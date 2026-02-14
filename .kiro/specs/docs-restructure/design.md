@@ -273,13 +273,18 @@ sequenceDiagram
 
 **Dependencies**
 - Inbound: README-Component — アルファリリース目標セクションから参照 (P1)
-- Outbound: shell/ 素材 — サーフェス一覧の情報源 (P1)
+- Outbound: shell/ 素材 — サーフェス一覧の情報源 (P0: 座標確定)
 - External: https://github.com/ekicyou/pasta — DSL実装リポジトリ (P1)
 
 **Implementation Notes**
-- shell/ 素材のパーツ合成座標は未定義のため、サーフェス一覧はファイル名ベースで記載し座標は「未定」とする
+- **パーツ合成座標**: ぱすたさんシェルの座標は ekicyou/pasta の index.html に定義済み。サーフェス一覧は以下で確定：
+  - base: xyz.png（320×420px）
+  - x（口）: x1-x5（5パターン）
+  - y（目）: y1-y6（6パターン）
+  - z（眉）: z1-z2（2パターン）
+  - **合計**: 60表情パターン（5×6×2）
+- PASTA_PROFILE.md 作成時に座標を完全記載し、areka-P0-reference-shell spec の information source として機能
 - pasta DSL の会話サンプルは、pasta リポジトリの文法仕様を参照して最小限に記載
-- areka-P0-reference-ghost / shell / balloon の要件定義インプットとして機能する位置づけを明記
 
 ---
 
