@@ -180,6 +180,7 @@ sequenceDiagram
 | 1.3 | dead_code 除去 | cached_nchittest | — | — |
 | 1.4 | 領域外 → DefWindowProcW | （既存動作維持） | — | — |
 | 1.5 | HTTRANSPARENT キャッシュ格納 | cached_nchittest | NchittestCacheEntry | — |
+| 1.6 | Opacity/Brushes α値判定 | hit_test_entity | Opacity, Brushes | — |
 | 2.1 | HTTRANSPARENT 時の PointerState 除去 | （WM_MOUSELEAVE 自動充足） | — | メッセージシーケンス |
 | 2.2 | HTCLIENT 再進入時の PointerState 付与 | （WM_MOUSEMOVE 既存動作） | — | メッセージシーケンス |
 | 2.3 | WM_MOUSELEAVE クリーンアップ | （既存ハンドラ） | — | メッセージシーケンス |
@@ -195,8 +196,7 @@ sequenceDiagram
 
 | Component | Domain/Layer | Intent | Req Coverage | Key Dependencies | Contracts |
 |-----------|-------------|--------|--------------|-----------------|-----------|
-| cached_nchittest | WndProc | HTTRANSPARENT/HTCLIENT分岐 + DragStateガード | 1.1-1.5, 3.2 | hit_test_in_window (P0), DragState (P0) | State |
-| ClickThroughDemo | Examples | 手動テスト用クリックスルー領域 | 4.4 | HitTest (P0) | — |
+| cached_nchittest | WndProc | HTTRANSPARENT/HTCLIENT分岐 + DragStateガード | 1.1-1.5, 3.2 | hit_test_in_window (P0), DragState (P0) | State || hit_test_entity | ECS/Layout | Opacity/Brushesα値判定による透明領域検出 | 1.6 | Opacity (P0), Brushes (P0) | — || ClickThroughDemo | Examples | 手動テスト用クリックスルー領域 | 4.4 | HitTest (P0) | — |
 
 ### WndProc Layer
 
@@ -247,6 +247,32 @@ sequenceDiagram
   // HTTRANSPARENT 返却後も PointerState は正常にクリーンアップされる。
   // ドラッグ中は DragState ガードで HTCLIENT を強制返却する。
   ```
+
+### ECS Layer
+
+#### hit_test_entity（既存関数修正）
+
+| Field | Detail |
+|-------|--------|
+| Intent | HitTestMode::Bounds エンティティに対して Opacity/Brushes α値判定を実施 |
+| Requirements | 1.6 |
+
+**Responsibilities & Constraints**
+- `HitTestMode::Bounds` 分岐で `Opacity * Brushes.foreground.a` の積（合成α値）を計算
+- 合成α値 < `128/255 (≈0.502)` なら `false` を返却（透明領域と判定）
+- Opacity 未設定時は 1.0、Brushes.foreground が Inherit 時は親継承済みまたは DEFAULT_FOREGROUND (a=1.0)
+- AlphaMask の `ALPHA_THRESHOLD` (128/255) と同一基準
+
+**Dependencies**
+- Inbound: hit_test, hit_test_in_window — ヒットテスト実行 (P0)
+- Outbound: Opacity — 不透明度コンポーネント (P0)
+- Outbound: Brushes — ブラシコンポーネント (P0)
+
+**Implementation Notes**
+- Integration: 既存の `HitTestMode::Bounds` 分岐（hit_test.rs L200付近）にα値判定を挿入
+- Validation: Rectangle は foreground から色を取得（rectangle.rs L154-158）するため、foreground.a を使用
+- Fallback: Brushes.foreground が Inherit の場合、`resolve_inherited_brushes` システムが事前に解決済み、または DEFAULT_FOREGROUND を使用
+- Risks: なし（単純な数値判定のみ）
 
 ### Examples Layer
 
@@ -312,6 +338,11 @@ sequenceDiagram
 2. **HTCLIENT 返却パステスト**: `hit_result = Some(entity)` の場合に `LRESULT(1)` が返却されることを検証
 3. **キャッシュ格納テスト**: HTTRANSPARENT / HTCLIENT 両方がキャッシュに正しく格納・取得されることを検証（既存テストの拡張）
 4. **DragState ガードテスト**: DragState が非 Idle の場合に `hit_result = None` でも HTCLIENT が返却されることを検証
+5. **Opacity/Brushes α値判定テスト**: 
+   - `Opacity(0.502) * foreground.a=1.0` (α=128.01/255) → HTCLIENT（境界値以上）
+   - `Opacity(0.501) * foreground.a=1.0` (α=127.76/255) → 透明領域（None）
+   - `Opacity(0.4) * foreground.a=1.0` (α=102/255) → 透明領域（None）
+   - `Opacity(1.0) * foreground.a=0.4` (α=102/255) → 透明領域（None）
 
 テスト方針: `cached_nchittest` は `HWND` + `EcsWorld` を要するためコンポーネント/インテグレーションテスト相当。キャッシュの低レベル API（`lookup` / `insert`）は既存のユニットテストで十分カバーされている。ここでは分岐ロジックの検証に注力する。
 
