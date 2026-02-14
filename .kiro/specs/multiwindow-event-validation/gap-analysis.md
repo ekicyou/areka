@@ -164,9 +164,9 @@ pub fn build_bubble_path(world: &World, start: Entity) -> Vec<Entity> {
 
 ## 4. Implementation Approach Options
 
-### Option A: 既存コンポーネント拡張（Minimal Fix）
+### Option A: 既存コンポーネント拡張【推奨】
 
-**対象**: G1, G2, G3, G4, G5 を既存ファイル内で修正
+**対象**: G1, G2, G3, G4, G5 を既存ファイル内で修正、デモも既存ファイルを改修
 
 **変更対象ファイル**:
 | ファイル | 変更内容 |
@@ -175,7 +175,7 @@ pub fn build_bubble_path(world: &World, start: Entity) -> Vec<Entity> {
 | `ecs/window_proc/handlers.rs` | WM_MOUSELEAVE/WM_MOUSEMOVE のスコーピング修正、SetCapture実装 |
 | `ecs/pointer/dispatch.rs` | `build_bubble_path` にウィンドウ境界停止条件追加 |
 | `ecs/drag/state.rs` | `DragState` にHWND検証追加 |
-| `examples/taffy_flex_demo.rs` | マルチウィンドウ版に改修（既存ファイル変更） |
+| `examples/taffy_flex_demo.rs` | マルチウィンドウ版に改修（既存ファイルを直接変更） |
 
 **トレードオフ**:
 - ✅ 変更ファイル最小、既存パターン踏襲
@@ -200,7 +200,7 @@ pub fn build_bubble_path(world: &World, start: Entity) -> Vec<Entity> {
 - ❌ 新ファイル追加でナビゲーションコスト増
 - ❌ `window_scope.rs` と `window.rs` の責務境界が曖昧になる可能性
 
-### Option C: ハイブリッドアプローチ【推奨】
+### Option C: ハイブリッドアプローチ
 
 **組み合わせ戦略**:
 
@@ -235,7 +235,7 @@ pub fn build_bubble_path(world: &World, start: Entity) -> Vec<Entity> {
 ## 6. Design Phase への推奨事項
 
 ### 推奨アプローチ
-**Option C（ハイブリッド）** を推奨。既存コードの修正は最小限のバグ修正として行い、新規デモ・テストは独立ファイルで作成する。
+**Option A（既存コンポーネント拡張）** を推奨。既存 `taffy_flex_demo.rs` を直接マルチウィンドウ版に改修し、全ウィジェットを完全再現する。ライブラリ側のバグ修正は既存ファイル内で行い、テストのみ新規ファイルとして作成する。
 
 ### 設計フェーズで決定すべき事項
 

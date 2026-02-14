@@ -23,14 +23,14 @@
 
 ### Requirement 1: マルチウィンドウデモの作成
 
-**Objective:** 開発者として、`taffy_flex_demo` と同等のウィジェット構成を複数ウィンドウで表示するデモを用意したい。これにより、マルチウィンドウでのイベント動作を手動かつ視覚的に検証可能にする。
+**Objective:** 開発者として、既存の `taffy_flex_demo` をマルチウィンドウ版に改修し、複数ウィンドウでのイベント動作を手動かつ視覚的に検証可能にしたい。
 
 #### Acceptance Criteria
 
 1. The `taffy_flex_demo` shall 複数の `Window` エンティティを生成し、各ウィンドウに独立したウィジェットツリーを構築する
-2. When デモを起動した場合, the demo shall 少なくとも2つの独立したウィンドウを表示し、各ウィンドウにクリック可能な要素とドラッグ移動可能な要素を配置する
-3. The demo shall 既存の `taffy_flex_demo` のウィジェット構成（RedBox色トグル、BlueBoxサイズトグル、GreenBoxダブルクリック、FlexContainerドラッグ移動、SeikatuImageαマスクヒットテスト）を各ウィンドウで再現する
-4. When 各ウィンドウの要素をクリックした場合, the demo shall 各ウィンドウ独立でイベントハンドラが動作し、他ウィンドウに影響しないことを `tracing` ログで確認可能にする
+2. When デモを起動した場合, the `taffy_flex_demo` shall 少なくとも2つの独立したウィンドウを表示する
+3. The `taffy_flex_demo` shall 各ウィンドウに既存のウィジェット構成（RedBox色トグル、BlueBoxサイズトグル、GreenBoxダブルクリック、FlexContainerドラッグ移動、SeikatuImageαマスクヒットテスト）を完全に再現する
+4. When 各ウィンドウの要素をクリックした場合, the `taffy_flex_demo` shall 各ウィンドウ独立でイベントハンドラが動作し、他ウィンドウに影響しないことを `tracing` ログで確認可能にする
 
 ### Requirement 2: WM_MOUSELEAVE のウィンドウスコープ修正
 
