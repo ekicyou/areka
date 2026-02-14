@@ -1,6 +1,6 @@
 # areka — デスクトップマスコット・プラットフォーム
 
-> 「伺か」の魂を継ぐ、Rust製デスクトップマスコット・プラットフォーム
+> Rust製デスクトップマスコット・プラットフォーム
 
 [![Rust](https://img.shields.io/badge/Rust-2024_Edition-orange?logo=rust)](https://www.rust-lang.org/)
 [![License](https://img.shields.io/badge/License-MIT%20OR%20Apache--2.0-blue)](LICENSE)
@@ -12,7 +12,7 @@
 
 **areka** は、デスクトップ上にキャラクター（ゴースト）を常駐させ、ユーザーとの自然な対話を実現するデスクトップマスコット・プラットフォームです。
 
-「伺か」にインスピレーションを得つつ、2025年の技術で再構築 — ECSアーキテクチャ、DirectComposition による高品質レンダリング、日本語縦書き描画、そして宣言的アニメーション定義を基盤に据えています。
+ECSアーキテクチャ、DirectComposition による高品質レンダリング、日本語縦書き描画、そして宣言的アニメーション定義を基盤に据えています。
 
 ---
 
