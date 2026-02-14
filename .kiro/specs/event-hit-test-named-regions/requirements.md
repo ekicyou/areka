@@ -49,6 +49,15 @@
 2. **カラーマップ画像（ColorMap）**: 領域ごとに色分けしたPNG画像を与え、色＝領域名のマッピングで定義。複雑な形状を直感的に作成可能
 3. **多角形領域（Polygon）**（オプショナル）: CSSの `polygon()` 記法に準じた頂点リストで任意形状を定義。HTMLイメージマップの `<area shape="poly">` に相当
 
+### NamedRegions の挙動モデル
+
+`HitTestMode::NamedRegions` は2段階の判定を行う：
+
+1. **エンティティヒット判定**（Bounds基準）: エンティティの `GlobalArrangement.bounds` 内かを判定
+2. **領域名解決**（エンティティにヒットした場合のみ）: `HitRegionMap` で定義された領域内かを判定し、領域名を返す
+
+**重要**: 領域外ピクセル（カラーマップのマッピング外色、矩形/多角形の外側）でも、エンティティの bounds 内であれば**無名ヒット**（`region: None`）となる。これは正常な挙動であり、「エンティティにヒットしないのに領域だけがヒットする」ことはない
+
 ### 技術的調査結果
 
 **座標系**:
@@ -83,8 +92,8 @@
 #### Acceptance Criteria
 
 1. The HitTest System shall `HitTestMode` enumに `NamedRegions` バリアントを追加する
-2. When `HitTestMode::NamedRegions` が設定されている時, the HitTest System shall 定義された名前付き領域を使用してヒット判定を行う
-3. When `HitTestMode::NamedRegions` が設定されているが `HitRegionMap` コンポーネントが存在しない時, the HitTest System shall `HitTestMode::Bounds`（矩形判定）にフォールバックする
+2. When `HitTestMode::NamedRegions` が設定されている時, the HitTest System shall エンティティのBounds判定を行った後、`HitRegionMap` で領域名を解決する
+3. When `HitTestMode::NamedRegions` が設定されているが `HitRegionMap` コンポーネントが存在しない時, the HitTest System shall Bounds判定のみ行い、領域名なし（`region: None`）として扱う
 4. The HitTest System shall 既存の `HitTestMode::None`, `HitTestMode::Bounds`, `HitTestMode::AlphaMask` の動作を維持する
 
 ---
@@ -113,7 +122,7 @@
 2. The カラーマップ方式 shall 画像ファイルパスと色→領域名マッピングテーブルを保持する
 3. The 色→領域名マッピング shall RGB値（アルファを無視）をキーとして領域名を返す
 4. When マウス座標に対応する画像ピクセルの色がマッピングテーブルに存在する時, the HitTest System shall その色に対応する領域名をヒット結果として返す
-5. When マウス座標に対応する画像ピクセルの色がマッピングテーブルに存在しない時, the HitTest System shall 領域名なし（ヒットなし、または無名ヒット）として扱う
+5. When マウス座標に対応する画像ピクセルの色がマッピングテーブルに存在しない時, the HitTest System shall 無名ヒット（`region: None`）として扱う（エンティティにはヒットする）
 6. The カラーマップ画像 shall エンティティの描画サイズと同じスケールで参照される（画像サイズとエンティティサイズが異なる場合はスケーリングして座標変換する）
 7. The HitTest System shall カラーマップ画像をWIC（Windows Imaging Component）を使用して読み込む
 8. The HitTest System shall カラーマップ画像の読み込み結果を内部にキャッシュし、フレームごとの再読み込みを回避する
