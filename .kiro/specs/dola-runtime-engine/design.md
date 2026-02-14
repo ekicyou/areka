@@ -170,7 +170,12 @@ sequenceDiagram
     R-->>S: Vec of changed variable name and value pairs
 ```
 
+**Time Scale Semantics**:
 - effective_time = `(current_time - start_time - pause_accumulated) * time_scale`
+- `time_scale` は再生速度倍率（乗算方式）:
+  - `time_scale = 2.0` → 2倍速（アニメーションが半分の時間で完了）
+  - `time_scale = 0.5` → 半速（アニメーションが2倍の時間で完了）
+  - WAM `SetStoryboardPlaybackSpeed` と同じ解釈
 - ループ時: 周回完了検出 → `pause_accumulated` 調整でオフセットリセット
 - 同一変数に複数 group_id が存在する場合、最新（最大）group_id の値を採用
 

@@ -152,10 +152,10 @@
 
 ## Risks & Mitigations
 
-- **time_scale の解釈不一致**: gap-analysis の `/ time_scale` と設計の `* time_scale` が矛盾する可能性。→ 子仕様の要件で「time_scale=2.0 は2倍速」と明記し、テストケースで検証
+- **time_scale の解釈** ✅ **Resolved**: WAM `SetStoryboardPlaybackSpeed` と同じ乗算方式で確定。`time_scale=2.0` は2倍速（半分の時間で完了）。式: `effective_time = (current_time - start_time - pause_accumulated) * time_scale`
 - **f64 精度**: 長時間再生（数時間以上）での f64 精度劣化。→ 差分基準（前回値との比較）で影響を緩和。実用上デスクトップマスコットでは問題にならない
 - **循環参照**: `SubscriptionHandle` が `DolaRuntime` への参照を保持し循環参照の可能性。→ ID ベース間接参照で回避
-- **Never ポリシーの延期キュー**: `InterruptionPolicy::Never` で延期されたストーリーボードの管理が複雑。→ 子仕様3（競合解決）で個別に設計
+- **Never ポリシーの延期キュー**: `InterruptionPolicy::Never` で延期されたストーリーボードの管理が複雑。→ 子仕様3（競合解決）で個別に設計。✅ **Resolved**: design.md に実装ノート追加済み
 
 ---
 
