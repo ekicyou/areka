@@ -29,7 +29,7 @@
 
 ### Requirement 2: ストーリーボード開始（Start コマンド）
 
-**Objective:** オーケストレーターとして、定義済みストーリーボードをコンパイルして再生開始したい。これにより、任意のタイミングでアニメーションを起動できる。
+**Objective:** オーケストレーターとして、定義済みストーリーボードをコンパイルして再生開始したい。また、実際に開始せずに終了予定時刻のみを事前計算したい。これにより、任意のタイミングでアニメーションを起動でき、連鎖アニメーションのスケジューリングが可能になる。
 
 #### Acceptance Criteria
 
@@ -38,7 +38,10 @@
 3. When コンパイル結果が生成された場合, the Dola Runtime shall 各コンパイル済みトランジションに `group_id` および元ストーリーボードの `InterruptionPolicy` をメタデータとして付与する。
 4. When 同一ストーリーボードに対して複数回 Start が発行された場合, the Dola Runtime shall それぞれ異なる `group_id` を持つ独立した実行インスタンスを生成する。
 5. When Start が正常に完了した場合, the Dola Runtime shall `group_id` と「正常に再生した場合の終了予定時刻（f64秒）」を返却する。これにより、オーケストレーターは連鎖アニメーションのタイミングを事前計算できる。
-6. If 存在しないストーリーボード名で Start が発行された場合, then the Dola Runtime shall エラーを返却する。
+6. When ストーリーボードの `loop_count` が `Some(0)`（無限ループ）の場合, the Dola Runtime shall 終了予定時刻として `f64::INFINITY` を返却する。
+7. When オーケストレーターが CalculateEndTime コマンド（ストーリーボード名 + 開始時刻）を発行した場合, the Dola Runtime shall 該当ストーリーボード定義をコンパイルし、終了予定時刻（f64秒）のみを返却する。実行インスタンスは生成せず、タイムテーブルへの追加も行わない。
+8. If 存在しないストーリーボード名で Start または CalculateEndTime が発行された場合, then the Dola Runtime shall エラーを返却する。
+9. If ストーリーボードの duration が 0秒 かつ `loop_count` が `None` 以外に設定されている場合, then the Dola Runtime shall エラーを返却する。即座に終了するストーリーボードにループ設定は無効である。
 
 ---
 
@@ -54,7 +57,7 @@
 4. When Cancel コマンドが発行された場合, the Dola Runtime shall 指定 `group_id` の現在の補間値でそのまま凍結して破棄する（WAM の Abandon 相当）。
 5. When Finish(offset) コマンドが発行された場合, the Dola Runtime shall 指定オフセット時間経過後に Conclude と同等の動作を実行する。
 6. While ストーリーボードが Paused 状態にある場合, the Dola Runtime shall 当該ストーリーボードの経過時刻の加算のみを停止し、他のストーリーボードの再生に影響を与えない。
-7. If 終了状態（Concluded / Cancelled / Trimmed / Compressed）にある実行インスタンスに制御コマンドが発行された場合, then the Dola Runtime shall 当該コマンドを無視するか、エラーを返却する。
+7. If 終了状態（Concluded / Cancelled / Trimmed / Compressed）にある実行インスタンスに制御コマンドが発行された場合, then the Dola Runtime shall エラーを返却する。オーケストレーターが終了済みインスタンスへの操作を検知できるようにする。
 
 ---
 
@@ -94,7 +97,7 @@
 #### Acceptance Criteria
 
 1. The Dola Runtime shall 購読変数の数だけタイムテーブルを保持する。
-2. When Start コマンドでコンパイル結果が生成された場合, the Dola Runtime shall 該当変数のタイムテーブルにコンパイル済みセグメントを追加する。
+2. When Start コマンドでコンパイル結果が生成された場合, the Dola Runtime shall 該当変数のタイムテーブルにコンパイル済みトランジションを追加する。
 3. When Pause が適用された場合, the Dola Runtime shall タイムテーブルへの時間オフセットを設定して経過時刻の進行を停止する。
 4. When Resume が適用された場合, the Dola Runtime shall 時間オフセットを調整して経過時刻の進行を再開する。
 5. When Update でトランジションの終了が検出された場合, the Dola Runtime shall 当該トランジションをタイムテーブルから破棄する。
@@ -167,3 +170,21 @@
 1. The Dola Runtime shall 現在時刻（OS 起動時からの f64 秒数）を取得するユーティリティ関数を提供する。
 2. The Dola Runtime shall 時刻取得に適切な既存クレートが利用可能であればそれを使用する。
 3. If 適切なクレートが存在しない場合, then the Dola Runtime shall Windows パフォーマンスタイマー（`QueryPerformanceCounter` / `QueryPerformanceFrequency`）を使用して時刻を生成する。
+
+---
+
+### Requirement 12: ループ再生
+
+**Objective:** ランタイムとして、ストーリーボード定義の `loop_count` に基づいてループ再生を実現したい。これにより、タイムテーブルを1周分のみ保持しつつ、効率的な繰り返し再生が可能になる。
+
+#### Acceptance Criteria
+
+1. When ストーリーボードの `loop_count` が `None` の場合, the Dola Runtime shall 1回のみ再生し、終了後にインスタンスを終了状態へ遷移させる。
+2. When ストーリーボードの `loop_count` が `Some(0)` の場合, the Dola Runtime shall 無限にループ再生を継続する。
+3. When ストーリーボードの `loop_count` が `Some(n)` (n > 0) の場合, the Dola Runtime shall n 回のループ再生後にインスタンスを終了状態へ遷移させる。
+4. The Dola Runtime shall ループ再生時もタイムテーブルを1周分のみ生成し、ループ展開を行わない。
+5. When 1周目の全セグメントが終了した場合, the Dola Runtime shall `loop_count` をチェックしてループ継続の可否を判定する。
+6. When ループを継続する場合, the Dola Runtime shall タイムテーブルを破棄せず、時間オフセットを調整して再利用する。この時間オフセット機構は Pause / Resume と同じ仕組みを使用する。
+7. When ループが完了した場合, the Dola Runtime shall インスタンスを終了状態（Concluded / Cancelled / Trimmed / Compressed のいずれか）へ遷移させ、タイムテーブルを破棄する。
+8. The Dola Runtime shall ループ中の各周回も競合検出・中断戦略の対象とする。ループ中でも他のストーリーボードによる中断が発生し得る。
+
