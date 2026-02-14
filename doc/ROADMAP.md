@@ -13,13 +13,13 @@
 
 | フェーズ | 状態 | 進捗 |
 |---------|:----:|:----:|
-| Phase A: 基盤完成 | 🔵 進行中 | ██████░░░░ 60% |
+| Phase A: 基盤完成 | 🔵 進行中 | ████████░░ 80% |
 | Phase B: 表示層 | ⚪ 未着手 | ░░░░░░░░░░ 0% |
 | Phase C: コンテンツ | ⚪ 未着手 | ░░░░░░░░░░ 0% |
 | Phase D: アプリ統合 | ⚪ 未着手 | ░░░░░░░░░░ 0% |
 | Phase E: アルファ出荷 | ⚪ 未着手 | ░░░░░░░░░░ 0% |
 
-**完了済み仕様**: 59件 / **アクティブ仕様(P0)**: 13件 / **バックログ(P1-P3)**: 18件
+**完了済み仕様**: 61件 / **アクティブ仕様(P0)**: 11件 / **バックログ(P1-P3)**: 18件
 
 ---
 
@@ -29,14 +29,14 @@
 
 | 仕様 | .kiro/specs/ | 状態 | 備考 |
 |------|-------------|:----:|------|
-| イベントシステム | `wintf-P0-event-system` | 🔵 進行中 | event-hit-test-named-regions 残 |
+| イベントシステム | `completed/wintf-P0-event-system` | ✅ 完了 | |
 | ├ ヒットテスト | `completed/event-hit-test` | ✅ 完了 | |
 | ├ ヒットテストキャッシュ | `completed/event-hit-test-cache` | ✅ 完了 | |
 | ├ マウス基本 | `completed/event-mouse-basic` | ✅ 完了 | |
 | ├ 親→子ルーティング | `completed/event-parent-to-child-routing` | ✅ 完了 | |
 | ├ イベント配信 | `completed/event-dispatch` | ✅ 完了 | |
 | ├ ドラッグシステム | `completed/event-drag-system` | ✅ 完了 | |
-| ├ ヒットテスト名前付き領域 | `event-hit-test-named-regions` | ⚪ 未着手 | |
+| ├ ヒットテスト名前付き領域 | `completed/event-hit-test-named-regions` | ✅ 完了 | |
 | ├ マルチウィンドウイベント | `completed/multiwindow-event-validation` | ✅ 完了 | |
 | アニメーションシステム | `wintf-P0-animation-system` | ⚪ 未着手 | dola → wintf 統合 |
 | タイプライター | `completed/wintf-P0-typewriter` | ✅ 完了 | |
