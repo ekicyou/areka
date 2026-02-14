@@ -39,12 +39,37 @@ mv .kiro/specs/<spec-name> .kiro/specs/completed/
 - `phase` → `"implementation-complete"`
 - `updated_at` → 現在日時
 
-### Step 4. ロードマップ更新（該当する場合）
+### Step 4. ROADMAP更新（該当する場合）
 
-ROADMAPが存在する場合（メタ仕様配下の仕様など）：
-- Progress Summary を更新
-- Phase 列を `implementation-complete` に更新
-- 📍 参照: `focus.md` のROADMAP更新タイミング
+仕様が `doc/ROADMAP.md` に記載されている場合、以下を更新する：
+
+#### 4-1. 仕様テーブルの状態列を更新
+
+該当する仕様の行を見つけ、状態列を更新：
+- ⚪ 未着手 / 🔵 進行中 → ✅ 完了
+
+```markdown
+例:
+| ├ マルチウィンドウイベント | `completed/multiwindow-event-validation` | ✅ 完了 | |
+```
+
+#### 4-2. プログレスサマリーを更新
+
+- **完了済み仕様**: カウントをインクリメント（+1）
+- **アクティブ仕様(P0)**: 該当する場合デクリメント（-1）
+
+```markdown
+例:
+**完了済み仕様**: 58件 / **アクティブ仕様(P0)**: 14件 / **バックログ(P1-P3)**: 18件
+    ↓
+**完了済み仕様**: 59件 / **アクティブ仕様(P0)**: 13件 / **バックログ(P1-P3)**: 18件
+```
+
+#### 4-3. 必要に応じてフェーズ進捗率を更新
+
+Phase 内の仕様完了状況に応じて進捗バーとパーセンテージを更新。
+
+📍 **参照**: `.kiro/steering/focus.md` のROADMAP更新タイミング
 
 ### Step 5. 完了コミット & プッシュ
 
@@ -65,7 +90,9 @@ git push origin <branch>
 - [ ] スペックフォルダが `.kiro/specs/completed/<spec-name>/` に存在
 - [ ] `spec.json` の `phase` が `"implementation-complete"`
 - [ ] 移動元（`.kiro/specs/<spec-name>/`）にファイルが残っていない
-- [ ] ロードマップ更新済み（該当する場合）
+- [ ] ROADMAP更新済み（該当する場合）
+  - 仕様の状態列が ✅ 完了 になっている
+  - 完了済み仕様数がインクリメントされている
 
 ## 仕様フェーズフロー
 
