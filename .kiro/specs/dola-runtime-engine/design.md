@@ -738,6 +738,46 @@ struct StartResult {
 
 ---
 
+## Implementation Extensions
+
+### Never ポリシーの延期キュー実装ノート
+
+**Context**: 要件 7.8 — InterruptionPolicy::Never が適用された場合、新ストーリーボードの当該変数エントリを既存インスタンス完了後まで延期する。
+
+**Implementation Strategy**:
+
+#### データ構造
+```rust
+/// ConflictResolver または TimelineManager 内部で管理
+struct DeferredEntry {
+    group_id: u64,
+    variable_name: String,
+    segments: Vec<CompiledSegment>,
+    variable_type: VariableTypeHint,
+    blocked_by: u64,  // 先行 group_id
+}
+
+// 延期キュー
+deferred_entries: Vec<DeferredEntry>
+```
+
+#### 再評価トリガー
+- **タイミング**: InstanceManager が group_id を終了状態（Concluded/Cancelled/Trimmed/Compressed）に遷移させた時
+- **処理**: TimelineManager が deferred_entries を走査し、`blocked_by == 終了した group_id` のエントリをタイムテーブルに追加
+
+#### タイムアウトとメモリ管理
+- **無期限延期の許容**: 先行 group_id が無限ループ（`loop_count = Some(0)`）の場合、延期エントリは永続的に保持される。これは仕様上許容される動作
+- **メモリ上限**: 実装フェーズで必要と判断された場合、子仕様 `dola-runtime-conflict-loop` で延期キューのサイズ上限を定義可能
+
+#### 実装コンポーネント
+- **ConflictResolver**: 競合検出時に延期エントリを生成
+- **TimelineManager**: 延期キューの保持と再評価トリガー時の追加処理
+- **InstanceManager**: group_id 終了時に TimelineManager へ通知
+
+**Verification**: 統合テスト「Never ポリシー + 先行完了による自動追加」で検証
+
+---
+
 ## Child Spec Decomposition Plan
 
 本仕様の実装は以下の4子仕様に分割して段階的に完成させる。
