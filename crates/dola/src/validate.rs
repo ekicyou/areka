@@ -284,7 +284,7 @@ fn validate_keyframe_references(
 }
 
 /// KeyframeRef からキーフレーム名を収集
-fn collect_keyframe_names_from_ref(kf_ref: &KeyframeRef) -> Vec<String> {
+pub(crate) fn collect_keyframe_names_from_ref(kf_ref: &KeyframeRef) -> Vec<String> {
     match kf_ref {
         KeyframeRef::Single(name) => vec![name.clone()],
         KeyframeRef::Multiple(names) => names.clone(),

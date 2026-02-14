@@ -5,6 +5,7 @@
 //! プラットフォーム非依存のデータモデルとして再構成する。
 
 mod builder;
+mod compile;
 mod document;
 mod easing;
 mod error;
@@ -16,6 +17,10 @@ mod value;
 mod variable;
 
 pub use builder::{DolaDocumentBuilder, StoryboardBuilder};
+pub use compile::{
+    compile_storyboard, CompiledSegment, CompiledStoryboard, CompiledVariableTimeline,
+    VariableTypeHint,
+};
 pub use document::DolaDocument;
 pub use easing::{EasingFunction, EasingName, ParametricEasing};
 pub use error::DolaError;

@@ -55,6 +55,18 @@ pub enum DolaError {
         entry_index: usize,
         reason: String,
     },
+    /// キーフレーム循環依存
+    KeyframeCycle {
+        storyboard: String,
+        /// 循環に含まれるキーフレーム名のリスト
+        cycle: Vec<String>,
+    },
+    /// コンパイル固有エラー（汎用）
+    CompileError {
+        storyboard: String,
+        entry_index: usize,
+        reason: String,
+    },
 }
 
 impl fmt::Display for DolaError {
@@ -159,6 +171,25 @@ impl fmt::Display for DolaError {
                 write!(
                     f,
                     "Type mismatch in storyboard '{}' entry {}: {}",
+                    storyboard, entry_index, reason
+                )
+            }
+            DolaError::KeyframeCycle { storyboard, cycle } => {
+                write!(
+                    f,
+                    "Keyframe cycle detected in storyboard '{}': {}",
+                    storyboard,
+                    cycle.join(" -> ")
+                )
+            }
+            DolaError::CompileError {
+                storyboard,
+                entry_index,
+                reason,
+            } => {
+                write!(
+                    f,
+                    "Compile error in storyboard '{}' at entry {}: {}",
                     storyboard, entry_index, reason
                 )
             }
