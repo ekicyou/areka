@@ -56,11 +56,11 @@
 | — | Trim |
 | — | Never |
 
-**ギャップ**: 
-- 要件のデフォルトは **Abandon** だが、既存 enum のデフォルトは **Conclude**
-- 要件の「Abandon」は既存の「Cancel」に対応するが名称が異なる
-- 既存に `Trim` / `Never` があるが要件には未記載
-- → **設計フェーズで命名・デフォルト値・バリアント構成を整理する必要あり**
+**解決済み**:
+- デフォルト: **Conclude** を維持（既存コード準拠、開発者確認済み）
+- バリアント構成: 全5バリアント（Cancel/Conclude/Trim/Compress/Never）をランタイムで実装（開発者確認済み）
+- 要件の「Abandon」＝既存の「Cancel」。要件定義を既存コードの `Cancel` 名に統一済み
+- → **解決済み。設計フェーズでは各戦略の内部アルゴリズム詳細を設計する**
 
 ### 2.4 PlaybackState の差異
 
@@ -107,8 +107,8 @@ dola クレートの現在の依存:
 | **Req 4: 購読管理** | なし | **Missing**: Subscribe/Unsubscribe 機構、Drop 自動解除、購読者別評価フィルタ |
 | **Req 5: Update** | なし | **Missing**: 補間エンジン、差分検出、前回値キャッシュ |
 | **Req 6: タイムテーブル** | `CompiledVariableTimeline` / `CompiledSegment` | **Missing**: 変数ごとのランタイムタイムテーブル（複数 group_id 共存、GC） |
-| **Req 7: 競合検出** | `InterruptionPolicy` enum | **Missing**: 競合検出ロジック、group_id 単位一括適用、3戦略の実装。**Unknown**: 既存 enum との命名差異の解決 |
-| **Req 8: 状態遷移** | `PlaybackState` enum（不一致あり） | **Missing**: 状態遷移マシン、インスタンスごとのライフサイクル管理。**Constraint**: 既存 enum との互換性 |
+| **Req 7: 競合検出** | `InterruptionPolicy` enum | **Missing**: 競合検出ロジック、group_id 単位一括適用、5戦略の実装。**Resolved**: 命名・デフォルト値・バリアント構成は開発者確認済み |
+| **Req 8: 状態遷移** | `PlaybackState` enum（要拡張） | **Missing**: 状態遷移マシン、インスタンスごとのライフサイクル管理。終了状態を Concluded/Cancelled/Trimmed/Compressed に拡張 |
 | **Req 9: 同時再生** | なし | **Missing**: 複数実行インスタンスの並行管理。低リスク（タイムテーブル設計で自然に対応） |
 | **Req 10: イージング** | `EasingFunction` / `EasingName` 型定義 | **Missing**: 評価ロジックの実装。**Resolved**: `interpolation` (0.3.0) 採用確定。`Ease` trait (`impl Ease for f64`) + `quad_bez`/`cub_bez` |
 | **Req 11: 時刻ユーティリティ** | `com/animation.rs` の `IUIAnimationTimer` | **Missing**: dola クレート内のプラットフォーム非依存 API。**Research Needed**: `quanta` / `std::time::Instant` / Win32 QPC の選定 |
@@ -225,8 +225,8 @@ dola クレートの現在の依存:
 ### 設計判断が必要な項目
 
 1. **クレート構成**: dola 内実装 vs 別クレート `dola-runtime` vs ハイブリッド
-2. **InterruptionPolicy の整理**: 既存 enum（Cancel/Conclude/Trim/Compress/Never）と要件（Abandon/Conclude/Compress）の統合方針
-3. **PlaybackState の整理**: 既存 enum と要件の状態遷移モデル（Created/Concluded/Abandoned/Compressed）の統合
+2. **InterruptionPolicy の内部アルゴリズム設計**: 5戦略（Cancel/Conclude/Trim/Compress/Never）それぞれの中断処理ロジック詳細（命名・デフォルト値・バリアント構成は確定済み）
+3. **PlaybackState の整理**: 既存 enum と要件の状態遷移モデル（Created/Concluded/Cancelled/Trimmed/Compressed）の統合
 4. **時刻ユーティリティの配置先**: dola 内（feature gate `windows`）vs wintf 側 vs 引数で受け取る設計
 5. **購読者の所有権モデル**: Arc<Mutex> 共有 vs チャネル vs 直接所有
 

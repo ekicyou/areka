@@ -50,10 +50,10 @@
 1. When Pause コマンドが発行された場合, the Dola Runtime shall 指定 `group_id` の実行インスタンスの経過時刻加算を停止する。
 2. When Resume コマンドが発行された場合, the Dola Runtime shall 指定 `group_id` の実行インスタンスの経過時刻加算を再開する。
 3. When Conclude コマンドが発行された場合, the Dola Runtime shall 指定 `group_id` の現在再生中トランジションを最終値にジャンプさせ、未開始トランジションをスキップして終了する。
-4. When Abandon コマンドが発行された場合, the Dola Runtime shall 指定 `group_id` の現在の補間値でそのまま凍結して破棄する。
+4. When Cancel コマンドが発行された場合, the Dola Runtime shall 指定 `group_id` の現在の補間値でそのまま凍結して破棄する（WAM の Abandon 相当）。
 5. When Finish(offset) コマンドが発行された場合, the Dola Runtime shall 指定オフセット時間経過後に Conclude と同等の動作を実行する。
 6. While ストーリーボードが Paused 状態にある場合, the Dola Runtime shall 当該ストーリーボードの経過時刻の加算のみを停止し、他のストーリーボードの再生に影響を与えない。
-7. If 終了状態（Concluded / Abandoned / Compressed）にある実行インスタンスに制御コマンドが発行された場合, then the Dola Runtime shall 当該コマンドを無視するか、エラーを返却する。
+7. If 終了状態（Concluded / Cancelled / Trimmed / Compressed）にある実行インスタンスに制御コマンドが発行された場合, then the Dola Runtime shall 当該コマンドを無視するか、エラーを返却する。
 
 ---
 
@@ -108,10 +108,12 @@
 1. When 同一変数に対して時間的に重複するトランジションが発生した場合, the Dola Runtime shall 競合を検出する。
 2. When 競合が検出された場合, the Dola Runtime shall 既存ストーリーボード実行インスタンス（`group_id` 単位）に対して終了戦略を一括適用する。
 3. When 1つの変数で競合が検出された場合, the Dola Runtime shall 同じ `group_id` を持つ全変数のタイムテーブルに対して終了戦略を一括適用する。
-4. When 終了戦略が Abandon の場合, the Dola Runtime shall 既存インスタンスの現在の補間値でそのまま凍結する。
+4. When 終了戦略が Cancel の場合, the Dola Runtime shall 既存インスタンスの現在の補間値でそのまま凍結して破棄する（WAM の Abandon 相当）。
 5. When 終了戦略が Conclude の場合, the Dola Runtime shall 既存インスタンスの現在再生中トランジションの最終値にジャンプし、未開始トランジションをスキップする。
-6. When 終了戦略が Compress の場合, the Dola Runtime shall 既存インスタンスのストーリーボード全体の最終値にジャンプし、全トランジションを完走扱いとする。
-7. If ストーリーボード定義に終了戦略が未指定の場合, then the Dola Runtime shall デフォルトとして Abandon を適用する。
+6. When 終了戦略が Trim の場合, the Dola Runtime shall 既存インスタンスを割り込み開始時点まで再生して切断する。
+7. When 終了戦略が Compress の場合, the Dola Runtime shall 既存インスタンスのストーリーボード全体の最終値にジャンプし、全トランジションを完走扱いとする。
+8. When 終了戦略が Never の場合, the Dola Runtime shall 既存インスタンスの中断を拒否し、新ストーリーボードの当該変数へのセグメント追加を既存インスタンス完了後まで延期する。
+9. If ストーリーボード定義に終了戦略が未指定の場合, then the Dola Runtime shall デフォルトとして Conclude を適用する（既存 `InterruptionPolicy` enum のデフォルトと一致）。
 
 ---
 
@@ -121,10 +123,10 @@
 
 #### Acceptance Criteria
 
-1. The Dola Runtime shall ストーリーボード実行インスタンスの状態を Created → Playing → {Concluded / Abandoned / Compressed} の遷移で管理する。
+1. The Dola Runtime shall ストーリーボード実行インスタンスの状態を Created → Playing → {Concluded / Cancelled / Trimmed / Compressed} の遷移で管理する。各終了状態は `InterruptionPolicy` の同名戦略に対応する（Cancel→Cancelled, Conclude→Concluded, Trim→Trimmed, Compress→Compressed）。
 2. While ストーリーボードが Playing 状態にある場合, the Dola Runtime shall Pause コマンドで Paused 状態に遷移可能とする。
 3. While ストーリーボードが Paused 状態にある場合, the Dola Runtime shall Resume コマンドで Playing 状態に復帰可能とする。
-4. When 実行インスタンスが終了状態（Concluded / Abandoned / Compressed）に入った場合, the Dola Runtime shall 当該インスタンスを再利用不可とする。
+4. When 実行インスタンスが終了状態（Concluded / Cancelled / Trimmed / Compressed）に入った場合, the Dola Runtime shall 当該インスタンスを再利用不可とする。
 5. The Dola Runtime shall 同一ストーリーボード定義から複数の独立した実行インスタンスを同時に実行可能とする。
 
 ---
