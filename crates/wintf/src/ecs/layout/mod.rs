@@ -63,6 +63,7 @@
 // Layout System サブモジュール
 pub mod arrangement;
 pub mod high_level;
+pub mod hit_region;
 pub mod hit_test;
 pub mod metrics;
 pub mod rect;

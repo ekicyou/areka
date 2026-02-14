@@ -1,0 +1,57 @@
+{
+    "feature_name": "wintf-P0-event-system",
+    "created_at": "2025-11-29T00:00:00Z",
+    "updated_at": "2026-02-14T00:00:00Z",
+    "language": "ja",
+    "phase": "implementation-complete",
+    "parent_spec": "ukagaka-desktop-mascot",
+    "approvals": {
+        "requirements": {
+            "generated": true,
+            "approved": true,
+            "approved_at": "2025-11-29T00:00:00Z"
+        },
+        "design": {
+            "generated": false,
+            "approved": false,
+            "note": "スキップ: 子仕様に詳細設計あり。親仕様レベルでの統合設計は省略"
+        },
+        "tasks": {
+            "generated": false,
+            "approved": false,
+            "note": "スキップ: 子仕様でタスク分解済み。親仕様レベルでのタスク生成は不要"
+        }
+    },
+    "ready_for_implementation": false,
+    "implementation_complete": true,
+    "implementation": {
+        "completed_at": "2026-02-13T00:00:00Z",
+        "note": "全要件を4つの子仕様経由で実装完了。Req1:event-hit-test, Req3-4:event-mouse-basic, Req5-6:event-drag-system, Req7-8:event-dispatch"
+    },
+    "child_specs": [
+        {
+            "name": "event-hit-test",
+            "phase": "completed",
+            "completed_at": "2025-12-02T15:00:00Z",
+            "location": ".kiro/specs/completed/event-hit-test"
+        },
+        {
+            "name": "event-mouse-basic",
+            "phase": "implementation-complete",
+            "completed_at": "2025-12-03T15:00:00Z",
+            "location": ".kiro/specs/completed/event-mouse-basic"
+        },
+        {
+            "name": "event-dispatch",
+            "phase": "implementation-complete",
+            "completed_at": "2025-12-05T10:45:00Z",
+            "location": ".kiro/specs/completed/event-dispatch"
+        },
+        {
+            "name": "event-drag-system",
+            "phase": "implementation-complete",
+            "completed_at": "2026-02-13T15:30:00Z",
+            "location": ".kiro/specs/completed/event-drag-system"
+        }
+    ]
+}

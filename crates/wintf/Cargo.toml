@@ -4,6 +4,9 @@ version = { workspace = true }
 edition = { workspace = true }
 publish = { workspace = true }
 
+[features]
+serde = ["dep:serde"]
+
 [dependencies]
 ambassador ={ workspace = true }
 async-executor = { workspace = true }
@@ -13,6 +16,7 @@ bevy_ecs = { workspace = true }
 bevy_tasks = { workspace = true }
 bevy_utils = { workspace = true }
 nonmax = { workspace = true }
+serde = { version = "1", optional = true, features = ["derive"] }
 taffy = { workspace = true }
 tracing = { workspace = true }
 windows = { workspace = true }

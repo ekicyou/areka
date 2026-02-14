@@ -31,8 +31,10 @@
 //! ```
 
 use bevy_ecs::prelude::*;
+use tracing::warn;
 
-use super::{D2DRectExt, GlobalArrangement};
+use super::hit_region::HitRegionMap;
+use super::{Arrangement, D2DRectExt, GlobalArrangement};
 use crate::ecs::common::DepthFirstReversePostOrder;
 use crate::ecs::WindowPos;
 
@@ -84,6 +86,8 @@ pub enum HitTestMode {
     Bounds,
     /// αマスクによるピクセル単位ヒットテスト
     AlphaMask,
+    /// 名前付きヒット領域（矩形・多角形・カラーマップ）による部位判定
+    NamedRegions,
 }
 
 // ============================================================================
@@ -129,6 +133,13 @@ impl HitTest {
     pub fn alpha_mask() -> Self {
         Self {
             mode: HitTestMode::AlphaMask,
+        }
+    }
+
+    /// 名前付きヒット領域によるヒットテスト
+    pub fn named_regions() -> Self {
+        Self {
+            mode: HitTestMode::NamedRegions,
         }
     }
 }
@@ -224,6 +235,151 @@ pub fn hit_test_entity(world: &World, entity: Entity, point: PhysicalPoint) -> b
 }
 
 // ============================================================================
+// HitTestResult - 拡張ヒットテスト結果
+// ============================================================================
+
+/// 拡張ヒットテスト結果
+///
+/// ヒットしたエンティティと、名前付きリージョン（NamedRegions モード時）を含む。
+#[derive(Debug, Clone)]
+pub struct HitTestResult {
+    /// ヒットしたエンティティ
+    pub entity: Entity,
+    /// ヒットした領域名（`NamedRegions` モード時のみ、`None` は無名ヒット）
+    pub region: Option<String>,
+}
+
+// ============================================================================
+// RegionHit - 内部判定結果
+// ============================================================================
+
+/// hit_test_entity_ex の内部返値
+pub(crate) enum RegionHit {
+    /// エンティティにヒットしなかった
+    Miss,
+    /// エンティティにヒットした（リージョン名は Option）
+    Hit(Option<String>),
+}
+
+// ============================================================================
+// hit_test_entity_ex - 単一エンティティ拡張ヒットテスト
+// ============================================================================
+
+/// 単一エンティティの拡張ヒットテスト
+///
+/// 既存 `hit_test_entity` と同等だが、`NamedRegions` モード時にリージョン名も返す。
+///
+/// # Arguments
+/// - `world`: ECS World 参照
+/// - `entity`: 判定対象エンティティ
+/// - `point`: スクリーン座標（物理ピクセル）
+///
+/// # Returns
+/// - `RegionHit::Hit(Some(name))`: 名前付き領域にヒット
+/// - `RegionHit::Hit(None)`: エンティティにヒット（無名）
+/// - `RegionHit::Miss`: ヒットしない
+pub(crate) fn hit_test_entity_ex(
+    world: &World,
+    entity: Entity,
+    point: PhysicalPoint,
+) -> RegionHit {
+    use crate::ecs::widget::bitmap_source::BitmapSourceResource;
+
+    // HitTest コンポーネントを取得（なければデフォルト = Bounds）
+    let mode = world
+        .get::<HitTest>(entity)
+        .map(|h| h.mode)
+        .unwrap_or(HitTestMode::Bounds);
+
+    // HitTestMode::None の場合はヒットしない
+    if mode == HitTestMode::None {
+        return RegionHit::Miss;
+    }
+
+    // GlobalArrangement を取得（なければヒットしない）
+    let Some(global) = world.get::<GlobalArrangement>(entity) else {
+        return RegionHit::Miss;
+    };
+
+    // まず矩形判定（全モード共通の早期リターン）
+    if !global.bounds.contains(point.x, point.y) {
+        return RegionHit::Miss;
+    }
+
+    // モード別判定
+    match mode {
+        HitTestMode::None => unreachable!(),
+        HitTestMode::Bounds => RegionHit::Hit(None),
+        HitTestMode::AlphaMask => {
+            // BitmapSourceResource を取得
+            let Some(resource) = world.get::<BitmapSourceResource>(entity) else {
+                return RegionHit::Hit(None); // フォールバック
+            };
+            let Some(alpha_mask) = resource.alpha_mask() else {
+                return RegionHit::Hit(None); // フォールバック
+            };
+
+            let bounds = &global.bounds;
+            let bounds_width = bounds.right - bounds.left;
+            let bounds_height = bounds.bottom - bounds.top;
+
+            if bounds_width <= 0.0 || bounds_height <= 0.0 {
+                return RegionHit::Hit(None);
+            }
+
+            let rel_x = (point.x - bounds.left) / bounds_width;
+            let rel_y = (point.y - bounds.top) / bounds_height;
+            let mask_x = (rel_x * alpha_mask.width() as f32) as u32;
+            let mask_y = (rel_y * alpha_mask.height() as f32) as u32;
+
+            if alpha_mask.is_hit(mask_x, mask_y) {
+                RegionHit::Hit(None)
+            } else {
+                RegionHit::Miss
+            }
+        }
+        HitTestMode::NamedRegions => {
+            // HitRegionMap を取得
+            let Some(region_map) = world.get::<HitRegionMap>(entity) else {
+                // HitRegionMap 不在時は Bounds フォールバック（1.3）
+                warn!(
+                    entity = ?entity,
+                    "NamedRegions モードですが HitRegionMap がありません。Bounds にフォールバックします"
+                );
+                return RegionHit::Hit(None);
+            };
+
+            // 正規化座標を計算
+            let bounds = &global.bounds;
+            let bounds_width = bounds.right - bounds.left;
+            let bounds_height = bounds.bottom - bounds.top;
+
+            if bounds_width <= 0.0 || bounds_height <= 0.0 {
+                return RegionHit::Hit(None);
+            }
+
+            let rel_x = (point.x - bounds.left) / bounds_width;
+            let rel_y = (point.y - bounds.top) / bounds_height;
+
+            // Arrangement.size を取得（DIPサイズ）
+            // Arrangement がない場合は bounds サイズをフォールバック値として使用
+            let entity_size = world
+                .get::<Arrangement>(entity)
+                .map(|a| a.size)
+                .unwrap_or(super::Size {
+                    width: bounds_width,
+                    height: bounds_height,
+                });
+
+            // HitRegionMap で判定
+            let region_name = region_map.hit_test_region(rel_x, rel_y, &entity_size);
+
+            RegionHit::Hit(region_name.map(|s| s.to_string()))
+        }
+    }
+}
+
+// ============================================================================
 // hit_test - ツリー走査ヒットテスト
 // ============================================================================
 
@@ -285,6 +441,74 @@ pub fn hit_test_in_window(
 
     // hit_test に委譲
     hit_test(world, window, screen_point)
+}
+
+// ============================================================================
+// hit_test_ex - ツリー走査拡張ヒットテスト
+// ============================================================================
+
+/// 指定ルートエンティティ配下でスクリーン座標による拡張ヒットテストを実行
+///
+/// 既存 `hit_test` と同じ走査だが、`HitTestResult`（エンティティ＋リージョン名）を返す。
+///
+/// # Arguments
+/// - `world`: ECS World 参照
+/// - `root`: 検索ルートエンティティ
+/// - `screen_point`: スクリーン座標（物理ピクセル）
+///
+/// # Returns
+/// - `Some(HitTestResult)`: ヒットした最前面エンティティと領域名
+/// - `None`: ヒットなし
+pub fn hit_test_ex(
+    world: &World,
+    root: Entity,
+    screen_point: PhysicalPoint,
+) -> Option<HitTestResult> {
+    let mut traversal = DepthFirstReversePostOrder::new(root);
+
+    while let Some(entity) = traversal.next(world) {
+        match hit_test_entity_ex(world, entity, screen_point) {
+            RegionHit::Hit(region) => {
+                return Some(HitTestResult {
+                    entity,
+                    region,
+                });
+            }
+            RegionHit::Miss => continue,
+        }
+    }
+
+    None
+}
+
+// ============================================================================
+// hit_test_in_window_ex - ウィンドウ座標拡張ヒットテスト
+// ============================================================================
+
+/// 指定Window内でクライアント座標による拡張ヒットテストを実行
+///
+/// # Arguments
+/// - `world`: ECS World 参照
+/// - `window`: Window エンティティ（WindowPos を持つ）
+/// - `client_point`: ウィンドウクライアント座標（物理ピクセル）
+///
+/// # Returns
+/// - `Some(HitTestResult)`: ヒットした最前面エンティティと領域名
+/// - `None`: ヒットなしまたは WindowPos が存在しない
+pub fn hit_test_in_window_ex(
+    world: &World,
+    window: Entity,
+    client_point: PhysicalPoint,
+) -> Option<HitTestResult> {
+    let window_pos = world.get::<WindowPos>(window)?;
+    let position = window_pos.position?;
+
+    let screen_point = PhysicalPoint::new(
+        client_point.x + position.x as f32,
+        client_point.y + position.y as f32,
+    );
+
+    hit_test_ex(world, window, screen_point)
 }
 
 // ============================================================================
@@ -687,5 +911,310 @@ mod tests {
         // bounds外の座標
         let point = PhysicalPoint::new(200.0, 200.0);
         assert!(!hit_test_entity(&world, entity, point));
+    }
+
+    // ========================================================================
+    // HitTestMode::NamedRegions テスト
+    // ========================================================================
+
+    #[test]
+    fn test_hit_test_named_regions_constructor() {
+        let hit_test = HitTest::named_regions();
+        assert_eq!(hit_test.mode, HitTestMode::NamedRegions);
+    }
+
+    // ========================================================================
+    // hit_test_entity_ex テスト
+    // ========================================================================
+
+    /// NamedRegions + HitRegionMap 矩形領域ヒット
+    #[test]
+    fn test_hit_test_entity_ex_named_regions_rect_hit() {
+        let mut world = World::new();
+
+        let region_map = HitRegionMap::builder()
+            .rect("head", 20.0, 0.0, 60.0, 40.0) // DIP: (20,0)-(80,40) on 100x100
+            .build()
+            .unwrap();
+
+        // Arrangement の on_add hookが GlobalArrangement を上書きするため、
+        // GlobalArrangement のみをセットし、Arrangement.size は bounds からフォールバック
+        let entity = world
+            .spawn((
+                make_global_arrangement(0.0, 0.0, 100.0, 100.0),
+                HitTest::named_regions(),
+                region_map,
+            ))
+            .id();
+
+        // local (50, 20) → screen (50, 20) — "head" 領域内
+        let point = PhysicalPoint::new(50.0, 20.0);
+        match hit_test_entity_ex(&world, entity, point) {
+            RegionHit::Hit(Some(name)) => assert_eq!(name, "head"),
+            other => panic!("Expected Hit(Some('head')), got {:?}", match other {
+                RegionHit::Miss => "Miss",
+                RegionHit::Hit(None) => "Hit(None)",
+                RegionHit::Hit(Some(_)) => "Hit(Some(...))",
+            }),
+        }
+    }
+
+    /// NamedRegions + HitRegionMap 領域外（bounds内、領域外 → 無名ヒット）
+    #[test]
+    fn test_hit_test_entity_ex_named_regions_no_region() {
+        let mut world = World::new();
+
+        let region_map = HitRegionMap::builder()
+            .rect("head", 20.0, 0.0, 60.0, 40.0)
+            .build()
+            .unwrap();
+
+        let entity = world
+            .spawn((
+                make_global_arrangement(0.0, 0.0, 100.0, 100.0),
+                HitTest::named_regions(),
+                region_map,
+            ))
+            .id();
+
+        // local (5, 80) — bounds内だが領域外
+        let point = PhysicalPoint::new(5.0, 80.0);
+        match hit_test_entity_ex(&world, entity, point) {
+            RegionHit::Hit(None) => {} // 期待通り: 無名ヒット
+            other => panic!("Expected Hit(None), got {:?}", match other {
+                RegionHit::Miss => "Miss",
+                RegionHit::Hit(None) => "Hit(None)",
+                RegionHit::Hit(Some(ref s)) => s.as_str(),
+            }),
+        }
+    }
+
+    /// NamedRegions + HitRegionMap 不在 → Bounds フォールバック (1.3)
+    #[test]
+    fn test_hit_test_entity_ex_named_regions_no_region_map_fallback() {
+        let mut world = World::new();
+
+        let entity = world
+            .spawn((
+                make_global_arrangement(0.0, 0.0, 100.0, 100.0),
+                HitTest::named_regions(),
+                // HitRegionMap なし
+            ))
+            .id();
+
+        let point = PhysicalPoint::new(50.0, 50.0);
+        match hit_test_entity_ex(&world, entity, point) {
+            RegionHit::Hit(None) => {} // Bounds フォールバック
+            other => panic!("Expected Hit(None) (fallback), got {:?}", match other {
+                RegionHit::Miss => "Miss",
+                RegionHit::Hit(None) => "Hit(None)",
+                RegionHit::Hit(Some(ref s)) => s.as_str(),
+            }),
+        }
+    }
+
+    /// hit_test_entity_ex: Bounds モードでは region: None
+    #[test]
+    fn test_hit_test_entity_ex_bounds_mode_region_none() {
+        let mut world = World::new();
+
+        let entity = world
+            .spawn((
+                make_global_arrangement(0.0, 0.0, 100.0, 100.0),
+                HitTest::bounds(),
+            ))
+            .id();
+
+        let point = PhysicalPoint::new(50.0, 50.0);
+        match hit_test_entity_ex(&world, entity, point) {
+            RegionHit::Hit(None) => {}
+            _ => panic!("Expected Hit(None) for Bounds mode"),
+        }
+    }
+
+    /// hit_test_entity_ex: bounds外は Miss
+    #[test]
+    fn test_hit_test_entity_ex_outside_bounds() {
+        let mut world = World::new();
+
+        let entity = world
+            .spawn((
+                make_global_arrangement(0.0, 0.0, 100.0, 100.0),
+                HitTest::named_regions(),
+            ))
+            .id();
+
+        let point = PhysicalPoint::new(200.0, 200.0);
+        match hit_test_entity_ex(&world, entity, point) {
+            RegionHit::Miss => {}
+            _ => panic!("Expected Miss for outside bounds"),
+        }
+    }
+
+    // ========================================================================
+    // hit_test_ex テスト
+    // ========================================================================
+
+    /// hit_test_ex: ツリー走査で最前面エンティティとリージョン名を返す
+    #[test]
+    fn test_hit_test_ex_returns_region_name() {
+        let mut world = World::new();
+
+        let region_map = HitRegionMap::builder()
+            .rect("head", 0.0, 0.0, 100.0, 50.0)
+            .rect("body", 0.0, 50.0, 100.0, 50.0)
+            .build()
+            .unwrap();
+
+        let entity = world
+            .spawn((
+                make_global_arrangement(0.0, 0.0, 100.0, 100.0),
+                HitTest::named_regions(),
+                region_map,
+            ))
+            .id();
+
+        let root = world.spawn_empty().id();
+        world.entity_mut(root).add_children(&[entity]);
+
+        // head 領域
+        let result = hit_test_ex(&world, root, PhysicalPoint::new(50.0, 25.0));
+        assert!(result.is_some());
+        let result = result.unwrap();
+        assert_eq!(result.entity, entity);
+        assert_eq!(result.region.as_deref(), Some("head"));
+
+        // body 領域
+        let result = hit_test_ex(&world, root, PhysicalPoint::new(50.0, 75.0));
+        assert!(result.is_some());
+        let result = result.unwrap();
+        assert_eq!(result.entity, entity);
+        assert_eq!(result.region.as_deref(), Some("body"));
+    }
+
+    /// hit_test_ex: Bounds モードでは region: None
+    #[test]
+    fn test_hit_test_ex_bounds_mode() {
+        let mut world = World::new();
+
+        let entity = world
+            .spawn((
+                make_global_arrangement(0.0, 0.0, 100.0, 100.0),
+                HitTest::bounds(),
+            ))
+            .id();
+
+        let root = world.spawn_empty().id();
+        world.entity_mut(root).add_children(&[entity]);
+
+        let result = hit_test_ex(&world, root, PhysicalPoint::new(50.0, 50.0));
+        assert!(result.is_some());
+        let result = result.unwrap();
+        assert_eq!(result.entity, entity);
+        assert_eq!(result.region, None);
+    }
+
+    /// hit_test_ex: 後方互換 — 既存 hit_test と同じエンティティを返す
+    #[test]
+    fn test_hit_test_ex_backward_compat_same_entity() {
+        let mut world = World::new();
+
+        let back = world
+            .spawn(make_global_arrangement(0.0, 0.0, 100.0, 100.0))
+            .id();
+        let front = world
+            .spawn(make_global_arrangement(20.0, 20.0, 80.0, 80.0))
+            .id();
+
+        let root = world.spawn_empty().id();
+        world.entity_mut(root).add_children(&[back, front]);
+
+        let point = PhysicalPoint::new(50.0, 50.0);
+
+        let old_result = hit_test(&world, root, point);
+        let new_result = hit_test_ex(&world, root, point);
+
+        assert_eq!(old_result.unwrap(), new_result.unwrap().entity);
+    }
+
+    // ========================================================================
+    // hit_test_in_window_ex テスト
+    // ========================================================================
+
+    /// hit_test_in_window_ex: クライアント座標変換 + リージョン名
+    #[test]
+    fn test_hit_test_in_window_ex_with_region() {
+        let mut world = World::new();
+
+        let region_map = HitRegionMap::builder()
+            .rect("button", 0.0, 0.0, 100.0, 50.0)
+            .build()
+            .unwrap();
+
+        let window = world
+            .spawn((
+                make_global_arrangement(100.0, 200.0, 500.0, 500.0),
+                WindowPos {
+                    position: Some(POINT { x: 100, y: 200 }),
+                    size: Some(SIZE { cx: 400, cy: 300 }),
+                    ..Default::default()
+                },
+            ))
+            .id();
+
+        let widget = world
+            .spawn((
+                make_global_arrangement(150.0, 250.0, 250.0, 300.0), // 100x50
+                HitTest::named_regions(),
+                region_map,
+            ))
+            .id();
+
+        world.entity_mut(window).add_children(&[widget]);
+
+        // クライアント (50, 50) → スクリーン (150, 250)
+        let result =
+            hit_test_in_window_ex(&world, window, PhysicalPoint::new(50.0, 50.0));
+        assert!(result.is_some());
+        let result = result.unwrap();
+        assert_eq!(result.entity, widget);
+        assert_eq!(result.region.as_deref(), Some("button"));
+    }
+
+    /// hit_test_in_window_ex: WindowPos なし → None
+    #[test]
+    fn test_hit_test_in_window_ex_no_window_pos() {
+        let mut world = World::new();
+        let window = world
+            .spawn(make_global_arrangement(0.0, 0.0, 100.0, 100.0))
+            .id();
+
+        let result =
+            hit_test_in_window_ex(&world, window, PhysicalPoint::new(50.0, 50.0));
+        assert!(result.is_none());
+    }
+
+    /// 既存 hit_test / hit_test_in_window の後方互換性（NamedRegions以外の動作不変）
+    #[test]
+    fn test_existing_api_backward_compat() {
+        let mut world = World::new();
+
+        let entity = world
+            .spawn((
+                make_global_arrangement(0.0, 0.0, 100.0, 100.0),
+                HitTest::bounds(),
+            ))
+            .id();
+
+        let root = world.spawn_empty().id();
+        world.entity_mut(root).add_children(&[entity]);
+
+        // 既存 API は変更なく動作
+        let result = hit_test(&world, root, PhysicalPoint::new(50.0, 50.0));
+        assert_eq!(result, Some(entity));
+
+        // bounds外
+        let result = hit_test(&world, root, PhysicalPoint::new(200.0, 200.0));
+        assert_eq!(result, None);
     }
 }
