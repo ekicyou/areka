@@ -298,11 +298,11 @@ pub fn hit_test_entity_ex(
   - `HitTestMode::Bounds/AlphaMask`: 既存 `hit_test_entity` に委譲し、`Hit(None)` または `Miss`
 - **Invariants**: 既存 `hit_test_entity` の判定結果と矛盾しない
 
-**座標変換ロジック（AlphaMask 踏襲の2段階変換）**:
+**座標変換ロジック（AlphaMask 完全踏襲）**:
 
 ```rust
-// 【段階1】スクリーン座標 → 正規化座標（0.0〜1.0）— 方式共通
-// GlobalArrangement.bounds（物理ピクセル）を使用
+// スクリーン座標 → 正規化座標（0.0〜1.0）— AlphaMask と同じパターン
+// hit_test.rs L215-220 と同一ロジック
 let bounds = &global_arrangement.bounds;
 let bounds_width = bounds.right - bounds.left;
 let bounds_height = bounds.bottom - bounds.top;
@@ -310,27 +310,15 @@ let bounds_height = bounds.bottom - bounds.top;
 let rel_x = (point.x - bounds.left) / bounds_width;
 let rel_y = (point.y - bounds.top) / bounds_height;
 
-// 【段階2】正規化座標 → ターゲット座標 — 方式別
-match &hit_region_map.kind {
-    RegionKind::Shapes(_) => {
-        // DIPローカル座標系（Requirement 2.3, 4.3）
-        // Arrangement.size から論理サイズを取得（TaffyComputedLayoutから設定される）
-        let local_x = rel_x * arrangement.size.width;
-        let local_y = rel_y * arrangement.size.height;
-        // hit_region_map.hit_test_region(local_x, local_y) で判定
-    }
-    RegionKind::ColorMap(color_map) => {
-        // 画像ピクセル座標系（Requirement 3.6）
-        let pixel_x = (rel_x * color_map.width() as f32) as u32;
-        let pixel_y = (rel_y * color_map.height() as f32) as u32;
-        // hit_region_map.hit_test_region(...) で判定 ※座標系責務は後述
-    }
-}
+// HitRegionMap で判定（正規化座標 + entity_size を渡す）
+let region_name = hit_region_map.hit_test_region(rel_x, rel_y, &arrangement.size);
+// → HitRegionMap 内部で方式別の座標変換と判定を実施
 ```
 
 **データソース**:
 - 物理ピクセル bounds: `GlobalArrangement.bounds`（hit_test.rs L207 パターン踏襲）
 - DIP論理サイズ: `Arrangement.size`（systems.rs L335-342 で TaffyComputedLayout.size から設定）
+- 既存 AlphaMask 実装（hit_test.rs L215-220）と完全に同じ正規化座標を使用
 
 #### hit_test_ex / hit_test_in_window_ex
 
@@ -415,14 +403,26 @@ impl HitRegionMap {
         mapping: &HashMap<(u8, u8, u8), String>,
     ) -> windows::core::Result<Self> { ... }
 
-    /// ローカル座標から領域名を返す
-    pub fn hit_test_region(&self, local_x: f32, local_y: f32) -> Option<&str> { ... }
+    /// 正規化座標から領域名を返す（AlphaMaskパターン踏襲）
+    /// 
+    /// # Arguments
+    /// * `rel_x`, `rel_y` - 正規化座標（0.0〜1.0）
+    /// * `entity_size` - エンティティの論理サイズ（DIP単位、Shapes方式で使用）
+    pub fn hit_test_region(
+        &self, 
+        rel_x: f32, 
+        rel_y: f32, 
+        entity_size: &Size
+    ) -> Option<&str> { ... }
 }
 ```
 
-- **Preconditions**: `local_x`, `local_y` はエンティティローカル座標系（DIP単位、Shapes方式）または画像ピクセル座標（ColorMap方式）
+- **Preconditions**: `rel_x`, `rel_y` は正規化座標（0.0〜1.0）、`entity_size` は `Arrangement.size`
 - **Postconditions**: 領域内→`Some("name")`、領域外→`None`
 - **Invariants**: 空の場合は常に `None`
+- **Implementation**: 内部で方式別の座標変換を実施
+  - Shapes: `local_x = rel_x * entity_size.width` で DIPローカル座標に変換
+  - ColorMap: `pixel_x = (rel_x * color_map.width()) as u32` で画像ピクセル座標に変換（AlphaMask L218-219 と同一）
 
 #### RegionKind
 
