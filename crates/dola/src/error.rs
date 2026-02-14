@@ -87,7 +87,11 @@ impl fmt::Display for DolaError {
                 )
             }
             DolaError::ReservedKeyframeName { name } => {
-                write!(f, "Reserved keyframe name '{}' cannot be user-defined", name)
+                write!(
+                    f,
+                    "Reserved keyframe name '{}' cannot be user-defined",
+                    name
+                )
             }
             DolaError::UndefinedVariable {
                 storyboard,

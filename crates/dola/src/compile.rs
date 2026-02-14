@@ -12,7 +12,7 @@ use crate::easing::EasingFunction;
 use crate::error::DolaError;
 use crate::storyboard::{InterruptionPolicy, KeyframeNames, KeyframeRef, StoryboardEntry};
 use crate::transition::{TransitionRef, TransitionValue};
-use crate::validate::{collect_keyframe_names_from_ref, Validate};
+use crate::validate::{Validate, collect_keyframe_names_from_ref};
 use crate::variable::AnimationVariableDef;
 
 // ============================================================
@@ -195,16 +195,11 @@ pub fn compile_storyboard(
             None => continue, // validated already: transition requires variable
         };
 
-        let trans_def = match resolve_transition(
-            storyboard_name,
-            entry_idx,
-            entry,
-            doc,
-            &mut errors,
-        ) {
-            Some(td) => td,
-            None => continue,
-        };
+        let trans_def =
+            match resolve_transition(storyboard_name, entry_idx, entry, doc, &mut errors) {
+                Some(td) => td,
+                None => continue,
+            };
 
         let var_def = match doc.variable.get(&var_name) {
             Some(vd) => vd,
@@ -530,10 +525,7 @@ fn resolve_pure_keyframe_time(
 }
 
 /// Find the previous entry (by original array index) in sorted order
-fn find_previous_entry_in_sort_order(
-    entry_idx: usize,
-    _sorted_indices: &[usize],
-) -> Option<usize> {
+fn find_previous_entry_in_sort_order(entry_idx: usize, _sorted_indices: &[usize]) -> Option<usize> {
     // "配列直前エントリ" = original array index - 1
     if entry_idx > 0 {
         Some(entry_idx - 1)
