@@ -30,7 +30,7 @@
 | 種別 | ゴースト（pasta DSL 解釈・実行） |
 | シェル | 1体キャラクター表示（透過ウィンドウ、アイドルアニメーション） |
 | バルーン | 縦書きタイプライター付き吹き出し |
-| スクリプト | pasta DSL（里々インスパイアのカスタムDSL） |
+| スクリプト | pasta DSL（里々インスパイアのカスタムDSL、外部リポ: ekicyou/pasta） |
 
 ### 現状サマリー（2026-02-14時点）
 
@@ -48,6 +48,7 @@
 - dola（宣言的アニメーション定義フォーマット）
 
 **未実装（アプリケーション層）:**
+- areka バイナリクレート (`crates/areka`) の作成（現在の `examples/areka.rs` はダミー、削除予定）
 - アニメーションシステム（dola → wintf 統合）
 - バルーンシステム（吹き出しUI）
 - ウィンドウ配置（デスクトップ端固定等）
@@ -71,8 +72,8 @@
 #### Acceptance Criteria
 
 1. **The** docs-restructure プロセス **shall** 現在の `README.md` を `doc/DEVLOG_ORIGINAL_README.md` にリネームして保存する
-2. **The** 新 `README.md` **shall** 以下のセクションを含む：プロジェクト概要、スクリーンショット/デモ（プレースホルダー可）、技術スタック、クレート構成（wintf / dola + 外部: pasta）、ビルド手順、アルファリリース目標（ぱすたさん）、現在の到達点、開発ロードマップ概要、ライセンス
-3. **The** 新 `README.md` **shall** プロジェクトの二層構造（wintf = Windows UIフレームワーク / areka = デスクトップマスコットアプリ）を明確に説明する
+2. **The** 新 `README.md` **shall** 以下のセクションを含む：プロジェクト概要、スクリーンショット/デモ（プレースホルダー可）、技術スタック、クレート構成（wintf / dola / areka + 外部: pasta）、ビルド手順、アルファリリース目標（ぱすたさん）、現在の到達点、開発ロードマップ概要、ライセンス
+3. **The** 新 `README.md` **shall** プロジェクトの二層構造（wintf = Windows UIフレームワーク / areka = デスクトップマスコットアプリバイナリクレート）を明確に説明する
 4. **The** 新 `README.md` **shall** 「ぱすたさんアルファリリース」をマイルストーンとして提示し、残タスクの概要をロードマップセクションで示す
 5. **The** 新 `README.md` **shall** 日本語で記述し、プロジェクトの「顔」として洗練された表現を用いる
 6. **The** 新 `README.md` **shall** 現在の実装済み機能リストを客観的に反映する（達成済みチェックマーク付き）
@@ -122,7 +123,7 @@
 #### Acceptance Criteria
 
 1. **The** docs-restructure プロセス **shall** `doc/ARCHITECTURE.md` を新規作成する
-2. **The** アーキテクチャドキュメント **shall** 以下を含む：クレート依存関係図、wintf の3層構造（COM → ECS → Message Handling）、dola の責務、areka アプリケーション層の概要
+2. **The** アーキテクチャドキュメント **shall** 以下を含む：クレート依存関係図（wintf / dola / areka + 外部: pasta）、wintf の3層構造（COM → ECS → Message Handling）、dola の責務、areka バイナリクレートの責務、pasta 外部リポジトリとの連携概要
 3. **The** アーキテクチャドキュメント **shall** wintf の ECS モジュール一覧（window, graphics, layout, widget, pointer, drag 等）を記載し、各モジュールの責務を1-2行で説明する
 4. **The** アーキテクチャドキュメント **shall** steering/structure.md を原典として参照し、差分のみを記載する（二重管理回避）
 5. **The** アーキテクチャドキュメント **shall** 新規開発者が「どのファイルを読めば理解が進むか」の推奨読書順序を提供する
