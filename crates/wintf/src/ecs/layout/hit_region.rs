@@ -30,8 +30,8 @@ use windows::core::Interface;
 
 use super::metrics::Size;
 use crate::com::wic::{
-    wic_factory, WICBitmapDecoderExt, WICBitmapSourceExt, WICFormatConverterExt,
-    WICImagingFactoryExt,
+    WICBitmapDecoderExt, WICBitmapSourceExt, WICFormatConverterExt, WICImagingFactoryExt,
+    wic_factory,
 };
 
 // ============================================================================
@@ -136,9 +136,9 @@ impl ColorMapData {
         image_path: &std::path::Path,
         mapping: &HashMap<(u8, u8, u8), String>,
     ) -> windows::core::Result<Self> {
-        use windows::core::HSTRING;
         use windows::Win32::Foundation::GENERIC_READ;
         use windows::Win32::Graphics::Imaging::*;
+        use windows::core::HSTRING;
 
         // リージョン名リストとカラー→ID マッピングを構築
         let mut region_names = Vec::new();
@@ -358,9 +358,7 @@ impl HitRegionMap {
                                 && local_y >= *y
                                 && local_y <= *y + *height
                         }
-                        Shape::Polygon { vertices } => {
-                            point_in_polygon(local_x, local_y, vertices)
-                        }
+                        Shape::Polygon { vertices } => point_in_polygon(local_x, local_y, vertices),
                     };
                     if hit {
                         return Some(&region.name);
@@ -429,9 +427,7 @@ impl HitRegionMapBuilder {
         // バリデーション
         for region in &self.regions {
             match &region.shape {
-                Shape::Rect {
-                    width, height, ..
-                } => {
+                Shape::Rect { width, height, .. } => {
                     if *width <= 0.0 || *height <= 0.0 {
                         return Err(HitRegionError::InvalidRectSize {
                             width: *width,
@@ -582,10 +578,7 @@ mod tests {
             height: 100.0,
         };
         // local (35, 35) → rel (0.35, 0.35)
-        assert_eq!(
-            map.hit_test_region(0.35, 0.35, &entity_size),
-            Some("test")
-        );
+        assert_eq!(map.hit_test_region(0.35, 0.35, &entity_size), Some("test"));
     }
 
     #[test]
@@ -615,15 +608,9 @@ mod tests {
             height: 100.0,
         };
         // 左上角 (10, 20) → rel (0.10, 0.20)
-        assert_eq!(
-            map.hit_test_region(0.10, 0.20, &entity_size),
-            Some("test")
-        );
+        assert_eq!(map.hit_test_region(0.10, 0.20, &entity_size), Some("test"));
         // 内部点 (59, 49) → rel (0.59, 0.49) — 右下角の近傍
-        assert_eq!(
-            map.hit_test_region(0.59, 0.49, &entity_size),
-            Some("test")
-        );
+        assert_eq!(map.hit_test_region(0.59, 0.49, &entity_size), Some("test"));
     }
 
     // ========================================================================
@@ -691,10 +678,7 @@ mod tests {
             height: 100.0,
         };
         // 両方の領域内 → 先に定義された "first" が返る
-        assert_eq!(
-            map.hit_test_region(0.5, 0.5, &entity_size),
-            Some("first")
-        );
+        assert_eq!(map.hit_test_region(0.5, 0.5, &entity_size), Some("first"));
     }
 
     #[test]
@@ -721,6 +705,111 @@ mod tests {
         assert_eq!(
             map.hit_test_region(0.75, 0.25, &entity_size),
             Some("poly_region")
+        );
+    }
+
+    // ========================================================================
+    // Polygon hit_test_region 統一インターフェーステスト
+    // ========================================================================
+
+    #[test]
+    fn test_polygon_hit_test_region_inside() {
+        // 三角形 (0,0)-(100,0)-(50,100) をエンティティ 100x100 で定義
+        let map = HitRegionMap::builder()
+            .polygon("tri", &[(0.0, 0.0), (100.0, 0.0), (50.0, 100.0)])
+            .build()
+            .unwrap();
+
+        let entity_size = Size {
+            width: 100.0,
+            height: 100.0,
+        };
+        // 三角形の重心付近 (50, 33) → rel (0.50, 0.33)
+        assert_eq!(map.hit_test_region(0.50, 0.33, &entity_size), Some("tri"));
+    }
+
+    #[test]
+    fn test_polygon_hit_test_region_outside() {
+        let map = HitRegionMap::builder()
+            .polygon("tri", &[(0.0, 0.0), (100.0, 0.0), (50.0, 100.0)])
+            .build()
+            .unwrap();
+
+        let entity_size = Size {
+            width: 100.0,
+            height: 100.0,
+        };
+        // 三角形の外 (95, 90) → rel (0.95, 0.90)
+        assert_eq!(map.hit_test_region(0.95, 0.90, &entity_size), None);
+    }
+
+    #[test]
+    fn test_polygon_hit_test_region_non_square_entity() {
+        // エンティティが非正方形 (200x100) の場合の座標変換を検証
+        // 多角形: (100,0)-(200,0)-(200,100)-(100,100) — 右半分の矩形
+        let map = HitRegionMap::builder()
+            .polygon(
+                "right_half",
+                &[(100.0, 0.0), (200.0, 0.0), (200.0, 100.0), (100.0, 100.0)],
+            )
+            .build()
+            .unwrap();
+
+        let entity_size = Size {
+            width: 200.0,
+            height: 100.0,
+        };
+        // 左半分 (50, 50) → rel (0.25, 0.50) → local (50, 50) … 外
+        assert_eq!(map.hit_test_region(0.25, 0.50, &entity_size), None);
+        // 右半分 (150, 50) → rel (0.75, 0.50) → local (150, 50) … 内
+        assert_eq!(
+            map.hit_test_region(0.75, 0.50, &entity_size),
+            Some("right_half")
+        );
+    }
+
+    #[test]
+    fn test_polygon_hit_test_region_multiple_regions() {
+        // 4分割のポリゴンリージョン
+        let map = HitRegionMap::builder()
+            .polygon(
+                "top-left",
+                &[(0.0, 0.0), (50.0, 0.0), (50.0, 50.0), (0.0, 50.0)],
+            )
+            .polygon(
+                "top-right",
+                &[(50.0, 0.0), (100.0, 0.0), (100.0, 50.0), (50.0, 50.0)],
+            )
+            .polygon(
+                "bottom-left",
+                &[(0.0, 50.0), (50.0, 50.0), (50.0, 100.0), (0.0, 100.0)],
+            )
+            .polygon(
+                "bottom-right",
+                &[(50.0, 50.0), (100.0, 50.0), (100.0, 100.0), (50.0, 100.0)],
+            )
+            .build()
+            .unwrap();
+
+        let entity_size = Size {
+            width: 100.0,
+            height: 100.0,
+        };
+        assert_eq!(
+            map.hit_test_region(0.25, 0.25, &entity_size),
+            Some("top-left")
+        );
+        assert_eq!(
+            map.hit_test_region(0.75, 0.25, &entity_size),
+            Some("top-right")
+        );
+        assert_eq!(
+            map.hit_test_region(0.25, 0.75, &entity_size),
+            Some("bottom-left")
+        );
+        assert_eq!(
+            map.hit_test_region(0.75, 0.75, &entity_size),
+            Some("bottom-right")
         );
     }
 
@@ -829,14 +918,122 @@ mod tests {
         };
 
         // 左側 (rel_x=0.25 → pixel_x=1)
-        assert_eq!(
-            map.hit_test_region(0.25, 0.5, &entity_size),
-            Some("left")
-        );
+        assert_eq!(map.hit_test_region(0.25, 0.5, &entity_size), Some("left"));
         // 右側 (rel_x=0.75 → pixel_x=3)
+        assert_eq!(map.hit_test_region(0.75, 0.5, &entity_size), Some("right"));
+    }
+
+    #[test]
+    fn test_color_map_hit_test_region_unmapped_via_interface() {
+        // 4x4 カラーマップ: 中央2x2のみマッピング、周囲は未マッピング(id=0)
+        let mut index_map = vec![0u8; 16];
+        // (1,1),(2,1),(1,2),(2,2) を "center" (id=1) に設定
+        index_map[5] = 1; // (1,1)
+        index_map[6] = 1; // (2,1)
+        index_map[9] = 1; // (1,2)
+        index_map[10] = 1; // (2,2)
+
+        let map = HitRegionMap {
+            kind: RegionKind::ColorMap(ColorMapData {
+                index_map,
+                region_names: vec!["center".to_string()],
+                width: 4,
+                height: 4,
+            }),
+        };
+
+        let entity_size = Size {
+            width: 100.0,
+            height: 100.0,
+        };
+        // 中央 → "center"
         assert_eq!(
-            map.hit_test_region(0.75, 0.5, &entity_size),
-            Some("right")
+            map.hit_test_region(0.375, 0.375, &entity_size),
+            Some("center")
+        );
+        // 左上隅 (0,0) → 未マッピング → None
+        assert_eq!(map.hit_test_region(0.0, 0.0, &entity_size), None);
+        // 右下隅 (3,3) → 未マッピング → None
+        assert_eq!(map.hit_test_region(0.875, 0.875, &entity_size), None);
+    }
+
+    #[test]
+    fn test_color_map_hit_test_region_non_square_entity() {
+        // 4x2 カラーマップ（横長）: 左半分 "a", 右半分 "b"
+        //  a a b b
+        //  a a b b
+        let index_map = vec![1, 1, 2, 2, 1, 1, 2, 2];
+
+        let map = HitRegionMap {
+            kind: RegionKind::ColorMap(ColorMapData {
+                index_map,
+                region_names: vec!["a".to_string(), "b".to_string()],
+                width: 4,
+                height: 2,
+            }),
+        };
+
+        // エンティティが非正方形: 200x50
+        let entity_size = Size {
+            width: 200.0,
+            height: 50.0,
+        };
+        // 左1/4 → pixel_x=1 → "a"
+        assert_eq!(map.hit_test_region(0.25, 0.5, &entity_size), Some("a"));
+        // 右3/4 → pixel_x=3 → "b"
+        assert_eq!(map.hit_test_region(0.75, 0.5, &entity_size), Some("b"));
+    }
+
+    #[test]
+    fn test_color_map_hit_test_region_four_quadrants() {
+        // 4x4 カラーマップ: 4象限
+        // TL=1, TR=2, BL=3, BR=4
+        let mut index_map = vec![0u8; 16];
+        for y in 0..4u32 {
+            for x in 0..4u32 {
+                let i = (y * 4 + x) as usize;
+                index_map[i] = match (x < 2, y < 2) {
+                    (true, true) => 1,   // top-left
+                    (false, true) => 2,  // top-right
+                    (true, false) => 3,  // bottom-left
+                    (false, false) => 4, // bottom-right
+                };
+            }
+        }
+
+        let map = HitRegionMap {
+            kind: RegionKind::ColorMap(ColorMapData {
+                index_map,
+                region_names: vec![
+                    "top-left".to_string(),
+                    "top-right".to_string(),
+                    "bottom-left".to_string(),
+                    "bottom-right".to_string(),
+                ],
+                width: 4,
+                height: 4,
+            }),
+        };
+
+        let entity_size = Size {
+            width: 100.0,
+            height: 100.0,
+        };
+        assert_eq!(
+            map.hit_test_region(0.25, 0.25, &entity_size),
+            Some("top-left")
+        );
+        assert_eq!(
+            map.hit_test_region(0.75, 0.25, &entity_size),
+            Some("top-right")
+        );
+        assert_eq!(
+            map.hit_test_region(0.25, 0.75, &entity_size),
+            Some("bottom-left")
+        );
+        assert_eq!(
+            map.hit_test_region(0.75, 0.75, &entity_size),
+            Some("bottom-right")
         );
     }
 

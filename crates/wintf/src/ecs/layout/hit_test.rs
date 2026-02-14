@@ -35,8 +35,8 @@ use tracing::warn;
 
 use super::hit_region::HitRegionMap;
 use super::{Arrangement, D2DRectExt, GlobalArrangement};
-use crate::ecs::common::DepthFirstReversePostOrder;
 use crate::ecs::WindowPos;
+use crate::ecs::common::DepthFirstReversePostOrder;
 
 // ============================================================================
 // PhysicalPoint - 物理ピクセル座標型
@@ -278,11 +278,7 @@ pub(crate) enum RegionHit {
 /// - `RegionHit::Hit(Some(name))`: 名前付き領域にヒット
 /// - `RegionHit::Hit(None)`: エンティティにヒット（無名）
 /// - `RegionHit::Miss`: ヒットしない
-pub(crate) fn hit_test_entity_ex(
-    world: &World,
-    entity: Entity,
-    point: PhysicalPoint,
-) -> RegionHit {
+pub(crate) fn hit_test_entity_ex(world: &World, entity: Entity, point: PhysicalPoint) -> RegionHit {
     use crate::ecs::widget::bitmap_source::BitmapSourceResource;
 
     // HitTest コンポーネントを取得（なければデフォルト = Bounds）
@@ -363,13 +359,14 @@ pub(crate) fn hit_test_entity_ex(
 
             // Arrangement.size を取得（DIPサイズ）
             // Arrangement がない場合は bounds サイズをフォールバック値として使用
-            let entity_size = world
-                .get::<Arrangement>(entity)
-                .map(|a| a.size)
-                .unwrap_or(super::Size {
-                    width: bounds_width,
-                    height: bounds_height,
-                });
+            let entity_size =
+                world
+                    .get::<Arrangement>(entity)
+                    .map(|a| a.size)
+                    .unwrap_or(super::Size {
+                        width: bounds_width,
+                        height: bounds_height,
+                    });
 
             // HitRegionMap で判定
             let region_name = region_map.hit_test_region(rel_x, rel_y, &entity_size);
@@ -469,10 +466,7 @@ pub fn hit_test_ex(
     while let Some(entity) = traversal.next(world) {
         match hit_test_entity_ex(world, entity, screen_point) {
             RegionHit::Hit(region) => {
-                return Some(HitTestResult {
-                    entity,
-                    region,
-                });
+                return Some(HitTestResult { entity, region });
             }
             RegionHit::Miss => continue,
         }
@@ -951,11 +945,14 @@ mod tests {
         let point = PhysicalPoint::new(50.0, 20.0);
         match hit_test_entity_ex(&world, entity, point) {
             RegionHit::Hit(Some(name)) => assert_eq!(name, "head"),
-            other => panic!("Expected Hit(Some('head')), got {:?}", match other {
-                RegionHit::Miss => "Miss",
-                RegionHit::Hit(None) => "Hit(None)",
-                RegionHit::Hit(Some(_)) => "Hit(Some(...))",
-            }),
+            other => panic!(
+                "Expected Hit(Some('head')), got {:?}",
+                match other {
+                    RegionHit::Miss => "Miss",
+                    RegionHit::Hit(None) => "Hit(None)",
+                    RegionHit::Hit(Some(_)) => "Hit(Some(...))",
+                }
+            ),
         }
     }
 
@@ -981,11 +978,14 @@ mod tests {
         let point = PhysicalPoint::new(5.0, 80.0);
         match hit_test_entity_ex(&world, entity, point) {
             RegionHit::Hit(None) => {} // 期待通り: 無名ヒット
-            other => panic!("Expected Hit(None), got {:?}", match other {
-                RegionHit::Miss => "Miss",
-                RegionHit::Hit(None) => "Hit(None)",
-                RegionHit::Hit(Some(ref s)) => s.as_str(),
-            }),
+            other => panic!(
+                "Expected Hit(None), got {:?}",
+                match other {
+                    RegionHit::Miss => "Miss",
+                    RegionHit::Hit(None) => "Hit(None)",
+                    RegionHit::Hit(Some(ref s)) => s.as_str(),
+                }
+            ),
         }
     }
 
@@ -1005,11 +1005,14 @@ mod tests {
         let point = PhysicalPoint::new(50.0, 50.0);
         match hit_test_entity_ex(&world, entity, point) {
             RegionHit::Hit(None) => {} // Bounds フォールバック
-            other => panic!("Expected Hit(None) (fallback), got {:?}", match other {
-                RegionHit::Miss => "Miss",
-                RegionHit::Hit(None) => "Hit(None)",
-                RegionHit::Hit(Some(ref s)) => s.as_str(),
-            }),
+            other => panic!(
+                "Expected Hit(None) (fallback), got {:?}",
+                match other {
+                    RegionHit::Miss => "Miss",
+                    RegionHit::Hit(None) => "Hit(None)",
+                    RegionHit::Hit(Some(ref s)) => s.as_str(),
+                }
+            ),
         }
     }
 
@@ -1173,8 +1176,7 @@ mod tests {
         world.entity_mut(window).add_children(&[widget]);
 
         // クライアント (50, 50) → スクリーン (150, 250)
-        let result =
-            hit_test_in_window_ex(&world, window, PhysicalPoint::new(50.0, 50.0));
+        let result = hit_test_in_window_ex(&world, window, PhysicalPoint::new(50.0, 50.0));
         assert!(result.is_some());
         let result = result.unwrap();
         assert_eq!(result.entity, widget);
@@ -1189,8 +1191,7 @@ mod tests {
             .spawn(make_global_arrangement(0.0, 0.0, 100.0, 100.0))
             .id();
 
-        let result =
-            hit_test_in_window_ex(&world, window, PhysicalPoint::new(50.0, 50.0));
+        let result = hit_test_in_window_ex(&world, window, PhysicalPoint::new(50.0, 50.0));
         assert!(result.is_none());
     }
 

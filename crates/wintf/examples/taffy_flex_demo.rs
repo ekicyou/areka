@@ -75,16 +75,17 @@ use windows::core::Result;
 use wintf::ecs::drag::{
     DragConfig, DragEndEvent, DragEvent, DragStartEvent, OnDrag, OnDragEnd, OnDragStart,
 };
+use wintf::ecs::layout::hit_region::HitRegionMap;
+use wintf::ecs::layout::{BoxMargin, BoxPosition, BoxSize, BoxStyle, Dimension, Opacity};
 use wintf::ecs::layout::{
-    BoxInset, BoxMargin, BoxPosition, BoxSize, BoxStyle, Dimension, LengthPercentageAuto, Opacity,
+    GlobalArrangement, HitTest, PhysicalPoint, hit_test, hit_test_in_window_ex,
 };
-use wintf::ecs::layout::{GlobalArrangement, PhysicalPoint, hit_test};
 use wintf::ecs::pointer::{OnPointerMoved, OnPointerPressed, Phase, PointerState};
 use wintf::ecs::widget::bitmap_source::{BitmapSource, CommandSender};
 use wintf::ecs::widget::brushes::Brushes;
 use wintf::ecs::widget::shapes::Rectangle;
-use wintf::ecs::{Window, WindowPos};
 use wintf::ecs::window::find_owner_window;
+use wintf::ecs::{Window, WindowPos};
 use wintf::*;
 
 #[derive(Debug, Clone, Copy, Component, PartialEq, Hash)]
@@ -124,6 +125,30 @@ pub struct BlueBox;
 #[derive(Debug, Clone, Copy, Component, PartialEq, Hash)]
 pub struct GreenBoxChild;
 
+/// リージョンテストコンテナを識別するマーカー
+#[derive(Debug, Clone, Copy, Component, PartialEq, Hash)]
+pub struct RegionTestContainer;
+
+/// 矩形リージョンテスト用ボックス
+#[derive(Debug, Clone, Copy, Component, PartialEq, Hash)]
+pub struct RegionRectBox;
+
+/// 多角形リージョンテスト用ボックス
+#[derive(Debug, Clone, Copy, Component, PartialEq, Hash)]
+pub struct RegionPolygonBox;
+
+/// 混在（矩形+多角形）リージョンテスト用ボックス
+#[derive(Debug, Clone, Copy, Component, PartialEq, Hash)]
+pub struct RegionMixedBox;
+
+/// カラーマップリージョンテスト用ボックス
+#[derive(Debug, Clone, Copy, Component, PartialEq, Hash)]
+pub struct RegionColorMapBox;
+
+/// フォールバックテスト用ボックス（HitRegionMap なし）
+#[derive(Debug, Clone, Copy, Component, PartialEq, Hash)]
+pub struct RegionFallbackBox;
+
 fn main() -> Result<()> {
     human_panic::setup_panic!();
 
@@ -145,11 +170,14 @@ fn main() -> Result<()> {
     });
 
     println!("\nTaffy Flexboxレイアウトのデモ:");
-    println!("  1. Window Entity (ルート) - 800x600");
-    println!("  2. FlexContainer (横並び、均等配置、中央揃え) - 灰色背景");
-    println!("  3. 赤い矩形 (固定200x100)");
-    println!("  4. 緑の矩形 (100x100, grow=1.0、残りスペースの1/3)");
-    println!("  5. 青い矩形 (100x100, grow=2.0、残りスペースの2/3)");
+    println!("  [上段] イベントシステムデモ（既存）");
+    println!("    - 赤い矩形 (固定200x100) / 緑の矩形 (grow=1) / 青い矩形 (grow=2)");
+    println!("  [下段] 名前付きヒット領域テスト（新規）");
+    println!("    - 矩形リージョン (head/body/feet)");
+    println!("    - 多角形リージョン (triangle/pentagon)");
+    println!("    - 混在＋重複 (banner/overlap_zone/arrow)");
+    println!("    - カラーマップ (head/body/feet/hand)");
+    println!("    - フォールバック (NamedRegions without HitRegionMap)");
     println!("\n5秒後にレイアウトパラメーターを変更します。");
     println!("10秒後に自動的にWindowを閉じてアプリ終了します。");
 
@@ -185,7 +213,9 @@ async fn run_demo(tx: CommandSender) {
 
     // === 長時間待機（ポインターイベントデモ用） ===
     println!("[Async] Waiting 60 seconds for pointer event demo...");
-    println!("  Try: Left-click on RedBox, BlueBox, Right-click on Container");
+    println!("  [上段] Left-click on RedBox, BlueBox, Right-click on Container");
+    println!("  [下段] Left-click on region boxes to test hit regions");
+    println!("  Hover over region boxes to see region names in debug log");
     println!("  Verify: Events in Window 1 don't affect Window 2 and vice versa");
     async_io::Timer::after(Duration::from_secs(60)).await;
 
@@ -195,7 +225,11 @@ async fn run_demo(tx: CommandSender) {
 }
 
 /// Flexboxデモウィンドウを作成（パラメータ化）
-fn create_flexbox_window(world: &mut World, title: &str, position: windows::Win32::Foundation::POINT) -> Entity {
+fn create_flexbox_window(
+    world: &mut World,
+    title: &str,
+    position: windows::Win32::Foundation::POINT,
+) -> Entity {
     // Window Entity (ルート)
     // WindowPos.position でクライアント領域の位置を指定
     let window_entity = world
@@ -204,9 +238,10 @@ fn create_flexbox_window(world: &mut World, title: &str, position: windows::Win3
             FlexDemoWindow,
             BoxStyle {
                 position: Some(BoxPosition::Absolute),
+                flex_direction: Some(taffy::FlexDirection::Column),
                 size: Some(BoxSize {
                     width: Some(Dimension::Px(800.0)),
-                    height: Some(Dimension::Px(600.0)),
+                    height: Some(Dimension::Px(700.0)),
                 }),
                 ..Default::default()
             },
@@ -399,20 +434,241 @@ fn create_flexbox_window(world: &mut World, title: &str, position: windows::Win3
         ChildOf(flex_container),
     ));
 
+    // =======================================================================
+    // 下段: リージョンテストコンテナ（名前付きヒット領域のデモ）
+    // =======================================================================
+    let region_container = world
+        .spawn((
+            Name::new("RegionTest-Container"),
+            RegionTestContainer,
+            Rectangle::new(),
+            Brushes::with_foreground(D2D1_COLOR_F {
+                r: 0.85,
+                g: 0.85,
+                b: 0.95,
+                a: 1.0,
+            }),
+            BoxStyle {
+                flex_direction: Some(taffy::FlexDirection::Row),
+                justify_content: Some(taffy::JustifyContent::SpaceEvenly),
+                align_items: Some(taffy::AlignItems::Center),
+                size: Some(BoxSize {
+                    width: None,
+                    height: None,
+                }),
+                flex_grow: Some(1.0),
+                margin: Some(BoxMargin(wintf::ecs::layout::Rect {
+                    left: wintf::ecs::layout::LengthPercentageAuto::Px(10.0),
+                    right: wintf::ecs::layout::LengthPercentageAuto::Px(10.0),
+                    top: wintf::ecs::layout::LengthPercentageAuto::Px(0.0),
+                    bottom: wintf::ecs::layout::LengthPercentageAuto::Px(10.0),
+                })),
+                ..Default::default()
+            },
+            ChildOf(window_entity),
+        ))
+        .id();
+
+    // --- 1. 矩形リージョン (Rect) ---
+    // 4分割: top-left / top-right / bottom-left / bottom-right
+    let rect_region_map = HitRegionMap::builder()
+        .rect("top-left", 0.0, 0.0, 70.0, 75.0)
+        .rect("top-right", 70.0, 0.0, 70.0, 75.0)
+        .rect("bottom-left", 0.0, 75.0, 70.0, 75.0)
+        .rect("bottom-right", 70.0, 75.0, 70.0, 75.0)
+        .build()
+        .expect("Rect region map build failed");
+
+    world.spawn((
+        Name::new("RegionRectBox"),
+        RegionRectBox,
+        Rectangle::new(),
+        Brushes::with_foreground(D2D1_COLOR_F {
+            r: 0.8,
+            g: 0.6,
+            b: 0.6,
+            a: 1.0,
+        }),
+        BoxStyle {
+            size: Some(BoxSize {
+                width: Some(Dimension::Px(140.0)),
+                height: Some(Dimension::Px(150.0)),
+            }),
+            ..Default::default()
+        },
+        HitTest::named_regions(),
+        rect_region_map,
+        OnPointerPressed(on_region_box_pressed),
+        OnPointerMoved(on_region_box_moved),
+        ChildOf(region_container),
+    ));
+
+    // --- 2. 多角形リージョン (Polygon) ---
+    // 4分割を三角形ポリゴンで表現（各象限を2三角形で充填）
+    let polygon_region_map = HitRegionMap::builder()
+        .polygon(
+            "top-left",
+            &[(0.0, 0.0), (70.0, 0.0), (70.0, 75.0), (0.0, 75.0)],
+        )
+        .polygon(
+            "top-right",
+            &[(70.0, 0.0), (140.0, 0.0), (140.0, 75.0), (70.0, 75.0)],
+        )
+        .polygon(
+            "bottom-left",
+            &[(0.0, 75.0), (70.0, 75.0), (70.0, 150.0), (0.0, 150.0)],
+        )
+        .polygon(
+            "bottom-right",
+            &[(70.0, 75.0), (140.0, 75.0), (140.0, 150.0), (70.0, 150.0)],
+        )
+        .build()
+        .expect("Polygon region map build failed");
+
+    world.spawn((
+        Name::new("RegionPolygonBox"),
+        RegionPolygonBox,
+        Rectangle::new(),
+        Brushes::with_foreground(D2D1_COLOR_F {
+            r: 0.6,
+            g: 0.8,
+            b: 0.6,
+            a: 1.0,
+        }),
+        BoxStyle {
+            size: Some(BoxSize {
+                width: Some(Dimension::Px(140.0)),
+                height: Some(Dimension::Px(150.0)),
+            }),
+            ..Default::default()
+        },
+        HitTest::named_regions(),
+        polygon_region_map,
+        OnPointerPressed(on_region_box_pressed),
+        OnPointerMoved(on_region_box_moved),
+        ChildOf(region_container),
+    ));
+
+    // --- 3. 混在＋重複リージョン (Mixed + Overlap) ---
+    // rect(top-left, bottom-right) + polygon(top-right, bottom-left) の混在
+    let mixed_region_map = HitRegionMap::builder()
+        .rect("top-left", 0.0, 0.0, 70.0, 75.0)
+        .polygon(
+            "top-right",
+            &[(70.0, 0.0), (140.0, 0.0), (140.0, 75.0), (70.0, 75.0)],
+        )
+        .polygon(
+            "bottom-left",
+            &[(0.0, 75.0), (70.0, 75.0), (70.0, 150.0), (0.0, 150.0)],
+        )
+        .rect("bottom-right", 70.0, 75.0, 70.0, 75.0)
+        .build()
+        .expect("Mixed region map build failed");
+
+    world.spawn((
+        Name::new("RegionMixedBox"),
+        RegionMixedBox,
+        Rectangle::new(),
+        Brushes::with_foreground(D2D1_COLOR_F {
+            r: 0.6,
+            g: 0.6,
+            b: 0.8,
+            a: 1.0,
+        }),
+        BoxStyle {
+            size: Some(BoxSize {
+                width: Some(Dimension::Px(140.0)),
+                height: Some(Dimension::Px(150.0)),
+            }),
+            ..Default::default()
+        },
+        HitTest::named_regions(),
+        mixed_region_map,
+        OnPointerPressed(on_region_box_pressed),
+        OnPointerMoved(on_region_box_moved),
+        ChildOf(region_container),
+    ));
+
+    // --- 4. カラーマップリージョン (ColorMap) ---
+    // demo_region_colormap_64x64.png: 赤=top-left, 緑=top-right, 青=bottom-left, 黄=bottom-right
+    const COLORMAP_IMAGE_PATH: &str = concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/tests/assets/demo_region_colormap_64x64.png"
+    );
+    let mut colormap_mapping = std::collections::HashMap::new();
+    colormap_mapping.insert((255, 0, 0), "top-left".to_string());
+    colormap_mapping.insert((0, 255, 0), "top-right".to_string());
+    colormap_mapping.insert((0, 0, 255), "bottom-left".to_string());
+    colormap_mapping.insert((255, 255, 0), "bottom-right".to_string());
+
+    let colormap_region_map =
+        HitRegionMap::from_color_map(std::path::Path::new(COLORMAP_IMAGE_PATH), &colormap_mapping)
+            .expect("ColorMap region map load failed");
+
+    world.spawn((
+        Name::new("RegionColorMapBox"),
+        RegionColorMapBox,
+        Rectangle::new(),
+        Brushes::with_foreground(D2D1_COLOR_F {
+            r: 0.8,
+            g: 0.8,
+            b: 0.6,
+            a: 1.0,
+        }),
+        BoxStyle {
+            size: Some(BoxSize {
+                width: Some(Dimension::Px(140.0)),
+                height: Some(Dimension::Px(150.0)),
+            }),
+            ..Default::default()
+        },
+        HitTest::named_regions(),
+        colormap_region_map,
+        OnPointerPressed(on_region_box_pressed),
+        OnPointerMoved(on_region_box_moved),
+        ChildOf(region_container),
+    ));
+
+    // --- 5. フォールバックテスト (NamedRegions without HitRegionMap) ---
+    // HitRegionMap なし → Bounds フォールバック（region: None）
+    world.spawn((
+        Name::new("RegionFallbackBox"),
+        RegionFallbackBox,
+        Rectangle::new(),
+        Brushes::with_foreground(D2D1_COLOR_F {
+            r: 0.7,
+            g: 0.7,
+            b: 0.7,
+            a: 1.0,
+        }),
+        BoxStyle {
+            size: Some(BoxSize {
+                width: Some(Dimension::Px(140.0)),
+                height: Some(Dimension::Px(150.0)),
+            }),
+            ..Default::default()
+        },
+        HitTest::named_regions(),
+        // HitRegionMap は意図的に付与しない → Bounds フォールバック
+        OnPointerPressed(on_region_box_pressed),
+        OnPointerMoved(on_region_box_moved),
+        ChildOf(region_container),
+    ));
+
     println!("[Test] Flexbox demo window created: {}", title);
     println!("  Window (root) - entity={:?}", window_entity);
-    println!(
-        "  └─ FlexContainer (Row, SpaceEvenly, Center) - 灰色背景、10pxマージン、右クリック/Ctrl+左クリックでTunnelデモ"
-    );
-    println!("     ├─ Rectangle (red, 200x100 fixed) - 左クリックで色トグル");
-    println!(
-        "     │   └─ BitmapSource (seikatu_0_0.webp) - αマスクヒットテスト有効、透明部分は親に透過"
-    );
-    println!(
-        "     ├─ Rectangle (green, 100x100, grow=1, Column) - マウス移動でログ、左クリックでTunnelキャプチャ"
-    );
-    println!("     │   └─ Rectangle (yellow, 50x50) - Tunnelキャプチャ検証用子エンティティ");
-    println!("     └─ Rectangle (blue, 100x100, grow=2) - 左クリックでサイズトグル");
+    println!("  ├─ FlexContainer (Row, SpaceEvenly, Center) - 灰色背景");
+    println!("  │  ├─ Rectangle (red, 200x100 fixed) - 左クリックで色トグル");
+    println!("  │  │   └─ BitmapSource (seikatu_0_0.webp) - αマスクヒットテスト有効");
+    println!("  │  ├─ Rectangle (green, 100x100, grow=1) - Tunnelキャプチャデモ");
+    println!("  │  │   └─ Rectangle (yellow, 50x50)");
+    println!("  │  └─ Rectangle (blue, 100x100, grow=2) - サイズトグル");
+    println!("  └─ RegionTest-Container (Row, SpaceEvenly) - 名前付きヒット領域テスト");
+    println!("     ├─ RegionRectBox (矩形: top-left/top-right/bottom-left/bottom-right)");
+    println!("     ├─ RegionPolygonBox (多角形: top-left/top-right/bottom-left/bottom-right)");
+    println!("     ├─ RegionMixedBox (混在: rect+polygonで4分割)");
+    println!("     ├─ RegionColorMapBox (カラーマップ: 4色→4リージョン)");
+    println!("     └─ RegionFallbackBox (フォールバック: region=None)");
 
     window_entity
 }
@@ -609,9 +865,71 @@ fn test_hit_test_1s(world: &mut World) {
             }
         }
     }
+
+    // === リージョンテスト用ヒットテスト検証 ===
+    println!("[HitTest @1s] --- Region hit test (hit_test_in_window_ex) ---");
+
+    // リージョンテストボックスの bounds をダンプ
+    let mut rect_query = world.query_filtered::<Entity, With<RegionRectBox>>();
+    if let Some(e) = rect_query.iter(world).next() {
+        dump_entity_bounds(world, "RegionRectBox", e);
+    }
+    let mut polygon_query = world.query_filtered::<Entity, With<RegionPolygonBox>>();
+    if let Some(e) = polygon_query.iter(world).next() {
+        dump_entity_bounds(world, "RegionPolygonBox", e);
+    }
+    let mut mixed_query = world.query_filtered::<Entity, With<RegionMixedBox>>();
+    if let Some(e) = mixed_query.iter(world).next() {
+        dump_entity_bounds(world, "RegionMixedBox", e);
+    }
+    let mut colormap_query = world.query_filtered::<Entity, With<RegionColorMapBox>>();
+    if let Some(e) = colormap_query.iter(world).next() {
+        dump_entity_bounds(world, "RegionColorMapBox", e);
+    }
+    let mut fallback_query = world.query_filtered::<Entity, With<RegionFallbackBox>>();
+    if let Some(e) = fallback_query.iter(world).next() {
+        dump_entity_bounds(world, "RegionFallbackBox", e);
+    }
+
+    // hit_test_in_window_ex でリージョン付きヒットテスト
+    // 各ボックスの4象限をテスト（DIP座標はウィンドウサイズに相対）
+    test_region_hit_ex(world, window_entity, "RectBox top-left?", 40.0, 420.0);
+    test_region_hit_ex(world, window_entity, "RectBox top-right?", 110.0, 420.0);
+    test_region_hit_ex(world, window_entity, "RectBox bottom-left?", 40.0, 490.0);
+    test_region_hit_ex(world, window_entity, "RectBox bottom-right?", 110.0, 490.0);
+    test_region_hit_ex(world, window_entity, "FallbackBox center", 720.0, 460.0);
+
+    println!("[HitTest @1s] --- End of region hit test ---");
 }
 
-/// 6秒後のヒットテスト検証（レイアウト変更後）
+/// リージョン付きヒットテスト結果を表示するヘルパー
+fn test_region_hit_ex(
+    world: &World,
+    window_entity: Entity,
+    description: &str,
+    client_x: f32,
+    client_y: f32,
+) {
+    let client_point = PhysicalPoint::new(client_x, client_y);
+    match hit_test_in_window_ex(world, window_entity, client_point) {
+        Some(result) => {
+            let name = world
+                .get::<Name>(result.entity)
+                .map(|n| n.as_str().to_string())
+                .unwrap_or_else(|| format!("{:?}", result.entity));
+            println!(
+                "[HitTest @1s] {} at client({:.0},{:.0}): entity={}, region={:?}",
+                description, client_x, client_y, name, result.region
+            );
+        }
+        None => {
+            println!(
+                "[HitTest @1s] {} at client({:.0},{:.0}): No hit",
+                description, client_x, client_y
+            );
+        }
+    }
+}
 #[allow(dead_code)]
 fn test_hit_test_6s(world: &mut World) {
     println!("[HitTest @6s] === Running hit test after layout change ===");
@@ -1357,4 +1675,149 @@ fn on_blue_box_pressed(
     }
 
     false
+}
+
+// ============================================================================
+// リージョンテスト用イベントハンドラ
+// ============================================================================
+
+/// リージョンテスト共通: hit_test_in_window_ex でリージョン名を取得するヘルパー
+fn resolve_region_name(world: &World, entity: Entity, state: &PointerState) -> Option<String> {
+    // ウィンドウエンティティを探索
+    let window = find_owner_window(world, entity)?;
+    // hit_test_in_window_ex でリージョン名を含む結果を取得
+    let result = hit_test_in_window_ex(
+        world,
+        window,
+        PhysicalPoint::new(state.client_point.x as f32, state.client_point.y as f32),
+    )?;
+    result.region
+}
+
+/// リージョンに基づく色を返す（視覚フィードバック用）
+fn region_color(region: Option<&str>) -> D2D1_COLOR_F {
+    match region {
+        Some("top-left") => D2D1_COLOR_F {
+            r: 1.0,
+            g: 0.2,
+            b: 0.2,
+            a: 1.0,
+        }, // 赤
+        Some("top-right") => D2D1_COLOR_F {
+            r: 0.2,
+            g: 0.8,
+            b: 0.2,
+            a: 1.0,
+        }, // 緑
+        Some("bottom-left") => D2D1_COLOR_F {
+            r: 0.2,
+            g: 0.2,
+            b: 1.0,
+            a: 1.0,
+        }, // 青
+        Some("bottom-right") => D2D1_COLOR_F {
+            r: 1.0,
+            g: 1.0,
+            b: 0.2,
+            a: 1.0,
+        }, // 黄
+        Some(other) => {
+            println!("[Region] 不明なリージョン: {}", other);
+            D2D1_COLOR_F {
+                r: 0.9,
+                g: 0.9,
+                b: 0.9,
+                a: 1.0,
+            }
+        }
+        None => D2D1_COLOR_F {
+            r: 0.5,
+            g: 0.5,
+            b: 0.5,
+            a: 1.0,
+        }, // 無名（フォールバック）
+    }
+}
+
+/// リージョンテストボックス共通の OnPointerPressed ハンドラ
+///
+/// クリック時に hit_test_in_window_ex でリージョン名を取得し、色を変更＋ログ出力
+fn on_region_box_pressed(
+    world: &mut World,
+    _sender: Entity,
+    entity: Entity,
+    ev: &Phase<PointerState>,
+) -> bool {
+    // Bubble フェーズでのみ処理
+    if !ev.is_bubble() {
+        return false;
+    }
+
+    let state = ev.value();
+    if !state.left_down {
+        return false;
+    }
+
+    let entity_name = world
+        .get::<Name>(entity)
+        .map(|n| n.as_str().to_string())
+        .unwrap_or_else(|| format!("{:?}", entity));
+
+    // リージョン名を取得
+    let region = resolve_region_name(world, entity, state);
+
+    info!(
+        "[Region] {} pressed: region={:?}, client=({:.1},{:.1}), local=({:.1},{:.1})",
+        entity_name,
+        region,
+        state.client_point.x,
+        state.client_point.y,
+        state.local_point.x,
+        state.local_point.y,
+    );
+
+    // リージョンに応じた色に変更
+    let color = region_color(region.as_deref());
+    if let Some(mut brushes) = world.get_mut::<Brushes>(entity) {
+        brushes.foreground = wintf::ecs::widget::brushes::Brush::Solid(color);
+    }
+
+    true
+}
+
+/// リージョンテストボックス共通の OnPointerMoved ハンドラ
+///
+/// ホバー時にリージョン名をログ出力（30フレームに1回）
+fn on_region_box_moved(
+    world: &mut World,
+    _sender: Entity,
+    entity: Entity,
+    ev: &Phase<PointerState>,
+) -> bool {
+    if !ev.is_bubble() {
+        return false;
+    }
+
+    let state = ev.value();
+
+    // 頻度制限: 30回に1回ログ出力
+    static REGION_MOVE_COUNT: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
+    let count = REGION_MOVE_COUNT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    if count % 30 != 0 {
+        return false;
+    }
+
+    let entity_name = world
+        .get::<Name>(entity)
+        .map(|n| n.as_str().to_string())
+        .unwrap_or_else(|| format!("{:?}", entity));
+
+    let region = resolve_region_name(world, entity, state);
+
+    debug!(
+        "[Region] {} hover: region={:?}, client=({:.1},{:.1})",
+        entity_name, region, state.client_point.x, state.client_point.y,
+    );
+
+    false // 伝播続行
 }
