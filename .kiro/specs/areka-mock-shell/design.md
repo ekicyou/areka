@@ -210,9 +210,16 @@ sequenceDiagram
 
 **Responsibilities & Constraints**
 - `world.borrow().spawn(|tx| async { ... })` で非同期タスクを起動
-- `tx.send(Box::new(create_shell_window))` でシェルウィンドウ生成コマンドを送信
-- `tx.send(Box::new(create_balloon_window))` でバルーンウィンドウ生成コマンドを送信
+- 1つのコマンド内でシェルとバルーンを生成し、EntityIDを受け渡す
 - コマンドは `fn(&mut World)` シグネチャのクロージャ
+
+**Implementation Pseudocode**:
+```rust
+tx.send(Box::new(|world: &mut World| {
+    let shell_entity = create_shell_window(world);
+    let balloon_entity = create_balloon_window(world, shell_entity);
+}));
+```
 
 **Dependencies**
 - Outbound: CommandSender — 非同期コマンド送信 (P0)
@@ -274,6 +281,7 @@ struct ShellWindowMarker;
 - `WindowPos` でシェルウィンドウの右側に配置（シェルの x + 320 + 15px のオフセット）
 - `BoxStyle` でバルーンサイズ指定（幅: 約200px、高さ: 約350px — 縦書きテキストに適したサイズ）
 - マーカーコンポーネント `BalloonWindowMarker` でクエリ用識別
+- `ChildOf(shell_entity)` で親子関係を設定（wintf公開API: `wintf::ecs::ChildOf`）
 - 子エンティティとして `BalloonBackground` と `BalloonTypewriter` を保持
 
 **Dependencies**
@@ -307,7 +315,7 @@ struct BalloonWindowMarker;
 **Responsibilities & Constraints**
 - `Rectangle::new()` + `Brushes::with_foreground(D2D1_COLOR_F { r: 1.0, g: 1.0, b: 0.95, a: 0.85 })` で薄いクリーム色の半透明背景
 - `BoxStyle { flex_grow: Some(1.0), .. }` でバルーンウィンドウ全体を覆う
-- `ChildOf(balloon_window_entity)` でバルーンウィンドウの子エンティティ
+- `ChildOf(balloon_window_entity)` でバルーンウィンドウの子エンティティ（wintf公開API）
 - 子エンティティとして `BalloonTypewriter` を保持（テキストが背景の上に表示される）
 
 **Dependencies**
@@ -326,7 +334,7 @@ struct BalloonWindowMarker;
 - `TypewriterTalk::new(tokens, start_time)` でテキストトークン設定
 - テキスト内容: 「みんながもってる、記憶の糸。…ぱすた」（Req 2.4 で定義）
 - `BoxStyle` でマージン付き配置（背景矩形内にパディング）
-- `ChildOf(balloon_background_entity)` で背景矩形の子エンティティ
+- `ChildOf(balloon_background_entity)` で背景矩形の子エンティティ（wintf公開API）
 
 **Dependencies**
 - Inbound: BalloonBackground — 親エンティティ (P0)
@@ -334,6 +342,7 @@ struct BalloonWindowMarker;
 **Implementation Notes**
 - `TypewriterToken` の構築: テキストを文字単位で `TypewriterToken::Char(c)` に分解。改行は `TypewriterToken::NewLine`。空行は `TypewriterToken::Wait(pause_duration)` で表現。
 - `start_time` は `FrameTime` リソースから取得、または `0.0` で即時開始。
+- `ChildOf` は `wintf::ecs::ChildOf` （bevy_ecs::hierarchy 由来の公開API）を使用。
 
 ### Interaction Layer
 
@@ -386,6 +395,10 @@ fn on_shell_drag(
 **Dependencies**
 - Inbound: PointerState — ダブルクリック検出 (P0)
 - Outbound: ShellWindowMarker, BalloonWindowMarker — Entity検索 (P0)
+
+**Implementation Notes**
+- wintfは`CS_DBLCLKS`クラススタイルを設定済み（`process_singleton.rs` L74: ECS用ウィンドウクラス）
+- `WM_LBUTTONDBLCLK`メッセージは正常に受信され、`PointerState.double_click`に反映される
 
 ##### Service Interface
 

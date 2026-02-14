@@ -54,7 +54,7 @@
   - ハンドラ内で `world.despawn(window_entity)` を呼べば全ウィンドウ終了が可能
   - **注意**: `WS_POPUP` ウィンドウでダブルクリックを受信するには `CS_DBLCLKS` クラススタイルが必要
   - wintfの `create_windows` システムが `RegisterClassExW` を呼ぶ箇所で `CS_DBLCLKS` が設定されているかは要確認
-- **Implications**: `OnPointerPressed` + `DoubleClick::Left` チェック + `world.despawn()` の組み合わせで実装可能。`CS_DBLCLKS` が未設定の場合は wintf 側の修正が必要（別仕様）。
+- **Implications**: `OnPointerPressed` + `DoubleClick::Left` チェック + `world.despawn()` の組み合わせで実装可能。**✅ 確認完了**: wintfの`process_singleton.rs` L74でECS用ウィンドウクラスに`CS_DBLCLKS`が既に設定されており、ダブルクリック終了は問題なく動作する。
 
 ### Cargo.toml 構成（crates.io公開）
 - **Context**: arekaクレートをcrates.io公開可能な状態にする（Req 5.1, 5.2）
@@ -118,7 +118,8 @@
 - **Follow-up**: `CS_DBLCLKS` の有無を実装時に確認。未設定なら wintf への修正要求を検討。
 
 ## Risks & Mitigations
-- **CS_DBLCLKS 未設定リスク** — wintfのウィンドウクラスに `CS_DBLCLKS` が設定されていない場合、ダブルクリックイベントが発火しない。実装時に確認し、必要なら wintf 側を修正する（影響は軽微、1行の変更）。
+- **CS_DBLCLKS 未設定リスク** — ✅ **Resolved**: wintfの`process_singleton.rs` L74でECS用ウィンドウクラスに`CS_DBLCLKS`が設定済み。ダブルクリック終了は実装可能。
+- **ChildOf コンポーネント利用可能性** — ✅ **Resolved**: wintfの`ecs/mod.rs` L23で`pub use bevy_ecs::hierarchy::{ChildOf, Children};`として公開されている。`wintf::ecs::ChildOf`として利用可能。
 - **アセットパス依存** — `BitmapSource` のパスがワークスペースルートからの相対パスに依存。`cargo install` でのバイナリ配布時にはパス解決が破綻する。モック段階では許容し、将来 `include_bytes!` や `CARGO_MANIFEST_DIR` ベースのパス解決に移行。
 - **crates.io 名前予約** — `areka` クレート名が既に取得されている可能性。公開前に `crates.io` で確認が必要。
 
