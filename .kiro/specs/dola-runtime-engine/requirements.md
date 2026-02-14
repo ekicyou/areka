@@ -21,7 +21,7 @@
 1. When オーケストレーターが指示書（TOML文字列）を配信した場合, the Dola Runtime shall 指示書をパースし、変数定義・トランジション定義・ストーリーボード定義を内部に保持する。
 2. When 新しい指示書が配信された場合, the Dola Runtime shall 旧定義を完全に上書きし、新定義で置換する。
 3. When 新定義に旧定義と同名の変数が含まれる場合, the Dola Runtime shall 同一対象として引き継ぎ、現在の値を維持する。
-4. When 新定義に旧定義の変数が含まれない場合, the Dola Runtime shall 当該変数を最後の値で凍結したまま残す（消滅通知は発行しない）。
+4. When 新定義に旧定義の変数が含まれない場合, the Dola Runtime shall 当該変数の指示書定義を削除する。購読中の変数は最後の値で凍結状態となり、購読が継続する限り値を保持する。未購読の変数は即座に破棄される。
 5. If 指示書のパースに失敗した場合, then the Dola Runtime shall エラーを返却し、既存の定義を変更しない。
 6. The Dola Runtime shall 指示書が上書きされるまでストーリーボード定義を保持し、同じストーリーボード名での再 Start を可能とする。
 
@@ -60,15 +60,16 @@
 
 ### Requirement 4: 購読管理
 
-**Objective:** 購読者として、関心のある変数のみを購読し、リソースを効率的に使用したい。これにより、不要な変数評価を避けてパフォーマンスを最適化できる。
+**Objective:** 購読者として、関心のある変数のみを購読し、リソースを効率的に使用したい。これにより、不要な変数評価を避けてパフォーマンスを最適化できる。購読する変数名の決定は購読者（子）の責務・権利であり、指示書受信より前に登録される。
 
 #### Acceptance Criteria
 
-1. When 購読者が Subscribe コマンドで変数名を登録した場合, the Dola Runtime shall 当該変数をその購読者の評価対象に追加する。
-2. When 購読者が Unsubscribe コマンドを発行した場合, the Dola Runtime shall 当該変数をその購読者の評価対象から除外する。
-3. When 購読者が Drop された場合, the Dola Runtime shall 自動的に全購読を解除する（`Drop` トレイトによる自動 Unsubscribe）。
-4. The Dola Runtime shall 購読されていない変数の評価を行わない。
-5. If 定義に存在しない変数を購読している場合, then the Dola Runtime shall 当該変数を無視する（コンパイル対象にならない）。
+1. The Dola Runtime shall 購読登録を指示書受信より前に受け付け可能とする。購読する変数名の決定は購読者（子）側の責務である。
+2. When 購読者が Subscribe コマンドで変数名を登録した場合, the Dola Runtime shall 当該変数をその購読者の評価対象に追加する。
+3. When 購読者が Unsubscribe コマンドを発行した場合, the Dola Runtime shall 当該変数をその購読者の評価対象から除外する。
+4. When 購読者が Drop された場合, the Dola Runtime shall 自動的に全購読を解除する（`Drop` トレイトによる自動 Unsubscribe）。
+5. The Dola Runtime shall 購読されていない変数の評価を行わない。ランタイムが評価対象として保持する変数は、購読登録された変数名のみである。
+6. If 指示書に存在しない変数を購読している場合, then the Dola Runtime shall 当該変数を無視する（コンパイル対象にならない）。
 
 ---
 
