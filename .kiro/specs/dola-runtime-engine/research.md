@@ -153,6 +153,7 @@
 ## Risks & Mitigations
 
 - **time_scale の解釈** ✅ **Resolved**: WAM `SetStoryboardPlaybackSpeed` と同じ乗算方式で確定。`time_scale=2.0` は2倍速（半分の時間で完了）。式: `effective_time = (current_time - start_time - pause_accumulated) * time_scale`
+- **InstanceState 外部可視性** ✅ **Resolved**: ステートレス設計を採用。`InstanceState` は内部のみ。オーケストレーターは `end_time` で終了管理、購読者は `update()` の空 Vec で検知。`group_id` は同一ストーリーボードの複数実行インスタンスを個別制御するための一意識別子として使用
 - **f64 精度**: 長時間再生（数時間以上）での f64 精度劣化。→ 差分基準（前回値との比較）で影響を緩和。実用上デスクトップマスコットでは問題にならない
 - **循環参照**: `SubscriptionHandle` が `DolaRuntime` への参照を保持し循環参照の可能性。→ ID ベース間接参照で回避
 - **Never ポリシーの延期キュー**: `InterruptionPolicy::Never` で延期されたストーリーボードの管理が複雑。→ 子仕様3（競合解決）で個別に設計。✅ **Resolved**: design.md に実装ノート追加済み

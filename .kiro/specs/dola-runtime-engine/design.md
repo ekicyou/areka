@@ -331,9 +331,35 @@ trait DolaRuntimeApi {
 }
 ```
 
+**Contract Specifications**:
 - **Preconditions**: `start_time` / `current_time` は OS 起動時からの f64 秒
 - **Postconditions**: `start()` 成功時、group_id は単調増加の一意値
 - **Invariants**: `load_document()` 失敗時、既存定義は変更されない (1.5)
+
+**Instance Identification via group_id**:
+
+制御コマンド（pause/resume/conclude/cancel/finish）は `group_id` で実行インスタンスを特定する。ストーリーボード名ではなく group_id を使う理由：
+
+- **同一ストーリーボードの複数実行**: 同じストーリーボード（例: "blink"）を複数回 start した場合、各インスタンスを個別に制御する必要がある
+- **名前では特定不可**: ストーリーボード名では「どの実行インスタンスか」を区別できない（例: 2つの "blink" のうち1つだけ pause したい場合）
+- **group_id で一意識別**: 各 start が返す一意な group_id により、特定のインスタンスのみを操作可能
+
+例:
+```rust
+let result1 = runtime.start("blink", 0.0)?; // group_id = 1
+let result2 = runtime.start("blink", 0.5)?; // group_id = 2
+runtime.pause(1)?; // 1つ目の "blink" だけ一時停止
+```
+
+**State Visibility Design (ステートレス設計)**:
+
+インスタンス状態（`InstanceState`）を外部に公開する問い合わせAPIは提供しない。理由：
+
+1. **オーケストレーター**: 自分が発行した `group_id` とその `end_time`（`start()` の返り値）を既に管理している。終了タイミングは `end_time` で計算可能
+2. **購読者**: `group_id` を知らず、`update(subscriber_id, current_time)` で値を取得するのみ。終了は空 Vec で間接的に検知
+3. **エラーハンドリング**: 終了済みインスタンスへの操作は `RuntimeError::TerminatedInstance` で検知可能
+
+この設計により、API surface を最小化し、ステートレスな利用パターンを推奨する。デバッグ目的での状態確認が必要な場合は、将来的に `tracing` ログ出力で対応可能。
 
 ### Core Layer
 
@@ -371,7 +397,15 @@ enum InstanceState {
     Trimmed,
     Compressed,
 }
+```
 
+**Design Note: InstanceState vs PlaybackState**
+
+- **InstanceState** (新規): ランタイム専用の内部状態管理。7バリアント（Created + InterruptionPolicy 対応の終了状態4つ）
+- **PlaybackState** (既存): dola データモデル層の型定義のみ。5バリアント（Idle/Playing/Paused/Completed/Cancelled）。ロジックなし、シリアライズ用途
+- **外部非公開**: `InstanceState` は facade API から公開しない。オーケストレーターは `start()` の返り値 `end_time` で終了タイミングを管理し、購読者は `update()` の空 Vec で終了を検知する（ステートレス設計）
+
+```rust
 /// ストーリーボード実行インスタンス
 struct StoryboardInstance {
     group_id: u64,
