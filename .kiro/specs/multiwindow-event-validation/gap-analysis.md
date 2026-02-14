@@ -51,7 +51,6 @@
 | Req2 | WM_MOUSELEAVE スコープ修正 | `handlers.rs` L815-860 (WM_MOUSELEAVE), L673-742 (WM_MOUSEMOVE Leave) | **Missing**: ウィンドウスコーピングロジック |
 | Req2 | エンティティ-ウィンドウ所有権クエリ | `drag/dispatch.rs` L96-118 (ad-hoc実装のみ) | **Missing**: 共通 `find_owner_window()` ユーティリティ |
 | Req3 | ドラッグ状態安全性 | `drag/state.rs` (DRAG_STATE), `drag/context.rs` | **Constraint**: シングルトン設計だがWin32のSetCapture制約と整合 |
-| Req3 | SetCapture/ReleaseCapture | `handlers.rs` L1014-1015 (TODOコメント) | **Missing**: 完全に未実装 |
 | Req4 | イベント伝播境界 | `pointer/dispatch.rs` (build_bubble_path) | **Missing**: ウィンドウ境界での停止条件 |
 | Req5 | 統合テスト | `tests/` (31ファイル) | **Missing**: マルチウィンドウイベントテスト皆無 |
 
@@ -92,18 +91,18 @@ pub(super) fn WM_MOUSELEAVE(hwnd, ...) -> HandlerResult {
 
 **修正方針**: `DragState` にHWNDまたはウィンドウEntityを保持させ、終了処理時にHWNDを検証する。
 
-### G4: SetCapture/ReleaseCapture 未実装【High】
+### G4: SetCapture/ReleaseCapture 未実装【Low / スコープ外】
 
 **場所**: [handlers.rs](crates/wintf/src/ecs/window_proc/handlers.rs) L1014-1015
 
-**現状**: TODO コメントとして5箇所に記載:
-- `handle_button_message` のDown処理
-- ドラッグ開始準備
-- ドラッグ終了処理
+**現状**: TODO コメントとし5箇所に記載。
 
-**影響**: ドラッグ中にマウスがウィンドウのクライアント領域外に出ると `WM_MOUSEMOVE` が来なくなり、ドラッグが途切れる。マルチウィンドウ環境で顕著（ウィンドウ間をまたぐ移動時）。
+**分析**: 
+- `taffy_flex_demo` は `DragConfig::default()` (`move_window: true`) で**ウィンドウドラッグ**を使用
+- ウィンドウドラッグではウィンドウ自体がマウスを追従するため、SetCapture は**原理的に不要**
+- SetCapture が必要なのは `move_window: false` で**ウィジェットD&D**を実装する場合
 
-**Research Needed**: `windows` クレートの現バージョン (0.62.2) で `SetCapture`/`ReleaseCapture` が利用可能か確認が必要。
+**本仕様スコープ**: ウィジェットD&Dはスコープ外。将来的な拡張時に検討する記録レベルのギャップとして保持。
 
 ### G5: build_bubble_path がウィンドウ境界で停止しない【Medium】
 
@@ -223,11 +222,10 @@ pub fn build_bubble_path(world: &World, start: Entity) -> Vec<Entity> {
 ## 5. Implementation Complexity & Risk
 
 **Effort**: **M (3–7 days)**
-- 既存パターンの修正が主体だが、WndProc内のウィンドウスコーピングは慎重なテストが必要。handlers.rs は800行超の複雑なファイル。SetCapture/ReleaseCapture の統合も調査が必要。
+- 既存パターンの修正が主体だが、WndProc内のウィンドウスコーピングは慎重なテストが必要。handlers.rs は800行超の複雑なファイル。
 
 **Risk**: **Medium**
 - WndProc は unsafe コードと thread_local! が絡む敏感な領域。修正が既存のシングルウィンドウ動作を壊さないことの検証が必須。
-- `windows` クレート 0.62.2 で `SetCapture`/`ReleaseCapture` が利用可能かの確認が必要（Research Needed）。
 - ドラッグのグローバルシングルトン変更は、既存 `taffy_flex_demo` の動作に影響を与える可能性。
 
 ---
@@ -246,5 +244,4 @@ pub fn build_bubble_path(world: &World, start: Entity) -> Vec<Entity> {
 
 ### Research Needed（設計フェーズで調査）
 
-- `windows` クレート 0.62.2 における `SetCapture` / `ReleaseCapture` の利用可否と呼び出しパターン
-- `WM_CAPTURECHANGED` メッセージの処理要否（キャプチャが別ウィンドウに奪われた場合）
+なし（現時点では外部調査が必要な項目なし）

@@ -44,14 +44,12 @@
 
 ### Requirement 3: ドラッグ状態のマルチウィンドウ安全性
 
-**Objective:** 開発者として、複数ウィンドウが存在する環境でドラッグ操作が安全に動作することを保証したい。
+**Objective:** 開発者として、複数ウィンドウが存在する環境でウィンドウドラッグ操作が安全に動作することを保証したい。
 
 #### Acceptance Criteria
 
 1. While ウィンドウAでドラッグ操作中の場合, when ウィンドウBでクリックが発生した場合, the wintf shall ウィンドウAのドラッグ状態を破壊せず適切に処理する
 2. When ウィンドウAでドラッグを開始した場合, the wintf shall ドラッグ操作がそのウィンドウのHWNDに対してのみ `SetWindowPos` を発行する
-3. When ドラッグ中にマウスポインタが開始ウィンドウのクライアント領域外に出た場合, the wintf shall ドラッグ追従が継続するよう `SetCapture` を使用してマウスキャプチャを取得する
-4. When ドラッグ操作が終了した場合, the wintf shall `ReleaseCapture` によりマウスキャプチャを解放する
 
 ### Requirement 4: ポインタイベントのウィンドウスコープ
 
