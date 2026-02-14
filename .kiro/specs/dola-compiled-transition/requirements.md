@@ -20,7 +20,7 @@ dolaクレートのStoryboard / TransitionDef / EasingFunctionなどの宣言的
 #### Acceptance Criteria
 
 1. The Dola Compiler shall 変数名をキーとしたコンパイル済みトランジションのマップ（`BTreeMap<String, CompiledVariableTimeline>` 等）をコンパイル結果として生成する
-2. The Dola Compiler shall 各変数のタイムラインを、時間的に連続したセグメント（`CompiledSegment`）の配列として表現する
+2. The Dola Compiler shall 各変数のタイムラインを、セグメント（`CompiledSegment`）の配列として表現する。セグメント間に時間的ギャップがあってもよい（ランタイムはギャップ区間において直前セグメントの終了値を保持する）
 3. The Dola Compiler shall 各セグメントに開始時刻（f64秒）、終了時刻（f64秒）、開始値、終了値、イージング関数を含める
 4. The Dola Compiler shall Object型変数のセグメントについて、イージングなしの即時切り替え情報を含める（値域はDynamicValueを使用）
 5. The Dola Compiler shall コンパイル結果のルート構造体に、元のストーリーボード名と生成元のメタ情報を含める
