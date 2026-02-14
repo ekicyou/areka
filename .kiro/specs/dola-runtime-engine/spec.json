@@ -36,8 +36,9 @@
         "created": [
             "dola-runtime-core-types",
             "dola-runtime-clock",
-            "dola-runtime-facade"
+            "dola-runtime-facade",
+            "dola-runtime-conflict-loop"
         ],
-        "pending": 1
+        "pending": 0
     }
 }
