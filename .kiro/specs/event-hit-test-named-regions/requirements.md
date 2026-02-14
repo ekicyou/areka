@@ -155,7 +155,6 @@
 2. The `HitTestResult` shall 以下のフィールドを持つ：
    - `entity: Entity` — ヒットしたエンティティ
    - `region: Option<String>` — ヒットした領域名（`NamedRegions`モード時のみ、`None`は無名ヒット）
-   - `local_point: (f32, f32)` — エンティティローカル座標系でのヒット位置（DIP単位）
 3. The HitTest System shall 既存の `hit_test` / `hit_test_in_window` APIに加えて、`HitTestResult` を返す拡張API `hit_test_ex` / `hit_test_in_window_ex` を提供する
 4. When `HitTestMode::Bounds` または `HitTestMode::AlphaMask` のエンティティがヒットした時, the 拡張API shall `region: None` を含む `HitTestResult` を返す
 5. When `HitTestMode::NamedRegions` のエンティティがヒットした時, the 拡張API shall `region: Some("領域名")` を含む `HitTestResult` を返す
