@@ -169,3 +169,18 @@
 3. **The** プロファイル **shall** areka-P0-reference-ghost / shell / balloon の要件定義のインプットとして機能する位置づけとする
 4. **The** プロファイル **shall** pasta DSL の概要（里々インスパイアの会話記述DSL）を1セクションで説明する
 5. **The** プロフィール **shall** pasta DSL スクリプトエンジンの外部リポジトリ (https://github.com/ekicyou/pasta) への参照リンクを含む
+
+---
+
+### Requirement 8: クレートレベル README.md の作成
+
+**Objective:** クレート利用者・開発者として、各クレートの目的・使い方・APIの概要を crate ルートの README.md から把握したい。それにより、ワークスペース内の各クレートの役割が自己説明的になる。
+
+#### Acceptance Criteria
+
+1. **The** docs-restructure プロセス **shall** `crates/wintf/README.md` を新規作成する
+2. **The** wintf README **shall** 以下を含む：クレート概要（Windows縦書きUIフレームワーク）、主要機能一覧、アーキテクチャ概要（COM→ECS→Message Handling 3層構造）、サンプル実行方法、doc/spec/ 12章への参照リンク
+3. **The** docs-restructure プロセス **shall** `crates/dola/README.md` を新規作成する
+4. **The** dola README **shall** 以下を含む：クレート概要（Declarative Orchestration for Live Animation）、対応フォーマット（JSON/TOML/YAML）、基本的な使用例、API概要
+5. **The** クレートレベル README **shall** プロジェクトルートの README.md との重複を最小限にし、クレート固有の情報に焦点を当てる
+6. **The** areka バイナリクレートの README.md **shall** 本スペックのスコープ外とし、`crates/areka` 作成時に同時作成する

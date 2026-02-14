@@ -69,6 +69,7 @@ shell/ ディレクトリにはPNG画像のみ存在し、descript.txt / manifes
 | **5** | steering 整合性更新 | steering/ 7ファイル | product.md/structure.md/tech.md/focus.md の更新。形式は既存を踏襲 | **Constraint** (既存形式維持) |
 | **6** | 旧ドキュメントアーカイブ | doc/spec_backup_20251101, README.md, ROADMAP.md | `doc/archive/` 新規作成、git mv 操作 | **Missing** (単純操作) |
 | **7** | ぱすたさんプロファイル | shell/ 素材、script-engine 設計 (pasta DSL)、rune-persistence-guide.md | 新規ファイル。素材・DSL設計は存在 | **Missing** (素材あり) |
+| **8** | クレートレベル README.md | crates/wintf/ (コード実在)、crates/dola/ (コード実在) | 新規ファイル×2。Cargo.toml・src/lib.rs から情報取得可能 | **Missing** (素材あり) |
 
 ### 技術的ニーズ
 
@@ -96,8 +97,8 @@ shell/ ディレクトリにはPNG画像のみ存在し、descript.txt / manifes
 
 | 観点 | 評価 |
 |------|------|
-| 作業順序 | Req6(アーカイブ) → Req1(README) → Req2(憲法) → Req3(ロードマップ) → Req4(アーキテクチャ) → Req5(steering) → Req7(ぱすた) |
-| ファイル操作 | git mv × 3-4件、新規作成 × 5件、更新 × 4件 |
+| 作業順序 | Req6(アーカイブ) → Req1(README) → Req8(クレートREADME) → Req2(憲法) → Req3(ロードマップ) → Req4(アーキテクチャ) → Req5(steering) → Req7(ぱすた) |
+| ファイル操作 | git mv × 3-4件、新規作成 × 7件、更新 × 4件 |
 | コミット | アーカイブ1回 + 新規ドキュメント1回 + steering更新1回 = 3コミット |
 
 **Trade-offs**:
@@ -128,7 +129,7 @@ shell/ ディレクトリにはPNG画像のみ存在し、descript.txt / manifes
 
 | フェーズ | 内容 | 理由 |
 |---------|------|------|
-| C-1 | Req6(アーカイブ) + Req1(README) + Req7(ぱすたプロファイル) | プロジェクトの「顔」を即座に整備。ぱすたさん情報はREADMEに含む必要があるため同時実施 |
+| C-1 | Req6(アーカイブ) + Req1(README) + Req7(ぱすたプロファイル) + Req8(クレートREADME) | プロジェクトの「顔」を即座に整備。クレートREADMEはプロジェクトREADMEと同時に整合性を確保 |
 | C-2 | Req2(憲法) + Req3(ロードマップ) + Req4(アーキテクチャ) + Req5(steering) | 内部設計文書群を一括整備 |
 
 **Trade-offs**:
@@ -143,7 +144,7 @@ shell/ ディレクトリにはPNG画像のみ存在し、descript.txt / manifes
 
 | 項目 | 評価 | 根拠 |
 |------|------|------|
-| **Effort** | **M (3-7日)** | 新規Markdownドキュメント5件作成 + 4件更新 + git操作。コード変更なしだが情報整理の精度が求められる |
+| **Effort** | **M (3-7日)** | 新規Markdownドキュメント7件作成 + 4件更新 + git操作。コード変更なしだが情報整理の精度が求められる |
 | **Risk** | **Low** | 既存パターン（Markdown + git）の範囲内。アーキテクチャ変更なし。失敗時もgit revertで完全復元可能 |
 
 ### リスク詳細
