@@ -44,10 +44,11 @@ wintfのWM_NCHITTESTハンドラにおけるクリックスルー（HTTRANSPAREN
 
 ### 要件 4: テスト検証可能性
 
-**目的:** 開発者として、クリックスルー機能の動作を自動テストで検証できるようにしたい。
+**目的:** 開発者として、クリックスルー機能の動作を自動テストで検証できるようにしたい。また、手動テストで実際のクリックスルー挙動を確認できる環境が欲しい。
 
 #### 受入基準
 
 1. The wintf shall `cached_nchittest` 関数のHTTRANSPARENT返却パスについてユニットテストを持つ
 2. The wintf shall HTCLIENT・HTTRANSPARENT両方の結果がキャッシュに正しく格納されることを検証するテストを持つ
 3. The wintf shall `hit_test_in_window()` が `None` を返す条件（透明領域、HitTestMode::None、エンティティ不在）ごとにテストケースを持つ
+4. The wintf shall exampleアプリケーション（`taffy_flex_demo`）において、`HitTestMode::None` を持つクリックスルー領域と通常のHTCLIENT領域を並べて配置し、開発者が手動でクリックスルー挙動を確認できるテストシーンを提供する
