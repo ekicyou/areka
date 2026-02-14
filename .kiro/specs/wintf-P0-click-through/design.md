@@ -236,6 +236,11 @@ sequenceDiagram
 - Integration: `drag::read_drag_state` は同一 thread_local スレッドで実行されるため、借用競合なし
 - Validation: DragState 確認は `hit_test_in_window()` の後、LRESULT 決定の直前に実行
 - Risks: DragState ガードにより、ドラッグ中はクリックスルーが無効になる（意図された動作）
+- Alpha Threshold Alignment: `HitTestMode::Bounds` の透明判定に `Opacity * Brushes.foreground.a < 128/255` を適用
+  - AlphaMask の `ALPHA_THRESHOLD` (alpha_mask.rs L7) と同一基準
+  - Rectangle は foreground から色を取得（rectangle.rs L154-158）
+  - Opacity 未設定時は 1.0、Brushes.foreground が Inherit 時は親継承済みまたは DEFAULT_FOREGROUND (a=1.0)
+  - 実装箇所: `hit_test_entity` (`hit_test.rs` L200付近) の `HitTestMode::Bounds` 分岐
 - Comment Update: `nchittest_cache.rs` L136-138 の3行コメントを以下に更新
   ```rust
   // WM_MOUSELEAVE ハンドラ実装済み（handlers.rs L820-876）により、
@@ -261,9 +266,26 @@ sequenceDiagram
 - Inbound: taffy_flex_demo — デモシーン構築 (P0)
 - Outbound: HitTest コンポーネント — ヒットテストモード設定 (P0)
 
+**UI Configuration**
+
+| 要素 | BoxStyle | Brushes | HitTest | OnPointerPressed |
+|------|---------|---------|---------|------------------|
+| クリックスルー領域 | 150x100px, 黄色枠線 | foreground: rgba(255,255,0,0.3) | `HitTest::none()` | なし（貫通するため） |
+| 通常領域 | 150x100px, シアン枠線 | foreground: rgba(0,255,255,0.3) | `HitTest::bounds()` | ログ出力「Normal region clicked」 |
+| ラベル（各領域） | テキストレイヤー | foreground: rgba(0,0,0,1.0) | Inherit（親に従う） | — |
+
+**Layout**
+```
+[既存 region_container]
+[ClickThroughDemo Container (横並び FlexDirection::Row)]
+  ├─ [クリックスルー領域] "Click-through\n(HitTest::none)"
+  └─ [通常領域] "Normal\n(HitTest::bounds)"
+```
+
 **Implementation Notes**
-- Integration: 既存の `create_flexbox_window()` 内に新しいコンテナを追加
+- Integration: 既存の `create_flexbox_window()` 内、`region_container` の後に新しい Flex コンテナを追加
 - Validation: クリックスルー領域をクリックしてデスクトップや背後のウィンドウにイベントが到達することを手動確認
+- Alpha Boundary Test: `Opacity(0.5)` + `foreground.a=1.0` → 合成α=0.5 → HTCLIENT（境界値テスト）
 - Risks: なし（テスト用コードのみ）
 
 ## Error Handling

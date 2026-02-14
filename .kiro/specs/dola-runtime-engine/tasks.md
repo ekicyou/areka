@@ -8,22 +8,22 @@ dola クレート内に `runtime` サブモジュールを構築し、12要件�
 
 ## 実装タスク
 
-- [ ] 1. ランタイムコア型定義 (Child Spec 1: core-types)
-- [ ] 1.1 (P) 実行インスタンス状態管理型の実装
+- [x] 1. ランタイムコア型定義 (Child Spec 1: core-types)
+- [x] 1.1 (P) 実行インスタンス状態管理型の実装
   - `InstanceState` enum を7バリアント（Created, Playing, Paused, Concluded, Cancelled, Trimmed, Compressed）で定義
   - 状態遷移ロジックの実装（Playing ⇄ Paused、Playing/Paused → 各終了状態）
   - 終了状態への遷移後は変更不可の不変条件を保証
   - 単体テスト: 全遷移パターン（許可/拒否）の網羅
   - _Requirements: 8.1, 8.2, 8.3, 8.4_
 
-- [ ] 1.2 (P) 評価済み変数値型とエラー型の実装
+- [x] 1.2 (P) 評価済み変数値型とエラー型の実装
   - `EvaluatedValue` enum（Float, Integer, Object）を定義
   - `RuntimeError` enum を6バリアント（StoryboardNotFound, InvalidGroupId, TerminatedInstance, DocumentParseError, ZeroDurationWithLoop, CompileError）で定義
   - `TerminatedInstance` バリアントに group_id と state を含める
   - 単体テスト: エラーメッセージのフォーマット検証
   - _Requirements: 1.5, 2.8, 2.9, 3.7_
 
-- [ ] 1.3 (P) イージング補間計算機能の実装
+- [x] 1.3 (P) イージング補間計算機能の実装
   - `Interpolator` 構造体と `InterpolatorApi` trait を定義
   - `interpolation` クレート (0.3.0) の `Ease` trait および `EaseFunction` を使用
   - `EasingName` 30バリアント + `Linear` + `ParametricEasing`（QuadraticBezier, CubicBezier）の1対1マッピング

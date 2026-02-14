@@ -20,8 +20,8 @@ wintfのWM_NCHITTESTハンドラにおけるクリックスルー（HTTRANSPAREN
 2. When `hit_test_in_window()` が `Some(entity)` を返した場合, the wintf shall WM\_NCHITTESTの戻り値として `HTCLIENT` (`1`) を返す
 3. The wintf shall `nchittest_cache.rs` 内の `#[allow(dead_code)]` アノテーションを `HTTRANSPARENT` 定数から除去し、実際に使用する
 4. When クライアント領域外の座標に対するWM\_NCHITTESTを受信した場合, the wintf shall 従来どおり `DefWindowProcW` に処理を委譲する（既存動作を維持）
-5. The wintf shall HTTRANSPARENT / HTCLIENT いずれの結果もWM\_NCHITTESTキャッシュに同一方式で格納し、同一座標への再問い合わせ時にキャッシュから正しく返す
-
+5. The wintf shall HTTRANSPARENT / HTCLIENT いずれの結果もWM\_NCHITTESTキャッシュに同一方式で格納し、同一座標への再問い合わせ時にキャッシュから正しく返す6. When `HitTestMode::Bounds` エンティティに対してヒットテストを実行する場合, the wintf shall `Opacity` コンポーネントと `Brushes.foreground.a` の積（合成α値）が `128/255 (≈0.502)` 未満なら透明領域として扱い `None` を返す
+   - Note: AlphaMask の `ALPHA_THRESHOLD` (128/255) と同一基準を採用。Rectangle は `Brushes.foreground` から色を取得するため、foreground のα値を使用。Opacity が未設定の場合は 1.0、Brushes.foreground が Inherit の場合は親から継承済み（`resolve_inherited_brushes`）または `DEFAULT_FOREGROUND` (a=1.0) を使用
 ### 要件 2: ECSポインターイベントとの共存
 
 **目的:** 開発者として、HTTRANSPARENT返却時にもECS内部のポインター状態管理が正しく動作することを保証したい。これにより、ホバー中のエンティティの `PointerState` が適切にクリーンアップされ、不正な状態が残らないようにする。
