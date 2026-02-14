@@ -10,8 +10,8 @@
 
 ## Phase C-1: プロジェクトの顔（外部向けドキュメント）
 
-- [ ] 1. 旧ドキュメントアーカイブ移動
-- [ ] 1.1 `doc/archive/` ディレクトリ作成と旧ファイル移動
+- [x] 1. 旧ドキュメントアーカイブ移動
+- [x] 1.1 `doc/archive/` ディレクトリ作成と旧ファイル移動
   - `doc/archive/` ディレクトリを作成（既存の場合はそのまま使用）
   - `README.md` を `doc/DEVLOG_ORIGINAL_README.md` に git mv でリネーム保存
   - `.kiro/specs/ukagaka-desktop-mascot/ROADMAP.md` を `doc/archive/ROADMAP_ukagaka_meta.md` に git mv で移動
@@ -19,8 +19,8 @@
   - git commit でアーカイブ移動を記録（"docs(archive): 旧ドキュメントを doc/archive/ に移動" 等）
   - _Requirements: 6.1, 6.2, 6.3, 6.4, 6.5_
 
-- [ ] 2. Completed specs スキャンと機能リスト中間報告
-- [ ] 2.1 Completed specs スキャンスクリプト実行と中間報告ファイル生成
+- [x] 2. Completed specs スキャンと機能リスト中間報告
+- [x] 2.1 Completed specs スキャンスクリプト実行と中間報告ファイル生成
   - `.kiro/specs/completed/` ディレクトリ内の spec.json ファイルをスキャン
   - 各 spec.json から `feature_name` と `title` 情報を抽出
   - ECS, DirectComposition, 縦書き, 透過ウィンドウ, レイアウト, ポインターイベント等のカテゴリ別に分類
@@ -28,8 +28,8 @@
   - スキャン結果サマリー（56件完了、カテゴリ別機能リスト）を記載
   - _Requirements: 1.6_
 
-- [ ] 3. README.md 作成
-- [ ] 3.1 プロジェクトREADME.md の執筆
+- [x] 3. README.md 作成
+- [x] 3.1 プロジェクトREADME.md の執筆
   - 新規 `README.md` を作成し、以下12セクションを記述：
     1. ヘッダー・バッジ（プロジェクト名、キャッチコピー）
     2. プロジェクト概要（areka の使命、伺かインスパイア）
@@ -47,8 +47,8 @@
   - git commit でREADME.md 作成を記録
   - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 1.6_
 
-- [ ] 4. PASTA_PROFILE.md 作成
-- [ ] 4.1 (P) ぱすたさんプロファイル文書の執筆
+- [x] 4. PASTA_PROFILE.md 作成
+- [x] 4.1 (P) ぱすたさんプロファイル文書の執筆
   - `doc/PASTA_PROFILE.md` を新規作成し、以下7セクションを記述：
     1. キャラクター概要（名前「ぱすたさん」、設定1段落）
     2. シェル構成（サーフェス一覧: base.png（xyz.png, 320×420px）+ x1-x5（口5パターン）+ y1-y6（目6パターン）+ z1-z2（眉2パターン）= 60表情）
@@ -62,8 +62,8 @@
   - git commit で PASTA_PROFILE.md 作成を記録
   - _Requirements: 7.1, 7.2, 7.3, 7.4, 7.5_
 
-- [ ] 5. クレートレベル README 作成
-- [ ] 5.1 (P) wintf クレート README 執筆
+- [x] 5. クレートレベル README 作成
+- [x] 5.1 (P) wintf クレート README 執筆
   - `crates/wintf/README.md` を新規作成し、以下6セクションを記述：
     1. クレート概要（Windows縦書きUIフレームワーク）
     2. 主要機能一覧（ECS統合, DirectComposition, 縦書き, 透過ウィンドウ, レイアウト, ポインターイベント）
@@ -74,7 +74,7 @@
   - プロジェクトルート README.md との重複を最小限に（クレート固有情報に焦点）
   - _Requirements: 8.1, 8.2, 8.5_
 
-- [ ] 5.2 (P) dola クレート README 執筆
+- [x] 5.2 (P) dola クレート README 執筆
   - `crates/dola/README.md` を新規作成し、以下5セクションを記述：
     1. クレート概要（Declarative Orchestration for Live Animation）
     2. 対応フォーマット（JSON（デフォルト）, TOML, YAML（feature flags））
@@ -83,7 +83,7 @@
     5. feature flags（json, toml, yaml の説明）
   - _Requirements: 8.3, 8.4, 8.5_
 
-- [ ] 5.3 Phase C-1 git commit とレビュー準備
+- [x] 5.3 Phase C-1 git commit とレビュー準備
   - 5.1 / 5.2 の変更を git commit（"docs(crates): wintf/dola README.md 作成"）
   - Phase C-1 完了を確認：README.md, PASTA_PROFILE.md, crates/wintf/README.md, crates/dola/README.md がすべて作成済み
   - Phase C-2 進行前の中間レビューポイント
@@ -93,8 +93,8 @@
 
 ## Phase C-2: 内部設計文書（開発者向けドキュメント）
 
-- [ ] 6. CONSTITUTION.md 作成
-- [ ] 6.1 (P) プロジェクト憲法文書の執筆
+- [x] 6. CONSTITUTION.md 作成
+- [x] 6.1 (P) プロジェクト憲法文書の執筆
   - `doc/CONSTITUTION.md` を新規作成し、以下6セクションを記述：
     1. ミッション宣言（areka プロジェクトの存在理由とビジョン）
     2. 設計理念（5原則以内: ECS駆動, 責務分離, 段階的拡張, 日本語ファースト, AI協調開発）
@@ -107,8 +107,8 @@
   - git commit で CONSTITUTION.md 作成を記録
   - _Requirements: 2.1, 2.2, 2.3, 2.4, 2.5, 2.6_
 
-- [ ] 7. ROADMAP.md 作成
-- [ ] 7.1 (P) ロードマップ文書の執筆
+- [x] 7. ROADMAP.md 作成
+- [x] 7.1 (P) ロードマップ文書の執筆
   - `doc/ROADMAP.md` を新規作成し、以下8セクションを記述：
     1. プログレスサマリー（Phase A-E の完了率バー、56件完了/N件残の数値）
     2. Phase A: 基盤完成（event-system 残件, animation-system (dola→wintf統合)）
@@ -124,8 +124,8 @@
   - git commit で ROADMAP.md 作成を記録
   - _Requirements: 3.1, 3.2, 3.3, 3.4, 3.5, 3.6, 3.7_
 
-- [ ] 8. ARCHITECTURE.md 作成
-- [ ] 8.1 (P) アーキテクチャ概要文書の執筆
+- [x] 8. ARCHITECTURE.md 作成
+- [x] 8.1 (P) アーキテクチャ概要文書の執筆
   - `doc/ARCHITECTURE.md` を新規作成し、以下8セクションを記述：
     1. クレート依存関係図（wintf, dola, areka, pasta のMermaid図）
     2. wintf 3層構造（COM → ECS → Message Handling）
@@ -140,15 +140,15 @@
   - git commit で ARCHITECTURE.md 作成を記録
   - _Requirements: 4.1, 4.2, 4.3, 4.4, 4.5_
 
-- [ ] 9. steering/ 整合性更新
-- [ ] 9.1 steering/product.md 更新
+- [x] 9. steering/ 整合性更新
+- [x] 9.1 steering/product.md 更新
   - areka アプリケーション層の記述を追加
   - アルファリリースターゲット（ぱすたさん）を追加
   - 既存の wintf 記述は保持、areka アプリ層セクションを追記
   - 既存のスタイル（セクション構成、記述の詳細度、フォーマット）を厳密に維持
   - _Requirements: 5.1_
 
-- [ ] 9.2 steering/structure.md 更新
+- [x] 9.2 steering/structure.md 更新
   - dola クレートの記述を追加（serde + feature flags）
   - areka バイナリクレート（予定）の記述を追加
   - pasta 外部リポジトリの言及を追加
@@ -156,17 +156,17 @@
   - 既存のスタイルを厳密に維持
   - _Requirements: 5.2_
 
-- [ ] 9.3 steering/tech.md 更新
+- [x] 9.3 steering/tech.md 更新
   - dola クレートの記述を追加（serde + feature flags: json, toml, yaml）
   - 既存のスタイルを厳密に維持
   - _Requirements: 5.3_
 
-- [ ] 9.4 steering/focus.md 更新
+- [x] 9.4 steering/focus.md 更新
   - ロードマップ参照先を `.kiro/specs/ukagaka-desktop-mascot/ROADMAP.md` から `doc/ROADMAP.md` に切り替え
   - 最小限の変更（参照先 URL のみ変更）
   - _Requirements: 5.4_
 
-- [ ] 9.5 steering/ 更新の git commit
+- [x] 9.5 steering/ 更新の git commit
   - 9.1～9.4 の変更を git commit（"docs(steering): areka/dola 追加、ROADMAP 参照先更新"）
   - Phase C-2 完了を確認
   - _Requirements: 5.5_
@@ -175,8 +175,8 @@
 
 ## 検証・最終化
 
-- [ ] 10. ドキュメント品質検証
-- [ ] 10.1 全ドキュメント品質チェック
+- [x] 10. ドキュメント品質検証
+- [x] 10.1 全ドキュメント品質チェック
   - リンク検証: 全ドキュメント内の相対リンクが正しいパスを指していることを手動確認
   - セクション完全性: requirements.md の AC に対し、各ドキュメントの対応セクションが存在することを確認
   - 原典整合性: steering/ の記載内容と各ドキュメントの引用が矛盾しないことを確認
