@@ -174,20 +174,19 @@
 
 ---
 
-### Requirement 7: 外部ファイルからのヒット領域定義読み込み
+### Requirement 7: ヒット領域定義のシリアライズ対応
 
-**Objective:** 開発者として、ヒット領域定義をJSONファイルから読み込みたい。それによりコードを変更せずに領域定義を調整できる。
+**Objective:** 開発者として、ヒット領域定義を外部ファイル（JSON/TOML等）から読み込めるようにしたい。それによりコードを変更せずに領域定義を調整できる。
 
 #### Acceptance Criteria
 
-1. The HitTest System shall JSON形式の外部ファイルからヒット領域定義を読み込む機能を提供する
-2. The JSON定義ファイル shall 以下の構造をサポートする：
+1. The `HitRegionMap` および関連する型 shall `serde` feature flag が有効な場合に `serde::Serialize` / `serde::Deserialize` を実装する
+2. The シリアライズ可能な構造 shall 以下をサポートする：
    - 領域リスト（名前、形状タイプ、座標データ）
    - カラーマップ定義（画像ファイルパス、色→領域名マッピング）
-3. When 外部ファイルの読み込みに失敗した時, the HitTest System shall エラーをログ出力し、`HitTestMode::Bounds` にフォールバックする
-4. The JSON形式 shall `serde` によるデシリアライズをサポートし、型安全に読み込む
-5. The HitTest System shall JSON定義ファイルのパスを `HitRegionMap` コンポーネントの生成時に指定できる
-6. If JSON定義ファイルに不正な形状データ（頂点数不足の多角形、負のサイズの矩形など）が含まれる時, the HitTest System shall バリデーションエラーをログ出力し、該当領域をスキップする
+3. If ヒット領域定義に不正な形状データ（頂点数不足の多角形、負のサイズの矩形など）が含まれる時, the ビルダーAPI shall バリデーションエラーを返す（パニックしない）
+4. The wintf crate shall `serde` をオプショナル依存として追加する（`[dependencies]` で `serde = { version = "1", optional = true, features = ["derive"] }`、`[features]` で `serde = ["dep:serde"]`）
+5. The JSON/TOMLパース処理（ファイルI/O含む）shall 上位層（arekaクレート）の責務とし、wintfはデータ型とビルダーAPIのみ提供する
 
 ---
 
@@ -200,8 +199,7 @@
 1. The HitTest System shall `HitRegionMap` コンポーネントを `ecs::layout` モジュールに提供する
 2. The `HitRegionMap` shall 名前付きヒット領域のリストを保持する
 3. The `HitRegionMap` shall ビルダーパターンによる構築APIを提供する（例: `.rect("head", x, y, w, h).polygon("body", &vertices)`）
-4. The `HitRegionMap` shall `from_json(path)` メソッドによる外部ファイルからの構築をサポートする
-5. The `HitRegionMap` shall `from_color_map(image_path, mapping)` メソッドによるカラーマップ画像からの構築をサポートする
-6. The `HitRegionMap` shall `hit_test_region(local_x: f32, local_y: f32) -> Option<&str>` メソッドを提供し、ローカル座標から領域名を返す
-7. When `HitRegionMap` が空（領域未定義）の時, the `hit_test_region` method shall `None` を返す
+4. The `HitRegionMap` shall `color_map(image_path, mapping)` メソッドによるカラーマップ画像からの構築をサポートする
+5. The `HitRegionMap` shall `hit_test_region(local_x: f32, local_y: f32) -> Option<&str>` メソッドを提供し、ローカル座標から領域名を返す
+6. When `HitRegionMap` が空（領域未定義）の時, the `hit_test_region` method shall `None` を返す
 
