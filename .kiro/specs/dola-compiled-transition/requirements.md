@@ -79,11 +79,9 @@ dolaクレートのStoryboard / TransitionDef / EasingFunctionなどの宣言的
 
 #### Acceptance Criteria
 
-1. If 未定義の変数名がストーリーボードエントリに含まれている場合, the Dola Compiler shall コンパイルエラーを返す（既存バリデーションと連携）
-2. If 未定義のトランジション名がNamedで参照されている場合, the Dola Compiler shall コンパイルエラーを返す
-3. If キーフレーム参照が未定義または循環依存の場合, the Dola Compiler shall コンパイルエラーを返す
-4. The Dola Compiler shall コンパイルエラーを既存のDolaError enumに新バリアントとして追加するか、専用の型として定義する
-5. The Dola Compiler shall 既存のValidateトレイトによるバリデーションを前提条件として、バリデーション済みドキュメントに対してコンパイルを実行する設計とする
+1. The Dola Compiler shall コンパイル関数の冒頭で既存の `Validate` トレイトによるバリデーション（`doc.validate()`）を内部呼び出しし、バリデーションエラーがあればそのまま返す（呼び出し側が validate を忘れるリスクをゼロにする設計。二重呼び出しのコストは無視できる）
+2. If キーフレーム参照が循環依存している場合, the Dola Compiler shall コンパイル固有エラーを返す（既存バリデーションではカバーされない）
+3. The Dola Compiler shall コンパイル固有エラーを既存の `DolaError` enum に新バリアントとして追加する
 
 ### Requirement 7: コンパイルAPIの設計
 
