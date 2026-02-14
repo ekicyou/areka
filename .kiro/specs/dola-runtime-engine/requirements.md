@@ -37,7 +37,8 @@
 2. When コンパイルが実行される場合, the Dola Runtime shall 単調増加の連番で一意な `group_id: u64` を採番し、実行インスタンスを識別する。
 3. When コンパイル結果が生成された場合, the Dola Runtime shall 各コンパイル済みトランジションに `group_id` および元ストーリーボードの `InterruptionPolicy` をメタデータとして付与する。
 4. When 同一ストーリーボードに対して複数回 Start が発行された場合, the Dola Runtime shall それぞれ異なる `group_id` を持つ独立した実行インスタンスを生成する。
-5. If 存在しないストーリーボード名で Start が発行された場合, then the Dola Runtime shall エラーを返却する。
+5. When Start が正常に完了した場合, the Dola Runtime shall `group_id` と「正常に再生した場合の終了予定時刻（f64秒）」を返却する。これにより、オーケストレーターは連鎖アニメーションのタイミングを事前計算できる。
+6. If 存在しないストーリーボード名で Start が発行された場合, then the Dola Runtime shall エラーを返却する。
 
 ---
 
@@ -48,7 +49,7 @@
 #### Acceptance Criteria
 
 1. When Pause コマンドが発行された場合, the Dola Runtime shall 指定 `group_id` の実行インスタンスの経過時刻加算を停止する。
-2. When Resume コマンドが発行された場合, the Dola Runtime shall 指定 `group_id` の実行インスタンスの経過時刻加算を再開する。
+2. When Resume コマンドが発行された場合, the Dola Runtime shall 指定 `group_id` の実行インスタンスの経過時刻加算を再開し、「正常に再生した場合の終了予定時刻（f64秒）」を返却する。一時停止中の経過時間を差し引いて再計算する。
 3. When Conclude コマンドが発行された場合, the Dola Runtime shall 指定 `group_id` の現在再生中トランジションを最終値にジャンプさせ、未開始トランジションをスキップして終了する。
 4. When Cancel コマンドが発行された場合, the Dola Runtime shall 指定 `group_id` の現在の補間値でそのまま凍結して破棄する（WAM の Abandon 相当）。
 5. When Finish(offset) コマンドが発行された場合, the Dola Runtime shall 指定オフセット時間経過後に Conclude と同等の動作を実行する。
@@ -79,7 +80,7 @@
 
 1. When 購読者が Update(現在時刻) を呼び出した場合, the Dola Runtime shall 購読中の全変数を現在時刻で評価し、前回呼び出しから値が変化した変数のみを `Vec<(変数名, 値)>` として返す。
 2. When Update が呼び出された場合, the Dola Runtime shall 終了済みトランジションをタイムテーブルから破棄する。
-3. The Dola Runtime shall Update を唯一の出力経路とし、親（オーケストレーター）への直接的なフィードバック（ストーリーボード完了通知等）は行わない。
+3. The Dola Runtime shall Update を購読者への唯一の値配信経路とする。オーケストレーターへのストーリーボード完了検知は、Start / Resume が返却する終了予定時刻によって実現する（イベント通知やコールバックは提供しない）。
 4. When 全トランジションが終了し変数が凍結状態にある場合, the Dola Runtime shall 当該変数に対して値の変化がないものとして空の結果を返す。
 5. The Dola Runtime shall 現在時刻を OS 起動時からの秒数（f64）として受け取る。
 
