@@ -1,0 +1,44 @@
+{
+  // VS Code + CodeLLDB 用。Rust Analyzer + CodeLLDB をインストールしてください。
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Rust: Debug (cargo build)",
+      "type": "lldb",
+      "request": "launch",
+      "cargo": {
+        "args": ["build"],            // ここを run → build に変更
+        "filter": { "kind": "bin" }   // 対象binを自動選択（単一bin想定）
+      },
+      "cwd": "${workspaceFolder}",
+      "env": { "RUST_BACKTRACE": "1" },
+      "console": "integratedTerminal"
+    },
+    {
+      // ビルド済みバイナリを直接起動する場合（必要なら exe 名を変更）
+      "name": "Rust: Debug (binary path)",
+      "type": "lldb",
+      "request": "launch",
+      "program": "${workspaceFolder}/target/debug/sample_dcomp.exe",
+      "cwd": "${workspaceFolder}",
+      "env": { "RUST_BACKTRACE": "1" },
+      "args": []
+    }
+  ],
+    "tasks": [
+    {
+      "label": "cargo build",
+      "type": "shell",
+      "command": "cargo",
+      "args": ["build"],
+      "problemMatcher": ["$rustc"]
+    },
+    {
+      "label": "cargo test",
+      "type": "shell",
+      "command": "cargo",
+      "args": ["test"],
+      "problemMatcher": ["$rustc"]
+    }
+  ]
+}

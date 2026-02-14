@@ -1,0 +1,31 @@
+{
+    "feature_name": "wintf-P0-image-widget",
+    "created_at": "2025-11-29T00:00:00Z",
+    "updated_at": "2025-11-30T18:00:00Z",
+    "language": "ja",
+    "phase": "completed",
+    "parent_spec": "ukagaka-desktop-mascot",
+    "parent_requirements": [
+        "1.1",
+        "1.3",
+        "2.4"
+    ],
+    "tier": 1,
+    "priority": "P0",
+    "approvals": {
+        "requirements": {
+            "generated": true,
+            "approved": true
+        },
+        "design": {
+            "generated": true,
+            "approved": true
+        },
+        "tasks": {
+            "generated": true,
+            "approved": true
+        }
+    },
+    "ready_for_implementation": true,
+    "implementation_completed": true
+}

@@ -1,0 +1,139 @@
+# Requirements Document
+
+## Project Description (Input)
+ディスプレイをエンティティ管理する。
+レイアウトルートをツリーの頂点としたモニター・ウィンドウ階層を構築し、
+Taffyレイアウトエンジンによる統一的なレイアウト計算を可能にする。
+
+## Introduction
+本機能は、wintfフレームワークにおいて、モニタとウィンドウの階層構造をECSエンティティとして管理し、Taffyレイアウトエンジンによる統一的なレイアウト計算を実現します。
+
+これまでのWindowエンティティを頂点としたレイアウトツリーから、LayoutRoot → {Monitor, Window} → Widget の階層に拡張することで、マルチモニタ環境での柔軟なウィンドウ配置とレイアウト計算を可能にします。
+
+**注**: 本機能で使用する`LayoutRoot`は、既存のTaffyレイアウト計算のルートマーカーコンポーネントです。Windows OSの仮想デスクトップ機能（Desktop 1, Desktop 2等）とは**無関係**であり、wintfフレームワーク内でのレイアウト計算の起点として機能します。
+
+### 設計決定: MonitorとWindowは同階層
+
+**採用設計**: `LayoutRoot → {Monitor, Window} → Widget`
+
+**設計根拠**:
+1. **ツリー張替えの回避**: Windowがモニター間を移動しても親子関係の変更が不要。ツリー張替えに伴うGPUリソースの意図しない初期化を防ぐ
+2. **概念的等価性**: Monitorは全画面Windowと仮想的に等価であり、レイアウト計算上は対等な存在
+3. **メタ情報としての機能**: Monitorはwindowの親ではなく、レイアウト参照用の情報として機能
+4. **実装の単純化**: Window移動時の親子関係管理が不要になり、処理が大幅に簡素化される
+
+**Window-Monitor関連付け**:
+- WindowとMonitorの関連付けは、必要に応じてWindowの物理的な位置（WindowPos）と各Monitorのboundsを照合することで判定可能
+- 明示的な参照コンポーネントは不要（YAGNI原則）
+- Window移動時は階層構造を変更せず、レイアウト計算で位置を反映
+
+---
+
+### 設計方針
+- **レイアウト階層**: 既存の`LayoutRoot`マーカーコンポーネントを活用し、MonitorとWindowを直接の子として持つ階層を構築
+- **Windows APIマッピング**: 物理的なモニタ情報（HMONITOR、EnumDisplayMonitors）のみを活用。Windows OSの仮想デスクトップAPIとは連携しない
+- **既存システムとの統合**: 既存の `Arrangement` システムと `taffy` レイアウトエンジンとの一貫性を保持
+- **既存コンポーネントの再利用**: 既に実装済みの`LayoutRoot`を再利用し、実装を簡素化
+
+## Requirements
+
+### Requirement 1: コンポーネント定義とECS統合
+**Objective:** 開発者として、モニタをECSエンティティとして扱い、既存の`LayoutRoot`を親とする階層を構築したい。これにより、既存のウィンドウ管理システムとシームレスに統合できる。
+
+#### Acceptance Criteria
+1. wintf システムは、既存の `LayoutRoot` マーカーコンポーネントをレイアウト階層のルートとして使用しなければならない
+2. wintf システムは、`Monitor` コンポーネントを定義し、以下のフィールドを保持しなければならない:
+   - `handle: HMONITOR` - モニターハンドル（識別子）
+   - `bounds: RECT` - モニター全体の矩形領域（仮想スクリーン座標系、`i32`フィールド）
+   - `work_area: RECT` - 作業領域（タスクバー除く）
+   - `dpi: u32` - DPI値
+   - `is_primary: bool` - プライマリモニターフラグ
+3. wintf システムは、Windows API（`GetMonitorInfoW`, `GetDpiForMonitor`）経由でモニタ情報を取得し、`Monitor` コンポーネントに統合しなければならない
+4. When アプリケーションが起動し、最初のECSフレーム更新が実行される前に、wintf システムは `LayoutRoot` マーカーを持つシングルトンエンティティを作成しなければならない
+5. When `LayoutRoot` エンティティが作成された際、wintf システムは `EnumDisplayMonitors` を使用して全モニタを列挙し、`Monitor` エンティティとして生成し、`LayoutRoot` の子として追加しなければならない
+6. wintf システムは、`LayoutRoot` エンティティの一意性を保証し、既に存在する場合は新規作成をスキップしなければならない
+7. wintf システムは、`LayoutRoot` エンティティをアプリケーションのライフサイクル全体で維持し、アプリケーション終了時にのみ破棄しなければならない
+8. wintf システムは、`LayoutRoot` の子として `Monitor` および `Window` エンティティを `ChildOf` および `Children` コンポーネントで管理しなければならない
+9. wintf システムは、`App` リソースを拡張し、`DisplayConfigurationChanged` フラグを保持しなければならない
+
+### Requirement 2: エンティティ階層の構築
+**Objective:** 開発者として、LayoutRoot → {Monitor, Window} → Widget の階層構造を構築し、Taffy レイアウト計算のルートとして使用したい。
+
+#### Acceptance Criteria
+1. wintf システムは、`LayoutRoot` マーカーを持つエンティティをルートノードとし、複数の `Monitor` および `Window` エンティティを子として持つ階層を構築しなければならない
+2. wintf システムは、`Monitor` と `Window` を同じ階層レベル（LayoutRootの直接の子）に配置しなければならない
+3. wintf システムは、`Widget` エンティティを `Window` エンティティの子としてのみ配置し、`Monitor` エンティティの直接の子として `Widget` を配置してはならない
+4. wintf システムは、既存の `Window` → `Widget` 階層構造を維持し、`Widget` に対する `TaffyStyle` の扱いを変更してはならない
+5. When モニタ構成が変更された場合（モニタの追加/削除/解像度変更）、wintf システムは `Monitor` エンティティの情報を更新しなければならない
+6. wintf システムは、`LayoutRoot` エンティティが削除される際、子孫の `Monitor`, `Window`, `Widget` エンティティも適切にクリーンアップしなければならない
+
+### Requirement 3: Taffy スタイルコンポーネントの名称変更
+**Objective:** 開発者として、既存のレイアウトコンポーネント名を Taffy との統合を明示する名称に変更し、コードの意図を明確にしたい。
+
+#### Acceptance Criteria
+1. wintf システムは、既存の `BoxStyle` コンポーネントを `TaffyStyle` に名称変更しなければならない
+2. wintf システムは、既存の `BoxComputedLayout` コンポーネントを `TaffyComputedLayout` に名称変更しなければならない
+3. When 名称変更が完了した際、wintf システムは既存の全システム関数とテストコードで新しい名称を使用しなければならない
+4. wintf システムは、`TaffyStyle` コンポーネントに `taffy::Style` 構造体を保持し、Taffy レイアウトエンジンと直接統合しなければならない
+5. wintf システムは、`TaffyComputedLayout` コンポーネントに `taffy::Layout` 構造体を保持し、計算結果を格納しなければならない
+
+### Requirement 4: Taffy ツリーの構築と管理
+**Objective:** 開発者として、ECS エンティティ階層から Taffy のノードツリーを構築し、レイアウト計算を実行できるようにしたい。
+
+#### Acceptance Criteria
+1. wintf システムは、`TaffyTree` リソースを定義し、`taffy::Taffy` インスタンスと Entity → NodeId のマッピングを保持しなければならない
+2. When `LayoutRoot`, `Monitor`, `Window`, `Widget` エンティティが生成される際、wintf システムは対応する Taffy ノードを作成し、ツリー構造を構築しなければならない
+3. wintf システムは、`BoxPosition`（Absolute/Relative）、`BoxInset`（left/top/right/bottom座標）、`BoxSize`（width/height）コンポーネントを定義し、`Monitor` エンティティに対して `BoxPosition::Absolute` と `BoxInset`（bounds由来）と `BoxSize`（bounds由来）を設定しなければならない
+4. wintf システムは、`build_taffy_styles_system` を拡張し、`BoxPosition`/`BoxInset`/`BoxSize` から `TaffyStyle` の `position`/`inset`/`size` を生成しなければならない
+5. When エンティティ階層が変更された場合、wintf システムは Taffy ツリーの親子関係を同期しなければならない
+6. wintf システムは、`build_taffy_tree_system` を提供し、ECS エンティティから Taffy ツリーを構築する処理を実行しなければならない
+
+### Requirement 5: レイアウト計算の実行
+**Objective:** 開発者として、LayoutRoot をルートとして Taffy レイアウト計算を実行し、計算結果を各エンティティに反映したい。
+
+#### Acceptance Criteria
+1. wintf システムは、`compute_taffy_layout_system` を提供し、`LayoutRoot` マーカーを持つエンティティをルートノードとして Taffy のレイアウト計算を実行しなければならない
+2. When レイアウト計算が完了した際、wintf システムは計算結果（`taffy::Layout`）を各エンティティの `TaffyComputedLayout` コンポーネントに書き込まなければならない
+3. wintf システムは、`distribute_computed_layouts_system` を提供し、Taffy の計算結果を各エンティティの `TaffyComputedLayout` に配布しなければならない
+4. When `TaffyComputedLayout` が更新された際、wintf システムは既存の `Arrangement` 更新システムを呼び出し、最終的なウィンドウ配置を計算しなければならない
+5. wintf システムは、レイアウト計算を `LayoutRoot` → `Monitor` → `Window` → `Widget` の順序で実行し、親から子への依存関係を保証しなければならない
+
+### Requirement 6: モニタ情報の動的更新
+**Objective:** 開発者として、モニタ構成の変更（解像度変更、モニタ追加/削除）を検知し、自動的にモニタ情報とレイアウトを更新したい。
+
+#### Acceptance Criteria
+1. When Windows メッセージ `WM_DISPLAYCHANGE` を受信した場合、wintf システムはメッセージハンドラで `DisplayConfigurationChanged` フラグを `App` リソースに設定しなければならない
+2. wintf システムは、`detect_display_change_system` を提供し、`App` リソースの `DisplayConfigurationChanged` フラグを監視しなければならない
+3. When `DisplayConfigurationChanged` フラグが true の場合、wintf システムは `EnumDisplayMonitors` を使用して全モニタ情報を再取得しなければならない
+4. When 新しいモニタが検出された場合、wintf システムは新しい `Monitor` エンティティを生成し、`LayoutRoot` の子として追加しなければならない
+5. When モニタが削除された場合、wintf システムは該当する `Monitor` エンティティを削除しなければならない
+6. wintf システムは、`DisplayConfigurationChanged` フラグを処理後に false にリセットしなければならない
+
+### Requirement 7: システムスケジュールの統合
+**Objective:** 開発者として、新しいレイアウトシステムが既存のECSスケジュールに適切に統合され、正しい順序で実行されるようにしたい。
+
+#### Acceptance Criteria
+1. wintf システムは、レイアウト関連のシステムを以下の順序で実行しなければならない: `update_monitor_style` → `update_window_style` → `compute_taffy_layout` → `distribute_computed_layouts` → `update_arrangements`
+2. wintf システムは、`compute_taffy_layout_system` を `update_*_style` システムの後に実行するよう、依存関係を設定しなければならない
+3. wintf システムは、`distribute_computed_layouts_system` を `compute_taffy_layout_system` の後に実行しなければならない
+4. wintf システムは、既存の `Arrangement` 更新システムを `distribute_computed_layouts_system` の後に実行しなければならない
+5. When システムスケジュールが構築された際、wintf システムは循環依存が存在しないことを保証しなければならない
+
+### Requirement 8: 既存システムとの互換性維持
+**Objective:** 開発者として、既存のウィンドウ管理とレイアウトシステムを破壊せず、段階的に新機能を追加したい。
+
+#### Acceptance Criteria
+1. While 新しい階層システムが実装される間、wintf システムは既存の `Window` エンティティベースのレイアウト計算を継続してサポートしなければならない
+2. wintf システムは、`LayoutRoot` または `Monitor` エンティティが存在しない場合でも、既存のレイアウトシステムが正常に動作することを保証しなければならない
+3. When 既存のテストが実行された際、wintf システムは名称変更（`BoxStyle` → `TaffyStyle`）を除き、すべてのテストがパスしなければならない
+4. wintf システムは、`GlobalArrangement` から `WindowPos` への変換処理を維持し、Win32 API との統合を保持しなければならない
+5. wintf システムは、既存の `Surface` 最適化機能（サイズ変更時の再生成判定）を継続してサポートしなければならない
+
+### Requirement 9: テストとバリデーション
+**Objective:** 開発者として、新しい階層システムの動作を検証し、レイアウト計算が正しく実行されることを確認したい。
+
+#### Acceptance Criteria
+1. wintf システムは、`LayoutRoot` → `Monitor` → `Window` 階層が正しく構築されることを検証するテストを提供しなければならない
+2. wintf システムは、`Monitor` の物理サイズと座標が `TaffyStyle` に正しく反映されることを検証するテストを提供しなければならない
+3. wintf システムは、Taffy レイアウト計算の結果が `TaffyComputedLayout` に正しく格納されることを検証するテストを提供しなければならない
+4. wintf システムは、モニタ構成変更時に階層とレイアウトが正しく更新されることを検証するテストを提供しなければならない

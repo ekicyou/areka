@@ -1,0 +1,27 @@
+{
+    "feature_name": "taffy-layout-integration",
+    "created_at": "2025-11-23T00:00:00Z",
+    "updated_at": "2025-11-24T00:00:00Z",
+    "completed_at": "2025-11-24T00:00:00Z",
+    "language": "ja",
+    "phase": "completed",
+    "approvals": {
+        "requirements": {
+            "generated": true,
+            "approved": true
+        },
+        "design": {
+            "generated": true,
+            "approved": true
+        },
+        "tasks": {
+            "generated": true,
+            "approved": true
+        },
+        "implementation": {
+            "completed": true,
+            "approved": true
+        }
+    },
+    "ready_for_implementation": false
+}
