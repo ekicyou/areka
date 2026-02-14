@@ -22,8 +22,13 @@ optional = true
 version = "0.9"
 optional = true
 
+[dependencies.interpolation]
+version = "0.3.0"
+optional = true
+
 [features]
 default = ["json"]
 json = ["dep:serde_json"]
 toml = ["dep:toml"]
 yaml = ["dep:serde_yaml"]
+runtime = ["dep:interpolation"]

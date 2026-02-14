@@ -10,6 +10,8 @@ mod document;
 mod easing;
 mod error;
 mod playback;
+#[cfg(feature = "runtime")]
+pub mod runtime;
 mod storyboard;
 mod transition;
 mod validate;
