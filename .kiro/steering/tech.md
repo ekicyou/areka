@@ -15,7 +15,8 @@ ECSアーキテクチャ（Entity Component System）をベースとした、Win
 ## Key Libraries
 
 - **bevy_ecs** (0.18.0): ECSアーキテクチャの実装基盤
-- **windows** (0.62.1): Windows API バインディング
+- **windows** (0.62.2): Windows API バインディング
+- **windows-core** (0.62.2): Windows Core API
 - **taffy** (0.9.2): レイアウトエンジン
 - **euclid** (0.22.11): 2D/3D幾何計算
 - **async-executor** (1.13.3): 非同期タスク実行
@@ -37,7 +38,7 @@ Rust言語の型システムを最大限に活用。`unsafe`ブロックはWindo
 ## Development Environment
 
 ### Required Tools
-- Rust 2021 Edition以降
+- Rust 2024 Edition
 - Windows 10/11 (DirectComposition対応)
 - Visual Studio Build Tools (Windows SDKが必要)
 

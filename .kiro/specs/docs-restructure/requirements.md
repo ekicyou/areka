@@ -137,7 +137,7 @@
 
 1. **The** docs-restructure プロセス **shall** `.kiro/steering/product.md` を更新し、areka アプリケーション層の記述とアルファリリースターゲット（ぱすたさん）を追加する
 2. **The** docs-restructure プロセス **shall** `.kiro/steering/structure.md` を更新し、dola クレートの記述を追加する
-3. **The** docs-restructure プロセス **shall** `.kiro/steering/tech.md` を更新し、dola クレート・bevy_ecs 0.18・windows-rs 0.62 等のバージョン情報を現状に合わせる
+3. **The** docs-restructure プロセス **shall** `.kiro/steering/tech.md` を更新し、dola クレート・bevy_ecs 0.18・windows 0.62.2 等のバージョン情報を現状に合わせる
 4. **The** docs-restructure プロセス **shall** `.kiro/steering/focus.md` を更新し、新ロードマップ（`doc/ROADMAP.md`）への参照に切り替える
 5. **While** steering ファイルを更新する間, **the** docs-restructure プロセス **shall** 既存の構造・形式・詳細度のスタイルを維持する
 
