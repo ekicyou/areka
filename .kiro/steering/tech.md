@@ -22,6 +22,12 @@ ECSアーキテクチャ（Entity Component System）をベースとした、Win
 - **async-executor** (1.13.3): 非同期タスク実行
 - **windows-numerics** (0.3.1): Windows数値型サポート
 
+### dola クレート依存
+- **serde** (1): シリアライズ/デシリアライズ基盤
+- **serde_json** (1, feature: `json`): JSON対応（デフォルト有効）
+- **toml** (0.8, feature: `toml`): TOML対応
+- **serde_yaml** (0.9, feature: `yaml`): YAML対応
+
 ## Development Standards
 
 ### Type Safety

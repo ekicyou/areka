@@ -26,4 +26,4 @@
 
 ## 参照先
 
-📍 `.kiro/specs/ukagaka-desktop-mascot/ROADMAP.md`
+📍 `doc/ROADMAP.md`

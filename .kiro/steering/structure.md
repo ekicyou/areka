@@ -125,6 +125,36 @@ COMリソースコンポーネント内部のアクセスメソッドは、COM�
 - `SurfaceGraphics::surface()` → `Option<&IDCompositionSurface>`
 - `TextLayoutResource::get()` → `Option<&IDWriteTextLayout>`
 
+### Animation Definition Crate
+**Location**: `/crates/dola/`  
+**Purpose**: 宣言的アニメーション定義フォーマット（Declarative Orchestration for Live Animation）  
+**Structure**:
+- `src/` - ライブラリソースコード
+  - `document.rs` - ルートドキュメント定義
+  - `storyboard.rs` - ストーリーボード定義
+  - `transition.rs` - トランジション定義
+  - `easing.rs` - イージング関数
+  - `variable.rs` - アニメーション変数定義
+  - `value.rs` - 動的値
+  - `builder.rs` - Builder API
+  - `playback.rs` - 再生状態
+  - `validate.rs` - バリデーション
+  - `error.rs` - エラー型
+- `tests/` - テスト
+
+**Dependencies**: `serde` + feature flags (`json`, `toml`, `yaml`)
+
+### Application Binary Crate (予定)
+**Location**: `/crates/areka/`  
+**Purpose**: デスクトップマスコット・プラットフォーム本体  
+**Status**: 未作成（`examples/areka.rs` はダミー、正式クレート作成時に置き換え）  
+**Dependencies**: wintf, dola, pasta (外部)
+
+### External: pasta DSL Engine
+**Repository**: https://github.com/ekicyou/pasta  
+**Purpose**: 里々インスパイアの会話記述DSLスクリプトエンジン  
+**Integration**: areka バイナリクレートが依存として取り込み
+
 ## Import Organization
 
 ```rust
