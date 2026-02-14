@@ -29,6 +29,7 @@ wintfのWM_NCHITTESTハンドラにおけるクリックスルー（HTTRANSPAREN
 #### 受入基準
 
 1. When HTTRANSPARENT領域にマウスカーソルが移動した場合, the wintf shall 直前にホバーしていたエンティティの `PointerState` コンポーネントを適切に除去する（PointerLeave 相当の処理）
+   - Note: Windows標準動作（HTTRANSPARENT→WM_MOUSELEAVE発行）と既存WM_MOUSELEAVEハンドラ（[handlers.rs L820-876](crates/wintf/src/ecs/window_proc/handlers.rs#L820-L876)）によって自動的に充足される。追加実装は不要。
 2. When HTTRANSPARENT領域からHTCLIENT領域にマウスカーソルが再進入した場合, the wintf shall ヒットしたエンティティに対して `PointerState` を正しく付与する（PointerEnter 相当の処理）
 3. If HTTRANSPARENT返却により `WM_MOUSELEAVE` がWindowsから発行された場合, the wintf shall 既存の `WM_MOUSELEAVE` ハンドラで全PointerStateを正常にクリーンアップする
 
