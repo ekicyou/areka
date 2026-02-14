@@ -15,7 +15,7 @@ arekaクレートのモック実装として、wintfフレームワークを使�
 #### Acceptance Criteria
 1. When arekaモックが起動した時, the Shell Window shall タイトルバー・枠線なしの透過ウィンドウとして画面上に表示する（`WS_POPUP`スタイル）
 2. The Shell Window shall キャラクター画像（320×420px）を`BitmapSource`コンポーネントで表示する
-3. The Shell Window shall 画像の透明部分（アルファ値0の領域）をクリックスルーとして扱い、背後のデスクトップやウィンドウを操作可能にする
+3. Where `wintf-P0-click-through`が実装済みの場合, the Shell Window shall 画像の透明部分（アルファ値0の領域）をクリックスルーとして扱い、背後のデスクトップやウィンドウを操作可能にする（※本仕様のスコープ外。wintfの`HTTRANSPARENT`有効化に依存）
 4. When シェル画像アセットが見つからない場合, the Shell Window shall プレースホルダー矩形（半透明の塗りつぶし）を代替表示する
 
 ### Requirement 2: バルーンウィンドウ（縦書き吹き出し）
