@@ -236,6 +236,12 @@ sequenceDiagram
 - Integration: `drag::read_drag_state` は同一 thread_local スレッドで実行されるため、借用競合なし
 - Validation: DragState 確認は `hit_test_in_window()` の後、LRESULT 決定の直前に実行
 - Risks: DragState ガードにより、ドラッグ中はクリックスルーが無効になる（意図された動作）
+- Comment Update: `nchittest_cache.rs` L136-138 の3行コメントを以下に更新
+  ```rust
+  // WM_MOUSELEAVE ハンドラ実装済み（handlers.rs L820-876）により、
+  // HTTRANSPARENT 返却後も PointerState は正常にクリーンアップされる。
+  // ドラッグ中は DragState ガードで HTCLIENT を強制返却する。
+  ```
 
 ### Examples Layer
 
@@ -278,14 +284,14 @@ sequenceDiagram
 
 ## Testing Strategy
 
-### Unit Tests
+### Component/Integration Tests
 
 1. **HTTRANSPARENT 返却パステスト**: `hit_result = None` の場合に `LRESULT(-1)` が返却されることを検証
 2. **HTCLIENT 返却パステスト**: `hit_result = Some(entity)` の場合に `LRESULT(1)` が返却されることを検証
 3. **キャッシュ格納テスト**: HTTRANSPARENT / HTCLIENT 両方がキャッシュに正しく格納・取得されることを検証（既存テストの拡張）
 4. **DragState ガードテスト**: DragState が非 Idle の場合に `hit_result = None` でも HTCLIENT が返却されることを検証
 
-テスト方針: `cached_nchittest` は `HWND` + `EcsWorld` を要するため結合テスト相当。キャッシュの低レベル API（`lookup` / `insert`）は既存テストで十分。分岐ロジックの検証に注力する。
+テスト方針: `cached_nchittest` は `HWND` + `EcsWorld` を要するためコンポーネント/インテグレーションテスト相当。キャッシュの低レベル API（`lookup` / `insert`）は既存のユニットテストで十分カバーされている。ここでは分岐ロジックの検証に注力する。
 
 ### Integration Tests
 
