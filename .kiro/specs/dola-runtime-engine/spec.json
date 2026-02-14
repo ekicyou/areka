@@ -18,5 +18,15 @@
             "approved": true
         }
     },
-    "ready_for_implementation": true
+    "ready_for_implementation": true,
+    "child_specifications": {
+        "total": 4,
+        "categories": {
+            "tier1": ["dola-runtime-core-types", "dola-runtime-clock"],
+            "tier2": ["dola-runtime-facade"],
+            "tier3": ["dola-runtime-conflict-loop"]
+        },
+        "created": ["dola-runtime-core-types"],
+        "pending": 3
+    }
 }
