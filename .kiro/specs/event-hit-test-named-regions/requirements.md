@@ -141,7 +141,7 @@
 4. The 多角形 shall 3頂点以上の閉じた多角形を要求し、最初と最後の頂点は自動的に接続される
 5. When マウス座標が多角形領域内にある時, the HitTest System shall Ray Casting法（半直線交差法）を使用して内外判定を行う
 6. The 多角形定義 shall CSSの `polygon()` 記法に準じた形式をサポートする（例: `"polygon(0 0, 100 0, 100 100, 0 100)"`）
-7. The HitTest System shall 1つのエンティティに対して矩形・多角形・カラーマップを混在して定義できる
+7. The HitTest System shall 1つのエンティティに対して矩形と多角形を混在して定義できる
 
 ---
 
@@ -170,7 +170,7 @@
 
 1. When 複数の名前付き領域が重なるポイントでヒットテストが行われた時, the HitTest System shall 定義リストを前から順に評価し、最初にヒットした領域を返す（先勝ち）
 2. When カラーマップ方式を使用する時, the HitTest System shall ピクセルの色から一意に領域名が決まるため、重複判定は発生しない
-3. When 矩形領域・多角形領域・カラーマップ領域が混在する時, the HitTest System shall 定義順序による先勝ちルールを適用する
+3. When 矩形領域と多角形領域が混在する時, the HitTest System shall 定義順序による先勝ちルールを適用する
 
 ---
 
@@ -197,9 +197,11 @@
 #### Acceptance Criteria
 
 1. The HitTest System shall `HitRegionMap` コンポーネントを `ecs::layout` モジュールに提供する
-2. The `HitRegionMap` shall 名前付きヒット領域のリストを保持する
+2. The `HitRegionMap` shall **矩形/多角形方式**または**カラーマップ方式**のいずれか一方を保持する（両者は排他的）
 3. The `HitRegionMap` shall ビルダーパターンによる構築APIを提供する（例: `.rect("head", x, y, w, h).polygon("body", &vertices)`）
 4. The `HitRegionMap` shall `color_map(image_path, mapping)` メソッドによるカラーマップ画像からの構築をサポートする
-5. The `HitRegionMap` shall `hit_test_region(local_x: f32, local_y: f32) -> Option<&str>` メソッドを提供し、ローカル座標から領域名を返す
-6. When `HitRegionMap` が空（領域未定義）の時, the `hit_test_region` method shall `None` を返す
+5. When カラーマップ方式で構築された場合, the `HitRegionMap` shall 矩形/多角形の追加メソッド呼び出しを無視する（または panic）
+6. When 矩形/多角形方式で構築された場合, the `HitRegionMap` shall カラーマップメソッド呼び出しを無視する（または panic）
+7. The `HitRegionMap` shall `hit_test_region(local_x: f32, local_y: f32) -> Option<&str>` メソッドを提供し、ローカル座標から領域名を返す
+8. When `HitRegionMap` が空（領域未定義）の時, the `hit_test_region` method shall `None` を返す
 
