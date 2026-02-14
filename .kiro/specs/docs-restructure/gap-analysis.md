@@ -186,4 +186,4 @@ shell/ ディレクトリにはPNG画像のみ存在し、descript.txt / manifes
 | D-1 | ~~script-engine のロードマップ上の扱い~~ | ✅ 解決済み: 「完了（外部リポジトリ ekicyou/pasta）」と記載 |
 | D-2 | 旧ROADMAP.md の処理 | (a) doc/archive/ へ移動 (b) ROADMAP.md 内に折りたたみで保持 |
 | D-3 | ~~ドキュメント言語~~ | ✅ 解決済み: 全て日本語で統一（伺か文化圏・国内コミュニティ向け） |
-| D-4 | doc/spec/ 12章の扱い | (a) 現状維持（ARCHITECTURE.mdから参照） (b) 統合 |
+| D-4 | ~~doc/spec/ 12章の扱い~~ | ✅ 解決済み: 現状維持。ARCHITECTURE.md から参照リンクで指す（俯瞰図→詳細設計の二層構造） |
