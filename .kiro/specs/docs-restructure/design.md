@@ -241,8 +241,8 @@ sequenceDiagram
 - External: shell/icon.png — スクリーンショットプレースホルダー (P2)
 
 **Implementation Notes**
-- 実装済み機能リストは completed/ 56件のスペックから客観的に導出する
-- 「現在の到達点」セクションでは基盤レイヤー ~70% 完了という定量評価を含める
+- **Completed Specs スキャン手法**: Task phase で `.kiro/specs/completed/` を scan し、各 spec.json の `feature_name` / `title` から機能リスト案を抽出。中間報告ファイル (`completed_specs_scan_report.md`) を `.kiro/specs/docs-restructure/` に出力し、セッション継続性を維持
+- 「現在の到達点」セクション では、スキャン結果から ECS, DirectComposition, 縦書き, 透過ウィンドウ, レイアウト, ポインター等のカテゴリ別 feature をリスト化し、基盤レイヤー ~70% 完了の定量評価と合わせて記載
 - 既存の wintf フェーズリスト形式は排除し、areka 全体のプロジェクトビジョンを提示
 
 ---
