@@ -1,0 +1,22 @@
+[package]
+name = "areka"
+version = "0.0.1"
+edition = { workspace = true }
+authors = { workspace = true }
+license = { workspace = true }
+publish = true
+description = "Desktop mascot platform inspired by Ukagaka"
+repository = "https://github.com/ekicyou/areka"
+
+[[bin]]
+name = "areka"
+path = "src/main.rs"
+
+[dependencies]
+wintf = { path = "../wintf" }
+human-panic = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+async-io = { version = "2.6", default-features = false }
+bevy_ecs = { workspace = true }
+windows = { workspace = true }

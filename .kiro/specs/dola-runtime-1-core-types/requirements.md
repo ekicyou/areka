@@ -56,7 +56,7 @@ _Parent: Req 10（間接）、統合指針 Section 3.1_
 1. The EvaluatedValue enum shall 3バリアント（`Float(f64)`, `Integer(i64)`, `Object(DynamicValue)`）を定義する。
 2. The EvaluatedValue enum shall `Debug`, `Clone`, `PartialEq` を derive する。
 3. The EvaluatedValue enum shall `Display` trait を実装し、Float は `{:.6}` 形式、Integer は整数表記、Object は `Debug` 形式で出力する。
-4. The EvaluatedValue の各バリアントは `VariableTypeHint` と1対1対応する: Float↔Float, Integer↔Integer, Object↔Object。
+4. The EvaluatedValue enum shall `VariableTypeHint` の各バリアントと1対1対応を持つ: Float↔Float, Integer↔Integer, Object↔Object。
 
 ---
 
@@ -74,11 +74,11 @@ _Parent: Req 1.5, 2.8, 2.9, 3.7、統合指針 Section 3.1_
    - `TerminatedInstance { group_id: u64, state: InstanceState }` — 終了済みインスタンスへの操作（Parent Req 3.7）
    - `DocumentParseError(String)` — TOML パース失敗（Parent Req 1.5）
    - `ZeroDurationWithLoop { storyboard: String }` — duration=0 + loop_count（Parent Req 2.9）
-   - `CompileError(DolaError)` — 既存コンパイルエラーのラップ
+   - `CompileError(Vec<DolaError>)` — 既存コンパイルエラーのラップ（`compile_storyboard()` が `Vec<DolaError>` を返すため）
    - `InvalidStateTransition { from: InstanceState, to: InstanceState }` — 不正な状態遷移（Req 2 のエラー型）
 2. The RuntimeError enum shall `Debug`, `Clone` を derive する。
 3. The RuntimeError enum shall `std::fmt::Display` と `std::error::Error` を実装する。
-4. The RuntimeError enum shall `From<DolaError>` を実装し、コンパイルエラーの自動変換を提供する。
+4. The RuntimeError enum shall `From<Vec<DolaError>>` を実装し、コンパイルエラーの自動変換を提供する。
 
 ---
 

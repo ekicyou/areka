@@ -355,7 +355,10 @@ pub fn on_click_through_timer(
         return Some(LRESULT(0));
     }
 
-    // クライアント領域判定
+    // クライアント領域判定: 領域外の場合は WS_EX_TRANSPARENT を維持
+    // カーソルが非クライアント領域（タイトルバー等）やウィンドウ外に出ても、
+    // インタラクティブなエンティティ上にない限りは透過を維持する。
+    // （デスクトップマスコット用途: 非クライアント領域も透過が正しい動作）
     let mut rect = windows::Win32::Foundation::RECT::default();
     if unsafe { windows::Win32::UI::WindowsAndMessaging::GetClientRect(hwnd, &mut rect).is_err() } {
         println!("[click-through-timer] GetClientRect failed, keeping transparent");
@@ -366,12 +369,11 @@ pub fn on_click_through_timer(
         || client_pt.y < rect.top
         || client_pt.y >= rect.bottom
     {
-        // クライアント領域外 → WS_EX_TRANSPARENT 解除
+        // クライアント領域外 → WS_EX_TRANSPARENT 維持（タイマー継続）
         println!(
-            "[click-through-timer] cursor outside client rect ({},{}) rect=({},{},{},{}), disabling",
+            "[click-through-timer] cursor outside client rect ({},{}) rect=({},{},{},{}), keeping transparent",
             client_pt.x, client_pt.y, rect.left, rect.top, rect.right, rect.bottom
         );
-        disable_click_through(hwnd);
         return Some(LRESULT(0));
     }
 
@@ -414,8 +416,13 @@ pub fn on_click_through_timer(
         NCHITTEST_CACHE.with(|cache| {
             cache.borrow_mut().remove(&(hwnd.0 as isize));
         });
+    } else {
+        // ヒットなし → WS_EX_TRANSPARENT 維持、タイマー継続
+        println!(
+            "[click-through-timer] no hit at client({},{}), keeping transparent",
+            client_pt.x, client_pt.y
+        );
     }
-    // ヒットなし → WS_EX_TRANSPARENT 維持、タイマー継続
 
     Some(LRESULT(0))
 }

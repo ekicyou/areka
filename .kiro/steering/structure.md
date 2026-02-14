@@ -144,11 +144,11 @@ COMリソースコンポーネント内部のアクセスメソッドは、COM�
 
 **Dependencies**: `serde` + feature flags (`json`, `toml`, `yaml`)
 
-### Application Binary Crate (予定)
+### Application Binary Crate
 **Location**: `/crates/areka/`  
 **Purpose**: デスクトップマスコット・プラットフォーム本体  
-**Status**: 未作成（`examples/areka.rs` はダミー、正式クレート作成時に置き換え）  
-**Dependencies**: wintf, dola, pasta (外部)
+**Status**: モック実装（シェル+バルーン2ウィンドウ表示、ドラッグ移動、ダブルクリック終了）  
+**Dependencies**: wintf, human-panic, tracing, tracing-subscriber, async-io, bevy_ecs, windows
 
 ### External: pasta DSL Engine
 **Repository**: https://github.com/ekicyou/pasta  
