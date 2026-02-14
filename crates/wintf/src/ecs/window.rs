@@ -266,6 +266,41 @@ pub fn flush_window_pos_commands() {
     SetWindowPosCommand::flush();
 }
 
+// ============================================================================
+// find_owner_window - エンティティの所属ウィンドウ特定
+// ============================================================================
+
+/// エンティティが所属する Window エンティティを返す。
+///
+/// ChildOf チェーンを辿り、Window コンポーネントを持つ最初の祖先で停止する。
+/// エンティティ自身が Window の場合は `Some(entity)` を返す。
+/// ChildOf を持たないエンティティ（LayoutRoot 等）に到達した場合は `None` を返す。
+///
+/// # Arguments
+/// * `world` - ECS World 参照（読み取り専用）
+/// * `entity` - 所属ウィンドウを検索するエンティティ
+///
+/// # Returns
+/// 所属する Window エンティティ。Window が見つからない場合は `None`。
+pub fn find_owner_window(world: &World, entity: Entity) -> Option<Entity> {
+    // エンティティ自身が Window を持つ場合は自身を返す
+    if world.get::<Window>(entity).is_some() {
+        return Some(entity);
+    }
+
+    // ChildOf チェーンを辿る
+    let mut current = entity;
+    while let Some(child_of) = world.get::<ChildOf>(current) {
+        let parent = child_of.parent();
+        if world.get::<Window>(parent).is_some() {
+            return Some(parent);
+        }
+        current = parent;
+    }
+
+    None
+}
+
 /// Windowコンポーネント - ウィンドウ作成に必要な基本パラメータを保持
 /// スタイルや位置・サイズは WindowStyle, WindowPos コンポーネントで指定
 #[derive(Component, Debug, Clone)]

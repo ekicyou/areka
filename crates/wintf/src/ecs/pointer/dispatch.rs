@@ -110,12 +110,27 @@ pub struct OnPointerMoved(pub PointerEventHandler);
 ///
 /// バブリング経路を構築する汎用ヘルパー関数。
 /// 公開APIとして、他のイベントシステム（ドラッグ等）でも利用可能。
+/// Window コンポーネントを持つエンティティに到達したら停止する（Window 自身は含む）。
 pub fn build_bubble_path(world: &World, start: Entity) -> Vec<Entity> {
+    use crate::ecs::window::Window;
+
     let mut path = vec![start];
+
+    // start 自身が Window の場合はここで停止
+    if world.get::<Window>(start).is_some() {
+        return path;
+    }
+
     let mut current = start;
     while let Some(child_of) = world.get::<ChildOf>(current) {
         let parent = child_of.parent();
         path.push(parent);
+
+        // Window に到達したら停止（Window はパスに含める）
+        if world.get::<Window>(parent).is_some() {
+            break;
+        }
+
         current = parent;
     }
     path

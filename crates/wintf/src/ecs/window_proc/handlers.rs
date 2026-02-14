@@ -455,6 +455,28 @@ pub(super) fn WM_NCHITTEST(
     crate::ecs::nchittest_cache::cached_nchittest(hwnd, (x, y), entity, &world)
 }
 
+/// 当該ウィンドウに属し、exclude と異なるエンティティの PointerState 保持者を収集する。
+///
+/// WM_MOUSEMOVE の leave 処理で使用するヘルパー関数。
+/// `find_owner_window` でウィンドウスコーピングを行い、他ウィンドウの PointerState を保護する。
+fn collect_entities_to_leave(
+    world: &mut bevy_ecs::world::World,
+    window_entity: bevy_ecs::prelude::Entity,
+    exclude: bevy_ecs::prelude::Entity,
+) -> Vec<bevy_ecs::prelude::Entity> {
+    use crate::ecs::pointer::PointerState;
+    use crate::ecs::window::find_owner_window;
+
+    let mut result = Vec::new();
+    let mut query = world.query::<(bevy_ecs::prelude::Entity, &PointerState)>();
+    for (e, _) in query.iter(world) {
+        if e != exclude && find_owner_window(world, e) == Some(window_entity) {
+            result.push(e);
+        }
+    }
+    result
+}
+
 /// WM_MOUSEMOVE: マウス移動メッセージ
 ///
 /// 位置をPointerBufferに蓄積し、hit_testでヒットしたエンティティにPointerStateを付与。
@@ -660,18 +682,12 @@ pub(super) fn WM_MOUSEMOVE(
 
             // ヒットしたエンティティが存在する場合
             if let Some(target_entity) = hit_entity {
-                // 現在PointerStateを持っている全エンティティを探す
-                // 異なるエンティティにPointerStateがある場合はLeave処理
-                let mut entities_to_leave = Vec::new();
-                {
-                    let world_mut = world_borrow.world_mut();
-                    let mut query = world_mut.query::<(bevy_ecs::prelude::Entity, &PointerState)>();
-                    for (e, _) in query.iter(world_mut) {
-                        if e != target_entity {
-                            entities_to_leave.push(e);
-                        }
-                    }
-                }
+                // 当該ウィンドウに属し、target_entity と異なるエンティティを Leave 対象として収集
+                let entities_to_leave = collect_entities_to_leave(
+                    world_borrow.world_mut(),
+                    window_entity,
+                    target_entity,
+                );
 
                 // 古いエンティティからPointerStateを削除し、PointerLeaveを付与
                 for old_entity in entities_to_leave {
@@ -729,17 +745,12 @@ pub(super) fn WM_MOUSEMOVE(
                 // Windowエンティティに対して処理
                 let target_entity = window_entity;
 
-                // 現在PointerStateを持っている全エンティティを探す
-                let mut entities_to_leave = Vec::new();
-                {
-                    let world_mut = world_borrow.world_mut();
-                    let mut query = world_mut.query::<(bevy_ecs::prelude::Entity, &PointerState)>();
-                    for (e, _) in query.iter(world_mut) {
-                        if e != target_entity {
-                            entities_to_leave.push(e);
-                        }
-                    }
-                }
+                // 当該ウィンドウに属し、target_entity と異なるエンティティを Leave 対象として収集
+                let entities_to_leave = collect_entities_to_leave(
+                    world_borrow.world_mut(),
+                    window_entity,
+                    target_entity,
+                );
 
                 // 古いエンティティからPointerStateを削除し、PointerLeaveを付与
                 for old_entity in entities_to_leave {
@@ -808,7 +819,8 @@ pub(super) fn WM_MOUSEMOVE(
 
 /// WM_MOUSELEAVE: マウス離脱メッセージ
 ///
-/// 全エンティティのPointerStateを削除し、PointerLeaveマーカーを付与する。
+/// 当該ウィンドウに属するエンティティのPointerStateのみを削除し、
+/// PointerLeaveマーカーを付与する（他ウィンドウのPointerStateは保持）。
 #[inline]
 pub(super) fn WM_MOUSELEAVE(
     hwnd: HWND,
@@ -817,6 +829,7 @@ pub(super) fn WM_MOUSELEAVE(
     _lparam: LPARAM,
 ) -> HandlerResult {
     use crate::ecs::pointer::{PointerLeave, PointerState, WindowPointerTracking};
+    use crate::ecs::window::find_owner_window;
 
     let Some(window_entity) = super::get_entity_from_hwnd(hwnd) else {
         return None;
@@ -824,17 +837,19 @@ pub(super) fn WM_MOUSELEAVE(
 
     if let Some(world) = super::try_get_ecs_world() {
         if let Ok(mut world_borrow) = world.try_borrow_mut() {
-            // PointerStateを持つ全エンティティを収集
+            // PointerStateを持つ全エンティティを収集（当該ウィンドウに属するもののみ）
             let mut entities_with_pointer_state = Vec::new();
             {
                 let world_mut = world_borrow.world_mut();
                 let mut query = world_mut.query::<(bevy_ecs::prelude::Entity, &PointerState)>();
                 for (e, _) in query.iter(world_mut) {
-                    entities_with_pointer_state.push(e);
+                    if find_owner_window(world_mut, e) == Some(window_entity) {
+                        entities_with_pointer_state.push(e);
+                    }
                 }
             }
 
-            // 各エンティティからPointerStateを削除し、PointerLeaveを付与
+            // 当該ウィンドウのエンティティからPointerStateを削除し、PointerLeaveを付与
             for entity in entities_with_pointer_state {
                 if let Ok(mut entity_ref) = world_borrow.world_mut().get_entity_mut(entity) {
                     entity_ref.remove::<PointerState>();
@@ -842,7 +857,7 @@ pub(super) fn WM_MOUSELEAVE(
                     debug!(
                         entity = ?entity,
                         hwnd = ?hwnd,
-                        "PointerLeave marker inserted"
+                        "PointerLeave marker inserted (scoped to window)"
                     );
                 }
             }
@@ -1019,34 +1034,58 @@ fn handle_button_message(
                 } else {
                     crate::ecs::pointer::record_button_up(target_entity, button);
 
-                    // ドラッグ終了
+                    // ドラッグ終了（HWND ガード付き: 当該ウィンドウのドラッグのみ終了）
                     if button == crate::ecs::pointer::PointerButton::Left {
                         // thread_local DragStateをクローンして取得
                         let state_snapshot =
                             crate::ecs::drag::read_drag_state(|state| state.clone());
 
-                        if let crate::ecs::drag::DragState::Dragging { entity, .. } = state_snapshot
-                        {
-                            // DragAccumulatorResourceにEnded遷移を記録
-                            if let Some(accumulator) = world_borrow
-                                .world()
-                                .get_resource::<crate::ecs::drag::DragAccumulatorResource>(
-                            ) {
-                                accumulator.set_transition(
-                                    crate::ecs::drag::DragTransition::Ended {
-                                        entity,
-                                        end_pos: PhysicalPoint::new(screen_x, screen_y),
-                                        cancelled: false,
-                                    },
-                                );
+                        let should_end = match &state_snapshot {
+                            crate::ecs::drag::DragState::Dragging { hwnd: drag_hwnd, .. } => {
+                                *drag_hwnd == hwnd
                             }
-                        }
+                            crate::ecs::drag::DragState::Preparing { entity, .. }
+                            | crate::ecs::drag::DragState::JustStarted { entity, .. } => {
+                                crate::ecs::window::find_owner_window(
+                                    world_borrow.world(),
+                                    *entity,
+                                ) == Some(window_entity)
+                            }
+                            _ => false,
+                        };
 
-                        // thread_local DragStateをIdleに戻す
-                        crate::ecs::drag::end_dragging(
-                            PhysicalPoint::new(screen_x, screen_y),
-                            false,
-                        );
+                        if should_end {
+                            if let crate::ecs::drag::DragState::Dragging { entity, .. }
+                            | crate::ecs::drag::DragState::Preparing { entity, .. }
+                            | crate::ecs::drag::DragState::JustStarted { entity, .. } =
+                                &state_snapshot
+                            {
+                                // DragAccumulatorResourceにEnded遷移を記録
+                                if let Some(accumulator) = world_borrow
+                                    .world()
+                                    .get_resource::<crate::ecs::drag::DragAccumulatorResource>(
+                                ) {
+                                    accumulator.set_transition(
+                                        crate::ecs::drag::DragTransition::Ended {
+                                            entity: *entity,
+                                            end_pos: PhysicalPoint::new(screen_x, screen_y),
+                                            cancelled: false,
+                                        },
+                                    );
+                                }
+                            }
+
+                            // thread_local DragStateをIdleに戻す
+                            crate::ecs::drag::end_dragging(
+                                PhysicalPoint::new(screen_x, screen_y),
+                                false,
+                            );
+                        } else {
+                            trace!(
+                                hwnd = format!("0x{:X}", hwnd.0 as usize),
+                                "[handle_button_message] Drag end skipped: HWND mismatch"
+                            );
+                        }
                         // TODO: ReleaseCapture (not available in current windows crate version)
                         // let _ = unsafe { ReleaseCapture() };
                     }
@@ -1063,34 +1102,65 @@ fn handle_button_message(
     } else {
         crate::ecs::pointer::record_button_up(window_entity, button);
 
-        // ドラッグ終了（hit_test失敗時でもドラッグ中なら終了処理）
+        // ドラッグ終了（hit_test失敗時でもドラッグ中なら終了処理、HWNDガード付き）
         if button == crate::ecs::pointer::PointerButton::Left {
-            if let Some(world) = super::try_get_ecs_world() {
-                if let Ok(world_borrow) = world.try_borrow() {
-                    // thread_local DragStateをクローンして取得
-                    let state_snapshot = crate::ecs::drag::read_drag_state(|state| state.clone());
+            let state_snapshot = crate::ecs::drag::read_drag_state(|state| state.clone());
 
-                    if let crate::ecs::drag::DragState::Dragging { entity, .. }
-                    | crate::ecs::drag::DragState::Preparing { entity, .. }
-                    | crate::ecs::drag::DragState::JustStarted { entity, .. } = state_snapshot
-                    {
-                        // DragAccumulatorResourceにEnded遷移を記録
-                        if let Some(accumulator) = world_borrow
-                            .world()
-                            .get_resource::<crate::ecs::drag::DragAccumulatorResource>(
-                        ) {
-                            accumulator.set_transition(crate::ecs::drag::DragTransition::Ended {
-                                entity,
-                                end_pos: PhysicalPoint::new(screen_x, screen_y),
-                                cancelled: false,
-                            });
+            let should_end = match &state_snapshot {
+                crate::ecs::drag::DragState::Dragging { hwnd: drag_hwnd, .. } => {
+                    *drag_hwnd == hwnd
+                }
+                crate::ecs::drag::DragState::Preparing { entity, .. }
+                | crate::ecs::drag::DragState::JustStarted { entity, .. } => {
+                    if let Some(world) = super::try_get_ecs_world() {
+                        if let Ok(world_borrow) = world.try_borrow() {
+                            crate::ecs::window::find_owner_window(
+                                world_borrow.world(),
+                                *entity,
+                            ) == Some(window_entity)
+                        } else {
+                            false
+                        }
+                    } else {
+                        false
+                    }
+                }
+                _ => false,
+            };
+
+            if should_end {
+                if let Some(world) = super::try_get_ecs_world() {
+                    if let Ok(world_borrow) = world.try_borrow() {
+                        if let crate::ecs::drag::DragState::Dragging { entity, .. }
+                        | crate::ecs::drag::DragState::Preparing { entity, .. }
+                        | crate::ecs::drag::DragState::JustStarted { entity, .. } =
+                            &state_snapshot
+                        {
+                            // DragAccumulatorResourceにEnded遷移を記録
+                            if let Some(accumulator) = world_borrow
+                                .world()
+                                .get_resource::<crate::ecs::drag::DragAccumulatorResource>(
+                            ) {
+                                accumulator.set_transition(
+                                    crate::ecs::drag::DragTransition::Ended {
+                                        entity: *entity,
+                                        end_pos: PhysicalPoint::new(screen_x, screen_y),
+                                        cancelled: false,
+                                    },
+                                );
+                            }
                         }
                     }
                 }
-            }
 
-            // thread_local DragStateをIdleに戻す
-            crate::ecs::drag::end_dragging(PhysicalPoint::new(screen_x, screen_y), false);
+                // thread_local DragStateをIdleに戻す
+                crate::ecs::drag::end_dragging(PhysicalPoint::new(screen_x, screen_y), false);
+            } else {
+                trace!(
+                    hwnd = format!("0x{:X}", hwnd.0 as usize),
+                    "[handle_button_message] Fallback drag end skipped: HWND mismatch"
+                );
+            }
             // TODO: ReleaseCapture (not available in current windows crate version)
             // let _ = unsafe { ReleaseCapture() };
         }

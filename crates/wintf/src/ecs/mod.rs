@@ -56,7 +56,8 @@ pub use widget::{
 };
 pub use window::{
     DPI, DpiChangeContext, SetWindowPosCommand, Window, WindowHandle, WindowPos, WindowStyle,
-    ZOrder, flush_window_pos_commands, guarded_set_window_pos, is_self_initiated,
+    ZOrder, find_owner_window, flush_window_pos_commands, guarded_set_window_pos,
+    is_self_initiated,
 };
 pub(crate) use window_proc::{ecs_wndproc, set_ecs_world};
 pub use world::{

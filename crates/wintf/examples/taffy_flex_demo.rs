@@ -84,10 +84,25 @@ use wintf::ecs::widget::bitmap_source::{BitmapSource, CommandSender};
 use wintf::ecs::widget::brushes::Brushes;
 use wintf::ecs::widget::shapes::Rectangle;
 use wintf::ecs::{Window, WindowPos};
+use wintf::ecs::window::find_owner_window;
 use wintf::*;
 
 #[derive(Debug, Clone, Copy, Component, PartialEq, Hash)]
 pub struct FlexDemoWindow;
+
+/// イベントハンドラ用ウィンドウ識別文字列を返す
+fn window_label(world: &World, entity: Entity) -> String {
+    match find_owner_window(world, entity) {
+        Some(win) => {
+            let title = world
+                .get::<Window>(win)
+                .map(|w| w.title.as_str())
+                .unwrap_or("?");
+            format!("win={:?}({})", win, title)
+        }
+        None => "win=None".to_string(),
+    }
+}
 
 /// Flexコンテナを識別するマーカー
 #[derive(Debug, Clone, Copy, Component, PartialEq, Hash)]
@@ -146,34 +161,46 @@ fn main() -> Result<()> {
 
 /// 非同期デモ実行
 async fn run_demo(tx: CommandSender) {
-    // === 0秒: ウィンドウ作成 ===
-    println!("[Async] 0s: Creating Flexbox demo window");
-    let _ = tx.send(Box::new(create_flexbox_window));
+    // === 0秒: ウィンドウ作成（2つ） ===
+    println!("[Async] 0s: Creating Flexbox demo windows (multi-window)");
+    let _ = tx.send(Box::new(|world: &mut World| {
+        create_flexbox_window(
+            world,
+            "wintf - Taffy Flexbox Demo (Window 1)",
+            windows::Win32::Foundation::POINT { x: 0, y: 0 },
+        );
+        create_flexbox_window(
+            world,
+            "wintf - Taffy Flexbox Demo (Window 2)",
+            windows::Win32::Foundation::POINT { x: 850, y: 0 },
+        );
+    }));
 
     // === 1秒待機 ===
     async_io::Timer::after(Duration::from_secs(1)).await;
 
-    // === 1秒: ヒットテスト検証 ===
+    // === 1秒: ヒットテスト検証（Window 1のみ） ===
     println!("[Async] 1s: Running hit test verification");
     let _ = tx.send(Box::new(test_hit_test_1s));
 
     // === 長時間待機（ポインターイベントデモ用） ===
     println!("[Async] Waiting 60 seconds for pointer event demo...");
     println!("  Try: Left-click on RedBox, BlueBox, Right-click on Container");
+    println!("  Verify: Events in Window 1 don't affect Window 2 and vice versa");
     async_io::Timer::after(Duration::from_secs(60)).await;
 
     // === 61秒: ウィンドウ終了 ===
-    println!("[Async] 61s: Closing window");
+    println!("[Async] 61s: Closing windows");
     let _ = tx.send(Box::new(close_window));
 }
 
-/// Flexboxデモウィンドウを作成
-fn create_flexbox_window(world: &mut World) {
+/// Flexboxデモウィンドウを作成（パラメータ化）
+fn create_flexbox_window(world: &mut World, title: &str, position: windows::Win32::Foundation::POINT) -> Entity {
     // Window Entity (ルート)
     // WindowPos.position でクライアント領域の位置を指定
     let window_entity = world
         .spawn((
-            Name::new("FlexDemo-Window"),
+            Name::new(format!("FlexDemo-Window [{}]", title)),
             FlexDemoWindow,
             BoxStyle {
                 position: Some(BoxPosition::Absolute),
@@ -184,11 +211,11 @@ fn create_flexbox_window(world: &mut World) {
                 ..Default::default()
             },
             WindowPos {
-                position: Some(windows::Win32::Foundation::POINT { x: 0, y: 0 }),
+                position: Some(position),
                 ..Default::default()
             },
             Window {
-                title: "wintf - Taffy Flexbox Demo".to_string(),
+                title: title.to_string(),
                 ..Default::default()
             },
         ))
@@ -372,8 +399,8 @@ fn create_flexbox_window(world: &mut World) {
         ChildOf(flex_container),
     ));
 
-    println!("[Test] Flexbox demo window created:");
-    println!("  Window (root)");
+    println!("[Test] Flexbox demo window created: {}", title);
+    println!("  Window (root) - entity={:?}", window_entity);
     println!(
         "  └─ FlexContainer (Row, SpaceEvenly, Center) - 灰色背景、10pxマージン、右クリック/Ctrl+左クリックでTunnelデモ"
     );
@@ -386,22 +413,8 @@ fn create_flexbox_window(world: &mut World) {
     );
     println!("     │   └─ Rectangle (yellow, 50x50) - Tunnelキャプチャ検証用子エンティティ");
     println!("     └─ Rectangle (blue, 100x100, grow=2) - 左クリックでサイズトグル");
-    println!("\n[PointerEvent Demo]");
-    println!("  - 灰色コンテナを右クリック → 色がピンクに変化");
-    println!("  - 灰色コンテナをCtrl+左クリック → Tunnelで停止、子にイベント到達せず");
-    println!(
-        "  - 黄色矩形(GreenBoxChild)を左クリック → 親(GreenBox)がTunnelキャプチャ、子は到達しない"
-    );
-    println!(
-        "  - 黄色矩形(GreenBoxChild)を右クリック → 親がキャプチャせず、Tunnel/Bubble両フェーズ実行"
-    );
-    println!("  - 赤い矩形を左クリック → 色が赤⇔黄トグル");
-    println!("  - 画像の透明部分を左クリック → 背景(RedBox)の色が変わる（αマスクヒットテスト）");
-    println!("  - 画像の不透明部分を左クリック → 画像がクリックされ背景は変わらない");
-    println!("  - 緑の矩形を左クリック → 色が緑⇔黄緑トグル");
-    println!("  - 緑の矩形をダブルクリック → サイズが100⇔150トグル");
-    println!("  - 緑の矩形でマウス移動 → ログ出力（デバッグ）");
-    println!("  - 青い矩形を左クリック → サイズが100⇔150トグル");
+
+    window_entity
 }
 
 /// レイアウトパラメーターを変更
@@ -466,7 +479,8 @@ fn change_layout_parameters(world: &mut World) {
 /// ウィンドウを閉じる
 fn close_window(world: &mut World) {
     let mut query = world.query_filtered::<Entity, With<FlexDemoWindow>>();
-    if let Some(window) = query.iter(world).next() {
+    let windows: Vec<Entity> = query.iter(world).collect();
+    for window in windows {
         println!("[Test] Removing Window entity {:?}", window);
         world.despawn(window);
     }
@@ -777,14 +791,16 @@ fn on_container_pressed(
     entity: Entity,
     ev: &Phase<PointerState>,
 ) -> bool {
+    let wlabel = window_label(world, entity);
     match ev {
         Phase::Tunnel(state) => {
             // Ctrl+左クリックでイベントを停止
             if state.ctrl_down && state.left_down {
                 info!(
-                    "[Tunnel] FlexContainer: Event stopped at Container (Ctrl+Left), sender={:?}, entity={:?}, screen=({:.1},{:.1}), local=({:.1},{:.1})",
+                    "[Tunnel] FlexContainer: Event stopped at Container (Ctrl+Left), sender={:?}, entity={:?}, {}, screen=({:.1},{:.1}), local=({:.1},{:.1})",
                     sender,
                     entity,
+                    wlabel,
                     state.client_point.x,
                     state.client_point.y,
                     state.local_point.x,
@@ -805,8 +821,8 @@ fn on_container_pressed(
             }
 
             info!(
-                "[Tunnel] FlexContainer: Passing through, sender={:?}, entity={:?}",
-                sender, entity,
+                "[Tunnel] FlexContainer: Passing through, sender={:?}, entity={:?}, {}",
+                sender, entity, wlabel,
             );
             false
         }
@@ -814,9 +830,10 @@ fn on_container_pressed(
             // 右クリック検出
             if state.right_down {
                 info!(
-                    "[Bubble] FlexContainer: Right-click detected! sender={:?}, entity={:?}, screen=({:.1},{:.1}), local=({:.1},{:.1})",
+                    "[Bubble] FlexContainer: Right-click detected! sender={:?}, entity={:?}, {}, screen=({:.1},{:.1}), local=({:.1},{:.1})",
                     sender,
                     entity,
+                    wlabel,
                     state.client_point.x,
                     state.client_point.y,
                     state.local_point.x,
@@ -951,11 +968,12 @@ fn on_red_box_pressed(
     entity: Entity,
     ev: &Phase<PointerState>,
 ) -> bool {
+    let wlabel = window_label(world, entity);
     // Bubble フェーズでのみ処理
     if !ev.is_bubble() {
         info!(
-            "[Tunnel] RedBox: Passing through, sender={:?}, entity={:?}",
-            sender, entity,
+            "[Tunnel] RedBox: Passing through, sender={:?}, entity={:?}, {}",
+            sender, entity, wlabel,
         );
         return false;
     }
@@ -1256,7 +1274,7 @@ fn on_green_child_pressed(
 ///
 /// マウス移動時にログを出力する（デバッグ用）。
 fn on_green_box_moved(
-    _world: &mut World,
+    world: &mut World,
     sender: Entity,
     entity: Entity,
     ev: &Phase<PointerState>,
@@ -1266,6 +1284,7 @@ fn on_green_box_moved(
         return false;
     }
 
+    let wlabel = window_label(world, entity);
     let state = ev.value();
 
     // 10フレームに1回程度ログ出力（頻繁すぎないように）
@@ -1275,6 +1294,7 @@ fn on_green_box_moved(
         info!(
             sender = ?sender,
             entity = ?entity,
+            window = %wlabel,
             x = state.client_point.x,
             y = state.client_point.y,
             "[Bubble] GreenBox: Pointer moved"
