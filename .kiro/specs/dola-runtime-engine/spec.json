@@ -23,21 +23,21 @@
         "total": 4,
         "categories": {
             "tier1": [
-                "dola-runtime-core-types",
-                "dola-runtime-clock"
+                "dola-runtime-1-core-types",
+                "dola-runtime-2-clock"
             ],
             "tier2": [
-                "dola-runtime-facade"
+                "dola-runtime-3-facade"
             ],
             "tier3": [
-                "dola-runtime-conflict-loop"
+                "dola-runtime-4-conflict-loop"
             ]
         },
         "created": [
-            "dola-runtime-core-types",
-            "dola-runtime-clock",
-            "dola-runtime-facade",
-            "dola-runtime-conflict-loop"
+            "dola-runtime-1-core-types",
+            "dola-runtime-2-clock",
+            "dola-runtime-3-facade",
+            "dola-runtime-4-conflict-loop"
         ],
         "pending": 0
     }

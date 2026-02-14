@@ -149,6 +149,18 @@ pub struct RegionColorMapBox;
 #[derive(Debug, Clone, Copy, Component, PartialEq, Hash)]
 pub struct RegionFallbackBox;
 
+/// クリックスルーテストコンテナを識別するマーカー
+#[derive(Debug, Clone, Copy, Component, PartialEq, Hash)]
+pub struct ClickThroughTestContainer;
+
+/// クリックスルー領域（HitTest::none）を識別するマーカー
+#[derive(Debug, Clone, Copy, Component, PartialEq, Hash)]
+pub struct ClickThroughBox;
+
+/// 通常領域（HitTest::bounds）を識別するマーカー
+#[derive(Debug, Clone, Copy, Component, PartialEq, Hash)]
+pub struct NormalHitBox;
+
 fn main() -> Result<()> {
     human_panic::setup_panic!();
 
@@ -253,6 +265,7 @@ fn create_flexbox_window(
                 title: title.to_string(),
                 ..Default::default()
             },
+            HitTest::none(),
         ))
         .id();
 
@@ -655,6 +668,111 @@ fn create_flexbox_window(
         ChildOf(region_container),
     ));
 
+    // =======================================================================
+    // 下段2: クリックスルーテストコンテナ
+    // =======================================================================
+    let click_through_container = world
+        .spawn((
+            Name::new("ClickThrough-Container"),
+            ClickThroughTestContainer,
+            Rectangle::new(),
+            Brushes::with_foreground(D2D1_COLOR_F {
+                r: 0.95,
+                g: 0.95,
+                b: 0.85,
+                a: 1.0,
+            }),
+            BoxStyle {
+                flex_direction: Some(taffy::FlexDirection::Row),
+                justify_content: Some(taffy::JustifyContent::SpaceEvenly),
+                align_items: Some(taffy::AlignItems::Center),
+                size: Some(BoxSize {
+                    width: None,
+                    height: Some(Dimension::Px(120.0)),
+                }),
+                margin: Some(BoxMargin(wintf::ecs::layout::Rect {
+                    left: wintf::ecs::layout::LengthPercentageAuto::Px(10.0),
+                    right: wintf::ecs::layout::LengthPercentageAuto::Px(10.0),
+                    top: wintf::ecs::layout::LengthPercentageAuto::Px(0.0),
+                    bottom: wintf::ecs::layout::LengthPercentageAuto::Px(10.0),
+                })),
+                ..Default::default()
+            },
+            HitTest::none(),
+            ChildOf(window_entity),
+        ))
+        .id();
+
+    // --- クリックスルー領域 (HitTest::none) ---
+    // 黄色半透明矩形、マウスイベントが貫通する
+    world.spawn((
+        Name::new("ClickThroughBox"),
+        ClickThroughBox,
+        Rectangle::new(),
+        Brushes::with_foreground(D2D1_COLOR_F {
+            r: 1.0,
+            g: 1.0,
+            b: 0.0,
+            a: 0.3,
+        }),
+        BoxStyle {
+            size: Some(BoxSize {
+                width: Some(Dimension::Px(150.0)),
+                height: Some(Dimension::Px(100.0)),
+            }),
+            ..Default::default()
+        },
+        HitTest::none(),
+        ChildOf(click_through_container),
+    ));
+
+    // --- 通常領域 (HitTest::bounds) ---
+    // シアン半透明矩形、マウスイベントを受け取る
+    world.spawn((
+        Name::new("NormalHitBox"),
+        NormalHitBox,
+        Rectangle::new(),
+        Brushes::with_foreground(D2D1_COLOR_F {
+            r: 0.0,
+            g: 1.0,
+            b: 1.0,
+            a: 0.3,
+        }),
+        BoxStyle {
+            size: Some(BoxSize {
+                width: Some(Dimension::Px(150.0)),
+                height: Some(Dimension::Px(100.0)),
+            }),
+            ..Default::default()
+        },
+        HitTest::bounds(),
+        OnPointerPressed(on_normal_hit_box_pressed),
+        ChildOf(click_through_container),
+    ));
+
+    // --- α境界値テスト (Opacity=0.5, foreground.a=1.0 → 合成α=0.5 → HTCLIENT) ---
+    world.spawn((
+        Name::new("AlphaBoundaryBox"),
+        Rectangle::new(),
+        Opacity(0.5),
+        Brushes::with_foreground(D2D1_COLOR_F {
+            r: 0.5,
+            g: 0.0,
+            b: 0.5,
+            a: 1.0,
+        }),
+        BoxStyle {
+            size: Some(BoxSize {
+                width: Some(Dimension::Px(150.0)),
+                height: Some(Dimension::Px(100.0)),
+            }),
+            ..Default::default()
+        },
+        HitTest::bounds(),
+        OnPointerPressed(on_normal_hit_box_pressed),
+        ChildOf(click_through_container),
+    ));
+
     println!("[Test] Flexbox demo window created: {}", title);
     println!("  Window (root) - entity={:?}", window_entity);
     println!("  ├─ FlexContainer (Row, SpaceEvenly, Center) - 灰色背景");
@@ -663,12 +781,16 @@ fn create_flexbox_window(
     println!("  │  ├─ Rectangle (green, 100x100, grow=1) - Tunnelキャプチャデモ");
     println!("  │  │   └─ Rectangle (yellow, 50x50)");
     println!("  │  └─ Rectangle (blue, 100x100, grow=2) - サイズトグル");
-    println!("  └─ RegionTest-Container (Row, SpaceEvenly) - 名前付きヒット領域テスト");
-    println!("     ├─ RegionRectBox (矩形: top-left/top-right/bottom-left/bottom-right)");
-    println!("     ├─ RegionPolygonBox (多角形: top-left/top-right/bottom-left/bottom-right)");
-    println!("     ├─ RegionMixedBox (混在: rect+polygonで4分割)");
-    println!("     ├─ RegionColorMapBox (カラーマップ: 4色→4リージョン)");
-    println!("     └─ RegionFallbackBox (フォールバック: region=None)");
+    println!("  ├─ RegionTest-Container (Row, SpaceEvenly) - 名前付きヒット領域テスト");
+    println!("  │  ├─ RegionRectBox (矩形: top-left/top-right/bottom-left/bottom-right)");
+    println!("  │  ├─ RegionPolygonBox (多角形: top-left/top-right/bottom-left/bottom-right)");
+    println!("  │  ├─ RegionMixedBox (混在: rect+polygonで4分割)");
+    println!("  │  ├─ RegionColorMapBox (カラーマップ: 4色→4リージョン)");
+    println!("  │  └─ RegionFallbackBox (フォールバック: region=None)");
+    println!("  └─ ClickThrough-Container (Row, SpaceEvenly) - クリックスルーテスト");
+    println!("     ├─ ClickThroughBox (黄色, HitTest::none) - クリック貫通");
+    println!("     ├─ NormalHitBox (シアン, HitTest::bounds) - 通常クリック");
+    println!("     └─ AlphaBoundaryBox (紫, Opacity=0.5) - α境界値テスト");
 
     window_entity
 }
@@ -1820,4 +1942,35 @@ fn on_region_box_moved(
     );
 
     false // 伝播続行
+}
+
+/// 通常ヒットテスト領域の OnPointerPressed ハンドラ
+///
+/// クリックスルーテストの通常領域がクリックされたことを確認するためのログ出力
+fn on_normal_hit_box_pressed(
+    world: &mut World,
+    _sender: Entity,
+    entity: Entity,
+    ev: &Phase<PointerState>,
+) -> bool {
+    if !ev.is_bubble() {
+        return false;
+    }
+
+    let state = ev.value();
+    if !state.left_down {
+        return false;
+    }
+
+    let entity_name = world
+        .get::<Name>(entity)
+        .map(|n| n.as_str().to_string())
+        .unwrap_or_else(|| format!("{:?}", entity));
+
+    info!(
+        "[ClickThrough] Normal region clicked: {} at ({:.1},{:.1})",
+        entity_name, state.client_point.x, state.client_point.y,
+    );
+
+    false
 }

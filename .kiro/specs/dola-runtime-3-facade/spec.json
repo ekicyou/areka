@@ -1,5 +1,5 @@
 {
-    "feature_name": "dola-runtime-facade",
+    "feature_name": "dola-runtime-3-facade",
     "created_at": "2026-02-14T23:50:00+09:00",
     "updated_at": "2026-02-14T23:50:00+09:00",
     "language": "ja",
@@ -71,6 +71,6 @@
     "tier": 2,
     "priority": "P0",
     "dependencies": [
-        "dola-runtime-core-types"
+        "dola-runtime-1-core-types"
     ]
 }

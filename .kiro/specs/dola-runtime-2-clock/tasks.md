@@ -1,4 +1,4 @@
-# 実装計画 — dola-runtime-clock
+# 実装計画 — dola-runtime-2-clock
 
 ## タスク概要
 

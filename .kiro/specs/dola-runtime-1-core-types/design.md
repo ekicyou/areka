@@ -1,4 +1,4 @@
-# Design Document — dola-runtime-core-types
+# Design Document — dola-runtime-1-core-types
 
 ## Overview
 

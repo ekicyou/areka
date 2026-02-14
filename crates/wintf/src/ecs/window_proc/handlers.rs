@@ -125,6 +125,12 @@ pub(super) fn WM_WINDOWPOSCHANGED(
     _wparam: WPARAM,
     lparam: LPARAM,
 ) -> HandlerResult {
+    // click-through スタイル更新中の SWP_FRAMECHANGED 由来 → 即座に DefWindowProcW に委譲
+    // 位置/サイズ変更なし (SWP_NOMOVE|SWP_NOSIZE) なので tick やレイアウト再計算は不要
+    if crate::ecs::nchittest_cache::is_click_through_style_update() {
+        return None;
+    }
+
     // echo 判定: TLS フラグを参照（ステップ①冒頭で1回のみ）
     let is_echo = crate::ecs::window::is_self_initiated();
 
@@ -1041,15 +1047,13 @@ fn handle_button_message(
                             crate::ecs::drag::read_drag_state(|state| state.clone());
 
                         let should_end = match &state_snapshot {
-                            crate::ecs::drag::DragState::Dragging { hwnd: drag_hwnd, .. } => {
-                                *drag_hwnd == hwnd
-                            }
+                            crate::ecs::drag::DragState::Dragging {
+                                hwnd: drag_hwnd, ..
+                            } => *drag_hwnd == hwnd,
                             crate::ecs::drag::DragState::Preparing { entity, .. }
                             | crate::ecs::drag::DragState::JustStarted { entity, .. } => {
-                                crate::ecs::window::find_owner_window(
-                                    world_borrow.world(),
-                                    *entity,
-                                ) == Some(window_entity)
+                                crate::ecs::window::find_owner_window(world_borrow.world(), *entity)
+                                    == Some(window_entity)
                             }
                             _ => false,
                         };
@@ -1107,17 +1111,15 @@ fn handle_button_message(
             let state_snapshot = crate::ecs::drag::read_drag_state(|state| state.clone());
 
             let should_end = match &state_snapshot {
-                crate::ecs::drag::DragState::Dragging { hwnd: drag_hwnd, .. } => {
-                    *drag_hwnd == hwnd
-                }
+                crate::ecs::drag::DragState::Dragging {
+                    hwnd: drag_hwnd, ..
+                } => *drag_hwnd == hwnd,
                 crate::ecs::drag::DragState::Preparing { entity, .. }
                 | crate::ecs::drag::DragState::JustStarted { entity, .. } => {
                     if let Some(world) = super::try_get_ecs_world() {
                         if let Ok(world_borrow) = world.try_borrow() {
-                            crate::ecs::window::find_owner_window(
-                                world_borrow.world(),
-                                *entity,
-                            ) == Some(window_entity)
+                            crate::ecs::window::find_owner_window(world_borrow.world(), *entity)
+                                == Some(window_entity)
                         } else {
                             false
                         }
@@ -1689,4 +1691,35 @@ fn find_ancestor_with_drag_config(
             return None;
         }
     }
+}
+
+// ============================================================================
+// タイマーメッセージハンドラ
+// ============================================================================
+
+/// WM_TIMER: タイマーメッセージ処理
+///
+/// クリックスルー用タイマー（CLICK_THROUGH_TIMER_ID）をディスパッチする。
+/// WS_EX_TRANSPARENT 設定中もウィンドウは WM_TIMER を受信し続ける。
+#[inline]
+pub(super) fn WM_TIMER(
+    hwnd: HWND,
+    _message: u32,
+    wparam: WPARAM,
+    _lparam: LPARAM,
+) -> HandlerResult {
+    let timer_id = wparam.0;
+
+    // Entity 取得
+    let Some(entity) = super::get_entity_from_hwnd(hwnd) else {
+        return None;
+    };
+
+    // World 取得
+    let Some(world) = super::try_get_ecs_world() else {
+        return None;
+    };
+
+    // クリックスルータイマーにディスパッチ
+    crate::ecs::nchittest_cache::on_click_through_timer(hwnd, timer_id, entity, &world)
 }

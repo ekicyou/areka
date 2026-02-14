@@ -129,14 +129,14 @@ conflict-loop 子仕様は facade から以下を消費する:
 
 ```
 Tier 1 (基盤・並行可能)
-├── Child 1: dola-runtime-core-types  ← 依存なし
-└── Child 4: dola-runtime-clock       ← 依存なし
+├── 仕様1: dola-runtime-1-core-types  ← 依存なし
+└── 仕様2: dola-runtime-2-clock       ← 依存なし
 
 Tier 2 (ランタイム本体)
-└── Child 2: dola-runtime-facade      ← Child 1 に依存
+└── 仕様3: dola-runtime-3-facade      ← 仕様1 に依存
 
 Tier 3 (高度機能)
-└── Child 3: dola-runtime-conflict-loop ← Child 2 に依存
+└── 仕様4: dola-runtime-4-conflict-loop ← 仕様3 に依存
 ```
 
 ### 4.2 各 Tier 完了時の検証可能状態
@@ -170,7 +170,7 @@ facade 子仕様（Tier 2）は conflict-loop（Tier 3）なしでも動作可�
 
 ### 5.2 段階的 Cargo.toml 変更計画
 
-**Child 1 (core-types) 実装時:**
+**仕様1 (1-core-types) 実装時:**
 ```toml
 [features]
 runtime = ["dep:interpolation"]
@@ -179,7 +179,7 @@ runtime = ["dep:interpolation"]
 interpolation = { version = "0.3.0", optional = true }
 ```
 
-**Child 4 (clock) 実装時:**
+**仕様2 (2-clock) 実装時:**
 ```toml
 [features]
 runtime = ["dep:interpolation"]
@@ -190,9 +190,9 @@ interpolation = { version = "0.3.0", optional = true }
 windows = { version = "0.62", optional = true, features = ["Win32_System_SystemInformation"] }
 ```
 
-**Child 2 (facade) 実装時:** `runtime` feature の scope が拡大するが、既存の feature flag はそのまま。追加依存なし。
+**仕様3 (3-facade) 実装時:** `runtime` feature の scope が拡大するが、既存の feature flag はそのまま。追加依存なし。
 
-**Child 3 (conflict-loop) 実装時:** 追加依存なし。既存の `runtime` feature 内で実装。
+**仕様4 (4-conflict-loop) 実装時:** 追加依存なし。既存の `runtime` feature 内で実装。
 
 ### 5.3 モジュール構成
 
@@ -200,17 +200,17 @@ windows = { version = "0.62", optional = true, features = ["Win32_System_SystemI
 crates/dola/src/
 ├── runtime/              # #[cfg(feature = "runtime")]
 │   ├── mod.rs            # 公開 API re-export
-│   ├── instance_state.rs # Child 1: InstanceState
-│   ├── types.rs          # Child 1: EvaluatedValue, RuntimeError, StartResult
-│   ├── interpolator.rs   # Child 1: Interpolator
-│   ├── clock.rs          # Child 4: #[cfg(feature = "windows-clock")]
-│   ├── document_store.rs # Child 2: DocumentStore
-│   ├── instance_manager.rs # Child 2: InstanceManager + StoryboardInstance
-│   ├── timeline_manager.rs # Child 2: TimelineManager + VariableTimeline
-│   ├── subscription_manager.rs # Child 2: SubscriptionManager
-│   ├── facade.rs          # Child 2: DolaRuntime
-│   ├── conflict_resolver.rs # Child 3: ConflictResolver
-│   └── loop_controller.rs  # Child 3: LoopController
+│   ├── instance_state.rs # 仕様1: InstanceState
+│   ├── types.rs          # 仕様1: EvaluatedValue, RuntimeError, StartResult
+│   ├── interpolator.rs   # 仕様1: Interpolator
+│   ├── clock.rs          # 仕様2: #[cfg(feature = "windows-clock")]
+│   ├── document_store.rs # 仕様3: DocumentStore
+│   ├── instance_manager.rs # 仕様3: InstanceManager + StoryboardInstance
+│   ├── timeline_manager.rs # 仕様3: TimelineManager + VariableTimeline
+│   ├── subscription_manager.rs # 仕様3: SubscriptionManager
+│   ├── facade.rs          # 仕様3: DolaRuntime
+│   ├── conflict_resolver.rs # 仕様4: ConflictResolver
+│   └── loop_controller.rs  # 仕様4: LoopController
 ```
 
 ---

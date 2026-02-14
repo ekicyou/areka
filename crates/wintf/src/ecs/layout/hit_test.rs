@@ -195,8 +195,33 @@ pub fn hit_test_entity(world: &World, entity: Entity, point: PhysicalPoint) -> b
         return false;
     }
 
-    // HitTestMode::Bounds の場合は矩形判定のみ
+    // HitTestMode::Bounds の場合は矩形判定 + α値判定
     if mode == HitTestMode::Bounds {
+        // Opacity * Brushes.foreground.a の合成α値が ALPHA_THRESHOLD 未満なら透明と判定
+        // AlphaMask の ALPHA_THRESHOLD (128/255 ≈ 0.502) と同一基準
+        const ALPHA_THRESHOLD: f32 = 128.0 / 255.0;
+
+        let opacity = world
+            .get::<super::Opacity>(entity)
+            .map(|o| o.clamped())
+            .unwrap_or(1.0);
+
+        let foreground_a = world
+            .get::<crate::ecs::widget::brushes::Brushes>(entity)
+            .and_then(|b| b.foreground.as_color())
+            .map(|c| c.a)
+            .unwrap_or_else(|| {
+                crate::ecs::widget::brushes::DEFAULT_FOREGROUND
+                    .as_color()
+                    .map(|c| c.a)
+                    .unwrap_or(1.0)
+            });
+
+        let composite_alpha = opacity * foreground_a;
+        if composite_alpha < ALPHA_THRESHOLD {
+            return false;
+        }
+
         return true;
     }
 
@@ -305,7 +330,33 @@ pub(crate) fn hit_test_entity_ex(world: &World, entity: Entity, point: PhysicalP
     // モード別判定
     match mode {
         HitTestMode::None => unreachable!(),
-        HitTestMode::Bounds => RegionHit::Hit(None),
+        HitTestMode::Bounds => {
+            // Opacity * Brushes.foreground.a の合成α値が ALPHA_THRESHOLD 未満なら透明と判定
+            const ALPHA_THRESHOLD: f32 = 128.0 / 255.0;
+
+            let opacity = world
+                .get::<super::Opacity>(entity)
+                .map(|o| o.clamped())
+                .unwrap_or(1.0);
+
+            let foreground_a = world
+                .get::<crate::ecs::widget::brushes::Brushes>(entity)
+                .and_then(|b| b.foreground.as_color())
+                .map(|c| c.a)
+                .unwrap_or_else(|| {
+                    crate::ecs::widget::brushes::DEFAULT_FOREGROUND
+                        .as_color()
+                        .map(|c| c.a)
+                        .unwrap_or(1.0)
+                });
+
+            let composite_alpha = opacity * foreground_a;
+            if composite_alpha < ALPHA_THRESHOLD {
+                RegionHit::Miss
+            } else {
+                RegionHit::Hit(None)
+            }
+        }
         HitTestMode::AlphaMask => {
             // BitmapSourceResource を取得
             let Some(resource) = world.get::<BitmapSourceResource>(entity) else {
@@ -397,7 +448,8 @@ pub fn hit_test(world: &World, root: Entity, screen_point: PhysicalPoint) -> Opt
     let mut traversal = DepthFirstReversePostOrder::new(root);
 
     while let Some(entity) = traversal.next(world) {
-        if hit_test_entity(world, entity, screen_point) {
+        let hit = hit_test_entity(world, entity, screen_point);
+        if hit {
             return Some(entity);
         }
     }
@@ -514,7 +566,7 @@ mod tests {
     use super::*;
     use bevy_ecs::world::World;
     use windows::Win32::Foundation::{POINT, SIZE};
-    use windows::Win32::Graphics::Direct2D::Common::D2D_RECT_F;
+    use windows::Win32::Graphics::Direct2D::Common::{D2D_RECT_F, D2D1_COLOR_F};
     use windows_numerics::Matrix3x2;
 
     /// テスト用ヘルパー: 指定した bounds を持つ GlobalArrangement を作成
@@ -1217,5 +1269,169 @@ mod tests {
         // bounds外
         let result = hit_test(&world, root, PhysicalPoint::new(200.0, 200.0));
         assert_eq!(result, None);
+    }
+
+    // ========================================================================
+    // Opacity/Brushes α値判定テスト（HitTestMode::Bounds）
+    // ========================================================================
+
+    /// Opacity(0.502) * foreground.a=1.0 → 合成α ≈ 0.502 ≥ 128/255 → HTCLIENT（ヒット）
+    #[test]
+    fn test_hit_test_entity_bounds_alpha_boundary_above() {
+        use super::super::Opacity;
+        use crate::ecs::widget::brushes::Brushes;
+
+        let mut world = World::new();
+        let entity = world
+            .spawn((
+                make_global_arrangement(0.0, 0.0, 100.0, 100.0),
+                HitTest::bounds(),
+                Opacity(0.502),
+                Brushes::with_foreground(D2D1_COLOR_F {
+                    r: 1.0,
+                    g: 0.0,
+                    b: 0.0,
+                    a: 1.0,
+                }),
+            ))
+            .id();
+
+        // 合成α = 0.502 * 1.0 = 0.502 ≥ 128/255 ≈ 0.50196 → ヒット
+        assert!(hit_test_entity(
+            &world,
+            entity,
+            PhysicalPoint::new(50.0, 50.0)
+        ));
+    }
+
+    /// Opacity(0.501) * foreground.a=1.0 → 合成α ≈ 0.501 < 128/255 → 透明領域（ミス）
+    #[test]
+    fn test_hit_test_entity_bounds_alpha_boundary_below() {
+        use super::super::Opacity;
+        use crate::ecs::widget::brushes::Brushes;
+
+        let mut world = World::new();
+        let entity = world
+            .spawn((
+                make_global_arrangement(0.0, 0.0, 100.0, 100.0),
+                HitTest::bounds(),
+                Opacity(0.501),
+                Brushes::with_foreground(D2D1_COLOR_F {
+                    r: 1.0,
+                    g: 0.0,
+                    b: 0.0,
+                    a: 1.0,
+                }),
+            ))
+            .id();
+
+        // 合成α = 0.501 * 1.0 = 0.501 < 128/255 ≈ 0.50196 → 透明
+        assert!(!hit_test_entity(
+            &world,
+            entity,
+            PhysicalPoint::new(50.0, 50.0)
+        ));
+    }
+
+    /// Opacity(0.4) * foreground.a=1.0 → 合成α = 0.4 < 128/255 → 透明領域
+    #[test]
+    fn test_hit_test_entity_bounds_low_opacity() {
+        use super::super::Opacity;
+        use crate::ecs::widget::brushes::Brushes;
+
+        let mut world = World::new();
+        let entity = world
+            .spawn((
+                make_global_arrangement(0.0, 0.0, 100.0, 100.0),
+                HitTest::bounds(),
+                Opacity(0.4),
+                Brushes::with_foreground(D2D1_COLOR_F {
+                    r: 0.0,
+                    g: 1.0,
+                    b: 0.0,
+                    a: 1.0,
+                }),
+            ))
+            .id();
+
+        // 合成α = 0.4 * 1.0 = 0.4 < 128/255 → 透明
+        assert!(!hit_test_entity(
+            &world,
+            entity,
+            PhysicalPoint::new(50.0, 50.0)
+        ));
+    }
+
+    /// Opacity(1.0) * foreground.a=0.4 → 合成α = 0.4 < 128/255 → 透明領域（foreground側が低い）
+    #[test]
+    fn test_hit_test_entity_bounds_low_foreground_alpha() {
+        use super::super::Opacity;
+        use crate::ecs::widget::brushes::Brushes;
+
+        let mut world = World::new();
+        let entity = world
+            .spawn((
+                make_global_arrangement(0.0, 0.0, 100.0, 100.0),
+                HitTest::bounds(),
+                Opacity(1.0),
+                Brushes::with_foreground(D2D1_COLOR_F {
+                    r: 0.0,
+                    g: 0.0,
+                    b: 1.0,
+                    a: 0.4,
+                }),
+            ))
+            .id();
+
+        // 合成α = 1.0 * 0.4 = 0.4 < 128/255 → 透明
+        assert!(!hit_test_entity(
+            &world,
+            entity,
+            PhysicalPoint::new(50.0, 50.0)
+        ));
+    }
+
+    /// Opacity なし + Brushes なし → デフォルト（1.0 * 1.0 = 1.0）→ ヒット
+    #[test]
+    fn test_hit_test_entity_bounds_no_opacity_no_brushes() {
+        let mut world = World::new();
+        let entity = world
+            .spawn((
+                make_global_arrangement(0.0, 0.0, 100.0, 100.0),
+                HitTest::bounds(),
+            ))
+            .id();
+
+        // Opacity=1.0(default), foreground.a=1.0(DEFAULT_FOREGROUND=BLACK) → ヒット
+        assert!(hit_test_entity(
+            &world,
+            entity,
+            PhysicalPoint::new(50.0, 50.0)
+        ));
+    }
+
+    /// Opacity(0.502) + Brushes::Inherit → DEFAULT_FOREGROUND (a=1.0) → 合成α ≥ 閾値 → ヒット
+    #[test]
+    fn test_hit_test_entity_bounds_inherit_foreground() {
+        use super::super::Opacity;
+        use crate::ecs::widget::brushes::Brushes;
+
+        let mut world = World::new();
+        let entity = world
+            .spawn((
+                make_global_arrangement(0.0, 0.0, 100.0, 100.0),
+                HitTest::bounds(),
+                Opacity(0.502),
+                Brushes::default(), // foreground = Inherit
+            ))
+            .id();
+
+        // Inherit → DEFAULT_FOREGROUND (BLACK, a=1.0)
+        // 合成α = 0.502 * 1.0 ≥ 128/255 → ヒット
+        assert!(hit_test_entity(
+            &world,
+            entity,
+            PhysicalPoint::new(50.0, 50.0)
+        ));
     }
 }

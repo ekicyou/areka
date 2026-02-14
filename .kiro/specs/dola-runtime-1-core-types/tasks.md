@@ -1,4 +1,4 @@
-# 実装計画 — dola-runtime-core-types
+# 実装計画 — dola-runtime-1-core-types
 
 ## タスク概要
 
