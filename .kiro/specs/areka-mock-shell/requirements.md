@@ -28,21 +28,21 @@ arekaクレートのモック実装として、wintfフレームワークを使�
 4. The Balloon Window shall `Typewriter`コンポーネントを使用し、縦書き(`TextDirection::VerticalRightToLeft`)でサンプルテキストを表示する
 5. The Balloon Window shall シェルウィンドウの右側に、適切な間隔（約10〜20px）を空けて配置する
 
-### Requirement 3: ウィンドウドラッグ移動
-**Objective:** ユーザーとして、シェルウィンドウをマウスドラッグでデスクトップ上の任意の位置に移動できるようにしたい。
+### Requirement 3: ウィンドウ操作（ドラッグ移動・終了）
+**Objective:** ユーザーとして、シェルウィンドウをマウスドラッグで移動でき、ダブルクリックでアプリケーションを終了できるようにしたい。タスクバー非表示のため、シェル自体が終了手段を提供する。
 
 #### Acceptance Criteria
 1. When シェルウィンドウの不透明部分を左クリック＆ドラッグした時, the Shell Window shall マウスに追従してウィンドウ位置を移動する
 2. When シェルウィンドウがドラッグ移動された時, the Balloon Window shall シェルウィンドウとの相対位置を維持して追従移動する
+3. When シェルウィンドウをダブルクリックした時, the Shell Window shall 全ウィンドウを閉じてアプリケーションを終了する
 
-### Requirement 4: 非同期デモフロー
-**Objective:** 開発者として、モック実装の動作を自動で確認できるデモフローを持たせたい。
+### Requirement 4: 起動・ログ
+**Objective:** 開発者として、モック実装の起動フローとデバッグ手段を整えたい。
 
 #### Acceptance Criteria
-1. When モックが起動した時, the Demo shall `CommandSender`を使った非同期タスクでウィンドウ生成を実行する
-2. The Demo shall コンソールに操作ガイド（ドラッグ操作の説明等）を出力する
-3. The Demo shall 起動後60秒で自動的にウィンドウを閉じ、アプリケーションを終了する
-4. The Demo shall `tracing-subscriber`で`RUST_LOG`環境変数によるログレベル制御に対応する
+1. When モックが起動した時, the Mock Shell shall `CommandSender`を使った非同期タスクでウィンドウ生成を実行する
+2. The Mock Shell shall コンソールに操作ガイド（ドラッグ移動・ダブルクリック終了の説明）を出力する
+3. The Mock Shell shall `tracing-subscriber`で`RUST_LOG`環境変数によるログレベル制御に対応する
 
 ### Requirement 5: プロジェクト構成
 **Objective:** 開発者として、既存のwintfワークスペース構成に沿った形でモック実装を配置したい。
