@@ -71,7 +71,7 @@
 #### Acceptance Criteria
 
 1. **The** docs-restructure プロセス **shall** 現在の `README.md` を `doc/DEVLOG_ORIGINAL_README.md` にリネームして保存する
-2. **The** 新 `README.md` **shall** 以下のセクションを含む：プロジェクト概要、スクリーンショット/デモ（プレースホルダー可）、技術スタック、クレート構成（wintf / dola / areka）、ビルド手順、アルファリリース目標（ぱすたさん）、現在の到達点、開発ロードマップ概要、ライセンス
+2. **The** 新 `README.md` **shall** 以下のセクションを含む：プロジェクト概要、スクリーンショット/デモ（プレースホルダー可）、技術スタック、クレート構成（wintf / dola + 外部: pasta）、ビルド手順、アルファリリース目標（ぱすたさん）、現在の到達点、開発ロードマップ概要、ライセンス
 3. **The** 新 `README.md` **shall** プロジェクトの二層構造（wintf = Windows UIフレームワーク / areka = デスクトップマスコットアプリ）を明確に説明する
 4. **The** 新 `README.md` **shall** 「ぱすたさんアルファリリース」をマイルストーンとして提示し、残タスクの概要をロードマップセクションで示す
 5. **The** 新 `README.md` **shall** 日本語で記述し、プロジェクトの「顔」として洗練された表現を用いる
@@ -167,4 +167,4 @@
 2. **The** プロファイル **shall** 以下を含む：キャラクター名、キャラクター設定（1段落）、シェル構成（サーフェス一覧）、バルーン種別（縦書きタイプライター）、ゴースト種別（pasta DSL）、最小限の会話サンプル
 3. **The** プロファイル **shall** areka-P0-reference-ghost / shell / balloon の要件定義のインプットとして機能する位置づけとする
 4. **The** プロファイル **shall** pasta DSL の概要（里々インスパイアの会話記述DSL）を1セクションで説明する
-5. **Where** areka-P0-script-engine の設計が完了している場合, **the** プロファイル **shall** script-engine の対応機能への参照リンクを含む
+5. **The** プロフィール **shall** pasta DSL スクリプトエンジンの外部リポジトリ (https://github.com/ekicyou/pasta) への参照リンクを含む

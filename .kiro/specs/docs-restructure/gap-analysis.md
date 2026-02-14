@@ -38,13 +38,13 @@
 
 ### 1.3 重要な発見事項
 
-#### 🔴 Critical: pasta クレートの不在
+#### ✅ Resolved: pasta クレートは別リポジトリに分離済み
 
-`areka-P0-script-engine` は spec.json で `phase: "complete"`, `implementation: 100%` と記録されているが、**`crates/` 配下に pasta クレートは存在しない**。Cargo.toml の workspace members にも含まれていない。
+`areka-P0-script-engine` は spec.json で `phase: "complete"`, `implementation: 100%` と記録されており、これは正確。コード実装は別リポジトリに分離されている。
 
-- **仮説A**: 仕様・設計・タスクの文書化（Phase 1: 子仕様原案作成）が「完了」の意味であり、コード実装はまだ
-- **仮説B**: 別ブランチや別リポジトリに存在
-- **影響**: ロードマップで「script-engine 完了」と記載すべきかの判断に影響
+- **リポジトリ**: https://github.com/ekicyou/pasta
+- **結論**: `crates/` 配下に不在なのは別リポジトリ化によるものであり、問題なし
+- **ロードマップ記載**: 「✅ 完了（外部リポジトリ）」として記載可能
 
 #### 🟡 Warning: shell/ メタデータ不在
 
@@ -150,7 +150,7 @@ shell/ ディレクトリにはPNG画像のみ存在し、descript.txt / manifes
 
 | リスク | 影響 | 対策 |
 |--------|------|------|
-| script-engine 完了状態の誤記載 | ROADMAP/READMEの信頼性低下 | 開発者確認（仮説A/B判定）後にロードマップ反映 |
+| ~~script-engine 完了状態の誤記載~~ | ~~ROADMAP/READMEの信頼性低下~~ | ✅ 解決済み: 別リポジトリ (ekicyou/pasta) に分離済み |
 | 情報の散逸・矛盾 | ドキュメント間の不整合 | 相互参照リンクの徹底、原典主義（steering = 信頼源） |
 | ぱすたさんプロファイルの情報不足 | リファレンス実装の要件が不明確 | 最小限プロファイル + 「未定」マークで暫定公開 |
 
@@ -158,12 +158,12 @@ shell/ ディレクトリにはPNG画像のみ存在し、descript.txt / manifes
 
 ## 5. Research Needed（設計フェーズへの申し送り）
 
-| # | 項目 | 理由 | 影響する要件 |
-|---|------|------|-------------|
-| R-1 | `areka-P0-script-engine` の実装状態確認 | spec.jsonは完了だがcrates/pastaが不在。ロードマップでの記載方法に影響 | Req 3 (ROADMAP) |
-| R-2 | pasta DSL の最新文法仕様 | ぱすたさんプロファイルに会話サンプルを記載するにあたり、DSL構文の確定が必要 | Req 7 (ぱすたプロファイル) |
-| R-3 | shell/ 素材のパーツ合成座標 | base.png に対する x/y/z パーツのオーバーレイ座標が未定義。PASTA_PROFILE.md に記載すべきか | Req 7 |
-| R-4 | ukagaka-desktop-mascot ROADMAP.md の廃止手順 | 旧ROADMAPを参照している他のスペック（focus.md等）への影響 | Req 3, Req 5 |
+| # | 項目 | 理由 | 影響する要件 | 状態 |
+|---|------|------|-------------|------|
+| R-1 | `areka-P0-script-engine` の実装状態確認 | 別リポジトリ (https://github.com/ekicyou/pasta) に分離済み。ロードマップでは「完了（外部リポ）」と記載 | Req 3 (ROADMAP) | ✅ 解決済 |
+| R-2 | pasta DSL の最新文法仕様 | ぱすたさんプロファイルに会話サンプルを記載するにあたり、DSL構文の確定が必要。pasta リポジトリを参照 | Req 7 (ぱすたプロフィール) | ℹ️ 設計フェーズ |
+| R-3 | shell/ 素材のパーツ合成座標 | base.png に対する x/y/z パーツのオーバーレイ座標が未定義。PASTA_PROFILE.md に記載すべきか | Req 7 | ℹ️ 設計フェーズ |
+| R-4 | ukagaka-desktop-mascot ROADMAP.md の廃止手順 | 旧ROADMAPを参照している他のスペック（focus.md等）への影響 | Req 3, Req 5 | ℹ️ 設計フェーズ |
 
 ---
 
@@ -183,7 +183,7 @@ shell/ ディレクトリにはPNG画像のみ存在し、descript.txt / manifes
 
 | # | 決定事項 | 選択肢 |
 |---|---------|--------|
-| D-1 | script-engine のロードマップ上の扱い | (a) 「仕様完了・実装待ち」(b) 「完了」(c) 開発者に確認 |
+| D-1 | ~~script-engine のロードマップ上の扱い~~ | ✅ 解決済み: 「完了（外部リポジトリ ekicyou/pasta）」と記載 |
 | D-2 | 旧ROADMAP.md の処理 | (a) doc/archive/ へ移動 (b) ROADMAP.md 内に折りたたみで保持 |
 | D-3 | ドキュメント言語 | (a) 全て日本語 (b) README英語 + 他は日本語 |
 | D-4 | doc/spec/ 12章の扱い | (a) 現状維持（ARCHITECTURE.mdから参照） (b) 統合 |
