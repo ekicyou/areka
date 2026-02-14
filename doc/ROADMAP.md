@@ -29,7 +29,7 @@
 
 | 仕様 | .kiro/specs/ | 状態 | 備考 |
 |------|-------------|:----:|------|
-| イベントシステム | `wintf-P0-event-system` | 🔵 進行中 | event-dispatch, event-drag-system 残 |
+| イベントシステム | `wintf-P0-event-system` | 🔵 進行中 | event-hit-test-named-regions 残 |
 | ├ ヒットテスト | `completed/event-hit-test` | ✅ 完了 | |
 | ├ ヒットテストキャッシュ | `completed/event-hit-test-cache` | ✅ 完了 | |
 | ├ マウス基本 | `completed/event-mouse-basic` | ✅ 完了 | |
@@ -37,7 +37,7 @@
 | ├ イベント配信 | `completed/event-dispatch` | ✅ 完了 | |
 | ├ ドラッグシステム | `completed/event-drag-system` | ✅ 完了 | |
 | ├ ヒットテスト名前付き領域 | `event-hit-test-named-regions` | ⚪ 未着手 | |
-| ├ マルチウィンドウイベント | `multiwindow-event-validation` | ⚪ 未着手 | |
+| ├ マルチウィンドウイベント | `completed/multiwindow-event-validation` | ✅ 完了 | |
 | アニメーションシステム | `wintf-P0-animation-system` | ⚪ 未着手 | dola → wintf 統合 |
 | タイプライター | `completed/wintf-P0-typewriter` | ✅ 完了 | |
 

@@ -8,8 +8,8 @@
 
 use bevy_ecs::hierarchy::ChildOf;
 use bevy_ecs::prelude::*;
-use wintf::ecs::pointer::{build_bubble_path, PointerState};
-use wintf::ecs::window::{find_owner_window, Window};
+use wintf::ecs::pointer::{PointerState, build_bubble_path};
+use wintf::ecs::window::{Window, find_owner_window};
 
 // ============================================================================
 // Task 1.2: find_owner_window ユニットテスト
