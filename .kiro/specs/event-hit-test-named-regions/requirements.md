@@ -164,15 +164,13 @@
 
 ### Requirement 6: ヒット領域の優先順位
 
-**Objective:** 開発者として、重なり合うヒット領域の優先順位を制御したい。それにより意図した領域が正しくヒットする。
+**Objective:** 開発者として、重なり合うヒット領域が存在する際の判定順序を理解したい。それにより意図した領域定義を記述できる。
 
 #### Acceptance Criteria
 
-1. The HitTest System shall **定義順序（後勝ち）** によりヒット領域の優先順位を決定する
-2. When 複数の名前付き領域が重なるポイントでヒットテストが行われた時, the HitTest System shall 定義リストの後方に定義された領域を優先して返す
-3. The HitTest System shall 明示的な `priority: i32` フィールドによる優先順位のオーバーライドをサポートする
-4. When `priority` が指定されている時, the HitTest System shall priority値が大きい領域を優先する（同値の場合は定義順序で決定）
-5. When 矩形領域・多角形領域・カラーマップ領域が混在する時, the HitTest System shall 同一の優先順位ルールを適用する
+1. When 複数の名前付き領域が重なるポイントでヒットテストが行われた時, the HitTest System shall 定義リストを前から順に評価し、最初にヒットした領域を返す（先勝ち）
+2. When カラーマップ方式を使用する時, the HitTest System shall ピクセルの色から一意に領域名が決まるため、重複判定は発生しない
+3. When 矩形領域・多角形領域・カラーマップ領域が混在する時, the HitTest System shall 定義順序による先勝ちルールを適用する
 
 ---
 
@@ -184,7 +182,7 @@
 
 1. The HitTest System shall JSON形式の外部ファイルからヒット領域定義を読み込む機能を提供する
 2. The JSON定義ファイル shall 以下の構造をサポートする：
-   - 領域リスト（名前、形状タイプ、座標データ、優先順位）
+   - 領域リスト（名前、形状タイプ、座標データ）
    - カラーマップ定義（画像ファイルパス、色→領域名マッピング）
 3. When 外部ファイルの読み込みに失敗した時, the HitTest System shall エラーをログ出力し、`HitTestMode::Bounds` にフォールバックする
 4. The JSON形式 shall `serde` によるデシリアライズをサポートし、型安全に読み込む
