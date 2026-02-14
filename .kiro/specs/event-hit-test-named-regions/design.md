@@ -298,22 +298,39 @@ pub fn hit_test_entity_ex(
   - `HitTestMode::Bounds/AlphaMask`: 既存 `hit_test_entity` に委譲し、`Hit(None)` または `Miss`
 - **Invariants**: 既存 `hit_test_entity` の判定結果と矛盾しない
 
-**座標変換ロジック（AlphaMask 踏襲）**:
+**座標変換ロジック（AlphaMask 踏襲の2段階変換）**:
 
 ```rust
-// screen → ローカル正規化座標（0.0〜1.0）
+// 【段階1】スクリーン座標 → 正規化座標（0.0〜1.0）— 方式共通
+// GlobalArrangement.bounds（物理ピクセル）を使用
+let bounds = &global_arrangement.bounds;
+let bounds_width = bounds.right - bounds.left;
+let bounds_height = bounds.bottom - bounds.top;
+
 let rel_x = (point.x - bounds.left) / bounds_width;
 let rel_y = (point.y - bounds.top) / bounds_height;
 
-// Shapes方式: 正規化 → DIPローカル座標
-// entity_logical_size は Arrangement.width/height から取得
-let local_x = rel_x * entity_logical_width;
-let local_y = rel_y * entity_logical_height;
-
-// ColorMap方式: 正規化 → 画像ピクセル座標
-let pixel_x = (rel_x * color_map.width() as f32) as u32;
-let pixel_y = (rel_y * color_map.height() as f32) as u32;
+// 【段階2】正規化座標 → ターゲット座標 — 方式別
+match &hit_region_map.kind {
+    RegionKind::Shapes(_) => {
+        // DIPローカル座標系（Requirement 2.3, 4.3）
+        // Arrangement.size から論理サイズを取得（TaffyComputedLayoutから設定される）
+        let local_x = rel_x * arrangement.size.width;
+        let local_y = rel_y * arrangement.size.height;
+        // hit_region_map.hit_test_region(local_x, local_y) で判定
+    }
+    RegionKind::ColorMap(color_map) => {
+        // 画像ピクセル座標系（Requirement 3.6）
+        let pixel_x = (rel_x * color_map.width() as f32) as u32;
+        let pixel_y = (rel_y * color_map.height() as f32) as u32;
+        // hit_region_map.hit_test_region(...) で判定 ※座標系責務は後述
+    }
+}
 ```
+
+**データソース**:
+- 物理ピクセル bounds: `GlobalArrangement.bounds`（hit_test.rs L207 パターン踏襲）
+- DIP論理サイズ: `Arrangement.size`（systems.rs L335-342 で TaffyComputedLayout.size から設定）
 
 #### hit_test_ex / hit_test_in_window_ex
 
