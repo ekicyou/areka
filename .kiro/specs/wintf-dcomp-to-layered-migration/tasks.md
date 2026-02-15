@@ -17,7 +17,7 @@
   - D2D1 Bitmap Options, BLENDFUNCTION, DIBSection パラメータ等の技術リファレンスを整備する
   - _Requirements: 1.1, 1.2, 1.3, 2.1, 2.2, 2.3, 2.4, 2.5, 3.1, 3.2, 3.3, 3.4, 3.5, 3.6, 4.1, 4.2, 4.3, 4.4, 4.5, 5.1, 5.2, 5.3, 5.4, 6.1, 6.2, 6.3, 6.4, 6.5, 7.1, 7.2, 7.3, 8.1, 8.2, 8.3, 8.4, 9.1, 9.2, 9.3, 9.4, 10.1, 10.2, 10.3_
 
-- [ ] 2. Phase 1 子仕様の作成
+- [x] 2. Phase 1 子仕様の作成
   - 統合指針文書を参照し、D2D1 合成スタック構築（新 GraphicsCore、合成ビットマップ、合成描画システム）の仕様を策定する
   - 仕様サイクル全工程を完了する（init → requirements → design → tasks）
   - 親仕様の設計に基づき、WindowD3D11Compositor コンポーネント、compositor_init_system, composite_render_system の詳細設計を子仕様に具体化する
