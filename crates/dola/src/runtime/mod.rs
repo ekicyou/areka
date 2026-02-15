@@ -8,6 +8,7 @@ mod facade;
 mod instance_manager;
 mod instance_state;
 mod interpolator;
+mod loop_controller;
 mod subscription_manager;
 mod timeline_manager;
 mod types;

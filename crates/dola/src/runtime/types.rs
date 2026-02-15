@@ -6,6 +6,10 @@ use std::rc::Rc;
 use crate::DolaError;
 use crate::value::DynamicValue;
 
+/// 無限ループ許可の最小周期（秒）。
+/// システムスリープ復帰時の極端な周回数処理を防止する。
+pub(crate) const MIN_LOOP_DURATION: f64 = 0.1; // 100ms
+
 /// 評価済み変数値（補間計算の出力）。
 ///
 /// `Object` バリアントは `Rc<DynamicValue>` を保持し、
@@ -52,6 +56,8 @@ pub enum RuntimeError {
     ZeroDurationWithLoop { storyboard: String },
     /// 無効な loop_count 値（0 以下で -1 を除く）
     InvalidLoopCount(i32),
+    /// 無限ループ時の周期が短すぎる（MIN_LOOP_DURATION 未満）
+    TooShortDurationWithInfiniteLoop { storyboard: String, duration: f64 },
     /// コンパイルエラー（既存 DolaError のラップ）
     CompileError(Vec<DolaError>),
 }
@@ -73,6 +79,15 @@ impl fmt::Display for RuntimeError {
             }
             Self::InvalidLoopCount(count) => {
                 write!(f, "invalid loop_count: {count}")
+            }
+            Self::TooShortDurationWithInfiniteLoop {
+                storyboard,
+                duration,
+            } => {
+                write!(
+                    f,
+                    "storyboard '{storyboard}' has too short duration ({duration:.3}s) for infinite loop (min: {MIN_LOOP_DURATION}s)"
+                )
             }
             Self::CompileError(errors) => {
                 write!(f, "compile error: {errors:?}")

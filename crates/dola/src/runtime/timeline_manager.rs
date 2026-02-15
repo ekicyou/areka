@@ -158,17 +158,20 @@ impl TimelineManager {
 
 /// effective_time を計算する。
 ///
-/// `effective_time = (current_time - start_time - pause_accumulated) * time_scale`
+/// `effective_time = (current_time - loop_start_time - pause_accumulated) * time_scale`
 /// Pause 中は pause 開始時点で固定。
+/// `loop_start_time` の初期値は `start_time` と同一のため、ループなし時は既存動作と互換。
 fn calculate_effective_time(current_time: f64, instance: &StoryboardInstance) -> f64 {
     let raw_time = if instance.state == InstanceState::Paused {
         // Pause 中は pause_start 時点で固定
         match instance.pause_start {
-            Some(pause_start) => pause_start - instance.start_time - instance.pause_accumulated,
-            None => current_time - instance.start_time - instance.pause_accumulated,
+            Some(pause_start) => {
+                pause_start - instance.loop_start_time - instance.pause_accumulated
+            }
+            None => current_time - instance.loop_start_time - instance.pause_accumulated,
         }
     } else {
-        current_time - instance.start_time - instance.pause_accumulated
+        current_time - instance.loop_start_time - instance.pause_accumulated
     };
     // time_scale は再生速度倍率（1.0 倍速が標準、2.0 で 2 倍速）
     // time_scale が大きいほどタイムラインが速く進む
@@ -291,6 +294,8 @@ mod tests {
             loops_completed: 0,
             finish_deadline: None,
             end_time: start_time + 1.0,
+            loop_start_time: start_time,
+            loop_duration: 1.0,
         }
     }
 

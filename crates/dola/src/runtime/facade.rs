@@ -10,7 +10,8 @@ use super::instance_manager::InstanceManager;
 use super::instance_state::InstanceState;
 use super::subscription_manager::SubscriptionManager;
 use super::timeline_manager::TimelineManager;
-use super::types::{EvaluatedValue, RuntimeError, StartResult};
+use super::loop_controller::{self, LoopAction};
+use super::types::{EvaluatedValue, RuntimeError, StartResult, MIN_LOOP_DURATION};
 
 /// dola ランタイムエンジンの唯一の公開 API。
 ///
@@ -83,19 +84,23 @@ impl DolaRuntime {
         if compiled.loop_count <= 0 && compiled.loop_count != -1 {
             return Err(RuntimeError::InvalidLoopCount(compiled.loop_count));
         }
-        if compiled.total_base_duration == 0.0 && compiled.loop_count == -1 {
+
+        let loop_duration = compiled.total_base_duration / compiled.time_scale;
+
+        if loop_duration == 0.0 && compiled.loop_count == -1 {
             return Err(RuntimeError::ZeroDurationWithLoop {
                 storyboard: name.to_string(),
             });
         }
+        if loop_duration < MIN_LOOP_DURATION && compiled.loop_count == -1 {
+            return Err(RuntimeError::TooShortDurationWithInfiniteLoop {
+                storyboard: name.to_string(),
+                duration: loop_duration,
+            });
+        }
 
-        // 4. end_time 算出
-        let end_time = if compiled.loop_count == -1 {
-            f64::INFINITY
-        } else {
-            // Tier 2: ループ未実装、1回再生として扱う（Req 11.2）
-            start_time + compiled.total_base_duration / compiled.time_scale
-        };
+        // 4. end_time 算出（無限ループでも1周分の end_time を設定）
+        let end_time = start_time + loop_duration;
 
         // 5. group_id 採番
         let group_id = self.next_group_id;
@@ -111,6 +116,8 @@ impl DolaRuntime {
             compiled.total_base_duration,
             compiled.loop_count,
             end_time,
+            start_time,      // loop_start_time = start_time（初期値）
+            loop_duration,
         );
 
         // 7. [Tier 3 Hook] 競合解決
@@ -143,17 +150,22 @@ impl DolaRuntime {
         if compiled.loop_count <= 0 && compiled.loop_count != -1 {
             return Err(RuntimeError::InvalidLoopCount(compiled.loop_count));
         }
-        if compiled.total_base_duration == 0.0 && compiled.loop_count == -1 {
+
+        let loop_duration = compiled.total_base_duration / compiled.time_scale;
+
+        if loop_duration == 0.0 && compiled.loop_count == -1 {
             return Err(RuntimeError::ZeroDurationWithLoop {
                 storyboard: name.to_string(),
             });
         }
+        if loop_duration < MIN_LOOP_DURATION && compiled.loop_count == -1 {
+            return Err(RuntimeError::TooShortDurationWithInfiniteLoop {
+                storyboard: name.to_string(),
+                duration: loop_duration,
+            });
+        }
 
-        let end_time = if compiled.loop_count == -1 {
-            f64::INFINITY
-        } else {
-            start_time + compiled.total_base_duration / compiled.time_scale
-        };
+        let end_time = start_time + loop_duration;
 
         Ok(end_time)
     }
@@ -256,19 +268,24 @@ impl DolaRuntime {
             self.conclude_internal(gid);
         }
 
-        // Step 2: 自然終了検知（end_time 到達 — evaluate がエントリを削除する前に実行）
-        let naturally_ended: Vec<u64> = self
+        // Step 2: ループ処理 + 自然終了検知
+        let loop_results: Vec<(u64, LoopAction)> = self
             .instance_manager
-            .instances()
-            .iter()
+            .instances_mut()
+            .iter_mut()
             .filter(|(_, inst)| {
                 inst.state == InstanceState::Playing && current_time >= inst.end_time
             })
-            .map(|(gid, _)| *gid)
+            .map(|(gid, inst)| {
+                let action = loop_controller::process_loops(inst, current_time);
+                (*gid, action)
+            })
             .collect();
 
-        for gid in naturally_ended {
-            self.conclude_internal(gid);
+        for (gid, action) in loop_results {
+            if action == LoopAction::Conclude {
+                self.conclude_internal(gid);
+            }
         }
 
         // Step 3: 購読変数の評価（残存インスタンス対象）

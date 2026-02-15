@@ -23,11 +23,18 @@ pub(crate) struct StoryboardInstance {
     pub pause_start: Option<f64>,
     /// 1=1回, n≥2=n回, -1=無限ループ
     pub loop_count: i32,
-    /// Tier 2: 常に 0
-    pub loops_completed: u32,
+    /// 完了済み周回数
+    pub loops_completed: u64,
     pub finish_deadline: Option<f64>,
-    /// end_time (start_time + duration/time_scale + pause)
+    /// end_time (loop_start_time + loop_duration + pause_accumulated)
     pub end_time: f64,
+    /// 現在の周回の開始時刻（wall clock ベース）。
+    /// 初期値は `start_time` と同一。周回終了ごとに `+= loop_duration` で更新。
+    /// Pause/Resume では変更されない（独立性: Req 4.3）。
+    pub loop_start_time: f64,
+    /// 1周分の再生時間（wall clock ベース）。
+    /// `base_duration / time_scale` で算出。インスタンス生存中は定数。
+    pub loop_duration: f64,
 }
 
 /// 実行インスタンスのコレクション管理と状態遷移制御。
@@ -53,6 +60,8 @@ impl InstanceManager {
         base_duration: f64,
         loop_count: i32,
         end_time: f64,
+        loop_start_time: f64,
+        loop_duration: f64,
     ) -> &StoryboardInstance {
         let instance = StoryboardInstance {
             group_id,
@@ -68,6 +77,8 @@ impl InstanceManager {
             loops_completed: 0,
             finish_deadline: None,
             end_time,
+            loop_start_time,
+            loop_duration,
         };
         self.instances.insert(group_id, instance);
         self.instances.get(&group_id).unwrap()
@@ -197,6 +208,11 @@ impl InstanceManager {
         &self.instances
     }
 
+    /// 全インスタンスへの可変参照。
+    pub fn instances_mut(&mut self) -> &mut HashMap<u64, StoryboardInstance> {
+        &mut self.instances
+    }
+
     /// 指定 group_id のインスタンスを削除する（Concluded/Cancelled 後の cleanup）。
     pub fn remove(&mut self, group_id: u64) {
         self.instances.remove(&group_id);
@@ -217,6 +233,8 @@ mod tests {
             2.0, // base_duration
             1,   // loop_count
             2.0, // end_time
+            0.0, // loop_start_time
+            2.0, // loop_duration
         );
     }
 
@@ -232,6 +250,8 @@ mod tests {
             5.0,
             1,
             15.0,
+            10.0, // loop_start_time
+            5.0,  // loop_duration
         );
         assert_eq!(inst.group_id, 1);
         assert_eq!(inst.storyboard_name, "fade");
