@@ -96,7 +96,7 @@ _Parent: wintf-dcomp-to-layered-migration Req 5.4_
 
 2. The wintf shall Phase 1 完了まで `Opacity` コンポーネントの存在を許容する（互換性維持期間）
 
-3. The wintf shall Phase 2 開始時に `Opacity` コンポーネントを使用する全コード（Widget 実装含む）から参照を削除する
+3. The wintf shall Phase 2 開始時に `Opacity` コンポーネントを使用する全コード（Layout 層の `hit_test.rs`、Widget 実装含む）から参照を削除する
 
 4. The wintf shall Phase 3 開始前に `Opacity` コンポーネント定義を `ecs/layout/metrics.rs` から完全削除する
 

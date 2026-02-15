@@ -441,7 +441,7 @@ Root → Child1 → Child1.Child1 → Child1.Child2 → Child2 → ...
 ### 10.2 wintf-P0-animation-system（影響度: 低）
 
 - DComp Animation API（`CreateAnimation()`等）は `dcomp_demo.rs` でのみ使用、ECSシステムでは未使用
-- dolaクレートのアニメーション値→ECSコンポーネント（Opacity, Offset等）→描画システム のフローは維持
+- dolaクレートのアニメーション値→ECSコンポーネント（`Visual.opacity`, Offset等）→描画システム のフローは維持
 - **影響なし**: dolaアニメーションの出力先がDComp Visual PropertiesからD2D合成描画パラメータに変わるのみ
 
 ### 10.3 wintf-P0-balloon-system（影響度: 中）

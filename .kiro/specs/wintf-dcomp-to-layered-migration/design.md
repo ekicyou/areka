@@ -745,7 +745,8 @@ graph LR
 
 **完了基準（DoD）**:
 - Widget描画システムが`Visual.opacity`/`Visual.is_visible`に正しく書き込む
-- `Opacity`コンポーネント（metrics.rs）の廃止が完了、またはPhase 2以降での廃止計画が明確化
+- `Opacity`コンポーネント（metrics.rs）に `#[deprecated]` が付与済み、Phase 2 での全参照削除・ Phase 3 前の定義削除タスクが子仕様に記載済み
+- `hit_test.rs` の `Opacity` 参照を `Visual.opacity` に移行済み、または Phase 2 タスクとして計上済み
 - 既存のDCompパイプライン（`visual_property_sync_system`）との互換性維持
 - Phase 1の`composite_render_system`がこのデータフローを前提として動作可能
 
@@ -814,10 +815,11 @@ graph LR
 - `ecs/graphics/core.rs`: DComp関連 `use` 文の最終クリーンアップ
 - テストファイル: DComp 参照を含むテストの修正 or 削除
 
-**前提条件**: 子仕様3完了
+**前提条件**: 子仕様3完了、`Opacity` コンポーネントが `ecs/layout/metrics.rs` から削除済み（Phase 0 Req 4.4 により Phase 3 開始前に完了済みのはず）
 
 **完了基準（DoD）**:
 - `com/dcomp.rs` が削除されている
+- `Opacity` コンポーネントが `metrics.rs` から削除済み（Phase 0 Req 4.4 のフォールバック確認: 万一残存していた場合は本 Phase で削除）
 - ECS コード内の `IDComposition*` 型参照がゼロ
 - `cargo test` 全テストパス
 - `cargo build --examples` 全ビルドパス（dcomp_demo.rs 削除済み）
