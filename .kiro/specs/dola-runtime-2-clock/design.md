@@ -10,15 +10,15 @@
 
 ### Goals
 
-- `now() -> f64` 関数の提供（OS 起動時からの秒数）
-- `windows-clock` feature gate による分離
-- ms 精度の時刻取得（60fps に十分）
+- `now() -> f64` 関数の提供（OS 起動時からの秒数、マイクロ秒級精度）
+- `#[cfg(target_os = "windows")]` による条件コンパイル
+- QueryPerformanceCounter ベースの高精度時刻取得
 
 ### Non-Goals
 
-- 高精度タイマー（QPC ベース）の実装（将来拡張として可能だが現時点では不要）
 - クロスプラットフォーム対応（Windows 専用）
 - facade への統合（clock は facade とは独立）
+- タイムゾーン変換やカレンダー機能
 
 ---
 
@@ -55,8 +55,8 @@ graph LR
 
 | Layer | Choice / Version | Role in Feature | Notes |
 |-------|------------------|-----------------|-------|
-| Time Utility | Win32 `GetTickCount64` | OS 起動時からの ms 時刻 | `windows` クレート経由 |
-| Windows Bindings | `windows` 0.62 | Win32 API バインディング | features: `Win32_System_SystemInformation` |
+| Time Utility | Win32 `QueryPerformanceCounter` / `QueryPerformanceFrequency` | OS 起動時からの高精度時刻（マイクロ秒級） | `windows` クレート経由 |
+| Windows Bindings | `windows` 0.62 | Win32 API バインディング | features: `Win32_System_Performance` |
 
 ---
 
@@ -101,27 +101,37 @@ graph LR
 ```rust
 /// OS 起動時からの現在時刻（f64秒）を取得
 ///
-/// `GetTickCount64()` の戻り値（ms 単位）を 1000.0 で除算して秒に変換。
-/// 49.7 日問題はない（u64 で約5億8400万年）。
+/// `QueryPerformanceCounter()` の戻り値（カウント）を
+/// `QueryPerformanceFrequency()` で除算して秒に変換。
+/// ハードウェアレベルの高精度タイマーを使用し、マイクロ秒級の精度を提供。
 ///
 /// # Note
-/// 精度は ms 単位。60fps アニメーション（≈16.7ms/frame）に十分。
-/// 将来 QPC (QueryPerformanceCounter) ベースへの差し替えが必要な場合、
-/// この関数シグネチャを維持したまま内部実装を変更可能。
+/// - OS 起動時を起点とする単調増加時刻
+/// - マルチプロセスで共有可能
+/// - アニメーションエンジンのフレーム間時間差計測に最適
 #[cfg(target_os = "windows")]
 pub fn now() -> f64 {
-    unsafe { windows::Win32::System::SystemInformation::GetTickCount64() as f64 / 1000.0 }
+    use windows::Win32::System::Performance::{QueryPerformanceCounter, QueryPerformanceFrequency};
+    unsafe {
+        let mut counter = 0i64;
+        let mut frequency = 0i64;
+        QueryPerformanceCounter(&mut counter);
+        QueryPerformanceFrequency(&mut frequency);
+        counter as f64 / frequency as f64
+    }
 }
 ```
 
 - **Preconditions**: なし（Windows 環境で実行中であること）
-- **Postconditions**: 戻り値は OS 起動からの秒数（f64, 常に非負）
-- **Invariants**: 単調増加（OS レベルで保証）
+- **Postconditions**: 戻り値は OS 起動からの秒数（f64, 常に非負、マイクロ秒級精度）
+- **Invariants**: 単調増加（ハードウェアレベルで保証）
 
 **Implementation Notes**
-- `GetTickCount64` は u64 を返すため 49.7 日問題（32bit `GetTickCount` の問題）は存在しない
-- f64 への変換で精度が失われるのは OS 起動後 285 年以上経過した場合のみ（非現実的）
-- `unsafe` ブロックは `GetTickCount64` 呼び出しのみ。副作用なし、スレッドセーフ
+- `QueryPerformanceCounter` はハードウェアタイマー（通常 TSC または HPET）を使用
+- 分解能は通常 1MHz 以上（マイクロ秒級）、システム依存
+- f64 の仮数部 53bit で約 285 年の精度維持が可能
+- `unsafe` ブロックは Win32 API 呼び出しのみ。副作用なし、スレッドセーフ
+- エラーハンドリング: 両 API とも常に成功（Windows XP 以降保証）
 
 ---
 

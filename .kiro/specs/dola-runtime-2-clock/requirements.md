@@ -31,16 +31,16 @@ _Parent: Req 11.1_
 
 _Parent: Req 11.2, 11.3_
 
-**Objective:** ランタイム実装者として、OS 起動時起点の時刻を取得する適切な手段を選定・使用したい。gap-analysis の調査結果に基づき、要件に合致する実装を確定する。
+**Objective:** ランタイム実装者として、OS 起動時起点の高精度時刻を取得する適切な手段を選定・使用したい。アニメーションエンジンにおけるフレーム間の微小な時間差を正確に計測するため、ハードウェアレベルの高精度タイマーを使用する。
 
 #### Acceptance Criteria
 
-1. The Clock module shall Win32 API `GetTickCount64` を使用して時刻を取得する。
-2. The Clock module shall `GetTickCount64() as f64 / 1000.0` の演算で OS 起動時からの経過秒数（f64）を生成する。
+1. The Clock module shall Win32 API `QueryPerformanceCounter` および `QueryPerformanceFrequency` を使用して時刻を取得する。
+2. The Clock module shall QueryPerformanceCounter の戻り値を QueryPerformanceFrequency で除算し、OS 起動時からの経過秒数（f64）を生成する。
 3. The Clock module shall `unsafe` ブロックを時刻取得の Win32 API 呼び出し箇所のみに限定する。
-4. The Clock module shall 外部クレート依存を追加しない（`windows` クレートの `Win32_System_SystemInformation` feature のみ使用）。
+4. The Clock module shall 外部クレート依存を追加しない（`windows` クレートの `Win32_System_Performance` feature のみ使用）。
 
-> **設計根拠**: gap-analysis Section 4.2 より、「OS 起動時からの秒数（f64）」要件に合致する手段は `GetTickCount64`（ms 精度）と `IUIAnimationTimer::GetTime()`（COM 依存）の2つ。dola クレートの COM 非依存方針により `GetTickCount64` を採用。`quanta` / `std::time::Instant` / QPC は OS 起動時起点ではないため不適格。
+> **設計根拠**: アニメーションエンジンであれば、フレーム間の微小な時間差（<1ms）を正確に計測する必要がある。`GetTickCount64` は分解能が 10～16ms と低精度であり不適格。`QueryPerformanceCounter` はハードウェアタイマーを使用し、マイクロ秒級の高精度を提供する。OS 起動時起点であり、マルチプロセスで共有可能。COM 依存の `IUIAnimationTimer::GetTime()` よりもシンプルで、dola クレートの COM 非依存方針に合致する。
 
 ---
 
@@ -71,7 +71,7 @@ _Parent: 統合指針 Section 5.2_
 
 1. The `Cargo.toml` shall `[target.'cfg(windows)'.dependencies]` セクションで `windows` クレートを定義する。
 2. The `windows` dependency shall `workspace = true` でワークスペースバージョンを参照する。
-3. The `windows` dependency shall `features = ["Win32_System_SystemInformation"]` を指定する（`GetTickCount64` が含まれるモジュール）。
+3. The `windows` dependency shall `features = ["Win32_System_Performance"]` を指定する（`QueryPerformanceCounter` / `QueryPerformanceFrequency` が含まれるモジュール）。
 4. The `windows` dependency shall Windows 以外の OS では依存関係に含まれない。
 
 ---

@@ -18,7 +18,7 @@
 | runtime/instance_state.rs | `crates/dola/src/runtime/instance_state.rs` | **参考**: 同一 runtime サブモジュール内の実装パターン |
 | runtime/interpolator.rs | `crates/dola/src/runtime/interpolator.rs` | **参考**: 同一 runtime サブモジュール内の実装パターン |
 | runtime/types.rs | `crates/dola/src/runtime/types.rs` | **参考**: 型定義パターン |
-| FrameTime::get_precise_time() | `crates/wintf/src/ecs/graphics/core.rs:176-181` | **参考**: Win32 SystemInformation API の unsafe 呼び出しパターン |
+| FrameTime::get_precise_time() | `crates/wintf/src/ecs/graphics/core.rs:176-181` | **参考**: Win32 SystemInformation API の unsafe 呼び出しパターン。QueryPerformanceCounter も同様に unsafe ブロック内で呼び出す |
 | IUIAnimationTimer::get_time() | `crates/wintf/src/com/animation.rs:16-24` | **参考**: OS 起動時起点の f64 秒取得（COM 経由、dola では不採用） |
 | dola Cargo.toml | `crates/dola/Cargo.toml` | **直接**: feature gate と依存定義の追加対象 |
 | ワークスペース Cargo.toml | `Cargo.toml:53-78` | **参考**: `windows` クレートの workspace 定義（`Win32_System_SystemInformation` 既に含む） |
@@ -50,7 +50,7 @@ fn get_precise_time() -> u64 {
 }
 ```
 
-**観察**: `use` 文を関数内に局所化し、`unsafe` ブロックは最小限。`GetTickCount64` も同じパターンで実装可能。
+**観察**: `GetSystemTimePreciseAsFileTime` と同様のパターンで `QueryPerformanceCounter` / `QueryPerformanceFrequency` も実装可能。`use` 文は関数内に局所化し、`unsafe` ブロックは最小限。
 
 ### 1.4 条件コンパイルパターン
 
@@ -80,7 +80,7 @@ use dola::runtime::{EvaluatedValue, InstanceState, RuntimeError, StartResult};
 | 要件 | 既存アセット | ギャップ |
 |------|------------|---------|
 | Req 1: `now() -> f64` | なし | **Missing**: 新規関数の作成が必要 |
-| Req 2: `GetTickCount64` 使用 | `Win32_System_SystemInformation` がワークスペース Cargo.toml に既存 | **Missing (軽微)**: dola の Cargo.toml への `windows` 依存追加のみ |
+| Req 2: `QueryPerformanceCounter` / `QueryPerformanceFrequency` 使用 | `Win32_System_Performance` がワークスペース Cargo.toml に既存の可能性 | **Missing (軽微)**: dola の Cargo.toml への `windows` 依存追加のみ |
 | Req 3: `windows-clock` feature gate | `runtime` feature のパターンが確立済み | **Missing (軽微)**: 新規 feature 定義を追加 |
 | Req 4: Cargo.toml 依存定義 | `windows = "0.62.2"` がワークスペースレベルで定義済み | **Missing (軽微)**: dola 固有の feature 指定が必要 |
 | Req 5: モジュール公開 | `runtime/mod.rs` のモジュール構造が確立済み | **Missing (軽微)**: 1行の条件付き `pub mod` 追加 |
@@ -90,11 +90,11 @@ use dola::runtime::{EvaluatedValue, InstanceState, RuntimeError, StartResult};
 
 | 制約 | 影響度 | 備考 |
 |------|--------|------|
-| `GetTickCount64` は `unsafe` | 低 | windows crate docs で確認済み: `pub unsafe fn GetTickCount64() -> u64`。1行の unsafe ブロックで完結 |
-| dola の `windows` 依存追加 | 低 | optional dependency + feature gate で隔離。`runtime` feature のみの場合は `windows` クレートに依存しない |
+| `QueryPerformanceCounter` / `QueryPerformanceFrequency` は `unsafe` | 低 | windows crate docs で確認済み。数行の unsafe ブロックで完結 |
+| dola の `windows` 依存追加 | 低 | target dependency で隔離。Windows ターゲット時のみ依存 |
 | ワークスペース vs ローカル feature 指定 | 低 | dola は `windows` を workspace 依存として参照しつつ、独自の features subset を指定する必要がある |
-| `GetTickCount64` の精度（ms） | なし | 60fps = 16.67ms に対して十分。要件 1.4 で明示的に合意済み |
-| `GetTickCount64` のオーバーフロー | なし | u64 で最大 585 百万年。f64 への変換でも精度は秒単位で十分 |
+| `QueryPerformanceCounter` の精度（マイクロ秒級） | なし | 60fps = 16.67ms に対して十分過ぎる精度。アニメーションエンジンに最適 |
+| f64 への変換精度 | なし | f64 の仮数部 53bit で約 285 年の精度維持が可能。非現実的な長期利用でも問題なし |
 
 ### 2.3 複雑度シグナル
 
@@ -140,7 +140,7 @@ use dola::runtime::{EvaluatedValue, InstanceState, RuntimeError, StartResult};
 [workspace.dependencies.windows]
 version = "0.62.2"
 features = [
-    "Win32_System_SystemInformation",  # ← GetTickCount64 を含む（既存）
+    "Win32_System_Performance",  # ← QueryPerformanceCounter / QueryPerformanceFrequency を含む（追加必要な場合有）
     # ... 他の features ...
 ]
 ```
@@ -151,7 +151,7 @@ features = [
 
 ```toml
 [target.'cfg(windows)'.dependencies]
-windows = { workspace = true, features = ["Win32_System_SystemInformation"] }
+windows = { workspace = true, features = ["Win32_System_Performance"] }
 ```
 
 この方式では、Windows ターゲット時のみ `windows` クレートが依存関係に追加される。非 Windows 環境では完全に除外される。
@@ -185,6 +185,6 @@ windows = { workspace = true, features = ["Win32_System_SystemInformation"] }
 
 | 項目 | 優先度 | 状態 | 備考 |
 |------|--------|------|------|
-| `workspace = true` + `optional = true` の Cargo 挙動 | P0 | **解決済み** | Cargo 公式ドキュメントで明示的にサポート。メンバークレート側で `optional = true` を指定可能。features はワークスペース定義を継承し、追加は可能だが削除・上書きは不可。publish 時は通常の optional dependency として扱われる。方式1 vs 方式2 の選択は設計判断として残す |
+| `workspace = true` + target dependency の Cargo 挙動 | P0 | **解決済み** | Cargo 公式ドキュメントで明示的にサポート。メンバークレート側で `workspace = true` を指定しつつ features を独自に追加可能。ワークスペース定義を継承し、追加は可能だが削除・上書きは不可。publish 時は通常の target dependency として扱われる |
 
-**注**: 全 Research Items が解決済み。`GetTickCount64` の API 仕様と動作は十分に枯れており、追加調査は不要。
+**注**: 全 Research Items が解決済み。`QueryPerformanceCounter` / `QueryPerformanceFrequency` の API 仕様と動作は十分に枯れており（Windows XP 以降保証）、追加調査は不要。
