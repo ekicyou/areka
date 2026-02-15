@@ -89,9 +89,9 @@ _Parent: wintf-dcomp-to-layered-migration Req 2.1（フェーズ0 定義）, Req
 
 6. The `hit_test` 関連テスト shall `Opacity(値)` のスポーンを `Visual { opacity: 値, ..default() }` に移行する
 
-### Requirement 4: Opacity コンポーネント廃止方針
+### Requirement 4: Opacity コンポーネント deprecation マーキング
 
-**Objective:** 開発者として、`Opacity` コンポーネント（metrics.rs）を段階的に廃止する明確な方針とタイムラインが欲しい。これにより重複したデータソースを整理し、コードベースを簡素化できる。
+**Objective:** 開発者として、`Opacity` コンポーネント（metrics.rs）に deprecation 属性を付与することで、新規使用を抑止し、後続フェーズでの削除を容易にしたい。
 
 _Parent: wintf-dcomp-to-layered-migration Req 2.1（フェーズ0 定義）_
 
@@ -99,13 +99,7 @@ _Parent: wintf-dcomp-to-layered-migration Req 2.1（フェーズ0 定義）_
 
 1. The wintf shall `Opacity` コンポーネントに `#[deprecated]` 属性を付与し、deprecation メッセージに「`Visual.opacity` フィールドを使用してください」を含める
 
-2. The wintf shall Phase 1 完了まで `Opacity` コンポーネントの存在を許容する（互換性維持期間）
-
-3. The wintf shall 残存する `Opacity` コンポーネント参照（Example コード等）を後続フェーズで段階的に削除する
-
-4. The wintf shall Phase 3 開始前に `Opacity` コンポーネント定義を `ecs/layout/metrics.rs` から完全削除する
-
-5. When `Opacity` コンポーネント削除が完了する, the wintf shall `cargo build` にコンパイルエラーが発生しないことを保証する（全参照削除済みの検証）
+2. The wintf shall deprecation 警告を CI ビルドで可視化し、残存参照箇所を追跡可能にする
 
 ### Requirement 5: Phase 0 検証基準
 
@@ -134,5 +128,5 @@ _Parent: wintf-dcomp-to-layered-migration Req 10.1, 10.2_
 | Req 1 | 2.1, 6.2 | Visual.opacity データフロー確立 |
 | Req 2 | 2.1, 6.2 | Visual.is_visible データフロー確立 |
 | Req 3 | 2.1, 6.2 | Opacity 読み取り箇所の Visual.opacity への移行（sync system + hit_test） |
-| Req 4 | 2.1 | Opacity コンポーネント廃止方針 |
+| Req 4 | 2.1 | Opacity コンポーネント deprecation マーキング |
 | Req 5 | 10.1, 10.2 | Phase 0 検証基準 |
