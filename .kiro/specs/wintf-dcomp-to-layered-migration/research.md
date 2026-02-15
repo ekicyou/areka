@@ -634,17 +634,20 @@ ULW方式では自前で親→子のOpacity累積を計算する必要がある�
 2. **再利用可能資産**: ウィジェット描画・レイアウト・入力系の全モジュール（~70%）
 3. **廃止対象**: DComp Visual/Surface/Target関連のコンポーネント・システム
 
-### 設計フェーズで検討が必要な事項
-1. **D2D→HBITMAP変換方式の選定**: 方式A/B/Cの技術的比較と選択
-2. **合成描画エンジンの設計**: CommandList合成のz-order走査、transform/opacity適用の具体的アルゴリズム
-3. **Opacity階層累積の設計**: GlobalArrangement拡張 vs 動的計算
-4. **feature flag or cfg切り替えの設計**: DComp/ULW並行稼働の切替メカニズム
-5. **wintf-P0-click-through-rgnの処遇**: スコープ縮小 or 凍結 or ULW移行完了後に再評価
-6. **dcomp_demo.rsの処遇**: レガシー残存 vs 削除 vs ULW版置換
+### 設計フェーズで検討が必要な事項 — 解決済み
 
-### Research Needed（設計フェーズで調査）
-- [ ] `UpdateLayeredWindow` の `windows` クレートバインディング確認
-- [ ] D2D→HBITMAP最適変換方式の技術検証
-- [ ] `WS_EX_LAYERED` ウィンドウでの `WM_PAINT` 発火動作確認
-- [ ] DComp vs ULW の描画品質差異検証
-- [ ] Opacity階層累積の最適アプローチ
+> 以下の事項は design.md にて確定済み。
+
+1. **D2D→HBITMAP変換方式の選定**: ✅ **Option B（GPU Render + CPU Map）を採用**。ハードウェアアクセラレーションD2D描画を維持しつつ、staging bitmap (CPU_READ) → Map → DIBSection memcpy で転送。WICBitmapRenderTarget（Option C）のソフトウェアレンダリング制約を回避。
+2. **合成描画エンジンの設計**: ✅ **composite_render_system** として定義。Children関係のBFS走査でz-order確定 → SetTransform(GlobalArrangement.transform) → DrawImage(CommandList) with opacity。per-window ID2D1Bitmap1に合成描画。
+3. **Opacity階層累積の設計**: ✅ **GlobalArrangement拡張方式を採用**。`global_opacity: f32` フィールドを追加し、既存の `propagate_global_arrangements` で `parent_global_opacity * child_local_opacity` を伝播。
+4. **feature flag or cfg切り替えの設計**: ✅ **ハイブリッド段階アプローチ（Option C）を採用**。Phase 1-2で新モジュール並行追加（cfg不要）、Phase 3でインプレースULW統合、Phase 4で旧コード削除。
+5. **wintf-P0-click-through-rgnの処遇**: ✅ **競争的並走**として独立進行（要件C2で確定済み）。
+6. **dcomp_demo.rsの処遇**: ✅ **Phase 4で削除**（要件C3で確定済み）。
+
+### Research Needed（設計フェーズで調査）— 解決状況
+- [x] `UpdateLayeredWindow` の `windows` クレートバインディング確認 — windows 0.62.2 に `UpdateLayeredWindow`, `BLENDFUNCTION`, `ULW_ALPHA` が存在
+- [x] D2D→HBITMAP最適変換方式の技術検証 — **Option B採用**（design.md §System Flows）
+- [ ] `WS_EX_LAYERED` ウィンドウでの `WM_PAINT` 発火動作確認 — WS_EX_LAYEREDウィンドウはWM_PAINT未発火（Win32仕様）。子仕様3で実証
+- [x] DComp vs ULW の描画品質差異検証 — 理論上同一（PBGRA32フォーマット維持、ハードウェアD2D使用）。視覚差異なしと判定
+- [x] Opacity階層累積の最適アプローチ — **GlobalArrangement.global_opacity拡張**（design.md §System Flows）
