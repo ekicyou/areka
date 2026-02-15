@@ -152,6 +152,41 @@
 - **WM_TIMER 精度**: OS の timer resolution により ±50ms 程度のジッターあり。受容可能（Req 1.4）
 - **ドラッグ操作中のちらつき**: ドラッグ開始→リージョンリセット→ドラッグ終了→リージョン再構築の遷移にラグ。bRedraw=FALSE で軽減
 
+## Phase 0 実験結果: NO-GO
+
+### 実験日: 2026-02-15
+### 結果: **NO-GO — SetWindowRgn は DirectComposition 描画をクリップする**
+
+#### 実験手順
+1. `setwindowrgn_compat_test.rs` プロトタイプを作成
+2. WS_EX_NOREDIRECTIONBITMAP + WS_POPUP ウィンドウを作成
+3. DirectComposition デバイスチェーン（D3D11 → IDXGIDevice4 → D2D → DComp）を構築
+4. DComp Surface にウィンドウ全体（400x400）を描画:
+   - マゼンタ背景（リージョン外領域、alpha=0.6）
+   - 青矩形（リージョン内領域、中央 240x240）
+   - 赤枠線（ウィンドウ境界）、緑枠線（リージョン境界）
+5. SetWindowRgn で中央 240x240 のみをリージョンに設定
+6. SetWindowRgn 適用前後で描画変化を目視比較（3秒タイマー + Rキートグル）
+
+#### 観測結果
+| 検証項目 | 結果 |
+|----------|------|
+| SetWindowRgn API 成功 | ✅ OK |
+| リージョン内の描画維持 | ✅ OK（青矩形は表示される） |
+| リージョン外のクリックスルー | ✅ OK（クリックは背面ウィンドウに貫通） |
+| **リージョン外の描画維持** | ❌ **NG — DComp描画がクリップされる** |
+
+#### 技術的知見
+- SetWindowRgn は DWM に対してウィンドウの有効領域を通知する
+- DWM は WS_EX_NOREDIRECTIONBITMAP ウィンドウであっても、リージョン外の DirectComposition Visual をクリップする
+- つまり SetWindowRgn は「入力の制御」だけでなく「描画のクリッピング」にも影響する
+- 当初の仮説（入力と描画は独立レイヤー）は誤りであった
+
+#### 結論
+SetWindowRgn ベースのクリックスルー方式は、デスクトップマスコットの要件（リージョン外でも装飾的な描画を維持しつつクリックだけ貫通させる）を満たせない。別のアプローチ（例: WS_EX_LAYERED + UpdateLayeredWindow、分割ウィンドウ方式、InputSink API 等）の検討が必要。
+
+---
+
 ## References
 - [SetWindowRgn (MSDN)](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-setwindowrgn) — API仕様、所有権移転の挙動
 - [CombineRgn (MSDN)](https://learn.microsoft.com/en-us/windows/win32/api/wingdi/nf-wingdi-combinergn) — リージョン合成の詳細
