@@ -1,12 +1,14 @@
-# Requirements Document — dola-runtime-4-conflict-loop
+# Requirements Document — dola-runtime-4-conflict
 
 ## Introduction
 
-本ドキュメントは dola ランタイムエンジンの高度機能を定義する子仕様 `dola-runtime-4-conflict-loop` の機能要件を定義する。親仕様 `dola-runtime-engine` の Req 7（競合検出と終了戦略）と Req 12（ループ再生）を子仕様の粒度に詳細化する。
+本ドキュメントは dola ランタイムエンジンの競合解決機能を定義する子仕様 `dola-runtime-4-conflict` の機能要件を定義する。親仕様 `dola-runtime-engine` の Req 7（競合検出と終了戦略）を子仕様の粒度に詳細化する。
 
 本子仕様は Tier 3 に位置し、`dola-runtime-1-core-types`（Tier 1）と `dola-runtime-3-facade`（Tier 2）に依存する。facade が提供する `StoryboardInstance`, `VariableTimeline`, `TimelineEntry`, `InstanceManager`, `TimelineManager` の `pub(crate)` 内部 API を消費する。
 
-> 統合指針: `.kiro/specs/dola-runtime-engine/integration-guide.md` Section 2.3 参照
+**重要**: 本仕様はループ再生機能（`dola-runtime-5-loop`）と独立している。ConflictResolver は `loop_count` の値に関わらず、`Playing` 状態の全インスタンスを競合検出対象とする。
+
+> 統合指針: `.kiro/specs/dola-runtime-engine/integration-guide.md` Section 2.3, 5.3 参照
 
 ---
 
@@ -104,7 +106,7 @@ _Parent: Req 7.8_
 
 1. When 終了戦略が Never の場合, the ConflictResolver shall 既存インスタンスの中断を拒否する。
 2. When 終了戦略が Never の場合, the ConflictResolver shall 新ストーリーボードの当該変数へのセグメント追加を延期キュー（`DeferredEntry`）に格納する。
-3. When 先行 group_id のインスタンスが終了状態に遷移した場合, the ConflictResolver shall 延期キューを走査し、`blocked_by` が一致するエントリをタイムテーブルに追加する。
+3. When 先行 group_id のインスタンスが終了状態（Concluded/Cancelled/Trimmed/Compressed）に遷移した場合, the ConflictResolver shall 延期キューを走査し、`blocked_by` が一致するエントリをタイムテーブルに追加する。
 4. While 先行 group_id が無限ループ（`loop_count = -1`）で再生中の場合, the ConflictResolver shall 延期エントリを永続的に保持する。
 
 ---
@@ -118,46 +120,3 @@ _Parent: Req 7.9_
 #### Acceptance Criteria
 
 1. If ストーリーボード定義に終了戦略が未指定の場合, then the ConflictResolver shall デフォルトとして Conclude を適用する。
-
----
-
-### Requirement 9: ループ再生 — 基本動作
-
-_Parent: Req 12.1, 12.2, 12.3_
-
-**Objective:** ランタイムとして、ストーリーボードの `loop_count` に基づいてループ再生を実現したい。これにより、繰り返しアニメーションやアイドルモーションを宣言的に定義できる。
-
-#### Acceptance Criteria
-
-1. When `loop_count` が `1` の場合, the LoopController shall 1回のみ再生し、終了後にインスタンスを終了状態へ遷移させる。
-2. When `loop_count` が `-1` の場合, the LoopController shall 無限にループ再生を継続する。
-3. When `loop_count` が `n` (`n ≥ 2`) の場合, the LoopController shall n 回のループ再生後にインスタンスを終了状態へ遷移させる。
-
----
-
-### Requirement 10: ループ再生 — タイムテーブル再利用
-
-_Parent: Req 12.4, 12.5, 12.6, 12.7_
-
-**Objective:** ランタイムとして、タイムテーブルを1周分のみ保持しつつ効率的なループ再生を実現したい。これにより、メモリ消費を抑えながらも正確な周回管理を可能にする。
-
-#### Acceptance Criteria
-
-1. The LoopController shall ループ再生時もタイムテーブルを1周分のみ生成し、ループ展開を行わない。
-2. When 1周目の全セグメントが終了した場合, the LoopController shall `loop_count` をチェックしてループ継続の可否を判定する。
-3. When ループを継続する場合, the LoopController shall タイムテーブルを破棄せず、時間オフセット機構を調整して再利用する。
-4. When ループが完了した場合, the LoopController shall インスタンスを終了状態へ遷移させ、タイムテーブルを破棄する。
-
----
-
-### Requirement 11: ループ中の競合
-
-_Parent: Req 12.8_
-
-**Objective:** ランタイムとして、ループ中でも他のストーリーボードによる競合検出・中断戦略の適用を保証したい。これにより、無限ループ中でも新規ストーリーボードによる自然な割り込みを実現する。
-
-#### Acceptance Criteria
-
-1. The LoopController shall ループ中の各周回も競合検出・中断戦略の対象とする。
-2. When ループ中に他のストーリーボードによる競合が発生した場合, the ConflictResolver shall 通常の競合解決プロセスを適用する。
-

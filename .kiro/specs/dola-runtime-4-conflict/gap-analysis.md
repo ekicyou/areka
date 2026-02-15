@@ -1,8 +1,8 @@
-# ギャップ分析 — dola-runtime-4-conflict-loop
+# ギャップ分析 — dola-runtime-4-conflict
 
 ## 分析概要
 
-本文書は `dola-runtime-4-conflict-loop` の要件（Req 1〜11）と既存コードベースのギャップを分析し、設計フェーズへの入力とする。
+本文書は `dola-runtime-4-conflict` の要件（Req 1〜8）と既存コードベースのギャップを分析し、設計フェーズへの入力とする。
 
 ---
 
@@ -53,7 +53,6 @@ pub fn from_policy(policy: InterruptionPolicy) -> Option<InstanceState> {
 #### Tier 2 の暫定動作
 
 - **競合未解決**: 同一変数に複数 `group_id` エントリが共存し、最新 `group_id` の値が evaluate で採用される
-- **ループ未実装**: `loop_count` フィールドは `StoryboardInstance` に保持されるが、実際には常に1回再生
 
 ### 1.3 コーディング規約・パターン
 
@@ -83,21 +82,13 @@ pub fn from_policy(policy: InterruptionPolicy) -> Option<InstanceState> {
 | Req 7: Never + 延期キュー | 延期キュー（`DeferredEntry`） | なし | **Missing**: `DeferredEntry` 型、延期キュー、再評価トリガー |
 | Req 8: デフォルト戦略 | 未指定時 Conclude | `default_interruption_policy()` = Conclude | **Existing**: storyboard.rs で既にデフォルト定義済み |
 
-### 2.2 LoopController（Req 9〜11）
-
-| 要件 | 必要な機能 | 既存資産 | ギャップ |
-|------|-----------|---------|---------|
-| Req 9: 基本ループ | loop_count 判定 → 周回制御 | `StoryboardInstance.loop_count` / `loops_completed` フィールド存在 | **Missing**: 周回判定ロジック |
-| Req 10: タイムテーブル再利用 | pause_accumulated 機構でオフセット調整 | `pause_accumulated` フィールド + Resume の加算ロジック存在 | **Missing**: ループ用オフセット調整（同一機構の再利用） |
-| Req 11: ループ中競合 | ループ中の競合検出保証 | evaluate の最新 group_id 優先 | **Missing**: ループ中のエントリが ConflictResolver の対象になる保証 |
-
-### 2.3 ギャップサマリー
+### 2.2 ギャップサマリー
 
 | カテゴリ | ステータス |
 |---------|----------|
 | **Existing** (そのまま使用) | `InstanceState` 全バリアント, `from_policy()`, `InterruptionPolicy` enum, デフォルト戦略, `conclude_internal()`, `remove_entries()`, `collect_final_values()` |
 | **Partial** (拡張必要) | `facade.start()` の Tier 3 Hook, `InstanceManager` の状態遷移, `TimelineManager` のエントリ操作 |
-| **Missing** (新規作成) | `ConflictResolver` モジュール, `LoopController` モジュール, `DeferredEntry` 型, 時間重複検出ロジック, Trim 切断ロジック, ループ周回制御 |
+| **Missing** (新規作成) | `ConflictResolver` モジュール, `DeferredEntry` 型, 時間重複検出ロジック, Trim 切断ロジック, Conclude 用の現在セグメント最終値取得 |
 
 ---
 
@@ -105,18 +96,17 @@ pub fn from_policy(policy: InterruptionPolicy) -> Option<InstanceState> {
 
 ### Option A: 新モジュール作成（推奨）
 
-統合指針 Section 5.3 に従い、`conflict_resolver.rs` と `loop_controller.rs` を新規作成する。
+統合指針 Section 5.3 に従い、`conflict_resolver.rs` を新規作成する。
 
 **対象ファイル**:
 
 | 操作 | ファイル | 内容 |
 |------|---------|------|
 | **新規作成** | `runtime/conflict_resolver.rs` | `ConflictResolver` struct + 5戦略実装 |
-| **新規作成** | `runtime/loop_controller.rs` | `LoopController` struct + 周回制御 |
-| **修正** | `runtime/mod.rs` | `mod conflict_resolver; mod loop_controller;` 追加 |
-| **修正** | `runtime/facade.rs` | `start()` 内の Tier 3 Hook を実装に置換、`update()` にループ制御を挿入 |
+| **修正** | `runtime/mod.rs` | `mod conflict_resolver;` 追加 |
+| **修正** | `runtime/facade.rs` | `start()` 内の Tier 3 Hook を実装に置換 |
 | **修正** | `runtime/timeline_manager.rs` | 延期キュー (`deferred_entries`)、時間重複チェック用メソッド追加 |
-| **修正** | `runtime/instance_manager.rs` | `instances_mut()` (可変アクセス)、ループ関連ヘルパー追加 |
+| **修正** | `runtime/instance_manager.rs` | `instances_mut()` (可変アクセス) 追加 |
 
 **トレードオフ**:
 - ✅ 統合指針に完全準拠、モジュール構成が明確
@@ -126,7 +116,7 @@ pub fn from_policy(policy: InterruptionPolicy) -> Option<InstanceState> {
 
 ### Option B: facade 拡張（非推奨）
 
-ConflictResolver/LoopController のロジックを facade.rs 内のプライベートメソッドとして実装する。
+ConflictResolver のロジックを facade.rs 内のプライベートメソッドとして実装する。
 
 **トレードオフ**:
 - ✅ 借用制約が単純（全フィールドが `self` 配下）
@@ -136,7 +126,7 @@ ConflictResolver/LoopController のロジックを facade.rs 内のプライベ�
 
 ### Option C: ハイブリッド（関数ベース + 新モジュール）
 
-ConflictResolver/LoopController を struct ではなくフリー関数群として実装し、facade が `&mut self` 内部のフィールド参照を個別に渡す。
+ConflictResolver を struct ではなくフリー関数群として実装し、facade が `&mut self` 内部のフィールド参照を個別に渡す。
 
 **トレードオフ**:
 - ✅ borrowck の制約を自然に回避（各フィールドの個別 `&mut` が可能）
@@ -188,25 +178,13 @@ ConflictResolver/LoopController を struct ではなくフリー関数群とし�
 
 > **Research Needed**: 統合指針の設計ノート (design.md L777-815) では「ConflictResolver が生成、TimelineManager が保持」のハイブリッドを示唆
 
-### 4.4 ループのオフセット調整と pause_accumulated の統合
+### 4.4 終了状態の再評価トリガー範囲
 
-**課題**: ループ継続時に `pause_accumulated` を調整してタイムテーブルを再利用する設計。既存の `pause_accumulated` は Pause/Resume 用で加算のみ。ループでは「1周分の duration」を加算する別用途が発生する。
+**課題**: Req 7 AC3「終了状態に遷移」は全4種（Concluded/Cancelled/Trimmed/Compressed）を指すか、Concluded のみを指すか。
 
-**既存資産**:
-- `StoryboardInstance.pause_accumulated`: f64 フィールド（加算済み一時停止時間）
-- `calculate_effective_time()`: `pause_accumulated` を差し引いて effective_time を算出
+**影響**: Never 延期キューの解放条件。無限ループ中の Never インスタンスに対する明示的 `cancel()` で後続を解放するかどうか。
 
-**注意点**: `pause_accumulated` にループオフセットを加算すると、Pause/Resume の一時停止時間との混同リスクがある。別フィールド（例: `loop_offset`）を追加するか、`pause_accumulated` を汎用化するかの判断が必要。
-
-> **Research Needed**: 設計フェーズでフィールド設計を確定
-
-### 4.5 evaluate() フロー内でのループ完了検出
-
-**課題**: 現在の `evaluate_segments()` は全セグメント終了時に `None` を返し、呼び出し元がエントリを expired として削除する。ループ時はこの動作を変更し、「全セグメント終了 → ループ判定 → 継続/終了」のフローに切り替える必要がある。
-
-**影響範囲**:
-- `timeline_manager.rs` の `evaluate()` メソッド
-- `facade.rs` の `update()` 内の自然終了検知ロジック
+> **Decision Needed**: 全4種で延期解放を推奨（先行インスタンスが何らかの理由で終了したら後続を解放）
 
 ---
 
@@ -217,20 +195,17 @@ ConflictResolver/LoopController を struct ではなくフリー関数群とし�
 | コンポーネント | 工数 | 根拠 |
 |--------------|------|------|
 | ConflictResolver (Req 1-8) | **M** (3-7日) | 5戦略 × 個別実装 + Never 延期キュー。パターンは既存資産から類推可能だが、Trim/Never に固有の複雑性あり |
-| LoopController (Req 9-11) | **S** (1-3日) | 周回判定とオフセット調整。既存の pause_accumulated 機構を参考にできる |
-| facade 統合 | **S** (1-3日) | Tier 3 Hook の実装、update() へのループ統合、mod.rs 更新 |
-| テスト | **M** (3-7日) | 5戦略 × 単体テスト + ループテスト + 統合テスト |
-| **合計** | **M〜L** (7-14日) | |
+| テスト | **M** (3-7日) | 5戦略 × 単体テスト + 統合テスト |
+| **合計** | **M〜L** (6-14日) | |
 
 ### 5.2 リスク評価
 
 | リスク | レベル | 説明 |
 |--------|--------|------|
-| 借用制約の設計 | **Medium** | facade の `&mut self` 制約で ConflictResolver/LoopController への可変参照渡しに工夫が必要。ただし解決パターンは明確 |
+| 借用制約の設計 | **Medium** | facade の `&mut self` 制約で ConflictResolver への可変参照渡しに工夫が必要。ただし解決パターンは明確 |
 | Trim 戦略の正確性 | **Medium** | セグメント途中切断の補間値計算は精度が重要。既存 Interpolator を再利用できるが、エッジケース（duration=0, 最終セグメント）の検証が必要 |
 | Never 延期キューのライフサイクル | **Medium** | 無限ループとの組み合わせで永続的に保持されるエントリのメモリ管理。仕様上は許容だが、テストでの確認が必要 |
-| ループと競合の相互作用 | **Low-Medium** | ループ中の各周回が競合対象となる設計は明確だが、周回境界でのタイミング整合が必要 |
-| 既存テストへの影響 | **Low** | ConflictResolver/LoopController は新規モジュール。facade.rs の修正は Tier 3 Hook 挿入のみで、既存テスト（502行）は暫定動作テストとして有効 |
+| 既存テストへの影響 | **Low** | ConflictResolver は新規モジュール。facade.rs の修正は Tier 3 Hook 挿入のみで、既存テスト（502行）は暫定動作テストとして有効 |
 
 ---
 
@@ -241,7 +216,7 @@ ConflictResolver/LoopController を struct ではなくフリー関数群とし�
 **Option C（ハイブリッド: フリー関数 + 新モジュール）** を推奨。
 
 理由:
-1. 統合指針のモジュール構成に準拠（`conflict_resolver.rs`, `loop_controller.rs`）
+1. 統合指針のモジュール構成に準拠（`conflict_resolver.rs`）
 2. `facade.rs` の Tier 3 Hook から分離されたフィールド参照を個別に渡すことで borrowck を自然に回避
 3. 親仕様 design.md の trait interface に近い形で関数シグネチャを定義可能
 
@@ -249,12 +224,11 @@ ConflictResolver/LoopController を struct ではなくフリー関数群とし�
 
 1. **ConflictResolver の呼び出しパターン**: 個別引数渡し (S1) vs 中間結果パターン (S3)
 2. **DeferredEntry の保持場所**: TimelineManager vs ConflictResolver vs 新構造体
-3. **ループオフセットフィールド**: `pause_accumulated` 再利用 vs `loop_offset` 新設
-4. **Trim 後のエントリ表現**: セグメント列切断 vs 凍結値の直接格納
-5. **evaluate() へのループ統合**: LoopController コールバック vs evaluate 内判定
+3. **Trim 後のエントリ表現**: セグメント列切断 vs 凍結値の直接格納
+4. **終了状態の再評価トリガー範囲**: 全4種 vs Concluded のみ（全4種を推奨）
 
 ### 6.3 設計フェーズで不要な調査
 
 - 外部クレート追加: 不要（`interpolation` 0.3.0 のみで十分）
 - Feature gate 変更: 不要（integration-guide Section 5.2 で確認済み）
-- 公開 API 変更: 不要（ConflictResolver/LoopController は非公開）
+- 公開 API 変更: 不要（ConflictResolver は非公開）
