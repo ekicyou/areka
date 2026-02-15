@@ -515,15 +515,45 @@ erDiagram
 
 ### Error Strategy
 
-本仕様では新規エラーバリアントを追加しない。既存の `RuntimeError` で対応する。
+無限ループ時の極端な短周期再生を防止するため、新規エラーバリアント `TooShortDurationWithInfiniteLoop` を追加する。
 
 ### Error Categories
 
-| エラー条件 | 既存バリアント | 発生タイミング |
-|-----------|--------------|--------------|
+| エラー条件 | バリアント | 発生タイミング |
+|-----------|------------|--------------|
 | `loop_count <= 0` かつ `-1` でない | `InvalidLoopCount(i32)` | `start()` 時 |
 | `duration == 0.0` かつ `loop_count == -1` | `ZeroDurationWithLoop { storyboard }` | `start()` 時 |
+| `loop_duration < MIN_LOOP_DURATION` かつ `loop_count == -1` | `TooShortDurationWithInfiniteLoop { storyboard, duration }` | `start()` 時 |
 | 存在しない group_id | `InvalidGroupId(u64)` | 各操作時 |
+
+**MIN_LOOP_DURATION 定数**:
+```rust
+/// 無限ループ許可の最小周期（秒）。
+/// システムスリープ復帰時の極端な周回数処理を防止する。
+const MIN_LOOP_DURATION: f64 = 0.1; // 100ms
+```
+
+**バリデーションロジック** (`start()` 内):
+```rust
+let loop_duration = compiled.total_base_duration / compiled.time_scale;
+
+// 既存チェック（duration=0.0 は特殊ケースとして先に判定）
+if loop_duration == 0.0 && compiled.loop_count == -1 {
+    return Err(RuntimeError::ZeroDurationWithLoop {
+        storyboard: name.to_string(),
+    });
+}
+
+// 新規チェック（無限ループ時の短周期防止）
+if loop_duration < MIN_LOOP_DURATION && compiled.loop_count == -1 {
+    return Err(RuntimeError::TooShortDurationWithInfiniteLoop {
+        storyboard: name.to_string(),
+        duration: loop_duration,
+    });
+}
+```
+
+**設計判断**: 有限ループ（`loop_count >= 1`）は制限しない（自己責任）。極端な周回数設定（例: loop_count=1000000）も入力側の問題として扱う。
 
 ループ処理中のランタイムエラーは発生しない設計（`process_loops()` は `LoopAction` を返すのみ）。
 
@@ -557,6 +587,8 @@ erDiagram
 | Pause + ループ | ループ中に Pause → Resume 後も正確な周回・位置から再開 |
 | Cancel + ループ | ループ中に Cancel → 即座に Cancelled 状態 |
 | end_time 統一（loop_count=1 vs -1） | 両方とも `start_time + loop_duration` で統一されていることを確認 |
+| 短周期無限ループエラー | loop_duration < 0.1秒 かつ loop_count=-1 → `TooShortDurationWithInfiniteLoop` エラー |
+| 短周期有限ループ許可 | loop_duration < 0.1秒 かつ loop_count=10 → エラーなし（自己責任で許可） |
 
 ### Performance Tests（optional）
 
@@ -575,8 +607,9 @@ erDiagram
 |------|---------|---------|
 | **新規作成** | `runtime/loop_controller.rs` | `LoopAction` enum + フリー関数群 |
 | **修正** | `runtime/mod.rs` | `mod loop_controller;` 追加 |
+| **修正** | `runtime/types.rs` | `RuntimeError::TooShortDurationWithInfiniteLoop { storyboard: String, duration: f64 }` バリアント追加 |
 | **修正** | `runtime/instance_manager.rs` | `StoryboardInstance` フィールド追加（`loop_start_time`, `loop_duration`, `loops_completed` 型変更）、`create_instance()` 引数追加、`instances_mut()` メソッド追加 |
-| **修正** | `runtime/facade.rs` | `start()` の end_time 算出変更、`update()` Step 2 のループ拡張、`calculate_end_time()` 変更 |
+| **修正** | `runtime/facade.rs` | `start()` の end_time 算出変更 + MIN_LOOP_DURATION バリデーション、`update()` Step 2 のループ拡張、`calculate_end_time()` 変更 |
 | **修正** | `runtime/timeline_manager.rs` | `calculate_effective_time()` の `start_time` → `loop_start_time` 変更 |
 
 ### 設計判断の詳細
