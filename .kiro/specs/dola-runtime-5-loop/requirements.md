@@ -34,7 +34,7 @@ _Parent: Req 12.1, 12.2, 12.3_
 1. When `loop_count` が `1` の場合, the LoopController shall 1回のみ再生し、全セグメント終了後にインスタンスを終了状態へ遷移させる（既存の Tier 2 動作と同一）。
 2. When `loop_count` が `-1` の場合, the LoopController shall 全セグメント終了時にループを再開し、外部からの明示的な停止（Cancel 等）がない限り無限にループ再生を継続する。
 3. When `loop_count` が `n` (`n ≥ 2`) の場合, the LoopController shall n 回のループ再生を完了した後にインスタンスを終了状態へ遷移させる。
-4. When 各周回の全セグメントが終了した場合, the LoopController shall 周回数を更新し、ループ継続の可否を判定する。
+4. When `update()` 呼び出し時に複数周回が終了している場合, the LoopController shall 終了した全周回分を一括処理し、周回数を正確に更新する。
 5. While ループ再生が継続中の場合, the LoopController shall インスタンスを `Playing` 状態に維持する。
 
 ---
@@ -48,7 +48,7 @@ _Parent: Req 12.4, 12.5, 12.6, 12.7_
 #### Acceptance Criteria
 
 1. The LoopController shall ループ再生時もタイムテーブルを1周分のみ生成し、n 周分のタイムテーブル展開を行わない。
-2. When 周回終了時刻に到達した場合（`current_time >= end_time`）, the LoopController shall 周回完了数をインクリメントし、`loop_count` と比較してループ継続の可否を判定する。
+2. When 周回終了時刻に到達した場合（`current_time >= end_time`）, the LoopController shall 反復ループで全ての終了済み周回を処理し、各周回について完了数をインクリメントして継続可否を判定する。
 3. When ループを継続する場合, the LoopController shall タイムテーブルを破棄せず、現在の周回開始時刻を更新してタイムテーブルを再利用する。
 4. The LoopController shall 周回開始時刻の更新において、1周分の duration を加算することで次周回の開始タイミングを正確に維持する。
 5. When ループが完了した場合（`loops_completed >= loop_count`）, the LoopController shall インスタンスを終了状態へ遷移させ、タイムテーブルを破棄する。

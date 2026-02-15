@@ -267,15 +267,23 @@ for gid in naturally_ended {
 
 **ループ対応後のフロー**:
 
-```
-Step 2: 周回終了検知
-  ├─ loop_count == 1 → conclude_internal()（既存動作）
-  ├─ loop_count > 1 && loops_completed < loop_count → advance_loop() + end_time 更新
-  ├─ loop_count > 1 && loops_completed >= loop_count → conclude_internal()
-  └─ loop_count == -1 → advance_loop()（永続）
+```rust
+// Step 2: 周回終了検知（複数周回対応）
+while current_time >= end_time {
+    loops_completed += 1;
+    
+    if loops_completed >= loop_count {  // ループ完了
+        conclude_internal(group_id);
+        break;
+    }
+    
+    // 次周回へ
+    loop_start_time += loop_duration;
+    end_time += loop_duration;
+}
 ```
 
-**注意**: `end_time` の再計算が必要。ループ継続時は `end_time += base_duration / time_scale`。無限ループ時は `end_time = INFINITY` のため、**end_time 到達では検知できない**。
+**重要**: `update()` の呼び出し間隔が長い場合、複数周回が一度に終了する可能性がある。`while` ループで全終了済み周回を一括処理することで、正確な周回数管理を実現する。
 
 **解決策**: 4.3 で推奨する方式 A（end_time を1周分の「次の周回終了時刻」として管理）を採用すれば、有限/無限ループの統一処理が可能。
 
