@@ -757,7 +757,7 @@ graph LR
 ### 子仕様2: DCompパイプライン置換（Phase 2）
 
 **担当範囲**:
-- `ecs/world.rs`: DComp システム（12個 RED）の登録を新システムに切り替え
+- `ecs/world.rs`: DComp システム（9個 RED）の登録を新システムに切り替え
 - `ecs/graphics/components.rs`: `on_visual_add` フックから VisualGraphics/SurfaceGraphics 挿入を除去
 - `ecs/graphics/systems.rs`: DComp システムの登録解除（コード自体は残存 — Phase 4 で削除）
 - `ecs/graphics/core.rs`: GraphicsCore から DComp 初期化を除去

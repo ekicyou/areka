@@ -12,7 +12,7 @@ Phase 4 — DComp コード削除・クリーンアップ。Phase 1-3 で DComp�
 
 **Objective:** 開発者として、使われなくなった DComp COM ラッパーファイルを削除したい。
 
-_Parent: Req 1.1_
+_Parent: Req 1.1, 1.2_
 
 #### Acceptance Criteria
 
@@ -24,7 +24,7 @@ _Parent: Req 1.1_
 
 **Objective:** 開発者として、DComp 専用の ECS コンポーネント定義を削除したい。
 
-_Parent: Req 1.1_
+_Parent: Req 1.1, 6.3_
 
 #### Acceptance Criteria
 
@@ -39,7 +39,7 @@ _Parent: Req 1.1_
 
 **Objective:** 開発者として、DComp 専用の ECS システム関数のコードを削除したい。
 
-_Parent: Req 1.1_
+_Parent: Req 1.1, 3.3_
 
 #### Acceptance Criteria
 
@@ -60,7 +60,7 @@ _Parent: Req 1.1_
 
 **Objective:** 開発者として、DComp 固有のリソースマネージャーファイルを削除したい。
 
-_Parent: Req 1.1_
+_Parent: Req 1.1, 6.4_
 
 #### Acceptance Criteria
 
@@ -84,7 +84,7 @@ _Parent: Req 8.4_
 
 **Objective:** 開発者として、DComp 関連の import 文や型参照の残存をゼロにしたい。
 
-_Parent: Req 5.1_
+_Parent: Req 5.1, 5.3_
 
 #### Acceptance Criteria
 
@@ -108,7 +108,7 @@ _Parent: Req 10.1_
 
 **Objective:** 開発者として、DComp コード完全削除後の品質基準を明確にしたい。
 
-_Parent: Req 10.1_
+_Parent: Req 2.5, 10.1_
 
 #### Acceptance Criteria
 
@@ -125,7 +125,11 @@ _Parent: Req 10.1_
 
 | 親要件 | 子仕様要件 |
 |--------|-----------|
-| Req 1.1 (影響範囲特定) | Req 1, 2, 3, 4 |
-| Req 5.1 (DComp初期化除去) | Req 6 |
+| Req 1.1, 1.2 (影響範囲特定・廃止ファイル) | Req 1, 2, 3, 4 |
+| Req 2.5 (Phase 4完了時DComp除去) | Req 8 |
+| Req 3.3 (DCompステージ置換) | Req 3 |
+| Req 5.1, 5.3 (DComp初期化・フィールド除去) | Req 6 |
+| Req 6.3 (VisualGraphics/SurfaceGraphics一新) | Req 2 |
+| Req 6.4 (visual_manager置換) | Req 4 |
 | Req 8.4 (dcomp_demo.rs削除) | Req 5 |
 | Req 10.1 (検証基準) | Req 7, 8 |

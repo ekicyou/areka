@@ -127,6 +127,10 @@ fn ulw_present_system(
 
 ### 4.2 present_layered_window（com/ulw.rs）
 
+> **親 design.md からの設計変更**: 親仕様では `present_layered_window(hwnd, memory_dc, width, height, window_pos: Option<(i32, i32)>)` の5引数シグネチャだったが、Phase 3 詳細設計で以下の簡素化を行った:
+> - `width, height` → `size: &SIZE`（Win32 API 直結型に統一）
+> - `window_pos: Option<(i32, i32)>` → 削除（`pptDst=None` 固定。ウィンドウ位置管理は既存 `SetWindowPos` フローに委譲）
+
 ```rust
 use windows::Win32::UI::WindowsAndMessaging::UpdateLayeredWindow;
 use windows::Win32::UI::WindowsAndMessaging::ULW_ALPHA;

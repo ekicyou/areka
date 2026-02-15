@@ -70,6 +70,7 @@ graph TB
 pub struct WindowD3D11Compositor {
     inner: Option<WindowD3D11CompositorInner>,
     generation: u32,
+    dirty: bool,  // Phase 3 (ulw_present_system) が参照。composite_render_system が描画完了時に true に設定
 }
 
 struct WindowD3D11CompositorInner {
@@ -96,6 +97,13 @@ struct WindowD3D11CompositorInner {
 | `memory_dc()` | — | `Option<HDC>` | — | — |
 | `dib_bits()` | — | `Option<*mut u8>` | — | — |
 | `generation()` | — | `u32` | — | — |
+| `is_dirty()` | — | `bool` | — | — |
+| `set_dirty(v: bool)` | `v: bool` | `()` | — | dirty=v |
+
+**dirty フラグ契約（Phase 3 インターフェース）**:
+- `composite_render_system` が合成描画＋CopyFromBitmap 完了後に `set_dirty(true)` を呼び出す
+- Phase 3 の `ulw_present_system` が ULW 転送完了後に `set_dirty(false)` を呼び出す
+- Phase 1 単体では dirty フラグは設定されるが消費されない（Phase 3 で消費）
 
 **Bitmap 作成パラメータ**:
 
@@ -267,6 +275,9 @@ fn composite_render_system(
         // 6. CopyFromBitmap(composition → staging)
         let staging = compositor.staging_bitmap().unwrap();
         staging.CopyFromBitmap(None, comp_bmp, None);
+
+        // 7. dirty フラグ設定（Phase 3 ulw_present_system が消費）
+        compositor.set_dirty(true);
     }
 }
 ```
