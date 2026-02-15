@@ -191,9 +191,10 @@ DirectCompositionベース⇒UpdateLayeredWindowベースへ変更。マウス�
 
 #### Acceptance Criteria
 
-1. The 実装指針 shall wintf-P0-click-through-rgn仕様への影響を評価する：
-   - ULW方式によりalpha=0クリックスルーが自動実現されるため、SetWindowRgn方式の要件の大半が不要化
-   - 残存する要件（HitTestMode::NamedRegions等の精密制御）の扱いを定義
+1. The 実装指針 shall wintf-P0-click-through-rgn仕様との関係を以下のように定義する：
+   - 両仕様は**競争的並走**とする。click-through-rgn（SetWindowRgn+DComp方式）の実験結果が十分な性能を示した場合、本仕様（ULW移行）が凍結される可能性がある
+   - 逆にclick-through-rgnが性能要件を満たせない場合、本仕様が優先され、click-through-rgn仕様の大部分はULW方式のalpha=0自動クリックスルーにより不要化する
+   - 両仕様の実装は互いに依存せず、独立して進行可能とする
 
 2. The 実装指針 shall wintf-P0-animation-system仕様への影響を評価する：
    - DComp Animation APIからの切り替え必要性の判断
