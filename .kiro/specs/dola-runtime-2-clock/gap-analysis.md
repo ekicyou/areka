@@ -52,11 +52,13 @@ fn get_precise_time() -> u64 {
 
 **観察**: `use` 文を関数内に局所化し、`unsafe` ブロックは最小限。`GetTickCount64` も同じパターンで実装可能。
 
-### 1.4 Feature Gate パターン
+### 1.4 条件コンパイルパターン
 
 **重要**: 本仕様実装時に `runtime` feature を削除する設計決定を行った。`crates/dola/src/lib.rs` の `pub mod runtime;` は無条件となる。
 
-**観察**: `windows-clock` は `runtime/mod.rs` 内で `#[cfg(feature = "windows-clock")] pub mod clock;` として条件分岐する。lib.rs レベルでの feature gate は不要。
+**追加決定**: `windows-clock` feature も削除。clock モジュールは `#[cfg(target_os = "windows")]` で条件コンパイルする。areka は Windows 専用プロジェクトであり、完全なユーティリティ関数 `now()` に feature gate は不要。
+
+**観察**: `runtime/mod.rs` 内で `#[cfg(target_os = "windows")] pub mod clock;` として条件分岐する。lib.rs レベルでの条件コンパイルは不要。
 
 ### 1.5 テストパターン
 
@@ -145,32 +147,16 @@ features = [
 
 ### 4.2 dola Cargo.toml への追加方針
 
-**方式1**: ワークスペース参照 + 独自 features
+**決定済み**: Windows ターゲット依存で十分
 
 ```toml
-[dependencies.windows]
-workspace = true
-optional = true
+[target.'cfg(windows)'.dependencies]
+windows = { workspace = true, features = ["Win32_System_SystemInformation"] }
 ```
 
-この方式では、ワークスペースの全 features を継承する。dola は `Win32_System_SystemInformation` のみ必要だが、optional dependency なので feature gate 無効時はコンパイルされない。
+この方式では、Windows ターゲット時のみ `windows` クレートが依存関係に追加される。非 Windows 環境では完全に除外される。
 
-**方式2**: dola 独自のバージョン + 最小 features
-
-```toml
-[dependencies.windows]
-version = "0.62"
-optional = true
-features = ["Win32_System_SystemInformation"]
-```
-
-この方式では、dola が独立して必要最小限の features のみを指定する。
-
-**評価**:
-- 方式1: ワークスペース統一性を保つ（`Cargo.lock` のバージョン一致保証）。ただし dola に不要な features が含まれる（コンパイル時のみの影響、バイナリには含まれない）
-- 方式2: dola の独立性を保つ（publish 時に最小依存）。ワークスペースとの version 不一致リスクあり
-
-**Research Needed**: `workspace = true` と `optional = true` の組み合わせが Cargo で正しく動作するかの確認（Cargo リファレンス上は対応しているが、features の上書き挙動に注意）
+**評価**: areka は Windows 専用プロジェクトだが、dola クレート自体は他 OS でもビルド可能にすることで汎用性を保つ。`workspace = true` でバージョン統一性を保証。
 
 ---
 

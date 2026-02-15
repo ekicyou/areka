@@ -49,7 +49,7 @@ graph LR
 - **選定パターン**: ステートレスな関数1つ。構造体なし
 - **境界**: `pub` 関数として公開。facade は依存しない（利用者経由で時刻が渡される）
 - **Steering 準拠**: `unsafe` は Win32 API 呼び出しのみ（`GetTickCount64` は安全な FFI）
-- **Feature Gate**: `windows-clock` feature のみ。`runtime` feature は本仕様実装時に削除（dola の本質はエンジンであり、常時有効化）
+- **条件コンパイル**: `#[cfg(target_os = "windows")]` のみ。feature gate ではなく OS 自動判定。`runtime` feature は本仕様実装時に削除済み（dola の本質はエンジンであり、常時有効化）
 
 ### Technology Stack
 
@@ -108,7 +108,7 @@ graph LR
 /// 精度は ms 単位。60fps アニメーション（≈16.7ms/frame）に十分。
 /// 将来 QPC (QueryPerformanceCounter) ベースへの差し替えが必要な場合、
 /// この関数シグネチャを維持したまま内部実装を変更可能。
-#[cfg(feature = "windows-clock")]
+#[cfg(target_os = "windows")]
 pub fn now() -> f64 {
     unsafe { windows::Win32::System::SystemInformation::GetTickCount64() as f64 / 1000.0 }
 }
@@ -142,7 +142,7 @@ pub fn now() -> f64 {
 - **非ゼロテスト**: `now()` の戻り値が 0.0 より大きいことを検証（OS 起動直後でなければ常に成立）
 - **精度テスト**: `std::thread::sleep(Duration::from_millis(100))` 前後で `now()` の差分が 0.08..0.15 の範囲にあることを検証
 
-> テストは `#[cfg(feature = "windows-clock")]` で囲み、feature 有効時のみ実行。
+> テストは `#[cfg(all(test, target_os = "windows"))]` で囲み、Windows ターゲット時のみ実行。
 
 ---
 
@@ -155,18 +155,17 @@ pub fn now() -> f64 {
 [dependencies]
 interpolation = "0.3.0"  # runtime feature 削除に伴い常時依存化
 
+[target.'cfg(windows)'.dependencies]
+windows = { workspace = true, features = ["Win32_System_SystemInformation"] }
+
 [features]
 default = ["json"]
 json = ["dep:serde_json"]
 toml = ["dep:toml"]
 yaml = ["dep:serde_yaml"]
-windows-clock = ["dep:windows"]  # 新規追加
-
-[target.'cfg(windows)'.dependencies]
-windows = { workspace = true, optional = true, features = ["Win32_System_SystemInformation"] }
 ```
 
-> **BREAKING CHANGE**: `runtime` feature を削除。ランタイムエンジンは常時有効化される。
+> **BREAKING CHANGE**: `runtime` feature を削除。ランタイムエンジンは常時有効化される。`windows-clock` feature も削除。Windows ターゲット時に OS 自動判定で clock モジュールが有効化される。
 
 ### モジュール構成
 

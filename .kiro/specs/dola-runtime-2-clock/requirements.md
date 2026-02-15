@@ -44,21 +44,20 @@ _Parent: Req 11.2, 11.3_
 
 ---
 
-### Requirement 3: Feature Gate 分離
+### Requirement 3: 条件コンパイル (Windows 専用)
 
 _Parent: 統合指針 Section 5_
 
-**Objective:** ランタイム実装者として、Windows 専用の時刻取得ユーティリティを独立した feature gate で分離したい。これにより、Windows 以外の環境でもランタイムエンジンをビルド可能にする。
+**Objective:** ランタイム実装者として、Windows 専用の時刻取得ユーティリティを OS 条件コンパイルで分離したい。これにより、非 Windows 環境でも dola クレート全体をビルド可能にする。
 
-> **設計決定**: 本仕様実装時に `runtime` feature を削除し、ランタイムエンジンを常時有効化する（BREAKING CHANGE）。dola の本質は「アニメーションエンジン」であり、データモデルのみの配布用途は想定しない。
+> **設計決定**: feature gate ではなく `#[cfg(target_os = "windows")]` を使用する。clock::now() は完全なユーティリティ関数であり、利用者の選択肢ではなく OS の自動判定で十分。`runtime` feature も本仕様実装時に削除済み（常時有効化）。
 
 #### Acceptance Criteria
 
-1. The Clock module shall `windows-clock` feature gate で有効化される。
-2. The Clock module shall `crates/dola/src/runtime/clock.rs` に配置し、`#[cfg(feature = "windows-clock")]` で条件コンパイルする。
-3. When `windows-clock` feature が無効な場合, the Clock module shall コンパイル対象から完全に除外される。
-4. The `windows-clock` feature shall `Cargo.toml` で `windows` クレートへのオプショナル依存を有効化する（`windows-clock = ["dep:windows"]`）。
-5. The `runtime/` モジュール自体には feature gate を設定しない（`lib.rs` の `pub mod runtime;` は無条件）。
+1. The Clock module shall `crates/dola/src/runtime/clock.rs` に配置し、`#[cfg(target_os = "windows")]` で条件コンパイルする。
+2. The `runtime/mod.rs` shall `#[cfg(target_os = "windows")] pub mod clock;` で clock サブモジュールを条件付き公開する。
+3. When Windows 以外の OS でビルドする場合, the Clock module shall コンパイル対象から完全に除外される。
+4. The `runtime/` モジュール自体には条件コンパイルを設定しない（`lib.rs` の `pub mod runtime;` は無条件）。
 
 ---
 
@@ -66,14 +65,14 @@ _Parent: 統合指針 Section 5_
 
 _Parent: 統合指針 Section 5.2_
 
-**Objective:** ランタイム実装者として、`windows-clock` feature に必要な依存クレートを正しく定義したい。
+**Objective:** ランタイム実装者として、Windows ターゲット時に必要な依存クレートを正しく定義したい。
 
 #### Acceptance Criteria
 
-1. The `Cargo.toml` shall `windows` クレートをオプショナル依存として追加する（`optional = true`）。
-2. The `windows` dependency shall `Win32_System_SystemInformation` feature を指定する（`GetTickCount64` が含まれるモジュール）。
-3. The `windows` dependency shall ワークスペースの既存バージョン（0.62）と整合する。
-4. The `default` feature shall `windows-clock` を含まない。
+1. The `Cargo.toml` shall `[target.'cfg(windows)'.dependencies]` セクションで `windows` クレートを定義する。
+2. The `windows` dependency shall `workspace = true` でワークスペースバージョンを参照する。
+3. The `windows` dependency shall `features = ["Win32_System_SystemInformation"]` を指定する（`GetTickCount64` が含まれるモジュール）。
+4. The `windows` dependency shall Windows 以外の OS では依存関係に含まれない。
 
 ---
 
@@ -85,7 +84,7 @@ _Parent: 統合指針 Section 2.4, 5.3_
 
 #### Acceptance Criteria
 
-1. The `runtime/mod.rs` shall `windows-clock` feature 有効時に `clock` サブモジュールを条件付きで公開する（`#[cfg(feature = "windows-clock")] pub mod clock;`）。
+1. The `runtime/mod.rs` shall Windows ターゲット時に `clock` サブモジュールを条件付きで公開する（`#[cfg(target_os = "windows")] pub mod clock;`）。
 2. The `clock::now()` function shall `pub` 可視性を持つ。
 3. The Clock module shall `clock::now()` 以外の内部実装詳細を公開しない。
 
@@ -102,5 +101,5 @@ _Parent: 統合指針 Section 6.1_
 1. The Clock module shall 時刻の単調増加性を検証するユニットテストを持つ（連続2回の `now()` 呼び出しで `t2 >= t1`）。
 2. The Clock module shall 返却値が正の有限値であることを検証するユニットテストを持つ。
 3. The Clock module shall ms 精度を検証するテストを持つ（`std::thread::sleep(1ms)` 後の差分が 0 より大きい）。
-4. The Clock module shall `#[cfg(test)]` テストモジュールを `clock.rs` 内に配置する、または `tests/` ディレクトリに統合テストファイルを配置する。
+4. The Clock module shall `#[cfg(all(test, target_os = "windows"))]` テストモジュールを `clock.rs` 内に配置する、または `tests/` ディレクトリに統合テストファイルを配置する。
 

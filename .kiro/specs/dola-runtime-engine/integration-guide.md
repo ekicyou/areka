@@ -163,11 +163,20 @@ facade 子仕様（Tier 2）は conflict-loop（Tier 3）なしでも動作可�
 
 ### 5.1 feature 一覧
 
-| Feature 名 | 有効化する機能 | 依存クレート | 子仕様 |
-|------------|--------------|------------|--------|
-| `windows-clock` | Clock ユーティリティ (`runtime::clock` サブモジュール) | `windows` (Win32 API) | clock |
+**重要**: 仕様2 (clock) 実装時に `runtime` と `windows-clock` 両 feature を削除する決定を行った。
 
-> **重要**: 仕様2（clock）実装時に `runtime` feature を削除する決定を行った。dola の本質は「アニメーションエンジン」であり、ランタイムは常時有効化される（BREAKING CHANGE）。
+- **`runtime` feature 削除理由**: dola の本質は「アニメーションエンジン」であり、ランタイムは常時有効化すべき（BREAKING CHANGE）
+- **`windows-clock` feature 削除理由**: clock::now() は完全なユーティリティ関数であり、OS 自動判定 (`#[cfg(target_os = "windows")]`) で十分
+
+**残存 feature**:
+
+| Feature 名 | 用途 | 依存 | 理由 |
+|------------|------|------|------|
+| `json` | JSON パーサー | `serde_json` | 利用者の選択肢 |
+| `toml` | TOML パーサー | `toml` | 利用者の選択肢 |
+| `yaml` | YAML パーサー | `serde_yaml` | 利用者の選択肢 |
+
+> **注**: `serde` は常時必須依存。feature 化しない。
 
 ### 5.2 段階的 Cargo.toml 変更計画
 
@@ -191,15 +200,16 @@ yaml = ["dep:serde_yaml"]
 interpolation = "0.3.0"
 
 [target.'cfg(windows)'.dependencies]
-windows = { workspace = true, optional = true, features = ["Win32_System_SystemInformation"] }
+windows = { workspace = true, features = ["Win32_System_SystemInformation"] }
 
 [features]
 default = ["json"]
 json = ["dep:serde_json"]
 toml = ["dep:toml"]
 yaml = ["dep:serde_yaml"]
-windows-clock = ["dep:windows"]
 ```
+
+> **重要**: `windows-clock` feature も削除。clock::now() は完全なユーティリティ関数であり、`#[cfg(target_os = "windows")]` で条件コンパイルする。
 
 **仕様3 (3-facade) 実装時:** 追加依存なし。
 
