@@ -796,7 +796,7 @@ graph LR
 **担当範囲**:
 - `com/dcomp.rs`: ファイル全体削除（315行）
 - `ecs/graphics/components.rs`: VisualGraphics, SurfaceGraphics, SurfaceGraphicsDirty, SurfaceCreationStats のstruct削除
-- `ecs/graphics/systems.rs`: RED分類の12システム関数のコード削除
+- `ecs/graphics/systems.rs`: RED分類のシステム関数コード削除（主要9エントリポイント＋関連ヘルパー3関数、計12関数 — research.md §1.1 参照）
 - `ecs/graphics/visual_manager.rs`: ファイル全体削除（170行）
 - `examples/dcomp_demo.rs`: ファイル削除（8.4）
 - `ecs/graphics/core.rs`: DComp関連 `use` 文の最終クリーンアップ
