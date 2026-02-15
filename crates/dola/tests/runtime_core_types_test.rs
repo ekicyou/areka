@@ -315,6 +315,30 @@ mod runtime_error_tests {
         let err: Box<dyn std::error::Error> = Box::new(RuntimeError::InvalidGroupId(1));
         assert!(err.to_string().contains("1"));
     }
+
+    /// Req 4.4: `From<Vec<DolaError>>` による `?` 演算子自動変換
+    #[test]
+    fn from_vec_dola_error_conversion() {
+        use dola::DolaError;
+
+        fn fallible() -> Result<(), RuntimeError> {
+            let errors: Vec<DolaError> = vec![DolaError::ReservedKeyframeName {
+                name: "test".to_string(),
+            }];
+            // `?` 演算子で Vec<DolaError> → RuntimeError::CompileError に自動変換
+            Err(errors)?
+        }
+
+        let result = fallible();
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        match err {
+            RuntimeError::CompileError(errors) => {
+                assert_eq!(errors.len(), 1);
+            }
+            _ => panic!("expected CompileError variant"),
+        }
+    }
 }
 
 mod start_result_tests {

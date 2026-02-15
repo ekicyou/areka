@@ -43,12 +43,12 @@ Tier 1 基盤型（InstanceState, EvaluatedValue, RuntimeError, StartResult）�
   - 境界値・丸め・即時切替・パラメトリックテスト実装済み
   - _Requirements: 1.1, 1.2, 1.3, 1.4, 2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 3.1, 3.2, 3.3, 3.4, 4.1, 4.2, 4.3, 4.4, 5.1, 5.2, 5.3, 6.1, 6.2, 6.3, 6.4, 6.5, 6.6, 6.7, 6.8, 6.9, 7.1, 7.2, 7.3_
 
-- [ ] 6. 実装完成度の最終検証
-  - 全7要件の各 Acceptance Criteria を実装・テストと照合し充足を確認
-  - `From<Vec<DolaError>>` の動作テストを追加（`?` 演算子による自動変換確認）
-  - `cargo clippy --features runtime` でコード品質を確認
-  - `cargo test --features runtime --all-targets` で全テスト通過を最終確認
-  - すべての public 型・メソッドにドキュメントコメントが存在するか確認
+- [x] 6. 実装完成度の最終検証
+  - 全7要件の各 Acceptance Criteria を実装・テストと照合し充足を確認 ✅
+  - `From<Vec<DolaError>>` の動作テストを追加（`?` 演算子による自動変換確認）✅
+  - `cargo clippy --features runtime` でコード品質を確認（runtime モジュール警告ゼロ）✅
+  - `cargo test --features runtime --all-targets` で全テスト通過を最終確認 ✅
+  - すべての public 型・メソッドにドキュメントコメントが存在するか確認（26/26 完全）✅
   - _Requirements: 1.1, 1.2, 1.3, 1.4, 2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 3.1, 3.2, 3.3, 3.4, 4.1, 4.2, 4.3, 4.4, 5.1, 5.2, 5.3, 6.1, 6.2, 6.3, 6.4, 6.5, 6.6, 6.7, 6.8, 6.9, 7.1, 7.2, 7.3_
 
 ---
