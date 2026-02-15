@@ -173,7 +173,7 @@ DirectCompositionベース⇒UpdateLayeredWindowベースへ変更。マウス�
 
 4. The wintf crate shall visual_manager.rsのDComp固有リソース管理（IDCompositionVisual作成等）を、D2D1合成方式のリソース管理に置換する
 
-5. The wintf crate shall コンポーネント命名規則（GPUリソースは`XxxGraphics`サフィックス）を維持し、新しいWindowGraphicsおよびリソースコンポーネントの設計に適用する
+5. The wintf crate shall コンポーネント命名規則を維持し、新しいリソースコンポーネントの設計に適用する。GPUリソースは`XxxGraphics`サフィックス形式、またはバックエンド技術を明示する形式（例: `WindowD3D11Compositor`）を使用する
 
 ### Requirement 7: ウィンドウメッセージハンドリングの更新
 

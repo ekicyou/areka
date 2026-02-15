@@ -80,7 +80,7 @@ graph TB
     end
 
     subgraph Resource Layer - NEW
-        WindowCompositor[WindowCompositor per-window]
+        WindowD3D11Compositor[WindowD3D11Compositor per-window]
         CompositionBitmap[ID2D1Bitmap1 render target]
         StagingBitmap[ID2D1Bitmap1 CPU_READ]
         HBITMAP_DIB[HBITMAP DIBSection]
@@ -96,7 +96,7 @@ graph TB
     Arrangement --> GlobalArrangement
     WidgetSystems --> GraphicsCommandList
 
-    CompositorInit --> WindowCompositor
+    CompositorInit --> WindowD3D11Compositor
     CompositeRender --> GlobalArrangement
     CompositeRender --> GraphicsCommandList
     CompositeRender --> CompositionBitmap
@@ -112,7 +112,7 @@ graph TB
 - **選択パターン**: ハイブリッド段階アプローチ（research.md Option C）。子仕様1-2で新モジュール並行追加、子仕様3でULW統合、子仕様4で旧コード削除
 - **ドメイン境界**: Layout層（GREEN, 変更なし）→ Widget層（GREEN, 変更なし）→ Graphics層（RED→NEW, 全面置換）→ OS層（NEW, ULW統合）
 - **維持パターン**: Schedule/Stageベースの描画パイプライン、GraphicsCommandListによる描画抽象化、GlobalArrangement座標累積
-- **新コンポーネント根拠**: WindowCompositor（per-window合成リソースの統合管理）、GlobalArrangement拡張（Opacity累積の自然な配置場所）
+- **新コンポーネント根拠**: WindowD3D11Compositor（per-window合成リソースの統合管理）、GlobalArrangement拡張（Opacity累積の自然な配置場所）
 - **steering準拠**: bevy_ecs 0.18.0 API、windows 0.62.2 COM安全パターン、tracing計装
 
 ### Technology Stack
@@ -240,15 +240,15 @@ graph TB
 | 1.2 | 廃止対象ファイル識別 | research.md §1-3 | — | — |
 | 1.3 | 再利用可能資産保証 | GraphicsCommandList, Layout全体, Widget全体 | — | — |
 | 2.1 | 4フェーズ移行戦略 | Migration Strategy節 | — | — |
-| 2.2 | フェーズ1: DComp同等描画 | WindowCompositor, composite_render_system | CompositorService | 合成描画パイプライン |
+| 2.2 | フェーズ1: DComp同等描画 | WindowD3D11Compositor, composite_render_system | CompositorService | 合成描画パイプライン |
 | 2.3 | フェーズ2: DComp無効化 | world.rs Schedule更新 | — | — |
 | 2.4 | フェーズ3: ULW統合 | UlwTransfer, ulw_present_system | UlwService | D2D→HBITMAP転送 |
 | 2.5 | フェーズ4: DComp削除 | com/dcomp.rs削除, DCompコンポーネント削除 | — | — |
-| 3.1 | per-window合成ビットマップ | WindowCompositor | CompositorService | 合成描画パイプライン |
+| 3.1 | per-window合成ビットマップ | WindowD3D11Compositor | CompositorService | 合成描画パイプライン |
 | 3.2 | Composition概念継承 | composite_render_system, GlobalArrangement | — | z-orderソート走査 |
 | 3.3 | DCompステージ置換 | Schedule再構成（後述） | — | — |
 | 3.4 | GraphicsCommandList再利用 | 変更なし | — | — |
-| 3.5 | リサイズ対応 | WindowCompositor.resize() | CompositorService | WM_SIZE→リサイズ |
+| 3.5 | リサイズ対応 | WindowD3D11Compositor.resize() | CompositorService | WM_SIZE→リサイズ |
 | 3.6 | Opacity階層累積 | GlobalArrangement.global_opacity | PropagateTransform | Opacity累積フロー |
 | 4.1 | ULW呼出 | UlwTransfer | UlwService | D2D→HBITMAP転送 |
 | 4.2 | WS_EX_LAYERED切替 | WindowStyle, main.rs | — | — |
@@ -259,13 +259,13 @@ graph TB
 | 5.2 | デバイスチェーン維持 | GraphicsCore | — | — |
 | 5.3 | DCompフィールド除去 | GraphicsCoreInner | — | — |
 | 5.4 | デバイスロスト対応 | invalidate()フロー維持 | — | — |
-| 6.1 | WindowGraphics置換 | WindowCompositor | CompositorService | — |
+| 6.1 | WindowGraphics置換 | WindowD3D11Compositor | CompositorService | — |
 | 6.2 | Visual概念継承 | Visual（変更なし） | — | — |
 | 6.3 | VisualGraphics/SurfaceGraphics一新 | 削除（per-entityリソース不要） | — | — |
 | 6.4 | visual_manager置換 | 廃止（合成描画で代替） | — | — |
-| 6.5 | 命名規則維持 | WindowCompositor (XxxGraphicsではなくCompositor) | — | — |
+| 6.5 | 命名規則維持 | WindowD3D11Compositor（技術スタック明示形式） | — | — |
 | 7.1 | WM_PAINT更新 | handlers.rs | — | — |
-| 7.2 | WM_SIZE→合成リサイズ | handlers.rs + WindowCompositor | — | — |
+| 7.2 | WM_SIZE→合成リサイズ | handlers.rs + WindowD3D11Compositor | — | — |
 | 7.3 | BeginPaint/EndPaint最小化 | handlers.rs | — | — |
 | 8.1 | click-through-rgn競争的並走 | 実装指針（Migration Strategy節） | — | — |
 | 8.2 | animation-system影響評価 | 実装指針（影響なし） | — | — |
@@ -288,12 +288,12 @@ graph TB
 | Component | Domain/Layer | Intent | Req Coverage | Key Dependencies | Contracts |
 |-----------|--------------|--------|--------------|------------------|-----------|
 | GraphicsCore（改修） | Graphics/Resource | GPU初期化・DComp除去 | 5.1-5.4 | ID3D11Device(P0), ID2D1Device(P0) | State |
-| WindowCompositor（新規） | Graphics/Resource | per-window合成リソース管理 | 3.1, 3.5, 4.1, 6.1 | GraphicsCore(P0), ID2D1Bitmap1(P0) | Service, State |
-| UlwTransfer（新規） | COM/Transfer | D2D→HBITMAP→ULW転送 | 4.1, 4.2, 4.4, 4.5 | WindowCompositor(P0), Win32 API(P0) | Service |
+| WindowD3D11Compositor（新規） | Graphics/Resource | per-window合成リソース管理 | 3.1, 3.5, 4.1, 6.1 | GraphicsCore(P0), ID2D1Bitmap1(P0) | Service, State |
+| UlwTransfer（新規） | COM/Transfer | D2D→HBITMAP→ULW転送 | 4.1, 4.2, 4.4, 4.5 | WindowD3D11Compositor(P0), Win32 API(P0) | Service |
 | Visual（維持） | Graphics/Logic | 可視性・透明度・変換原点 | 6.2 | — | State |
 | GlobalArrangement（拡張） | Layout/Metrics | 累積座標変換 + Opacity | 3.6 | Arrangement(P0) | State |
-| composite_render_system（新規） | Graphics/System | 全CommandList合成描画 | 3.1-3.4 | WindowCompositor(P0), GlobalArrangement(P0) | — |
-| ulw_present_system（新規） | Graphics/System | ULW呼出 + エラーリカバリ | 4.1, 4.4, 4.5 | UlwTransfer(P0), WindowCompositor(P0) | — |
+| composite_render_system（新規） | Graphics/System | 全CommandList合成描画 | 3.1-3.4 | WindowD3D11Compositor(P0), GlobalArrangement(P0) | — |
+| ulw_present_system（新規） | Graphics/System | ULW呼出 + エラーリカバリ | 4.1, 4.4, 4.5 | UlwTransfer(P0), WindowD3D11Compositor(P0) | — |
 | compositor_init_system（新規） | Graphics/System | per-window合成リソース初期化 | 3.1, 6.1 | GraphicsCore(P0) | — |
 
 ### Graphics / Resource Layer
@@ -322,7 +322,7 @@ graph TB
 
 ---
 
-#### WindowCompositor（新規）
+#### WindowD3D11Compositor（新規）
 
 | Field | Detail |
 |-------|--------|
@@ -348,7 +348,7 @@ graph TB
 ##### Service Interface
 
 ```
-WindowCompositor:
+WindowD3D11Compositor:
   new(d2d_dc: &ID2D1DeviceContext, width: u32, height: u32) -> Result<Self>
   resize(d2d_dc: &ID2D1DeviceContext, width: u32, height: u32) -> Result<()>
   invalidate() -> ()
@@ -375,8 +375,8 @@ Invariants:
 - HBITMAP（DIBSection）のサイズは composition_bitmap と一致
 
 ##### State Management
-- `Option<WindowCompositorInner>` パターン（WindowGraphicsと同一パターン）
-- `WindowCompositorInner` にID2D1Bitmap1 x2, HBITMAP, HDC, `*mut u8`（DIBSection bits pointer）, `(u32, u32)` size
+- `Option<WindowD3D11CompositorInner>` パターン（WindowGraphicsと同一パターン）
+- `WindowD3D11CompositorInner` にID2D1Bitmap1 x2, HBITMAP, HDC, `*mut u8`（DIBSection bits pointer）, `(u32, u32)` size
 - `invalidate()` で `inner = None`（リソース解放はDrop）
 
 **Implementation Notes**
@@ -396,7 +396,7 @@ Invariants:
 
 **Responsibilities & Constraints**
 - `com/` 層のユーティリティモジュール（ECS非依存、純粋Win32 API呼び出し）
-- 入力: WindowCompositorのステージングビットマップ（CPU_READ）+ DIBSection HBITMAP + MemoryDC
+- 入力: WindowD3D11Compositorのステージングビットマップ（CPU_READ）+ DIBSection HBITMAP + MemoryDC
 - 出力: UpdateLayeredWindow呼び出し
 - BLENDFUNCTION設定: `BlendOp = AC_SRC_OVER, SourceConstantAlpha = 255, AlphaFormat = AC_SRC_ALPHA`
 
@@ -496,19 +496,19 @@ present_layered_window(
 
 | Field | Detail |
 |-------|--------|
-| Intent | HWND付きウィンドウエンティティに WindowCompositor を作成・アタッチ |
+| Intent | HWND付きウィンドウエンティティに WindowD3D11Compositor を作成・アタッチ |
 | Requirements | 3.1, 6.1 |
 
 **動作**:
 - Stage: GraphicsSetup
-- Query: `Added<WindowHandle>` かつ `Without<WindowCompositor>` のエンティティ
+- Query: `Added<WindowHandle>` かつ `Without<WindowD3D11Compositor>` のエンティティ
 - GraphicsCoreからID2D1DeviceContextを取得
-- WindowCompositorを作成し、エンティティに挿入
+- WindowD3D11Compositorを作成し、エンティティに挿入
 - 既存の `init_window_graphics` を**置換**
 
 **Dependencies**:
 - Inbound: GraphicsCore — D2D DeviceContext (P0)
-- Outbound: WindowCompositor — 作成 (P0)
+- Outbound: WindowD3D11Compositor — 作成 (P0)
 
 ---
 
@@ -524,9 +524,9 @@ present_layered_window(
 - 既存の `render_surface`（per-entity DComp Surface描画）を**置換**
 
 **合成描画ループ**:
-1. per-windowの `WindowCompositor` をイテレート
+1. per-windowの `WindowD3D11Compositor` をイテレート
 2. ウィンドウに属するエンティティをz-order順（Children関係のbreadth-first）でソート
-3. WindowCompositorの composition_bitmap を D2D DeviceContextにSetTarget
+3. WindowD3D11Compositorの composition_bitmap を D2D DeviceContextにSetTarget
 4. BeginDraw → Clear(transparent)
 5. 各エンティティについて:
    - `GlobalArrangement.transform` で SetTransform
@@ -537,7 +537,7 @@ present_layered_window(
 7. CopyFromBitmap(composition_bitmap → staging_bitmap)
 
 **Dependencies**:
-- Inbound: WindowCompositor — 合成描画先 (P0)
+- Inbound: WindowD3D11Compositor — 合成描画先 (P0)
 - Inbound: GlobalArrangement — 座標変換 + Opacity (P0)
 - Inbound: GraphicsCommandList — ウィジェット描画データ (P0)
 - Inbound: Visual — is_visible判定 (P1)
@@ -554,7 +554,7 @@ present_layered_window(
 
 | Field | Detail |
 |-------|--------|
-| Intent | WindowCompositorのステージングビットマップをHBITMAPに転送し、UpdateLayeredWindowで表示 |
+| Intent | WindowD3D11CompositorのステージングビットマップをHBITMAPに転送し、UpdateLayeredWindowで表示 |
 | Requirements | 4.1, 4.4, 4.5 |
 
 **動作**:
@@ -562,13 +562,13 @@ present_layered_window(
 - 既存の `commit_composition`（DComp Commit）を**置換**
 
 **フロー**:
-1. 各 `WindowCompositor` の staging bitmap を Map()
+1. 各 `WindowD3D11Compositor` の staging bitmap を Map()
 2. `UlwTransfer::transfer_to_hbitmap()` でDIBSectionにコピー
 3. `UlwTransfer::present_layered_window()` でULW呼び出し
 4. エラー発生時: tracing::warnでログ記録、次フレームで再試行（明示的なリトライカウンタなし）
 
 **Dependencies**:
-- Inbound: WindowCompositor — ステージングビットマップ + HBITMAP + MemoryDC (P0)
+- Inbound: WindowD3D11Compositor — ステージングビットマップ + HBITMAP + MemoryDC (P0)
 - External: UlwTransfer (com/ulw.rs) — Win32 API呼び出し (P0)
 
 ---
@@ -600,7 +600,7 @@ present_layered_window(
 ```mermaid
 erDiagram
     Window ||--o{ Entity : contains
-    Window ||--|| WindowCompositor : has
+    Window ||--|| WindowD3D11Compositor : has
     Window ||--|| WindowHandle : has
 
     Entity ||--|| Visual : has
@@ -608,7 +608,7 @@ erDiagram
     Entity ||--|| GlobalArrangement : has
     Entity ||--o| GraphicsCommandList : may_have
 
-    WindowCompositor {
+    WindowD3D11Compositor {
         ID2D1Bitmap1 composition_bitmap
         ID2D1Bitmap1 staging_bitmap
         HBITMAP hbitmap_dib
@@ -636,14 +636,14 @@ erDiagram
 ```
 
 **Aggregates and Boundaries**:
-- **Window Aggregate**: Window + WindowCompositor + WindowHandle。ウィンドウリソースのライフサイクルはWindowエンティティに紐づく
+- **Window Aggregate**: Window + WindowD3D11Compositor + WindowHandle。ウィンドウリソースのライフサイクルはWindowエンティティに紐づく
 - **Visual Entity Aggregate**: Visual + Arrangement + GlobalArrangement + GraphicsCommandList。各エンティティの論理状態と描画データ
-- **分離ポイント**: WindowCompositor（per-window）が複数の Visual Entity（per-entity）の GraphicsCommandList を合成する1:N関係
+- **分離ポイント**: WindowD3D11Compositor（per-window）が複数の Visual Entity（per-entity）の GraphicsCommandList を合成する1:N関係
 
 **Business Rules & Invariants**:
 - `global_opacity = parent.global_opacity * local.opacity`（`is_visible == false` の場合は `0.0`）
 - `global_opacity ∈ [0.0, 1.0]`
-- WindowCompositor の全ビットマップリソースは同一サイズ
+- WindowD3D11Compositor の全ビットマップリソースは同一サイズ
 - 合成描画の z-order は Children 関係の depth-first pre-order に従う
 
 ### GlobalArrangement 拡張（Logical Data Model）
@@ -677,18 +677,18 @@ GlobalArrangement {
 
 | Error Category | Source | Response | Recovery |
 |----------------|--------|----------|----------|
-| D2D Bitmap作成失敗 | compositor_init_system | tracing::error + WindowCompositor::invalidate() | 次フレームで再作成試行 |
+| D2D Bitmap作成失敗 | compositor_init_system | tracing::error + WindowD3D11Compositor::invalidate() | 次フレームで再作成試行 |
 | BeginDraw/EndDraw失敗 | composite_render_system | tracing::error + フレームスキップ | 次フレームで再描画 |
 | CopyFromBitmap失敗 | composite_render_system | tracing::error + フレームスキップ | 次フレームで再試行 |
 | Map失敗 | ulw_present_system (via UlwTransfer) | tracing::error + フレームスキップ | 次フレームで再試行 |
 | UpdateLayeredWindow失敗 | ulw_present_system (via UlwTransfer) | tracing::warn + 次フレーム再試行 | 4.5: 自動リトライ |
-| デバイスロスト (DXGI_ERROR_DEVICE_REMOVED) | 任意のD2D操作 | GraphicsCore::invalidate() → 全WindowCompositor::invalidate() | 既存有効化フロー維持 |
-| リサイズ時ビットマップ作成失敗 | WindowCompositor::resize() | tracing::error + 旧サイズ維持 | 次回リサイズで再試行 |
+| デバイスロスト (DXGI_ERROR_DEVICE_REMOVED) | 任意のD2D操作 | GraphicsCore::invalidate() → 全WindowD3D11Compositor::invalidate() | 既存有効化フロー維持 |
+| リサイズ時ビットマップ作成失敗 | WindowD3D11Compositor::resize() | tracing::error + 旧サイズ維持 | 次回リサイズで再試行 |
 
 **デバイスロスト対応**:
 - 既存の `init_graphics_core` システムが `GraphicsCore.is_valid()` を監視して再初期化
 - `HasGraphicsResources.set_changed()` で全GPUリソースコンポーネントの再初期化をトリガー（既存パターン維持）
-- WindowCompositor は `generation` カウンタでリソース世代を追跡。`compositor_init_system` で世代不一致を検出して再作成
+- WindowD3D11Compositor は `generation` カウンタでリソース世代を追跡。`compositor_init_system` で世代不一致を検出して再作成
 
 ---
 
@@ -696,14 +696,14 @@ GlobalArrangement {
 
 ### Unit Tests
 - `GlobalArrangement::global_opacity` の累積計算テスト（parent 0.8 × child 0.5 = 0.4）
-- `WindowCompositor::new()` / `resize()` / `invalidate()` のライフサイクルテスト
+- `WindowD3D11Compositor::new()` / `resize()` / `invalidate()` のライフサイクルテスト
 - `UlwTransfer::transfer_to_hbitmap()` のpitch/strideが異なるケースでの正しいコピー検証
 - `UlwTransfer::present_layered_window()` のBLENDFUNCTION構成テスト
 
 ### Integration Tests
 - `composite_render_system`: 複数エンティティのGraphicsCommandListが正しい z-order・transform・opacity で合成されること
 - `compositor_init_system` + `composite_render_system` + `ulw_present_system` の完全パイプライン統合テスト
-- デバイスロスト後のWindowCompositor自動再初期化テスト
+- デバイスロスト後のWindowD3D11Compositor自動再初期化テスト
 - ウィンドウリサイズ後の合成ビットマップ正常再作成テスト
 
 ### E2E Tests (Phase-specific — 子仕様検証基準を兼ねる)
@@ -740,7 +740,7 @@ graph LR
 
 **担当範囲**:
 - `com/ulw.rs` 新規作成: ULW ユーティリティ関数（ただしULW呼び出しはPhase 3）
-- `ecs/graphics/compositor.rs` 新規作成: WindowCompositor コンポーネント定義
+- `ecs/graphics/compositor.rs` 新規作成: WindowD3D11Compositor コンポーネント定義
 - `ecs/graphics/compositor_systems.rs` 新規作成: compositor_init_system, composite_render_system
 - `ecs/layout/arrangement.rs` 拡張: GlobalArrangement に global_opacity フィールド追加
 - `ecs/layout/systems.rs` 拡張: propagate_global_arrangements に Opacity 累積ロジック追加
@@ -749,7 +749,7 @@ graph LR
 **並行稼働**: DComp パイプラインは変更せず稼働継続。新システムは world.rs に**登録しない**（独立テスト）
 
 **完了基準（DoD）**:
-- `WindowCompositor::new()` が ID2D1Bitmap1 + HBITMAP リソースを正しく作成
+- `WindowD3D11Compositor::new()` が ID2D1Bitmap1 + HBITMAP リソースを正しく作成
 - `composite_render_system` が GraphicsCommandList を z-order + transform + opacity で合成描画
 - `global_opacity` 累積が unit test でパス
 - 新パイプライン単体での描画結果が taffy_flex_demo 相当と視覚的に一致
