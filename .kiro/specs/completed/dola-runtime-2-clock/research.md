@@ -94,3 +94,33 @@
 - [QueryPerformanceFrequency (profileapi.h)](https://learn.microsoft.com/windows/win32/api/profileapi/nf-profileapi-queryperformancefrequency) — 周波数取得 API
 - [Acquiring high-resolution time stamps](https://learn.microsoft.com/windows/win32/sysinfo/acquiring-high-resolution-time-stamps) — 高精度タイマー設計ガイド
 - [windows crate 0.62.2](https://docs.rs/windows/0.62.2/windows/) — Rust Win32 バインディング
+
+---
+
+## Benchmark Results (Task 4)
+
+**実施日**: 2026-02-15  
+**環境**: Windows (dev profile, unoptimized + debuginfo)  
+**手法**: `std::time::Instant` による手動計測（10,000 回反復、1,000 回ウォームアップ）
+
+### 計測結果
+
+| 項目 | 値 |
+|------|-----|
+| 反復回数 | 10,000 |
+| 合計時間 | 806 μs |
+| **平均呼出時間** | **80.6 ns/call** |
+| 60FPS フレーム間隔比 | 0.000484% |
+| 現在の `now()` 値 | 291,427.069592 秒（OS 起動後 約 81.0 時間 ≒ 3.4 日） |
+
+### 分析
+
+- **性能**: 平均 80.6 ns/call（デバッグビルド）。リリースビルドではさらに高速化が見込まれる
+- **frequency 毎回取得のコスト**: QPC + QPF の 2 回 API 呼び出しで 80.6 ns。frequency をキャッシュした場合との差はナノ秒オーダーであり、ステートレス設計の維持が妥当
+- **60FPS 影響**: 16.67ms フレーム間隔に対して 0.000484%。**完全に無視可能**
+- **結論**: 「性能影響はナノ秒オーダー」の design.md の主張を実測で確認。frequency 毎回取得によるステートレス設計を維持する判断は妥当
+
+### now() 返却値の検証
+
+- OS 起動後 291,427 秒 ≒ 81.0 時間 ≒ 3.4 日（実際の uptime と整合）
+- 値は正の有限値であり、f64 精度で小数点以下 6 桁（マイクロ秒級）を維持
