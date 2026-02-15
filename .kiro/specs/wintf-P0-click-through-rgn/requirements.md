@@ -13,10 +13,11 @@ wintf フレームワークにおいて、HitTestMode::None エンティティ�
 
 ### 技術要件
 - DirectComposition (WS_EX_NOREDIRECTIONBITMAP) との互換性検証が必要（互換性が確認できない場合は DirectComposition 利用を破棄する判断もあり得る）
-- ビットマップベースのリージョン構築により、ヒットテスト負荷を最小化
-- エンティティが自身の不透明領域をビットマップにプッシュする方式
+- **矩形ベースのリージョン構築**により、実装コストとヒットテスト負荷を最小化（実験的アプローチとしてシンプルさを優先）
+- エンティティの bounds（`GlobalArrangement.bounds`）を直接 HRGN に合成する方式
 - レイアウト変更時にリージョンを動的に更新
 - ドラッグ中のリージョン一時拡張（ドラッグ操作の継続性保証）
+- **継続可能性**: 将来的に HitTestMode::AlphaMask のピクセル単位クリックスルーが必要になった場合は、ビットマップ中間表現方式への拡張を許容
 - **本仕様は実験的性質を持ち、パフォーマンス検証結果によってアプローチの根本的変更もあり得る**
 
 ## Requirements
@@ -30,34 +31,25 @@ wintf フレームワークにおいて、HitTestMode::None エンティティ�
 3. The wintf shall execute region updates independently from the main rendering loop
 4. The wintf shall maintain region update timing accuracy within ±50ms
 
-### Requirement 2: ビットマップベースのリージョン構築
-**Objective:** 開発者として、ウィンドウサイズの1bitビットマップを基にウィンドウリージョンを構築したい。これにより、高頻度なヒットテストクエリを回避し、更新負荷を最小化できる。
+### Requirement 2: 矩形ベースのリージョン構築
+**Objective:** 開発者として、エンティティの矩形 bounds を直接 HRGN に合成してウィンドウリージョンを構築したい。これにより、実装をシンプルに保ちながらクリックスルー機能を実現できる。
 
 #### Acceptance Criteria
-1. When window region update is triggered, the wintf shall allocate a 1-bit bitmap matching the physical pixel dimensions of the window
-2. The wintf shall initialize the bitmap with all pixels set to transparent (0: click-through)
-3. When bitmap is ready, the wintf shall invoke entity rendering pass to populate opaque regions
-4. When bitmap population is complete, the wintf shall convert the bitmap to HRGN representation
-5. The wintf shall apply the constructed HRGN to the target window using SetWindowRgn
-6. The wintf shall release bitmap resources after HRGN construction
+1. When window region update is triggered, the wintf shall query all entities with GlobalArrangement and HitTest components (note: entities without HitTest component default to HitTestMode::Bounds)
+2. When an entity has HitTestMode other than None (i.e., Bounds, AlphaMask, or NamedRegions), the wintf shall collect the entity's physical bounds (GlobalArrangement.bounds)
+3. When an entity has HitTestMode::None, the wintf shall skip the entity (leaving the region click-through)
+4. For each collected bounds, the wintf shall snap the rectangle to the configured grid size and create a rectangular region using CreateRectRgn
+5. The wintf shall combine all rectangular regions into a single HRGN using CombineRgn(RGN_OR)
+6. The wintf shall apply the combined HRGN to the target window using SetWindowRgn
+7. The wintf shall delete temporary HRGN objects after combination to prevent resource leaks
 
-### Requirement 3: エンティティによる不透明領域書き込み
-**Objective:** 開発者として、各エンティティが自身の不透明領域を1bitビットマップに書き込めるようにしたい。これにより、HitTestMode::None 以外のエンティティのみがクリック可能領域として登録される。
-
-#### Acceptance Criteria
-1. When entity rendering pass is invoked, the wintf shall iterate all entities with HitTest component (note: entities without HitTest component default to HitTestMode::Bounds)
-2. When an entity has HitTestMode other than None (i.e., Bounds, AlphaMask, or NamedRegions), the wintf shall write the entity's physical bounds as opaque (1) to the bitmap
-3. When an entity has HitTestMode::None, the wintf shall skip writing to the bitmap (leaving the region transparent)
-4. The wintf shall clip entity bounds to the window dimensions before writing to bitmap
-5. The wintf shall write entity regions to bitmap in parent-to-child hierarchy order to respect z-ordering
-
-### Requirement 4: ビットマップ解像度の構成可能性
-**Objective:** 開発者として、リージョン構築時のビットマップ解像度単位を調整可能な定数として宣言したい。これにより、メモリ使用量とクリック精度のトレードオフを調整できる。
+### Requirement 3: グリッドスナップの構成可能性
+**Objective:** 開発者として、リージョン構築時のグリッドサイズを調整可能な定数として宣言したい。これにより、HRGN の複雑度とクリック精度のトレードオフを調整できる。
 
 #### Acceptance Criteria
-1. The wintf shall declare the bitmap resolution scale factor as a named constant (default: 4x4 physical pixels per bitmap pixel)
-2. The wintf shall use the resolution scale factor consistently throughout bitmap allocation and entity bounds conversion
-3. The wintf shall allow resolution scale modification via a single constant definition
+1. The wintf shall declare the grid snap size as a named constant (default: 4x4 physical pixels)
+2. The wintf shall snap entity bounds to the grid before creating rectangular regions
+3. The wintf shall allow grid size modification via a single constant definition
 
 ### Requirement 5: レイアウト変更検知と動的更新
 **Objective:** 開発者として、ECS レイアウトシステムの変更を検知してリージョンを即座に更新したい。これにより、エンティティの移動・サイズ変更時にクリックスルー領域が正確に反映される。
@@ -67,8 +59,8 @@ wintf フレームワークにおいて、HitTestMode::None エンティティ�
 2. When region is marked as dirty and region update timer elapses, the wintf shall trigger immediate region reconstruction
 3. If layout changes occur within the 0.25-second update interval, the wintf shall defer region update to the next scheduled update cycle
 
-### Requirement 6: ドラッグ操作中のリージョン一時拡張
-**Objective:** 開発者として、ウィンドウドラッグ操作中はリージョンをウィンドウ全体に拡張したい。これにより、ドラッグ開始エンティティから意図せずマウスが外れた場合でも、ドラッグ操作が継続できる。
+### Requirement 5: ドラッグ操作中のリージョン一時拡張
+**Objective:** 開4者として、ウィンドウドラッグ操作中はリージョンをウィンドウ全体に拡張したい。これにより、ドラッグ開始エンティティから意図せずマウスが外れた場合でも、ドラッグ操作が継続できる。
 
 #### Acceptance Criteria
 1. When window drag operation starts, the wintf shall expand the window region to cover the entire window bounds
@@ -76,7 +68,7 @@ wintf フレームワークにおいて、HitTestMode::None エンティティ�
 3. When window drag operation completes, the wintf shall restore region to the hit-test-based construction on the next update cycle
 4. When drag operation is cancelled, the wintf shall restore region to the hit-test-based construction on the next update cycle
 
-### Requirement 7: DirectComposition互換性検証
+### Requirement 6: DirectComposition互換性検証
 **Objective:** 開発者として、SetWindowRgn がウィンドウスタイル WS_EX_NOREDIRECTIONBITMAP と併用可能であることを検証したい。これにより、DirectComposition による描画とクリックスルー機能が同時に動作するかを確認し、不可能な場合は DirectComposition 利用破棄の判断材料とする。
 
 #### Acceptance Criteria
@@ -85,7 +77,7 @@ wintf フレームワークにおいて、HitTestMode::None エンティティ�
 3. If SetWindowRgn fails with WS_EX_NOREDIRECTIONBITMAP, the wintf shall log an error with HRESULT code and detailed compatibility diagnostics
 4. If visual rendering is broken after SetWindowRgn, the wintf shall log a critical incompatibility warning
 
-### Requirement 8: クロスプロセスクリックスルー
+### Requirement 7: クロスプロセスクリックスルー
 **Objective:** エンドユーザーとして、HitTestMode::None エンティティの領域をクリックした際、他のプロセスのウィンドウにクリックイベントが貫通することを期待する。これにより、デスクトップマスコットの透過領域を通してデスクトップアイコンや他のアプリケーションを操作できる。
 
 #### Acceptance Criteria
@@ -93,16 +85,16 @@ wintf フレームワークにおいて、HitTestMode::None エンティティ�
 2. When user clicks on a non-HitTestMode::None entity area, the wintf shall capture the click event and prevent pass-through
 3. The wintf shall achieve cross-process click-through without requiring WS_EX_TRANSPARENT or HTTRANSPARENT
 
-### Requirement 9: パフォーマンス測定と最適化指針
+### Requirement 8: パフォーマンス測定と最適化指針
 **Objective:** 開発者として、リージョン更新処理のパフォーマンスを測定し、実用性を判断したい。これにより、本アプローチの継続可否を決定できる。
 
 #### Acceptance Criteria
-1. The wintf shall measure and log the time required for each region update cycle (bitmap allocation, entity rendering, HRGN conversion)
+1. The wintf shall measure and log the time required for each region update cycle (entity query, bounds snapping, HRGN creation and combination)
 2. When region update time exceeds 16ms (60 FPS threshold), the wintf shall log a performance warning
 3. The wintf shall provide configuration to disable region updates for performance comparison
 4. If sustained region update overhead degrades application responsiveness, the wintf shall document the incompatibility for architectural decision
 
-### Requirement 10: モジュール化とリジェクション容易性
+### Requirement 9: モジュール化とリジェクション容易性
 **Objective:** 開発者として、実験的実装が失敗した場合に容易に機能を削除できるようにしたい。これにより、パフォーマンスや互換性の問題が判明した際、既存コードへの影響を最小限に抑えながら機能を無効化できる。
 
 #### Acceptance Criteria
