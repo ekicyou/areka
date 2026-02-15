@@ -5,8 +5,6 @@ use std::fmt;
 use crate::DolaError;
 use crate::value::DynamicValue;
 
-use super::InstanceState;
-
 /// 評価済み変数値（補間計算の出力）。
 #[derive(Debug, Clone, PartialEq)]
 pub enum EvaluatedValue {
@@ -69,6 +67,12 @@ impl fmt::Display for RuntimeError {
 }
 
 impl std::error::Error for RuntimeError {}
+
+impl From<Vec<DolaError>> for RuntimeError {
+    fn from(errors: Vec<DolaError>) -> Self {
+        Self::CompileError(errors)
+    }
+}
 
 /// Start コマンドの返却値。
 #[derive(Debug, Clone, PartialEq)]

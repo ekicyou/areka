@@ -8,21 +8,15 @@
 //! - HWND をキーとしたエントリ管理（HashMap）
 //! - try_tick_world() 終了時に全エントリをクリア
 
-use std::cell::{Cell, RefCell};
+use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
 
 use tracing::trace;
 use windows::Win32::Foundation::{HWND, LRESULT, POINT};
 use windows::Win32::Graphics::Gdi::ScreenToClient;
-use windows::Win32::UI::WindowsAndMessaging::{
-    GWL_EXSTYLE, GetWindowLongPtrW, KillTimer, SWP_FRAMECHANGED, SWP_NOACTIVATE, SWP_NOMOVE,
-    SWP_NOSIZE, SWP_NOZORDER, SetTimer, SetWindowLongPtrW, SetWindowPos,
-};
 
-use crate::ecs::layout::hit_test::{
-    PhysicalPoint, hit_test_in_window, is_in_click_through_area_in_window,
-};
+use crate::ecs::layout::hit_test::{PhysicalPoint, hit_test_in_window};
 use crate::ecs::world::EcsWorld;
 
 // HTCLIENT = 1, HTTRANSPARENT = -1
@@ -32,16 +26,6 @@ const HTCLIENT: i32 = 1;
 /// HTTRANSPARENT 返却後も PointerState は正常にクリーンアップされる。
 /// ドラッグ中は DragState ガードで HTCLIENT を強制返却する。
 const HTTRANSPARENT: i32 = -1;
-
-/// クリックスルー復帰チェック用タイマーID
-///
-/// WS_EX_TRANSPARENT 設定中、マウス位置を監視してヒット可能領域に
-/// 入ったらスタイルを解除するためのタイマー。
-pub(crate) const CLICK_THROUGH_TIMER_ID: usize = 0xC71C; // "CLTC" mnemonic
-
-/// クリックスルータイマーの間隔（ミリ秒）
-/// 16ms ≒ 60fps のマウス位置チェック
-const CLICK_THROUGH_TIMER_INTERVAL_MS: u32 = 16;
 
 // ============================================================================
 // キャッシュエントリ
@@ -117,27 +101,6 @@ pub fn cached_nchittest(
     entity: bevy_ecs::prelude::Entity,
     ecs_world: &Rc<RefCell<EcsWorld>>,
 ) -> Option<LRESULT> {
-    // WS_EX_TRANSPARENT が有効な間は無条件で HTTRANSPARENT を返す。
-    // DWM Step 1 で弾かれるはずだが、同一スレッド内の WM_NCHITTEST は
-    // 引き続き呼ばれるため、ここでもガードする必要がある。
-    let is_transparent = TRANSPARENT_WINDOWS.with(|set| set.borrow().contains(&(hwnd.0 as isize)));
-    if is_transparent {
-        // ドラッグ中は HTCLIENT を返してドラッグを継続
-        let is_dragging = crate::ecs::drag::read_drag_state(|state| {
-            matches!(
-                state,
-                crate::ecs::drag::DragState::Preparing { .. }
-                    | crate::ecs::drag::DragState::JustStarted { .. }
-                    | crate::ecs::drag::DragState::Dragging { .. }
-            )
-        });
-        if is_dragging {
-            disable_click_through(hwnd);
-            return Some(LRESULT(HTCLIENT as isize));
-        }
-        return Some(LRESULT(HTTRANSPARENT as isize));
-    }
-
     // キャッシュヒット判定
     if let Some(lresult) = lookup(hwnd, screen_point) {
         trace!(
@@ -194,14 +157,6 @@ pub fn cached_nchittest(
 
     // キャッシュに挿入
     insert(hwnd, screen_point, lresult);
-
-    // WS_EX_TRANSPARENT トグル:
-    // HTTRANSPARENT はクロスプロセスでは機能しないため、
-    // Win32 ヒットテストレベルで透過させる WS_EX_TRANSPARENT を動的に設定する。
-    // タイマーで復帰をチェックし、ヒット可能になったら解除する。
-    if lresult.0 == HTTRANSPARENT as isize {
-        enable_click_through(hwnd);
-    }
 
     trace!(
         hwnd = ?hwnd,
@@ -392,11 +347,16 @@ pub fn on_click_through_timer(
         || client_pt.y < rect.top
         || client_pt.y >= rect.bottom
     {
-        // クライアント領域外 → WS_EX_TRANSPARENT 維持（タイマー継続）
+        // クライアント領域外 → WS_EX_TRANSPARENT 解除
+        // DWM は WS_EX_TRANSPARENT を見てウィンドウをスキップするため、
+        // カーソルがウィンドウ外にいる間に解除しておかないと、
+        // 戻ってきた時に WM_NCHITTEST が呼ばれず永久ロックになる。
+        // カーソルが再度 HitTest::None 領域に入れば cached_nchittest で再有効化される。
         println!(
-            "[click-through-timer] cursor outside client rect ({},{}) rect=({},{},{},{}), keeping transparent",
+            "[click-through-timer] cursor outside client rect ({},{}) rect=({},{},{},{}), disabling",
             client_pt.x, client_pt.y, rect.left, rect.top, rect.right, rect.bottom
         );
+        disable_click_through(hwnd);
         return Some(LRESULT(0));
     }
 
