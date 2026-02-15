@@ -123,6 +123,8 @@ _Parent: Req 5.1, 5.2, 5.3, 5.4, 5.5_
 4. When 全トランジションが終了し変数が凍結状態にある場合, the DolaRuntime shall 空の結果を返す（値変化なし）。
 5. The DolaRuntime shall 現在時刻を OS 起動時からの秒数（f64）として受け取る。
 6. The SubscriptionManager shall 差分検出のために前回配信値を subscriber ごとに保持し、現在値（evaluate 結果または凍結値）と比較する。
+7. The DolaRuntime shall `update()` 実行時に finish_deadline 到達インスタンスを検知し、Concluded に遷移させる。
+8. The DolaRuntime shall `update()` 実行時に自然終了したインスタンス（全タイムテーブルエントリが消失）を検知し、自動的に Concluded 遷移と削除を実行する。
 
 ---
 
@@ -156,6 +158,7 @@ _Parent: Req 8.1, 8.2, 8.3, 8.4, 8.5_
 4. While インスタンスが Paused 状態にある場合, the InstanceManager shall Resume コマンドで `Playing` 状態への復帰を許可する。
 5. When 実行インスタンスが終了状態（Concluded / Cancelled / Trimmed / Compressed）に入った場合, the InstanceManager shall 当該インスタンスを再利用不可とし、以降の状態遷移を拒否する。
 6. The InstanceManager shall 同一ストーリーボード定義から複数の独立した実行インスタンスを同時に管理可能とする。
+7. When 実行インスタンスが Concluded 状態に遷移した場合, the InstanceManager shall 当該インスタンスを内部コレクション（HashMap）から即座に削除する。
 
 ---
 

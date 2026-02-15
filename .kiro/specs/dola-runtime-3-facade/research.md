@@ -165,6 +165,28 @@
   - 負の値（-1 以外）をエラーにする必要があるが、バリデーションは簡単
 - **Follow-up**: `RuntimeError::InvalidLoopCount(i32)` バリアント追加（Tier 1 core-types）、Tier 2 facade の start() バリデーション実装
 
+### Decision 7: 自然終了検知と自動削除（議題 D2）
+
+- **Context**: `TimelineManager::evaluate()` が全セグメント終了を検知してエントリを破棄しても、`InstanceManager` の `Playing` インスタンスが残り続ける。これによりメモリリーク、不正な pause/resume 受付、無駄な evaluate 試行が発生する。
+- **Alternatives Considered**:
+  1. **start() で finish_deadline 自動設定**: 1回再生の終了時刻を計算して finish_deadline に設定 → シンプルだが loop_count=-1 に対応できない、Tier 3 でループ実装時に変更必要
+  2. **update() で空インスタンス検知**: Playing インスタンスをフィルタし、タイムテーブルエントリが存在しない場合に Concluded 遷移 & 削除 → 全ケース対応、Tier 3 変更不要
+  3. **evaluate() でシグナル返却**: エントリ破棄時に group_id リストを返却 → API 変更、group_id 全体の判定が複雑
+- **Selected Approach**: Option 2 — `update()` で自然終了検知 & 即削除
+- **Rationale**:
+  - **「終わったら片付け」哲学**: 再生終了したインスタンスは即座に削除する方が、「ドーラさんは40秒で支度しな！」という設計思想に合致（終わったものには無頓着）
+  - **Tier 3 変更不要**: ループ実装時、TimelineManager がエントリを再追加し続けるので、「エントリあり = まだ終わってない」が自然に成立
+  - **全ケース対応**: loop_count=-1 の無限ループ、手動 Conclude、finish で明示的終了、全てに対応
+  - **パフォーマンス許容**: Playing インスタンスは通常数個（デスクトップマスコット用途）、`has_entries()` チェックは O(変数数) で軽量
+- **Trade-offs**:
+  - 毎 update で Playing インスタンス数 × `has_entries()` チェックが走る（~10行コード追加）
+  - Option 1 に比べてコード量がやや多い（finish_deadline 再利用の方がシンプル）
+- **Follow-up**: 
+  - TimelineManager に `has_entries(group_id) -> bool` メソッド追加
+  - update() 疑似コード Step 2.5 追加（Playing フィルタ → has_entries チェック → conclude_internal）
+  - Req 7 に AC 7-8 追加（finish_deadline チェック、自然終了検知）
+  - Req 9 に AC 7 追加（Concluded 遷移時の即削除）
+
 ## Risks & Mitigations
 - **二重バリデーションのパフォーマンス** — デスクトップマスコット用途では問題にならない規模。最適化は計測後に判断
 - **f64 精度の蓄積誤差** — アニメーション時間は数十秒程度。f64 の有効桁（15-16桁）で十分

@@ -571,6 +571,9 @@ impl TimelineManager {
 
     /// group_id の全エントリを削除 (8.5)
     pub fn remove_entries(&mut self, group_id: u64);
+
+    /// group_id に関連するタイムテーブルエントリが存在するか確認 (7.8)
+    pub fn has_entries(&self, group_id: u64) -> bool;
 }
 ```
 
@@ -906,6 +909,19 @@ fn update(&mut self, subscriber_id: u64, current_time: f64) -> Vec<(String, Eval
             name, current_time, self.instance_manager.instances()
         ) {
             values.insert(name.to_string(), val);
+        }
+    }
+
+    // Step 2.5: 自然終了検知（全タイムテーブルエントリ消失） (7.8)
+    let playing_instances: Vec<u64> = self.instance_manager.instances()
+        .iter()
+        .filter(|(_, inst)| inst.state == InstanceState::Playing)
+        .map(|(gid, _)| *gid)
+        .collect();
+    
+    for gid in playing_instances {
+        if !self.timeline_manager.has_entries(gid) {
+            self.conclude_internal(gid);  // Concluded 遷移 & 削除
         }
     }
 
