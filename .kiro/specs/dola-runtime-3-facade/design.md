@@ -44,7 +44,7 @@ Tier 1 `dola-runtime-core-types` が提供する型を消費する:
 
 | 型 | 用途 |
 |----|------|
-| `DolaDocument` | 指示書パース結果（DocumentStore が保持） |
+| `DolaDocument` | 指示書定義（DocumentStore が保持） |
 | `compile_storyboard()` | Start 時のコンパイル |
 | `CompiledStoryboard` / `CompiledSegment` | タイムテーブルのデータ |
 | `InterruptionPolicy` | メタデータ保持（Tier 3 で使用） |
@@ -176,7 +176,7 @@ effective_time = (current_time - start_time - pause_accumulated) * time_scale
 
 | Requirement | Summary | Components | Interfaces | Flows |
 |-------------|---------|------------|------------|-------|
-| 1.1-1.2 | 指示書パース | DocumentStore | `load_document()` | — |
+| 1.1 | 指示書の受信 | DocumentStore | `load_document()` | — |
 | 2.1-2.4 | 指示書差し替え | DocumentStore, DolaRuntime | `load_document()` | — |
 | 3.1-3.6 | Start コマンド | InstanceManager, TimelineManager | `start()` | Start フロー |
 | 4.1-4.3 | Start エラー | DolaRuntime | `start()`, `calculate_end_time()` | — |
@@ -184,7 +184,7 @@ effective_time = (current_time - start_time - pause_accumulated) * time_scale
 | 6.1-6.6 | 購読管理 | SubscriptionManager | `subscribe()` 等 | — |
 | 7.1-7.5 | Update 差分配信 | TimelineManager, SubscriptionManager | `update()` | Update サイクル |
 | 8.1-8.5 | タイムテーブル管理 | TimelineManager | 内部 API | Update サイクル |
-| 9.1-9.3 | 状態遷移適用 | InstanceManager | 内部 API | Start フロー |
+| 9.1-9.6 | 状態遷移の適用 | InstanceManager | 内部 API | Start フロー |
 | 10.1-10.3 | 同時再生 | TimelineManager | — | — |
 | 11.1-11.3 | Tier 2 暫定動作 | TimelineManager, DolaRuntime | — | — |
 
@@ -230,7 +230,7 @@ impl DolaRuntime {
     pub fn new() -> Self;
 
     /// 指示書読み込み (Req 1, 2)
-    pub fn load_document(&mut self, toml_str: &str) -> Result<(), RuntimeError>;
+    pub fn load_document(&mut self, doc: DolaDocument);
 
     /// ストーリーボード開始 (Req 3)
     pub fn start(&mut self, name: &str, start_time: f64) -> Result<StartResult, RuntimeError>;
@@ -487,7 +487,6 @@ erDiagram
 
 - `RuntimeError`（core-types 定義）を全メソッドで使用
 - **Fail Fast**: 無効な group_id、終了済みインスタンス、未定義ストーリーボードは即座にエラー
-- **Graceful Degradation**: `load_document` パース失敗時は既存定義保持
 - **Tier 2 暫定**: 競合は検出せず共存を許可（最新 group_id 優先）
 
 ---
@@ -497,7 +496,7 @@ erDiagram
 ### Unit Tests
 
 **DocumentStore**:
-- パース成功/失敗、定義上書き、ロールバック（失敗時の既存保持）
+- 定義保持、上書き
 
 **InstanceManager**:
 - group_id 採番の単調増加

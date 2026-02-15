@@ -10,11 +10,10 @@ DolaRuntime facade と4つの内部コンポーネント（DocumentStore, Instan
 
 - [ ] 1. DocumentStore の実装
   - `crates/dola/src/runtime/document_store.rs` を作成
-  - TOML パース → `DolaDocument` 保持
-  - パース失敗時のロールバック（既存定義保持）
+  - `DolaDocument` の保持と差し替え
   - ストーリーボード定義の取得メソッド
-  - 単体テスト: パース成功/失敗、上書き、ロールバック
-  - _Requirements: 1.1, 1.2, 2.1, 2.4_
+  - 単体テスト: 保持、上書き
+  - _Requirements: 1.1, 2.1, 2.4_
 
 - [ ] 2. InstanceManager の実装 (P)
   - `crates/dola/src/runtime/instance_manager.rs` を作成
