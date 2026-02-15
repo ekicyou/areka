@@ -436,7 +436,7 @@ present_layered_window(
 - `transfer_to_hbitmap`: staging bitmap を `Map()` → stride/pitch を考慮してDIBSection メモリへ行単位コピー → `Unmap()`
 - `present_layered_window`: `BLENDFUNCTION` 構造体を構築し `UpdateLayeredWindow(hwnd, None, ptDst, size, hdcSrc, ptSrc, 0, &blend, ULW_ALPHA)` 呼び出し
 - `window_pos: Option<(i32, i32)>` は `pptDst` パラメータに対応。`None` の場合は位置変更しない（サイズ変更のみ）
-- WS_EX_LAYERED ウィンドウは WM_PAINT を受信しないため、描画は完全に ULW 駆動となる
+- WS_EX_LAYERED ウィンドウは一般に WM_PAINT を受信しないとされるが、Phase 3開始前の動作検証で確認が必要。描画は基本的に ULW 駆動を想定
 
 ---
 
@@ -779,8 +779,11 @@ graph LR
 - `areka/src/main.rs`: Shell/Balloon の `WS_EX_NOREDIRECTIONBITMAP` → `WS_EX_LAYERED`
 - `ecs/window_proc/handlers.rs`: WM_PAINT / WM_ERASEBKGND / WM_SIZE ハンドラを ULW 方式に更新
 
-**前提条件**: 子仕様2完了
-**WS_EX_LAYERED 注意点**: WS_EX_LAYERED ウィンドウは WM_PAINT を受信しない。描画は完全に ulw_present_system から駆動される
+**前提条件**: 
+- 子仕様2完了
+- **必須検証**: WS_EX_LAYERED ウィンドウでの WM_PAINT 発火動作確認（research.md § Research Needed参照）
+
+**WS_EX_LAYERED 注意点**: WS_EX_LAYERED ウィンドウは一般に WM_PAINT を受信しないとされる。動作検証後、描画を ulw_present_system から駆動する設計を確定
 
 **完了基準（DoD）**:
 - UpdateLayeredWindow での透過ウィンドウ表示が動作

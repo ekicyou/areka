@@ -478,7 +478,10 @@ IWICBitmap → ID2D1RenderTarget (CreateWicBitmapRenderTarget) → 直接描画
 | WM_SIZE→リサイズ | ✅ WM_SIZE検出は既存 | **新規**: 合成Bitmapリサイズトリガーの追加 |
 | WM_PAINT最小化 | ✅ 既存ValidateRect | WS_EX_LAYEREDでWM_PAINT未発火の可能性→検証必要 |
 
-**Research Needed**: `WS_EX_LAYERED` ウィンドウでの `WM_PAINT` 発火動作の確認
+**⚠️ Phase 3 前提条件 (Research Needed)**: `WS_EX_LAYERED` ウィンドウでの `WM_PAINT` 発火動作の確認
+- 子仕様3開始前に実機検証を実施
+- 検証方法: 最小構成のWS_EX_LAYEREDウィンドウを作成し、WM_PAINTハンドラでログ出力
+- 設計への影響: WM_PAINT発火が確認された場合、handlers.rsの最小ペア実装が必須。未発火の場合、ハンドラ自体が不要
 
 ### 10.8 Requirement 8: 既存仕様影響
 
