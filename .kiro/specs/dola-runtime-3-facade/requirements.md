@@ -12,15 +12,17 @@
 
 ## Requirements
 
-### Requirement 1: 指示書の受信
+### Requirement 1: 指示書の受信とバリデーション
 
-_Parent: Req 1.1_
+_Parent: Req 1.1, 1.5_
 
-**Objective:** オーケストレーターとして、デシリアライズ済みの `DolaDocument` をランタイムに配信し、変数・トランジション・ストーリーボードの定義を保持させたい。シリアライズ形式（TOML/JSON/YAML）の選択と変換は呼び出し側の責務であり、dola のスコープ外とする。
+**Objective:** オーケストレーターとして、デシリアライズ済みの `DolaDocument` をランタイムに配信し、バリデーション成功時のみ変数・トランジション・ストーリーボードの定義を保持させたい。シリアライズ形式（TOML/JSON/YAML）の選択と変換は呼び出し側の責務であり、dola のスコープ外とする。
 
 #### Acceptance Criteria
 
-1. When `load_document(doc: DolaDocument)` が呼び出された場合, the DocumentStore shall `DolaDocument` を内部に保持する。
+1. When `load_document(doc: DolaDocument)` が呼び出された場合, the DocumentStore shall `doc.validate()` でバリデーションを実行する。
+2. If バリデーションが成功した場合, then the DocumentStore shall `DolaDocument` を内部に保持する。
+3. If バリデーションが失敗した場合, then the DolaRuntime shall `RuntimeError::CompileError(Vec<DolaError>)` を返却し、既存の document を保持する（無効な指示書を受け入れない）。
 
 ---
 

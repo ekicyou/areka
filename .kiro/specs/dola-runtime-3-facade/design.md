@@ -229,8 +229,8 @@ pub struct DolaRuntime {
 impl DolaRuntime {
     pub fn new() -> Self;
 
-    /// 指示書読み込み (Req 1, 2)
-    pub fn load_document(&mut self, doc: DolaDocument);
+    /// 指示書読み込み (Req 1)
+    pub fn load_document(&mut self, doc: DolaDocument) -> Result<(), RuntimeError>;
 
     /// ストーリーボード開始 (Req 3)
     pub fn start(&mut self, name: &str, start_time: f64) -> Result<StartResult, RuntimeError>;
@@ -487,6 +487,7 @@ erDiagram
 
 - `RuntimeError`（core-types 定義）を全メソッドで使用
 - **Fail Fast**: 無効な group_id、終了済みインスタンス、未定義ストーリーボードは即座にエラー
+- **Graceful Degradation**: `load_document` バリデーション失敗時は既存定義を維持 (Req 1.3)
 - **Tier 2 暫定**: 競合は検出せず共存を許可（最新 group_id 優先）
 
 ---
@@ -496,7 +497,7 @@ erDiagram
 ### Unit Tests
 
 **DocumentStore**:
-- 定義保持、上書き
+- 定義保持、上書き、バリデーション失敗時の既存保持
 
 **InstanceManager**:
 - group_id 採番の単調増加

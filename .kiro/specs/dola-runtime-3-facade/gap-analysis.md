@@ -79,7 +79,7 @@ runtime = ["dep:interpolation"]
 
 | 要件 | 既存資産 | ギャップ | タグ |
 |------|---------|---------|------|
-| **Req 1**: 指示書受信 | `DolaDocument`（serde 定義済み） | **Missing**: `DocumentStore` 構造体（`DolaDocument` 保持のみ、パースは外部責務） |
+| **Req 1**: 指示書受信とバリデーション | `DolaDocument`（serde 定義済み）、`Validate` trait | **Missing**: `DocumentStore` 構造体（`doc.validate()` 実行 + 成功時のみ保持、失敗時は既存保持） |
 | **Req 2**: 指示書差し替え | `DolaDocument` フィールドは全て `BTreeMap` | **Missing**: 変数引き継ぎロジック、凍結状態管理 |
 | **Req 3**: Start | `compile_storyboard()` 完全実装、`CompiledStoryboard` | **Missing**: `InstanceManager`、group_id 生成、タイムテーブル挿入 |
 | **Req 4**: Start エラー | `RuntimeError::StoryboardNotFound`, `ZeroDurationWithLoop` 定義済み | **Missing**: `calculate_end_time()` 実装、`loop_count` + `total_base_duration` からの計算 |
@@ -215,7 +215,6 @@ effective_time = (current_time - start_time - pause_accumulated) * time_scale
 ### 必須決定事項
 
 1. **`runtime` feature gate**: 現行維持 or このタイミングで削除
-2. **`load_document` 返り値**: パース責務の外部化に伴い、`Result<(), RuntimeError>` を維持するか infallible (`fn load_document(&mut self, doc: DolaDocument)`) にするか
 
 ### Research Needed（設計フェーズで調査）
 

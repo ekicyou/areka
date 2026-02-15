@@ -10,10 +10,11 @@ DolaRuntime facade と4つの内部コンポーネント（DocumentStore, Instan
 
 - [ ] 1. DocumentStore の実装
   - `crates/dola/src/runtime/document_store.rs` を作成
-  - `DolaDocument` の保持と差し替え
+  - `doc.validate()` によるバリデーション実行
+  - バリデーション成功時のみ `DolaDocument` を保持、失敗時は既存保持
   - ストーリーボード定義の取得メソッド
-  - 単体テスト: 保持、上書き
-  - _Requirements: 1.1, 2.1, 2.4_
+  - 単体テスト: 保持、上書き、バリデーション失敗時の既存保持
+  - _Requirements: 1.1, 1.5, 2.1, 2.4_
 
 - [ ] 2. InstanceManager の実装 (P)
   - `crates/dola/src/runtime/instance_manager.rs` を作成
