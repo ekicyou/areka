@@ -450,6 +450,12 @@ fn calculate_effective_time(current_time: f64, instance: &StoryboardInstance) ->
 
 **Key Decision**: `start_time` → `loop_start_time` への1箇所の置換のみ。`loop_start_time` の初期値は `start_time` なので、ループなし（loop_count=1）の場合は既存動作と完全互換。
 
+**Pause/Resume との整合性**:
+- `calculate_effective_time()` は `pause_accumulated` を減算して effective_time を算出（既存動作）
+- ループ周回判定 `current_time >= end_time` は wall clock ベースで実行（facade.rs 内）
+- Resume 時に `end_time += pause_duration` で補正されるため、両者は独立して正しく動作
+- 不変条件: Pause 介入時は `end_time == loop_start_time + loop_duration + pause_accumulated`
+
 ---
 
 ## Data Models
@@ -478,9 +484,12 @@ erDiagram
 
 ### 不変条件
 
-1. **end_time 整合性**: `end_time == loop_start_time + loop_duration + pause_accumulated_at_end_time_calc`
-   - Pause 未介入時: `end_time == loop_start_time + loop_duration`
-   - Resume 後: `end_time += pause_duration`（既存ロジック）
+1. **end_time 整合性**:
+   - **Pause 未介入時**: `end_time == loop_start_time + loop_duration`
+   - **Pause 介入時**: `end_time == loop_start_time + loop_duration + pause_accumulated`
+     - Resume 時に `end_time += pause_duration` で補正（既存ロジック）
+     - `calculate_effective_time()` が `pause_accumulated` を減算するため、effective_time の計算では相殺される
+     - ループ周回判定 `current_time >= end_time` は wall clock ベースで正しく動作
 2. **loops_completed 単調増加**: Pause/Resume/Cancel で loops_completed はデクリメントされない
 3. **loop_start_time 更新タイミング**: `advance_loop()` 内でのみ更新。Pause/Resume では不変
 4. **loop_duration 定数性**: インスタンス生存中は `loop_duration` は変化しない
