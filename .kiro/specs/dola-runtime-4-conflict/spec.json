@@ -1,18 +1,22 @@
 {
     "feature_name": "dola-runtime-4-conflict",
     "created_at": "2026-02-15T15:00:00+09:00",
-    "updated_at": "2026-02-15T15:30:00+09:00",
+    "updated_at": "2026-02-15T21:00:00+09:00",
     "language": "ja",
-    "phase": "gap-analyzed",
+    "phase": "design-approved",
     "parent_spec": "dola-runtime-engine",
     "approvals": {
         "requirements": {
-            "generated": false,
-            "approved": false
+            "generated": true,
+            "approved": true,
+            "approved_at": "2026-02-15T18:00:00+09:00",
+            "note": "Auto-approved via -y flag"
         },
         "design": {
-            "generated": false,
-            "approved": false
+            "generated": true,
+            "approved": true,
+            "approved_at": "2026-02-15T21:00:00+09:00",
+            "note": "All critical issues resolved: Never strategy redesigned (deferred->reject), transition auto-delete confirmed, secondary conflict eliminated"
         },
         "tasks": {
             "generated": false,
