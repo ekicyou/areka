@@ -124,7 +124,7 @@ Phase 4 spec.json の `parent_requirements` を拡充。requirements.md の `_Pa
 | Req 3.3 | DCompステージ置換 | Phase 2 Req 1 + Phase 4 Req 3 | **PASS** |
 | Req 3.4 | GraphicsCommandList再利用 | Phase 1 design.md Non-Goals | **PASS** |
 | Req 3.5 | リサイズ時ビットマップ再作成 | Phase 1 Req 6 (リサイズ) | **PASS** |
-| Req 3.6 | Opacity階層累積 | Phase 1 Req 4 (GlobalArrangement.global_opacity) | **PASS** |
+| Req 3.6 | Opacity階層累積 | Phase 1 Req 4 (CompositeContext手動累積) | **PASS** |
 | Req 4.1 | ULW呼び出し | Phase 3 Req 1, 2 | **PASS** |
 | Req 4.2 | WS_EX_LAYERED変更 | Phase 3 Req 3 | **PASS** |
 | Req 4.3 | alpha=0クリックスルー | Phase 3 Req 7 | **PASS** |
@@ -184,7 +184,7 @@ Phase 4 spec.json の `parent_requirements` を拡充。requirements.md の `_Pa
 
 | 境界 | migration-guide.md §3 | 子仕様の前提/完了条件 | ステータス |
 |------|----------------------|---------------------|-----------|
-| Phase 1→2 | WindowD3D11Compositor, compositor_init/render_system, GlobalArrangement.global_opacity | Phase 2 前提: Phase 1 完了 + 新システム独立テスト済み | **PASS** |
+| Phase 1→2 | WindowD3D11Compositor, compositor_init/render_system, CompositeContext opacity累積 | Phase 2 前提: Phase 1 完了 + 新システム独立テスト済み | **PASS** |
 | Phase 2→3 | world.rs Schedule切替済み, DComp API呼出ゼロ, GraphicsCore DComp除去 | Phase 3 前提: Phase 2 完了, DComp API呼出ゼロ | **PASS** |
 | Phase 3→4 | ULW全ウィンドウ稼働, WS_EX_LAYERED, WM_PAINT/SIZE更新済み | Phase 4 前提: Phase 3 完了, ULW方式で全描画動作 | **PASS** |
 
@@ -196,7 +196,7 @@ Phase 4 spec.json の `parent_requirements` を拡充。requirements.md の `_Pa
 | BLENDFUNCTION | AC_SRC_OVER, 255, AC_SRC_ALPHA | §6.2 同一 | Phase 3 同一 | **PASS** |
 | DIBSection | biHeight=-(h), BI_RGB, 32bpp | §6.3 同一 | Phase 1 同一 | **PASS** |
 | z-order | depth-first pre-order（画家のアルゴリズム） | §6.6 同一 | Phase 1 同一 | **PASS** |
-| Opacity累積 | parent.global_opacity × child.opacity, clamp [0,1] | §6.5 同一 | Phase 1 同一 | **PASS** |
+| Opacity累積 | accumulated_opacity = parent × child.Visual.opacity, clamp [0,1] | §6.5 同一 | Phase 1 同一 | **PASS** |
 
 ### 5.3 Schedule Stage 変更の一貫性
 

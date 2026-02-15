@@ -120,7 +120,7 @@ DirectCompositionベース⇒UpdateLayeredWindowベースへ変更。マウス�
 
 5. While ウィンドウサイズが変更された時, the 新パイプライン shall 合成ビットマップを適切にリサイズし、次フレームで正しい描画を行う
 
-6. The 新パイプライン shall 合成描画時に親→子のOpacity階層累積を適用する（DComp方式でVisual.SetOpacity()が自動処理していた機能の自前実装）。具体的な累積方法（GlobalArrangement拡張 or 合成ループ内動的計算）は設計フェーズで確定する
+6. The 新パイプライン shall 合成描画時に親→子のOpacity階層累積を適用する（DComp方式でVisual.SetOpacity()が自動処理していた機能の自前実装）。CompositeContext 手動累積方式を採用: render_subtree() 再帰走査中に accumulated_opacity を親→子に伝搬する
 
 ### Requirement 4: UpdateLayeredWindow統合
 

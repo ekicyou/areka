@@ -9,7 +9,7 @@ DComp パイプラインを温存したまま、D2D1 合成描画スタックを
 - `WindowD3D11Compositor` コンポーネントの実装（per-window 合成リソース管理）
 - `compositor_init_system` / `composite_render_system` の実装（合成描画パイプライン）
 - `com/ulw.rs` の `transfer_to_hbitmap()` 実装（D2D→HBITMAP 転送基盤）
-- `GlobalArrangement.global_opacity` 拡張（Opacity 階層累積）
+- `CompositeContext` による Opacity 階層累積（`render_subtree()` 再帰走査中に手動累積、Layout層変更なし）
 - 全新規コードは **独立テスト可能** — world.rs に登録しない（Phase 2 で登録）
 
 ### Non-Goals
@@ -36,8 +36,7 @@ crates/wintf/src/
 │   │   ├── compositor_systems.rs   ← NEW: compositor_init_system, composite_render_system
 │   │   └── (既存: core.rs, components.rs, systems.rs, visual_manager.rs)
 │   └── layout/
-│       ├── (既存: arrangement.rs, systems.rs)
-│       └── (拡張: GlobalArrangement.global_opacity)
+│       └── (既存: arrangement.rs, systems.rs) ← 変更なし
 ```
 
 ### コンポーネント間依存関係
@@ -148,39 +147,36 @@ BITMAPINFOHEADER {
 
 ---
 
-### GlobalArrangement 拡張
+### CompositeContext（Opacity 階層累積）
 
-**ファイル**: `ecs/layout/arrangement.rs`（既存ファイル拡張）
+**配置**: `ecs/graphics/compositor_systems.rs` 内のローカル構造体
 
-**変更内容**:
+**設計決定**: GlobalArrangement は**変更しない**。Opacity は描画属性であり Layout 層に含めず、`composite_render_system` の再帰走査中に `CompositeContext` で手動累積する。PushLayer は中間サーフェス確保の負荷が大きいため不使用。
+
 ```rust
-// 追加フィールド
-pub struct GlobalArrangement {
-    pub transform: Matrix3x2,    // 既存
-    pub bounds: D2DRect,          // 既存
-    pub global_opacity: f32,      // NEW: 初期値 1.0
+/// 合成描画ツリー走査時に親→子へ伝搬する描画コンテキスト
+struct CompositeContext<'a> {
+    dc: &'a ID2D1DeviceContext,
+    accumulated_opacity: f32,  // 親から累積された opacity
 }
 ```
 
-**PropagateTransform 拡張**: `propagate_global_arrangements` で Opacity 累積ロジックを追加。
-
+**累積ロジック**:
 ```rust
-// 擬似コード — propagate時のOpacity計算
-fn propagate_opacity(
-    parent_global_opacity: f32,
-    child_visual: &Visual,
-) -> f32 {
-    if !child_visual.is_visible {
-        return 0.0;
-    }
-    (parent_global_opacity * child_visual.opacity).clamp(0.0, 1.0)
-}
+// render_subtree() 内での計算
+let local_opacity = ctx.accumulated_opacity * visual.opacity;
+if !visual.is_visible || local_opacity == 0.0 { return; } // サブツリースキップ
+
+let child_ctx = CompositeContext {
+    dc: ctx.dc,
+    accumulated_opacity: local_opacity.clamp(0.0, 1.0),
+};
 ```
 
 **制約**:
-- `global_opacity` ∈ `[0.0, 1.0]`（clamp）
-- `Default::default()` で `global_opacity: 1.0`
-- `is_visible == false` → `global_opacity = 0.0`（全子孫に伝播）
+- `accumulated_opacity` ∈ `[0.0, 1.0]`（clamp）
+- `is_visible == false` → サブツリーごとスキップ
+- 将来 clipping 等の拡張にも対応可能
 
 ---
 
@@ -221,10 +217,16 @@ fn compositor_init_system(
 **合成描画フロー**:
 
 ```rust
+/// 合成描画ツリー走査時に親→子へ伝搬する描画コンテキスト
+struct CompositeContext<'a> {
+    dc: &'a ID2D1DeviceContext,
+    accumulated_opacity: f32,
+}
+
 fn composite_render_system(
     core: Res<GraphicsCore>,
     mut compositor_query: Query<(Entity, &mut WindowD3D11Compositor, &Children)>,
-    entity_query: Query<(&GlobalArrangement, Option<&GraphicsCommandList>, &Visual)>,
+    entity_query: Query<(&GlobalArrangement, Option<&GraphicsCommandList>, &Visual, Option<&Children>)>,
 ) {
     let dc = core.device_context();
 
@@ -240,33 +242,10 @@ fn composite_render_system(
         dc.BeginDraw();
         dc.Clear(Some(&D2D1_COLOR_F { r: 0.0, g: 0.0, b: 0.0, a: 0.0 }));
 
-        // 4. depth-first pre-order 走査で z-order 描画
-        for entity in depth_first_preorder(window_entity, children, &entity_query) {
-            let (ga, cmd_opt, visual) = entity_query.get(entity).unwrap();
-
-            // 4a. global_opacity == 0.0 → スキップ
-            if ga.global_opacity == 0.0 { continue; }
-
-            // 4b. GraphicsCommandList が無い → スキップ
-            let Some(cmd) = cmd_opt else { continue; };
-            let Some(command_list) = cmd.get() else { continue; };
-
-            // 4c. SetTransform(GlobalArrangement.transform)
-            dc.SetTransform(&ga.transform);
-
-            // 4d. Opacity < 1.0 の場合 PushLayer
-            if ga.global_opacity < 1.0 {
-                // PushLayer with opacity parameter
-                dc.PushLayer(&layer_params_with_opacity(ga.global_opacity), None);
-            }
-
-            // 4e. DrawImage(command_list)
-            dc.DrawImage(command_list, None, None, D2D1_INTERPOLATION_MODE_LINEAR, D2D1_COMPOSITE_MODE_SOURCE_OVER);
-
-            // 4f. PopLayer (if pushed)
-            if ga.global_opacity < 1.0 {
-                dc.PopLayer();
-            }
+        // 4. CompositeContext を作成し、ルートから再帰走査
+        let ctx = CompositeContext { dc: &dc, accumulated_opacity: 1.0 };
+        for &child in children.iter() {
+            render_subtree(&ctx, child, &entity_query);
         }
 
         // 5. EndDraw
@@ -278,6 +257,43 @@ fn composite_render_system(
 
         // 7. dirty フラグ設定（Phase 3 ulw_present_system が消費）
         compositor.set_dirty(true);
+    }
+}
+
+/// サブツリーを再帰的に描画。CompositeContext で DC + 累積透明度を伝搬。
+fn render_subtree(
+    ctx: &CompositeContext,
+    entity: Entity,
+    query: &Query<(&GlobalArrangement, Option<&GraphicsCommandList>, &Visual, Option<&Children>)>,
+) {
+    let Ok((ga, cmd_opt, visual, children_opt)) = query.get(entity) else { return; };
+
+    // is_visible == false → サブツリーごとスキップ
+    if !visual.is_visible { return; }
+
+    // 累積 opacity 計算
+    let local_opacity = ctx.accumulated_opacity * visual.opacity;
+    if local_opacity == 0.0 { return; }
+
+    // SetTransform
+    ctx.dc.SetTransform(&ga.transform);
+
+    // 描画（opacity < 1.0 の場合は D2D Effect 等で適用）
+    if let Some(cmd) = cmd_opt {
+        if let Some(command_list) = cmd.get() {
+            draw_with_opacity(ctx.dc, command_list, local_opacity);
+        }
+    }
+
+    // 子エンティティに累積 opacity を渡して再帰
+    let child_ctx = CompositeContext {
+        dc: ctx.dc,
+        accumulated_opacity: local_opacity,
+    };
+    if let Some(children) = children_opt {
+        for &child in children.iter() {
+            render_subtree(&child_ctx, child, query);
+        }
     }
 }
 ```
@@ -295,7 +311,7 @@ fn depth_first_preorder(
 }
 ```
 
-**Opacity 適用方式**: `ID2D1DeviceContext::PushLayer()` で `D2D1_LAYER_PARAMETERS1` の `opacity` フィールドを使用。CommandList 全体に均一な opacity を適用するため、PushLayer/PopLayer が最も自然な API。
+**Opacity 適用方式**: **PushLayer は不使用**（中間サーフェス確保による負荷が大きいため）。`CompositeContext` で `accumulated_opacity` を親→子に手動累積し、D2D Effect または pre-multiplied alpha 操作で個別に適用。具体的な D2D API 選択は設計フェーズで確定。
 
 **ダーティ判定**: bevy_ecs の `Changed<T>` フィルタを使用。ウィンドウに属するいずれかのエンティティが変更された場合にウィンドウ全体を再合成。初回フレーム（`Added<WindowD3D11Compositor>`）は必ず描画。
 
@@ -364,11 +380,11 @@ pub unsafe fn transfer_to_hbitmap(
 - **有効**: `is_valid() == true`、全リソースが使用可能
 - **無効**: `is_valid() == false`、`inner == None`
 
-### GlobalArrangement 拡張（互換性）
+### CompositeContext Opacity 累積（互換性）
 
-- `global_opacity` フィールド追加は **後方互換** — `Default::default()` で `1.0`
-- 既存の `GlobalArrangement` を使用するコードは `global_opacity` を無視しても動作する
-- `propagate_global_arrangements` の変更は **前方互換** — Opacity 累積は追加ロジックのみ
+- `CompositeContext` は `composite_render_system` 内部のローカル構造体であり、既存コンポーネントに一切影響しない
+- GlobalArrangement は座標変換専用のまま維持（フィールド追加なし）
+- Layout層（arrangement.rs, systems.rs）は一切変更不要
 
 ---
 
@@ -379,7 +395,7 @@ pub unsafe fn transfer_to_hbitmap(
 | Req 1.1-1.4 | WindowD3D11Compositor struct + methods | Unit: new/resize/invalidate lifecycle |
 | Req 2.1-2.7 | composite_render_system | Integration: z-order, transform, opacity |
 | Req 3.1-3.4 | compositor_init_system | Unit: creation, resize detection, generation |
-| Req 4.1-4.5 | GlobalArrangement.global_opacity + propagation | Unit: opacity accumulation |
+| Req 4.1-4.5 | CompositeContext opacity 手動累積 (render_subtree) | Unit: opacity accumulation |
 | Req 5.1-5.4 | com/ulw.rs transfer_to_hbitmap | Unit: pitch/stride copy |
 | Req 6.1-6.3 | WindowD3D11Compositor::resize() | Integration: resize → redraw |
 | Req 7.1-7.3 | compositor_init_system generation check | Integration: device lost → reinit |
@@ -407,9 +423,9 @@ pub unsafe fn transfer_to_hbitmap(
 - `WindowD3D11Compositor::new()` — 全4リソース正常作成
 - `WindowD3D11Compositor::resize()` — リソース再作成＋サイズ整合
 - `WindowD3D11Compositor::invalidate()` — `is_valid() == false`
-- `GlobalArrangement::global_opacity` — Default で 1.0
+- CompositeContext `accumulated_opacity` — 初期値 1.0
 - Opacity 累積計算 — parent 0.8 × child 0.5 = 0.4
-- Opacity is_visible=false — global_opacity = 0.0
+- Opacity is_visible=false — サブツリースキップ
 - Opacity clamp — 範囲外値のクランプ
 - `transfer_to_hbitmap` — pitch==stride 一括コピー
 - `transfer_to_hbitmap` — pitch!=stride 行単位コピー

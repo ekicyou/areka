@@ -586,7 +586,7 @@ IWICBitmap → ID2D1RenderTarget (CreateWicBitmapRenderTarget) → 直接描画
 **状況**: DComp方式では `Visual.SetOpacity()` でDCompが階層的にOpacityを処理。
 ULW方式では自前で親→子のOpacity累積を計算する必要がある可能性。
 **影響**: 透過表示の品質に関わる
-**Research Needed**: `GlobalArrangement` にOpacity累積を追加するか、合成描画時に動的計算するかの設計判断
+**Research Needed**: ~~`GlobalArrangement` にOpacity累積を追加するか、合成描画時に動的計算するかの設計判断~~ → **設計決定済み**: CompositeContext 手動累積方式を採用。GlobalArrangement は変更しない
 
 ### Risk 4: ダーティ検出の粒度変更（LOW-MEDIUM）
 
@@ -643,7 +643,7 @@ ULW方式では自前で親→子のOpacity累積を計算する必要がある�
 
 1. **D2D→HBITMAP変換方式の選定**: ✅ **Option B（GPU Render + CPU Map）を採用**。ハードウェアアクセラレーションD2D描画を維持しつつ、staging bitmap (CPU_READ) → Map → DIBSection memcpy で転送。WICBitmapRenderTarget（Option C）のソフトウェアレンダリング制約を回避。
 2. **合成描画エンジンの設計**: ✅ **composite_render_system** として定義。Children関係のBFS走査でz-order確定 → SetTransform(GlobalArrangement.transform) → DrawImage(CommandList) with opacity。per-window ID2D1Bitmap1に合成描画。
-3. **Opacity階層累積の設計**: ✅ **GlobalArrangement拡張方式を採用**。`global_opacity: f32` フィールドを追加し、既存の `propagate_global_arrangements` で `parent_global_opacity * child_local_opacity` を伝播。
+3. **Opacity階層累積の設計**: ✅ **CompositeContext 手動累積方式を採用**。`composite_render_system` の `render_subtree()` 再帰走査中に `accumulated_opacity * Visual.opacity` で動的に累積。Layout層（GlobalArrangement）は変更せず、PushLayerは不使用。
 4. **feature flag or cfg切り替えの設計**: ✅ **ハイブリッド段階アプローチ（Option C）を採用**。Phase 1-2で新モジュール並行追加（cfg不要）、Phase 3でインプレースULW統合、Phase 4で旧コード削除。
 5. **wintf-P0-click-through-rgnの処遇**: ✅ **競争的並走**として独立進行（要件C2で確定済み）。
 6. **dcomp_demo.rsの処遇**: ✅ **Phase 4で削除**（要件C3で確定済み）。
@@ -653,4 +653,4 @@ ULW方式では自前で親→子のOpacity累積を計算する必要がある�
 - [x] D2D→HBITMAP最適変換方式の技術検証 — **Option B採用**（design.md §System Flows）
 - [ ] `WS_EX_LAYERED` ウィンドウでの `WM_PAINT` 発火動作確認 — WS_EX_LAYEREDウィンドウはWM_PAINT未発火（Win32仕様）。子仕様3で実証
 - [x] DComp vs ULW の描画品質差異検証 — 理論上同一（PBGRA32フォーマット維持、ハードウェアD2D使用）。視覚差異なしと判定
-- [x] Opacity階層累積の最適アプローチ — **GlobalArrangement.global_opacity拡張**（design.md §System Flows）
+- [x] Opacity階層累積の最適アプローチ — **CompositeContext手動累積方式**（design.md §System Flows）。PushLayer不使用、Layout層変更なし

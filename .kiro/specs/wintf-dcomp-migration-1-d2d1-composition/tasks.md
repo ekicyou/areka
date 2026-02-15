@@ -28,20 +28,9 @@ Phase 1 — D2D1 合成スタック構築。DComp パイプラインを温存し
   - `ecs/graphics/mod.rs` に `pub mod compositor;` を追加する
   - _Requirements: 1.1, 1.2, 1.3, 1.4_
 
-### Phase 1B: Layout層拡張
+### Phase 1B: ECSシステム実装
 
-- [ ] 3. GlobalArrangement に global_opacity 追加
-  - `GlobalArrangement` 構造体に `global_opacity: f32` フィールドを追加する（初期値 1.0）
-  - `Default` 実装を更新する
-  - `propagate_global_arrangements` に Opacity 累積ロジック（`parent.global_opacity * child.opacity`）を追加する
-  - `Visual.is_visible == false` 時に `global_opacity = 0.0` を設定するロジックを追加する
-  - `[0.0, 1.0]` 範囲クランプを適用する
-  - _Requirements: 4.1, 4.2, 4.3, 4.4, 4.5_
-  - _Dependencies: None_
-
-### Phase 1C: ECSシステム実装
-
-- [ ] 4. compositor_init_system 実装
+- [ ] 3. compositor_init_system 実装
   - `ecs/graphics/compositor_systems.rs` を新規作成する
   - `Added<WindowHandle>` && `Without<WindowD3D11Compositor>` クエリで新規ウィンドウを検出する
   - `GraphicsCore` から DC を取得して `WindowD3D11Compositor::new()` を呼び出す
@@ -51,37 +40,42 @@ Phase 1 — D2D1 合成スタック構築。DComp パイプラインを温存し
   - _Requirements: 3.1, 3.2, 3.3, 3.4, 7.1, 7.2, 7.3_
   - _Dependencies: Task 2_
 
-- [ ] 5. composite_render_system 実装
+- [ ] 4. composite_render_system 実装
   - `compositor_systems.rs` に `composite_render_system` を追加する
+  - `CompositeContext` 構造体（`dc: &ID2D1DeviceContext`, `accumulated_opacity: f32`）を定義する
   - per-window `WindowD3D11Compositor` のイテレーションを実装する
-  - `Children` 関係の depth-first pre-order 走査で z-order 描画順を決定する
+  - `render_subtree()` 再帰関数を実装する:
+    - `CompositeContext` で DC + 累積透明度を親→子に伝搬
+    - `Visual.is_visible == false` でサブツリースキップ
+    - `accumulated_opacity * Visual.opacity` で opacity 手動累積（clamp [0.0, 1.0]）
+    - **PushLayer は不使用**（中間サーフェス確保による負荷のため）
   - 合成描画ループを実装する:
     - composition_bitmap を DC に SetTarget
     - BeginDraw → Clear transparent
-    - 各エンティティ: SetTransform → PushLayer(opacity) → DrawImage(CommandList) → PopLayer
+    - `render_subtree()` で再帰走査: SetTransform → draw_with_opacity(accumulated_opacity) → 子に伝搬
     - EndDraw
   - ダーティ判定（Changed<GraphicsCommandList/GlobalArrangement/Visual>）を実装する
   - CopyFromBitmap（composition → staging）を実装する
-  - _Requirements: 2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 2.7_
+  - _Requirements: 2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 2.7, 4.1, 4.2, 4.3, 4.4, 4.5_
   - _Dependencies: Task 2, Task 3_
 
-### Phase 1D: テスト・検証
+### Phase 1C: テスト・検証
 
-- [ ] 6. ユニットテスト作成
+- [ ] 5. ユニットテスト作成
   - `WindowD3D11Compositor` ライフサイクルテスト（new/resize/invalidate）を作成する
-  - `GlobalArrangement.global_opacity` 累積テスト（parent×child, is_visible=false, clamp）を作成する
+  - `CompositeContext` による opacity 手動累積テスト（parent×child, is_visible=false, clamp）を作成する
   - `transfer_to_hbitmap` のpitch/stride テストを作成する
   - _Requirements: 8.1, 8.3_
-  - _Dependencies: Task 1, Task 2, Task 3_
+  - _Dependencies: Task 1, Task 2, Task 3, Task 4_
 
-- [ ] 7. 統合テスト・E2E検証
+- [ ] 6. 統合テスト・E2E検証
   - `composite_render_system` の z-order + transform + opacity 合成テストを作成する
   - `compositor_init_system` + `composite_render_system` 統合テストを作成する
   - デバイスロスト→再初期化の統合テストを作成する
   - `taffy_flex_demo` 相当の独立テスト環境を構築し、新パイプラインでの描画検証を行う
   - `cargo test` で全テスト（既存+新規）がパスすることを確認する
   - _Requirements: 8.2, 8.4, 8.5_
-  - _Dependencies: Task 4, Task 5_
+  - _Dependencies: Task 3, Task 4_
 
 ---
 
@@ -89,8 +83,8 @@ Phase 1 — D2D1 合成スタック構築。DComp パイプラインを温存し
 
 ```
 Task 1 (com/ulw.rs) ──────┐
-Task 2 (Compositor) ───────┼──→ Task 4 (init_system) ──→ Task 6 (Unit Tests) ──→ Task 7 (Integration)
-Task 3 (GlobalArrangement) ┘──→ Task 5 (render_system) ─┘
+Task 2 (Compositor) ───────┼──→ Task 3 (init_system) ──→ Task 5 (Unit Tests) ──→ Task 6 (Integration)
+                           └──→ Task 4 (render_system) ─┘
 ```
 
 ## 要件カバレッジサマリー
@@ -98,12 +92,12 @@ Task 3 (GlobalArrangement) ┘──→ Task 5 (render_system) ─┘
 | 要件 | タスク |
 |------|--------|
 | Req 1 (WindowD3D11Compositor) | 2 |
-| Req 2 (composite_render_system) | 5 |
-| Req 3 (compositor_init_system) | 4 |
-| Req 4 (Opacity累積) | 3 |
+| Req 2 (composite_render_system) | 4 |
+| Req 3 (compositor_init_system) | 3 |
+| Req 4 (Opacity累積) | 4 |
 | Req 5 (D2D→HBITMAP転送) | 1 |
-| Req 6 (リサイズ) | 2, 4 |
-| Req 7 (デバイスロスト) | 4 |
-| Req 8 (検証基準) | 6, 7 |
+| Req 6 (リサイズ) | 2, 3 |
+| Req 7 (デバイスロスト) | 3 |
+| Req 8 (検証基準) | 5, 6 |
 
-全8要件がタスクにマッピング済み。
+全6タスクで全8要件をカバー。Opacity累積（Req 4）は `composite_render_system`（Task 4）内の `CompositeContext` で実装。

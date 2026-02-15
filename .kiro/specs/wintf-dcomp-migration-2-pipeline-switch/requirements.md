@@ -9,9 +9,8 @@
 本子仕様は **Phase 1 の完了を前提** とする。Phase 1 が提供する以下の成果物が存在することを前提に要件を定義する:
 
 - `ecs/graphics/compositor.rs`: `WindowD3D11Compositor` コンポーネント
-- `ecs/graphics/compositor_systems.rs`: `compositor_init_system`, `composite_render_system`
+- `ecs/graphics/compositor_systems.rs`: `compositor_init_system`, `composite_render_system`（`CompositeContext` で opacity 手動累積）
 - `com/ulw.rs`: `transfer_to_hbitmap` ユーティリティ
-- `ecs/layout/arrangement.rs`: `GlobalArrangement.global_opacity` フィールド
 
 ### 本子仕様のスコープ
 

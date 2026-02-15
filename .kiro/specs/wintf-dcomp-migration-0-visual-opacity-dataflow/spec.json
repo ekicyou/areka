@@ -1,13 +1,13 @@
 {
     "feature_name": "wintf-dcomp-migration-0-visual-opacity-dataflow",
     "created_at": "2026-02-15T21:30:00+09:00",
-    "updated_at": "2026-02-15T21:30:00+09:00",
+    "updated_at": "2026-02-15T22:15:00+09:00",
     "language": "ja",
-    "phase": "initialized",
+    "phase": "requirements-generated",
     "parent_spec": "wintf-dcomp-to-layered-migration",
     "approvals": {
         "requirements": {
-            "generated": false,
+            "generated": true,
             "approved": false
         },
         "design": {
@@ -22,5 +22,8 @@
     "ready_for_implementation": false,
     "tier": 0,
     "priority": "P0",
+    "parent_requirements": [
+        "5.4"
+    ],
     "dependencies": []
 }

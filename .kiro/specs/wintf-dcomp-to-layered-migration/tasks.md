@@ -21,7 +21,7 @@
   - 統合指針文書を参照し、D2D1 合成スタック構築（新 GraphicsCore、合成ビットマップ、合成描画システム）の仕様を策定する
   - 仕様サイクル全工程を完了する（init → requirements → design → tasks）
   - 親仕様の設計に基づき、WindowD3D11Compositor コンポーネント、compositor_init_system, composite_render_system の詳細設計を子仕様に具体化する
-  - GlobalArrangement への global_opacity 累積機能追加の仕様を確定する
+  - CompositeContext による opacity 手動累積方式の仕様を確定する
   - 新パイプライン単体での描画検証基準（taffy_flex_demo 相当）を定義する
   - _Requirements: 3.1, 3.2, 3.3, 3.4, 3.5, 3.6, 6.1, 10.1, 10.2_
   - _Dependencies: Task 1_

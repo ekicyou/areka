@@ -20,7 +20,7 @@
 | Visual | 🟢 GREEN | — | 変更なし（on_visual_addフックのみPhase 2で改修） | Req 6.2 |
 | GraphicsCommandList | 🟢 GREEN | — | 完全再利用 | Req 3.4 |
 | Arrangement | 🟢 GREEN | — | 変更なし | — |
-| GlobalArrangement | 🟡 拡張 | Phase 1 | `global_opacity: f32` フィールド追加 | Req 3.6 |
+| GlobalArrangement | � GREEN | — | 変更なし（座標変換専用、Opacityは保持しない） | — |
 | FrameTime | 🟢 GREEN | — | 変更なし | — |
 | TaffyStyle / TaffyComputedLayout | 🟢 GREEN | — | 変更なし | — |
 | Label / Rectangle / BitmapSource / Typewriter | 🟢 GREEN | — | 変更なし | — |
@@ -89,7 +89,6 @@
 | コンポーネント | 所属子仕様 | Phase | 要件カバー | 備考 |
 |---------------|-----------|-------|-----------|------|
 | WindowD3D11Compositor | Phase 1 | 1 | Req 3.1, 3.5, 4.1, 6.1 | per-window合成リソース統合管理 |
-| GlobalArrangement.global_opacity | Phase 1 | 1 | Req 3.6 | 既存コンポーネントの拡張 |
 
 ### 2.2 新規システム
 
@@ -130,7 +129,7 @@ Phase 2 は Phase 1 から以下の成果物を消費する:
 | `WindowD3D11Compositor` コンポーネント | per-window合成リソース | compositor_init_system, composite_render_system, ulw_present_system |
 | `compositor_init_system` 関数 | ウィンドウ初期化 | world.rs GraphicsSetup Stage |
 | `composite_render_system` 関数 | 合成描画 | world.rs RenderSurface Stage |
-| `GlobalArrangement.global_opacity` | Opacity累積値 | composite_render_system |
+| `composite_render_system` 関数 | 合成描画（CompositeContextでopacity手動累積） | world.rs RenderSurface Stage |
 | `com/ulw.rs` の `transfer_to_hbitmap()` | ステージング→HBITMAP転送 | ulw_present_system（Phase 3で使用） |
 | `ecs/graphics/compositor.rs` | コンポーネント定義モジュール | Phase 2以降の全子仕様 |
 | `ecs/graphics/compositor_systems.rs` | システム定義モジュール | Phase 2以降の全子仕様 |
@@ -178,7 +177,7 @@ wintf クレートの公開 API (`api.rs`) への影響:
 | `compositor.rs` モジュール | Phase 1 | Phase 2, 3, 4 | コンポーネント定義 |
 | `compositor_systems.rs` モジュール | Phase 1 | Phase 2, 3 | システム定義 |
 | `com/ulw.rs` モジュール | Phase 1（部分） | Phase 3 | ULW ユーティリティ |
-| `GlobalArrangement.global_opacity` | Phase 1 | Phase 2, 3, 4 | Opacity累積値 |
+| `CompositeContext.accumulated_opacity` | Phase 1 | Phase 2, 3, 4 | 合成描画時のOpacity手動累積（ローカル変数、コンポーネント非保存） |
 
 ### 4.2 既存 wintf リソース（全子仕様が参照可能）
 
@@ -226,7 +225,7 @@ Phase 4 (クリーンアップ)
 
 | Phase | 完了後に検証可能な機能 | DComp状態 |
 |-------|---------------------|-----------|
-| Phase 1 完了 | WindowD3D11Compositor リソース作成、合成描画（独立テスト）、GlobalArrangement.global_opacity 累積 | **稼働中** — 変更なし |
+| Phase 1 完了 | WindowD3D11Compositor リソース作成、合成描画（独立テスト）、CompositeContextによるopacity手動累積 | **稼働中** — 変更なし |
 | Phase 2 完了 | 全exampleがD2D1合成パイプラインで動作、DComp API呼出ゼロ | **無効化** — コード残存だがSchedule未登録 |
 | Phase 3 完了 | UpdateLayeredWindow透過描画、alpha=0クリックスルー、WM_SIZEリサイズ | **無効化** — ULWで全描画 |
 | Phase 4 完了 | cargo test全パス、cargo build --examples全パス、DComp参照ゼロ | **削除済み** |
@@ -294,16 +293,16 @@ ID2D1Bitmap1 (RenderTarget)
 
 **stride/pitch 注意**: D2D1 `Map()` の pitch と DIBSection の stride（`width * 4`）が異なる場合は行単位コピーが必要。一致する場合は単一 `memcpy` で最適化可能。
 
-### 6.5 Opacity階層累積（GlobalArrangement拡張方式）
+### 6.5 Opacity階層累積（CompositeContext 手動累積方式）
 
 ```
-global_opacity = parent.global_opacity * child.opacity
+accumulated_opacity = parent_accumulated_opacity * child.Visual.opacity
 ```
 
-- `global_opacity` ∈ `[0.0, 1.0]`（clamp）
-- `Visual.is_visible == false` の場合: `global_opacity = 0.0`（描画スキップ最適化）
-- `propagate_global_arrangements` で毎フレーム再計算
-- 合成描画時は `GlobalArrangement.global_opacity` を読み取るだけ（ツリー走査不要）
+- `accumulated_opacity` ∈ `[0.0, 1.0]`（clamp）
+- `Visual.is_visible == false` の場合: サブツリーごとスキップ（描画スキップ最適化）
+- `composite_render_system` の `render_subtree()` 再帰走査中に動的に計算（ECSコンポーネントには保存しない）
+- **PushLayer は不使用**（中間サーフェス確保による負荷が大きいため）
 
 ### 6.6 z-order ソートアルゴリズム
 
@@ -315,7 +314,7 @@ Root → Child1 → Child1.Child1 → Child1.Child2 → Child2 → ...
 
 - 先に描いたものが背景、後に描いたものが前景
 - `Children` コンポーネントから再帰的に走査
-- 各エンティティの `GlobalArrangement.transform` で `SetTransform` → `DrawImage(CommandList)` with `global_opacity`
+- 各エンティティの `GlobalArrangement.transform` で `SetTransform` → `DrawImage(CommandList)` with `CompositeContext.accumulated_opacity`
 
 ---
 
@@ -329,7 +328,7 @@ Root → Child1 → Child1.Child1 → Child1.Child2 → Child2 → ...
 | Update | invalidate_dependent_components | コンポーネント型変更に追従 | 2 | 軽微改修 |
 | **PreLayout** | visual_resource_management (RED), visual_hierarchy_sync (RED), init_graphics_core (YELLOW) | init_graphics_core（DComp除去版） | 2 | RED削除 |
 | Layout | 変更なし（taffy系4システム） | 変更なし | — | — |
-| PostLayout | 変更なし（arrangement伝播系5システム） | global_opacity累積追加 | 1 | 軽微拡張 |
+| PostLayout | 変更なし（arrangement伝播系5システム） | 変更なし | — | — |
 | UISetup | 変更なし | 変更なし | — | — |
 | **GraphicsSetup** | init_window_graphics (RED), window_visual_integration (RED) | **compositor_init_system** | 2 | 全面置換 |
 | **Draw** | deferred_surface_creation (RED), cleanup_surface (RED), ウィジェット描画 (GREEN) | ウィジェット描画のみ | 2 | RED削除 |
@@ -388,7 +387,7 @@ Root → Child1 → Child1.Child1 → Child1.Child2 → Child2 → ...
 
 | テスト対象 | 担当子仕様 | テスト概要 |
 |-----------|-----------|-----------|
-| GlobalArrangement.global_opacity 累積 | Phase 1 | parent 0.8 × child 0.5 = 0.4, is_visible=false → 0.0, clamp |
+| CompositeContext opacity 手動累積 | Phase 1 | parent 0.8 × child 0.5 = 0.4, is_visible=false → skip, clamp |
 | WindowD3D11Compositor ライフサイクル | Phase 1 | new() / resize() / invalidate() / is_valid() |
 | transfer_to_hbitmap stride処理 | Phase 1 | pitch≠stride時の行単位コピー検証 |
 | present_layered_window BLENDFUNCTION | Phase 3 | BLENDFUNCTION構成テスト |
@@ -497,7 +496,7 @@ Root → Child1 → Child1.Child1 → Child1.Child2 → Child2 → ...
 
 | 子仕様 | 抽出するセクション |
 |--------|------------------|
-| Phase 1 (D2D1合成) | WindowD3D11Compositor コンポーネント, composite_render_system, compositor_init_system, GlobalArrangement拡張, com/ulw.rs (transfer_to_hbitmap), D2D→HBITMAP転送パス, Opacity累積フロー |
+| Phase 1 (D2D1合成) | WindowD3D11Compositor コンポーネント, composite_render_system, compositor_init_system, CompositeContext opacity手動累積, com/ulw.rs (transfer_to_hbitmap), D2D→HBITMAP転送パス, Opacity累積フロー |
 | Phase 2 (DComp置換) | GraphicsCore改修, Schedule Stage再構成, on_visual_addフック, DCompシステム登録解除, invalidate_dependent_components改修, mark_dirty_surfaces改修 |
 | Phase 3 (ULW統合) | UlwTransfer (present_layered_window), ulw_present_system, WS_EX_LAYERED切替, WM_PAINT/WM_SIZE ハンドラ更新, areka/src/main.rs更新 |
 | Phase 4 (DComp削除) | com/dcomp.rs削除, VisualGraphics/SurfaceGraphics削除, visual_manager.rs削除, DCompシステムコード削除, dcomp_demo.rs削除, テスト修正 |

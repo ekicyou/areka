@@ -17,9 +17,9 @@
 | `graphics/components.rs` | `ecs/graphics/components.rs` | `WindowGraphics`, `VisualGraphics`, `SurfaceGraphics`, `Visual` | パターン参考・`Visual.opacity` 確認 |
 | `graphics/command_list.rs` | `ecs/graphics/command_list.rs` | `GraphicsCommandList`（`ID2D1CommandList` ラッパー） | 合成描画の入力 |
 | `graphics/systems.rs` | `ecs/graphics/systems.rs` | DComp描画・合成システム群（1419行） | `draw_recursive` パターン参考 |
-| `layout/arrangement.rs` | `ecs/layout/arrangement.rs` | `Arrangement`, `GlobalArrangement` | `global_opacity` フィールド追加先 |
-| `layout/metrics.rs` | `ecs/layout/metrics.rs` | `Opacity` コンポーネント | 累積計算のソースデータ |
-| `layout/systems.rs` | `ecs/layout/systems.rs` | `propagate_global_arrangements` | Opacity 累積ロジック追加先 |
+| `layout/arrangement.rs` | `ecs/layout/arrangement.rs` | `Arrangement`, `GlobalArrangement` | 座標変換参照元（変更なし） |
+| `layout/metrics.rs` | `ecs/layout/metrics.rs` | `Opacity` コンポーネント | Phase 0 で廃止予定（Visual.opacity に統合） |
+| `layout/systems.rs` | `ecs/layout/systems.rs` | `propagate_global_arrangements` | 座標伝播参照（変更なし） |
 | `common/tree_system.rs` | `ecs/common/tree_system.rs` | ジェネリック階層伝播アルゴリズム | `Mul<L, Output=G>` trait 制約 |
 | `common/tree_iter.rs` | `ecs/common/tree_iter.rs` | `DepthFirstReversePostOrder` イテレータ | 合成走査のパターン参考 |
 | `com/d2d/mod.rs` | `com/d2d/mod.rs` | D2D1 拡張 trait 群 | `DrawImage`, `SetTransform` 等の API |
@@ -76,7 +76,7 @@ G: Component<Mutability = Mutable> + Copy + PartialEq + Mul<L, Output = G>,
 M: Component<Mutability = Mutable>,
 ```
 
-**`GlobalArrangement` に `global_opacity` を追加する場合、`impl Mul<Arrangement> for GlobalArrangement` の実装を拡張して opacity 累積を含める必要がある。** しかし、`Arrangement` には opacity フィールドがない。
+**設計決定: GlobalArrangement には opacity を追加しない。** `Arrangement` に opacity フィールドがなく `Mul` trait での累積が不自然であることも、Opacity を Layout 層から分離する決定を支持する。代わりに `CompositeContext` で `composite_render_system` 内の `render_subtree()` 再帰走査中に手動累積する。
 
 ### 1.3 Visual 描画属性の現状
 
@@ -135,7 +135,7 @@ Layout → Visual               （どこに、どう描くか）
 | AC1: 深さ優先走査 | `draw_recursive()` + `DepthFirstReversePostOrder` | `Children` の pre-order 走査は `draw_recursive` にほぼ同じロジックあり | Low |
 | AC2: Transform + DrawImage | `render_surface` 内の `DrawImage` パターン | `SetTransform` + `DrawImage` パターンは完全に既存 | Low |
 | AC3: is_visible == false スキップ | なし | `Visual.is_visible` は現在デッドフィールド。初ててのワイヤリング | Medium |
-| AC4: PushLayer opacity | なし | **`ID2D1DeviceContext::PushLayer` or `CreateLayer` の使用が新規** | Medium |
+| AC4: Opacity 適用 | なし | **`CompositeContext` で手動累積、D2D Effect 等で個別適用（PushLayer不使用）** | Medium |
 | AC5: CopyFromBitmap | なし | `ID2D1Bitmap1::CopyFromBitmap()` は新規 | Low |
 | AC6: ダーティ判定 | `Changed<SurfaceGraphicsDirty>` パターン | ウィンドウレベルの集約判定が新規ロジック | Medium |
 | AC7: 既存システム非侵襲 | `GraphicsCommandList` が DComp 非依存設計 | 入力側は完全に既存のまま。合成システムは消費側のみ | Low |
@@ -146,7 +146,7 @@ Layout → Visual               （どこに、どう描くか）
 現行の `render_surface` は各エンティティの `IDCompositionSurface` に `BeginDraw`/`EndDraw` で描画する。新しい `composite_render_system` は `WindowD3D11Compositor` の `composition_bitmap` に対して `ID2D1DeviceContext::SetTarget` → `BeginDraw`/`EndDraw`（レンダーターゲット方式）で描画する。
 
 **Research Needed:**
-- `PushLayer` で opacity を適用する際の `D2D1_LAYER_PARAMETERS1` 構成
+- `CompositeContext` 手動累積方式における D2D Effect または pre-multiplied alpha での opacity 適用方法
 - `ID2D1Bitmap1` に `SetTarget` して描画する際のデバイスコンテキスト要件（共有 DC vs 専用 DC）
 
 ### Req 3: compositor_init_system
@@ -230,7 +230,9 @@ Layout → Visual               （どこに、どう描くか）
 
 ### Option C: ハイブリッド
 
-Option A をベースに、opacity 累積のみ Phase 1 から除外し、`global_opacity` を常に `1.0` としておく。Phase 2 で `visual_property_sync_system` の DComp 呼び出しを除去する際に opacity 累積も同時に実装。
+Option A をベースに、opacity 累積のみ Phase 1 から除外し、合成時に常に opacity `1.0` としておく。Phase 2 で `visual_property_sync_system` の DComp 呼び出しを除去する際に opacity 累積も同時に実装。
+
+> **注**: 設計決定により Option C の前提（GlobalArrangement.global_opacity）は却下された。Opacity 累積は `CompositeContext` 手動累積方式で Phase 1 の `composite_render_system` 内に含まれる。
 
 **Trade-offs:**
 - ✅ Phase 1 のスコープが大幅に縮小
@@ -249,14 +251,14 @@ Option A をベースに、opacity 累積のみ Phase 1 から除外し、`globa
 | 指標 | 評価 | 根拠 |
 |------|------|------|
 | **工数** | **S-M（2-5日）** | 新規ファイル3つ、パターン流用が多いが D2D API 周りの実装・検証に時間要 |
-| **リスク** | **Low-Medium** | D2D1 Bitmap 作成 / Map / PushLayer が新規 API |
+| **リスク** | **Low-Medium** | D2D1 Bitmap 作成 / Map が新規 API、CompositeContext opacity 累積 |
 
 ### 要件別
 
 | 要件 | 工数 | リスク | 備考 |
 |------|------|--------|------|
 | Req 1 | S | Low | パターン流用、API 調査のみ |
-| Req 2 | M | Medium | PushLayer 新規、opacity 累積、ダーティ判定ロジック |
+| Req 2 | M | Medium | CompositeContext opacity 累積、ダーティ判定ロジック |
 | Req 3 | S | Low | `init_window_graphics` 流用 + サイズ変更/デバイスロスト検出 |
 | Req 4 | S | Low | 標準的なメモリ操作 |
 | Req 5 | S-M | Low | GPU テスト制約あり |
@@ -277,7 +279,7 @@ Option A をベースに、opacity 累積のみ Phase 1 から除外し、`globa
 ### Research Items（設計フェーズで調査）
 
 1. `ID2D1DeviceContext::CreateBitmap()` に `D2D1_BITMAP_OPTIONS_TARGET` を指定する際の具体的な `D2D1_BITMAP_PROPERTIES1` 構成
-2. `PushLayer` の `D2D1_LAYER_PARAMETERS1` で opacity のみを適用する構成
+2. `CompositeContext` 手動累積方式での opacity 適用 API（D2D Effect or pre-multiplied alpha）
 3. `ID2D1Bitmap1::Map()` / `Unmap()` の制約（CPU_READ ビットマップに対するスレッドセーフティ）
 4. `ID2D1Bitmap::CopyFromBitmap()` の制約（ターゲットビットマップからステージングへのコピー）
 5. `CreateDIBSection` で PBGRA32 top-down DIB を作成する際の `BITMAPINFO` 構成
@@ -289,7 +291,7 @@ Option A をベースに、opacity 累積のみ Phase 1 から除外し、`globa
 | 要件 | 既存資産（再利用可能） | ギャップ（新規実装） | 制約 |
 |------|----------------------|---------------------|------|
 | Req 1 | `Option<Inner>` パターン、SparseSet | D2D Bitmap 作成（TARGET/CPU_READ）、DIBSection/DC 作成 | GPU 依存 |
-| Req 2 | `draw_recursive` ロジック、`DrawImage`/`SetTransform` パターン | PushLayer opacity（階層走査中に累積）、ダーティ集約判定 | DComp 非干渉 |
+| Req 2 | `draw_recursive` ロジック、`DrawImage`/`SetTransform` パターン | CompositeContext opacity 手動累積、ダーティ集約判定 | DComp 非干渉 |
 | Req 3 | `init_window_graphics` パターン、resize/generation パターン | `WindowPos` サイズ取得、エラーログ、0×0 ガード | — |
 | Req 4 | なし | Map/Copy/Unmap 全体 | — |
 | Req 5 | `crates/wintf/tests/` パターン | GPU 依存テスト | CI 制約 |

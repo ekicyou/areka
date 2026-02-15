@@ -64,7 +64,7 @@ Per-Entity:
 graph TB
     subgraph Layout Layer - Reused
         Arrangement[Arrangement]
-        GlobalArrangement[GlobalArrangement + global_opacity]
+        GlobalArrangement[GlobalArrangement]
         TaffyLayout[Taffy Layout Engine]
     end
 
@@ -112,7 +112,7 @@ graph TB
 - **選択パターン**: ハイブリッド段階アプローチ（research.md Option C）。子仕様1-2で新モジュール並行追加、子仕様3でULW統合、子仕様4で旧コード削除
 - **ドメイン境界**: Layout層（GREEN, 変更なし）→ Widget層（GREEN, 変更なし）→ Graphics層（RED→NEW, 全面置換）→ OS層（NEW, ULW統合）
 - **維持パターン**: Schedule/Stageベースの描画パイプライン、GraphicsCommandListによる描画抽象化、GlobalArrangement座標累積
-- **新コンポーネント根拠**: WindowD3D11Compositor（per-window合成リソースの統合管理）、GlobalArrangement拡張（Opacity累積の自然な配置場所）
+- **新コンポーネント根拠**: WindowD3D11Compositor（per-window合成リソースの統合管理）
 - **steering準拠**: bevy_ecs 0.18.0 API、windows 0.62.2 COM安全パターン、tracing計装
 
 ### Technology Stack
@@ -153,9 +153,10 @@ sequenceDiagram
         CRender->>CRender: Set composition bitmap as DC target
         CRender->>CRender: BeginDraw + Clear transparent
         loop For each entity z-order sorted
-            CRender->>CRender: Read GlobalArrangement transform + global_opacity
+            CRender->>CRender: Read GlobalArrangement transform
+            CRender->>CRender: Accumulate parent_opacity * Visual.opacity
             CRender->>CRender: SetTransform from GlobalArrangement
-            CRender->>CRender: DrawImage CommandList with opacity
+            CRender->>CRender: DrawImage CommandList with accumulated opacity
         end
         CRender->>CRender: EndDraw
         CRender->>CRender: CopyFromBitmap to staging CPU_READ bitmap
@@ -204,31 +205,33 @@ research.mdの3方式（A: WIC経由, B: CPU Map, C: WICBitmapRenderTarget）か
 - CPU Map方式はD2D APIのみで完結し、追加ライブラリ依存が発生しない
 - デスクトップマスコット規模（~500x500px, 数十ウィジェット）ではGPU→CPUコピーのオーバーヘッドは無視できる
 
-### Opacity階層累積フロー（設計決定: GlobalArrangement拡張）
+### Opacity階層累積フロー（設計決定: CompositeContext 手動累積方式）
 
 ```mermaid
 graph TB
-    Root[Root Entity - opacity 1.0]
-    Parent[Parent Entity - opacity 0.8]
-    Child[Child Entity - opacity 0.5]
+    Root[Root Entity - Visual.opacity 1.0]
+    Parent[Parent Entity - Visual.opacity 0.8]
+    Child[Child Entity - Visual.opacity 0.5]
 
-    Root -->|propagate| Parent
-    Parent -->|propagate| Child
+    Root -->|CompositeContext.accumulated_opacity=1.0| Parent
+    Parent -->|CompositeContext.accumulated_opacity=0.8| Child
 
-    Root --- RGA[GlobalArrangement global_opacity 1.0]
-    Parent --- PGA[GlobalArrangement global_opacity 0.8]
-    Child --- CGA[GlobalArrangement global_opacity 0.4]
-
-    Note1[global_opacity = parent_global_opacity x local_opacity]
+    Root --- R_ACC[accumulated = 1.0]
+    Parent --- P_ACC[accumulated = 1.0 x 0.8 = 0.8]
+    Child --- C_ACC[accumulated = 0.8 x 0.5 = 0.4]
 ```
 
-**設計決定: GlobalArrangement拡張方式を採用**
+**設計決定: CompositeContext 手動累積方式を採用（PushLayer 不使用）**
 
-要件3.6で指定されたOpacity階層累積について、`GlobalArrangement` に `global_opacity: f32` フィールドを追加し、既存の `propagate_global_arrangements` で伝播する方式を選択した理由:
-- 既存のtransform累積と同一のPropagateメカニズムを利用でき、実装の一貫性が保たれる
-- 合成描画ループでは `GlobalArrangement.global_opacity` を読み取るだけで済み、ツリー走査が不要
-- 各エンティティのローカルopacityは既存の `Visual.opacity` フィールドに維持される
-- `propagate_parent_transforms` ジェネリクスの `PropagateTransform` トレイト実装で累積計算を追加する
+要件3.6で指定されたOpacity階層累積について、`CompositeContext` 構造体で DC + 累積透明度を親→子に伝搬し、`accumulated_opacity * Visual.opacity` で動的に累積する方式を選択した理由:
+- **関心の分離**: opacity は描画属性であり、Layout層（GlobalArrangement）に混入させない
+- **PushLayer 回避**: PushLayer は各呼び出しで中間サーフェスを確保するため負荷が大きい。手動累積なら追加のGPUリソース不要
+- **CompositeContext 構造体**: `dc: &ID2D1DeviceContext` + `accumulated_opacity: f32` を保持し、将来の拡張（clipping等）にも対応可能
+- 各エンティティのローカル opacity は `Visual.opacity` フィールドから取得（Phase 0 で確立済み）
+- `Visual.is_visible == false` の場合はサブツリーごと描画スキップ
+- Layout層（Arrangement, GlobalArrangement, propagate系システム）は一切変更不要
+
+**トレードオフ**: 半透明の親の下で子同士が重なる部分は二重透過が見える。デスクトップマスコットでは各パーツが重ならないか、重なっても許容範囲のため問題なし
 
 ---
 
@@ -249,7 +252,7 @@ graph TB
 | 3.3 | DCompステージ置換 | Schedule再構成（後述） | — | — |
 | 3.4 | GraphicsCommandList再利用 | 変更なし | — | — |
 | 3.5 | リサイズ対応 | WindowD3D11Compositor.resize() | CompositorService | WM_SIZE→リサイズ |
-| 3.6 | Opacity階層累積 | GlobalArrangement.global_opacity | PropagateTransform | Opacity累積フロー |
+| 3.6 | Opacity階層累積 | composite_render_system内動的計算 | — | Opacity累積フロー |
 | 4.1 | ULW呼出 | UlwTransfer | UlwService | D2D→HBITMAP転送 |
 | 4.2 | WS_EX_LAYERED切替 | WindowStyle, main.rs | — | — |
 | 4.3 | alpha=0クリックスルー | OS標準動作 | — | — |
@@ -291,8 +294,8 @@ graph TB
 | WindowD3D11Compositor（新規） | Graphics/Resource | per-window合成リソース管理 | 3.1, 3.5, 4.1, 6.1 | GraphicsCore(P0), ID2D1Bitmap1(P0) | Service, State |
 | UlwTransfer（新規） | COM/Transfer | D2D→HBITMAP→ULW転送 | 4.1, 4.2, 4.4, 4.5 | WindowD3D11Compositor(P0), Win32 API(P0) | Service |
 | Visual（維持） | Graphics/Logic | 可視性・透明度・変換原点 | 6.2 | — | State |
-| GlobalArrangement（拡張） | Layout/Metrics | 累積座標変換 + Opacity | 3.6 | Arrangement(P0) | State |
-| composite_render_system（新規） | Graphics/System | 全CommandList合成描画 | 3.1-3.4 | WindowD3D11Compositor(P0), GlobalArrangement(P0) | — |
+| GlobalArrangement（維持） | Layout/Metrics | 累積座標変換（変更なし） | — | Arrangement(P0) | State |
+| composite_render_system（新規） | Graphics/System | 全CommandList合成描画 | 3.1-3.4, 3.6 | WindowD3D11Compositor(P0), GlobalArrangement(P0), Visual(P0) | — |
 | ulw_present_system（新規） | Graphics/System | ULW呼出 + エラーリカバリ | 4.1, 4.4, 4.5 | UlwTransfer(P0), WindowD3D11Compositor(P0) | — |
 | compositor_init_system（新規） | Graphics/System | per-window合成リソース初期化 | 3.1, 6.1 | GraphicsCore(P0) | — |
 
@@ -452,7 +455,7 @@ present_layered_window(
 **Responsibilities & Constraints**
 - フィールド: `is_visible: bool`, `opacity: f32`, `transform_origin: Vector2`
 - DComp依存なし（Discovery確認済み）VisualGraphics/SurfaceGraphicsを除去しても影響なし
-- `opacity` フィールドはローカル値（累積値は `GlobalArrangement.global_opacity` に伝播）
+- `opacity` フィールドはローカル値（累積計算は `composite_render_system` の再帰走査中に動的実行）
 
 **変更点: `on_visual_add` フック**
 - 現行: `VisualGraphics::default()`, `SurfaceGraphics::default()`, `SurfaceGraphicsDirty::default()` を自動挿入
@@ -467,26 +470,23 @@ present_layered_window(
 
 ### Layout / Metrics Layer
 
-#### GlobalArrangement（拡張）
+#### GlobalArrangement（変更なし）/ CompositeContext（新規）
 
 | Field | Detail |
 |-------|--------|
-| Intent | 累積座標変換に加え、累積Opacityを保持 |
+| Intent | GlobalArrangement: 累積座標変換の保持（変更なし）。CompositeContext: 合成ループ内で accumulated_opacity を親→子に伝搬 |
 | Requirements | 3.6 |
 
-**変更点**:
-- 新規フィールド: `global_opacity: f32`（初期値 `1.0`）
-- `propagate_global_arrangements` 経由で `parent_global_opacity * child_local_opacity` を累積
-- `Default::default()` で `global_opacity: 1.0` を設定
+**変更点**: なし（GlobalArrangement は座標変換のみを保持し、Opacity は保持しない）
 
-**PropagateTransform 実装の拡張**:
-- 既存の `PropagateTransform` トレイト（`Arrangement` → `GlobalArrangement` 変換）にOpacity累積ロジックを追加
-- ローカル `Visual.opacity` を参照するため、伝播クエリに `&Visual` を追加する必要がある
-- 代替案: `Opacity(f32)` コンポーネントが別に存在するが、`Visual.opacity` フィールドと統合されているため、`Visual` から直接取得が自然
+**Opacity の扱い**:
+- Opacity の累積計算は `composite_render_system` の合成ループ内で動的に行う（レイアウト層には含めない）
+- `Visual.opacity` と `Visual.is_visible` を合成時に参照し、親子ツリー走査中に `accumulated_opacity` を累積
+- レイアウト層（GlobalArrangement / PropagateTransform）は座標変換専用のまま維持
 
 **Constraints**:
-- `global_opacity` は `0.0..=1.0` の範囲（アンダーフロー/オーバーフローは clamp）
-- `is_visible == false` の場合、`global_opacity` は `0.0` に設定（描画スキップ最適化用）
+- 累積 opacity は `0.0..=1.0` の範囲（clamp）
+- `is_visible == false` の場合、サブツリーごとスキップ（描画スキップ最適化用）
 
 ---
 
@@ -528,24 +528,28 @@ present_layered_window(
 2. ウィンドウに属するエンティティをz-order順（Children関係のbreadth-first）でソート
 3. WindowD3D11Compositorの composition_bitmap を D2D DeviceContextにSetTarget
 4. BeginDraw → Clear(transparent)
-5. 各エンティティについて:
+5. `CompositeContext { dc, accumulated_opacity: 1.0 }` を作成し、ルートから再帰走査:
    - `GlobalArrangement.transform` で SetTransform
-   - `GlobalArrangement.global_opacity` が 0.0 ならスキップ（`Visual.is_visible == false` の場合を含む）
-   - `global_opacity < 1.0` の場合、PushLayer で opacity を適用（または DrawImage の composite mode で適用）
+   - `Visual.is_visible == false` ならサブツリーごとスキップ
+   - `ctx.accumulated_opacity * Visual.opacity` で最終 opacity を計算
+   - 最終 opacity が 0.0 ならスキップ
+   - 最終 opacity < 1.0 の場合、D2D Effect 等で opacity を適用して描画
    - `GraphicsCommandList` が存在する場合、`DrawImage(command_list)` で描画
+   - 子エンティティに `CompositeContext { dc, accumulated_opacity: local_opacity }` を渡して再帰
 6. EndDraw
 7. CopyFromBitmap(composition_bitmap → staging_bitmap)
 
 **Dependencies**:
 - Inbound: WindowD3D11Compositor — 合成描画先 (P0)
-- Inbound: GlobalArrangement — 座標変換 + Opacity (P0)
+- Inbound: GlobalArrangement — 座標変換 (P0)
+- Inbound: Visual — opacity + is_visible判定 (P0)
 - Inbound: GraphicsCommandList — ウィジェット描画データ (P0)
-- Inbound: Visual — is_visible判定 (P1)
-- External: ID2D1DeviceContext — DrawImage, SetTransform, PushLayer (P0)
+- External: ID2D1DeviceContext — DrawImage, SetTransform (P0)
 
 **Implementation Notes**
 - z-orderソート: bevy_ecsの `Children` コンポーネントから再帰的にdepth-first pre-order走査して描画順序を決定（画家のアルゴリズム: 親→子1→子1の子→子2→... の順で、先に描いたものが背景になる）
-- Opacity適用方法: `ID2D1DeviceContext::PushLayer()` で `D2D1_LAYER_PARAMETERS` の `opacity` フィールドを使用するか、`DrawImage` 前後でグローバルPrimitiveBlendを操作する。子仕様1設計フェーズで最適方式を確定
+- Opacity適用方法: **PushLayer は不使用**（中間サーフェス確保による負荷が大きいため）。`CompositeContext` で `accumulated_opacity` を手動累積し、D2D Effect または pre-multiplied alpha 操作で個別に適用。具体的な D2D API 選択は子仕様1設計フェーズで確定
+- CompositeContext: `struct CompositeContext<'a> { dc: &'a ID2D1DeviceContext, accumulated_opacity: f32 }` — 将来の clipping 等の拡張にも対応可能
 - ダーティ判定: ウィンドウ内のいずれかのエンティティで `Changed<GraphicsCommandList>` || `Changed<GlobalArrangement>` || `Changed<Visual>` であればウィンドウ全体を再合成
 
 ---
@@ -581,7 +585,7 @@ present_layered_window(
 | Update | invalidate_dependent_components (YELLOW) | コンポーネント型変更に追従 | 軽微改修 |
 | **PreLayout** | visual_resource_management (RED), visual_hierarchy_sync (RED), init_graphics_core (YELLOW) | init_graphics_core（DComp除去版）のみ | RED 2システム削除 |
 | Layout | 変更なし（taffy系4システム） | 変更なし | — |
-| PostLayout | 変更なし（arrangement伝播系5システム） | propagate_global_arrangementsにOpacity累積追加 | 軽微拡張 |
+| PostLayout | 変更なし（arrangement伝播系5システム） | 変更なし | — |
 | UISetup | 変更なし（create_windows, apply_window_pos_changes） | 変更なし | — |
 | **GraphicsSetup** | init_window_graphics (RED), window_visual_integration (RED) | **compositor_init_system** | 全面置換 |
 | **Draw** | deferred_surface_creation (RED), cleanup_surface (RED), ウィジェット描画系 (GREEN) | ウィジェット描画系のみ（RED 2システム削除） | RED削除 |
@@ -627,7 +631,6 @@ erDiagram
     GlobalArrangement {
         Matrix3x2 transform
         D2DRect bounds
-        f32 global_opacity
     }
 
     GraphicsCommandList {
@@ -641,33 +644,20 @@ erDiagram
 - **分離ポイント**: WindowD3D11Compositor（per-window）が複数の Visual Entity（per-entity）の GraphicsCommandList を合成する1:N関係
 
 **Business Rules & Invariants**:
-- `global_opacity = parent.global_opacity * local.opacity`（`is_visible == false` の場合は `0.0`）
-- `global_opacity ∈ [0.0, 1.0]`
+- opacity累積は `composite_render_system` の再帰走査中に `parent_accumulated * Visual.opacity` で動的計算（`is_visible == false` の場合はサブツリーごとスキップ）
 - WindowD3D11Compositor の全ビットマップリソースは同一サイズ
 - 合成描画の z-order は Children 関係の depth-first pre-order に従う
 
-### GlobalArrangement 拡張（Logical Data Model）
+### GlobalArrangement（変更なし）
 
-**変更前**:
-```
-GlobalArrangement {
-    transform: Matrix3x2,    // 累積座標変換
-    bounds: D2DRect,          // 累積バウンディングボックス
-}
-```
+Layout層のコンポーネントに描画属性（opacity）は含めない。Opacity 階層累積は `composite_render_system` の再帰走査中に動的計算する。
 
-**変更後**:
 ```
 GlobalArrangement {
     transform: Matrix3x2,    // 累積座標変換（変更なし）
     bounds: D2DRect,          // 累積バウンディングボックス（変更なし）
-    global_opacity: f32,      // 累積不透明度（NEW）
 }
 ```
-
-**Consistency**:
-- `global_opacity` は `propagate_global_arrangements` で毎フレーム再計算（layoutツリー変更時のみ）
-- `ArrangementTreeChanged` マーカーコンポーネントが既存のdirty伝播メカニズムとして機能
 
 ---
 
@@ -695,7 +685,7 @@ GlobalArrangement {
 ## Testing Strategy
 
 ### Unit Tests
-- `GlobalArrangement::global_opacity` の累積計算テスト（parent 0.8 × child 0.5 = 0.4）
+- 合成ループ内 Opacity 累積計算テスト（parent 0.8 × child 0.5 = 0.4、`composite_render_system` 内で動的に計算）
 - `WindowD3D11Compositor::new()` / `resize()` / `invalidate()` のライフサイクルテスト
 - `UlwTransfer::transfer_to_hbitmap()` のpitch/strideが異なるケースでの正しいコピー検証
 - `UlwTransfer::present_layered_window()` のBLENDFUNCTION構成テスト
@@ -765,8 +755,7 @@ graph LR
 - `com/ulw.rs` 新規作成: ULW ユーティリティ関数（ただしULW呼び出しはPhase 3）
 - `ecs/graphics/compositor.rs` 新規作成: WindowD3D11Compositor コンポーネント定義
 - `ecs/graphics/compositor_systems.rs` 新規作成: compositor_init_system, composite_render_system
-- `ecs/layout/arrangement.rs` 拡張: GlobalArrangement に global_opacity フィールド追加
-- `ecs/layout/systems.rs` 拡張: propagate_global_arrangements に Opacity 累積ロジック追加
+- `ecs/graphics/compositor_systems.rs`: composite_render_system 内で Opacity 累積を動的に計算（レイアウト層は変更なし）
 
 **前提条件**: 子仕様0完了（Widget→Visual.opacityデータフロー確立済み）
 **並行稼働**: DComp パイプラインは変更せず稼働継続。新システムは world.rs に**登録しない**（独立テスト）
@@ -774,7 +763,7 @@ graph LR
 **完了基準（DoD）**:
 - `WindowD3D11Compositor::new()` が ID2D1Bitmap1 + HBITMAP リソースを正しく作成
 - `composite_render_system` が GraphicsCommandList を z-order + transform + opacity で合成描画
-- `global_opacity` 累積が unit test でパス
+- 合成ループ内 opacity 累積が unit test でパス
 - 新パイプライン単体での描画結果が taffy_flex_demo 相当と視覚的に一致
 
 ### 子仕様2: DCompパイプライン置換（Phase 2）

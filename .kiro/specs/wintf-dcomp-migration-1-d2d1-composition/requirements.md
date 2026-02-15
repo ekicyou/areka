@@ -72,7 +72,7 @@ _Parent: Req 3.1, 3.2, 3.3, 3.4_
 
 4. The `composite_render_system` shall 再帰的な階層走査中に `parent_opacity * Visual.opacity` で各エンティティの最終的な opacity を累積計算し、親から子へ引き継ぐ
 
-5. When 累積 opacity が 1.0 未満のエンティティを処理する時, the `composite_render_system` shall D2D1 レイヤー機構（`PushLayer` または同等 API）で累積 opacity を適用してから描画する
+5. When 累積 opacity が 1.0 未満のエンティティを処理する時, the `composite_render_system` shall D2D Effect または pre-multiplied alpha 操作で累積 opacity を適用してから描画する（PushLayer は中間サーフェス確保の負荷のため不使用）
 
 6. The `composite_render_system` shall 合成描画完了後、合成ビットマップからステージングビットマップへピクセルデータをコピーする
 
