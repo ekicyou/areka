@@ -3,7 +3,7 @@
 ## Project Description (Input)
 SetWindowRgn ベースのクリックスルー（クロスプロセス対応）実装 - **実験的仕様**
 
-wintf フレームワークにおいて、HitTest::None エンティティのクリックスルーをクロスプロセスで実現する。
+wintf フレームワークにおいて、HitTestMode::None エンティティのクリックスルーをクロスプロセスで実現する。
 従来の WS_EX_TRANSPARENT + WM_NCHITTEST (HTTRANSPARENT) アプローチは同一スレッド内のウィンドウ間でしか機能しないことが判明したため、SetWindowRgn を使用してウィンドウリージョンからクリックスルー領域を除外する方式に切り替える。
 
 ### 背景
@@ -42,12 +42,12 @@ wintf フレームワークにおいて、HitTest::None エンティティのク
 6. The wintf shall release bitmap resources after HRGN construction
 
 ### Requirement 3: エンティティによる不透明領域書き込み
-**Objective:** 開発者として、各エンティティが自身の不透明領域を1bitビットマップに書き込めるようにしたい。これにより、HitTest::None 以外のエンティティのみがクリック可能領域として登録される。
+**Objective:** 開発者として、各エンティティが自身の不透明領域を1bitビットマップに書き込めるようにしたい。これにより、HitTestMode::None 以外のエンティティのみがクリック可能領域として登録される。
 
 #### Acceptance Criteria
-1. When entity rendering pass is invoked, the wintf shall iterate all entities with HitTest component
-2. When an entity has HitTest::Opaque or HitTest::Client, the wintf shall write the entity's physical bounds as opaque (1) to the bitmap
-3. When an entity has HitTest::None, the wintf shall skip writing to the bitmap (leaving the region transparent)
+1. When entity rendering pass is invoked, the wintf shall iterate all entities with HitTest component (note: entities without HitTest component default to HitTestMode::Bounds)
+2. When an entity has HitTestMode other than None (i.e., Bounds, AlphaMask, or NamedRegions), the wintf shall write the entity's physical bounds as opaque (1) to the bitmap
+3. When an entity has HitTestMode::None, the wintf shall skip writing to the bitmap (leaving the region transparent)
 4. The wintf shall clip entity bounds to the window dimensions before writing to bitmap
 5. The wintf shall write entity regions to bitmap in parent-to-child hierarchy order to respect z-ordering
 
@@ -86,11 +86,11 @@ wintf フレームワークにおいて、HitTest::None エンティティのク
 4. If visual rendering is broken after SetWindowRgn, the wintf shall log a critical incompatibility warning
 
 ### Requirement 8: クロスプロセスクリックスルー
-**Objective:** エンドユーザーとして、HitTest::None エンティティの領域をクリックした際、他のプロセスのウィンドウにクリックイベントが貫通することを期待する。これにより、デスクトップマスコットの透過領域を通してデスクトップアイコンや他のアプリケーションを操作できる。
+**Objective:** エンドユーザーとして、HitTestMode::None エンティティの領域をクリックした際、他のプロセスのウィンドウにクリックイベントが貫通することを期待する。これにより、デスクトップマスコットの透過領域を通してデスクトップアイコンや他のアプリケーションを操作できる。
 
 #### Acceptance Criteria
-1. When user clicks on a HitTest::None entity area, the wintf shall allow the click event to pass through to windows from other processes
-2. When user clicks on a non-HitTest::None entity area, the wintf shall capture the click event and prevent pass-through
+1. When user clicks on a HitTestMode::None entity area, the wintf shall allow the click event to pass through to windows from other processes
+2. When user clicks on a non-HitTestMode::None entity area, the wintf shall capture the click event and prevent pass-through
 3. The wintf shall achieve cross-process click-through without requiring WS_EX_TRANSPARENT or HTTRANSPARENT
 
 ### Requirement 9: パフォーマンス測定と最適化指針
