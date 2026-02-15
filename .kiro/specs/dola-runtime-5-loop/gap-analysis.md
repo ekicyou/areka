@@ -338,11 +338,30 @@ effective_time = (current_time - loop_start_time - pause_accumulated) * time_sca
 | コンポーネント | 工数 | 根拠 |
 |--------------|------|------|
 | LoopController フリー関数群 (Req 1, 3) | **S** (1-2日) | 周回判定・インクリメント・飽和加算。純粋関数で実装シンプル |
-| loop_offset 機構 (Req 2, 4) | **S** (1-2日) | フィールド追加 + `calculate_effective_time()` 修正。既存パターン踏襲 |
-| facade 統合 (Req 1-5) | **S** (1-2日) | `update()` のループ分岐挿入、`start()` の end_time 計算修正 |
-| 単体テスト (Req 1-5) | **S** (2-3日) | 3種ループ × 周回境界 × Pause/Resume 組合せ × Cancel |
+| loop_start_time 機構 (Req 2, 4) | **S** (1-2日) | フィールド追加 + `calculate_effective_time()` 修正。既存パターン踏襲 |
+| facade 統合 (Req 1-5) | **S** (1-2日) | `update()` の while ループ挿入、`start()` の end_time 計算修正 |
+| 単体テスト (Req 1-5) | **S** (2-3日) | 下記テストケース群を実施 |
 | 統合テスト | **S** (1日) | facade 経由のエンドツーエンド |
 | **合計** | **S〜M** (6-10日) | |
+
+#### 重要なテストケース
+
+**基本ループ動作** (Req 1):
+- loop_count=1: 1回再生後に Conclude
+- loop_count=3: 3回再生後に Conclude
+- loop_count=-1: 無限ループ（Cancel までの動作確認）
+
+**複数周回一括処理** (Req 1 AC4, Req 2 AC2) — **抜けやすいクリティカルケース**:
+- loop_count=3, duration=2秒, update(5秒) で一度に2周終了
+- loop_count=5, duration=1秒, update(10秒) で全周回が一度に完了
+- 無限ループで複数周回を飛ばした場合の loops_completed の正確性
+
+**Pause/Resume 組合せ** (Req 4):
+- ループ中に Pause → Resume 後の正確な周回・位置復帰
+- 複数周回飛ばし + Pause の組合せ
+
+**外部制御** (Req 5):
+- ループ中の Cancel 即座停止
 
 ### 5.2 リスク評価
 
