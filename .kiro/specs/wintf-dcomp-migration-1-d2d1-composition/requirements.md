@@ -104,11 +104,13 @@ _Parent: Req 3.1, 6.1_
 
 _Parent: Req 3.6_
 
+**ソースデータ**: `Visual.opacity` フィールド（描画属性として Visual が保持）
+
 #### Acceptance Criteria
 
 1. The `GlobalArrangement` shall `global_opacity: f32` フィールドを持ち、初期値は `1.0`（完全不透明）とする
 
-2. The `propagate_global_arrangements` shall 各エンティティの `global_opacity` を `parent.global_opacity * child.opacity` として計算する
+2. The `propagate_global_arrangements` shall 各エンティティの `global_opacity` を `parent.global_opacity * Visual.opacity` として計算する
 
 3. The `propagate_global_arrangements` shall 計算後の `global_opacity` を `[0.0, 1.0]` 範囲にクランプする
 

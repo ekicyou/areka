@@ -78,25 +78,31 @@ M: Component<Mutability = Mutable>,
 
 **`GlobalArrangement` に `global_opacity` を追加する場合、`impl Mul<Arrangement> for GlobalArrangement` の実装を拡張して opacity 累積を含める必要がある。** しかし、`Arrangement` には opacity フィールドがない。
 
-### 1.3 Opacity の二重定義問題
+### 1.3 Visual 描画属性の現状
 
-現行コードベースには **2つの Opacity 機構** が存在する：
+**Visual 構造体の設計意図**: 描画属性（opacity, is_visible, transform_origin）を保持するコンポーネント
 
-| 名前 | 型 | 場所 | 用途 |
+| 名前 | 型 | 場所 | 役割 |
 |------|------|------|------|
-| `Visual.opacity` | `f32` フィールド | `components.rs` | **デッドフィールド**（プロダクションコードで一切読み書きされていない。テストコードのみ） |
-| `Opacity` | `Component` | `metrics.rs` | `visual_property_sync_system` で DComp Visual に反映（唯一の実稼働機構） |
+| `Visual.opacity` | `f32` フィールド | `components.rs` | **描画属性（正式）** — 現在未使用だが Phase 1 で初ワイヤリング |
+| `Visual.is_visible` | `bool` フィールド | `components.rs` | **描画属性（正式）** — 現在未使用だが Phase 1 で初ワイヤリング |
+| `Opacity` | `Component` | `metrics.rs` | **設計ミス** — layout モジュールに配置されているが、opacity は描画属性であり layout 概念ではない |
 
-`visual_property_sync_system` は `Opacity` コンポーネントを読んで DComp `visual.set_opacity()` を呼ぶ。`Visual.opacity` は `default()` で `1.0` に初期化されるが、プロダクションコード内で読み書きするシステムは一切存在しない（grep で確認済み）。
+**処理の伝搬層**:
+```
+Widget → GraphicsCommandList  （何を描くか）
+Layout → Visual               （どこに、どう描くか）
+         ↓
+    Visual.opacity          （透明度 = 描画属性）
+    Visual.is_visible       （描画実行の有無 = 描画属性）
+```
 
-同様に **`Visual.is_visible` も完全に未使用** — フィールド定義と Default 実装のみ存在し、条件分岐で参照するシステムはゼロ。現行 DComp パイプラインでは可視性制御が `Visual` コンポーネント経由で行われていないことを意味する。
+**現状の誤った実装**: `visual_property_sync_system` が `Opacity` コンポーネント（metrics.rs）を参照しているが、これは **Visual.opacity を使うべき**。
 
-**Req 4 における「`child.opacity`」の解釈が曖昧**:
-- `Opacity` コンポーネント（metrics.rs）を使うべきか？
-- `Visual.opacity` フィールドを使うべきか？
-- または両方の統合？
-
-→ **要件レビューで確定が必要（議題1参照）。推奨: `Opacity` コンポーネントを使用（唯一の実稼働機構）**
+**Phase 1 での修正方針**:
+- `Visual.opacity` を正式な透明度ソースとして使用
+- `Visual.is_visible` を正式な可視性制御として使用
+- `Opacity` コンポーネントは Phase 2 以降で廃止候補（DComp 依存コード削除時）
 
 ---
 
@@ -163,18 +169,18 @@ M: Component<Mutability = Mutable>,
 | AC | 既存資産 | ギャップ | 難度 |
 |----|---------|--------|------|
 | AC1: global_opacity フィールド | `GlobalArrangement` 構造体（transform + bounds の2フィールド） | フィールド追加 + Default 更新 | Low |
-| AC2: 乗算累積 | `impl Mul<Arrangement> for GlobalArrangement` | **Arrangement に opacity がないため、Mul 実装で累積不可** | **High** |
+| AC2: 乗算累積 | `impl Mul<Arrangement> for GlobalArrangement` | **Arrangement に opacity がなく、Visual.opacity を参照する必要あり** | **High** |
 | AC3: クランプ | — | 単純な `.clamp(0.0, 1.0)` | Low |
 | AC4: 同一パス実行 | `propagate_parent_transforms` ジェネリック関数 | **ジェネリック制約により、opacity 累積を Mul trait 内に入れるか、カスタム伝播が必要** | **High** |
 | AC5: 回帰なし | `GlobalArrangement` を参照するテスト多数 | `Default::default()` で `global_opacity: 1.0` なら影響最小 | Low |
 
 **核心的なギャップ 1: `propagate_parent_transforms` のジェネリック設計との不整合**
 
-現在の伝播は `G = parent_global * child_local` で計算される（`Mul<L, Output=G>` trait）。`Arrangement` には opacity が含まれないため、`GlobalArrangement` の `global_opacity` をこのメカニズムだけで累積できない。
+現在の伝播は `G = parent_global * child_local` で計算される（`Mul<L, Output=G>` trait）。`Arrangement` には opacity が含まれないため、`GlobalArrangement` の `global_opacity` をこのメカニズムだけで累積できない。**別途 `Visual.opacity` を参照するロジックが必要**。
 
-**核心的なギャップ 2: `ArrangementTreeChanged` トリガーが Opacity 変更をカバーしない**
+**核心的なギャップ 2: `ArrangementTreeChanged` トリガーが Visual.opacity 変更をカバーしない**
 
-`propagate_global_arrangements` は `Changed<ArrangementTreeChanged>` をトリガーとして実行される。`Opacity` コンポーネントの変更はこのマーカーを設定しないため、Opacity だけが変更された場合に `propagate_global_arrangements` が実行されず、`GlobalArrangement.global_opacity` が更新されない問題がある。Opacity 変更を伝播のトリガーに含める設計が必要（議題2参照）。
+`propagate_global_arrangements` は `Changed<ArrangementTreeChanged>` をトリガーとして実行される。`Visual.opacity` 変更はこのマーカーを設定しないため、Visual.opacity だけが変更された場合に `propagate_global_arrangements` が実行されず、`GlobalArrangement.global_opacity` が更新されない問題がある。Visual.opacity 変更を伝播のトリガーに含める設計が必要（議題2参照）。
 
 **アプローチオプション:**
 
@@ -191,8 +197,8 @@ pub struct Arrangement {
 
 - `impl Mul<Arrangement> for GlobalArrangement` で `global_opacity = self.global_opacity * rhs.opacity` を計算
 - **利点**: ジェネリック伝播パイプラインを変更不要
-- **欠点**: `Arrangement` はレイアウト概念であり、opacity というビジュアル概念を混ぜる設計上の不整合
-- **欠点**: 既存 `Opacity` コンポーネントとの関係が曖昧化
+- **欠点**: `Arrangement` はレイアウト概念であり、opacity という描画属性を混ぜる設計上の不整合
+- **欠点**: `Visual.opacity` との同期が必要（どちらが真実のソースか曖昧）
 - **欠点**: Arrangement を参照する全テスト・全システムへの潜在的影響
 
 #### Option B: 専用の Opacity 伝播パスを追加
@@ -201,29 +207,29 @@ pub struct Arrangement {
 // propagate_global_arrangements の後に追加システム
 pub fn propagate_global_opacity(
     roots: Query<(Entity, &Children, &mut GlobalArrangement), Without<ChildOf>>,
-    nodes: Query<(&Opacity, &Visual, &mut GlobalArrangement, Option<&Children>)>,
+    nodes: Query<(&Visual, &mut GlobalArrangement, Option<&Children>)>,
 ) { ... }
 ```
 
 - `propagate_global_arrangements` の直後に別システムとして実行
-- **利点**: `Arrangement` を汚さない、`Opacity` コンポーネントを直接参照
+- **利点**: `Arrangement` を汚さない、`Visual.opacity` を直接参照
 - **欠点**: 追加の階層走査（パフォーマンスコスト）
 - **欠点**: AC5「同一パスで実行」の要件違反
 
 #### Option C: `propagate_global_arrangements` をカスタム実装に置換
 
-ジェネリック `propagate_parent_transforms` を呼ぶのではなく、Arrangement 用の専用実装に差し替え。この中で `Opacity` と `Visual.is_visible` を同時に参照して `global_opacity` を計算。
+ジェネリック `propagate_parent_transforms` を呼ぶのではなく、Arrangement 用の専用実装に差し替え。この中で `Visual.opacity` と `Visual.is_visible` を同時に参照して `global_opacity` を計算。
 
 - **利点**: 同一パスで実行（AC5 準拠）
-- **利点**: `Arrangement` の型を変更不要
+- **利点**: `Arrangement` の型を変更不要、`Visual.opacity` を直接参照
 - **欠点**: ジェネリック共通基盤を活用できなくなる（`common/tree_system.rs` からの分岐）
 - **欠点**: 実装量が最も多い
 
-#### Option D: Arrangement に opacity を追加 + Opacity コンポーネントとの同期システム
+#### Option D: Arrangement に opacity を追加 + Visual.opacity との同期システム
 
-Arrangement に opacity フィールドを追加するが、ユーザーは従来通り `Opacity` コンポーネントで設定。同期システムが `Opacity` → `Arrangement.opacity` を毎フレーム転送。
+Arrangement に opacity フィールドを追加するが、ユーザーは従来通り `Visual.opacity` で設定。同期システムが `Visual.opacity` → `Arrangement.opacity` を毎フレーム転送。
 
-- **利点**: ジェネリック伝播を維持、ユーザー API は変わらない
+- **利点**: ジェネリック伝播を維持、ユーザー API は Visual のまま
 - **欠点**: 同期コスト、二重管理の複雑性
 
 **→ 設計フェーズで Option A vs Option B vs Option C を決定。推奨は Option A（最もシンプル）、ただし設計上の不整合に注意。**
@@ -351,8 +357,8 @@ Option A をベースに、opacity 累積のみ Phase 1 から除外し、`globa
 
 ### 設計フェーズで確定が必要な項目
 
-1. **Opacity 累積メカニズム**: Option A（Arrangement に opacity 追加）vs Option B（別パス）vs Option C（カスタム伝播）
-2. **Opacity ソース**: `Opacity` コンポーネント vs `Visual.opacity` フィールド — 統合方針
+1. **Opacity 累積メカニズム**: Option A（Arrangement に opacity 追加）vs Option B（別パス）vs Option C（カスタム伝播）vs Option D（同期システム）
+2. **Visual.opacity 変更トリガー**: `propagate_global_arrangements` のトリガーに `Changed<Visual>` を追加するか、別の伝播制御方式を採用するか
 3. **DeviceContext 共有**: `GraphicsCore` の共有 DC を合成で使うか、WindowD3D11Compositor 用に専用 DC を作るか
 4. **ダーティ判定粒度**: ウィンドウ全体再合成 vs 差分更新（Phase 1 ではウィンドウ全体再合成で十分と想定）
 
