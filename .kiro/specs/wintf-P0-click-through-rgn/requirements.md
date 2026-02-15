@@ -101,3 +101,13 @@ wintf フレームワークにおいて、HitTest::None エンティティのク
 2. When region update time exceeds 16ms (60 FPS threshold), the wintf shall log a performance warning
 3. The wintf shall provide configuration to disable region updates for performance comparison
 4. If sustained region update overhead degrades application responsiveness, the wintf shall document the incompatibility for architectural decision
+
+### Requirement 10: モジュール化とリジェクション容易性
+**Objective:** 開発者として、実験的実装が失敗した場合に容易に機能を削除できるようにしたい。これにより、パフォーマンスや互換性の問題が判明した際、既存コードへの影響を最小限に抑えながら機能を無効化できる。
+
+#### Acceptance Criteria
+1. The wintf shall provide a standalone function that takes ECS World and returns HRGN (e.g., `build_window_region_from_world(world: &World) -> Result<HRGN>`)
+2. The wintf shall invoke the region construction function only from the 0.25-second timer callback
+3. The wintf shall allow disabling region updates by removing the timer callback invocation without modifying the region construction function
+4. When region updates are disabled, the wintf shall not interfere with existing window behavior
+5. The wintf shall encapsulate all SetWindowRgn-related logic within a clearly defined module boundary
