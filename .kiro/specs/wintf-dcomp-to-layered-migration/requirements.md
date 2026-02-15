@@ -99,13 +99,13 @@ DirectCompositionベース⇒UpdateLayeredWindowベースへ変更。マウス�
 
 ### Requirement 3: 新描画パイプライン（D2D1合成方式）
 
-**Objective:** 開発者として、DComp Visual階層を使わずにD2D1で全ウィジェットを単一ビットマップに合成描画する仕組みが欲しい。
+**Objective:** 開発者として、DComp COMリソースをD2D1ベースに一新しつつ、Visual/Surface のComposition概念を継承した合成描画パイプラインが欲しい。
 
 #### Acceptance Criteria
 
 1. The 新パイプライン shall ウィンドウごとに1つの合成ビットマップ（ID2D1Bitmap1 or WIC Bitmap）を確保し、全ウィジェットのGraphicsCommandListを座標オフセット＋不透明度を適用しながら合成描画する
 
-2. The 新パイプライン shall DComp Visual階層同期システム（visual_hierarchy_sync_system）を、自前のz-order管理＋合成描画による単一ビットマップ出力に置換する
+2. The 新パイプライン shall 既存のComposition概念（Visual階層、z-order、親子関係）をD2D1合成方式で引き継ぎ、DComp Visual階層同期システム（visual_hierarchy_sync_system）をD2D1ベースの合成描画ループに置換する
 
 3. The 新パイプライン shall 以下のDCompスケジュールステージを置換する：
    - `PreLayout`のVisual作成 → 合成レイヤー管理
@@ -157,7 +157,7 @@ DirectCompositionベース⇒UpdateLayeredWindowベースへ変更。マウス�
 
 ### Requirement 6: ECSコンポーネント再設計
 
-**Objective:** 開発者として、DComp固有のコンポーネントをD2D1合成方式に適したコンポーネントに置換したい。
+**Objective:** 開発者として、論理コンポーネント（Visual概念）を継承しつつ、DComp COMリソースコンポーネントをD2D1合成方式に適したものに一新したい。
 
 #### Acceptance Criteria
 
@@ -165,13 +165,13 @@ DirectCompositionベース⇒UpdateLayeredWindowベースへ変更。マウス�
    - 合成ビットマップ（ID2D1Bitmap1）: ウィンドウ全体の合成描画先
    - MemoryDC/HBITMAP: UpdateLayeredWindow転送用
 
-2. The wintf crate shall VisualGraphicsコンポーネント（IDCompositionVisual3保持）を廃止し、合成描画時のz-order/座標情報はArrangement/GlobalArrangementコンポーネントから取得する
+2. The wintf crate shall Visual（論理コンポーネント）のComposition概念（階層、z-order、親子関係）を継承する。既存のVisualコンポーネントがそのまま利用可能かを設計フェーズで調査し、利用不可と判明した場合は仮名（Visual2等）で新コンポーネントを並行作成する
 
-3. The wintf crate shall SurfaceGraphicsコンポーネント（IDCompositionSurface保持）を廃止する（個別エンティティのサーフェスは不要、ウィンドウ単位の合成ビットマップに統合）
+3. The wintf crate shall VisualGraphicsコンポーネント（IDCompositionVisual3保持）およびSurfaceGraphicsコンポーネント（IDCompositionSurface保持）を、D2D1合成方式に適した新リソースコンポーネントに一新する
 
-4. The wintf crate shall visual_manager.rsのDComp Visual作成・階層管理を廃止する
+4. The wintf crate shall visual_manager.rsのDComp固有リソース管理（IDCompositionVisual作成等）を、D2D1合成方式のリソース管理に置換する
 
-5. The wintf crate shall コンポーネント命名規則（GPUリソースは`XxxGraphics`サフィックス）を維持し、新しいWindowGraphicsの設計に適用する
+5. The wintf crate shall コンポーネント命名規則（GPUリソースは`XxxGraphics`サフィックス）を維持し、新しいWindowGraphicsおよびリソースコンポーネントの設計に適用する
 
 ### Requirement 7: ウィンドウメッセージハンドリングの更新
 
