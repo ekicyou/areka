@@ -544,7 +544,7 @@ present_layered_window(
 - External: ID2D1DeviceContext — DrawImage, SetTransform, PushLayer (P0)
 
 **Implementation Notes**
-- z-orderソート: bevy_ecsの `Children` コンポーネントから再帰的にBFS走査して描画順序を決定。parent先 → children後
+- z-orderソート: bevy_ecsの `Children` コンポーネントから再帰的にdepth-first pre-order走査して描画順序を決定（画家のアルゴリズム: 親→子1→子1の子→子2→... の順で、先に描いたものが背景になる）
 - Opacity適用方法: `ID2D1DeviceContext::PushLayer()` で `D2D1_LAYER_PARAMETERS` の `opacity` フィールドを使用するか、`DrawImage` 前後でグローバルPrimitiveBlendを操作する。子仕様1設計フェーズで最適方式を確定
 - ダーティ判定: ウィンドウ内のいずれかのエンティティで `Changed<GraphicsCommandList>` || `Changed<GlobalArrangement>` || `Changed<Visual>` であればウィンドウ全体を再合成
 
