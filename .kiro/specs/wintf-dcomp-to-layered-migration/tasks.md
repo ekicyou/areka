@@ -26,7 +26,7 @@
   - _Requirements: 3.1, 3.2, 3.3, 3.4, 3.5, 3.6, 6.1, 10.1, 10.2_
   - _Dependencies: Task 1_
 
-- [ ] 3. Phase 2 子仕様の作成
+- [x] 3. Phase 2 子仕様の作成
   - 統合指針文書と Phase 1 子仕様を参照し、DComp パイプライン置換（ECS システム切り替え、スケジュール更新）の仕様を策定する
   - 仕様サイクル全工程を完了する（init → requirements → design → tasks）
   - 親仕様の設計に基づき、GraphicsCore からの DComp 初期化除去、world.rs のスケジュール切り替え、on_visual_add フック更新の詳細設計を子仕様に具体化する
