@@ -83,16 +83,19 @@ DirectCompositionベース⇒UpdateLayeredWindowベースへ変更。マウス�
 
 #### Acceptance Criteria
 
-1. The 実装指針 shall 以下の3フェーズ段階的移行戦略を定義する：
+1. The 実装指針 shall 以下の4フェーズ段階的移行戦略を定義する：
    - **フェーズ1**: D2D1ベースの新合成スタック構築（DComp並行稼働、旧コード温存）
    - **フェーズ2**: DCompパイプラインからD2D1合成パイプラインへの切り替え（旧コード参照可能な状態で新パイプライン有効化）
-   - **フェーズ3**: UpdateLayeredWindow統合と旧DCompコード削除
+   - **フェーズ3**: UpdateLayeredWindow統合（WS_EX_LAYERED適用、ULW呼出、クリックスルー検証）
+   - **フェーズ4**: 旧DCompコード削除と最終クリーンアップ
 
 2. When フェーズ1が完了した時, the 新パイプライン shall DCompパイプラインと同等の描画結果を達成する（矩形描画、テキスト描画、画像描画、透過表示の各機能）
 
 3. When フェーズ2が完了した時, the wintf crate shall DCompベースの合成パイプラインを無効化し、D2D1合成パイプラインで全描画を実行する
 
-4. When フェーズ3が完了した時, the wintf crate shall DComp関連コード（com/dcomp.rs参照を含む）をECSシステムから完全に除去し、UpdateLayeredWindowによるウィンドウ更新を実装する
+4. When フェーズ3が完了した時, the wintf crate shall UpdateLayeredWindowによるウィンドウ更新を実装し、alpha=0ピクセルのクリックスルーが動作すること
+
+5. When フェーズ4が完了した時, the wintf crate shall DComp関連コード（com/dcomp.rs、DCompコンポーネント、DCompシステム）をECSコードから完全に除去し、cargo test全テストがパスすること
 
 ### Requirement 3: 新描画パイプライン（D2D1合成方式）
 
