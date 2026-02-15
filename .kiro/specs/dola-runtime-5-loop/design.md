@@ -404,8 +404,23 @@ let end_time = start_time + loop_duration;
 ```
 
 **Implementation Notes**
-- `instances_mut()` メソッドを InstanceManager に追加する必要がある
-- `loop_controller::process_loops()` が `&mut StoryboardInstance` を受け取るため、collect() で中間結果を確定してから `conclude_internal()` を呼ぶ（borrowck 対策）
+
+`instances_mut()` API を InstanceManager に追加（既存 `instances()` と対称的）：
+
+```rust
+// InstanceManager に追加
+pub(crate) fn instances_mut(&mut self) -> &mut HashMap<u64, StoryboardInstance> {
+    &mut self.instances
+}
+```
+
+**borrowck 検証**:
+1. `instances_mut()` で `&mut HashMap` を取得 → `iter_mut()` で各インスタンスを可変借用
+2. `process_loops()` が `&mut StoryboardInstance` を受け取り、フィールドを更新（周回進行処理）
+3. `collect()` で Vec に結果を確定 → ここで InstanceManager への可変借用が終了
+4. その後 `conclude_internal(gid)` を呼び出し（`&mut self` の新しい借用を要求）
+
+collect() なしで直接 `conclude_internal()` を呼ぶと、InstanceManager が二重に可変借用されるため borrowck エラーになる。
 
 #### timeline_manager.rs
 
