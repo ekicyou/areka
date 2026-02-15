@@ -290,8 +290,6 @@ pub enum RuntimeError {
     StoryboardNotFound(String),
     /// 存在しない group_id（終了済みインスタンスへの操作を含む）
     InvalidGroupId(u64),
-    /// TOML パース失敗
-    DocumentParseError(String),
     /// duration=0 + loop_count
     ZeroDurationWithLoop { storyboard: String },
     /// コンパイルエラー（複数エラー対応）
@@ -443,7 +441,6 @@ fn transition_value_to_dynamic(value: &TransitionValue) -> DynamicValue;
 |--------|------|------|
 | `StoryboardNotFound` | 未定義名での Start | 呼び出し側で名前を確認 |
 | `InvalidGroupId` | 存在しない/終了済み group_id への操作 | 呼び出し側で group_id の有効性を確認 |
-| `DocumentParseError` | TOML 不正 | 定義ファイルを修正 |
 | `ZeroDurationWithLoop` | duration=0 + loop | 定義を修正 |
 | `CompileError` | バリデーション/コンパイル失敗 | Vec<DolaError> の詳細を確認 |
 

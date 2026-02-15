@@ -33,8 +33,6 @@ pub enum RuntimeError {
     StoryboardNotFound(String),
     /// 指定 group_id が存在しない（終了済みインスタンスへの操作を含む）
     InvalidGroupId(u64),
-    /// 指示書パース失敗 (Req 1.5)
-    DocumentParseError(String),
     /// duration=0 かつ loop_count 設定 (Req 2.9)
     ZeroDurationWithLoop { storyboard: String },
     /// コンパイルエラー（既存 DolaError のラップ）
@@ -49,9 +47,6 @@ impl fmt::Display for RuntimeError {
             }
             Self::InvalidGroupId(id) => {
                 write!(f, "invalid group_id: {id}")
-            }
-            Self::DocumentParseError(msg) => {
-                write!(f, "document parse error: {msg}")
             }
             Self::ZeroDurationWithLoop { storyboard } => {
                 write!(

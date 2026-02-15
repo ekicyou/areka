@@ -294,13 +294,6 @@ mod runtime_error_tests {
     }
 
     #[test]
-    fn document_parse_error_display() {
-        let err = RuntimeError::DocumentParseError("invalid toml".to_string());
-        let msg = format!("{err}");
-        assert!(msg.contains("invalid toml"));
-    }
-
-    #[test]
     fn zero_duration_with_loop_display() {
         let err = RuntimeError::ZeroDurationWithLoop {
             storyboard: "blink".to_string(),

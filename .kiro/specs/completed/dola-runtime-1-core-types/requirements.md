@@ -70,7 +70,6 @@ _Parent: Req 1.5, 2.8, 2.9, 3.7、統合指針 Section 3.1_
 1. The RuntimeError enum shall 以下のバリアントを定義する:
    - `StoryboardNotFound(String)` — 存在しないストーリーボード名（Parent Req 2.8）
    - `InvalidGroupId(u64)` — 存在しない group_id（終了済みインスタンスへの操作を含む。終了インスタンスは即座に削除される設計）
-   - `DocumentParseError(String)` — TOML パース失敗（Parent Req 1.5）
    - `ZeroDurationWithLoop { storyboard: String }` — duration=0 + loop_count（Parent Req 2.9）
    - `CompileError(Vec<DolaError>)` — 既存コンパイルエラーのラップ（`compile_storyboard()` が `Vec<DolaError>` を返すため）
 2. The RuntimeError enum shall `Debug`, `Clone` を derive する。

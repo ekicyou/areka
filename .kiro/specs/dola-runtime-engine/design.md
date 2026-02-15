@@ -711,8 +711,6 @@ enum RuntimeError {
     InvalidGroupId(u64),
     /// 終了済みインスタンスへの操作 (3.7)
     TerminatedInstance { group_id: u64, state: InstanceState },
-    /// 指示書パース失敗 (1.5)
-    DocumentParseError(String),
     /// duration=0 かつ loop_count 設定 (2.9)
     ZeroDurationWithLoop { storyboard: String },
     /// コンパイルエラー（既存 DolaError のラップ）
@@ -749,7 +747,6 @@ struct StartResult {
 | Invalid Input | duration=0 + loop_count (2.9) | `RuntimeError::ZeroDurationWithLoop` |
 | Invalid State | 終了済みインスタンスへの操作 (3.7) | `RuntimeError::TerminatedInstance` |
 | Invalid State | 存在しない group_id | `RuntimeError::InvalidGroupId` |
-| Parse Error | TOML パース失敗 (1.5) | `RuntimeError::DocumentParseError` |
 | Compile Error | バリデーション/コンパイル失敗 | `RuntimeError::CompileError` |
 
 ---
