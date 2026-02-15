@@ -253,6 +253,27 @@ mod evaluated_value_tests {
             EvaluatedValue::Object(DynamicValue::String("hello".to_string()))
         );
     }
+
+    #[test]
+    fn display_float() {
+        let v = EvaluatedValue::Float(3.14159);
+        let s = format!("{v}");
+        assert_eq!(s, "3.141590");
+    }
+
+    #[test]
+    fn display_integer() {
+        let v = EvaluatedValue::Integer(-42);
+        let s = format!("{v}");
+        assert_eq!(s, "-42");
+    }
+
+    #[test]
+    fn display_object() {
+        let v = EvaluatedValue::Object(DynamicValue::String("test".to_string()));
+        let s = format!("{v}");
+        assert!(s.contains("test"));
+    }
 }
 
 mod runtime_error_tests {

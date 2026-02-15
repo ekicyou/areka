@@ -18,6 +18,16 @@ pub enum EvaluatedValue {
     Object(DynamicValue),
 }
 
+impl fmt::Display for EvaluatedValue {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Float(v) => write!(f, "{v:.6}"),
+            Self::Integer(v) => write!(f, "{v}"),
+            Self::Object(v) => write!(f, "{v:?}"),
+        }
+    }
+}
+
 /// ランタイムエラー。
 #[derive(Debug, Clone, PartialEq)]
 pub enum RuntimeError {
