@@ -47,8 +47,14 @@ fn main() -> Result<()> {
             CLASS_NORMAL,
             w!("[A] Normal - click target (赤)"),
             WS_OVERLAPPEDWINDOW | WS_VISIBLE,
-            50, 50, 800, 500,
-            None, None, Some(hinstance.into()), None,
+            50,
+            50,
+            800,
+            500,
+            None,
+            None,
+            Some(hinstance.into()),
+            None,
         )?;
         println!("[A] Normal window: {:?}", hwnd_a);
 
@@ -60,8 +66,14 @@ fn main() -> Result<()> {
             CLASS_DCOMP,
             w!("[B] DComp+Transparent"),
             WS_POPUP | WS_VISIBLE,
-            100, 150, 300, 300,
-            None, None, Some(hinstance.into()), None,
+            100,
+            150,
+            300,
+            300,
+            None,
+            None,
+            Some(hinstance.into()),
+            None,
         )?;
         println!(
             "[B] DComp+Transparent window: {:?}, ex_style=0x{:X}",
@@ -80,8 +92,14 @@ fn main() -> Result<()> {
             CLASS_LAYERED,
             w!("[C] Transparent+Layered"),
             WS_POPUP | WS_VISIBLE,
-            450, 150, 300, 300,
-            None, None, Some(hinstance.into()), None,
+            450,
+            150,
+            300,
+            300,
+            None,
+            None,
+            Some(hinstance.into()),
+            None,
         )?;
         // SetLayeredWindowAttributes で半透明に
         SetLayeredWindowAttributes(hwnd_c, COLORREF(0), 128, LWA_ALPHA)?;
@@ -158,8 +176,8 @@ unsafe extern "system" fn wndproc_normal(
                 let hdc = windows::Win32::Graphics::Gdi::BeginPaint(hwnd, &mut ps);
                 let brush = windows::Win32::Graphics::Gdi::CreateSolidBrush(COLORREF(0x000000FF));
                 windows::Win32::Graphics::Gdi::FillRect(hdc, &ps.rcPaint, brush);
-                windows::Win32::Graphics::Gdi::DeleteObject(brush.into());
-                windows::Win32::Graphics::Gdi::EndPaint(hwnd, &ps);
+                let _ = windows::Win32::Graphics::Gdi::DeleteObject(brush.into());
+                let _ = windows::Win32::Graphics::Gdi::EndPaint(hwnd, &ps);
                 LRESULT(0)
             }
             WM_LBUTTONDOWN => {
@@ -208,11 +226,10 @@ unsafe extern "system" fn wndproc_layered(
             WM_PAINT => {
                 let mut ps = windows::Win32::Graphics::Gdi::PAINTSTRUCT::default();
                 let hdc = windows::Win32::Graphics::Gdi::BeginPaint(hwnd, &mut ps);
-                let brush =
-                    windows::Win32::Graphics::Gdi::CreateSolidBrush(COLORREF(0x0000FF00));
+                let brush = windows::Win32::Graphics::Gdi::CreateSolidBrush(COLORREF(0x0000FF00));
                 windows::Win32::Graphics::Gdi::FillRect(hdc, &ps.rcPaint, brush);
-                windows::Win32::Graphics::Gdi::DeleteObject(brush.into());
-                windows::Win32::Graphics::Gdi::EndPaint(hwnd, &ps);
+                let _ = windows::Win32::Graphics::Gdi::DeleteObject(brush.into());
+                let _ = windows::Win32::Graphics::Gdi::EndPaint(hwnd, &ps);
                 LRESULT(0)
             }
             WM_NCHITTEST => {
@@ -246,13 +263,17 @@ fn setup_dcomp(hwnd: HWND) -> Result<()> {
     target.set_root(&root_visual)?;
 
     // サーフェス（青い矩形）
-    let surface = dcomp.create_surface(300, 300, DXGI_FORMAT_B8G8R8A8_UNORM, DXGI_ALPHA_MODE_PREMULTIPLIED)?;
+    let surface = dcomp.create_surface(
+        300,
+        300,
+        DXGI_FORMAT_B8G8R8A8_UNORM,
+        DXGI_ALPHA_MODE_PREMULTIPLIED,
+    )?;
 
     // サーフェスに青を描画
     {
         let mut offset = POINT::default();
-        let d2d_dc: ID2D1DeviceContext =
-            unsafe { surface.BeginDraw(None, &mut offset)? };
+        let d2d_dc: ID2D1DeviceContext = unsafe { surface.BeginDraw(None, &mut offset)? };
 
         let color = D2D1_COLOR_F {
             r: 0.2,

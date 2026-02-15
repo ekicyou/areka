@@ -20,7 +20,9 @@ use windows::Win32::UI::WindowsAndMessaging::{
     SWP_NOSIZE, SWP_NOZORDER, SetTimer, SetWindowLongPtrW, SetWindowPos,
 };
 
-use crate::ecs::layout::hit_test::{PhysicalPoint, hit_test_in_window};
+use crate::ecs::layout::hit_test::{
+    PhysicalPoint, hit_test_in_window, is_in_click_through_area_in_window,
+};
 use crate::ecs::world::EcsWorld;
 
 // HTCLIENT = 1, HTTRANSPARENT = -1
@@ -115,6 +117,27 @@ pub fn cached_nchittest(
     entity: bevy_ecs::prelude::Entity,
     ecs_world: &Rc<RefCell<EcsWorld>>,
 ) -> Option<LRESULT> {
+    // WS_EX_TRANSPARENT が有効な間は無条件で HTTRANSPARENT を返す。
+    // DWM Step 1 で弾かれるはずだが、同一スレッド内の WM_NCHITTEST は
+    // 引き続き呼ばれるため、ここでもガードする必要がある。
+    let is_transparent = TRANSPARENT_WINDOWS.with(|set| set.borrow().contains(&(hwnd.0 as isize)));
+    if is_transparent {
+        // ドラッグ中は HTCLIENT を返してドラッグを継続
+        let is_dragging = crate::ecs::drag::read_drag_state(|state| {
+            matches!(
+                state,
+                crate::ecs::drag::DragState::Preparing { .. }
+                    | crate::ecs::drag::DragState::JustStarted { .. }
+                    | crate::ecs::drag::DragState::Dragging { .. }
+            )
+        });
+        if is_dragging {
+            disable_click_through(hwnd);
+            return Some(LRESULT(HTCLIENT as isize));
+        }
+        return Some(LRESULT(HTTRANSPARENT as isize));
+    }
+
     // キャッシュヒット判定
     if let Some(lresult) = lookup(hwnd, screen_point) {
         trace!(
@@ -392,20 +415,33 @@ pub fn on_click_through_timer(
         return Some(LRESULT(0));
     }
 
-    // ECS ヒットテスト実行
-    let hit_result = match ecs_world.try_borrow() {
-        Ok(world_ref) => hit_test_in_window(
-            world_ref.world(),
-            entity,
-            PhysicalPoint::new(client_pt.x as f32, client_pt.y as f32),
-        ),
+    // ECS チェック: まず HitTest::None エリアか判定し、次に通常ヒットテスト
+    let client_phys = PhysicalPoint::new(client_pt.x as f32, client_pt.y as f32);
+    let (is_in_ct_area, hit_result) = match ecs_world.try_borrow() {
+        Ok(world_ref) => {
+            let w = world_ref.world();
+            let ct = is_in_click_through_area_in_window(w, entity, client_phys);
+            // HitTest::None エリア内なら通常ヒットテスト不要
+            let hit = if ct {
+                None
+            } else {
+                hit_test_in_window(w, entity, client_phys)
+            };
+            (ct, hit)
+        }
         Err(_) => {
             println!("[click-through-timer] world borrow failed, keeping transparent");
-            None
+            (false, None)
         }
     };
 
-    if hit_result.is_some() {
+    if is_in_ct_area {
+        // HitTest::None エリア上 → WS_EX_TRANSPARENT 維持（クリック貫通）
+        println!(
+            "[click-through-timer] in click-through area at client({},{}), keeping transparent",
+            client_pt.x, client_pt.y
+        );
+    } else if hit_result.is_some() {
         // ヒット可能エンティティあり → WS_EX_TRANSPARENT 解除
         println!(
             "[click-through-timer] hit_test returned {:?} at client({},{}), disabling",

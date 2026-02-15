@@ -45,7 +45,7 @@
 
 ```mermaid
 graph TB
-    subgraph CoreTypes["runtime/ (feature = runtime)"]
+    subgraph CoreTypes["runtime/ feature = runtime"]
         IS[instance_state.rs<br/>InstanceState]
         TY[types.rs<br/>EvaluatedValue, RuntimeError, StartResult]
         IP[interpolator.rs<br/>Interpolator]
@@ -65,10 +65,10 @@ graph TB
         et[Ease trait]
         qb[quad_bez fn]
         cb[cub_bez fn]
+        lp[lerp fn]
     end
 
     IS --> sb
-    IS --> TY
     TY --> val
     TY --> err
     IP --> ease
@@ -80,20 +80,22 @@ graph TB
     IP --> et
     IP --> qb
     IP --> cb
+    IP --> lp
 ```
 
 **Architecture Integration**:
 - **選定パターン**: 型定義 + ステートレス関数群。状態を持たない純粋なロジック層
-- **境界**: `pub(crate)` 可視性。facade 子仕様が `pub` re-export を決定する
+- **境界**: `pub` re-export（`mod.rs` 経由）。facade 子仕様がさらなる可視性境界を決定する
+- **レイヤー分離**: InstanceState（ドメイン層）は RuntimeError（API層）に依存しない。try_transition は `Result<InstanceState, InstanceState>` を返し、InstanceManager が必要に応じて変換する
 - **既存パターン保持**: 既存 dola の `Serialize/Deserialize` パターンには従わない（ランタイム内部型はシリアライズ不要）
-- **Steering 準拠**: Rust 2024 Edition、`unsafe` なし
+- **Steering 準拠**: Rust 2024 Edition、`unsafe` なし、パニック禁止
 
 ### Technology Stack
 
 | Layer | Choice / Version | Role in Feature | Notes |
 |-------|------------------|-----------------|-------|
 | Runtime | Rust 2024 Edition | 型定義 + 補間ロジック | 既存 dola クレート内 |
-| Interpolation | `interpolation` 0.3.0 | イージング評価 | feature `runtime` で有効化 |
+| Interpolation | `interpolation` 0.3.0 | イージング評価 + lerp | feature `runtime` で有効化 |
 
 ---
 
@@ -133,6 +135,8 @@ stateDiagram-v2
 | Trimmed | ✗ | ✗ | ✗ | ✗ | ✗ | - | ✗ |
 | Compressed | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ | - |
 
+**Key Decisions**: 不正遷移は `Err(self)` を返す（RuntimeError ではない）。終了状態からの全遷移は拒否。
+
 ### Interpolator 補間フロー
 
 ```mermaid
@@ -146,22 +150,22 @@ flowchart TD
 
     TypeCheck -->|Float / Integer| EasingCheck{easing 指定?}
     EasingCheck -->|None| LinearT[eased_t = progress_t]
-    EasingCheck -->|Named(name)| NamedEase[EasingName → EaseFunction マッピング]
-    EasingCheck -->|Parametric(QB)| QuadBez[quad_bez で eased_t 計算]
-    EasingCheck -->|Parametric(CB)| CubBez[cub_bez で eased_t 計算]
+    EasingCheck -->|Named name| NamedEase[EasingName から EaseFunction マッピング]
+    EasingCheck -->|Parametric QB| QuadBez[quad_bez で eased_t 計算]
+    EasingCheck -->|Parametric CB| CubBez[cub_bez で eased_t 計算]
 
     NamedEase --> LinCheck{Linear?}
     LinCheck -->|Yes| LinearT
-    LinCheck -->|No| CalcEase["eased_t = f64::calc(ease_fn, progress_t)"]
+    LinCheck -->|No| CalcEase[eased_t = f64 calc ease_fn progress_t]
 
-    LinearT --> Lerp["value = from + (to - from) * eased_t"]
+    LinearT --> Lerp[value = lerp from to eased_t]
     CalcEase --> Lerp
     QuadBez --> Lerp
     CubBez --> Lerp
 
     Lerp --> RetType{VariableTypeHint?}
-    RetType -->|Float| RetFloat["EvaluatedValue::Float(value)"]
-    RetType -->|Integer| RetInt["EvaluatedValue::Integer(value.round() as i64)"]
+    RetType -->|Float| RetFloat[EvaluatedValue Float value]
+    RetType -->|Integer| RetInt[EvaluatedValue Integer round as i64]
 ```
 
 ---
@@ -171,9 +175,9 @@ flowchart TD
 | Requirement | Summary | Components | Interfaces | Flows |
 |-------------|---------|------------|------------|-------|
 | 1.1-1.4 | InstanceState 7バリアント + ユーティリティ | InstanceState | `is_terminal()`, `from_policy()` | 状態遷移図 |
-| 2.1-2.7 | 状態遷移ルール | InstanceState | `try_transition()` | 状態遷移図 |
+| 2.1-2.6 | 状態遷移ルール | InstanceState | `try_transition()` | 状態遷移図 |
 | 3.1-3.4 | EvaluatedValue 値型 | EvaluatedValue | `Display` | — |
-| 4.1-4.4 | RuntimeError エラー型 | RuntimeError | `Display`, `Error`, `From<DolaError>` | — |
+| 4.1-4.4 | RuntimeError エラー型 | RuntimeError | `Display`, `Error`, `From<Vec<DolaError>>` | — |
 | 5.1-5.3 | StartResult 返却型 | StartResult | — | — |
 | 6.1-6.9 | Interpolator 補間計算 | Interpolator | `interpolate()` | 補間フロー |
 | 7.1-7.3 | EasingName マッピング | Interpolator | 内部マッピング | — |
@@ -186,7 +190,7 @@ flowchart TD
 |-----------|-------------|--------|-------------|-----------------|-----------|
 | InstanceState | Core Types | 実行インスタンスの状態enum + 遷移ロジック | 1, 2 | InterruptionPolicy (P0) | State |
 | EvaluatedValue | Core Types | 補間結果の型安全な値型 | 3 | DynamicValue (P0) | — |
-| RuntimeError | Core Types | 全子仕様共通のエラー型 | 4 | DolaError (P0), InstanceState (P0) | — |
+| RuntimeError | Core Types | 全子仕様共通のエラー型 | 4 | DolaError (P0) | — |
 | StartResult | Core Types | Start 返却値構造体 | 5 | — | — |
 | Interpolator | Core | イージング適用 + 補間計算 | 6, 7 | interpolation crate (P0), CompiledSegment (P0) | Service |
 
@@ -200,11 +204,12 @@ flowchart TD
 | Requirements | 1, 2 |
 
 **Responsibilities & Constraints**
-- 7バリアント enum の定義と derive マクロ
-- 状態遷移の正当性検証（`try_transition`）
-- `InterruptionPolicy` との相互変換（`from_policy`）
+- 7バリアント enum の定義と derive マクロ（Debug, Clone, Copy, PartialEq, Eq）
+- 状態遷移の正当性検証（`try_transition`）— `Result<InstanceState, InstanceState>` を返しドメイン層で完結
+- `InterruptionPolicy` から対応終了状態への変換（`from_policy`）— `Option<Self>` で Never を安全に処理
 - 終了状態判定（`is_terminal`）
 - シリアライズなし（ランタイム内部専用）
+- **パニック禁止**: 全パスが `Result` / `Option` 返却
 
 **Dependencies**
 - Inbound: InstanceManager (Tier 2) — 状態管理 (P0)
@@ -216,9 +221,8 @@ flowchart TD
 ##### State Management
 
 ```rust
-/// 実行インスタンスの状態（ランタイム内部専用）
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum InstanceState {
+pub enum InstanceState {
     Created,
     Playing,
     Paused,
@@ -230,48 +234,23 @@ pub(crate) enum InstanceState {
 
 impl InstanceState {
     /// 終了状態かどうかを判定
-    pub fn is_terminal(&self) -> bool {
-        matches!(
-            self,
-            Self::Concluded | Self::Cancelled | Self::Trimmed | Self::Compressed
-        )
-    }
+    pub fn is_terminal(&self) -> bool;
 
-    /// InterruptionPolicy から対応する終了状態へ変換
-    /// Never は終了状態ではないため panic する
-    pub fn from_policy(policy: InterruptionPolicy) -> Self {
-        match policy {
-            InterruptionPolicy::Cancel => Self::Cancelled,
-            InterruptionPolicy::Conclude => Self::Concluded,
-            InterruptionPolicy::Trim => Self::Trimmed,
-            InterruptionPolicy::Compress => Self::Compressed,
-            InterruptionPolicy::Never => {
-                panic!("Never is not a terminal state; cannot convert to InstanceState")
-            }
-        }
-    }
+    /// 状態遷移を試行する。
+    /// 遷移成功時は Ok(target)、不正遷移時は Err(self) を返す。
+    /// ドメイン層の責務として RuntimeError に依存しない。
+    pub fn try_transition(&self, target: InstanceState)
+        -> Result<InstanceState, InstanceState>;
 
-    /// 状態遷移の正当性を検証
-    pub fn try_transition(&self, to: InstanceState) -> Result<(), RuntimeError> {
-        let valid = match (self, &to) {
-            (Self::Created, Self::Playing) => true,
-            (Self::Playing, Self::Paused) => true,
-            (Self::Playing, s) if s.is_terminal() => true,
-            (Self::Paused, Self::Playing) => true,
-            (Self::Paused, s) if s.is_terminal() => true,
-            _ => false,
-        };
-        if valid {
-            Ok(())
-        } else {
-            Err(RuntimeError::InvalidStateTransition {
-                from: *self,
-                to,
-            })
-        }
-    }
+    /// InterruptionPolicy に対応する終了状態を返す。
+    /// Never は終了状態に直接対応しないため None を返す。
+    pub fn from_policy(policy: InterruptionPolicy) -> Option<Self>;
 }
 ```
+
+- **Preconditions**: なし
+- **Postconditions**: `try_transition` — Ok は target と同値、Err は self と同値
+- **Invariants**: 終了状態（`is_terminal() == true`）からの遷移は常に `Err`
 
 #### EvaluatedValue
 
@@ -280,26 +259,22 @@ impl InstanceState {
 | Intent | 補間計算の出力値を型安全に表現する共通値型 |
 | Requirements | 3 |
 
-**Implementation Notes**
 ```rust
-/// 評価済み変数値（補間計算の出力）
 #[derive(Debug, Clone, PartialEq)]
-pub(crate) enum EvaluatedValue {
+pub enum EvaluatedValue {
     Float(f64),
     Integer(i64),
     Object(DynamicValue),
 }
 
 impl std::fmt::Display for EvaluatedValue {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::Float(v) => write!(f, "{v:.6}"),
-            Self::Integer(v) => write!(f, "{v}"),
-            Self::Object(v) => write!(f, "{v:?}"),
-        }
-    }
+    // Float → "{v:.6}", Integer → "{v}", Object → "{v:?}"
 }
 ```
+
+**Implementation Notes**
+- `VariableTypeHint` の各バリアントと1対1対応: Float↔Float, Integer↔Integer, Object↔Object
+- `Display` はデバッグ・ログ用途。Float は小数6桁固定
 
 #### RuntimeError
 
@@ -308,56 +283,34 @@ impl std::fmt::Display for EvaluatedValue {
 | Intent | 全子仕様が共通利用するエラー型 |
 | Requirements | 4 |
 
-**Implementation Notes**
 ```rust
-/// ランタイムエラー
-#[derive(Debug, Clone)]
-pub(crate) enum RuntimeError {
+#[derive(Debug, Clone, PartialEq)]
+pub enum RuntimeError {
+    /// 存在しないストーリーボード名
     StoryboardNotFound(String),
+    /// 存在しない group_id（終了済みインスタンスへの操作を含む）
     InvalidGroupId(u64),
-    TerminatedInstance { group_id: u64, state: InstanceState },
+    /// TOML パース失敗
     DocumentParseError(String),
+    /// duration=0 + loop_count
     ZeroDurationWithLoop { storyboard: String },
-    CompileError(DolaError),
-    InvalidStateTransition { from: InstanceState, to: InstanceState },
+    /// コンパイルエラー（複数エラー対応）
+    CompileError(Vec<DolaError>),
 }
 
-impl std::fmt::Display for RuntimeError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::StoryboardNotFound(name) => {
-                write!(f, "storyboard not found: {name}")
-            }
-            Self::InvalidGroupId(id) => {
-                write!(f, "invalid group_id: {id}")
-            }
-            Self::TerminatedInstance { group_id, state } => {
-                write!(f, "instance {group_id} is terminated ({state:?})")
-            }
-            Self::DocumentParseError(msg) => {
-                write!(f, "document parse error: {msg}")
-            }
-            Self::ZeroDurationWithLoop { storyboard } => {
-                write!(f, "zero duration with loop: {storyboard}")
-            }
-            Self::CompileError(e) => {
-                write!(f, "compile error: {e}")
-            }
-            Self::InvalidStateTransition { from, to } => {
-                write!(f, "invalid state transition: {from:?} -> {to:?}")
-            }
-        }
-    }
-}
-
+impl std::fmt::Display for RuntimeError { /* バリアント別メッセージ */ }
 impl std::error::Error for RuntimeError {}
-
-impl From<DolaError> for RuntimeError {
-    fn from(e: DolaError) -> Self {
-        Self::CompileError(e)
+impl From<Vec<DolaError>> for RuntimeError {
+    fn from(errors: Vec<DolaError>) -> Self {
+        Self::CompileError(errors)
     }
 }
 ```
+
+**Key Decisions**:
+- **5バリアント構成**: `TerminatedInstance`（終了インスタンスは即削除→InvalidGroupId で統一）と `InvalidStateTransition`（try_transition がドメイン層で完結）を排除
+- **`CompileError(Vec<DolaError>)`**: `compile_storyboard()` が `Vec<DolaError>` を返す既存APIに合わせて複数エラー保持
+- **`From<Vec<DolaError>>`**: `?` 演算子による自動変換を提供
 
 #### StartResult
 
@@ -367,9 +320,8 @@ impl From<DolaError> for RuntimeError {
 | Requirements | 5 |
 
 ```rust
-/// Start コマンドの返却値
 #[derive(Debug, Clone, PartialEq)]
-pub(crate) struct StartResult {
+pub struct StartResult {
     pub group_id: u64,
     pub end_time: f64,
 }
@@ -391,101 +343,40 @@ pub(crate) struct StartResult {
 - `ParametricEasing::CubicBezier` → `interpolation::cub_bez()`
 - `VariableTypeHint` による型別ディスパッチ: Float→f64直接, Integer→f64補間→round→i64, Object→即時切替
 - `progress_t` は 0.0..=1.0 にクランプ
+- 補間計算には `interpolation::lerp()` を使用
 
 **Dependencies**
 - Inbound: TimelineManager (Tier 2) — 補間要求 (P0)
-- External: `interpolation` 0.3.0 — `Ease`, `EaseFunction`, `quad_bez`, `cub_bez` (P0)
+- External: `interpolation` 0.3.0 — `Ease`, `EaseFunction`, `quad_bez`, `cub_bez`, `lerp` (P0)
 
 **Contracts**: Service [x]
 
 ##### Service Interface
 
 ```rust
-/// イージング適用 + 補間計算（ステートレス関数群）
-pub(crate) struct Interpolator;
+/// イージング適用 + 補間計算（ステートレス ZST）
+pub struct Interpolator;
 
 impl Interpolator {
-    /// EasingName → interpolation::EaseFunction のマッピング
-    fn map_easing(name: &EasingName) -> Option<interpolation::EaseFunction> {
-        match name {
-            EasingName::Linear => None, // Linear は EaseFunction を使わない
-            EasingName::QuadraticIn => Some(EaseFunction::QuadraticIn),
-            EasingName::QuadraticOut => Some(EaseFunction::QuadraticOut),
-            // ... 残り27バリアント（1対1マッピング）
-            EasingName::BounceInOut => Some(EaseFunction::BounceInOut),
-        }
-    }
-
-    /// easing 適用後の補間率を計算
-    fn apply_easing(easing: Option<&EasingFunction>, t: f64) -> f64 {
-        match easing {
-            None => t,
-            Some(EasingFunction::Named(name)) => {
-                match Self::map_easing(name) {
-                    None => t, // Linear
-                    Some(ef) => t.calc(ef),
-                }
-            }
-            Some(EasingFunction::Parametric(ParametricEasing::QuadraticBezier {
-                x0, x1, x2,
-            })) => interpolation::quad_bez(x0, x1, x2, &t),
-            Some(EasingFunction::Parametric(ParametricEasing::CubicBezier {
-                x0, x1, x2, x3,
-            })) => interpolation::cub_bez(x0, x1, x2, x3, &t),
-        }
-    }
-
     /// セグメントの進捗率 t で補間値を計算
     pub fn interpolate(
         segment: &CompiledSegment,
         variable_type: &VariableTypeHint,
         progress_t: f64,
-    ) -> EvaluatedValue {
-        let t = progress_t.clamp(0.0, 1.0);
-
-        // Object 型: 補間なし、即時切替
-        if matches!(variable_type, VariableTypeHint::Object) {
-            return if t >= 1.0 {
-                Self::extract_object(&segment.to_value)
-            } else {
-                Self::extract_object(&segment.from_value)
-            };
-        }
-
-        // Float / Integer 型: イージング適用 + 線形補間
-        let eased_t = Self::apply_easing(segment.easing.as_ref(), t);
-        let from = Self::extract_scalar(&segment.from_value);
-        let to = Self::extract_scalar(&segment.to_value);
-        let value = from + (to - from) * eased_t;
-
-        match variable_type {
-            VariableTypeHint::Float => EvaluatedValue::Float(value),
-            VariableTypeHint::Integer { .. } => EvaluatedValue::Integer(value.round() as i64),
-            VariableTypeHint::Object => unreachable!(),
-        }
-    }
-
-    /// TransitionValue から f64 スカラー値を取得
-    fn extract_scalar(value: &TransitionValue) -> f64 {
-        match value {
-            TransitionValue::Scalar(v) => *v,
-            TransitionValue::Dynamic(_) => 0.0, // Object 型は本パスに到達しない
-        }
-    }
-
-    /// TransitionValue から DynamicValue を取得し EvaluatedValue::Object を返す
-    fn extract_object(value: &TransitionValue) -> EvaluatedValue {
-        match value {
-            TransitionValue::Dynamic(dv) => EvaluatedValue::Object(dv.clone()),
-            TransitionValue::Scalar(v) => EvaluatedValue::Float(*v), // fallback
-        }
-    }
+    ) -> EvaluatedValue;
 }
+
+// 内部は自由関数で実装（Interpolator のメソッドではない）
+fn apply_easing(t: f64, easing: &Option<EasingFunction>) -> f64;
+fn apply_named_easing(t: f64, name: EasingName) -> f64;
+fn apply_parametric_easing(t: f64, param: &ParametricEasing) -> f64;
+fn scalar_value(value: &TransitionValue) -> f64;
+fn transition_value_to_dynamic(value: &TransitionValue) -> DynamicValue;
 ```
 
-- **Preconditions**: `progress_t` は任意の f64（クランプ済み）。`segment` は有効な `CompiledSegment`
-- **Postconditions**: `VariableTypeHint::Integer` → `EvaluatedValue::Integer`。`Float` → `Float`。`Object` → `Object`
-- **Invariants**: `EasingName` 30バリアントと `EaseFunction` 30バリアントの1対1対応。マッピング漏れはコンパイルエラーで検出（`match` 網羅性）
+- **Preconditions**: `progress_t` は任意の f64（内部でクランプ）。`segment` は有効な `CompiledSegment`
+- **Postconditions**: `VariableTypeHint::Integer` → `EvaluatedValue::Integer`, `Float` → `Float`, `Object` → `Object`
+- **Invariants**: `EasingName` 30バリアント（+Linear）と `EaseFunction` 30バリアントの1対1対応。マッピング漏れはコンパイルエラーで検出（`match` 網羅性）
 
 ---
 
@@ -531,8 +422,8 @@ impl Interpolator {
 
 | VariableTypeHint | 補間方式 | 出力 EvaluatedValue |
 |-----------------|---------|-------------------|
-| Float | `from + (to - from) * eased_t` | `Float(f64)` |
-| Integer { typewriter } | `(from + (to - from) * eased_t).round() as i64` | `Integer(i64)` |
+| Float | `lerp(from, to, eased_t)` | `Float(f64)` |
+| Integer { typewriter } | `lerp(from, to, eased_t).round() as i64` | `Integer(i64)` |
 | Object | `progress_t >= 1.0 ? to : from` | `Object(DynamicValue)` |
 
 ---
@@ -541,20 +432,20 @@ impl Interpolator {
 
 ### Error Strategy
 
-- **型安全**: `RuntimeError` enum でエラーを網羅的に定義。呼び出し側は `match` でパターンマッチ
-- **パニック禁止**: `from_policy(Never)` のみ `panic!`（設計上到達不可能なパス）。他の全パスは `Result` 返却
-- **`From<DolaError>`**: `?` 演算子による自動変換で ergonomic なエラーハンドリング
+- **型安全**: `RuntimeError` enum 5バリアントでエラーを網羅的に定義。呼び出し側は `match` でパターンマッチ
+- **パニック禁止**: 全パスが `Result` / `Option` 返却。`from_policy(Never)` は `None` を返す
+- **レイヤー分離**: `try_transition` は `Result<InstanceState, InstanceState>` を返し、InstanceManager が RuntimeError に変換する責務を持つ
+- **`From<Vec<DolaError>>`**: `?` 演算子による自動変換で ergonomic なエラーハンドリング
 
 ### Error Categories
 
 | エラー | 原因 | 対応 |
 |--------|------|------|
-| `InvalidStateTransition` | 不正な遷移（例: Concluded → Playing） | 呼び出し側で遷移前にチェック、またはエラーハンドリング |
 | `StoryboardNotFound` | 未定義名での Start | 呼び出し側で名前を確認 |
-| `TerminatedInstance` | 終了済みへの操作 | 呼び出し側で group_id の生存を確認 |
-| `DocumentParseError` | TOML 不正 | 既存定義を維持、エラーを報告 |
+| `InvalidGroupId` | 存在しない/終了済み group_id への操作 | 呼び出し側で group_id の有効性を確認 |
+| `DocumentParseError` | TOML 不正 | 定義ファイルを修正 |
 | `ZeroDurationWithLoop` | duration=0 + loop | 定義を修正 |
-| `CompileError` | バリデーション/コンパイル失敗 | DolaError の詳細を確認 |
+| `CompileError` | バリデーション/コンパイル失敗 | Vec<DolaError> の詳細を確認 |
 
 ---
 
@@ -562,31 +453,30 @@ impl Interpolator {
 
 ### Unit Tests
 
-**InstanceState 遷移テスト** (Req 1, 2):
+**InstanceState 遷移テスト** (1, 2):
 - 全7×7=49の遷移パターン（対角を除く42パターン）を網羅的に検証
-- `is_terminal()` の5状態（4 terminal + 3 non-terminal）
-- `from_policy()` の5パターン（4正常 + 1 panic）
+- `is_terminal()` の7状態（4 terminal + 3 non-terminal）
+- `from_policy()` の5パターン（4 Some + 1 None for Never）
 
-**EvaluatedValue テスト** (Req 3):
-- 3バリアントの構築と `Display` 出力フォーマット
+**EvaluatedValue テスト** (3):
+- 3バリアントの構築と `Display` 出力フォーマット（Float小数6桁、Integer整数、Object Debug）
 - `PartialEq` の等価比較
 
-**RuntimeError テスト** (Req 4):
-- 全7バリアントの `Display` 出力
-- `From<DolaError>` 変換
+**RuntimeError テスト** (4):
+- 全5バリアントの `Display` 出力
+- `From<Vec<DolaError>>` 変換
 - `std::error::Error` trait 準拠
 
-**StartResult テスト** (Req 5):
+**StartResult テスト** (5):
 - 構築と `PartialEq` 比較
 
-**Interpolator テスト** (Req 6, 7):
+**Interpolator テスト** (6, 7):
 - **マッピングテスト**: 30バリアント全ての `EasingName` → `EaseFunction` マッピング正確性
-- **境界値テスト**: `progress_t = 0.0`（from_value）、`progress_t = 1.0`（to_value）、クランプ（-0.1 → 0.0, 1.5 → 1.0）
+- **境界値テスト**: `progress_t = 0.0`（from_value）、`progress_t = 1.0`（to_value）、クランプ（-0.5 → 0.0, 1.5 → 1.0）
 - **Float 補間**: `from=0.0, to=100.0, t=0.5, Linear` → `50.0`
-- **Integer 丸め**: `from=0.0, to=10.0, t=0.55` → `round(5.5) = 6`
-- **Object 即時切替**: `t=0.99` → from_value、`t=1.0` → to_value
+- **Integer 丸め**: `from=0.0, to=10.0, t=0.25` → `round(2.5) = 3`
+- **Object 即時切替**: `t=0.5` → from_value、`t=1.0` → to_value
 - **ParametricEasing**: QuadraticBezier / CubicBezier の値範囲検証
-- **全31イージングの非NaN検証**: 各イージングで `t=0.0, 0.25, 0.5, 0.75, 1.0` を評価し、NaN でないことを検証
 
 ---
 
@@ -595,7 +485,7 @@ impl Interpolator {
 ### Cargo.toml 変更計画
 
 ```toml
-# 追加する内容（Child 1 実装時）
+# 既に追加済み
 [features]
 runtime = ["dep:interpolation"]
 
@@ -607,12 +497,12 @@ interpolation = { version = "0.3.0", optional = true }
 
 ```
 crates/dola/src/
-├── lib.rs              # #[cfg(feature = "runtime")] mod runtime; 追加
+├── lib.rs              # #[cfg(feature = "runtime")] mod runtime;
 ├── runtime/
-│   ├── mod.rs          # pub(crate) re-export
+│   ├── mod.rs          # pub use re-export
 │   ├── instance_state.rs  # InstanceState enum + impl
 │   ├── types.rs           # EvaluatedValue, RuntimeError, StartResult
-│   └── interpolator.rs    # Interpolator struct + impl
+│   └── interpolator.rs    # Interpolator struct + 自由関数群
 ```
 
 ### `interpolation` クレート API メモ
@@ -633,4 +523,7 @@ enum EaseFunction {
 // パラメトリック補間
 fn quad_bez<T>(x0: &T, x1: &T, x2: &T, t: &T) -> T;
 fn cub_bez<T>(x0: &T, x1: &T, x2: &T, x3: &T, t: &T) -> T;
+
+// 線形補間
+fn lerp<T>(x0: &T, x1: &T, t: &T) -> T;
 ```
