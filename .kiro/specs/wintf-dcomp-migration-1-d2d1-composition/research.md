@@ -164,77 +164,7 @@ Layout → Visual               （どこに、どう描くか）
 - **Option B**: `Changed<WindowPos>` フィルタでサイズ変更を検出
 - **推奨**: Option A（compositor 内部にサイズキャッシュ、シンプルで自己完結）
 
-### Req 4: GlobalArrangement Opacity 累積
-
-| AC | 既存資産 | ギャップ | 難度 |
-|----|---------|--------|------|
-| AC1: global_opacity フィールド | `GlobalArrangement` 構造体（transform + bounds の2フィールド） | フィールド追加 + Default 更新 | Low |
-| AC2: 乗算累積 | `impl Mul<Arrangement> for GlobalArrangement` | **Arrangement に opacity がなく、Visual.opacity を参照する必要あり** | **High** |
-| AC3: クランプ | — | 単純な `.clamp(0.0, 1.0)` | Low |
-| AC4: 同一パス実行 | `propagate_parent_transforms` ジェネリック関数 | **ジェネリック制約により、opacity 累積を Mul trait 内に入れるか、カスタム伝播が必要** | **High** |
-| AC5: 回帰なし | `GlobalArrangement` を参照するテスト多数 | `Default::default()` で `global_opacity: 1.0` なら影響最小 | Low |
-
-**核心的なギャップ 1: `propagate_parent_transforms` のジェネリック設計との不整合**
-
-現在の伝播は `G = parent_global * child_local` で計算される（`Mul<L, Output=G>` trait）。`Arrangement` には opacity が含まれないため、`GlobalArrangement` の `global_opacity` をこのメカニズムだけで累積できない。**別途 `Visual.opacity` を参照するロジックが必要**。
-
-**核心的なギャップ 2: `ArrangementTreeChanged` トリガーが Visual.opacity 変更をカバーしない**
-
-`propagate_global_arrangements` は `Changed<ArrangementTreeChanged>` をトリガーとして実行される。`Visual.opacity` 変更はこのマーカーを設定しないため、Visual.opacity だけが変更された場合に `propagate_global_arrangements` が実行されず、`GlobalArrangement.global_opacity` が更新されない問題がある。Visual.opacity 変更を伝播のトリガーに含める設計が必要（議題2参照）。
-
-**アプローチオプション:**
-
-#### Option A: Arrangement に opacity を追加
-
-```rust
-pub struct Arrangement {
-    pub offset: Offset,
-    pub scale: LayoutScale,
-    pub size: Size,
-    pub opacity: f32,  // NEW
-}
-```
-
-- `impl Mul<Arrangement> for GlobalArrangement` で `global_opacity = self.global_opacity * rhs.opacity` を計算
-- **利点**: ジェネリック伝播パイプラインを変更不要
-- **欠点**: `Arrangement` はレイアウト概念であり、opacity という描画属性を混ぜる設計上の不整合
-- **欠点**: `Visual.opacity` との同期が必要（どちらが真実のソースか曖昧）
-- **欠点**: Arrangement を参照する全テスト・全システムへの潜在的影響
-
-#### Option B: 専用の Opacity 伝播パスを追加
-
-```rust
-// propagate_global_arrangements の後に追加システム
-pub fn propagate_global_opacity(
-    roots: Query<(Entity, &Children, &mut GlobalArrangement), Without<ChildOf>>,
-    nodes: Query<(&Visual, &mut GlobalArrangement, Option<&Children>)>,
-) { ... }
-```
-
-- `propagate_global_arrangements` の直後に別システムとして実行
-- **利点**: `Arrangement` を汚さない、`Visual.opacity` を直接参照
-- **欠点**: 追加の階層走査（パフォーマンスコスト）
-- **欠点**: AC5「同一パスで実行」の要件違反
-
-#### Option C: `propagate_global_arrangements` をカスタム実装に置換
-
-ジェネリック `propagate_parent_transforms` を呼ぶのではなく、Arrangement 用の専用実装に差し替え。この中で `Visual.opacity` と `Visual.is_visible` を同時に参照して `global_opacity` を計算。
-
-- **利点**: 同一パスで実行（AC5 準拠）
-- **利点**: `Arrangement` の型を変更不要、`Visual.opacity` を直接参照
-- **欠点**: ジェネリック共通基盤を活用できなくなる（`common/tree_system.rs` からの分岐）
-- **欠点**: 実装量が最も多い
-
-#### Option D: Arrangement に opacity を追加 + Visual.opacity との同期システム
-
-Arrangement に opacity フィールドを追加するが、ユーザーは従来通り `Visual.opacity` で設定。同期システムが `Visual.opacity` → `Arrangement.opacity` を毎フレーム転送。
-
-- **利点**: ジェネリック伝播を維持、ユーザー API は Visual のまま
-- **欠点**: 同期コスト、二重管理の複雑性
-
-**→ 設計フェーズで Option A vs Option B vs Option C を決定。推奨は Option A（最もシンプル）、ただし設計上の不整合に注意。**
-
-### Req 5: transfer_to_hbitmap
+### Req 4: transfer_to_hbitmap
 
 | AC | 既存資産 | ギャップ | 難度 |
 |----|---------|--------|------|
@@ -248,19 +178,19 @@ Arrangement に opacity フィールドを追加するが、ユーザーは従�
 - `ID2D1Bitmap1::Map()` の正確な API シグネチャ（`D2D1_MAP_OPTIONS_READ`）
 - Map 中のスレッドセーフティ制約
 
-### Req 6: リサイズ対応
+### Req 5: リサイズ対応
 
 実装の大部分は Req 1（`resize()` メソッド）と Req 3（`compositor_init_system` 内のサイズ検出）に含まれる。追加実装量は最小。ただし **Req 6 固有の受入基準** として AC3（リサイズ失敗時の `tracing::error` ログ）と AC4（0×0 サイズガード）がある。これらは Req 1/3 には記載されていない独自要件。
 
 → Req 1/3 に統合可能か、独立維持すべきかは議題3で協議。
 
-### Req 7: デバイスロスト対応
+### Req 6: デバイスロスト対応
 
 実装の大部分は Req 3（`compositor_init_system` 内の generation 不一致検出 + 再作成）に含まれる。既存パターンの完全流用。ただし **Req 7 固有の受入基準** として AC3（`HasGraphicsResources.set_changed()` との整合）と AC4（ユーザー操作なしの自動復旧保証）がある。
 
 → Req 3 に統合可能か、独立維持すべきかは議題3で協議。
 
-### Req 8: Phase 1 検証基準
+### Req 7: Phase 1 検証基準
 
 | AC | テスト種別 | 既存パターン | 難度 |
 |----|-----------|-------------|------|
@@ -377,10 +307,9 @@ Option A をベースに、opacity 累積のみ Phase 1 から除外し、`globa
 | 要件 | 既存資産（再利用可能） | ギャップ（新規実装） | 制約 |
 |------|----------------------|---------------------|------|
 | Req 1 | `Option<Inner>` パターン、SparseSet | D2D Bitmap 作成（TARGET/CPU_READ）、DIBSection/DC 作成 | GPU 依存 |
-| Req 2 | `draw_recursive` ロジック、`DrawImage`/`SetTransform` パターン | PushLayer opacity、ダーティ集約判定 | DComp 非干渉 |
+| Req 2 | `draw_recursive` ロジック、`DrawImage`/`SetTransform` パターン | PushLayer opacity（階層走査中に累積）、ダーティ集約判定 | DComp 非干渉 |
 | Req 3 | `init_window_graphics` パターン | `WindowPos` からのサイズ取得 | — |
-| Req 4 | `propagate_parent_transforms` ジェネリック基盤 | **Opacity 累積と Mul trait の不整合解決** | 設計判断必須 |
-| Req 5 | なし | Map/Copy/Unmap 全体 | — |
-| Req 6 | resize パターン（`WindowGraphics` 参考） | 0×0 ガード | — |
-| Req 7 | `HasGraphicsResources` + generation パターン | — | — |
-| Req 8 | `crates/wintf/tests/` パターン | GPU 依存テスト | CI 制約 |
+| Req 4 | なし | Map/Copy/Unmap 全体 | — |
+| Req 5 | resize パターン（`WindowGraphics` 参考） | 0×0 ガード | — |
+| Req 6 | `HasGraphicsResources` + generation パターン | — | — |
+| Req 7 | `crates/wintf/tests/` パターン | GPU 依存テスト | CI 制約 |

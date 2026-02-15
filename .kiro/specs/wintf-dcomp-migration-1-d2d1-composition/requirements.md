@@ -70,15 +70,17 @@ _Parent: Req 3.1, 3.2, 3.3, 3.4_
 
 3. When `Visual.is_visible` が `false` のエンティティを処理する時, the `composite_render_system` shall そのエンティティとその children の描画を完全にスキップする
 
-4. When `GlobalArrangement.global_opacity` が 1.0 未満のエンティティを処理する時, the `composite_render_system` shall D2D1 レイヤー機構（`PushLayer` または同等 API）で opacity を適用してから描画する
+4. The `composite_render_system` shall 再帰的な階層走査中に `parent_opacity * Visual.opacity` で各エンティティの最終的な opacity を累積計算し、親から子へ引き継ぐ
 
-5. The `composite_render_system` shall 合成描画完了後、合成ビットマップからステージングビットマップへピクセルデータをコピーする
+5. When 累積 opacity が 1.0 未満のエンティティを処理する時, the `composite_render_system` shall D2D1 レイヤー機構（`PushLayer` または同等 API）で累積 opacity を適用してから描画する
 
-6. The `composite_render_system` shall ウィンドウ内のいずれかのエンティティでコンポーネント変更（`GraphicsCommandList`、`GlobalArrangement`、`Visual` のいずれか）が検出された場合のみ、ウィンドウ全体の再合成を実行する
+6. The `composite_render_system` shall 合成描画完了後、合成ビットマップからステージングビットマップへピクセルデータをコピーする
 
-7. The `composite_render_system` shall 既存のウィジェット描画システム群（`draw_rectangles`, `draw_labels`, `draw_typewriters`, `draw_bitmap_sources`）を一切変更せず、それらが出力した `GraphicsCommandList` を合成入力として消費する
+7. The `composite_render_system` shall ウィンドウ内のいずれかのエンティティでコンポーネント変更（`GraphicsCommandList`、`GlobalArrangement`、`Visual` のいずれか）が検出された場合のみ、ウィンドウ全体の再合成を実行する
 
-8. The `composite_render_system` shall `ecs/graphics/compositor_systems.rs` に配置される
+8. The `composite_render_system` shall 既存のウィジェット描画システム群（`draw_rectangles`, `draw_labels`, `draw_typewriters`, `draw_bitmap_sources`）を一切変更せず、それらが出力した `GraphicsCommandList` を合成入力として消費する
+
+9. The `composite_render_system` shall `ecs/graphics/compositor_systems.rs` に配置される
 
 ### Requirement 3: 合成リソース初期化システム（compositor_init_system）
 
@@ -98,27 +100,7 @@ _Parent: Req 3.1, 6.1_
 
 5. The `compositor_init_system` shall `ecs/graphics/compositor_systems.rs` に配置される
 
-### Requirement 4: GlobalArrangement Opacity 累積
-
-**Objective:** 開発者として、DComp `Visual.SetOpacity()` の代替として、親→子の Opacity 階層累積を `GlobalArrangement` で自動処理したい。これにより合成描画システムが各エンティティの最終的な透明度を直接参照できる。
-
-_Parent: Req 3.6_
-
-**ソースデータ**: `Visual.opacity` フィールド（描画属性として Visual が保持）
-
-#### Acceptance Criteria
-
-1. The `GlobalArrangement` shall `global_opacity: f32` フィールドを持ち、初期値は `1.0`（完全不透明）とする
-
-2. The `propagate_global_arrangements` shall 各エンティティの `global_opacity` を `parent.global_opacity * Visual.opacity` として計算する
-
-3. The `propagate_global_arrangements` shall 計算後の `global_opacity` を `[0.0, 1.0]` 範囲にクランプする
-
-4. The Opacity 累積 shall 既存の `propagate_global_arrangements` システム内の transform 伝播と同一パスで実行される（追加の走査コストを発生させない）
-
-5. The `global_opacity` フィールド追加 shall 既存の `GlobalArrangement` を参照するテスト・システムに回帰を起こさない
-
-### Requirement 5: D2D → HBITMAP 転送ユーティリティ
+### Requirement 4: D2D → HBITMAP 転送ユーティリティ
 
 **Objective:** 開発者として、D2D1 ステージングビットマップから GDI HBITMAP への高速ピクセル転送関数が欲しい。これにより Phase 3 での `UpdateLayeredWindow` 呼び出しの前提条件が整う。
 
@@ -136,7 +118,7 @@ _Parent: Req 3.1（合成パイプラインの一部として）_
 
 5. If Map 操作が失敗した場合, the `transfer_to_hbitmap()` shall `windows::core::Result` でエラーを返却する
 
-### Requirement 6: リサイズ対応
+### Requirement 5: リサイズ対応
 
 **Objective:** 開発者として、ウィンドウサイズ変更時に合成ビットマップ群が適切に再作成され、次フレームから正しい描画が行われることを保証したい。
 
@@ -152,7 +134,7 @@ _Parent: Req 3.5_
 
 4. The リサイズ処理 shall 0×0 サイズのウィンドウに対してリソース作成を試行しない
 
-### Requirement 7: デバイスロスト対応
+### Requirement 6: デバイスロスト対応
 
 **Objective:** 開発者として、既存の `GraphicsCore` デバイスロストフローと整合性のある `WindowD3D11Compositor` の自動再初期化が欲しい。
 
@@ -168,7 +150,7 @@ _Parent: Req 5.4（間接）, Req 10.1_
 
 4. The デバイスロスト復旧 shall ユーザー操作なしで自動的に完了し、次の正常フレームで合成描画が再開される
 
-### Requirement 8: Phase 1 検証基準
+### Requirement 7: Phase 1 検証基準
 
 **Objective:** 開発者として、Phase 1 の完了を客観的に判定できる検証基準が欲しい。
 
@@ -180,7 +162,7 @@ _Parent: Req 10.1, 10.2_
 
 2. The `composite_render_system` shall 複数の `GraphicsCommandList` を z-order + transform + opacity で正しく合成描画できること（integration test で検証）
 
-3. The `global_opacity` 累積 shall 多段階層で正確に動作すること（unit test: parent 0.8 × child 0.5 = 0.4）
+3. The `composite_render_system` shall 階層構造で opacity 累積を正確に実行できること（integration test: parent opacity=0.8 × child opacity=0.5 = final 0.4）
 
 4. The `transfer_to_hbitmap()` shall pitch/stride 不一致パターンを含む転送を正しく実行できること（unit test で検証）
 
@@ -195,10 +177,9 @@ _Parent: Req 10.1, 10.2_
 | 子仕様要件 | 親要件 | 概要 |
 |-----------|--------|------|
 | Req 1 | 3.1, 6.1 | WindowD3D11Compositor コンポーネント定義 |
-| Req 2 | 3.1-3.4 | composite_render_system（合成描画） |
+| Req 2 | 3.1-3.4, 3.6 | composite_render_system（合成描画 + opacity 累積） |
 | Req 3 | 3.1, 6.1 | compositor_init_system（リソース初期化） |
-| Req 4 | 3.6 | GlobalArrangement Opacity 累積 |
-| Req 5 | 3.1 | D2D → HBITMAP 転送ユーティリティ |
-| Req 6 | 3.5 | リサイズ対応 |
-| Req 7 | 5.4, 10.1 | デバイスロスト対応 |
-| Req 8 | 10.1, 10.2 | Phase 1 検証基準 |
+| Req 4 | 3.1 | D2D → HBITMAP 転送ユーティリティ |
+| Req 5 | 3.5 | リサイズ対応 |
+| Req 6 | 5.4, 10.1 | デバイスロスト対応 |
+| Req 7 | 10.1, 10.2 | Phase 1 検証基準 |
