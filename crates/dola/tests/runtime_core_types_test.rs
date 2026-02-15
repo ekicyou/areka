@@ -1,7 +1,7 @@
 //! ランタイムコア型のテスト — InstanceState, EvaluatedValue, RuntimeError
 
-use dola::runtime::{EvaluatedValue, InstanceState, RuntimeError, StartResult};
 use dola::InterruptionPolicy;
+use dola::runtime::{EvaluatedValue, InstanceState, RuntimeError, StartResult};
 
 // =============================================================================
 // Task 1.1: InstanceState 状態遷移テスト
@@ -218,10 +218,7 @@ mod instance_state_properties {
             InstanceState::from_policy(InterruptionPolicy::Compress),
             Some(InstanceState::Compressed)
         );
-        assert_eq!(
-            InstanceState::from_policy(InterruptionPolicy::Never),
-            None
-        );
+        assert_eq!(InstanceState::from_policy(InterruptionPolicy::Never), None);
     }
 }
 
@@ -313,8 +310,7 @@ mod runtime_error_tests {
 
     #[test]
     fn runtime_error_is_std_error() {
-        let err: Box<dyn std::error::Error> =
-            Box::new(RuntimeError::InvalidGroupId(1));
+        let err: Box<dyn std::error::Error> = Box::new(RuntimeError::InvalidGroupId(1));
         assert!(err.to_string().contains("1"));
     }
 }

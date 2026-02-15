@@ -41,25 +41,26 @@ fn main() -> Result<()> {
         register_class(hinstance, CLASS_DCOMP, Some(wndproc_dcomp))?;
         register_class(hinstance, CLASS_LAYERED, Some(wndproc_layered))?;
 
-        // === Window A: 通常ウィンドウ（赤背景、最背面） ===
+        // === Window A: 通常ウィンドウ（赤背景、大きめ、最背面） ===
         let hwnd_a = CreateWindowExW(
             WINDOW_EX_STYLE(0),
             CLASS_NORMAL,
-            w!("[A] Normal - click target"),
+            w!("[A] Normal - click target (赤)"),
             WS_OVERLAPPEDWINDOW | WS_VISIBLE,
-            100, 100, 400, 300,
+            50, 50, 800, 500,
             None, None, Some(hinstance.into()), None,
         )?;
         println!("[A] Normal window: {:?}", hwnd_a);
 
         // === Window B: WS_EX_NOREDIRECTIONBITMAP + WS_EX_TRANSPARENT ===
+        // A の左半分に重なるように配置
         let ex_style_b = WS_EX_NOREDIRECTIONBITMAP | WS_EX_TRANSPARENT | WS_EX_TOPMOST;
         let hwnd_b = CreateWindowExW(
             ex_style_b,
             CLASS_DCOMP,
             w!("[B] DComp+Transparent"),
             WS_POPUP | WS_VISIBLE,
-            100, 100, 400, 300,
+            100, 150, 300, 300,
             None, None, Some(hinstance.into()), None,
         )?;
         println!(
@@ -72,13 +73,14 @@ fn main() -> Result<()> {
         setup_dcomp(hwnd_b)?;
 
         // === Window C: WS_EX_TRANSPARENT + WS_EX_LAYERED (NOREDIRECTIONBITMAP なし) ===
+        // A の右半分に重なるように配置
         let ex_style_c = WS_EX_TRANSPARENT | WS_EX_TOPMOST | WS_EX_LAYERED;
         let hwnd_c = CreateWindowExW(
             ex_style_c,
             CLASS_LAYERED,
             w!("[C] Transparent+Layered"),
             WS_POPUP | WS_VISIBLE,
-            150, 150, 300, 200,
+            450, 150, 300, 300,
             None, None, Some(hinstance.into()), None,
         )?;
         // SetLayeredWindowAttributes で半透明に
@@ -103,13 +105,13 @@ fn main() -> Result<()> {
         }
 
         println!("\n=== クリックスルーテスト ===");
-        println!("Window A (赤): 最背面、クリックすると \"[A] CLICKED\" と表示");
-        println!("Window B (青帯): DComp+WS_EX_TRANSPARENT、A の上に重なる");
-        println!("Window C (緑半透明): Layered+WS_EX_TRANSPARENT、A/B の上に重なる");
+        println!("Window A (赤, 大): 最背面、800x500、クリックすると \"[A] CLICKED\" と表示");
+        println!("Window B (青, 左): DComp+WS_EX_TRANSPARENT、A の左半分に重なる 300x300");
+        println!("Window C (緑, 右): Layered+WS_EX_TRANSPARENT、A の右半分に重なる 300x300");
         println!();
-        println!("テスト1: 緑半透明の部分をクリック → [A] CLICKED が出れば C を貫通");
-        println!("テスト2: 青帯の部分をクリック     → [A] CLICKED が出れば B を貫通");
-        println!("テスト3: 赤だけの部分をクリック   → [A] CLICKED が出るはず（直接）");
+        println!("テスト1: 右の緑の部分をクリック → [A] CLICKED が出れば C を貫通");
+        println!("テスト2: 左の青の部分をクリック → [A] CLICKED が出れば B を貫通");
+        println!("テスト3: 赤だけの部分をクリック → [A] CLICKED が出るはず（直接）");
         println!("\nWindow A を閉じると終了");
 
         // メッセージループ
@@ -244,7 +246,7 @@ fn setup_dcomp(hwnd: HWND) -> Result<()> {
     target.set_root(&root_visual)?;
 
     // サーフェス（青い矩形）
-    let surface = dcomp.create_surface(400, 300, DXGI_FORMAT_B8G8R8A8_UNORM, DXGI_ALPHA_MODE_PREMULTIPLIED)?;
+    let surface = dcomp.create_surface(300, 300, DXGI_FORMAT_B8G8R8A8_UNORM, DXGI_ALPHA_MODE_PREMULTIPLIED)?;
 
     // サーフェスに青を描画
     {

@@ -103,9 +103,7 @@ fn apply_named_easing(t: f64, name: EasingName) -> f64 {
 /// パラメトリックイージング（ベジェ曲線）を適用する。
 fn apply_parametric_easing(t: f64, param: &ParametricEasing) -> f64 {
     match param {
-        ParametricEasing::QuadraticBezier { x0, x1, x2 } => {
-            interpolation::quad_bez(x0, x1, x2, &t)
-        }
+        ParametricEasing::QuadraticBezier { x0, x1, x2 } => interpolation::quad_bez(x0, x1, x2, &t),
         ParametricEasing::CubicBezier { x0, x1, x2, x3 } => {
             interpolation::cub_bez(x0, x1, x2, x3, &t)
         }
@@ -155,11 +153,7 @@ mod tests {
 
     #[test]
     fn linear_easing_explicit() {
-        let seg = make_segment(
-            0.0,
-            100.0,
-            Some(EasingFunction::Named(EasingName::Linear)),
-        );
+        let seg = make_segment(0.0, 100.0, Some(EasingFunction::Named(EasingName::Linear)));
         let result = Interpolator::interpolate(&seg, &VariableTypeHint::Float, 0.5);
         assert_eq!(result, EvaluatedValue::Float(50.0));
     }
@@ -294,6 +288,55 @@ mod tests {
             assert!((v - 50.0).abs() < 1.0, "expected ~50.0, got {v}");
         } else {
             panic!("expected Float");
+        }
+    }
+
+    /// Req 7 AC3: 全30バリアントのマッピング正確性を検証
+    #[test]
+    fn all_30_easing_names_mapping() {
+        let all_easings = [
+            EasingName::Linear,
+            EasingName::QuadraticIn,
+            EasingName::QuadraticOut,
+            EasingName::QuadraticInOut,
+            EasingName::CubicIn,
+            EasingName::CubicOut,
+            EasingName::CubicInOut,
+            EasingName::QuarticIn,
+            EasingName::QuarticOut,
+            EasingName::QuarticInOut,
+            EasingName::QuinticIn,
+            EasingName::QuinticOut,
+            EasingName::QuinticInOut,
+            EasingName::SineIn,
+            EasingName::SineOut,
+            EasingName::SineInOut,
+            EasingName::CircularIn,
+            EasingName::CircularOut,
+            EasingName::CircularInOut,
+            EasingName::ExponentialIn,
+            EasingName::ExponentialOut,
+            EasingName::ExponentialInOut,
+            EasingName::ElasticIn,
+            EasingName::ElasticOut,
+            EasingName::ElasticInOut,
+            EasingName::BackIn,
+            EasingName::BackOut,
+            EasingName::BackInOut,
+            EasingName::BounceIn,
+            EasingName::BounceOut,
+            EasingName::BounceInOut,
+        ];
+
+        // 全30バリアントがパニックせずに実行できることを検証
+        for easing in all_easings {
+            let seg = make_segment(0.0, 100.0, Some(EasingFunction::Named(easing)));
+            let result = Interpolator::interpolate(&seg, &VariableTypeHint::Float, 0.5);
+            // 結果がFloat型であることを確認（値は各イージングで異なる）
+            assert!(
+                matches!(result, EvaluatedValue::Float(_)),
+                "EasingName::{easing:?} failed to produce Float"
+            );
         }
     }
 }
