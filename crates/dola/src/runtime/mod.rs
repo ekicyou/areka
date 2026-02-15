@@ -7,6 +7,9 @@ mod instance_state;
 mod interpolator;
 mod types;
 
+#[cfg(target_os = "windows")]
+pub mod clock;
+
 pub use instance_state::InstanceState;
 pub use interpolator::Interpolator;
 pub use types::{EvaluatedValue, RuntimeError, StartResult};

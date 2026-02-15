@@ -10,7 +10,6 @@ mod document;
 mod easing;
 mod error;
 mod playback;
-#[cfg(feature = "runtime")]
 pub mod runtime;
 mod storyboard;
 mod transition;
@@ -20,8 +19,8 @@ mod variable;
 
 pub use builder::{DolaDocumentBuilder, StoryboardBuilder};
 pub use compile::{
-    compile_storyboard, CompiledSegment, CompiledStoryboard, CompiledVariableTimeline,
-    VariableTypeHint,
+    CompiledSegment, CompiledStoryboard, CompiledVariableTimeline, VariableTypeHint,
+    compile_storyboard,
 };
 pub use document::DolaDocument;
 pub use easing::{EasingFunction, EasingName, ParametricEasing};

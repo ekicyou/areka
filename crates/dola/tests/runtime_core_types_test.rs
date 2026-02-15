@@ -1,7 +1,5 @@
 //! ランタイムコア型のテスト — InstanceState, EvaluatedValue, RuntimeError
 
-#![cfg(feature = "runtime")]
-
 use dola::InterruptionPolicy;
 use dola::runtime::{EvaluatedValue, InstanceState, RuntimeError, StartResult};
 
