@@ -106,7 +106,7 @@ pub fn from_policy(policy: InterruptionPolicy) -> Option<InstanceState> {
 
 | AC | 必要機能 | 既存資産 | ギャップ |
 |----|---------|---------|---------|
-| 3.1 現在補間値で凍結 | 値保持（暗黙的） | `SubscriptionManager.last_values` に前回 evaluate 値が残る | **Existing**: facade の `cancel()` と同様に、`last_values` の自然残存で実現可能 |
+| 3.1 現在補間値で凍結 | start_time での値評価 | `TimelineManager.evaluate(var, start_time, instances)` | **Partial**: evaluate は存在するが、start_time 基準での呼び出し + 値伝播ロジックが必要 |
 | 3.2 Cancelled 状態遷移 | `transition(gid, Cancelled)` | `InstanceManager.transition()` + `InstanceState::try_transition()` | **Existing** |
 | 3.3 タイムテーブルエントリ除去 | `remove_entries(gid)` | `TimelineManager.remove_entries()` | **Existing** |
 
@@ -123,7 +123,7 @@ pub fn from_policy(policy: InterruptionPolicy) -> Option<InstanceState> {
 | AC | 必要機能 | 既存資産 | ギャップ |
 |----|---------|---------|---------|
 | 5.1 割り込み時点（新SB開始時刻）で切断 | effective_time 計算 + セグメント切断 | `calculate_effective_time()` (プライベート関数) | **Missing**: セグメント列の途中切断ロジック |
-| 5.2 割り込み時点の補間値をタイムテーブルに反映 | 補間値計算 + エントリ書き換え | `Interpolator::interpolate()` | **Missing**: 既存エントリの上書き/書き換えメソッド |
+| 5.2 割り込み時点の補間値を購読者に伝播 | 補間値計算 + 値伝播 | `Interpolator::interpolate()` + `force_update_last_values()` | **Partial**: interpolate は存在、割り込み時点での呼び出し + 伝播ロジックが必要 |
 | 5.3 割り込み時点以降のセグメント除去 | セグメント列の部分削除 | なし | **Missing** |
 | 5.4 Trimmed 状態遷移 | `transition(gid, Trimmed)` | `InstanceManager.transition()` | **Existing**（ただし Trimmed 後の手動 `remove()` が必要） |
 
@@ -157,8 +157,8 @@ pub fn from_policy(policy: InterruptionPolicy) -> Option<InstanceState> {
 
 | カテゴリ | AC 数 | 項目 |
 |---------|------|------|
-| **Existing** (そのまま使用可能) | 11 | AC 3.1〜3.3, 4.2, 4.3, 5.4, 6.1〜6.4, 8.1 — `InstanceState` 全バリアント, `from_policy()`, `transition()`, `remove_entries()`, `collect_final_values()`, `force_update_last_values()`, デフォルト戦略 serde |
-| **Partial** (拡張必要) | 4 | AC 1.5, 2.2, 7.1, 7.4 — Playing/Paused 状態フィルタ、group_id 全変数横断削除、Never 分岐判定、無限ループチェック |
+| **Existing** (そのまま使用可能) | 10 | AC 4.2, 4.3, 5.4, 6.1〜6.4, 8.1 — `InstanceState` 全バリアント, `from_policy()`, `transition()`, `remove_entries()`, `collect_final_values()`, `force_update_last_values()`, デフォルト戦略 serde |
+| **Partial** (拡張必要) | 5 | AC 1.5, 2.2, 3.1, 7.1, 7.4 — Playing/Paused 状態フィルタ、group_id 全変数横断削除、start_time 基準評価、Never 分岐判定、無限ループチェック |
 | **Missing** (新規作成) | 12 | AC 1.1, 1.2, 1.4, 2.1, 2.3, 4.1, 5.1〜5.3, 7.2, 7.3, 7.5 — 時間重複検出、変数横断集約、戦略ディスパッチャー、`collect_current_segment_final_values()`、Trim 切断ロジック、`DeferredEntry` 型、延期キュー管理、終了トリガー→解放パス |
 | **Trivial** (自明に実装可能) | 2 | AC 1.3, 8.2 — 空リスト返却（早期リターン）、デフォルト値一致テスト |
 
@@ -264,9 +264,9 @@ let affected = conflict_resolver::resolve_conflicts(
 | **Conclude** | **現在再生中セグメント**の `to_value` (progress_t=1.0) | **なし** — 新規 `collect_current_segment_final_values()` が必要 |
 | **Compress** | **ストーリーボード全体**の最終セグメントの `to_value` (progress_t=1.0) | `collect_final_values()` — **そのまま再利用可能** |
 
-**新メソッドの概要**: `collect_current_segment_final_values(group_id, instances)`:
+**新メソッドの概要**: `collect_current_segment_final_values(group_id, start_time, instances)`:
 1. 各変数の TimelineEntry から group_id のエントリを探す
-2. `calculate_effective_time()` で effective_time を算出
+2. `calculate_effective_time(start_time, instance)` で effective_time を算出
 3. セグメント列を走査し、effective_time がカバーするアクティブセグメントを特定
 4. そのセグメントの `to_value` を `Interpolator::interpolate(seg, type, 1.0)` で取得
 5. 結果を `HashMap<String, EvaluatedValue>` で返す

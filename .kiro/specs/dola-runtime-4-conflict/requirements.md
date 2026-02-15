@@ -52,7 +52,7 @@ _Parent: Req 7.4_
 
 #### Acceptance Criteria
 
-1. When 終了戦略が Cancel の場合, the ConflictResolver shall 既存インスタンスの現在の補間値でそのまま凍結する。
+1. When 終了戦略が Cancel の場合, the ConflictResolver shall 新ストーリーボードの `start_time` 時点で既存インスタンスの補間値を評価し、その値で凍結する。
 2. When 終了戦略が Cancel の場合, the ConflictResolver shall 既存インスタンスの状態を `Cancelled` に遷移させる。
 3. When 終了戦略が Cancel の場合, the ConflictResolver shall 既存インスタンスのタイムテーブルエントリを除去する。
 
@@ -66,7 +66,7 @@ _Parent: Req 7.5_
 
 #### Acceptance Criteria
 
-1. When 終了戦略が Conclude の場合, the ConflictResolver shall 既存インスタンスの**現在再生中トランジション**の最終値にジャンプさせる（ストーリーボード全体の最終値ではない）。未開始のトランジションはスキップする。
+1. When 終了戦略が Conclude の場合, the ConflictResolver shall 新ストーリーボードの `start_time` 時点で既存インスタンスの**現在再生中トランジション**の最終値にジャンプさせる（ストーリーボード全体の最終値ではない）。未開始のトランジションはスキップする。
 2. When 終了戦略が Conclude の場合, the ConflictResolver shall 既存インスタンスの状態を `Concluded` に遷移させる。
 3. When 終了戦略が Conclude の場合, the ConflictResolver shall 既存インスタンスのタイムテーブルエントリを除去する。
 
@@ -81,7 +81,7 @@ _Parent: Req 7.6_
 #### Acceptance Criteria
 
 1. When 終了戦略が Trim の場合, the ConflictResolver shall 新ストーリーボードの開始時刻を割り込み時点として使用し、既存インスタンスを当該時点まで再生して切断する。
-2. When 終了戦略が Trim の場合, the ConflictResolver shall 割り込み時点における各変数の補間値を確定値としてタイムテーブルに反映する。
+2. When 終了戦略が Trim の場合, the ConflictResolver shall 割り込み時点における各変数の補間値を確定値として購読者に伝播する。
 3. When 終了戦略が Trim の場合, the ConflictResolver shall 割り込み時点以降のセグメントを除去する。
 4. When 終了戦略が Trim の場合, the ConflictResolver shall 既存インスタンスの状態を `Trimmed` に遷移させる。
 
