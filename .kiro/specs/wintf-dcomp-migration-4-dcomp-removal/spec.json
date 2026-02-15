@@ -1,0 +1,17 @@
+{
+  "name": "wintf-dcomp-migration-4-dcomp-removal",
+  "description": "DComp→Layered移行 Phase 4: DCompコード削除・クリーンアップ — com/dcomp.rs削除、DCompコンポーネント/システム削除、visual_manager.rs削除、dcomp_demo.rs削除、テスト修正",
+  "language": "ja",
+  "parent_spec": "wintf-dcomp-to-layered-migration",
+  "parent_requirements": ["1.1", "5.1", "8.4", "10.1"],
+  "tier": 4,
+  "dependencies": [
+    "wintf-dcomp-migration-3-ulw-integration"
+  ],
+  "phase": "tasks-generated",
+  "approvals": {
+    "requirements": { "generated": true, "approved": false },
+    "design": { "generated": true, "approved": false },
+    "tasks": { "generated": true, "approved": false }
+  }
+}

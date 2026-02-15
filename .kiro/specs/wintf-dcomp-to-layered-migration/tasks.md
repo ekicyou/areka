@@ -43,7 +43,7 @@
   - _Requirements: 4.1, 4.2, 4.3, 4.4, 4.5, 7.1, 7.2, 7.3, 10.1_
   - _Dependencies: Task 1, Task 2, Task 3_
 
-- [ ] 5. Phase 4 子仕様の作成
+- [x] 5. Phase 4 子仕様の作成
   - 統合指針文書と Phase 1-3 子仕様を参照し、DComp コード削除と最終クリーンアップの仕様を策定する
   - 仕様サイクル全工程を完了する（init → requirements → design → tasks）
   - 親仕様の設計に基づき、com/dcomp.rs 削除、DComp コンポーネント・システム削除、dcomp_demo.rs 削除、テスト修正の詳細設計を子仕様に具体化する
