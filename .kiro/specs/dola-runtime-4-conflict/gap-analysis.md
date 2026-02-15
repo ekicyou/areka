@@ -136,15 +136,14 @@ pub fn from_policy(policy: InterruptionPolicy) -> Option<InstanceState> {
 | 6.3 Compressed 状態遷移 | `transition(gid, Compressed)` | `InstanceManager.transition()` | **Existing**（ただし Compressed 後の手動 `remove()` が必要） |
 | 6.4 タイムテーブルエントリ除去 | `remove_entries(gid)` | `TimelineManager.remove_entries()` | **Existing** |
 
-#### Req 7: Never + 延期キュー（5 AC）
+#### Req 7: Never 戦略による起動拒否（4 AC）
 
 | AC | 必要機能 | 既存資産 | ギャップ |
 |----|---------|---------|---------|
-| 7.1 既存インスタンスの中断拒否 | 戦略ディスパッチで Never 分岐 | `InstanceState::from_policy(Never) → None` | **Partial**: 分岐判定は可能、スキップロジックが必要 |
-| 7.2 延期キュー格納 | `DeferredEntry` 型 + 格納先 | なし | **Missing**: `DeferredEntry` 型定義、格納コレクション |
-| 7.3 先行 group_id 終了時の解放 | 終了トリガー → 延期キュー走査 → タイムテーブル追加 | なし | **Missing**: 終了イベントの検知パスと延期キュー走査ロジック |
-| 7.4 無限ループ中の永続保持 | `loop_count == -1` チェック | `StoryboardInstance.loop_count` | **Partial**: フィールド参照は可能、保持ロジックが必要 |
-| 7.5 複数変数延期の個別管理＋一括解放 | 変数別 DeferredEntry + blocked_by 走査 | なし | **Missing** |
+| 7.1 Never 競合時 start() エラー終了 | 戦略ディスパッチで Never 分岐 → Err 返却 | `InstanceState::from_policy(Never) → None` | **Partial**: 分岐判定は可能、エラー返却ロジックが必要 |
+| 7.2 RuntimeError::Conflict 返却 | 新エラーバリアント | なし | **Missing**: `RuntimeError::Conflict` バリアント定義 |
+| 7.3 部分競合でも全体拒否 | 1変数 Never競合 → 全変数挿入スキップ | なし | **Missing**: start()のロールバック or 事前競合検出 |
+| 7.4 インスタンス作成前エラー | 競合検出 → インスタンス作成 → Never 検出 → 削除 | `InstanceManager::remove()` | **Partial**: remove()は存在、シーケンス調整が必要 |
 
 #### Req 8: デフォルト終了戦略（2 AC）
 
@@ -158,8 +157,8 @@ pub fn from_policy(policy: InterruptionPolicy) -> Option<InstanceState> {
 | カテゴリ | AC 数 | 項目 |
 |---------|------|------|
 | **Existing** (そのまま使用可能) | 10 | AC 4.2, 4.3, 5.4, 6.1〜6.4, 8.1 — `InstanceState` 全バリアント, `from_policy()`, `transition()`, `remove_entries()`, `collect_final_values()`, `force_update_last_values()`, デフォルト戦略 serde |
-| **Partial** (拡張必要) | 5 | AC 1.5, 2.2, 3.1, 7.1, 7.4 — Playing/Paused 状態フィルタ、group_id 全変数横断削除、start_time 基準評価、Never 分岐判定、無限ループチェック |
-| **Missing** (新規作成) | 12 | AC 1.1, 1.2, 1.4, 2.1, 2.3, 4.1, 5.1〜5.3, 7.2, 7.3, 7.5 — 時間重複検出、変数横断集約、戦略ディスパッチャー、`collect_current_segment_final_values()`、Trim 切断ロジック、`DeferredEntry` 型、延期キュー管理、終了トリガー→解放パス |
+| **Partial** (拡張必要) | 6 | AC 1.5, 2.2, 3.1, 7.1, 7.3, 7.4 — Playing/Paused 状態フィルタ、group_id 全変数横断削除、start_time 基準評価、Never 分岐判定、部分競合での全体拒否、インスタンス削除シーケンス |
+| **Missing** (新規作成) | 10 | AC 1.1, 1.2, 1.4, 2.1, 2.3, 4.1, 5.1〜5.3, 7.2 — 時間重複検出、変数横断集約、戦略ディスパッチャー、`collect_current_segment_final_values()`、Trim 切断ロジック、`RuntimeError::Conflict` バリアント |
 | **Trivial** (自明に実装可能) | 2 | AC 1.3, 8.2 — 空リスト返却（早期リターン）、デフォルト値一致テスト |
 
 ### 2.3 既存メソッドの pub(crate) 化が必要な関数

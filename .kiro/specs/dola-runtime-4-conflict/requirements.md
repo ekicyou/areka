@@ -102,19 +102,18 @@ _Parent: Req 7.7_
 
 ---
 
-### Requirement 7: Never 戦略と延期キュー
+### Requirement 7: Never 戦略による起動拒否
 
 _Parent: Req 7.8_
 
-**Objective:** ランタイムとして、Never 戦略で既存インスタンスの中断を拒否し、新ストーリーボードの当該変数エントリを延期したい。これにより、先行アニメーションの完全な完了を保証しつつ、後続の再生を予約できる。
+**Objective:** ランタイムとして、Never 戦略で既存インスタンスの中断を拒否し、新ストーリーボードの起動を失敗させたい。これにより、先行アニメーションの完全な完了を保証し、start_time の整合性を維持する。
 
 #### Acceptance Criteria
 
-1. When 終了戦略が Never の場合, the ConflictResolver shall 既存インスタンスの中断を拒否する。
-2. When 終了戦略が Never の場合, the ConflictResolver shall 新ストーリーボードの当該変数へのセグメント追加を延期キュー（`DeferredEntry`）に格納する。
-3. When 先行 `group_id` のインスタンスが終了状態（`Concluded` / `Cancelled` / `Trimmed` / `Compressed` のいずれか）に遷移した場合, the ConflictResolver shall 延期キューを走査し、`blocked_by` が一致するエントリをタイムテーブルに追加する。
-4. While 先行 `group_id` が無限ループ（`loop_count = -1`）で再生中の場合, the ConflictResolver shall 延期エントリを永続的に保持する。
-5. When 同一 `group_id` 内の複数変数が Never で延期された場合, the ConflictResolver shall 各変数の延期エントリを個別に管理し、先行インスタンス終了時に一括解放する。
+1. When 競合が検出され、既存インスタンスが Never 戦略を持つ場合, the ConflictResolver shall 新ストーリーボードの `start()` をエラーで終了させる。
+2. When Never 戦略による競合が発生した場合, the start() shall `RuntimeError::Conflict` を返す。
+3. When 新ストーリーボードの一部変数のみが Never 競合した場合, the start() shall ストーリーボード全体を拒否する（部分的な起動は行わない）。
+4. When Never 競合が検出された場合, the ConflictResolver shall インスタンス作成前にエラーを返す（InstanceManager に副作用を残さない）。
 
 ---
 
