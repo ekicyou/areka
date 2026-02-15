@@ -287,21 +287,21 @@ fn create_balloon_window(world: &mut World, _shell_entity: Entity) -> Entity {
 
 /// テキストを TypewriterToken 列に変換
 ///
-/// 空行は Wait(0.3) に変換し、段落間のポーズを表現
+/// - 行境界は必ず `\n` トークンを挿入（縦書き時は次カラムへ移動）
+/// - 空行は `\n` + `Wait(0.3)` で段落間ポーズを表現
 fn build_typewriter_tokens(text: &str) -> Vec<TypewriterToken> {
     let mut tokens = Vec::new();
     let lines: Vec<&str> = text.split('\n').collect();
 
     for (i, line) in lines.iter().enumerate() {
+        // 2行目以降は前の行との間に改行を挿入
+        if i > 0 {
+            tokens.push(TypewriterToken::Text("\n".to_string()));
+        }
         if line.is_empty() {
             // 空行 → 段落間ポーズ
             tokens.push(TypewriterToken::Wait(0.3));
         } else {
-            // テキスト行
-            if i > 0 && !lines[i - 1].is_empty() {
-                // 前の行が空行でなければ改行テキストを入れる
-                tokens.push(TypewriterToken::Text("\n".to_string()));
-            }
             tokens.push(TypewriterToken::Text(line.to_string()));
         }
     }

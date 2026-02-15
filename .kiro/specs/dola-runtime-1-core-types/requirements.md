@@ -23,7 +23,7 @@ _Parent: Req 8.1, 8.4_
 1. The InstanceState enum shall 7バリアント（Created, Playing, Paused, Concluded, Cancelled, Trimmed, Compressed）を定義する。
 2. The InstanceState enum shall `Debug`, `Clone`, `Copy`, `PartialEq`, `Eq` を derive する。シリアライズは不要（ランタイム内部専用）。
 3. The InstanceState enum shall 終了状態判定メソッド `is_terminal() -> bool` を提供し、Concluded / Cancelled / Trimmed / Compressed で `true` を返す。
-4. The InstanceState enum shall `InterruptionPolicy` から対応する終了状態への変換メソッド `from_policy(policy: InterruptionPolicy) -> Self` を提供する（Cancel→Cancelled, Conclude→Concluded, Trim→Trimmed, Compress→Compressed）。Never に対しては `panic!` する（Never は終了状態ではなく延期戦略であるため、この変換は呼び出されるべきでない）。
+4. The InstanceState enum shall `InterruptionPolicy` から対応する終了状態への変換メソッド `from_policy(policy: InterruptionPolicy) -> Option<Self>` を提供する（Cancel→Some(Cancelled), Conclude→Some(Concluded), Trim→Some(Trimmed), Compress→Some(Compressed)）。Never に対しては `None` を返す（Never は終了状態ではなく延期戦略であり、競合解決時に正常に呼ばれ得る）。
 
 ---
 
