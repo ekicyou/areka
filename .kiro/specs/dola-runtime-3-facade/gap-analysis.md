@@ -215,6 +215,7 @@ effective_time = (current_time - start_time - pause_accumulated) * time_scale
 ### 必須決定事項
 
 1. **`runtime` feature gate**: 現行維持 or このタイミングで削除
+2. **`load_document` 返り値**: パース責務の外部化に伴い、`Result<(), RuntimeError>` を維持するか infallible (`fn load_document(&mut self, doc: DolaDocument)`) にするか
 
 ### Research Needed（設計フェーズで調査）
 
