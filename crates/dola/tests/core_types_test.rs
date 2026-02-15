@@ -265,7 +265,12 @@ mod easing_tests {
 
         for (variant, expected_str) in &names {
             let json = serde_json::to_string(variant).unwrap();
-            assert_eq!(json, format!("\"{}\"", expected_str), "Failed for {:?}", variant);
+            assert_eq!(
+                json,
+                format!("\"{}\"", expected_str),
+                "Failed for {:?}",
+                variant
+            );
 
             let deserialized: EasingName = serde_json::from_str(&json).unwrap();
             assert_eq!(*variant, deserialized);
@@ -539,11 +544,8 @@ mod storyboard_tests {
         let json = r#"{"entry":[]}"#;
         let sb: Storyboard = serde_json::from_str(json).unwrap();
         assert_eq!(sb.time_scale, 1.0);
-        assert_eq!(sb.loop_count, None);
-        assert_eq!(
-            sb.interruption_policy,
-            dola::InterruptionPolicy::Conclude
-        );
+        assert_eq!(sb.loop_count, 1);
+        assert_eq!(sb.interruption_policy, dola::InterruptionPolicy::Conclude);
         assert!(sb.entry.is_empty());
     }
 

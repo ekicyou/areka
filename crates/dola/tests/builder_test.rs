@@ -88,9 +88,11 @@ mod document_builder_tests {
 
         assert!(result.is_err());
         let errors = result.unwrap_err();
-        assert!(errors
-            .iter()
-            .any(|e| matches!(e, DolaError::UndefinedVariable { .. })));
+        assert!(
+            errors
+                .iter()
+                .any(|e| matches!(e, DolaError::UndefinedVariable { .. }))
+        );
     }
 }
 
@@ -105,7 +107,7 @@ mod storyboard_builder_tests {
     fn default_values() {
         let sb = StoryboardBuilder::new().build();
         assert_eq!(sb.time_scale, 1.0);
-        assert_eq!(sb.loop_count, None);
+        assert_eq!(sb.loop_count, 1);
         assert_eq!(sb.interruption_policy, InterruptionPolicy::Conclude);
         assert!(sb.entry.is_empty());
     }
@@ -142,7 +144,7 @@ mod storyboard_builder_tests {
             .build();
 
         assert_eq!(sb.time_scale, 2.0);
-        assert_eq!(sb.loop_count, Some(3));
+        assert_eq!(sb.loop_count, 3);
         assert_eq!(sb.interruption_policy, InterruptionPolicy::Cancel);
     }
 }

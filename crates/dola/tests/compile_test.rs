@@ -65,7 +65,7 @@ mod serde_tests {
             start_time: 0.0,
             timelines,
             time_scale: 1.0,
-            loop_count: None,
+            loop_count: 1,
             interruption_policy: InterruptionPolicy::Conclude,
             total_base_duration: 1.0,
         };
@@ -832,7 +832,7 @@ mod metadata_tests {
         );
 
         let result = compile_storyboard(&doc, "test", 0.0).unwrap();
-        assert_eq!(result.loop_count, Some(3));
+        assert_eq!(result.loop_count, 3);
     }
 
     #[test]

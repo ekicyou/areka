@@ -229,6 +229,7 @@ mod instance_state_properties {
 mod evaluated_value_tests {
     use super::*;
     use dola::DynamicValue;
+    use std::rc::Rc;
 
     #[test]
     fn float_variant() {
@@ -243,12 +244,20 @@ mod evaluated_value_tests {
     }
 
     #[test]
-    fn object_variant() {
-        let v = EvaluatedValue::Object(DynamicValue::String("hello".to_string()));
-        assert_eq!(
-            v,
-            EvaluatedValue::Object(DynamicValue::String("hello".to_string()))
-        );
+    fn object_variant_ptr_eq() {
+        let rc = Rc::new(DynamicValue::String("hello".to_string()));
+        let v1 = EvaluatedValue::Object(rc.clone());
+        let v2 = EvaluatedValue::Object(rc.clone());
+        // 同一 Rc ポインタなので等しい
+        assert_eq!(v1, v2);
+    }
+
+    #[test]
+    fn object_variant_different_rc_not_eq() {
+        let v1 = EvaluatedValue::Object(Rc::new(DynamicValue::String("hello".to_string())));
+        let v2 = EvaluatedValue::Object(Rc::new(DynamicValue::String("hello".to_string())));
+        // 内容は同じだが異なる Rc ポインタなので等しくない
+        assert_ne!(v1, v2);
     }
 
     #[test]
@@ -267,7 +276,7 @@ mod evaluated_value_tests {
 
     #[test]
     fn display_object() {
-        let v = EvaluatedValue::Object(DynamicValue::String("test".to_string()));
+        let v = EvaluatedValue::Object(Rc::new(DynamicValue::String("test".to_string())));
         let s = format!("{v}");
         assert!(s.contains("test"));
     }

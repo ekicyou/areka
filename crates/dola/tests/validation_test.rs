@@ -83,7 +83,7 @@ mod v2_tests {
             "sb1".to_string(),
             Storyboard {
                 time_scale: 1.0,
-                loop_count: None,
+                loop_count: 1,
                 interruption_policy: InterruptionPolicy::Conclude,
                 entry: vec![
                     StoryboardEntry {
@@ -154,7 +154,7 @@ mod v3_tests {
             "sb1".to_string(),
             Storyboard {
                 time_scale: 1.0,
-                loop_count: None,
+                loop_count: 1,
                 interruption_policy: InterruptionPolicy::Conclude,
                 entry: vec![StoryboardEntry {
                     variable: Some("x".to_string()),
@@ -196,7 +196,7 @@ mod v4_tests {
             "sb1".to_string(),
             Storyboard {
                 time_scale: 1.0,
-                loop_count: None,
+                loop_count: 1,
                 interruption_policy: InterruptionPolicy::Conclude,
                 entry: vec![StoryboardEntry {
                     variable: Some("undefined_var".to_string()),
@@ -251,7 +251,7 @@ mod v5_tests {
             "sb1".to_string(),
             Storyboard {
                 time_scale: 1.0,
-                loop_count: None,
+                loop_count: 1,
                 interruption_policy: InterruptionPolicy::Conclude,
                 entry: vec![StoryboardEntry {
                     variable: Some("x".to_string()),
@@ -300,7 +300,7 @@ mod v6_tests {
             "sb1".to_string(),
             Storyboard {
                 time_scale: 1.0,
-                loop_count: None,
+                loop_count: 1,
                 interruption_policy: InterruptionPolicy::Conclude,
                 entry: vec![
                     StoryboardEntry {
@@ -358,7 +358,7 @@ mod v6_tests {
             "sb1".to_string(),
             Storyboard {
                 time_scale: 1.0,
-                loop_count: None,
+                loop_count: 1,
                 interruption_policy: InterruptionPolicy::Conclude,
                 entry: vec![StoryboardEntry {
                     variable: Some("x".to_string()),
@@ -406,7 +406,7 @@ mod v6_tests {
             "sb1".to_string(),
             Storyboard {
                 time_scale: 1.0,
-                loop_count: None,
+                loop_count: 1,
                 interruption_policy: InterruptionPolicy::Conclude,
                 entry: vec![
                     StoryboardEntry {
@@ -465,7 +465,7 @@ mod v6_tests {
             "sb1".to_string(),
             Storyboard {
                 time_scale: 1.0,
-                loop_count: None,
+                loop_count: 1,
                 interruption_policy: InterruptionPolicy::Conclude,
                 entry: vec![StoryboardEntry {
                     variable: Some("x".to_string()),
@@ -504,7 +504,7 @@ mod v7_tests {
             "sb1".to_string(),
             Storyboard {
                 time_scale: 1.0,
-                loop_count: None,
+                loop_count: 1,
                 interruption_policy: InterruptionPolicy::Conclude,
                 entry: vec![StoryboardEntry {
                     variable: None, // missing!
@@ -559,7 +559,7 @@ mod v8_tests {
             "sb1".to_string(),
             Storyboard {
                 time_scale: 1.0,
-                loop_count: None,
+                loop_count: 1,
                 interruption_policy: InterruptionPolicy::Conclude,
                 entry: vec![
                     // Need a KF first
@@ -623,7 +623,7 @@ mod v9_tests {
             "sb1".to_string(),
             Storyboard {
                 time_scale: 1.0,
-                loop_count: None,
+                loop_count: 1,
                 interruption_policy: InterruptionPolicy::Conclude,
                 entry: vec![StoryboardEntry {
                     variable: None,
@@ -652,7 +652,7 @@ mod v9_tests {
             "sb1".to_string(),
             Storyboard {
                 time_scale: 1.0,
-                loop_count: None,
+                loop_count: 1,
                 interruption_policy: InterruptionPolicy::Conclude,
                 entry: vec![StoryboardEntry {
                     variable: None,
@@ -693,7 +693,7 @@ mod v10_tests {
             "sb1".to_string(),
             Storyboard {
                 time_scale: 1.0,
-                loop_count: None,
+                loop_count: 1,
                 interruption_policy: InterruptionPolicy::Conclude,
                 entry: vec![StoryboardEntry {
                     variable: Some("bg".to_string()),
@@ -740,7 +740,7 @@ mod v10_tests {
             "sb1".to_string(),
             Storyboard {
                 time_scale: 1.0,
-                loop_count: None,
+                loop_count: 1,
                 interruption_policy: InterruptionPolicy::Conclude,
                 entry: vec![StoryboardEntry {
                     variable: Some("bg".to_string()),
@@ -795,7 +795,7 @@ mod v11_tests {
             "sb1".to_string(),
             Storyboard {
                 time_scale: 1.0,
-                loop_count: None,
+                loop_count: 1,
                 interruption_policy: InterruptionPolicy::Conclude,
                 entry: vec![StoryboardEntry {
                     variable: Some("x".to_string()),
@@ -859,7 +859,7 @@ mod v12_tests {
             "sb1".to_string(),
             Storyboard {
                 time_scale: 1.0,
-                loop_count: None,
+                loop_count: 1,
                 interruption_policy: InterruptionPolicy::Conclude,
                 entry: vec![StoryboardEntry {
                     variable: Some("x".to_string()),
@@ -926,7 +926,7 @@ mod v13_tests {
             "sb1".to_string(),
             Storyboard {
                 time_scale: 1.0,
-                loop_count: None,
+                loop_count: 1,
                 interruption_policy: InterruptionPolicy::Conclude,
                 entry: vec![StoryboardEntry {
                     variable: Some("x".to_string()),
@@ -973,7 +973,7 @@ mod v13_tests {
             "sb1".to_string(),
             Storyboard {
                 time_scale: 1.0,
-                loop_count: None,
+                loop_count: 1,
                 interruption_policy: InterruptionPolicy::Conclude,
                 entry: vec![StoryboardEntry {
                     variable: Some("bg".to_string()),
