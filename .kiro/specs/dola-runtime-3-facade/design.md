@@ -504,7 +504,7 @@ pub(crate) struct StoryboardInstance {
     pub base_duration: f64,
     pub pause_accumulated: f64,
     pub pause_start: Option<f64>,
-    pub loop_count: Option<u32>,    // Tier 2: 無視、Tier 3: LoopController が使用
+    pub loop_count: i32,             // 1=1回, n≥2=n回, -1=無限ループ
     pub loops_completed: u32,        // Tier 2: 常に 0
     pub finish_deadline: Option<f64>,
 }
@@ -850,8 +850,11 @@ fn start(&mut self, name: &str, start_time: f64) -> Result<StartResult, RuntimeE
         .ok_or(RuntimeError::StoryboardNotFound(name.to_string()))?;
     let compiled = compile_storyboard(doc, name, start_time)?;
 
-    // 2. ZeroDurationWithLoop チェック
-    if compiled.total_base_duration == 0.0 && compiled.loop_count.is_some() {
+    // 2. loop_count バリデーション
+    if compiled.loop_count <= 0 && compiled.loop_count != -1 {
+        return Err(RuntimeError::InvalidLoopCount(compiled.loop_count));
+    }
+    if compiled.total_base_duration == 0.0 && compiled.loop_count == -1 {
         return Err(RuntimeError::ZeroDurationWithLoop { storyboard: name.to_string() });
     }
 
@@ -875,10 +878,10 @@ fn start(&mut self, name: &str, start_time: f64) -> Result<StartResult, RuntimeE
     self.instance_manager.transition(group_id, InstanceState::Playing)?;
 
     // 7. end_time 算出
-    let end_time = if compiled.loop_count == Some(0) {
+    let end_time = if compiled.loop_count == -1 {
         f64::INFINITY  // 無限ループ (3.6)
     } else {
-        start_time + compiled.total_base_duration / compiled.time_scale
+        start_time + compiled.total_base_duration * (compiled.loop_count as f64) / compiled.time_scale  // (3.7)
     };
 
     Ok(StartResult { group_id, end_time })

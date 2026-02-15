@@ -32,8 +32,8 @@ pub struct CompiledStoryboard {
     pub timelines: BTreeMap<String, CompiledVariableTimeline>,
     /// 再生速度倍率（ランタイム適用、事前適用なし）
     pub time_scale: f64,
-    /// ループ回数 None=なし, Some(0)=無限, Some(n)=n回
-    pub loop_count: Option<u32>,
+    /// ループ回数（1 = 1回再生、n≥2 = n回再生、-1 = 無限ループ）
+    pub loop_count: i32,
     /// 割り込み終了戦略
     pub interruption_policy: InterruptionPolicy,
     /// ベース合計再生時間 time_scale未適用 全タイムラインの最大値

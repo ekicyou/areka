@@ -54,7 +54,8 @@ _Parent: Req 2.1, 2.2, 2.3, 2.4, 2.5, 2.6_
 3. The DolaRuntime shall コンパイル済みトランジションに `group_id` および `InterruptionPolicy` をメタデータとして付与する。
 4. When 同一ストーリーボードに対して複数回 Start が発行された場合, the DolaRuntime shall それぞれ独立した実行インスタンスを生成する。
 5. When Start が正常に完了した場合, the DolaRuntime shall `StartResult { group_id, end_time }` を返却する。
-6. When `loop_count` が `Some(0)` の場合, the DolaRuntime shall `end_time = f64::INFINITY` を返却する。
+6. When `loop_count` が `-1` の場合, the DolaRuntime shall `end_time = f64::INFINITY` を返却する。
+7. When `loop_count` が `1` 以上の場合, the DolaRuntime shall `end_time = start_time + base_duration * loop_count` を返却する（Tier 2 ではループ未実装だが、理論上の終了時刻を算出）。
 
 ---
 
@@ -68,7 +69,8 @@ _Parent: Req 2.7, 2.8, 2.9_
 
 1. When `calculate_end_time(name, start_time)` が呼び出された場合, the DolaRuntime shall 終了予定時刻のみを返却し、実行インスタンスの生成やタイムテーブルへの追加を行わない。
 2. If 存在しないストーリーボード名で Start / CalculateEndTime が発行された場合, then the DolaRuntime shall `RuntimeError::StoryboardNotFound` を返却する。
-3. If duration=0 かつ `loop_count` が `None` 以外の場合, then the DolaRuntime shall `RuntimeError::ZeroDurationWithLoop` を返却する。
+3. If duration=0 かつ `loop_count` が `-1` の場合, then the DolaRuntime shall `RuntimeError::ZeroDurationWithLoop` を返却する。
+4. If `loop_count` が `0` 以下（`-1` を除く）の場合, then the DolaRuntime shall `RuntimeError::InvalidLoopCount` を返却する。
 
 ---
 

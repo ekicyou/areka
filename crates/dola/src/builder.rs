@@ -60,7 +60,7 @@ impl DolaDocumentBuilder {
 /// Storyboard ビルダー
 pub struct StoryboardBuilder {
     time_scale: f64,
-    loop_count: Option<u32>,
+    loop_count: i32,
     interruption_policy: InterruptionPolicy,
     entry: Vec<StoryboardEntry>,
 }
@@ -70,7 +70,7 @@ impl StoryboardBuilder {
     pub fn new() -> Self {
         Self {
             time_scale: 1.0,
-            loop_count: None,
+            loop_count: 1,
             interruption_policy: InterruptionPolicy::Conclude,
             entry: Vec::new(),
         }
@@ -82,9 +82,9 @@ impl StoryboardBuilder {
         self
     }
 
-    /// ループ回数を設定
-    pub fn loop_count(mut self, count: u32) -> Self {
-        self.loop_count = Some(count);
+    /// ループ回数を設定（1 = 1回、n≥2 = n回、-1 = 無限ループ）
+    pub fn loop_count(mut self, count: i32) -> Self {
+        self.loop_count = count;
         self
     }
 

@@ -147,6 +147,24 @@
   - compile.rs に Object intern pool 追加（~30行の追加コード）
 - **Follow-up**: Tier 1 `types.rs` の修正、Tier 1 テストの修正、`compile.rs` への intern pool 追加（本仕様スコープに含む）
 
+### Decision 6: loop_count の型と意味論の変更
+
+- **Context**: 従来の `Option<u32>` 型では、`None` の意味（デフォルト）と `Some(0)` の意味（無限ループ）が直感に反する。一般的な API では `-1` が無限ループ、`None` または省略がデフォルト（1回再生）を示す。
+- **Alternatives Considered**:
+  1. `Option<u32>` のまま、`None` = 1回、`Some(n)` = n回（n≥1）、`Some(0)` = エラー、無限ループ非対応 → 無限ループが表現できない
+  2. `Option<u32>` で `Some(u32::MAX)` = 無限 → マジックナンバー、意味が不明瞭
+  3. `enum LoopCount { Once, Times(NonZeroU32), Infinite }` に変更 → BREAKING CHANGE、既存 TOML 非互換
+  4. **`i32` に変更**: `1` = 1回（デフォルト）、`n≥2` = n回、`-1` = 無限、`0` 以下（-1 除く）= エラー
+- **Selected Approach**: Option 4 — `i32` 型（serde デフォルト値 `1`）
+- **Rationale**:
+  - **直感的**: `-1` = 無限は一般的な慣例（POSIX、HTTP timeout など）
+  - **型簡潔性**: `Option` や `enum` 不要、TOML で自然な表現 `loop_count = -1`
+  - **バリデーション容易**: `<= 0` かつ `!= -1` で不正値を検出
+- **Trade-offs**:
+  - `u32` → `i32` で表現範囲が半減（4,294,967,295 → 2,147,483,647）だが、ループ回数として十分
+  - 負の値（-1 以外）をエラーにする必要があるが、バリデーションは簡単
+- **Follow-up**: `RuntimeError::InvalidLoopCount(i32)` バリアント追加（Tier 1 core-types）、Tier 2 facade の start() バリデーション実装
+
 ## Risks & Mitigations
 - **二重バリデーションのパフォーマンス** — デスクトップマスコット用途では問題にならない規模。最適化は計測後に判断
 - **f64 精度の蓄積誤差** — アニメーション時間は数十秒程度。f64 の有効桁（15-16桁）で十分

@@ -29,6 +29,10 @@ fn default_time_scale() -> f64 {
     1.0
 }
 
+fn default_loop_count() -> i32 {
+    1
+}
+
 fn default_interruption_policy() -> InterruptionPolicy {
     InterruptionPolicy::Conclude
 }
@@ -39,9 +43,9 @@ pub struct Storyboard {
     /// 再生速度倍率（デフォルト 1.0）
     #[serde(default = "default_time_scale")]
     pub time_scale: f64,
-    /// ループ回数（None = ループなし、Some(0) = 無限、Some(n) = n回）
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub loop_count: Option<u32>,
+    /// ループ回数（1 = 1回再生、n≥2 = n回再生、-1 = 無限ループ、0以下 = エラー）
+    #[serde(default = "default_loop_count")]
+    pub loop_count: i32,
     /// 割り込み終了戦略（デフォルト: Conclude）
     #[serde(default = "default_interruption_policy")]
     pub interruption_policy: InterruptionPolicy,
