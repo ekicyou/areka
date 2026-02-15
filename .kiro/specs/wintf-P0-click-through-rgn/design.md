@@ -288,8 +288,9 @@ pub(crate) fn set_region_updates_enabled(enabled: bool);
 - **State model**:
   - `REGION_UPDATES_ENABLED: AtomicBool` — リージョン更新の有効/無効（パフォーマンス比較用）
   - `REGION_DIRTY: AtomicBool` — レイアウト変更によるダーティフラグ（将来拡張用。現在はタイマー毎に無条件更新）
+  - `CONSECUTIVE_ERROR_COUNT: AtomicUsize` — 連続エラーカウンタ（恒久的エラー検出用）
 - **Persistence**: なし（プロセスライフタイム内のみ）
-- **Concurrency**: AtomicBool + メインスレッド固定アクセス。ecs_wndproc はメインスレッドでのみ実行される
+- **Concurrency**: AtomicBool/AtomicUsize + メインスレッド固定アクセス。ecs_wndproc はメインスレッドでのみ実行される
 
 **Implementation Notes**
 - **Integration**: ecs_wndproc に `WM_TIMER if wparam == TIMER_ID_CLICK_THROUGH_RGN` の match arm を追加。WindowHandle on_add フックに `setup_timer()` 呼び出しを追加。on_remove フックに `kill_timer()` 呼び出しを追加
@@ -379,6 +380,66 @@ GlobalArrangement.bounds (f32, screen coords)
 - **互換性エラー** (Req 6): SetWindowRgn 失敗 or Visual 描画異常 → `error!` + 互換性診断 → アプローチ破棄判断材料
 - **一時的エラー**: World borrow 失敗、CreateRectRgn 失敗 → スキップ + 次回リトライ
 - **設定エラー**: SetTimer 失敗 → `warn!` + クリックスルー無効状態で続行
+
+### Error Recovery and Self-Healing
+
+#### 恒久的エラーの検出と自動無効化
+GDI API エラー（CreateRectRgn, CombineRgn）が連続して発生する場合、リソース枯渇などの恒久的な問題の可能性がある。無限リトライによるログスパムと CPU 負荷を防止するため、以下の自己修復機構を実装する:
+
+- **State**: `CONSECUTIVE_ERROR_COUNT: AtomicUsize` — 連続エラーカウンタ（thread_local）
+- **Threshold**: 連続エラー 10 回で恒久的エラーと判定
+- **Action**: 
+  1. `set_region_updates_enabled(false)` を呼び出し、リージョン更新を恒久的に無効化
+  2. `error!` レベルで `"Click-through region updates permanently disabled due to repeated GDI errors (count: {})"`をログ記録
+  3. 以降の WM_TIMER では early return し、リージョン構築を試行しない
+- **Reset**: リージョン更新が成功した場合、カウンタを 0 にリセット
+
+#### SetTimer 失敗時の明示的な状態管理
+SetTimer 失敗時、クリックスルー機能が完全に無効化されるが、現在の設計では `warn!` ログのみで状態が追跡されない。以下の方式で状態を明示的に管理する:
+
+- **Option A (推奨)**: `setup_timer()` が `Err` を返した場合、呼び出し側（`on_window_handle_add`）で警告ログを出力し、処理を継続
+  - 実装: `if let Err(e) = setup_timer(hwnd) { warn!("SetTimer failed, click-through disabled: {:?}", e); }`
+  - メリット: 既存のエラーハンドリングパターンに準拠、追加の状態管理不要
+  
+- **Option B**: WindowHandle に `ClickThroughDisabled` マーカーコンポーネントを追加
+  - 実装: `commands.entity(entity).insert(ClickThroughDisabled);`
+  - メリット: ECS query で無効化されたウィンドウを検出可能、診断ツールで状態を可視化できる
+  - デメリット: リジェクション時の削除対象が増加
+
+**本仕様では Option A を採用**: 実験的仕様としてシンプルさを優先し、SetTimer 失敗は稀なケースとして扱う。
+
+## Implementation Priority
+
+### Phase 0: DirectComposition 互換性検証（GO/NO-GO 判定）
+**本アプローチ最大のリスク項目を最優先で検証**し、失敗時は即座に実装を中止する。
+
+#### 実装内容
+最小限のプロトタイプコードで以下を検証:
+1. WS_EX_NOREDIRECTIONBITMAP スタイルのウィンドウを作成
+2. DirectComposition Visual を設定し、描画を確認
+3. SetWindowRgn で簡単なリージョン（例: 画面中央の矩形のみ有効）を設定
+4. 以下の3点を目視確認:
+   - **API 成功**: SetWindowRgn が成功する（戻り値チェック）
+   - **Visual 描画維持**: DirectComposition Visual の描画が壊れていない（ビジュアルが表示され続ける）
+   - **クロスプロセスクリック貫通**: リージョン外をクリックした際、他プロセス（例: エクスプローラのデスクトップアイコン）にクリックが貫通する
+
+#### 完了条件（GO/NO-GO 判定）
+- **GO**: すべての検証項目が成功 → Phase 1（本実装）に進む
+- **NO-GO**: いずれかの検証項目が失敗 → 実装を中止し、以下のいずれかを選択:
+  - DirectComposition を破棄し、レガシー描画（GDI+ / UpdateLayeredWindow）に切り替え
+  - SetWindowRgn アプローチ全体を破棄し、代替案（プロセス間通信経由のクリック転送等）を検討
+  - 本機能（クロスプロセスクリックスルー）を諦め、Requirement 7 を削除
+
+#### 実装優先度
+**Task 1 として配置**。他のすべての実装タスクは Phase 0 の GO 判定後に実施する。
+
+### Phase 1: 本実装（Phase 0 が GO の場合のみ）
+Phase 0 で互換性が確認された場合のみ、以下の順序で実装を進める:
+1. ClickThroughRgnModule の基本構造（OwnedRegion, 定数定義）
+2. build_click_through_region の実装（エラーリカバリ含む）
+3. ecs_wndproc への WM_TIMER ディスパッチ追加
+4. WindowHandle on_add/on_remove フック追加
+5. 統合テスト・パフォーマンステスト
 
 ## Testing Strategy
 
