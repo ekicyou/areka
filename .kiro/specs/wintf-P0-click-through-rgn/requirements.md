@@ -1,7 +1,7 @@
 # Requirements Document
 
 ## Project Description (Input)
-SetWindowRgn ベースのクリックスルー（クロスプロセス対応）実装。
+SetWindowRgn ベースのクリックスルー（クロスプロセス対応）実装 - **実験的仕様**
 
 wintf フレームワークにおいて、HitTest::None エンティティのクリックスルーをクロスプロセスで実現する。
 従来の WS_EX_TRANSPARENT + WM_NCHITTEST (HTTRANSPARENT) アプローチは同一スレッド内のウィンドウ間でしか機能しないことが判明したため、SetWindowRgn を使用してウィンドウリージョンからクリックスルー領域を除外する方式に切り替える。
@@ -12,10 +12,12 @@ wintf フレームワークにおいて、HitTest::None エンティティのク
 - SetWindowRgn: DWM Step 1 でリージョン外をスキップ → クロスプロセスで貫通可能
 
 ### 技術要件
-- DirectComposition (WS_EX_NOREDIRECTIONBITMAP) との互換性が必要
-- HitTest::None エンティティの bounds をリージョンから除外
+- DirectComposition (WS_EX_NOREDIRECTIONBITMAP) との互換性検証が必要（互換性が確認できない場合は DirectComposition 利用を破棄する判断もあり得る）
+- ビットマップベースのリージョン構築により、ヒットテスト負荷を最小化
+- エンティティが自身の不透明領域をビットマップにプッシュする方式
 - レイアウト変更時にリージョンを動的に更新
 - ドラッグ中のリージョン一時拡張（ドラッグ操作の継続性保証）
+- **本仕様は実験的性質を持ち、パフォーマンス検証結果によってアプローチの根本的変更もあり得る**
 
 ## Requirements
 
@@ -28,25 +30,36 @@ wintf フレームワークにおいて、HitTest::None エンティティのク
 3. The wintf shall execute region updates independently from the main rendering loop
 4. The wintf shall maintain region update timing accuracy within ±50ms
 
-### Requirement 2: ヒットテスト統合リージョン構築
-**Objective:** 開発者として、ECS ワールドのヒットテスト結果を基にウィンドウリージョンを構築したい。これにより、HitTest::None エンティティの bounds がクリックスルー領域として正しく除外される。
+### Requirement 2: ビットマップベースのリージョン構築
+**Objective:** 開発者として、ウィンドウサイズの1bitビットマップを基にウィンドウリージョンを構築したい。これにより、高頻度なヒットテストクエリを回避し、更新負荷を最小化できる。
 
 #### Acceptance Criteria
-1. When constructing window region, the wintf shall perform hit-test queries against the ECS world in 4x4 pixel grid units (physical pixels)
-2. When a 4x4 pixel region contains at least one entity with HitTest::None, the wintf shall exclude that region from the window region
-3. When a 4x4 pixel region contains no HitTest::None entities, the wintf shall include that region in the window region
-4. The wintf shall construct the final HRGN as a union of 4x4 pixel rectangles
+1. When window region update is triggered, the wintf shall allocate a 1-bit bitmap matching the physical pixel dimensions of the window
+2. The wintf shall initialize the bitmap with all pixels set to transparent (0: click-through)
+3. When bitmap is ready, the wintf shall invoke entity rendering pass to populate opaque regions
+4. When bitmap population is complete, the wintf shall convert the bitmap to HRGN representation
 5. The wintf shall apply the constructed HRGN to the target window using SetWindowRgn
+6. The wintf shall release bitmap resources after HRGN construction
 
-### Requirement 3: リージョン解像度設定の構成可能性
-**Objective:** 開発者として、リージョン構築時のグリッド解像度（4x4ピクセル）を調整可能な定数として宣言したい。これにより、将来的なパフォーマンス調整やクリック精度の最適化が容易になる。
+### Requirement 3: エンティティによる不透明領域書き込み
+**Objective:** 開発者として、各エンティティが自身の不透明領域を1bitビットマップに書き込めるようにしたい。これにより、HitTest::None 以外のエンティティのみがクリック可能領域として登録される。
 
 #### Acceptance Criteria
-1. The wintf shall declare the region grid size (4x4 pixels) as a named constant
-2. The wintf shall use the grid size constant consistently throughout all region construction logic
-3. The wintf shall allow grid size modification via a single constant definition
+1. When entity rendering pass is invoked, the wintf shall iterate all entities with HitTest component
+2. When an entity has HitTest::Opaque or HitTest::Client, the wintf shall write the entity's physical bounds as opaque (1) to the bitmap
+3. When an entity has HitTest::None, the wintf shall skip writing to the bitmap (leaving the region transparent)
+4. The wintf shall clip entity bounds to the window dimensions before writing to bitmap
+5. The wintf shall write entity regions to bitmap in parent-to-child hierarchy order to respect z-ordering
 
-### Requirement 4: レイアウト変更検知と動的更新
+### Requirement 4: ビットマップ解像度の構成可能性
+**Objective:** 開発者として、リージョン構築時のビットマップ解像度単位を調整可能な定数として宣言したい。これにより、メモリ使用量とクリック精度のトレードオフを調整できる。
+
+#### Acceptance Criteria
+1. The wintf shall declare the bitmap resolution scale factor as a named constant (default: 4x4 physical pixels per bitmap pixel)
+2. The wintf shall use the resolution scale factor consistently throughout bitmap allocation and entity bounds conversion
+3. The wintf shall allow resolution scale modification via a single constant definition
+
+### Requirement 5: レイアウト変更検知と動的更新
 **Objective:** 開発者として、ECS レイアウトシステムの変更を検知してリージョンを即座に更新したい。これにより、エンティティの移動・サイズ変更時にクリックスルー領域が正確に反映される。
 
 #### Acceptance Criteria
@@ -54,7 +67,7 @@ wintf フレームワークにおいて、HitTest::None エンティティのク
 2. When region is marked as dirty and region update timer elapses, the wintf shall trigger immediate region reconstruction
 3. If layout changes occur within the 0.25-second update interval, the wintf shall defer region update to the next scheduled update cycle
 
-### Requirement 5: ドラッグ操作中のリージョン一時拡張
+### Requirement 6: ドラッグ操作中のリージョン一時拡張
 **Objective:** 開発者として、ウィンドウドラッグ操作中はリージョンをウィンドウ全体に拡張したい。これにより、ドラッグ開始エンティティから意図せずマウスが外れた場合でも、ドラッグ操作が継続できる。
 
 #### Acceptance Criteria
@@ -63,18 +76,28 @@ wintf フレームワークにおいて、HitTest::None エンティティのク
 3. When window drag operation completes, the wintf shall restore region to the hit-test-based construction on the next update cycle
 4. When drag operation is cancelled, the wintf shall restore region to the hit-test-based construction on the next update cycle
 
-### Requirement 6: DirectComposition互換性
-**Objective:** 開発者として、SetWindowRgn がウィンドウスタイル WS_EX_NOREDIRECTIONBITMAP と併用可能であることを確認したい。これにより、DirectComposition による描画とクリックスルー機能が同時に動作する。
+### Requirement 7: DirectComposition互換性検証
+**Objective:** 開発者として、SetWindowRgn がウィンドウスタイル WS_EX_NOREDIRECTIONBITMAP と併用可能であることを検証したい。これにより、DirectComposition による描画とクリックスルー機能が同時に動作するかを確認し、不可能な場合は DirectComposition 利用破棄の判断材料とする。
 
 #### Acceptance Criteria
-1. The wintf shall support SetWindowRgn on windows with WS_EX_NOREDIRECTIONBITMAP style
-2. When SetWindowRgn is applied, the wintf shall not interfere with DirectComposition visual rendering
-3. If SetWindowRgn fails with WS_EX_NOREDIRECTIONBITMAP, the wintf shall log an error with HRESULT code
+1. The wintf shall attempt SetWindowRgn on windows with WS_EX_NOREDIRECTIONBITMAP style
+2. When SetWindowRgn is applied, the wintf shall verify that DirectComposition visual rendering continues to function correctly
+3. If SetWindowRgn fails with WS_EX_NOREDIRECTIONBITMAP, the wintf shall log an error with HRESULT code and detailed compatibility diagnostics
+4. If visual rendering is broken after SetWindowRgn, the wintf shall log a critical incompatibility warning
 
-### Requirement 7: クロスプロセスクリックスルー
+### Requirement 8: クロスプロセスクリックスルー
 **Objective:** エンドユーザーとして、HitTest::None エンティティの領域をクリックした際、他のプロセスのウィンドウにクリックイベントが貫通することを期待する。これにより、デスクトップマスコットの透過領域を通してデスクトップアイコンや他のアプリケーションを操作できる。
 
 #### Acceptance Criteria
 1. When user clicks on a HitTest::None entity area, the wintf shall allow the click event to pass through to windows from other processes
 2. When user clicks on a non-HitTest::None entity area, the wintf shall capture the click event and prevent pass-through
 3. The wintf shall achieve cross-process click-through without requiring WS_EX_TRANSPARENT or HTTRANSPARENT
+
+### Requirement 9: パフォーマンス測定と最適化指針
+**Objective:** 開発者として、リージョン更新処理のパフォーマンスを測定し、実用性を判断したい。これにより、本アプローチの継続可否を決定できる。
+
+#### Acceptance Criteria
+1. The wintf shall measure and log the time required for each region update cycle (bitmap allocation, entity rendering, HRGN conversion)
+2. When region update time exceeds 16ms (60 FPS threshold), the wintf shall log a performance warning
+3. The wintf shall provide configuration to disable region updates for performance comparison
+4. If sustained region update overhead degrades application responsiveness, the wintf shall document the incompatibility for architectural decision
