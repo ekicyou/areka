@@ -5,10 +5,11 @@ members = [
 resolver = "2"
 
 [workspace.package]
-version = "0.0.0"
+version = "0.0.1"
 edition = "2024"
-authors = ["Dot-Station Master <dot.station@gmail.com>"]
-license = "MIT OR Apache-2.0"
+authors = ["ekicyou <dot.station@gmail.com>"]
+license = "MIT"
+repository = "https://github.com/ekicyou/areka"
 publish = false
 
 [workspace.dependencies]

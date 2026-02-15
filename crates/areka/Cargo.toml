@@ -1,12 +1,14 @@
 [package]
 name = "areka"
-version = "0.0.1"
-edition = { workspace = true }
-authors = { workspace = true }
-license = { workspace = true }
+description = "Desktop mascot platform for Windows"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
 publish = true
-description = "Desktop mascot platform inspired by Ukagaka"
-repository = "https://github.com/ekicyou/areka"
+keywords = ["ukagaka", "desktop-mascot", "windows", "character", "interactive"]
+categories = ["gui", "games", "multimedia"]
 
 [[bin]]
 name = "areka"
