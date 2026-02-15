@@ -35,13 +35,12 @@ _Parent: Req 8.1, 8.2, 8.3, 8.4_
 
 #### Acceptance Criteria
 
-1. The InstanceState shall 遷移検証メソッド `try_transition(to: InstanceState) -> Result<(), RuntimeError>` を提供する。
-2. When Created → Playing の遷移が要求された場合, the InstanceState shall 成功を返す。
-3. When Playing → Paused の遷移が要求された場合, the InstanceState shall 成功を返す。
-4. When Paused → Playing の遷移が要求された場合, the InstanceState shall 成功を返す。
-5. When Playing または Paused から終了状態（Concluded / Cancelled / Trimmed / Compressed）への遷移が要求された場合, the InstanceState shall 成功を返す。
-6. When 終了状態から任意の状態への遷移が要求された場合, the InstanceState shall `RuntimeError::InvalidStateTransition` を返す。
-7. When 上記以外の不正な遷移（例: Created → Paused, Created → Concluded）が要求された場合, the InstanceState shall `RuntimeError::InvalidStateTransition` を返す。
+1. The InstanceState shall 遷移検証メソッド `try_transition(target: InstanceState) -> Result<InstanceState, InstanceState>` を提供する。遷移成功時は `Ok(target)`、失敗時は `Err(self)` を返す。ドメイン層の責務として RuntimeError に依存せず、InstanceManager が必要に応じて InvalidGroupId へ変換する。
+2. When Created → Playing の遷移が要求された場合, the InstanceState shall `Ok(Playing)` を返す。
+3. When Playing → Paused の遷移が要求された場合, the InstanceState shall `Ok(Paused)` を返す。
+4. When Paused → Playing の遷移が要求された場合, the InstanceState shall `Ok(Playing)` を返す。
+5. When Playing または Paused から終了状態（Concluded / Cancelled / Trimmed / Compressed）への遷移が要求された場合, the InstanceState shall `Ok(target)` を返す。
+6. When 上記以外の遷移が要求された場合（終了状態からの遷移、Created → Paused など）, the InstanceState shall `Err(self)` を返す。InstanceManager の実装が正しければ発生しない（内部バグのみ）。
 
 ---
 
@@ -70,12 +69,10 @@ _Parent: Req 1.5, 2.8, 2.9, 3.7、統合指針 Section 3.1_
 
 1. The RuntimeError enum shall 以下のバリアントを定義する:
    - `StoryboardNotFound(String)` — 存在しないストーリーボード名（Parent Req 2.8）
-   - `InvalidGroupId(u64)` — 存在しない group_id
-   - `TerminatedInstance { group_id: u64, state: InstanceState }` — 終了済みインスタンスへの操作（Parent Req 3.7）
+   - `InvalidGroupId(u64)` — 存在しない group_id（終了済みインスタンスへの操作を含む。終了インスタンスは即座に削除される設計）
    - `DocumentParseError(String)` — TOML パース失敗（Parent Req 1.5）
    - `ZeroDurationWithLoop { storyboard: String }` — duration=0 + loop_count（Parent Req 2.9）
    - `CompileError(Vec<DolaError>)` — 既存コンパイルエラーのラップ（`compile_storyboard()` が `Vec<DolaError>` を返すため）
-   - `InvalidStateTransition { from: InstanceState, to: InstanceState }` — 不正な状態遷移（Req 2 のエラー型）
 2. The RuntimeError enum shall `Debug`, `Clone` を derive する。
 3. The RuntimeError enum shall `std::fmt::Display` と `std::error::Error` を実装する。
 4. The RuntimeError enum shall `From<Vec<DolaError>>` を実装し、コンパイルエラーの自動変換を提供する。

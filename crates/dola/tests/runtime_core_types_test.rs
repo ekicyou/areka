@@ -274,17 +274,6 @@ mod runtime_error_tests {
     }
 
     #[test]
-    fn terminated_instance_display() {
-        let err = RuntimeError::TerminatedInstance {
-            group_id: 5,
-            state: InstanceState::Concluded,
-        };
-        let msg = format!("{err}");
-        assert!(msg.contains("5"));
-        assert!(msg.contains("Concluded"));
-    }
-
-    #[test]
     fn document_parse_error_display() {
         let err = RuntimeError::DocumentParseError("invalid toml".to_string());
         let msg = format!("{err}");

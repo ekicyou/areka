@@ -677,9 +677,9 @@ fn create_flexbox_window(
             ClickThroughTestContainer,
             Rectangle::new(),
             Brushes::with_foreground(D2D1_COLOR_F {
-                r: 0.95,
-                g: 0.95,
-                b: 0.85,
+                r: 0.2,
+                g: 0.2,
+                b: 0.2,
                 a: 1.0,
             }),
             BoxStyle {
@@ -711,9 +711,9 @@ fn create_flexbox_window(
         Rectangle::new(),
         Brushes::with_foreground(D2D1_COLOR_F {
             r: 1.0,
-            g: 1.0,
+            g: 0.0,
             b: 0.0,
-            a: 0.3,
+            a: 0.7,
         }),
         BoxStyle {
             size: Some(BoxSize {
@@ -734,9 +734,9 @@ fn create_flexbox_window(
         Rectangle::new(),
         Brushes::with_foreground(D2D1_COLOR_F {
             r: 0.0,
-            g: 1.0,
+            g: 0.4,
             b: 1.0,
-            a: 0.3,
+            a: 0.7,
         }),
         BoxStyle {
             size: Some(BoxSize {

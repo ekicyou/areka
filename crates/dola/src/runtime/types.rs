@@ -2,8 +2,8 @@
 
 use std::fmt;
 
-use crate::value::DynamicValue;
 use crate::DolaError;
+use crate::value::DynamicValue;
 
 use super::InstanceState;
 
@@ -23,13 +23,8 @@ pub enum EvaluatedValue {
 pub enum RuntimeError {
     /// 指定ストーリーボード名が未定義
     StoryboardNotFound(String),
-    /// 指定 group_id が存在しない
+    /// 指定 group_id が存在しない（終了済みインスタンスへの操作を含む）
     InvalidGroupId(u64),
-    /// 終了済みインスタンスへの操作 (Req 3.7)
-    TerminatedInstance {
-        group_id: u64,
-        state: InstanceState,
-    },
     /// 指示書パース失敗 (Req 1.5)
     DocumentParseError(String),
     /// duration=0 かつ loop_count 設定 (Req 2.9)
@@ -46,12 +41,6 @@ impl fmt::Display for RuntimeError {
             }
             Self::InvalidGroupId(id) => {
                 write!(f, "invalid group_id: {id}")
-            }
-            Self::TerminatedInstance { group_id, state } => {
-                write!(
-                    f,
-                    "operation on terminated instance: group_id={group_id}, state={state:?}"
-                )
             }
             Self::DocumentParseError(msg) => {
                 write!(f, "document parse error: {msg}")
