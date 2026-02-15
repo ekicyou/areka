@@ -2,7 +2,7 @@
 
 ## 分析概要
 
-本文書は `dola-runtime-5-loop` の要件（Req 1〜2）と既存コードベースのギャップを分析し、設計フェーズへの入力とする。
+本文書は `dola-runtime-5-loop` の要件（Req 1〜5、20 AC）と既存コードベースのギャップを分析し、設計フェーズへの入力とする。
 
 ---
 
@@ -10,13 +10,15 @@
 
 ### 1.1 既存コードベースの構造
 
-| モジュール | ファイル | 役割 | 本仕様との関連 |
-|-----------|---------|------|--------------|
-| `facade.rs` | `crates/dola/src/runtime/facade.rs` (326行) | 公開 API、update フロー制御 | **自然終了検知ロジック**（L270）にループ判定を挿入 |
-| `instance_manager.rs` | `crates/dola/src/runtime/instance_manager.rs` (357行) | インスタンス状態管理 | **`loop_count`, `loops_completed` フィールド保持** |
-| `timeline_manager.rs` | `crates/dola/src/runtime/timeline_manager.rs` (408行) | タイムテーブル評価 | evaluate() 内でループオフセット調整が必要 |
-| `instance_state.rs` | `crates/dola/src/runtime/instance_state.rs` (80行) | 状態 enum + 遷移 | 終了状態への遷移（ループ完了時） |
-| `storyboard.rs` | `crates/dola/src/storyboard.rs` (124行) | `loop_count` 定義 | `i32` 型: 1=1回, n≥2=n回, -1=無限ループ |
+| モジュール | ファイル | 行数 | 役割 | 本仕様との関連 |
+|-----------|---------|------|------|--------------|
+| `facade.rs` | `runtime/facade.rs` | 326 | 公開 API、update フロー制御 | **自然終了検知ロジック**（L268-278）にループ判定を挿入 |
+| `instance_manager.rs` | `runtime/instance_manager.rs` | 357 | インスタンス状態管理 | **`loop_count`, `loops_completed` フィールド保持**、Pause/Resume 実装 |
+| `timeline_manager.rs` | `runtime/timeline_manager.rs` | 408 | タイムテーブル評価 | `calculate_effective_time()` でループオフセット統合が必要 |
+| `instance_state.rs` | `runtime/instance_state.rs` | 80 | 状態 enum（7 バリアント） + 遷移 | 終了状態への遷移（ループ完了時）、`Playing` 状態維持 |
+| `storyboard.rs` | `src/storyboard.rs` | 124 | `loop_count` 定義 | `i32` 型: 1=1回, n≥2=n回, -1=無限ループ |
+| `types.rs` | `runtime/types.rs` | 101 | RuntimeError enum | `InvalidLoopCount`, `ZeroDurationWithLoop` 既存 |
+| `mod.rs` | `runtime/mod.rs` | 23 | re-export | `mod loop_controller;` 追加が必要 |
 
 ### 1.2 既存のループ関連フィールド
 
@@ -25,75 +27,148 @@
 ```rust
 pub struct StoryboardInstance {
     // ... 他のフィールド ...
+    pub pause_accumulated: f64,   // Pause/Resume の時間補正
+    pub pause_start: Option<f64>, // Pause 開始時刻
     /// 1=1回, n≥2=n回, -1=無限ループ
     pub loop_count: i32,
     /// Tier 2: 常に 0
     pub loops_completed: u32,
-    // ...
+    pub end_time: f64,
 }
 ```
 
-`loop_count` は Tier 2 でコピーされるが、`loops_completed` は常に 0 で未使用。
+- `loop_count`: Tier 2 でコンパイル結果からコピーされるが、ループ判定ロジックは未実装
+- `loops_completed`: 初期値 `0` で固定、インクリメントされない
+- `pause_accumulated`: Pause/Resume 専用。ループの時間オフセットには未使用
+
+#### end_time の算出（facade.rs L96-101）
+
+```rust
+let end_time = if compiled.loop_count == -1 {
+    f64::INFINITY  // 無限ループ → INFINITY
+} else {
+    // Tier 2: ループ未実装、1回再生として扱う
+    start_time + compiled.total_base_duration / compiled.time_scale
+};
+```
 
 ### 1.3 Tier 2 の暫定動作
 
 - **ループ未実装**: `loop_count` は無視され、常に1回再生
 - **自然終了検知**: `update()` 内で `current_time >= inst.end_time` を検知し、`conclude_internal()` を呼ぶ
+- **evaluate_segments()**: 全セグメント終了時に `None` を返し、エントリを expired として削除
 
-### 1.4 コーディング規約・パターン
+### 1.4 effective_time 計算（timeline_manager.rs L166-180）
+
+```rust
+fn calculate_effective_time(current_time: f64, instance: &StoryboardInstance) -> f64 {
+    let raw_time = if instance.state == InstanceState::Paused {
+        match instance.pause_start {
+            Some(pause_start) => pause_start - instance.start_time - instance.pause_accumulated,
+            None => current_time - instance.start_time - instance.pause_accumulated,
+        }
+    } else {
+        current_time - instance.start_time - instance.pause_accumulated
+    };
+    raw_time * instance.time_scale
+}
+```
+
+ループ対応には、`pause_accumulated` と同様の減算オフセット機構が必要。
+
+### 1.5 コーディング規約・パターン
 
 | パターン | 観察 |
 |---------|------|
 | 公開範囲 | `pub(crate)` を内部コンポーネントに使用、`pub` は facade の `DolaRuntime` のみ |
 | エラー処理 | `RuntimeError` enum + `Result<T, RuntimeError>` |
 | テスト配置 | 各モジュール内に `#[cfg(test)] mod tests`、統合テストは `tests/` ディレクトリ |
-| 時間オフセット | `pause_accumulated` フィールドを Pause/Resume で使用 |
+| 時間オフセット | `pause_accumulated` フィールドを Pause/Resume で使用（加算のみ） |
 | 所有権パターン | facade が全コンポーネントを所有し `&mut self` 経由で操作 |
+| 自然終了パターン | `conclude_internal()`: 最終値取得 → last_values 更新 → Concluded 遷移 → エントリ削除 |
 
 ---
 
 ## 2. 要件→既存資産マッピング
 
-### 2.1 LoopController（Req 1〜2）
+### 2.1 Req 1: ループ再生 — 基本動作
 
-| 要件 | 必要な機能 | 既存資産 | ギャップ |
-|------|-----------|---------|---------|
-| Req 1: 基本ループ | loop_count 判定 → 周回制御 | `StoryboardInstance.loop_count` / `loops_completed` フィールド存在 | **Missing**: 周回判定ロジック |
-| Req 2 AC1: タイムテーブル1周分のみ | ループ展開しない設計 | `insert_entries()` は既に1周分のみ生成 | **Existing**: 実装済み |
-| Req 2 AC2: loop_count チェック | 全セグメント終了時の判定 | `update()` の自然終了検知（L270） | **Missing**: ループ継続判定ロジック |
-| Req 2 AC3: 時間オフセット調整 | pause_accumulated 機構でオフセット調整 | `pause_accumulated` フィールド + Resume の加算ロジック存在 | **Missing**: ループ用オフセット調整（同一機構の再利用） |
-| Req 2 AC4: ループ完了時の終了 | 終了状態遷移 + エントリ削除 | `conclude_internal()` パターン存在 | **Existing**: 呼び出しパスのみ必要 |
+| AC | 必要な機能 | 既存資産 | ギャップ |
+|----|-----------|---------|---------|
+| AC1: loop_count=1 | 1回再生後に終了 | Tier 2 の自然終了検知がそのまま動作 | **Existing** |
+| AC2: loop_count=-1 | 無限ループ継続 | `end_time = INFINITY` 設定済み → 自然終了検知は発動しない | **Missing**: 1周分終了時のループ再開ロジック |
+| AC3: loop_count=n | n回再生後に終了 | `end_time` が1回分のみで計算 | **Missing**: 周回判定 + end_time 再計算 or ループオフセット |
+| AC4: 周回終了時の判定 | loops_completed 更新 + 継続判定 | `loops_completed` フィールド存在、未使用 | **Missing**: 判定ロジック全体 |
+| AC5: Playing 状態維持 | ループ中は conclude しない | `conclude_internal()` が呼ばれると Concluded 遷移 | **Missing**: ループ中の conclude 抑制 |
 
-### 2.2 ギャップサマリー
+### 2.2 Req 2: タイムテーブル再利用
 
-| カテゴリ | ステータス |
-|---------|----------|
-| **Existing** (そのまま使用) | `loop_count` / `loops_completed` フィールド, タイムテーブル1周分設計, `conclude_internal()` パターン |
-| **Partial** (拡張必要) | `facade.update()` の自然終了検知ロジック |
-| **Missing** (新規作成) | `LoopController` モジュール, 周回判定ロジック, ループ用時間オフセット調整 |
+| AC | 必要な機能 | 既存資産 | ギャップ |
+|----|-----------|---------|---------|
+| AC1: 1周分のみ生成 | n周分のタイムテーブル展開なし | `insert_entries()` は既に1周分のみ生成 | **Existing** |
+| AC2: loops_completed 比較 | loop_count と比較して継続判定 | フィールド存在、比較ロジックなし | **Missing**: 比較関数 |
+| AC3: オフセット調整で再利用 | タイムテーブル破棄せず再利用 | `evaluate()` が expired エントリを削除する既存動作 | **Missing**: ループ時のエントリ保持 + オフセット調整 |
+| AC4: duration 累積 | 1周分 duration を加算 | `pause_accumulated` は pause 専用 | **Missing**: ループオフセット機構 |
+| AC5: ループ完了時の終了 | 終了遷移 + エントリ削除 | `conclude_internal()` パターン存在 | **Partial**: 呼び出しパスのみ追加 |
+
+### 2.3 Req 3: ループ周回トラッキング
+
+| AC | 必要な機能 | 既存資産 | ギャップ |
+|----|-----------|---------|---------|
+| AC1: loops_completed 管理 | 周回数の読み書き | `pub loops_completed: u32` フィールド存在 | **Partial**: 書き込みロジック不在 |
+| AC2: インクリメント | 周回完了時に+1 | なし | **Missing**: インクリメントロジック |
+| AC3: 初期値 0 | 生成時に 0 | `create_instance()` で `loops_completed: 0` | **Existing** |
+| AC4: u32::MAX 飽和 | 無限ループ時のオーバーフロー保護 | なし | **Missing**: `saturating_add` 使用 |
+
+### 2.4 Req 4: Pause/Resume との相互作用
+
+| AC | 必要な機能 | 既存資産 | ギャップ |
+|----|-----------|---------|---------|
+| AC1: Pause 時のループ状態保持 | 周回数・再生位置を保持 | Pause は `pause_start` を記録し状態を固定 | **Partial**: ループ固有フィールドの Pause 時挙動確認が必要 |
+| AC2: Resume 後の正確な再開 | 周回 + 位置から再開 | Resume は `pause_accumulated` を加算し `end_time` を再計算 | **Partial**: ループオフセットとの組み合わせ検証 |
+| AC3: 独立オフセット管理 | ループ offset ≠ pause offset | `pause_accumulated` は pause 専用 | **Missing**: 別フィールドでのループオフセット管理 or 関心分離 |
+
+### 2.5 Req 5: ループと外部制御の境界
+
+| AC | 必要な機能 | 既存資産 | ギャップ |
+|----|-----------|---------|---------|
+| AC1: Cancel 時の即座停止 | ループ中でも Cancel 動作 | `cancel()` は Playing/Paused → Cancelled 遷移 + エントリ削除 | **Existing**: ループ中でもそのまま動作 |
+| AC2: ConflictResolver との独立 | ループは競合を意識しない | 設計上独立 | **Existing by design** |
+| AC3: Playing 状態維持 | 競合検出対象に含まれる | LoopController が Playing を維持すれば自動的に対象 | **Existing by design**: LoopController の Playing 維持がキー |
+
+### 2.6 ギャップサマリー
+
+| カテゴリ | 項目 |
+|---------|------|
+| **Existing** (8 AC) | Req 1 AC1, Req 2 AC1, Req 3 AC3, Req 5 AC1/AC2/AC3, end_time=INFINITY (loop_count=-1) |
+| **Partial** (4 AC) | Req 2 AC5, Req 3 AC1, Req 4 AC1/AC2 |
+| **Missing** (8 AC) | Req 1 AC2/AC3/AC4/AC5, Req 2 AC2/AC3/AC4, Req 3 AC2/AC4, Req 4 AC3 |
+
+**コア欠落**: ループ周回判定ロジック、時間オフセット調整機構、`evaluate()` のエントリ保持制御
 
 ---
 
 ## 3. 実装アプローチ選択肢
 
-### Option A: 新モジュール作成（推奨）
+### Option A: 新モジュール（struct ベース）
 
-統合指針 Section 5.3 に従い、`loop_controller.rs` を新規作成する。
+統合指針 Section 5.3 に従い、`loop_controller.rs` に `LoopController` struct を新規作成する。
 
 **対象ファイル**:
 
 | 操作 | ファイル | 内容 |
 |------|---------|------|
-| **新規作成** | `runtime/loop_controller.rs` | `LoopController` struct + 周回制御 |
+| **新規作成** | `runtime/loop_controller.rs` | `LoopController` struct + 周回制御メソッド群 |
 | **修正** | `runtime/mod.rs` | `mod loop_controller;` 追加 |
-| **修正** | `runtime/facade.rs` | `update()` 内の自然終了検知にループ制御を挿入 |
-| **修正** | `runtime/instance_manager.rs` | ループ関連ヘルパー追加（必要に応じて） |
+| **修正** | `runtime/facade.rs` | `update()` の自然終了検知をループ対応に拡張 |
+| **修正** | `runtime/instance_manager.rs` | ループ関連ヘルパー追加（`increment_loop`, `reset_loop_offset` 等） |
+| **修正** | `runtime/timeline_manager.rs` | `calculate_effective_time()` のループオフセット対応 |
 
 **トレードオフ**:
 - ✅ 統合指針に完全準拠、モジュール構成が明確
 - ✅ 独立テスト可能な単位として設計できる
-- ✅ 既存 facade 層への影響を最小化
-- ❌ facade との結合点を明確にする必要あり
+- ❌ facade が `LoopController` を所有し、borrowck の制約を受ける可能性
+- ❌ `&mut self` の分割借用が必要になる場面がある
 
 ### Option B: facade 拡張（非推奨）
 
@@ -101,58 +176,145 @@ LoopController のロジックを facade.rs 内のプライベートメソッド
 
 **トレードオフ**:
 - ✅ 実装が単純（単一ファイル内で完結）
-- ❌ facade.rs がさらに肥大化
+- ❌ facade.rs がさらに肥大化（326行 → 400行超）
 - ❌ 統合指針の設計に反する
 - ❌ 単体テストが困難
 
-### Option C: ハイブリッド（関数ベース + 新モジュール）
+### Option C: ハイブリッド（フリー関数 + 新モジュール）— 推奨
 
-LoopController を struct ではなくフリー関数群として実装し、facade が `&mut self` 内部のフィールド参照を個別に渡す。
+`loop_controller.rs` を新規作成するが、struct ではなくフリー関数群として実装。facade が `&mut StoryboardInstance` や `&mut TimelineManager` の参照を個別に渡す。
+
+**関数シグネチャ候補**:
+
+```rust
+/// ループ継続の可否を判定する純粋関数
+pub(crate) fn should_continue_loop(instance: &StoryboardInstance) -> bool
+
+/// 周回完了処理: loops_completed インクリメント + オフセット調整
+pub(crate) fn advance_loop(instance: &mut StoryboardInstance)
+
+/// ループ完了判定 + 自然終了の分岐
+pub(crate) enum LoopAction { Continue, Conclude }
+pub(crate) fn check_loop_completion(instance: &StoryboardInstance) -> LoopAction
+```
+
+**対象ファイル**:
+
+| 操作 | ファイル | 内容 |
+|------|---------|------|
+| **新規作成** | `runtime/loop_controller.rs` | フリー関数群（`should_continue_loop`, `advance_loop` 等） |
+| **修正** | `runtime/mod.rs` | `mod loop_controller;` 追加 |
+| **修正** | `runtime/facade.rs` | `update()` の自然終了検知で `loop_controller::*` を呼び出し |
+| **修正** | `runtime/instance_manager.rs` | `StoryboardInstance` にループオフセットフィールド追加（必要に応じて） |
+| **修正** | `runtime/timeline_manager.rs` | `calculate_effective_time()` のループオフセット対応 |
 
 **トレードオフ**:
-- ✅ borrowck の制約を自然に回避
-- ✅ テスト容易（純粋関数に近い設計）
-- ✅ シンプルな関数シグネチャ（`should_continue_loop(instance: &StoryboardInstance) -> bool` 等）
-- ❌ 状態管理が分散（LoopController が状態を持たない）
+- ✅ borrowck の制約を自然に回避（分割借用不要）
+- ✅ テスト容易（純粋関数に近い設計、`StoryboardInstance` のモック不要）
+- ✅ 統合指針のモジュール構成に準拠
+- ✅ シンプルな関数シグネチャで責務が明確
+- ❌ 状態管理が `StoryboardInstance` のフィールドに分散（LoopController 自体は状態を持たない）
 
 ---
 
 ## 4. 技術的課題と調査事項
 
-### 4.1 ループのオフセット調整と pause_accumulated の統合
+### 4.1 ループ用時間オフセット機構
 
-**課題**: ループ継続時に `pause_accumulated` を調整してタイムテーブルを再利用する設計。既存の `pause_accumulated` は Pause/Resume 用で加算のみ。ループでは「1周分の duration」を加算する別用途が発生する。
+**課題**: ループ継続時にタイムテーブルを再利用するには、`effective_time` を1周分の duration 分だけ巻き戻す必要がある。
 
-**既存資産**:
-- `StoryboardInstance.pause_accumulated`: f64 フィールド（加算済み一時停止時間）
-- `calculate_effective_time()`: `pause_accumulated` を差し引いて effective_time を算出
+**既存の effective_time 計算**:
+```
+effective_time = (current_time - start_time - pause_accumulated) * time_scale
+```
 
-**注意点**: `pause_accumulated` にループオフセットを加算すると、Pause/Resume の一時停止時間との混同リスクがある。別フィールド（例: `loop_offset`）を追加するか、`pause_accumulated` を汎用化するかの判断が必要。
+**ループ対応後**:
+```
+effective_time = (current_time - start_time - pause_accumulated - loop_offset) * time_scale
+```
 
-> **Research Needed**: 設計フェーズでフィールド設計を確定
-
-### 4.2 evaluate() フロー内でのループ完了検出
-
-**課題**: 現在の `evaluate_segments()` は全セグメント終了時に `None` を返し、呼び出し元がエントリを expired として削除する。ループ時はこの動作を変更し、「全セグメント終了 → ループ判定 → 継続/終了」のフローに切り替える必要がある。
-
-**影響範囲**:
-- `timeline_manager.rs` の `evaluate()` メソッド
-- `facade.rs` の `update()` 内の自然終了検知ロジック
-
-**設計候補**:
+**選択肢**:
 
 | 方式 | 説明 | 評価 |
 |------|------|------|
-| **facade 内判定** | `update()` で `end_time` 到達を検知し、LoopController を呼ぶ | ✅ シンプル、既存フローに近い |
-| **evaluate 内判定** | `evaluate()` がループ情報を参照してエントリ削除を制御 | ❌ TimelineManager の責務拡大 |
+| **A: `loop_offset` 新設** | `StoryboardInstance` に `loop_offset: f64` を追加。ループ時に `base_duration / time_scale` を加算。 | ✅ 明確な関心分離（Req 4 AC3）、❌ フィールド増加 |
+| **B: `pause_accumulated` 再利用** | ループオフセットも `pause_accumulated` に加算。 | ✅ フィールド追加なし、❌ Pause/Resume との意味的混同（Req 4 AC3 違反リスク） |
+| **C: `time_offset` 汎用化** | `pause_accumulated` を `time_offset` にリネームし、Pause + Loop の両方を格納。 | ✅ 実装シンプル、❌ 既存コード全体のフィールド名変更が必要 |
 
-> **Research Needed**: facade 内判定を推奨（既存の自然終了検知パターンと一貫）
+> **推奨**: **方式 A**（`loop_offset` 新設）。Req 4 AC3「独立して管理」を直接満たし、既存の Pause/Resume コードを変更しない。
 
-### 4.3 ループ中の競合検出保証
+### 4.2 自然終了検知のループ分岐
 
-**課題**: 親仕様 Req 12.8「ループ中も競合検出の対象」は、実際には LoopController の要件ではなく ConflictResolver の不変条件。
+**課題**: 現在の `update()` フロー（facade.rs L267-278）:
 
-**解決**: 本仕様では特別な考慮は不要。LoopController は単に `Playing` 状態を維持するだけで、ConflictResolver が自然に競合を検出する。
+```rust
+// Step 2: 自然終了検知
+let naturally_ended: Vec<u64> = self.instance_manager.instances()
+    .iter()
+    .filter(|(_, inst)| inst.state == InstanceState::Playing && current_time >= inst.end_time)
+    .map(|(gid, _)| *gid)
+    .collect();
+
+for gid in naturally_ended {
+    self.conclude_internal(gid);
+}
+```
+
+**ループ対応後のフロー**:
+
+```
+Step 2: 周回終了検知
+  ├─ loop_count == 1 → conclude_internal()（既存動作）
+  ├─ loop_count > 1 && loops_completed < loop_count → advance_loop() + end_time 更新
+  ├─ loop_count > 1 && loops_completed >= loop_count → conclude_internal()
+  └─ loop_count == -1 → advance_loop()（永続）
+```
+
+**注意**: `end_time` の再計算が必要。ループ継続時は `end_time += base_duration / time_scale`。無限ループ時は `end_time = INFINITY` のため、**end_time 到達では検知できない**。
+
+**解決策**: 4.3 で推奨する方式 A（end_time を1周分の「次の周回終了時刻」として管理）を採用すれば、有限/無限ループの統一処理が可能。
+
+### 4.3 無限ループ (loop_count=-1) の周回終了検出
+
+**課題**: `end_time = INFINITY` のため、facade の `current_time >= inst.end_time` フィルタに引っかからない。周回終了を別の方法で検出する必要がある。
+
+**選択肢**:
+
+| 方式 | 説明 | 評価 |
+|------|------|------|
+| **A: end_time を1周分に設定** | 無限ループでも `end_time = start_time + duration/time_scale` とし、ループ時に再計算 | ✅ 既存の自然終了検知をそのまま活用、✅ 有限/無限の統一処理 |
+| **B: evaluate 結果で検出** | `evaluate_segments()` が `None` を返した時点で周回終了と判定 | ❌ evaluate のタイミングは変数依存、❌ 購読変数なしの場合検出不可 |
+| **C: 周回 end_time フィールド新設** | `cycle_end_time: f64` を追加し、1周分の終了時刻を管理 | ✅ end_time（全体）と cycle_end_time（周回）の分離が明確、❌ フィールド増加 |
+
+> **推奨**: **方式 A**。end_time を常に「次の周回終了時刻」として管理し、ループ完了時に初めて Conclude する。`INFINITY` は使用しない。これにより有限/無限ループの処理が統一できる。
+
+### 4.4 evaluate() のエントリ保持とループ
+
+**課題**: `evaluate()` は全セグメント終了時にエントリを expired として削除する（L112-114）。ループ再生時はエントリを保持し、オフセット調整後に再評価する必要がある。
+
+**影響**: ループ中のインスタンスのエントリが `evaluate()` によって削除されると、次周回の評価値が失われる。
+
+**解決候補**:
+1. **facade 先行判定**: `update()` の evaluate 呼び出し**前に**ループ処理を完了し、`loop_offset` を調整。evaluate は調整済み effective_time で評価するため、セグメントが再度アクティブになる → **エントリ削除は発生しない**
+2. **evaluate 内でループ対応**: evaluate がインスタンスの `loop_count` を参照し、ループ中の expired を保持 → **TimelineManager の責務拡大（非推奨）**
+
+> **推奨**: 方式 1（facade 先行判定）。update() の Step 2 でループオフセット調整を完了すれば、Step 3 の evaluate は通常通り動作する。
+
+### 4.5 Pause とループオフセットの独立性
+
+**課題**: Req 4 AC3「独立して管理し、相互に干渉しない」。
+
+**分析**: `loop_offset` 新設（4.1 方式 A）を採用すれば自動的に満たされる。
+
+```
+effective_time = (current_time - start_time - pause_accumulated - loop_offset) * time_scale
+```
+
+- `pause_accumulated`: Pause/Resume のみが変更
+- `loop_offset`: LoopController のみが変更
+- 両者は加算的に独立 → 相互干渉なし
+
+**Resume 時の end_time 再計算**: 既存の `resume()` は `end_time += pause_duration` で調整。ループ対応後も同一ロジックが適用可能（`end_time` は常に「次の周回終了時刻」）。
 
 ---
 
@@ -162,18 +324,22 @@ LoopController を struct ではなくフリー関数群として実装し、fac
 
 | コンポーネント | 工数 | 根拠 |
 |--------------|------|------|
-| LoopController (Req 1-2) | **S** (1-3日) | 周回判定とオフセット調整。既存の pause_accumulated 機構を参考にできる |
-| facade 統合 | **S** (1日) | `update()` へのループ制御挿入、mod.rs 更新 |
-| テスト | **S** (2-3日) | 3種ループ（1回/n回/無限） × 周回境界テスト |
-| **合計** | **S〜M** (4-7日) | |
+| LoopController フリー関数群 (Req 1, 3) | **S** (1-2日) | 周回判定・インクリメント・飽和加算。純粋関数で実装シンプル |
+| loop_offset 機構 (Req 2, 4) | **S** (1-2日) | フィールド追加 + `calculate_effective_time()` 修正。既存パターン踏襲 |
+| facade 統合 (Req 1-5) | **S** (1-2日) | `update()` のループ分岐挿入、`start()` の end_time 計算修正 |
+| 単体テスト (Req 1-5) | **S** (2-3日) | 3種ループ × 周回境界 × Pause/Resume 組合せ × Cancel |
+| 統合テスト | **S** (1日) | facade 経由のエンドツーエンド |
+| **合計** | **S〜M** (6-10日) | |
 
 ### 5.2 リスク評価
 
 | リスク | レベル | 説明 |
 |--------|--------|------|
-| pause_accumulated の混同 | **Low-Medium** | ループオフセットを同一フィールドに格納する場合、Pause/Resume との意味的分離が必要。ただし実装は明確 |
-| evaluate() フローへの影響 | **Low** | 自然終了検知ロジックの拡張のみ。既存パターンを踏襲可能 |
-| 既存テストへの影響 | **Low** | LoopController は新規モジュール。facade.rs の修正は1箇所のみ |
+| 周回終了検出タイミング | **Medium** | end_time ベース vs evaluate ベースの選択。設計フェーズで確定 |
+| `loop_offset` + `pause_accumulated` の組合せ | **Low** | 加算的独立で干渉なし。テストで組合せ検証 |
+| evaluate() のエントリ保持 | **Low** | facade 先行判定方式で解決可能（4.4 参照） |
+| 既存テストへの影響 | **Low** | 新規モジュール中心。facade の修正は `update()` の1箇所 + `start()` の end_time 計算 |
+| 無限ループの u32 オーバーフロー | **Low** | `saturating_add` で対処（Req 3 AC4） |
 
 ---
 
@@ -186,17 +352,20 @@ LoopController を struct ではなくフリー関数群として実装し、fac
 理由:
 1. 統合指針のモジュール構成に準拠（`loop_controller.rs`）
 2. シンプルな関数シグネチャ（状態を持たない純粋関数群）
-3. facade との結合が明確（`update()` の自然終了検知ロジック内から呼び出し）
+3. borrowck の制約を自然に回避
+4. facade との結合が明確（`update()` の自然終了検知ロジック内から呼び出し）
 
 ### 6.2 設計フェーズで確定すべき事項
 
-1. **ループオフセットフィールド**: `pause_accumulated` 再利用 vs `loop_offset` 新設
-2. **evaluate() へのループ統合**: facade 内判定（推奨） vs evaluate 内判定
-3. **loops_completed の更新タイミング**: ループ継続判定前 vs 判定後
+1. **ループオフセットフィールド**: `loop_offset: f64` 新設を推奨（Req 4 AC3 直接対応）
+2. **周回終了検出方式**: end_time ベース（方式 A）を推奨。`end_time` を「次の周回終了時刻」として管理
+3. **update() 内のループ処理位置**: Step 2（自然終了検知）をループ対応に拡張。evaluate 前に完了
+4. **loops_completed の更新タイミング**: ループ継続判定**前**にインクリメント（判定は `loops_completed >= loop_count`）
 
 ### 6.3 設計フェーズで不要な調査
 
 - 外部クレート追加: 不要
 - Feature gate 変更: 不要
-- 公開 API 変更: 不要（LoopController は非公開）
-- 競合検出との統合: 不要（ConflictResolver の責務）
+- 公開 API 変更: 不要（LoopController は `pub(crate)` フリー関数群）
+- 競合検出との統合: 不要（ConflictResolver の責務、LoopController は Playing 維持のみ）
+- `InstanceState` の変更: 不要（既存の 7 バリアントで十分）
