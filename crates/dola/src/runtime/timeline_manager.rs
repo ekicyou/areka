@@ -154,6 +154,86 @@ impl TimelineManager {
             .values()
             .any(|tl| tl.entries.iter().any(|e| e.group_id == group_id))
     }
+
+    /// 指定変数のタイムラインを取得（読み取り専用）。
+    /// 競合検出（detect_overlaps）で使用。
+    pub(crate) fn get_timeline(&self, variable_name: &str) -> Option<&VariableTimeline> {
+        self.timelines.get(variable_name)
+    }
+
+    /// group_id に属する全変数の値を start_time 時点で評価する。
+    /// Cancel/Trim 戦略で使用。
+    pub(crate) fn evaluate_all_for_group(
+        &mut self,
+        group_id: u64,
+        current_time: f64,
+        instances: &HashMap<u64, StoryboardInstance>,
+    ) -> HashMap<String, EvaluatedValue> {
+        let instance = match instances.get(&group_id) {
+            Some(inst) => inst,
+            None => return HashMap::new(),
+        };
+
+        let effective_time = calculate_effective_time(current_time, instance);
+        let mut result = HashMap::new();
+
+        for (var_name, timeline) in &self.timelines {
+            for entry in &timeline.entries {
+                if entry.group_id == group_id {
+                    if let Some(val) = evaluate_segments(
+                        &entry.segments,
+                        &entry.variable_type,
+                        effective_time,
+                        &mut self.intern_pool,
+                    ) {
+                        result.insert(var_name.clone(), val);
+                    }
+                }
+            }
+        }
+
+        result
+    }
+
+    /// 現在再生中セグメントの最終値を group_id 単位で取得する。
+    /// Conclude 戦略専用。各変数について、start_time 時点でアクティブな
+    /// セグメントの to_value (progress_t=1.0) を返す。
+    /// 未開始のセグメントはスキップする。
+    pub(crate) fn collect_current_segment_final_values(
+        &self,
+        group_id: u64,
+        current_time: f64,
+        instances: &HashMap<u64, StoryboardInstance>,
+    ) -> HashMap<String, EvaluatedValue> {
+        let instance = match instances.get(&group_id) {
+            Some(inst) => inst,
+            None => return HashMap::new(),
+        };
+
+        let effective_time = calculate_effective_time(current_time, instance);
+        let mut result = HashMap::new();
+
+        for (var_name, timeline) in &self.timelines {
+            for entry in &timeline.entries {
+                if entry.group_id == group_id {
+                    // アクティブなセグメントを特定
+                    if let Some(active_seg) =
+                        find_active_segment(&entry.segments, effective_time)
+                    {
+                        // アクティブセグメントの最終値 (progress_t=1.0) を取得
+                        let val = Interpolator::interpolate(
+                            active_seg,
+                            &entry.variable_type,
+                            1.0,
+                        );
+                        result.insert(var_name.clone(), val);
+                    }
+                }
+            }
+        }
+
+        result
+    }
 }
 
 /// effective_time を計算する。
@@ -161,7 +241,7 @@ impl TimelineManager {
 /// `effective_time = (current_time - loop_start_time - pause_accumulated) * time_scale`
 /// Pause 中は pause 開始時点で固定。
 /// `loop_start_time` の初期値は `start_time` と同一のため、ループなし時は既存動作と互換。
-fn calculate_effective_time(current_time: f64, instance: &StoryboardInstance) -> f64 {
+pub(crate) fn calculate_effective_time(current_time: f64, instance: &StoryboardInstance) -> f64 {
     let raw_time = if instance.state == InstanceState::Paused {
         // Pause 中は pause_start 時点で固定
         match instance.pause_start {
@@ -232,6 +312,40 @@ fn evaluate_segments(
     // 最終セグメントが完了したが、全体終了とはみなさない（最後の値を保持）
     let val = Interpolator::interpolate_with_pool(last_seg, variable_type, 1.0, Some(intern_pool));
     Some(val)
+}
+
+/// effective_time 時点でアクティブなセグメントを検索する。
+/// Conclude 戦略の collect_current_segment_final_values で使用。
+/// 未開始セグメントはスキップし、アクティブなセグメントを返す。
+fn find_active_segment(segments: &[CompiledSegment], effective_time: f64) -> Option<&CompiledSegment> {
+    if segments.is_empty() {
+        return None;
+    }
+
+    let mut active: Option<&CompiledSegment> = None;
+
+    for seg in segments {
+        if effective_time < seg.start_time {
+            // まだこのセグメントに到達していない
+            break;
+        }
+
+        let duration = seg.end_time - seg.start_time;
+        if duration <= 0.0 {
+            // 即時遷移
+            if effective_time >= seg.start_time {
+                active = Some(seg);
+            }
+        } else if effective_time < seg.end_time {
+            // このセグメント内
+            return Some(seg);
+        } else {
+            // このセグメントは終了済み → 次へ
+            active = Some(seg);
+        }
+    }
+
+    active
 }
 
 #[cfg(test)]

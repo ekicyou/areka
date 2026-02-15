@@ -133,7 +133,7 @@ mod full_playback_cycle {
         let doc = simple_float_doc("fade_in");
         rt.load_document(doc).unwrap();
 
-        let StartResult { group_id, end_time } = rt.start("fade_in", 0.0).unwrap();
+        let StartResult { group_id, end_time, .. } = rt.start("fade_in", 0.0).unwrap();
         assert_eq!(group_id, 1);
         assert!((end_time - 1.0).abs() < 1e-9);
 

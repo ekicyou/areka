@@ -60,6 +60,8 @@ pub enum RuntimeError {
     TooShortDurationWithInfiniteLoop { storyboard: String, duration: f64 },
     /// コンパイルエラー（既存 DolaError のラップ）
     CompileError(Vec<DolaError>),
+    /// Never 戦略を持つインスタンスとの競合により start() が拒否された
+    Conflict { conflicting_group_ids: Vec<u64> },
 }
 
 impl fmt::Display for RuntimeError {
@@ -92,6 +94,14 @@ impl fmt::Display for RuntimeError {
             Self::CompileError(errors) => {
                 write!(f, "compile error: {errors:?}")
             }
+            Self::Conflict {
+                conflicting_group_ids,
+            } => {
+                write!(
+                    f,
+                    "conflict with never-interrupt instances: {conflicting_group_ids:?}"
+                )
+            }
         }
     }
 }
@@ -112,4 +122,57 @@ pub struct StartResult {
     /// 正常再生した場合の終了予定時刻（f64秒）。
     /// 無限ループ時は `f64::INFINITY`。
     pub end_time: f64,
+    /// 競合解決で影響を受けた既存 group_id のリスト。
+    /// 競合がなければ空。
+    pub affected_group_ids: Vec<u64>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn conflict_error_contains_group_ids() {
+        let err = RuntimeError::Conflict {
+            conflicting_group_ids: vec![1, 2, 3],
+        };
+        match &err {
+            RuntimeError::Conflict {
+                conflicting_group_ids,
+            } => {
+                assert_eq!(conflicting_group_ids, &vec![1, 2, 3]);
+            }
+            _ => panic!("expected Conflict variant"),
+        }
+    }
+
+    #[test]
+    fn conflict_error_display() {
+        let err = RuntimeError::Conflict {
+            conflicting_group_ids: vec![5, 10],
+        };
+        let msg = format!("{err}");
+        assert!(
+            msg.contains("conflict"),
+            "Display should mention conflict: {msg}"
+        );
+        assert!(
+            msg.contains("5"),
+            "Display should contain group_id 5: {msg}"
+        );
+        assert!(
+            msg.contains("10"),
+            "Display should contain group_id 10: {msg}"
+        );
+    }
+
+    #[test]
+    fn start_result_has_affected_group_ids() {
+        let result = StartResult {
+            group_id: 1,
+            end_time: 5.0,
+            affected_group_ids: vec![2, 3],
+        };
+        assert_eq!(result.affected_group_ids, vec![2, 3]);
+    }
 }

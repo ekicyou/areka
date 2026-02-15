@@ -5,13 +5,14 @@ use std::collections::HashMap;
 use crate::compile::compile_storyboard;
 use crate::document::DolaDocument;
 
+use super::conflict_resolver;
 use super::document_store::DocumentStore;
 use super::instance_manager::InstanceManager;
 use super::instance_state::InstanceState;
+use super::loop_controller::{self, LoopAction};
 use super::subscription_manager::SubscriptionManager;
 use super::timeline_manager::TimelineManager;
-use super::loop_controller::{self, LoopAction};
-use super::types::{EvaluatedValue, RuntimeError, StartResult, MIN_LOOP_DURATION};
+use super::types::{EvaluatedValue, MIN_LOOP_DURATION, RuntimeError, StartResult};
 
 /// dola ランタイムエンジンの唯一の公開 API。
 ///
@@ -116,12 +117,19 @@ impl DolaRuntime {
             compiled.total_base_duration,
             compiled.loop_count,
             end_time,
-            start_time,      // loop_start_time = start_time（初期値）
+            start_time, // loop_start_time = start_time（初期値）
             loop_duration,
         );
 
         // 7. [Tier 3 Hook] 競合解決
-        // Tier 2: スキップ
+        let affected = conflict_resolver::resolve_conflicts(
+            group_id,
+            &compiled,
+            start_time,
+            &mut self.timeline_manager,
+            &mut self.instance_manager,
+            &mut self.subscription_manager,
+        )?; // Never 競合時はここで Err(RuntimeError::Conflict) を返す
 
         // 8. タイムテーブル挿入
         self.timeline_manager.insert_entries(group_id, &compiled);
@@ -130,7 +138,11 @@ impl DolaRuntime {
         self.instance_manager
             .transition(group_id, InstanceState::Playing)?;
 
-        Ok(StartResult { group_id, end_time })
+        Ok(StartResult {
+            group_id,
+            end_time,
+            affected_group_ids: affected,
+        })
     }
 
     /// 終了予定時刻のみ計算（インスタンス非生成）。
@@ -204,13 +216,11 @@ impl DolaRuntime {
             return Err(RuntimeError::InvalidGroupId(group_id));
         }
 
-        // 状態遷移 → Cancelled
+        // 状態遷移 → Cancelled（is_terminal → 自動削除）
         self.instance_manager
             .transition(group_id, InstanceState::Cancelled)?;
         // エントリ削除
         self.timeline_manager.remove_entries(group_id);
-        // Cancelled インスタンスは削除（Concluded は transition で自動削除）
-        self.instance_manager.remove(group_id);
         Ok(())
     }
 

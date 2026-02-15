@@ -101,8 +101,8 @@ impl InstanceManager {
         match instance.state.try_transition(to) {
             Ok(new_state) => {
                 instance.state = new_state;
-                // Concluded 状態に遷移した場合、インスタンスを削除 (Req 9.7)
-                if to == InstanceState::Concluded {
+                // 終了状態に遷移した場合、インスタンスを自動削除
+                if new_state.is_terminal() {
                     self.instances.remove(&group_id);
                 }
                 Ok(())
@@ -356,9 +356,8 @@ mod tests {
         create_test_instance(&mut mgr, 1);
         mgr.transition(1, InstanceState::Playing).unwrap();
         mgr.transition(1, InstanceState::Cancelled).unwrap();
-        // Cancelled は terminal → deadline 設定不可（ただしインスタンスは残る）
-        // Note: Cancelled は Concluded と違い自動削除しない
-        assert!(mgr.set_finish_deadline(1, 5.0).is_err());
+        // Cancelled は terminal → 自動削除される → deadline 設定不可
+        assert!(mgr.get(1).is_err());
     }
 
     #[test]
@@ -372,5 +371,32 @@ mod tests {
         // Instance 1 is Paused, Instance 2 is still Playing
         assert_eq!(mgr.get(1).unwrap().state, InstanceState::Paused);
         assert_eq!(mgr.get(2).unwrap().state, InstanceState::Playing);
+    }
+
+    #[test]
+    fn transition_to_cancelled_removes_instance() {
+        let mut mgr = InstanceManager::new();
+        create_test_instance(&mut mgr, 1);
+        mgr.transition(1, InstanceState::Playing).unwrap();
+        mgr.transition(1, InstanceState::Cancelled).unwrap();
+        assert!(mgr.get(1).is_err());
+    }
+
+    #[test]
+    fn transition_to_trimmed_removes_instance() {
+        let mut mgr = InstanceManager::new();
+        create_test_instance(&mut mgr, 1);
+        mgr.transition(1, InstanceState::Playing).unwrap();
+        mgr.transition(1, InstanceState::Trimmed).unwrap();
+        assert!(mgr.get(1).is_err());
+    }
+
+    #[test]
+    fn transition_to_compressed_removes_instance() {
+        let mut mgr = InstanceManager::new();
+        create_test_instance(&mut mgr, 1);
+        mgr.transition(1, InstanceState::Playing).unwrap();
+        mgr.transition(1, InstanceState::Compressed).unwrap();
+        assert!(mgr.get(1).is_err());
     }
 }

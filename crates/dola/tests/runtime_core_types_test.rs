@@ -349,9 +349,11 @@ mod start_result_tests {
         let r = StartResult {
             group_id: 1,
             end_time: 5.0,
+            affected_group_ids: vec![],
         };
         assert_eq!(r.group_id, 1);
         assert_eq!(r.end_time, 5.0);
+        assert!(r.affected_group_ids.is_empty());
     }
 
     #[test]
@@ -359,6 +361,7 @@ mod start_result_tests {
         let r = StartResult {
             group_id: 2,
             end_time: f64::INFINITY,
+            affected_group_ids: vec![],
         };
         assert!(r.end_time.is_infinite());
     }
