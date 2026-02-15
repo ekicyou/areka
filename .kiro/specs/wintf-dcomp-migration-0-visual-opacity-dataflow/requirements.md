@@ -45,11 +45,7 @@ _Parent: wintf-dcomp-to-layered-migration Req 2.1（フェーズ0 定義）, Req
 
 2. The wintf shall `Visual.opacity` フィールドの値を 0.0（完全透明）から 1.0（完全不透明）の範囲に自動クランプする
 
-3. When `Opacity` コンポーネント（metrics.rs）が存在しないエンティティに対して `Visual.opacity` が設定される, the wintf shall `Opacity` コンポーネントへの依存なく正常に動作する
-
-4. The wintf shall `Visual.opacity` のデフォルト値として 1.0（完全不透明）を維持する（既存コードの互換性保証）
-
-5. When `Visual.opacity` が変更される, the wintf shall bevy_ecs の `Changed<Visual>` クエリで変更検出可能にする
+3. When `Visual.opacity` が変更される, the wintf shall bevy_ecs の `Changed<Visual>` クエリで変更検出可能にする
 
 ### Requirement 2: Visual.is_visible データフロー確立
 
@@ -61,13 +57,9 @@ _Parent: wintf-dcomp-to-layered-migration Req 2.1（フェーズ0 定義）, Req
 
 1. When Widget が可視性を変更する, the wintf shall その値を `Visual.is_visible` フィールドに直接書き込む
 
-2. The wintf shall `Visual.is_visible` フィールドを `bool` 型として明確な true/false 値で保持する
+2. When `Visual.is_visible` が変更される, the wintf shall bevy_ecs の `Changed<Visual>` クエリで変更検出可能にする
 
-3. The wintf shall `Visual.is_visible` のデフォルト値として `true` を維持する（既存コードの互換性保証）
-
-4. When `Visual.is_visible` が変更される, the wintf shall bevy_ecs の `Changed<Visual>` クエリで変更検出可能にする
-
-5. The wintf shall `Visual.is_visible = false` のエンティティに対しても、既存の描画システム（`draw_rectangles`, `draw_labels` 等）で GraphicsCommandList 生成を継続する（描画スキップ判定は合成システム側の責務）
+3. The wintf shall `Visual.is_visible = false` のエンティティに対しても、既存の描画システム（`draw_rectangles`, `draw_labels` 等）で GraphicsCommandList 生成を継続する（描画スキップ判定は合成システム側の責務）
 
 ### Requirement 3: Opacity 読み取り箇所の Visual.opacity への移行
 

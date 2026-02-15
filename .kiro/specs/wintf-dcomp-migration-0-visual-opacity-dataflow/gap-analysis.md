@@ -79,21 +79,18 @@ Layout → PostLayout → ... → Draw → ... → Composition → CommitComposi
 |------|-----|------------|------|
 | **Req 1** (opacity データフロー) | 1.1 | **Missing** | Widget → `Visual.opacity` 書き込みパスが存在しない（Widget on_add は `Visual::default()` のみ） |
 | | 1.2 | **Missing** | `Visual` にクランプロジック（`clamped()`）が存在しない |
-| | 1.3 | **既存で充足** | `Visual::default()` は既に `Opacity` 無しで動作する |
-| | 1.4 | **既存で充足** | `Visual::default().opacity == 1.0` |
-| | 1.5 | **既存で充足** | bevy_ecs `#[derive(Component)]` + `PartialEq` で `Changed<Visual>` は自動対応 |
+| | 1.3 | **既存で充足** | bevy_ecs `#[derive(Component)]` + `PartialEq` で `Changed<Visual>` は自動対応 |
 | **Req 2** (is_visible データフロー) | 2.1 | **Missing** | Widget → `Visual.is_visible` 書き込みパスが存在しない |
-| | 2.2 | **既存で充足** | `Visual.is_visible: bool` は既に定義済み |
-| | 2.3 | **既存で充足** | `Visual::default().is_visible == true` |
-| | 2.4 | **既存で充足** | `Changed<Visual>` で自動検出可能 |
-| | 2.5 | **既存で充足** | 描画システムは `Visual.is_visible` を参照していない（スキップ判定なし = 継続） |
+| | 2.2 | **既存で充足** | `Changed<Visual>` で自動検出可能 |
+| | 2.3 | **既存で充足** | 描画システムは `Visual.is_visible` を参照していない（スキップ判定なし = 継続） |
 | **Req 3** (sync system 移行) | 3.1 | **Missing** | クエリに `Visual` が含まれていない |
-| | 3.2 | **Missing** | 優先度ロジックが存在しない |
-| | 3.3 | **Missing** | `Changed<Visual>` がフィルタにない |
-| | 3.4 | **Missing** | `Changed<Opacity>` が残存 |
-| | 3.5 | **Missing** | `is_visible` → `SetOpacity(0.0)` 変換ロジックが存在しない |
+| | 3.2 | **Missing** | `Changed<Visual>` がフィルタにない |
+| | 3.3 | **Missing** | `Changed<Opacity>` が残存 |
+| | 3.4 | **Missing** | `is_visible` → `SetOpacity(0.0)` 変換ロジックが存在しない |
+| | 3.5 | **Missing** | hit_test の `Opacity` 読み取りが残存 |
+| | 3.6 | **Missing** | hit_test テストの `Opacity` スポーンが残存 |
 | **Req 4** (deprecation) | 4.1 | **Missing** | `#[deprecated]` 未付与 |
-| | 4.2-4.5 | **方針のみ** | コード変更は将来フェーズ |
+| | 4.2 | **Missing** | CI での警告可視化設定 |
 | **Req 5** (検証基準) | 5.1 | **部分充足** | `visual_component_test.rs`, `insert_visual_test.rs` が一部カバー |
 | | 5.2 | **Missing** | sync system の integration test 不足 |
 
