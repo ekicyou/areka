@@ -12,16 +12,15 @@
 
 ## Requirements
 
-### Requirement 1: 指示書の受信とパース
+### Requirement 1: 指示書の受信
 
-_Parent: Req 1.1, 1.5_
+_Parent: Req 1.1_
 
-**Objective:** オーケストレーターとして、TOML 形式の指示書を配信し、変数・トランジション・ストーリーボードの定義をランタイムに保持させたい。
+**Objective:** オーケストレーターとして、デシリアライズ済みの `DolaDocument` をランタイムに配信し、変数・トランジション・ストーリーボードの定義を保持させたい。シリアライズ形式（TOML/JSON/YAML）の選択と変換は呼び出し側の責務であり、dola のスコープ外とする。
 
 #### Acceptance Criteria
 
-1. When `load_document(toml_str)` が呼び出された場合, the DocumentStore shall TOML 文字列をパースし、`DolaDocument` として内部に保持する。
-2. If パースに失敗した場合, then the DocumentStore shall `RuntimeError::DocumentParseError` を返し、既存の定義を変更しない。
+1. When `load_document(doc: DolaDocument)` が呼び出された場合, the DocumentStore shall `DolaDocument` を内部に保持する。
 
 ---
 
@@ -85,7 +84,7 @@ _Parent: Req 3.1, 3.2, 3.3, 3.4, 3.5, 3.6, 3.7_
 4. When `cancel(group_id)` が呼び出された場合, the InstanceManager shall 現在の補間値でそのまま凍結して破棄する。
 5. When `finish(group_id, offset)` が呼び出された場合, the InstanceManager shall `finish_deadline` を設定し、オフセット時間経過後に Conclude 相当の動作を実行する。
 6. While インスタンスが Paused 状態にある場合, the InstanceManager shall 当該インスタンスの経過時刻の加算のみを停止し、他のインスタンスの再生に影響を与えない。
-7. If 終了状態にある実行インスタンスに制御コマンドが発行された場合, then the InstanceManager shall `RuntimeError::TerminatedInstance` を返却する。
+7. If 存在しないまたは終了済みの `group_id` に対して制御コマンドが発行された場合, then the InstanceManager shall `RuntimeError::InvalidGroupId` を返却する。
 
 ---
 

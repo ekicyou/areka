@@ -200,7 +200,7 @@ yaml = ["dep:serde_yaml"]
 interpolation = "0.3.0"
 
 [target.'cfg(windows)'.dependencies]
-windows = { workspace = true, features = ["Win32_System_SystemInformation"] }
+windows = { workspace = true, features = ["Win32_System_Performance"] }
 
 [features]
 default = ["json"]
@@ -224,7 +224,7 @@ crates/dola/src/
 │   ├── instance_state.rs # 仕様1: InstanceState
 │   ├── types.rs          # 仕様1: EvaluatedValue, RuntimeError, StartResult
 │   ├── interpolator.rs   # 仕様1: Interpolator
-│   ├── clock.rs          # 仕様2: #[cfg(feature = "windows-clock")]
+│   ├── clock.rs          # 仕様2: #[cfg(target_os = "windows")]
 │   ├── document_store.rs # 仕様3: DocumentStore
 │   ├── instance_manager.rs # 仕様3: InstanceManager + StoryboardInstance
 │   ├── timeline_manager.rs # 仕様3: TimelineManager + VariableTimeline
@@ -297,6 +297,6 @@ crates/dola/src/
 | 子仕様 | 抽出するセクション |
 |--------|------------------|
 | core-types | Data Models (InstanceState, EvaluatedValue, RuntimeError, StartResult), Interpolator コンポーネント, 状態遷移図 |
-| clock | Clock コンポーネント, Technology Stack (Win32 `GetTickCount64`) |
+| clock | Clock コンポーネント, Technology Stack (Win32 `QueryPerformanceCounter` / `QueryPerformanceFrequency`) |
 | facade | 全 Components (DocumentStore, InstanceManager, TimelineManager, SubscriptionManager, DolaRuntime), System Flows (Update 評価サイクル, 状態遷移図), Data Models |
 | conflict-loop | ConflictResolver コンポーネント, LoopController コンポーネント, System Flows (競合解決フロー), Implementation Extensions (Never 延期キュー) |
