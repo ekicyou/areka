@@ -48,10 +48,10 @@ _Parent: Req 12.4, 12.5, 12.6, 12.7_
 #### Acceptance Criteria
 
 1. The LoopController shall ループ再生時もタイムテーブルを1周分のみ生成し、n 周分のタイムテーブル展開を行わない。
-2. When 周回の全セグメントが終了した場合, the LoopController shall `loop_count` と現在の周回完了数を比較してループ継続の可否を判定する。
-3. When ループを継続する場合, the LoopController shall タイムテーブルを破棄せず、時間オフセットを調整してタイムテーブルを再利用する。
-4. The LoopController shall 時間オフセット調整において、1周分の duration を累積することで次周回の effective_time を正しく算出する。
-5. When ループが完了した場合（`loops_completed == loop_count`）, the LoopController shall インスタンスを終了状態へ遷移させ、タイムテーブルを破棄する。
+2. When 周回終了時刻に到達した場合（`current_time >= end_time`）, the LoopController shall 周回完了数をインクリメントし、`loop_count` と比較してループ継続の可否を判定する。
+3. When ループを継続する場合, the LoopController shall タイムテーブルを破棄せず、現在の周回開始時刻を更新してタイムテーブルを再利用する。
+4. The LoopController shall 周回開始時刻の更新において、1周分の duration を加算することで次周回の開始タイミングを正確に維持する。
+5. When ループが完了した場合（`loops_completed >= loop_count`）, the LoopController shall インスタンスを終了状態へ遷移させ、タイムテーブルを破棄する。
 
 ---
 
@@ -64,7 +64,7 @@ _Parent: Req 12.5（周回管理の内部状態）_
 #### Acceptance Criteria
 
 1. The LoopController shall 各インスタンスの完了周回数（`loops_completed`）を管理する。
-2. When 1周分の全セグメントが終了した場合, the LoopController shall `loops_completed` を 1 インクリメントする。
+2. When 周回終了時刻に到達した場合（`current_time >= end_time`）, the LoopController shall ループ継続判定の前に `loops_completed` を 1 インクリメントする。
 3. The LoopController shall `loops_completed` の初期値を `0` とする。
 4. While `loop_count` が `-1`（無限ループ）の場合, the LoopController shall `loops_completed` を周回ごとにインクリメントし続ける（オーバーフロー保護は `u32::MAX` で飽和）。
 
@@ -80,7 +80,7 @@ _Parent: Req 12.6（時間オフセット機構の共存）_
 
 1. When ループ再生中にインスタンスが Pause された場合, the LoopController shall 現在の周回内の再生位置を保持し、ループ周回数をリセットしない。
 2. When Pause 中のインスタンスが Resume された場合, the LoopController shall Pause 前の周回と再生位置からループ再生を正確に再開する。
-3. The LoopController shall ループの時間オフセットと Pause/Resume の一時停止時間を独立して管理し、相互に干渉しない。
+3. The LoopController shall ループの周回開始時刻（`loop_start_time`）と Pause/Resume の一時停止時間（`pause_accumulated`）を独立したフィールドで管理し、相互に干渉しない。
 
 ---
 

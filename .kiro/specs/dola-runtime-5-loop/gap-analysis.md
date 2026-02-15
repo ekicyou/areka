@@ -219,9 +219,9 @@ pub(crate) fn check_loop_completion(instance: &StoryboardInstance) -> LoopAction
 
 ## 4. 技術的課題と調査事項
 
-### 4.1 ループ用時間オフセット機構
+### 4.1 ループ用周回開始時刻管理
 
-**課題**: ループ継続時にタイムテーブルを再利用するには、`effective_time` を1周分の duration 分だけ巻き戻す必要がある。
+**課題**: ループ継続時にタイムテーブルを再利用するには、現在の周回開始時刻を正確に管理する必要がある。`update()` での周回終了検出は遅延するため、次周回は「実際の周回終了時刻」から開始されなければならない。
 
 **既存の effective_time 計算**:
 ```
@@ -230,18 +230,23 @@ effective_time = (current_time - start_time - pause_accumulated) * time_scale
 
 **ループ対応後**:
 ```
-effective_time = (current_time - start_time - pause_accumulated - loop_offset) * time_scale
+effective_time = (current_time - loop_start_time - pause_accumulated) * time_scale
 ```
 
-**選択肢**:
+周回終了時:
+```rust
+loop_start_time += loop_duration  // 次周回の開始時刻に更新
+end_time += loop_duration         // 次周回の終了時刻に更新
+```
 
-| 方式 | 説明 | 評価 |
-|------|------|------|
-| **A: `loop_offset` 新設** | `StoryboardInstance` に `loop_offset: f64` を追加。ループ時に `base_duration / time_scale` を加算。 | ✅ 明確な関心分離（Req 4 AC3）、❌ フィールド増加 |
-| **B: `pause_accumulated` 再利用** | ループオフセットも `pause_accumulated` に加算。 | ✅ フィールド追加なし、❌ Pause/Resume との意味的混同（Req 4 AC3 違反リスク） |
-| **C: `time_offset` 汎用化** | `pause_accumulated` を `time_offset` にリネームし、Pause + Loop の両方を格納。 | ✅ 実装シンプル、❌ 既存コード全体のフィールド名変更が必要 |
+**必要なフィールド**:
+- `loop_start_time: f64` — 現在の周回の開始時刻（初期値は `start_time`）
+- `loop_duration: f64` — 1周分の時間 `base_duration / time_scale`（定数）
 
-> **推奨**: **方式 A**（`loop_offset` 新設）。Req 4 AC3「独立して管理」を直接満たし、既存の Pause/Resume コードを変更しない。
+**利点**:
+- ✅ 明確な関心分離（Req 4 AC3）: `loop_start_time` はループ専用、`pause_accumulated` は Pause 専用
+- ✅ シンプルな計算: オフセット累積ではなく開始時刻の更新
+- ✅ 遅延検出でも正確なタイミング維持
 
 ### 4.2 自然終了検知のループ分岐
 
@@ -300,21 +305,21 @@ Step 2: 周回終了検知
 
 > **推奨**: 方式 1（facade 先行判定）。update() の Step 2 でループオフセット調整を完了すれば、Step 3 の evaluate は通常通り動作する。
 
-### 4.5 Pause とループオフセットの独立性
+### 4.5 Pause とループ開始時刻の独立性
 
 **課題**: Req 4 AC3「独立して管理し、相互に干渉しない」。
 
-**分析**: `loop_offset` 新設（4.1 方式 A）を採用すれば自動的に満たされる。
+**分析**: `loop_start_time` 方式（4.1）を採用すれば自動的に満たされる。
 
 ```
-effective_time = (current_time - start_time - pause_accumulated - loop_offset) * time_scale
+effective_time = (current_time - loop_start_time - pause_accumulated) * time_scale
 ```
 
-- `pause_accumulated`: Pause/Resume のみが変更
-- `loop_offset`: LoopController のみが変更
-- 両者は加算的に独立 → 相互干渉なし
+- `loop_start_time`: LoopController のみが更新（周回終了時に `+= loop_duration`）
+- `pause_accumulated`: Pause/Resume のみが更新（Pause 時に累積加算）
+- 両者は独立したフィールド → 相互干渉なし
 
-**Resume 時の end_time 再計算**: 既存の `resume()` は `end_time += pause_duration` で調整。ループ対応後も同一ロジックが適用可能（`end_time` は常に「次の周回終了時刻」）。
+**Resume 時の end_time 再計算**: 既存の `resume()` は `end_time += pause_duration` で調整。ループ対応後も同一ロジックが適用可能（`end_time` は常に「次の周回終了時刻」）。`loop_start_time` は Pause/Resume で変更されない。
 
 ---
 
@@ -357,9 +362,9 @@ effective_time = (current_time - start_time - pause_accumulated - loop_offset) *
 
 ### 6.2 設計フェーズで確定すべき事項
 
-1. **ループオフセットフィールド**: `loop_offset: f64` 新設を推奨（Req 4 AC3 直接対応）
-2. **周回終了検出方式**: end_time ベース（方式 A）を推奨。`end_time` を「次の周回終了時刻」として管理
-3. **update() 内のループ処理位置**: Step 2（自然終了検知）をループ対応に拡張。evaluate 前に完了
+1. **ループ周回管理フィールド**: `loop_start_time: f64` と `loop_duration: f64` を新設（Req 4 AC3 直接対応）
+2. **周回終了検出方式**: end_time ベース（4.3 方式 A）。`end_time` を常に「次の周回終了時刻」として管理（無限ループでも `INFINITY` を使わない）
+3. **update() 内のループ処理位置**: Step 2（自然終了検知）をループ対応に拡張。evaluate 前にループ処理を完了
 4. **loops_completed の更新タイミング**: ループ継続判定**前**にインクリメント（判定は `loops_completed >= loop_count`）
 
 ### 6.3 設計フェーズで不要な調査
