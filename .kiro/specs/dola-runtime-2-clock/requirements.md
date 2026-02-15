@@ -21,9 +21,8 @@ _Parent: Req 11.1_
 #### Acceptance Criteria
 
 1. The Clock module shall `now() -> f64` 公開関数を提供する。
-2. The `now()` function shall OS 起動時からの経過秒数を f64 で返す。
-3. The `now()` function shall 単調増加であること（同一プロセス内で前回呼び出し値以上を保証）。
-4. The `now()` function shall ms 精度以上を保証する（16.67ms = 60fps フレーム間隔を十分に識別可能）。
+2. The `now()` function shall OS が提供する起動後経過時間を f64 秒で取得できること。
+3. The `now()` function shall ms 精度以上を保証する（16.67ms = 60fps フレーム間隔を十分に識別可能）。
 
 ---
 

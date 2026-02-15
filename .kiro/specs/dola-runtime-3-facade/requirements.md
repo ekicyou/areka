@@ -140,7 +140,7 @@ _Parent: Req 6.1, 6.2, 6.3, 6.4, 6.5_
 
 ### Requirement 9: 状態遷移の適用
 
-_Parent: Req 8.1, 8.2, 8.3, 8.5_
+_Parent: Req 8.1, 8.2, 8.3, 8.4, 8.5_
 
 **Objective:** InstanceManager として、core-types が定義する `InstanceState` の遷移ルールをインスタンスのライフサイクルに適用したい。
 
@@ -148,7 +148,10 @@ _Parent: Req 8.1, 8.2, 8.3, 8.5_
 
 1. The InstanceManager shall `InstanceState::try_transition()` を使用して全状態遷移の正当性を検証する。
 2. The InstanceManager shall Start 時に `Created → Playing` 遷移を適用する。
-3. The InstanceManager shall 同一ストーリーボード定義から複数の独立した実行インスタンスを同時に管理可能とする。
+3. While インスタンスが Playing 状態にある場合, the InstanceManager shall Pause コマンドで `Paused` 状態への遷移を許可する。
+4. While インスタンスが Paused 状態にある場合, the InstanceManager shall Resume コマンドで `Playing` 状態への復帰を許可する。
+5. When 実行インスタンスが終了状態（Concluded / Cancelled / Trimmed / Compressed）に入った場合, the InstanceManager shall 当該インスタンスを再利用不可とし、以降の状態遷移を拒否する。
+6. The InstanceManager shall 同一ストーリーボード定義から複数の独立した実行インスタンスを同時に管理可能とする。
 
 ---
 

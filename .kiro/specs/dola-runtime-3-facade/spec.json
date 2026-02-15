@@ -1,9 +1,9 @@
 {
     "feature_name": "dola-runtime-3-facade",
     "created_at": "2026-02-14T23:50:00+09:00",
-    "updated_at": "2026-02-14T23:50:00+09:00",
+    "updated_at": "2026-02-15T00:00:00+09:00",
     "language": "ja",
-    "phase": "requirements-draft",
+    "phase": "requirements-generated",
     "parent_spec": "dola-runtime-engine",
     "approvals": {
         "requirements": {
