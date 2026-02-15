@@ -63,10 +63,10 @@ _Parent: Req 12.5（周回管理の内部状態）_
 
 #### Acceptance Criteria
 
-1. The LoopController shall 各インスタンスの完了周回数（`loops_completed`）を管理する。
+1. The LoopController shall 各インスタンスの完了周回数（`loops_completed: u64`）を管理する。
 2. When 周回終了時刻に到達した場合（`current_time >= end_time`）, the LoopController shall ループ継続判定の前に `loops_completed` を 1 インクリメントする。
 3. The LoopController shall `loops_completed` の初期値を `0` とする。
-4. While `loop_count` が `-1`（無限ループ）の場合, the LoopController shall `loops_completed` を周回ごとにインクリメントし続ける（オーバーフロー保護は `u32::MAX` で飽和）。
+4. While `loop_count` が `-1`（無限ループ）の場合, the LoopController shall `loops_completed` を周回ごとにインクリメントし続ける。
 
 ---
 

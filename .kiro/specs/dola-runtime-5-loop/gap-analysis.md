@@ -115,10 +115,10 @@ fn calculate_effective_time(current_time: f64, instance: &StoryboardInstance) ->
 
 | AC | 必要な機能 | 既存資産 | ギャップ |
 |----|-----------|---------|---------|
-| AC1: loops_completed 管理 | 周回数の読み書き | `pub loops_completed: u32` フィールド存在 | **Partial**: 書き込みロジック不在 |
+| AC1: loops_completed: u64 管理 | 周回数の読み書き（実質無制限） | `pub loops_completed: u32` フィールド存在 | **Missing**: u32→u64 型変更 + 書き込みロジック |
 | AC2: インクリメント | 周回完了時に+1 | なし | **Missing**: インクリメントロジック |
 | AC3: 初期値 0 | 生成時に 0 | `create_instance()` で `loops_completed: 0` | **Existing** |
-| AC4: u32::MAX 飽和 | 無限ループ時のオーバーフロー保護 | なし | **Missing**: `saturating_add` 使用 |
+| AC4: 無限ループ継続 | 制限なくカウント続行 | u64 で実質無限 | **Trivial**: 通常のインクリメントのみ |
 
 ### 2.4 Req 4: Pause/Resume との相互作用
 
@@ -140,9 +140,9 @@ fn calculate_effective_time(current_time: f64, instance: &StoryboardInstance) ->
 
 | カテゴリ | 項目 |
 |---------|------|
-| **Existing** (8 AC) | Req 1 AC1, Req 2 AC1, Req 3 AC3, Req 5 AC1/AC2/AC3, end_time=INFINITY (loop_count=-1) |
-| **Partial** (4 AC) | Req 2 AC5, Req 3 AC1, Req 4 AC1/AC2 |
-| **Missing** (8 AC) | Req 1 AC2/AC3/AC4/AC5, Req 2 AC2/AC3/AC4, Req 3 AC2/AC4, Req 4 AC3 |
+| **Existing** (9 AC) | Req 1 AC1, Req 2 AC1, Req 3 AC3/AC4, Req 5 AC1/AC2/AC3, end_time=INFINITY (loop_count=-1) |
+| **Partial** (3 AC) | Req 2 AC5, Req 4 AC1/AC2 |
+| **Missing** (8 AC) | Req 1 AC2/AC3/AC4/AC5, Req 2 AC2/AC3/AC4, Req 3 AC1/AC2, Req 4 AC3 |
 
 **コア欠落**: ループ周回判定ロジック、時間オフセット調整機構、`evaluate()` のエントリ保持制御
 
@@ -337,8 +337,8 @@ effective_time = (current_time - loop_start_time - pause_accumulated) * time_sca
 
 | コンポーネント | 工数 | 根拠 |
 |--------------|------|------|
-| LoopController フリー関数群 (Req 1, 3) | **S** (1-2日) | 周回判定・インクリメント・飽和加算。純粋関数で実装シンプル |
-| loop_start_time 機構 (Req 2, 4) | **S** (1-2日) | フィールド追加 + `calculate_effective_time()` 修正。既存パターン踏襲 |
+| LoopController フリー関数群 (Req 1, 3) | **S** (1-2日) | 周回判定・インクリメント。純粋関数で実装シンプル |
+| loop_start_time 機構 (Req 2, 4) | **S** (1-2日) | フィールド追加 (u64変更含む) + `calculate_effective_time()` 修正。既存パターン踏襲 |
 | facade 統合 (Req 1-5) | **S** (1-2日) | `update()` の while ループ挿入、`start()` の end_time 計算修正 |
 | 単体テスト (Req 1-5) | **S** (2-3日) | 下記テストケース群を実施 |
 | 統合テスト | **S** (1日) | facade 経由のエンドツーエンド |
@@ -371,7 +371,6 @@ effective_time = (current_time - loop_start_time - pause_accumulated) * time_sca
 | `loop_offset` + `pause_accumulated` の組合せ | **Low** | 加算的独立で干渉なし。テストで組合せ検証 |
 | evaluate() のエントリ保持 | **Low** | facade 先行判定方式で解決可能（4.4 参照） |
 | 既存テストへの影響 | **Low** | 新規モジュール中心。facade の修正は `update()` の1箇所 + `start()` の end_time 計算 |
-| 無限ループの u32 オーバーフロー | **Low** | `saturating_add` で対処（Req 3 AC4） |
 
 ---
 
