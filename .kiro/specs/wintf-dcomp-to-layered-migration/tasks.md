@@ -34,7 +34,7 @@
   - _Requirements: 2.3, 3.3, 5.1, 5.2, 5.3, 5.4, 6.2, 6.3, 10.1, 10.2_
   - _Dependencies: Task 1, Task 2_
 
-- [ ] 4. Phase 3 子仕様の作成
+- [x] 4. Phase 3 子仕様の作成
   - 統合指針文書と Phase 1-2 子仕様を参照し、UpdateLayeredWindow 統合（WS_EX_LAYERED、ULW 呼び出し、クリックスルー検証）の仕様を策定する
   - 仕様サイクル全工程を完了する（init → requirements → design → tasks）
   - 親仕様の設計に基づき、ulw_present_system 実装、WS_EX_LAYERED 切り替え、WM_PAINT/WM_SIZE ハンドラ更新の詳細設計を子仕様に具体化する

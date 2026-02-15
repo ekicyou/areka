@@ -1,0 +1,17 @@
+{
+  "name": "wintf-dcomp-migration-3-ulw-integration",
+  "description": "DComp→Layered移行 Phase 3: UpdateLayeredWindow統合 — ULW呼び出し、WS_EX_LAYERED切替、WM_PAINT/WM_SIZE更新、クリックスルー検証",
+  "language": "ja",
+  "parent_spec": "wintf-dcomp-to-layered-migration",
+  "parent_requirements": ["4.1", "4.2", "4.3", "4.4", "4.5", "7.1", "7.2", "7.3", "10.1"],
+  "tier": 3,
+  "dependencies": [
+    "wintf-dcomp-migration-2-pipeline-switch"
+  ],
+  "phase": "tasks-generated",
+  "approvals": {
+    "requirements": { "generated": true, "approved": false },
+    "design": { "generated": true, "approved": false },
+    "tasks": { "generated": true, "approved": false }
+  }
+}
