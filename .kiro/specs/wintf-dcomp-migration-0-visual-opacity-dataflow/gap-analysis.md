@@ -25,8 +25,8 @@
 | `ecs/layout/metrics.rs` | L108-133 | 構造体定義 + impl + Default | `#[deprecated]` 付与 |
 | `ecs/graphics/systems.rs` | L1011, L1019 | `visual_property_sync_system` クエリ | `Visual` に切り替え |
 | `ecs/graphics/systems.rs` | L1076-1089 | Opacity 同期ロジック | `Visual.opacity` 読み取りに変更 |
-| `ecs/layout/hit_test.rs` | L204-206 | `hit_test_entity` Opacity 読み取り | **Phase 0 スコープ外** (Req 4.3: Phase 2) |
-| `ecs/layout/hit_test.rs` | L337-339 | `hit_test_entity_ex` Opacity 読み取り | **Phase 0 スコープ外** (Req 4.3: Phase 2) |
+| `ecs/layout/hit_test.rs` | L204-206 | `hit_test_entity` Opacity 読み取り | **Phase 0 スコープ内** (Req 3.5) |
+| `ecs/layout/hit_test.rs` | L337-339 | `hit_test_entity_ex` Opacity 読み取り | **Phase 0 スコープ内** (Req 3.5) |
 | `ecs/world.rs` | L433 | コメント内参照 | コメント更新 |
 
 #### Example コード（2ファイル・8箇所）
@@ -104,7 +104,7 @@ Layout → PostLayout → ... → Draw → ... → Composition → CommitComposi
 | アルゴリズム複雑度 | 低（値のコピー・クランプ・条件分岐のみ） |
 | 外部統合 | 低（DComp COM API の既存呼び出しパターン変更なし） |
 | データモデル変更 | 低（`Visual` フィールドは既存、`Opacity` は温存） |
-| クロスモジュール影響 | 中（hit_test.rs は Phase 0 スコープ外だが設計考慮要） |
+| クロスモジュール影響 | 低（hit_test.rs も Phase 0 で移行） |
 
 ---
 
@@ -182,7 +182,7 @@ Layout → PostLayout → ... → Draw → ... → Composition → CommitComposi
 
 ### Option C: ハイブリッド（推奨ベース + Example 段階移行）
 
-**方針**: Option A をベースに、Example 移行を Phase 0 内で実施するが、hit_test.rs 移行は Phase 2 に延期
+**方針**: Option A をベースに、Example + hit_test.rs 移行を Phase 0 内で実施
 
 #### 変更内容
 
@@ -190,22 +190,18 @@ Layout → PostLayout → ... → Draw → ... → Composition → CommitComposi
 1. `Visual` にメソッド追加（Option A 同様）
 2. `visual_property_sync_system` を `Visual` ベースに移行（Option A 同様）
 3. Widget on_add の競合解決（Option A の A-2 方式）
-4. Example 移行: `Opacity(0.5)` → `Visual { opacity: 0.5, .. }` 
-5. `Opacity` に `#[deprecated]` 付与
-6. hit_test.rs のプロダクションコードは**変更しない**（Phase 2 で対応）
-7. hit_test.rs テストは **`#[allow(deprecated)]` で一時的に警告抑制**
+4. hit_test.rs の Opacity → `Visual.opacity` 読み取り移行 + テスト更新
+5. Example 移行: `Opacity(0.5)` → `Visual { opacity: 0.5, .. }` 
+6. `Opacity` に `#[deprecated]` 付与
 
-**Phase 2 で実施:**
-- hit_test.rs の `Opacity` → `Visual.opacity` 移行
-- hit_test テストの `Opacity` 参照削除
+**後続フェーズで実施:**
 - `Opacity` コンポーネント完全削除
 
 **Trade-offs**:
-- ✅ Phase 0 のスコープを明確に限定（sync system + example のみ）
-- ✅ hit_test.rs の変更を他の Phase 2 変更と一括で実施可能
+- ✅ Phase 0 でデータ不整合リスクを完全に解消
+- ✅ hit_test.rs の Opacity 参照を Example と同一 Phase で移行、一貫性保証
 - ✅ `#[deprecated]` により既存 `Opacity` 使用箇所が警告で可視化される
-- ❌ hit_test テストの `#[allow(deprecated)]` が一時的に必要
-- ❌ 移行期間中、hit_test は旧 `Opacity` を参照し続ける（データ不整合リスク）
+- ❌ hit_test.rs の Opacity 参照箇所が Phase 0 スコープに追加（小規模）
 
 ---
 
@@ -225,7 +221,7 @@ Layout → PostLayout → ... → Draw → ... → Composition → CommitComposi
 |--------|--------|--------|
 | Widget on_add が `Visual::default()` でカスタム opacity を上書き | **高** | on_add 内既存チェック or 挿入ロジック見直し（R1, R2 で調査） |
 | `Changed<Visual>` の過剰発火 | **低** | sync system 内で `opacity` / `is_visible` 値の差分チェック追加で対応可能 |
-| hit_test のデータ不整合（移行期間中） | **中** | Phase 0 で hit_test は `Opacity` を参照し続けるため、Example で `Opacity` を削除すると hit_test のα判定が 1.0 にフォールバック → hit_test テストが失敗する可能性 |
+| hit_test のデータ不整合（移行期間中） | ~~**中**~~ → **解消** | Phase 0 で hit_test も Visual.opacity に移行することが決定 |
 | Example 移行時の visual regression | **低** | `Opacity(0.5)` → `Visual { opacity: 0.5, .. }` は等価な値変更。既存 example を手動実行で確認 |
 
 ---

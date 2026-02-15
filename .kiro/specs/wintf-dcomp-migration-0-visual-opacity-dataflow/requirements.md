@@ -18,6 +18,7 @@ Phase 1 では `composite_render_system` が `Visual.opacity` を読んで階層
 
 - `Visual.opacity` / `Visual.is_visible` への Widget 層書き込みパス実装
 - `visual_property_sync_system` の `Visual` フィールド読み取りへの移行
+- `hit_test.rs` の Opacity → `Visual.opacity` 読み取りへの移行
 - `Opacity` コンポーネント（metrics.rs）の deprecation マーキング
 - Phase 1 合成描画システムが依存する Visual データフローの事前整備
 
@@ -68,9 +69,9 @@ _Parent: wintf-dcomp-to-layered-migration Req 2.1（フェーズ0 定義）, Req
 
 5. The wintf shall `Visual.is_visible = false` のエンティティに対しても、既存の描画システム（`draw_rectangles`, `draw_labels` 等）で GraphicsCommandList 生成を継続する（描画スキップ判定は合成システム側の責務）
 
-### Requirement 3: visual_property_sync_system の移行
+### Requirement 3: Opacity 読み取り箇所の Visual.opacity への移行
 
-**Objective:** 開発者として、既存の DComp パイプライン（`visual_property_sync_system`）が `Opacity` コンポーネントではなく `Visual.opacity` フィールドを読むように移行したい。これにより DComp/D2D1 両パイプラインが同一データソースを共有できる。
+**Objective:** 開発者として、`Opacity` コンポーネントを読み取っている全システム（`visual_property_sync_system`, `hit_test`）を `Visual.opacity` フィールド読み取りに移行したい。これによりデータソースの一元化とデータ整合性を確保できる。
 
 _Parent: wintf-dcomp-to-layered-migration Req 2.1（フェーズ0 定義）, Req 6.2（Visual コンポーネント設計）_
 
@@ -84,6 +85,10 @@ _Parent: wintf-dcomp-to-layered-migration Req 2.1（フェーズ0 定義）, Req
 
 4. When `Visual.is_visible = false` のエンティティを処理する, the `visual_property_sync_system` shall `SetOpacity(0.0)` を呼び出すことで非表示を実現する（DComp は is_visible 概念を持たないため）
 
+5. The `hit_test_entity` および `hit_test_entity_ex` shall `world.get::<Opacity>(entity)` を `world.get::<Visual>(entity).map(|v| v.opacity)` に置換し、`Visual.opacity` からα判定値を取得する
+
+6. The `hit_test` 関連テスト shall `Opacity(値)` のスポーンを `Visual { opacity: 値, ..default() }` に移行する
+
 ### Requirement 4: Opacity コンポーネント廃止方針
 
 **Objective:** 開発者として、`Opacity` コンポーネント（metrics.rs）を段階的に廃止する明確な方針とタイムラインが欲しい。これにより重複したデータソースを整理し、コードベースを簡素化できる。
@@ -96,7 +101,7 @@ _Parent: wintf-dcomp-to-layered-migration Req 2.1（フェーズ0 定義）_
 
 2. The wintf shall Phase 1 完了まで `Opacity` コンポーネントの存在を許容する（互換性維持期間）
 
-3. The wintf shall Phase 2 開始時に `Opacity` コンポーネントを使用する全コード（Layout 層の `hit_test.rs`、Widget 実装含む）から参照を削除する
+3. The wintf shall 残存する `Opacity` コンポーネント参照（Example コード等）を後続フェーズで段階的に削除する
 
 4. The wintf shall Phase 3 開始前に `Opacity` コンポーネント定義を `ecs/layout/metrics.rs` から完全削除する
 
@@ -128,6 +133,6 @@ _Parent: wintf-dcomp-to-layered-migration Req 10.1, 10.2_
 |-----------|--------|------|
 | Req 1 | 2.1, 6.2 | Visual.opacity データフロー確立 |
 | Req 2 | 2.1, 6.2 | Visual.is_visible データフロー確立 |
-| Req 3 | 2.1, 6.2 | visual_property_sync_system の移行 |
+| Req 3 | 2.1, 6.2 | Opacity 読み取り箇所の Visual.opacity への移行（sync system + hit_test） |
 | Req 4 | 2.1 | Opacity コンポーネント廃止方針 |
 | Req 5 | 10.1, 10.2 | Phase 0 検証基準 |
