@@ -92,7 +92,7 @@ pub fn from_policy(policy: InterruptionPolicy) -> Option<InstanceState> {
 | 1.2 競合 group_id リスト返却 | 重複する既存 group_id の収集 | なし | **Missing**: 変数ごとの group_id 収集 + 集約 |
 | 1.3 重複なし → 空リスト、スキップ | 早期リターン | なし（自然に実装可能） | **Trivial** |
 | 1.4 複数変数の独立チェック＋集約 | 変数別の並行走査 | `TimelineManager.timelines: HashMap<String, VariableTimeline>` | **Missing**: 変数横断の集約ロジック。`CompiledStoryboard.timelines` から変数名を取得し、各変数で独立チェック |
-| 1.5 Playing 状態フィルタ | インスタンス状態参照 | `InstanceManager.instances()` + `StoryboardInstance.state` | **Partial**: 参照は可能だが、フィルタ統合ロジックが必要 |
+| 1.5 Playing/Paused 状態フィルタ | インスタンス状態参照 | `InstanceManager.instances()` + `StoryboardInstance.state` | **Partial**: 参照は可能だが、フィルタ統合ロジックが必要 |
 
 #### Req 2: group_id 一括適用（3 AC）
 
@@ -158,7 +158,7 @@ pub fn from_policy(policy: InterruptionPolicy) -> Option<InstanceState> {
 | カテゴリ | AC 数 | 項目 |
 |---------|------|------|
 | **Existing** (そのまま使用可能) | 11 | AC 3.1〜3.3, 4.2, 4.3, 5.4, 6.1〜6.4, 8.1 — `InstanceState` 全バリアント, `from_policy()`, `transition()`, `remove_entries()`, `collect_final_values()`, `force_update_last_values()`, デフォルト戦略 serde |
-| **Partial** (拡張必要) | 4 | AC 1.5, 2.2, 7.1, 7.4 — Playing 状態フィルタ、group_id 全変数横断削除、Never 分岐判定、無限ループチェック |
+| **Partial** (拡張必要) | 4 | AC 1.5, 2.2, 7.1, 7.4 — Playing/Paused 状態フィルタ、group_id 全変数横断削除、Never 分岐判定、無限ループチェック |
 | **Missing** (新規作成) | 12 | AC 1.1, 1.2, 1.4, 2.1, 2.3, 4.1, 5.1〜5.3, 7.2, 7.3, 7.5 — 時間重複検出、変数横断集約、戦略ディスパッチャー、`collect_current_segment_final_values()`、Trim 切断ロジック、`DeferredEntry` 型、延期キュー管理、終了トリガー→解放パス |
 | **Trivial** (自明に実装可能) | 2 | AC 1.3, 8.2 — 空リスト返却（早期リターン）、デフォルト値一致テスト |
 

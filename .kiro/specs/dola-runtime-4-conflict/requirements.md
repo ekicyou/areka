@@ -26,7 +26,7 @@ _Parent: Req 7.1_
 2. When 重複が検出された場合, the ConflictResolver shall 競合する既存 `group_id` のリストを返す。
 3. If 重複がない場合, then the ConflictResolver shall 空のリストを返し、競合解決をスキップする。
 4. When 新ストーリーボードが複数の変数にセグメントを持つ場合, the ConflictResolver shall 各変数について独立して重複チェックを行い、変数ごとの競合 `group_id` リストを集約する。
-5. The ConflictResolver shall `Playing` 状態のインスタンスのみを競合検出対象とする（`Paused`、`Created`、終了状態のインスタンスは除外）。
+5. The ConflictResolver shall タイムテーブルエントリが存在するインスタンス（`Playing` または `Paused` 状態）を競合検出対象とする（`Created` および終了状態のインスタンスは除外）。
 
 ---
 
