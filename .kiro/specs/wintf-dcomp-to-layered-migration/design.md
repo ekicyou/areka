@@ -239,7 +239,7 @@ graph TB
 | 1.1 | DComp依存3カテゴリ分類 | research.md参照 | — | — |
 | 1.2 | 廃止対象ファイル識別 | research.md §1-3 | — | — |
 | 1.3 | 再利用可能資産保証 | GraphicsCommandList, Layout全体, Widget全体 | — | — |
-| 2.1 | 4フェーズ移行戦略 | Migration Strategy節 | — | — |
+| 2.1 | 5フェーズ移行戦略 | Migration Strategy節 | — | — |
 | 2.2 | フェーズ1: DComp同等描画 | WindowD3D11Compositor, composite_render_system | CompositorService | 合成描画パイプライン |
 | 2.3 | フェーズ2: DComp無効化 | world.rs Schedule更新 | — | — |
 | 2.4 | フェーズ3: ULW統合 | UlwTransfer, ulw_present_system | UlwService | D2D→HBITMAP転送 |
@@ -726,15 +726,38 @@ GlobalArrangement {
 
 ```mermaid
 graph LR
+    P0[Phase 0: Widget→Visual.opacity<br/>データフロー確立]
     P1[Phase 1: D2D1合成スタック構築]
     P2[Phase 2: DCompパイプライン置換]
     P3[Phase 3: ULW統合]
     P4[Phase 4: DCompコード削除]
 
+    P0 -->|前提| P1
     P1 -->|前提| P2
     P2 -->|前提| P3
     P3 -->|前提| P4
 ```
+
+### 子仕様0: Widget→Visual.opacityデータフロー確立（Phase 0）
+
+**担当範囲**:
+- Widget描画システム（`draw_rectangles`, `draw_labels`, `draw_bitmap_sources`）からの`Visual.opacity`/`Visual.is_visible`書き込みパス確立
+- `Opacity`コンポーネント（`ecs/layout/metrics.rs`）の廃止方針策定
+- `visual_property_sync_system`（DComp依存）が使用する`Opacity`コンポーネントからの移行パス定義
+- Widget層→Layout層のデータフロー設計ギャップの解決
+
+**前提条件**: なし（Phase 1 より前に完了必須）
+
+**設計課題**:
+- 現行：Widget → `Opacity`コンポーネント（metrics.rs） → `visual_property_sync_system` → `IDCompositionVisual3::SetOpacity()`
+- 問題：`Visual.opacity`フィールドは存在するがWidgetから未使用（0 usages）、常にデフォルト1.0
+- 目標：Widget → `Visual.opacity`/`Visual.is_visible` → Phase 1の`composite_render_system`が読み取り
+
+**完了基準（DoD）**:
+- Widget描画システムが`Visual.opacity`/`Visual.is_visible`に正しく書き込む
+- `Opacity`コンポーネント（metrics.rs）の廃止が完了、またはPhase 2以降での廃止計画が明確化
+- 既存のDCompパイプライン（`visual_property_sync_system`）との互換性維持
+- Phase 1の`composite_render_system`がこのデータフローを前提として動作可能
 
 ### 子仕様1: D2D1合成スタック構築（Phase 1）
 
@@ -745,7 +768,7 @@ graph LR
 - `ecs/layout/arrangement.rs` 拡張: GlobalArrangement に global_opacity フィールド追加
 - `ecs/layout/systems.rs` 拡張: propagate_global_arrangements に Opacity 累積ロジック追加
 
-**前提条件**: なし（新規モジュールとして並行追加）
+**前提条件**: 子仕様0完了（Widget→Visual.opacityデータフロー確立済み）
 **並行稼働**: DComp パイプラインは変更せず稼働継続。新システムは world.rs に**登録しない**（独立テスト）
 
 **完了基準（DoD）**:
@@ -820,6 +843,7 @@ graph LR
 
 ### 実装アプローチ: ハイブリッド段階（research.md Option C）
 
+- **Phase 0**: Widget層のデータフロー修正（Visual.opacity書き込みパス確立）
 - **Phase 1-2**: 新モジュールを `ecs/graphics/` 内に並行追加。DCompモジュールと共存
   - 新ファイル: `compositor.rs`, `compositor_systems.rs`
   - 既存ファイル: DCompコードに触れない

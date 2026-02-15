@@ -13,8 +13,6 @@
 - `ecs/graphics/compositor.rs` 新規作成: WindowD3D11Compositor コンポーネント
 - `ecs/graphics/compositor_systems.rs` 新規作成: compositor_init_system, composite_render_system
 - `com/ulw.rs` 新規作成（部分）: transfer_to_hbitmap ユーティリティ
-- `ecs/layout/arrangement.rs` 拡張: GlobalArrangement に `global_opacity` フィールド追加
-- `ecs/layout/systems.rs` 拡張: `propagate_global_arrangements` に Opacity 累積ロジック追加
 
 ### Non-Goals
 
@@ -24,6 +22,8 @@
 - `WS_EX_LAYERED` ウィンドウスタイル変更（Phase 3 で実施）
 - 旧 DComp コード削除（Phase 4 で実施）
 - `GraphicsCore` からの DComp 初期化除去（Phase 2 以降）
+- Widget → `Visual.opacity` データフロー確立（Phase 0 子仕様 `wintf-dcomp-migration-0-visual-opacity-dataflow` で実施）
+- Layout 層への透明度追加（GlobalArrangement に opacity は不要）
 
 ---
 
@@ -98,7 +98,11 @@ _Parent: Req 3.1, 6.1_
 
 4. When `GraphicsCore` の generation カウンタと `WindowD3D11Compositor` の generation カウンタが不一致の時, the `compositor_init_system` shall `WindowD3D11Compositor` を再作成する
 
-5. The `compositor_init_system` shall `ecs/graphics/compositor_systems.rs` に配置される
+5. If リソース作成が失敗した場合, the `compositor_init_system` shall リソースを無効化（invalidate）し、`tracing::error` でエラー詳細をログ出力する
+
+6. The `compositor_init_system` shall 0×0 サイズのウィンドウに対してリソース作成を試行しない
+
+7. The `compositor_init_system` shall `ecs/graphics/compositor_systems.rs` に配置される
 
 ### Requirement 4: D2D → HBITMAP 転送ユーティリティ
 
@@ -118,39 +122,7 @@ _Parent: Req 3.1（合成パイプラインの一部として）_
 
 5. If Map 操作が失敗した場合, the `transfer_to_hbitmap()` shall `windows::core::Result` でエラーを返却する
 
-### Requirement 5: リサイズ対応
-
-**Objective:** 開発者として、ウィンドウサイズ変更時に合成ビットマップ群が適切に再作成され、次フレームから正しい描画が行われることを保証したい。
-
-_Parent: Req 3.5_
-
-#### Acceptance Criteria
-
-1. When ウィンドウサイズが変更された時, the `WindowD3D11Compositor` shall 全4リソース（合成ビットマップ、ステージングビットマップ、HBITMAP、MemoryDC）を新サイズで再作成する
-
-2. The リサイズ処理完了後, the `composite_render_system` shall 次フレームで新サイズに基づく正しい合成描画を実行する
-
-3. If リサイズ時のリソース作成が失敗した場合, the `WindowD3D11Compositor` shall リソースを無効化（invalidate）し、`tracing::error` でエラー詳細をログ出力する
-
-4. The リサイズ処理 shall 0×0 サイズのウィンドウに対してリソース作成を試行しない
-
-### Requirement 6: デバイスロスト対応
-
-**Objective:** 開発者として、既存の `GraphicsCore` デバイスロストフローと整合性のある `WindowD3D11Compositor` の自動再初期化が欲しい。
-
-_Parent: Req 5.4（間接）, Req 10.1_
-
-#### Acceptance Criteria
-
-1. When `GraphicsCore` が invalidate された時, the `WindowD3D11Compositor` shall 自身も invalidate される
-
-2. The `compositor_init_system` shall `GraphicsCore` と `WindowD3D11Compositor` の generation カウンタの不一致を検出し、`WindowD3D11Compositor` を新しいデバイスリソースで再作成する
-
-3. The デバイスロスト後の復旧 shall 既存の `HasGraphicsResources.set_changed()` トリガーメカニズムと整合する
-
-4. The デバイスロスト復旧 shall ユーザー操作なしで自動的に完了し、次の正常フレームで合成描画が再開される
-
-### Requirement 7: Phase 1 検証基準
+### Requirement 5: Phase 1 検証基準
 
 **Objective:** 開発者として、Phase 1 の完了を客観的に判定できる検証基準が欲しい。
 
@@ -160,9 +132,9 @@ _Parent: Req 10.1, 10.2_
 
 1. The `WindowD3D11Compositor::new()` shall 全4リソースを正しく作成できること（unit test で検証）
 
-2. The `composite_render_system` shall 複数の `GraphicsCommandList` を z-order + transform + opacity で正しく合成描画できること（integration test で検証）
+2. The `composite_render_system` shall 複数の `GraphicsCommandList` を z-order + transform で正しく合成描画できること（integration test で検証）
 
-3. The `composite_render_system` shall 階層構造で opacity 累積を正確に実行できること（integration test: parent opacity=0.8 × child opacity=0.5 = final 0.4）
+3. The `composite_render_system` shall 階層構造で opacity 累積を正確に実行できること（integration test: parent opacity=0.8 × child opacity=0.5 = final 0.4。**注**: 現時点では Visual.opacity がデフォルト 1.0 のため、テストでは直接 Visual.opacity を設定して検証）
 
 4. The `transfer_to_hbitmap()` shall pitch/stride 不一致パターンを含む転送を正しく実行できること（unit test で検証）
 
@@ -178,8 +150,9 @@ _Parent: Req 10.1, 10.2_
 |-----------|--------|------|
 | Req 1 | 3.1, 6.1 | WindowD3D11Compositor コンポーネント定義 |
 | Req 2 | 3.1-3.4, 3.6 | composite_render_system（合成描画 + opacity 累積） |
-| Req 3 | 3.1, 6.1 | compositor_init_system（リソース初期化） |
+| Req 3 | 3.1, 3.5, 5.4, 6.1 | compositor_init_system（初期化・サイズ変更・デバイスロスト） |
 | Req 4 | 3.1 | D2D → HBITMAP 転送ユーティリティ |
+| Req 5 | 10.1, 10.2 | Phase 1 検証基準 |
 | Req 5 | 3.5 | リサイズ対応 |
 | Req 6 | 5.4, 10.1 | デバイスロスト対応 |
 | Req 7 | 10.1, 10.2 | Phase 1 検証基準 |

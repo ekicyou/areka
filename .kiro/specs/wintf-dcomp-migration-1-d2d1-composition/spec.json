@@ -1,9 +1,9 @@
 {
     "feature_name": "wintf-dcomp-migration-1-d2d1-composition",
     "created_at": "2026-02-15T21:00:00+09:00",
-    "updated_at": "2026-02-15T21:00:00+09:00",
+    "updated_at": "2026-02-16T06:00:00+09:00",
     "language": "ja",
-    "phase": "tasks-generated",
+    "phase": "requirements-generated",
     "parent_spec": "wintf-dcomp-to-layered-migration",
     "approvals": {
         "requirements": {
@@ -11,11 +11,11 @@
             "approved": false
         },
         "design": {
-            "generated": true,
+            "generated": false,
             "approved": false
         },
         "tasks": {
-            "generated": true,
+            "generated": false,
             "approved": false
         }
     },
@@ -27,11 +27,14 @@
         "3.4",
         "3.5",
         "3.6",
+        "5.4",
         "6.1",
         "10.1",
         "10.2"
     ],
     "tier": 1,
     "priority": "P0",
-    "dependencies": []
+    "dependencies": [
+        "wintf-dcomp-migration-0-visual-opacity-dataflow"
+    ]
 }

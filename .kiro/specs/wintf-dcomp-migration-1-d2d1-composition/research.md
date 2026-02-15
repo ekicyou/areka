@@ -178,19 +178,9 @@ Layout → Visual               （どこに、どう描くか）
 - `ID2D1Bitmap1::Map()` の正確な API シグネチャ（`D2D1_MAP_OPTIONS_READ`）
 - Map 中のスレッドセーフティ制約
 
-### Req 5: リサイズ対応
+### Req 5: Phase 1 検証基準
 
-実装の大部分は Req 1（`resize()` メソッド）と Req 3（`compositor_init_system` 内のサイズ検出）に含まれる。追加実装量は最小。ただし **Req 6 固有の受入基準** として AC3（リサイズ失敗時の `tracing::error` ログ）と AC4（0×0 サイズガード）がある。これらは Req 1/3 には記載されていない独自要件。
-
-→ Req 1/3 に統合可能か、独立維持すべきかは議題3で協議。
-
-### Req 6: デバイスロスト対応
-
-実装の大部分は Req 3（`compositor_init_system` 内の generation 不一致検出 + 再作成）に含まれる。既存パターンの完全流用。ただし **Req 7 固有の受入基準** として AC3（`HasGraphicsResources.set_changed()` との整合）と AC4（ユーザー操作なしの自動復旧保証）がある。
-
-→ Req 3 に統合可能か、独立維持すべきかは議題3で協議。
-
-### Req 7: Phase 1 検証基準
+**注**: 旧 Req 5 (リサイズ対応) と旧 Req 6 (デバイスロスト対応) は Req 3 (compositor_init_system) の通常動作に包含されるため削除。AC は Req 3 に統合済み。
 
 | AC | テスト種別 | 既存パターン | 難度 |
 |----|-----------|-------------|------|
@@ -217,9 +207,6 @@ Layout → Visual               （どこに、どう描くか）
 - `com/ulw.rs` — `transfer_to_hbitmap`
 
 **拡張ファイル:**
-- `ecs/layout/arrangement.rs` — `GlobalArrangement` に `global_opacity` 追加
-- `ecs/layout/arrangement.rs` — `impl Mul<Arrangement>` に opacity 累積追加（Option A採用時）
-- `ecs/layout/systems.rs` または別途システム — opacity ソース読み取り
 - `ecs/graphics/mod.rs` — `mod compositor; mod compositor_systems;` 追加
 - `com/mod.rs` — `pub mod ulw;` 追加
 
@@ -227,7 +214,7 @@ Layout → Visual               （どこに、どう描くか）
 - ✅ DComp パイプラインに一切触れない（共存保証）
 - ✅ 新規ファイルが中心で回帰リスク最小
 - ✅ 既存パターンを忠実に踏襲
-- ❌ `GlobalArrangement` Opacity 累積の設計判断が必要
+- ✅ Opacity 累積は composite_render_system 内の階層走査で実施（Layout 層への影響なし）
 
 ### Option B: 既存システムを拡張
 
@@ -261,21 +248,18 @@ Option A をベースに、opacity 累積のみ Phase 1 から除外し、`globa
 
 | 指標 | 評価 | 根拠 |
 |------|------|------|
-| **工数** | **M（3-7日）** | 新規ファイル3つ + 既存拡張2つ、パターン流用が多いが D2D API 周りの実装・検証に時間要 |
-| **リスク** | **Medium** | D2D1 Bitmap 作成 / Map / PushLayer が新規 API、Opacity 累積の設計判断あり |
+| **工数** | **S-M（2-5日）** | 新規ファイル3つ、パターン流用が多いが D2D API 周りの実装・検証に時間要 |
+| **リスク** | **Low-Medium** | D2D1 Bitmap 作成 / Map / PushLayer が新規 API |
 
 ### 要件別
 
 | 要件 | 工数 | リスク | 備考 |
 |------|------|--------|------|
 | Req 1 | S | Low | パターン流用、API 調査のみ |
-| Req 2 | M | Medium | PushLayer 新規、ダーティ判定ロジック |
-| Req 3 | S | Low | `init_window_graphics` のほぼコピー |
-| Req 4 | M | **High** | ジェネリック伝播との不整合解決 |
-| Req 5 | S | Low | 標準的なメモリ操作 |
-| Req 6 | S | Low | Req 1, 3 に包含 |
-| Req 7 | S | Low | 既存パターン完全流用 |
-| Req 8 | S-M | Low | GPU テスト制約あり |
+| Req 2 | M | Medium | PushLayer 新規、opacity 累積、ダーティ判定ロジック |
+| Req 3 | S | Low | `init_window_graphics` 流用 + サイズ変更/デバイスロスト検出 |
+| Req 4 | S | Low | 標準的なメモリ操作 |
+| Req 5 | S-M | Low | GPU テスト制約あり |
 
 ---
 
@@ -287,10 +271,8 @@ Option A をベースに、opacity 累積のみ Phase 1 から除外し、`globa
 
 ### 設計フェーズで確定が必要な項目
 
-1. **Opacity 累積メカニズム**: Option A（Arrangement に opacity 追加）vs Option B（別パス）vs Option C（カスタム伝播）vs Option D（同期システム）
-2. **Visual.opacity 変更トリガー**: `propagate_global_arrangements` のトリガーに `Changed<Visual>` を追加するか、別の伝播制御方式を採用するか
-3. **DeviceContext 共有**: `GraphicsCore` の共有 DC を合成で使うか、WindowD3D11Compositor 用に専用 DC を作るか
-4. **ダーティ判定粒度**: ウィンドウ全体再合成 vs 差分更新（Phase 1 ではウィンドウ全体再合成で十分と想定）
+1. **DeviceContext 共有**: `GraphicsCore` の共有 DC を合成で使うか、WindowD3D11Compositor 用に専用 DC を作るか
+2. **ダーティ判定粒度**: ウィンドウ全体再合成 vs 差分更新（Phase 1 ではウィンドウ全体再合成で十分と想定）
 
 ### Research Items（設計フェーズで調査）
 
@@ -308,8 +290,6 @@ Option A をベースに、opacity 累積のみ Phase 1 から除外し、`globa
 |------|----------------------|---------------------|------|
 | Req 1 | `Option<Inner>` パターン、SparseSet | D2D Bitmap 作成（TARGET/CPU_READ）、DIBSection/DC 作成 | GPU 依存 |
 | Req 2 | `draw_recursive` ロジック、`DrawImage`/`SetTransform` パターン | PushLayer opacity（階層走査中に累積）、ダーティ集約判定 | DComp 非干渉 |
-| Req 3 | `init_window_graphics` パターン | `WindowPos` からのサイズ取得 | — |
+| Req 3 | `init_window_graphics` パターン、resize/generation パターン | `WindowPos` サイズ取得、エラーログ、0×0 ガード | — |
 | Req 4 | なし | Map/Copy/Unmap 全体 | — |
-| Req 5 | resize パターン（`WindowGraphics` 参考） | 0×0 ガード | — |
-| Req 6 | `HasGraphicsResources` + generation パターン | — | — |
-| Req 7 | `crates/wintf/tests/` パターン | GPU 依存テスト | CI 制約 |
+| Req 5 | `crates/wintf/tests/` パターン | GPU 依存テスト | CI 制約 |

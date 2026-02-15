@@ -83,7 +83,8 @@ DirectCompositionベース⇒UpdateLayeredWindowベースへ変更。マウス�
 
 #### Acceptance Criteria
 
-1. The 実装指針 shall 以下の4フェーズ段階的移行戦略を定義する：
+1. The 実装指針 shall 以下の5フェーズ段階的移行戦略を定義する：
+   - **フェーズ0**: Widget→Visual.opacityデータフロー確立（Phase 1の前提条件、Opacityコンポーネント廃止方針策定）
    - **フェーズ1**: D2D1ベースの新合成スタック構築（DComp並行稼働、旧コード温存）
    - **フェーズ2**: DCompパイプラインからD2D1合成パイプラインへの切り替え（旧コード参照可能な状態で新パイプライン有効化）
    - **フェーズ3**: UpdateLayeredWindow統合（WS_EX_LAYERED適用、ULW呼出、クリックスルー検証）
