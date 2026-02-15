@@ -98,9 +98,9 @@ pub fn from_policy(policy: InterruptionPolicy) -> Option<InstanceState> {
 
 | AC | 必要機能 | 既存資産 | ギャップ |
 |----|---------|---------|---------|
-| 2.1 group_id 単位で終了戦略一括適用 | policy 取得 + 戦略ディスパッチ | `StoryboardInstance.interruption_policy`, `InstanceState::from_policy()` | **Missing**: policy → 戦略実行のディスパッチャー |
+| 2.1 group_id 単位で終了戦略一括適用 | その group_id の `interruption_policy` 取得 + 戦略ディスパッチ | `StoryboardInstance.interruption_policy`, `InstanceState::from_policy()` | **Missing**: policy → 戦略実行のディスパッチャー |
 | 2.2 同一 group_id の全変数に適用 | group_id による全変数横断 | `TimelineManager.remove_entries(group_id)` が横断削除を実装済み | **Partial**: 削除は可能、戦略別の横断操作（値取得、Trim 切断等）が必要 |
-| 2.3 複数 group_id 同時競合 | 各 group_id 個別適用 | なし | **Missing**: 競合 group_id リストのイテレーション + 個別戦略適用 |
+| 2.3 複数 group_id 同時競合時の個別適用 | 各 group_id が持つ独自の policy に従う | なし | **Missing**: 競合 group_id リストのイテレーション + 各 group_id の policy 取得 + 個別戦略適用 |
 
 #### Req 3: Cancel 戦略（3 AC）
 

@@ -38,9 +38,9 @@ _Parent: Req 7.2, 7.3_
 
 #### Acceptance Criteria
 
-1. When 競合が検出された場合, the ConflictResolver shall 既存ストーリーボード実行インスタンス（`group_id` 単位）に対して終了戦略を一括適用する。
-2. When 1つの変数で競合が検出された場合, the ConflictResolver shall 同じ `group_id` を持つ全変数のタイムテーブルに対して終了戦略を一括適用する。
-3. When 複数の既存 `group_id` が同時に競合した場合, the ConflictResolver shall 各 `group_id` に対して同一の終了戦略を個別に適用する。
+1. When 競合が検出された場合, the ConflictResolver shall 既存ストーリーボード実行インスタンス（`group_id` 単位）に対して、その `group_id` が持つ `interruption_policy` に従った終了戦略を適用する。
+2. When 1つの変数で競合が検出された場合, the ConflictResolver shall 同じ `group_id` を持つ全変数のタイムテーブルに対して、その `group_id` の終了戦略を一括適用する。
+3. When 複数の既存 `group_id` が同時に競合した場合, the ConflictResolver shall 各 `group_id` に対して、それぞれの `group_id` が持つ `interruption_policy` に従った終了戦略を個別に適用する。
 
 ---
 
