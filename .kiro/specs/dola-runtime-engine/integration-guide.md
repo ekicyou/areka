@@ -165,40 +165,51 @@ facade 子仕様（Tier 2）は conflict-loop（Tier 3）なしでも動作可�
 
 | Feature 名 | 有効化する機能 | 依存クレート | 子仕様 |
 |------------|--------------|------------|--------|
-| `runtime` | ランタイムエンジン全体 (`runtime` サブモジュール) | `interpolation` 0.3.0 | core-types, facade, conflict-loop |
 | `windows-clock` | Clock ユーティリティ (`runtime::clock` サブモジュール) | `windows` (Win32 API) | clock |
+
+> **重要**: 仕様2（clock）実装時に `runtime` feature を削除する決定を行った。dola の本質は「アニメーションエンジン」であり、ランタイムは常時有効化される（BREAKING CHANGE）。
 
 ### 5.2 段階的 Cargo.toml 変更計画
 
 **仕様1 (1-core-types) 実装時:**
 ```toml
-[features]
-runtime = ["dep:interpolation"]
-
 [dependencies]
-interpolation = { version = "0.3.0", optional = true }
+interpolation = "0.3.0"  # 常時依存化（runtime feature 削除）
+
+[features]
+default = ["json"]
+json = ["dep:serde_json"]
+toml = ["dep:toml"]
+yaml = ["dep:serde_yaml"]
 ```
+
+> **BREAKING CHANGE**: `runtime` feature を削除。ランタイムエンジンは dola の本質であり、常時有効化する。
 
 **仕様2 (2-clock) 実装時:**
 ```toml
-[features]
-runtime = ["dep:interpolation"]
-windows-clock = ["dep:windows"]
-
 [dependencies]
-interpolation = { version = "0.3.0", optional = true }
-windows = { version = "0.62", optional = true, features = ["Win32_System_SystemInformation"] }
+interpolation = "0.3.0"
+
+[target.'cfg(windows)'.dependencies]
+windows = { workspace = true, optional = true, features = ["Win32_System_SystemInformation"] }
+
+[features]
+default = ["json"]
+json = ["dep:serde_json"]
+toml = ["dep:toml"]
+yaml = ["dep:serde_yaml"]
+windows-clock = ["dep:windows"]
 ```
 
-**仕様3 (3-facade) 実装時:** `runtime` feature の scope が拡大するが、既存の feature flag はそのまま。追加依存なし。
+**仕様3 (3-facade) 実装時:** 追加依存なし。
 
-**仕様4 (4-conflict-loop) 実装時:** 追加依存なし。既存の `runtime` feature 内で実装。
+**仕様4 (4-conflict-loop) 実装時:** 追加依存なし。
 
 ### 5.3 モジュール構成
 
 ```
 crates/dola/src/
-├── runtime/              # #[cfg(feature = "runtime")]
+├── runtime/              # 常時有効（runtime feature 削除済み）
 │   ├── mod.rs            # 公開 API re-export
 │   ├── instance_state.rs # 仕様1: InstanceState
 │   ├── types.rs          # 仕様1: EvaluatedValue, RuntimeError, StartResult

@@ -48,15 +48,17 @@ _Parent: Req 11.2, 11.3_
 
 _Parent: 統合指針 Section 5_
 
-**Objective:** ランタイム実装者として、時刻取得ユーティリティを独立した feature gate で分離したい。これにより、Windows 以外の環境でもランタイムコア（`runtime` feature）を単独でビルド・テスト可能にする。
+**Objective:** ランタイム実装者として、Windows 専用の時刻取得ユーティリティを独立した feature gate で分離したい。これにより、Windows 以外の環境でもランタイムエンジンをビルド可能にする。
+
+> **設計決定**: 本仕様実装時に `runtime` feature を削除し、ランタイムエンジンを常時有効化する（BREAKING CHANGE）。dola の本質は「アニメーションエンジン」であり、データモデルのみの配布用途は想定しない。
 
 #### Acceptance Criteria
 
 1. The Clock module shall `windows-clock` feature gate で有効化される。
-2. The `windows-clock` feature shall `runtime` feature とは独立であること（`runtime` は `windows-clock` を暗黙に有効化しない）。
-3. The Clock module shall `crates/dola/src/runtime/clock.rs` に配置し、`#[cfg(feature = "windows-clock")]` で条件コンパイルする。
-4. When `windows-clock` feature が無効な場合, the Clock module shall コンパイル対象から完全に除外される。
-5. The `windows-clock` feature shall `Cargo.toml` で `windows` クレートへのオプショナル依存を有効化する（`windows-clock = ["dep:windows"]`）。
+2. The Clock module shall `crates/dola/src/runtime/clock.rs` に配置し、`#[cfg(feature = "windows-clock")]` で条件コンパイルする。
+3. When `windows-clock` feature が無効な場合, the Clock module shall コンパイル対象から完全に除外される。
+4. The `windows-clock` feature shall `Cargo.toml` で `windows` クレートへのオプショナル依存を有効化する（`windows-clock = ["dep:windows"]`）。
+5. The `runtime/` モジュール自体には feature gate を設定しない（`lib.rs` の `pub mod runtime;` は無条件）。
 
 ---
 

@@ -54,14 +54,9 @@ fn get_precise_time() -> u64 {
 
 ### 1.4 Feature Gate パターン
 
-`crates/dola/src/lib.rs` で `runtime` feature の条件コンパイルパターンが確立済み:
+**重要**: 本仕様実装時に `runtime` feature を削除する設計決定を行った。`crates/dola/src/lib.rs` の `pub mod runtime;` は無条件となる。
 
-```rust
-#[cfg(feature = "runtime")]
-pub mod runtime;
-```
-
-**観察**: `windows-clock` も同じ `#[cfg()]` パターンで追加可能。ただし `clock` は `runtime` サブモジュール内なので、`runtime/mod.rs` 側に条件を記述する。
+**観察**: `windows-clock` は `runtime/mod.rs` 内で `#[cfg(feature = "windows-clock")] pub mod clock;` として条件分岐する。lib.rs レベルでの feature gate は不要。
 
 ### 1.5 テストパターン
 

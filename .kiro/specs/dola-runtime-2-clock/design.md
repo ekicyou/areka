@@ -49,6 +49,7 @@ graph LR
 - **選定パターン**: ステートレスな関数1つ。構造体なし
 - **境界**: `pub` 関数として公開。facade は依存しない（利用者経由で時刻が渡される）
 - **Steering 準拠**: `unsafe` は Win32 API 呼び出しのみ（`GetTickCount64` は安全な FFI）
+- **Feature Gate**: `windows-clock` feature のみ。`runtime` feature は本仕様実装時に削除（dola の本質はエンジンであり、常時有効化）
 
 ### Technology Stack
 
@@ -150,13 +151,22 @@ pub fn now() -> f64 {
 ### Cargo.toml 変更計画
 
 ```toml
-# 追加する内容（Child 4 実装時）
+# 本仕様実装時の変更内容
+[dependencies]
+interpolation = "0.3.0"  # runtime feature 削除に伴い常時依存化
+
 [features]
-windows-clock = ["dep:windows"]
+default = ["json"]
+json = ["dep:serde_json"]
+toml = ["dep:toml"]
+yaml = ["dep:serde_yaml"]
+windows-clock = ["dep:windows"]  # 新規追加
 
 [target.'cfg(windows)'.dependencies]
-windows = { version = "0.62", optional = true, features = ["Win32_System_SystemInformation"] }
+windows = { workspace = true, optional = true, features = ["Win32_System_SystemInformation"] }
 ```
+
+> **BREAKING CHANGE**: `runtime` feature を削除。ランタイムエンジンは常時有効化される。
 
 ### モジュール構成
 

@@ -51,7 +51,7 @@ wintf フレームワークにおいて、HitTestMode::None エンティティ�
 2. The wintf shall snap entity bounds to the grid before creating rectangular regions
 3. The wintf shall allow grid size modification via a single constant definition
 
-### Requirement 5: レイアウト変更検知と動的更新
+### Requirement 4: レイアウト変更検知と動的更新
 **Objective:** 開発者として、ECS レイアウトシステムの変更を検知してリージョンを即座に更新したい。これにより、エンティティの移動・サイズ変更時にクリックスルー領域が正確に反映される。
 
 #### Acceptance Criteria
@@ -60,7 +60,7 @@ wintf フレームワークにおいて、HitTestMode::None エンティティ�
 3. If layout changes occur within the 0.25-second update interval, the wintf shall defer region update to the next scheduled update cycle
 
 ### Requirement 5: ドラッグ操作中のリージョン一時拡張
-**Objective:** 開4者として、ウィンドウドラッグ操作中はリージョンをウィンドウ全体に拡張したい。これにより、ドラッグ開始エンティティから意図せずマウスが外れた場合でも、ドラッグ操作が継続できる。
+**Objective:** 開発者として、ウィンドウドラッグ操作中はリージョンをウィンドウ全体に拡張したい。これにより、ドラッグ開始エンティティから意図せずマウスが外れた場合でも、ドラッグ操作が継続できる。
 
 #### Acceptance Criteria
 1. When window drag operation starts, the wintf shall expand the window region to cover the entire window bounds

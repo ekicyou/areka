@@ -9,10 +9,12 @@ feature gate `windows-clock` 下の時刻取得ユーティリティ `clock::now
 ## 実装タスク
 
 - [ ] 1. Cargo.toml と feature gate のセットアップ
+  - `Cargo.toml` の `runtime` feature を削除し、`interpolation` を常時依存に変更（BREAKING CHANGE）
   - `Cargo.toml` に `windows-clock = ["dep:windows"]` feature と `windows` オプショナル依存を追加
+  - `lib.rs` の `#[cfg(feature = "runtime")] pub mod runtime;` を `pub mod runtime;` に変更
   - `runtime/mod.rs` に `#[cfg(feature = "windows-clock")] pub mod clock;` を追加
-  - `cargo build --features runtime,windows-clock` が成功することを確認
-  - _Requirements: 3.1, 3.2, 3.3, 3.4_
+  - `cargo build --features windows-clock` が成功することを確認
+  - _Requirements: 3.1, 3.2, 3.3, 3.4, 3.5_
 
 - [ ] 2. clock::now() の実装
   - `crates/dola/src/runtime/clock.rs` を作成
