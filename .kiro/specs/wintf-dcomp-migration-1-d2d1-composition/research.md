@@ -128,7 +128,7 @@ M: Component<Mutability = Mutable>,
 |----|---------|--------|------|
 | AC1: 深さ優先走査 | `draw_recursive()` + `DepthFirstReversePostOrder` | `Children` の pre-order 走査は `draw_recursive` にほぼ同じロジックあり | Low |
 | AC2: Transform + DrawImage | `render_surface` 内の `DrawImage` パターン | `SetTransform` + `DrawImage` パターンは完全に既存 | Low |
-| AC3: opacity==0.0 スキップ | なし | 単純な条件分岐の追加 | Low |
+| AC3: is_visible == false スキップ | なし | `Visual.is_visible` は現在デッドフィールド。初ててのワイヤリング | Medium |
 | AC4: PushLayer opacity | なし | **`ID2D1DeviceContext::PushLayer` or `CreateLayer` の使用が新規** | Medium |
 | AC5: CopyFromBitmap | なし | `ID2D1Bitmap1::CopyFromBitmap()` は新規 | Low |
 | AC6: ダーティ判定 | `Changed<SurfaceGraphicsDirty>` パターン | ウィンドウレベルの集約判定が新規ロジック | Medium |
@@ -164,10 +164,9 @@ M: Component<Mutability = Mutable>,
 |----|---------|--------|------|
 | AC1: global_opacity フィールド | `GlobalArrangement` 構造体（transform + bounds の2フィールド） | フィールド追加 + Default 更新 | Low |
 | AC2: 乗算累積 | `impl Mul<Arrangement> for GlobalArrangement` | **Arrangement に opacity がないため、Mul 実装で累積不可** | **High** |
-| AC3: is_visible→0.0 | `Visual.is_visible` | `propagate_global_arrangements` が `Visual` をクエリしていない | Medium |
-| AC4: クランプ | — | 単純な `.clamp(0.0, 1.0)` | Low |
-| AC5: 同一パス実行 | `propagate_parent_transforms` ジェネリック関数 | **ジェネリック制約により、opacity 累積を Mul trait 内に入れるか、カスタム伝播が必要** | **High** |
-| AC6: 回帰なし | `GlobalArrangement` を参照するテスト多数 | `Default::default()` で `global_opacity: 1.0` なら影響最小 | Low |
+| AC3: クランプ | — | 単純な `.clamp(0.0, 1.0)` | Low |
+| AC4: 同一パス実行 | `propagate_parent_transforms` ジェネリック関数 | **ジェネリック制約により、opacity 累積を Mul trait 内に入れるか、カスタム伝播が必要** | **High** |
+| AC5: 回帰なし | `GlobalArrangement` を参照するテスト多数 | `Default::default()` で `global_opacity: 1.0` なら影響最小 | Low |
 
 **核心的なギャップ 1: `propagate_parent_transforms` のジェネリック設計との不整合**
 
