@@ -25,6 +25,8 @@ _Parent: Req 7.1_
 1. When 新ストーリーボードの Start が発行された場合, the ConflictResolver shall 新セグメントの時間範囲が既存タイムテーブルエントリと重複するかチェックする。
 2. When 重複が検出された場合, the ConflictResolver shall 競合する既存 `group_id` のリストを返す。
 3. If 重複がない場合, then the ConflictResolver shall 空のリストを返し、競合解決をスキップする。
+4. When 新ストーリーボードが複数の変数にセグメントを持つ場合, the ConflictResolver shall 各変数について独立して重複チェックを行い、変数ごとの競合 `group_id` リストを集約する。
+5. The ConflictResolver shall `Playing` 状態のインスタンスのみを競合検出対象とする（`Paused`、`Created`、終了状態のインスタンスは除外）。
 
 ---
 
@@ -38,6 +40,7 @@ _Parent: Req 7.2, 7.3_
 
 1. When 競合が検出された場合, the ConflictResolver shall 既存ストーリーボード実行インスタンス（`group_id` 単位）に対して終了戦略を一括適用する。
 2. When 1つの変数で競合が検出された場合, the ConflictResolver shall 同じ `group_id` を持つ全変数のタイムテーブルに対して終了戦略を一括適用する。
+3. When 複数の既存 `group_id` が同時に競合した場合, the ConflictResolver shall 各 `group_id` に対して同一の終了戦略を個別に適用する。
 
 ---
 
@@ -51,6 +54,7 @@ _Parent: Req 7.4_
 
 1. When 終了戦略が Cancel の場合, the ConflictResolver shall 既存インスタンスの現在の補間値でそのまま凍結する。
 2. When 終了戦略が Cancel の場合, the ConflictResolver shall 既存インスタンスの状態を `Cancelled` に遷移させる。
+3. When 終了戦略が Cancel の場合, the ConflictResolver shall 既存インスタンスのタイムテーブルエントリを除去する。
 
 ---
 
@@ -62,9 +66,9 @@ _Parent: Req 7.5_
 
 #### Acceptance Criteria
 
-1. When 終了戦略が Conclude の場合, the ConflictResolver shall 既存インスタンスの現在再生中トランジションの最終値にジャンプさせる。
-2. When 終了戦略が Conclude の場合, the ConflictResolver shall 未開始トランジションをスキップして既存インスタンスを終了する。
-3. When 終了戦略が Conclude の場合, the ConflictResolver shall 既存インスタンスの状態を `Concluded` に遷移させる。
+1. When 終了戦略が Conclude の場合, the ConflictResolver shall 既存インスタンスの**現在再生中トランジション**の最終値にジャンプさせる（ストーリーボード全体の最終値ではない）。未開始のトランジションはスキップする。
+2. When 終了戦略が Conclude の場合, the ConflictResolver shall 既存インスタンスの状態を `Concluded` に遷移させる。
+3. When 終了戦略が Conclude の場合, the ConflictResolver shall 既存インスタンスのタイムテーブルエントリを除去する。
 
 ---
 
@@ -76,9 +80,10 @@ _Parent: Req 7.6_
 
 #### Acceptance Criteria
 
-1. When 終了戦略が Trim の場合, the ConflictResolver shall 既存インスタンスを割り込み開始時点まで再生して切断する。
-2. When 終了戦略が Trim の場合, the ConflictResolver shall 切断後の補間値でタイムテーブルを更新する。
-3. When 終了戦略が Trim の場合, the ConflictResolver shall 既存インスタンスの状態を `Trimmed` に遷移させる。
+1. When 終了戦略が Trim の場合, the ConflictResolver shall 新ストーリーボードの開始時刻を割り込み時点として使用し、既存インスタンスを当該時点まで再生して切断する。
+2. When 終了戦略が Trim の場合, the ConflictResolver shall 割り込み時点における各変数の補間値を確定値としてタイムテーブルに反映する。
+3. When 終了戦略が Trim の場合, the ConflictResolver shall 割り込み時点以降のセグメントを除去する。
+4. When 終了戦略が Trim の場合, the ConflictResolver shall 既存インスタンスの状態を `Trimmed` に遷移させる。
 
 ---
 
@@ -93,6 +98,7 @@ _Parent: Req 7.7_
 1. When 終了戦略が Compress の場合, the ConflictResolver shall 既存インスタンスのストーリーボード全体の最終値にジャンプさせる。
 2. When 終了戦略が Compress の場合, the ConflictResolver shall 全トランジションを完走扱いとする。
 3. When 終了戦略が Compress の場合, the ConflictResolver shall 既存インスタンスの状態を `Compressed` に遷移させる。
+4. When 終了戦略が Compress の場合, the ConflictResolver shall 既存インスタンスのタイムテーブルエントリを除去する。
 
 ---
 
@@ -106,8 +112,9 @@ _Parent: Req 7.8_
 
 1. When 終了戦略が Never の場合, the ConflictResolver shall 既存インスタンスの中断を拒否する。
 2. When 終了戦略が Never の場合, the ConflictResolver shall 新ストーリーボードの当該変数へのセグメント追加を延期キュー（`DeferredEntry`）に格納する。
-3. When 先行 group_id のインスタンスが終了状態（Concluded/Cancelled/Trimmed/Compressed）に遷移した場合, the ConflictResolver shall 延期キューを走査し、`blocked_by` が一致するエントリをタイムテーブルに追加する。
-4. While 先行 group_id が無限ループ（`loop_count = -1`）で再生中の場合, the ConflictResolver shall 延期エントリを永続的に保持する。
+3. When 先行 `group_id` のインスタンスが終了状態（`Concluded` / `Cancelled` / `Trimmed` / `Compressed` のいずれか）に遷移した場合, the ConflictResolver shall 延期キューを走査し、`blocked_by` が一致するエントリをタイムテーブルに追加する。
+4. While 先行 `group_id` が無限ループ（`loop_count = -1`）で再生中の場合, the ConflictResolver shall 延期エントリを永続的に保持する。
+5. When 同一 `group_id` 内の複数変数が Never で延期された場合, the ConflictResolver shall 各変数の延期エントリを個別に管理し、先行インスタンス終了時に一括解放する。
 
 ---
 
@@ -120,3 +127,4 @@ _Parent: Req 7.9_
 #### Acceptance Criteria
 
 1. If ストーリーボード定義に終了戦略が未指定の場合, then the ConflictResolver shall デフォルトとして Conclude を適用する。
+2. The ConflictResolver shall デフォルト値が既存の `InterruptionPolicy` enum のデフォルト（`Conclude`）と一致することを保証する。

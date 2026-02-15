@@ -1,8 +1,10 @@
 # ギャップ分析 — dola-runtime-4-conflict
 
+> 更新日: 2026-02-15 | 要件: Req 1〜8（29 AC） | 対象: `crates/dola/src/runtime/`
+
 ## 分析概要
 
-本文書は `dola-runtime-4-conflict` の要件（Req 1〜8）と既存コードベースのギャップを分析し、設計フェーズへの入力とする。
+本文書は `dola-runtime-4-conflict` の要件（Req 1〜8、29受入基準）と既存コードベースのギャップを分析し、設計フェーズへの入力とする。
 
 ---
 
@@ -10,33 +12,32 @@
 
 ### 1.1 既存コードベースの構造
 
-| モジュール | ファイル | 役割 | 本仕様との関連 |
-|-----------|---------|------|--------------|
-| `facade.rs` | `crates/dola/src/runtime/facade.rs` (326行) | 公開 API、start フロー制御 | **Tier 3 Hook 挿入点**（L116-117） |
-| `instance_manager.rs` | `crates/dola/src/runtime/instance_manager.rs` (357行) | インスタンス状態管理 | **状態遷移先として Cancelled/Trimmed/Compressed 追加済み** |
-| `timeline_manager.rs` | `crates/dola/src/runtime/timeline_manager.rs` (408行) | タイムテーブル評価 | **競合検出・エントリ操作の主要対象** |
-| `instance_state.rs` | `crates/dola/src/runtime/instance_state.rs` (80行) | 状態 enum + 遷移 | **全7バリアント実装済み、`from_policy()` も完備** |
-| `subscription_manager.rs` | `crates/dola/src/runtime/subscription_manager.rs` (280行) | 購読・差分配信 | 間接影響（Conclude/Cancel 時の値伝播） |
-| `interpolator.rs` | `crates/dola/src/runtime/interpolator.rs` (388行) | イージング + 補間 | 値計算のユーティリティとして利用 |
-| `types.rs` | `crates/dola/src/runtime/types.rs` (101行) | 公開型定義 | `EvaluatedValue`, `RuntimeError` |
-| `mod.rs` | `crates/dola/src/runtime/mod.rs` (22行) | モジュール公開制御 | **新モジュール追加必要** |
-| `storyboard.rs` | `crates/dola/src/storyboard.rs` (124行) | `InterruptionPolicy` 定義 | 5バリアント定義済み、デフォルト=Conclude |
+| モジュール | ファイル | 行数 | 役割 | 本仕様との関連 |
+|-----------|---------|------|------|--------------|
+| `facade.rs` | `runtime/facade.rs` | 326 | 公開 API、start フロー制御 | **Tier 3 Hook 挿入点**（L116-117: `// 7. [Tier 3 Hook] 競合解決`） |
+| `instance_manager.rs` | `runtime/instance_manager.rs` | 357 | インスタンス状態管理 | 状態遷移先 `Cancelled`/`Trimmed`/`Compressed` 実装済み |
+| `timeline_manager.rs` | `runtime/timeline_manager.rs` | 408 | タイムテーブル評価 | **競合検出・エントリ操作の主要対象** |
+| `instance_state.rs` | `runtime/instance_state.rs` | 80 | 状態 enum + 遷移 | 全7バリアント + `from_policy()` 完備 |
+| `subscription_manager.rs` | `runtime/subscription_manager.rs` | 280 | 購読・差分配信 | `force_update_last_values()` で Conclude/Compress 時の値伝播 |
+| `interpolator.rs` | `runtime/interpolator.rs` | 388 | イージング + 補間 | `Interpolator::interpolate()` を値計算に利用 |
+| `types.rs` | `runtime/types.rs` | 101 | 公開型定義 | `EvaluatedValue`, `RuntimeError`, `StartResult` |
+| `mod.rs` | `runtime/mod.rs` | 22 | モジュール公開制御 | **`mod conflict_resolver;` 追加が必要** |
+| `storyboard.rs` | `storyboard.rs` | 124 | `InterruptionPolicy` 定義 | 5バリアント定義済み、`default_interruption_policy() = Conclude` |
 
 ### 1.2 既存のフック・拡張ポイント
 
-#### facade.rs の Tier 3 Hook
+#### facade.rs の Tier 3 Hook（L116-117）
 
 ```rust
-// facade.rs L116-117
 // 7. [Tier 3 Hook] 競合解決
 // Tier 2: スキップ
 ```
 
-`start()` メソッド内で、タイムテーブル挿入（L119）の直前に明示的なコメントフックが配置済み。
+`start()` メソッド内で、タイムテーブル挿入（L119: `self.timeline_manager.insert_entries()`）の**直前**に明示的なコメントフックが配置済み。このフック位置で ConflictResolver を呼び出す設計。
 
 #### InstanceState の終了状態4種
 
-`InstanceState` enum はすでに `Concluded`, `Cancelled`, `Trimmed`, `Compressed` の全4終了バリアントを定義済み。`from_policy()` メソッドも `InterruptionPolicy` → `InstanceState` の変換を提供:
+`InstanceState` enum は `Concluded`, `Cancelled`, `Trimmed`, `Compressed` の全4終了バリアントを定義済み。`from_policy()` メソッドも `InterruptionPolicy` → `InstanceState` の変換を提供:
 
 ```rust
 pub fn from_policy(policy: InterruptionPolicy) -> Option<InstanceState> {
@@ -50,69 +51,148 @@ pub fn from_policy(policy: InterruptionPolicy) -> Option<InstanceState> {
 }
 ```
 
-#### Tier 2 の暫定動作
+#### facade.rs の既存 conclude/cancel パス
 
-- **競合未解決**: 同一変数に複数 `group_id` エントリが共存し、最新 `group_id` の値が evaluate で採用される
+| メソッド | 操作フロー | 競合解決との関係 |
+|---------|-----------|---------------|
+| `conclude_internal()` | `collect_final_values()` → `force_update_last_values()` → Concluded 遷移 → `remove_entries()` | **Compress 戦略で再利用可能**（全最終値ジャンプ）。Conclude 戦略には**不適合**（全体最終値ではなく現在セグメント最終値が必要） |
+| `cancel()` | terminal check → Cancelled 遷移 → `remove_entries()` → `remove()` | **Cancel 戦略の参考パターン**。ただし「現在値凍結」の値伝播ロジックは含まれていない |
+
+#### Tier 2 の暫定動作（競合未実装時）
+
+- 同一変数に複数 `group_id` エントリが共存 → 最新（最大）`group_id` の値が evaluate で採用される（`timeline_manager.rs` L100-105: `entry.group_id <= *best_gid` チェック）
+- Tier 3 Hook は `// Tier 2: スキップ` で空の状態
 
 ### 1.3 コーディング規約・パターン
 
-| パターン | 観察 |
-|---------|------|
-| 公開範囲 | `pub(crate)` を内部コンポーネントに使用、`pub` は facade の `DolaRuntime` のみ |
-| エラー処理 | `RuntimeError` enum + `Result<T, RuntimeError>` |
-| テスト配置 | 各モジュール内に `#[cfg(test)] mod tests`、統合テストは `tests/` ディレクトリ |
-| HashMap/BTreeMap | 内部データは `HashMap`、外部定義は `BTreeMap` |
-| ヘルパー関数 | モジュール内にプライベート関数（例: `calculate_effective_time()`, `evaluate_segments()`） |
-| 所有権パターン | facade が全コンポーネントを所有し `&mut self` 経由で操作 |
+| パターン | 観察 | ソース |
+|---------|------|--------|
+| 公開範囲 | `pub(crate)` を内部コンポーネントに使用、`pub` は facade の `DolaRuntime` のみ | `instance_manager.rs`, `timeline_manager.rs` |
+| エラー処理 | `RuntimeError` enum + `Result<T, RuntimeError>` | `types.rs` |
+| テスト配置 | 各モジュール内に `#[cfg(test)] mod tests`、統合テストは `tests/` ディレクトリ | 全モジュール |
+| HashMap/BTreeMap | 内部データは `HashMap`、外部定義（compile 出力）は `BTreeMap` | `instance_manager.rs`, `compile.rs` |
+| ヘルパー関数 | モジュール内にプライベート関数 | `calculate_effective_time()`, `evaluate_segments()` |
+| 所有権パターン | facade が全コンポーネントを所有し `&mut self` 経由で操作 | `facade.rs` L27-34 |
+| 状態遷移 | `InstanceManager.transition()` 経由、`try_transition()` バリデーション | `instance_manager.rs` L84-101 |
+| インスタンス削除 | **Concluded のみ** `transition()` 内で自動削除 | `instance_manager.rs` L97-99 |
+
+**重要な観察**: 現在の `InstanceManager.transition()` は `Concluded` 遷移時のみインスタンスを自動削除する（L97-99）。`Cancelled`/`Trimmed`/`Compressed` の自動削除は実装されていない。facade の `cancel()` では明示的に `self.instance_manager.remove(group_id)` を呼んでいる。**ConflictResolver 実装では4終了状態すべてで適切な cleanup が必要。**
 
 ---
 
 ## 2. 要件→既存資産マッピング
 
-### 2.1 ConflictResolver（Req 1〜8）
+### 2.1 AC 別詳細マッピング
 
-| 要件 | 必要な機能 | 既存資産 | ギャップ |
-|------|-----------|---------|---------|
-| Req 1: 競合検出 | 新セグメントの時間範囲 vs 既存エントリの重複チェック | `VariableTimeline.entries` へのアクセスあり | **Missing**: 重複検出ロジック |
-| Req 2: group_id 一括適用 | 競合 group_id の全変数へ戦略適用 | `remove_entries(group_id)` が全変数横断削除を実装済み | **Missing**: 戦略別の横断適用ロジック |
-| Req 3: Cancel 戦略 | 現在値凍結 + Cancelled 遷移 | `cancel()` メソッドが facade に存在 | **Partial**: facade の cancel はコマンド用。競合トリガー版が必要 |
-| Req 4: Conclude 戦略 | 現在再生中トランジション最終値ジャンプ + 未開始スキップ | `conclude_internal()` / `collect_final_values()` が存在 | **Partial**: 既存 `collect_final_values()` はストーリーボード全体の最終値（=Compress 相当）を返す。Conclude には「現在再生中セグメントの最終値」を取得する新メソッドが必要。また、競合トリガー版の呼び出しパスも未実装 |
-| Req 5: Trim 戦略 | 割り込み時点での切断 + 補間値更新 | なし | **Missing**: Trim 固有の切断ロジック（セグメント分割/値確定） |
-| Req 6: Compress 戦略 | 全トランジション最終値ジャンプ | `collect_final_values()` で最終値取得可能 | **Missing**: Compress 固有フロー（全完走扱い） |
-| Req 7: Never + 延期キュー | 延期キュー（`DeferredEntry`） | なし | **Missing**: `DeferredEntry` 型、延期キュー、再評価トリガー |
-| Req 8: デフォルト戦略 | 未指定時 Conclude | `default_interruption_policy()` = Conclude | **Existing**: storyboard.rs で既にデフォルト定義済み |
+#### Req 1: 競合検出（5 AC）
+
+| AC | 必要機能 | 既存資産 | ギャップ |
+|----|---------|---------|---------|
+| 1.1 新セグメント vs 既存エントリの重複チェック | 時間範囲重複検出 | `VariableTimeline.entries` アクセス可能、`TimelineEntry.segments[].start_time/end_time` | **Missing**: 重複検出ロジック。`segments` の時間範囲を走査し交差判定する関数が必要 |
+| 1.2 競合 group_id リスト返却 | 重複する既存 group_id の収集 | なし | **Missing**: 変数ごとの group_id 収集 + 集約 |
+| 1.3 重複なし → 空リスト、スキップ | 早期リターン | なし（自然に実装可能） | **Trivial** |
+| 1.4 複数変数の独立チェック＋集約 | 変数別の並行走査 | `TimelineManager.timelines: HashMap<String, VariableTimeline>` | **Missing**: 変数横断の集約ロジック。`CompiledStoryboard.timelines` から変数名を取得し、各変数で独立チェック |
+| 1.5 Playing 状態フィルタ | インスタンス状態参照 | `InstanceManager.instances()` + `StoryboardInstance.state` | **Partial**: 参照は可能だが、フィルタ統合ロジックが必要 |
+
+#### Req 2: group_id 一括適用（3 AC）
+
+| AC | 必要機能 | 既存資産 | ギャップ |
+|----|---------|---------|---------|
+| 2.1 group_id 単位で終了戦略一括適用 | policy 取得 + 戦略ディスパッチ | `StoryboardInstance.interruption_policy`, `InstanceState::from_policy()` | **Missing**: policy → 戦略実行のディスパッチャー |
+| 2.2 同一 group_id の全変数に適用 | group_id による全変数横断 | `TimelineManager.remove_entries(group_id)` が横断削除を実装済み | **Partial**: 削除は可能、戦略別の横断操作（値取得、Trim 切断等）が必要 |
+| 2.3 複数 group_id 同時競合 | 各 group_id 個別適用 | なし | **Missing**: 競合 group_id リストのイテレーション + 個別戦略適用 |
+
+#### Req 3: Cancel 戦略（3 AC）
+
+| AC | 必要機能 | 既存資産 | ギャップ |
+|----|---------|---------|---------|
+| 3.1 現在補間値で凍結 | 値保持（暗黙的） | `SubscriptionManager.last_values` に前回 evaluate 値が残る | **Existing**: facade の `cancel()` と同様に、`last_values` の自然残存で実現可能 |
+| 3.2 Cancelled 状態遷移 | `transition(gid, Cancelled)` | `InstanceManager.transition()` + `InstanceState::try_transition()` | **Existing** |
+| 3.3 タイムテーブルエントリ除去 | `remove_entries(gid)` | `TimelineManager.remove_entries()` | **Existing** |
+
+#### Req 4: Conclude 戦略（3 AC）
+
+| AC | 必要機能 | 既存資産 | ギャップ |
+|----|---------|---------|---------|
+| 4.1 **現在再生中トランジション**の最終値ジャンプ＋未開始スキップ | アクティブセグメント特定 + `to_value` 取得 | `evaluate_segments()` がアクティブセグメント走査を実装（ただし `fn` プライベート） | **Missing**: `collect_current_segment_final_values()` — effective_time でアクティブなセグメントを見つけ、そのセグメントの `to_value` (progress_t=1.0) を返す新メソッドが必要。既存 `collect_final_values()` は**ストーリーボード全体の最終値（=Compress 相当）**であり Conclude には不適合 |
+| 4.2 Concluded 状態遷移 | `transition(gid, Concluded)` | `InstanceManager.transition()` — Concluded 遷移時に自動削除 | **Existing** |
+| 4.3 タイムテーブルエントリ除去 | `remove_entries(gid)` | `TimelineManager.remove_entries()` | **Existing** |
+
+#### Req 5: Trim 戦略（4 AC）
+
+| AC | 必要機能 | 既存資産 | ギャップ |
+|----|---------|---------|---------|
+| 5.1 割り込み時点（新SB開始時刻）で切断 | effective_time 計算 + セグメント切断 | `calculate_effective_time()` (プライベート関数) | **Missing**: セグメント列の途中切断ロジック |
+| 5.2 割り込み時点の補間値をタイムテーブルに反映 | 補間値計算 + エントリ書き換え | `Interpolator::interpolate()` | **Missing**: 既存エントリの上書き/書き換えメソッド |
+| 5.3 割り込み時点以降のセグメント除去 | セグメント列の部分削除 | なし | **Missing** |
+| 5.4 Trimmed 状態遷移 | `transition(gid, Trimmed)` | `InstanceManager.transition()` | **Existing**（ただし Trimmed 後の手動 `remove()` が必要） |
+
+#### Req 6: Compress 戦略（4 AC）
+
+| AC | 必要機能 | 既存資産 | ギャップ |
+|----|---------|---------|---------|
+| 6.1 ストーリーボード全体の最終値ジャンプ | 全セグメント最終値取得 | `TimelineManager.collect_final_values()` — 最終セグメントの `to_value` (progress_t=1.0) | **Existing** |
+| 6.2 全トランジション完走扱い | `force_update_last_values()` で値伝播 | `SubscriptionManager.force_update_last_values()` | **Existing** |
+| 6.3 Compressed 状態遷移 | `transition(gid, Compressed)` | `InstanceManager.transition()` | **Existing**（ただし Compressed 後の手動 `remove()` が必要） |
+| 6.4 タイムテーブルエントリ除去 | `remove_entries(gid)` | `TimelineManager.remove_entries()` | **Existing** |
+
+#### Req 7: Never + 延期キュー（5 AC）
+
+| AC | 必要機能 | 既存資産 | ギャップ |
+|----|---------|---------|---------|
+| 7.1 既存インスタンスの中断拒否 | 戦略ディスパッチで Never 分岐 | `InstanceState::from_policy(Never) → None` | **Partial**: 分岐判定は可能、スキップロジックが必要 |
+| 7.2 延期キュー格納 | `DeferredEntry` 型 + 格納先 | なし | **Missing**: `DeferredEntry` 型定義、格納コレクション |
+| 7.3 先行 group_id 終了時の解放 | 終了トリガー → 延期キュー走査 → タイムテーブル追加 | なし | **Missing**: 終了イベントの検知パスと延期キュー走査ロジック |
+| 7.4 無限ループ中の永続保持 | `loop_count == -1` チェック | `StoryboardInstance.loop_count` | **Partial**: フィールド参照は可能、保持ロジックが必要 |
+| 7.5 複数変数延期の個別管理＋一括解放 | 変数別 DeferredEntry + blocked_by 走査 | なし | **Missing** |
+
+#### Req 8: デフォルト終了戦略（2 AC）
+
+| AC | 必要機能 | 既存資産 | ギャップ |
+|----|---------|---------|---------|
+| 8.1 未指定時 Conclude 適用 | デフォルト値参照 | `default_interruption_policy() = Conclude` in `storyboard.rs` | **Existing**: serde デフォルトで Conclude が設定される |
+| 8.2 InterruptionPolicy デフォルトとの一致保証 | テストでの検証 | なし（テスト追加で対応） | **Trivial** |
 
 ### 2.2 ギャップサマリー
 
-| カテゴリ | ステータス |
-|---------|----------|
-| **Existing** (そのまま使用) | `InstanceState` 全バリアント, `from_policy()`, `InterruptionPolicy` enum, デフォルト戦略, `conclude_internal()`, `remove_entries()`, `collect_final_values()` |
-| **Partial** (拡張必要) | `facade.start()` の Tier 3 Hook, `InstanceManager` の状態遷移, `TimelineManager` のエントリ操作 |
-| **Missing** (新規作成) | `ConflictResolver` モジュール, `DeferredEntry` 型, 時間重複検出ロジック, Trim 切断ロジック, Conclude 用の現在セグメント最終値取得 |
+| カテゴリ | AC 数 | 項目 |
+|---------|------|------|
+| **Existing** (そのまま使用可能) | 11 | AC 3.1〜3.3, 4.2, 4.3, 5.4, 6.1〜6.4, 8.1 — `InstanceState` 全バリアント, `from_policy()`, `transition()`, `remove_entries()`, `collect_final_values()`, `force_update_last_values()`, デフォルト戦略 serde |
+| **Partial** (拡張必要) | 4 | AC 1.5, 2.2, 7.1, 7.4 — Playing 状態フィルタ、group_id 全変数横断削除、Never 分岐判定、無限ループチェック |
+| **Missing** (新規作成) | 12 | AC 1.1, 1.2, 1.4, 2.1, 2.3, 4.1, 5.1〜5.3, 7.2, 7.3, 7.5 — 時間重複検出、変数横断集約、戦略ディスパッチャー、`collect_current_segment_final_values()`、Trim 切断ロジック、`DeferredEntry` 型、延期キュー管理、終了トリガー→解放パス |
+| **Trivial** (自明に実装可能) | 2 | AC 1.3, 8.2 — 空リスト返却（早期リターン）、デフォルト値一致テスト |
+
+### 2.3 既存メソッドの pub(crate) 化が必要な関数
+
+| 関数 | 現在の公開範囲 | 必要な変更 | 理由 |
+|------|-------------|-----------|------|
+| `calculate_effective_time()` | `fn`（モジュールプライベート） | `pub(crate) fn` | Trim 戦略で effective_time 計算に使用 |
+| `evaluate_segments()` | `fn`（モジュールプライベート） | `pub(crate) fn` | Conclude 戦略でアクティブセグメント特定パターンを参考にする可能性 |
 
 ---
 
 ## 3. 実装アプローチ選択肢
 
-### Option A: 新モジュール作成（推奨）
+### Option A: struct ベースの新モジュール
 
-統合指針 Section 5.3 に従い、`conflict_resolver.rs` を新規作成する。
+統合指針 Section 5.3 に従い、`ConflictResolver` struct を持つ `conflict_resolver.rs` を新規作成する。
 
 **対象ファイル**:
 
 | 操作 | ファイル | 内容 |
 |------|---------|------|
-| **新規作成** | `runtime/conflict_resolver.rs` | `ConflictResolver` struct + 5戦略実装 |
+| **新規作成** | `runtime/conflict_resolver.rs` | `ConflictResolver` struct + 5戦略実装 + `DeferredEntry` |
 | **修正** | `runtime/mod.rs` | `mod conflict_resolver;` 追加 |
-| **修正** | `runtime/facade.rs` | `start()` 内の Tier 3 Hook を実装に置換 |
-| **修正** | `runtime/timeline_manager.rs` | 延期キュー (`deferred_entries`)、時間重複チェック用メソッド追加 |
-| **修正** | `runtime/instance_manager.rs` | `instances_mut()` (可変アクセス) 追加 |
+| **修正** | `runtime/facade.rs` | `start()` 内の Tier 3 Hook 実装置換 + 延期キュー解放フック |
+| **修正** | `runtime/timeline_manager.rs` | `calculate_effective_time()` と `evaluate_segments()` の `pub(crate)` 化 |
+| **修正** | `runtime/instance_manager.rs` | `instances_mut()` メソッド追加（または不要 — 後述の借用回避策次第） |
 
 **トレードオフ**:
 - ✅ 統合指針に完全準拠、モジュール構成が明確
-- ✅ 独立テスト可能な単位として設計できる
-- ✅ 既存 facade 層への影響を最小化
-- ❌ `&mut self` の借用制約で facade → ConflictResolver → TimelineManager/InstanceManager の連鎖呼び出しに設計工夫が必要
+- ✅ 独立テスト可能な単位
+- ✅ 延期キューの状態を struct 内部に保持できる
+- ❌ `&mut self` の借用制約で ConflictResolver → TimelineManager/InstanceManager の連鎖に設計工夫が必要
+- ❌ ConflictResolver が延期キューを保持する場合、facade が `&mut conflict_resolver` と `&mut timeline_manager` を同時に渡せない
 
 ### Option B: facade 拡張（非推奨）
 
@@ -124,15 +204,38 @@ ConflictResolver のロジックを facade.rs 内のプライベートメソッ�
 - ❌ 統合指針の設計に反する
 - ❌ 単体テストが困難
 
-### Option C: ハイブリッド（関数ベース + 新モジュール）
+### Option C: ハイブリッド（フリー関数 + 新モジュール）— **推奨**
 
-ConflictResolver を struct ではなくフリー関数群として実装し、facade が `&mut self` 内部のフィールド参照を個別に渡す。
+ConflictResolver をステートレスなフリー関数群として実装し、延期キューは TimelineManager 内部に保持する。facade が `&mut self` 内部のフィールド参照を個別に渡す。
+
+**対象ファイル**:
+
+| 操作 | ファイル | 内容 |
+|------|---------|------|
+| **新規作成** | `runtime/conflict_resolver.rs` | フリー関数群（`resolve_conflicts()`, 5戦略関数） |
+| **修正** | `runtime/mod.rs` | `mod conflict_resolver;` 追加 |
+| **修正** | `runtime/facade.rs` | Tier 3 Hook 実装 + 延期キュー解放フック（update 内） |
+| **修正** | `runtime/timeline_manager.rs` | `DeferredEntry` 型定義、`deferred_entries: Vec<DeferredEntry>` 追加、`collect_current_segment_final_values()` 新規、`pub(crate)` 化 |
+| **修正** | `runtime/instance_manager.rs` | 軽微な拡張（必要に応じて） |
 
 **トレードオフ**:
 - ✅ borrowck の制約を自然に回避（各フィールドの個別 `&mut` が可能）
 - ✅ テスト容易（純粋関数に近い設計）
-- ✅ 統合指針の trait interface に近い
-- ❌ trait メソッドではなくフリー関数のため、将来的なモック化がやや困難
+- ✅ 親仕様 design.md の trait interface シグネチャ `fn resolve_conflicts(&self, ..., timelines: &mut ..., instances: &mut ...)` に近い形
+- ✅ DeferredEntry を TimelineManager に配置 → 終了トリガー（evaluate/conclude 内）で自然に検知可能
+- ❌ ステートレスなためモジュール凝集度がやや低い（テスト用のセットアップが散在）
+
+**呼び出しパターン**: facade の `start()` 内で以下のように呼び出す:
+```rust
+// facade.rs start() 内
+let affected = conflict_resolver::resolve_conflicts(
+    &compiled,
+    start_time,
+    &mut self.timeline_manager,
+    &mut self.instance_manager,
+    &mut self.subscription_manager,  // Conclude/Compress 時の値伝播用
+);
+```
 
 ---
 
@@ -140,51 +243,92 @@ ConflictResolver を struct ではなくフリー関数群として実装し、f
 
 ### 4.1 Rust 借用制約: facade 内部のコンポーネント間参照
 
-**課題**: `ConflictResolver::resolve_conflicts()` は `TimelineManager` と `InstanceManager` の両方を可変で操作する必要がある。しかし `DolaRuntime` が全コンポーネントを所有するため、`&mut self` 経由では同時に `&mut timeline_manager` と `&mut instance_manager` を取得できない。
+**課題**: `resolve_conflicts()` は `TimelineManager`, `InstanceManager`, `SubscriptionManager` の3つを可変で操作する必要がある。`DolaRuntime` が全コンポーネントを所有するため、`&mut self` 経由では同時に取得できない。
 
 **解決策候補**:
 
 | 策 | 方式 | 評価 |
 |----|------|------|
-| **S1: 個別引数渡し** | `resolve(tm: &mut TimelineManager, im: &mut InstanceManager, ...)` | ✅ 最もシンプル、borrowck フレンドリー |
-| **S2: 一時的な split borrow** | facade のフィールドを destructure して個別に渡す | ✅ Rust 的に正当、やや冗長 |
-| **S3: 中間結果パターン** | ConflictResolver が計画（`Vec<ConflictAction>`）を返し、facade が適用 | ✅ テスト容易、分離が最も強い |
+| **S1: 個別引数渡し** | `resolve(tm: &mut TimelineManager, im: &mut InstanceManager, sm: &mut SubscriptionManager, ...)` | ✅ 最もシンプル、borrowck フレンドリー。引数が多くなるが明快 |
+| **S2: split borrow** | `let Self { timeline_manager, instance_manager, subscription_manager, .. } = self;` で destructure | ✅ Rust 的に正当。facade メソッド内での一時 destructure |
+| **S3: 中間結果パターン** | ConflictResolver が `Vec<ConflictAction>` を返し、facade が `apply_actions()` で適用 | ✅ テスト最容易、最も分離が強い。❌ 2パスになるため Trim 値確定の精度に注意 |
 
-> **Research Needed**: 設計フェーズで S1/S3 を比較評価
+**推奨**: **S1（個別引数渡し）** — 親仕様 design.md の trait interface と一致し、最もシンプル。
 
-### 4.2 Trim 戦略の値確定ロジック
+### 4.2 Conclude vs Compress: 値取得メソッドの差異
 
-**課題**: Trim は「割り込み開始時点まで再生して切断」を要求する。これは既存の `evaluate_segments()` で intermediate 値を計算し、その結果でタイムテーブルを書き換える操作を意味する。
+**課題**: Conclude と Compress で取得すべき「最終値」が異なる。
 
-**既存資産**:
-- `calculate_effective_time()`: 時刻→effective_time 変換（再利用可能）
-- `Interpolator::interpolate()`: 任意の progress_t で値を計算（再利用可能）
-- `evaluate_segments()`: モジュールプライベート関数（`pub(crate)` 化が必要）
+| 戦略 | 取得する値 | 既存メソッド |
+|------|-----------|------------|
+| **Conclude** | **現在再生中セグメント**の `to_value` (progress_t=1.0) | **なし** — 新規 `collect_current_segment_final_values()` が必要 |
+| **Compress** | **ストーリーボード全体**の最終セグメントの `to_value` (progress_t=1.0) | `collect_final_values()` — **そのまま再利用可能** |
 
-**ギャップ**: セグメント列を途中で切断し、残りを除去した新しいエントリを生成するロジックが存在しない。
+**新メソッドの概要**: `collect_current_segment_final_values(group_id, instances)`:
+1. 各変数の TimelineEntry から group_id のエントリを探す
+2. `calculate_effective_time()` で effective_time を算出
+3. セグメント列を走査し、effective_time がカバーするアクティブセグメントを特定
+4. そのセグメントの `to_value` を `Interpolator::interpolate(seg, type, 1.0)` で取得
+5. 結果を `HashMap<String, EvaluatedValue>` で返す
 
-> **Research Needed**: Trim 後のタイムテーブルエントリの具体的な表現（セグメント列の切断 vs 新しいエントリ差し替え）
+### 4.3 Trim 戦略の値確定ロジック
 
-### 4.3 Never 延期キューの保持場所
+**課題**: Trim は「割り込み開始時点まで再生して切断」を要求する。
 
-**課題**: `DeferredEntry` の保持場所として `ConflictResolver` 内部か `TimelineManager` 内部かの選択。
+**既存の再利用可能な関数**:
+- `calculate_effective_time()`: 時刻→effective_time 変換 (**`pub(crate)` 化が必要**)
+- `Interpolator::interpolate()`: 任意の progress_t で値を計算
+- `evaluate_segments()`: アクティブセグメント走査ロジック (**参考パターン**)
 
-**設計候補**:
+**Trim の具体的操作**:
+1. 新 SB の `start_time` を割り込み時点とする (Req 5 AC1)
+2. `calculate_effective_time(start_time, instance)` で割り込み時点の effective_time を計算
+3. 各変数のセグメント列を走査:
+   - effective_time 時点でアクティブなセグメントを特定
+   - `Interpolator::interpolate()` で割り込み時点の値を算出（= 確定値）
+   - **アクティブセグメント以降のセグメントを除去**
+4. 確定値を `force_update_last_values()` で購読者に伝播 (Req 5 AC2)
+5. 状態遷移: Trimmed + cleanup
+
+**Research Needed**: Trim 後のエントリ表現 — 2つの選択肢:
+| 方式 | 説明 | 利点 | 欠点 |
+|------|------|------|------|
+| **A: セグメント列切断** | アクティブセグメント以降を `truncate` + end_time を割り込み時点に更新 | evaluate が自然に最終値を返す | セグメント内部の書き換えが必要 |
+| **B: エントリ全削除 + 値のみ保持** | `remove_entries()` + `force_update_last_values()` | 既存 API で完結、実装がシンプル | Trim 後に「切断された値」としてタイムテーブルに残らない |
+
+> **推奨**: **方式 B** — Cancel と同様にエントリ全削除 + 値伝播で十分。Trim の意味的な区別は `InstanceState::Trimmed` で表現される。
+
+### 4.4 Never 延期キューの保持場所と解放トリガー
+
+**課題**: `DeferredEntry` の保持場所と、先行 group_id 終了時の解放トリガー設計。
+
+**設計候補比較**:
 
 | 場所 | 利点 | 欠点 |
 |------|------|------|
-| `TimelineManager` 内部 | エントリ追加のトリガー（group_id 終了）をevaluate フロー内で検知可能 | TimelineManager の責務拡大 |
-| `ConflictResolver` 内部 | 責務が明確（競合解決の一環） | 終了トリガーの通知パスが必要 |
+| **TimelineManager 内部** | 終了検知（evaluate 内の expired チェック、`remove_entries` 呼び出し時）で自然にトリガー可能 | TimelineManager の責務拡大 |
+| **ConflictResolver struct 内部** | 責務明確 | facade が `&mut conflict_resolver` と `&mut timeline_manager` を同時に借用する必要 → Option A の場合 borrowck 問題再発 |
+| **facade 直接保持** | 実装が最もシンプル | 設計の凝集度が低い |
 
-> **Research Needed**: 統合指針の設計ノート (design.md L777-815) では「ConflictResolver が生成、TimelineManager が保持」のハイブリッドを示唆
+**推奨**: **TimelineManager 内部** — 統合指針の「ConflictResolver が生成、TimelineManager が保持」のハイブリッド設計に合致。具体的には:
+- `conflict_resolver::resolve_conflicts()` が `DeferredEntry` を生成し、`TimelineManager.add_deferred()` で格納
+- `facade.update()` 内の自然終了/Conclude 処理後に `TimelineManager.flush_deferred(terminated_group_ids)` を呼び出して解放
 
-### 4.4 終了状態の再評価トリガー範囲
+**解放トリガーの範囲**: Req 7 AC3 は「Concluded / Cancelled / Trimmed / Compressed のいずれか」に遷移した場合と明記。全4終了状態で解放する。
 
-**課題**: Req 7 AC3「終了状態に遷移」は全4種（Concluded/Cancelled/Trimmed/Compressed）を指すか、Concluded のみを指すか。
+### 4.5 InstanceManager の cleanup 一貫性
 
-**影響**: Never 延期キューの解放条件。無限ループ中の Never インスタンスに対する明示的 `cancel()` で後続を解放するかどうか。
+**課題**: 現在の `InstanceManager.transition()` は `Concluded` 遷移時のみ `self.instances.remove(group_id)` を行い、`Cancelled`/`Trimmed`/`Compressed` では行わない。facade の `cancel()` は別途 `self.instance_manager.remove(group_id)` を呼んでいる。
 
-> **Decision Needed**: 全4種で延期解放を推奨（先行インスタンスが何らかの理由で終了したら後続を解放）
+**影響**: ConflictResolver で4種の終了状態に遷移させる際、`Concluded` 以外は明示的な `remove()` が必要。
+
+**設計選択肢**:
+| 方式 | 説明 |
+|------|------|
+| **A: transition() を全終了状態で自動削除に変更** | `is_terminal()` チェックで統一。ただし既存 cancel() の `remove()` 呼び出しが冗長になる |
+| **B: ConflictResolver 内で明示的に remove() を呼ぶ** | 既存コード変更なし。戦略関数内で `transition()` + `remove()` をセットで呼ぶ |
+
+> **推奨**: **方式 A** — `transition()` を全終了状態で自動削除に統一。既存 `cancel()` の `remove()` は冗長になるが無害（`remove()` は存在しない key に対して何もしない）。デザインフェーズで判断。
 
 ---
 
@@ -194,18 +338,26 @@ ConflictResolver を struct ではなくフリー関数群として実装し、f
 
 | コンポーネント | 工数 | 根拠 |
 |--------------|------|------|
-| ConflictResolver (Req 1-8) | **M** (3-7日) | 5戦略 × 個別実装 + Never 延期キュー。パターンは既存資産から類推可能だが、Trim/Never に固有の複雑性あり |
-| テスト | **M** (3-7日) | 5戦略 × 単体テスト + 統合テスト |
-| **合計** | **M〜L** (6-14日) | |
+| 競合検出 (Req 1) | **S** (1-3日) | 時間範囲交差判定は単純アルゴリズム。Playing 状態フィルタ + 変数横断集約 |
+| group_id 一括 + 戦略ディスパッチ (Req 2, 8) | **S** (1-2日) | policy 取得 + match 分岐。既存パターンの組み合わせ |
+| Cancel 戦略 (Req 3) | **S** (1日) | 既存 `cancel()` パターンの模倣 |
+| Conclude 戦略 (Req 4) | **M** (2-3日) | `collect_current_segment_final_values()` の新規実装が必要。アクティブセグメント特定のエッジケース検証（AC 3→1 Missing, 2 Existing） |
+| Trim 戦略 (Req 5) | **M** (2-4日) | セグメント切断/値確定ロジックの新規実装。エッジケース（duration=0, 最終セグメント, 未開始セグメント）の検証 |
+| Compress 戦略 (Req 6) | **S** (1日) | 既存 `conclude_internal()` パターンの模倣 |
+| Never + 延期キュー (Req 7) | **M** (3-5日) | `DeferredEntry` 型定義、格納/解放ロジック、終了トリガー統合、無限ループとの組合せテスト |
+| テスト（全戦略） | **M** (3-5日) | 5戦略 × 単体テスト + 統合テスト + エッジケース |
+| **合計** | **M〜L** (8-16日) | |
 
 ### 5.2 リスク評価
 
 | リスク | レベル | 説明 |
 |--------|--------|------|
-| 借用制約の設計 | **Medium** | facade の `&mut self` 制約で ConflictResolver への可変参照渡しに工夫が必要。ただし解決パターンは明確 |
-| Trim 戦略の正確性 | **Medium** | セグメント途中切断の補間値計算は精度が重要。既存 Interpolator を再利用できるが、エッジケース（duration=0, 最終セグメント）の検証が必要 |
-| Never 延期キューのライフサイクル | **Medium** | 無限ループとの組み合わせで永続的に保持されるエントリのメモリ管理。仕様上は許容だが、テストでの確認が必要 |
-| 既存テストへの影響 | **Low** | ConflictResolver は新規モジュール。facade.rs の修正は Tier 3 Hook 挿入のみで、既存テスト（502行）は暫定動作テストとして有効 |
+| 借用制約の設計 | **Medium** | facade の `&mut self` 制約。ただし個別引数渡し (S1) で解決パターンが明確 |
+| Trim 戦略の正確性 | **Medium** | 割り込み時点の effective_time 計算 + セグメント切断。エッジケース検証が重要 |
+| Conclude の「現在再生中セグメント」特定 | **Medium** | `evaluate_segments()` のパターンを参考にできるが、新メソッド実装 + セグメント境界のエッジケース |
+| Never 延期キューのライフサイクル | **Medium** | 無限ループとの組み合わせ。永続保持時のメモリは仕様上許容だがテスト要確認 |
+| InstanceManager の cleanup 変更 | **Low** | `transition()` の自動削除拡張。既存テスト通過は容易に確認可能 |
+| 既存テストへの影響 | **Low** | ConflictResolver は新規モジュール。facade.rs 修正は Hook 挿入 + 延期解放フックのみ。既存 `runtime_facade_test.rs` はそのまま通過すべき |
 
 ---
 
@@ -213,22 +365,26 @@ ConflictResolver を struct ではなくフリー関数群として実装し、f
 
 ### 6.1 推奨アプローチ
 
-**Option C（ハイブリッド: フリー関数 + 新モジュール）** を推奨。
+**Option C（ハイブリッド: フリー関数 + 新モジュール）** + **S1（個別引数渡し）** を推奨。
 
 理由:
 1. 統合指針のモジュール構成に準拠（`conflict_resolver.rs`）
-2. `facade.rs` の Tier 3 Hook から分離されたフィールド参照を個別に渡すことで borrowck を自然に回避
-3. 親仕様 design.md の trait interface に近い形で関数シグネチャを定義可能
+2. borrowck を自然に回避: facade が各コンポーネントの `&mut` を個別に渡す
+3. 親仕様 design.md の trait interface に近い関数シグネチャ
+4. DeferredEntry を TimelineManager に配置 → 終了トリガーで自然に検知可能
+5. テスト容易: ConflictResolver 関数は純粋関数に近く、モック不要で単体テスト可能
 
 ### 6.2 設計フェーズで確定すべき事項
 
-1. **ConflictResolver の呼び出しパターン**: 個別引数渡し (S1) vs 中間結果パターン (S3)
-2. **DeferredEntry の保持場所**: TimelineManager vs ConflictResolver vs 新構造体
-3. **Trim 後のエントリ表現**: セグメント列切断 vs 凍結値の直接格納
-4. **終了状態の再評価トリガー範囲**: 全4種 vs Concluded のみ（全4種を推奨）
+1. **Trim 後のエントリ表現**: 方式 A（セグメント列切断）vs 方式 B（エントリ全削除 + 値保持）— 方式 B を推奨
+2. **InstanceManager の cleanup 統一**: `transition()` 全終了状態自動削除 vs ConflictResolver 内で明示 `remove()`
+3. **延期キュー解放の facade フック位置**: `update()` 内の自然終了処理後 vs 別途メソッド
+4. **`collect_current_segment_final_values()` の配置**: TimelineManager の新 `pub(crate)` メソッド vs conflict_resolver 内ヘルパー
+5. **`evaluate_segments()` / `calculate_effective_time()` の公開範囲変更**: `pub(crate)` 化の可否
 
 ### 6.3 設計フェーズで不要な調査
 
 - 外部クレート追加: 不要（`interpolation` 0.3.0 のみで十分）
 - Feature gate 変更: 不要（integration-guide Section 5.2 で確認済み）
-- 公開 API 変更: 不要（ConflictResolver は非公開）
+- 公開 API 変更: 不要（ConflictResolver は `pub(crate)` 非公開）
+- `RuntimeError` 拡張: 不要（競合解決は Start 時に暗黙実行、エラー報告なし）
