@@ -1,9 +1,9 @@
 {
     "feature_name": "dola-runtime-5-loop",
     "created_at": "2026-02-15T15:00:00+09:00",
-    "updated_at": "2026-02-15T20:00:00+09:00",
+    "updated_at": "2026-02-15T21:30:00+09:00",
     "language": "ja",
-    "phase": "design-generated",
+    "phase": "design-approved",
     "parent_spec": "dola-runtime-engine",
     "approvals": {
         "requirements": {
@@ -12,7 +12,7 @@
         },
         "design": {
             "generated": true,
-            "approved": false
+            "approved": true
         },
         "tasks": {
             "generated": false,
