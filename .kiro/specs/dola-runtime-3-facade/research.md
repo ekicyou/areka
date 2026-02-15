@@ -128,6 +128,25 @@
 - **Trade-offs**: 旧定義のインスタンスが新定義と並行して走る可能性があるが、ストーリーボードは数秒〜数十秒で終了するため許容範囲
 - **Follow-up**: Tier 3 で競合解決を導入する際に、指示書差し替え時の競合戦略を再検討可能
 
+### Decision 5: 差分検出メカニズムと Object 値の効率的比較（議題 D1）
+
+- **Context**: Conclude で最終値を `force_update_last_values()` で凍結値に反映した後、次回 `update()` で subscriber に最終値を差分配信する必要がある。また、Object 型変数の比較コストを最小化したい（60fps 想定で update は頻繁に呼ばれる）
+- **Alternatives Considered**:
+  1. `last_values` 単一フィールドで配信値と凍結値を兼用 → Conclude 後の差分検出が失敗（前回も最終値、今回も最終値で差分なし）
+  2. `last_values`（凍結値）と `last_sent_values`（前回配信値）を分離 → 差分検出は `last_sent_values` との比較で正しく動作
+  3. Object 比較は構造的比較（`PartialEq`）→ O(n) だが正確
+  4. Object を `Rc<DynamicValue>` 化 + compile 時に intern → `Rc::ptr_eq()` で O(1) 比較
+- **Selected Approach**: Option 2 + Option 4 — `SubscriberState` に `last_sent_values` 追加、`EvaluatedValue::Object` を `Rc<DynamicValue>` 化（Tier 1 変更）
+- **Rationale**:
+  - **差分検出の正確性**: 凍結値（`last_values`）と前回配信値（`last_sent_values`）を分離することで、Conclude 後も正しく最終値を配信できる
+  - **Object 比較の効率**: compile 時に同一内容の Object 値は同一 Rc を共有（intern）するため、内容が同じなら必ずポインタも同じ。`Rc::ptr_eq()` で O(1) 判定可能
+  - **用途適合性**: デスクトップマスコット用途では Object 変数は小規模（シェル切り替え、表情番号程度）だが、update は 60fps で頻繁に呼ばれるため、diff 処理の軽量化は重要
+- **Trade-offs**:
+  - Tier 1 core-types の `EvaluatedValue::Object` 型を変更（BREAKING CHANGE）
+  - `Rc` は serde と直接統合できないため、custom serialize impl が必要
+  - compile.rs に Object intern pool 追加（~30行の追加コード）
+- **Follow-up**: Tier 1 `types.rs` の修正、Tier 1 テストの修正、`compile.rs` への intern pool 追加（本仕様スコープに含む）
+
 ## Risks & Mitigations
 - **二重バリデーションのパフォーマンス** — デスクトップマスコット用途では問題にならない規模。最適化は計測後に判断
 - **f64 精度の蓄積誤差** — アニメーション時間は数十秒程度。f64 の有効桁（15-16桁）で十分

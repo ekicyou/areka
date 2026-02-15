@@ -120,6 +120,7 @@ _Parent: Req 5.1, 5.2, 5.3, 5.4, 5.5_
 3. The DolaRuntime shall Update を購読者への唯一の値配信経路とする。
 4. When 全トランジションが終了し変数が凍結状態にある場合, the DolaRuntime shall 空の結果を返す（値変化なし）。
 5. The DolaRuntime shall 現在時刻を OS 起動時からの秒数（f64）として受け取る。
+6. The SubscriptionManager shall 差分検出のために前回配信値を subscriber ごとに保持し、現在値（evaluate 結果または凍結値）と比較する。
 
 ---
 
@@ -182,3 +183,17 @@ _Parent: 統合指針 Section 4.3_
 2. The DolaRuntime shall `loop_count` を無視し、常に1回再生として扱う（ループは Tier 3 で実装）。
 3. The DolaRuntime shall ConflictResolver / LoopController の注入ポイントを内部設計に含め、Tier 3 追加を容易にする。
 
+---
+
+### Requirement 12: Object 値の効率的比較（Tier 1 core-types 変更を含む）
+
+_Parent: 設計レビュー議題 D1_
+
+**Objective:** ランタイム実装者として、Object 型変数の差分検出を update() 呼び出しごとに O(1) で実行したい。
+
+#### Acceptance Criteria
+
+1. The EvaluatedValue::Object shall `Rc<DynamicValue>` 型で Object 値を保持する（Tier 1 core-types の変更）。
+2. When コンパイル時に Object 値が生成される場合, the DolaRuntime shall 内容が同一の Object 値に対して同一の `Rc` を共有する（intern）。
+3. When Object 値の差分比較を行う場合, the SubscriptionManager shall `Rc::ptr_eq()` によるポインタ比較で O(1) 判定を行う。
+4. The EvaluatedValue::Object shall serde との統合のため、serialize 時に `Rc` を unwrap して内容を出力する custom impl を持つ。

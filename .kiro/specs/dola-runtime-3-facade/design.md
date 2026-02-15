@@ -6,7 +6,7 @@
 
 **Users**: オーケストレーター（親）が `load_document` / `start` / `pause` / `resume` / `conclude` / `cancel` / `finish` を呼び出し、購読者（子）が `subscribe` / `unsubscribe` / `update` を呼び出す。
 
-**Impact**: `crates/dola/src/runtime/` に `document_store.rs`, `instance_manager.rs`, `timeline_manager.rs`, `subscription_manager.rs`, `facade.rs` を追加。core-types（Tier 1）が定義する `InstanceState`, `EvaluatedValue`, `RuntimeError`, `StartResult`, `Interpolator` に依存。既存 dola 層の変更は `runtime/mod.rs` への `mod` 追加のみ。
+**Impact**: `crates/dola/src/runtime/` に `document_store.rs`, `instance_manager.rs`, `timeline_manager.rs`, `subscription_manager.rs`, `facade.rs` を追加。**Tier 1 core-types の `EvaluatedValue::Object` 型を `DynamicValue` から `Rc<DynamicValue>` に変更**（BREAKING CHANGE）。既存 dola 層の変更は `runtime/mod.rs` への `mod` 追加と `compile.rs` への Object intern pool 追加。
 
 ### Goals
 
@@ -39,7 +39,7 @@ Tier 1 `dola-runtime-core-types` が提供する型を消費する:
 | 型 | 用途 |
 |----|------|
 | `InstanceState` + `try_transition()` / `from_policy()` / `is_terminal()` | InstanceManager での状態管理 |
-| `EvaluatedValue` | TimelineManager / SubscriptionManager での値伝搬 |
+| `EvaluatedValue` (**Object を `Rc<DynamicValue>` に変更**) | TimelineManager / SubscriptionManager での値伝搬と O(1) 比較 |
 | `RuntimeError`（4 バリアント） | 全メソッドのエラー返却 |
 | `StartResult` | `start()` の返却値 |
 | `Interpolator::interpolate()` | TimelineManager での補間計算 |
@@ -121,8 +121,9 @@ graph TB
 | Data Model | `DolaDocument`, `CompiledStoryboard` | 指示書・コンパイル済みデータ | 既存 dola 層 |
 | Validation | `Validate` trait | `load_document()` でのゲートキーパー | 既存 403 行 |
 | Compiler | `compile_storyboard()` | Start 時のオンデマンドコンパイル | 既存 753 行 |
+| Object Interning | `HashMap<DynamicValue, Rc<DynamicValue>>` | compile 時に同一 Object 値の Rc 共有 | NEW |
 
-> 新規外部依存の追加なし。`std::collections` (`HashMap`, `HashSet`, `BTreeMap`) のみ使用。
+> 新規外部依存の追加なし。`std::collections` (`HashMap`, `HashSet`, `BTreeMap`) と `std::rc::Rc` のみ使用。
 
 ---
 
@@ -220,10 +221,11 @@ sequenceDiagram
     DR-->>O: Ok
 ```
 
-**Key Decisions** (`research.md` Decision 3):
+**Key Decisions** (`research.md` Decision 3, 議題 D1):
 - 操作順序: 値取得 → last_values 更新 → 状態遷移 → エントリ削除
-- **Conclude**: 全セグメントの最終値（to_value）を取得して last_values を上書き
+- **Conclude**: 全セグメントの最終値（to_value）を取得して `force_update_last_values()` で SubscriptionManager の `last_values`（凍結値）を更新
 - **Cancel**: エントリ削除のみ（last_values は前回 update の値が自然に残る）
+- **最終値配信**: Conclude 後の次回 `update()` で `diff_and_update()` が `last_values`（更新された最終値）と `last_sent_values`（前回配信値）を比較し、差分ありと判定して最終値を subscriber に配信
 
 ### effective_time 計算
 
@@ -248,11 +250,12 @@ effective_time = (current_time - start_time - pause_accumulated) * time_scale
 | 4.1-4.3 | Start エラー | DolaRuntime | `start()`, `calculate_end_time()` | — |
 | 5.1-5.7 | 制御コマンド | InstanceManager, TimelineManager, SubscriptionManager | `pause()`, `resume()`, `conclude()`, `cancel()`, `finish()` | Conclude/Cancel フロー |
 | 6.1-6.6 | 購読管理 | SubscriptionManager | `subscribe()`, `unsubscribe()`, `unsubscribe_all()` | — |
-| 7.1-7.5 | Update 差分配信 | DolaRuntime, TimelineManager, SubscriptionManager | `update()` | Update サイクル |
+| 7.1-7.6 | Update 差分配信 | DolaRuntime, TimelineManager, SubscriptionManager | `update()` | Update サイクル |
 | 8.1-8.5 | タイムテーブル管理 | TimelineManager | 内部 API | Update サイクル |
 | 9.1-9.6 | 状態遷移の適用 | InstanceManager | 内部 API | Start フロー |
 | 10.1-10.3 | 同時再生 | TimelineManager | — | — |
-| 11.1-11.3 | Tier 2 暫定動作 | TimelineManager, DolaRuntime | — | — |
+| 11.1-11.3 | Tier 2 暂定動作 | TimelineManager, DolaRuntime | — | — |
+| 12.1-12.4 | Object 値の効率的比較 | EvaluatedValue (Tier 1), compile.rs intern pool, SubscriptionManager | — | — |
 
 ---
 
@@ -660,13 +663,42 @@ impl SubscriptionManager {
 ```rust
 pub(crate) struct SubscriberState {
     pub variables: HashSet<String>,
-    pub last_values: HashMap<String, EvaluatedValue>,
+    pub last_values: HashMap<String, EvaluatedValue>,      // 凍結値（evaluate が None 時の現在値）
+    pub last_sent_values: HashMap<String, EvaluatedValue>, // 前回配信値（差分比較用）
 }
 ```
 
 - `variables`: 購読中の変数名セット
-- `last_values`: 前回 update で配信した値。diff_and_update で `PartialEq` 比較
-- 凍結変数: タイムテーブルにエントリがなくなった変数は `last_values` の値で固定（値変化なし → 差分配信なし）
+- `last_values`: 凍結値。タイムテーブルにエントリがない変数の現在値を保持
+- `last_sent_values`: 前回 subscriber に配信した値。diff_and_update で比較する基準
+- 凍結変数: タイムテーブルにエントリがなくなった変数は `last_values` の値を現在値とする
+
+**diff_and_update ロジック**:
+```rust
+// 疑似コード
+for var in state.variables {
+    // 現在値 = evaluate 結果 or 凍結値
+    let current = values.get(var).or_else(|| state.last_values.get(var));
+    
+    // 前回配信値と比較
+    let last_sent = state.last_sent_values.get(var);
+    if current != last_sent {
+        // 差分あり → 配信
+        changed.push((var.clone(), current.clone()));
+        state.last_sent_values.insert(var.clone(), current.clone());
+    }
+    
+    // evaluate 結果があれば凍結値も更新
+    if let Some(v) = values.get(var) {
+        state.last_values.insert(var.clone(), v.clone());
+    }
+}
+```
+
+**Object 比較の最適化**:
+- `EvaluatedValue::Object(Rc<DynamicValue>)` の比較は `Rc::ptr_eq()` で O(1)
+- compile 時に同一内容の Object 値は同一 Rc を共有（intern）するため、内容が同じなら必ずポインタも同じ
+- Float/Integer は通常の `PartialEq` 比較
 
 ---
 
@@ -878,6 +910,48 @@ fn update(&mut self, subscriber_id: u64, current_time: f64) -> Vec<(String, Eval
     self.subscription_manager.diff_and_update(subscriber_id, values)
 }
 ```
+
+### Object Intern Pool（compile.rs への追加）
+
+```rust
+use std::rc::Rc;
+use std::collections::HashMap;
+
+/// Object 値の intern pool（compile 時に同一内容の Object 値を共有）
+struct ObjectInternPool {
+    pool: HashMap<DynamicValue, Rc<DynamicValue>>,
+}
+
+impl ObjectInternPool {
+    fn new() -> Self {
+        Self { pool: HashMap::new() }
+    }
+    
+    /// 同一内容の DynamicValue に対して同一の Rc を返す
+    fn intern(&mut self, value: DynamicValue) -> Rc<DynamicValue> {
+        self.pool.entry(value.clone())
+            .or_insert_with(|| Rc::new(value))
+            .clone()
+    }
+}
+
+// compile_storyboard() 内部で使用
+fn compile_storyboard(doc: &DolaDocument, name: &str, start_time: f64) 
+    -> Result<CompiledStoryboard, Vec<DolaError>> 
+{
+    let mut intern_pool = ObjectInternPool::new();
+    
+    // TransitionValue::Object を intern pool 経由で Rc 化
+    // ... コンパイルロジック ...
+    
+    // EvaluatedValue::Object(intern_pool.intern(dyn_value)) として生成
+}
+```
+
+**Tier 1 への影響**:
+- `crates/dola/src/runtime/types.rs` の `EvaluatedValue::Object` を `DynamicValue` から `Rc<DynamicValue>` に変更
+- `PartialEq` impl で Object は `Rc::ptr_eq()` を使用（O(1) 比較）
+- serde custom impl で serialize 時に `Rc` を unwrap
 
 ### モジュール構成
 
