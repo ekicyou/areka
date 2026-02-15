@@ -203,8 +203,7 @@ DirectCompositionベース⇒UpdateLayeredWindowベースへ変更。マウス�
 3. The 実装指針 shall wintf-P0-balloon-system仕様への影響を評価する：
    - バルーンウィンドウの描画パイプライン変更の影響
 
-4. The 実装指針 shall dcomp_demo.rs（ECS非使用の独立DCompデモ）の扱いを決定する：
-   - レガシーショーケースとして残存 or ULW版デモに置換 or 削除
+4. The 実装指針 shall dcomp_demo.rs（ECS非使用の独立DCompデモ）をフェーズ4（DCompコード削除・クリーンアップ）で削除対象とする
 
 ### Requirement 9: 子仕様の構成定義
 
