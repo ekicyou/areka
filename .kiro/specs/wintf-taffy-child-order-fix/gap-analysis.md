@@ -145,7 +145,8 @@ updates.sort_by_key(|item| item.4);
 | `visual_hierarchy_sync_system` の兄弟順序影響度 | 現在 Z-order が DComp Visual の `add_visual` 呼び出し順で決まる。アーキタイプ混在時に実際にどの程度 Z-order が崩れるか、再現確認が必要 |
 | DComp Visual 再構築の安全性 | `remove_all_visuals` + 順序付き `add_visual` がフレーム間で視覚的アーティファクトを生じないか |
 
-> **解決済み**: `Children` クエリ追加のパフォーマンス影響 — 読み取り専用 `Query<&Children>` であり、bevy_ecs のスケジューリング競合は発生しない。設計フェーズでの調査は不要。
+**解決済み調査項目**:
+- **`Children` クエリ追加のパフォーマンス影響**: 読み取り専用 `Query<&Children>` であり、bevy_ecs のスケジューリング競合は発生しない。設計フェーズでの調査は不要。
 
 ---
 
