@@ -228,8 +228,13 @@ pub fn sync_taffy_tree_system(
 - 不変条件: `entity_to_node` / `node_to_entity` マッピングは変更されない
 
 **Implementation Notes**
-- 統合: Phase 3 の `for (entity, child_of) in changed_hierarchy.iter()` ループの後に、収集した親エンティティ集合に対して `children_query.get(parent)` → `set_children` を実行
-- 検証: `Children` 内の各エンティティに対して `get_node` を呼び、`Some` のもののみ `NodeId` リストに含める
+- 統合: Phase 3 の `changed_hierarchy` 処理後、影響を受けた親の子順序を確定的に設定：
+  1. `changed_hierarchy.iter()` から各 `child_of.parent()` を `HashSet<Entity>` に収集（重複排除）
+  2. 各 affected_parent について `children_query.get(parent)` で `Children` を取得
+  3. `Children.iter()` の順序で各子エンティティの `get_node(child)` を呼び出し、`Some(node_id)` のもののみ `Vec<NodeId>` に追加（この Vec の順序が taffy ツリーの子順序を決定）
+  4. 親の `get_node(parent)` で `parent_node` を取得
+  5. `taffy_mut().set_children(parent_node, &ordered_node_ids)` を呼び出し、Children の順序でツリー構造を確定
+- 検証: `Children` 内に存在するがレイアウト非参加（taffy ノード未作成）のエンティティは手順 3 で自然にスキップされる
 - リスク: `Changed<ChildOf>` が発火するが `Children` がまだ更新されていないケース → bevy_ecs 0.18.0 では同一フレーム内で伝播されるため問題なし（`research.md` 調査 3 参照）
 
 ### Graphics Layer
@@ -284,13 +289,16 @@ pub fn visual_hierarchy_sync_system(
 - 不変条件: `parent_visual.is_some()` の既同期エンティティは影響を受けない（影響親の子は除く）
 
 **Implementation Notes**
-- 統合: Phase 1 の未同期エンティティ収集後、`affected_parents: HashSet<Entity>` を構築（Phase 1 で収集した各未同期エンティティの `parent_entity` を挿入）。Phase 2 では各 affected_parent について：
-  1. `children_query.get(parent)` で親の `Children` を取得
-  2. 親の `VisualGraphics` から `parent_visual` を取得
-  3. `parent_visual.remove_all_visuals()` を実行
-  4. `Children` の順序で各子の `VisualGraphics` を取得し、`visual()` が `Some` なら `parent_visual.add_visual(child_visual, false, None)` を実行
-  5. 各子の `parent_visual` キャッシュを更新
-- 検証: `Children` 内の各エンティティについて `vg_queries.p0()` で `VisualGraphics` を取得。`visual()` が `Some` のもののみ `add_visual` 対象
+- 統合: Phase 1 の未同期エンティティ収集後、影響を受けた親の Visual 子順序を確定的に設定：
+  1. Phase 1 で収集した各未同期エンティティの `parent_entity` を `HashSet<Entity>` に挿入（affected_parents）
+  2. 各 affected_parent について `children_query.get(parent)` で `Children` を取得
+  3. 親の `VisualGraphics` から `parent_visual` を取得
+  4. `parent_visual.remove_all_visuals()` を実行（既存の Z-order をリセット）
+  5. `Children.iter()` の順序で各子エンティティを処理（**この順序が DComp Visual の Z-order を決定**）：
+     - `vg_queries.p0()` で子の `VisualGraphics` を取得
+     - `visual()` が `Some(child_visual)` なら `parent_visual.add_visual(child_visual, false, None)` を実行
+  6. 各処理済み子の `parent_visual` キャッシュを更新
+- 検証: `Children` 内に存在するが Visual 未生成のエンティティは手順 5 で自然にスキップされる
 - リスク: `remove_all_visuals` 後に `add_visual` が失敗した場合、子 Visual が欠落する → 既存コードと同じエラー無視パターン（`error!` ログ + 続行）を適用
 
 ## Data Models
