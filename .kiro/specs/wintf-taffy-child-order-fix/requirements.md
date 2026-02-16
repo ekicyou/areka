@@ -78,6 +78,4 @@ for (entity, child_of) in changed_hierarchy.iter() {
 #### Acceptance Criteria
 1. The テストスイート shall 異なるコンポーネント構成（アーキタイプ）を持つ複数の子エンティティを同一親に spawn し、taffy ツリーの子ノード順序が `Children` の順序と一致することを検証するテストケースを含む
 2. The テストスイート shall `taffy_flex_demo` 相当のシナリオ（一部の子に追加コンポーネントを付与してアーキタイプを変えた状態）で兄弟順序が維持されることを検証するテストケースを含む
-3. Where R2 が本仕様のスコープに含まれる場合, the テストスイート shall Visual 階層の兄弟順序が `Children` の順序と一致することを検証するテストケースを含む
-
-> **Discussion Topic 2**: 実行時にコンポーネント追加でアーキタイプが変化した場合の順序維持テスト（旧 R4-AC2）の必要性について開発者確認
+3. The テストスイート shall Visual 階層の兄弟順序が `Children` の順序と一致することを検証するテストケースを含む
