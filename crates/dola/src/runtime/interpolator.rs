@@ -1,5 +1,8 @@
 //! イージング関数の適用と補間計算。
 
+use std::collections::HashMap;
+use std::rc::Rc;
+
 use interpolation::{Ease, EaseFunction};
 
 use crate::compile::{CompiledSegment, VariableTypeHint};
@@ -8,6 +11,30 @@ use crate::transition::TransitionValue;
 use crate::value::DynamicValue;
 
 use super::EvaluatedValue;
+
+/// Object 値の intern pool（同一内容の DynamicValue に同一 Rc を返す）。
+///
+/// compile 時または evaluate 時に使用し、Object 型変数の
+/// 差分比較を `Rc::ptr_eq()` による O(1) で実行可能にする。
+pub(crate) struct ObjectInternPool {
+    pool: HashMap<DynamicValue, Rc<DynamicValue>>,
+}
+
+impl ObjectInternPool {
+    pub fn new() -> Self {
+        Self {
+            pool: HashMap::new(),
+        }
+    }
+
+    /// 同一内容の DynamicValue に対して同一の Rc を返す。
+    pub fn intern(&mut self, value: DynamicValue) -> Rc<DynamicValue> {
+        self.pool
+            .entry(value.clone())
+            .or_insert_with(|| Rc::new(value))
+            .clone()
+    }
+}
 
 /// イージング適用と値の補間計算を行う。
 pub struct Interpolator;
@@ -19,10 +46,22 @@ impl Interpolator {
     /// - `VariableTypeHint::Float`: f64 直接値
     /// - `VariableTypeHint::Integer`: f64 補間 → `round()` → i64
     /// - `VariableTypeHint::Object`: `progress_t >= 1.0` なら `to_value`、それ以外は `from_value`
+    ///
+    /// `intern_pool` が Some の場合、Object 値を intern して同一内容で同一 Rc を共有する。
     pub fn interpolate(
         segment: &CompiledSegment,
         variable_type: &VariableTypeHint,
         progress_t: f64,
+    ) -> EvaluatedValue {
+        Self::interpolate_with_pool(segment, variable_type, progress_t, None)
+    }
+
+    /// intern pool 付き補間。TimelineManager から呼ばれる。
+    pub(crate) fn interpolate_with_pool(
+        segment: &CompiledSegment,
+        variable_type: &VariableTypeHint,
+        progress_t: f64,
+        intern_pool: Option<&mut ObjectInternPool>,
     ) -> EvaluatedValue {
         let t = progress_t.clamp(0.0, 1.0);
 
@@ -34,7 +73,12 @@ impl Interpolator {
                 } else {
                     &segment.from_value
                 };
-                EvaluatedValue::Object(transition_value_to_dynamic(value))
+                let dv = transition_value_to_dynamic(value);
+                let rc = match intern_pool {
+                    Some(pool) => pool.intern(dv),
+                    None => Rc::new(dv),
+                };
+                EvaluatedValue::Object(rc)
             }
             VariableTypeHint::Float => {
                 let from = scalar_value(&segment.from_value);
@@ -214,10 +258,11 @@ mod tests {
             easing: None,
         };
         let result = Interpolator::interpolate(&seg, &VariableTypeHint::Object, 0.5);
-        assert_eq!(
-            result,
-            EvaluatedValue::Object(DynamicValue::String("a".to_string()))
-        );
+        // Rc::ptr_eq は異なるアロケーションなので内容で比較
+        match &result {
+            EvaluatedValue::Object(rc) => assert_eq!(**rc, DynamicValue::String("a".to_string())),
+            _ => panic!("expected Object variant"),
+        }
     }
 
     #[test]
@@ -230,10 +275,10 @@ mod tests {
             easing: None,
         };
         let result = Interpolator::interpolate(&seg, &VariableTypeHint::Object, 1.0);
-        assert_eq!(
-            result,
-            EvaluatedValue::Object(DynamicValue::String("b".to_string()))
-        );
+        match &result {
+            EvaluatedValue::Object(rc) => assert_eq!(**rc, DynamicValue::String("b".to_string())),
+            _ => panic!("expected Object variant"),
+        }
     }
 
     #[test]

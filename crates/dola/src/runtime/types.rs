@@ -1,19 +1,38 @@
 //! ランタイムの公開型定義（EvaluatedValue, RuntimeError, StartResult）。
 
 use std::fmt;
+use std::rc::Rc;
 
 use crate::DolaError;
 use crate::value::DynamicValue;
 
+/// 無限ループ許可の最小周期（秒）。
+/// システムスリープ復帰時の極端な周回数処理を防止する。
+pub(crate) const MIN_LOOP_DURATION: f64 = 0.1; // 100ms
+
 /// 評価済み変数値（補間計算の出力）。
-#[derive(Debug, Clone, PartialEq)]
+///
+/// `Object` バリアントは `Rc<DynamicValue>` を保持し、
+/// `PartialEq` では `Rc::ptr_eq()` による O(1) ポインタ比較を行う。
+#[derive(Debug, Clone)]
 pub enum EvaluatedValue {
     /// 浮動小数点（f64 直接値）
     Float(f64),
     /// 整数（f64 補間 → i64 丸め）
     Integer(i64),
-    /// オブジェクト型（即時切替）
-    Object(DynamicValue),
+    /// オブジェクト型（即時切替、Rc 共有による O(1) 比較）
+    Object(Rc<DynamicValue>),
+}
+
+impl PartialEq for EvaluatedValue {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Self::Float(a), Self::Float(b)) => a == b,
+            (Self::Integer(a), Self::Integer(b)) => a == b,
+            (Self::Object(a), Self::Object(b)) => Rc::ptr_eq(a, b),
+            _ => false,
+        }
+    }
 }
 
 impl fmt::Display for EvaluatedValue {
@@ -35,8 +54,14 @@ pub enum RuntimeError {
     InvalidGroupId(u64),
     /// duration=0 かつ loop_count 設定 (Req 2.9)
     ZeroDurationWithLoop { storyboard: String },
+    /// 無効な loop_count 値（0 以下で -1 を除く）
+    InvalidLoopCount(i32),
+    /// 無限ループ時の周期が短すぎる（MIN_LOOP_DURATION 未満）
+    TooShortDurationWithInfiniteLoop { storyboard: String, duration: f64 },
     /// コンパイルエラー（既存 DolaError のラップ）
     CompileError(Vec<DolaError>),
+    /// Never 戦略を持つインスタンスとの競合により start() が拒否された
+    Conflict { conflicting_group_ids: Vec<u64> },
 }
 
 impl fmt::Display for RuntimeError {
@@ -54,8 +79,28 @@ impl fmt::Display for RuntimeError {
                     "storyboard '{storyboard}' has zero duration with loop_count"
                 )
             }
+            Self::InvalidLoopCount(count) => {
+                write!(f, "invalid loop_count: {count}")
+            }
+            Self::TooShortDurationWithInfiniteLoop {
+                storyboard,
+                duration,
+            } => {
+                write!(
+                    f,
+                    "storyboard '{storyboard}' has too short duration ({duration:.3}s) for infinite loop (min: {MIN_LOOP_DURATION}s)"
+                )
+            }
             Self::CompileError(errors) => {
                 write!(f, "compile error: {errors:?}")
+            }
+            Self::Conflict {
+                conflicting_group_ids,
+            } => {
+                write!(
+                    f,
+                    "conflict with never-interrupt instances: {conflicting_group_ids:?}"
+                )
             }
         }
     }
@@ -77,4 +122,57 @@ pub struct StartResult {
     /// 正常再生した場合の終了予定時刻（f64秒）。
     /// 無限ループ時は `f64::INFINITY`。
     pub end_time: f64,
+    /// 競合解決で影響を受けた既存 group_id のリスト。
+    /// 競合がなければ空。
+    pub affected_group_ids: Vec<u64>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn conflict_error_contains_group_ids() {
+        let err = RuntimeError::Conflict {
+            conflicting_group_ids: vec![1, 2, 3],
+        };
+        match &err {
+            RuntimeError::Conflict {
+                conflicting_group_ids,
+            } => {
+                assert_eq!(conflicting_group_ids, &vec![1, 2, 3]);
+            }
+            _ => panic!("expected Conflict variant"),
+        }
+    }
+
+    #[test]
+    fn conflict_error_display() {
+        let err = RuntimeError::Conflict {
+            conflicting_group_ids: vec![5, 10],
+        };
+        let msg = format!("{err}");
+        assert!(
+            msg.contains("conflict"),
+            "Display should mention conflict: {msg}"
+        );
+        assert!(
+            msg.contains("5"),
+            "Display should contain group_id 5: {msg}"
+        );
+        assert!(
+            msg.contains("10"),
+            "Display should contain group_id 10: {msg}"
+        );
+    }
+
+    #[test]
+    fn start_result_has_affected_group_ids() {
+        let result = StartResult {
+            group_id: 1,
+            end_time: 5.0,
+            affected_group_ids: vec![2, 3],
+        };
+        assert_eq!(result.affected_group_ids, vec![2, 3]);
+    }
 }
