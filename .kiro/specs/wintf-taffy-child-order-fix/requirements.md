@@ -61,12 +61,8 @@ for (entity, child_of) in changed_hierarchy.iter() {
 1. When `sync_taffy_tree_system` が階層変更を処理するとき, the `sync_taffy_tree_system` shall 親エンティティの `Children` コンポーネントが保持する兄弟順序に従って taffy ツリーの子ノード順序を設定する
 2. The `sync_taffy_tree_system` shall `Changed<ChildOf>` クエリの反復順序（アーキタイプテーブル順）に依存せず、`Children` の正式な順序を権威的なソースとして使用する
 
-> **統合メモ**: 旧 Requirement 2（アーキタイプ非依存の順序保証）は本要件に統合。`Children` を権威的ソースとすることで、アーキタイプ差異による順序不定は解消される。
-
 ### Requirement 2: Visual階層同期の兄弟順序保証
 **Objective:** 開発者として、DirectComposition Visual 階層における兄弟ビジュアルの順序も `Children` の兄弟順序に従うことを保証したい。`sync_taffy_tree_system` と同じ根本原因（Childrenコンポーネントを参照していない）を持つため、本仕様で一括修正するためである。
-
-> **スコープ確定**: `visual_hierarchy_sync_system` も `sync_taffy_tree_system` と同様にアーキタイプ反復順序に依存している。本仕様のスコープは「親子階層はChildrenコンポーネントが権威ソースである」というポリシー適用であり、同じ問題を持つ両システムを今修正する。
 
 #### Acceptance Criteria
 1. When `visual_hierarchy_sync_system` が子 Visual を親 Visual に追加するとき, the `visual_hierarchy_sync_system` shall `Children` コンポーネントの兄弟順序に従った z-order でビジュアルを配置する
@@ -79,3 +75,17 @@ for (entity, child_of) in changed_hierarchy.iter() {
 1. The テストスイート shall 異なるコンポーネント構成（アーキタイプ）を持つ複数の子エンティティを同一親に spawn し、taffy ツリーの子ノード順序が `Children` の順序と一致することを検証するテストケースを含む
 2. The テストスイート shall `taffy_flex_demo` 相当のシナリオ（一部の子に追加コンポーネントを付与してアーキタイプを変えた状態）で兄弟順序が維持されることを検証するテストケースを含む
 3. The テストスイート shall Visual 階層の兄弟順序が `Children` の順序と一致することを検証するテストケースを含む
+
+---
+
+## Design Rationale / Change History
+
+### Requirement 1: 要件統合の経緯
+- 当初、「Requirement 1: Taffyツリーの子ノード兄弟順序保証」と「Requirement 2: アーキタイプ非依存の順序保証」の2つの要件に分離されていた
+- レビューの結果、`Children` を権威的なソースとして採用することで、アーキタイプ差異による順序不定は自動的に解消されることが判明
+- したがって、旧 Requirement 2 を Requirement 1 に統合し、AC2 として「`Children` の正式な順序を権威的なソースとして使用する」を明記
+
+### Requirement 2: スコープ拡張の根拠
+- 当初、`visual_hierarchy_sync_system` の問題は「可能性がある」という調査項目として扱われていた
+- コードレビューの結果、`visual_hierarchy_sync_system` (crates/wintf/src/ecs/graphics/systems.rs L898-903) も `sync_taffy_tree_system` と同一の根本原因（アーキタイプ反復順序への依存）を持つことが確認された
+- 本仕様のスコープは「親子階層は `Children` コンポーネントが権威ソースである」というアーキテクチャポリシーの適用であるため、同じ問題を持つ両システムを本仕様で一括修正することに決定
