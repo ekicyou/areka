@@ -64,9 +64,9 @@ for (entity, child_of) in changed_hierarchy.iter() {
 > **統合メモ**: 旧 Requirement 2（アーキタイプ非依存の順序保証）は本要件に統合。`Children` を権威的ソースとすることで、アーキタイプ差異による順序不定は解消される。
 
 ### Requirement 2: Visual階層同期の兄弟順序保証
-**Objective:** 開発者として、DirectComposition Visual 階層における兄弟ビジュアルの順序も `Children` の兄弟順序に従うことを保証したい。レイアウト順序と描画順序の一貫性を確保するためである。
+**Objective:** 開発者として、DirectComposition Visual 階層における兄弟ビジュアルの順序も `Children` の兄弟順序に従うことを保証したい。`sync_taffy_tree_system` と同じ根本原因（Childrenコンポーネントを参照していない）を持つため、本仕様で一括修正するためである。
 
-> **スコープ未確定**: 本要件を本仕様に含めるか、別仕様として切り出すかは開発者確認が必要（Discussion Topic 1）
+> **スコープ確定**: `visual_hierarchy_sync_system` も `sync_taffy_tree_system` と同様にアーキタイプ反復順序に依存している。本仕様のスコープは「親子階層はChildrenコンポーネントが権威ソースである」というポリシー適用であり、同じ問題を持つ両システムを今修正する。
 
 #### Acceptance Criteria
 1. When `visual_hierarchy_sync_system` が子 Visual を親 Visual に追加するとき, the `visual_hierarchy_sync_system` shall `Children` コンポーネントの兄弟順序に従った z-order でビジュアルを配置する

@@ -55,7 +55,7 @@ updates.sort_by_key(|item| item.4);
 | 要件 | 必要な技術能力 | 既存資産 | ギャップ |
 |------|--------------|---------|---------|
 | R1: Taffyツリー子順序保証（アーキタイプ非依存含む） | `Children` に基づく taffy 子順序設定 | `TaffyTree::set_children()` API 利用可能 | **Missing**: `sync_taffy_tree_system` が `Children` を参照していない |
-| R2: Visual階層Z-order保証（スコープ未確定） | `Children` に基づく Visual 追加順序 | `add_visual`, `remove_all_visuals` API 利用可能 | **Missing**: `visual_hierarchy_sync_system` に兄弟順序ロジックなし |
+| R2: Visual階層Z-order保証 | `Children` に基づく Visual 追加順序 | `add_visual`, `remove_all_visuals` API 利用可能 | **Missing**: `visual_hierarchy_sync_system` に兄弟順序ロジックなし（R1と同じ根本原因） |
 | R3: 回帰防止テスト | アーキタイプ混在時の順序検証テスト | `taffy_advanced_test.rs` にテスト基盤あり | **Missing**: アーキタイプが異なる兄弟での順序検証テスト |
 
 ---
