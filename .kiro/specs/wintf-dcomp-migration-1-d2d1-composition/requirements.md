@@ -114,7 +114,7 @@ _Parent: Req 3.1, 3.5, 5.4, 6.1_
 
 5. If リソース作成が失敗した場合, the `compositor_init_system` shall リソースを無効化（invalidate）し、`tracing::error` でエラー詳細をログ出力する（次フレームで再試行）
 
-6. The `compositor_init_system` shall 0×0 サイズのウィンドウに対してリソース作成を試行しない
+6. The `compositor_init_system` shall 幅または高さが 0 のウィンドウに対してリソース作成を試行しない（既存の `calculate_surface_size_from_global_arrangement` と同様、いずれかの次元が 0 以下なら作成をスキップ）
 
 7. The `compositor_init_system` shall `ecs/graphics/compositor_systems.rs` に配置される
 
@@ -174,6 +174,10 @@ _Parent: Req 10.1, 10.2_
 
 **事実誤認の修正**:
 - Req 3 AC4: 「GraphicsCore の generation カウンタ」→ `Changed<HasGraphicsResources>` + `!is_valid()` パターンに修正。`GraphicsCore` に generation フィールドは存在しない（research.md v2 で確認済み）
+- Req 3 AC6: 「0×0 サイズ」→「幅または高さが 0」に精緻化（design.md の `w>0, h>0` 〪よび既存 `calculate_surface_size_from_global_arrangement` と整合）
+
+**ディスカッション結果**:
+- Req 2 AC8（ダーティ判定）: Phase 1 での維持を確認。最初から正しい Changed<T> 集約検出を実装し、Phase 2 での手戻りを防ぐ
 
 ### v2 (2026-02-16): 子仕様完了に伴う洗練
 
