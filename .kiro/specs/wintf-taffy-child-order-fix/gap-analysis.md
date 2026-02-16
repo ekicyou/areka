@@ -151,7 +151,44 @@ updates.sort_by_key(|item| item.4);
 
 ## 7. 出力チェックリスト
 
-- [x] 要件-資産マッピング（ギャップタグ付き）
-- [x] Option A/B/C の評価とトレードオフ
-- [x] 工数（S）とリスク（Low）の評価
-- [x] 設計フェーズへの推奨事項と研究項目
+- [x] 要件-資産マッピング（セクション 2: ギャップタグ付き）
+- [x] Option A/B/C の評価とトレードオフ（セクション 3）
+- [x] 工数（S）とリスク（Low）の評価（セクション 5）
+- [x] 設計フェーズへの推奨事項（セクション 4: Option A 推奨）
+- [x] 研究項目の明記（セクション 6: Visual 影響度、再構築最適化、Children 順序保証）
+- [x] スコープ確定の反映（両システムを本仕様で一括修正）
+
+---
+
+## 8. 設計フェーズへの推奨事項
+
+### 次のステップ
+
+1. **Option A の詳細設計**:
+   - `sync_taffy_tree_system` の `Query<&Children>` パラメータ追加と `set_children` ロジック実装
+   - `visual_hierarchy_sync_system` の兄弟順序ソートロジック（深さ + sibling_index）実装
+   
+2. **Research Item の調査**:
+   - Visual Z-order の実際の影響度を `taffy_flex_demo` 相当シナリオで確認
+   - DComp Visual の再配置戦略を決定（増分更新 vs 全再構築）
+
+3. **テスト設計**:
+   - R3-AC1: 異なるアーキタイプの兄弟順序検証（taffy ツリー）
+   - R3-AC2: `taffy_flex_demo` 相当シナリオ（アーキタイプ混在時の順序維持）
+   - R3-AC3: Visual 階層の兄弟順序検証
+
+4. **実装タスク分割**:
+   - タスク 1: `sync_taffy_tree_system` 修正
+   - タスク 2: `visual_hierarchy_sync_system` 修正
+   - タスク 3: 回帰テスト実装
+   - タスク 4: 既存テスト（`taffy_flex_demo`）での動作確認
+
+### 設計フェーズで決定すべき事項
+
+- **Visual 再配置戦略**: 既存 Visual を削除して再追加するか、増分更新するか
+- **パフォーマンス最適化**: 変更があった親のみ処理する最適化の実装詳細
+- **エラーハンドリング**: `Children` に存在するが taffy ノード/Visual が存在しないエンティティの扱い
+
+---
+
+_次のコマンド_: `/kiro-spec-design wintf-taffy-child-order-fix` で設計ドキュメント生成へ進む
