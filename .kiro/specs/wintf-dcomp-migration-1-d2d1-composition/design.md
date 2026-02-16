@@ -390,16 +390,13 @@ pub unsafe fn transfer_to_hbitmap(
 
 ## Requirements Traceability
 
-| Requirement | Design Component | Test Coverage |
-|-------------|-----------------|---------------|
-| Req 1.1-1.4 | WindowD3D11Compositor struct + methods | Unit: new/resize/invalidate lifecycle |
-| Req 2.1-2.7 | composite_render_system | Integration: z-order, transform, opacity |
-| Req 3.1-3.4 | compositor_init_system | Unit: creation, resize detection, generation |
-| Req 4.1-4.5 | CompositeContext opacity 手動累積 (render_subtree) | Unit: opacity accumulation |
-| Req 5.1-5.4 | com/ulw.rs transfer_to_hbitmap | Unit: pitch/stride copy |
-| Req 6.1-6.3 | WindowD3D11Compositor::resize() | Integration: resize → redraw |
-| Req 7.1-7.3 | compositor_init_system generation check | Integration: device lost → reinit |
-| Req 8.1-8.5 | All above | E2E: taffy_flex_demo equivalent |
+| Requirement (v2) | Design Component | Test Coverage |
+|-------------------|-----------------|---------------|
+| Req 1 AC1-AC6 (WindowD3D11Compositor) | WindowD3D11Compositor struct + methods + Drop | Unit: new/resize/invalidate lifecycle |
+| Req 2 AC1-AC10 (composite_render_system) | composite_render_system + CompositeContext opacity 手動累積 | Integration: z-order, transform, opacity, dirty check |
+| Req 3 AC1-AC7 (compositor_init_system) | compositor_init_system | Unit: creation, resize detection, HasGraphicsResources recovery |
+| Req 4 AC1-AC5 (transfer_to_hbitmap) | com/ulw.rs transfer_to_hbitmap | Unit: pitch/stride copy |
+| Req 5 AC1-AC6 (検証基準) | All above | E2E: taffy_flex_demo equivalent |
 
 ---
 

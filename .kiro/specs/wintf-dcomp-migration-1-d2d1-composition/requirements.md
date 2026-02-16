@@ -110,7 +110,7 @@ _Parent: Req 3.1, 3.5, 5.4, 6.1_
 
 3. When ウィンドウサイズが前フレームから変更されたことを検出した時, the `compositor_init_system` shall `WindowD3D11Compositor` のリサイズ処理を呼び出す（検出方式: `WindowD3D11Compositor` 内部の `cached_size` と `WindowPos` の比較）
 
-4. When `GraphicsCore` の generation カウンタと `WindowD3D11Compositor` の generation カウンタが不一致の時, the `compositor_init_system` shall `WindowD3D11Compositor` を再作成する（既存の `init_window_graphics` と同じデバイスロスト復旧パターン）
+4. When `HasGraphicsResources` の変更が検出されリソースが無効（`!is_valid()`）な時, the `compositor_init_system` shall `WindowD3D11Compositor` を再作成する（既存の `init_window_graphics` と同じ `Or<(Without<WindowD3D11Compositor>, Changed<HasGraphicsResources>)>` + `!is_valid()` パターン。`GraphicsCore` に generation フィールドは存在しない）
 
 5. If リソース作成が失敗した場合, the `compositor_init_system` shall リソースを無効化（invalidate）し、`tracing::error` でエラー詳細をログ出力する（次フレームで再試行）
 
@@ -169,6 +169,11 @@ _Parent: Req 10.1, 10.2_
 | Req 5 | 10.1, 10.2 | Phase 1 検証基準 |
 
 ## 変更履歴
+
+### v2.1 (2026-02-16): レビュー指摘修正
+
+**事実誤認の修正**:
+- Req 3 AC4: 「GraphicsCore の generation カウンタ」→ `Changed<HasGraphicsResources>` + `!is_valid()` パターンに修正。`GraphicsCore` に generation フィールドは存在しない（research.md v2 で確認済み）
 
 ### v2 (2026-02-16): 子仕様完了に伴う洗練
 
