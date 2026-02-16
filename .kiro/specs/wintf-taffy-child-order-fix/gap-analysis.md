@@ -155,6 +155,7 @@ parent_visual.add_visual(&child_visual, false, None)
 
 **解決済み調査項目**:
 - **`Children` クエリ追加のパフォーマンス影響**: 読み取り専用 `Query<&Children>` であり、bevy_ecs のスケジューリング競合は発生しない。設計フェーズでの調査は不要。
+- **`Children` の順序保証**: bevy_ecs 0.18.0 の `Children` は `Deref<Target = [Entity]>` を実装し、エンティティの挿入順序（`ChildOf` 挿入順序）を保持することが文書化されている（参考: [`references/bevy-ecs-hierarchy-api-guide.md`](references/bevy-ecs-hierarchy-api-guide.md) セクション1「`ChildOf` が唯一の真実、`Children` は読み取り専用のキャッシュ」）。
 
 ---
 
