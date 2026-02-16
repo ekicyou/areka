@@ -1,5 +1,7 @@
 mod command_list;
 mod components;
+pub mod compositor;
+pub mod compositor_systems;
 mod core;
 mod systems;
 pub mod visual_manager;

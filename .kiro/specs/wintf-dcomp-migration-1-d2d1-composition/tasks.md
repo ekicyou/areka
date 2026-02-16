@@ -10,8 +10,8 @@ Phase 1 — D2D1 合成スタック構築。DComp パイプラインを温存し
 
 ### Phase 1A: COM層・コンポーネント基盤
 
-- [ ] 1. (P) transfer_to_hbitmap ユーティリティ実装
-- [ ] 1.1 (P) com/ulw.rs モジュール作成と基本実装
+- [x] 1. (P) transfer_to_hbitmap ユーティリティ実装
+- [x] 1.1 (P) com/ulw.rs モジュール作成と基本実装
   - `com/ulw.rs` を新規作成し、`transfer_to_hbitmap()` 関数を実装する
   - ステージング ID2D1Bitmap1 を `Map(D2D1_MAP_OPTIONS_READ)` でマップする
   - `D2D1_MAPPED_RECT` から pitch と bits を取得する
@@ -21,8 +21,8 @@ Phase 1 — D2D1 合成スタック構築。DComp パイプラインを温存し
   - `com/mod.rs` に `pub mod ulw;` を追加する
   - _Requirements: 4.1, 4.2, 4.3, 4.4, 4.5_
 
-- [ ] 2. (P) WindowD3D11Compositor コンポーネント実装
-- [ ] 2.1 (P) compositor.rs 作成とコンポーネント構造定義
+- [x] 2. (P) WindowD3D11Compositor コンポーネント実装
+- [x] 2.1 (P) compositor.rs 作成とコンポーネント構造定義
   - `ecs/graphics/compositor.rs` を新規作成する
   - `WindowD3D11CompositorInner` 構造体を定義する（composition_bitmap, staging_bitmap, hbitmap, memory_dc, dib_bits フィールド）
   - `WindowD3D11Compositor` 構造体を定義する（inner: Option<Inner>, generation: u32, dirty: bool, cached_size: (u32, u32)）
@@ -30,7 +30,7 @@ Phase 1 — D2D1 合成スタック構築。DComp パイプラインを温存し
   - `unsafe impl Send` と `unsafe impl Sync` を実装する
   - _Requirements: 1.1, 1.4_
 
-- [ ] 2.2 (P) リソース作成とライフサイクル管理
+- [x] 2.2 (P) リソース作成とライフサイクル管理
   - `new(dc: &ID2D1DeviceContext, w: u32, h: u32)` を実装する:
     - composition_bitmap を `D2D1_BITMAP_OPTIONS_TARGET`、PBGRA32、96dpi で作成
     - staging_bitmap を `D2D1_BITMAP_OPTIONS_CPU_READ | CANNOT_DRAW`、PBGRA32、96dpi で作成
@@ -44,7 +44,7 @@ Phase 1 — D2D1 合成スタック構築。DComp パイプラインを温存し
   - `Drop` を実装する（`DeleteObject(hbitmap)`, `DeleteDC(memory_dc)` を呼び出す）
   - _Requirements: 1.1, 1.2, 1.3, 1.5_
 
-- [ ] 2.3 (P) アクセサメソッドと状態管理
+- [x] 2.3 (P) アクセサメソッドと状態管理
   - `is_valid()`, `composition_bitmap()`, `staging_bitmap()`, `hbitmap()`, `memory_dc()`, `dib_bits()` を実装する
   - `cached_size()`, `generation()` を実装する
   - `is_dirty()`, `set_dirty(v: bool)` を実装する
@@ -53,34 +53,34 @@ Phase 1 — D2D1 合成スタック構築。DComp パイプラインを温存し
 
 ### Phase 1B: ECSシステム実装
 
-- [ ] 3. compositor_init_system 実装
-- [ ] 3.1 compositor_systems.rs 作成とシステム骨格
+- [x] 3. compositor_init_system 実装
+- [x] 3.1 compositor_systems.rs 作成とシステム骨格
   - `ecs/graphics/compositor_systems.rs` を新規作成する
   - `compositor_init_system` 関数を定義する
   - `GraphicsCore` リソースから `device_context()` を取得し、None なら early return する
   - `Or<(Without<WindowD3D11Compositor>, Changed<HasGraphicsResources>)>` クエリを実装する
   - _Requirements: 3.2, 3.7_
 
-- [ ] 3.2 新規ウィンドウとデバイスロスト復旧ロジック
+- [x] 3.2 新規ウィンドウとデバイスロスト復旧ロジック
   - `WindowPos.size` が None または幅/高さ 0 の場合はスキップする
   - `Option<WindowD3D11Compositor> = None` の場合、`WindowD3D11Compositor::new(dc, w, h)` を呼び出し、成功時は `commands.entity(entity).insert(compositor)` する
   - `Some(compositor)` + `!is_valid()` の場合、`new()` で再作成し、成功時は旧 generation を引き継ぎ increment する
   - 失敗時は `tracing::error!` でエラー出力し、`invalidate()` を呼び出す
   - _Requirements: 3.1, 3.4, 3.5, 3.6_
 
-- [ ] 3.3 リサイズ検出と処理
+- [x] 3.3 リサイズ検出と処理
   - `is_valid()` かつ `cached_size != (w, h)` の場合、`resize(dc, w, h)` を呼び出す
   - 失敗時は `tracing::error!` でエラー出力する（旧サイズ維持）
   - _Requirements: 3.3_
 
-- [ ] 4. composite_render_system 実装
-- [ ] 4.1 DcTargetGuard RAII 構造体実装
+- [x] 4. composite_render_system 実装
+- [x] 4.1 DcTargetGuard RAII 構造体実装
   - `compositor_systems.rs` に `DcTargetGuard` 構造体を定義する（dc: &ID2D1DeviceContext, prev_target: Option<ID2D1Image>）
   - `new(dc, new_target)` を実装する（`GetTarget()` で保存、`SetTarget(new_target)` で切替）
   - `Drop` を実装する（`SetTarget(prev_target.as_ref())` で復元）
   - _Requirements: 2.2, 2.7_
 
-- [ ] 4.2 CompositeContext と render_subtree 骨格
+- [x] 4.2 CompositeContext と render_subtree 骨格
   - `CompositeContext` 構造体を定義する（dc: &ID2D1DeviceContext, accumulated_opacity: f32）
   - `render_subtree(ctx, entity, query)` 関数を定義する
   - `Visual.is_visible == false` の場合、サブツリー全体をスキップする
@@ -88,7 +88,7 @@ Phase 1 — D2D1 合成スタック構築。DComp パイプラインを温存し
   - `accumulated_opacity == 0.0` の場合、サブツリー全体をスキップする
   - _Requirements: 2.3, 2.4, 2.6_
 
-- [ ] 4.3 draw_with_opacity 関数実装
+- [x] 4.3 draw_with_opacity 関数実装
   - `draw_with_opacity(dc, command_list, opacity) -> windows::core::Result<()>` を実装する
   - opacity == 1.0（f32::EPSILON 比較）の場合、`DrawImage` で直接描画する
   - opacity < 1.0 の場合:
@@ -101,13 +101,13 @@ Phase 1 — D2D1 合成スタック構築。DComp パイプラインを温存し
   - `render_subtree` で Result を受け取り、失敗時は `tracing::error!` でログ出力して当該エンティティをスキップする
   - _Requirements: 2.5_
 
-- [ ] 4.4 render_subtree でのトランスフォームと描画
+- [x] 4.4 render_subtree でのトランスフォームと描画
   - `GlobalArrangement.transform` を `SetTransform` で DC に適用する
   - `GraphicsCommandList.command_list()` が Some の場合、`draw_with_opacity` を呼び出す
   - 子エンティティへの再帰（`CompositeContext` で accumulated_opacity を伝搬）を実装する
   - _Requirements: 2.1, 2.2_
 
-- [ ] 4.5 composite_render_system メインループ実装
+- [x] 4.5 composite_render_system メインループ実装
   - `compositor_query: Query<(Entity, &mut WindowD3D11Compositor, &Children)>` を定義する
   - `added_query: Query<Entity, Added<WindowD3D11Compositor>>` を定義する
   - `changed_query`, `children_query` を定義する
@@ -117,7 +117,7 @@ Phase 1 — D2D1 合成スタック構築。DComp パイプラインを温存し
   - メインループで DC 取得、`is_valid()` チェック、`is_window_dirty()` 判定を実装する
   - _Requirements: 2.8, 2.9_
 
-- [ ] 4.6 合成描画パイプライン実装
+- [x] 4.6 合成描画パイプライン実装
   - `DcTargetGuard::new(dc, composition_bitmap)` で DC ターゲット切替
   - `BeginDraw()` → `Clear(transparent)` を実装する
   - `CompositeContext { dc, accumulated_opacity: 1.0 }` を作成し、`Children` を depth-first pre-order で走査する
@@ -129,37 +129,37 @@ Phase 1 — D2D1 合成スタック構築。DComp パイプラインを温存し
 
 ### Phase 1C: テスト・検証
 
-- [ ] 5. ユニットテスト作成
-- [ ] 5.1 WindowD3D11Compositor ライフサイクルテスト
+- [x] 5. ユニットテスト作成
+- [x] 5.1 WindowD3D11Compositor ライフサイクルテスト
   - `new()` が全4リソースを正しく作成することをテストする
   - `resize()` がリソースを再作成し、generation をインクリメントすることをテストする
   - `invalidate()` が `is_valid() == false` にすることをテストする
   - _Requirements: 5.1_
 
-- [ ] 5.2 (P) CompositeContext opacity 累積テスト
+- [x] 5.2 (P) CompositeContext opacity 累積テスト
   - parent opacity 0.8 × child opacity 0.5 = final 0.4 となることをテストする
   - `is_visible == false` でサブツリーがスキップされることをテストする
   - opacity が [0.0, 1.0] に clamp されることをテストする
   - _Requirements: 5.3_
 
-- [ ] 5.3 (P) transfer_to_hbitmap 転送テスト
+- [x] 5.3 (P) transfer_to_hbitmap 転送テスト
   - pitch == stride 時の一括コピーをテストする
   - pitch != stride 時の行単位コピーをテストする
   - Map 失敗時の Result::Err 返却をテストする
   - _Requirements: 5.4_
 
-- [ ] 6. 統合テスト・E2E検証
-- [ ] 6.1 composite_render_system 合成テスト
+- [x] 6. 統合テスト・E2E検証
+- [x] 6.1 composite_render_system 合成テスト
   - 複数 `GraphicsCommandList` を z-order + transform で正しく合成描画できることをテストする
   - opacity 累積が正確に実行されることをテストする
   - _Requirements: 5.2, 5.3_
 
-- [ ] 6.2 システム統合テスト
+- [x] 6.2 システム統合テスト
   - `compositor_init_system` → `composite_render_system` パイプラインの統合動作をテストする
   - デバイスロスト → 再初期化 → 正常描画再開のフローをテストする
   - _Requirements: 5.2_
 
-- [ ] 6.3* E2E描画検証とリグレッションテスト
+- [x] 6.3* E2E描画検証とリグレッションテスト
   - `taffy_flex_demo` 相当の独立テスト環境を構築し、新パイプラインでの描画を検証する
   - `cargo test` で全テスト（既存+新規）がパスすることを確認する
   - `cargo build` で DComp パイプラインとの共存ビルドが成功することを確認する
