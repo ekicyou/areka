@@ -375,13 +375,25 @@ v1 で「Research Needed」だった項目のうち、Phase 0 完了で解消さ
 | `visual_property_sync_system` の修正方法 | Research Needed | ✅ `Changed<Visual>` に移行済み。Phase 1 では非変更 |
 | `Children` の兄弟順序保証 | 暗黙の前提 | ✅ `wintf-taffy-child-order-fix` で明示的に保証 |
 
-### 残存 Research Items（設計フェーズで調査）
+### 残存 Research Items（設計フェーズで調査 → v2.1 で解決）
 
-1. `ID2D1DeviceContext::CreateBitmap()` に `D2D1_BITMAP_OPTIONS_TARGET` を指定する際の具体的な `D2D1_BITMAP_PROPERTIES1` 構成（pixelFormat, dpiX/dpiY, bitmapOptions）
-2. opacity 適用の D2D API 選択: `DrawImage` の interpolationMode/compositeMode パラメータで opacity 指定可能か、または `ID2D1Effect`（`CLSID_D2D1Opacity`）が必要か
-3. `ID2D1Bitmap1::Map()` / `Unmap()` の制約（Map 中の DC ロック範囲、GPU 同期タイミング）
-4. `ID2D1Bitmap::CopyFromBitmap()` の制約（TARGET → CPU_READ ビットマップ間のコピー可否）
-5. `CreateDIBSection` で PBGRA32 top-down DIB を作成する際の `BITMAPINFO` 構成（`biHeight` を負値にする）
+以下の項目は設計フェーズのディスカバリで調査・解決済み:
+
+1. ~~`ID2D1DeviceContext::CreateBitmap()` に `D2D1_BITMAP_OPTIONS_TARGET` を指定する際の具体的な `D2D1_BITMAP_PROPERTIES1` 構成~~ → design.md v2 の WindowD3D11Compositor セクションで確定
+2. ~~opacity 適用の D2D API 選択~~ → **D2D1 ColorMatrix Effect 方式を採用**。理由: `DrawImage(ID2D1Image)` COM API に opacity パラメータなし。`DrawBitmap` は opacity パラメータあるが `ID2D1Bitmap` のみ受付（`ID2D1CommandList` 不可）。PushLayer は不使用（要件 2.5）。ColorMatrix Effect の alpha チャネル乗算（`_44 = accumulated_opacity`）が最も低コスト
+3. ~~`ID2D1Bitmap1::Map()` / `Unmap()` の制約~~ → 標準的な GPU→CPU 同期。ダーティフラグで必要時のみ転送（毎フレーム Map 非推奨）
+4. ~~`ID2D1Bitmap::CopyFromBitmap()` の制約~~ → TARGET → CPU_READ 間コピーは D2D1 仕様で許可。同一デバイス・同一フォーマット・同一サイズが前提
+5. ~~`CreateDIBSection` で PBGRA32 top-down DIB~~ → `biHeight = -(height as i32)` で top-down DIB。design.md v2 の Bitmap 作成パラメータで確定
+
+### 設計フェーズ Discovery の追加発見（v2.1）
+
+| 発見 | 影響 | 対応 |
+|------|------|------|
+| `D2D1DeviceContextExt::draw_image()` ラッパーに opacity パラメータなし | opacity 適用に別アプローチ要 | D2D1 ColorMatrix Effect 採用（design.md v2 で詳細化） |
+| `render_surface` は直接 COM `DrawImage` を呼び出し（ラッパー未使用） | 新パイプラインも直接 COM 呼び出しパターンを踏襲 | `composite_render_system` 内で `unsafe` 直接呼び出し |
+| `GraphicsCommandList` のメソッド名は `command_list()` (`get()` ではない) | 設計書の API 参照を修正 | design.md v2 で正確な API 名を使用 |
+| `WindowGraphics` に `dirty` / `cached_size` フィードは不在 | `WindowD3D11Compositor` の新規追加フィールド | 既存パターンからの逸脱なし — 独立設計 |
+| `Visual` の `on_visual_add` フックが自動挿入（`SurfaceGraphics` 等） | `WindowD3D11Compositor` は Window エンティティに付与。Visual フックとの干渉なし | 影響なし |
 
 ---
 
@@ -398,6 +410,18 @@ v1 で「Research Needed」だった項目のうち、Phase 0 完了で解消さ
 ---
 
 ## 変更履歴
+
+### v2.1 (2026-02-16): 設計フェーズ Discovery 反映
+
+**残存 Research Items の解決**:
+- 5 項目全てを設計ディスカバリで調査・解決しクローズ
+- opacity 適用方式を **D2D1 ColorMatrix Effect** に確定（`DrawImage` API に opacity パラメータなし、`DrawBitmap` は `ID2D1Bitmap` のみ、PushLayer 不使用要件）
+
+**追加発見の記録**:
+- `draw_image` ラッパーの opacity パラメータ不在を確認
+- `render_surface` が直接 COM 呼び出しパターンを使用していることを確認
+- `GraphicsCommandList` の正確なメソッド名（`command_list()` ≠ `get()`）を確認
+- `WindowGraphics` に dirty/cached_size フィールドが不在であることを確認
 
 ### v2 (2026-02-16): 子仕様完了に伴う全面再評価
 
