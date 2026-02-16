@@ -27,26 +27,34 @@ spawn 順序と一致しなくなるバグのギャップ分析。
 
 ### 1.3 バグの根本原因
 
+**共通の根本原因**: 両システムとも `Children` コンポーネントを参照せず、クエリの反復順序（アーキタイプ順）に依存している。
+
 **`sync_taffy_tree_system`** (L171-183):
 ```rust
+// 問題: Query<&Children> パラメータがない
 for (entity, child_of) in changed_hierarchy.iter() {
-    // iter() はアーキタイプテーブル順で反復 → spawn順序と一致しない
+    // iter() はアーキタイプテーブル順で反復 → Children の順序を無視
     let _ = taffy_res.taffy_mut().add_child(parent_node, node_id);
     // add_child は末尾追加 → 反復順がそのままtaffy子順序になる
 }
 ```
 
-**`visual_hierarchy_sync_system`** (L898-903):
+**`visual_hierarchy_sync_system`** (L898-903, L925, L963):
 ```rust
+// 問題: Query<&Children> パラメータがない
 for (entity, child_of, child_vg, child_name) in child_query.iter() {
-    // iter() はアーキタイプテーブル順 → 兄弟間順序不定
+    // iter() はアーキタイプテーブル順 → Children の順序を無視
     if child_vg.parent_visual().is_none() {
         // 未同期エンティティを収集
     }
 }
 // depth でソート（親→子の順序のみ保証、兄弟間順序は保証されない）
 updates.sort_by_key(|item| item.4);
+// add_visual(false, None) は最前面に追加 → 反復順がZ-orderになる
+parent_visual.add_visual(&child_visual, false, None)
 ```
+
+**権威的ソース**: bevy_ecs の `Children` コンポーネントは `SmallVec<[Entity; 8]>` で兄弟順序を保持しており、`ChildOf` 挿入順序に基づく正式な順序情報を持つ。両システムともこれを参照せず、列挙方法がアーキタイプ順の API（`changed_hierarchy.iter()`, `child_query.iter()`）を使っているため、エンティティのアーキタイプ（コンポーネント構成）が異なると順序が崩れる。
 
 ---
 

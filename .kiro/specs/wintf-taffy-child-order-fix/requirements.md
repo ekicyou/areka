@@ -18,6 +18,8 @@ spawn 順序と一致しなくなるバグの修正。
 
 **ファイル**: `crates/wintf/src/ecs/layout/systems.rs` L143-189 (`sync_taffy_tree_system`)
 
+**問題**: `sync_taffy_tree_system` が `Children` コンポーネントを参照していないため、兄弟順序の権威的ソースを無視している。
+
 ```rust
 // 階層変更を処理（新規エンティティの親子関係もここで設定）
 for (entity, child_of) in changed_hierarchy.iter() {
@@ -33,9 +35,13 @@ for (entity, child_of) in changed_hierarchy.iter() {
 }
 ```
 
-- `changed_hierarchy` クエリの `iter()` はアーキタイプテーブル順で反復する
-- `taffy.add_child()` は**末尾追加**
-- 異なるアーキタイプのエンティティが混在すると、反復順序 ≠ spawn 順序 → taffy ツリーの子順序が不定になる
+**具体的な問題点**:
+1. `changed_hierarchy` クエリが `Children` コンポーネントを参照していない
+2. `changed_hierarchy.iter()` はアーキタイプテーブル順で反復する（spawn 順序と無関係）
+3. `taffy.add_child()` は**末尾追加**であるため、反復順序がそのまま taffy ツリーの子順序になる
+4. 異なるアーキタイプのエンティティが混在すると、反復順序 ≠ spawn 順序 → taffy ツリーの子順序が不定になる
+
+**権威的ソース**: bevy_ecs の `Children` コンポーネントが兄弟エンティティの正式な順序を保持しているが、これを参照していない。
 
 ### 期待動作
 - bevy_ecs の `Children` コンポーネントが保持する正式な兄弟順序に従って taffy ツリーの子順序を設定すべき
