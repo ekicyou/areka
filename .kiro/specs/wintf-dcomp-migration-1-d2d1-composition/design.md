@@ -203,6 +203,7 @@ stateDiagram-v2
 | WindowD3D11Compositor | ECS/Graphics | per-window 合成リソース統合管理 | 1.1-1.6 | GraphicsCore (P0) | Service, State |
 | compositor_init_system | ECS/Graphics | 合成リソース自動初期化 | 3.1-3.7 | GraphicsCore (P0), WindowHandle (P0) | — |
 | composite_render_system | ECS/Graphics | D2D1 合成描画パイプライン | 2.1-2.10 | GraphicsCore (P0), WindowD3D11Compositor (P0) | — |
+| DcTargetGuard | ECS/Graphics (internal) | DC ターゲット RAII 復元 | 2.2, 2.7 | ID2D1DeviceContext (P0) | RAII |
 | CompositeContext | ECS/Graphics (internal) | opacity 階層累積 | 2.3-2.6 | Visual (P0) | — |
 | transfer_to_hbitmap | COM/ULW | D2D→HBITMAP ピクセル転送 | 4.1-4.5 | — | Service |
 
@@ -488,10 +489,9 @@ for (window_entity, mut compositor, window_children) in compositor_query.iter_mu
         continue;
     }
 
-    // 2. DC ターゲット切替（RAII ガード）
-    let prev_target = unsafe { dc.GetTarget() };
+    // 2. DC ターゲット切替（RAII ガード：スコープ終了で自動復元）
     let comp_bmp = compositor.composition_bitmap().unwrap();
-    unsafe { dc.SetTarget(comp_bmp) };
+    let _target_guard = DcTargetGuard::new(dc, comp_bmp);
 
     // 3. BeginDraw → Clear
     unsafe { dc.BeginDraw() };
@@ -503,9 +503,8 @@ for (window_entity, mut compositor, window_children) in compositor_query.iter_mu
         render_subtree(&ctx, child, &entity_query);
     }
 
-    // 5. EndDraw + ターゲット復元
+    // 5. EndDraw（ターゲット復元は _target_guard の Drop で自動実行）
     unsafe { dc.EndDraw(std::ptr::null_mut(), std::ptr::null_mut()) };
-    unsafe { dc.SetTarget(prev_target.as_ref()) };
 
     // 6. CopyFromBitmap（Req 2.7）
     let staging = compositor.staging_bitmap().unwrap();
@@ -521,6 +520,42 @@ for (window_entity, mut compositor, window_children) in compositor_query.iter_mu
     compositor.set_dirty(true);
 }
 ```
+
+##### DcTargetGuard（Req 2.2, 2.7 エラー安全性保証）
+
+```rust
+/// ID2D1DeviceContext のターゲット切替を RAII パターンで管理し、
+/// スコープ終了時に自動復元する。エラー発生時も確実に復元される。
+struct DcTargetGuard<'a> {
+    dc: &'a ID2D1DeviceContext,
+    prev_target: Option<ID2D1Image>,
+}
+
+impl<'a> DcTargetGuard<'a> {
+    /// DC のターゲットを new_target に切り替え、RAII ガードを返す。
+    /// スコープ終了時に元のターゲットに自動復元される。
+    unsafe fn new(dc: &'a ID2D1DeviceContext, new_target: &ID2D1Bitmap1) -> Self {
+        let prev_target = dc.GetTarget().ok();
+        dc.SetTarget(new_target);
+        Self { dc, prev_target }
+    }
+}
+
+impl Drop for DcTargetGuard<'_> {
+    fn drop(&mut self) {
+        unsafe {
+            self.dc.SetTarget(self.prev_target.as_ref());
+        }
+    }
+}
+```
+
+**Responsibilities**:
+- `SetTarget` の前後でターゲットを保存・復元
+- BeginDraw/EndDraw/CopyFromBitmap のエラー時も確実に復元
+- マルチウィンドウ環境での DC 状態不整合を防止
+
+---
 
 ##### CompositeContext と render_subtree（Req 2.3, 2.4, 2.5, 2.6）
 
@@ -636,7 +671,7 @@ unsafe fn draw_with_opacity(
 > - CreateEffect/SetValue/GetOutput の失敗時は `Err` を返し、`render_subtree` が `tracing::error!` でログ出力後、当該エンティティの描画をスキップ（子エンティティへの再帰は継続）。この graceful degradation により GPU リソース枯渇時もアプリケーション全体のクラッシュを回避。
 
 **Implementation Notes**
-- DC ターゲット復元: `GetTarget()` → 保存 → 描画 → `SetTarget(prev)` のパターン。RAII ガード構造体への抽出は Phase 2 で検討
+- DC ターゲット復元: `DcTargetGuard` RAII パターンでエラー安全性を保証。BeginDraw/EndDraw のエラー時も確実に復元される
 - `render_surface` と同様、直接 COM `DrawImage` を呼び出す（ラッパー trait の `draw_image` は opacity 制御に非対応）
 - Stage は `RenderSurface` 相当（Phase 2 で `world.rs` に登録予定）
 
