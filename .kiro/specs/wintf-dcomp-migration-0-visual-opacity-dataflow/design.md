@@ -369,6 +369,8 @@ classDiagram
 - `visual_property_sync_system` が `Visual.is_visible = false` で `SetOpacity(0.0)` を呼ぶことの検証
 - `Changed<Visual>` フィルタが opacity 変更で発火することの検証
 - `hit_test_entity` が `Visual.opacity` からα判定値を取得することの検証（既存テスト 6 関数の移行）
+- Widget spawn 時に `Visual { opacity: 0.5, .. }` を指定した場合、`visual_property_sync_system` が正しく opacity を読み取り `SetOpacity(0.5)` を呼ぶことの検証（Req 1.1）
+- `set_opacity()` を spawn 後に呼び出した場合、`Changed<Visual>` が発火し、`visual_property_sync_system` が更新された opacity を DComp に反映することの検証（Req 1.1, 1.3）
 
 ### Regression Tests
 - 既存 Example（`dcomp_demo.rs`, `taffy_flex_demo.rs` 等）の手動実行による visual regression 確認
