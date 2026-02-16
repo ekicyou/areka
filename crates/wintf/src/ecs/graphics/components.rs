@@ -1,6 +1,7 @@
 use bevy_ecs::lifecycle::HookContext;
 use bevy_ecs::prelude::*;
 use bevy_ecs::world::DeferredWorld;
+use tracing::warn;
 use windows::Win32::Graphics::Direct2D::*;
 use windows::Win32::Graphics::DirectComposition::*;
 use windows_numerics::Vector2;
@@ -310,6 +311,31 @@ impl Default for Visual {
             opacity: 1.0,
             transform_origin: Vector2::default(),
         }
+    }
+}
+
+impl Visual {
+    /// opacity を 0.0〜1.0 にクランプして設定する。
+    /// 範囲外の値は warn ログを出力後にクランプされる。
+    pub fn set_opacity(&mut self, value: f32) {
+        if value < 0.0 || value > 1.0 {
+            warn!(
+                value = value,
+                "Opacity value is outside valid range [0.0, 1.0]"
+            );
+        }
+        self.opacity = value.clamp(0.0, 1.0);
+    }
+
+    /// クランプ済み opacity 値を返す (0.0〜1.0)。
+    /// `Opacity::clamped()` の移行先。
+    pub fn clamped_opacity(&self) -> f32 {
+        self.opacity.clamp(0.0, 1.0)
+    }
+
+    /// is_visible を設定する。
+    pub fn set_visible(&mut self, visible: bool) {
+        self.is_visible = visible;
     }
 }
 

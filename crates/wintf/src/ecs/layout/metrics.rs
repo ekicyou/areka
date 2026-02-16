@@ -1,3 +1,6 @@
+// Opacity deprecated: derive macro の自己参照警告を抑制
+#![allow(deprecated)]
+
 use bevy_ecs::prelude::*;
 use tracing::warn;
 
@@ -106,6 +109,7 @@ impl Default for LayoutScale {
 /// - UIレベルのパラメータとしてlayoutモジュールに配置
 /// - 内部的にはgraphicsシステムがVisualGraphicsに反映
 /// - アニメーション対象として将来的に拡張可能
+#[deprecated(since = "0.1.0", note = "Use Visual.opacity instead")]
 #[derive(Component, Debug, Clone, Copy, PartialEq)]
 pub struct Opacity(pub f32);
 

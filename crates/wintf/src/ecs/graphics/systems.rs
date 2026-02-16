@@ -6,7 +6,7 @@ use crate::com::dcomp::{
 };
 use crate::ecs::graphics::{
     GraphicsCore, HasGraphicsResources, SurfaceCreationStats, SurfaceGraphics,
-    SurfaceGraphicsDirty, VisualGraphics, WindowGraphics,
+    SurfaceGraphicsDirty, Visual, VisualGraphics, WindowGraphics,
 };
 use crate::ecs::layout::GlobalArrangement;
 use crate::ecs::widget::{Brush, BrushInherit, Brushes, DEFAULT_BACKGROUND, DEFAULT_FOREGROUND};
@@ -1008,7 +1008,7 @@ pub fn visual_property_sync_system(
             Entity,
             &crate::ecs::layout::Arrangement,
             &crate::ecs::layout::GlobalArrangement,
-            Option<&crate::ecs::layout::Opacity>,
+            &Visual,
             &VisualGraphics,
             Option<&Name>,
             Has<crate::ecs::window::Window>,
@@ -1016,16 +1016,16 @@ pub fn visual_property_sync_system(
         Or<(
             Changed<crate::ecs::layout::Arrangement>,
             Changed<crate::ecs::layout::GlobalArrangement>,
-            Changed<crate::ecs::layout::Opacity>,
+            Changed<Visual>,
         )>,
     >,
 ) {
     use crate::com::dcomp::DCompositionVisualExt;
 
-    for (entity, arrangement, global_arrangement, opacity_opt, vg, name, is_window) in
+    for (entity, arrangement, global_arrangement, visual_component, vg, name, is_window) in
         changed_entities.iter()
     {
-        let Some(visual) = vg.visual() else {
+        let Some(visual_com) = vg.visual() else {
             continue;
         };
 
@@ -1042,14 +1042,14 @@ pub fn visual_property_sync_system(
             let offset_x = arrangement.offset.x * scale_x;
             let offset_y = arrangement.offset.y * scale_y;
 
-            if let Err(e) = visual.set_offset_x(offset_x) {
+            if let Err(e) = visual_com.set_offset_x(offset_x) {
                 error!(
                     entity = %entity_name,
                     error = ?e,
                     "[visual_property_sync] SetOffsetX failed"
                 );
             }
-            if let Err(e) = visual.set_offset_y(offset_y) {
+            if let Err(e) = visual_com.set_offset_y(offset_y) {
                 error!(
                     entity = %entity_name,
                     error = ?e,
@@ -1073,20 +1073,18 @@ pub fn visual_property_sync_system(
             // eprintln!("[visual_property_sync] Entity={} (Window): offset skipped", entity_name);
         }
 
-        // Opacity同期: Opacityコンポーネントがあれば反映（Windowも含む）
-        if let Some(opacity) = opacity_opt {
-            let opacity_value = opacity.clamped();
-            if let Err(e) = visual.set_opacity(opacity_value) {
-                error!(
-                    entity = %entity_name,
-                    error = ?e,
-                    "[visual_property_sync] SetOpacity failed"
-                );
-            }
-
-            // 正常パスのログは抑制
-            // #[cfg(debug_assertions)]
-            // eprintln!("[visual_property_sync] Entity={}, opacity={}", entity_name, opacity_value);
+        // Opacity同期: Visual.opacityを読み取り、is_visible=falseなら0.0を設定
+        let opacity_value = if !visual_component.is_visible {
+            0.0
+        } else {
+            visual_component.clamped_opacity()
+        };
+        if let Err(e) = visual_com.set_opacity(opacity_value) {
+            error!(
+                entity = %entity_name,
+                error = ?e,
+                "[visual_property_sync] SetOpacity failed"
+            );
         }
     }
 }

@@ -76,6 +76,7 @@ use wintf::ecs::drag::{
     DragConfig, DragEndEvent, DragEvent, DragStartEvent, OnDrag, OnDragEnd, OnDragStart,
 };
 use wintf::ecs::layout::hit_region::HitRegionMap;
+use wintf::ecs::Visual;
 use wintf::ecs::layout::{BoxMargin, BoxPosition, BoxSize, BoxStyle, Dimension, Opacity};
 use wintf::ecs::layout::{
     GlobalArrangement, HitTest, PhysicalPoint, hit_test, hit_test_in_window_ex,
@@ -675,6 +676,7 @@ fn create_flexbox_window(
         .spawn((
             Name::new("ClickThrough-Container"),
             ClickThroughTestContainer,
+            Visual { opacity: 0.3, ..Default::default() },
             Rectangle::new(),
             Brushes::with_foreground(D2D1_COLOR_F {
                 r: 0.2,
