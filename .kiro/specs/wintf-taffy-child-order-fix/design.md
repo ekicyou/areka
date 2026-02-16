@@ -284,7 +284,12 @@ pub fn visual_hierarchy_sync_system(
 - 不変条件: `parent_visual.is_some()` の既同期エンティティは影響を受けない（影響親の子は除く）
 
 **Implementation Notes**
-- 統合: Phase 1 の未同期エンティティ収集後、`affected_parents: HashSet<Entity>` を構築。Phase 2 冒頭で各 affected_parent に対して `remove_all_visuals` を実行し、`Children` 順で `add_visual` を再実行
+- 統合: Phase 1 の未同期エンティティ収集後、`affected_parents: HashSet<Entity>` を構築（Phase 1 で収集した各未同期エンティティの `parent_entity` を挿入）。Phase 2 では各 affected_parent について：
+  1. `children_query.get(parent)` で親の `Children` を取得
+  2. 親の `VisualGraphics` から `parent_visual` を取得
+  3. `parent_visual.remove_all_visuals()` を実行
+  4. `Children` の順序で各子の `VisualGraphics` を取得し、`visual()` が `Some` なら `parent_visual.add_visual(child_visual, false, None)` を実行
+  5. 各子の `parent_visual` キャッシュを更新
 - 検証: `Children` 内の各エンティティについて `vg_queries.p0()` で `VisualGraphics` を取得。`visual()` が `Some` のもののみ `add_visual` 対象
 - リスク: `remove_all_visuals` 後に `add_visual` が失敗した場合、子 Visual が欠落する → 既存コードと同じエラー無視パターン（`error!` ログ + 続行）を適用
 
@@ -334,8 +339,11 @@ pub fn visual_hierarchy_sync_system(
 
 ### 統合テスト（Visual 階層順序）
 
-4. **Visual 階層の兄弟順序テスト** (R3-AC3): ECS レベルで `visual_hierarchy_sync_system` 実行後の更新リスト（`add_visual` 呼び出し順序）が `Children` の順序と一致することを検証
+4. **Visual 階層の兄弟順序テスト** (R3-AC3): 
+   - **検証方法**: 異なるアーキタイプの兄弟を持つ親エンティティで、一部の子を未同期状態（`parent_visual.is_none()`）にし、`visual_hierarchy_sync_system` 実行後に以下を検証:
+     - 影響を受けた親の全子の `parent_visual` キャッシュが更新されている（`is_some()`）
+     - 各子の `parent_visual` が正しい親 Visual を参照している
+     - 同一親の子が処理された順序（depth + entity 収集順）が `Children` の順序と無関係でも、最終的な Z-order は `Children` 順序に一致する（`remove_all_visuals` + `Children` 順再追加により保証）
+   - **E2E補完**: 実際の DComp Visual Z-order はサンプルアプリケーション（`taffy_flex_demo` 相当）で視覚的に確認
 5. **VisualGraphics を持たない子のスキップテスト**: `Children` に含まれるが `VisualGraphics` を持たないエンティティが安全にスキップされることを検証
-
-> Visual 階層テスト (R3-AC3) は DirectComposition COM オブジェクトを必要とするため、実際のGPU依存の部分はE2Eテスト（examples）で確認し、単体テストではECSレベルの更新データ構造を検証する。
 
