@@ -441,17 +441,38 @@ pub fn composite_render_system(
         (Or<(Changed<GraphicsCommandList>, Changed<GlobalArrangement>, Changed<Visual>)>,),
     >,
     children_query: Query<&Children>,
+    // 初回フレーム検出用
+    added_query: Query<Entity, Added<WindowD3D11Compositor>>,
 )
 ```
 
 ##### ダーティ判定（Req 2.8）
 
-ウィンドウ内のいずれかのエンティティで `Changed<GraphicsCommandList>` / `Changed<GlobalArrangement>` / `Changed<Visual>` が検出された場合にウィンドウ全体を再合成する。
+ウィンドウ内のいずれかのエンティティで `Changed<GraphicsCommandList>` / `Changed<GlobalArrangement>` / `Changed<Visual>` が検出された場合、またはウィンドウ初回フレームの場合にウィンドウ全体を再合成する。
 
 判定手順:
-1. ウィンドウの `Children` からサブツリー全体を走査
-2. `changed_query` にヒットするエンティティが1つでもあれば dirty
-3. `Added<WindowD3D11Compositor>` の初回フレームは常に dirty
+1. `added_query` で `Added<WindowD3D11Compositor>` を検出 → 初回フレームは常に dirty
+2. ウィンドウの `Children` からサブツリー全体を走査
+3. `changed_query` にヒットするエンティティが1つでもあれば dirty
+
+**is_window_dirty 関数シグネチャ**:
+```rust
+fn is_window_dirty(
+    window_entity: Entity,
+    window_children: &Children,
+    changed_query: &Query<Entity, Or<(Changed<GraphicsCommandList>, Changed<GlobalArrangement>, Changed<Visual>)>>,
+    children_query: &Query<&Children>,
+    added_query: &Query<Entity, Added<WindowD3D11Compositor>>,
+) -> bool {
+    // 初回フレーム検出
+    if added_query.contains(window_entity) {
+        return true;
+    }
+    
+    // サブツリー内の Changed<T> 検出
+    // ... 既存のロジック
+}
+```
 
 > Phase 1 ではウィンドウ全体再合成。差分更新最適化は Phase 2 以降で検討。
 
@@ -462,8 +483,8 @@ for (window_entity, mut compositor, window_children) in compositor_query.iter_mu
     let Some(dc) = core.device_context() else { continue };
     if !compositor.is_valid() { continue; }
 
-    // 1. ダーティ判定（Req 2.8）
-    if !is_window_dirty(window_entity, window_children, &changed_query, &children_query) {
+    // 1. ダーティ判定（Req 2.8: 初回フレームまたは Changed<T> 検出）
+    if !is_window_dirty(window_entity, window_children, &changed_query, &children_query, &added_query) {
         continue;
     }
 
