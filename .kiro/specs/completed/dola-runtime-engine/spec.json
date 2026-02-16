@@ -1,9 +1,9 @@
 {
     "feature_name": "dola-runtime-engine",
     "created_at": "2026-02-14T19:39:00+09:00",
-    "updated_at": "2026-02-15T02:00:00+09:00",
+    "updated_at": "2026-02-16T00:00:00+09:00",
     "language": "ja",
-    "phase": "tasks-approved",
+    "phase": "implementation-complete",
     "approvals": {
         "requirements": {
             "generated": true,
@@ -20,7 +20,7 @@
     },
     "ready_for_implementation": true,
     "child_specifications": {
-        "total": 4,
+        "total": 5,
         "categories": {
             "tier1": [
                 "dola-runtime-1-core-types",
@@ -30,14 +30,23 @@
                 "dola-runtime-3-facade"
             ],
             "tier3": [
-                "dola-runtime-4-conflict-loop"
+                "dola-runtime-4-conflict",
+                "dola-runtime-5-loop"
             ]
         },
         "created": [
             "dola-runtime-1-core-types",
             "dola-runtime-2-clock",
             "dola-runtime-3-facade",
-            "dola-runtime-4-conflict-loop"
+            "dola-runtime-4-conflict",
+            "dola-runtime-5-loop"
+        ],
+        "completed": [
+            "dola-runtime-1-core-types",
+            "dola-runtime-2-clock",
+            "dola-runtime-3-facade",
+            "dola-runtime-4-conflict",
+            "dola-runtime-5-loop"
         ],
         "pending": 0
     }
