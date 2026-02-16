@@ -876,6 +876,7 @@ pub fn mark_dirty_surfaces(
 ///
 /// 重要: 親→子の順序でAddVisualを呼ぶ必要がある（DirectComposition要件）。
 /// 深さでソートして親が先に処理されるようにする。
+/// 兄弟間のZ-orderはChildrenコンポーネントの順序を権威的ソースとする。
 ///
 /// 注意: エラーは無視する（親が先に削除されている場合など）
 pub fn visual_hierarchy_sync_system(
@@ -886,60 +887,56 @@ pub fn visual_hierarchy_sync_system(
         Query<(&VisualGraphics, Option<&Name>)>,
     )>,
     child_of_query: Query<&ChildOf>,
+    // Children コンポーネント（兄弟順序の権威的ソース）
+    children_query: Query<&Children>,
 ) {
     use crate::com::dcomp::DCompositionVisualExt;
 
-    // 1. まず未同期（parent_visual==None）のエンティティと親情報とName情報を収集
-    // (child_entity, parent_entity, child_name, parent_name, depth)
-    let mut updates: Vec<(Entity, Entity, Option<String>, Option<String>, usize)> = Vec::new();
+    // Phase 1: 未同期（parent_visual==None）のエンティティと親情報を収集
+    // affected_parents: 未同期の子を持つ親エンティティの集合
+    let mut affected_parents = std::collections::HashSet::new();
+    // 深さ付き親情報: (parent_entity, depth) — depth は親の深さ（浅い順に処理するため）
+    let mut parent_depths: std::collections::HashMap<Entity, usize> = std::collections::HashMap::new();
     {
         let child_query = vg_queries.p0();
-        for (entity, child_of, child_vg, child_name) in child_query.iter() {
+        for (_entity, child_of, child_vg, _child_name) in child_query.iter() {
             // parent_visualがNoneなら未同期
             if child_vg.parent_visual().is_none() {
-                let child_name_str = child_name.map(|n| n.to_string());
-                // 深さを計算
-                let mut depth = 0;
-                let mut current = entity;
-                while let Ok(co) = child_of_query.get(current) {
-                    depth += 1;
-                    current = co.parent();
+                let parent_entity = child_of.parent();
+                affected_parents.insert(parent_entity);
+
+                // 親の深さを計算（まだ計算していない場合）
+                if !parent_depths.contains_key(&parent_entity) {
+                    let mut depth = 0;
+                    let mut current = parent_entity;
+                    while let Ok(co) = child_of_query.get(current) {
+                        depth += 1;
+                        current = co.parent();
+                    }
+                    parent_depths.insert(parent_entity, depth);
                 }
-                updates.push((entity, child_of.parent(), child_name_str, None, depth));
             }
         }
     }
 
-    // 親のNameを取得
-    {
-        let parent_query = vg_queries.p1();
-        for item in updates.iter_mut() {
-            let parent_entity = item.1;
-            if let Ok((_, parent_name)) = parent_query.get(parent_entity) {
-                item.3 = parent_name.map(|n| n.to_string());
-            }
-        }
+    if affected_parents.is_empty() {
+        return;
     }
 
-    // 2. 深さでソート（浅い＝親が先）
-    updates.sort_by_key(|item| item.4);
+    // Phase 2: affected_parents を深さでソート（浅い親が先 → 親→子の順序で処理）
+    let mut sorted_parents: Vec<Entity> = affected_parents.into_iter().collect();
+    sorted_parents.sort_by_key(|e| parent_depths.get(e).copied().unwrap_or(0));
 
-    if !updates.is_empty() {
-        debug!(
-            count = updates.len(),
-            "[visual_hierarchy_sync] Processing entities (sorted by depth)"
-        );
-    }
+    debug!(
+        count = sorted_parents.len(),
+        "[visual_hierarchy_sync] Processing affected parents (sorted by depth)"
+    );
 
-    // 3. 各子エンティティに対して処理
-    for (child_entity, parent_entity, child_name_str, parent_name_str, depth) in updates {
-        // フォーマット済み名前を生成
-        let child_fallback = format!("Entity({:?})", child_entity);
-        let parent_fallback = format!("Entity({:?})", parent_entity);
-        let child_display = child_name_str.as_deref().unwrap_or(&child_fallback);
-        let parent_display = parent_name_str.as_deref().unwrap_or(&parent_fallback);
+    // Phase 3: 各 affected_parent について Children 順で子 Visual を再配置
+    for parent_entity in sorted_parents {
+        let parent_depth = parent_depths.get(&parent_entity).copied().unwrap_or(0);
 
-        // 親のVisualを取得
+        // 親の Visual を取得
         let parent_visual = {
             let parent_query = vg_queries.p1();
             parent_query
@@ -948,45 +945,92 @@ pub fn visual_hierarchy_sync_system(
                 .and_then(|(pv, _)| pv.visual().cloned())
         };
 
-        // 子のVisualGraphicsを更新
-        let mut child_query = vg_queries.p0();
-        if let Ok((_, _, mut child_vg, _)) = child_query.get_mut(child_entity) {
-            // 子のvisualを取得
-            let child_visual = match child_vg.visual() {
-                Some(v) => v.clone(),
-                None => continue,
-            };
+        // 親の名前（ログ用）
+        let parent_name = {
+            let parent_query = vg_queries.p1();
+            parent_query
+                .get(parent_entity)
+                .ok()
+                .and_then(|(_, name)| name.map(|n| n.to_string()))
+        };
+        let parent_fallback = format!("Entity({:?})", parent_entity);
+        let parent_display = parent_name.as_deref().unwrap_or(&parent_fallback);
 
-            // 新しい親に追加
-            if let Some(ref parent_visual) = parent_visual {
-                // 親がVisualGraphicsを持つ場合: 親Visualに追加
-                if let Err(e) = parent_visual.add_visual(&child_visual, false, None) {
-                    error!(
-                        child = %child_display,
-                        depth = depth,
-                        parent = %parent_display,
-                        error = ?e,
-                        "[visual_hierarchy_sync] AddVisual failed"
-                    );
-                } else {
-                    debug!(
-                        child = %child_display,
-                        depth = depth,
-                        parent = %parent_display,
-                        "[visual_hierarchy_sync] AddVisual success"
-                    );
+        if let Some(ref parent_visual) = parent_visual {
+            // 親の既存 Visual 子をすべて削除して Z-order をリセット
+            let _ = parent_visual.remove_all_visuals();
+
+            // Children コンポーネントの順序で子 Visual を再追加
+            if let Ok(children) = children_query.get(parent_entity) {
+                for child_entity in children.iter() {
+                    let mut child_query = vg_queries.p0();
+                    if let Ok((_, _, mut child_vg, child_name)) =
+                        child_query.get_mut(child_entity)
+                    {
+                        let child_visual = match child_vg.visual() {
+                            Some(v) => v.clone(),
+                            None => continue,
+                        };
+
+                        let child_name_str = child_name.map(|n| n.to_string());
+                        let child_fallback = format!("Entity({:?})", child_entity);
+                        let child_display =
+                            child_name_str.as_deref().unwrap_or(&child_fallback);
+
+                        if let Err(e) =
+                            parent_visual.add_visual(&child_visual, false, None)
+                        {
+                            error!(
+                                child = %child_display,
+                                depth = parent_depth + 1,
+                                parent = %parent_display,
+                                error = ?e,
+                                "[visual_hierarchy_sync] AddVisual failed"
+                            );
+                        } else {
+                            debug!(
+                                child = %child_display,
+                                depth = parent_depth + 1,
+                                parent = %parent_display,
+                                "[visual_hierarchy_sync] AddVisual success"
+                            );
+                        }
+
+                        // parent_visual キャッシュを更新
+                        child_vg.set_parent_visual(Some(parent_visual.clone()));
+                    }
                 }
-                // parent_visualキャッシュを更新
-                child_vg.set_parent_visual(Some(parent_visual.clone()));
-            } else {
-                // 親がVisualGraphicsを持たない場合: Visual階層のルート
-                debug!(
-                    name = %child_display,
-                    depth = depth,
-                    "[visual_hierarchy_sync] Visual hierarchy root"
-                );
-                // 自分自身のVisualを設定して「処理済み」とマーク
-                child_vg.set_parent_visual(Some(child_visual.clone()));
+            }
+        } else {
+            // 親が VisualGraphics を持たない場合: 各子を Visual 階層のルートとしてマーク
+            if let Ok(children) = children_query.get(parent_entity) {
+                for child_entity in children.iter() {
+                    let mut child_query = vg_queries.p0();
+                    if let Ok((_, _, mut child_vg, child_name)) =
+                        child_query.get_mut(child_entity)
+                    {
+                        if child_vg.parent_visual().is_some() {
+                            continue; // 既に同期済み
+                        }
+                        let child_visual = match child_vg.visual() {
+                            Some(v) => v.clone(),
+                            None => continue,
+                        };
+
+                        let child_name_str = child_name.map(|n| n.to_string());
+                        let child_fallback = format!("Entity({:?})", child_entity);
+                        let child_display =
+                            child_name_str.as_deref().unwrap_or(&child_fallback);
+
+                        debug!(
+                            name = %child_display,
+                            depth = parent_depth + 1,
+                            "[visual_hierarchy_sync] Visual hierarchy root"
+                        );
+                        // 自分自身の Visual を設定して「処理済み」とマーク
+                        child_vg.set_parent_visual(Some(child_visual.clone()));
+                    }
+                }
             }
         }
     }

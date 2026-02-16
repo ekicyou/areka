@@ -150,6 +150,8 @@ pub fn sync_taffy_tree_system(
     changed_hierarchy: Query<(Entity, Option<&ChildOf>), Changed<ChildOf>>,
     // ChildOfが削除されたエンティティ
     mut removed_hierarchy: RemovedComponents<ChildOf>,
+    // Children コンポーネント（兄弟順序の権威的ソース）
+    children_query: Query<&Children>,
 ) {
     // 新規エンティティにtaffyノードを作成
     for (entity, _) in new_entities.iter() {
@@ -165,15 +167,28 @@ pub fn sync_taffy_tree_system(
         }
     }
 
-    // 階層変更を処理（新規エンティティの親子関係もここで設定）
-    for (entity, child_of) in changed_hierarchy.iter() {
-        if let Some(node_id) = taffy_res.get_node(entity) {
-            if let Some(parent_ref) = child_of {
-                let parent_entity = parent_ref.parent();
-                if let Some(parent_node) = taffy_res.get_node(parent_entity) {
-                    // 新しい親に追加（taffyが自動的に既存の親から削除する）
-                    let _ = taffy_res.taffy_mut().add_child(parent_node, node_id);
-                }
+    // 階層変更を処理: Children コンポーネントの順序を権威的ソースとして使用
+    // Step 1: changed_hierarchy から影響を受けた親エンティティを収集（重複排除）
+    let mut affected_parents = std::collections::HashSet::new();
+    for (_entity, child_of) in changed_hierarchy.iter() {
+        if let Some(parent_ref) = child_of {
+            affected_parents.insert(parent_ref.parent());
+        }
+    }
+
+    // Step 2: 各影響親について Children の順序で taffy 子ノードを一括設定
+    for parent_entity in affected_parents {
+        if let Some(parent_node) = taffy_res.get_node(parent_entity) {
+            if let Ok(children) = children_query.get(parent_entity) {
+                // Children.iter() の順序で NodeId リストを構築
+                // taffy ノード未作成のエンティティはスキップ
+                let ordered_node_ids: Vec<taffy::NodeId> = children
+                    .iter()
+                    .filter_map(|child_entity| taffy_res.get_node(child_entity))
+                    .collect();
+                let _ = taffy_res
+                    .taffy_mut()
+                    .set_children(parent_node, &ordered_node_ids);
             }
         }
     }
@@ -321,10 +336,9 @@ pub fn update_arrangements_system(
 
         let new_offset = if is_window {
             // 既存の offset を維持、まだ存在しない場合は (0,0)
-            arrangement.as_ref().map_or(
-                Offset { x: 0.0, y: 0.0 },
-                |arr| arr.offset,
-            )
+            arrangement
+                .as_ref()
+                .map_or(Offset { x: 0.0, y: 0.0 }, |arr| arr.offset)
         } else {
             Offset {
                 x: layout.location.x,
