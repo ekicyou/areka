@@ -156,7 +156,8 @@ sequenceDiagram
 | Requirements | 1.1, 1.2, 1.3, 2.1, 2.2 |
 
 **Responsibilities & Constraints**
-- opacity 値の 0.0〜1.0 クランプ保証
+- 読み取り時の opacity 値 0.0〜1.0 クランプ保証（`clamped_opacity()` 経由）
+- `set_opacity()` 経由での書き込み時のバリデーション（範囲外警告 + クランプ）
 - `Changed<Visual>` による変更検出の基盤提供
 - 既存 `pub` フィールドとの後方互換性維持（直接アクセスも許容）
 
@@ -185,13 +186,27 @@ impl Visual {
 ```
 
 - Preconditions: なし
-- Postconditions: `self.opacity` は 0.0〜1.0 の範囲内
-- Invariants: `clamped_opacity()` は常に `self.opacity.clamp(0.0, 1.0)` を返す
+- Postconditions: `set_opacity()` 経由の場合、`self.opacity` は 0.0〜1.0 の範囲内
+- Invariants: `clamped_opacity()` は常に `self.opacity.clamp(0.0, 1.0)` を返す（入力値に関わらず読み取り時にクランプを保証）
 
 **Implementation Notes**
 - `set_opacity` は `Opacity::validate()` 相当のログ出力を移植する（範囲外警告）
 - フィールド `pub opacity: f32` はそのまま維持。`set_opacity` はクランプ付き setter として追加
 - `clamped_opacity()` は `Opacity::clamped()` と同一ロジック: `self.opacity.clamp(0.0, 1.0)`
+
+##### API Usage Patterns
+
+**設計原則**: 受け入れ側（読み取り側）がクランプを保証する防御的プログラミング
+
+| パターン | 用途 | バリデーション | 推奨シーン |
+|---------|------|--------------|-----------|
+| 構造体リテラル | `Visual { opacity: 0.5, .. }` | なし（範囲外でも警告なし） | spawn 時の初期化（自己責任） |
+| `set_opacity()` | `visual.set_opacity(0.5)` | あり（範囲外で warn ログ + クランプ） | spawn 後の動的変更 |
+| `clamped_opacity()` | `visual.clamped_opacity()` | 常にクランプ (0.0〜1.0) | 読み取り側（sync system, hit_test） |
+
+**許容される設計トレードオフ**:
+- spawn 時の構造体リテラルは範囲外値の警告を出さない（後方互換性・簡潔性優先）
+- 読み取り側（`visual_property_sync_system`, `hit_test`）は必ず `clamped_opacity()` を使用することで、無効値が DComp API / α判定に到達することを防ぐ
 
 #### visual_property_sync_system 修正
 
