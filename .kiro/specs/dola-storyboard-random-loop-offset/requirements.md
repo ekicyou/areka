@@ -41,7 +41,6 @@
 1. If `loop_offset.min` が負の値の場合, the dola Validator shall バリデーションエラーを報告する
 2. If `loop_offset.max` が負の値の場合, the dola Validator shall バリデーションエラーを報告する
 3. If `loop_offset.min > loop_offset.max` の場合, the dola Validator shall 範囲逆転エラーを報告する
-4. If `loop_offset` が指定されているが `loop_count = 1` の場合, the dola Validator shall 警告を報告する（エラーではなく警告）
 
 ### Requirement 4: JSON定義の簡潔な記法
 **Objective:** アニメーション作成者として、シンプルなユースケース（瞬きなど）をできるだけ簡潔に記述したい。定義ファイルの可読性と記述効率を高めるため。
