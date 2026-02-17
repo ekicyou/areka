@@ -1,6 +1,6 @@
 # 要件定義書: wintf-dcomp-migration-2-pipeline-switch
 
-> **Rev 5** (2026-02-17) — 議題 4: Req 4 冗長性解消。Req 4（commit_composition 除去）の AC が Req 1 AC 4 と完全同一のため削除、Phase 間ハンドオーバー Note を Req 1 に統合。
+> **Rev 6** (2026-02-17) — 議題 5: Req 3 AC 4 削除（旧実装保持戦略との整合）。`mark_dirty_surfaces` 関数本体修正要求を削除し、Schedule 除去のみに限定。
 
 ## 導入
 
@@ -117,9 +117,7 @@ _Parent: Req 3.3_
 
 3. The `invalidate_dependent_components` shall `BitmapSourceGraphics` への Query パラメータを維持する（DComp 非依存のコンポーネントであるため）
 
-4. The `mark_dirty_surfaces` shall per-entity `SurfaceGraphicsDirty` ベースのダーティ検出を廃止する
-
-5. The `mark_dirty_surfaces` の機能 shall `composite_render_system` 内の `is_window_dirty()` ヘルパー（`Changed<GraphicsCommandList>`, `Changed<GlobalArrangement>`, `Changed<Visual>` ベース）で代替されるため、システム自体を Schedule から除去する（Req 1.3 と連動）
+4. The `mark_dirty_surfaces` の機能 shall `composite_render_system` 内の `is_window_dirty()` ヘルパー（`Changed<GraphicsCommandList>`, `Changed<GlobalArrangement>`, `Changed<Visual>` ベース）で代替されるため、システム自体を Schedule から除去する（Req 1.3 と連動）
 
 ### Requirement 4: Schedule 登録済みシステムの DComp 参照除去検証
 
@@ -160,6 +158,14 @@ _Parent: Req 10.1, 10.2_
 ---
 
 ## 改定履歴
+
+### Rev 6 (2026-02-17) — 議題 5: Req 3 AC 4 削除（旧実装保持戦略との整合）
+
+**改定動機**: Req 3 AC 4 が `mark_dirty_surfaces` 関数本体の修正（`SurfaceGraphicsDirty` ベースのダーティ検出廃止）を要求していたが、これは Rev 3 の旧実装保持戦略（「Schedule 非登録の旧システム関数は Phase 4 まで保持し、Phase 2-3 では触らない」）と矛盾する。`mark_dirty_surfaces` は Req 1.3 で Schedule から除去されるため、Schedule 非登録関数となり、関数本体の修正は Phase 4 の責任である。
+
+**主な変更点**:
+- **Req 3 AC 4 削除**: `mark_dirty_surfaces` 関数本体の修正要求を削除（旧実装保持戦略違反）
+- **Req 3 AC 5 → AC 4**: Schedule 除去のみを要求する AC を繰り上げ（Req 1.3 と連動）
 
 ### Rev 5 (2026-02-17) — 議題 4: Req 4 冗長性解消
 
