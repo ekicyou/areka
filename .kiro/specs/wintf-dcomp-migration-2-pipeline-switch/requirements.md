@@ -1,6 +1,6 @@
 # 要件定義書: wintf-dcomp-migration-2-pipeline-switch
 
-> **Rev 3** (2026-02-17) — 議題 2: 旧関数保持戦略への変更。GraphicsCore DComp 除去を Phase 4 に延期し、Phase 2 では Schedule 切り替えのみに集中。
+> **Rev 4** (2026-02-17) — 議題 3: Phase 2 完了基準の現実化。Phase 2 単体では画面表示不可能（UpdateLayeredWindow は Phase 3 担当）のため、検証範囲を構造的整合性に限定。
 
 ## 導入
 
@@ -83,8 +83,6 @@ _Parent: Req 2.3, 3.3_
 
 4. The `world.rs` shall CommitComposition ステージから `commit_composition` を除去する（Phase 3 で `ulw_present_system` が当該ステージを引き継ぐ）
 
-5. When Schedule 切り替えが完了した時, the wintf crate shall 全既存 example（`taffy_flex_demo`, `typewriter_demo`, `multi_window_test`, `split_image`）が D2D1 合成パイプラインで正常動作する
-
 ### Requirement 2: on_visual_add フック更新
 
 **Objective:** 開発者として、`Visual` コンポーネント追加時の自動コンポーネント挿入から DComp リソースコンポーネントを除去し、新パイプラインに不要な DComp コンポーネントの生成を停止したい。
@@ -153,25 +151,33 @@ _Parent: Req 2.3, 10.1_
 
 _Parent: Req 10.1, 10.2_
 
+**Note**: Phase 2 は Schedule 切り替えによる **構造的整合性** のみを検証する。`composite_render_system` はビットマップへの合成描画を完了するが、`UpdateLayeredWindow` 呼び出しは Phase 3 の `ulw_present_system` が担当するため、**Phase 2 単体では画面に何も表示されない**。Example の視覚的動作確認は Phase 3 完了まで不可能である。
+
 #### Acceptance Criteria
 
-1. The 全既存 example（`taffy_flex_demo`, `typewriter_demo`, `multi_window_test`, `split_image`）shall D2D1 合成パイプラインで正常に描画される
+1. The `world.rs` の Schedule shall DComp システム（Req 1.1 の 8 システム + `mark_dirty_surfaces` + `commit_composition`）を含まない
 
-2. The `world.rs` の Schedule shall DComp システム（Req 1.1 の 8 システム + `mark_dirty_surfaces` + `commit_composition`）を含まない
+2. The `world.rs` の Schedule shall Phase 1 新システム（`compositor_init_system`, `composite_render_system`）を含む
 
-3. The `world.rs` の Schedule shall Phase 1 新システム（`compositor_init_system`, `composite_render_system`）を含む
+3. The RenderSurface ステージ shall システム登録を含まない（WPF 的遅延戦略により、焼き付けは Composition ステージで実行）
 
-4. The RenderSurface ステージ shall システム登録を含まない（WPF 的遅延戦略により、焼き付けは Composition ステージで実行）
+4. The `on_visual_add` フック shall DComp コンポーネント（`VisualGraphics`, `SurfaceGraphics`, `SurfaceGraphicsDirty`）の挿入を含まない
 
-5. The `on_visual_add` フック shall DComp コンポーネント（`VisualGraphics`, `SurfaceGraphics`, `SurfaceGraphicsDirty`）の挿入を含まない
+5. The `cargo test` shall 全テストがパスする
 
-6. The `cargo test` shall 全テストがパスする
-
-7. The `cargo build --examples` shall 全 example がビルド成功する
+6. The `cargo build --examples` shall 全 example がビルド成功する
 
 ---
 
 ## 改定履歴
+
+### Rev 4 (2026-02-17) — 議題 3: Phase 2 完了基準の現実化
+
+**改定動機**: Phase 1 実装確認の結果、`composite_render_system` がビットマップ合成完了後に `dirty` フラグを設定するのみで、`UpdateLayeredWindow` 呼び出しは Phase 3 の `ulw_present_system` に委譲されることが判明。Phase 2 単体では画面表示が不可能であるため、完了検証基準を構造的整合性に限定する。
+
+**主な変更点**:
+- **Req 1**: AC 5 削除（「全既存 example が正常動作する」— Phase 2 単体では画面表示不可能）
+- **Req 6**: Note 新設（Phase 2 は構造的整合性のみ検証、画面表示は Phase 3 待ち）、AC 1 削除（「example が正常に描画される」— Phase 2 単体では実現不可能）、AC 番号繰り上げ（旧 AC 2-7 → 新 AC 1-6）
 
 ### Rev 3 (2026-02-17) — 議題 2: 旧関数保持戦略への変更
 
@@ -214,7 +220,7 @@ _Parent: Req 10.1, 10.2_
 | ---------- | ---------- | ------------------------------------------------------------------------ |
 | Req 1      | 2.3, 3.3   | ECS Schedule 切り替え（DComp 除去 + D2D1 登録 + mark_dirty/commit 除去） |
 | Req 2      | 6.2, 6.3   | on_visual_add フックから DComp コンポーネント除去                        |
-| Req 3      | 3.3        | YELLOW システム（invalidate / mark_dirty）改修                    |
-| Req 4      | 2.3        | commit_composition の Schedule 除去                       |
-| Req 5      | 2.3, 10.1  | Schedule 登録済みシステムの DComp 参照除去検証                  |
-| Req 6      | 10.1, 10.2 | Phase 2 完了検証基準（E2E + 構造検証）                      |
+| Req 3      | 3.3        | YELLOW システム（invalidate / mark_dirty）改修                           |
+| Req 4      | 2.3        | commit_composition の Schedule 除去                                      |
+| Req 5      | 2.3, 10.1  | Schedule 登録済みシステムの DComp 参照除去検証                           |
+| Req 6      | 10.1, 10.2 | Phase 2 完了検証基準（構造検証のみ、画面表示は Phase 3 待ち）            |
