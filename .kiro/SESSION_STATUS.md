@@ -1,126 +1,110 @@
 # ULW Transform Bug Fix - Session Status
 
 **Date**: 2026年2月17日  
-**Phase**: Phase 3 ULW Integration - Bug Fix & Verification
+**Phase**: Phase 3 ULW Integration - Bug Fix & Verification (継続セッション)
 
 ## 今セッションで完了した作業
 
-### 1. 根本原因の特定と修正 ✅
-**問題**: GlobalArrangement.transform にウィンドウのスクリーン座標が含まれており、ULW合成ビットマップ（ウィンドウ相対座標系）に描画する際に位置ずれが発生していた。
+### 前セッションから引き継ぎ ✅
+- SESSION_STATUS.md と spec files からコンテキスト復旧
+- 残存課題の確認と優先度付け
 
-**根本原因**:
-- `sync_window_arrangement_from_window_pos` (layout/systems.rs) が `Arrangement.offset` にスクリーン座標を設定
-- `propagate_global_arrangements` が全子エンティティの `GlobalArrangement.transform` にこの座標を伝播
-- DComp はスクリーン座標で描画するため問題なかったが、ULW は (0,0) 起点のウィンドウ相対ビットマップに描画するため位置ずれが発生
+### 1. Window エンティティ自体の描画修正 ✅
+**問題**: `composite_render_system` は `window_children` のみを iterate し、Window エンティティ自身の描画がスキップされていた。
 
 **修正内容** (compositor_systems.rs):
 ```rust
-// ウィンドウの GlobalArrangement.transform から画面オフセットを取得
-let window_offset = (window_ga.transform.M31, window_ga.transform.M32);
-
-// CompositeContext にオフセット情報を追加
-struct CompositeContext {
-    dc: &ID2D1DeviceContext,
-    accumulated_opacity: f32,
-    window_offset: (f32, f32),  // NEW
+// Before: 子エンティティのみ iterate
+for child in window_children.iter() {
+    render_subtree(&ctx, child, &entity_query);
 }
 
-// render_subtree で各エンティティの transform からオフセットを減算
-let mut adjusted_transform = ga.transform;
-adjusted_transform.M31 -= ctx.window_offset.0;
-adjusted_transform.M32 -= ctx.window_offset.1;
-unsafe { ctx.dc.SetTransform(&adjusted_transform) };
+// After: Window エンティティをルートとして再帰走査
+// render_subtree が Window 自身を描画してから子へ再帰する
+render_subtree(&ctx, window_entity, &entity_query);
 ```
 
-### 2. 検証完了 ✅
-- **ulw_debug_demo.rs**: 赤色矩形が正しく描画されることを確認
-- **taffy_flex_demo.rs**: DIB pixel dump で以下を確認
-  - `px_15_15=[0, 0, 255, 255]` → 赤色 (BGRA)
-  - `px_100_100=[0, 0, 255, 255]` → 赤色
-  - `first_nonzero_pixel_idx=Some(8010)` → entity 4v0 の位置 (10,10) から描画開始
-  - `nonzero_count=514800` / `total_pixels=560000` = **91.9%** が描画済み
+**効果**: Window エンティティに Rectangle/Brushes がある場合でも正しく描画される。Window にそれらがない場合（taffy_flex_demo等）も安全に動作（entity_query の `Option<&GraphicsCommandList>` が None を返す）。
 
-### 3. デバッグログの追加 ✅
-composite_render_system に以下を追加：
-- dirty check の詳細
-- child_count と window_offset 値
-- DIB pixel dump (コンテンツ位置 + 非ゼロピクセルスキャン)
-- render_subtree のエンティティごとの詳細 (opacity, has_cmd, transform)
+### 2. is_window_dirty のウィンドウエンティティチェック追加 ✅
+**問題**: `is_window_dirty` は子エンティティの変更のみチェックし、Window エンティティ自身の `Changed<GraphicsCommandList/GlobalArrangement/Visual>` を検出していなかった。
+
+**修正内容**:
+```rust
+// ウィンドウエンティティ自体の変更もチェック
+if changed_query.contains(window_entity) {
+    return true;
+}
+```
+
+### 3. デバッグログのクリーンアップ ✅
+以下のログを `debug!` → `trace!` に変更（通常時のノイズ削減）:
+- `composite_render_system`: dirty check, subtree rendering, DIB pixel dump, completion
+- `render_subtree`: visibility skip, opacity skip, entity drawing, draw_with_opacity
+- `ulw_present_system`: ULW 呼び出し、成功通知
+
+`debug!` レベルで残存:
+- `compositor_init_system`: 作成/リサイズ/デバイスロスト復旧（低頻度ライフサイクルイベント）
+
+### 4. テストスイートの回帰確認 ✅
+- `cargo test` 全テストパス（550+ テスト、0 failures）
+
+### 5. クリック時の表示消失問題の調査 ✅
+**調査結果**（コード分析による）:
+
+根本原因の候補:
+1. **draw_rectangles のエラーパス**: `EndDraw` -> brush作成失敗 → `continue` → command_list.Close() がスキップ → Changed<GraphicsCommandList> 不発火
+2. **デバイスロスト時の全コマンドリスト無効化**: shared DC が無効化 → 後続エンティティの描画も全失敗
+3. **is_window_dirty が Changed<Brushes> を未チェック**: 正常パスでは draw_rectangles が GraphicsCommandList を更新するため問題ないが、エラー時に不整合
+
+**対応方針**（次セッション）:
+- `RUST_LOG=trace` で実行して draw_rectangles のエラーログを確認
+- draw_rectangles のエラーパスで空コマンドリスト挿入（Changed<GraphicsCommandList> 確実発火）
+- 実機クリック操作での動作確認
 
 ## 残存課題 (次セッションで対応)
 
 ### 優先度: 高
 
-1. **Window エンティティ自体の描画が欠落**
-   - 現状: `composite_render_system` は `window_children` のみを iterate
-   - 問題: Window エンティティ自身に Rectangle/Brushes があっても描画されない
-   - 影響: Background を持たない Window は完全に透明になる
-   - 対応: Window エンティティ自身も render_subtree で描画する
+1. **クリック時の表示消失問題 (実機検証待ち)**
+   - 状態: コード分析完了、候補原因3件特定
+   - 対応: trace ログで実機動作確認 → エラーパス改善
 
-2. **クリック時の表示消失問題 (未検証)**
-   - ユーザー報告: "クリックしたら初期表示がガラッと消えちゃう"
-   - 状態: Transform 補正後は未検証
-   - 対応: 実際にクリック操作を行って動作確認
-
-3. **"黄色だけが残る" 問題 (未調査)**
-   - ユーザー報告の一部だが、まだ再現・調査していない
-   - 対応: taffy_flex_demo で黄色要素を特定して動作確認
+2. **"黄色だけが残る" 問題 (実機検証待ち)**
+   - 仮説: デバイスロスト後の一部コマンドリストのみ再構築
+   - 対応: 上記と同時に検証
 
 ### 優先度: 中
 
-4. **デバッグログのクリーンアップ**
-   - 現状: debug! レベルで大量のログ出力
-   - 対応: trace! レベルに変更して通常時のログノイズを削減
+3. **draw_rectangles エラーパスの堅牢性向上**
+   - エラー時でも空コマンドリストを挿入して Changed 発火を保証
+   - command_list.Close() のエラーハンドリング改善
 
-5. **テストスイートの回帰確認**
-   - compositor_systems.rs に Query パラメータ追加 (`&GlobalArrangement`)
-   - 対応: `cargo test` で既存テストの破損がないか確認
-
-6. **設計ドキュメントの更新**
+4. **設計ドキュメントの更新**
    - ULW座標系補正の設計判断を文書化
-   - Phase 3 requirements.md の更新
+   - Window エンティティ自体の描画修正を文書化
 
 ## 技術メモ
 
-### ULW vs DComp の座標系の違い
-- **DComp**: スクリーン座標系で Direct3D サーフェスに描画 → GlobalArrangement をそのまま使用
-- **ULW**: ウィンドウ相対座標系の GDI ビットマップに描画 → Window のスクリーン位置を減算
-
-### DIB ピクセルフォーマット
-- Format: BGRA (32bpp, BI_RGB)
-- Layout: Top-down (negative biHeight)
-- Stride: width * 4 bytes
-
-### ECS Schedule の実行順序
-GraphicsSetup → Draw → Composition → CommitComposition → FrameFinalize
-
 ### 修正ファイル
 - `crates/wintf/src/ecs/graphics/compositor_systems.rs`
-  - compositor_query に `&GlobalArrangement` 追加
-  - CompositeContext に `window_offset` フィールド追加
-  - render_subtree で transform 補正処理追加
-  - DIB pixel dump の改善
+  - render_subtree: Window エンティティをルートとして直接走査する方式に変更
+  - is_window_dirty: ウィンドウエンティティ自体の変更チェック追加
+  - ログレベル: debug! → trace! に変更（compositor_init_system は debug! 維持）
 
-### 新規ファイル (前セッション)
-- `crates/wintf/examples/ulw_debug_demo.rs` (minimal debug demo)
+### ECS Query 安全性
+- `compositor_query` (Entity, &mut WindowD3D11Compositor, &Children, &GlobalArrangement)
+- `entity_query` (&GlobalArrangement, Option<&GraphicsCommandList>, &Visual, Option<&Children>)
+- 両 Query は `&mut WindowD3D11Compositor` のみが排他。他は全て immutable borrow で競合なし。
+- render_subtree(window_entity) の entity_query.get() は compositor_query と同一エンティティだが、
+  アクセスするコンポーネントが異なるため bevy_ecs の borrow check を正常に通過。
 
-## 次セッションの開始方法
-
-1. このファイルを読む
-2. TODO リスト (上記「残存課題」) を確認
-3. 優先度「高」から順に対応
-4. 各対応後に taffy_flex_demo/ulw_debug_demo で動作確認
-
-## テスト実行コマンド
-
+### テスト実行コマンド
 ```powershell
-# デバッグログ付き実行
-$env:RUST_LOG="wintf::ecs::graphics::compositor_systems=debug,info"
-cargo run --example taffy_flex_demo
-
 # テストスイート実行
 cargo test
 
-# 特定テスト実行
-cargo test --test compositor_systems_test
+# trace ログ付き実行（クリック問題の調査用）
+$env:RUST_LOG="wintf::ecs::graphics=trace,info"
+cargo run --example taffy_flex_demo
 ```

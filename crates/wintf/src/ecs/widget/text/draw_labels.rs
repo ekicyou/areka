@@ -1,16 +1,16 @@
 use crate::com::d2d::{D2D1CommandListExt, D2D1DeviceContextExt};
 use crate::com::dwrite::DWriteFactoryExt;
+use crate::ecs::TextLayoutMetrics;
 use crate::ecs::graphics::{GraphicsCommandList, GraphicsCore};
 use crate::ecs::widget::brushes::{Brushes, DEFAULT_FOREGROUND};
 use crate::ecs::widget::text::label::TextDirection;
 use crate::ecs::widget::text::{Label, TextLayoutResource};
-use crate::ecs::TextLayoutMetrics;
 use bevy_ecs::prelude::*;
 use tracing::{debug, warn};
 use windows::Win32::Graphics::Direct2D::Common::D2D1_COLOR_F;
 use windows::Win32::Graphics::Direct2D::D2D1_DRAW_TEXT_OPTIONS_NONE;
 use windows::Win32::Graphics::DirectWrite::*;
-use windows_numerics::Vector2;
+use windows_numerics::{Matrix3x2, Vector2};
 
 /// 透明色定数（内部使用）
 const TRANSPARENT_COLOR: D2D1_COLOR_F = D2D1_COLOR_F {
@@ -162,6 +162,8 @@ pub fn draw_labels(
 
         // 描画開始
         unsafe {
+            // 共有DCのワールド変換をリセット（前フレームのcomposite_render_systemの残留変換を防止）
+            dc.SetTransform(&Matrix3x2::identity());
             dc.BeginDraw();
         }
 

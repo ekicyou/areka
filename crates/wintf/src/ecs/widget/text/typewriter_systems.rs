@@ -21,7 +21,7 @@ use tracing::{debug, trace, warn};
 use windows::Win32::Graphics::Direct2D::Common::D2D1_COLOR_F;
 use windows::Win32::Graphics::Direct2D::D2D1_DRAW_TEXT_OPTIONS_NONE;
 use windows::Win32::Graphics::DirectWrite::*;
-use windows_numerics::Vector2;
+use windows_numerics::{Matrix3x2, Vector2};
 
 /// 透明色定数（内部使用）
 const TRANSPARENT_COLOR: D2D1_COLOR_F = D2D1_COLOR_F {
@@ -376,6 +376,8 @@ pub fn draw_typewriters(
 
         // 描画開始
         unsafe {
+            // 共有DCのワールド変換をリセット（前フレームのcomposite_render_systemの残留変換を防止）
+            dc.SetTransform(&Matrix3x2::identity());
             dc.BeginDraw();
         }
 
@@ -559,6 +561,8 @@ pub fn draw_typewriter_backgrounds(
 
         unsafe {
             dc.SetTarget(&command_list);
+            // 共有DCのワールド変換をリセット（前フレームのcomposite_render_systemの残留変換を防止）
+            dc.SetTransform(&Matrix3x2::identity());
             dc.BeginDraw();
         }
 

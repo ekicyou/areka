@@ -15,6 +15,7 @@ use tracing::{debug, error, trace, warn};
 use windows::Win32::Foundation::SIZE;
 use windows::Win32::Graphics::Direct2D::Common::*;
 use windows::Win32::Graphics::Direct2D::*;
+use windows_numerics::Matrix3x2;
 
 use super::systems::format_entity_name;
 
@@ -254,7 +255,7 @@ fn render_subtree(
 
     // Req 2.3: is_visible == false → サブツリーごとスキップ
     if !visual.is_visible {
-        debug!(entity = ?entity, "[render_subtree] SKIP: not visible");
+        trace!(entity = ?entity, "[render_subtree] SKIP: not visible");
         return;
     }
 
@@ -263,11 +264,11 @@ fn render_subtree(
 
     // Req 2.6: opacity == 0.0 → サブツリーごとスキップ
     if local_opacity == 0.0 {
-        debug!(entity = ?entity, "[render_subtree] SKIP: opacity=0");
+        trace!(entity = ?entity, "[render_subtree] SKIP: opacity=0");
         return;
     }
 
-    debug!(
+    trace!(
         entity = ?entity,
         opacity = local_opacity,
         has_cmd = cmd_opt.is_some(),
@@ -286,7 +287,7 @@ fn render_subtree(
     // Req 2.5: opacity 適用描画
     if let Some(cmd) = cmd_opt {
         if let Some(command_list) = cmd.command_list() {
-            debug!(entity = ?entity, "[render_subtree] draw_with_opacity");
+            trace!(entity = ?entity, "[render_subtree] draw_with_opacity");
             if let Err(e) = unsafe { draw_with_opacity(ctx.dc, command_list, local_opacity) } {
                 error!(
                     entity = ?entity,
@@ -296,7 +297,7 @@ fn render_subtree(
                 // 当該エンティティの描画をスキップ（子への再帰は継続）
             }
         } else {
-            debug!(entity = ?entity, "[render_subtree] command_list is None (closed?)");
+            trace!(entity = ?entity, "[render_subtree] command_list is None (closed?)");
         }
     }
 
@@ -359,6 +360,11 @@ fn is_window_dirty(
         false
     }
 
+    // ウィンドウエンティティ自体の変更もチェック
+    if changed_query.contains(window_entity) {
+        return true;
+    }
+
     for child in window_children.iter() {
         if check_subtree(child, changed_query, children_query) {
             return true;
@@ -377,6 +383,7 @@ pub fn composite_render_system(
         &mut WindowD3D11Compositor,
         &Children,
         &GlobalArrangement,
+        &WindowHandle,
     )>,
     entity_query: Query<(
         &GlobalArrangement,
@@ -398,7 +405,7 @@ pub fn composite_render_system(
         return;
     };
 
-    for (window_entity, mut compositor, window_children, window_ga) in compositor_query.iter_mut() {
+    for (window_entity, mut compositor, window_children, window_ga, window_handle) in compositor_query.iter_mut() {
         if !compositor.is_valid() {
             continue;
         }
@@ -414,7 +421,7 @@ pub fn composite_render_system(
             &children_query,
             is_added,
         );
-        debug!(
+        trace!(
             entity = ?window_entity,
             is_added = is_added,
             is_dirty = is_dirty,
@@ -444,11 +451,33 @@ pub fn composite_render_system(
         }
 
         // 4. 再帰走査（Req 2.1: depth-first pre-order）
-        // ULW 補正: ウィンドウのスクリーン位置を GlobalArrangement から取得し、
-        // 合成ビットマップ内では (0,0) 起点で描画するよう補正する。
-        let window_offset = (window_ga.transform.M31, window_ga.transform.M32);
+        // ULW 補正: 合成ビットマップは (0,0) 起点で描画する。
+        // present_layered_window は GetWindowRect の位置をビットマップ配置先とするため、
+        // ここでも WINDOW 座標（GetWindowRect.topLeft）を基準にオフセットを差し引く。
+        //
+        // WS_OVERLAPPEDWINDOW のフレーム補正:
+        // GlobalArrangement はクライアント座標（WindowPos.position 由来）だが、
+        // UpdateLayeredWindow はウィンドウ矩形の左上にビットマップを配置する。
+        // GetWindowRect を使うことで双方の基準点が一致し、
+        // エンティティが正しいスクリーン座標に描画される。
+        let window_offset = {
+            let mut rect = windows::Win32::Foundation::RECT::default();
+            if unsafe {
+                windows::Win32::UI::WindowsAndMessaging::GetWindowRect(
+                    window_handle.hwnd,
+                    &mut rect,
+                )
+            }
+            .is_ok()
+            {
+                (rect.left as f32, rect.top as f32)
+            } else {
+                // フォールバック: GetWindowRect 失敗時は GlobalArrangement を使用
+                (window_ga.transform.M31, window_ga.transform.M32)
+            }
+        };
         let child_count = window_children.iter().count();
-        debug!(
+        trace!(
             entity = ?window_entity,
             child_count = child_count,
             window_offset_x = window_offset.0,
@@ -460,12 +489,18 @@ pub fn composite_render_system(
             accumulated_opacity: 1.0,
             window_offset,
         };
-        for child in window_children.iter() {
-            render_subtree(&ctx, child, &entity_query);
-        }
+        // ウィンドウエンティティをルートとして再帰走査
+        // render_subtree はウィンドウ自身（背景がある場合）を描画した後、
+        // 子エンティティへ再帰する。Children が entity_query の Optional なので
+        // 子が無い場合も安全に処理される。
+        render_subtree(&ctx, window_entity, &entity_query);
 
         // 5. EndDraw（ターゲット復元は _target_guard の Drop で自動実行）
         let end_result = unsafe { dc.EndDraw(None, None) };
+
+        // ワールド変換をリセット（次フレームのdrawシステムに非単位変換が漏れるのを防止）
+        unsafe { dc.SetTransform(&Matrix3x2::identity()) };
+
         if let Err(e) = end_result {
             error!(
                 error = ?e,
@@ -524,7 +559,7 @@ pub fn composite_render_system(
                 let first_nonzero = buf.chunks(4).position(|c| c.iter().any(|&b| b != 0));
                 let nonzero_count = buf.chunks(4).filter(|c| c.iter().any(|&b| b != 0)).count();
                 let total_pixels = (w as usize) * (h as usize);
-                debug!(
+                trace!(
                     entity = ?window_entity,
                     size = ?(w, h),
                     px_15_15 = ?px_15_15,
@@ -537,7 +572,7 @@ pub fn composite_render_system(
             }
         }
 
-        debug!(
+        trace!(
             entity = ?window_entity,
             "[composite_render_system] Composition complete, dirty=true"
         );
@@ -573,7 +608,7 @@ pub fn ulw_present_system(mut query: Query<(&WindowHandle, &mut WindowD3D11Compo
             cy: h as i32,
         };
 
-        debug!(
+        trace!(
             hwnd = ?hwnd,
             size_w = w,
             size_h = h,
@@ -589,7 +624,7 @@ pub fn ulw_present_system(mut query: Query<(&WindowHandle, &mut WindowD3D11Compo
         match present_layered_window(hwnd, hdc, &size) {
             Ok(()) => {
                 compositor.set_dirty(false);
-                debug!("[ulw_present_system] UpdateLayeredWindow succeeded, dirty=false");
+                trace!("[ulw_present_system] UpdateLayeredWindow succeeded, dirty=false");
             }
             Err(e) => {
                 warn!(

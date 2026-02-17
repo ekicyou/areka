@@ -1,15 +1,16 @@
 use crate::com::d2d::{D2D1CommandListExt, D2D1DeviceContextExt};
-use crate::ecs::graphics::{format_entity_name, GraphicsCommandList, GraphicsCore};
+use crate::ecs::Visual;
+use crate::ecs::graphics::{GraphicsCommandList, GraphicsCore, format_entity_name};
 use crate::ecs::layout::Arrangement;
 use crate::ecs::widget::brushes::{Brushes, DEFAULT_FOREGROUND};
-use crate::ecs::Visual;
 use bevy_ecs::component::Component;
 use bevy_ecs::lifecycle::HookContext;
 use bevy_ecs::name::Name;
 use bevy_ecs::prelude::*;
 use bevy_ecs::world::DeferredWorld;
 use tracing::{trace, warn};
-use windows::Win32::Graphics::Direct2D::Common::{D2D1_COLOR_F, D2D_RECT_F};
+use windows::Win32::Graphics::Direct2D::Common::{D2D_RECT_F, D2D1_COLOR_F};
+use windows_numerics::Matrix3x2;
 
 /// 色の型エイリアス（D2D1_COLOR_Fをそのまま使用）
 pub type Color = D2D1_COLOR_F;
@@ -189,6 +190,9 @@ pub fn draw_rectangles(
 
         // 描画命令を記録
         unsafe {
+            // 共有DCのワールド変換をリセット（前フレームのcomposite_render_systemが
+            // 設定したエンティティ位置変換が残留するのを防止）
+            dc.SetTransform(&Matrix3x2::identity());
             dc.BeginDraw();
 
             // 透明色クリア

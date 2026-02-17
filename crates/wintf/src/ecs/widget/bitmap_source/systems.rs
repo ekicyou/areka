@@ -4,7 +4,7 @@
 
 use super::resource::{BitmapSourceGraphics, BitmapSourceResource};
 use super::task_pool::WintfTaskPool;
-use crate::com::d2d::D2D1CommandListExt;
+use crate::com::d2d::{D2D1CommandListExt, D2D1DeviceContextExt};
 use crate::com::wic::{WICBitmapDecoderExt, WICFormatConverterExt, WICImagingFactoryExt};
 use crate::ecs::graphics::{format_entity_name, GraphicsCommandList, GraphicsCore};
 use crate::ecs::layout::Arrangement;
@@ -18,6 +18,7 @@ use windows::Win32::Graphics::Direct2D::Common::D2D1_PIXEL_FORMAT;
 use windows::Win32::Graphics::Direct2D::{
     ID2D1DeviceContext, D2D1_BITMAP_OPTIONS_NONE, D2D1_BITMAP_PROPERTIES1,
 };
+use windows_numerics::Matrix3x2;
 use windows::Win32::Graphics::Dxgi::Common::DXGI_FORMAT_B8G8R8A8_UNORM;
 use windows::Win32::Graphics::Imaging::D2D::IWICImagingFactory2;
 use windows::Win32::Graphics::Imaging::{
@@ -212,6 +213,8 @@ pub fn draw_bitmap_sources(
 
         // 描画命令を記録
         unsafe {
+            // 共有DCのワールド変換をリセット（前フレームのcomposite_render_systemの残留変換を防止）
+            dc.set_transform(&Matrix3x2::identity());
             dc.BeginDraw();
 
             if let Some(bitmap) = graphics.bitmap() {

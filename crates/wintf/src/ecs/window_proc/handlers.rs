@@ -215,22 +215,42 @@ pub(super) fn WM_WINDOWPOSCHANGED(
                                         "WindowPos updated via bypass (echo)"
                                     );
                                 } else {
-                                    // 外部由来 → DerefMut で更新（Changed 発火 → apply_window_pos_changes トリガー）
-                                    window_pos.position = Some(client_pos);
-                                    window_pos.size = Some(client_size);
+                                    // 外部由来: 値が実際に変化した場合のみ DerefMut で更新
+                                    // Changed<WindowPos> → apply_window_pos_changes トリガー
+                                    //
+                                    // 値ガード: ウィンドウアクティベーション等で WM_WINDOWPOSCHANGED が
+                                    // 発火しても、座標/サイズが同一なら Changed を発火させない。
+                                    // これにより不要な SetWindowPos エコーバックループを防止し、
+                                    // 高DPI環境でのフレームオフセット不一致による位置ズレを回避する。
+                                    let pos_changed =
+                                        window_pos.position != Some(client_pos);
+                                    let size_changed =
+                                        window_pos.size != Some(client_size);
 
-                                    trace!(
-                                        entity = ?entity,
-                                        window_x = wp.x,
-                                        window_y = wp.y,
-                                        window_cx = wp.cx,
-                                        window_cy = wp.cy,
-                                        client_x = client_pos.x,
-                                        client_y = client_pos.y,
-                                        client_cx = client_size.cx,
-                                        client_cy = client_size.cy,
-                                        "WindowPos updated (external change)"
-                                    );
+                                    if pos_changed || size_changed {
+                                        window_pos.position = Some(client_pos);
+                                        window_pos.size = Some(client_size);
+
+                                        debug!(
+                                            entity = ?entity,
+                                            window_x = wp.x,
+                                            window_y = wp.y,
+                                            window_cx = wp.cx,
+                                            window_cy = wp.cy,
+                                            client_x = client_pos.x,
+                                            client_y = client_pos.y,
+                                            client_cx = client_size.cx,
+                                            client_cy = client_size.cy,
+                                            "WindowPos updated (external change, values differ)"
+                                        );
+                                    } else {
+                                        trace!(
+                                            entity = ?entity,
+                                            client_x = client_pos.x,
+                                            client_y = client_pos.y,
+                                            "WindowPos unchanged (external, same values — skipping DerefMut)"
+                                        );
+                                    }
                                 }
                             }
 
