@@ -53,7 +53,7 @@ _Parent: Req 4.1, 4.4_
 2. The `ulw_present_system` shall `world.rs` の `CommitComposition` ステージに登録され、Phase 2 で空化された当該ステージを引き継ぐ
 3. When `WindowD3D11Compositor` のダーティフラグが false の時, the `ulw_present_system` shall 当該ウィンドウの ULW 呼び出しをスキップする
 4. When `present_layered_window` が成功した時, the `ulw_present_system` shall `WindowD3D11Compositor` のダーティフラグを false に設定する
-5. The `ulw_present_system` shall `Query<(&WindowHandle, &WindowSize, &mut WindowD3D11Compositor)>` を使用し、全ウィンドウをイテレートする
+5. The `ulw_present_system` shall `Query<(&WindowHandle, &mut WindowD3D11Compositor)>` を使用し、全ウィンドウをイテレートする。ウィンドウサイズは `WindowD3D11Compositor::cached_size()` から取得する（`WindowSize` コンポーネントは存在しない）
 
 #### 設計メモ
 

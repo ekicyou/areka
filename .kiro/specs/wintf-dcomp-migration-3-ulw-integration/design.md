@@ -55,8 +55,7 @@ Phase 3 での world.rs 変更は **CommitComposition ステージのみ**:
 
 Phase 3 では新規 ECS コンポーネントを追加しない。以下の Phase 1-2 で実装済みコンポーネントを使用する:
 
-- **`WindowD3D11Compositor`**: `hbitmap`, `memory_dc`, `dirty` フラグ
-- **`WindowSize`**: ウィンドウサイズ（ULW の `SIZE` パラメータに使用）
+- **`WindowD3D11Compositor`**: `hbitmap`, `memory_dc`, `dirty` フラグ、`cached_size()` でウィンドウサイズ取得（ULW の `SIZE` パラメータに使用）
 - **`WindowHandle`**: HWND（ULW の対象ウィンドウ）
 
 ### 3.2 WindowStyle 変更
@@ -93,28 +92,27 @@ impl Default for WindowStyle {
 ### 4.1 ulw_present_system
 
 **ステージ**: CommitComposition
-**クエリ**: `Query<(&WindowHandle, &WindowSize, &mut WindowD3D11Compositor)>`
+**クエリ**: `Query<(&WindowHandle, &mut WindowD3D11Compositor)>`
 
 ```
 fn ulw_present_system(
-    query: Query<(&WindowHandle, &WindowSize, &mut WindowD3D11Compositor)>,
+    query: Query<(&WindowHandle, &mut WindowD3D11Compositor)>,
 ) {
-    for (window_handle, window_size, mut compositor) in &mut query {
-        // ダーティでなければスキップ
-        if !compositor.dirty {
+    for (window_handle, mut compositor) in &mut query {
+        // リソース未初期化またはダーティでなければスキップ
+        if !compositor.is_valid() || !compositor.is_dirty() {
             continue;
         }
 
         let hwnd = window_handle.hwnd();
-        let size = SIZE {
-            cx: window_size.width as i32,
-            cy: window_size.height as i32,
-        };
+        let (w, h) = compositor.cached_size();
+        let size = SIZE { cx: w as i32, cy: h as i32 };
 
         // present_layered_window 呼び出し
-        match present_layered_window(hwnd, compositor.memory_dc, &size) {
+        let Some(hdc) = compositor.memory_dc() else { continue };
+        match present_layered_window(hwnd, hdc, &size) {
             Ok(()) => {
-                compositor.dirty = false;
+                compositor.set_dirty(false);
             }
             Err(e) => {
                 tracing::warn!("UpdateLayeredWindow failed: {e:?}, retrying next frame");
@@ -142,7 +140,6 @@ pub fn present_layered_window(
     hdc_src: HDC,
     size: &SIZE,
 ) -> windows::core::Result<()> {
-    let pt_dst = POINT { x: 0, y: 0 }; // ウィンドウ位置は OS が管理
     let pt_src = POINT { x: 0, y: 0 };
     let blend = BLENDFUNCTION {
         BlendOp: AC_SRC_OVER as u8,
@@ -169,7 +166,7 @@ pub fn present_layered_window(
 }
 ```
 
-**注意**: `pptDst` を `None` にすることでウィンドウ位置を変更しない。ウィンドウの移動は ECS の既存 `SetWindowPos` フローで管理する。ウィンドウ位置が必要な場合は `GetWindowRect` で取得して `pptDst` に渡す設計に変更する（Phase 3 実装時に検証）。
+**注意**: `pptDst` を `None` にすることでウィンドウ位置を変更しない。ウィンドウの移動は ECS の既存 `SetWindowPos` フローで管理する。`pptDst=None` の動作は Req 10（Task 1: 前提検証）で確認する。位置がリセットされる場合は `GetWindowRect` で現在位置を取得して `pptDst` に渡す設計に変更する（§5.2 設計分岐参照）。
 
 ### 4.3 WM_PAINT / WM_ERASEBKGND ハンドラ更新
 
@@ -197,7 +194,7 @@ WM_ERASEBKGND => {
 
 WM_SIZE の処理は Phase 1 で実装済みの `WindowD3D11Compositor::resize()` を活用する。既存の WM_SIZE ハンドラがウィンドウサイズコンポーネントを更新し、`compositor_init_system`（Phase 1-2）がサイズ変更を検出して `resize()` を呼び出すフローが既に構築されている。
 
-追加のハンドラ変更は不要（ECS のリアクティブフローで処理）。ただし、WM_SIZE 受信後の即時 ULW 更新が必要な場合は `InvalidateRect` をトリガーする。
+追加のハンドラ変更は不要（ECS のリアクティブフローで処理）。WM_WINDOWPOSCHANGED → `WindowPos` 更新 → `compositor_init_system` リサイズ検出 → `composite_render_system` → `ulw_present_system` のパイプラインで処理される。
 
 ---
 
@@ -232,6 +229,8 @@ WM_SIZE の処理は Phase 1 で実装済みの `WindowD3D11Compositor::resize()
 | Req 6 (ULW失敗) | §4.1 ulw_present_system エラーハンドリング |
 | Req 7 (クリックスルー) | §5.1 前提検証 |
 | Req 8 (Phase 3検証) | §7 テスト戦略 |
+| Req 9 (テスト互換性) | §7.3 E2E テスト |
+| Req 10 (前提検証) | §5 WS_EX_LAYERED 前提検証, §7.4 前提検証テスト |
 
 ---
 
@@ -274,5 +273,4 @@ WM_SIZE の処理は Phase 1 で実装済みの `WindowD3D11Compositor::resize()
 | エラー | 発生元 | レスポンス | リカバリ |
 |--------|--------|----------|---------|
 | UpdateLayeredWindow 失敗 | present_layered_window | `tracing::warn!` + フレームスキップ | 次フレーム再試行（dirty=true 維持） |
-| GetWindowRect 失敗 | ulw_present_system (pptDst 取得時) | `tracing::error!` + フレームスキップ | 次フレーム再試行 |
-| HDC 無効 | ulw_present_system | `tracing::error!` + compositor.invalidate() | compositor_init_system で再初期化 |
+| HDC 無効 / リソース未初期化 | ulw_present_system | `is_valid()` / `memory_dc()` ガードで skip | compositor_init_system が次フレームで再初期化 |
