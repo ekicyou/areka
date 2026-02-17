@@ -1,16 +1,23 @@
 # 要件定義書: wintf-dcomp-migration-2-pipeline-switch
 
+> **Rev 2** (2026-02-17) — Phase 1 完了を受けた改定。コンパイル整合性制約の追加、Req 5 決定確定、Req 6 スコープ明確化、Req 8 新設。
+
 ## 導入
 
-本子仕様は親仕様 `wintf-dcomp-to-layered-migration` の Phase 2「DComp パイプライン置換」を担当する。Phase 1（`wintf-dcomp-migration-1-d2d1-composition`）で構築される D2D1 合成スタック（`WindowD3D11Compositor`, `composite_render_system`, `compositor_init_system`）を `world.rs` の ECS Schedule に登録し、既存 DComp パイプラインのシステム群を Schedule から除去して新パイプラインに切り替える。
+本子仕様は親仕様 `wintf-dcomp-to-layered-migration` の Phase 2「DComp パイプライン置換」を担当する。Phase 1（`wintf-dcomp-migration-1-d2d1-composition`）で構築された D2D1 合成スタック（`WindowD3D11Compositor`, `composite_render_system`, `compositor_init_system`）を `world.rs` の ECS Schedule に登録し、既存 DComp パイプラインのシステム群を Schedule から除去して新パイプラインに切り替える。
 
 ### 前提条件
 
-本子仕様は **Phase 1 の完了を前提** とする。Phase 1 が提供する以下の成果物が存在することを前提に要件を定義する:
+本子仕様は **Phase 1 の完了を前提** とする。Phase 1 が提供する以下の成果物が **完了済み** であることを確認した（2026-02-17 検証）:
 
-- `ecs/graphics/compositor.rs`: `WindowD3D11Compositor` コンポーネント
-- `ecs/graphics/compositor_systems.rs`: `compositor_init_system`, `composite_render_system`（`CompositeContext` で opacity 手動累積）
-- `com/ulw.rs`: `transfer_to_hbitmap` ユーティリティ
+- `ecs/graphics/compositor.rs` (265行): `WindowD3D11Compositor` コンポーネント — `composition_bitmap`, `staging_bitmap`, `hbitmap`, `memory_dc`, `dib_bits` の 4+1 リソース統合管理。`generation`, `dirty` フラグ、`resize()`, `invalidate()` メソッド実装済み
+- `ecs/graphics/compositor_systems.rs` (459行): `compositor_init_system`, `composite_render_system` — D2D1 合成描画 + `transfer_to_hbitmap` による HBITMAP 転送。再帰 `render_subtree()` で opacity 手動累積。`is_window_dirty()` ヘルパーで `Changed<GraphicsCommandList>`, `Changed<GlobalArrangement>`, `Changed<Visual>`, `Added<WindowD3D11Compositor>` によるダーティ判定実装済み
+- `ecs/graphics/mod.rs`: `pub mod compositor`, `pub mod compositor_systems` 宣言済み
+- `com/ulw.rs` (52行): `transfer_to_hbitmap` ユーティリティ — D2D1 staging bitmap → HBITMAP ピクセル転送
+
+**Phase 1 で未実装・Phase 3 に委譲された項目:**
+- `UpdateLayeredWindow` Win32 API 呼び出し（`dirty` フラグは Phase 3 の `ulw_present_system` が消費する設計）
+- `WS_EX_LAYERED` ウィンドウスタイル変更
 
 ### 本子仕様のスコープ
 
@@ -18,11 +25,31 @@
 - `ecs/graphics/core.rs`: `GraphicsCoreInner` から DComp 初期化・フィールド・メソッドを除去
 - `ecs/graphics/components.rs`: `on_visual_add` フックから DComp コンポーネント自動挿入を除去
 - `ecs/graphics/systems.rs`: YELLOW システム（`invalidate_dependent_components`, `mark_dirty_surfaces`）を新コンポーネント型に適合
-- `ecs/graphics/systems.rs`: `commit_composition` の DComp 依存を除去
+- `ecs/graphics/systems.rs`: `commit_composition` を Schedule から除去（Phase 3 `ulw_present_system` が CommitComposition ステージを引き継ぐ）
+- `ecs/graphics/systems.rs`: DComp 除去に伴うコンパイルエラー解消（`dcomp()` / `desktop()` 参照を持つ旧システム関数本体の修正）
+- `ecs/graphics_tests.rs`: DComp 参照を持つテストコードの更新
+
+### コンパイル整合性制約
+
+本 Phase の核心的課題として、**GraphicsCore から `dcomp()` / `desktop()` アクセサを除去すると、それらを参照する旧システム関数がコンパイルエラーになる** という依存関係がある。具体的に影響を受ける関数は以下の通り:
+
+| ファイル            | 関数                                      | 参照 API            | Schedule 状態    |
+| ------------------- | ----------------------------------------- | ------------------- | ---------------- |
+| `systems.rs`        | `init_window_graphics` (ヘルパー経由)     | `desktop()`         | Req 1 で除去     |
+| `systems.rs`        | `commit_composition`                      | `dcomp()`           | Req 5 で除去     |
+| `systems.rs`        | `deferred_surface_creation_system` (ヘルパー経由) | `dcomp()`  | Req 1 で除去     |
+| `visual_manager.rs` | `visual_resource_management_system`       | `dcomp()`           | Req 1 で除去     |
+| `visual_manager.rs` | `create_visual_only` (ヘルパー)           | `dcomp()` (引数)    | Req 1 で間接除去 |
+| `graphics_tests.rs` | テスト関数 3 箇所                         | `dcomp()`           | テストコード     |
+
+**Note**: `window_visual_integration_system`（visual_manager.rs）および `visual_hierarchy_sync_system`, `visual_property_sync_system`, `render_surface`, `cleanup_surface_on_commandlist_removed`（systems.rs）は DComp COM オブジェクトをコンポーネント経由で使用するが、`GraphicsCore.dcomp()` / `desktop()` を直接呼ばないため、アクセサ除去によるコンパイルエラーは発生しない。
+
+**方針**: Schedule から除去されるシステム関数は、関数本体から `dcomp()` / `desktop()` 呼び出しを除去する（空実装化、引数除去、または関数削除）。`com/dcomp.rs` モジュールおよびコンポーネント型定義（`WindowGraphics`, `VisualGraphics`, `SurfaceGraphics` の struct）の物理的削除は Phase 4 のスコープとする。
 
 ### Non-Goals
 
-- DComp コードファイルの物理的削除（Phase 4 で実施）
+- DComp コードモジュールの物理的削除（`com/dcomp.rs`, `ecs/graphics/visual_manager.rs` の削除は Phase 4 で実施）
+- DComp コンポーネント型定義の削除（`WindowGraphics`, `VisualGraphics`, `SurfaceGraphics` の struct 定義は Phase 4 まで残存許容）
 - `UpdateLayeredWindow` 呼び出し（Phase 3 で実施）
 - `WS_EX_LAYERED` ウィンドウスタイル変更（Phase 3 で実施）
 - Phase 1 新モジュール（`compositor.rs`, `compositor_systems.rs`）の新規実装
@@ -50,9 +77,11 @@ _Parent: Req 2.3, 3.3_
    - GraphicsSetup ステージ: `compositor_init_system`
    - RenderSurface ステージ: `composite_render_system`
 
-3. The `world.rs` shall PreRenderSurface ステージの `mark_dirty_surfaces` を除去するか、`composite_render_system` 内のダーティ判定に置換する
+3. The `world.rs` shall PreRenderSurface ステージから `mark_dirty_surfaces` を除去する（`composite_render_system` 内の `is_window_dirty()` ヘルパーが `Changed<GraphicsCommandList>`, `Changed<GlobalArrangement>`, `Changed<Visual>` でダーティ判定を代替する）
 
-4. When Schedule 切り替えが完了した時, the wintf crate shall 全既存 example（`taffy_flex_demo`, `typewriter_demo`, `multi_window_test`, `split_image`）が D2D1 合成パイプラインで正常動作する
+4. The `world.rs` shall CommitComposition ステージから `commit_composition` を除去する（Phase 3 で `ulw_present_system` が当該ステージを引き継ぐ）
+
+5. When Schedule 切り替えが完了した時, the wintf crate shall 全既存 example（`taffy_flex_demo`, `typewriter_demo`, `multi_window_test`, `split_image`）が D2D1 合成パイプラインで正常動作する
 
 ### Requirement 2: GraphicsCore DComp 除去
 
@@ -74,6 +103,8 @@ _Parent: Req 5.1, 5.2, 5.3, 5.4_
    - `DWriteCreateFactory` → `IDWriteFactory2`
 
 5. When デバイスロストが発生した時, the `GraphicsCore` shall `invalidate()` → 再初期化フローを DComp 再初期化ステップなしで正常に完了する
+
+6. The `graphics_tests.rs` のテストコード shall `dcomp()` / `desktop()` への参照を除去し、DComp 非依存のテストとして更新する
 
 ### Requirement 3: on_visual_add フック更新
 
@@ -101,45 +132,49 @@ _Parent: Req 3.3_
 
 #### Acceptance Criteria
 
-1. The `invalidate_dependent_components` shall `VisualGraphics` および `SurfaceGraphics` への Query パラメータを除去する
+1. The `invalidate_dependent_components` shall `WindowGraphics` への Query パラメータおよび `VisualGraphics`, `SurfaceGraphics` への Query パラメータを除去する
 
 2. The `invalidate_dependent_components` shall `WindowD3D11Compositor` への Query パラメータを追加し、デバイスロスト時に `WindowD3D11Compositor` を invalidate する
 
-3. The `mark_dirty_surfaces` shall per-entity `SurfaceGraphicsDirty` ベースのダーティ検出を廃止する
+3. The `invalidate_dependent_components` shall `BitmapSourceGraphics` への Query パラメータを維持する（DComp 非依存のコンポーネントであるため）
 
-4. The `mark_dirty_surfaces` の機能 shall `composite_render_system` 内の `Changed<GraphicsCommandList>`, `Changed<GlobalArrangement>`, `Changed<Visual>` によるダーティ判定に統合される（システム自体の除去または空実装化を含む）
+4. The `mark_dirty_surfaces` shall per-entity `SurfaceGraphicsDirty` ベースのダーティ検出を廃止する
 
-5. The `init_graphics_core` shall DComp デバイスの有効性チェックを除去する（DComp フィールド参照が `GraphicsCore` から消滅するため）
+5. The `mark_dirty_surfaces` の機能 shall `composite_render_system` 内の `is_window_dirty()` ヘルパー（`Changed<GraphicsCommandList>`, `Changed<GlobalArrangement>`, `Changed<Visual>` ベース）で代替されるため、システム自体を Schedule から除去する（Req 1.3 と連動）
 
-### Requirement 5: commit_composition の DComp 依存除去
+6. The `init_graphics_core` shall Req 2 で `GraphicsCore::new()` から DComp 初期化ステップが消滅するため、DComp デバイスの有効性に関する暗黙の依存がなくなる（Req 2 の効果として自動達成）
 
-**Objective:** 開発者として、`commit_composition` システムの `IDCompositionDevice3::Commit()` 呼び出しを除去し、DComp API 依存をゼロにしたい。
+### Requirement 5: commit_composition の除去
+
+**Objective:** 開発者として、`commit_composition` システムを Schedule から除去し、CommitComposition ステージを Phase 3 の `ulw_present_system` に引き渡したい。
 
 _Parent: Req 2.3_
 
 #### Acceptance Criteria
 
-1. The `commit_composition` shall `IDCompositionDevice3::Commit()` の呼び出しを除去する
+1. The `world.rs` shall `commit_composition` を CommitComposition ステージから除去する（Req 1.4 と連動）
 
-2. If Phase 3（ULW 統合）まで `commit_composition` の Schedule 登録を維持する場合, the `commit_composition` shall DComp API を一切呼び出さない no-op 実装とする
+2. The `commit_composition` 関数本体 shall `GraphicsCore.dcomp()` 呼び出し（`IDCompositionDevice3::Commit()`）を除去する（コンパイル整合性のため。関数の空実装化または削除のいずれかを選択。Phase 3 `ulw_present_system` が CommitComposition ステージの新たな担い手となる）
 
-3. If `commit_composition` の責務が Phase 2 時点で不要と判断された場合, the `world.rs` shall 当該システムを CommitComposition ステージから除去する
+### Requirement 6: ECS コードからの DComp 実行パス除去検証
 
-### Requirement 6: ECS コードからの DComp 参照ゼロ検証
-
-**Objective:** 開発者として、ECS パイプライン実装（`ecs/` ディレクトリ）からの DComp API 参照が完全にゼロであることを静的に検証したい。
+**Objective:** 開発者として、ECS パイプラインの実行パス（Schedule 登録済みシステム、GraphicsCore、テストコード）から DComp API 参照を完全に除去したことを静的に検証したい。
 
 _Parent: Req 2.3, 10.1_
 
 #### Acceptance Criteria
 
-1. When Phase 2 が完了した時, the `ecs/` ディレクトリ shall `IDComposition` 型への参照を含まない（`com/dcomp.rs` ファイル自体の残存は Phase 4 まで許容）
+1. When Phase 2 が完了した時, the `ecs/` ディレクトリ内の **Schedule 登録済みシステム関数**, **GraphicsCore**, **テストコード** shall `IDComposition` 型への参照を含まない
 
-2. When Phase 2 が完了した時, the `ecs/` ディレクトリ shall `dcomp()` や `desktop()` メソッド呼び出しを含まない
+2. When Phase 2 が完了した時, the `ecs/` ディレクトリ内の Schedule 登録済みコード shall `dcomp()` や `desktop()` メソッド呼び出しを含まない
 
-3. The wintf crate shall `cargo test` の全テストがパスする
+3. The `ecs/` ディレクトリ内の DComp コンポーネント型定義（`WindowGraphics`, `VisualGraphics`, `SurfaceGraphics` の struct 定義）における `IDComposition` 型フィールド shall Phase 4 まで残存を許容する（型定義は Schedule 実行パスに含まれないため）
 
-4. The wintf crate shall `cargo build --examples` で全 example がビルド成功する
+4. The `ecs/` ディレクトリ内の Schedule 非登録関数（`init_window_graphics`, `render_surface`, `deferred_surface_creation_system` 等の旧関数本体）における `dcomp()` / `desktop()` 参照 shall 除去する（空実装化・引数除去・関数削除のいずれか）
+
+5. The wintf crate shall `cargo test` の全テストがパスする
+
+6. The wintf crate shall `cargo build --examples` で全 example がビルド成功する
 
 ### Requirement 7: Phase 2 完了検証基準
 
@@ -155,7 +190,7 @@ _Parent: Req 10.1, 10.2_
 
 3. The `GraphicsCore` shall DComp 関連アクセサメソッド（`dcomp()`, `desktop()`）を含まない
 
-4. The `world.rs` の Schedule shall DComp システム（Req 1.1 の9システム）を含まない
+4. The `world.rs` の Schedule shall DComp システム（Req 1.1 の 8 システム + `mark_dirty_surfaces` + `commit_composition`）を含まない
 
 5. The `world.rs` の Schedule shall Phase 1 新システム（`compositor_init_system`, `composite_render_system`）を含む
 
@@ -163,16 +198,59 @@ _Parent: Req 10.1, 10.2_
 
 7. The `cargo test` shall 全テストがパスする
 
+8. The `cargo build --examples` shall 全 example がビルド成功する
+
+9. The `ecs/` ディレクトリ内の Schedule 登録済みシステム関数 shall `dcomp()` / `desktop()` メソッド呼び出しを含まない
+
+### Requirement 8: コンパイル整合性
+
+**Objective:** 開発者として、Phase 2 の全変更適用後に wintf crate 全体がコンパイル可能であることを保証したい。DComp アクセサ除去と旧システム関数の共存を安全に管理する。
+
+_Parent: Req 2.3, 10.1_
+
+#### Acceptance Criteria
+
+1. The wintf crate shall Phase 2 の全変更を適用後、`cargo build` が成功する
+
+2. The `systems.rs` 内の Schedule 非登録旧システム関数（`init_window_graphics`, `render_surface`, `deferred_surface_creation_system`, `cleanup_surface_on_commandlist_removed`, `visual_property_sync_system`）shall `GraphicsCore.dcomp()` / `GraphicsCore.desktop()` への参照を含まない状態でコンパイル可能とする
+
+3. The `visual_manager.rs` 内の関数 shall `GraphicsCore.dcomp()` への参照を含まない状態でコンパイル可能とする（関数本体の修正、引数変更、または関数の `#[allow(dead_code)]` + 空実装化のいずれか）
+
+4. The `graphics_tests.rs` shall `GraphicsCore.dcomp()` / `GraphicsCore.desktop()` への参照を含まない状態でコンパイル可能とする
+
 ---
+
+## 改定履歴
+
+### Rev 2 (2026-02-17) — Phase 1 完了に伴う改定
+
+**改定動機**: Phase 1 (`wintf-dcomp-migration-1-d2d1-composition`) が完了し、成果物の実態を検証した結果、以下の課題が判明した:
+
+1. **コンパイル整合性問題**: Req 2 で `dcomp()` / `desktop()` を除去すると、Schedule 非登録の旧システム関数 6 箇所 + テスト 3 箇所がコンパイルエラーになる。元要件はこの連鎖的影響を明示していなかった
+2. **Req 5 の判断保留**: `commit_composition` の Schedule 維持/除去が未決定だったが、Phase 3 仕様で `ulw_present_system` が CommitComposition ステージを引き継ぐことが確定しており、Phase 2 で除去が妥当
+3. **Req 6 のスコープ不整合**: "ecs/ の IDComposition 参照ゼロ" と Non-Goals "DComp コード物理削除は Phase 4" が矛盾。コンポーネント型定義（16 件の IDComposition 参照残存）の許容を明確化する必要あり
+4. **Req 4 の WindowGraphics 欠落**: `invalidate_dependent_components` が `WindowGraphics` も無効化しているが、元 AC 4.1 には記載がなかった
+5. **Phase 1 成果物の具体性**: `composite_render_system` 内の `is_window_dirty()` ヘルパーの存在が確認され、`mark_dirty_surfaces` の完全除去判断が確定
+
+**主な変更点**:
+- **Req 1**: AC 1.3 を確定（mark_dirty_surfaces 除去）、AC 1.4 を新設（commit_composition 除去）、旧 AC 1.4 → AC 1.5 に繰り下げ
+- **Req 2**: AC 2.6 新設（テストコード更新）
+- **Req 4**: AC 4.1 に `WindowGraphics` 除去を追加、AC 4.3 を BitmapSourceGraphics 維持として新設、旧 AC を繰り下げ、AC 4.6 を Req 2 効果の自動達成に修正
+- **Req 5**: 全面改訂 — 判断保留の条件分岐を除去し、Schedule 除去 + 関数本体修正に確定
+- **Req 6**: タイトル変更（「参照ゼロ検証」→「実行パス除去検証」）、AC 6.1 のスコープを Schedule 登録済みコードに限定、AC 6.3 に型定義残存許容を明記、AC 6.4 に旧関数本体の修正義務を追加
+- **Req 7**: AC 7.4 に mark_dirty_surfaces + commit_composition を追加、AC 7.8-7.9 新設
+- **Req 8**: 新設 — コンパイル整合性保証（旧システム関数・visual_manager・テストコードの修正義務）
+- **導入**: Phase 1 成果物の詳細確認結果を記載、コンパイル整合性制約セクション新設
 
 ## 要件カバレッジサマリー
 
-| 子仕様要件 | 親要件 | 概要 |
-|-----------|--------|------|
-| Req 1 | 2.3, 3.3 | ECS Schedule 切り替え（DComp 除去 + D2D1 登録） |
-| Req 2 | 5.1–5.4 | GraphicsCore DComp フィールド・初期化除去 |
-| Req 3 | 6.2, 6.3 | on_visual_add フックから DComp コンポーネント除去 |
-| Req 4 | 3.3 | YELLOW システム（invalidate / mark_dirty / init）改修 |
-| Req 5 | 2.3 | commit_composition の DComp 依存除去 |
-| Req 6 | 2.3, 10.1 | ECS コードからの DComp 参照ゼロ静的検証 |
-| Req 7 | 10.1, 10.2 | Phase 2 完了検証基準（E2E + 構造検証） |
+| 子仕様要件 | 親要件     | 概要                                                                     |
+| ---------- | ---------- | ------------------------------------------------------------------------ |
+| Req 1      | 2.3, 3.3   | ECS Schedule 切り替え（DComp 除去 + D2D1 登録 + mark_dirty/commit 除去） |
+| Req 2      | 5.1–5.4    | GraphicsCore DComp フィールド・初期化除去 + テスト更新                   |
+| Req 3      | 6.2, 6.3   | on_visual_add フックから DComp コンポーネント除去                        |
+| Req 4      | 3.3        | YELLOW システム（invalidate / mark_dirty / init）改修                    |
+| Req 5      | 2.3        | commit_composition の Schedule 除去 + 関数本体修正                       |
+| Req 6      | 2.3, 10.1  | ECS 実行パスからの DComp 参照除去検証（型定義残存許容）                  |
+| Req 7      | 10.1, 10.2 | Phase 2 完了検証基準（E2E + 構造 + コンパイル検証）                      |
+| Req 8      | 2.3, 10.1  | コンパイル整合性保証（旧関数・テスト修正）                               |
