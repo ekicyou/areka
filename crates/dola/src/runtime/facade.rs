@@ -4,6 +4,8 @@ use std::collections::HashMap;
 
 use crate::compile::compile_storyboard;
 use crate::document::DolaDocument;
+use crate::easing::{EasingFunction, EasingName};
+use crate::storyboard::LoopOffset;
 
 use super::conflict_resolver;
 use super::document_store::DocumentStore;
@@ -107,6 +109,15 @@ impl DolaRuntime {
         let group_id = self.next_group_id;
         self.next_group_id += 1;
 
+        // 5.5 loop_offset 展開
+        let (lo_min, lo_max, lo_easing) = match &compiled.loop_offset {
+            Some(LoopOffset::Scalar(v)) => {
+                (Some(0.0), *v, EasingFunction::Named(EasingName::Linear))
+            }
+            Some(LoopOffset::Range(r)) => (Some(r.min), r.max, r.easing.clone()),
+            None => (None, 0.0, EasingFunction::Named(EasingName::Linear)),
+        };
+
         // 6. インスタンス作成
         self.instance_manager.create_instance(
             group_id,
@@ -119,6 +130,9 @@ impl DolaRuntime {
             end_time,
             start_time, // loop_start_time = start_time（初期値）
             loop_duration,
+            lo_min,
+            lo_max,
+            lo_easing,
         );
 
         // 7. [Tier 3 Hook] 競合解決
@@ -279,6 +293,7 @@ impl DolaRuntime {
         }
 
         // Step 2: ループ処理 + 自然終了検知
+        let mut rng = rand::rng();
         let loop_results: Vec<(u64, LoopAction)> = self
             .instance_manager
             .instances_mut()
@@ -287,7 +302,7 @@ impl DolaRuntime {
                 inst.state == InstanceState::Playing && current_time >= inst.end_time
             })
             .map(|(gid, inst)| {
-                let action = loop_controller::process_loops(inst, current_time);
+                let action = loop_controller::process_loops(inst, current_time, &mut rng);
                 (*gid, action)
             })
             .collect();

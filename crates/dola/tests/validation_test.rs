@@ -85,6 +85,7 @@ mod v2_tests {
                 time_scale: 1.0,
                 loop_count: 1,
                 interruption_policy: InterruptionPolicy::Conclude,
+                loop_offset: None,
                 entry: vec![
                     StoryboardEntry {
                         variable: Some("x".to_string()),
@@ -156,6 +157,7 @@ mod v3_tests {
                 time_scale: 1.0,
                 loop_count: 1,
                 interruption_policy: InterruptionPolicy::Conclude,
+                loop_offset: None,
                 entry: vec![StoryboardEntry {
                     variable: Some("x".to_string()),
                     transition: Some(TransitionRef::Inline(TransitionDef {
@@ -198,6 +200,7 @@ mod v4_tests {
                 time_scale: 1.0,
                 loop_count: 1,
                 interruption_policy: InterruptionPolicy::Conclude,
+                loop_offset: None,
                 entry: vec![StoryboardEntry {
                     variable: Some("undefined_var".to_string()),
                     transition: Some(TransitionRef::Inline(TransitionDef {
@@ -253,6 +256,7 @@ mod v5_tests {
                 time_scale: 1.0,
                 loop_count: 1,
                 interruption_policy: InterruptionPolicy::Conclude,
+                loop_offset: None,
                 entry: vec![StoryboardEntry {
                     variable: Some("x".to_string()),
                     transition: Some(TransitionRef::Named("undefined_trans".to_string())),
@@ -302,6 +306,7 @@ mod v6_tests {
                 time_scale: 1.0,
                 loop_count: 1,
                 interruption_policy: InterruptionPolicy::Conclude,
+                loop_offset: None,
                 entry: vec![
                     StoryboardEntry {
                         variable: Some("x".to_string()),
@@ -360,6 +365,7 @@ mod v6_tests {
                 time_scale: 1.0,
                 loop_count: 1,
                 interruption_policy: InterruptionPolicy::Conclude,
+                loop_offset: None,
                 entry: vec![StoryboardEntry {
                     variable: Some("x".to_string()),
                     transition: Some(TransitionRef::Inline(TransitionDef {
@@ -408,6 +414,7 @@ mod v6_tests {
                 time_scale: 1.0,
                 loop_count: 1,
                 interruption_policy: InterruptionPolicy::Conclude,
+                loop_offset: None,
                 entry: vec![
                     StoryboardEntry {
                         variable: Some("x".to_string()),
@@ -467,6 +474,7 @@ mod v6_tests {
                 time_scale: 1.0,
                 loop_count: 1,
                 interruption_policy: InterruptionPolicy::Conclude,
+                loop_offset: None,
                 entry: vec![StoryboardEntry {
                     variable: Some("x".to_string()),
                     transition: Some(TransitionRef::Inline(TransitionDef {
@@ -506,6 +514,7 @@ mod v7_tests {
                 time_scale: 1.0,
                 loop_count: 1,
                 interruption_policy: InterruptionPolicy::Conclude,
+                loop_offset: None,
                 entry: vec![StoryboardEntry {
                     variable: None, // missing!
                     transition: Some(TransitionRef::Inline(TransitionDef {
@@ -561,6 +570,7 @@ mod v8_tests {
                 time_scale: 1.0,
                 loop_count: 1,
                 interruption_policy: InterruptionPolicy::Conclude,
+                loop_offset: None,
                 entry: vec![
                     // Need a KF first
                     StoryboardEntry {
@@ -625,6 +635,7 @@ mod v9_tests {
                 time_scale: 1.0,
                 loop_count: 1,
                 interruption_policy: InterruptionPolicy::Conclude,
+                loop_offset: None,
                 entry: vec![StoryboardEntry {
                     variable: None,
                     transition: None,
@@ -654,6 +665,7 @@ mod v9_tests {
                 time_scale: 1.0,
                 loop_count: 1,
                 interruption_policy: InterruptionPolicy::Conclude,
+                loop_offset: None,
                 entry: vec![StoryboardEntry {
                     variable: None,
                     transition: None,
@@ -695,6 +707,7 @@ mod v10_tests {
                 time_scale: 1.0,
                 loop_count: 1,
                 interruption_policy: InterruptionPolicy::Conclude,
+                loop_offset: None,
                 entry: vec![StoryboardEntry {
                     variable: Some("bg".to_string()),
                     transition: Some(TransitionRef::Inline(TransitionDef {
@@ -742,6 +755,7 @@ mod v10_tests {
                 time_scale: 1.0,
                 loop_count: 1,
                 interruption_policy: InterruptionPolicy::Conclude,
+                loop_offset: None,
                 entry: vec![StoryboardEntry {
                     variable: Some("bg".to_string()),
                     transition: Some(TransitionRef::Inline(TransitionDef {
@@ -797,6 +811,7 @@ mod v11_tests {
                 time_scale: 1.0,
                 loop_count: 1,
                 interruption_policy: InterruptionPolicy::Conclude,
+                loop_offset: None,
                 entry: vec![StoryboardEntry {
                     variable: Some("x".to_string()),
                     transition: Some(TransitionRef::Inline(TransitionDef {
@@ -861,6 +876,7 @@ mod v12_tests {
                 time_scale: 1.0,
                 loop_count: 1,
                 interruption_policy: InterruptionPolicy::Conclude,
+                loop_offset: None,
                 entry: vec![StoryboardEntry {
                     variable: Some("x".to_string()),
                     transition: Some(TransitionRef::Inline(TransitionDef {
@@ -928,6 +944,7 @@ mod v13_tests {
                 time_scale: 1.0,
                 loop_count: 1,
                 interruption_policy: InterruptionPolicy::Conclude,
+                loop_offset: None,
                 entry: vec![StoryboardEntry {
                     variable: Some("x".to_string()),
                     transition: Some(TransitionRef::Inline(TransitionDef {
@@ -975,6 +992,7 @@ mod v13_tests {
                 time_scale: 1.0,
                 loop_count: 1,
                 interruption_policy: InterruptionPolicy::Conclude,
+                loop_offset: None,
                 entry: vec![StoryboardEntry {
                     variable: Some("bg".to_string()),
                     transition: Some(TransitionRef::Inline(TransitionDef {

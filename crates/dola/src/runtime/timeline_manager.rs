@@ -354,6 +354,7 @@ mod tests {
     use std::collections::BTreeMap;
 
     use crate::compile::{CompiledVariableTimeline, VariableTypeHint};
+    use crate::easing::{EasingFunction, EasingName};
     use crate::storyboard::InterruptionPolicy;
     use crate::transition::TransitionValue;
 
@@ -389,6 +390,7 @@ mod tests {
             time_scale: 1.0,
             loop_count: 1,
             interruption_policy: InterruptionPolicy::Conclude,
+            loop_offset: None,
             total_base_duration: end - start,
         }
     }
@@ -410,6 +412,9 @@ mod tests {
             end_time: start_time + 1.0,
             loop_start_time: start_time,
             loop_duration: 1.0,
+            loop_offset_min: None,
+            loop_offset_max: 0.0,
+            loop_offset_easing: EasingFunction::Named(EasingName::Linear),
         }
     }
 

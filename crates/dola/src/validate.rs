@@ -3,7 +3,7 @@ use std::collections::BTreeSet;
 
 use crate::document::DolaDocument;
 use crate::error::DolaError;
-use crate::storyboard::{KeyframeNames, KeyframeRef};
+use crate::storyboard::{KeyframeNames, KeyframeRef, LoopOffset};
 use crate::transition::{TransitionRef, TransitionValue};
 use crate::variable::AnimationVariableDef;
 
@@ -36,6 +36,9 @@ impl Validate for DolaDocument {
 
             // V6: キーフレーム参照検証（前方参照許可 + 暗黙的KF追跡）
             validate_keyframe_references(sb_name, sb, &mut errors);
+
+            // V14-V17: ループオフセットバリデーション
+            validate_loop_offset(sb_name, sb, &mut errors);
 
             for (entry_idx, entry) in sb.entry.iter().enumerate() {
                 // V4: 変数参照存在確認
@@ -399,4 +402,48 @@ fn validate_transition_type_constraints(
             }
         }
     }
+}
+
+/// V14-V17: loop_offset バリデーション
+fn validate_loop_offset(
+    sb_name: &str,
+    sb: &crate::storyboard::Storyboard,
+    errors: &mut Vec<DolaError>,
+) {
+    let lo = match &sb.loop_offset {
+        Some(lo) => lo,
+        None => return,
+    };
+
+    let (min, max) = match lo {
+        LoopOffset::Scalar(v) => (0.0, *v),
+        LoopOffset::Range(r) => (r.min, r.max),
+    };
+
+    // V14: min < 0
+    if min < 0.0 {
+        errors.push(DolaError::LoopOffsetNegativeMin {
+            storyboard: sb_name.to_string(),
+            value: min,
+        });
+    }
+
+    // V15: max < 0
+    if max < 0.0 {
+        errors.push(DolaError::LoopOffsetNegativeMax {
+            storyboard: sb_name.to_string(),
+            value: max,
+        });
+    }
+
+    // V16: min > max
+    if min > max {
+        errors.push(DolaError::LoopOffsetRangeInverted {
+            storyboard: sb_name.to_string(),
+            min,
+            max,
+        });
+    }
+
+    // V17: easing は serde の型システムが保証（追加バリデーション不要）
 }

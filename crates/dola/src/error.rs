@@ -67,6 +67,22 @@ pub enum DolaError {
         entry_index: usize,
         reason: String,
     },
+    /// loop_offset.min が負値 (V14)
+    LoopOffsetNegativeMin {
+        storyboard: String,
+        value: f64,
+    },
+    /// loop_offset.max が負値 (V15)
+    LoopOffsetNegativeMax {
+        storyboard: String,
+        value: f64,
+    },
+    /// loop_offset の min > max (V16)
+    LoopOffsetRangeInverted {
+        storyboard: String,
+        min: f64,
+        max: f64,
+    },
 }
 
 impl fmt::Display for DolaError {
@@ -195,6 +211,31 @@ impl fmt::Display for DolaError {
                     f,
                     "Compile error in storyboard '{}' at entry {}: {}",
                     storyboard, entry_index, reason
+                )
+            }
+            DolaError::LoopOffsetNegativeMin { storyboard, value } => {
+                write!(
+                    f,
+                    "loop_offset.min is negative in storyboard '{}': {}",
+                    storyboard, value
+                )
+            }
+            DolaError::LoopOffsetNegativeMax { storyboard, value } => {
+                write!(
+                    f,
+                    "loop_offset.max is negative in storyboard '{}': {}",
+                    storyboard, value
+                )
+            }
+            DolaError::LoopOffsetRangeInverted {
+                storyboard,
+                min,
+                max,
+            } => {
+                write!(
+                    f,
+                    "loop_offset range inverted in storyboard '{}': min {} > max {}",
+                    storyboard, min, max
                 )
             }
         }

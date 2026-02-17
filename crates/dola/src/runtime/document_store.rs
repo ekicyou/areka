@@ -74,6 +74,7 @@ mod tests {
                 time_scale: 1.0,
                 loop_count: 1,
                 interruption_policy: InterruptionPolicy::Conclude,
+                loop_offset: None,
                 entry: vec![StoryboardEntry {
                     variable: Some("x".to_string()),
                     transition: Some(TransitionRef::Inline(TransitionDef {

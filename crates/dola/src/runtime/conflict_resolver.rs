@@ -3,7 +3,7 @@
 //! 同一変数の時間的重複を検出し、`InterruptionPolicy` に基づく
 //! 5種の終了戦略を group_id 単位で適用する。
 
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 
 use crate::compile::CompiledStoryboard;
 use crate::storyboard::InterruptionPolicy;
