@@ -791,11 +791,11 @@ pub fn apply_window_pos_changes(
 }
 
 /// 依存コンポーネント無効化
+/// Phase 2: DComp Query（WindowGraphics, VisualGraphics, SurfaceGraphics）を除去し、
+/// WindowD3D11Compositorを追加。BitmapSourceGraphicsは維持（DComp非依存）。
 pub fn invalidate_dependent_components(
     graphics: Option<Res<GraphicsCore>>,
-    mut window_graphics_query: Query<&mut WindowGraphics>,
-    mut visual_query: Query<&mut VisualGraphics>,
-    mut surface_query: Query<&mut SurfaceGraphics>,
+    mut compositor_query: Query<&mut super::compositor::WindowD3D11Compositor>,
     mut bitmap_source_query: Query<&mut crate::ecs::widget::bitmap_source::BitmapSourceGraphics>,
 ) {
     if let Some(gc) = graphics {
@@ -804,14 +804,8 @@ pub fn invalidate_dependent_components(
                 "[invalidate_dependent_components] GraphicsCore invalid - invalidating all dependent components"
             );
 
-            for mut wg in window_graphics_query.iter_mut() {
-                wg.invalidate();
-            }
-            for mut v in visual_query.iter_mut() {
-                v.invalidate();
-            }
-            for mut s in surface_query.iter_mut() {
-                s.invalidate();
+            for mut comp in compositor_query.iter_mut() {
+                comp.invalidate();
             }
             for mut bsg in bitmap_source_query.iter_mut() {
                 bsg.invalidate();

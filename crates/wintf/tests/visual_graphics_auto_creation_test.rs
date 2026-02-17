@@ -1,7 +1,10 @@
 //! VisualGraphics 自動作成テスト (R2)
 //!
-//! Visual コンポーネント追加時に VisualGraphics が自動的に作成され、
-//! SurfaceGraphics は作成されないことをテストする。
+//! visual_resource_management_system は VisualGraphics が存在するエンティティにGPUリソースを作成し、
+//! SurfaceGraphics は作成しないことをテストする。
+//!
+//! Phase 2: on_visual_add は VisualGraphics を自動挿入しなくなったため、
+//! テスト内で明示的に VisualGraphics::default() を挿入する。
 
 use bevy_ecs::prelude::*;
 use windows::core::Result;
@@ -24,13 +27,17 @@ fn setup_world_with_graphics() -> Result<World> {
     Ok(world)
 }
 
-/// Visual追加時に VisualGraphics が自動的に作成されることを確認
+/// Visual追加時に VisualGraphics が存在すればGPUリソースが作成されることを確認
+/// Phase 2: on_visual_addはVisualGraphicsを自動挿入しなくなったため明示的に追加
 #[test]
 fn test_visual_triggers_visual_graphics_creation() -> Result<()> {
     let mut world = setup_world_with_graphics()?;
 
-    // Visual を持つ Entity を作成
-    let entity = world.spawn(Visual::default()).id();
+    // Visual + VisualGraphics を持つ Entity を作成
+    // Phase 2: on_visual_addはVisualGraphicsを自動挿入しなくなったため明示的に追加
+    let entity = world
+        .spawn((Visual::default(), VisualGraphics::default()))
+        .id();
 
     // この時点では VisualGraphics はまだない
     // システムを実行すると作成される
@@ -75,7 +82,9 @@ fn test_visual_does_not_trigger_immediate_surface_creation() -> Result<()> {
 fn test_visual_graphics_not_recreated_if_exists() -> Result<()> {
     let mut world = setup_world_with_graphics()?;
 
-    let entity = world.spawn(Visual::default()).id();
+    let entity = world
+        .spawn((Visual::default(), VisualGraphics::default()))
+        .id();
 
     // 最初のシステム実行
     let mut schedule = Schedule::default();
@@ -100,14 +109,20 @@ fn test_visual_graphics_not_recreated_if_exists() -> Result<()> {
     Ok(())
 }
 
-/// 複数の Entity に対して VisualGraphics が作成されることを確認
+/// 複数の Entity に対して VisualGraphics がGPUリソース付きで作成されることを確認
 #[test]
 fn test_multiple_entities_get_visual_graphics() -> Result<()> {
     let mut world = setup_world_with_graphics()?;
 
-    let entity1 = world.spawn(Visual::default()).id();
-    let entity2 = world.spawn(Visual::default()).id();
-    let entity3 = world.spawn(Visual::default()).id();
+    let entity1 = world
+        .spawn((Visual::default(), VisualGraphics::default()))
+        .id();
+    let entity2 = world
+        .spawn((Visual::default(), VisualGraphics::default()))
+        .id();
+    let entity3 = world
+        .spawn((Visual::default(), VisualGraphics::default()))
+        .id();
 
     let mut schedule = Schedule::default();
     schedule.add_systems(visual_resource_management_system);
@@ -130,7 +145,7 @@ fn test_multiple_entities_get_visual_graphics() -> Result<()> {
 }
 
 /// GraphicsCore が無効（invalidate済み）の場合は VisualGraphics のGPUリソースが作成されないことを確認
-/// Note: Visual.on_add で VisualGraphics::default() は挿入されるが、GPUリソースは作成されない
+/// Phase 2: on_visual_addはVisualGraphicsを自動挿入しなくなったため明示的に追加
 #[test]
 fn test_no_visual_graphics_with_invalid_graphics_core() -> Result<()> {
     let mut graphics = setup_graphics()?;
@@ -141,17 +156,19 @@ fn test_no_visual_graphics_with_invalid_graphics_core() -> Result<()> {
     world.insert_resource(graphics);
     world.insert_resource(FrameCount(1));
 
-    let entity = world.spawn(Visual::default()).id();
+    let entity = world
+        .spawn((Visual::default(), VisualGraphics::default()))
+        .id();
 
     let mut schedule = Schedule::default();
     schedule.add_systems(visual_resource_management_system);
     schedule.run(&mut world);
 
-    // VisualGraphics コンポーネント自体は Visual.on_add で作成される
+    // VisualGraphics コンポーネント自体は明示的に追加済み
     let vg = world.get::<VisualGraphics>(entity);
     assert!(
         vg.is_some(),
-        "VisualGraphics component should exist (created by Visual.on_add)"
+        "VisualGraphics component should exist (explicitly added)"
     );
 
     // ただし、GPUリソースは作成されない（GraphicsCoreが無効なため）
