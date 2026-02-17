@@ -322,21 +322,10 @@ impl EcsWorld {
                     .chain(),
             );
 
-            // PreLayoutスケジュール: GraphicsCore初期化とVisual作成
-            // Phase 6: VisualはPreLayoutで早期作成、SurfaceはDrawで遅延作成
-            schedules.add_systems(
-                PreLayout,
-                (
-                    crate::ecs::graphics::init_graphics_core,
-                    // Visualリソース作成（Surfaceは作成しない）
-                    // Changed<VisualGraphics> + !is_valid() で初期化と再初期化を統一処理
-                    crate::ecs::graphics::visual_resource_management_system
-                        .after(crate::ecs::graphics::init_graphics_core),
-                    // Visual階層同期（parent_visual==Noneで未同期を検出）
-                    crate::ecs::graphics::visual_hierarchy_sync_system
-                        .after(crate::ecs::graphics::visual_resource_management_system),
-                ),
-            );
+            // PreLayoutスケジュール: GraphicsCore初期化
+            // Phase 2: DCompシステム（visual_resource_management_system, visual_hierarchy_sync_system）を除去
+            // init_graphics_coreのみ残存（単独登録、chain不要）
+            schedules.add_systems(PreLayout, crate::ecs::graphics::init_graphics_core);
 
             // Layoutスケジュールにtaffyレイアウトシステムを登録
             schedules.add_systems(
@@ -372,22 +361,17 @@ impl EcsWorld {
                     .chain(),
             );
 
-            // GraphicsSetupスケジュール: グラフィックスリソース系
-            // UISetupの後に実行され、WindowHandleが利用可能
-            // Note: sync_surface_from_arrangementは廃止（deferred_surface_creation_systemに統合）
+            // GraphicsSetupスケジュール: D2D1合成スタック初期化
+            // Phase 2: DCompシステム（init_window_graphics, window_visual_integration_system）を除去
+            // Phase 1で構築されたcompositor_init_systemを登録
             schedules.add_systems(
                 GraphicsSetup,
-                (
-                    crate::ecs::graphics::init_window_graphics,
-                    crate::ecs::graphics::window_visual_integration_system
-                        .after(crate::ecs::graphics::init_window_graphics),
-                )
-                    .chain(),
+                crate::ecs::graphics::compositor_systems::compositor_init_system,
             );
 
-            // Drawスケジュールにクリーンアップシステムとウィジェット描画システムを登録
-            // Surface生成とクリーンアップを統合管理
-            // Brush継承解決を最初に実行し、その後ウィジェット描画
+            // Drawスケジュール: ウィジェット描画システム
+            // Phase 2: DCompシステム（deferred_surface_creation_system, cleanup_surface_on_commandlist_removed）を除去
+            // chainはgenerate_alpha_mask_systemまで維持
             schedules.add_systems(
                 Draw,
                 (
@@ -412,32 +396,26 @@ impl EcsWorld {
                     // αマスク生成（draw_bitmap_sourcesの後、BitmapSourceResource追加検出時に実行）
                     crate::ecs::widget::bitmap_source::generate_alpha_mask_system
                         .after(crate::ecs::widget::bitmap_source::draw_bitmap_sources),
-                    // 遅延Surface作成（GraphicsCommandList存在時、GlobalArrangementベース）
-                    crate::ecs::graphics::deferred_surface_creation_system
-                        .after(crate::ecs::widget::bitmap_source::generate_alpha_mask_system),
-                    // GraphicsCommandList削除時のSurface解放（Req 1.3, 1.4）
-                    crate::ecs::graphics::cleanup_surface_on_commandlist_removed
-                        .after(crate::ecs::graphics::deferred_surface_creation_system),
                 )
                     .chain(),
             );
 
-            // PreRenderSurfaceスケジュールに変更検知システムを登録
-            schedules.add_systems(PreRenderSurface, crate::ecs::graphics::mark_dirty_surfaces);
+            // PreRenderSurface: Phase 2で空化（mark_dirty_surfaces除去）
+            // composite_render_system内のis_window_dirty()がダーティ判定を代替
 
-            // RenderSurfaceスケジュールに描画システムを登録
-            schedules.add_systems(RenderSurface, crate::ecs::graphics::render_surface);
+            // RenderSurface: Phase 2で空化（render_surface除去）
+            // WPF的遅延戦略により、焼き付けはCompositionステージで実行
 
-            // Compositionスケジュールに Visual プロパティ同期システムを登録
-            // visual_property_sync_systemはArrangementに依存するのでレイアウト後に実行
-            // Offset と Opacity を一括で同期
+            // Compositionスケジュール: D2D1合成描画
+            // Phase 2: DCompシステム（visual_property_sync_system）を除去
+            // Phase 1で構築されたcomposite_render_systemを登録
             schedules.add_systems(
                 Composition,
-                crate::ecs::graphics::visual_property_sync_system,
+                crate::ecs::graphics::compositor_systems::composite_render_system,
             );
 
-            // CommitCompositionスケジュールにコミットシステムを登録
-            schedules.add_systems(CommitComposition, crate::ecs::graphics::commit_composition);
+            // CommitComposition: Phase 2で空化（commit_composition除去）
+            // Phase 3のulw_present_systemが当該ステージを引き継ぐ（Phase間ハンドオーバーポイント）
 
             // FrameFinalizeスケジュール: 一時的ポインター状態クリア
             schedules.add_systems(

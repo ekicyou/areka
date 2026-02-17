@@ -303,10 +303,10 @@ fn is_window_dirty(
         )>,
     >,
     children_query: &Query<&Children>,
-    added_query: &Query<Entity, Added<WindowD3D11Compositor>>,
+    is_compositor_added: bool,
 ) -> bool {
-    // 初回フレーム検出
-    if added_query.contains(window_entity) {
+    // 初回フレーム検出（Mut::is_added() で判定）
+    if is_compositor_added {
         return true;
     }
 
@@ -365,7 +365,6 @@ pub fn composite_render_system(
         )>,
     >,
     children_query: Query<&Children>,
-    added_query: Query<Entity, Added<WindowD3D11Compositor>>,
 ) {
     let Some(dc) = core.device_context() else {
         return;
@@ -377,12 +376,15 @@ pub fn composite_render_system(
         }
 
         // Req 2.8: ダーティ判定（初回フレームまたは Changed<T> 検出）
+        // Phase 2: Added<WindowD3D11Compositor> の別 Query を廃止し、
+        // Mut::is_added() で初回フレームを検出（Query 競合回避）
+        let is_added = compositor.is_added();
         if !is_window_dirty(
             window_entity,
             window_children,
             &changed_query,
             &children_query,
-            &added_query,
+            is_added,
         ) {
             continue;
         }

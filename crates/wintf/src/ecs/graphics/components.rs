@@ -256,9 +256,8 @@ pub struct Visual {
 
 /// Visualコンポーネントが追加されたときに呼ばれるフック
 /// - Arrangementを自動挿入（既に存在する場合はスキップ）
-/// - VisualGraphics::default()を自動挿入（GPUリソースはシステムで作成）
-/// - SurfaceGraphics::default()とSurfaceGraphicsDirty::default()を自動挿入
 /// - BrushInheritマーカーを自動挿入（継承解決用）
+/// Phase 2: VisualGraphics, SurfaceGraphics, SurfaceGraphicsDirty の自動挿入は除去済み（D2D1合成パイプライン移行）
 fn on_visual_add(mut world: DeferredWorld, context: HookContext) {
     let entity = context.entity;
 
@@ -266,9 +265,6 @@ fn on_visual_add(mut world: DeferredWorld, context: HookContext) {
     let needs_arrangement = world
         .get::<crate::ecs::layout::Arrangement>(entity)
         .is_none();
-    let needs_visual_graphics = world.get::<VisualGraphics>(entity).is_none();
-    let needs_surface_graphics = world.get::<SurfaceGraphics>(entity).is_none();
-    let needs_surface_dirty = world.get::<SurfaceGraphicsDirty>(entity).is_none();
     let needs_brush_inherit = world
         .get::<crate::ecs::widget::BrushInherit>(entity)
         .is_none();
@@ -283,19 +279,8 @@ fn on_visual_add(mut world: DeferredWorld, context: HookContext) {
         entity_cmds.insert(crate::ecs::layout::Arrangement::default());
     }
 
-    // VisualGraphics::default()を挿入（GPUリソースなし）
-    // Changed<VisualGraphics> + !is_valid() でシステムがGPUリソースを作成
-    if needs_visual_graphics {
-        entity_cmds.insert(VisualGraphics::default());
-    }
-
-    // SurfaceGraphicsとSurfaceGraphicsDirtyも事前配置
-    if needs_surface_graphics {
-        entity_cmds.insert(SurfaceGraphics::default());
-    }
-    if needs_surface_dirty {
-        entity_cmds.insert(SurfaceGraphicsDirty::default());
-    }
+    // Phase 2: DCompコンポーネント（VisualGraphics, SurfaceGraphics, SurfaceGraphicsDirty）の
+    // 自動挿入を除去。D2D1合成パイプラインではこれらは不要。
 
     // BrushInheritマーカーを挿入（継承解決システムで処理される）
     // Note: Brushesコンポーネントは挿入しない（オプショナル設計）

@@ -39,6 +39,9 @@ fn test_visual_component_properties() {
 ///
 /// visual_resource_management_systemはVisualGraphicsのみを作成し、
 /// SurfaceGraphicsは作成しない（deferred_surface_creation_systemで遅延作成）。
+///
+/// Phase 2: on_visual_addフックはVisualGraphics自動挿入を停止したため、
+/// テスト内で明示的にVisualGraphicsを挿入する。
 #[test]
 fn test_visual_resource_creation() {
     let mut world = World::new();
@@ -57,8 +60,11 @@ fn test_visual_resource_creation() {
     let mut schedule = Schedule::default();
     schedule.add_systems(visual_resource_management_system);
 
-    // Spawn entity with Visual
-    let entity = world.spawn(Visual::default()).id();
+    // Spawn entity with Visual + VisualGraphics
+    // Phase 2: on_visual_addはVisualGraphicsを自動挿入しなくなったため明示的に追加
+    let entity = world
+        .spawn((Visual::default(), VisualGraphics::default()))
+        .id();
 
     // Run schedule
     schedule.run(&mut world);

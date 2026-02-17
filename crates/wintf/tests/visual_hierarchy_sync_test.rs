@@ -170,7 +170,7 @@ fn test_children_order_change_syncs_zorder() -> Result<()> {
 }
 
 /// VisualGraphicsにGPUリソースがないエンティティは階層同期をスキップすることを確認
-/// Note: Visual.on_add で VisualGraphics::default() は挿入されるが、GPUリソースがなければスキップ
+/// Phase 2: on_visual_addはVisualGraphicsを自動挿入しなくなったため明示的に追加
 #[test]
 fn test_entities_without_visual_graphics_are_skipped() -> Result<()> {
     let graphics = setup_graphics()?;
@@ -188,9 +188,14 @@ fn test_entities_without_visual_graphics_are_skipped() -> Result<()> {
         ))
         .id();
 
-    // 子を作成（Visual.on_addでVisualGraphics::default()が挿入されるがGPUリソースなし）
+    // 子を作成（VisualGraphics::default()を明示追加、GPUリソースなし）
+    // Phase 2: on_visual_addはVisualGraphicsを自動挿入しなくなったため明示的に追加
     let child_entity = world
-        .spawn((Visual::default(), ChildOf(parent_entity)))
+        .spawn((
+            Visual::default(),
+            VisualGraphics::default(),
+            ChildOf(parent_entity),
+        ))
         .id();
 
     // 同期システムを実行（パニックしないことを確認）
@@ -202,7 +207,7 @@ fn test_entities_without_visual_graphics_are_skipped() -> Result<()> {
     let child_vg = world.get::<VisualGraphics>(child_entity);
     assert!(
         child_vg.is_some(),
-        "VisualGraphics component should exist (created by Visual.on_add)"
+        "VisualGraphics component should exist (explicitly added)"
     );
     assert!(
         !child_vg.unwrap().is_valid(),

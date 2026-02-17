@@ -10,52 +10,52 @@ Phase 2 — ECS Schedule 切り替え。Phase 1 で構築した D2D1 合成ス�
 
 ## 実装タスク
 
-- [ ] 1. (P) world.rs Schedule 切り替え
-- [ ] 1.1 (P) PreLayout ステージ DComp システム除去
+- [x] 1. (P) world.rs Schedule 切り替え
+- [x] 1.1 (P) PreLayout ステージ DComp システム除去
   - `visual_resource_management_system`, `visual_hierarchy_sync_system` を chain から除去する
   - `init_graphics_core` を単独 add_systems で再登録する（chain 不要）
   - _Requirements: 1.1_
 
-- [ ] 1.2 (P) GraphicsSetup ステージ新旧置換
+- [x] 1.2 (P) GraphicsSetup ステージ新旧置換
   - `init_window_graphics`, `window_visual_integration_system` の chain を除去する
   - `compositor_init_system` を単独登録する
   - _Requirements: 1.2_
 
-- [ ] 1.3 (P) Draw ステージ末尾システム除去
+- [x] 1.3 (P) Draw ステージ末尾システム除去
   - chain 末尾の `deferred_surface_creation_system`, `cleanup_surface_on_commandlist_removed` を除去する
   - chain は `generate_alpha_mask_system` まで維持する
   - _Requirements: 1.1_
 
-- [ ] 1.4 (P) PreRenderSurface ステージ空化
+- [x] 1.4 (P) PreRenderSurface ステージ空化
   - `mark_dirty_surfaces` を除去する
   - ステージセクションをコメントアウトまたは除去する
   - _Requirements: 1.3, 3.4_
 
-- [ ] 1.5 (P) RenderSurface ステージ空化
+- [x] 1.5 (P) RenderSurface ステージ空化
   - `render_surface` を除去する
   - ステージセクションをコメントアウトまたは除去する（WPF 的遅延戦略により焼き付けは Composition で実行）
   - _Requirements: 1.1, 5.3_
 
-- [ ] 1.6 (P) Composition ステージ新旧置換
+- [x] 1.6 (P) Composition ステージ新旧置換
   - `visual_property_sync_system` を除去する
   - `composite_render_system` を登録する
   - _Requirements: 1.2_
 
-- [ ] 1.7 (P) CommitComposition ステージ空化
+- [x] 1.7 (P) CommitComposition ステージ空化
   - `commit_composition` を除去する
   - ステージセクションをコメントアウトまたは除去する（Phase 3 `ulw_present_system` 用のハンドオーバーポイント）
   - _Requirements: 1.4_
 
-- [ ] 2. (P) on_visual_add フック更新
-- [ ] 2.1 (P) DComp コンポーネント挿入除去
+- [x] 2. (P) on_visual_add フック更新
+- [x] 2.1 (P) DComp コンポーネント挿入除去
   - `VisualGraphics::default()` 挿入 if ブロックを削除する
   - `SurfaceGraphics::default()` 挿入 if ブロックを削除する
   - `SurfaceGraphicsDirty::default()` 挿入 if ブロックを削除する
   - `Arrangement::default()` と `BrushInherit` 挿入は維持する
   - _Requirements: 2.1, 2.2, 2.3, 2.4, 2.5_
 
-- [ ] 3. (P) invalidate_dependent_components 改修
-- [ ] 3.1 (P) Query パラメータ更新
+- [x] 3. (P) invalidate_dependent_components 改修
+- [x] 3.1 (P) Query パラメータ更新
   - `Query<&mut WindowGraphics>` を除去する
   - `Query<&mut VisualGraphics>` を除去する
   - `Query<&mut SurfaceGraphics>` を除去する
@@ -63,21 +63,21 @@ Phase 2 — ECS Schedule 切り替え。Phase 1 で構築した D2D1 合成ス�
   - `Query<&mut BitmapSourceGraphics>` は維持する
   - _Requirements: 3.1, 3.2, 3.3_
 
-- [ ] 3.2 (P) invalidate ループ更新
+- [x] 3.2 (P) invalidate ループ更新
   - DComp コンポーネントの 3 ループ（`window_graphics_query`, `visual_query`, `surface_query`）を削除する
   - `WindowD3D11Compositor::invalidate()` ループを追加する
   - `BitmapSourceGraphics::invalidate()` ループは維持する
   - generation 比較ロジックは変更しない
   - _Requirements: 3.1, 3.2, 3.3_
 
-- [ ] 4. 構造検証 + ビルド確認
-- [ ] 4.1 Schedule 構造検査
+- [x] 4. 構造検証 + ビルド確認
+- [x] 4.1 Schedule 構造検査
   - `world.rs` に DComp 10 システムの add_systems 呼び出しが存在しないことを確認する（grep 検証）
   - `compositor_init_system`, `composite_render_system` が Schedule に登録されていることを確認する
   - RenderSurface ステージにシステム登録がないことを確認する
   - _Requirements: 4.1, 4.2, 5.1, 5.2, 5.3, 5.4_
 
-- [ ] 4.2 コンパイル + テスト実行
+- [x] 4.2 コンパイル + テスト実行
   - `cargo test` 全テストパスを確認する（旧 DComp テストはコンパイル通過するが Schedule 非登録のため実行されない）
   - `cargo build --examples` 全 example ビルド成功を確認する
   - _Requirements: 5.5, 5.6_
