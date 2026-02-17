@@ -1,7 +1,40 @@
 // TODO: Implement Storyboard, StoryboardEntry, KeyframeRef, KeyframeNames, BetweenKeyframes, InterruptionPolicy
 use serde::{Deserialize, Serialize};
 
+use crate::easing::{EasingFunction, EasingName};
 use crate::transition::TransitionRef;
+
+/// デフォルトのイージング関数（Linear）を返すヘルパー
+fn default_easing_linear() -> EasingFunction {
+    EasingFunction::Named(EasingName::Linear)
+}
+
+/// ループオフセット定義（短縮形 / オブジェクト形式）
+///
+/// ストーリーボードの各ループ周回間にランダムな待機時間を挿入するためのパラメータ。
+/// - 短縮形: 数値 → `max` として解釈（`min=0.0`, `easing=linear`）
+/// - オブジェクト形式: `{ min, max, easing }` で詳細指定
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum LoopOffset {
+    /// 短縮形: 数値 → max として解釈（min=0.0, easing=linear）
+    Scalar(f64),
+    /// オブジェクト形式: { min, max, easing }
+    Range(LoopOffsetRange),
+}
+
+/// ループオフセット範囲定義
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct LoopOffsetRange {
+    /// 最小待機時間（f64秒、デフォルト 0.0）
+    #[serde(default)]
+    pub min: f64,
+    /// 最大待機時間（f64秒、必須）
+    pub max: f64,
+    /// イージング関数（デフォルト: linear）
+    #[serde(default = "default_easing_linear")]
+    pub easing: EasingFunction,
+}
 
 /// 割り込み終了戦略（ストーリーボード競合時の自己申告方針）
 ///
@@ -49,6 +82,9 @@ pub struct Storyboard {
     /// 割り込み終了戦略（デフォルト: Conclude）
     #[serde(default = "default_interruption_policy")]
     pub interruption_policy: InterruptionPolicy,
+    /// ループオフセット定義（省略可能 — 省略時は遅延なし）
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub loop_offset: Option<LoopOffset>,
     /// エントリ配列
     #[serde(default)]
     pub entry: Vec<StoryboardEntry>,

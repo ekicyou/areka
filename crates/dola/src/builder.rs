@@ -1,7 +1,7 @@
 // TODO: Implement DolaDocumentBuilder, StoryboardBuilder
 use crate::document::DolaDocument;
 use crate::error::DolaError;
-use crate::storyboard::{InterruptionPolicy, Storyboard, StoryboardEntry};
+use crate::storyboard::{InterruptionPolicy, LoopOffset, Storyboard, StoryboardEntry};
 use crate::transition::TransitionDef;
 use crate::validate::Validate;
 use crate::variable::AnimationVariableDef;
@@ -62,6 +62,7 @@ pub struct StoryboardBuilder {
     time_scale: f64,
     loop_count: i32,
     interruption_policy: InterruptionPolicy,
+    loop_offset: Option<LoopOffset>,
     entry: Vec<StoryboardEntry>,
 }
 
@@ -72,6 +73,7 @@ impl StoryboardBuilder {
             time_scale: 1.0,
             loop_count: 1,
             interruption_policy: InterruptionPolicy::Conclude,
+            loop_offset: None,
             entry: Vec::new(),
         }
     }
@@ -94,6 +96,12 @@ impl StoryboardBuilder {
         self
     }
 
+    /// ループオフセットを設定
+    pub fn loop_offset(mut self, offset: LoopOffset) -> Self {
+        self.loop_offset = Some(offset);
+        self
+    }
+
     /// エントリを追加
     pub fn entry(mut self, entry: StoryboardEntry) -> Self {
         self.entry.push(entry);
@@ -106,6 +114,7 @@ impl StoryboardBuilder {
             time_scale: self.time_scale,
             loop_count: self.loop_count,
             interruption_policy: self.interruption_policy,
+            loop_offset: self.loop_offset,
             entry: self.entry,
         }
     }

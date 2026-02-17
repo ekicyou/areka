@@ -2,6 +2,7 @@
 
 use std::collections::HashMap;
 
+use crate::easing::EasingFunction;
 use crate::storyboard::InterruptionPolicy;
 
 use super::instance_state::InstanceState;
@@ -35,6 +36,12 @@ pub(crate) struct StoryboardInstance {
     /// 1周分の再生時間（wall clock ベース）。
     /// `base_duration / time_scale` で算出。インスタンス生存中は定数。
     pub loop_duration: f64,
+    /// ループオフセット最小値（f64秒）。None = オフセットなし。
+    pub loop_offset_min: Option<f64>,
+    /// ループオフセット最大値（f64秒）。
+    pub loop_offset_max: f64,
+    /// ループオフセット用イージング関数。
+    pub loop_offset_easing: EasingFunction,
 }
 
 /// 実行インスタンスのコレクション管理と状態遷移制御。
@@ -62,6 +69,9 @@ impl InstanceManager {
         end_time: f64,
         loop_start_time: f64,
         loop_duration: f64,
+        loop_offset_min: Option<f64>,
+        loop_offset_max: f64,
+        loop_offset_easing: EasingFunction,
     ) -> &StoryboardInstance {
         let instance = StoryboardInstance {
             group_id,
@@ -79,6 +89,9 @@ impl InstanceManager {
             end_time,
             loop_start_time,
             loop_duration,
+            loop_offset_min,
+            loop_offset_max,
+            loop_offset_easing,
         };
         self.instances.insert(group_id, instance);
         self.instances.get(&group_id).unwrap()
@@ -222,6 +235,7 @@ impl InstanceManager {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::easing::EasingName;
 
     fn create_test_instance(mgr: &mut InstanceManager, group_id: u64) {
         mgr.create_instance(
@@ -235,6 +249,9 @@ mod tests {
             2.0, // end_time
             0.0, // loop_start_time
             2.0, // loop_duration
+            None, // loop_offset_min
+            0.0,  // loop_offset_max
+            EasingFunction::Named(EasingName::Linear),
         );
     }
 
@@ -252,6 +269,9 @@ mod tests {
             15.0,
             10.0, // loop_start_time
             5.0,  // loop_duration
+            None, // loop_offset_min
+            0.0,  // loop_offset_max
+            EasingFunction::Named(EasingName::Linear),
         );
         assert_eq!(inst.group_id, 1);
         assert_eq!(inst.storyboard_name, "fade");

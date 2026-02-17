@@ -67,6 +67,7 @@ mod serde_tests {
             time_scale: 1.0,
             loop_count: 1,
             interruption_policy: InterruptionPolicy::Conclude,
+            loop_offset: None,
             total_base_duration: 1.0,
         };
 

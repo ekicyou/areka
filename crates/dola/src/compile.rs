@@ -10,7 +10,9 @@ use serde::{Deserialize, Serialize};
 use crate::document::DolaDocument;
 use crate::easing::EasingFunction;
 use crate::error::DolaError;
-use crate::storyboard::{InterruptionPolicy, KeyframeNames, KeyframeRef, StoryboardEntry};
+use crate::storyboard::{
+    InterruptionPolicy, KeyframeNames, KeyframeRef, LoopOffset, StoryboardEntry,
+};
 use crate::transition::{TransitionRef, TransitionValue};
 use crate::validate::{Validate, collect_keyframe_names_from_ref};
 use crate::variable::AnimationVariableDef;
@@ -36,6 +38,9 @@ pub struct CompiledStoryboard {
     pub loop_count: i32,
     /// 割り込み終了戦略
     pub interruption_policy: InterruptionPolicy,
+    /// ループオフセット定義（省略可能）
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub loop_offset: Option<LoopOffset>,
     /// ベース合計再生時間 time_scale未適用 全タイムラインの最大値
     pub total_base_duration: f64,
 }
@@ -327,6 +332,7 @@ pub fn compile_storyboard(
         time_scale: sb.time_scale,
         loop_count: sb.loop_count,
         interruption_policy: sb.interruption_policy,
+        loop_offset: sb.loop_offset.clone(),
         total_base_duration,
     })
 }
