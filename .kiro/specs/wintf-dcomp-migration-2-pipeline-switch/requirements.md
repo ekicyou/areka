@@ -33,14 +33,14 @@
 
 本 Phase の核心的課題として、**GraphicsCore から `dcomp()` / `desktop()` アクセサを除去すると、それらを参照する旧システム関数がコンパイルエラーになる** という依存関係がある。具体的に影響を受ける関数は以下の通り:
 
-| ファイル            | 関数                                      | 参照 API            | Schedule 状態    |
-| ------------------- | ----------------------------------------- | ------------------- | ---------------- |
-| `systems.rs`        | `init_window_graphics` (ヘルパー経由)     | `desktop()`         | Req 1 で除去     |
-| `systems.rs`        | `commit_composition`                      | `dcomp()`           | Req 5 で除去     |
-| `systems.rs`        | `deferred_surface_creation_system` (ヘルパー経由) | `dcomp()`  | Req 1 で除去     |
-| `visual_manager.rs` | `visual_resource_management_system`       | `dcomp()`           | Req 1 で除去     |
-| `visual_manager.rs` | `create_visual_only` (ヘルパー)           | `dcomp()` (引数)    | Req 1 で間接除去 |
-| `graphics_tests.rs` | テスト関数 3 箇所                         | `dcomp()`           | テストコード     |
+| ファイル            | 関数                                              | 参照 API         | Schedule 状態    |
+| ------------------- | ------------------------------------------------- | ---------------- | ---------------- |
+| `systems.rs`        | `init_window_graphics` (ヘルパー経由)             | `desktop()`      | Req 1 で除去     |
+| `systems.rs`        | `commit_composition`                              | `dcomp()`        | Req 5 で除去     |
+| `systems.rs`        | `deferred_surface_creation_system` (ヘルパー経由) | `dcomp()`        | Req 1 で除去     |
+| `visual_manager.rs` | `visual_resource_management_system`               | `dcomp()`        | Req 1 で除去     |
+| `visual_manager.rs` | `create_visual_only` (ヘルパー)                   | `dcomp()` (引数) | Req 1 で間接除去 |
+| `graphics_tests.rs` | テスト関数 3 箇所                                 | `dcomp()`        | テストコード     |
 
 **Note**: `window_visual_integration_system`（visual_manager.rs）および `visual_hierarchy_sync_system`, `visual_property_sync_system`, `render_surface`, `cleanup_surface_on_commandlist_removed`（systems.rs）は DComp COM オブジェクトをコンポーネント経由で使用するが、`GraphicsCore.dcomp()` / `desktop()` を直接呼ばないため、アクセサ除去によるコンパイルエラーは発生しない。
 
@@ -75,7 +75,7 @@ _Parent: Req 2.3, 3.3_
 
 2. The `world.rs` shall Phase 1 で構築された以下の新システムを Schedule に登録する:
    - GraphicsSetup ステージ: `compositor_init_system`
-   - RenderSurface ステージ: `composite_render_system`
+   - Composition ステージ: `composite_render_system`
 
 3. The `world.rs` shall PreRenderSurface ステージから `mark_dirty_surfaces` を除去する（`composite_render_system` 内の `is_window_dirty()` ヘルパーが `Changed<GraphicsCommandList>`, `Changed<GlobalArrangement>`, `Changed<Visual>` でダーティ判定を代替する）
 
