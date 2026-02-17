@@ -152,6 +152,8 @@ _Parent: Req 3.3_
 
 _Parent: Req 2.3_
 
+**Note**: 本要件は Phase 2 と Phase 3 の責任境界を明示する。CommitComposition ステージは本 Phase で空にされ、Phase 3 の `ulw_present_system` に完全に引き継がれる設計である。親仕様の段階的移行戦略（Req 2.1）における Phase 間ハンドオーバーポイントとして機能する。
+
 #### Acceptance Criteria
 
 1. The `world.rs` shall `commit_composition` を CommitComposition ステージから除去する（Req 1.4 と連動）
@@ -237,12 +239,12 @@ _Parent: Req 2.3, 10.1_
 5. **Phase 1 成果物の具体性**: `composite_render_system` 内の `is_window_dirty()` ヘルパーの存在が確認され、`mark_dirty_surfaces` の完全除去判断が確定
 
 **主な変更点**:
-- **Req 1**: AC 1.3 を確定（mark_dirty_surfaces 除去）、AC 1.4 を新設（commit_composition 除去）、旧 AC 1.4 → AC 1.5 に繰り下げ
+- **Req 1**: AC 1.3 を確定（mark_dirty_surfaces 除去）、AC 1.4 を新設（commit_composition 除去）、旧 AC 1.4 → AC 1.5 に繰り下げ。AC 1.2 に WPF 的遅延戦略 Note 追加、AC 7.6 新設（RenderSurface 空ステージ検証）
 - **Req 2**: AC 2.6 新設（テストコード更新）
 - **Req 4**: AC 4.1 に `WindowGraphics` 除去を追加、AC 4.3 を BitmapSourceGraphics 維持として新設、旧 AC を繰り下げ、AC 4.6 を Req 2 効果の自動達成に修正
-- **Req 5**: 全面改訂 — 判断保留の条件分岐を除去し、Schedule 除去 + 関数本体修正に確定
+- **Req 5**: 全面改訂 — 判断保留の条件分岐を除去し、Schedule 除去 + 関数本体修正に確定。Phase 2-3 責任境界明示のため Note 追加（Phase 間ハンドオーバーポイントとしての位置づけを明確化）
 - **Req 6**: タイトル変更（「参照ゼロ検証」→「実行パス除去検証」）、AC 6.1 のスコープを Schedule 登録済みコードに限定、AC 6.3 に型定義残存許容を明記、AC 6.4 に旧関数本体の修正義務を追加
-- **Req 7**: AC 7.4 に mark_dirty_surfaces + commit_composition を追加、AC 7.8-7.9 新設
+- **Req 7**: AC 7.4 に mark_dirty_surfaces + commit_composition を追加、AC 7.6 新設（RenderSurface 空ステージ検証）、AC 7.8-7.9 新設
 - **Req 8**: 新設 — コンパイル整合性保証（旧システム関数・visual_manager・テストコードの修正義務）
 - **導入**: Phase 1 成果物の詳細確認結果を記載、コンパイル整合性制約セクション新設
 
