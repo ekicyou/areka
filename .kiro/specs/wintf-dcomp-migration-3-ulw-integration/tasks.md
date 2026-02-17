@@ -10,7 +10,7 @@ Phase 3 — UpdateLayeredWindow 統合。合成済みビットマップを ULW �
 
 ### Phase 3A: 前提検証（Phase 3 開始前）
 
-- [ ] 1. WS_EX_LAYERED 動作検証
+- [ ] 1. (P) WS_EX_LAYERED 動作検証
   - 最小構成の `WS_EX_LAYERED` ウィンドウを作成し、WM_PAINT 発火動作を確認する
   - `pptDst=None` での UpdateLayeredWindow 呼び出し時にウィンドウ位置が維持されるかを確認する
   - alpha=0 ピクセルのクリックスルー動作を確認する
@@ -36,7 +36,7 @@ Phase 3 — UpdateLayeredWindow 統合。合成済みビットマップを ULW �
 
 ### Phase 3C: ウィンドウスタイル・ハンドラ更新
 
-- [ ] 4. WS_EX_LAYERED 切替
+- [ ] 4. (P) WS_EX_LAYERED 切替
   - `ecs/window.rs` の `WindowStyle::default()` を `WS_EX_LAYERED` に変更する
   - `areka/src/main.rs` の Shell/Balloon の `ex_style` を `WS_EX_LAYERED` に変更する
   - `WS_EX_TOOLWINDOW | WS_EX_TOPMOST` は維持する
@@ -52,7 +52,7 @@ Phase 3 — UpdateLayeredWindow 統合。合成済みビットマップを ULW �
 
 ### Phase 3D: Schedule 登録・検証
 
-- [ ] 6. world.rs CommitComposition ステージ更新
+- [ ] 6. (P) world.rs CommitComposition ステージ更新
   - CommitComposition ステージの `commit_composition` を `ulw_present_system` に置換する
   - _Requirements: 1.3_
   - _Dependencies: Task 3_
@@ -72,24 +72,25 @@ Phase 3 — UpdateLayeredWindow 統合。合成済みビットマップを ULW �
 ## 依存関係サマリー
 
 ```
-Task 1 (前提検証) ──→ Task 2 (present_layered_window) ──→ Task 3 (ulw_present_system) ──→ Task 6 (Schedule登録)
-                  └──→ Task 5 (ハンドラ更新)                                                    ↓
-                                                            Task 4 (WS_EX_LAYERED) ────────→ Task 7 (完了検証)
+Task 1 (P) ──→ Task 2 ──→ Task 3 ──┬→ Task 4 (P) ──→ Task 5 ──┬→ Task 7
+                                   └→ Task 6 (P) ─────────────┘
+
+並列実行可能: Task 1 (P) — 即座開始 | Task 4 (P) & Task 6 (P) — Task 3 完了後
 ```
 
 ## 要件カバレッジサマリー
 
-| 要件 | タスク |
-|------|--------|
-| Req 1 (ulw_present_system) | 3, 6 |
-| Req 2 (present_layered_window) | 2 |
-| Req 3 (WS_EX_LAYERED) | 4 |
-| Req 4 (WM_PAINT/ERASEBKGND) | 1, 5 |
-| Req 5 (WM_SIZE) | 5 |
-| Req 6 (ULW失敗) | 3 |
-| Req 7 (クリックスルー) | 1, 7 |
-| Req 8 (Phase 3検証) | 7 |
-| Req 9 (テスト互換性) | 4, 7 |
-| Req 10 (前提検証) | 1 |
+| 要件                           | タスク |
+| ------------------------------ | ------ |
+| Req 1 (ulw_present_system)     | 3, 6   |
+| Req 2 (present_layered_window) | 2      |
+| Req 3 (WS_EX_LAYERED)          | 4      |
+| Req 4 (WM_PAINT/ERASEBKGND)    | 1, 5   |
+| Req 5 (WM_SIZE)                | 5      |
+| Req 6 (ULW失敗)                | 3      |
+| Req 7 (クリックスルー)         | 1, 7   |
+| Req 8 (Phase 3検証)            | 7      |
+| Req 9 (テスト互換性)           | 4, 7   |
+| Req 10 (前提検証)              | 1      |
 
 全10要件がタスクにマッピング済み。
