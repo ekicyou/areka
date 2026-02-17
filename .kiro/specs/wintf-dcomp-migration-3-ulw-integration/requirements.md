@@ -69,7 +69,7 @@ _Parent: Req 4.1_
 #### Acceptance Criteria
 
 1. The `present_layered_window` 関数 shall `HWND`, `HDC`（MemoryDC）, `&SIZE`（ウィンドウサイズ）を引数に取り、`UpdateLayeredWindow` の Win32 API 呼び出しを実行する
-2. The `present_layered_window` 関数 shall `pptDst` に `None` を渡し、ウィンドウ位置を変更しない（位置管理は既存 `SetWindowPos` フローに委譲）
+2. The `present_layered_window` 関数 shall `pptDst` に現在のウィンドウ位置（`GetWindowRect` で取得）を渡し、ウィンドウ位置を維持する。**注**: `pptDst=None` では実際には位置がリセットされることが判明したため、明示的な位置指定が必須
 3. The `present_layered_window` 関数 shall `ptSrc` に `POINT { x: 0, y: 0 }` を使用する
 4. The `present_layered_window` 関数 shall `BLENDFUNCTION { BlendOp: AC_SRC_OVER, BlendFlags: 0, SourceConstantAlpha: 255, AlphaFormat: AC_SRC_ALPHA }` を使用する
 5. The `present_layered_window` 関数 shall `ULW_ALPHA` モードで `UpdateLayeredWindow` を呼び出す
@@ -78,8 +78,8 @@ _Parent: Req 4.1_
 
 #### 設計メモ
 
-- 親仕様の設計では `window_pos: Option<(i32, i32)>` を含む 5 引数シグネチャだったが、Phase 3 詳細設計で `pptDst=None` 固定に簡素化。ウィンドウ位置は `SetWindowPos` が管理しており、ULW で二重管理する必要がない
-- `pptDst=None` が正しく動作すること（ウィンドウ位置がリセットされないこと）は Task 1（前提検証）で確認する
+- **実装時修正（2026-02-17）**: 親仕様の設計では `pptDst=None` 固定を想定していたが、実際のテスト（`taffy_flex_demo`）でウィンドウ位置がリセットされる問題が発覚。`GetWindowRect` で現在位置を取得して `pptDst` に明示的に渡す実装に変更
+- MSDN ドキュメントと実際の動作に乖離があることが判明（ドキュメントでは `pptDst=NULL` で位置維持とされているが、実際にはリセットされる）
 
 ### Requirement 3: WS_EX_LAYERED ウィンドウスタイル切替
 

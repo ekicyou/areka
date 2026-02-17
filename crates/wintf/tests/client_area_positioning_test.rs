@@ -11,7 +11,8 @@ use windows::Win32::UI::WindowsAndMessaging::*;
 fn test_to_window_coords_overlapped_window() {
     // 実際のウィンドウを作成してテストする
     // ウィンドウ作成
-    let hwnd = create_test_window(WS_OVERLAPPEDWINDOW | WS_VISIBLE, WS_EX_NOREDIRECTIONBITMAP);
+    // Phase 3: WS_EX_NOREDIRECTIONBITMAP → WS_EX_LAYERED（ULW 方式に対応）
+    let hwnd = create_test_window(WS_OVERLAPPEDWINDOW | WS_VISIBLE, WS_EX_LAYERED);
     assert!(!hwnd.is_invalid(), "テストウィンドウの作成に失敗");
 
     // WindowPosを作成 - クライアント領域 (100, 100, 800, 600)

@@ -68,7 +68,7 @@ pub(super) fn WM_NCDESTROY(
 
 /// WM_ERASEBKGND: 背景消去要求
 ///
-/// DirectCompositionで描画するため、背景消去をスキップする
+/// ULW が全画面を管理するため、背景消去をスキップする
 #[inline]
 pub(super) fn WM_ERASEBKGND(
     _hwnd: HWND,
@@ -81,7 +81,9 @@ pub(super) fn WM_ERASEBKGND(
 
 /// WM_PAINT: 再描画要求
 ///
-/// DirectCompositionで描画するため、領域を無効化解除するだけ
+/// WS_EX_LAYERED ウィンドウでは WM_PAINT がほぼ発火しないが、
+/// 安全のため BeginPaint/EndPaint 最小ペアを維持する（MSDN 準拠）。
+/// 実際の描画は UpdateLayeredWindow（ulw_present_system）に委譲。
 #[inline]
 pub(super) fn WM_PAINT(
     hwnd: HWND,
@@ -89,8 +91,12 @@ pub(super) fn WM_PAINT(
     _wparam: WPARAM,
     _lparam: LPARAM,
 ) -> HandlerResult {
-    use windows::Win32::Graphics::Gdi::ValidateRect;
-    let _ = unsafe { ValidateRect(Some(hwnd), None) };
+    use windows::Win32::Graphics::Gdi::{BeginPaint, EndPaint, PAINTSTRUCT};
+    let mut ps = PAINTSTRUCT::default();
+    unsafe {
+        let _ = BeginPaint(hwnd, &mut ps);
+        let _ = EndPaint(hwnd, &ps);
+    }
     Some(LRESULT(0))
 }
 

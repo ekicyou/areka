@@ -208,12 +208,19 @@ WM_SIZE の処理は Phase 1 で実装済みの `WindowD3D11Compositor::resize()
 
 ### 5.2 検証結果に基づく設計分岐
 
-| 検証結果                           | 設計への影響                                                                             |
-| ---------------------------------- | ---------------------------------------------------------------------------------------- |
-| WM_PAINT 発火なし（想定通り）      | WM_PAINT ハンドラは BeginPaint/EndPaint 最小ペアのみ。描画は ulw_present_system 一元管理 |
-| WM_PAINT 発火あり                  | WM_PAINT ハンドラ内で追加の ValidateRect() を実行して無限ループを防止                    |
-| pptDst=None で位置維持される       | present_layered_window は pptDst=None のまま                                             |
-| pptDst=None で位置がリセットされる | GetWindowRect で現在位置を取得して pptDst に渡す                                         |
+| 検証結果                           | 設計への影響                                                                             | **実装採用** | **実測結果**                 |
+| ---------------------------------- | ---------------------------------------------------------------------------------------- | ------------ | ---------------------------- |
+| WM_PAINT 発火なし（想定通り）      | WM_PAINT ハンドラは BeginPaint/EndPaint 最小ペアのみ。描画は ulw_present_system 一元管理 | **採用** ✅   | ✅ 確認済み                   |
+| WM_PAINT 発火あり                  | WM_PAINT ハンドラ内で追加の ValidateRect() を実行して無限ループを防止                    | —            | —                            |
+| pptDst=None で位置維持される       | present_layered_window は pptDst=None のまま                                             | ❌ 不採用     | ❌ **位置リセット発生**       |
+| pptDst=None で位置がリセットされる | GetWindowRect で現在位置を取得して pptDst に渡す                                         | **採用** ✅   | ✅ **実装済み（2026-02-17）** |
+
+> **検証結果メモ（2026-02-17 更新）**:
+> 1. MSDN ドキュメントでは `pptDst=NULL` でウィンドウ位置が維持されるとされていたが、**実際には位置がリセットされる問題を確認**。
+> 2. `taffy_flex_demo` 実行時に「ウィンドウが逃げる」「画像が消える」不具合が発生。
+> 3. **修正内容**: `present_layered_window` 関数内で `GetWindowRect` を使用して現在のウィンドウ位置を取得し、`pptDst` に明示的に渡すように変更。
+> 4. BeginPaint/EndPaint 最小ペアをセーフティネットとして実装（WM_PAINT 自体は発火しない）。
+> 5. ULW_ALPHA モードで alpha=0 ピクセルがクリックスルーになることを確認。
 
 ---
 

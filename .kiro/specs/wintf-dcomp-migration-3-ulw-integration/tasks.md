@@ -10,7 +10,7 @@ Phase 3 — UpdateLayeredWindow 統合。合成済みビットマップを ULW �
 
 ### Phase 3A: 前提検証（Phase 3 開始前）
 
-- [ ] 1. (P) WS_EX_LAYERED 動作検証
+- [x] 1. (P) WS_EX_LAYERED 動作検証
   - 最小構成の `WS_EX_LAYERED` ウィンドウを作成し、WM_PAINT 発火動作を確認する
   - `pptDst=None` での UpdateLayeredWindow 呼び出し時にウィンドウ位置が維持されるかを確認する
   - alpha=0 ピクセルのクリックスルー動作を確認する
@@ -20,14 +20,14 @@ Phase 3 — UpdateLayeredWindow 統合。合成済みビットマップを ULW �
 
 ### Phase 3B: ULW コア実装
 
-- [ ] 2. present_layered_window 関数の実装
+- [x] 2. present_layered_window 関数の実装
   - `com/ulw.rs` に `present_layered_window(hwnd, hdc_src, size)` を実装する
   - `BLENDFUNCTION` を `AC_SRC_OVER, SourceConstantAlpha=255, AC_SRC_ALPHA` で構成する
   - Task 1 の検証結果に基づき `pptDst` の扱いを決定する
   - _Requirements: 2.1, 2.2, 2.3_
   - _Dependencies: Task 1_
 
-- [ ] 3. ulw_present_system の実装
+- [x] 3. ulw_present_system の実装
   - `ecs/graphics/compositor_systems.rs` に `ulw_present_system` を追加する
   - ダーティフラグチェック → `present_layered_window` 呼び出し → dirty=false の基本フローを実装する
   - ULW 失敗時は `tracing::warn!` + dirty 維持（次フレーム再試行）を実装する
@@ -36,14 +36,14 @@ Phase 3 — UpdateLayeredWindow 統合。合成済みビットマップを ULW �
 
 ### Phase 3C: ウィンドウスタイル・ハンドラ更新
 
-- [ ] 4. (P) WS_EX_LAYERED 切替
+- [x] 4. (P) WS_EX_LAYERED 切替
   - `ecs/window.rs` の `WindowStyle::default()` を `WS_EX_LAYERED` に変更する
   - `areka/src/main.rs` の Shell/Balloon の `ex_style` を `WS_EX_LAYERED` に変更する
   - `WS_EX_TOOLWINDOW | WS_EX_TOPMOST` は維持する
   - _Requirements: 3.1, 3.2, 3.3, 3.4_
   - _Dependencies: Task 3_
 
-- [ ] 5. WM_PAINT / WM_ERASEBKGND / WM_SIZE ハンドラ更新
+- [x] 5. WM_PAINT / WM_ERASEBKGND / WM_SIZE ハンドラ更新
   - Task 1 の検証結果に基づき WM_PAINT ハンドラを更新する（BeginPaint/EndPaint 最小ペア or 不要化）
   - WM_ERASEBKGND ハンドラで `LRESULT(1)` を返す
   - WM_SIZE の既存フロー（ECS リアクティブ）が ULW 方式で正しく動作することを確認する
@@ -52,12 +52,12 @@ Phase 3 — UpdateLayeredWindow 統合。合成済みビットマップを ULW �
 
 ### Phase 3D: Schedule 登録・検証
 
-- [ ] 6. (P) world.rs CommitComposition ステージ更新
+- [x] 6. (P) world.rs CommitComposition ステージ更新
   - CommitComposition ステージの `commit_composition` を `ulw_present_system` に置換する
   - _Requirements: 1.3_
   - _Dependencies: Task 3_
 
-- [ ] 7. Phase 3 完了検証
+- [x] 7. Phase 3 完了検証
   - ULW 透過ウィンドウ表示が動作することを確認する
   - alpha=0 クリックスルーが動作することを確認する
   - WM_SIZE リサイズが正常動作することを確認する

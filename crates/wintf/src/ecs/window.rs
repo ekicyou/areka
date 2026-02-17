@@ -705,7 +705,9 @@ impl Default for WindowStyle {
     fn default() -> Self {
         Self {
             style: WS_OVERLAPPEDWINDOW | WS_VISIBLE,
-            ex_style: WS_EX_NOREDIRECTIONBITMAP,
+            // Phase 3: WS_EX_NOREDIRECTIONBITMAP → WS_EX_LAYERED
+            // ULW 方式による alpha 透過描画に必要
+            ex_style: WS_EX_LAYERED,
         }
     }
 }

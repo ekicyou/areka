@@ -138,7 +138,8 @@ fn create_shell_window(world: &mut World) -> Entity {
             },
             WindowStyle {
                 style: WS_POPUP | WS_VISIBLE,
-                ex_style: WS_EX_NOREDIRECTIONBITMAP | WS_EX_TOOLWINDOW | WS_EX_TOPMOST,
+                // Phase 3: WS_EX_NOREDIRECTIONBITMAP → WS_EX_LAYERED
+                ex_style: WS_EX_LAYERED | WS_EX_TOOLWINDOW | WS_EX_TOPMOST,
             },
             WindowPos {
                 position: Some(POINT {
@@ -198,7 +199,8 @@ fn create_balloon_window(world: &mut World, _shell_entity: Entity) -> Entity {
             },
             WindowStyle {
                 style: WS_POPUP | WS_VISIBLE,
-                ex_style: WS_EX_NOREDIRECTIONBITMAP | WS_EX_TOOLWINDOW | WS_EX_TOPMOST,
+                // Phase 3: WS_EX_NOREDIRECTIONBITMAP → WS_EX_LAYERED
+                ex_style: WS_EX_LAYERED | WS_EX_TOOLWINDOW | WS_EX_TOPMOST,
             },
             WindowPos {
                 position: Some(POINT {

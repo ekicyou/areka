@@ -414,8 +414,12 @@ impl EcsWorld {
                 crate::ecs::graphics::compositor_systems::composite_render_system,
             );
 
-            // CommitComposition: Phase 2で空化（commit_composition除去）
-            // Phase 3のulw_present_systemが当該ステージを引き継ぐ（Phase間ハンドオーバーポイント）
+            // CommitComposition: Phase 3 — UpdateLayeredWindow による画面転送
+            // Phase 2 で空化された当該ステージを ulw_present_system が引き継ぐ
+            schedules.add_systems(
+                CommitComposition,
+                crate::ecs::graphics::compositor_systems::ulw_present_system,
+            );
 
             // FrameFinalizeスケジュール: 一時的ポインター状態クリア
             schedules.add_systems(

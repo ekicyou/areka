@@ -4,14 +4,15 @@
 //! - `composite_render_system`: 全エンティティの `GraphicsCommandList` を z-order + transform + opacity で合成描画
 
 use super::compositor::WindowD3D11Compositor;
-use crate::com::ulw::transfer_to_hbitmap;
+use crate::com::ulw::{present_layered_window, transfer_to_hbitmap};
 use crate::ecs::graphics::{GraphicsCommandList, GraphicsCore, HasGraphicsResources, Visual};
 use crate::ecs::layout::GlobalArrangement;
 use crate::ecs::window::{WindowHandle, WindowPos};
 use bevy_ecs::hierarchy::Children;
 use bevy_ecs::name::Name;
 use bevy_ecs::prelude::*;
-use tracing::{debug, error, trace};
+use tracing::{debug, error, trace, warn};
+use windows::Win32::Foundation::SIZE;
 use windows::Win32::Graphics::Direct2D::Common::*;
 use windows::Win32::Graphics::Direct2D::*;
 
@@ -173,6 +174,9 @@ impl Drop for DcTargetGuard<'_> {
 struct CompositeContext<'a> {
     dc: &'a ID2D1DeviceContext,
     accumulated_opacity: f32,
+    /// ULW ビットマップはウィンドウクライアント領域の (0,0) から始まるため、
+    /// GlobalArrangement のスクリーン座標からウィンドウ位置分を差し引く補正オフセット。
+    window_offset: (f32, f32),
 }
 
 /// opacity を適用して GraphicsCommandList を描画する。
@@ -250,6 +254,7 @@ fn render_subtree(
 
     // Req 2.3: is_visible == false → サブツリーごとスキップ
     if !visual.is_visible {
+        debug!(entity = ?entity, "[render_subtree] SKIP: not visible");
         return;
     }
 
@@ -258,15 +263,30 @@ fn render_subtree(
 
     // Req 2.6: opacity == 0.0 → サブツリーごとスキップ
     if local_opacity == 0.0 {
+        debug!(entity = ?entity, "[render_subtree] SKIP: opacity=0");
         return;
     }
 
+    debug!(
+        entity = ?entity,
+        opacity = local_opacity,
+        has_cmd = cmd_opt.is_some(),
+        transform = ?ga.transform,
+        "[render_subtree] drawing entity"
+    );
+
     // Req 2.2: SetTransform
-    unsafe { ctx.dc.SetTransform(&ga.transform) };
+    // ULW 補正: GlobalArrangement はスクリーン座標だが、合成ビットマップは
+    // ウィンドウクライアント領域の (0,0) 起点なので、ウィンドウ位置分を差し引く。
+    let mut adjusted_transform = ga.transform;
+    adjusted_transform.M31 -= ctx.window_offset.0;
+    adjusted_transform.M32 -= ctx.window_offset.1;
+    unsafe { ctx.dc.SetTransform(&adjusted_transform) };
 
     // Req 2.5: opacity 適用描画
     if let Some(cmd) = cmd_opt {
         if let Some(command_list) = cmd.command_list() {
+            debug!(entity = ?entity, "[render_subtree] draw_with_opacity");
             if let Err(e) = unsafe { draw_with_opacity(ctx.dc, command_list, local_opacity) } {
                 error!(
                     entity = ?entity,
@@ -275,13 +295,16 @@ fn render_subtree(
                 );
                 // 当該エンティティの描画をスキップ（子への再帰は継続）
             }
+        } else {
+            debug!(entity = ?entity, "[render_subtree] command_list is None (closed?)");
         }
     }
 
-    // 子エンティティへ再帰（accumulated_opacity を伝搬）
+    // 子エンティティへ再帰（accumulated_opacity + window_offset を伝搬）
     let child_ctx = CompositeContext {
         dc: ctx.dc,
         accumulated_opacity: local_opacity,
+        window_offset: ctx.window_offset,
     };
     if let Some(children) = children_opt {
         for child in children.iter() {
@@ -349,7 +372,12 @@ fn is_window_dirty(
 /// per-window 合成ビットマップに描画する。
 pub fn composite_render_system(
     core: Res<GraphicsCore>,
-    mut compositor_query: Query<(Entity, &mut WindowD3D11Compositor, &Children)>,
+    mut compositor_query: Query<(
+        Entity,
+        &mut WindowD3D11Compositor,
+        &Children,
+        &GlobalArrangement,
+    )>,
     entity_query: Query<(
         &GlobalArrangement,
         Option<&GraphicsCommandList>,
@@ -370,7 +398,7 @@ pub fn composite_render_system(
         return;
     };
 
-    for (window_entity, mut compositor, window_children) in compositor_query.iter_mut() {
+    for (window_entity, mut compositor, window_children, window_ga) in compositor_query.iter_mut() {
         if !compositor.is_valid() {
             continue;
         }
@@ -379,13 +407,21 @@ pub fn composite_render_system(
         // Phase 2: Added<WindowD3D11Compositor> の別 Query を廃止し、
         // Mut::is_added() で初回フレームを検出（Query 競合回避）
         let is_added = compositor.is_added();
-        if !is_window_dirty(
+        let is_dirty = is_window_dirty(
             window_entity,
             window_children,
             &changed_query,
             &children_query,
             is_added,
-        ) {
+        );
+        debug!(
+            entity = ?window_entity,
+            is_added = is_added,
+            is_dirty = is_dirty,
+            size = ?compositor.cached_size(),
+            "[composite_render_system] dirty check"
+        );
+        if !is_dirty {
             continue;
         }
 
@@ -408,9 +444,21 @@ pub fn composite_render_system(
         }
 
         // 4. 再帰走査（Req 2.1: depth-first pre-order）
+        // ULW 補正: ウィンドウのスクリーン位置を GlobalArrangement から取得し、
+        // 合成ビットマップ内では (0,0) 起点で描画するよう補正する。
+        let window_offset = (window_ga.transform.M31, window_ga.transform.M32);
+        let child_count = window_children.iter().count();
+        debug!(
+            entity = ?window_entity,
+            child_count = child_count,
+            window_offset_x = window_offset.0,
+            window_offset_y = window_offset.1,
+            "[composite_render_system] rendering subtree (ULW offset compensation)"
+        );
         let ctx = CompositeContext {
             dc,
             accumulated_opacity: 1.0,
+            window_offset,
         };
         for child in window_children.iter() {
             render_subtree(&ctx, child, &entity_query);
@@ -455,6 +503,90 @@ pub fn composite_render_system(
         // 8. dirty フラグ設定（Req 2.7、Phase 3 で消費）
         compositor.set_dirty(true);
 
-        trace!("[composite_render_system] Composition complete for window");
+        // DIB ピクセルダンプ（先頭行 + 中央行のサンプルを debug 出力）
+        if let Some(dib_bits) = compositor.dib_bits() {
+            let (w, h) = compositor.cached_size();
+            let stride = w as usize * 4;
+            if w > 0 && h > 0 {
+                // 先頭行の最初の4ピクセル
+                let first_row: &[u8] =
+                    unsafe { std::slice::from_raw_parts(dib_bits, stride.min(16)) };
+                // 中央行の最初の4ピクセル
+                let mid_y = h as usize / 2;
+                let mid_offset = mid_y * stride;
+                let mid_row: &[u8] =
+                    unsafe { std::slice::from_raw_parts(dib_bits.add(mid_offset), stride.min(16)) };
+                debug!(
+                    entity = ?window_entity,
+                    size = ?(w, h),
+                    row0_pixels = ?&first_row[..first_row.len().min(16)],
+                    mid_row_y = mid_y,
+                    mid_pixels = ?&mid_row[..mid_row.len().min(16)],
+                    "[composite_render_system] DIB pixel dump [B,G,R,A per pixel]"
+                );
+            }
+        }
+
+        debug!(
+            entity = ?window_entity,
+            "[composite_render_system] Composition complete, dirty=true"
+        );
+    }
+}
+
+// ==========================================================================
+// ulw_present_system
+// ==========================================================================
+
+/// 合成済みビットマップを UpdateLayeredWindow で各ウィンドウに転送する。
+///
+/// `CommitComposition` ステージで実行され、`composite_render_system` が設定した
+/// dirty フラグを消費する。dirty=false のウィンドウはスキップし、
+/// ULW 成功後に dirty=false を設定する。失敗時は warn ログ + 次フレーム再試行。
+pub fn ulw_present_system(mut query: Query<(&WindowHandle, &mut WindowD3D11Compositor)>) {
+    for (window_handle, mut compositor) in query.iter_mut() {
+        let is_valid = compositor.is_valid();
+        let is_dirty = compositor.is_dirty();
+        // リソース未初期化またはダーティでなければスキップ
+        if !is_valid || !is_dirty {
+            trace!(
+                "[ulw_present_system] skip: valid={}, dirty={}",
+                is_valid, is_dirty
+            );
+            continue;
+        }
+
+        let hwnd = window_handle.hwnd;
+        let (w, h) = compositor.cached_size();
+        let size = SIZE {
+            cx: w as i32,
+            cy: h as i32,
+        };
+
+        debug!(
+            hwnd = ?hwnd,
+            size_w = w,
+            size_h = h,
+            "[ulw_present_system] calling UpdateLayeredWindow"
+        );
+
+        // MemoryDC 取得（HBITMAP が SelectObject 済み）
+        let Some(hdc) = compositor.memory_dc() else {
+            warn!("[ulw_present_system] memory_dc() returned None");
+            continue;
+        };
+
+        match present_layered_window(hwnd, hdc, &size) {
+            Ok(()) => {
+                compositor.set_dirty(false);
+                debug!("[ulw_present_system] UpdateLayeredWindow succeeded, dirty=false");
+            }
+            Err(e) => {
+                warn!(
+                    "[ulw_present_system] UpdateLayeredWindow failed: {e:?}, retrying next frame"
+                );
+                // dirty フラグは true のまま → 次フレームで再試行
+            }
+        }
     }
 }
