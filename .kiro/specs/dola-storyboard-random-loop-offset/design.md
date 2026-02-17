@@ -540,6 +540,7 @@ classDiagram
 ### Unit Tests
 - `LoopOffset` serde round-trip: スカラー短縮形、オブジェクト形式、easing 省略時デフォルト
 - `generate_delay()`: 固定シード `SmallRng` で決定的テスト。easing 別の分布確認
+- `generate_delay()` with `min == max`: 固定遅延として機能（常に min 値を返す）、イージング・乱数生成スキップ
 - `advance_loop()` with delay: 遅延が `end_time` に正しく加算されるか
 - `process_loops()` with delay: while ループが遅延で正しく停止するか
 - バリデーション V14-V17: 各ルールの正常/異常ケース

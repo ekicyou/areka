@@ -59,11 +59,11 @@
 
 ## Architecture Pattern Evaluation
 
-| Option | Description | Strengths | Risks / Limitations | Notes |
-|--------|-------------|-----------|---------------------|-------|
-| A: 既存コンポーネント拡張 | `loop_controller.rs` のフリー関数 + `StoryboardInstance` フィールド追加 | 確立パターン踏襲、最小変更 | `advance_loop()` の引数増加 | **推奨** |
-| B: 新モジュール `delay_controller.rs` | 遅延管理を独立モジュール化 | 関心分離 | `loop_controller` との密結合、過度な抽象化 | 機能規模に不釣り合い |
-| C: ハイブリッド | A ベース + `process_delay()` 分離関数 | 呼び出し順序が明示的 | `facade.rs` での呼び出し管理が複雑化 | |
+| Option                                | Description                                                             | Strengths                  | Risks / Limitations                        | Notes                |
+| ------------------------------------- | ----------------------------------------------------------------------- | -------------------------- | ------------------------------------------ | -------------------- |
+| A: 既存コンポーネント拡張             | `loop_controller.rs` のフリー関数 + `StoryboardInstance` フィールド追加 | 確立パターン踏襲、最小変更 | `advance_loop()` の引数増加                | **推奨**             |
+| B: 新モジュール `delay_controller.rs` | 遅延管理を独立モジュール化                                              | 関心分離                   | `loop_controller` との密結合、過度な抽象化 | 機能規模に不釣り合い |
+| C: ハイブリッド                       | A ベース + `process_delay()` 分離関数                                   | 呼び出し順序が明示的       | `facade.rs` での呼び出し管理が複雑化       |                      |
 
 ## Design Decisions
 
@@ -104,6 +104,41 @@
 - **Selected Approach**: 遅延を wall clock ベースで `end_time` に直接加算。`calculate_effective_time() = (current_time - loop_start_time - pause_accumulated) * time_scale` の `time_scale` 乗算の外で遅延が処理される
 - **Rationale**: 既存アーキテクチャの自然な帰結。`end_time` は wall clock ベースの絶対時刻であり、遅延を wall clock で加算すれば `time_scale` の影響を受けない
 - **Trade-offs**: ✅ 変更なしで実現 ❌ なし
+
+### Decision: StoryboardInstance フィールド設計
+- **Context**: 遅延パラメータをランタイム層でどう保持するか
+- **Alternatives Considered**:
+  1. 3フィールド分離（`loop_offset_min: Option<f64>`, `loop_offset_max: f64`, `loop_offset_easing: EasingFunction`）— 既存パターン踏襲
+  2. `Option<LoopOffsetParams>` 構造体化 — 型安全性強化
+- **Selected Approach**: **案1（3フィールド分離）**を採用
+- **Rationale**: 
+  - 既存の `pause_start: Option<f64>` + `pause_accumulated: f64` パターンとの一貫性維持
+  - 確立されたパターンの応用で実装リスクが低い
+  - 部分的な型安全性強化は中途半端（pause 関連も同時リファクタすべきだが scope 外）
+- **Trade-offs**: ✅ codebase 一貫性、既存テストパターン流用可能 ❌ 型レベルの不変条件は弱い
+- **Follow-up**: `loop_offset_min.is_none()` チェックは `generate_delay()` 呼び出し前の1箇所のみ
+
+### Decision: min=max エッジケースの扱い
+- **Context**: `loop_offset = { min = 3.0, max = 3.0 }` のような定義で `max - min = 0` となり、イージングが無意味になる
+- **Issue**: `min + eased * (max - min)` で `eased * 0 = 0` となり、常に `min` が返される（数学的には問題ないが意味論的に疑問）
+- **Selected Approach**: **min == max の場合は固定遅延として扱う**（常に `min` を返す early return）
+- **Rationale**: 
+  - `loop_offset = 3.0` は「常に3秒待機」の意図と解釈可能（valid な使用例）
+  - イージング計算をスキップすることで無駄な処理を削減
+  - バリデーションでエラーにするのは過剰（ユーザーの意図を制限しすぎ）
+- **Implementation**: 
+  ```rust
+  fn generate_delay(min: f64, max: f64, easing: &EasingFunction, rng: &mut impl Rng) -> f64 {
+      if min == max {
+          return min; // 固定遅延（イージング・乱数スキップ）
+      }
+      let t = rng.gen_range(0.0..1.0);
+      let eased = apply_easing(easing, t);
+      min + eased * (max - min)
+  }
+  ```
+- **Trade-offs**: ✅ 明示的な early return で意図が明確 ✅ パフォーマンス最適化 ❌ なし
+- **Follow-up**: 単体テスト追加（`min == max` ケースで固定値が返されることを検証）
 
 ## Risks & Mitigations
 - `rand` クレート追加による依存増加 — `rand` は広く使用されており事実上のリスクなし
