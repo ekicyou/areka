@@ -77,6 +77,8 @@ _Parent: Req 2.3, 3.3_
    - GraphicsSetup ステージ: `compositor_init_system`
    - Composition ステージ: `composite_render_system`
 
+   **Note**: RenderSurface ステージは Phase 2 完了後に空になる。DComp では RenderSurface で CommandList を IDCompositionSurface へ焼き付けていたが、D2D1 パイプラインでは WPF 的遅延戦略を採用し、Composition ステージまで Window Bitmap への焼き付けを遅延する。これにより、最終描画タイミングでの最適化が可能となる。
+
 3. The `world.rs` shall PreRenderSurface ステージから `mark_dirty_surfaces` を除去する（`composite_render_system` 内の `is_window_dirty()` ヘルパーが `Changed<GraphicsCommandList>`, `Changed<GlobalArrangement>`, `Changed<Visual>` でダーティ判定を代替する）
 
 4. The `world.rs` shall CommitComposition ステージから `commit_composition` を除去する（Phase 3 で `ulw_present_system` が当該ステージを引き継ぐ）
@@ -194,13 +196,15 @@ _Parent: Req 10.1, 10.2_
 
 5. The `world.rs` の Schedule shall Phase 1 新システム（`compositor_init_system`, `composite_render_system`）を含む
 
-6. The `on_visual_add` フック shall DComp コンポーネント（`VisualGraphics`, `SurfaceGraphics`, `SurfaceGraphicsDirty`）の挿入を含まない
+6. The RenderSurface ステージ shall システム登録を含まない（WPF 的遅延戦略により、焼き付けは Composition ステージで実行）
 
-7. The `cargo test` shall 全テストがパスする
+7. The `on_visual_add` フック shall DComp コンポーネント（`VisualGraphics`, `SurfaceGraphics`, `SurfaceGraphicsDirty`）の挿入を含まない
 
-8. The `cargo build --examples` shall 全 example がビルド成功する
+8. The `cargo test` shall 全テストがパスする
 
-9. The `ecs/` ディレクトリ内の Schedule 登録済みシステム関数 shall `dcomp()` / `desktop()` メソッド呼び出しを含まない
+9. The `cargo build --examples` shall 全 example がビルド成功する
+
+10. The `ecs/` ディレクトリ内の Schedule 登録済みシステム関数 shall `dcomp()` / `desktop()` メソッド呼び出しを含まない
 
 ### Requirement 8: コンパイル整合性
 
