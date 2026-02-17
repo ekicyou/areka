@@ -222,10 +222,8 @@ pub(super) fn WM_WINDOWPOSCHANGED(
                                     // 発火しても、座標/サイズが同一なら Changed を発火させない。
                                     // これにより不要な SetWindowPos エコーバックループを防止し、
                                     // 高DPI環境でのフレームオフセット不一致による位置ズレを回避する。
-                                    let pos_changed =
-                                        window_pos.position != Some(client_pos);
-                                    let size_changed =
-                                        window_pos.size != Some(client_size);
+                                    let pos_changed = window_pos.position != Some(client_pos);
+                                    let size_changed = window_pos.size != Some(client_size);
 
                                     if pos_changed || size_changed {
                                         window_pos.position = Some(client_pos);

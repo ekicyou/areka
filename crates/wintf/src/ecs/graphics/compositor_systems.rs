@@ -405,7 +405,9 @@ pub fn composite_render_system(
         return;
     };
 
-    for (window_entity, mut compositor, window_children, window_ga, window_handle) in compositor_query.iter_mut() {
+    for (window_entity, mut compositor, window_children, window_ga, window_handle) in
+        compositor_query.iter_mut()
+    {
         if !compositor.is_valid() {
             continue;
         }
