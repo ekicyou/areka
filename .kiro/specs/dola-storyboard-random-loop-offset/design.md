@@ -78,11 +78,11 @@ graph TB
 
 ### Technology Stack
 
-| Layer | Choice / Version | Role in Feature | Notes |
-|-------|------------------|-----------------|-------|
-| Data Model | `serde` 1.x | `LoopOffset` の JSON/TOML/YAML シリアライズ | 既存依存 |
-| Easing | `interpolation` (workspace) | `[0,1]` → easing 変換 | 既存依存、`EaseFunction` 計算用 |
-| Random | `rand` (新規追加) | `[0,1]` 一様乱数生成 | `thread_rng()` + `&mut impl Rng` DI |
+| Layer      | Choice / Version            | Role in Feature                             | Notes                               |
+| ---------- | --------------------------- | ------------------------------------------- | ----------------------------------- |
+| Data Model | `serde` 1.x                 | `LoopOffset` の JSON/TOML/YAML シリアライズ | 既存依存                            |
+| Easing     | `interpolation` (workspace) | `[0,1]` → easing 変換                       | 既存依存、`EaseFunction` 計算用     |
+| Random     | `rand` (新規追加)           | `[0,1]` 一様乱数生成                        | `thread_rng()` + `&mut impl Rng` DI |
 
 ## System Flows
 
@@ -114,50 +114,50 @@ stateDiagram-v2
 
 ## Requirements Traceability
 
-| Requirement | Summary | Components | Interfaces | Flows |
-|-------------|---------|------------|------------|-------|
-| 1.1 | `loop_offset` フィールド（省略可能） | `Storyboard` | `Option<LoopOffset>` | - |
-| 1.2 | min/max/easing パラメータ | `LoopOffset` | `LoopOffsetRange` struct fields | - |
-| 1.3 | 省略時の後方互換性 | `Storyboard`, `loop_controller` | `Option<LoopOffset>` = `None` | CheckLoopEnd → AdvanceLoop |
-| 1.4 | 全シリアライズ形式サポート | `LoopOffset` | serde derive | - |
-| 1.5 | 既存 EasingFunction サポート | `LoopOffset` | `EasingFunction` 型再利用 | ApplyEasing |
-| 2.1 | ランダム遅延算出（uniform → easing → mapping） | `loop_controller` | `generate_delay()` | GenerateDelay → MapToRange |
-| 2.2 | 無限ループ対応 | `loop_controller` | `process_loops()` | CheckContinue → Playing |
-| 2.3 | `loop_count=1` 時の `loop_offset` 無視 | `loop_controller` | `process_loops()` 早期 return | LoopCount1 → Conclude |
-| 2.4 | 遅延中の変数値維持（最終値） | `timeline_manager` | 変更不要（`end_time` 延長で自然に実現） | - |
-| 2.5 | 各周回独立乱数 | `loop_controller` | `generate_delay()` 毎回呼び出し | GenerateDelay |
-| 2.6 | `time_scale` 非適用 | `loop_controller` | wall clock ベースで `end_time` 加算 | AddToEndTime |
-| 3.1 | `min` 負値エラー (V14) | `validate.rs`, `DolaError` | `LoopOffsetNegativeMin` | - |
-| 3.2 | `max` 負値エラー (V15) | `validate.rs`, `DolaError` | `LoopOffsetNegativeMax` | - |
-| 3.3 | 範囲逆転エラー (V16) | `validate.rs`, `DolaError` | `LoopOffsetRangeInverted` | - |
-| 3.4 | 不正 easing エラー (V17) | serde | デシリアライズ時エラー（型安全） | - |
-| 4.1 | スカラー短縮形 | `LoopOffset` | `Scalar(f64)` variant | - |
-| 4.2 | オブジェクト形式 | `LoopOffset` | `Range` variant | - |
-| 4.3 | 両形式のデシリアライズ/シリアライズ | `LoopOffset` | `#[serde(untagged)]` | - |
-| 5.1 | 遅延中 Pause → 残り時間保持 | `instance_manager` | 既存 `pause_accumulated` + `end_time` 延長 | - |
-| 5.2 | 遅延中 Cancel | `facade` | 既存 `cancel()` フロー | - |
-| 5.3 | 遅延中割り込み | `facade` | 既存 `InterruptionPolicy` フロー | - |
+| Requirement | Summary                                        | Components                      | Interfaces                                 | Flows                      |
+| ----------- | ---------------------------------------------- | ------------------------------- | ------------------------------------------ | -------------------------- |
+| 1.1         | `loop_offset` フィールド（省略可能）           | `Storyboard`                    | `Option<LoopOffset>`                       | -                          |
+| 1.2         | min/max/easing パラメータ                      | `LoopOffset`                    | `LoopOffsetRange` struct fields            | -                          |
+| 1.3         | 省略時の後方互換性                             | `Storyboard`, `loop_controller` | `Option<LoopOffset>` = `None`              | CheckLoopEnd → AdvanceLoop |
+| 1.4         | 全シリアライズ形式サポート                     | `LoopOffset`                    | serde derive                               | -                          |
+| 1.5         | 既存 EasingFunction サポート                   | `LoopOffset`                    | `EasingFunction` 型再利用                  | ApplyEasing                |
+| 2.1         | ランダム遅延算出（uniform → easing → mapping） | `loop_controller`               | `generate_delay()`                         | GenerateDelay → MapToRange |
+| 2.2         | 無限ループ対応                                 | `loop_controller`               | `process_loops()`                          | CheckContinue → Playing    |
+| 2.3         | `loop_count=1` 時の `loop_offset` 無視         | `loop_controller`               | `process_loops()` 早期 return              | LoopCount1 → Conclude      |
+| 2.4         | 遅延中の変数値維持（最終値）                   | `timeline_manager`              | 変更不要（`end_time` 延長で自然に実現）    | -                          |
+| 2.5         | 各周回独立乱数                                 | `loop_controller`               | `generate_delay()` 毎回呼び出し            | GenerateDelay              |
+| 2.6         | `time_scale` 非適用                            | `loop_controller`               | wall clock ベースで `end_time` 加算        | AddToEndTime               |
+| 3.1         | `min` 負値エラー (V14)                         | `validate.rs`, `DolaError`      | `LoopOffsetNegativeMin`                    | -                          |
+| 3.2         | `max` 負値エラー (V15)                         | `validate.rs`, `DolaError`      | `LoopOffsetNegativeMax`                    | -                          |
+| 3.3         | 範囲逆転エラー (V16)                           | `validate.rs`, `DolaError`      | `LoopOffsetRangeInverted`                  | -                          |
+| 3.4         | 不正 easing エラー (V17)                       | serde                           | デシリアライズ時エラー（型安全）           | -                          |
+| 4.1         | スカラー短縮形                                 | `LoopOffset`                    | `Scalar(f64)` variant                      | -                          |
+| 4.2         | オブジェクト形式                               | `LoopOffset`                    | `Range` variant                            | -                          |
+| 4.3         | 両形式のデシリアライズ/シリアライズ            | `LoopOffset`                    | `#[serde(untagged)]`                       | -                          |
+| 5.1         | 遅延中 Pause → 残り時間保持                    | `instance_manager`              | 既存 `pause_accumulated` + `end_time` 延長 | -                          |
+| 5.2         | 遅延中 Cancel                                  | `facade`                        | 既存 `cancel()` フロー                     | -                          |
+| 5.3         | 遅延中割り込み                                 | `facade`                        | 既存 `InterruptionPolicy` フロー           | -                          |
 
 ## Components and Interfaces
 
-| Component | Domain/Layer | Intent | Req Coverage | Key Dependencies | Contracts |
-|-----------|--------------|--------|--------------|------------------|-----------|
-| `LoopOffset` | Definition | ランダム遅延パラメータの宣言的定義 | 1.1-1.5, 4.1-4.3 | `EasingFunction` (P0) | State |
-| `Storyboard` (拡張) | Definition | `loop_offset` フィールド追加 | 1.1, 1.3 | `LoopOffset` (P1) | State |
-| `loop_controller` (拡張) | Runtime | 遅延生成・適用ロジック | 2.1-2.6 | `rand::Rng` (P0), `EasingFunction` (P0) | Service |
-| `StoryboardInstance` (拡張) | Runtime | 遅延パラメータ保持 | 2.1, 2.4-2.6 | - | State |
-| `CompiledStoryboard` (拡張) | Compilation | `loop_offset` メタ情報転送 | 1.1 | `LoopOffset` (P1) | State |
-| `validate.rs` (拡張) | Validation | V14-V17 ルール追加 | 3.1-3.4 | `DolaError` (P0) | Service |
-| `DolaError` (拡張) | Error | 新バリアント追加 | 3.1-3.3 | - | State |
+| Component                   | Domain/Layer | Intent                             | Req Coverage     | Key Dependencies                        | Contracts |
+| --------------------------- | ------------ | ---------------------------------- | ---------------- | --------------------------------------- | --------- |
+| `LoopOffset`                | Definition   | ランダム遅延パラメータの宣言的定義 | 1.1-1.5, 4.1-4.3 | `EasingFunction` (P0)                   | State     |
+| `Storyboard` (拡張)         | Definition   | `loop_offset` フィールド追加       | 1.1, 1.3         | `LoopOffset` (P1)                       | State     |
+| `loop_controller` (拡張)    | Runtime      | 遅延生成・適用ロジック             | 2.1-2.6          | `rand::Rng` (P0), `EasingFunction` (P0) | Service   |
+| `StoryboardInstance` (拡張) | Runtime      | 遅延パラメータ保持                 | 2.1, 2.4-2.6     | -                                       | State     |
+| `CompiledStoryboard` (拡張) | Compilation  | `loop_offset` メタ情報転送         | 1.1              | `LoopOffset` (P1)                       | State     |
+| `validate.rs` (拡張)        | Validation   | V14-V17 ルール追加                 | 3.1-3.4          | `DolaError` (P0)                        | Service   |
+| `DolaError` (拡張)          | Error        | 新バリアント追加                   | 3.1-3.3          | -                                       | State     |
 
 ### Definition Layer
 
 #### LoopOffset
 
-| Field | Detail |
-|-------|--------|
-| Intent | ループ間ランダム遅延の min/max/easing を表現する serde 対応型 |
-| Requirements | 1.1, 1.2, 1.4, 1.5, 4.1, 4.2, 4.3 |
+| Field        | Detail                                                        |
+| ------------ | ------------------------------------------------------------- |
+| Intent       | ループ間ランダム遅延の min/max/easing を表現する serde 対応型 |
+| Requirements | 1.1, 1.2, 1.4, 1.5, 4.1, 4.2, 4.3                             |
 
 **Responsibilities & Constraints**
 - スカラー短縮形とオブジェクト形式の両方をデシリアライズ可能にする
@@ -203,10 +203,10 @@ pub struct LoopOffsetRange {
 
 #### Storyboard (拡張)
 
-| Field | Detail |
-|-------|--------|
-| Intent | `loop_offset` フィールドの追加 |
-| Requirements | 1.1, 1.3 |
+| Field        | Detail                         |
+| ------------ | ------------------------------ |
+| Intent       | `loop_offset` フィールドの追加 |
+| Requirements | 1.1, 1.3                       |
 
 **Implementation Notes**
 - `Storyboard` struct に `loop_offset: Option<LoopOffset>` を追加
@@ -217,10 +217,10 @@ pub struct LoopOffsetRange {
 
 #### loop_controller (拡張)
 
-| Field | Detail |
-|-------|--------|
-| Intent | ループ周回完了時のランダム遅延生成・適用 |
-| Requirements | 2.1, 2.2, 2.3, 2.4, 2.5, 2.6 |
+| Field        | Detail                                   |
+| ------------ | ---------------------------------------- |
+| Intent       | ループ周回完了時のランダム遅延生成・適用 |
+| Requirements | 2.1, 2.2, 2.3, 2.4, 2.5, 2.6             |
 
 **Responsibilities & Constraints**
 - `advance_loop()` 呼び出し後に遅延を生成し `end_time` に加算する
@@ -271,12 +271,50 @@ pub(crate) fn generate_delay(
 - `loop_offset` が `None` の場合、遅延は 0（既存動作と完全互換）
 - `process_loops()` 内の while ループは変更最小限: `advance_loop()` が遅延を `end_time` に加算するため、`current_time < end_time` で自然にループ脱出
 
+**EasingFunction 適用メカニズム**:
+
+`generate_delay()` の実装フロー:
+1. 一様乱数生成: `let t = rng.gen_range(0.0..1.0)`
+2. イージング適用: `let eased = apply_easing(easing, t)`
+3. 範囲マッピング: `min + eased * (max - min)`
+
+`apply_easing()` ヘルパー関数の設計:
+```rust
+fn apply_easing(easing: &EasingFunction, t: f64) -> f64 {
+    use interpolation::Ease;
+    match easing {
+        EasingFunction::Named(name) => {
+            let ease_fn = match name {
+                EasingName::Linear => return t,
+                EasingName::QuadraticIn => interpolation::EaseFunction::QuadraticIn,
+                EasingName::QuadraticOut => interpolation::EaseFunction::QuadraticOut,
+                EasingName::QuadraticInOut => interpolation::EaseFunction::QuadraticInOut,
+                // ... 全30+ variants のマッピング
+            };
+            ease_fn.ease(t, 0.0, 1.0)
+        }
+        EasingFunction::Parametric(p) => {
+            match p {
+                ParametricEasing::QuadraticBezier { x0, x1, x2 } => {
+                    interpolation::quad_bez(t, *x0, *x1, *x2)
+                }
+                ParametricEasing::CubicBezier { x0, x1, x2, x3 } => {
+                    interpolation::cub_bez(t, *x0, *x1, *x2, *x3)
+                }
+            }
+        }
+    }
+}
+```
+
+`EasingName` → `interpolation::EaseFunction` の完全マッピング表（30+ variants）は実装時に参照。Linear は特別扱い（`t` をそのまま返す）で最適化。
+
 #### StoryboardInstance (拡張)
 
-| Field | Detail |
-|-------|--------|
-| Intent | 遅延パラメータをインスタンス生存期間中保持 |
-| Requirements | 2.1, 2.6 |
+| Field        | Detail                                     |
+| ------------ | ------------------------------------------ |
+| Intent       | 遅延パラメータをインスタンス生存期間中保持 |
+| Requirements | 2.1, 2.6                                   |
 
 **Contracts**: State [x]
 
@@ -305,10 +343,10 @@ pub(crate) struct StoryboardInstance {
 
 #### CompiledStoryboard (拡張)
 
-| Field | Detail |
-|-------|--------|
-| Intent | `loop_offset` メタ情報の定義層→ランタイム層への転送 |
-| Requirements | 1.1 |
+| Field        | Detail                                              |
+| ------------ | --------------------------------------------------- |
+| Intent       | `loop_offset` メタ情報の定義層→ランタイム層への転送 |
+| Requirements | 1.1                                                 |
 
 **Implementation Notes**
 
@@ -329,10 +367,10 @@ pub struct CompiledStoryboard {
 
 #### validate.rs (拡張)
 
-| Field | Detail |
-|-------|--------|
-| Intent | `loop_offset` に対するバリデーションルール V14-V17 の追加 |
-| Requirements | 3.1, 3.2, 3.3, 3.4 |
+| Field        | Detail                                                    |
+| ------------ | --------------------------------------------------------- |
+| Intent       | `loop_offset` に対するバリデーションルール V14-V17 の追加 |
+| Requirements | 3.1, 3.2, 3.3, 3.4                                        |
 
 **Contracts**: Service [x]
 
@@ -361,10 +399,10 @@ fn validate_loop_offset(
 
 #### DolaError (拡張)
 
-| Field | Detail |
-|-------|--------|
-| Intent | `loop_offset` バリデーションエラーバリアント追加 |
-| Requirements | 3.1, 3.2, 3.3 |
+| Field        | Detail                                           |
+| ------------ | ------------------------------------------------ |
+| Intent       | `loop_offset` バリデーションエラーバリアント追加 |
+| Requirements | 3.1, 3.2, 3.3                                    |
 
 **Contracts**: State [x]
 
