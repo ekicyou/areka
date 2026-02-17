@@ -23,8 +23,7 @@
 
 - `ecs/world.rs`: DComp システムの Schedule 登録解除 + Phase 1 新システムの登録
 - `ecs/graphics/components.rs`: `on_visual_add` フックから DComp コンポーネント自動挿入を除去
-- `ecs/graphics/systems.rs`: YELLOW システム（`invalidate_dependent_components`, `mark_dirty_surfaces`）を新コンポーネント型に適合
-- `ecs/graphics/systems.rs`: `commit_composition` を Schedule から除去（Phase 3 `ulw_present_system` が CommitComposition ステージを引き継ぐ）
+- `ecs/graphics/systems.rs`: `invalidate_dependent_components` を新コンポーネント型（`WindowD3D11Compositor`）に適合
 
 ### 旧実装保持戦略
 
