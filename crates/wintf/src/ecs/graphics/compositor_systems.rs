@@ -503,25 +503,35 @@ pub fn composite_render_system(
         // 8. dirty フラグ設定（Req 2.7、Phase 3 で消費）
         compositor.set_dirty(true);
 
-        // DIB ピクセルダンプ（先頭行 + 中央行のサンプルを debug 出力）
+        // DIB ピクセルダンプ（コンテンツ位置 + 非ゼロピクセルスキャン）
         if let Some(dib_bits) = compositor.dib_bits() {
             let (w, h) = compositor.cached_size();
             let stride = w as usize * 4;
+            let total_bytes = stride * h as usize;
             if w > 0 && h > 0 {
-                // 先頭行の最初の4ピクセル
-                let first_row: &[u8] =
-                    unsafe { std::slice::from_raw_parts(dib_bits, stride.min(16)) };
-                // 中央行の最初の4ピクセル
-                let mid_y = h as usize / 2;
-                let mid_offset = mid_y * stride;
-                let mid_row: &[u8] =
-                    unsafe { std::slice::from_raw_parts(dib_bits.add(mid_offset), stride.min(16)) };
+                let buf: &[u8] = unsafe { std::slice::from_raw_parts(dib_bits, total_bytes) };
+                // (15, 15) のピクセル — コンテンツ領域内のはず
+                let sample_x = 15usize.min(w as usize - 1);
+                let sample_y = 15usize.min(h as usize - 1);
+                let px_offset = sample_y * stride + sample_x * 4;
+                let px_15_15 = &buf[px_offset..px_offset + 4];
+                // (100, 100) のピクセル
+                let sx2 = 100usize.min(w as usize - 1);
+                let sy2 = 100usize.min(h as usize - 1);
+                let px2_offset = sy2 * stride + sx2 * 4;
+                let px_100_100 = &buf[px2_offset..px2_offset + 4];
+                // 非ゼロピクセルの最初の出現位置を探す
+                let first_nonzero = buf.chunks(4).position(|c| c.iter().any(|&b| b != 0));
+                let nonzero_count = buf.chunks(4).filter(|c| c.iter().any(|&b| b != 0)).count();
+                let total_pixels = (w as usize) * (h as usize);
                 debug!(
                     entity = ?window_entity,
                     size = ?(w, h),
-                    row0_pixels = ?&first_row[..first_row.len().min(16)],
-                    mid_row_y = mid_y,
-                    mid_pixels = ?&mid_row[..mid_row.len().min(16)],
+                    px_15_15 = ?px_15_15,
+                    px_100_100 = ?px_100_100,
+                    first_nonzero_pixel_idx = ?first_nonzero,
+                    nonzero_count,
+                    total_pixels,
                     "[composite_render_system] DIB pixel dump [B,G,R,A per pixel]"
                 );
             }
