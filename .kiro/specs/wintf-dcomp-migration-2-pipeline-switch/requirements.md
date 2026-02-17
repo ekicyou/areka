@@ -1,6 +1,6 @@
 # 要件定義書: wintf-dcomp-migration-2-pipeline-switch
 
-> **Rev 4** (2026-02-17) — 議題 3: Phase 2 完了基準の現実化。Phase 2 単体では画面表示不可能（UpdateLayeredWindow は Phase 3 担当）のため、検証範囲を構造的整合性に限定。
+> **Rev 5** (2026-02-17) — 議題 4: Req 4 冗長性解消。Req 4（commit_composition 除去）の AC が Req 1 AC 4 と完全同一のため削除、Phase 間ハンドオーバー Note を Req 1 に統合。
 
 ## 導入
 
@@ -81,7 +81,9 @@ _Parent: Req 2.3, 3.3_
 
 3. The `world.rs` shall PreRenderSurface ステージから `mark_dirty_surfaces` を除去する（`composite_render_system` 内の `is_window_dirty()` ヘルパーが `Changed<GraphicsCommandList>`, `Changed<GlobalArrangement>`, `Changed<Visual>` でダーティ判定を代替する）
 
-4. The `world.rs` shall CommitComposition ステージから `commit_composition` を除去する（Phase 3 で `ulw_present_system` が当該ステージを引き継ぐ）
+4. The `world.rs` shall CommitComposition ステージから `commit_composition` を除去する
+
+   **Note**: 本 AC は Phase 2 と Phase 3 の責任境界を明示する。CommitComposition ステージは本 Phase で空にされ、Phase 3 の `ulw_present_system` に完全に引き継がれる設計である。親仕様の段階的移行戦略（Req 2.1）における Phase 間ハンドオーバーポイントとして機能する。
 
 ### Requirement 2: on_visual_add フック更新
 
@@ -119,19 +121,7 @@ _Parent: Req 3.3_
 
 5. The `mark_dirty_surfaces` の機能 shall `composite_render_system` 内の `is_window_dirty()` ヘルパー（`Changed<GraphicsCommandList>`, `Changed<GlobalArrangement>`, `Changed<Visual>` ベース）で代替されるため、システム自体を Schedule から除去する（Req 1.3 と連動）
 
-### Requirement 4: commit_composition の除去
-
-**Objective:** 開発者として、`commit_composition` システムを Schedule から除去し、CommitComposition ステージを Phase 3 の `ulw_present_system` に引き渡したい。
-
-_Parent: Req 2.3_
-
-**Note**: 本要件は Phase 2 と Phase 3 の責任境界を明示する。CommitComposition ステージは本 Phase で空にされ、Phase 3 の `ulw_present_system` に完全に引き継がれる設計である。親仕様の段階的移行戦略（Req 2.1）における Phase 間ハンドオーバーポイントとして機能する。
-
-#### Acceptance Criteria
-
-1. The `world.rs` shall `commit_composition` を CommitComposition ステージから除去する（Req 1.4 と連動）
-
-### Requirement 5: Schedule 登録済みシステムの DComp 参照除去検証
+### Requirement 4: Schedule 登録済みシステムの DComp 参照除去検証
 
 **Objective:** 開発者として、ECS Schedule に登録済みのシステムが DComp API を参照していないことを検証し、新パイプラインへの完全切り替えを確認したい。
 
@@ -145,7 +135,7 @@ _Parent: Req 2.3, 10.1_
 
 2. When Phase 2 が完了した時, the `ecs/world.rs` の Schedule 登録システム shall Phase 1 新システム（`compositor_init_system`, `composite_render_system`）を含む
 
-### Requirement 6: Phase 2 完了検証基準
+### Requirement 5: Phase 2 完了検証基準
 
 **Objective:** 開発者として、Phase 2 の完了を客観的に判定できる包括的な検証基準が欲しい。
 
@@ -170,6 +160,16 @@ _Parent: Req 10.1, 10.2_
 ---
 
 ## 改定履歴
+
+### Rev 5 (2026-02-17) — 議題 4: Req 4 冗長性解消
+
+**改定動機**: Req 4 「commit_composition の除去」の唯一の AC が Req 1 AC 4 と完全に同一であり、実装者の混乱を招く。Req 5 は「検証の独立性」により独立維持が妥当だったが、Req 4 は「実装の重複」により統合が適切。Phase 間ハンドオーバー情報は Req 1 AC 4 の Note として保持。
+
+**主な変更点**:
+- **Req 4 削除**: 「commit_composition の除去」要件全体を削除
+- **Req 1 AC 4**: Req 4 の Phase 間ハンドオーバー Note を統合
+- **Req 5-6 繰り上げ**: 旧 Req 5 → Req 4、旧 Req 6 → Req 5
+- **要件カバレッジサマリー**: 6 要件 → 5 要件に更新
 
 ### Rev 4 (2026-02-17) — 議題 3: Phase 2 完了基準の現実化
 
@@ -221,6 +221,5 @@ _Parent: Req 10.1, 10.2_
 | Req 1      | 2.3, 3.3   | ECS Schedule 切り替え（DComp 除去 + D2D1 登録 + mark_dirty/commit 除去） |
 | Req 2      | 6.2, 6.3   | on_visual_add フックから DComp コンポーネント除去                        |
 | Req 3      | 3.3        | YELLOW システム（invalidate / mark_dirty）改修                           |
-| Req 4      | 2.3        | commit_composition の Schedule 除去                                      |
-| Req 5      | 2.3, 10.1  | Schedule 登録済みシステムの DComp 参照除去検証                           |
-| Req 6      | 10.1, 10.2 | Phase 2 完了検証基準（構造検証のみ、画面表示は Phase 3 待ち）            |
+| Req 4      | 2.3, 10.1  | Schedule 登録済みシステムの DComp 参照除去検証                           |
+| Req 5      | 10.1, 10.2 | Phase 2 完了検証基準（構造検証のみ、画面表示は Phase 3 待ち）            |
