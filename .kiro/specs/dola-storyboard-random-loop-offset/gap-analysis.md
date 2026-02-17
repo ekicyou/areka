@@ -36,8 +36,8 @@
 
 | 要件                                   | 対象アセット                                             | ギャップ                                                                                                                                                                        |
 | -------------------------------------- | -------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Req 1**: loop_offset フィールド定義  | `storyboard.rs::Storyboard`                              | **Missing**: フィールド・型が存在しない。**Partial**: easingフィールドは既存のEasing型を再利用可能                                                                               |
-| **Req 2**: ランタイムランダム遅延      | `loop_controller.rs::process_loops()` / `advance_loop()` | **Missing**: 遅延待機状態・乱数生成が未実装。**Exists**: イージング適用は `easing.rs::EasingFunction::ease()` で実現可能                                                         |
+| **Req 1**: loop_offset フィールド定義  | `storyboard.rs::Storyboard`                              | **Missing**: フィールド・型が存在しない。**Partial**: easingフィールドは既存のEasing型を再利用可能                                                                              |
+| **Req 2**: ランタイムランダム遅延      | `loop_controller.rs::process_loops()` / `advance_loop()` | **Missing**: 遅延待機状態・乱数生成が未実装。**Exists**: イージング適用は `easing.rs::EasingFunction::ease()` で実現可能                                                        |
 | **Req 3**: バリデーション              | `validate.rs` / `error.rs`                               | **Missing**: loop_offset 検証なし（min/max範囲、easing妥当性）。**Unknown**: 警告の仕組みが未存在                                                                               |
 | **Req 4**: time_scale 非適用           | `timeline_manager.rs::calculate_effective_time()`        | **設計上対応可能**: 遅延を `loop_start_time` / `end_time` に実時間ベースで加算すれば `time_scale` 乗算の外になる                                                                |
 | **Req 5**: 短縮形serde                 | `storyboard.rs`                                          | **Missing**: 新型（`LoopOffset` enum）が必要。パターンは `KeyframeRef` に確立済み。easingフィールドのデフォルト「linear」はserde(default)で実現可能                             |
@@ -51,18 +51,18 @@
 
 **変更ファイル一覧**:
 
-| 操作                   | ファイル                                  | 内容                                                                                   |
-| ---------------------- | ----------------------------------------- | -------------------------------------------------------------------------------------- |
-| **新型追加**           | `storyboard.rs`                           | `LoopOffset` enum（短縮形: `Scalar(f64)` / `Range { min, max, easing }`）                                                                        |
-| **フィールド追加**     | `storyboard.rs::Storyboard`               | `loop_offset: Option<LoopOffset>`                                                                                                                |
-| **フィールド追加**     | `instance_manager.rs::StoryboardInstance` | `loop_offset_min: f64`, `loop_offset_max: f64`, `loop_offset_easing: Easing`, `current_delay_remaining: Option<f64>`                             |
+| 操作                   | ファイル                                  | 内容                                                                                                                                                |
+| ---------------------- | ----------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **新型追加**           | `storyboard.rs`                           | `LoopOffset` enum（短縮形: `Scalar(f64)` / `Range { min, max, easing }`）                                                                           |
+| **フィールド追加**     | `storyboard.rs::Storyboard`               | `loop_offset: Option<LoopOffset>`                                                                                                                   |
+| **フィールド追加**     | `instance_manager.rs::StoryboardInstance` | `loop_offset_min: f64`, `loop_offset_max: f64`, `loop_offset_easing: Easing`, `current_delay_remaining: Option<f64>`                                |
 | **ロジック拡張**       | `loop_controller.rs`                      | `advance_loop()` に遅延計算（乱数生成 + イージング適用 + [min,max]マッピング）を追加。新関数 `is_in_delay()`, `process_delay()`, `generate_delay()` |
-| **フロー修正**         | `facade.rs::start()`                      | `loop_offset` 情報を `StoryboardInstance` に伝達                                       |
-| **フロー修正**         | `facade.rs::update()`                     | ループ処理部でdelay状態を考慮                                                          |
-| **メタ転送**           | `compile.rs::CompiledStoryboard`          | `loop_offset` 情報の転送（またはfacadeが直接参照）                                     |
-| **バリデーション追加** | `validate.rs`                             | 4件の検証ルール（V14〜V17相当）                                                        |
-| **エラー追加**         | `error.rs`                                | `InvalidLoopOffset` 系バリアント                                                       |
-| **依存追加**           | `Cargo.toml`                              | `rand` クレート                                                                        |
+| **フロー修正**         | `facade.rs::start()`                      | `loop_offset` 情報を `StoryboardInstance` に伝達                                                                                                    |
+| **フロー修正**         | `facade.rs::update()`                     | ループ処理部でdelay状態を考慮                                                                                                                       |
+| **メタ転送**           | `compile.rs::CompiledStoryboard`          | `loop_offset` 情報の転送（またはfacadeが直接参照）                                                                                                  |
+| **バリデーション追加** | `validate.rs`                             | 4件の検証ルール（V14〜V17相当）                                                                                                                     |
+| **エラー追加**         | `error.rs`                                | `InvalidLoopOffset` 系バリアント                                                                                                                    |
+| **依存追加**           | `Cargo.toml`                              | `rand` クレート                                                                                                                                     |
 
 **トレードオフ**:
 - ✅ 既存のフリー関数パターン（`dola-runtime-5-loop` Decision）を踏襲

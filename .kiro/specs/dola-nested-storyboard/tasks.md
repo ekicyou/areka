@@ -170,31 +170,31 @@
 
 ## Progress Tracking
 
-| Task | Status | Requirements |
-|------|--------|--------------|
-| 1.1 | ⬜ Not Started | 1.1, 1.2, 4.1, 4.2, 4.3, 4.4, 4.5 |
-| 1.2 | ⬜ Not Started | 1.4, 3.3, 4.3 |
-| 1.3 | ⬜ Not Started | 2.2, 2.5 |
-| 1.4 | ⬜ Not Started | 5.1, 5.2 |
-| 1.5 | ⬜ Not Started | 3.1, 3.2, 3.5 |
-| 2.1 | ⬜ Not Started | 1.4 |
-| 2.2 | ⬜ Not Started | 3.1 |
-| 2.3 | ⬜ Not Started | 3.2 |
-| 2.4 | ⬜ Not Started | 1.3 |
-| 2.5 | ⬜ Not Started | 3.4 |
-| 2.6 | ⬜ Not Started | 1.5 |
-| 3.1 | ⬜ Not Started | 1.2, 1.4, 3.3, 4.4 |
-| 4.1 | ⬜ Not Started | 2.1, 5.1, 5.2 |
-| 4.2 | ⬜ Not Started | 2.1, 2.2, 2.3, 5.4 |
-| 4.3 | ⬜ Not Started | 2.5 |
-| 4.4 | ⬜ Not Started | 5.1, 5.2 |
-| 4.5 | ⬜ Not Started | 2.4, 5.3 |
-| 5.1 | ⬜ Not Started | 4.1, 4.2, 4.3 |
-| 5.2 | ⬜ Not Started | 1.3, 1.5, 3.1, 3.2, 3.4 |
-| 5.3 | ⬜ Not Started | 1.2, 1.4, 3.3 |
-| 5.4 | ⬜ Not Started | 2.1, 2.2, 2.5 |
-| 5.5 | ⬜ Not Started | 5.1, 5.2 |
-| 5.6 | ⬜ Not Started | 2.3, 2.4, 5.3, 5.4 |
+| Task | Status        | Requirements                      |
+| ---- | ------------- | --------------------------------- |
+| 1.1  | ⬜ Not Started | 1.1, 1.2, 4.1, 4.2, 4.3, 4.4, 4.5 |
+| 1.2  | ⬜ Not Started | 1.4, 3.3, 4.3                     |
+| 1.3  | ⬜ Not Started | 2.2, 2.5                          |
+| 1.4  | ⬜ Not Started | 5.1, 5.2                          |
+| 1.5  | ⬜ Not Started | 3.1, 3.2, 3.5                     |
+| 2.1  | ⬜ Not Started | 1.4                               |
+| 2.2  | ⬜ Not Started | 3.1                               |
+| 2.3  | ⬜ Not Started | 3.2                               |
+| 2.4  | ⬜ Not Started | 1.3                               |
+| 2.5  | ⬜ Not Started | 3.4                               |
+| 2.6  | ⬜ Not Started | 1.5                               |
+| 3.1  | ⬜ Not Started | 1.2, 1.4, 3.3, 4.4                |
+| 4.1  | ⬜ Not Started | 2.1, 5.1, 5.2                     |
+| 4.2  | ⬜ Not Started | 2.1, 2.2, 2.3, 5.4                |
+| 4.3  | ⬜ Not Started | 2.5                               |
+| 4.4  | ⬜ Not Started | 5.1, 5.2                          |
+| 4.5  | ⬜ Not Started | 2.4, 5.3                          |
+| 5.1  | ⬜ Not Started | 4.1, 4.2, 4.3                     |
+| 5.2  | ⬜ Not Started | 1.3, 1.5, 3.1, 3.2, 3.4           |
+| 5.3  | ⬜ Not Started | 1.2, 1.4, 3.3                     |
+| 5.4  | ⬜ Not Started | 2.1, 2.2, 2.5                     |
+| 5.5  | ⬜ Not Started | 5.1, 5.2                          |
+| 5.6  | ⬜ Not Started | 2.3, 2.4, 5.3, 5.4                |
 
 ## Requirements Coverage Check
 
