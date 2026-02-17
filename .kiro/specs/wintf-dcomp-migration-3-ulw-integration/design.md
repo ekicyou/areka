@@ -12,14 +12,14 @@ Phase 3 は、Phase 2 で D2D1 合成パイプラインに切り替わった描�
 
 ### 変更対象ファイル一覧
 
-| ファイル | 変更種別 | 内容 |
-|---------|---------|------|
-| `ecs/graphics/compositor_systems.rs` | 追加 | `ulw_present_system` 関数 |
-| `com/ulw.rs` | 追加 | `present_layered_window` 関数 |
-| `ecs/world.rs` | 変更 | CommitComposition ステージ更新 |
-| `ecs/window.rs` | 変更 | `WS_EX_LAYERED` 切替 |
-| `ecs/window_proc/handlers.rs` | 変更 | WM_PAINT/WM_ERASEBKGND/WM_SIZE 更新 |
-| `areka/src/main.rs` | 変更 | Shell/Balloon の `ex_style` 更新 |
+| ファイル                             | 変更種別 | 内容                                |
+| ------------------------------------ | -------- | ----------------------------------- |
+| `ecs/graphics/compositor_systems.rs` | 追加     | `ulw_present_system` 関数           |
+| `com/ulw.rs`                         | 追加     | `present_layered_window` 関数       |
+| `ecs/world.rs`                       | 変更     | CommitComposition ステージ更新      |
+| `ecs/window.rs`                      | 変更     | `WS_EX_LAYERED` 切替                |
+| `ecs/window_proc/handlers.rs`        | 変更     | WM_PAINT/WM_ERASEBKGND/WM_SIZE 更新 |
+| `areka/src/main.rs`                  | 変更     | Shell/Balloon の `ex_style` 更新    |
 
 ---
 
@@ -41,8 +41,8 @@ Desktop Window Manager
 
 Phase 3 での world.rs 変更は **CommitComposition ステージのみ**:
 
-| Stage | Phase 2 完了時 | Phase 3 変更後 |
-|-------|---------------|---------------|
+| Stage             | Phase 2 完了時                                | Phase 3 変更後       |
+| ----------------- | --------------------------------------------- | -------------------- |
 | CommitComposition | `commit_composition`（残存だが実質無効）or 空 | `ulw_present_system` |
 
 他のステージは Phase 2 の状態を維持する。
@@ -208,29 +208,29 @@ WM_SIZE の処理は Phase 1 で実装済みの `WindowD3D11Compositor::resize()
 
 ### 5.2 検証結果に基づく設計分岐
 
-| 検証結果 | 設計への影響 |
-|---------|------------|
-| WM_PAINT 発火なし（想定通り） | WM_PAINT ハンドラは BeginPaint/EndPaint 最小ペアのみ。描画は ulw_present_system 一元管理 |
-| WM_PAINT 発火あり | WM_PAINT ハンドラ内で追加の ValidateRect() を実行して無限ループを防止 |
-| pptDst=None で位置維持される | present_layered_window は pptDst=None のまま |
-| pptDst=None で位置がリセットされる | GetWindowRect で現在位置を取得して pptDst に渡す |
+| 検証結果                           | 設計への影響                                                                             |
+| ---------------------------------- | ---------------------------------------------------------------------------------------- |
+| WM_PAINT 発火なし（想定通り）      | WM_PAINT ハンドラは BeginPaint/EndPaint 最小ペアのみ。描画は ulw_present_system 一元管理 |
+| WM_PAINT 発火あり                  | WM_PAINT ハンドラ内で追加の ValidateRect() を実行して無限ループを防止                    |
+| pptDst=None で位置維持される       | present_layered_window は pptDst=None のまま                                             |
+| pptDst=None で位置がリセットされる | GetWindowRect で現在位置を取得して pptDst に渡す                                         |
 
 ---
 
 ## 6. 要件トレーサビリティ
 
-| 子仕様要件 | 設計セクション |
-|-----------|---------------|
-| Req 1 (ulw_present_system) | §4.1 ulw_present_system |
-| Req 2 (present_layered_window) | §4.2 present_layered_window |
-| Req 3 (WS_EX_LAYERED) | §3.2 WindowStyle, §3.3 main.rs |
-| Req 4 (WM_PAINT/ERASEBKGND) | §4.3 ハンドラ更新, §5 前提検証 |
-| Req 5 (WM_SIZE) | §4.4 WM_SIZE |
-| Req 6 (ULW失敗) | §4.1 ulw_present_system エラーハンドリング |
-| Req 7 (クリックスルー) | §5.1 前提検証 |
-| Req 8 (Phase 3検証) | §7 テスト戦略 |
-| Req 9 (テスト互換性) | §7.3 E2E テスト |
-| Req 10 (前提検証) | §5 WS_EX_LAYERED 前提検証, §7.4 前提検証テスト |
+| 子仕様要件                     | 設計セクション                                 |
+| ------------------------------ | ---------------------------------------------- |
+| Req 1 (ulw_present_system)     | §4.1 ulw_present_system                        |
+| Req 2 (present_layered_window) | §4.2 present_layered_window                    |
+| Req 3 (WS_EX_LAYERED)          | §3.2 WindowStyle, §3.3 main.rs                 |
+| Req 4 (WM_PAINT/ERASEBKGND)    | §4.3 ハンドラ更新, §5 前提検証                 |
+| Req 5 (WM_SIZE)                | §4.4 WM_SIZE                                   |
+| Req 6 (ULW失敗)                | §4.1 ulw_present_system エラーハンドリング     |
+| Req 7 (クリックスルー)         | §5.1 前提検証                                  |
+| Req 8 (Phase 3検証)            | §7 テスト戦略                                  |
+| Req 9 (テスト互換性)           | §7.3 E2E テスト                                |
+| Req 10 (前提検証)              | §5 WS_EX_LAYERED 前提検証, §7.4 前提検証テスト |
 
 ---
 
@@ -238,39 +238,39 @@ WM_SIZE の処理は Phase 1 で実装済みの `WindowD3D11Compositor::resize()
 
 ### 7.1 単体テスト
 
-| テスト | 対象 | 検証内容 |
-|-------|------|---------|
-| `present_layered_window` BLENDFUNCTION 構成 | com/ulw.rs | AC_SRC_OVER, AC_SRC_ALPHA, SourceConstantAlpha=255 |
-| ulw_present_system ダーティスキップ | compositor_systems.rs | dirty=false → ULW 呼び出しなし |
+| テスト                                      | 対象                  | 検証内容                                           |
+| ------------------------------------------- | --------------------- | -------------------------------------------------- |
+| `present_layered_window` BLENDFUNCTION 構成 | com/ulw.rs            | AC_SRC_OVER, AC_SRC_ALPHA, SourceConstantAlpha=255 |
+| ulw_present_system ダーティスキップ         | compositor_systems.rs | dirty=false → ULW 呼び出しなし                     |
 
 ### 7.2 統合テスト
 
-| テスト | 検証内容 |
-|-------|---------|
-| ULW 透過描画 | 合成ビットマップ → ULW → 透過表示が動作 |
-| ULW 失敗リトライ | ULW 失敗 → warn ログ → 次フレームで再試行成功 |
-| リサイズ後 ULW | WM_SIZE → resize() → 次フレームで正しいサイズの ULW |
+| テスト           | 検証内容                                            |
+| ---------------- | --------------------------------------------------- |
+| ULW 透過描画     | 合成ビットマップ → ULW → 透過表示が動作             |
+| ULW 失敗リトライ | ULW 失敗 → warn ログ → 次フレームで再試行成功       |
+| リサイズ後 ULW   | WM_SIZE → resize() → 次フレームで正しいサイズの ULW |
 
 ### 7.3 E2E テスト
 
-| テスト | 検証方法 |
-|-------|---------|
+| テスト                 | 検証方法                                                    |
+| ---------------------- | ----------------------------------------------------------- |
 | alpha=0 クリックスルー | 実機操作: 透過領域クリック → 背後ウィンドウにフォーカス移動 |
-| 全 example 動作 | `cargo run --example {name}` 全 example の目視確認 |
-| `cargo test` 全パス | CI 確認 |
+| 全 example 動作        | `cargo run --example {name}` 全 example の目視確認          |
+| `cargo test` 全パス    | CI 確認                                                     |
 
 ### 7.4 前提検証テスト（Phase 3 開始前）
 
-| テスト | 方法 | 結果の扱い |
-|-------|------|-----------|
-| WM_PAINT 発火 | 最小 WS_EX_LAYERED ウィンドウ + tracing | §5.2 の設計分岐に反映 |
-| pptDst=None 動作 | ULW 呼び出し + ウィンドウ位置確認 | present_layered_window の引数に反映 |
+| テスト           | 方法                                    | 結果の扱い                          |
+| ---------------- | --------------------------------------- | ----------------------------------- |
+| WM_PAINT 発火    | 最小 WS_EX_LAYERED ウィンドウ + tracing | §5.2 の設計分岐に反映               |
+| pptDst=None 動作 | ULW 呼び出し + ウィンドウ位置確認       | present_layered_window の引数に反映 |
 
 ---
 
 ## 8. エラーハンドリング
 
-| エラー | 発生元 | レスポンス | リカバリ |
-|--------|--------|----------|---------|
-| UpdateLayeredWindow 失敗 | present_layered_window | `tracing::warn!` + フレームスキップ | 次フレーム再試行（dirty=true 維持） |
-| HDC 無効 / リソース未初期化 | ulw_present_system | `is_valid()` / `memory_dc()` ガードで skip | compositor_init_system が次フレームで再初期化 |
+| エラー                      | 発生元                 | レスポンス                                 | リカバリ                                      |
+| --------------------------- | ---------------------- | ------------------------------------------ | --------------------------------------------- |
+| UpdateLayeredWindow 失敗    | present_layered_window | `tracing::warn!` + フレームスキップ        | 次フレーム再試行（dirty=true 維持）           |
+| HDC 無効 / リソース未初期化 | ulw_present_system     | `is_valid()` / `memory_dc()` ガードで skip | compositor_init_system が次フレームで再初期化 |
