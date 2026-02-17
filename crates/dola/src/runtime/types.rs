@@ -127,6 +127,40 @@ pub struct StartResult {
     pub affected_group_ids: Vec<u64>,
 }
 
+/// update() の返却値。
+///
+/// 変数の差分変化とトリガー実行結果を含む。
+#[derive(Debug, Clone)]
+pub struct UpdateResult {
+    /// 変数の差分変化（既存の Vec<(String, EvaluatedValue)> と同等）
+    pub changes: Vec<(String, EvaluatedValue)>,
+    /// トリガー実行結果のリスト
+    pub triggered: Vec<TriggerResult>,
+}
+
+/// 個別トリガーの実行結果。
+#[derive(Debug, Clone)]
+pub enum TriggerResult {
+    /// トリガー成功
+    Started {
+        /// 起動元ストーリーボード名
+        source_storyboard: String,
+        /// 起動先ストーリーボード名
+        target_storyboard: String,
+        /// 起動結果
+        start_result: StartResult,
+    },
+    /// トリガー失敗（競合等）
+    Error {
+        /// 起動元ストーリーボード名
+        source_storyboard: String,
+        /// 起動先ストーリーボード名
+        target_storyboard: String,
+        /// エラー内容
+        error: RuntimeError,
+    },
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

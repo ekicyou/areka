@@ -70,17 +70,16 @@ fn build_complete_document() -> DolaDocument {
                 .entry(StoryboardEntry {
                     variable: Some("opacity".to_string()),
                     transition: Some(TransitionRef::Named("fade_in".to_string())),
-                    at: None,
-                    between: None,
                     keyframe: Some("visible".to_string()),
+                    ..Default::default()
                 })
                 // Entry 2: KF起点 (at = "visible")
                 .entry(StoryboardEntry {
                     variable: Some("char_count".to_string()),
                     transition: Some(TransitionRef::Named("typewrite".to_string())),
                     at: Some(KeyframeRef::Single("visible".to_string())),
-                    between: None,
                     keyframe: Some("text_done".to_string()),
+                    ..Default::default()
                 })
                 // Entry 3: Object型インライントランジション
                 .entry(StoryboardEntry {
@@ -101,8 +100,7 @@ fn build_complete_document() -> DolaDocument {
                         duration: None,
                     })),
                     at: Some(KeyframeRef::Single("text_done".to_string())),
-                    between: None,
-                    keyframe: None,
+                    ..Default::default()
                 })
                 .build(),
         )
@@ -112,11 +110,8 @@ fn build_complete_document() -> DolaDocument {
             StoryboardBuilder::new()
                 // Entry 1: 純粋KF
                 .entry(StoryboardEntry {
-                    variable: None,
-                    transition: None,
-                    at: None,
-                    between: None,
                     keyframe: Some("marker_a".to_string()),
+                    ..Default::default()
                 })
                 // Entry 2: 前エントリ連結
                 .entry(StoryboardEntry {
@@ -129,9 +124,8 @@ fn build_complete_document() -> DolaDocument {
                         delay: 0.0,
                         duration: Some(2.0),
                     })),
-                    at: None,
-                    between: None,
                     keyframe: Some("marker_b".to_string()),
+                    ..Default::default()
                 })
                 // Entry 3: KF間 (between)
                 .entry(StoryboardEntry {
@@ -144,12 +138,11 @@ fn build_complete_document() -> DolaDocument {
                         delay: 0.0,
                         duration: None,
                     })),
-                    at: None,
                     between: Some(BetweenKeyframes {
                         from: "marker_a".to_string(),
                         to: "marker_b".to_string(),
                     }),
-                    keyframe: None,
+                    ..Default::default()
                 })
                 .build(),
         )
@@ -184,11 +177,8 @@ mod json_integration_tests {
         let sb = StoryboardBuilder::new()
             .interruption_policy(InterruptionPolicy::Conclude)
             .entry(StoryboardEntry {
-                variable: None,
-                transition: None,
-                at: None,
-                between: None,
                 keyframe: Some("kf".to_string()),
+                ..Default::default()
             })
             .build();
         let json = serde_json::to_string(&sb).unwrap();
@@ -281,9 +271,7 @@ mod e2e_tests {
                             delay: 0.0,
                             duration: Some(1.0),
                         })),
-                        at: None,
-                        between: None,
-                        keyframe: None, // implicit KF
+                        ..Default::default()
                     })
                     .entry(StoryboardEntry {
                         variable: Some("x".to_string()),
@@ -295,9 +283,7 @@ mod e2e_tests {
                             delay: 0.0,
                             duration: Some(1.0),
                         })),
-                        at: None,
-                        between: None,
-                        keyframe: None, // implicit KF
+                        ..Default::default()
                     })
                     .build(),
             )
@@ -333,11 +319,8 @@ mod edge_case_tests {
                 "kf_only",
                 StoryboardBuilder::new()
                     .entry(StoryboardEntry {
-                        variable: None,
-                        transition: None,
-                        at: None,
-                        between: None,
                         keyframe: Some("marker".to_string()),
+                        ..Default::default()
                     })
                     .build(),
             )
@@ -371,9 +354,7 @@ mod edge_case_tests {
                             delay: 0.0,
                             duration: Some(3.0),
                         })),
-                        at: None,
-                        between: None,
-                        keyframe: None,
+                        ..Default::default()
                     })
                     .build(),
             )
@@ -413,9 +394,7 @@ mod edge_case_tests {
                             delay: 0.0,
                             duration: Some(2.0),
                         })),
-                        at: None,
-                        between: None,
-                        keyframe: None,
+                        ..Default::default()
                     })
                     .build(),
             )
@@ -452,9 +431,7 @@ mod edge_case_tests {
                             delay: 2.0,
                             duration: None, // instant transition after delay
                         })),
-                        at: None,
-                        between: None,
-                        keyframe: None,
+                        ..Default::default()
                     })
                     .build(),
             )
@@ -488,8 +465,7 @@ mod edge_case_tests {
                             duration: Some(1.0),
                         })),
                         at: Some(KeyframeRef::Single("start".to_string())),
-                        between: None,
-                        keyframe: None,
+                        ..Default::default()
                     })
                     .build(),
             )
@@ -522,9 +498,8 @@ mod edge_case_tests {
                             delay: 0.0,
                             duration: Some(1.0),
                         })),
-                        at: None,
-                        between: None,
                         keyframe: Some("a".to_string()),
+                        ..Default::default()
                     })
                     .entry(StoryboardEntry {
                         variable: Some("x".to_string()),
@@ -536,9 +511,8 @@ mod edge_case_tests {
                             delay: 0.0,
                             duration: Some(1.0),
                         })),
-                        at: None,
-                        between: None,
                         keyframe: Some("b".to_string()),
+                        ..Default::default()
                     })
                     .entry(StoryboardEntry {
                         variable: Some("x".to_string()),
@@ -554,8 +528,7 @@ mod edge_case_tests {
                             "a".to_string(),
                             "b".to_string(),
                         ])),
-                        between: None,
-                        keyframe: None,
+                        ..Default::default()
                     })
                     .build(),
             )
@@ -588,9 +561,8 @@ mod edge_case_tests {
                             delay: 0.0,
                             duration: Some(1.0),
                         })),
-                        at: None,
-                        between: None,
                         keyframe: Some("visible".to_string()),
+                        ..Default::default()
                     })
                     .entry(StoryboardEntry {
                         variable: Some("x".to_string()),
@@ -606,8 +578,7 @@ mod edge_case_tests {
                             keyframes: KeyframeNames::Single("visible".to_string()),
                             offset: 0.5,
                         }),
-                        between: None,
-                        keyframe: None,
+                        ..Default::default()
                     })
                     .build(),
             )
@@ -652,9 +623,7 @@ mod edge_case_tests {
                             delay: 0.0,
                             duration: None,
                         })),
-                        at: None,
-                        between: None,
-                        keyframe: None,
+                        ..Default::default()
                     })
                     .build(),
             )
@@ -708,9 +677,7 @@ mod edge_case_tests {
                             delay: 0.0,
                             duration: Some(1.0),
                         })),
-                        at: None,
-                        between: None,
-                        keyframe: None,
+                        ..Default::default()
                     })
                     .build(),
             )

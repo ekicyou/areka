@@ -83,6 +83,28 @@ pub enum DolaError {
         min: f64,
         max: f64,
     },
+    /// トリガー自己参照 (V14t)
+    TriggerSelfReference {
+        storyboard: String,
+        entry_index: usize,
+    },
+    /// トリガー循環参照 (V15t)
+    TriggerCycle {
+        /// 循環パス（例: ["A", "B", "C", "A"]）
+        cycle: Vec<String>,
+    },
+    /// トリガーエントリの排他違反 (V16t/V17t)
+    TriggerExclusiveViolation {
+        storyboard: String,
+        entry_index: usize,
+        reason: String,
+    },
+    /// トリガー対象ストーリーボード未定義 (V18t)
+    TriggerTargetNotFound {
+        storyboard: String,
+        entry_index: usize,
+        target: String,
+    },
 }
 
 impl fmt::Display for DolaError {
@@ -236,6 +258,45 @@ impl fmt::Display for DolaError {
                     f,
                     "loop_offset range inverted in storyboard '{}': min {} > max {}",
                     storyboard, min, max
+                )
+            }
+            DolaError::TriggerSelfReference {
+                storyboard,
+                entry_index,
+            } => {
+                write!(
+                    f,
+                    "Trigger self-reference in storyboard '{}' entry {}: cannot trigger itself",
+                    storyboard, entry_index
+                )
+            }
+            DolaError::TriggerCycle { cycle } => {
+                write!(
+                    f,
+                    "Trigger cycle detected: {}",
+                    cycle.join(" -> ")
+                )
+            }
+            DolaError::TriggerExclusiveViolation {
+                storyboard,
+                entry_index,
+                reason,
+            } => {
+                write!(
+                    f,
+                    "Trigger exclusive violation in storyboard '{}' entry {}: {}",
+                    storyboard, entry_index, reason
+                )
+            }
+            DolaError::TriggerTargetNotFound {
+                storyboard,
+                entry_index,
+                target,
+            } => {
+                write!(
+                    f,
+                    "Trigger target storyboard '{}' not found in storyboard '{}' entry {}",
+                    target, storyboard, entry_index
                 )
             }
         }

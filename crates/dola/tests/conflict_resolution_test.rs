@@ -37,9 +37,7 @@ fn make_doc_with_policy(sb_name: &str, policy: InterruptionPolicy) -> DolaDocume
                 delay: 0.0,
                 duration: Some(2.0),
             })),
-            at: None,
-            between: None,
-            keyframe: None,
+            ..Default::default()
         })
         .build();
     let mut storyboard = BTreeMap::new();
@@ -93,9 +91,7 @@ fn make_multi_sb_doc() -> DolaDocument {
                 delay: 0.0,
                 duration: Some(2.0),
             })),
-            at: None,
-            between: None,
-            keyframe: None,
+            ..Default::default()
         })
         .entry(StoryboardEntry {
             variable: Some("y".to_string()),
@@ -107,9 +103,7 @@ fn make_multi_sb_doc() -> DolaDocument {
                 delay: 0.0,
                 duration: Some(2.0),
             })),
-            at: None,
-            between: None,
-            keyframe: None,
+            ..Default::default()
         })
         .build();
 
@@ -126,9 +120,7 @@ fn make_multi_sb_doc() -> DolaDocument {
                 delay: 0.0,
                 duration: Some(2.0),
             })),
-            at: None,
-            between: None,
-            keyframe: None,
+            ..Default::default()
         })
         .build();
 
@@ -145,9 +137,7 @@ fn make_multi_sb_doc() -> DolaDocument {
                 delay: 0.0,
                 duration: Some(2.0),
             })),
-            at: None,
-            between: None,
-            keyframe: None,
+            ..Default::default()
         })
         .build();
 
@@ -163,9 +153,7 @@ fn make_multi_sb_doc() -> DolaDocument {
                 delay: 0.0,
                 duration: Some(1.0),
             })),
-            at: None,
-            between: None,
-            keyframe: None,
+            ..Default::default()
         })
         .build();
 
@@ -223,9 +211,7 @@ fn make_never_doc() -> DolaDocument {
                 delay: 0.0,
                 duration: Some(2.0),
             })),
-            at: None,
-            between: None,
-            keyframe: None,
+            ..Default::default()
         })
         .build();
 
@@ -241,9 +227,7 @@ fn make_never_doc() -> DolaDocument {
                 delay: 0.0,
                 duration: Some(1.0),
             })),
-            at: None,
-            between: None,
-            keyframe: None,
+            ..Default::default()
         })
         .build();
 
@@ -259,9 +243,7 @@ fn make_never_doc() -> DolaDocument {
                 delay: 0.0,
                 duration: Some(1.0),
             })),
-            at: None,
-            between: None,
-            keyframe: None,
+            ..Default::default()
         })
         .entry(StoryboardEntry {
             variable: Some("y".to_string()),
@@ -273,9 +255,7 @@ fn make_never_doc() -> DolaDocument {
                 delay: 0.0,
                 duration: Some(1.0),
             })),
-            at: None,
-            between: None,
-            keyframe: None,
+            ..Default::default()
         })
         .entry(StoryboardEntry {
             variable: Some("z".to_string()),
@@ -287,9 +267,7 @@ fn make_never_doc() -> DolaDocument {
                 delay: 0.0,
                 duration: Some(1.0),
             })),
-            at: None,
-            between: None,
-            keyframe: None,
+            ..Default::default()
         })
         .build();
 
@@ -343,9 +321,7 @@ mod conflict_detection {
                     delay: 0.0,
                     duration: Some(2.0),
                 })),
-                at: None,
-                between: None,
-                keyframe: None,
+                ..Default::default()
             })
             .build();
 
@@ -360,9 +336,7 @@ mod conflict_detection {
                     delay: 0.0,
                     duration: Some(2.0),
                 })),
-                at: None,
-                between: None,
-                keyframe: None,
+                ..Default::default()
             })
             .build();
 
@@ -449,7 +423,7 @@ mod cancel_strategy {
         // Start 1st at t=0.0
         rt.start("fade", 0.0).unwrap();
         // Update at t=0.5 → opacity = 25.0 (progress=0.25 of 0→100, 2s duration)
-        let changes = rt.update(1, 0.5);
+        let changes = rt.update(1, 0.5).changes;
         assert!(!changes.is_empty());
 
         // Start 2nd at t=1.0 → Cancel 1st, freeze at t=1.0 → 50.0
@@ -457,7 +431,7 @@ mod cancel_strategy {
         assert!(!r2.affected_group_ids.is_empty());
 
         // Update → 新しい SB の値が取得される
-        let changes = rt.update(1, 1.0);
+        let changes = rt.update(1, 1.0).changes;
         // The cancelled instance's frozen value should be 50.0,
         // but now the new instance starts at 0.0
         // The subscription manager should show the new SB's value
@@ -482,7 +456,7 @@ mod cancel_strategy {
         assert_eq!(r2.affected_group_ids, vec![r1.group_id]);
 
         // sb_a's y values should be frozen at t=0.5 → 12.5 (progress=0.25 of 0→50)
-        let changes = rt.update(1, 0.5);
+        let changes = rt.update(1, 0.5).changes;
         // y should show frozen value, x shows new SB value
         let y_val = changes.iter().find(|(name, _)| name == "y");
         if let Some((_, val)) = y_val {
@@ -512,7 +486,7 @@ mod conclude_strategy {
         // Start at t=0.0
         rt.start("fade", 0.0).unwrap();
         // Update to get initial value
-        let changes = rt.update(1, 0.5);
+        let changes = rt.update(1, 0.5).changes;
         assert!(!changes.is_empty());
 
         // Start 2nd at t=1.0 → Conclude 1st → jump to segment final (100.0)
@@ -521,7 +495,7 @@ mod conclude_strategy {
 
         // The concluded instance's last value should be 100.0 (segment final)
         // Next update should see new SB starting
-        let changes = rt.update(1, 1.0);
+        let changes = rt.update(1, 1.0).changes;
         assert!(!changes.is_empty());
     }
 
@@ -549,9 +523,7 @@ mod conclude_strategy {
                     delay: 0.0,
                     duration: Some(2.0),
                 })),
-                at: None,
-                between: None,
-                keyframe: None,
+                ..Default::default()
             })
             .build();
         let mut storyboard = BTreeMap::new();
@@ -592,7 +564,7 @@ mod trim_strategy {
         assert!(!r2.affected_group_ids.is_empty());
 
         // Update → trimmed value should have been propagated
-        let changes = rt.update(1, 1.0);
+        let changes = rt.update(1, 1.0).changes;
         assert!(!changes.is_empty());
     }
 }
@@ -615,7 +587,7 @@ mod compress_strategy {
         assert!(!r2.affected_group_ids.is_empty());
 
         // Update → compressed value was 100.0, new SB starts
-        let changes = rt.update(1, 0.5);
+        let changes = rt.update(1, 0.5).changes;
         assert!(!changes.is_empty());
     }
 }
@@ -686,7 +658,7 @@ mod never_strategy {
         assert!(result.is_err());
 
         // Update → the Never SB should still be running normally
-        let changes = rt.update(1, 1.0);
+        let changes = rt.update(1, 1.0).changes;
         // sb_never: x at t=1.0 → progress=0.5 of 0→100 = 50.0
         let x_val = changes.iter().find(|(name, _)| name == "x");
         if let Some((_, val)) = x_val {
@@ -737,9 +709,7 @@ mod edge_cases {
                     delay: 0.0,
                     duration: Some(2.0),
                 })),
-                at: None,
-                between: None,
-                keyframe: None,
+                ..Default::default()
             })
             .build();
 
@@ -754,9 +724,7 @@ mod edge_cases {
                     delay: 0.0,
                     duration: Some(2.0),
                 })),
-                at: None,
-                between: None,
-                keyframe: None,
+                ..Default::default()
             })
             .build();
 
@@ -778,7 +746,7 @@ mod edge_cases {
         rt.start("sb_x", 0.0).unwrap();
 
         // Update at t=1.0 → x = 50.0
-        let changes = rt.update(1, 1.0);
+        let changes = rt.update(1, 1.0).changes;
         let x_val = changes.iter().find(|(name, _)| name == "x");
         assert!(x_val.is_some());
 
@@ -787,7 +755,7 @@ mod edge_cases {
         assert!(r.affected_group_ids.is_empty());
 
         // Both should still work
-        let changes = rt.update(1, 1.5);
+        let changes = rt.update(1, 1.5).changes;
         // x should still be updating (from sb_x)
         // y should be updating (from sb_y)
         let x_change = changes.iter().find(|(name, _)| name == "x");

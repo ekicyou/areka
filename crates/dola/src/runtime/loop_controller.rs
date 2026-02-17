@@ -101,6 +101,7 @@ pub(crate) fn generate_delay(
 /// - `loop_start_time += loop_duration`
 /// - `end_time += loop_duration`
 /// - `loop_offset_min.is_some()` の場合: `end_time += generate_delay(...)`
+/// - 全 `trigger_states` の `fired = false` にリセット
 pub(crate) fn advance_loop(instance: &mut StoryboardInstance, rng: &mut impl Rng) {
     instance.loops_completed += 1;
     instance.loop_start_time += instance.loop_duration;
@@ -110,6 +111,11 @@ pub(crate) fn advance_loop(instance: &mut StoryboardInstance, rng: &mut impl Rng
     if let Some(min) = instance.loop_offset_min {
         let delay = generate_delay(min, instance.loop_offset_max, &instance.loop_offset_easing, rng);
         instance.end_time += delay;
+    }
+
+    // トリガー状態リセット（周回ごとに再発火可能にする）
+    for ts in &mut instance.trigger_states {
+        ts.fired = false;
     }
 }
 
@@ -183,6 +189,7 @@ mod tests {
             loop_offset_min: None,
             loop_offset_max: 0.0,
             loop_offset_easing: EasingFunction::Named(EasingName::Linear),
+            trigger_states: Vec::new(),
         }
     }
 

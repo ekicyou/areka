@@ -378,9 +378,7 @@ mod compile_integration_tests {
                         delay: 0.0,
                         duration: Some(0.5),
                     })),
-                    at: None,
-                    between: None,
-                    keyframe: None,
+                    ..Default::default()
                 }],
             },
         );
@@ -475,9 +473,7 @@ mod e2e_tests {
                     delay: 0.0,
                     duration: Some(1.0),
                 })),
-                at: None,
-                between: None,
-                keyframe: None,
+                ..Default::default()
             }],
         };
         let mut storyboard = BTreeMap::new();
@@ -506,14 +502,14 @@ mod e2e_tests {
         assert_eq!(result.end_time, 1.0); // first loop end
 
         // Mid first loop
-        let changes = rt.update(1, 0.5);
+        let changes = rt.update(1, 0.5).changes;
         assert!(!changes.is_empty());
 
         // After 2 loops → conclude
-        let _changes = rt.update(1, 2.5);
+        let _changes = rt.update(1, 2.5).changes;
         // Should have final values (opacity=1.0 at end of loop)
         // After conclude, subsequent update returns empty
-        let changes = rt.update(1, 3.0);
+        let changes = rt.update(1, 3.0).changes;
         assert!(changes.is_empty());
     }
 
@@ -527,13 +523,13 @@ mod e2e_tests {
 
         // At t=1.5: past first loop end (1.0), advance happens
         // end_time should be 1.0 + 1.0 + delay(0..5) ≥ 2.0
-        let _changes = rt.update(1, 1.5);
+        let _changes = rt.update(1, 1.5).changes;
         // Animation should still be active (within delay period)
         // Value should be at end of first loop (1.0) since we're in delay
         // or at beginning of second loop depending on timing
 
         // At t=3.0: still within delay period (end_time ≥ 2.0 + delay)
-        let _changes = rt.update(1, 3.0);
+        let _changes = rt.update(1, 3.0).changes;
 
         // 遅延中は最終値を維持（Req 2.4）
         // (具体的な値の検証は遅延のランダム性により、ここでは存在確認のみ)
@@ -547,10 +543,10 @@ mod e2e_tests {
         rt.start("blink", 0.0).unwrap();
 
         // At t=1.5: past end_time=1.0, loop_count=1 → conclude
-        let _changes = rt.update(1, 1.5);
+        let _changes = rt.update(1, 1.5).changes;
 
         // After conclude, no more updates
-        let changes = rt.update(1, 2.0);
+        let changes = rt.update(1, 2.0).changes;
         assert!(changes.is_empty());
     }
 
@@ -571,19 +567,19 @@ mod e2e_tests {
 
         // t=1.5: past first loop end (1.0)
         // advance → end_time = 1.0 + 1.0 + 2.0 = 4.0
-        let _changes = rt.update(1, 1.5);
+        let _changes = rt.update(1, 1.5).changes;
 
         // t=3.0: still in delay (end_time=4.0)
-        let _changes = rt.update(1, 3.0);
+        let _changes = rt.update(1, 3.0).changes;
         // Should still be active (not concluded)
         // Values should be present (frozen at loop end or interpolating)
 
         // t=4.5: past second end_time (4.0)
         // advance → end_time = 4.0 + 1.0 + 2.0 = 7.0
-        let _changes = rt.update(1, 4.5);
+        let _changes = rt.update(1, 4.5).changes;
 
         // t=6.0: still in delay period of 2nd loop
-        let _changes = rt.update(1, 6.0);
+        let _changes = rt.update(1, 6.0).changes;
         // Still active (infinite loop never concludes)
     }
 
@@ -638,7 +634,7 @@ mod e2e_tests {
         rt.cancel(group_id).unwrap();
 
         // After cancel, no more updates
-        let changes = rt.update(1, 2.0);
+        let changes = rt.update(1, 2.0).changes;
         assert!(changes.is_empty());
     }
 
@@ -650,12 +646,12 @@ mod e2e_tests {
         rt.start("fade", 0.0).unwrap();
 
         // Mid-loop updates should work normally
-        let changes = rt.update(1, 0.5);
+        let changes = rt.update(1, 0.5).changes;
         assert!(!changes.is_empty());
 
         // All 3 loops complete at t=3.0+
-        let _changes = rt.update(1, 3.5);
-        let changes = rt.update(1, 4.0);
+        let _changes = rt.update(1, 3.5).changes;
+        let changes = rt.update(1, 4.0).changes;
         assert!(changes.is_empty()); // concluded
     }
 
@@ -671,8 +667,8 @@ mod e2e_tests {
         rt.start("fast", 0.0).unwrap();
 
         // Should complete all loops fairly quickly
-        let _changes = rt.update(1, 5.0);
-        let changes = rt.update(1, 6.0);
+        let _changes = rt.update(1, 5.0).changes;
+        let changes = rt.update(1, 6.0).changes;
         assert!(changes.is_empty()); // concluded
     }
 
@@ -692,15 +688,15 @@ mod e2e_tests {
         rt.start("slow", 0.0).unwrap();
 
         // At t=1.5: past first loop → advance, end_time=1.0+1.0+100.0=102.0
-        let _changes = rt.update(1, 1.5);
+        let _changes = rt.update(1, 1.5).changes;
 
         // At t=50.0: still in delay
-        let _changes = rt.update(1, 50.0);
+        let _changes = rt.update(1, 50.0).changes;
         // Should still be alive
 
         // At t=105.0: past end_time=102.0, 2nd loop completes → conclude
-        let _changes = rt.update(1, 105.0);
-        let changes = rt.update(1, 106.0);
+        let _changes = rt.update(1, 105.0).changes;
+        let changes = rt.update(1, 106.0).changes;
         assert!(changes.is_empty()); // concluded
     }
 
@@ -721,7 +717,7 @@ mod e2e_tests {
 
         // Advance through many loops: each loop = 1.0s + 0.1s delay = 1.1s/loop
         // 100 loops ≈ 110s
-        let _changes = rt.update(1, 115.0);
+        let _changes = rt.update(1, 115.0).changes;
         // Should still be running (infinite loops), no crash, no infinite loop
     }
 }

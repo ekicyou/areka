@@ -20,4 +20,4 @@ pub mod clock;
 pub use facade::DolaRuntime;
 pub use instance_state::InstanceState;
 pub use interpolator::Interpolator;
-pub use types::{EvaluatedValue, RuntimeError, StartResult};
+pub use types::{EvaluatedValue, RuntimeError, StartResult, TriggerResult, UpdateResult};

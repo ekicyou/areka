@@ -37,9 +37,7 @@ fn simple_float_doc(sb_name: &str) -> DolaDocument {
                 delay: 0.0,
                 duration: Some(1.0),
             })),
-            at: None,
-            between: None,
-            keyframe: None,
+            ..Default::default()
         })
         .build();
     let mut storyboard = BTreeMap::new();
@@ -84,9 +82,7 @@ fn dual_variable_doc() -> DolaDocument {
                 delay: 0.0,
                 duration: Some(1.0),
             })),
-            at: None,
-            between: None,
-            keyframe: None,
+            ..Default::default()
         })
         .build();
 
@@ -102,9 +98,7 @@ fn dual_variable_doc() -> DolaDocument {
                 delay: 0.0,
                 duration: Some(2.0),
             })),
-            at: None,
-            between: None,
-            keyframe: None,
+            ..Default::default()
         })
         .build();
 
@@ -138,7 +132,7 @@ mod full_playback_cycle {
         assert!((end_time - 1.0).abs() < 1e-9);
 
         // t=0.0: 初回 update — opacity=0.0
-        let diff = rt.update(1, 0.0);
+        let diff = rt.update(1, 0.0).changes;
         assert_eq!(diff.len(), 1);
         assert_eq!(diff[0].0, "opacity");
         match &diff[0].1 {
@@ -147,7 +141,7 @@ mod full_playback_cycle {
         }
 
         // t=0.5: 中間値 — opacity≈0.5
-        let diff = rt.update(1, 0.5);
+        let diff = rt.update(1, 0.5).changes;
         assert_eq!(diff.len(), 1);
         match &diff[0].1 {
             EvaluatedValue::Float(v) => assert!((*v - 0.5).abs() < 0.05, "expected ~0.5, got {v}"),
@@ -155,7 +149,7 @@ mod full_playback_cycle {
         }
 
         // t=1.0: 最終値 — opacity=1.0, 自然終了トリガー
-        let diff = rt.update(1, 1.0);
+        let diff = rt.update(1, 1.0).changes;
         // 自然終了により conclude_internal が呼ばれ、最終値が配信される
         assert!(!diff.is_empty(), "expected final value delivery at t=1.0");
         let opacity_val = diff.iter().find(|(k, _)| k == "opacity").expect("opacity");
@@ -165,7 +159,7 @@ mod full_playback_cycle {
         }
 
         // t=1.5: 終了後 — 差分なし
-        let diff = rt.update(1, 1.5);
+        let diff = rt.update(1, 1.5).changes;
         assert!(diff.is_empty(), "expected empty diff after natural end");
     }
 
@@ -197,7 +191,7 @@ mod full_playback_cycle {
 
         // subscribe して update しても差分なし（インスタンス未生成）
         rt.subscribe(1, "opacity");
-        let diff = rt.update(1, 0.5);
+        let diff = rt.update(1, 0.5).changes;
         assert!(diff.is_empty());
     }
 }
@@ -222,7 +216,7 @@ mod pause_resume_cycle {
         let _ = rt.update(1, 0.0);
 
         // t=0.3: 中間
-        let diff = rt.update(1, 0.3);
+        let diff = rt.update(1, 0.3).changes;
         assert!(!diff.is_empty());
         match &diff[0].1 {
             EvaluatedValue::Float(v) => assert!((*v - 0.3).abs() < 0.05, "t=0.3: got {v}"),
@@ -234,7 +228,7 @@ mod pause_resume_cycle {
 
         // t=0.5: Pause 中 — 値が凍結される
         // Paused 状態では timeline_manager が pause_start 時点の値を返す
-        let diff = rt.update(1, 0.5);
+        let diff = rt.update(1, 0.5).changes;
         // Paused 中は前回値と同じ → diff 空
         assert!(
             diff.is_empty(),
@@ -250,7 +244,7 @@ mod pause_resume_cycle {
         );
 
         // t=0.7: pause 分 0.2s ずれで effective=0.5
-        let diff = rt.update(1, 0.7);
+        let diff = rt.update(1, 0.7).changes;
         assert!(!diff.is_empty(), "expected value to change after resume");
         match &diff[0].1 {
             EvaluatedValue::Float(v) => {
@@ -278,7 +272,7 @@ mod document_replacement {
         rt.start("fade_in", 0.0).unwrap();
 
         // t=0.5: opacity ≈ 0.5
-        let diff = rt.update(1, 0.5);
+        let diff = rt.update(1, 0.5).changes;
         assert!(!diff.is_empty());
 
         // t=1.5: 自然終了後
@@ -290,7 +284,7 @@ mod document_replacement {
         rt.start("fade_in", 2.0).unwrap();
 
         // t=2.0: 新しいストーリーボードで opacity=0.0
-        let diff = rt.update(1, 2.0);
+        let diff = rt.update(1, 2.0).changes;
         assert!(
             !diff.is_empty(),
             "expected value delivery from new storyboard"
@@ -346,7 +340,7 @@ mod concurrent_playback {
         assert!((r2.end_time - 2.0).abs() < 1e-9, "zoom end_time");
 
         // t=0.5: opacity=0.5, scale=1.25
-        let diff = rt.update(1, 0.5);
+        let diff = rt.update(1, 0.5).changes;
         assert!(diff.len() >= 2, "expected both variables, got {diff:?}");
 
         let opacity = diff.iter().find(|(k, _)| k == "opacity");
@@ -360,7 +354,7 @@ mod concurrent_playback {
         }
 
         // t=1.5: opacity 終了(→1.0 凍結), scale 中間(→1.75)
-        let diff = rt.update(1, 1.5);
+        let diff = rt.update(1, 1.5).changes;
         // opacity の自然終了 + scale の更新
         let scale = diff.iter().find(|(k, _)| k == "scale");
         if let Some((_, EvaluatedValue::Float(v))) = scale {
@@ -391,7 +385,7 @@ mod conclude_cancel_finish {
         rt.conclude(group_id).unwrap();
 
         // 次の update で最終値 (1.0) が配信される
-        let diff = rt.update(1, 0.3);
+        let diff = rt.update(1, 0.3).changes;
         let opacity = diff.iter().find(|(k, _)| k == "opacity");
         match opacity {
             Some((_, EvaluatedValue::Float(v))) => {
@@ -401,7 +395,7 @@ mod conclude_cancel_finish {
         }
 
         // 以降は差分なし
-        let diff = rt.update(1, 0.5);
+        let diff = rt.update(1, 0.5).changes;
         assert!(
             diff.is_empty(),
             "expected empty diff after conclude, got {diff:?}"
@@ -426,10 +420,10 @@ mod conclude_cancel_finish {
         rt.cancel(group_id).unwrap();
 
         // 以降は差分なし（タイムテーブル削除済み、値は前回 update 値で凍結）
-        let diff = rt.update(1, 0.6);
+        let diff = rt.update(1, 0.6).changes;
         assert!(diff.is_empty(), "expected empty diff after cancel");
 
-        let diff = rt.update(1, 1.0);
+        let diff = rt.update(1, 1.0).changes;
         assert!(diff.is_empty(), "expected still empty after cancel");
     }
 
@@ -449,7 +443,7 @@ mod conclude_cancel_finish {
         rt.finish(group_id, 0.5).unwrap();
 
         // t=0.3: deadline 未到達 → まだ再生中
-        let diff = rt.update(1, 0.3);
+        let diff = rt.update(1, 0.3).changes;
         assert!(!diff.is_empty(), "expected playing at 0.3");
         match &diff[0].1 {
             EvaluatedValue::Float(v) => assert!(*v < 0.9, "should not be final value yet, got {v}"),
@@ -457,7 +451,7 @@ mod conclude_cancel_finish {
         }
 
         // t=0.5: deadline 到達 → Conclude 相当
-        let diff = rt.update(1, 0.5);
+        let diff = rt.update(1, 0.5).changes;
         // 最終値が配信されるか、conclude 処理で値が飛ぶ
         let opacity = diff.iter().find(|(k, _)| k == "opacity");
         if let Some((_, EvaluatedValue::Float(v))) = opacity {
@@ -465,7 +459,7 @@ mod conclude_cancel_finish {
         }
 
         // 以降は差分なし
-        let diff = rt.update(1, 0.8);
+        let diff = rt.update(1, 0.8).changes;
         assert!(
             diff.is_empty(),
             "expected empty after finish-conclude, got {diff:?}"

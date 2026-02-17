@@ -1,8 +1,8 @@
 //! DolaRuntime — 唯一の公開 API（Facade パターン）。
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
-use crate::compile::compile_storyboard;
+use crate::compile::{CompiledTrigger, compile_storyboard};
 use crate::document::DolaDocument;
 use crate::easing::{EasingFunction, EasingName};
 use crate::storyboard::LoopOffset;
@@ -14,7 +14,7 @@ use super::instance_state::InstanceState;
 use super::loop_controller::{self, LoopAction};
 use super::subscription_manager::SubscriptionManager;
 use super::timeline_manager::TimelineManager;
-use super::types::{EvaluatedValue, MIN_LOOP_DURATION, RuntimeError, StartResult};
+use super::types::{MIN_LOOP_DURATION, RuntimeError, StartResult, TriggerResult, UpdateResult};
 
 /// dola ランタイムエンジンの唯一の公開 API。
 ///
@@ -34,6 +34,8 @@ pub struct DolaRuntime {
     timeline_manager: TimelineManager,
     subscription_manager: SubscriptionManager,
     next_group_id: u64,
+    /// group_id → CompiledTrigger リスト（start() 時に格納、conclude/cancel で削除）
+    trigger_store: HashMap<u64, Vec<CompiledTrigger>>,
 }
 
 impl DolaRuntime {
@@ -45,6 +47,7 @@ impl DolaRuntime {
             timeline_manager: TimelineManager::new(),
             subscription_manager: SubscriptionManager::new(),
             next_group_id: 1,
+            trigger_store: HashMap::new(),
         }
     }
 
@@ -68,6 +71,19 @@ impl DolaRuntime {
     /// 指示書からストーリーボード定義を取得し、コンパイル → インスタンス作成 →
     /// タイムテーブル挿入 → Playing 遷移の一連のフローを実行する。
     pub fn start(&mut self, name: &str, start_time: f64) -> Result<StartResult, RuntimeError> {
+        self.start_internal(name, start_time, &HashSet::new())
+    }
+
+    /// ストーリーボード開始（内部）。
+    ///
+    /// `skip_conflict_gids` に含まれる group_id は競合検出から除外される。
+    /// トリガー起動時、親インスタンスを除外するために使用。
+    fn start_internal(
+        &mut self,
+        name: &str,
+        start_time: f64,
+        skip_conflict_gids: &HashSet<u64>,
+    ) -> Result<StartResult, RuntimeError> {
         // 1. ドキュメント取得
         let doc = self
             .document_store
@@ -79,9 +95,9 @@ impl DolaRuntime {
             return Err(RuntimeError::StoryboardNotFound(name.to_string()));
         }
 
-        // 2. コンパイル
-        let compiled =
-            compile_storyboard(doc, name, start_time).map_err(RuntimeError::CompileError)?;
+        // 2. コンパイル（セグメントは常に相対時間 0.0 起点で構築。
+        //    壁時計時刻への変換は loop_start_time で行う）
+        let compiled = compile_storyboard(doc, name, 0.0).map_err(RuntimeError::CompileError)?;
 
         // 3. loop_count バリデーション
         if compiled.loop_count <= 0 && compiled.loop_count != -1 {
@@ -133,20 +149,28 @@ impl DolaRuntime {
             lo_min,
             lo_max,
             lo_easing,
+            compiled.triggers.len(),
         );
 
-        // 7. [Tier 3 Hook] 競合解決
-        let affected = conflict_resolver::resolve_conflicts(
+        // 7. [Tier 3 Hook] 競合解決（skip_conflict_gids 内のインスタンスは除外）
+        let affected = conflict_resolver::resolve_conflicts_excluding(
             group_id,
             &compiled,
             start_time,
             &mut self.timeline_manager,
             &mut self.instance_manager,
             &mut self.subscription_manager,
+            skip_conflict_gids,
         )?; // Never 競合時はここで Err(RuntimeError::Conflict) を返す
 
         // 8. タイムテーブル挿入
         self.timeline_manager.insert_entries(group_id, &compiled);
+
+        // 8.5 トリガー格納
+        if !compiled.triggers.is_empty() {
+            self.trigger_store
+                .insert(group_id, compiled.triggers.clone());
+        }
 
         // 9. 状態遷移 Created → Playing
         self.instance_manager
@@ -235,6 +259,8 @@ impl DolaRuntime {
             .transition(group_id, InstanceState::Cancelled)?;
         // エントリ削除
         self.timeline_manager.remove_entries(group_id);
+        // トリガーストア削除
+        self.trigger_store.remove(&group_id);
         Ok(())
     }
 
@@ -278,19 +304,19 @@ impl DolaRuntime {
     ///
     /// 内部フロー:
     /// 1. finish deadline チェック → deadline 到達インスタンスは Conclude 相当
+    /// 1.5 トリガー収集・実行（Playing インスタンスのトリガーを先に処理）
     /// 2. 自然終了検知（current_time >= end_time の Playing インスタンス）
     /// 3. 購読変数の evaluate ループ
     /// 4. diff_and_update
-    pub fn update(
-        &mut self,
-        subscriber_id: u64,
-        current_time: f64,
-    ) -> Vec<(String, EvaluatedValue)> {
+    pub fn update(&mut self, subscriber_id: u64, current_time: f64) -> UpdateResult {
         // Step 1: Finish Deadline チェック
         let expired = self.instance_manager.check_finish_deadlines(current_time);
         for gid in expired {
             self.conclude_internal(gid);
         }
+
+        // Step 1.5: トリガー収集・実行（Conclude 前に発火させる）
+        let trigger_results = self.process_triggers(current_time);
 
         // Step 2: ループ処理 + 自然終了検知
         let mut rng = rand::rng();
@@ -329,13 +355,100 @@ impl DolaRuntime {
         }
 
         // Step 4: 差分検出
-        self.subscription_manager
-            .diff_and_update(subscriber_id, values)
+        let changes = self
+            .subscription_manager
+            .diff_and_update(subscriber_id, values);
+
+        UpdateResult {
+            changes,
+            triggered: trigger_results,
+        }
     }
 
     // =========================================================================
     // 内部ヘルパー
     // =========================================================================
+
+    /// トリガー収集・実行。
+    ///
+    /// Playing 状態のインスタンスに紐づくトリガーを走査し、
+    /// 発火条件（current_time >= 発火時刻 かつ 未発火）を満たすものを
+    /// fire-and-forget で子ストーリーボードとして開始する。
+    fn process_triggers(&mut self, current_time: f64) -> Vec<TriggerResult> {
+        // Step 1: 発火対象を収集（借用を分離するため先に Vec へ集約）
+        struct PendingTrigger {
+            parent_group_id: u64,
+            trigger_index: usize,
+            target_storyboard: String,
+            child_start_time: f64,
+            source_storyboard: String,
+        }
+
+        let mut pending: Vec<PendingTrigger> = Vec::new();
+
+        for (gid, inst) in self.instance_manager.instances().iter() {
+            if inst.state != InstanceState::Playing {
+                continue;
+            }
+            if let Some(triggers) = self.trigger_store.get(gid) {
+                for (ti, ts) in inst.trigger_states.iter().enumerate() {
+                    if ts.fired {
+                        continue;
+                    }
+                    let trigger = &triggers[ts.trigger_index];
+                    // fire_time は compile 時の絶対時刻（start_time 基準）。
+                    // ループ内での壁時計発火時刻:
+                    //   loop_start_time + (fire_time - original_start_time) / time_scale
+                    let relative_base_time = trigger.fire_time - inst.start_time;
+                    let wall_fire_time =
+                        inst.loop_start_time + relative_base_time / inst.time_scale;
+
+                    if current_time >= wall_fire_time {
+                        let child_start = wall_fire_time + trigger.start_offset.unwrap_or(0.0);
+                        pending.push(PendingTrigger {
+                            parent_group_id: *gid,
+                            trigger_index: ti,
+                            target_storyboard: trigger.target_storyboard.clone(),
+                            child_start_time: child_start,
+                            source_storyboard: inst.storyboard_name.clone(),
+                        });
+                    }
+                }
+            }
+        }
+
+        // Step 2: fired フラグを立てる
+        for p in &pending {
+            if let Ok(inst) = self.instance_manager.get_mut(p.parent_group_id) {
+                inst.trigger_states[p.trigger_index].fired = true;
+            }
+        }
+
+        // Step 3: 子ストーリーボードを start（fire-and-forget）
+        //         親インスタンスを競合検出から除外する
+        let mut results: Vec<TriggerResult> = Vec::new();
+        for p in pending {
+            let skip = HashSet::from([p.parent_group_id]);
+            match self.start_internal(&p.target_storyboard, p.child_start_time, &skip) {
+                Ok(start_result) => {
+                    results.push(TriggerResult::Started {
+                        source_storyboard: p.source_storyboard,
+                        target_storyboard: p.target_storyboard,
+                        start_result,
+                    });
+                }
+                Err(e) => {
+                    results.push(TriggerResult::Error {
+                        source_storyboard: p.source_storyboard,
+                        target_storyboard: p.target_storyboard,
+                        error: e,
+                    });
+                }
+            }
+        }
+
+        results
+    }
 
     /// Conclude 相当の内部処理。
     ///
@@ -357,6 +470,9 @@ impl DolaRuntime {
 
         // 4. タイムテーブルエントリ削除
         self.timeline_manager.remove_entries(group_id);
+
+        // 5. トリガーストア削除
+        self.trigger_store.remove(&group_id);
     }
 }
 

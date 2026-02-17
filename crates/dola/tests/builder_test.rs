@@ -47,9 +47,8 @@ mod document_builder_tests {
                     .entry(StoryboardEntry {
                         variable: Some("opacity".to_string()),
                         transition: Some(TransitionRef::Named("fade_in".to_string())),
-                        at: None,
-                        between: None,
                         keyframe: Some("visible".to_string()),
+                        ..Default::default()
                     })
                     .build(),
             )
@@ -78,9 +77,7 @@ mod document_builder_tests {
                             delay: 0.0,
                             duration: Some(1.0),
                         })),
-                        at: None,
-                        between: None,
-                        keyframe: None,
+                        ..Default::default()
                     })
                     .build(),
             )
@@ -125,9 +122,8 @@ mod storyboard_builder_tests {
                     delay: 0.0,
                     duration: Some(1.0),
                 })),
-                at: None,
-                between: None,
                 keyframe: Some("kf1".to_string()),
+                ..Default::default()
             })
             .build();
 

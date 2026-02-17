@@ -474,9 +474,8 @@ mod storyboard_tests {
         let entry = StoryboardEntry {
             variable: Some("opacity".to_string()),
             transition: Some(TransitionRef::Named("fade_in".to_string())),
-            at: None,
-            between: None,
             keyframe: Some("visible".to_string()),
+            ..Default::default()
         };
         let json = serde_json::to_string(&entry).unwrap();
         let deserialized: StoryboardEntry = serde_json::from_str(&json).unwrap();
@@ -490,8 +489,8 @@ mod storyboard_tests {
             variable: Some("char_count".to_string()),
             transition: Some(TransitionRef::Named("typewrite".to_string())),
             at: Some(KeyframeRef::Single("visible".to_string())),
-            between: None,
             keyframe: Some("text_done".to_string()),
+            ..Default::default()
         };
         let json = serde_json::to_string(&entry).unwrap();
         let deserialized: StoryboardEntry = serde_json::from_str(&json).unwrap();
@@ -511,12 +510,11 @@ mod storyboard_tests {
                 delay: 0.0,
                 duration: None,
             })),
-            at: None,
             between: Some(BetweenKeyframes {
                 from: "visible".to_string(),
                 to: "text_done".to_string(),
             }),
-            keyframe: None,
+            ..Default::default()
         };
         let json = serde_json::to_string(&entry).unwrap();
         let deserialized: StoryboardEntry = serde_json::from_str(&json).unwrap();
@@ -527,11 +525,8 @@ mod storyboard_tests {
     fn storyboard_entry_pure_keyframe_json_roundtrip() {
         // 純粋KF
         let entry = StoryboardEntry {
-            variable: None,
-            transition: None,
-            at: None,
-            between: None,
             keyframe: Some("sync_point".to_string()),
+            ..Default::default()
         };
         let json = serde_json::to_string(&entry).unwrap();
         let deserialized: StoryboardEntry = serde_json::from_str(&json).unwrap();

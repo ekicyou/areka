@@ -23,7 +23,7 @@ pub enum TransitionValue {
 /// - f64/i64 型変数: from/to は TransitionValue::Scalar のみ（V13）。relative_to 使用可
 /// - Object 型変数: to（TransitionValue::Dynamic）のみ。from/relative_to/easing は不可（V10）
 /// - 総時間 = delay + duration（duration 省略時は即時 = delay 後即座に切り替え）
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 pub struct TransitionDef {
     /// 開始値（省略時は配置時点の変数の現在値）
     #[serde(default, skip_serializing_if = "Option::is_none")]

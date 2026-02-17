@@ -43,6 +43,9 @@ pub struct CompiledStoryboard {
     pub loop_offset: Option<LoopOffset>,
     /// ベース合計再生時間 time_scale未適用 全タイムラインの最大値
     pub total_base_duration: f64,
+    /// トリガーリスト（fire_time 順ソート済み）
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub triggers: Vec<CompiledTrigger>,
 }
 
 /// 変数ごとのセグメント列とランタイムヒント
@@ -94,6 +97,20 @@ pub enum VariableTypeHint {
     },
     /// Object型（即時切り替えのみ）
     Object,
+}
+
+/// コンパイル済みトリガー情報
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct CompiledTrigger {
+    /// トリガー発火時刻（絶対時刻、f64秒）
+    pub fire_time: f64,
+    /// 対象ストーリーボード名
+    pub target_storyboard: String,
+    /// 開始オフセット（fire_time + start_offset = 子SBの start_time）
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub start_offset: Option<f64>,
+    /// 元エントリのインデックス（デバッグ用）
+    pub source_entry_index: usize,
 }
 
 // ============================================================
@@ -165,6 +182,8 @@ pub fn compile_storyboard(
     let mut var_segments: HashMap<String, Vec<CompiledSegment>> = HashMap::new();
     // entry_index → keyframe_time (for pure KF "at なし" fallback)
     let mut entry_keyframe_time: HashMap<usize, f64> = HashMap::new();
+    // compiled triggers
+    let mut triggers: Vec<CompiledTrigger> = Vec::new();
 
     for &entry_idx in &sorted_indices {
         let entry = &sb.entry[entry_idx];
@@ -173,8 +192,38 @@ pub fn compile_storyboard(
             .clone()
             .unwrap_or_else(|| format!("__implicit_{}", entry_idx));
 
-        // Determine if this is a pure keyframe entry (no variable/transition)
-        let is_pure_kf = entry.variable.is_none() && entry.transition.is_none();
+        // Determine if this is a trigger entry
+        let is_trigger = entry.trigger_storyboard.is_some();
+
+        // Determine if this is a pure keyframe entry (no variable/transition/trigger)
+        let is_pure_kf = entry.variable.is_none() && entry.transition.is_none() && !is_trigger;
+
+        if is_trigger {
+            // Trigger entry: resolve fire_time using same logic as pure KF
+            let fire_time = resolve_pure_keyframe_time(
+                storyboard_name,
+                entry_idx,
+                entry,
+                &keyframe_times,
+                &entry_keyframe_time,
+                &sorted_indices,
+                &mut errors,
+            );
+            if let Some(t) = fire_time {
+                // Register keyframe at fire_time (0-second completion)
+                keyframe_times.insert(kf_name, t);
+                entry_keyframe_time.insert(entry_idx, t);
+
+                // Create CompiledTrigger
+                triggers.push(CompiledTrigger {
+                    fire_time: t,
+                    target_storyboard: entry.trigger_storyboard.clone().unwrap(),
+                    start_offset: entry.trigger_start_offset,
+                    source_entry_index: entry_idx,
+                });
+            }
+            continue;
+        }
 
         if is_pure_kf {
             // Pure Keyframe (Task 5.4)
@@ -325,6 +374,14 @@ pub fn compile_storyboard(
         .map(|tl| tl.base_duration)
         .fold(0.0_f64, f64::max);
 
+    // Sort triggers by fire_time (stable sort preserves entry index order for same fire_time)
+    triggers.sort_by(|a, b| {
+        a.fire_time
+            .partial_cmp(&b.fire_time)
+            .unwrap_or(std::cmp::Ordering::Equal)
+            .then(a.source_entry_index.cmp(&b.source_entry_index))
+    });
+
     Ok(CompiledStoryboard {
         storyboard_name: storyboard_name.to_string(),
         start_time,
@@ -334,6 +391,7 @@ pub fn compile_storyboard(
         interruption_policy: sb.interruption_policy,
         loop_offset: sb.loop_offset.clone(),
         total_base_duration,
+        triggers,
     })
 }
 
@@ -519,12 +577,18 @@ fn resolve_pure_keyframe_time(
                 }
             }
             None => {
-                errors.push(DolaError::CompileError {
-                    storyboard: storyboard_name.to_string(),
-                    entry_index: entry_idx,
-                    reason: "Pure keyframe without 'at': no previous entry in array".to_string(),
-                });
-                None
+                // 先頭エントリ: "start" キーフレーム（= start_time）をフォールバック
+                if let Some(&t) = keyframe_times.get("start") {
+                    Some(t)
+                } else {
+                    errors.push(DolaError::CompileError {
+                        storyboard: storyboard_name.to_string(),
+                        entry_index: entry_idx,
+                        reason: "Pure keyframe without 'at': no previous entry in array"
+                            .to_string(),
+                    });
+                    None
+                }
             }
         }
     }

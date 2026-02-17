@@ -85,9 +85,7 @@ mod tests {
                         delay: 0.0,
                         duration: Some(1.0),
                     })),
-                    at: None,
-                    between: None,
-                    keyframe: None,
+                    ..Default::default()
                 }],
             },
         );

@@ -92,12 +92,13 @@ pub struct Storyboard {
 
 /// ストーリーボードエントリ（配置 + KF 定義の統合単位）
 ///
-/// 4配置パターン:
+/// 5配置パターン:
 /// - 前エントリ連結: variable + transition（at/between なし）
 /// - KF起点: variable + transition + at
 /// - KF間: variable + transition + between
 /// - 純粋KF: keyframe のみ
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+/// - トリガー: trigger_storyboard（他SB起動）
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
 pub struct StoryboardEntry {
     /// 対象変数名
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -114,6 +115,12 @@ pub struct StoryboardEntry {
     /// このエントリ終了時点のキーフレーム名（省略時は暗黙的KFが生成される: Req 3.6）
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub keyframe: Option<String>,
+    /// トリガー対象ストーリーボード名
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub trigger_storyboard: Option<String>,
+    /// トリガー開始オフセット（トリガー発火時刻 + offset = 子SBの start_time）
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub trigger_start_offset: Option<f64>,
 }
 
 /// キーフレーム起点指定（`at` フィールド用）

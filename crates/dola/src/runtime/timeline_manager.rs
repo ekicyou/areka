@@ -392,6 +392,7 @@ mod tests {
             interruption_policy: InterruptionPolicy::Conclude,
             loop_offset: None,
             total_base_duration: end - start,
+            triggers: Vec::new(),
         }
     }
 
@@ -415,6 +416,7 @@ mod tests {
             loop_offset_min: None,
             loop_offset_max: 0.0,
             loop_offset_easing: EasingFunction::Named(EasingName::Linear),
+            trigger_states: Vec::new(),
         }
     }
 

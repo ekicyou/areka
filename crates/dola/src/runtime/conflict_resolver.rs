@@ -8,7 +8,7 @@ use std::collections::HashSet;
 use crate::compile::CompiledStoryboard;
 use crate::storyboard::InterruptionPolicy;
 
-use super::instance_manager::{InstanceManager};
+use super::instance_manager::InstanceManager;
 use super::instance_state::InstanceState;
 use super::subscription_manager::SubscriptionManager;
 use super::timeline_manager::TimelineManager;
@@ -16,6 +16,7 @@ use super::types::RuntimeError;
 
 /// 競合を検出し終了戦略を適用する。影響を受けた group_id のリストを返す。
 /// Never 競合が検出された場合は Err(RuntimeError::Conflict) を返す。
+#[allow(dead_code)]
 pub(crate) fn resolve_conflicts(
     new_group_id: u64,
     compiled: &CompiledStoryboard,
@@ -24,8 +25,37 @@ pub(crate) fn resolve_conflicts(
     instance_manager: &mut InstanceManager,
     subscription_manager: &mut SubscriptionManager,
 ) -> Result<Vec<u64>, RuntimeError> {
+    resolve_conflicts_excluding(
+        new_group_id,
+        compiled,
+        start_time,
+        timeline_manager,
+        instance_manager,
+        subscription_manager,
+        &HashSet::new(),
+    )
+}
+
+/// 指定 group_id を除外して競合解決を行う。
+///
+/// トリガー起動時、親インスタンスを除外して子の変数競合を解決するために使用。
+pub(crate) fn resolve_conflicts_excluding(
+    new_group_id: u64,
+    compiled: &CompiledStoryboard,
+    start_time: f64,
+    timeline_manager: &mut TimelineManager,
+    instance_manager: &mut InstanceManager,
+    subscription_manager: &mut SubscriptionManager,
+    skip_group_ids: &HashSet<u64>,
+) -> Result<Vec<u64>, RuntimeError> {
     // 1. 競合検出
-    let conflicting = detect_overlaps(compiled, start_time, timeline_manager, instance_manager);
+    let conflicting = detect_overlaps(
+        compiled,
+        start_time,
+        timeline_manager,
+        instance_manager,
+        skip_group_ids,
+    );
 
     if conflicting.is_empty() {
         return Ok(vec![]);
@@ -109,15 +139,17 @@ fn detect_overlaps(
     _start_time: f64,
     timeline_manager: &TimelineManager,
     instance_manager: &InstanceManager,
+    skip_group_ids: &HashSet<u64>,
 ) -> HashSet<u64> {
     let mut conflicting = HashSet::new();
 
-    // Playing/Paused のインスタンスのみ対象
+    // Playing/Paused のインスタンスのみ対象（skip_group_ids を除外）
     let active_instances: HashSet<u64> = instance_manager
         .instances()
         .iter()
-        .filter(|(_, inst)| {
-            inst.state == InstanceState::Playing || inst.state == InstanceState::Paused
+        .filter(|(gid, inst)| {
+            !skip_group_ids.contains(gid)
+                && (inst.state == InstanceState::Playing || inst.state == InstanceState::Paused)
         })
         .map(|(gid, _)| *gid)
         .collect();

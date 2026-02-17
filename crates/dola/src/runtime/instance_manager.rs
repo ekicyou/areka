@@ -8,6 +8,15 @@ use crate::storyboard::InterruptionPolicy;
 use super::instance_state::InstanceState;
 use super::types::RuntimeError;
 
+/// トリガー発火状態（StoryboardInstance に埋め込み）
+#[derive(Debug, Clone)]
+pub(crate) struct TriggerState {
+    /// CompiledTrigger のインデックス
+    pub trigger_index: usize,
+    /// 当該周回で発火済みか
+    pub fired: bool,
+}
+
 /// ストーリーボード実行インスタンス。
 ///
 /// 各 `start()` 呼び出しで 1 つ生成され、`group_id` で一意に識別される。
@@ -42,6 +51,8 @@ pub(crate) struct StoryboardInstance {
     pub loop_offset_max: f64,
     /// ループオフセット用イージング関数。
     pub loop_offset_easing: EasingFunction,
+    /// トリガー発火状態（周回ごとにリセット）
+    pub trigger_states: Vec<TriggerState>,
 }
 
 /// 実行インスタンスのコレクション管理と状態遷移制御。
@@ -72,7 +83,14 @@ impl InstanceManager {
         loop_offset_min: Option<f64>,
         loop_offset_max: f64,
         loop_offset_easing: EasingFunction,
+        trigger_count: usize,
     ) -> &StoryboardInstance {
+        let trigger_states = (0..trigger_count)
+            .map(|i| TriggerState {
+                trigger_index: i,
+                fired: false,
+            })
+            .collect();
         let instance = StoryboardInstance {
             group_id,
             storyboard_name: name.to_string(),
@@ -92,6 +110,7 @@ impl InstanceManager {
             loop_offset_min,
             loop_offset_max,
             loop_offset_easing,
+            trigger_states,
         };
         self.instances.insert(group_id, instance);
         self.instances.get(&group_id).unwrap()
@@ -101,6 +120,13 @@ impl InstanceManager {
     pub fn get(&self, group_id: u64) -> Result<&StoryboardInstance, RuntimeError> {
         self.instances
             .get(&group_id)
+            .ok_or(RuntimeError::InvalidGroupId(group_id))
+    }
+
+    /// 可変参照取得（InvalidGroupId エラー対応）。
+    pub fn get_mut(&mut self, group_id: u64) -> Result<&mut StoryboardInstance, RuntimeError> {
+        self.instances
+            .get_mut(&group_id)
             .ok_or(RuntimeError::InvalidGroupId(group_id))
     }
 
@@ -252,6 +278,7 @@ mod tests {
             None, // loop_offset_min
             0.0,  // loop_offset_max
             EasingFunction::Named(EasingName::Linear),
+            0,    // trigger_count
         );
     }
 
@@ -272,6 +299,7 @@ mod tests {
             None, // loop_offset_min
             0.0,  // loop_offset_max
             EasingFunction::Named(EasingName::Linear),
+            0,    // trigger_count
         );
         assert_eq!(inst.group_id, 1);
         assert_eq!(inst.storyboard_name, "fade");

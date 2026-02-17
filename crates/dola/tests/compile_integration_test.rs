@@ -74,9 +74,8 @@ fn complex_multi_variable_mixed_placement() {
                     delay: 0.0,
                     duration: Some(0.5),
                 })),
-                at: None,
-                between: None,
                 keyframe: Some("visible".to_string()),
+                ..Default::default()
             })
             // Entry 1: x_pos at "visible" → starts at 0.5
             .entry(StoryboardEntry {
@@ -90,8 +89,8 @@ fn complex_multi_variable_mixed_placement() {
                     duration: Some(1.0),
                 })),
                 at: Some(KeyframeRef::Single("visible".to_string())),
-                between: None,
                 keyframe: Some("moved".to_string()),
+                ..Default::default()
             })
             // Entry 2: y_pos between "visible" and "moved" → 0.5..1.5
             .entry(StoryboardEntry {
@@ -104,12 +103,12 @@ fn complex_multi_variable_mixed_placement() {
                     delay: 0.0,
                     duration: Some(999.0), // ignored for between
                 })),
-                at: None,
                 between: Some(BetweenKeyframes {
                     from: "visible".to_string(),
                     to: "moved".to_string(),
                 }),
                 keyframe: Some("settled".to_string()),
+                ..Default::default()
             })
             .build(),
     );
@@ -190,9 +189,8 @@ fn all_variable_types_mixed() {
                     delay: 0.0,
                     duration: Some(1.0),
                 })),
-                at: None,
-                between: None,
                 keyframe: Some("kf1".to_string()),
+                ..Default::default()
             })
             .entry(StoryboardEntry {
                 variable: Some("frame".to_string()),
@@ -204,9 +202,8 @@ fn all_variable_types_mixed() {
                     delay: 0.0,
                     duration: Some(2.0),
                 })),
-                at: None,
-                between: None,
                 keyframe: Some("kf2".to_string()),
+                ..Default::default()
             })
             .entry(StoryboardEntry {
                 variable: Some("state".to_string()),
@@ -220,9 +217,8 @@ fn all_variable_types_mixed() {
                     delay: 0.0,
                     duration: None,
                 })),
-                at: None,
-                between: None,
                 keyframe: Some("kf3".to_string()),
+                ..Default::default()
             })
             .build(),
     );
@@ -292,9 +288,8 @@ fn builder_to_compile_flow() {
                 .entry(StoryboardEntry {
                     variable: Some("alpha".to_string()),
                     transition: Some(TransitionRef::Named("fade_in".to_string())),
-                    at: None,
-                    between: None,
                     keyframe: Some("visible".to_string()),
+                    ..Default::default()
                 })
                 .build(),
         )
@@ -351,20 +346,17 @@ fn pure_keyframe_with_at() {
                     delay: 0.0,
                     duration: Some(2.0),
                 })),
-                at: None,
-                between: None,
                 keyframe: Some("kf1".to_string()),
+                ..Default::default()
             })
             // Pure KF: at kf1 + offset 1.0 → time = 3.0
             .entry(StoryboardEntry {
-                variable: None,
-                transition: None,
                 at: Some(KeyframeRef::WithOffset {
                     keyframes: KeyframeNames::Single("kf1".to_string()),
                     offset: 1.0,
                 }),
-                between: None,
                 keyframe: Some("marker".to_string()),
+                ..Default::default()
             })
             // y at marker → 3.0
             .entry(StoryboardEntry {
@@ -378,8 +370,8 @@ fn pure_keyframe_with_at() {
                     duration: Some(1.0),
                 })),
                 at: Some(KeyframeRef::Single("marker".to_string())),
-                between: None,
                 keyframe: Some("kf2".to_string()),
+                ..Default::default()
             })
             .build(),
     );
@@ -434,9 +426,8 @@ fn multiple_keyframe_wait() {
                     delay: 0.0,
                     duration: Some(1.0),
                 })),
-                at: None,
-                between: None,
                 keyframe: Some("kf_x".to_string()),
+                ..Default::default()
             })
             // y: 0..3s → kf_y at 3.0
             .entry(StoryboardEntry {
@@ -449,9 +440,8 @@ fn multiple_keyframe_wait() {
                     delay: 0.0,
                     duration: Some(3.0),
                 })),
-                at: None,
-                between: None,
                 keyframe: Some("kf_y".to_string()),
+                ..Default::default()
             })
             // z: at [kf_x, kf_y] → waits for max(1.0, 3.0) = 3.0
             .entry(StoryboardEntry {
@@ -468,8 +458,8 @@ fn multiple_keyframe_wait() {
                     "kf_x".to_string(),
                     "kf_y".to_string(),
                 ])),
-                between: None,
                 keyframe: Some("kf_z".to_string()),
+                ..Default::default()
             })
             .build(),
     );
@@ -504,9 +494,8 @@ fn compile_result_serializable() {
                     delay: 0.0,
                     duration: Some(1.0),
                 })),
-                at: None,
-                between: None,
                 keyframe: Some("visible".to_string()),
+                ..Default::default()
             })
             .build(),
     );

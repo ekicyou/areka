@@ -97,9 +97,8 @@ mod v2_tests {
                             delay: 0.0,
                             duration: Some(1.0),
                         })),
-                        at: None,
-                        between: None,
                         keyframe: Some("visible".to_string()),
+                        ..Default::default()
                     },
                     StoryboardEntry {
                         variable: Some("x".to_string()),
@@ -111,9 +110,8 @@ mod v2_tests {
                             delay: 0.0,
                             duration: Some(1.0),
                         })),
-                        at: None,
-                        between: None,
                         keyframe: Some("visible".to_string()), // duplicate!
+                        ..Default::default()
                     },
                 ],
             },
@@ -168,9 +166,8 @@ mod v3_tests {
                         delay: 0.0,
                         duration: Some(1.0),
                     })),
-                    at: None,
-                    between: None,
                     keyframe: Some("start".to_string()), // reserved!
+                    ..Default::default()
                 }],
             },
         );
@@ -211,9 +208,7 @@ mod v4_tests {
                         delay: 0.0,
                         duration: Some(1.0),
                     })),
-                    at: None,
-                    between: None,
-                    keyframe: None,
+                    ..Default::default()
                 }],
             },
         );
@@ -260,9 +255,7 @@ mod v5_tests {
                 entry: vec![StoryboardEntry {
                     variable: Some("x".to_string()),
                     transition: Some(TransitionRef::Named("undefined_trans".to_string())),
-                    at: None,
-                    between: None,
-                    keyframe: None,
+                    ..Default::default()
                 }],
             },
         );
@@ -319,8 +312,7 @@ mod v6_tests {
                             duration: Some(1.0),
                         })),
                         at: Some(KeyframeRef::Single("kf_from_entry_1".to_string())),
-                        between: None,
-                        keyframe: None,
+                        ..Default::default()
                     },
                     StoryboardEntry {
                         variable: Some("x".to_string()),
@@ -332,9 +324,8 @@ mod v6_tests {
                             delay: 0.0,
                             duration: Some(1.0),
                         })),
-                        at: None,
-                        between: None,
                         keyframe: Some("kf_from_entry_1".to_string()),
+                        ..Default::default()
                     },
                 ],
             },
@@ -377,8 +368,7 @@ mod v6_tests {
                         duration: Some(1.0),
                     })),
                     at: Some(KeyframeRef::Single("nonexistent".to_string())),
-                    between: None,
-                    keyframe: None,
+                    ..Default::default()
                 }],
             },
         );
@@ -427,8 +417,7 @@ mod v6_tests {
                             duration: Some(1.0),
                         })),
                         at: Some(KeyframeRef::Single("__implicit_1".to_string())),
-                        between: None,
-                        keyframe: None,
+                        ..Default::default()
                     },
                     StoryboardEntry {
                         variable: Some("x".to_string()),
@@ -440,9 +429,7 @@ mod v6_tests {
                             delay: 0.0,
                             duration: Some(1.0),
                         })),
-                        at: None,
-                        between: None,
-                        keyframe: None, // implicit KF: __implicit_1
+                        ..Default::default()
                     },
                 ],
             },
@@ -486,8 +473,7 @@ mod v6_tests {
                         duration: Some(1.0),
                     })),
                     at: Some(KeyframeRef::Single("start".to_string())),
-                    between: None,
-                    keyframe: None,
+                    ..Default::default()
                 }],
             },
         );
@@ -516,7 +502,6 @@ mod v7_tests {
                 interruption_policy: InterruptionPolicy::Conclude,
                 loop_offset: None,
                 entry: vec![StoryboardEntry {
-                    variable: None, // missing!
                     transition: Some(TransitionRef::Inline(TransitionDef {
                         from: None,
                         to: Some(TransitionValue::Scalar(1.0)),
@@ -525,9 +510,7 @@ mod v7_tests {
                         delay: 0.0,
                         duration: Some(1.0),
                     })),
-                    at: None,
-                    between: None,
-                    keyframe: None,
+                    ..Default::default()
                 }],
             },
         );
@@ -583,9 +566,8 @@ mod v8_tests {
                             delay: 0.0,
                             duration: Some(1.0),
                         })),
-                        at: None,
-                        between: None,
                         keyframe: Some("kf1".to_string()),
+                        ..Default::default()
                     },
                     StoryboardEntry {
                         variable: Some("x".to_string()),
@@ -602,7 +584,7 @@ mod v8_tests {
                             from: "start".to_string(),
                             to: "kf1".to_string(),
                         }),
-                        keyframe: None,
+                        ..Default::default()
                     },
                 ],
             },
@@ -637,11 +619,7 @@ mod v9_tests {
                 interruption_policy: InterruptionPolicy::Conclude,
                 loop_offset: None,
                 entry: vec![StoryboardEntry {
-                    variable: None,
-                    transition: None,
-                    at: None,
-                    between: None,
-                    keyframe: None, // missing!
+                    ..Default::default()
                 }],
             },
         );
@@ -667,11 +645,8 @@ mod v9_tests {
                 interruption_policy: InterruptionPolicy::Conclude,
                 loop_offset: None,
                 entry: vec![StoryboardEntry {
-                    variable: None,
-                    transition: None,
-                    at: None,
-                    between: None,
                     keyframe: Some("sync_point".to_string()),
+                    ..Default::default()
                 }],
             },
         );
@@ -720,9 +695,7 @@ mod v10_tests {
                         delay: 0.0,
                         duration: None,
                     })),
-                    at: None,
-                    between: None,
-                    keyframe: None,
+                    ..Default::default()
                 }],
             },
         );
@@ -766,9 +739,7 @@ mod v10_tests {
                         delay: 0.0,
                         duration: None,
                     })),
-                    at: None,
-                    between: None,
-                    keyframe: None,
+                    ..Default::default()
                 }],
             },
         );
@@ -822,9 +793,7 @@ mod v11_tests {
                         delay: 0.0,
                         duration: Some(1.0),
                     })),
-                    at: None,
-                    between: None,
-                    keyframe: None,
+                    ..Default::default()
                 }],
             },
         );
@@ -887,9 +856,7 @@ mod v12_tests {
                         delay: 0.0,
                         duration: Some(1.0),
                     })),
-                    at: None,
-                    between: None,
-                    keyframe: None,
+                    ..Default::default()
                 }],
             },
         );
@@ -957,9 +924,7 @@ mod v13_tests {
                         delay: 0.0,
                         duration: Some(1.0),
                     })),
-                    at: None,
-                    between: None,
-                    keyframe: None,
+                    ..Default::default()
                 }],
             },
         );
@@ -1003,9 +968,7 @@ mod v13_tests {
                         delay: 0.0,
                         duration: None,
                     })),
-                    at: None,
-                    between: None,
-                    keyframe: None,
+                    ..Default::default()
                 }],
             },
         );

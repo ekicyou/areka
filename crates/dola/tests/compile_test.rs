@@ -69,6 +69,7 @@ mod serde_tests {
             interruption_policy: InterruptionPolicy::Conclude,
             loop_offset: None,
             total_base_duration: 1.0,
+            triggers: Vec::new(),
         };
 
         let json = serde_json::to_string_pretty(&compiled).unwrap();
@@ -148,9 +149,8 @@ mod time_resolution_tests {
                         delay: 0.0,
                         duration: Some(1.0),
                     })),
-                    at: None,
-                    between: None,
                     keyframe: Some("kf1".to_string()),
+                    ..Default::default()
                 })
                 .entry(StoryboardEntry {
                     variable: Some("x".to_string()),
@@ -162,9 +162,8 @@ mod time_resolution_tests {
                         delay: 0.0,
                         duration: Some(2.0),
                     })),
-                    at: None,
-                    between: None,
                     keyframe: Some("kf2".to_string()),
+                    ..Default::default()
                 })
                 .build(),
         );
@@ -207,9 +206,8 @@ mod time_resolution_tests {
                         delay: 0.5,
                         duration: Some(1.0),
                     })),
-                    at: None,
-                    between: None,
                     keyframe: Some("kf1".to_string()),
+                    ..Default::default()
                 })
                 .build(),
         );
@@ -251,9 +249,8 @@ mod time_resolution_tests {
                         delay: 0.0,
                         duration: Some(2.0),
                     })),
-                    at: None,
-                    between: None,
                     keyframe: Some("kf1".to_string()),
+                    ..Default::default()
                 })
                 // Entry 1: y, at "kf1", starts at 2.0
                 .entry(StoryboardEntry {
@@ -267,8 +264,8 @@ mod time_resolution_tests {
                         duration: Some(1.0),
                     })),
                     at: Some(KeyframeRef::Single("kf1".to_string())),
-                    between: None,
                     keyframe: Some("kf2".to_string()),
+                    ..Default::default()
                 })
                 .build(),
         );
@@ -307,9 +304,8 @@ mod time_resolution_tests {
                         delay: 0.0,
                         duration: Some(2.0),
                     })),
-                    at: None,
-                    between: None,
                     keyframe: Some("kf1".to_string()),
+                    ..Default::default()
                 })
                 .entry(StoryboardEntry {
                     variable: Some("y".to_string()),
@@ -325,8 +321,8 @@ mod time_resolution_tests {
                         keyframes: KeyframeNames::Single("kf1".to_string()),
                         offset: 0.5,
                     }),
-                    between: None,
                     keyframe: Some("kf2".to_string()),
+                    ..Default::default()
                 })
                 .build(),
         );
@@ -366,9 +362,8 @@ mod time_resolution_tests {
                         delay: 0.0,
                         duration: Some(2.0),
                     })),
-                    at: None,
-                    between: None,
                     keyframe: Some("kf1".to_string()),
+                    ..Default::default()
                 })
                 .entry(StoryboardEntry {
                     variable: Some("x".to_string()),
@@ -380,9 +375,8 @@ mod time_resolution_tests {
                         delay: 0.0,
                         duration: Some(3.0),
                     })),
-                    at: None,
-                    between: None,
                     keyframe: Some("kf2".to_string()),
+                    ..Default::default()
                 })
                 // y between kf1 and kf2: from_t=2.0, to_t=5.0
                 .entry(StoryboardEntry {
@@ -395,12 +389,12 @@ mod time_resolution_tests {
                         delay: 0.0,
                         duration: Some(999.0), // ignored for between
                     })),
-                    at: None,
                     between: Some(BetweenKeyframes {
                         from: "kf1".to_string(),
                         to: "kf2".to_string(),
                     }),
                     keyframe: Some("kf3".to_string()),
+                    ..Default::default()
                 })
                 .build(),
         );
@@ -432,9 +426,8 @@ mod time_resolution_tests {
                         delay: 0.0,
                         duration: None, // instant
                     })),
-                    at: None,
-                    between: None,
                     keyframe: Some("kf1".to_string()),
+                    ..Default::default()
                 })
                 .build(),
         );
@@ -465,9 +458,8 @@ mod time_resolution_tests {
                         delay: 0.0,
                         duration: Some(1.0),
                     })),
-                    at: None,
-                    between: None,
                     keyframe: Some("kf1".to_string()),
+                    ..Default::default()
                 })
                 .build(),
         );
@@ -501,9 +493,8 @@ mod time_resolution_tests {
                         delay: 1.0,
                         duration: Some(2.0),
                     })),
-                    at: None,
-                    between: None,
                     keyframe: Some("kf1".to_string()),
+                    ..Default::default()
                 })
                 .build(),
         );
@@ -546,9 +537,8 @@ mod transition_resolution_tests {
                 .entry(StoryboardEntry {
                     variable: Some("x".to_string()),
                     transition: Some(TransitionRef::Named("fade".to_string())),
-                    at: None,
-                    between: None,
                     keyframe: Some("kf1".to_string()),
+                    ..Default::default()
                 })
                 .build(),
         );
@@ -585,9 +575,8 @@ mod transition_resolution_tests {
                         delay: 0.0,
                         duration: Some(1.0),
                     })),
-                    at: None,
-                    between: None,
                     keyframe: Some("kf1".to_string()),
+                    ..Default::default()
                 })
                 .entry(StoryboardEntry {
                     variable: Some("x".to_string()),
@@ -599,9 +588,8 @@ mod transition_resolution_tests {
                         delay: 0.0,
                         duration: Some(1.0),
                     })),
-                    at: None,
-                    between: None,
                     keyframe: Some("kf2".to_string()),
+                    ..Default::default()
                 })
                 .build(),
         );
@@ -632,9 +620,8 @@ mod transition_resolution_tests {
                         delay: 0.0,
                         duration: Some(1.0),
                     })),
-                    at: None,
-                    between: None,
                     keyframe: Some("kf1".to_string()),
+                    ..Default::default()
                 })
                 .build(),
         );
@@ -665,9 +652,8 @@ mod transition_resolution_tests {
                         delay: 0.0,
                         duration: Some(1.0),
                     })),
-                    at: None,
-                    between: None,
                     keyframe: Some("kf1".to_string()),
+                    ..Default::default()
                 })
                 .build(),
         );
@@ -698,9 +684,8 @@ mod transition_resolution_tests {
                         delay: 0.0,
                         duration: None, // instant
                     })),
-                    at: None,
-                    between: None,
                     keyframe: Some("kf1".to_string()),
+                    ..Default::default()
                 })
                 .build(),
         );
@@ -742,9 +727,8 @@ mod transition_resolution_tests {
                         delay: 0.0,
                         duration: Some(1.0),
                     })),
-                    at: None,
-                    between: None,
                     keyframe: Some("kf1".to_string()),
+                    ..Default::default()
                 })
                 .build(),
         );
@@ -788,9 +772,8 @@ mod metadata_tests {
                         delay: 0.0,
                         duration: Some(1.0),
                     })),
-                    at: None,
-                    between: None,
                     keyframe: Some("kf1".to_string()),
+                    ..Default::default()
                 })
                 .build(),
         );
@@ -825,9 +808,8 @@ mod metadata_tests {
                         delay: 0.0,
                         duration: Some(1.0),
                     })),
-                    at: None,
-                    between: None,
                     keyframe: Some("kf1".to_string()),
+                    ..Default::default()
                 })
                 .build(),
         );
@@ -858,9 +840,8 @@ mod metadata_tests {
                         delay: 0.0,
                         duration: Some(1.0),
                     })),
-                    at: None,
-                    between: None,
                     keyframe: Some("kf1".to_string()),
+                    ..Default::default()
                 })
                 .build(),
         );
@@ -890,9 +871,8 @@ mod metadata_tests {
                         delay: 0.0,
                         duration: Some(1.0),
                     })),
-                    at: None,
-                    between: None,
                     keyframe: Some("kf1".to_string()),
+                    ..Default::default()
                 })
                 .build(),
         );
@@ -926,9 +906,8 @@ mod metadata_tests {
                         delay: 0.0,
                         duration: Some(2.0),
                     })),
-                    at: None,
-                    between: None,
                     keyframe: Some("kf1".to_string()),
+                    ..Default::default()
                 })
                 .build(),
         );
@@ -972,9 +951,8 @@ mod metadata_tests {
                         delay: 0.0,
                         duration: Some(1.0),
                     })),
-                    at: None,
-                    between: None,
                     keyframe: Some("kf1".to_string()),
+                    ..Default::default()
                 })
                 // y: 0.0 -> 3.0 (duration 3.0)
                 .entry(StoryboardEntry {
@@ -987,9 +965,8 @@ mod metadata_tests {
                         delay: 0.0,
                         duration: Some(3.0),
                     })),
-                    at: None,
-                    between: None,
                     keyframe: Some("kf2".to_string()),
+                    ..Default::default()
                 })
                 .build(),
         );
@@ -1021,9 +998,8 @@ mod metadata_tests {
                         delay: 0.0,
                         duration: Some(1.0),
                     })),
-                    at: None,
-                    between: None,
                     keyframe: Some("kf1".to_string()),
+                    ..Default::default()
                 })
                 .build(),
         );
@@ -1056,9 +1032,8 @@ mod metadata_tests {
                         delay: 0.0,
                         duration: Some(1.0),
                     })),
-                    at: None,
-                    between: None,
                     keyframe: Some("kf1".to_string()),
+                    ..Default::default()
                 })
                 .build(),
         );
@@ -1139,8 +1114,8 @@ mod error_tests {
                         duration: Some(1.0),
                     })),
                     at: Some(KeyframeRef::Single("kf1".to_string())),
-                    between: None,
                     keyframe: Some("kf0".to_string()),
+                    ..Default::default()
                 })
                 .entry(StoryboardEntry {
                     variable: Some("y".to_string()),
@@ -1153,8 +1128,8 @@ mod error_tests {
                         duration: Some(1.0),
                     })),
                     at: Some(KeyframeRef::Single("kf0".to_string())),
-                    between: None,
                     keyframe: Some("kf1".to_string()),
+                    ..Default::default()
                 })
                 .build(),
         );
@@ -1195,9 +1170,8 @@ mod error_tests {
                         delay: 0.0,
                         duration: Some(1.0),
                     })),
-                    at: None,
-                    between: None,
                     keyframe: Some("kf1".to_string()),
+                    ..Default::default()
                 })
                 .entry(StoryboardEntry {
                     variable: Some("x".to_string()),
@@ -1209,9 +1183,8 @@ mod error_tests {
                         delay: 0.0,
                         duration: Some(1.0),
                     })),
-                    at: None,
-                    between: None,
                     keyframe: Some("kf2".to_string()),
+                    ..Default::default()
                 })
                 // between kf1 (1.0) and kf2 (2.0) with delay 2.0 → exceeds interval
                 .entry(StoryboardEntry {
@@ -1224,12 +1197,12 @@ mod error_tests {
                         delay: 2.0, // exceeds interval (kf2-kf1 = 1.0)
                         duration: None,
                     })),
-                    at: None,
                     between: Some(BetweenKeyframes {
                         from: "kf1".to_string(),
                         to: "kf2".to_string(),
                     }),
                     keyframe: Some("kf3".to_string()),
+                    ..Default::default()
                 })
                 .build(),
         );
@@ -1256,11 +1229,9 @@ mod error_tests {
             StoryboardBuilder::new()
                 // Entry 0: pure KF at start - sets kf_start at time 0.0
                 .entry(StoryboardEntry {
-                    variable: None,
-                    transition: None,
                     at: Some(KeyframeRef::Single("start".to_string())),
-                    between: None,
                     keyframe: Some("kf_start".to_string()),
+                    ..Default::default()
                 })
                 // Entry 1: x from 0->100, at start, duration 2.0 → 0.0..2.0
                 .entry(StoryboardEntry {
@@ -1274,8 +1245,8 @@ mod error_tests {
                         duration: Some(2.0),
                     })),
                     at: Some(KeyframeRef::Single("start".to_string())),
-                    between: None,
                     keyframe: Some("kf1".to_string()),
+                    ..Default::default()
                 })
                 // Entry 2: x from 50->200, at start, duration 3.0 → 0.0..3.0 (OVERLAP!)
                 .entry(StoryboardEntry {
@@ -1289,8 +1260,8 @@ mod error_tests {
                         duration: Some(3.0),
                     })),
                     at: Some(KeyframeRef::Single("start".to_string())),
-                    between: None,
                     keyframe: Some("kf2".to_string()),
+                    ..Default::default()
                 })
                 .build(),
         );

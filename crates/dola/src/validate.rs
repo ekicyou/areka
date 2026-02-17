@@ -81,14 +81,57 @@ impl Validate for DolaDocument {
                     });
                 }
 
-                // V9: 純粋KFエントリ（variable/transition なし）→ keyframe 必須
-                if entry.variable.is_none() && entry.transition.is_none() && entry.keyframe.is_none()
+                // V9: 純粋KFエントリ（variable/transition なし）→ keyframe または trigger_storyboard 必須
+                if entry.variable.is_none()
+                    && entry.transition.is_none()
+                    && entry.keyframe.is_none()
+                    && entry.trigger_storyboard.is_none()
                 {
                     errors.push(DolaError::InvalidEntry {
                         storyboard: sb_name.clone(),
                         entry_index: entry_idx,
-                        reason: "entry without variable/transition must have keyframe".to_string(),
+                        reason: "entry without variable/transition must have keyframe or trigger_storyboard".to_string(),
                     });
+                }
+
+                // V16t: trigger_storyboard と variable/transition の排他チェック
+                if entry.trigger_storyboard.is_some() {
+                    if entry.variable.is_some() || entry.transition.is_some() {
+                        errors.push(DolaError::TriggerExclusiveViolation {
+                            storyboard: sb_name.clone(),
+                            entry_index: entry_idx,
+                            reason: "trigger_storyboard cannot be combined with variable/transition".to_string(),
+                        });
+                    }
+                }
+
+                // V17t: トリガーエントリにトランジション固有フィールドが存在する場合はエラー
+                if entry.trigger_storyboard.is_some() {
+                    // TransitionRef にはfrom/to/easing/durationが含まれるため、
+                    // transition自体があればV16tで検出済み。
+                    // ここではbetweenのfrom/toフィールドをチェック（betweenはタイミング制御なので許可とも取れるが
+                    // design.mdの記述に従い、betweenはトリガーでも使用可能とする）
+                }
+
+                // V14t: トリガー自己参照検出
+                if let Some(ref trigger_target) = entry.trigger_storyboard {
+                    if trigger_target == sb_name {
+                        errors.push(DolaError::TriggerSelfReference {
+                            storyboard: sb_name.clone(),
+                            entry_index: entry_idx,
+                        });
+                    }
+                }
+
+                // V18t: トリガー対象ストーリーボード存在確認
+                if let Some(ref trigger_target) = entry.trigger_storyboard {
+                    if !self.storyboard.contains_key(trigger_target) {
+                        errors.push(DolaError::TriggerTargetNotFound {
+                            storyboard: sb_name.clone(),
+                            entry_index: entry_idx,
+                            target: trigger_target.clone(),
+                        });
+                    }
                 }
 
                 // V10, V11, V13: トランジション内容の検証
@@ -123,6 +166,9 @@ impl Validate for DolaDocument {
                 }
             }
         }
+
+        // V15t: トリガー循環参照検出（ドキュメントレベル DFS）
+        validate_trigger_cycles(self, &mut errors);
 
         if errors.is_empty() {
             Ok(())
@@ -446,4 +492,69 @@ fn validate_loop_offset(
     }
 
     // V17: easing は serde の型システムが保証（追加バリデーション不要）
+}
+
+/// V15t: トリガー循環参照検出（ドキュメントレベル DFS）
+///
+/// ドキュメント内全ストーリーボードのトリガーグラフを構築し、
+/// DFS で循環を検出する。O(V+E)。
+fn validate_trigger_cycles(doc: &DolaDocument, errors: &mut Vec<DolaError>) {
+    use std::collections::{HashMap, HashSet};
+
+    // トリガーグラフ構築: SB名 → トリガー先SB名のリスト
+    let mut graph: HashMap<&str, Vec<&str>> = HashMap::new();
+    for (sb_name, sb) in &doc.storyboard {
+        let targets: Vec<&str> = sb
+            .entry
+            .iter()
+            .filter_map(|e| e.trigger_storyboard.as_deref())
+            .collect();
+        graph.insert(sb_name.as_str(), targets);
+    }
+
+    // DFS による循環検出
+    let mut visited: HashSet<&str> = HashSet::new();
+    let mut in_stack: HashSet<&str> = HashSet::new();
+    let mut path: Vec<&str> = Vec::new();
+
+    for sb_name in graph.keys() {
+        if !visited.contains(sb_name) {
+            if let Some(cycle) = dfs_detect_cycle(sb_name, &graph, &mut visited, &mut in_stack, &mut path) {
+                errors.push(DolaError::TriggerCycle { cycle });
+            }
+        }
+    }
+}
+
+/// DFS ヘルパー: 循環検出時にパスを返す
+fn dfs_detect_cycle<'a>(
+    node: &'a str,
+    graph: &std::collections::HashMap<&'a str, Vec<&'a str>>,
+    visited: &mut std::collections::HashSet<&'a str>,
+    in_stack: &mut std::collections::HashSet<&'a str>,
+    path: &mut Vec<&'a str>,
+) -> Option<Vec<String>> {
+    visited.insert(node);
+    in_stack.insert(node);
+    path.push(node);
+
+    if let Some(neighbors) = graph.get(node) {
+        for &next in neighbors {
+            if !visited.contains(next) {
+                if let Some(cycle) = dfs_detect_cycle(next, graph, visited, in_stack, path) {
+                    return Some(cycle);
+                }
+            } else if in_stack.contains(next) {
+                // 循環検出: path から next の位置以降を抽出
+                let start_pos = path.iter().position(|&n| n == next).unwrap();
+                let mut cycle: Vec<String> = path[start_pos..].iter().map(|s| s.to_string()).collect();
+                cycle.push(next.to_string()); // 循環を閉じる
+                return Some(cycle);
+            }
+        }
+    }
+
+    path.pop();
+    in_stack.remove(node);
+    None
 }
