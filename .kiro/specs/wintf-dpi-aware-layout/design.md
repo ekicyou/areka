@@ -554,14 +554,27 @@ guarded_set_window_pos(hwnd, None, x, y, 0, 0,
 
 | Field | Detail |
 |-------|--------|
-| Intent | 自動検証フロー：起動→ウィンドウ作成→DPI ダンプ→自動終了 |
+| Intent | 自動検証フロー：起動→ウィンドウ作成→DPI ダンプ→レイアウト変更→ダンプ②→自動終了 |
 | Requirements | 6.1, 6.2 |
 
 **Responsibilities & Constraints**
-- `run_demo` の総所要時間を 60 秒から大幅に削減
-- レイアウト安定に必要な初期待機は維持（Taffy 計算＋DirectComposition コミット完了待ち）
-- DPI ダンプ出力後に自動的にウィンドウを閉じて終了
-- `change_layout_parameters` の呼び出しは DPI 検証に不要であれば削除または短縮
+- `run_demo` の総所要時間を 60 秒から **約 4 秒** に短縮（93% 削減）
+- レイアウト安定待機は 1 秒単位で十分（Taffy 計算 + DirectComposition Commit は 1 VSYNC ≈ 16ms で完了）
+- `change_layout_parameters` は Taffy レイアウト変更の統合テストとして維持
+- DPI ダンプを change 前後の 2 回実行し、変動フレームを確実にキャプチャ
+
+**タイムライン設計**:
+```
+0s: ウィンドウ2つ作成
+1s: dump① — 初期レイアウト状態の DPI/GA/BoxStyle ダンプ
+2s: change_layout_parameters — ウィンドウリサイズ・Flex方向変更等
+3s: dump② — 変更後レイアウト状態の DPI/GA/BoxStyle ダンプ
+4s: close — 全ウィンドウ破棄・自動終了
+```
+
+**待機時間の根拠**:
+- 1 秒間隔は VSYNC 間隔（~16ms）の約 60 倍 → OS 高負荷時でもレイアウト安定に十分
+- dump は ECS World への同期コマンドであり、tick 完了後にキャプチャされるため正確
 
 ---
 
