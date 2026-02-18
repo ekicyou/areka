@@ -257,7 +257,7 @@ fn find_non_primary_monitor_origin() -> Option<windows::Win32::Foundation::POINT
 /// 非同期デモ実行
 async fn run_demo(tx: CommandSender) {
     // === 0秒: ウィンドウ作成（2つ） ===
-    println!("[Async] 0s: Creating Flexbox demo windows (multi-window)");
+    info!("[Async] 0s: Creating Flexbox demo windows (multi-window)");
     let _ = tx.send(Box::new(|world: &mut World| {
         create_flexbox_window(
             world,
@@ -276,21 +276,21 @@ async fn run_demo(tx: CommandSender) {
     async_io::Timer::after(Duration::from_secs(2)).await;
 
     // === 2秒: 全Windowの DPI / GA / レイアウトダンプ ===
-    println!("[Async] 2s: Running DPI layout dump for all windows");
+    info!("[Async] 2s: Running DPI layout dump for all windows");
     let _ = tx.send(Box::new(dump_all_windows_dpi));
 
     // === 5秒待機 ===
     async_io::Timer::after(Duration::from_secs(3)).await;
 
     // === 5秒: レイアウトパラメーター変更 ===
-    println!("[Async] 5s: Changing layout parameters");
+    info!("[Async] 5s: Changing layout parameters");
     let _ = tx.send(Box::new(change_layout_parameters));
 
     // === 60秒待機後に終了 ===
     async_io::Timer::after(Duration::from_secs(55)).await;
 
     // === 60秒: 終了 ===
-    println!("[Async] 60s: Closing windows");
+    info!("[Async] 60s: Closing windows");
     let _ = tx.send(Box::new(close_window));
 }
 
@@ -942,9 +942,9 @@ fn close_window(world: &mut World) {
 /// 全ウィンドウの DPI / GlobalArrangement / Arrangement をダンプ（DPI問題調査用）
 fn dump_all_windows_dpi(world: &mut World) {
     use wintf::ecs::DPI;
-    use wintf::ecs::layout::Arrangement;
+    use wintf::ecs::layout::{Arrangement, BoxStyle};
 
-    println!("[DPIDump] ========== DPI Layout Dump for All Windows ==========");
+    info!("[DPIDump] ========== DPI Layout Dump for All Windows ==========");
 
     let mut window_query =
         world.query_filtered::<(Entity, Option<&bevy_ecs::name::Name>), With<FlexDemoWindow>>();
@@ -997,6 +997,21 @@ fn dump_all_windows_dpi(world: &mut World) {
             "Arrangement: None".to_string()
         };
 
+        // BoxStyle（論理 px サイズ確認用）
+        let bs_str = if let Some(bs) = world.get::<BoxStyle>(window_entity) {
+            if let Some(size) = bs.size {
+                format!(
+                    "size=({:?}x{:?})",
+                    size.width,
+                    size.height
+                )
+            } else {
+                "size=None".to_string()
+            }
+        } else {
+            "BoxStyle: None".to_string()
+        };
+
         // GlobalArrangement
         let ga_str = if let Some(ga) = world.get::<GlobalArrangement>(window_entity) {
             format!(
@@ -1018,22 +1033,23 @@ fn dump_all_windows_dpi(world: &mut World) {
             "GlobalArrangement: None".to_string()
         };
 
-        println!("[DPIDump] Window: {}", window_name);
-        println!("[DPIDump]   {}", dpi_str);
-        println!("[DPIDump]   WindowPos: {}", wp_str);
-        println!("[DPIDump]   Arrangement: {}", arr_str);
-        println!("[DPIDump]   GA: {}", ga_str);
+        info!(window = %window_name, "[DPIDump] Window");
+        info!("[DPIDump]   {}", dpi_str);
+        info!("[DPIDump]   WindowPos: {}", wp_str);
+        info!("[DPIDump]   Arrangement: {}", arr_str);
+        info!("[DPIDump]   BoxStyle(logical px): {}", bs_str);
+        info!("[DPIDump]   GA(physical px): {}", ga_str);
 
         // 子エンティティをダンプ
         dump_children_dpi(world, window_entity, 1);
     }
 
-    println!("[DPIDump] ========== End of DPI Layout Dump ==========");
+    info!("[DPIDump] ========== End of DPI Layout Dump ==========");
 }
 
 /// 子エンティティの GA/Arrangement を再帰的にダンプ
 fn dump_children_dpi(world: &mut World, entity: Entity, depth: usize) {
-    use wintf::ecs::layout::Arrangement;
+    use wintf::ecs::layout::{Arrangement, BoxStyle};
 
     let children: Vec<Entity> = world
         .get::<bevy_ecs::hierarchy::Children>(entity)
@@ -1072,9 +1088,19 @@ fn dump_children_dpi(world: &mut World, entity: Entity, depth: usize) {
         } else {
             "no GA".to_string()
         };
-        println!(
-            "[DPIDump]{}{}: arr=[{}] ga=[{}]",
-            indent, name, arr_str, ga_str
+        // BoxStyle（論理 px）
+        let bs_str = if let Some(bs) = world.get::<BoxStyle>(child) {
+            if let Some(size) = bs.size {
+                format!("BoxStyle=({:?}x{:?})", size.width, size.height)
+            } else {
+                "BoxStyle=None".to_string()
+            }
+        } else {
+            String::new()
+        };
+        info!(
+            "[DPIDump]{}{}: arr=[{}] ga=[{}] {}",
+            indent, name, arr_str, ga_str, bs_str
         );
         // 再帰（2階層まで）
         if depth < 2 {
