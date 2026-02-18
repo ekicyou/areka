@@ -464,14 +464,12 @@ pub fn composite_render_system(
 
         // 4. 再帰走査（Req 2.1: depth-first pre-order）
         // ULW 補正: 合成ビットマップは (0,0) 起点で描画する。
-        // GlobalArrangement.transform は DPI スケール済みスクリーン座標なので、
-        // 子の ga.transform.M31 から window の ga.transform.M31 を引くことで
-        // ビットマップ内ローカル座標を得る。
+        // GlobalArrangement.bounds はスクリーン物理ピクセル座標なので、
+        // bounds.left/top をウィンドウ原点として使いビットマップ内ローカル座標に変換する。
         //
-        // 重要: GetWindowRect（フレーム座標、非スケール）と ga.transform（DPIスケール済み）は
-        // 異なる座標空間に属するため混合してはならない。
-        // window_ga.transform を基準とすることで座標空間が統一される。
-        let window_offset = (window_ga.transform.M31, window_ga.transform.M32);
+        // 重要: transform.M31/M32 はスケール込みの値 (offset * scale) であり bounds.left と
+        // 一致しないため、window_offset には bounds.left/top を使用する。
+        let window_offset = (window_ga.bounds.left, window_ga.bounds.top);
         let child_count = window_children.iter().count();
         debug!(
             entity = ?window_entity,

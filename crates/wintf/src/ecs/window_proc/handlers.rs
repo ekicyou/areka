@@ -293,15 +293,12 @@ pub(super) fn WM_WINDOWPOSCHANGED(
                                 let physical_width = client_size.cx as f32;
                                 let physical_height = client_size.cy as f32;
 
-                                // DPI スケールで割って論理サイズに変換
-                                let scale_x = dpi.scale_x();
-                                let scale_y = dpi.scale_y();
-                                let logical_width = physical_width / scale_x;
-                                let logical_height = physical_height / scale_y;
-
+                                // LayoutRoot は物理 px 座標系で動作するため、
+                                // Taffy へ渡す BoxStyle.size も物理 px で統一する。
+                                // (DPI スケールで割らない)
                                 let new_size = Some(BoxSize {
-                                    width: Some(Dimension::Px(logical_width)),
-                                    height: Some(Dimension::Px(logical_height)),
+                                    width: Some(Dimension::Px(physical_width)),
+                                    height: Some(Dimension::Px(physical_height)),
                                 });
 
                                 // Step 1: 現在のサイズを読み取り（immutable borrow）
@@ -324,11 +321,7 @@ pub(super) fn WM_WINDOWPOSCHANGED(
                                         entity = ?entity,
                                         physical_width = physical_width,
                                         physical_height = physical_height,
-                                        logical_width = logical_width,
-                                        logical_height = logical_height,
-                                        scale_x = scale_x,
-                                        scale_y = scale_y,
-                                        "[WM_WINDOWPOSCHANGED] BoxStyle.size updated (size changed)"
+                                        "[WM_WINDOWPOSCHANGED] BoxStyle.size updated (physical px, size changed)"
                                     );
                                 } else {
                                     trace!(
@@ -445,15 +438,18 @@ pub(super) fn WM_DPICHANGED(
         "Calling guarded_set_window_pos with suggested_rect"
     );
 
+    // サイズは維持（SWP_NOSIZE）し、位置のみ suggested_rect に従う。
+    // LayoutRoot が物理 px 座標系で動作しているため DPI スケールによる
+    // サイズ変更は行わず、ウィンドウを新モニターの適切な位置に移動するだけ。
     let result = unsafe {
         crate::ecs::window::guarded_set_window_pos(
             hwnd,
             None,
             suggested_rect.left,
             suggested_rect.top,
-            width,
-            height,
-            SWP_NOZORDER | SWP_NOACTIVATE,
+            0,
+            0,
+            SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE,
         )
     };
     if let Err(e) = result {

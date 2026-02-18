@@ -200,6 +200,60 @@ fn main() -> Result<()> {
     Ok(())
 }
 
+/// プライマリ以外のモニター中央付近の物理ピクセル座標を返す。
+///
+/// マルチモニター環境で DPI が異なるスクリーンへのウィンドウ配置テスト用。
+/// 非プライマリモニターが存在しない場合は None を返す。
+fn find_non_primary_monitor_origin() -> Option<windows::Win32::Foundation::POINT> {
+    use std::cell::Cell;
+    use windows::Win32::Foundation::{LPARAM, POINT, RECT};
+    use windows::Win32::Graphics::Gdi::{
+        EnumDisplayMonitors, GetMonitorInfoW, HDC, HMONITOR, MONITORINFO,
+    };
+    use windows_core::BOOL;
+
+    // スレッドローカルで結果を収集（EnumDisplayMonitors コールバックから返す手段として）
+    thread_local! {
+        static RESULT: Cell<Option<POINT>> = const { Cell::new(None) };
+    }
+
+    RESULT.with(|r| r.set(None));
+
+    unsafe extern "system" fn monitor_enum_proc(
+        hmonitor: HMONITOR,
+        _hdc: HDC,
+        _lprc: *mut RECT,
+        _lparam: LPARAM,
+    ) -> BOOL {
+        let mut info = MONITORINFO {
+            cbSize: std::mem::size_of::<MONITORINFO>() as u32,
+            ..Default::default()
+        };
+        if unsafe { GetMonitorInfoW(hmonitor, &mut info) }.as_bool() {
+            let is_primary = (info.dwFlags & 1) != 0; // MONITORINFOF_PRIMARY = 1
+            if !is_primary {
+                // モニター中央付近（左上から10%内側）を初期位置とする
+                let rect = info.rcMonitor;
+                let w = rect.right - rect.left;
+                let h = rect.bottom - rect.top;
+                let pt = POINT {
+                    x: rect.left + w / 10,
+                    y: rect.top + h / 10,
+                };
+                RESULT.with(|r| r.set(Some(pt)));
+                return BOOL(0); // 最初の非プライマリを見つけたら列挙停止
+            }
+        }
+        BOOL(1) // 継続
+    }
+
+    unsafe {
+        let _ = EnumDisplayMonitors(None, None, Some(monitor_enum_proc), LPARAM(0));
+    }
+
+    RESULT.with(|r| r.get())
+}
+
 /// 非同期デモ実行
 async fn run_demo(tx: CommandSender) {
     // === 0秒: ウィンドウ作成（2つ） ===
@@ -210,34 +264,23 @@ async fn run_demo(tx: CommandSender) {
             "wintf - Taffy Flexbox Demo (Window 1)",
             windows::Win32::Foundation::POINT { x: 100, y: 100 },
         );
-        // Window 2: Window 1の右側に配置（重ならないように十分な間隔を確保）
-        // Window 1の論理幅800px + マージン50px = 850（DIP）
-        // 物理ピクセルでは DPI スケール依存だが、WindowPos は物理ピクセル座標。
-        // 125% DPIでは800DIP=1000物理px なので、1100+100=1200で重ならない。
         create_flexbox_window(
             world,
             "wintf - Taffy Flexbox Demo (Window 2)",
-            windows::Win32::Foundation::POINT { x: 1200, y: 100 },
+            find_non_primary_monitor_origin()
+                .unwrap_or(windows::Win32::Foundation::POINT { x: 1200, y: 100 }),
         );
     }));
 
-    // === 1秒待機 ===
-    async_io::Timer::after(Duration::from_secs(1)).await;
+    // === 2秒待機（DPI確定＋レイアウト安定のため） ===
+    async_io::Timer::after(Duration::from_secs(2)).await;
 
-    // === 1秒: ヒットテスト検証（Window 1のみ） ===
-    println!("[Async] 1s: Running hit test verification");
-    let _ = tx.send(Box::new(test_hit_test_1s));
+    // === 2秒: 全Windowの DPI / GA / レイアウトダンプ ===
+    println!("[Async] 2s: Running DPI layout dump for all windows");
+    let _ = tx.send(Box::new(dump_all_windows_dpi));
 
-    // === 長時間待機（ポインターイベントデモ用） ===
-    println!("[Async] Waiting 60 seconds for pointer event demo...");
-    println!("  [上段] Left-click on RedBox, BlueBox, Right-click on Container");
-    println!("  [下段] Left-click on region boxes to test hit regions");
-    println!("  Hover over region boxes to see region names in debug log");
-    println!("  Verify: Events in Window 1 don't affect Window 2 and vice versa");
-    async_io::Timer::after(Duration::from_secs(60)).await;
-
-    // === 61秒: ウィンドウ終了 ===
-    println!("[Async] 61s: Closing windows");
+    // === 即終了 ===
+    println!("[Async] 2s: Closing windows (quick-exit mode)");
     let _ = tx.send(Box::new(close_window));
 }
 
@@ -883,6 +926,150 @@ fn close_window(world: &mut World) {
     for window in windows {
         println!("[Test] Removing Window entity {:?}", window);
         world.despawn(window);
+    }
+}
+
+/// 全ウィンドウの DPI / GlobalArrangement / Arrangement をダンプ（DPI問題調査用）
+fn dump_all_windows_dpi(world: &mut World) {
+    use wintf::ecs::DPI;
+    use wintf::ecs::layout::Arrangement;
+
+    println!("[DPIDump] ========== DPI Layout Dump for All Windows ==========");
+
+    let mut window_query =
+        world.query_filtered::<(Entity, Option<&bevy_ecs::name::Name>), With<FlexDemoWindow>>();
+    let windows: Vec<(Entity, String)> = window_query
+        .iter(world)
+        .map(|(e, n)| {
+            (
+                e,
+                n.map(|n| n.to_string())
+                    .unwrap_or_else(|| format!("{:?}", e)),
+            )
+        })
+        .collect();
+
+    for (window_entity, window_name) in &windows {
+        let window_entity = *window_entity;
+
+        // DPI
+        let dpi_str = if let Some(dpi) = world.get::<DPI>(window_entity) {
+            format!(
+                "dpi_x={}, dpi_y={}, scale_x={:.3}, scale_y={:.3}",
+                dpi.dpi_x,
+                dpi.dpi_y,
+                dpi.scale_x(),
+                dpi.scale_y()
+            )
+        } else {
+            "DPI: None (no DPI component)".to_string()
+        };
+
+        // WindowPos
+        let wp_str = if let Some(wp) = world.get::<wintf::ecs::window::WindowPos>(window_entity) {
+            format!("pos={:?}, size={:?}", wp.position, wp.size)
+        } else {
+            "WindowPos: None".to_string()
+        };
+
+        // Arrangement (local)
+        let arr_str = if let Some(arr) = world.get::<Arrangement>(window_entity) {
+            format!(
+                "offset=({:.1},{:.1}), scale=({:.3},{:.3}), size=({:.1},{:.1})",
+                arr.offset.x,
+                arr.offset.y,
+                arr.scale.x,
+                arr.scale.y,
+                arr.size.width,
+                arr.size.height
+            )
+        } else {
+            "Arrangement: None".to_string()
+        };
+
+        // GlobalArrangement
+        let ga_str = if let Some(ga) = world.get::<GlobalArrangement>(window_entity) {
+            format!(
+                "bounds=({:.1},{:.1})-({:.1},{:.1}) size=({:.1}x{:.1}) scale=({:.3},{:.3}) transform_M=[{:.3},{:.3},{:.3},{:.3}]",
+                ga.bounds.left,
+                ga.bounds.top,
+                ga.bounds.right,
+                ga.bounds.bottom,
+                ga.bounds.right - ga.bounds.left,
+                ga.bounds.bottom - ga.bounds.top,
+                ga.scale_x(),
+                ga.scale_y(),
+                ga.transform.M11,
+                ga.transform.M22,
+                ga.transform.M31,
+                ga.transform.M32
+            )
+        } else {
+            "GlobalArrangement: None".to_string()
+        };
+
+        println!("[DPIDump] Window: {}", window_name);
+        println!("[DPIDump]   {}", dpi_str);
+        println!("[DPIDump]   WindowPos: {}", wp_str);
+        println!("[DPIDump]   Arrangement: {}", arr_str);
+        println!("[DPIDump]   GA: {}", ga_str);
+
+        // 子エンティティをダンプ
+        dump_children_dpi(world, window_entity, 1);
+    }
+
+    println!("[DPIDump] ========== End of DPI Layout Dump ==========");
+}
+
+/// 子エンティティの GA/Arrangement を再帰的にダンプ
+fn dump_children_dpi(world: &mut World, entity: Entity, depth: usize) {
+    use wintf::ecs::layout::Arrangement;
+
+    let children: Vec<Entity> = world
+        .get::<bevy_ecs::hierarchy::Children>(entity)
+        .map(|c| c.iter().collect())
+        .unwrap_or_default();
+
+    let indent = "  ".repeat(depth + 1);
+    for child in children {
+        let name = world
+            .get::<bevy_ecs::name::Name>(child)
+            .map(|n| n.to_string())
+            .unwrap_or_else(|| format!("{:?}", child));
+        let arr_str = if let Some(arr) = world.get::<Arrangement>(child) {
+            format!(
+                "offset=({:.1},{:.1}) scale=({:.3},{:.3}) size=({:.1}x{:.1})",
+                arr.offset.x,
+                arr.offset.y,
+                arr.scale.x,
+                arr.scale.y,
+                arr.size.width,
+                arr.size.height
+            )
+        } else {
+            "no Arrangement".to_string()
+        };
+        let ga_str = if let Some(ga) = world.get::<GlobalArrangement>(child) {
+            format!(
+                "bounds=({:.1},{:.1})-({:.1},{:.1}) scale=({:.3},{:.3})",
+                ga.bounds.left,
+                ga.bounds.top,
+                ga.bounds.right,
+                ga.bounds.bottom,
+                ga.scale_x(),
+                ga.scale_y()
+            )
+        } else {
+            "no GA".to_string()
+        };
+        println!(
+            "[DPIDump]{}{}: arr=[{}] ga=[{}]",
+            indent, name, arr_str, ga_str
+        );
+        // 再帰（2階層まで）
+        if depth < 2 {
+            dump_children_dpi(world, child, depth + 1);
+        }
     }
 }
 

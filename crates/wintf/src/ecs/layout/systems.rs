@@ -314,18 +314,23 @@ pub fn update_arrangements_system(
     for (entity, computed_layout, arrangement, name, dpi, window) in query.iter_mut() {
         let layout = &computed_layout.0;
 
-        // DPIが存在する場合はスケールファクターを使用、なければデフォルト(1.0, 1.0)
-        let scale = dpi
-            .as_ref()
-            .map_or(LayoutScale::default(), |d| LayoutScale {
-                x: d.scale_x(),
-                y: d.scale_y(),
-            });
+        // LayoutRoot は物理ピクセル座標系で動作する（GetSystemMetrics が物理 px を返すため）。
+        // Taffy は LayoutRoot の物理 px 座標系で計算するため、
+        // ComputedLayout の値はすでに物理ピクセル単位である。
+        // したがって Arrangement.scale は 1.0 で固定し、DPI スケールを二重適用しない。
+        //
+        // DPI情報をデバッグ用に保持するが、レイアウトスケールには使用しない。
+        let scale = LayoutScale::default(); // 常に (1.0, 1.0) — 物理 px 1:1
 
         // デバッグ: DPI変更検知の確認
         if let Some(ref d) = dpi {
             if d.is_changed() {
-                debug!(entity = ?entity, "[update_arrangements] DPI is_changed=true");
+                debug!(
+                    entity = ?entity,
+                    dpi_x = d.dpi_x,
+                    dpi_y = d.dpi_y,
+                    "[update_arrangements] DPI changed (scale NOT applied to layout)"
+                );
             }
         }
 
