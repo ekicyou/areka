@@ -314,13 +314,25 @@ pub fn update_arrangements_system(
     for (entity, computed_layout, arrangement, name, dpi, window) in query.iter_mut() {
         let layout = &computed_layout.0;
 
-        // LayoutRoot は物理ピクセル座標系で動作する（GetSystemMetrics が物理 px を返すため）。
-        // Taffy は LayoutRoot の物理 px 座標系で計算するため、
-        // ComputedLayout の値はすでに物理ピクセル単位である。
-        // したがって Arrangement.scale は 1.0 で固定し、DPI スケールを二重適用しない。
-        //
-        // DPI情報をデバッグ用に保持するが、レイアウトスケールには使用しない。
-        let scale = LayoutScale::default(); // 常に (1.0, 1.0) — 物理 px 1:1
+        // Window エンティティの判定（scale と offset の両方で使用）
+        let is_window = window.is_some();
+
+        // Window エンティティの場合、Arrangement.scale に DPI スケールを設定する。
+        // これにより変換伝播（GlobalArrangement = parent_GA * Arrangement）で
+        // GA.bounds が物理ピクセル単位に正しく変換される。
+        // Window 以外のエンティティは Taffy が論理 px で計算するため (1.0, 1.0) を維持。
+        let scale = if is_window {
+            if let Some(ref d) = dpi {
+                LayoutScale {
+                    x: d.scale_x(),
+                    y: d.scale_y(),
+                }
+            } else {
+                LayoutScale::default() // DPI コンポーネントなし → フォールバック
+            }
+        } else {
+            LayoutScale::default() // 非 Window → (1.0, 1.0)
+        };
 
         // デバッグ: DPI変更検知の確認
         if let Some(ref d) = dpi {
@@ -329,7 +341,10 @@ pub fn update_arrangements_system(
                     entity = ?entity,
                     dpi_x = d.dpi_x,
                     dpi_y = d.dpi_y,
-                    "[update_arrangements] DPI changed (scale NOT applied to layout)"
+                    scale_x = scale.x,
+                    scale_y = scale.y,
+                    is_window = is_window,
+                    "[update_arrangements] DPI changed, scale applied"
                 );
             }
         }
@@ -337,7 +352,6 @@ pub fn update_arrangements_system(
         // Window エンティティの場合、offset は sync_window_arrangement_from_window_pos
         // で管理されるため、taffy の layout.location で上書きしない。
         // サイズとスケールのみ更新する。
-        let is_window = window.is_some();
 
         let new_offset = if is_window {
             // 既存の offset を維持、まだ存在しない場合は (0,0)

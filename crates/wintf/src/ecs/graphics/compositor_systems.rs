@@ -282,9 +282,20 @@ fn render_subtree(
     // Req 2.2: SetTransform
     // ULW 補正: GlobalArrangement はスクリーン座標だが、合成ビットマップは
     // ウィンドウクライアント領域の (0,0) 起点なので、ウィンドウ位置分を差し引く。
-    let mut adjusted_transform = ga.transform;
-    adjusted_transform.M31 -= ctx.window_offset.0;
-    adjusted_transform.M32 -= ctx.window_offset.1;
+    //
+    // 重要: transform.M31/M32 は Arrangement → Matrix3x2 変換（translation * scale）に
+    // よりオフセットにスケールが乗算されるため、DPIスケール ≠ 1.0 の場合
+    // bounds.left/top と一致しない。bounds は scaled_offset = offset * parent_scale で
+    // 正しく物理座標を保持するため、位置には bounds を使用しスケールには
+    // transform.M11/M22 を使用する（bounds-based transform reconstruction）。
+    let adjusted_transform = Matrix3x2 {
+        M11: ga.transform.M11,
+        M12: ga.transform.M12,
+        M21: ga.transform.M21,
+        M22: ga.transform.M22,
+        M31: ga.bounds.left - ctx.window_offset.0,
+        M32: ga.bounds.top - ctx.window_offset.1,
+    };
     unsafe { ctx.dc.SetTransform(&adjusted_transform) };
 
     debug!(
@@ -292,9 +303,11 @@ fn render_subtree(
         has_cmd = cmd_opt.is_some(),
         adj_tx = adjusted_transform.M31,
         adj_ty = adjusted_transform.M32,
+        scale_x = adjusted_transform.M11,
+        scale_y = adjusted_transform.M22,
         ga_bounds = ?(ga.bounds.left, ga.bounds.top, ga.bounds.right, ga.bounds.bottom),
         opacity = local_opacity,
-        "[render_subtree] adjusted transform"
+        "[render_subtree] adjusted transform (bounds-based)"
     );
 
     // Req 2.5: opacity 適用描画

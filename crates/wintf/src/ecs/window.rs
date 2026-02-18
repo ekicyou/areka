@@ -108,16 +108,35 @@ pub fn is_self_initiated() -> bool {
     IS_SELF_INITIATED.get()
 }
 
-/// RAII ガード: スコープ終了時に `IS_SELF_INITIATED` を `false` にリセット。
+/// RAII ガード: スコープ終了時に `IS_SELF_INITIATED` を以前の値に復元する。
 ///
 /// `guarded_set_window_pos()` 内で使用され、正常終了・`?` early return・
-/// パニック時のいずれでもフラグが確実にリセットされることを保証する。
-struct SetWindowPosGuard;
+/// パニック時のいずれでもフラグが確実に復元されることを保証する。
+///
+/// ## ネスト対応
+/// ドラッグ中の DPI 変更などで `guarded_set_window_pos` がネストされた場合、
+/// 内側のガードが Drop されても外側のガードが設定した `true` 値が復元される。
+/// これにより、外側の `SetWindowPos` 完了までの WM_WINDOWPOSCHANGED が
+/// 正しく echo と判定される。
+struct SetWindowPosGuard {
+    previous: bool,
+}
+
+impl SetWindowPosGuard {
+    fn new() -> Self {
+        let previous = IS_SELF_INITIATED.get();
+        IS_SELF_INITIATED.set(true);
+        Self { previous }
+    }
+}
 
 impl Drop for SetWindowPosGuard {
     fn drop(&mut self) {
-        IS_SELF_INITIATED.set(false);
-        trace!(is_initiated = false, "IS_SELF_INITIATED reset by guard");
+        IS_SELF_INITIATED.set(self.previous);
+        trace!(
+            is_initiated = self.previous,
+            "IS_SELF_INITIATED restored by guard"
+        );
     }
 }
 
@@ -146,8 +165,7 @@ pub unsafe fn guarded_set_window_pos(
     cy: i32,
     flags: SET_WINDOW_POS_FLAGS,
 ) -> windows::core::Result<()> {
-    IS_SELF_INITIATED.set(true);
-    let _guard = SetWindowPosGuard; // Drop でリセット保証
+    let _guard = SetWindowPosGuard::new(); // Drop で previous 値を復元
 
     trace!(
         hwnd = format!("0x{:X}", hwnd.0 as usize),

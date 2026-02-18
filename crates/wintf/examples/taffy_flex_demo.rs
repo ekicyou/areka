@@ -255,6 +255,8 @@ fn find_non_primary_monitor_origin() -> Option<windows::Win32::Foundation::POINT
 }
 
 /// 非同期デモ実行
+///
+/// タイムライン: 0s→create → 1s→dump① → 2s→change_layout → 3s→dump② → 4s→close
 async fn run_demo(tx: CommandSender) {
     // === 0秒: ウィンドウ作成（2つ） ===
     info!("[Async] 0s: Creating Flexbox demo windows (multi-window)");
@@ -272,25 +274,32 @@ async fn run_demo(tx: CommandSender) {
         );
     }));
 
-    // === 2秒待機（DPI確定＋レイアウト安定のため） ===
-    async_io::Timer::after(Duration::from_secs(2)).await;
+    // === 1秒待機（DPI確定＋レイアウト安定のため） ===
+    async_io::Timer::after(Duration::from_secs(1)).await;
 
-    // === 2秒: 全Windowの DPI / GA / レイアウトダンプ ===
-    info!("[Async] 2s: Running DPI layout dump for all windows");
+    // === 1秒: dump① — 初期レイアウト状態の DPI/GA/BoxStyle ダンプ ===
+    info!("[Async] 1s: Running DPI layout dump ① (initial)");
     let _ = tx.send(Box::new(dump_all_windows_dpi));
 
-    // === 5秒待機 ===
-    async_io::Timer::after(Duration::from_secs(3)).await;
+    // === 1秒待機 ===
+    async_io::Timer::after(Duration::from_secs(1)).await;
 
-    // === 5秒: レイアウトパラメーター変更 ===
-    info!("[Async] 5s: Changing layout parameters");
+    // === 2秒: レイアウトパラメーター変更 ===
+    info!("[Async] 2s: Changing layout parameters");
     let _ = tx.send(Box::new(change_layout_parameters));
 
-    // === 60秒待機後に終了 ===
-    async_io::Timer::after(Duration::from_secs(55)).await;
+    // === 1秒待機 ===
+    async_io::Timer::after(Duration::from_secs(1)).await;
 
-    // === 60秒: 終了 ===
-    info!("[Async] 60s: Closing windows");
+    // === 3秒: dump② — 変更後レイアウト状態の DPI/GA/BoxStyle ダンプ ===
+    info!("[Async] 3s: Running DPI layout dump ② (after change)");
+    let _ = tx.send(Box::new(dump_all_windows_dpi));
+
+    // === 1秒待機 ===
+    async_io::Timer::after(Duration::from_secs(1)).await;
+
+    // === 4秒: 終了 ===
+    info!("[Async] 4s: Closing windows");
     let _ = tx.send(Box::new(close_window));
 }
 
@@ -939,10 +948,10 @@ fn close_window(world: &mut World) {
     }
 }
 
-/// 全ウィンドウの DPI / GlobalArrangement / Arrangement をダンプ（DPI問題調査用）
+/// 全ウィンドウの DPI / GlobalArrangement / Arrangement / BoxStyle をダンプ
 fn dump_all_windows_dpi(world: &mut World) {
     use wintf::ecs::DPI;
-    use wintf::ecs::layout::{Arrangement, BoxStyle};
+    use wintf::ecs::layout::Arrangement;
 
     info!("[DPIDump] ========== DPI Layout Dump for All Windows ==========");
 
@@ -963,82 +972,86 @@ fn dump_all_windows_dpi(world: &mut World) {
         let window_entity = *window_entity;
 
         // DPI
-        let dpi_str = if let Some(dpi) = world.get::<DPI>(window_entity) {
-            format!(
-                "dpi_x={}, dpi_y={}, scale_x={:.3}, scale_y={:.3}",
-                dpi.dpi_x,
-                dpi.dpi_y,
-                dpi.scale_x(),
-                dpi.scale_y()
-            )
+        if let Some(dpi) = world.get::<DPI>(window_entity) {
+            info!(
+                window = %window_name,
+                dpi_x = dpi.dpi_x,
+                dpi_y = dpi.dpi_y,
+                scale_x = format_args!("{:.3}", dpi.scale_x()),
+                scale_y = format_args!("{:.3}", dpi.scale_y()),
+                "[DPIDump] DPI"
+            );
         } else {
-            "DPI: None (no DPI component)".to_string()
-        };
+            info!(window = %window_name, "[DPIDump] DPI: None");
+        }
+
+        // BoxStyle (論理 px)
+        if let Some(bs) = world.get::<BoxStyle>(window_entity) {
+            let (w, h) = match &bs.size {
+                Some(size) => {
+                    let w = size.width.map(|d| match d {
+                        Dimension::Px(v) => v,
+                        _ => 0.0,
+                    }).unwrap_or(0.0);
+                    let h = size.height.map(|d| match d {
+                        Dimension::Px(v) => v,
+                        _ => 0.0,
+                    }).unwrap_or(0.0);
+                    (w, h)
+                }
+                None => (0.0, 0.0),
+            };
+            info!(
+                window = %window_name,
+                logical_width = format_args!("{:.1}", w),
+                logical_height = format_args!("{:.1}", h),
+                "[DPIDump] BoxStyle.size (logical px)"
+            );
+        }
 
         // WindowPos
-        let wp_str = if let Some(wp) = world.get::<wintf::ecs::window::WindowPos>(window_entity) {
-            format!("pos={:?}, size={:?}", wp.position, wp.size)
-        } else {
-            "WindowPos: None".to_string()
-        };
+        if let Some(wp) = world.get::<wintf::ecs::window::WindowPos>(window_entity) {
+            info!(
+                window = %window_name,
+                pos = ?wp.position,
+                size = ?wp.size,
+                "[DPIDump] WindowPos"
+            );
+        }
 
         // Arrangement (local)
-        let arr_str = if let Some(arr) = world.get::<Arrangement>(window_entity) {
-            format!(
-                "offset=({:.1},{:.1}), scale=({:.3},{:.3}), size=({:.1},{:.1})",
-                arr.offset.x,
-                arr.offset.y,
-                arr.scale.x,
-                arr.scale.y,
-                arr.size.width,
-                arr.size.height
-            )
-        } else {
-            "Arrangement: None".to_string()
-        };
-
-        // BoxStyle（論理 px サイズ確認用）
-        let bs_str = if let Some(bs) = world.get::<BoxStyle>(window_entity) {
-            if let Some(size) = bs.size {
-                format!(
-                    "size=({:?}x{:?})",
-                    size.width,
-                    size.height
-                )
-            } else {
-                "size=None".to_string()
-            }
-        } else {
-            "BoxStyle: None".to_string()
-        };
+        if let Some(arr) = world.get::<Arrangement>(window_entity) {
+            info!(
+                window = %window_name,
+                offset_x = format_args!("{:.1}", arr.offset.x),
+                offset_y = format_args!("{:.1}", arr.offset.y),
+                scale_x = format_args!("{:.3}", arr.scale.x),
+                scale_y = format_args!("{:.3}", arr.scale.y),
+                size_w = format_args!("{:.1}", arr.size.width),
+                size_h = format_args!("{:.1}", arr.size.height),
+                "[DPIDump] Arrangement"
+            );
+        }
 
         // GlobalArrangement
-        let ga_str = if let Some(ga) = world.get::<GlobalArrangement>(window_entity) {
-            format!(
-                "bounds=({:.1},{:.1})-({:.1},{:.1}) size=({:.1}x{:.1}) scale=({:.3},{:.3}) transform_M=[{:.3},{:.3},{:.3},{:.3}]",
-                ga.bounds.left,
-                ga.bounds.top,
-                ga.bounds.right,
-                ga.bounds.bottom,
-                ga.bounds.right - ga.bounds.left,
-                ga.bounds.bottom - ga.bounds.top,
-                ga.scale_x(),
-                ga.scale_y(),
-                ga.transform.M11,
-                ga.transform.M22,
-                ga.transform.M31,
-                ga.transform.M32
-            )
-        } else {
-            "GlobalArrangement: None".to_string()
-        };
-
-        info!(window = %window_name, "[DPIDump] Window");
-        info!("[DPIDump]   {}", dpi_str);
-        info!("[DPIDump]   WindowPos: {}", wp_str);
-        info!("[DPIDump]   Arrangement: {}", arr_str);
-        info!("[DPIDump]   BoxStyle(logical px): {}", bs_str);
-        info!("[DPIDump]   GA(physical px): {}", ga_str);
+        if let Some(ga) = world.get::<GlobalArrangement>(window_entity) {
+            let ga_width = ga.bounds.right - ga.bounds.left;
+            let ga_height = ga.bounds.bottom - ga.bounds.top;
+            info!(
+                window = %window_name,
+                bounds_left = format_args!("{:.1}", ga.bounds.left),
+                bounds_top = format_args!("{:.1}", ga.bounds.top),
+                bounds_right = format_args!("{:.1}", ga.bounds.right),
+                bounds_bottom = format_args!("{:.1}", ga.bounds.bottom),
+                physical_width = format_args!("{:.1}", ga_width),
+                physical_height = format_args!("{:.1}", ga_height),
+                scale_x = format_args!("{:.3}", ga.scale_x()),
+                scale_y = format_args!("{:.3}", ga.scale_y()),
+                transform_M11 = format_args!("{:.3}", ga.transform.M11),
+                transform_M22 = format_args!("{:.3}", ga.transform.M22),
+                "[DPIDump] GlobalArrangement"
+            );
+        }
 
         // 子エンティティをダンプ
         dump_children_dpi(world, window_entity, 1);
@@ -1047,9 +1060,9 @@ fn dump_all_windows_dpi(world: &mut World) {
     info!("[DPIDump] ========== End of DPI Layout Dump ==========");
 }
 
-/// 子エンティティの GA/Arrangement を再帰的にダンプ
+/// 子エンティティの GA/Arrangement/BoxStyle を再帰的にダンプ
 fn dump_children_dpi(world: &mut World, entity: Entity, depth: usize) {
-    use wintf::ecs::layout::{Arrangement, BoxStyle};
+    use wintf::ecs::layout::Arrangement;
 
     let children: Vec<Entity> = world
         .get::<bevy_ecs::hierarchy::Children>(entity)
@@ -1062,6 +1075,28 @@ fn dump_children_dpi(world: &mut World, entity: Entity, depth: usize) {
             .get::<bevy_ecs::name::Name>(child)
             .map(|n| n.to_string())
             .unwrap_or_else(|| format!("{:?}", child));
+
+        // BoxStyle (論理 px)
+        let bs_str = if let Some(bs) = world.get::<BoxStyle>(child) {
+            let (w, h) = match &bs.size {
+                Some(size) => {
+                    let w = size.width.map(|d| match d {
+                        Dimension::Px(v) => v,
+                        _ => 0.0,
+                    }).unwrap_or(0.0);
+                    let h = size.height.map(|d| match d {
+                        Dimension::Px(v) => v,
+                        _ => 0.0,
+                    }).unwrap_or(0.0);
+                    (w, h)
+                }
+                None => (0.0, 0.0),
+            };
+            format!("box_style=({:.1}x{:.1})", w, h)
+        } else {
+            "no BoxStyle".to_string()
+        };
+
         let arr_str = if let Some(arr) = world.get::<Arrangement>(child) {
             format!(
                 "offset=({:.1},{:.1}) scale=({:.3},{:.3}) size=({:.1}x{:.1})",
@@ -1088,19 +1123,9 @@ fn dump_children_dpi(world: &mut World, entity: Entity, depth: usize) {
         } else {
             "no GA".to_string()
         };
-        // BoxStyle（論理 px）
-        let bs_str = if let Some(bs) = world.get::<BoxStyle>(child) {
-            if let Some(size) = bs.size {
-                format!("BoxStyle=({:?}x{:?})", size.width, size.height)
-            } else {
-                "BoxStyle=None".to_string()
-            }
-        } else {
-            String::new()
-        };
         info!(
-            "[DPIDump]{}{}: arr=[{}] ga=[{}] {}",
-            indent, name, arr_str, ga_str, bs_str
+            "[DPIDump]{}{}: {} arr=[{}] ga=[{}]",
+            indent, name, bs_str, arr_str, ga_str
         );
         // 再帰（2階層まで）
         if depth < 2 {
