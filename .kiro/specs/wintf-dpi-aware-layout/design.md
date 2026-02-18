@@ -120,35 +120,126 @@ sequenceDiagram
 論理サイズ保存: BoxStyle.size = physical / new_DPI = (logical × old_DPI) × (new_DPI / old_DPI) / new_DPI = logical ✓
 ```
 
-### ドラッグ中の WM_DPICHANGED 安全性解析
+### ドラッグ中の WM_DPICHANGED 安全性解析（深掘り版）
 
 wintf のドラッグは **OS モーダルループ（`WM_NCLBUTTONDOWN` → `DefWindowProc`）を使わず**、`WM_MOUSEMOVE` ごとにアプリが `guarded_set_window_pos(SWP_NOSIZE)` を直接呼ぶアプリ制御ドラッグである。
-これにより、ドラッグ中に OS から `WM_DPICHANGED` が届いた場合のシーケンスは以下のとおり：
+
+#### 前提: ウィンドウ特性
+
+- **スタイル**: `WS_POPUP | WS_VISIBLE` + `WS_EX_LAYERED`（window.rs L721-724）
+- **フレーム**: タイトルバーなし、ボーダーなし → `AdjustWindowRectExForDpi` は恒等変換
+- **座標変換**: `window_to_client_coords` ≈ `client_to_window_coords` ≈ identity
+- **含意**: `GetDpiForWindow` のタイミング問題（WM_DPICHANGED中にold/new DPIのどちらを返すか）が座標変換に影響しない
+
+#### 前提: ドラッグ位置計算
 
 ```
-WM_MOUSEMOVE（モニター境界越え）
-  └─ deferred_set_window_pos = (hwnd, new_x, new_y)
-       └─ guarded_set_window_pos(new_x, new_y, 0, 0, SWP_NOSIZE)
-            └─ WM_WINDOWPOSCHANGED [is_echo=true, dpi_context=None → bypass]
-
-↓ OS が DPI 変更を検知
-
-WM_DPICHANGED
-  └─ DpiChangeContext::set(new_dpi)
-       └─ guarded_set_window_pos(suggested_rect, w, h, SWP_NOZORDER)  ← 修正後
-            └─ WM_WINDOWPOSCHANGED [is_echo=true, dpi_context=Some → DPI更新+BoxStyle更新]
-
-↓ ドラッグ継続
-
-次の WM_MOUSEMOVE
-  └─ new_x = initial_window_pos.x + (current_pos.x - start_pos.x)  ← 自己修正
+screen_x = client_x + WindowPos.position.x  (= mouse の実スクリーン座標)
+new_pos  = initial_window_pos + (current_mouse_screen - start_mouse_screen)
 ```
 
-**位置の一時ずれ**：`WM_DPICHANGED` の `SetWindowPos` が `suggested_rect` 位置にウィンドウを移動するが、`initial_window_pos`（ドラッグ開始時座標）は更新されないため次の `WM_MOUSEMOVE` で 1 フレーム分の位置ずれが発生する。ただし次フレームの `new_x` 計算が正しい絶対座標を再算出して上書きするため、**1 フレームで自己修正される**。
+- `initial_window_pos`: ドラッグ開始時に固定、以降不変（WINDOW座標）
+- 結果: ウィンドウ位置はマウスの絶対座標のみに依存し、現在のウィンドウ位置には非依存
 
-**サイズ変更の安全性**：`SWP_NOSIZE` 除去によりサイズが `suggested_rect` の値に 1 回変わるが、以降のドラッグ中 `SetWindowPos` は引き続き `SWP_NOSIZE` のままであるため、サイズはその後維持される。`WM_WINDOWPOSCHANGED` で `BoxStyle.size = physical / new_DPI` が正しく算出されるため座標系の整合性も保たれる。
+#### Windows API イベント発火順序
 
-**結論**：ドラッグ中の `WM_DPICHANGED` に対して `SWP_NOSIZE` を除去しても、ドラッグは 1 フレーム後に正常に継続する。追加のドラッグ中検知・分岐ロジックは不要。
+ドラッグの `guarded_set_window_pos(P_drag, SWP_NOSIZE)` が DPI境界を越えた場合、
+Windows API の仕様上、以下の3つの順序が考えられる:
+
+##### Case A: WM_WINDOWPOSCHANGED → WM_DPICHANGED（最有力）
+
+```
+outer guarded_set_window_pos(P_drag, SWP_NOSIZE):
+  IS_SELF_INITIATED = true, _guard1 作成
+  Win32 SetWindowPos:
+    ① WM_WINDOWPOSCHANGED(P_drag):
+       is_echo=true, DpiCtx=None → bypass (Changed なし)
+       try_tick_on_vsync → (変更なし、ほぼ空振り)
+       flush_window_pos_commands → no-op
+    ② OS が DPI 変化を検知
+    ③ WM_DPICHANGED(new_dpi, suggested_rect):
+       DpiChangeContext::set(new_dpi)
+       inner guarded_set_window_pos(P_suggested):
+         IS_SELF_INITIATED = true (上書き), _guard2 作成
+         Win32 SetWindowPos:
+           ④ WM_WINDOWPOSCHANGED(P_suggested):
+              is_echo=true, DpiCtx=Some → NOT bypass
+              DPI コンポーネント更新: *dpi_comp = new_dpi ✓
+              WindowPos 更新 with Changed<WindowPos> ✓
+              try_tick_on_vsync:
+                IS_TICK_FLUSH_IN_PROGRESS = false → 実行可能
+                tick: apply_window_pos_changes → SetWindowPosCommand enqueue
+                flush: guarded_set_window_pos(P_suggested') [冗長、同値]
+                  → WM_WINDOWPOSCHANGED: is_echo=true, bypass
+                  → _guard3 drops: IS_SELF_INITIATED = false ← ★
+                IS_TICK_FLUSH_IN_PROGRESS = false に復帰
+         _guard2 drops: IS_SELF_INITIATED = false (already false ← ★)
+    ③ returns
+  Win32 SetWindowPos returns
+  _guard1 drops: IS_SELF_INITIATED = false (already false)
+```
+
+##### Case B: SetWindowPos 完了後 → WM_DPICHANGED（メッセージキュー経由）
+
+```
+outer guarded_set_window_pos(P_drag, SWP_NOSIZE):
+  IS_SELF_INITIATED = true
+  Win32 SetWindowPos:
+    WM_WINDOWPOSCHANGED(P_drag): bypass
+  SetWindowPos returns
+  _guard1 drops: IS_SELF_INITIATED = false
+(メッセージポンプ)
+WM_DPICHANGED:               ← ネストなし、IS_SELF_INITIATED = false
+  guarded_set_window_pos(P_suggested):
+    WM_WINDOWPOSCHANGED: DPI更新 ✓, WindowPos Changed ✓
+  _guard drops: IS_SELF_INITIATED = false ← 正常
+```
+
+##### Case C: WM_DPICHANGED → WM_WINDOWPOSCHANGED（DPI検知が先）
+
+```
+outer guarded_set_window_pos(P_drag, SWP_NOSIZE):
+  IS_SELF_INITIATED = true, _guard1 作成
+  Win32 SetWindowPos:
+    ① WM_DPICHANGED:
+       inner guarded_set_window_pos(P_suggested):
+         IS_SELF_INITIATED = true, _guard2 作成
+         WM_WINDOWPOSCHANGED(P_suggested): DPI更新 ✓, Changed ✓, tick+flush
+         _guard2 drops: IS_SELF_INITIATED = false ← ★
+    ② WM_WINDOWPOSCHANGED(P_drag):
+       is_echo = is_self_initiated() → FALSE (★で解除済み)
+       DpiCtx = None (①で消費済み)
+       → 外部由来と誤認! WindowPos をドラッグ位置で上書き (Changed)
+       → tick → apply_window_pos_changes → SetWindowPos(P_drag)
+  _guard1 drops
+```
+
+#### 発見事項
+
+| # | 発見 | 重大度 | 説明 |
+|---|------|--------|------|
+| **F1** | `SetWindowPosGuard` がネスト非対応 | **Medium** | `Drop` で無条件に `IS_SELF_INITIATED = false`。保存/復元方式に要修正。Case A/C で内側 guard が外側の true を reset する |
+| **F2** | `WS_POPUP` → フレーム補正ゼロ | Low (朗報) | `GetDpiForWindow` タイミング問題が無害化。`AdjustWindowRectExForDpi` は恒等変換 |
+| **F3** | ドラッグ中の位置ジャンプ | **Low** | suggested→drag 位置復帰は次 `WM_MOUSEMOVE`（~1-8ms）で自動修正。WS_POPUP + ULW なので flicker は不可視に近い |
+| **F4** | 3 Case 全てで機能的に収束 | Info | 経路は異なるが DPI 更新 + 位置復帰は全ケースで達成される |
+| **F5** | `IS_TICK_FLUSH_IN_PROGRESS` 再入防止が正常動作 | Info | 再帰 tick 無限ループを防止。`try_tick_on_vsync` の guard は tick+flush スコープ全体を保護 |
+| **F6** | Case C で `is_echo` 誤判定 | **Medium** | 外側 WM_WINDOWPOSCHANGED が外部由来と誤認。余分な `SetWindowPosCommand` 発行。ただし WS_POPUP（identity 変換） + 同値ガードで実害薄 |
+
+#### 1フレーム遅延の安全性評価
+
+**結論: この WS_POPUP アプリケーションでは致命的ではない。** 理由:
+
+1. **フレーム補正ゼロ**: タイトルバー/ボーダーなし → DPI 差による座標変換誤差なし
+2. **位置復帰が高速**: ドラッグ中は WM_MOUSEMOVE が高頻度（125-1000Hz）、1 メッセージ間隔で復帰
+3. **DPI 更新は全 Case 共通**: DpiChangeContext 経由で確実に新 DPI が反映される
+4. **サイズ変更は永続**: SWP_NOSIZE 除去後、`suggested_rect` のサイズはドラッグの次フレームでも保持される（ドラッグは `SWP_NOSIZE` で位置のみ変更）
+
+#### 設計への推奨事項
+
+1. **F1 修正（実装タスクに追加）**: `SetWindowPosGuard` を save/restore 方式に変更。`previous: bool` フィールドを追加し、Drop で `IS_SELF_INITIATED.set(self.previous)` とする
+2. **SWP_NOSIZE 除去**: 設計通り進行可能。WS_POPUP 特性によりフレーム関連の副作用なし
+3. **ドラッグ中 WM_DPICHANGED 特別処理は不要**: 位置自動復帰が成立、サイズ変更は正しく適用される
+4. **イベント順序の不確定性を受容**: 3 Case いずれでも安全に収束するため、特定順序を前提にしない設計で OK
 
 ---
 
