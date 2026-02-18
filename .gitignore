@@ -2,3 +2,6 @@ target
 Cargo.lock
 tmpclaude*
 .vs/
+# デバッグ用一時ログファイル
+*_test.txt
+*_dump.txt
