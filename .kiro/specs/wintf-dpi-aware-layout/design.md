@@ -120,6 +120,36 @@ sequenceDiagram
 論理サイズ保存: BoxStyle.size = physical / new_DPI = (logical × old_DPI) × (new_DPI / old_DPI) / new_DPI = logical ✓
 ```
 
+### ドラッグ中の WM_DPICHANGED 安全性解析
+
+wintf のドラッグは **OS モーダルループ（`WM_NCLBUTTONDOWN` → `DefWindowProc`）を使わず**、`WM_MOUSEMOVE` ごとにアプリが `guarded_set_window_pos(SWP_NOSIZE)` を直接呼ぶアプリ制御ドラッグである。
+これにより、ドラッグ中に OS から `WM_DPICHANGED` が届いた場合のシーケンスは以下のとおり：
+
+```
+WM_MOUSEMOVE（モニター境界越え）
+  └─ deferred_set_window_pos = (hwnd, new_x, new_y)
+       └─ guarded_set_window_pos(new_x, new_y, 0, 0, SWP_NOSIZE)
+            └─ WM_WINDOWPOSCHANGED [is_echo=true, dpi_context=None → bypass]
+
+↓ OS が DPI 変更を検知
+
+WM_DPICHANGED
+  └─ DpiChangeContext::set(new_dpi)
+       └─ guarded_set_window_pos(suggested_rect, w, h, SWP_NOZORDER)  ← 修正後
+            └─ WM_WINDOWPOSCHANGED [is_echo=true, dpi_context=Some → DPI更新+BoxStyle更新]
+
+↓ ドラッグ継続
+
+次の WM_MOUSEMOVE
+  └─ new_x = initial_window_pos.x + (current_pos.x - start_pos.x)  ← 自己修正
+```
+
+**位置の一時ずれ**：`WM_DPICHANGED` の `SetWindowPos` が `suggested_rect` 位置にウィンドウを移動するが、`initial_window_pos`（ドラッグ開始時座標）は更新されないため次の `WM_MOUSEMOVE` で 1 フレーム分の位置ずれが発生する。ただし次フレームの `new_x` 計算が正しい絶対座標を再算出して上書きするため、**1 フレームで自己修正される**。
+
+**サイズ変更の安全性**：`SWP_NOSIZE` 除去によりサイズが `suggested_rect` の値に 1 回変わるが、以降のドラッグ中 `SetWindowPos` は引き続き `SWP_NOSIZE` のままであるため、サイズはその後維持される。`WM_WINDOWPOSCHANGED` で `BoxStyle.size = physical / new_DPI` が正しく算出されるため座標系の整合性も保たれる。
+
+**結論**：ドラッグ中の `WM_DPICHANGED` に対して `SWP_NOSIZE` を除去しても、ドラッグは 1 フレーム後に正常に継続する。追加のドラッグ中検知・分岐ロジックは不要。
+
 ---
 
 ## Requirements Traceability
