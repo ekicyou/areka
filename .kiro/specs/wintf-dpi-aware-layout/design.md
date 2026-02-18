@@ -537,17 +537,16 @@ guarded_set_window_pos(hwnd, None, x, y, 0, 0,
 
 | Field | Detail |
 |-------|--------|
-| Intent | ウィンドウサイズを 200% DPI モニターに収まるサイズに縮小 |
+| Intent | ウィンドウサイズが 200% DPI モニターに収まることを確認（変更不要） |
 | Requirements | 5.1, 5.2 |
 
 **Responsibilities & Constraints**
-- Window の BoxStyle.size を 200% DPI モニター（論理 720×450）に `find_non_primary_monitor_origin` の配置マージンを考慮して収まるサイズに設定
-- 子要素（RegionTest 子: 140×150）をウィンドウ内に収まるサイズに縮小
-- Rect/Polygon HitRegionMap 座標を縮小後のボックスサイズに合わせて更新（ColorMap は自動スケーリングのため不要）
-- ClickThrough 子要素（150×100）はウィンドウサイズとの比率で必要に応じて調整
+- 現行の BoxStyle.size = 800×700 論理 px は、200% DPI モニター（論理 1440×900）に十分収まるため **サイズ変更不要**
+- 子要素（RegionTest 子: 140×150、ClickThrough 子: 150×100）もウィンドウ内に収まっており変更不要
+- 環境情報の誤り（物理 1440×900 → 実際は 2880×1800）が「ウィンドウが大きすぎる」という誤認の原因だった
 
 **Implementation Notes**
-- 具体的なサイズ値は実装時に決定（REQ-5 は「収まること」が本質）
+- REQ-5 は現行サイズで充足。実装タスクではサイズ変更ではなく、DPI スケーリング適用後のログ確認のみ
 - gap-analysis.md §3.2 の Taffy レイアウト計算を参考に、子要素間の余白・grow/shrink バランスを検証すること
 
 #### taffy_flex_demo run_demo
@@ -601,7 +600,7 @@ guarded_set_window_pos(hwnd, None, x, y, 0, 0,
 2. **200% DPI モニターでの GA.bounds 検証**: `BoxStyle.size × 2.0 = GA.bounds size` をログで確認
 3. **DPI 変更ラウンドトリップ**: ウィンドウをモニター間でドラッグし、論理サイズが保存されることを確認
 4. **デモ自動終了**: `RUST_LOG=info cargo run --example taffy_flex_demo` で手作業なしに完了すること
-5. **ヒットテスト正常動作**: RegionTest 子要素のクリック検知が縮小後も正しく動作すること
+5. **ヒットテスト正常動作**: RegionTest 子要素のクリック検知が DPI スケーリング適用後も正しく動作すること
 
 ### Performance
 - レイアウト計算: 既存の Taffy 計算に DPI スケール設定が1行追加されるのみ。パフォーマンス影響なし。

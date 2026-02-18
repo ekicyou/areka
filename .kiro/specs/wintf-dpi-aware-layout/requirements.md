@@ -7,8 +7,8 @@ wintf の DPI 対応レイアウトシステムを修正する仕様である。
 ### 背景
 
 #### 環境情報
-- 左モニター (DISPLAY1, 非プライマリ): 200% DPI = 物理 1440×900px = 論理 720×450px
-- 右モニター (DISPLAY2, プライマリ): 125% DPI = 物理 3072×1728px = 論理 2457×1382px
+- 左モニター (DISPLAY1, 非プライマリ): 200% DPI = 物理 2880×1800px = 論理 1440×900px
+- 右モニター (DISPLAY2, プライマリ, 4K): 125% DPI = 物理 3840×2160px = 論理 3072×1728px
 - プロセス DPI Awareness: `DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2`
 
 #### バグの根本原因
@@ -37,8 +37,8 @@ Window:     scale=(DPI_scale, DPI_scale)
 - `BoxStyle.size = physical_width / DPI` (論理 px) だった
 - `Arrangement.scale = DPI.scale` (2.0 など) だった
 - `GA.bounds.width = 800 (logical) × 2.0 = 1600 (physical)` → 正しい計算
-- **しかし**: デモウィンドウが `BoxStyle 800×700 論理px` で 200% DPI モニターが `720×450 論理px` しかない → ウィンドウがモニターより大きい
-- これを「ウィンドウが1600×1400pxに膨れた」と誤認して、原因を二重スケーリングと判断したが、実際は**デモのウィンドウサイズが大きすぎた**のが問題だった
+- **しかし**: デモウィンドウが `BoxStyle 800×700 論理px` で、当初は 200% DPI モニターの論理サイズを 720×450 と誤認しウィンドウがモニターより大きいと判断していた。実際の左モニターは物理 2880×1800 = 論理 1440×900 であり、800×700 は十分に収まる
+- これを「ウィンドウが1600×1400pxに膨れた」と誤認して、原因を二重スケーリングと判断したが、実際は **DPI スケール未適用による物理 px 直接描画**が問題だった
 
 ---
 
@@ -83,7 +83,7 @@ Window:     scale=(DPI_scale, DPI_scale)
 **Objective:** 開発者として、`taffy_flex_demo.rs` のウィンドウサイズを 200% DPI モニターに収まるサイズに変更したい。なぜなら、マルチモニター環境でのテスト検証をどのモニターでも行えるようにするためである。
 
 #### Acceptance Criteria
-1. The `taffy_flex_demo` shall ウィンドウの `BoxStyle.size` を、200% DPI モニター（論理サイズ 720×450 px）に `find_non_primary_monitor_origin` が返す初期配置位置を考慮しても収まるサイズに設定する（具体的なサイズ値は実装時に決定する）
+1. The `taffy_flex_demo` shall ウィンドウの `BoxStyle.size` が、200% DPI モニター（論理サイズ 1440×900 px）に `find_non_primary_monitor_origin` が返す初期配置位置を考慮しても収まることを確認する（現行の 800×700 論理 px は条件を満たすため変更不要）
 2. The `taffy_flex_demo` shall 全ての子要素がウィンドウ内に収まり、レイアウトが崩れない状態を維持する
 
 ### Requirement 6: デモ検証フローの自動化
