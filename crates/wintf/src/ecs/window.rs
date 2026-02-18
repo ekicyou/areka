@@ -5,7 +5,7 @@ use bevy_ecs::world::DeferredWorld;
 use std::cell::{Cell, RefCell};
 use tracing::{debug, trace, warn};
 use windows::Win32::Foundation::*;
-use windows::Win32::UI::HiDpi::{AdjustWindowRectExForDpi, GetDpiForWindow};
+use windows::Win32::UI::HiDpi::{AdjustWindowRectExForDpi, GetDpiForSystem, GetDpiForWindow};
 use windows::Win32::UI::WindowsAndMessaging::*;
 
 use crate::api::*;
@@ -512,22 +512,32 @@ fn on_window_handle_add(
             "WindowHandle added"
         );
 
-        // DPIコンポーネントを挿入
+        // DPIコンポーネントを更新（on_window_addでシステムDPIで事前挿入済み）
+        // GetDpiForWindow()の実際値が事前値と異なる場合のみ更新（マルチモニタ対応）
         let dpi_value = unsafe { GetDpiForWindow(hwnd) };
         let dpi_component = if dpi_value > 0 {
             DPI::from_dpi(dpi_value as u16, dpi_value as u16)
         } else {
             DPI::default() // 取得失敗時はデフォルト96
         };
-        debug!(
-            entity = ?entity,
-            dpi_x = dpi_component.dpi_x,
-            dpi_y = dpi_component.dpi_y,
-            scale_x = format_args!("{:.2}", dpi_component.scale_x()),
-            scale_y = format_args!("{:.2}", dpi_component.scale_y()),
-            "DPI component inserted"
-        );
-        world.commands().entity(entity).insert(dpi_component);
+        let existing_dpi = world.get::<DPI>(entity).copied();
+        if existing_dpi != Some(dpi_component) {
+            debug!(
+                entity = ?entity,
+                old_dpi = ?existing_dpi,
+                new_dpi_x = dpi_component.dpi_x,
+                new_dpi_y = dpi_component.dpi_y,
+                "DPI updated from GetDpiForWindow (differs from system DPI)"
+            );
+            world.commands().entity(entity).insert(dpi_component);
+        } else {
+            debug!(
+                entity = ?entity,
+                dpi_x = dpi_component.dpi_x,
+                dpi_y = dpi_component.dpi_y,
+                "DPI unchanged (matches pre-initialized system DPI)"
+            );
+        }
 
         // Note: WindowPosは on_window_add で挿入済み（CreateWindow前に必要なため）
 
@@ -704,7 +714,11 @@ pub struct WindowStyle {
 impl Default for WindowStyle {
     fn default() -> Self {
         Self {
-            style: WS_OVERLAPPEDWINDOW | WS_VISIBLE,
+            // ULW（UpdateLayeredWindow）透過ウィンドウはフレームを持たないため
+            // WS_POPUP を使用する。WS_OVERLAPPEDWINDOW だと AdjustWindowRectExForDpi が
+            // タイトルバー・ボーダー分（約17px）を client↔window 変換時に加減算し、
+            // ドラッグのたびにサイズが縮小するバグを引き起こす。
+            style: WS_POPUP | WS_VISIBLE,
             // Phase 3: WS_EX_NOREDIRECTIONBITMAP → WS_EX_LAYERED
             // ULW 方式による alpha 透過描画に必要
             ex_style: WS_EX_LAYERED,
@@ -1047,7 +1061,7 @@ impl WindowPos {
         &self,
         style: WINDOW_STYLE,
         ex_style: WINDOW_EX_STYLE,
-        _dpi: u32,
+        dpi: u32,
     ) -> (i32, i32, i32, i32) {
         let position = self.position.unwrap_or(POINT {
             x: CW_USEDEFAULT,
@@ -1063,10 +1077,11 @@ impl WindowPos {
             return (position.x, position.y, size.cx, size.cy);
         }
 
-        // WindowPos.size は既に物理ピクセル単位（DPIスケール適用済み）のため、
-        // AdjustWindowRectExForDpi には DPI=96 (100%) を渡してウィンドウ枠のみを追加する
-        // これにより二重のDPIスケーリングを回避
-        let dpi = 96;
+        // 実際のシステムDPIを使用してウィンドウ枠サイズを計算する。
+        // DPI=96 固定だと高DPI環境でフレームサイズが不一致となり、
+        // CreateWindowExW 後の実クライアント領域サイズが意図値とずれる。
+        // 0が渡された場合はフォールバックとして96を使用する。
+        let dpi = if dpi == 0 { 96 } else { dpi };
 
         // クライアント領域からRECT構造体を構築
         let mut rect = RECT {
@@ -1149,6 +1164,26 @@ fn on_window_add(mut world: DeferredWorld, context: HookContext) {
         debug!(
             entity = ?entity,
             "WindowPos component inserted in on_window_add"
+        );
+    }
+
+    // DPI事前セット: CreateWindowExW前にシステムDPIで初期化
+    // これにより、最初のレイアウト計算からDPIスケーリングが有効になり、
+    // Frame 2でのサイズジャンプ（800x700 → 1000x875等）を防ぐ。
+    // ウィンドウ作成後にon_window_handle_addで実際のGetDpiForWindow()値に更新される。
+    if world.get::<DPI>(entity).is_none() {
+        let system_dpi = unsafe { GetDpiForSystem() } as u16;
+        let dpi = if system_dpi > 0 {
+            DPI::from_dpi(system_dpi, system_dpi)
+        } else {
+            DPI::default()
+        };
+        world.commands().entity(entity).insert(dpi);
+        debug!(
+            entity = ?entity,
+            dpi_x = dpi.dpi_x,
+            dpi_y = dpi.dpi_y,
+            "DPI pre-initialized with system DPI in on_window_add"
         );
     }
 }

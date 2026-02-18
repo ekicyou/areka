@@ -8,6 +8,8 @@ use crate::com::ulw::{present_layered_window, transfer_to_hbitmap};
 use crate::ecs::graphics::{GraphicsCommandList, GraphicsCore, HasGraphicsResources, Visual};
 use crate::ecs::layout::GlobalArrangement;
 use crate::ecs::window::{WindowHandle, WindowPos};
+// Note: WindowHandle は composite_render_system では不要（window_offset に GlobalArrangement を使用）
+// だが ulw_present_system で使用するため import は維持
 use bevy_ecs::hierarchy::Children;
 use bevy_ecs::name::Name;
 use bevy_ecs::prelude::*;
@@ -43,6 +45,7 @@ pub fn compositor_init_system(
         Or<(
             Without<WindowD3D11Compositor>,
             Changed<HasGraphicsResources>,
+            Changed<WindowPos>,
         )>,
     >,
 ) {
@@ -284,6 +287,16 @@ fn render_subtree(
     adjusted_transform.M32 -= ctx.window_offset.1;
     unsafe { ctx.dc.SetTransform(&adjusted_transform) };
 
+    debug!(
+        entity = ?entity,
+        has_cmd = cmd_opt.is_some(),
+        adj_tx = adjusted_transform.M31,
+        adj_ty = adjusted_transform.M32,
+        ga_bounds = ?(ga.bounds.left, ga.bounds.top, ga.bounds.right, ga.bounds.bottom),
+        opacity = local_opacity,
+        "[render_subtree] adjusted transform"
+    );
+
     // Req 2.5: opacity 適用描画
     if let Some(cmd) = cmd_opt {
         if let Some(command_list) = cmd.command_list() {
@@ -383,7 +396,6 @@ pub fn composite_render_system(
         &mut WindowD3D11Compositor,
         &Children,
         &GlobalArrangement,
-        &WindowHandle,
     )>,
     entity_query: Query<(
         &GlobalArrangement,
@@ -405,9 +417,7 @@ pub fn composite_render_system(
         return;
     };
 
-    for (window_entity, mut compositor, window_children, window_ga, window_handle) in
-        compositor_query.iter_mut()
-    {
+    for (window_entity, mut compositor, window_children, window_ga) in compositor_query.iter_mut() {
         if !compositor.is_valid() {
             continue;
         }
@@ -454,36 +464,25 @@ pub fn composite_render_system(
 
         // 4. 再帰走査（Req 2.1: depth-first pre-order）
         // ULW 補正: 合成ビットマップは (0,0) 起点で描画する。
-        // present_layered_window は GetWindowRect の位置をビットマップ配置先とするため、
-        // ここでも WINDOW 座標（GetWindowRect.topLeft）を基準にオフセットを差し引く。
+        // GlobalArrangement.transform は DPI スケール済みスクリーン座標なので、
+        // 子の ga.transform.M31 から window の ga.transform.M31 を引くことで
+        // ビットマップ内ローカル座標を得る。
         //
-        // WS_OVERLAPPEDWINDOW のフレーム補正:
-        // GlobalArrangement はクライアント座標（WindowPos.position 由来）だが、
-        // UpdateLayeredWindow はウィンドウ矩形の左上にビットマップを配置する。
-        // GetWindowRect を使うことで双方の基準点が一致し、
-        // エンティティが正しいスクリーン座標に描画される。
-        let window_offset = {
-            let mut rect = windows::Win32::Foundation::RECT::default();
-            if unsafe {
-                windows::Win32::UI::WindowsAndMessaging::GetWindowRect(
-                    window_handle.hwnd,
-                    &mut rect,
-                )
-            }
-            .is_ok()
-            {
-                (rect.left as f32, rect.top as f32)
-            } else {
-                // フォールバック: GetWindowRect 失敗時は GlobalArrangement を使用
-                (window_ga.transform.M31, window_ga.transform.M32)
-            }
-        };
+        // 重要: GetWindowRect（フレーム座標、非スケール）と ga.transform（DPIスケール済み）は
+        // 異なる座標空間に属するため混合してはならない。
+        // window_ga.transform を基準とすることで座標空間が統一される。
+        let window_offset = (window_ga.transform.M31, window_ga.transform.M32);
         let child_count = window_children.iter().count();
-        trace!(
+        debug!(
             entity = ?window_entity,
             child_count = child_count,
             window_offset_x = window_offset.0,
             window_offset_y = window_offset.1,
+            cached_size = ?compositor.cached_size(),
+            ga_bounds_left = window_ga.bounds.left,
+            ga_bounds_top = window_ga.bounds.top,
+            ga_bounds_right = window_ga.bounds.right,
+            ga_bounds_bottom = window_ga.bounds.bottom,
             "[composite_render_system] rendering subtree (ULW offset compensation)"
         );
         let ctx = CompositeContext {
@@ -496,6 +495,66 @@ pub fn composite_render_system(
         // 子エンティティへ再帰する。Children が entity_query の Optional なので
         // 子が無い場合も安全に処理される。
         render_subtree(&ctx, window_entity, &entity_query);
+
+        // DEBUG: ULW ビットマップ外周に赤枠（2px）を描画
+        // レイアウト由来 vs 描画由来の切り分け用
+        {
+            let (w, h) = compositor.cached_size();
+            let fw = w as f32;
+            let fh = h as f32;
+            const BORDER: f32 = 2.0;
+            let red = D2D1_COLOR_F {
+                r: 1.0,
+                g: 0.0,
+                b: 0.0,
+                a: 1.0,
+            };
+            unsafe {
+                dc.SetTransform(&Matrix3x2::identity());
+                if let Ok(brush) = dc.CreateSolidColorBrush(&red, None) {
+                    // 上辺
+                    dc.FillRectangle(
+                        &D2D_RECT_F {
+                            left: 0.0,
+                            top: 0.0,
+                            right: fw,
+                            bottom: BORDER,
+                        },
+                        &brush,
+                    );
+                    // 下辺
+                    dc.FillRectangle(
+                        &D2D_RECT_F {
+                            left: 0.0,
+                            top: fh - BORDER,
+                            right: fw,
+                            bottom: fh,
+                        },
+                        &brush,
+                    );
+                    // 左辺
+                    dc.FillRectangle(
+                        &D2D_RECT_F {
+                            left: 0.0,
+                            top: BORDER,
+                            right: BORDER,
+                            bottom: fh - BORDER,
+                        },
+                        &brush,
+                    );
+                    // 右辺
+                    dc.FillRectangle(
+                        &D2D_RECT_F {
+                            left: fw - BORDER,
+                            top: BORDER,
+                            right: fw,
+                            bottom: fh - BORDER,
+                        },
+                        &brush,
+                    );
+                }
+            }
+        }
 
         // 5. EndDraw（ターゲット復元は _target_guard の Drop で自動実行）
         let end_result = unsafe { dc.EndDraw(None, None) };

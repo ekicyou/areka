@@ -259,7 +259,7 @@ pub fn dispatch_drag_events(world: &mut World) {
                     );
                 }
 
-                // Window entity を探索して WindowDragging を remove + WindowPos を最終位置で更新
+                // Window entity を探索して WindowDragging を remove + Arrangement.offset を同期
                 {
                     let mut current = entity;
                     loop {
@@ -273,26 +273,48 @@ pub fn dispatch_drag_events(world: &mut World) {
                                 );
                             }
 
-                            // WindowPos.position を DerefMut で更新（Changed<WindowPos> 発火）
-                            // これにより PostLayout の sync_window_arrangement_from_window_pos が
-                            // Arrangement.offset を正しく更新する
+                            // Arrangement.offset を WindowPos.position から直接同期
+                            //
+                            // 旧方式: wp.set_changed() で Changed<WindowPos> を発火 →
+                            //   sync_window_arrangement_from_window_pos で offset 更新
+                            //   + apply_window_pos_changes で冗長な SetWindowPos 発火
+                            //
+                            // 問題: apply_window_pos_changes が client→window 座標変換を行い
+                            //   SetWindowPos を呼ぶが、変換の丸め誤差やタイミングにより
+                            //   ウィンドウがフレームオフセット分だけジャンプする場合がある。
+                            //
+                            // 新方式: Arrangement.offset を直接更新し、Changed<WindowPos> は
+                            //   発火させない。これにより冗長な SetWindowPos を回避しつつ、
+                            //   hit_test に必要な GA.bounds の整合性を維持する。
                             if let Ok(mut window_mut) = world.get_entity_mut(current) {
-                                if let Some(wp) = window_mut.get::<crate::ecs::window::WindowPos>()
-                                {
-                                    let current_pos = wp.position;
-                                    tracing::debug!(
-                                        window_entity = ?current,
-                                        current_pos = ?current_pos,
-                                        "[dispatch_drag_events] Syncing final WindowPos"
-                                    );
-                                }
-                                // DerefMut アクセスで Changed<WindowPos> を明示的に発火
-                                if let Some(mut wp) =
-                                    window_mut.get_mut::<crate::ecs::window::WindowPos>()
-                                {
-                                    // 現在のWindowPosは WM_WINDOWPOSCHANGED で既に更新されているため
-                                    // 値自体は変更しないが、DerefMut を通じて Changed を発火させる
-                                    wp.set_changed();
+                                let pos_opt = window_mut
+                                    .get::<crate::ecs::window::WindowPos>()
+                                    .and_then(|wp| wp.position);
+
+                                if let Some(pos) = pos_opt {
+                                    let new_offset = crate::ecs::layout::Offset {
+                                        x: pos.x as f32,
+                                        y: pos.y as f32,
+                                    };
+                                    if let Some(mut arr) =
+                                        window_mut.get_mut::<crate::ecs::layout::Arrangement>()
+                                    {
+                                        if arr.offset != new_offset {
+                                            tracing::info!(
+                                                window_entity = ?current,
+                                                old_offset = format_args!("({:.0},{:.0})", arr.offset.x, arr.offset.y),
+                                                new_offset = format_args!("({:.0},{:.0})", new_offset.x, new_offset.y),
+                                                "[DragEnd] Direct Arrangement.offset sync"
+                                            );
+                                            arr.offset = new_offset;
+                                        } else {
+                                            tracing::debug!(
+                                                window_entity = ?current,
+                                                offset = format_args!("({:.0},{:.0})", new_offset.x, new_offset.y),
+                                                "[DragEnd] Arrangement.offset unchanged"
+                                            );
+                                        }
+                                    }
                                 }
                             }
 

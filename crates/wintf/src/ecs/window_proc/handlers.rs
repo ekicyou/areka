@@ -190,19 +190,32 @@ pub(super) fn WM_WINDOWPOSCHANGED(
                         if let Some((client_pos, client_size)) = client_coords {
                             debug!(
                                 is_echo = is_echo,
+                                has_dpi_ctx = dpi_context.is_some(),
                                 entity = ?entity,
-                                x = client_pos.x,
-                                y = client_pos.y,
-                                cx = client_size.cx,
-                                cy = client_size.cy,
-                                "[WM_WINDOWPOSCHANGED] Processing"
+                                window_xy = format_args!("({},{})", wp.x, wp.y),
+                                window_size = format_args!("{}x{}", wp.cx, wp.cy),
+                                client_xy = format_args!("({},{})", client_pos.x, client_pos.y),
+                                client_size = format_args!("{}x{}", client_size.cx, client_size.cy),
+                                dpi = format_args!("{:.2}", dpi.scale_x()),
+                                "[WM_WINDOWPOSCHANGED]"
                             );
 
                             if let Some(mut window_pos) =
                                 entity_ref.get_mut::<crate::ecs::window::WindowPos>()
                             {
-                                if is_echo {
-                                    // echo（自アプリ由来）→ bypass_change_detection で更新
+                                // DPI変更時の特別処理:
+                                // DpiChangeContext がある場合は echo でも bypass しない。
+                                // bypass すると Changed<WindowPos> が発火せず、
+                                // sync_window_arrangement_from_window_pos が新位置を
+                                // Arrangement.offset に反映できない。結果として
+                                // update_arrangements_system が旧 offset を保持したまま
+                                // 新 DPI スケールを適用 → 誤ったグローバル座標 →
+                                // window_pos_sync_system が旧位置へ SetWindowPos →
+                                // 旧モニタに戻る → 再び WM_DPICHANGED → 無限ループ (フリーズ)
+                                let use_bypass = is_echo && dpi_context.is_none();
+
+                                if use_bypass {
+                                    // echo（自アプリ由来、DPI変更なし）→ bypass_change_detection で更新
                                     // Changed<WindowPos> を発火させない → apply_window_pos_changes 非トリガー
                                     let bypass = window_pos.bypass_change_detection();
                                     bypass.position = Some(client_pos);
@@ -212,7 +225,7 @@ pub(super) fn WM_WINDOWPOSCHANGED(
                                         entity = ?entity,
                                         client_x = client_pos.x,
                                         client_y = client_pos.y,
-                                        "WindowPos updated via bypass (echo)"
+                                        "WindowPos updated via bypass (echo, no DPI change)"
                                     );
                                 } else {
                                     // 外部由来: 値が実際に変化した場合のみ DerefMut で更新
@@ -229,18 +242,30 @@ pub(super) fn WM_WINDOWPOSCHANGED(
                                         window_pos.position = Some(client_pos);
                                         window_pos.size = Some(client_size);
 
-                                        debug!(
-                                            entity = ?entity,
-                                            window_x = wp.x,
-                                            window_y = wp.y,
-                                            window_cx = wp.cx,
-                                            window_cy = wp.cy,
-                                            client_x = client_pos.x,
-                                            client_y = client_pos.y,
-                                            client_cx = client_size.cx,
-                                            client_cy = client_size.cy,
-                                            "WindowPos updated (external change, values differ)"
-                                        );
+                                        if dpi_context.is_some() {
+                                            debug!(
+                                                entity = ?entity,
+                                                is_echo,
+                                                client_x = client_pos.x,
+                                                client_y = client_pos.y,
+                                                client_cx = client_size.cx,
+                                                client_cy = client_size.cy,
+                                                "[WM_WINDOWPOSCHANGED] WindowPos updated (DPI change, no bypass)"
+                                            );
+                                        } else {
+                                            debug!(
+                                                entity = ?entity,
+                                                window_x = wp.x,
+                                                window_y = wp.y,
+                                                window_cx = wp.cx,
+                                                window_cy = wp.cy,
+                                                client_x = client_pos.x,
+                                                client_y = client_pos.y,
+                                                client_cx = client_size.cx,
+                                                client_cy = client_size.cy,
+                                                "WindowPos updated (external change, values differ)"
+                                            );
+                                        }
                                     } else {
                                         trace!(
                                             entity = ?entity,
@@ -255,7 +280,14 @@ pub(super) fn WM_WINDOWPOSCHANGED(
                             // BoxStyle.size のサイズ変更判定と条件付き更新
                             // BoxStyle.inset への書き込みは行わない（Window位置はWindowPosが唯一のsource of truth）
                             // 注: BoxStyleは論理座標（DIP）を使用するため、物理ピクセルから変換が必要
-                            {
+                            //
+                            // echo（自アプリ由来）かつ DPI 変更なしの場合は BoxStyle.size の更新もスキップする。
+                            // BoxStyle.size が変化すると Changed<BoxStyle> → re-layout → Changed<GlobalArrangement>
+                            // → window_pos_sync_system → Changed<WindowPos> → apply_window_pos_changes
+                            // → SetWindowPos → WM_WINDOWPOSCHANGED のループ2が成立してしまうため。
+                            // WindowPos の bypass による Changed<WindowPos> 抑制だけではこのループを防げない。
+                            let skip_box_style = is_echo && dpi_context.is_none();
+                            if !skip_box_style {
                                 use crate::ecs::layout::{BoxSize, Dimension};
 
                                 let physical_width = client_size.cx as f32;
@@ -304,6 +336,11 @@ pub(super) fn WM_WINDOWPOSCHANGED(
                                         "[WM_WINDOWPOSCHANGED] BoxStyle.size unchanged, skipping update"
                                     );
                                 }
+                            } else {
+                                trace!(
+                                    entity = ?entity,
+                                    "[WM_WINDOWPOSCHANGED] BoxStyle.size skipped (echo, no DPI change)"
+                                );
                             }
                         }
                     }

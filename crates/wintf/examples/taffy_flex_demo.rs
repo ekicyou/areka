@@ -72,12 +72,12 @@ use tracing::{debug, info};
 use tracing_subscriber::EnvFilter;
 use windows::Win32::Graphics::Direct2D::Common::D2D1_COLOR_F;
 use windows::core::Result;
+use wintf::ecs::Visual;
 use wintf::ecs::drag::{
     DragConfig, DragEndEvent, DragEvent, DragStartEvent, OnDrag, OnDragEnd, OnDragStart,
 };
 use wintf::ecs::layout::hit_region::HitRegionMap;
-use wintf::ecs::Visual;
-use wintf::ecs::layout::{BoxMargin, BoxPosition, BoxSize, BoxStyle, Dimension, Opacity};
+use wintf::ecs::layout::{BoxMargin, BoxPosition, BoxSize, BoxStyle, Dimension};
 use wintf::ecs::layout::{
     GlobalArrangement, HitTest, PhysicalPoint, hit_test, hit_test_in_window_ex,
 };
@@ -208,12 +208,16 @@ async fn run_demo(tx: CommandSender) {
         create_flexbox_window(
             world,
             "wintf - Taffy Flexbox Demo (Window 1)",
-            windows::Win32::Foundation::POINT { x: 0, y: 0 },
+            windows::Win32::Foundation::POINT { x: 100, y: 100 },
         );
+        // Window 2: Window 1の右側に配置（重ならないように十分な間隔を確保）
+        // Window 1の論理幅800px + マージン50px = 850（DIP）
+        // 物理ピクセルでは DPI スケール依存だが、WindowPos は物理ピクセル座標。
+        // 125% DPIでは800DIP=1000物理px なので、1100+100=1200で重ならない。
         create_flexbox_window(
             world,
             "wintf - Taffy Flexbox Demo (Window 2)",
-            windows::Win32::Foundation::POINT { x: 850, y: 0 },
+            windows::Win32::Foundation::POINT { x: 1200, y: 100 },
         );
     }));
 
@@ -288,8 +292,10 @@ fn create_flexbox_window(
                 align_items: Some(taffy::AlignItems::Center),
                 size: Some(BoxSize {
                     width: None,
-                    height: None,
+                    height: Some(Dimension::Px(160.0)),
                 }),
+                flex_grow: Some(0.0),
+                flex_shrink: Some(0.0),
                 margin: Some(BoxMargin(wintf::ecs::layout::Rect {
                     left: wintf::ecs::layout::LengthPercentageAuto::Px(10.0),
                     right: wintf::ecs::layout::LengthPercentageAuto::Px(10.0),
@@ -315,7 +321,6 @@ fn create_flexbox_window(
         .spawn((
             Name::new("RedBox"),
             RedBox,
-            Opacity(1.0),
             Rectangle::new(),
             Brushes::with_foreground(D2D1_COLOR_F {
                 r: 1.0,
@@ -370,7 +375,10 @@ fn create_flexbox_window(
         .spawn((
             Name::new("GreenBox"),
             GreenBox,
-            Opacity(0.5),
+            Visual {
+                opacity: 0.5,
+                ..Default::default()
+            },
             Rectangle::new(),
             Brushes::with_foreground(D2D1_COLOR_F {
                 r: 0.0,
@@ -401,7 +409,10 @@ fn create_flexbox_window(
     world.spawn((
         Name::new("GreenBoxChild"),
         GreenBoxChild,
-        Opacity(0.5),
+        Visual {
+            opacity: 0.5,
+            ..Default::default()
+        },
         Rectangle::new(),
         Brushes::with_foreground(D2D1_COLOR_F {
             r: 1.0,
@@ -425,7 +436,10 @@ fn create_flexbox_window(
     world.spawn((
         Name::new("BlueBox"),
         BlueBox,
-        Opacity(0.5),
+        Visual {
+            opacity: 0.5,
+            ..Default::default()
+        },
         Rectangle::new(),
         Brushes::with_foreground(D2D1_COLOR_F {
             r: 0.0,
@@ -676,7 +690,10 @@ fn create_flexbox_window(
         .spawn((
             Name::new("ClickThrough-Container"),
             ClickThroughTestContainer,
-            Visual { opacity: 0.3, ..Default::default() },
+            Visual {
+                opacity: 0.3,
+                ..Default::default()
+            },
             Rectangle::new(),
             Brushes::with_foreground(D2D1_COLOR_F {
                 r: 0.2,
@@ -756,7 +773,10 @@ fn create_flexbox_window(
     world.spawn((
         Name::new("AlphaBoundaryBox"),
         Rectangle::new(),
-        Opacity(0.5),
+        Visual {
+            opacity: 0.5,
+            ..Default::default()
+        },
         Brushes::with_foreground(D2D1_COLOR_F {
             r: 0.5,
             g: 0.0,

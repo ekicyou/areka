@@ -6,25 +6,25 @@ use super::resource::{BitmapSourceGraphics, BitmapSourceResource};
 use super::task_pool::WintfTaskPool;
 use crate::com::d2d::{D2D1CommandListExt, D2D1DeviceContextExt};
 use crate::com::wic::{WICBitmapDecoderExt, WICFormatConverterExt, WICImagingFactoryExt};
-use crate::ecs::graphics::{format_entity_name, GraphicsCommandList, GraphicsCore};
+use crate::ecs::graphics::{GraphicsCommandList, GraphicsCore, format_entity_name};
 use crate::ecs::layout::Arrangement;
 use bevy_ecs::name::Name;
 use bevy_ecs::prelude::*;
 use std::path::{Path, PathBuf};
 use tracing::{trace, warn};
-use windows::core::{Interface, Result};
 use windows::Win32::Foundation::GENERIC_READ;
 use windows::Win32::Graphics::Direct2D::Common::D2D1_PIXEL_FORMAT;
 use windows::Win32::Graphics::Direct2D::{
-    ID2D1DeviceContext, D2D1_BITMAP_OPTIONS_NONE, D2D1_BITMAP_PROPERTIES1,
+    D2D1_BITMAP_OPTIONS_NONE, D2D1_BITMAP_PROPERTIES1, ID2D1DeviceContext,
 };
-use windows_numerics::Matrix3x2;
 use windows::Win32::Graphics::Dxgi::Common::DXGI_FORMAT_B8G8R8A8_UNORM;
 use windows::Win32::Graphics::Imaging::D2D::IWICImagingFactory2;
 use windows::Win32::Graphics::Imaging::{
     GUID_WICPixelFormat32bppPBGRA, IWICBitmapSource, WICBitmapDitherTypeNone,
     WICBitmapPaletteTypeMedianCut, WICDecodeMetadataCacheOnDemand,
 };
+use windows::core::{Interface, Result};
+use windows_numerics::Matrix3x2;
 
 // ============================================================
 // パス解決
@@ -218,9 +218,26 @@ pub fn draw_bitmap_sources(
             dc.BeginDraw();
 
             if let Some(bitmap) = graphics.bitmap() {
-                // OFFSET(0,0)から描画
+                // Arrangement.size(DIP単位)の矩形に合わせてスケール描画
+                // draw_image(ネイティブサイズ描画)ではなくDrawBitmapで宛先矩形を指定することで
+                // ビットマップのネイティブ解像度やDPIに関係なく正確な表示サイズになる
                 use crate::com::d2d::D2D1DeviceContextExt;
-                dc.draw_image(bitmap);
+                use windows::Win32::Graphics::Direct2D::Common::D2D_RECT_F;
+                use windows::Win32::Graphics::Direct2D::D2D1_INTERPOLATION_MODE_HIGH_QUALITY_CUBIC;
+                let dest_rect = D2D_RECT_F {
+                    left: 0.0,
+                    top: 0.0,
+                    right: arrangement.size.width,
+                    bottom: arrangement.size.height,
+                };
+                dc.draw_bitmap(
+                    bitmap,
+                    Some(&dest_rect),
+                    1.0,
+                    D2D1_INTERPOLATION_MODE_HIGH_QUALITY_CUBIC,
+                    None,
+                    None,
+                );
             }
 
             let _ = dc.EndDraw(None, None);
@@ -258,13 +275,24 @@ fn create_d2d_bitmap(
     use std::mem::ManuallyDrop;
     use windows::Win32::Graphics::Direct2D::ID2D1ColorContext;
 
+    // DCの実際のDPIを取得してビットマップに設定する。
+    // 96.0固定にするとDCのDPIスケール(例:125%=120dpi)とズレが生じ、
+    // DrawBitmapで宛先矩形を指定しても内部スケール計算が狂うため、
+    // 常にDCのDPIに合わせる。
+    let (dpi_x, dpi_y) = unsafe {
+        let mut x = 0.0f32;
+        let mut y = 0.0f32;
+        dc.GetDpi(&mut x, &mut y);
+        (x, y)
+    };
+
     let props = D2D1_BITMAP_PROPERTIES1 {
         pixelFormat: D2D1_PIXEL_FORMAT {
             format: DXGI_FORMAT_B8G8R8A8_UNORM,
             alphaMode: windows::Win32::Graphics::Direct2D::Common::D2D1_ALPHA_MODE_PREMULTIPLIED,
         },
-        dpiX: 96.0,
-        dpiY: 96.0,
+        dpiX: dpi_x,
+        dpiY: dpi_y,
         bitmapOptions: D2D1_BITMAP_OPTIONS_NONE,
         colorContext: ManuallyDrop::new(None::<ID2D1ColorContext>),
     };

@@ -4,9 +4,9 @@ use bevy_ecs::name::Name;
 use bevy_ecs::prelude::*;
 use bevy_ecs::system::SystemState;
 use tracing::{debug, error};
-use windows::core::*;
 use windows::Win32::UI::HiDpi::GetDpiForSystem;
 use windows::Win32::UI::WindowsAndMessaging::*;
+use windows::core::*;
 
 // Note: init_window_arrangement システムは廃止されました。
 // Arrangementは以下のライフタイムフックで自動挿入されます：
@@ -90,11 +90,14 @@ pub fn create_windows(world: &mut World) {
         debug!(
             frame,
             entity = %entity_name,
-            x = x,
-            y = y,
-            width = width,
-            height = height,
-            "[create_windows] CreateWindow coordinates"
+            input_pos = ?pos_comp.position,
+            input_size = ?pos_comp.size,
+            win_x = x,
+            win_y = y,
+            win_w = width,
+            win_h = height,
+            system_dpi,
+            "[create_windows] CreateWindowExW"
         );
 
         let entity_bits = entity.to_bits() as *mut std::ffi::c_void;

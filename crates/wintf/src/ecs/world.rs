@@ -2,7 +2,7 @@ use bevy_ecs::message::Messages;
 use bevy_ecs::prelude::*;
 use bevy_ecs::schedule::*;
 use bevy_ecs::system::*;
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 use std::time::Instant;
 use tracing::trace;
@@ -12,6 +12,26 @@ use windows::Win32::Foundation::HWND;
 // VSYNC優先レンダリング用トレイト
 // WndProcからRefCell<EcsWorld>を安全に借用してtickを実行する。
 // ============================================================
+
+thread_local! {
+    /// tick+flush の再入防止ガード。
+    ///
+    /// `VsyncTick::try_tick_on_vsync()` のスコープ中のみ `true`。
+    /// `flush_window_pos_commands()` → `guarded_set_window_pos()` → 同期 `WM_WINDOWPOSCHANGED`
+    /// → 再び `try_tick_on_vsync()` が呼ばれたとき、このフラグが `true` なら
+    /// tick をスキップする。これにより VSYNC カウンター更新による
+    /// 再帰的 tick-flush-tick ループ（フリーズ）を防止する。
+    static IS_TICK_FLUSH_IN_PROGRESS: Cell<bool> = const { Cell::new(false) };
+}
+
+/// RAII ガード: スコープ離脱時に `IS_TICK_FLUSH_IN_PROGRESS` を `false` にリセット
+struct TickFlushGuard;
+
+impl Drop for TickFlushGuard {
+    fn drop(&mut self) {
+        IS_TICK_FLUSH_IN_PROGRESS.set(false);
+    }
+}
 
 /// VSYNC駆動のtick実行を提供するトレイト
 ///
@@ -37,6 +57,22 @@ pub trait VsyncTick {
 
 impl VsyncTick for Rc<RefCell<EcsWorld>> {
     fn try_tick_on_vsync(&self) -> bool {
+        // ── 再入防止ガード ──────────────────────────────
+        // flush_window_pos_commands() → guarded_set_window_pos() が同期で
+        // WM_WINDOWPOSCHANGED を発火し、そこから再び try_tick_on_vsync() が
+        // 呼ばれる。VSYNC カウンターは別スレッドで ~16ms ごとに進むため、
+        // DPI 変更など重い tick（>16ms）ではカウンターが毎回進行し、
+        //   tick → flush → SetWindowPos → WM_WINDOWPOSCHANGED → tick → …
+        // という再帰的ループでフリーズが発生する。
+        // IS_TICK_FLUSH_IN_PROGRESS フラグで tick+flush スコープ全体を
+        // ガードし、再入時は即座にスキップする。
+        if IS_TICK_FLUSH_IN_PROGRESS.get() {
+            trace!("[try_tick_on_vsync] Re-entry blocked by IS_TICK_FLUSH_IN_PROGRESS");
+            return false;
+        }
+        IS_TICK_FLUSH_IN_PROGRESS.set(true);
+        let _guard = TickFlushGuard;
+
         // RefCellの借用を試みる
         // 既に借用されている場合（再入時）は安全にスキップ
         let result = match self.try_borrow_mut() {
@@ -67,6 +103,7 @@ impl VsyncTick for Rc<RefCell<EcsWorld>> {
         crate::ecs::window::flush_window_pos_commands();
 
         result
+        // _guard がドロップされ IS_TICK_FLUSH_IN_PROGRESS = false に戻る
     }
 }
 

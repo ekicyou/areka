@@ -757,15 +757,11 @@ pub fn apply_window_pos_changes(
 
         debug!(
             entity = %entity_name,
-            client_x = position.x,
-            client_y = position.y,
-            client_cx = size.cx,
-            client_cy = size.cy,
-            window_x = x,
-            window_y = y,
-            window_cx = width,
-            window_cy = height,
-            "[apply_window_pos_changes] Enqueueing SetWindowPosCommand"
+            client_xy = format_args!("({},{})", position.x, position.y),
+            client_size = format_args!("{}x{}", size.cx, size.cy),
+            win_xy = format_args!("({},{})", x, y),
+            win_size = format_args!("{}x{}", width, height),
+            "[apply_window_pos] Enqueue SetWindowPos"
         );
 
         let cmd = crate::ecs::window::SetWindowPosCommand::new(
@@ -890,7 +886,8 @@ pub fn visual_hierarchy_sync_system(
     // affected_parents: 未同期の子を持つ親エンティティの集合
     let mut affected_parents = std::collections::HashSet::new();
     // 深さ付き親情報: (parent_entity, depth) — depth は親の深さ（浅い順に処理するため）
-    let mut parent_depths: std::collections::HashMap<Entity, usize> = std::collections::HashMap::new();
+    let mut parent_depths: std::collections::HashMap<Entity, usize> =
+        std::collections::HashMap::new();
     {
         let child_query = vg_queries.p0();
         for (_entity, child_of, child_vg, _child_name) in child_query.iter() {
@@ -958,8 +955,7 @@ pub fn visual_hierarchy_sync_system(
             if let Ok(children) = children_query.get(parent_entity) {
                 for child_entity in children.iter() {
                     let mut child_query = vg_queries.p0();
-                    if let Ok((_, _, mut child_vg, child_name)) =
-                        child_query.get_mut(child_entity)
+                    if let Ok((_, _, mut child_vg, child_name)) = child_query.get_mut(child_entity)
                     {
                         let child_visual = match child_vg.visual() {
                             Some(v) => v.clone(),
@@ -968,12 +964,9 @@ pub fn visual_hierarchy_sync_system(
 
                         let child_name_str = child_name.map(|n| n.to_string());
                         let child_fallback = format!("Entity({:?})", child_entity);
-                        let child_display =
-                            child_name_str.as_deref().unwrap_or(&child_fallback);
+                        let child_display = child_name_str.as_deref().unwrap_or(&child_fallback);
 
-                        if let Err(e) =
-                            parent_visual.add_visual(&child_visual, false, None)
-                        {
+                        if let Err(e) = parent_visual.add_visual(&child_visual, false, None) {
                             error!(
                                 child = %child_display,
                                 depth = parent_depth + 1,
@@ -1000,8 +993,7 @@ pub fn visual_hierarchy_sync_system(
             if let Ok(children) = children_query.get(parent_entity) {
                 for child_entity in children.iter() {
                     let mut child_query = vg_queries.p0();
-                    if let Ok((_, _, mut child_vg, child_name)) =
-                        child_query.get_mut(child_entity)
+                    if let Ok((_, _, mut child_vg, child_name)) = child_query.get_mut(child_entity)
                     {
                         if child_vg.parent_visual().is_some() {
                             continue; // 既に同期済み
@@ -1013,8 +1005,7 @@ pub fn visual_hierarchy_sync_system(
 
                         let child_name_str = child_name.map(|n| n.to_string());
                         let child_fallback = format!("Entity({:?})", child_entity);
-                        let child_display =
-                            child_name_str.as_deref().unwrap_or(&child_fallback);
+                        let child_display = child_name_str.as_deref().unwrap_or(&child_fallback);
 
                         debug!(
                             name = %child_display,

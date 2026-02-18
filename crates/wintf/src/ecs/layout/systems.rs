@@ -450,11 +450,10 @@ pub fn window_pos_sync_system(
                 entity = %entity_name,
                 old_pos = ?window_pos.position,
                 old_size = ?window_pos.size,
-                new_x = new_position.x,
-                new_y = new_position.y,
-                new_cx = new_size.cx,
-                new_cy = new_size.cy,
-                "[window_pos_sync_system] Updating WindowPos"
+                new_xy = format_args!("({},{})", new_position.x, new_position.y),
+                new_size = format_args!("{}x{}", new_size.cx, new_size.cy),
+                ga_bounds = format_args!("({:.0},{:.0})-({:.0},{:.0})", global_arr.bounds.left, global_arr.bounds.top, global_arr.bounds.right, global_arr.bounds.bottom),
+                "[window_pos_sync] Updating WindowPos from GA"
             );
             window_pos.position = Some(new_position);
             window_pos.size = Some(new_size);
@@ -515,15 +514,11 @@ pub fn sync_window_arrangement_from_window_pos(
         // 変更があった場合のみ更新
         if arrangement.offset != new_offset {
             let entity_name = format_entity_name(entity, name);
-            tracing::debug!(
+            debug!(
                 entity = %entity_name,
-                old_x = arrangement.offset.x,
-                old_y = arrangement.offset.y,
-                new_x = new_offset.x,
-                new_y = new_offset.y,
-                position_x = position.x,
-                position_y = position.y,
-                "[sync_window_arrangement_from_window_pos] Updating Arrangement.offset"
+                old = format_args!("({:.0},{:.0})", arrangement.offset.x, arrangement.offset.y),
+                new = format_args!("({:.0},{:.0})", new_offset.x, new_offset.y),
+                "[sync_window_arr] offset changed"
             );
             arrangement.offset = new_offset;
         }

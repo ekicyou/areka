@@ -55,7 +55,7 @@ pub unsafe fn transfer_to_hbitmap(
 
 /// UpdateLayeredWindow を呼び出し、合成済みビットマップを WS_EX_LAYERED ウィンドウに表示する。
 ///
-/// - `pptDst`: ウィンドウ位置を `GetWindowRect` で取得して明示的に指定（pptDst=None ではリセットされる問題を回避）
+/// - `pptDst`: `GetWindowRect` で取得したウィンドウフレーム座標を使用
 /// - `ptSrc` = `POINT { x: 0, y: 0 }`: ソースビットマップの原点
 /// - `BLENDFUNCTION`: `AC_SRC_OVER`, `SourceConstantAlpha=255`, `AC_SRC_ALPHA`
 /// - `ULW_ALPHA` モードで alpha 透過合成
@@ -63,9 +63,16 @@ pub unsafe fn transfer_to_hbitmap(
 /// # Arguments
 /// - `hwnd` - 表示対象の WS_EX_LAYERED ウィンドウ
 /// - `hdc_src` - 合成済みビットマップが SelectObject 済みの MemoryDC
-/// - `size` - ウィンドウサイズ（幅, 高さ）
+/// - `size` - ビットマップサイズ
+///
+/// # 座標系
+/// `pptDst` には `GetWindowRect` で取得したフレーム座標を使用する。
+/// `WS_OVERLAPPEDWINDOW | WS_EX_LAYERED` ではフレーム位置とクライアント位置が
+/// 異なるため、クライアント座標を渡すとクリックのたびにフレームオフセット分
+/// ウィンドウが移動してしまう。
+/// `pptDst=None` ではリセットされる問題を回避するため、明示的に指定する。
 pub fn present_layered_window(hwnd: HWND, hdc_src: HDC, size: &SIZE) -> windows::core::Result<()> {
-    // ウィンドウ位置を取得（pptDst=None だと位置がリセットされる問題への対策）
+    // ウィンドウフレーム位置を取得して pptDst に指定
     let mut rect = RECT::default();
     unsafe { GetWindowRect(hwnd, &mut rect)? };
     let pt_dst = POINT {

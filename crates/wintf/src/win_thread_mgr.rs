@@ -15,11 +15,11 @@ use std::sync::*;
 use std::thread;
 use std::time::Instant;
 use tracing::{debug, info, trace};
-use windows::core::*;
 use windows::Win32::Foundation::*;
 use windows::Win32::Graphics::Dwm::*;
 use windows::Win32::System::Com::*;
 use windows::Win32::UI::WindowsAndMessaging::*;
+use windows::core::*;
 
 // デバッグ用カウンター
 static DEBUG_LOOP_COUNT: AtomicU64 = AtomicU64::new(0);
@@ -219,10 +219,7 @@ impl WinThreadMgrInner {
                     #[cfg(not(debug_assertions))]
                     trace!(
                         loop_count,
-                        vsync_count,
-                        other_msg_count,
-                        no_msg_count,
-                        "Message loop stats"
+                        vsync_count, other_msg_count, no_msg_count, "Message loop stats"
                     );
                     last_stats_time = now;
                 }
@@ -233,19 +230,14 @@ impl WinThreadMgrInner {
                     }
 
                     // WM_VSYNCメッセージでECSを更新
-                    // try_tick_on_vsync()を使用することで、WndProcで既に処理済みの場合は
-                    // カウンター比較によりスキップされ、重複実行が防止される
+                    // VsyncTickトレイト経由で処理し、再入防止ガードを共有する
                     if msg.message == WM_VSYNC {
                         DEBUG_VSYNC_COUNT.fetch_add(1, Ordering::Relaxed);
 
-                        // World借用→tick→借用解放→flushの順で処理
-                        // VsyncTickトレイトのtry_tick_on_vsync()と同じ流れを維持
-                        let ticked = {
-                            let mut world = self.world.borrow_mut();
-                            world.try_tick_on_vsync()
-                        };
-                        // World借用解放後にSetWindowPosコマンドをフラッシュ
-                        crate::ecs::window::flush_window_pos_commands();
+                        // VsyncTickトレイト経由で tick + flush を実行
+                        // 再入防止ガード（IS_TICK_FLUSH_IN_PROGRESS）も適用される
+                        use crate::ecs::world::VsyncTick;
+                        let ticked = self.world.try_tick_on_vsync();
 
                         // デバッグビルドのみ: run()経由のtick回数をカウント
                         #[cfg(debug_assertions)]

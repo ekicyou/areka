@@ -267,7 +267,8 @@ fn test_changed_boxstyle_fired_on_size_change() {
 // Task 7.3: ドラッグ終了同期テスト
 // =============================================================================
 
-/// ドラッグ終了後に WindowPos に set_changed() が呼ばれることを検証
+/// ドラッグ終了後に Arrangement.offset が直接更新されることを検証
+/// （Changed<WindowPos> は発火させず、冗長な SetWindowPos を回避する）
 #[test]
 fn test_drag_end_syncs_window_pos_changed() {
     let mut world = World::new();
@@ -279,11 +280,13 @@ fn test_drag_end_syncs_window_pos_changed() {
     world.init_resource::<bevy_ecs::message::Messages<DragEndEvent>>();
 
     // Window entity（WindowDragging マーカー付き = ドラッグ中を模擬）
+    // ドラッグ中に WindowPos.position は bypass で (500, 600) に更新されたが、
+    // Arrangement.offset はまだ旧値 (300, 400) のまま
     let window_entity = world
         .spawn((
             Window::default(),
             WindowPos {
-                position: Some(POINT { x: 300, y: 400 }),
+                position: Some(POINT { x: 500, y: 600 }),
                 size: Some(SIZE { cx: 800, cy: 600 }),
                 ..Default::default()
             },
@@ -309,47 +312,55 @@ fn test_drag_end_syncs_window_pos_changed() {
         ))
         .id();
 
-    // Changed<WindowPos> 検知用
+    // Changed<Arrangement> 検知用
     #[derive(Resource, Default)]
-    struct WindowPosChangedCount(u32);
+    struct ArrangementChangedCount(u32);
 
-    fn detect_window_pos_change(
-        query: Query<Entity, (With<Window>, Changed<WindowPos>)>,
-        mut count: ResMut<WindowPosChangedCount>,
+    fn detect_arrangement_change(
+        query: Query<Entity, (With<Window>, Changed<Arrangement>)>,
+        mut count: ResMut<ArrangementChangedCount>,
     ) {
         for _e in query.iter() {
             count.0 += 1;
         }
     }
 
-    world.insert_resource(WindowPosChangedCount::default());
+    world.insert_resource(ArrangementChangedCount::default());
 
     let mut schedule = Schedule::default();
-    schedule.add_systems(detect_window_pos_change);
+    schedule.add_systems(detect_arrangement_change);
 
     // 初回: Added で発火
     schedule.run(&mut world);
-    let initial = world.resource::<WindowPosChangedCount>().0;
+    let initial = world.resource::<ArrangementChangedCount>().0;
 
     // Ended 遷移を設定
     world
         .resource::<DragAccumulatorResource>()
         .set_transition(DragTransition::Ended {
             entity: drag_entity,
-            end_pos: PhysicalPoint::new(350, 450),
+            end_pos: PhysicalPoint::new(550, 650),
             cancelled: false,
         });
 
     // dispatch_drag_events を実行（ドラッグ終了処理）
     dispatch_drag_events(&mut world);
 
-    // Changed<WindowPos> 検知を実行
+    // Arrangement.offset が WindowPos.position から直接更新されていることを検証
+    let arr = world.get::<Arrangement>(window_entity).unwrap();
+    assert_eq!(
+        arr.offset,
+        Offset { x: 500.0, y: 600.0 },
+        "DragEnd後にArrangement.offsetがWindowPos.positionと同期していること"
+    );
+
+    // Changed<Arrangement> 検知を実行
     schedule.run(&mut world);
-    let after_end = world.resource::<WindowPosChangedCount>().0;
+    let after_end = world.resource::<ArrangementChangedCount>().0;
 
     assert!(
         after_end > initial,
-        "ドラッグ終了後に Changed<WindowPos> が発火すること"
+        "ドラッグ終了後に Changed<Arrangement> が発火すること"
     );
 }
 
