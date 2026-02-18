@@ -64,19 +64,19 @@ Window:     scale=(DPI_scale, DPI_scale)
 
 ### Requirement 3: WM_WINDOWPOSCHANGED での論理 px 変換
 
-**Objective:** 開発者として、ウィンドウサイズ変更時に物理ピクセルを論理ピクセルに変換して BoxStyle に設定したい。なぜなら、Win32 API から受け取る物理ピクセル値を BoxStyle の論理ピクセル座標系に正しくマッピングするためである。
+**Objective:** 開発者として、外部リサイズ時に物理ピクセルを論理ピクセルに変換して BoxStyle に設定したい。なぜなら、Win32 API から受け取る物理ピクセル値を BoxStyle の論理ピクセル座標系に正しくマッピングするためである。
 
 #### Acceptance Criteria
-1. When `WM_WINDOWPOSCHANGED` メッセージを受信した場合, the wintf window handler shall `BoxStyle.size` を `physical_width / DPI.scale_x()`, `physical_height / DPI.scale_y()` （論理 px）で設定する
-2. When DPI が変化した後に `WM_WINDOWPOSCHANGED` を受信した場合, the wintf window handler shall `DpiChangeContext` 経由で取得した最新の DPI 値を使用して論理 px 変換を行う
+1. When `WM_WINDOWPOSCHANGED` メッセージを外部リサイズ（非echo かつ 非DPI変更）として受信した場合, the wintf window handler shall `BoxStyle.size` を `physical_width / DPI.scale_x()`, `physical_height / DPI.scale_y()` （論理 px）で設定する
+2. When DPI 変更に起因する `WM_WINDOWPOSCHANGED` を受信した場合（`DpiChangeContext` 存在時）, the wintf window handler shall `BoxStyle.size` の更新を **スキップ** し、ECS レイアウトパイプラインによるサイズ算出に委ねる。ただし `Changed<WindowPos>` は発火させ、`sync_window_arrangement_from_window_pos` が `Arrangement.offset` を更新できるようにする
 
-### Requirement 4: WM_DPICHANGED でのウィンドウサイズ更新
+### Requirement 4: WM_DPICHANGED でのレイアウトシステム主導サイズ更新
 
-**Objective:** 開発者として、DPI 変更時に `SetWindowPos` でウィンドウの物理サイズを更新したい。なぜなら、モニター間移動時に OS が提供する推奨サイズを適用し、見た目のサイズを保つためである。
+**Objective:** 開発者として、DPI 変更時に ECS レイアウトパイプラインでウィンドウの物理サイズを正しく算出し適用したい。なぜなら、BoxStyle.size（論理 px）を唯一のソース・オブ・トゥルースとして保持し、`suggested_rect` への依存を排除してラウンドトリップ丸め誤差をゼロにするためである。
 
 #### Acceptance Criteria
-1. When `WM_DPICHANGED` メッセージを受信した場合, the wintf window handler shall `SetWindowPos` 呼び出しから `SWP_NOSIZE` フラグを除去し、`suggested_rect` の幅・高さ（物理 px）をそのまま適用する
-2. When `WM_DPICHANGED` に続いて `WM_WINDOWPOSCHANGED` が発行される場合, the wintf window handler shall `WM_WINDOWPOSCHANGED` ハンドラ内で新しい物理サイズを新 DPI で除算して `BoxStyle.size` を論理 px に変換し、座標系の一貫性を自動的に維持する
+1. When `WM_DPICHANGED` メッセージを受信した場合, the wintf window handler shall DPI コンポーネントを新 DPI 値で直接更新し（`Changed<DPI>` 発火）、`DpiChangeContext` を設定した上で、`SetWindowPos` を `SWP_NOSIZE` 維持（位置のみ）で呼び出す。サイズの決定は ECS レイアウトパイプライン（`Changed<DPI>` → `update_arrangements_system` → `propagate_global_arrangements` → `window_pos_sync_system` → `apply_window_pos_changes`）に委ねる
+2. When `WM_DPICHANGED` に続いて `WM_WINDOWPOSCHANGED` が発行される場合, the wintf window handler shall `DpiChangeContext` の存在により `BoxStyle.size` 更新をスキップし、`Changed<WindowPos>` のみを発火させて位置情報を ECS に伝播する
 
 ### Requirement 5: デモウィンドウサイズの適正化
 
