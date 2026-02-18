@@ -192,7 +192,7 @@ fn main() -> Result<()> {
     println!("    - カラーマップ (head/body/feet/hand)");
     println!("    - フォールバック (NamedRegions without HitRegionMap)");
     println!("\n5秒後にレイアウトパラメーターを変更します。");
-    println!("10秒後に自動的にWindowを閉じてアプリ終了します。");
+    println!("60秒後に自動的にWindowを閉じてアプリ終了します。");
 
     // メッセージループを開始
     mgr.run()?;
@@ -279,8 +279,18 @@ async fn run_demo(tx: CommandSender) {
     println!("[Async] 2s: Running DPI layout dump for all windows");
     let _ = tx.send(Box::new(dump_all_windows_dpi));
 
-    // === 即終了 ===
-    println!("[Async] 2s: Closing windows (quick-exit mode)");
+    // === 5秒待機 ===
+    async_io::Timer::after(Duration::from_secs(3)).await;
+
+    // === 5秒: レイアウトパラメーター変更 ===
+    println!("[Async] 5s: Changing layout parameters");
+    let _ = tx.send(Box::new(change_layout_parameters));
+
+    // === 60秒待機後に終了 ===
+    async_io::Timer::after(Duration::from_secs(55)).await;
+
+    // === 60秒: 終了 ===
+    println!("[Async] 60s: Closing windows");
     let _ = tx.send(Box::new(close_window));
 }
 
