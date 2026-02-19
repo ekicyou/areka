@@ -28,7 +28,7 @@
 | Req 6: パフォーマンス最適化      | ULWシステムはDComp非依存。DCompシステムはWindow検索不要                           | 空クエリスキップの検証、DComp遅延初期化の実装                  |
 | Req 7: DComp動作検証             | `dcomp_demo.rs` が存在（ECS非使用の独立デモ）                                     | ECSベースのDComp描画テスト/exampleが必要                       |
 | Req 8: 共存動作                  | 両パイプラインのコードが独立して存在                                              | 混在時の共有リソース競合・デバイスロスト独立復旧の検証         |
-| Req 9: WinRT拡張準備             | パイプラインコードがモジュール分離済み（`compositor_systems.rs` vs `systems.rs`） | `CompositionMode` の拡張設計、モジュール境界の明確化           |
+| ~~Req 9: WinRT拡張準備~~         | パイプラインコードがモジュール分離済み（`compositor_systems.rs` vs `systems.rs`） | **削除**: Phase 4 の実装要件外。将来調査トピックとして分離     |
 | Req 10: テスト戦略               | 既存テスト + example が ULW 前提                                                  | DComp example、混在 example の新規作成                         |
 
 ### 1.2 関連モジュール構成
@@ -260,7 +260,7 @@ WndProcハンドラは `hwnd` ベースで、ECS World への直接アクセス�
 - ✅ ULW システムは変更なし（`WindowD3D11Compositor` の有無がフィルタ）
 - ✅ ECS ネイティブフィルタで空クエリ時の即スキップが保証される
 - ❌ DComp コンポーネント挿入タイミングの管理が必要（`on_visual_add` or 専用システム）
-- ❌ WinRT Compositor 追加時に新しいコンポーネントセットとon_addロジックが必要
+- ❌ 将来のバックエンド追加時に新しいコンポーネントセットとon_addロジックが必要
 
 ### Option B: 明示的モード伝播方式（明確・拡張容易）
 
@@ -275,7 +275,7 @@ WndProcハンドラは `hwnd` ベースで、ECS World への直接アクセス�
 
 **トレードオフ**:
 - ✅ モードの明示性が最高（どのエンティティがどのパイプラインか一目瞭然）
-- ✅ WinRT Compositor 追加時に enum variant 追加のみ
+- ✅ WinRT 拡張が容易（enum variant 追加のみ）
 - ❌ 全エンティティへの伝播オーバーヘッド（メモリ + 伝播システムの実行コスト）
 - ❌ 既存システムの大量変更（DComp: 8システム、ULW: 3システムにフィルタ追加）
 - ❌ ランタイムフィルタ（enum variant マッチ）でクエリ効率が低下
@@ -306,7 +306,7 @@ WndProcハンドラは `hwnd` ベースで、ECS World への直接アクセス�
 - ✅ 空クエリ時の即スキップが保証される（パフォーマンス要件 Req 6 充足）
 - ✅ DComp 遅延初期化で ULW のみ使用時のコスト排除（Req 6.4 充足）
 - ❌ `on_visual_add` 内でのモード判定が技術的に challenge（DeferredWorld制約）
-- ❌ WinRT Compositor 追加時に新しいコンポーネントセットと初期化ロジックが必要
+- ❌ 将来のバックエンド追加時に新しいコンポーネントセットと初期化ロジックが必要
 
 ---
 
@@ -322,13 +322,13 @@ WndProcハンドラは `hwnd` ベースで、ECS World への直接アクセス�
 
 ### リスク: **Medium**
 
-| リスク要因                                | レベル | 対策                                                                                                        |
-| ----------------------------------------- | ------ | ----------------------------------------------------------------------------------------------------------- |
-| `on_visual_add` 内の CompositionMode 参照 | Medium | DeferredWorld でのクエリ制約を調査。不可の場合は専用システムで後付け（1フレーム遅延は許容範囲）             |
-| DComp パイプライン再起動後の描画品質      | Medium | `dcomp_demo.rs` をリファレンスに段階的検証。Phase 2 除去前のコミットと diff 比較                            |
-| 共有リソース（D2D DeviceContext）の競合   | Low    | ULW と DComp は同一フレーム内で異なるステージで実行。DeviceContext は排他アクセス。スケジュール順序保証あり |
+| リスク要因                                | レベル | 対策                                                                                                                                  |
+| ----------------------------------------- | ------ | ------------------------------------------------------------------------------------------------------------------------------------- |
+| `on_visual_add` 内の CompositionMode 参照 | Medium | DeferredWorld でのクエリ制約を調査。不可の場合は専用システムで後付け（1フレーム遅延は許容範囲）                                       |
+| DComp パイプライン再起動後の描画品質      | Medium | `dcomp_demo.rs` をリファレンスに段階的検証。Phase 2 除去前のコミットと diff 比較                                                      |
+| 共有リソース（D2D DeviceContext）の競合   | Low    | ULW と DComp は同一フレーム内で異なるステージで実行。DeviceContext は排他アクセス。スケジュール順序保証あり                           |
 | デバイスロスト時の復旧                    | Low    | `GraphicsCore.invalidate()` で一括破棄・再初期化。D3Dデバイスロストは全パイプラインに波及するため、独立復旧は不要（Req 8.5 削除済み） |
-| WndProc ハンドラのモード分岐              | Low    | `hwnd_to_entity` マップ + Entity→CompositionMode 取得のパターンが確立済み                                   |
+| WndProc ハンドラのモード分岐              | Low    | `hwnd_to_entity` マップ + Entity→CompositionMode 取得のパターンが確立済み                                                             |
 
 ---
 
@@ -340,9 +340,8 @@ WndProcハンドラは `hwnd` ベースで、ECS World への直接アクセス�
 
 ### 設計フェーズでの決定事項
 
-1. **CompositionMode の定義方式**: `#[non_exhaustive]` enum vs sealed enum + extension trait
-2. **DComp コンポーネント挿入タイミング**: `on_visual_add` フック内 vs 専用後付けシステム
-3. **GraphicsCore 分割粒度**: Inner 内 Option vs Inner 分割 vs 別 Resource
+1. **DComp コンポーネント挿入タイミング**: `on_visual_add` フック内 vs 専用後付けシステム
+2. **GraphicsCore 分割粒度**: Inner 内 Option vs Inner 分割 vs 別 Resource
 
 ### Research Needed（設計フェーズで調査）
 
@@ -350,3 +349,11 @@ WndProcハンドラは `hwnd` ベースで、ECS World への直接アクセス�
 - [ ] bevy_ecs 0.18 の Observer パターンによるコンポーネント連動挿入の実現性
 - [ ] DComp と ULW が同一フレーム内で同一 `ID2D1DeviceContext` を使用する際の排他制御要件
 - [ ] `IDCompositionDesktopDevice::CreateTargetForHwnd` が `WS_EX_LAYERED` ウィンドウに対して動作するか（万が一の混同防止）
+
+### 将来調査トピック（Phase 4 スコープ外）
+
+- [ ] WinRT Compositor（Windows.UI.Composition）への DComp 移行可能性調査
+  - `Windows.UI.Composition.Compositor` と `IDCompositionDevice3` のAPI対応関係
+  - WinRT Compositor が提供する追加機能（アニメーション、エフェクト等）
+  - 移行に伴う `CompositionMode` enum 拡張の影響範囲
+  - 調査結果により「こう変わるからこうした方が良い」という項目が出た場合にのみ、Phase 4 実装にフィードバックする

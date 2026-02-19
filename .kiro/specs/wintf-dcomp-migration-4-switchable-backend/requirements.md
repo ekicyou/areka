@@ -3,20 +3,20 @@
 ## Project Description (Input)
 Phase 4 方針変更: DComp完全除去 → 切り替え式バックエンド実装。
 
-透過ウィンドウのクリックスルーが必要な場合は ULW（UpdateLayeredWindow）パイプライン、通常のウィンドウUIには DComp パイプラインを使用する切り替え式アーキテクチャを実装する。将来的には DComp を WinRT Compositor（Windows.UI.Composition）ベースへ移行することも視野に入れる。
+透過ウィンドウのクリックスルーが必要な場合は ULW（UpdateLayeredWindow）パイプライン、通常のウィンドウUIには DComp パイプラインを使用する切り替え式アーキテクチャを実装する。
 
 ### 背景・動機
 - Phase 1〜3 で DComp → ULW 移行が完了し、現在は ULW パイプラインのみがアクティブ
 - DComp のシステム関数・コンポーネント・COM ラッパーはコードとして完全に残存（スケジュール登録のみ解除）
 - GraphicsCore は現在も DComp デバイスを初期化している
-- デスクトップマスコット（透過・クリックスルー必須）は ULW、通常ウィンドウ UI は DComp（将来は WinRT Compositor）で描画する二刀流が最適
+- デスクトップマスコット（透過・クリックスルー必須）は ULW、通常ウィンドウ UI は DComp で描画する二刀流が最適
 - Window エンティティ単位で合成モードを切り替え、同一アプリ内で ULW ウィンドウと DComp ウィンドウを共存させる
 
 ### 設計方針
 - Window エンティティに合成モード（CompositionMode enum: ULW / DComp）を持たせ、ウィンドウ単位で描画パイプラインを切り替える
 - 描画コマンド生成（GraphicsCommandList）は両パイプラインで共有
 - ECS システムは CompositionMode に基づきクエリフィルタリングで分岐
-- 将来の WinRT Compositor 対応を見据え、CompositionMode に拡張余地を持たせる
+- パイプライン固有のシステム・コンポーネントをモジュール分離し、保守性を確保する
 
 ## Requirements
 
@@ -31,7 +31,6 @@ Phase 4 方針変更: DComp完全除去 → 切り替え式バックエンド実
 3. The wintf crate shall `CompositionMode` のデフォルト値を `ULW` とする（既存のデスクトップマスコット用途との後方互換性確保）
 4. When `CompositionMode::ULW` が設定されている時, the wintf crate shall `WS_EX_LAYERED` スタイルを適用し、ULW パイプライン（D2D1合成 → DIBSection → UpdateLayeredWindow）で描画する
 5. When `CompositionMode::DComp` が設定されている時, the wintf crate shall `WS_EX_NOREDIRECTIONBITMAP` スタイルを適用し、DComp パイプライン（IDCompositionTarget → IDCompositionVisual3 → IDCompositionSurface）で描画する
-6. The wintf crate shall 将来の WinRT Compositor（Windows.UI.Composition）対応を見据え、`CompositionMode` enum に拡張余地を持たせる設計とする（例: `#[non_exhaustive]` 属性、または内部的な拡張ポイント）
 
 ### Requirement 2: ECS システムの CompositionMode ベースクエリ分岐
 
@@ -119,17 +118,7 @@ Phase 4 方針変更: DComp完全除去 → 切り替え式バックエンド実
 3. While ULW ウィンドウが透過クリックスルーを実行している時, the wintf crate shall DComp ウィンドウの描画・インタラクションに影響を与えない
 4. The wintf crate shall 既存のヒットテスト・ポインタイベント・ドラッグシステムが両 CompositionMode のウィンドウで正しく動作する
 
-### Requirement 9: WinRT Compositor 拡張への準備
-
-**Objective:** 開発者として、将来的に DComp を WinRT Compositor（Windows.UI.Composition）へ移行する際の拡張ポイントを確保したい。
-
-#### Acceptance Criteria
-
-1. The wintf crate shall `CompositionMode` enum の設計において、将来の WinRT Compositor バリアント追加が既存コードの大規模変更を伴わない構造とする
-2. The wintf crate shall パイプライン固有のシステムとコンポーネントを明確にモジュール分離し、新しいバックエンド追加時にモジュール単位で追加可能とする
-3. The wintf crate shall パイプライン選択のロジックを集約し、新バリアント追加時の変更箇所を最小限にする
-
-### Requirement 10: テスト・検証戦略
+### Requirement 9: テスト・検証戦略
 
 **Objective:** 開発者として、Phase 4 完了時に切り替え式バックエンドが正しく動作することを包括的に検証したい。
 
