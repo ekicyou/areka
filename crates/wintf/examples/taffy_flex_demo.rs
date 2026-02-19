@@ -191,8 +191,8 @@ fn main() -> Result<()> {
     println!("    - 混在＋重複 (banner/overlap_zone/arrow)");
     println!("    - カラーマップ (head/body/feet/hand)");
     println!("    - フォールバック (NamedRegions without HitRegionMap)");
-    println!("\n5秒後にレイアウトパラメーターを変更します。");
-    println!("60秒後に自動的にWindowを閉じてアプリ終了します。");
+    println!("\n2秒後にレイアウトパラメーターを変更し、ウィンドウを別モニターへ移動します。");
+    println!("4秒後に自動的にWindowを閉じてアプリ終了します。");
 
     // メッセージループを開始
     mgr.run()?;
@@ -882,60 +882,19 @@ fn create_flexbox_window(
 /// レイアウトパラメーターを変更
 #[allow(dead_code)]
 fn change_layout_parameters(world: &mut World) {
-    // WindowエンティティのBoxStyleを変更してウィンドウを移動・リサイズ
-    let mut window_query = world.query_filtered::<&mut BoxStyle, With<FlexDemoWindow>>();
-    if let Some(mut style) = window_query.iter_mut(world).next() {
-        style.size = Some(BoxSize {
-            width: Some(Dimension::Px(600.0)),
-            height: Some(Dimension::Px(400.0)),
-        });
-        println!("[Test] Window BoxStyle changed: size=(600,400) in DIP");
-    }
-
-    // WindowPos.position を変更してウィンドウを移動
+    // WindowPos.position を変更してウィンドウを別モニターへ移動（サイズ・内部レイアウトは維持）
+    // NOTE: BoxStyle.size および子要素のレイアウトパラメーターは一切変更しない。
+    // ウィンドウの論理サイズと内部レイアウトを保持したままモニター間移動することで、
+    // DPIスケーリング動作を正しく検証できる。
     let mut wp_query = world.query_filtered::<&mut WindowPos, With<FlexDemoWindow>>();
     if let Some(mut wp) = wp_query.iter_mut(world).next() {
         wp.position = Some(windows::Win32::Foundation::POINT { x: -500, y: 400 });
         println!("[Test] Window position changed to (-500, 400) via WindowPos");
     }
 
-    // FlexContainerを縦並びに変更
-    let mut container_query = world.query_filtered::<&mut BoxStyle, With<FlexDemoContainer>>();
-    if let Some(mut style) = container_query.iter_mut(world).next() {
-        style.flex_direction = Some(taffy::FlexDirection::Column);
-        style.justify_content = Some(taffy::JustifyContent::SpaceAround);
-        println!("[Test] FlexContainer direction changed to Column");
-    }
-
-    // 赤い矩形のサイズを変更
-    let mut red_query = world.query_filtered::<&mut BoxStyle, With<RedBox>>();
-    if let Some(mut style) = red_query.iter_mut(world).next() {
-        if let Some(ref mut size) = style.size {
-            size.width = Some(Dimension::Px(150.0));
-            size.height = Some(Dimension::Px(80.0));
-        }
-        println!("[Test] RedBox size changed to 150x80");
-    }
-
-    // 緑の矩形のgrowを変更
-    let mut green_query = world.query_filtered::<&mut BoxStyle, With<GreenBox>>();
-    if let Some(mut style) = green_query.iter_mut(world).next() {
-        style.flex_grow = Some(2.0);
-        println!("[Test] GreenBox grow changed to 2.0");
-    }
-
-    // 青い矩形のgrowを変更
-    let mut blue_query = world.query_filtered::<&mut BoxStyle, With<BlueBox>>();
-    if let Some(mut style) = blue_query.iter_mut(world).next() {
-        style.flex_grow = Some(1.0);
-        println!("[Test] BlueBox grow changed to 1.0");
-    }
-
     println!("[Test] Layout parameters changed:");
-    println!("  FlexContainer: Row → Column, SpaceEvenly → SpaceAround");
-    println!("  RedBox: 200x100 → 150x80");
-    println!("  GreenBox: grow 1.0 → 2.0");
-    println!("  BlueBox: grow 2.0 → 1.0");
+    println!("  Window: position moved to (-500, 400)");
+    println!("  All other layout parameters unchanged (DPI scaling test)");
 }
 
 /// ウィンドウを閉じる
