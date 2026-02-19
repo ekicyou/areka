@@ -2,7 +2,8 @@ use bevy_ecs::hierarchy::ChildOf;
 use bevy_ecs::lifecycle::HookContext;
 use bevy_ecs::prelude::*;
 use bevy_ecs::world::DeferredWorld;
-use std::cell::{Cell, RefCell};
+use std::cell::RefCell;
+use std::sync::atomic::{AtomicI32, Ordering};
 use tracing::{debug, trace, warn};
 use windows::Win32::Foundation::*;
 use windows::Win32::UI::HiDpi::{AdjustWindowRectExForDpi, GetDpiForSystem, GetDpiForWindow};
@@ -81,61 +82,50 @@ impl DpiChangeContext {
 }
 
 // ============================================================================
-// IS_SELF_INITIATED - SetWindowPos ラッパーフラグ (TLS)
+// SELF_INITIATED_DEPTH - SetWindowPos ネストカウンタ (AtomicI32)
 // ============================================================================
 
-thread_local! {
-    /// `SetWindowPos` ラッパーが呼び出し中であることを示すフラグ。
-    ///
-    /// `guarded_set_window_pos()` のスコープ内でのみ `true` となる。
-    /// `true` の間に発火する `WM_WINDOWPOSCHANGED` は自アプリ由来の echo と判定し、
-    /// `apply_window_pos_changes` での再送信をスキップする。
-    ///
-    /// ## ライフサイクル
-    /// 1. `guarded_set_window_pos()` 呼び出し → `true` に設定
-    /// 2. `SetWindowPos` Win32 API 呼び出し（同期的に `WM_WINDOWPOSCHANGED` が発火）
-    /// 3. ハンドラ内で `is_self_initiated()` を参照 → `true` なら echo
-    /// 4. `SetWindowPosGuard` の Drop で `false` にリセット（RAII 保証）
-    static IS_SELF_INITIATED: Cell<bool> = const { Cell::new(false) };
-}
+/// `guarded_set_window_pos` のネスト深度カウンタ。
+///
+/// 0 より大きい場合、自アプリ由来の `SetWindowPos` 呼び出し中であることを示す。
+/// `SetWindowPos` → `WM_WINDOWPOSCHANGED` は同期的に発火するため、
+/// Relaxed ordering で十分。
+///
+/// ## ライフサイクル
+/// 1. `guarded_set_window_pos()` 呼び出し → カウンタ +1
+/// 2. `SetWindowPos` Win32 API 呼び出し（同期的に `WM_WINDOWPOSCHANGED` が発火）
+/// 3. ハンドラ内で `is_self_initiated()` を参照 → カウンタ > 0 なら echo
+/// 4. `SetWindowPosGuard` の Drop でカウンタ -1（RAII 保証）
+static SELF_INITIATED_DEPTH: AtomicI32 = AtomicI32::new(0);
 
-/// 現在の `SetWindowPos` 呼び出しスコープ内かどうかを返す。
+/// 現在 `guarded_set_window_pos` 呼び出しスコープ内かどうかを返す。
 ///
 /// `WM_WINDOWPOSCHANGED` ハンドラ内で echo 判定に使用する。
 /// `true` の場合、自アプリの `guarded_set_window_pos()` 経由の呼び出しであり、
 /// `apply_window_pos_changes` での再送信は不要。
 pub fn is_self_initiated() -> bool {
-    IS_SELF_INITIATED.get()
+    SELF_INITIATED_DEPTH.load(Ordering::Relaxed) > 0
 }
 
-/// RAII ガード: スコープ終了時に `IS_SELF_INITIATED` を以前の値に復元する。
+/// RAII ガード: スコープ終了時にネストカウンタをデクリメントする。
 ///
 /// `guarded_set_window_pos()` 内で使用され、正常終了・`?` early return・
-/// パニック時のいずれでもフラグが確実に復元されることを保証する。
-///
-/// ## ネスト対応
-/// ドラッグ中の DPI 変更などで `guarded_set_window_pos` がネストされた場合、
-/// 内側のガードが Drop されても外側のガードが設定した `true` 値が復元される。
-/// これにより、外側の `SetWindowPos` 完了までの WM_WINDOWPOSCHANGED が
-/// 正しく echo と判定される。
-struct SetWindowPosGuard {
-    previous: bool,
-}
+/// パニック時のいずれでもカウンタが確実に復元されることを保証する。
+struct SetWindowPosGuard;
 
 impl SetWindowPosGuard {
     fn new() -> Self {
-        let previous = IS_SELF_INITIATED.get();
-        IS_SELF_INITIATED.set(true);
-        Self { previous }
+        SELF_INITIATED_DEPTH.fetch_add(1, Ordering::Relaxed);
+        Self
     }
 }
 
 impl Drop for SetWindowPosGuard {
     fn drop(&mut self) {
-        IS_SELF_INITIATED.set(self.previous);
+        let prev = SELF_INITIATED_DEPTH.fetch_sub(1, Ordering::Relaxed);
         trace!(
-            is_initiated = self.previous,
-            "IS_SELF_INITIATED restored by guard"
+            depth = prev - 1,
+            "SELF_INITIATED_DEPTH decremented by guard"
         );
     }
 }
@@ -143,7 +133,7 @@ impl Drop for SetWindowPosGuard {
 /// `SetWindowPos` をラッパー付きで呼び出す。
 ///
 /// RAII Drop guard により、正常終了・`?` early return・パニック時も
-/// `IS_SELF_INITIATED` が確実に `false` にリセットされる。
+/// ネストカウンタが確実にデクリメントされる。
 /// `SetWindowPos` → `WM_WINDOWPOSCHANGED` は同期発火のため、
 /// ハンドラ内で `is_self_initiated()` を参照して echo を判定できる。
 ///
@@ -165,7 +155,7 @@ pub unsafe fn guarded_set_window_pos(
     cy: i32,
     flags: SET_WINDOW_POS_FLAGS,
 ) -> windows::core::Result<()> {
-    let _guard = SetWindowPosGuard::new(); // Drop で previous 値を復元
+    let _guard = SetWindowPosGuard::new(); // Drop でカウンタ -1
 
     trace!(
         hwnd = format!("0x{:X}", hwnd.0 as usize),
