@@ -300,6 +300,7 @@ async fn run_demo(tx: CommandSender) {
 
     // === 4秒: 終了 ===
     info!("[Async] 4s: Closing windows");
+    async_io::Timer::after(Duration::from_secs(60)).await;
     let _ = tx.send(Box::new(close_window));
 }
 
@@ -888,12 +889,12 @@ fn change_layout_parameters(world: &mut World) {
     // DPIスケーリング動作を正しく検証できる。
     let mut wp_query = world.query_filtered::<&mut WindowPos, With<FlexDemoWindow>>();
     if let Some(mut wp) = wp_query.iter_mut(world).next() {
-        wp.position = Some(windows::Win32::Foundation::POINT { x: -500, y: 400 });
-        println!("[Test] Window position changed to (-500, 400) via WindowPos");
+        wp.position = Some(windows::Win32::Foundation::POINT { x: -1600, y: 400 });
+        println!("[Test] Window position changed to (-1600, 400) via WindowPos");
     }
 
     println!("[Test] Layout parameters changed:");
-    println!("  Window: position moved to (-500, 400)");
+    println!("  Window: position moved to (-1600, 400)");
     println!("  All other layout parameters unchanged (DPI scaling test)");
 }
 
@@ -948,14 +949,20 @@ fn dump_all_windows_dpi(world: &mut World) {
         if let Some(bs) = world.get::<BoxStyle>(window_entity) {
             let (w, h) = match &bs.size {
                 Some(size) => {
-                    let w = size.width.map(|d| match d {
-                        Dimension::Px(v) => v,
-                        _ => 0.0,
-                    }).unwrap_or(0.0);
-                    let h = size.height.map(|d| match d {
-                        Dimension::Px(v) => v,
-                        _ => 0.0,
-                    }).unwrap_or(0.0);
+                    let w = size
+                        .width
+                        .map(|d| match d {
+                            Dimension::Px(v) => v,
+                            _ => 0.0,
+                        })
+                        .unwrap_or(0.0);
+                    let h = size
+                        .height
+                        .map(|d| match d {
+                            Dimension::Px(v) => v,
+                            _ => 0.0,
+                        })
+                        .unwrap_or(0.0);
                     (w, h)
                 }
                 None => (0.0, 0.0),
@@ -1039,14 +1046,20 @@ fn dump_children_dpi(world: &mut World, entity: Entity, depth: usize) {
         let bs_str = if let Some(bs) = world.get::<BoxStyle>(child) {
             let (w, h) = match &bs.size {
                 Some(size) => {
-                    let w = size.width.map(|d| match d {
-                        Dimension::Px(v) => v,
-                        _ => 0.0,
-                    }).unwrap_or(0.0);
-                    let h = size.height.map(|d| match d {
-                        Dimension::Px(v) => v,
-                        _ => 0.0,
-                    }).unwrap_or(0.0);
+                    let w = size
+                        .width
+                        .map(|d| match d {
+                            Dimension::Px(v) => v,
+                            _ => 0.0,
+                        })
+                        .unwrap_or(0.0);
+                    let h = size
+                        .height
+                        .map(|d| match d {
+                            Dimension::Px(v) => v,
+                            _ => 0.0,
+                        })
+                        .unwrap_or(0.0);
                     (w, h)
                 }
                 None => (0.0, 0.0),
