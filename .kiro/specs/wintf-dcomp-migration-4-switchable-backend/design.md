@@ -476,7 +476,7 @@ fn find_composition_mode_deferred(
 **フィルタリング戦略**:
 - `init_window_graphics` は `Without<WindowGraphics>` を含むため、`WindowGraphics` が存在しない Window のみ処理
 - ULW モードの Window には `WindowGraphics` が挿入されないため、`init_window_graphics` のクエリに引っかかりうる
-- → 追加で `With<CompositionMode>` + ランタイムの `CompositionMode::DComp` チェック、または `Without<WindowD3D11Compositor>` フィルタで ULW Window を除外
+- → クエリに `&CompositionMode` を追加し、ランタイムで `CompositionMode::DComp` の Window のみ処理する。`Without<WindowD3D11Compositor>` フィルタは **使用不可**（`GraphicsSetup` ステージ内で `init_window_graphics` が `compositor_init_system` より先に実行されるため、この時点では ULW Window にも `WindowD3D11Compositor` が未存在であり、両者を区別できない）
 
 **Implementation Notes**
 - `DCompGraphicsResource` の初期化は `init_window_graphics` 内で行う（最初の DComp Window 検出時にのみ実行）
