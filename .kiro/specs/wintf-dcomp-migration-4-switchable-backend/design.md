@@ -99,7 +99,8 @@ graph TB
 - **選択パターン**: ハイブリッド方式 — Window レベルの `CompositionMode` enum + コンポーネント存在フィルタ
 - **ドメイン境界**: ULW パイプライン（`compositor.rs`, `compositor_systems.rs`）と DComp パイプライン（`systems.rs`, `visual_manager.rs`）は既存のモジュール分離をそのまま活用
 - **維持パターン**: `Option<Inner>` デバイスロスト対応、`With<T>` / `Without<T>` クエリフィルタ
-- **新規コンポーネント**: `CompositionMode`（Window 専用）、`DCompGraphicsResource`（グローバルリソース）
+- **Window フィールド追加**: `composition_mode: CompositionMode`（`Window` 構造体プライベートフィールド、ゲッターのみ公開）
+- **新規 ECS Resource**: `DCompGraphicsResource`（グローバルリソース）
 - **ステアリング準拠**: ECS コンポーネントベース設計、COM ラッパー層分離、tracing ロギング
 
 ### Technology Stack
@@ -247,7 +248,7 @@ DComp の `render_surface`（RenderSurface ステージ）と ULW の `composite
 
 | Component                      | Domain/Layer | Intent                           | Req Coverage  | Key Dependencies           | Contracts      |
 | ------------------------------ | ------------ | -------------------------------- | ------------- | -------------------------- | -------------- |
-| CompositionMode                | ECS/Window   | Window のパイプライン選択を表現  | 1.1-1.5       | Window (P0)                | State          |
+| Window::composition_mode       | Window field | Window のパイプライン選択を表現  | 1.1-1.5       | —                          | State          |
 | DCompGraphicsResource          | ECS/Graphics | DComp COM デバイスの遅延管理     | 4.1-4.5       | GraphicsCore (P0)          | Service, State |
 | GraphicsCore（変更）           | ECS/Graphics | 共通 GPU リソース管理            | 4.3, 4.5, 6.5 | —                          | Service, State |
 | create_windows（変更）         | ECS/Window   | モード連動スタイル適用           | 5.1-5.3       | CompositionMode (P0)       | —              |
@@ -259,17 +260,18 @@ DComp の `render_surface`（RenderSurface ステージ）と ULW の `composite
 
 ### ECS / Window Layer
 
-#### CompositionMode
+#### Window::composition_mode フィールド
 
-| Field        | Detail                                                                               |
-| ------------ | ------------------------------------------------------------------------------------ |
-| Intent       | Window エンティティの描画パイプラインを ULW / DComp から選択する enum コンポーネント |
-| Requirements | 1.1, 1.2, 1.3, 1.4, 1.5                                                              |
+| Field        | Detail                                                                                                      |
+| ------------ | ----------------------------------------------------------------------------------------------------------- |
+| Intent       | `Window` 構造体のプライベートフィールドとして描画パイプライン（ULW / DComp）を保持する                      |
+| Requirements | 1.1, 1.2, 1.3, 1.4, 1.5                                                                                     |
 
 **Responsibilities & Constraints**
-- Window エンティティにのみ配置（子ウィジェットには伝播しない）
-- ウィンドウ生成時に決定し、以降不変（ランタイム切り替え不可）
+- `Window` コンポーネントのフィールドとして常に存在する（挿入タイミング問題が構造的に消滅）
+- フィールドはプライベート、ゲッター `composition_mode()` のみ公開（不変保証）
 - デフォルト値は `ULW`（後方互換性）
+- ビルダーパターン導入は将来課題（現フェーズでは `Window { composition_mode: CompositionMode::DComp, ..Default::default() }` で指定）
 
 **Dependencies**
 - Inbound: `create_windows` — スタイル決定 (P0)
@@ -283,30 +285,53 @@ DComp の `render_surface`（RenderSurface ステージ）と ULW の `composite
 ##### State Management
 
 ```rust
-#[derive(Component, Debug, Clone, Copy, PartialEq, Eq)]
+/// 描画パイプライン選択 enum。Window フィールドとして保持。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum CompositionMode {
     /// ULW パイプライン: D2D1 合成 → DIBSection → UpdateLayeredWindow
     /// 透過クリックスルー対応。デフォルト。
+    #[default]
     ULW,
     /// DComp パイプライン: IDCompositionTarget → Visual → Surface
     /// 通常ウィンドウUI向け。
     DComp,
 }
 
-impl Default for CompositionMode {
+/// Windowコンポーネント - ウィンドウ作成に必要な基本パラメータを保持
+#[derive(Component, Debug, Clone)]
+#[component(on_add = on_window_add)]
+pub struct Window {
+    pub title: String,
+    pub parent: Option<HWND>,
+    /// 描画パイプライン選択。生成後は不変（プライベートフィールド + ゲッターのみ）。
+    composition_mode: CompositionMode,
+}
+
+impl Window {
+    /// 描画パイプラインを返す。生成後は変更不可。
+    pub fn composition_mode(&self) -> CompositionMode {
+        self.composition_mode
+    }
+}
+
+impl Default for Window {
     fn default() -> Self {
-        Self::ULW
+        Self {
+            title: "Window".to_string(),
+            parent: None,
+            composition_mode: CompositionMode::default(), // ULW
+        }
     }
 }
 ```
 
-- Persistence: ECS コンポーネントとして Entity に付与、永続化なし
-- Consistency: ウィンドウ生成前に設定、生成後は不変
-- Concurrency: 読み取り専用（生成時に1度書き込み）
+- Persistence: `Window` コンポーネントのフィールドとして Entity に常に存在
+- Consistency: `Window` と同時に作成されるため挿入タイミング問題なし
+- Concurrency: フィールドはプライベート + ゲッターのみ、書き換え不可
 
 **Implementation Notes**
-- `on_visual_add` フック内で `DeferredWorld` を使い、`ChildOf` チェーンを辿って祖先 Window の `CompositionMode` を参照する。`find_owner_window` と同等のロジックを `DeferredWorld` 上で実装。
-- `CompositionMode` は Window エンティティ専用のため、`on_window_add` フックでの自動挿入は行わない（呼び出し側が明示的に指定するか、`Default` で ULW が選択される）。
+- `on_visual_add` フック内では `world.get::<Window>(ancestor).map(|w| w.composition_mode())` で参照する（別途 `CompositionMode` コンポーネントを探す必要がない）。
+- ECS フィルタリングは引き続きパイプライン固有コンポーネント（`WindowD3D11Compositor` / `WindowGraphics`）の存在で行う。フィールド値はシステム内でのランタイムチェックのみに使用。
 
 ### ECS / Graphics Layer
 
@@ -413,9 +438,9 @@ fn on_visual_add(mut world: DeferredWorld, context: HookContext) {
 
     // 既存: Arrangement, BrushInherit の挿入（変更なし）
 
-    // 新規: 祖先 Window の CompositionMode を判定
-    // DeferredWorld で ChildOf チェーンを辿り、Window を持つ祖先を探索
-    let is_dcomp_mode = find_composition_mode_deferred(&world, entity)
+    // 新規: 祖先 Window の composition_mode フィールドを判定
+    // CompositionMode は Window のフィールドであるため、Window が存在すれば必ず取得可能
+    let is_dcomp_mode = find_owner_window_composition_mode(&world, entity)
         .map(|mode| matches!(mode, CompositionMode::DComp))
         .unwrap_or(false);
 
@@ -431,22 +456,23 @@ fn on_visual_add(mut world: DeferredWorld, context: HookContext) {
     }
 }
 
-/// DeferredWorld で ChildOf チェーンを辿り、祖先 Window の CompositionMode を返す。
-/// Window が見つからないか CompositionMode がない場合は None。
-fn find_composition_mode_deferred(
+/// DeferredWorld で ChildOf チェーンを辿り、祖先 Window の composition_mode を返す。
+/// CompositionMode は Window のフィールドのため、Window が存在すれば必ず Some を返す。
+/// Window が見つからない場合（orphan Visual 等）は None。
+fn find_owner_window_composition_mode(
     world: &DeferredWorld,
     entity: Entity,
 ) -> Option<CompositionMode> {
-    // エンティティ自身が Window + CompositionMode を持つ場合
-    if world.get::<Window>(entity).is_some() {
-        return world.get::<CompositionMode>(entity).copied();
+    // エンティティ自身が Window の場合
+    if let Some(w) = world.get::<Window>(entity) {
+        return Some(w.composition_mode());
     }
     // ChildOf チェーンを辿る
     let mut current = entity;
     while let Some(child_of) = world.get::<ChildOf>(current) {
         let parent = child_of.parent();
-        if world.get::<Window>(parent).is_some() {
-            return world.get::<CompositionMode>(parent).copied();
+        if let Some(w) = world.get::<Window>(parent) {
+            return Some(w.composition_mode());
         }
         current = parent;
     }
@@ -455,10 +481,10 @@ fn find_composition_mode_deferred(
 ```
 
 **Implementation Notes**
-- `DeferredWorld` は `world.get::<T>(entity)` を提供するため、`ChildOf` チェーン走査が可能。既存の `find_owner_window(&World, Entity)` と同等のロジック。
-- Window エンティティ自身が Visual を持つ場合、`on_window_add` で `Visual::default()` が自動挿入される。この時点で Window にまだ `CompositionMode` が付与されていない可能性がある。spawn 時に `CompositionMode` と `Window` を同時に insert するか、`CompositionMode` → `Window` の順で insert する必要がある。
+- `CompositionMode` は `Window` のフィールドであるため、`Window` が存在すれば必ず `composition_mode()` が返る。挿入タイミング競合は構造的に存在しない。
+- `find_owner_window_composition_mode` は既存の `find_owner_window(&World, Entity)` と同等の ChildOf 走査ロジックを `DeferredWorld` で実装。
 - ULW モードでは DComp コンポーネントは挿入されず、既存と同じ動作。後方互換性を維持。
-- 万が一 `find_composition_mode_deferred` が `None` を返す場合（Window 未所属の orphan Visual）、DComp コンポーネントは挿入しない（安全側に倒す）。
+- orphan Visual（Window 祖先なし）の場合は `None` → DComp コンポーネントを挿入しない（安全側）。
 
 #### init_window_graphics（変更）
 
@@ -564,7 +590,6 @@ fn find_composition_mode_deferred(
 
 ```mermaid
 erDiagram
-    Window ||--|| CompositionMode : "has"
     Window ||--o| WindowD3D11Compositor : "ULW mode"
     Window ||--o| WindowGraphics : "DComp mode"
     Window ||--o{ Visual : "children"
@@ -576,10 +601,7 @@ erDiagram
     Window {
         String title
         HWND parent
-    }
-    CompositionMode {
-        enum ULW
-        enum DComp
+        CompositionMode composition_mode
     }
     WindowD3D11Compositor {
         ID2D1Bitmap1 composition_bitmap
