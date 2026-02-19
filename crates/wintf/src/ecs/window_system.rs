@@ -45,6 +45,7 @@ pub fn create_windows(world: &mut World) {
                 entity,
                 window.title.clone(),
                 window.parent,
+                window.composition_mode(),
                 opt_style.copied(),
                 opt_pos.copied(),
                 name.map(|n| n.as_str().to_string()),
@@ -55,7 +56,7 @@ pub fn create_windows(world: &mut World) {
     // 収集したエンティティに対してウィンドウを作成
     let singleton = WinProcessSingleton::get_or_init();
 
-    for (entity, title, parent, opt_style, opt_pos, name_str) in entities_to_create {
+    for (entity, title, parent, composition_mode, opt_style, opt_pos, name_str) in entities_to_create {
         let entity_name = match &name_str {
             Some(n) => n.clone(),
             None => format!("Entity({:?})", entity),
@@ -72,6 +73,15 @@ pub fn create_windows(world: &mut World) {
         let pos_comp = opt_pos.unwrap_or_default();
         let system_dpi = unsafe { GetDpiForSystem() };
 
+        // CompositionMode に基づいて ex_style を調整
+        let ex_style = match composition_mode {
+            CompositionMode::ULW => style_comp.ex_style, // WS_EX_LAYERED (デフォルト)
+            CompositionMode::DComp => {
+                // DComp モード: WS_EX_NOREDIRECTIONBITMAP を設定、WS_EX_LAYERED は除去
+                (style_comp.ex_style & !WS_EX_LAYERED) | WS_EX_NOREDIRECTIONBITMAP
+            }
+        };
+
         debug!(
             frame,
             entity = %entity_name,
@@ -83,7 +93,7 @@ pub fn create_windows(world: &mut World) {
 
         let (x, y, width, height) = pos_comp.to_window_coords_for_creation(
             style_comp.style,
-            style_comp.ex_style,
+            ex_style,
             system_dpi,
         );
 
@@ -104,7 +114,7 @@ pub fn create_windows(world: &mut World) {
 
         let result = unsafe {
             CreateWindowExW(
-                style_comp.ex_style,
+                ex_style,
                 singleton.ecs_window_class_name(),
                 &title_hstring,
                 style_comp.style,

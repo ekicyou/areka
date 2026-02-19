@@ -5,6 +5,7 @@ use bevy_ecs::prelude::*;
 use tracing::{debug, error, trace};
 use windows::Win32::Graphics::DirectComposition::*;
 
+use super::dcomp_resource::DCompGraphicsResource;
 use super::format_entity_name;
 
 /// デフォルトのVisualコンポーネントをEntityに挿入する (R3)
@@ -76,6 +77,7 @@ fn create_visual_only(
 pub fn visual_resource_management_system(
     mut commands: Commands,
     graphics: Res<GraphicsCore>,
+    dcomp_resource: Option<Res<DCompGraphicsResource>>,
     mut query: Query<
         (Entity, &Visual, &mut VisualGraphics, Option<&Name>),
         Changed<VisualGraphics>,
@@ -86,7 +88,7 @@ pub fn visual_resource_management_system(
         return;
     }
 
-    let dcomp = match graphics.dcomp() {
+    let dcomp = match dcomp_resource.as_ref().and_then(|r| r.dcomp()) {
         Some(d) => d,
         None => return,
     };

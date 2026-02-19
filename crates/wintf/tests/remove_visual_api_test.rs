@@ -4,6 +4,7 @@
 
 use windows::core::Result;
 use wintf::com::dcomp::*;
+use wintf::ecs::DCompGraphicsResource;
 use wintf::ecs::GraphicsCore;
 
 /// テスト用の GraphicsCore を作成するヘルパー関数
@@ -15,7 +16,9 @@ fn setup_graphics() -> Result<GraphicsCore> {
 #[test]
 fn test_remove_visual_removes_child_from_parent() -> Result<()> {
     let graphics = setup_graphics()?;
-    let dcomp = graphics.dcomp().expect("dcomp device should exist");
+    let d2d = graphics.d2d_device().expect("D2Dデバイスが無効");
+    let dcomp_resource = DCompGraphicsResource::new(d2d).expect("DCompGraphicsResource作成失敗");
+    let dcomp = dcomp_resource.dcomp().expect("dcomp device should exist");
 
     // 親Visual と 子Visual を作成
     let parent_visual = dcomp.create_visual()?;
@@ -35,7 +38,9 @@ fn test_remove_visual_removes_child_from_parent() -> Result<()> {
 #[test]
 fn test_remove_visual_nonexistent_returns_error() -> Result<()> {
     let graphics = setup_graphics()?;
-    let dcomp = graphics.dcomp().expect("dcomp device should exist");
+    let d2d = graphics.d2d_device().expect("D2Dデバイスが無効");
+    let dcomp_resource = DCompGraphicsResource::new(d2d).expect("DCompGraphicsResource作成失敗");
+    let dcomp = dcomp_resource.dcomp().expect("dcomp device should exist");
 
     // 親Visual と 子Visual を作成（子は追加しない）
     let parent_visual = dcomp.create_visual()?;
@@ -60,7 +65,9 @@ fn test_remove_visual_nonexistent_returns_error() -> Result<()> {
 #[test]
 fn test_remove_all_visuals_clears_all_children() -> Result<()> {
     let graphics = setup_graphics()?;
-    let dcomp = graphics.dcomp().expect("dcomp device should exist");
+    let d2d = graphics.d2d_device().expect("D2Dデバイスが無効");
+    let dcomp_resource = DCompGraphicsResource::new(d2d).expect("DCompGraphicsResource作成失敗");
+    let dcomp = dcomp_resource.dcomp().expect("dcomp device should exist");
 
     // 親Visual と 複数の子Visual を作成
     let parent_visual = dcomp.create_visual()?;
@@ -96,7 +103,9 @@ fn test_remove_all_visuals_clears_all_children() -> Result<()> {
 #[test]
 fn test_remove_visual_multiple_operations() -> Result<()> {
     let graphics = setup_graphics()?;
-    let dcomp = graphics.dcomp().expect("dcomp device should exist");
+    let d2d = graphics.d2d_device().expect("D2Dデバイスが無効");
+    let dcomp_resource = DCompGraphicsResource::new(d2d).expect("DCompGraphicsResource作成失敗");
+    let dcomp = dcomp_resource.dcomp().expect("dcomp device should exist");
 
     let parent_visual = dcomp.create_visual()?;
     let child_visual = dcomp.create_visual()?;

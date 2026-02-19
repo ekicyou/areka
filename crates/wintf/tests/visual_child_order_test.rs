@@ -8,6 +8,7 @@ use bevy_ecs::hierarchy::{ChildOf, Children};
 use bevy_ecs::prelude::*;
 use windows::core::Result;
 use wintf::com::dcomp::*;
+use wintf::ecs::DCompGraphicsResource;
 use wintf::ecs::{visual_hierarchy_sync_system, GraphicsCore, Visual, VisualGraphics};
 
 /// テスト用マーカーコンポーネント（アーキタイプを変えるために使用）
@@ -29,7 +30,9 @@ fn setup_graphics() -> Result<GraphicsCore> {
 #[test]
 fn test_different_archetype_siblings_visual_hierarchy_sync() -> Result<()> {
     let graphics = setup_graphics()?;
-    let dcomp = graphics.dcomp().expect("dcomp device should exist").clone();
+    let d2d = graphics.d2d_device().expect("D2Dデバイスが無効");
+    let dcomp_resource = DCompGraphicsResource::new(d2d).expect("DCompGraphicsResource作成失敗");
+    let dcomp = dcomp_resource.dcomp().expect("dcomp device should exist").clone();
 
     let mut world = World::new();
     world.insert_resource(graphics);
@@ -108,7 +111,9 @@ fn test_different_archetype_siblings_visual_hierarchy_sync() -> Result<()> {
 #[test]
 fn test_children_without_visual_graphics_are_safely_skipped() -> Result<()> {
     let graphics = setup_graphics()?;
-    let dcomp = graphics.dcomp().expect("dcomp device should exist").clone();
+    let d2d = graphics.d2d_device().expect("D2Dデバイスが無効");
+    let dcomp_resource = DCompGraphicsResource::new(d2d).expect("DCompGraphicsResource作成失敗");
+    let dcomp = dcomp_resource.dcomp().expect("dcomp device should exist").clone();
 
     let mut world = World::new();
     world.insert_resource(graphics);
@@ -169,7 +174,9 @@ fn test_children_without_visual_graphics_are_safely_skipped() -> Result<()> {
 #[test]
 fn test_many_siblings_alternating_archetypes_visual_hierarchy() -> Result<()> {
     let graphics = setup_graphics()?;
-    let dcomp = graphics.dcomp().expect("dcomp device should exist").clone();
+    let d2d = graphics.d2d_device().expect("D2Dデバイスが無効");
+    let dcomp_resource = DCompGraphicsResource::new(d2d).expect("DCompGraphicsResource作成失敗");
+    let dcomp = dcomp_resource.dcomp().expect("dcomp device should exist").clone();
 
     let mut world = World::new();
     world.insert_resource(graphics);

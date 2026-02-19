@@ -398,12 +398,16 @@ impl EcsWorld {
                     .chain(),
             );
 
-            // GraphicsSetupスケジュール: D2D1合成スタック初期化
-            // Phase 2: DCompシステム（init_window_graphics, window_visual_integration_system）を除去
-            // Phase 1で構築されたcompositor_init_systemを登録
+            // GraphicsSetupスケジュール: D2D1合成スタック + DComp初期化
+            // init_window_graphics: DComp モードの Window に WindowGraphics を作成
+            // compositor_init_system: ULW モードの Window に WindowD3D11Compositor を作成
             schedules.add_systems(
                 GraphicsSetup,
-                crate::ecs::graphics::compositor_systems::compositor_init_system,
+                (
+                    crate::ecs::graphics::init_window_graphics,
+                    crate::ecs::graphics::compositor_systems::compositor_init_system
+                        .after(crate::ecs::graphics::init_window_graphics),
+                ),
             );
 
             // Drawスケジュール: ウィジェット描画システム
@@ -437,25 +441,48 @@ impl EcsWorld {
                     .chain(),
             );
 
-            // PreRenderSurface: Phase 2で空化（mark_dirty_surfaces除去）
-            // composite_render_system内のis_window_dirty()がダーティ判定を代替
-
-            // RenderSurface: Phase 2で空化（render_surface除去）
-            // WPF的遅延戦略により、焼き付けはCompositionステージで実行
-
-            // Compositionスケジュール: D2D1合成描画
-            // Phase 2: DCompシステム（visual_property_sync_system）を除去
-            // Phase 1で構築されたcomposite_render_systemを登録
+            // PreRenderSurface: DComp パイプライン用 Visual/Surface リソース管理
             schedules.add_systems(
-                Composition,
-                crate::ecs::graphics::compositor_systems::composite_render_system,
+                PreRenderSurface,
+                (
+                    crate::ecs::graphics::visual_manager::visual_resource_management_system,
+                    crate::ecs::graphics::deferred_surface_creation_system
+                        .after(crate::ecs::graphics::visual_manager::visual_resource_management_system),
+                    crate::ecs::graphics::mark_dirty_surfaces
+                        .after(crate::ecs::graphics::deferred_surface_creation_system),
+                    crate::ecs::graphics::cleanup_surface_on_commandlist_removed
+                        .after(crate::ecs::graphics::mark_dirty_surfaces),
+                    crate::ecs::graphics::visual_manager::window_visual_integration_system
+                        .after(crate::ecs::graphics::cleanup_surface_on_commandlist_removed),
+                ),
             );
 
-            // CommitComposition: Phase 3 — UpdateLayeredWindow による画面転送
-            // Phase 2 で空化された当該ステージを ulw_present_system が引き継ぐ
+            // RenderSurface: DComp パイプライン用 Surface 描画
+            schedules.add_systems(
+                RenderSurface,
+                crate::ecs::graphics::render_surface,
+            );
+
+            // Compositionスケジュール: DComp Visual階層同期 + D2D1合成描画
+            // visual_hierarchy_sync → visual_property_sync → composite_render
+            schedules.add_systems(
+                Composition,
+                (
+                    crate::ecs::graphics::visual_hierarchy_sync_system,
+                    crate::ecs::graphics::visual_property_sync_system
+                        .after(crate::ecs::graphics::visual_hierarchy_sync_system),
+                    crate::ecs::graphics::compositor_systems::composite_render_system
+                        .after(crate::ecs::graphics::visual_property_sync_system),
+                ),
+            );
+
+            // CommitComposition: ULW 画面転送 + DComp コミット
             schedules.add_systems(
                 CommitComposition,
-                crate::ecs::graphics::compositor_systems::ulw_present_system,
+                (
+                    crate::ecs::graphics::compositor_systems::ulw_present_system,
+                    crate::ecs::graphics::commit_composition,
+                ),
             );
 
             // FrameFinalizeスケジュール: 一時的ポインター状態クリア

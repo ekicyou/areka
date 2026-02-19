@@ -6,6 +6,7 @@
 use bevy_ecs::prelude::*;
 use windows::core::Result;
 use wintf::com::dcomp::*;
+use wintf::ecs::DCompGraphicsResource;
 use wintf::ecs::{GraphicsCore, VisualGraphics};
 
 /// テスト用の GraphicsCore を作成するヘルパー関数
@@ -17,7 +18,9 @@ fn setup_graphics() -> Result<GraphicsCore> {
 #[test]
 fn test_visual_graphics_has_parent_visual_field() -> Result<()> {
     let graphics = setup_graphics()?;
-    let dcomp = graphics.dcomp().expect("dcomp device should exist");
+    let d2d = graphics.d2d_device().expect("D2Dデバイスが無効");
+    let dcomp_resource = DCompGraphicsResource::new(d2d).expect("DCompGraphicsResource作成失敗");
+    let dcomp = dcomp_resource.dcomp().expect("dcomp device should exist");
 
     // Visual を作成
     let visual = dcomp.create_visual()?;
@@ -36,7 +39,9 @@ fn test_visual_graphics_has_parent_visual_field() -> Result<()> {
 #[test]
 fn test_visual_graphics_new_with_parent() -> Result<()> {
     let graphics = setup_graphics()?;
-    let dcomp = graphics.dcomp().expect("dcomp device should exist");
+    let d2d = graphics.d2d_device().expect("D2Dデバイスが無効");
+    let dcomp_resource = DCompGraphicsResource::new(d2d).expect("DCompGraphicsResource作成失敗");
+    let dcomp = dcomp_resource.dcomp().expect("dcomp device should exist");
 
     let parent_visual = dcomp.create_visual()?;
     let child_visual = dcomp.create_visual()?;
@@ -54,7 +59,9 @@ fn test_visual_graphics_new_with_parent() -> Result<()> {
 #[test]
 fn test_visual_graphics_set_parent_visual() -> Result<()> {
     let graphics = setup_graphics()?;
-    let dcomp = graphics.dcomp().expect("dcomp device should exist");
+    let d2d = graphics.d2d_device().expect("D2Dデバイスが無効");
+    let dcomp_resource = DCompGraphicsResource::new(d2d).expect("DCompGraphicsResource作成失敗");
+    let dcomp = dcomp_resource.dcomp().expect("dcomp device should exist");
 
     let parent1 = dcomp.create_visual()?;
     let parent2 = dcomp.create_visual()?;
@@ -85,7 +92,9 @@ fn test_visual_graphics_set_parent_visual() -> Result<()> {
 #[test]
 fn test_visual_graphics_on_remove_simulation() -> Result<()> {
     let graphics = setup_graphics()?;
-    let dcomp = graphics.dcomp().expect("dcomp device should exist");
+    let d2d = graphics.d2d_device().expect("D2Dデバイスが無効");
+    let dcomp_resource = DCompGraphicsResource::new(d2d).expect("DCompGraphicsResource作成失敗");
+    let dcomp = dcomp_resource.dcomp().expect("dcomp device should exist");
 
     let parent = dcomp.create_visual()?;
     let child = dcomp.create_visual()?;
@@ -117,7 +126,9 @@ fn test_visual_graphics_on_remove_simulation() -> Result<()> {
 #[test]
 fn test_visual_graphics_ecs_lifecycle() -> Result<()> {
     let graphics = setup_graphics()?;
-    let dcomp = graphics.dcomp().expect("dcomp device should exist");
+    let d2d = graphics.d2d_device().expect("D2Dデバイスが無効");
+    let dcomp_resource = DCompGraphicsResource::new(d2d).expect("DCompGraphicsResource作成失敗");
+    let dcomp = dcomp_resource.dcomp().expect("dcomp device should exist");
 
     let mut world = World::new();
 

@@ -309,6 +309,20 @@ pub fn find_owner_window(world: &World, entity: Entity) -> Option<Entity> {
     None
 }
 
+/// 描画パイプライン選択 enum。Window フィールドとして保持。
+///
+/// ウィンドウ生成時に指定し、以降は不変。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum CompositionMode {
+    /// ULW パイプライン: D2D1 合成 → DIBSection → UpdateLayeredWindow
+    /// 透過クリックスルー対応。デフォルト。
+    #[default]
+    ULW,
+    /// DComp パイプライン: IDCompositionTarget → Visual → Surface
+    /// 通常ウィンドウUI向け。
+    DComp,
+}
+
 /// Windowコンポーネント - ウィンドウ作成に必要な基本パラメータを保持
 /// スタイルや位置・サイズは WindowStyle, WindowPos コンポーネントで指定
 #[derive(Component, Debug, Clone)]
@@ -316,6 +330,16 @@ pub fn find_owner_window(world: &World, entity: Entity) -> Option<Entity> {
 pub struct Window {
     pub title: String,
     pub parent: Option<HWND>,
+    /// 描画パイプライン選択。生成後は変更しないこと。
+    /// ULW: 透過クリックスルー対応、DComp: 通常ウィンドウUI向け。
+    pub composition_mode: CompositionMode,
+}
+
+impl Window {
+    /// 描画パイプラインを返す。生成後は変更不可。
+    pub fn composition_mode(&self) -> CompositionMode {
+        self.composition_mode
+    }
 }
 
 impl Default for Window {
@@ -323,6 +347,7 @@ impl Default for Window {
         Self {
             title: "Window".to_string(),
             parent: None,
+            composition_mode: CompositionMode::default(), // ULW
         }
     }
 }

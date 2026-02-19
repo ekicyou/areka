@@ -3,6 +3,7 @@
 #[cfg(test)]
 mod graphics_core_tests {
     use crate::ecs::graphics::GraphicsCore;
+    use crate::ecs::graphics::DCompGraphicsResource;
     use windows::Win32::Graphics::Direct2D::D2D1_DEVICE_CONTEXT_OPTIONS_NONE;
 
     #[test]
@@ -29,9 +30,11 @@ mod graphics_core_tests {
     #[test]
     fn test_create_visual() {
         let graphics = GraphicsCore::new().expect("GraphicsCore作成失敗");
+        let d2d = graphics.d2d_device().expect("D2Dデバイスが無効");
+        let dcomp_resource = DCompGraphicsResource::new(d2d).expect("DCompGraphicsResource作成失敗");
 
         use crate::com::dcomp::DCompositionDeviceExt;
-        let dcomp = graphics.dcomp().expect("DCompositionデバイスが無効");
+        let dcomp = dcomp_resource.dcomp().expect("DCompositionデバイスが無効");
         let _visual = dcomp.create_visual().expect("Visual作成失敗");
 
         println!("[TEST PASS] IDCompositionVisual3 created successfully");
@@ -63,9 +66,11 @@ mod graphics_core_tests {
     #[test]
     fn test_create_multiple_visuals() {
         let graphics = GraphicsCore::new().expect("GraphicsCore作成失敗");
+        let d2d = graphics.d2d_device().expect("D2Dデバイスが無効");
+        let dcomp_resource = DCompGraphicsResource::new(d2d).expect("DCompGraphicsResource作成失敗");
 
         use crate::com::dcomp::DCompositionDeviceExt;
-        let dcomp = graphics.dcomp().expect("DCompositionデバイスが無効");
+        let dcomp = dcomp_resource.dcomp().expect("DCompositionデバイスが無効");
 
         // 複数のVisualを作成できることを確認
         let _v1 = dcomp.create_visual().expect("Visual1作成失敗");
@@ -78,9 +83,11 @@ mod graphics_core_tests {
     #[test]
     fn test_commit() {
         let graphics = GraphicsCore::new().expect("GraphicsCore作成失敗");
+        let d2d = graphics.d2d_device().expect("D2Dデバイスが無効");
+        let dcomp_resource = DCompGraphicsResource::new(d2d).expect("DCompGraphicsResource作成失敗");
 
         use crate::com::dcomp::DCompositionDeviceExt;
-        let dcomp = graphics.dcomp().expect("DCompositionデバイスが無効");
+        let dcomp = dcomp_resource.dcomp().expect("DCompositionデバイスが無効");
 
         // Commit()を呼び出せることを確認
         dcomp.commit().expect("Commit失敗");

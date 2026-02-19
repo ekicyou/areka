@@ -71,9 +71,8 @@ pub(super) fn WM_ERASEBKGND(
 
 /// WM_PAINT: 再描画要求
 ///
-/// WS_EX_LAYERED ウィンドウでは WM_PAINT がほぼ発火しないが、
-/// 安全のため BeginPaint/EndPaint 最小ペアを維持する（MSDN 準拠）。
-/// 実際の描画は UpdateLayeredWindow（ulw_present_system）に委譲。
+/// - `CompositionMode::DComp` → `DefWindowProcW` に委譲（DComp は OS 管理）
+/// - `CompositionMode::ULW` またはフォールバック → `BeginPaint`/`EndPaint` 最小ペア
 #[inline]
 pub(super) fn WM_PAINT(
     hwnd: HWND,
@@ -81,13 +80,40 @@ pub(super) fn WM_PAINT(
     _wparam: WPARAM,
     _lparam: LPARAM,
 ) -> HandlerResult {
-    use windows::Win32::Graphics::Gdi::{BeginPaint, EndPaint, PAINTSTRUCT};
-    let mut ps = PAINTSTRUCT::default();
-    unsafe {
-        let _ = BeginPaint(hwnd, &mut ps);
-        let _ = EndPaint(hwnd, &ps);
+    // Entity から CompositionMode を判定
+    let is_dcomp = if let Some(entity) = super::get_entity_from_hwnd(hwnd) {
+        if let Some(world_rc) = super::try_get_ecs_world() {
+            if let Ok(world_borrow) = world_rc.try_borrow() {
+                world_borrow
+                    .world()
+                    .get::<crate::ecs::window::Window>(entity)
+                    .map(|w| {
+                        w.composition_mode() == crate::ecs::window::CompositionMode::DComp
+                    })
+                    .unwrap_or(false)
+            } else {
+                false
+            }
+        } else {
+            false
+        }
+    } else {
+        false
+    };
+
+    if is_dcomp {
+        // DComp モード: DefWindowProcW に委譲
+        None
+    } else {
+        // ULW モード: BeginPaint/EndPaint 最小ペア
+        use windows::Win32::Graphics::Gdi::{BeginPaint, EndPaint, PAINTSTRUCT};
+        let mut ps = PAINTSTRUCT::default();
+        unsafe {
+            let _ = BeginPaint(hwnd, &mut ps);
+            let _ = EndPaint(hwnd, &ps);
+        }
+        Some(LRESULT(0))
     }
-    Some(LRESULT(0))
 }
 
 /// WM_CLOSE: ウィンドウクローズ要求

@@ -2,6 +2,7 @@
 ///
 /// このテストはGraphicsCore、WindowGraphics、Visual、Surfaceの
 /// Option<T>ラップと状態遷移機能をテストします。
+use wintf::ecs::DCompGraphicsResource;
 use wintf::ecs::{GraphicsCore, SurfaceGraphics, VisualGraphics};
 
 #[test]
@@ -30,14 +31,7 @@ fn test_graphics_core_invalidate_and_is_valid() {
         graphics.d2d_device().is_none(),
         "d2d_device() should return None after invalidate()"
     );
-    assert!(
-        graphics.dcomp().is_none(),
-        "dcomp() should return None after invalidate()"
-    );
-    assert!(
-        graphics.desktop().is_none(),
-        "desktop() should return None after invalidate()"
-    );
+    // Note: dcomp() and desktop() are no longer on GraphicsCore (moved to DCompGraphicsResource)
     assert!(
         graphics.dwrite_factory().is_none(),
         "dwrite_factory() should return None after invalidate()"
@@ -49,7 +43,9 @@ fn test_visual_new_and_invalidate() {
     use wintf::com::dcomp::DCompositionDeviceExt;
 
     let graphics = GraphicsCore::new().expect("GraphicsCore作成失敗");
-    let dcomp = graphics.dcomp().expect("dcomp取得失敗");
+    let d2d = graphics.d2d_device().expect("D2Dデバイスが無効");
+    let dcomp_resource = DCompGraphicsResource::new(d2d).expect("DCompGraphicsResource作成失敗");
+    let dcomp = dcomp_resource.dcomp().expect("dcomp device should exist");
 
     let visual_raw = dcomp.create_visual().expect("Visual作成失敗");
     let mut visual = VisualGraphics::new(visual_raw);
@@ -79,7 +75,9 @@ fn test_surface_new_and_invalidate() {
     use wintf::com::dcomp::DCompositionDeviceExt;
 
     let graphics = GraphicsCore::new().expect("GraphicsCore作成失敗");
-    let dcomp = graphics.dcomp().expect("dcomp取得失敗");
+    let d2d = graphics.d2d_device().expect("D2Dデバイスが無効");
+    let dcomp_resource = DCompGraphicsResource::new(d2d).expect("DCompGraphicsResource作成失敗");
+    let dcomp = dcomp_resource.dcomp().expect("dcomp device should exist");
 
     let surface_raw = dcomp
         .create_surface(

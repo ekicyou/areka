@@ -73,16 +73,17 @@ pub fn calculate_surface_size_from_global_arrangement(
 /// HWNDに対してWindowGraphicsリソースを作成する
 fn create_window_graphics_for_hwnd(
     graphics: &GraphicsCore,
+    dcomp_resource: &super::DCompGraphicsResource,
     hwnd: HWND,
 ) -> windows::core::Result<WindowGraphics> {
     use windows::Win32::Graphics::Direct2D::D2D1_DEVICE_CONTEXT_OPTIONS_NONE;
 
-    if !graphics.is_valid() {
+    if !graphics.is_valid() || !dcomp_resource.is_valid() {
         return Err(windows::core::Error::from(E_FAIL));
     }
 
-    // 1. CompositionTarget作成
-    let desktop = graphics
+    // 1. CompositionTarget作成（DCompGraphicsResource から取得）
+    let desktop = dcomp_resource
         .desktop()
         .ok_or(windows::core::Error::from(E_FAIL))?;
     let target = desktop.create_target_for_hwnd(hwnd, true)?;
@@ -98,17 +99,19 @@ fn create_window_graphics_for_hwnd(
 
 /// Surfaceを作成してVisualに設定する
 fn create_surface_for_visual(
-    graphics: &GraphicsCore,
+    dcomp_resource: &super::DCompGraphicsResource,
     visual: &VisualGraphics,
     width: u32,
     height: u32,
 ) -> windows::core::Result<SurfaceGraphics> {
-    if !graphics.is_valid() {
+    if !dcomp_resource.is_valid() {
         return Err(windows::core::Error::from(E_FAIL));
     }
 
     // 1. IDCompositionSurface作成
-    let dcomp = graphics.dcomp().ok_or(windows::core::Error::from(E_FAIL))?;
+    let dcomp = dcomp_resource
+        .dcomp()
+        .ok_or(windows::core::Error::from(E_FAIL))?;
     let surface = dcomp.create_surface(
         width,
         height,
@@ -310,32 +313,22 @@ pub fn render_surface(
 
 /// DirectCompositionのすべての変更を確定する
 pub fn commit_composition(
-    graphics: Option<Res<GraphicsCore>>,
+    dcomp_resource: Option<Res<super::DCompGraphicsResource>>,
     frame_count: Res<crate::ecs::world::FrameCount>,
 ) {
-    let Some(graphics) = graphics else {
-        warn!(
-            frame = frame_count.0,
-            "[commit_composition] GraphicsCore not available"
-        );
+    let Some(dcomp_resource) = dcomp_resource else {
+        // DCompGraphicsResource 未初期化（DComp ウィンドウなし）: 正常スキップ
         return;
     };
 
-    if !graphics.is_valid() {
-        warn!(
-            frame = frame_count.0,
-            "[commit_composition] GraphicsCore is invalid"
-        );
+    if !dcomp_resource.is_valid() {
+        // DComp デバイス無効化中: 次フレームで再初期化予定
         return;
     }
 
-    let dcomp = match graphics.dcomp() {
+    let dcomp = match dcomp_resource.dcomp() {
         Some(d) => d,
         None => {
-            warn!(
-                frame = frame_count.0,
-                "[commit_composition] DComp device not available"
-            );
             return;
         }
     };
@@ -443,12 +436,17 @@ pub fn init_graphics_core(
 
 /// WindowGraphics初期化・再初期化
 ///
-/// Changed: GraphicsNeedsInitマーカーから、Changed<HasGraphicsResources> + needs_init()に移行
+/// WindowGraphics初期化・再初期化（DComp モード専用）
+///
+/// CompositionMode::DComp の Window にのみ WindowGraphics を作成する。
+/// DCompGraphicsResource が未初期化の場合はここで遅延初期化する。
 pub fn init_window_graphics(
     graphics: Res<GraphicsCore>,
+    dcomp_resource: Option<ResMut<super::DCompGraphicsResource>>,
     mut query: Query<
         (
             Entity,
+            &crate::ecs::window::Window,
             &crate::ecs::window::WindowHandle,
             &HasGraphicsResources,
             Option<&mut WindowGraphics>,
@@ -459,11 +457,57 @@ pub fn init_window_graphics(
     mut commands: Commands,
     frame_count: Res<crate::ecs::world::FrameCount>,
 ) {
+    use crate::ecs::window::CompositionMode;
+
     if !graphics.is_valid() {
         return;
     }
 
-    for (entity, handle, _res, window_graphics, name) in query.iter_mut() {
+    // DComp モードの Window が存在するか確認
+    let has_dcomp_windows = query
+        .iter()
+        .any(|(_, w, _, _, _, _)| w.composition_mode() == CompositionMode::DComp);
+
+    if !has_dcomp_windows {
+        return;
+    }
+
+    // DCompGraphicsResource の遅延初期化
+    let dcomp_valid = dcomp_resource.as_ref().map_or(false, |r| r.is_valid());
+    if !dcomp_valid {
+        if let Some(d2d) = graphics.d2d_device() {
+            match super::DCompGraphicsResource::new(d2d) {
+                Ok(new_resource) => {
+                    info!(
+                        frame = frame_count.0,
+                        "[init_window_graphics] DCompGraphicsResource lazily initialized"
+                    );
+                    commands.insert_resource(new_resource);
+                    // insert_resource はコマンドキューなのでこのフレームでは使えない
+                    // 次フレームで DCompGraphicsResource が利用可能になる
+                    return;
+                }
+                Err(e) => {
+                    error!(
+                        frame = frame_count.0,
+                        error = ?e,
+                        "[init_window_graphics] DCompGraphicsResource initialization failed"
+                    );
+                    return;
+                }
+            }
+        } else {
+            return;
+        }
+    }
+
+    let dcomp_res = dcomp_resource.unwrap();
+    for (entity, window, handle, _res, window_graphics, name) in query.iter_mut() {
+        // DComp モードのみ処理
+        if window.composition_mode() != CompositionMode::DComp {
+            continue;
+        }
+
         let entity_name = format_entity_name(entity, name);
         match window_graphics {
             None => {
@@ -472,7 +516,7 @@ pub fn init_window_graphics(
                     entity = %entity_name,
                     "[init_window_graphics] WindowGraphics creating new"
                 );
-                match create_window_graphics_for_hwnd(&graphics, handle.hwnd) {
+                match create_window_graphics_for_hwnd(&graphics, &dcomp_res, handle.hwnd) {
                     Ok(wg) => {
                         debug!(
                             frame = frame_count.0,
@@ -500,7 +544,7 @@ pub fn init_window_graphics(
                         "[init_window_graphics] WindowGraphics re-initializing"
                     );
                     let old_generation = wg.generation();
-                    match create_window_graphics_for_hwnd(&graphics, handle.hwnd) {
+                    match create_window_graphics_for_hwnd(&graphics, &dcomp_res, handle.hwnd) {
                         Ok(new_wg) => {
                             // 古いgenerationを引き継いでインクリメント
                             let new_generation = old_generation.wrapping_add(1);
@@ -572,6 +616,7 @@ pub fn init_window_visual(
 #[allow(dead_code)]
 pub fn sync_surface_from_arrangement(
     graphics: Option<Res<GraphicsCore>>,
+    dcomp_resource: Option<Res<super::DCompGraphicsResource>>,
     mut query: Query<
         (
             Entity,
@@ -592,6 +637,10 @@ pub fn sync_surface_from_arrangement(
     if !graphics.is_valid() {
         return;
     }
+
+    let Some(ref dcomp_res) = dcomp_resource else {
+        return;
+    };
 
     let mut _processed_count = 0;
 
@@ -643,7 +692,7 @@ pub fn sync_surface_from_arrangement(
                         new_height = height,
                         "[sync_surface_from_arrangement] Entity resizing, calling SetContent"
                     );
-                    match create_surface_for_visual(&graphics, visual_graphics, width, height) {
+                    match create_surface_for_visual(dcomp_res, visual_graphics, width, height) {
                         Ok(new_surface) => {
                             trace!(
                                 frame = frame_count.0,
@@ -672,7 +721,7 @@ pub fn sync_surface_from_arrangement(
                     height = height,
                     "[sync_surface_from_arrangement] Entity creating new Surface, calling SetContent"
                 );
-                match create_surface_for_visual(&graphics, visual_graphics, width, height) {
+                match create_surface_for_visual(dcomp_res, visual_graphics, width, height) {
                     Ok(new_surface) => {
                         trace!(
                             frame = frame_count.0,
@@ -791,6 +840,7 @@ pub fn apply_window_pos_changes(
 /// WindowD3D11Compositorを追加。BitmapSourceGraphicsは維持（DComp非依存）。
 pub fn invalidate_dependent_components(
     graphics: Option<Res<GraphicsCore>>,
+    dcomp_resource: Option<ResMut<super::DCompGraphicsResource>>,
     mut compositor_query: Query<&mut super::compositor::WindowD3D11Compositor>,
     mut bitmap_source_query: Query<&mut crate::ecs::widget::bitmap_source::BitmapSourceGraphics>,
 ) {
@@ -799,6 +849,11 @@ pub fn invalidate_dependent_components(
             warn!(
                 "[invalidate_dependent_components] GraphicsCore invalid - invalidating all dependent components"
             );
+
+            // DCompGraphicsResource の無効化
+            if let Some(mut dcr) = dcomp_resource {
+                dcr.invalidate();
+            }
 
             for mut comp in compositor_query.iter_mut() {
                 comp.invalidate();
@@ -1142,6 +1197,7 @@ pub fn visual_property_sync_system(
 /// ここでは直接更新（set_surface）する。commands.insert() は使用しない。
 pub fn deferred_surface_creation_system(
     graphics: Res<GraphicsCore>,
+    dcomp_resource: Option<Res<super::DCompGraphicsResource>>,
     // 統合クエリ: SurfaceGraphicsを持ち、GlobalArrangementまたはGraphicsCommandListが変更されたEntity
     // SurfaceGraphicsは事前配置されている前提
     mut query: Query<
@@ -1164,7 +1220,7 @@ pub fn deferred_surface_creation_system(
         return;
     }
 
-    let dcomp = match graphics.dcomp() {
+    let dcomp = match dcomp_resource.as_ref().and_then(|r| r.dcomp()) {
         Some(d) => d,
         None => return,
     };

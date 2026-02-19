@@ -1,17 +1,15 @@
 use crate::com::d2d::*;
 use crate::com::d3d11::*;
-use crate::com::dcomp::*;
 use crate::com::dwrite::*;
 use bevy_ecs::prelude::*;
 use tracing::{debug, info};
-use windows::core::{Interface, Result};
 use windows::Win32::Foundation::*;
 use windows::Win32::Graphics::Direct2D::*;
 use windows::Win32::Graphics::Direct3D::*;
 use windows::Win32::Graphics::Direct3D11::*;
-use windows::Win32::Graphics::DirectComposition::*;
 use windows::Win32::Graphics::DirectWrite::*;
 use windows::Win32::Graphics::Dxgi::*;
+use windows::core::{Interface, Result};
 
 #[derive(Debug)]
 struct GraphicsCoreInner {
@@ -21,8 +19,6 @@ struct GraphicsCoreInner {
     pub d2d: ID2D1Device,
     pub d2d_device_context: ID2D1DeviceContext, // グローバル共有DeviceContext
     pub dwrite_factory: IDWriteFactory2,
-    pub desktop: IDCompositionDesktopDevice,
-    pub dcomp: IDCompositionDevice3,
 }
 
 #[derive(Resource, Debug)]
@@ -47,8 +43,6 @@ impl GraphicsCore {
         debug!("[GraphicsCore] Global DeviceContext created");
 
         let dwrite_factory = dwrite_create_factory(DWRITE_FACTORY_TYPE_SHARED)?;
-        let desktop = dcomp_create_desktop_device(&d2d)?;
-        let dcomp: IDCompositionDevice3 = desktop.cast()?;
 
         info!("[GraphicsCore] Initialization completed");
 
@@ -60,8 +54,6 @@ impl GraphicsCore {
                 d2d,
                 d2d_device_context,
                 dwrite_factory,
-                desktop,
-                dcomp,
             }),
         })
     }
@@ -80,14 +72,6 @@ impl GraphicsCore {
 
     pub fn d2d_device(&self) -> Option<&ID2D1Device> {
         self.inner.as_ref().map(|i| &i.d2d)
-    }
-
-    pub fn dcomp(&self) -> Option<&IDCompositionDevice3> {
-        self.inner.as_ref().map(|i| &i.dcomp)
-    }
-
-    pub fn desktop(&self) -> Option<&IDCompositionDesktopDevice> {
-        self.inner.as_ref().map(|i| &i.desktop)
     }
 
     pub fn dwrite_factory(&self) -> Option<&IDWriteFactory2> {

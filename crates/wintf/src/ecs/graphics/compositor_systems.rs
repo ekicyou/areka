@@ -7,7 +7,7 @@ use super::compositor::WindowD3D11Compositor;
 use crate::com::ulw::{present_layered_window, transfer_to_hbitmap};
 use crate::ecs::graphics::{GraphicsCommandList, GraphicsCore, HasGraphicsResources, Visual};
 use crate::ecs::layout::GlobalArrangement;
-use crate::ecs::window::{WindowHandle, WindowPos};
+use crate::ecs::window::{CompositionMode, WindowHandle, WindowPos};
 // Note: WindowHandle は composite_render_system では不要（window_offset に GlobalArrangement を使用）
 // だが ulw_present_system で使用するため import は維持
 use bevy_ecs::hierarchy::Children;
@@ -36,6 +36,7 @@ pub fn compositor_init_system(
     mut query: Query<
         (
             Entity,
+            &crate::ecs::window::Window,
             &WindowHandle,
             &WindowPos,
             &HasGraphicsResources,
@@ -54,7 +55,12 @@ pub fn compositor_init_system(
         return;
     };
 
-    for (entity, _handle, window_pos, _res, compositor_opt, name) in query.iter_mut() {
+    for (entity, window, _handle, window_pos, _res, compositor_opt, name) in query.iter_mut() {
+        // DComp モードの Window はスキップ
+        if window.composition_mode() != CompositionMode::ULW {
+            continue;
+        }
+
         let entity_name = format_entity_name(entity, name);
 
         // WindowPos.size が None または幅/高さ 0 の場合はスキップ
