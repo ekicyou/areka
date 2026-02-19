@@ -1,0 +1,119 @@
+# Implementation Plan
+
+- [ ] 1. SubscriptionManager の内部構造をフラット化し、variable_id 管理を導入する
+- [ ] 1.1 購読状態のフラット化と ID 採番機構の実装
+  - 複数購読者マップを廃止し、単一の購読状態に統合する
+  - 0-origin のモノトニックカウンタで variable_id を自動採番する
+  - 変数名と ID の双方向マッピングを管理する（name→id / id→name）
+  - id_to_name は全割り当て済み ID を保持し、再利用禁止を保証する
+  - _Requirements: 1.1, 1.3, 1.5, 2.1, 5.1_
+- [ ] 1.2 subscribe メソッドの再設計（冪等性・事前購読対応）
+  - subscriber_id パラメータを除去し、変数名のみ受け取る
+  - 新規変数名には新しい variable_id を割り当てて返却する
+  - 既に購読済みの変数名には同一の variable_id を返却する（冪等性）
+  - 指示書未読み込み状態でも正常に ID を返却する
+  - _Requirements: 1.1, 1.2, 1.4, 2.2_
+- [ ] 1.3 unsubscribe / unsubscribe_all の再設計
+  - unsubscribe は variable_id を受け取り、購読を解除する
+  - 無効な variable_id に対しては Result::Err を返却する
+  - unsubscribe 後に同じ変数名で再 subscribe した場合は新しい ID を割り当てる
+  - unsubscribe_all は全購読を一括解除する
+  - _Requirements: 2.2, 5.2, 5.3, 5.4_
+- [ ] 1.4 (P) get_variable_name（逆引き）の実装
+  - variable_id から変数名への逆引きを提供する
+  - 存在しない ID に対しては Result::Err を返却する
+  - _Requirements: 4.3_
+- [ ] 1.5 (P) convert_names_to_ids（名前→ID 一括変換）の実装
+  - 変数名ベースの値マップを id ベースに変換するヘルパーを追加する
+  - 購読中の変数のみ変換し、未購読の名前は無視する
+  - _Requirements: 6.2_
+- [ ] 1.6 差分検出ロジックを id ベースに改修する
+  - diff_and_update は evaluate 結果（変数名ベース）を受け取り、内部で name→id 変換を行う
+  - 差分結果を id ベースの Vec で返却する
+  - 凍結値の管理も id ベースに移行する
+  - _Requirements: 3.1, 4.1, 4.2_
+- [ ] 1.7 force_update_last_values を id ベースに改修する
+  - id ベースの HashMap を受け取り、購読中の変数のみ last_values を更新する
+  - name→id 変換は呼び出し側が convert_names_to_ids を経由して行う
+  - _Requirements: 6.2_
+
+- [ ] 2. 公開型と エラー型の変更
+- [ ] 2.1 (P) UpdateResult の changes 型を id ベースに変更する
+  - changes フィールドの型を変数名ベースから variable_id ベースに変更する
+  - triggered フィールドは変更なし
+  - _Requirements: 4.1_
+- [ ] 2.2 (P) RuntimeError に InvalidVariableId バリアントを追加する
+  - 無効な variable_id 操作に対する新しいエラーバリアントを追加する
+  - Display 実装を追加する
+  - _Requirements: 5.2_
+
+- [ ] 3. DolaRuntime facade の公開 API を新シグネチャに変更する
+- [ ] 3.1 subscribe / unsubscribe / unsubscribe_all の委譲を更新する
+  - subscribe は SubscriptionManager に委譲し、variable_id を返却する
+  - unsubscribe は variable_id を受け取り、Result を返却する
+  - unsubscribe_all は引数なしで全購読を解除する
+  - _Requirements: 1.1, 2.2, 5.2_
+- [ ] 3.2 update メソッドから subscriber_id を除去し、新しい差分取得フローに接続する
+  - subscriber_id パラメータを除去する
+  - get_subscribed_variable_names で変数名を取得し evaluate に渡す
+  - diff_and_update の戻り値（id ベース）をそのまま UpdateResult に格納する
+  - アニメーション進行処理（deadline/トリガー/ループ/終了検知）は既存動作を維持する
+  - _Requirements: 2.2, 3.1, 3.2, 3.3_
+- [ ] 3.3 conclude_internal の name→id 変換フローを接続する
+  - collect_final_values（変数名ベース）→ convert_names_to_ids → force_update_last_values の3段階に改修する
+  - _Requirements: 6.2_
+
+- [ ] 4. ConflictResolver の force_update_last_values 呼び出しを改修する
+- [ ] 4.1 4つの競合解決戦略（Cancel/Conclude/Trim/Compress）の呼び出し部を更新する
+  - 各戦略で取得した変数名ベースの最終値を convert_names_to_ids で id に変換する
+  - 変換後の id ベース値を force_update_last_values に渡す
+  - 全4戦略で同一パターンの変更を適用する
+  - _Requirements: 6.1, 6.2, 6.3_
+
+- [ ] 5. SubscriptionManager のユニットテストを新 API に対応させる
+- [ ] 5.1 (P) 購読・採番・冪等性のユニットテストを実装する
+  - subscribe が連番 ID を返却することを検証する
+  - 同一変数名への subscribe で同一 ID が返却される冪等性を検証する
+  - 事前購読（指示書未読み込み状態）でも正常に動作することを検証する
+  - _Requirements: 7.2, 7.4_
+- [ ] 5.2 (P) unsubscribe / unsubscribe_all / ライフサイクルのユニットテストを実装する
+  - unsubscribe 後の再 subscribe で新 ID が割り当てられることを検証する
+  - 無効な ID への unsubscribe がエラーを返すことを検証する
+  - unsubscribe_all 後の再 subscribe で新 ID が割り当てられることを検証する
+  - _Requirements: 7.3_
+- [ ] 5.3 (P) get_variable_name 逆引きのユニットテストを実装する
+  - 有効な ID から変数名が取得できることを検証する
+  - 無効な ID でエラーが返ることを検証する
+  - _Requirements: 7.5_
+- [ ] 5.4 (P) 差分検出・凍結値・force_update のユニットテストを実装する
+  - id ベースの差分検出が正しく動作することを検証する
+  - 同一値では差分が発生しないことを検証する
+  - force_update_last_values 後に正しく差分が配信されることを検証する
+  - 凍結値が無関係な更新で消えないことを検証する
+  - convert_names_to_ids の変換が正しいことを検証する
+  - _Requirements: 7.4_
+
+- [ ] 6. 既存統合テストを新 API シグネチャに移行する
+- [ ] 6.1 runtime_facade_test の全テストを移行する
+  - subscribe 呼び出しを新シグネチャに変更し、返却された variable_id を保持する
+  - update 呼び出しから subscriber_id を除去する
+  - changes のアサーションを variable_id ベースに変更する
+  - _Requirements: 7.1_
+- [ ] 6.2 (P) conflict_resolution_test の全テストを移行する
+  - subscribe / update のシグネチャを変更する
+  - 4つの競合解決戦略のテストで id ベースの差分検証を行う
+  - _Requirements: 7.1_
+- [ ] 6.3 (P) loop_integration_test / loop_offset_test の全テストを移行する
+  - subscribe / update のシグネチャを変更する
+  - ループ関連の差分アサーションを id ベースに変更する
+  - _Requirements: 7.1_
+- [ ] 6.4 (P) trigger_test の全テストを移行する
+  - subscribe / update のシグネチャを変更する
+  - トリガー発火後の差分アサーションを id ベースに変更する
+  - _Requirements: 7.1_
+
+- [ ] 7. 全体ビルド・テスト通過を確認する
+  - cargo build でコンパイルエラーがないことを確認する
+  - cargo test で全テストがパスすることを確認する
+  - 指示書差し替え時に購読状態が維持されることを確認する
+  - _Requirements: 6.1, 6.3, 6.4, 7.1_
