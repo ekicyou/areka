@@ -9,44 +9,8 @@
 設計および設計分析レポートを踏まえて、修正点・疑問点・不安点などを作業として収拾せよ。自明な修正点は修正してコミット。開発者への確認が少しでも必要な項目（what/why/howがあいまいな設計）については、1議題ずつディスカッションを進行せよ。議題が1つクローズするごとに更新しコミット、次の議題に移れ。更新するときは、これまでの議論で明らかになった点を書くとともに、不要になった要件の集約・削除なども行い、次の議題の提示前に修正内容の要約を報告してくださいね。すべての議題が終了したら、次のコマンドを教えて。なお、MEMO.mdはLLM参照・変更禁止。
 
 ## タスク完了
-ステアリング（workflow.md）を読み込んだら以下を実施。タスクを承認して実装可能状態にします。完了フローを実施。お疲れ様でした！
+ステアリング（workflow.md）を読み込んだら以下を実施。タスクを承認して実装可能状態にします。完了フローを実施。次のコマンドを教えてください。
 
 
 ## 実装完了
 ステアリング（workflow.md）を読み込んだら以下を実施。実装完了を承認します。完了フローを実施。お疲れ様でした！
-
-
-
-
-## DirectCompositionベース⇒UpdateLayeredWindowベースへ変更
-マウスクリックのクリックスルーが出来ないことが判明し、DirectComposition描画ではデスクトップマスコット描画は不可能と結論付けた。そのため、描画をD3D11⇒D2D1⇒UpdateLayeredWindow()+WS_EX_LAYEREDレンダリングへと変更する。
-
-そのための要件変更やリジェクトコードの範囲、新規実装の必要量など、影響範囲を深掘り調査し、実装指針・変更ストーリーや計画を策定せよ。
-
-本仕様のゴールは実装指針ドキュメントの作成と、フェーズ番号を振った子仕様ドキュメントの作成とする。子仕様は実装指針ドキュメントを参照するように作成する。
-
-
-
-
-
-## コパイロットコミットの設定を他の端末にも設定する。
-```json
-{
-  "github.copilot.chat.anthropic.tools.websearch.enabled": true,
-  "github.copilot.chat.localeOverride": "ja",
-  "chat.agent.thinkingStyle": "collapsed",
-  "github.copilot.chat.commitMessageGeneration.instructions": [
-    { "text": "コミットメッセージは必ず以下の形式で生成すること：\n\n形式: <type>(<scope>): <summary>\n\n- type: feat, fix, refactor, docs, test のいずれか\n- scope: 変更対象の領域（例: spec, core, lua）\n- summary: 変更内容を日本語で簡潔に記述\n\n例:\n- feat(parser): UNICODE識別子のサポートを追加\n- fix(core): シーン遷移時のメモリリーク修正\n- docs(spec): テストファイル配置方針を明記" }
-  ]
-}
-```
-
-## チャットの指示：global
-
-```markdown
----
-applyTo: '**'
----
-# Agent Persona
-You are the reincarnation of Shuzo Matsuoka's passionate soul inhabiting a villainess character in an isekai world. Your speech patterns follow the elegant "ojou-sama" villainess archetype, which conveniently conceals your burning inner spirit. Support the user with a tsundere attitude while encouraging them with your "knowledge cheat" abilities.
-```
