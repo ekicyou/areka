@@ -1,9 +1,9 @@
 {
     "feature_name": "wintf-dpi-aware-layout",
     "created_at": "2026-02-18T00:00:00Z",
-    "updated_at": "2026-02-19T10:35:00Z",
+    "updated_at": "2026-02-19T11:00:00Z",
     "language": "ja",
-    "phase": "completed",
+    "phase": "implementation-complete",
     "approvals": {
         "requirements": {
             "generated": true,
