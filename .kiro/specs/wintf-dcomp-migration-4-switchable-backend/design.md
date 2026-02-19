@@ -262,10 +262,10 @@ DComp の `render_surface`（RenderSurface ステージ）と ULW の `composite
 
 #### Window::composition_mode フィールド
 
-| Field        | Detail                                                                                                      |
-| ------------ | ----------------------------------------------------------------------------------------------------------- |
-| Intent       | `Window` 構造体のプライベートフィールドとして描画パイプライン（ULW / DComp）を保持する                      |
-| Requirements | 1.1, 1.2, 1.3, 1.4, 1.5                                                                                     |
+| Field        | Detail                                                                                 |
+| ------------ | -------------------------------------------------------------------------------------- |
+| Intent       | `Window` 構造体のプライベートフィールドとして描画パイプライン（ULW / DComp）を保持する |
+| Requirements | 1.1, 1.2, 1.3, 1.4, 1.5                                                                |
 
 **Responsibilities & Constraints**
 - `Window` コンポーネントのフィールドとして常に存在する（挿入タイミング問題が構造的に消滅）
@@ -396,14 +396,21 @@ pub struct DCompGraphicsResource {
 ```
 
 - Persistence: ECS Resource（`Res<DCompGraphicsResource>`）
-- Consistency: `GraphicsCore.invalidate()` 時に `DCompGraphicsResource.invalidate()` を連動呼出し
+- Consistency: 既存の `invalidate_dependent_components` システムが `!gc.is_valid()` を毎フレーム検査し、`DCompGraphicsResource.invalidate()` を連動呼出し
 - Concurrency: ECS Resource アクセス制御による排他管理
 
 **Implementation Notes**
 - `GraphicsCore` から DComp 2フィールド（`desktop`, `dcomp`）を除去し、`DCompGraphicsResource` に移管。
 - `GraphicsCore::new()` は D3D/D2D/DWrite の共通リソースのみ初期化。DComp 初期化ステップ（7, 8）を除去。
-- `init_window_graphics` 内で `Option<ResMut<DCompGraphicsResource>>` を受け取り、必要時に `Commands::init_resource()` で初期化。
-- `invalidate_dependent_components` システムで `GraphicsCore` 無効化検知時に `DCompGraphicsResource` も無効化する。
+- `init_window_graphics` 内で `Option<ResMut<DCompGraphicsResource>>` を受け取り、必要時に `Commands::insert_resource()` で初期化。
+- **無効化連鎖メカニズム**: 既存の `invalidate_dependent_components`（GraphicsSetup ステージ）に `Option<ResMut<DCompGraphicsResource>>` パラメータを追加するのみ。`!gc.is_valid()` の間、`WindowD3D11Compositor` / `BitmapSourceGraphics` と同じパターンで `dcr.invalidate()` を呼ぶ。新規システム不要。
+  ```rust
+  // invalidate_dependent_components への追加分のみ（既存コードは変更なし）
+  if let Some(ref mut dcr) = dcomp_resource {
+      dcr.invalidate();
+  }
+  ```
+- 再初期化: `DCompGraphicsResource.invalidate()` → `inner = None` → 次フレームの `init_window_graphics` が `!dcomp.is_valid()` を検出して `DCompGraphicsResource::new()` を呼ぶ。既存パターンと完全対称。
 
 #### GraphicsCore（変更）
 
@@ -626,7 +633,7 @@ erDiagram
 ```
 
 **集約境界**:
-- `GraphicsCore` + `DCompGraphicsResource`: グローバルリソース集約。`invalidate()` は `GraphicsCore` → `DCompGraphicsResource` の順で連鎖無効化。
+- `GraphicsCore` + `DCompGraphicsResource`: グローバルリソース集約。無効化連鎖は `invalidate_dependent_components` システムが `!gc.is_valid()` を検出して `DCompGraphicsResource.invalidate()` を呼ぶことで実現（`WindowD3D11Compositor` / `BitmapSourceGraphics` と同パターン）。
 - Window エンティティ: `CompositionMode` に応じて `WindowD3D11Compositor`（ULW）または `WindowGraphics`（DComp）のいずれか一方を保持。
 - Visual エンティティ: DComp モード Window 配下でのみ `VisualGraphics` + `SurfaceGraphics` を保持。ULW モード Window 配下では保持しない。
 
