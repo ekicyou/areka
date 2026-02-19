@@ -1,9 +1,9 @@
 {
     "feature_name": "wintf-dcomp-migration-4-switchable-backend",
     "created_at": "2026-02-19T00:00:00+09:00",
-    "updated_at": "2026-02-20T00:00:00+09:00",
+    "updated_at": "2026-02-21T00:00:00+09:00",
     "language": "ja",
-    "phase": "design-generated",
+    "phase": "tasks-generated",
     "parent_spec": "wintf-dcomp-to-layered-migration",
     "approvals": {
         "requirements": {
@@ -12,10 +12,10 @@
         },
         "design": {
             "generated": true,
-            "approved": false
+            "approved": true
         },
         "tasks": {
-            "generated": false,
+            "generated": true,
             "approved": false
         }
     },
