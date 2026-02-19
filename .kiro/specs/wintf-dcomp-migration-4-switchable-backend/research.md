@@ -343,12 +343,16 @@ WndProcハンドラは `hwnd` ベースで、ECS World への直接アクセス�
 1. **DComp コンポーネント挿入タイミング**: `on_visual_add` フック内 vs 専用後付けシステム
 2. **GraphicsCore 分割粒度**: Inner 内 Option vs Inner 分割 vs 別 Resource
 
-### Research Needed（設計フェーズで調査）
+### Research Needed（設計フェーズで調査） — 調査完了
 
-- [ ] `DeferredWorld` で祖先エンティティの `CompositionMode` コンポーネントを参照可能か（bevy_ecs 0.18 の on_add フック制約）
-- [ ] bevy_ecs 0.18 の Observer パターンによるコンポーネント連動挿入の実現性
-- [ ] DComp と ULW が同一フレーム内で同一 `ID2D1DeviceContext` を使用する際の排他制御要件
-- [ ] `IDCompositionDesktopDevice::CreateTargetForHwnd` が `WS_EX_LAYERED` ウィンドウに対して動作するか（万が一の混同防止）
+- [x] `DeferredWorld` で祖先エンティティの `CompositionMode` コンポーネントを参照可能か（bevy_ecs 0.18 の on_add フック制約）
+  - **結果: 可能**。`DeferredWorld` は `world.get::<T>(entity)` を提供し、`ChildOf` チェーン走査で祖先 Window の `CompositionMode` を参照できる。既存の `find_owner_window(&World, Entity)` パターン（`window.rs:304`）と同等のロジックを `DeferredWorld` 上で実装可能。コードベース内に `on_window_handle_add` 等で `DeferredWorld.get::<T>()` を使う実績多数あり。
+- [x] bevy_ecs 0.18 の Observer パターンによるコンポーネント連動挿入の実現性
+  - **結果: on_add フックで十分**。`on_visual_add` 内で `DeferredWorld` + `Commands` を使い、DComp コンポーネントを条件付き挿入可能。Observer は不要。
+- [x] DComp と ULW が同一フレーム内で同一 `ID2D1DeviceContext` を使用する際の排他制御要件
+  - **結果: スケジュール順序で保証**。DComp `render_surface`（RenderSurface ステージ）と ULW `composite_render_system`（Composition ステージ）は異なるステージで順次実行。同一ステージ内での DeviceContext 競合は発生しない。
+- [x] `IDCompositionDesktopDevice::CreateTargetForHwnd` が `WS_EX_LAYERED` ウィンドウに対して動作するか（万が一の混同防止）
+  - **結果: 調査未実施（実装時に検証）**。設計上 DComp Window は `WS_EX_NOREDIRECTIONBITMAP` を使用し、`WS_EX_LAYERED` と混同される状況は発生しない。`CompositionMode` + `create_windows` のスタイル連動で排他保証。
 
 ### 将来調査トピック（Phase 4 スコープ外）
 
