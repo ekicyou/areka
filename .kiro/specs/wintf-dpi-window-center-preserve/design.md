@@ -124,6 +124,7 @@ flowchart TD
 | 4.1 | BoxStyle.size ソースオブトゥルース維持 | WM_WINDOWPOSCHANGED handler | — | — |
 | 4.2 | tick 前 WindowPos.position 補正 | CenterPreserveCorrection | `correct_position_for_dpi_center_preserve()` | DPI change flow |
 | 4.3 | 新規コンポーネント/TLS なし | — | — | — |
+| 4.4 | handlers.rs 分割・補正ヘルパー配置 | handlers.rs リファクタリング, CenterPreserveCorrection | — | — |
 | 5.1 | SELF_INITIATED_DEPTH AtomicI32 | SetWindowPosGuard | `is_self_initiated()` | — |
 | 5.2 | RAII カウンタ inc/dec | SetWindowPosGuard | `SetWindowPosGuard::new()`, `Drop` | — |
 | 5.3 | カウンタ > 0 判定 | SetWindowPosGuard | `is_self_initiated()` | — |
@@ -137,7 +138,8 @@ flowchart TD
 
 | Component | Domain/Layer | Intent | Req Coverage | Key Dependencies | Contracts |
 |-----------|-------------|--------|--------------|------------------|-----------|
-| CenterPreserveCorrection | Window Handler | DPI 変更時の中心保持位置補正 | 1.1-1.3, 2.1-2.3, 3.1-3.2, 4.1-4.3, 6.1-6.3, 7.1-7.2 | BoxStyle (P0), DPI (P0), WindowPos (P0), DpiChangeContext (P0) | Service |
+| handlers.rs リファクタリング | Window Proc | handlers.rs を関心事別に5ファイルに分割 | 4.4 | 全ハンドラ (P0) | — |
+| CenterPreserveCorrection | window_pos.rs | DPI 変更時の中心保持位置補正 | 1.1-1.3, 2.1-2.3, 3.1-3.2, 4.1-4.3, 6.1-6.3, 7.1-7.2 | BoxStyle (P0), DPI (P0), WindowPos (P0), DpiChangeContext (P0) | Service |
 | SetWindowPosGuard (refactored) | Window Management | ネストカウンタ管理 | 5.1-5.3 | SELF_INITIATED_DEPTH (P0) | State |
 
 ### Window Handler Layer
@@ -213,7 +215,14 @@ fn correct_position_for_dpi_center_preserve(
 ```
 
 **Implementation Notes**
-- **Integration**: `handlers.rs` の WM_WINDOWPOSCHANGED ハンドラ通常パス内、`window_pos.position = Some(client_pos)` の直前で `correct_position_for_dpi_center_preserve()` を呼び出し、戻り値で `client_pos` を差し替える
+- **ファイル配置**: `handlers.rs`（1,760行）を関心事別に分割し、中心保持補正ロジックは `window_proc/window_pos.rs` に配置する。分割構成:
+  - `lifecycle.rs` (~117行): NCCREATE, NCDESTROY, ERASEBKGND, PAINT, CLOSE, DISPLAYCHANGE
+  - `window_pos.rs` (~420行): WINDOWPOSCHANGED, DPICHANGED, center-preserve 補正ヘルパー
+  - `mouse_move.rs` (~473行): NCHITTEST, MOUSEMOVE, MOUSELEAVE + helpers
+  - `mouse_button.rs` (~630行): handle_button_message, 各ボタン6種, DBLCLK4種, MOUSEWHEEL2種
+  - `keyboard.rs` (~175行): KEYDOWN, CANCELMODE, ACTIVATE, find_ancestor_with_drag_config
+  - `handlers.rs` は削除し、`mod.rs` から各サブモジュールを `pub(super)` で参照
+- **Integration**: `window_pos.rs` の WM_WINDOWPOSCHANGED ハンドラ通常パス内、`window_pos.position = Some(client_pos)` の直前で `correct_position_for_dpi_center_preserve()` を呼び出し、戻り値で `client_pos` を差し替える
 - **Validation**: `calculate_center_correction` の計算結果は整数除算のため最大 1px の丸め誤差が生じうるが、実用上問題なし
 - **前提条件（BoxStyle.size）**: 本計算は Window エンティティが `BoxStyle.size = Some(BoxSize { width: Some(Px(w)), height: Some(Px(h)) })` で**固定物理サイズを直接保持**しており、taffy の min/max サイズ制約や flex 再分配が適用されていないことを前提とする。この前提が崩れた場合（min/max 制約による taffy 再計算で `window_pos_sync_system` の結果と乖離する場合）、補正精度は低下する可能性がある。現行アーキテクチャでは Window エンティティへの min/max 適用は設計外であるため、リスクは低い。
 - **Risks**: `BoxStyle.size` が `Dimension::Px` 以外（`Percent` 等）の場合は補正をスキップ。現行実装では Window エンティティは常に `Px` を使用

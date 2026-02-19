@@ -35,25 +35,37 @@ DPI200%モニタ（左）からDPI125%モニタ（右）へドラッグしよう
 1. When ウィンドウを125%モニターから200%モニターへドラッグした場合, the wintf window system shall ウィンドウが移動先の200%モニター上に正しく配置される
 2. When DPI増加（例: 125%→200%）によりウィンドウ物理サイズが増加した場合, the wintf window system shall 中心座標保持補正により、ウィンドウ中心が移動先モニター領域内に維持される
 
-### Requirement 4: ECSパイプラインとの統合
+### Requirement 4: ECSパイプラインとの統合およびファイル構成
 
-**Objective:** 開発者として、中心座標保持ロジックが既存のECSレイアウトパイプライン（`update_arrangements_system` → `propagate_global_arrangements` → `window_pos_sync_system` → `apply_window_pos_changes`）と自然に統合されることを保証したい。既存のレイアウト主導方式の設計原則を壊さないため。
+**Objective:** 開発者として、中心座標保持ロジックが既存のECSレイアウトパイプラインと自然に統合され、かつ `handlers.rs`（1,760行）の肄大化を解消するためのファイル分割リファクタリングを同時に実施したい。
 
 #### Acceptance Criteria
 1. The wintf layout system shall `BoxStyle.size`（論理px）をソースオブトゥルースとする既存の設計原則を維持する
-2. When DPI変更時にサイズ補正と位置補正を適用する場合, the wintf layout system shall `DpiChangeContext` の仕組みを活用し、`WM_WINDOWPOSCHANGED` ハンドラの echo/bypass 判定と整合する
-3. The wintf layout system shall 中心座標保持のための位置情報（変更前の物理サイズまたは中心座標）を `DpiChangeContext` もしくは同等の仕組みで DPI変更フロー内に伝達する
+2. When DPI変更時の `WM_WINDOWPOSCHANGED` ハンドラにおいて, the wintf window system shall ECS tick 前に `WindowPos.position` を中心保持補正済みの値に設定し、後続のレイアウトパイプラインが自然に正しい座標を伝播するようにする
+3. The wintf window system shall 中心保持補正に必要な情報（旧物理サイズ、論理サイズ、新DPIスケール）をハンドラ内で取得し、新規ECSコンポーネントやTLS追加なしに補正を完結する
+4. The wintf window system shall `handlers.rs` を関心事別に分割し、中心保持補正ヘルパー関数を `window_pos.rs` に配置する（ユニットテスト容易性のため）
 
-### Requirement 5: 単一DPIモニター環境での無影響
+### Requirement 5: SetWindowPosGuard のカウンタ方式化
+
+**Objective:** 開発者として、`guarded_set_window_pos` のネスト管理を AtomicI32 カウンタ方式に変更し、フラグ管理を簡素化・堅牢化したい。同期処理におけるネスト検知をより本質的な実装にするため。
+
+#### Acceptance Criteria
+1. The wintf window system shall `IS_SELF_INITIATED` TLS bool フラグを `SELF_INITIATED_DEPTH` AtomicI32 カウンタに置き換える
+2. When `guarded_set_window_pos` が呼び出された場合, the wintf window system shall カウンタをインクリメントし、スコープ終了時に RAII でデクリメントする
+3. The wintf window system shall `is_self_initiated()` をカウンタ > 0 の判定として実装する
+
+### Requirement 6: 単一DPIモニター環境での無影響
 
 **Objective:** 開発者として、単一DPIモニター環境やDPI変更が発生しない通常操作において、中心座標保持ロジックが動作に影響を与えないことを保証したい。既存の動作を壊さないため。
+
+> Note: Requirement 5（SetWindowPosGuard カウンタ方式化）は要件レビュー中に先行実装済み。
 
 #### Acceptance Criteria
 1. While DPI変更が発生していない場合, the wintf window system shall ウィンドウの移動・リサイズ操作に追加の位置補正を行わない
 2. While 単一DPIモニター環境で動作している場合, the wintf window system shall 既存の動作と同一のウィンドウ配置結果を維持する
 3. When ユーザーが手動でウィンドウをリサイズした場合, the wintf window system shall 中心座標保持補正を適用しない（DPI変更起因のサイズ変更にのみ適用される）
 
-### Requirement 6: ログ出力
+### Requirement 7: ログ出力
 
 **Objective:** 開発者として、DPI変更時の中心座標保持補正の適用状況をトレースログで確認できるようにしたい。デバッグと動作確認を容易にするため。
 
