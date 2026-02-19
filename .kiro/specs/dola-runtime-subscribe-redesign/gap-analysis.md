@@ -176,7 +176,7 @@
 ### 主要な設計決定が必要な項目
 
 1. **SubscriptionState の内部構造**: `HashMap<String, i64>` (name→id) + `HashMap<i64, String>` (id→name) の双方向マップか、単方向で十分か
-2. **`force_update_last_values` のI/F**: 引数は変数名ベース (`HashMap<String, EvaluatedValue>`) を維持し内部変換するか、呼び出し側を変更するか
+2. **`force_update_last_values` のI/F**: 引数はvariable_idベース（`HashMap<i64, EvaluatedValue>`）に統一する（設計判断済み）
 3. **テストヘルパーの設計**: `variable_id` ベースのテストで可読性を維持する手法（`get_variable_name` を使った逆引きヘルパー等）
 4. **`diff_and_update` 内部の変数名→ID変換タイミング**: evaluate結果（変数名ベース）をID変換するのは diff_and_update 内部か facade か
 

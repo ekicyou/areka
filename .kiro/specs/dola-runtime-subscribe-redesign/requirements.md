@@ -77,6 +77,7 @@ DolaRuntime の変数購読・更新 API を再設計する。現行の `subscri
 3. When `unsubscribe` 後に同じ `variable_name` で再度 `subscribe` が呼び出された場合、DolaRuntime shall 新しい `variable_id` を割り当てる
 4. When `unsubscribe_all` が呼び出された場合、DolaRuntime shall 全ての購読を解除し、以降の `subscribe` では新しい `variable_id` を割り当てる
 
+
 ### 要件 6: 既存機能の互換性維持
 
 **目的:** ランタイム利用者として、購読モデルの変更後も、既存のアニメーション再生・停止・トリガー機能が正しく動作することを期待する。
@@ -84,7 +85,7 @@ DolaRuntime の変数購読・更新 API を再設計する。現行の `subscri
 #### 受入基準
 
 1. The DolaRuntime shall 指示書読み込み (`load_document`)、開始 (`start`)、一時停止 (`pause`)、再開 (`resume`)、停止 (`cancel`) の各メソッドは既存の動作を維持する
-2. When ストーリーボードが終了（Conclude）した場合、DolaRuntime shall 購読変数の最終値を `update` の差分に含める（`force_update_last_values` 相当の動作維持）
+2. When ストーリーボードが終了（Conclude）した場合、DolaRuntime shall 購読変数の最終値を `update` の差分に含める（`force_update_last_values` 相当の動作維持。ただしAPIはvariable_id（i64）ベースのHashMapで値を強制設定する設計判断とする）
 3. While アニメーションが再生中、DolaRuntime shall トリガー機能が正しく動作する（`TriggerResult` の既存仕様維持）
 4. When 指示書が差し替え (`load_document` 再呼び出し) された場合、DolaRuntime shall 購読状態（`variable_id` マッピング）を維持する
 
