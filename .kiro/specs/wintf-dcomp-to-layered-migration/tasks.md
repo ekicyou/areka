@@ -44,28 +44,30 @@
   - _Dependencies: Task 1, Task 2, Task 3_
 
 - [x] 5. Phase 4 子仕様の作成
-  - 統合指針文書と Phase 1-3 子仕様を参照し、DComp コード削除と最終クリーンアップの仕様を策定する
+  - 統合指針文書と Phase 1-3 子仕様を参照し、切り替え式バックエンド実装（CompositionMode導入、ULW/DComp切り替え、DCompパイプライン復活登録）の仕様を策定する
   - 仕様サイクル全工程を完了する（init → requirements → design → tasks）
-  - 親仕様の設計に基づき、com/dcomp.rs 削除、DComp コンポーネント・システム削除、dcomp_demo.rs 削除、テスト修正の詳細設計を子仕様に具体化する
-  - 最終検証基準（grep 検証、cargo test, cargo build --examples 全パス）を定義する
-  - _Requirements: 1.1, 5.1, 8.4, 10.1_
+  - 親仕様の設計に基づき、CompositionMode enum導入、DCompシステムの条件付き復活登録、WS_EX_NOREDIRECTIONBITMAP / WS_EX_LAYERED動的切替の詳細設計を子仕様に具体化する
+  - DCompバックエンドの動作検証基準（dcomp_demo.rs維持、DCompモードウィンドウでの描画確認）を定義する
+  - 将来のWinRT Compositor拡張を見据えたenum設計方針を確定する
+  - 最終検証基準（cargo test, cargo build --examples 全パス、ULW/DComp両モード動作確認）を定義する
+  - _Requirements: 1.1, 2.5, 5.1, 10.1_
   - _Dependencies: Task 1, Task 2, Task 3, Task 4_
 
 ---
 
 ## 要件カバレッジサマリー
 
-| 要件 | タスク |
-|------|--------|
-| Req 1 | 1, 5 |
-| Req 2 | 1, 3 |
-| Req 3 | 1, 2 |
-| Req 4 | 1, 4 |
-| Req 5 | 1, 3, 5 |
-| Req 6 | 1, 2, 3 |
-| Req 7 | 1, 4 |
-| Req 8 | 1, 5 |
-| Req 9 | 1, 2, 3, 4, 5 |
+| 要件   | タスク        |
+| ------ | ------------- |
+| Req 1  | 1, 5          |
+| Req 2  | 1, 3          |
+| Req 3  | 1, 2          |
+| Req 4  | 1, 4          |
+| Req 5  | 1, 3, 5       |
+| Req 6  | 1, 2, 3       |
+| Req 7  | 1, 4          |
+| Req 8  | 1, 5          |
+| Req 9  | 1, 2, 3, 4, 5 |
 | Req 10 | 1, 2, 3, 4, 5 |
 
 全10要件がタスクにマッピング済み。

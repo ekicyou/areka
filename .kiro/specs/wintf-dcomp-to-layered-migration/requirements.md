@@ -96,7 +96,7 @@ DirectCompositionベース⇒UpdateLayeredWindowベースへ変更。マウス�
 
 4. When フェーズ3が完了した時, the wintf crate shall UpdateLayeredWindowによるウィンドウ更新を実装し、alpha=0ピクセルのクリックスルーが動作すること
 
-5. When フェーズ4が完了した時, the wintf crate shall DComp関連コード（com/dcomp.rs、DCompコンポーネント、DCompシステム）をECSコードから完全に除去し、cargo test全テストがパスすること
+5. When フェーズ4が完了した時, the wintf crate shall Windowエンティティ単位でULW/DCompの合成モード切り替えが可能な状態となり、同一アプリ内でULWウィンドウとDCompウィンドウが共存でき、cargo test全テストがパスすること
 
 ### Requirement 3: 新描画パイプライン（D2D1合成方式）
 
@@ -138,13 +138,13 @@ DirectCompositionベース⇒UpdateLayeredWindowベースへ変更。マウス�
 
 5. If UpdateLayeredWindow呼び出しが失敗した場合, the wintf crate shall エラーをトレースログに記録し、次フレームで再試行する
 
-### Requirement 5: GraphicsCore初期化の簡素化
+### Requirement 5: GraphicsCoreの合成モード対応
 
-**Objective:** 開発者として、DComp初期化を除去しD2D1デバイス中心のシンプルな初期化フローにしたい。
+**Objective:** 開発者として、GraphicsCoreがULWモードとDCompモードの両方をサポートし、DCompデバイスを条件付きで保持する構成にしたい。
 
 #### Acceptance Criteria
 
-1. The GraphicsCore shall 初期化フローからDCompositionCreateDevice3およびIDCompositionDesktopDevice/IDCompositionDevice3の作成を除去する
+1. The GraphicsCore shall DCompデバイスフィールド（`desktop: IDCompositionDesktopDevice`, `dcomp: IDCompositionDevice3`）を維持し、DCompモードのウィンドウが存在する場合に利用可能とする
 
 2. The GraphicsCore shall 以下のデバイスチェーンを維持する：
    - D3D11CreateDevice → ID3D11Device
@@ -153,10 +153,11 @@ DirectCompositionベース⇒UpdateLayeredWindowベースへ変更。マウス�
    - D2D1CreateDevice(dxgi) → ID2D1Device
    - CreateDeviceContext → ID2D1DeviceContext（共有）
    - DWriteCreateFactory → IDWriteFactory2
+   - DCompositionCreateDevice3 → IDCompositionDesktopDevice → IDCompositionDevice3（DComp維持）
 
-3. The GraphicsCore shall DComp関連フィールド（`desktop: IDCompositionDesktopDevice`, `dcomp: IDCompositionDevice3`）をstructから除去する
+3. The GraphicsCore shall DCompデバイスへのアクセサメソッド（`dcomp()`, `desktop()`）を維持する
 
-4. If デバイスロストが発生した場合, the GraphicsCore shall 既存のinvalidate()→再初期化フローを維持しつつ、DComp再初期化ステップを省略する
+4. If デバイスロストが発生した場合, the GraphicsCore shall 既存のinvalidate()→再初期化フローを維持し、DCompデバイスも含めて再初期化する
 
 ### Requirement 6: ECSコンポーネント再設計
 
@@ -206,7 +207,7 @@ DirectCompositionベース⇒UpdateLayeredWindowベースへ変更。マウス�
 3. The 実装指針 shall wintf-P0-balloon-system仕様への影響を評価する：
    - バルーンウィンドウの描画パイプライン変更の影響
 
-4. The 実装指針 shall dcomp_demo.rs（ECS非使用の独立DCompデモ）をフェーズ4（DCompコード削除・クリーンアップ）で削除対象とする
+4. The 実装指針 shall dcomp_demo.rs（ECS非使用の独立DCompデモ）をDCompバックエンド検証用リファレンスとして維持する。フェーズ4（切り替え式バックエンド実装）ではDCompパイプラインの動作確認に活用する
 
 ### Requirement 9: 子仕様の構成定義
 
@@ -218,7 +219,7 @@ DirectCompositionベース⇒UpdateLayeredWindowベースへ変更。マウス�
    - **子仕様1**: D2D1合成スタック構築（新GraphicsCore、合成ビットマップ、合成描画システム）
    - **子仕様2**: DCompパイプライン置換（ECSシステム切り替え、スケジュール更新）
    - **子仕様3**: UpdateLayeredWindow統合（WS_EX_LAYERED、ULW呼び出し、クリックスルー検証）
-   - **子仕様4**: DCompコード削除と最終クリーンアップ
+   - **子仕様4**: 切り替え式バックエンド実装（CompositionMode導入、ULW/DComp切り替え、DComp復活登録）
 
 2. The 各子仕様 shall 実装指針ドキュメントを参照し、自仕様の担当範囲・依存する前提条件・完了基準を明記する
 
@@ -236,7 +237,7 @@ DirectCompositionベース⇒UpdateLayeredWindowベースへ変更。マウス�
    - フェーズ1: 新パイプラインでtaffy_flex_demo相当の描画が動作すること
    - フェーズ2: 全既存exampleが新パイプラインで動作すること
    - フェーズ3: UpdateLayeredWindowでの透過表示＋クリックスルーが動作すること
-   - フェーズ4: `cargo test` 全テストパス＋DComp参照がECSコードから除去されていること
+   - フェーズ4: `cargo test` 全テストパス＋CompositionMode切り替えでULW/DComp両パイプラインが動作すること
 
 2. The 実装指針 shall 各フェーズの完了基準（Definition of Done）を明記する
 

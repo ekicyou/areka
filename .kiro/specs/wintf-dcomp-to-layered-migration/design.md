@@ -2,9 +2,9 @@
 
 ## Overview
 
-DirectComposition（DComp）ベースの描画パイプラインを、D2D1合成＋UpdateLayeredWindow（ULW）ベースの描画パイプラインへ全面移行するための**実装指針設計書**である。本仕様は親仕様として4つの段階的子仕様を策定し、各子仕様が参照する技術的指針・コンポーネント設計・システムフロー・移行戦略を包括的に定義する。
+DirectComposition（DComp）ベースの描画パイプラインを、D2D1合成＋UpdateLayeredWindow（ULW）ベースの描画パイプラインへ移行し、た上でWindowエンティティ単位でULW/DCompを切り替え可能にするための**実装指針設計書**である。本仕様は親仕様として4つの段階的子仕様を策定し、各子仕様が参照する技術的指針・コンポーネント設計・システムフロー・移行戦略を包括的に定義する。
 
-現行パイプラインではper-entity DCompリソース（IDCompositionVisual3, IDCompositionSurface）をGPU側で並列合成しているが、DComp描画ではクロスプロセスのクリックスルーが不可能であり、デスクトップマスコットの根幹要件を満たせない。新パイプラインではper-window ID2D1Bitmap1に全ウィジェットのGraphicsCommandListを合成描画し、UpdateLayeredWindow経由でウィンドウに転送することで、alpha=0ピクセルのOS自動クリックスルーを実現する。
+現行パイプラインではper-entity DCompリソース（IDCompositionVisual3, IDCompositionSurface）をGPU側で並列合成しているが、DComp描画ではクロスプロセスのクリックスルーが不可能であり、デスクトップマスコットの根幹要件を満たせない。新パイプラインではper-window ID2D1Bitmap1に全ウィジェットのGraphicsCommandListを合成描画し、UpdateLayeredWindow経由でウィンドウに転送することで、alpha=0ピクセルのOS自動クリックスルーを実現する。ただし、通常のウィンドウUI向けにDCompパイプラインも切り替え式で維持する（将来的にWinRT Compositorへの移行も視野）。
 
 ### Goals
 
@@ -14,14 +14,17 @@ DirectComposition（DComp）ベースの描画パイプラインを、D2D1合成
 - 4フェーズの段階的移行により各段階で検証可能な構成とする
 - Visual/Surface のComposition概念（階層・z-order・parent-child）をD2D1合成描画で論理的に継承する
 - 親→子のOpacity階層累積を自前実装する（DComp自動処理の代替）
+- Windowエンティティ単位でULW/DCompの合成モード切り替えを実現し、同一アプリ内で透過ウィンドウ（ULW）と通常ウィンドウUI（DComp）を共存させる
+- 将来的にDCompをWinRT Compositor（Windows.UI.Composition）に置換可能な拡張余地を持たせる
 
 ### Non-Goals
 
 - 本設計書での実装コード生成（子仕様で実施）
-- DComp以外のレンダリングバックエンド対応（Vulkan, OpenGL等）
+- DComp/ULW以外のレンダリングバックエンド対応（Vulkan, OpenGL等）
 - マルチウィンドウ間の合成最適化（各ウィンドウ独立）
 - GPU合成の維持（ULW方式はCPU転送を含む — デスクトップマスコットのウィジェット規模では問題にならない）
 - wintf-P0-click-through-rgn仕様の設計変更（競争的並走として独立進行）
+- WinRT Compositorへの実際の移行実装（本仕様では拡張余地の確保のみ。実際の移行は将来の別仕様で実施）
 
 ---
 
@@ -109,7 +112,7 @@ graph TB
 ```
 
 **Architecture Integration**:
-- **選択パターン**: ハイブリッド段階アプローチ（research.md Option C）。子仕様1-2で新モジュール並行追加、子仕様3でULW統合、子仕様4で旧コード削除
+- **選択パターン**: ハイブリッド段階アプローチ（research.md Option C）。子仕様1-2で新モジュール並行追加、子仕様3でULW統合、子仕様4で切り替え式バックエンド実装
 - **ドメイン境界**: Layout層（GREEN, 変更なし）→ Widget層（GREEN, 変更なし）→ Graphics層（RED→NEW, 全面置換）→ OS層（NEW, ULW統合）
 - **維持パターン**: Schedule/Stageベースの描画パイプライン、GraphicsCommandListによる描画抽象化、GlobalArrangement座標累積
 - **新コンポーネント根拠**: WindowD3D11Compositor（per-window合成リソースの統合管理）
@@ -117,16 +120,16 @@ graph TB
 
 ### Technology Stack
 
-| Layer | Choice / Version | Role in Feature | Notes |
-|-------|------------------|-----------------|-------|
-| ECS Runtime | bevy_ecs 0.18.0 | Schedule/System/Component基盤 | 変更なし |
-| Graphics Device | ID3D11Device + ID2D1Device (windows 0.62.2) | GPU描画リソース作成 | DComp初期化を除去 |
-| Rendering | ID2D1DeviceContext + ID2D1CommandList | ウィジェット描画 + 合成描画 | CommandList生成は既存、合成描画は新規 |
-| Composition | ID2D1Bitmap1 (render target + staging) | per-window合成ビットマップ | DComp Visual Treeの代替 |
-| Transfer | CreateDIBSection + MemoryDC | D2D→HBITMAP→HDC変換 | 新規COM ユーティリティ |
-| Presentation | UpdateLayeredWindow (Win32 API) | ULW_ALPHA モードでウィンドウ更新 | 新規。windows crateに API バインディング存在 |
-| Window Style | WS_EX_LAYERED (Win32) | alpha=0 自動クリックスルー | WS_EX_NOREDIRECTIONBITMAP から切替 |
-| Layout | taffy 0.9.2 | フレックスボックスレイアウト | 変更なし |
+| Layer           | Choice / Version                            | Role in Feature                  | Notes                                        |
+| --------------- | ------------------------------------------- | -------------------------------- | -------------------------------------------- |
+| ECS Runtime     | bevy_ecs 0.18.0                             | Schedule/System/Component基盤    | 変更なし                                     |
+| Graphics Device | ID3D11Device + ID2D1Device (windows 0.62.2) | GPU描画リソース作成              | DComp初期化を除去                            |
+| Rendering       | ID2D1DeviceContext + ID2D1CommandList       | ウィジェット描画 + 合成描画      | CommandList生成は既存、合成描画は新規        |
+| Composition     | ID2D1Bitmap1 (render target + staging)      | per-window合成ビットマップ       | DComp Visual Treeの代替                      |
+| Transfer        | CreateDIBSection + MemoryDC                 | D2D→HBITMAP→HDC変換              | 新規COM ユーティリティ                       |
+| Presentation    | UpdateLayeredWindow (Win32 API)             | ULW_ALPHA モードでウィンドウ更新 | 新規。windows crateに API バインディング存在 |
+| Window Style    | WS_EX_LAYERED (Win32)                       | alpha=0 自動クリックスルー       | WS_EX_NOREDIRECTIONBITMAP から切替           |
+| Layout          | taffy 0.9.2                                 | フレックスボックスレイアウト     | 変更なし                                     |
 
 ---
 
@@ -237,50 +240,50 @@ graph TB
 
 ## Requirements Traceability
 
-| Requirement | Summary | Components | Interfaces | Flows |
-|-------------|---------|------------|------------|-------|
-| 1.1 | DComp依存3カテゴリ分類 | research.md参照 | — | — |
-| 1.2 | 廃止対象ファイル識別 | research.md §1-3 | — | — |
-| 1.3 | 再利用可能資産保証 | GraphicsCommandList, Layout全体, Widget全体 | — | — |
-| 2.1 | 5フェーズ移行戦略 | Migration Strategy節 | — | — |
-| 2.2 | フェーズ1: DComp同等描画 | WindowD3D11Compositor, composite_render_system | CompositorService | 合成描画パイプライン |
-| 2.3 | フェーズ2: DComp無効化 | world.rs Schedule更新 | — | — |
-| 2.4 | フェーズ3: ULW統合 | UlwTransfer, ulw_present_system | UlwService | D2D→HBITMAP転送 |
-| 2.5 | フェーズ4: DComp削除 | com/dcomp.rs削除, DCompコンポーネント削除 | — | — |
-| 3.1 | per-window合成ビットマップ | WindowD3D11Compositor | CompositorService | 合成描画パイプライン |
-| 3.2 | Composition概念継承 | composite_render_system, GlobalArrangement | — | z-orderソート走査 |
-| 3.3 | DCompステージ置換 | Schedule再構成（後述） | — | — |
-| 3.4 | GraphicsCommandList再利用 | 変更なし | — | — |
-| 3.5 | リサイズ対応 | WindowD3D11Compositor.resize() | CompositorService | WM_SIZE→リサイズ |
-| 3.6 | Opacity階層累積 | composite_render_system内動的計算 | — | Opacity累積フロー |
-| 4.1 | ULW呼出 | UlwTransfer | UlwService | D2D→HBITMAP転送 |
-| 4.2 | WS_EX_LAYERED切替 | WindowStyle, main.rs | — | — |
-| 4.3 | alpha=0クリックスルー | OS標準動作 | — | — |
-| 4.4 | commit→ULW置換 | ulw_present_system | — | — |
-| 4.5 | ULWエラーリカバリ | ulw_present_system内retry | — | — |
-| 5.1 | DComp初期化除去 | GraphicsCore | — | — |
-| 5.2 | デバイスチェーン維持 | GraphicsCore | — | — |
-| 5.3 | DCompフィールド除去 | GraphicsCoreInner | — | — |
-| 5.4 | デバイスロスト対応 | invalidate()フロー維持 | — | — |
-| 6.1 | WindowGraphics置換 | WindowD3D11Compositor | CompositorService | — |
-| 6.2 | Visual概念継承 | Visual（変更なし） | — | — |
-| 6.3 | VisualGraphics/SurfaceGraphics一新 | 削除（per-entityリソース不要） | — | — |
-| 6.4 | visual_manager置換 | 廃止（合成描画で代替） | — | — |
-| 6.5 | 命名規則維持 | WindowD3D11Compositor（技術スタック明示形式） | — | — |
-| 7.1 | WM_PAINT更新 | handlers.rs | — | — |
-| 7.2 | WM_SIZE→合成リサイズ | handlers.rs + WindowD3D11Compositor | — | — |
-| 7.3 | BeginPaint/EndPaint最小化 | handlers.rs | — | — |
-| 8.1 | click-through-rgn競争的並走 | 実装指針（Migration Strategy節） | — | — |
-| 8.2 | animation-system影響評価 | 実装指針（影響なし） | — | — |
-| 8.3 | balloon-system影響評価 | 実装指針（ULW移行後に再評価） | — | — |
-| 8.4 | dcomp_demo.rsフェーズ4削除 | Migration Strategy §Phase 4 | — | — |
-| 9.1 | 4子仕様構成 | Migration Strategy節 | — | — |
-| 9.2 | 子仕様間依存関係 | Migration Strategy §依存関係 | — | — |
-| 9.3 | 段階的検証可能性 | Testing Strategy節 | — | — |
-| 9.4 | DComp並行稼働期間 | Migration Strategy §Phase 1-2 | — | — |
-| 10.1 | フェーズ別検証基準 | Testing Strategy節 | — | — |
-| 10.2 | 完了基準（DoD） | Testing Strategy §DoD | — | — |
-| 10.3 | 描画品質許容範囲 | Testing Strategy §品質基準 | — | — |
+| Requirement | Summary                            | Components                                     | Interfaces        | Flows                |
+| ----------- | ---------------------------------- | ---------------------------------------------- | ----------------- | -------------------- |
+| 1.1         | DComp依存3カテゴリ分類             | research.md参照                                | —                 | —                    |
+| 1.2         | 廃止対象ファイル識別               | research.md §1-3                               | —                 | —                    |
+| 1.3         | 再利用可能資産保証                 | GraphicsCommandList, Layout全体, Widget全体    | —                 | —                    |
+| 2.1         | 5フェーズ移行戦略                  | Migration Strategy節                           | —                 | —                    |
+| 2.2         | フェーズ1: DComp同等描画           | WindowD3D11Compositor, composite_render_system | CompositorService | 合成描画パイプライン |
+| 2.3         | フェーズ2: DComp無効化             | world.rs Schedule更新                          | —                 | —                    |
+| 2.4         | フェーズ3: ULW統合                 | UlwTransfer, ulw_present_system                | UlwService        | D2D→HBITMAP転送      |
+| 2.5         | フェーズ4: 切り替え式バックエンド  | CompositionMode, DCompシステム復活登録         | —                 | —                    |
+| 3.1         | per-window合成ビットマップ         | WindowD3D11Compositor                          | CompositorService | 合成描画パイプライン |
+| 3.2         | Composition概念継承                | composite_render_system, GlobalArrangement     | —                 | z-orderソート走査    |
+| 3.3         | DCompステージ置換                  | Schedule再構成（後述）                         | —                 | —                    |
+| 3.4         | GraphicsCommandList再利用          | 変更なし                                       | —                 | —                    |
+| 3.5         | リサイズ対応                       | WindowD3D11Compositor.resize()                 | CompositorService | WM_SIZE→リサイズ     |
+| 3.6         | Opacity階層累積                    | composite_render_system内動的計算              | —                 | Opacity累積フロー    |
+| 4.1         | ULW呼出                            | UlwTransfer                                    | UlwService        | D2D→HBITMAP転送      |
+| 4.2         | WS_EX_LAYERED切替                  | WindowStyle, main.rs                           | —                 | —                    |
+| 4.3         | alpha=0クリックスルー              | OS標準動作                                     | —                 | —                    |
+| 4.4         | commit→ULW置換                     | ulw_present_system                             | —                 | —                    |
+| 4.5         | ULWエラーリカバリ                  | ulw_present_system内retry                      | —                 | —                    |
+| 5.1         | DComp初期化維持                    | GraphicsCore                                   | —                 | —                    |
+| 5.2         | デバイスチェーン維持               | GraphicsCore                                   | —                 | —                    |
+| 5.3         | DCompフィールド維持                | GraphicsCoreInner                              | —                 | —                    |
+| 5.4         | デバイスロスト対応                 | invalidate()フロー維持                         | —                 | —                    |
+| 6.1         | WindowGraphics置換                 | WindowD3D11Compositor                          | CompositorService | —                    |
+| 6.2         | Visual概念継承                     | Visual（変更なし）                             | —                 | —                    |
+| 6.3         | VisualGraphics/SurfaceGraphics一新 | 削除（per-entityリソース不要）                 | —                 | —                    |
+| 6.4         | visual_manager置換                 | 廃止（合成描画で代替）                         | —                 | —                    |
+| 6.5         | 命名規則維持                       | WindowD3D11Compositor（技術スタック明示形式）  | —                 | —                    |
+| 7.1         | WM_PAINT更新                       | handlers.rs                                    | —                 | —                    |
+| 7.2         | WM_SIZE→合成リサイズ               | handlers.rs + WindowD3D11Compositor            | —                 | —                    |
+| 7.3         | BeginPaint/EndPaint最小化          | handlers.rs                                    | —                 | —                    |
+| 8.1         | click-through-rgn競争的並走        | 実装指針（Migration Strategy節）               | —                 | —                    |
+| 8.2         | animation-system影響評価           | 実装指針（影響なし）                           | —                 | —                    |
+| 8.3         | balloon-system影響評価             | 実装指針（ULW移行後に再評価）                  | —                 | —                    |
+| 8.4         | dcomp_demo.rsフェーズ4で維持       | Migration Strategy §Phase 4                    | —                 | —                    |
+| 9.1         | 4子仕様構成                        | Migration Strategy節                           | —                 | —                    |
+| 9.2         | 子仕様間依存関係                   | Migration Strategy §依存関係                   | —                 | —                    |
+| 9.3         | 段階的検証可能性                   | Testing Strategy節                             | —                 | —                    |
+| 9.4         | DComp並行稼働期間                  | Migration Strategy §Phase 1-2                  | —                 | —                    |
+| 10.1        | フェーズ別検証基準                 | Testing Strategy節                             | —                 | —                    |
+| 10.2        | 完了基準（DoD）                    | Testing Strategy §DoD                          | —                 | —                    |
+| 10.3        | 描画品質許容範囲                   | Testing Strategy §品質基準                     | —                 | —                    |
 
 ---
 
@@ -288,25 +291,25 @@ graph TB
 
 ### Summary
 
-| Component | Domain/Layer | Intent | Req Coverage | Key Dependencies | Contracts |
-|-----------|--------------|--------|--------------|------------------|-----------|
-| GraphicsCore（改修） | Graphics/Resource | GPU初期化・DComp除去 | 5.1-5.4 | ID3D11Device(P0), ID2D1Device(P0) | State |
-| WindowD3D11Compositor（新規） | Graphics/Resource | per-window合成リソース管理 | 3.1, 3.5, 4.1, 6.1 | GraphicsCore(P0), ID2D1Bitmap1(P0) | Service, State |
-| UlwTransfer（新規） | COM/Transfer | D2D→HBITMAP→ULW転送 | 4.1, 4.2, 4.4, 4.5 | WindowD3D11Compositor(P0), Win32 API(P0) | Service |
-| Visual（維持） | Graphics/Logic | 可視性・透明度・変換原点 | 6.2 | — | State |
-| GlobalArrangement（維持） | Layout/Metrics | 累積座標変換（変更なし） | — | Arrangement(P0) | State |
-| composite_render_system（新規） | Graphics/System | 全CommandList合成描画 | 3.1-3.4, 3.6 | WindowD3D11Compositor(P0), GlobalArrangement(P0), Visual(P0) | — |
-| ulw_present_system（新規） | Graphics/System | ULW呼出 + エラーリカバリ | 4.1, 4.4, 4.5 | UlwTransfer(P0), WindowD3D11Compositor(P0) | — |
-| compositor_init_system（新規） | Graphics/System | per-window合成リソース初期化 | 3.1, 6.1 | GraphicsCore(P0) | — |
+| Component                       | Domain/Layer      | Intent                       | Req Coverage       | Key Dependencies                                             | Contracts      |
+| ------------------------------- | ----------------- | ---------------------------- | ------------------ | ------------------------------------------------------------ | -------------- |
+| GraphicsCore（合成モード対応）  | Graphics/Resource | GPU初期化・DComp維持         | 5.1-5.4            | ID3D11Device(P0), ID2D1Device(P0), IDCompositionDevice3(P0)  | State          |
+| WindowD3D11Compositor（新規）   | Graphics/Resource | per-window合成リソース管理   | 3.1, 3.5, 4.1, 6.1 | GraphicsCore(P0), ID2D1Bitmap1(P0)                           | Service, State |
+| UlwTransfer（新規）             | COM/Transfer      | D2D→HBITMAP→ULW転送          | 4.1, 4.2, 4.4, 4.5 | WindowD3D11Compositor(P0), Win32 API(P0)                     | Service        |
+| Visual（維持）                  | Graphics/Logic    | 可視性・透明度・変換原点     | 6.2                | —                                                            | State          |
+| GlobalArrangement（維持）       | Layout/Metrics    | 累積座標変換（変更なし）     | —                  | Arrangement(P0)                                              | State          |
+| composite_render_system（新規） | Graphics/System   | 全CommandList合成描画        | 3.1-3.4, 3.6       | WindowD3D11Compositor(P0), GlobalArrangement(P0), Visual(P0) | —              |
+| ulw_present_system（新規）      | Graphics/System   | ULW呼出 + エラーリカバリ     | 4.1, 4.4, 4.5      | UlwTransfer(P0), WindowD3D11Compositor(P0)                   | —              |
+| compositor_init_system（新規）  | Graphics/System   | per-window合成リソース初期化 | 3.1, 6.1           | GraphicsCore(P0)                                             | —              |
 
 ### Graphics / Resource Layer
 
 #### GraphicsCore（改修）
 
-| Field | Detail |
-|-------|--------|
-| Intent | D3D11/D2D1デバイスの初期化とライフサイクル管理（DComp除去） |
-| Requirements | 5.1, 5.2, 5.3, 5.4 |
+| Field        | Detail                                                      |
+| ------------ | ----------------------------------------------------------- |
+| Intent       | D3D11/D2D1デバイスの初期化とライフサイクル管理（DComp除去） |
+| Requirements | 5.1, 5.2, 5.3, 5.4                                          |
 
 **Responsibilities & Constraints**
 - DComp初期化ステップ（`dcomp_create_desktop_device`, `desktop.cast::<IDCompositionDevice3>()`）を除去
@@ -327,10 +330,10 @@ graph TB
 
 #### WindowD3D11Compositor（新規）
 
-| Field | Detail |
-|-------|--------|
-| Intent | ウィンドウごとの合成描画リソース（合成ビットマップ + CPU転送用ステージング + HBITMAP）を統合管理 |
-| Requirements | 3.1, 3.5, 4.1, 6.1 |
+| Field        | Detail                                                                                           |
+| ------------ | ------------------------------------------------------------------------------------------------ |
+| Intent       | ウィンドウごとの合成描画リソース（合成ビットマップ + CPU転送用ステージング + HBITMAP）を統合管理 |
+| Requirements | 3.1, 3.5, 4.1, 6.1                                                                               |
 
 **Responsibilities & Constraints**
 - per-windowコンポーネント（SparseSet戦略 — ウィンドウ数は少ない）
@@ -392,10 +395,10 @@ Invariants:
 
 #### UlwTransfer（新規モジュール: `com/ulw.rs`）
 
-| Field | Detail |
-|-------|--------|
-| Intent | D2D合成ビットマップからHBITMAPへの転送およびUpdateLayeredWindow呼び出しを提供 |
-| Requirements | 4.1, 4.2, 4.4, 4.5 |
+| Field        | Detail                                                                        |
+| ------------ | ----------------------------------------------------------------------------- |
+| Intent       | D2D合成ビットマップからHBITMAPへの転送およびUpdateLayeredWindow呼び出しを提供 |
+| Requirements | 4.1, 4.2, 4.4, 4.5                                                            |
 
 **Responsibilities & Constraints**
 - `com/` 層のユーティリティモジュール（ECS非依存、純粋Win32 API呼び出し）
@@ -447,10 +450,10 @@ present_layered_window(
 
 #### Visual（維持 — 変更なし）
 
-| Field | Detail |
-|-------|--------|
-| Intent | 可視性・ローカル透明度・変換原点の論理コンポーネント |
-| Requirements | 6.2 |
+| Field        | Detail                                               |
+| ------------ | ---------------------------------------------------- |
+| Intent       | 可視性・ローカル透明度・変換原点の論理コンポーネント |
+| Requirements | 6.2                                                  |
 
 **Responsibilities & Constraints**
 - フィールド: `is_visible: bool`, `opacity: f32`, `transform_origin: Vector2`
@@ -472,10 +475,10 @@ present_layered_window(
 
 #### GlobalArrangement（変更なし）/ CompositeContext（新規）
 
-| Field | Detail |
-|-------|--------|
-| Intent | GlobalArrangement: 累積座標変換の保持（変更なし）。CompositeContext: 合成ループ内で accumulated_opacity を親→子に伝搬 |
-| Requirements | 3.6 |
+| Field        | Detail                                                                                                                |
+| ------------ | --------------------------------------------------------------------------------------------------------------------- |
+| Intent       | GlobalArrangement: 累積座標変換の保持（変更なし）。CompositeContext: 合成ループ内で accumulated_opacity を親→子に伝搬 |
+| Requirements | 3.6                                                                                                                   |
 
 **変更点**: なし（GlobalArrangement は座標変換のみを保持し、Opacity は保持しない）
 
@@ -494,10 +497,10 @@ present_layered_window(
 
 #### compositor_init_system（新規）
 
-| Field | Detail |
-|-------|--------|
-| Intent | HWND付きウィンドウエンティティに WindowD3D11Compositor を作成・アタッチ |
-| Requirements | 3.1, 6.1 |
+| Field        | Detail                                                                  |
+| ------------ | ----------------------------------------------------------------------- |
+| Intent       | HWND付きウィンドウエンティティに WindowD3D11Compositor を作成・アタッチ |
+| Requirements | 3.1, 6.1                                                                |
 
 **動作**:
 - Stage: GraphicsSetup
@@ -514,10 +517,10 @@ present_layered_window(
 
 #### composite_render_system（新規）
 
-| Field | Detail |
-|-------|--------|
-| Intent | 全エンティティのGraphicsCommandListをz-orderソートでper-window合成ビットマップに描画 |
-| Requirements | 3.1, 3.2, 3.3, 3.4 |
+| Field        | Detail                                                                               |
+| ------------ | ------------------------------------------------------------------------------------ |
+| Intent       | 全エンティティのGraphicsCommandListをz-orderソートでper-window合成ビットマップに描画 |
+| Requirements | 3.1, 3.2, 3.3, 3.4                                                                   |
 
 **動作**:
 - Stage: RenderSurface（既存ステージ再利用）
@@ -556,10 +559,10 @@ present_layered_window(
 
 #### ulw_present_system（新規）
 
-| Field | Detail |
-|-------|--------|
-| Intent | WindowD3D11CompositorのステージングビットマップをHBITMAPに転送し、UpdateLayeredWindowで表示 |
-| Requirements | 4.1, 4.4, 4.5 |
+| Field        | Detail                                                                                      |
+| ------------ | ------------------------------------------------------------------------------------------- |
+| Intent       | WindowD3D11CompositorのステージングビットマップをHBITMAPに転送し、UpdateLayeredWindowで表示 |
+| Requirements | 4.1, 4.4, 4.5                                                                               |
 
 **動作**:
 - Stage: CommitComposition（既存ステージ再利用）
@@ -579,21 +582,21 @@ present_layered_window(
 
 ### Schedule Stage 再構成
 
-| Stage | 現行システム | 新パイプラインシステム | 変更 |
-|-------|-------------|----------------------|------|
-| Input | 変更なし | 変更なし | — |
-| Update | invalidate_dependent_components (YELLOW) | コンポーネント型変更に追従 | 軽微改修 |
-| **PreLayout** | visual_resource_management (RED), visual_hierarchy_sync (RED), init_graphics_core (YELLOW) | init_graphics_core（DComp除去版）のみ | RED 2システム削除 |
-| Layout | 変更なし（taffy系4システム） | 変更なし | — |
-| PostLayout | 変更なし（arrangement伝播系5システム） | 変更なし | — |
-| UISetup | 変更なし（create_windows, apply_window_pos_changes） | 変更なし | — |
-| **GraphicsSetup** | init_window_graphics (RED), window_visual_integration (RED) | **compositor_init_system** | 全面置換 |
-| **Draw** | deferred_surface_creation (RED), cleanup_surface (RED), ウィジェット描画系 (GREEN) | ウィジェット描画系のみ（RED 2システム削除） | RED削除 |
-| PreRenderSurface | mark_dirty_surfaces (YELLOW) | ウィンドウ単位ダーティ検出に改修 | 改修 |
-| **RenderSurface** | render_surface (RED) | **composite_render_system** | 全面置換 |
-| **Composition** | visual_property_sync (RED) | **削除**（合成描画でtransform/opacity適用済み） | ステージ空化 |
-| **CommitComposition** | commit_composition (RED) | **ulw_present_system** | 全面置換 |
-| FrameFinalize | 変更なし | 変更なし | — |
+| Stage                 | 現行システム                                                                               | 新パイプラインシステム                          | 変更              |
+| --------------------- | ------------------------------------------------------------------------------------------ | ----------------------------------------------- | ----------------- |
+| Input                 | 変更なし                                                                                   | 変更なし                                        | —                 |
+| Update                | invalidate_dependent_components (YELLOW)                                                   | コンポーネント型変更に追従                      | 軽微改修          |
+| **PreLayout**         | visual_resource_management (RED), visual_hierarchy_sync (RED), init_graphics_core (YELLOW) | init_graphics_core（DComp除去版）のみ           | RED 2システム削除 |
+| Layout                | 変更なし（taffy系4システム）                                                               | 変更なし                                        | —                 |
+| PostLayout            | 変更なし（arrangement伝播系5システム）                                                     | 変更なし                                        | —                 |
+| UISetup               | 変更なし（create_windows, apply_window_pos_changes）                                       | 変更なし                                        | —                 |
+| **GraphicsSetup**     | init_window_graphics (RED), window_visual_integration (RED)                                | **compositor_init_system**                      | 全面置換          |
+| **Draw**              | deferred_surface_creation (RED), cleanup_surface (RED), ウィジェット描画系 (GREEN)         | ウィジェット描画系のみ（RED 2システム削除）     | RED削除           |
+| PreRenderSurface      | mark_dirty_surfaces (YELLOW)                                                               | ウィンドウ単位ダーティ検出に改修                | 改修              |
+| **RenderSurface**     | render_surface (RED)                                                                       | **composite_render_system**                     | 全面置換          |
+| **Composition**       | visual_property_sync (RED)                                                                 | **削除**（合成描画でtransform/opacity適用済み） | ステージ空化      |
+| **CommitComposition** | commit_composition (RED)                                                                   | **ulw_present_system**                          | 全面置換          |
+| FrameFinalize         | 変更なし                                                                                   | 変更なし                                        | —                 |
 
 ---
 
@@ -665,15 +668,15 @@ GlobalArrangement {
 
 ### Error Strategy
 
-| Error Category | Source | Response | Recovery |
-|----------------|--------|----------|----------|
-| D2D Bitmap作成失敗 | compositor_init_system | tracing::error + WindowD3D11Compositor::invalidate() | 次フレームで再作成試行 |
-| BeginDraw/EndDraw失敗 | composite_render_system | tracing::error + フレームスキップ | 次フレームで再描画 |
-| CopyFromBitmap失敗 | composite_render_system | tracing::error + フレームスキップ | 次フレームで再試行 |
-| Map失敗 | ulw_present_system (via UlwTransfer) | tracing::error + フレームスキップ | 次フレームで再試行 |
-| UpdateLayeredWindow失敗 | ulw_present_system (via UlwTransfer) | tracing::warn + 次フレーム再試行 | 4.5: 自動リトライ |
-| デバイスロスト (DXGI_ERROR_DEVICE_REMOVED) | 任意のD2D操作 | GraphicsCore::invalidate() → 全WindowD3D11Compositor::invalidate() | 既存有効化フロー維持 |
-| リサイズ時ビットマップ作成失敗 | WindowD3D11Compositor::resize() | tracing::error + 旧サイズ維持 | 次回リサイズで再試行 |
+| Error Category                             | Source                               | Response                                                           | Recovery               |
+| ------------------------------------------ | ------------------------------------ | ------------------------------------------------------------------ | ---------------------- |
+| D2D Bitmap作成失敗                         | compositor_init_system               | tracing::error + WindowD3D11Compositor::invalidate()               | 次フレームで再作成試行 |
+| BeginDraw/EndDraw失敗                      | composite_render_system              | tracing::error + フレームスキップ                                  | 次フレームで再描画     |
+| CopyFromBitmap失敗                         | composite_render_system              | tracing::error + フレームスキップ                                  | 次フレームで再試行     |
+| Map失敗                                    | ulw_present_system (via UlwTransfer) | tracing::error + フレームスキップ                                  | 次フレームで再試行     |
+| UpdateLayeredWindow失敗                    | ulw_present_system (via UlwTransfer) | tracing::warn + 次フレーム再試行                                   | 4.5: 自動リトライ      |
+| デバイスロスト (DXGI_ERROR_DEVICE_REMOVED) | 任意のD2D操作                        | GraphicsCore::invalidate() → 全WindowD3D11Compositor::invalidate() | 既存有効化フロー維持   |
+| リサイズ時ビットマップ作成失敗             | WindowD3D11Compositor::resize()      | tracing::error + 旧サイズ維持                                      | 次回リサイズで再試行   |
 
 **デバイスロスト対応**:
 - 既存の `init_graphics_core` システムが `GraphicsCore.is_valid()` を監視して再初期化
@@ -700,7 +703,7 @@ GlobalArrangement {
 - **Phase 1**: `taffy_flex_demo` 相当の描画が新パイプラインで動作すること
 - **Phase 2**: 全既存 example（taffy_flex_demo, typewriter_demo, multi_window_test, split_image）が新パイプラインで動作すること
 - **Phase 3**: UpdateLayeredWindow での透過表示＋alpha=0クリックスルーが動作すること
-- **Phase 4**: `cargo test` 全テストパス＋`com/dcomp.rs` への参照がECSコードから除去されていること
+- **Phase 4**: `cargo test` 全テストパス＋`cargo build --examples` 全パス＋CompositionMode切り替えでULW/DComp両パイプラインが動作すること
 
 ### 描画品質基準（10.3）
 - DComp方式とULW方式で最終的なピクセル出力が同一であることは**保証しない**
@@ -720,7 +723,7 @@ graph LR
     P1[Phase 1: D2D1合成スタック構築]
     P2[Phase 2: DCompパイプライン置換]
     P3[Phase 3: ULW統合]
-    P4[Phase 4: DCompコード削除]
+    P4[Phase 4: 切り替え式バックエンド]
 
     P0 -->|前提| P1
     P1 -->|前提| P2
@@ -804,33 +807,35 @@ graph LR
 - WM_SIZE 時のリサイズが正常動作
 - ULW 失敗時のログ出力 + 次フレーム再試行が動作
 
-### 子仕様4: DCompコード削除・クリーンアップ（Phase 4）
+### 子仕様4: 切り替え式バックエンド実装（Phase 4）
 
-**担当範囲**:
-- `com/dcomp.rs`: ファイル全体削除（315行）
-- `ecs/graphics/components.rs`: VisualGraphics, SurfaceGraphics, SurfaceGraphicsDirty, SurfaceCreationStats のstruct削除
-- `ecs/graphics/systems.rs`: RED分類のシステム関数コード削除（主要9エントリポイント＋関連ヘルパー3関数、計12関数 — research.md §1.1 参照）
-- `ecs/graphics/visual_manager.rs`: ファイル全体削除（170行）
-- `examples/dcomp_demo.rs`: ファイル削除（8.4）
-- `ecs/graphics/core.rs`: DComp関連 `use` 文の最終クリーンアップ
-- テストファイル: DComp 参照を含むテストの修正 or 削除
+**抵当範囲**:
+- `ecs/graphics/components.rs`: `CompositionMode` enum（ULW / DComp）を導入し、Windowエンティティに付与
+- `ecs/world.rs`: DCompシステムを復活登録（CompositionMode::DCompのウィンドウのみに適用）
+- `ecs/graphics/systems.rs`: DCompシステムをCompositionModeベースのクエリフィルタで分岐
+- `ecs/graphics/compositor_systems.rs`: ULWシステムをCompositionModeベースのクエリフィルタで分岐
+- `ecs/window.rs`: CompositionModeに基づくWS_EX_NOREDIRECTIONBITMAP / WS_EX_LAYEREDの動的切替
+- `com/dcomp.rs`: **維持**（削除しない）
+- `ecs/graphics/visual_manager.rs`: **維持**（DCompモード用）
+- `examples/dcomp_demo.rs`: **維持**（DCompバックエンド検証用）
+- 将来的にCompositionMode::WinRT拡張を見据えたenum設計
 
-**前提条件**: 子仕様3完了、`Opacity` コンポーネントが `ecs/layout/metrics.rs` から削除済み（Phase 0 Req 4.4 により Phase 3 開始前に完了済みのはず）
+**前提条件**: 子仕様3完了
 
 **完了基準（DoD）**:
-- `com/dcomp.rs` が削除されている
-- `Opacity` コンポーネントが `metrics.rs` から削除済み（Phase 0 Req 4.4 のフォールバック確認: 万一残存していた場合は本 Phase で削除）
-- ECS コード内の `IDComposition*` 型参照がゼロ
+- CompositionMode::ULW指定のウィンドウがULWパイプラインで動作（Phase 3と同等）
+- CompositionMode::DComp指定のウィンドウがDCompパイプラインで動作（WS_EX_NOREDIRECTIONBITMAP）
+- 同一アプリでULWウィンドウとDCompウィンドウが共存可能
 - `cargo test` 全テストパス
-- `cargo build --examples` 全ビルドパス（dcomp_demo.rs 削除済み）
+- `cargo build --examples` 全ビルドパス（dcomp_demo.rs含む）
 
 ### 既存仕様への影響（8.1-8.3）
 
-| 仕様 | 影響度 | 対応方針 |
-|------|--------|---------|
-| wintf-P0-click-through-rgn | 高 | **競争的並走**: 両仕様は独立進行。CTRが十分な性能を示す場合は本仕様凍結の可能性あり。逆に本仕様完了時はCTRの大部分が不要化 |
-| wintf-P0-animation-system | 低 | dola駆動アニメーションはDComp非依存。出力先がDComp Visual PropertiesからD2D合成パラメータに変わるのみ |
-| wintf-P0-balloon-system | 中 | バルーンウィンドウもULW方式に移行。ウィジェット描画（GREEN）はそのまま動作。ULW移行（本仕様）を先に完了推奨 |
+| 仕様                       | 影響度 | 対応方針                                                                                                                   |
+| -------------------------- | ------ | -------------------------------------------------------------------------------------------------------------------------- |
+| wintf-P0-click-through-rgn | 高     | **競争的並走**: 両仕様は独立進行。CTRが十分な性能を示す場合は本仕様凍結の可能性あり。逆に本仕様完了時はCTRの大部分が不要化 |
+| wintf-P0-animation-system  | 低     | dola駆動アニメーションはDComp非依存。出力先がDComp Visual PropertiesからD2D合成パラメータに変わるのみ                      |
+| wintf-P0-balloon-system    | 中     | バルーンウィンドウもULW方式に移行。ウィジェット描画（GREEN）はそのまま動作。ULW移行（本仕様）を先に完了推奨                |
 
 ### 実装アプローチ: ハイブリッド段階（research.md Option C）
 
@@ -839,9 +844,9 @@ graph LR
   - 新ファイル: `compositor.rs`, `compositor_systems.rs`
   - 既存ファイル: DCompコードに触れない
 - **Phase 3**: ULW統合をインプレースで実装（WindowStyle変更等）
-- **Phase 4**: 旧モジュール削除
+- **Phase 4**: 切り替え式バックエンド実装（CompositionMode導入、DCompパイプライン復活登録、ULW/DComp切り替え）
 
-利点: 旧実装を参照しながら新実装を検討でき、各段階でロールバック可能
+利点: 旧実装を参照しながら新実装を検討でき、各段階でロールバック可能。最終的にはDCompを削除せず切り替え式として維持し、将来的にWinRT Compositorへの移行も見据える
 
 ---
 
