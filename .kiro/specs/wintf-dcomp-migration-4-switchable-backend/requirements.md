@@ -118,7 +118,6 @@ Phase 4 方針変更: DComp完全除去 → 切り替え式バックエンド実
 2. When ULW ウィンドウと DComp ウィンドウが同時に表示されている時, the wintf crate shall 各ウィンドウが独立して正しい描画パイプラインで描画される
 3. While ULW ウィンドウが透過クリックスルーを実行している時, the wintf crate shall DComp ウィンドウの描画・インタラクションに影響を与えない
 4. The wintf crate shall 既存のヒットテスト・ポインタイベント・ドラッグシステムが両 CompositionMode のウィンドウで正しく動作する
-5. When 一方の CompositionMode のウィンドウがデバイスロストから復旧する時, the wintf crate shall 他方の CompositionMode のウィンドウに影響を与えず、独立して復旧できる
 
 ### Requirement 9: WinRT Compositor 拡張への準備
 
