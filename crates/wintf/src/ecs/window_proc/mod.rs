@@ -2,7 +2,11 @@
 //!
 //! Windowsメッセージのディスパッチとハンドラ管理
 
-mod handlers;
+mod keyboard;
+mod lifecycle;
+mod mouse_button;
+mod mouse_move;
+mod window_pos;
 
 use bevy_ecs::prelude::*;
 use windows::Win32::Foundation::*;
@@ -40,35 +44,35 @@ pub(crate) extern "system" fn ecs_wndproc(
     lparam: LPARAM,
 ) -> LRESULT {
     let result = match message {
-        WM_NCCREATE => handlers::WM_NCCREATE(hwnd, message, wparam, lparam),
-        WM_NCDESTROY => handlers::WM_NCDESTROY(hwnd, message, wparam, lparam),
-        WM_ERASEBKGND => handlers::WM_ERASEBKGND(hwnd, message, wparam, lparam),
-        WM_PAINT => handlers::WM_PAINT(hwnd, message, wparam, lparam),
-        WM_CLOSE => handlers::WM_CLOSE(hwnd, message, wparam, lparam),
-        WM_WINDOWPOSCHANGED => handlers::WM_WINDOWPOSCHANGED(hwnd, message, wparam, lparam),
-        WM_DISPLAYCHANGE => handlers::WM_DISPLAYCHANGE(hwnd, message, wparam, lparam),
-        WM_DPICHANGED => handlers::WM_DPICHANGED(hwnd, message, wparam, lparam),
+        WM_NCCREATE => lifecycle::WM_NCCREATE(hwnd, message, wparam, lparam),
+        WM_NCDESTROY => lifecycle::WM_NCDESTROY(hwnd, message, wparam, lparam),
+        WM_ERASEBKGND => lifecycle::WM_ERASEBKGND(hwnd, message, wparam, lparam),
+        WM_PAINT => lifecycle::WM_PAINT(hwnd, message, wparam, lparam),
+        WM_CLOSE => lifecycle::WM_CLOSE(hwnd, message, wparam, lparam),
+        WM_WINDOWPOSCHANGED => window_pos::WM_WINDOWPOSCHANGED(hwnd, message, wparam, lparam),
+        WM_DISPLAYCHANGE => lifecycle::WM_DISPLAYCHANGE(hwnd, message, wparam, lparam),
+        WM_DPICHANGED => window_pos::WM_DPICHANGED(hwnd, message, wparam, lparam),
         // マウスメッセージ
-        WM_NCHITTEST => handlers::WM_NCHITTEST(hwnd, message, wparam, lparam),
-        WM_MOUSEMOVE => handlers::WM_MOUSEMOVE(hwnd, message, wparam, lparam),
-        WM_MOUSELEAVE => handlers::WM_MOUSELEAVE(hwnd, message, wparam, lparam),
-        WM_LBUTTONDOWN => handlers::WM_LBUTTONDOWN(hwnd, message, wparam, lparam),
-        WM_LBUTTONUP => handlers::WM_LBUTTONUP(hwnd, message, wparam, lparam),
-        WM_RBUTTONDOWN => handlers::WM_RBUTTONDOWN(hwnd, message, wparam, lparam),
-        WM_RBUTTONUP => handlers::WM_RBUTTONUP(hwnd, message, wparam, lparam),
-        WM_MBUTTONDOWN => handlers::WM_MBUTTONDOWN(hwnd, message, wparam, lparam),
-        WM_MBUTTONUP => handlers::WM_MBUTTONUP(hwnd, message, wparam, lparam),
-        WM_XBUTTONDOWN => handlers::WM_XBUTTONDOWN(hwnd, message, wparam, lparam),
-        WM_XBUTTONUP => handlers::WM_XBUTTONUP(hwnd, message, wparam, lparam),
-        WM_LBUTTONDBLCLK => handlers::WM_LBUTTONDBLCLK(hwnd, message, wparam, lparam),
-        WM_RBUTTONDBLCLK => handlers::WM_RBUTTONDBLCLK(hwnd, message, wparam, lparam),
-        WM_MBUTTONDBLCLK => handlers::WM_MBUTTONDBLCLK(hwnd, message, wparam, lparam),
-        WM_XBUTTONDBLCLK => handlers::WM_XBUTTONDBLCLK(hwnd, message, wparam, lparam),
-        WM_MOUSEWHEEL => handlers::WM_MOUSEWHEEL(hwnd, message, wparam, lparam),
-        WM_MOUSEHWHEEL => handlers::WM_MOUSEHWHEEL(hwnd, message, wparam, lparam),
-        WM_KEYDOWN => handlers::WM_KEYDOWN(hwnd, message, wparam, lparam),
-        WM_CANCELMODE => handlers::WM_CANCELMODE(hwnd, message, wparam, lparam),
-        WM_ACTIVATE => handlers::WM_ACTIVATE(hwnd, message, wparam, lparam),
+        WM_NCHITTEST => mouse_move::WM_NCHITTEST(hwnd, message, wparam, lparam),
+        WM_MOUSEMOVE => mouse_move::WM_MOUSEMOVE(hwnd, message, wparam, lparam),
+        WM_MOUSELEAVE => mouse_move::WM_MOUSELEAVE(hwnd, message, wparam, lparam),
+        WM_LBUTTONDOWN => mouse_button::WM_LBUTTONDOWN(hwnd, message, wparam, lparam),
+        WM_LBUTTONUP => mouse_button::WM_LBUTTONUP(hwnd, message, wparam, lparam),
+        WM_RBUTTONDOWN => mouse_button::WM_RBUTTONDOWN(hwnd, message, wparam, lparam),
+        WM_RBUTTONUP => mouse_button::WM_RBUTTONUP(hwnd, message, wparam, lparam),
+        WM_MBUTTONDOWN => mouse_button::WM_MBUTTONDOWN(hwnd, message, wparam, lparam),
+        WM_MBUTTONUP => mouse_button::WM_MBUTTONUP(hwnd, message, wparam, lparam),
+        WM_XBUTTONDOWN => mouse_button::WM_XBUTTONDOWN(hwnd, message, wparam, lparam),
+        WM_XBUTTONUP => mouse_button::WM_XBUTTONUP(hwnd, message, wparam, lparam),
+        WM_LBUTTONDBLCLK => mouse_button::WM_LBUTTONDBLCLK(hwnd, message, wparam, lparam),
+        WM_RBUTTONDBLCLK => mouse_button::WM_RBUTTONDBLCLK(hwnd, message, wparam, lparam),
+        WM_MBUTTONDBLCLK => mouse_button::WM_MBUTTONDBLCLK(hwnd, message, wparam, lparam),
+        WM_XBUTTONDBLCLK => mouse_button::WM_XBUTTONDBLCLK(hwnd, message, wparam, lparam),
+        WM_MOUSEWHEEL => mouse_button::WM_MOUSEWHEEL(hwnd, message, wparam, lparam),
+        WM_MOUSEHWHEEL => mouse_button::WM_MOUSEHWHEEL(hwnd, message, wparam, lparam),
+        WM_KEYDOWN => keyboard::WM_KEYDOWN(hwnd, message, wparam, lparam),
+        WM_CANCELMODE => keyboard::WM_CANCELMODE(hwnd, message, wparam, lparam),
+        WM_ACTIVATE => keyboard::WM_ACTIVATE(hwnd, message, wparam, lparam),
         _ => None,
     };
 
