@@ -164,7 +164,7 @@
 ### リスク: **Medium**
 
 **根拠**:
-- `force_update_last_values` は全サブスクライバーに一括適用する設計で、フラット化後は単純化されるが、変数名→ID の変換ロジックが正しいことの検証が必要
+- `force_update_last_values` はフラット化後に単一購読状態への適用に単純化されるが、変数名→ID の変換ロジックが正しいことの検証が必要
 - テスト移行後のアサーション変更（名前ベース→IDベース）で、テストの可読性が低下するリスク
   - → **対策**: テスト用ヘルパー関数（`find_change_by_name`）の導入を推奨
 - `conflict_resolver` の4戦略（Cancel/Conclude/Trim/Compress）すべてが `force_update_last_values` を使用 → 全パスのテスト確認が必要

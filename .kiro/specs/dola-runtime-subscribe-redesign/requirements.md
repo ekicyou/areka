@@ -35,18 +35,16 @@ DolaRuntime の変数購読・更新 API を再設計する。現行の `subscri
 4. When 指示書（ドキュメント）がまだ読み込まれていない状態で `subscribe` が呼び出された場合、DolaRuntime shall 正常に `variable_id` を返却する（事前購読対応、現行 Req 6.1 の維持）
 5. The DolaRuntime shall `variable_id` を 0 から始まる連番で割り当てる
 
-### 要件 2: subscriber_id の廃止
+### 要件 2: ランタイム単位の一元購読管理
 
 **目的:** ランタイム利用者として、購読者IDの管理から解放されたい。ランタイムは単一の購読状態のみ保持すればよい。
 
 #### 受入基準
 
-1. The DolaRuntime shall `subscribe` メソッドのシグネチャから `subscriber_id` パラメータを除去する
-2. The DolaRuntime shall `update` メソッドのシグネチャから `subscriber_id` パラメータを除去する
-3. The DolaRuntime shall `unsubscribe` メソッドを `unsubscribe(variable_id: i64)` に変更する（`subscriber_id` と `variable_name` の両方を除去し、`subscribe` が返した ID で指定する）
-4. The DolaRuntime shall ランタイムインスタンスごとに単一の購読状態を内部管理する（`HashMap<u64, SubscriberState>` を廃止）
-5. When `unsubscribe(variable_id)` が呼び出された場合、DolaRuntime shall 対応する変数の購読を解除し、`variable_id` のマッピングも削除する
-6. The DolaRuntime shall `unsubscribe_all` メソッドにおいて `subscriber_id` パラメータを除去する
+1. The DolaRuntime shall ランタイムインスタンスごとに単一の購読状態を内部管理する（現行の `HashMap<u64, SubscriberState>` による複数購読者モデルを廃止）
+2. The DolaRuntime shall 全ての購読者向けメソッド（`subscribe`, `update`, `unsubscribe`, `unsubscribe_all`）から `subscriber_id` パラメータを除去する
+
+> **注**: 各メソッドのシグネチャ詳細は要件 1（subscribe）、要件 3（update）、要件 5（unsubscribe のライフサイクル）にそれぞれ規定する。
 
 ### 要件 3: update メソッドの再設計
 
