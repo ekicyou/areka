@@ -697,7 +697,7 @@ mod trigger_execution_tests {
         let doc = timed_trigger_doc("parent", "child", None);
 
         let mut rt = DolaRuntime::new();
-        rt.subscribe(1, "opacity");
+        let _opacity_id = rt.subscribe("opacity");
         rt.load_document(doc).unwrap();
 
         // 親開始
@@ -705,14 +705,14 @@ mod trigger_execution_tests {
         assert_eq!(parent_result.group_id, 1);
 
         // t=0.5: 発火前 — トリガーなし
-        let result = rt.update(1, 0.5);
+        let result = rt.update(0.5);
         assert!(
             result.triggered.is_empty(),
             "no triggers should fire at t=0.5"
         );
 
         // t=1.0: kf1 到達 → トリガー発火
-        let result = rt.update(1, 1.0);
+        let result = rt.update(1.0);
         assert_eq!(
             result.triggered.len(),
             1,
@@ -740,16 +740,16 @@ mod trigger_execution_tests {
         let doc = timed_trigger_doc("parent", "child", None);
 
         let mut rt = DolaRuntime::new();
-        rt.subscribe(1, "opacity");
+        let _opacity_id = rt.subscribe("opacity");
         rt.load_document(doc).unwrap();
         rt.start("parent", 0.0).unwrap();
 
         // t=1.0: 初回発火
-        let result = rt.update(1, 1.0);
+        let result = rt.update(1.0);
         assert_eq!(result.triggered.len(), 1);
 
         // t=1.5: 2回目の update — 再発火しない
-        let result = rt.update(1, 1.5);
+        let result = rt.update(1.5);
         assert!(
             result.triggered.is_empty(),
             "trigger should not re-fire in same loop"
@@ -762,12 +762,12 @@ mod trigger_execution_tests {
         let doc = timed_trigger_doc("parent", "child", Some(0.5));
 
         let mut rt = DolaRuntime::new();
-        rt.subscribe(1, "opacity");
+        let _opacity_id = rt.subscribe("opacity");
         rt.load_document(doc).unwrap();
         rt.start("parent", 0.0).unwrap();
 
         // t=1.0: 発火。子SBの start_time = fire_time(1.0) + offset(0.5) = 1.5
-        let result = rt.update(1, 1.0);
+        let result = rt.update(1.0);
         assert_eq!(result.triggered.len(), 1);
         match &result.triggered[0] {
             TriggerResult::Started { start_result, .. } => {
@@ -788,17 +788,17 @@ mod trigger_execution_tests {
         let doc = timed_trigger_doc("parent", "child", None);
 
         let mut rt = DolaRuntime::new();
-        rt.subscribe(1, "opacity");
+        let _opacity_id = rt.subscribe("opacity");
         rt.load_document(doc).unwrap();
         rt.start("parent", 0.0).unwrap();
 
         // t=0.0: 初回 update
-        let result = rt.update(1, 0.0);
+        let result = rt.update(0.0);
         assert!(!result.changes.is_empty(), "should have opacity change");
         assert!(result.triggered.is_empty());
 
         // t=1.0: トリガー + 変数更新の両方
-        let result = rt.update(1, 1.0);
+        let result = rt.update(1.0);
         assert!(!result.triggered.is_empty(), "should have trigger");
     }
 }
@@ -861,16 +861,16 @@ mod loop_trigger_tests {
             .expect("doc should be valid");
 
         let mut rt = DolaRuntime::new();
-        rt.subscribe(1, "opacity");
+        let _opacity_id = rt.subscribe("opacity");
         rt.load_document(doc).unwrap();
         rt.start("parent", 0.0).unwrap();
 
         // 周回1: t=1.0 でトリガー発火
-        let result = rt.update(1, 1.0);
+        let result = rt.update(1.0);
         assert_eq!(result.triggered.len(), 1, "loop 1: trigger should fire");
 
         // 周回2: t=2.0 でトリガー再発火
-        let result = rt.update(1, 2.0);
+        let result = rt.update(2.0);
         assert_eq!(result.triggered.len(), 1, "loop 2: trigger should re-fire");
     }
 
@@ -924,14 +924,14 @@ mod loop_trigger_tests {
             .expect("doc should be valid");
 
         let mut rt = DolaRuntime::new();
-        rt.subscribe(1, "opacity");
+        let _opacity_id = rt.subscribe("opacity");
         rt.load_document(doc).unwrap();
         rt.start("parent", 0.0).unwrap();
 
         // 3 周回分チェック
         for cycle in 1..=3 {
             let t = cycle as f64;
-            let result = rt.update(1, t);
+            let result = rt.update(t);
             assert!(
                 !result.triggered.is_empty(),
                 "cycle {cycle}: trigger should fire at t={t}"
@@ -1008,7 +1008,7 @@ mod e2e_tests {
             .expect("chain doc should be valid");
 
         let mut rt = DolaRuntime::new();
-        rt.subscribe(1, "opacity");
+        let opacity_id = rt.subscribe("opacity");
         rt.load_document(doc).unwrap();
 
         // start A
@@ -1016,7 +1016,7 @@ mod e2e_tests {
         assert_eq!(a_result.group_id, 1);
 
         // t=0.0: A はトリガーのみ → B が起動される
-        let result = rt.update(1, 0.0);
+        let result = rt.update(0.0);
         assert!(!result.triggered.is_empty(), "A should trigger B at t=0.0");
         let b_group_id = match &result.triggered[0] {
             TriggerResult::Started {
@@ -1032,7 +1032,7 @@ mod e2e_tests {
         assert!(b_group_id > a_result.group_id);
 
         // t=0.5: B の kf1 到達 → C が起動される
-        let result = rt.update(1, 0.5);
+        let result = rt.update(0.5);
         assert!(!result.triggered.is_empty(), "B should trigger C at t=0.5");
         let c_target = match &result.triggered[0] {
             TriggerResult::Started {
@@ -1048,8 +1048,8 @@ mod e2e_tests {
         assert!(c_target > b_group_id);
 
         // t=1.0: C が完了。opacity は最終値 1.0 付近
-        let result = rt.update(1, 1.0);
-        if let Some((_, val)) = result.changes.iter().find(|(name, _)| name == "opacity") {
+        let result = rt.update(1.0);
+        if let Some((_, val)) = result.changes.iter().find(|(id, _)| *id == opacity_id) {
             let v = extract_float(val);
             assert!(v > 0.9, "opacity should be ~1.0 at t=1.0, got {v}");
         }
@@ -1062,12 +1062,12 @@ mod e2e_tests {
         let doc = timed_trigger_doc("parent", "child", None);
 
         let mut rt = DolaRuntime::new();
-        rt.subscribe(1, "opacity");
+        let _opacity_id = rt.subscribe("opacity");
         rt.load_document(doc).unwrap();
         rt.start("parent", 0.0).unwrap();
 
         // t=1.0: 親トランジション完了 + トリガー発火 → 子SB開始
-        let result = rt.update(1, 1.0);
+        let result = rt.update(1.0);
         assert_eq!(
             result.triggered.len(),
             1,
@@ -1075,7 +1075,7 @@ mod e2e_tests {
         );
 
         // t=1.5: 親は自然終了済み、子SBはまだ再生中（1.0s→2.0s）
-        let result = rt.update(1, 1.5);
+        let result = rt.update(1.5);
         // 子SBが opacity を 1→0 に遷移中 → changes が発生するべき
         assert!(
             !result.changes.is_empty(),
@@ -1083,7 +1083,7 @@ mod e2e_tests {
         );
 
         // t=2.0: 子SBも完了
-        let result = rt.update(1, 2.0);
+        let result = rt.update(2.0);
         // 最終値に到達
         assert!(result.triggered.is_empty(), "no new triggers");
     }
@@ -1094,21 +1094,21 @@ mod e2e_tests {
         let doc = timed_trigger_doc("parent", "child", None);
 
         let mut rt = DolaRuntime::new();
-        rt.subscribe(1, "opacity");
+        let _opacity_id = rt.subscribe("opacity");
         rt.load_document(doc).unwrap();
         rt.start("parent", 0.0).unwrap();
 
         // 段階的に time を進める
-        let _ = rt.update(1, 0.0);
-        let _ = rt.update(1, 0.5);
-        let result = rt.update(1, 1.0); // trigger fires
+        let _ = rt.update(0.0);
+        let _ = rt.update(0.5);
+        let result = rt.update(1.0); // trigger fires
         assert!(!result.triggered.is_empty());
 
-        let _ = rt.update(1, 1.5);
-        let _ = rt.update(1, 2.0); // child completes (1→0 over 1s, started at 1.0)
+        let _ = rt.update(1.5);
+        let _ = rt.update(2.0); // child completes (1→0 over 1s, started at 1.0)
 
         // 最終状態: 全インスタンス自然終了
-        let result = rt.update(1, 3.0);
+        let result = rt.update(3.0);
         // 両方終了後は変化なし
         assert!(
             result.triggered.is_empty(),

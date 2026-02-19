@@ -486,30 +486,30 @@ mod e2e_tests {
         }
     }
 
-    fn setup_runtime(doc: DolaDocument) -> DolaRuntime {
+    fn setup_runtime(doc: DolaDocument) -> (DolaRuntime, i64) {
         let mut rt = DolaRuntime::new();
-        rt.subscribe(1, "opacity");
+        let opacity_id = rt.subscribe("opacity");
         rt.load_document(doc).unwrap();
-        rt
+        (rt, opacity_id)
     }
 
     #[test]
     fn e2e_no_offset_natural_end() {
         // loop_count=2, no offset → ends at t=2.0
         let doc = loop_offset_doc("blink", 2, None);
-        let mut rt = setup_runtime(doc);
+        let (mut rt, _opacity_id) = setup_runtime(doc);
         let result = rt.start("blink", 0.0).unwrap();
         assert_eq!(result.end_time, 1.0); // first loop end
 
         // Mid first loop
-        let changes = rt.update(1, 0.5).changes;
+        let changes = rt.update(0.5).changes;
         assert!(!changes.is_empty());
 
         // After 2 loops → conclude
-        let _changes = rt.update(1, 2.5).changes;
+        let _changes = rt.update(2.5).changes;
         // Should have final values (opacity=1.0 at end of loop)
         // After conclude, subsequent update returns empty
-        let changes = rt.update(1, 3.0).changes;
+        let changes = rt.update(3.0).changes;
         assert!(changes.is_empty());
     }
 
@@ -518,18 +518,18 @@ mod e2e_tests {
         // loop_count=2, fixed delay 5.0s → 1st loop ends at t=1.0
         // after loop 1 advance: end_time = 1.0 + 1.0(loop) + 5.0(delay) = 7.0
         let doc = loop_offset_doc("blink", 2, Some(LoopOffset::Scalar(5.0)));
-        let mut rt = setup_runtime(doc);
+        let (mut rt, _opacity_id) = setup_runtime(doc);
         rt.start("blink", 0.0).unwrap();
 
         // At t=1.5: past first loop end (1.0), advance happens
         // end_time should be 1.0 + 1.0 + delay(0..5) ≥ 2.0
-        let _changes = rt.update(1, 1.5).changes;
+        let _changes = rt.update(1.5).changes;
         // Animation should still be active (within delay period)
         // Value should be at end of first loop (1.0) since we're in delay
         // or at beginning of second loop depending on timing
 
         // At t=3.0: still within delay period (end_time ≥ 2.0 + delay)
-        let _changes = rt.update(1, 3.0).changes;
+        let _changes = rt.update(3.0).changes;
 
         // 遅延中は最終値を維持（Req 2.4）
         // (具体的な値の検証は遅延のランダム性により、ここでは存在確認のみ)
@@ -539,14 +539,14 @@ mod e2e_tests {
     fn e2e_loop_count_1_ignores_offset() {
         // loop_count=1 + offset → offset is ignored, concludes normally
         let doc = loop_offset_doc("blink", 1, Some(LoopOffset::Scalar(10.0)));
-        let mut rt = setup_runtime(doc);
+        let (mut rt, _opacity_id) = setup_runtime(doc);
         rt.start("blink", 0.0).unwrap();
 
         // At t=1.5: past end_time=1.0, loop_count=1 → conclude
-        let _changes = rt.update(1, 1.5).changes;
+        let _changes = rt.update(1.5).changes;
 
         // After conclude, no more updates
-        let changes = rt.update(1, 2.0).changes;
+        let changes = rt.update(2.0).changes;
         assert!(changes.is_empty());
     }
 
@@ -562,24 +562,24 @@ mod e2e_tests {
                 easing: EasingFunction::Named(EasingName::Linear),
             })),
         );
-        let mut rt = setup_runtime(doc);
+        let (mut rt, _opacity_id) = setup_runtime(doc);
         rt.start("blink", 0.0).unwrap();
 
         // t=1.5: past first loop end (1.0)
         // advance → end_time = 1.0 + 1.0 + 2.0 = 4.0
-        let _changes = rt.update(1, 1.5).changes;
+        let _changes = rt.update(1.5).changes;
 
         // t=3.0: still in delay (end_time=4.0)
-        let _changes = rt.update(1, 3.0).changes;
+        let _changes = rt.update(3.0).changes;
         // Should still be active (not concluded)
         // Values should be present (frozen at loop end or interpolating)
 
         // t=4.5: past second end_time (4.0)
         // advance → end_time = 4.0 + 1.0 + 2.0 = 7.0
-        let _changes = rt.update(1, 4.5).changes;
+        let _changes = rt.update(4.5).changes;
 
         // t=6.0: still in delay period of 2nd loop
-        let _changes = rt.update(1, 6.0).changes;
+        let _changes = rt.update(6.0).changes;
         // Still active (infinite loop never concludes)
     }
 
@@ -595,12 +595,12 @@ mod e2e_tests {
                 easing: EasingFunction::Named(EasingName::Linear),
             })),
         );
-        let mut rt = setup_runtime(doc);
+        let (mut rt, _opacity_id) = setup_runtime(doc);
         let result = rt.start("blink", 0.0).unwrap();
         let group_id = result.group_id;
 
         // t=1.5: past first loop end → advance → end_time = 1.0+1.0+5.0 = 7.0
-        rt.update(1, 1.5);
+        rt.update(1.5);
 
         // Pause at t=3.0 (in delay period, end_time=7.0)
         rt.pause(group_id, 3.0).unwrap();
@@ -623,18 +623,18 @@ mod e2e_tests {
                 easing: EasingFunction::Named(EasingName::Linear),
             })),
         );
-        let mut rt = setup_runtime(doc);
+        let (mut rt, _opacity_id) = setup_runtime(doc);
         let result = rt.start("blink", 0.0).unwrap();
         let group_id = result.group_id;
 
         // t=1.5: advance → in delay period
-        rt.update(1, 1.5);
+        rt.update(1.5);
 
         // Cancel → immediate stop
         rt.cancel(group_id).unwrap();
 
         // After cancel, no more updates
-        let changes = rt.update(1, 2.0).changes;
+        let changes = rt.update(2.0).changes;
         assert!(changes.is_empty());
     }
 
@@ -642,16 +642,16 @@ mod e2e_tests {
     fn e2e_without_offset_backward_compatible() {
         // No loop_offset → identical behavior to before
         let doc = loop_offset_doc("fade", 3, None);
-        let mut rt = setup_runtime(doc);
+        let (mut rt, _opacity_id) = setup_runtime(doc);
         rt.start("fade", 0.0).unwrap();
 
         // Mid-loop updates should work normally
-        let changes = rt.update(1, 0.5).changes;
+        let changes = rt.update(0.5).changes;
         assert!(!changes.is_empty());
 
         // All 3 loops complete at t=3.0+
-        let _changes = rt.update(1, 3.5).changes;
-        let changes = rt.update(1, 4.0).changes;
+        let _changes = rt.update(3.5).changes;
+        let changes = rt.update(4.0).changes;
         assert!(changes.is_empty()); // concluded
     }
 
@@ -663,12 +663,12 @@ mod e2e_tests {
             3,
             Some(LoopOffset::Scalar(0.001)),
         );
-        let mut rt = setup_runtime(doc);
+        let (mut rt, _opacity_id) = setup_runtime(doc);
         rt.start("fast", 0.0).unwrap();
 
         // Should complete all loops fairly quickly
-        let _changes = rt.update(1, 5.0).changes;
-        let changes = rt.update(1, 6.0).changes;
+        let _changes = rt.update(5.0).changes;
+        let changes = rt.update(6.0).changes;
         assert!(changes.is_empty()); // concluded
     }
 
@@ -684,19 +684,19 @@ mod e2e_tests {
                 easing: EasingFunction::Named(EasingName::Linear),
             })),
         );
-        let mut rt = setup_runtime(doc);
+        let (mut rt, _opacity_id) = setup_runtime(doc);
         rt.start("slow", 0.0).unwrap();
 
         // At t=1.5: past first loop → advance, end_time=1.0+1.0+100.0=102.0
-        let _changes = rt.update(1, 1.5).changes;
+        let _changes = rt.update(1.5).changes;
 
         // At t=50.0: still in delay
-        let _changes = rt.update(1, 50.0).changes;
+        let _changes = rt.update(50.0).changes;
         // Should still be alive
 
         // At t=105.0: past end_time=102.0, 2nd loop completes → conclude
-        let _changes = rt.update(1, 105.0).changes;
-        let changes = rt.update(1, 106.0).changes;
+        let _changes = rt.update(105.0).changes;
+        let changes = rt.update(106.0).changes;
         assert!(changes.is_empty()); // concluded
     }
 
@@ -712,12 +712,12 @@ mod e2e_tests {
                 easing: EasingFunction::Named(EasingName::Linear),
             })),
         );
-        let mut rt = setup_runtime(doc);
+        let (mut rt, _opacity_id) = setup_runtime(doc);
         rt.start("precision", 0.0).unwrap();
 
         // Advance through many loops: each loop = 1.0s + 0.1s delay = 1.1s/loop
         // 100 loops ≈ 110s
-        let _changes = rt.update(1, 115.0).changes;
+        let _changes = rt.update(115.0).changes;
         // Should still be running (infinite loops), no crash, no infinite loop
     }
 }

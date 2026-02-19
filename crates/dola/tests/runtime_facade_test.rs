@@ -122,26 +122,28 @@ mod full_playback_cycle {
     #[test]
     fn load_start_update_natural_end() {
         let mut rt = DolaRuntime::new();
-        rt.subscribe(1, "opacity");
+        let opacity_id = rt.subscribe("opacity");
 
         let doc = simple_float_doc("fade_in");
         rt.load_document(doc).unwrap();
 
-        let StartResult { group_id, end_time, .. } = rt.start("fade_in", 0.0).unwrap();
+        let StartResult {
+            group_id, end_time, ..
+        } = rt.start("fade_in", 0.0).unwrap();
         assert_eq!(group_id, 1);
         assert!((end_time - 1.0).abs() < 1e-9);
 
         // t=0.0: 初回 update — opacity=0.0
-        let diff = rt.update(1, 0.0).changes;
+        let diff = rt.update(0.0).changes;
         assert_eq!(diff.len(), 1);
-        assert_eq!(diff[0].0, "opacity");
+        assert_eq!(diff[0].0, opacity_id);
         match &diff[0].1 {
             EvaluatedValue::Float(v) => assert!(*v < 0.01, "expected ~0.0, got {v}"),
             other => panic!("expected Float, got {other:?}"),
         }
 
         // t=0.5: 中間値 — opacity≈0.5
-        let diff = rt.update(1, 0.5).changes;
+        let diff = rt.update(0.5).changes;
         assert_eq!(diff.len(), 1);
         match &diff[0].1 {
             EvaluatedValue::Float(v) => assert!((*v - 0.5).abs() < 0.05, "expected ~0.5, got {v}"),
@@ -149,17 +151,20 @@ mod full_playback_cycle {
         }
 
         // t=1.0: 最終値 — opacity=1.0, 自然終了トリガー
-        let diff = rt.update(1, 1.0).changes;
+        let diff = rt.update(1.0).changes;
         // 自然終了により conclude_internal が呼ばれ、最終値が配信される
         assert!(!diff.is_empty(), "expected final value delivery at t=1.0");
-        let opacity_val = diff.iter().find(|(k, _)| k == "opacity").expect("opacity");
+        let opacity_val = diff
+            .iter()
+            .find(|(id, _)| *id == opacity_id)
+            .expect("opacity");
         match &opacity_val.1 {
             EvaluatedValue::Float(v) => assert!((*v - 1.0).abs() < 0.01, "expected ~1.0, got {v}"),
             other => panic!("expected Float, got {other:?}"),
         }
 
         // t=1.5: 終了後 — 差分なし
-        let diff = rt.update(1, 1.5).changes;
+        let diff = rt.update(1.5).changes;
         assert!(diff.is_empty(), "expected empty diff after natural end");
     }
 
@@ -190,8 +195,8 @@ mod full_playback_cycle {
         assert!((end_time - 1.0).abs() < 1e-9);
 
         // subscribe して update しても差分なし（インスタンス未生成）
-        rt.subscribe(1, "opacity");
-        let diff = rt.update(1, 0.5).changes;
+        let _opacity_id = rt.subscribe("opacity");
+        let diff = rt.update(0.5).changes;
         assert!(diff.is_empty());
     }
 }
@@ -205,7 +210,7 @@ mod pause_resume_cycle {
     #[test]
     fn pause_freezes_value_and_resume_continues() {
         let mut rt = DolaRuntime::new();
-        rt.subscribe(1, "opacity");
+        let _opacity_id = rt.subscribe("opacity");
 
         let doc = simple_float_doc("fade_in");
         rt.load_document(doc).unwrap();
@@ -213,10 +218,10 @@ mod pause_resume_cycle {
         let StartResult { group_id, .. } = rt.start("fade_in", 0.0).unwrap();
 
         // t=0.0: 初回
-        let _ = rt.update(1, 0.0);
+        let _ = rt.update(0.0);
 
         // t=0.3: 中間
-        let diff = rt.update(1, 0.3).changes;
+        let diff = rt.update(0.3).changes;
         assert!(!diff.is_empty());
         match &diff[0].1 {
             EvaluatedValue::Float(v) => assert!((*v - 0.3).abs() < 0.05, "t=0.3: got {v}"),
@@ -228,7 +233,7 @@ mod pause_resume_cycle {
 
         // t=0.5: Pause 中 — 値が凍結される
         // Paused 状態では timeline_manager が pause_start 時点の値を返す
-        let diff = rt.update(1, 0.5).changes;
+        let diff = rt.update(0.5).changes;
         // Paused 中は前回値と同じ → diff 空
         assert!(
             diff.is_empty(),
@@ -244,7 +249,7 @@ mod pause_resume_cycle {
         );
 
         // t=0.7: pause 分 0.2s ずれで effective=0.5
-        let diff = rt.update(1, 0.7).changes;
+        let diff = rt.update(0.7).changes;
         assert!(!diff.is_empty(), "expected value to change after resume");
         match &diff[0].1 {
             EvaluatedValue::Float(v) => {
@@ -264,7 +269,7 @@ mod document_replacement {
     #[test]
     fn same_variable_carries_over_value() {
         let mut rt = DolaRuntime::new();
-        rt.subscribe(1, "opacity");
+        let _opacity_id = rt.subscribe("opacity");
 
         // 第1指示書: opacity 0→1
         let doc1 = simple_float_doc("fade_in");
@@ -272,11 +277,11 @@ mod document_replacement {
         rt.start("fade_in", 0.0).unwrap();
 
         // t=0.5: opacity ≈ 0.5
-        let diff = rt.update(1, 0.5).changes;
+        let diff = rt.update(0.5).changes;
         assert!(!diff.is_empty());
 
         // t=1.5: 自然終了後
-        let _ = rt.update(1, 1.5);
+        let _ = rt.update(1.5);
 
         // 第2指示書: opacity 0→1 (同じ名前)
         let doc2 = simple_float_doc("fade_in");
@@ -284,7 +289,7 @@ mod document_replacement {
         rt.start("fade_in", 2.0).unwrap();
 
         // t=2.0: 新しいストーリーボードで opacity=0.0
-        let diff = rt.update(1, 2.0).changes;
+        let diff = rt.update(2.0).changes;
         assert!(
             !diff.is_empty(),
             "expected value delivery from new storyboard"
@@ -326,8 +331,8 @@ mod concurrent_playback {
     #[test]
     fn two_storyboards_on_different_variables() {
         let mut rt = DolaRuntime::new();
-        rt.subscribe(1, "opacity");
-        rt.subscribe(1, "scale");
+        let opacity_id = rt.subscribe("opacity");
+        let scale_id = rt.subscribe("scale");
 
         let doc = dual_variable_doc();
         rt.load_document(doc).unwrap();
@@ -340,11 +345,11 @@ mod concurrent_playback {
         assert!((r2.end_time - 2.0).abs() < 1e-9, "zoom end_time");
 
         // t=0.5: opacity=0.5, scale=1.25
-        let diff = rt.update(1, 0.5).changes;
+        let diff = rt.update(0.5).changes;
         assert!(diff.len() >= 2, "expected both variables, got {diff:?}");
 
-        let opacity = diff.iter().find(|(k, _)| k == "opacity");
-        let scale = diff.iter().find(|(k, _)| k == "scale");
+        let opacity = diff.iter().find(|(id, _)| *id == opacity_id);
+        let scale = diff.iter().find(|(id, _)| *id == scale_id);
 
         if let Some((_, EvaluatedValue::Float(v))) = opacity {
             assert!((*v - 0.5).abs() < 0.05, "opacity@0.5: {v}");
@@ -354,9 +359,9 @@ mod concurrent_playback {
         }
 
         // t=1.5: opacity 終了(→1.0 凍結), scale 中間(→1.75)
-        let diff = rt.update(1, 1.5).changes;
+        let diff = rt.update(1.5).changes;
         // opacity の自然終了 + scale の更新
-        let scale = diff.iter().find(|(k, _)| k == "scale");
+        let scale = diff.iter().find(|(id, _)| *id == scale_id);
         if let Some((_, EvaluatedValue::Float(v))) = scale {
             assert!((*v - 1.75).abs() < 0.05, "scale@1.5: {v}");
         }
@@ -372,21 +377,21 @@ mod conclude_cancel_finish {
     #[test]
     fn conclude_delivers_final_values() {
         let mut rt = DolaRuntime::new();
-        rt.subscribe(1, "opacity");
+        let opacity_id = rt.subscribe("opacity");
 
         let doc = simple_float_doc("fade_in");
         rt.load_document(doc).unwrap();
         let StartResult { group_id, .. } = rt.start("fade_in", 0.0).unwrap();
 
         // t=0.0: 初回
-        let _ = rt.update(1, 0.0);
+        let _ = rt.update(0.0);
 
         // t=0.3 で Conclude
         rt.conclude(group_id).unwrap();
 
         // 次の update で最終値 (1.0) が配信される
-        let diff = rt.update(1, 0.3).changes;
-        let opacity = diff.iter().find(|(k, _)| k == "opacity");
+        let diff = rt.update(0.3).changes;
+        let opacity = diff.iter().find(|(id, _)| *id == opacity_id);
         match opacity {
             Some((_, EvaluatedValue::Float(v))) => {
                 assert!((*v - 1.0).abs() < 0.01, "conclude final value: {v}")
@@ -395,7 +400,7 @@ mod conclude_cancel_finish {
         }
 
         // 以降は差分なし
-        let diff = rt.update(1, 0.5).changes;
+        let diff = rt.update(0.5).changes;
         assert!(
             diff.is_empty(),
             "expected empty diff after conclude, got {diff:?}"
@@ -405,45 +410,45 @@ mod conclude_cancel_finish {
     #[test]
     fn cancel_freezes_current_value() {
         let mut rt = DolaRuntime::new();
-        rt.subscribe(1, "opacity");
+        let _opacity_id = rt.subscribe("opacity");
 
         let doc = simple_float_doc("fade_in");
         rt.load_document(doc).unwrap();
         let StartResult { group_id, .. } = rt.start("fade_in", 0.0).unwrap();
 
         // t=0.0: 初回
-        let _ = rt.update(1, 0.0);
+        let _ = rt.update(0.0);
         // t=0.5: 中間値取得
-        let _ = rt.update(1, 0.5);
+        let _ = rt.update(0.5);
 
         // Cancel — 現在値凍結
         rt.cancel(group_id).unwrap();
 
         // 以降は差分なし（タイムテーブル削除済み、値は前回 update 値で凍結）
-        let diff = rt.update(1, 0.6).changes;
+        let diff = rt.update(0.6).changes;
         assert!(diff.is_empty(), "expected empty diff after cancel");
 
-        let diff = rt.update(1, 1.0).changes;
+        let diff = rt.update(1.0).changes;
         assert!(diff.is_empty(), "expected still empty after cancel");
     }
 
     #[test]
     fn finish_delayed_conclude() {
         let mut rt = DolaRuntime::new();
-        rt.subscribe(1, "opacity");
+        let opacity_id = rt.subscribe("opacity");
 
         let doc = simple_float_doc("fade_in");
         rt.load_document(doc).unwrap();
         let StartResult { group_id, .. } = rt.start("fade_in", 0.0).unwrap();
 
         // t=0.0
-        let _ = rt.update(1, 0.0);
+        let _ = rt.update(0.0);
 
         // finish: deadline = 0.5（t=0.5 で Conclude 相当）
         rt.finish(group_id, 0.5).unwrap();
 
         // t=0.3: deadline 未到達 → まだ再生中
-        let diff = rt.update(1, 0.3).changes;
+        let diff = rt.update(0.3).changes;
         assert!(!diff.is_empty(), "expected playing at 0.3");
         match &diff[0].1 {
             EvaluatedValue::Float(v) => assert!(*v < 0.9, "should not be final value yet, got {v}"),
@@ -451,15 +456,15 @@ mod conclude_cancel_finish {
         }
 
         // t=0.5: deadline 到達 → Conclude 相当
-        let diff = rt.update(1, 0.5).changes;
+        let diff = rt.update(0.5).changes;
         // 最終値が配信されるか、conclude 処理で値が飛ぶ
-        let opacity = diff.iter().find(|(k, _)| k == "opacity");
+        let opacity = diff.iter().find(|(id, _)| *id == opacity_id);
         if let Some((_, EvaluatedValue::Float(v))) = opacity {
             assert!((*v - 1.0).abs() < 0.01, "finish conclude final: {v}");
         }
 
         // 以降は差分なし
-        let diff = rt.update(1, 0.8).changes;
+        let diff = rt.update(0.8).changes;
         assert!(
             diff.is_empty(),
             "expected empty after finish-conclude, got {diff:?}"

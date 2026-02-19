@@ -351,8 +351,8 @@ mod conflict_detection {
         };
 
         let mut rt = DolaRuntime::new();
-        rt.subscribe(1, "x");
-        rt.subscribe(1, "y");
+        let _x_id = rt.subscribe("x");
+        let _y_id = rt.subscribe("y");
         rt.load_document(doc).unwrap();
 
         let r1 = rt.start("sb_x", 0.0).unwrap();
@@ -367,7 +367,7 @@ mod conflict_detection {
     fn no_conflict_when_no_existing_instances() {
         let doc = make_doc_with_policy("fade", InterruptionPolicy::Conclude);
         let mut rt = DolaRuntime::new();
-        rt.subscribe(1, "opacity");
+        let _opacity_id = rt.subscribe("opacity");
         rt.load_document(doc).unwrap();
 
         let result = rt.start("fade", 0.0).unwrap();
@@ -378,7 +378,7 @@ mod conflict_detection {
     fn conflict_detected_on_same_variable() {
         let doc = make_doc_with_policy("fade", InterruptionPolicy::Cancel);
         let mut rt = DolaRuntime::new();
-        rt.subscribe(1, "opacity");
+        let _opacity_id = rt.subscribe("opacity");
         rt.load_document(doc).unwrap();
 
         // 1st start
@@ -394,12 +394,12 @@ mod conflict_detection {
     fn no_conflict_after_natural_end() {
         let doc = make_doc_with_policy("fade", InterruptionPolicy::Cancel);
         let mut rt = DolaRuntime::new();
-        rt.subscribe(1, "opacity");
+        let _opacity_id = rt.subscribe("opacity");
         rt.load_document(doc).unwrap();
 
         let _r1 = rt.start("fade", 0.0).unwrap();
         // 自然終了を発生させる
-        rt.update(1, 3.0);
+        rt.update(3.0);
 
         // 新規 start → 競合なし（前のインスタンスは終了済み）
         let r2 = rt.start("fade", 3.0).unwrap();
@@ -417,13 +417,13 @@ mod cancel_strategy {
     fn cancel_freezes_at_interrupt_time() {
         let doc = make_doc_with_policy("fade", InterruptionPolicy::Cancel);
         let mut rt = DolaRuntime::new();
-        rt.subscribe(1, "opacity");
+        let _opacity_id = rt.subscribe("opacity");
         rt.load_document(doc).unwrap();
 
         // Start 1st at t=0.0
         rt.start("fade", 0.0).unwrap();
         // Update at t=0.5 → opacity = 25.0 (progress=0.25 of 0→100, 2s duration)
-        let changes = rt.update(1, 0.5).changes;
+        let changes = rt.update(0.5).changes;
         assert!(!changes.is_empty());
 
         // Start 2nd at t=1.0 → Cancel 1st, freeze at t=1.0 → 50.0
@@ -431,7 +431,7 @@ mod cancel_strategy {
         assert!(!r2.affected_group_ids.is_empty());
 
         // Update → 新しい SB の値が取得される
-        let changes = rt.update(1, 1.0).changes;
+        let changes = rt.update(1.0).changes;
         // The cancelled instance's frozen value should be 50.0,
         // but now the new instance starts at 0.0
         // The subscription manager should show the new SB's value
@@ -442,8 +442,8 @@ mod cancel_strategy {
     fn cancel_group_id_all_variables() {
         let doc = make_multi_sb_doc();
         let mut rt = DolaRuntime::new();
-        rt.subscribe(1, "x");
-        rt.subscribe(1, "y");
+        let _x_id = rt.subscribe("x");
+        let y_id = rt.subscribe("y");
         rt.load_document(doc).unwrap();
 
         // Start sb_a (Cancel policy, operates x and y)
@@ -456,9 +456,9 @@ mod cancel_strategy {
         assert_eq!(r2.affected_group_ids, vec![r1.group_id]);
 
         // sb_a's y values should be frozen at t=0.5 → 12.5 (progress=0.25 of 0→50)
-        let changes = rt.update(1, 0.5).changes;
+        let changes = rt.update(0.5).changes;
         // y should show frozen value, x shows new SB value
-        let y_val = changes.iter().find(|(name, _)| name == "y");
+        let y_val = changes.iter().find(|(id, _)| *id == y_id);
         if let Some((_, val)) = y_val {
             match val {
                 EvaluatedValue::Float(v) => {
@@ -480,13 +480,13 @@ mod conclude_strategy {
     fn conclude_jumps_to_current_segment_final() {
         let doc = make_doc_with_policy("fade", InterruptionPolicy::Conclude);
         let mut rt = DolaRuntime::new();
-        rt.subscribe(1, "opacity");
+        let _opacity_id = rt.subscribe("opacity");
         rt.load_document(doc).unwrap();
 
         // Start at t=0.0
         rt.start("fade", 0.0).unwrap();
         // Update to get initial value
-        let changes = rt.update(1, 0.5).changes;
+        let changes = rt.update(0.5).changes;
         assert!(!changes.is_empty());
 
         // Start 2nd at t=1.0 → Conclude 1st → jump to segment final (100.0)
@@ -495,7 +495,7 @@ mod conclude_strategy {
 
         // The concluded instance's last value should be 100.0 (segment final)
         // Next update should see new SB starting
-        let changes = rt.update(1, 1.0).changes;
+        let changes = rt.update(1.0).changes;
         assert!(!changes.is_empty());
     }
 
@@ -536,7 +536,7 @@ mod conclude_strategy {
         };
 
         let mut rt = DolaRuntime::new();
-        rt.subscribe(1, "opacity");
+        let _opacity_id = rt.subscribe("opacity");
         rt.load_document(doc).unwrap();
 
         let r1 = rt.start("fade", 0.0).unwrap();
@@ -553,18 +553,18 @@ mod trim_strategy {
     fn trim_cuts_at_interrupt_time() {
         let doc = make_doc_with_policy("fade", InterruptionPolicy::Trim);
         let mut rt = DolaRuntime::new();
-        rt.subscribe(1, "opacity");
+        let _opacity_id = rt.subscribe("opacity");
         rt.load_document(doc).unwrap();
 
         rt.start("fade", 0.0).unwrap();
-        rt.update(1, 0.5);
+        rt.update(0.5);
 
         // Start 2nd at t=1.0 → Trim 1st at t=1.0 → value = 50.0
         let r2 = rt.start("fade", 1.0).unwrap();
         assert!(!r2.affected_group_ids.is_empty());
 
         // Update → trimmed value should have been propagated
-        let changes = rt.update(1, 1.0).changes;
+        let changes = rt.update(1.0).changes;
         assert!(!changes.is_empty());
     }
 }
@@ -576,18 +576,18 @@ mod compress_strategy {
     fn compress_jumps_to_all_final_values() {
         let doc = make_doc_with_policy("fade", InterruptionPolicy::Compress);
         let mut rt = DolaRuntime::new();
-        rt.subscribe(1, "opacity");
+        let _opacity_id = rt.subscribe("opacity");
         rt.load_document(doc).unwrap();
 
         rt.start("fade", 0.0).unwrap();
-        rt.update(1, 0.5);
+        rt.update(0.5);
 
         // Start 2nd at t=0.5 → Compress 1st → all final values (100.0)
         let r2 = rt.start("fade", 0.5).unwrap();
         assert!(!r2.affected_group_ids.is_empty());
 
         // Update → compressed value was 100.0, new SB starts
-        let changes = rt.update(1, 0.5).changes;
+        let changes = rt.update(0.5).changes;
         assert!(!changes.is_empty());
     }
 }
@@ -602,7 +602,7 @@ mod never_strategy {
     fn never_rejects_start_with_conflict() {
         let doc = make_never_doc();
         let mut rt = DolaRuntime::new();
-        rt.subscribe(1, "x");
+        let _x_id = rt.subscribe("x");
         rt.load_document(doc).unwrap();
 
         // Start Never SB
@@ -627,9 +627,9 @@ mod never_strategy {
         // Even though y and z don't conflict, the entire start should fail.
         let doc = make_never_doc();
         let mut rt = DolaRuntime::new();
-        rt.subscribe(1, "x");
-        rt.subscribe(1, "y");
-        rt.subscribe(1, "z");
+        let _x_id = rt.subscribe("x");
+        let _y_id = rt.subscribe("y");
+        let _z_id = rt.subscribe("z");
         rt.load_document(doc).unwrap();
 
         // Start Never SB (only x)
@@ -647,7 +647,7 @@ mod never_strategy {
     fn never_new_instance_cleaned_up_on_conflict() {
         let doc = make_never_doc();
         let mut rt = DolaRuntime::new();
-        rt.subscribe(1, "x");
+        let x_id = rt.subscribe("x");
         rt.load_document(doc).unwrap();
 
         // Start Never SB
@@ -658,9 +658,9 @@ mod never_strategy {
         assert!(result.is_err());
 
         // Update → the Never SB should still be running normally
-        let changes = rt.update(1, 1.0).changes;
+        let changes = rt.update(1.0).changes;
         // sb_never: x at t=1.0 → progress=0.5 of 0→100 = 50.0
-        let x_val = changes.iter().find(|(name, _)| name == "x");
+        let x_val = changes.iter().find(|(id, _)| *id == x_id);
         if let Some((_, val)) = x_val {
             match val {
                 EvaluatedValue::Float(v) => {
@@ -739,15 +739,15 @@ mod edge_cases {
         };
 
         let mut rt = DolaRuntime::new();
-        rt.subscribe(1, "x");
-        rt.subscribe(1, "y");
+        let x_id = rt.subscribe("x");
+        let y_id = rt.subscribe("y");
         rt.load_document(doc).unwrap();
 
         rt.start("sb_x", 0.0).unwrap();
 
         // Update at t=1.0 → x = 50.0
-        let changes = rt.update(1, 1.0).changes;
-        let x_val = changes.iter().find(|(name, _)| name == "x");
+        let changes = rt.update(1.0).changes;
+        let x_val = changes.iter().find(|(id, _)| *id == x_id);
         assert!(x_val.is_some());
 
         // Start sb_y (different variable) → no conflict, no side effects
@@ -755,11 +755,11 @@ mod edge_cases {
         assert!(r.affected_group_ids.is_empty());
 
         // Both should still work
-        let changes = rt.update(1, 1.5).changes;
+        let changes = rt.update(1.5).changes;
         // x should still be updating (from sb_x)
         // y should be updating (from sb_y)
-        let x_change = changes.iter().find(|(name, _)| name == "x");
-        let y_change = changes.iter().find(|(name, _)| name == "y");
+        let x_change = changes.iter().find(|(id, _)| *id == x_id);
+        let y_change = changes.iter().find(|(id, _)| *id == y_id);
         assert!(
             x_change.is_some() || y_change.is_some(),
             "at least one variable should have changed"
@@ -770,8 +770,8 @@ mod edge_cases {
     fn mixed_policies_simultaneous_conflict() {
         let doc = make_multi_sb_doc();
         let mut rt = DolaRuntime::new();
-        rt.subscribe(1, "x");
-        rt.subscribe(1, "y");
+        let _x_id = rt.subscribe("x");
+        let _y_id = rt.subscribe("y");
         rt.load_document(doc).unwrap();
 
         // Start sb_a (Cancel, x+y) at t=0.0

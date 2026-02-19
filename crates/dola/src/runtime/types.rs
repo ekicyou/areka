@@ -62,6 +62,8 @@ pub enum RuntimeError {
     CompileError(Vec<DolaError>),
     /// Never 戦略を持つインスタンスとの競合により start() が拒否された
     Conflict { conflicting_group_ids: Vec<u64> },
+    /// 無効な variable_id（存在しない or 購読解除済み）
+    InvalidVariableId(i64),
 }
 
 impl fmt::Display for RuntimeError {
@@ -102,6 +104,9 @@ impl fmt::Display for RuntimeError {
                     "conflict with never-interrupt instances: {conflicting_group_ids:?}"
                 )
             }
+            Self::InvalidVariableId(id) => {
+                write!(f, "invalid variable_id: {id}")
+            }
         }
     }
 }
@@ -132,8 +137,8 @@ pub struct StartResult {
 /// 変数の差分変化とトリガー実行結果を含む。
 #[derive(Debug, Clone)]
 pub struct UpdateResult {
-    /// 変数の差分変化（既存の Vec<(String, EvaluatedValue)> と同等）
-    pub changes: Vec<(String, EvaluatedValue)>,
+    /// 変数の差分変化（variable_id ベース）
+    pub changes: Vec<(i64, EvaluatedValue)>,
     /// トリガー実行結果のリスト
     pub triggered: Vec<TriggerResult>,
 }

@@ -198,9 +198,10 @@ fn apply_cancel(
     let freeze_values =
         timeline_manager.evaluate_all_for_group(group_id, start_time, instance_manager.instances());
 
-    // 2. 凍結値を購読者に伝播
+    // 2. 凍結値を購読者に伝播（name→id 変換）
     if !freeze_values.is_empty() {
-        subscription_manager.force_update_last_values(&freeze_values);
+        let id_values = subscription_manager.convert_names_to_ids(&freeze_values);
+        subscription_manager.force_update_last_values(&id_values);
     }
 
     // 3. Cancelled 遷移（is_terminal() → 自動削除）
@@ -225,9 +226,10 @@ fn apply_conclude(
         instance_manager.instances(),
     );
 
-    // 2. 最終値を購読者に伝播
+    // 2. 最終値を購読者に伝播（name→id 変換）
     if !final_values.is_empty() {
-        subscription_manager.force_update_last_values(&final_values);
+        let id_values = subscription_manager.convert_names_to_ids(&final_values);
+        subscription_manager.force_update_last_values(&id_values);
     }
 
     // 3. Concluded 遷移（自動削除）
@@ -249,9 +251,10 @@ fn apply_trim(
     let trim_values =
         timeline_manager.evaluate_all_for_group(group_id, start_time, instance_manager.instances());
 
-    // 2. 確定値を購読者に伝播
+    // 2. 確定値を購読者に伝播（name→id 変換）
     if !trim_values.is_empty() {
-        subscription_manager.force_update_last_values(&trim_values);
+        let id_values = subscription_manager.convert_names_to_ids(&trim_values);
+        subscription_manager.force_update_last_values(&id_values);
     }
 
     // 3. Trimmed 遷移（is_terminal() → 自動削除）
@@ -271,9 +274,10 @@ fn apply_compress(
     // 1. 全セグメントの最終値を収集（既存 collect_final_values を再利用）
     let final_values = timeline_manager.collect_final_values(group_id);
 
-    // 2. 最終値を購読者に伝播
+    // 2. 最終値を購読者に伝播（name→id 変換）
     if !final_values.is_empty() {
-        subscription_manager.force_update_last_values(&final_values);
+        let id_values = subscription_manager.convert_names_to_ids(&final_values);
+        subscription_manager.force_update_last_values(&id_values);
     }
 
     // 3. Compressed 遷移（is_terminal() → 自動削除）

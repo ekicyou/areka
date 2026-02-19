@@ -23,10 +23,10 @@ use super::types::{MIN_LOOP_DURATION, RuntimeError, StartResult, TriggerResult, 
 /// # Usage
 /// ```ignore
 /// let mut rt = DolaRuntime::new();
-/// rt.subscribe(1, "opacity");
+/// let opacity_id = rt.subscribe("opacity");
 /// rt.load_document(doc)?;
 /// let result = rt.start("fade_in", 0.0)?;
-/// let changes = rt.update(1, 0.5);
+/// let changes = rt.update(0.5);
 /// ```
 pub struct DolaRuntime {
     document_store: DocumentStore,
@@ -284,20 +284,19 @@ impl DolaRuntime {
     // =========================================================================
 
     /// 購読登録（指示書受信前でも呼び出し可能）。
-    pub fn subscribe(&mut self, subscriber_id: u64, variable_name: &str) {
-        self.subscription_manager
-            .subscribe(subscriber_id, variable_name);
+    /// 同一変数名の再呼び出しは同一IDを返却する（冪等）。
+    pub fn subscribe(&mut self, variable_name: &str) -> i64 {
+        self.subscription_manager.subscribe(variable_name)
     }
 
-    /// 購読解除。
-    pub fn unsubscribe(&mut self, subscriber_id: u64, variable_name: &str) {
-        self.subscription_manager
-            .unsubscribe(subscriber_id, variable_name);
+    /// 購読解除（variable_id 指定）。
+    pub fn unsubscribe(&mut self, variable_id: i64) -> Result<(), RuntimeError> {
+        self.subscription_manager.unsubscribe(variable_id)
     }
 
     /// 全購読解除。
-    pub fn unsubscribe_all(&mut self, subscriber_id: u64) {
-        self.subscription_manager.unsubscribe_all(subscriber_id);
+    pub fn unsubscribe_all(&mut self) {
+        self.subscription_manager.unsubscribe_all();
     }
 
     /// 差分更新取得。
@@ -308,7 +307,7 @@ impl DolaRuntime {
     /// 2. 自然終了検知（current_time >= end_time の Playing インスタンス）
     /// 3. 購読変数の evaluate ループ
     /// 4. diff_and_update
-    pub fn update(&mut self, subscriber_id: u64, current_time: f64) -> UpdateResult {
+    pub fn update(&mut self, current_time: f64) -> UpdateResult {
         // Step 1: Finish Deadline チェック
         let expired = self.instance_manager.check_finish_deadlines(current_time);
         for gid in expired {
@@ -340,9 +339,7 @@ impl DolaRuntime {
         }
 
         // Step 3: 購読変数の評価（残存インスタンス対象）
-        let var_names = self
-            .subscription_manager
-            .get_subscribed_variables(subscriber_id);
+        let var_names = self.subscription_manager.get_subscribed_variable_names();
         let mut values = HashMap::new();
         for name in &var_names {
             if let Some(val) = self.timeline_manager.evaluate(
@@ -355,9 +352,7 @@ impl DolaRuntime {
         }
 
         // Step 4: 差分検出
-        let changes = self
-            .subscription_manager
-            .diff_and_update(subscriber_id, values);
+        let changes = self.subscription_manager.diff_and_update(values);
 
         UpdateResult {
             changes,
@@ -452,15 +447,18 @@ impl DolaRuntime {
 
     /// Conclude 相当の内部処理。
     ///
-    /// 操作順序: 値取得 → last_values 更新 → 状態遷移(Concluded) → エントリ削除
+    /// 操作順序: 値取得 → name→id変換 → last_values 更新 → 状態遷移(Concluded) → エントリ削除
     fn conclude_internal(&mut self, group_id: u64) {
-        // 1. 最終値取得
+        // 1. 最終値取得（変数名ベース）
         let final_values = self.timeline_manager.collect_final_values(group_id);
 
-        // 2. last_values 強制更新
+        // 2. name→id 変換 + last_values 強制更新
         if !final_values.is_empty() {
+            let id_values = self
+                .subscription_manager
+                .convert_names_to_ids(&final_values);
             self.subscription_manager
-                .force_update_last_values(&final_values);
+                .force_update_last_values(&id_values);
         }
 
         // 3. 状態遷移 → Concluded（自動削除）
