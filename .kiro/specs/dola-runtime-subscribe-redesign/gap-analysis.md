@@ -52,11 +52,11 @@
 
 ### 要件 2: subscriber_id の廃止
 
-| 技術要素                 | 現状                                                                    | ギャップ                                             |
-| ------------------------ | ----------------------------------------------------------------------- | ---------------------------------------------------- |
-| SubscriptionManager 構造 | `HashMap<u64, SubscriberState>`                                         | **Constraint**: フラット化が必要（単一の状態に統合） |
+| 技術要素                 | 現状                                                                    | ギャップ                                                                    |
+| ------------------------ | ----------------------------------------------------------------------- | --------------------------------------------------------------------------- |
+| SubscriptionManager 構造 | `HashMap<u64, SubscriberState>`                                         | **Constraint**: フラット化が必要（単一の状態に統合）                        |
 | facade API               | 3メソッドに `subscriber_id` 引数                                        | **Missing**: パラメータ削除、`unsubscribe` は `variable_id: i64` 引数に変更 |
-| conflict_resolver 連携   | `&mut SubscriptionManager` を受け取り `force_update_last_values` を呼ぶ | 内部メソッドI/F変更の伝播が必要                      |
+| conflict_resolver 連携   | `&mut SubscriptionManager` を受け取り `force_update_last_values` を呼ぶ | 内部メソッドI/F変更の伝播が必要                                             |
 
 ### 要件 3: update の再設計
 
