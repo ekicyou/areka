@@ -3,8 +3,8 @@
 
 use crate::api::get_window_long_ptr;
 use ambassador::*;
-use windows::core::*;
 use windows::Win32::{Foundation::*, UI::HiDpi::*, UI::WindowsAndMessaging::*};
+use windows::core::*;
 
 #[delegatable_trait]
 pub trait WinState {

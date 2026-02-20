@@ -109,7 +109,12 @@ pub(crate) fn advance_loop(instance: &mut StoryboardInstance, rng: &mut impl Rng
 
     // ループオフセット遅延の適用
     if let Some(min) = instance.loop_offset_min {
-        let delay = generate_delay(min, instance.loop_offset_max, &instance.loop_offset_easing, rng);
+        let delay = generate_delay(
+            min,
+            instance.loop_offset_max,
+            &instance.loop_offset_easing,
+            rng,
+        );
         instance.end_time += delay;
     }
 
@@ -163,8 +168,8 @@ pub(crate) fn process_loops(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::storyboard::InterruptionPolicy;
     use crate::runtime::instance_state::InstanceState;
+    use crate::storyboard::InterruptionPolicy;
     use rand::SeedableRng;
     use rand::rngs::SmallRng;
 
@@ -382,9 +387,19 @@ mod tests {
     fn generate_delay_min_eq_max_returns_fixed() {
         let mut rng = test_rng();
         // min == max → 常に固定値を返す（rng 不使用）
-        let d1 = generate_delay(3.0, 3.0, &EasingFunction::Named(EasingName::Linear), &mut rng);
+        let d1 = generate_delay(
+            3.0,
+            3.0,
+            &EasingFunction::Named(EasingName::Linear),
+            &mut rng,
+        );
         assert_eq!(d1, 3.0);
-        let d2 = generate_delay(0.0, 0.0, &EasingFunction::Named(EasingName::QuadraticIn), &mut rng);
+        let d2 = generate_delay(
+            0.0,
+            0.0,
+            &EasingFunction::Named(EasingName::QuadraticIn),
+            &mut rng,
+        );
         assert_eq!(d2, 0.0);
     }
 
@@ -429,7 +444,10 @@ mod tests {
         let mean_lin = sum_lin / n as f64;
         let mean_qin = sum_qin / n as f64;
         // QuadraticIn skews low → mean should be lower than Linear
-        assert!(mean_qin < mean_lin, "QuadraticIn mean {mean_qin} should < Linear mean {mean_lin}");
+        assert!(
+            mean_qin < mean_lin,
+            "QuadraticIn mean {mean_qin} should < Linear mean {mean_lin}"
+        );
     }
 
     #[test]
@@ -448,7 +466,10 @@ mod tests {
         let mean_lin = sum_lin / n as f64;
         let mean_qout = sum_qout / n as f64;
         // QuadraticOut skews high → mean should be higher than Linear
-        assert!(mean_qout > mean_lin, "QuadraticOut mean {mean_qout} should > Linear mean {mean_lin}");
+        assert!(
+            mean_qout > mean_lin,
+            "QuadraticOut mean {mean_qout} should > Linear mean {mean_lin}"
+        );
     }
 
     #[test]
@@ -473,16 +494,17 @@ mod tests {
 
     #[test]
     fn apply_easing_parametric_cubic_bezier() {
-        let easing = EasingFunction::Parametric(
-            crate::easing::ParametricEasing::CubicBezier {
-                x0: 0.0,
-                x1: 0.5,
-                x2: 0.5,
-                x3: 1.0,
-            },
-        );
+        let easing = EasingFunction::Parametric(crate::easing::ParametricEasing::CubicBezier {
+            x0: 0.0,
+            x1: 0.5,
+            x2: 0.5,
+            x3: 1.0,
+        });
         let result = apply_easing(&easing, 0.5);
-        assert!(result >= 0.0 && result <= 1.0, "result {result} out of range");
+        assert!(
+            result >= 0.0 && result <= 1.0,
+            "result {result} out of range"
+        );
     }
 
     // =======================================================================
@@ -491,22 +513,26 @@ mod tests {
 
     #[test]
     fn advance_loop_with_offset_adds_delay() {
-        let mut inst = make_instance_with_offset(
-            -1, 2.0, 1.0, 5.0,
-            EasingFunction::Named(EasingName::Linear),
-        );
+        let mut inst =
+            make_instance_with_offset(-1, 2.0, 1.0, 5.0, EasingFunction::Named(EasingName::Linear));
         let mut rng = test_rng();
         let end_before = inst.end_time; // 2.0
 
         advance_loop(&mut inst, &mut rng);
 
         // end_time should be > 2.0 + 2.0 (loop_duration) due to delay
-        assert!(inst.end_time > end_before + inst.loop_duration,
+        assert!(
+            inst.end_time > end_before + inst.loop_duration,
             "end_time {} should be > {} (loop_duration + old end_time)",
-            inst.end_time, end_before + inst.loop_duration);
+            inst.end_time,
+            end_before + inst.loop_duration
+        );
         // delay should be in [1.0, 5.0] → end_time in [5.0, 9.0]
         let delay = inst.end_time - (end_before + inst.loop_duration);
-        assert!(delay >= 1.0 && delay <= 5.0, "delay {delay} out of [1.0, 5.0]");
+        assert!(
+            delay >= 1.0 && delay <= 5.0,
+            "delay {delay} out of [1.0, 5.0]"
+        );
     }
 
     #[test]
@@ -522,7 +548,10 @@ mod tests {
     fn process_loops_with_delay_prevents_multi_skip() {
         // With loop_offset, delay prevents multiple loops from completing at once
         let mut inst = make_instance_with_offset(
-            -1, 1.0, 3.0, 3.0, // fixed 3.0s delay
+            -1,
+            1.0,
+            3.0,
+            3.0, // fixed 3.0s delay
             EasingFunction::Named(EasingName::Linear),
         );
         let mut rng = test_rng();
@@ -539,10 +568,8 @@ mod tests {
     #[test]
     fn process_loops_loop_count_1_ignores_offset() {
         // loop_count=1 → Conclude immediately, offset is never applied
-        let mut inst = make_instance_with_offset(
-            1, 2.0, 5.0, 5.0,
-            EasingFunction::Named(EasingName::Linear),
-        );
+        let mut inst =
+            make_instance_with_offset(1, 2.0, 5.0, 5.0, EasingFunction::Named(EasingName::Linear));
         let mut rng = test_rng();
         let action = process_loops(&mut inst, 2.5, &mut rng);
         assert_eq!(action, LoopAction::Conclude);
@@ -552,7 +579,10 @@ mod tests {
     #[test]
     fn process_loops_infinite_with_offset_applies_each_loop() {
         let mut inst = make_instance_with_offset(
-            -1, 1.0, 2.0, 2.0, // fixed 2.0s delay
+            -1,
+            1.0,
+            2.0,
+            2.0, // fixed 2.0s delay
             EasingFunction::Named(EasingName::Linear),
         );
         let mut rng = test_rng();

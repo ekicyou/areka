@@ -1,9 +1,9 @@
 use std::cell::RefCell;
 use std::mem::*;
-use windows::core::*;
 use windows::Win32::Graphics::Direct2D::Common::*;
 use windows::Win32::Graphics::Direct2D::*;
 use windows::Win32::Graphics::DirectWrite::*;
+use windows::core::*;
 use windows_numerics::*;
 
 #[inline(always)]

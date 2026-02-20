@@ -1,12 +1,12 @@
 use bevy_ecs::prelude::*;
-use wintf::ecs::calculate_surface_size_from_global_arrangement;
-use wintf::ecs::layout::GlobalArrangement;
-use wintf::ecs::mark_dirty_surfaces;
-use wintf::ecs::world::FrameCount;
 use wintf::ecs::GraphicsCommandList;
 use wintf::ecs::SurfaceCreationStats;
 use wintf::ecs::SurfaceGraphics;
 use wintf::ecs::SurfaceGraphicsDirty;
+use wintf::ecs::calculate_surface_size_from_global_arrangement;
+use wintf::ecs::layout::GlobalArrangement;
+use wintf::ecs::mark_dirty_surfaces;
+use wintf::ecs::world::FrameCount;
 
 #[test]
 fn test_surface_graphics_dirty_component_exists() {
@@ -78,10 +78,11 @@ fn test_surface_graphics_dirty_on_surface_added() {
 
     // 両方のコンポーネントが存在することを確認
     assert!(app.world().entity(entity).contains::<SurfaceGraphics>());
-    assert!(app
-        .world()
-        .entity(entity)
-        .contains::<SurfaceGraphicsDirty>());
+    assert!(
+        app.world()
+            .entity(entity)
+            .contains::<SurfaceGraphicsDirty>()
+    );
 }
 
 // ========== Task 1.1: SurfaceCreationStats テスト ==========

@@ -1,5 +1,5 @@
-use windows::core::*;
 use windows::Win32::Graphics::DirectWrite::*;
+use windows::core::*;
 
 /// DWriteCreateFactory
 pub fn dwrite_create_factory(factorytype: DWRITE_FACTORY_TYPE) -> Result<IDWriteFactory2> {
@@ -104,7 +104,7 @@ pub trait DWriteTextFormatExt {
     fn set_text_alignment(&self, textalignment: DWRITE_TEXT_ALIGNMENT) -> Result<()>;
     /// SetParagraphAlignment
     fn set_paragraph_alignment(&self, paragraphalignment: DWRITE_PARAGRAPH_ALIGNMENT)
-        -> Result<()>;
+    -> Result<()>;
 }
 
 impl DWriteTextFormatExt for IDWriteTextFormat {

@@ -9,8 +9,8 @@
 //! の統合的なテストとなる。
 
 use wintf::com::ulw::transfer_to_hbitmap;
-use wintf::ecs::compositor::WindowD3D11Compositor;
 use wintf::ecs::GraphicsCore;
+use wintf::ecs::compositor::WindowD3D11Compositor;
 
 // ==========================================================================
 // transfer_to_hbitmap: 実 COM リソースを使った転送テスト
@@ -25,8 +25,7 @@ fn test_transfer_to_hbitmap_basic() {
     let height = 64u32;
 
     // WindowD3D11Compositor を作成してリソースを取得
-    let compositor =
-        WindowD3D11Compositor::new(dc, width, height).expect("Compositor 作成失敗");
+    let compositor = WindowD3D11Compositor::new(dc, width, height).expect("Compositor 作成失敗");
 
     let comp_bmp = compositor.composition_bitmap().expect("composition_bitmap");
     let staging = compositor.staging_bitmap().expect("staging_bitmap");
@@ -88,8 +87,7 @@ fn test_transfer_pipeline_after_resize() {
     let core = GraphicsCore::new().expect("GraphicsCore 作成失敗");
     let dc = core.device_context().expect("DeviceContext 取得失敗");
 
-    let mut compositor =
-        WindowD3D11Compositor::new(dc, 32, 32).expect("Compositor 作成失敗");
+    let mut compositor = WindowD3D11Compositor::new(dc, 32, 32).expect("Compositor 作成失敗");
 
     // 転送テスト（初期サイズ）
     {

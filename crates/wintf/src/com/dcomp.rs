@@ -1,8 +1,8 @@
-use windows::core::*;
 use windows::Win32::Foundation::*;
 use windows::Win32::Graphics::Direct2D::*;
 use windows::Win32::Graphics::DirectComposition::*;
 use windows::Win32::Graphics::Dxgi::Common::*;
+use windows::core::*;
 use windows_numerics::*;
 
 pub fn dcomp_create_desktop_device<P0>(renderingdevice: P0) -> Result<IDCompositionDesktopDevice>

@@ -4,10 +4,10 @@
 //! GraphicsCore.invalidate()時もWicCoreは有効なまま。
 
 use bevy_ecs::prelude::*;
-use windows::core::Result;
 use windows::Win32::Graphics::Imaging::D2D::*;
 use windows::Win32::Graphics::Imaging::*;
 use windows::Win32::System::Com::*;
+use windows::core::Result;
 
 /// WIC関連リソース
 ///

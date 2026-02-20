@@ -2,12 +2,12 @@ pub mod command;
 pub use command::*;
 
 use ambassador::*;
-use windows::core::*;
 use windows::Win32::Graphics::Direct2D::Common::*;
 use windows::Win32::Graphics::Direct2D::*;
 use windows::Win32::Graphics::DirectWrite::*;
 use windows::Win32::Graphics::Dxgi::*;
 use windows::Win32::Graphics::Imaging::*;
+use windows::core::*;
 use windows_numerics::*;
 
 /// D2D1CreateDevice

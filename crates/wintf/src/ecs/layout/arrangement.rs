@@ -1,7 +1,7 @@
 use bevy_ecs::prelude::*;
 use windows_numerics::Matrix3x2;
 
-use super::{transform_rect_axis_aligned, D2DRect, LayoutScale, Offset, Size};
+use super::{D2DRect, LayoutScale, Offset, Size, transform_rect_axis_aligned};
 
 /// ローカルレイアウト配置（親からの相対位置とサイズ）
 #[derive(Component, Debug, Clone, Copy, PartialEq)]

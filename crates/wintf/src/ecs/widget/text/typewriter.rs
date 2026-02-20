@@ -4,10 +4,10 @@
 //! - TypewriterTalk: 1回のトーク論理情報（再生中のみ存在）
 //! - TypewriterLayoutCache: 描画リソース（システムが自動生成）
 
+use crate::ecs::Visual;
 use crate::ecs::widget::text::typewriter_ir::{
     TimelineItem, TypewriterEventKind, TypewriterTimeline, TypewriterToken,
 };
-use crate::ecs::Visual;
 use bevy_ecs::component::Component;
 use bevy_ecs::lifecycle::HookContext;
 use bevy_ecs::world::DeferredWorld;

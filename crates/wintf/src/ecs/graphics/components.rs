@@ -302,8 +302,8 @@ fn on_visual_add(mut world: DeferredWorld, context: HookContext) {
         .is_none();
 
     // DComp モード判定: 祖先 Window の CompositionMode を確認
-    let is_dcomp_mode = find_owner_window_composition_mode(&world, entity)
-        == Some(CompositionMode::DComp);
+    let is_dcomp_mode =
+        find_owner_window_composition_mode(&world, entity) == Some(CompositionMode::DComp);
 
     // コマンドを発行
     let mut cmds = world.commands();
@@ -339,7 +339,9 @@ fn on_visual_add(mut world: DeferredWorld, context: HookContext) {
     // Note: Brushesコンポーネントは挿入しない（オプショナル設計）
     if needs_brush_inherit {
         let mut cmds3 = world.commands();
-        cmds3.entity(entity).insert(crate::ecs::widget::BrushInherit);
+        cmds3
+            .entity(entity)
+            .insert(crate::ecs::widget::BrushInherit);
     }
 }
 

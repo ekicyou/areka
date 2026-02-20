@@ -3,9 +3,9 @@
 //! Label/Rectangle コンポーネント追加時に Visual が自動的に挿入されることをテストする。
 
 use bevy_ecs::prelude::*;
+use wintf::ecs::Visual;
 use wintf::ecs::widget::shapes::Rectangle;
 use wintf::ecs::widget::text::Label;
-use wintf::ecs::Visual;
 
 /// Label追加時にVisualが自動追加されることを確認
 #[test]

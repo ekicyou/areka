@@ -3,8 +3,8 @@
 #![allow(dead_code)]
 
 use crate::api::*;
-use windows::core::*;
 use windows::Win32::{Foundation::*, UI::WindowsAndMessaging::*};
+use windows::core::*;
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub struct WinStyle {

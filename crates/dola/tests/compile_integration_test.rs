@@ -232,9 +232,7 @@ fn all_variable_types_mixed() {
     );
     assert_eq!(
         result.timelines.get("frame").unwrap().variable_type,
-        VariableTypeHint::Integer {
-            typewriter: None,
-        }
+        VariableTypeHint::Integer { typewriter: None }
     );
     assert_eq!(
         result.timelines.get("state").unwrap().variable_type,
@@ -508,12 +506,7 @@ fn compile_result_serializable() {
 
 #[test]
 fn empty_storyboard_compiles() {
-    let doc = make_doc(
-        vec![],
-        vec![],
-        "empty",
-        StoryboardBuilder::new().build(),
-    );
+    let doc = make_doc(vec![], vec![], "empty", StoryboardBuilder::new().build());
 
     let result = compile_storyboard(&doc, "empty", 0.0).unwrap();
     assert_eq!(result.timelines.len(), 0);

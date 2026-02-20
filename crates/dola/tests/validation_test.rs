@@ -15,7 +15,12 @@ fn minimal_valid_doc() -> DolaDocument {
 }
 
 /// ヘルパー: f64変数付きドキュメント
-fn doc_with_float_var(name: &str, initial: f64, min: Option<f64>, max: Option<f64>) -> DolaDocument {
+fn doc_with_float_var(
+    name: &str,
+    initial: f64,
+    min: Option<f64>,
+    max: Option<f64>,
+) -> DolaDocument {
     let mut variable = BTreeMap::new();
     variable.insert(
         name.to_string(),
@@ -174,9 +179,11 @@ mod v3_tests {
         doc.storyboard = storyboard;
 
         let errors = doc.validate().unwrap_err();
-        assert!(errors
-            .iter()
-            .any(|e| matches!(e, DolaError::ReservedKeyframeName { name } if name == "start")));
+        assert!(
+            errors
+                .iter()
+                .any(|e| matches!(e, DolaError::ReservedKeyframeName { name } if name == "start"))
+        );
     }
 }
 
@@ -800,9 +807,11 @@ mod v11_tests {
         doc.storyboard = storyboard;
 
         let errors = doc.validate().unwrap_err();
-        assert!(errors
-            .iter()
-            .any(|e| matches!(e, DolaError::MutuallyExclusive { .. })));
+        assert!(
+            errors
+                .iter()
+                .any(|e| matches!(e, DolaError::MutuallyExclusive { .. }))
+        );
     }
 }
 

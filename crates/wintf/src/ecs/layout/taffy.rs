@@ -1,7 +1,7 @@
 use bevy_ecs::prelude::*;
 use std::collections::HashMap;
-use taffy::prelude::*;
 use taffy::TaffyError;
+use taffy::prelude::*;
 
 /// taffyのStyle
 #[derive(Component, Debug, Clone, PartialEq, Default)]

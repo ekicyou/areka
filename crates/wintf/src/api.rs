@@ -2,8 +2,8 @@
 #![allow(unused_variables)]
 #![allow(dead_code)]
 
-use windows::core::*;
 use windows::Win32::{Foundation::*, UI::WindowsAndMessaging::*};
+use windows::core::*;
 
 /// GetWindowLongPtrWのラッパー
 #[inline(always)]

@@ -68,15 +68,9 @@ pub enum DolaError {
         reason: String,
     },
     /// loop_offset.min が負値 (V14)
-    LoopOffsetNegativeMin {
-        storyboard: String,
-        value: f64,
-    },
+    LoopOffsetNegativeMin { storyboard: String, value: f64 },
     /// loop_offset.max が負値 (V15)
-    LoopOffsetNegativeMax {
-        storyboard: String,
-        value: f64,
-    },
+    LoopOffsetNegativeMax { storyboard: String, value: f64 },
     /// loop_offset の min > max (V16)
     LoopOffsetRangeInverted {
         storyboard: String,
@@ -271,11 +265,7 @@ impl fmt::Display for DolaError {
                 )
             }
             DolaError::TriggerCycle { cycle } => {
-                write!(
-                    f,
-                    "Trigger cycle detected: {}",
-                    cycle.join(" -> ")
-                )
+                write!(f, "Trigger cycle detected: {}", cycle.join(" -> "))
             }
             DolaError::TriggerExclusiveViolation {
                 storyboard,

@@ -10,8 +10,8 @@ use bevy_ecs::prelude::*;
 use windows::core::Result;
 use wintf::ecs::world::FrameCount;
 use wintf::ecs::{
-    visual_resource_management_system, DCompGraphicsResource, GraphicsCore, SurfaceGraphics, Visual,
-    VisualGraphics,
+    DCompGraphicsResource, GraphicsCore, SurfaceGraphics, Visual, VisualGraphics,
+    visual_resource_management_system,
 };
 
 /// テスト用の GraphicsCore を作成するヘルパー関数
@@ -22,9 +22,7 @@ fn setup_graphics() -> Result<GraphicsCore> {
 /// テスト用のワールドをセットアップするヘルパー関数
 fn setup_world_with_graphics() -> Result<World> {
     let graphics = setup_graphics()?;
-    let d2d = graphics
-        .d2d_device()
-        .expect("D2Dデバイスが無効");
+    let d2d = graphics.d2d_device().expect("D2Dデバイスが無効");
     let dcomp_resource = DCompGraphicsResource::new(d2d)?;
     let mut world = World::new();
     world.insert_resource(graphics);

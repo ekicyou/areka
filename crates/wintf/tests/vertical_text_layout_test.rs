@@ -1,7 +1,7 @@
 #[cfg(test)]
 mod tests {
-    use wintf::ecs::widget::text::label::{Label, TextDirection};
     use wintf::ecs::TextLayoutMetrics;
+    use wintf::ecs::widget::text::label::{Label, TextDirection};
 
     #[test]
     fn test_text_direction_enum() {

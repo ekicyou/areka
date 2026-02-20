@@ -91,10 +91,7 @@ fn test_opacity_accumulation_three_levels() {
 fn test_opacity_accumulation_zero_parent() {
     // parent == 0.0 → 子もすべて 0.0
     let result = accumulated_opacity(0.0, 0.8);
-    assert!(
-        result.abs() < f32::EPSILON,
-        "0.0 × 0.8 = 0.0: got {result}"
-    );
+    assert!(result.abs() < f32::EPSILON, "0.0 × 0.8 = 0.0: got {result}");
     eprintln!("✅ parent 0.0 なら子も 0.0");
 }
 
@@ -132,20 +129,14 @@ fn test_visible_skip_logic() {
         opacity: 1.0,
         ..Default::default()
     };
-    assert!(
-        !hidden.is_visible,
-        "is_visible == false でスキップ判定"
-    );
+    assert!(!hidden.is_visible, "is_visible == false でスキップ判定");
 
     let visible = Visual {
         is_visible: true,
         opacity: 1.0,
         ..Default::default()
     };
-    assert!(
-        visible.is_visible,
-        "is_visible == true で描画続行"
-    );
+    assert!(visible.is_visible, "is_visible == true で描画続行");
 
     eprintln!("✅ is_visible の真偽判定が正しい");
 }

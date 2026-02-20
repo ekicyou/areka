@@ -87,9 +87,7 @@ pub(super) fn WM_PAINT(
                 world_borrow
                     .world()
                     .get::<crate::ecs::window::Window>(entity)
-                    .map(|w| {
-                        w.composition_mode() == crate::ecs::window::CompositionMode::DComp
-                    })
+                    .map(|w| w.composition_mode() == crate::ecs::window::CompositionMode::DComp)
                     .unwrap_or(false)
             } else {
                 false

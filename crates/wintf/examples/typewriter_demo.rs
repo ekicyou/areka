@@ -12,8 +12,9 @@ use bevy_ecs::name::Name;
 use bevy_ecs::prelude::*;
 use std::time::Duration;
 use tracing_subscriber::EnvFilter;
-use windows::core::Result;
+use windows::Win32::Foundation::POINT;
 use windows::Win32::Graphics::Direct2D::Common::D2D1_COLOR_F;
+use windows::core::Result;
 use wintf::ecs::layout::{
     BoxInset, BoxMargin, BoxPosition, BoxSize, BoxStyle, Dimension, LengthPercentageAuto,
 };
@@ -25,7 +26,6 @@ use wintf::ecs::widget::text::{
     TypewriterTalk, TypewriterToken,
 };
 use wintf::ecs::{FrameTime, Window, WindowPos};
-use windows::Win32::Foundation::POINT;
 use wintf::*;
 
 #[derive(Debug, Clone, Copy, Component, PartialEq, Hash)]
@@ -389,7 +389,9 @@ fn start_typewriter_talk(world: &mut World) {
     }
 
     println!("[Test] TypewriterTalk started with text:");
-    println!("  \"こんにちは、（wait 300ms）今日もいい天気ですね。（wait 500ms）タイプライター効果のデモです！\"");
+    println!(
+        "  \"こんにちは、（wait 300ms）今日もいい天気ですね。（wait 500ms）タイプライター効果のデモです！\""
+    );
 }
 
 /// Typewriter を一時停止

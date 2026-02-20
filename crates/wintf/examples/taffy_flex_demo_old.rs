@@ -2,13 +2,13 @@
 
 use bevy_ecs::name::Name;
 use bevy_ecs::prelude::*;
-use std::sync::mpsc::channel;
 use std::sync::Mutex;
+use std::sync::mpsc::channel;
 use std::thread;
 use std::time::Duration;
 use tracing_subscriber::EnvFilter;
-use windows::core::Result;
 use windows::Win32::Graphics::Direct2D::Common::D2D1_COLOR_F;
+use windows::core::Result;
 use wintf::ecs::layout::{
     BoxInset, BoxMargin, BoxPosition, BoxSize, BoxStyle, Dimension, LengthPercentageAuto, Opacity,
 };
@@ -242,15 +242,12 @@ fn main() -> Result<()> {
                     width: Some(Dimension::Px(600.0)),
                     height: Some(Dimension::Px(400.0)),
                 });
-                println!(
-                    "[Test] Window BoxStyle changed: size=(600,400) in DIP"
-                );
+                println!("[Test] Window BoxStyle changed: size=(600,400) in DIP");
                 println!("[Test] Moving to left monitor (DPI=192) to trigger WM_DPICHANGED");
             }
 
             // WindowPos.position を変更してウィンドウを移動
-            let mut wp_query =
-                world.query_filtered::<&mut WindowPos, With<FlexDemoWindow>>();
+            let mut wp_query = world.query_filtered::<&mut WindowPos, With<FlexDemoWindow>>();
             if let Some(mut wp) = wp_query.iter_mut(world).next() {
                 wp.position = Some(windows::Win32::Foundation::POINT { x: -500, y: 400 });
                 println!("[Test] Window position changed to (-500, 400) via WindowPos");

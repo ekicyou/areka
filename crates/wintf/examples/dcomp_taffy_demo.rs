@@ -26,8 +26,8 @@ use tracing_subscriber::EnvFilter;
 use windows::Win32::Foundation::POINT;
 use windows::Win32::Graphics::Direct2D::Common::D2D1_COLOR_F;
 use windows::core::Result;
-use wintf::ecs::layout::{BoxMargin, BoxPosition, BoxSize, BoxStyle, Dimension};
 use wintf::ecs::layout::LengthPercentageAuto;
+use wintf::ecs::layout::{BoxMargin, BoxPosition, BoxSize, BoxStyle, Dimension};
 use wintf::ecs::widget::bitmap_source::{BitmapSource, CommandSender};
 use wintf::ecs::widget::brushes::Brushes;
 use wintf::ecs::widget::shapes::Rectangle;
@@ -314,8 +314,9 @@ fn create_dcomp_demo_window(world: &mut World) {
     world.spawn((
         Name::new("InfoLabel"),
         Label {
-            text: "このウィンドウは WS_EX_NOREDIRECTIONBITMAP + DirectComposition で描画されています"
-                .to_string(),
+            text:
+                "このウィンドウは WS_EX_NOREDIRECTIONBITMAP + DirectComposition で描画されています"
+                    .to_string(),
             font_family: "メイリオ".to_string(),
             font_size: 12.0,
             ..Default::default()
@@ -342,5 +343,8 @@ fn create_dcomp_demo_window(world: &mut World) {
         ChildOf(window_entity),
     ));
 
-    info!("[DCompDemo] DComp Flexbox window created (entity={:?})", window_entity);
+    info!(
+        "[DCompDemo] DComp Flexbox window created (entity={:?})",
+        window_entity
+    );
 }

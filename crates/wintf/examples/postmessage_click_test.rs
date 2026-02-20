@@ -175,10 +175,7 @@ fn inject_click(world: &mut World) {
 
     // WM_LBUTTONUP も投入（次フレーム処理用）
     let wparam_up = WPARAM(0);
-    info!(
-        "[Test] PostMessageW WM_LBUTTONUP to {:?} at (50,50)",
-        hwnd
-    );
+    info!("[Test] PostMessageW WM_LBUTTONUP to {:?} at (50,50)", hwnd);
     unsafe {
         let _ = PostMessageW(Some(hwnd), WM_LBUTTONUP, wparam_up, lparam);
     }
@@ -186,7 +183,8 @@ fn inject_click(world: &mut World) {
 
 /// クリック対象の現在状態をダンプ
 fn dump_click_target_state(world: &mut World, label: &str) {
-    let mut query = world.query_filtered::<(Entity, &Brushes, Option<&GlobalArrangement>), With<ClickTarget>>();
+    let mut query =
+        world.query_filtered::<(Entity, &Brushes, Option<&GlobalArrangement>), With<ClickTarget>>();
     for (entity, brushes, ga_opt) in query.iter(world) {
         let color = brushes
             .foreground

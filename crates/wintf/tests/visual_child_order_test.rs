@@ -9,7 +9,7 @@ use bevy_ecs::prelude::*;
 use windows::core::Result;
 use wintf::com::dcomp::*;
 use wintf::ecs::DCompGraphicsResource;
-use wintf::ecs::{visual_hierarchy_sync_system, GraphicsCore, Visual, VisualGraphics};
+use wintf::ecs::{GraphicsCore, Visual, VisualGraphics, visual_hierarchy_sync_system};
 
 /// テスト用マーカーコンポーネント（アーキタイプを変えるために使用）
 #[derive(Component, Default)]
@@ -32,7 +32,10 @@ fn test_different_archetype_siblings_visual_hierarchy_sync() -> Result<()> {
     let graphics = setup_graphics()?;
     let d2d = graphics.d2d_device().expect("D2Dデバイスが無効");
     let dcomp_resource = DCompGraphicsResource::new(d2d).expect("DCompGraphicsResource作成失敗");
-    let dcomp = dcomp_resource.dcomp().expect("dcomp device should exist").clone();
+    let dcomp = dcomp_resource
+        .dcomp()
+        .expect("dcomp device should exist")
+        .clone();
 
     let mut world = World::new();
     world.insert_resource(graphics);
@@ -95,7 +98,11 @@ fn test_different_archetype_siblings_visual_hierarchy_sync() -> Result<()> {
     );
 
     // 全子の parent_visual が更新されていること（is_some()）
-    for (name, entity) in [("child_a", child_a), ("child_b", child_b), ("child_c", child_c)] {
+    for (name, entity) in [
+        ("child_a", child_a),
+        ("child_b", child_b),
+        ("child_c", child_c),
+    ] {
         let vg = world.get::<VisualGraphics>(entity).unwrap();
         assert!(
             vg.parent_visual().is_some(),
@@ -113,7 +120,10 @@ fn test_children_without_visual_graphics_are_safely_skipped() -> Result<()> {
     let graphics = setup_graphics()?;
     let d2d = graphics.d2d_device().expect("D2Dデバイスが無効");
     let dcomp_resource = DCompGraphicsResource::new(d2d).expect("DCompGraphicsResource作成失敗");
-    let dcomp = dcomp_resource.dcomp().expect("dcomp device should exist").clone();
+    let dcomp = dcomp_resource
+        .dcomp()
+        .expect("dcomp device should exist")
+        .clone();
 
     let mut world = World::new();
     world.insert_resource(graphics);
@@ -176,7 +186,10 @@ fn test_many_siblings_alternating_archetypes_visual_hierarchy() -> Result<()> {
     let graphics = setup_graphics()?;
     let d2d = graphics.d2d_device().expect("D2Dデバイスが無効");
     let dcomp_resource = DCompGraphicsResource::new(d2d).expect("DCompGraphicsResource作成失敗");
-    let dcomp = dcomp_resource.dcomp().expect("dcomp device should exist").clone();
+    let dcomp = dcomp_resource
+        .dcomp()
+        .expect("dcomp device should exist")
+        .clone();
 
     let mut world = World::new();
     world.insert_resource(graphics);

@@ -1,13 +1,13 @@
 /// Task 7.2-7.7: 追加ユニットテスト
 /// TaffyComputedLayout変換、マッピング管理、階層同期、増分計算、クリーンアップ、境界値シナリオ
 use bevy_ecs::prelude::*;
+use wintf::ecs::ChildOf;
 use wintf::ecs::layout::systems::{
     build_taffy_styles_system, cleanup_removed_entities_system, compute_taffy_layout_system,
     sync_taffy_tree_system, update_arrangements_system,
 };
 use wintf::ecs::layout::taffy::{TaffyComputedLayout, TaffyLayoutResource, TaffyStyle};
 use wintf::ecs::layout::{Arrangement, BoxSize, BoxStyle, Dimension, LayoutRoot};
-use wintf::ecs::ChildOf;
 
 // ===== Task 7.2: TaffyComputedLayout→Arrangement変換テスト =====
 

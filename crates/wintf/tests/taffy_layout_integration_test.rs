@@ -456,8 +456,8 @@ fn test_layout_recalculation_on_parameter_change() {
 /// これにより、実際のウィンドウ作成処理を回避し、テストの安全性と速度を向上させます。
 #[test]
 fn test_full_layout_pipeline_with_ecs_world() {
-    use wintf::ecs::world::EcsWorld;
     use wintf::ecs::ChildOf;
+    use wintf::ecs::world::EcsWorld;
 
     // EcsWorldを作成（デフォルトのシステムスケジュールが登録済み）
     let mut ecs_world = EcsWorld::new();

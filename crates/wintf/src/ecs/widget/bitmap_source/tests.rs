@@ -9,7 +9,7 @@ use windows_core::Interface;
 
 // COMを初期化するヘルパー
 fn with_com_initialized<F: FnOnce()>(f: F) {
-    use windows::Win32::System::Com::{CoInitializeEx, CoUninitialize, COINIT_MULTITHREADED};
+    use windows::Win32::System::Com::{COINIT_MULTITHREADED, CoInitializeEx, CoUninitialize};
     // COINIT_MULTITHREADED for WIC free-threaded factory
     unsafe {
         let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
@@ -94,8 +94,8 @@ fn test_wintf_task_pool_drain_empty() {
 fn test_wintf_task_pool_command_send_receive() {
     // spawnで送信したコマンドがdrain_and_applyで実行されることを確認
     use bevy_ecs::prelude::*;
-    use std::sync::atomic::{AtomicBool, Ordering};
     use std::sync::Arc;
+    use std::sync::atomic::{AtomicBool, Ordering};
 
     let task_pool = WintfTaskPool::new();
     let executed = Arc::new(AtomicBool::new(false));

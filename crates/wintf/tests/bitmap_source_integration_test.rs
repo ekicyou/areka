@@ -7,10 +7,10 @@
 
 use std::path::PathBuf;
 use windows::Win32::Graphics::Imaging::IWICBitmapSource;
-use windows::Win32::System::Com::{CoInitializeEx, CoUninitialize, COINIT_MULTITHREADED};
+use windows::Win32::System::Com::{COINIT_MULTITHREADED, CoInitializeEx, CoUninitialize};
 use windows_core::Interface;
-use wintf::ecs::widget::bitmap_source::systems::load_bitmap_source;
 use wintf::ecs::widget::bitmap_source::WicCore;
+use wintf::ecs::widget::bitmap_source::systems::load_bitmap_source;
 
 /// テストアセットディレクトリのパスを取得
 fn test_asset_path(filename: &str) -> PathBuf {

@@ -1,8 +1,8 @@
 use windows::Win32::Graphics::Direct2D::Common::D2D_RECT_F;
 use windows_numerics::{Matrix3x2, Vector2};
 use wintf::ecs::{
-    transform_rect_axis_aligned, Arrangement, D2DRectExt, GlobalArrangement, LayoutScale, Offset,
-    Size,
+    Arrangement, D2DRectExt, GlobalArrangement, LayoutScale, Offset, Size,
+    transform_rect_axis_aligned,
 };
 
 // Task 6.1: Size構造体とArrangement.local_bounds()のテスト
@@ -357,8 +357,8 @@ fn test_global_arrangement_from_arrangement() {
     // transform検証
     assert_eq!(global.transform.M11, 2.0); // scale x
     assert_eq!(global.transform.M22, 2.0); // scale y
-                                           // translation * scaleの場合、offsetもscaleされる
-                                           // Matrix3x2の演算では: M31 = offset.x * scale.x = 10 * 2 = 20
+    // translation * scaleの場合、offsetもscaleされる
+    // Matrix3x2の演算では: M31 = offset.x * scale.x = 10 * 2 = 20
     assert_eq!(global.transform.M31, 20.0);
     assert_eq!(global.transform.M32, 40.0);
 

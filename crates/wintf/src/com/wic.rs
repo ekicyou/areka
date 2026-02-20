@@ -1,7 +1,7 @@
-use windows::core::*;
 use windows::Win32::Foundation::*;
 use windows::Win32::Graphics::Imaging::{D2D::*, *};
 use windows::Win32::System::Com::*;
+use windows::core::*;
 
 pub fn wic_factory() -> Result<IWICImagingFactory2> {
     unsafe { CoCreateInstance(&CLSID_WICImagingFactory, None, CLSCTX_INPROC_SERVER) }

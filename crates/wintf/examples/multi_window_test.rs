@@ -1,7 +1,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-use windows::core::*;
 use windows::Win32::Foundation::{HWND, POINT, SIZE};
+use windows::core::*;
 use wintf::ecs::{Window, WindowHandle, WindowPos};
 use wintf::*;
 

@@ -131,11 +131,14 @@ mod time_resolution_tests {
     fn simple_sequential_single_variable() {
         // 1 variable, 2 sequential entries
         let doc = make_doc_with_storyboard(
-            vec![("x", AnimationVariableDef::Float {
-                initial: 0.0,
-                min: None,
-                max: None,
-            })],
+            vec![(
+                "x",
+                AnimationVariableDef::Float {
+                    initial: 0.0,
+                    min: None,
+                    max: None,
+                },
+            )],
             vec![],
             "test",
             StoryboardBuilder::new()
@@ -188,11 +191,14 @@ mod time_resolution_tests {
     #[test]
     fn sequential_with_delay() {
         let doc = make_doc_with_storyboard(
-            vec![("x", AnimationVariableDef::Float {
-                initial: 0.0,
-                min: None,
-                max: None,
-            })],
+            vec![(
+                "x",
+                AnimationVariableDef::Float {
+                    initial: 0.0,
+                    min: None,
+                    max: None,
+                },
+            )],
             vec![],
             "test",
             StoryboardBuilder::new()
@@ -224,16 +230,22 @@ mod time_resolution_tests {
     fn at_reference_keyframe() {
         let doc = make_doc_with_storyboard(
             vec![
-                ("x", AnimationVariableDef::Float {
-                    initial: 0.0,
-                    min: None,
-                    max: None,
-                }),
-                ("y", AnimationVariableDef::Float {
-                    initial: 0.0,
-                    min: None,
-                    max: None,
-                }),
+                (
+                    "x",
+                    AnimationVariableDef::Float {
+                        initial: 0.0,
+                        min: None,
+                        max: None,
+                    },
+                ),
+                (
+                    "y",
+                    AnimationVariableDef::Float {
+                        initial: 0.0,
+                        min: None,
+                        max: None,
+                    },
+                ),
             ],
             vec![],
             "test",
@@ -280,16 +292,22 @@ mod time_resolution_tests {
     fn at_with_offset() {
         let doc = make_doc_with_storyboard(
             vec![
-                ("x", AnimationVariableDef::Float {
-                    initial: 0.0,
-                    min: None,
-                    max: None,
-                }),
-                ("y", AnimationVariableDef::Float {
-                    initial: 0.0,
-                    min: None,
-                    max: None,
-                }),
+                (
+                    "x",
+                    AnimationVariableDef::Float {
+                        initial: 0.0,
+                        min: None,
+                        max: None,
+                    },
+                ),
+                (
+                    "y",
+                    AnimationVariableDef::Float {
+                        initial: 0.0,
+                        min: None,
+                        max: None,
+                    },
+                ),
             ],
             vec![],
             "test",
@@ -338,16 +356,22 @@ mod time_resolution_tests {
     fn between_placement() {
         let doc = make_doc_with_storyboard(
             vec![
-                ("x", AnimationVariableDef::Float {
-                    initial: 0.0,
-                    min: None,
-                    max: None,
-                }),
-                ("y", AnimationVariableDef::Float {
-                    initial: 0.0,
-                    min: None,
-                    max: None,
-                }),
+                (
+                    "x",
+                    AnimationVariableDef::Float {
+                        initial: 0.0,
+                        min: None,
+                        max: None,
+                    },
+                ),
+                (
+                    "y",
+                    AnimationVariableDef::Float {
+                        initial: 0.0,
+                        min: None,
+                        max: None,
+                    },
+                ),
             ],
             vec![],
             "test",
@@ -408,11 +432,14 @@ mod time_resolution_tests {
     #[test]
     fn duration_zero_instant_transition() {
         let doc = make_doc_with_storyboard(
-            vec![("x", AnimationVariableDef::Float {
-                initial: 0.0,
-                min: None,
-                max: None,
-            })],
+            vec![(
+                "x",
+                AnimationVariableDef::Float {
+                    initial: 0.0,
+                    min: None,
+                    max: None,
+                },
+            )],
             vec![],
             "test",
             StoryboardBuilder::new()
@@ -440,11 +467,14 @@ mod time_resolution_tests {
     #[test]
     fn start_time_offset() {
         let doc = make_doc_with_storyboard(
-            vec![("x", AnimationVariableDef::Float {
-                initial: 0.0,
-                min: None,
-                max: None,
-            })],
+            vec![(
+                "x",
+                AnimationVariableDef::Float {
+                    initial: 0.0,
+                    min: None,
+                    max: None,
+                },
+            )],
             vec![],
             "test",
             StoryboardBuilder::new()
@@ -475,11 +505,14 @@ mod time_resolution_tests {
     fn sequential_first_entry_uses_compile_start_time() {
         // First entry for a variable: base_time = compile start_time
         let doc = make_doc_with_storyboard(
-            vec![("x", AnimationVariableDef::Float {
-                initial: 10.0,
-                min: None,
-                max: None,
-            })],
+            vec![(
+                "x",
+                AnimationVariableDef::Float {
+                    initial: 10.0,
+                    min: None,
+                    max: None,
+                },
+            )],
             vec![],
             "test",
             StoryboardBuilder::new()
@@ -519,19 +552,25 @@ mod transition_resolution_tests {
     #[test]
     fn named_transition_resolved() {
         let doc = make_doc_with_storyboard(
-            vec![("x", AnimationVariableDef::Float {
-                initial: 0.0,
-                min: None,
-                max: None,
-            })],
-            vec![("fade", TransitionDef {
-                from: Some(TransitionValue::Scalar(0.0)),
-                to: Some(TransitionValue::Scalar(1.0)),
-                relative_to: None,
-                easing: Some(EasingFunction::Named(EasingName::CubicInOut)),
-                delay: 0.0,
-                duration: Some(0.5),
-            })],
+            vec![(
+                "x",
+                AnimationVariableDef::Float {
+                    initial: 0.0,
+                    min: None,
+                    max: None,
+                },
+            )],
+            vec![(
+                "fade",
+                TransitionDef {
+                    from: Some(TransitionValue::Scalar(0.0)),
+                    to: Some(TransitionValue::Scalar(1.0)),
+                    relative_to: None,
+                    easing: Some(EasingFunction::Named(EasingName::CubicInOut)),
+                    delay: 0.0,
+                    duration: Some(0.5),
+                },
+            )],
             "test",
             StoryboardBuilder::new()
                 .entry(StoryboardEntry {
@@ -557,11 +596,14 @@ mod transition_resolution_tests {
     #[test]
     fn from_inferred_from_previous_segment() {
         let doc = make_doc_with_storyboard(
-            vec![("x", AnimationVariableDef::Float {
-                initial: 0.0,
-                min: None,
-                max: None,
-            })],
+            vec![(
+                "x",
+                AnimationVariableDef::Float {
+                    initial: 0.0,
+                    min: None,
+                    max: None,
+                },
+            )],
             vec![],
             "test",
             StoryboardBuilder::new()
@@ -602,11 +644,14 @@ mod transition_resolution_tests {
     #[test]
     fn from_inferred_from_initial_value() {
         let doc = make_doc_with_storyboard(
-            vec![("x", AnimationVariableDef::Float {
-                initial: 42.0,
-                min: None,
-                max: None,
-            })],
+            vec![(
+                "x",
+                AnimationVariableDef::Float {
+                    initial: 42.0,
+                    min: None,
+                    max: None,
+                },
+            )],
             vec![],
             "test",
             StoryboardBuilder::new()
@@ -634,11 +679,14 @@ mod transition_resolution_tests {
     #[test]
     fn relative_to_calculation() {
         let doc = make_doc_with_storyboard(
-            vec![("x", AnimationVariableDef::Float {
-                initial: 10.0,
-                min: None,
-                max: None,
-            })],
+            vec![(
+                "x",
+                AnimationVariableDef::Float {
+                    initial: 10.0,
+                    min: None,
+                    max: None,
+                },
+            )],
             vec![],
             "test",
             StoryboardBuilder::new()
@@ -666,9 +714,12 @@ mod transition_resolution_tests {
     #[test]
     fn object_type_instant_switch() {
         let doc = make_doc_with_storyboard(
-            vec![("state", AnimationVariableDef::Object {
-                initial: DynamicValue::String("idle".to_string()),
-            })],
+            vec![(
+                "state",
+                AnimationVariableDef::Object {
+                    initial: DynamicValue::String("idle".to_string()),
+                },
+            )],
             vec![],
             "test",
             StoryboardBuilder::new()
@@ -709,11 +760,14 @@ mod transition_resolution_tests {
     #[test]
     fn easing_function_preserved() {
         let doc = make_doc_with_storyboard(
-            vec![("x", AnimationVariableDef::Float {
-                initial: 0.0,
-                min: None,
-                max: None,
-            })],
+            vec![(
+                "x",
+                AnimationVariableDef::Float {
+                    initial: 0.0,
+                    min: None,
+                    max: None,
+                },
+            )],
             vec![],
             "test",
             StoryboardBuilder::new()
@@ -753,11 +807,14 @@ mod metadata_tests {
     #[test]
     fn time_scale_propagated_not_applied() {
         let doc = make_doc_with_storyboard(
-            vec![("x", AnimationVariableDef::Float {
-                initial: 0.0,
-                min: None,
-                max: None,
-            })],
+            vec![(
+                "x",
+                AnimationVariableDef::Float {
+                    initial: 0.0,
+                    min: None,
+                    max: None,
+                },
+            )],
             vec![],
             "test",
             StoryboardBuilder::new()
@@ -789,11 +846,14 @@ mod metadata_tests {
     #[test]
     fn loop_count_propagated() {
         let doc = make_doc_with_storyboard(
-            vec![("x", AnimationVariableDef::Float {
-                initial: 0.0,
-                min: None,
-                max: None,
-            })],
+            vec![(
+                "x",
+                AnimationVariableDef::Float {
+                    initial: 0.0,
+                    min: None,
+                    max: None,
+                },
+            )],
             vec![],
             "test",
             StoryboardBuilder::new()
@@ -821,11 +881,14 @@ mod metadata_tests {
     #[test]
     fn interruption_policy_propagated() {
         let doc = make_doc_with_storyboard(
-            vec![("x", AnimationVariableDef::Float {
-                initial: 0.0,
-                min: None,
-                max: None,
-            })],
+            vec![(
+                "x",
+                AnimationVariableDef::Float {
+                    initial: 0.0,
+                    min: None,
+                    max: None,
+                },
+            )],
             vec![],
             "test",
             StoryboardBuilder::new()
@@ -853,11 +916,14 @@ mod metadata_tests {
     #[test]
     fn variable_type_hint_float() {
         let doc = make_doc_with_storyboard(
-            vec![("x", AnimationVariableDef::Float {
-                initial: 0.0,
-                min: None,
-                max: None,
-            })],
+            vec![(
+                "x",
+                AnimationVariableDef::Float {
+                    initial: 0.0,
+                    min: None,
+                    max: None,
+                },
+            )],
             vec![],
             "test",
             StoryboardBuilder::new()
@@ -887,12 +953,15 @@ mod metadata_tests {
     #[test]
     fn variable_type_hint_integer_with_typewriter() {
         let doc = make_doc_with_storyboard(
-            vec![("idx", AnimationVariableDef::Integer {
-                initial: 0,
-                min: Some(0),
-                max: Some(5),
-                typewriter: Some("Hello".to_string()),
-            })],
+            vec![(
+                "idx",
+                AnimationVariableDef::Integer {
+                    initial: 0,
+                    min: Some(0),
+                    max: Some(5),
+                    typewriter: Some("Hello".to_string()),
+                },
+            )],
             vec![],
             "test",
             StoryboardBuilder::new()
@@ -926,16 +995,22 @@ mod metadata_tests {
     fn base_duration_and_total_base_duration() {
         let doc = make_doc_with_storyboard(
             vec![
-                ("x", AnimationVariableDef::Float {
-                    initial: 0.0,
-                    min: None,
-                    max: None,
-                }),
-                ("y", AnimationVariableDef::Float {
-                    initial: 0.0,
-                    min: None,
-                    max: None,
-                }),
+                (
+                    "x",
+                    AnimationVariableDef::Float {
+                        initial: 0.0,
+                        min: None,
+                        max: None,
+                    },
+                ),
+                (
+                    "y",
+                    AnimationVariableDef::Float {
+                        initial: 0.0,
+                        min: None,
+                        max: None,
+                    },
+                ),
             ],
             vec![],
             "test",
@@ -980,11 +1055,14 @@ mod metadata_tests {
     #[test]
     fn min_max_propagated() {
         let doc = make_doc_with_storyboard(
-            vec![("x", AnimationVariableDef::Float {
-                initial: 0.5,
-                min: Some(0.0),
-                max: Some(1.0),
-            })],
+            vec![(
+                "x",
+                AnimationVariableDef::Float {
+                    initial: 0.5,
+                    min: Some(0.0),
+                    max: Some(1.0),
+                },
+            )],
             vec![],
             "test",
             StoryboardBuilder::new()
@@ -1013,12 +1091,15 @@ mod metadata_tests {
     #[test]
     fn integer_min_max_converted_to_f64() {
         let doc = make_doc_with_storyboard(
-            vec![("idx", AnimationVariableDef::Integer {
-                initial: 0,
-                min: Some(-10),
-                max: Some(100),
-                typewriter: None,
-            })],
+            vec![(
+                "idx",
+                AnimationVariableDef::Integer {
+                    initial: 0,
+                    min: Some(-10),
+                    max: Some(100),
+                    typewriter: None,
+                },
+            )],
             vec![],
             "test",
             StoryboardBuilder::new()
@@ -1066,7 +1147,10 @@ mod error_tests {
         let result = compile_storyboard(&doc, "test", 0.0);
         assert!(result.is_err());
         let errs = result.unwrap_err();
-        assert!(errs.iter().any(|e| matches!(e, DolaError::SchemaVersionMismatch { .. })));
+        assert!(
+            errs.iter()
+                .any(|e| matches!(e, DolaError::SchemaVersionMismatch { .. }))
+        );
     }
 
     #[test]
@@ -1081,7 +1165,9 @@ mod error_tests {
         let result = compile_storyboard(&doc, "nonexistent", 0.0);
         assert!(result.is_err());
         let errs = result.unwrap_err();
-        assert!(errs.iter().any(|e| matches!(e, DolaError::CompileError { reason, .. } if reason.contains("not found"))));
+        assert!(errs.iter().any(
+            |e| matches!(e, DolaError::CompileError { reason, .. } if reason.contains("not found"))
+        ));
     }
 
     #[test]
@@ -1089,16 +1175,22 @@ mod error_tests {
         // Create a cycle: entry0 (at kf1) -> entry1 (at kf0)
         let doc = make_doc_with_storyboard(
             vec![
-                ("x", AnimationVariableDef::Float {
-                    initial: 0.0,
-                    min: None,
-                    max: None,
-                }),
-                ("y", AnimationVariableDef::Float {
-                    initial: 0.0,
-                    min: None,
-                    max: None,
-                }),
+                (
+                    "x",
+                    AnimationVariableDef::Float {
+                        initial: 0.0,
+                        min: None,
+                        max: None,
+                    },
+                ),
+                (
+                    "y",
+                    AnimationVariableDef::Float {
+                        initial: 0.0,
+                        min: None,
+                        max: None,
+                    },
+                ),
             ],
             vec![],
             "test",
@@ -1137,25 +1229,32 @@ mod error_tests {
         let result = compile_storyboard(&doc, "test", 0.0);
         assert!(result.is_err());
         let errs = result.unwrap_err();
-        assert!(errs
-            .iter()
-            .any(|e| matches!(e, DolaError::KeyframeCycle { .. })));
+        assert!(
+            errs.iter()
+                .any(|e| matches!(e, DolaError::KeyframeCycle { .. }))
+        );
     }
 
     #[test]
     fn between_delay_exceeds_interval() {
         let doc = make_doc_with_storyboard(
             vec![
-                ("x", AnimationVariableDef::Float {
-                    initial: 0.0,
-                    min: None,
-                    max: None,
-                }),
-                ("y", AnimationVariableDef::Float {
-                    initial: 0.0,
-                    min: None,
-                    max: None,
-                }),
+                (
+                    "x",
+                    AnimationVariableDef::Float {
+                        initial: 0.0,
+                        min: None,
+                        max: None,
+                    },
+                ),
+                (
+                    "y",
+                    AnimationVariableDef::Float {
+                        initial: 0.0,
+                        min: None,
+                        max: None,
+                    },
+                ),
             ],
             vec![],
             "test",
@@ -1219,11 +1318,14 @@ mod error_tests {
     fn segment_overlap_detected() {
         // Create overlapping segments for the same variable using 'at' to force overlap
         let doc = make_doc_with_storyboard(
-            vec![("x", AnimationVariableDef::Float {
-                initial: 0.0,
-                min: None,
-                max: None,
-            })],
+            vec![(
+                "x",
+                AnimationVariableDef::Float {
+                    initial: 0.0,
+                    min: None,
+                    max: None,
+                },
+            )],
             vec![],
             "test",
             StoryboardBuilder::new()

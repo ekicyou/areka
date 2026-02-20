@@ -35,12 +35,12 @@ impl BitmapSource {
 /// - Visual + BitmapSourceGraphics + HitTest::alpha_mask()を自動挿入
 /// - 非同期読み込みタスクを起動
 fn on_bitmap_source_add(mut world: DeferredWorld, hook: HookContext) {
+    use super::WintfTaskPool;
     use super::resource::BitmapSourceGraphics;
     use super::task_pool::BoxedCommand;
     use super::wic_core::WicCore;
-    use super::WintfTaskPool;
-    use crate::ecs::layout::HitTest;
     use crate::ecs::Visual;
+    use crate::ecs::layout::HitTest;
     use tracing::warn;
 
     let entity = hook.entity;

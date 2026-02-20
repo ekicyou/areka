@@ -100,7 +100,9 @@ impl Validate for DolaDocument {
                         errors.push(DolaError::TriggerExclusiveViolation {
                             storyboard: sb_name.clone(),
                             entry_index: entry_idx,
-                            reason: "trigger_storyboard cannot be combined with variable/transition".to_string(),
+                            reason:
+                                "trigger_storyboard cannot be combined with variable/transition"
+                                    .to_string(),
                         });
                     }
                 }
@@ -216,7 +218,9 @@ fn validate_variable_ranges(doc: &DolaDocument, errors: &mut Vec<DolaError>) {
                     }
                 }
             }
-            AnimationVariableDef::Integer { initial, min, max, .. } => {
+            AnimationVariableDef::Integer {
+                initial, min, max, ..
+            } => {
                 if let Some(min_val) = min {
                     if *initial < *min_val {
                         errors.push(DolaError::ValueOutOfRange {
@@ -412,15 +416,14 @@ fn validate_transition_type_constraints(
 
             // V12: トランジション from/to の値域検証
             let (min_f, max_f) = match var_def {
-                AnimationVariableDef::Float { min, max, .. } => {
-                    (min.unwrap_or(f64::NEG_INFINITY), max.unwrap_or(f64::INFINITY))
-                }
-                AnimationVariableDef::Integer { min, max, .. } => {
-                    (
-                        min.map(|v| v as f64).unwrap_or(f64::NEG_INFINITY),
-                        max.map(|v| v as f64).unwrap_or(f64::INFINITY),
-                    )
-                }
+                AnimationVariableDef::Float { min, max, .. } => (
+                    min.unwrap_or(f64::NEG_INFINITY),
+                    max.unwrap_or(f64::INFINITY),
+                ),
+                AnimationVariableDef::Integer { min, max, .. } => (
+                    min.map(|v| v as f64).unwrap_or(f64::NEG_INFINITY),
+                    max.map(|v| v as f64).unwrap_or(f64::INFINITY),
+                ),
                 _ => unreachable!(),
             };
 
@@ -519,7 +522,9 @@ fn validate_trigger_cycles(doc: &DolaDocument, errors: &mut Vec<DolaError>) {
 
     for sb_name in graph.keys() {
         if !visited.contains(sb_name) {
-            if let Some(cycle) = dfs_detect_cycle(sb_name, &graph, &mut visited, &mut in_stack, &mut path) {
+            if let Some(cycle) =
+                dfs_detect_cycle(sb_name, &graph, &mut visited, &mut in_stack, &mut path)
+            {
                 errors.push(DolaError::TriggerCycle { cycle });
             }
         }
@@ -547,7 +552,8 @@ fn dfs_detect_cycle<'a>(
             } else if in_stack.contains(next) {
                 // 循環検出: path から next の位置以降を抽出
                 let start_pos = path.iter().position(|&n| n == next).unwrap();
-                let mut cycle: Vec<String> = path[start_pos..].iter().map(|s| s.to_string()).collect();
+                let mut cycle: Vec<String> =
+                    path[start_pos..].iter().map(|s| s.to_string()).collect();
                 cycle.push(next.to_string()); // 循環を閉じる
                 return Some(cycle);
             }

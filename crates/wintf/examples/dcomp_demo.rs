@@ -4,13 +4,13 @@ use ambassador::*;
 use std::path::*;
 use std::sync::*;
 use windows::{
-    core::*,
     Win32::{
         Foundation::*, Graphics::Direct2D::Common::*, Graphics::Direct2D::*, Graphics::Direct3D::*,
         Graphics::Direct3D11::*, Graphics::DirectComposition::*, Graphics::DirectWrite::*,
         Graphics::Dxgi::Common::*, Graphics::Gdi::*, Graphics::Imaging::*, UI::Animation::*,
         UI::HiDpi::*, UI::WindowsAndMessaging::*,
     },
+    core::*,
 };
 use windows_numerics::*;
 use wintf::{

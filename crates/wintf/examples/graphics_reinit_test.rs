@@ -1,15 +1,15 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 use bevy_ecs::prelude::*;
-use std::sync::mpsc::channel;
 use std::sync::Mutex;
+use std::sync::mpsc::channel;
 use std::thread;
 use std::time::Duration;
-use windows::core::Result;
 use windows::Win32::Foundation::{POINT, SIZE};
+use windows::core::Result;
+use wintf::ecs::Window;
 use wintf::ecs::widget::brushes::{Brush, Brushes};
 use wintf::ecs::widget::shapes::Rectangle;
-use wintf::ecs::Window;
 use wintf::ecs::{
     GraphicsCore, SurfaceGraphics, VisualGraphics, WindowGraphics, WindowHandle, WindowPos,
 };

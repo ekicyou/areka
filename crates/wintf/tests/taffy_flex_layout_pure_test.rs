@@ -5,9 +5,9 @@
 /// 2. ArrangementとGlobalArrangementが正しく計算されること
 /// 3. レイアウトパラメータ変更後も正しく再計算されること
 use bevy_ecs::prelude::*;
+use wintf::ecs::ChildOf;
 use wintf::ecs::layout::*;
 use wintf::ecs::world::EcsWorld;
-use wintf::ecs::ChildOf;
 
 #[test]
 fn test_taffy_flex_layout_pure() {

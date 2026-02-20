@@ -3,8 +3,8 @@
 //! 指示書の受信 → コンパイル → タイムテーブル管理 → 購読者への差分配信を行う
 //! リアクティブ・アニメーション・ランタイム。
 
-mod document_store;
 mod conflict_resolver;
+mod document_store;
 mod facade;
 mod instance_manager;
 mod instance_state;

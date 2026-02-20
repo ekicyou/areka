@@ -268,17 +268,17 @@ mod tests {
             group_id,
             "test_sb",
             InterruptionPolicy::Conclude,
-            0.0, // start_time
-            1.0, // time_scale
-            2.0, // base_duration
-            1,   // loop_count
-            2.0, // end_time
-            0.0, // loop_start_time
-            2.0, // loop_duration
+            0.0,  // start_time
+            1.0,  // time_scale
+            2.0,  // base_duration
+            1,    // loop_count
+            2.0,  // end_time
+            0.0,  // loop_start_time
+            2.0,  // loop_duration
             None, // loop_offset_min
             0.0,  // loop_offset_max
             EasingFunction::Named(EasingName::Linear),
-            0,    // trigger_count
+            0, // trigger_count
         );
     }
 
@@ -299,7 +299,7 @@ mod tests {
             None, // loop_offset_min
             0.0,  // loop_offset_max
             EasingFunction::Named(EasingName::Linear),
-            0,    // trigger_count
+            0, // trigger_count
         );
         assert_eq!(inst.group_id, 1);
         assert_eq!(inst.storyboard_name, "fade");

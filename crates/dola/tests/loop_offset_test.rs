@@ -62,10 +62,7 @@ mod serde_tests {
         let lo: LoopOffset = serde_json::from_str(json).unwrap();
         match &lo {
             LoopOffset::Range(r) => {
-                assert_eq!(
-                    r.easing,
-                    EasingFunction::Named(EasingName::Linear)
-                );
+                assert_eq!(r.easing, EasingFunction::Named(EasingName::Linear));
             }
             _ => panic!("Expected LoopOffset::Range"),
         }
@@ -658,11 +655,7 @@ mod e2e_tests {
     #[test]
     fn e2e_extreme_small_delay() {
         // Task 6.2: Very small delay (0.001s)
-        let doc = loop_offset_doc(
-            "fast",
-            3,
-            Some(LoopOffset::Scalar(0.001)),
-        );
+        let doc = loop_offset_doc("fast", 3, Some(LoopOffset::Scalar(0.001)));
         let (mut rt, _opacity_id) = setup_runtime(doc);
         rt.start("fast", 0.0).unwrap();
 

@@ -6,8 +6,8 @@
 use bevy_ecs::prelude::*;
 use bevy_tasks::TaskPool;
 use std::future::Future;
-use std::sync::mpsc;
 use std::sync::Mutex;
+use std::sync::mpsc;
 
 /// Box化されたECSコマンド型（クロージャベース）
 pub type BoxedCommand = Box<dyn FnOnce(&mut World) + Send>;

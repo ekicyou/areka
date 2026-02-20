@@ -1,5 +1,5 @@
-use crate::ecs::graphics::GraphicsCommandList;
 use crate::ecs::Visual;
+use crate::ecs::graphics::GraphicsCommandList;
 use bevy_ecs::change_detection::DetectChangesMut;
 use bevy_ecs::component::Component;
 use bevy_ecs::lifecycle::HookContext;

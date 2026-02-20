@@ -6,7 +6,7 @@
 //! - init_graphics_coreシステムが正しく動作すること
 
 use bevy_ecs::prelude::*;
-use wintf::ecs::{init_graphics_core, FrameCount, GraphicsCore};
+use wintf::ecs::{FrameCount, GraphicsCore, init_graphics_core};
 
 #[test]
 fn test_init_graphics_core_creates_resource() {

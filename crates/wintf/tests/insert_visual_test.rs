@@ -4,7 +4,7 @@
 
 use bevy_ecs::prelude::*;
 use windows_numerics::Vector2;
-use wintf::ecs::{insert_visual, insert_visual_with, Visual};
+use wintf::ecs::{Visual, insert_visual, insert_visual_with};
 
 /// insert_visual: デフォルト Visual を挿入できることを確認
 #[test]

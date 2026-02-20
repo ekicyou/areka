@@ -217,15 +217,9 @@ impl TimelineManager {
             for entry in &timeline.entries {
                 if entry.group_id == group_id {
                     // アクティブなセグメントを特定
-                    if let Some(active_seg) =
-                        find_active_segment(&entry.segments, effective_time)
-                    {
+                    if let Some(active_seg) = find_active_segment(&entry.segments, effective_time) {
                         // アクティブセグメントの最終値 (progress_t=1.0) を取得
-                        let val = Interpolator::interpolate(
-                            active_seg,
-                            &entry.variable_type,
-                            1.0,
-                        );
+                        let val = Interpolator::interpolate(active_seg, &entry.variable_type, 1.0);
                         result.insert(var_name.clone(), val);
                     }
                 }
@@ -317,7 +311,10 @@ fn evaluate_segments(
 /// effective_time 時点でアクティブなセグメントを検索する。
 /// Conclude 戦略の collect_current_segment_final_values で使用。
 /// 未開始セグメントはスキップし、アクティブなセグメントを返す。
-fn find_active_segment(segments: &[CompiledSegment], effective_time: f64) -> Option<&CompiledSegment> {
+fn find_active_segment(
+    segments: &[CompiledSegment],
+    effective_time: f64,
+) -> Option<&CompiledSegment> {
     if segments.is_empty() {
         return None;
     }

@@ -7,7 +7,7 @@ use bevy_ecs::prelude::*;
 use windows::core::Result;
 use wintf::com::dcomp::*;
 use wintf::ecs::DCompGraphicsResource;
-use wintf::ecs::{visual_hierarchy_sync_system, GraphicsCore, Visual, VisualGraphics};
+use wintf::ecs::{GraphicsCore, Visual, VisualGraphics, visual_hierarchy_sync_system};
 
 /// テスト用の GraphicsCore を作成するヘルパー関数
 fn setup_graphics() -> Result<GraphicsCore> {
@@ -20,7 +20,10 @@ fn test_childof_addition_syncs_visual_hierarchy() -> Result<()> {
     let graphics = setup_graphics()?;
     let d2d = graphics.d2d_device().expect("D2Dデバイスが無効");
     let dcomp_resource = DCompGraphicsResource::new(d2d).expect("DCompGraphicsResource作成失敗");
-    let dcomp = dcomp_resource.dcomp().expect("dcomp device should exist").clone();
+    let dcomp = dcomp_resource
+        .dcomp()
+        .expect("dcomp device should exist")
+        .clone();
 
     let mut world = World::new();
     world.insert_resource(graphics);
@@ -66,7 +69,10 @@ fn test_childof_change_moves_visual_to_new_parent() -> Result<()> {
     let graphics = setup_graphics()?;
     let d2d = graphics.d2d_device().expect("D2Dデバイスが無効");
     let dcomp_resource = DCompGraphicsResource::new(d2d).expect("DCompGraphicsResource作成失敗");
-    let dcomp = dcomp_resource.dcomp().expect("dcomp device should exist").clone();
+    let dcomp = dcomp_resource
+        .dcomp()
+        .expect("dcomp device should exist")
+        .clone();
 
     let mut world = World::new();
     world.insert_resource(graphics);
@@ -125,7 +131,10 @@ fn test_children_order_change_syncs_zorder() -> Result<()> {
     let graphics = setup_graphics()?;
     let d2d = graphics.d2d_device().expect("D2Dデバイスが無効");
     let dcomp_resource = DCompGraphicsResource::new(d2d).expect("DCompGraphicsResource作成失敗");
-    let dcomp = dcomp_resource.dcomp().expect("dcomp device should exist").clone();
+    let dcomp = dcomp_resource
+        .dcomp()
+        .expect("dcomp device should exist")
+        .clone();
 
     let mut world = World::new();
     world.insert_resource(graphics);
@@ -183,7 +192,10 @@ fn test_entities_without_visual_graphics_are_skipped() -> Result<()> {
     let graphics = setup_graphics()?;
     let d2d = graphics.d2d_device().expect("D2Dデバイスが無効");
     let dcomp_resource = DCompGraphicsResource::new(d2d).expect("DCompGraphicsResource作成失敗");
-    let dcomp = dcomp_resource.dcomp().expect("dcomp device should exist").clone();
+    let dcomp = dcomp_resource
+        .dcomp()
+        .expect("dcomp device should exist")
+        .clone();
 
     let mut world = World::new();
     world.insert_resource(graphics);

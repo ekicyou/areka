@@ -1,8 +1,8 @@
-use windows::core::*;
 use windows::Win32::Foundation::*;
 use windows::Win32::Graphics::Direct3D::*;
 use windows::Win32::Graphics::Direct3D11::*;
 use windows::Win32::Graphics::Dxgi::*;
+use windows::core::*;
 
 /// D3D11CreateDevice
 pub fn d3d11_create_device<P0>(

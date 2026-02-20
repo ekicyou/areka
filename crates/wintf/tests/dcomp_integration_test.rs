@@ -12,8 +12,7 @@ use wintf::ecs::{
 fn setup_world() -> World {
     let graphics = GraphicsCore::new().expect("GraphicsCore作成失敗");
     let d2d = graphics.d2d_device().expect("D2Dデバイスが無効");
-    let dcomp_resource =
-        DCompGraphicsResource::new(d2d).expect("DCompGraphicsResource作成失敗");
+    let dcomp_resource = DCompGraphicsResource::new(d2d).expect("DCompGraphicsResource作成失敗");
 
     let mut world = World::new();
     world.insert_resource(graphics);

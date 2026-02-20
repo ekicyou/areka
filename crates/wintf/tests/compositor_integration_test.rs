@@ -4,8 +4,8 @@
 //! - WindowD3D11Compositor のライフサイクルとデバイスロスト復旧フローを検証
 //! - DComp パイプラインとの共存（既存コンポーネントが破壊されないこと）を検証
 
-use wintf::ecs::compositor::WindowD3D11Compositor;
 use wintf::ecs::GraphicsCore;
+use wintf::ecs::compositor::WindowD3D11Compositor;
 
 // ==========================================================================
 // デバイスロスト → 再初期化 → 正常描画再開フロー
@@ -17,8 +17,7 @@ fn test_compositor_device_lost_recovery() {
     let dc = core.device_context().expect("DeviceContext 取得失敗");
 
     // 1. 正常作成
-    let mut compositor =
-        WindowD3D11Compositor::new(dc, 200, 200).expect("初期作成失敗");
+    let mut compositor = WindowD3D11Compositor::new(dc, 200, 200).expect("初期作成失敗");
     assert!(compositor.is_valid());
     let initial_gen = compositor.generation();
 
@@ -32,8 +31,7 @@ fn test_compositor_device_lost_recovery() {
 
     // 3. compositor_init_system 相当の再作成ロジックを手動実行
     let old_generation = compositor.generation();
-    let mut new_compositor =
-        WindowD3D11Compositor::new(dc, 200, 200).expect("再作成失敗");
+    let mut new_compositor = WindowD3D11Compositor::new(dc, 200, 200).expect("再作成失敗");
 
     // 旧 generation を引き継ぎインクリメント
     let target_gen = old_generation.wrapping_add(1);
@@ -87,12 +85,14 @@ fn test_compositor_full_pipeline_integration() {
         let prev_target = dc.GetTarget().ok();
         dc.SetTarget(&comp_bmp);
         dc.BeginDraw();
-        dc.Clear(Some(&windows::Win32::Graphics::Direct2D::Common::D2D1_COLOR_F {
-            r: 0.0,
-            g: 0.0,
-            b: 0.0,
-            a: 0.0,
-        }));
+        dc.Clear(Some(
+            &windows::Win32::Graphics::Direct2D::Common::D2D1_COLOR_F {
+                r: 0.0,
+                g: 0.0,
+                b: 0.0,
+                a: 0.0,
+            },
+        ));
         dc.EndDraw(None, None).expect("EndDraw 失敗");
         dc.SetTarget(prev_target.as_ref());
     }
@@ -127,8 +127,7 @@ fn test_compositor_resize_and_recompose() {
     let core = GraphicsCore::new().expect("GraphicsCore 作成失敗");
     let dc = core.device_context().expect("DeviceContext 取得失敗");
 
-    let mut compositor =
-        WindowD3D11Compositor::new(dc, 100, 100).expect("Compositor 作成失敗");
+    let mut compositor = WindowD3D11Compositor::new(dc, 100, 100).expect("Compositor 作成失敗");
 
     // 初回合成
     {
@@ -191,16 +190,12 @@ fn test_compositor_does_not_affect_existing_graphics_core() {
     assert!(core.d2d_device().is_some(), "D2D device が存在");
 
     // Compositor 作成 — GraphicsCore のリソースに影響しないこと
-    let _compositor =
-        WindowD3D11Compositor::new(dc, 64, 64).expect("Compositor 作成失敗");
+    let _compositor = WindowD3D11Compositor::new(dc, 64, 64).expect("Compositor 作成失敗");
 
     // GraphicsCore のリソースが健在
     assert!(core.d2d_factory().is_some(), "D2D factory が健在");
     assert!(core.d2d_device().is_some(), "D2D device が健在");
-    assert!(
-        core.device_context().is_some(),
-        "DeviceContext が健在"
-    );
+    assert!(core.device_context().is_some(), "DeviceContext が健在");
 
     eprintln!("✅ Compositor 作成が既存 GraphicsCore リソースに影響を与えない");
 }

@@ -56,7 +56,9 @@ pub fn create_windows(world: &mut World) {
     // 収集したエンティティに対してウィンドウを作成
     let singleton = WinProcessSingleton::get_or_init();
 
-    for (entity, title, parent, composition_mode, opt_style, opt_pos, name_str) in entities_to_create {
+    for (entity, title, parent, composition_mode, opt_style, opt_pos, name_str) in
+        entities_to_create
+    {
         let entity_name = match &name_str {
             Some(n) => n.clone(),
             None => format!("Entity({:?})", entity),
@@ -91,11 +93,8 @@ pub fn create_windows(world: &mut World) {
             "[create_windows] WindowPos before CreateWindow"
         );
 
-        let (x, y, width, height) = pos_comp.to_window_coords_for_creation(
-            style_comp.style,
-            ex_style,
-            system_dpi,
-        );
+        let (x, y, width, height) =
+            pos_comp.to_window_coords_for_creation(style_comp.style, ex_style, system_dpi);
 
         debug!(
             frame,

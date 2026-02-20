@@ -446,8 +446,9 @@ impl EcsWorld {
                 PreRenderSurface,
                 (
                     crate::ecs::graphics::visual_manager::visual_resource_management_system,
-                    crate::ecs::graphics::deferred_surface_creation_system
-                        .after(crate::ecs::graphics::visual_manager::visual_resource_management_system),
+                    crate::ecs::graphics::deferred_surface_creation_system.after(
+                        crate::ecs::graphics::visual_manager::visual_resource_management_system,
+                    ),
                     crate::ecs::graphics::mark_dirty_surfaces
                         .after(crate::ecs::graphics::deferred_surface_creation_system),
                     crate::ecs::graphics::cleanup_surface_on_commandlist_removed
@@ -458,10 +459,7 @@ impl EcsWorld {
             );
 
             // RenderSurface: DComp パイプライン用 Surface 描画
-            schedules.add_systems(
-                RenderSurface,
-                crate::ecs::graphics::render_surface,
-            );
+            schedules.add_systems(RenderSurface, crate::ecs::graphics::render_surface);
 
             // Compositionスケジュール: DComp Visual階層同期 + D2D1合成描画
             // visual_hierarchy_sync → visual_property_sync → composite_render

@@ -646,9 +646,11 @@ mod edge_case_tests {
             .build();
         assert!(result.is_err());
         let errors = result.unwrap_err();
-        assert!(errors
-            .iter()
-            .any(|e| matches!(e, DolaError::ValueOutOfRange { .. })));
+        assert!(
+            errors
+                .iter()
+                .any(|e| matches!(e, DolaError::ValueOutOfRange { .. }))
+        );
     }
 
     #[test]
@@ -684,9 +686,11 @@ mod edge_case_tests {
             .build();
         assert!(result.is_err());
         let errors = result.unwrap_err();
-        assert!(errors
-            .iter()
-            .any(|e| matches!(e, DolaError::TypeMismatch { .. })));
+        assert!(
+            errors
+                .iter()
+                .any(|e| matches!(e, DolaError::TypeMismatch { .. }))
+        );
     }
 }
 
