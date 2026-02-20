@@ -100,6 +100,7 @@ impl SubscriptionManager {
 
     /// variable_id → variable_name 逆引き。
     /// 存在しない ID → Err(RuntimeError::InvalidVariableId)。
+    #[cfg(test)]
     pub fn get_variable_name(&self, variable_id: i64) -> Result<&str, RuntimeError> {
         self.id_to_name
             .get(&variable_id)
