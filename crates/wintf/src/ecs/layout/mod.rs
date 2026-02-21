@@ -62,7 +62,8 @@
 
 // Layout System サブモジュール
 pub mod arrangement;
-pub mod high_level;
+pub mod box_style;
+pub mod dimension;
 pub mod hit_region;
 pub mod hit_test;
 pub mod metrics;
@@ -72,7 +73,8 @@ pub mod taffy;
 
 // 公開API
 pub use arrangement::*;
-pub use high_level::*;
+pub use box_style::*;
+pub use dimension::*;
 pub use hit_test::*;
 pub use metrics::*;
 pub use rect::*; // D2DRect, D2DRectExt, transform_rect_axis_aligned

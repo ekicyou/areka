@@ -9,13 +9,11 @@ use std::time::Duration;
 use tracing_subscriber::EnvFilter;
 use windows::Win32::Graphics::Direct2D::Common::D2D1_COLOR_F;
 use windows::core::Result;
-use wintf::ecs::layout::{
-    BoxInset, BoxMargin, BoxPosition, BoxSize, BoxStyle, Dimension, LengthPercentageAuto, Opacity,
-};
+use wintf::ecs::layout::{BoxMargin, BoxPosition, BoxSize, BoxStyle, Dimension};
 use wintf::ecs::widget::bitmap_source::BitmapSource;
 use wintf::ecs::widget::brushes::Brushes;
 use wintf::ecs::widget::shapes::Rectangle;
-use wintf::ecs::{Window, WindowPos};
+use wintf::ecs::{Visual, Window, WindowPos};
 use wintf::*;
 
 /// バックグラウンドスレッドから送信するコマンド
@@ -123,7 +121,10 @@ fn main() -> Result<()> {
                 .spawn((
                     Name::new("RedBox"), // R1.3: RedBoxエンティティに名前を付与
                     RedBox,              // マーカー追加
-                    Opacity(0.5),        // 50%透明度
+                    Visual {
+                        opacity: 0.5,
+                        ..Default::default()
+                    }, // 50%透明度
                     Rectangle::new(),
                     Brushes::with_foreground(D2D1_COLOR_F {
                         r: 1.0,
@@ -172,7 +173,10 @@ fn main() -> Result<()> {
             world.spawn((
                 Name::new("GreenBox"), // R1.4: GreenBoxエンティティに名前を付与
                 GreenBox,              // マーカー追加
-                Opacity(0.5),          // 50%透明度
+                Visual {
+                    opacity: 0.5,
+                    ..Default::default()
+                }, // 50%透明度
                 Rectangle::new(),
                 Brushes::with_foreground(D2D1_COLOR_F {
                     r: 0.0,
@@ -197,7 +201,10 @@ fn main() -> Result<()> {
             world.spawn((
                 Name::new("BlueBox"), // R1.5: BlueBoxエンティティに名前を付与
                 BlueBox,              // マーカー追加
-                Opacity(0.5),         // 50%透明度
+                Visual {
+                    opacity: 0.5,
+                    ..Default::default()
+                }, // 50%透明度
                 Rectangle::new(),
                 Brushes::with_foreground(D2D1_COLOR_F {
                     r: 0.0,

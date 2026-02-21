@@ -1,5 +1,7 @@
-pub mod command;
-pub use command::*;
+pub mod command_sink;
+pub mod command_types;
+pub use command_sink::*;
+pub use command_types::*;
 
 use ambassador::*;
 use windows::Win32::Graphics::Direct2D::Common::*;

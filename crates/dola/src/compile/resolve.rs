@@ -1,0 +1,438 @@
+//! 依存グラフ構築・トポロジカルソート・タイミング解決ヘルパー
+//!
+//! compile_storyboard() から呼び出される内部関数群。
+
+use std::collections::{HashMap, HashSet};
+
+use crate::document::DolaDocument;
+use crate::error::DolaError;
+use crate::storyboard::{KeyframeNames, KeyframeRef, StoryboardEntry};
+use crate::transition::{TransitionRef, TransitionValue};
+use crate::validate::collect_keyframe_names_from_ref;
+use crate::variable::AnimationVariableDef;
+
+use super::types::VariableTypeHint;
+
+/// キーフレーム依存グラフ
+/// adjacency[i] = set of entry indices that entry i depends on
+pub(super) struct DependencyGraph {
+    /// entry_index → set of dependency entry indices
+    pub(super) deps: HashMap<usize, HashSet<usize>>,
+    /// keyframe name → entry index that defines it
+    pub(super) kf_to_entry: HashMap<String, usize>,
+}
+
+/// Build dependency graph from storyboard entries (Task 4.1)
+pub(super) fn build_dependency_graph(
+    _storyboard_name: &str,
+    sb: &crate::storyboard::Storyboard,
+    _errors: &mut Vec<DolaError>,
+) -> DependencyGraph {
+    let mut kf_to_entry: HashMap<String, usize> = HashMap::new();
+
+    // First pass: map keyframe names to entry indices
+    for (idx, entry) in sb.entry.iter().enumerate() {
+        let kf_name = entry
+            .keyframe
+            .clone()
+            .unwrap_or_else(|| format!("__implicit_{}", idx));
+        kf_to_entry.insert(kf_name, idx);
+    }
+
+    let mut deps: HashMap<usize, HashSet<usize>> = HashMap::new();
+
+    // Second pass: build dependency edges
+    for (idx, entry) in sb.entry.iter().enumerate() {
+        let entry_deps = deps.entry(idx).or_default();
+
+        if let Some(ref kf_ref) = entry.at {
+            // at-based: depends on referenced keyframes
+            let names = collect_keyframe_names_from_ref(kf_ref);
+            for name in names {
+                if name == "start" {
+                    continue; // pseudo-keyframe, always available
+                }
+                if let Some(&dep_idx) = kf_to_entry.get(&name) {
+                    entry_deps.insert(dep_idx);
+                }
+            }
+        } else if let Some(ref between) = entry.between {
+            // between: depends on from and to keyframes
+            if between.from != "start" {
+                if let Some(&dep_idx) = kf_to_entry.get(&between.from) {
+                    entry_deps.insert(dep_idx);
+                }
+            }
+            if between.to != "start" {
+                if let Some(&dep_idx) = kf_to_entry.get(&between.to) {
+                    entry_deps.insert(dep_idx);
+                }
+            }
+        }
+        // Sequential entries: no explicit dependency in graph
+        // (handled by variable-specific last_end_time tracking)
+    }
+
+    DependencyGraph { deps, kf_to_entry }
+}
+
+/// Topological sort using Kahn's algorithm (Task 4.2, 4.3)
+/// Returns sorted entry indices or a cycle (Vec of keyframe names)
+pub(super) fn topological_sort(
+    graph: &DependencyGraph,
+    entry_count: usize,
+) -> Result<Vec<usize>, Vec<String>> {
+    let mut in_degree: HashMap<usize, usize> = HashMap::new();
+    let mut reverse_deps: HashMap<usize, Vec<usize>> = HashMap::new();
+
+    for idx in 0..entry_count {
+        in_degree.entry(idx).or_insert(0);
+    }
+
+    for (idx, dep_set) in &graph.deps {
+        in_degree.entry(*idx).or_insert(0);
+        for &dep in dep_set {
+            *in_degree.entry(*idx).or_insert(0) += 0; // ensure entry exists
+            reverse_deps.entry(dep).or_default().push(*idx);
+        }
+    }
+
+    // Recompute in_degree properly
+    for idx in 0..entry_count {
+        let dep_count = graph.deps.get(&idx).map_or(0, |s| s.len());
+        in_degree.insert(idx, dep_count);
+    }
+
+    let mut queue: Vec<usize> = Vec::new();
+    for idx in 0..entry_count {
+        if in_degree[&idx] == 0 {
+            queue.push(idx);
+        }
+    }
+    // Sort descending so pop() gives smallest index first
+    queue.sort_by(|a, b| b.cmp(a));
+
+    let mut result = Vec::new();
+
+    while let Some(node) = queue.pop() {
+        result.push(node);
+        if let Some(dependents) = reverse_deps.get(&node) {
+            for &dep in dependents {
+                let deg = in_degree.get_mut(&dep).unwrap();
+                *deg -= 1;
+                if *deg == 0 {
+                    queue.push(dep);
+                    queue.sort_by(|a, b| b.cmp(a));
+                }
+            }
+        }
+    }
+
+    if result.len() != entry_count {
+        // Cycle detected: find cycle members
+        let cycle_members: Vec<String> = (0..entry_count)
+            .filter(|idx| in_degree.get(idx).copied().unwrap_or(0) > 0)
+            .map(|idx| {
+                // Try to find keyframe name for this entry
+                graph
+                    .kf_to_entry
+                    .iter()
+                    .find(|&(_, &v)| v == idx)
+                    .map(|(k, _)| k.clone())
+                    .unwrap_or_else(|| format!("entry_{}", idx))
+            })
+            .collect();
+        Err(cycle_members)
+    } else {
+        Ok(result)
+    }
+}
+
+/// Resolve a pure keyframe entry's time (Task 5.4)
+pub(super) fn resolve_pure_keyframe_time(
+    storyboard_name: &str,
+    entry_idx: usize,
+    entry: &StoryboardEntry,
+    keyframe_times: &HashMap<String, f64>,
+    entry_keyframe_time: &HashMap<usize, f64>,
+    sorted_indices: &[usize],
+    errors: &mut Vec<DolaError>,
+) -> Option<f64> {
+    if let Some(ref kf_ref) = entry.at {
+        // at ベースの純粋KF
+        let time = resolve_keyframe_ref_time(kf_ref, keyframe_times);
+        match time {
+            Some(t) => Some(t),
+            None => {
+                errors.push(DolaError::CompileError {
+                    storyboard: storyboard_name.to_string(),
+                    entry_index: entry_idx,
+                    reason: "Cannot resolve keyframe reference time".to_string(),
+                });
+                None
+            }
+        }
+    } else {
+        // at なし: 配列直前エントリの keyframe_time を継承
+        let prev_entry_idx = find_previous_entry_in_sort_order(entry_idx, sorted_indices);
+        match prev_entry_idx {
+            Some(prev_idx) => {
+                if let Some(&t) = entry_keyframe_time.get(&prev_idx) {
+                    Some(t)
+                } else {
+                    errors.push(DolaError::CompileError {
+                        storyboard: storyboard_name.to_string(),
+                        entry_index: entry_idx,
+                        reason:
+                            "Pure keyframe without 'at': no previous entry keyframe time available"
+                                .to_string(),
+                    });
+                    None
+                }
+            }
+            None => {
+                // 先頭エントリ: "start" キーフレーム（= start_time）をフォールバック
+                if let Some(&t) = keyframe_times.get("start") {
+                    Some(t)
+                } else {
+                    errors.push(DolaError::CompileError {
+                        storyboard: storyboard_name.to_string(),
+                        entry_index: entry_idx,
+                        reason: "Pure keyframe without 'at': no previous entry in array"
+                            .to_string(),
+                    });
+                    None
+                }
+            }
+        }
+    }
+}
+
+/// Find the previous entry (by original array index) in sorted order
+fn find_previous_entry_in_sort_order(entry_idx: usize, _sorted_indices: &[usize]) -> Option<usize> {
+    // "配列直前エントリ" = original array index - 1
+    if entry_idx > 0 {
+        Some(entry_idx - 1)
+    } else {
+        None
+    }
+}
+
+/// Resolve a KeyframeRef to a time value (Task 5.5)
+pub(super) fn resolve_keyframe_ref_time(
+    kf_ref: &KeyframeRef,
+    keyframe_times: &HashMap<String, f64>,
+) -> Option<f64> {
+    match kf_ref {
+        KeyframeRef::Single(name) => keyframe_times.get(name).copied(),
+        KeyframeRef::Multiple(names) => {
+            // All KFs must be resolved; take the latest
+            let mut max_time: Option<f64> = None;
+            for name in names {
+                match keyframe_times.get(name) {
+                    Some(&t) => {
+                        max_time = Some(max_time.map_or(t, |m: f64| m.max(t)));
+                    }
+                    None => return None,
+                }
+            }
+            max_time
+        }
+        KeyframeRef::WithOffset { keyframes, offset } => {
+            let base_time = match keyframes {
+                KeyframeNames::Single(name) => keyframe_times.get(name).copied(),
+                KeyframeNames::Multiple(names) => {
+                    let mut max_time: Option<f64> = None;
+                    for name in names {
+                        match keyframe_times.get(name) {
+                            Some(&t) => {
+                                max_time = Some(max_time.map_or(t, |m: f64| m.max(t)));
+                            }
+                            None => return None,
+                        }
+                    }
+                    max_time
+                }
+            };
+            base_time.map(|t| t + offset)
+        }
+    }
+}
+
+/// Resolve transition definition from entry (Task 5.6)
+pub(super) fn resolve_transition(
+    storyboard_name: &str,
+    entry_idx: usize,
+    entry: &StoryboardEntry,
+    doc: &DolaDocument,
+    errors: &mut Vec<DolaError>,
+) -> Option<crate::transition::TransitionDef> {
+    match &entry.transition {
+        Some(TransitionRef::Inline(def)) => Some(def.clone()),
+        Some(TransitionRef::Named(name)) => match doc.transition.get(name) {
+            Some(def) => Some(def.clone()),
+            None => {
+                errors.push(DolaError::CompileError {
+                    storyboard: storyboard_name.to_string(),
+                    entry_index: entry_idx,
+                    reason: format!("Named transition '{}' not found", name),
+                });
+                None
+            }
+        },
+        None => {
+            // No transition, shouldn't happen for non-pure-KF entry
+            errors.push(DolaError::CompileError {
+                storyboard: storyboard_name.to_string(),
+                entry_index: entry_idx,
+                reason: "Entry has variable but no transition".to_string(),
+            });
+            None
+        }
+    }
+}
+
+/// Resolve entry timing (Tasks 5.1-5.3)
+/// Returns (segment_start, segment_end, keyframe_time)
+pub(super) fn resolve_entry_timing(
+    storyboard_name: &str,
+    entry_idx: usize,
+    entry: &StoryboardEntry,
+    trans_def: &crate::transition::TransitionDef,
+    start_time: f64,
+    keyframe_times: &HashMap<String, f64>,
+    var_last_end_time: Option<f64>,
+    errors: &mut Vec<DolaError>,
+) -> Option<(f64, f64, f64)> {
+    let delay = trans_def.delay;
+    let duration = trans_def.duration.unwrap_or(0.0);
+
+    if let Some(ref between) = entry.between {
+        // Between placement (Task 5.3)
+        let from_time = keyframe_times.get(&between.from).copied();
+        let to_time = keyframe_times.get(&between.to).copied();
+
+        match (from_time, to_time) {
+            (Some(from_t), Some(to_t)) => {
+                let segment_start = from_t + delay;
+                let segment_end = to_t;
+
+                if segment_start >= segment_end {
+                    errors.push(DolaError::CompileError {
+                        storyboard: storyboard_name.to_string(),
+                        entry_index: entry_idx,
+                        reason: format!(
+                            "Between delay {} exceeds or equals interval ({} to {})",
+                            delay, from_t, to_t
+                        ),
+                    });
+                    return None;
+                }
+
+                let kf_time = segment_end;
+                Some((segment_start, segment_end, kf_time))
+            }
+            _ => {
+                errors.push(DolaError::CompileError {
+                    storyboard: storyboard_name.to_string(),
+                    entry_index: entry_idx,
+                    reason: "Cannot resolve between keyframe times".to_string(),
+                });
+                None
+            }
+        }
+    } else if let Some(ref kf_ref) = entry.at {
+        // At placement (Task 5.2)
+        match resolve_keyframe_ref_time(kf_ref, keyframe_times) {
+            Some(base_time) => {
+                let segment_start = base_time + delay;
+                let segment_end = segment_start + duration;
+                let kf_time = segment_end;
+                Some((segment_start, segment_end, kf_time))
+            }
+            None => {
+                errors.push(DolaError::CompileError {
+                    storyboard: storyboard_name.to_string(),
+                    entry_index: entry_idx,
+                    reason: "Cannot resolve 'at' keyframe reference time".to_string(),
+                });
+                None
+            }
+        }
+    } else {
+        // Sequential placement (Task 5.1)
+        let base_time = var_last_end_time.unwrap_or(start_time);
+        let segment_start = base_time + delay;
+        let segment_end = segment_start + duration;
+        let kf_time = segment_end;
+        Some((segment_start, segment_end, kf_time))
+    }
+}
+
+/// Resolve from value (Task 5.7)
+pub(super) fn resolve_from_value(
+    trans_def: &crate::transition::TransitionDef,
+    last_value: Option<&TransitionValue>,
+    var_def: &AnimationVariableDef,
+) -> TransitionValue {
+    if let Some(ref from) = trans_def.from {
+        return from.clone();
+    }
+
+    // Infer from last segment end value or variable initial
+    if let Some(last_val) = last_value {
+        return last_val.clone();
+    }
+
+    // Use variable initial value
+    match var_def {
+        AnimationVariableDef::Float { initial, .. } => TransitionValue::Scalar(*initial),
+        AnimationVariableDef::Integer { initial, .. } => TransitionValue::Scalar(*initial as f64),
+        AnimationVariableDef::Object { initial } => TransitionValue::Dynamic(initial.clone()),
+    }
+}
+
+/// Resolve to value (Task 5.8)
+pub(super) fn resolve_to_value(
+    trans_def: &crate::transition::TransitionDef,
+    from_value: &TransitionValue,
+) -> TransitionValue {
+    if let Some(ref relative_to) = trans_def.relative_to {
+        // relative_to: from + offset
+        if let TransitionValue::Scalar(from_val) = from_value {
+            return TransitionValue::Scalar(from_val + relative_to);
+        }
+    }
+
+    if let Some(ref to) = trans_def.to {
+        return to.clone();
+    }
+
+    // If neither to nor relative_to specified, from value is kept (instant)
+    from_value.clone()
+}
+
+/// Build VariableTypeHint from variable definition (Task 6.3)
+pub(super) fn build_variable_type_hint(var_def: Option<&AnimationVariableDef>) -> VariableTypeHint {
+    match var_def {
+        Some(AnimationVariableDef::Float { .. }) => VariableTypeHint::Float,
+        Some(AnimationVariableDef::Integer { typewriter, .. }) => VariableTypeHint::Integer {
+            typewriter: typewriter.clone(),
+        },
+        Some(AnimationVariableDef::Object { .. }) => VariableTypeHint::Object,
+        None => VariableTypeHint::Float, // fallback
+    }
+}
+
+/// Extract min/max from variable definition (Task 6.3)
+pub(super) fn extract_min_max(
+    var_def: Option<&AnimationVariableDef>,
+) -> (Option<f64>, Option<f64>) {
+    match var_def {
+        Some(AnimationVariableDef::Float { min, max, .. }) => (*min, *max),
+        Some(AnimationVariableDef::Integer { min, max, .. }) => {
+            (min.map(|v| v as f64), max.map(|v| v as f64))
+        }
+        _ => (None, None),
+    }
+}

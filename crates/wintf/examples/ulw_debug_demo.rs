@@ -17,7 +17,7 @@ use wintf::ecs::pointer::{OnPointerPressed, Phase, PointerState};
 use wintf::ecs::widget::bitmap_source::CommandSender;
 use wintf::ecs::widget::brushes::Brushes;
 use wintf::ecs::widget::shapes::Rectangle;
-use wintf::ecs::{Visual, Window, WindowPos};
+use wintf::ecs::{Window, WindowPos};
 use wintf::*;
 
 fn main() -> Result<()> {

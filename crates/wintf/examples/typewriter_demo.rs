@@ -16,7 +16,7 @@ use windows::Win32::Foundation::POINT;
 use windows::Win32::Graphics::Direct2D::Common::D2D1_COLOR_F;
 use windows::core::Result;
 use wintf::ecs::layout::{
-    BoxInset, BoxMargin, BoxPosition, BoxSize, BoxStyle, Dimension, LengthPercentageAuto,
+    BoxMargin, BoxPosition, BoxSize, BoxStyle, Dimension, LengthPercentageAuto,
 };
 use wintf::ecs::widget::bitmap_source::CommandSender;
 use wintf::ecs::widget::brushes::Brushes;
