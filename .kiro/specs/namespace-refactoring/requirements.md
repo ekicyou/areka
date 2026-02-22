@@ -62,9 +62,9 @@
 #### 受入基準
 
 1. The refactoring shall `dola/src/` ルート直下のファイル群（`builder.rs`, `document.rs`, `easing.rs`, `error.rs`, `playback.rs`, `storyboard.rs`, `transition.rs`, `value.rs`, `variable.rs`）が適切な粒度であることを検証する
-2. The refactoring shall 現在の `compile/`（3ファイル）・`runtime/`（12ファイル）・`validate/`（2ファイル）の粒度バランスを評価し、変更が必要な場合のみ対応する
+2. The refactoring shall 現在の `compile/`（3ファイル）・`runtime/`（12ファイル）・`validate/`（2ファイル）の粒度バランスを評価する
 
-> **ギャップ分析の結論**: ルート直下ファイルは `pub use` フラットエクスポートの設計意図があり、サブモジュール化のメリットは薄い。`runtime/` は論理的サブグループに分けられるが、現時点での分割リスクは工数に見合わない可能性がある。
+> **確定方針**: ルート直下ファイルは `pub use` フラットエクスポートの設計意図がありサブモジュール化しない。`runtime/` は12ファイルだが `pub(crate)` の内部結合が多く分割リスクが工数に見合わないため、現状維持とする（開発者確認済み）。本要件は検証のみで変更なし。
 
 ### Requirement 5: wintf プロダクションコードのモジュール構造検証
 
