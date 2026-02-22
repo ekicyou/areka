@@ -300,7 +300,7 @@ wintf/tests/
 **Implementation Notes**
 - ドメインプレフィックスの除去ルール: ドメインディレクトリ名と重複するプレフィックスのみ除去（例: `visual_child_order_test.rs` → `child_order_test.rs`）。ただし `taffy_` プレフィックスは layout/ 内でも維持（サブドメインとして意味がある）
 - `setup_graphics()` の共通化: `visual/common/mod.rs` に統合し、5ファイルのローカル定義を削除
-- `assets/` ディレクトリ: `tests/` 直下に残す。`bitmap_source_integration_test.rs` 内のパス参照は `../../assets/` に更新
+- `assets/` ディレクトリ: `tests/` 直下に残す。`bitmap_source_integration_test.rs` は `env!("CARGO_MANIFEST_DIR")` で絶対パスを構築しているため、ファイル移動後もパス変更不要
 - `tests/ecs/` は ECS パターンテスト（mock-only）専用。wintf の機能テストではないが、ECS パターンのリファレンスとして wintf に残す（開発者確認済み）
 
 ### Naming Convention Domain
