@@ -4,7 +4,7 @@
 |------|------|
 | **対象仕様** | wintf-P0-balloon-system |
 | **分析日** | 2026-02-22 |
-| **対象バージョン** | requirements.md v2.1 |
+| **対象バージョン** | requirements.md v2.2 |
 
 ---
 
@@ -103,12 +103,11 @@
 
 | 要件 | AC# | 既存資産 | ギャップ | 分類 |
 |------|------|---------|---------|------|
-| **Req 9: 選択肢UI** | 1 | `OnPointerPressed` イベント | 選択肢ウィジェットコンポーネント未定義 | Missing |
+| **Req 9: 選択肢UI** | 1 | `Window` + `BalloonAnchor`（balloon-core） | ChoiceBalloon 専用コンポーネント未定義（テキストバルーンと別ウィンドウ） | Missing |
 | | 2 | `TaffyStyle` (flexbox column) | ✅ flexbox 縦並び可能 | — |
 | | 3 | `Phase<T>` イベントシステム | 選択肢イベント定義未定義 | Missing |
 | | 4 | `OnPointerEntered` / `OnPointerExited` | ホバー状態ウィジェット未実装 | Missing |
 | | 5 | `keyboard.rs`: WM_KEYDOWN (ESC のみ) | キーボードナビゲーション基盤未実装（上下キー・Enter） | Missing |
-| | 6 | なし | 選択肢とスクロールの座標統合未実装 | Missing |
 
 ---
 
@@ -165,12 +164,12 @@
 
 ### Option B: 新規コンポーネント作成（推奨）
 
-**方針**: バルーン専用コンポーネント群（`BalloonWindow`, `BalloonAnchor`, `BalloonPlacement` 等）を新規モジュールとして作成。スクロールコンテナ、選択肢UI、入力ボックスも独立ウィジェットとして実装。
+**方針**: バルーン専用コンポーネント群（`BalloonWindow`, `BalloonAnchor`, `BalloonPlacement` 等）を新規モジュールとして作成。選択肢専用バルーン（ChoiceBalloon）は同じ `ecs/widget/balloon/` でテキストバルーンと並列する別ウィンドウ実装。
 
 - **新規モジュール構成**:
-  - `ecs/widget/balloon/` — バルーンコア（ウィンドウ生成・配置・表示制御）
+  - `ecs/widget/balloon/` — バルーンコア（`BalloonWindow`, `ChoiceBalloon` 両方; ウィンドウ生成・配置・表示制御）
   - `ecs/widget/scroll.rs` — スクロールコンテナウィジェット
-  - `ecs/widget/choice.rs` — 選択肢ウィジェット
+  - `ecs/widget/choice.rs` — 選択肢項目ウィジェット（ChoiceBalloon内部の各選択肢アイテム）
   - `com/dwrite_ext.rs` — ルビ・テキストヒットテスト用 DirectWrite 拡張
 
 - **統合ポイント**:
@@ -217,7 +216,7 @@
 | **balloon-core** | M (3–7日) | Low | 既存 `Window` + `WindowPos` パターンの拡張。`on_add` フック、コマンドキューのパターンが確立済み。配置アルゴリズムは新規だが技術的に明確 |
 | **balloon-content** | M (3–7日) | Low | Typewriter 統合は既にモックで実証済み。スクロールは新規だが `WheelDelta` と taffy の制約で段階的に実装可能 |
 | **balloon-rich-text** | L (1–2週) | High | DirectWrite ルビ API は `IDWriteTextLayout1` 以降の COM インターフェースが必要。テキスト座標↔文字位置の正確な逆変換は技術的に複雑。縦書き+ルビの組合せは検証が必要 |
-| **balloon-input** | S (1–3日) | Low | Req 10（入力ボックス）をP0スコープ外としたことで、選択肢UIのみ。既存ポインタイベント + flexbox レイアウトで対応可能。キーボード操作のスコープ次第でMに変動 |
+| **balloon-input** | S (1–3日) | Low | ChoiceBalloonはテキストバルーンと同じ balloon-core パターンを再利用。スクロール内位置統合不要（別ウィンドウのため）。キーボード操作のスコープ次第でMに変動 |
 
 ### 全体工数: L (2–4週)
 

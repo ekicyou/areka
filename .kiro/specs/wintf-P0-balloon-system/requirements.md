@@ -3,7 +3,7 @@
 | 項目 | 内容 |
 |------|------|
 | **Document Title** | wintf バルーンシステム 要件定義書（マスタープラン） |
-| **Version** | 2.1 |
+| **Version** | 2.2 |
 | **Date** | 2026-02-22 |
 | **Parent Spec** | ukagaka-desktop-mascot |
 | **Priority** | P0 (MVP必須) |
@@ -39,7 +39,7 @@
 | 1 | `wintf-P0-balloon-core` | ウィンドウ管理・配置・ライフサイクル | event-system ✅ | B-1: 最優先 |
 | 2 | `wintf-P0-balloon-content` | テキスト表示領域・typewriter統合・スクロール | balloon-core, typewriter ✅ | B-2 |
 | 3 | `wintf-P0-balloon-rich-text` | ルビ・リンク（リッチテキスト拡張） | balloon-content | B-3 |
-| 4 | `wintf-P0-balloon-input` | 選択肢UI（インタラクション） | balloon-core, event-system ✅ | B-3（rich-textと並行可） |
+| 4 | `wintf-P0-balloon-input` | 選択肢専用バルーンウィンドウ（ChoiceBalloon）— 選択のみに使用する独立ウィンドウ | balloon-core, event-system ✅ | B-3（rich-textと並行可） |
 
 ```
 依存関係:
@@ -58,7 +58,7 @@
 - テキスト表示領域とtypewriter統合（balloon-content）
 - ルビ（ふりがな）表示（balloon-rich-text）
 - リンク（クリッカブルテキスト）（balloon-rich-text）
-- 選択肢UI（balloon-input）
+- 選択肢専用バルーンウィンドウ（ChoiceBalloon: balloon-input）
 
 **含まれないもの:**
 - タイプライター表示制御（`wintf-P0-typewriter` ✅ 完了済み）
@@ -200,24 +200,23 @@
 
 ---
 
-### 子仕様 4: balloon-input（選択肢）
+### 子仕様 4: balloon-input（選択肢専用バルーン）
 
-バルーン内にインタラクティブな選択肢UIを配置する。ユーザーからの応答を受け取り、会話分岐を実現する。
+選択肢UIを表示するための**独立した専用バルーンウィンドウ（ChoiceBalloon）**を提供する。テキストバルーンとは別ウィンドウとして生成され、同キャラクターに紐付いて配置される。選択の応答受け取りと会話分岐の実現のみを目的とする。
 
 ---
 
 #### Requirement 9: 選択肢UI [balloon-input]
 
-**Objective:** 開発者として、ユーザーに選択肢を提示したい。それによりインタラクティブな会話分岐を実現できる。
+**Objective:** 開発者として、ユーザーに選択肢を選択肢専用バルーンで提示したい。それによりテキスト表示を妨げずにインタラクティブな会話分岐を実現できる。
 
 ##### Acceptance Criteria
 
-1. **The** Balloon Input **shall** 選択肢形式の入力をバルーン内にユーザーに提示できる
+1. **The** Balloon Input **shall** 選択肢専用バルーンウィンドウ（ChoiceBalloon）を生成し、キャラクターに紐付いて配置できる
 2. **The** Balloon Input **shall** 複数の選択肢を縦並びで表示できる
 3. **When** ユーザーが選択肢をクリックした時, **the** Balloon Input **shall** 選択肢IDを含むイベントを発火する
 4. **When** マウスが選択肢上にある時, **the** Balloon Input **shall** ホバー状態を視覚的にフィードバックする
 5. **The** Balloon Input **shall** キーボード操作（上下キー、Enter）での選択をサポートする
-6. **When** 選択肢が表示されている間にテキスト領域がスクロールされた場合, **the** Balloon Input **shall** 選択肢の表示位置を適切に維持する
 
 ---
 
@@ -265,6 +264,7 @@
 | 用語 | 定義 |
 |------|------|
 | **バルーン** | キャラクターの発言を表示する吹き出しウィンドウ |
+| **ChoiceBalloon** | 選択肢のみを表示する専用バルーンウィンドウ。テキストバルーンとは独立した別ウィンドウとして同キャラクターに紐付いて配置される |
 | **コンテンツ領域** | バルーンウィンドウ内のテキスト・ウィジェット配置エリア |
 | **ルビ** | 漢字等の上または横に付けるふりがな |
 | **選択肢** | ユーザーがクリックして選ぶ複数の選択肢ボタン |
