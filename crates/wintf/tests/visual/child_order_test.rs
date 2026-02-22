@@ -9,7 +9,9 @@ use bevy_ecs::prelude::*;
 use windows::core::Result;
 use wintf::com::dcomp::*;
 use wintf::ecs::DCompGraphicsResource;
-use wintf::ecs::{GraphicsCore, Visual, VisualGraphics, visual_hierarchy_sync_system};
+use wintf::ecs::{Visual, VisualGraphics, visual_hierarchy_sync_system};
+
+use super::common::setup_graphics;
 
 /// テスト用マーカーコンポーネント（アーキタイプを変えるために使用）
 #[derive(Component, Default)]
@@ -18,11 +20,6 @@ struct ExtraMarkerA;
 /// テスト用マーカーコンポーネント（別のアーキタイプを作る）
 #[derive(Component, Default)]
 struct ExtraMarkerB;
-
-/// テスト用の GraphicsCore を作成するヘルパー関数
-fn setup_graphics() -> Result<GraphicsCore> {
-    GraphicsCore::new()
-}
 
 /// 異なるアーキタイプを持つ兄弟エンティティの一部を未同期状態にした場合、
 /// visual_hierarchy_sync_system 実行後に全子の parent_visual が更新されることを検証。

@@ -24,8 +24,9 @@
 
 - **dola `runtime/`**: フラット構成（16ファイル、サブディレクトリなし）
 - **wintf `layout/`**: `systems/` サブディレクトリあり、他はフラット
-- **wintf `pointer/`**: フラット（5ファイル + テスト1つ）
+- **wintf `pointer/`**: フラット（6ファイル）。namespace-refactoring により `nchittest_cache.rs` が `ecs/` から移動済み
 - **wintf `graphics/`**: 既にディレクトリモジュール化済み（`mod.rs` + `compositor_systems/`, `systems/` 等のサブモジュール群）
+- **wintf `ecs/`**: namespace-refactoring により `monitor.rs` → `window/monitor.rs`、`window_system.rs` → `window/window_system.rs`、`nchittest_cache.rs` → `pointer/nchittest_cache.rs` に移動済み。`app.rs` のみ `ecs/` ルートに残存
 
 #### 既存の慣用パターン（参考モデル）
 
@@ -54,6 +55,7 @@ bitmap_source/
 - **親モジュール宣言**: `mod instance_manager;` 等はファイル→ディレクトリ変更時も修正不要（Rust モジュール解決が吸収）
 - **`#[cfg(test)]` ガード**: 全箇所で付与済み
 - **git 履歴**: `foo.rs` → `foo/mod.rs` は `git mv` で追跡可能（similarity threshold 内）
+- **テスト命名規約**: `structure.md` に `{module}/tests.rs` パターンが文書化済み（namespace-refactoring にて追記）
 
 ## 2. Requirements Feasibility Analysis
 

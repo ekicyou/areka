@@ -1,14 +1,12 @@
 //! トリガー機能のテスト — 5.4: update() トリガー実行統合テスト,
 //! 5.5: ループ内トリガー統合テスト, 5.6: E2E テスト
 
-mod trigger_common;
-
+use super::common::{extract_float, timed_trigger_doc};
 use dola::runtime::{DolaRuntime, EvaluatedValue, TriggerResult};
 use dola::{
     AnimationVariableDef, DolaDocumentBuilder, StoryboardBuilder, StoryboardEntry, TransitionDef,
     TransitionRef, TransitionValue,
 };
-use trigger_common::{extract_float, timed_trigger_doc};
 
 // ============================================================
 // 5.4: update() トリガー実行統合テスト

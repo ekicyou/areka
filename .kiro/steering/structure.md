@@ -87,6 +87,21 @@
 - **Functions**: `snake_case`
 - **Constants**: `SCREAMING_SNAKE_CASE`
 
+### Test Naming Conventions
+
+#### Integration Tests (`tests/` directory)
+- **File name**: `{feature}_{type}_test.rs` or `{feature}_test.rs`
+- **Entry point**: `tests/{domain}.rs` — `#[path]` による `mod` 宣言のみ、テストロジックは含まない
+- **Common helpers**: `tests/{domain}/common/mod.rs`
+- **Domain prefix removal**: ドメインサブディレクトリに配置する際、ドメイン名と重複するプレフィックスを除去する
+  - 例: `compile_error_test.rs` → `compile/error_test.rs`
+  - 例: `visual_child_order_test.rs` → `visual/child_order_test.rs`
+  - ただし `taffy_` のようなサブドメインプレフィックスは維持する
+
+#### Unit Tests (in-source `#[cfg(test)]`)
+- **Inline**: 小規模テストはソースファイル内に `mod tests { ... }` として記述
+- **Separated**: `{module}/tests.rs` — ディレクトリモジュール化パターン（`bitmap_source/` を参照）
+
 ### Component Naming Conventions
 
 COMオブジェクトをラップするECSコンポーネントは、以下の命名規則に従う：

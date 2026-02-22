@@ -83,7 +83,7 @@ pub fn initialize_layout_root(world: &mut World) {
     }
 
     // 全モニターを列挙
-    let monitors = crate::ecs::monitor::enumerate_monitors();
+    let monitors = crate::ecs::window::monitor::enumerate_monitors();
     debug!(
         count = monitors.len(),
         "[initialize_layout_root] Enumerated monitors"
@@ -189,7 +189,7 @@ pub fn detect_display_change_system(
     };
 
     // 新しいモニターリストを取得
-    let new_monitors = crate::ecs::monitor::enumerate_monitors();
+    let new_monitors = crate::ecs::window::monitor::enumerate_monitors();
     debug!(
         count = new_monitors.len(),
         "[detect_display_change_system] Found monitors"

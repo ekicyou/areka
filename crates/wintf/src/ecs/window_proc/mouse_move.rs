@@ -57,7 +57,7 @@ pub(super) fn WM_NCHITTEST(
     };
 
     // キャッシュ付きヒットテスト実行
-    crate::ecs::nchittest_cache::cached_nchittest(hwnd, (x, y), entity, &world)
+    crate::ecs::pointer::nchittest_cache::cached_nchittest(hwnd, (x, y), entity, &world)
 }
 
 /// 当該ウィンドウに属し、exclude と異なるエンティティの PointerState 保持者を収集する。

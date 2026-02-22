@@ -1,12 +1,10 @@
 //! トリガー機能のテスト — 5.2: バリデーションユニットテスト（V9更新, V14t–V18t）
 
-mod trigger_common;
-
 use dola::{
     AnimationVariableDef, DolaDocumentBuilder, DolaError, StoryboardBuilder, StoryboardEntry,
     TransitionDef, TransitionRef, TransitionValue, Validate,
 };
-use trigger_common::minimal_trigger_doc;
+use super::common::minimal_trigger_doc;
 
 // ============================================================
 // 5.2: バリデーションユニットテスト

@@ -5,12 +5,8 @@
 use windows::core::Result;
 use wintf::com::dcomp::*;
 use wintf::ecs::DCompGraphicsResource;
-use wintf::ecs::GraphicsCore;
 
-/// テスト用の GraphicsCore を作成するヘルパー関数
-fn setup_graphics() -> Result<GraphicsCore> {
-    GraphicsCore::new()
-}
+use super::common::setup_graphics;
 
 /// remove_visual: 子Visualを親から削除できることを確認
 #[test]

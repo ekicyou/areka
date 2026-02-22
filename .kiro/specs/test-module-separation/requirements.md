@@ -38,6 +38,8 @@ mod tests;
 - **複数テストファイル**: `hit_test.rs` は `tests` と `tests_ex` の2つの外部テストモジュールを持つ唯一のケース
 - **親ディレクトリ参照**: `graphics/mod.rs` は `../graphics_tests.rs` を参照し、内部に3つのネストされたサブモジュールを持つ特殊パターン
 - **既存の慣用パターン**: `bitmap_source/mod.rs` は `#[path]` なしの `#[cfg(test)] mod tests;` を使用しており、参考モデルとなる
+- **テスト命名規約**: `structure.md` の Test Naming Conventions セクションにて「Separated: `{module}/tests.rs`」パターンが文書化済み（namespace-refactoring にて追記）
+- **pointer/ ディレクトリ変更**: namespace-refactoring により `ecs/nchittest_cache.rs` が `pointer/nchittest_cache.rs` に移動済み（`dispatch.rs` と同一ディレクトリ）
 
 ## Requirements
 

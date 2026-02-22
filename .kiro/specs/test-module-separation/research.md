@@ -95,6 +95,19 @@
 - **Risk 2**: rust-analyzer の一時的な認識遅延 → ディレクトリモジュール化は rust-analyzer が完全サポートする標準パターンであり問題なし
 - **Risk 3**: `graphics_tests.rs` 移動時の import 漏れ → mod 名変更（`graphics_tests` → `tests`）のみで import パスの変更は不要
 
+## namespace-refactoring 影響評価
+
+namespace-refactoring（`phase: implementation-complete`）実施後の影響を評価。
+
+### 影響なし（全対象ファイルはパス変更なし）
+
+全17ファイル（9ソース + 8テスト）の配置に変化なし。namespace-refactoring の移動対象（`monitor.rs`, `window_system.rs`, `nchittest_cache.rs`）は test-module-separation の対象外。
+
+### 間接的影響（2件）
+
+1. **`pointer/` ディレクトリに `nchittest_cache.rs` が追加**: `ecs/nchittest_cache.rs` → `ecs/pointer/nchittest_cache.rs` に移動済み。`dispatch.rs` のディレクトリモジュール化には影響なし（ディレクトリ内のファイル数が1つ増えるのみ）。
+2. **`structure.md` にテスト命名規約が追加**: Test Naming Conventions セクションに「Separated: `{module}/tests.rs` — ディレクトリモジュール化パターン（`bitmap_source/` を参照）」が文書化済み。test-module-separation の移行先パターンと完全に一致。
+
 ## References
 - [Rust Reference: Modules](https://doc.rust-lang.org/reference/items/modules.html) — モジュール解決規則
 - [Rust Reference: Visibility and Privacy](https://doc.rust-lang.org/reference/visibility-and-privacy.html) — 子モジュールのプライベートアクセス規則

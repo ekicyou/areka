@@ -1,12 +1,10 @@
 //! トリガー機能のテスト — 5.3: CompiledTrigger の fire_time 計算テスト
 
-mod trigger_common;
-
+use super::common::{minimal_trigger_doc, timed_trigger_doc};
 use dola::{
     AnimationVariableDef, DolaDocumentBuilder, StoryboardBuilder, StoryboardEntry, TransitionDef,
     TransitionRef, TransitionValue,
 };
-use trigger_common::{minimal_trigger_doc, timed_trigger_doc};
 
 // ============================================================
 // 5.3: CompiledTrigger の fire_time 計算テスト

@@ -103,7 +103,7 @@ graph TB
 - **Architecture Integration**: 既存のモジュールツリー構造を維持し、ファイル配置のみ変更
 - **Existing patterns preserved**: `bitmap_source/` のディレクトリモジュールパターンを踏襲
 - **New components rationale**: 新規コンポーネントなし。既存ファイルの再配置のみ
-- **Steering compliance**: `structure.md` のモジュール独立性原則を維持
+- **Steering compliance**: `structure.md` のモジュール独立性原則を維持。Test Naming Conventions に文書化済みの `{module}/tests.rs` パターンに準拠
 
 ### Technology Stack
 
@@ -186,6 +186,14 @@ runtime/
 │   ├── mod.rs           # 元 instance_manager.rs
 │   └── tests.rs         # 元 instance_manager_tests.rs
 ```
+
+#### `wintf/src/ecs/pointer/`
+```
+buffers.rs, dispatch.rs, dispatch_tests.rs, mod.rs,
+nchittest_cache.rs, systems.rs, types.rs
+```
+- `dispatch.rs` + `dispatch_tests.rs` が対象
+- `nchittest_cache.rs` は namespace-refactoring により `ecs/` から移動済み（`dispatch` のディレクトリモジュール化に影響なし）
 
 **親モジュール（`runtime/mod.rs` 等）への影響**: なし。`mod instance_manager;` は `instance_manager.rs` と `instance_manager/mod.rs` の両方に解決されるため、宣言変更は不要。
 

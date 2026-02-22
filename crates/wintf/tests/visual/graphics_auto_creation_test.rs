@@ -14,10 +14,7 @@ use wintf::ecs::{
     visual_resource_management_system,
 };
 
-/// テスト用の GraphicsCore を作成するヘルパー関数
-fn setup_graphics() -> Result<GraphicsCore> {
-    GraphicsCore::new()
-}
+use super::common::setup_graphics;
 
 /// テスト用のワールドをセットアップするヘルパー関数
 fn setup_world_with_graphics() -> Result<World> {

@@ -7,12 +7,9 @@ use bevy_ecs::prelude::*;
 use windows::core::Result;
 use wintf::com::dcomp::*;
 use wintf::ecs::DCompGraphicsResource;
-use wintf::ecs::{GraphicsCore, VisualGraphics};
+use wintf::ecs::VisualGraphics;
 
-/// テスト用の GraphicsCore を作成するヘルパー関数
-fn setup_graphics() -> Result<GraphicsCore> {
-    GraphicsCore::new()
-}
+use super::common::setup_graphics;
 
 /// VisualGraphics が parent_visual フィールドを持つことを確認
 #[test]

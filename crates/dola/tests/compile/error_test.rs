@@ -4,8 +4,7 @@
 use dola::*;
 use std::collections::BTreeMap;
 
-mod compile_common;
-use compile_common::make_doc_with_storyboard;
+use super::common::make_doc_with_storyboard;
 
 #[cfg(test)]
 mod error_tests {

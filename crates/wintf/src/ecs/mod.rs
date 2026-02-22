@@ -3,14 +3,11 @@ pub mod common;
 pub mod drag;
 mod graphics;
 pub mod layout;
-pub mod monitor;
-mod nchittest_cache;
 pub mod pointer;
 pub mod transform;
 pub mod widget;
 pub mod window;
 mod window_proc;
-mod window_system;
 pub mod world;
 
 /// 後方互換性のためのエイリアス
@@ -31,7 +28,7 @@ pub use graphics::FrameTime;
 pub use graphics::calculate_surface_size_from_global_arrangement;
 pub use graphics::*;
 pub use layout::*;
-pub use monitor::*;
+pub use window::monitor::*;
 pub use pointer::{
     CursorVelocity, DoubleClick, EventHandler, OnPointerEntered, OnPointerExited, OnPointerMoved,
     OnPointerPressed, OnPointerReleased, Phase, PhysicalPoint, PointerButton, PointerEventHandler,

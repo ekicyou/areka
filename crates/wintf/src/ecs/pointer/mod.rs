@@ -7,6 +7,7 @@
 
 mod buffers;
 mod dispatch;
+pub(crate) mod nchittest_cache;
 mod systems;
 mod types;
 

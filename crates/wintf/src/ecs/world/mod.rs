@@ -140,7 +140,7 @@ impl EcsWorld {
             );
 
             // UISetupスケジュール：ウィンドウ作成とWindowPos反映
-            schedules.add_systems(UISetup, crate::ecs::window_system::create_windows);
+            schedules.add_systems(UISetup, crate::ecs::window::window_system::create_windows);
             // on_window_handle_addedとon_window_handle_removedはフックで代替
 
             // WindowPos変更をSetWindowPosに反映（メインスレッド固定が必要）
@@ -465,7 +465,7 @@ impl EcsWorld {
         let _ = self.world.try_run_schedule(FrameFinalize);
 
         // Layout スケジュール実行後のタイミングで NCHITTEST キャッシュをクリア
-        crate::ecs::nchittest_cache::clear_nchittest_cache();
+        crate::ecs::pointer::nchittest_cache::clear_nchittest_cache();
 
         true
     }

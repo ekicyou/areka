@@ -3,8 +3,7 @@
 
 use dola::*;
 
-mod compile_common;
-use compile_common::make_doc_with_storyboard;
+use super::common::make_doc_with_storyboard;
 
 #[cfg(test)]
 mod transition_resolution_tests {

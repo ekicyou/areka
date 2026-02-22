@@ -4,15 +4,7 @@
 use dola::*;
 use std::collections::BTreeMap;
 
-/// ヘルパー: 最小の有効なドキュメントを作成
-fn minimal_valid_doc() -> DolaDocument {
-    DolaDocument {
-        schema_version: "1.0".to_string(),
-        variable: BTreeMap::new(),
-        transition: BTreeMap::new(),
-        storyboard: BTreeMap::new(),
-    }
-}
+use super::common::minimal_valid_doc;
 
 /// ヘルパー: f64変数付きドキュメント
 fn doc_with_float_var(

@@ -7,12 +7,9 @@ use bevy_ecs::prelude::*;
 use windows::core::Result;
 use wintf::com::dcomp::*;
 use wintf::ecs::DCompGraphicsResource;
-use wintf::ecs::{GraphicsCore, Visual, VisualGraphics, visual_hierarchy_sync_system};
+use wintf::ecs::{Visual, VisualGraphics, visual_hierarchy_sync_system};
 
-/// テスト用の GraphicsCore を作成するヘルパー関数
-fn setup_graphics() -> Result<GraphicsCore> {
-    GraphicsCore::new()
-}
+use super::common::setup_graphics;
 
 /// ChildOf追加時にVisual階層が同期されることを確認
 #[test]
