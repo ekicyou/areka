@@ -4,7 +4,7 @@
 |------|------|
 | **対象仕様** | wintf-P0-balloon-system |
 | **分析日** | 2026-02-22 |
-| **対象バージョン** | requirements.md v2.2 |
+| **対象バージョン** | requirements.md v3.0 |
 
 ---
 
@@ -99,14 +99,14 @@
 | | 5 | `DWriteTextLayoutExt::hit_test_text_position` | テキスト座標→文字位置の逆引き API 未ラップ (`HitTestPoint` 等) | Missing |
 | | 6 | `TypewriterToken` (Stage 1 IR) | リンク用トークン variant 未定義 (`TypewriterToken::Link` 等) | Missing |
 
-### 子仕様 4: balloon-input
+### 子仕様 4: balloon-choice
 
 | 要件 | AC# | 既存資産 | ギャップ | 分類 |
 |------|------|---------|---------|------|
 | **Req 9: 選択肢UI** | 1 | `Window` + `BalloonAnchor`（balloon-core） | ChoiceBalloon 専用コンポーネント未定義（テキストバルーンと別ウィンドウ） | Missing |
-| | 2 | `TaffyStyle` (flexbox column) | ✅ flexbox 縦並び可能 | — |
+| | 2 | `TaffyStyle` (flexbox column) | ✅ flexbox 縦並び可能（DR-5: 選択肢UI描画） | — |
 | | 3 | `Phase<T>` イベントシステム | 選択肢イベント定義未定義 | Missing |
-| | 4 | `OnPointerEntered` / `OnPointerExited` | ホバー状態ウィジェット未実装 | Missing |
+| | 4 | `OnPointerEntered` / `OnPointerExited` | ホバー状態ウィジェット未実装（DR-5: 選択肢UI描画） | Missing |
 | | 5 | `keyboard.rs`: WM_KEYDOWN (ESC のみ) | キーボードナビゲーション基盤未実装（上下キー・Enter） | Missing |
 
 ---
@@ -167,10 +167,10 @@
 **方針**: バルーン専用コンポーネント群（`BalloonWindow`, `BalloonAnchor`, `BalloonPlacement` 等）を新規モジュールとして作成。選択肢専用バルーン（ChoiceBalloon）は同じ `ecs/widget/balloon/` でテキストバルーンと並列する別ウィンドウ実装。
 
 - **新規モジュール構成**:
-  - `ecs/widget/balloon/` — バルーンコア（`BalloonWindow`, `ChoiceBalloon` 両方; ウィンドウ生成・配置・表示制御）
-  - `ecs/widget/scroll.rs` — スクロールコンテナウィジェット
-  - `ecs/widget/choice.rs` — 選択肢項目ウィジェット（ChoiceBalloon内部の各選択肢アイテム）
-  - `com/dwrite_ext.rs` — ルビ・テキストヒットテスト用 DirectWrite 拡張
+  - `ecs/widget/balloon/` — バルーンコア（`BalloonWindow`, `ChoiceBalloon` 両方; DR-1: フレーム描画基盤・ウィンドウ管理）
+  - `ecs/widget/scroll.rs` — スクロールコンテナウィジェット（DR-2: ビューポート描画）
+  - `ecs/widget/choice.rs` — 選択肢項目ウィジェット（DR-5: 選択肢UI描画）
+  - `com/dwrite_ext.rs` — ルビ・テキストヒットテスト用 DirectWrite 拡張（DR-4: テキスト装飾描画）
 
 - **統合ポイント**:
   - `BalloonWindow` の `on_add` フックで `Window` + `WindowStyle` を自動挿入（既存パターン踏襲）
@@ -216,7 +216,7 @@
 | **balloon-core** | M (3–7日) | Low | 既存 `Window` + `WindowPos` パターンの拡張。`on_add` フック、コマンドキューのパターンが確立済み。配置アルゴリズムは新規だが技術的に明確 |
 | **balloon-content** | M (3–7日) | Low | Typewriter 統合は既にモックで実証済み。スクロールは新規だが `WheelDelta` と taffy の制約で段階的に実装可能 |
 | **balloon-rich-text** | L (1–2週) | High | DirectWrite ルビ API は `IDWriteTextLayout1` 以降の COM インターフェースが必要。テキスト座標↔文字位置の正確な逆変換は技術的に複雑。縦書き+ルビの組合せは検証が必要 |
-| **balloon-input** | S (1–3日) | Low | ChoiceBalloonはテキストバルーンと同じ balloon-core パターンを再利用。スクロール内位置統合不要（別ウィンドウのため）。キーボード操作のスコープ次第でMに変動 |
+| **balloon-choice** | S (1–3日) | Low | ChoiceBalloonはテキストバルーンと同じ balloon-core パターンを再利用。スクロール内位置統合不要（別ウィンドウのため）。キーボード操作のスコープ次第でMに変動 |
 
 ### 全体工数: L (2–4週)
 
@@ -228,7 +228,7 @@
 
 **Option B（新規コンポーネント作成）を推奨**。理由：
 
-1. 子仕様の段階的実装に最も適合（モジュール境界が子仕様境界と一致）
+1. 子仕様の段階的実装に最も適合（モジュール境界が子仕様境界＝描画責務境界と一致）
 2. 既存 `Window` / `Typewriter` への侵入的変更を最小化
 3. `on_add` フックによる自動セットアップパターンが既に確立されており踏襲可能
 4. 各子仕様の独立テストが容易
