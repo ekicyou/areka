@@ -19,8 +19,10 @@
         },
         "tasks": {
             "generated": true,
-            "approved": false
+            "approved": true,
+            "approved_at": "2026-02-22T20:00:00+09:00",
+            "note": "auto-approved via -y flag"
         }
     },
-    "ready_for_implementation": false
+    "ready_for_implementation": true
 }

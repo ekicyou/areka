@@ -3,7 +3,7 @@
 | 項目 | 内容 |
 |------|------|
 | **Document Title** | wintf バルーンシステム 要件定義書（マスタープラン） |
-| **Version** | 2.0 |
+| **Version** | 2.1 |
 | **Date** | 2026-02-22 |
 | **Parent Spec** | ukagaka-desktop-mascot |
 | **Priority** | P0 (MVP必須) |
@@ -44,8 +44,11 @@
 ```
 依存関係:
 
-  event-system ✅ ─┬─► balloon-core ─┬─► balloon-content ─► balloon-rich-text
-  typewriter ✅ ────┘                └─► balloon-input
+                                    ┌─► balloon-content ──► balloon-rich-text
+                                    │        ↑
+  event-system ✅ ──► balloon-core ──┤   typewriter ✅
+                                    │
+                                    └─► balloon-input
 ```
 
 ### スコープ（全体）
@@ -143,11 +146,9 @@
 
 ##### Acceptance Criteria
 
-1. **The** Balloon Content **shall** バルーンのコンテンツ領域にTypewriterウィジェットを配置できる
-2. **The** Balloon Content **shall** 縦書きテキスト表示をサポートする（TypewriterのDirectWrite統合を利用）
-3. **The** Balloon Content **shall** 横書きテキスト表示をサポートする
-4. **When** TypewriterTalkが設定された時, **the** Balloon Content **shall** コンテンツ領域内でテキストをレイアウトして表示する
-5. **The** Balloon Content **shall** フォント、サイズ、色のスタイル設定をTypewriterに委譲できる
+1. **The** Balloon Content **shall** バルーンのコンテンツ領域にTypewriterウィジェットを配置できる（Typewriter既存の縦書き・横書き機能はそのまま利用可能）
+2. **When** TypewriterTalkが設定された時, **the** Balloon Content **shall** コンテンツ領域内でテキストをレイアウトして表示する
+3. **The** Balloon Content **shall** フォント、サイズ、色のスタイル設定をTypewriterに委譲できる
 
 ---
 
