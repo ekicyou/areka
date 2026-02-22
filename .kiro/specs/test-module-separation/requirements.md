@@ -73,7 +73,7 @@ mod tests;
 1. The refactoring shall 全9箇所に対してディレクトリモジュール化（`foo.rs` → `foo/mod.rs` + `foo/tests.rs`）を一貫して適用すること
 2. The file structure shall 全対象モジュールにおいて `<module_name>/mod.rs`（プロダクションコード）と `<module_name>/tests.rs`（テストコード）の構成を取ること
 3. The refactoring shall `graphics/mod.rs` の親ディレクトリ参照（`../graphics_tests.rs`）パターンを解消すること
-4. When `hit_test.rs` のように1ソースから複数テストファイルが参照されている場合, the refactoring shall 複数テストモジュールの共存を慣用的な構造で実現すること
+4. When `hit_test.rs` のように1ソースから複数テストファイルが参照されている場合, the refactoring shall 複数テストモジュールの共存を慣用的な構造で実現すること（`hit_test/tests.rs` + `hit_test/tests_ex.rs` として配置し、`tests_ex` というモジュール名はテスト対象の `_ex` 系関数群を反映した意味ある命名のため維持する）
 
 ### Requirement 4: 既存コードへの影響最小化
 
