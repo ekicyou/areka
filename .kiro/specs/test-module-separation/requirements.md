@@ -2,7 +2,7 @@
 
 ## Introduction
 
-プロジェクト内の9箇所で使用されている `#[path = "xxx_tests.rs"]` パターンを、より慣用的な Rust のテストモジュール分離手法にリファクタリングする。`#[path]` アトリビュートはコンパイラ指示子としては正当だが、Rust コミュニティの標準的なプラクティスから外れており、コード可読性・保守性の観点で改善の余地がある。
+プロジェクト内の9箇所で使用されている `#[path = "xxx_tests.rs"]` パターンを、ディレクトリモジュール化による慣用的な Rust テストモジュール分離手法にリファクタリングする。`#[path]` アトリビュートはコンパイラ指示子として正当だが、Rust コミュニティの標準プラクティスから外れており、モジュールツリーとファイル構造の乖離、IDE 互換性の不安定さ、コードレビュー時の認知負荷といった問題がある。
 
 ### 背景
 
@@ -13,32 +13,31 @@
 mod tests;
 ```
 
-このパターンは以下の点で問題がある:
-- Rust エコシステムで一般的でなく、コードレビュー時に戸惑いを生む
-- ファイル配置の意図が暗黙的であり、モジュールツリーと実ファイル構造の乖離を招く
-- IDE のモジュール解決との相性が不安定な場合がある
+### `#[path]` 使用の根本原因
+
+`#[path]` が使用されている理由はプライベートアクセスではない（子モジュールは親モジュールのプライベートアイテムに常にアクセス可能）。フラットファイル構成において複数モジュールが同一ディレクトリに存在する場合、`mod tests;` による標準モジュール解決では `tests.rs` が衝突するため、ファイル命名の制約を回避する目的で `#[path]` が導入された。
 
 ### 対象箇所（9箇所）
 
-| # | クレート | ソースファイル | テストファイル | テスト行数 |
-|---|---------|--------------|--------------|-----------|
-| 1 | dola | `runtime/instance_manager.rs` | `instance_manager_tests.rs` | 188 |
-| 2 | dola | `runtime/interpolator.rs` | `interpolator_tests.rs` | 209 |
-| 3 | dola | `runtime/subscription_manager.rs` | `subscription_manager_tests.rs` | 284 |
-| 4 | dola | `runtime/timeline_manager.rs` | `timeline_manager_tests.rs` | 181 |
-| 5 | wintf | `ecs/pointer/dispatch.rs` | `dispatch_tests.rs` | 163 |
-| 6 | wintf | `ecs/layout/hit_region.rs` | `hit_region_tests.rs` | 554 |
-| 7 | wintf | `ecs/layout/hit_test.rs` | `hit_test_tests.rs` | 330 |
-| 8 | wintf | `ecs/layout/hit_test.rs` | `hit_test_ex_tests.rs` | 593 |
-| 9 | wintf | `ecs/graphics/mod.rs` | `../graphics_tests.rs` | 143 |
+| # | クレート | ソースファイル | テストファイル | テスト行数 | 特殊性 |
+|---|---------|--------------|--------------|-----------|--------|
+| 1 | dola | `runtime/instance_manager.rs` | `instance_manager_tests.rs` | 188 | — |
+| 2 | dola | `runtime/interpolator.rs` | `interpolator_tests.rs` | 209 | — |
+| 3 | dola | `runtime/subscription_manager.rs` | `subscription_manager_tests.rs` | 284 | — |
+| 4 | dola | `runtime/timeline_manager.rs` | `timeline_manager_tests.rs` | 181 | — |
+| 5 | wintf | `ecs/pointer/dispatch.rs` | `dispatch_tests.rs` | 163 | — |
+| 6 | wintf | `ecs/layout/hit_region.rs` | `hit_region_tests.rs` | 554 | private 関数テスト |
+| 7 | wintf | `ecs/layout/hit_test.rs` | `hit_test_tests.rs` | 330 | 2ファイル構成 |
+| 8 | wintf | `ecs/layout/hit_test.rs` | `hit_test_ex_tests.rs` | 593 | 上記の2つ目 |
+| 9 | wintf | `ecs/graphics/mod.rs` | `../graphics_tests.rs` | 143 | 親Dir参照・`use crate::` |
 
 ### 制約条件
 
-- **プライベートアイテムアクセス**: `hit_region.rs` の `point_in_polygon` 関数はプライベートで、テストが直接呼び出している
-- **`pub(crate)` アクセス**: dola の多くのモジュールは `pub(crate)` を使用しており、テストは子モジュールとしてアクセスしている
+- **プライベートアイテムアクセス**: `hit_region.rs` の `point_in_polygon` はプライベートだが、子モジュール（テスト）からアクセス可能（Rust の可視性規則）
+- **`pub(crate)` アクセス**: dola の多くのモジュールは `pub(crate)` を使用しており、テストは子モジュールとしてアクセス
 - **複数テストファイル**: `hit_test.rs` は `tests` と `tests_ex` の2つの外部テストモジュールを持つ唯一のケース
-- **親ディレクトリ参照**: `graphics/mod.rs` は `../graphics_tests.rs` を参照する特殊パターン
-- **既存の慣用パターン**: `bitmap_source/mod.rs` は `#[path]` なしの `#[cfg(test)] mod tests;` を使用しており、これが参考モデルとなる
+- **親ディレクトリ参照**: `graphics/mod.rs` は `../graphics_tests.rs` を参照し、内部に3つのネストされたサブモジュールを持つ特殊パターン
+- **既存の慣用パターン**: `bitmap_source/mod.rs` は `#[path]` なしの `#[cfg(test)] mod tests;` を使用しており、参考モデルとなる
 
 ## Requirements
 
@@ -73,7 +72,7 @@ mod tests;
 1. The refactoring shall 全9箇所に対してディレクトリモジュール化（`foo.rs` → `foo/mod.rs` + `foo/tests.rs`）を一貫して適用すること
 2. The file structure shall 全対象モジュールにおいて `<module_name>/mod.rs`（プロダクションコード）と `<module_name>/tests.rs`（テストコード）の構成を取ること
 3. The refactoring shall `graphics/mod.rs` の親ディレクトリ参照（`../graphics_tests.rs`）パターンを解消すること
-4. When `hit_test.rs` のように1ソースから複数テストファイルが参照されている場合, the refactoring shall 複数テストモジュールの共存を慣用的な構造で実現すること（`hit_test/tests.rs` + `hit_test/tests_ex.rs` として配置し、`tests_ex` というモジュール名はテスト対象の `_ex` 系関数群を反映した意味ある命名のため維持する）
+4. When `hit_test.rs` のように1ソースから複数テストファイルが参照されている場合, the refactoring shall 複数テストモジュールの共存を慣用的な構造で実現すること（`hit_test/tests.rs` + `hit_test/tests_ex.rs` として配置し、`tests_ex` というモジュール名はテスト対象の `_ex` 系関数群（`hit_test_entity_ex`, `hit_test_ex`, `hit_test_in_window_ex`）を反映した意味ある命名のため維持する）
 
 ### Requirement 4: 既存コードへの影響最小化
 
@@ -94,4 +93,4 @@ mod tests;
 
 1. The refactoring plan shall 各対象箇所を独立したタスクとして実行可能な単位に分割すること
 2. When 個別のモジュールが移行された時, the build system shall 他の未移行モジュールに影響なく `cargo build` と `cargo test` が成功すること
-3. The refactoring plan shall 難易度の低い箇所（`pub` アイテムのみのモジュール）から着手し、段階的に複雑な箇所（プライベートアイテムのテスト、複数テストファイル）に進む順序を提供すること
+3. The refactoring plan shall 難易度の低い箇所（標準ケース）から着手し、段階的に複雑な箇所（プライベートアイテムのテスト、複数テストファイル、親ディレクトリ参照）に進む順序を提供すること
