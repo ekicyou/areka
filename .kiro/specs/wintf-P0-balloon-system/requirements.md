@@ -64,9 +64,10 @@
 |---|---------|------|-----------|
 | DR-1 | フレーム描画 | バルーンウィンドウの背景・形状・枠線の描画。スキンによる外観変更の受け口。 | balloon-core |
 | DR-2 | ビューポート描画 | コンテンツ領域のクリッピング、スクロール位置管理。コンテンツ量に応じた表示制御。 | balloon-content |
-| DR-3 | テキスト本文描画 | 文字の描画、文字単位アニメーション。 | (typewriter ✅ 完了済み) |
+| DR-3 | テキスト本文描画（基本） | 文字の基本描画、縦横書き、文字単位表示制御。 | (typewriter P0 ✅ 基礎機能完了) |
 | DR-4 | テキスト装飾描画 | ルビ（ふりがな）、リンク（クリッカブルテキスト）のテキスト上への重畳描画。 | balloon-rich-text |
 | DR-5 | 選択肢UI描画 | 選択肢ボタンのレイアウト・描画・ホバー状態フィードバック。 | balloon-choice |
+| DR-6 | テキスト本文描画（エフェクト） | 文字単位エフェクト（フェードイン・アウト等）、アニメーション管理との連動、描画領域管理の強化。 | balloon-text-effects |
 
 ### AR-3: 描画責務間の独立性
 
@@ -84,13 +85,14 @@
 | 2 | `wintf-P0-balloon-content` | DR-2: ビューポート描画 | コンテンツ領域管理・typewriter統合・スクロール | balloon-core, typewriter ✅ | B-2 |
 | 3 | `wintf-P0-balloon-rich-text` | DR-4: テキスト装飾描画 | ルビ・リンク（リッチテキスト拡張） | balloon-content | B-3 |
 | 4 | `wintf-P0-balloon-choice` | DR-5: 選択肢UI描画 | 選択肢専用バルーンウィンドウ（ChoiceBalloon） | balloon-core, event-system ✅ | B-3（rich-textと並行可） |
+| 5 | `wintf-P0-balloon-text-effects` | DR-6: テキストエフェクト描画 | 文字単位エフェクト・アニメーション連動・描画領域管理 | typewriter ✅, balloon-content | B-4 |
 
 ```
 依存関係:
 
-                                    ┌─► balloon-content ──► balloon-rich-text
-                                    │        ↑
-  event-system ✅ ──► balloon-core ──┤   typewriter ✅
+                                    ┌─► balloon-content ──┬─► balloon-rich-text
+                                    │        ↑            │
+  event-system ✅ ──► balloon-core ──┤   typewriter ✅ ────┴─► balloon-text-effects
                                     │
                                     └─► balloon-choice
 ```
@@ -100,11 +102,12 @@
 **含まれるもの:**
 - バルーンウィンドウのフレーム描画基盤・生成・配置・管理（balloon-core / DR-1）
 - コンテンツ領域のビューポート描画・typewriter統合・スクロール（balloon-content / DR-2）
+- テキスト本文の基本描画（typewriter P0 ✅ / DR-3）
 - テキスト装飾のルビ・リンク描画（balloon-rich-text / DR-4）
 - 選択肢専用バルーンウィンドウの描画（balloon-choice / DR-5）
+- テキスト本文のエフェクト描画・アニメーション連動（balloon-text-effects / DR-6）
 
 **含まれないもの:**
-- テキスト本文描画（DR-3: `wintf-P0-typewriter` ✅ 完了済み）
 - バルーンスキンの定義（`areka-P0-reference-balloon` の責務）
 - テキスト入力ボックス（親仕様スコープ外、将来の別仕様で対応）
 
@@ -262,6 +265,40 @@
 
 ---
 
+### 子仕様 5: balloon-text-effects（DR-6: テキストエフェクト描画）
+
+テキスト本文に対する視覚エフェクト・アニメーション連動を担う。typewriterの基本描画機能（DR-3）を拡張し、文字単位のエフェクト表現とdolaアニメーションシステムとの統合を提供する。
+
+---
+
+#### Requirement 10: 文字単位エフェクト [balloon-text-effects]
+
+**Objective:** 開発者として、テキスト表示に文字単位のエフェクト（フェードイン・アウト等）を適用したい。それによりテキスト演出の表現力を向上させる。
+
+##### Acceptance Criteria
+
+1. **The** Balloon Text Effects **shall** 文字単位でのフェードイン（不透明度0→1）エフェクトを適用できる
+2. **The** Balloon Text Effects **shall** 文字単位でのフェードアウト（不透明度1→0）エフェクトを適用できる
+3. **The** Balloon Text Effects **shall** エフェクトの開始タイミング・継続時間を文字ごとに設定できる
+4. **The** Balloon Text Effects **shall** 複数エフェクトの同時適用（例: フェード＋スライド）をサポートする
+5. **The** Balloon Text Effects **shall** エフェクト適用中の文字の描画領域を適切に管理し、クリッピング問題を回避する
+
+---
+
+#### Requirement 11: アニメーション統合 [balloon-text-effects]
+
+**Objective:** 開発者として、テキストエフェクトをdolaアニメーションシステムと連動させたい。それによりタイムライン制御されたテキスト演出を実現できる。
+
+##### Acceptance Criteria
+
+1. **The** Balloon Text Effects **shall** dolaアニメーション定義ファイルからテキストエフェクトを読み込める
+2. **The** Balloon Text Effects **shall** dolaのイージング関数をエフェクトに適用できる
+3. **When** dolaストーリーボードが再生された時, **the** Balloon Text Effects **shall** タイムラインに同期してエフェクトを実行する
+4. **The** Balloon Text Effects **shall** アニメーションの一時停止・再開・逆再生に対応する
+5. **The** Balloon Text Effects **shall** TypewriterTalkの進行とdolaアニメーションを協調させる
+
+---
+
 ## ガバナンス要件
 
 子仕様と親仕様の関係を規定する。
@@ -288,7 +325,8 @@
 | M-2: テキスト表示パイプライン | balloon-content | 未着手 | M-1 完了, typewriter ✅ |
 | M-3a: リッチテキスト装飾 | balloon-rich-text | 未着手 | M-2 完了 |
 | M-3b: 選択肢バルーン | balloon-choice | 未着手 | M-1 完了 |
-| M-4: 統合検証 | （親仕様） | 未着手 | M-3a, M-3b 完了 |
+| M-3c: テキストエフェクト・アニメーション | balloon-text-effects | 未着手 | M-2 完了, typewriter ✅ |
+| M-4: 統合検証 | （親仕様） | 未着手 | M-3a, M-3b, M-3c 完了 |
 
 ---
 
