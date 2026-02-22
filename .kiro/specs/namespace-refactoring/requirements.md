@@ -55,18 +55,7 @@
 4. If 既存テストファイル名が規約に従っていない場合, the refactoring shall 規約に準拠するようリネームする
 5. The refactoring shall 命名規約を `structure.md` ステアリングドキュメントに追記する
 
-### Requirement 4: dola プロダクションコードのモジュール構造検証
-
-**Objective:** 開発者として、`dola` クレートのプロダクションコードモジュール構造が適切かを確認したい。特に `runtime/`（12ファイル）のサブモジュール粒度がドメインモデルと整合しているか確認するため。
-
-#### 受入基準
-
-1. The refactoring shall `dola/src/` ルート直下のファイル群（`builder.rs`, `document.rs`, `easing.rs`, `error.rs`, `playback.rs`, `storyboard.rs`, `transition.rs`, `value.rs`, `variable.rs`）が適切な粒度であることを検証する
-2. The refactoring shall 現在の `compile/`（3ファイル）・`runtime/`（12ファイル）・`validate/`（2ファイル）の粒度バランスを評価する
-
-> **確定方針**: ルート直下ファイルは `pub use` フラットエクスポートの設計意図がありサブモジュール化しない。`runtime/` は12ファイルだが `pub(crate)` の内部結合が多く分割リスクが工数に見合わないため、現状維持とする（開発者確認済み）。本要件は検証のみで変更なし。
-
-### Requirement 5: wintf プロダクションコードのモジュール構造検証
+### Requirement 4: wintf プロダクションコードのモジュール構造検証
 
 **Objective:** 開発者として、`wintf` クレートの `ecs/` 配下モジュール構造が適切かを検証したい。現在のサブモジュール分割がドメインモデルおよびsteering（`structure.md`）の指針と整合しているか確認するため。
 
@@ -76,3 +65,5 @@
 2. If `ecs/` ルート直下にサブモジュールに属すべきファイルが存在する場合, the refactoring shall 適切なサブモジュールへの移動を実施する（例: `window_system.rs` → `window/`, `monitor.rs` → `window/`）
 3. When 内部モジュールパスが変更された場合, the refactoring shall `pub use` で旧パスからのアクセスを維持するか、全参照箇所（`areka/src/main.rs`, `examples/` 等）を更新し、コンパイル・実行可能な状態を保証する
 4. The refactoring shall `widget/` 配下のサブモジュール（`bitmap_source/`, `shapes/`, `text/`）の構成がウィジェット種別と一致していることを確認する
+
+> **参考（dola プロダクションコードについて）**: dola のモジュール構造は検証済み。ルート直下9ファイルは `pub use` フラットエクスポートの設計意図がありサブモジュール化しない。`runtime/`（12ファイル）は `pub(crate)` の内部結合が多く分割リスクが工数に見合わないため現状維持（開発者確認済み）。
