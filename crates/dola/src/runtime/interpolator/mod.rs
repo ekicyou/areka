@@ -175,5 +175,4 @@ fn transition_value_to_dynamic(value: &TransitionValue) -> DynamicValue {
 }
 
 #[cfg(test)]
-#[path = "interpolator_tests.rs"]
 mod tests;

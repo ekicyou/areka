@@ -17,5 +17,4 @@ pub use visual::*;
 pub use visual_manager::*;
 
 #[cfg(test)]
-#[path = "../graphics_tests.rs"]
-mod graphics_tests;
+mod tests;

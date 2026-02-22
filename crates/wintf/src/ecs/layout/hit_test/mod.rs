@@ -563,9 +563,7 @@ pub fn hit_test_in_window_ex(
 // ============================================================================
 
 #[cfg(test)]
-#[path = "hit_test_tests.rs"]
 mod tests;
 
 #[cfg(test)]
-#[path = "hit_test_ex_tests.rs"]
 mod tests_ex;

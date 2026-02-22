@@ -259,5 +259,4 @@ impl InstanceManager {
 }
 
 #[cfg(test)]
-#[path = "instance_manager_tests.rs"]
 mod tests;

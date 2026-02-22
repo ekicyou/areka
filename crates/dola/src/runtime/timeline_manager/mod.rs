@@ -346,5 +346,4 @@ fn find_active_segment(
 }
 
 #[cfg(test)]
-#[path = "timeline_manager_tests.rs"]
 mod tests;

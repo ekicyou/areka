@@ -257,5 +257,4 @@ pub fn dispatch_pointer_events(world: &mut World) {
 // ============================================================================
 
 #[cfg(test)]
-#[path = "dispatch_tests.rs"]
 mod tests;

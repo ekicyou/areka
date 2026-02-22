@@ -187,5 +187,4 @@ impl SubscriptionManager {
 }
 
 #[cfg(test)]
-#[path = "subscription_manager_tests.rs"]
 mod tests;

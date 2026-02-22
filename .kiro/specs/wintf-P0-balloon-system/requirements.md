@@ -39,7 +39,7 @@
 | 1 | `wintf-P0-balloon-core` | ウィンドウ管理・配置・ライフサイクル | event-system ✅ | B-1: 最優先 |
 | 2 | `wintf-P0-balloon-content` | テキスト表示領域・typewriter統合・スクロール | balloon-core, typewriter ✅ | B-2 |
 | 3 | `wintf-P0-balloon-rich-text` | ルビ・リンク（リッチテキスト拡張） | balloon-content | B-3 |
-| 4 | `wintf-P0-balloon-input` | 選択肢UI・入力ボックス（インタラクション） | balloon-core, event-system ✅ | B-3（rich-textと並行可） |
+| 4 | `wintf-P0-balloon-input` | 選択肢UI（インタラクション） | balloon-core, event-system ✅ | B-3（rich-textと並行可） |
 
 ```
 依存関係:
@@ -59,12 +59,12 @@
 - ルビ（ふりがな）表示（balloon-rich-text）
 - リンク（クリッカブルテキスト）（balloon-rich-text）
 - 選択肢UI（balloon-input）
-- 入力ボックス（balloon-input）
 
 **含まれないもの:**
 - タイプライター表示制御（`wintf-P0-typewriter` ✅ 完了済み）
 - バルーンスキンの定義（`areka-P0-reference-balloon` の責務）
 - 縦書きテキストレンダリング詳細（`wintf-P0-typewriter` ✅ 完了済み）
+- テキスト入力ボックス（親仕様スコープ外、将来の別仕様で対応）
 
 ---
 
@@ -200,9 +200,9 @@
 
 ---
 
-### 子仕様 4: balloon-input（選択肢・入力）
+### 子仕様 4: balloon-input（選択肢）
 
-バルーン内にインタラクティブなUI要素を配置する。テキスト表示とは独立した入力ウィジェット群を提供し、ユーザーからの応答を受け取る。
+バルーン内にインタラクティブな選択肢UIを配置する。ユーザーからの応答を受け取り、会話分岐を実現する。
 
 ---
 
@@ -218,20 +218,6 @@
 4. **When** マウスが選択肢上にある時, **the** Balloon Input **shall** ホバー状態を視覚的にフィードバックする
 5. **The** Balloon Input **shall** キーボード操作（上下キー、Enter）での選択をサポートする
 6. **When** 選択肢が表示されている間にテキスト領域がスクロールされた場合, **the** Balloon Input **shall** 選択肢の表示位置を適切に維持する
-
----
-
-#### Requirement 10: 入力ボックス [balloon-input]
-
-**Objective:** 開発者として、ユーザーからテキスト入力を受け取りたい。それにより自由形式の応答を取得できる。
-
-##### Acceptance Criteria
-
-1. **The** Balloon Input **shall** テキスト入力ボックスをバルーン内に表示できる
-2. **When** ユーザーがテキストを入力してEnterを押した時, **the** Balloon Input **shall** 入力内容を含むイベントを発火する
-3. **The** Balloon Input **shall** 入力ボックスのプレースホルダーテキストを設定できる
-4. **The** Balloon Input **shall** 入力文字数の制限を設定できる
-5. **When** 入力ボックスが表示された時, **the** Balloon Input **shall** 自動的にキーボードフォーカスを取得する
 
 ---
 

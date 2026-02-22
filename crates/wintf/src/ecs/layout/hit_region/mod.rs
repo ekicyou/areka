@@ -501,5 +501,4 @@ fn point_in_polygon(x: f32, y: f32, vertices: &[(f32, f32)]) -> bool {
 // ============================================================================
 
 #[cfg(test)]
-#[path = "hit_region_tests.rs"]
 mod tests;

@@ -109,11 +109,6 @@
 | | 4 | `OnPointerEntered` / `OnPointerExited` | ホバー状態ウィジェット未実装 | Missing |
 | | 5 | `keyboard.rs`: WM_KEYDOWN (ESC のみ) | キーボードナビゲーション基盤未実装（上下キー・Enter） | Missing |
 | | 6 | なし | 選択肢とスクロールの座標統合未実装 | Missing |
-| **Req 10: 入力ボックス** | 1 | なし | テキスト入力ウィジェット未実装 | Missing |
-| | 2 | なし | 入力確定イベント未定義 | Missing |
-| | 3 | なし | プレースホルダーテキスト機構なし | Missing |
-| | 4 | なし | 文字数制限バリデーション機構なし | Missing |
-| | 5 | `win_message_handler.rs` に WM_SETFOCUS スタブ | キーボードフォーカス管理 ECS 未実装。WM_CHAR/WM_IME ECS未接続 | Missing |
 
 ---
 
@@ -129,9 +124,9 @@
 | G4 | スクロールコンテナウィジェット未実装 | Req 6 全AC | 中 |
 | G5 | DirectWrite ルビAPI未ラップ | Req 7 全AC | 高 |
 | G6 | テキスト座標→文字位置の逆変換API未ラップ | Req 8 AC5 | 中 |
-| G7 | キーボード入力フレームワーク未実装（ESC以外） | Req 9 AC5, Req 10 全AC | 高 |
-| G8 | キーボードフォーカス管理ECS未実装 | Req 10 AC5 | 高 |
-| G9 | WM_CHAR / WM_IME のECS接続なし | Req 10 全AC | 高 |
+| G7 | キーボード入力フレームワーク未実装（ESC以外） | Req 9 AC5 | 中 |
+| G8 | ~~キーボードフォーカス管理ECS未実装~~ | ~~Req 10 AC5~~ | P0スコープ外 |
+| G9 | ~~WM_CHAR / WM_IME のECS接続なし~~ | ~~Req 10 全AC~~ | P0スコープ外 |
 | G10 | TypewriterToken にルビ・リンク variant なし | Req 7 AC5, Req 8 AC6 | 中 |
 
 ### 3.2 既存資産の活用可能ポイント
@@ -148,7 +143,7 @@
 | `Phase<T>` イベントシステム | Req 8, 9: イベント発火 | イベント型の追加のみ |
 | `OnPointerEntered/Exited` | Req 8 AC4, Req 9 AC4: ホバー | ポインタイベントフック再利用 |
 | `HitRegionMap` | Req 8: リンクヒットテスト | テキスト座標からの自動生成が新規 |
-| `win_message_handler.rs` スタブ | Req 10: テキスト入力 | スタブ→ECS接続の実装が必要 |
+| `win_message_handler.rs` スタブ | ~~Req 10: テキスト入力~~ | P0スコープ外。将来の別仕様で対応 |
 
 ---
 
@@ -176,9 +171,7 @@
   - `ecs/widget/balloon/` — バルーンコア（ウィンドウ生成・配置・表示制御）
   - `ecs/widget/scroll.rs` — スクロールコンテナウィジェット
   - `ecs/widget/choice.rs` — 選択肢ウィジェット
-  - `ecs/widget/text_input.rs` — テキスト入力ウィジェット
   - `com/dwrite_ext.rs` — ルビ・テキストヒットテスト用 DirectWrite 拡張
-  - `ecs/keyboard/` — キーボードフォーカス管理 + イベントディスパッチ
 
 - **統合ポイント**:
   - `BalloonWindow` の `on_add` フックで `Window` + `WindowStyle` を自動挿入（既存パターン踏襲）
@@ -224,9 +217,9 @@
 | **balloon-core** | M (3–7日) | Low | 既存 `Window` + `WindowPos` パターンの拡張。`on_add` フック、コマンドキューのパターンが確立済み。配置アルゴリズムは新規だが技術的に明確 |
 | **balloon-content** | M (3–7日) | Low | Typewriter 統合は既にモックで実証済み。スクロールは新規だが `WheelDelta` と taffy の制約で段階的に実装可能 |
 | **balloon-rich-text** | L (1–2週) | High | DirectWrite ルビ API は `IDWriteTextLayout1` 以降の COM インターフェースが必要。テキスト座標↔文字位置の正確な逆変換は技術的に複雑。縦書き+ルビの組合せは検証が必要 |
-| **balloon-input** | L (1–2週) | High | キーボードフォーカス管理は ECS に存在しない基盤。WM_CHAR / WM_IME の ECS 統合は `win_message_handler.rs` のスタブから本実装への移行が広範囲。IME（日本語入力）対応は特に検証が必要 |
+| **balloon-input** | S (1–3日) | Low | Req 10（入力ボックス）をP0スコープ外としたことで、選択肢UIのみ。既存ポインタイベント + flexbox レイアウトで対応可能。キーボード操作のスコープ次第でMに変動 |
 
-### 全体工数: XL (4–6週)
+### 全体工数: L (2–4週)
 
 ---
 
@@ -249,8 +242,8 @@
 | D2 | 配置システムのスケジュール位置（PreLayout? Update?） | Req 2 |
 | D3 | スクロールコンテナの描画方式（クリッピング vs オフスクリーン） | Req 6 |
 | D4 | ルビの実装方式（DirectWrite ネイティブ vs 手動配置） | Req 7 |
-| D5 | キーボードフォーカスの ECS 設計（リソース vs コンポーネント） | Req 9, 10 |
-| D6 | IME 統合の範囲（基本入力のみ vs 変換ウィンドウ位置制御） | Req 10 |
+| D5 | キーボードナビゲーションの実装方式（Req 9 AC5 のスコープ次第） | Req 9 |
+| ~~D6~~ | ~~IME 統合の範囲~~ | ~~Req 10~~ P0スコープ外 |
 | D7 | TypewriterToken 拡張の責任境界（本仕様 vs typewriter仕様の改訂） | Req 7 AC5, Req 8 AC6 |
 
 ### 6.3 リサーチ項目
@@ -259,7 +252,7 @@
 |---|------|------|--------|
 | R1 | `IDWriteTextLayout1::SetPairKerning` / ルビ用 DirectWrite API の可用性 | windows-rs クレートでの API 提供状況が不明 | 高 |
 | R2 | `IDWriteTextLayout::HitTestPoint` の精度（縦書き時） | 縦書きテキストでの座標→文字位置変換の信頼性 | 高 |
-| R3 | WM_IME_COMPOSITION → bevy_ecs 統合のアーキテクチャ | イベント粒度、変換中テキストの表示方式 | 中 |
+| ~~R3~~ | ~~WM_IME_COMPOSITION → bevy_ecs 統合のアーキテクチャ~~ | Req 10 P0スコープ外 | — |
 | R4 | taffy のスクロールコンテナサポート状況 | taffy 0.9 で overflow/scroll がどこまで使えるか | 中 |
 | R5 | `bevy_ecs` 0.18 の Relation API 安定性 | BalloonAnchor にRelation が使えるか | 低 |
 | R6 | ULW 合成モードでのクリッピング描画パフォーマンス | スクロール時の再描画コストの見積もり | 中 |
