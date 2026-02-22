@@ -90,6 +90,17 @@
 - **Trade-offs**: なし
 - **Follow-up**: なし
 
+### Decision: Phase 1 の作業粒度は実装者判断
+- **Context**: dola runtime の4モジュール（instance_manager, interpolator, subscription_manager, timeline_manager）を個別コミットすべきか一括コミットすべきか
+- **Alternatives Considered**:
+  1. 4モジュールをまとめて1コミット（作業効率優先）
+  2. 1つずつ移行・コミット（Req 5.2 厳守）
+  3. どちらでもよい（実装者判断）
+- **Selected Approach**: どちらでもよい（実装者判断に委ねる）
+- **Rationale**: 4モジュールは互いに独立しており、個別に移行してもビルド・テストは成功する（Req 5.2 充足）。一方で同一ディレクトリ・同一パターンであり、まとめて移行しても問題ない。作業効率とリスク管理のバランスを実装者が判断してよい。
+- **Trade-offs**: 一括コミットは効率的だが問題発生時の切り分けがやや困難。個別コミットは切り分け容易だがコミット回数が増える。
+- **Follow-up**: design.md の Phase 1 に「個別コミット/一括コミット両対応」と明記
+
 ## Risks & Mitigations
 - **Risk 1**: `git mv` 後の履歴追跡漏れ → `git log --follow` で変更追跡を確認
 - **Risk 2**: rust-analyzer の一時的な認識遅延 → ディレクトリモジュール化は rust-analyzer が完全サポートする標準パターンであり問題なし
