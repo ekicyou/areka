@@ -19,10 +19,10 @@
 
 1. The refactoring shall テスト群を以下のドメイン別サブディレクトリに分類する:
    - `tests/compile/` — コンパイル関連テスト（`compile_error_test`, `compile_integration_test`, `compile_metadata_test`, `compile_serde_test`, `compile_time_resolution_test`, `compile_transition_test`）
-   - `tests/runtime/` — ランタイム関連テスト（`runtime_core_types_test`, `runtime_facade_test`, `conflict_resolution_test`）
+   - `tests/runtime/` — ランタイム関連テスト（`runtime_core_types_test`, `runtime_facade_test`, `conflict_resolution_test`, `loop_integration_test`, `loop_offset_test`）
    - `tests/trigger/` — トリガー関連テスト（`trigger_compile_test`, `trigger_runtime_test`, `trigger_serde_test`, `trigger_validation_test`）
    - `tests/validation/` — バリデーション関連テスト（`validation_keyframe_test`, `validation_schema_test`, `validation_transition_test`）
-   - `tests/` 直下 — ドメイン横断テスト（`builder_test`, `core_types_test`, `integration_test`, `loop_integration_test`, `loop_offset_test`）
+   - `tests/core/` — コア定義・横断結合テスト（`builder_test`, `core_types_test`, `integration_test`）
 2. When テストファイルをサブディレクトリに移動する際, the refactoring shall 既存の共通モジュール（`compile_common/`, `trigger_common/`）を対応するサブディレクトリ内に配置する
 3. The refactoring shall 移動後も `cargo test -p dola` が全テストパスすることを保証する
 4. The refactoring shall 各サブディレクトリに `mod.rs` を配置せず、Cargo の integration test 規約（各 `.rs` ファイルが独立テストバイナリ）に従う。ただし共通ヘルパーモジュールは `tests/<domain>/common/mod.rs` として配置可能とする
@@ -34,12 +34,12 @@
 #### 受入基準
 
 1. The refactoring shall テスト群を以下のドメイン別サブディレクトリに分類する:
-   - `tests/layout/` — レイアウト関連テスト（`arrangement_bounds_test`, `client_area_positioning_test`, `layout_component_conversion_test`, `layout_graphics_sync_test`, `taffy_*_test` 群, `hierarchical_bounds_test`, `boxstyle_coordinate_separation_test`, `box_style_consolidation_test`）
-   - `tests/graphics/` — グラフィックス関連テスト（`graphics_core_test`, `graphics_core_ecs_test`, `graphics_reinit_unit_test`, `lazy_reinit_pattern_test`, `dcomp_*_test` 群, `compositor_*_test` 群, `surface_optimization_test`）
-   - `tests/visual/` — ビジュアルツリー関連テスト（`visual_*_test` 群, `parent_visual_test`, `insert_visual_test`, `remove_visual_api_test`, `widget_visual_auto_insert_test`）
-   - `tests/widget/` — ウィジェット関連テスト（`bitmap_source_integration_test`, `vertical_text_layout_test`）
-   - `tests/window/` — ウィンドウ関連テスト（`multiwindow_event_test`, `monitor_hierarchy_test`）
-   - `tests/` 直下 — 全体結合テスト・その他（`component_state_pattern_test`, `entity_name_format_test`, `feedback_loop_convergence_test`, `resource_removal_detection_test`, `transform_test`, `find_owner_composition_mode_test`, `composition_mode_test`）
+   - `tests/layout/` — レイアウト関連テスト（`arrangement_bounds_test`, `client_area_positioning_test`, `layout_component_conversion_test`, `layout_graphics_sync_test`, `taffy_*_test` 群, `hierarchical_bounds_test`, `boxstyle_coordinate_separation_test`, `box_style_consolidation_test`, `feedback_loop_convergence_test`）
+   - `tests/graphics/` — グラフィックス関連テスト（`graphics_core_test`, `graphics_core_ecs_test`, `graphics_reinit_unit_test`, `dcomp_*_test` 群, `compositor_*_test` 群, `surface_optimization_test`）
+   - `tests/visual/` — ビジュアルツリー関連テスト（`visual_*_test` 群, `parent_visual_test`, `insert_visual_test`, `remove_visual_api_test`, `widget_visual_auto_insert_test`, `transform_test`）
+   - `tests/widget/` — ウィジェット関連テスト（`bitmap_source_integration_test`, `vertical_text_layout_test`, `entity_name_format_test`）
+   - `tests/window/` — ウィンドウ関連テスト（`multiwindow_event_test`, `monitor_hierarchy_test`, `composition_mode_test`, `find_owner_composition_mode_test`）
+   - `tests/ecs/` — ECS パターンテスト（`component_state_pattern_test`, `lazy_reinit_pattern_test`, `resource_removal_detection_test`）
 2. The refactoring shall 移動後も `cargo test -p wintf` が全テストパスすることを保証する
 3. If テストファイルが複数ドメインにまたがる場合, the refactoring shall 最も主要な関心ドメインのサブディレクトリに配置する
 
