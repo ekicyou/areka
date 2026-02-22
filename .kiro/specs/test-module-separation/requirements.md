@@ -60,7 +60,7 @@ mod tests;
 #### Acceptance Criteria
 
 1. The refactoring shall 既存のテストケース数を減少させないこと（テスト関数の削除禁止）
-2. The refactoring shall テストモジュールが `use super::*;` パターンで親モジュールのアイテムにアクセスする既存の慣習を維持すること
+2. The refactoring shall テストモジュールが `use super::*;` パターンで親モジュールのアイテムにアクセスする既存の慣習を維持すること（例外: `graphics/tests.rs` は内部にサブモジュールを持つ構造上 `use crate::` パスを使用しており、変更しない）
 3. While プライベートアイテム（`hit_region.rs` の `point_in_polygon` 等）がテストされている場合, the refactoring shall 当該アイテムのテスト可能性を維持する構造を選択すること
 4. While `pub(crate)` アイテムがテストされている場合, the refactoring shall テストモジュールが当該アイテムへのアクセス権を保持する構造を選択すること
 
