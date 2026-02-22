@@ -161,7 +161,7 @@
 1. **When** テキストがコンテンツ領域の高さを超えた時, **the** Balloon Content **shall** スクロール表示を有効にする
 2. **The** Balloon Content **shall** タイプライターの表示進行に追従してスクロール位置を自動調整する
 3. **The** Balloon Content **shall** マウスホイールによるスクロール操作をサポートする
-4. **The** Balloon Content **shall** ページ送り（コンテンツ領域単位の表示切替）をサポートする
+4. **The** Balloon Content **shall** ページ送り（スクロール位置をコンテンツ領域の高さ分だけ移動するPageDown相当の操作）をサポートする
 
 ---
 
