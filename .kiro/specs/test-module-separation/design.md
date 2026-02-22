@@ -342,7 +342,9 @@ graph TB
 
 - **ビルド検証**: `cargo build` — コンパイルエラーがないことを確認
 - **テスト検証**: `cargo test` — 全テストが pass することを確認
-- **テスト数検証**: 移行前後で `cargo test 2>&1 | grep "test result"` の出力を比較し、テスト数が減少していないことを確認
+- **テスト数検証**: 移行前後で `cargo test` の出力（最終行の `test result: ok. X passed; ...`）を比較し、テスト数が減少していないことを確認
+  - PowerShell: `cargo test 2>&1 | Select-String "test result"`
+  - Bash/Zsh: `cargo test 2>&1 | grep "test result"`
 
 ### リグレッション防止策
 
