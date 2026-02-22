@@ -3,11 +3,12 @@
 | 項目 | 内容 |
 |------|------|
 | **Document Title** | wintf バルーンシステム 親仕様（マスタープラン） |
-| **Version** | 3.0 |
+| **Version** | 3.1-draft |
 | **Date** | 2026-02-22 |
 | **Parent Spec** | ukagaka-desktop-mascot |
 | **Priority** | P0 (MVP必須) |
 | **Spec Type** | 親仕様（Constitutional） |
+| **Status** | 🚧 Draft - v3.1レビュー中 |
 
 ---
 
@@ -36,15 +37,15 @@
 
 本仕様は `ukagaka-desktop-mascot` の以下の要件をカバーする：
 
-| 親要件ID | 内容 | 子仕様 |
-|----------|------|--------|
-| 3.1 | キャラクターに紐付いた吹き出しウィンドウを表示できる | balloon-core |
-| 3.2 | 複数キャラクターそれぞれに独立した吹き出しを表示できる | balloon-core |
-| 3.3 | 吹き出し内にテキストを表示できる | balloon-content |
-| 3.7 | テキストがクリックされた時、リンクとしてアクションを実行できる | balloon-rich-text |
-| 3.8 | テキスト表示中、ルビ（ふりがな）を表示できる | balloon-rich-text |
-| 3.9 | 選択肢形式の入力をユーザーに提示できる | balloon-choice |
-| 3.10 | ユーザーが選択肢をクリックした時、対応するイベントを発火する | balloon-choice |
+| 親要件ID | 内容 | 子仕様 | P0/P1 |
+|----------|------|--------|-------|
+| 3.1 | キャラクターに紐付いた吹き出しウィンドウを表示できる | balloon01-core | P0 |
+| 3.2 | 複数キャラクターそれぞれに独立した吹き出しを表示できる | balloon01-core | P0 |
+| 3.3 | 吹き出し内にテキストを表示できる | balloon02-content | P0 |
+| 3.7 | テキストがクリックされた時、リンクとしてアクションを実行できる | balloon03-link | **P0** |
+| 3.8 | テキスト表示中、ルビ（ふりがな）を表示できる | balloon06-ruby | **P1** |
+| 3.9 | 選択肢形式の入力をユーザーに提示できる | balloon04-choice | P0 |
+| 3.10 | ユーザーが選択肢をクリックした時、対応するイベントを発火する | balloon04-choice | P0 |
 
 ---
 
@@ -60,14 +61,15 @@
 
 バルーンシステムの視覚的構成は、以下の**描画責務**に分離される。各描画責務は独立して開発・テスト可能な単位とする。
 
-| # | 描画責務 | 内容 | 担当子仕様 |
-|---|---------|------|-----------|
-| DR-1 | フレーム描画 | バルーンウィンドウの背景・形状・枠線の描画。スキンによる外観変更の受け口。 | balloon-core |
-| DR-2 | ビューポート描画 | コンテンツ領域のクリッピング、スクロール位置管理。コンテンツ量に応じた表示制御。 | balloon-content |
-| DR-3 | テキスト本文描画（基本） | 文字の基本描画、縦横書き、文字単位表示制御。 | (typewriter P0 ✅ 基礎機能完了) |
-| DR-4 | テキスト装飾描画 | ルビ（ふりがな）、リンク（クリッカブルテキスト）のテキスト上への重畳描画。 | balloon-rich-text |
-| DR-5 | 選択肢UI描画 | 選択肢ボタンのレイアウト・描画・ホバー状態フィードバック。 | balloon-choice |
-| DR-6 | テキスト本文描画（エフェクト） | 文字単位エフェクト（フェードイン・アウト等）、アニメーション管理との連動、描画領域管理の強化。 | balloon-text-effects |
+| # | 描画責務 | 内容 | 担当子仕様 | P0/P1 |
+|---|---------|------|-----------|-------|
+| DR-1 | フレーム描画 | バルーンウィンドウの背景・形状・枠線の描画。スキンによる外観変更の受け口。 | balloon01-core | P0 |
+| DR-2 | ビューポート描画 | コンテンツ領域のクリッピング、スクロール位置管理。コンテンツ量に応じた表示制御。 | balloon02-content | P0 |
+| DR-3 | テキスト本文描画（基本） | 文字の基本描画、縦横書き、文字単位表示制御。**グリフ単位への事前分割**、濁点・半濁点ウェイト調整、dolaアニメーション基盤との統合。 | balloon02-content<br/>*(typewriter P0は参考実装)* | P0 |
+| DR-4 | リンク描画 | クリッカブルテキストの視覚フィードバック（色、下線、ホバー状態）。 | balloon03-link | **P0** |
+| DR-5 | 選択肢UI描画 | 選択肢ボタンのレイアウト・描画・ホバー状態フィードバック。 | balloon04-choice | P0 |
+| DR-6 | テキスト本文描画（エフェクト） | 文字単位エフェクト（フェードイン・アウト等）、アニメーション管理との連動、描画領域管理の強化。 | balloon05-text-effects | **P0** |
+| DR-7 | ルビ描画 | ふりがなの重畳描画（親文字の上/横）。 | balloon06-ruby | **P1** |
 
 ### AR-3: 描画責務間の独立性
 
@@ -79,33 +81,48 @@
 
 本仕様は以下の子仕様に分割される。各子仕様は独立した設計・タスク・実装サイクルを持つ。分割は上記の**描画責務**に基づく。
 
-| # | 子仕様 | 描画責務 | スコープ | 依存 | フェーズ |
-|---|--------|---------|----------|------|---------|
-| 1 | `wintf-P0-balloon-core` | DR-1: フレーム描画 | ウィンドウ生成・配置・表示制御・フレーム描画基盤 | event-system ✅ | B-1: 最優先 |
-| 2 | `wintf-P0-balloon-content` | DR-2: ビューポート描画 | コンテンツ領域管理・typewriter統合・スクロール | balloon-core, typewriter ✅ | B-2 |
-| 3 | `wintf-P0-balloon-rich-text` | DR-4: テキスト装飾描画 | ルビ・リンク（リッチテキスト拡張） | balloon-content | B-3 |
-| 4 | `wintf-P0-balloon-choice` | DR-5: 選択肢UI描画 | 選択肢専用バルーンウィンドウ（ChoiceBalloon） | balloon-core, event-system ✅ | B-3（rich-textと並行可） |
-| 5 | `wintf-P0-balloon-text-effects` | DR-6: テキストエフェクト描画 | 文字単位エフェクト・アニメーション連動・描画領域管理 | typewriter ✅, balloon-content | B-4 |
+| # | 子仕様 | 描画責務 | スコープ | 依存 | P0/P1 | フェーズ |
+|---|--------|---------|----------|------|-------|---------|
+| 1 | `wintf-P0-balloon01-core` | DR-1: フレーム描画 | ウィンドウ生成・配置・表示制御・フレーム描画基盤 | event-system ✅ | **P0** | B-1: 最優先 |
+| 2 | `wintf-P0-balloon02-content` | DR-2+DR-3: ビューポート+テキスト基本描画 | コンテンツ領域管理・テキスト描画（新規実装）・スクロール | balloon01-core, (typewriter📖参考) | **P0** | B-2 |
+| 3 | `wintf-P0-balloon03-link` | DR-4: リンク描画 | クリッカブルテキスト、ヒットテスト、イベント発火 | balloon02-content, event-system ✅ | **P0** | B-3 |
+| 4 | `wintf-P0-balloon04-choice` | DR-5: 選択肢UI描画 | 選択肢専用バルーンウィンドウ（ChoiceBalloon） | balloon01-core, event-system ✅ | **P0** | B-3（linkと並行可） |
+| 5 | `wintf-P0-balloon05-text-effects` | DR-6: テキストエフェクト描画 | 文字単位エフェクト・dolaアニメーション統合 | balloon02-content, dola | **P0** | B-4 |
+| 6 | `wintf-P1-balloon06-ruby` | DR-7: ルビ描画 | ルビ（ふりがな）表示 | balloon02-content | **P1** | Phase 2 |
 
 ```
 依存関係:
 
-                                    ┌─► balloon-content ──┬─► balloon-rich-text
-                                    │        ↑            │
-  event-system ✅ ──► balloon-core ──┤   typewriter ✅ ────┴─► balloon-text-effects
-                                    │
-                                    └─► balloon-choice
+P0フロー:
+                                        ┌─► balloon02-content ──┬─► balloon03-link (P0)
+                                        │   (DR-2+DR-3実装)     │
+  event-system ✅ ──► balloon01-core ──┤                        │
+                                        │     dola ──────────────┴─► balloon05-text-effects (P0)
+                                        └─► balloon04-choice (P0)
+
+参考実装:
+  typewriter P0 📖 ──参考──► balloon02-content (DirectWrite縦書き、文字単位制御の実装指針)
+
+P1拡張:
+  balloon02-content ──► balloon06-ruby (P1)
 ```
 
 ### スコープ（全体）
 
-**含まれるもの:**
-- バルーンウィンドウのフレーム描画基盤・生成・配置・管理（balloon-core / DR-1）
-- コンテンツ領域のビューポート描画・typewriter統合・スクロール（balloon-content / DR-2）
-- テキスト本文の基本描画（typewriter P0 ✅ / DR-3）
-- テキスト装飾のルビ・リンク描画（balloon-rich-text / DR-4）
-- 選択肢専用バルーンウィンドウの描画（balloon-choice / DR-5）
-- テキスト本文のエフェクト描画・アニメーション連動（balloon-text-effects / DR-6）
+**P0スコープ（含まれるもの）:**
+- バルーンウィンドウのフレーム描画基盤・生成・配置・管理（balloon01-core / DR-1）
+- コンテンツ領域のビューポート描画・スクロール（balloon02-content / DR-2）
+- **テキスト本文の基本描画（balloon02-content / DR-3）**
+  - DirectWrite縦横書き、グリフ単位への事前分割（レイアウト最適化）
+  - 濁点・半濁点でのウェイト調整
+  - dolaアニメーションシステムへのマッピング構造
+  - *(typewriter P0は参考実装として活用、新規実装が必要)*
+- クリッカブルテキスト（リンク）の描画・ヒットテスト・イベント（balloon03-link / DR-4）
+- 選択肢専用バルーンウィンドウの描画（balloon04-choice / DR-5）
+- テキスト本文のエフェクト描画・dolaアニメーション統合（balloon05-text-effects / DR-6）
+
+**P1スコープ（Phase 2で対応）:**
+- ルビ（ふりがな）描画（balloon06-ruby / DR-7）
 
 **含まれないもの:**
 - バルーンスキンの定義（`areka-P0-reference-balloon` の責務）
@@ -119,13 +136,13 @@
 
 ---
 
-### 子仕様 1: balloon-core（DR-1: フレーム描画）
+### 子仕様 1: balloon01-core（DR-1: フレーム描画）
 
 バルーンウィンドウのフレーム描画基盤とライフサイクル管理を担う最基盤レイヤー。ウィンドウの背景・形状の描画責務を持ち、他のすべてのバルーン子仕様がこの上に構築される。
 
 ---
 
-#### Requirement 1: バルーンウィンドウ生成 [balloon-core]
+#### Requirement 1: バルーンウィンドウ生成 [balloon01-core]
 
 **Objective:** 開発者として、キャラクターに紐付いたバルーンウィンドウを生成・管理したい。それによりキャラクターの発言表示の基盤を確立できる。
 
@@ -139,7 +156,7 @@
 
 ---
 
-#### Requirement 2: バルーン配置制御 [balloon-core]
+#### Requirement 2: バルーン配置制御 [balloon01-core]
 
 **Objective:** 開発者として、バルーンをキャラクターの近傍に自動配置したい。それによりどのキャラクターの発言かが視覚的に明確になる。
 
@@ -153,7 +170,7 @@
 
 ---
 
-#### Requirement 3: バルーン表示制御 [balloon-core]
+#### Requirement 3: バルーン表示制御 [balloon01-core]
 
 **Objective:** 開発者として、バルーンの表示状態を制御したい。それにより会話の開始・終了に応じた表示管理ができる。
 
@@ -166,13 +183,19 @@
 
 ---
 
-### 子仕様 2: balloon-content（DR-2: ビューポート描画）
+### 子仕様 2: balloon02-content（DR-2+DR-3: ビューポート+テキスト基本描画）
 
-バルーン内のコンテンツ領域のビューポート描画を担う。コンテンツのクリッピング・スクロール表示を管理し、typewriter ウィジェットの配置基盤を提供する。
+バルーン内のコンテンツ領域のビューポート描画とテキスト基本描画を担う。コンテンツのクリッピング・スクロール表示を管理し、DirectWriteによる縦横書きテキスト描画を実装する。
+
+**設計方針**: 既存の `wintf-P0-typewriter` は参考実装として活用。DirectWrite縦書き・文字単位制御の実装指針を継承しつつ、以下の最適化と統合を実現する**新規実装**を行う:
+
+1. **グリフベースアーキテクチャ**: テキストを最初にグリフ単位へ分割（追加文字ごとの全レイアウト再計算を回避）
+2. **dolaマッピング構造**: グリフ+表示位置情報をdolaアニメーションまたはタイプライター用アニメーション管理システムにマップ
+3. **ウェイト調整**: 濁点・半濁点、さくらスクリプト的なウェイト挿入に対応
 
 ---
 
-#### Requirement 4: コンテンツ領域管理 [balloon-content]
+#### Requirement 4: コンテンツ領域管理 [balloon02-content]
 
 **Objective:** 開発者として、バルーン内にコンテンツ領域を定義したい。それによりテキストやウィジェットの配置基盤を確立できる。
 
@@ -185,73 +208,69 @@
 
 ---
 
-#### Requirement 5: Typewriter統合 [balloon-content]
+#### Requirement 5: テキスト描画実装 [balloon02-content]
 
-**Objective:** 開発者として、バルーン内に完了済みのTypewriterウィジェットを配置してテキスト表示したい。それにより既存のタイプライター効果をバルーンで利用できる。
+**Objective:** 開発者として、バルーン内にグリフベースの高性能テキスト描画を実装したい。それによりdolaアニメーション統合可能かつ描画負荷の低いテキスト表示基盤を確立できる。
+
+**設計決定**: 既存のtypewriter P0実装は参考実装として活用し、バルーン要件に特化した新規実装を行う。テキスト表示パイプラインは以下の3フェーズで構成される:
+
+1. **グリフ分割**: 描画開始位置 & テキスト & 描画位置RECT情報 ⇒ 「グリフ + 表示位置情報」の配列への変換
+2. **アニメーションマッピング**: 「グリフ + 表示位置情報」をdolaアニメーションまたはタイプライター用アニメーション管理システムにマップ
+3. **アニメーション再生**: 基本的なフェードイン・アウトアニメーションへの変換と再生
 
 ##### Acceptance Criteria
 
-1. **The** Balloon Content **shall** バルーンのコンテンツ領域にTypewriterウィジェットを配置できる（Typewriter既存の縦書き・横書き機能はそのまま利用可能）
-2. **When** TypewriterTalkが設定された時, **the** Balloon Content **shall** コンテンツ領域内でテキストをレイアウトして表示する
-3. **The** Balloon Content **shall** フォント、サイズ、色のスタイル設定をTypewriterに委譲できる
+1. **The** Balloon Content **shall** DirectWriteによる縦書き・横書きテキストレイアウトを実装する（typewriter P0のDirectWrite実装を参考）
+2. **The** Balloon Content **shall** テキストを最初にグリフ単位へ分割し、「グリフ + 表示位置情報」の配列を生成する（追加文字ごとの全レイアウト再計算を回避）
+3. **The** Balloon Content **shall** グリフ配列をdolaアニメーションまたはタイプライター用アニメーション管理システムにマッピングできる構造を提供する
+4. **The** Balloon Content **shall** 文字単位での表示タイミング制御（タイプライター効果）を実装する
+5. **The** Balloon Content **shall** 濁点・半濁点など結合文字でのウェイト調整機能を提供する
+6. **The** Balloon Content **shall** さくらスクリプト的なウェイト挿入マーカーをサポートする
+7. **The** Balloon Content **shall** フォント、サイズ、色のスタイル設定を受け付ける
 
 ---
 
-#### Requirement 6: テキストスクロール [balloon-content]
+#### Requirement 6: コンテンツスクロール [balloon02-content]
 
 **Objective:** 開発者として、長文テキストをバルーン内でスクロール表示したい。それによりコンテンツ領域に収まらない長文も閲覧できる。
 
 ##### Acceptance Criteria
 
 1. **When** テキストがコンテンツ領域の高さを超えた時, **the** Balloon Content **shall** スクロール表示を有効にする
-2. **The** Balloon Content **shall** タイプライターの表示進行に追従してスクロール位置を自動調整する
+2. **The** Balloon Content **shall** テキスト描画の表示進行に追従してスクロール位置を自動調整する
 3. **The** Balloon Content **shall** マウスホイールによるスクロール操作をサポートする
 4. **The** Balloon Content **shall** ページ送り（スクロール位置をコンテンツ領域の高さ分だけ移動するPageDown相当の操作）をサポートする
 
 ---
 
-### 子仕様 3: balloon-rich-text（DR-4: テキスト装飾描画）
+### 子仕様 3: balloon03-link（DR-4: リンク描画）**[P0]**
 
-テキスト本文の上に重畳される装飾要素の描画を担う。DirectWriteのテキストレイアウト拡張とイベントシステムとの統合を必要とする、技術的に高度なレイヤー。
-
----
-
-#### Requirement 7: ルビ（ふりがな）表示 [balloon-rich-text]
-
-**Objective:** 開発者として、テキストにルビ（ふりがな）を付加したい。それにより漢字の読み方を示し、テキストの可読性を向上させる。
-
-##### Acceptance Criteria
-
-1. **The** Balloon Rich Text **shall** テキストの指定範囲にルビ（ふりがな）を表示できる
-2. **The** Balloon Rich Text **shall** 横書き時のルビ配置（親文字の上側）をサポートする
-3. **The** Balloon Rich Text **shall** 縦書き時のルビ配置（親文字の右側）をサポートする
-4. **The** Balloon Rich Text **shall** ルビのフォントサイズを親文字に対して自動調整できる
-5. **The** Balloon Rich Text **shall** ルビ情報をTypewriterのIRトークンとして受け渡しできる
+テキスト内のクリッカブルな領域（リンク）の視覚フィードバックとインタラクションを担う。DirectWriteのテキスト位置情報からヒットテスト領域を生成し、イベントシステムと統合する。
 
 ---
 
-#### Requirement 8: リンク（クリッカブルテキスト） [balloon-rich-text]
+#### Requirement 7: クリッカブルテキスト [balloon03-link]
 
 **Objective:** 開発者として、テキスト内にクリック可能なリンクを設定したい。それによりユーザーのアクションをトリガーできる。
 
 ##### Acceptance Criteria
 
-1. **The** Balloon Rich Text **shall** テキスト内の指定範囲をクリッカブルなリンクとして設定できる
-2. **When** リンクがクリックされた時, **the** Balloon Rich Text **shall** リンクIDを含むイベントを発火する
-3. **The** Balloon Rich Text **shall** リンクの外観（色、下線等）をカスタマイズできる
-4. **When** マウスがリンク上にある時, **the** Balloon Rich Text **shall** ホバー状態を視覚的にフィードバックする
-5. **The** Balloon Rich Text **shall** リンクのヒットテスト領域をDirectWriteのテキスト位置情報から算出する
-6. **The** Balloon Rich Text **shall** リンク情報をTypewriterのIRトークンとして受け渡しできる
+1. **The** Balloon Link **shall** テキスト内の指定範囲をクリッカブルなリンクとして設定できる
+2. **When** リンクがクリックされた時, **the** Balloon Link **shall** リンクIDを含むイベントを発火する
+3. **The** Balloon Link **shall** リンクの外観（色、下線等）をカスタマイズできる
+4. **When** マウスがリンク上にある時, **the** Balloon Link **shall** ホバー状態を視覚的にフィードバックする
+5. **The** Balloon Link **shall** リンクのヒットテスト領域をDirectWriteのテキスト位置情報から算出する
+6. **The** Balloon Link **shall** リンク情報をテキスト入力形式（マークアップ）として受け渡しできる
 
 ---
 
-### 子仕様 4: balloon-choice（DR-5: 選択肢UI描画）
+### 子仕様 4: balloon04-choice（DR-5: 選択肢UI描画）**[P0]**
 
 選択肢UIの描画を担う**独立した専用バルーンウィンドウ（ChoiceBalloon）**を提供する。テキストバルーンとは別ウィンドウとして生成され、同キャラクターに紐付いて配置される。選択肢ボタンのレイアウト・描画・インタラクションを責務とする。
 
 ---
 
-#### Requirement 9: 選択肢UI [balloon-choice]
+#### Requirement 8: 選択肢バルーン [balloon04-choice]
 
 **Objective:** 開発者として、ユーザーに選択肢を選択肢専用バルーンで提示したい。それによりテキスト表示を妨げずにインタラクティブな会話分岐を実現できる。
 
@@ -265,13 +284,13 @@
 
 ---
 
-### 子仕様 5: balloon-text-effects（DR-6: テキストエフェクト描画）
+### 子仕様 5: balloon05-text-effects（DR-6: テキストエフェクト描画）**[P0]**
 
-テキスト本文に対する視覚エフェクト・アニメーション連動を担う。typewriterの基本描画機能（DR-3）を拡張し、文字単位のエフェクト表現とdolaアニメーションシステムとの統合を提供する。
+テキスト本文に対する視覚エフェクト・アニメーション連動を担う。balloon02-contentの基本テキスト描画（DR-3）を基盤として、文字単位のエフェクト表現とdolaアニメーションシステムとの統合を提供する。
 
 ---
 
-#### Requirement 10: 文字単位エフェクト [balloon-text-effects]
+#### Requirement 9: 文字単位エフェクト [balloon05-text-effects]
 
 **Objective:** 開発者として、テキスト表示に文字単位のエフェクト（フェードイン・アウト等）を適用したい。それによりテキスト演出の表現力を向上させる。
 
@@ -285,7 +304,7 @@
 
 ---
 
-#### Requirement 11: アニメーション統合 [balloon-text-effects]
+#### Requirement 10: dolaアニメーション統合 [balloon05-text-effects]
 
 **Objective:** 開発者として、テキストエフェクトをdolaアニメーションシステムと連動させたい。それによりタイムライン制御されたテキスト演出を実現できる。
 
@@ -295,7 +314,29 @@
 2. **The** Balloon Text Effects **shall** dolaのイージング関数をエフェクトに適用できる
 3. **When** dolaストーリーボードが再生された時, **the** Balloon Text Effects **shall** タイムラインに同期してエフェクトを実行する
 4. **The** Balloon Text Effects **shall** アニメーションの一時停止・再開・逆再生に対応する
-5. **The** Balloon Text Effects **shall** TypewriterTalkの進行とdolaアニメーションを協調させる
+5. **The** Balloon Text Effects **shall** balloon02-contentのテキスト描画進行とdolaアニメーションを協調させる
+
+---
+
+### 子仕様 6: balloon06-ruby（DR-7: ルビ描画） **[P1]**
+
+ルビ（ふりがな）の重畳描画を担う。DirectWriteのルビ専用APIまたは手動配置により、親文字に対するルビの適切な配置を実現する。**Phase 2（P1）で実装予定**。
+
+---
+
+#### Requirement 11: ルビ表示 [balloon06-ruby] **[P1]**
+
+**Objective:** 開発者として、テキストにルビ（ふりがな）を付加したい。それにより漢字の読み方を示し、テキストの可読性を向上させる。
+
+**Priority:** P1（Phase 2実装予定）
+
+##### Acceptance Criteria
+
+1. **The** Balloon Ruby **shall** テキストの指定範囲にルビ（ふりがな）を表示できる
+2. **The** Balloon Ruby **shall** 横書き時のルビ配置（親文字の上側）をサポートする
+3. **The** Balloon Ruby **shall** 縦書き時のルビ配置（親文字の右側）をサポートする
+4. **The** Balloon Ruby **shall** ルビのフォントサイズを親文字に対して自動調整できる
+5. **The** Balloon Ruby **shall** ルビ情報をテキスト入力形式（マークアップ）として受け渡しできる
 
 ---
 
@@ -319,14 +360,22 @@
 
 ## ロードマップ
 
+### Phase 1 (P0)
+
 | マイルストーン | 子仕様 | 状態 | 前提条件 |
 |---------------|--------|------|---------|
-| M-1: バルーンウィンドウ基盤 | balloon-core | 未着手 | event-system ✅ |
-| M-2: テキスト表示パイプライン | balloon-content | 未着手 | M-1 完了, typewriter ✅ |
-| M-3a: リッチテキスト装飾 | balloon-rich-text | 未着手 | M-2 完了 |
-| M-3b: 選択肢バルーン | balloon-choice | 未着手 | M-1 完了 |
-| M-3c: テキストエフェクト・アニメーション | balloon-text-effects | 未着手 | M-2 完了, typewriter ✅ |
+| M-1: バルーンウィンドウ基盤 | balloon01-core | 未着手 | event-system ✅ |
+| M-2: テキスト描画パイプライン | balloon02-content | 未着手 | M-1 完了, (typewriter📖参考) |
+| M-3a: クリッカブルテキスト | balloon03-link | 未着手 | M-2 完了 |
+| M-3b: 選択肢バルーン | balloon04-choice | 未着手 | M-1 完了 |
+| M-3c: テキストエフェクト・アニメーション | balloon05-text-effects | 未着手 | M-2 完了, dola |
 | M-4: 統合検証 | （親仕様） | 未着手 | M-3a, M-3b, M-3c 完了 |
+
+### Phase 2 (P1)
+
+| マイルストーン | 子仕様 | 状態 | 前提条件 |
+|---------------|--------|------|------|
+| M-5: ルビ描画 | balloon06-ruby | 未着手 | balloon02-content 完了 |
 
 ---
 
@@ -358,8 +407,9 @@
 
 | 仕様 | 状態 | 依存内容 |
 |------|:----:|----------|
-| `wintf-P0-typewriter` | ✅ 完了 | テキスト本文描画（DR-3）、文字単位制御、IR型定義 |
+| `wintf-P0-typewriter` | 📖 参考実装 | DirectWrite縦書き・文字単位制御の実装指針（balloon02-contentで新規実装） |
 | `wintf-P0-event-system` | ✅ 完了 | ヒットテスト、イベント配信 |
+| `dola` crate | 開発中 | アニメーションタイムライン・イージング・変数管理（balloon05-text-effectsで使用） |
 
 ### 依存される仕様
 
@@ -376,10 +426,15 @@
 | **バルーン** | キャラクターの発言を表示する吹き出しウィンドウ |
 | **複合ウィジェット** | 親エンティティから子孫エンティティへの階層構造で構成されるウィジェット。各エンティティが固有の描画責務を持つ |
 | **描画責務** | 複合ウィジェット内の各エンティティが担う、特定の視覚要素の描画に関する責任範囲 |
+| **P0/P1** | 優先度分類。P0=MVP必須（Phase 1）、P1=拡張機能（Phase 2） |
 | **ChoiceBalloon** | 選択肢のみを表示する専用バルーンウィンドウ。テキストバルーンとは独立した別ウィンドウとして同キャラクターに紐付いて配置される |
 | **コンテンツ領域** | バルーンウィンドウ内のテキスト・ウィジェット配置エリア（ビューポート） |
-| **ルビ** | 漢字等の上または横に付けるふりがな |
+| **ルビ** | 漢字等の上または横に付けるふりがな（P1機能） |
 | **選択肢** | ユーザーがクリックして選ぶ複数の選択肢ボタン |
 | **リンク** | クリック可能なテキスト領域 |
-| **Typewriter** | 完了済み仕様 `wintf-P0-typewriter` が提供する文字単位表示ウィジェット（DR-3担当） |
-| **IRトークン** | Typewriterが受け取る構造化入力データ（Stage 1 IR） |
+| **Typewriter** | 完了済み仕様 `wintf-P0-typewriter`。DirectWrite縦書き・文字単位制御の**参考実装**。バルーンシステムでは新規実装が必要 |
+| **dola** | 宣言的アニメーション定義フォーマット（Declarative Orchestration for Live Animation）。イージング・タイムライン・変数管理を提供 |
+| **グリフベースアーキテクチャ** | テキストを最初にグリフ単位へ分割し、「グリフ+表示位置情報」の配列を生成することで、追加文字ごとの全レイアウト再計算を回避する設計 |
+| **アニメーションマッピング** | グリフ配列をdolaアニメーションまたはタイプライター用アニメーション管理システムに対応付ける機構 |
+| **濁点・半濁点ウェイト** | 結合文字（濁点・半濁点等）表示時の待機時間調整機能 |
+| **ウェイト挿入** | さくらスクリプトの `\w[300]` 的な、任意タイミングでの待機時間挿入機能 |

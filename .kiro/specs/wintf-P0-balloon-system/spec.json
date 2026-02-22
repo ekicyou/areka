@@ -32,7 +32,7 @@
     "tier": 1,
     "priority": "P0",
     "dependencies": [
-        "wintf-P0-typewriter",
-        "wintf-P0-event-system"
+        "wintf-P0-event-system",
+        "dola"
     ]
 }
