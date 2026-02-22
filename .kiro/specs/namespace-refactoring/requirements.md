@@ -22,7 +22,7 @@
    - `tests/runtime/` — ランタイム関連テスト（`runtime_core_types_test`, `runtime_facade_test`, `conflict_resolution_test`, `loop_integration_test`, `loop_offset_test`）
    - `tests/trigger/` — トリガー関連テスト（`trigger_compile_test`, `trigger_runtime_test`, `trigger_serde_test`, `trigger_validation_test`）
    - `tests/validation/` — バリデーション関連テスト（`validation_keyframe_test`, `validation_schema_test`, `validation_transition_test`）
-   - `tests/core/` — コア定義・横断結合テスト（`builder_test`, `core_types_test`, `integration_test`）
+   - `tests/general/` — コア定義・横断結合テスト（`builder_test`, `core_types_test`, `integration_test`）
 2. When テストファイルをサブディレクトリに移動する際, the refactoring shall 既存の共通モジュール（`compile_common/`, `trigger_common/`）を対応するサブディレクトリ内に配置する
 3. The refactoring shall 移動後も `cargo test -p dola` が全テストパスすることを保証する
 4. The refactoring shall 各サブディレクトリに `mod.rs` を配置せず、Cargo の integration test 規約（各 `.rs` ファイルが独立テストバイナリ）に従う。ただし共通ヘルパーモジュールは `tests/<domain>/common/mod.rs` として配置可能とする

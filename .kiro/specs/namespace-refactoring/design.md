@@ -9,7 +9,7 @@
 **Impact**: テストディレクトリのフラット構造をドメイン別に階層化し、wintf `ecs/` 直下の3ファイルを適切なサブモジュールに移動する。プロダクションコードのロジック変更なし。
 
 ### Goals
-- dola テスト21件を5ドメイン（compile/runtime/trigger/validation/core）に分類
+- dola テスト21件を5ドメイン（compile/runtime/trigger/validation/general）に分類
 - wintf テスト41件を6ドメイン（layout/graphics/visual/widget/window/ecs）に分類
 - テスト命名規約を文書化し structure.md に追記
 - wintf `ecs/` 直下の配置不整合ファイルを適切なサブモジュールに移動
@@ -46,13 +46,13 @@ graph TB
         trigger_dir["trigger/"]
         validation_entry["validation.rs (entry)"]
         validation_dir["validation/"]
-        core_entry["core.rs (entry)"]
-        core_dir["core/"]
+        general_entry["general.rs (entry)"]
+        general_dir["general/"]
         compile_entry --> compile_dir
         runtime_entry --> runtime_dir
         trigger_entry --> trigger_dir
         validation_entry --> validation_dir
-        core_entry --> core_dir
+        general_entry --> general_dir
     end
 
     subgraph wintf_tests["wintf/tests/"]
@@ -167,7 +167,7 @@ graph LR
 | Requirements | 1.1, 1.4 |
 
 **Responsibilities & Constraints**
-- `tests/` 直下に5つのエントリポイントファイル（`compile.rs`, `runtime.rs`, `trigger.rs`, `validation.rs`, `core.rs`）を生成
+- `tests/` 直下に5つのエントリポイントファイル（`compile.rs`, `runtime.rs`, `trigger.rs`, `validation.rs`, `general.rs`）を生成
 - 各エントリポイントは `mod` 宣言のみを含み、テストロジックは含まない
 - `#[allow(unused)]` 等のアトリビュートは必要に応じて付与
 
@@ -204,8 +204,8 @@ dola/tests/
 │   ├── keyframe_test.rs          # ← validation_keyframe_test.rs
 │   ├── schema_test.rs            # ← validation_schema_test.rs
 │   └── transition_test.rs        # ← validation_transition_test.rs
-├── core.rs                       # mod builder_test; mod core_types_test; ...
-└── core/
+├── general.rs                    # mod builder_test; mod core_types_test; ...
+└── general/
     ├── builder_test.rs           # ← builder_test.rs
     ├── core_types_test.rs        # ← core_types_test.rs
     └── integration_test.rs       # ← integration_test.rs
