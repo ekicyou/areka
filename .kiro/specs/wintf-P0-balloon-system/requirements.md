@@ -328,7 +328,7 @@ P1拡張:
 1. **The** Balloon Text Effects **shall** dolaアニメーション定義ファイルからテキストエフェクトを読み込める
 2. **The** Balloon Text Effects **shall** dolaのイージング関数をエフェクトに適用できる
 3. **When** dolaストーリーボードが再生された時, **the** Balloon Text Effects **shall** タイムラインに同期してエフェクトを実行する
-4. **The** Balloon Text Effects **shall** アニメーションの一時停止・再開・逆再生に対応する
+4. **The** Balloon Text Effects **shall** アニメーションの一時停止・再開に対応する
 5. **The** Balloon Text Effects **shall** balloon02-contentのテキスト描画進行とdolaアニメーションを協調させる
 
 ---
