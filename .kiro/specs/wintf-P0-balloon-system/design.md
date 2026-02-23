@@ -44,7 +44,7 @@
 **制約事項（変更不可）**:
 - `d2d_device_context` はグローバル共有（並列 Draw 不可能）
 - ULW モードでは `UpdateLayeredWindow` のたびに全面再描画
-- `on_add` フック内では `Commands` 使用不可（`DeferredWorld` のみ）
+- `on_add` フック内では `DeferredWorld` が提供される。`world.commands()` は使用可能（`on_window_add` 実証済）だが、コマンドは遅延実行される
 - DComp モードでのグリフ単位エンティティは GPU リソースコスト高（非推奨）
 
 ### アーキテクチャパターンと境界マップ
@@ -132,7 +132,7 @@ graph TB
 | アニメーション | dola (workspace) | タイムライン・イージング・変数管理 | **新規依存** (`optional = true`) |
 | COM バインディング | windows 0.62.2 | Win32 API ラッパー | 既存 |
 
-> dola 依存の追加詳細は `research.md` の「dola↔ECS統合アーキテクチャ」を参照。
+> dola 依存の追加詳細は `research.md` の「dola↔ECS統合アーキテクチャ」を参照。wintf からの依存は既存の内部クレート参照パターン（`dola = { version = "0.0.1", path = "../dola", optional = true }`）に準拠。
 
 ---
 
@@ -308,7 +308,7 @@ pub enum BalloonPlacement {
 - 不変条件: `anchor` が有効な Entity であること（無効時はバルーン非表示）
 
 **実装ノート**
-- on_add 内で `Commands` 使用不可のため、子エンティティ spawn は `SetBalloonChildren` コマンドキュー（thread_local パターン）で遅延実行
+- 子エンティティ spawn は `world.commands().queue(SpawnBalloonChildren { entity })` で遅延実行。`Command::apply(&mut World)` 内で `world.spawn((..., ChildOf(entity)))` が可能（`on_window_add` + `SetWindowParentToLayoutRoot` の既存パターンに準拠）
 - 配置計算は `PlacementSystem` に委譲（Req 3.1-3.5）
 
 #### BalloonSkinDef
@@ -768,7 +768,7 @@ graph TB
 
     LR --> BW
     BW --> BF
-    BW --> BCA
+    BF --> BCA
     BCA --> GC
     GC --> G0
     GC --> G1

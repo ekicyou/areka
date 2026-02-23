@@ -141,6 +141,25 @@
 
 ---
 
+## 正誤表
+
+### Errata E1: on_add フック内での Commands 使用可否
+
+- **誤**: 設計レビュー時点で「on_add フック内では Commands 使用不可（DeferredWorld のみ）」と記載
+- **正**: `DeferredWorld::commands()` は bevy_ecs 0.18 で使用可能。コマンドは遅延実行される
+- **既存実証**: `on_window_add` (`ecs/window/components.rs` L187-L230) が `world.commands().queue(SetWindowParentToLayoutRoot)` で子エンティティ操作を実施。`on_visual_add` も同パターン
+- **影響**: BalloonWindow の子エンティティ spawn は `world.commands().queue(SpawnBalloonChildren)` で実装可能。thread_local コマンドキューは不要
+- **適用**: design.md の制約事項リスト・BalloonWindow 実装ノートを修正済み
+
+### Errata E2: エンティティ階層図の BalloonContentArea 親子関係
+
+- **誤**: Mermaid 図で `BW --> BCA`（BalloonContentArea が BalloonWindow の直接の子）
+- **正**: `BF --> BCA`（BalloonContentArea は BalloonFrame の子）。コンポーネント構成パターンの `ChildOf(balloon_frame)` と整合
+- **根拠**: BalloonFrame の BoxStyle padding が ContentArea の有効領域を定義するため、BCA は BF の子として配置される
+- **適用**: design.md のエンティティ階層 Mermaid 図を修正済み
+
+---
+
 ## 参考資料
 
 - DirectWrite `IDWriteTextLayout::HitTestTextPosition` — [Microsoft Learn](https://learn.microsoft.com/en-us/windows/win32/api/dwrite/nf-dwrite-idwritetextlayout-hittesttextposition)
