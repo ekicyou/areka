@@ -334,7 +334,7 @@ GlyphContainer:
 | | 3 | `WheelDelta` 取得可能 | ホイール→スクロール変換ロジック未実装 | Missing |
 | | 4 | なし | ページ送り機構未実装 | Missing |
 
-### 子仕様 3: balloon03-link（DR-4: リンク描画）**[P0]**
+### 子仕様 3: balloon03-link（DR-4: リンク描画）
 
 | 要件 | AC# | 既存資産 | ギャップ | 分類 |
 |------|------|---------|---------|------|
@@ -345,7 +345,7 @@ GlyphContainer:
 | | 5 | `DWriteTextLayoutExt::hit_test_text_position` (位置→座標) | **`HitTestPoint` (座標→位置) が未ラップ**。リンクヒットテストに必須 | Missing |
 | | 6 | `TypewriterToken` (Text/Wait/FireEvent のみ) | リンク用トークン variant 未定義 | Missing |
 
-### 子仕様 4: balloon04-choice（DR-5: 選択肢UI描画）**[P0]**
+### 子仕様 4: balloon04-choice（DR-5: 選択肢UI描画）
 
 | 要件 | AC# | 既存資産 | ギャップ | 分類 |
 |------|------|---------|---------|------|
@@ -355,7 +355,7 @@ GlyphContainer:
 | | 4 | `OnPointerEntered/Exited` | ホバー状態ウィジェット未実装（ボタン相当ウィジェットがない） | Missing |
 | | 5 | WM_KEYDOWN (ESC のみ) | キーボードナビゲーション基盤未実装（上下キー・Enter） | Missing |
 
-### 子仕様 5: balloon05-text-effects（DR-6: テキストエフェクト描画）**[P0]**
+### 子仕様 5: balloon05-text-effects（DR-6: テキストエフェクト描画）
 
 | 要件 | AC# | 既存資産 | ギャップ | 分類 |
 |------|------|---------|---------|------|
@@ -623,7 +623,7 @@ balloon01-core (M, Low)
 | **balloon04-choice** | 🟡 **40%** | ボタンウィジェット新規。イベントシステム再利用可。キーボードNav不足 | 中 | — |
 | **balloon05-text-effects** | 🟠 **30%** | **wintf↔dola未接続**。ただし G17 解決 + G20 簡素化によりエフェクト実装の見通し改善 | 中 | **15%→30%** |
 | **balloon06-ruby** (P1) | 🔴 **10%** | DirectWriteルビAPI未ラップ。縦書きルビ配置全て新規 | 低 | — |
-| **balloon-reference-skin** | 🟢 **0%** | 全て新規だが規模XS（単色背景・角丸矩形・しっぽ定義のみ） | — | — |
+| **balloon-reference-skin** | 🟢 **(XS)** | 全て新規だが規模XS（単色背景・角丸矩形・しっぽ定義のみ） | — | — |
 
 ### クリティカルリスクTOP 3
 
