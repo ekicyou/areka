@@ -1,0 +1,110 @@
+# Implementation Plan
+
+- [ ] 1. balloon01-core 子仕様の策定
+  - 親仕様 R1〜R4、AR-1〜AR-3 を基に子仕様を初期化し、仕様駆動サイクルを開始
+  - 子仕様スコープ: ウィンドウ生成・フレーム描画・配置制御・表示制御
+  - 親仕様からの引継ぎコンテキスト:
+    - design.md: BalloonWindow / BalloonSkinDef / BalloonPlacement コンポーネント定義、エンティティ階層モデル（BW→BF→BCA）、コンポーネント構成パターン、モジュール配置（`ecs/widget/balloon/`）
+    - design.md: システムフロー「バルーン生成シーケンス」、on_add フックによる子エンティティ spawn パターン
+    - design.md: 制約事項（ULW/DComp 両モード対応）、エラーハンドリング戦略
+    - research.md: Errata E1（on_add 内 `DeferredWorld::commands()` 使用可）、Errata E2（BCA は BF の子）
+    - research.md: D1（BalloonAnchor は `anchor: Entity` フィールド方式）
+  - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 2.1, 2.2, 2.3, 2.4, 2.5, 3.1, 3.2, 3.3, 3.4, 3.5, 4.1, 4.2, 4.3, 4.4_
+
+- [ ] 2. (P) balloon02-reference-skin 子仕様の策定
+  - 親仕様 R14 を基に子仕様を初期化し、仕様駆動サイクルを開始
+  - 子仕様スコープ: 検証用スキン（単色背景・角丸矩形・しっぽ定義）
+  - 親仕様からの引継ぎコンテキスト:
+    - design.md: BalloonSkinDef コンポーネント定義（スキンインターフェース契約）、ReferenceSkinDef
+    - design.md: フレーム描画の責務と Brushes / GraphicsCommandList の連携
+    - balloon01-core 子仕様: フレーム描画インターフェースの確定仕様（実装後に参照）
+  - 依存: Task 1 完了後
+  - _Requirements: 14.1, 14.2, 14.3_
+
+- [ ] 3. (P) balloon03-content 子仕様の策定
+  - 親仕様 R5〜R8 を基に子仕様を初期化し、仕様駆動サイクルを開始
+  - 子仕様スコープ: コンテンツ領域管理・グリフ分割パイプライン・テキスト表示制御・スクロール
+  - 親仕様からの引継ぎコンテキスト:
+    - design.md: BalloonContentArea / GlyphContainer / GlyphInfo / GlyphDrawData / ScrollState コンポーネント定義、コンポーネント構成パターン
+    - design.md: システムフロー「テキスト描画パイプライン」、モジュール配置（`ecs/widget/text/`、`com/dwrite_ext.rs`）
+    - design.md: パフォーマンスとスケーラビリティ（グリフ spawn ≤5ms、最適化方針）
+    - research.md: D3 rev.1（CustomTextRenderer 採用、DrawGlyphRun キャプチャ方式）
+    - research.md: D3 rev.2（グリフ分解粒度 — 案A〜D の評価、**本子仕様で最終決定**）
+    - research.md: D6（PushAxisAlignedClip によるクリッピング、SetTransform との相互作用）
+    - research.md: D8（テキスト変更時は全グリフ再構築方式）
+    - research.md: P2（ULW 完全サポート・文字数制限なし、既存タイプライター比較ベンチマーク、フォールバック戦略）
+    - research.md: P3（インライン要素は P0 範囲外、将来拡張アプローチ参照）
+    - research.md: Errata E3（DComp モード推奨、ULW モードの毎フレーム再描画コスト）
+    - research.md: R1（ULW パフォーマンスリスクと対策）
+    - design.md: 将来拡張の考慮テーブル（コンテンツ領域の拡張ポイント確保）
+  - 依存: Task 1 完了後
+  - _Requirements: 5.1, 5.2, 5.3, 5.4, 6.1, 6.2, 6.3, 7.1, 7.2, 7.3, 7.4, 8.1, 8.2, 8.3, 8.4_
+
+- [ ] 4. (P) balloon04-choice 子仕様の策定
+  - 親仕様 R10 を基に子仕様を初期化し、仕様駆動サイクルを開始
+  - 子仕様スコープ: 選択肢専用バルーンウィンドウ・レイアウト・キーボード操作・イベント発火
+  - 親仕様からの引継ぎコンテキスト:
+    - design.md: ChoiceBalloon / ChoiceItem / FocusIndex / ChoiceSelected コンポーネント定義、イベント契約
+    - design.md: BalloonWindow と同一の anchor パターン、ChoiceBalloon エンティティ階層（CB→CF→CC→CI）
+    - design.md: flexbox column レイアウト、WM_KEYDOWN によるキーボードナビゲーション
+    - design.md: モジュール配置（`ecs/widget/balloon/choice.rs`）
+  - 依存: Task 1 完了後
+  - _Requirements: 10.1, 10.2, 10.3, 10.4, 10.5_
+
+- [ ] 5. (P) balloon05-link 子仕様の策定
+  - 親仕様 R9 を基に子仕様を初期化し、仕様駆動サイクルを開始
+  - 子仕様スコープ: クリッカブルテキスト・ヒットテスト・リンクイベント・マークアップ
+  - 親仕様からの引継ぎコンテキスト:
+    - design.md: LinkRegion / LinkClicked コンポーネント定義、イベント契約
+    - design.md: モジュール配置（`ecs/widget/text/link.rs`）
+    - research.md: G11 改訂（DirectWrite HitTestPoint API は不要 — グリフエンティティの GlobalArrangement.bounds による既存ヒットテスト方式で対応）
+    - research.md: R4（縦書きヒットテスト精度 — 検証が必要）
+    - balloon03-content 子仕様: GlyphInfo.text_position と LinkRegion.text_range のマッチングフロー
+  - 依存: Task 3 完了後
+  - _Requirements: 9.1, 9.2, 9.3, 9.4, 9.5, 9.6_
+
+- [ ] 6. (P) balloon06-text-effects 子仕様の策定
+  - 親仕様 R11〜R12 を基に子仕様を初期化し、仕様駆動サイクルを開始
+  - 子仕様スコープ: 文字単位エフェクト・dola アニメーション統合
+  - 親仕様からの引継ぎコンテキスト:
+    - design.md: DolaBridgeResource / AnimatableProperty / PropertyTarget コンポーネント・サービス定義
+    - design.md: dola_sync_system のフレーム同期フロー、システムフロー「dola 同期シーケンス」
+    - design.md: モジュール配置（`ecs/dola_bridge/`）、`#[cfg(feature = "dola")]` 条件コンパイル
+    - research.md: D7（共有 ECS Resource 方式、DolaRuntime ライフサイクル）
+    - research.md: G18（wintf↔dola Cargo.toml 接続、`dola = { path = "../dola", optional = true }`）
+    - research.md: dola↔ECS 統合アーキテクチャ（subscribe → variable_id → changes 差分配信フロー）
+    - balloon03-content 子仕様: グリフエンティティの Visual.opacity / is_visible / Arrangement.offset バインディング対象
+  - 依存: Task 3 完了後
+  - _Requirements: 11.1, 11.2, 11.3, 11.4, 11.5, 12.1, 12.2, 12.3, 12.4, 12.5_
+
+- [ ] 7. P0 統合検証（M-4）
+  - 全 P0 子仕様（balloon01〜06）の完了を前提として実施
+  - 子仕様間インターフェース契約の整合検証
+  - 複数バルーン同時表示での性能検証（NFR-1 準拠）
+  - ロードマップ全マイルストーン達成確認と親仕様完了判定
+  - 親仕様からの引継ぎコンテキスト:
+    - design.md: テスト戦略（統合テスト・パフォーマンステスト項目一覧）
+    - design.md: パフォーマンスターゲット表（表示遅延 ≤16ms、スクロール ≥60fps、4ウィンドウ同時 60fps）
+    - requirements.md: NFR-1〜NFR-3、ガバナンス要件 GR-1〜GR-3
+    - requirements.md: ロードマップ Phase 1 マイルストーン表
+  - _Requirements: 1.1, 1.2, 2.1, 5.1, 6.2, 9.1, 10.1, 11.1, 12.3_
+
+- [ ] 8. (P) balloon07-ruby 子仕様の策定 [P1]
+  - 親仕様 R13 を基に子仕様を初期化し、仕様駆動サイクルを開始
+  - 子仕様スコープ: ルビ描画（縦書き・横書き配置、フォント自動調整、マークアップ）
+  - 親仕様からの引継ぎコンテキスト:
+    - design.md: 将来拡張の考慮テーブル「ルビ」行（GlyphInfo 拡張フィールドまたは sibling コンポーネント）
+    - research.md: P1 設計考慮（taffy inline 非対応の制約、DirectWrite ルビ API の検討必要性）
+    - balloon03-content 子仕様: GlyphInfo / GlyphContainer の確定仕様（ルビ配置の基盤）
+  - 依存: Task 3 完了後
+  - _Requirements: 13.1, 13.2, 13.3, 13.4, 13.5_
+
+- [ ] 9. (P) balloon08-portrait 子仕様の策定 [P1]
+  - 親仕様 R15 を基に子仕様を初期化し、仕様駆動サイクルを開始
+  - 子仕様スコープ: ポートレート描画（静止画・アニメーション、表情切替、サイズ設定）
+  - 親仕様からの引継ぎコンテキスト:
+    - design.md: 将来拡張の考慮テーブル「ポートレート」行（BalloonContentArea の ChildOf 子エンティティ、BitmapSource パターン踏襲）
+    - research.md: P1 設計考慮（taffy flexbox でテキスト領域と並列配置、ブロックレベル拡張ポイント）
+    - balloon03-content 子仕様: BalloonContentArea の確定仕様（ChildOf 子として追加可能な構造）
+  - 依存: Task 3 完了後
+  - _Requirements: 15.1, 15.2, 15.3, 15.4, 15.5_
