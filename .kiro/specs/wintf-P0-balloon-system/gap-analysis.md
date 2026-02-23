@@ -59,9 +59,9 @@
 | **`ChildOf(parent)` 階層** | 親子関係によるウィジェットツリー構築。`Children.iter()` が Z-order の権威的ソース | **全子仕様**: 描画責務ごとにエンティティ分離。**グリフエンティティの親子構造にも適用** |
 | **コマンドキュー** | `SetWindowPosCommand`: thread_localキューでバッチ処理 | Req 2: 位置追従のウィンドウ操作 |
 | **描画パイプライン** | Widget→`GraphicsCommandList`→`composite_render_system`(z-order合成)→`ulw_present_system`(ULW転送) | 全描画責務の基本フロー。**グリフエンティティもこのパイプラインに自然に乗る** |
-| **2段階IR** | Stage 1 `TypewriterToken`→Stage 2 `TimelineItem`。外部/内部の責務分離 | balloon02-content: 同パターンを参考にグリフベースIR設計 |
+| **2段階IR** | Stage 1 `TypewriterToken`→Stage 2 `TimelineItem`。外部/内部の責務分離 | balloon03-content: 同パターンを参考にグリフベースIR設計 |
 | **ブラシ継承** | `Brush::Inherit`→`resolve_inherited_brushes`で親から解決 | グリフエンティティのテキスト色を親から継承 |
-| **SparseSetハンドラ** | `EventHandler<T>` は SparseSet ストレージ（少数エンティティに最適化） | balloon03-link, balloon04-choice: イベントハンドラ |
+| **SparseSetハンドラ** | `EventHandler<T>` は SparseSet ストレージ（少数エンティティに最適化） | balloon05-link, balloon04-choice: イベントハンドラ |
 | **ダーティビット** | `SurfaceGraphicsDirty`, `Changed<T>` でシステムトリガー | **グリフエンティティの再描画最適化にも適用** |
 | **Entity-per-Visual描画** | 各エンティティが `Visual` を持てば自動的にレンダリングパイプラインに参加 | **1グリフ=1エンティティの前提パターン** |
 
@@ -144,7 +144,7 @@ ulw_present_system (単一ビットマップへ転送→UpdateLayeredWindow)
 
 | API | 重要度 | 用途 |
 |-----|--------|------|
-| `HitTestPoint` (座標→文字位置) | 高 | リンクヒットテスト (balloon03-link) |
+| `HitTestPoint` (座標→文字位置) | 高 | リンクヒットテスト (balloon05-link) |
 | `IDWriteTextRenderer` (カスタムレンダラ) | 中〜高 | グリフラン単位の描画分配（エンティティ方式の描画手段候補） |
 | `GetLineMetrics` | 中 | 行単位メトリクス（スクロール、ルビ配置） |
 | `GetOverhangMetrics` | 低 | テキスト領域のオーバーハング計算 |
@@ -314,7 +314,15 @@ GlyphContainer:
 | | 3 | `WindowPos.hide_window` | ✅ ウィンドウ非表示+エンティティ保持は既存で可能 | — |
 | | 4 | `WindowPos.size` + `BoxStyle` | ✅ サイズ設定可能 | — |
 
-### 子仕様 2: balloon02-content（DR-2+DR-3: ビューポート+テキスト基本描画）
+### 子仕様 2: balloon02-reference-skin（検証用スキン）
+
+| 要件 | AC# | 既存資産 | ギャップ | 分類 |
+|------|------|---------|---------|------|
+| **Req 14: 検証用バルーンスキン** | 1 | なし | 単色背景スキン定義未実装 | Missing |
+| | 2 | なし | 角丸矩形形状定義未実装 | Missing |
+| | 3 | なし | しっぽ座標・形状定義未実装 | Missing |
+
+### 子仕様 3: balloon03-content（DR-2+DR-3: ビューポート+テキスト基本描画）
 
 | 要件 | AC# | 既存資産 | ギャップ | 分類 |
 |------|------|---------|---------|------|
@@ -334,17 +342,6 @@ GlyphContainer:
 | | 3 | `WheelDelta` 取得可能 | ホイール→スクロール変換ロジック未実装 | Missing |
 | | 4 | なし | ページ送り機構未実装 | Missing |
 
-### 子仕様 3: balloon03-link（DR-4: リンク描画）
-
-| 要件 | AC# | 既存資産 | ギャップ | 分類 |
-|------|------|---------|---------|------|
-| **Req 9: クリッカブルテキスト** | 1 | `HitRegionMap` (rect/polygon) | テキスト位置→ヒットリージョン自動生成が未実装 | Missing |
-| | 2 | `Phase<T>` イベントシステム (完備) | リンクイベント型（`LinkClicked { action }` 等）未定義 | Missing |
-| | 3 | なし | リンク外観カスタマイズ機構未実装 | Missing |
-| | 4 | `OnPointerEntered/Exited` (5種ハンドラ完備) | **グリフエンティティが個別にポインタイベントを受けられる可能性あり**。ホバー状態管理は新規 | Missing |
-| | 5 | `DWriteTextLayoutExt::hit_test_text_position` (位置→座標) | **`HitTestPoint` (座標→位置) が未ラップ**。リンクヒットテストに必須 | Missing |
-| | 6 | `TypewriterToken` (Text/Wait/FireEvent のみ) | リンク用トークン variant 未定義 | Missing |
-
 ### 子仕様 4: balloon04-choice（DR-5: 選択肢UI描画）
 
 | 要件 | AC# | 既存資産 | ギャップ | 分類 |
@@ -355,7 +352,18 @@ GlyphContainer:
 | | 4 | `OnPointerEntered/Exited` | ホバー状態ウィジェット未実装（ボタン相当ウィジェットがない） | Missing |
 | | 5 | WM_KEYDOWN (ESC のみ) | キーボードナビゲーション基盤未実装（上下キー・Enter） | Missing |
 
-### 子仕様 5: balloon05-text-effects（DR-6: テキストエフェクト描画）
+### 子仕様 5: balloon05-link（DR-4: リンク描画）
+
+| 要件 | AC# | 既存資産 | ギャップ | 分類 |
+|------|------|---------|---------|------|
+| **Req 9: クリッカブルテキスト** | 1 | `HitRegionMap` (rect/polygon) | テキスト位置→ヒットリージョン自動生成が未実装 | Missing |
+| | 2 | `Phase<T>` イベントシステム (完備) | リンクイベント型（`LinkClicked { action }` 等）未定義 | Missing |
+| | 3 | なし | リンク外観カスタマイズ機構未実装 | Missing |
+| | 4 | `OnPointerEntered/Exited` (5種ハンドラ完備) | **グリフエンティティが個別にポインタイベントを受けられる可能性あり**。ホバー状態管理は新規 | Missing |
+| | 5 | `DWriteTextLayoutExt::hit_test_text_position` (位置→座標) | **`HitTestPoint` (座標→位置) が未ラップ**。リンクヒットテストに必須 | Missing |
+| | 6 | `TypewriterToken` (Text/Wait/FireEvent のみ) | リンク用トークン variant 未定義 | Missing |
+
+### 子仕様 6: balloon06-text-effects（DR-6: テキストエフェクト描画）
 
 | 要件 | AC# | 既存資産 | ギャップ | 分類 |
 |------|------|---------|---------|------|
@@ -370,7 +378,7 @@ GlyphContainer:
 | | 4 | `dola`: `InterruptionPolicy` (Cancel/Conclude/Trim/Compress/Never) | アニメーション中断制御のECS統合未実装 | Missing |
 | | 5 | `dola::variable`: `AnimationVariableDef::Integer { typewriter }` フィールドあり | **グリフエンティティ方式ではエンティティプロパティバインディングに帰結**。バインディング機構は未実装 | Missing |
 
-### 子仕様 6: balloon06-ruby（DR-7: ルビ描画）**[P1]**
+### 子仕様 7: balloon07-ruby（DR-7: ルビ描画）**[P1]**
 
 | 要件 | AC# | 既存資産 | ギャップ | 分類 |
 |------|------|---------|---------|------|
@@ -379,14 +387,6 @@ GlyphContainer:
 | | 3 | なし | 縦書きルビ配置ロジック未実装 | Missing |
 | | 4 | なし | ルビフォントサイズ自動調整未実装 | Missing |
 | | 5 | IR: `TypewriterToken` (Text/Wait/FireEvent のみ) | ルビ用トークン variant 未定義 | Missing |
-
-### 子仕様 7: balloon-reference-skin（検証用スキン）
-
-| 要件 | AC# | 既存資産 | ギャップ | 分類 |
-|------|------|---------|---------|------|
-| **Req 14: 検証用バルーンスキン** | 1 | なし | 単色背景スキン定義未実装 | Missing |
-| | 2 | なし | 角丸矩形形状定義未実装 | Missing |
-| | 3 | なし | しっぽ座標・形状定義未実装 | Missing |
 
 ---
 
@@ -533,16 +533,16 @@ GlyphContainer:
 | 子仕様 | 工数 | リスク | 根拠 | v3.2-r1比較 |
 |--------|------|--------|------|-------------|
 | **balloon01-core** | M (3–7日) | Low | 既存 `Window` + `WindowPos` パターン踏襲。配置アルゴリズムは新規だが技術的に明確 | — |
-| **balloon02-content** | **L (1–2週)** | **Medium** | グリフエンティティ spawn パイプラインが中核。`HitTestTextPosition` で座標取得の道筋は明確だが、グリフ描画方式（G25）とライフサイクル管理（G26）の設計が必要。ビューポート/スクロールも新規 | リスク微減（道筋明確化） |
-| **balloon03-link** | M (3–7日) | Medium | `HitTestPoint` APIラップが新規。グリフエンティティのポインタイベント活用可能性あり。縦書き精度要検証 | — |
+| **balloon03-content** | **L (1–2週)** | **Medium** | グリフエンティティ spawn パイプラインが中核。`HitTestTextPosition` で座標取得の道筋は明確だが、グリフ描画方式（G25）とライフサイクル管理（G26）の設計が必要。ビューポート/スクロールも新規 | リスク微減（道筋明確化） |
+| **balloon05-link** | M (3–7日) | Medium | `HitTestPoint` APIラップが新規。グリフエンティティのポインタイベント活用可能性あり。縦書き精度要検証 | — |
 | **balloon04-choice** | S (1–3日) | Low | balloon01-core パターン再利用。flexbox縦並び対応済み | — |
-| **balloon05-text-effects** | **M→L (5日–1.5週)** | **Medium** | **v3.2-r1の L(High) から改善**。グリフエンティティ方式により G17（文字単位opacity）が解決済み、G20（エフェクト定義）が簡素化。残課題は dola↔wintf 接続（G18）と dola→ECSプロパティ・バインディング（G5）。dola 統合層の設計は依然として重要だが、バインディング対象がECSプロパティに標準化されたことで設計の見通しが改善 | **工数↓リスク↓** |
-| **balloon06-ruby** (P1) | L (1–2週) | High | DirectWriteルビAPI + 縦書きルビ配置。P1のためクリティカルパス外 | — |
-| **balloon-reference-skin** | XS (0.5–1日) | Low | 単色背景・D2D1角丸矩形・しっぽ座標JSON定義のみ | — |
+| **balloon06-text-effects** | **M→L (5日–1.5週)** | **Medium** | **v3.2-r1の L(High) から改善**。グリフエンティティ方式により G17（文字単位opacity）が解決済み、G20（エフェクト定義）が簡素化。残課題は dola↔wintf 接続（G18）と dola→ECSプロパティ・バインディング（G5）。dola 統合層の設計は依然として重要だが、バインディング対象がECSプロパティに標準化されたことで設計の見通しが改善 | **工数↓リスク↓** |
+| **balloon07-ruby** (P1) | L (1–2週) | High | DirectWriteルビAPI + 縦書きルビ配置。P1のためクリティカルパス外 | — |
+| **balloon02-reference-skin** | XS (0.5–1日) | Low | 単色背景・D2D1角丸矩形・しっぽ座標JSON定義のみ | — |
 
 ### 全体工数: L–XL (4–7週)
 
-> **v3.2-r1比較**: 5–8週 → **4–7週**。主因: balloon05-text-effects のリスク低減（G17解決、G20簡素化）。ただし balloon02-content のグリフ spawn パイプライン（G4 具体化、G25, G26 新規）は依然として中核的な設計課題。
+> **v3.2-r1比較**: 5–8週 → **4–7週**。主因: balloon06-text-effects のリスク低減（G17解決、G20簡素化）。ただし balloon03-content のグリフ spawn パイプライン（G4 具体化、G25, G26 新規）は依然として中核的な設計課題。
 
 ---
 
@@ -562,15 +562,15 @@ GlyphContainer:
 
 ```
 balloon01-core (M, Low)
-  ├── balloon-reference-skin (XS, Low) ← 検証用スキン（クリティカルパス外）
-  ├── balloon02-content (L, Medium) ← グリフエンティティ spawn が設計の鍵
-  │     ├── balloon03-link (M, Medium)
-  │     ├── balloon05-text-effects (M-L, Medium) ← dola統合（改善済み）
-  │     └── balloon06-ruby (L, High) [P1]
+  ├── balloon02-reference-skin (XS, Low) ← 検証用スキン（クリティカルパス外）
+  ├── balloon03-content (L, Medium) ← グリフエンティティ spawn が設計の鍵
+  │     ├── balloon05-link (M, Medium)
+  │     ├── balloon06-text-effects (M-L, Medium) ← dola統合（改善済み）
+  │     └── balloon07-ruby (L, High) [P1]
   └── balloon04-choice (S, Low) ← 並行開発可能
 ```
 
-**ボトルネック**: balloon01-core → balloon02-content → balloon05-text-effects。特に **dola↔wintf 接続（G18）** の早期着手が重要。ただし balloon05-text-effects のリスクは v3.2-r1 から Low→Medium に改善。
+**ボトルネック**: balloon01-core → balloon03-content → balloon06-text-effects。特に **dola↔wintf 接続（G18）** の早期着手が重要。ただし balloon06-text-effects のリスクは v3.2-r1 から Low→Medium に改善。
 
 ### 7.3 設計フェーズでの決定事項
 
@@ -618,12 +618,12 @@ balloon01-core (M, Low)
 | 子仕様 | 準備レベル | 主要ギャップ | 既存資産活用度 | v3.2-r1比較 |
 |--------|-----------|-------------|--------------|-------------|
 | **balloon01-core** | 🟡 **60%** | 自動配置・追従の新規実装。ユーティリティは堅固 | 高 | — |
-| **balloon02-content** | 🟠 **40%** | **グリフ spawn パイプライン**が中核。`HitTestTextPosition` で座標取得の道筋あり。スクロール/ビューポート新規 | 中 | **35%→40%**（道筋明確化） |
-| **balloon03-link** | 🟠 **30%** | テキストヒットテスト(`HitTestPoint`)、リンクイベント、ホバーFB全て新規 | 低〜中 | — |
+| **balloon03-content** | 🟠 **40%** | **グリフ spawn パイプライン**が中核。`HitTestTextPosition` で座標取得の道筋あり。スクロール/ビューポート新規 | 中 | **35%→40%**（道筋明確化） |
+| **balloon05-link** | 🟠 **30%** | テキストヒットテスト(`HitTestPoint`)、リンクイベント、ホバーFB全て新規 | 低〜中 | — |
 | **balloon04-choice** | 🟡 **40%** | ボタンウィジェット新規。イベントシステム再利用可。キーボードNav不足 | 中 | — |
-| **balloon05-text-effects** | 🟠 **30%** | **wintf↔dola未接続**。ただし G17 解決 + G20 簡素化によりエフェクト実装の見通し改善 | 中 | **15%→30%** |
-| **balloon06-ruby** (P1) | 🔴 **10%** | DirectWriteルビAPI未ラップ。縦書きルビ配置全て新規 | 低 | — |
-| **balloon-reference-skin** | 🟢 **(XS)** | 全て新規だが規模XS（単色背景・角丸矩形・しっぽ定義のみ） | — | — |
+| **balloon06-text-effects** | 🟠 **30%** | **wintf↔dola未接続**。ただし G17 解決 + G20 簡素化によりエフェクト実装の見通し改善 | 中 | **15%→30%** |
+| **balloon07-ruby** (P1) | 🔴 **10%** | DirectWriteルビAPI未ラップ。縦書きルビ配置全て新規 | 低 | — |
+| **balloon02-reference-skin** | 🟢 **(XS)** | 全て新規だが規模XS（単色背景・角丸矩形・しっぽ定義のみ） | — | — |
 
 ### クリティカルリスクTOP 3
 
