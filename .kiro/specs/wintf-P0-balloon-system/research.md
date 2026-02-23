@@ -60,6 +60,7 @@
   - オフスクリーンレンダリングはULWモードでは不要（全面再描画のため）
   - 既存 `composite_render_system` にクリッピング対応を追加する必要あり
 - **影響**: `BalloonContentArea` にクリッピング矩形を持たせ、描画時に `PushAxisAlignedClip` で制限
+- **補足（検証済み）**: `PushAxisAlignedClip` はD2Dの現在の変換行列（`SetTransform`）の影響を受ける。クリップ矩形はローカル座標で指定し、`composite_render_system` の `SetTransform` でスケール・移動が適用される。回転を含む場合はAABBに丸められるが、バルーンでは軸平行変換のみのため問題なし
 
 ### HitTestPoint API (G11)
 
@@ -69,7 +70,7 @@
   - `HitTestPoint(x, y)` → `(is_trailing_hit, is_inside, metrics)` を返す
   - `metrics.textPosition` で文字インデックスが取得可能
   - 縦書き時の精度は実装時に検証が必要（リサーチ項目 R4, R5）
-- **影響**: `DWriteTextLayoutExt` に `hit_test_point()` メソッドを追加。COM層 (`com/dwrite.rs` or `com/dwrite_ext.rs`) に実装
+- **影響（改訂）**: 1グリフ＝1エンティティ方式の採用により、**DirectWrite `HitTestPoint` APIのラップは不要**となった。各グリフエンティティが `Arrangement`（position + size）を持つため、`GlobalArrangement.bounds` による既存のエンティティレベルヒットテスト（`HitTestMode::Bounds`）でリンクの座標判定が可能。フロー: ポインタイベント → `hit_test_in_window` → グリフエンティティ特定 → `GlyphInfo.text_position` → `LinkRegion.text_range` マッチ
 
 ### コンテンツ領域の拡張性 (P1設計考慮)
 
@@ -80,7 +81,8 @@
   - GlyphContainer は子エンティティの1つとして配置される（P0）
   - P1でPortraitWidget等を sibling として追加するだけで拡張可能
   - flexbox の `flex-direction` で配置方向を制御（row: 横並び、column: 縦並び）
-- **影響**: 特別な拡張機構は不要。標準のECS `ChildOf` + taffyレイアウトで自然に対応。P0設計で意識すべきは、BalloonContentAreaがGlyphContainer以外の子も受け入れるレイアウト設計にすること
+- **影響**: 標準のECS `ChildOf` + taffy flexbox レイアウトで**ブロックレベル配置**（ポートレートをテキスト領域の横/上に配置）に対応。P0設計で意識すべきは、BalloonContentAreaがGlyphContainer以外の子も受け入れるレイアウト設計にすること
+- **制約（taffy inline非対応）**: taffy 0.9.2 は `Display::Inline` を未サポート（Flex/Block/Grid/None のみ）。テキスト行内にインライン画像を埋め込むユースケースは、taffy ではなく DirectWrite の `IDWriteInlineObject` で対応する必要がある。P1ポートレートはテキスト領域と並列のブロック要素として設計されるため、taffy flexbox で十分。テキスト行内へのインライン埋め込みが将来必要になった場合は別途設計が必要
 
 ---
 
@@ -96,16 +98,20 @@
 
 ## 設計決定
 
-### 決定: D3 — グリフ描画方式
+### 決定: D3 — グリフ描画方式 (rev.1)
 
 - **背景**: グリフエンティティが1文字を描画する具体的方式の選択
 - **代替案**:
   1. Per-char IDWriteTextLayout — 各グリフが独自TextLayout保持
   2. カスタム IDWriteTextRenderer — COMインターフェース実装による描画ルーティング
-- **選択**: **Per-char IDWriteTextLayout**
-- **根拠**: 単純性とエンティティ自己完結性。バルーンテキスト（20〜200文字）でのカーニング差異は無視可能。COMトレイト実装の複雑さ回避
-- **トレードオフ**: カーニング精度がやや劣る / 実装単純・デバッグ容易
-- **フォローアップ**: 品質問題が発生した場合、Option B（カスタムレンダラ）へのマイグレーションパスを確保
+- **選択**: **カスタム IDWriteTextRenderer** (Option B)
+- **根拠**:
+  - 既存の `RecCommandSink`（`#[implement(ID2D1CommandSink5)]`）が COM インターフェース実装の実証済みパターン。複雑さの懸念は既存実績で解消
+  - 共有 TextLayout からの `DrawGlyphRun` コールバックにより、カーニング・テキストシェーピング品質を完全保持
+  - per-char TextLayout 生成コスト (N×CreateTextLayout) を排除し、パフォーマンスリスク R1 を軽減
+  - `GlyphDrawData` としてキャプチャした描画データを各エンティティが `dc.DrawGlyphRun()` で再生する方式
+- **トレードオフ**: COM 実装コスト（ただし RecCommandSink パターンで軽減済み）/ テキスト品質の完全保持・描画コスト削減
+- **初期選択からの変更理由**: 設計レビューで既存 COM 実装パターン（`RecCommandSink`）の存在が確認され、Option B の複雑さ懸念が解消。品質・性能の両面で Option A を上回る
 
 ### 決定: D7 — dola_bridge ECSリソース設計
 
@@ -129,7 +135,7 @@
 
 ## リスクと対策
 
-- **R1: per-char CreateCommandList のスループット** — 100文字時の性能が未検証。対策: プロトタイプで早期検証、ダーティフラグ最適化でアクティブグリフのみ再描画
+- **R1: per-entity DrawGlyphRun のスループット** — 100文字時の性能が未検証。D3 rev.1（CustomTextRenderer）により per-char CreateTextLayout コストは排除済みだが、N×CommandList + N×DrawGlyphRun の再生コストは残存。対策: プロトタイプで早期検証、ダーティフラグ最適化でアクティブグリフのみ再描画
 - **R4: HitTestTextPosition の縦書き精度** — 縦書き時のグリフ矩形精度が未検証。対策: balloon03-content 設計フェーズで検証テスト実施
 - **G18: wintf↔dola Cargo.toml接続** — 初回のクレート間依存追加。対策: フィーチャフラグによるオプショナル依存で影響範囲を限定
 

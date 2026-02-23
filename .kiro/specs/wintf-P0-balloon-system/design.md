@@ -166,6 +166,7 @@ sequenceDiagram
     participant App as Application
     participant GC as GlyphContainer
     participant DW as DirectWrite
+    participant CTR as CustomTextRenderer
     participant GE as GlyphEntity
     participant CR as composite_render
 
@@ -173,15 +174,17 @@ sequenceDiagram
     GC->>GC: Stage1 BalloonToken to Stage2 GlyphTimeline
     GC->>DW: CreateTextLayout full text
     DW-->>GC: IDWriteTextLayout
-    loop Each glyph cluster
-        GC->>DW: HitTestTextPosition cluster_index
-        DW-->>GC: position rect
-        GC->>GE: spawn GlyphEntity with Visual + Arrangement + GlyphInfo
+    GC->>DW: HitTestTextPosition per cluster
+    DW-->>GC: position rects
+    GC->>GE: spawn GlyphEntity with Visual + Arrangement + GlyphInfo
+    GC->>CTR: text_layout.Draw(CustomTextRenderer)
+    loop Each DrawGlyphRun callback
+        CTR->>CTR: map glyph_run to entity by text_position
+        CTR->>GE: store GlyphDrawData (glyph_run + baseline_origin)
     end
-    Note over GE: Each GlyphEntity draws 1 char
-    GE->>GE: create per-char TextLayout
-    GE->>GE: BeginDraw + DrawTextLayout + EndDraw
-    GE->>ECS: insert GraphicsCommandList
+    Note over GE: Each GlyphEntity replays DrawGlyphRun
+    GE->>GE: BeginDraw + DrawGlyphRun(captured data) + EndDraw
+    GE->>GE: insert GraphicsCommandList
     CR->>CR: composite_render_system traverses children
     CR->>CR: draw all glyphs with accumulated opacity
 ```
@@ -226,7 +229,7 @@ sequenceDiagram
 | 6.1-6.3 | グリフ分割 | GlyphContainer, GlyphInfo | GlyphTimeline, spawn pipeline | テキスト表示 |
 | 7.1-7.4 | テキスト表示制御 | GlyphContainer, GlyphTimeline | BalloonToken IR, TypewriterControl | テキスト表示 |
 | 8.1-8.4 | スクロール | ScrollState, BalloonContentArea | scroll_system | — |
-| 9.1-9.6 | リンク | LinkRegion, DWriteTextLayoutExt | LinkClicked event, HitTestPoint | — |
+| 9.1-9.6 | リンク | LinkRegion, GlyphInfo | LinkClicked event, エンティティヒットテスト | — |
 | 10.1-10.5 | 選択肢 | ChoiceBalloon, ChoiceItem | ChoiceSelected event | — |
 | 11.1-11.5 | 文字単位エフェクト | GlyphEntity (Visual.opacity) | PropertyBinding | dola同期 |
 | 12.1-12.5 | dola統合 | DolaBridgeResource, PropertyBinding | DolaRuntime API | dola同期 |
@@ -250,7 +253,7 @@ sequenceDiagram
 | GlyphContainer | Content | グリフ分割・テキストレイアウト管理 | 6.1-6.3, 7.1-7.4 | DirectWrite (P0), BalloonContentArea (P0) | Service, State |
 | GlyphInfo | Content | 個別グリフのメタデータ | 6.2 | GlyphContainer (P0) | — |
 | ScrollState | Content | スクロール状態管理 | 8.1-8.4 | BalloonContentArea (P0), WheelDelta (P0) | State |
-| LinkRegion | Interaction | リンク定義・ヒットテスト | 9.1-9.6 | GlyphContainer (P0), EventSystem (P0) | Event |
+| LinkRegion | Interaction | リンク定義・ヒットテスト | 9.1-9.6 | GlyphContainer (P0), EventSystem (P0), HitTest Bounds (P0) | Event |
 | ChoiceBalloon | Interaction | 選択肢専用バルーン | 10.1-10.5 | BalloonWindow pattern (P0), EventSystem (P0) | Event |
 | ChoiceItem | Interaction | 選択肢項目 | 10.2-10.5 | ChoiceBalloon (P0) | Event |
 | DolaBridgeResource | Animation | dola↔ECS統合 | 12.1-12.5 | DolaRuntime (P0) | Service, State |
@@ -434,6 +437,7 @@ pub struct ScrollState {
 **責務と制約**
 - 共有 `IDWriteTextLayout` を保持し、テキスト全体のレイアウト計算を担当
 - `HitTestTextPosition` で各グリフの矩形位置を取得し、グリフエンティティを spawn
+- `CustomTextRenderer`（`#[implement(IDWriteTextRenderer1)]`）で共有 TextLayout を描画し、`DrawGlyphRun` コールバックで各グリフエンティティに描画データ（`GlyphDrawData`）を配布
 - テキスト変更時は全グリフエンティティを despawn → 再 spawn（全再構築方式、`research.md` D8参照）
 - Stage 1 IR (`BalloonToken`) → Stage 2 IR (`GlyphTimeline`) の変換を担当
 
@@ -497,6 +501,8 @@ pub struct GlyphLayoutResource {
     text_layout: IDWriteTextLayout,
     /// グリフタイムライン
     timeline: GlyphTimeline,
+    /// CustomTextRenderer でキャプチャしたグリフ描画データ
+    glyph_draw_data: Vec<GlyphDrawData>,
 }
 
 pub struct GlyphTextStyle {
@@ -527,11 +533,23 @@ pub struct GlyphInfo {
     /// 結合文字フラグ（濁点・半濁点等）
     pub is_combining: bool,
 }
+
+/// CustomTextRendererからキャプチャした描画データ（各グリフエンティティが保持）
+#[derive(Component)]
+pub struct GlyphDrawData {
+    /// DrawGlyphRun のグリフランデータ（font_face, glyph_indices, advances, offsets）
+    pub glyph_run: CapturedGlyphRun,
+    /// ベースライン原点
+    pub baseline_origin: D2D1_POINT_2F,
+    /// 測定モード
+    pub measuring_mode: DWRITE_MEASURING_MODE,
+}
 ```
 
-- 各グリフエンティティは `Visual` + `Arrangement` + `GlyphInfo` + `GraphicsCommandList` を持つ
+- 各グリフエンティティは `Visual` + `Arrangement` + `GlyphInfo` + `GlyphDrawData` + `GraphicsCommandList` を持つ
 - `ChildOf(glyph_container)` で GlyphContainer の子として配置
 - `Arrangement.offset` は `HitTestTextPosition` から算出された位置
+- 描画方式: `dc.DrawGlyphRun(baseline_origin, &glyph_run, brush, measuring_mode)` でキャプチャデータを再生（共有 TextLayout のカーニング・シェーピングを完全保持）
 - **dola バインディング対象**: `Visual.opacity`, `Visual.is_visible`, `Arrangement.offset`
 
 ### Interaction ドメイン
@@ -546,7 +564,7 @@ pub struct GlyphInfo {
 **依存**
 - Inbound: GlyphContainer — テキスト位置情報 (P0)
 - Outbound: EventSystem — リンクイベント配信 (P0)
-- External: DirectWrite `HitTestPoint` — 座標→文字位置変換 (P0)
+- Inbound: HitTest (Bounds) — エンティティレベルヒットテストでリンク座標判定 (P0)
 
 **契約**: Event [ ✓ ] / State [ ✓ ]
 
@@ -576,8 +594,8 @@ pub struct LinkClicked {
 ```
 
 - イベント配信: `Phase<LinkClicked>::Bubble` で親チェーンに伝播
-- ヒットテスト: `HitTestPoint(pointer_x, pointer_y)` → `text_position` → `LinkRegion.text_range` マッチ
-- ホバー: `OnPointerMoved` → `LinkRegion.is_hovered` 更新 → Brush 変更
+- ヒットテスト: エンティティレベル判定。`hit_test_in_window` → グリフエンティティ特定 (`HitTestMode::Bounds`) → `GlyphInfo.text_position` → `LinkRegion.text_range` マッチ。DirectWrite `HitTestPoint` APIは不要
+- ホバー: `OnPointerMoved` → グリフエンティティ判定 → `LinkRegion.is_hovered` 更新 → Brush 変更
 
 #### ChoiceBalloon
 
@@ -717,7 +735,9 @@ P0 設計での拡張ポイント確保により、以下の P1 コンポーネ�
 | コンポーネント | 拡張ポイント | 設計考慮 |
 |--------------|-------------|---------|
 | **GlyphRubyInfo** (DR-7) | GlyphInfo の拡張フィールドまたは sibling コンポーネント | グリフエンティティに `Option<RubyText>` を追加、または別コンポーネントとして付与 |
-| **PortraitWidget** (DR-8) | BalloonContentArea の ChildOf 子エンティティ | 既存 `BitmapSource` パターンを踏襲。アニメーション画像再生は新規モジュール |
+| **PortraitWidget** (DR-8) | BalloonContentArea の ChildOf 子エンティティ | 既存 `BitmapSource` パターンを踏襲。taffy flexbox でテキスト領域と並列配置（ブロックレベル） |
+
+> **制約**: taffy 0.9.2 は `Display::Inline` 未サポート。P1 ポートレートはテキスト領域と並列のブロック要素（flexbox）として配置される。テキスト行内へのインライン埋め込みが将来必要になった場合は、DirectWrite の `IDWriteInlineObject` で対応する必要がある。
 
 ---
 
@@ -776,7 +796,7 @@ graph TB
 `Visual` + `Arrangement` + `GlyphContainer` + `GlyphLayoutResource` + `BoxStyle` + `ChildOf(content_area)`
 
 **GlyphEntity エンティティ**:
-`Visual` + `Arrangement` + `GlyphInfo` + `GraphicsCommandList` + `ChildOf(glyph_container)`
+`Visual` + `Arrangement` + `GlyphInfo` + `GlyphDrawData` + `GraphicsCommandList` + `ChildOf(glyph_container)`
 
 **ChoiceItem エンティティ**:
 `Visual` + `Arrangement` + `ChoiceItem` + `Brushes` + `BoxStyle` + `ChildOf(choice_container)` + `OnPointerPressed` + `OnPointerEntered` + `OnPointerExited`
@@ -788,7 +808,7 @@ graph TB
 ```
 crates/wintf/src/
 ├── com/
-│   └── dwrite_ext.rs           ← HitTestPoint ラッパー追加
+│   └── dwrite_ext.rs           ← CustomTextRenderer (IDWriteTextRenderer1実装)
 ├── ecs/
 │   ├── widget/
 │   │   ├── balloon/
@@ -799,8 +819,8 @@ crates/wintf/src/
 │   │   │   ├── choice.rs        ← ChoiceBalloon, ChoiceItem, FocusIndex
 │   │   │   └── reference_skin.rs ← ReferenceSkinDef
 │   │   └── text/
-│   │       ├── glyph.rs          ← GlyphContainer, GlyphInfo, GlyphLayoutResource
-│   │       ├── glyph_draw.rs     ← draw_glyphs system
+│   │       ├── glyph.rs          ← GlyphContainer, GlyphInfo, GlyphDrawData
+│   │       ├── glyph_draw.rs     ← draw_glyphs system (DrawGlyphRun再生)
 │   │       ├── glyph_timeline.rs ← BalloonToken, GlyphTimeline, IR変換
 │   │       └── link.rs           ← LinkRegion, LinkClicked, link systems
 │   └── dola_bridge/              ← #[cfg(feature = "dola")]
@@ -819,7 +839,7 @@ crates/wintf/src/
 
 | カテゴリ | 例 | 対応 |
 |---------|-----|------|
-| **DirectWrite エラー** | TextLayout 作成失敗、HitTestPoint 失敗 | グレースフルデグレード（テキスト表示をスキップ、エラーログ出力） |
+| **DirectWrite エラー** | TextLayout 作成失敗、DrawGlyphRun 失敗 | グレースフルデグレード（テキスト表示をスキップ、エラーログ出力） |
 | **エンティティ解決エラー** | `BalloonWindow.anchor` が無効 | バルーン非表示化（パニックしない） |
 | **dola エラー** | DolaDocument パース失敗、変数名不一致 | アニメーションなしフォールバック |
 | **スキン定義エラー** | 画像パス不正、パラメータ範囲外 | デフォルトスキンにフォールバック |
@@ -838,7 +858,7 @@ crates/wintf/src/
 
 ### パフォーマンステスト
 
-- **グリフ描画スループット**: 100文字・200文字テキストでの `CreateCommandList` × N の処理時間測定（NFR-1: 16ms以内）
+- **グリフ描画スループット**: 100文字・200文字テキストでの `DrawGlyphRun` × N の処理時間測定（NFR-1: 16ms以内）
 - **スクロール60fps**: 長文テキストの連続スクロール時のフレームレート維持確認
 - **追従レイテンシ**: キャラクター移動→バルーン追従の描画遅延測定
 
