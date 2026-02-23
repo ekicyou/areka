@@ -173,7 +173,7 @@
 
 ## リスクと対策
 
-- **R1: per-entity DrawGlyphRun のスループット** — 100文字時の性能が未検証。D3 rev.1（CustomTextRenderer）により per-char CreateTextLayout コストは排除済みだが、N×CommandList + N×DrawGlyphRun の再生コストは残存。対策: プロトタイプで早期検証、ダーティフラグ最適化でアクティブグリフのみ再描画
+- **R1: ULWモードでの毎フレーム再描画コスト** — 100文字時の N×DrawGlyphRun CPU 実行が 16ms 予算内に収まるか未検証。DCompモードでは CommandList 焼き付け後はプロパティ変更のみでGPU合成されるためリスク低い。対策: DCompモード推奨、ULWモードはプロトタイプで早期検証、ダーティフラグ最適化でアクティブグリフのみ再描画
 - **R4: HitTestTextPosition の縦書き精度** — 縦書き時のグリフ矩形精度が未検証。対策: balloon03-content 設計フェーズで検証テスト実施
 - **G18: wintf↔dola Cargo.toml接続** — 初回のクレート間依存追加。対策: フィーチャフラグによるオプショナル依存で影響範囲を限定
 
@@ -195,6 +195,14 @@
 - **正**: `BF --> BCA`（BalloonContentArea は BalloonFrame の子）。コンポーネント構成パターンの `ChildOf(balloon_frame)` と整合
 - **根拠**: BalloonFrame の BoxStyle padding が ContentArea の有効領域を定義するため、BCA は BF の子として配置される
 - **適用**: design.md のエンティティ階層 Mermaid 図を修正済み
+
+### Errata E3: DComp モードでのグリフエンティティパフォーマンス理解
+
+- **誤**: 設計レビュー時点で「DComp モードでのグリフ単位エンティティは GPU リソースコスト高（非推奨）」と記載
+- **正**: DComp モードでは CommandList を一度 DirectComposition ビジュアルに焼き付け後、**プロパティ変更（SetOpacity/SetTransform）のみで GPU 合成**。CPU コスト最小でありグリフエンティティ方式に最適
+- **ULWモードの課題**: `UpdateLayeredWindow` が毎フレーム全面再描画のため、N×DrawGlyphRun を CPU で毎フレーム実行。こちらがパフォーマンスリスク
+- **影響**: 制約事項・最適化方針を訂正。R1 リスクを「ULWモード固有の毎フレーム再描画コスト」として明確化
+- **適用**: design.md の制約事項・最適化方針、research.md の R1 リスク記述を修正済み
 
 ---
 

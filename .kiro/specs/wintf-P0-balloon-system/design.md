@@ -43,9 +43,9 @@
 
 **制約事項（変更不可）**:
 - `d2d_device_context` はグローバル共有（並列 Draw 不可能）
-- ULW モードでは `UpdateLayeredWindow` のたびに全面再描画
+- ULW モードでは `UpdateLayeredWindow` のたびに全面再描画（N×DrawGlyphRun が毎フレーム CPU 実行）
 - `on_add` フック内では `DeferredWorld` が提供される。`world.commands()` は使用可能（`on_window_add` 実証済）だが、コマンドは遅延実行される
-- DComp モードでのグリフ単位エンティティは GPU リソースコスト高（非推奨）
+- DComp モードでは CommandList を一度 DirectComposition ビジュアルに焼き付け後、プロパティ変更（SetOpacity/SetTransform）のみでアニメーション可能（GPU 合成、CPU コスト最小）
 
 ### アーキテクチャパターンと境界マップ
 
@@ -876,5 +876,5 @@ crates/wintf/src/
 
 **最適化方針**:
 - **ダーティグリフのみ再描画**: `Changed<GlyphInfo>` / `Changed<Visual>` でアクティブなグリフのみ `CreateCommandList`
-- **ULW モード推奨**: グリフエンティティの GPU リソースコストなし
+- **DComp モード推奨**: CommandList 焼き付け後は SetOpacity/SetTransform のみでGPU合成。ULW モードは毎フレーム N×DrawGlyphRun 再実行コストあり
 - **レイアウト再計算回避**: グリフ単位分割により、追加文字表示時は `Visual.is_visible` 切替のみ（`Arrangement` 不変）
