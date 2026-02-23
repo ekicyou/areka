@@ -328,7 +328,7 @@ GlyphContainer:
 | **Req 7: 表示制御** | 1 | `Visual.is_visible` (エンティティ単位の表示切替) | **グリフエンティティ方式なら `is_visible` の順次切替でタイプライター効果が実現可能**。制御ロジックは新規 | Constraint |
 | | 2 | なし | 濁点・半濁点ウェイト調整が未実装 | Missing |
 | | 3 | `TypewriterToken::Wait` (固定待機) | さくらスクリプト的ウェイト挿入マーカー未実装 | Missing |
-| | 4 | `Visual.opacity` + dola (未接続) | **グリフエンティティ方式なら dola→`Visual.opacity` バインディングに帰結**。統合層のみ新規 | Missing |
+| | 4 | `Visual.opacity` + dola (未接続) | **グリフエンティティ方式なら dola→`Visual.opacity` バインディングに帰結**。dola↔wintf統合層のみ新規 | Missing |
 | **Req 8: スクロール** | 1 | なし | スクロールコンテナウィジェット未実装 | Missing |
 | | 2 | なし | テキスト描画進行追従のスクロール制御未実装 | Missing |
 | | 3 | `WheelDelta` 取得可能 | ホイール→スクロール変換ロジック未実装 | Missing |
@@ -400,7 +400,7 @@ GlyphContainer:
 | G2 | シェル↔バルーンのECSリレーション機構なし | Req 1, 3 | 高 | — |
 | G3 | 自動配置・追従・反転アルゴリズム未実装 | Req 3 全AC | 高 | — |
 | G4 | **グリフエンティティ spawn パイプライン未実装** | Req 6 AC2 | **高** | 🔄 「配列生成」→「エンティティ spawn」に具体化。`HitTestTextPosition` で座標取得は可能 |
-| G5 | **dola→エンティティプロパティ・バインディング未実装** | Req 7 AC4, Req 12 | **高** | 🔄 「マッピング構造」→「プロパティバインディング」に具体化。`Visual.opacity` / `Arrangement.offset` への直接バインディング |
+| G5 | **dola→エンティティプロパティ・バインディング未実装** | Req 7 AC4, Req 12 | **高** | 🔄 「マッピング構造」→「dola→ECSプロパティバインディング」に具体化。`Visual.opacity` / `Arrangement.offset` への直接バインディング |
 | G6 | 濁点・半濁点ウェイト調整未実装 | Req 7 AC2 | 中 | — |
 | G7 | さくらスクリプト的ウェイト挿入未実装 | Req 7 AC3 | 中 | — |
 | G8 | ビューポート/クリッピング未実装 | Req 5, 8 | 中 | — |
