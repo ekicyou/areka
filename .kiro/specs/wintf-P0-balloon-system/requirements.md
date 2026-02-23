@@ -89,6 +89,7 @@
 | 4 | `wintf-P0-balloon04-choice` | DR-5: 選択肢UI描画 | 選択肢専用バルーンウィンドウ（ChoiceBalloon） | balloon01-core, event-system ✅ | **P0** | B-3（linkと並行可） |
 | 5 | `wintf-P0-balloon05-text-effects` | DR-6: テキストエフェクト描画 | 文字単位エフェクト・dolaアニメーション統合 | balloon02-content, dola | **P0** | B-4 |
 | 6 | `wintf-P1-balloon06-ruby` | DR-7: ルビ描画 | ルビ（ふりがな）表示 | balloon02-content | **P1** | Phase 2 |
+| 7 | `wintf-P0-balloon-reference-skin` | （検証用） | 最小限の検証用バルーンスキン（単色背景・角丸矩形・しっぽ定義） | balloon01-core | **P0** | M-1b |
 
 ```
 依存関係:
@@ -125,7 +126,7 @@ P1拡張:
 - ルビ（ふりがな）描画（balloon06-ruby / DR-7）
 
 **含まれないもの:**
-- バルーンスキンの定義（`areka-P0-reference-balloon` の責務）
+- アプリケーション層のバルーンスキン定義（`areka-P0-reference-balloon` 等。別仕様で対応）
 - テキスト入力ボックス（親仕様スコープ外、将来の別仕様で対応）
 
 ---
@@ -153,6 +154,20 @@ P1拡張:
 3. **The** Balloon Core **shall** バルーンウィンドウを透過ウィンドウとして生成できる
 4. **When** バルーンが不要になった時, **the** Balloon Core **shall** ウィンドウリソースを適切に解放する
 5. **The** Balloon Core **shall** バルーンウィンドウをECSエンティティとして管理する
+
+---
+
+#### Requirement 1.5: フレーム描画 [balloon01-core]
+
+**Objective:** 開発者として、バルーンウィンドウの外観（背景・形状・枠線）を描画したい。それによりスキン定義に基づいた視覚表現を実現できる。
+
+##### Acceptance Criteria
+
+1. **The** Balloon Core **shall** バルーンスキン定義（背景画像・形状・枠線パラメータ）を受け取るインターフェースを提供する
+2. **The** Balloon Core **shall** スキン定義に基づきバルーンの背景を描画できる
+3. **The** Balloon Core **shall** 角丸・枠線をスキン定義のパラメータに従い描画できる
+4. **The** Balloon Core **shall** 吹き出しの「しっぽ」をスキン定義の座標・形状に従い描画できる
+5. **When** スキン定義が更新された時, **the** Balloon Core **shall** 外観を再描画する
 
 ---
 
@@ -364,10 +379,11 @@ P1拡張:
 
 | マイルストーン | 子仕様 | 状態 | 前提条件 |
 |---------------|--------|------|---------|
-| M-1: バルーンウィンドウ基盤 | balloon01-core | 未着手 | event-system ✅ |
-| M-2: テキスト描画パイプライン | balloon02-content | 未着手 | M-1 完了, (typewriter📖参考) |
+| M-1a: バルーンウィンドウ基盤（コア） | balloon01-core | 未着手 | event-system ✅ |
+| M-1b: 検証用リファレンススキン | balloon-reference-skin | 未着手 | M-1a 完了 |
+| M-2: テキスト描画パイプライン | balloon02-content | 未着手 | M-1b 完了, (typewriter📖参考) |
 | M-3a: クリッカブルテキスト | balloon03-link | 未着手 | M-2 完了 |
-| M-3b: 選択肢バルーン | balloon04-choice | 未着手 | M-1 完了 |
+| M-3b: 選択肢バルーン | balloon04-choice | 未着手 | M-1b 完了 |
 | M-3c: テキストエフェクト・アニメーション | balloon05-text-effects | 未着手 | M-2 完了, dola |
 | M-4: 統合検証 | （親仕様） | 未着手 | M-3a, M-3b, M-3c 完了 |
 

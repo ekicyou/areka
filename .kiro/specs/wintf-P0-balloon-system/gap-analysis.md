@@ -206,7 +206,7 @@
 | G19 | DolaRuntime↔bevy_ecsスケジュール統合未実装 | Req 10 AC3 | 高 | — |
 | G20 | 文字単位エフェクト定義フォーマット未設計 | Req 9, 10 | 高 | — |
 | G21 | エフェクトタイミング管理（テキスト表示タイミング↔dola開始タイミング同期）未実装 | Req 10 AC5 | 高 | — |
-| G22 | フレーム描画ウィジェット（枠線+角丸+しっぽ）未実装 | DR-1 | 中 | — |
+| ~~G22~~ | ~~フレーム描画ウィジェット（枠線+角丸+しっぽ）未実装~~ | ~~DR-1~~ | — | **✅ Req 1.5で解決** |
 | G23 | DirectWriteルビAPI未ラップ (P1) | Req 11 全AC | 中 | P1のため低優先 |
 | G24 | TypewriterToken にルビ variant なし (P1) | Req 11 AC5 | 中 | P1のため低優先 |
 
@@ -332,10 +332,11 @@
 | **balloon04-choice** | S (1–3日) | Low | balloon01-core パターン再利用。flexbox縦並び対応済み。キーボード操作のスコープ次第でMに変動 | 変化なし |
 | **balloon05-text-effects** | **L (1–2週)** | **High** | **v3.0のM→Lに変更**。**最大リスク**: wintf↔dola接続が未確立（Cargo.tomlレベルで未接続）。DolaRuntimeのECSリソース化、グリフ配列→dola変数バインディング、タイミング同期の全てが新規設計。dola側の `Integer { typewriter }` フィールドが設計意図の手がかりだが、具体的な統合パターンは未検証 | 工数↑リスク↑ |
 | **balloon06-ruby** (P1) | L (1–2週) | High | DirectWriteルビAPI + 縦書きルビ配置。P1のためクリティカルパス外 | P1移動 |
+| **balloon-reference-skin** | **XS (0.5–1日)** | **Low** | **新規追加**。単色背景・D2D1角丸矩形・しっぽ座標JSON定義のみ。balloon01-coreのスキンインターフェース検証用 | 新規 |
 
 ### 全体工数: XL (5–8週)
 
-> **v3.0比較**: 3–5週 → **5–8週**に増加。主因はグリフベースアーキテクチャ新規実装（balloon02-content）とdola統合層の設計負荷（balloon05-text-effects）。
+> **v3.0比較**: 3–5週 → **5–8週**に増加。主因はグリフベースアーキテクチャ新規実装（balloon02-content）とdola統合層の設計負荷（balloon05-text-effects）。balloon-reference-skin (0.5日) はクリティカルパス外のため全体工数に影響なし。
 
 ---
 
@@ -355,6 +356,7 @@
 
 ```
 balloon01-core (M, Low)
+  ├── balloon-reference-skin (XS, Low) ← 検証用スキン（クリティカルパス外）
   ├── balloon02-content (L, Medium) ← グリフベースアーキテクチャが設計の鍵
   │     ├── balloon03-link (M, Medium)
   │     ├── balloon05-text-effects (L, High) ← dola統合が最大リスク
@@ -362,7 +364,7 @@ balloon01-core (M, Low)
   └── balloon04-choice (S, Low) ← 並行開発可能
 ```
 
-**ボトルネック**: balloon02-content → balloon05-text-effects のパスが最長かつ最高リスク。特に **dola↔wintf統合層の設計** は早期に着手すべき。
+**ボトルネック**: balloon01-core → balloon02-content → balloon05-text-effects のパスが最長かつ最高リスク。balloon-reference-skinはballoon01-coreの検証用だが、クリティカルパス外（balloon02-content以降はスキン不要）。特に **dola↔wintf統合層の設計** は早期に着手すべき。
 
 ### 6.3 設計フェーズでの決定事項
 
