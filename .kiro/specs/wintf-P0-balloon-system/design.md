@@ -19,7 +19,6 @@
 
 - 各子仕様の詳細実装設計（子仕様ごとの design.md で対応）
 - アプリケーション層のスキン定義（`areka-P0-reference-balloon` 仕様で対応）
-- P1 機能（ルビ・ポートレート）の詳細設計（P0 拡張ポイントの確保のみ）
 - テキスト入力ボックス等のバルーン外 UI 要素
 
 ---
@@ -85,11 +84,6 @@ graph TB
         PB[PropertyBinding]
     end
 
-    subgraph P1Extensions
-        Ruby[RubyOverlay]
-        Port[PortraitWidget]
-    end
-
     WinSys --> BW
     WinSys --> CB
     GfxPipe --> GE
@@ -118,7 +112,6 @@ graph TB
 - **ContentDomain**: コンテンツ領域管理・グリフ分割・テキスト描画。テキスト表示の中核
 - **InteractionDomain**: ユーザー操作（リンク・選択肢）。イベントシステムとの統合
 - **AnimationDomain**: dola アニメーションとの統合。ContentDomain のグリフプロパティを制御
-- **P1Extensions**: P0 設計の拡張ポイントを通じて後付け追加
 
 ### テクノロジースタック
 
@@ -233,9 +226,12 @@ sequenceDiagram
 | 10.1-10.5 | 選択肢 | ChoiceBalloon, ChoiceItem | ChoiceSelected event | — |
 | 11.1-11.5 | 文字単位エフェクト | GlyphEntity (Visual.opacity) | PropertyBinding | dola同期 |
 | 12.1-12.5 | dola統合 | DolaBridgeResource, PropertyBinding | DolaRuntime API | dola同期 |
-| 13.1-13.5 | ルビ [P1] | GlyphRubyInfo | — | — |
 | 14.1-14.3 | 検証用スキン | ReferenceSkinDef | BalloonSkinDef | — |
+
+<!-- P1機能は範囲外
+| 13.1-13.5 | ルビ [P1] | GlyphRubyInfo | — | — |
 | 15.1-15.5 | ポートレート [P1] | PortraitWidget | BitmapSource (既存) | — |
+-->
 
 ---
 
@@ -393,7 +389,7 @@ fn placement_system(/* ... */);
 **責務と制約**
 - `BalloonFrame` の子エンティティとして配置（`ChildOf(frame_entity)`）
 - taffy flexbox コンテナとして、GlyphContainer 等の子ウィジェットをレイアウト
-- P1 拡張: `ChildOf` で PortraitWidget 等を追加可能（特別な拡張機構不要）
+- 子仕様追加時の拡張: `ChildOf` で新規コンポーネントを追加可能（特別な拡張機構不要）
 - クリッピングは `PushAxisAlignedClip` で実現（`research.md` 参照）
 
 **依存**
@@ -729,16 +725,16 @@ fn dola_sync_system(/* ... */);
 - `EvaluatedValue::Float` → `Visual.opacity` / `Arrangement.offset.x|y`
 - `EvaluatedValue::Integer` → `Visual.is_visible` (0/1)
 
-### P1 Extensions（概要のみ）
+### 将来拡張の考慮
 
-P0 設計での拡張ポイント確保により、以下の P1 コンポーネントは子仕様設計時に追加される:
-
-| コンポーネント | 拡張ポイント | 設計考慮 |
+| 機能 | 実装アプローチ | 設計考慮 |
 |--------------|-------------|---------|
-| **GlyphRubyInfo** (DR-7) | GlyphInfo の拡張フィールドまたは sibling コンポーネント | グリフエンティティに `Option<RubyText>` を追加、または別コンポーネントとして付与 |
-| **PortraitWidget** (DR-8) | BalloonContentArea の ChildOf 子エンティティ | 既存 `BitmapSource` パターンを踏襲。taffy flexbox でテキスト領域と並列配置（ブロックレベル） |
+| **ルビ** | GlyphInfo の拡張フィールドまたは sibling コンポーネント | グリフエンティティに `Option<RubyText>` を追加、または別コンポーネントとして付与 |
+| **ポートレート（ブロックレベル）** | BalloonContentArea の ChildOf 子エンティティ | 既存 `BitmapSource` パターンを踏襲。taffy flexbox でテキスト領域と並列配置 |
+| **インライン画像・絵文字** | GlyphContainer の子エンティティとして画像エンティティを挿入 | グリフエンティティと同様のパターン（`Visual` + `Arrangement` + `BitmapSource`）。DirectWrite `IDWriteInlineObject` を経由せず ECS エンティティとして直接制御 |
+| **WebView コンテンツ領域** | BalloonContentArea に WebView2 ウィジェットを配置 | 本格的な組版・インライン要素が必要な場合の代替案（balloon04 以降で検討） |
 
-> **制約**: taffy 0.9.2 は `Display::Inline` 未サポート。P1 ポートレートはテキスト領域と並列のブロック要素（flexbox）として配置される。テキスト行内へのインライン埋め込みが将来必要になった場合は、DirectWrite の `IDWriteInlineObject` で対応する必要がある。
+> **決定事項**: インライン要素（テキスト行内画像・絵文字）は P0 範囲外。将来必要になった場合、本格的な組版エンジンが必要。現実的なアプローチとして は、グリフエンティティの延長で画像エンティティを `GlyphContainer` の子として挿入する方式、または WebView2 を使用したコンテンツ領域の置き換えが有力（research.md P3 参照）。
 
 ---
 
