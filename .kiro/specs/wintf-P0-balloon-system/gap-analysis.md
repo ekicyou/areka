@@ -4,8 +4,8 @@
 |------|------|
 | **対象仕様** | wintf-P0-balloon-system |
 | **分析日** | 2026-02-23 |
-| **対象バージョン** | requirements.md v3.2 |
-| **前回分析** | v3.2初回。本レポートで「1グリフ＝1エンティティ」アーキテクチャ分析を追加 |
+| **対象バージョン** | requirements.md v3.3 |
+| **前回分析** | v3.2初回。v3.3でballoon08-portrait（ポートレート描画）子仕様追加に伴いギャップ分析を更新 |
 
 ---
 
@@ -388,6 +388,16 @@ GlyphContainer:
 | | 4 | なし | ルビフォントサイズ自動調整未実装 | Missing |
 | | 5 | IR: `TypewriterToken` (Text/Wait/FireEvent のみ) | ルビ用トークン variant 未定義 | Missing |
 
+### 子仕様 8: balloon08-portrait（DR-8: ポートレート描画）**[P1]**
+
+| 要件 | AC# | 既存資産 | ギャップ | 分類 |
+|------|------|---------|---------|------|
+| **Req 15: ポートレート表示** | 1 | `BitmapSource` (PNG画像表示ウィジェット) | ポートレート専用コンポーネント未定義。コンテンツ領域内への配置機構未実装 | Missing |
+| | 2 | `BitmapSource` (PNG描画対応済み) | ✅ 既存 `BitmapSource` パターンで静止画描画は対応可能 | — |
+| | 3 | なし | **アニメーション画像（WebM等）のデコード・フレーム再生機構未実装** | Missing |
+| | 4 | なし | 表情切替えロジック（画像ソースの動的切替）未実装 | Missing |
+| | 5 | `BoxStyle` (sizing対応済み) | ✅ 既存 `BoxStyle` でサイズ設定可能 | — |
+
 ---
 
 ## 4. ギャップサマリ
@@ -422,6 +432,8 @@ GlyphContainer:
 | G24 | テキスト入力形式にルビ variant なし (P1) | Req 13 AC5 | 中 | P1のため低優先 |
 | **G25** | **グリフエンティティの描画方式未決定** | Req 6 AC2, Req 11 | **中** | 🆕 各グリフが自身の CommandList に1文字を描画する方式の詳細設計が必要（per-char TextLayout / カスタム TextRenderer 等） |
 | **G26** | **グリフエンティティのライフサイクル管理未設計** | Req 6, 7 | **中** | 🆕 テキスト変更時のグリフエンティティ群の生成・破棄・再利用戦略が未設計 |
+| **G27** | **ポートレートウィジェット未定義 (P1)** | Req 15 AC1, AC4 | **中** | 🆕 コンテンツ領域内へのポートレート配置コンポーネント、表情切替ロジックが未定義。`BitmapSource` パターンを活用可能。P1のため低優先 |
+| **G28** | **アニメーション画像再生機構未実装 (P1)** | Req 15 AC3 | **中** | 🆕 WebM等の動画デコード・フレーム抽出・タイミング再生が未実装。外部ライブラリ（ffmpeg等）の検討が必要。P1のため低優先 |
 
 ### 4.2 「1グリフ＝1エンティティ」によるギャップ変化サマリ
 
@@ -538,6 +550,7 @@ GlyphContainer:
 | **balloon04-choice** | S (1–3日) | Low | balloon01-core パターン再利用。flexbox縦並び対応済み | — |
 | **balloon06-text-effects** | **M→L (5日–1.5週)** | **Medium** | **v3.2-r1の L(High) から改善**。グリフエンティティ方式により G17（文字単位opacity）が解決済み、G20（エフェクト定義）が簡素化。残課題は dola↔wintf 接続（G18）と dola→ECSプロパティ・バインディング（G5）。dola 統合層の設計は依然として重要だが、バインディング対象がECSプロパティに標準化されたことで設計の見通しが改善 | **工数↓リスク↓** |
 | **balloon07-ruby** (P1) | L (1–2週) | High | DirectWriteルビAPI + 縦書きルビ配置。P1のためクリティカルパス外 | — |
+| **balloon08-portrait** (P1) | S–M (2–5日) | Medium | 静止画は `BitmapSource` パターン活用で工数低。アニメーション画像（WebM）はデコードライブラリ選定+フレーム再生が中リスク。P1のためクリティカルパス外 | 🆕 |
 | **balloon02-reference-skin** | XS (0.5–1日) | Low | 単色背景・D2D1角丸矩形・しっぽ座標JSON定義のみ | — |
 
 ### 全体工数: L–XL (4–7週)
@@ -566,7 +579,8 @@ balloon01-core (M, Low)
   ├── balloon03-content (L, Medium) ← グリフエンティティ spawn が設計の鍵
   │     ├── balloon05-link (M, Medium)
   │     ├── balloon06-text-effects (M-L, Medium) ← dola統合（改善済み）
-  │     └── balloon07-ruby (L, High) [P1]
+  │     ├── balloon07-ruby (L, High) [P1]
+  │     └── balloon08-portrait (S-M, Medium) [P1]
   └── balloon04-choice (S, Low) ← 並行開発可能
 ```
 
@@ -623,6 +637,7 @@ balloon01-core (M, Low)
 | **balloon04-choice** | 🟡 **40%** | ボタンウィジェット新規。イベントシステム再利用可。キーボードNav不足 | 中 | — |
 | **balloon06-text-effects** | 🟠 **30%** | **wintf↔dola未接続**。ただし G17 解決 + G20 簡素化によりエフェクト実装の見通し改善 | 中 | **15%→30%** |
 | **balloon07-ruby** (P1) | 🔴 **10%** | DirectWriteルビAPI未ラップ。縦書きルビ配置全て新規 | 低 | — |
+| **balloon08-portrait** (P1) | 🟡 **40%** | 静止画は `BitmapSource` パターン活用可。アニメーション画像再生が新規。表情切替ロジック新規 | 中 | 🆕 |
 | **balloon02-reference-skin** | 🟢 **(XS)** | 全て新規だが規模XS（単色背景・角丸矩形・しっぽ定義のみ） | — | — |
 
 ### クリティカルリスクTOP 3
