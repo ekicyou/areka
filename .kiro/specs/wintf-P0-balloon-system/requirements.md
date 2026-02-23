@@ -3,12 +3,12 @@
 | 項目 | 内容 |
 |------|------|
 | **Document Title** | wintf バルーンシステム 親仕様（マスタープラン） |
-| **Version** | 3.1-draft |
-| **Date** | 2026-02-22 |
+| **Version** | 3.2 |
+| **Date** | 2026-02-23 |
 | **Parent Spec** | ukagaka-desktop-mascot |
 | **Priority** | P0 (MVP必須) |
 | **Spec Type** | 親仕様（Constitutional） |
-| **Status** | 🚧 Draft - v3.1レビュー中 |
+| **Status** | 🚧 Draft - v3.2リファイン |
 
 ---
 
@@ -42,7 +42,7 @@
 | 3.1 | キャラクターに紐付いた吹き出しウィンドウを表示できる | balloon01-core | P0 |
 | 3.2 | 複数キャラクターそれぞれに独立した吹き出しを表示できる | balloon01-core | P0 |
 | 3.3 | 吹き出し内にテキストを表示できる | balloon02-content | P0 |
-| 3.7 | テキストがクリックされた時、リンクとしてアクションを実行できる | balloon03-link | **P0** |
+| 3.7 | テキストがクリックされた時、リンクとしてアクションを実行できる | balloon03-link | P0 |
 | 3.8 | テキスト表示中、ルビ（ふりがな）を表示できる | balloon06-ruby | **P1** |
 | 3.9 | 選択肢形式の入力をユーザーに提示できる | balloon04-choice | P0 |
 | 3.10 | ユーザーが選択肢をクリックした時、対応するイベントを発火する | balloon04-choice | P0 |
@@ -66,9 +66,9 @@
 | DR-1 | フレーム描画 | バルーンウィンドウの背景・形状・枠線の描画。スキンによる外観変更の受け口。 | balloon01-core | P0 |
 | DR-2 | ビューポート描画 | コンテンツ領域のクリッピング、スクロール位置管理。コンテンツ量に応じた表示制御。 | balloon02-content | P0 |
 | DR-3 | テキスト本文描画（基本） | 文字の基本描画、縦横書き、文字単位表示制御。**グリフ単位への事前分割**、濁点・半濁点ウェイト調整、dolaアニメーション基盤との統合。 | balloon02-content<br/>*(typewriter P0は参考実装)* | P0 |
-| DR-4 | リンク描画 | クリッカブルテキストの視覚フィードバック（色、下線、ホバー状態）。 | balloon03-link | **P0** |
+| DR-4 | リンク描画 | クリッカブルテキストの視覚フィードバック（色、下線、ホバー状態）。 | balloon03-link | P0 |
 | DR-5 | 選択肢UI描画 | 選択肢ボタンのレイアウト・描画・ホバー状態フィードバック。 | balloon04-choice | P0 |
-| DR-6 | テキスト本文描画（エフェクト） | 文字単位エフェクト（フェードイン・アウト等）、アニメーション管理との連動、描画領域管理の強化。 | balloon05-text-effects | **P0** |
+| DR-6 | テキスト本文描画（エフェクト） | 文字単位エフェクト（フェードイン・アウト等）、アニメーション管理との連動、描画領域管理の強化。 | balloon05-text-effects | P0 |
 | DR-7 | ルビ描画 | ふりがなの重畳描画（親文字の上/横）。 | balloon06-ruby | **P1** |
 
 ### AR-3: 描画責務間の独立性
@@ -83,13 +83,13 @@
 
 | # | 子仕様 | 描画責務 | スコープ | 依存 | P0/P1 | フェーズ |
 |---|--------|---------|----------|------|-------|---------|
-| 1 | `wintf-P0-balloon01-core` | DR-1: フレーム描画 | ウィンドウ生成・配置・表示制御・フレーム描画基盤 | event-system ✅ | **P0** | B-1: 最優先 |
-| 2 | `wintf-P0-balloon02-content` | DR-2+DR-3: ビューポート+テキスト基本描画 | コンテンツ領域管理・テキスト描画（新規実装）・スクロール | balloon01-core, (typewriter📖参考) | **P0** | B-2 |
-| 3 | `wintf-P0-balloon03-link` | DR-4: リンク描画 | クリッカブルテキスト、ヒットテスト、イベント発火 | balloon02-content, event-system ✅ | **P0** | B-3 |
-| 4 | `wintf-P0-balloon04-choice` | DR-5: 選択肢UI描画 | 選択肢専用バルーンウィンドウ（ChoiceBalloon） | balloon01-core, event-system ✅ | **P0** | B-3（linkと並行可） |
-| 5 | `wintf-P0-balloon05-text-effects` | DR-6: テキストエフェクト描画 | 文字単位エフェクト・dolaアニメーション統合 | balloon02-content, dola | **P0** | B-4 |
-| 6 | `wintf-P1-balloon06-ruby` | DR-7: ルビ描画 | ルビ（ふりがな）表示 | balloon02-content | **P1** | Phase 2 |
-| 7 | `wintf-P0-balloon-reference-skin` | （検証用） | 最小限の検証用バルーンスキン（単色背景・角丸矩形・しっぽ定義） | balloon01-core | **P0** | M-1b |
+| 1 | `wintf-P0-balloon01-core` | DR-1: フレーム描画 | ウィンドウ生成・配置・表示制御・フレーム描画基盤 | event-system ✅ | P0 | M-1a |
+| 2 | `wintf-P0-balloon02-content` | DR-2+DR-3: ビューポート+テキスト基本描画 | コンテンツ領域管理・テキスト描画（新規実装）・スクロール | balloon01-core, (typewriter📖参考) | P0 | M-2 |
+| 3 | `wintf-P0-balloon03-link` | DR-4: リンク描画 | クリッカブルテキスト、ヒットテスト、イベント発火 | balloon02-content, event-system ✅ | P0 | M-3a |
+| 4 | `wintf-P0-balloon04-choice` | DR-5: 選択肢UI描画 | 選択肢専用バルーンウィンドウ（ChoiceBalloon） | balloon01-core, event-system ✅ | P0 | M-3b |
+| 5 | `wintf-P0-balloon05-text-effects` | DR-6: テキストエフェクト描画 | 文字単位エフェクト・dolaアニメーション統合 | balloon02-content, dola | P0 | M-3c |
+| 6 | `wintf-P1-balloon06-ruby` | DR-7: ルビ描画 | ルビ（ふりがな）表示 | balloon02-content | **P1** | M-5 |
+| 7 | `wintf-P0-balloon-reference-skin` | （検証用） | 最小限の検証用バルーンスキン（単色背景・角丸矩形・しっぽ定義） | balloon01-core | P0 | M-1b |
 
 ```
 依存関係:
@@ -99,7 +99,8 @@ P0フロー:
                                         │   (DR-2+DR-3実装)     │
   event-system ✅ ──► balloon01-core ──┤                        │
                                         │     dola ──────────────┴─► balloon05-text-effects (P0)
-                                        └─► balloon04-choice (P0)
+                                        ├─► balloon04-choice (P0)
+                                        └─► balloon-reference-skin (検証用)
 
 参考実装:
   typewriter P0 📖 ──参考──► balloon02-content (DirectWrite縦書き、文字単位制御の実装指針)
@@ -113,7 +114,7 @@ P1拡張:
 **P0スコープ（含まれるもの）:**
 - バルーンウィンドウのフレーム描画基盤・生成・配置・管理（balloon01-core / DR-1）
 - コンテンツ領域のビューポート描画・スクロール（balloon02-content / DR-2）
-- **テキスト本文の基本描画（balloon02-content / DR-3）**
+- テキスト本文の基本描画（balloon02-content / DR-3）
   - DirectWrite縦横書き、グリフ単位への事前分割（レイアウト最適化）
   - 濁点・半濁点でのウェイト調整
   - dolaアニメーションシステムへのマッピング構造
@@ -121,6 +122,7 @@ P1拡張:
 - クリッカブルテキスト（リンク）の描画・ヒットテスト・イベント（balloon03-link / DR-4）
 - 選択肢専用バルーンウィンドウの描画（balloon04-choice / DR-5）
 - テキスト本文のエフェクト描画・dolaアニメーション統合（balloon05-text-effects / DR-6）
+- 検証用バルーンスキン（balloon-reference-skin）
 
 **P1スコープ（Phase 2で対応）:**
 - ルビ（ふりがな）描画（balloon06-ruby / DR-7）
@@ -157,7 +159,7 @@ P1拡張:
 
 ---
 
-#### Requirement 1.5: フレーム描画 [balloon01-core]
+#### Requirement 2: フレーム描画 [balloon01-core]
 
 **Objective:** 開発者として、バルーンウィンドウの外観（背景・形状・枠線）を描画したい。それによりスキン定義に基づいた視覚表現を実現できる。
 
@@ -171,7 +173,7 @@ P1拡張:
 
 ---
 
-#### Requirement 2: バルーン配置制御 [balloon01-core]
+#### Requirement 3: バルーン配置制御 [balloon01-core]
 
 **Objective:** 開発者として、バルーンをキャラクターの近傍に自動配置したい。それによりどのキャラクターの発言かが視覚的に明確になる。
 
@@ -185,7 +187,7 @@ P1拡張:
 
 ---
 
-#### Requirement 3: バルーン表示制御 [balloon01-core]
+#### Requirement 4: バルーン表示制御 [balloon01-core]
 
 **Objective:** 開発者として、バルーンの表示状態を制御したい。それにより会話の開始・終了に応じた表示管理ができる。
 
@@ -210,7 +212,7 @@ P1拡張:
 
 ---
 
-#### Requirement 4: コンテンツ領域管理 [balloon02-content]
+#### Requirement 5: コンテンツ領域管理 [balloon02-content]
 
 **Objective:** 開発者として、バルーン内にコンテンツ領域を定義したい。それによりテキストやウィジェットの配置基盤を確立できる。
 
@@ -223,29 +225,40 @@ P1拡張:
 
 ---
 
-#### Requirement 5: テキスト描画実装 [balloon02-content]
+#### Requirement 6: テキストレイアウトとグリフ分割 [balloon02-content]
 
-**Objective:** 開発者として、バルーン内にグリフベースの高性能テキスト描画を実装したい。それによりdolaアニメーション統合可能かつ描画負荷の低いテキスト表示基盤を確立できる。
+**Objective:** 開発者として、バルーン内にグリフベースの高性能テキスト描画基盤を実装したい。それによりdolaアニメーション統合可能かつ描画負荷の低いテキストレイアウトを確立できる。
 
-**設計決定**: 既存のtypewriter P0実装は参考実装として活用し、バルーン要件に特化した新規実装を行う。テキスト表示パイプラインは以下の3フェーズで構成される:
+**設計決定**: 既存のtypewriter P0実装は参考実装として活用し、バルーン要件に特化した新規実装を行う。テキスト表示パイプラインの第1フェーズ（グリフ分割）を本要件でカバーする:
 
-1. **グリフ分割**: 描画開始位置 & テキスト & 描画位置RECT情報 ⇒ 「グリフ + 表示位置情報」の配列への変換
-2. **アニメーションマッピング**: 「グリフ + 表示位置情報」をdolaアニメーションまたはタイプライター用アニメーション管理システムにマップ
-3. **アニメーション再生**: 基本的なフェードイン・アウトアニメーションへの変換と再生
+- **グリフ分割**: テキスト & 描画位置RECT情報 ⇒ 「グリフ + 表示位置情報」の配列への変換
 
 ##### Acceptance Criteria
 
 1. **The** Balloon Content **shall** DirectWriteによる縦書き・横書きテキストレイアウトを実装する（typewriter P0のDirectWrite実装を参考）
 2. **The** Balloon Content **shall** テキストを最初にグリフ単位へ分割し、「グリフ + 表示位置情報」の配列を生成する（追加文字ごとの全レイアウト再計算を回避）
-3. **The** Balloon Content **shall** グリフ配列をdolaアニメーションまたはタイプライター用アニメーション管理システムにマッピングできる構造を提供する
-4. **The** Balloon Content **shall** 文字単位での表示タイミング制御（タイプライター効果）を実装する
-5. **The** Balloon Content **shall** 濁点・半濁点など結合文字でのウェイト調整機能を提供する
-6. **The** Balloon Content **shall** さくらスクリプト的なウェイト挿入マーカーをサポートする
-7. **The** Balloon Content **shall** フォント、サイズ、色のスタイル設定を受け付ける
+3. **The** Balloon Content **shall** フォント、サイズ、色のスタイル設定を受け付ける
 
 ---
 
-#### Requirement 6: コンテンツスクロール [balloon02-content]
+#### Requirement 7: テキスト表示制御 [balloon02-content]
+
+**Objective:** 開発者として、テキストの表示タイミングとアニメーション連携を制御したい。それにより文字単位のタイプライター効果やウェイト調整、アニメーションシステムとの統合が可能になる。
+
+**設計決定**: テキスト表示パイプラインの第2フェーズ（アニメーションマッピング）を本要件でカバーする:
+
+- **アニメーションマッピング**: 「グリフ + 表示位置情報」をdolaアニメーションまたはタイプライター用アニメーション管理システムにマップ
+
+##### Acceptance Criteria
+
+1. **The** Balloon Content **shall** 文字単位での表示タイミング制御（タイプライター効果）を実装する
+2. **The** Balloon Content **shall** 濁点・半濁点など結合文字でのウェイト調整機能を提供する
+3. **The** Balloon Content **shall** さくらスクリプト的なウェイト挿入マーカーをサポートする
+4. **The** Balloon Content **shall** グリフ配列をdolaアニメーションまたはタイプライター用アニメーション管理システムにマッピングできる構造を提供する
+
+---
+
+#### Requirement 8: コンテンツスクロール [balloon02-content]
 
 **Objective:** 開発者として、長文テキストをバルーン内でスクロール表示したい。それによりコンテンツ領域に収まらない長文も閲覧できる。
 
@@ -258,13 +271,13 @@ P1拡張:
 
 ---
 
-### 子仕様 3: balloon03-link（DR-4: リンク描画）**[P0]**
+### 子仕様 3: balloon03-link（DR-4: リンク描画）
 
 テキスト内のクリッカブルな領域（リンク）の視覚フィードバックとインタラクションを担う。DirectWriteのテキスト位置情報からヒットテスト領域を生成し、イベントシステムと統合する。
 
 ---
 
-#### Requirement 7: クリッカブルテキスト [balloon03-link]
+#### Requirement 9: クリッカブルテキスト [balloon03-link]
 
 **Objective:** 開発者として、テキスト内にクリック可能なリンクを設定したい。それによりユーザーのアクションをトリガーできる。
 
@@ -279,13 +292,13 @@ P1拡張:
 
 ---
 
-### 子仕様 4: balloon04-choice（DR-5: 選択肢UI描画）**[P0]**
+### 子仕様 4: balloon04-choice（DR-5: 選択肢UI描画）
 
 選択肢UIの描画を担う**独立した専用バルーンウィンドウ（ChoiceBalloon）**を提供する。テキストバルーンとは別ウィンドウとして生成され、同キャラクターに紐付いて配置される。選択肢ボタンのレイアウト・描画・インタラクションを責務とする。
 
 ---
 
-#### Requirement 8: 選択肢バルーン [balloon04-choice]
+#### Requirement 10: 選択肢バルーン [balloon04-choice]
 
 **Objective:** 開発者として、ユーザーに選択肢を選択肢専用バルーンで提示したい。それによりテキスト表示を妨げずにインタラクティブな会話分岐を実現できる。
 
@@ -299,13 +312,17 @@ P1拡張:
 
 ---
 
-### 子仕様 5: balloon05-text-effects（DR-6: テキストエフェクト描画）**[P0]**
+### 子仕様 5: balloon05-text-effects（DR-6: テキストエフェクト描画）
 
 テキスト本文に対する視覚エフェクト・アニメーション連動を担う。balloon02-contentの基本テキスト描画（DR-3）を基盤として、文字単位のエフェクト表現とdolaアニメーションシステムとの統合を提供する。
 
+テキスト表示パイプラインの第3フェーズ（アニメーション再生）を本子仕様でカバーする:
+
+- **アニメーション再生**: 基本的なフェードイン・アウトアニメーションへの変換と再生
+
 ---
 
-#### Requirement 9: 文字単位エフェクト [balloon05-text-effects]
+#### Requirement 11: 文字単位エフェクト [balloon05-text-effects]
 
 **Objective:** 開発者として、テキスト表示に文字単位のエフェクト（フェードイン・アウト等）を適用したい。それによりテキスト演出の表現力を向上させる。
 
@@ -319,7 +336,7 @@ P1拡張:
 
 ---
 
-#### Requirement 10: dolaアニメーション統合 [balloon05-text-effects]
+#### Requirement 12: dolaアニメーション統合 [balloon05-text-effects]
 
 **Objective:** 開発者として、テキストエフェクトをdolaアニメーションシステムと連動させたい。それによりタイムライン制御されたテキスト演出を実現できる。
 
@@ -339,7 +356,7 @@ P1拡張:
 
 ---
 
-#### Requirement 11: ルビ表示 [balloon06-ruby] **[P1]**
+#### Requirement 13: ルビ表示 [balloon06-ruby] **[P1]**
 
 **Objective:** 開発者として、テキストにルビ（ふりがな）を付加したい。それにより漢字の読み方を示し、テキストの可読性を向上させる。
 
@@ -352,6 +369,24 @@ P1拡張:
 3. **The** Balloon Ruby **shall** 縦書き時のルビ配置（親文字の右側）をサポートする
 4. **The** Balloon Ruby **shall** ルビのフォントサイズを親文字に対して自動調整できる
 5. **The** Balloon Ruby **shall** ルビ情報をテキスト入力形式（マークアップ）として受け渡しできる
+
+---
+
+### 子仕様 7: balloon-reference-skin（検証用スキン）
+
+balloon01-coreのフレーム描画機構（Req 2）を検証するための最小限のバルーンスキンを提供する。製品用スキンではなく、wintf層で完結する検証用リファレンス実装。
+
+---
+
+#### Requirement 14: 検証用バルーンスキン [balloon-reference-skin]
+
+**Objective:** 開発者として、balloon01-coreのフレーム描画機構を検証するための最小限のスキン定義を持ちたい。それによりバルーンシステムの動作検証をwintf層内で完結できる。
+
+##### Acceptance Criteria
+
+1. **The** Reference Skin **shall** 単色背景のバルーンスキン定義を提供する
+2. **The** Reference Skin **shall** 角丸矩形の形状定義を含む
+3. **The** Reference Skin **shall** 吹き出しの「しっぽ」の座標・形状定義を含む
 
 ---
 
@@ -381,11 +416,11 @@ P1拡張:
 |---------------|--------|------|---------|
 | M-1a: バルーンウィンドウ基盤（コア） | balloon01-core | 未着手 | event-system ✅ |
 | M-1b: 検証用リファレンススキン | balloon-reference-skin | 未着手 | M-1a 完了 |
-| M-2: テキスト描画パイプライン | balloon02-content | 未着手 | M-1b 完了, (typewriter📖参考) |
+| M-2: テキスト描画パイプライン | balloon02-content | 未着手 | M-1a 完了, (typewriter📖参考) |
 | M-3a: クリッカブルテキスト | balloon03-link | 未着手 | M-2 完了 |
-| M-3b: 選択肢バルーン | balloon04-choice | 未着手 | M-1b 完了 |
+| M-3b: 選択肢バルーン | balloon04-choice | 未着手 | M-1a 完了 |
 | M-3c: テキストエフェクト・アニメーション | balloon05-text-effects | 未着手 | M-2 完了, dola |
-| M-4: 統合検証 | （親仕様） | 未着手 | M-3a, M-3b, M-3c 完了 |
+| M-4: 統合検証 | （親仕様） | 未着手 | M-1b, M-3a, M-3b, M-3c 完了 |
 
 ### Phase 2 (P1)
 

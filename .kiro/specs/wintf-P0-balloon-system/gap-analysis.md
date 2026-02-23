@@ -4,7 +4,7 @@
 |------|------|
 | **対象仕様** | wintf-P0-balloon-system |
 | **分析日** | 2026-02-22 |
-| **対象バージョン** | requirements.md v3.1-draft |
+| **対象バージョン** | requirements.md v3.2 |
 | **前回分析** | v3.0（本レポートで全面更新） |
 
 ---
@@ -101,12 +101,17 @@
 | | 3 | `CompositionMode::ULW` で透過ウィンドウ生成済み | ✅ 既存パターンで対応可能（モックで実証済み） | — |
 | | 4 | `on_remove` フック基盤あり | バルーン固有のクリーンアップロジック未定義 | Missing |
 | | 5 | bevy_ecs でエンティティ管理済み | バルーン専用マーカー/関係コンポーネント未定義 | Missing |
-| **Req 2: 配置制御** | 1 | モック: `BALLOON_OFFSET_X=335` ハードコード | 自動配置アルゴリズム未実装 | Missing |
+| **Req 2: フレーム描画** | 1 | なし | スキン定義インターフェース未定義 | Missing |
+| | 2 | なし | スキンに基づく背景描画未実装 | Missing |
+| | 3 | なし | 角丸・枠線描画ウィジェット未実装 | Missing |
+| | 4 | なし | しっぽ描画未実装 | Missing |
+| | 5 | なし | スキン更新時の再描画機構未実装 | Missing |
+| **Req 3: 配置制御** | 1 | モック: `BALLOON_OFFSET_X=335` ハードコード | 自動配置アルゴリズム未実装 | Missing |
 | | 2 | なし | 配置方向（上/下/左/右）指定機能なし | Missing |
 | | 3 | モック: `OnDrag` ハンドラで手動 `SetWindowPosCommand` | ECSシステムとしての自動追従未実装 | Missing |
 | | 4 | `Monitor.work_area` でデスクトップ領域取得可能 | 自動反転ロジック未実装 | Missing |
 | | 5 | なし | オフセット距離設定コンポーネント未定義 | Missing |
-| **Req 3: 表示制御** | 1 | `WindowPos.show_window` / `hide_window` フラグ | ✅ 既存機構で対応可能 | — |
+| **Req 4: 表示制御** | 1 | `WindowPos.show_window` / `hide_window` フラグ | ✅ 既存機構で対応可能 | — |
 | | 2 | `WindowPos.zorder` (TopMost 等) | ✅ 前面表示は既存 ZOrder で可能 | — |
 | | 3 | `WindowPos.hide_window` | ✅ ウィンドウ非表示+エンティティ保持は既存で可能 | — |
 | | 4 | `WindowPos.size` + `BoxStyle` | ✅ サイズ設定可能 | — |
@@ -115,18 +120,18 @@
 
 | 要件 | AC# | 既存資産 | ギャップ | 分類 |
 |------|------|---------|---------|------|
-| **Req 4: コンテンツ領域** | 1 | `BoxStyle` + `LayoutRoot` 階層 | コンテンツ領域コンポーネント未定義 | Missing |
+| **Req 5: コンテンツ領域** | 1 | `BoxStyle` + `LayoutRoot` 階層 | コンテンツ領域コンポーネント未定義 | Missing |
 | | 2 | `BoxStyle` に margin/padding あり | ✅ 既存BoxStyleで設定可能 | — |
 | | 3 | `BoxStyle` の content-based sizing | コンテンツ→ウィンドウへのサイズ自動調整ロジック未実装 | Missing |
 | | 4 | `BoxStyle` に max_width/max_height | ✅ taffy の制約で設定可能 | — |
-| **Req 5: テキスト描画実装** | 1 | `TextDirection` (縦横4方向), `DWriteFactoryExt` | 📖 typewriter P0のDirectWrite実装を参考に新規実装が必要 | Missing |
+| **Req 6: テキストレイアウトとグリフ分割** | 1 | `TextDirection` (縦横4方向), `DWriteFactoryExt` | 📖 typewriter P0のDirectWrite実装を参考に新規実装が必要 | Missing |
 | | 2 | `TypewriterTimeline` (Stage 2 IRでクラスタベース分解) | **グリフ単位分割→配列生成が未実装**。typewriterは `visible_cluster_count` による全文再描画方式 | Missing |
-| | 3 | **dola↔wintf接続なし** (Cargo.toml未接続) | **グリフ配列→アニメーションマッピング構造が完全未実装** | Missing |
-| | 4 | `TypewriterTalk` (`visible_cluster_count` 増加による逐次表示) | 📖 参考にはなるが、グリフベース方式での文字単位表示制御は新規実装 | Constraint |
-| | 5 | なし | **濁点・半濁点ウェイト調整が未実装** | Missing |
-| | 6 | `TypewriterToken::Wait` (固定待機) | **さくらスクリプト的ウェイト挿入マーカー未実装** | Missing |
-| | 7 | `Typewriter { font_family, font_size }` | 📖 参考。新規実装でのスタイル設定はフォント・サイズ・色の設計が必要 | Constraint |
-| **Req 6: スクロール** | 1 | なし | スクロールコンテナウィジェット未実装 | Missing |
+| | 3 | `Typewriter { font_family, font_size }` | 📖 参考。新規実装でのスタイル設定はフォント・サイズ・色の設計が必要 | Constraint |
+| **Req 7: テキスト表示制御** | 1 | `TypewriterTalk` (`visible_cluster_count` 増加による逐次表示) | 📖 参考にはなるが、グリフベース方式での文字単位表示制御は新規実装 | Constraint |
+| | 2 | なし | **濁点・半濁点ウェイト調整が未実装** | Missing |
+| | 3 | `TypewriterToken::Wait` (固定待機) | **さくらスクリプト的ウェイト挿入マーカー未実装** | Missing |
+| | 4 | **dola↔wintf接続なし** (Cargo.toml未接続) | **グリフ配列→アニメーションマッピング構造が完全未実装** | Missing |
+| **Req 8: スクロール** | 1 | なし | スクロールコンテナウィジェット未実装 | Missing |
 | | 2 | なし | テキスト描画進行追従のスクロール制御未実装 | Missing |
 | | 3 | `WheelDelta` 取得可能 | ホイール→スクロール変換ロジック未実装 | Missing |
 | | 4 | なし | ページ送り機構未実装 | Missing |
@@ -135,7 +140,7 @@
 
 | 要件 | AC# | 既存資産 | ギャップ | 分類 |
 |------|------|---------|---------|------|
-| **Req 7: クリッカブルテキスト** | 1 | `HitRegionMap` (rect/polygon) | テキスト位置→ヒットリージョン自動生成が未実装 | Missing |
+| **Req 9: クリッカブルテキスト** | 1 | `HitRegionMap` (rect/polygon) | テキスト位置→ヒットリージョン自動生成が未実装 | Missing |
 | | 2 | `Phase<T>` イベントシステム (完備) | リンクイベント型（`LinkClicked { action }` 等）未定義 | Missing |
 | | 3 | なし | リンク外観カスタマイズ機構未実装 | Missing |
 | | 4 | `OnPointerEntered/Exited` (5種ハンドラ完備) | ホバー状態管理コンポーネント未定義（ハンドラフック自体は再利用可能） | Missing |
@@ -146,7 +151,7 @@
 
 | 要件 | AC# | 既存資産 | ギャップ | 分類 |
 |------|------|---------|---------|------|
-| **Req 8: 選択肢バルーン** | 1 | `Window` + balloon01-core の `BalloonAnchor` | ChoiceBalloon 専用コンポーネント未定義 | Missing |
+| **Req 10: 選択肢バルーン** | 1 | `Window` + balloon01-core の `BalloonAnchor` | ChoiceBalloon 専用コンポーネント未定義 | Missing |
 | | 2 | `BoxStyle` (flexbox column対応) | ✅ flexbox 縦並び可能 | — |
 | | 3 | `Phase<T>` イベントシステム | 選択肢イベント型（`ChoiceSelected { index, id }` 等）未定義 | Missing |
 | | 4 | `OnPointerEntered/Exited` | ホバー状態ウィジェット未実装（ボタン相当ウィジェットがない） | Missing |
@@ -156,12 +161,12 @@
 
 | 要件 | AC# | 既存資産 | ギャップ | 分類 |
 |------|------|---------|---------|------|
-| **Req 9: 文字単位エフェクト** | 1 | Typewriter描画: `visible_cluster_count` でオン/オフのみ | **文字単位フェードイン（不透明度0→1）未実装** | Missing |
+| **Req 11: 文字単位エフェクト** | 1 | Typewriter描画: `visible_cluster_count` でオン/オフのみ | **文字単位フェードイン（不透明度0→1）未実装** | Missing |
 | | 2 | なし | 文字単位フェードアウト未実装 | Missing |
 | | 3 | なし | エフェクトタイミング・継続時間の文字ごと管理未実装 | Missing |
 | | 4 | なし | 複数エフェクト同時適用エンジン未実装 | Missing |
 | | 5 | なし | エフェクト適用中の描画領域管理（クリッピング拡張）未実装 | Missing |
-| **Req 10: dolaアニメーション統合** | 1 | `dola`: `DolaRuntime` + `compile_storyboard` 完全ランタイム | **wintf↔dola依存なし（Cargo.tomlレベルで未接続）** | Missing |
+| **Req 12: dolaアニメーション統合** | 1 | `dola`: `DolaRuntime` + `compile_storyboard` 完全ランタイム | **wintf↔dola依存なし（Cargo.tomlレベルで未接続）** | Missing |
 | | 2 | `dola::easing`: 30+種ネームドイージング + パラメトリック | イージング→テキストエフェクトへの適用機構未実装 | Missing |
 | | 3 | `dola::playback`: `PlaybackState` (Idle/Playing/Paused/Completed/Cancelled) | dola↔bevy_ecs スケジュール統合未実装 | Missing |
 | | 4 | `dola`: `InterruptionPolicy` (Cancel/Conclude/Trim/Compress/Never) | アニメーション中断制御のECS統合未実装 | Missing |
@@ -171,11 +176,19 @@
 
 | 要件 | AC# | 既存資産 | ギャップ | 分類 |
 |------|------|---------|---------|------|
-| **Req 11: ルビ表示** | 1 | `IDWriteTextLayout` 基本ラップのみ | ルビ用 DirectWrite API 未ラップ（`IDWriteTextLayout1` 以降） | Missing |
+| **Req 13: ルビ表示** | 1 | `IDWriteTextLayout` 基本ラップのみ | ルビ用 DirectWrite API 未ラップ（`IDWriteTextLayout1` 以降） | Missing |
 | | 2 | なし | 横書きルビ配置ロジック未実装 | Missing |
 | | 3 | なし | 縦書きルビ配置ロジック未実装 | Missing |
 | | 4 | なし | ルビフォントサイズ自動調整未実装 | Missing |
 | | 5 | IR: `TypewriterToken` (Text/Wait/FireEvent のみ) | **ルビ用トークン variant 未定義** | Missing |
+
+### 子仕様 7: balloon-reference-skin（検証用スキン）
+
+| 要件 | AC# | 既存資産 | ギャップ | 分類 |
+|------|------|---------|---------|------|
+| **Req 14: 検証用バルーンスキン** | 1 | なし | 単色背景スキン定義未実装 | Missing |
+| | 2 | なし | 角丸矩形形状定義未実装 | Missing |
+| | 3 | なし | しっぽ座標・形状定義未実装 | Missing |
 
 ---
 
@@ -186,35 +199,35 @@
 | # | ギャップ | 影響範囲 | 深刻度 | v3.0からの変化 |
 |---|---------|---------|--------|---------------|
 | G1 | バルーン専用ECSコンポーネント群が未定義 | balloon01-core 全体 | 高 | — |
-| G2 | シェル↔バルーンのECSリレーション機構なし | Req 1, 2 | 高 | — |
-| G3 | 自動配置・追従・反転アルゴリズム未実装 | Req 2 全AC | 高 | — |
-| G4 | **グリフ単位分割→配列生成パイプライン未実装** | Req 5 AC2 | **高** | 🆕 v3.1で追加 |
-| G5 | **グリフ配列→dola/アニメーションマッピング構造未実装** | Req 5 AC3 | **高** | 🆕 v3.1で追加 |
-| G6 | **濁点・半濁点ウェイト調整未実装** | Req 5 AC5 | 中 | 🆕 v3.1で追加 |
-| G7 | **さくらスクリプト的ウェイト挿入未実装** | Req 5 AC6 | 中 | 🆕 v3.1で追加 |
-| G8 | ビューポート/クリッピング未実装 | Req 4, 6 | 中 | — |
-| G9 | スクロールコンテナウィジェット未実装 | Req 6 全AC | 中 | — |
-| G10 | コンテンツ→ウィンドウ サイズ自動調整未実装 | Req 4 AC3 | 中 | — |
-| G11 | `HitTestPoint`（座標→文字位置）API未ラップ | Req 7 AC5 | 中 | — |
-| G12 | リンクイベント型・ホバー状態管理未定義 | Req 7 全AC | 中 | — |
-| G13 | TypewriterToken にリンク variant なし | Req 7 AC6 | 中 | — |
-| G14 | ChoiceBalloon専用コンポーネント未定義 | Req 8 AC1 | 中 | — |
-| G15 | ボタン相当ウィジェット未実装 | Req 8 AC4 | 中 | — |
-| G16 | キーボードナビゲーション基盤不足（ESCのみ） | Req 8 AC5 | 中 | — |
-| G17 | 文字単位不透明度制御未実装（visible_cluster_countはオン/オフのみ） | Req 9 全AC | 高 | — |
-| G18 | **wintf↔dola Cargo.toml依存なし（完全未接続）** | Req 10 全AC | **最高** | 深刻度↑ |
-| G19 | DolaRuntime↔bevy_ecsスケジュール統合未実装 | Req 10 AC3 | 高 | — |
-| G20 | 文字単位エフェクト定義フォーマット未設計 | Req 9, 10 | 高 | — |
-| G21 | エフェクトタイミング管理（テキスト表示タイミング↔dola開始タイミング同期）未実装 | Req 10 AC5 | 高 | — |
-| ~~G22~~ | ~~フレーム描画ウィジェット（枠線+角丸+しっぽ）未実装~~ | ~~DR-1~~ | — | **✅ Req 1.5で解決** |
-| G23 | DirectWriteルビAPI未ラップ (P1) | Req 11 全AC | 中 | P1のため低優先 |
-| G24 | TypewriterToken にルビ variant なし (P1) | Req 11 AC5 | 中 | P1のため低優先 |
+| G2 | シェル↔バルーンのECSリレーション機構なし | Req 1, 3 | 高 | — |
+| G3 | 自動配置・追従・反転アルゴリズム未実装 | Req 3 全AC | 高 | — |
+| G4 | **グリフ単位分割→配列生成パイプライン未実装** | Req 6 AC2 | **高** | 🆕 v3.1で追加 |
+| G5 | **グリフ配列→dola/アニメーションマッピング構造未実装** | Req 7 AC4 | **高** | 🆕 v3.1で追加 |
+| G6 | **濁点・半濁点ウェイト調整未実装** | Req 7 AC2 | 中 | 🆕 v3.1で追加 |
+| G7 | **さくらスクリプト的ウェイト挿入未実装** | Req 7 AC3 | 中 | 🆕 v3.1で追加 |
+| G8 | ビューポート/クリッピング未実装 | Req 5, 8 | 中 | — |
+| G9 | スクロールコンテナウィジェット未実装 | Req 8 全AC | 中 | — |
+| G10 | コンテンツ→ウィンドウ サイズ自動調整未実装 | Req 5 AC3 | 中 | — |
+| G11 | `HitTestPoint`（座標→文字位置）API未ラップ | Req 9 AC5 | 中 | — |
+| G12 | リンクイベント型・ホバー状態管理未定義 | Req 9 全AC | 中 | — |
+| G13 | TypewriterToken にリンク variant なし | Req 9 AC6 | 中 | — |
+| G14 | ChoiceBalloon専用コンポーネント未定義 | Req 10 AC1 | 中 | — |
+| G15 | ボタン相当ウィジェット未実装 | Req 10 AC4 | 中 | — |
+| G16 | キーボードナビゲーション基盤不足（ESCのみ） | Req 10 AC5 | 中 | — |
+| G17 | 文字単位不透明度制御未実装（visible_cluster_countはオン/オフのみ） | Req 11 全AC | 高 | — |
+| G18 | **wintf↔dola Cargo.toml依存なし（完全未接続）** | Req 12 全AC | **最高** | 深刻度↑ |
+| G19 | DolaRuntime↔bevy_ecsスケジュール統合未実装 | Req 12 AC3 | 高 | — |
+| G20 | 文字単位エフェクト定義フォーマット未設計 | Req 11, 12 | 高 | — |
+| G21 | エフェクトタイミング管理（テキスト表示タイミング↔dola開始タイミング同期）未実装 | Req 12 AC5 | 高 | — |
+| ~~G22~~ | ~~フレーム描画ウィジェット（枠線+角丸+しっぽ）未実装~~ | ~~DR-1~~ | — | **✅ Req 2で解決** |
+| G23 | DirectWriteルビAPI未ラップ (P1) | Req 13 全AC | 中 | P1のため低優先 |
+| G24 | TypewriterToken にルビ variant なし (P1) | Req 13 AC5 | 中 | P1のため低優先 |
 
 ### 3.2 v3.0→v3.1 ギャップ変化サマリ
 
 | 変更点 | 影響 |
 |--------|------|
-| **typewriter P0 → 📖参考実装** | Req 5 の全ACが「既存活用」から「新規実装（参考あり）」に変化。G4-G7が新規発生 |
+| **typewriter P0 → 📖参考実装** | Req 6+7 の全ACが「既存活用」から「新規実装（参考あり）」に変化。G4-G7が新規発生 |
 | **グリフベースアーキテクチャ追加** | G4（グリフ分割）、G5（マッピング構造）が最重要ギャップとして新規追加。balloon02-contentの工数↑ |
 | **dola依存の重要度↑** | G18（wintf↔dola未接続）の深刻度が「最高」に。統合層設計がクリティカルパスに |
 | **P0/P1分離** | ルビ（G23, G24）がP1に移動し、P0のクリティカルパスから除外 |
@@ -226,21 +239,21 @@
 |------|--------|---------|
 | `Window` + `on_window_add` hookチェーン | Req 1: バルーンウィンドウ生成 | `BalloonWindow` on_add で同パターン踏襲 |
 | `CompositionMode::ULW` | Req 1 AC3: 透過ウィンドウ | そのまま利用可能（モック実証済み） |
-| `WindowPos` + `SetWindowPosCommand` | Req 2, 3: 位置・表示制御 | コマンドキューパターン再利用 |
-| `Monitor.work_area` | Req 2 AC4: デスクトップ境界判定 | 値取得済み。反転判定ロジックのみ新規 |
-| `BoxStyle` (margin/padding/flex) | Req 4: コンテンツ領域レイアウト | そのまま利用可能 |
-| `TextDirection` (縦横4方向) | Req 5 AC1: 縦書き・横書き | DirectWrite統合パターンを参考 |
-| `TypewriterTimeline` (2段階IR) | Req 5: テキスト描画 | 📖 IRパターンを参考に新グリフベースIR設計 |
-| `DWriteFactoryExt` / `DWriteTextLayoutExt` | Req 5: DirectWrite操作 | 📖 API利用方法を参考 |
-| `WheelDelta` | Req 6 AC3: ホイールスクロール | 値取得済み。消費ロジックのみ新規 |
-| `Phase<T>` (Tunnel/Bubble) イベントシステム | Req 7, 8: イベント発火 | イベント型の追加のみ |
-| `OnPointerEntered/Exited` (全5種ハンドラ) | Req 7 AC4, Req 8 AC4: ホバー | ポインタイベントフック再利用 |
-| `HitRegionMap` (rect/polygon/colormap) | Req 7: リンクヒットテスト | テキスト座標→領域生成が新規 |
-| `composite_render_system` (opacity対応) | Req 9: 文字単位エフェクト | opacity合成パターンを参考。文字単位への適用は新規 |
-| `DolaRuntime` (load→start→update→subscribe) | Req 10: dola統合 | ランタイムは完成。wintf統合層が新規 |
-| `AnimationVariableDef::Integer { typewriter }` | Req 10: dola×テキスト連携 | 設計時点でTypewriter統合が想定されていた |
-| `EasingFunction` (30+種) | Req 10 AC2: イージング | そのまま利用可能 |
-| `InterruptionPolicy` (5種) | Req 10 AC4: 中断制御 | そのまま利用可能 |
+| `WindowPos` + `SetWindowPosCommand` | Req 3, 4: 位置・表示制御 | コマンドキューパターン再利用 |
+| `Monitor.work_area` | Req 3 AC4: デスクトップ境界判定 | 値取得済み。反転判定ロジックのみ新規 |
+| `BoxStyle` (margin/padding/flex) | Req 5: コンテンツ領域レイアウト | そのまま利用可能 |
+| `TextDirection` (縦横4方向) | Req 6 AC1: 縦書き・横書き | DirectWrite統合パターンを参考 |
+| `TypewriterTimeline` (2段階IR) | Req 6+7: テキスト描画 | 📖 IRパターンを参考に新グリフベースIR設計 |
+| `DWriteFactoryExt` / `DWriteTextLayoutExt` | Req 6: DirectWrite操作 | 📖 API利用方法を参考 |
+| `WheelDelta` | Req 8 AC3: ホイールスクロール | 値取得済み。消費ロジックのみ新規 |
+| `Phase<T>` (Tunnel/Bubble) イベントシステム | Req 9, 10: イベント発火 | イベント型の追加のみ |
+| `OnPointerEntered/Exited` (全5種ハンドラ) | Req 9 AC4, Req 10 AC4: ホバー | ポインタイベントフック再利用 |
+| `HitRegionMap` (rect/polygon/colormap) | Req 9: リンクヒットテスト | テキスト座標→領域生成が新規 |
+| `composite_render_system` (opacity対応) | Req 11: 文字単位エフェクト | opacity合成パターンを参考。文字単位への適用は新規 |
+| `DolaRuntime` (load→start→update→subscribe) | Req 12: dola統合 | ランタイムは完成。wintf統合層が新規 |
+| `AnimationVariableDef::Integer { typewriter }` | Req 12: dola×テキスト連携 | 設計時点でTypewriter統合が想定されていた |
+| `EasingFunction` (30+種) | Req 12 AC2: イージング | そのまま利用可能 |
+| `InterruptionPolicy` (5種) | Req 12 AC4: 中断制御 | そのまま利用可能 |
 | モック実装 (`areka/src/main.rs`) | 全子仕様: 構築パターン | エンティティ構築パターンを参考 |
 
 ---
@@ -370,16 +383,16 @@ balloon01-core (M, Low)
 
 | # | 決定事項 | 関連要件 | 優先度 |
 |---|---------|---------|--------|
-| D1 | `BalloonAnchor` の ECS 表現（Relation vs コンポーネント内 Entity 参照） | Req 1, 2 | 高 |
-| D2 | 配置システムのスケジュール位置（PreLayout? Update?） | Req 2 | 中 |
-| D3 | **グリフ分割パイプラインのIR設計**（入力形式、グリフ+表示位置情報の構造体定義） | Req 5 AC2 | **最高** |
-| D4 | **グリフ配列→dola/アニメーション管理へのマッピングインターフェース** | Req 5 AC3 | **最高** |
-| D5 | 濁点・半濁点の結合文字判定ロジック（Unicode解析 vs DirectWriteクラスタ情報活用） | Req 5 AC5 | 高 |
-| D6 | スクロールコンテナの描画方式（D2D1 `PushAxisAlignedClip` / `PushLayer` vs オフスクリーン） | Req 6 | 中 |
-| D7 | **dola_bridge のECSリソース設計**（`DolaRuntime` のライフサイクル管理、subscribe方式） | Req 10 | **最高** |
-| D8 | 文字単位エフェクトのデータモデル（グリフごとの状態: opacity, position, color, etc.） | Req 9 | 高 |
-| D9 | キーボードナビゲーションの実装方式（フォーカスシステム要否） | Req 8 AC5 | 中 |
-| D10 | ルビの実装方式（DirectWrite ネイティブ vs 手動配置）(P1) | Req 11 | 低 |
+| D1 | `BalloonAnchor` の ECS 表現（Relation vs コンポーネント内 Entity 参照） | Req 1, 3 | 高 |
+| D2 | 配置システムのスケジュール位置（PreLayout? Update?） | Req 3 | 中 |
+| D3 | **グリフ分割パイプラインのIR設計**（入力形式、グリフ+表示位置情報の構造体定義） | Req 6 AC2 | **最高** |
+| D4 | **グリフ配列→dola/アニメーション管理へのマッピングインターフェース** | Req 7 AC4 | **最高** |
+| D5 | 濁点・半濁点の結合文字判定ロジック（Unicode解析 vs DirectWriteクラスタ情報活用） | Req 7 AC2 | 高 |
+| D6 | スクロールコンテナの描画方式（D2D1 `PushAxisAlignedClip` / `PushLayer` vs オフスクリーン） | Req 8 | 中 |
+| D7 | **dola_bridge のECSリソース設計**（`DolaRuntime` のライフサイクル管理、subscribe方式） | Req 12 | **最高** |
+| D8 | 文字単位エフェクトのデータモデル（グリフごとの状態: opacity, position, color, etc.） | Req 11 | 高 |
+| D9 | キーボードナビゲーションの実装方式（フォーカスシステム要否） | Req 10 AC5 | 中 |
+| D10 | ルビの実装方式（DirectWrite ネイティブ vs 手動配置）(P1) | Req 13 | 低 |
 
 ### 6.4 リサーチ項目
 
@@ -416,6 +429,7 @@ balloon01-core (M, Low)
 | **balloon04-choice** | 🟡 **40%** | ボタンウィジェット新規。イベントシステム再利用可。キーボードNav不足 | 中 | — |
 | **balloon05-text-effects** | 🔴 **15%** | **wintf↔dola未接続**。文字単位エフェクト機構全て新規 | 低 | — |
 | **balloon06-ruby** (P1) | 🔴 **10%** | DirectWriteルビAPI未ラップ。縦書きルビ配置全て新規 | 低 | P1移動 |
+| **balloon-reference-skin** | 🟢 **0%** | 全て新規だが規模XS（単色背景・角丸矩形・しっぽ定義のみ） | — | 新規 |
 
 ### クリティカルリスクTOP 3
 
