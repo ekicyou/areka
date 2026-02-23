@@ -1,7 +1,7 @@
 # 親仕様からの引継ぎコンテキスト
 
 > **親仕様**: `wintf-P0-balloon-system`
-> **対象要件**: R11（テキストエフェクト）、R12（タイプライター統合）
+> **対象要件**: R11（文字単位エフェクト）、R12（dola アニメーション統合）
 
 ---
 
@@ -9,18 +9,21 @@
 
 ### design.md
 
-- **GlyphDrawData コンポーネント定義**: opacity、color、transform フィールドをアニメーション可能なグリフ描画データ
-- **GlyphTimeline / GlyphEffect コンポーネント定義**: グリフ単位のタイムライン管理
-- **dola マッピング構造**: dola の Variable → GlyphDrawData フィールドへの自動バインディング
+- **DolaBridgeResource リソース定義**: `DolaRuntime` を ECS `Resource` としてラップ。`load_document`, `start`, `bind`, `unbind`, `pause`, `resume` のサービスインターフェース
+- **PropertyBinding / PropertyTarget**: dola Variable → エンティティプロパティ（`AnimatableProperty`）への対応付け
+- **AnimatableProperty enum**: `Opacity`, `IsVisible`, `OffsetX`, `OffsetY` — グリフエンティティの `Visual.opacity`, `Visual.is_visible`, `Arrangement.offset` にバインド
+- **dola_sync_system**: 毎フレーム `runtime.update(time)` → `changes` イテレート → `PropertyTarget` 解決 → コンポーネント更新
+- **GlyphTimeline / GlyphTimelineEntry**: グリフレベルタイムライン（`show_at`, `weight`, `link_id`）。BalloonToken → GlyphTimeline への IR 変換は GlyphContainer が担当
 - **タイプライター効果**: opacity 0→1 のシーケンシャル遷移として表現。dola Storyboard で制御
-- **テキストエフェクション一覧**: フェードイン、スライドイン、バウンス、シェイク、虹色
-- **dola 依存パス**: `crates/dola` を直接パス参照で依存追加（workspace 外 crate）
+- **モジュール配置**: `ecs/dola_bridge/mod.rs`（DolaBridgeResource）、`ecs/dola_bridge/sync.rs`（dola_sync_system, PropertyBinding）
+- **条件コンパイル**: `#[cfg(feature = "dola")]` で dola 依存をオプショナル化
 
 ### research.md — dola 関連
 
-- **依存方式**: `dola = { path = "../../crates/dola" }` で直接参照。dola は workspace メンバーではないが同一リポジトリ内
-- **D5**: dola の Storyboard → GlyphDrawData へのバインディングメカニズム。Variable::Float → opacity/transform パラメータへのマッピング
+- **依存方式**: `dola = { path = "../dola", optional = true }` で wintf の Cargo.toml に追加（G18）。areka が `wintf = { features = ["dola"] }` で有効化
+- **D7**: dola_bridge ECS リソース設計 — 共有 ECS Resource 方式を採用。DolaRuntime は document 単位でロード、複数バルーンが同一定義を共有可能
 - **D4**: タイプライター効果は dola の SequenceTransition として実装。各グリフに遅延付き opacity 遷移を設定
+- **dola↔ECS 統合フロー**: `subscribe(variable_name)` → `variable_id: i64` → `update(time)` → `changes: Vec<(i64, EvaluatedValue)>` で差分配信
 
 ### research.md — パフォーマンス
 
@@ -30,8 +33,9 @@
 
 ## 子仕様スコープ
 
-- dola アニメーションシステムとの統合
-- グリフ単位のエフェクト適用（opacity, color, transform）
+- DolaBridgeResource の実装（DolaRuntime の ECS Resource 化）
+- PropertyBinding によるグリフエンティティプロパティへの自動バインディング
+- グリフ単位のエフェクト適用（opacity, is_visible, offset）
 - タイプライター効果（シーケンシャル表示）の dola Storyboard 実装
-- テキストエフェクト定義と適用メカニズム
+- dola_sync_system による毎フレーム同期
 - balloon03-content のグリフパイプラインが前提
