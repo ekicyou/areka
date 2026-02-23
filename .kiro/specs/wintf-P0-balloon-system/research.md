@@ -113,6 +113,44 @@
 - **トレードオフ**: COM 実装コスト（ただし RecCommandSink パターンで軽減済み）/ テキスト品質の完全保持・描画コスト削減
 - **初期選択からの変更理由**: 設計レビューで既存 COM 実装パターン（`RecCommandSink`）の存在が確認され、Option B の複雑さ懸念が解消。品質・性能の両面で Option A を上回る
 
+### 決定: D3 — グリフエンティティ化の粒度 (rev.2 — 子仕様で最終決定)
+
+- **背景**: `DrawGlyphRun` コールバックは**グリフラン単位**（書式・スクリプト境界で分割）。1コールバック ≠ 1文字。「1グリフ = 1エンティティ」実現のための粒度選択
+- **技術的事実**:
+  - 日本語統一書式テキスト: 1グリフラン = 複数文字（例: "こんにちは" = 1コールバック、5グリフ）
+  - 日英混在: スクリプト境界で分割（例: "日本語ABC" = 2コールバック: CJK + Latin）
+  - 合字（英語）: "fi" → 1グリフ（フォント依存）
+  - `DWRITE_GLYPH_RUN` 内部: `glyphCount`, `glyphIndices`, `glyphAdvances`, `glyphOffsets` 配列
+- **代替案**:
+  - **案A: グリフラン単位エンティティ** — 1 DrawGlyphRun = 1エンティティ（最シンプル、文字単位アニメーション不可）
+  - **案B: 文字単位分解（clusterMap使用）** — グリフ→テキスト位置マッピングで分解（合字分割困難）
+  - **案C: ハイブリッド** — 基本グリフラン単位、アニメーション時のみ分解
+  - **案D: グリフ単位分解** — DrawGlyphRun 内部の `glyphCount` をループし、各グリフを個別エンティティ化（完全な1グリフ=1エンティティ、文字単位アニメーション可能）
+- **案D の技術詳細**:
+  ```rust
+  // CustomTextRenderer::DrawGlyphRun 内で各グリフをループ
+  for i in 0..glyph_run.glyphCount {
+      let single_glyph_run = DWRITE_GLYPH_RUN {
+          glyphCount: 1,
+          glyphIndices: &glyph_run.glyphIndices[i],
+          glyphAdvances: &glyph_run.glyphAdvances[i],
+          glyphOffsets: &glyph_run.glyphOffsets[i],
+          // ... その他フィールドはコピー
+      };
+      // X座標 = baseline_origin_x + Σ(glyphAdvances[0..i]) + glyphOffsets[i].advanceOffset
+      // Y座標 = baseline_origin_y + glyphOffsets[i].ascenderOffset
+      // → 各グリフ用の GlyphDrawData + CommandList + エンティティ生成
+  }
+  ```
+  - `clusterMap` でグリフ→テキスト位置の逆引き可能（リンク領域ヒットテストに有用）
+  - 合字も1グリフ=1エンティティとして扱える（英語 "fi" 対応）
+  - パフォーマンスコストは案A/B/Cと同等（N×CommandList は変わらない）
+- **最終決定の保留理由**: 子仕様（balloon03-content）で実装時に以下を踏まえて選択
+  - 文字単位アニメーションの実需（タイプライター演出は別方式で実現可能）
+  - 合字発生フォントでの表示崩れリスク評価
+  - パフォーマンステスト結果（議題2で検証戦略を決定）
+- **親仕様での暫定方針**: 設計書では案D（グリフ単位分解）を想定した記述を採用し、子仕様で代替案への変更余地を残す
+
 ### 決定: D7 — dola_bridge ECSリソース設計
 
 - **背景**: DolaRuntime のライフサイクルと ECS スケジュールの統合方式

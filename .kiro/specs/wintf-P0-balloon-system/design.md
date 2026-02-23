@@ -550,6 +550,7 @@ pub struct GlyphDrawData {
 - `ChildOf(glyph_container)` で GlyphContainer の子として配置
 - `Arrangement.offset` は `HitTestTextPosition` から算出された位置
 - 描画方式: `dc.DrawGlyphRun(baseline_origin, &glyph_run, brush, measuring_mode)` でキャプチャデータを再生（共有 TextLayout のカーニング・シェーピングを完全保持）
+- **グリフエンティティ化の粒度**: `DrawGlyphRun` コールバック内で各グリフを個別エンティティ化（1グリフ=1エンティティ）する方式を想定。最終決定は子仕様（balloon03-content）で行う（`research.md` D3 rev.2 参照）
 - **dola バインディング対象**: `Visual.opacity`, `Visual.is_visible`, `Arrangement.offset`
 
 ### Interaction ドメイン
