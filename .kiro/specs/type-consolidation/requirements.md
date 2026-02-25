@@ -76,8 +76,9 @@ wintf クレート内で幾何学・空間系の構造体（`Size`, `Offset`, `R
 
 #### Acceptance Criteria
 1. The wintf shall `WindowPos` コンポーネントで Win32 `POINT`/`SIZE` を使用している箇所を評価する
-2. The wintf shall ECS コンポーネントの公開フィールドでは共通型を使用し、Win32 型への変換は `From`/`Into` トレイトで提供する
-3. The wintf shall COM 層（`src/com/`）内部では Win32 ネイティブ型の直接使用を許容する
+2. When ECS コンポーネントの公開フィールドが Win32 型（`POINT`, `SIZE` 等）を直接参照している場合, the wintf shall フィールド型が一致する共通型（整数座標の場合は `i32 × 2` の共通ポイント型、等）に置き換える
+3. The wintf shall 共通型と Win32 型の相互変換を `From`/`Into` トレイトで提供する
+4. The wintf shall COM 層（`src/com/`）内部では Win32 ネイティブ型の直接使用を許容する
 4. The wintf shall 共通型から Win32 型（`POINT`, `SIZE`, `D2D_RECT_F`, `RECT` 等）への双方向変換を提供する
 
 ### Requirement 7: 後方互換性の維持

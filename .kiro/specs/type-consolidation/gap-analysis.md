@@ -139,15 +139,15 @@ ecs/mod.rs
 
 ### 要件 → 既存資産マッピング
 
-| 要件                       | 既存資産                                                  | ギャップ                                                | 状態           |
-| -------------------------- | --------------------------------------------------------- | ------------------------------------------------------- | -------------- |
-| Req1: 共通型モジュール導入 | 該当なし（各サブモジュールに分散）                        | 共通型モジュール自体が存在しない                        | **Missing**    |
-| Req2: Point型統一          | `PhysicalPoint`×2, Win32 `POINT`, `Vector2`               | 同名異義の重複、整数/浮動小数点の未分離                 | **Missing**    |
-| Req3: Size/Offset共通化    | `Size`, `Offset` (layout内)                            | 定義場所がlayout層に閉じ込め                          | **Constraint** |
-| Req4: Rect型整理           | `Rect<T>`, `D2DRect`, `Shape::Rect`, `D2D_RECT_F`, `RECT` | 5種類の矩形表現が乱立                                   | **Missing**    |
-| Req5: Transform境界整理    | `transform/` モジュール全体が非推奨                       | `#[deprecated]` マーキングが一部のみ                    | **Constraint** |
-| Req6: Win32型抽象化        | `WindowPos` が `POINT`/`SIZE` を直接保持                  | From/Into変換なし                                       | **Missing**    |
-| Req7: 後方互換性           | `pub use` re-export パターンが既に存在                    | 移動後の re-export パスを追加する作業が必要             | **Unknown**    |
+| 要件                       | 既存資産                                                  | ギャップ                                    | 状態           |
+| -------------------------- | --------------------------------------------------------- | ------------------------------------------- | -------------- |
+| Req1: 共通型モジュール導入 | 該当なし（各サブモジュールに分散）                        | 共通型モジュール自体が存在しない            | **Missing**    |
+| Req2: Point型統一          | `PhysicalPoint`×2, Win32 `POINT`, `Vector2`               | 同名異義の重複、整数/浮動小数点の未分離     | **Missing**    |
+| Req3: Size/Offset共通化    | `Size`, `Offset` (layout内)                               | 定義場所がlayout層に閉じ込め                | **Constraint** |
+| Req4: Rect型整理           | `Rect<T>`, `D2DRect`, `Shape::Rect`, `D2D_RECT_F`, `RECT` | 5種類の矩形表現が乱立                       | **Missing**    |
+| Req5: Transform境界整理    | `transform/` モジュール全体が非推奨                       | `#[deprecated]` マーキングが一部のみ                                                                   | **Constraint** |
+| Req6: Win32型抽象化        | `WindowPos` が `POINT`/`SIZE` を直接保持                  | WindowPos はコンポーネント参照のためスコープ内。i32版共通型への置き換え + From/Into 変換が必要        | **Missing**    |
+| Req7: 後方互換性           | `pub use` re-export パターンが既に存在                    | 移動後の re-export パスを追加する作業が必要                                                            | **Unknown**    |
 
 ---
 
