@@ -1,5 +1,49 @@
 # ギャップ分析: type-consolidation
 
+## 0. 設計方針の明確化
+
+### 0.1 API 依存とメモリレイアウト互換性の戦略
+
+wintf は **Windows 専用設計**であるが、API 依存を型名レベルで隠蔽し、将来の保守性を確保する。
+
+**基本方針**:
+1. **独自型名・Rust 慣例のフィールド名を使用**: `Rect { left, top, right, bottom }`, `Point { x, y }`, `Size { width, height }` 等
+2. **D2D1/Win32 型とメモリレイアウト互換**: `#[repr(C)]` + フィールド順を一致させ、`From`/`Into` 変換を実質ゼロコストにする（inline + 最適化でメモリコピーも消える）
+3. **D2D1 に存在しない概念は完全独自定義**: taffy 由来の `Dimension`, `LengthPercentage` 等はレイアウトライブラリ固有として維持
+4. **型の階層**:
+   - **プリミティブ型** (`Point`, `PointF`, `Size`, `SizeI`, `Offset`, `Rect` 等) → 共通型モジュールで定義
+   - **ボックスモデル型** (`Rect<T>`, `Dimension`, `LengthPercentage` 等) → レイアウトモジュールに維持
+   - **コンポーネント型** (`Arrangement`, `GlobalArrangement`, `WindowPos` 等) → 各モジュールに維持
+
+**メモリレイアウト互換の例**:
+```rust
+// 独自型だが、D2D_RECT_F とメモリレイアウト互換
+#[repr(C)]
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Rect {
+    pub left: f32,
+    pub top: f32,
+    pub right: f32,
+    pub bottom: f32,
+}
+
+// From 変換は実質ゼロコスト（フィールド順が同じため）
+impl From<D2D_RECT_F> for Rect { /* ... */ }
+impl From<Rect> for D2D_RECT_F { /* ... */ }
+
+// Win32 POINT も同様
+#[repr(C)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Point {
+    pub x: i32,
+    pub y: i32,
+}
+impl From<POINT> for Point { /* ... */ }
+impl From<Point> for POINT { /* ... */ }
+```
+
+---
+
 ## 1. 現状調査
 
 ### 1.1 幾何・空間型の完全インベントリ
@@ -139,15 +183,15 @@ ecs/mod.rs
 
 ### 要件 → 既存資産マッピング
 
-| 要件                       | 既存資産                                                  | ギャップ                                                                                       | 状態           |
-| -------------------------- | --------------------------------------------------------- | ---------------------------------------------------------------------------------------------- | -------------- |
-| Req1: 共通型モジュール導入 | 該当なし（各サブモジュールに分散）                        | 共通型モジュール自体が存在しない                                                               | **Missing**    |
-| Req2: Point型統一          | `PhysicalPoint`×2, Win32 `POINT`, `Vector2`               | 同名異義の重複、整数/浮動小数点の未分離                                                        | **Missing**    |
-| Req3: Size/Offset共通化    | `Size`, `Offset` (layout内)                               | 定義場所がlayout層に閉じ込め                                                                                           | **Constraint** |
-| Req4: Rect型整理           | `Rect<T>`, `D2DRect`, `Shape::Rect`, `D2D_RECT_F`, `RECT` | D2DRect を標準バウンディングボックス型として採用。ボックスモデル `Rect<T>` との使い分けを明確化                       | **Constraint** |
-| Req5: Transform境界整理    | `transform/` モジュール全体が非推奨                       | `#[deprecated]` マーキングが一部のみ                                                                                   | **Constraint** |
-| Req6: Win32型抽象化        | `WindowPos` が `POINT`/`SIZE` を直接保持                  | WindowPos はコンポーネント参照のためスコープ内。i32版共通型への置き換え + From/Into 変換が必要 | **Missing**    |
-| Req7: 後方互換性           | `pub use` re-export パターンが既に存在                    | 移動後の re-export パスを追加する作業が必要                                                    | **Unknown**    |
+| 要件                       | 既存資産                                                  | ギャップ                                                                                                                                                                 | 状態           |
+| -------------------------- | --------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------- |
+| Req1: 共通型モジュール導入 | 該当なし（各サブモジュールに分散）                        | 共通型モジュール自体が存在しない                                                                                                                                         | **Missing**    |
+| Req2: Point型統一          | `PhysicalPoint`×2, Win32 `POINT`, `Vector2`               | `Point { x: i32, y: i32 }`, `PointF { x: f32, y: f32 }` を定義し、Win32/D2D1 とメモリレイアウト互換にする。PhysicalPoint 重複を解消                                      | **Missing**    |
+| Req3: Size/Offset共通化    | `Size`, `Offset` (layout内)                               | `Size`/`SizeI`, `Offset` を共通型として定義し、Win32/D2D1 とメモリレイアウト互換にする。既存 metrics.rs から移動                                                         | **Constraint** |
+| Req4: Rect型整理           | `Rect<T>`, `D2DRect`, `Shape::Rect`, `D2D_RECT_F`, `RECT` | 独自 `Rect { left, top, right, bottom: f32 }` を定義し D2D_RECT_F とメモリレイアウト互換にする。`D2DRect` は type alias として維持。`D2DRectExt` トレイトも移植        | **Missing**    |
+| Req5: Transform境界整理    | `transform/` モジュール全体が非推奨                       | `#[deprecated]` マーキングが一部のみ                                                                                                                                     | **Constraint** |
+| Req6: Win32型抽象化        | `WindowPos` が `POINT`/`SIZE` を直接保持                  | WindowPos のフィールドを `Point`/`SizeI` (メモリレイアウト互換の独自型) に置き換え。From/Into 変換でゼロコスト変換を提供                                                 | **Missing**    |
+| Req7: 後方互換性           | `pub use` re-export パターンが既に存在                    | 移動後の re-export パスを追加する作業が必要                                                                                                                              | **Unknown**    |
 
 ---
 
@@ -213,20 +257,24 @@ ecs/mod.rs
 
 ### Research Needed
 
-1. **PhysicalPoint の統一方針** 【設計判断】: i32版（pointer用）とf32版（hit_test用）をどう統合するか
-   - 案1: `PhysicalPoint<T>` ジェネリック化
-   - 案2: `PhysicalPointI`（整数）/ `PhysicalPointF`（浮動小数点）に分離命名
-   - 案3: `ScreenPoint`（i32、ポインター用）/ `LogicalPoint`（f32、レイアウト用）のように意味名で分離
+1. **PhysicalPoint の統一方針** 【解決済み】: 設計方針セクション（§0.1）に従い、`Point { x: i32, y: i32 }` と `PointF { x: f32, y: f32 }` に分離。それぞれ Win32 `POINT` と D2D1 `D2D_POINT_2F` とメモリレイアウト互換とする。
 2. **`TextLayoutMetrics` の扱い** 【解決済み】: `TextLayoutMetrics` は「テキストレイアウトの測定結果」というセマンティック型であり、汎用の `Size` とは意味が異なる。`metrics.rs` に維持し、統合は行わない。
-3. **`D2DRectExt` トレイトの移行** 【設計判断】: 共通矩形型にメソッドを組み込むか、トレイトのまま維持か
-4. **`LayoutScale` のスコープ判定** 【設計判断】: DPI専用か汎用スケールか（`DPI` コンポーネントとの関係整理）
+3. **`D2DRectExt` トレイトの移行** 【解決済み】: Req4 AC4 に従い、共通型 `Rect` に対しても `D2DRectExt` トレイトを実装し、既存の便利メソッド（`.offset()`, `.size()`, `.expand()`, `.contains()` 等）を維持する。
+4. **`LayoutScale` のスコープ判定** 【設計判断】: 使用箇所（Arrangement.scale）と DPI コンポーネントとの関係を評価し、レイアウト専用か汎用スケールかを設計時に判定する。
 5. **`PositionSample`, `CursorVelocity` の扱い** 【解決済み】: `PositionSample`（`x, y, timestamp`）、`CursorVelocity`（`x, y, magnitude`）は追加フィールドを持つポインターモジュール固有のドメイン型。共通化の対象外とする。
 
 ### 推奨アプローチ
 
-**Option C（ハイブリッド段階的実装）** を推奨。
+**メモリレイアウト互換戦略に基づく包括的実装**（Option B の変種）を推奨。
 
 理由:
-- Phase 1 で最も深刻な問題（PhysicalPoint重複、Size/Offset の閉じ込め）を解消
-- Phase 2 以降は要件の優先度に応じて柔軟にスケジューリング可能
-- 各 Phase 末でコンパイル通過・テストパスを保証でき、安全
+- **設計方針（§0.1）により、全ての共通型が Win32/D2D1 とメモリレイアウト互換** → `From` 変換はゼロコスト、パフォーマンス問題なし
+- **型名の中立性を確保**（`Point`, `PointF`, `Size`, `SizeI`, `Rect` 等の独自型名）→ API 依存を隠蔽、将来の保守性確保
+- **既存の `D2DRectExt` トレイトを移植**し、`Rect` 型に対しても豊富なメソッドを提供 → 互換性維持
+- **段階的実装も可能**: Phase 1 で Point系・Size/Offset、Phase 2 で Rect・Win32 変換と分割しても良いが、メモリレイアウト互換により破壊的変更のリスクが低減
+
+実装順序案:
+1. **Phase 1**: 共通型モジュール作成 + Point/PointF 定義 → PhysicalPoint 重複解消
+2. **Phase 2**: Size/SizeI/Offset 移動 + メモリレイアウト互換確認
+3. **Phase 3**: Rect 定義 + D2DRectExt 移植 + WindowPos 型置き換え
+4. **Phase 4**: 全テスト・サンプルの検証 + 後方互換性確認

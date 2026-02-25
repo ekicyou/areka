@@ -38,30 +38,34 @@ wintf クレート内で幾何学・空間系の構造体（`Size`, `Offset`, `R
 **Objective:** As a wintf ライブラリ開発者, I want `PhysicalPoint` の重複定義を解消し、用途に応じた型体系を持つ, so that 同名異義の型による混乱がなくなる
 
 #### Acceptance Criteria
-1. The wintf shall 整数座標ポイント型（`i32 × 2`）を共通型モジュールで一つだけ定義する
-2. The wintf shall 浮動小数点座標ポイント型（`f32 × 2`）を共通型モジュールで一つだけ定義する
-3. When `ecs/pointer/types.rs` が整数座標ポイントを必要とする場合, the wintf shall 共通型モジュールの整数ポイント型を使用する
-4. When `ecs/layout/hit_test/` が浮動小数点座標ポイントを必要とする場合, the wintf shall 共通型モジュールの浮動小数点ポイント型を使用する
-5. The wintf shall `PhysicalPoint` という同一名称の異なる定義を排除する
+1. The wintf shall 整数座標ポイント型（`Point { x: i32, y: i32 }`）を共通型モジュールで定義し、Win32 `POINT` とメモリレイアウト互換にする（`#[repr(C)]` + フィールド順一致）
+2. The wintf shall 浮動小数点座標ポイント型（`PointF { x: f32, y: f32 }`）を共通型モジュールで定義し、D2D1 `D2D_POINT_2F` とメモリレイアウト互換にする
+3. The wintf shall `Point`/`PointF` と Win32/D2D1 型の相互変換を `From`/`Into` トレイトで提供する（メモリレイアウト互換によりゼロコスト変換）
+4. When `ecs/pointer/types.rs` が整数座標ポイントを必要とする場合, the wintf shall 共通型モジュールの `Point` を使用する
+5. When `ecs/layout/hit_test/` が浮動小数点座標ポイントを必要とする場合, the wintf shall 共通型モジュールの `PointF` を使用する
+6. The wintf shall `PhysicalPoint` という同一名称の異なる定義を排除する
 
 ### Requirement 3: Size/Offset 型の共通化
 **Objective:** As a wintf ライブラリ開発者, I want `Size`, `Offset`, `LayoutScale` を共通型として他モジュールからも参照しやすくする, so that レイアウト以外のモジュールでも一貫した空間型を使用できる
 
 #### Acceptance Criteria
-1. The wintf shall `Size`（`f32 × 2: width, height`）を共通型モジュールで定義する
-2. The wintf shall `Offset`（`f32 × 2: x, y`）を共通型モジュールで定義する
-3. The wintf shall `ecs/layout/metrics.rs` の `Size`, `Offset` を共通型モジュールからの re-export に置き換える
-4. While `Arrangement` コンポーネントが `Size`, `Offset` を使用している場合, the wintf shall 共通型モジュールの定義を参照する
-5. The wintf shall `LayoutScale` のスコープを評価し、レイアウト専用であれば `layout/` に残し、汎用であれば共通化する
+1. The wintf shall `Size { width: f32, height: f32 }` を共通型モジュールで定義し、D2D1 `D2D_SIZE_F` とメモリレイアウト互換にする（`#[repr(C)]` + フィールド順一致）
+2. The wintf shall `Offset { x: f32, y: f32 }` を共通型モジュールで定義する（D2D1 には直接対応型なし、`D2D_POINT_2F` 互換のレイアウト）
+3. The wintf shall 整数版サイズ型 `SizeI { width: i32, height: i32 }` を共通型モジュールで定義し、Win32 `SIZE` とメモリレイアウト互換にする
+4. The wintf shall `ecs/layout/metrics.rs` の `Size`, `Offset` を共通型モジュールからの re-export に置き換える
+5. While `Arrangement` コンポーネントが `Size`, `Offset` を使用している場合, the wintf shall 共通型モジュールの定義を参照する
+6. The wintf shall `LayoutScale` のスコープを評価し、レイアウト専用であれば `layout/` に残し、汎用であれば共通化する
 
 ### Requirement 4: Rect 型の整理
-**Objective:** As a wintf ライブラリ開発者, I want 矩形を表す型を用途別に整理する, so that D2DRect を標準バウンディングボックス型として採用し、型の意味が明確になる
+**Objective:** As a wintf ライブラリ開発者, I want 矩形を表す型を用途別に整理する, so that メモリレイアウト互換の独自 Rect 型を標準バウンディングボックス型として定義し、型の意味が明確になる
 
 #### Acceptance Criteria
-1. The wintf shall ボックスモデル用の `Rect<T>`（`left/right/top/bottom`）をレイアウトモジュールに維持する
-2. The wintf shall `D2DRect`（`D2D_RECT_F` のエイリアス、`left/top/right/bottom: f32`）をバウンディングボックス用途の標準矩形型として採用する
-3. The wintf shall `Shape::Rect` variant（`hit_region` 内部の enum、`x/y/w/h` 表現）は本仕様のスコープ外とし、変更しない
-4. The wintf shall 描画コマンド（`DrawRectangle`, `FillRectangle`）等の `D2D_RECT_F` フィールドは COM 層の型として維持し、`D2DRect` との相互変換を提供する
+1. The wintf shall ボックスモデル用の `Rect<T>`（`left: T, right: T, top: T, bottom: T`）をレイアウトモジュールに維持する（ボックスモデル専用型）
+2. The wintf shall バウンディングボックス用途の `Rect { left: f32, top: f32, right: f32, bottom: f32 }` を共通型モジュールで定義し、D2D1 `D2D_RECT_F` とメモリレイアウト互換にする（`#[repr(C)]` + フィールド順一致）
+3. The wintf shall 既存の `D2DRect` 型エイリアスを共通型モジュールの `Rect` への type alias として維持し、後方互換性を提供する（`pub type D2DRect = Rect;`）
+4. The wintf shall `D2DRectExt` トレイトを共通型 `Rect` に対しても実装し、既存の便利メソッド（`.offset()`, `.size()`, `.expand()`, `.contains()` 等）を維持する
+5. The wintf shall `Shape::Rect` variant（`hit_region` 内部の enum、`x/y/w/h` 表現）は本仕様のスコープ外とし、変更しない
+6. The wintf shall 描画コマンド（`DrawRectangle`, `FillRectangle`）等の `D2D_RECT_F` フィールドは COM 層の型として維持し、共通型 `Rect` との相互変換を `From`/`Into` で提供する（メモリレイアウト互換によりゼロコスト変換）
 
 ### Requirement 5: Transform 系型との境界整理
 **Objective:** As a wintf ライブラリ開発者, I want 非推奨の `transform/` モジュールの型と共通型の関係を明確にする, so that 非推奨モジュールの将来的な削除時に影響範囲が限定される
@@ -71,13 +75,13 @@ wintf クレート内で幾何学・空間系の構造体（`Size`, `Offset`, `R
 2. The wintf shall 非推奨モジュールに `#[deprecated]` 属性またはドキュメントによる非推奨マーキングを施す
 
 ### Requirement 6: Win32 型の抽象化境界
-**Objective:** As a wintf ライブラリ開発者, I want ECS 層で Win32 の `POINT`/`SIZE` を直接使用する箇所を整理する, so that プラットフォーム依存の型が ECS コンポーネントの公開 API に漏れない
+**Objective:** As a wintf ライブラリ開発者, I want ECS 層で Win32 の `POINT`/`SIZE` を直接使用する箇所を整理する, so that プラットフォーム依存の型が ECS コンポーネントの公開 API に漏れず、かつメモリレイアウト互換によりゼロコスト変換が可能になる
 
 #### Acceptance Criteria
 1. The wintf shall `WindowPos` コンポーネントで Win32 `POINT`/`SIZE` を使用している箇所を評価する
-2. When ECS コンポーネントの公開フィールドが Win32 型（`POINT`, `SIZE` 等）を直接参照している場合, the wintf shall フィールド型が一致する共通型（整数座標の場合は `i32 × 2` の共通ポイント型、等）に置き換える
-3. The wintf shall 共通型と Win32 型の相互変換を `From`/`Into` トレイトで提供する
-4. The wintf shall COM 層（`src/com/`）内部では Win32 ネイティブ型の直接使用を許容する
+2. When ECS コンポーネントの公開フィールドが Win32 型（`POINT`, `SIZE` 等）を直接参照している場合, the wintf shall メモリレイアウト互換の共通型（`Point { x: i32, y: i32 }`, `SizeI { width: i32, height: i32 }`）に置き換える
+3. The wintf shall 共通型と Win32 型の相互変換を `From`/`Into` トレイトで提供し、メモリレイアウト互換によりゼロコスト変換を実現する
+4. The wintf shall COM 層（`src/com/`）内部では Win32 ネイティブ型の直接使用を許容する（`From` 変換でブリッジ）
 4. The wintf shall 共通型から Win32 型（`POINT`, `SIZE`, `D2D_RECT_F`, `RECT` 等）への双方向変換を提供する
 
 ### Requirement 7: 後方互換性の維持
