@@ -32,7 +32,7 @@
 | `local_bounds()` メソッド   | **Exists**         | `Arrangement::local_bounds()` が `(0,0)-(width,height)` を返す（`arrangement.rs:18-24`） |
 | ゼロサイズ回避              | **Missing**        | 新規ガード条件が必要                                                                     |
 
-### Req 4: DirectComposition との同期（clip_sync_system）
+### Req 4: DComp モード — DirectComposition との同期（clip_sync_system）
 
 | 項目                              | 状態               | 既存アセット                                                                                 |
 | --------------------------------- | ------------------ | -------------------------------------------------------------------------------------------- |
@@ -46,9 +46,10 @@
 
 | 項目                              | 状態               | 既存アセット                                                                                               |
 | --------------------------------- | ------------------ | ---------------------------------------------------------------------------------------------------------- |
-| `GlobalArrangement` スケール適用  | **Pattern Exists** | `visual_property_sync_system` で `scale_x/scale_y` を offset に適用（`visual_sync.rs:225-232`）            |
+| DComp: `GlobalArrangement` スケール適用 | **Pattern Exists** | `visual_property_sync_system` で `scale_x/scale_y` を offset に適用（`visual_sync.rs:225-232`）            |
 | `Changed<GlobalArrangement>` 検知 | **Exists**         | `visual_property_sync_system` の `Or<(Changed<Arrangement>, Changed<GlobalArrangement>, Changed<Visual>)>` |
-| radius のスケーリング             | **Missing**        | 新規。offset スケーリングと同様のパターンで実装                                                            |
+| DComp: radius のスケーリング      | **Missing**        | 新規。offset スケーリングと同様のパターンで実装                                                            |
+| ULW: SetTransform による自動スケーリング | **Exists**     | `render_subtree` の `adjusted_transform` が DPI スケールを含む（`render.rs:163-171`）                       |
 
 ### Req 6: COM API 拡張
 
@@ -64,7 +65,7 @@
 | ---------------------------------- | ------------------ | ------------------------------------------------------------------------ |
 | Composition スケジュール           | **Exists**         | `schedule_labels.rs:93` に定義済み                                       |
 | `visual_property_sync_system` の後 | **Extend**         | `world/mod.rs:272-280` の `add_systems(Composition, ...)` チェーンに追加 |
-| DComp モードガード                 | **Pattern Exists** | `visual.rs:87` の `is_dcomp_mode` チェックパターン                       |
+| モード別分岐                       | **Pattern Exists** | `visual.rs:87` の `is_dcomp_mode` チェックパターン                       |
 
 ### Req 8: 将来の拡張性
 
@@ -72,6 +73,17 @@
 | -------------------------- | ------------------- | ------------------------------------------------------------------------------ |
 | `#[non_exhaustive]` 非付与 | **Design Decision** | 既存 enum パターンとの一貫性を確認（クレート内部型に non_exhaustive は不使用） |
 | パターンマッチ網羅性       | **Exists**          | Rust コンパイラが自動保証                                                      |
+
+### Req 9: ULW モード — D2D 描画パイプラインでのクリップ適用
+
+| 項目                                  | 状態               | 既存アセット                                                                                      |
+| ------------------------------------- | ------------------ | ------------------------------------------------------------------------------------------------- |
+| `render_subtree` へのクリップ追加     | **Missing**        | 新規。`render_subtree`（`render.rs:110-210`）に clip 分岐を追加                                   |
+| `PushAxisAlignedClip` (Rectangle)     | **Exists**         | D2D command type が `com/d2d/command_types.rs:487` に実装済み                                     |
+| `PushLayer` (角丸)                    | **Exists**         | D2D command type が `com/d2d/command_types.rs:503` に実装済み                                     |
+| `ID2D1RoundedRectangleGeometry` 作成  | **Missing**        | `ID2D1Factory::CreateRoundedRectangleGeometry` ラッパーが必要                                     |
+| サブツリークリッピング                | **Missing**        | Push → 自Entity描画 → 子再帰 → Pop の構造に `render_subtree` を変更                              |
+| `PopAxisAlignedClip` / `PopLayer`     | **Exists**         | `com/d2d/command_types.rs` に `PopAxisAlignedClip` / `PopLayer` が実装済み                        |
 
 ---
 
@@ -96,16 +108,17 @@
 
 ### Option B: 新規モジュール clip.rs + clip_sync_system（推奨）
 
-**概要**: クリップ専用のモジュールとシステムを新規作成する。
+**概要**: クリップ専用のモジュールとシステムを新規作成する。DComp 同期は専用システム、ULW は render_subtree 内で処理。
 
 **変更対象ファイル**:
 - `com/dcomp.rs` — COM API ラッパー追加（`create_rectangle_clip`, `set_clip`）
 - `ecs/graphics/clip.rs` — **新規**: `ClipShape` enum 定義
 - `ecs/graphics/visual.rs` — `Visual` に `clip: Option<ClipShape>` フィールド追加
 - `ecs/graphics/mod.rs` — `clip` モジュール追加、`pub use`
-- `ecs/graphics/systems/clip_sync.rs` — **新規**: `clip_sync_system` 定義
+- `ecs/graphics/systems/clip_sync.rs` — **新規**: `clip_sync_system` 定義（DComp モード用）
 - `ecs/graphics/systems/mod.rs` — `clip_sync` モジュール追加
-- `ecs/world/mod.rs` — Composition スケジュールに登録
+- `ecs/graphics/compositor_systems/render.rs` — `render_subtree` にクリップ描画追加（ULW モード用）
+- `ecs/world/mod.rs` — Composition スケジュールに clip_sync_system 登録
 
 **トレードオフ**:
 - ✅ 責務が明確に分離（clip = 独立モジュール）
@@ -162,29 +175,55 @@
 
 **対応**: `Changed<Arrangement>` または `Changed<GlobalArrangement>` もトリガーとする。Option B では独自のクエリフィルタを定義可能。
 
+### ULW モード: render_subtree の構造変更
+
+**課題**: ULW モードでは `render_subtree`（`render.rs:110-210`）にクリップ描画を追加する必要がある。DComp モードの `Visual::SetClip` はサブツリー全体をクリップするため、ULW でも同等の挙動が求められる。
+
+**現在の render_subtree 構造**:
+1. Get entity data → visibility check → opacity calculation
+2. `SetTransform(adjusted_transform)` 
+3. Draw entity content with opacity
+4. Recurse to children
+
+**クリップ追加後の構造**:
+1. Get entity data → visibility check → opacity calculation
+2. `SetTransform(adjusted_transform)`
+3. **If clip: Push clip (PushAxisAlignedClip or PushLayer)**
+4. Draw entity content with opacity
+5. Recurse to children
+6. **If clip: Pop clip (PopAxisAlignedClip or PopLayer)**
+
+**注意点**:
+- Push/Pop はペアで呼び出す必要があり、エラー時にも Pop を確実に実行する（RAII パターン or finally 相当）
+- `PushAxisAlignedClip` のクリップ矩形は current transform 空間。`SetTransform` 後に呼ぶため、ローカル座標 (0,0)-(w,h) を指定すれば transform により物理座標に自動変換される
+- `PushLayer` + `ID2D1RoundedRectangleGeometry` の場合、Geometry 作成に `ID2D1Factory` が必要。`dc.GetFactory()` で取得可能
+- 角丸の場合の Geometry 作成コストについて: 毎フレーム作成 vs キャッシュ（Phase 1 では毎フレーム作成で十分な可能性が高い）
+
 ---
 
 ## 4. 実装複雑度とリスク
 
 ### 工数見積
 
-**S（1〜3日）**
+**M（3〜5日）**
 
 理由:
-- 既存パターン（`visual_property_sync_system`）の踏襲で済む
+- DComp 側: 既存パターン（`visual_property_sync_system`）の踏襲で済む
+- ULW 側: `render_subtree` の構造変更（Push → Draw → 子再帰 → Pop）が必要
+- ULW 角丸: `ID2D1RoundedRectangleGeometry` 作成パスの新規実装
 - COM API ラッパーは定型的
-- 新規概念が少ない（DirectComposition の RectangleClip は単純な API）
 - テストは既存のインテグレーションテストパターンを流用可能
 
 ### リスク評価
 
-**Low**
+**Low〜Medium**
 
 理由:
-- DirectComposition の `IDCompositionRectangleClip` は成熟した API
-- 既存パターンの直接的な拡張
-- 影響範囲が限定的（`Visual` フィールド追加 + 新規システム）
-- 破壊的変更なし（`Default` 互換を維持）
+- DirectComposition の `IDCompositionRectangleClip` は成熟した API（Low）
+- D2D の `PushAxisAlignedClip` は既にコマンド型が存在（Low）
+- ULW `PushLayer` + `ID2D1RoundedRectangleGeometry` はレンダリングパスの構造変更を伴う（Medium）
+- `render_subtree` の変更はすべての ULW 描画に影響するため、回帰テストが重要
+- 影響範囲: `Visual` フィールド追加 + 新規システム（DComp） + 既存レンダリング関数修正（ULW）
 
 ---
 
@@ -197,9 +236,12 @@
 2. `ClipShape` は将来 SurfaceMask が追加される前提のため、独立モジュールとして管理する方が自然
 3. wintf の既存パターン（モジュール分離 + `pub use`）と一貫性がある
 4. `visual_sync.rs` の277行にさらに同期ロジックを追加するのは保守性の観点で非推奨
+5. ULW モードの `render_subtree` 変更は Option B でも避けられないが、DComp 同期が独立システムであれば変更箇所が明確に分離される
 
 ### 設計フェーズへの持ち越し事項
 
 - **Research Needed #1**: `IDCompositionVisual3::SetClip` に null ポインタを渡してクリップ解除する具体的な API 呼び出し方法（`windows-rs` での `None` パラメーターの扱い）
 - **Research Needed #2**: `Changed<Arrangement>` と `Changed<Visual>` が同一フレームで両方発生した場合の二重実行回避が必要か
+- **Research Needed #3**: ULW モードで `ID2D1RoundedRectangleGeometry` を作成するための `ID2D1Factory` へのアクセス方法（`ID2D1DeviceContext::GetFactory()` またはリソースとして保持）
+- **Research Needed #4**: ULW モードの `PushLayer` + Geometry によるクリッピングのパフォーマンス特性（毎フレーム Geometry 再作成のコスト）
 
