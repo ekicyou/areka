@@ -103,78 +103,79 @@ graph TB
 
 ### Technology Stack
 
-| Layer | Choice / Version | Role in Feature | Notes |
-|-------|------------------|-----------------|-------|
-| Language | Rust 2024 Edition | 型定義、`#[repr(C)]`、`From`/`Into` 実装 | |
-| ECS | bevy_ecs 0.18.0 | `Component` derive マクロ | 移動先でも `Component` derive 維持 |
-| Win32 Bindings | windows 0.62.2 | `POINT`, `SIZE`, `D2D_RECT_F` 変換ターゲット | `D2D_POINT_2F` は非存在、`Vector2` が代替 |
-| Numerics | windows-numerics 0.3.1 | `Vector2` — `PointF` の変換ターゲット | 既に依存済み |
+| Layer          | Choice / Version       | Role in Feature                              | Notes                                     |
+| -------------- | ---------------------- | -------------------------------------------- | ----------------------------------------- |
+| Language       | Rust 2024 Edition      | 型定義、`#[repr(C)]`、`From`/`Into` 実装     |                                           |
+| ECS            | bevy_ecs 0.18.0        | `Component` derive マクロ                    | 移動先でも `Component` derive 維持        |
+| Win32 Bindings | windows 0.62.2         | `POINT`, `SIZE`, `D2D_RECT_F` 変換ターゲット | `D2D_POINT_2F` は非存在、`Vector2` が代替 |
+| Numerics       | windows-numerics 0.3.1 | `Vector2` — `PointF` の変換ターゲット        | 既に依存済み                              |
 
 ## Requirements Traceability
 
-| Requirement | Summary | Components | Interfaces | Flows |
-|-------------|---------|------------|------------|-------|
-| 1.1 | 共通型モジュール提供 | `ecs/types.rs` | — | — |
-| 1.2 | pub use re-export | `ecs/mod.rs`, `ecs/layout/metrics.rs` | — | — |
-| 1.3 | 最低限 derive 適用 | 全共通型 | — | — |
-| 2.1 | Point 定義（POINT 互換） | `ecs/types.rs` — `Point` | `From<POINT>`, `Into<POINT>` | — |
-| 2.2 | PointF 定義（Vector2 互換） | `ecs/types.rs` — `PointF` | `From<Vector2>`, `Into<Vector2>` | — |
-| 2.3 | Point/PointF 変換 | `ecs/types.rs` | `From`/`Into` impl | — |
-| 2.4 | pointer で Point 使用 | `ecs/pointer/types.rs` | — | — |
-| 2.5 | hit_test で PointF 使用 | `ecs/layout/hit_test/mod.rs` | — | — |
-| 2.6 | PhysicalPoint 重複排除 | pointer, hit_test 両モジュール | — | — |
-| 3.1 | Size 定義（D2D_SIZE_F 互換） | `ecs/types.rs` — `Size` | `From<D2D_SIZE_F>`, `Into<D2D_SIZE_F>` | — |
-| 3.2 | Offset 定義 | `ecs/types.rs` — `Offset` | — | — |
-| 3.3 | SizeI 定義（SIZE 互換） | `ecs/types.rs` — `SizeI` | `From<SIZE>`, `Into<SIZE>` | — |
-| 3.4 | metrics.rs re-export 置換 | `ecs/layout/metrics.rs` | — | — |
-| 3.5 | Arrangement 参照先変更 | `ecs/layout/arrangement.rs` | — | — |
-| 3.6 | LayoutScale スコープ判定 | — | — | — |
-| 4.1 | Rect\<T\> 維持 | `ecs/layout/dimension.rs` | — | — |
-| 4.2 | Rect 定義（D2D_RECT_F 互換） | `ecs/types.rs` — `Rect` | `From<D2D_RECT_F>`, `Into<D2D_RECT_F>` | — |
-| 4.3 | D2DRect type alias 維持 | `ecs/layout/rect.rs` | — | — |
-| 4.4 | D2DRectExt for Rect | `ecs/layout/rect.rs` | `D2DRectExt` trait impl | — |
-| 4.5 | Shape::Rect スコープ外 | — | — | — |
-| 4.6 | COM 層 D2D_RECT_F 維持 | `com/` 変更なし | `From<Rect> for D2D_RECT_F` | — |
-| 5.1 | transform 型は維持 | `ecs/transform/components.rs` | — | — |
-| 5.2 | #[deprecated] マーキング | `ecs/transform/components.rs` | — | — |
-| 6.1 | WindowPos 評価 | — | — | — |
-| 6.2 | WindowPos フィールド置換 | `ecs/window/window_pos.rs` | — | — |
-| 6.3 | 共通型↔Win32 変換 | `ecs/types.rs` | `From`/`Into` impl | — |
-| 6.4 | COM 層は Win32 型許容 | `com/` 変更なし | — | — |
-| 6.5 | 双方向変換提供 | `ecs/types.rs` | `From`/`Into` impl | — |
-| 7.1 | pub use re-export 互換 | `ecs/layout/metrics.rs`, `ecs/pointer/types.rs` | — | — |
-| 7.2 | 元モジュールに re-export | `metrics.rs`, `pointer/types.rs`, `hit_test/mod.rs` | — | — |
-| 7.3 | 既存テスト維持 | — | — | — |
-| 7.4 | 既存サンプル維持 | — | — | — |
-| 7.5 | 型エイリアスによる移行 | `rect.rs`（`D2DRect`）, `pointer/types.rs`（`PhysicalPoint`） | — | — |
+| Requirement | Summary                      | Components                                                    | Interfaces                             | Flows |
+| ----------- | ---------------------------- | ------------------------------------------------------------- | -------------------------------------- | ----- |
+| 1.1         | 共通型モジュール提供         | `ecs/types.rs`                                                | —                                      | —     |
+| 1.2         | pub use re-export            | `ecs/mod.rs`, `ecs/layout/metrics.rs`                         | —                                      | —     |
+| 1.3         | 最低限 derive 適用           | 全共通型                                                      | —                                      | —     |
+| 2.1         | Point 定義（POINT 互換）     | `ecs/types.rs` — `Point`                                      | `From<POINT>`, `Into<POINT>`           | —     |
+| 2.2         | PointF 定義（Vector2 互換）  | `ecs/types.rs` — `PointF`                                     | `From<Vector2>`, `Into<Vector2>`       | —     |
+| 2.3         | Point/PointF 変換            | `ecs/types.rs`                                                | `From`/`Into` impl                     | —     |
+| 2.4         | pointer で Point 使用        | `ecs/pointer/types.rs`                                        | —                                      | —     |
+| 2.5         | hit_test で PointF 使用      | `ecs/layout/hit_test/mod.rs`                                  | —                                      | —     |
+| 2.6         | PhysicalPoint 重複排除       | pointer, hit_test 両モジュール                                | —                                      | —     |
+| 3.1         | Size 定義（D2D_SIZE_F 互換） | `ecs/types.rs` — `Size`                                       | `From<D2D_SIZE_F>`, `Into<D2D_SIZE_F>` | —     |
+| 3.2         | Offset 定義                  | `ecs/types.rs` — `Offset`                                     | —                                      | —     |
+| 3.3         | SizeI 定義（SIZE 互換）      | `ecs/types.rs` — `SizeI`                                      | `From<SIZE>`, `Into<SIZE>`             | —     |
+| 3.4         | metrics.rs re-export 置換    | `ecs/layout/metrics.rs`                                       | —                                      | —     |
+| 3.5         | Arrangement 参照先変更       | `ecs/layout/arrangement.rs`                                   | —                                      | —     |
+| 3.6         | LayoutScale スコープ判定     | —                                                             | —                                      | —     |
+| 4.1         | Rect\<T\> 維持               | `ecs/layout/dimension.rs`                                     | —                                      | —     |
+| 4.2         | Rect 定義（D2D_RECT_F 互換） | `ecs/types.rs` — `Rect`                                       | `From<D2D_RECT_F>`, `Into<D2D_RECT_F>` | —     |
+| 4.3         | D2DRect type alias 維持      | `ecs/layout/rect.rs`                                          | —                                      | —     |
+| 4.4         | D2DRectExt for Rect          | `ecs/layout/rect.rs`                                          | `D2DRectExt` trait impl                | —     |
+| 4.5         | Shape::Rect スコープ外       | —                                                             | —                                      | —     |
+| 4.6         | COM 層 D2D_RECT_F 維持       | `com/` 変更なし                                               | `From<Rect> for D2D_RECT_F`            | —     |
+| 5.1         | transform 型は維持           | `ecs/transform/components.rs`                                 | —                                      | —     |
+| 5.2         | #[deprecated] マーキング     | `ecs/transform/components.rs`                                 | —                                      | —     |
+| 6.1         | WindowPos 評価               | —                                                             | —                                      | —     |
+| 6.2         | WindowPos フィールド置換     | `ecs/window/window_pos.rs`                                    | —                                      | —     |
+| 6.3         | 共通型↔Win32 変換            | `ecs/types.rs`                                                | `From`/`Into` impl                     | —     |
+| 6.4         | COM 層は Win32 型許容        | `com/` 変更なし                                               | —                                      | —     |
+| 6.5         | 双方向変換提供               | `ecs/types.rs`                                                | `From`/`Into` impl                     | —     |
+| 7.1         | pub use re-export 互換       | `ecs/layout/metrics.rs`, `ecs/pointer/types.rs`               | —                                      | —     |
+| 7.2         | 元モジュールに re-export     | `metrics.rs`, `pointer/types.rs`, `hit_test/mod.rs`           | —                                      | —     |
+| 7.3         | 既存テスト維持               | —                                                             | —                                      | —     |
+| 7.4         | 既存サンプル維持             | —                                                             | —                                      | —     |
+| 7.5         | 型エイリアスによる移行       | `rect.rs`（`D2DRect`）, `pointer/types.rs`（`PhysicalPoint`） | —                                      | —     |
 
 ## Components and Interfaces
 
-| Component | Domain/Layer | Intent | Req Coverage | Key Dependencies | Contracts |
-|-----------|-------------|--------|--------------|-----------------|-----------|
-| `ecs/types.rs` | ECS / Primitive | 共通幾何型の定義＋From/Into変換 | 1.1, 1.3, 2.1-2.3, 3.1-3.3, 4.2, 6.3, 6.5 | windows (P0), windows-numerics (P1) | Trait impl |
-| `ecs/mod.rs` | ECS / Root | 共通型の re-export | 1.2, 7.1 | types.rs (P0) | — |
-| `ecs/layout/rect.rs` | Layout | D2DRect alias + D2DRectExt impl | 4.3, 4.4 | types.rs (P0) | Trait |
-| `ecs/layout/metrics.rs` | Layout | Size/Offset re-export + LayoutScale維持 | 3.4, 3.6, 7.2 | types.rs (P0) | — |
-| `ecs/pointer/types.rs` | Pointer | PhysicalPoint → Point 移行 | 2.4, 2.6, 7.2 | types.rs (P0) | — |
-| `ecs/layout/hit_test/mod.rs` | Layout / Hit Test | PhysicalPoint → PointF 移行 | 2.5, 2.6 | types.rs (P0) | — |
-| `ecs/window/window_pos.rs` | Window | POINT/SIZE → Point/SizeI 置換 | 6.1, 6.2 | types.rs (P0) | — |
-| `ecs/transform/components.rs` | Transform | #[deprecated] マーキング追加 | 5.1, 5.2 | — | — |
+| Component                     | Domain/Layer      | Intent                                  | Req Coverage                              | Key Dependencies                    | Contracts  |
+| ----------------------------- | ----------------- | --------------------------------------- | ----------------------------------------- | ----------------------------------- | ---------- |
+| `ecs/types.rs`                | ECS / Primitive   | 共通幾何型の定義＋From/Into変換         | 1.1, 1.3, 2.1-2.3, 3.1-3.3, 4.2, 6.3, 6.5 | windows (P0), windows-numerics (P1) | Trait impl |
+| `ecs/mod.rs`                  | ECS / Root        | 共通型の re-export                      | 1.2, 7.1                                  | types.rs (P0)                       | —          |
+| `ecs/layout/rect.rs`          | Layout            | D2DRect alias + D2DRectExt impl         | 4.3, 4.4                                  | types.rs (P0)                       | Trait      |
+| `ecs/layout/metrics.rs`       | Layout            | Size/Offset re-export + LayoutScale維持 | 3.4, 3.6, 7.2                             | types.rs (P0)                       | —          |
+| `ecs/pointer/types.rs`        | Pointer           | PhysicalPoint → Point 移行              | 2.4, 2.6, 7.2                             | types.rs (P0)                       | —          |
+| `ecs/layout/hit_test/mod.rs`  | Layout / Hit Test | PhysicalPoint → PointF 移行             | 2.5, 2.6                                  | types.rs (P0)                       | —          |
+| `ecs/window/window_pos.rs`    | Window            | POINT/SIZE → Point/SizeI 置換           | 6.1, 6.2                                  | types.rs (P0)                       | —          |
+| `ecs/transform/components.rs` | Transform         | #[deprecated] マーキング追加            | 5.1, 5.2                                  | —                                   | —          |
 
 ### ECS / Primitive
 
 #### ecs/types.rs（新設）
 
-| Field | Detail |
-|-------|--------|
-| Intent | 共通幾何プリミティブ型の唯一の定義箇所 |
+| Field        | Detail                                                |
+| ------------ | ----------------------------------------------------- |
+| Intent       | 共通幾何プリミティブ型の唯一の定義箇所                |
 | Requirements | 1.1, 1.3, 2.1, 2.2, 2.3, 3.1, 3.2, 3.3, 4.2, 6.3, 6.5 |
 
 **Responsibilities & Constraints**
 - プリミティブ幾何型（`Point`, `PointF`, `Size`, `SizeI`, `Offset`, `Rect`）の定義
 - Win32/D2D1 型との `From`/`Into` 変換の実装
 - 全型に `#[repr(C)]` を適用し、メモリレイアウト互換を保証
-- ECS `Component` derive は**含まない**（コンポーネントとして使うモジュール側で newtype or 直接フィールドとして使用）
+- `Size` と `Offset` には `Component` derive を適用（既存の metrics.rs での使用を維持）
+- `Point`, `PointF`, `SizeI`, `Rect` は pure primitive 型として `Component` derive なし
 
 **Dependencies**
 - Outbound: `windows::Win32::Foundation::{POINT, SIZE}` — From/Into 変換ターゲット (P0)
@@ -239,17 +240,19 @@ impl From<Rect> for D2D_RECT_F {
 ```
 
 **Implementation Notes**
-- `bevy_ecs::component::Component` derive は `types.rs` では適用**しない**。`Size`, `Offset` が ECS コンポーネントとして使われる場合、`metrics.rs` 側で newtype パターンまたは `Component` derive を追加する方式は検討の余地があるが、**現状の `Size`/`Offset` は `metrics.rs` で `Component` derive 付きで定義されている**。移行戦略として、`types.rs` の `Size`/`Offset` には `Component` derive を含め、`metrics.rs` は re-export のみとする
-- `Default` の実装: `Point`, `PointF`, `Size`, `SizeI`, `Rect` は全フィールド `0` / `0.0`。`Offset` も `Default` は `(0.0, 0.0)` で Rust の derive Default と一致
+- `Size` と `Offset` には `Component` derive を適用（`Arrangement` などの ECS コンポーネントのフィールドとして直接使用されるため）
+- `Point`, `PointF`, `SizeI`, `Rect` は pure primitive 型として `Component` derive なし（他の型のフィールドとして使用）
+- `metrics.rs` は `pub use crate::ecs::types::{Size, Offset};` による re-export のみとなり、元の構造体定義は削除
+- `Default` の実装: `Point`, `PointF`, `Size`, `SizeI`, `Rect` は全フィールド `0` / `0.0`。`Offset` は `Default = (0.0, 0.0)` で Rust の derive Default と一致
 
 ### Layout
 
 #### ecs/layout/rect.rs（変更）
 
-| Field | Detail |
-|-------|--------|
-| Intent | D2DRect 型エイリアスの維持＋D2DRectExt トレイト実装の移行 |
-| Requirements | 4.3, 4.4 |
+| Field        | Detail                                                    |
+| ------------ | --------------------------------------------------------- |
+| Intent       | D2DRect 型エイリアスの維持＋D2DRectExt トレイト実装の移行 |
+| Requirements | 4.3, 4.4                                                  |
 
 **Responsibilities & Constraints**
 - `pub type D2DRect = Rect;`（`D2D_RECT_F` → `Rect` への変更）
@@ -271,10 +274,10 @@ impl From<Rect> for D2D_RECT_F {
 
 #### ecs/layout/metrics.rs（変更）
 
-| Field | Detail |
-|-------|--------|
-| Intent | Size/Offset を共通型からの re-export に置換、LayoutScale は維持 |
-| Requirements | 3.4, 3.6, 7.2 |
+| Field        | Detail                                                          |
+| ------------ | --------------------------------------------------------------- |
+| Intent       | Size/Offset を共通型からの re-export に置換、LayoutScale は維持 |
+| Requirements | 3.4, 3.6, 7.2                                                   |
 
 **Responsibilities & Constraints**
 - `Size` と `Offset` の構造体定義を削除し、`pub use crate::ecs::types::{Size, Offset};` に置き換え
@@ -286,10 +289,10 @@ impl From<Rect> for D2D_RECT_F {
 
 #### ecs/pointer/types.rs（変更）
 
-| Field | Detail |
-|-------|--------|
-| Intent | PhysicalPoint を共通型 Point に置換 |
-| Requirements | 2.4, 2.6, 7.2 |
+| Field        | Detail                              |
+| ------------ | ----------------------------------- |
+| Intent       | PhysicalPoint を共通型 Point に置換 |
+| Requirements | 2.4, 2.6, 7.2                       |
 
 **Responsibilities & Constraints**
 - `PhysicalPoint` 構造体定義を削除
@@ -302,10 +305,10 @@ impl From<Rect> for D2D_RECT_F {
 
 #### ecs/layout/hit_test/mod.rs（変更）
 
-| Field | Detail |
-|-------|--------|
-| Intent | PhysicalPoint (f32) を共通型 PointF に置換 |
-| Requirements | 2.5, 2.6 |
+| Field        | Detail                                     |
+| ------------ | ------------------------------------------ |
+| Intent       | PhysicalPoint (f32) を共通型 PointF に置換 |
+| Requirements | 2.5, 2.6                                   |
 
 **Responsibilities & Constraints**
 - `PhysicalPoint` 構造体定義を削除
@@ -317,10 +320,10 @@ impl From<Rect> for D2D_RECT_F {
 
 #### ecs/window/window_pos.rs（変更）
 
-| Field | Detail |
-|-------|--------|
-| Intent | Win32 POINT/SIZE を共通型 Point/SizeI に置換 |
-| Requirements | 6.1, 6.2 |
+| Field        | Detail                                       |
+| ------------ | -------------------------------------------- |
+| Intent       | Win32 POINT/SIZE を共通型 Point/SizeI に置換 |
+| Requirements | 6.1, 6.2                                     |
 
 **Responsibilities & Constraints**
 - `position: Option<POINT>` → `position: Option<Point>` に変更
@@ -339,10 +342,10 @@ impl From<Rect> for D2D_RECT_F {
 
 #### ecs/transform/components.rs（変更）
 
-| Field | Detail |
-|-------|--------|
-| Intent | #[deprecated] 属性マーキングの追加 |
-| Requirements | 5.1, 5.2 |
+| Field        | Detail                             |
+| ------------ | ---------------------------------- |
+| Intent       | #[deprecated] 属性マーキングの追加 |
+| Requirements | 5.1, 5.2                           |
 
 **Responsibilities & Constraints**
 - `Transform`, `GlobalTransform`, `Translate`, `Scale`, `Rotate`, `Skew`, `TransformOrigin` に `#[deprecated]` 属性を追加
@@ -403,32 +406,32 @@ classDiagram
 
 #### 共通型定義一覧
 
-| 型名 | フィールド | `#[repr(C)]` | derive | メモリ互換ターゲット | Notes |
-|------|-----------|-------------|--------|---------------------|-------|
-| `Point` | `x: i32, y: i32` | ✅ | `Debug, Clone, Copy, Default, PartialEq, Eq` | `POINT` (完全一致) | |
-| `PointF` | `x: f32, y: f32` | ✅ | `Debug, Clone, Copy, Default, PartialEq` | `Vector2` (PascalCase→snake_case) | `D2D_POINT_2F` は windows 0.62.2 に非存在 |
-| `Size` | `width: f32, height: f32` | ✅ | `Component, Debug, Clone, Copy, Default, PartialEq` | `D2D_SIZE_F` (完全一致) | 既存 metrics.rs から移動 |
-| `SizeI` | `width: i32, height: i32` | ✅ | `Debug, Clone, Copy, Default, PartialEq, Eq` | `SIZE` (cx↔width, cy↔height) | フィールド名マッピング必要 |
-| `Offset` | `x: f32, y: f32` | ✅ | `Component, Debug, Clone, Copy, PartialEq` | なし（独立定義） | Default = (0.0, 0.0)、既存 metrics.rs から移動 |
-| `Rect` | `left: f32, top: f32, right: f32, bottom: f32` | ✅ | `Debug, Clone, Copy, Default, PartialEq` | `D2D_RECT_F` (完全一致) | 新規定義 |
+| 型名     | フィールド                                     | `#[repr(C)]` | derive                                              | メモリ互換ターゲット              | Notes                                          |
+| -------- | ---------------------------------------------- | ------------ | --------------------------------------------------- | --------------------------------- | ---------------------------------------------- |
+| `Point`  | `x: i32, y: i32`                               | ✅            | `Debug, Clone, Copy, Default, PartialEq, Eq`        | `POINT` (完全一致)                |                                                |
+| `PointF` | `x: f32, y: f32`                               | ✅            | `Debug, Clone, Copy, Default, PartialEq`            | `Vector2` (PascalCase→snake_case) | `D2D_POINT_2F` は windows 0.62.2 に非存在      |
+| `Size`   | `width: f32, height: f32`                      | ✅            | `Component, Debug, Clone, Copy, Default, PartialEq` | `D2D_SIZE_F` (完全一致)           | 既存 metrics.rs から移動                       |
+| `SizeI`  | `width: i32, height: i32`                      | ✅            | `Debug, Clone, Copy, Default, PartialEq, Eq`        | `SIZE` (cx↔width, cy↔height)      | フィールド名マッピング必要                     |
+| `Offset` | `x: f32, y: f32`                               | ✅            | `Component, Debug, Clone, Copy, PartialEq`          | なし（独立定義）                  | Default = (0.0, 0.0)、既存 metrics.rs から移動 |
+| `Rect`   | `left: f32, top: f32, right: f32, bottom: f32` | ✅            | `Debug, Clone, Copy, Default, PartialEq`            | `D2D_RECT_F` (完全一致)           | 新規定義                                       |
 
 #### フィールド順序と `#[repr(C)]` 互換性マトリクス
 
-| 独自型 | フィールド順 | 外部型 | フィールド順 | 名前一致 | レイアウト互換 |
-|--------|------------|--------|------------|---------|-------------|
-| `Point` | `x, y` | `POINT` | `x, y` | ✅ | ✅ |
-| `PointF` | `x, y` | `Vector2` | `X, Y` | ❌ (case) | ✅ |
-| `Size` | `width, height` | `D2D_SIZE_F` | `width, height` | ✅ | ✅ |
-| `SizeI` | `width, height` | `SIZE` | `cx, cy` | ❌ | ✅ |
-| `Rect` | `left, top, right, bottom` | `D2D_RECT_F` | `left, top, right, bottom` | ✅ | ✅ |
+| 独自型   | フィールド順               | 外部型       | フィールド順               | 名前一致 | レイアウト互換 |
+| -------- | -------------------------- | ------------ | -------------------------- | -------- | -------------- |
+| `Point`  | `x, y`                     | `POINT`      | `x, y`                     | ✅        | ✅              |
+| `PointF` | `x, y`                     | `Vector2`    | `X, Y`                     | ❌ (case) | ✅              |
+| `Size`   | `width, height`            | `D2D_SIZE_F` | `width, height`            | ✅        | ✅              |
+| `SizeI`  | `width, height`            | `SIZE`       | `cx, cy`                   | ❌        | ✅              |
+| `Rect`   | `left, top, right, bottom` | `D2D_RECT_F` | `left, top, right, bottom` | ✅        | ✅              |
 
 > **Note**: `#[repr(C)]` ではフィールド名はレイアウトに影響しない。同一型・同一順序であればメモリレイアウト互換。
 
 #### 型エイリアスと後方互換定義
 
-| エイリアス | 定義箇所 | 定義 | 目的 |
-|-----------|---------|------|------|
-| `D2DRect` | `ecs/layout/rect.rs` | `pub type D2DRect = Rect` | 既存コード互換（Req4 AC3） |
+| エイリアス      | 定義箇所               | 定義                             | 目的                         |
+| --------------- | ---------------------- | -------------------------------- | ---------------------------- |
+| `D2DRect`       | `ecs/layout/rect.rs`   | `pub type D2DRect = Rect`        | 既存コード互換（Req4 AC3）   |
 | `PhysicalPoint` | `ecs/pointer/types.rs` | `pub type PhysicalPoint = Point` | 移行期間中の互換（Req7 AC5） |
 
 ## Error Handling
