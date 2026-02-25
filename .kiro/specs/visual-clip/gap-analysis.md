@@ -80,8 +80,9 @@
 | ------------------------------------- | ------------------ | ------------------------------------------------------------------------------------------------- |
 | `render_subtree` へのクリップ追加     | **Missing**        | 新規。`render_subtree`（`render.rs:110-210`）に clip 分岐を追加                                   |
 | `PushAxisAlignedClip` (Rectangle)     | **Exists**         | D2D command type が `com/d2d/command_types.rs:487` に実装済み                                     |
-| `PushLayer` (角丸)                    | **Exists**         | D2D command type が `com/d2d/command_types.rs:503` に実装済み                                     |
-| `ID2D1RoundedRectangleGeometry` 作成  | **Missing**        | `ID2D1Factory::CreateRoundedRectangleGeometry` ラッパーが必要                                     |
+| `PushLayer` (角丸共通)                | **Exists**         | D2D command type が `com/d2d/command_types.rs:503` に実装済み                                     |
+| `ID2D1RoundedRectangleGeometry` 作成  | **Missing**        | `ID2D1Factory::CreateRoundedRectangleGeometry` ラッパーが必要（RoundedRectangle 用）              |
+| `ID2D1PathGeometry` (各角個別)        | **Exists**         | `D2D1FactoryExt::create_path_geometry` が `com/d2d/mod.rs:22` に実装済み（RoundedRectangleIndividual 用）|
 | サブツリークリッピング                | **Missing**        | Push → 自Entity描画 → 子再帰 → Pop の構造に `render_subtree` を変更                              |
 | `PopAxisAlignedClip` / `PopLayer`     | **Exists**         | `com/d2d/command_types.rs` に `PopAxisAlignedClip` / `PopLayer` が実装済み                        |
 

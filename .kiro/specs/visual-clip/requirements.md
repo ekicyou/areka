@@ -125,12 +125,13 @@ Visualコンポーネントにクリッピング機能を追加し、描画領�
 #### Acceptance Criteria
 
 1. When `Visual.clip` が `Some(ClipShape::Rectangle)` かつ CompositionMode が ULW の場合, wintf shall `render_subtree` 内で `PushAxisAlignedClip` / `PopAxisAlignedClip` を用いて矩形クリッピングを適用する。
-2. When `Visual.clip` が `Some(ClipShape::RoundedRectangle { .. })` または `Some(ClipShape::RoundedRectangleIndividual { .. })` かつ CompositionMode が ULW の場合, wintf shall `PushLayer` + `ID2D1RoundedRectangleGeometry` を用いて角丸クリッピングを適用する。
-3. wintf shall ULW モードのクリップを当該エンティティおよびその子エンティティの描画全体に適用する（DComp モードの `IDCompositionVisual::SetClip` と同等のサブツリークリッピング）。
-4. クリップ矩形は Arrangement のローカル座標 (0, 0)-(width, height) とする（Req 3 と同一基準）。
-5. When `Visual.clip` が `None` の場合, wintf shall ULW モードでクリッピングを適用しない。
-6. If D2D クリップ操作（PushAxisAlignedClip / PushLayer）が失敗した場合, wintf shall `error!` ログを出力して描画処理を継続する。
-7. ULW モードで使用する D2D API（PushAxisAlignedClip、PushLayer）は既存の `com/d2d` モジュールに実装済みであり、追加の COM ラッパーは不要とする。
+2. When `Visual.clip` が `Some(ClipShape::RoundedRectangle { .. })` かつ CompositionMode が ULW の場合, wintf shall `PushLayer` + `ID2D1RoundedRectangleGeometry` を用いて角丸クリッピングを適用する。
+3. When `Visual.clip` が `Some(ClipShape::RoundedRectangleIndividual { .. })` かつ CompositionMode が ULW の場合, wintf shall `PushLayer` + `ID2D1PathGeometry`（各角個別の円弧を持つカスタム角丸矩形パス）を用いて角丸クリッピングを適用する。
+4. wintf shall ULW モードのクリップを当該エンティティおよびその子エンティティの描画全体に適用する（DComp モードの `IDCompositionVisual::SetClip` と同等のサブツリークリッピング）。
+5. クリップ矩形は Arrangement のローカル座標 (0, 0)-(width, height) とする（Req 3 と同一基準）。
+6. When `Visual.clip` が `None` の場合, wintf shall ULW モードでクリッピングを適用しない。
+7. If D2D クリップ操作（PushAxisAlignedClip / PushLayer）が失敗した場合, wintf shall `error!` ログを出力して描画処理を継続する。
+8. ULW モードで使用する D2D API（PushAxisAlignedClip、PushLayer、PathGeometry）は既存の `com/d2d` モジュールに基盤が実装済みであり、`ID2D1RoundedRectangleGeometry` 作成ラッパーのみ追加が必要。
 
 ## Out of Scope
 
