@@ -1,13 +1,91 @@
-# ギャップ分析レポート: wintf-screen-drag-stability（拡張版）
+# ギャップ分析 & リサーチログ: wintf-screen-drag-stability
 
-## 分析サマリー
+## Summary
+- **Feature**: `wintf-screen-drag-stability`
+- **Discovery Scope**: Extension（既存ドラッグシステムの安定性改善）
+- **Key Findings**:
+  - **P2根因（実測確認済み）**: DPI変更（200%→125%）時にウィンドウが縮小しマウスが外に出ると、SetCapture がないため `WM_MOUSEMOVE` が届かずドラッグが途切れる
+  - **P1根因**: ドラッグ中に間接レイアウト再計算が走ると、古い `Arrangement.offset` が ECS パイプラインで復活し WindowPos に書き戻される巻き戻しカスケード
+  - `SetCapture`/`ReleaseCapture` は `windows 0.62.2` の `Win32::UI::Input::KeyboardAndMouse` に存在し利用可能
+  - `WindowDragging` マーカーはライフサイクル実装済みだが、レイアウト/WindowPos 反映系で未参照のため防御として機能していない
 
-- ドラッグ不安定は2つの**主要根因**と複数の副次根因の組み合わせで発生
-- **主要根因1 (P1)**: `Arrangement.offset` のステール化とカスケード巻き戻し — ドラッグ中に間接レイアウト再計算が走ると古い座標が復活
-- **主要根因2 (S2→P2に格上げ)**: マウスキャプチャ未実装 — DPI変更でウィンドウ縮小時、マウスが外に出ると `WM_MOUSEMOVE` が届かずドラッグが途切れる（**実測で確認済み**）
-- `SetCapture`/`ReleaseCapture` は windows 0.62.2 で利用可能（`Win32::UI::Input::KeyboardAndMouse`）であり、TODOは古い前提
-- `WindowDragging` マーカーはライフサイクル実装済みだが、**レイアウト/WindowPos反映系で未参照** のため防御機構として機能していない
-- 設計フェーズでは「原因仮説を1件ずつ有効化/無効化して評価」する実験計画が妥当
+## Research Log
+
+### SetCapture/ReleaseCapture API 利用可能性
+- **Context**: TODO コメントが「current windows crate version で利用不可」と記載
+- **Sources Consulted**: `c:\rust\cargo\registry\src\...\windows-0.62.2\src\Windows\Win32\UI\Input\KeyboardAndMouse\mod.rs`
+- **Findings**: L161-L179 に `SetCapture` / `ReleaseCapture` が存在。`Win32_UI_Input_KeyboardAndMouse` feature は `Cargo.toml` で有効済み
+- **Implications**: TODO コメントは古い前提。即座に実装可能
+
+### WindowDragging フィルタ統合ポイント
+- **Context**: ドラッグ中に ECS レイアウトパイプラインが位置を巻き戻す問題
+- **Sources Consulted**: `window_pos_systems.rs`, `graphics/systems/window_pos.rs`, `world/mod.rs`
+- **Findings**: 3つのシステムに `Without<WindowDragging>` フィルタが必要:
+  - `window_pos_sync_system`（PostLayout）: `Changed<GlobalArrangement>` → WindowPos
+  - `sync_window_arrangement_from_window_pos`（PostLayout）: `Changed<WindowPos>` → Arrangement.offset
+  - `apply_window_pos_changes`（UISetup）: `Changed<WindowPos>` → SetWindowPos
+- **Implications**: 各クエリフィルタに1行追加で対応可能。ドラッグ終了時の再同期は `dispatch_drag_events` の Ended パスで既に実装済み
+
+### WM_CAPTURECHANGED ディスパッチ状態
+- **Context**: SetCapture 導入時に外部キャプチャ喪失に対応する必要
+- **Sources Consulted**: `ecs/window_proc/mod.rs`, `win_message_handler.rs`
+- **Findings**: ディスパッチテーブルに `WM_CAPTURECHANGED` が**未登録**。`DefWindowProcW` に委譲されている。非推奨の `win_message_handler.rs` にはデフォルト実装あり（`None` 返却のみ）
+- **Implications**: 新ハンドラを `keyboard.rs` に追加し、ディスパッチテーブルに登録が必要
+
+### DPI変更×ドラッグの相互作用
+- **Context**: ドラッグ中にDPI境界を越えた場合の競合
+- **Sources Consulted**: `window_proc/window_pos.rs` の WM_DPICHANGED / WM_WINDOWPOSCHANGED ハンドラ
+- **Findings**: 
+  - DPI変更時: `DpiChangeContext` によりechoでもbypassしない（`Changed<WindowPos>` 発火）
+  - `Without<WindowDragging>` を追加すると、DPI変更後の位置が `Arrangement.offset` に反映されなくなるリスク
+  - しかしドラッグ終了時の `dispatch_drag_events` Ended パスで `Arrangement.offset` を `WindowPos.position` から直接同期するため、問題は緩和される
+- **Implications**: ドラッグ中の DPI 変更は SetCapture が解決（ウィンドウ外でもイベント受信）。レイアウト再同期はドラッグ終了後で十分
+
+### RAII ガードパターン
+- **Context**: SetCapture/ReleaseCapture の確実な解放保証
+- **Sources Consulted**: `window/command.rs`（SetWindowPosGuard）, `world/vsync.rs`（TickFlushGuard）
+- **Findings**: 2つの成熟したRAIIパターンが存在。`SetWindowPosGuard` は AtomicI32 ネストカウンタ、`TickFlushGuard` は thread_local `Cell<bool>` 再入防止
+- **Implications**: `CaptureGuard` を同パターンで設計可能。ドラッグは同時に1つしか発生しないため、ブール値ガードが適切
+
+## Architecture Pattern Evaluation
+
+| Option | Description | Strengths | Risks / Limitations | Notes |
+|--------|-------------|-----------|---------------------|-------|
+| A: 既存拡張（最小差分） | SetCapture + WindowDragging フィルタ追加 | 変更範囲狭い、P1/P2/S1/S2 を一気に解決 | 副次根因（S3-S7）は未対処 | **採用** |
+| B: ドラッグ専用ガード層 | DragGuard resource/system で排他集中管理 | 将来拡張に強い | 今回スコープでは過大設計 | 見送り |
+| C: ハイブリッド | A + NCHITTEST/flush 改善 + 診断ログ | 真因切り分け効率高い | 作業範囲が広がる | P1/P2解決後に必要に応じて追加 |
+
+## Design Decisions
+
+### Decision: Option A（既存拡張）を採用
+- **Context**: 実測で確認された2つの主要根因（P1, P2）を最小差分で解決する
+- **Alternatives Considered**:
+  1. Option B — ドラッグ専用ガード層（過大）
+  2. Option C — ハイブリッド（P1/P2解決後の追加判断で十分）
+- **Selected Approach**: 既存コードの拡張ポイントに `SetCapture` + `Without<WindowDragging>` を追加
+- **Rationale**: TODO コメントと marker component が既に配置済み。3箇所の SetCapture/ReleaseCapture 有効化と3つのシステムのクエリフィルタ追加で対応可能
+- **Trade-offs**: 副次根因（S3-S7）は本仕様のスコープ外。P1/P2 解決後に再発するなら別仕様で対応
+- **Follow-up**: 実装後に200%→125% DPI環境で手動テスト、回帰テスト実行
+
+### Decision: WM_CAPTURECHANGED ハンドラの追加先
+- **Context**: `keyboard.rs` に既に WM_CANCELMODE / WM_ACTIVATE のキャンセルハンドラがある
+- **Selected Approach**: `keyboard.rs` の同一パターンで `WM_CAPTURECHANGED` ハンドラを実装
+- **Rationale**: 責務の集約（ドラッグキャンセル系は keyboard.rs に集中）
+
+### Decision: CaptureGuard の設計
+- **Context**: パニック時の SetCapture 解放保証
+- **Selected Approach**: thread_local `Cell<bool>` + RAII Drop ガード（TickFlushGuard パターン準拠）
+- **Rationale**: ドラッグは同時に1つ。AtomicI32 ネストカウンタは不要
+
+## Risks & Mitigations
+- **DPI変更中のドラッグ**: SetCapture によりウィンドウ外でもイベント受信可能。レイアウト再同期はドラッグ終了後、`dispatch_drag_events` Ended パスで実施
+- **WindowDragging フィルタの副作用**: ドラッグ中にウィンドウサイズが変更される場合（DPI変更）、フィルタにより中間更新が抑止される。ドラッグ終了時の Arrangement 直接同期で吸収
+- **WM_CAPTURECHANGED と WM_CANCELMODE の重複**: 両方がドラッグを終了させうる。DragState が既に Idle なら早期 return で冪等性を確保
+
+## References
+- [SetCapture function (winuser.h)](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-setcapture)
+- [ReleaseCapture function (winuser.h)](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-releasecapture)
+- [WM_CAPTURECHANGED message](https://learn.microsoft.com/en-us/windows/win32/inputdev/wm-capturechanged)
 
 ---
 
