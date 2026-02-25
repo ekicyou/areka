@@ -55,14 +55,13 @@ wintf クレート内で幾何学・空間系の構造体（`Size`, `Offset`, `R
 5. The wintf shall `LayoutScale` のスコープを評価し、レイアウト専用であれば `layout/` に残し、汎用であれば共通化する
 
 ### Requirement 4: Rect 型の整理
-**Objective:** As a wintf ライブラリ開発者, I want 矩形を表す型を用途別に整理する, so that `D2D_RECT_F` への直接依存を減らし、型の意味が明確になる
+**Objective:** As a wintf ライブラリ開発者, I want 矩形を表す型を用途別に整理する, so that D2DRect を標準バウンディングボックス型として採用し、型の意味が明確になる
 
 #### Acceptance Criteria
 1. The wintf shall ボックスモデル用の `Rect<T>`（`left/right/top/bottom`）をレイアウトモジュールに維持する
-2. The wintf shall バウンディングボックス用途の矩形型（`x, y, width, height` または `left, top, right, bottom`）を共通型モジュールで定義する
-3. The wintf shall `D2DRect` エイリアスの使用箇所を評価し、共通矩形型への段階的な移行パスを提供する
-4. The wintf shall `Shape::Rect` variant（`hit_region` 内部の enum、`x/y/w/h` 表現）は本仕様のスコープ外とし、変更しない
-5. The wintf shall 描画コマンド（`DrawRectangle`, `FillRectangle`）の `D2D_RECT_F` フィールドは COM 層の型として維持する（COM 層はWin32型を直接使用する設計方針に従う）
+2. The wintf shall `D2DRect`（`D2D_RECT_F` のエイリアス、`left/top/right/bottom: f32`）をバウンディングボックス用途の標準矩形型として採用する
+3. The wintf shall `Shape::Rect` variant（`hit_region` 内部の enum、`x/y/w/h` 表現）は本仕様のスコープ外とし、変更しない
+4. The wintf shall 描画コマンド（`DrawRectangle`, `FillRectangle`）等の `D2D_RECT_F` フィールドは COM 層の型として維持し、`D2DRect` との相互変換を提供する
 
 ### Requirement 5: Transform 系型との境界整理
 **Objective:** As a wintf ライブラリ開発者, I want 非推奨の `transform/` モジュールの型と共通型の関係を明確にする, so that 非推奨モジュールの将来的な削除時に影響範囲が限定される
