@@ -21,16 +21,15 @@ pub(super) fn WM_KEYDOWN(
 
     // ESCキーでドラッグキャンセル
     if wparam.0 == VK_ESCAPE.0 as usize {
-        // thread_local DragStateをクローンして取得
-        let state_snapshot = crate::ecs::drag::read_drag_state(|state| state.clone());
+        let state_snapshot = crate::ecs::drag::snapshot_drag_state();
 
-        if let crate::ecs::drag::DragState::Dragging {
+        if let crate::ecs::drag::DragStateSnapshot::Dragging {
             entity, start_pos, ..
         }
-        | crate::ecs::drag::DragState::Preparing {
+        | crate::ecs::drag::DragStateSnapshot::Preparing {
             entity, start_pos, ..
         }
-        | crate::ecs::drag::DragState::JustStarted {
+        | crate::ecs::drag::DragStateSnapshot::JustStarted {
             entity, start_pos, ..
         } = state_snapshot
         {
@@ -51,10 +50,9 @@ pub(super) fn WM_KEYDOWN(
             }
         }
 
+        // cancel_dragging → DragState::JustEnded へ遷移
+        // 旧状態の CaptureGuard が Drop され ReleaseCapture が自動呼び出し
         crate::ecs::drag::cancel_dragging();
-        // TODO(wintf-screen-drag-stability): ReleaseCapture をここで呼び出す
-        // API: windows::Win32::UI::Input::KeyboardAndMouse::ReleaseCapture
-        // let _ = unsafe { ReleaseCapture() };
 
         tracing::debug!("[WM_KEYDOWN] ESC key pressed, drag cancelled");
     }
@@ -70,16 +68,15 @@ pub(super) fn WM_CANCELMODE(
     _wparam: WPARAM,
     _lparam: LPARAM,
 ) -> HandlerResult {
-    // thread_local DragStateをクローンして取得
-    let state_snapshot = crate::ecs::drag::read_drag_state(|state| state.clone());
+    let state_snapshot = crate::ecs::drag::snapshot_drag_state();
 
-    if let crate::ecs::drag::DragState::Dragging {
+    if let crate::ecs::drag::DragStateSnapshot::Dragging {
         entity, start_pos, ..
     }
-    | crate::ecs::drag::DragState::Preparing {
+    | crate::ecs::drag::DragStateSnapshot::Preparing {
         entity, start_pos, ..
     }
-    | crate::ecs::drag::DragState::JustStarted {
+    | crate::ecs::drag::DragStateSnapshot::JustStarted {
         entity, start_pos, ..
     } = state_snapshot
     {
@@ -101,11 +98,13 @@ pub(super) fn WM_CANCELMODE(
     }
 
     // ドラッグキャンセル
+    // cancel_dragging → DragState::JustEnded へ遷移
+    // 旧状態の CaptureGuard が Drop され ReleaseCapture が自動呼び出し
     crate::ecs::drag::cancel_dragging();
 
     tracing::debug!("[WM_CANCELMODE] System cancel, drag cancelled");
 
-    None // DefWindowProcWに委譲（ReleaseCapture自動実行）
+    None // DefWindowProcWに委譲
 }
 
 /// WM_ACTIVATE: ウィンドウ非アクティブ化時のドラッグキャンセル
@@ -127,9 +126,9 @@ pub(super) fn WM_ACTIVATE(
     }
 
     // ドラッグ中なら状態を確認してキャンセル
-    let state_snapshot = crate::ecs::drag::read_drag_state(|state| state.clone());
+    let state_snapshot = crate::ecs::drag::snapshot_drag_state();
     match state_snapshot {
-        crate::ecs::drag::DragState::Dragging {
+        crate::ecs::drag::DragStateSnapshot::Dragging {
             entity, start_pos, ..
         } => {
             tracing::info!(
@@ -155,12 +154,87 @@ pub(super) fn WM_ACTIVATE(
 
             crate::ecs::drag::cancel_dragging();
         }
-        crate::ecs::drag::DragState::Preparing { .. } => {
+        crate::ecs::drag::DragStateSnapshot::Preparing { .. } => {
             tracing::debug!("[WM_ACTIVATE] Window deactivated during drag prepare, resetting");
-            crate::ecs::drag::reset_to_idle();
+            // Preparing 状態をキャンセル（CaptureGuard が Drop され ReleaseCapture が自動呼び出し）
+            crate::ecs::drag::cancel_dragging();
         }
         _ => {}
     }
+
+    None // DefWindowProcWに委譲
+}
+
+/// WM_CAPTURECHANGED: 外部要因でマウスキャプチャを失った場合の処理
+///
+/// 別ウィンドウが `SetCapture` を呼び出すか、OS がキャプチャを解放した場合に送信される。
+/// ドラッグ中であれば安全にキャンセルする。
+/// CaptureGuard に `mark_released()` を呼び、Drop 時の `ReleaseCapture` をスキップする
+/// （キャプチャは OS が既に解放済みのため）。
+///
+/// 冪等性: DragState が既に Idle / JustEnded の場合は何もしない。
+pub(super) fn WM_CAPTURECHANGED(
+    _hwnd: HWND,
+    _message: u32,
+    _wparam: WPARAM,
+    _lparam: LPARAM,
+) -> HandlerResult {
+    // CaptureGuard を mark_released してからドラッグキャンセル
+    // mark_released を先に呼ぶことで、cancel_dragging → JustEnded 遷移時の
+    // CaptureGuard Drop で ReleaseCapture が呼ばれないようにする
+    let was_dragging = crate::ecs::drag::update_drag_state(|state| {
+        match state {
+            crate::ecs::drag::DragState::Preparing {
+                capture_guard, ..
+            }
+            | crate::ecs::drag::DragState::JustStarted {
+                capture_guard, ..
+            }
+            | crate::ecs::drag::DragState::Dragging {
+                capture_guard, ..
+            } => {
+                capture_guard.mark_released();
+                true
+            }
+            _ => false, // Idle / JustEnded: 何もしない
+        }
+    });
+
+    if !was_dragging {
+        return None;
+    }
+
+    // DragAccumulatorResource に Ended(cancelled) 遷移を記録
+    let state_snapshot = crate::ecs::drag::snapshot_drag_state();
+    if let crate::ecs::drag::DragStateSnapshot::Dragging {
+        entity, start_pos, ..
+    }
+    | crate::ecs::drag::DragStateSnapshot::Preparing {
+        entity, start_pos, ..
+    }
+    | crate::ecs::drag::DragStateSnapshot::JustStarted {
+        entity, start_pos, ..
+    } = state_snapshot
+    {
+        if let Some(world) = super::try_get_ecs_world() {
+            if let Ok(world_borrow) = world.try_borrow() {
+                if let Some(accumulator) = world_borrow
+                    .world()
+                    .get_resource::<crate::ecs::drag::DragAccumulatorResource>()
+                {
+                    accumulator.set_transition(crate::ecs::drag::DragTransition::Ended {
+                        entity,
+                        end_pos: start_pos,
+                        cancelled: true,
+                    });
+                }
+            }
+        }
+    }
+
+    crate::ecs::drag::cancel_dragging();
+
+    tracing::debug!("[WM_CAPTURECHANGED] Capture lost externally, drag cancelled");
 
     None // DefWindowProcWに委譲
 }

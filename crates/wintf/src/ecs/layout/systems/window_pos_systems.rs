@@ -6,6 +6,7 @@ use tracing::{debug, trace};
 
 use super::super::metrics::Offset;
 use super::super::{Arrangement, GlobalArrangement};
+use crate::ecs::drag::WindowDragging;
 use crate::ecs::graphics::format_entity_name;
 use crate::ecs::window::{Window, WindowPos};
 
@@ -13,14 +14,24 @@ use crate::ecs::window::{Window, WindowPos};
 ///
 /// bounds.left/top → WindowPos.position（truncate to i32）
 /// bounds の幅/高さ → WindowPos.size（ceil to i32）
+///
+/// ドラッグ中のウィンドウ（`WindowDragging` 付き）はサイズのみ更新し、
+/// 位置の書き換えをスキップする。これにより DPI 変更時のリサイズが
+/// ドラッグ中でも正しく反映される。
 pub fn window_pos_sync_system(
     mut query: Query<
-        (Entity, &GlobalArrangement, &mut WindowPos, Option<&Name>),
+        (
+            Entity,
+            &GlobalArrangement,
+            &mut WindowPos,
+            Option<&Name>,
+            Has<WindowDragging>,
+        ),
         (With<Window>, Changed<GlobalArrangement>),
     >,
     frame_count: Res<crate::ecs::world::FrameCount>,
 ) {
-    for (entity, global_arr, mut window_pos, name) in query.iter_mut() {
+    for (entity, global_arr, mut window_pos, name, is_dragging) in query.iter_mut() {
         let entity_name = format_entity_name(entity, name);
         let width = global_arr.bounds.right - global_arr.bounds.left;
         let height = global_arr.bounds.bottom - global_arr.bounds.top;
@@ -34,6 +45,7 @@ pub fn window_pos_sync_system(
             bounds_bottom = global_arr.bounds.bottom,
             width = width,
             height = height,
+            is_dragging = is_dragging,
             "[window_pos_sync_system] Processing entity"
         );
 
@@ -47,37 +59,52 @@ pub fn window_pos_sync_system(
         }
 
         use crate::ecs::types::{Point, SizeI};
-        let new_position = Point {
-            x: global_arr.bounds.left as i32,
-            y: global_arr.bounds.top as i32,
-        };
         let new_size = SizeI {
             width: width.ceil() as i32,
             height: height.ceil() as i32,
         };
-
-        let position_changed = window_pos.position != Some(new_position);
         let size_changed = window_pos.size != Some(new_size);
 
-        if position_changed || size_changed {
-            debug!(
-                frame = frame_count.0,
-                entity = %entity_name,
-                old_pos = ?window_pos.position,
-                old_size = ?window_pos.size,
-                new_xy = format_args!("({},{})", new_position.x, new_position.y),
-                new_size = format_args!("{}x{}", new_size.width, new_size.height),
-                ga_bounds = format_args!("({:.0},{:.0})-({:.0},{:.0})", global_arr.bounds.left, global_arr.bounds.top, global_arr.bounds.right, global_arr.bounds.bottom),
-                "[window_pos_sync] Updating WindowPos from GA"
-            );
-            window_pos.position = Some(new_position);
-            window_pos.size = Some(new_size);
+        if is_dragging {
+            // ドラッグ中: サイズのみ更新（位置はドラッグ操作が管理）
+            if size_changed {
+                debug!(
+                    frame = frame_count.0,
+                    entity = %entity_name,
+                    old_size = ?window_pos.size,
+                    new_size = format_args!("{}x{}", new_size.width, new_size.height),
+                    "[window_pos_sync] Dragging: size-only update"
+                );
+                window_pos.size = Some(new_size);
+            }
         } else {
-            trace!(
-                frame = frame_count.0,
-                entity = %entity_name,
-                "[window_pos_sync_system] No change needed"
-            );
+            // 通常時: 位置とサイズの両方を更新
+            let new_position = Point {
+                x: global_arr.bounds.left as i32,
+                y: global_arr.bounds.top as i32,
+            };
+            let position_changed = window_pos.position != Some(new_position);
+
+            if position_changed || size_changed {
+                debug!(
+                    frame = frame_count.0,
+                    entity = %entity_name,
+                    old_pos = ?window_pos.position,
+                    old_size = ?window_pos.size,
+                    new_xy = format_args!("({},{})", new_position.x, new_position.y),
+                    new_size = format_args!("{}x{}", new_size.width, new_size.height),
+                    ga_bounds = format_args!("({:.0},{:.0})-({:.0},{:.0})", global_arr.bounds.left, global_arr.bounds.top, global_arr.bounds.right, global_arr.bounds.bottom),
+                    "[window_pos_sync] Updating WindowPos from GA"
+                );
+                window_pos.position = Some(new_position);
+                window_pos.size = Some(new_size);
+            } else {
+                trace!(
+                    frame = frame_count.0,
+                    entity = %entity_name,
+                    "[window_pos_sync_system] No change needed"
+                );
+            }
         }
     }
 }
@@ -93,6 +120,8 @@ pub fn window_pos_sync_system(
 /// `Changed<WindowPos>` フィルタにより、WindowPos が変更されたエンティティのみ処理する。
 /// 変更がない場合は何もしない。
 ///
+/// `Without<WindowDragging>` フィルタにより、ドラッグ中のウィンドウはスキップする。
+///
 /// # 座標系
 /// Window エンティティは LayoutRoot (scale=1.0) の子であり、
 /// `GlobalArrangement.bounds.left = parent.bounds.left + offset × parent_scale = offset` となる。
@@ -104,7 +133,7 @@ pub fn window_pos_sync_system(
 pub fn sync_window_arrangement_from_window_pos(
     mut query: Query<
         (Entity, &WindowPos, &mut Arrangement, Option<&Name>),
-        (With<Window>, Changed<WindowPos>),
+        (With<Window>, Changed<WindowPos>, Without<WindowDragging>),
     >,
 ) {
     use crate::ecs::graphics::format_entity_name;

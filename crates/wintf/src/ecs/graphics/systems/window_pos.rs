@@ -1,4 +1,5 @@
 use super::init::format_entity_name;
+use crate::ecs::drag::WindowDragging;
 use crate::ecs::graphics::DCompGraphicsResource;
 use crate::ecs::graphics::GraphicsCore;
 use crate::ecs::graphics::compositor::WindowD3D11Compositor;
@@ -7,19 +8,30 @@ use crate::ecs::window::{SetWindowPosCommand, Window, WindowHandle, WindowPos};
 use bevy_ecs::name::Name;
 use bevy_ecs::prelude::*;
 use tracing::{debug, trace, warn};
+use windows::Win32::UI::WindowsAndMessaging::SWP_NOMOVE;
 
 /// WindowPos変更時にSetWindowPosコマンドをキューに追加
 ///
 /// クライアント領域座標をウィンドウ全体座標に変換してからコマンドを生成する。
 /// echo 時は `WM_WINDOWPOSCHANGED` ハンドラが `bypass_change_detection()` で更新するため
 /// `Changed<WindowPos>` が発火せず、本システムのトリガー自体が発火しない。
+///
+/// ドラッグ中のウィンドウ（`WindowDragging` 付き）はサイズ変更のみ発行し、
+/// `SWP_NOMOVE` フラグで位置を固定する。これにより DPI 変更時の
+/// ウィンドウリサイズがドラッグ中でも正しく反映される。
 pub fn apply_window_pos_changes(
     mut query: Query<
-        (Entity, &WindowHandle, &WindowPos, Option<&Name>),
+        (
+            Entity,
+            &WindowHandle,
+            &WindowPos,
+            Option<&Name>,
+            Has<WindowDragging>,
+        ),
         (Changed<WindowPos>, With<Window>),
     >,
 ) {
-    for (entity, window_handle, window_pos, name) in query.iter_mut() {
+    for (entity, window_handle, window_pos, name, is_dragging) in query.iter_mut() {
         let entity_name = format_entity_name(entity, name);
 
         // エコーバックチェック
@@ -58,8 +70,13 @@ pub fn apply_window_pos_changes(
 
         // SetWindowPosコマンドを生成してキューに追加
         // 直接SetWindowPosを呼び出さない（World借用競合防止）
-        let flags = window_pos.build_flags_for_system();
+        let mut flags = window_pos.build_flags_for_system();
         let hwnd_insert_after = window_pos.get_hwnd_insert_after();
+
+        // ドラッグ中は SWP_NOMOVE を強制: サイズのみ変更
+        if is_dragging {
+            flags |= SWP_NOMOVE;
+        }
 
         debug!(
             entity = %entity_name,
@@ -67,6 +84,7 @@ pub fn apply_window_pos_changes(
             client_size = format_args!("{}x{}", size.width, size.height),
             win_xy = format_args!("({},{})", x, y),
             win_size = format_args!("{}x{}", width, height),
+            is_dragging = is_dragging,
             "[apply_window_pos] Enqueue SetWindowPos"
         );
 

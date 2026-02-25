@@ -5,19 +5,22 @@
 //! ドラッグ中の継続的な位置追跡、ドラッグ終了を検知する。
 
 mod accumulator;
+mod capture_guard;
 mod context;
 mod dispatch;
 mod state;
 mod systems;
 
 pub use accumulator::{DragAccumulator, DragAccumulatorResource, DragTransition, FlushResult};
+pub use capture_guard::CaptureGuard;
 pub use context::{WindowDragContext, WindowDragContextResource};
 pub use dispatch::{
     DragEndEvent, DragEvent, DragStartEvent, OnDrag, OnDragEnd, OnDragStart, dispatch_drag_events,
 };
 pub use state::{
-    DragState, cancel_dragging, check_threshold, end_dragging, read_drag_state, reset_to_idle,
-    start_dragging, start_preparing, update_drag_state, update_dragging,
+    DragState, DragStateSnapshot, cancel_dragging, check_threshold, end_dragging, read_drag_state,
+    reset_to_idle, snapshot_drag_state, start_dragging, start_preparing, update_drag_state,
+    update_dragging,
 };
 pub use systems::cleanup_drag_state;
 

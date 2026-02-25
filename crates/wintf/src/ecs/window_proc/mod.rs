@@ -75,6 +75,7 @@ pub(crate) extern "system" fn ecs_wndproc(
         WM_KEYDOWN => keyboard::WM_KEYDOWN(hwnd, message, wparam, lparam),
         WM_CANCELMODE => keyboard::WM_CANCELMODE(hwnd, message, wparam, lparam),
         WM_ACTIVATE => keyboard::WM_ACTIVATE(hwnd, message, wparam, lparam),
+        WM_CAPTURECHANGED => keyboard::WM_CAPTURECHANGED(hwnd, message, wparam, lparam),
         _ => None,
     };
 

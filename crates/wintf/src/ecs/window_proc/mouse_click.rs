@@ -161,10 +161,8 @@ fn handle_button_message(
                                 crate::ecs::drag::start_preparing(
                                     entity_with_config,
                                     PhysicalPoint::new(screen_x, screen_y),
+                                    hwnd,
                                 );
-                                // TODO(wintf-screen-drag-stability): SetCapture をここで呼び出す
-                                // API: windows::Win32::UI::Input::KeyboardAndMouse::SetCapture
-                                // let _ = unsafe { SetCapture(hwnd) };
                             }
                         }
                     }
@@ -173,16 +171,14 @@ fn handle_button_message(
 
                     // ドラッグ終了（HWND ガード付き: 当該ウィンドウのドラッグのみ終了）
                     if button == crate::ecs::pointer::PointerButton::Left {
-                        // thread_local DragStateをクローンして取得
-                        let state_snapshot =
-                            crate::ecs::drag::read_drag_state(|state| state.clone());
+                        let state_snapshot = crate::ecs::drag::snapshot_drag_state();
 
                         let should_end = match &state_snapshot {
-                            crate::ecs::drag::DragState::Dragging {
+                            crate::ecs::drag::DragStateSnapshot::Dragging {
                                 hwnd: drag_hwnd, ..
                             } => *drag_hwnd == hwnd,
-                            crate::ecs::drag::DragState::Preparing { entity, .. }
-                            | crate::ecs::drag::DragState::JustStarted { entity, .. } => {
+                            crate::ecs::drag::DragStateSnapshot::Preparing { entity, .. }
+                            | crate::ecs::drag::DragStateSnapshot::JustStarted { entity, .. } => {
                                 crate::ecs::window::find_owner_window(world_borrow.world(), *entity)
                                     == Some(window_entity)
                             }
@@ -190,9 +186,9 @@ fn handle_button_message(
                         };
 
                         if should_end {
-                            if let crate::ecs::drag::DragState::Dragging { entity, .. }
-                            | crate::ecs::drag::DragState::Preparing { entity, .. }
-                            | crate::ecs::drag::DragState::JustStarted { entity, .. } =
+                            if let crate::ecs::drag::DragStateSnapshot::Dragging { entity, .. }
+                            | crate::ecs::drag::DragStateSnapshot::Preparing { entity, .. }
+                            | crate::ecs::drag::DragStateSnapshot::JustStarted { entity, .. } =
                                 &state_snapshot
                             {
                                 // DragAccumulatorResourceにEnded遷移を記録
@@ -210,7 +206,8 @@ fn handle_button_message(
                                 }
                             }
 
-                            // thread_local DragStateをIdleに戻す
+                            // thread_local DragStateをJustEndedに遷移
+                            // 旧状態の CaptureGuard が Drop され ReleaseCapture が自動呼び出し
                             crate::ecs::drag::end_dragging(
                                 PhysicalPoint::new(screen_x, screen_y),
                                 false,
@@ -221,9 +218,6 @@ fn handle_button_message(
                                 "[handle_button_message] Drag end skipped: HWND mismatch"
                             );
                         }
-                        // TODO(wintf-screen-drag-stability): ReleaseCapture をここで呼び出す
-                        // API: windows::Win32::UI::Input::KeyboardAndMouse::ReleaseCapture
-                        // let _ = unsafe { ReleaseCapture() };
                     }
                 }
 
@@ -240,14 +234,14 @@ fn handle_button_message(
 
         // ドラッグ終了（hit_test失敗時でもドラッグ中なら終了処理、HWNDガード付き）
         if button == crate::ecs::pointer::PointerButton::Left {
-            let state_snapshot = crate::ecs::drag::read_drag_state(|state| state.clone());
+            let state_snapshot = crate::ecs::drag::snapshot_drag_state();
 
             let should_end = match &state_snapshot {
-                crate::ecs::drag::DragState::Dragging {
+                crate::ecs::drag::DragStateSnapshot::Dragging {
                     hwnd: drag_hwnd, ..
                 } => *drag_hwnd == hwnd,
-                crate::ecs::drag::DragState::Preparing { entity, .. }
-                | crate::ecs::drag::DragState::JustStarted { entity, .. } => {
+                crate::ecs::drag::DragStateSnapshot::Preparing { entity, .. }
+                | crate::ecs::drag::DragStateSnapshot::JustStarted { entity, .. } => {
                     if let Some(world) = super::try_get_ecs_world() {
                         if let Ok(world_borrow) = world.try_borrow() {
                             crate::ecs::window::find_owner_window(world_borrow.world(), *entity)
@@ -265,9 +259,9 @@ fn handle_button_message(
             if should_end {
                 if let Some(world) = super::try_get_ecs_world() {
                     if let Ok(world_borrow) = world.try_borrow() {
-                        if let crate::ecs::drag::DragState::Dragging { entity, .. }
-                        | crate::ecs::drag::DragState::Preparing { entity, .. }
-                        | crate::ecs::drag::DragState::JustStarted { entity, .. } =
+                        if let crate::ecs::drag::DragStateSnapshot::Dragging { entity, .. }
+                        | crate::ecs::drag::DragStateSnapshot::Preparing { entity, .. }
+                        | crate::ecs::drag::DragStateSnapshot::JustStarted { entity, .. } =
                             &state_snapshot
                         {
                             // DragAccumulatorResourceにEnded遷移を記録
@@ -287,7 +281,8 @@ fn handle_button_message(
                     }
                 }
 
-                // thread_local DragStateをIdleに戻す
+                // thread_local DragStateをJustEndedに遷移
+                // 旧状態の CaptureGuard が Drop され ReleaseCapture が自動呼び出し
                 crate::ecs::drag::end_dragging(PhysicalPoint::new(screen_x, screen_y), false);
             } else {
                 trace!(
@@ -295,9 +290,6 @@ fn handle_button_message(
                     "[handle_button_message] Fallback drag end skipped: HWND mismatch"
                 );
             }
-            // TODO(wintf-screen-drag-stability): ReleaseCapture をここで呼び出す
-            // API: windows::Win32::UI::Input::KeyboardAndMouse::ReleaseCapture
-            // let _ = unsafe { ReleaseCapture() };
         }
     }
 

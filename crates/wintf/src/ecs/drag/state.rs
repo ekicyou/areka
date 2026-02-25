@@ -2,16 +2,20 @@
 //!
 //! thread_local! + RefCellパターンでwndproc層のドラッグ状態を管理する。
 
-use crate::ecs::drag::DragConstraint;
-use crate::ecs::pointer::PhysicalPoint;
 use crate::ecs::Point;
+use crate::ecs::drag::DragConstraint;
+use crate::ecs::drag::capture_guard::CaptureGuard;
+use crate::ecs::pointer::PhysicalPoint;
 use bevy_ecs::entity::Entity;
 use std::cell::RefCell;
 use std::time::Instant;
 use windows::Win32::Foundation::HWND;
 
 /// ドラッグ状態（thread_local!で管理）
-#[derive(Debug, Clone)]
+///
+/// `CaptureGuard` を内包するため Clone 不可。
+/// 読み取り専用スナップショットが必要な場合は [`DragStateSnapshot`] / [`snapshot_drag_state`] を使用する。
+#[derive(Debug)]
 pub enum DragState {
     /// アイドル状態、ドラッグなし
     Idle,
@@ -24,6 +28,8 @@ pub enum DragState {
         start_pos: PhysicalPoint,
         /// 押下時刻
         start_time: Instant,
+        /// マウスキャプチャ RAII ガード
+        capture_guard: CaptureGuard,
     },
 
     /// ドラッグ開始直後（1フレームのみ）
@@ -36,6 +42,8 @@ pub enum DragState {
         current_pos: PhysicalPoint,
         /// 開始時刻
         start_time: Instant,
+        /// マウスキャプチャ RAII ガード
+        capture_guard: CaptureGuard,
     },
 
     /// ドラッグ中、閾値到達済み
@@ -59,6 +67,8 @@ pub enum DragState {
         move_window: bool,
         /// DragConstraint のキャッシュ
         constraint: Option<DragConstraint>,
+        /// マウスキャプチャ RAII ガード
+        capture_guard: CaptureGuard,
     },
 
     /// ドラッグ終了直後（1フレームのみ）
@@ -70,6 +80,104 @@ pub enum DragState {
         /// キャンセルされたか
         cancelled: bool,
     },
+}
+
+/// ドラッグ状態の読み取り専用スナップショット。
+///
+/// `CaptureGuard` を含まないため Clone 可能。
+/// WndProc ハンドラが状態を判定するために使用する。
+#[derive(Debug, Clone)]
+pub enum DragStateSnapshot {
+    Idle,
+    Preparing {
+        entity: Entity,
+        start_pos: PhysicalPoint,
+        start_time: Instant,
+    },
+    JustStarted {
+        entity: Entity,
+        start_pos: PhysicalPoint,
+        current_pos: PhysicalPoint,
+        start_time: Instant,
+    },
+    Dragging {
+        entity: Entity,
+        start_pos: PhysicalPoint,
+        current_pos: PhysicalPoint,
+        prev_pos: PhysicalPoint,
+        start_time: Instant,
+        hwnd: HWND,
+        initial_window_pos: Point,
+        move_window: bool,
+        constraint: Option<DragConstraint>,
+    },
+    JustEnded {
+        entity: Entity,
+        position: PhysicalPoint,
+        cancelled: bool,
+    },
+}
+
+impl DragState {
+    /// 読み取り専用スナップショットを生成する。
+    pub fn snapshot(&self) -> DragStateSnapshot {
+        match self {
+            DragState::Idle => DragStateSnapshot::Idle,
+            DragState::Preparing {
+                entity,
+                start_pos,
+                start_time,
+                ..
+            } => DragStateSnapshot::Preparing {
+                entity: *entity,
+                start_pos: *start_pos,
+                start_time: *start_time,
+            },
+            DragState::JustStarted {
+                entity,
+                start_pos,
+                current_pos,
+                start_time,
+                ..
+            } => DragStateSnapshot::JustStarted {
+                entity: *entity,
+                start_pos: *start_pos,
+                current_pos: *current_pos,
+                start_time: *start_time,
+            },
+            DragState::Dragging {
+                entity,
+                start_pos,
+                current_pos,
+                prev_pos,
+                start_time,
+                hwnd,
+                initial_window_pos,
+                move_window,
+                constraint,
+                ..
+            } => DragStateSnapshot::Dragging {
+                entity: *entity,
+                start_pos: *start_pos,
+                current_pos: *current_pos,
+                prev_pos: *prev_pos,
+                start_time: *start_time,
+                hwnd: *hwnd,
+                initial_window_pos: *initial_window_pos,
+                move_window: *move_window,
+                constraint: *constraint,
+            },
+            DragState::JustEnded {
+                entity,
+                position,
+                cancelled,
+            } => DragStateSnapshot::JustEnded {
+                entity: *entity,
+                position: *position,
+                cancelled: *cancelled,
+            },
+        }
+    }
 }
 
 thread_local! {
@@ -99,9 +207,20 @@ where
     })
 }
 
-/// ドラッグ開始準備（WM_LBUTTONDOWN時）
+/// ドラッグ状態のスナップショットを取得する（clone 相当）。
+///
+/// `CaptureGuard` を含まない `DragStateSnapshot` を返す。
+/// WndProc ハンドラ等で状態のパターンマッチに使用する。
 #[inline]
-pub fn start_preparing(entity: Entity, pos: PhysicalPoint) {
+pub fn snapshot_drag_state() -> DragStateSnapshot {
+    read_drag_state(|state| state.snapshot())
+}
+
+/// ドラッグ開始準備（WM_LBUTTONDOWN時）
+///
+/// `hwnd` を使って `SetCapture` を呼び出し、`CaptureGuard` を生成する。
+#[inline]
+pub fn start_preparing(entity: Entity, pos: PhysicalPoint, hwnd: HWND) {
     update_drag_state(|state| {
         // 既にドラッグ中の場合は無視（複数ボタン同時ドラッグ禁止）
         // JustEndedは許可（前回のドラッグが終了した後の新しいドラッグ）
@@ -115,38 +234,43 @@ pub fn start_preparing(entity: Entity, pos: PhysicalPoint) {
             return;
         }
 
+        let capture_guard = CaptureGuard::acquire(hwnd);
+
         *state = DragState::Preparing {
             entity,
             start_pos: pos,
             start_time: Instant::now(),
+            capture_guard,
         };
 
         tracing::debug!(
             entity = ?entity,
             x = pos.x,
             y = pos.y,
-            "[start_preparing] DragState -> Preparing"
+            hwnd = format!("0x{:X}", hwnd.0 as usize),
+            "[start_preparing] DragState -> Preparing (with capture)"
         );
     });
 }
 
 /// ドラッグ開始（閾値到達時）
+///
+/// Preparing → JustStarted 遷移。CaptureGuard を引き継ぐ。
 #[inline]
 pub fn start_dragging(current_pos: PhysicalPoint) {
     update_drag_state(|state| {
+        if !matches!(state, DragState::Preparing { .. }) {
+            return;
+        }
+
+        let old = std::mem::replace(state, DragState::Idle);
         if let DragState::Preparing {
             entity,
             start_pos,
             start_time,
-        } = *state
+            capture_guard,
+        } = old
         {
-            *state = DragState::JustStarted {
-                entity,
-                start_pos,
-                current_pos,
-                start_time,
-            };
-
             tracing::debug!(
                 entity = ?entity,
                 start_x = start_pos.x,
@@ -155,6 +279,14 @@ pub fn start_dragging(current_pos: PhysicalPoint) {
                 current_y = current_pos.y,
                 "[drag] Dragging started"
             );
+
+            *state = DragState::JustStarted {
+                entity,
+                start_pos,
+                current_pos,
+                start_time,
+                capture_guard,
+            };
         }
     });
 }
@@ -163,97 +295,119 @@ pub fn start_dragging(current_pos: PhysicalPoint) {
 ///
 /// JustStarted → Dragging 遷移時に WindowDragContextResource から
 /// HWND・初期位置・制約情報を読み取り、DragState::Dragging にセットする。
+/// CaptureGuard は `std::mem::replace` で所有権を移動する。
 #[inline]
 pub fn update_dragging(
     current_pos: PhysicalPoint,
     drag_context: Option<&crate::ecs::drag::WindowDragContextResource>,
 ) {
-    update_drag_state(|state| match state {
-        DragState::JustStarted {
-            entity,
-            start_pos,
-            start_time,
-            ..
-        } => {
-            // WindowDragContextResource から Window 情報を読み取り
-            let (hwnd, initial_window_pos, move_window, constraint) =
-                if let Some(ctx_res) = drag_context {
-                    if let Some(ctx) = ctx_res.get() {
-                        (
-                            ctx.hwnd.unwrap_or(HWND::default()),
-                            ctx.initial_window_pos.unwrap_or(Point { x: 0, y: 0 }),
-                            ctx.move_window,
-                            ctx.constraint,
-                        )
-                    } else {
-                        (HWND::default(), Point { x: 0, y: 0 }, false, None)
-                    }
-                } else {
-                    (HWND::default(), Point { x: 0, y: 0 }, false, None)
-                };
-
-            tracing::debug!(
-                entity = ?*entity,
-                hwnd = format!("0x{:X}", hwnd.0 as usize),
-                initial_x = initial_window_pos.x,
-                initial_y = initial_window_pos.y,
-                move_window = move_window,
-                "[update_dragging] JustStarted -> Dragging with WindowDragContext"
-            );
-
-            *state = DragState::Dragging {
-                entity: *entity,
-                start_pos: *start_pos,
-                current_pos,
-                prev_pos: current_pos,
-                start_time: *start_time,
-                hwnd,
-                initial_window_pos,
-                move_window,
-                constraint,
-            };
-        }
-        DragState::Dragging {
-            current_pos: old_pos,
-            ..
-        } => {
-            let prev_pos = *old_pos;
-            if let DragState::Dragging {
-                entity,
-                start_pos,
-                start_time,
-                hwnd,
-                initial_window_pos,
-                move_window,
-                constraint,
-                ..
-            } = state.clone()
-            {
-                *state = DragState::Dragging {
+    update_drag_state(|state| {
+        match state {
+            DragState::JustStarted { .. } => {
+                let old = std::mem::replace(state, DragState::Idle);
+                if let DragState::JustStarted {
                     entity,
                     start_pos,
-                    current_pos,
-                    prev_pos,
+                    start_time,
+                    capture_guard,
+                    ..
+                } = old
+                {
+                    // WindowDragContextResource から Window 情報を読み取り
+                    let (hwnd, initial_window_pos, move_window, constraint) =
+                        if let Some(ctx_res) = drag_context {
+                            if let Some(ctx) = ctx_res.get() {
+                                (
+                                    ctx.hwnd.unwrap_or(HWND::default()),
+                                    ctx.initial_window_pos.unwrap_or(Point { x: 0, y: 0 }),
+                                    ctx.move_window,
+                                    ctx.constraint,
+                                )
+                            } else {
+                                (HWND::default(), Point { x: 0, y: 0 }, false, None)
+                            }
+                        } else {
+                            (HWND::default(), Point { x: 0, y: 0 }, false, None)
+                        };
+
+                    tracing::debug!(
+                        entity = ?entity,
+                        hwnd = format!("0x{:X}", hwnd.0 as usize),
+                        initial_x = initial_window_pos.x,
+                        initial_y = initial_window_pos.y,
+                        move_window = move_window,
+                        "[update_dragging] JustStarted -> Dragging with WindowDragContext"
+                    );
+
+                    *state = DragState::Dragging {
+                        entity,
+                        start_pos,
+                        current_pos,
+                        prev_pos: current_pos,
+                        start_time,
+                        hwnd,
+                        initial_window_pos,
+                        move_window,
+                        constraint,
+                        capture_guard,
+                    };
+                }
+            }
+            DragState::Dragging { .. } => {
+                let old = std::mem::replace(state, DragState::Idle);
+                if let DragState::Dragging {
+                    entity,
+                    start_pos,
+                    current_pos: old_pos,
                     start_time,
                     hwnd,
                     initial_window_pos,
                     move_window,
                     constraint,
-                };
+                    capture_guard,
+                    ..
+                } = old
+                {
+                    *state = DragState::Dragging {
+                        entity,
+                        start_pos,
+                        current_pos,
+                        prev_pos: old_pos,
+                        start_time,
+                        hwnd,
+                        initial_window_pos,
+                        move_window,
+                        constraint,
+                        capture_guard,
+                    };
+                }
             }
+            _ => {}
         }
-        _ => {}
     });
 }
 
 /// ドラッグ終了（WM_LBUTTONUP時）
+///
+/// `CaptureGuard` は `RefCell` borrow 解放後にドロップされる。
+/// `ReleaseCapture` が同期的に `WM_CAPTURECHANGED` をディスパッチするため、
+/// borrow 中に Drop すると `RefCell already borrowed` パニックになる。
 #[inline]
 pub fn end_dragging(position: PhysicalPoint, cancelled: bool) {
-    update_drag_state(|state| match state {
+    // CaptureGuard を closure の外に取り出し、borrow 解放後にドロップする
+    let _guard = update_drag_state(|state| match state {
         DragState::Preparing { entity, .. }
         | DragState::JustStarted { entity, .. }
         | DragState::Dragging { entity, .. } => {
             let entity = *entity;
+            // 旧状態から CaptureGuard を抽出
+            let old = std::mem::replace(state, DragState::Idle);
+            let capture_guard = match old {
+                DragState::Preparing { capture_guard, .. }
+                | DragState::JustStarted { capture_guard, .. }
+                | DragState::Dragging { capture_guard, .. } => Some(capture_guard),
+                _ => None,
+            };
             *state = DragState::JustEnded {
                 entity,
                 position,
@@ -267,15 +421,19 @@ pub fn end_dragging(position: PhysicalPoint, cancelled: bool) {
                 cancelled,
                 "[drag] Dragging ended"
             );
+            capture_guard
         }
-        _ => {}
+        _ => None,
     });
+    // _guard がここでドロップ → ReleaseCapture が RefCell borrow 外で実行される
 }
 
 /// ドラッグキャンセル（ESCキー、WM_CANCELMODE時）
+///
+/// `CaptureGuard` は `RefCell` borrow 解放後にドロップされる。
 #[inline]
 pub fn cancel_dragging() {
-    update_drag_state(|state| match state {
+    let _guard = update_drag_state(|state| match state {
         DragState::Preparing {
             entity, start_pos, ..
         }
@@ -287,6 +445,14 @@ pub fn cancel_dragging() {
         } => {
             let entity = *entity;
             let position = *start_pos;
+            // 旧状態から CaptureGuard を抽出
+            let old = std::mem::replace(state, DragState::Idle);
+            let capture_guard = match old {
+                DragState::Preparing { capture_guard, .. }
+                | DragState::JustStarted { capture_guard, .. }
+                | DragState::Dragging { capture_guard, .. } => Some(capture_guard),
+                _ => None,
+            };
             *state = DragState::JustEnded {
                 entity,
                 position,
@@ -297,9 +463,11 @@ pub fn cancel_dragging() {
                 entity = ?entity,
                 "[drag] Dragging cancelled"
             );
+            capture_guard
         }
-        _ => {}
+        _ => None,
     });
+    // _guard がここでドロップ
 }
 
 /// ドラッグ状態をIdleにリセット（dispatch_drag_events後）

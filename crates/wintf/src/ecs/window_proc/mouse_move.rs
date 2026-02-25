@@ -181,10 +181,10 @@ pub(super) fn WM_MOUSEMOVE(
 
             // ドラッグ処理（thread_local DragState + DragAccumulatorResource）
             // ヒットテスト結果に関わらず、Preparing/Dragging状態なら処理を続ける
-            let state_snapshot = crate::ecs::drag::read_drag_state(|state| state.clone());
+            let state_snapshot = crate::ecs::drag::snapshot_drag_state();
 
             match state_snapshot {
-                crate::ecs::drag::DragState::Preparing {
+                crate::ecs::drag::DragStateSnapshot::Preparing {
                     entity,
                     start_pos,
                     start_time,
@@ -225,7 +225,7 @@ pub(super) fn WM_MOUSEMOVE(
                         }
                     }
                 }
-                crate::ecs::drag::DragState::Dragging {
+                crate::ecs::drag::DragStateSnapshot::Dragging {
                     prev_pos,
                     start_pos,
                     hwnd: drag_hwnd,
