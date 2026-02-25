@@ -30,7 +30,7 @@ wintf クレート内で幾何学・空間系の構造体（`Size`, `Offset`, `R
 **Objective:** As a wintf ライブラリ開発者, I want 幾何学・空間型を一箇所にまとめた共通型モジュールを持つ, so that 型定義の発見性が向上し、新規モジュール作成時の型選択が容易になる
 
 #### Acceptance Criteria
-1. The wintf shall `ecs/types/` または `ecs/common/types/` モジュールに共通幾何型を定義する共通型モジュールを提供する
+1. The wintf shall `ecs/types.rs` ファイルまたは `ecs/types/` ディレクトリモジュールに共通幾何型を定義する共通型モジュールを提供する（型数が少量の場合は単一ファイルで可）
 2. The wintf shall 共通型モジュールを `pub use` で re-export し、既存のモジュール構成を壊さずにアクセス可能とする
 3. The wintf shall 共通型モジュールの全型に `Debug`, `Clone`, `Copy`, `PartialEq` の最低限の derive を適用する
 

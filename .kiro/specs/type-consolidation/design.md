@@ -97,6 +97,7 @@ graph TB
 **Architecture Integration**:
 - **Selected pattern**: 共通型モジュール（`ecs/types.rs`）による型集約 + `pub use` re-export
 - **Domain boundaries**: プリミティブ型（types.rs） → レイアウト型（layout/） → コンポーネント型（各モジュール）の3層型階層
+- **Module dependency direction**: `ecs/types.rs` は最下層プリミティブモジュールであり、他の `ecs/` 内モジュールに一切依存しない。依存は常に types.rs への一方向（types.rs ← layout, pointer, window 等← より高レイヤー）
 - **Existing patterns preserved**: `pub use layout::*` による自動公開、`D2DRectExt` トレイト拡張パターン
 - **New components rationale**: `ecs/types.rs` はプリミティブ幾何型の唯一の定義箇所として導入。型数が6個と少ないため単一ファイルで十分（`research.md` Architecture Pattern Evaluation 参照）
 - **Steering compliance**: レイヤー分離原則（COM→ECS→Message）を維持。ECS 層に Win32 型が漏れない設計
@@ -178,9 +179,11 @@ graph TB
 - `Point`, `PointF`, `SizeI`, `Rect` は pure primitive 型として `Component` derive なし
 
 **Dependencies**
+- Inbound: **なし** — types.rs は最下層プリミティブモジュールであり、他の `ecs/` 内モジュールからは依存されるが、自身は他の `ecs/` モジュールに依存しない
 - Outbound: `windows::Win32::Foundation::{POINT, SIZE}` — From/Into 変換ターゲット (P0)
 - Outbound: `windows::Win32::Graphics::Direct2D::Common::{D2D_RECT_F, D2D_SIZE_F}` — From/Into 変換ターゲット (P0)
 - Outbound: `windows_numerics::Vector2` — PointF の From/Into 変換ターゲット (P1)
+- Outbound: `bevy_ecs::prelude::Component` — Size/Offset の derive macro (P0)
 
 **Contracts**: Trait [x]
 
