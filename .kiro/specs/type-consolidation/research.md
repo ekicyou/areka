@@ -15,13 +15,13 @@
 - **Context**: Req2-4, Req6 の `#[repr(C)]` メモリレイアウト互換戦略の根拠を実コードで検証
 - **Sources Consulted**: windows 0.62.2 / windows-numerics 0.3.1 のソースコード（Cargo registry）
 - **Findings**:
-  | 外部型 | フィールド順 | `#[repr(C)]` | derive |
-  |--------|-------------|-------------|--------|
-  | `D2D_RECT_F` | `left: f32, top: f32, right: f32, bottom: f32` | ✅ | `Clone, Copy, Debug, Default, PartialEq` |
-  | `D2D_SIZE_F` | `width: f32, height: f32` | ✅ | `Clone, Copy, Debug, Default, PartialEq` |
-  | `POINT` | `x: i32, y: i32` | ✅ | `Clone, Copy, Debug, Default, PartialEq` |
-  | `SIZE` | `cx: i32, cy: i32` | ✅ | `Clone, Copy, Debug, Default, PartialEq` |
-  | `Vector2` | `X: f32, Y: f32` | ✅ | `Clone, Copy, Debug, Default, PartialEq` |
+  | 外部型       | フィールド順                                   | `#[repr(C)]` | derive                                   |
+  | ------------ | ---------------------------------------------- | ------------ | ---------------------------------------- |
+  | `D2D_RECT_F` | `left: f32, top: f32, right: f32, bottom: f32` | ✅            | `Clone, Copy, Debug, Default, PartialEq` |
+  | `D2D_SIZE_F` | `width: f32, height: f32`                      | ✅            | `Clone, Copy, Debug, Default, PartialEq` |
+  | `POINT`      | `x: i32, y: i32`                               | ✅            | `Clone, Copy, Debug, Default, PartialEq` |
+  | `SIZE`       | `cx: i32, cy: i32`                             | ✅            | `Clone, Copy, Debug, Default, PartialEq` |
+  | `Vector2`    | `X: f32, Y: f32`                               | ✅            | `Clone, Copy, Debug, Default, PartialEq` |
 
 - **Implications**:
   - `D2D_POINT_2F` は windows 0.62.2 に**存在しない**。D2D API は `Vector2`（PascalCase フィールド `X`, `Y`）を直接使用。`PointF` のメモリレイアウト互換ターゲットは `Vector2` となる
@@ -65,19 +65,19 @@
 - **Context**: Req4 AC4 のトレイト移植範囲の確定
 - **Sources Consulted**: `crates/wintf/src/ecs/layout/rect.rs`（全165行）
 - **Findings**:
-  | メソッド | シグネチャ | 備考 |
-  |----------|-----------|------|
-  | `from_offset_size` | `(offset: Offset, size: Size) -> Self` | 構築 |
-  | `width` | `(&self) -> f32` | `right - left` |
-  | `height` | `(&self) -> f32` | `bottom - top` |
-  | `offset` | `(&self) -> Vector2` | 左上座標 |
-  | `size` | `(&self) -> Vector2` | サイズ |
-  | `set_offset` | `(&mut self, offset: Vector2)` | 左上設定 |
-  | `set_size` | `(&mut self, size: Vector2)` | サイズ設定 |
-  | `set_left/top/right/bottom` | `(&mut self, val: f32)` | 個別設定 |
-  | `contains` | `(&self, x: f32, y: f32) -> bool` | 点包含判定 |
-  | `union` | `(&self, other: &Self) -> Self` | 外接矩形 |
-  | `validate` | `(&self)` | debug_assertions のみ |
+  | メソッド                    | シグネチャ                             | 備考                  |
+  | --------------------------- | -------------------------------------- | --------------------- |
+  | `from_offset_size`          | `(offset: Offset, size: Size) -> Self` | 構築                  |
+  | `width`                     | `(&self) -> f32`                       | `right - left`        |
+  | `height`                    | `(&self) -> f32`                       | `bottom - top`        |
+  | `offset`                    | `(&self) -> Vector2`                   | 左上座標              |
+  | `size`                      | `(&self) -> Vector2`                   | サイズ                |
+  | `set_offset`                | `(&mut self, offset: Vector2)`         | 左上設定              |
+  | `set_size`                  | `(&mut self, size: Vector2)`           | サイズ設定            |
+  | `set_left/top/right/bottom` | `(&mut self, val: f32)`                | 個別設定              |
+  | `contains`                  | `(&self, x: f32, y: f32) -> bool`      | 点包含判定            |
+  | `union`                     | `(&self, other: &Self) -> Self`        | 外接矩形              |
+  | `validate`                  | `(&self)`                              | debug_assertions のみ |
   
   自由関数: `transform_rect_axis_aligned(rect: &D2DRect, matrix: &Matrix3x2) -> D2DRect`
 
@@ -88,10 +88,10 @@
 - **Context**: Req2 の PhysicalPoint 統合方針
 - **Sources Consulted**: `ecs/pointer/types.rs`, `ecs/layout/hit_test/mod.rs`, `ecs/window_proc/mouse_*.rs`
 - **Findings**:
-  | モジュール | フィールド型 | 用途 | derive |
-  |-----------|-------------|------|--------|
-  | `pointer::PhysicalPoint` | `i32` | Win32マウスメッセージ座標 | `Debug, Clone, Copy, Default, PartialEq, Eq` |
-  | `hit_test::PhysicalPoint` | `f32` | ヒットテスト座標 | `Debug, Clone, Copy, PartialEq` |
+  | モジュール                | フィールド型 | 用途                      | derive                                       |
+  | ------------------------- | ------------ | ------------------------- | -------------------------------------------- |
+  | `pointer::PhysicalPoint`  | `i32`        | Win32マウスメッセージ座標 | `Debug, Clone, Copy, Default, PartialEq, Eq` |
+  | `hit_test::PhysicalPoint` | `f32`        | ヒットテスト座標          | `Debug, Clone, Copy, PartialEq`              |
   
   - `ecs/mod.rs` は pointer 版のみ公開
   - `mouse_move.rs`, `mouse_click.rs`, `mouse_dblclick_wheel.rs` で `PhysicalPoint as HitTestPoint` エイリアス使用
@@ -113,22 +113,22 @@
 - **Context**: `SizeI { width, height }` 導入時の `SIZE { cx, cy }` 書き換え箇所の特定
 - **Sources Consulted**: プロジェクト全体の `SIZE` 使用箇所
 - **Findings**:
-  | ファイル | パターン |
-  |---------|---------|
-  | `window_pos.rs:58` | `pub size: Option<SIZE>` フィールド定義 |
-  | `window_pos.rs:306` | `size.cx, size.cy` 直接アクセス |
+  | ファイル                   | パターン                                                     |
+  | -------------------------- | ------------------------------------------------------------ |
+  | `window_pos.rs:58`         | `pub size: Option<SIZE>` フィールド定義                      |
+  | `window_pos.rs:306`        | `size.cx, size.cy` 直接アクセス                              |
   | `window_pos_systems.rs:56` | `SIZE { cx: width.ceil() as i32, cy: height.ceil() as i32 }` |
-  | `render.rs:14` | `use windows::Win32::Foundation::SIZE` インポート |
-  | `dpi_helpers.rs:119` | テスト内使用 |
+  | `render.rs:14`             | `use windows::Win32::Foundation::SIZE` インポート            |
+  | `dpi_helpers.rs:119`       | テスト内使用                                                 |
 - **Implications**: `WindowPos.size` を `SizeI` に変更する場合、上記全箇所で `cx`/`cy` → `width`/`height` への書き換え＋Win32 API 境界での `.into()` 変換追加が必要
 
 ## Architecture Pattern Evaluation
 
-| Option | Description | Strengths | Risks / Limitations | Notes |
-|--------|-------------|-----------|---------------------|-------|
-| A: ecs/types.rs 単一ファイル | 全共通型を1ファイルに集約 | シンプル、変更最小 | ファイル肥大化リスク | 型数が6-8個であれば許容範囲 |
-| B: ecs/types/ ディレクトリモジュール | point.rs, size.rs, rect.rs, convert.rs に分割 | 責務分離、拡張容易 | ファイル数増加 | 将来の型追加に備える |
-| C: layout/types.rs に配置 | 既存 layout/ 内に新設 | `pub use layout::*` で自動公開 | layout 依存の印象 | 最小変更だが概念的に不正確 |
+| Option                               | Description                                   | Strengths                      | Risks / Limitations  | Notes                       |
+| ------------------------------------ | --------------------------------------------- | ------------------------------ | -------------------- | --------------------------- |
+| A: ecs/types.rs 単一ファイル         | 全共通型を1ファイルに集約                     | シンプル、変更最小             | ファイル肥大化リスク | 型数が6-8個であれば許容範囲 |
+| B: ecs/types/ ディレクトリモジュール | point.rs, size.rs, rect.rs, convert.rs に分割 | 責務分離、拡張容易             | ファイル数増加       | 将来の型追加に備える        |
+| C: layout/types.rs に配置            | 既存 layout/ 内に新設                         | `pub use layout::*` で自動公開 | layout 依存の印象    | 最小変更だが概念的に不正確  |
 
 **Selected**: **Option A（ecs/types.rs 単一ファイル）** — 理由:
 - 導入する型数（`Point`, `PointF`, `Size`, `SizeI`, `Offset`, `Rect`）に対してディレクトリは過剰
