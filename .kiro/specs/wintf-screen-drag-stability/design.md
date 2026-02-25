@@ -53,6 +53,11 @@ WM_LBUTTONUP
 - `bypass_change_detection()` でドラッグ由来の `WM_WINDOWPOSCHANGED` による `Changed<WindowPos>` を抑止（直接ループ防止済み）
 - `WindowDragging` マーカーは `dispatch_drag_events` で insert/remove 済み（**ただし他システムで未参照**）
 
+**メッセージキューの特性**:
+- SetCapture 中、移動中の `WM_MOUSEMOVE` はシステムによって間引かれる可能性がある（Win32 仕様）
+- `DragAccumulator` がデルタを累積する設計により、メッセージ間引きに対応済み（各 `WM_MOUSEMOVE` 受信時に `accumulate_delta()` で加算、ECS tick 時にまとめて flush）
+- マウスボタン離脱時の `WM_LBUTTONUP` は保証される
+
 **根本問題**: 
 1. `SetCapture` がないため、DPI 変更でウィンドウが縮小するとマウスイベントが途切れる
 2. `Without<WindowDragging>` がないため、間接レイアウト再計算が古い座標を復活させる
@@ -122,6 +127,7 @@ graph TB
 | Layer | Choice / Version | Role in Feature | Notes |
 |-------|------------------|-----------------|-------|
 | Win32 API | windows 0.62.2 | `SetCapture`, `ReleaseCapture`, `WM_CAPTURECHANGED` ハンドリング | `Win32_UI_Input_KeyboardAndMouse` feature 有効済み |
+| DPI Mode | Per-Monitor DPI Aware V2 | DPI 境界横断時の座標系統一 | `DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2` 設定済み（process_singleton.rs）。スクリーン座標は物理ピクセルで統一され、DPI 差に依らず一貫性を保つ |
 | ECS | bevy_ecs 0.18.0 | `Without<WindowDragging>` クエリフィルタ、`Changed<T>` 検知 | 既存パターン準拠 |
 | Layout | taffy 0.9.2 | ドラッグ排他時もサイズ計算は維持 | 位置のみ排他 |
 | Logging | tracing | キャプチャ取得/解放の構造化ログ | steering/logging.md 準拠 |
