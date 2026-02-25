@@ -269,8 +269,12 @@ impl From<Rect> for D2D_RECT_F {
 - Outbound: `windows_numerics::Matrix3x2` — transform_rect_axis_aligned 用 (P0)
 
 **Implementation Notes**
-- `D2DRectExt` メソッドの `offset()`/`size()` 戻り値型変更は breaking change。呼び出し元（`arrangement.rs` 等）が `Vector2` を期待する箇所では `.into()` で変換可能（`PointF`/`Size` → `Vector2` の `From` 実装により）
-- `impl Into<PointF>` / `impl Into<Size>` を setter の引数型にすることで、`Vector2` 値を直接渡すことも可能にできる（互換性オプション）
+- **影響範囲調査結果（Issue 3 解決）**: `D2DRectExt` メソッド（`.offset()`, `.size()`, `.set_offset()`, `.set_size()`）は現在**テストコードでのみ使用**。
+  - `tests/layout/arrangement_bounds_test.rs` L127, L141, L153, L166 の 4 箇所のみ
+  - `src/` 以下では `.contains()`, `.union()`, `.from_offset_size()` のみ使用（戻り値型変更の影響なし）
+  - Phase 3 での戻り値型変更（`Vector2` → `PointF`/`Size`）の影響は**テストコード 4 箇所のみ**（型名変更のみで `.X`/`.Y` は維持されるため、実質的な変更は `Vector2` import を `PointF`/`Size` に置換するのみ）
+- `PointF`/`Size` → `Vector2` の `From` 実装により、既存の `Vector2` を期待する箇所では `.into()` 変換で互換維持可能
+- `impl Into<PointF>` / `impl Into<Size>` を setter の引数型にすることで、`Vector2` 値を直接渡すことも可能にできる（互換性オプション、ただし現在の使用箇所は 0 のため不要）
 
 #### ecs/layout/metrics.rs（変更）
 
