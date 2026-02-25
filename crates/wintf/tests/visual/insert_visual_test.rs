@@ -3,8 +3,7 @@
 //! ウィジェットの on_add フックから呼び出し可能な Visual 挿入ヘルパー関数をテストする。
 
 use bevy_ecs::prelude::*;
-use windows_numerics::Vector2;
-use wintf::ecs::{Visual, insert_visual, insert_visual_with};
+use wintf::ecs::{PointF, Visual, insert_visual, insert_visual_with};
 
 /// insert_visual: デフォルト Visual を挿入できることを確認
 #[test]
@@ -37,7 +36,7 @@ fn test_insert_visual_with_adds_custom_visual() {
     let custom_visual = Visual {
         is_visible: false,
         opacity: 0.5,
-        transform_origin: Vector2 { X: 100.0, Y: 100.0 },
+        transform_origin: PointF { x: 100.0, y: 100.0 },
     };
 
     // insert_visual_with を呼び出し
@@ -48,8 +47,8 @@ fn test_insert_visual_with_adds_custom_visual() {
 
     assert_eq!(visual.is_visible, false);
     assert_eq!(visual.opacity, 0.5);
-    assert_eq!(visual.transform_origin.X, 100.0);
-    assert_eq!(visual.transform_origin.Y, 100.0);
+    assert_eq!(visual.transform_origin.x, 100.0);
+    assert_eq!(visual.transform_origin.y, 100.0);
 }
 
 /// insert_visual: 既に Visual を持つ Entity に対しては上書きされることを確認

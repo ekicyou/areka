@@ -24,7 +24,7 @@ use bevy_ecs::prelude::*;
 use std::time::Duration;
 use tracing::info;
 use tracing_subscriber::EnvFilter;
-use windows::Win32::Foundation::{LPARAM, POINT, WPARAM};
+use windows::Win32::Foundation::{LPARAM, WPARAM};
 use windows::Win32::Graphics::Direct2D::Common::D2D1_COLOR_F;
 use windows::Win32::UI::WindowsAndMessaging::{PostMessageW, WM_LBUTTONDOWN, WM_LBUTTONUP};
 use windows::core::Result;
@@ -33,7 +33,7 @@ use wintf::ecs::pointer::{OnPointerPressed, Phase, PointerState};
 use wintf::ecs::widget::brushes::Brushes;
 use wintf::ecs::widget::shapes::Rectangle;
 use wintf::ecs::window::WindowHandle;
-use wintf::ecs::{Window, WindowPos};
+use wintf::ecs::{Point, Window, WindowPos};
 use wintf::*;
 
 /// ウィンドウマーカー
@@ -109,7 +109,7 @@ fn create_test_window(world: &mut World) {
                 ..Default::default()
             },
             WindowPos {
-                position: Some(POINT { x: 200, y: 200 }),
+                position: Some(Point { x: 200, y: 200 }),
                 ..Default::default()
             },
             Window {

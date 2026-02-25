@@ -92,7 +92,7 @@ pub(crate) use wintf::ecs::widget::bitmap_source::{BitmapSource, CommandSender};
 pub(crate) use wintf::ecs::widget::brushes::Brushes;
 pub(crate) use wintf::ecs::widget::shapes::Rectangle;
 pub(crate) use wintf::ecs::window::find_owner_window;
-pub(crate) use wintf::ecs::{Window, WindowPos};
+pub(crate) use wintf::ecs::{Point, Window, WindowPos};
 pub(crate) use wintf::*;
 
 #[derive(Debug, Clone, Copy, Component, PartialEq, Hash)]
@@ -270,13 +270,14 @@ async fn run_demo(tx: CommandSender) {
         setup::create_flexbox_window(
             world,
             "wintf - Taffy Flexbox Demo (Window 1)",
-            windows::Win32::Foundation::POINT { x: 100, y: 100 },
+            Point { x: 100, y: 100 },
         );
         setup::create_flexbox_window(
             world,
             "wintf - Taffy Flexbox Demo (Window 2)",
             find_non_primary_monitor_origin()
-                .unwrap_or(windows::Win32::Foundation::POINT { x: 1200, y: 100 }),
+                .map(Point::from)
+                .unwrap_or(Point { x: 1200, y: 100 }),
         );
     }));
 
@@ -319,7 +320,7 @@ fn change_layout_parameters(world: &mut World) {
     // DPIスケーリング動作を正しく検証できる。
     let mut wp_query = world.query_filtered::<&mut WindowPos, With<FlexDemoWindow>>();
     if let Some(mut wp) = wp_query.iter_mut(world).next() {
-        wp.position = Some(windows::Win32::Foundation::POINT { x: -1600, y: 400 });
+        wp.position = Some(Point { x: -1600, y: 400 });
         println!("[Test] Window position changed to (-1600, 400) via WindowPos");
     }
 

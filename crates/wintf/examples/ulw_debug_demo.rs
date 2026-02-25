@@ -93,7 +93,7 @@ fn create_debug_window(world: &mut World) {
                 ..Default::default()
             },
             WindowPos {
-                position: Some(windows::Win32::Foundation::POINT { x: 100, y: 100 }),
+                position: Some(wintf::ecs::Point { x: 100, y: 100 }),
                 ..Default::default()
             },
             Window {

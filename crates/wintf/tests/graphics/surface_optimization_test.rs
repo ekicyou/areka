@@ -149,10 +149,10 @@ fn test_surface_creation_stats_as_resource() {
 #[test]
 fn test_calculate_surface_size_from_global_arrangement_normal() {
     // Req 3.1, 3.2: GlobalArrangement.boundsから物理ピクセルサイズを計算
-    use windows::Win32::Graphics::Direct2D::Common::D2D_RECT_F;
+    use wintf::ecs::Rect;
 
     let ga = GlobalArrangement {
-        bounds: D2D_RECT_F {
+        bounds: Rect {
             left: 10.0,
             top: 20.0,
             right: 110.0,
@@ -168,10 +168,10 @@ fn test_calculate_surface_size_from_global_arrangement_normal() {
 #[test]
 fn test_calculate_surface_size_from_global_arrangement_fractional() {
     // Req 3.2: 小数点以下の切り上げ
-    use windows::Win32::Graphics::Direct2D::Common::D2D_RECT_F;
+    use wintf::ecs::Rect;
 
     let ga = GlobalArrangement {
-        bounds: D2D_RECT_F {
+        bounds: Rect {
             left: 0.0,
             top: 0.0,
             right: 100.5,
@@ -187,10 +187,10 @@ fn test_calculate_surface_size_from_global_arrangement_fractional() {
 #[test]
 fn test_calculate_surface_size_from_global_arrangement_zero_width() {
     // Req 3.3: サイズ0の場合はNone
-    use windows::Win32::Graphics::Direct2D::Common::D2D_RECT_F;
+    use wintf::ecs::Rect;
 
     let ga = GlobalArrangement {
-        bounds: D2D_RECT_F {
+        bounds: Rect {
             left: 50.0,
             top: 0.0,
             right: 50.0, // width = 0
@@ -206,10 +206,10 @@ fn test_calculate_surface_size_from_global_arrangement_zero_width() {
 #[test]
 fn test_calculate_surface_size_from_global_arrangement_zero_height() {
     // Req 3.3: サイズ0の場合はNone
-    use windows::Win32::Graphics::Direct2D::Common::D2D_RECT_F;
+    use wintf::ecs::Rect;
 
     let ga = GlobalArrangement {
-        bounds: D2D_RECT_F {
+        bounds: Rect {
             left: 0.0,
             top: 50.0,
             right: 100.0,
@@ -225,10 +225,10 @@ fn test_calculate_surface_size_from_global_arrangement_zero_height() {
 #[test]
 fn test_calculate_surface_size_from_global_arrangement_negative() {
     // 負の幅・高さの場合もNone
-    use windows::Win32::Graphics::Direct2D::Common::D2D_RECT_F;
+    use wintf::ecs::Rect;
 
     let ga = GlobalArrangement {
-        bounds: D2D_RECT_F {
+        bounds: Rect {
             left: 100.0,
             top: 100.0,
             right: 50.0,  // negative width

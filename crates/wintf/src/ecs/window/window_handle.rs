@@ -136,14 +136,14 @@ impl WindowHandle {
     /// * `Err(String)` - 変換失敗時のエラーメッセージ
     pub fn client_to_window_coords(
         &self,
-        position: POINT,
-        size: SIZE,
+        position: crate::ecs::Point,
+        size: crate::ecs::SizeI,
     ) -> Result<(i32, i32, i32, i32), String> {
         let client_rect = RECT {
             left: position.x,
             top: position.y,
-            right: position.x + size.cx,
-            bottom: position.y + size.cy,
+            right: position.x + size.width,
+            bottom: position.y + size.height,
         };
         let window_rect = self.client_to_window_rect(client_rect)?;
         Ok((
@@ -171,7 +171,7 @@ impl WindowHandle {
         y: i32,
         width: i32,
         height: i32,
-    ) -> Result<(POINT, SIZE), String> {
+    ) -> Result<(crate::ecs::Point, crate::ecs::SizeI), String> {
         let window_rect = RECT {
             left: x,
             top: y,
@@ -180,13 +180,13 @@ impl WindowHandle {
         };
         let client_rect = self.window_to_client_rect(window_rect)?;
         Ok((
-            POINT {
+            crate::ecs::Point {
                 x: client_rect.left,
                 y: client_rect.top,
             },
-            SIZE {
-                cx: client_rect.right - client_rect.left,
-                cy: client_rect.bottom - client_rect.top,
+            crate::ecs::SizeI {
+                width: client_rect.right - client_rect.left,
+                height: client_rect.bottom - client_rect.top,
             },
         ))
     }

@@ -37,24 +37,14 @@ use super::hit_region::HitRegionMap;
 use super::{Arrangement, D2DRectExt, GlobalArrangement};
 use crate::ecs::WindowPos;
 use crate::ecs::common::DepthFirstReversePostOrder;
+use crate::ecs::types::PointF;
 
 // ============================================================================
-// PhysicalPoint - 物理ピクセル座標型
+// PhysicalPoint — PointF への後方互換エイリアス
 // ============================================================================
 
-/// 物理ピクセル座標（スクリーン座標系）
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub struct PhysicalPoint {
-    pub x: f32,
-    pub y: f32,
-}
-
-impl PhysicalPoint {
-    /// 新しい座標を作成
-    pub fn new(x: f32, y: f32) -> Self {
-        Self { x, y }
-    }
-}
+/// 後方互換性エイリアス（PhysicalPoint → PointF）
+pub type PhysicalPoint = PointF;
 
 // ============================================================================
 // HitTestMode - ヒットテストモード

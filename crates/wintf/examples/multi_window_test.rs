@@ -1,8 +1,8 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-use windows::Win32::Foundation::{HWND, POINT, SIZE};
+use windows::Win32::Foundation::HWND;
 use windows::core::*;
-use wintf::ecs::{Window, WindowHandle, WindowPos};
+use wintf::ecs::{Point, SizeI, Window, WindowHandle, WindowPos};
 use wintf::*;
 
 /// タスク7.2: 複数ウィンドウでのグラフィックス初期化テスト
@@ -23,8 +23,8 @@ fn main() -> Result<()> {
             ..Default::default()
         },
         WindowPos {
-            position: Some(POINT { x: 100, y: 100 }),
-            size: Some(SIZE { cx: 400, cy: 300 }),
+            position: Some(Point { x: 100, y: 100 }),
+            size: Some(SizeI { width: 400, height: 300 }),
             ..Default::default()
         },
     ));
@@ -35,8 +35,8 @@ fn main() -> Result<()> {
             ..Default::default()
         },
         WindowPos {
-            position: Some(POINT { x: 550, y: 100 }),
-            size: Some(SIZE { cx: 400, cy: 300 }),
+            position: Some(Point { x: 550, y: 100 }),
+            size: Some(SizeI { width: 400, height: 300 }),
             ..Default::default()
         },
     ));
@@ -47,8 +47,8 @@ fn main() -> Result<()> {
             ..Default::default()
         },
         WindowPos {
-            position: Some(POINT { x: 325, y: 450 }),
-            size: Some(SIZE { cx: 400, cy: 300 }),
+            position: Some(Point { x: 325, y: 450 }),
+            size: Some(SizeI { width: 400, height: 300 }),
             ..Default::default()
         },
     ));

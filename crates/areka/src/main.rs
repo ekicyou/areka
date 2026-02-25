@@ -11,10 +11,10 @@
 use bevy_ecs::name::Name;
 use bevy_ecs::prelude::*;
 use tracing_subscriber::EnvFilter;
-use windows::Win32::Foundation::POINT;
 use windows::Win32::Graphics::Direct2D::Common::D2D1_COLOR_F;
 use windows::Win32::UI::WindowsAndMessaging::*;
 use windows::core::Result;
+use wintf::ecs::Point;
 use wintf::ecs::drag::{DragConfig, DragEvent, OnDrag};
 use wintf::ecs::layout::{
     BoxMargin, BoxPosition, BoxSize, BoxStyle, Dimension, LengthPercentageAuto, Rect,
@@ -142,7 +142,7 @@ fn create_shell_window(world: &mut World) -> Entity {
                 ex_style: WS_EX_LAYERED | WS_EX_TOOLWINDOW | WS_EX_TOPMOST,
             },
             WindowPos {
-                position: Some(POINT {
+                position: Some(Point {
                     x: SHELL_INITIAL_X,
                     y: SHELL_INITIAL_Y,
                 }),
@@ -203,7 +203,7 @@ fn create_balloon_window(world: &mut World, _shell_entity: Entity) -> Entity {
                 ex_style: WS_EX_LAYERED | WS_EX_TOOLWINDOW | WS_EX_TOPMOST,
             },
             WindowPos {
-                position: Some(POINT {
+                position: Some(Point {
                     x: SHELL_INITIAL_X + BALLOON_OFFSET_X,
                     y: SHELL_INITIAL_Y + BALLOON_OFFSET_Y,
                 }),

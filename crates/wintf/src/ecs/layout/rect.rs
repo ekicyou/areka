@@ -1,10 +1,10 @@
-use windows::Win32::Graphics::Direct2D::Common::D2D_RECT_F;
-use windows_numerics::{Matrix3x2, Vector2};
+use windows_numerics::Matrix3x2;
 
 use super::{Offset, Size};
+use crate::ecs::types::{PointF, Rect};
 
-/// D2D_RECT_Fの型エイリアス
-pub type D2DRect = D2D_RECT_F;
+/// 後方互換性のための型エイリアス（D2D_RECT_F → Rect）
+pub type D2DRect = Rect;
 
 /// D2D_RECT_Fに対する拡張トレイト
 ///
@@ -41,16 +41,16 @@ pub trait D2DRectExt {
     fn height(&self) -> f32;
 
     /// 左上座標を取得
-    fn offset(&self) -> Vector2;
+    fn offset(&self) -> PointF;
 
     /// サイズを取得
-    fn size(&self) -> Vector2;
+    fn size(&self) -> Size;
 
     /// 左上座標を設定（幅・高さは維持）
-    fn set_offset(&mut self, offset: Vector2);
+    fn set_offset(&mut self, offset: PointF);
 
     /// サイズを設定（左上座標は維持）
-    fn set_size(&mut self, size: Vector2);
+    fn set_size(&mut self, size: Size);
 
     /// 左座標を設定
     fn set_left(&mut self, left: f32);
@@ -75,9 +75,9 @@ pub trait D2DRectExt {
     fn validate(&self);
 }
 
-impl D2DRectExt for D2D_RECT_F {
+impl D2DRectExt for Rect {
     fn from_offset_size(offset: Offset, size: Size) -> Self {
-        D2D_RECT_F {
+        Rect {
             left: offset.x,
             top: offset.y,
             right: offset.x + size.width,
@@ -93,32 +93,32 @@ impl D2DRectExt for D2D_RECT_F {
         self.bottom - self.top
     }
 
-    fn offset(&self) -> Vector2 {
-        Vector2 {
-            X: self.left,
-            Y: self.top,
+    fn offset(&self) -> PointF {
+        PointF {
+            x: self.left,
+            y: self.top,
         }
     }
 
-    fn size(&self) -> Vector2 {
-        Vector2 {
-            X: self.width(),
-            Y: self.height(),
+    fn size(&self) -> Size {
+        Size {
+            width: self.width(),
+            height: self.height(),
         }
     }
 
-    fn set_offset(&mut self, offset: Vector2) {
+    fn set_offset(&mut self, offset: PointF) {
         let w = self.width();
         let h = self.height();
-        self.left = offset.X;
-        self.top = offset.Y;
-        self.right = offset.X + w;
-        self.bottom = offset.Y + h;
+        self.left = offset.x;
+        self.top = offset.y;
+        self.right = offset.x + w;
+        self.bottom = offset.y + h;
     }
 
-    fn set_size(&mut self, size: Vector2) {
-        self.right = self.left + size.X;
-        self.bottom = self.top + size.Y;
+    fn set_size(&mut self, size: Size) {
+        self.right = self.left + size.width;
+        self.bottom = self.top + size.height;
     }
 
     fn set_left(&mut self, left: f32) {
@@ -142,7 +142,7 @@ impl D2DRectExt for D2D_RECT_F {
     }
 
     fn union(&self, other: &Self) -> Self {
-        D2D_RECT_F {
+        Rect {
             left: self.left.min(other.left),
             top: self.top.min(other.top),
             right: self.right.max(other.right),
@@ -189,7 +189,7 @@ impl D2DRectExt for D2D_RECT_F {
 /// assert_eq!(transformed.left, 5.0);
 /// assert_eq!(transformed.top, 5.0);
 /// ```
-pub fn transform_rect_axis_aligned(rect: &D2DRect, matrix: &Matrix3x2) -> D2DRect {
+pub fn transform_rect_axis_aligned(rect: &Rect, matrix: &Matrix3x2) -> Rect {
     // 左上と右下の2点を変換
     // Matrix3x2での点変換: x' = M11*x + M21*y + M31, y' = M12*x + M22*y + M32
     let top_left_x = matrix.M11 * rect.left + matrix.M21 * rect.top + matrix.M31;
@@ -199,7 +199,7 @@ pub fn transform_rect_axis_aligned(rect: &D2DRect, matrix: &Matrix3x2) -> D2DRec
     let bottom_right_y = matrix.M12 * rect.right + matrix.M22 * rect.bottom + matrix.M32;
 
     // min/maxで新しい軸平行矩形を構築
-    D2D_RECT_F {
+    Rect {
         left: top_left_x.min(bottom_right_x),
         top: top_left_y.min(bottom_right_y),
         right: top_left_x.max(bottom_right_x),

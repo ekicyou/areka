@@ -12,6 +12,7 @@ use windows::Win32::UI::HiDpi::AdjustWindowRectExForDpi;
 use windows::Win32::UI::WindowsAndMessaging::*;
 
 use crate::ecs::layout::LayoutRoot;
+use crate::ecs::types::{Point, SizeI};
 
 use super::window_handle::WindowHandle;
 
@@ -54,8 +55,8 @@ unsafe impl Sync for ZOrder {}
 #[derive(Component, Debug, Clone, Copy, PartialEq)]
 pub struct WindowPos {
     pub zorder: ZOrder,
-    pub position: Option<POINT>,
-    pub size: Option<SIZE>,
+    pub position: Option<Point>,
+    pub size: Option<SizeI>,
 
     pub no_redraw: bool,        // SWP_NOREDRAW: 再描画しない
     pub no_activate: bool,      // SWP_NOACTIVATE: ウィンドウをアクティブにしない
@@ -73,13 +74,13 @@ impl Default for WindowPos {
     fn default() -> Self {
         Self {
             zorder: ZOrder::NoChange,
-            position: Some(POINT {
+            position: Some(Point {
                 x: CW_USEDEFAULT,
                 y: CW_USEDEFAULT,
             }),
-            size: Some(SIZE {
-                cx: CW_USEDEFAULT,
-                cy: CW_USEDEFAULT,
+            size: Some(SizeI {
+                width: CW_USEDEFAULT,
+                height: CW_USEDEFAULT,
             }),
             no_redraw: false,
             no_activate: false,
@@ -147,13 +148,13 @@ impl WindowPos {
     }
 
     /// 位置を設定
-    pub fn with_position(mut self, position: POINT) -> Self {
+    pub fn with_position(mut self, position: Point) -> Self {
         self.position = Some(position);
         self
     }
 
     /// サイズを設定
-    pub fn with_size(mut self, size: SIZE) -> Self {
+    pub fn with_size(mut self, size: SizeI) -> Self {
         self.size = Some(size);
         self
     }
@@ -299,7 +300,7 @@ impl WindowPos {
         };
 
         let (width, height) = if let Some(size) = self.size {
-            (size.cx, size.cy)
+            (size.width, size.height)
         } else {
             (0, 0)
         };
@@ -327,10 +328,13 @@ impl WindowPos {
         window_handle: &WindowHandle,
     ) -> Result<(i32, i32, i32, i32), String> {
         // position/sizeがNoneの場合はデフォルト値(0, 0)を使用
-        let position = self.position.unwrap_or(POINT { x: 0, y: 0 });
-        let size = self.size.unwrap_or(SIZE { cx: 0, cy: 0 });
+        let position = self.position.unwrap_or(Point { x: 0, y: 0 });
+        let size = self.size.unwrap_or(SizeI {
+            width: 0,
+            height: 0,
+        });
 
-        window_handle.client_to_window_coords(position, size)
+        window_handle.client_to_window_coords(position.into(), size.into())
     }
 
     /// ウィンドウ作成時に使用する座標変換（HWNDなしでスタイル情報から変換）
@@ -351,18 +355,18 @@ impl WindowPos {
         ex_style: WINDOW_EX_STYLE,
         dpi: u32,
     ) -> (i32, i32, i32, i32) {
-        let position = self.position.unwrap_or(POINT {
+        let position = self.position.unwrap_or(Point {
             x: CW_USEDEFAULT,
             y: CW_USEDEFAULT,
         });
-        let size = self.size.unwrap_or(SIZE {
-            cx: CW_USEDEFAULT,
-            cy: CW_USEDEFAULT,
+        let size = self.size.unwrap_or(SizeI {
+            width: CW_USEDEFAULT,
+            height: CW_USEDEFAULT,
         });
 
         // CW_USEDEFAULTが含まれる場合は変換をスキップ
-        if position.x == CW_USEDEFAULT || size.cx == CW_USEDEFAULT {
-            return (position.x, position.y, size.cx, size.cy);
+        if position.x == CW_USEDEFAULT || size.width == CW_USEDEFAULT {
+            return (position.x, position.y, size.width, size.height);
         }
 
         // 実際のシステムDPIを使用してウィンドウ枠サイズを計算する。
@@ -375,8 +379,8 @@ impl WindowPos {
         let mut rect = RECT {
             left: position.x,
             top: position.y,
-            right: position.x + size.cx,
-            bottom: position.y + size.cy,
+            right: position.x + size.width,
+            bottom: position.y + size.height,
         };
 
         // AdjustWindowRectExForDpiでウィンドウ全体の矩形を計算
@@ -389,7 +393,7 @@ impl WindowPos {
                 error = ?result,
                 "AdjustWindowRectExForDpi failed during window creation, using original values"
             );
-            return (position.x, position.y, size.cx, size.cy);
+            return (position.x, position.y, size.width, size.height);
         }
 
         (

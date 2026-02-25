@@ -51,8 +51,8 @@ pub fn compositor_init_system(
         let Some(size) = window_pos.size else {
             continue;
         };
-        let w = size.cx as u32;
-        let h = size.cy as u32;
+        let w = size.width as u32;
+        let h = size.height as u32;
         if w == 0 || h == 0 {
             continue;
         }

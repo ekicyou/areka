@@ -27,7 +27,7 @@ use wintf::ecs::widget::bitmap_source::CommandSender;
 use wintf::ecs::widget::brushes::Brushes;
 use wintf::ecs::widget::shapes::Rectangle;
 use wintf::ecs::window::WindowHandle;
-use wintf::ecs::{Window, WindowPos};
+use wintf::ecs::{Point, Window, WindowPos};
 use wintf::*;
 
 fn main() -> Result<()> {
@@ -67,12 +67,12 @@ async fn run_demo(tx: CommandSender) {
         create_simple_window(
             world,
             "Twin Demo (Window 1)",
-            windows::Win32::Foundation::POINT { x: 100, y: 100 },
+            Point { x: 100, y: 100 },
         );
         create_simple_window(
             world,
             "Twin Demo (Window 2)",
-            windows::Win32::Foundation::POINT { x: 1200, y: 100 },
+            Point { x: 1200, y: 100 },
         );
     }));
 
@@ -174,7 +174,7 @@ fn dump_layout_info(world: &mut World) {
 fn create_simple_window(
     world: &mut World,
     title: &str,
-    position: windows::Win32::Foundation::POINT,
+    position: Point,
 ) -> Entity {
     info!(
         "[Demo] Creating window: {} at ({},{})",

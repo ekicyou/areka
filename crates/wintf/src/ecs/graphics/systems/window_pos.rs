@@ -29,14 +29,14 @@ pub fn apply_window_pos_changes(
         // CW_USEDEFAULTが設定されている場合はスキップ（ウィンドウ作成時の初期値）
         // 座標変換をスキップし、ウィンドウ作成時の初期配置を優先
         if position.x == windows::Win32::UI::WindowsAndMessaging::CW_USEDEFAULT
-            || size.cx == windows::Win32::UI::WindowsAndMessaging::CW_USEDEFAULT
+            || size.width == windows::Win32::UI::WindowsAndMessaging::CW_USEDEFAULT
         {
             trace!(
                 entity = %entity_name,
                 x = position.x,
                 y = position.y,
-                cx = size.cx,
-                cy = size.cy,
+                width = size.width,
+                height = size.height,
                 "[apply_window_pos_changes] CW_USEDEFAULT detected, skipping"
             );
             continue;
@@ -52,7 +52,7 @@ pub fn apply_window_pos_changes(
                     error = %e,
                     "[apply_window_pos_changes] Failed to transform window coordinates. Using original values."
                 );
-                (position.x, position.y, size.cx, size.cy)
+                (position.x, position.y, size.width, size.height)
             }
         };
 
@@ -64,7 +64,7 @@ pub fn apply_window_pos_changes(
         debug!(
             entity = %entity_name,
             client_xy = format_args!("({},{})", position.x, position.y),
-            client_size = format_args!("{}x{}", size.cx, size.cy),
+            client_size = format_args!("{}x{}", size.width, size.height),
             win_xy = format_args!("({},{})", x, y),
             win_size = format_args!("{}x{}", width, height),
             "[apply_window_pos] Enqueue SetWindowPos"
@@ -85,8 +85,8 @@ pub fn apply_window_pos_changes(
             entity = %entity_name,
             x = position.x,
             y = position.y,
-            cx = size.cx,
-            cy = size.cy,
+            width = size.width,
+            height = size.height,
             "[apply_window_pos_changes] Command enqueued"
         );
     }

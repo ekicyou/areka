@@ -160,12 +160,14 @@ pub fn draw_typewriters(
         // Rectangleと同様にarrangement.sizeを使用
         if let Some(bg_color) = bg_color_opt {
             if let Ok(bg_brush) = dc.create_solid_color_brush(&bg_color, None) {
-                let bg_rect = windows::Win32::Graphics::Direct2D::Common::D2D_RECT_F {
-                    left: 0.0,
-                    top: 0.0,
-                    right: arrangement.size.width,
-                    bottom: arrangement.size.height,
-                };
+                let bg_rect: windows::Win32::Graphics::Direct2D::Common::D2D_RECT_F =
+                    crate::ecs::Rect {
+                        left: 0.0,
+                        top: 0.0,
+                        right: arrangement.size.width,
+                        bottom: arrangement.size.height,
+                    }
+                    .into();
                 unsafe {
                     dc.FillRectangle(&bg_rect, &bg_brush);
                 }
@@ -343,12 +345,14 @@ pub fn draw_typewriter_backgrounds(
 
         // 背景描画
         if let Ok(bg_brush) = dc.create_solid_color_brush(&bg_color, None) {
-            let bg_rect = windows::Win32::Graphics::Direct2D::Common::D2D_RECT_F {
-                left: 0.0,
-                top: 0.0,
-                right: arrangement.size.width,
-                bottom: arrangement.size.height,
-            };
+            let bg_rect: windows::Win32::Graphics::Direct2D::Common::D2D_RECT_F =
+                crate::ecs::Rect {
+                    left: 0.0,
+                    top: 0.0,
+                    right: arrangement.size.width,
+                    bottom: arrangement.size.height,
+                }
+                .into();
             unsafe {
                 dc.FillRectangle(&bg_rect, &bg_brush);
             }

@@ -9,7 +9,7 @@ use std::sync::atomic::*;
 use std::sync::mpsc::{Receiver, Sender};
 use std::sync::*;
 
-/// 階層に属していないエンティティの[`GlobalTransform`]コンポーネントを更新する。
+/// 階層に属していないエンティティのグローバル変換コンポーネントを更新する。
 ///
 /// サードパーティプラグインは、このシステムを
 /// [`propagate_parent_transforms`]および[`mark_dirty_trees`]と組み合わせて使用する必要がある。

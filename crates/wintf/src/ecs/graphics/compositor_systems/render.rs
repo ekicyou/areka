@@ -11,7 +11,6 @@ use crate::ecs::window::WindowHandle;
 use bevy_ecs::hierarchy::Children;
 use bevy_ecs::prelude::*;
 use tracing::{debug, error, trace, warn};
-use windows::Win32::Foundation::SIZE;
 use windows::Win32::Graphics::Direct2D::Common::*;
 use windows::Win32::Graphics::Direct2D::*;
 use windows_numerics::Matrix3x2;
@@ -391,42 +390,46 @@ pub fn composite_render_system(
                 if let Ok(brush) = dc.CreateSolidColorBrush(&red, None) {
                     // 上辺
                     dc.FillRectangle(
-                        &D2D_RECT_F {
+                        &crate::ecs::Rect {
                             left: 0.0,
                             top: 0.0,
                             right: fw,
                             bottom: BORDER,
-                        },
+                        }
+                        .into(),
                         &brush,
                     );
                     // 下辺
                     dc.FillRectangle(
-                        &D2D_RECT_F {
+                        &crate::ecs::Rect {
                             left: 0.0,
                             top: fh - BORDER,
                             right: fw,
                             bottom: fh,
-                        },
+                        }
+                        .into(),
                         &brush,
                     );
                     // 左辺
                     dc.FillRectangle(
-                        &D2D_RECT_F {
+                        &crate::ecs::Rect {
                             left: 0.0,
                             top: BORDER,
                             right: BORDER,
                             bottom: fh - BORDER,
-                        },
+                        }
+                        .into(),
                         &brush,
                     );
                     // 右辺
                     dc.FillRectangle(
-                        &D2D_RECT_F {
+                        &crate::ecs::Rect {
                             left: fw - BORDER,
                             top: BORDER,
                             right: fw,
                             bottom: fh - BORDER,
-                        },
+                        }
+                        .into(),
                         &brush,
                     );
                 }
@@ -541,10 +544,11 @@ pub fn ulw_present_system(mut query: Query<(&WindowHandle, &mut WindowD3D11Compo
 
         let hwnd = window_handle.hwnd;
         let (w, h) = compositor.cached_size();
-        let size = SIZE {
-            cx: w as i32,
-            cy: h as i32,
-        };
+        let size: windows::Win32::Foundation::SIZE = crate::ecs::SizeI {
+            width: w as i32,
+            height: h as i32,
+        }
+        .into();
 
         trace!(
             hwnd = ?hwnd,

@@ -9,7 +9,7 @@ use bevy_ecs::name::Name;
 use bevy_ecs::prelude::*;
 use bevy_ecs::world::DeferredWorld;
 use tracing::{trace, warn};
-use windows::Win32::Graphics::Direct2D::Common::{D2D_RECT_F, D2D1_COLOR_F};
+use windows::Win32::Graphics::Direct2D::Common::D2D1_COLOR_F;
 use windows_numerics::Matrix3x2;
 
 /// 色の型エイリアス（D2D1_COLOR_Fをそのまま使用）
@@ -199,7 +199,7 @@ pub fn draw_rectangles(
             dc.clear(Some(&TRANSPARENT_COLOR));
 
             // 四角形描画（原点0,0から描画）
-            let rect = D2D_RECT_F {
+            let rect = crate::ecs::Rect {
                 left: 0.0,
                 top: 0.0,
                 right: arrangement.size.width,
@@ -233,7 +233,7 @@ pub fn draw_rectangles(
                 }
             };
 
-            dc.fill_rectangle(&rect, &brush);
+            dc.fill_rectangle(&rect.into(), &brush);
 
             if let Err(err) = dc.EndDraw(None, None) {
                 warn!(

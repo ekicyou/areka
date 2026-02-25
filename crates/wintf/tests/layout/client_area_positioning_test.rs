@@ -4,6 +4,7 @@
 
 use windows::Win32::Foundation::*;
 use windows::Win32::UI::WindowsAndMessaging::*;
+use wintf::ecs::{Point, SizeI};
 
 /// Task 3.1: WS_OVERLAPPEDWINDOWスタイルでの座標変換テスト
 /// 標準ウィンドウスタイルでto_window_coordsの動作を検証
@@ -17,8 +18,8 @@ fn test_to_window_coords_overlapped_window() {
 
     // WindowPosを作成 - クライアント領域 (100, 100, 800, 600)
     let window_pos = wintf::ecs::window::WindowPos::new()
-        .with_position(POINT { x: 100, y: 100 })
-        .with_size(SIZE { cx: 800, cy: 600 });
+        .with_position(Point { x: 100, y: 100 })
+        .with_size(SizeI { width: 800, height: 600 });
 
     // 座標変換を実行
     let window_handle = wintf::ecs::window::WindowHandle {
@@ -71,8 +72,8 @@ fn test_to_window_coords_popup_window() {
 
     // WindowPosを作成 - クライアント領域 (100, 100, 800, 600)
     let window_pos = wintf::ecs::window::WindowPos::new()
-        .with_position(POINT { x: 100, y: 100 })
-        .with_size(SIZE { cx: 800, cy: 600 });
+        .with_position(Point { x: 100, y: 100 })
+        .with_size(SizeI { width: 800, height: 600 });
 
     // 座標変換を実行
     let window_handle = wintf::ecs::window::WindowHandle {
@@ -105,8 +106,8 @@ fn test_to_window_coords_invalid_hwnd() {
 
     // WindowPosを作成
     let window_pos = wintf::ecs::window::WindowPos::new()
-        .with_position(POINT { x: 100, y: 100 })
-        .with_size(SIZE { cx: 800, cy: 600 });
+        .with_position(Point { x: 100, y: 100 })
+        .with_size(SizeI { width: 800, height: 600 });
 
     // 座標変換を実行 - Errが返されることを期待
     let window_handle = wintf::ecs::window::WindowHandle {

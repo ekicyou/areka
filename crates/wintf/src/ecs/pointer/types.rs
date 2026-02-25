@@ -7,24 +7,15 @@ use bevy_ecs::prelude::*;
 use std::collections::VecDeque;
 use std::time::Instant;
 
+// 共通幾何型
+use crate::ecs::types::Point;
+
 // ============================================================================
 // 基本型定義
 // ============================================================================
 
-/// 物理座標（ピクセル）
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
-pub struct PhysicalPoint {
-    pub x: i32,
-    pub y: i32,
-}
-
-impl PhysicalPoint {
-    /// 新しいPhysicalPointを作成
-    #[inline]
-    pub fn new(x: i32, y: i32) -> Self {
-        Self { x, y }
-    }
-}
+/// 後方互換性エイリアス（PhysicalPoint → Point）
+pub type PhysicalPoint = Point;
 
 /// ダブルクリック種別（1フレームのみ有効）
 ///

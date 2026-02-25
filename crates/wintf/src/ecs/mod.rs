@@ -4,11 +4,13 @@ pub mod drag;
 mod graphics;
 pub mod layout;
 pub mod pointer;
-pub mod transform;
+pub mod types;
 pub mod widget;
 pub mod window;
 mod window_proc;
 pub mod world;
+
+pub use types::{Point, PointF, Rect, SizeI};
 
 /// 後方互換性のためのエイリアス
 #[deprecated(since = "0.1.0", note = "Use pointer module instead")]
@@ -28,7 +30,6 @@ pub use graphics::FrameTime;
 pub use graphics::calculate_surface_size_from_global_arrangement;
 pub use graphics::*;
 pub use layout::*;
-pub use window::monitor::*;
 pub use pointer::{
     CursorVelocity, DoubleClick, EventHandler, OnPointerEntered, OnPointerExited, OnPointerMoved,
     OnPointerPressed, OnPointerReleased, Phase, PhysicalPoint, PointerButton, PointerEventHandler,
@@ -36,13 +37,13 @@ pub use pointer::{
     debug_pointer_leave, debug_pointer_state_changes, dispatch_pointer_events,
     process_pointer_buffers,
 };
+pub use window::monitor::*;
 // 後方互換性エイリアス
 #[allow(deprecated)]
 pub use pointer::{
     MouseButton, MouseLeave, MouseState, WindowMouseTracking, clear_transient_mouse_state,
     debug_mouse_leave, debug_mouse_state_changes, process_mouse_buffers,
 };
-pub use transform::*;
 pub use widget::{
     BitmapSource, BitmapSourceGraphics, BitmapSourceResource, BoxedCommand, CommandSender, WicCore,
     WintfTaskPool, draw_bitmap_sources,

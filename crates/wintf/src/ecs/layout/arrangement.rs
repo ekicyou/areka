@@ -2,6 +2,7 @@ use bevy_ecs::prelude::*;
 use windows_numerics::Matrix3x2;
 
 use super::{D2DRect, LayoutScale, Offset, Size, transform_rect_axis_aligned};
+use crate::ecs::types::Rect;
 
 /// ローカルレイアウト配置（親からの相対位置とサイズ）
 #[derive(Component, Debug, Clone, Copy, PartialEq)]
@@ -16,8 +17,7 @@ impl Arrangement {
     /// ローカル座標系でのバウンディングボックスを返す
     /// 原点(0,0)を基準とした矩形を返す（offsetは含まない）
     pub fn local_bounds(&self) -> D2DRect {
-        use windows::Win32::Graphics::Direct2D::Common::D2D_RECT_F;
-        D2D_RECT_F {
+        Rect {
             left: 0.0,
             top: 0.0,
             right: self.size.width,
@@ -139,10 +139,9 @@ impl GlobalArrangement {
 
 impl Default for GlobalArrangement {
     fn default() -> Self {
-        use windows::Win32::Graphics::Direct2D::Common::D2D_RECT_F;
         Self {
             transform: Matrix3x2::identity(),
-            bounds: D2D_RECT_F {
+            bounds: Rect {
                 left: 0.0,
                 top: 0.0,
                 right: 0.0,

@@ -6,7 +6,7 @@
 ///
 /// R1-AC1: Changed<WindowPos> フィルタにより WindowPos が変更された Window のみ処理すること
 use bevy_ecs::prelude::*;
-use windows::Win32::Foundation::{POINT, SIZE};
+use wintf::ecs::{Point, SizeI};
 use wintf::ecs::layout::{
     mark_dirty_arrangement_trees, propagate_global_arrangements, sync_simple_arrangements,
     sync_window_arrangement_from_window_pos, window_pos_sync_system,
@@ -31,8 +31,8 @@ fn test_sync_window_arrangement_only_processes_changed_window_pos() {
         .spawn((
             Window::default(),
             WindowPos {
-                position: Some(POINT { x: 100, y: 200 }),
-                size: Some(SIZE { cx: 800, cy: 600 }),
+                position: Some(Point { x: 100, y: 200 }),
+                size: Some(SizeI { width: 800, height: 600 }),
                 ..Default::default()
             },
             DPI::default(), // 96 DPI → scale=1.0
@@ -85,7 +85,7 @@ fn test_sync_window_arrangement_only_processes_changed_window_pos() {
     // --- 3回目: WindowPos を変更 → Changed<WindowPos> 発火 → 処理される ---
     {
         let mut wp = world.get_mut::<WindowPos>(entity).unwrap();
-        wp.position = Some(POINT { x: 300, y: 400 });
+        wp.position = Some(Point { x: 300, y: 400 });
     }
     schedule.run(&mut world);
 
@@ -115,8 +115,8 @@ fn test_sync_window_arrangement_dpi_192_no_division() {
         .spawn((
             Window::default(),
             WindowPos {
-                position: Some(POINT { x: 200, y: 400 }),
-                size: Some(SIZE { cx: 1600, cy: 1200 }),
+                position: Some(Point { x: 200, y: 400 }),
+                size: Some(SizeI { width: 1600, height: 1200 }),
                 ..Default::default()
             },
             DPI {
@@ -161,8 +161,8 @@ fn test_sync_window_arrangement_dpi_96_identity() {
         .spawn((
             Window::default(),
             WindowPos {
-                position: Some(POINT { x: 150, y: 250 }),
-                size: Some(SIZE { cx: 800, cy: 600 }),
+                position: Some(Point { x: 150, y: 250 }),
+                size: Some(SizeI { width: 800, height: 600 }),
                 ..Default::default()
             },
             DPI::default(), // 96 DPI → scale=1.0
@@ -209,7 +209,7 @@ fn test_sync_window_arrangement_skips_none_position() {
             Window::default(),
             WindowPos {
                 position: None,
-                size: Some(SIZE { cx: 800, cy: 600 }),
+                size: Some(SizeI { width: 800, height: 600 }),
                 ..Default::default()
             },
             DPI::default(),
@@ -253,11 +253,11 @@ fn test_sync_window_arrangement_skips_cw_usedefault() {
         .spawn((
             Window::default(),
             WindowPos {
-                position: Some(POINT {
+                position: Some(Point {
                     x: CW_USEDEFAULT,
                     y: CW_USEDEFAULT,
                 }),
-                size: Some(SIZE { cx: 800, cy: 600 }),
+                size: Some(SizeI { width: 800, height: 600 }),
                 ..Default::default()
             },
             DPI::default(),
@@ -300,8 +300,8 @@ fn test_sync_window_arrangement_skips_equal_offset() {
         .spawn((
             Window::default(),
             WindowPos {
-                position: Some(POINT { x: 100, y: 200 }),
-                size: Some(SIZE { cx: 800, cy: 600 }),
+                position: Some(Point { x: 100, y: 200 }),
+                size: Some(SizeI { width: 800, height: 600 }),
                 ..Default::default()
             },
             DPI::default(), // scale=1.0
@@ -344,8 +344,8 @@ fn test_feedback_loop_converges_in_one_frame_dpi_96() {
         .spawn((
             Window::default(),
             WindowPos {
-                position: Some(POINT { x: 0, y: 0 }),
-                size: Some(SIZE { cx: 800, cy: 600 }),
+                position: Some(Point { x: 0, y: 0 }),
+                size: Some(SizeI { width: 800, height: 600 }),
                 ..Default::default()
             },
             DPI::default(), // 96 DPI → scale=1.0
@@ -377,7 +377,7 @@ fn test_feedback_loop_converges_in_one_frame_dpi_96() {
     // --- ユーザーがウィンドウをドラッグ: position を変更 ---
     {
         let mut wp = world.get_mut::<WindowPos>(entity).unwrap();
-        wp.position = Some(POINT { x: 500, y: 300 });
+        wp.position = Some(Point { x: 500, y: 300 });
     }
 
     // フレーム1: 変更が伝播
@@ -442,8 +442,8 @@ fn test_feedback_loop_converges_dpi_192() {
             ChildOf(layout_root),
             Window::default(),
             WindowPos {
-                position: Some(POINT { x: 0, y: 0 }),
-                size: Some(SIZE { cx: 1600, cy: 1200 }),
+                position: Some(Point { x: 0, y: 0 }),
+                size: Some(SizeI { width: 1600, height: 1200 }),
                 ..Default::default()
             },
             DPI {
@@ -477,7 +477,7 @@ fn test_feedback_loop_converges_dpi_192() {
     // ユーザーがウィンドウをドラッグ: (200, 400) 物理px
     {
         let mut wp = world.get_mut::<WindowPos>(entity).unwrap();
-        wp.position = Some(POINT { x: 200, y: 400 });
+        wp.position = Some(Point { x: 200, y: 400 });
     }
 
     // フレーム1

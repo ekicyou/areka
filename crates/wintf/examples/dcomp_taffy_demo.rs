@@ -23,7 +23,6 @@ use bevy_ecs::prelude::*;
 use std::time::Duration;
 use tracing::info;
 use tracing_subscriber::EnvFilter;
-use windows::Win32::Foundation::POINT;
 use windows::Win32::Graphics::Direct2D::Common::D2D1_COLOR_F;
 use windows::core::Result;
 use wintf::ecs::layout::LengthPercentageAuto;
@@ -32,7 +31,7 @@ use wintf::ecs::widget::bitmap_source::{BitmapSource, CommandSender};
 use wintf::ecs::widget::brushes::Brushes;
 use wintf::ecs::widget::shapes::Rectangle;
 use wintf::ecs::widget::text::label::Label;
-use wintf::ecs::{CompositionMode, Window, WindowPos};
+use wintf::ecs::{CompositionMode, Point, Window, WindowPos};
 use wintf::*;
 
 /// DComp デモウィンドウを識別するマーカー
@@ -107,7 +106,7 @@ fn create_dcomp_demo_window(world: &mut World) {
                 ..Default::default()
             },
             WindowPos {
-                position: Some(POINT { x: 100, y: 100 }),
+                position: Some(Point { x: 100, y: 100 }),
                 ..Default::default()
             },
             Window {

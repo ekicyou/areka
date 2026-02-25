@@ -76,7 +76,7 @@ fn main() -> Result<()> {
                         ..Default::default()
                     },
                     WindowPos {
-                        position: Some(windows::Win32::Foundation::POINT { x: 100, y: 100 }),
+                        position: Some(wintf::ecs::Point { x: 100, y: 100 }),
                         ..Default::default()
                     },
                     Window {
@@ -256,7 +256,7 @@ fn main() -> Result<()> {
             // WindowPos.position を変更してウィンドウを移動
             let mut wp_query = world.query_filtered::<&mut WindowPos, With<FlexDemoWindow>>();
             if let Some(mut wp) = wp_query.iter_mut(world).next() {
-                wp.position = Some(windows::Win32::Foundation::POINT { x: -500, y: 400 });
+                wp.position = Some(wintf::ecs::Point { x: -500, y: 400 });
                 println!("[Test] Window position changed to (-500, 400) via WindowPos");
             }
 

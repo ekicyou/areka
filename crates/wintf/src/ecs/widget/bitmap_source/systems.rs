@@ -222,14 +222,15 @@ pub fn draw_bitmap_sources(
                 // draw_image(ネイティブサイズ描画)ではなくDrawBitmapで宛先矩形を指定することで
                 // ビットマップのネイティブ解像度やDPIに関係なく正確な表示サイズになる
                 use crate::com::d2d::D2D1DeviceContextExt;
-                use windows::Win32::Graphics::Direct2D::Common::D2D_RECT_F;
                 use windows::Win32::Graphics::Direct2D::D2D1_INTERPOLATION_MODE_HIGH_QUALITY_CUBIC;
-                let dest_rect = D2D_RECT_F {
-                    left: 0.0,
-                    top: 0.0,
-                    right: arrangement.size.width,
-                    bottom: arrangement.size.height,
-                };
+                let dest_rect: windows::Win32::Graphics::Direct2D::Common::D2D_RECT_F =
+                    crate::ecs::Rect {
+                        left: 0.0,
+                        top: 0.0,
+                        right: arrangement.size.width,
+                        bottom: arrangement.size.height,
+                    }
+                    .into();
                 dc.draw_bitmap(
                     bitmap,
                     Some(&dest_rect),

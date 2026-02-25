@@ -537,7 +537,7 @@ fn dump_window_pos(world: &World, entity: Entity) {
             println!("[HitTest] WindowPos.position: None");
         }
         if let Some(size) = window_pos.size {
-            println!("[HitTest] WindowPos.size: cx={}, cy={}", size.cx, size.cy);
+            println!("[HitTest] WindowPos.size: width={}, height={}", size.width, size.height);
         } else {
             println!("[HitTest] WindowPos.size: None");
         }

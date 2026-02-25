@@ -89,7 +89,7 @@ pub fn dispatch_drag_events(world: &mut World) {
                 // 親階層からWindowエンティティを探索し、HWND・位置・DragConfig情報を取得
                 let mut current = entity;
                 let mut window_entity: Option<bevy_ecs::entity::Entity> = None;
-                let mut initial_window_pos = windows::Win32::Foundation::POINT { x: 0, y: 0 };
+                let mut initial_window_pos = crate::ecs::Point { x: 0, y: 0 };
                 let mut move_window = false;
                 let mut constraint: Option<crate::ecs::drag::DragConstraint> = None;
                 let mut hwnd: Option<windows::Win32::Foundation::HWND> = None;
@@ -108,10 +108,9 @@ pub fn dispatch_drag_events(world: &mut World) {
                                 if let Some(pos) = wp.position {
                                     let size = wp.size.unwrap_or_default();
                                     if let Ok((wx, wy, _, _)) =
-                                        wh.client_to_window_coords(pos, size)
+                                        wh.client_to_window_coords(pos.into(), size.into())
                                     {
-                                        initial_window_pos =
-                                            windows::Win32::Foundation::POINT { x: wx, y: wy };
+                                        initial_window_pos = crate::ecs::Point { x: wx, y: wy };
                                     }
                                 }
                             }
@@ -119,7 +118,7 @@ pub fn dispatch_drag_events(world: &mut World) {
                             // WindowHandle がない場合はフォールバック
                             if let Some(wp) = world.get::<crate::ecs::window::WindowPos>(current) {
                                 if let Some(pos) = wp.position {
-                                    initial_window_pos = pos;
+                                    initial_window_pos = pos.into();
                                 }
                             }
                         }

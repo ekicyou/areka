@@ -1,7 +1,6 @@
-use windows::Win32::Graphics::Direct2D::Common::D2D_RECT_F;
-use windows_numerics::{Matrix3x2, Vector2};
+use windows_numerics::Matrix3x2;
 use wintf::ecs::{
-    Arrangement, D2DRectExt, GlobalArrangement, LayoutScale, Offset, Size,
+    Arrangement, D2DRectExt, GlobalArrangement, LayoutScale, Offset, PointF, Rect, Size,
     transform_rect_axis_aligned,
 };
 
@@ -95,7 +94,7 @@ fn test_d2drect_from_offset_size() {
         height: 50.0,
     };
 
-    let rect = D2D_RECT_F::from_offset_size(offset, size);
+    let rect = Rect::from_offset_size(offset, size);
     assert_eq!(rect.left, 10.0);
     assert_eq!(rect.top, 20.0);
     assert_eq!(rect.right, 110.0);
@@ -104,7 +103,7 @@ fn test_d2drect_from_offset_size() {
 
 #[test]
 fn test_d2drect_width_height() {
-    let rect = D2D_RECT_F {
+    let rect = Rect {
         left: 10.0,
         top: 20.0,
         right: 110.0,
@@ -117,7 +116,7 @@ fn test_d2drect_width_height() {
 
 #[test]
 fn test_d2drect_offset() {
-    let rect = D2D_RECT_F {
+    let rect = Rect {
         left: 10.0,
         top: 20.0,
         right: 110.0,
@@ -125,13 +124,13 @@ fn test_d2drect_offset() {
     };
 
     let offset = rect.offset();
-    assert_eq!(offset.X, 10.0);
-    assert_eq!(offset.Y, 20.0);
+    assert_eq!(offset.x, 10.0);
+    assert_eq!(offset.y, 20.0);
 }
 
 #[test]
 fn test_d2drect_size() {
-    let rect = D2D_RECT_F {
+    let rect = Rect {
         left: 10.0,
         top: 20.0,
         right: 110.0,
@@ -139,20 +138,20 @@ fn test_d2drect_size() {
     };
 
     let size = rect.size();
-    assert_eq!(size.X, 100.0);
-    assert_eq!(size.Y, 50.0);
+    assert_eq!(size.width, 100.0);
+    assert_eq!(size.height, 50.0);
 }
 
 #[test]
 fn test_d2drect_set_offset() {
-    let mut rect = D2D_RECT_F {
+    let mut rect = Rect {
         left: 10.0,
         top: 20.0,
         right: 110.0,
         bottom: 70.0,
     };
 
-    rect.set_offset(Vector2 { X: 30.0, Y: 40.0 });
+    rect.set_offset(PointF { x: 30.0, y: 40.0 });
     assert_eq!(rect.left, 30.0);
     assert_eq!(rect.top, 40.0);
     assert_eq!(rect.right, 130.0); // 幅100を維持
@@ -161,14 +160,14 @@ fn test_d2drect_set_offset() {
 
 #[test]
 fn test_d2drect_set_size() {
-    let mut rect = D2D_RECT_F {
+    let mut rect = Rect {
         left: 10.0,
         top: 20.0,
         right: 110.0,
         bottom: 70.0,
     };
 
-    rect.set_size(Vector2 { X: 200.0, Y: 100.0 });
+    rect.set_size(Size { width: 200.0, height: 100.0 });
     assert_eq!(rect.left, 10.0); // 左上を維持
     assert_eq!(rect.top, 20.0);
     assert_eq!(rect.right, 210.0); // 10 + 200
@@ -177,7 +176,7 @@ fn test_d2drect_set_size() {
 
 #[test]
 fn test_d2drect_contains() {
-    let rect = D2D_RECT_F {
+    let rect = Rect {
         left: 10.0,
         top: 20.0,
         right: 110.0,
@@ -195,14 +194,14 @@ fn test_d2drect_contains() {
 
 #[test]
 fn test_d2drect_union() {
-    let rect1 = D2D_RECT_F {
+    let rect1 = Rect {
         left: 10.0,
         top: 20.0,
         right: 50.0,
         bottom: 60.0,
     };
 
-    let rect2 = D2D_RECT_F {
+    let rect2 = Rect {
         left: 30.0,
         top: 40.0,
         right: 70.0,
@@ -220,7 +219,7 @@ fn test_d2drect_union() {
 #[test]
 #[should_panic(expected = "Invalid rect: left > right")]
 fn test_d2drect_validate_invalid_horizontal() {
-    let rect = D2D_RECT_F {
+    let rect = Rect {
         left: 100.0,
         top: 20.0,
         right: 50.0, // left > right
@@ -234,7 +233,7 @@ fn test_d2drect_validate_invalid_horizontal() {
 #[test]
 #[should_panic(expected = "Invalid rect: top > bottom")]
 fn test_d2drect_validate_invalid_vertical() {
-    let rect = D2D_RECT_F {
+    let rect = Rect {
         left: 10.0,
         top: 100.0,
         right: 50.0,
@@ -248,7 +247,7 @@ fn test_d2drect_validate_invalid_vertical() {
 
 #[test]
 fn test_transform_rect_identity() {
-    let rect = D2D_RECT_F {
+    let rect = Rect {
         left: 10.0,
         top: 20.0,
         right: 110.0,
@@ -266,7 +265,7 @@ fn test_transform_rect_identity() {
 
 #[test]
 fn test_transform_rect_translation_only() {
-    let rect = D2D_RECT_F {
+    let rect = Rect {
         left: 10.0,
         top: 20.0,
         right: 110.0,
@@ -284,7 +283,7 @@ fn test_transform_rect_translation_only() {
 
 #[test]
 fn test_transform_rect_scale_only() {
-    let rect = D2D_RECT_F {
+    let rect = Rect {
         left: 10.0,
         top: 20.0,
         right: 110.0,
@@ -302,7 +301,7 @@ fn test_transform_rect_scale_only() {
 
 #[test]
 fn test_transform_rect_translation_and_scale() {
-    let rect = D2D_RECT_F {
+    let rect = Rect {
         left: 10.0,
         top: 20.0,
         right: 110.0,
@@ -377,7 +376,7 @@ fn test_global_arrangement_from_arrangement() {
 fn test_global_arrangement_mul_arrangement() {
     let parent = GlobalArrangement {
         transform: Matrix3x2::translation(10.0, 20.0),
-        bounds: D2D_RECT_F {
+        bounds: Rect {
             left: 10.0,
             top: 20.0,
             right: 50.0,

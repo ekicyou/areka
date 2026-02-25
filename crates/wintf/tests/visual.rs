@@ -1,8 +1,8 @@
 // tests/visual.rs — wintf visual domain test entry point
-#[path = "visual/common/mod.rs"]
-mod common;
 #[path = "visual/child_order_test.rs"]
 mod child_order_test;
+#[path = "visual/common/mod.rs"]
+mod common;
 #[path = "visual/component_test.rs"]
 mod component_test;
 #[path = "visual/graphics_auto_creation_test.rs"]
@@ -15,7 +15,5 @@ mod insert_visual_test;
 mod parent_visual_test;
 #[path = "visual/remove_visual_api_test.rs"]
 mod remove_visual_api_test;
-#[path = "visual/transform_test.rs"]
-mod transform_test;
 #[path = "visual/widget_visual_auto_insert_test.rs"]
 mod widget_visual_auto_insert_test;

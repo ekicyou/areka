@@ -20,8 +20,6 @@ pub fn window_pos_sync_system(
     >,
     frame_count: Res<crate::ecs::world::FrameCount>,
 ) {
-    use windows::Win32::Foundation::{POINT, SIZE};
-
     for (entity, global_arr, mut window_pos, name) in query.iter_mut() {
         let entity_name = format_entity_name(entity, name);
         let width = global_arr.bounds.right - global_arr.bounds.left;
@@ -48,13 +46,14 @@ pub fn window_pos_sync_system(
             continue;
         }
 
-        let new_position = POINT {
+        use crate::ecs::types::{Point, SizeI};
+        let new_position = Point {
             x: global_arr.bounds.left as i32,
             y: global_arr.bounds.top as i32,
         };
-        let new_size = SIZE {
-            cx: width.ceil() as i32,
-            cy: height.ceil() as i32,
+        let new_size = SizeI {
+            width: width.ceil() as i32,
+            height: height.ceil() as i32,
         };
 
         let position_changed = window_pos.position != Some(new_position);
@@ -67,7 +66,7 @@ pub fn window_pos_sync_system(
                 old_pos = ?window_pos.position,
                 old_size = ?window_pos.size,
                 new_xy = format_args!("({},{})", new_position.x, new_position.y),
-                new_size = format_args!("{}x{}", new_size.cx, new_size.cy),
+                new_size = format_args!("{}x{}", new_size.width, new_size.height),
                 ga_bounds = format_args!("({:.0},{:.0})-({:.0},{:.0})", global_arr.bounds.left, global_arr.bounds.top, global_arr.bounds.right, global_arr.bounds.bottom),
                 "[window_pos_sync] Updating WindowPos from GA"
             );

@@ -5,13 +5,12 @@ use std::sync::Mutex;
 use std::sync::mpsc::channel;
 use std::thread;
 use std::time::Duration;
-use windows::Win32::Foundation::{POINT, SIZE};
 use windows::core::Result;
 use wintf::ecs::Window;
 use wintf::ecs::widget::brushes::{Brush, Brushes};
 use wintf::ecs::widget::shapes::Rectangle;
 use wintf::ecs::{
-    GraphicsCore, SurfaceGraphics, VisualGraphics, WindowGraphics, WindowHandle, WindowPos,
+    GraphicsCore, Point, SizeI, SurfaceGraphics, VisualGraphics, WindowGraphics, WindowHandle, WindowPos,
 };
 use wintf::*;
 
@@ -47,8 +46,8 @@ fn main() -> Result<()> {
                     ..Default::default()
                 },
                 WindowPos {
-                    position: Some(POINT { x: 100, y: 100 }),
-                    size: Some(SIZE { cx: 600, cy: 400 }),
+                    position: Some(Point { x: 100, y: 100 }),
+                    size: Some(SizeI { width: 600, height: 400 }),
                     ..Default::default()
                 },
                 Rectangle::new(),
@@ -61,8 +60,8 @@ fn main() -> Result<()> {
                     ..Default::default()
                 },
                 WindowPos {
-                    position: Some(POINT { x: 750, y: 100 }),
-                    size: Some(SIZE { cx: 600, cy: 400 }),
+                    position: Some(Point { x: 750, y: 100 }),
+                    size: Some(SizeI { width: 600, height: 400 }),
                     ..Default::default()
                 },
                 Rectangle::new(),

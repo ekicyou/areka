@@ -1,6 +1,6 @@
 use bevy_ecs::prelude::*;
-use windows_numerics::Vector2;
 use wintf::ecs::Visual;
+use wintf::ecs::PointF;
 use wintf::ecs::visual_resource_management_system;
 use wintf::ecs::world::FrameCount;
 use wintf::ecs::{GraphicsCore, VisualGraphics};
@@ -17,8 +17,8 @@ fn test_visual_component_definition() {
     // Check default values
     assert_eq!(visual.is_visible, true);
     assert_eq!(visual.opacity, 1.0);
-    assert_eq!(visual.transform_origin.X, 0.0);
-    assert_eq!(visual.transform_origin.Y, 0.0);
+    assert_eq!(visual.transform_origin.x, 0.0);
+    assert_eq!(visual.transform_origin.y, 0.0);
 }
 
 #[test]
@@ -26,13 +26,13 @@ fn test_visual_component_properties() {
     let visual = Visual {
         is_visible: false,
         opacity: 0.5,
-        transform_origin: Vector2::new(10.0, 20.0),
+        transform_origin: PointF { x: 10.0, y: 20.0 },
     };
 
     assert_eq!(visual.is_visible, false);
     assert_eq!(visual.opacity, 0.5);
-    assert_eq!(visual.transform_origin.X, 10.0);
-    assert_eq!(visual.transform_origin.Y, 20.0);
+    assert_eq!(visual.transform_origin.x, 10.0);
+    assert_eq!(visual.transform_origin.y, 20.0);
 }
 
 /// Phase 6: Visualリソース作成テスト

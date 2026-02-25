@@ -4,7 +4,7 @@
 /// 伝播することを検証します。
 use bevy_ecs::prelude::*;
 use bevy_ecs::system::IntoSystem;
-use windows::Win32::Foundation::{POINT, SIZE};
+use wintf::ecs::{Point, SizeI};
 use wintf::ecs::*;
 
 // sync_visual_from_layout_rootは廃止され、Arrangementから直接Surfaceサイズを取得するようになりました。
@@ -56,8 +56,8 @@ fn test_sync_window_pos() {
 
     // WindowPosが更新されていることを確認
     let window_pos = world.entity(entity).get::<WindowPos>().unwrap();
-    assert_eq!(window_pos.position, Some(POINT { x: 100, y: 50 }));
-    assert_eq!(window_pos.size, Some(SIZE { cx: 800, cy: 600 }));
+    assert_eq!(window_pos.position, Some(Point { x: 100, y: 50 }));
+    assert_eq!(window_pos.size, Some(SizeI { width: 800, height: 600 }));
 }
 
 #[test]
@@ -102,8 +102,8 @@ fn test_skip_invalid_bounds() {
             },
             Visual::default(),
             WindowPos {
-                position: Some(POINT { x: 100, y: 100 }),
-                size: Some(SIZE { cx: 800, cy: 600 }),
+                position: Some(Point { x: 100, y: 100 }),
+                size: Some(SizeI { width: 800, height: 600 }),
                 ..Default::default()
             },
         ))
@@ -117,8 +117,8 @@ fn test_skip_invalid_bounds() {
 
     // 無効なboundsの場合、WindowPosは更新されないべき
     let window_pos = world.entity(entity).get::<WindowPos>().unwrap();
-    assert_eq!(window_pos.position, Some(POINT { x: 100, y: 100 }));
-    assert_eq!(window_pos.size, Some(SIZE { cx: 800, cy: 600 }));
+    assert_eq!(window_pos.position, Some(Point { x: 100, y: 100 }));
+    assert_eq!(window_pos.size, Some(SizeI { width: 800, height: 600 }));
 }
 
 #[test]
@@ -167,8 +167,8 @@ fn test_echo_back_flow() {
 
     // WindowPosが更新されたことを確認
     let window_pos = world.entity(entity).get::<WindowPos>().unwrap();
-    assert_eq!(window_pos.position, Some(POINT { x: 100, y: 50 }));
-    assert_eq!(window_pos.size, Some(SIZE { cx: 800, cy: 600 }));
+    assert_eq!(window_pos.position, Some(Point { x: 100, y: 50 }));
+    assert_eq!(window_pos.size, Some(SizeI { width: 800, height: 600 }));
 
     // TLS フラグ方式: echo 時は bypass_change_detection で値を更新する（Changed 非発火）
     // これは WM_WINDOWPOSCHANGED ハンドラが is_self_initiated() == true の場合に行う処理
@@ -177,14 +177,14 @@ fn test_echo_back_flow() {
         let mut window_pos = entity_mut.get_mut::<WindowPos>().unwrap();
         // echo シミュレーション: bypass で同一値を書き込み（Changed 非発火）
         let bypass = window_pos.bypass_change_detection();
-        bypass.position = Some(POINT { x: 100, y: 50 });
-        bypass.size = Some(SIZE { cx: 800, cy: 600 });
+        bypass.position = Some(Point { x: 100, y: 50 });
+        bypass.size = Some(SizeI { width: 800, height: 600 });
     }
 
     // WindowPos が変わっていないことを確認
     let window_pos = world.entity(entity).get::<WindowPos>().unwrap();
-    assert_eq!(window_pos.position, Some(POINT { x: 100, y: 50 }));
-    assert_eq!(window_pos.size, Some(SIZE { cx: 800, cy: 600 }));
+    assert_eq!(window_pos.position, Some(Point { x: 100, y: 50 }));
+    assert_eq!(window_pos.size, Some(SizeI { width: 800, height: 600 }));
 }
 
 #[test]
@@ -197,8 +197,8 @@ fn test_reverse_flow_simulation() {
         .spawn((
             Window::default(),
             WindowPos {
-                position: Some(POINT { x: 100, y: 50 }),
-                size: Some(SIZE { cx: 800, cy: 600 }),
+                position: Some(Point { x: 100, y: 50 }),
+                size: Some(SizeI { width: 800, height: 600 }),
                 ..Default::default()
             },
         ))
@@ -207,8 +207,8 @@ fn test_reverse_flow_simulation() {
     // ユーザーがウィンドウをリサイズ（WM_WINDOWPOSCHANGEDシミュレーション）
     // 新しい値（外部変更）を受信
     // TLS フラグ方式: is_self_initiated() == false の場合、DerefMut で更新
-    let new_position = POINT { x: 150, y: 100 };
-    let new_size = SIZE { cx: 1024, cy: 768 };
+    let new_position = Point { x: 150, y: 100 };
+    let new_size = SizeI { width: 1024, height: 768 };
 
     {
         // 外部変更時の処理：WindowPosを通常代入で更新（Changed 発火）

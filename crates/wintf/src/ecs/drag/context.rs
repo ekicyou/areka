@@ -5,8 +5,9 @@
 
 use bevy_ecs::prelude::*;
 use std::sync::{Arc, Mutex};
-use windows::Win32::Foundation::{HWND, POINT};
+use windows::Win32::Foundation::HWND;
 
+use crate::ecs::Point;
 use super::DragConstraint;
 
 /// wndprocスレッドでのドラッグに必要なWindow情報
@@ -15,7 +16,7 @@ pub struct WindowDragContext {
     /// Window の Win32 ハンドル
     pub hwnd: Option<HWND>,
     /// ドラッグ開始時のウィンドウ位置（ウィンドウ枠を含むスクリーン座標、SetWindowPos用）
-    pub initial_window_pos: Option<POINT>,
+    pub initial_window_pos: Option<Point>,
     /// DragConfig.move_window のキャッシュ
     pub move_window: bool,
     /// DragConstraint のキャッシュ

@@ -1,14 +1,16 @@
 use super::*;
+use crate::ecs::types::{Point, SizeI};
 use bevy_ecs::world::World;
-use windows::Win32::Foundation::{POINT, SIZE};
-use windows::Win32::Graphics::Direct2D::Common::{D2D_RECT_F, D2D1_COLOR_F};
+use windows::Win32::Graphics::Direct2D::Common::D2D1_COLOR_F;
 use windows_numerics::Matrix3x2;
+
+use crate::ecs::types::Rect;
 
 /// テスト用ヘルパー: 指定した bounds を持つ GlobalArrangement を作成
 fn make_global_arrangement(left: f32, top: f32, right: f32, bottom: f32) -> GlobalArrangement {
     GlobalArrangement {
         transform: Matrix3x2::translation(left, top),
-        bounds: D2D_RECT_F {
+        bounds: Rect {
             left,
             top,
             right,
@@ -334,8 +336,11 @@ fn test_hit_test_in_window_ex_with_region() {
         .spawn((
             make_global_arrangement(100.0, 200.0, 500.0, 500.0),
             WindowPos {
-                position: Some(POINT { x: 100, y: 200 }),
-                size: Some(SIZE { cx: 400, cy: 300 }),
+                position: Some(Point { x: 100, y: 200 }),
+                size: Some(SizeI {
+                    width: 400,
+                    height: 300,
+                }),
                 ..Default::default()
             },
         ))

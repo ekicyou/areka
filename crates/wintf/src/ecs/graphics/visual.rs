@@ -7,7 +7,6 @@ use bevy_ecs::lifecycle::HookContext;
 use bevy_ecs::prelude::*;
 use bevy_ecs::world::DeferredWorld;
 use tracing::warn;
-use windows_numerics::Vector2;
 
 use super::components::{SurfaceGraphics, SurfaceGraphicsDirty, VisualGraphics};
 use crate::ecs::window::CompositionMode;
@@ -27,7 +26,7 @@ use crate::ecs::window::CompositionMode;
 pub struct Visual {
     pub is_visible: bool,
     pub opacity: f32,
-    pub transform_origin: Vector2,
+    pub transform_origin: crate::ecs::PointF,
 }
 
 /// ChildOf チェーンを辿ってオーナー Window の CompositionMode を取得するヘルパー
@@ -124,7 +123,7 @@ impl Default for Visual {
         Self {
             is_visible: true,
             opacity: 1.0,
-            transform_origin: Vector2::default(),
+            transform_origin: crate::ecs::PointF::default(),
         }
     }
 }

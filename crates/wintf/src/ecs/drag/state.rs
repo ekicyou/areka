@@ -4,10 +4,11 @@
 
 use crate::ecs::drag::DragConstraint;
 use crate::ecs::pointer::PhysicalPoint;
+use crate::ecs::Point;
 use bevy_ecs::entity::Entity;
 use std::cell::RefCell;
 use std::time::Instant;
-use windows::Win32::Foundation::{HWND, POINT};
+use windows::Win32::Foundation::HWND;
 
 /// ドラッグ状態（thread_local!で管理）
 #[derive(Debug, Clone)]
@@ -53,7 +54,7 @@ pub enum DragState {
         /// Window の Win32 ハンドル
         hwnd: HWND,
         /// ドラッグ開始時のウィンドウ位置（クライアント領域スクリーン座標）
-        initial_window_pos: POINT,
+        initial_window_pos: Point,
         /// DragConfig.move_window のキャッシュ
         move_window: bool,
         /// DragConstraint のキャッシュ
@@ -180,15 +181,15 @@ pub fn update_dragging(
                     if let Some(ctx) = ctx_res.get() {
                         (
                             ctx.hwnd.unwrap_or(HWND::default()),
-                            ctx.initial_window_pos.unwrap_or(POINT { x: 0, y: 0 }),
+                            ctx.initial_window_pos.unwrap_or(Point { x: 0, y: 0 }),
                             ctx.move_window,
                             ctx.constraint,
                         )
                     } else {
-                        (HWND::default(), POINT { x: 0, y: 0 }, false, None)
+                        (HWND::default(), Point { x: 0, y: 0 }, false, None)
                     }
                 } else {
-                    (HWND::default(), POINT { x: 0, y: 0 }, false, None)
+                    (HWND::default(), Point { x: 0, y: 0 }, false, None)
                 };
 
             tracing::debug!(

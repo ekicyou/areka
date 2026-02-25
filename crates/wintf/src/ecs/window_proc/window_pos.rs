@@ -77,7 +77,7 @@ pub(super) fn WM_WINDOWPOSCHANGED(
                                 window_xy = format_args!("({},{})", wp.x, wp.y),
                                 window_size = format_args!("{}x{}", wp.cx, wp.cy),
                                 client_xy = format_args!("({},{})", client_pos.x, client_pos.y),
-                                client_size = format_args!("{}x{}", client_size.cx, client_size.cy),
+                                client_size = format_args!("{}x{}", client_size.width, client_size.height),
                                 dpi = format_args!("{:.2}", dpi.scale_x()),
                                 "[WM_WINDOWPOSCHANGED]"
                             );
@@ -105,8 +105,8 @@ pub(super) fn WM_WINDOWPOSCHANGED(
                                     // echo（自アプリ由来、DPI変更なし）→ bypass_change_detection で更新
                                     // Changed<WindowPos> を発火させない → apply_window_pos_changes 非トリガー
                                     let bypass = window_pos.bypass_change_detection();
-                                    bypass.position = Some(client_pos);
-                                    bypass.size = Some(client_size);
+                                    bypass.position = Some(client_pos.into());
+                                    bypass.size = Some(client_size.into());
 
                                     trace!(
                                         entity = ?entity,
@@ -133,12 +133,13 @@ pub(super) fn WM_WINDOWPOSCHANGED(
                                     // 発火しても、座標/サイズが同一なら Changed を発火させない。
                                     // これにより不要な SetWindowPos エコーバックループを防止し、
                                     // 高DPI環境でのフレームオフセット不一致による位置ズレを回避する。
-                                    let pos_changed = window_pos.position != Some(corrected_pos);
-                                    let size_changed = window_pos.size != Some(client_size);
+                                    let pos_changed =
+                                        window_pos.position != Some(corrected_pos.into());
+                                    let size_changed = window_pos.size != Some(client_size.into());
 
                                     if pos_changed || size_changed {
-                                        window_pos.position = Some(corrected_pos);
-                                        window_pos.size = Some(client_size);
+                                        window_pos.position = Some(corrected_pos.into());
+                                        window_pos.size = Some(client_size.into());
 
                                         if dpi_context.is_some() {
                                             debug!(
@@ -148,8 +149,8 @@ pub(super) fn WM_WINDOWPOSCHANGED(
                                                 original_y = client_pos.y,
                                                 corrected_x = corrected_pos.x,
                                                 corrected_y = corrected_pos.y,
-                                                client_cx = client_size.cx,
-                                                client_cy = client_size.cy,
+                                                client_cx = client_size.width,
+                                                client_cy = client_size.height,
                                                 "[WM_WINDOWPOSCHANGED] WindowPos updated (DPI change, center-preserve)"
                                             );
                                         } else {
@@ -161,8 +162,8 @@ pub(super) fn WM_WINDOWPOSCHANGED(
                                                 window_cy = wp.cy,
                                                 client_x = client_pos.x,
                                                 client_y = client_pos.y,
-                                                client_cx = client_size.cx,
-                                                client_cy = client_size.cy,
+                                                client_cx = client_size.width,
+                                                client_cy = client_size.height,
                                                 "WindowPos updated (external change, values differ)"
                                             );
                                         }
@@ -188,8 +189,8 @@ pub(super) fn WM_WINDOWPOSCHANGED(
                             if !skip_box_style {
                                 use crate::ecs::layout::{BoxSize, Dimension};
 
-                                let physical_width = client_size.cx as f32;
-                                let physical_height = client_size.cy as f32;
+                                let physical_width = client_size.width as f32;
+                                let physical_height = client_size.height as f32;
 
                                 // 物理ピクセルを DPI スケールで除算して論理ピクセルに変換
                                 // BoxStyle は論理 px（96 DPI / 100% 相当）を唯一の座標系とする

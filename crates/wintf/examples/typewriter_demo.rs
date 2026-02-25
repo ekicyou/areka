@@ -12,7 +12,6 @@ use bevy_ecs::name::Name;
 use bevy_ecs::prelude::*;
 use std::time::Duration;
 use tracing_subscriber::EnvFilter;
-use windows::Win32::Foundation::POINT;
 use windows::Win32::Graphics::Direct2D::Common::D2D1_COLOR_F;
 use windows::core::Result;
 use wintf::ecs::layout::{
@@ -25,7 +24,7 @@ use wintf::ecs::widget::text::{
     TextDirection, Typewriter, TypewriterEvent, TypewriterEventKind, TypewriterLayoutCache,
     TypewriterTalk, TypewriterToken,
 };
-use wintf::ecs::{FrameTime, Window, WindowPos};
+use wintf::ecs::{FrameTime, Point, Window, WindowPos};
 use wintf::*;
 
 #[derive(Debug, Clone, Copy, Component, PartialEq, Hash)]
@@ -143,7 +142,7 @@ fn create_typewriter_demo_window(world: &mut World) {
                 ..Default::default()
             },
             WindowPos {
-                position: Some(POINT { x: 100, y: 100 }),
+                position: Some(Point { x: 100, y: 100 }),
                 ..Default::default()
             },
             Window {

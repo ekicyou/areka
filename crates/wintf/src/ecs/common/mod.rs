@@ -9,9 +9,9 @@
 //!
 //! 3つのジェネリック型パラメータで、さまざまな変換タイプに対応：
 //!
-//! - **`L`**: ローカル変換コンポーネント (例: `Arrangement`, `Transform`)
-//! - **`G`**: グローバル変換コンポーネント (例: `GlobalArrangement`, `GlobalTransform`)
-//! - **`M`**: 変更マーカーコンポーネント (例: `ArrangementTreeChanged`, `TransformTreeChanged`)
+//! - **`L`**: ローカル変換コンポーネント (例: `Arrangement`)
+//! - **`G`**: グローバル変換コンポーネント (例: `GlobalArrangement`)
+//! - **`M`**: 変更マーカーコンポーネント (例: `ArrangementTreeChanged`)
 //!
 //! ### 3つの中核システム関数
 //!

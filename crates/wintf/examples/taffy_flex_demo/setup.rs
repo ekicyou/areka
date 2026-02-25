@@ -12,7 +12,7 @@ use super::*;
 pub(crate) fn create_flexbox_window(
     world: &mut World,
     title: &str,
-    position: windows::Win32::Foundation::POINT,
+    position: Point,
 ) -> Entity {
     // Window Entity (ルート)
     // WindowPos.position でクライアント領域の位置を指定

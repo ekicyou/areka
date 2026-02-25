@@ -9,7 +9,7 @@
 
 use bevy_ecs::prelude::*;
 use std::time::Instant;
-use windows::Win32::Foundation::{POINT, SIZE};
+use wintf::ecs::{Point, SizeI};
 use wintf::ecs::drag::{
     DragAccumulatorResource, DragConfig, DragEndEvent, DragEvent, DragStartEvent, DragTransition,
     WindowDragContextResource, WindowDragging,
@@ -38,8 +38,8 @@ fn test_boxstyle_inset_unchanged_after_window_pos_update() {
         .spawn((
             Window::default(),
             WindowPos {
-                position: Some(POINT { x: 100, y: 200 }),
-                size: Some(SIZE { cx: 800, cy: 600 }),
+                position: Some(Point { x: 100, y: 200 }),
+                size: Some(SizeI { width: 800, height: 600 }),
                 ..Default::default()
             },
             DPI::default(),
@@ -84,8 +84,8 @@ fn test_boxstyle_inset_unaffected_by_window_position_change() {
         .spawn((
             Window::default(),
             WindowPos {
-                position: Some(POINT { x: 100, y: 200 }),
-                size: Some(SIZE { cx: 800, cy: 600 }),
+                position: Some(Point { x: 100, y: 200 }),
+                size: Some(SizeI { width: 800, height: 600 }),
                 ..Default::default()
             },
             DPI::default(),
@@ -109,7 +109,7 @@ fn test_boxstyle_inset_unaffected_by_window_position_change() {
     schedule.run(&mut world);
 
     // WindowPos.position を変更（ウィンドウ移動を模擬）
-    world.get_mut::<WindowPos>(entity).unwrap().position = Some(POINT { x: 500, y: 300 });
+    world.get_mut::<WindowPos>(entity).unwrap().position = Some(Point { x: 500, y: 300 });
     schedule.run(&mut world);
 
     // BoxStyle.inset は変更されていないこと
@@ -142,8 +142,8 @@ fn test_changed_boxstyle_not_fired_on_position_only_change() {
         .spawn((
             Window::default(),
             WindowPos {
-                position: Some(POINT { x: 100, y: 200 }),
-                size: Some(SIZE { cx: 800, cy: 600 }),
+                position: Some(Point { x: 100, y: 200 }),
+                size: Some(SizeI { width: 800, height: 600 }),
                 ..Default::default()
             },
             DPI::default(),
@@ -185,7 +185,7 @@ fn test_changed_boxstyle_not_fired_on_position_only_change() {
     let initial_count = world.resource::<ChangedBoxStyleCount>().0;
 
     // WindowPos.position のみ変更（BoxStyle は触らない）
-    world.get_mut::<WindowPos>(entity).unwrap().position = Some(POINT { x: 500, y: 300 });
+    world.get_mut::<WindowPos>(entity).unwrap().position = Some(Point { x: 500, y: 300 });
     schedule.run(&mut world);
 
     let after_pos_change = world.resource::<ChangedBoxStyleCount>().0;
@@ -205,8 +205,8 @@ fn test_changed_boxstyle_fired_on_size_change() {
         .spawn((
             Window::default(),
             WindowPos {
-                position: Some(POINT { x: 100, y: 200 }),
-                size: Some(SIZE { cx: 800, cy: 600 }),
+                position: Some(Point { x: 100, y: 200 }),
+                size: Some(SizeI { width: 800, height: 600 }),
                 ..Default::default()
             },
             DPI::default(),
@@ -286,8 +286,8 @@ fn test_drag_end_syncs_window_pos_changed() {
         .spawn((
             Window::default(),
             WindowPos {
-                position: Some(POINT { x: 500, y: 600 }),
-                size: Some(SIZE { cx: 800, cy: 600 }),
+                position: Some(Point { x: 500, y: 600 }),
+                size: Some(SizeI { width: 800, height: 600 }),
                 ..Default::default()
             },
             DPI::default(),
@@ -379,7 +379,7 @@ fn test_drag_end_clears_context_resource() {
         .spawn((
             Window::default(),
             WindowPos {
-                position: Some(POINT { x: 100, y: 200 }),
+                position: Some(Point { x: 100, y: 200 }),
                 ..Default::default()
             },
             DPI::default(),
@@ -401,7 +401,7 @@ fn test_drag_end_clears_context_resource() {
         .resource::<WindowDragContextResource>()
         .set(wintf::ecs::drag::WindowDragContext {
             hwnd: None,
-            initial_window_pos: Some(POINT { x: 100, y: 200 }),
+            initial_window_pos: Some(Point { x: 100, y: 200 }.into()),
             move_window: true,
             constraint: None,
         });
@@ -447,8 +447,8 @@ fn test_window_dragging_inserted_on_drag_start() {
         .spawn((
             Window::default(),
             WindowPos {
-                position: Some(POINT { x: 100, y: 200 }),
-                size: Some(SIZE { cx: 800, cy: 600 }),
+                position: Some(Point { x: 100, y: 200 }),
+                size: Some(SizeI { width: 800, height: 600 }),
                 ..Default::default()
             },
             DPI::default(),
@@ -507,8 +507,8 @@ fn test_window_dragging_removed_on_drag_end() {
         .spawn((
             Window::default(),
             WindowPos {
-                position: Some(POINT { x: 300, y: 400 }),
-                size: Some(SIZE { cx: 800, cy: 600 }),
+                position: Some(Point { x: 300, y: 400 }),
+                size: Some(SizeI { width: 800, height: 600 }),
                 ..Default::default()
             },
             DPI::default(),
@@ -564,8 +564,8 @@ fn test_window_dragging_full_lifecycle() {
         .spawn((
             Window::default(),
             WindowPos {
-                position: Some(POINT { x: 100, y: 200 }),
-                size: Some(SIZE { cx: 800, cy: 600 }),
+                position: Some(Point { x: 100, y: 200 }),
+                size: Some(SizeI { width: 800, height: 600 }),
                 ..Default::default()
             },
             DPI::default(),
