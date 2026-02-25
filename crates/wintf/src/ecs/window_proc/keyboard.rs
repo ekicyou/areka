@@ -52,8 +52,8 @@ pub(super) fn WM_KEYDOWN(
         }
 
         crate::ecs::drag::cancel_dragging();
-        // ReleaseCapture
-        // TODO: ReleaseCapture (not available in current windows crate version)
+        // TODO(wintf-screen-drag-stability): ReleaseCapture をここで呼び出す
+        // API: windows::Win32::UI::Input::KeyboardAndMouse::ReleaseCapture
         // let _ = unsafe { ReleaseCapture() };
 
         tracing::debug!("[WM_KEYDOWN] ESC key pressed, drag cancelled");

@@ -162,7 +162,8 @@ fn handle_button_message(
                                     entity_with_config,
                                     PhysicalPoint::new(screen_x, screen_y),
                                 );
-                                // TODO: SetCapture for proper mouse capture (not available in current windows crate version)
+                                // TODO(wintf-screen-drag-stability): SetCapture をここで呼び出す
+                                // API: windows::Win32::UI::Input::KeyboardAndMouse::SetCapture
                                 // let _ = unsafe { SetCapture(hwnd) };
                             }
                         }
@@ -220,7 +221,8 @@ fn handle_button_message(
                                 "[handle_button_message] Drag end skipped: HWND mismatch"
                             );
                         }
-                        // TODO: ReleaseCapture (not available in current windows crate version)
+                        // TODO(wintf-screen-drag-stability): ReleaseCapture をここで呼び出す
+                        // API: windows::Win32::UI::Input::KeyboardAndMouse::ReleaseCapture
                         // let _ = unsafe { ReleaseCapture() };
                     }
                 }
@@ -293,7 +295,8 @@ fn handle_button_message(
                     "[handle_button_message] Fallback drag end skipped: HWND mismatch"
                 );
             }
-            // TODO: ReleaseCapture (not available in current windows crate version)
+            // TODO(wintf-screen-drag-stability): ReleaseCapture をここで呼び出す
+            // API: windows::Win32::UI::Input::KeyboardAndMouse::ReleaseCapture
             // let _ = unsafe { ReleaseCapture() };
         }
     }
