@@ -272,35 +272,92 @@ sequenceDiagram
 ##### State Management
 
 ```rust
-// thread_local に配置。DragState と同じスレッド親和性を持つ
-thread_local! {
-    static CAPTURE_GUARD: Cell<Option<CaptureGuardInner>> = const { Cell::new(None) };
-}
-
-struct CaptureGuardInner {
+/// マウスキャプチャの RAII ガード
+pub struct CaptureGuard {
     hwnd: HWND,
+    released: bool,
 }
 
-impl Drop for CaptureGuardInner {
-    fn drop(&mut self) {
-        // ReleaseCapture を呼び出す
-        // HWND は検証不要（ReleaseCapture はグローバル状態をリセット）
+impl CaptureGuard {
+    /// キャプチャを取得して新しいガードを生成
+    pub fn acquire(hwnd: HWND) -> Self {
+        unsafe {
+            SetCapture(hwnd);
+        }
+        debug!(hwnd = format!("0x{:X}", hwnd.0), "[CaptureGuard] Capture acquired");
+        Self {
+            hwnd,
+            released: false,
+        }
     }
+
+    /// WM_CAPTURECHANGED 受信時に呼ぶ（ReleaseCapture を呼ばずにマーク）
+    pub fn mark_released(&mut self) {
+        self.released = true;
+    }
+}
+
+impl Drop for CaptureGuard {
+    fn drop(&mut self) {
+        if !self.released {
+            unsafe {
+                ReleaseCapture();
+            }
+            debug!(hwnd = format!("0x{:X}", self.hwnd.0), "[CaptureGuard] Capture released");
+        }
+    }
+}
+
+// DragState に統合
+pub enum DragState {
+    Idle,
+    Preparing {
+        entity: Entity,
+        start_pos: PhysicalPoint,
+        start_time: Instant,
+        capture_guard: CaptureGuard,  // NEW
+    },
+    JustStarted {
+        entity: Entity,
+        start_pos: PhysicalPoint,
+        current_pos: PhysicalPoint,
+        start_time: Instant,
+        capture_guard: CaptureGuard,  // NEW
+    },
+    Dragging {
+        entity: Entity,
+        start_pos: PhysicalPoint,
+        current_pos: PhysicalPoint,
+        prev_pos: PhysicalPoint,
+        start_time: Instant,
+        hwnd: HWND,
+        initial_window_pos: Point,
+        move_window: bool,
+        constraint: Option<DragConstraint>,
+        capture_guard: CaptureGuard,  // NEW
+    },
+    JustEnded {
+        entity: Entity,
+        position: PhysicalPoint,
+        cancelled: bool,
+    },
 }
 ```
 
-- **State model**: thread_local `Cell<Option<CaptureGuardInner>>` — Idle（None）/ Active（Some）の2状態
-- **取得**: `acquire_capture(hwnd)` → `SetCapture(hwnd)` → `CAPTURE_GUARD.set(Some(...))`
-  - 既に Active の場合は先に release してから再取得
-  - `SetCapture` が失敗することはないが、`warn!` ログを出力する方針は不要（API 仕様上常に成功）
-- **解放**: `release_capture()` → `CAPTURE_GUARD.take()` → Drop → `ReleaseCapture()`
-  - 既に Idle の場合は no-op（冪等）
-- **パニック安全性**: `panic = 'unwind'` 設定によりスタック巻き戻しで Drop が実行される
+- **State model**: `DragState` の各バリアント（Preparing / JustStarted / Dragging）が `CaptureGuard` を所有
+- **取得**: `start_preparing` 内で `CaptureGuard::acquire(hwnd)` を呼び、`DragState::Preparing { capture_guard, ... }` に格納
+- **解放**: `end_dragging` / `cancel_dragging` で `DragState::Idle` に遷移 → 旧状態の Drop → `CaptureGuard::drop()` → `ReleaseCapture()`
+- **パニック安全性**: 
+  - WndProc スレッドでパニック発生時、スタック巻き戻しで `DRAG_STATE` (`RefCell<DragState>`) が Drop される
+  - → `DragState` の Drop が連鎖
+  - → `capture_guard` フィールドの `CaptureGuard::drop()` が呼ばれる
+  - → `ReleaseCapture()` が確実に実行される
+  - Cargo.toml の `panic = 'unwind'` 設定で保証
 
 **Implementation Notes**
-- Integration: `mouse_click.rs` の `start_preparing` 直後で `acquire_capture(hwnd)`、`end_dragging` / `cancel_dragging` 直後で `release_capture()`
-- Validation: `CaptureGuardInner` が保持されている場合のみ `ReleaseCapture` を呼ぶ（ `WM_CAPTURECHANGED` で外部解放された場合は guard を clear するだけ）
-- Risks: `WM_CAPTURECHANGED` を受けた時点で OS 側のキャプチャは既に解放済み。guard 側は `release_capture()` で clear するのみ（`ReleaseCapture` は不要）
+- Integration: `state.rs` で `DragState` 定義を変更、`mod.rs` の `start_preparing` / `check_threshold` / `start_dragging` / `update_dragging` / `end_dragging` / `cancel_dragging` で `capture_guard` フィールドを適切に引き継ぐ
+- Validation: `WM_CAPTURECHANGED` 受信時は `capture_guard.mark_released()` を呼び、Drop 時の `ReleaseCapture` をスキップ
+- Risks: DragState の各バリアント定義変更により、既存のパターンマッチ箇所が網羅性エラーになる可能性あり（コンパイラが検出）
 
 #### WM_CAPTURECHANGED Handler
 
@@ -317,10 +374,10 @@ impl Drop for CaptureGuardInner {
 **Dependencies**
 - Inbound: `ecs_wndproc` ディスパッチテーブル — メッセージルーティング (P0)
 - Outbound: `crate::ecs::drag::cancel_dragging()` — DragState 遷移 (P0)
-- Outbound: `CaptureGuard::clear_without_release()` — guard リセット (P0)
+- Outbound: `CaptureGuard::mark_released()` — guard のリリースマーク (P0)
 
 **Implementation Notes**
-- Integration: `keyboard.rs` に `handle_capture_changed` 関数を追加。`ecs_wndproc` の `mod.rs` ディスパッチテーブルに `WM_CAPTURECHANGED` エントリを追加
+- Integration: `keyboard.rs` に `handle_capture_changed` 関数を追加。`ecs_wndproc` の `mod.rs` ディスパッチテーブルに `WM_CAPTURECHANGED` エントリを追加。DragState が Preparing / JustStarted / Dragging の場合、`capture_guard.mark_released()` を呼んでから `cancel_dragging()` を呼ぶ
 - Validation: `WM_CANCELMODE` ハンドラとの冪等性を確保（DragState が既に Idle なら早期 return）
 - Risks: `WM_CAPTURECHANGED` は `ReleaseCapture()` 呼び出し時にも発火する。自発的な解放時は DragState が既に JustEnded/Idle なので、cancel_dragging の冪等性で安全
 
@@ -411,9 +468,10 @@ pub fn apply_window_pos_changes(
 
 ### Unit Tests
 
-1. **CaptureGuard の RAII 動作**: `acquire_capture` → `release_capture` のペア呼び出しで状態が Idle に戻ること
-2. **CaptureGuard の冪等性**: `release_capture` を2回呼んでもパニックしないこと
+1. **CaptureGuard の RAII 動作**: `CaptureGuard::acquire(hwnd)` → スコープ終了で Drop → `ReleaseCapture` が呼ばれること
+2. **CaptureGuard の mark_released**: `mark_released()` 呼び出し後の Drop で `ReleaseCapture` が呼ばれないこと
 3. **WM_CAPTURECHANGED ハンドラの冪等性**: DragState が Idle の場合に何もしないこと
+4. **パニック安全性**: `start_preparing` → `panic!()` → thread 終了時に `ReleaseCapture` が呼ばれること（`std::panic::catch_unwind` + thread spawn で検証）
 
 ### Integration Tests
 

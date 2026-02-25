@@ -42,10 +42,10 @@
 - **Implications**: ドラッグ中の DPI 変更は SetCapture が解決（ウィンドウ外でもイベント受信）。レイアウト再同期はドラッグ終了後で十分
 
 ### RAII ガードパターン
-- **Context**: SetCapture/ReleaseCapture の確実な解放保証
+- **Context**: SetCapture/ReleaseCapture の確実な解放保証（パニック安全性）
 - **Sources Consulted**: `window/command.rs`（SetWindowPosGuard）, `world/vsync.rs`（TickFlushGuard）
 - **Findings**: 2つの成熟したRAIIパターンが存在。`SetWindowPosGuard` は AtomicI32 ネストカウンタ、`TickFlushGuard` は thread_local `Cell<bool>` 再入防止
-- **Implications**: `CaptureGuard` を同パターンで設計可能。ドラッグは同時に1つしか発生しないため、ブール値ガードが適切
+- **Implications**: `CaptureGuard` をスタックベース RAII として設計。DragState にフィールドとして保持することで、パニック時のスタック巻き戻しで確実に Drop が呼ばれる
 
 ## Architecture Pattern Evaluation
 
@@ -73,9 +73,12 @@
 - **Rationale**: 責務の集約（ドラッグキャンセル系は keyboard.rs に集中）
 
 ### Decision: CaptureGuard の設計
-- **Context**: パニック時の SetCapture 解放保証
-- **Selected Approach**: thread_local `Cell<bool>` + RAII Drop ガード（TickFlushGuard パターン準拠）
-- **Rationale**: ドラッグは同時に1つ。AtomicI32 ネストカウンタは不要
+- **Context**: パニック時の SetCapture 解放保証（要件 1.5, 5.5）
+- **Selected Approach**: スタックベース RAII ガード（`DragState` にフィールドとして保持）
+- **Rationale**: 
+  - thread_local `Cell<Option<T>>` パターンではパニック時の自動 Drop が保証されない（Cell 自体は Drop を実装していない）
+  - `DragState` の Preparing / JustStarted / Dragging バリアントに `capture_guard: CaptureGuard` フィールドを追加することで、DragState の Drop 時に連鎖的に CaptureGuard の Drop が呼ばれる
+  - WndProc スレッドのパニック時、`DRAG_STATE` (`RefCell<DragState>`) のスタック巻き戻しで確実に `ReleaseCapture` が実行される
 
 ## Risks & Mitigations
 - **DPI変更中のドラッグ**: SetCapture によりウィンドウ外でもイベント受信可能。レイアウト再同期はドラッグ終了後、`dispatch_drag_events` Ended パスで実施
