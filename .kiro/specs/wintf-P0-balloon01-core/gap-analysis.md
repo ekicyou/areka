@@ -1,12 +1,12 @@
 # Gap Analysis: wintf-P0-balloon01-core
 
-| 項目             | 内容                                          |
-| ---------------- | --------------------------------------------- |
-| **対象仕様**     | wintf-P0-balloon01-core（バルーンコア子仕様） |
-| **分析日**       | 2026-02-26                                    |
-| **Requirements** | v2.0（7要件 / 27受入基準）                    |
-| **ブロッカー** | `wintf-P0-cue-system`（コンテンツコマンド配送基盤）|
-| **分析範囲**     | crates/wintf/src/, crates/areka/src/main.rs   |
+| 項目             | 内容                                                |
+| ---------------- | --------------------------------------------------- |
+| **対象仕様**     | wintf-P0-balloon01-core（バルーンコア子仕様）       |
+| **分析日**       | 2026-02-26                                          |
+| **Requirements** | v2.0（7要件 / 27受入基準）                          |
+| **ブロッカー**   | `wintf-P0-cue-system`（コンテンツコマンド配送基盤） |
+| **分析範囲**     | crates/wintf/src/, crates/areka/src/main.rs         |
 
 ---
 
