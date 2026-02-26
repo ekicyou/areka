@@ -147,7 +147,7 @@ cue-system は**舞台演出のキューシート**をメタファーとする�
 
 #### Acceptance Criteria
 
-1. **The** Cue System **shall** 演出台本を表現する CueSheet データ構造を提供する
+1. **The** Cue System **shall** 演出台本を表現する CueSheet データ構造を提供する（pure Vec<Cue>、メタデータフィールドなし）
 2. **The** Cue System **shall** CueSheet 内の各指示（Cue）が対象演者の識別子（PerformerKey）を明示的に保持する設計とする
 3. **The** Cue System **shall** 各 Cue に CueSheet 開始時点からの絶対時刻（start_time: f64、秒単位）を保持させる
 4. **The** Cue System **shall** CueSheet 内の Cue を start_time の昇順で保持する（同一時刻のコマンドは挿入順で安定ソート）

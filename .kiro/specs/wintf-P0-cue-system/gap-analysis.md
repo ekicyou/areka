@@ -118,7 +118,7 @@ pub enum TimelineItem {
 
 | AC  | 技術要素                 | 既存アセット                        | ギャップ                                                  |
 | --- | ------------------------ | ----------------------------------- | --------------------------------------------------------- |
-| AC1 | CueSheet データ構造      | —                                   | **Missing**: `CueSheet` 構造体（Vec\<Cue\> + メタデータ） |
+| AC1 | CueSheet データ構造      | —                                   | **Missing**: `CueSheet` 構造体（Vec\<Cue\>、メタデータなし） |
 | AC2 | PerformerKey 識別子      | —                                   | **Missing**: `PerformerKey` 型定義（文字列 or enum）      |
 | AC3 | start_time 保持          | TypewriterTimeline が `show_at` 保持 | **Missing**: `Cue` 構造体に `start_time: f64` フィールド   |
 | AC4 | start_time 昇順保持      | —                                   | **Missing**: Vec\<Cue\> の安定ソートロジック               |
