@@ -1,14 +1,14 @@
 # Requirements Document
 
-| 項目               | 内容                                 |
-| ------------------ | ------------------------------------ |
-| **Document Title** | wintf バルーンコア 子仕様 要件定義書 |
-| **Version**        | 2.0                                  |
-| **Date**           | 2026-02-26                           |
-| **Parent Spec**    | wintf-P0-balloon-system              |
-| **Priority**       | P0 (MVP必須)                         |
-| **Spec Type**      | 子仕様（Tier 1 基盤レイヤー）        |
-| **Status**         | 🚧 Draft - v2.0 責務分離リファクタ    |
+| 項目               | 内容                                    |
+| ------------------ | --------------------------------------- |
+| **Document Title** | wintf バルーンコア 子仕様 要件定義書    |
+| **Version**        | 2.0                                     |
+| **Date**           | 2026-02-26                              |
+| **Parent Spec**    | wintf-P0-balloon-system                 |
+| **Priority**       | P0 (MVP必須)                            |
+| **Spec Type**      | 子仕様（Tier 1 基盤レイヤー）           |
+| **Status**         | 🚧 Draft - v2.0 責務分離 + v3.0 議事待ち |
 
 ---
 
@@ -37,7 +37,8 @@
 ### 依存関係
 
 - **前提**: `wintf-P0-event-system` ✅（完了済み）
-- **後続**: 他のすべてのバルーン子仕様（balloon02〜balloon08）が本仕様に依存
+- **ブロッカー**: `wintf-P0-cue-system`（演出キュー配送基盤）—— コンテンツコマンド配送メカニズムの設計がバルーンのコンポーネント構成原則に影響するため、v3.0 要件最終化の前提
+- **後続**: 他のすべてのバルーン子仕様（balloon02〜 balloon08）が本仕様に依存
 
 ### 設計制約（inherited-context.md より）
 
@@ -46,8 +47,79 @@
 - ULW / DComp 両描画モード対応が必要
 - Balloon はルートエンティティであり Visual コンポーネントを持つ。自前のサーフェスは透明で、コマンドリストは作らず、実際の描画は子エンティティに委譲する
 - Balloon は純粋な描画ウィジェットであり、ウィンドウ管理・配置制御・キャラクターとの紐づけの責務を持たない
+- dola はバルーン内部サブシステムとしても利用可能（タイミング計算、グリフ表示制御等）
 
 > **詳細な引継ぎコンテキスト**: [inherited-context.md](./inherited-context.md) を参照
+
+---
+
+## v3.0 要件更新に向けた議事コンテキスト
+
+> 以下は v2.0 レビュー議事（2026-02-26）で確定した設計判断。`/kiro-spec-requirements wintf-P0-balloon01-core` で v3.0 要件を生成する際に反映すること。
+
+### D1: ファサードパターン原則
+
+外部からバルーンに与えるすべての設定情報は、**Balloon ルートエンティティのコンポーネント**として受け取る。内部エンティティ（BalloonFrame, BalloonContentArea）への手動伝播を利用者に要求しない。
+
+**モデル**:
+```
+Balloon entity  (ルート = 外部 API)
+├── Balloon             : マーカー + on_add + TextDirection（静的）
+├── BalloonSkinDef      : フレーム外観          ← balloon01-core
+├── BalloonStyleMap     : 感情値→スタイル KV     ← balloon01-core or balloon03
+├── [キュー配送]       : cue-system が定義   ← wintf-P0-cue-system
+├── Visual              : 表示制御              ← 既存
+└── BoxStyle            : レイアウト制約        ← 既存
+
+内部 (自動spawn、外部非公開)
+└── BalloonFrame → BalloonContentArea → GlyphContainer → GlyphEntity×N
+```
+
+**理由**: Typewriter の成功パターン（`Typewriter` + `TypewriterTalk`）の正統な拡張。外部システムは Balloon エンティティに対してだけ操作すればよく、内部の BalloonFrame / BalloonContentArea を知る必要がない。
+
+**検討した代替案**:
+- Pattern A (フラットコンポーネント): API簡便だがルート肥大化・責務混在
+- Pattern B (階層分散): 責務分離完璧だが内部構造露出が設計原則に反する
+- Pattern C (ファサード + 内部伝播) ⭐: **採用**。API簡便さと責務分離のバランス
+- Pattern D (コンパニオンエンティティ): ECS的に自然だが過度に複雑
+
+### D2: TextDirection はバルーンの静的属性
+
+`Balloon` コンポーネントに `TextDirection` フィールドを含める。1つのバルーン内で縦書き・横書きは混在しない。TextDirection の変更はコンテンツ全削除を伴う破壊的操作。
+
+### D3: 感情値ベースの BalloonStyleMap
+
+フォント・文字サイズ等のスタイル設定を、感情値（任意の文字列、例: 「笑顔」「怒り」）をキーとした KV マップ + デフォルト値で管理する。
+
+- 構造: `HashMap<String, TextStyle>` + `default: TextStyle`
+- TextStyle には: font_family, font_size, color 等
+- アニメーション指示で感情値を切り替えることも可能だが非推奨。感情値による設定を推奨
+- 帰属先: balloon01-core か balloon03-content かは v3.0 で決定
+
+### D4: dola はバルーン内部サブシステムとしても利用可能
+
+dola は「外部の調停層が使う」だけでなく、バルーン内部のタイミング計算（グリフ表示タイミング、タイプライター効果等）にも直接使える。`#[cfg(feature = "dola")]` での条件コンパイルは維持。
+
+### D5: コンテンツコマンド配送は cue-system に外部化
+
+バルーンへのコンテンツコマンド（テキスト表示、Wait、スタイル変更等）の配送メカニズムは `wintf-P0-cue-system` で汎用基盤として設計する。バルーン固有ではなく、キャラクター演技指令にも同一インターフェースが必要なため横断的関心事として分離。
+
+**検討済みの配送方式**:
+
+| 方式                       | 概要                                            | 評価                                   |
+| -------------------------- | ----------------------------------------------- | -------------------------------------- |
+| A: コンポーネント差し替え  | `XxxTalk::new(commands)` で丸ごと insert        | Typewriter踏襲。「追加」が不自然       |
+| B: 子エンティティ追加      | `Command` entity を `ChildOf` で spawn          | ECS的に自然。順序保証設計が必要        |
+| C: Messages\<T\>           | bevy_ecs メッセージキュー                       | 既存パターン(Drag系)。送り先特定が課題 |
+| D: VecDeque コンポーネント | ルートに `CueQueue(VecDeque)` を付与、直接 push | 明白。Changed 検出が Mut\<T\> 必須     |
+
+### v3.0 で追加すべき要件（候補）
+
+1. **ファサードパターン原則**: ルートエンティティ = 外部 APIの原則を確立する要件
+2. **TextDirection の Balloon コンポーネント化**: 静的属性として Balloon に含める
+3. **BalloonStyleMap の位置づけ**: balloon01-core か balloon03 かを決定
+4. **cue-system との結合点**: BalloonContentArea をキュー消費の拡張スロットとして定義
+5. **dola 内部利用の設計制約**: バルーン内部サブシステムとしての dola 利用を許容する制約追加
 
 ---
 
