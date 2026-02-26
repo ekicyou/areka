@@ -4,7 +4,7 @@
 | ---------------- | --------------------------------------------- |
 | **対象仕様**     | wintf-P0-balloon01-core（バルーンコア子仕様） |
 | **分析日**       | 2026-02-26                                    |
-| **Requirements** | v1.0（8要件 / 39受入基準）                    |
+| **Requirements** | v1.0（8要件 / 38受入基準）                    |
 | **分析範囲**     | crates/wintf/src/, crates/areka/src/main.rs   |
 
 ---
@@ -92,18 +92,17 @@
 
 ---
 
-### Req 4: フレーム描画
+### Req 4: フレーム描画の委譲設計
 
-| AC  | 技術要素                       | 既存アセット                                    | ギャップ                                                                            |
-| --- | ------------------------------ | ----------------------------------------------- | ----------------------------------------------------------------------------------- |
-| AC1 | CommandList によるフレーム描画 | `GraphicsCommandList`, `Rectangle` 描画パターン | **Missing**: `draw_balloon_frame` システム                                          |
-| AC2 | 角丸矩形描画                   | `create_rounded_rectangle_geometry()`           | ギャップなし（D2D1 API 利用可能）                                                   |
-| AC3 | 枠線描画                       | `D2D1DeviceContextExt`                          | ギャップなし（DrawGeometry API 利用可能）                                           |
-| AC4 | しっぽ描画                     | `create_path_geometry()` — PathGeometry         | **Missing**: しっぽジオメトリ生成ロジック                                           |
-| AC5 | SkinDef 変更時再描画           | `Changed<T>` パターン                           | **Missing**: `Changed<BalloonSkinDef>` リアクティブシステム                         |
-| AC6 | ULW/DComp 両対応               | 既存 RenderSurface パイプライン                 | **Constraint**: 両モードのテスト必要。描画自体は CommandList 経由なのでモード非依存 |
+| AC  | 技術要素                              | 既存アセット                                           | ギャップ                                                                       |
+| --- | ------------------------------------- | ------------------------------------------------------ | ------------------------------------------------------------------------------ |
+| AC1 | 子ウィジットへの描画委譲構造          | `ChildOf` 階層パターン, `Rectangle` 描画パターン       | **Missing**: `BalloonFrame` → 描画子ウィジット spawn・管理ロジック             |
+| AC2 | Image 背景の BitmapSource 活用        | `BitmapSource` ウィジット                              | ギャップなし（既存ウィジットを ChildOf で配置）                                |
+| AC3 | 背景・枠線・角丸・しっぽの描画委譲    | D2D1 ジオメトリ API, `Rectangle`, `BitmapSource`       | **Missing**: フレーム描画ウィジット（本仕様内 or 孫仕様で対応、設計フェーズ判断） |
+| AC4 | SkinDef 変更時の子ウィジット再構築    | `Changed<T>` パターン                                  | **Missing**: `Changed<BalloonSkinDef>` による再構築システム                     |
+| AC5 | ULW/DComp 両対応                      | 既存 `GraphicsCommandList` パイプライン                | **Constraint**: 子ウィジットが既存パイプラインに乗るため本質的にモード非依存    |
 
-**評価**: 描画パイプラインは `GraphicsCommandList` → `RenderSurface` で確立済み。しっぽの PathGeometry 構築が唯一のアルゴリズム的課題。角丸・枠線は既存 D2D1 API で対応。
+**評価**: 描画の実装責務を BalloonFrame の子ウィジットに委譲。Image 背景は既存 `BitmapSource` を活用可能。SolidColor 背景・枠線・角丸・しっぽの描画ウィジットは本仕様内で新規作成するか孫仕様に分離するかを設計フェーズで判断。balloon01-core は委譲構造とスキン定義管理に集中。
 
 ---
 
@@ -172,19 +171,19 @@
 | M3  | `BalloonContentArea` コンポーネント                               | Req 1                | 低                               |
 | M4  | `BalloonSkinDef` コンポーネント（背景・枠線・しっぽ・パディング） | Req 3                | 低（データ定義のみ）             |
 | M5  | `BalloonPlacement` コンポーネント（方向 enum + Auto 判定）        | Req 5                | 低                               |
-| M6  | `draw_balloon_frame` システム（CommandList 描画）                 | Req 4                | 中（しっぽ PathGeometry）        |
+| M6  | フレーム描画委譲ロジック（SkinDef → 子ウィジット spawn・管理）    | Req 4                | 低〜中（既存ウィジット活用）     |
 | M7  | `placement_system`（配置計算 + デスクトップ境界反転）             | Req 5                | 中                               |
-| M8  | しっぽジオメトリ生成ロジック                                      | Req 4 AC4            | 中（PathGeometry 構築）          |
+| M8  | フレーム描画ウィジット（背景・枠線・角丸・しっぽ）               | Req 4 AC3            | 中（本仕様内 or 孫仕様）        |
 | M9  | デフォルト BalloonSkinDef + バリデーション                        | Req 3 AC5, Req 7 AC3 | 低                               |
 | M10 | モジュール構造（balloon/mod.rs, frame.rs, placement.rs）          | Req 8                | 低（スキャフォールド）           |
 
 ### Research Needed（設計フェーズで調査）
 
-| #   | アイテム                                                                         | 影響範囲  |
-| --- | -------------------------------------------------------------------------------- | --------- |
-| RN1 | `ChildOf` despawn 時の cascade 動作確認（bevy_ecs 0.18 の仕様）                  | Req 2 AC5 |
-| RN2 | placement_system のスケジュール配置（PostLayout vs Update）                      | Req 5 AC3 |
-| ~~RN3~~ | ~~BalloonWindow が Window を同一エンティティに共存させるか~~ **解決済み**: 親 design.md で同一エンティティ方式に決定済み（`on_balloon_window_add` で Window + WindowStyle + WindowPos + Visual を同一エンティティに挿入） | — |
+| #       | アイテム                                                                                                                                                                                                                  | 影響範囲  |
+| ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------- |
+| RN1     | `ChildOf` despawn 時の cascade 動作確認（bevy_ecs 0.18 の仕様）                                                                                                                                                           | Req 2 AC5 |
+| RN2     | placement_system のスケジュール配置（PostLayout vs Update）                                                                                                                                                               | Req 5 AC3 |
+| ~~RN3~~ | ~~BalloonWindow が Window を同一エンティティに共存させるか~~ **解決済み**: 親 design.md で同一エンティティ方式に決定済み（`on_balloon_window_add` で Window + WindowStyle + WindowPos + Visual を同一エンティティに挿入） | —         |
 
 ### Constraint（既存アーキテクチャ制約）
 
@@ -255,14 +254,14 @@
 
 ### 工数: **M（3〜7日）**
 
-**根拠**: 新規コンポーネント定義は5つだが、いずれも既存 on_add パターンのテンプレート流用。描画システム（draw_balloon_frame）としっぽ PathGeometry 構築、placement_system のデスクトップ境界反転ロジックが主要な実装工数。ULW/DComp 両モードのテストも含む。
+**根拠**: 新規コンポーネント定義は5つだが、いずれも既存 on_add パターンのテンプレート流用。描画は子ウィジット委譲モデルにより既存ウィジット（BitmapSource 等）を活用可能。placement_system のデスクトップ境界反転ロジックが主要な実装工数。フレーム描画ウィジット（背景・枠線・しっぽ）は本仕様内または孫仕様で対応。
 
 ### リスク: **低**
 
 **根拠**:
 - 全コンポーネントが on_add フックチェーンという確立済みパターンに準拠
-- 描画は GraphicsCommandList → RenderSurface の既存パイプラインを利用
-- D2D1 ジオメトリ API（PathGeometry, RoundedRectangleGeometry）は既に COM ラッパーで利用可能
+- 描画は子ウィジット委譲モデルにより既存 GraphicsCommandList パイプラインを利用。既存ウィジット（BitmapSource, Rectangle）の活用で工数削減
+- D2D1 ジオメトリ API（PathGeometry, RoundedRectangleGeometry）は既に COM ラッパーで利用可能（フレーム描画ウィジット内で使用）
 - 外部依存・未知技術なし
 - areka モック実装が概念実証として存在
 
