@@ -304,7 +304,7 @@ cue-system は**舞台演出のキューシート**をメタファーとする�
 
 ### NFR-1: パフォーマンス
 
-1. **The** Cue System **shall** CueQueue のコマンド追加・時刻到達消費操作を O(1) 償却で実行する（start_time 順が保証されている場合の末尾追加・先頭消費）
+1. **The** Cue System **shall** CueQueue のコマンド追加・時刻到達消費操作を効率的に実行する（O(log n) 許容。実用上のキュー長は数十〜数百を想定）
 2. **While** CueQueue が空の状態, **the** Cue System **shall** 消費者システムの不要な走査を最小化する
 3. **The** Cue System **shall** コマンド型のメモリサイズをキャッシュフレンドリーな範囲に抑える
 4. **The** Cue System **shall** TimedCue（start_time + CueCommand）の合計メモリサイズを 64 バイト以下に維持する

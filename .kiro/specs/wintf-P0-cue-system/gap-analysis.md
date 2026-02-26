@@ -246,12 +246,12 @@ pub enum TimelineItem {
 
 | AC  | 技術要素               | 既存アセット                           | ギャップ                                                               |
 | --- | ---------------------- | -------------------------------------- | ---------------------------------------------------------------------- |
-| AC1 | O(1) 追加・消費        | **BinaryHeap は O(log n)**             | **Verify**: 実装選択肢に依存（BinaryHeap vs Vec）                      |
+| AC1 | 効率的な追加・消費     | **BinaryHeap は O(log n)**             | ギャップなし（O(log n) 許容に緩和確定。実用キュー長で問題なし）        |
 | AC2 | 空キュー時の走査最小化 | bevy_ecs クエリフィルタ                | **Design Decision**: With\<CueQueue\> + Changed でフィルタするか        |
 | AC3 | メモリサイズ最適化     | TypewriterToken は32バイト未満（推定） | **Verify**: CueCommand のサイズをコンパイル時に assert する            |
 | AC4 | TimedCue 64バイト制約  | —                                      | **Verify**: `size_of::<TimedCue>() <= 64` を assert（NFR-1 AC4 で追加） |
 
-**評価**: DD9 により O(1) 保証が困難に（BinaryHeap は O(log n) push）。ただし実用上のキュー長は短い（数十〜数百）ため影響は軽微。AC1 を「O(1) 償却」から「効率的な追加・消費（O(log n) 許容）」に緩和するか、Vec ベースに変更するかが設計判断。
+**評価**: DD9 により O(1) 保証は非現実的（時刻順キューの本質的制約）。AC1 を「効率的な追加・消費（O(log n) 許容）」に緩和確定（Q1 結論）。BinaryHeap 採用により実用上の影響は軽微（log₂(100) ≈ 7 回の比較）。
 
 ---
 
