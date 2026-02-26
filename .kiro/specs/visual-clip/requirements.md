@@ -16,7 +16,9 @@ wintf論理VisualコンポーネントにDComp / D2D デュアルモード対応
 - DComp モード: clip_sync_system 実装（Changed<Visual> による IDCompositionRectangleClip 同期）
 - DComp モード: COM API 拡張（DCompositionDeviceExt::create_rectangle_clip, DCompositionVisualExt::set_clip）
 - ULW モード: render_subtree でのクリップ描画（PushAxisAlignedClip / PushLayer + RoundedRectangleGeometry）
+- ULW モード: COM API 拡張（D2D1FactoryExt::create_rounded_rectangle_geometry）
 - システムスケジュール登録（Composition フェーズ、visual_property_sync_system の後）
+- クリッピング検証デモ（clip_demo.rs: ULW/DComp 2ウィンドウ、可変サイズレイアウト、全3バリアント表示）
 
 ### 実装しない（後回し）
 - ClipShape::SurfaceMask（任意形状・グラデーションマスク）
@@ -132,6 +134,19 @@ Visualコンポーネントにクリッピング機能を追加し、描画領�
 6. When `Visual.clip` が `None` の場合, wintf shall ULW モードでクリッピングを適用しない。
 7. If D2D クリップ操作（PushAxisAlignedClip / PushLayer）が失敗した場合, wintf shall `error!` ログを出力して描画処理を継続する。
 8. ULW モードで使用する D2D API（PushAxisAlignedClip、PushLayer、PathGeometry）は既存の `com/d2d` モジュールに基盤が実装済みであり、`ID2D1RoundedRectangleGeometry` 作成ラッパーのみ追加が必要。
+
+### Requirement 10: クリッピング検証デモ
+
+**Objective:** 開発者として、clip 機能が DComp / ULW 両モードで正しく動作することを視覚的に検証したい。ウィンドウサイズ変更時にクリップ領域も追従することを確認したい。
+
+#### Acceptance Criteria
+
+1. wintf shall クリッピング検証デモ（`clip_demo.rs` または同等の example）を提供する。
+2. デモは ULW モードと DComp モードの2つのウィンドウを同時に表示 shall する。
+3. 各ウィンドウは同一のレイアウト構造を持ち、クリッピング効果が視覚的に確認できる shall とする（例: はみ出す子要素を持つ親要素、角丸クリップの適用など）。
+4. When ウィンドウサイズが変更された場合, デモ shall レイアウト領域のサイズをウィンドウサイズに追従させ、クリップ領域も動的に更新されることを確認可能にする。
+5. デモは `ClipShape` の全3バリアント（Rectangle, RoundedRectangle, RoundedRectangleIndividual）を表示可能 shall とする。
+6. デモは `cargo run --example clip_demo` または同等のコマンドで実行可能 shall とする。
 
 ## Out of Scope
 

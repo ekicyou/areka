@@ -44,12 +44,12 @@
 
 ### Req 5: DPI スケーリング対応
 
-| 項目                              | 状態               | 既存アセット                                                                                               |
-| --------------------------------- | ------------------ | ---------------------------------------------------------------------------------------------------------- |
-| DComp: `GlobalArrangement` スケール適用 | **Pattern Exists** | `visual_property_sync_system` で `scale_x/scale_y` を offset に適用（`visual_sync.rs:225-232`）            |
-| `Changed<GlobalArrangement>` 検知 | **Exists**         | `visual_property_sync_system` の `Or<(Changed<Arrangement>, Changed<GlobalArrangement>, Changed<Visual>)>` |
-| DComp: radius のスケーリング      | **Missing**        | 新規。offset スケーリングと同様のパターンで実装                                                            |
-| ULW: SetTransform による自動スケーリング | **Exists**     | `render_subtree` の `adjusted_transform` が DPI スケールを含む（`render.rs:163-171`）                       |
+| 項目                                     | 状態               | 既存アセット                                                                                               |
+| ---------------------------------------- | ------------------ | ---------------------------------------------------------------------------------------------------------- |
+| DComp: `GlobalArrangement` スケール適用  | **Pattern Exists** | `visual_property_sync_system` で `scale_x/scale_y` を offset に適用（`visual_sync.rs:225-232`）            |
+| `Changed<GlobalArrangement>` 検知        | **Exists**         | `visual_property_sync_system` の `Or<(Changed<Arrangement>, Changed<GlobalArrangement>, Changed<Visual>)>` |
+| DComp: radius のスケーリング             | **Missing**        | 新規。offset スケーリングと同様のパターンで実装                                                            |
+| ULW: SetTransform による自動スケーリング | **Exists**         | `render_subtree` の `adjusted_transform` が DPI スケールを含む（`render.rs:163-171`）                      |
 
 ### Req 6: COM API 拡張
 
@@ -76,15 +76,26 @@
 
 ### Req 9: ULW モード — D2D 描画パイプラインでのクリップ適用
 
-| 項目                                  | 状態               | 既存アセット                                                                                      |
-| ------------------------------------- | ------------------ | ------------------------------------------------------------------------------------------------- |
-| `render_subtree` へのクリップ追加     | **Missing**        | 新規。`render_subtree`（`render.rs:110-210`）に clip 分岐を追加                                   |
-| `PushAxisAlignedClip` (Rectangle)     | **Exists**         | D2D command type が `com/d2d/command_types.rs:487` に実装済み                                     |
-| `PushLayer` (角丸共通)                | **Exists**         | D2D command type が `com/d2d/command_types.rs:503` に実装済み                                     |
-| `ID2D1RoundedRectangleGeometry` 作成  | **Missing**        | `ID2D1Factory::CreateRoundedRectangleGeometry` ラッパーが必要（RoundedRectangle 用）              |
-| `ID2D1PathGeometry` (各角個別)        | **Exists**         | `D2D1FactoryExt::create_path_geometry` が `com/d2d/mod.rs:22` に実装済み（RoundedRectangleIndividual 用）|
-| サブツリークリッピング                | **Missing**        | Push → 自Entity描画 → 子再帰 → Pop の構造に `render_subtree` を変更                              |
-| `PopAxisAlignedClip` / `PopLayer`     | **Exists**         | `com/d2d/command_types.rs` に `PopAxisAlignedClip` / `PopLayer` が実装済み                        |
+| 項目                                 | 状態        | 既存アセット                                                                                              |
+| ------------------------------------ | ----------- | --------------------------------------------------------------------------------------------------------- |
+| `render_subtree` へのクリップ追加    | **Missing** | 新規。`render_subtree`（`render.rs:110-210`）に clip 分岐を追加                                           |
+| `PushAxisAlignedClip` (Rectangle)    | **Exists**  | D2D command type が `com/d2d/command_types.rs:487` に実装済み                                             |
+| `PushLayer` (角丸共通)               | **Exists**  | D2D command type が `com/d2d/command_types.rs:503` に実装済み                                             |
+| `ID2D1RoundedRectangleGeometry` 作成 | **Missing** | `ID2D1Factory::CreateRoundedRectangleGeometry` ラッパーが必要（RoundedRectangle 用）                      |
+| `ID2D1PathGeometry` (各角個別)       | **Exists**  | `D2D1FactoryExt::create_path_geometry` が `com/d2d/mod.rs:22` に実装済み（RoundedRectangleIndividual 用） |
+| サブツリークリッピング               | **Missing** | Push → 自Entity描画 → 子再帰 → Pop の構造に `render_subtree` を変更                                       |
+| `PopAxisAlignedClip` / `PopLayer`    | **Exists**  | `com/d2d/command_types.rs` に `PopAxisAlignedClip` / `PopLayer` が実装済み                                |
+
+### Req 10: クリッピング検証デモ
+
+| 項目                            | 状態               | 既存アセット                                                                               |
+| ------------------------------- | ------------------ | ------------------------------------------------------------------------------------------ |
+| デュアルモードデモプログラム    | **Missing**        | 新規 example ファイル。`multi_backend_demo.rs` をテンプレートに使用可能                     |
+| ULW/DComp 2ウィンドウ同時表示   | **Pattern Exists** | `multi_backend_demo.rs` が同パターンを実装済み（UlwDemoWindow / DCompDemoWindow マーカー） |
+| 同一レイアウト構造              | **Pattern Exists** | `ulw_twin_demo.rs:create_simple_window` が同レイアウト複製パターンを実装済み               |
+| ウィンドウサイズ追従レイアウト  | **Pattern Exists** | flex grow を使った可変サイズレイアウトが既存デモに多数存在                                  |
+| クリップ効果の視覚化            | **Missing**        | 新規。はみ出す子要素 + 親に clip 設定のレイアウトを構築                                     |
+| 3バリアントの全表示             | **Missing**        | 新規。Rectangle / RoundedRectangle / RoundedRectangleIndividual を異なる要素に適用         |
 
 ---
 
@@ -113,6 +124,7 @@
 
 **変更対象ファイル**:
 - `com/dcomp.rs` — COM API ラッパー追加（`create_rectangle_clip`, `set_clip`）
+- `com/d2d/mod.rs` — D2D1FactoryExt に `create_rounded_rectangle_geometry` ラッパー追加（ULW 角丸用）
 - `ecs/graphics/clip.rs` — **新規**: `ClipShape` enum 定義
 - `ecs/graphics/visual.rs` — `Visual` に `clip: Option<ClipShape>` フィールド追加
 - `ecs/graphics/mod.rs` — `clip` モジュール追加、`pub use`
@@ -120,6 +132,7 @@
 - `ecs/graphics/systems/mod.rs` — `clip_sync` モジュール追加
 - `ecs/graphics/compositor_systems/render.rs` — `render_subtree` にクリップ描画追加（ULW モード用）
 - `ecs/world/mod.rs` — Composition スケジュールに clip_sync_system 登録
+- `examples/clip_demo.rs` — **新規**: クリッピング検証デモ（ULW/DComp 2ウィンドウ、可変サイズレイアウト）
 
 **トレードオフ**:
 - ✅ 責務が明確に分離（clip = 独立モジュール）
