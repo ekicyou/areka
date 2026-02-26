@@ -273,17 +273,18 @@
 | DD6 | **TypewriterToken との関係**: 置換 vs 共存 vs From 変換                 | (a) CueCommand が TypewriterToken を完全置換, (b) 共存 + From 変換, (c) TypewriterToken を CueCommand に統合                 | Req 2, 後方互換 |
 | DD7 | **CueSheet 投入の API**: コンポーネント差し替え vs 関数呼び出し vs 両方 | (a) `commands.entity(e).insert(PendingCueSheet(sheet))`, (b) `dispatch_cue_sheet(world, sheet)`, (c) 両方                    | Req 4           |
 | DD8 | **dola 統合の粒度**: 最小限 vs DolaBridgeResource 完全統合              | (a) インターフェース定義のみ, (b) DolaBridgeResource と CueQueue の連携システム実装                                          | Req 6           |
+| DD9 | **タイミングモデル**: 相対時刻 vs 絶対時刻キーフレーム方式              | (a) Wait コマンドによる相対時刻（FIFO 逐次消費）, (b) Cue に start_time フィールドを付与し絶対時刻管理（並行実行可能）       | Req 1,2,5,6 全体 |
 
 ### Constraint（既存アーキテクチャ制約）
 
-| #   | 制約                                                                                           | 影響              |
-| --- | ---------------------------------------------------------------------------------------------- | ----------------- |
-| C1  | wintf Cargo.toml に dola 依存が未追加（`dola = { path = "../dola", optional = true }` が必要） | Req 6             |
-| C2  | DolaBridgeResource は balloon-system 設計書で定義済みだがコード未実装                          | Req 6             |
+| #   | 制約                                                                                                                                                                 | 影響              |
+| --- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------- |
+| C1  | wintf Cargo.toml に dola 依存が未追加（`dola = { path = "../dola", optional = true }` が必要）                                                                       | Req 6             |
+| C2  | DolaBridgeResource は balloon-system 設計書で定義済みだがコード未実装                                                                                                | Req 6             |
 | C3  | TypewriterToken / TypewriterTalk は typewriter 専用で、cue-system とは独立して存在し続ける（DD6 の決定に依存。DD6-a 採用時は CueCommand が完全置換し本制約は無効化） | Req 2（後方互換） |
-| C4  | on_add フック内で World にアクセスできる範囲が限定的（DeferredWorld の制約）                   | Req 4（配送設計） |
-| C5  | bevy_ecs 0.18 の Component derive は `Clone` を求めない（手動実装は可能だが derive が自然）    | Req 3             |
-| C6  | スケジュール実行順は Input → Update → ... が固定。CueQueue 消費は Update スケジュールが適切    | Req 5             |
+| C4  | on_add フック内で World にアクセスできる範囲が限定的（DeferredWorld の制約）                                                                                         | Req 4（配送設計） |
+| C5  | bevy_ecs 0.18 の Component derive は `Clone` を求めない（手動実装は可能だが derive が自然）                                                                          | Req 3             |
+| C6  | スケジュール実行順は Input → Update → ... が固定。CueQueue 消費は Update スケジュールが適切                                                                          | Req 5             |
 
 ---
 
@@ -413,4 +414,79 @@ cue-system の完成後、TypewriterToken / TypewriterTalk は以下のいずれ
 
 ---
 
-*分析完了。cue-system は TypewriterToken/TypewriterTalk の先行実装から多くのパターンを継承できるが、「差し替え→append」「Stage 2 変換→Stage 1 直接消費」「特定用途→汎用拡張」の3つの根本的な再設計が必要。工数 M（3〜7日）、リスク中。8つの設計判断（DD1〜DD8）を設計フェーズで解決する。*
+*分析完了。cue-system は TypewriterToken/TypewriterTalk の先行実装から多くのパターンを継承できるが、「差し替え→append」「Stage 2 変換→Stage 1 直接消費」「特定用途→汎用拡張」の3つの根本的な再設計が必要。工数 M（3〜7日）、リスク中。9つの設計判断（DD1〜DD9）を設計フェーズで解決する。*
+
+---
+
+## 7. セッション継続情報（2026-02-26 レビューセッション）
+
+### 実施済み作業
+
+| # | 作業内容 | コミット |
+|---|---------|----------|
+| 1 | 要件 v1.0 生成 | `28222f0` |
+| 2 | ギャップ分析 v1.0 生成 | `b4d0a67` |
+| 3 | レビュー自明修正（F1: C3 但し書き追加、F2: Req 4 AC2 実装詳細削除） | `1a8c85b` |
+
+### レビュー結果
+
+#### 自明な修正（完了）
+- **F1**: gap-analysis C3 に DD6 依存の但し書き追加
+- **F2**: requirements Req 4 AC2 から実装詳細「（演者レジストリまたは解決関数）」を削除
+
+#### 議題 T1/T3/T4 の統合結論（DD9 として追加）
+
+**決定事項**: **絶対時刻キーフレーム方式**を採用
+
+##### 設計方針
+
+```rust
+struct Cue {
+    performer: PerformerKey,
+    command: CueCommand,
+    start_time: f64,  // CueSheet 開始からの絶対秒数
+}
+```
+
+- CueSheet = 時系列イベントリスト（投入順 ≠ 実行順）
+- 並行実行: 複数 Cue に同じ start_time を設定
+- タイミング計算: pasta DSL のコンパイル時に相対時刻→絶対時刻変換
+- 消費プロトコル: 現在時刻 ≥ start_time のコマンドを時系列順に消費
+
+##### 解決される問題
+
+| 旧議題 | 問題 | 解決 |
+|--------|------|------|
+| **T1** | Instant モードの解除方法が不明 | 複数コマンドに同じ start_time を設定するだけ。Instant バリアント不要 |
+| **T3** | 消費速度変更の適用対象が曖昧 | start_time に倍率適用と明確 |
+| **T4** | dola subscribe は dola→ECS、ECS→dola の公開方法不明 | CueSheet の start_time = dola の時間軸で統一可能 |
+
+##### 影響を受ける要件（要書き換え）
+
+- **Req 1**: AC 追加「各 Cue が絶対時刻 start_time を保持」「投入順≠実行順」
+- **Req 2**: AC5 削除（Instant バリアント）、AC4 変更（WaitForInput のタイムアウト解釈）
+- **Req 4**: AC 追加「配送時に start_time でソート挿入」
+- **Req 5**: AC1 変更「先頭消費→時刻到達消費」、AC4 削除（即時モード）、AC5 変更「バッチ→同時刻並行」
+- **Req 6**: AC5 明確化（速度 = start_time 倍率）、AC7 変更（dola 連携の統一時間軸）
+
+#### 残議題
+
+**T2: 感情値キーの用語問題**
+- 現状: Req 2 AC7「スタイル変更バリアント（感情値キーを保持）」
+- 指摘: 基盤コマンドがバルーン固有の語彙「感情値」を使用
+- 論点: 横断的基盤にふさわしい汎用名（「スタイルキー」「モードキー」等）にすべきか？
+- 状況: 未着手（次セッションで議論）
+
+### 次セッションのタスク
+
+1. **T2 議題の解決** — 感情値キーの用語について開発者と確認
+2. **DD9 に基づく requirements.md 書き換え** — Req 1, 2, 4, 5, 6 を絶対時刻方式に転換
+3. **gap-analysis.md 更新** — DD9 影響による Missing/Adapt/Redesign 項目の再評価
+4. **設計フェーズ移行判断** — 全議題解決後、requirements 承認 → design 生成
+
+### 技術メモ
+
+- VecDeque 利用実績: `ecs/pointer/types.rs:210` で `VecDeque<PositionSample>` 確認済み
+- DolaBridgeResource: balloon-system 設計書で定義済み、コード未実装（C2 制約）
+- DolaRuntime API: `subscribe(var_name)` → 変数 ID、`update(time)` → UpdateResult（差分値）、絶対時刻ベースの時間軸
+- さくらスクリプト `\_q`: 「以降即時表示」だが絶対時刻方式では不要（同時刻指定で代替）
