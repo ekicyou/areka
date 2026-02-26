@@ -119,15 +119,15 @@ pub enum TimelineItem {
 | AC  | 技術要素                 | 既存アセット                        | ギャップ                                                  |
 | --- | ------------------------ | ----------------------------------- | --------------------------------------------------------- |
 | AC1 | CueSheet データ構造      | —                                   | **Missing**: `CueSheet` 構造体（Vec\<Cue\>、メタデータなし） |
-| AC2 | PerformerKey 識別子      | —                                   | **Missing**: `PerformerKey` 型定義（文字列 or enum）      |
+| AC2 | ActorKey 識別子          | —                                   | **Missing**: `ActorKey` 型定義（文字列 or enum）          |
 | AC3 | start_time 保持          | TypewriterTimeline が `show_at` 保持 | **Missing**: `Cue` 構造体に `start_time: f64` フィールド   |
 | AC4 | start_time 昇順保持      | —                                   | **Missing**: Vec\<Cue\> の安定ソートロジック               |
-| AC5 | 複数演者の混在記述       | —                                   | **Missing**: `Cue` 構造体（PerformerKey + CueCommand + start_time） |
+| AC5 | 複数演者の混在記述       | —                                   | **Missing**: `Cue` 構造体（ActorKey + CueCommand + start_time） |
 | AC6 | 同一 start_time 並行実行 | —                                   | ギャップなし（同時刻 Cue の順序保持で実現）                |
-| AC7 | 演者別フィルタリング API | —                                   | **Missing**: `filter_by_performer()` 等の API             |
+| AC7 | 演者別フィルタリング API | —                                   | **Missing**: `filter_by_actor()` 等の API                 |
 | AC8 | Clone, Debug derive      | TypewriterToken は Debug + Clone 済 | ギャップなし（derive マクロ付与のみ）                     |
 
-**評価**: CueSheet は完全新規のデータ構造。TypewriterTimeline が絶対時刻モデルの実証なので、設計パターンは確立済み。PerformerKey の型設計（String vs NewType vs Entity）が設計フェーズの論点。
+**評価**: CueSheet は完全新規のデータ構造。TypewriterTimeline が絶対時刻モデルの実証なので、設計パターンは確立済み。ActorKey の型設計（String vs NewType vs Entity）が設計フェーズの論点。
 
 ---
 
@@ -168,17 +168,17 @@ pub enum TimelineItem {
 
 ### Req 4: CueSheet 配送メカニズム（絶対時刻保持・マージ挿入配送）
 
-| AC  | 技術要素                           | 既存アセット                      | ギャップ                                                       |
+| AC  | 技術要素                       | 既存アセット                      | ギャップ                                                       |
 | --- | ---------------------------------- | --------------------------------- | -------------------------------------------------------------- |
-| AC1 | PerformerKey→CueQueue 分配         | —                                 | **Missing**: 配送関数 / 配送システム                           |
-| AC2 | 演者レジストリ / 解決関数          | —                                 | **Missing**: PerformerKey → Entity 解決メカニズム              |
+| AC1 | ActorKey→CueQueue 分配         | —                                 | **Missing**: 配送関数 / 配送システム                           |
+| AC2 | 演者レジストリ / 解決関数          | —                                 | **Missing**: ActorKey → Entity 解決メカニズム              |
 | AC3 | start_time 保持したまま配送        | —                                 | ギャップなし（Cue の start_time をそのまま TimedCue に移行）   |
 | AC4 | start_time 昇順マージ挿入          | —                                 | **Missing**: CueQueue への既存エントリとのマージロジック        |
 | AC5 | 全演者への配送                     | —                                 | **Missing**: `for cue in cuesheet { dispatch(...) }` ループ    |
-| AC6 | 未解決 PerformerKey のハンドリング | `tracing::warn!` パターン確立済み | ギャップなし（ログパターン流用）                               |
+| AC6 | 未解決 ActorKey のハンドリング | `tracing::warn!` パターン確立済み | ギャップなし（ログパターン流用）                               |
 | AC7 | 逐次投入（既存キューへの追加）     | TypewriterTalk は丸ごと差し替え   | **Redesign**: 追加投入モデルは CueQueue の append で自然に実現 |
 
-**評価**: DD9 により配送ロジックが変更 — 単純な append ではなく**start_time 順マージ挿入**が必要。PerformerKey の解決メカニズム（レジストリ方式 vs クエリ方式 vs マーカーコンポーネント方式）が設計フェーズの主要論点（DD2）。
+**評価**: DD9 により配送ロジックが変更 — 単純な append ではなく**start_time 順マージ挿入**が必要。ActorKey の解決メカニズム（レジストリ方式 vs クエリ方式 vs マーカーコンポーネント方式）が設計フェーズの主要論点（DD2）。
 
 ---
 
@@ -188,12 +188,12 @@ pub enum TimelineItem {
 | --- | -------------------- | ----------------------------------------------- | -------------------------------------------------------------------- |
 | AC1 | 時刻到達消費         | TypewriterTalk::update() で `elapsed >= show_at` 判定 | **Adapt**: `while queue.peek_next().start_time <= current_time` パターンを汎化 |
 | AC2 | 同一 start_time 一括消費 | —                                           | **Missing**: 同時刻コマンド完全消費ループ                             |
-| AC3 | 入力待ちブロッキング | —                                               | **Missing**: WaitForInput の消費ブロッキングセマンティクス [T5 議題]  |
+| AC3 | 入力待ちブロッキング | —                                               | **Missing**: WaitForInput の演者ごとブロッキングセマンティクス（Q5 確定）  |
 | AC4 | 経過時刻管理         | TypewriterTalk に `start_time + paused_elapsed` | **Missing**: CueQueue の経過時刻フィールド [T6 議題影響]              |
 | AC5 | 消費ステート管理     | `TypewriterState`（Playing/Paused/Completed）   | **Extend**: TypewriterState を汎用化 + WaitingForInput 状態追加      |
 | AC6 | 消費完了状態         | `TypewriterState::Completed`                    | **Adapt**: 既存パターンの流用                                        |
 
-**評価**: DD9 により消費プロトコルが **FIFO 先頭消費 → 時刻到達消費**に変更。TypewriterTalk::update() が時刻ベース判定の実証実装として存在。WaitForInput のブロッキングスコープ（演者ごと vs CueSheet 全体、T5 議題）と、経過時刻管理の主体（各 CueQueue vs ルート CueTimeline、T6 議題）が設計判断に影響。
+**評価**: DD9 により消費プロトコルが **FIFO 先頭消費 → 時刻到達消費**に変更。TypewriterTalk::update() が時刻ベース判定の実証実装として存在。WaitForInput のブロッキングスコープは演者ごとブロック確定（Q5）。経過時刻管理の主体（各 CueQueue vs ルート CueTimeline、T6 議題）が設計判断に影響。
 
 ---
 
@@ -286,15 +286,15 @@ pub enum TimelineItem {
 
 | #   | アイテム                                                     | 関連要件 | 複雑度                                |
 | --- | ------------------------------------------------------------ | -------- | ------------------------------------- |
-| M1  | `CueSheet` 構造体（Vec\<Cue\> + メタデータ）                 | Req 1    | 低（データ構造のみ）                  |
-| M2  | `Cue` 構造体（PerformerKey + CueCommand + **start_time**）    | Req 1    | 低                                    |
-| M3  | `PerformerKey` 型定義                                        | Req 1, 4 | 低〜中（型設計の判断が必要、DD1）     |
-| M4  | `CueCommand` enum（**6+バリアント** — Wait/Instant削除済み）  | Req 2    | 低（TypewriterToken の簡略化）        |
+| M1  | `CueSheet` 構造体（Vec\<Cue\>、メタデータなし）              | Req 1    | 低（データ構造のみ）                  |
+| M2  | `Cue` 構造体（ActorKey + CueCommand + **start_time**）        | Req 1    | 低                                    |
+| M3  | `ActorKey` 型定義                                            | Req 1, 4 | 低〜中（型設計の判断が必要、DD1）     |
+| M4  | `CueCommand` enum（**5バリアント** — Wait/Instant削除済み）  | Req 2    | 低（TypewriterToken の簡略化）        |
 | M5  | `TimedCue` 構造体（start_time + CueCommand）                 | Req 3    | 低                                    |
 | M6  | `CueQueue` コンポーネント（時刻順キュー + API）              | Req 3    | 低〜中（データ構造選択が影響）        |
-| M7  | 配送関数 / 配送システム（`dispatch_cue_sheet`）              | Req 4    | 中（PerformerKey 解決 + マージ挿入）  |
-| M8  | PerformerKey → Entity 解決メカニズム（レジストリ or クエリ） | Req 4    | 中（設計判断が必要、DD2）             |
-| M9  | WaitForInput のブロッキングセマンティクス                    | Req 5    | 中（外部入力との連携設計、T5 議題）   |
+| M7  | 配送関数 / 配送システム（`dispatch_cue_sheet`）              | Req 4    | 中（ActorKey 解決 + マージ挿入）      |
+| M8  | ActorKey → Entity 解決メカニズム（レジストリ or クエリ）     | Req 4    | 中（設計判断が必要、DD2）             |
+| M9  | WaitForInput の演者ごとブロッキングセマンティクス            | Req 5    | 中（外部入力との連携設計、Q5 確定）   |
 | M10 | 同一 start_time 一括消費ロジック                             | Req 5    | 低                                    |
 | M11 | 時刻到達消費プロトコル（`pop_ready`）                        | Req 5    | 低〜中（TypewriterTalk パターン汎化） |
 | M12 | 消費ステート enum（CueQueueState + WaitingForInput）         | Req 5    | 低（TypewriterState の拡張）          |
@@ -582,7 +582,7 @@ struct CueQueue {
    - 消費者（balloon, animation）の使い勝手とコンパイル時安全性のバランスを評価
    - 影響範囲: Req 7 全体、後続消費者の実装パターン
 
-2. **DD1/DD2（PerformerKey + 解決メカニズム）** ⭐⭐
+2. **DD1/DD2（ActorKey + 解決メカニズム）** ⭐⭐
    - CueSheet 配送の具体的な実現方式
    - 推奨: DD1-b (NewType), DD2-a (HashMap レジストリ) で開始
    - ECS World へのアクセス方法が影響する
@@ -596,10 +596,10 @@ struct CueQueue {
 
 #### 優先度 Middle（設計整合性・将来拡張）
 
-4. **T5 議題解決: WaitForInput のブロッキングスコープ** ⭐
-   - 演者ごとブロック vs CueSheet 全体ブロック vs 指定スコープブロック
-   - 推奨: 演者ごとブロック（エンティティ独立の原則に合致）
-   - ただし T6（タイムライン管理主体）の決定に依存
+4. **✅ Q5 確定: WaitForInput のブロッキングスコープ = 演者ごとブロック**
+   - 各 Cue が ActorKey を明示的に保持するため、WaitForInput は該当演者の CueQueue のみブロック
+   - 他の演者のタイムラインは独立して進行
+   - ECS の「エンティティ独立の原則」に合致
    - 影響範囲: Req 5 AC3
 
 5. **T6 議題解決: CueSheet タイムライン管理の主体** ⭐
