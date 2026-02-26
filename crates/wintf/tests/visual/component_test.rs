@@ -1,6 +1,6 @@
 use bevy_ecs::prelude::*;
-use wintf::ecs::Visual;
 use wintf::ecs::PointF;
+use wintf::ecs::Visual;
 use wintf::ecs::visual_resource_management_system;
 use wintf::ecs::world::FrameCount;
 use wintf::ecs::{GraphicsCore, VisualGraphics};
