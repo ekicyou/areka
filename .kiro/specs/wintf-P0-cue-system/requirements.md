@@ -175,7 +175,7 @@ cue-system は**舞台演出のキューシート**をメタファーとする�
 2. **The** Cue System **shall** 基盤コマンドにテキスト表示バリアント（表示対象文字列を保持）を含める
 3. **The** Cue System **shall** 基盤コマンドにユーザー入力待ちバリアント（タイムアウトを任意で保持）を含める
 4. **The** Cue System **shall** 基盤コマンドにコンテンツクリアバリアントを含める
-5. **The** Cue System **shall** 基盤コマンドにスタイル変更バリアント（スタイルキーを保持）を含める [T2: 要確認 — 「感情値キー」「スタイルキー」「モードキー」等の用語選定が未決定]
+5. **The** Cue System **shall** 基盤コマンドに演技発現バリアント（演技キーを保持。Emote { key: String }）を含める
 6. **The** Cue System **shall** 基盤コマンドに消費者固有コマンドを格納するための拡張バリアントを含める
 7. **The** Cue System **shall** 各コマンドバリアントのパラメータに適切な Rust 型を付与する（文字列パラメータへの依存を最小化）
 8. **The** Cue System **shall** 基盤コマンド型に Clone, Debug を derive する

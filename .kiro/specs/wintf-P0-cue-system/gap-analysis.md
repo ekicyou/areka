@@ -135,16 +135,16 @@ pub enum TimelineItem {
 
 | AC   | 技術要素                   | 既存アセット                     | ギャップ                                                        |
 | ---- | -------------------------- | -------------------------------- | --------------------------------------------------------------- |
-| AC1  | 基盤コマンド enum          | `TypewriterToken`（3バリアント） | **Extend**: 3→6+ バリアントへの拡張（Wait/Instant **削除済み**） |
+| AC1  | 基盤コマンド enum          | `TypewriterToken`（3バリアント） | **Extend**: 3→5 バリアントへの拡張（Wait/Instant **削除済み**） |
 | AC2  | テキスト表示バリアント     | `TypewriterToken::Text(String)`  | ギャップなし（直接対応、型も同一）                              |
 | AC3  | ユーザー入力待ちバリアント | —                                | **Missing**: `WaitForInput { timeout: Option<f64> }` バリアント |
 | AC4  | コンテンツクリアバリアント | —                                | **Missing**: `Clear` バリアント                                 |
-| AC5  | スタイル変更バリアント     | —                                | **Missing**: `StyleChange { key: String }` バリアント [T2 議題] |
+| AC5  | 演技発現バリアント         | —                                | **Missing**: `Emote { key: String }` バリアント（演技キー保持） |
 | AC6  | 拡張バリアント             | `TypewriterToken::FireEvent`     | **Redesign**: FireEvent を汎用拡張機構に再設計                  |
 | AC7  | 型安全パラメータ           | TypewriterToken で実績あり       | ギャップなし（Rust enum の自然な型付け）                        |
 | AC8  | Clone, Debug derive        | TypewriterToken は Debug + Clone | ギャップなし                                                    |
 
-**評価**: DD9 により Wait バリアント **削除**（タイミングは start_time 差分で表現）、Instant バリアント **削除**（同一 start_time で並行実行）。6+バリアントに整理された CueCommand enum を新規定義。TypewriterToken との後方互換は `From` トレイト変換で対応可能。
+**評価**: DD9 により Wait バリアント **削除**（タイミングは start_time 差分で表現）、Instant バリアント **削除**（同一 start_time で並行実行）。5バリアント（Text, WaitForInput, Clear, Emote, Extension）+ 将来拡張余地で「5+」表記。TypewriterToken との後方互換は `From` トレイト変換で対応可能。
 
 ---
 
