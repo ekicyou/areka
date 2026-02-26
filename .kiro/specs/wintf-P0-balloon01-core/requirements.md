@@ -3,32 +3,36 @@
 | 項目               | 内容                                 |
 | ------------------ | ------------------------------------ |
 | **Document Title** | wintf バルーンコア 子仕様 要件定義書 |
-| **Version**        | 1.0                                  |
+| **Version**        | 2.0                                  |
 | **Date**           | 2026-02-26                           |
 | **Parent Spec**    | wintf-P0-balloon-system              |
 | **Priority**       | P0 (MVP必須)                         |
 | **Spec Type**      | 子仕様（Tier 1 基盤レイヤー）        |
-| **Status**         | 🚧 Draft - v1.0 初版                  |
+| **Status**         | 🚧 Draft - v2.0 責務分離リファクタ    |
 
 ---
 
 ## Introduction
 
-本仕様書は `wintf-P0-balloon-system`（バルーンシステム親仕様）の子仕様であり、バルーンウィンドウの**生成・フレーム描画基盤・配置制御・表示制御**を担う Tier 1 基盤レイヤーの要件を定義する。
+本仕様書は `wintf-P0-balloon-system`（バルーンシステム親仕様）の子仕様であり、バルーン**描画ウィジェット**の**エンティティ階層構築・フレーム描画基盤・表示制御**を担う Tier 1 基盤レイヤーの要件を定義する。
+
+> **設計原則**: バルーンはあくまで**描画コンポーネント（ウィジェット）**であり、ウィンドウ管理や配置制御の責務を持たない。バルーンをどのウィンドウに配置するか、どう動かすかは外部システムの責務である。キャラクターとバルーンは同一ウィンドウに配置される可能性も、別ウィンドウに配置される可能性もあり、その協調制御は外部が行う。
 
 ### スコープ
 
 親仕様の以下の要件・アーキテクチャ要件を本子仕様でカバーする:
 
-| 親要件 | 内容                           | 描画責務 |
-| ------ | ------------------------------ | -------- |
-| R1     | バルーンウィンドウ生成         | —        |
-| R2     | フレーム描画                   | DR-1     |
-| R3     | 配置制御                       | —        |
-| R4     | 表示制御                       | —        |
-| AR-1   | 複合ウィジェット構造           | —        |
-| AR-2   | 描画責務の分離（基盤定義）     | DR-1     |
-| AR-3   | 描画責務間の独立性（基盤保証） | —        |
+| 親要件 | 内容                           | 描画責務 | 本仕様での対応                           |
+| ------ | ------------------------------ | -------- | ---------------------------------------- |
+| R1     | バルーンウィジェット生成       | —        | Req 1, 2                                 |
+| R2     | フレーム描画                   | DR-1     | Req 3, 4                                 |
+| ~~R3~~ | ~~配置制御~~                   | —        | **スコープ外**: 外部システムの責務に移管 |
+| R4     | 表示制御                       | —        | Req 5                                    |
+| AR-1   | 複合ウィジェット構造           | —        | Req 1                                    |
+| AR-2   | 描画責務の分離（基盤定義）     | DR-1     | Req 4                                    |
+| AR-3   | 描画責務間の独立性（基盤保証） | —        | Req 7                                    |
+
+> **親仕様 R3（配置制御）について**: 本子仕様では、バルーンの配置・追従・デスクトップ境界反転をスコープ外とする。これらはバルーンウィジェットの描画責務ではなく、外部の協調制御システムの責務である。親仕様 R3 は別途見直しが必要。
 
 ### 依存関係
 
@@ -39,9 +43,9 @@
 
 - `on_add` フック内で `DeferredWorld::commands()` は使用可能（`on_window_add` 実証済み）
 - BalloonContentArea は BalloonFrame の子（`ChildOf(balloon_frame)`）、Balloon の直接の子ではない
-- BalloonAnchor は `anchor: Entity` フィールド方式（Relation API 不採用）
 - ULW / DComp 両描画モード対応が必要
 - Balloon はルートエンティティであり Visual コンポーネントを持つ。自前のサーフェスは透明で、コマンドリストは作らず、実際の描画は子エンティティに委譲する
+- Balloon は純粋な描画ウィジェットであり、ウィンドウ管理・配置制御・キャラクターとの紐づけの責務を持たない
 
 > **詳細な引継ぎコンテキスト**: [inherited-context.md](./inherited-context.md) を参照
 
@@ -67,19 +71,20 @@
 
 ---
 
-### Requirement 2: バルーンウィンドウ生成
+### Requirement 2: バルーンウィジェットの構成
 
-**Objective:** 開発者として、キャラクターエンティティに紐付いたバルーンウィンドウを生成・管理したい。それによりキャラクターの発言表示の基盤を確立できる。
+**Objective:** 開発者として、バルーンを独立した描画ウィジェットとして spawn できるようにしたい。それにより外部システムがバルーンの配置・協調制御を自由に構成できる基盤を確立できる。
 
 **親要件トレース**: R1（1.1〜1.5）
 
+**設計方針**: Balloon コンポーネントはキャラクターへの参照や配置ロジックを持たない。バルーンは純粋な描画ウィジェットであり、どのウィンドウに配置するか、どう動かすかは外部からの指令による。
+
 #### Acceptance Criteria
 
-1. **The** Balloon Core **shall** `Balloon` コンポーネントの `anchor` フィールドにより、キャラクターエンティティとの紐付けを保持する
-2. **The** Balloon Core **shall** 複数のキャラクターそれぞれに独立したバルーンウィンドウを生成できる（1キャラクター：Nバルーン対応）
-3. **When** `Balloon` コンポーネントが追加された時, **the** Balloon Core **shall** 透過ウィンドウ（`WS_EX_LAYERED | WS_EX_TOOLWINDOW | WS_EX_TOPMOST`）として Win32 ウィンドウを生成する
-4. **The** Balloon Core **shall** バルーンウィンドウを bevy_ecs エンティティとして管理し、HWND と Entity の双方向マッピングを既存の `Window` システムに準拠して維持する
-5. **When** バルーンエンティティが despawn された時, **the** Balloon Core **shall** 関連する Win32 ウィンドウリソースおよび子エンティティを適切に解放する
+1. **The** Balloon Core **shall** `Balloon` コンポーネントを spawn するだけで、描画可能なバルーンウィジェットを生成できる
+2. **The** Balloon Core **shall** 複数のバルーンエンティティを独立して生成できる
+3. **The** Balloon Core **shall** バルーンエンティティを bevy_ecs エンティティとして管理する
+4. **When** バルーンエンティティが despawn された時, **the** Balloon Core **shall** 子エンティティを適切に解放する
 
 ---
 
@@ -93,7 +98,7 @@
 
 1. **The** Balloon Core **shall** `BalloonSkinDef` コンポーネントを通じて、バルーンの背景定義（単色 or 画像）を受け取るインターフェースを提供する
 2. **The** Balloon Core **shall** `BalloonSkinDef` コンポーネントを通じて、枠線パラメータ（色・幅・角丸半径）を受け取るインターフェースを提供する
-3. **The** Balloon Core **shall** `BalloonSkinDef` コンポーネントを通じて、しっぽ定義（方向・サイズ・オフセット）を受け取るインターフェースを提供する
+3. **The** Balloon Core **shall** `BalloonSkinDef` コンポーネントを通じて、しっぽ定義（角度・サイズ・オフセット）を受け取るインターフェースを提供する
 4. **The** Balloon Core **shall** `BalloonSkinDef` コンポーネントを通じて、コンテンツ領域のパディング定義を受け取るインターフェースを提供する
 5. **If** スキン定義のパラメータが不正な場合, **the** Balloon Core **shall** デフォルトスキン（単色白背景・角丸なし）にフォールバックする
 
@@ -117,53 +122,33 @@
 
 ---
 
-### Requirement 5: バルーン配置制御
+### Requirement 5: バルーン表示制御
 
-**Objective:** 開発者として、バルーンをキャラクターウィンドウの近傍に自動配置し、キャラクターの移動に追従させたい。それによりどのキャラクターの発言かが視覚的に明確になる。
-
-**親要件トレース**: R3（3.1〜3.5）
-
-#### Acceptance Criteria
-
-1. **The** Balloon Core **shall** `BalloonPlacement` により配置方向（Auto/Right/Left/Above/Below）を指定できる
-2. **The** Balloon Core **shall** `Balloon.anchor` が参照するキャラクターウィンドウの `WindowPos` に基づき、バルーンの位置を自動算出する
-3. **When** キャラクターウィンドウの `WindowPos` が変更された時, **the** Balloon Core **shall** `placement_system` によりバルーンの位置を追従させる
-4. **When** 算出されたバルーン位置がデスクトップ領域外に出る場合, **the** Balloon Core **shall** 配置方向を自動反転してデスクトップ内に収まるよう調整する
-5. **The** Balloon Core **shall** `Balloon.offset` によりキャラクターとバルーン間のオフセット距離を設定できる
-
----
-
-### Requirement 6: バルーン表示制御
-
-**Objective:** 開発者として、バルーンの表示状態（表示/非表示/サイズ）を制御したい。それにより会話の開始・終了に応じた表示管理ができる。
+**Objective:** 開発者として、バルーンの表示状態（表示/非表示）を制御したい。それにより外部システムが会話の開始・終了に応じた表示管理を行える。
 
 **親要件トレース**: R4（4.1〜4.4）
 
 #### Acceptance Criteria
 
 1. **The** Balloon Core **shall** バルーンの表示/非表示を `Visual.is_visible` を通じて制御できる
-2. **When** バルーンが表示された時, **the** Balloon Core **shall** バルーンウィンドウをキャラクターウィンドウの前面（`WindowPos(TopMost)`）に表示する
-3. **When** バルーンが非表示にされた時, **the** Balloon Core **shall** Win32 ウィンドウを非表示にしつつ ECS エンティティとその子階層は保持する
-4. **The** Balloon Core **shall** バルーンウィンドウのサイズを `WindowPos` を通じて設定できる
+2. **When** バルーンが非表示にされた時, **the** Balloon Core **shall** ECS エンティティとその子階層は保持する
 
 ---
 
-### Requirement 7: エラーハンドリングと堅牢性
+### Requirement 6: エラーハンドリングと堅牢性
 
-**Objective:** 開発者として、バルーン生成・配置時のエラーが適切にハンドリングされ、システム全体の安定性が維持されるようにしたい。それにより不正な入力や状態変化に対しても予測可能な挙動を保証できる。
+**Objective:** 開発者として、バルーン生成時のエラーが適切にハンドリングされ、システム全体の安定性が維持されるようにしたい。それにより不正な入力や状態変化に対しても予測可能な挙動を保証できる。
 
 **親要件トレース**: inherited-context.md エラーハンドリング戦略
 
 #### Acceptance Criteria
 
-1. **If** `Balloon.anchor` が無効なエンティティを参照している場合, **the** Balloon Core **shall** バルーンを非表示状態にする（パニックしない）
-2. **If** `Balloon.anchor` が参照するエンティティに `WindowPos` が存在しない場合, **the** Balloon Core **shall** 配置計算をスキップし、前回の位置を維持する
-3. **If** `BalloonSkinDef` が `BalloonFrame` に付与されていない場合, **the** Balloon Core **shall** デフォルトスキンを適用してフレームを描画する
-4. **If** Win32 ウィンドウの生成に失敗した場合, **the** Balloon Core **shall** エラーを `tracing::error!` でログ出力し、エンティティをクリーンアップする
+1. **If** `BalloonSkinDef` が `BalloonFrame` に付与されていない場合, **the** Balloon Core **shall** デフォルトスキンを適用してフレームを描画する
+2. **If** スキン定義のパラメータが不正な場合, **the** Balloon Core **shall** `tracing::warn!` でログ出力し、デフォルトスキンにフォールバックする
 
 ---
 
-### Requirement 8: モジュール配置と拡張性
+### Requirement 7: モジュール配置と拡張性
 
 **Objective:** 開発者として、バルーンコアのコードが既存の wintf アーキテクチャに適合した場所に配置され、後続子仕様の拡張が容易であるようにしたい。それにより保守性の高いモジュール構造を確立できる。
 
@@ -173,6 +158,5 @@
 
 1. **The** Balloon Core **shall** `ecs/widget/balloon/mod.rs` に `Balloon` コンポーネントと `on_add` フックを配置する
 2. **The** Balloon Core **shall** `ecs/widget/balloon/frame.rs` に `BalloonFrame` と `BalloonSkinDef` コンポーネントを配置する
-3. **The** Balloon Core **shall** `ecs/widget/balloon/placement.rs` に `placement_system` を配置する
-4. **The** Balloon Core **shall** 後続子仕様（balloon02〜balloon08）が `BalloonContentArea` の `ChildOf` 階層に新規エンティティを追加できる拡張ポイントを維持する（特別な拡張機構は不要、ECS の `ChildOf` パターンで十分）
-5. **The** Balloon Core **shall** 既存の wintf レイヤー構造（COM → ECS → Message Handling）の依存方向に違反しない
+3. **The** Balloon Core **shall** 後続子仕様（balloon02〜balloon08）が `BalloonContentArea` の `ChildOf` 階層に新規エンティティを追加できる拡張ポイントを維持する（特別な拡張機構は不要、ECS の `ChildOf` パターンで十分）
+4. **The** Balloon Core **shall** 既存の wintf レイヤー構造（COM → ECS → Message Handling）の依存方向に違反しない
