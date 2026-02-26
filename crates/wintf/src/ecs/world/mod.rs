@@ -268,15 +268,17 @@ impl EcsWorld {
             schedules.add_systems(RenderSurface, crate::ecs::graphics::render_surface);
 
             // Compositionスケジュール: DComp Visual階層同期 + D2D1合成描画
-            // visual_hierarchy_sync → visual_property_sync → composite_render
+            // visual_hierarchy_sync → visual_property_sync → clip_sync → composite_render
             schedules.add_systems(
                 Composition,
                 (
                     crate::ecs::graphics::visual_hierarchy_sync_system,
                     crate::ecs::graphics::visual_property_sync_system
                         .after(crate::ecs::graphics::visual_hierarchy_sync_system),
-                    crate::ecs::graphics::compositor_systems::composite_render_system
+                    crate::ecs::graphics::clip_sync_system
                         .after(crate::ecs::graphics::visual_property_sync_system),
+                    crate::ecs::graphics::compositor_systems::composite_render_system
+                        .after(crate::ecs::graphics::clip_sync_system),
                 ),
             );
 

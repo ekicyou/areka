@@ -27,6 +27,7 @@ fn test_visual_component_properties() {
         is_visible: false,
         opacity: 0.5,
         transform_origin: PointF { x: 10.0, y: 20.0 },
+        clip: None,
     };
 
     assert_eq!(visual.is_visible, false);

@@ -37,6 +37,7 @@ fn test_insert_visual_with_adds_custom_visual() {
         is_visible: false,
         opacity: 0.5,
         transform_origin: PointF { x: 100.0, y: 100.0 },
+        clip: None,
     };
 
     // insert_visual_with を呼び出し

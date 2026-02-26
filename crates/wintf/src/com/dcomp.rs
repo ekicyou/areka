@@ -37,6 +37,8 @@ pub trait DCompositionDeviceExt {
         transforms: &[Option<IDCompositionTransform3D>],
     ) -> Result<IDCompositionTransform3D>;
     fn create_rotate_transform_3d(&self) -> Result<IDCompositionRotateTransform3D>;
+    /// CreateRectangleClip
+    fn create_rectangle_clip(&self) -> Result<IDCompositionRectangleClip>;
 }
 
 impl DCompositionDeviceExt for IDCompositionDevice3 {
@@ -87,6 +89,11 @@ impl DCompositionDeviceExt for IDCompositionDevice3 {
     #[inline(always)]
     fn create_rotate_transform_3d(&self) -> Result<IDCompositionRotateTransform3D> {
         unsafe { self.CreateRotateTransform3D() }
+    }
+
+    #[inline(always)]
+    fn create_rectangle_clip(&self) -> Result<IDCompositionRectangleClip> {
+        unsafe { self.CreateRectangleClip() }
     }
 }
 
@@ -147,6 +154,10 @@ pub trait DCompositionVisualExt {
     fn set_effect<P0>(&self, effect: P0) -> Result<()>
     where
         P0: Param<IDCompositionEffect>;
+    /// SetClip — クリップ適用。None で解除。
+    fn set_clip_object(&self, clip: &IDCompositionClip) -> Result<()>;
+    /// SetClip(null) — クリップ解除。
+    fn clear_clip(&self) -> Result<()>;
 }
 
 impl DCompositionVisualExt for IDCompositionVisual3 {
@@ -206,6 +217,16 @@ impl DCompositionVisualExt for IDCompositionVisual3 {
         P0: Param<IDCompositionEffect>,
     {
         unsafe { self.SetEffect(effect) }
+    }
+
+    #[inline(always)]
+    fn set_clip_object(&self, clip: &IDCompositionClip) -> Result<()> {
+        unsafe { self.SetClip(clip) }
+    }
+
+    #[inline(always)]
+    fn clear_clip(&self) -> Result<()> {
+        unsafe { self.SetClip(None) }
     }
 }
 

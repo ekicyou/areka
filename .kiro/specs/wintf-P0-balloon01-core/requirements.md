@@ -38,9 +38,10 @@
 ### 設計制約（inherited-context.md より）
 
 - `on_add` フック内で `DeferredWorld::commands()` は使用可能（`on_window_add` 実証済み）
-- BalloonContentArea は BalloonFrame の子（`ChildOf(balloon_frame)`）、BalloonWindow の直接の子ではない
+- BalloonContentArea は BalloonFrame の子（`ChildOf(balloon_frame)`）、Balloon の直接の子ではない
 - BalloonAnchor は `anchor: Entity` フィールド方式（Relation API 不採用）
 - ULW / DComp 両描画モード対応が必要
+- Balloon はルートエンティティであり Visual コンポーネントを持つ。自前のサーフェスは透明で、コマンドリストは作らず、実際の描画は子エンティティに委譲する
 
 > **詳細な引継ぎコンテキスト**: [inherited-context.md](./inherited-context.md) を参照
 
@@ -50,15 +51,17 @@
 
 ### Requirement 1: 複合ウィジェットエンティティ階層の構築
 
-**Objective:** 開発者として、BalloonWindow の spawn 時に複合ウィジェットとしてのエンティティ階層が自動構築されるようにしたい。それにより各描画責務エンティティが正しい親子関係で配置され、後続子仕様が安定した基盤上に実装できる。
+**Objective:** 開発者として、Balloon の spawn 時に複合ウィジェットとしてのエンティティ階層が自動構築されるようにしたい。それにより各描画責務エンティティが正しい親子関係で配置され、後続子仕様が安定した基盤上に実装できる。
 
 **親要件トレース**: R1（1.5 ECS管理）、AR-1（複合ウィジェット構造）
 
+**設計方針**: `Balloon` はルート Visual ウィジェットとして透過サーフェスを持つが、自身の `GraphicsCommandList` は作成せず、全ての描画を子エンティティに委譲する。この委譲モデルにより既存ウィジェット（Rectangle, Label, BitmapSource等）の再利用と新規ウィジェットの独立開発が可能となる。
+
 #### Acceptance Criteria
 
-1. **When** `BalloonWindow` コンポーネントがエンティティに追加された時, **the** Balloon Core **shall** `on_add` フックにより `BalloonFrame` 子エンティティを `ChildOf(balloon_window)` として自動 spawn する
-2. **When** `BalloonWindow` コンポーネントがエンティティに追加された時, **the** Balloon Core **shall** `on_add` フックにより `BalloonContentArea` 子エンティティを `ChildOf(balloon_frame)` として自動 spawn する
-3. **The** Balloon Core **shall** エンティティ階層を `BalloonWindow → BalloonFrame → BalloonContentArea` の3層構造で構築する
+1. **When** `Balloon` コンポーネントがエンティティに追加された時, **the** Balloon Core **shall** `on_add` フックにより `BalloonFrame` 子エンティティを `ChildOf(balloon)` として自動 spawn する
+2. **When** `Balloon` コンポーネントがエンティティに追加された時, **the** Balloon Core **shall** `on_add` フックにより `BalloonContentArea` 子エンティティを `ChildOf(balloon_frame)` として自動 spawn する
+3. **The** Balloon Core **shall** エンティティ階層を `Balloon → BalloonFrame → BalloonContentArea` の3層構造で構築する
 4. **The** Balloon Core **shall** `on_add` フック内の子エンティティ spawn を `DeferredWorld::commands()` による遅延実行で行う（`on_window_add` パターン準拠）
 5. **The** Balloon Core **shall** 各子エンティティに `Visual` および `Arrangement` コンポーネントを自動挿入する
 
@@ -72,9 +75,9 @@
 
 #### Acceptance Criteria
 
-1. **The** Balloon Core **shall** `BalloonWindow` コンポーネントの `anchor` フィールドにより、キャラクターエンティティとの紐付けを保持する
+1. **The** Balloon Core **shall** `Balloon` コンポーネントの `anchor` フィールドにより、キャラクターエンティティとの紐付けを保持する
 2. **The** Balloon Core **shall** 複数のキャラクターそれぞれに独立したバルーンウィンドウを生成できる（1キャラクター：Nバルーン対応）
-3. **When** `BalloonWindow` コンポーネントが追加された時, **the** Balloon Core **shall** 透過ウィンドウ（`WS_EX_LAYERED | WS_EX_TOOLWINDOW | WS_EX_TOPMOST`）として Win32 ウィンドウを生成する
+3. **When** `Balloon` コンポーネントが追加された時, **the** Balloon Core **shall** 透過ウィンドウ（`WS_EX_LAYERED | WS_EX_TOOLWINDOW | WS_EX_TOPMOST`）として Win32 ウィンドウを生成する
 4. **The** Balloon Core **shall** バルーンウィンドウを bevy_ecs エンティティとして管理し、HWND と Entity の双方向マッピングを既存の `Window` システムに準拠して維持する
 5. **When** バルーンエンティティが despawn された時, **the** Balloon Core **shall** 関連する Win32 ウィンドウリソースおよび子エンティティを適切に解放する
 
@@ -123,10 +126,10 @@
 #### Acceptance Criteria
 
 1. **The** Balloon Core **shall** `BalloonPlacement` により配置方向（Auto/Right/Left/Above/Below）を指定できる
-2. **The** Balloon Core **shall** `BalloonWindow.anchor` が参照するキャラクターウィンドウの `WindowPos` に基づき、バルーンの位置を自動算出する
+2. **The** Balloon Core **shall** `Balloon.anchor` が参照するキャラクターウィンドウの `WindowPos` に基づき、バルーンの位置を自動算出する
 3. **When** キャラクターウィンドウの `WindowPos` が変更された時, **the** Balloon Core **shall** `placement_system` によりバルーンの位置を追従させる
 4. **When** 算出されたバルーン位置がデスクトップ領域外に出る場合, **the** Balloon Core **shall** 配置方向を自動反転してデスクトップ内に収まるよう調整する
-5. **The** Balloon Core **shall** `BalloonWindow.offset` によりキャラクターとバルーン間のオフセット距離を設定できる
+5. **The** Balloon Core **shall** `Balloon.offset` によりキャラクターとバルーン間のオフセット距離を設定できる
 
 ---
 
@@ -153,8 +156,8 @@
 
 #### Acceptance Criteria
 
-1. **If** `BalloonWindow.anchor` が無効なエンティティを参照している場合, **the** Balloon Core **shall** バルーンを非表示状態にする（パニックしない）
-2. **If** `BalloonWindow.anchor` が参照するエンティティに `WindowPos` が存在しない場合, **the** Balloon Core **shall** 配置計算をスキップし、前回の位置を維持する
+1. **If** `Balloon.anchor` が無効なエンティティを参照している場合, **the** Balloon Core **shall** バルーンを非表示状態にする（パニックしない）
+2. **If** `Balloon.anchor` が参照するエンティティに `WindowPos` が存在しない場合, **the** Balloon Core **shall** 配置計算をスキップし、前回の位置を維持する
 3. **If** `BalloonSkinDef` が `BalloonFrame` に付与されていない場合, **the** Balloon Core **shall** デフォルトスキンを適用してフレームを描画する
 4. **If** Win32 ウィンドウの生成に失敗した場合, **the** Balloon Core **shall** エラーを `tracing::error!` でログ出力し、エンティティをクリーンアップする
 
@@ -168,7 +171,7 @@
 
 #### Acceptance Criteria
 
-1. **The** Balloon Core **shall** `ecs/widget/balloon/mod.rs` に `BalloonWindow` コンポーネントと `on_add` フックを配置する
+1. **The** Balloon Core **shall** `ecs/widget/balloon/mod.rs` に `Balloon` コンポーネントと `on_add` フックを配置する
 2. **The** Balloon Core **shall** `ecs/widget/balloon/frame.rs` に `BalloonFrame` と `BalloonSkinDef` コンポーネントを配置する
 3. **The** Balloon Core **shall** `ecs/widget/balloon/placement.rs` に `placement_system` を配置する
 4. **The** Balloon Core **shall** 後続子仕様（balloon02〜balloon08）が `BalloonContentArea` の `ChildOf` 階層に新規エンティティを追加できる拡張ポイントを維持する（特別な拡張機構は不要、ECS の `ChildOf` パターンで十分）

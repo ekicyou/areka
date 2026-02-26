@@ -1,3 +1,4 @@
+mod clip;
 mod command_list;
 mod components;
 pub mod compositor;
@@ -8,6 +9,7 @@ mod systems;
 pub mod visual;
 pub mod visual_manager;
 
+pub use clip::*;
 pub use command_list::*;
 pub use components::*;
 pub use core::*;

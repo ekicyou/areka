@@ -8,6 +8,7 @@ use bevy_ecs::prelude::*;
 use bevy_ecs::world::DeferredWorld;
 use tracing::warn;
 
+use super::clip::ClipShape;
 use super::components::{SurfaceGraphics, SurfaceGraphicsDirty, VisualGraphics};
 use crate::ecs::window::CompositionMode;
 
@@ -27,6 +28,7 @@ pub struct Visual {
     pub is_visible: bool,
     pub opacity: f32,
     pub transform_origin: crate::ecs::PointF,
+    pub clip: Option<ClipShape>,
 }
 
 /// ChildOf チェーンを辿ってオーナー Window の CompositionMode を取得するヘルパー
@@ -124,6 +126,7 @@ impl Default for Visual {
             is_visible: true,
             opacity: 1.0,
             transform_origin: crate::ecs::PointF::default(),
+            clip: None,
         }
     }
 }
@@ -150,5 +153,10 @@ impl Visual {
     /// is_visible を設定する。
     pub fn set_visible(&mut self, visible: bool) {
         self.is_visible = visible;
+    }
+
+    /// クリップ形状を設定する。`None` でクリップ解除。
+    pub fn set_clip(&mut self, clip: Option<ClipShape>) {
+        self.clip = clip;
     }
 }

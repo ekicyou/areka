@@ -20,12 +20,25 @@ pub fn d2d_create_device(dxgi: &IDXGIDevice4) -> Result<ID2D1Device> {
 pub trait D2D1FactoryExt {
     /// CreatePathGeometry
     fn create_path_geometry(&self) -> Result<ID2D1PathGeometry>;
+    /// CreateRoundedRectangleGeometry
+    fn create_rounded_rectangle_geometry(
+        &self,
+        rounded_rect: &D2D1_ROUNDED_RECT,
+    ) -> Result<ID2D1RoundedRectangleGeometry>;
 }
 
 impl D2D1FactoryExt for ID2D1Factory {
     #[inline(always)]
     fn create_path_geometry(&self) -> Result<ID2D1PathGeometry> {
         unsafe { self.CreatePathGeometry() }
+    }
+
+    #[inline(always)]
+    fn create_rounded_rectangle_geometry(
+        &self,
+        rounded_rect: &D2D1_ROUNDED_RECT,
+    ) -> Result<ID2D1RoundedRectangleGeometry> {
+        unsafe { self.CreateRoundedRectangleGeometry(rounded_rect) }
     }
 }
 
