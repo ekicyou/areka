@@ -88,14 +88,14 @@
 
 ### Req 10: クリッピング検証デモ
 
-| 項目                            | 状態               | 既存アセット                                                                               |
-| ------------------------------- | ------------------ | ------------------------------------------------------------------------------------------ |
-| デュアルモードデモプログラム    | **Missing**        | 新規 example ファイル。`multi_backend_demo.rs` をテンプレートに使用可能                     |
-| ULW/DComp 2ウィンドウ同時表示   | **Pattern Exists** | `multi_backend_demo.rs` が同パターンを実装済み（UlwDemoWindow / DCompDemoWindow マーカー） |
-| 同一レイアウト構造              | **Pattern Exists** | `ulw_twin_demo.rs:create_simple_window` が同レイアウト複製パターンを実装済み               |
-| ウィンドウサイズ追従レイアウト  | **Pattern Exists** | flex grow を使った可変サイズレイアウトが既存デモに多数存在                                  |
-| クリップ効果の視覚化            | **Missing**        | 新規。はみ出す子要素 + 親に clip 設定のレイアウトを構築                                     |
-| 3バリアントの全表示             | **Missing**        | 新規。Rectangle / RoundedRectangle / RoundedRectangleIndividual を異なる要素に適用         |
+| 項目                           | 状態               | 既存アセット                                                                               |
+| ------------------------------ | ------------------ | ------------------------------------------------------------------------------------------ |
+| デュアルモードデモプログラム   | **Missing**        | 新規 example ファイル。`multi_backend_demo.rs` をテンプレートに使用可能                    |
+| ULW/DComp 2ウィンドウ同時表示  | **Pattern Exists** | `multi_backend_demo.rs` が同パターンを実装済み（UlwDemoWindow / DCompDemoWindow マーカー） |
+| 同一レイアウト構造             | **Pattern Exists** | `ulw_twin_demo.rs:create_simple_window` が同レイアウト複製パターンを実装済み               |
+| ウィンドウサイズ追従レイアウト | **Pattern Exists** | flex grow を使った可変サイズレイアウトが既存デモに多数存在                                 |
+| クリップ効果の視覚化           | **Missing**        | 新規。はみ出す子要素 + 親に clip 設定のレイアウトを構築                                    |
+| 3バリアントの全表示            | **Missing**        | 新規。Rectangle / RoundedRectangle / RoundedRectangleIndividual を異なる要素に適用         |
 
 ---
 

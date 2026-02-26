@@ -476,11 +476,72 @@ fn render_subtree(ctx, entity, query):
 - `RoundedRectangle`: `dc.GetFactory()` → `factory.CreateRoundedRectangleGeometry(&D2D1_ROUNDED_RECT { rect: (0,0,w,h), radiusX: radius, radiusY: radius })`
 - `RoundedRectangleIndividual`: `factory.create_path_geometry()` → `geo.Open()` で `ID2D1GeometrySink` を取得 → 各角に `AddArc` で個別半径の円弧を描画 → `Close()`
 
+**Push/Pop ペア保証: RAII ガード方式**
+
+Push/Pop のペア実行保証には RAII ガードを使用する（既存の `DcTargetGuard` と同じパターン）:
+
+```rust
+/// D2D クリップの RAII ガード。Drop 時に自動で Pop を実行。
+struct ClipGuard<'a> {
+    dc: &'a ID2D1DeviceContext,
+    clip_type: ClipType,
+}
+
+enum ClipType {
+    AxisAligned,  // PopAxisAlignedClip
+    Layer,        // PopLayer
+}
+
+impl<'a> ClipGuard<'a> {
+    /// クリップを Push し、RAII ガードを返す。
+    unsafe fn push(
+        dc: &'a ID2D1DeviceContext,
+        clip_shape: &ClipShape,
+        size: Size,
+    ) -> Result<Self> {
+        // Push 処理（省略）
+        Ok(Self { dc, clip_type })
+    }
+}
+
+impl Drop for ClipGuard<'_> {
+    fn drop(&mut self) {
+        unsafe {
+            match self.clip_type {
+                ClipType::AxisAligned => self.dc.PopAxisAlignedClip(),
+                ClipType::Layer => self.dc.PopLayer(),
+            }
+        }
+    }
+}
+```
+
+使用方法:
+```rust
+fn render_subtree(...) {
+    // ...
+    let _clip_guard = if let Some(clip_shape) = &visual.clip {
+        if arrangement.size.width > 0.0 && arrangement.size.height > 0.0 {
+            unsafe { ClipGuard::push(ctx.dc, clip_shape, arrangement.size).ok() }
+        } else {
+            None
+        }
+    } else {
+        None
+    };
+    
+    // draw と children（エラーでも _clip_guard の Drop が自動実行）
+    draw_with_opacity(...);
+    recurse_children(...);
+    // スコープ終了で _clip_guard が Drop → Pop が確実に実行される
+}
+```
+
 **Implementation Notes**
 - クエリに `&Arrangement` を追加（上記 Service Interface 参照）
 - サイズは `arrangement.size` から取得（DComp の clip_sync_system と同じソース）
-- Pop の種類（PopAxisAlignedClip vs PopLayer）は Push 時の ClipShape バリアントで決定
-- Push/Pop ペア保証の具体的メカニズムは実装時に RAII ガードまたはフラグ + 確実 Pop のいずれかを選択
+- ClipGuard は `render.rs` 内の private struct として定義（既存の `DcTargetGuard` と並列）
+- Push 失敗時は `Ok(None)` を返し、クリップなしで描画を継続（Graceful Degradation）
 
 ---
 
