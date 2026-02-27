@@ -801,7 +801,13 @@ impl CueQueue {
 
     // === 挿入 API ==
 
-    /// バリア応答の送信先 CueSheet エンティティを設定（dispatch 時から呼ばれる）
+    /// バリア応答の送信先 CueSheet エンティティを設定（dispatch 時に呼ばれる）
+    ///
+    /// # 単一アクティブ制約
+    /// 1つの CueQueue に対して同時にアクティブな CueSheet は高々 1 つ。
+    /// 2回目の dispatch で上書きされた場合、前の CueSheetTracker はバリア応答を
+    /// 受け取れなくなる。逐次投入（Req 4 AC7）は、前の CueSheet の結果を
+    /// await してから次を投入する Modal Dialog パターンで使用すること。
     pub fn set_cue_sheet(&mut self, entity: Entity) {
         self.cue_sheet_entity = Some(entity);
     }
@@ -1759,6 +1765,7 @@ classDiagram
 7. **PendingCueSheet エンティティ = CueSheet エンティティ**（dispatch 後に同一 Entity ID が CueSheetTracker を保持する）
 8. **同時アクティブバリアは最大 1 件**（バリアは逐次解決。BarrierState が Some の間は次のバリアに到達しない）
 9. **バリアライフサイクルは CueSheetTracker::update() が集中管理**（自動検知・タイムアウト・残スロット強制スキップ・解決判定すべてを update() が担う。消費システムは receive_barrier() で応答報告のみ）
+10. **1 CueQueue あたり同時アクティブ CueSheet は高々 1 つ**（`cue_sheet_entity` が単一値のため。逐次投入は前の CueSheet を await/cancel してから行う）
 
 ---
 
