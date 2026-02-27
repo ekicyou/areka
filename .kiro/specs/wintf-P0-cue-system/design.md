@@ -124,7 +124,7 @@ graph TB
 sequenceDiagram
     participant P as pasta DSL / areka
     participant D as dispatch()
-    participant R as ActorRegistry
+    participant R as EntityRegistry
     participant Q1 as CueQueue (Shell)
     participant Q2 as CueQueue (Balloon)
 
@@ -199,7 +199,7 @@ sequenceDiagram
 | 1.1-1.8 | CueSheet 構造化台本 | CueSheet, Cue, ActorKey | `CueSheet::new()`, `filter_by_actor()` | — |
 | 2.1-2.11 | CueCommand 8バリアント | CueCommand | enum pattern match | — |
 | 3.1-3.9 | CueQueue コンポーネント | CueQueue, TimedCue | `push_sorted()`, `pop_ready()`, `peek()` | 消費フロー |
-| 4.1-4.7 | CueSheet 配送 | dispatch(), ActorRegistry, CueTarget | `dispatch_cue_sheet_internal()` | 配送フロー |
+| 4.1-4.7 | CueSheet 配送 | dispatch(), EntityRegistry, CueTarget | `dispatch_cue_sheet_internal()` | 配送フロー |
 | 5.1-5.6 | 消費プロトコル | CueQueueState | `pop_ready(current_time)` | 消費フロー |
 | 6.1-6.4 | タイミング制御・dola統合 | CueQueue (playback_rate) | `#[cfg(feature = "dola")]` | — |
 | 7.1-7.5 | コマンド拡張機構 | CueCommand::Custom | DynamicValue | — |
@@ -225,8 +225,8 @@ sequenceDiagram
 | TimedCue | cue/data | 絶対時刻付きコマンド | Req 3 | CueCommand | Data |
 | CueQueue | cue/component | エンティティキュー | Req 3, 5 | TimedCue, CueQueueState | State, Service |
 | CueQueueState | cue/data | 消費状態 enum | Req 5 | — | Data |
-| dispatch() | cue/system | 配送システム | Req 4 | CueSheet, ActorRegistry, CueQueue | Service |
-| ActorRegistry | cue/resource | 演者ルーティング | Req 4 | ActorKey, CueTarget | Service |
+| dispatch() | cue/system | 配送システム | Req 4 | CueSheet, EntityRegistry, CueQueue | Service |
+| EntityRegistry | cue/resource | エンティティ統合レジストリ | Req 4 | EntityKey, ActorKey, CueTarget | Service |
 | CueSheetTracker | cue/component | 実行状態追跡 | Req 9 | CueQueue, CueSheetResult | State |
 | CueSheetResult | cue/data | 実行結果 | Req 9 | CueSystemError | Data |
 | CueSystemError | cue/data | 構造化エラー | Req 8, 9 | thiserror | Data |
@@ -462,7 +462,7 @@ impl CueCommand {
 
     /// コマンドのデフォルトルーティング先
     ///
-    /// dispatch 時に ActorRegistry で (ActorKey, CueTarget) → Entity を解決する際に使用。
+    /// dispatch 時に EntityRegistry で EntityKey::Actor(key, target) → Entity を解決する際に使用。
     /// Custom コマンドはプレフィックス規約で判定。
     pub fn default_target(&self) -> CueTarget {
         match self {
@@ -632,8 +632,8 @@ pub enum CueSystemError {
     EmptyChoiceBarrier { actor: String },
 
     /// (ActorKey, CueTarget) の解決に失敗（warn ログ用、配送は継続）
-    #[error("Actor '{key}' with target '{target:?}' not found in registry")]
-    ActorNotFound { key: String, target: CueTarget },
+    #[error("Entity not found in registry: {key:?}")]
+    EntityNotFound { key: EntityKey },
 
     /// CueQueue キャパシティ超過
     #[error("CueQueue capacity exceeded for actor '{actor}': limit={limit}, attempted={attempted}")]
@@ -1019,7 +1019,7 @@ pub struct PendingCueSheet {
 pub fn dispatch_pending_cue_sheets(
     mut pending: Query<(Entity, &PendingCueSheet)>,
     mut queues: Query<&mut CueQueue>,
-    registry: Res<ActorRegistry>,
+    registry: Res<EntityRegistry>,
     mut commands: Commands,
 ) {
     for (entity, pending) in pending.iter() {
@@ -1057,7 +1057,7 @@ pub struct CueSheetHandle {
 ///
 /// # Process
 /// 1. 各 Cue の CueCommand::default_target() でルーティング先を決定
-/// 2. (ActorKey, CueTarget) を ActorRegistry で Entity に解決
+/// 2. EntityKey::Actor(key, target) を EntityRegistry で Entity に解決
 /// 3. cue.start_time + sheet_start_time で世界絶対時刻を算出
 /// 4. Entity の CueQueue に push_sorted()
 ///
@@ -1065,23 +1065,23 @@ pub struct CueSheetHandle {
 /// ```text
 /// Cue { actor: "sakura", cmd: Text("hello") }
 ///   → default_target() = Balloon
-///   → registry.resolve("sakura", Balloon) → balloon_entity
+///   → registry.resolve(&EntityKey::Actor("sakura".into(), CueTarget::Balloon)) → balloon_entity
 ///   → balloon_entity.CueQueue.push_sorted(...)
 ///
 /// Cue { actor: "sakura", cmd: Emote { key: "smile" } }
 ///   → default_target() = Shell
-///   → registry.resolve("sakura", Shell) → sakura_shell_entity
+///   → registry.resolve(&EntityKey::Actor("sakura".into(), CueTarget::Shell)) → sakura_shell_entity
 ///   → sakura_shell_entity.CueQueue.push_sorted(...)
 /// ```
 ///
 /// # Error Handling
-/// - (ActorKey, CueTarget) 未解決: warn! ログ + スキップ（他は継続）
+/// - EntityKey 未解決: warn! ログ + スキップ（他は継続）
 /// - CueQueue キャパシティ超過: warn! ログ + 超過分スキップ
 /// - 空 CueSheet: no-op（エラーなし）
 fn dispatch_cue_sheet_internal(
     cue_sheet: &CueSheet,
     sheet_start_time: f64,
-    registry: &ActorRegistry,
+    registry: &EntityRegistry,
     queues: &mut Query<&mut CueQueue>,
 ) -> CueSheetHandle {
     // Implementation: see Tasks
@@ -1089,80 +1089,103 @@ fn dispatch_cue_sheet_internal(
 }
 ```
 
-#### ActorRegistry — DD2 決定: (ActorKey, CueTarget) → Entity ルーティングマップ
+#### EntityRegistry — DD2-c 決定: 統合エンティティレジストリ
 
 | Field | Detail |
 |-------|--------|
-| Intent | (ActorKey, CueTarget) ペアから Entity へのルーティングを提供する |
+| Intent | EntityKey から Entity への統合ルーティングを提供する単一レジストリ |
 | Requirements | 4.3, 4.6 |
 
-**設計判断 DD2**: HashMap\<(ActorKey, CueTarget), Entity\> ルーティングマップを採用。
+**設計判断 DD2-c**: 統合 `EntityRegistry` + `EntityKey` enum を採用。
 
 | 選択肢 | 評価 | 理由 |
 |---------|------|------|
 | (a) HashMap\<ActorKey, Entity\> | ❌ | 1演者 = 1エンティティの仮定。Shell/Balloon 分離不可 |
-| **(b) HashMap\<(ActorKey, CueTarget), Entity\>** | **✅ 採用** | O(1) 解決。演者×ターゲットの多対多ルーティング。バルーン共有対応 |
-| (c) Query\<(Entity, &ActorMarker)\> | ❌ | 毎フレームのクエリが不要（配送はイベント駆動） |
+| (b) HashMap\<(ActorKey, CueTarget), Entity\> | ❌ | 演者専用。Spot/Balloon 追加で別レジストリが乱立 |
+| **(c) HashMap\<EntityKey, Entity\>** | **✅ 採用** | O(1) 解決。EntityKey enum で型安全に名前空間を分離。P1 Spot/Balloon も同一レジストリで拡張可能 |
+| (d) Query\<(Entity, &ActorMarker)\> | ❌ | 毎フレームのクエリが不要（配送はイベント駆動） |
 
 **設計ポイント**:
+- `EntityKey` enum で演者(P0) / 立ち位置 / バルーン(P1) を型安全に統一
 - 1演者 = 複数の CueQueue 配信先（Shell + Balloon）
 - バルーン共有: 複数演者が同一 Balloon エンティティを共有可能
-- CueCommand::default_target() でコマンド種別から㏫ーティング先を自動決定
+- P1 では `EntityKey::Spot` / `EntityKey::Balloon` variant を追加するだけで拡張完結
 
 ```rust
 use bevy_ecs::prelude::*;
 use std::collections::HashMap;
 
-/// 演者ルーティングレジストリ — (ActorKey, CueTarget) から Entity への解決
+/// エンティティ統合ルーティングキー
 ///
-/// 1演者が複数の CueQueue 配信先を持つ。
-/// バルーン共有: 複数の演者が同一の Balloon エンティティを共有できる。
+/// 名前 → Entity の解決に使用する型安全な識別子。
+/// P0 では Actor variant のみ使用。P1 で Spot/Balloon を追加予定。
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum EntityKey {
+    /// 演者 × ルーティング先 (P0)
+    Actor(ActorKey, CueTarget),
+    /// 立ち位置名 (P1)
+    Spot(String),
+    /// バルーン名 (P1)
+    Balloon(String),
+}
+
+/// 統合エンティティレジストリ — EntityKey から Entity への解決
+///
+/// XxxRegistry が乱立しないよう単一 HashMap に統合したリソース。
+/// 演者(Actor)、立ち位置(Spot)、バルーン(Balloon) を一元管理する。
 ///
 /// ```ignore
 /// // セットアップ例: さくらとうにゅうがバルーンを共有
-/// registry.register("sakura", CueTarget::Shell, sakura_shell_entity);
-/// registry.register("sakura", CueTarget::Balloon, balloon_0_entity);
-/// registry.register("unyuu", CueTarget::Shell, unyuu_shell_entity);
-/// registry.register("unyuu", CueTarget::Balloon, balloon_0_entity); // 共有!
+/// registry.register_actor("sakura", CueTarget::Shell, sakura_shell);
+/// registry.register_actor("sakura", CueTarget::Balloon, balloon_0);
+/// registry.register_actor("unyuu", CueTarget::Shell, unyuu_shell);
+/// registry.register_actor("unyuu", CueTarget::Balloon, balloon_0); // 共有!
 /// ```
 #[derive(Resource, Debug, Default)]
-pub struct ActorRegistry {
-    routes: HashMap<(ActorKey, CueTarget), Entity>,
+pub struct EntityRegistry {
+    map: HashMap<EntityKey, Entity>,
 }
 
-impl ActorRegistry {
-    /// 演者のルーティングを登録
-    pub fn register(
+impl EntityRegistry {
+    /// エンティティを登録
+    pub fn register(&mut self, key: EntityKey, entity: Entity) {
+        self.map.insert(key, entity);
+    }
+
+    /// エンティティの登録を解除
+    pub fn unregister(&mut self, key: &EntityKey) -> Option<Entity> {
+        self.map.remove(key)
+    }
+
+    /// EntityKey から Entity を解決
+    pub fn resolve(&self, key: &EntityKey) -> Option<Entity> {
+        self.map.get(key).copied()
+    }
+
+    /// 演者のルーティングを便利登録 (P0 向けショートハンド)
+    pub fn register_actor(
         &mut self,
         key: impl Into<ActorKey>,
         target: CueTarget,
         entity: Entity,
     ) {
-        self.routes.insert((key.into(), target), entity);
+        self.map.insert(EntityKey::Actor(key.into(), target), entity);
     }
 
-    /// 演者のルーティングを解除
-    pub fn unregister(&mut self, key: &ActorKey, target: CueTarget) -> Option<Entity> {
-        self.routes.remove(&(key.clone(), target))
-    }
-
-    /// (ActorKey, CueTarget) から Entity を解決
-    pub fn resolve(&self, key: &ActorKey, target: CueTarget) -> Option<Entity> {
-        self.routes.get(&(key.clone(), target)).copied()
+    /// 演者ルーティングを便利解決 (P0 向けショートハンド)
+    pub fn resolve_actor(&self, key: &ActorKey, target: CueTarget) -> Option<Entity> {
+        self.map.get(&EntityKey::Actor(key.clone(), target)).copied()
     }
 
     /// 指定演者の全ルーティングを取得
     pub fn routes_for_actor(&self, key: &ActorKey) -> Vec<(CueTarget, Entity)> {
-        self.routes
+        self.map
             .iter()
-            .filter(|((k, _), _)| k == key)
-            .map(|((_, t), e)| (*t, *e))
+            .filter_map(|(k, e)| match k {
+                EntityKey::Actor(k, t) if k == key => Some((*t, *e)),
+                _ => None,
+            })
             .collect()
-    }
-
-    /// 登録済みの全ルーティングを取得
-    pub fn all_routes(&self) -> &HashMap<(ActorKey, CueTarget), Entity> {
-        &self.routes
     }
 }
 ```
@@ -1304,7 +1327,7 @@ crates/wintf/src/ecs/
 │   ├── command.rs       ← CueCommand enum（8バリアント）, CueTarget enum
 │   ├── component.rs     ← PendingCueSheet コンポーネント
 │   ├── queue.rs         ← CueQueue コンポーネント, TimedCue, CueQueueState
-│   ├── dispatch.rs      ← dispatch_pending_cue_sheets システム, dispatch_cue_sheet_internal, ActorRegistry
+│   ├── dispatch.rs      ← dispatch_pending_cue_sheets システム, dispatch_cue_sheet_internal, EntityRegistry, EntityKey
 │   ├── tracker.rs       ← CueSheetTracker, CueSheetResult
 │   ├── error.rs         ← CueSystemError (thiserror)
 │   └── tests.rs         ← in-source unit tests
@@ -1333,7 +1356,7 @@ mod tracker;
 
 pub use command::CueCommand;
 pub use component::PendingCueSheet;
-pub use dispatch::{dispatch_pending_cue_sheets, ActorRegistry, CueSheetHandle};
+pub use dispatch::{dispatch_pending_cue_sheets, EntityKey, EntityRegistry, CueSheetHandle};
 pub use error::CueSystemError;
 pub use queue::{CueQueue, CueQueueState, PendingChoice, TimedCue};
 pub use tracker::{CueSheetResult, CueSheetTracker};
@@ -1351,7 +1374,7 @@ pub mod cue;
 
 // re-export に追加
 pub use cue::{
-    ActorKey, ActorRegistry, Cue, CueCommand, CueQueue, CueQueueState,
+    ActorKey, EntityKey, EntityRegistry, Cue, CueCommand, CueQueue, CueQueueState,
     CueSheet, CueSheetHandle, CueSheetResult, CueSheetTracker, CueSystemError,
     dispatch_cue_sheet,
 };
@@ -1446,11 +1469,20 @@ classDiagram
         Error(CueSystemError)
     }
 
-    class ActorRegistry {
-        -HashMap~(ActorKey, CueTarget), Entity~ routes
-        +register(ActorKey, CueTarget, Entity)
-        +resolve(&ActorKey, CueTarget) Option~Entity~
+    class EntityRegistry {
+        -HashMap~EntityKey, Entity~ map
+        +register(EntityKey, Entity)
+        +resolve(&EntityKey) Option~Entity~
+        +register_actor(ActorKey, CueTarget, Entity)
+        +resolve_actor(&ActorKey, CueTarget) Option~Entity~
         +routes_for_actor(&ActorKey) Vec~(CueTarget, Entity)~
+    }
+
+    class EntityKey {
+        <<enumeration>>
+        Actor(ActorKey, CueTarget)
+        Spot(String)
+        Balloon(String)
     }
 
     class CueTarget {
@@ -1467,8 +1499,9 @@ classDiagram
     TimedCue --> CueCommand
     CueQueue --> CueQueueState
     CueSheetTracker --> CueSheetResult
-    ActorRegistry --> ActorKey
-    ActorRegistry --> CueTarget
+    EntityRegistry --> EntityKey
+    EntityKey --> ActorKey
+    EntityKey --> CueTarget
 ```
 
 ### 不変条件
@@ -1487,12 +1520,12 @@ classDiagram
 ### アクター登録（セットアップ）
 
 ```rust
-use wintf::ecs::cue::{ActorKey, ActorRegistry, CueTarget};
+use wintf::ecs::cue::{ActorKey, EntityRegistry, CueTarget};
 use bevy_ecs::prelude::*;
 
 /// アクター登録 — シェルとバルーンを CueTarget 別に登録
 fn setup_actors(
-    mut registry: ResMut<ActorRegistry>,
+    mut registry: ResMut<EntityRegistry>,
     mut commands: Commands,
 ) {
     // エンティティを生成
@@ -1501,13 +1534,13 @@ fn setup_actors(
     let shared_balloon = commands.spawn(CueQueue::new()).id();
 
     // シェル（体・サーフェス・エモート）を登録
-    registry.register("sakura", CueTarget::Shell, sakura_shell);
-    registry.register("unyuu", CueTarget::Shell, unyuu_shell);
+    registry.register_actor("sakura", CueTarget::Shell, sakura_shell);
+    registry.register_actor("unyuu", CueTarget::Shell, unyuu_shell);
 
     // バルーン（テキスト・選択肢・待機）を登録
     // ★ sakura と unyuu が同一バルーンエンティティを共有
-    registry.register("sakura", CueTarget::Balloon, shared_balloon);
-    registry.register("unyuu", CueTarget::Balloon, shared_balloon);
+    registry.register_actor("sakura", CueTarget::Balloon, shared_balloon);
+    registry.register_actor("unyuu", CueTarget::Balloon, shared_balloon);
 }
 ```
 
@@ -1589,7 +1622,7 @@ fn poll_cue_results(
 
 | 分類 | エラー型 | 処理方針 | ログレベル |
 |------|----------|----------|------------|
-| (ActorKey, CueTarget) 未解決 | `CueSystemError::ActorNotFound` | スキップ + 継続 | `warn!` |
+| EntityKey 未解決 | `CueSystemError::EntityNotFound` | スキップ + 継続 | `warn!` |
 | キャパシティ超過 | `CueSystemError::CapacityExceeded` | 超過分スキップ + 継続 | `warn!` |
 | Choice 空打ち | `CueSystemError::EmptyChoiceBarrier` | CueQueue.state → Error → CueSheetTracker が検知 → CueSheetResult::Error | `error!` |
 | 未知コマンドスキップ | — | 消費者が `_` パターンで pass-through | `debug!` |
@@ -1677,7 +1710,7 @@ fn consume_balloon_cues(
 | DD# | 決定事項 | 選定 | 根拠 |
 |-----|----------|------|------|
 | DD1 | ActorKey の型 | **NewType(String)** | 型安全性 + pasta DSL からの変換容易性 |
-| DD2 | 演者解決メカニズム | **(ActorKey, CueTarget) → Entity ルーティングマップ** | O(1) 解決、コマンド種別による自動ルーティング、バルーン共有対応 |
+| DD2 | 演者解決メカニズム | **EntityKey enum + EntityRegistry 統合レジストリ** | O(1) 解決、型安全な名前空間統合、P1 Spot/Balloon 拡張可能 |
 | DD3 | 拡張コマンドの型構造 | **Custom { command, params: DynamicValue }** | DD12 で確定済み。enum ネストは不採用（Clone 制約） |
 | DD4 | 消費プロトコルの提供形態 | **ヘルパー API + ドキュメント** | `pop_ready()` が消費の主要 API。trait は過剰 |
 | DD5 | モジュール配置 | **`ecs/cue/`** | ウィジット横断的基盤は widget の外 |
