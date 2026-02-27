@@ -423,9 +423,15 @@ pub enum CueCommand {
     /// 先行 Choice が 0 件の場合は CueSheetResult::Error を発行。
     WaitForChoice { timeout: Option<f64> },
 
-    /// クリック待ちバリア（ブロッキング）
+    /// クリック待ちバリア（全体配信バリア）
     ///
-    /// ユーザーのクリック入力またはタイムアウトまでブロック。
+    /// 演者に登録された全スロットに配信される。
+    /// 受信エンティティ（Spot / Balloon 両方）はハンドラーおよびノンハンドラーの両方になりうる。
+    /// 最初に Click を返したものが勝ち。
+    ///
+    /// # UX 意図
+    /// ユーザーがスポットをクリックしてもバルーンをクリックしても応答される。
+    /// 「関係するエンティティのどこをクリックしても反応する」という直感的な UX を実現する。
     WaitForClick { timeout: Option<f64> },
 
     /// ECS エンティティ渡し
@@ -817,7 +823,8 @@ impl CueQueue {
 
     /// バリアをスキップしキューを再開（非ハンドラー用）
     ///
-    /// WaitingForClick / WaitingForChoice 状態から Playing に戻る。
+    /// `WaitForChoice` を受け取ったが選択 UI を表示できないエンティティ（Spot 等）で使用。
+    /// `WaitForClick` は Spot もハンドラーになれるので、このメソッドは呼ばないこと。
     /// 呼び出し元は次に `cue_sheet_entity()` で CueSheetTracker に Skipped を報告すること。
     pub fn skip_barrier(&mut self) -> bool {
         match self.state {
@@ -1802,17 +1809,67 @@ fn poll_cue_results(
 | Entity despawn | — | panic しない（Option チェック） | `debug!` |
 | 遅延到達 | — | start_time < current_time → 即時消費 | `trace!` |
 
+### 消費者ハンドラー責務表
+
+一つのコマンドに対してどの消費システムがハンドラーになるか。ハンドラーは有効な BarrierResponse を返す。非ハンドラーは `skip_barrier()` + `Skipped` を返す。
+
+| コマンド | Spot (Shell) | Balloon |
+|----------|-------------|---------|
+| `Text` | ⏭ スキップ | ✅ ハンドラー（タイプライター表示） |
+| `Clear` | ⏭ スキップ | ✅ ハンドラー |
+| `Emote { key }` | ✅ ハンドラー（演者名 + 感情キーでサーフェスアニメ決定） | ✅ ハンドラー（感情キーでフォントセット切替） |
+| `Choice` | ⏭ スキップ | ✅ ハンドラー（pending 蓄積） |
+| `WaitForChoice` | ⏭ スキップ (`skip_barrier()` + `Skipped`) | ✅ ハンドラー（選択 UI 表示 → `Choice { id }`） |
+| `WaitForClick` | ✅ **ハンドラー**（スポットクリック受付 → `Click`） | ✅ ハンドラー（バルーンクリック受付 → `Click`） |
+| `EntityRef` | ✅ ハンドラー（エンティティ参照解釈） | ⏭ スキップ |
+| `Custom` | 機能次第 | 機能次第 |
+
+> **WaitForClick は全体配信バリア**: Spot と Balloon の両方が返答するため、関係するどこをクリックしても応答される (first valid wins)。
+
 ### 消費者側のコマンド処理パターン
 
 ```rust
-// 消費者（balloon03-content）の典型的な消費ループ
-// ルーティングコマンド（RouteAdd/RouteSwitch/RouteRemove）は dispatch 層で消費済みのため、ここには届かない。
+// 消費者（Balloon）の典型的な消費ループ
+// WaitForChoice: 選択 UI 表示。選択確定後に receive_barrier(Choice)。
+// WaitForClick: クリック UI 表示。クリック後に receive_barrier(Click)。
 fn consume_balloon_cues(
-    mut query: Query<&mut CueQueue>,
+    mut query: Query<(Entity, &mut CueQueue)>,
+    mut tracker_query: Query<&mut CueSheetTracker>,
+    registry: Res<EntityRegistry>,
+    // 以下は UI 入力イベントの受口（実装内容は P0 スコープ外）
+    click_events: EventReader<BalloonClickEvent>,
+    choice_events: EventReader<ChoiceSelectedEvent>,
     frame_time: Res<FrameTime>,
 ) {
     let current_time = frame_time.elapsed_secs();
-    for mut queue in query.iter_mut() {
+    for (_self_entity, mut queue) in query.iter_mut() {
+        // WaitForClick ハンドラー: バルーンクリックで応答
+        if queue.pending_barrier_kind() == Some(BarrierKind::Click) {
+            if let Some(cue_sheet) = queue.cue_sheet_entity() {
+                if click_events.iter_for_entity(_self_entity).next().is_some() {
+                    if let Ok(mut tracker) = tracker_query.get_mut(cue_sheet) {
+                        queue.resolve_click();
+                        tracker.receive_barrier(BarrierResponse::Click);
+                    }
+                }
+            }
+            continue; // バリア中は pop_ready を呼ばない
+        }
+
+        // WaitForChoice ハンドラー: 選択確定で応答
+        if queue.pending_barrier_kind() == Some(BarrierKind::Choice) {
+            if let Some(cue_sheet) = queue.cue_sheet_entity() {
+                if let Some(ev) = choice_events.iter_for_entity(_self_entity).next() {
+                    if let Some(id) = queue.resolve_choice(&ev.choice_id) {
+                        if let Ok(mut tracker) = tracker_query.get_mut(cue_sheet) {
+                            tracker.receive_barrier(BarrierResponse::Choice { id });
+                        }
+                    }
+                }
+            }
+            continue;
+        }
+
         let commands = queue.pop_ready(current_time);
         for cmd in commands {
             match cmd {
@@ -1822,44 +1879,57 @@ fn consume_balloon_cues(
                 CueCommand::Custom { command, params } if command.starts_with("balloon.") => {
                     /* バルーン固有処理 */
                 }
-                CueCommand::WaitForChoice { .. } => {
-                    /* 空 Choice → Error 処理は pop_ready 内で完了 */
-                }
-                _ => {
-                    // 自ドメイン外のコマンド → 安全にスキップ
-                    tracing::debug!(command = ?cmd, "Skipping unknown command");
-                }
+                _ => { tracing::debug!(command = ?cmd, "Skipping unknown command"); }
             }
         }
     }
 }
 
-// 消費者（スポット）の典型的な消費ループ
-// Emote は演者名 + 感情キーでサーフェスアニメーションを決定する
-// バリア（WaitForXxx）はここでは解釈しないため skip_barrier()で辺り、直接 CueSheetTracker に報告する
+// 消費者（Spot）の典型的な消費ループ
+// Emote: 演者名 + 感情キーでサーフェスアニメーションを決定。
+// WaitForClick: Spot クリックで応答（全体配信バリア）。
+// WaitForChoice: 選択 UI を表示できないため即隣スキップ。
 fn consume_spot_cues(
     mut query: Query<(Entity, &mut CueQueue, &ActorKey)>,
     mut tracker_query: Query<&mut CueSheetTracker>,
     registry: Res<EntityRegistry>,
+    click_events: EventReader<SpotClickEvent>,
     frame_time: Res<FrameTime>,
 ) {
     let current_time = frame_time.elapsed_secs();
     for (_self_entity, mut queue, actor_key) in query.iter_mut() {
-        // バリア橋渡し: WaitingForXxx を検知したら即座にスキップ
-        if let (Some(kind), Some(cue_sheet)) = (queue.pending_barrier_kind(), queue.cue_sheet_entity()) {
-            if let Ok(mut tracker) = tracker_query.get_mut(cue_sheet) {
-                let n_slots = registry.routes_for_actor(actor_key).len();
-                tracker.init_barrier_if_needed(n_slots, kind);
-                queue.skip_barrier();
-                tracker.receive_barrier(BarrierResponse::Skipped);
+        // WaitForClick ハンドラー: Spot クリックで応答
+        if queue.pending_barrier_kind() == Some(BarrierKind::Click) {
+            if let Some(cue_sheet) = queue.cue_sheet_entity() {
+                if click_events.iter_for_entity(_self_entity).next().is_some() {
+                    if let Ok(mut tracker) = tracker_query.get_mut(cue_sheet) {
+                        let n_slots = registry.routes_for_actor(actor_key).len();
+                        tracker.init_barrier_if_needed(n_slots, BarrierKind::Click);
+                        queue.resolve_click();
+                        tracker.receive_barrier(BarrierResponse::Click);
+                    }
+                }
             }
+            continue;
+        }
+
+        // WaitForChoice は選択 UI 表示不可のため即隣スキップ
+        if queue.pending_barrier_kind() == Some(BarrierKind::Choice) {
+            if let Some(cue_sheet) = queue.cue_sheet_entity() {
+                if let Ok(mut tracker) = tracker_query.get_mut(cue_sheet) {
+                    let n_slots = registry.routes_for_actor(actor_key).len();
+                    tracker.init_barrier_if_needed(n_slots, BarrierKind::Choice);
+                    queue.skip_barrier();
+                    tracker.receive_barrier(BarrierResponse::Skipped);
+                }
+            }
+            continue;
         }
 
         let commands = queue.pop_ready(current_time);
         for cmd in commands {
             match cmd {
                 CueCommand::Emote { key } => {
-                    // 演者名 + 感情キーでサーフェスアニメーションを決定
                     /* apply_surface_animation(actor_key, &key) */
                 }
                 _ => { /* 自ドメイン外はスキップ */ }
