@@ -12,6 +12,7 @@ categories = ["graphics", "game-development"]
 
 [dependencies]
 serde = { version = "1", features = ["derive"] }
+thiserror = { workspace = true }
 interpolation = "0.3.0"
 rand = { workspace = true }
 

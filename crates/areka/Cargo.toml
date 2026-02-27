@@ -17,6 +17,7 @@ path = "src/main.rs"
 [dependencies]
 wintf = { version = "0.0.1", path = "../wintf" }
 human-panic = { workspace = true }
+thiserror = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
 async-io = { version = "2.6", default-features = false }

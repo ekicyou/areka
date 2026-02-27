@@ -15,6 +15,7 @@ ECSアーキテクチャ（Entity Component System）をベースとした、Win
 ## Key Libraries
 
 - **bevy_ecs** (0.18.0): ECSアーキテクチャの実装基盤
+- **thiserror** (2): エラー型定義（全クレート共通）
 - **windows** (0.62.2): Windows API バインディング
 - **windows-core** (0.62.2): Windows Core API
 - **taffy** (0.9.2): レイアウトエンジン
@@ -36,7 +37,8 @@ Rust言語の型システムを最大限に活用。`unsafe`ブロックはWindo
 ### Code Quality
 - モジュール単位で責務を明確に分離（`com/`, `ecs/`, `api.rs`など）
 - Windows COMオブジェクトのライフタイム管理を厳密に実施
-- エラーハンドリングは`windows::core::Result`を使用
+- エラーハンドリングは `thiserror` を使用して構造化 enum を定義する（全クレート共通規約）
+- Windows API 境界では `windows::core::Result` を使用し、内部エラーへの変換は `#[from]` で行う
 
 ### Testing
 サンプルアプリケーション（`examples/areka.rs`, `examples/dcomp_demo.rs`）で動作確認を実施

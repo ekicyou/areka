@@ -24,6 +24,7 @@ bevy_utils = { workspace = true }
 nonmax = { workspace = true }
 serde = { version = "1", optional = true, features = ["derive"] }
 taffy = { workspace = true }
+thiserror = { workspace = true }
 tracing = { workspace = true }
 windows = { workspace = true }
 windows-core = { workspace = true }
