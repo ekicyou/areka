@@ -921,18 +921,73 @@ impl CueQueue {
 | Intent | CueSheet を絶対時刻化して各演者の CueQueue に分配する |
 | Requirements | 4.1-4.7 |
 
-**設計判断 DD7**: 関数呼び出し方式を主要 API とする。
+**設計判断 DD7**: PendingCueSheet コンポーネント方式を採用。
 
 DD7 で検討した3方式:
-- (a) `PendingCueSheet` コンポーネント差し替え → on_add フックで配送
-- **(b) `dispatch_cue_sheet()` 関数呼び出し → 採用**
-- (c) 両方
+- (a) `PendingCueSheet` コンポーネント → dispatch システムで処理
+- (b) `dispatch_cue_sheet()` 関数呼び出し（排他的 &mut World）
+- **(c) 両方（コンポーネント投入 + 内部ヘルパー関数）→ 採用**
 
-**DD7-b を採用する理由**:
-- CueSheet は特定のエンティティに属さない横断的データ → コンポーネント差し替えの親エンティティが不自然
-- 関数呼び出しなら `Result<CueSheetHandle, CueSystemError>` で即座にエラーを返せる
-- テストで World を直接操作して dispatch を呼び出せるため検証が容易
-- 将来的に PendingCueSheet コンポーネント方式を追加することは容易（上位互換）
+**DD7-c を採用する理由**:
+- **通常のシステムから呼び出し可能**: `commands.spawn(PendingCueSheet)` で投入できる
+- **独立短命エンティティパターン**: CueSheet は配送処理中のみ存在する一時エンティティとして自然
+- **排他制御不要**: dispatch システムは Query/Commands で実装でき、他システムと並列実行可能
+- **ECS 親和性**: bevy_ecs の Component-based 設計に沿った実装
+- gap-analysis DD7-c の推奨に従う（当初の DD7-b 理由「親エンティティが不自然」は誤解、PendingCueSheet は独立エンティティとして使用）
+
+#### PendingCueSheet — 配送待ちコンポーネント
+
+```rust
+/// 配送待ちの CueSheet（独立短命エンティティに付与）
+///
+/// # Usage
+/// ```ignore
+/// // 通常のシステムから投入
+/// commands.spawn(PendingCueSheet {
+///     sheet: cue_sheet,
+///     start_time: frame_time.elapsed_secs(),
+/// });
+/// ```
+#[derive(Component, Debug)]
+#[component(storage = "SparseSet")]
+pub struct PendingCueSheet {
+    pub sheet: CueSheet,
+    pub start_time: f64,
+}
+```
+
+#### dispatch_pending_cue_sheets システム
+
+```rust
+/// PendingCueSheet を処理し、各演者の CueQueue に配送
+///
+/// Update スケジュールで実行される。
+/// 配送完了後、PendingCueSheet エンティティを despawn し、
+/// CueSheetTracker エンティティを spawn する。
+pub fn dispatch_pending_cue_sheets(
+    mut pending: Query<(Entity, &PendingCueSheet)>,
+    mut queues: Query<&mut CueQueue>,
+    registry: Res<ActorRegistry>,
+    mut commands: Commands,
+) {
+    for (entity, pending) in pending.iter() {
+        let handle = dispatch_cue_sheet_internal(
+            &pending.sheet,
+            pending.start_time,
+            &registry,
+            &mut queues,
+        );
+        
+        // CueSheetTracker を spawn
+        commands.spawn(CueSheetTracker::new(handle));
+        
+        // PendingCueSheet エンティティを削除
+        commands.entity(entity).despawn();
+    }
+}
+```
+
+#### dispatch_cue_sheet_internal — 内部ヘルパー
 
 ```rust
 /// CueSheet 配送結果
@@ -943,7 +998,7 @@ pub struct CueSheetHandle {
     pub skipped: Vec<ActorKey>,
 }
 
-/// CueSheet を各演者の CueQueue に配送
+/// CueSheet を各演者の CueQueue に配送（内部ヘルパー）
 ///
 /// # dola 思想との対応
 /// dispatch() ≈ dola::compile()（相対時刻を絶対時刻にコンパイル）
@@ -958,11 +1013,11 @@ pub struct CueSheetHandle {
 /// - ActorKey 未解決: warn! ログ + スキップ（他の演者は継続）
 /// - CueQueue キャパシティ超過: warn! ログ + 超過分スキップ
 /// - 空 CueSheet: no-op（エラーなし）
-pub fn dispatch_cue_sheet(
+fn dispatch_cue_sheet_internal(
     cue_sheet: &CueSheet,
     sheet_start_time: f64,
     registry: &ActorRegistry,
-    world: &mut bevy_ecs::world::World,
+    queues: &mut Query<&mut CueQueue>,
 ) -> CueSheetHandle {
     // Implementation: see Tasks
     todo!()
@@ -1101,7 +1156,7 @@ impl CueSheetTracker {
     /// 毎フレーム更新（Update システムから呼ばれる）
     ///
     /// 全演者の CueQueue 状態を確認し、結果を確定する。
-    pub fn update(&mut self, world: &bevy_ecs::world::World, current_time: f64) {
+    pub fn update(&mut self, queues: &Query<&CueQueue>, current_time: f64) {
         if self.result.is_some() {
             return; // 既に確定済み
         }
@@ -1115,7 +1170,7 @@ impl CueSheetTracker {
         // 全演者の状態を確認
         let mut all_completed = true;
         for (actor_key, entity) in &self.actors {
-            if let Some(queue) = world.get::<CueQueue>(*entity) {
+            if let Ok(queue) = queues.get(*entity) {
                 match queue.state() {
                     CueQueueState::Error(err) => {
                         // Error 状態を検出 — actor 名を補完して即座に通知
@@ -1158,8 +1213,9 @@ crates/wintf/src/ecs/
 ├── cue/
 │   ├── mod.rs           ← re-exports, CueSheet, Cue, ActorKey
 │   ├── command.rs       ← CueCommand enum（8バリアント）
+│   ├── component.rs     ← PendingCueSheet コンポーネント
 │   ├── queue.rs         ← CueQueue コンポーネント, TimedCue, CueQueueState
-│   ├── dispatch.rs      ← dispatch_cue_sheet(), ActorRegistry
+│   ├── dispatch.rs      ← dispatch_pending_cue_sheets システム, dispatch_cue_sheet_internal, ActorRegistry
 │   ├── tracker.rs       ← CueSheetTracker, CueSheetResult
 │   ├── error.rs         ← CueSystemError (thiserror)
 │   └── tests.rs         ← in-source unit tests
@@ -1180,13 +1236,15 @@ crates/wintf/src/ecs/
 //! CueSheet(相対時刻) → dispatch(compile) → CueQueue(絶対時刻) → pop_ready(consume)
 
 mod command;
+mod component;
 mod dispatch;
 mod error;
 mod queue;
 mod tracker;
 
 pub use command::CueCommand;
-pub use dispatch::{dispatch_cue_sheet, ActorRegistry, CueSheetHandle};
+pub use component::PendingCueSheet;
+pub use dispatch::{dispatch_pending_cue_sheets, ActorRegistry, CueSheetHandle};
 pub use error::CueSystemError;
 pub use queue::{CueQueue, CueQueueState, PendingChoice, TimedCue};
 pub use tracker::{CueSheetResult, CueSheetTracker};
@@ -1326,6 +1384,80 @@ classDiagram
 
 ---
 
+## Integration Examples
+
+### CueSheet 投入（上位層）
+
+```rust
+use wintf::ecs::cue::{CueSheet, Cue, ActorKey, CueCommand, PendingCueSheet};
+use bevy_ecs::prelude::*;
+
+/// 上位アプリケーション層からの CueSheet 投入
+fn submit_cue_sheet(
+    mut commands: Commands,
+    frame_time: Res<FrameTime>,
+) {
+    // 1. CueSheet を作成
+    let cues = vec![
+        Cue {
+            actor: ActorKey::from("sakura"),
+            start_time: 0.0,
+            command: CueCommand::Text("こんにちは".to_string()),
+        },
+        Cue {
+            actor: ActorKey::from("sakura"),
+            start_time: 1.0,
+            command: CueCommand::WaitForClick { timeout: None },
+        },
+        Cue {
+            actor: ActorKey::from("unyuu"),
+            start_time: 0.5,
+            command: CueCommand::Emote { key: "surprise".to_string() },
+        },
+    ];
+    let cue_sheet = CueSheet::new(cues);
+
+    // 2. PendingCueSheet として投入（独立短命エンティティを spawn）
+    commands.spawn(PendingCueSheet {
+        sheet: cue_sheet,
+        start_time: frame_time.elapsed_secs(),
+    });
+
+    // 3. dispatch_pending_cue_sheets システムが自動処理
+    //    → 各演者の CueQueue に分配
+    //    → CueSheetTracker エンティティを spawn
+}
+
+/// CueSheetTracker の結果を poll（上位オーケストレーション層）
+fn poll_cue_results(
+    mut query: Query<(Entity, &CueSheetTracker)>,
+    mut commands: Commands,
+) {
+    for (entity, tracker) in query.iter() {
+        if let Some(result) = tracker.result() {
+            match result {
+                CueSheetResult::Completed => {
+                    tracing::info!("CueSheet completed");
+                    // 次の CueSheet を投入
+                }
+                CueSheetResult::Choice { id } => {
+                    tracing::info!(choice_id = %id, "User selected choice");
+                    // 選択分岐処理
+                }
+                CueSheetResult::Error(err) => {
+                    tracing::error!(error = %err, "CueSheet error");
+                }
+                _ => {}
+            }
+            // 結果を受け取ったら Tracker を削除
+            commands.entity(entity).despawn();
+        }
+    }
+}
+```
+
+---
+
 ## Error Handling
 
 ### Error Strategy
@@ -1425,7 +1557,7 @@ fn consume_balloon_cues(
 | DD4 | 消費プロトコルの提供形態 | **ヘルパー API + ドキュメント** | `pop_ready()` が消費の主要 API。trait は過剰 |
 | DD5 | モジュール配置 | **`ecs/cue/`** | ウィジット横断的基盤は widget の外 |
 | DD6 | TypewriterToken との関係 | **共存 (DD6-b)** | CueCommand は独立。将来的に From 変換で段階移行 |
-| DD7 | CueSheet 投入 API | **関数呼び出し (DD7-b)** | 横断的データにコンポーネント方式は不自然 |
+| DD7 | CueSheet 投入 API | **PendingCueSheet コンポーネント (DD7-c)** | 通常システムから Commands で呼び出し可能。独立短命エンティティパターン |
 | DD8 | dola 統合の粒度 | **インターフェース定義のみ (DD8-a)** | 実質的な統合は後続仕様で |
 | DD9 | タイミングモデル | **絶対時刻キーフレーム方式** | 要件確定済み（v2.0 で適用） |
 | DD10 | コマンド複雑性の哲学 | **純粋データ列** | Wait なし、start_time 差分でタイミング |
