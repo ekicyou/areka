@@ -3,10 +3,10 @@
 | 項目               | 内容                                         |
 | ------------------ | -------------------------------------------- |
 | **Document Title** | wintf キューシステム（cue-system）要件定義書 |
-| **Version**        | 2.0                                          |
+| **Version**        | 2.3                                          |
 | **Date**           | 2026-02-27                                   |
 | **Priority**       | P0 (MVP必須)                                 |
-| **Status**         | 📋 Generated - v2.0（DD9 絶対時刻方式適用） |
+| **Status**         | 📋 Generated - v2.3（dola 必須依存化） |
 
 ---
 
@@ -105,7 +105,7 @@ cue-system は**舞台演出のキューシート**をメタファーとし、**
 - TypewriterToken の Stage 1 IR パターンとの後方互換性を考慮する
 - bevy_ecs 0.18.0 のコンポーネントシステム制約に従う
 - `on_add` フック、`Changed<T>`、`ChildOf` パターンを活用する
-- `#[cfg(feature = "dola")]` でのフィーチャーフラグによる条件コンパイルを維持
+- dola クレートは必須依存として統合する（条件コンパイルは使用しない）
 - 伺かのさくらスクリプトとの互換性は**非目標**（設計のオマージュであり、パースの互換ではない）
 
 ### 先行議論コンテキスト（balloon01-core v2.0 レビューより引継ぎ）
@@ -279,9 +279,9 @@ enum CueCommand {
 #### Acceptance Criteria
 
 1. **The** Cue System **shall** playback_rate（再生速度倍率）を適用可能な設計とする
-2. **When** dola feature が有効な時, **the** Cue System **shall** dola の `DolaBridgeResource` 経由でタイムライン制御を統合する
+2. **The** Cue System **shall** DolaRuntime リソース経由で dola タイムライン実行エンジンを統合する
 3. **The** Cue System **shall** CueQueue の時刻進行を dola の時刻精度（f64 秒）と互換にする
-4. **The** Cue System **shall** dola feature が無効な時でも独立して動作できる設計とする（`#[cfg(feature = "dola")]` による条件コンパイル）
+4. **The** Cue System **shall** FrameTime と dola::clock::now() が同じ時刻基準（QueryPerformanceCounter、OS起動時=0秒）を共有する
 
 ---
 
@@ -373,6 +373,7 @@ enum CueCommand {
 | 2.0     | 2026-02-27 | DD9 絶対時刻キーフレーム方式適用。Req 1,2,3,4,5,6 を全面書き換え。議題T5-T8追加 |
 | 2.1     | 2026-02-27 | Q5-Q8 議論完了。performer→actor 用語統一。CueSheet 相対時刻・CueQueue 外部 current_time 受取確定。dola 思想統一。Req 9 追加（フィーチャーモデル・CueSheetResult）。T2/T5/T6/T7/T8 全議題削除 |
 | 2.2     | 2026-02-27 | CueCommand 8バリアント確定。WaitForInput → WaitForClick/WaitForChoice/Choice に再設計（データとバリアの分離）。EntityRef/Custom(DynamicValue) 追加。CueSheetResult::Error 追加。Req 7 を DynamicValue 方針に更新 |
+| 2.3     | 2026-02-27 | dola 必須依存化。Req 6 AC2/AC4 改訂（feature flag 削除）、設計制約・外部依存セクション更新。design v2.0 との整合性確保 |
 
 ---
 
@@ -399,4 +400,4 @@ enum CueCommand {
 | 外部                        | 依存内容                                                                    |
 | --------------------------- | --------------------------------------------------------------------------- |
 | pasta DSL（外部リポジトリ） | CueSheet の主要な生成者。pasta → CueSheet 変換はアプリケーション層の責務    |
-| dola クレート               | タイミングオーケストレーション。`#[cfg(feature = "dola")]` で条件コンパイル |
+| dola クレート               | タイムライン実行エンジン。必須依存として統合。DolaRuntime リソース + update_dola_runtime システムを提供 |
