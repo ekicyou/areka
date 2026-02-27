@@ -21,7 +21,7 @@
         "design": {
             "generated": true,
             "approved": false,
-            "version": "1.0",
+            "version": "2.0",
             "design_decisions": 14
         },
         "tasks": {

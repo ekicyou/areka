@@ -3,7 +3,7 @@
 | 項目               | 内容                                         |
 | ------------------ | -------------------------------------------- |
 | **Document Title** | wintf キューシステム（cue-system）技術設計書 |
-| **Version**        | 1.0                                          |
+| **Version**        | 2.0                                          |
 | **Date**           | 2026-02-27                                   |
 | **Requirements**   | v2.2（9 Req + 3 NFR）                       |
 | **Status**         | 📐 Generated                                |
@@ -30,7 +30,7 @@
 - TypewriterToken / TypewriterTalk の変更・置換（段階的共存、DD6-b）
 - 具体的な描画・音声再生実装（消費者仕様の責務）
 - pasta DSL パーサー / コンパイラの実装（外部リポジトリ）
-- dola ランタイムの実装（dola クレートの責務）
+- dola ランタイム自体の実装（dola クレートの責務）
 - CueSheet のシリアライズ / デシリアライズ（将来拡張）
 
 ---
@@ -45,9 +45,9 @@
 |----------|----------|---------------------|
 | SparseSet コンポーネント | `TypewriterTalk`, `DragConfig` 等 27件 | `CueQueue` コンポーネント |
 | on_add フックチェーン | `Typewriter` → Visual + TypewriterTalk 自動挿入 | 配送トリガーに活用可能（DD7） |
-| 2段階 IR | Stage 1 (TypewriterToken) → Stage 2 (TimelineItem) | CueSheet(相対) → CueQueue(絶対) の1段変換（DD9 により Stage 2 不要化） |
-| FrameTime 絶対時刻 | `elapsed_secs() -> f64`（QueryPerformanceCounter ベース、dola と同じ時刻基準） | `pop_ready(current_time)` の時刻ソース |
-| Changed\<T\> gotcha | `Mut<T>` は内容変更なしでも Changed 発火 | CueQueue 消費では Changed フィルタを使わない設計 |
+| 2段階 IR | Stage 1 (TypewriterToken) → Stage 2 (TimelineItem) | CueSheet(相対) → CueQueue(絶対) の1段変換（DD9 で Stage 2 不要化） |
+| FrameTime 絶対時刻 | `elapsed_secs() -> f64`（QueryPerformanceCounter ベース） | `pop_ready(current_time)` の時刻ソース |
+| Changed\<T\> gotcha | `Mut<T>` は内容変更なしでも Changed 発火 | CueQueue 消費では Changed フィルタ不使用 |
 
 #### 遵守すべき制約
 
@@ -68,8 +68,8 @@ graph TB
         CS["CueSheet<br/>Vec&lt;Cue&gt;<br/>(相対時刻)"]
         DISPATCH["dispatch()<br/>compile + distribute"]
         CQ["CueQueue<br/>Vec&lt;TimedCue&gt;<br/>(絶対時刻)"]
-        RESULT["CueSheetResult<br/>Completed/Cancelled<br/>Timeout/Choice/Error"]
         TRACKER["CueSheetTracker<br/>実行状態追跡"]
+        RESULT["CueSheetResult"]
     end
 
     subgraph Consumers["消費者システム"]
@@ -79,7 +79,7 @@ graph TB
     end
 
     subgraph Infra["インフラ"]
-        FT["FrameTime<br/>elapsed_secs() → f64"]
+        FT["FrameTime<br/>elapsed_secs()"]
         DOLA["DolaRuntime<br/>(必須リソース)"]
     end
 
@@ -92,29 +92,31 @@ graph TB
     CQ -->|"pop_ready(current_time)"| FUTURE
     FT -.->|current_time| CQ
     FT -->|"update_dola_runtime()"| DOLA
-    DOLA -.->|"アニメーション制御<br/>(直接参照)"| BALLOON
-    DOLA -.->|"アニメーション制御<br/>(直接参照)"| ANIM
+    DOLA -.->|"アニメーション制御"| BALLOON
+    DOLA -.->|"アニメーション制御"| ANIM
     TRACKER -->|監視| CQ
     TRACKER -->|通知| RESULT
 ```
 
 **Architecture Integration**:
-- **選択パターン**: 新規独立モジュール `ecs/cue/`（Option B — gap-analysis 推奨案）
-- **ドメイン/フィーチャー境界**: cue-system はウィジット横断的基盤として `ecs/widget/` の外に配置
+- **選択パターン**: 新規独立モジュール `ecs/cue/`（gap-analysis 推奨案）
+- **ドメイン境界**: cue-system はウィジェット横断的基盤として `ecs/widget/` の外に配置
 - **既存パターン保持**: SparseSet, on_add hook, FrameTime, tracing ログレベル規約
-- **新規コンポーネント**: CueQueue（消費コンテナ）, CueSheetTracker（実行追跡）
+- **新規コンポーネント**: CueQueue（演出指示キュー）, CueSheetTracker（実行追跡）
 - **Steering 準拠**: structure.md のレイヤー依存方向、logging.md のログレベル、tech.md の thiserror 採用
+
+> **要件からの設計逸脱（dola 必須化）**: requirements.md Req 6 AC4 は `#[cfg(feature = "dola")]` による条件コンパイルを想定するが、設計分析の結果、dola は必須依存とし条件コンパイルは採用しない。根拠: (1) Custom パラメーター型に `dola::DynamicValue` を採用（DD12）、(2) 時刻基準を dola と統一（DD8-b）、(3) 物理エンティティが DolaRuntime を直接参照する設計。
 
 ### Technology Stack
 
 | Layer | Choice / Version | Role in Feature | Notes |
 |-------|------------------|-----------------|-------|
 | ECS Framework | bevy_ecs 0.18.0 | コンポーネント・システム基盤 | SparseSet, on_add hooks, Changed\<T\> |
-| 時刻管理 | FrameTime (f64秒) | 絶対時刻ソース | QueryPerformanceCounter ベース、dola と同じ時刻基準（OS起動時=0秒） |
+| 時刻管理 | FrameTime (f64秒) | 絶対時刻ソース | QueryPerformanceCounter ベース、OS起動時=0秒 |
 | エラー型 | thiserror 2 | CueSystemError 定義 | workspace 統一規約 |
-| 動的値 | dola::DynamicValue | Custom コマンドパラメータ | JSON互換、Clone + Debug + Eq + Hash |
+| 動的値 | dola::DynamicValue | Custom コマンドパラメーター | JSON互換、Clone + Debug + Eq + Hash |
 | ロギング | tracing | 構造化ログ | debug!/trace!/warn! |
-| アニメーション | dola | タイムライン実行エンジン | DolaRuntime リソース、物理エンティティが直接使用 |
+| アニメーション | dola（必須依存） | タイムライン実行エンジン | DolaRuntime リソース。FrameTime と同じ時刻基準を共有 |
 
 ---
 
@@ -178,7 +180,7 @@ sequenceDiagram
     participant O as Orchestration Layer
 
     Note over T: 毎フレーム Update スケジュールで監視
-    T->>Q: 全配送先 (ActorKey, CueTarget) の state を確認
+    T->>Q: 全配送先の state を確認
     alt 全配送先 Completed
         T->>O: CueSheetResult::Completed
     else WaitForChoice で Choice 選択
@@ -198,18 +200,20 @@ sequenceDiagram
 
 | Requirement | Summary | Components | Interfaces | Flows |
 |-------------|---------|------------|------------|-------|
-| 1.1-1.8 | CueSheet 構造化台本 | CueSheet, Cue, ActorKey | `CueSheet::new()`, `filter_by_actor()` | — |
-| 2.1-2.11 | CueCommand 11バリアント | CueCommand | enum pattern match | — |
-| 3.1-3.9 | CueQueue コンポーネント | CueQueue, TimedCue | `push_sorted()`, `pop_ready()`, `peek()` | 消費フロー |
-| 4.1-4.7 | CueSheet 配送 | dispatch(), EntityRegistry, CueTarget | `dispatch_cue_sheet_internal()` | 配送フロー |
-| 5.1-5.6 | 消費プロトコル | CueQueueState | `pop_ready(current_time)` | 消費フロー |
-| 6.1-6.4 | タイミング制御・dola統合 | DolaRuntime リソース、update_dola_runtime システム | 物理エンティティが直接使用 | dola統合フロー |
-| 7.1-7.5 | コマンド拡張機構 | CueCommand::Custom | DynamicValue | — |
-| 8.1-8.6 | エラーハンドリング | CueSystemError | thiserror | — |
-| 9.1-9.7 | CueSheetResult フィーチャーモデル | CueSheetTracker, CueSheetResult | poll / Observer | 結果通知フロー |
-| NFR-1 | パフォーマンス | CueQueue (Vec) | — | — |
-| NFR-2 | デバッグ容易性 | 全型に Debug | tracing | — |
-| NFR-3 | ECS 親和性 | SparseSet, bevy_ecs 0.18 | — | — |
+| Req 1 | CueSheet 構造化台本 | CueSheet, Cue, ActorKey | `CueSheet::new()`, `filter_by_actor()` | dispatch |
+| Req 2 | CueCommand 型安全コマンド | CueCommand (11 variants) | `is_barrier()`, `is_routing_command()` | — |
+| Req 3 | CueQueue エンティティキュー | CueQueue, TimedCue | `push_sorted()`, `pop_ready()`, `peek()` | pop_ready |
+| Req 4 | CueSheet 配送 | PendingCueSheet, EntityRegistry | `dispatch_pending_cue_sheets()` | dispatch |
+| Req 5 | 消費プロトコル | CueQueue, CueQueueState | `pop_ready()`, `resolve_click/choice()` | pop_ready |
+| Req 6 | dola 統合 | DolaRuntime | `update_dola_runtime()` | — |
+| Req 7 | コマンド拡張 | CueCommand::Custom | DynamicValue パラメーター | — |
+| Req 8 | エラーハンドリング | CueSystemError | `push_sorted()` Result | — |
+| Req 9 | CueSheet ライフサイクル | CueSheetTracker, CueSheetResult | `tracker.result()`, `cancel()` | result |
+| NFR-1 | パフォーマンス | TimedCue ≤ 64B | 降順 Vec + pop tail O(1) | — |
+| NFR-2 | デバッグ容易性 | 全型 Debug derive | tracing structured logging | — |
+| NFR-3 | ECS 親和性 | SparseSet storage | bevy_ecs 0.18.0 準拠 | — |
+
+> **Req 2 への補足**: requirements.md では 8 バリアントを定義。DD13 によりルーティングコマンド 3 バリアント（RouteAdd / RouteSwitch / RouteRemove）を追加し、計 11 バリアントに拡張。
 
 ---
 
@@ -217,911 +221,345 @@ sequenceDiagram
 
 ### Component Summary
 
-| Component | Domain/Layer | Intent | Req Coverage | Key Dependencies | Contracts |
-|-----------|--------------|--------|--------------|------------------|-----------|
-| CueSheet | cue/data | 構造化演出台本（相対時刻） | Req 1 | ActorKey, CueCommand | Data |
-| Cue | cue/data | 個別演出指示 | Req 1 | ActorKey, CueCommand | Data |
-| ActorKey | cue/data | 演者識別子 | Req 1, 4 | — | Data |
-| CueCommand | cue/data | 型安全コマンド enum | Req 2, 7 | DynamicValue, Entity | Data |
-| CueTarget | cue/data | コマンドのルーティング先 | Req 4 | — | Data |
-| TimedCue | cue/data | 絶対時刻付きコマンド | Req 3 | CueCommand | Data |
-| CueQueue | cue/component | エンティティキュー | Req 3, 5 | TimedCue, CueQueueState | State, Service |
-| CueQueueState | cue/data | 消費状態 enum | Req 5 | — | Data |
-| dispatch() | cue/system | 配送システム | Req 4 | CueSheet, EntityRegistry, CueQueue | Service |
-| EntityRegistry | cue/resource | エンティティ統合レジストリ | Req 4 | EntityKey, ActorKey, CueTarget | Service |
-| CueSheetTracker | cue/component | 実行状態追跡 | Req 9 | CueQueue, CueSheetResult, BarrierState | State |
-| CueSheetResult | cue/data | 実行結果 | Req 9 | CueSystemError | Data |
-| CueSystemError | cue/data | 構造化エラー | Req 8, 9 | thiserror | Data |
-| BarrierResponse | cue/data | バリア応答型 | Req 9 | — | Data |
-| BarrierState | cue/data | バリア集約状態（CueSheetTracker 内） | Req 9 | BarrierResponse, BarrierKind | State |
+| Component | Layer | Intent | Req Coverage | Storage |
+|-----------|-------|--------|--------------|---------|
+| CueSheet / Cue / ActorKey | Data Model | 構造化演出台本 | 1 | — (値型) |
+| CueCommand | Data Model | 型安全コマンド体系 (11 variants) | 2, 7 | — (値型) |
+| CueTarget | Data Model | ルーティングスロット識別子 | 4 | — (値型) |
+| TimedCue | Data Model | 絶対時刻コマンドエントリー | 1, 3 | — (値型) |
+| CueQueue | Component | 演出指示キュー | 3, 5 | SparseSet |
+| PendingCueSheet | Component | 配送待ち CueSheet | 4 | SparseSet |
+| CueSheetTracker | Component | CueSheet 実行状態追跡 | 9 | SparseSet |
+| EntityRegistry | Resource | ActorKey → Entity 解決 | 4 | — |
+| DolaRuntime | Resource | dola ランタイムラッパー | 6 | — |
 
-### cue/data — データモデル層
+### Data Model Layer
 
-#### CueSheet
+#### CueSheet — 構造化演出台本
 
-| Field | Detail |
-|-------|--------|
-| Intent | 複数演者への構造化演出台本を表現する純粋データ型 |
-| Requirements | 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8 |
-
-**Responsibilities & Constraints**
-- CueSheet は `Vec<Cue>` のニュータイプラッパー（メタデータフィールドなし — Req 1 AC1 確定）
-- 内部の Cue は `start_time` 昇順で保持（同一時刻は挿入順で安定ソート）
-- CueSheet は CueQueue ローカル座標系（相対秒数）を使用。世界絶対時刻への変換は dispatch() の責務
-
-**Dependencies**
-- Inbound: pasta DSL / areka（CueSheet 生成） — P0
-- Outbound: dispatch()（配送） — P0
-
-##### Data Contract
+**DD1 決定: ActorKey = NewType(String)**。型安全性 + pasta DSL からの変換容易性のためにニュータイプパターンを採用。
 
 ```rust
-/// 構造化演出台本（相対時刻）
+/// 構造化演出台本。相対時刻で記述された演出指示の集合。
 ///
-/// # dola 思想との対応
-/// CueSheet ≈ dola::Document/Storyboard（宣言的、相対時刻）
-#[derive(Debug, Clone)]
+/// CueSheet は CueQueue にとっての "ソースコード" に相当し、
+/// dispatch（コンパイル）を経て絶対時刻の TimedCue に変換される。
+#[derive(Clone, Debug)]
 pub struct CueSheet(Vec<Cue>);
 
 impl CueSheet {
-    /// Cue 列から CueSheet を生成（start_time 昇順ソート + 安定ソート）
+    /// start_time 昇順でソートして構築（安定ソート）
     pub fn new(mut cues: Vec<Cue>) -> Self {
-        cues.sort_by(|a, b| {
-            a.start_time
-                .partial_cmp(&b.start_time)
-                .unwrap_or(std::cmp::Ordering::Equal)
-        });
+        cues.sort_by(|a, b| a.start_time.partial_cmp(&b.start_time).unwrap());
         Self(cues)
     }
-
-    /// 全 Cue のスライス参照
-    pub fn cues(&self) -> &[Cue] {
-        &self.0
-    }
-
-    /// 指定演者の Cue のみをフィルタリング抽出
-    pub fn filter_by_actor(&self, actor: &ActorKey) -> Vec<&Cue> {
-        self.0.iter().filter(|c| &c.actor == actor).collect()
-    }
-
-    /// CueSheet 内の一意な ActorKey 一覧を取得
-    pub fn actors(&self) -> Vec<&ActorKey> {
-        let mut seen = Vec::new();
-        for cue in &self.0 {
-            if !seen.contains(&&cue.actor) {
-                seen.push(&cue.actor);
-            }
-        }
-        seen
-    }
-
-    /// CueSheet が空かどうか
-    pub fn is_empty(&self) -> bool {
-        self.0.is_empty()
-    }
-
-    /// Cue の数
-    pub fn len(&self) -> usize {
-        self.0.len()
-    }
+    pub fn cues(&self) -> &[Cue] { &self.0 }
+    pub fn filter_by_actor(&self, key: &ActorKey) -> Vec<&Cue> { /* ... */ }
+    pub fn actors(&self) -> Vec<&ActorKey> { /* ... */ }
+    pub fn is_empty(&self) -> bool { self.0.is_empty() }
+    pub fn len(&self) -> usize { self.0.len() }
 }
-```
 
-#### Cue
-
-```rust
-/// 個別の演出指示（CueSheet ローカル座標系）
-#[derive(Debug, Clone)]
+/// 個々の演出指示
+#[derive(Clone, Debug)]
 pub struct Cue {
-    /// 対象演者
+    /// 対象演者の識別子
     pub actor: ActorKey,
     /// CueSheet 開始時点からの相対秒数
     pub start_time: f64,
     /// 演出コマンド
     pub command: CueCommand,
 }
-```
 
-#### ActorKey — DD1 決定: NewType(String)
-
-| Field | Detail |
-|-------|--------|
-| Intent | 演者を一意に識別するキー型 |
-| Requirements | 1.2, 4.3, 4.6 |
-
-**設計判断 DD1**: `NewType(String)` を採用。
-
-| 選択肢 | 評価 | 理由 |
-|---------|------|------|
-| (a) `String` | ❌ | 型安全性なし。演者キーと他の文字列の混同リスク |
-| **(b) `NewType(String)`** | **✅ 採用** | 型安全。pasta DSL からの文字列変換が自然。`From<&str>` で ergonomic |
-| (c) `Entity` 直接 | ❌ | CueSheet 生成時に Entity が必要 → pasta DSL から使用困難 |
-
-```rust
-/// 演者識別キー（NewType パターン）
+/// 演者識別子。NewType パターンにより型安全性を確保。
 ///
-/// pasta DSL のキャラクター名（`"sakura"`, `"unyu"`）から直接変換可能。
-/// さくらスクリプトの `\0`, `\1` に相当するが、名前ベースで直感的。
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+/// さくらスクリプトの `\0` (さくら) / `\1` (うにゅう) に相当するが、
+/// 文字列ベースで任意の名前を許容する。
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct ActorKey(String);
 
 impl ActorKey {
-    pub fn new(key: impl Into<String>) -> Self {
-        Self(key.into())
-    }
-
-    pub fn as_str(&self) -> &str {
-        &self.0
-    }
+    pub fn new(key: impl Into<String>) -> Self { Self(key.into()) }
+    pub fn as_str(&self) -> &str { &self.0 }
 }
 
-impl<S: Into<String>> From<S> for ActorKey {
-    fn from(s: S) -> Self {
-        Self(s.into())
-    }
-}
-
-impl std::fmt::Display for ActorKey {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.0)
-    }
+impl From<&str> for ActorKey {
+    fn from(s: &str) -> Self { Self(s.to_string()) }
 }
 ```
 
-#### CueCommand — 11バリアント確定
+#### CueCommand — 型安全コマンド体系
 
-| Field | Detail |
-|-------|--------|
-| Intent | 演出指示を型安全に表現する基盤コマンド型 |
-| Requirements | 2.1-2.11, 7.1-7.5 |
+**DD10 決定**: Wait バリアントなし。タイミングは start_time 差分で表現。  
+**DD12 決定**: Custom パラメーターに `dola::DynamicValue` を採用。  
+**DD13 決定**: 非ルーティングコマンドはブロードキャスト。RouteXxx は dispatch 層のみで消費。
 
-**DD10 確定**: 純粋データ列哲学。Wait バリアントなし（start_time 差分でタイミング表現）。
-**DD12 確定**: Custom パラメータは `dola::DynamicValue`（Clone + Debug 互換、JSON 変換可能）。
-**DD13 確定**: ブロードキャスト配信モデル。非ルーティングコマンドは演者の全スロットに同一内容を配信、解釈は受信エンティティの責務。ルーティングコマンドは dispatch 層で消費し物理エンティティには届かない。
+コマンドは **3 カテゴリー** に分類される:
+
+| カテゴリー | コマンド | 配信モデル | 消費者 |
+|-----------|---------|-----------|--------|
+| データ（演出指示） | Text, Clear, Emote, Choice, EntityRef, Custom | ブロードキャスト（全スロット） | 各消費者 |
+| バリア（入力待ち） | WaitForChoice, WaitForClick | ブロードキャスト（全スロット） | ハンドラー or skip |
+| ルーティング（配送制御） | RouteAdd, RouteSwitch, RouteRemove | dispatch 層のみ消費 | EntityRegistry |
 
 ```rust
-use dola::DynamicValue;
-
-/// 型安全な演出コマンド enum（11バリアント）
-///
-/// # コマンドの3分類
-/// - データコマンド: Text, Clear, Emote, Choice, EntityRef, Custom
-///   → 演者に登録された全物理エンティティ（スポット・バルーン等）にブロードキャスト
-///   → 解釈は受信エンティティの役割に委ねる
-/// - バリアコマンド: WaitForChoice, WaitForClick
-///   → 同上ブロードキャスト + タイムライン進行をブロック
-/// - ルーティングコマンド: RouteAdd, RouteSwitch, RouteRemove
-///   → dispatch 層で EntityRegistry を更新して消費
-///   → 物理エンティティの CueQueue には届かない
-#[derive(Debug, Clone)]
+/// 演出コマンド。さくらスクリプトの各タグに相当する型安全な enum。
+#[derive(Clone, Debug)]
 pub enum CueCommand {
-    /// テキスト表示（意味解釈は消費者の責務）
-    ///
-    /// バルーンの場合: タイプライター表示の対象テキスト
-    /// アニメーションの場合: ラベル表示等
+    // ── データコマンド（ブロードキャスト） ──
+    /// テキスト表示。意味解釈（縦書き、装飾等）は消費者の責務。
     Text(String),
-
     /// コンテンツクリア
-    ///
-    /// バルーンの場合: テキスト全消去
     Clear,
-
-    /// 演技発現（全ルーティングスロットにブロードキャスト。解釈は受信エンティティの責務）
-    ///
-    /// # 受信側ごとの解釈例
-    /// - スポット（Shell）: 演者名 + 感情キーでサーフェスアニメーションを決定
-    /// - バルーン（Balloon）: 感情キーに応じたフォントセット・スタイルを選択
+    /// 演技発現。key の意味解釈は消費者が担う。
+    /// Spot: サーフェスアニメーション選択、Balloon: フォントセット切替。
     Emote { key: String },
-
-    /// 選択肢データ（先積み）
-    ///
-    /// WaitForChoice の前に連続投入し、選択肢群を構成する。
-    /// id はユーザー選択結果を CueSheetResult::Choice { id } で通知する際の識別子。
+    /// 選択肢データ。WaitForChoice の前に連続投入する先積みプロトコル。
     Choice { id: String, text: String },
+    /// ECS エンティティ参照渡し（消費者が解釈）
+    EntityRef(Entity),
+    /// 消費者固有コマンド。DynamicValue は JSON 互換辞書型。
+    Custom { command: String, params: dola::DynamicValue },
 
-    /// 選択肢バリア（ブロッキング）
-    ///
-    /// 到達時に直前の Choice 群を選択肢として提示しブロック開始。
-    /// 先行 Choice が 0 件の場合は CueSheetResult::Error を発行。
+    // ── バリアコマンド（ブロードキャスト） ──
+    /// 選択肢バリア。直前の Choice 群を提示してブロック。
     WaitForChoice { timeout: Option<f64> },
-
-    /// クリック待ちバリア（全体配信バリア）
-    ///
-    /// 演者に登録された全スロットに配信される。
-    /// 受信エンティティ（Spot / Balloon 両方）はハンドラーおよびノンハンドラーの両方になりうる。
-    /// 最初に Click を返したものが勝ち。
-    ///
-    /// # UX 意図
-    /// ユーザーがスポットをクリックしてもバルーンをクリックしても応答される。
-    /// 「関係するエンティティのどこをクリックしても反応する」という直感的な UX を実現する。
+    /// クリック待ちバリア。全体配信のため関係するどこをクリックしても応答される。
     WaitForClick { timeout: Option<f64> },
 
-    /// ECS エンティティ渡し
-    ///
-    /// 消費者が Entity を解釈して処理する。
-    /// 例: アニメーション対象のサーフェスエンティティ参照
-    EntityRef(bevy_ecs::entity::Entity),
-
-    /// 消費者固有コマンド
-    ///
-    /// command 文字列で分岐し、自ドメイン以外のコマンドは安全にスキップする。
-    /// params に DynamicValue::Null を使用すれば引数なしコマンドを表現可能。
-    ///
-    /// # 使用例（バルーン向け）
-    /// ```ignore
-    /// CueCommand::Custom {
-    ///     command: "balloon.font_size".into(),
-    ///     params: DynamicValue::Integer(24),
-    /// }
-    /// ```
-    ///
-    /// # 使用例（アニメーション向け）
-    /// ```ignore
-    /// CueCommand::Custom {
-    ///     command: "anim.transition".into(),
-    ///     params: DynamicValue::Map(BTreeMap::from([
-    ///         ("from".into(), DynamicValue::Integer(0)),
-    ///         ("to".into(), DynamicValue::Integer(5)),
-    ///         ("duration".into(), DynamicValue::Float(0.3)),
-    ///     ])),
-    /// }
-    /// ```
-    Custom { command: String, params: DynamicValue },
-
-    // --- ルーティングコマンド（dispatch 層で消費。物理エンティティには届かない） ---
-
-    /// 演者の配信先スロットにエンティティを追加（dispatch 層消費）
-    ///
-    /// `to` は EntityRegistry に登録済みの EntityKey でなければならない。
-    /// 既存スロットへの配信は影響を受けない。
-    /// 例: 演者に2枚目のバルーンスロットを追加する。
+    // ── ルーティングコマンド（dispatch 層のみ消費） ──
+    /// スロット追加（既存ルーティングを維持したまま追加先を登録）
     RouteAdd { target: CueTarget, to: EntityKey },
-
-    /// 演者の配信先スロットを差し替え（dispatch 層消費）
-    ///
-    /// `target` スロットへのルーティングを `to` が指すエンティティに切り替える。
-    /// 例: バルーン A からバルーン B への切り替え。
+    /// スロット切替（既存ルーティングを上書き）
     RouteSwitch { target: CueTarget, to: EntityKey },
-
-    /// 演者の配信先スロットを削除（dispatch 層消費）
-    ///
-    /// `target` スロットへの配信を停止する。
-    /// 例: 退場した演者のシェルスロットを配信対象から外す。
+    /// スロット除去（指定ターゲットのルーティングを削除）
     RouteRemove { target: CueTarget },
 }
 
 impl CueCommand {
-    /// バリアコマンド（タイムライン進行をブロックするコマンド）かどうか
+    /// バリアコマンドか判定
     pub fn is_barrier(&self) -> bool {
-        matches!(self, CueCommand::WaitForChoice { .. } | CueCommand::WaitForClick { .. })
+        matches!(self, Self::WaitForChoice { .. } | Self::WaitForClick { .. })
     }
-
-    /// ルーティングコマンド（dispatch 層で EntityRegistry を操作し物理エンティティには届かない）かどうか
+    /// ルーティングコマンドか判定（dispatch 層で消費、CueQueue に入らない）
     pub fn is_routing_command(&self) -> bool {
-        matches!(
-            self,
-            CueCommand::RouteAdd { .. }
-                | CueCommand::RouteSwitch { .. }
-                | CueCommand::RouteRemove { .. }
-        )
+        matches!(self, Self::RouteAdd { .. } | Self::RouteSwitch { .. } | Self::RouteRemove { .. })
     }
 }
+```
 
-#### CueTarget
+#### CueTarget — ルーティングスロット識別子
 
 ```rust
-/// 演者の配信先スロット種別
-///
-/// EntityRegistry の `EntityKey::Actor(key, CueTarget)` に使用するスロット識別子。
-/// 非ルーティングコマンドは登録された全スロットにブロードキャストされる。
-/// ルーティングコマンド (RouteAdd/RouteSwitch/RouteRemove) は操作対象のスロットを指定する際に使用。
-///
-/// # バルーン共有
-/// 複数の演者が同一の Balloon エンティティを共有できる。
-/// 例: ("sakura", Balloon) と ("unyuu", Balloon) が同一 Entity を指す構成。
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+/// CueCommand の配送先スロット。
+/// 1 ActorKey に対して複数の CueTarget スロットが存在する。
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum CueTarget {
-    /// シェル（体・サーフェス・感情・アニメーション）
+    /// シェル（キャラクター描画）— Emote, EntityRef を主に消費
     Shell,
-    /// バルーン（テキスト・選択肢・ブロッキング）
+    /// バルーン（テキスト表示）— Text, Clear, Choice, WaitForChoice を主に消費
     Balloon,
 }
 ```
-```
 
-**メモリサイズ見積もり**（NFR-1 AC3）:
-
-| バリアント | フィールドサイズ | 備考 |
-|------------|------------------|------|
-| Text(String) | 24 bytes | String = ptr + len + cap |
-| Clear | 0 bytes | unit |
-| Emote { key } | 24 bytes | String |
-| Choice { id, text } | 48 bytes | String × 2 |
-| WaitForChoice { timeout } | 16 bytes | Option\<f64\> |
-| WaitForClick { timeout } | 16 bytes | Option\<f64\> |
-| EntityRef(Entity) | 8 bytes | Entity = u64 |
-| Custom { command, params } | 24 + 56 bytes | String + DynamicValue(最大) |
-| RouteAdd/RouteSwitch { target, to } | 1 + 32 bytes | CueTarget + EntityKey(String 最大) |
-| RouteRemove { target } | 1 byte | CueTarget のみ |
-
-enum 全体サイズ: **discriminant(8) + 最大バリアント(Choice: 48) = 56 bytes**（推定）。RouteAdd/RouteSwitch は ≈40 bytes で Choice より小。
-TimedCue = `start_time(8) + CueCommand(56) = 64 bytes` → **NFR-1 AC4: 64バイト制約に適合**。
-
-> 正確なサイズは `static_assert!(size_of::<TimedCue>() <= 64)` でコンパイル時検証する。
-
-#### TimedCue
+#### TimedCue — 絶対時刻コマンドエントリー
 
 ```rust
-/// 絶対時刻付きコマンド（CueQueue のエントリ）
-///
-/// # dola 思想との対応
-/// TypewriterTimeline::TimelineItem の show_at/start_at/fire_at に相当。
-/// cue-system では統一された start_time フィールドで一元管理。
-#[derive(Debug, Clone)]
+/// 絶対時刻に変換済みの消費可能コマンド。
+/// dispatch 時に `cue.start_time + sheet_start_time` で生成される。
+/// CueQueue 内部のエントリー型。
 pub struct TimedCue {
     /// 世界絶対時刻（秒）
     pub start_time: f64,
-    /// 演出コマンド
+    /// 演出コマンド（actor 情報は分配済みのため不要）
     pub command: CueCommand,
-}
-
-impl TimedCue {
-    pub fn new(start_time: f64, command: CueCommand) -> Self {
-        Self { start_time, command }
-    }
 }
 ```
 
-#### CueQueueState
+**メモリー見積もり（NFR-1 AC4 対応）**:
+
+| フィールド | 型 | サイズ | 備考 |
+|-----------|-----|--------|------|
+| `start_time` | `f64` | 8 B | |
+| `command` | `CueCommand` | ≤ 56 B | Text(String): tag 8 + ptr 8 + len 8 + cap 8 = 32B + padding |
+| **合計** | | **≤ 64 B** | `static_assert!(size_of::<TimedCue>() <= 64)` |
+
+### Component Layer
+
+#### CueQueue — 演出指示キュー
+
+**DD9 決定**: Vec\<TimedCue\> を降順ソートで保持し、末尾から pop（O(1)）する。  
+**Storage**: SparseSet（`#[component(storage = "SparseSet")]`）— 動的変更が頻繁なため。
 
 ```rust
-/// CueQueue の消費状態
+/// 各演者エンティティが保持する時刻付き演出指示のキュー。
 ///
-/// TypewriterState (Playing/Paused/Completed) を汎用化し、
-/// WaitingForClick / WaitingForChoice / Error を追加。
-#[derive(Debug, Clone, PartialEq, Default)]
-pub enum CueQueueState {
-    /// 時刻到達コマンドを消費中
-    #[default]
-    Playing,
-    /// 一時停止中（外部からの resume 待ち）
-    Paused,
-    /// クリック入力待ちブロック中
-    WaitingForClick {
-        /// ブロック開始時刻（タイムアウト計算用）
-        blocked_at: f64,
-        /// タイムアウト秒数（None = 無制限）
-        timeout: Option<f64>,
-    },
-    /// 選択肢入力待ちブロック中
-    WaitingForChoice {
-        /// ブロック開始時刻
-        blocked_at: f64,
-        /// タイムアウト秒数
-        timeout: Option<f64>,
-        /// 提示中の選択肢群（Choice コマンドから収集）
-        choices: Vec<PendingChoice>,
-    },
-    /// プロトコル違反によるエラー状態
-    ///
-    /// この状態になると以降の消費は停止され、CueSheetTracker が
-    /// CueSheetResult::Error に変換する。
-    Error(CueSystemError),
-    /// 全コマンド消費済み
-    Completed,
+/// CueSheet の配送（dispatch）により TimedCue が追加され、
+/// 消費者システムが pop_ready() で時刻到達済みコマンドを取得する。
+///
+/// 内部は start_time **降順** ソートの Vec<TimedCue>。
+/// 消費は末尾からの pop（O(1)）で行い、先頭への挿入移動を回避する。
+#[derive(Component, Debug)]
+#[component(storage = "SparseSet")]
+pub struct CueQueue {
+    queue: Vec<TimedCue>,
+    state: CueQueueState,
+    playback_rate: f64,
+    capacity: Option<usize>,
+    /// Choice バリアの先積みデータ
+    pending_choices: Vec<PendingChoice>,
+    /// 現在この CueQueue にコマンドを供給している CueSheet の Tracker エンティティ
+    cue_sheet_entity: Option<Entity>,
+    /// 現在アクティブなバリア
+    barrier_state: Option<BarrierState>,
 }
 
-/// 提示中の選択肢
-#[derive(Debug, Clone)]
+/// Choice コマンドの先積みデータ
+#[derive(Clone, Debug)]
 pub struct PendingChoice {
     pub id: String,
     pub text: String,
 }
 ```
 
-#### BarrierResponse — DD14: バリア直接応答型
+**Service Interface**:
 
 ```rust
-/// 物理エンティティ（スポット・バルーン等）から CueSheet エンティティへの直接バリア応答
-///
-/// 各物理エンティティの消費システムが `CueSheetTracker::receive_barrier()` に渡す。
-/// ブロードキャストされた WaitForXxx に対し、各スロットが個別に応答する。
-#[derive(Debug, Clone, PartialEq)]
-pub enum BarrierResponse {
-    /// このスロットはバリアを処理しない（即時応答）
+impl CueQueue {
+    pub fn new() -> Self { /* state: Playing, playback_rate: 1.0, capacity: None */ }
+    pub fn with_capacity(capacity: usize) -> Self { /* ... */ }
+
+    // ── 追加 ──
+    /// TimedCue を降順ソート維持で挿入（O(log n) binary search + O(n) shift）
+    pub fn push_sorted(&mut self, cue: TimedCue) -> Result<(), CueSystemError> { /* ... */ }
+    /// 複数の TimedCue を一括追加（内部で再ソート）
+    pub fn extend_sorted(&mut self, cues: impl IntoIterator<Item = TimedCue>) -> Result<(), CueSystemError> { /* ... */ }
+
+    // ── 消費 ──
+    /// current_time に到達した全コマンドを返却（O(1) per pop）
     ///
-    /// 例: Spot は WaitForChoice を解釈しない（WaitForClick はハンドラー）
-    /// → skip_barrier() でキューを再開し、Skipped を報告する
+    /// - バリア中は空 Vec を返す
+    /// - Choice コマンドは pending_choices に蓄積（返却しない）
+    /// - WaitForChoice 到達時: pending_choices > 0 → ブロック、== 0 → Error
+    /// - WaitForClick 到達時: ブロック
+    pub fn pop_ready(&mut self, current_time: f64) -> Vec<CueCommand> { /* ... */ }
+    /// 先頭（次に消費される）要素の参照
+    pub fn peek(&self) -> Option<&TimedCue> { self.queue.last() }
+
+    // ── バリア制御 ──
+    /// クリック応答（WaitForClick 解除）
+    pub fn resolve_click(&mut self) { /* state → Playing */ }
+    /// 選択肢応答（WaitForChoice 解除）。該当 id を返す。
+    pub fn resolve_choice(&mut self, choice_id: &str) -> Option<String> { /* ... */ }
+    /// タイムアウト検査
+    pub fn check_timeout(&mut self, current_time: f64) -> bool { /* ... */ }
+    /// バリアを強制スキップ
+    pub fn skip_barrier(&mut self) { /* ... */ }
+    /// 現在保留中のバリア種別
+    pub fn pending_barrier_kind(&self) -> Option<BarrierKind> { /* ... */ }
+
+    // ── 制御 ──
+    pub fn pause(&mut self) { /* state → Paused */ }
+    pub fn resume(&mut self) { /* state → Playing */ }
+    pub fn clear(&mut self) { /* queue + pending_choices + barrier_state をクリア */ }
+    pub fn set_cue_sheet(&mut self, entity: Entity) { self.cue_sheet_entity = Some(entity); }
+    pub fn cue_sheet_entity(&self) -> Option<Entity> { self.cue_sheet_entity }
+
+    // ── 状態照会 ──
+    pub fn state(&self) -> &CueQueueState { &self.state }
+    pub fn is_empty(&self) -> bool { self.queue.is_empty() }
+    pub fn len(&self) -> usize { self.queue.len() }
+    pub fn pending_choices(&self) -> &[PendingChoice] { &self.pending_choices }
+}
+```
+
+**Preconditions**: `current_time` は `FrameTime::elapsed_secs()` の値  
+**Postconditions**: 返却されたコマンドは queue から除去済み  
+**Invariants**: queue は常に start_time 降順を維持
+
+#### CueQueueState — キュー状態
+
+```rust
+#[derive(Clone, Debug, PartialEq)]
+pub enum CueQueueState {
+    Playing,
+    Paused,
+    WaitingForClick,
+    WaitingForChoice,
+    Error(CueSystemError),
+    Completed,
+}
+```
+
+#### バリア関連型
+
+```rust
+/// バリア応答値。消費者がハンドラーとして返す、またはスキップする。
+#[derive(Clone, Debug)]
+pub enum BarrierResponse {
+    /// 非ハンドラー（自ドメイン外のバリア）
     Skipped,
-    /// クリック確定（Spot や Balloon の消費システムから）
+    /// クリック応答
     Click,
-    /// 選択肢確定（Balloon の消費システムから）
+    /// 選択応答
     Choice { id: String },
-    /// タイムアウト超過（CueSheetTracker::update() が検知）
+    /// タイムアウト
     Timeout,
 }
 
-/// バリア集約状態（CueSheetTracker 内部）
-///
-/// 1つの WaitForXxx に対して全スロットの応答を集約する。
-/// CueSheetTracker::update() が自動的に初期化・解決を管理する。
-/// 最初の有効応答（Skipped 以外）が確定した時点で、残スロットを強制スキップして解決する。
-#[derive(Debug, Clone)]
-pub struct BarrierState {
-    /// 最初の有効応答（Skipped 以外）
+/// CueQueue 内部のバリア状態管理
+#[derive(Clone, Debug)]
+struct BarrierState {
+    /// 最初に有効応答が到達した時点の BarrierResponse
     first_valid: Option<BarrierResponse>,
-    /// バリアの種別
+    /// バリア種別
     kind: BarrierKind,
 }
 
-/// バリアコマンドの種別
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// バリア種別
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum BarrierKind {
-    /// WaitForChoice — 全 Skipped は EmptyChoiceBarrier エラー
     Choice,
-    /// WaitForClick — 全 Skipped は継続（ハンドラー不在 = 即通過）
     Click,
 }
 ```
 
-#### CueSheetResult
+#### CueSheetResult / CueSystemError — 実行結果とエラー
 
 ```rust
-/// CueSheet の実行結果（Modal Dialog パターン）
-///
-/// 1 CueSheet = 1 フィーチャー実行単位。
-/// 上位のオーケストレーション層がこの結果を await して次の処理に分岐する。
-#[derive(Debug, Clone)]
+/// CueSheet の実行結果。Modal Dialog の DialogResult に相当。
+#[derive(Clone, Debug)]
 pub enum CueSheetResult {
-    /// 全演者の CueQueue が消費完了
     Completed,
-    /// 外部からのキャンセル
     Cancelled,
-    /// WaitForClick / WaitForChoice のタイムアウト超過
     Timeout,
-    /// ユーザーが選択肢を選択
     Choice { id: String },
-    /// システムエラー（プロトコル違反等）
     Error(CueSystemError),
 }
-```
 
-#### CueSystemError
-
-```rust
-use thiserror::Error;
-
-/// cue-system の構造化エラー型
-#[derive(Debug, Clone, Error)]
+/// cue-system のエラー型（thiserror 2）
+#[derive(Clone, Debug, thiserror::Error)]
 pub enum CueSystemError {
-    /// WaitForChoice 消費時に先行 Choice が 0 件
-    #[error("Empty choice barrier for actor '{actor}': WaitForChoice reached with no preceding Choice commands")]
+    #[error("WaitForChoice に先行する Choice コマンドがありません (actor: {actor})")]
     EmptyChoiceBarrier { actor: String },
-
-    /// (ActorKey, CueTarget) の解決に失敗（warn ログ用、配送は継続）
-    #[error("Entity not found in registry: {key:?}")]
-    EntityNotFound { key: EntityKey },
-
-    /// CueQueue キャパシティ超過
-    #[error("CueQueue capacity exceeded for actor '{actor}': limit={limit}, attempted={attempted}")]
-    CapacityExceeded {
-        actor: String,
-        limit: usize,
-        attempted: usize,
-    },
+    #[error("EntityKey '{key}' に対応するエンティティが見つかりません")]
+    EntityNotFound { key: String },
+    #[error("CueQueue のキャパシティ上限 ({capacity}) を超過しました")]
+    CapacityExceeded { capacity: usize },
 }
 ```
 
-### cue/component — ECS コンポーネント層
+### System Layer
 
-#### CueQueue
+#### PendingCueSheet + dispatch — 配送メカニズム
 
-| Field | Detail |
-|-------|--------|
-| Intent | 各演者エンティティの時刻付き演出指示キュー |
-| Requirements | 3.1-3.9, 5.1-5.6 |
-
-**Responsibilities & Constraints**
-- `Vec<TimedCue>` をソート済みで保持（start_time 昇順）
-- 経過時刻を管理しない（消費時に外部から `current_time` を受け取る — dola 思想）
-- SparseSet ストレージ（動的追加/削除が頻繁）
-- CueQueue 自身は消費ロジックを持たない（消費プロトコルは `pop_ready()` API で提供）
-
-**Dependencies**
-- Inbound: dispatch()（TimedCue の追加） — P0
-- Outbound: 消費者システム（`pop_ready()` 経由のコマンド取得） — P0
-- Infra: FrameTime（current_time の提供元） — P0
-- Infra: DolaRuntime（物理エンティティのアニメーション実行） — P0
-
-**データ構造選択 — DD9 固有の決定**:
-
-| 選択肢 | push | pop | peek | 選定理由 |
-|---------|------|-----|------|----------|
-| BinaryHeap\<Reverse\> | O(log n) | O(log n) | O(1) | 標準的だが pop 後の同一時刻一括消費が不便 |
-| **Vec\<TimedCue\> ソート済み** | **O(log n)** | **O(1) 償却** | **O(1)** | **キャッシュフレンドリー。実用キュー長で最速** |
-| VecDeque ソート済み | O(n) | O(1) | O(1) | pop_front は O(1) だが insert が O(n) |
-
-**採用: Vec\<TimedCue\> ソート済み（逆順保持）**
-
-実用上のキュー長は数十〜数百件。Vec の連続メモリ配置はキャッシュ効率で BinaryHeap を上回る。`start_time` 降順で保持し、末尾（最小時刻）から `pop()` することで O(1) 消費を実現する。挿入は `binary_search_by()` + `insert()` で O(log n) 探索 + O(n) シフトだが、実用キュー長では問題にならない。
-
-> **gap-analysis の BinaryHeap 推奨を修正**: 実用観点で Vec のほうが適切。BinaryHeap は同一時刻の一括消費パターンとの相性が悪い（peek で1件しか見えず、pop 後に再ヒープ化が必要）。Vec は末尾から走査で同一時刻コマンドを効率的に一括消費できる。
-
-##### Service Interface
+**DD7-c 決定**: PendingCueSheet コンポーネント + 内部ヘルパー関数パターン。  
+通常システムから `Commands` で短命エンティティを spawn し、dispatch システムが自動処理。
 
 ```rust
-/// エンティティキュー — 時刻付き演出指示の消費コンテナ
-///
-/// # dola 思想との対応
-/// CueQueue ≈ dola::Runtime（実行可能形式）
-/// pop_ready(current_time) ≈ dola::playback()
-///
-/// # メモリ戦略
-/// Vec<TimedCue> を start_time **降順**で保持。
-/// 末尾が最小時刻（次に消費すべきコマンド）。
-/// pop() で O(1) 消費、binary_search + insert で O(log n + n) 挿入。
-#[derive(Component, Debug, Clone)]
-#[component(storage = "SparseSet")]
-pub struct CueQueue {
-    /// TimedCue 列（start_time 降順）
-    queue: Vec<TimedCue>,
-    /// 消費状態
-    state: CueQueueState,
-    /// 再生速度倍率（1.0 = 通常速度）
-    playback_rate: f64,
-    /// オプショナルなキャパシティ上限
-    capacity: Option<usize>,
-    /// WaitForChoice 前に収集した Choice コマンド群（一時バッファ）
-    pending_choices: Vec<PendingChoice>,
-    /// バリア応答の送信先 CueSheet エンティティ
-    ///
-    /// dispatch 時に設定される。WaitForXxx 処理後、
-    /// 消費システムが CueSheetTracker::receive_barrier() を呼ぶ際のターゲット。
-    cue_sheet_entity: Option<Entity>,
-}
-
-impl CueQueue {
-    /// 空のキューを生成
-    pub fn new() -> Self {
-        Self {
-            queue: Vec::new(),
-            state: CueQueueState::Playing,
-            playback_rate: 1.0,
-            capacity: None,
-            pending_choices: Vec::new(),
-            cue_sheet_entity: None,
-        }
-    }
-
-    /// キャパシティ付きで生成
-    pub fn with_capacity(capacity: usize) -> Self {
-        Self {
-            queue: Vec::with_capacity(capacity),
-            capacity: Some(capacity),
-            ..Self::new()
-        }
-    }
-
-    // === 挿入 API ==
-
-    /// バリア応答の送信先 CueSheet エンティティを設定（dispatch 時に呼ばれる）
-    ///
-    /// # 単一アクティブ制約
-    /// 1つの CueQueue に対して同時にアクティブな CueSheet は高々 1 つ。
-    /// 2回目の dispatch で上書きされた場合、前の CueSheetTracker はバリア応答を
-    /// 受け取れなくなる。逐次投入（Req 4 AC7）は、前の CueSheet の結果を
-    /// await してから次を投入する Modal Dialog パターンで使用すること。
-    pub fn set_cue_sheet(&mut self, entity: Entity) {
-        self.cue_sheet_entity = Some(entity);
-    }
-
-    /// バリア応答の送信先 CueSheet エンティティを取得
-    pub fn cue_sheet_entity(&self) -> Option<Entity> {
-        self.cue_sheet_entity
-    }
-
-    /// 現在ブロック中のバリア種別を取得（CueSheetTracker::update() がバリア自動検知に使用）
-    pub fn pending_barrier_kind(&self) -> Option<BarrierKind> {
-        match &self.state {
-            CueQueueState::WaitingForChoice { .. } => Some(BarrierKind::Choice),
-            CueQueueState::WaitingForClick { .. } => Some(BarrierKind::Click),
-            _ => None,
-        }
-    }
-
-    /// バリアをスキップしキューを再開
-    ///
-    /// 以下の2つのケースで使用される:
-    /// 1. **消費者が非ハンドラーの場合**: `WaitForChoice` を受け取ったが選択 UI を
-    ///    表示できないエンティティ（Spot 等）がスキップ + `receive_barrier(Skipped)` を報告
-    /// 2. **CueSheetTracker::update() による強制スキップ**: first_valid 確定後、
-    ///    残りのバリア待ちスロットを強制的に解放する
-    ///
-    /// 既に Playing 状態の場合は false を返す（冪等）。
-    pub fn skip_barrier(&mut self) -> bool {
-        match self.state {
-            CueQueueState::WaitingForClick { .. } | CueQueueState::WaitingForChoice { .. } => {
-                self.pending_choices.clear();
-                self.state = CueQueueState::Playing;
-                true
-            }
-            _ => false,
-        }
-    }
-
-    // === 挿入 API ===
-
-    /// 時刻順を維持して TimedCue を挿入
-    ///
-    /// start_time 降順の Vec に対して binary_search で挿入位置を特定。
-    /// 同一時刻のコマンドは挿入順（= 末尾寄り）で安定。
-    pub fn push_sorted(&mut self, timed_cue: TimedCue) -> Result<(), CueSystemError> {
-        if let Some(cap) = self.capacity {
-            if self.queue.len() >= cap {
-                return Err(CueSystemError::CapacityExceeded {
-                    actor: String::new(), // 呼び出し元で補完
-                    limit: cap,
-                    attempted: self.queue.len() + 1,
-                });
-            }
-        }
-        // 降順保持: 大きい start_time が先頭、小さいのが末尾
-        let pos = self.queue.partition_point(|existing| {
-            existing.start_time > timed_cue.start_time
-        });
-        self.queue.insert(pos, timed_cue);
-        // 挿入により Idle → Playing 遷移
-        if self.state == CueQueueState::Completed {
-            self.state = CueQueueState::Playing;
-        }
-        Ok(())
-    }
-
-    /// 複数の TimedCue を一括挿入（配送時のバッチ用）
-    pub fn extend_sorted(&mut self, cues: impl IntoIterator<Item = TimedCue>) -> Result<(), CueSystemError> {
-        for cue in cues {
-            self.push_sorted(cue)?;
-        }
-        Ok(())
-    }
-
-    // === 消費 API ===
-
-    /// 時刻到達済みの先頭コマンドを全て取得・除去
-    ///
-    /// current_time ≥ start_time のコマンドを末尾から pop。
-    /// 同一 start_time のコマンドはフレーム内で一括消費される。
-    ///
-    /// # バリアコマンドの処理
-    /// - WaitForClick: state を WaitingForClick に遷移、以降の pop を中断
-    /// - WaitForChoice: pending_choices を収集し WaitingForChoice に遷移
-    /// - Choice: pending_choices に蓄積（消費者には返さない）
-    ///
-    /// # Returns
-    /// 消費可能なコマンド列（Choice を除く）
-    pub fn pop_ready(&mut self, current_time: f64) -> Vec<CueCommand> {
-        // ブロック中またはエラー状態では消費しない
-        match &self.state {
-            CueQueueState::Playing => {}
-            CueQueueState::Paused => return Vec::new(),
-            CueQueueState::WaitingForClick { .. } => return Vec::new(),
-            CueQueueState::WaitingForChoice { .. } => return Vec::new(),
-            CueQueueState::Error(_) => return Vec::new(),
-            CueQueueState::Completed => return Vec::new(),
-        }
-
-        let mut commands = Vec::new();
-
-        while let Some(tail) = self.queue.last() {
-            if tail.start_time > current_time {
-                break;
-            }
-            let timed_cue = self.queue.pop().unwrap();
-
-            match timed_cue.command {
-                CueCommand::Choice { ref id, ref text } => {
-                    // Choice はバッファに蓄積（消費者には返さない）
-                    self.pending_choices.push(PendingChoice {
-                        id: id.clone(),
-                        text: text.clone(),
-                    });
-                }
-                CueCommand::WaitForChoice { timeout } => {
-                    // バリア: 先行 Choice 群を収集してブロック
-                    let choices = std::mem::take(&mut self.pending_choices);
-                    if choices.is_empty() {
-                        // プロトコル違反 → Error 状態に遷移
-                        // ActorKey 情報は CueQueue が持たないため、
-                        // actor フィールドは空文字列で仮置き。
-                        // CueSheetTracker::update() で補完される。
-                        self.state = CueQueueState::Error(
-                            CueSystemError::EmptyChoiceBarrier {
-                                actor: String::new(),
-                            }
-                        );
-                    } else {
-                        self.state = CueQueueState::WaitingForChoice {
-                            blocked_at: current_time,
-                            timeout,
-                            choices,
-                        };
-                    }
-                    break; // バリア到達またはエラーで消費中断
-                }
-                CueCommand::WaitForClick { timeout } => {
-                    self.state = CueQueueState::WaitingForClick {
-                        blocked_at: current_time,
-                        timeout,
-                    };
-                    break; // バリア到達で消費中断
-                }
-                other => {
-                    commands.push(other);
-                }
-            }
-        }
-
-        // 全コマンド消費済み + Playing 状態 → Completed
-        if self.queue.is_empty() && self.state == CueQueueState::Playing {
-            self.state = CueQueueState::Completed;
-        }
-
-        commands
-    }
-
-    /// 先頭（次に消費すべき）コマンドを参照（除去しない）
-    pub fn peek(&self) -> Option<&TimedCue> {
-        self.queue.last()
-    }
-
-    /// 次のコマンドの start_time を取得
-    pub fn next_start_time(&self) -> Option<f64> {
-        self.queue.last().map(|tc| tc.start_time)
-    }
-
-    // === 状態 API ===
-
-    /// 消費状態を取得
-    pub fn state(&self) -> &CueQueueState {
-        &self.state
-    }
-
-    /// キューが空かどうか
-    pub fn is_empty(&self) -> bool {
-        self.queue.is_empty()
-    }
-
-    /// キュー内のコマンド数
-    pub fn len(&self) -> usize {
-        self.queue.len()
-    }
-
-    /// 全コマンドを消去
-    pub fn clear(&mut self) {
-        self.queue.clear();
-        self.pending_choices.clear();
-        self.state = CueQueueState::Completed;
-    }
-
-    // === 制御 API ===
-
-    /// 一時停止
-    pub fn pause(&mut self) {
-        if self.state == CueQueueState::Playing {
-            self.state = CueQueueState::Paused;
-        }
-    }
-
-    /// 再開
-    pub fn resume(&mut self) {
-        if self.state == CueQueueState::Paused {
-            self.state = CueQueueState::Playing;
-        }
-    }
-
-    /// クリック入力を受信（WaitingForClick 解除）
-    pub fn resolve_click(&mut self) {
-        if matches!(self.state, CueQueueState::WaitingForClick { .. }) {
-            self.state = CueQueueState::Playing;
-        }
-    }
-
-    /// 選択肢選択を受信（WaitingForChoice 解除）
-    ///
-    /// # Returns
-    /// 選択された Choice の id（CueSheetResult::Choice に使用）
-    pub fn resolve_choice(&mut self, choice_id: &str) -> Option<String> {
-        if let CueQueueState::WaitingForChoice { choices, .. } = &self.state {
-            let found = choices.iter().any(|c| c.id == choice_id);
-            if found {
-                self.state = CueQueueState::Playing;
-                return Some(choice_id.to_string());
-            }
-        }
-        None
-    }
-
-    /// タイムアウトチェック（WaitingForClick / WaitingForChoice 用）
-    ///
-    /// # Returns
-    /// タイムアウトした場合 true
-    pub fn check_timeout(&mut self, current_time: f64) -> bool {
-        match &self.state {
-            CueQueueState::WaitingForClick { blocked_at, timeout: Some(t) } => {
-                if current_time - blocked_at >= *t {
-                    self.state = CueQueueState::Playing;
-                    return true;
-                }
-            }
-            CueQueueState::WaitingForChoice { blocked_at, timeout: Some(t), .. } => {
-                if current_time - blocked_at >= *t {
-                    self.state = CueQueueState::Playing;
-                    return true;
-                }
-            }
-            _ => {}
-        }
-        false
-    }
-
-    /// 再生速度倍率を設定
-    pub fn set_playback_rate(&mut self, rate: f64) {
-        self.playback_rate = rate;
-    }
-
-    /// 再生速度倍率を取得
-    pub fn playback_rate(&self) -> f64 {
-        self.playback_rate
-    }
-
-    /// 提示中の選択肢を取得（WaitingForChoice 中のみ）
-    pub fn pending_choices(&self) -> Option<&[PendingChoice]> {
-        if let CueQueueState::WaitingForChoice { choices, .. } = &self.state {
-            Some(choices)
-        } else {
-            None
-        }
-    }
-}
-```
-
-### cue/system — システム層
-
-#### dispatch() — 配送関数
-
-| Field | Detail |
-|-------|--------|
-| Intent | CueSheet を絶対時刻化して各演者の CueQueue に分配する |
-| Requirements | 4.1-4.7 |
-
-**設計判断 DD7**: PendingCueSheet コンポーネント方式を採用。
-
-DD7 で検討した3方式:
-- (a) `PendingCueSheet` コンポーネント → dispatch システムで処理
-- (b) `dispatch_cue_sheet()` 関数呼び出し（排他的 &mut World）
-- **(c) 両方（コンポーネント投入 + 内部ヘルパー関数）→ 採用**
-
-**DD7-c を採用する理由**:
-- **通常のシステムから呼び出し可能**: `commands.spawn(PendingCueSheet)` で投入できる
-- **独立短命エンティティパターン**: CueSheet は配送処理中のみ存在する一時エンティティとして自然
-- **排他制御不要**: dispatch システムは Query/Commands で実装でき、他システムと並列実行可能
-- **ECS 親和性**: bevy_ecs の Component-based 設計に沿った実装
-- gap-analysis DD7-c の推奨に従う（当初の DD7-b 理由「親エンティティが不自然」は誤解、PendingCueSheet は独立エンティティとして使用）
-
-#### PendingCueSheet — 配送待ちコンポーネント
-
-```rust
-/// 配送待ちの CueSheet（独立短命エンティティに付与）
-///
-/// # Usage
-/// ```ignore
-/// // 通常のシステムから投入
-/// commands.spawn(PendingCueSheet {
-///     sheet: cue_sheet,
-///     start_time: frame_time.elapsed_secs(),
-/// });
-/// ```
-#[derive(Component, Debug)]
+/// 配送待ち CueSheet を保持する短命コンポーネント。
+/// dispatch_pending_cue_sheets システムが消費し、同一エンティティに CueSheetTracker を付与する。
+#[derive(Component)]
 #[component(storage = "SparseSet")]
 pub struct PendingCueSheet {
     pub sheet: CueSheet,
@@ -1129,454 +567,223 @@ pub struct PendingCueSheet {
 }
 ```
 
-#### dispatch_pending_cue_sheets システム
+**dispatch_pending_cue_sheets システム**:
 
 ```rust
-/// PendingCueSheet を処理し、各演者の CueQueue に配送
+/// PendingCueSheet を検出し、CueSheet を各演者の CueQueue に配送するシステム。
 ///
-/// Update スケジュールで実行される。
-/// 配送完了後、PendingCueSheet コンポーネントを除去し同一エンティティに CueSheetTracker を付与する。
-/// PendingCueSheet エンティティがそのまま CueSheet エンティティとなる（同一 Entity ID）。
+/// 1. PendingCueSheet を持つエンティティを走査
+/// 2. dispatch_cue_sheet_internal() でルーティング + 分配
+/// 3. PendingCueSheet を除去し、同一エンティティに CueSheetTracker を付与
+///
+/// Schedule: Update（消費者システムより前）
 pub fn dispatch_pending_cue_sheets(
-    mut pending: Query<(Entity, &PendingCueSheet)>,
-    mut queues: Query<&mut CueQueue>,
-    mut registry: ResMut<EntityRegistry>,
     mut commands: Commands,
-) {
-    for (entity, pending) in pending.iter() {
-        let handle = dispatch_cue_sheet_internal(
-            &pending.sheet,
-            pending.start_time,
-            entity,           // バリア応答の送信先
-            &mut registry,
-            &mut queues,
-        );
-        
-        // PendingCueSheet エンティティに CueSheetTracker を付与（同一 Entity ID のまま CueSheet エンティティに）
-        commands
-            .entity(entity)
-            .remove::<PendingCueSheet>()
-            .insert(CueSheetTracker::new(handle));
-    }
-}
+    query: Query<(Entity, &PendingCueSheet)>,
+    mut registry: ResMut<EntityRegistry>,
+    world: &World,
+) { /* ... */ }
 ```
 
-#### dispatch_cue_sheet_internal — 内部ヘルパー
+**dispatch_cue_sheet_internal ヘルパー**:
 
 ```rust
-/// CueSheet 配送結果
-pub struct CueSheetHandle {
-    /// 配送先のエンティティリスト（重複なし）
-    pub targets: Vec<(ActorKey, CueTarget, bevy_ecs::entity::Entity)>,
-    /// ルーティング解決に失敗した (ActorKey, CueTarget) ペア
-    pub skipped: Vec<(ActorKey, CueTarget)>,
-}
-
-/// CueSheet を各演者の CueQueue に配送（内部ヘルパー）
+/// CueSheet を各演者の CueQueue に分配する内部関数。
 ///
-/// # dola 思想との対応
-/// dispatch() ≈ dola::compile()（相対時刻を絶対時刻にコンパイル）
-///
-/// # Process
-/// 1. コマンド分類を判定
-///    - `is_routing_command()` = true: EntityRegistry を更新して消費（CueQueue には届かない）
-///    - それ以外: 全スロットにブロードキャスト
-/// 2. ブロードキャスト対象: `registry.routes_for_actor(actor)` で全スロットを列挙
-/// 3. cue.start_time + sheet_start_time で世界絶対時刻を算出
-/// 4. 各スロットの Entity の CueQueue に push_sorted()
-/// 5. 各 CueQueue に `cue_sheet_entity` を設定（未設定の場合のみ）
-///
-/// # Routing Example
-/// ```text
-/// Cue { actor: "sakura", cmd: Text("hello") }
-///   → is_routing_command() = false
-///   → routes_for_actor("sakura") = [(Shell, entity_spot), (Balloon, entity_balloon)]
-///   → entity_spot.CueQueue.push_sorted(Text("hello"))    ← スポットは _ でスキップ
-///   → entity_balloon.CueQueue.push_sorted(Text("hello")) ← バルーンがタイプ表示
-///
-/// Cue { actor: "sakura", cmd: Emote { key: "smile" } }
-///   → is_routing_command() = false
-///   → routes_for_actor("sakura") = [(Shell, entity_spot), (Balloon, entity_balloon)]
-///   → entity_spot.CueQueue.push_sorted(Emote { "smile" })    ← スポット: サーフェスアニメが決定
-///   → entity_balloon.CueQueue.push_sorted(Emote { "smile" }) ← バルーン: フォントセット切替
-///
-/// Cue { actor: "sakura", cmd: RouteSwitch { target: Balloon, to: EntityKey::Balloon("balloon_b") } }
-///   → is_routing_command() = true
-///   → registry で EntityKey::Balloon("balloon_b") を解決 → entity_b
-///   → registry.register(EntityKey::Actor("sakura", Balloon), entity_b) で更新
-///   → CueQueue へのプッシュなし
-/// ```
-///
-/// # Error Handling
-/// - EntityKey 未解決: warn! ログ + スキップ（他は継続）
-/// - CueQueue キャパシティ超過: warn! ログ + 超過分スキップ
-/// - 空 CueSheet: no-op（エラーなし）
+/// 処理フロー:
+/// 1. 各 Cue を走査
+/// 2. ルーティングコマンド → EntityRegistry を更新（CueQueue には入らない）
+/// 3. 非ルーティングコマンド → routes_for_actor() で全スロットにブロードキャスト
+/// 4. 各スロットの CueQueue に push_sorted(TimedCue)
+/// 5. 配送先リスト (Vec<(ActorKey, CueTarget, Entity)>) を返却 → CueSheetTracker 生成に使用
 fn dispatch_cue_sheet_internal(
-    cue_sheet: &CueSheet,
-    sheet_start_time: f64,
-    cue_sheet_entity: Entity,
+    sheet: &CueSheet,
+    start_time: f64,
     registry: &mut EntityRegistry,
-    queues: &mut Query<&mut CueQueue>,
-) -> CueSheetHandle {
-    // Implementation: see Tasks
-    todo!()
+    world: &mut World,
+) -> CueSheetHandle { /* ... */ }
+
+/// dispatch の戻り値。CueSheetTracker 生成に必要な配送先情報。
+pub struct CueSheetHandle {
+    pub targets: Vec<(ActorKey, CueTarget, Entity)>,
 }
 ```
 
-#### update_cue_sheet_trackers — Tracker 更新システム
+#### EntityRegistry — 統合レジストリ
+
+**DD2-c 決定**: `HashMap<EntityKey, Entity>` による統合レジストリ。O(1) 解決、型安全な名前空間統合。
 
 ```rust
-/// CueSheetTracker を毎フレーム更新（バリアライフサイクル集中管理 + 完了判定）
+/// ActorKey + CueTarget から Entity を解決する統合レジストリ。
 ///
-/// 消費者システム（consume_balloon_cues, consume_spot_cues）の **後** に
-/// 実行されるよう .after() でスケジュールすることを推奨する。
-///
-/// # Responsibilities
-/// - バリア自動検知（キューの WaitingForXxx 状態から）
-/// - タイムアウト検知（check_timeout → BarrierResponse::Timeout）
-/// - 残スロット強制スキップ（first_valid 確定後）
-/// - 完了判定（全スロット Completed → CueSheetResult::Completed）
-pub fn update_cue_sheet_trackers(
-    mut trackers: Query<&mut CueSheetTracker>,
-    mut queues: Query<&mut CueQueue>,
-    frame_time: Res<FrameTime>,
-) {
-    let current_time = frame_time.elapsed_secs();
-    for mut tracker in trackers.iter_mut() {
-        tracker.update(&mut queues, current_time);
-    }
-}
-```
-
-#### EntityRegistry — DD2-c 決定: 統合エンティティレジストリ
-
-| Field | Detail |
-|-------|--------|
-| Intent | EntityKey から Entity への統合ルーティングを提供する単一レジストリ |
-| Requirements | 4.3, 4.6 |
-
-**設計判断 DD2-c**: 統合 `EntityRegistry` + `EntityKey` enum を採用。
-
-| 選択肢 | 評価 | 理由 |
-|---------|------|------|
-| (a) HashMap\<ActorKey, Entity\> | ❌ | 1演者 = 1エンティティの仮定。Shell/Balloon 分離不可 |
-| (b) HashMap\<(ActorKey, CueTarget), Entity\> | ❌ | 演者専用。Spot/Balloon 追加で別レジストリが乱立 |
-| **(c) HashMap\<EntityKey, Entity\>** | **✅ 採用** | O(1) 解決。EntityKey enum で型安全に名前空間を分離。P1 Spot/Balloon も同一レジストリで拡張可能 |
-| (d) Query\<(Entity, &ActorMarker)\> | ❌ | 毎フレームのクエリが不要（配送はイベント駆動） |
-
-**設計ポイント**:
-- `EntityKey` enum で演者(P0) / 立ち位置 / バルーン(P1) を型安全に統一
-- 1演者 = 複数の CueQueue 配信先（Shell + Balloon）
-- バルーン共有: 複数演者が同一 Balloon エンティティを共有可能
-- P1 では `EntityKey::Spot` / `EntityKey::Balloon` variant を追加するだけで拡張完結
-
-```rust
-use bevy_ecs::prelude::*;
-use std::collections::HashMap;
-
-/// エンティティ統合ルーティングキー
-///
-/// 名前 → Entity の解決に使用する型安全な識別子。
-/// P0 では Actor variant のみ使用。P1 で Spot/Balloon を追加予定。
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub enum EntityKey {
-    /// 演者 × ルーティング先 (P0)
-    Actor(ActorKey, CueTarget),
-    /// 立ち位置名 (P1)
-    Spot(String),
-    /// バルーン名 (P1)
-    Balloon(String),
-}
-
-/// 統合エンティティレジストリ — EntityKey から Entity への解決
-///
-/// XxxRegistry が乱立しないよう単一 HashMap に統合したリソース。
-/// 演者(Actor)、立ち位置(Spot)、バルーン(Balloon) を一元管理する。
-///
-/// ```ignore
-/// // セットアップ例: さくらとうにゅうがバルーンを共有
-/// registry.register_actor("sakura", CueTarget::Shell, sakura_shell);
-/// registry.register_actor("sakura", CueTarget::Balloon, balloon_0);
-/// registry.register_actor("unyuu", CueTarget::Shell, unyuu_shell);
-/// registry.register_actor("unyuu", CueTarget::Balloon, balloon_0); // 共有!
-/// ```
-#[derive(Resource, Debug, Default)]
+/// 名前空間の統合:
+/// - Actor(ActorKey, CueTarget): アクターの特定スロット
+/// - Spot(String): 物理スポットエンティティ (P1 拡張)
+/// - Balloon(String): 物理バルーンエンティティ (P1 拡張)
+#[derive(Resource, Default, Debug)]
 pub struct EntityRegistry {
     map: HashMap<EntityKey, Entity>,
 }
 
+/// レジストリのキー。名前空間を型で分離。
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub enum EntityKey {
+    Actor(ActorKey, CueTarget),
+    Spot(String),
+    Balloon(String),
+}
+
 impl EntityRegistry {
-    /// エンティティを登録
-    pub fn register(&mut self, key: EntityKey, entity: Entity) {
-        self.map.insert(key, entity);
+    /// アクター登録（ショートカット）
+    pub fn register_actor(&mut self, actor: impl Into<ActorKey>, target: CueTarget, entity: Entity) {
+        self.map.insert(EntityKey::Actor(actor.into(), target), entity);
     }
+    /// アクター解決（ショートカット）
+    pub fn resolve_actor(&self, actor: &ActorKey, target: &CueTarget) -> Option<Entity> {
+        self.map.get(&EntityKey::Actor(actor.clone(), target.clone())).copied()
+    }
+    /// 指定アクターの全ルーティングスロットを返却
+    pub fn routes_for_actor(&self, actor: &ActorKey) -> Vec<(CueTarget, Entity)> { /* ... */ }
 
-    /// エンティティの登録を解除
-    pub fn unregister(&mut self, key: &EntityKey) -> Option<Entity> {
-        self.map.remove(key)
-    }
-
-    /// EntityKey から Entity を解決
-    pub fn resolve(&self, key: &EntityKey) -> Option<Entity> {
-        self.map.get(key).copied()
-    }
-
-    /// 演者のルーティングを便利登録 (P0 向けショートハンド)
-    pub fn register_actor(
-        &mut self,
-        key: impl Into<ActorKey>,
-        target: CueTarget,
-        entity: Entity,
-    ) {
-        self.map.insert(EntityKey::Actor(key.into(), target), entity);
-    }
-
-    /// 演者ルーティングを便利解決 (P0 向けショートハンド)
-    pub fn resolve_actor(&self, key: &ActorKey, target: CueTarget) -> Option<Entity> {
-        self.map.get(&EntityKey::Actor(key.clone(), target)).copied()
-    }
-
-    /// 指定演者の全ルーティングを取得
-    pub fn routes_for_actor(&self, key: &ActorKey) -> Vec<(CueTarget, Entity)> {
-        self.map
-            .iter()
-            .filter_map(|(k, e)| match k {
-                EntityKey::Actor(k, t) if k == key => Some((*t, *e)),
-                _ => None,
-            })
-            .collect()
-    }
+    // 汎用 API
+    pub fn register(&mut self, key: EntityKey, entity: Entity) { self.map.insert(key, entity); }
+    pub fn resolve(&self, key: &EntityKey) -> Option<Entity> { self.map.get(key).copied() }
 }
 ```
 
-#### CueSheetTracker — DD11 決定: Component Poll 方式
+#### CueSheetTracker — 実行状態追跡
 
-| Field | Detail |
-|-------|--------|
-| Intent | CueSheet の実行状態を追跡し、CueSheetResult を通知する |
-| Requirements | 9.1-9.7 |
-
-**設計判断 DD11**: Component Poll 方式を採用。
-
-| 選択肢 | 評価 | 理由 |
-|---------|------|------|
-| (a) bevy Observer/Event | ❌ | bevy_ecs 0.18 の Observer は安定性が未検証。配送パターンの学習コストが高い |
-| (b) bevy AsyncTask | ❌ | bevy_ecs の async 統合は不安定。ECS の外で Future を管理する複雑性 |
-| **(c) Component Poll** | **✅ 採用** | TypewriterState::Completed パターンの自然な拡張。ECS の Changed\<T\> で検出可能。シンプルかつ確実 |
+**DD11 決定**: Component Poll パターン。TypewriterState パターンの自然な拡張。  
+**DD14 決定**: バリアライフサイクルは `update()` が集中管理（自動検知 → タイムアウト → 強制スキップ → 解決判定）。
 
 ```rust
-/// CueSheet 実行追跡コンポーネント
+/// CueSheet の実行状態を追跡するコンポーネント。
+/// dispatch により spawn され、全配送先の CueQueue を監視する。
 ///
-/// 配送時に生成され、全演者の CueQueue を監視する。
-/// 上位層が `Changed<CueSheetTracker>` または毎フレーム poll で結果を取得。
-///
-/// # Modal Dialog パターン
-/// ```ignore
-/// // 配送
-/// let handle = dispatch_cue_sheet(&sheet, start_time, &registry, world);
-/// world.spawn(CueSheetTracker::new(handle));
-///
-/// // 毎フレーム poll（Update スケジュール）
-/// for (entity, tracker) in query.iter() {
-///     if let Some(result) = tracker.result() {
-///         match result {
-///             CueSheetResult::Completed => { /* 次の CueSheet へ */ }
-///             CueSheetResult::Choice { id } => { /* 選択分岐 */ }
-///             _ => {}
-///         }
-///         commands.entity(entity).despawn();
-///     }
-/// }
-/// ```
-#[derive(Component, Debug, Clone)]
+/// 上位層は `tracker.result()` を毎フレーム poll して完了を検知する。
+#[derive(Component, Debug)]
 #[component(storage = "SparseSet")]
 pub struct CueSheetTracker {
-    /// 追跡対象の配送先エンティティ（重複なし）
-    targets: Vec<(ActorKey, CueTarget, bevy_ecs::entity::Entity)>,
-    /// 実行結果（確定後に Some）
+    /// 配送先の (ActorKey, CueTarget, Entity) リスト
+    targets: Vec<(ActorKey, CueTarget, Entity)>,
+    /// 実行結果（Some になったら完了）
     result: Option<CueSheetResult>,
-    /// キャンセルフラグ
+    /// キャンセル要求フラグ
     cancelled: bool,
-    /// 現在アクティブなバリア集約状態
-    ///
-    /// ブロードキャストされた WaitForXxx に対し、
-    /// 子スロットの応答を集約する。同時にアクティブなバリアは常に高々 1 つ。
-    /// update() が自動的に初期化・タイムアウト検知・残スロット強制スキップ・解決を管理する。
+    /// バリア状態の集中管理
     barrier_state: Option<BarrierState>,
 }
 
 impl CueSheetTracker {
-    /// CueSheetHandle から生成
-    pub fn new(handle: CueSheetHandle) -> Self {
-        Self {
-            targets: handle.targets,
-            result: None,
-            cancelled: false,
-            barrier_state: None,
-        }
-    }
+    /// 実行結果を poll（None = 実行中）
+    pub fn result(&self) -> Option<&CueSheetResult> { self.result.as_ref() }
+    /// 外部からのキャンセル要求
+    pub fn cancel(&mut self) { self.cancelled = true; }
+    /// 消費者がバリア応答を報告
+    pub fn receive_barrier(&mut self, response: BarrierResponse) { /* first_valid 更新 */ }
 
-    /// 実行結果を取得（確定済みの場合 Some）
-    pub fn result(&self) -> Option<&CueSheetResult> {
-        self.result.as_ref()
-    }
-
-    /// 外部からキャンセル
-    pub fn cancel(&mut self) {
-        self.cancelled = true;
-    }
-
-    /// 追跡対象の配送先リスト
-    pub fn targets(&self) -> &[(ActorKey, CueTarget, bevy_ecs::entity::Entity)] {
-        &self.targets
-    }
-
-    /// バリア応答を受信（物理エンティティの消費システムから呼ばれる）
+    /// 毎フレーム呼び出し — バリアライフサイクル集中管理
     ///
-    /// 消費システムは CueQueue のバリア状態を解決したとき（resolve_click / resolve_choice / skip_barrier）
-    /// に、対応する BarrierResponse をこのメソッドで報告する。
-    /// 最初の有効応答（Skipped 以外）が first_valid として保存される。
-    /// 解決処理は update() が行う（消費側はタイミングを気にしなくてよい）。
-    pub fn receive_barrier(&mut self, response: BarrierResponse) {
-        let Some(barrier) = &mut self.barrier_state else { return; };
-        if barrier.first_valid.is_none() && response != BarrierResponse::Skipped {
-            barrier.first_valid = Some(response);
-        }
-    }
+    /// 4 フェーズアルゴリズム:
+    /// 1. バリア自動検知: 全配送先の CueQueueState を走査し、
+    ///    WaitingForClick/WaitingForChoice を検出したら BarrierState を生成
+    /// 2. タイムアウト検出: barrier 開始からの経過時間が timeout を超過したら
+    ///    BarrierResponse::Timeout を設定
+    /// 3. 解決判定: first_valid が Some になったら:
+    ///    - 残りの未応答スロットに skip_barrier() を強制適用
+    ///    - Click → 全スロット resolve_click() → 継続
+    ///    - Choice → result に CueSheetResult::Choice を設定
+    ///    - Timeout → result に CueSheetResult::Timeout を設定
+    ///    - 全 Skipped + Click → 全スロット resolve_click() → 継続
+    ///    - 全 Skipped + Choice → CueSheetResult::Error
+    /// 4. 完了判定: 全配送先が Completed → CueSheetResult::Completed
+    pub fn update(&mut self, world: &World, current_time: f64) { /* ... */ }
+}
+```
 
-    /// 毎フレーム更新（Update スケジュール。消費者システムの後に実行推奨）
-    ///
-    /// # バリアライフサイクルの集中管理
-    /// 1. **バリア自動検知**: ターゲットキューの WaitingForXxx 状態を検出し barrier_state を初期化
-    /// 2. **タイムアウト検知**: 各ターゲットの check_timeout() を呼び出し Timeout 応答に変換
-    /// 3. **解決判定**: first_valid 確定 or 全スロット退出 → バリア解決 + 残スロット強制スキップ
-    /// 4. **完了判定**: 全配送先 Completed → CueSheetResult::Completed
-    ///
-    /// # システム実行順の注意
-    /// update() は消費者システム（consume_balloon_cues, consume_spot_cues 等）のあとに
-    /// 実行されることを推奨する。消費者が receive_barrier() を呼んだ同一フレームで
-    /// 解決判定が行われる。逆順でも正常動作するが、解決が1フレーム遅延する。
-    pub fn update(&mut self, queues: &mut Query<&mut CueQueue>, current_time: f64) {
-        if self.result.is_some() {
-            return; // 既に確定済み
-        }
-        if self.cancelled {
-            self.result = Some(CueSheetResult::Cancelled);
-            return;
-        }
+**update_cue_sheet_trackers システム**:
 
-        // === Phase 1: バリア自動検知 ===
-        if self.barrier_state.is_none() {
-            for (_, _, entity) in &self.targets {
-                if let Ok(queue) = queues.get(*entity) {
-                    if let Some(kind) = queue.pending_barrier_kind() {
-                        self.barrier_state = Some(BarrierState {
-                            first_valid: None,
-                            kind,
-                        });
-                        break;
-                    }
-                }
-            }
-        }
-
-        // === Phase 2: タイムアウト検知 ===
-        if let Some(barrier) = &mut self.barrier_state {
-            for (_, _, entity) in &self.targets {
-                if let Ok(mut queue) = queues.get_mut(*entity) {
-                    if queue.check_timeout(current_time) {
-                        if barrier.first_valid.is_none() {
-                            barrier.first_valid = Some(BarrierResponse::Timeout);
-                        }
-                    }
-                }
-            }
-        }
-
-        // === Phase 3: 解決判定 ===
-        if let Some(barrier) = &self.barrier_state {
-            // 条件: first_valid が存在するか、全スロットがバリアを退出済み
-            let still_waiting = self.targets.iter()
-                .filter(|(_, _, e)| {
-                    queues.get(*e).map_or(false, |q| q.pending_barrier_kind().is_some())
-                })
-                .count();
-
-            let should_resolve = barrier.first_valid.is_some() || still_waiting == 0;
-
-            if should_resolve {
-                // 残スロットの強制スキップ（既に Playing なら false が返るだけ）
-                for (_, _, entity) in &self.targets {
-                    if let Ok(mut queue) = queues.get_mut(*entity) {
-                        queue.skip_barrier();
-                    }
-                }
-                // バリアを取り出して結果確定
-                let barrier = self.barrier_state.take().unwrap();
-                match barrier.first_valid {
-                    Some(BarrierResponse::Choice { id }) => {
-                        self.result = Some(CueSheetResult::Choice { id });
-                    }
-                    Some(BarrierResponse::Click) => {
-                        // WaitForClick 解決後はキュー消費を続行、結果は末尾の Completed
-                    }
-                    Some(BarrierResponse::Timeout) => {
-                        self.result = Some(CueSheetResult::Timeout);
-                    }
-                    None | Some(BarrierResponse::Skipped) => match barrier.kind {
-                        BarrierKind::Choice => {
-                            self.result = Some(CueSheetResult::Error(
-                                CueSystemError::EmptyChoiceBarrier { actor: "<all-skipped>".into() },
-                            ));
-                        }
-                        BarrierKind::Click => {
-                            // ハンドラー不在 = 即時通過、継続
-                        }
-                    },
-                }
-                return; // 解決直後はフレーム終了（次フレームで完了判定）
-            }
-        }
-
-        // === Phase 4: 完了判定 ===
-        // バリア処理中は完了判定を保留
-        if self.barrier_state.is_some() {
-            return;
-        }
-
-        let mut all_completed = true;
-        for (_, _, entity) in &self.targets {
-            if let Ok(queue) = queues.get(*entity) {
-                match queue.state() {
-                    CueQueueState::Error(err) => {
-                        self.result = Some(CueSheetResult::Error(err.clone()));
-                        return;
-                    }
-                    CueQueueState::Completed => {} // OK
-                    _ => { all_completed = false; }
-                }
-            }
-        }
-        if all_completed {
-            self.result = Some(CueSheetResult::Completed);
-        }
+```rust
+/// 全 CueSheetTracker の update() を呼び出すシステム。
+///
+/// Schedule: Update（消費者システムの **後** に実行）
+/// 理由: 消費者が receive_barrier() で応答を報告した後に集計するため。
+pub fn update_cue_sheet_trackers(
+    mut query: Query<&mut CueSheetTracker>,
+    world: &World,
+    frame_time: Res<FrameTime>,
+) {
+    let current_time = frame_time.elapsed_secs();
+    for mut tracker in query.iter_mut() {
+        tracker.update(world, current_time);
     }
 }
 ```
 
-### モジュール構造 — DD5 決定: `ecs/cue/`
+#### DolaRuntime — dola ランタイムリソース
 
-**設計判断 DD5**: `ecs/cue/` に配置（ウィジット横断的基盤）。
+**DD8 決定**: dola は必須依存。DolaRuntime リソースを ECS Resource として提供し、物理エンティティが直接参照する。
+
+```rust
+use dola::runtime::DolaFacade;
+
+/// dola アニメーションランタイムをラップする bevy_ecs リソース。
+///
+/// 物理エンティティ（Spot、Balloon）がアニメーション制御に直接使用する。
+/// FrameTime と同じ時刻基準（QueryPerformanceCounter、OS起動時=0秒）を共有。
+#[derive(Resource)]
+pub struct DolaRuntime {
+    facade: DolaFacade,
+}
+
+impl DolaRuntime {
+    pub fn new() -> Self { Self { facade: DolaFacade::new() } }
+    pub fn facade(&self) -> &DolaFacade { &self.facade }
+    pub fn facade_mut(&mut self) -> &mut DolaFacade { &mut self.facade }
+}
+
+impl Default for DolaRuntime {
+    fn default() -> Self { Self::new() }
+}
+
+/// dola ランタイム更新システム（毎フレーム実行）
+///
+/// FrameTime から現在時刻を取得し DolaRuntime を更新する。Req 6.1 対応。
+/// UpdateResult（変更された変数リスト）の処理は後続仕様（animation-system）で実装。
+pub fn update_dola_runtime(
+    frame_time: Res<FrameTime>,
+    mut dola: ResMut<DolaRuntime>,
+) {
+    let current_time = frame_time.elapsed_secs();
+    let _result = dola.facade_mut().update(current_time);
+}
+```
+
+**統合スコープ**:
+
+| 責務 | 実装時期 | 説明 |
+|------|----------|------|
+| DolaRuntime リソース | P0 (cue-system) | bevy_ecs Resource として提供 |
+| update_dola_runtime | P0 (cue-system) | 毎フレーム `runtime.update()` 実行 |
+| 物理エンティティでの使用 | balloon03-content, animation-system | Spot、Balloon が直接 DolaRuntime を参照 |
+| CueQueue との連携 | 将来（任意） | playback_rate 同期等（必須ではない） |
+
+**時刻基準の統一（DD8-b）**: FrameTime と DolaRuntime は同じ QueryPerformanceCounter ベース（OS起動時=0秒）を使用し、時刻を直接比較可能。
+
+### Module Structure — DD5
+
+**DD5 決定**: `ecs/cue/` に配置（ウィジェット横断的基盤）。
 
 ```
 crates/wintf/src/ecs/
 ├── cue/
-│   ├── mod.rs           ← re-exports, CueSheet, Cue, ActorKey, CueTarget
+│   ├── mod.rs           ← re-exports, CueSheet, Cue, ActorKey
 │   ├── command.rs       ← CueCommand enum（11バリアント）, CueTarget enum
 │   ├── component.rs     ← PendingCueSheet コンポーネント
-│   ├── queue.rs         ← CueQueue コンポーネント, TimedCue, CueQueueState
-│   ├── dispatch.rs      ← dispatch_pending_cue_sheets システム, dispatch_cue_sheet_internal, EntityRegistry, EntityKey
+│   ├── queue.rs         ← CueQueue, TimedCue, CueQueueState
+│   ├── dispatch.rs      ← dispatch_pending_cue_sheets, EntityRegistry, EntityKey
 │   ├── tracker.rs       ← CueSheetTracker, CueSheetResult
+│   ├── runtime.rs       ← DolaRuntime, update_dola_runtime
 │   ├── error.rs         ← CueSystemError (thiserror)
 │   └── tests.rs         ← in-source unit tests
 ├── widget/
@@ -1600,6 +807,7 @@ mod component;
 mod dispatch;
 mod error;
 mod queue;
+mod runtime;
 mod tracker;
 
 pub use command::CueCommand;
@@ -1607,25 +815,11 @@ pub use component::PendingCueSheet;
 pub use dispatch::{dispatch_pending_cue_sheets, update_cue_sheet_trackers, EntityKey, EntityRegistry, CueSheetHandle};
 pub use error::CueSystemError;
 pub use queue::{CueQueue, CueQueueState, PendingChoice, TimedCue};
+pub use runtime::{DolaRuntime, update_dola_runtime};
 pub use tracker::{BarrierKind, BarrierResponse, CueSheetResult, CueSheetTracker};
 
-/// 構造化演出台本（相対時刻）
-// CueSheet, Cue, ActorKey は mod.rs に直接定義
+// CueSheet, Cue, ActorKey, CueTarget は mod.rs に直接定義
 // （小さい型は分離するほどでもない）
-```
-
-**ecs/mod.rs への追加**:
-
-```rust
-// 既存の mod 宣言に追加
-pub mod cue;
-
-// re-export に追加
-pub use cue::{
-    ActorKey, EntityKey, EntityRegistry, Cue, CueCommand, CueQueue, CueQueueState,
-    CueSheet, CueSheetHandle, CueSheetResult, CueSheetTracker, CueSystemError,
-    dispatch_pending_cue_sheets, update_cue_sheet_trackers,
-};
 ```
 
 ---
@@ -1636,128 +830,31 @@ pub use cue::{
 
 ```mermaid
 classDiagram
-    class CueSheet {
-        -Vec~Cue~ cues
-        +new(Vec~Cue~) CueSheet
-        +cues() &[Cue]
-        +filter_by_actor(&ActorKey) Vec~&Cue~
-        +actors() Vec~&ActorKey~
-        +is_empty() bool
-        +len() usize
-    }
+    direction LR
 
-    class Cue {
-        +ActorKey actor
-        +f64 start_time
-        +CueCommand command
-    }
+    CueSheet "1" *-- "0..*" Cue : contains
+    Cue --> ActorKey : actor
+    Cue --> CueCommand : command
+    CueCommand ..> CueTarget : RouteXxx
+    CueCommand ..> EntityKey : RouteSwitch/Add
 
-    class ActorKey {
-        -String key
-        +new(impl Into~String~) ActorKey
-        +as_str() &str
-    }
+    CueQueue "1" *-- "0..*" TimedCue : queue
+    TimedCue --> CueCommand : command
+    CueQueue --> CueQueueState : state
 
-    class CueCommand {
-        <<enumeration>>
-        Text(String)
-        Clear
-        Emote~key: String~
-        Choice~id: String, text: String~
-        WaitForChoice~timeout: Option~f64~~
-        WaitForClick~timeout: Option~f64~~
-        EntityRef(Entity)
-        Custom~command: String, params: DynamicValue~
-        RouteAdd~target: CueTarget, to: EntityKey~
-        RouteSwitch~target: CueTarget, to: EntityKey~
-        RouteRemove~target: CueTarget~
-        +is_barrier() bool
-        +is_routing_command() bool
-    }
+    CueSheetTracker --> CueSheetResult : result
+    CueSheetTracker --> BarrierState : barrier
 
-    class TimedCue {
-        +f64 start_time
-        +CueCommand command
-    }
+    EntityRegistry --> EntityKey : map key
+    EntityKey --> ActorKey : Actor variant
+    EntityKey --> CueTarget : Actor variant
 
-    class CueQueue {
-        -Vec~TimedCue~ queue
-        -CueQueueState state
-        -f64 playback_rate
-        -Option~usize~ capacity
-        +push_sorted(TimedCue) Result
-        +pop_ready(f64) Vec~CueCommand~
-        +peek() Option~&TimedCue~
-        +resolve_click()
-        +resolve_choice(&str) Option~String~
-        +check_timeout(f64) bool
-    }
-
-    class CueQueueState {
-        <<enumeration>>
-        Playing
-        Paused
-        WaitingForClick
-        WaitingForChoice
-        Error
-        Completed
-    }
-
-    class CueSheetTracker {
-        -Vec actors
-        -Option~CueSheetResult~ result
-        -bool cancelled
-        +result() Option~&CueSheetResult~
-        +cancel()
-        +update(&World, f64)
-    }
-
-    class CueSheetResult {
-        <<enumeration>>
-        Completed
-        Cancelled
-        Timeout
-        Choice~id: String~
-        Error(CueSystemError)
-    }
-
-    class EntityRegistry {
-        -HashMap~EntityKey, Entity~ map
-        +register(EntityKey, Entity)
-        +resolve(&EntityKey) Option~Entity~
-        +register_actor(ActorKey, CueTarget, Entity)
-        +resolve_actor(&ActorKey, CueTarget) Option~Entity~
-        +routes_for_actor(&ActorKey) Vec~(CueTarget, Entity)~
-    }
-
-    class EntityKey {
-        <<enumeration>>
-        Actor(ActorKey, CueTarget)
-        Spot(String)
-        Balloon(String)
-    }
-
-    class CueTarget {
-        <<enumeration>>
-        Shell
-        Balloon
-    }
-
-    CueSheet "1" *-- "0..*" Cue
-    Cue --> ActorKey
-    Cue --> CueCommand
-    CueCommand ..> CueTarget : RouteXxx(スロット指定)
-    CueCommand ..> EntityKey : RouteSwitch/RouteAdd(to)
-    CueQueue "1" *-- "0..*" TimedCue
-    TimedCue --> CueCommand
-    CueQueue --> CueQueueState
-    CueSheetTracker --> CueSheetResult
-    EntityRegistry --> EntityKey
-    EntityKey --> ActorKey
-    EntityKey --> CueTarget
+    DolaRuntime --> DolaFacade : facade
 ```
 
-### 不変条件
+> 各型の詳細（フィールド・メソッド）は「Components and Interfaces」セクションで定義済み。
+
+### Invariants
 
 1. **CueSheet 内の Cue は start_time 昇順**（`CueSheet::new()` でソート保証）
 2. **CueQueue 内の TimedCue は start_time 降順**（`push_sorted()` で保持）
@@ -1765,111 +862,10 @@ classDiagram
 4. **CueQueueState の遷移は単方向**（Completed → Playing は新 CueSheet 配送時のみ許可）
 5. **ActorKey は空文字列を許可しない**（バリデーションは生成者の責務）
 6. **TimedCue の start_time は非負**（負値はコンパイルエラーではないが、即時消費される）
-7. **PendingCueSheet エンティティ = CueSheet エンティティ**（dispatch 後に同一 Entity ID が CueSheetTracker を保持する）
-8. **同時アクティブバリアは最大 1 件**（バリアは逐次解決。BarrierState が Some の間は次のバリアに到達しない）
-9. **バリアライフサイクルは CueSheetTracker::update() が集中管理**（自動検知・タイムアウト・残スロット強制スキップ・解決判定すべてを update() が担う。消費システムは receive_barrier() で応答報告のみ）
-10. **1 CueQueue あたり同時アクティブ CueSheet は高々 1 つ**（`cue_sheet_entity` が単一値のため。逐次投入は前の CueSheet を await/cancel してから行う）
-
----
-
-## Integration Examples
-
-### アクター登録（セットアップ）
-
-```rust
-use wintf::ecs::cue::{ActorKey, EntityRegistry, CueTarget};
-use bevy_ecs::prelude::*;
-
-/// アクター登録 — シェルとバルーンを CueTarget 別に登録
-fn setup_actors(
-    mut registry: ResMut<EntityRegistry>,
-    mut commands: Commands,
-) {
-    // エンティティを生成
-    let sakura_shell = commands.spawn(CueQueue::new()).id();
-    let unyuu_shell = commands.spawn(CueQueue::new()).id();
-    let shared_balloon = commands.spawn(CueQueue::new()).id();
-
-    // シェル（体・サーフェス・エモート）を登録
-    registry.register_actor("sakura", CueTarget::Shell, sakura_shell);
-    registry.register_actor("unyuu", CueTarget::Shell, unyuu_shell);
-
-    // バルーン（テキスト・選択肢・待機）を登録
-    // ★ sakura と unyuu が同一バルーンエンティティを共有
-    registry.register_actor("sakura", CueTarget::Balloon, shared_balloon);
-    registry.register_actor("unyuu", CueTarget::Balloon, shared_balloon);
-}
-```
-
-### CueSheet 投入（上位層）
-
-```rust
-use wintf::ecs::cue::{CueSheet, Cue, ActorKey, CueCommand, PendingCueSheet};
-use bevy_ecs::prelude::*;
-
-/// 上位アプリケーション層からの CueSheet 投入
-fn submit_cue_sheet(
-    mut commands: Commands,
-    frame_time: Res<FrameTime>,
-) {
-    // 1. CueSheet を作成
-    let cues = vec![
-        Cue {
-            actor: ActorKey::from("sakura"),
-            start_time: 0.0,
-            command: CueCommand::Text("こんにちは".to_string()),
-        },
-        Cue {
-            actor: ActorKey::from("sakura"),
-            start_time: 1.0,
-            command: CueCommand::WaitForClick { timeout: None },
-        },
-        Cue {
-            actor: ActorKey::from("unyuu"),
-            start_time: 0.5,
-            command: CueCommand::Emote { key: "surprise".to_string() },
-        },
-    ];
-    let cue_sheet = CueSheet::new(cues);
-
-    // 2. PendingCueSheet として投入（独立短命エンティティを spawn）
-    commands.spawn(PendingCueSheet {
-        sheet: cue_sheet,
-        start_time: frame_time.elapsed_secs(),
-    });
-
-    // 3. dispatch_pending_cue_sheets システムが自動処理
-    //    → 各演者の CueQueue に分配
-    //    → CueSheetTracker エンティティを spawn
-}
-
-/// CueSheetTracker の結果を poll（上位オーケストレーション層）
-fn poll_cue_results(
-    mut query: Query<(Entity, &CueSheetTracker)>,
-    mut commands: Commands,
-) {
-    for (entity, tracker) in query.iter() {
-        if let Some(result) = tracker.result() {
-            match result {
-                CueSheetResult::Completed => {
-                    tracing::info!("CueSheet completed");
-                    // 次の CueSheet を投入
-                }
-                CueSheetResult::Choice { id } => {
-                    tracing::info!(choice_id = %id, "User selected choice");
-                    // 選択分岐処理
-                }
-                CueSheetResult::Error(err) => {
-                    tracing::error!(error = %err, "CueSheet error");
-                }
-                _ => {}
-            }
-            // 結果を受け取ったら Tracker を削除
-            commands.entity(entity).despawn();
-        }
-    }
-}
-```
+7. **PendingCueSheet エンティティ = CueSheetTracker エンティティ**（dispatch 後に同一 Entity が CueSheetTracker を保持）
+8. **同時アクティブバリアは最大 1 件**（BarrierState が Some の間は次のバリアに到達しない）
+9. **バリアライフサイクルは CueSheetTracker::update() が集中管理**（自動検知・タイムアウト・強制スキップ・解決判定すべてを update() が担う。消費者は receive_barrier() で応答報告のみ）
+10. **1 CueQueue あたり同時アクティブ CueSheet は高々 1 つ**（`cue_sheet_entity` が単一値。逐次投入は前の CueSheet を await/cancel してから行う）
 
 ---
 
@@ -1880,13 +876,13 @@ fn poll_cue_results(
 | 分類 | エラー型 | 処理方針 | ログレベル |
 |------|----------|----------|------------|
 | EntityKey 未解決 | `CueSystemError::EntityNotFound` | スキップ + 継続 | `warn!` |
-| キャパシティ超過 | `CueSystemError::CapacityExceeded` | 超過分スキップ + 継続 | `warn!` |
-| Choice 空打ち | `CueSystemError::EmptyChoiceBarrier` | CueQueue.state → Error → CueSheetTracker が検知 → CueSheetResult::Error | `error!` |
+| キャパシティー超過 | `CueSystemError::CapacityExceeded` | 超過分スキップ + 継続 | `warn!` |
+| Choice 空打ち | `CueSystemError::EmptyChoiceBarrier` | CueSheetResult::Error 即時発行 | `error!` |
 | 未知コマンドスキップ | — | 消費者が `_` パターンで pass-through | `debug!` |
 | Entity despawn | — | panic しない（Option チェック） | `debug!` |
 | 遅延到達 | — | start_time < current_time → 即時消費 | `trace!` |
 
-### 消費者ハンドラー責務表
+### Handler Responsibility Table
 
 一つのコマンドに対してどの消費システムがハンドラーになるか。ハンドラーは有効な BarrierResponse を返す。非ハンドラーは `skip_barrier()` + `Skipped` を返す。
 
@@ -1894,118 +890,123 @@ fn poll_cue_results(
 |----------|-------------|---------|
 | `Text` | ⏭ スキップ | ✅ ハンドラー（タイプライター表示） |
 | `Clear` | ⏭ スキップ | ✅ ハンドラー |
-| `Emote { key }` | ✅ ハンドラー（演者名 + 感情キーでサーフェスアニメ決定） | ✅ ハンドラー（感情キーでフォントセット切替） |
+| `Emote { key }` | ✅ ハンドラー（サーフェスアニメーション） | ✅ ハンドラー（フォントセット切替） |
 | `Choice` | ⏭ スキップ | ✅ ハンドラー（pending 蓄積） |
-| `WaitForChoice` | ⏭ スキップ (`skip_barrier()` + `Skipped`) | ✅ ハンドラー（選択 UI 表示 → `Choice { id }`） |
-| `WaitForClick` | ✅ **ハンドラー**（スポットクリック受付 → `Click`） | ✅ ハンドラー（バルーンクリック受付 → `Click`） |
-| `EntityRef` | ✅ ハンドラー（エンティティ参照解釈） | ⏭ スキップ |
+| `WaitForChoice` | ⏭ skip_barrier() + `Skipped` | ✅ ハンドラー（選択 UI → `Choice { id }`） |
+| `WaitForClick` | ✅ ハンドラー（クリック受付 → `Click`） | ✅ ハンドラー（クリック受付 → `Click`） |
+| `EntityRef` | ✅ ハンドラー | ⏭ スキップ |
 | `Custom` | 機能次第 | 機能次第 |
 
-> **WaitForClick は全体配信バリア**: Spot と Balloon の両方が返答するため、関係するどこをクリックしても応答される (first valid wins)。
+> **WaitForClick は全体配信バリア**: Spot と Balloon の両方が応答可能なため、関係するどこをクリックしても first valid wins で解決される。
 
-### 消費者側のコマンド処理パターン
+---
+
+## Integration Examples
+
+### アクター登録（セットアップ）
 
 ```rust
-// 消費者（Balloon）の典型的な消費ループ
-// WaitForChoice: 選択 UI 表示。選択確定後に receive_barrier(Choice)。
-// WaitForClick: クリック UI 表示。クリック後に receive_barrier(Click)。
-// バリアの初期化・タイムアウト・残スロット強制スキップは CueSheetTracker::update() が管理するため、
-// 消費システムは receive_barrier() で応答を報告するだけでよい。
+use wintf::ecs::cue::{ActorKey, EntityRegistry, CueTarget, CueQueue};
+use bevy_ecs::prelude::*;
+
+fn setup_actors(mut registry: ResMut<EntityRegistry>, mut commands: Commands) {
+    let sakura_shell = commands.spawn(CueQueue::new()).id();
+    let unyuu_shell = commands.spawn(CueQueue::new()).id();
+    let shared_balloon = commands.spawn(CueQueue::new()).id();
+
+    registry.register_actor("sakura", CueTarget::Shell, sakura_shell);
+    registry.register_actor("unyuu", CueTarget::Shell, unyuu_shell);
+    // ★ sakura と unyuu が同一バルーンエンティティを共有
+    registry.register_actor("sakura", CueTarget::Balloon, shared_balloon);
+    registry.register_actor("unyuu", CueTarget::Balloon, shared_balloon);
+}
+```
+
+### CueSheet 投入
+
+```rust
+use wintf::ecs::cue::{CueSheet, Cue, ActorKey, CueCommand, PendingCueSheet};
+
+fn submit_cue_sheet(mut commands: Commands, frame_time: Res<FrameTime>) {
+    let cues = vec![
+        Cue { actor: ActorKey::from("sakura"), start_time: 0.0,
+               command: CueCommand::Text("こんにちは".into()) },
+        Cue { actor: ActorKey::from("sakura"), start_time: 1.0,
+               command: CueCommand::WaitForClick { timeout: None } },
+        Cue { actor: ActorKey::from("unyuu"), start_time: 0.5,
+               command: CueCommand::Emote { key: "surprise".into() } },
+    ];
+    // PendingCueSheet として投入 → dispatch システムが自動処理
+    commands.spawn(PendingCueSheet {
+        sheet: CueSheet::new(cues),
+        start_time: frame_time.elapsed_secs(),
+    });
+}
+```
+
+### CueSheetTracker 結果 poll
+
+```rust
+fn poll_cue_results(query: Query<(Entity, &CueSheetTracker)>, mut commands: Commands) {
+    for (entity, tracker) in query.iter() {
+        if let Some(result) = tracker.result() {
+            match result {
+                CueSheetResult::Completed => { /* 次の CueSheet を投入 */ }
+                CueSheetResult::Choice { id } => { /* 選択分岐 */ }
+                CueSheetResult::Error(err) => { tracing::error!(%err, "CueSheet error"); }
+                _ => {}
+            }
+            commands.entity(entity).despawn();
+        }
+    }
+}
+```
+
+### 消費者パターン（Balloon）
+
+```rust
+/// バリア中は pop_ready を呼ばず、応答イベントを待つ。
+/// バリアの初期化・タイムアウト・残スロット強制スキップは CueSheetTracker::update() が管理。
+/// 消費者は receive_barrier() で応答を報告するだけでよい。
 fn consume_balloon_cues(
     mut query: Query<(Entity, &mut CueQueue)>,
     mut tracker_query: Query<&mut CueSheetTracker>,
-    // 以下は UI 入力イベントの受口（実装内容は P0 スコープ外）
     click_events: EventReader<BalloonClickEvent>,
     choice_events: EventReader<ChoiceSelectedEvent>,
     frame_time: Res<FrameTime>,
 ) {
     let current_time = frame_time.elapsed_secs();
-    for (_self_entity, mut queue) in query.iter_mut() {
-        // WaitForClick ハンドラー: バルーンクリックで応答
-        if queue.pending_barrier_kind() == Some(BarrierKind::Click) {
+    for (self_entity, mut queue) in query.iter_mut() {
+        // バリア処理: ハンドラーは応答を報告、非ハンドラーは skip
+        if let Some(kind) = queue.pending_barrier_kind() {
             if let Some(cue_sheet) = queue.cue_sheet_entity() {
-                if click_events.iter_for_entity(_self_entity).next().is_some() {
-                    queue.resolve_click();
-                    if let Ok(mut tracker) = tracker_query.get_mut(cue_sheet) {
-                        tracker.receive_barrier(BarrierResponse::Click);
+                let response = match kind {
+                    BarrierKind::Click => {
+                        click_events.iter_for_entity(self_entity).next()
+                            .map(|_| { queue.resolve_click(); BarrierResponse::Click })
                     }
-                }
-            }
-            continue; // バリア中は pop_ready を呼ばない
-        }
-
-        // WaitForChoice ハンドラー: 選択確定で応答
-        if queue.pending_barrier_kind() == Some(BarrierKind::Choice) {
-            if let Some(cue_sheet) = queue.cue_sheet_entity() {
-                if let Some(ev) = choice_events.iter_for_entity(_self_entity).next() {
-                    if let Some(id) = queue.resolve_choice(&ev.choice_id) {
-                        if let Ok(mut tracker) = tracker_query.get_mut(cue_sheet) {
-                            tracker.receive_barrier(BarrierResponse::Choice { id });
-                        }
+                    BarrierKind::Choice => {
+                        choice_events.iter_for_entity(self_entity).next()
+                            .and_then(|ev| queue.resolve_choice(&ev.choice_id)
+                                .map(|id| BarrierResponse::Choice { id }))
+                    }
+                };
+                if let Some(resp) = response {
+                    if let Ok(mut tracker) = tracker_query.get_mut(cue_sheet) {
+                        tracker.receive_barrier(resp);
                     }
                 }
             }
             continue;
         }
 
-        let commands = queue.pop_ready(current_time);
-        for cmd in commands {
+        // 通常消費
+        for cmd in queue.pop_ready(current_time) {
             match cmd {
                 CueCommand::Text(text) => { /* タイプライター表示 */ }
                 CueCommand::Clear => { /* コンテンツクリア */ }
-                CueCommand::Emote { key } => { /* 感情キーに応じたフォントセット・スタイルを選択 */ }
-                CueCommand::Custom { command, params } if command.starts_with("balloon.") => {
-                    /* バルーン固有処理 */
-                }
+                CueCommand::Emote { key } => { /* フォントセット切替 */ }
                 _ => { tracing::debug!(command = ?cmd, "Skipping unknown command"); }
-            }
-        }
-    }
-}
-
-// 消費者（Spot）の典型的な消費ループ
-// Emote: 演者名 + 感情キーでサーフェスアニメーションを決定。
-// WaitForClick: Spot クリックで応答（全体配信バリア）。
-// WaitForChoice: 選択 UI を表示できないため即座にスキップ。
-fn consume_spot_cues(
-    mut query: Query<(Entity, &mut CueQueue, &ActorKey)>,
-    mut tracker_query: Query<&mut CueSheetTracker>,
-    click_events: EventReader<SpotClickEvent>,
-    frame_time: Res<FrameTime>,
-) {
-    let current_time = frame_time.elapsed_secs();
-    for (_self_entity, mut queue, _actor_key) in query.iter_mut() {
-        // WaitForClick ハンドラー: Spot クリックで応答
-        if queue.pending_barrier_kind() == Some(BarrierKind::Click) {
-            if let Some(cue_sheet) = queue.cue_sheet_entity() {
-                if click_events.iter_for_entity(_self_entity).next().is_some() {
-                    queue.resolve_click();
-                    if let Ok(mut tracker) = tracker_query.get_mut(cue_sheet) {
-                        tracker.receive_barrier(BarrierResponse::Click);
-                    }
-                }
-            }
-            continue;
-        }
-
-        // WaitForChoice は選択 UI 表示不可のため即座にスキップ
-        if queue.pending_barrier_kind() == Some(BarrierKind::Choice) {
-            if let Some(cue_sheet) = queue.cue_sheet_entity() {
-                queue.skip_barrier();
-                if let Ok(mut tracker) = tracker_query.get_mut(cue_sheet) {
-                    tracker.receive_barrier(BarrierResponse::Skipped);
-                }
-            }
-            continue;
-        }
-
-        let commands = queue.pop_ready(current_time);
-        for cmd in commands {
-            match cmd {
-                CueCommand::Emote { key } => {
-                    /* apply_surface_animation(actor_key, &key) */
-                }
-                _ => { /* 自ドメイン外はスキップ */ }
             }
         }
     }
@@ -2016,187 +1017,76 @@ fn consume_spot_cues(
 
 ## Testing Strategy
 
-### Unit Tests（`ecs/cue/tests.rs` + 各モジュール内 `#[cfg(test)]`）
+### Unit Tests（`ecs/cue/tests.rs` + 各モジュール `#[cfg(test)]`）
 
-| テスト対象 | テスト内容 | 対象要件 |
-|------------|------------|----------|
-| `CueSheet::new()` | start_time 昇順ソート + 安定ソート | Req 1 AC4 |
-| `CueSheet::filter_by_actor()` | 演者別フィルタリング | Req 1 AC7 |
-| `CueQueue::push_sorted()` | 降順挿入 + 順序維持 | Req 3 AC3, AC4 |
-| `CueQueue::pop_ready()` | 時刻到達消費 + 一括消費 | Req 5 AC1, AC3 |
-| `CueQueue::pop_ready()` 遅延到達 | start_time < current_time の即時消費 | Req 8 AC6 |
-| Choice + WaitForChoice プロトコル | Choice 先積み → WaitForChoice でブロック | Req 2 AC5, AC6 |
-| WaitForChoice 空打ち | 先行 Choice 0 件 → Error 発行 | Req 9 AC7 |
-| `resolve_click()` / `resolve_choice()` | ブロック解除 | Req 5 AC4 |
-| `check_timeout()` | タイムアウト検知 | Req 9 AC4 |
-| キャパシティ超過 | push_sorted で CapacityExceeded | Req 8 AC1 |
-| メモリサイズ assert | `size_of::<TimedCue>() <= 64` | NFR-1 AC4 |
+| テスト対象 | テスト内容 | Req |
+|------------|------------|-----|
+| `CueSheet::new()` | start_time 昇順ソート + 安定ソート | 1 |
+| `CueSheet::filter_by_actor()` | 演者別フィルタリング | 1 |
+| `CueQueue::push_sorted()` | 降順挿入 + 順序維持 | 3 |
+| `CueQueue::pop_ready()` | 時刻到達消費 + 一括消費 | 5 |
+| `CueQueue::pop_ready()` 遅延到達 | start_time < current_time の即時消費 | 8 |
+| Choice + WaitForChoice | 先積み → ブロック | 2, 5 |
+| WaitForChoice 空打ち | 先行 Choice 0 件 → Error | 9 |
+| `resolve_click/choice()` | ブロック解除 | 5 |
+| `check_timeout()` | タイムアウト検知 | 9 |
+| キャパシティー超過 | push_sorted で CapacityExceeded | 8 |
+| メモリーサイズ assert | `size_of::<TimedCue>() <= 64` | NFR-1 |
 
 ### Integration Tests（`crates/wintf/tests/cue/`）
 
-| テスト対象 | テスト内容 | 対象要件 |
-|------------|------------|----------|
-| dispatch → 消費 E2E | CueSheet 生成 → dispatch → pop_ready で全コマンド回収 | Req 4, 5 |
-| 複数演者配送 | 2演者への CueSheet 配送 + 独立消費 | Req 1 AC5, Req 4 AC5 |
-| ActorKey 未解決 | 未登録 ActorKey → warn + 他演者は正常配送 | Req 4 AC6, Req 8 AC5 |
-| CueSheetTracker 完了検知 | 全演者 Completed → CueSheetResult::Completed | Req 9 AC2 |
-| CueSheetTracker キャンセル | cancel() → CueSheetResult::Cancelled | Req 9 AC3 |
-| 逐次投入 | 2つの CueSheet を連続配送 → マージ消費 | Req 4 AC7 |
-| WaitForClick → クリック | ブロック → resolve_click → 再開 | Req 5 AC4 |
+| テスト対象 | テスト内容 | Req |
+|------------|------------|-----|
+| dispatch → 消費 E2E | CueSheet → dispatch → pop_ready で全コマンド回収 | 4, 5 |
+| 複数演者配送 | 2 演者への配送 + 独立消費 | 1, 4 |
+| ActorKey 未解決 | 未登録 ActorKey → warn + 他演者は正常配送 | 4, 8 |
+| CueSheetTracker 完了 | 全演者 Completed → CueSheetResult::Completed | 9 |
+| CueSheetTracker キャンセル | cancel() → Cancelled | 9 |
+| WaitForClick → クリック | ブロック → resolve_click → 再開 | 5 |
 
 ### Performance Tests
 
-| テスト対象 | テスト内容 | 対象要件 |
-|------------|------------|----------|
-| push_sorted ベンチ | 100件/1000件の挿入時間 | NFR-1 AC1 |
-| pop_ready ベンチ | 100件/1000件の消費時間 | NFR-1 AC1 |
-| 空キュー走査 | 空 CueQueue の pop_ready コスト | NFR-1 AC2 |
+| テスト対象 | テスト内容 | Req |
+|------------|------------|-----|
+| push_sorted ベンチ | 100件/1000件の挿入時間 | NFR-1 |
+| pop_ready ベンチ | 100件/1000件の消費時間 | NFR-1 |
+| 空キュー走査 | 空 CueQueue の pop_ready コスト | NFR-1 |
+
+---
+
+## Migration Strategy: TypewriterToken（DD6-b — 段階的共存）
+
+| Phase | 時期 | 内容 | 影響 |
+|-------|------|------|------|
+| Phase 1 | cue-system 実装完了 | 共存。TypewriterToken / TypewriterTalk は変更なし | ゼロ |
+| Phase 2 | balloon03-content | Balloon が CueQueue を直接消費。Typewriter と並行稼働 | 限定的 |
+| Phase 3 | balloon03-content 安定後 | Typewriter 内部を CueQueue ベースに移行。外部 API は維持 | 内部のみ |
+
+**From 変換方向**: `CueCommand → TypewriterToken` は可能（Text→Text, WaitForClick→Wait(0.0)）。逆方向は Wait の意味が異なるため不可（DD10 により Wait バリアント削除済み）。
 
 ---
 
 ## Design Decisions Summary
 
-全14件のDesign Decisionsの最終結果:
+全 14 件の Design Decisions:
 
 | DD# | 決定事項 | 選定 | 根拠 |
 |-----|----------|------|------|
-| DD1 | ActorKey の型 | **NewType(String)** | 型安全性 + pasta DSL からの変換容易性 |
-| DD2 | 演者解決メカニズム | **EntityKey enum + EntityRegistry 統合レジストリ** | O(1) 解決、型安全な名前空間統合、P1 Spot/Balloon 拡張可能 |
-| DD3 | 拡張コマンドの型構造 | **Custom { command, params: DynamicValue }** | DD12 で確定済み。enum ネストは不採用（Clone 制約） |
-| DD4 | 消費プロトコルの提供形態 | **ヘルパー API + ドキュメント** | `pop_ready()` が消費の主要 API。trait は過剰 |
-| DD5 | モジュール配置 | **`ecs/cue/`** | ウィジット横断的基盤は widget の外 |
-| DD6 | TypewriterToken との関係 | **共存 (DD6-b)** | CueCommand は独立。将来的に From 変換で段階移行 |
-| DD7 | CueSheet 投入 API | **PendingCueSheet コンポーネント (DD7-c)** | 通常システムから Commands で呼び出し可能。独立短命エンティティパターン |
-| DD8 | dola 統合の粒度 | **インターフェース定義のみ (DD8-a)** | 実質的な統合は後続仕様で |
-| DD9 | タイミングモデル | **絶対時刻キーフレーム方式** | 要件確定済み（v2.0 で適用） |
-| DD10 | コマンド複雑性の哲学 | **純粋データ列 + ブロードキャスト** | Wait なし、start_time 差分でタイミング |
-| DD11 | CueSheetResult の await | **Component Poll** | TypewriterState パターンの自然な拡張 |
-| DD12 | Custom パラメータ型 | **dola::DynamicValue** | 要件確定済み（v2.2 で確定） |
-| DD13 | コマンド配信モデル | **ブロードキャスト + ルーティングコマンド分離** | 非ルーティングコマンドは全スロットにブロードキャスト、RouteXxxはdispatch層のみ消費 |
-| DD14 | バリア応答プロトコル | **直接応答 + Tracker 集中管理** | 消費システムが receive_barrier() で応答報告。update() がバリア自動検知・タイムアウト・残スロット強制スキップ・解決判定を集中管理。全Skipped+Choice→Error、全Skipped+Click→継続 |
-
----
-
-## dola 統合設計（DD8-a: DolaRuntime リソース）
-
-### 統合方針
-
-dola は **必須依存** として wintf に統合する。`wintf/Cargo.toml` に以下を追加:
-
-```toml
-[dependencies]
-dola = { path = "../dola" }
-```
-
-### DolaRuntime リソース
-
-```rust
-use dola::runtime::DolaFacade;
-
-/// dola アニメーションランタイムをラップする bevy_ecs リソース
-///
-/// 物理エンティティ（Spot、Balloon）がアニメーション制御に直接使用する。
-/// FrameTime と同じ時刻基準（QueryPerformanceCounter、OS起動時=0秒）を共有。
-#[derive(Resource)]
-pub struct DolaRuntime {
-    facade: DolaFacade,
-}
-
-impl DolaRuntime {
-    pub fn new() -> Self {
-        Self {
-            facade: DolaFacade::new(),
-        }
-    }
-
-    /// dola::runtime::DolaFacade への参照を取得
-    pub fn facade(&self) -> &DolaFacade {
-        &self.facade
-    }
-
-    /// dola::runtime::DolaFacade への可変参照を取得
-    pub fn facade_mut(&mut self) -> &mut DolaFacade {
-        &mut self.facade
-    }
-}
-
-impl Default for DolaRuntime {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-```
-
-### update_dola_runtime システム
-
-```rust
-/// dola ランタイム更新システム（毎フレーム実行）
-///
-/// FrameTime から現在時刻を取得し、DolaRuntime を更新する。
-/// Req 6.1 対応。
-pub fn update_dola_runtime(
-    frame_time: Res<FrameTime>,
-    mut dola: ResMut<DolaRuntime>,
-) {
-    let current_time = frame_time.elapsed_secs();
-    let _result = dola.facade_mut().update(current_time);
-    // UpdateResult (変更された変数リスト) の処理は
-    // 後続仕様（animation-system）で実装
-}
-```
-
-### 物理エンティティでの使用パターン
-
-物理エンティティ（Spot、Balloon 等）は以下のパターンで DolaRuntime を使用:
-
-```rust
-/// 例: Spot エンティティのサーフェス切り替えアニメーション
-pub fn animate_spot_surface(
-    mut dola: ResMut<DolaRuntime>,
-    query: Query<(Entity, &SpotAnimation)>,
-) {
-    for (entity, anim) in query.iter() {
-        // storyboard を start し、group_id を保持
-        match dola.facade_mut().start(&anim.storyboard_name, anim.start_time) {
-            Ok(result) => {
-                // result.group_id を SpotAnimation に保存
-            },
-            Err(e) => {
-                tracing::warn!("Failed to start animation: {:?}", e);
-            }
-        }
-    }
-}
-```
-
-### 統合スコープ
-
-| 責務 | 実装時期 | 説明 |
-|------|----------|------|
-| DolaRuntime リソース | P0 (cue-system) | bevy_ecs Resource として提供 |
-| update_dola_runtime システム | P0 (cue-system) | 毎フレーム `runtime.update()` 実行 |
-| 物理エンティティでの使用 | balloon03-content, animation-system | Spot、Balloon が直接 DolaRuntime を参照 |
-| CueQueue との連携 | 将来 (任意) | playback_rate 同期等（必須ではない） |
-
-### 時刻基準の統一（DD8-b）
-
-**Invariant**: FrameTime と DolaRuntime は同じ時刻基準（QueryPerformanceCounter、OS起動時=0秒）を使用する。
-
-- FrameTime::elapsed_secs() と dola::clock::now() は同一の値を返す
-- update_dola_runtime は FrameTime から時刻を取得して DolaRuntime に渡す
-- 物理エンティティのシステムは FrameTime と DolaRuntime の時刻を直接比較可能
-
----
-
-## TypewriterToken との移行戦略（DD6-b: 段階的共存）
-
-| Phase | 時期 | 内容 | 影響 |
-|-------|------|------|------|
-| Phase 1 | cue-system 実装完了 | 共存。TypewriterToken / TypewriterTalk は変更なし | ゼロ |
-| Phase 2 | balloon03-content | balloon が CueQueue を直接消費。Typewriter と並行稼働 | 限定的 |
-| Phase 3 | balloon03-content 安定後 | Typewriter 内部を CueQueue ベースに移行。外部 API は維持 | 内部のみ |
-
-**From 変換方向**: `CueCommand → TypewriterToken` は可能（Text→Text, WaitForClick→Wait(0.0)）。逆方向（TypewriterToken→CueCommand）は Wait の意味が異なるため不可（DD10 により Wait バリアント削除済み）。
+| DD1 | ActorKey の型 | **NewType(String)** | 型安全性 + pasta DSL 変換容易性 |
+| DD2-c | 演者解決メカニズム | **EntityKey enum + EntityRegistry** | O(1) 解決、型安全な名前空間統合 |
+| DD3 | 拡張コマンド型 | **Custom { command, params: DynamicValue }** | DD12 確定。enum ネスト不採用（Clone 制約） |
+| DD4 | 消費プロトコル提供形態 | **ヘルパー API + ドキュメント** | `pop_ready()` が主要 API。trait は過剰 |
+| DD5 | モジュール配置 | **`ecs/cue/`** | ウィジェット横断的基盤は widget の外 |
+| DD6-b | TypewriterToken 関係 | **段階的共存** | CueCommand は独立。将来 From 変換で移行 |
+| DD7-c | CueSheet 投入 API | **PendingCueSheet コンポーネント** | Commands で spawn 可能。独立短命エンティティ |
+| DD8 | dola 統合 | **必須依存。DolaRuntime リソース提供** | DynamicValue 採用(DD12)、時刻基準統一(DD8-b)、物理エンティティ直接参照 |
+| DD8-b | 時刻基準 | **QueryPerformanceCounter（OS起動時=0秒）** | FrameTime と dola::clock::now() が同一値 |
+| DD9 | タイミングモデル | **絶対時刻キーフレーム方式** | 降順 Vec + pop tail O(1) |
+| DD10 | コマンド哲学 | **純粋データ列 + ブロードキャスト** | Wait なし。間合いは start_time 差分で表現 |
+| DD11 | CueSheetResult await | **Component Poll** | TypewriterState パターンの自然な拡張 |
+| DD12 | Custom パラメーター型 | **dola::DynamicValue** | JSON 互換、Clone + Debug + Eq + Hash |
+| DD13 | コマンド配信モデル | **ブロードキャスト + ルーティングコマンド分離** | 非ルーティングは全スロットに配信。RouteXxx は dispatch 層のみ消費 |
+| DD14 | バリア応答プロトコル | **直接応答 + Tracker 集中管理** | receive_barrier() で応答報告。update() が自動検知・タイムアウト・強制スキップ・解決判定を集中管理 |
 
 ---
 
@@ -2205,4 +1095,5 @@ pub fn animate_spot_surface(
 | Version | Date       | Changes                                    |
 | ------- | ---------- | ------------------------------------------ |
 | 1.0     | 2026-02-27 | 初版生成。DD1-DD12 全決定。9 Req + 3 NFR 対応 |
-| 1.1     | 2026-02-27 | dola統合明確化。DolaRuntime必須依存化、DD8-b時刻基準統一、物理エンティティ直接使用設計 |
+| 1.1     | 2026-02-27 | dola 統合明確化。DolaRuntime 必須依存化、DD8-b 時刻基準統一、物理エンティティ直接使用設計 |
+| 2.0     | 2026-02-27 | 設計リファイン。dola 統合を Architecture + Components に統合、Data Models 重複排除、DD8 ラベル修正、用語統一、消費者コード例簡素化、Module Structure に runtime.rs 追加 |
