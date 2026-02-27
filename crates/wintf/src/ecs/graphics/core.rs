@@ -127,41 +127,40 @@ fn create_device_3d() -> Result<ID3D11Device> {
 ///
 /// GetSystemTimePreciseAsFileTime（100ナノ秒単位）を使用。
 /// Windows 8以降で利用可能な最高精度のシステム時刻API。
+/// OS起動時からの経過時刻を提供するリソース。
+///
+/// dola の `clock::now()` と同じ時刻基準（OS起動時=0秒、QueryPerformanceCounter ベース）を使用。
 /// スレッドセーフ、どのスケジュールからでもアクセス可能。
 #[derive(Resource, Debug)]
-pub struct FrameTime {
-    /// 起動時の時刻値（100ナノ秒単位）
-    start_time: u64,
-}
+pub struct FrameTime;
 
 impl FrameTime {
     /// リソース作成
     pub fn new() -> Self {
-        Self {
-            start_time: Self::get_precise_time(),
-        }
+        Self
     }
 
-    /// 現在時刻取得 (f64秒、起動時からの経過時間)
+    /// 現在時刻取得 (f64秒、OS起動時からの経過時間)
+    ///
+    /// dola の `clock::now()` と同じ時刻基準。
+    /// `QueryPerformanceCounter / QueryPerformanceFrequency` ベース。
     pub fn elapsed_secs(&self) -> f64 {
-        let now = Self::get_precise_time();
-        let elapsed_100ns = now.saturating_sub(self.start_time);
-        // 100ナノ秒 → 秒: 1秒 = 10,000,000 * 100ナノ秒
-        elapsed_100ns as f64 / 10_000_000.0
+        Self::query_performance_time()
     }
 
-    /// 現在時刻を100ナノ秒単位のu64で取得
-    pub fn elapsed_100ns(&self) -> u64 {
-        Self::get_precise_time().saturating_sub(self.start_time)
-    }
+    /// 高精度システム時刻を取得（OS起動時からの秒数）
+    fn query_performance_time() -> f64 {
+        use windows::Win32::System::Performance::{
+            QueryPerformanceCounter, QueryPerformanceFrequency,
+        };
 
-    /// 高精度システム時刻を取得（100ナノ秒単位のu64）
-    fn get_precise_time() -> u64 {
-        use windows::Win32::Foundation::FILETIME;
-        use windows::Win32::System::SystemInformation::GetSystemTimePreciseAsFileTime;
-
-        let ft: FILETIME = unsafe { GetSystemTimePreciseAsFileTime() };
-        ((ft.dwHighDateTime as u64) << 32) | (ft.dwLowDateTime as u64)
+        let mut counter: i64 = 0;
+        let mut frequency: i64 = 0;
+        unsafe {
+            let _ = QueryPerformanceCounter(&mut counter);
+            let _ = QueryPerformanceFrequency(&mut frequency);
+        }
+        (counter as f64) / (frequency as f64)
     }
 }
 

@@ -46,7 +46,7 @@ impl EcsWorld {
             world.insert_resource(wic_core);
         }
 
-        // FrameTime初期化（FILETIMEベースのフレーム時刻）
+        // FrameTime初期化（QueryPerformanceCounter ベース、dola と同じ時刻基準）
         world.insert_resource(crate::ecs::graphics::FrameTime::new());
 
         // WintfTaskPool初期化（非同期タスク実行基盤）

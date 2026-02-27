@@ -46,7 +46,7 @@
 | SparseSet コンポーネント | `TypewriterTalk`, `DragConfig` 等 27件 | `CueQueue` コンポーネント |
 | on_add フックチェーン | `Typewriter` → Visual + TypewriterTalk 自動挿入 | 配送トリガーに活用可能（DD7） |
 | 2段階 IR | Stage 1 (TypewriterToken) → Stage 2 (TimelineItem) | CueSheet(相対) → CueQueue(絶対) の1段変換（DD9 により Stage 2 不要化） |
-| FrameTime 絶対時刻 | `elapsed_secs() -> f64`（GetSystemTimePreciseAsFileTime ベース） | `pop_ready(current_time)` の時刻ソース |
+| FrameTime 絶対時刻 | `elapsed_secs() -> f64`（QueryPerformanceCounter ベース、dola と同じ時刻基準） | `pop_ready(current_time)` の時刻ソース |
 | Changed\<T\> gotcha | `Mut<T>` は内容変更なしでも Changed 発火 | CueQueue 消費では Changed フィルタを使わない設計 |
 
 #### 遵守すべき制約
@@ -108,7 +108,7 @@ graph TB
 | Layer | Choice / Version | Role in Feature | Notes |
 |-------|------------------|-----------------|-------|
 | ECS Framework | bevy_ecs 0.18.0 | コンポーネント・システム基盤 | SparseSet, on_add hooks, Changed\<T\> |
-| 時刻管理 | FrameTime (f64秒) | 絶対時刻ソース | GetSystemTimePreciseAsFileTime ベース |
+| 時刻管理 | FrameTime (f64秒) | 絶対時刻ソース | QueryPerformanceCounter ベース、dola と同じ時刻基準（OS起動時=0秒） |
 | エラー型 | thiserror 2 | CueSystemError 定義 | workspace 統一規約 |
 | 動的値 | dola::DynamicValue | Custom コマンドパラメータ | JSON互換、Clone + Debug + Eq + Hash |
 | ロギング | tracing | 構造化ログ | debug!/trace!/warn! |
@@ -2086,7 +2086,7 @@ fn consume_spot_cues(
 ///
 /// 1. CueQueue の playback_rate と dola の再生速度の同期
 /// 2. CueQueue の消費進行を dola 変数として公開するバインディング候補
-/// 3. FrameTime と DolaRuntime が同じ f64 秒時間軸であることの型レベル保証
+/// 3. FrameTime と dola::clock::now() が同じ時刻基準（QueryPerformanceCounter、OS起動時=0秒）を使用
 
 // 本ファイルは MVP では空実装。
 // wintf Cargo.toml に `dola = { path = "../dola", optional = true }` 追加は
