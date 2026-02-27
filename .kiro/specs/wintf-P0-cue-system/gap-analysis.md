@@ -137,18 +137,21 @@ pub enum TimelineItem {
 
 ### Req 2: CueCommand — 型安全な基盤コマンド体系（絶対時刻方式対応）
 
-| AC   | 技術要素                   | 既存アセット                     | ギャップ                                                        |
-| ---- | -------------------------- | -------------------------------- | --------------------------------------------------------------- |
-| AC1  | 基盤コマンド enum          | `TypewriterToken`（3バリアント） | **Extend**: 3→5 バリアントへの拡張（Wait/Instant **削除済み**） |
-| AC2  | テキスト表示バリアント     | `TypewriterToken::Text(String)`  | ギャップなし（直接対応、型も同一）                              |
-| AC3  | ユーザー入力待ちバリアント | —                                | **Missing**: `WaitForInput { timeout: Option<f64> }` バリアント |
-| AC4  | コンテンツクリアバリアント | —                                | **Missing**: `Clear` バリアント                                 |
-| AC5  | 演技発現バリアント         | —                                | **Missing**: `Emote { key: String }` バリアント（演技キー保持） |
-| AC6  | 拡張バリアント             | `TypewriterToken::FireEvent`     | **Redesign**: FireEvent を汎用拡張機構に再設計                  |
-| AC7  | 型安全パラメータ           | TypewriterToken で実績あり       | ギャップなし（Rust enum の自然な型付け）                        |
-| AC8  | Clone, Debug derive        | TypewriterToken は Debug + Clone | ギャップなし                                                    |
+| AC    | 技術要素                        | 既存アセット                     | ギャップ                                                                          |
+| ----- | ------------------------------- | -------------------------------- | --------------------------------------------------------------------------------- |
+| AC1   | 基盤コマンド enum（8バリアント）| `TypewriterToken`（3バリアント） | **Extend**: 3→8 バリアントへの拡張（Wait/Instant **削除**、6バリアント新規追加）  |
+| AC2   | `Text(String)`                  | `TypewriterToken::Text(String)`  | ギャップなし（直接対応、型も同一）                                                |
+| AC3   | `Clear`                         | —                                | **Missing**: `Clear` バリアント                                                   |
+| AC4   | `Emote { key: String }`         | —                                | **Missing**: `Emote` バリアント（演技キー保持）                                   |
+| AC5   | `Choice { id, text }`           | —                                | **Missing**: `Choice` 先積みバリアント                                            |
+| AC6   | `WaitForChoice { timeout }`     | —                                | **Missing**: 選択肢バリア（直前 Choice 群を収集して提示）                         |
+| AC7   | `WaitForClick { timeout }`      | —                                | **Missing**: クリック待ちバリア                                                   |
+| AC8   | `EntityRef(Entity)`             | —                                | **Missing**: ECS エンティティ渡しバリアント                                       |
+| AC9   | `Custom { command, params }`    | `TypewriterToken::FireEvent`     | **Redesign**: FireEvent → `Custom { command: String, params: DynamicValue }` に再設計（DD12 確定）|
+| AC10  | 型安全パラメータ                | TypewriterToken で実績あり       | ギャップなし（Rust enum の自然な型付け）                                          |
+| AC11  | Clone, Debug derive             | TypewriterToken は Debug + Clone | ギャップなし（`DynamicValue: Clone + Debug` により `Custom` も充足）              |
 
-**評価**: DD9 により Wait バリアント **削除**（タイミングは start_time 差分で表現）、Instant バリアント **削除**（同一 start_time で並行実行）。5バリアント（Text, WaitForInput, Clear, Emote, Extension）+ 将来拡張余地で「5+」表記。TypewriterToken との後方互換は `From` トレイト変換で対応可能。
+**評価**: DD9 により Wait/Instant バリアント**削除**。WaitForInput を WaitForClick/WaitForChoice/Choice の3バリアントに再設計（データとバリアの分離思想 — start_time でタイミングとコマンドを分離したのと同じ発想）。EntityRef は ECS ネイティブな Entity 渡し。Custom は `dola::DynamicValue` ベースで Clone 制約と pasta DSL からの変換路を両立（DD12 確定）。TypewriterToken との後方互換は `From` トレイト変換で対応可能。
 
 ---
 
@@ -254,12 +257,13 @@ pub enum TimelineItem {
 
 | AC  | 技術要素                      | 既存アセット                                      | ギャップ                                                                     |
 | --- | ----------------------------- | ------------------------------------------------- | ---------------------------------------------------------------------------- |
-| AC1 | `CueSheetResult` 型           | —                                                 | **Missing**: `CueSheetResult` enum（Completed/Cancelled/Timeout/Choice）      |
+| AC1 | `CueSheetResult` 型           | —                                                 | **Missing**: `CueSheetResult` enum（Completed/Cancelled/Timeout/Choice/Error) |
 | AC2 | Completed 通知                | `TypewriterState::Completed` パターン             | **Adapt**: 全演者 CueQueue 消費完了の検知ロジック                             |
 | AC3 | Cancelled 通知                | —                                                 | **Missing**: 外部キャンセル API + Cancelled 発行メカニズム                    |
-| AC4 | Timeout 通知                  | WaitForInput の `timeout: Option<f64>` フィールド | **Adapt**: タイムアウト超過検知 + Timeout 発行ロジック                        |
+| AC4 | Timeout 通知                  | WaitForChoice/Click の `timeout: Option<f64>`     | **Adapt**: タイムアウト超過検知 + Timeout 発行ロジック                        |
 | AC5 | Choice 通知                   | —                                                 | **Missing**: 選択肢選択イベントの検知 + Choice 発行メカニズム                |
 | AC6 | 上位層への await 形式提供     | —                                                 | **Missing**: Rust 的 await パターン（DD11 で実装方式決定）                    |
+| AC7 | WaitForChoice 空打ち → Error  | —                                                 | **Missing**: プロトコル違反検知 + `Error(CueSystemError::EmptyChoiceBarrier)` 発行 |
 
 **評価**: CueSheet を「フィーチャー実行単位（Modal Dialog モデル）」として定義する新 Requirement。T7（キャンセル）を Cancelled バリアントとして統合。T8（動的生成）はスコープ外確定。ECS 的な await 実現方法（Observer vs AsyncTask vs Poll）が DD11 として設計フェーズの主要論点。
 
@@ -333,6 +337,10 @@ pub enum TimelineItem {
 | M20 | `CueSheetResult` enum（Completed/Cancelled/Timeout/Choice）  | Req 9    | 低                                    |
 | M21 | 全演者 CueQueue 完了検知ロジック                             | Req 9    | 中（全演者の状態追跡が必要）          |
 | M22 | CueSheetResult 通知メカニズム（DD11 決定後実装）             | Req 9    | 中〜高（await 実現方法による）        |
+| M23 | `Choice` / `WaitForChoice` / `WaitForClick` バリアント       | Req 2    | 低（WaitForInput を3バリアントに再設計）|
+| M24 | `EntityRef(Entity)` バリアント                               | Req 2    | 低                                    |
+| M25 | `Custom { command, params: DynamicValue }` バリアント        | Req 2,7  | 低（`dola::DynamicValue` を再利用）   |
+| M26 | `CueSystemError` 型（`thiserror` ベース）                    | Req 9    | 低                                    |
 
 ### Adapt（既存パターンの汎化・適用）
 
@@ -369,6 +377,7 @@ pub enum TimelineItem {
 | **DD9** | **タイミングモデル**: ~~相対時刻~~ vs **絶対時刻キーフレーム方式** ✅     | ~~(a) Wait コマンドによる相対時刻（FIFO 逐次消費）~~, **(b) Cue に start_time フィールドを付与し絶対時刻管理（並行実行可能） — 採用済み** | Req 1,2,3,4,5,6 全体 |
 | DD10 | **コマンド複雑性の哲学**: 決定論的データ vs 手続き的プログラム | (a) 純粋なデータ列（Wait バリアントなし、start_time 差分でタイミング表現）— 採用済み, (b) Wait 等の手続き的コマンドを許容 | Req 2, 将来拡張 |
 | DD11 | **CueSheetResult の ECS 的 await 実現**: Observer vs AsyncTask vs Poll | (a) bevy Observer/Event（ECS イベント駆動）, (b) bevy AsyncTask（実際の Future/await）, (c) Component Poll（消費者がポーリング） | Req 9, オーケストレーション層 |
+| DD12 | **Custom バリアントのパラメータ型**: `DynamicValue` vs static dispatch | **(a) `dola::DynamicValue`（JSON 互換辞書型）— 採用済み**, (b) `Box<dyn CueExtension>`（trait object、`CueCommand: Clone` と非互換）, (c) `Box<dyn Any>`（型安全性なし） | Req 2, Req 7 |
 
 ### Constraint（既存アーキテクチャ制約）
 

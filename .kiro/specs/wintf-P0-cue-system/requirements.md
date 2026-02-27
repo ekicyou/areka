@@ -167,18 +167,41 @@ cue-system は**舞台演出のキューシート**をメタファーとし、**
 **DD9 による変更点**:
 - ~~時間ウェイトバリアント（Wait）~~ → 不要。タイミング間隔は Cue の start_time 差分で表現される
 - ~~即時モード切替バリアント（Instant）~~ → 不要。同一 start_time の指定で代替される
-- ユーザー入力待ち（WaitForInput）は残存。タイムラインを対話的にブロックする意味的に異なるコマンド
+- ~~WaitForInput~~ → `WaitForClick` / `WaitForChoice` / `Choice` の3バリアントに再設計（選択肢データとバリアを分離）
+
+**バリアント一覧（確定・8バリアント）**:
+
+```rust
+enum CueCommand {
+    Text(String),                                      // テキスト表示（意味解釈は消費者の責務）
+    Clear,                                             // コンテンツクリア
+    Emote { key: String },                             // 演技発現（キーの意味解釈は消費者の責務）
+    Choice { id: String, text: String },               // 選択肢データ（先積み、WaitForChoice の前に連続投入）
+    WaitForChoice { timeout: Option<f64> },            // 選択肢バリア（直前の Choice 群を提示してブロック）
+    WaitForClick  { timeout: Option<f64> },            // クリック待ちバリア
+    EntityRef(bevy_ecs::entity::Entity),               // ECS エンティティ渡し（消費者が解釈）
+    Custom { command: String, params: DynamicValue },  // 消費者固有コマンド（dola::DynamicValue）
+}
+```
+
+**Choice + WaitForChoice プロトコル**:
+- `Choice` は `WaitForChoice` の**前に**任意個数キューに積む
+- `WaitForChoice` が pop された時点で先行する `Choice` 群を選択肢として提示しブロック開始
+- `WaitForChoice` 消費時に先行 `Choice` が 0 件 → プロトコル違反として `CueSheetResult::Error` を即時発行
 
 #### Acceptance Criteria
 
 1. **The** Cue System **shall** 基盤コマンド型を enum として定義する
-2. **The** Cue System **shall** 基盤コマンドにテキスト表示バリアント（表示対象文字列を保持）を含める
-3. **The** Cue System **shall** 基盤コマンドにユーザー入力待ちバリアント（タイムアウトを任意で保持）を含める
-4. **The** Cue System **shall** 基盤コマンドにコンテンツクリアバリアントを含める
-5. **The** Cue System **shall** 基盤コマンドに演技発現バリアント（演技キーを保持。Emote { key: String }）を含める
-6. **The** Cue System **shall** 基盤コマンドに消費者固有コマンドを格納するための拡張バリアントを含める
-7. **The** Cue System **shall** 各コマンドバリアントのパラメータに適切な Rust 型を付与する（文字列パラメータへの依存を最小化）
-8. **The** Cue System **shall** 基盤コマンド型に Clone, Debug を derive する
+2. **The** Cue System **shall** 基盤コマンドにテキスト表示バリアント `Text(String)` を含める（意味解釈は消費者の責務）
+3. **The** Cue System **shall** 基盤コマンドにコンテンツクリアバリアント `Clear` を含める
+4. **The** Cue System **shall** 基盤コマンドに演技発現バリアント `Emote { key: String }` を含める（演技キーの意味解釈は消費者が担う）
+5. **The** Cue System **shall** 基盤コマンドに選択肢先積みバリアント `Choice { id: String, text: String }` を含める
+6. **The** Cue System **shall** 基盤コマンドに選択肢バリア `WaitForChoice { timeout: Option<f64> }` を含める
+7. **The** Cue System **shall** 基盤コマンドにクリック待ちバリア `WaitForClick { timeout: Option<f64> }` を含める
+8. **The** Cue System **shall** 基盤コマンドに ECS エンティティ渡しバリアント `EntityRef(Entity)` を含める（消費者が解釈）
+9. **The** Cue System **shall** 基盤コマンドに消費者固有コマンドバリアント `Custom { command: String, params: DynamicValue }` を含める（`DynamicValue` は `dola::DynamicValue` を使用）
+10. **The** Cue System **shall** 各コマンドバリアントのパラメータに適切な Rust 型を付与する（文字列パラメータへの依存を最小化）
+11. **The** Cue System **shall** 基盤コマンド型に Clone, Debug を derive する
 
 ---
 
@@ -266,15 +289,17 @@ cue-system は**舞台演出のキューシート**をメタファーとし、**
 
 **Objective:** 開発者として、消費者ごとに固有のコマンド型を型安全に定義したい。それにより balloon 向けのテキスト系コマンドと animation 向けのサーフェス系コマンドを、共通の配送・消費基盤上で安全に扱える。
 
-**さくらスクリプト脱構築**: `\!` 拡張メカニズム（文字列パラメータ、ベースウェア固有）→ Rust enum ベースの型安全な拡張
+**さくらスクリプト脱構築**: `\!` 拡張メカニズム（文字列パラメータ、ベースウェア固有）→ `Custom { command: String, params: DynamicValue }` バリアントによる型安全な拡張
+
+**DD12 による確定**: `Custom` バリアントは `dola::DynamicValue`（JSON 互換辞書型）をパラメータとして採用。`Box<dyn Trait>` は `CueCommand: Clone` と相性が悪いため不採用。消費者はコマンド名（String）でパターンマッチして処理する。
 
 #### Acceptance Criteria
 
-1. **The** Cue System **shall** 基盤コマンド型の拡張バリアントを通じて消費者固有コマンドを CueQueue に格納できる仕組みを提供する
-2. **The** Cue System **shall** 消費者が自ドメインの拡張コマンドを取り出し、それ以外のコマンドを安全にスキップまたは通過させるパターンを提供する
-3. **The** Cue System **shall** 拡張コマンドの型が Debug トレイトを実装することを要求する（構造化ログ対応）
-4. **The** Cue System **shall** 型拡張において `Any` ベースのダウンキャストよりも enum ベースの static dispatch を推奨する設計とする
-5. **The** Cue System **shall** 消費者固有コマンド型の定義例（バルーン向け・アニメーション向け）をドキュメントとして提供する
+1. **The** Cue System **shall** `Custom { command: String, params: DynamicValue }` バリアントを通じて消費者固有コマンドを CueQueue に格納できる仕組みを提供する
+2. **The** Cue System **shall** 消費者が `Custom` バリアントのコマンド名で分岐し、自ドメイン以外のコマンドを安全にスキップまたは通過させるパターンを提供する
+3. **The** Cue System **shall** `Custom` バリアントが `Clone + Debug` を満たすことを保証する（`DynamicValue: Clone + Debug` による）
+4. **The** Cue System **shall** `Custom` バリアントの `params` に `DynamicValue::Null` を使用することで引数なしコマンドを表現できる設計とする
+5. **The** Cue System **shall** 消費者固有コマンドの使用例（バルーン向け・アニメーション向け）をドキュメントとして提供する
 
 ---
 
@@ -305,12 +330,13 @@ cue-system は**舞台演出のキューシート**をメタファーとし、**
 
 #### Acceptance Criteria
 
-1. **The** Cue System **shall** CueSheet の実行結果を表す `CueSheetResult` 型を提供する（ベースバリアント: `Completed` / `Cancelled` / `Timeout` / `Choice { id: String }`。通常の Feature にありうる要素を許容する）
+1. **The** Cue System **shall** CueSheet の実行結果を表す `CueSheetResult` 型を提供する（バリアント: `Completed` / `Cancelled` / `Timeout` / `Choice { id: String }` / `Error(CueSystemError)`。`CueSystemError` は `thiserror` で定義される構造化エラー型）
 2. **When** CueSheet 内の全演者の CueQueue が消費完了した時, **the** Cue System **shall** `CueSheetResult::Completed` を通知する
 3. **When** CueSheet が外部から中断・キャンセルされた時, **the** Cue System **shall** `CueSheetResult::Cancelled` を通知する
 4. **When** WaitForInput に timeout が設定されており期限を超過した時, **the** Cue System **shall** `CueSheetResult::Timeout` を通知する
 5. **When** 選択肢コマンドがユーザーによって選択された時, **the** Cue System **shall** `CueSheetResult::Choice { id }` を通知する
 6. **The** Cue System **shall** `CueSheetResult` を上位層（オーケストレーション）が Rust 的な await パターンで受け取れる形式で提供する（ECS 的な具体的実装は DD11 として設計フェーズで決定）
+7. **When** `WaitForChoice` コマンドが消費された時点で対象演者キューに先行する `Choice` コマンドが 0 件だった場合, **the** Cue System **shall** `CueSheetResult::Error(CueSystemError::EmptyChoiceBarrier { actor })` を発行し CueSheet を即時終了する
 
 ---
 
@@ -346,6 +372,7 @@ cue-system は**舞台演出のキューシート**をメタファーとし、**
 | 1.0.1   | 2026-02-26 | レビュー自明修正（F1: C3但し書き, F2: Req4 AC2実装詳細削除）                    |
 | 2.0     | 2026-02-27 | DD9 絶対時刻キーフレーム方式適用。Req 1,2,3,4,5,6 を全面書き換え。議題T5-T8追加 |
 | 2.1     | 2026-02-27 | Q5-Q8 議論完了。performer→actor 用語統一。CueSheet 相対時刻・CueQueue 外部 current_time 受取確定。dola 思想統一。Req 9 追加（フィーチャーモデル・CueSheetResult）。T2/T5/T6/T7/T8 全議題削除 |
+| 2.2     | 2026-02-27 | CueCommand 8バリアント確定。WaitForInput → WaitForClick/WaitForChoice/Choice に再設計（データとバリアの分離）。EntityRef/Custom(DynamicValue) 追加。CueSheetResult::Error 追加。Req 7 を DynamicValue 方針に更新 |
 
 ---
 
