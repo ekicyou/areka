@@ -130,17 +130,17 @@ sequenceDiagram
 
     P->>D: dispatch(cue_sheet, sheet_start_time, registry, world)
     loop 各 Cue
-        D->>D: target = cue.command.default_target()
-        D->>R: resolve(actor_key, target)
-        alt Entity 見つかった
-            R-->>D: Entity
+        alt is_routing_command()
+            D->>R: ルーティング更新（RouteAdd/RouteSwitch/RouteRemove）
+            R-->>D: ok（CueQueue には届かない）
+        else ブロードキャスト
+            D->>R: routes_for_actor(actor_key)
+            R-->>D: [(Shell, Entity), (Balloon, Entity), ...]
             D->>D: cue.start_time + sheet_start_time → 絶対時刻
-            alt target == Shell
-                D->>Q1: push_sorted(TimedCue)
-            else target == Balloon
-                D->>Q2: push_sorted(TimedCue)
-            end
-        else Entity 見つからない
+            D->>Q1: push_sorted(TimedCue) ← Shell スロット
+            D->>Q2: push_sorted(TimedCue) ← Balloon スロット
+        end
+    else Entity 見つからない
             R-->>D: None
             D->>D: tracing::warn! → skip
         end
@@ -197,7 +197,7 @@ sequenceDiagram
 | Requirement | Summary | Components | Interfaces | Flows |
 |-------------|---------|------------|------------|-------|
 | 1.1-1.8 | CueSheet 構造化台本 | CueSheet, Cue, ActorKey | `CueSheet::new()`, `filter_by_actor()` | — |
-| 2.1-2.11 | CueCommand 8バリアント | CueCommand | enum pattern match | — |
+| 2.1-2.11 | CueCommand 11バリアント | CueCommand | enum pattern match | — |
 | 3.1-3.9 | CueQueue コンポーネント | CueQueue, TimedCue | `push_sorted()`, `pop_ready()`, `peek()` | 消費フロー |
 | 4.1-4.7 | CueSheet 配送 | dispatch(), EntityRegistry, CueTarget | `dispatch_cue_sheet_internal()` | 配送フロー |
 | 5.1-5.6 | 消費プロトコル | CueQueueState | `pop_ready(current_time)` | 消費フロー |
@@ -364,7 +364,7 @@ impl std::fmt::Display for ActorKey {
 }
 ```
 
-#### CueCommand — 8バリアント確定
+#### CueCommand — 11バリアント確定
 
 | Field | Detail |
 |-------|--------|
@@ -373,18 +373,22 @@ impl std::fmt::Display for ActorKey {
 
 **DD10 確定**: 純粋データ列哲学。Wait バリアントなし（start_time 差分でタイミング表現）。
 **DD12 確定**: Custom パラメータは `dola::DynamicValue`（Clone + Debug 互換、JSON 変換可能）。
+**DD13 確定**: ブロードキャスト配信モデル。非ルーティングコマンドは演者の全スロットに同一内容を配信、解釈は受信エンティティの責務。ルーティングコマンドは dispatch 層で消費し物理エンティティには届かない。
 
 ```rust
 use dola::DynamicValue;
 
-/// 型安全な演出コマンド enum（8バリアント）
+/// 型安全な演出コマンド enum（11バリアント）
 ///
-/// # データとバリアの分離思想
+/// # コマンドの3分類
 /// - データコマンド: Text, Clear, Emote, Choice, EntityRef, Custom
+///   → 演者に登録された全物理エンティティ（スポット・バルーン等）にブロードキャスト
+///   → 解釈は受信エンティティの役割に委ねる
 /// - バリアコマンド: WaitForChoice, WaitForClick
-///
-/// バリアコマンドが到達するとタイムライン進行がブロックされ、
-/// 外部入力を待つ。データコマンドは即時消費される。
+///   → 同上ブロードキャスト + タイムライン進行をブロック
+/// - ルーティングコマンド: RouteAdd, RouteSwitch, RouteRemove
+///   → dispatch 層で EntityRegistry を更新して消費
+///   → 物理エンティティの CueQueue には届かない
 #[derive(Debug, Clone)]
 pub enum CueCommand {
     /// テキスト表示（意味解釈は消費者の責務）
@@ -398,10 +402,11 @@ pub enum CueCommand {
     /// バルーンの場合: テキスト全消去
     Clear,
 
-    /// 演技発現（キーの意味解釈は消費者の責務）
+    /// 演技発現（全ルーティングスロットにブロードキャスト。解釈は受信エンティティの責務）
     ///
-    /// バルーンの場合: 感情値キー → BalloonStyleMap 切替
-    /// アニメーションの場合: サーフェス切替キー
+    /// # 受信側ごとの解釈例
+    /// - スポット（Shell）: 演者名 + 感情キーでサーフェスアニメーションを決定
+    /// - バルーン（Balloon）: 感情キーに応じたフォントセット・スタイルを選択
     Emote { key: String },
 
     /// 選択肢データ（先積み）
@@ -452,6 +457,27 @@ pub enum CueCommand {
     /// }
     /// ```
     Custom { command: String, params: DynamicValue },
+
+    // --- ルーティングコマンド（dispatch 層で消費。物理エンティティには届かない） ---
+
+    /// 演者の配信先スロットにエンティティを追加（dispatch 層消費）
+    ///
+    /// `to` は EntityRegistry に登録済みの EntityKey でなければならない。
+    /// 既存スロットへの配信は影響を受けない。
+    /// 例: 演者に2枚目のバルーンスロットを追加する。
+    RouteAdd { target: CueTarget, to: EntityKey },
+
+    /// 演者の配信先スロットを差し替え（dispatch 層消費）
+    ///
+    /// `target` スロットへのルーティングを `to` が指すエンティティに切り替える。
+    /// 例: バルーン A からバルーン B への切り替え。
+    RouteSwitch { target: CueTarget, to: EntityKey },
+
+    /// 演者の配信先スロットを削除（dispatch 層消費）
+    ///
+    /// `target` スロットへの配信を停止する。
+    /// 例: 退場した演者のシェルスロットを配信対象から外す。
+    RouteRemove { target: CueTarget },
 }
 
 impl CueCommand {
@@ -460,40 +486,25 @@ impl CueCommand {
         matches!(self, CueCommand::WaitForChoice { .. } | CueCommand::WaitForClick { .. })
     }
 
-    /// コマンドのデフォルトルーティング先
-    ///
-    /// dispatch 時に EntityRegistry で EntityKey::Actor(key, target) → Entity を解決する際に使用。
-    /// Custom コマンドはプレフィックス規約で判定。
-    pub fn default_target(&self) -> CueTarget {
-        match self {
-            // バルーン向け: テキスト表示・選択肢・ブロッキング
-            CueCommand::Text(_) => CueTarget::Balloon,
-            CueCommand::Clear => CueTarget::Balloon,
-            CueCommand::Choice { .. } => CueTarget::Balloon,
-            CueCommand::WaitForChoice { .. } => CueTarget::Balloon,
-            CueCommand::WaitForClick { .. } => CueTarget::Balloon,
-            // シェル向け: 感情・アニメーション
-            CueCommand::Emote { .. } => CueTarget::Shell,
-            CueCommand::EntityRef(_) => CueTarget::Shell,
-            // Custom: プレフィックス規約で判定
-            CueCommand::Custom { command, .. } => {
-                if command.starts_with("balloon.") {
-                    CueTarget::Balloon
-                } else {
-                    CueTarget::Shell
-                }
-            }
-        }
+    /// ルーティングコマンド（dispatch 層で EntityRegistry を操作し物理エンティティには届かない）かどうか
+    pub fn is_routing_command(&self) -> bool {
+        matches!(
+            self,
+            CueCommand::RouteAdd { .. }
+                | CueCommand::RouteSwitch { .. }
+                | CueCommand::RouteRemove { .. }
+        )
     }
 }
 
 #### CueTarget
 
 ```rust
-/// CueCommand のルーティング先種別
+/// 演者の配信先スロット種別
 ///
-/// 演者は複数の CueQueue 配信先を持つ。
-/// 例: 「さくら」は Shell（体）と Balloon（言葉）の両方に CueQueue を持つ。
+/// EntityRegistry の `EntityKey::Actor(key, CueTarget)` に使用するスロット識別子。
+/// 非ルーティングコマンドは登録された全スロットにブロードキャストされる。
+/// ルーティングコマンド (RouteAdd/RouteSwitch/RouteRemove) は操作対象のスロットを指定する際に使用。
 ///
 /// # バルーン共有
 /// 複数の演者が同一の Balloon エンティティを共有できる。
@@ -520,8 +531,10 @@ pub enum CueTarget {
 | WaitForClick { timeout } | 16 bytes | Option\<f64\> |
 | EntityRef(Entity) | 8 bytes | Entity = u64 |
 | Custom { command, params } | 24 + 56 bytes | String + DynamicValue(最大) |
+| RouteAdd/RouteSwitch { target, to } | 1 + 32 bytes | CueTarget + EntityKey(String 最大) |
+| RouteRemove { target } | 1 byte | CueTarget のみ |
 
-enum 全体サイズ: **discriminant(8) + 最大バリアント(Choice: 48) = 56 bytes**（推定）。
+enum 全体サイズ: **discriminant(8) + 最大バリアント(Choice: 48) = 56 bytes**（推定）。RouteAdd/RouteSwitch は ≈40 bytes で Choice より小。
 TimedCue = `start_time(8) + CueCommand(56) = 64 bytes` → **NFR-1 AC4: 64バイト制約に適合**。
 
 > 正確なサイズは `static_assert!(size_of::<TimedCue>() <= 64)` でコンパイル時検証する。
@@ -1055,22 +1068,32 @@ pub struct CueSheetHandle {
 /// dispatch() ≈ dola::compile()（相対時刻を絶対時刻にコンパイル）
 ///
 /// # Process
-/// 1. 各 Cue の CueCommand::default_target() でルーティング先を決定
-/// 2. EntityKey::Actor(key, target) を EntityRegistry で Entity に解決
+/// 1. コマンド分類を判定
+///    - `is_routing_command()` = true: EntityRegistry を更新して消費（CueQueue には届かない）
+///    - それ以外: 全スロットにブロードキャスト
+/// 2. ブロードキャスト対象: `registry.routes_for_actor(actor)` で全スロットを列挙
 /// 3. cue.start_time + sheet_start_time で世界絶対時刻を算出
-/// 4. Entity の CueQueue に push_sorted()
+/// 4. 各スロットの Entity の CueQueue に push_sorted()
 ///
 /// # Routing Example
 /// ```text
 /// Cue { actor: "sakura", cmd: Text("hello") }
-///   → default_target() = Balloon
-///   → registry.resolve(&EntityKey::Actor("sakura".into(), CueTarget::Balloon)) → balloon_entity
-///   → balloon_entity.CueQueue.push_sorted(...)
+///   → is_routing_command() = false
+///   → routes_for_actor("sakura") = [(Shell, entity_spot), (Balloon, entity_balloon)]
+///   → entity_spot.CueQueue.push_sorted(Text("hello"))    ← スポットは _ でスキップ
+///   → entity_balloon.CueQueue.push_sorted(Text("hello")) ← バルーンがタイプ表示
 ///
 /// Cue { actor: "sakura", cmd: Emote { key: "smile" } }
-///   → default_target() = Shell
-///   → registry.resolve(&EntityKey::Actor("sakura".into(), CueTarget::Shell)) → sakura_shell_entity
-///   → sakura_shell_entity.CueQueue.push_sorted(...)
+///   → is_routing_command() = false
+///   → routes_for_actor("sakura") = [(Shell, entity_spot), (Balloon, entity_balloon)]
+///   → entity_spot.CueQueue.push_sorted(Emote { "smile" })    ← スポット: サーフェスアニメが決定
+///   → entity_balloon.CueQueue.push_sorted(Emote { "smile" }) ← バルーン: フォントセット切替
+///
+/// Cue { actor: "sakura", cmd: RouteSwitch { target: Balloon, to: EntityKey::Balloon("balloon_b") } }
+///   → is_routing_command() = true
+///   → registry で EntityKey::Balloon("balloon_b") を解決 → entity_b
+///   → registry.register(EntityKey::Actor("sakura", Balloon), entity_b) で更新
+///   → CueQueue へのプッシュなし
 /// ```
 ///
 /// # Error Handling
@@ -1080,7 +1103,7 @@ pub struct CueSheetHandle {
 fn dispatch_cue_sheet_internal(
     cue_sheet: &CueSheet,
     sheet_start_time: f64,
-    registry: &EntityRegistry,
+    registry: &mut EntityRegistry,
     queues: &mut Query<&mut CueQueue>,
 ) -> CueSheetHandle {
     // Implementation: see Tasks
@@ -1323,7 +1346,7 @@ impl CueSheetTracker {
 crates/wintf/src/ecs/
 ├── cue/
 │   ├── mod.rs           ← re-exports, CueSheet, Cue, ActorKey, CueTarget
-│   ├── command.rs       ← CueCommand enum（8バリアント）, CueTarget enum
+│   ├── command.rs       ← CueCommand enum（11バリアント）, CueTarget enum
 │   ├── component.rs     ← PendingCueSheet コンポーネント
 │   ├── queue.rs         ← CueQueue コンポーネント, TimedCue, CueQueueState
 │   ├── dispatch.rs      ← dispatch_pending_cue_sheets システム, dispatch_cue_sheet_internal, EntityRegistry, EntityKey
@@ -1419,7 +1442,11 @@ classDiagram
         WaitForClick~timeout: Option~f64~~
         EntityRef(Entity)
         Custom~command: String, params: DynamicValue~
+        RouteAdd~target: CueTarget, to: EntityKey~
+        RouteSwitch~target: CueTarget, to: EntityKey~
+        RouteRemove~target: CueTarget~
         +is_barrier() bool
+        +is_routing_command() bool
     }
 
     class TimedCue {
@@ -1493,7 +1520,8 @@ classDiagram
     CueSheet "1" *-- "0..*" Cue
     Cue --> ActorKey
     Cue --> CueCommand
-    CueCommand --> CueTarget : default_target()
+    CueCommand ..> CueTarget : RouteXxx(スロット指定)
+    CueCommand ..> EntityKey : RouteSwitch/RouteAdd(to)
     CueQueue "1" *-- "0..*" TimedCue
     TimedCue --> CueCommand
     CueQueue --> CueQueueState
@@ -1632,6 +1660,7 @@ fn poll_cue_results(
 
 ```rust
 // 消費者（balloon03-content）の典型的な消費ループ
+// ルーティングコマンド（RouteAdd/RouteSwitch/RouteRemove）は dispatch 層で消費済みのため、ここには届かない。
 fn consume_balloon_cues(
     mut query: Query<&mut CueQueue>,
     frame_time: Res<FrameTime>,
@@ -1641,9 +1670,9 @@ fn consume_balloon_cues(
         let commands = queue.pop_ready(current_time);
         for cmd in commands {
             match cmd {
-                CueCommand::Text(text) => { /* テキスト表示処理 */ }
+                CueCommand::Text(text) => { /* タイプライター表示 */ }
                 CueCommand::Clear => { /* コンテンツクリア */ }
-                CueCommand::Emote { key } => { /* 感情値切替 */ }
+                CueCommand::Emote { key } => { /* 感情キーに応じたフォントセット・スタイルを選択 */ }
                 CueCommand::Custom { command, params } if command.starts_with("balloon.") => {
                     /* バルーン固有処理 */
                 }
@@ -1654,6 +1683,27 @@ fn consume_balloon_cues(
                     // 自ドメイン外のコマンド → 安全にスキップ
                     tracing::debug!(command = ?cmd, "Skipping unknown command");
                 }
+            }
+        }
+    }
+}
+
+// 消費者（スポット）の典型的な消費ループ
+// Emote は演者名 + 感情キーでサーフェスアニメーションを決定する
+fn consume_spot_cues(
+    mut query: Query<(&mut CueQueue, &ActorKey)>,
+    frame_time: Res<FrameTime>,
+) {
+    let current_time = frame_time.elapsed_secs();
+    for (mut queue, actor_key) in query.iter_mut() {
+        let commands = queue.pop_ready(current_time);
+        for cmd in commands {
+            match cmd {
+                CueCommand::Emote { key } => {
+                    // 演者名 + 感情キーでサーフェスアニメーションを決定
+                    /* apply_surface_animation(actor_key, &key) */
+                }
+                _ => { /* 自ドメイン外はスキップ */ }
             }
         }
     }
@@ -1717,9 +1767,10 @@ fn consume_balloon_cues(
 | DD7 | CueSheet 投入 API | **PendingCueSheet コンポーネント (DD7-c)** | 通常システムから Commands で呼び出し可能。独立短命エンティティパターン |
 | DD8 | dola 統合の粒度 | **インターフェース定義のみ (DD8-a)** | 実質的な統合は後続仕様で |
 | DD9 | タイミングモデル | **絶対時刻キーフレーム方式** | 要件確定済み（v2.0 で適用） |
-| DD10 | コマンド複雑性の哲学 | **純粋データ列** | Wait なし、start_time 差分でタイミング |
+| DD10 | コマンド複雑性の哲学 | **純粋データ列 + ブロードキャスト** | Wait なし、start_time 差分でタイミング |
 | DD11 | CueSheetResult の await | **Component Poll** | TypewriterState パターンの自然な拡張 |
 | DD12 | Custom パラメータ型 | **dola::DynamicValue** | 要件確定済み（v2.2 で確定） |
+| DD13 | コマンド配信モデル | **ブロードキャスト + ルーティングコマンド分離** | 非ルーティングコマンドは全スロットにブロードキャスト、RouteXxxはdispatch層のみ消費 |
 
 ---
 
