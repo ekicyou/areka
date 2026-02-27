@@ -18,15 +18,15 @@
 
 > **演劇シーンを与えたら、演者が演じてくれる**
 
-cue-system は**舞台演出のキューシート**をメタファーとする。
+cue-system は**舞台演出のキューシート**をメタファーとし、**dola の思想**（宣言的構造 → コンパイル → 時刻ベース実行）を共有する。
 
-| 概念                        | 説明                                                     | さくらスクリプトでの対応                       |
-| --------------------------- | -------------------------------------------------------- | ---------------------------------------------- |
-| **キューシート (CueSheet)** | 構造化された演出台本。どの演者がいつ何をするかを記述する | さくらスクリプト文字列そのもの                 |
-| **演者 (Actor)**            | キューシートの指示を受けて演技するエンティティ           | スコープ対象（`\0` = さくら、`\1` = うにゅう） |
-| **キュー (Cue)**            | 個々の演出指示                                           | 各タグ（`\s[0]`, `\w[500]`）や表示文字         |
-| **キューキュー (CueQueue)** | 各演者の手持ちの、次の演技指示を待つ行列                 | ベースウェアの内部バッファ（非公開）           |
-| **配送 (Dispatch)**         | 台本を各演者に配る行為                                   | スコープ切替によるコマンドの暗黙的な振り分け   |
+| 概念                        | 説明                                                     | さくらスクリプトでの対応                       | dola での対応               |
+| --------------------------- | -------------------------------------------------------- | ---------------------------------------------- | --------------------------- |
+| **キューシート (CueSheet)** | 構造化された演出台本（相対時刻）。どの演者がいつ何をするかを記述する | さくらスクリプト文字列そのもの                 | Document/Storyboard         |
+| **演者 (Actor)**            | キューシートの指示を受けて演技するエンティティ           | スコープ対象（`\0` = さくら、`\1` = うにゅう） | Variable の対象             |
+| **キュー (Cue)**            | 個々の演出指示（CueSheet 内での相対時刻保持）                                           | 各タグ（`\s[0]`, `\w[500]`）や表示文字         | Transition/Duration         |
+| **キューキュー (CueQueue)** | 各演者の実行可能な絶対時刻コマンド列                 | ベースウェアの内部バッファ（非公開）           | Runtime state               |
+| **配送 (Dispatch)**         | 台本をコンパイル（絶対時刻化）して各演者に配る行為                                   | スコープ切替によるコマンドの暗黙的な振り分け   | compile + playback start    |
 
 ### さくらスクリプトからの設計継承と脱構築
 
@@ -149,7 +149,7 @@ cue-system は**舞台演出のキューシート**をメタファーとする�
 
 1. **The** Cue System **shall** 演出台本を表現する CueSheet データ構造を提供する（pure Vec<Cue>、メタデータフィールドなし）
 2. **The** Cue System **shall** CueSheet 内の各指示（Cue）が対象演者の識別子（ActorKey）を明示的に保持する設計とする
-3. **The** Cue System **shall** 各 Cue に CueSheet 開始時点からの絶対時刻（start_time: f64、秒単位）を保持させる
+3. **The** Cue System **shall** 各 Cue に CueSheet ローカル時刻（start_time: f64、秒単位、CueSheet 開始時点からの相対秒数）を保持させる
 4. **The** Cue System **shall** CueSheet 内の Cue を start_time の昇順で保持する（同一時刻のコマンドは挿入順で安定ソート）
 5. **The** Cue System **shall** 1つの CueSheet 内に複数の演者への指示を混在して記述できる
 6. **The** Cue System **shall** 同一 start_time に複数の Cue を配置することで並行実行を表現できる
@@ -204,68 +204,61 @@ cue-system は**舞台演出のキューシート**をメタファーとする�
 
 ---
 
-### Requirement 4: CueSheet 配送メカニズム（絶対時刻保持配送）
+### Requirement 4: CueSheet 配送 — コンパイルと演者への分配
 
-**Objective:** 開発者として、CueSheet を投入するだけで各演者の CueQueue にコマンドが自動配送されるようにしたい。それにより外部システム（pasta DSL 等）は CueSheet の構築に専念でき、配送の詳細を意識する必要がない。
+**Objective:** 開発者として、作成した CueSheet を各演者エンティティに配送したい。それにより CueSheet の相対時刻が世界時刻に変換（コンパイル）され、演者ごとの独立した CueQueue に絶対時刻コマンドとして振り分けられ、個別の消費タイミング制御が可能になる。
 
-**さくらスクリプト継承・脱構築**: スコープ切替（`\0`, `\1`）による暗黙の振り分け → 明示的な ActorKey + 自動分配
+**さくらスクリプト脱構築**: スコープ切替（`\0`, `\1`）による暗黙の振り分け → 明示的な ActorKey + 自動分配
 
-**DD9 による変更点**: 配送時に各 Cue の start_time を保持したまま各演者の CueQueue に分配する。CueQueue への挿入は start_time 順序を維持し、既存エントリとマージする形で追加される。
+**dola 思想の継承**: CueSheet（宣言的、相対時刻）→ コンパイル（絶対時刻化）→ CueQueue（実行可能形式）という変換パイプライン
 
 #### Acceptance Criteria
 
-1. **The** Cue System **shall** CueSheet 内の各 Cue を、ActorKey に対応する演者エンティティの CueQueue に分配する配送メカニズムを提供する
-2. **The** Cue System **shall** ActorKey から対象エンティティを解決する仕組みを提供する
-3. **The** Cue System **shall** 配送時に各 Cue の start_time を保持したまま CueQueue に挿入する
-4. **The** Cue System **shall** 配送時に CueQueue 内の start_time 昇順を維持する（既存コマンドとのマージ挿入）
+1. **The** Cue System **shall** CueSheet 配送時に sheet_start_time（世界絶対時刻）を受け取り、各 Cue のローカル時刻を世界絶対時刻に変換する（`world_time = sheet_start_time + cue.start_time`）
+2. **The** Cue System **shall** 絶対時刻化された各 Cue を、ActorKey に対応する演者エンティティの CueQueue に分配する配送メカニズムを提供する
+3. **The** Cue System **shall** ActorKey から対象エンティティを解決する仕組みを提供する
+4. **The** Cue System **shall** 配送時に CueQueue 内の絶対時刻昇順を維持する（既存コマンドとのマージ挿入）
 5. **When** CueSheet がシステムに投入された時, **the** Cue System **shall** 対象となる全演者の CueQueue にコマンドを配送する
 6. **If** CueSheet 内の ActorKey に対応するエンティティが見つからない場合, **the** Cue System **shall** `tracing::warn!` でログ出力し、該当コマンドをスキップする（他の演者への配送は継続）
-7. **The** Cue System **shall** 既に CueQueue にコマンドが存在するエンティティに対しても、追加の CueSheet 配送による start_time 順マージ追加を行える（任意タイミングでの逐次投入）
+7. **The** Cue System **shall** 既に CueQueue にコマンドが存在するエンティティに対しても、追加の CueSheet 配送による絶対時刻順マージ追加を行える（任意タイミングでの逐次投入）
 
 ---
 
-### Requirement 5: キュー消費プロトコル（時刻到達消費モデル）
+### Requirement 5: CueQueue 消費プロトコル — 時刻ベース実行制御
 
-**Objective:** 開発者として、消費者システム（Typewriter、AnimationSystem 等）が CueQueue からコマンドを消費するための統一的なプロトコルを利用したい。それにより各消費者が一貫した方法でキューを処理でき、タイミング制御の共通セマンティクスを保証できる。
+**Objective:** 開発者として、CueQueue のコマンドを時刻到達順に消費したい。それにより絶対時刻方式（DD9）に基づいた正確なタイミング制御が可能になり、並行実行やタイムライン操作を自然に実現できる。
 
-**さくらスクリプト脱構築**: ベースウェア内部の逐次ブロッキング解釈 → ECS システムによるフレーム単位の時刻到達消費
+**さくらスクリプト脱構築**: FIFO 先頭消費（一本道） → 時刻到達ベース消費（並行可能）
 
-**DD9 による変更点**:
-- FIFO 先頭消費 → 現在時刻 ≥ start_time のコマンドを時系列順に消費
-- ~~即時モード消費~~ → 不要（同一 start_time 指定で代替済み）
-- バッチ消費 → 同一 start_time のコマンドをフレーム内で並行消費
-- WaitForInput は現在時刻のタイムライン進行を対話的にブロックする
+**dola 思想の継承**: playback(current_time) パターン — 外部から時刻を受け取り、到達済みコマンドを返す
 
 #### Acceptance Criteria
 
-1. **The** Cue System **shall** 消費者システムがフレームごとに CueQueue 内の時刻到達済みコマンド（現在時刻 ≥ start_time）を消費できるプロトコルを定義する
-2. **The** Cue System **shall** 同一 start_time のコマンドをフレーム内で一括消費（並行消費）できるパターンを定義する
-3. **When** CueQueue 内にユーザー入力待ちコマンドが時刻到達した場合, **the** Cue System **shall** 外部入力を受信するまで当該演者の CueQueue タイムライン進行をブロックするセマンティクスを定義する（演者ごとブロック。他の演者のタイムラインは独立して進行）
-4. **The** Cue System **shall** CueQueue の経過時刻（CueSheet 開始からの相対秒数）を管理する仕組みを提供する
+1. **The** Cue System **shall** 消費者システムがフレームごとに CueQueue 内の時刻到達済みコマンド（current_time ≥ start_time）を消費できるプロトコルを定義する
+2. **The** Cue System **shall** CueQueue は経過時刻を管理せず、消費時に外部から current_time（世界絶対時刻）を受け取る設計とする
+3. **The** Cue System **shall** 同一 start_time のコマンドをフレーム内で一括消費（並行消費）できるパターンを定義する
+4. **When** CueQueue 内にユーザー入力待ちコマンドが時刻到達した場合, **the** Cue System **shall** 外部入力を受信するまで当該演者の CueQueue タイムライン進行をブロックするセマンティクスを定義する（演者ごとブロック。他の演者のタイムラインは独立して進行）
 5. **The** Cue System **shall** キュー消費の現在状態（再生中・入力待ち・完了）を追跡する消費ステート管理を提供する
 6. **When** CueQueue の全コマンドが消費された時, **the** Cue System **shall** 消費完了状態を示す
 
 ---
 
-### Requirement 6: タイミング制御と dola 統合（統一時間軸モデル）
+### Requirement 6: タイミング制御と dola 統合（思想の共有）
 
-**Objective:** 開発者として、CueSheet の経過時刻管理と dola オーケストレーションを統一的な時間軸で利用したい。それにより CueSheet のタイムラインと dola アニメーションが同期した演出が可能となる。
+**Objective:** 開発者として、dola アニメーションシステムと思想を共有したタイミング制御を行いたい。それにより、テキスト表示とアニメーションが同一の時間軸で制御され、コンテンツの同期が保証される。cue-system は dola の「宣言的構造 → コンパイル → 時刻ベース実行」というパイプラインを対話的台本の領域で実現する。
 
-**さくらスクリプト継承**: `\w[N]`（間合い）→ start_time 差分で表現、`\x`（クリック待ち）→ WaitForInput、`\_q`/`\t`（即時表示）→ 同一 start_time
-
-**DD9 による変更点**:
-- 消費速度変更 = CueQueue 経過時刻の進行速度倍率として明確化
-- dola 統合 = CueSheet の start_time と dola の時間軸を統一可能
+**dola との思想共有**:
+- CueSheet ≈ dola::Document/Storyboard（宣言的、相対時刻）
+- dispatch(sheet_start_time) ≈ dola::compile（絶対時刻化）
+- CueQueue ≈ dola::Runtime（実行可能形式）
+- pop_ready(current_time) ≈ dola::playback（時刻ベース消費）
 
 #### Acceptance Criteria
 
-1. **The** Cue System **shall** CueQueue の経過時刻をシステム時間（FrameTime）ベースで進行させる
-2. **The** Cue System **shall** CueQueue のタイムライン進行を一時停止（pause）する API を提供する
-3. **The** Cue System **shall** CueQueue のタイムライン進行を再開（resume）する API を提供する
-4. **The** Cue System **shall** CueQueue の残コマンドを即時完了（skip）する API を提供する（経過時刻を末尾コマンドの start_time まで即座に進める）
-5. **The** Cue System **shall** CueQueue の経過時刻進行速度を変更する倍率（playback_rate）を提供する（倍速/低速対応。速度 = start_time 進行に対する倍率）
-6. **Where** dola フィーチャーが有効な場合, **the** Cue System **shall** CueQueue の経過時刻と DolaRuntime の時間軸を統一し、連携させるインターフェースを提供する
-7. **Where** dola フィーチャーが有効な場合, **the** Cue System **shall** dola の subscribe メカニズムを通じて CueQueue の消費進行状況を dola 変数として公開できる仕組みを提供する
+1. **The** Cue System **shall** playback_rate（再生速度倍率）を適用可能な設計とする
+2. **When** dola feature が有効な時, **the** Cue System **shall** dola の `DolaBridgeResource` 経由でタイムライン制御を統合する
+3. **The** Cue System **shall** CueQueue の時刻進行を dola の時刻精度（f64 秒）と互換にする
+4. **The** Cue System **shall** dola feature が無効な時でも独立して動作できる設計とする（`#[cfg(feature = "dola")]` による条件コンパイル）
 
 ---
 
@@ -328,15 +321,6 @@ cue-system は**舞台演出のキューシート**をメタファーとする�
 
 以下の議題はレビューセッションでの確認を要する。要件の承認判断に影響する可能性がある。
 
-### T6: CueSheet タイムライン管理の主体（Req 5 AC4, Req 6 に影響）
-
-| 候補                               | 説明                                                      | トレードオフ                          |
-| ---------------------------------- | --------------------------------------------------------- | ------------------------------------- |
-| **A: 各 CueQueue が独立管理**      | CueQueue コンポーネントに elapsed_time フィールドを保持   | シンプル。CueSheet 全体の同期が困難   |
-| **B: ルートに CueTimeline 配置**   | CueSheet 投入先エンティティに共有タイムラインコンポーネント | 全演者の同期が容易。ルート設計に依存 |
-| **C: タイムラインエンティティ分離** | CueSheet ごとに専用エンティティで経過時刻を管理          | 柔軟だがエンティティ増加              |
-
-**検討ポイント**: DD9 の絶対時刻方式を活かすには、CueSheet 全体の基準時刻が必要。T5 の WaitForInput ブロッキングスコープとも関連する。
 
 ### T7: CueSheet の中断・キャンセルセマンティクス（Req 4, Req 8 に影響）
 

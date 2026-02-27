@@ -47,10 +47,12 @@
 - **Changed\<T\> リアクティブクエリ**: コンポーネント変更検出による遅延処理（計8箇所で利用実績）
 - **on_remove クリーンアップ**: TypewriterTalk の on_remove フックでリソース解放
 
-#### タイミング & 時間管理パターン
+#### タイミング & 時間管理パターン（dola 思想との共有）
 
 - **FrameTime 絶対時刻**: `elapsed_secs() -> f64` — 起動時からの絶対秒数。`GetSystemTimePreciseAsFileTime` ベース（100ns 精度）
 - **DolaRuntime 絶対時刻**: `update(current_time: f64)` — **FrameTime と同じ時間軸の f64 秒**
+- **dola 思想**: `Document/Storyboard（宣言的、相対時刻） → compile（絶対時刻化） → Runtime（実行可能） → playback(current_time)（消費）`
+- **cue-system との対応**: `CueSheet（相対時刻） → dispatch(sheet_start_time)（コンパイル） → CueQueue（絶対時刻） → pop_ready(current_time)（消費）`
 - **TypewriterTimeline 絶対時刻**: Stage 2 IR の TimelineItem が `show_at`, `start_at`, `fire_at` フィールドを保持 — **DD9 方式の実証例**
 - **TypewriterTalk の start_time**: `start_time: f64` + `paused_elapsed: f64` で pause/resume を管理
 - **update() 消費ループ**: `while elapsed >= show_at/start_at/fire_at` で時刻到達判定 → `next_item_index` カーソルで進行
@@ -120,14 +122,16 @@ pub enum TimelineItem {
 | --- | ------------------------ | ----------------------------------- | --------------------------------------------------------- |
 | AC1 | CueSheet データ構造      | —                                   | **Missing**: `CueSheet` 構造体（Vec\<Cue\>、メタデータなし） |
 | AC2 | ActorKey 識別子          | —                                   | **Missing**: `ActorKey` 型定義（文字列 or enum）          |
-| AC3 | start_time 保持          | TypewriterTimeline が `show_at` 保持 | **Missing**: `Cue` 構造体に `start_time: f64` フィールド   |
+| AC3 | start_time 保持          | TypewriterTimeline が `show_at` 保持 | **Missing**: `Cue` 構造体に `start_time: f64` フィールド（CueSheet ローカル相対時刻）   |
 | AC4 | start_time 昇順保持      | —                                   | **Missing**: Vec\<Cue\> の安定ソートロジック               |
 | AC5 | 複数演者の混在記述       | —                                   | **Missing**: `Cue` 構造体（ActorKey + CueCommand + start_time） |
 | AC6 | 同一 start_time 並行実行 | —                                   | ギャップなし（同時刻 Cue の順序保持で実現）                |
 | AC7 | 演者別フィルタリング API | —                                   | **Missing**: `filter_by_actor()` 等の API                 |
 | AC8 | Clone, Debug derive      | TypewriterToken は Debug + Clone 済 | ギャップなし（derive マクロ付与のみ）                     |
 
-**評価**: CueSheet は完全新規のデータ構造。TypewriterTimeline が絶対時刻モデルの実証なので、設計パターンは確立済み。ActorKey の型設計（String vs NewType vs Entity）が設計フェーズの論点。
+**評価**: CueSheet は完全新規のデータ構造。Cue.start_time は **CueSheet ローカル時刻（相対秒数）**。TypewriterTimeline が絶対時刻モデルの実証なので、設計パターンは確立済み。ActorKey の型設計（String vs NewType vs Entity）が設計フェーズの論点。
+
+**dola 思想との対応**: CueSheet ≈ dola::Document/Storyboard（相対時刻構造）
 
 ---
 
@@ -170,15 +174,17 @@ pub enum TimelineItem {
 
 | AC  | 技術要素                       | 既存アセット                      | ギャップ                                                       |
 | --- | ---------------------------------- | --------------------------------- | -------------------------------------------------------------- |
-| AC1 | ActorKey→CueQueue 分配         | —                                 | **Missing**: 配送関数 / 配送システム                           |
-| AC2 | 演者レジストリ / 解決関数          | —                                 | **Missing**: ActorKey → Entity 解決メカニズム              |
-| AC3 | start_time 保持したまま配送        | —                                 | ギャップなし（Cue の start_time をそのまま TimedCue に移行）   |
-| AC4 | start_time 昇順マージ挿入          | —                                 | **Missing**: CueQueue への既存エントリとのマージロジック        |
+| AC1 | sheet_start_time 受け取り + コンパイル         | —                                 | **Missing**: `dispatch(sheet, sheet_start_time)` 関数            |
+| AC2 | ActorKey→CueQueue 分配         | —                                 | **Missing**: 配送関数 / 配送システム                           |
+| AC3 | 演者レジストリ / 解決関数          | —                                 | **Missing**: ActorKey → Entity 解決メカニズム              |
+| AC4 | 絶対時刻順マージ挿入          | —                                 | **Missing**: CueQueue への既存エントリとのマージロジック        |
 | AC5 | 全演者への配送                     | —                                 | **Missing**: `for cue in cuesheet { dispatch(...) }` ループ    |
 | AC6 | 未解決 ActorKey のハンドリング | `tracing::warn!` パターン確立済み | ギャップなし（ログパターン流用）                               |
 | AC7 | 逐次投入（既存キューへの追加）     | TypewriterTalk は丸ごと差し替え   | **Redesign**: 追加投入モデルは CueQueue の append で自然に実現 |
 
-**評価**: DD9 により配送ロジックが変更 — 単純な append ではなく**start_time 順マージ挿入**が必要。ActorKey の解決メカニズム（レジストリ方式 vs クエリ方式 vs マーカーコンポーネント方式）が設計フェーズの主要論点（DD2）。
+**評価**: DD9 により配送ロジックが変更 — **コンパイル（sheet_start_time + cue.start_time = 世界絶対時刻）+ 絶対時刻順マージ挿入**が必要。ActorKey の解決メカニズム（レジストリ方式 vs クエリ方式 vs マーカーコンポーネント方式）が設計フェーズの主要論点（DD2）。
+
+**dola 思想との対応**: dispatch(sheet_start_time) ≈ dola::compile（相対時刻を絶対時刻化）
 
 ---
 
@@ -187,13 +193,15 @@ pub enum TimelineItem {
 | AC  | 技術要素             | 既存アセット                                    | ギャップ                                                             |
 | --- | -------------------- | ----------------------------------------------- | -------------------------------------------------------------------- |
 | AC1 | 時刻到達消費         | TypewriterTalk::update() で `elapsed >= show_at` 判定 | **Adapt**: `while queue.peek_next().start_time <= current_time` パターンを汎化 |
-| AC2 | 同一 start_time 一括消費 | —                                           | **Missing**: 同時刻コマンド完全消費ループ                             |
-| AC3 | 入力待ちブロッキング | —                                               | **Missing**: WaitForInput の演者ごとブロッキングセマンティクス（Q5 確定）  |
-| AC4 | 経過時刻管理         | TypewriterTalk に `start_time + paused_elapsed` | **Missing**: CueQueue の経過時刻フィールド [T6 議題影響]              |
+| AC2 | current_time 受け取り | —                                           | **Missing**: `pop_ready(current_time: f64)` プロトコル（CueQueue は経過時刻を持たない）         |
+| AC3 | 同一 start_time 一括消費 | —                                           | **Missing**: 同時刻コマンド完全消費ループ                             |
+| AC4 | 入力待ちブロッキング | —                                               | **Missing**: WaitForInput の演者ごとブロッキングセマンティクス（Q5 確定）  |
 | AC5 | 消費ステート管理     | `TypewriterState`（Playing/Paused/Completed）   | **Extend**: TypewriterState を汎用化 + WaitingForInput 状態追加      |
 | AC6 | 消費完了状態         | `TypewriterState::Completed`                    | **Adapt**: 既存パターンの流用                                        |
 
-**評価**: DD9 により消費プロトコルが **FIFO 先頭消費 → 時刻到達消費**に変更。TypewriterTalk::update() が時刻ベース判定の実証実装として存在。WaitForInput のブロッキングスコープは演者ごとブロック確定（Q5）。経過時刻管理の主体（各 CueQueue vs ルート CueTimeline、T6 議題）が設計判断に影響。
+**評価**: DD9 により消費プロトコルが **FIFO 先頭消費 → 時刻到達消費**に変更。**CueQueue は経過時刻を管理せず、外部から current_time を受け取る**（Q6 確定）。TypewriterTalk::update() が時刻ベース判定の実証実装として存在。WaitForInput のブロッキングスコープは演者ごとブロック確定（Q5）。
+
+**dola 思想との対応**: pop_ready(current_time) ≈ dola::playback（外部から時刻を受け取り、到達済み要素を返す）
 
 ---
 
