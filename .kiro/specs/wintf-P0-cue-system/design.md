@@ -80,7 +80,7 @@ graph TB
 
     subgraph Infra["インフラ"]
         FT["FrameTime<br/>elapsed_secs() → f64"]
-        DOLA["DolaRuntime<br/>(optional, cfg feature)"]
+        DOLA["DolaRuntime<br/>(必須リソース)"]
     end
 
     PASTA -->|CueSheet| CS
@@ -91,7 +91,9 @@ graph TB
     CQ -->|"pop_ready(current_time)"| ANIM
     CQ -->|"pop_ready(current_time)"| FUTURE
     FT -.->|current_time| CQ
-    DOLA -.->|"タイムライン同期<br/>(cfg feature)"| CQ
+    FT -->|"update_dola_runtime()"| DOLA
+    DOLA -.->|"アニメーション制御<br/>(直接参照)"| BALLOON
+    DOLA -.->|"アニメーション制御<br/>(直接参照)"| ANIM
     TRACKER -->|監視| CQ
     TRACKER -->|通知| RESULT
 ```
@@ -112,7 +114,7 @@ graph TB
 | エラー型 | thiserror 2 | CueSystemError 定義 | workspace 統一規約 |
 | 動的値 | dola::DynamicValue | Custom コマンドパラメータ | JSON互換、Clone + Debug + Eq + Hash |
 | ロギング | tracing | 構造化ログ | debug!/trace!/warn! |
-| アニメーション統合 | dola (optional) | タイムライン同期 | `#[cfg(feature = "dola")]` |
+| アニメーション | dola | タイムライン実行エンジン | DolaRuntime リソース、物理エンティティが直接使用 |
 
 ---
 
@@ -201,7 +203,7 @@ sequenceDiagram
 | 3.1-3.9 | CueQueue コンポーネント | CueQueue, TimedCue | `push_sorted()`, `pop_ready()`, `peek()` | 消費フロー |
 | 4.1-4.7 | CueSheet 配送 | dispatch(), EntityRegistry, CueTarget | `dispatch_cue_sheet_internal()` | 配送フロー |
 | 5.1-5.6 | 消費プロトコル | CueQueueState | `pop_ready(current_time)` | 消費フロー |
-| 6.1-6.4 | タイミング制御・dola統合 | CueQueue (playback_rate) | `#[cfg(feature = "dola")]` | — |
+| 6.1-6.4 | タイミング制御・dola統合 | DolaRuntime リソース、update_dola_runtime システム | 物理エンティティが直接使用 | dola統合フロー |
 | 7.1-7.5 | コマンド拡張機構 | CueCommand::Custom | DynamicValue | — |
 | 8.1-8.6 | エラーハンドリング | CueSystemError | thiserror | — |
 | 9.1-9.7 | CueSheetResult フィーチャーモデル | CueSheetTracker, CueSheetResult | poll / Observer | 結果通知フロー |
@@ -729,6 +731,7 @@ pub enum CueSystemError {
 - Inbound: dispatch()（TimedCue の追加） — P0
 - Outbound: 消費者システム（`pop_ready()` 経由のコマンド取得） — P0
 - Infra: FrameTime（current_time の提供元） — P0
+- Infra: DolaRuntime（物理エンティティのアニメーション実行） — P0
 
 **データ構造選択 — DD9 固有の決定**:
 
@@ -2074,24 +2077,114 @@ fn consume_spot_cues(
 
 ---
 
-## dola 統合設計（DD8-a: インターフェース定義のみ）
+## dola 統合設計（DD8-a: DolaRuntime リソース）
+
+### 統合方針
+
+dola は **必須依存** として wintf に統合する。`wintf/Cargo.toml` に以下を追加:
+
+```toml
+[dependencies]
+dola = { path = "../dola" }
+```
+
+### DolaRuntime リソース
 
 ```rust
-// cue/dola_bridge.rs（将来実装、#[cfg(feature = "dola")] で隔離）
+use dola::runtime::DolaFacade;
 
-/// dola feature が有効な場合の統合ポイント定義
+/// dola アニメーションランタイムをラップする bevy_ecs リソース
 ///
-/// 実装は後続仕様（balloon03-content / animation-system）で行う。
-/// cue-system では以下のインターフェースのみ定義する:
-///
-/// 1. CueQueue の playback_rate と dola の再生速度の同期
-/// 2. CueQueue の消費進行を dola 変数として公開するバインディング候補
-/// 3. FrameTime と dola::clock::now() が同じ時刻基準（QueryPerformanceCounter、OS起動時=0秒）を使用
+/// 物理エンティティ（Spot、Balloon）がアニメーション制御に直接使用する。
+/// FrameTime と同じ時刻基準（QueryPerformanceCounter、OS起動時=0秒）を共有。
+#[derive(Resource)]
+pub struct DolaRuntime {
+    facade: DolaFacade,
+}
 
-// 本ファイルは MVP では空実装。
-// wintf Cargo.toml に `dola = { path = "../dola", optional = true }` 追加は
-// 実際の統合実装時に行う（C1 制約）。
+impl DolaRuntime {
+    pub fn new() -> Self {
+        Self {
+            facade: DolaFacade::new(),
+        }
+    }
+
+    /// dola::runtime::DolaFacade への参照を取得
+    pub fn facade(&self) -> &DolaFacade {
+        &self.facade
+    }
+
+    /// dola::runtime::DolaFacade への可変参照を取得
+    pub fn facade_mut(&mut self) -> &mut DolaFacade {
+        &mut self.facade
+    }
+}
+
+impl Default for DolaRuntime {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 ```
+
+### update_dola_runtime システム
+
+```rust
+/// dola ランタイム更新システム（毎フレーム実行）
+///
+/// FrameTime から現在時刻を取得し、DolaRuntime を更新する。
+/// Req 6.1 対応。
+pub fn update_dola_runtime(
+    frame_time: Res<FrameTime>,
+    mut dola: ResMut<DolaRuntime>,
+) {
+    let current_time = frame_time.elapsed_secs();
+    let _result = dola.facade_mut().update(current_time);
+    // UpdateResult (変更された変数リスト) の処理は
+    // 後続仕様（animation-system）で実装
+}
+```
+
+### 物理エンティティでの使用パターン
+
+物理エンティティ（Spot、Balloon 等）は以下のパターンで DolaRuntime を使用:
+
+```rust
+/// 例: Spot エンティティのサーフェス切り替えアニメーション
+pub fn animate_spot_surface(
+    mut dola: ResMut<DolaRuntime>,
+    query: Query<(Entity, &SpotAnimation)>,
+) {
+    for (entity, anim) in query.iter() {
+        // storyboard を start し、group_id を保持
+        match dola.facade_mut().start(&anim.storyboard_name, anim.start_time) {
+            Ok(result) => {
+                // result.group_id を SpotAnimation に保存
+            },
+            Err(e) => {
+                tracing::warn!("Failed to start animation: {:?}", e);
+            }
+        }
+    }
+}
+```
+
+### 統合スコープ
+
+| 責務 | 実装時期 | 説明 |
+|------|----------|------|
+| DolaRuntime リソース | P0 (cue-system) | bevy_ecs Resource として提供 |
+| update_dola_runtime システム | P0 (cue-system) | 毎フレーム `runtime.update()` 実行 |
+| 物理エンティティでの使用 | balloon03-content, animation-system | Spot、Balloon が直接 DolaRuntime を参照 |
+| CueQueue との連携 | 将来 (任意) | playback_rate 同期等（必須ではない） |
+
+### 時刻基準の統一（DD8-b）
+
+**Invariant**: FrameTime と DolaRuntime は同じ時刻基準（QueryPerformanceCounter、OS起動時=0秒）を使用する。
+
+- FrameTime::elapsed_secs() と dola::clock::now() は同一の値を返す
+- update_dola_runtime は FrameTime から時刻を取得して DolaRuntime に渡す
+- 物理エンティティのシステムは FrameTime と DolaRuntime の時刻を直接比較可能
 
 ---
 
@@ -2112,3 +2205,4 @@ fn consume_spot_cues(
 | Version | Date       | Changes                                    |
 | ------- | ---------- | ------------------------------------------ |
 | 1.0     | 2026-02-27 | 初版生成。DD1-DD12 全決定。9 Req + 3 NFR 対応 |
+| 1.1     | 2026-02-27 | dola統合明確化。DolaRuntime必須依存化、DD8-b時刻基準統一、物理エンティティ直接使用設計 |
