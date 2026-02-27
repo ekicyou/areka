@@ -628,25 +628,24 @@ pub struct PendingChoice {
 pub enum BarrierResponse {
     /// このスロットはバリアを処理しない（即時応答）
     ///
-    /// 例: Spot は WaitForChoice/WaitForClick を解釈しない
+    /// 例: Spot は WaitForChoice を解釈しない（WaitForClick はハンドラー）
     /// → skip_barrier() でキューを再開し、Skipped を報告する
     Skipped,
-    /// クリック確定（Balloon から）
+    /// クリック確定（Spot や Balloon の消費システムから）
     Click,
-    /// 選択肢確定（Balloon から）
+    /// 選択肢確定（Balloon の消費システムから）
     Choice { id: String },
-    /// タイムアウト超過
+    /// タイムアウト超過（CueSheetTracker::update() が検知）
     Timeout,
 }
 
 /// バリア集約状態（CueSheetTracker 内部）
 ///
 /// 1つの WaitForXxx に対して全スロットの応答を集約する。
-/// 最初の有効応答（Skipped 以外）が確定した時点で解決する。
+/// CueSheetTracker::update() が自動的に初期化・解決を管理する。
+/// 最初の有効応答（Skipped 以外）が確定した時点で、残スロットを強制スキップして解決する。
 #[derive(Debug, Clone)]
 pub struct BarrierState {
-    /// 応答待ちの残りスロット数
-    remaining: usize,
     /// 最初の有効応答（Skipped 以外）
     first_valid: Option<BarrierResponse>,
     /// バリアの種別
@@ -812,7 +811,7 @@ impl CueQueue {
         self.cue_sheet_entity
     }
 
-    /// 現在ブロック中のバリア種別を取得（消費システムが init_barrier 呼び出しに使用）
+    /// 現在ブロック中のバリア種別を取得（CueSheetTracker::update() がバリア自動検知に使用）
     pub fn pending_barrier_kind(&self) -> Option<BarrierKind> {
         match &self.state {
             CueQueueState::WaitingForChoice { .. } => Some(BarrierKind::Choice),
@@ -821,11 +820,15 @@ impl CueQueue {
         }
     }
 
-    /// バリアをスキップしキューを再開（非ハンドラー用）
+    /// バリアをスキップしキューを再開
     ///
-    /// `WaitForChoice` を受け取ったが選択 UI を表示できないエンティティ（Spot 等）で使用。
-    /// `WaitForClick` は Spot もハンドラーになれるので、このメソッドは呼ばないこと。
-    /// 呼び出し元は次に `cue_sheet_entity()` で CueSheetTracker に Skipped を報告すること。
+    /// 以下の2つのケースで使用される:
+    /// 1. **消費者が非ハンドラーの場合**: `WaitForChoice` を受け取ったが選択 UI を
+    ///    表示できないエンティティ（Spot 等）がスキップ + `receive_barrier(Skipped)` を報告
+    /// 2. **CueSheetTracker::update() による強制スキップ**: first_valid 確定後、
+    ///    残りのバリア待ちスロットを強制的に解放する
+    ///
+    /// 既に Playing 状態の場合は false を返す（冪等）。
     pub fn skip_barrier(&mut self) -> bool {
         match self.state {
             CueQueueState::WaitingForClick { .. } | CueQueueState::WaitingForChoice { .. } => {
@@ -1211,6 +1214,31 @@ fn dispatch_cue_sheet_internal(
 }
 ```
 
+#### update_cue_sheet_trackers — Tracker 更新システム
+
+```rust
+/// CueSheetTracker を毎フレーム更新（バリアライフサイクル集中管理 + 完了判定）
+///
+/// 消費者システム（consume_balloon_cues, consume_spot_cues）の **後** に
+/// 実行されるよう .after() でスケジュールすることを推奨する。
+///
+/// # Responsibilities
+/// - バリア自動検知（キューの WaitingForXxx 状態から）
+/// - タイムアウト検知（check_timeout → BarrierResponse::Timeout）
+/// - 残スロット強制スキップ（first_valid 確定後）
+/// - 完了判定（全スロット Completed → CueSheetResult::Completed）
+pub fn update_cue_sheet_trackers(
+    mut trackers: Query<&mut CueSheetTracker>,
+    mut queues: Query<&mut CueQueue>,
+    frame_time: Res<FrameTime>,
+) {
+    let current_time = frame_time.elapsed_secs();
+    for mut tracker in trackers.iter_mut() {
+        tracker.update(&mut queues, current_time);
+    }
+}
+```
+
 #### EntityRegistry — DD2-c 決定: 統合エンティティレジストリ
 
 | Field | Detail |
@@ -1364,6 +1392,7 @@ pub struct CueSheetTracker {
     ///
     /// ブロードキャストされた WaitForXxx に対し、
     /// 子スロットの応答を集約する。同時にアクティブなバリアは常に高々 1 つ。
+    /// update() が自動的に初期化・タイムアウト検知・残スロット強制スキップ・解決を管理する。
     barrier_state: Option<BarrierState>,
 }
 
@@ -1393,69 +1422,32 @@ impl CueSheetTracker {
         &self.targets
     }
 
-    /// バリア集約を初期化（最初に応答する消費システムから呼ばれる）
-    ///
-    /// 既に初期化済み（barrier_state.is_some()）の場合は何もしない。
-    /// `total` = このバリアコマンドが配信されたスロット数（EntityRegistry::routes_for_actor().len()）
-    pub fn init_barrier_if_needed(&mut self, total: usize, kind: BarrierKind) {
-        if self.barrier_state.is_none() {
-            self.barrier_state = Some(BarrierState {
-                remaining: total,
-                first_valid: None,
-                kind,
-            });
-        }
-    }
-
     /// バリア応答を受信（物理エンティティの消費システムから呼ばれる）
     ///
-    /// # 集約ルール
-    /// - 最初の有効応答（Skipped 以外）が勝ち
-    /// - 全スロット Skipped の場合:
-    ///   - WaitForChoice → EmptyChoiceBarrier Error
-    ///   - WaitForClick → 継続（即時クリックアニール）
+    /// 消費システムは CueQueue のバリア状態を解決したとき（resolve_click / resolve_choice / skip_barrier）
+    /// に、対応する BarrierResponse をこのメソッドで報告する。
+    /// 最初の有効応答（Skipped 以外）が first_valid として保存される。
+    /// 解決処理は update() が行う（消費側はタイミングを気にしなくてよい）。
     pub fn receive_barrier(&mut self, response: BarrierResponse) {
         let Some(barrier) = &mut self.barrier_state else { return; };
-
-        // 最初の有効応答を保存
         if barrier.first_valid.is_none() && response != BarrierResponse::Skipped {
             barrier.first_valid = Some(response);
         }
-        barrier.remaining = barrier.remaining.saturating_sub(1);
-
-        if barrier.remaining > 0 {
-            return; // 応答待ち
-        }
-
-        // 全スロット応答完了 — 結果を確定
-        let barrier = self.barrier_state.take().unwrap();
-        match barrier.first_valid {
-            Some(BarrierResponse::Choice { id }) => {
-                self.result = Some(CueSheetResult::Choice { id });
-            }
-            Some(BarrierResponse::Click) => {
-                // WaitForClick 解出後はキュー消費を続行、結果は末尾の Completed
-            }
-            Some(BarrierResponse::Timeout) => {
-                self.result = Some(CueSheetResult::Timeout);
-            }
-            None | Some(BarrierResponse::Skipped) => match barrier.kind {
-                BarrierKind::Choice => {
-                    self.result = Some(CueSheetResult::Error(
-                        CueSystemError::EmptyChoiceBarrier { actor: "<all-skipped>".into() },
-                    ));
-                }
-                BarrierKind::Click => {
-                    // ハンドラー不在 = 即時通過、継続
-                }
-            },
-        }
     }
 
-    /// 毎フレーム更新（Update システムから呼ばれる）
+    /// 毎フレーム更新（Update スケジュール。消費者システムの後に実行推奨）
     ///
-    /// バリア応答は receive_barrier() 経由。ここでは全配送先の Completed のみ監視する。
-    pub fn update(&mut self, queues: &Query<&CueQueue>, _current_time: f64) {
+    /// # バリアライフサイクルの集中管理
+    /// 1. **バリア自動検知**: ターゲットキューの WaitingForXxx 状態を検出し barrier_state を初期化
+    /// 2. **タイムアウト検知**: 各ターゲットの check_timeout() を呼び出し Timeout 応答に変換
+    /// 3. **解決判定**: first_valid 確定 or 全スロット退出 → バリア解決 + 残スロット強制スキップ
+    /// 4. **完了判定**: 全配送先 Completed → CueSheetResult::Completed
+    ///
+    /// # システム実行順の注意
+    /// update() は消費者システム（consume_balloon_cues, consume_spot_cues 等）のあとに
+    /// 実行されることを推奨する。消費者が receive_barrier() を呼んだ同一フレームで
+    /// 解決判定が行われる。逆順でも正常動作するが、解決が1フレーム遅延する。
+    pub fn update(&mut self, queues: &mut Query<&mut CueQueue>, current_time: f64) {
         if self.result.is_some() {
             return; // 既に確定済み
         }
@@ -1463,13 +1455,88 @@ impl CueSheetTracker {
             self.result = Some(CueSheetResult::Cancelled);
             return;
         }
-        // バリア応答待ち中は Completed 判定を保留
+
+        // === Phase 1: バリア自動検知 ===
+        if self.barrier_state.is_none() {
+            for (_, _, entity) in &self.targets {
+                if let Ok(queue) = queues.get(*entity) {
+                    if let Some(kind) = queue.pending_barrier_kind() {
+                        self.barrier_state = Some(BarrierState {
+                            first_valid: None,
+                            kind,
+                        });
+                        break;
+                    }
+                }
+            }
+        }
+
+        // === Phase 2: タイムアウト検知 ===
+        if let Some(barrier) = &mut self.barrier_state {
+            for (_, _, entity) in &self.targets {
+                if let Ok(mut queue) = queues.get_mut(*entity) {
+                    if queue.check_timeout(current_time) {
+                        if barrier.first_valid.is_none() {
+                            barrier.first_valid = Some(BarrierResponse::Timeout);
+                        }
+                    }
+                }
+            }
+        }
+
+        // === Phase 3: 解決判定 ===
+        if let Some(barrier) = &self.barrier_state {
+            // 条件: first_valid が存在するか、全スロットがバリアを退出済み
+            let still_waiting = self.targets.iter()
+                .filter(|(_, _, e)| {
+                    queues.get(*e).map_or(false, |q| q.pending_barrier_kind().is_some())
+                })
+                .count();
+
+            let should_resolve = barrier.first_valid.is_some() || still_waiting == 0;
+
+            if should_resolve {
+                // 残スロットの強制スキップ（既に Playing なら false が返るだけ）
+                for (_, _, entity) in &self.targets {
+                    if let Ok(mut queue) = queues.get_mut(*entity) {
+                        queue.skip_barrier();
+                    }
+                }
+                // バリアを取り出して結果確定
+                let barrier = self.barrier_state.take().unwrap();
+                match barrier.first_valid {
+                    Some(BarrierResponse::Choice { id }) => {
+                        self.result = Some(CueSheetResult::Choice { id });
+                    }
+                    Some(BarrierResponse::Click) => {
+                        // WaitForClick 解決後はキュー消費を続行、結果は末尾の Completed
+                    }
+                    Some(BarrierResponse::Timeout) => {
+                        self.result = Some(CueSheetResult::Timeout);
+                    }
+                    None | Some(BarrierResponse::Skipped) => match barrier.kind {
+                        BarrierKind::Choice => {
+                            self.result = Some(CueSheetResult::Error(
+                                CueSystemError::EmptyChoiceBarrier { actor: "<all-skipped>".into() },
+                            ));
+                        }
+                        BarrierKind::Click => {
+                            // ハンドラー不在 = 即時通過、継続
+                        }
+                    },
+                }
+                return; // 解決直後はフレーム終了（次フレームで完了判定）
+            }
+        }
+
+        // === Phase 4: 完了判定 ===
+        // バリア処理中は完了判定を保留
         if self.barrier_state.is_some() {
             return;
         }
 
         let mut all_completed = true;
-        for (_actor_key, _target, entity) in &self.targets {
+        for (_, _, entity) in &self.targets {
             if let Ok(queue) = queues.get(*entity) {
                 match queue.state() {
                     CueQueueState::Error(err) => {
@@ -1528,7 +1595,7 @@ mod tracker;
 
 pub use command::CueCommand;
 pub use component::PendingCueSheet;
-pub use dispatch::{dispatch_pending_cue_sheets, EntityKey, EntityRegistry, CueSheetHandle};
+pub use dispatch::{dispatch_pending_cue_sheets, update_cue_sheet_trackers, EntityKey, EntityRegistry, CueSheetHandle};
 pub use error::CueSystemError;
 pub use queue::{CueQueue, CueQueueState, PendingChoice, TimedCue};
 pub use tracker::{BarrierKind, BarrierResponse, CueSheetResult, CueSheetTracker};
@@ -1548,7 +1615,7 @@ pub mod cue;
 pub use cue::{
     ActorKey, EntityKey, EntityRegistry, Cue, CueCommand, CueQueue, CueQueueState,
     CueSheet, CueSheetHandle, CueSheetResult, CueSheetTracker, CueSystemError,
-    dispatch_cue_sheet,
+    dispatch_pending_cue_sheets, update_cue_sheet_trackers,
 };
 ```
 
@@ -1691,7 +1758,7 @@ classDiagram
 6. **TimedCue の start_time は非負**（負値はコンパイルエラーではないが、即時消費される）
 7. **PendingCueSheet エンティティ = CueSheet エンティティ**（dispatch 後に同一 Entity ID が CueSheetTracker を保持する）
 8. **同時アクティブバリアは最大 1 件**（バリアは逐次解決。BarrierState が Some の間は次のバリアに到達しない）
-9. **receive_barrier の呼び出し回数 = init_barrier の total**（消費システムが必ず全スロット分を報告する責務）
+9. **バリアライフサイクルは CueSheetTracker::update() が集中管理**（自動検知・タイムアウト・残スロット強制スキップ・解決判定すべてを update() が担う。消費システムは receive_barrier() で応答報告のみ）
 
 ---
 
@@ -1832,10 +1899,11 @@ fn poll_cue_results(
 // 消費者（Balloon）の典型的な消費ループ
 // WaitForChoice: 選択 UI 表示。選択確定後に receive_barrier(Choice)。
 // WaitForClick: クリック UI 表示。クリック後に receive_barrier(Click)。
+// バリアの初期化・タイムアウト・残スロット強制スキップは CueSheetTracker::update() が管理するため、
+// 消費システムは receive_barrier() で応答を報告するだけでよい。
 fn consume_balloon_cues(
     mut query: Query<(Entity, &mut CueQueue)>,
     mut tracker_query: Query<&mut CueSheetTracker>,
-    registry: Res<EntityRegistry>,
     // 以下は UI 入力イベントの受口（実装内容は P0 スコープ外）
     click_events: EventReader<BalloonClickEvent>,
     choice_events: EventReader<ChoiceSelectedEvent>,
@@ -1847,8 +1915,8 @@ fn consume_balloon_cues(
         if queue.pending_barrier_kind() == Some(BarrierKind::Click) {
             if let Some(cue_sheet) = queue.cue_sheet_entity() {
                 if click_events.iter_for_entity(_self_entity).next().is_some() {
+                    queue.resolve_click();
                     if let Ok(mut tracker) = tracker_query.get_mut(cue_sheet) {
-                        queue.resolve_click();
                         tracker.receive_barrier(BarrierResponse::Click);
                     }
                 }
@@ -1888,24 +1956,21 @@ fn consume_balloon_cues(
 // 消費者（Spot）の典型的な消費ループ
 // Emote: 演者名 + 感情キーでサーフェスアニメーションを決定。
 // WaitForClick: Spot クリックで応答（全体配信バリア）。
-// WaitForChoice: 選択 UI を表示できないため即隣スキップ。
+// WaitForChoice: 選択 UI を表示できないため即座にスキップ。
 fn consume_spot_cues(
     mut query: Query<(Entity, &mut CueQueue, &ActorKey)>,
     mut tracker_query: Query<&mut CueSheetTracker>,
-    registry: Res<EntityRegistry>,
     click_events: EventReader<SpotClickEvent>,
     frame_time: Res<FrameTime>,
 ) {
     let current_time = frame_time.elapsed_secs();
-    for (_self_entity, mut queue, actor_key) in query.iter_mut() {
+    for (_self_entity, mut queue, _actor_key) in query.iter_mut() {
         // WaitForClick ハンドラー: Spot クリックで応答
         if queue.pending_barrier_kind() == Some(BarrierKind::Click) {
             if let Some(cue_sheet) = queue.cue_sheet_entity() {
                 if click_events.iter_for_entity(_self_entity).next().is_some() {
+                    queue.resolve_click();
                     if let Ok(mut tracker) = tracker_query.get_mut(cue_sheet) {
-                        let n_slots = registry.routes_for_actor(actor_key).len();
-                        tracker.init_barrier_if_needed(n_slots, BarrierKind::Click);
-                        queue.resolve_click();
                         tracker.receive_barrier(BarrierResponse::Click);
                     }
                 }
@@ -1913,13 +1978,11 @@ fn consume_spot_cues(
             continue;
         }
 
-        // WaitForChoice は選択 UI 表示不可のため即隣スキップ
+        // WaitForChoice は選択 UI 表示不可のため即座にスキップ
         if queue.pending_barrier_kind() == Some(BarrierKind::Choice) {
             if let Some(cue_sheet) = queue.cue_sheet_entity() {
+                queue.skip_barrier();
                 if let Ok(mut tracker) = tracker_query.get_mut(cue_sheet) {
-                    let n_slots = registry.routes_for_actor(actor_key).len();
-                    tracker.init_barrier_if_needed(n_slots, BarrierKind::Choice);
-                    queue.skip_barrier();
                     tracker.receive_barrier(BarrierResponse::Skipped);
                 }
             }
@@ -1983,7 +2046,7 @@ fn consume_spot_cues(
 
 ## Design Decisions Summary
 
-全12件のDesign Decisionsの最終結果:
+全14件のDesign Decisionsの最終結果:
 
 | DD# | 決定事項 | 選定 | 根拠 |
 |-----|----------|------|------|
@@ -2000,7 +2063,7 @@ fn consume_spot_cues(
 | DD11 | CueSheetResult の await | **Component Poll** | TypewriterState パターンの自然な拡張 |
 | DD12 | Custom パラメータ型 | **dola::DynamicValue** | 要件確定済み（v2.2 で確定） |
 | DD13 | コマンド配信モデル | **ブロードキャスト + ルーティングコマンド分離** | 非ルーティングコマンドは全スロットにブロードキャスト、RouteXxxはdispatch層のみ消費 |
-| DD14 | バリア応答プロトコル | **直接応答 + BarrierAggregator** | 物理エンティティが CueSheet エンティティに直接応答。非ハンドラ: Skipped、ハンドラ: Choice/Click。全Skipped+Choice→Error、全Skipped+Click→継続 |
+| DD14 | バリア応答プロトコル | **直接応答 + Tracker 集中管理** | 消費システムが receive_barrier() で応答報告。update() がバリア自動検知・タイムアウト・残スロット強制スキップ・解決判定を集中管理。全Skipped+Choice→Error、全Skipped+Click→継続 |
 
 ---
 
