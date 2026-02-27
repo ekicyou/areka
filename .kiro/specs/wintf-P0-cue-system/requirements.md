@@ -288,8 +288,29 @@ cue-system は**舞台演出のキューシート**をメタファーとし、**
 2. **If** 消費者システムが CueQueue 内のコマンド型を認識しない場合, **the** Cue System **shall** 当該コマンドを安全にスキップし `tracing::debug!` でログ出力する
 3. **The** Cue System **shall** CueQueue を保持するエンティティが despawn されても panic しない
 4. **The** Cue System **shall** 空の CueSheet が配送された場合にエラーを発生させず無操作で完了する
-5. **If** PerformerKey の解決に失敗した場合, **the** Cue System **shall** 他の演者への正常な配送を継続する（部分的失敗の許容）
+5. **If** ActorKey の解決に失敗した場合, **the** Cue System **shall** 他の演者への正常な配送を継続する（部分的失敗の許容）
 6. **If** CueQueue 内のコマンドの start_time が現在の経過時刻より過去である場合, **the** Cue System **shall** 当該コマンドを遅延到達として即時消費する（タイムラインの追いつき処理）
+
+---
+
+### Requirement 9: CueSheet ライフサイクルと実行結果 — フィーチャーモデル
+
+**Objective:** 開発者として、CueSheet を「開始して決定論的に実行し、結果を返す」フィーチャーとして扱いたい。それにより上位のオーケストレーション層が CueSheet の実行結果を await し、選択肢の選択・完了・キャンセル・タイムアウトに応じた次の処理へ分岐できる。
+
+**設計メタファー**: OS の Modal Dialog — 開始すると決定論的に動作し、終了時に DialogResult を返す。1 CueSheet = 1 フィーチャー実行単位。
+
+**T7/T8 統合**:
+- T7（中断・キャンセル）→ `CueSheetResult::Cancelled` として本 Requirement に統合
+- T8（動的生成）→ スコープ外。CueQueue の追記型設計により逐次投入は自然に実現（上位層/pasta の責務）
+
+#### Acceptance Criteria
+
+1. **The** Cue System **shall** CueSheet の実行結果を表す `CueSheetResult` 型を提供する（ベースバリアント: `Completed` / `Cancelled` / `Timeout` / `Choice { id: String }`。通常の Feature にありうる要素を許容する）
+2. **When** CueSheet 内の全演者の CueQueue が消費完了した時, **the** Cue System **shall** `CueSheetResult::Completed` を通知する
+3. **When** CueSheet が外部から中断・キャンセルされた時, **the** Cue System **shall** `CueSheetResult::Cancelled` を通知する
+4. **When** WaitForInput に timeout が設定されており期限を超過した時, **the** Cue System **shall** `CueSheetResult::Timeout` を通知する
+5. **When** 選択肢コマンドがユーザーによって選択された時, **the** Cue System **shall** `CueSheetResult::Choice { id }` を通知する
+6. **The** Cue System **shall** `CueSheetResult` を上位層（オーケストレーション）が Rust 的な await パターンで受け取れる形式で提供する（ECS 的な具体的実装は DD11 として設計フェーズで決定）
 
 ---
 
@@ -317,30 +338,6 @@ cue-system は**舞台演出のキューシート**をメタファーとし、**
 
 ---
 
-## Open Discussion Topics（未決事項）
-
-以下の議題はレビューセッションでの確認を要する。要件の承認判断に影響する可能性がある。
-
-
-### T7: CueSheet の中断・キャンセルセマンティクス（Req 4, Req 8 に影響）
-
-- 再生中の CueSheet を中断して新しい CueSheet に切り替える場合の挙動は？
-- さくらスクリプトでは新スクリプト受信時に旧スクリプトを破棄（暗黙の clear + replace）
-- CueQueue の追記型設計と「台本の差し替え」の関係整理が必要
-- 候補A: `CueQueue::clear()` → 新 CueSheet 配送（明示的な差し替え）
-- 候補B: CueSheet にメタデータ（replace_mode: bool）を付与
-- 候補C: 配送 API で clear + dispatch のアトミック操作を提供
-
-### T8: 動的生成シナリオへの対応（Req 1, Req 4 に影響）
-
-- DD9 の絶対時刻方式は事前にタイミングが確定するシナリオに最適
-- LLM リアルタイム応答ストリーミングなど、事前に全コマンドの start_time を決定できない場合がある
-- 候補A: pasta DSL 層が都度 start_time を計算し、ミニ CueSheet を逐次投入
-- 候補B: CueSheet に「追記モード」を設け、前回末尾の start_time からの相対時刻で追記
-- 候補C: 本仕様のスコープ外とし、動的生成は別仕様で扱う
-
----
-
 ## Version History
 
 | Version | Date       | Changes                                                                         |
@@ -348,6 +345,7 @@ cue-system は**舞台演出のキューシート**をメタファーとし、**
 | 1.0     | 2026-02-26 | 初版生成（8要件 + 3NFR）                                                        |
 | 1.0.1   | 2026-02-26 | レビュー自明修正（F1: C3但し書き, F2: Req4 AC2実装詳細削除）                    |
 | 2.0     | 2026-02-27 | DD9 絶対時刻キーフレーム方式適用。Req 1,2,3,4,5,6 を全面書き換え。議題T5-T8追加 |
+| 2.1     | 2026-02-27 | Q5-Q8 議論完了。performer→actor 用語統一。CueSheet 相対時刻・CueQueue 外部 current_time 受取確定。dola 思想統一。Req 9 追加（フィーチャーモデル・CueSheetResult）。T2/T5/T6/T7/T8 全議題削除 |
 
 ---
 

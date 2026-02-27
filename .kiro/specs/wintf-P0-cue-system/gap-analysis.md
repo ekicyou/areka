@@ -250,6 +250,23 @@ pub enum TimelineItem {
 
 ---
 
+### Req 9: CueSheet ライフサイクルと実行結果 — フィーチャーモデル
+
+| AC  | 技術要素                      | 既存アセット                                      | ギャップ                                                                     |
+| --- | ----------------------------- | ------------------------------------------------- | ---------------------------------------------------------------------------- |
+| AC1 | `CueSheetResult` 型           | —                                                 | **Missing**: `CueSheetResult` enum（Completed/Cancelled/Timeout/Choice）      |
+| AC2 | Completed 通知                | `TypewriterState::Completed` パターン             | **Adapt**: 全演者 CueQueue 消費完了の検知ロジック                             |
+| AC3 | Cancelled 通知                | —                                                 | **Missing**: 外部キャンセル API + Cancelled 発行メカニズム                    |
+| AC4 | Timeout 通知                  | WaitForInput の `timeout: Option<f64>` フィールド | **Adapt**: タイムアウト超過検知 + Timeout 発行ロジック                        |
+| AC5 | Choice 通知                   | —                                                 | **Missing**: 選択肢選択イベントの検知 + Choice 発行メカニズム                |
+| AC6 | 上位層への await 形式提供     | —                                                 | **Missing**: Rust 的 await パターン（DD11 で実装方式決定）                    |
+
+**評価**: CueSheet を「フィーチャー実行単位（Modal Dialog モデル）」として定義する新 Requirement。T7（キャンセル）を Cancelled バリアントとして統合。T8（動的生成）はスコープ外確定。ECS 的な await 実現方法（Observer vs AsyncTask vs Poll）が DD11 として設計フェーズの主要論点。
+
+**dola 思想との対応**: CueSheet 実行完了通知 ≈ dola の playback 完了通知パターン
+
+---
+
 ### NFR-1: パフォーマンス
 
 | AC  | 技術要素               | 既存アセット                           | ギャップ                                                               |
@@ -313,6 +330,9 @@ pub enum TimelineItem {
 | M17 | キャパシティ上限チェック（オプショナル）                     | Req 8    | 低                                    |
 | M18 | 遅延到達コマンドの追いつき処理                               | Req 8    | 低                                    |
 | M19 | モジュール構造（`ecs/cue/` or `ecs/widget/cue/`）            | 全体     | 低（スキャフォールド）                |
+| M20 | `CueSheetResult` enum（Completed/Cancelled/Timeout/Choice）  | Req 9    | 低                                    |
+| M21 | 全演者 CueQueue 完了検知ロジック                             | Req 9    | 中（全演者の状態追跡が必要）          |
+| M22 | CueSheetResult 通知メカニズム（DD11 決定後実装）             | Req 9    | 中〜高（await 実現方法による）        |
 
 ### Adapt（既存パターンの汎化・適用）
 
@@ -347,6 +367,8 @@ pub enum TimelineItem {
 | DD7 | **CueSheet 投入の API**: コンポーネント差し替え vs 関数呼び出し vs 両方 | (a) `commands.entity(e).insert(PendingCueSheet(sheet))`, (b) `dispatch_cue_sheet(world, sheet)`, (c) 両方                    | Req 4           |
 | DD8 | **dola 統合の粒度**: 最小限 vs DolaBridgeResource 完全統合              | (a) インターフェース定義のみ, (b) DolaBridgeResource と CueQueue の連携システム実装                                          | Req 6           |
 | **DD9** | **タイミングモデル**: ~~相対時刻~~ vs **絶対時刻キーフレーム方式** ✅     | ~~(a) Wait コマンドによる相対時刻（FIFO 逐次消費）~~, **(b) Cue に start_time フィールドを付与し絶対時刻管理（並行実行可能） — 採用済み** | Req 1,2,3,4,5,6 全体 |
+| DD10 | **コマンド複雑性の哲学**: 決定論的データ vs 手続き的プログラム | (a) 純粋なデータ列（Wait バリアントなし、start_time 差分でタイミング表現）— 採用済み, (b) Wait 等の手続き的コマンドを許容 | Req 2, 将来拡張 |
+| DD11 | **CueSheetResult の ECS 的 await 実現**: Observer vs AsyncTask vs Poll | (a) bevy Observer/Event（ECS イベント駆動）, (b) bevy AsyncTask（実際の Future/await）, (c) Component Poll（消費者がポーリング） | Req 9, オーケストレーション層 |
 
 ### Constraint（既存アーキテクチャ制約）
 
