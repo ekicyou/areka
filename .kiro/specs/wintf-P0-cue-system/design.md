@@ -472,8 +472,7 @@ impl CueCommand {
             CueCommand::Choice { .. } => CueTarget::Balloon,
             CueCommand::WaitForChoice { .. } => CueTarget::Balloon,
             CueCommand::WaitForClick { .. } => CueTarget::Balloon,
-            // シェル向け: サーフェス・感情・アニメーション
-            CueCommand::Surface { .. } => CueTarget::Shell,
+            // シェル向け: 感情・アニメーション
             CueCommand::Emote { .. } => CueTarget::Shell,
             CueCommand::EntityRef(_) => CueTarget::Shell,
             // Custom: プレフィックス規約で判定
