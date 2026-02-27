@@ -3,9 +3,9 @@
 | 項目               | 内容                                         |
 | ------------------ | -------------------------------------------- |
 | **Document Title** | wintf キューシステム（cue-system）技術設計書 |
-| **Version**        | 2.0                                          |
+| **Version**        | 2.1                                          |
 | **Date**           | 2026-02-27                                   |
-| **Requirements**   | v2.2（9 Req + 3 NFR）                       |
+| **Requirements**   | v2.3（9 Req + 3 NFR）                       |
 | **Status**         | 📐 Generated                                |
 
 ---
@@ -684,19 +684,40 @@ impl CueSheetTracker {
 
     /// 毎フレーム呼び出し — バリアライフサイクル集中管理
     ///
-    /// 4 フェーズアルゴリズム:
-    /// 1. バリア自動検知: 全配送先の CueQueueState を走査し、
-    ///    WaitingForClick/WaitingForChoice を検出したら BarrierState を生成
-    /// 2. タイムアウト検出: barrier 開始からの経過時間が timeout を超過したら
-    ///    BarrierResponse::Timeout を設定
-    /// 3. 解決判定: first_valid が Some になったら:
-    ///    - 残りの未応答スロットに skip_barrier() を強制適用
-    ///    - Click → 全スロット resolve_click() → 継続
-    ///    - Choice → result に CueSheetResult::Choice を設定
-    ///    - Timeout → result に CueSheetResult::Timeout を設定
-    ///    - 全 Skipped + Click → 全スロット resolve_click() → 継続
-    ///    - 全 Skipped + Choice → CueSheetResult::Error
-    /// 4. 完了判定: 全配送先が Completed → CueSheetResult::Completed
+    /// **4 フェーズ処理フロー**:
+    ///
+    /// **Phase 1: バリア自動検知** (`detect_barrier_if_needed`)
+    /// - 前提: `barrier_state` が `None`
+    /// - 処理: 全 `targets` の `CueQueueState` を走査
+    ///   - `WaitingForClick` または `WaitingForChoice` を検出
+    ///   - 検出したら `BarrierState { start_time, timeout, first_valid: None, slots }` を生成
+    /// - 結果: バリア検出時 → `barrier_state` を `Some` に設定
+    ///
+    /// **Phase 2: タイムアウト検出** (`check_barrier_timeout`)
+    /// - 前提: `barrier_state` が `Some` かつ `first_valid` が `None`
+    /// - 処理: `current_time - start_time > timeout` を判定
+    /// - 結果: タイムアウト時 → `first_valid = Some(BarrierResponse::Timeout)`
+    ///
+    /// **Phase 3: バリア解決** (`resolve_barrier_if_ready`)
+    /// - 前提: `barrier_state.first_valid` が `Some`
+    /// - 処理:
+    ///   1. 残りの未応答スロットに `skip_barrier()` を強制適用
+    ///   2. `first_valid` の値に応じて分岐:
+    ///      - `Click` → 全スロット `resolve_click()` 適用 → 継続（`barrier_state = None`）
+    ///      - `Choice(idx)` → `result = Some(CueSheetResult::Choice(idx))`
+    ///      - `Timeout` → `result = Some(CueSheetResult::Timeout)`
+    ///      - 全スロット `Skipped` の場合:
+    ///        - `Click` → 全スロット `resolve_click()` → 継続
+    ///        - `Choice` → `result = Some(CueSheetResult::Error)`
+    /// - 結果: バリア解決完了 → `barrier_state = None` または `result` 設定
+    ///
+    /// **Phase 4: 完了判定** (`check_completion`)
+    /// - 前提: `result` が `None`
+    /// - 処理: 全 `targets` の `CueQueueState` を確認
+    /// - 結果: 全スロット `Completed` → `result = Some(CueSheetResult::Completed)`
+    ///
+    /// **実装推奨**: 上記 4 フェーズをプライベートヘルパーメソッドに分割することで、
+    /// 処理フローを明確化し、テスタビリティを向上。
     pub fn update(&mut self, world: &World, current_time: f64) { /* ... */ }
 }
 ```
@@ -1097,3 +1118,4 @@ fn consume_balloon_cues(
 | 1.0     | 2026-02-27 | 初版生成。DD1-DD12 全決定。9 Req + 3 NFR 対応 |
 | 1.1     | 2026-02-27 | dola 統合明確化。DolaRuntime 必須依存化、DD8-b 時刻基準統一、物理エンティティ直接使用設計 |
 | 2.0     | 2026-02-27 | 設計リファイン。dola 統合を Architecture + Components に統合、Data Models 重複排除、DD8 ラベル修正、用語統一、消費者コード例簡素化、Module Structure に runtime.rs 追加 |
+| 2.1     | 2026-02-27 | CueSheetTracker::update() 4フェーズアルゴリズム構造化。前提条件・処理フロー・事後条件を明記、ヘルパーメソッド推奨追加 |
