@@ -4,10 +4,10 @@
 //! IDCompositionVisual3 に適用する。
 
 use crate::com::dcomp::{DCompositionDeviceExt, DCompositionVisualExt};
+use crate::ecs::graphics::Visual;
 use crate::ecs::graphics::clip::ClipShape;
 use crate::ecs::graphics::components::VisualGraphics;
 use crate::ecs::graphics::dcomp_resource::DCompGraphicsResource;
-use crate::ecs::graphics::Visual;
 use crate::ecs::layout::{Arrangement, GlobalArrangement};
 use bevy_ecs::prelude::*;
 use tracing::{debug, error, trace};
@@ -24,8 +24,10 @@ use windows::core::Interface;
 ///
 /// # エラーハンドリング
 /// COM API 失敗時は `error!` ログを出力して処理を継続する。
+///
+/// ULW モードなど DCompGraphicsResource が未初期化の場合はスキップする。
 pub fn clip_sync_system(
-    dcomp_resource: Res<DCompGraphicsResource>,
+    dcomp_resource: Option<Res<DCompGraphicsResource>>,
     query: Query<
         (
             Entity,
@@ -41,6 +43,9 @@ pub fn clip_sync_system(
         )>,
     >,
 ) {
+    let Some(dcomp_resource) = dcomp_resource else {
+        return;
+    };
     let Some(dcomp) = dcomp_resource.dcomp() else {
         return;
     };
@@ -130,7 +135,9 @@ pub fn clip_sync_system(
 
                 // クリップを適用
                 let clip_interface: windows::Win32::Graphics::DirectComposition::IDCompositionClip =
-                    rectangle_clip.cast().expect("RectangleClip should implement IDCompositionClip");
+                    rectangle_clip
+                        .cast()
+                        .expect("RectangleClip should implement IDCompositionClip");
                 if let Err(e) = visual_com.set_clip_object(&clip_interface) {
                     error!(
                         entity = ?entity,

@@ -31,7 +31,7 @@ const TRANSPARENT_COLOR: D2D1_COLOR_F = D2D1_COLOR_F {
 
 /// Typewriter 更新システム（Update スケジュール）
 ///
-/// FrameTime から現在時刻を取得し、TypewriterTalk の状態を更新する。
+/// FrameTime リソースから現在フレームの時刻を取得し、TypewriterTalk の状態を更新する。
 /// FireEvent トークンを処理して対象エンティティの TypewriterEvent を設定する。
 pub fn update_typewriters(
     mut commands: Commands,
@@ -42,7 +42,7 @@ pub fn update_typewriters(
         return;
     };
 
-    let current_time = frame_time.elapsed_secs();
+    let current_time = frame_time.0;
 
     for (entity, mut talk, layout_cache) in query.iter_mut() {
         // 状態を更新し、発火すべきイベントを取得

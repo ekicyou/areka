@@ -46,7 +46,7 @@
 | SparseSet コンポーネント | `TypewriterTalk`, `DragConfig` 等 27件 | `CueQueue` コンポーネント |
 | on_add フックチェーン | `Typewriter` → Visual + TypewriterTalk 自動挿入 | 配送トリガーに活用可能（DD7） |
 | 2段階 IR | Stage 1 (TypewriterToken) → Stage 2 (TimelineItem) | CueSheet(相対) → CueQueue(絶対) の1段変換（DD9 で Stage 2 不要化） |
-| FrameTime 絶対時刻 | `elapsed_secs() -> f64`（QueryPerformanceCounter ベース） | `pop_ready(current_time)` の時刻ソース |
+| FrameTime 絶対時刻 | `FrameTime(pub f64)` — ワールド外で `dola::runtime::clock::now()` から更新、フレーム内一貫 | `pop_ready(current_time)` の時刻ソース |
 | Changed\<T\> gotcha | `Mut<T>` は内容変更なしでも Changed 発火 | CueQueue 消費では Changed フィルタ不使用 |
 
 #### 遵守すべき制約
@@ -79,7 +79,7 @@ graph TB
     end
 
     subgraph Infra["インフラ"]
-        FT["FrameTime<br/>elapsed_secs()"]
+        FT["FrameTime(f64)<br/>.0 参照"]
         DOLA["DolaRuntime<br/>(必須リソース)"]
     end
 
@@ -473,7 +473,7 @@ impl CueQueue {
 }
 ```
 
-**Preconditions**: `current_time` は `FrameTime::elapsed_secs()` の値  
+**Preconditions**: `current_time` は `FrameTime.0` の値（フレーム内一貫）  
 **Postconditions**: 返却されたコマンドは queue から除去済み  
 **Invariants**: queue は常に start_time 降順を維持
 
@@ -734,7 +734,7 @@ pub fn update_cue_sheet_trackers(
     world: &World,
     frame_time: Res<FrameTime>,
 ) {
-    let current_time = frame_time.elapsed_secs();
+    let current_time = frame_time.0;
     for mut tracker in query.iter_mut() {
         tracker.update(world, current_time);
     }
@@ -769,13 +769,13 @@ impl Default for DolaRuntime {
 
 /// dola ランタイム更新システム（毎フレーム実行）
 ///
-/// FrameTime から現在時刻を取得し DolaRuntime を更新する。Req 6.1 対応。
+/// FrameTime リソースから現在フレームの時刻を取得し DolaRuntime を更新する。Req 6.1 対応。
 /// UpdateResult（変更された変数リスト）の処理は後続仕様（animation-system）で実装。
 pub fn update_dola_runtime(
     frame_time: Res<FrameTime>,
     mut dola: ResMut<DolaRuntime>,
 ) {
-    let current_time = frame_time.elapsed_secs();
+    let current_time = frame_time.0;
     let _result = dola.facade_mut().update(current_time);
 }
 ```
@@ -960,7 +960,7 @@ fn submit_cue_sheet(mut commands: Commands, frame_time: Res<FrameTime>) {
     // PendingCueSheet として投入 → dispatch システムが自動処理
     commands.spawn(PendingCueSheet {
         sheet: CueSheet::new(cues),
-        start_time: frame_time.elapsed_secs(),
+        start_time: frame_time.0,
     });
 }
 ```
@@ -996,7 +996,7 @@ fn consume_balloon_cues(
     choice_events: EventReader<ChoiceSelectedEvent>,
     frame_time: Res<FrameTime>,
 ) {
-    let current_time = frame_time.elapsed_secs();
+    let current_time = frame_time.0;
     for (self_entity, mut queue) in query.iter_mut() {
         // バリア処理: ハンドラーは応答を報告、非ハンドラーは skip
         if let Some(kind) = queue.pending_barrier_kind() {

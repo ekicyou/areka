@@ -242,7 +242,7 @@ fn create_balloon_window(world: &mut World, _shell_entity: Entity) -> Entity {
     // 縦書き Typewriter テキスト
     let current_time = world
         .get_resource::<FrameTime>()
-        .map(|ft| ft.elapsed_secs())
+        .map(|ft| ft.0)
         .unwrap_or(0.0);
 
     let tokens = build_typewriter_tokens(BALLOON_TEXT);

@@ -46,8 +46,8 @@ impl EcsWorld {
             world.insert_resource(wic_core);
         }
 
-        // FrameTime初期化（QueryPerformanceCounter ベース、dola と同じ時刻基準）
-        world.insert_resource(crate::ecs::graphics::FrameTime::new());
+        // FrameTime初期化（dola::runtime::clock::now() の値を保持）
+        world.insert_resource(crate::ecs::graphics::FrameTime(dola::runtime::clock::now()));
 
         // WintfTaskPool初期化（非同期タスク実行基盤）
         world.insert_resource(crate::ecs::widget::bitmap_source::WintfTaskPool::new());
@@ -442,9 +442,15 @@ impl EcsWorld {
             return false;
         }
 
-        // FrameCountをインクリメント
+        // FrameCount をインクリメント、FrameTime を更新
         if let Some(mut frame_count) = self.world.get_resource_mut::<FrameCount>() {
             frame_count.0 += 1;
+        }
+        if let Some(mut frame_time) = self
+            .world
+            .get_resource_mut::<crate::ecs::graphics::FrameTime>()
+        {
+            frame_time.0 = dola::runtime::clock::now();
         }
 
         // WndProcスレッドのthread_localバッファからWorldに直接データを投入

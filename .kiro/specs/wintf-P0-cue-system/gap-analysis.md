@@ -29,7 +29,7 @@
 | `Messages<T>` (Drag系)                    | `ecs/world/mod.rs`                      | bevy_ecs メッセージキュー。init_resource + FrameFinalize 更新パターン     |
 | `CommandSender` (mpsc)                    | `ecs/widget/bitmap_source/task_pool.rs` | 非同期→ECS コマンド送信。CueSheet の非同期投入路の候補                    |
 | `WintfTaskPool`                           | `ecs/widget/bitmap_source/task_pool.rs` | BoxedCommand のドレイン→World適用パターン                                 |
-| `FrameTime` リソース                      | `ecs/graphics/core.rs`                  | フレーム時刻（**f64秒、起動時からの絶対時刻**）。ウェイト計測のタイムソース。**`GetSystemTimePreciseAsFileTime` 使用** |
+| `FrameTime` リソース                      | `ecs/graphics/core.rs`                  | フレーム時刻（**f64秒、起動時からの絶対時刻**）。ワールド外で `dola::runtime::clock::now()` から更新、フレーム内一貫 |
 | スケジュール実行順序                      | `ecs/world/mod.rs`                      | Input → **Update** → PreLayout → Layout → PostLayout → UISetup → GraphicsSetup → Draw → ... → FrameFinalize |
 | `DragConfig` / `OnDrag` 等                | `ecs/drag/mod.rs`                       | SparseSet コンポーネント + on_add パターンの参考                          |
 | `Brush` / `BrushInherit`                  | `ecs/widget/brushes.rs`                 | コンポーネント自動挿入 + 解決パターンの参考                               |
@@ -49,8 +49,8 @@
 
 #### タイミング & 時間管理パターン（dola 思想との共有）
 
-- **FrameTime 絶対時刻**: `elapsed_secs() -> f64` — 起動時からの絶対秒数。`GetSystemTimePreciseAsFileTime` ベース（100ns 精度）
-- **DolaRuntime 絶対時刻**: `update(current_time: f64)` — **FrameTime と同じ時間軸の f64 秒**
+- **FrameTime 絶対時刻**: `FrameTime(pub f64)` — `try_tick_world()` で `dola::runtime::clock::now()` から更新。フレーム内で一貫した値を参照
+- **DolaRuntime 絶対時刻**: `update(current_time: f64)` — **FrameTime.0 と同じ時間軸の f64 秒**
 - **dola 思想**: `Document/Storyboard（宣言的、相対時刻） → compile（絶対時刻化） → Runtime（実行可能） → playback(current_time)（消費）`
 - **cue-system との対応**: `CueSheet（相対時刻） → dispatch(sheet_start_time)（コンパイル） → CueQueue（絶対時刻） → pop_ready(current_time)（消費）`
 - **TypewriterTimeline 絶対時刻**: Stage 2 IR の TimelineItem が `show_at`, `start_at`, `fire_at` フィールドを保持 — **DD9 方式の実証例**
@@ -212,7 +212,7 @@ pub enum TimelineItem {
 
 | AC  | 技術要素                     | 既存アセット                                      | ギャップ                                                               |
 | --- | ---------------------------- | ------------------------------------------------- | ---------------------------------------------------------------------- |
-| AC1 | システム時間ベースの経過計測 | `FrameTime.elapsed_secs()` で実績あり             | ギャップなし（FrameTime リソース利用）                                 |
+| AC1 | システム時間ベースの経過計測 | `FrameTime.0` で実績あり                       | ギャップなし（FrameTime リソース利用）                                 |
 | AC2 | pause API                    | `TypewriterTalk::pause(current_time)` で実績あり  | **Adapt**: CueQueue 向け pause API                                     |
 | AC3 | resume API                   | `TypewriterTalk::resume(current_time)` で実績あり | **Adapt**: CueQueue 向け resume API                                    |
 | AC4 | skip API                     | `TypewriterTalk::skip()` で実績あり               | **Adapt**: 経過時刻を末尾コマンド start_time まで進める                |
@@ -436,7 +436,7 @@ ecs/
 
 **統合ポイント**:
 - `ecs/mod.rs` に `pub mod cue;` を追加
-- CueQueue 消費は各消費者の Update システムで実行（`while queue.peek_next().start_time <= frame_time.elapsed_secs()` パターン）
+- CueQueue 消費は各消費者の Update システムで実行（`while queue.peek_next().start_time <= frame_time.0` パターン）
 - TypewriterTalk との関係は `From<CueCommand> for TypewriterToken` 変換で段階移行（DD6-b 採用時）
 - dola 統合は `cue/dola_bridge.rs` を `#[cfg(feature = "dola")]` で追加
 
@@ -787,7 +787,7 @@ cue-system の完成後、TypewriterToken / TypewriterTalk は以下の移行パ
    - CueQueue が VecDeque を採用しても前例問題は存在しない
 
 3. **FrameTime と DolaRuntime が同じ f64 秒時間軸**
-   - FrameTime: elapsed_secs() — 起動時からの絶対秒数
+   - FrameTime: `.0` — 起動時からの絶対秒数（ワールド外で更新、フレーム内一貫）
    - DolaRuntime: update(current_time: f64) — 同じ時間軸
    - DD9 により dola 統合が自然に実現可能
 

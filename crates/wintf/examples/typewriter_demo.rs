@@ -355,7 +355,7 @@ fn start_typewriter_talk(world: &mut World) {
             println!("[Error] FrameTime not found");
             return;
         };
-        frame_time.elapsed_secs()
+        frame_time.0
     };
 
     // Stage 1 IR トークン列を作成
@@ -399,7 +399,7 @@ fn pause_typewriter(world: &mut World) {
         println!("[Error] FrameTime not found");
         return;
     };
-    let current_time = frame_time.elapsed_secs();
+    let current_time = frame_time.0;
 
     let mut query = world.query::<&mut TypewriterTalk>();
     for mut talk in query.iter_mut(world) {
@@ -418,7 +418,7 @@ fn resume_typewriter(world: &mut World) {
         println!("[Error] FrameTime not found");
         return;
     };
-    let current_time = frame_time.elapsed_secs();
+    let current_time = frame_time.0;
 
     let mut query = world.query::<&mut TypewriterTalk>();
     for mut talk in query.iter_mut(world) {

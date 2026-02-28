@@ -123,49 +123,17 @@ fn create_device_3d() -> Result<ID3D11Device> {
 // FrameTime - 高精度フレーム時刻リソース
 // ============================================================
 
-/// FrameTime - 高精度フレーム時刻リソース
+/// FrameTime - 高精度フレーム時刻リソース（f64 秒、OS起動時=0秒）
 ///
-/// GetSystemTimePreciseAsFileTime（100ナノ秒単位）を使用。
-/// Windows 8以降で利用可能な最高精度のシステム時刻API。
-/// OS起動時からの経過時刻を提供するリソース。
+/// `FrameCount` と同じ設計パターン。ワールド外（`try_tick_world()` 実行前）で
+/// `dola::runtime::clock::now()` を呼び出して値を更新する。
+/// ワールド内の全システムは同じフレームの時刻値（`.0`）を参照する。
 ///
-/// dola の `clock::now()` と同じ時刻基準（OS起動時=0秒、QueryPerformanceCounter ベース）を使用。
-/// スレッドセーフ、どのスケジュールからでもアクセス可能。
-#[derive(Resource, Debug)]
-pub struct FrameTime;
-
-impl FrameTime {
-    /// リソース作成
-    pub fn new() -> Self {
-        Self
-    }
-
-    /// 現在時刻取得 (f64秒、OS起動時からの経過時間)
-    ///
-    /// dola の `clock::now()` と同じ時刻基準。
-    /// `QueryPerformanceCounter / QueryPerformanceFrequency` ベース。
-    pub fn elapsed_secs(&self) -> f64 {
-        Self::query_performance_time()
-    }
-
-    /// 高精度システム時刻を取得（OS起動時からの秒数）
-    fn query_performance_time() -> f64 {
-        use windows::Win32::System::Performance::{
-            QueryPerformanceCounter, QueryPerformanceFrequency,
-        };
-
-        let mut counter: i64 = 0;
-        let mut frequency: i64 = 0;
-        unsafe {
-            let _ = QueryPerformanceCounter(&mut counter);
-            let _ = QueryPerformanceFrequency(&mut frequency);
-        }
-        (counter as f64) / (frequency as f64)
-    }
-}
-
-impl Default for FrameTime {
-    fn default() -> Self {
-        Self::new()
-    }
-}
+/// 利点:
+/// - フレーム内でタイミングが完全に一貫
+/// - テスト時に任意の時刻を注入可能
+/// - システム実行中に時刻が進まない（安定性向上）
+///
+/// 時刻基準: `QueryPerformanceCounter / QueryPerformanceFrequency`
+#[derive(Resource, Default, Debug, Clone, Copy)]
+pub struct FrameTime(pub f64);

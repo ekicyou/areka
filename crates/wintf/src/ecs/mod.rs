@@ -1,5 +1,6 @@
 mod app;
 pub mod common;
+pub mod cue;
 pub mod drag;
 mod graphics;
 pub mod layout;
