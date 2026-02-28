@@ -1,7 +1,7 @@
 {
     "feature_name": "wintf-P0-cue-system",
     "created_at": "2026-02-26T12:00:00Z",
-    "updated_at": "2026-02-27T15:00:00Z",
+    "updated_at": "2026-02-28T16:00:00+09:00",
     "language": "ja",
     "phase": "implementation",
     "approvals": {
@@ -46,6 +46,14 @@
             "test_results": "245/245 passed (100%)",
             "blocking_issues": 0
         }
+    },
+    "post_implementation_status": {
+        "discovery_date": "2026-02-28T16:00:00+09:00",
+        "blocked_by": "wintf-P0-dola-boundary",
+        "issue_summary": "DolaRuntime misplacement: Resource 化とシングルトン化が誤り。cue モジュール内に配置する責務がない。",
+        "functional_impact": "なし（cue パイプラインは DolaRuntime に依存せず正常動作）",
+        "architectural_impact": "中程度（設計上の誤配置、次仕様で責務境界明確化後に局所修正）",
+        "unblock_condition": "wintf-P0-dola-boundary の設計承認 + cue-system 局所修正"
     },
     "phase": "implementation",
     "ready_for_implementation": true
