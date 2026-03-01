@@ -167,8 +167,8 @@ sequenceDiagram
 
     Consumer->>CQ: Query mut CueQueue
     CQ->>TS: advance(FrameTime.0)
-    Note over TS: Routing到達 → next_routing()
-    Note over TS: Barrier到達 → current_barrier()
+    Note over TS: Routing到達 → routing_buffer に蒐集（通過）
+    Note over TS: Barrier到達 → 停止、current_barrier() で照会
     TS-->>CQ: ready() -> Payload slice
     Consumer-->>Consumer: コマンド処理
 ```
@@ -302,9 +302,10 @@ impl<T: Clone + Debug> TimedSchedule<T> {
 
     // ── 2 フェーズ API（DolaRuntime の tick/last_result と対称） ──
 
-    /// Phase 1: 時刻到達済み Payload を内部バッファに収集。
+    /// Phase 1: 新たな時刻を入力としてランタイムの時刻を進める。
     /// current_time は絶対時刻（内部で start_time 差分 → 相対オフセット変換）。
-    /// Barrier/Routing 到達または末尾到達まで進行。冪等。
+    /// 時刻到達済みの Payload を ready_buffer に、Routing を routing_buffer に蒐集しながら進行。
+    /// Barrier 到達（外部解決が必要）または末尾到達で停止。Routing は通過（停止しない）。冪等。
     pub fn advance(&mut self, current_time: f64);
 
     /// Phase 2: 直前の advance() で収集された Payload スライスを返す。
