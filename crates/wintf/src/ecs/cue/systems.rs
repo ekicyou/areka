@@ -1,20 +1,11 @@
-//! update_dola_runtime / update_cue_sheet_trackers — cue-system のシステム定義。
+//! update_cue_sheet_trackers — cue-system のシステム定義。
 
 use bevy_ecs::entity::Entity;
-use bevy_ecs::system::{Query, Res, ResMut};
+use bevy_ecs::system::{Query, Res};
 
 use super::queue::{CueQueue, CueQueueState};
-use super::runtime::DolaRuntime;
 use super::tracker::{CueSheetTracker, QueueSnapshot, TrackerAction};
 use crate::ecs::graphics::FrameTime;
-
-/// dola ランタイム更新システム（毎フレーム実行）
-///
-/// FrameTime リソースから現在フレームの時刻を取得し DolaRuntime を更新する。
-pub fn update_dola_runtime(frame_time: Res<FrameTime>, mut dola: ResMut<DolaRuntime>) {
-    let current_time = frame_time.0;
-    let _result = dola.facade_mut().update(current_time);
-}
 
 /// 全 CueSheetTracker の update() を呼び出すシステム。
 ///

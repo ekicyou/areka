@@ -286,9 +286,8 @@
 //! Update スケジュール内の実行順序:
 //!
 //!   1. dispatch_pending_cue_sheets   ← PendingCueSheet を消費して CueQueue に配送
-//!   2. update_dola_runtime           ← dola アニメーションの時刻更新
-//!   3. 消費者システム群              ← pop_ready() + バリア応答
-//!   4. update_cue_sheet_trackers     ← バリア集約・完了判定
+//!   2. 消費者システム群              ← pop_ready() + バリア応答
+//!   3. update_cue_sheet_trackers     ← バリア集約・完了判定
 //! ```
 
 pub mod command;
@@ -297,144 +296,19 @@ pub mod dispatch;
 pub mod error;
 pub mod queue;
 pub mod registry;
-pub mod runtime;
 pub mod systems;
 pub mod tracker;
 
 // ── re-exports ──
-pub use command::{CueCommand, EntityKey};
+pub use command::{
+    ActorKey, BarrierKind, CompiledCue, Cue, CueCommand, CuePayload, CueSheet, CueTarget,
+    EntityKey, Entry, RoutingCommand, TimedSchedule, compile_sheet,
+};
 pub use component::PendingCueSheet;
 pub use dispatch::{CueSheetHandle, dispatch_pending_cue_sheets};
 pub use error::{CueSheetResult, CueSystemError};
-pub use queue::{BarrierKind, BarrierResponse, CueQueue, CueQueueState, PendingChoice, TimedCue};
+pub use queue::{BarrierResponse, CueQueue, CueQueueState, PendingChoice};
 pub use registry::EntityRegistry;
-pub use runtime::DolaRuntime;
-pub use systems::{update_cue_sheet_trackers, update_dola_runtime};
+pub use systems::update_cue_sheet_trackers;
 pub use tracker::CueSheetTracker;
 pub use tracker::{QueueSnapshot, TrackerAction};
-
-// ── CueSheet / Cue / ActorKey / CueTarget はこのモジュールに直接定義 ──
-
-/// 演者識別子。NewType パターンにより型安全性を確保。
-///
-/// さくらスクリプトの `\0` (さくら) / `\1` (うにゅう) に相当するが、
-/// 文字列ベースで任意の名前を許容する。
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub struct ActorKey(String);
-
-impl ActorKey {
-    /// 新しい ActorKey を生成する。
-    pub fn new(key: impl Into<String>) -> Self {
-        Self(key.into())
-    }
-
-    /// 文字列スライスとして取得
-    pub fn as_str(&self) -> &str {
-        &self.0
-    }
-}
-
-impl From<&str> for ActorKey {
-    fn from(s: &str) -> Self {
-        Self(s.to_string())
-    }
-}
-
-impl From<String> for ActorKey {
-    fn from(s: String) -> Self {
-        Self(s)
-    }
-}
-
-impl std::fmt::Display for ActorKey {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.0)
-    }
-}
-
-/// CueCommand の配送先スロット。
-/// 1 ActorKey に対して複数の CueTarget スロットが存在する。
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub enum CueTarget {
-    /// シェル（キャラクター描画）— Emote, EntityRef を主に消費
-    Shell,
-    /// バルーン（テキスト表示）— Text, Clear, Choice, WaitForChoice を主に消費
-    Balloon,
-}
-
-/// 個々の演出指示
-#[derive(Clone, Debug)]
-pub struct Cue {
-    /// 対象演者の識別子
-    pub actor: ActorKey,
-    /// CueSheet 開始時点からの相対秒数
-    pub start_time: f64,
-    /// 演出コマンド
-    pub command: CueCommand,
-}
-
-/// 構造化演出台本。相対時刻で記述された演出指示の集合。
-///
-/// CueSheet は CueQueue にとっての "ソースコード" に相当し、
-/// dispatch（コンパイル）を経て絶対時刻の TimedCue に変換される。
-#[derive(Clone, Debug)]
-pub struct CueSheet(Vec<Cue>);
-
-impl CueSheet {
-    /// start_time 昇順でソートして構築（安定ソート）
-    pub fn new(mut cues: Vec<Cue>) -> Self {
-        cues.sort_by(|a, b| {
-            a.start_time
-                .partial_cmp(&b.start_time)
-                .unwrap_or(std::cmp::Ordering::Equal)
-        });
-        Self(cues)
-    }
-
-    /// 全 Cue のスライスを取得
-    pub fn cues(&self) -> &[Cue] {
-        &self.0
-    }
-
-    /// 特定演者のキューのみをフィルタリング
-    pub fn filter_by_actor(&self, key: &ActorKey) -> Vec<&Cue> {
-        self.0.iter().filter(|cue| &cue.actor == key).collect()
-    }
-
-    /// CueSheet 内の全演者を重複なしで取得
-    pub fn actors(&self) -> Vec<&ActorKey> {
-        let mut actors: Vec<&ActorKey> = Vec::new();
-        for cue in &self.0 {
-            if !actors.contains(&&cue.actor) {
-                actors.push(&cue.actor);
-            }
-        }
-        actors
-    }
-
-    /// CueSheet が空か
-    pub fn is_empty(&self) -> bool {
-        self.0.is_empty()
-    }
-
-    /// CueSheet 内の Cue 数
-    pub fn len(&self) -> usize {
-        self.0.len()
-    }
-}
-
-// ── TimedCue のメモリサイズ検証 ──
-#[cfg(test)]
-mod size_check {
-    use super::TimedCue;
-
-    #[test]
-    fn timed_cue_size_within_64_bytes() {
-        let size = std::mem::size_of::<TimedCue>();
-        assert!(
-            size <= 64,
-            "TimedCue size is {} bytes, exceeding 64 byte limit (NFR-1)",
-            size
-        );
-    }
-}

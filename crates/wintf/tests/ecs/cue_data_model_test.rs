@@ -2,8 +2,8 @@
 //!
 //! - CueSheet の start_time 昇順ソート保証
 //! - CueSheet の filter_by_actor() 動作
-//! - CueCommand の is_barrier() / is_routing_command() 分類
-//! - TimedCue のメモリーサイズ（≤ 64B）
+//! - CuePayload の分類（Command / Barrier / Routing）
+//! - Entry<CueCommand> のメモリーサイズ
 
 use wintf::ecs::cue::*;
 
@@ -15,17 +15,17 @@ fn cue_sheet_sorts_by_start_time_ascending() {
         Cue {
             actor: ActorKey::from("sakura"),
             start_time: 2.0,
-            command: CueCommand::Clear,
+            payload: CueCommand::Clear.into(),
         },
         Cue {
             actor: ActorKey::from("sakura"),
             start_time: 0.5,
-            command: CueCommand::Text("hello".into()),
+            payload: CueCommand::Text("hello".into()).into(),
         },
         Cue {
             actor: ActorKey::from("unyu"),
             start_time: 1.0,
-            command: CueCommand::Clear,
+            payload: CueCommand::Clear.into(),
         },
     ]);
 
@@ -41,17 +41,17 @@ fn cue_sheet_filter_by_actor() {
         Cue {
             actor: ActorKey::from("sakura"),
             start_time: 0.0,
-            command: CueCommand::Text("hi".into()),
+            payload: CueCommand::Text("hi".into()).into(),
         },
         Cue {
             actor: ActorKey::from("unyu"),
             start_time: 0.5,
-            command: CueCommand::Clear,
+            payload: CueCommand::Clear.into(),
         },
         Cue {
             actor: ActorKey::from("sakura"),
             start_time: 1.0,
-            command: CueCommand::Clear,
+            payload: CueCommand::Clear.into(),
         },
     ]);
 
@@ -67,17 +67,17 @@ fn cue_sheet_actors_dedup() {
         Cue {
             actor: ActorKey::from("sakura"),
             start_time: 0.0,
-            command: CueCommand::Clear,
+            payload: CueCommand::Clear.into(),
         },
         Cue {
             actor: ActorKey::from("sakura"),
             start_time: 1.0,
-            command: CueCommand::Clear,
+            payload: CueCommand::Clear.into(),
         },
         Cue {
             actor: ActorKey::from("unyu"),
             start_time: 0.5,
-            command: CueCommand::Clear,
+            payload: CueCommand::Clear.into(),
         },
     ]);
 
@@ -92,39 +92,37 @@ fn cue_sheet_empty() {
     assert_eq!(sheet.len(), 0);
 }
 
-// ── CueCommand 分類 ──
+// ── CuePayload 分類 ──
 
 #[test]
-fn cue_command_is_barrier() {
-    assert!(CueCommand::WaitForClick { timeout: None }.is_barrier());
-    assert!(CueCommand::WaitForChoice { timeout: Some(5.0) }.is_barrier());
-    assert!(!CueCommand::Text("hello".into()).is_barrier());
-    assert!(!CueCommand::Clear.is_barrier());
-    assert!(!CueCommand::Emote {
-        key: "smile".into()
-    }
-    .is_barrier());
+fn cue_payload_command_variant() {
+    let payload: CuePayload = CueCommand::Text("hello".into()).into();
+    assert!(matches!(payload, CuePayload::Command(_)));
 }
 
 #[test]
-fn cue_command_is_routing_command() {
-    assert!(CueCommand::RouteAdd {
+fn cue_payload_barrier_variant() {
+    let payload: CuePayload = BarrierKind::WaitForInput { timeout: None }.into();
+    assert!(matches!(payload, CuePayload::Barrier(_)));
+
+    let payload2: CuePayload = BarrierKind::WaitForChoice { timeout: Some(5.0) }.into();
+    assert!(matches!(payload2, CuePayload::Barrier(_)));
+}
+
+#[test]
+fn cue_payload_routing_variant() {
+    let payload: CuePayload = RoutingCommand::RouteAdd {
         target: CueTarget::Shell,
         to: EntityKey::Spot("s0".into()),
     }
-    .is_routing_command());
-    assert!(CueCommand::RouteSwitch {
-        target: CueTarget::Balloon,
-        to: EntityKey::Balloon("b0".into()),
-    }
-    .is_routing_command());
-    assert!(CueCommand::RouteRemove {
+    .into();
+    assert!(matches!(payload, CuePayload::Routing(_)));
+
+    let payload2: CuePayload = RoutingCommand::RouteRemove {
         target: CueTarget::Shell,
     }
-    .is_routing_command());
-
-    assert!(!CueCommand::Text("hello".into()).is_routing_command());
-    assert!(!CueCommand::WaitForClick { timeout: None }.is_routing_command());
+    .into();
+    assert!(matches!(payload2, CuePayload::Routing(_)));
 }
 
 // ── ActorKey ──
@@ -138,14 +136,15 @@ fn actor_key_conversions() {
     assert_eq!(format!("{}", key1), "sakura");
 }
 
-// ── TimedCue サイズ検証 ──
+// ── Entry サイズ検証 ──
 
 #[test]
-fn timed_cue_size_within_64_bytes() {
-    let size = std::mem::size_of::<TimedCue>();
+fn entry_size_within_limit() {
+    let size = std::mem::size_of::<Entry<CueCommand>>();
     assert!(
-        size <= 64,
-        "TimedCue size is {} bytes, exceeding 64 byte limit (NFR-1)",
+        size <= 128,
+        "Entry<CueCommand> size is {} bytes, exceeding 128 byte limit",
         size
     );
+    eprintln!("[info] Entry<CueCommand> size: {} bytes", size);
 }

@@ -1,3 +1,4 @@
+#![allow(deprecated)]
 //! DolaRuntime Facade 統合テスト
 //!
 //! Task 8.1〜8.5: load → start → update → 各終了フロー → 差分配信の

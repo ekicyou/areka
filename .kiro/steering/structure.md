@@ -70,6 +70,20 @@
 - **非推奨理由**: taffyレイアウトエンジンとの統合不足、軸平行変換最適化が適用できない
 - **推奨代替**: `Arrangement`ベースのLayout System
 
+**6. Cue System** (`cue/`)
+- 責務: 離散コマンド配信の ECS 統合レイヤー
+- 代表的なコンポーネント: `CueQueue`（`dola::TimedSchedule<CueCommand>` を内包）, `CueSheetTracker`
+- 型の再エクスポート: `dola::cue::*`（`CueCommand`, `BarrierKind`, `RoutingCommand`, ドメイン型）を `pub use` で提供
+- 主要システム: `dispatch_pending_cue_sheets`
+- 特徴: `Entity::to_bits()` / `from_bits()` 変換を ECS 境界で実行、`EntityRef(u64)` のラウンドトリップ
+
+**7. Dola Animator** (`dola/`)
+- 責務: `DolaRuntime` のエンティティごとの ECS Component 化
+- 代表的なコンポーネント: `DolaAnimator`（`DolaRuntime` を内部所有、`unsafe impl Send + Sync`）
+- 主要システム: `tick_dola_animators`（`Query<&mut DolaAnimator>` + `Res<FrameTime>` で全エンティティ一括 tick）
+- 安全性保証: `Query<&mut>` の排他アクセスにより 1 tick 1 回・単一スレッドでの更新を型レベルで保証
+- 消費パターン: 後続システムが `Query<&DolaAnimator>` の `last_result()` で `UpdateResult` を読み取る
+
 ### Message Handling
 **Location**: `/crates/wintf/src/`（ルート）  
 **Purpose**: Windowsメッセージループとスレッド管理  

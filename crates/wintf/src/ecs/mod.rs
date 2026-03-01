@@ -1,6 +1,7 @@
 mod app;
 pub mod common;
 pub mod cue;
+pub mod dola;
 pub mod drag;
 mod graphics;
 pub mod layout;
@@ -12,6 +13,7 @@ mod window_proc;
 pub mod world;
 
 pub use types::{Point, PointF, Rect, SizeI};
+pub use dola::{DolaAnimator, tick_dola_animators};
 
 /// 後方互換性のためのエイリアス
 #[deprecated(since = "0.1.0", note = "Use pointer module instead")]

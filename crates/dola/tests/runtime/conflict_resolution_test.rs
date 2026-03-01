@@ -1,3 +1,4 @@
+#![allow(deprecated)]
 //! 競合解決（ConflictResolver）統合テスト
 //!
 //! Task 6.1〜6.3: detect_overlaps, 各終了戦略, エラーパスと境界条件

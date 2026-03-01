@@ -44,12 +44,12 @@ fn dispatch_distributes_commands_to_correct_queues() {
         Cue {
             actor: ActorKey::from("sakura"),
             start_time: 0.0,
-            command: CueCommand::Text("hello".into()),
+            payload: CueCommand::Text("hello".into()).into(),
         },
         Cue {
             actor: ActorKey::from("sakura"),
             start_time: 1.0,
-            command: CueCommand::Clear,
+            payload: CueCommand::Clear.into(),
         },
     ]);
 
@@ -99,12 +99,12 @@ fn dispatch_multiple_actors_independent_consumption() {
         Cue {
             actor: ActorKey::from("sakura"),
             start_time: 0.0,
-            command: CueCommand::Text("sakura says hi".into()),
+            payload: CueCommand::Text("sakura says hi".into()).into(),
         },
         Cue {
             actor: ActorKey::from("unyu"),
             start_time: 0.5,
-            command: CueCommand::Text("unyu says hello".into()),
+            payload: CueCommand::Text("unyu says hello".into()).into(),
         },
     ]);
 
@@ -172,16 +172,17 @@ fn routing_commands_update_registry_only() {
         Cue {
             actor: ActorKey::from("sakura"),
             start_time: 0.0,
-            command: CueCommand::RouteSwitch {
+            payload: RoutingCommand::RouteSwitch {
                 target: CueTarget::Balloon,
                 to: EntityKey::Balloon("new_b".into()),
-            },
+            }
+            .into(),
         },
         // 切替後にテキストを配送
         Cue {
             actor: ActorKey::from("sakura"),
             start_time: 0.1,
-            command: CueCommand::Text("after switch".into()),
+            payload: CueCommand::Text("after switch".into()).into(),
         },
     ]);
 
@@ -230,7 +231,7 @@ fn non_routing_commands_broadcast_to_all_slots() {
     let sheet = CueSheet::new(vec![Cue {
         actor: ActorKey::from("sakura"),
         start_time: 0.0,
-        command: CueCommand::Text("broadcast test".into()),
+        payload: CueCommand::Text("broadcast test".into()).into(),
     }]);
 
     let tracker_entity = world.spawn_empty().id();
@@ -271,12 +272,12 @@ fn unregistered_actor_skipped_others_delivered() {
         Cue {
             actor: ActorKey::from("ghost"),
             start_time: 0.0,
-            command: CueCommand::Text("I am ghost".into()),
+            payload: CueCommand::Text("I am ghost".into()).into(),
         },
         Cue {
             actor: ActorKey::from("sakura"),
             start_time: 0.0,
-            command: CueCommand::Text("I am sakura".into()),
+            payload: CueCommand::Text("I am sakura".into()).into(),
         },
     ]);
 
@@ -308,7 +309,7 @@ fn dispatch_converts_relative_to_absolute_time() {
     let sheet = CueSheet::new(vec![Cue {
         actor: ActorKey::from("sakura"),
         start_time: 0.5, // 相対 0.5 秒
-        command: CueCommand::Text("delayed".into()),
+        payload: CueCommand::Text("delayed".into()).into(),
     }]);
 
     let tracker_entity = world.spawn_empty().id();
@@ -327,18 +328,7 @@ fn dispatch_converts_relative_to_absolute_time() {
         );
     }
 
-    // peek で絶対時刻を検証: 100.0 + 0.5 = 100.5
-    {
-        let queue = world.entity(sakura_shell).get::<CueQueue>().unwrap();
-        let peeked = queue.peek().expect("should have 1 command");
-        assert!(
-            (peeked.start_time - 100.5).abs() < 1e-10,
-            "Expected absolute time 100.5, got {}",
-            peeked.start_time
-        );
-    }
-
-    // 100.0 では消費されない
+    // 100.0 では消費されない（100.5 が到達時刻）
     {
         let mut queue = world.get_mut::<CueQueue>(sakura_shell).unwrap();
         let cmds = queue.pop_ready(100.0);

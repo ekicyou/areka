@@ -19,3 +19,5 @@ mod dcomp_resource_test;
 mod reinit_unit_test;
 #[path = "graphics/surface_optimization_test.rs"]
 mod surface_optimization_test;
+#[path = "graphics/frame_time_test.rs"]
+mod frame_time_test;

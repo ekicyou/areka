@@ -44,7 +44,8 @@ wintf は COM ラッパー → ECS → メッセージハンドリングの3層�
 │  ECS Component Layer                         │
 │  コンポーネント定義・システム実行             │
 │  ecs/ (window, graphics, layout,             │
-│        widget, pointer, drag, ...)           │
+│        widget, pointer, drag,                │
+│        cue, dola, ...)                       │
 ├─────────────────────────────────────────────┤
 │  COM Wrapper Layer                           │
 │  Windows COM APIのRustラッパー               │
@@ -76,6 +77,8 @@ wintf の ECS 層は以下のモジュールで構成されています。
 | `widget/` | UIウィジェット（Label, Rectangle, BitmapSource, brushes, shapes） |
 | `pointer/` | ポインターイベント配信（Tunnel/Bubble 2フェーズ）、ヒットテスト |
 | `drag/` | ドラッグシステム（エンティティドラッグ + ウィンドウ移動） |
+| `cue/` | 離散コマンド配信の ECS 統合（`CueQueue` Component, dispatch system, re-export） |
+| `dola/` | `DolaAnimator` Component — エンティティごとの `DolaRuntime` 所有・`tick_dola_animators` System で一括更新 |
 | `transform/` | 変換システム（**非推奨**: Arrangement ベースの Layout System を推奨） |
 | `nchittest_cache.rs` | WM_NCHITTEST キャッシュ最適化 |
 
@@ -85,16 +88,42 @@ wintf の ECS 層は以下のモジュールで構成されています。
 
 ## 4. dola の責務
 
-**dola** (Declarative Orchestration for Live Animation) は、Windows Animation Manager の概念をプラットフォーム非依存のデータモデルとして再構成したクレートです。
+**dola** (Declarative Orchestration for Live Animation) は、bevy_ecs に依存しないアニメーション実現のための汎用道具集であり、2 つのエンジンを提供します。
+
+### 4.1. 連続値アニメ宣言エンジン（dola 言語）
+
+Windows Animation Manager の概念をプラットフォーム非依存のデータモデルとして再構成したエンジンです。
 
 | 概念 | 説明 |
 |------|------|
+| `DolaRuntime` | 外部時刻注入型の計算エンジン（Facade パターン）。`tick(f64)` + `last_result()` の 2 フェーズ API |
 | `AnimationVariableDef` | アニメーション対象の変数定義（名前・初期値・範囲） |
 | `TransitionDef` | トランジション定義（対象変数・目標値・時間・イージング） |
 | `Storyboard` | トランジションの実行順序を束ねるコンテナ |
 | `EasingFunction` | イージング関数（プリセット・パラメトリック） |
 
 対応フォーマット: JSON (デフォルト), TOML, YAML（feature flags で選択）
+
+### 4.2. 離散コマンド配信エンジン（キューシート）
+
+時刻ベースの離散コマンドスケジューリング基盤です。
+
+| 概念 | 説明 |
+|------|------|
+| `TimedSchedule<T>` | 0 ベース相対オフセットの汎用配信エンジン。`tick(f64)` + `ready()` の 2 フェーズ API |
+| `Entry<T>` | Payload / Barrier / Routing の型レベル 3 種分離エントリ |
+| `BarrierKind` | WaitForInput / WaitForChoice / Timeout の 3 種バリア |
+| `CueCommand` | Text / Clear / Emote / Choice / EntityRef / Custom の 6 バリアント |
+| `RoutingCommand` | RouteAdd / RouteSwitch / RouteRemove の 3 バリアント |
+| `CueSheet` | 相対時刻コマンド列。`compile_sheet()` で `Entry<CueCommand>` を生成 |
+| `ActorKey` / `CueTarget` / `EntityKey` / `Cue` | 演出ドメイン型 |
+
+### 4.3. wintf ECS 統合
+
+| wintf 側 | 役割 |
+|----------|------|
+| `DolaAnimator` Component (`ecs/dola/`) | エンティティごとに `DolaRuntime` を所有。`tick_dola_animators` System が `Res<FrameTime>` で一括更新 |
+| `CueQueue` Component (`ecs/cue/`) | `TimedSchedule<CueCommand>` を内包する ECS 統合ラッパー。`Entity::to_bits()` / `from_bits()` 変換を担う |
 
 > 詳細: [crates/dola/README.md](../crates/dola/README.md)
 

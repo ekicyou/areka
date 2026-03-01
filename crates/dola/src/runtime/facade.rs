@@ -36,6 +36,8 @@ pub struct DolaRuntime {
     next_group_id: u64,
     /// group_id → CompiledTrigger リスト（start() 時に格納、conclude/cancel で削除）
     trigger_store: HashMap<u64, Vec<CompiledTrigger>>,
+    /// 直前の tick() 結果を保持するフィールド
+    last_update_result: UpdateResult,
 }
 
 impl DolaRuntime {
@@ -48,6 +50,10 @@ impl DolaRuntime {
             subscription_manager: SubscriptionManager::new(),
             next_group_id: 1,
             trigger_store: HashMap::new(),
+            last_update_result: UpdateResult {
+                changes: Vec::new(),
+                triggered: Vec::new(),
+            },
         }
     }
 
@@ -299,7 +305,26 @@ impl DolaRuntime {
         self.subscription_manager.unsubscribe_all();
     }
 
-    /// 差分更新取得。
+    // =========================================================================
+    // 2 フェーズ API（新規）
+    // =========================================================================
+
+    /// Phase 1: 内部状態を current_time まで進行し、結果を内部フィールドに格納。
+    ///
+    /// `TimedSchedule::tick()` と対称な設計。
+    pub fn tick(&mut self, current_time: f64) {
+        self.last_update_result = self.update_internal(current_time);
+    }
+
+    /// Phase 2: 直前の tick() 結果を読み取り専用で返す。
+    ///
+    /// tick() 未呼び出し時は空の `UpdateResult` を返す。
+    /// `TimedSchedule::ready()` と対称な設計。
+    pub fn last_result(&self) -> &UpdateResult {
+        &self.last_update_result
+    }
+
+    /// 差分更新取得（後方互換）。
     ///
     /// 内部フロー:
     /// 1. finish deadline チェック → deadline 到達インスタンスは Conclude 相当
@@ -307,7 +332,14 @@ impl DolaRuntime {
     /// 2. 自然終了検知（current_time >= end_time の Playing インスタンス）
     /// 3. 購読変数の evaluate ループ
     /// 4. diff_and_update
+    #[deprecated(note = "use tick() + last_result() instead")]
     pub fn update(&mut self, current_time: f64) -> UpdateResult {
+        self.tick(current_time);
+        self.last_update_result.clone()
+    }
+
+    /// 差分更新の内部実装。
+    fn update_internal(&mut self, current_time: f64) -> UpdateResult {
         // Step 1: Finish Deadline チェック
         let expired = self.instance_manager.check_finish_deadlines(current_time);
         for gid in expired {

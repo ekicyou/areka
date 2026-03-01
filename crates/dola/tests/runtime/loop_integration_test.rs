@@ -1,3 +1,4 @@
+#![allow(deprecated)]
 //! ループ再生 統合テスト（dola-runtime-5-loop Task 5.2）
 //!
 //! facade 経由でのループ再生エンドツーエンド検証。

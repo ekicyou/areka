@@ -1,24 +1,14 @@
 //! CueQueue — 演出指示キューコンポーネント。
 //!
-//! 各演者エンティティが保持する時刻付き演出指示のキュー。
-//! 内部は start_time **降順** ソートの Vec<TimedCue>。
-//! 消費は末尾からの pop（O(1)）で行い、先頭への挿入移動を回避する。
+//! 各演者エンティティが保持する時刻ベースの演出指示キュー。
+//! 内部は `dola::cue::TimedSchedule<CueCommand>` に委譲し、
+//! ECS 固有の状態（再生状態・選択肢蓄積・シートエンティティ参照）を保持する。
 
 use bevy_ecs::component::Component;
 use bevy_ecs::entity::Entity;
 
-use super::command::CueCommand;
+use super::command::{BarrierKind, CueCommand, Entry, TimedSchedule};
 use super::error::CueSystemError;
-
-/// 絶対時刻に変換済みの消費可能コマンド。
-/// dispatch 時に `cue.start_time + sheet_start_time` で生成される。
-#[derive(Clone, Debug)]
-pub struct TimedCue {
-    /// 世界絶対時刻（秒）
-    pub start_time: f64,
-    /// 演出コマンド（actor 情報は分配済みのため不要）
-    pub command: CueCommand,
-}
 
 /// Choice コマンドの先積みデータ
 #[derive(Clone, Debug)]
@@ -34,7 +24,7 @@ pub enum CueQueueState {
     Playing,
     /// 一時停止中
     Paused,
-    /// クリック待ちバリア中
+    /// クリック/入力待ちバリア中
     WaitingForClick,
     /// 選択肢バリア中
     WaitingForChoice,
@@ -42,15 +32,6 @@ pub enum CueQueueState {
     Error(CueSystemError),
     /// 全コマンド消費完了
     Completed,
-}
-
-/// バリア種別
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub enum BarrierKind {
-    /// 選択肢バリア
-    Choice,
-    /// クリック待ちバリア
-    Click,
 }
 
 /// バリア応答値。消費者がハンドラーとして返す、またはスキップする。
@@ -66,32 +47,22 @@ pub enum BarrierResponse {
     Timeout,
 }
 
-/// CueQueue 内部のバリア状態管理
-#[derive(Clone, Debug)]
-#[allow(dead_code)]
-pub(crate) struct BarrierState {
-    /// 最初に有効応答が到達した時点の BarrierResponse
-    pub(crate) first_valid: Option<BarrierResponse>,
-    /// バリア種別
-    pub(crate) kind: BarrierKind,
-    /// バリア開始時刻
-    pub(crate) start_time: f64,
-    /// タイムアウト値（秒）
-    pub(crate) timeout: Option<f64>,
-}
-
-/// 各演者エンティティが保持する時刻付き演出指示のキュー。
+/// 各演者エンティティが保持する時刻ベースの演出指示キュー。
 ///
-/// CueSheet の配送（dispatch）により TimedCue が追加され、
-/// 消費者システムが `pop_ready()` で時刻到達済みコマンドを取得する。
+/// 内部は `TimedSchedule<CueCommand>` に委譲し、
+/// ECS 固有の状態管理（再生状態・選択肢蓄積・シートエンティティ参照）を追加する。
 ///
-/// 内部は start_time **降順** ソートの Vec<TimedCue>。
-/// 消費は末尾からの pop（O(1)）で行い、先頭への挿入移動を回避する。
+/// # 2 フェーズ API
+///
+/// ```text
+/// queue.tick(current_time)  → TimedSchedule に委譲、バリア・Choice 処理
+/// queue.ready()             → 消費可能なコマンドスライス（Choice 除外済み）
+/// ```
 #[derive(Component, Debug)]
 #[component(storage = "SparseSet")]
 pub struct CueQueue {
-    /// 降順ソートされた TimedCue のキュー
-    queue: Vec<TimedCue>,
+    /// dola TimedSchedule にコア時刻管理を委譲
+    schedule: TimedSchedule<CueCommand>,
     /// 現在の状態
     state: CueQueueState,
     /// 再生速度倍率
@@ -102,185 +73,225 @@ pub struct CueQueue {
     pending_choices: Vec<PendingChoice>,
     /// 現在この CueQueue にコマンドを供給している CueSheet の Tracker エンティティ
     cue_sheet_entity: Option<Entity>,
-    /// 現在アクティブなバリア
-    barrier_state: Option<BarrierState>,
+    /// tick() で Choice を除外した ready コマンドのバッファ
+    filtered_ready: Vec<CueCommand>,
+    /// バリア進入時刻（check_timeout 計算用）
+    barrier_entered_time: Option<f64>,
+    /// バリアタイムアウト値（check_timeout 計算用）
+    barrier_timeout: Option<f64>,
 }
 
 impl CueQueue {
     /// 新しい CueQueue を生成する。
+    ///
+    /// `start_time` は TimedSchedule の絶対時刻基準。
+    /// dispatch 時に設定されるため、初期値は 0.0。
     pub fn new() -> Self {
         Self {
-            queue: Vec::new(),
+            schedule: TimedSchedule::new(0.0),
             state: CueQueueState::Playing,
             playback_rate: 1.0,
             capacity: None,
             pending_choices: Vec::new(),
             cue_sheet_entity: None,
-            barrier_state: None,
+            filtered_ready: Vec::new(),
+            barrier_entered_time: None,
+            barrier_timeout: None,
         }
     }
 
     /// キャパシティ指定で CueQueue を生成する。
     pub fn with_capacity(capacity: usize) -> Self {
         Self {
-            queue: Vec::with_capacity(capacity),
+            schedule: TimedSchedule::new(0.0),
             state: CueQueueState::Playing,
             playback_rate: 1.0,
             capacity: Some(capacity),
             pending_choices: Vec::new(),
             cue_sheet_entity: None,
-            barrier_state: None,
+            filtered_ready: Vec::new(),
+            barrier_entered_time: None,
+            barrier_timeout: None,
         }
     }
 
     // ── 追加 ──
 
-    /// TimedCue を降順ソート維持で挿入（O(log n) binary search + O(n) shift）
-    pub fn push_sorted(&mut self, cue: TimedCue) -> Result<(), CueSystemError> {
-        if let Some(cap) = self.capacity {
-            if self.queue.len() >= cap {
-                return Err(CueSystemError::CapacityExceeded { capacity: cap });
-            }
-        }
-
-        // 降順ソート: start_time が大きいほど先頭（index 0）、小さいほど末尾
-        let pos = self
-            .queue
-            .binary_search_by(|existing| {
-                // 降順: existing > cue なら Less（先に並ぶべき）
-                existing
-                    .start_time
-                    .partial_cmp(&cue.start_time)
-                    .unwrap_or(std::cmp::Ordering::Equal)
-                    .reverse()
-            })
-            .unwrap_or_else(|pos| pos);
-
-        self.queue.insert(pos, cue);
-
-        // Completed 状態だった場合は Playing に戻す
-        if self.state == CueQueueState::Completed {
-            self.state = CueQueueState::Playing;
-        }
-
-        Ok(())
-    }
-
-    /// 複数の TimedCue を一括追加（内部で再ソート）
-    pub fn extend_sorted(
-        &mut self,
-        cues: impl IntoIterator<Item = TimedCue>,
-    ) -> Result<(), CueSystemError> {
-        let cues: Vec<TimedCue> = cues.into_iter().collect();
-
-        if let Some(cap) = self.capacity {
-            if self.queue.len() + cues.len() > cap {
-                return Err(CueSystemError::CapacityExceeded { capacity: cap });
-            }
-        }
-
-        self.queue.extend(cues);
-        // 降順ソート（安定）
-        self.queue.sort_by(|a, b| {
-            b.start_time
-                .partial_cmp(&a.start_time)
-                .unwrap_or(std::cmp::Ordering::Equal)
-        });
-
-        // Completed 状態だった場合は Playing に戻す
-        if self.state == CueQueueState::Completed {
-            self.state = CueQueueState::Playing;
-        }
-
-        Ok(())
-    }
-
-    // ── 消費 ──
-
-    /// current_time に到達した全コマンドを返却（O(1) per pop）
+    /// 新しい CueSheet 開始時にスケジュールを再初期化する。
     ///
-    /// - バリア中・一時停止中・完了済み・エラー時は空 Vec を返す
-    /// - Choice コマンドは pending_choices に蓄積（返却しない）
-    /// - WaitForChoice 到達時: pending_choices > 0 → ブロック、== 0 → Error
-    /// - WaitForClick 到達時: ブロック
-    pub fn pop_ready(&mut self, current_time: f64) -> Vec<CueCommand> {
-        // バリア中・Paused・Completed・Error は消費しない
-        if !matches!(self.state, CueQueueState::Playing) {
-            return Vec::new();
+    /// 既存エントリを全破棄し、新たなスケジュールを受け入れ可能にする。
+    /// Entry のオフセットは絶対時刻で挿入されるため、TimedSchedule の
+    /// start_time は常に 0.0（offset == current_time）を維持する。
+    pub fn reset_schedule(&mut self, _start_time: f64) {
+        self.schedule = TimedSchedule::new(0.0);
+        self.pending_choices.clear();
+        self.filtered_ready.clear();
+        self.state = CueQueueState::Playing;
+        self.barrier_entered_time = None;
+        self.barrier_timeout = None;
+    }
+
+    /// ECS Entity を u64 に変換して EntityRef コマンドとして挿入するヘルパー。
+    ///
+    /// # push 境界変換
+    /// `Entity::to_bits()` で u64 に変換し、`Entry::Payload` として挿入する。
+    /// 消費時は [`resolve_entity_ref`] で `Entity::from_bits()` 復元を行う。
+    pub fn push_entity_command(
+        &mut self,
+        absolute_time: f64,
+        entity: Entity,
+    ) -> Result<(), CueSystemError> {
+        let bits = entity.to_bits();
+        self.insert(Entry::Payload(absolute_time, CueCommand::EntityRef(bits)))
+    }
+
+    /// EntityRef(u64) を ECS Entity に復元する（pop 境界変換）。
+    ///
+    /// `Entity::from_bits()` で復元する。無効な Entity が返る可能性があるため、
+    /// 消費者は `Query` で存在確認を行うこと。
+    ///
+    /// # Returns
+    /// - `Some(Entity)` — 復元成功
+    /// - `None` — 引数が EntityRef でない
+    pub fn resolve_entity_ref(cmd: &CueCommand) -> Option<Entity> {
+        match cmd {
+            CueCommand::EntityRef(bits) => Some(Entity::from_bits(*bits)),
+            _ => None,
+        }
+    }
+
+    /// Entry<CueCommand> を挿入する。
+    pub fn insert(&mut self, entry: Entry<CueCommand>) -> Result<(), CueSystemError> {
+        if let Some(cap) = self.capacity {
+            if self.schedule.remaining() >= cap {
+                return Err(CueSystemError::CapacityExceeded { capacity: cap });
+            }
         }
 
-        let mut result = Vec::new();
+        self.schedule.insert(entry);
 
-        while let Some(last) = self.queue.last() {
-            if last.start_time > current_time {
-                break;
+        // Completed 状態だった場合は Playing に戻す
+        if self.state == CueQueueState::Completed {
+            self.state = CueQueueState::Playing;
+        }
+
+        Ok(())
+    }
+
+    /// 複数の Entry<CueCommand> を一括挿入する。
+    pub fn extend_entries(
+        &mut self,
+        entries: impl IntoIterator<Item = Entry<CueCommand>>,
+    ) -> Result<(), CueSystemError> {
+        let entries: Vec<Entry<CueCommand>> = entries.into_iter().collect();
+
+        if let Some(cap) = self.capacity {
+            if self.schedule.remaining() + entries.len() > cap {
+                return Err(CueSystemError::CapacityExceeded { capacity: cap });
             }
+        }
 
-            let timed_cue = self.queue.pop().unwrap();
-            let cmd = timed_cue.command;
+        self.schedule.extend(entries);
 
-            match &cmd {
+        // Completed 状態だった場合は Playing に戻す
+        if self.state == CueQueueState::Completed {
+            self.state = CueQueueState::Playing;
+        }
+
+        Ok(())
+    }
+
+    // ── 2 フェーズ API ──
+
+    /// Phase 1: 時刻を進めてコマンドを収集する。
+    ///
+    /// TimedSchedule に委譲し、バリア状態と Choice 蓄積を処理する。
+    /// バリア中・一時停止中・完了済み・エラー時は何もしない。
+    pub fn tick(&mut self, current_time: f64) {
+        // バリア中・Paused・Completed・Error は進行しない
+        if !matches!(self.state, CueQueueState::Playing) {
+            self.filtered_ready.clear();
+            return;
+        }
+
+        self.schedule.tick(current_time);
+
+        // ready() から Choice を分離
+        self.filtered_ready.clear();
+        for cmd in self.schedule.ready() {
+            match cmd {
                 CueCommand::Choice { id, text } => {
-                    tracing::trace!(id = %id, text = %text, "[pop_ready] Choice accumulated");
+                    tracing::trace!(id = %id, text = %text, "[tick] Choice accumulated");
                     self.pending_choices.push(PendingChoice {
                         id: id.clone(),
                         text: text.clone(),
                     });
-                    // Choice は pending_choices に蓄積し返却しない
-                    continue;
                 }
-                CueCommand::WaitForChoice { timeout } => {
-                    if self.pending_choices.is_empty() {
-                        tracing::error!(
-                            "[pop_ready] WaitForChoice with no preceding Choice commands"
-                        );
-                        self.state = CueQueueState::Error(CueSystemError::EmptyChoiceBarrier {
-                            actor: "unknown".to_string(),
-                        });
-                        return result;
-                    }
-                    tracing::trace!(
-                        choices = self.pending_choices.len(),
-                        "[pop_ready] WaitForChoice barrier entered"
-                    );
-                    self.state = CueQueueState::WaitingForChoice;
-                    self.barrier_state = Some(BarrierState {
-                        first_valid: None,
-                        kind: BarrierKind::Choice,
-                        start_time: current_time,
-                        timeout: *timeout,
-                    });
-                    return result;
-                }
-                CueCommand::WaitForClick { timeout } => {
-                    tracing::trace!("[pop_ready] WaitForClick barrier entered");
-                    self.state = CueQueueState::WaitingForClick;
-                    self.barrier_state = Some(BarrierState {
-                        first_valid: None,
-                        kind: BarrierKind::Click,
-                        start_time: current_time,
-                        timeout: *timeout,
-                    });
-                    return result;
-                }
-                _ => {
-                    tracing::trace!(command = ?cmd, "[pop_ready] Command consumed");
-                    result.push(cmd);
+                other => {
+                    self.filtered_ready.push(other.clone());
                 }
             }
         }
 
-        // 全コマンド消費完了チェック
-        if self.queue.is_empty() && self.state == CueQueueState::Playing {
-            self.state = CueQueueState::Completed;
+        // バリア到達チェック
+        if let Some(barrier) = self.schedule.current_barrier() {
+            match barrier {
+                BarrierKind::WaitForChoice { timeout } => {
+                    if self.pending_choices.is_empty() {
+                        tracing::error!(
+                            "[tick] WaitForChoice with no preceding Choice commands"
+                        );
+                        self.state = CueQueueState::Error(CueSystemError::EmptyChoiceBarrier {
+                            actor: "unknown".to_string(),
+                        });
+                        return;
+                    }
+                    tracing::trace!(
+                        choices = self.pending_choices.len(),
+                        "[tick] WaitForChoice barrier entered"
+                    );
+                    self.state = CueQueueState::WaitingForChoice;
+                    self.barrier_entered_time = Some(current_time);
+                    self.barrier_timeout = *timeout;
+                }
+                BarrierKind::WaitForInput { timeout } => {
+                    tracing::trace!("[tick] WaitForInput barrier entered");
+                    self.state = CueQueueState::WaitingForClick;
+                    self.barrier_entered_time = Some(current_time);
+                    self.barrier_timeout = *timeout;
+                }
+                BarrierKind::Timeout { .. } => {
+                    // Timeout はTimedSchedule が自動管理する。
+                    // current_barrier() がSome(Timeout)を返す場合はまだ
+                    // duration が未経過。次の tick で自動解除される。
+                    tracing::trace!("[tick] Timeout barrier (auto-managed by TimedSchedule)");
+                    // Timeout 中は Playing を維持（TimedSchedule 側でブロック）
+                }
+            }
+            return;
         }
 
-        result
+        // 全コマンド消費完了チェック
+        if self.schedule.is_completed() && self.state == CueQueueState::Playing {
+            self.state = CueQueueState::Completed;
+        }
     }
 
-    /// 先頭（次に消費される）要素の参照（末尾 = 最小 start_time）
-    pub fn peek(&self) -> Option<&TimedCue> {
-        self.queue.last()
+    /// Phase 2: 直前の tick() で収集された消費可能コマンドのスライス。
+    ///
+    /// Choice コマンドは除外済み（`pending_choices()` で取得）。
+    /// 次の tick() まで何度でも参照可能。
+    pub fn ready(&self) -> &[CueCommand] {
+        &self.filtered_ready
+    }
+
+    /// 後方互換: current_time に到達した全コマンドを返却。
+    ///
+    /// 内部で `tick()` + `ready().to_vec()` を実行する。
+    /// 新規コードは `tick()` + `ready()` の 2 フェーズ API を使用すること。
+    pub fn pop_ready(&mut self, current_time: f64) -> Vec<CueCommand> {
+        self.tick(current_time);
+        self.filtered_ready.clone()
     }
 
     // ── バリア制御 ──
@@ -288,12 +299,14 @@ impl CueQueue {
     /// クリック応答（WaitForClick 解除）
     pub fn resolve_click(&mut self) {
         if self.state == CueQueueState::WaitingForClick {
+            self.schedule.notify_barrier_resolved(None);
             self.state = CueQueueState::Playing;
-            self.barrier_state = None;
+            self.barrier_entered_time = None;
+            self.barrier_timeout = None;
             tracing::trace!("[resolve_click] WaitForClick barrier resolved");
 
             // 解除後に全消費済みなら Completed
-            if self.queue.is_empty() {
+            if self.schedule.is_completed() {
                 self.state = CueQueueState::Completed;
             }
         }
@@ -309,12 +322,14 @@ impl CueQueue {
 
         if found {
             self.pending_choices.clear();
+            self.schedule.notify_barrier_resolved(Some(choice_id.to_string()));
             self.state = CueQueueState::Playing;
-            self.barrier_state = None;
+            self.barrier_entered_time = None;
+            self.barrier_timeout = None;
             tracing::trace!(choice_id = %choice_id, "[resolve_choice] WaitForChoice barrier resolved");
 
             // 解除後に全消費済みなら Completed
-            if self.queue.is_empty() {
+            if self.schedule.is_completed() {
                 self.state = CueQueueState::Completed;
             }
 
@@ -324,13 +339,14 @@ impl CueQueue {
         }
     }
 
-    /// タイムアウト検査。タイムアウト時は true を返す。
+    /// タイムアウト検査。バリア進入時刻と timeout 値から判定する。
     pub fn check_timeout(&self, current_time: f64) -> bool {
-        if let Some(ref barrier) = self.barrier_state {
-            if let Some(timeout) = barrier.timeout {
-                if current_time - barrier.start_time >= timeout {
-                    return true;
-                }
+        if matches!(
+            self.state,
+            CueQueueState::WaitingForClick | CueQueueState::WaitingForChoice
+        ) {
+            if let (Some(entered), Some(timeout)) = (self.barrier_entered_time, self.barrier_timeout) {
+                return current_time - entered >= timeout;
             }
         }
         false
@@ -343,20 +359,22 @@ impl CueQueue {
             CueQueueState::WaitingForClick | CueQueueState::WaitingForChoice
         ) {
             self.pending_choices.clear();
+            self.schedule.notify_barrier_resolved(None);
             self.state = CueQueueState::Playing;
-            self.barrier_state = None;
+            self.barrier_entered_time = None;
+            self.barrier_timeout = None;
             tracing::trace!("[skip_barrier] Barrier force-skipped");
 
             // スキップ後に全消費済みなら Completed
-            if self.queue.is_empty() {
+            if self.schedule.is_completed() {
                 self.state = CueQueueState::Completed;
             }
         }
     }
 
-    /// 現在保留中のバリア種別
+    /// 現在保留中のバリア種別（dola BarrierKind）
     pub fn pending_barrier_kind(&self) -> Option<&BarrierKind> {
-        self.barrier_state.as_ref().map(|b| &b.kind)
+        self.schedule.current_barrier()
     }
 
     // ── 制御 ──
@@ -377,10 +395,12 @@ impl CueQueue {
 
     /// キュー全消去
     pub fn clear(&mut self) {
-        self.queue.clear();
+        self.schedule.clear();
         self.pending_choices.clear();
-        self.barrier_state = None;
+        self.filtered_ready.clear();
         self.state = CueQueueState::Playing;
+        self.barrier_entered_time = None;
+        self.barrier_timeout = None;
     }
 
     /// 供給元 Tracker エンティティを設定
@@ -400,14 +420,14 @@ impl CueQueue {
         &self.state
     }
 
-    /// キューが空か
+    /// キューが空か（スケジュール内残りエントリ数）
     pub fn is_empty(&self) -> bool {
-        self.queue.is_empty()
+        self.schedule.remaining() == 0
     }
 
-    /// キュー内のコマンド数
+    /// キュー内の残りエントリ数
     pub fn len(&self) -> usize {
-        self.queue.len()
+        self.schedule.remaining()
     }
 
     /// 先積みされた Choice データ
@@ -423,6 +443,11 @@ impl CueQueue {
     /// 再生速度倍率を設定
     pub fn set_playback_rate(&mut self, rate: f64) {
         self.playback_rate = rate;
+    }
+
+    /// 内部 TimedSchedule への読み取り参照（テスト・デバッグ用）
+    pub fn schedule(&self) -> &TimedSchedule<CueCommand> {
+        &self.schedule
     }
 }
 

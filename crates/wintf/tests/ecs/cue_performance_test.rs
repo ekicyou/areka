@@ -1,35 +1,32 @@
 //! パフォーマンステスト: キュー操作ベンチマーク
 //!
-//! Task 4.11 — push_sorted / pop_ready の各操作を 100 件・1000 件で計測し、
+//! Task 4.11 — insert / pop_ready の各操作を 100 件・1000 件で計測し、
 //! NFR-1 の「1000 コマンドを 1ms 以内に消費可能」要件を検証する。
 //!
 //! NOTE: このテストは正確なベンチマーク環境（criterion 等）ではなく、
-//! `std::time::Instant` による簡易計測である。CI や低スペック環境では閾値を緩めてある。
+//! std::time::Instant による簡易計測である。CI や低スペック環境では閾値を緩めてある。
 
 use std::time::Instant;
 use wintf::ecs::cue::*;
 
-/// テスト用 TimedCue を生成するヘルパー。
-fn make_timed_cue(start_time: f64) -> TimedCue {
-    TimedCue {
-        start_time,
-        command: CueCommand::Text("bench".into()),
-    }
+/// テスト用 Entry を生成するヘルパー。
+fn make_entry(start_time: f64) -> Entry<CueCommand> {
+    Entry::Payload(start_time, CueCommand::Text("bench".into()))
 }
 
 // ---------------------------------------------------------------
-// push_sorted ベンチマーク
+// insert ベンチマーク
 // ---------------------------------------------------------------
 
-/// push_sorted 100 件挿入の計測。
+/// insert 100 件挿入の計測。
 #[test]
-fn bench_push_sorted_100() {
+fn bench_insert_100() {
     let mut queue = CueQueue::with_capacity(10_000);
-    let cues: Vec<TimedCue> = (0..100).map(|i| make_timed_cue(i as f64 * 0.01)).collect();
+    let entries: Vec<Entry<CueCommand>> = (0..100).map(|i| make_entry(i as f64 * 0.01)).collect();
 
     let start = Instant::now();
-    for cue in cues {
-        queue.push_sorted(cue).unwrap();
+    for entry in entries {
+        queue.insert(entry).unwrap();
     }
     let elapsed = start.elapsed();
 
@@ -37,20 +34,21 @@ fn bench_push_sorted_100() {
     // 100 件挿入は 10ms 以内であるべき（余裕を持たせた閾値）
     assert!(
         elapsed.as_millis() < 10,
-        "push_sorted 100 items took {elapsed:?} (expected < 10ms)"
+        "insert 100 items took {elapsed:?} (expected < 10ms)"
     );
-    eprintln!("[bench] push_sorted 100 items: {elapsed:?}");
+    eprintln!("[bench] insert 100 items: {elapsed:?}");
 }
 
-/// push_sorted 1000 件挿入の計測。
+/// insert 1000 件挿入の計測。
 #[test]
-fn bench_push_sorted_1000() {
+fn bench_insert_1000() {
     let mut queue = CueQueue::with_capacity(10_000);
-    let cues: Vec<TimedCue> = (0..1000).map(|i| make_timed_cue(i as f64 * 0.001)).collect();
+    let entries: Vec<Entry<CueCommand>> =
+        (0..1000).map(|i| make_entry(i as f64 * 0.001)).collect();
 
     let start = Instant::now();
-    for cue in cues {
-        queue.push_sorted(cue).unwrap();
+    for entry in entries {
+        queue.insert(entry).unwrap();
     }
     let elapsed = start.elapsed();
 
@@ -58,9 +56,9 @@ fn bench_push_sorted_1000() {
     // 1000 件挿入は 50ms 以内であるべき
     assert!(
         elapsed.as_millis() < 50,
-        "push_sorted 1000 items took {elapsed:?} (expected < 50ms)"
+        "insert 1000 items took {elapsed:?} (expected < 50ms)"
     );
-    eprintln!("[bench] push_sorted 1000 items: {elapsed:?}");
+    eprintln!("[bench] insert 1000 items: {elapsed:?}");
 }
 
 // ---------------------------------------------------------------
@@ -72,9 +70,7 @@ fn bench_push_sorted_1000() {
 fn bench_pop_ready_100() {
     let mut queue = CueQueue::with_capacity(10_000);
     for i in 0..100 {
-        queue
-            .push_sorted(make_timed_cue(i as f64 * 0.01))
-            .unwrap();
+        queue.insert(make_entry(i as f64 * 0.01)).unwrap();
     }
 
     // current_time を十分先に設定して全コマンドを ready にする
@@ -97,9 +93,7 @@ fn bench_pop_ready_100() {
 fn bench_pop_ready_1000() {
     let mut queue = CueQueue::with_capacity(10_000);
     for i in 0..1000 {
-        queue
-            .push_sorted(make_timed_cue(i as f64 * 0.001))
-            .unwrap();
+        queue.insert(make_entry(i as f64 * 0.001)).unwrap();
     }
 
     let start = Instant::now();

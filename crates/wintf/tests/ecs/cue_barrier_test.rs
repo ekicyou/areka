@@ -2,7 +2,7 @@
 //!
 //! - Choice 先積み + WaitForChoice ブロック遷移
 //! - WaitForChoice 空打ちで EmptyChoiceBarrier エラー
-//! - WaitForClick ブロック + resolve_click() 解除
+//! - WaitForInput ブロック + resolve_click() 解除
 //! - check_timeout() のタイムアウト判定
 //! - skip_barrier() の強制スキップ
 
@@ -14,25 +14,22 @@ use wintf::ecs::cue::*;
 fn choice_accumulation_and_wait_for_choice_barrier() {
     let mut queue = CueQueue::new();
     queue
-        .extend_sorted(vec![
-            TimedCue {
-                start_time: 1.0,
-                command: CueCommand::Choice {
+        .extend_entries(vec![
+            Entry::Payload(
+                1.0,
+                CueCommand::Choice {
                     id: "a".into(),
                     text: "Option A".into(),
                 },
-            },
-            TimedCue {
-                start_time: 1.0,
-                command: CueCommand::Choice {
+            ),
+            Entry::Payload(
+                1.0,
+                CueCommand::Choice {
                     id: "b".into(),
                     text: "Option B".into(),
                 },
-            },
-            TimedCue {
-                start_time: 2.0,
-                command: CueCommand::WaitForChoice { timeout: None },
-            },
+            ),
+            Entry::Barrier(2.0, BarrierKind::WaitForChoice { timeout: None }),
         ])
         .unwrap();
 
@@ -57,10 +54,7 @@ fn choice_accumulation_and_wait_for_choice_barrier() {
 fn wait_for_choice_without_preceding_choices_is_error() {
     let mut queue = CueQueue::new();
     queue
-        .push_sorted(TimedCue {
-            start_time: 1.0,
-            command: CueCommand::WaitForChoice { timeout: None },
-        })
+        .insert(Entry::Barrier(1.0, BarrierKind::WaitForChoice { timeout: None }))
         .unwrap();
 
     let pops = queue.pop_ready(2.0);
@@ -75,18 +69,15 @@ fn wait_for_choice_without_preceding_choices_is_error() {
 fn resolve_choice_with_wrong_id_returns_none() {
     let mut queue = CueQueue::new();
     queue
-        .extend_sorted(vec![
-            TimedCue {
-                start_time: 1.0,
-                command: CueCommand::Choice {
+        .extend_entries(vec![
+            Entry::Payload(
+                1.0,
+                CueCommand::Choice {
                     id: "a".into(),
                     text: "A".into(),
                 },
-            },
-            TimedCue {
-                start_time: 2.0,
-                command: CueCommand::WaitForChoice { timeout: None },
-            },
+            ),
+            Entry::Barrier(2.0, BarrierKind::WaitForChoice { timeout: None }),
         ])
         .unwrap();
 
@@ -100,25 +91,16 @@ fn resolve_choice_with_wrong_id_returns_none() {
     assert_eq!(*queue.state(), CueQueueState::WaitingForChoice);
 }
 
-// ── WaitForClick ──
+// ── WaitForInput (旧 WaitForClick) ──
 
 #[test]
 fn wait_for_click_barrier_and_resolve() {
     let mut queue = CueQueue::new();
     queue
-        .extend_sorted(vec![
-            TimedCue {
-                start_time: 1.0,
-                command: CueCommand::Text("hello".into()),
-            },
-            TimedCue {
-                start_time: 2.0,
-                command: CueCommand::WaitForClick { timeout: None },
-            },
-            TimedCue {
-                start_time: 3.0,
-                command: CueCommand::Text("world".into()),
-            },
+        .extend_entries(vec![
+            Entry::Payload(1.0, CueCommand::Text("hello".into())),
+            Entry::Barrier(2.0, BarrierKind::WaitForInput { timeout: None }),
+            Entry::Payload(3.0, CueCommand::Text("world".into())),
         ])
         .unwrap();
 
@@ -126,7 +108,7 @@ fn wait_for_click_barrier_and_resolve() {
     let pops = queue.pop_ready(1.5);
     assert_eq!(pops.len(), 1);
 
-    // t=2.5: WaitForClick でブロック
+    // t=2.5: WaitForInput でブロック
     let pops = queue.pop_ready(2.5);
     assert!(pops.is_empty());
     assert_eq!(*queue.state(), CueQueueState::WaitingForClick);
@@ -150,17 +132,12 @@ fn pending_barrier_kind() {
     assert!(queue.pending_barrier_kind().is_none());
 
     queue
-        .push_sorted(TimedCue {
-            start_time: 1.0,
-            command: CueCommand::WaitForClick { timeout: None },
-        })
+        .insert(Entry::Barrier(1.0, BarrierKind::WaitForInput { timeout: None }))
         .unwrap();
 
     queue.pop_ready(2.0);
-    assert_eq!(
-        queue.pending_barrier_kind(),
-        Some(&BarrierKind::Click)
-    );
+    let barrier = queue.pending_barrier_kind().expect("should have barrier");
+    assert!(matches!(barrier, BarrierKind::WaitForInput { .. }));
 }
 
 // ── タイムアウト ──
@@ -169,12 +146,12 @@ fn pending_barrier_kind() {
 fn check_timeout_returns_true_when_expired() {
     let mut queue = CueQueue::new();
     queue
-        .push_sorted(TimedCue {
-            start_time: 1.0,
-            command: CueCommand::WaitForClick {
+        .insert(Entry::Barrier(
+            1.0,
+            BarrierKind::WaitForInput {
                 timeout: Some(5.0),
             },
-        })
+        ))
         .unwrap();
 
     queue.pop_ready(1.0);
@@ -192,10 +169,7 @@ fn check_timeout_returns_true_when_expired() {
 fn no_timeout_when_not_set() {
     let mut queue = CueQueue::new();
     queue
-        .push_sorted(TimedCue {
-            start_time: 1.0,
-            command: CueCommand::WaitForClick { timeout: None },
-        })
+        .insert(Entry::Barrier(1.0, BarrierKind::WaitForInput { timeout: None }))
         .unwrap();
 
     queue.pop_ready(1.0);
@@ -208,22 +182,16 @@ fn no_timeout_when_not_set() {
 fn skip_barrier_clears_all_barrier_state() {
     let mut queue = CueQueue::new();
     queue
-        .extend_sorted(vec![
-            TimedCue {
-                start_time: 1.0,
-                command: CueCommand::Choice {
+        .extend_entries(vec![
+            Entry::Payload(
+                1.0,
+                CueCommand::Choice {
                     id: "x".into(),
                     text: "X".into(),
                 },
-            },
-            TimedCue {
-                start_time: 2.0,
-                command: CueCommand::WaitForChoice { timeout: None },
-            },
-            TimedCue {
-                start_time: 3.0,
-                command: CueCommand::Text("after".into()),
-            },
+            ),
+            Entry::Barrier(2.0, BarrierKind::WaitForChoice { timeout: None }),
+            Entry::Payload(3.0, CueCommand::Text("after".into())),
         ])
         .unwrap();
 

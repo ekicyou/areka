@@ -7,8 +7,18 @@ use bevy_ecs::component::Component;
 use bevy_ecs::entity::Entity;
 
 use super::error::{CueSheetResult, CueSystemError};
-use super::queue::{BarrierKind, BarrierResponse, CueQueueState};
+use super::queue::{BarrierResponse, CueQueueState};
 use super::{ActorKey, CueTarget};
+
+/// Tracker が検知したバリアの種類（dola BarrierKind の簡約版）。
+///
+/// CueQueue の CueQueueState から検知するため、
+/// タイムアウト値等の詳細は不要。
+#[derive(Clone, Debug, PartialEq)]
+enum TrackedBarrierKind {
+    Click,
+    Choice,
+}
 
 /// Tracker が systems に返すアクション指示
 #[derive(Debug)]
@@ -45,7 +55,7 @@ pub struct CueSheetTracker {
     /// バリア状態: 最初に有効応答を得た BarrierResponse
     barrier_first_valid: Option<BarrierResponse>,
     /// バリア種別（バリア検知中のみ Some）
-    barrier_kind: Option<BarrierKind>,
+    barrier_kind: Option<TrackedBarrierKind>,
 }
 
 impl CueSheetTracker {
@@ -117,11 +127,11 @@ impl CueSheetTracker {
             for snap in snapshots {
                 match &snap.state {
                     CueQueueState::WaitingForClick => {
-                        self.barrier_kind = Some(BarrierKind::Click);
+                        self.barrier_kind = Some(TrackedBarrierKind::Click);
                         break;
                     }
                     CueQueueState::WaitingForChoice => {
-                        self.barrier_kind = Some(BarrierKind::Choice);
+                        self.barrier_kind = Some(TrackedBarrierKind::Choice);
                         break;
                     }
                     _ => {}
@@ -167,10 +177,10 @@ impl CueSheetTracker {
         let kind = self.barrier_kind.take();
 
         match (response, kind) {
-            (Some(BarrierResponse::Click), Some(BarrierKind::Click)) => {
+            (Some(BarrierResponse::Click), Some(TrackedBarrierKind::Click)) => {
                 TrackerAction::ResolveAllClicks
             }
-            (Some(BarrierResponse::Choice { id }), Some(BarrierKind::Choice)) => {
+            (Some(BarrierResponse::Choice { id }), Some(TrackedBarrierKind::Choice)) => {
                 self.result = Some(CueSheetResult::Choice { id });
                 TrackerAction::SkipAllBarriers
             }
@@ -178,10 +188,10 @@ impl CueSheetTracker {
                 self.result = Some(CueSheetResult::Timeout);
                 TrackerAction::SkipAllBarriers
             }
-            (Some(BarrierResponse::Skipped), Some(BarrierKind::Click)) => {
+            (Some(BarrierResponse::Skipped), Some(TrackedBarrierKind::Click)) => {
                 TrackerAction::ResolveAllClicks
             }
-            (Some(BarrierResponse::Skipped), Some(BarrierKind::Choice)) => {
+            (Some(BarrierResponse::Skipped), Some(TrackedBarrierKind::Choice)) => {
                 self.result = Some(CueSheetResult::Error(CueSystemError::EmptyChoiceBarrier {
                     actor: "all".to_string(),
                 }));

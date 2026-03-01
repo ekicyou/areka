@@ -6,6 +6,7 @@
 
 mod builder;
 mod compile;
+pub mod cue;
 mod document;
 mod easing;
 mod error;
