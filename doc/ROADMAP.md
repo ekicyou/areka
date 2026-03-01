@@ -19,7 +19,7 @@
 | Phase D: アプリ統合 | ⚪ 未着手 | ░░░░░░░░░░ 0% |
 | Phase E: アルファ出荷 | ⚪ 未着手 | ░░░░░░░░░░ 0% |
 
-**完了済み仕様**: 65件 / **アクティブ仕様(P0)**: 8件 / **バックログ(P1-P3)**: 18件
+**完了済み仕様**: 66件 / **アクティブ仕様(P0)**: 7件 / **バックログ(P1-P3)**: 18件
 
 ---
 
@@ -39,6 +39,7 @@
 | ├ ヒットテスト名前付き領域 | `completed/event-hit-test-named-regions` | ✅ 完了 | |
 | ├ マルチウィンドウイベント | `completed/multiwindow-event-validation` | ✅ 完了 | |
 | アニメーションシステム | `wintf-P0-animation-system` | ⚪ 未着手 | dola → wintf 統合 |
+| ├ dola 責務境界 | `completed/wintf-P0-dola-boundary` | ✅ 完了 | cue-system unblock |
 | タイプライター | `completed/wintf-P0-typewriter` | ✅ 完了 | |
 
 ---
