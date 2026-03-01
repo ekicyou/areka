@@ -1,30 +1,41 @@
 # Requirements Document
 
-| 項目               | 内容                                                       |
-| ------------------ | ---------------------------------------------------------- |
-| **Document Title** | dola ランタイム責務境界定義（dola-boundary）要件定義書      |
-| **Version**        | 3.0                                                        |
-| **Date**           | 2026-02-28                                                 |
-| **Priority**       | P0（wintf-P0-cue-system の unblock 条件）                  |
-| **Status**         | 📋 Generated（v3.0: CueCommand 全バリアント dola 移管方針を反映）|
+| 項目               | 内容                                                  |
+| ------------------ | ----------------------------------------------------- |
+| **Document Title** | dola ランタイム責務境界定義（dola-boundary）要件定義書 |
+| **Version**        | 4.2                                                   |
+| **Date**           | 2026-03-01                                            |
+| **Priority**       | P0（wintf-P0-cue-system の unblock 条件）             |
+| **Status**         | 📋 Generated（v4.2: 命名確定・内部整合リファイン）    |
 
 ---
 
 ## Introduction
 
-本仕様書は、dola ランタイム（`dola::runtime::DolaRuntime`）を wintf ECS アーキテクチャ内でどのように配置・所有・利用すべきかの**責務境界**を定義する。
+本仕様書は、dola ランタイム（`dola::runtime::DolaRuntime`）と wintf ECS アーキテクチャの**責務境界**を定義する。スコープは「DolaRuntime の誤配置修正」にとどまらず、**dola と wintf の責務境界の根本定義**を包含する。
 
-### 経緯
+### dola クレートの位置づけ
 
-wintf-P0-cue-system 実装時、設計指示「dola の思想を共有する」を「dola ランタイムを ECS Resource として cue モジュール内に配置する」と解釈し、以下の3ファイルが作成された。
+`dola` クレートは**アニメーション実現のための汎用道具集**（Declarative Orchestration for Live Animation）であり、bevy_ecs に依存しない範疇で 2 つのエンジンを提供する:
+
+| エンジン | 記述言語文脈での呼称 | 中心型 | 性質 |
+|---------|-------------------|--------|------|
+| 連続値アニメ宣言エンジン | **dola**（言語） | `DolaDocument` / `DolaRuntime` | 変数補間・冪等 |
+| 離散コマンド配信エンジン | **キューシート** | `CueSheet` / `TimedSchedule<T>` | コマンド列・消費型 |
+
+設計議論では「dola 側」「キューシート側」と呼べば一意に区別できる。wintf はこの 2 エンジンを ECS Integration Layer（Component / System）として包む。
+
+### 背景
+
+wintf-P0-cue-system 実装時、dola ランタイムが ECS Resource として cue モジュール内に誤配置された。
 
 | ファイル | 内容 | 問題 |
 |----------|------|------|
 | `ecs/cue/runtime.rs` | `DolaRuntime` を `#[derive(Resource)]` でラップ | cue パイプラインは DolaRuntime を一切消費しない |
 | `ecs/cue/systems.rs` | `update_dola_runtime` システム | 戻り値 `UpdateResult` を `_result` として破棄 |
-| `ecs/cue/mod.rs` | `pub use runtime::DolaRuntime` | cue モジュールの公開 API として露出 |
+| `ecs/cue/mod.rs` | `pub use runtime::DolaRuntime` | cue モジュールの公開 API として不適切に露出 |
 
-**根本原因**: dola ランタイムの責務境界が未定義のまま実装が先行した。
+根本原因は、dola と wintf の責務境界が未定義のまま実装が先行したことにある。
 
 ### dola ランタイムの本質
 
@@ -35,55 +46,55 @@ wintf-P0-cue-system 実装時、設計指示「dola の思想を共有する」�
 - **TimelineManager** — 変数ごとのタイムテーブル・補間評価
 - **SubscriptionManager** — 購読変数の差分検出
 
-`update(current_time)` を呼ぶと、タイムラインを評価し `UpdateResult { changes, triggered }` を返す。これは ECS の Resource でも Component でもなく、アニメーション変数の補間・再生・購読を行う**内部実装の道具**である。
+外部から時刻を注入される純粋な計算エンジンであり、自ら時刻取得（`clock::now()`）を行わない。複数インスタンスの並行使用が可能（グローバル状態なし）。
 
 ### 設計上の制約
 
-- `DolaRuntime` は `Rc<DynamicValue>` を内部に持つため `Send` / `Sync` ではない（wintf は単一 UI スレッドで動作するため `unsafe impl` で回避可能だが、設計として妥当か要検討）
-- 複数インスタンスの並行使用が可能（グローバル状態なし）
-- `dola::runtime::clock::now()` は `QueryPerformanceCounter` ベースで、wintf の `FrameTime(f64)` と同じ時刻基準を共有
+- DolaRuntime は専用 ECS Component（`DolaAnimator`）としてエンティティごとに所有する
+- `DolaAnimator` は内部に `Rc<DynamicValue>`（インターニング用 `ObjectInternPool`）を含むため `unsafe impl Send + Sync` を行う。安全性は `tick_dola_animators` システムの `Query<&mut DolaAnimator>` 排他アクセスにより保証される
+- DolaRuntime の API を `tick(&mut self, current_time: f64)` と `last_result(&self) -> &UpdateResult` に分離する
 
-### 方針決定（2026-02-28）
+### 責務分割方針
 
-gap-analysis および議論を経て、以下の方針が承認された：
+dola は bevy_ecs に依存しない範疇で、可能な限りアニメーションエンジンとしての責務を担う。離散コマンドスケジューリング（時刻ベース実行キュー + バリア状態機械 + コアコマンド enum）および演出ドメイン型を dola に移管する。pasta DSL を利用した高レベル演出表現も dola のスコープとする。
 
-> **dola は `bevy_ecs` に依存しない範疇で、可能な限りアニメーションエンジンとしての責務を移譲させる。**
-> 具体的には、**離散コマンドスケジューリング**（時刻ベース実行キュー + バリア状態機械 + コアコマンド enum）を dola に持たせる。
-> pasta DSL を利用した高レベル演出表現（さくらスクリプトの置き換え）も dola のスコープとする。
+#### アニメーション層構造
 
-この決定により、本仕様のスコープは「DolaRuntime の誤配置修正」から「**dola と wintf の責務境界の根本定義**」へと拡張された。
+本仕様が定義する責務は 2 層に分かれる。両層とも「外部から `f64` 時刻を注入し tick で内部状態を更新する純粋な計算エンジン」という契約を共有するが、性質は異なる。
+
+| 層 | 型 | 性質 | 責務 |
+|---|---|---|---|
+| **上位層** — 配信エンジン | `TimedSchedule<T>` / `CueQueue` | 消費型・不可逆（pop は破壊的） | エンティティ間の協調演出を時刻ベースで配信する |
+| **下位層** — 変数遷移エンジン | `DolaRuntime` per entity | 参照型・冪等（同一時刻を再渡し可能） | 単一エンティティ内の変数遷移・補間を管理する |
 
 #### 移管対象（ECS 非依存 → dola）
 
 | 概念 | 現在の所在 | 移管後 |
 |------|-----------|--------|
-| `TimedSchedule<T>` — 汎用絶対時刻キュー + `pop_ready()` | wintf `CueQueue` 内に暗黙的に埋め込み | dola の新規ジェネリック型 |
-| バリア状態機械 — WaitForInput / WaitForChoice / timeout | wintf `CueQueue.barrier_state` | dola `TimedSchedule<T>` に統合 |
-| `CueScript` — 相対時刻コマンド列（= CueSheet の dola 版） | wintf `CueSheet` | dola の新規型 |
-| `compile_script` — 相対→絶対時刻変換 | wintf `dispatch` の一部 | dola の新規関数 |
-| `CueCommand` **全 11 バリアント** | wintf `command.rs` | dola の新規 enum |
-| `ActorKey(String)` — アクター識別子 | wintf `cue/mod.rs` | dola に移管 |
-| `CueTarget` (Shell \| Balloon) — 配送先スロット | wintf `cue/mod.rs` | dola に移管 |
-| `EntityKey` — ルーティングキー | wintf `command.rs` | dola に移管 |
-| `Cue` (actor + start_time + command) — 個々の演出指示 | wintf `cue/mod.rs` | dola に移管 |
+| `TimedSchedule<T>` — 汎用絶対時刻配信エンジン（`advance()` / `ready()`） | wintf `CueQueue` 内に暗黙 | dola 新規ジェネリック型 |
+| バリア状態（`Entry<T> = Payload(f64, T) \| Barrier(f64, BarrierKind)`） | wintf `CueQueue.barrier_state` + コマンド判定 | dola `TimedSchedule<T>` に型レベルで統合 |
+| `CueSheet` — 相対時刻コマンド列 | wintf `CueSheet`（**削除**・dola 型に置換） | dola 新規型 |
+| `compile_sheet` — 相対→絶対時刻変換 | wintf `dispatch` の一部 | dola 新規関数 |
+| `CueCommand` 9 バリアント（データ 6 + ルーティング 3）| wintf `command.rs` | dola 新規 enum |
+| `BarrierKind` — WaitForInput / WaitForChoice / Timeout（3 種） | wintf `CueCommand` のバリア 2 バリアント（WaitForChoice / WaitForClick）を再設計・統合 | `Entry::Barrier` として `TimedSchedule<T>` に統合 |
+| ドメイン型（`ActorKey`, `CueTarget`, `EntityKey`, `Cue`） | wintf `cue/` | dola ドメイン型 |
 
-**CueCommand 全 11 バリアント dola 移管（v3.0 決定）**:
+**CueCommand 9 バリアント**（バリアは `Entry::Barrier` として分離）:
 - データ（6）: `Text`, `Clear`, `Emote`, `Choice`, `EntityRef(u64)`, `Custom`
-- バリア（2）: `WaitForChoice`, `WaitForClick`
 - ルーティング（3）: `RouteAdd`, `RouteSwitch`, `RouteRemove`
 
-**EntityRef(Entity) → EntityRef(u64) 変換**: bevy_ecs の `Entity::to_bits() -> u64` / `Entity::from_bits(u64)` を利用し、dola 側では u64 として保持。wintf が push/pop 境界で変換する。
+`TimedSchedule<T>` 上のバリアエントリは `BarrierKind { WaitForInput { timeout }, WaitForChoice { timeout }, Timeout { duration } }` として `Entry::Barrier` に格納され、`CueCommand` enum とは独立する。旧 wintf `WaitForClick` は `WaitForInput`（クリック/キー入力）に統合され、新規に `Timeout` を追加する。
 
-ルーティングコマンドが使用する `CueTarget`・`EntityKey`・`ActorKey` はすべて文字列ベースのドメイン型であり、bevy_ecs に依存しない。
+`EntityRef(Entity)` は `Entity::to_bits() -> u64` / `Entity::from_bits(u64)` で変換し、dola 側では u64 として保持する。wintf が push/pop 境界で変換する。
 
 #### wintf に残る部分（ECS 依存）
 
 | 概念 | ECS 依存の根拠 |
 |------|---------------|
 | `CueQueue` — ECS Component ラッパー | `#[derive(Component)]`, `SparseSet` storage |
-| `u64 ↔ Entity` 変換ユーティリティ | `bevy_ecs::entity::Entity::to_bits()` / `from_bits()` |
-| `EntityRegistry` — ECS Resource | ActorKey → ECS Entity の解決 |
-| `CueSheetTracker` — ECS Component | ECS Query を通じたトラッキング |
+| `u64 ↔ Entity` 変換 | `bevy_ecs::entity::Entity` |
+| `EntityRegistry` — ECS Resource | ActorKey → ECS Entity 解決 |
+| `CueSheetTracker` — ECS Component | ECS Query トラッキング |
 | dispatch システム — ECS System | bevy_ecs スケジューラ統合 |
 
 ## Project Description (Input)
@@ -92,162 +103,89 @@ DolaRuntime の使い方が間違っている件の是正。cue-system 実装時
 
 ### 背景
 - cue-system の設計指示は「dola の思想を共有する」であり、「dola ランタイムを利用する」ではなかった
-- 「今後使うことになる」とは伝えられたが、どう使うべきか・誰が所有すべきかの線引きがされていない
-- 結果、cue モジュール内に DolaRuntime が Resource として配置され、update_dola_runtime システムが存在するが、cue パイプラインはこれを一切消費していない
+- どう使うべきか・誰が所有すべきかの線引きがないまま実装が先行した
+- 結果、cue モジュール内の DolaRuntime は cue パイプラインに一切消費されていない
 
 ### 解決すべき問題
-1. **DolaRuntime は ECS の Resource でもなく Component でもない** — 単なるタイミングエンジン（アニメーション変数の補間・再生・購読を行う内部実装の道具）
-2. **cue モジュール内に配置する理由がない** — cue は演出指令の配送基盤であり、アニメーション実行エンジンの管理場所ではない
-3. **シングルトン前提が間違っている** — 複数の DolaRuntime が同時に動作する可能性がある
-4. **dola を使うか・使わないか・拡張するか・wintf 側を拡張すべきか** — 責務境界の定義が必要
-5. **CueQueue の時刻スケジューリングロジック（ECS 非依存部分）が wintf に誤残している** — `TimedSchedule<T>`, バリア状態機械, コアコマンド enum は dola が担うべき汎用エンジン機能である
-
-### 調査・決定すべきこと
-- dola ランタイムを wintf のどのレイヤーで使うのか（Balloon? Spot? 別のコンポーネント?）
-- dola ランタイムの所有者は誰か（EcsWorld 外部? コンポーネントの内部フィールド? 利用者ごとのインスタンス?）
-- cue-system から DolaRuntime 関連コードを除去すべきか
-- update_dola_runtime システムは廃止か・移動か・再設計か
-- ~~dola に離散コマンドスケジューリングを持たせるか~~ → **承認済み（2026-02-28）**
+1. DolaRuntime の所有権と配置先が未定義
+2. cue モジュールの責務外にある DolaRuntime コードの除去
+3. dola と wintf の責務境界の根本定義
+4. CueQueue の時刻スケジューリングロジック（ECS 非依存部分）の正しい配置
 
 ---
 
 ## Requirements
 
-### Requirement 0: dola クレートへの離散コマンドスケジューリング移管
+### Requirement 1: dola 演出スケジューリング基盤
 
-**Objective:** dola 開発者として、bevy_ecs に依存しない演出スケジューリング機能（時刻キュー・バリア・コアコマンド）を dola クレートに持たせたい。dola を汎用アニメーションエンジンとして育て、wintf だけでなく pasta DSL 等からも利用可能にするため。
+**Objective:** dola 開発者として、bevy_ecs に依存しない演出スケジューリング機能（時刻キュー・バリア・コマンド・ドメイン型）を dola クレートに統合し、DolaRuntime の API を改善したい。wintf だけでなく pasta DSL 等からも利用可能な汎用エンジンとするため。
 
 #### Acceptance Criteria
 
 1. The dola crate shall `bevy_ecs` クレートへの依存を持たない
-2. The dola crate shall `TimedSchedule<T>` 型（または同等の汎用時刻スケジューリング型）を提供する — ジェネリックペイロード `T` と絶対時刻 `f64` を対応付け、`pop_ready(current_time: f64) -> Vec<T>` で時刻到達済みエントリを返す
-3. The dola crate shall バリア状態機械を提供する — WaitForInput（クリック/キー）/ WaitForChoice（選択肢）/ タイムアウト の3状態を `TimedSchedule<T>` と協調して管理する
-4. The dola crate shall `CueScript` 型（相対時刻コマンド列）と `compile_script` 関数（相対時刻 → 絶対時刻変換）を提供する
-5. The dola crate shall 演出コマンド enum を提供する — 全 11 バリアント: データ 6（`Text(String)`, `Clear`, `Emote { key }`, `Choice { id, text }`, `EntityRef(u64)`, `Custom { command, params: DynamicValue }`）、バリア 2（`WaitForChoice { timeout }`, `WaitForClick { timeout }`）、ルーティング 3（`RouteAdd { target, to }`, `RouteSwitch { target, to }`, `RouteRemove { target }`）
-6. The dola crate shall 演出コマンドのドメイン型を提供する — `ActorKey(String)`（アクター識別子）、`CueTarget`（配送先スロット: Shell / Balloon）、`EntityKey`（ルーティングキー: Actor / Spot / Balloon）
-7. When pasta DSL との統合が将来必要になった場合、dola shall pasta DSL の出力を `CueScript` として受け取るインターフェースを提供できる設計とする
-8. The dola crate shall 既存の連続値タイムライン機能（`DolaRuntime`, `DolaDocument`, `compile_storyboard`）との責務分離を明確にする — 連続値補間 vs 離散コマンドスケジューリング
+2. The dola crate shall `TimedSchedule<T>` 型を提供する — 内部エントリは `Entry<T> { Payload(f64, T) | Barrier(f64, BarrierKind) | Routing(f64, RoutingCommand) }` の型レベル 3 種分離とし、f64 は 0 ベースの相対オフセット（スケジュール開始からの経過時間）とする。2 フェーズ API を持つ: `advance(&mut self, current_time: f64)` で時刻到達済みの `Payload` を内部バッファに収集して停止（バリアまたはルーティング到達、または末尾到達まで。冪等、同一時刻の再呼び出し安全）し、`ready(&self) -> &[T]` で次の `advance()` 呼び出しまでそのバッファを何度でも読み取り専用で返す。`DolaRuntime` の `tick/last_result` と対称的な設計とする
+3. The dola crate shall `TimedSchedule<T>` のバリア管理 API を提供する — `current_barrier(&self) -> Option<&BarrierKind>` で現在の停止理由を照会し、`notify_barrier_resolved(&mut self, choice_id: Option<String>)` で外部イベントからバリア解除を通知する（WaitForInput: choice_id=None, WaitForChoice: choice_id=Some(選択ID)）。`BarrierKind` は WaitForInput（クリック/キー）/ WaitForChoice（選択肢）/ Timeout の 3 種とする。Timeout は時刻到達で自動解除。ルーティングエントリは `next_routing(&mut self) -> Option<RoutingCommand>` で取得し、CueQueue 層が消費する（`ready()` には含まれない）
+4. The dola crate shall `CueSheet` 型（相対時刻コマンド列）と `compile_sheet` 関数（0 ベース Entry 生成）を提供する — `compile_sheet` は `CueSheet` の相対時刻を 0 ベースの相対オフセットに正規化して `Entry<CueCommand>` を生成する。絶対時刻への変換は `TimedSchedule::new(start_time)` の責務。`CueSheet` は dola 言語（`DolaDocument` / `Storyboard` による連続値アニメ宣言）とは独立した離散コマンド列であり、記述言語の文脈では「dola（連続値アニメ）」と「キューシート（離散コマンド）」として区別する
+5. The dola crate shall `CueCommand` enum として全 6 バリアントを提供する — データ系のみ（`Text(String)`, `Clear`, `Emote { key: String }`, `Choice { id: String, text: String }`, `EntityRef(u64)`, `Custom { command: String, params: DynamicValue }`）。`Clone + Debug + PartialEq` を満たしシリアライズ可能（serde 対応）とする。バリアコマンド（旧 `WaitForChoice`, `WaitForClick`）は `BarrierKind` として、ルーティングコマンド（旧 `RouteAdd`, `RouteSwitch`, `RouteRemove`）は `RoutingCommand` として、それぞれ `Entry` レベルで分離済み
+5a. The dola crate shall `RoutingCommand` enum として全 3 バリアントを提供する — `RouteAdd { target: CueTarget, to: EntityKey }`, `RouteSwitch { target: CueTarget, to: EntityKey }`, `RouteRemove { target: CueTarget }`。CueQueue 層が消費し、消費者（ready() 利用側）には届かない
+6. The dola crate shall 演出ドメイン型を提供する — `ActorKey(String)`（アクター識別子）、`CueTarget`（配送先スロット: Shell / Balloon）、`EntityKey`（ルーティングキー: Actor / Spot / Balloon）、`Cue`（actor + start_time + command）
+7. The dola crate shall `DolaRuntime` の API を `tick(&mut self, current_time: f64)` と `last_result(&self) -> &UpdateResult` の 2 メソッドに分離する — `tick()` は内部状態を進行し結果を内部フィールドに格納、`last_result()` は直前の結果を読み取り専用で返す
+8. The dola crate shall 離散コマンドスケジューリング機能と既存の連続値タイムライン機能（`DolaRuntime`, `DolaDocument`, `compile_storyboard`）の責務を明確に分離する
+9. Where pasta DSL との統合が必要になった場合、dola shall pasta DSL の出力を `CueSheet` として受け取るインターフェースを提供できる設計とする
 
 ---
 
-### Requirement 1: DolaRuntime の所有モデル定義
+### Requirement 2: DolaAnimator コンポーネント設計
 
-**Objective:** wintf 開発者として、DolaRuntime のインスタンス所有権と生存期間のルールを確立したい。将来のアニメーション消費者（Balloon、Spot 等）が混乱なく DolaRuntime を利用できるようにするため。
+**Objective:** wintf 開発者として、DolaRuntime の ECS 統合方式を確立したい。専用 ECS Component `DolaAnimator` を通じてエンティティごとに独立したアニメーション状態を管理し、`tick_dola_animators` システムで一括更新する。
 
 #### Acceptance Criteria
 
-1. The wintf architecture specification shall DolaRuntime の所有モデルを以下のいずれかに決定し文書化する: (a) コンポーネント内部フィールド（エンティティごとのインスタンス）、(b) EcsWorld 外部の所有（アプリケーション層管理）、(c) 専用モジュールの ECS Resource（用途別シングルトン）
-2. The wintf architecture specification shall 選択した所有モデルの根拠と、棄却した選択肢の棄却理由を記録する
-3. The wintf architecture specification shall DolaRuntime の生存期間（いつ生成し、いつ破棄するか）のルールを定義する
-4. While DolaRuntime が複数インスタンスとして使用される場合、wintf shall 各インスタンスが独立した状態を持ち相互干渉しないことを保証する設計とする
+1. The wintf crate shall DolaRuntime を内部に所有する ECS Component `DolaAnimator` を提供する — 内部に `Rc` を含むため `unsafe impl Send + Sync` を行い、安全性は AC2 で保証する
+2. The wintf crate shall `tick_dola_animators` システムを提供する — `Query<&mut DolaAnimator>` と `Res<FrameTime>` を用い、全エンティティの `tick(FrameTime.0)` を一括実行する。Update スケジュール先頭に配置する。`DolaRuntime::tick()` の呼び出しをこのシステム内に限定することで、`Query<&mut>` の排他アクセスが 1 チック 1 回・単一スレッドを型レベルで保証し、`unsafe impl Send + Sync` の安全性根拠となる
+3. The wintf crate shall 消費者システムが `Query<&DolaAnimator>` の `last_result()` で `UpdateResult` を読み取る構成とし、`.after(tick_dola_animators)` で順序依存を ECS スケジュールで保証する
+4. The wintf architecture specification shall `DolaAnimator` と `tick_dola_animators` の配置先モジュール（候補: `ecs/dola/`, `ecs/dola_bridge/`）を決定し、ECS レイヤー依存方向を遵守する
+5. When 配置先が決定された後、wintf shall balloon06 の `DolaBridgeResource` 設計との整合性を検証し文書化する
 
 ---
 
-### Requirement 2: cue モジュールからの DolaRuntime 除去
+### Requirement 3: cue モジュール整理
 
-**Objective:** wintf 開発者として、cue モジュールから DolaRuntime 関連コードを除去したい。cue モジュールの責務を「演出指令の配送基盤」に限定し、アニメーション実行エンジンの管理責務を排除するため。
+**Objective:** wintf 開発者として、cue モジュールから DolaRuntime 関連の誤配置コードを除去し、dola が提供する型を活用した再設計方針を確立したい。cue モジュールの責務を「ECS 統合レイヤー」に限定するため。
 
 #### Acceptance Criteria
 
-1. When この仕様が実装される場合、wintf shall `ecs/cue/runtime.rs` を削除または空にする
-2. When この仕様が実装される場合、wintf shall `ecs/cue/systems.rs` から `update_dola_runtime` 関数を削除する
-3. When この仕様が実装される場合、wintf shall `ecs/cue/mod.rs` から `pub use runtime::DolaRuntime` を削除する
-4. When DolaRuntime 関連コードが除去された後、wintf shall 既存の cue パイプライン（CueSheet → dispatch → CueQueue → pop_ready → CueSheetTracker）が変更なく動作し続ける
-5. When DolaRuntime 関連コードが除去された後、wintf shall 既存の cue テスト 75 件がすべてパスする
+1. The wintf crate shall cue モジュールから DolaRuntime 関連コード（`runtime.rs`, `update_dola_runtime`, `pub use DolaRuntime`）を除去する
+2. The wintf architecture specification shall `CueQueue` のリファクタリング方針を決定し文書化する — `dola::TimedSchedule<dola::CueCommand>` を内包する設計とするか否か
+3. If `CueQueue` が `dola::TimedSchedule` を内包する場合、wintf shall `push_sorted` / `pop_ready` / バリア管理の実装を dola に委譲し、ECS Component ラッピング + `u64 ↔ Entity` 変換のみを wintf が担う
+4. The wintf crate shall EntityRef 投入時に `Entity::to_bits()` で u64 に変換し、取出時に `Entity::from_bits()` で ECS Entity に復元する
+5. The wintf crate shall `type CueCommand = dola::CueCommand` re-export で既存コードの後方互換性を維持する
+6. The wintf architecture specification shall 移行戦略を定義する — (a) 即時置換（dola 実装後に再設計）、(b) 段階的移行（除去のみ先行、再設計は別仕様）
 
 ---
 
-### Requirement 3: DolaRuntime の配置先決定
+### Requirement 4: UpdateResult 活用方針
 
-**Objective:** wintf 開発者として、DolaRuntime を wintf のどのモジュールに配置すべきかを決定したい。レイヤー依存方向（COM → ECS → Message Handling）を遵守し、将来の消費者が自然にアクセスできるようにするため。
-
-#### Acceptance Criteria
-
-1. The wintf architecture specification shall DolaRuntime ラッパー（`unsafe impl Send/Sync` を含む）の配置先モジュールを決定する
-2. If DolaRuntime を ECS Resource として配置する場合、wintf shall cue モジュール以外の適切なモジュール（例: `ecs/animation/` や `ecs/dola/`）に配置する
-3. If DolaRuntime をコンポーネント内部フィールドとして使用する場合、wintf shall ラッパー型を共通ユーティリティモジュールに配置し、各コンポーネントが個別にインスタンスを保持する設計とする
-4. The wintf architecture specification shall 配置先が ECS レイヤー依存方向を遵守していることを検証する
-5. When 配置先が決定された後、wintf shall `update_dola_runtime` システムの処理（FrameTime → DolaRuntime.update() → UpdateResult 活用）を新しい配置先で再実装するか、または廃止の判断を文書化する
-
----
-
-### Requirement 4: UpdateResult の活用方針
-
-**Objective:** wintf 開発者として、`DolaRuntime::update()` の戻り値 `UpdateResult { changes, triggered }` の消費方法を定義したい。現在の実装では戻り値が `_result` として破棄されており、dola の購読差分検出機能が無駄になっているため。
+**Objective:** wintf 開発者として、`DolaAnimator.last_result()` が返す `UpdateResult { changes, triggered }` の消費方法を定義したい。現在の実装では戻り値が破棄されており、dola の購読差分検出機能が活用されていないため。
 
 #### Acceptance Criteria
 
 1. The wintf architecture specification shall `UpdateResult.changes`（変化した購読変数のリスト）の消費パターンを定義する — (a) ECS コンポーネントへの反映、(b) イベント送信、(c) 消費者ごとの直接参照、のいずれか
-2. The wintf architecture specification shall `UpdateResult.triggered`（トリガー実行結果）の消費パターンを定義する — (a) 連鎖アニメーション起動、(b) ECS イベント変換、(c) 不使用（dola 単体のトリガー機構に委譲）、のいずれか
+2. The wintf architecture specification shall `UpdateResult.triggered`（トリガー実行結果）の消費パターンを定義する — (a) 連鎖アニメーション起動、(b) ECS イベント変換、(c) dola 単体のトリガー機構に委譲、のいずれか
 3. If `UpdateResult` の消費パターンが本仕様のスコープ外と判断される場合、wintf shall その旨と、どの将来仕様で扱うべきかを文書化する
 
 ---
 
-### Requirement 5: 時刻基準の統一保証
+### Requirement 5: 設計ドキュメント整合性
 
-**Objective:** wintf 開発者として、dola ランタイムと cue-system が同一の時刻基準を使用することを保証したい。FrameTime(f64) と dola::runtime::clock::now() はどちらも QueryPerformanceCounter ベースだが、統一ルールが明文化されていないため。
-
-#### Acceptance Criteria
-
-1. The wintf architecture specification shall DolaRuntime に対する時刻供給元を一意に定義する — (a) FrameTime.0 の値を渡す、(b) DolaRuntime 内部で clock::now() を直接呼ぶ、のいずれか
-2. When FrameTime.0 を時刻供給元とする場合、wintf shall DolaRuntime の更新タイミングを ECS スケジュール内で明示的に順序付ける（Update スケジュールの先頭等）
-3. While cue-system と DolaRuntime が同じ EcsWorld 内で動作する場合、wintf shall 両者が同一フレーム内で同一の時刻値を参照することを保証する
-
----
-
-### Requirement 6: dola 統合ガイドラインの文書化
-
-**Objective:** wintf 開発者として、将来のアニメーション消費者（Balloon テキストアニメーション、Spot サーフェス遷移、等）が dola を正しく統合するためのガイドラインを持ちたい。「dola の思想を共有する」と「dola ランタイムを使う」の区別が曖昧だったことによる混乱を防ぐため。
+**Objective:** wintf 開発者として、本仕様の実装後にアーキテクチャ文書・隣接仕様・コード間に矛盾がないことを保証したい。dola 統合ガイドラインを整備し、cue-system 設計ドキュメントの誤記述を是正するため。
 
 #### Acceptance Criteria
 
-1. The wintf architecture specification shall 「dola の思想を共有する」の意味を定義する — 宣言的構造 → コンパイル → 時刻ベース実行のパイプラインパターンを採用すること
-2. The wintf architecture specification shall 「dola ランタイムを使う」の意味を定義する — `dola::runtime::DolaRuntime` のインスタンスを直接利用して補間・購読・トリガーを実行すること
-3. The wintf architecture specification shall 各アニメーション消費者が dola 統合時に従うべき手順を定める — (a) DolaDocument のロード、(b) 変数の購読、(c) update ループへの組み込み、(d) UpdateResult の消費
-4. If 将来の消費者が dola ランタイムを使わず独自のタイムライン実装を選択する場合、wintf shall その判断基準（パフォーマンス、依存削減等）と、cue-system との互換性維持方法を文書化する
-
----
-
-### Requirement 8: CueCommand 全バリアントの dola 移管
-
-**Objective:** wintf 開発者として、wintf の `CueCommand` enum（全 11 バリアント）およびドメイン型（`ActorKey`, `CueTarget`, `EntityKey`, `Cue`, `CueSheet`）を dola に全面移管したい。dola に依存しない消費者（pasta DSL 処理系など）が同じコマンド型・ルーティング型を使えるようにし、wintf は ECS 結合層のみを担うため。
-
-#### Acceptance Criteria
-
-1. The dola crate shall `CueCommand` enum として全 11 バリアントを提供する — データ 6（`Text(String)`, `Clear`, `Emote { key: String }`, `Choice { id: String, text: String }`, `EntityRef(u64)`, `Custom { command: String, params: DynamicValue }`）、バリア 2（`WaitForChoice { timeout: Option<f64> }`, `WaitForClick { timeout: Option<f64> }`）、ルーティング 3（`RouteAdd { target: CueTarget, to: EntityKey }`, `RouteSwitch { target: CueTarget, to: EntityKey }`, `RouteRemove { target: CueTarget }`）
-2. When wintf が `EntityRef` コマンドを CueQueue に投入する場合、wintf shall `bevy_ecs::entity::Entity::to_bits() -> u64` で変換し、dola の `EntityRef(u64)` として格納する
-3. When wintf が CueQueue から `EntityRef(u64)` を取り出す場合、wintf shall `bevy_ecs::entity::Entity::from_bits(u64)` で ECS Entity に復元する
-4. The dola crate shall `CueCommand` enum が `Clone + Debug + PartialEq` を満たし、シリアライズ可能（serde 対応）とする
-5. The dola crate shall ドメイン型 `ActorKey(String)`、`CueTarget`（Shell / Balloon）、`EntityKey`（Actor / Spot / Balloon）を提供する
-6. If 移管によって既存の wintf cue テスト（75 件）に影響が生じる場合、wintf shall `type CueCommand = dola::CueCommand` 型エイリアスまたは re-export で後方互換性を維持する
-7. The dola crate shall `CueCommand::is_barrier()` および `CueCommand::is_routing_command()` メソッドを提供する（既存の分類ロジックを移管）
-
----
-
-### Requirement 9: wintf cue モジュールの dola ベース再設計方針
-
-**Objective:** wintf 開発者として、CueCommand 全面移管後に wintf の cue モジュールが「ECS 統合レイヤー」だけを責務として持つ設計に整理したい。dola が提供する `TimedSchedule<T>` と `CueCommand` を内包する形で `CueQueue` を再設計することで、wintf 側のドメインロジックを最小限に抑えるため。
-
-#### Acceptance Criteria
-
-1. The wintf architecture specification shall dola への移管後の `CueQueue` コンポーネントが `dola::TimedSchedule<dola::CueCommand>` を内包する設計かどうかを決定し文書化する
-2. If `CueQueue` が `dola::TimedSchedule` を内包する場合、wintf shall `push_sorted` / `pop_ready` / `check_timeout` / バリア管理の実装を dola 側に委譲し、ECS Component としてのラッピング + `u64 ↔ Entity` 変換のみを wintf が担う
-3. The wintf architecture specification shall 移行戦略を定義する — (a) 即時置換（本仕様で dola 実装後に再設計）、(b) 段階的移行（本仕様では除去のみ、別仕様で再設計）
-4. When dola の `TimedSchedule<T>` と `CueCommand` が実装済みである場合、wintf shall cue モジュール内の重複するスケジューリングロジックとコマンド型定義を dola に委譲する
-5. When wintf の cue モジュールが再設計された後、wintf shall `wintf::ecs::cue::CueCommand` を `type CueCommand = dola::CueCommand` として再公開し、既存の参照を維持する
-
----
-
-### Requirement 7: cue-system 設計ドキュメントの是正
-
-**Objective:** wintf 開発者として、wintf-P0-cue-system の設計ドキュメント内の DolaRuntime 関連記述を是正したい。現在の design.md は DolaRuntime を「必須リソース」「インフラ」として記載しており、実態と乖離しているため。
-
-#### Acceptance Criteria
-
-1. When この仕様が実装される場合、wintf shall wintf-P0-cue-system の design.md から DolaRuntime を「インフラ」「必須リソース」として記載している箇所を修正する
-2. When この仕様が実装される場合、wintf shall wintf-P0-cue-system の design.md の Architecture Boundary Map（mermaid 図）から DolaRuntime ノードを除去またはスコープ外として明示する
-3. When この仕様が実装される場合、wintf shall wintf-P0-cue-system の Requirements Traceability マトリクスから Req 6（dola 統合）の記述を本仕様への参照に更新する
-4. When この仕様が実装される場合、wintf shall wintf-P0-cue-system の Component Summary から DolaRuntime 行を除去し、本仕様への参照ノートを追加する
+1. The wintf architecture specification shall dola 統合ガイドラインを整備する — 「dola の思想を共有する」（宣言的パイプラインパターン採用）と「dola ランタイムを使う」（DolaRuntime インスタンスの直接利用）の区別を定義し、統合手順（DolaDocument ロード → 変数購読 → tick ループ → UpdateResult 消費）を定める
+2. When この仕様が実装される場合、wintf shall wintf-P0-cue-system の design.md から DolaRuntime を「インフラ」「必須リソース」として記載している箇所を是正し、Architecture Boundary Map・Component Summary・Requirements Traceability を更新する
+3. The wintf architecture specification shall `doc/ARCHITECTURE.md` および `.kiro/steering/structure.md` に DolaAnimator の所有モデル・配置先を反映する
+4. If 将来の消費者が DolaRuntime を使わず独自のタイムライン実装を選択する場合、wintf shall その判断基準と cue-system との互換性維持方法を文書化する
 
 ---
 
@@ -259,17 +197,6 @@ DolaRuntime の使い方が間違っている件の是正。cue-system 実装時
 
 #### Acceptance Criteria
 
-1. When DolaRuntime 関連コードが cue モジュールから除去された後、wintf shall 全テストスイート（920+ テスト）がパスする
-2. When DolaRuntime 関連コードが cue モジュールから除去された後、wintf shall 全サンプルアプリケーション（taffy_flex_demo 等）がパニックなく起動する
-3. The wintf crate shall 公開 API（`lib.rs` の `pub use`）から DolaRuntime を除去しても、現在 DolaRuntime を使用している外部コードが存在しないことを確認する
-4. When dola クレートに新規型（`TimedSchedule<T>`, コア演出コマンド enum 等）が追加された後、dola shall 既存のすべての dola テストがパスする
-5. When dola クレートに新規型が追加された後、dola shall 既存の連続値タイムライン機能（`DolaRuntime`, `compile_storyboard`, `DolaDocument`）の動作が変わらない
-
-### NFR-2: 設計文書の一貫性
-
-**Objective:** 本仕様の実装後、アーキテクチャ文書・仕様書・コード間に矛盾が生じないことを保証する。
-
-#### Acceptance Criteria
-
-1. The wintf architecture specification shall DolaRuntime の所有モデル・配置先・利用ガイドラインを doc/ARCHITECTURE.md または同等のアーキテクチャ文書に反映する
-2. The wintf architecture specification shall steering ファイル（structure.md）の ECS モジュール記述に DolaRuntime の配置を反映する
+1. When 本仕様の変更が適用された後、wintf shall 全テストスイート（920+ テスト、cue 系 75 件含む）がパスし、全サンプルアプリケーションがパニックなく起動する
+2. When dola クレートに新規型が追加された後、dola shall 既存テストがすべてパスし、連続値タイムライン機能（`DolaRuntime`, `compile_storyboard`, `DolaDocument`）の動作が変わらない
+3. The wintf crate shall 公開 API から DolaRuntime を除去しても外部への破壊的影響がないことを確認する — 現在 DolaRuntime は EcsWorld に未登録であり、実稼働パスに組み込まれていない

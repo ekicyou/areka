@@ -204,7 +204,7 @@ sequenceDiagram
 
 ### Component: `dola::cue::TimedSchedule<T>`
 
-**Intent**: 絶対時刻ベースの汎用配信エンジン。`Entry<T>` の型レベル分離により Payload とBarrier を区別し、2 フェーズ API（`advance` / `ready`）で消費者に時刻到達済みコマンドを提供する。
+**Intent**: 0 ベース相対オフセットの汎用配信エンジン。`Entry<T>` の型レベル 3 種分離により Payload / Barrier / Routing を区別し、2 フェーズ API（`advance` / `ready`）で消費者に時刻到達済みコマンドを提供する。絶対時刻との変換は new(start_time) で担当。
 
 **Requirements**: 1.2, 1.3
 
@@ -219,21 +219,25 @@ sequenceDiagram
 ##### Service Interface
 
 ```rust
-/// 絶対時刻ベースの汎用配信エンジン。
-/// Entry<T> により Payload と Barrier を型レベルで分離する。
+/// 0 ベース相対オフセットの汎用配信エンジン。
+/// Entry<T> により Payload / Barrier / Routing を型レベルで 3 種分離する。
 pub struct TimedSchedule<T> {
     // ── 内部フィールド ──
-    // entries: Vec<Entry<T>>  — 降順ソート
+    // start_time: f64         — 絶対時刻での開始時刻
+    // entries: Vec<Entry<T>>  — 降順ソート（0 ベース相対オフセット）
     // ready_buffer: Vec<T>    — advance() で収集した Payload
     // current_barrier: Option<BarrierKind>
 }
 
-/// エントリの型レベル分離
+/// エントリの型レベル 3 種分離
+/// f64 = スケジュール開始からの相対オフセット（0 ベース）
 pub enum Entry<T> {
-    /// 時刻付きデータペイロード
+    /// 時刻付きデータペイロード（実行すべきコマンド）
     Payload(f64, T),
-    /// 時刻付きバリア（進行停止点）
+    /// 時刻付きバリア（進行停止点、TimedSchedule が消費）
     Barrier(f64, BarrierKind),
+    /// 時刻付きルーティング（配送制御、CueQueue 層が消費）
+    Routing(f64, RoutingCommand),
 }
 
 /// バリア種別（3 種）
@@ -246,29 +250,45 @@ pub enum BarrierKind {
     Timeout { duration: f64 },
 }
 
-impl<T: Clone + Debug> TimedSchedule<T> {
-    /// 空のスケジュールを生成
-    pub fn new() -> Self;
+/// ルーティングコマンド（3 種）
+pub enum RoutingCommand {
+    /// スロット追加（既存ルーティングを維持したまま追加先を登録）
+    RouteAdd { target: CueTarget, to: EntityKey },
+    /// スロット切替（既存ルーティングを上書き）
+    RouteSwitch { target: CueTarget, to: EntityKey },
+    /// スロット除去（指定ターゲットのルーティングを削除）
+    RouteRemove { target: CueTarget },
+}
 
-    /// エントリを時刻順ソート維持で挿入
+impl<T: Clone + Debug> TimedSchedule<T> {
+    /// 絶対時刻 start_time でスケジュールを構築。
+    /// エントリの f64 は 0 ベースの相対オフセット、advance() は絶対時刻を受け取る。
+    pub fn new(start_time: f64) -> Self;
+
+    /// エントリを時刻順ソート維持で挿入（0 ベース相対オフセット）
     pub fn insert(&mut self, entry: Entry<T>);
 
     /// 複数エントリを一括挿入（内部で再ソート）
     pub fn extend(&mut self, entries: impl IntoIterator<Item = Entry<T>>);
 
     /// 時刻到達済み Payload を内部バッファに収集。
-    /// バリア到達または末尾到達まで進行。冪等（同一時刻の再呼び出し安全）。
+    /// current_time は絶対時刻、内部で start_time との差分で相対オフセットに変換。
+    /// バリア/ルーティング到達または末尾到達まで進行。冪等（同一時刻の再呼び出し安全）。
     pub fn advance(&mut self, current_time: f64);
 
     /// 直前の advance() で収集された Payload のスライスを返す。
     /// 次の advance() 呼び出しまで何度でも参照可能。
     pub fn ready(&self) -> &[T];
 
-    /// 現在停止中のバリア種別を照会
+    /// 現在停止中のバリア種別を照会（UI 表示用）
     pub fn current_barrier(&self) -> Option<&BarrierKind>;
 
-    /// バリアを解除して次エントリへ進行可能にする
-    pub fn resolve_barrier(&mut self);
+    /// バリア解除通知（外部イベント駆動）。
+    /// WaitForInput: choice_id = None, WaitForChoice: choice_id = Some(選択ID)
+    pub fn notify_barrier_resolved(&mut self, choice_id: Option<String>);
+
+    /// 時刻到達済みルーティングコマンドを取得（CueQueue 層が消費）
+    pub fn next_routing(&mut self) -> Option<RoutingCommand>;
 
     /// 残エントリ数
     pub fn remaining(&self) -> usize;
@@ -286,18 +306,19 @@ impl<T: Clone + Debug> TimedSchedule<T> {
 - **状態モデル**: `Idle` → `Advancing`（advance 中）→ `Blocked`（バリア到達）→ `Completed`（全消費）の内部状態遷移。外部からは `current_barrier()` と `is_completed()` で照会
 - **冪等性**: `advance(t)` を同一 `t` で複数回呼び出しても `ready_buffer` は変化しない
 - **消費型**: 一度 `advance()` で収集された `Payload` は内部キューから除去される（不可逆）
+- **時刻変換**: `new(start_time)` で絶対時刻を保持、`advance(current_time)` で `current_time - start_time` を相対オフセットに変換して内部処理
 
 **Implementation Notes**
 
-- **Integration**: wintf `CueQueue` が `TimedSchedule<CueCommand>` を内包する構成。`CueQueue::pop_ready()` は内部で `schedule.advance()` → `schedule.ready()` を呼び出す
-- **Validation**: `Entry::Payload` / `Entry::Barrier` の f64 タイムスタンプは非負値を前提（バリデーションは insert 時のデバッグアサートで実施）
+- **Integration**: wintf `CueQueue` が `TimedSchedule<CueCommand>` を内包する構成。`CueQueue::pop_ready()` は内部で `schedule.advance()` → `schedule.ready()` を呼び出す。バリア解除は wintf のイベントハンドラが `notify_barrier_resolved()` を呼び出す
+- **Validation**: `Entry` の f64 オフセットは非負値を前提（バリデーションは insert 時のデバッグアサートで実施）
 - **Risks**: `ready_buffer` の `Vec<T>` アロケーション。実用上 1 フレーム内の到達コマンド数は少数（1〜10）のためパフォーマンス問題なし
 
 ---
 
 ### Component: `dola::cue::CueCommand`
 
-**Intent**: 型安全な演出コマンド enum。データ 6 + ルーティング 3 の 9 バリアント。バリアは `BarrierKind` として `Entry::Barrier` に分離済み。
+**Intent**: 型安全な演出コマンド enum。データ系 6 バリアントのみ。バリアは `BarrierKind`、ルーティングは `RoutingCommand` として `Entry` レベルで分離済み。
 
 **Requirements**: 1.5
 
@@ -306,15 +327,13 @@ impl<T: Clone + Debug> TimedSchedule<T> {
 | 依存先 | 方向 | 重要度 | 説明 |
 |--------|------|--------|------|
 | `DynamicValue` | Outbound | P0 | `Custom` バリアントのパラメータ型 |
-| `CueTarget` | Outbound | P0 | ルーティングコマンドの配送先指定 |
-| `EntityKey` | Outbound | P0 | ルーティングコマンドのキー識別子 |
 
 **Contracts**:
 
 ##### Service Interface
 
 ```rust
-/// 演出コマンド（9 バリアント）
+/// 演出コマンド（6 バリアント、データ系のみ）
 /// Clone + Debug + PartialEq, serde::Serialize + serde::Deserialize
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub enum CueCommand {
@@ -325,24 +344,101 @@ pub enum CueCommand {
     Choice { id: String, text: String },
     EntityRef(u64),   // bevy Entity::to_bits() で変換済み
     Custom { command: String, params: DynamicValue },
+}
+```
 
-    // ── ルーティング（3） ──
+---
+
+### Component: `dola::cue::RoutingCommand`
+
+**Intent**: ルーティング制御コマンド enum（3 バリアント）。CueQueue 層が消費し、消費者（`ready()` 利用側）には届かない。
+
+**Requirements**: 1.5a
+
+**Dependencies**:
+
+| 依存先 | 方向 | 重要度 | 説明 |
+|--------|------|--------|------|
+| `CueTarget` | Outbound | P0 | 配送先スロット指定 |
+| `EntityKey` | Outbound | P0 | ルーティングキー識別子 |
+
+**Contracts**:
+
+##### Service Interface
+
+```rust
+/// ルーティングコマンド（3 バリアント）
+/// Clone + Debug + PartialEq, serde::Serialize + serde::Deserialize
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub enum RoutingCommand {
+    /// スロット追加（既存ルーティングを維持したまま追加先を登録）
     RouteAdd { target: CueTarget, to: EntityKey },
+    /// スロット切替（既存ルーティングを上書き）
     RouteSwitch { target: CueTarget, to: EntityKey },
+    /// スロット除去（指定ターゲットのルーティングを削除）
     RouteRemove { target: CueTarget },
 }
+```
 
-impl CueCommand {
-    /// ルーティングコマンドか判定
-    pub fn is_routing_command(&self) -> bool;
+**Implementation Notes** (CueCommand)
+
+- **Integration**: wintf は `type CueCommand = dola::CueCommand;` で re-export（D4 決定）。`EntityRef(Entity)` → `EntityRef(u64)` の変換は wintf dispatch 層が `Entity::to_bits()` で実施
+- **Validation**: `PartialEq` は `DynamicValue` の `PartialEq` 実装に依存。`DynamicValue` が `PartialEq` 未実装の場合、`CueCommand` から `PartialEq` derive を除外し手動実装を検討
+- **Risks**: `EntityRef(u64)` の `from_bits()` 復元時に無効な Entity が生成される可能性。wintf 消費者が `Entity::from_bits()` 後に ECS Query で存在確認すること
+
+**Implementation Notes** (RoutingCommand)
+
+- **Integration**: wintf `CueQueue` は `next_routing()` でルーティングコマンドを取得し、内部の `EntityRegistry` を更新する。消費者には `ready()` 経由で届かない
+- **Validation**: `EntityKey` の妥当性検証は wintf dispatch 層の責務
+- **Risks**: ルーティング変更とコマンド配信のタイミング競合。同一時刻のルーティング変更は次フレームから反映される設計で回避
+
+---
+
+### Component: `dola::cue::CuePayload`
+
+**Intent**: CueSheet 記述時の統一型。コマンド・バリア・ルーティングを同一インターフェースで記述可能にする。
+
+**Requirements**: 1.4, 1.5, 1.5a
+
+**Contracts**:
+
+##### Service Interface
+
+```rust
+/// CueSheet 記述時の統合型（3 種）
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub enum CuePayload {
+    /// データコマンド
+    Command(CueCommand),
+    /// バリア（進行停止点）
+    Barrier(BarrierKind),
+    /// ルーティング（配送制御）
+    Routing(RoutingCommand),
+}
+
+// 自然な記述のための Into 実装
+impl From<CueCommand> for CuePayload { /* ... */ }
+impl From<BarrierKind> for CuePayload { /* ... */ }
+impl From<RoutingCommand> for CuePayload { /* ... */ }
+
+impl CuePayload {
+    /// Entry<CueCommand> への変換（compile_sheet 内で使用）
+    pub fn into_entry(self, time: f64) -> Entry<CueCommand>;
 }
 ```
 
 **Implementation Notes**
 
-- **Integration**: wintf は `type CueCommand = dola::CueCommand;` で re-export（D4 決定）。`EntityRef(Entity)` → `EntityRef(u64)` の変換は wintf dispatch 層が `Entity::to_bits()` で実施
-- **Validation**: `PartialEq` は `DynamicValue` の `PartialEq` 実装に依存。`DynamicValue` が `PartialEq` 未実装の場合、`CueCommand` から `PartialEq` derive を除外し手動実装を検討
-- **Risks**: `EntityRef(u64)` の `from_bits()` 復元時に無効な Entity が生成される可能性。wintf 消費者が `Entity::from_bits()` 後に ECS Query で存在確認すること
+- **Integration**: `CueSheet` の `Cue::payload` フィールドとして使用。`compile_sheet()` が `CuePayload::into_entry()` を呼び出して `Entry<CueCommand>` に変換
+- **記述例**:
+  ```rust
+  let mut cues = vec![
+      Cue { actor: actor.clone(), start_time: 0.0, payload: CueCommand::Text("hello".into()).into() },
+      Cue { actor: actor.clone(), start_time: 1.0, payload: BarrierKind::WaitForInput { timeout: None }.into() },
+      Cue { actor: actor.clone(), start_time: 2.0, payload: RoutingCommand::RouteSwitch { target: CueTarget::Balloon, to: key }.into() },
+  ];
+  ```
+- **Risks**: `Into` trait の多重実装による型推論の曖昧性。実用上は `.into()` で明示的に解決
 
 ---
 
@@ -381,21 +477,24 @@ impl CueSheet {
     pub fn len(&self) -> usize;
 }
 
-/// コンパイル済みの絶対時刻エントリ
+/// コンパイル済みの 0 ベース相対オフセットエントリ
 pub struct CompiledCue {
-    pub absolute_time: f64,
+    pub offset: f64,  // 0 ベース相対オフセット
     pub actor: ActorKey,
     pub entry: Entry<CueCommand>,
 }
 
-/// 相対時刻 → 絶対時刻変換。
-/// BarrierKind を持つ CueCommand バリアントは Entry::Barrier に変換。
-pub fn compile_sheet(sheet: &CueSheet, start_time: f64) -> Vec<CompiledCue>;
+/// 相対時刻 → 0 ベース相対オフセット正規化。
+/// CueSheet::Cue::start_time を最小値 0 基準に正規化し、CuePayload を Entry<CueCommand> に変換:
+/// - CuePayload::Command → Entry::Payload
+/// - CuePayload::Barrier → Entry::Barrier
+/// - CuePayload::Routing → Entry::Routing
+pub fn compile_sheet(sheet: &CueSheet) -> Vec<CompiledCue>;
 ```
 
 **Implementation Notes**
 
-- **Integration**: wintf `dispatch_pending_cue_sheets` が `compile_sheet()` を呼び出し、`CompiledCue` を actor ごとに分配して `CueQueue.push_compiled()` に投入。Actor → Entity 解決は wintf `EntityRegistry` が担当
+- **Integration**: wintf `dispatch_pending_cue_sheets` が `compile_sheet()` を呼び出し、`CompiledCue` を actor ごとに分配。各 actor の `TimedSchedule::new(current_time)` で絶対時刻スケジュールを構築し、`extend(compiled_entries)` で 0 ベースエントリを投入。Actor → Entity 解決は wintf `EntityRegistry` が担当
 - **pasta DSL 互換**: `CueSheet` は `Serialize + Deserialize` を実装し、pasta DSL の出力を JSON/TOML 経由で受け取り可能な設計とする（1.9）
 
 ---
@@ -430,7 +529,7 @@ pub enum EntityKey {
 pub struct Cue {
     pub actor: ActorKey,
     pub start_time: f64,
-    pub command: CueCommand,
+    pub payload: CuePayload,
 }
 ```
 
