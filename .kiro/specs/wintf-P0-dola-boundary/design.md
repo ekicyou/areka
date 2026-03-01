@@ -311,6 +311,12 @@ impl<T: Clone + Debug> TimedSchedule<T> {
 **Implementation Notes**
 
 - **Integration**: wintf `CueQueue` が `TimedSchedule<CueCommand>` を内包する構成。`CueQueue::pop_ready()` は内部で `schedule.advance()` → `schedule.ready()` を呼び出す。バリア解除は wintf のイベントハンドラが `notify_barrier_resolved()` を呼び出す
+- **新CueSheet投入**: 既存スケジュールは全破棄（`clear()` + `new(start_time)` + `extend()`）。バリア中でも強制的に新スケジュールへ切り替え。Actor単位で独立したTimedSchedule
+- **同一時刻の処理**:
+  - **Payload**: キーフレームベース。`ready()` が `&[T]` スライスで返す。実行順序は不定（並列実行）
+  - **Barrier**: シーケンシャル。同一時刻に複数ある場合、最初の1つのみ有効（推奨: 1つのみ記述）
+  - **Routing**: シーケンシャル。同一時刻に複数ある場合、配列順（記述順）に `next_routing()` で順次取得
+- **タイムアウト判定**: `advance()` で `offset = current_time - start_time` を計算。Barrier到達時、タイムアウト付き（WaitForInput/WaitForChoice）の場合は `timeout_offset = barrier_offset + timeout_duration` と比較し、`offset >= timeout_offset` なら自動解除
 - **Validation**: `Entry` の f64 オフセットは非負値を前提（バリデーションは insert 時のデバッグアサートで実施）
 - **Risks**: `ready_buffer` の `Vec<T>` アロケーション。実用上 1 フレーム内の到達コマンド数は少数（1〜10）のためパフォーマンス問題なし
 
