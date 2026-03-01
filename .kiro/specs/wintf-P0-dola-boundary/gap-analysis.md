@@ -1,22 +1,22 @@
 # Gap Analysis: wintf-P0-dola-boundary
 
-| 項目               | 内容                                                                |
-| ------------------ | ------------------------------------------------------------------- |
-| **Document Title** | dola ランタイム責務境界 — 実装ギャップ分析                           |
-| **Version**        | 3.0                                                                 |
-| **Date**           | 2026-02-28 (更新: 2026-02-28)                                       |
-| **Requirements**   | v3.0（Req 0 + Req 1-7 + Req 8 + Req 9 + 2 NFR、CueCommand 全バリアント dola 移管反映） |
-| **Status**         | 📊 Analyzed (方針確定、設計フェーズ待ち)                            |
+| 項目               | 内容                                                            |
+| ------------------ | --------------------------------------------------------------- |
+| **Document Title** | dola ランタイム責務境界 — 実装ギャップ分析                      |
+| **Version**        | 5.0                                                             |
+| **Date**           | 2026-03-01                                                      |
+| **Requirements**   | v4.2（命名確定・内部整合リファイン完了）                         |
+| **Status**         | 📊 Analyzed（v5.0: D1-D3/D6 全確定・設計フェーズ待ち）         |
 
 ---
 
 ## 1. 分析サマリー
 
-- **スコープ**: cue モジュール内に誤配置された DolaRuntime の除去、dola への離散コマンドスケジューリング移管（Req 0）、CueCommand 全 11 バリアントの dola 全面移管（Req 8）、cue モジュール再設計方針（Req 9）。コード変更は中〜大規模で、設計判断が多い
-- **最大の課題**: `TimedSchedule<T>` の API 設計（D1）。この決定が wintf 側の CueQueue 再設計と balloon06 の DolaBridgeResource 設計を拘束する
-- **既存資産の活用度**: cue パイプラインは DolaRuntime に依存しないため、除去（Req 2）は低リスク。dola の既存型システムは `TimedSchedule<T>` の基盤として自然に活用可能
-- **隣接仕様との関係**: `wintf-P0-balloon06-text-effects` の `inherited-context.md` が `ecs/dola_bridge/` モジュールと `DolaBridgeResource` を想定。Option D 採用により dola に `TimedSchedule<T>` が揃った状態で balloon06 の実装フェーズに入れる
-- **承認方針**: **Option D（dola-first）** — 2026-02-28 にユーザー承認済み。dola が bevy_ecs 非依存の範疇で可能な限りアニメーションエンジンの責務を担う
+- **スコープ**: ①dola への離散コマンドスケジューリング基盤新規実装、②DolaRuntime API 分離（`update` → `tick/last_result`）、③wintf cue モジュールから誤配置 DolaRuntime 除去、④wintf `CueCommand` / ドメイン型の dola への移管
+- **最大の課題**: `CueCommand` の移管と wintf 側 `Entity` 参照処理 — `Entity` は bevy_ecs 型のため u64 変換が境界に必要。wintf cue テスト（cue 系）の移行方針が設計フェーズで決定が必要
+- **既存資産の活用度**: dola はすでに bevy_ecs 非依存。`CueQueue.push_sorted` / `pop_ready` のロジックが `TimedSchedule<T>` の参考実装として転用可能。誤配置コードは参照者がなく低リスクで除去可能
+- **採用方針**: **Option D（dola-first）** — dola が bevy_ecs 非依存の範疇で可能な限りアニメーションエンジンの責務を担う
+- **確定済み設計決定**: D1（`TimedSchedule<T>` API）、D2（`CueCommand` 名称）、D3（`CueSheet` / `compile_sheet` 名称）、D6（`update_dola_runtime` 廃止）— 設計フェーズへの持越しは D4/D5/D7/D8 のみ
 
 ---
 
@@ -41,31 +41,26 @@
 | `ecs/mod.rs` での再エクスポート | **なし**（`pub mod cue;` 経由のみ） |
 | `lib.rs` での再エクスポート | **なし** |
 
-**結論**: DolaRuntime は定義されているが、実稼働パスには一切組み込まれていない。テスト内でのみ手動で World に挿入されている。
+**結論**: DolaRuntime は定義されているが、実稼働パスには一切組み込まれていない。
 
 ### 2.3 既存 ECS Resource パターン
 
-wintf 内の `#[derive(Resource)]` 型:
-
-| Resource | モジュール | 初期化場所 | Send/Sync | 用途 |
-|----------|-----------|------------|-----------|------|
+| Resource | モジュール | 初期化 | Send/Sync | 用途 |
+|----------|-----------|--------|-----------|------|
 | `App` | `ecs/app.rs` | `EcsWorld::new()` | 自動 | アプリ状態 |
 | `FrameTime(pub f64)` | `ecs/graphics/core.rs` | `EcsWorld::new()` | 自動（Copy） | フレーム時刻 |
 | `FrameCount(pub u32)` | `ecs/graphics/core.rs` | `EcsWorld::new()` | 自動（Copy） | フレーム番号 |
-| `TaffyLayoutResource` | `ecs/layout/taffy.rs` | `EcsWorld::new()` | 自動 | レイアウトエンジン |
-| `GraphicsCore` | `ecs/graphics/core.rs` | `EcsWorld::new()` | `unsafe impl` | D2D/D3D デバイス |
-| `DCompGraphicsResource` | `ecs/graphics/dcomp_resource.rs` | DComp モード時のみ | `unsafe impl` | DComp デバイス |
+| `TaffyLayoutResource` | `ecs/layout/taffy.rs` | `EcsWorld::new()` | 自動 | レイアウト |
+| `GraphicsCore` | `ecs/graphics/core.rs` | `EcsWorld::new()` | `unsafe impl` | D2D/D3D |
+| `DCompGraphicsResource` | `ecs/graphics/dcomp_resource.rs` | DComp 時のみ | `unsafe impl` | DComp |
 | `WintfTaskPool` | `ecs/widget/.../task_pool.rs` | `EcsWorld::new()` | 自動 | 非同期タスク |
 | **`DolaRuntime`** | **`ecs/cue/runtime.rs`** | **未登録** | **`unsafe impl`** | **dola ラッパー** |
 
-**パターン抽出**:
-- COM ポインタ / `Rc` を内部に持つ Resource は `unsafe impl Send + Sync` を手動実装
-- `Option<Inner>` パターンで遅延初期化に対応（GraphicsCore, DCompGraphicsResource）
-- Resource はその機能ドメインのモジュールに配置（graphics リソースは `ecs/graphics/` 内）
+**パターン**: COM ポインタ / `Rc` を内部に持つ型は `unsafe impl Send + Sync` を手動実装。
 
-### 2.4 隣接仕様: balloon06-text-effects の DolaBridgeResource
+### 2.4 balloon06-text-effects の DolaBridgeResource
 
-`wintf-P0-balloon06-text-effects/inherited-context.md` が以下の設計を想定:
+`wintf-P0-balloon06-text-effects/inherited-context.md` の想定:
 
 | 項目 | 内容 |
 |------|------|
@@ -73,10 +68,8 @@ wintf 内の `#[derive(Resource)]` 型:
 | **モジュール** | `ecs/dola_bridge/mod.rs` |
 | **方式** | 共有 ECS Resource |
 | **API** | `load_document`, `start`, `bind`, `unbind`, `pause`, `resume` |
-| **所有モデル** | Document 単位でロード。複数バルーンが同一定義を共有可能 |
-| **条件コンパイル** | `#[cfg(feature = "dola")]` |
 
-**重要**: この設計は**未実装**（balloon06 は `phase: "init"`）。本仕様の決定が balloon06 の設計を拘束する。
+**重要**: この設計は**未実装**（balloon06 は `phase: "init"`）。本仕様の DolaAnimator Component 設計により、Resource 前提から Component 前提への調整が必要。
 
 ### 2.5 dola 依存の現状
 
@@ -87,63 +80,64 @@ dola = { path = "../dola" }  # 無条件必須依存
 
 - `FrameTime` の初期化に `dola::runtime::clock::now()` を使用（`world/mod.rs` L50, L453）
 - `CueCommand::Custom` のパラメーター型に `dola::DynamicValue` を使用
-- dola feature flag は現在使われていない（cue-system 設計時に必須化された）
+- dola feature flag は現在未使用
 
 ---
 
 ## 3. 要件別ギャップ分析
 
-### Req 1: DolaRuntime 所有モデル定義
+### Req 1: dola 演出スケジューリング基盤
 
 | 技術ニーズ | 既存資産 | ギャップ |
 |-----------|----------|----------|
-| 所有モデルの選択肢評価 | Resource パターン 7 件の前例 | **Decision Needed**: 3 選択肢のトレードオフ評価が未実施 |
-| 複数インスタンスの独立性保証 | `dola::runtime::DolaRuntime` はグローバル状態なし | Gap なし（dola 側で対応済み） |
-| 生存期間ルール | `EcsWorld::new()` 初期化 / `Option<>` 遅延初期化パターン | Gap なし（既存パターンで対応可能） |
-| `Rc<DynamicValue>` の Thread Safety | `unsafe impl Send/Sync` の前例（GraphicsCore, DCompGraphicsResource） | Gap なし（既存パターンで対応可能） |
-
-**所有モデル選択肢の評価**:
-
-| 選択肢 | 説明 | 適合度 | 課題 |
-|--------|------|--------|------|
-| **(a) コンポーネント内部フィールド** | 各 Balloon/Spot エンティティが独自の DolaRuntime を持つ | ✅ 複数インスタンス自然対応<br>✅ エンティティライフサイクルと一致 | ❌ DolaRuntime が `Send/Sync` でないため ECS Component にできない（`unsafe` ラッパー必須）<br>❌ Document 共有の効率低下 |
-| **(b) EcsWorld 外部** | アプリケーション層が DolaRuntime を管理し、必要時に貸し出す | ✅ ECS 制約から解放<br>✅ 自由な設計 | ❌ wintf のレイヤー依存方向に反する<br>❌ 消費者からのアクセスパスが煩雑 |
-| **(c) 専用モジュールの ECS Resource** | `ecs/dola/` に Resource として配置（balloon06 の DolaBridgeResource 構想に近い） | ✅ 既存パターン踏襲<br>✅ ECS システムから自然にアクセス<br>✅ balloon06 設計との整合性高い | ❌ シングルトン制約（1 World = 1 Resource）<br>⚠️ 複数ランタイム対応には内部に `HashMap` 等が必要 |
-
-**Research Needed**: (c) を採用した場合、Document 単位のスライス管理（balloon06 の `load_document` / `start` 等）と複数ランタイム（1 ランタイム per Document or per Actor）のトレードオフを設計フェーズで深掘りする必要がある。
+| 層構造（上位/下位） | 層概念は座標指定済み、コードなし | Gap なし（要件に層構造定義を提示済み） |
+| `TimedSchedule<T>` 型内部構造 | 未実装 | ✅ **決定済み**: `Entry<T> = Payload(f64, T) \| Barrier(f64, BarrierKind)` 型レベル分離 |
+| `TimedSchedule<T>` API | wintf `CueQueue::pop_ready()` が原型 | ✅ **決定済み**: `tick(&mut self, f64)`（冪等）+ `ready(&self) -> &[T]`（次の `tick()` まで何度でも参照可能）の 2 フェーズ分離。`DolaRuntime` の `tick/last_result` と対称 |
+| バリア管理 API | wintf `CueQueue.barrier_state` | ✅ **決定済み**: `current_barrier(&self) -> Option<&BarrierKind>` + `resolve_barrier(&mut self)` |
+| `CueSheet` + `compile_sheet` | wintf `CueSheet`（削除）+ `dispatch` の一部 | **New Implementation** — dola に新規型・新規関数 |
+| `CueCommand` 9 バリアント（バリア 2 件を `BarrierKind` に分離） | wintf `command.rs`（11 バリアント） | **Migration + Reduction** — `WaitForChoice`/`WaitForClick` を `BarrierKind` に移動して移管 |
+| 演出ドメイン型 | wintf `cue/mod.rs` | **Migration** — `ActorKey`, `CueTarget`, `EntityKey`, `Cue` を dola に移管 |
+| `tick/last_result` API 分離 | 現行 `update(&mut self) -> UpdateResult` | **Refactor** — dola 側の `DolaRuntime` を `tick()` + `last_result()` に分離 |
+| 連続値タイムラインとの責務分離 | 現行モジュール構成 | **Architecture** — モジュール構成で分離を表現 |
+| pasta DSL 互換 | 未実装 | **Design Only** — インターフェース設計の考慮 |
+| bevy_ecs 非依存 | dola は現在 bevy_ecs に依存しない | Gap なし |
 
 ---
 
-### Req 2: cue モジュールからの除去
+### Req 2: DolaAnimator コンポーネント設計
 
 | 技術ニーズ | 既存資産 | ギャップ |
 |-----------|----------|----------|
-| `runtime.rs` 削除 | 55 行の独立ファイル | Gap なし（参照なし。削除のみ） |
-| `update_dola_runtime` 削除 | `systems.rs` L14-17 | Gap なし（`update_cue_sheet_trackers` は独立） |
-| `pub use` 削除 | `mod.rs` L311, L313 | Gap なし |
-| cue パイプライン動作維持 | 75 テスト全パス確認済み | Gap なし |
-| 統合テスト対応 | `cue_dola_integration_test.rs` 147 行、5 テスト | **Migration Needed**: テストの移動先 or 廃止の判断 |
+| `DolaAnimator` Component | `ecs/cue/runtime.rs` の Resource ラッパーが原型 | **New Implementation** — Resource → Component、`tick()` + `last_result()` API に対応 |
+| `unsafe impl Send + Sync` | 前例あり（GraphicsCore, DCompGraphicsResource） | Gap なし（パターン確立済み） |
+| `tick_dola_animators` システム | `update_dola_runtime` が原型 | **New Implementation** — `Query<&mut DolaAnimator>` で全エンティティ一括 tick |
+| Update スケジュール先頭配置 | 13 フェーズのスケジュールラベル定義済み | Gap なし |
+| 消費者パターン | `.after()` パターンが ECS スケジュールに存在 | Gap なし |
+| 配置先モジュール | `ecs/` に 10+ のドメインモジュール | **Decision Needed** — `ecs/dola/` or `ecs/dola_bridge/` |
+| balloon06 整合 | `DolaBridgeResource`（Resource 前提） | **Alignment Needed** — Resource → Component 調整 |
 
-**リスク**: **低**。cue パイプラインは DolaRuntime に一切依存しないことが確認済み。
-
----
-
-### Req 3: 配置先決定
-
-| 技術ニーズ | 既存資産 | ギャップ |
-|-----------|----------|----------|
-| 新規モジュール作成 | `ecs/` に 10+ のドメインモジュールが存在 | Gap なし（パターン確立済み） |
-| balloon06 との整合 | `inherited-context.md` で `ecs/dola_bridge/` を想定 | **Alignment Needed**: 名前とスコープの統一 |
-| レイヤー依存方向 | ECS レイヤー内で完結 | Gap なし |
-| `update_dola_runtime` の再配置 or 廃止 | 現在の実装は結果破棄 | **Decision Needed**: 新配置先で UpdateResult を活用する設計が必要（Req 4 と連動） |
-
-**候補モジュール名**:
+**配置先候補**:
 
 | 候補 | 根拠 | balloon06 整合 |
 |------|------|----------------|
 | `ecs/dola/` | dola ランタイムの ECS 統合基盤 | ⚠️ balloon06 は `dola_bridge/` を想定 |
-| `ecs/dola_bridge/` | balloon06 の inherited-context と一致 | ✅ 完全一致 |
-| `ecs/animation/` | より汎用的な名前 | ❌ balloon06 と不一致 |
+| `ecs/dola_bridge/` | balloon06 の inherited-context と名称一致 | ⚠️ Resource → Component 再設計が必要 |
+
+---
+
+### Req 3: cue モジュール整理
+
+| 技術ニーズ | 既存資産 | ギャップ |
+|-----------|----------|----------|
+| DolaRuntime 関連コード除去 | 55 + 4 + 2 行の独立コード | Gap なし（参照なし、削除のみ） |
+| cue パイプライン動作維持 | 75 テスト全パス確認済み | Gap なし |
+| `CueQueue` リファクタリング | `CueQueue`（434 行）+ `CueSheetTracker` | **Redesign Needed** — `dola::TimedSchedule<dola::CueCommand>` 内包形に再設計 |
+| `u64 ↔ Entity` 変換 | `Entity::to_bits()` / `from_bits()` が利用可能 | **New Implementation** — push/pop 境界に変換レイヤー追加 |
+| re-export 後方互換 | `type` エイリアスパターンは Rust 標準 | Gap なし |
+| 移行戦略 | 未決定 | **Decision Needed** — 即時置換 vs 段階的移行 |
+| 統合テスト | `cue_dola_integration_test.rs` 5 テスト | **Migration Needed** — 移動 or 書き直し or 廃止 |
+
+**リスク**: DolaRuntime 除去は**低リスク**。cue パイプラインは DolaRuntime に一切依存しない。
 
 ---
 
@@ -151,59 +145,28 @@ dola = { path = "../dola" }  # 無条件必須依存
 
 | 技術ニーズ | 既存資産 | ギャップ |
 |-----------|----------|----------|
-| `changes` 消費パターン | balloon06 の `dola_sync_system` 設計が PropertyBinding → コンポーネント更新を想定 | **Research Needed**: 具体的な消費者が未実装のため、本仕様では方針のみ定義 |
-| `triggered` 消費パターン | 既存の消費者なし | **Scope Decision**: 本仕様で定義するか、将来仕様に委譲するか |
-
-**balloon06 から読み取れる消費パターン**:
-```
-runtime.update(time) → changes → PropertyTarget 解決 → コンポーネント更新
-```
-これは ECS システム（`dola_sync_system`）内で行う想定。
+| `changes` 消費パターン | balloon06 の `dola_sync_system` が PropertyBinding → コンポーネント更新を想定 | **Research Needed** — 具体的消費者が未実装 |
+| `triggered` 消費パターン | 既存の消費者なし | **Scope Decision** |
 
 ---
 
-### Req 5: 時刻基準統一
+### Req 5: 設計ドキュメント整合性
 
 | 技術ニーズ | 既存資産 | ギャップ |
 |-----------|----------|----------|
-| 時刻供給元の決定 | `FrameTime.0` = `dola::runtime::clock::now()`（world/mod.rs で毎フレーム更新） | Gap なし（既に統一されている） |
-| スケジュール順序 | 13 フェーズのスケジュールラベルが定義済み | Gap なし（Update フェーズ先頭に配置可能） |
-| フレーム内一貫性 | `FrameTime` の不変性テスト（`cue_dola_integration_test.rs`）が存在 | Gap なし |
+| dola 統合ガイドライン | cue-system design.md, balloon06 context に断片的記載 | **Documentation Needed** |
+| cue-system design.md 是正 | design.md 内に DolaRuntime 参照 20 箇所 | **Edit Needed** |
+| ARCHITECTURE.md / structure.md | dola クレート構造記載あり | **Update Needed** — 配置先決定後に反映 |
 
-**結論**: 時刻基準は既に事実上統一されている。文書化のみ必要。
+**design.md 影響箇所**:
 
----
-
-### Req 6: dola 統合ガイドライン
-
-| 技術ニーズ | 既存資産 | ギャップ |
-|-----------|----------|----------|
-| 「思想共有」の定義 | cue-system design.md の "dola の思想" 記述 | **Documentation Needed** |
-| 「ランタイム利用」の定義 | balloon06 の inherited-context に統合フロー記載 | **Documentation Needed** |
-| 統合手順書 | balloon06 の research.md に断片的記載 | **Consolidation Needed** |
-
-**リスク**: **低**。文書化タスクのみ。設計判断は Req 1/3/4 の結果に依存。
-
----
-
-### Req 7: cue-system 設計ドキュメント是正
-
-| 技術ニーズ | 既存資産 | ギャップ |
-|-----------|----------|----------|
-| design.md の DolaRuntime 記述修正 | design.md 内に DolaRuntime 参照 20 箇所 | **Edit Needed**: mermaid 図、Component Summary、Tech Stack、Req Traceability |
-| validation-report の Section 11 | 既に Post-Implementation Discovery として記録済み | Gap なし（参照追加のみ） |
-
-**影響箇所の詳細**:
-
-| design.md の箇所 | 変更内容 |
-|------------------|----------|
-| L83: Architecture Boundary Map の `DOLA` ノード | 除去またはスコープ外注記 |
-| L108: 設計逸脱注記 | dola-boundary 仕様への参照に変更 |
-| L119: Tech Stack の "dola（必須依存）" 行 | "dola-boundary 仕様で管理" に変更 |
-| L208: Req Traceability の Req 6 行 | dola-boundary 仕様への参照に変更 |
-| L234: Component Summary の DolaRuntime 行 | 除去 + dola-boundary 参照 |
-| L744-790: DolaRuntime 設計詳細セクション | 除去 or dola-boundary 参照に差し替え |
-| L807, L839, L873: ファイル構成・re-export・mermaid | 更新 |
+| 箇所 | 変更内容 |
+|------|----------|
+| L83: Architecture Boundary Map | `DOLA` ノード除去 or スコープ外注記 |
+| L119: Tech Stack | "dola-boundary 仕様で管理" に変更 |
+| L208: Req Traceability | dola-boundary 参照に変更 |
+| L234: Component Summary | DolaRuntime 行除去 |
+| L744-790: DolaRuntime 設計詳細 | 除去 or dola-boundary 参照 |
 
 ---
 
@@ -211,81 +174,34 @@ runtime.update(time) → changes → PropertyTarget 解決 → コンポーネ�
 
 | 技術ニーズ | 既存資産 | ギャップ |
 |-----------|----------|----------|
-| 920+ テスト維持 | DolaRuntime は EcsWorld に未登録、cue テスト 75 件は DolaRuntime 不使用 | Gap なし |
-| 統合テスト対応 | `cue_dola_integration_test.rs` 5 テストが `wintf::ecs::cue::runtime::DolaRuntime` を参照 | **Migration Needed** |
+| wintf 920+ テスト | DolaRuntime は EcsWorld に未登録 | Gap なし |
+| cue 75 テスト | DolaRuntime 不使用 | Gap なし |
+| 統合テスト | `cue_dola_integration_test.rs` 5 テストが `DolaRuntime` 参照 | **Migration Needed** |
+| dola 既存テスト | 新規型追加は既存に影響しない | Gap なし |
 | サンプルアプリ | DolaRuntime を使用する example なし | Gap なし |
 | 公開 API | `ecs/mod.rs` に DolaRuntime 再エクスポートなし | Gap なし |
 
 ---
 
-### NFR-2: 設計文書一貫性
+## 4. 実装アプローチ
 
-| 技術ニーズ | 既存資産 | ギャップ |
-|-----------|----------|----------|
-| ARCHITECTURE.md 更新 | §4 "dola の責務" に DolaRuntime 未記載 | **Update Needed**: 配置先決定後に反映 |
-| structure.md 更新 | dola クレート構造記載あり。ECS モジュールに cue/ の記載なし | **Update Needed**: 新モジュール追加後に反映 |
+### 採用: Option D（dola-first）
 
----
-
-## 4. 実装アプローチ評価
-
-### Option A: Extend Existing — cue モジュール内で再設計
-
-**説明**: `runtime.rs` と `update_dola_runtime` を cue モジュール内で修正。UpdateResult を活用するよう変更。配置は変えない。
-
-**Trade-offs**:
-- ✅ 変更箇所最小（ファイル移動なし）
-- ❌ **cue モジュールの責務違反が残る** — cue は「演出指令の配送基盤」であり DolaRuntime 管理は本来の役割ではない
-- ❌ balloon06 の `dola_bridge/` 設計との不整合
-- ❌ Req 2（除去）の要件を満たせない
-
-**結論**: **不採用**。要件に反する。
-
----
-
-### Option B: Create New — 新規 `ecs/dola/` モジュール
-
-**説明**: `ecs/dola/` モジュールを新規作成し、DolaRuntime ラッパー・更新システム・統合ガイドラインを集約。
-
-**結論**: **不採用**。Req 0（dola 移管方針）を反映しておらず、cue 層から移動するだけで責務境界の根本問題が解決しない。
-
----
-
-### Option C: Hybrid — 新規 `ecs/dola_bridge/` モジュール（balloon06 統合）
-
-**説明**: balloon06 の `inherited-context.md` が想定する `ecs/dola_bridge/` をそのまま採用。
-
-**結論**: **部分採用**。DolaRuntime の ECS 配置先には引き続き有力だが、Req 0（dola 移管）との組み合わせが必要。Option D に包含。
-
----
-
-### ~~Option Z: 現状維持 — 連続値タイムライン vs 離散コマンドキューの分離を維持~~
-
-**棄却確定（2026-02-28）**: ユーザー承認により正式に棄却。dola は離散コマンドスケジューリングを包含する汎用アニメーションエンジンとして拡張する。
-
-> 「dola に離散コマンドスケジューリングを持たせる」承認します。dola は、bevy_ecs に依存しない範疇で、可能な限りアニメーションエンジンとしての責務を移譲させたい。
-
----
-
-### 🟢 Option D: dola-first — dola に離散コアを移管、wintf は ECS 統合層（**採用方針**）
-
-**説明**: Req 0 の承認方針を実装する。ECS 非依存の演出スケジューリング機能を dola に移管し、wintf は ECS 結合レイヤーとして位置付ける。
+ECS 非依存の演出スケジューリング機能を dola に移管し、wintf は ECS 結合レイヤーとして位置付ける。
 
 **フェーズ分割**:
 
 | フェーズ | 仕様 | 内容 |
 |----------|------|------|
-| **Phase 1: dola 新規型** | **dola-boundary（本仕様）** | `TimedSchedule<T>`, `CueCommand`（全 11 バリアント、EntityRef(u64)）, `CueScript`, `compile_script`, ドメイン型（`ActorKey`, `CueTarget`, `EntityKey`）を dola に追加 |
-| **Phase 2: wintf cue 除去** | **dola-boundary（本仕様）** | `ecs/cue/runtime.rs` 削除、`update_dola_runtime` 削除、cue テスト移動 |
-| **Phase 3: wintf cue 再設計** | **dola-boundary または別仕様** | `CueQueue` を `dola::TimedSchedule<dola::CueCommand>` を内包した形に再設計、wintf は ECS ラッピング + u64 ↔ Entity 変換のみ |
-| **Phase 4: balloon06 統合** | **balloon06-text-effects** | `DolaBridgeResource` 実装、PropertyBinding, dola_sync_system |
+| **Phase 1: dola 新規型** | 本仕様 | `TimedSchedule<T>`, `CueCommand`（9 バリアント）, `CueSheet`, `compile_sheet`, ドメイン型 4 種, `tick/last_result` API 分離 |
+| **Phase 2: wintf 除去** | 本仕様 | `ecs/cue/runtime.rs` 削除、`update_dola_runtime` 削除、テスト移動 |
+| **Phase 3: wintf 再設計** | 本仕様 or 別仕様 | `CueQueue` を `dola::TimedSchedule<dola::CueCommand>` 内包形に再設計 |
+| **Phase 4: balloon06 統合** | balloon06-text-effects | DolaAnimator 活用、PropertyBinding, dola_sync_system |
 
-**Trade-offs**:
-- ✅ dola の「Declarative Orchestration」の理念に直結（連続値補間 + 離散コマンドスケジューリングの両立）
-- ✅ pasta DSL による高レベル演出表現が wintf 非依存で実現可能になる
-- ✅ wintf 以外のプラットフォーム（CLI ツール、テストハーネス）からも `TimedSchedule<T>` を利用できる
-- ⚠️ dola クレートの追加工数が発生（新規型 3〜4 + API 設計）
-- ⚠️ `TimedSchedule` の API 設計が後の wintf 再設計を拘束するため、慣れ今日のリスクあり
+**根拠**:
+- dola の「Declarative Orchestration」理念に直結
+- pasta DSL による高レベル演出表現が wintf 非依存で実現可能
+- wintf 以外のプラットフォームからも `TimedSchedule<T>` を利用可能
 
 ---
 
@@ -295,60 +211,46 @@ runtime.update(time) → changes → PropertyTarget 解決 → コンポーネ�
 
 | 要件 | 工数 | 根拠 |
 |------|------|------|
-| Req 0: dola 新規型 | **L** (5-7日) | `TimedSchedule<T>`, バリア状態機械, `CueCommand` enum, `CueScript`, `compile_script` の新規実装。dola のモジュール構成変更を伴う |
-| Req 2: cue 除去 | **S** (1日) | ファイル削除 + re-export 修正 + テスト移動 |
-| Req 8: CueCommand 全移管 | **M** (2-3日) | wintf の `command.rs` 全 11 バリアント + ドメイン型を dola に移管、EntityRef(u64) 変換、re-export で後方互換性維持 |
-| Req 9: cue モジュール再設計 | **M** (3-4日) | `CueQueue` を `dola::TimedSchedule<T>` 内包形に再設計、環境整備 |
-| Req 1: 所有モデル | **M** (2-3日) | 設計判断 + 文書化 + balloon06 整合確認 |
-| Req 3: 配置先 | **S** (0.5日) | Option D 採用により `ecs/dola_bridge/` 一択（Follows D1） |
+| Req 1: dola 新規型 + API | **L** (5-7日) | `TimedSchedule<T>`, `BarrierKind`（3 種）, `CueCommand`（9 バリアント）, `CueSheet`, `compile_sheet`, ドメイン型 4 種, `tick/last_result` 分離 |
+| Req 2: DolaAnimator | **M** (2-3日) | Component 実装 + tick システム + 配置先決定 |
+| Req 3: cue 整理 | **M** (3-4日) | 除去（S）+ CueQueue 再設計（M）+ 移行戦略 |
 | Req 4: UpdateResult | **S** (0.5日) | 方針決定 + 文書化（実装は balloon06 に委譲） |
-| Req 5: 時刻統一 | **S** (0.5日) | 文書化のみ |
-| Req 6: ガイドライン | **M** (2日) | 2層モデル（思想共有 vs ランタイム利用）の文書化 |
-| Req 7: design.md 是正 | **S** (1日) | 20 箇所の編集 |
-| NFR-1/2: 後方互換+文書 | **S** (1日) | テスト実行 + 文書更新 |
+| Req 5: ドキュメント | **M** (2日) | ガイドライン整備 + design.md 是正 20 箇所 + ARCHITECTURE.md |
+| NFR-1: 後方互換 | **S** (1日) | テスト実行 + 統合テスト移行 |
 
-**全体工数**: **L〜XL** (2週前後)。当初準 M 評価から Req 0/8/9（dola 新規実装）の追加により大幅増大。
+**全体工数**: **L〜XL** (2週前後)
 
 ### リスク評価
 
 | リスク | レベル | 根拠 |
 |--------|--------|------|
-| dola API 設計の慣れいく日 | **高** | `TimedSchedule<T>` のインターフェース設計が後の wintf 再設計を拘束する |
-| CueCommand 全移管の破壊的変更 | **中** | wintf 内の全テスト（cue 系 75 件）、re-export / 型エイリアスで緩和可能。EntityRef(u64) 変換レイヤー追加が必要 |
-| balloon06 との設計不整合 | **中** | 引き続き存在するが、Option D 採用により `DolaBridgeResource` 設計に引き継ぎやすくなる |
-| cue 除去によるリグレッション | **低** | DolaRuntime は cue パイプラインに未接続。920+ テスト中 DolaRuntime 参照は 5 テストのみ |
+| ~~`TimedSchedule<T>` API 設計~~ | ✅ **解溈** | API 確定（`Entry<T>` 型分離 + `tick/ready` 2 フェーズ）により拘束リスク解溈 |
+| CueCommand 全移管の影響 | **中** | wintf cue テスト 75 件に影響。re-export で緩和可能 |
+| balloon06 との設計不整合 | **中** | Resource → Component 調整が必要だが balloon06 は未実装 |
+| cue 除去リグレッション | **低** | DolaRuntime は cue パイプラインに未接続 |
 
 ---
 
 ## 6. 推奨事項（設計フェーズへの引き継ぎ）
 
-### 採用アプローチ: Option D（dola-first）
-
-**根拠**:
-1. **承認方針の実行**: 「dola は bevy_ecs に依存しない範疇で可能な限り責務を移譲」を体現する唯一の選択肢
-2. **dola の Orchestration 理念と的合**: 「Declarative Orchestration for Live Animation」は連続値補間だけでなく離散コマンドの時刻スケジューリングも包含する
-3. **pasta DSL との将来統合**: pasta を利用した高レベル演出表現が wintf 非依存で実現可能になる
-4. **balloon06 との孔空性**: `DolaBridgeResource` 実装する時に dola の `TimedSchedule<T>` が既に利用可能な状態になる
-
 ### 設計フェーズで決定すべき事項
 
-| # | 決定事項 | 優先度 |
-|---|----------|--------|
-| D1 | `TimedSchedule<T>` の API 設計: バリア型をジェネリック型パラメータにするか、別トレイト `Barrierlike` で抽象化するか | 最高 |
-| D2 | dola での演出コマンド enum の名前: `ScriptCommand`, `OrchestratorCommand`, `CueCommand` | 高 |
-| D3 | `CueScript` 候補名称: `Script`, `OrchestratorScript` | 中 |
-| D4 | wintf 側の型接続: `type CueCommand = dola::CueCommand` re-export のみ vs ラッパー型 | 中 |
-| D5 | Req 9 の移行戦略: (a) 即時置換 vs (b) 段階的移行 | 高 |
-| D6 | `update_dola_runtime` の処遇: 廃止 vs `ecs/dola_bridge/` へ移動 vs balloon06 に委譲 | 中 |
-| D7 | dola feature flag: 必須依存を維持 vs `#[cfg(feature = "dola")]` 再導入 | 中 |
-| D8 | `cue_dola_integration_test.rs` の処遇: 移動 vs 書き直し vs 廃止 | 低 |
+| # | 決定事項 | 関連要件 | 優先度 |
+|---|----------|----------|--------|
+| ~~D1~~ | ~~`TimedSchedule<T>` の API 設計~~ → ✅ 確定: `Entry<T> = Payload(f64, T) \| Barrier(f64, BarrierKind)` 型レベル分離、`tick()` + `ready(&self) -> &[T]` 2 フェーズ API（`tick/last_result` と対称） | Req 1 AC2-3 | ✅ **決定済み** |
+| ~~D2~~ | ~~dola での演出コマンド enum 名称候補~~ → ✅ 確定: `CueCommand`（9 バリアント、バリア 2 件は `BarrierKind` に分離） | Req 1 AC5 | ✅ **決定済み** |
+| ~~D3~~ | ~~`CueScript` 候補名称~~ → ✅ 確定: `CueSheet` / `compile_sheet`（wintf 側の同名型は削除） | Req 1 AC4 | ✅ **決定済み** |
+| **D4** | wintf 側の型接続: `type CueCommand = dola::CueCommand` re-export のみ vs newtypeラッパー | Req 3 AC5 | 高 |
+| **D5** | 移行戦略: Phase 1→2→3 の順序と Phase 2 先行の可否 | Req 3 AC6 | 高 |
+| ~~D6~~ | ~~`update_dola_runtime` の処遇~~ → ✅ 確定: **廃止**（Req 3 AC1 で明文化） | Req 3 AC1 | ✅ **決定済み** |
+| **D7** | dola feature flag: `CueSheet` 系を `#[cfg(feature = "cue")]` として分離するか、必須依存とするか | 横断 | 中 |
+| **D8** | `cue_dola_integration_test.rs` 処遇: `DolaAnimator` テストに書き直す vs 廃止 | Req 3 | 低 |
 
-### Research Items（設計フェーズで調査）
+### Research Items
 
-1. **`TimedSchedule<T>` のバリア設計**: `WaitForChoice` / `WaitForClick` がバリアかつ `T` のインスタンスでもある場合、型システム上どう表現するか。`TimedSchedule<Void>` と `TimedSchedule<CueCommand>` の統合方法
-2. **balloon06 との DolaBridgeResource API 整合**: `TimedSchedule<T>` の実装後、`DolaBridgeResource` の `start`, `bind`, `unbind` API との相互作用
-3. **`Rc<DynamicValue>` の Thread Safety 監査**: `TimedSchedule<T>` に `DynamicValue` を保持する場合の `Send` / `Sync` 安全性
-4. **pasta DSL インターフェース設計**: pasta の出力形式が `CueScript` の構造と直接対応つくか、変換層が必要か
+1. ~~**`TimedSchedule<T>` のバリア設計**~~: 決定済み — `Entry<T> = Payload(f64, T) | Barrier(f64, BarrierKind)` により旧 `WaitForChoice`/`WaitForClick` は `CueCommand` から除外され `BarrierKind`（WaitForInput/WaitForChoice/Timeout 3 種）として `Entry::Barrier` で管理される
+2. **balloon06 との DolaBridgeResource API 整合**: `TimedSchedule<T>` 実装後の `DolaBridgeResource` の `start`, `bind`, `unbind` API との相互作用
+3. **pasta DSL インターフェース設計**: pasta の出力形式が `dola::CueSheet` の構造と直接対応するか、変換層が必要か
 
 ---
 
@@ -356,15 +258,9 @@ runtime.update(time) → changes → PropertyTarget 解決 → コンポーネ�
 
 | 要件 | 既存資産 | ギャップステータス |
 |------|----------|-------------------|
-| **Req 0: dola 新規型** | dola の既存 Rust プロジェクト構造 | **New Implementation** — dola に TimedSchedule・CoreCommand・CueScript 追加 |
-| Req 1: 所有モデル | Resource パターン 7 件 | **Decision Needed** |
-| Req 2: cue 除去 | runtime.rs (55 行), systems.rs (4 行), mod.rs (2 行) | ✅ Ready（削除のみ） |
-| Req 3: 配置先 | Option D 採用により `ecs/dola_bridge/` に自然収束 | **Follows D1** |
+| **Req 1: dola 基盤** | dola 既存プロジェクト構造、wintf `CueQueue`/`command.rs` が原型 | **New Implementation + Migration** |
+| **Req 2: DolaAnimator** | `ecs/cue/runtime.rs` (Resource ラッパー)、`update_dola_runtime` | **New Implementation** — Resource → Component |
+| **Req 3: cue 整理** | runtime.rs (55行), systems.rs (4行), mod.rs (2行), CueQueue (434行) | 除去: ✅ Ready / 再設計: **Redesign Needed** |
 | Req 4: UpdateResult | balloon06 の dola_sync_system 設計 | **Research Needed** |
-| Req 5: 時刻統一 | FrameTime = clock::now() 、既に統一 | ✅ Ready（文書化のみ） |
-| Req 6: ガイドライン | cue-system design.md, balloon06 context | **Documentation Needed** |
-| Req 7: design.md 是正 | design.md 内 20 箇所特定済み | ✅ Ready（編集作業のみ） |
-| **Req 8: CueCommand 全移管** | wintf `command.rs` (81 行)、10/11 バリアントが ECS 非依存、EntityRef のみ Entity 使用→u64 変換で解決 | **Full Migration** — 全 11 バリアント + ドメイン型を dola に移管、wintf は re-export + u64 ↔ Entity 変換のみ |
-| **Req 9: cue 再設計** | wintf `CueQueue`（434 行）+ `CueSheetTracker` | **Redesign Needed** — 移行戦略を設計フェーズで決定 |
-| NFR-1: 後方互換 | 920+ テスト、DolaRuntime 未登録 | ✅ Ready（cue 除去分）/ **Pending**（dola 変更分） |
-| NFR-2: 文書一貫性 | ARCHITECTURE.md, structure.md | **Update Needed** |
+| Req 5: ドキュメント | design.md 影響 20 箇所特定済み、ARCHITECTURE.md | **Documentation Needed** |
+| NFR-1: 後方互換 | 920+ テスト、DolaRuntime 未登録 | ✅ Ready（除去分）/ **Pending**（dola 変更分） |

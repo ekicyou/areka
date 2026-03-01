@@ -71,7 +71,7 @@ dola は bevy_ecs に依存しない範疇で、可能な限りアニメーシ�
 
 | 概念 | 現在の所在 | 移管後 |
 |------|-----------|--------|
-| `TimedSchedule<T>` — 汎用絶対時刻配信エンジン（`advance()` / `ready()`） | wintf `CueQueue` 内に暗黙 | dola 新規ジェネリック型 |
+| `TimedSchedule<T>` — 汎用絶対時刻配信エンジン（`tick()` / `ready()`） | wintf `CueQueue` 内に暗黙 | dola 新規ジェネリック型 |
 | バリア状態（`Entry<T> = Payload(f64, T) \| Barrier(f64, BarrierKind)`） | wintf `CueQueue.barrier_state` + コマンド判定 | dola `TimedSchedule<T>` に型レベルで統合 |
 | `CueSheet` — 相対時刻コマンド列 | wintf `CueSheet`（**削除**・dola 型に置換） | dola 新規型 |
 | `compile_sheet` — 相対→絶対時刻変換 | wintf `dispatch` の一部 | dola 新規関数 |
@@ -123,7 +123,7 @@ DolaRuntime の使い方が間違っている件の是正。cue-system 実装時
 #### Acceptance Criteria
 
 1. The dola crate shall `bevy_ecs` クレートへの依存を持たない
-2. The dola crate shall `TimedSchedule<T>` 型を提供する — 内部エントリは `Entry<T> { Payload(f64, T) | Barrier(f64, BarrierKind) | Routing(f64, RoutingCommand) }` の型レベル 3 種分離とし、f64 は 0 ベースの相対オフセット（スケジュール開始からの経過時間）とする。2 フェーズ API を持つ: `advance(&mut self, current_time: f64)` は「新たな時刻を入力としてランタイムの時刻を進める行為」であり、時刻到達済みの `Payload` を `ready_buffer` に、`Routing` を `routing_buffer` にそれぞれ蒐集しながら進行し、**Barrier 到達または末尾到達で停止**する（冪等、同一時刻の再呼び出し安全）。Routing は外部解決不要のためバリアと異なり停止しない。`ready(&self) -> &[T]` で次の `advance()` 呼び出しまでそのバッファを何度でも読み取り専用で返す。`DolaRuntime` の `tick/last_result` と対称的な設計とする。**同一時刻の処理モデル**: Payload はキーフレームベース（`ready()` が複数を返す、実行順序不定）、Barrier/Routing はシーケンシャル（同一時刻に複数ある場合、Barrier は最初の1つのみ有効、Routing は配列順に処理。推奨: 各時刻に1つのみ記述）
+2. The dola crate shall `TimedSchedule<T>` 型を提供する — 内部エントリは `Entry<T> { Payload(f64, T) | Barrier(f64, BarrierKind) | Routing(f64, RoutingCommand) }` の型レベル 3 種分離とし、f64 は 0 ベースの相対オフセット（スケジュール開始からの経過時間）とする。2 フェーズ API を持つ: `tick(&mut self, current_time: f64)` は「新たな時刻を入力としてランタイムの時刻を進める行為」であり、時刻到達済みの `Payload` を `ready_buffer` に、`Routing` を `routing_buffer` にそれぞれ蒐集しながら進行し、**Barrier 到達または末尾到達で停止**する（冪等、同一時刻の再呼び出し安全）。Routing は外部解決不要のためバリアと異なり停止しない。`ready(&self) -> &[T]` で次の `tick()` 呼び出しまでそのバッファを何度でも読み取り専用で返す。`DolaRuntime` の `tick/last_result` と対称的な設計とする。**同一時刻の処理モデル**: Payload はキーフレームベース（`ready()` が複数を返す、実行順序不定）、Barrier/Routing はシーケンシャル（同一時刻に複数ある場合、Barrier は最初の1つのみ有効、Routing は配列順に処理。推奨: 各時刻に1つのみ記述）
 3. The dola crate shall `TimedSchedule<T>` のバリア管理 API を提供する — `current_barrier(&self) -> Option<&BarrierKind>` で現在の停止理由を照会し、`notify_barrier_resolved(&mut self, choice_id: Option<String>)` で外部イベントからバリア解除を通知する（WaitForInput: choice_id=None, WaitForChoice: choice_id=Some(選択ID)）。`BarrierKind` は WaitForInput（クリック/キー）/ WaitForChoice（選択肢）/ Timeout の 3 種とする。Timeout は時刻到達で自動解除。ルーティングエントリは `next_routing(&mut self) -> Option<RoutingCommand>` で取得し、CueQueue 層が消費する（`ready()` には含まれない）
 4. The dola crate shall `CueSheet` 型（相対時刻コマンド列）と `compile_sheet` 関数（0 ベース Entry 生成）を提供する — `compile_sheet` は `CueSheet` の相対時刻を 0 ベースの相対オフセットに正規化して `Entry<CueCommand>` を生成する。絶対時刻への変換は `TimedSchedule::new(start_time)` の責務。`CueSheet` は dola 言語（`DolaDocument` / `Storyboard` による連続値アニメ宣言）とは独立した離散コマンド列であり、記述言語の文脈では「dola（連続値アニメ）」と「キューシート（離散コマンド）」として区別する
 5. The dola crate shall `CueCommand` enum として全 6 バリアントを提供する — データ系のみ（`Text(String)`, `Clear`, `Emote { key: String }`, `Choice { id: String, text: String }`, `EntityRef(u64)`, `Custom { command: String, params: DynamicValue }`）。`Clone + Debug + PartialEq` を満たしシリアライズ可能（serde 対応）とする。バリアコマンド（旧 `WaitForChoice`, `WaitForClick`）は `BarrierKind` として、ルーティングコマンド（旧 `RouteAdd`, `RouteSwitch`, `RouteRemove`）は `RoutingCommand` として、それぞれ `Entry` レベルで分離済み

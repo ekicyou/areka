@@ -29,7 +29,7 @@
 - **調査対象**: `crates/wintf/src/ecs/cue/queue.rs`
 - **所見**:
   - `push_sorted`（降順 binary search + insert）: 汎用化可能 → `TimedSchedule::insert()`
-  - `pop_ready`（末尾 pop + 時刻比較 + barrier 遷移）: コア部分を `advance()` に抽出可能
+  - `pop_ready`（末尾 pop + 時刻比較 + barrier 遷移）: コア部分を `tick()` に抽出可能
   - `BarrierState`（kind + start_time + timeout + first_valid）: `Entry::Barrier` + `BarrierKind` に分解
   - `pending_choices`: CueCommand 固有ロジック。`TimedSchedule<T>` のスコープ外 → wintf `CueQueue` に残留
   - `CueQueueState` (Playing/Paused/WaitingForClick/WaitingForChoice/Error/Completed): ECS 固有状態。wintf に残留

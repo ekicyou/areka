@@ -19,7 +19,7 @@ dola クレートに離散コマンドスケジューリング基盤（`cue/` �
 ### Goals
 
 - dola に `cue/` モジュールを新設し `TimedSchedule<T>`, `CueSheet`, `CueCommand`, `RoutingCommand`, `CuePayload`, ドメイン型を提供する
-- `DolaRuntime` API を `tick()` + `last_result()` に分離し、`TimedSchedule` の `advance()` + `ready()` と対称な 2 フェーズ API を確立する
+- `DolaRuntime` API を `tick()` + `last_result()` に分離し、`TimedSchedule` の `tick()` + `ready()` と対称な 2 フェーズ API を確立する
 - wintf に `DolaAnimator` Component を新設し、エンティティごとの独立アニメーション状態を実現する
 - wintf `cue/` モジュールから誤配置 DolaRuntime コードを除去する
 - 移管した型は re-export により wintf 側の後方互換を維持する
@@ -166,7 +166,7 @@ sequenceDiagram
     DR-->>Consumer: UpdateResult ref
 
     Consumer->>CQ: Query mut CueQueue
-    CQ->>TS: advance(FrameTime.0)
+    CQ->>TS: tick(FrameTime.0)
     Note over TS: Routing到達 → routing_buffer に蒐集（通過）
     Note over TS: Barrier到達 → 停止、current_barrier() で照会
     TS-->>CQ: ready() -> Payload slice
@@ -185,7 +185,7 @@ sequenceDiagram
     UI->>CQ: handle_input_event()
     CQ->>TS: notify_barrier_resolved(choice_id)
     Note over TS: choice_id = None → WaitForInput<br/>choice_id = Some(...) → WaitForChoice
-    Note over TS: バリア解除、次回advance()で進行再開
+    Note over TS: バリア解除、次回tick()で進行再開
 ```
 
 ---
@@ -195,7 +195,7 @@ sequenceDiagram
 | 要件 | サマリー | コンポーネント | インターフェース | フロー |
 |------|---------|--------------|----------------|--------|
 | 1.1 | bevy_ecs 非依存 | dola::cue::* | — | — |
-| 1.2 | TimedSchedule API（Entry 3種分離・0ベースオフセット） | TimedSchedule, Entry | advance/ready | Flow 2 |
+| 1.2 | TimedSchedule API（Entry 3種分離・0ベースオフセット） | TimedSchedule, Entry | tick/ready | Flow 2 |
 | 1.3 | バリア管理（プッシュ通知） | TimedSchedule | current_barrier/notify_barrier_resolved/next_routing | Flow 2, 3 |
 | 1.4 | CueSheet + compile_sheet（0ベース正規化） | CueSheet, compile_sheet, CuePayload | compile_sheet() | Flow 1 |
 | 1.5 | CueCommand 6 バリアント（データ系のみ） | CueCommand | — | Flow 1 |
@@ -264,8 +264,8 @@ pub struct TimedSchedule<T> {
     // ── 内部フィールド ──
     // start_time: f64         — 絶対時刻での開始時刻
     // entries: Vec<Entry<T>>  — 降順ソート（0 ベース相対オフセット）
-    // ready_buffer: Vec<T>    — advance() で収集した Payload
-    // routing_buffer: Vec<RoutingCommand> — advance() で収集した Routing
+    // ready_buffer: Vec<T>    — tick() で収集した Payload
+    // routing_buffer: Vec<RoutingCommand> — tick() で収集した Routing
     // current_barrier: Option<BarrierKind>
 }
 
@@ -306,10 +306,10 @@ impl<T: Clone + Debug> TimedSchedule<T> {
     /// current_time は絶対時刻（内部で start_time 差分 → 相対オフセット変換）。
     /// 時刻到達済みの Payload を ready_buffer に、Routing を routing_buffer に蒐集しながら進行。
     /// Barrier 到達（外部解決が必要）または末尾到達で停止。Routing は通過（停止しない）。冪等。
-    pub fn advance(&mut self, current_time: f64);
+    pub fn tick(&mut self, current_time: f64);
 
-    /// Phase 2: 直前の advance() で収集された Payload スライスを返す。
-    /// 次の advance() まで何度でも参照可能。
+    /// Phase 2: 直前の tick() で収集された Payload スライスを返す。
+    /// 次の tick() まで何度でも参照可能。
     pub fn ready(&self) -> &[T];
 
     // ── バリア管理 ──
@@ -338,9 +338,9 @@ impl<T: Clone + Debug> TimedSchedule<T> {
 ##### State Management
 
 - **状態遷移**: `Idle` → `Advancing` → `Blocked`（バリア到達）→ `Completed`（全消費）。外部からは `current_barrier()` / `is_completed()` で照会
-- **冪等性**: `advance(t)` を同一 `t` で複数回呼び出しても `ready_buffer` は変化しない
-- **消費型**: `advance()` で収集された Payload は内部キューから除去される（不可逆）
-- **時刻変換**: `new(start_time)` で絶対時刻基準を保持。`advance(current_time)` は内部で `current_time - start_time` に変換
+- **冪等性**: `tick(t)` を同一 `t` で複数回呼び出しても `ready_buffer` は変化しない
+- **消費型**: `tick()` で収集された Payload は内部キューから除去される（不可逆）
+- **時刻変換**: `new(start_time)` で絶対時刻基準を保持。`tick(current_time)` は内部で `current_time - start_time` に変換
 
 **Implementation Notes**
 
@@ -348,7 +348,7 @@ impl<T: Clone + Debug> TimedSchedule<T> {
   - **Payload**: キーフレームベース — `ready()` が `&[T]` で複数返却。実行順序不定（並列処理可）
   - **Barrier**: シーケンシャル — 同一時刻に複数ある場合、最初の 1 つのみ有効。推奨: 各時刻に 1 つのみ記述
   - **Routing**: シーケンシャル — 同一時刻に複数ある場合、配列順（記述順）に `next_routing()` で順次取得
-- **タイムアウト判定**: Barrier 到達時、`timeout_offset = barrier_offset + timeout_duration` を計算。`advance()` で `offset >= timeout_offset` なら自動解除
+- **タイムアウト判定**: Barrier 到達時、`timeout_offset = barrier_offset + timeout_duration` を計算。`tick()` で `offset >= timeout_offset` なら自動解除
 - **新 CueSheet 投入**: 既存スケジュールは全破棄（`clear()` + `new(start_time)` + `extend()`）。バリア中でも強制切替。Actor 単位で独立した TimedSchedule
 - **Validation**: f64 オフセットは非負値を前提（insert 時の `debug_assert!`）
 - **Risks**: `ready_buffer` の `Vec<T>` アロケーション。実用上 1 フレーム内の到達コマンド数は少数（1〜10）のためパフォーマンス問題なし
@@ -733,7 +733,7 @@ classDiagram
     class TimedSchedule~T~ {
         -Vec~Entry~T~~ entries
         -Vec~T~ ready_buffer
-        +advance(f64)
+        +tick(f64)
         +ready() slice
         +current_barrier()
         +notify_barrier_resolved()
@@ -768,7 +768,7 @@ classDiagram
 **不変条件**:
 - `CueSheet` 内の `Cue` は `start_time` 昇順
 - `TimedSchedule` 内の `Entry` は f64 オフセット降順（末尾 pop で O(1) 消費）
-- `advance()` 後の `ready_buffer` はバリア到達前の全 Payload を含む
+- `tick()` 後の `ready_buffer` はバリア到達前の全 Payload を含む
 - `notify_barrier_resolved()` はバリア状態でのみ有効（非バリア時は no-op）
 
 ---
@@ -794,7 +794,7 @@ dola `cue/` モジュールのエラーは `thiserror` ベースの `CueError` e
 
 | テスト対象 | 検証内容 |
 |-----------|---------|
-| `TimedSchedule::advance` | 時刻到達済み Payload の正確な収集、冪等性、同一時刻複数 Payload |
+| `TimedSchedule::tick` | 時刻到達済み Payload の正確な収集、冪等性、同一時刻複数 Payload |
 | `TimedSchedule::barrier` | バリア到達で停止、notify_barrier_resolved 後に再進行、タイムアウト自動解除 |
 | `TimedSchedule::routing` | next_routing() による順次取得、ready() に含まれないことの確認 |
 | `CuePayload::into_entry` | 3 種の変換正確性 |
@@ -809,7 +809,7 @@ dola `cue/` モジュールのエラーは `thiserror` ベースの `CueError` e
 | `DolaAnimator` Component | spawn/tick/last_result の一連の流れ |
 | `tick_dola_animators` System | Query<&mut> による全エンティティ一括 tick |
 | re-export 後方互換 | `wintf::ecs::cue::CueCommand` パスの維持 |
-| CueQueue + TimedSchedule | push → advance → ready → barrier → notify の統合フロー |
+| CueQueue + TimedSchedule | push → tick → ready → barrier → notify の統合フロー |
 | 既存 cue テスト 75 件 | 全パス（リグレッションなし） |
 
 ### テスト移行（D8）
