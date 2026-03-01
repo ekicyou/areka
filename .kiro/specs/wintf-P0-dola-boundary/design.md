@@ -258,6 +258,8 @@ sequenceDiagram
 ```rust
 /// 0 ベース相対オフセットの汎用配信エンジン。
 /// Entry<T> により Payload / Barrier / Routing を型レベルで 3 種分離する。
+/// ジェネリクス T は Payload(f64, T) のみに適用される。
+/// Barrier(BarrierKind) / Routing(RoutingCommand) は T に関わらず固定型。
 pub struct TimedSchedule<T> {
     // ── 内部フィールド ──
     // start_time: f64         — 絶対時刻での開始時刻
