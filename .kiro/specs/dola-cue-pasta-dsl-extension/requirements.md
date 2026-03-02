@@ -77,7 +77,7 @@ dolaクレートの拡張の準備。完了した「wintf-P0-dola-boundary」仕
 3. The pasta DSL 拡張パーサー shall キューコマンド行で以下のコマンド種別を提供する：
    - **キーフレーム宣言**: 直前の暗黙キーフレームに名前を付与
    - **キーフレーム指定**: 指定キーフレーム + オフセット秒数を基準時刻として設定
-   - **Barrier 指定**: dola `BarrierKind`（All / Any / Explicit）に対応する進行停止点
+   - **Barrier 指定**: dola `BarrierKind`（WaitForInput / WaitForChoice / Timeout）に対応する進行停止点
    - **Clear**: dola `CueCommand::Clear` に対応するバルーンクリア指令
 4. The pasta DSL 拡張パーサー shall キーフレーム名として空でない任意の文字列を許容する。
 5. The pasta DSL 拡張パーサー shall キーフレーム指定のオフセット秒数として 0.0 以上の浮動小数点数を受け入れる。
