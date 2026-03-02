@@ -63,6 +63,10 @@ dolaクレートの拡張の準備。完了した「wintf-P0-dola-boundary」仕
 2. When 次のアクション行が時刻指定（`!` キーフレーム指定行）なしで記述された場合、the pasta DSL 拡張パーサー shall 直前の暗黙キーフレームを基準時刻（t=0.0）として扱う。
 3. The pasta DSL 拡張パーサー shall シーン開始時の初期基準時刻を `0.0` とする。
 4. The pasta DSL 拡張パーサー shall 暗黙キーフレームの時刻計算をシーンスコープ内に限定し、別シーンへ跨がらせない。
+5. The pasta DSL 拡張パーサー shall 各キューコマンドの所要時間（duration）を自ら算出せず、行の出現順序と構造情報のみを出力する。
+6. The CueSheet 構築層 shall 所要時間を外部注入インターフェース（Trait オブジェクト等）から取得し、`Cue.start_time` を算出する。dola 内で所要時間を確定しない。
+
+> **設計注記**: 「このコマンドならこれだけの時間がかかる」を返す Duration Resolver トレイトを定義し、CueSheet 初期化時またはビルダーに注入する設計とする。パーサー → IR（順序 + 構造） → Duration Resolver 注入 → CueSheet（時刻確定）というパイプラインを想定。
 
 ---
 
@@ -196,6 +200,7 @@ dolaクレートの拡張の準備。完了した「wintf-P0-dola-boundary」仕
     - エイリアス定義行の具体的文法（コマンド名の英語 / 日本語対応表、引数エンコード規則）
     - RoutingCommand 自動生成ロジック（状態追跡、Add / Switch / Remove 判定、RouteRemove 発行条件）
     - 並列演出検出アルゴリズム（キーフレーム + オフセットベースの時刻一致判定）
+    - Duration Resolver トレイトの設計（外部注入インターフェース、CueSheet ビルダーへの組み込み方法）
     - アクション行での複数 `@command` 処理方針
     - 継続行（`:content`）の CueCommand::Text 追加挙動
     - CueCommand::Clear の生成ポリシー（明示 vs 自動）
