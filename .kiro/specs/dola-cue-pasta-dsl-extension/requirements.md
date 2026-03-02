@@ -61,56 +61,38 @@ dolaクレートの拡張の準備。完了した「wintf-P0-dola-boundary」仕
 
 ---
 
-### 要件 3: キーフレーム宣言行
+### 要件 3: キューコマンド行（`!` 行）
 
-### 要件 3: キーフレーム宣言行
-
-**Objective:** スクリプト作者として、暗黙的に生成されたキーフレームに明示的な名前を付与したい。そうすることで、後続のキーフレーム指定行でその時点を参照できる。
+**Objective:** スクリプト作者として、キーフレーム制御・Barrier指定などの演出制御コマンドを統一的な記法で記述したい。そうすることで、時系列制御とインタラクティブな演出フローを宣言的に表現できる。
 
 #### Acceptance Criteria
 
-1. The pasta DSL 拡張パーサー shall キューシートモードでキーフレーム宣言行（具体的な文法は設計フェーズで決定）を認識し、直前の暗黙キーフレームに名前を付与する。
-2. The pasta DSL 拡張パーサー shall キーフレーム名として空でない任意の文字列を許容する。
-3. If 同一シーン内で重複するキーフレーム名が宣言された場合、the pasta DSL 拡張パーサー shall パースエラーを報告する。
-4. The pasta DSL 拡張パーサー shall キーフレーム名のスコープをシーン単位に限定する。
+1. The pasta DSL 拡張パーサー shall キューシートモードで `!` または `！` で始まる行をキューコマンド行として認識する。
+2. The pasta DSL 拡張パーサー shall キューコマンド行をシーンスコープ内の行種別として扱い、アクション行の本文に含めない。
+3. The pasta DSL 拡張パーサー shall キューコマンド行で以下のコマンド種別を提供する：
+   - **キーフレーム宣言**: 直前の暗黙キーフレームに名前を付与
+   - **キーフレーム指定**: 指定キーフレーム + オフセット秒数を基準時刻として設定
+   - **Barrier 指定**: dola `BarrierKind`（All/Any/Explicit）に対応する進行停止点
+4. The pasta DSL 拡張パーサー shall キーフレーム名として空でない任意の文字列を許容する。
+5. The pasta DSL 拡張パーザー shall キーフレーム指定のオフセット秒数として 0.0 以上の浮動小数点数を受け入れる。
+6. If 同一シーン内で重複するキーフレーム名が宣言された場合、the pasta DSL 拡張パーサー shall パースエラーを報告する。
+7. If キーフレーム指定で未宣言のキーフレーム名が参照された場合、the pasta DSL 拡張パーサー shall パースエラーを報告する。
+8. The pasta DSL 拡張パーサー shall キーフレーム名のスコープをシーン単位に限定する。
+9. The pasta DSL 拡張パーサー shall キーフレーム指定行以降のアクション行・エイリアス参照を、指定されたキーフレーム + オフセットを `start_time` として dola CueSheet に変換する。
+10. The pasta DSL 拡張パーサー shall 同一キーフレーム + オフセットを持つ複数の要素を並列演出として認識し、それぞれ別の `Cue` エントリとして生成する。
 
-> **設計注記**: キーフレーム宣言行の具体的な文法（例：`@keyframe_name`、`#keyframe name`）は design.md で決定する。
-
----
-
-### 要件 4: キーフレーム指定行
-
-**Objective:** スクリプト作者として、特定のキーフレームから相対的なオフセット秒数を指定して要素を配置したい。そうすることで、並列演出や複雑な時系列制御を記述できる。
-
-#### Acceptance Criteria
-
-1. The pasta DSL 拡張パーサー shall キューシートモードでキーフレーム指定行（具体的な文法は設計フェーズで決定）を認識し、キーフレーム名 + オフセット秒数の組を基準時刻として設定する。
-2. The pasta DSL 拡張パーサー shall オフセット秒数として 0.0 以上の浮動小数点数を受け入れる。
-3. If 指定されたキーフレーム名が同一シーン内で宣言されていない場合、the pasta DSL 拡張パーサー shall パースエラーを報告する。
-4. The pasta DSL 拡張パーサー shall キーフレーム指定行以降のアクション行・CueCommand を、指定されたキーフレーム + オフセットを `start_time` として dola CueSheet に変換する。
-5. The pasta DSL 拡張パーサー shall 同一キーフレーム + オフセットを持つ複数の要素を並列演出として認識し、それぞれ別の `Cue` エントリとして生成する。
-
-> **設計注記**: キーフレーム指定行の具体的な文法（例：`@keyframe + 0.5` 形式、`[keyframe + 0.5]` 形式）は design.md で決定する。並列演出検出のロジック、RoutingCommand（Add/Switch/Remove）の自動生成規則も設計フェーズで詳細化する。
-
----
-
-### 要件 5: Barrier 指定行
-
-**Objective:** スクリプト作者として、演出の進行停止点（入力待ち・選択待ち）を行レベルで宣言したい。そうすることで、インタラクティブな演出フローをキューシートとして記述できる。
-
-#### Acceptance Criteria
-
-1. The pasta DSL 拡張パーサー shall キューシートモードで Barrier 指定行（具体的な文法は設計フェーズで決定）を認識し、dola `BarrierKind` の3バリアント（All, Any, Explicit）に対応する。
-2. The pasta DSL 拡張パーサー shall `BarrierKind::All` を表す記法（全アクターの完了待ち）を提供する。
-3. The pasta DSL 拡張パーサー shall `BarrierKind::Any` を表す記法（いずれか1アクターの完了待ち）を提供する。
-4. The pasta DSL 拡張パーサー shall `BarrierKind::Explicit(Vec<ActorKey>)` を表す記法（特定アクターIDリストの完了待ち）を提供する。
-5. The pasta DSL 拡張パーサー shall Barrier 指定行をアクション行の本文に含めず、独立した行種別として扱う。
-
-> **設計注記**: 具体的な文法（例：`#barrier all`、`&barrier：all` 属性拡張、専用記号行）は design.md で決定する。
+> **設計注記**: 
+> - 具体的なコマンド文法（キーフレーム宣言・指定・Barrier の記法）は design.md で決定する
+> - 文法設計原則：
+>   - **シンプルなフレーズ**: 冗長な記号を避け、意図が直感的に理解できる形式
+>   - **英語・日本語両対応**: どちらの言語でも自然に記述可能
+>   - **明瞭なコマンド名**: 省略表記を避け、プログラムソースコード級の明確な単語を使用（例：`barrier`、`keyframe`、`goto` など）
+>   - **拡張性**: 将来的なコマンド追加（例：`timeout`、`wait` など）に対応可能な構造
+> - 並列演出検出のロジック、RoutingCommand（Add/Switch/Remove）の自動生成規則は設計フェーズで詳細化する
 
 ---
 
-### 要件 6: エイリアス定義行
+### 要件 4: エイリアス定義行
 
 **Objective:** スクリプト作者として、`@alias_name` に対して CueCommand の詳細（コマンド種別 + 引数）を定義したい。そうすることで、アクション行で `@alias_name` を参照するだけで CueCommand を挿入できる。
 
@@ -130,20 +112,20 @@ dolaクレートの拡張の準備。完了した「wintf-P0-dola-boundary」仕
 
 ---
 
-### 要件 7: Say/Emote のアクション行対応
+### 要件 5: Say/Emote のアクション行対応
 
 **Objective:** スクリプト作者として、既存の pasta DSL アクション行（`actor：content` および `@command` 記法）を使って dola `CueCommand::Text` と `CueCommand::Emote` を記述したい。そうすることで、通常の会話記述が自然にキューシートに変換される。
 
 #### Acceptance Criteria
 
 1. When キューシートモードでアクション行 `actor：content` が記述された場合、the pasta DSL 拡張パーサー shall `content` を `CueCommand::Text(content)` にマッピングする。
-2. When アクション行で `@command` 記法（例：`さくら：こんにちわ@happy`）が使用された場合、the pasta DSL 拡張パーサー shall `@command` 部分を要件 6 のエイリアス解決ルールに従って処理し、エイリアス未定義の場合は `CueCommand::Emote { key: "happy" }` にフォールバックする。
-3. The pasta DSL 拡張パーサー shall アクション行の `actor` 部分を ActorKey として解釈し、後続のルーティング自動生成（要件 8）の入力とする。
+2. When アクション行で `@command` 記法（例：`さくら：こんにちわ@happy`）が使用された場合、the pasta DSL 拡張パーサー shall `@command` 部分を要件 4 のエイリアス解決ルールに従って処理し、エイリアス未定義の場合は `CueCommand::Emote { key: "happy" }` にフォールバックする。
+3. The pasta DSL 拡張パーサー shall アクション行の `actor` 部分を ActorKey として解釈し、後続のルーティング自動生成（要件 6）の入力とする。
 4. The pasta DSL 拡張パーサー shall 1つのアクション行に複数の `@command` が含まれる場合、設計フェーズで決定する挙動（最初のみ有効、最後のみ有効、エラー）を適用する。
 
 ---
 
-### 要件 8: Routing の自動生成
+### 要件 6: Routing の自動生成
 
 **Objective:** スクリプト作者として、ルーティング制御（`RoutingCommand`）を明示的に記述せず、アクション行とアクター配置（`％`行）の組み合わせから自動生成してほしい。そうすることで、記述量を減らしつつ並列演出を実現できる。
 
@@ -160,7 +142,7 @@ dolaクレートの拡張の準備。完了した「wintf-P0-dola-boundary」仕
 
 ---
 
-### 要件 9: 後方互換性と既存文法との共存
+### 要件 7: 後方互換性と既存文法との共存
 
 **Objective:** プロジェクト関係者として、既存の pasta スクリプトが変更なく動作し続けることを保証したい。そうすることで、拡張導入による既存コンテンツの破壊リスクをゼロにできる。
 
@@ -173,7 +155,7 @@ dolaクレートの拡張の準備。完了した「wintf-P0-dola-boundary」仕
 
 ---
 
-### 要件 10: エラーハンドリング
+### 要件 8: エラーハンドリング
 
 **Objective:** スクリプト作者として、文法エラーの箇所が特定できるエラーメッセージを受け取りたい。そうすることで、キューシート記述の誤りを迅速に修正できる。
 
@@ -188,16 +170,16 @@ dolaクレートの拡張の準備。完了した「wintf-P0-dola-boundary」仕
 
 ---
 
-### 要件 11: 設計成果物要件
+### 要件 9: 設計成果物要件
 
 **Objective:** プロジェクト関係者として、本仕様を元に pasta_dsl の実装者が文法拡張を実施できる状態の設計書と動作サンプルファイルを得たい。そうすることで、コード実装フェーズに確実に移行できる。
 
 #### Acceptance Criteria
 
-1. The pasta DSL 拡張仕様 shall 全機能（暗黙キーフレーム、キーフレーム宣言・指定、Barrier、エイリアス定義、Say/Emote、Routing 自動生成）を網羅したサンプルシーンを含む `cue.pasta` ファイルを成果物として提供する。
+1. The pasta DSL 拡張仕様 shall 全機能（暗黙キーフレーム、キューコマンド行、エイリアス定義、Say/Emote、Routing 自動生成）を網羅したサンプルシーンを含む `cue.pasta` ファイルを成果物として提供する。
 2. The pasta DSL 拡張仕様 shall 並行演出（複数アクターの同一キーフレーム + オフセット）を示すシーンを `cue.pasta` に含める。
-3. The pasta DSL 拡張仕様 shall `design.md` に要件 1～10 の全機能を実現するために必要な pasta_dsl 変更対象ファイル（`.pest` 文法ファイル・AST・パーサー・IR）と変更内容の指針を記載する。
-4. The pasta DSL 拡張仕様 shall `design.md` に各新規行種別の具体的な文法（EBNF または PEG 記法）を明示する。
+3. The pasta DSL 拡張仕様 shall `design.md` に要件 1～8 の全機能を実現するために必要な pasta_dsl 変更対象ファイル（`.pest` 文法ファイル・AST・パーサー・IR）と変更内容の指針を記載する。
+4. The pasta DSL 拡張仕様 shall `design.md` にキューコマンド行（`!` 行）の具体的な文法（EBNF または PEG 記法）を明示する。
 5. The pasta DSL 拡張仕様 shall `design.md` に実装フェーズ計画（段階的 MVP）を記載し、最小実装（MVP）から段階的に拡張できる構成とする。
 6. The pasta DSL 拡張仕様 shall `cue.pasta` を現行の pasta_dsl ではコンパイルできないことを明記した免責コメントを当ファイル冒頭に記載する。
 7. The pasta DSL 拡張仕様 shall エイリアス定義の CueCommand 記法（コマンド名、引数エンコード規則）を `design.md` に表形式で明示し、実装者が正確に参照できるようにする。
@@ -207,16 +189,18 @@ dolaクレートの拡張の準備。完了した「wintf-P0-dola-boundary」仕
 ## Notes
 
 - **設計フェーズへの引き継ぎ事項**: 
-    - キーフレーム宣言・指定行の具体的文法
-    - Barrier 指定行の具体的文法
+    - キューコマンド行（`!` 行）の具体的文法（キーフレーム宣言・指定・Barrier の各コマンド記法）
     - エイリアス定義行の具体的文法とコマンド記法
     - RoutingCommand 自動生成ロジックの詳細
     - 並列演出検出のアルゴリズム
     - アクション行での複数 `@command` 処理方針
+    - 文法設計原則：シンプル・明瞭・英語日本語両対応・拡張性
 
 - **将来拡張候補**:
     - グローバルスコープのエイリアス定義
     - CueCommand::Move/Jump の記法
     - CueCommand::Custom の詳細パラメータ記法
+    - キューコマンド行への新規コマンド追加（timeout、wait など）
     - Storyboard 統合（キーフレーム相互参照）
+
 
