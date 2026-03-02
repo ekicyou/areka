@@ -14,6 +14,16 @@ dolaクレートの拡張の準備。完了した「wintf-P0-dola-boundary」仕
 
 本拡張は現行 pasta DSL の後方互換性を維持しつつ、キューシートモード専用の新構文を追加する。
 
+### スコープ
+
+本仕様は **CueSheet 単体のテキスト表現** に集中する。以下は明示的にスコープ外とする：
+
+- **CueSheet → Storyboard 起動**: CueSheet から連続値アニメーション（Storyboard）を起動する記法
+- **Storyboard キーフレーム同期**: Storyboard のキーフレームを CueSheet 側の同期点として使用する記法
+- **時刻・キーフレーム相互変換**: CueSheet の `start_time: f64` と Storyboard の `KeyframeRef` の連携
+
+これらの連携機能は将来拡張として、専用の統合仕様で扱う。
+
 ---
 
 ## Requirements

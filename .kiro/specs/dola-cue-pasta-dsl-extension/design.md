@@ -149,13 +149,13 @@ time_value        ::= float_literal       (* 秒単位、0.0 以上 *)
 
 ### 変更対象ファイル（推定）
 
-| ファイル                                       | 変更内容                                                     |
-| ---------------------------------------------- | ------------------------------------------------------------ |
-| `crates/pasta_dsl/src/parser/grammar.pest`     | タイムスタンプ記法・`\cue_*` トークンの文法ルール追加        |
-| `crates/pasta_dsl/src/parser/ast/*.rs`          | `TimedActionLine`, `CueDirective` AST ノード追加             |
-| `crates/pasta_dsl/src/parser/parse_action.rs`  | 新ルールに対応したパーサーロジック追加                        |
-| `crates/pasta_dsl/src/parser/parse_scene.rs`   | CueSheet シーンスコープの処理追加                             |
-| *(IR 層は pasta_lua 等の消費者側)*              | CueSheet 向けの IR 出力形式追加（対象クレートは設計時に確定） |
+| ファイル                                      | 変更内容                                                      |
+| --------------------------------------------- | ------------------------------------------------------------- |
+| `crates/pasta_dsl/src/parser/grammar.pest`    | タイムスタンプ記法・`\cue_*` トークンの文法ルール追加         |
+| `crates/pasta_dsl/src/parser/ast/*.rs`        | `TimedActionLine`, `CueDirective` AST ノード追加              |
+| `crates/pasta_dsl/src/parser/parse_action.rs` | 新ルールに対応したパーサーロジック追加                        |
+| `crates/pasta_dsl/src/parser/parse_scene.rs`  | CueSheet シーンスコープの処理追加                             |
+| *(IR 層は pasta_lua 等の消費者側)*            | CueSheet 向けの IR 出力形式追加（対象クレートは設計時に確定） |
 
 ### 実装フェーズ提案
 
@@ -165,6 +165,10 @@ time_value        ::= float_literal       (* 秒単位、0.0 以上 *)
 
 ### 非実装事項（本設計の対象外）
 
+- **CueSheet ↔ Storyboard 連携**（将来拡張）
+  - CueSheet から Storyboard（連続値アニメーション）を起動する記法
+  - Storyboard キーフレームを CueSheet 側の同期点として使用する記法
+  - `start_time: f64` と `KeyframeRef` の相互変換
 - タイムスタンプなし行の自動時刻割り当て戦略の最終決定（継承 vs. エラーは実装時に確定）
 - `\cue_entity` の運用方法（ECS Entity bits の流通経路）は areka 側設計と調整が必要
 - Lua ブロックからのキュー操作 API（将来拡張）
