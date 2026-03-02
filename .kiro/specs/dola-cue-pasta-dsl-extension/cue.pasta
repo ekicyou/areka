@@ -1,0 +1,123 @@
+# dola キューシート — pasta DSL 拡張設計仕様
+# ===========================================================================
+# 本ファイルは pasta DSL の拡張文法により dola CueSheet を表現するサンプルです。
+# 現行の pasta_core ではコンパイルできません（拡張実装待ち）。
+#
+# 拡張文法の中心となる 2 つの新要素：
+#   1. タイムスタンプ記法  [<秒>] — 行頭に記述し Cue.start_time を指定
+#   2. クエコマンド記法   \cue_<command>[<args>] — sakura スクリプト拡張として
+#      dola の CueCommand / BarrierKind / RoutingCommand を表現
+# ===========================================================================
+
+# ---------------------------------------------------------------------------
+# キューシート定義例 1: 起動挨拶シーン
+# ---------------------------------------------------------------------------
+# ＆type：cuesheet を付けることでこのシーンが CueSheet として解釈される。
+# 「タイプ属性」は pasta DSL の既存属性構文の拡張（意味論の追加）。
+
+＊起動挨拶
+    ＆type：cuesheet
+
+    # --- t=0.0: ルーティング設定 --------------------------------------------
+    # CueSheet 開始時にシェル・バルーンの配送先を確立する。
+    # \cue_route_add[<target>, <entity>]
+    #   target: shell | balloon
+    #   entity: actor:<name>:shell | actor:<name>:balloon | spot:<name> | balloon:<name>
+    [0.0] さくら：\cue_route_add[shell, actor:さくら:shell]
+    [0.0] さくら：\cue_route_add[balloon, actor:さくら:balloon]
+
+    # --- t=0.0: 表情設定 ----------------------------------------------------
+    # \cue_emote[<key>]  →  CueCommand::Emote { key }
+    # key の意味解釈は消費者（Shell 側）の責務。
+    [0.0] さくら：\cue_emote[normal]
+
+    # --- t=0.5: テキスト表示 ------------------------------------------------
+    # 通常のアクション行 → CueCommand::Text(<content>)
+    # content にはさくらスクリプト・単語参照・変数参照も埋め込み可能（現行文法のまま）。
+    [0.5] さくら：こんにちは！\n今日はいい天気ですね。
+
+    # --- t=2.0: 表情変更 + テキスト継続 -------------------------------------
+    [2.0] さくら：\cue_emote[smile]
+    [2.5] さくら：お散歩でも行きませんか？
+
+    # --- t=4.0: 入力待ちバリア（タイムアウト 10 秒）-----------------------
+    # \cue_wait_input             →  BarrierKind::WaitForInput { timeout: None }
+    # \cue_wait_input[<seconds>]  →  BarrierKind::WaitForInput { timeout: Some(seconds) }
+    [4.0] さくら：\cue_wait_input[10.0]
+
+    # --- t=4.0: コンテンツクリア + 選択肢先積み ----------------------------
+    # バリアと同時刻に Clear → Choice × N → WaitForChoice の流れは
+    # TimedSchedule のオフセット順処理で正しく並べることができる。
+    [4.0] さくら：\cue_clear
+
+    # \cue_choice[<id>, <text>]  →  CueCommand::Choice { id, text }
+    # WaitForChoice の「前」に連続投入する先積みプロトコルに対応。
+    [4.0] さくら：\cue_choice[go, はい、行きましょう！]
+    [4.0] さくら：\cue_choice[skip, 今日は遠慮しておきます]
+
+    # \cue_wait_choice             →  BarrierKind::WaitForChoice { timeout: None }
+    # \cue_wait_choice[<seconds>]  →  BarrierKind::WaitForChoice { timeout: Some(seconds) }
+    [4.0] さくら：\cue_wait_choice[30.0]
+
+    # --- t=5.0: 選択肢応答（2 アクターが同時進行する例）-------------------
+    # さくら側：選択結果に応じたアクション（ここでは "go" 選択を想定）
+    [5.0] さくら：\cue_emote[happy]
+    [5.0] さくら：では出発しましょう！
+
+    # --- t=6.0: タイムアウトバリア ------------------------------------------
+    # \cue_timeout[<seconds>]  →  BarrierKind::Timeout { duration }
+    [6.0] さくら：\cue_timeout[2.0]
+
+    # --- t=8.0: ルーティング解除 --------------------------------------------
+    # \cue_route_remove[<target>]  →  RoutingCommand::RouteRemove { target }
+    [8.0] さくら：\cue_route_remove[balloon]
+    [8.0] さくら：\cue_route_remove[shell]
+
+
+# ---------------------------------------------------------------------------
+# キューシート定義例 2: 2 アクター並行演出シーン
+# ---------------------------------------------------------------------------
+
+＊デュエット挨拶
+    ＆type：cuesheet
+
+    # 2 アクターのルーティングを t=0.0 で一括設定
+    [0.0] さくら：\cue_route_add[shell, actor:さくら:shell]
+    [0.0] さくら：\cue_route_add[balloon, actor:さくら:balloon]
+    [0.0] うにゅう：\cue_route_add[shell, actor:うにゅう:shell]
+    [0.0] うにゅう：\cue_route_add[balloon, actor:うにゅう:balloon]
+
+    # アクター省略記法（前行と同じ actor を継承）は現行 pasta 文法どおり使用可能
+    [0.5] さくら：こんにちはー！
+    [0.5] うにゅう：ごきげんよう！
+
+    # 異なる時刻で別々に発話
+    [1.5] さくら：ねえ、何か食べに行かない？
+    [2.5] うにゅう：いいですわね、ケーキはいかが？
+
+    # バリアは各アクター独立で発行可能
+    [3.5] さくら：\cue_wait_input[15.0]
+    [3.5] うにゅう：\cue_wait_input[15.0]
+
+
+# ---------------------------------------------------------------------------
+# キューシート定義例 3: カスタムコマンド・EntityRef の使用
+# ---------------------------------------------------------------------------
+
+＊高度な演出
+    ＆type：cuesheet
+
+    [0.0] さくら：\cue_route_add[shell, actor:さくら:shell]
+
+    # \cue_cmd[<command_name>, <json_params>]  →  CueCommand::Custom { command, params }
+    # JSON パラメータは DynamicValue（JSON 互換辞書型）として渡される。
+    [0.0] さくら：\cue_cmd[fade_in, {"duration":0.5,"easing":"ease_out"}]
+
+    # \cue_entity[<u64_bits>]  →  CueCommand::EntityRef(u64)
+    # ECS Entity::to_bits() 変換済みの値を渡す（設計上のプレースホルダー）。
+    [0.5] さくら：\cue_entity[1152921504606846976]
+
+    [1.0] さくら：こんにちは！
+
+    [2.0] さくら：\cue_cmd[fade_out, {"duration":0.3}]
+    [2.3] さくら：\cue_route_remove[shell]
