@@ -1,0 +1,3 @@
+[submodule "vendors/pasta"]
+	path = vendors/pasta
+	url = https://github.com/ekicyou/pasta.git
