@@ -26,6 +26,8 @@ bevy_utils = "0.18.0"
 thiserror = "2"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+# pasta DSL integration (switch to versioned release when stable)
+pasta_core = { git = "https://github.com/ekicyou/pasta.git", branch = "main" }
 
 [workspace.dependencies.bevy_app]
 version = "0.18.0"
