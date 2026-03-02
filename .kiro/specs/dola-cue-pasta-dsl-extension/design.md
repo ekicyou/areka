@@ -79,14 +79,14 @@ time_value        ::= float_literal       (* 秒単位、0.0 以上 *)
 
 ### 2-1. CueCommand 系
 
-| pasta 記法 | dola マッピング |
-|---|---|
-| `actor：テキスト` | `CueCommand::Text("テキスト")` |
-| `actor：\cue_clear` | `CueCommand::Clear` |
-| `actor：\cue_emote[<key>]` | `CueCommand::Emote { key }` |
-| `actor：\cue_choice[<id>, <text>]` | `CueCommand::Choice { id, text }` |
-| `actor：\cue_entity[<u64>]` | `CueCommand::EntityRef(u64)` |
-| `actor：\cue_cmd[<name>, <json>]` | `CueCommand::Custom { command: name, params: json }` |
+| pasta 記法                         | dola マッピング                                      |
+| ---------------------------------- | ---------------------------------------------------- |
+| `actor：テキスト`                  | `CueCommand::Text("テキスト")`                       |
+| `actor：\cue_clear`                | `CueCommand::Clear`                                  |
+| `actor：\cue_emote[<key>]`         | `CueCommand::Emote { key }`                          |
+| `actor：\cue_choice[<id>, <text>]` | `CueCommand::Choice { id, text }`                    |
+| `actor：\cue_entity[<u64>]`        | `CueCommand::EntityRef(u64)`                         |
+| `actor：\cue_cmd[<name>, <json>]`  | `CueCommand::Custom { command: name, params: json }` |
 
 **注意事項**
 - `\cue_choice` は `\cue_wait_choice` の直前に連続投入すること（先積みプロトコル）
@@ -94,21 +94,21 @@ time_value        ::= float_literal       (* 秒単位、0.0 以上 *)
 
 ### 2-2. BarrierKind 系
 
-| pasta 記法 | dola マッピング |
-|---|---|
-| `actor：\cue_wait_input` | `BarrierKind::WaitForInput { timeout: None }` |
-| `actor：\cue_wait_input[<sec>]` | `BarrierKind::WaitForInput { timeout: Some(sec) }` |
-| `actor：\cue_wait_choice` | `BarrierKind::WaitForChoice { timeout: None }` |
+| pasta 記法                       | dola マッピング                                     |
+| -------------------------------- | --------------------------------------------------- |
+| `actor：\cue_wait_input`         | `BarrierKind::WaitForInput { timeout: None }`       |
+| `actor：\cue_wait_input[<sec>]`  | `BarrierKind::WaitForInput { timeout: Some(sec) }`  |
+| `actor：\cue_wait_choice`        | `BarrierKind::WaitForChoice { timeout: None }`      |
 | `actor：\cue_wait_choice[<sec>]` | `BarrierKind::WaitForChoice { timeout: Some(sec) }` |
-| `actor：\cue_timeout[<sec>]` | `BarrierKind::Timeout { duration: sec }` |
+| `actor：\cue_timeout[<sec>]`     | `BarrierKind::Timeout { duration: sec }`            |
 
 ### 2-3. RoutingCommand 系
 
-| pasta 記法 | dola マッピング |
-|---|---|
-| `actor：\cue_route_add[<target>, <entity>]` | `RoutingCommand::RouteAdd { target, to: entity }` |
+| pasta 記法                                     | dola マッピング                                      |
+| ---------------------------------------------- | ---------------------------------------------------- |
+| `actor：\cue_route_add[<target>, <entity>]`    | `RoutingCommand::RouteAdd { target, to: entity }`    |
 | `actor：\cue_route_switch[<target>, <entity>]` | `RoutingCommand::RouteSwitch { target, to: entity }` |
-| `actor：\cue_route_remove[<target>]` | `RoutingCommand::RouteRemove { target }` |
+| `actor：\cue_route_remove[<target>]`           | `RoutingCommand::RouteRemove { target }`             |
 
 ---
 
@@ -116,19 +116,19 @@ time_value        ::= float_literal       (* 秒単位、0.0 以上 *)
 
 ### CueTarget 記法
 
-| 記法 | dola 型 |
-|---|---|
-| `shell` | `CueTarget::Shell` |
+| 記法      | dola 型              |
+| --------- | -------------------- |
+| `shell`   | `CueTarget::Shell`   |
 | `balloon` | `CueTarget::Balloon` |
 
 ### EntityKey 記法
 
-| 記法 | dola 型 |
-|---|---|
-| `actor:<name>:shell` | `EntityKey::Actor(ActorKey(<name>), CueTarget::Shell)` |
+| 記法                   | dola 型                                                  |
+| ---------------------- | -------------------------------------------------------- |
+| `actor:<name>:shell`   | `EntityKey::Actor(ActorKey(<name>), CueTarget::Shell)`   |
 | `actor:<name>:balloon` | `EntityKey::Actor(ActorKey(<name>), CueTarget::Balloon)` |
-| `spot:<name>` | `EntityKey::Spot(<name>)` |
-| `balloon:<name>` | `EntityKey::Balloon(<name>)` |
+| `spot:<name>`          | `EntityKey::Spot(<name>)`                                |
+| `balloon:<name>`       | `EntityKey::Balloon(<name>)`                             |
 
 ---
 
@@ -149,12 +149,13 @@ time_value        ::= float_literal       (* 秒単位、0.0 以上 *)
 
 ### 変更対象ファイル（推定）
 
-| ファイル | 変更内容 |
-|---|---|
-| `crates/pasta_core/src/grammar/*.pest` | タイムスタンプ記法・`\cue_*` トークンの文法ルール追加 |
-| `crates/pasta_core/src/ast.rs` | `TimedActionLine`, `CueDirective` AST ノード追加 |
-| `crates/pasta_core/src/parser.rs` | 新ルールに対応したパーサーロジック追加 |
-| `crates/pasta_core/src/ir.rs` | CueSheet 向けの IR 出力形式追加 |
+| ファイル                                       | 変更内容                                                     |
+| ---------------------------------------------- | ------------------------------------------------------------ |
+| `crates/pasta_dsl/src/parser/grammar.pest`     | タイムスタンプ記法・`\cue_*` トークンの文法ルール追加        |
+| `crates/pasta_dsl/src/parser/ast/*.rs`          | `TimedActionLine`, `CueDirective` AST ノード追加             |
+| `crates/pasta_dsl/src/parser/parse_action.rs`  | 新ルールに対応したパーサーロジック追加                        |
+| `crates/pasta_dsl/src/parser/parse_scene.rs`   | CueSheet シーンスコープの処理追加                             |
+| *(IR 層は pasta_lua 等の消費者側)*              | CueSheet 向けの IR 出力形式追加（対象クレートは設計時に確定） |
 
 ### 実装フェーズ提案
 
