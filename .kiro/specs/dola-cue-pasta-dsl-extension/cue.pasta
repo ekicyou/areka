@@ -174,27 +174,3 @@
     さくら：こちらはキューシートモードではありません。
     さくら：!keyframe のような行も通常テキストとして扱われます。
     さくら：@happy も通常の pasta ランダムワード参照として動作します。
-
-
-
-# ---------------------------------------------------------------------------
-# キューシート定義例 3: カスタムコマンド・EntityRef の使用
-# ---------------------------------------------------------------------------
-
-＊高度な演出
-    ＆type：cuesheet
-
-    [0.0] さくら：\cue_route_add[shell, actor:さくら:shell]
-
-    # \cue_cmd[<command_name>, <json_params>]  →  CueCommand::Custom { command, params }
-    # JSON パラメータは DynamicValue（JSON 互換辞書型）として渡される。
-    [0.0] さくら：\cue_cmd[fade_in, {"duration":0.5,"easing":"ease_out"}]
-
-    # \cue_entity[<u64_bits>]  →  CueCommand::EntityRef(u64)
-    # ECS Entity::to_bits() 変換済みの値を渡す（設計上のプレースホルダー）。
-    [0.5] さくら：\cue_entity[1152921504606846976]
-
-    [1.0] さくら：こんにちは！
-
-    [2.0] さくら：\cue_cmd[fade_out, {"duration":0.3}]
-    [2.3] さくら：\cue_route_remove[shell]
