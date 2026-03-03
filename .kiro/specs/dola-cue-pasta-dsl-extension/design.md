@@ -150,7 +150,9 @@ flowchart TD
 | 4.1–4.4 | エイリアス定義行の文法 | PEG `alias_def_line` ルール | `CueIrAliasDef` 型 | — |
 | 4.5–4.6 | エイリアス解決・Emote フォールバック | Builder のエイリアス解決ロジック | `AliasTable::resolve()` | — |
 | 5.1–5.6 | アクション行の CueCommand マッピング | Builder のアクション変換 | `CueIrAction` → `Vec<Cue>` 変換 | — |
-| 6.1–6.8 | Routing 自動生成と SlotRegistry | Builder の RouteAdd/Switch 判定 | `SlotRegistry::get_slot_assignment()` | RouteAdd/Switch フロー |
+| 6.1–6.2, 6.5–6.8, 6.10 | Routing 自動生成と SlotRegistry | Builder の RouteAdd 自動判定 | `SlotRegistry::get_slot_assignment()` | RouteAdd/Switch フロー |
+| 6.3 | `!route_add` 明示コマンド | PEG `cue_route_add` + Builder | `CueIrCommand::RouteAdd` | — |
+| 6.4 | `!route_switch` 明示コマンド | PEG `cue_route_switch` + Builder | `CueIrCommand::RouteSwitch` | — |
 | 7.1–7.4 | 後方互換性 | パーサーのモード条件分岐 | — | — |
 | 8.1–8.7 | エラーハンドリング | `CueParseError` / `CueBuildError` | エラー型定義 | — |
 | 9.1–9.9 | 設計成果物要件 | 本書 + `cue.pasta` | — | — |
@@ -206,6 +208,8 @@ cue_cmd_body = {
   | cue_wait_choice
   | cue_timeout
   | cue_clear
+  | cue_route_add
+  | cue_route_switch
   | cue_route_remove
 }
 
@@ -237,10 +241,26 @@ cue_timeout = {
 // !clear  /  ！クリア
 cue_clear = { "clear" | "クリア" }
 
+// !route_add[shell, actor:さくら:shell]  /  ！ルート追加[balloon, spot:stage]
+cue_route_add = {
+    ("route_add" | "ルート追加") ~ "[" ~ cue_target ~ "," ~ SPACE* ~ entity_key ~ "]"
+}
+
+// !route_switch[balloon, spot:stage_balloon]  /  ！ルート切替
+cue_route_switch = {
+    ("route_switch" | "ルート切替") ~ "[" ~ cue_target ~ "," ~ SPACE* ~ entity_key ~ "]"
+}
+
 // !route_remove[shell]  /  ！ルート削除[balloon]
 cue_route_remove = {
     ("route_remove" | "ルート削除") ~ "[" ~ cue_target ~ "]"
 }
+
+// EntityKey 記法（RouteAdd / RouteSwitch の to 引数）
+entity_key = { entity_key_actor | entity_key_spot | entity_key_balloon }
+entity_key_actor   = { "actor:" ~ cue_ident ~ ":" ~ cue_target }
+entity_key_spot    = { "spot:"    ~ cue_ident }
+entity_key_balloon = { "balloon:" ~ cue_ident }
 
 // ターゲット識別子
 cue_target = { "shell" | "balloon" | "シェル" | "バルーン" }
@@ -291,6 +311,8 @@ alias_custom_cmd = {
 | `wait_choice` | `選択肢待ち` | `BarrierKind::WaitForChoice` |
 | `timeout` | `タイムアウト` | `BarrierKind::Timeout` |
 | `clear` | `クリア` | `CueCommand::Clear` |
+| `route_add` | `ルート追加` | `RoutingCommand::RouteAdd` |
+| `route_switch` | `ルート切替` | `RoutingCommand::RouteSwitch` |
 | `route_remove` | `ルート削除` | `RoutingCommand::RouteRemove` |
 | `shell` | `シェル` | `CueTarget::Shell` |
 | `balloon` | `バルーン` | `CueTarget::Balloon` |
@@ -367,6 +389,10 @@ pub enum CueIrCommand {
     Barrier(BarrierKind),
     /// `!clear`
     Clear,
+    /// `!route_add[target, entity_key]` — 任意 EntityKey を指定して RouteAdd を明示発行
+    RouteAdd { target: CueTarget, to: EntityKey },
+    /// `!route_switch[target, entity_key]` — 配送先 Entity の切り替え
+    RouteSwitch { target: CueTarget, to: EntityKey },
     /// `!route_remove[target]`
     RouteRemove { target: CueTarget },
 }
@@ -463,7 +489,7 @@ pub trait SlotRegistry {
 }
 ```
 
-**RouteAdd/RouteSwitch 判定ロジック**:
+**RouteAdd 自動生成ロジック**:
 
 ```
 アクション行 actor:content を処理する際:
@@ -471,11 +497,20 @@ pub trait SlotRegistry {
 1. slot_registry.get_slot_assignment(&actor) を呼び出す
 2. None（未割り当て）の場合:
      slot = slot_registry.auto_assign(actor.clone())
+     // 伺か慣習: Shell・Balloon 両方に同一アクター Entity を自動登録
      cues.push(Cue { Routing(RouteAdd { target: Shell,   to: Actor(actor, Shell) }) })
      cues.push(Cue { Routing(RouteAdd { target: Balloon, to: Actor(actor, Balloon) }) })
 3. Some(slot)（割り当て済み）の場合:
-     通常発話は RouteSwitch を生成しない
-     （CueTarget 変更シナリオは将来拡張として設計に留保）
+     ルーティング Cue は生成しない
+
+// 明示 RouteAdd / RouteSwitch:
+// CueIrEntry::Command(RouteAdd { target, to }) →
+//   result_cues.push(Cue { actor: SYSTEM_ACTOR, start_time: current_time,
+//                           payload: Routing(RouteAdd { target, to }) })
+// CueIrEntry::Command(RouteSwitch { target, to }) →
+//   result_cues.push(Cue { actor: SYSTEM_ACTOR, start_time: current_time,
+//                           payload: Routing(RouteSwitch { target, to }) })
+// RouteSwitch は自動生成せず、スクリプト作者の !route_switch 明示記述のみで発行する。
 ```
 
 ---
@@ -543,6 +578,12 @@ build(scene):
       CueIrEntry::Command(Clear):
         result_cues.push(Cue { actor: SYSTEM_ACTOR, start_time: current_time,
                                 payload: Command(Clear) })
+      CueIrEntry::Command(RouteAdd { target, to }):
+        result_cues.push(Cue { actor: SYSTEM_ACTOR, start_time: current_time,
+                                payload: Routing(RouteAdd { target, to }) })
+      CueIrEntry::Command(RouteSwitch { target, to }):
+        result_cues.push(Cue { actor: SYSTEM_ACTOR, start_time: current_time,
+                                payload: Routing(RouteSwitch { target, to }) })
       CueIrEntry::Command(RouteRemove { target }):
         result_cues.push(Cue { actor: SYSTEM_ACTOR, start_time: current_time,
                                 payload: Routing(RouteRemove { target }) })
@@ -622,6 +663,9 @@ CueSheet
 | `!wait_choice` / `!wait_choice[30.0]` | `BarrierKind::WaitForChoice { timeout }` | 3.1, 3.3 |
 | `!timeout[2.0]` | `BarrierKind::Timeout { duration: 2.0 }` | 3.1, 3.3 |
 | `!clear` / `！クリア` | `CueCommand::Clear` | 3.1, 3.3, 3.11 |
+| `!route_add[shell, actor:さくら:shell]` | `RoutingCommand::RouteAdd { target: Shell, to: Actor(さくら, Shell) }` | 6.3 |
+| `!route_add[balloon, spot:stage]` | `RoutingCommand::RouteAdd { target: Balloon, to: Spot("stage") }` | 6.3 |
+| `!route_switch[balloon, spot:stage]` | `RoutingCommand::RouteSwitch { target: Balloon, to: Spot("stage") }` | 6.4 |
 | `!route_remove[shell]` | `RoutingCommand::RouteRemove { target: Shell }` | 3.1, 3.3 |
 
 #### エイリアス定義行
@@ -734,15 +778,15 @@ pub enum CueBuildError {
 | `ast/` | `CueIrCommand` enum |
 | `dola::cue::builder` | KeyframeDecl/Ref 処理, Barrier/Clear Cue 生成, エラーハンドリング |
 
-### フェーズ C: エイリアス定義 + Routing 自動生成
+### フェーズ C: エイリアス定義 + Routing 自動生成 + 明示 Routing コマンド
 
-**スコープ**: `alias_def_line` + RouteAdd 自動生成 + `!route_remove`
+**スコープ**: `alias_def_line` + RouteAdd 自動生成 + `!route_add` / `!route_switch` / `!route_remove` 明示コマンド
 
 | 対象 | 変更内容 |
-|------|---------|
-| `grammar.pest` | `alias_def_line` + `alias_cmd_expr` |
-| `ast/` | `CueIrAliasDef` |
-| `dola::cue::builder` | AliasTable 構築, エイリアス解決, RouteAdd 判定 |
+|------|------|
+| `grammar.pest` | `alias_def_line` + `alias_cmd_expr`、`cue_route_add`・`cue_route_switch` + `entity_key` ルール |
+| `ast/` | `CueIrAliasDef`、`CueIrCommand::RouteAdd`・`RouteSwitch` |
+| `dola::cue::builder` | AliasTable 構築、エイリアス解決、RouteAdd 自動判定、明示 RouteAdd/Switch 変換 |
 
 ### フェーズ D: 完全機能（Custom / EntityRef）
 
