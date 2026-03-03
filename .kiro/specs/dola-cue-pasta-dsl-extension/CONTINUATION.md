@@ -34,82 +34,84 @@
 
 ## 未完了ディスカッション議題（ここから再開）
 
-### Q3: 継続行（`:content`）の CueCommand::Text 挙動（Req 5.4, gap-analysis R-10）
+### Q3: 継続行（`:content`）の CueCommand::Text 挙動（Req 5.4, gap-analysis R-10）✅
 
-**問題**: Req 5.4 は「直前のアクション行の `CueCommand::Text` に追加する」とあるが、「追加」の具体的意味が未確定。
+**結論**: **A — 同一 `Cue` の `Text` に `\n` 結合**
 
-**選択肢**:
-- **A: 同一 `Cue` の `Text` に文字列結合** — `"前の行\n継続行"` のように1つの Text に連結。Cue 数は増えない。
-- **B: 別の `Cue` として同一 `start_time` で生成** — 新しい Cue エントリを追加。
-
-**補足**: 現行 pasta DSL では `ContinueAction` は「直前のアクション行への追記」として扱われており、A が自然に見える。
-
-**開発者への質問**: A（文字列結合）と B（別 Cue）のどちらにするか？
+- 継続行は `\n` を区切りとして直前 Cue の Text に結合する
+- 継続行内の `@command` は不許可（パースエラー）
+- タイムライン上は前行の暗黙キーフレームに続くルールを適用（B でも同様のため A を選択）
+- タイプライター側で改行処理が必要なのは A / B 共通のため、シンプルな A を採用
 
 ---
 
-### Q4: `%` 行不在時のデフォルトスロット（Req 6.6, gap-analysis R-7）
+### Q4: `%` 行不在時のデフォルトスロット（Req 6.6, gap-analysis R-7）✅
 
-**問題**: `%` 行が存在しない場合、ActorKey のスロット番号はどうするか？
+**結論**: **未割り当てアクターがいた場合のみ、空きスロットの 0 番から順に割り当て。スロット割り当ては最後の状態を継続**
 
-**選択肢**:
-- **A: 出現順に 0, 1, 2... 自動割り当て**
-- **B: `%` 行必須、なければエラー**
-- **C: デフォルトスロット 0 割り当て**
-
-**開発者への質問**: どの方針にするか？
-
----
-
-### Q5: `CueCommand::Clear` 生成ポリシー（Req 5.5, gap-analysis R-9）
-
-**問題**: Clear はいつ生成するか？
-
-**選択肢**:
-- **A: `!clear` 明示コマンドのみ** — スクリプト作者が明示的に書いた場合のみ
-- **B: シーン遷移時に自動生成** — シーン終了時に全アクターに対して Clear を自動挿入
-- **C: 両方** — 明示 `!clear` + シーン遷移時自動
-
-**開発者への質問**: どの方針にするか？
+- スロット割り当ては**セッションをまたいで永続**する（最終シーンの配置を継続）
+- `%` 行が存在する場合はその指定を使用（明示優先）
+- `%` 行がなく未割り当てのアクターが出現した場合、現在未使用の最小スロット番号（0 から）を割り当てる
+- 既に割り当て済みのアクターは再割り当てしない
+- **ランタイム API 要件**: DSL 実行層は「現在のスロット割り当て状態を取得する」メソッドを提供する必要がある（例: `get_slot_assignment(actor) -> Option<SlotId>`）
 
 ---
 
-### Q6: `RouteRemove` 発行条件（gap-analysis R-8）
+### Q5: `CueCommand::Clear` 生成ポリシー（Req 5.5, gap-analysis R-9）✅
 
-**問題**: `RoutingCommand::RouteRemove` はいつ発行するか？
+**結論**: **A — `!clear` 明示コマンドのみ**
 
-**選択肢**:
-- **A: シーン終了時に自動** — シーン内で RouteAdd したものを自動 Remove
-- **B: 明示 `!` コマンドのみ** — スクリプト作者が `!route_remove` 等で指定
-- **C: 両方** — 明示 + シーン終了時自動クリーンアップ
-
-**開発者への質問**: どの方針にするか？
+- DSL としては `!clear` を明示的に記述した場合のみ `CueCommand::Clear` を生成する
+- シーン遷移時の自動 Clear はアプリ（wintf 等）の責務とし、DSL・dola は関知しない
+- 責務分離: DSL = 宣言、クリアタイミング制御 = アプリ層
 
 ---
 
-### Q7: 1行内の複数 `@command` 処理（Req 5.6, gap-analysis R-6）
+### Q6: `RouteRemove` 発行条件（gap-analysis R-8）✅
 
-**問題**: `さくら：こんにちは@happy@sad` のように1行に複数 `@command` がある場合の処理。
+**結論**: **明示 `!` コマンドのみ。シーン終了時の自動生成なし**
 
-**選択肢**:
-- **A: 全て適用** — 出現順に CueCommand を生成（同一 start_time で複数 Cue）
-- **B: 最後のみ適用** — 最後の `@command` のみ有効
-- **C: エラー** — 複数 `@command` はパースエラー
+- スロット割り当ては永続（Q4）のため、シーン終了時に RouteRemove を自動挿入しない
+- `RouteAdd` は「未割り当てアクターが初出現した場合のみ」生成される
+- `RouteRemove` はスクリプト作者が明示的に `!route_remove` と書いた場合のみ生成される
+- Q5（Clear）と同じ「DSL は宣言のみ、ライフサイクルはアプリ層」の原則に従う
+- **ランタイム API 要件**: Q4 の `get_slot_assignment()` により RouteAdd 生成要否の判定が可能
 
-**開発者への質問**: どの方針にするか？
+---
+
+### Q7: 1行内の複数 `@command` 処理（Req 5.6, gap-analysis R-6）✅
+
+**結論**: **A — 全て適用（出現順に CueCommand を生成）**
+
+- `さくら：＠笑顔　ふふーんいいでしょ。＠驚き　あ、ちょっとそれは持っていかないで！` のように、セリフの途中で表情が変化するケースがあるため
+- `@command` は出現順に Cue として生成される（テキスト断片と交互に並ぶイメージ）
+- 同一アクター・同一行内で `Text → Emote → Text → Emote` の順に複数 Cue が生成される
+- 各 Cue の start_time 計算は Duration Resolver の責務
 
 ---
 
 ## 全議題終了後の次ステップ
 
+### ✅ 完了: requirements.md v3 全面更新（2026-03-03）
+
+Q1〜Q7 の全決定事項を requirements.md に反映済み。主な変更点:
+- 要件 3: Clear の明示のみ生成（AC 11 追加）
+- 要件 5: 継続行 `\n` 結合 + `@command` 不許可（AC 4-6 更新）
+- 要件 6: スロット永続 + RouteRemove 明示のみ + `get_slot_assignment()` API（AC 6-8 更新）
+- 要件 9: Duration Resolver / get_slot_assignment API 仕様の design.md 記載要件追加（AC 7-9 追加）
+
+### 次アクション
+
 ```
 /kiro-spec-design dola-cue-pasta-dsl-extension
 ```
 
-design.md リビルドでは以下を含める:
-- `!` コマンド行の PEG/EBNF 文法
-- エイリアス定義行の PEG/EBNF 文法
-- Duration Resolver トレイト設計
+design.md v2 書き直し（旧 `\cue_*` + `[timestamp]` 形式を完全廃棄）では以下を含める:
+- `!` コマンド行の PEG/EBNF 文法（キーフレーム宣言・指定・Barrier・Clear・route_remove）
+- エイリアス定義行の PEG 文法（`@alias = Command(args)` の `=` セパレータ）
+- Duration Resolver トレイトの型定義
 - CueCommand 記法対応表（EN/JA）
+- `get_slot_assignment()` API 仕様
+- RouteAdd/Switch/Remove 判定ロジック
 - 実装フェーズ計画（MVP → Full）
 - `cue.pasta` の v2 全面書き換え
