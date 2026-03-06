@@ -1,4 +1,4 @@
-# 実装依頼書: pasta DSL キューシートモード文法拡張
+# 実装依頼書: pasta DSL キューコマンド文法拡張
 
 > **作成日**: 2026-03-03  
 > **バージョン**: v1  
@@ -11,7 +11,7 @@
 
 ### 1.1 何を実装するのか
 
-pasta DSL の PEG 文法（`grammar.pest`）を拡張し、**キューシートモード** という新しいシーンモードを追加する。このモードでは、dola クレートの `CueSheet` データモデルをテキストで記述できる。
+pasta DSL の PEG 文法（`grammar.pest`）を拡張し、既存の行指向文法へ **キューコマンド行** と **アクション行内 alias 参照** を埋め込めるようにする。これにより dola クレートの `CueSheet` データモデルをテキストで記述できる。
 
 ### 1.2 なぜ必要なのか
 
@@ -43,7 +43,11 @@ dola: CueSheet（最終出力 — start_time 確定済み）
 
 ### 1.4 破壊的変更はゼロ
 
-`&type:cuesheet` 属性を持たないシーンは完全に現行 pasta DSL 仕様で動作する。キューシート専用構文（`!` コマンド行、エイリアス定義行）はこのモード内でのみ有効になる。
+既存の pasta DSL の行種別は維持したまま、拡張対象は次の 3 点に限定する。
+
+- `!` / `！` で始まるキューコマンド行
+- アクション行中の `@alias` による CueCommand 参照
+- `%actor、actor=N` 形式のスロット指定情報の利用
 
 ---
 
@@ -246,19 +250,19 @@ pub enum CueIrFragment {
 ```rust
 /// `!` コマンド行の中間表現（7 バリアント）。
 pub enum CueIrCommand {
-    /// `!keyframe <name>` — 現在時刻に名前を付ける
-    KeyframeDecl { name: String },
-    /// `!@<name>` / `!@<name>+<offset>` — 基準時刻をキーフレームに設定
-    KeyframeRef { name: String, offset: f64 },
+    /// `!mark@名前` — 現在時刻に名前を付ける（マーカー登録）
+    Mark { name: String },
+    /// `!seek(@名前)` / `!seek(@名前, offset)` — 基準時刻をマーカーに設定
+    Seek { name: String, offset: f64 },
     /// Barrier 系（WaitForInput / WaitForChoice / Timeout）
     Barrier(BarrierKind),
     /// `!clear`
     Clear,
-    /// `!route_add[target, entity_key]`
+    /// `!route_add(target, entity_key)`
     RouteAdd { target: CueTarget, to: EntityKey },
-    /// `!route_switch[target, entity_key]`
+    /// `!route_switch(target, entity_key)`
     RouteSwitch { target: CueTarget, to: EntityKey },
-    /// `!route_remove[target]`
+    /// `!route_remove(target)`
     RouteRemove { target: CueTarget },
 }
 ```
@@ -266,8 +270,10 @@ pub enum CueIrCommand {
 ### 3.6 CueIrAliasDef
 
 ```rust
-/// エイリアス定義（シーンスコープ）。
+/// 名前付きコマンド定義（シーンスコープ）。
 pub struct CueIrAliasDef {
+    /// actor ローカル定義なら Some(actor)、グローバル定義なら None
+    pub scope_actor: Option<ActorKey>,
     /// エイリアス名（`@` 抜き）
     pub name: String,
     /// 対応する CueCommand
@@ -288,8 +294,8 @@ CueIrScene
 │   │       ├── Text(String)
 │   │       └── AliasRef(String)
 │   └── Command(CueIrCommand)
-│       ├── KeyframeDecl { name }
-│       ├── KeyframeRef { name, offset }
+│       ├── Mark { name }
+│       ├── Seek { name, offset }
 │       ├── Barrier(BarrierKind)     ← dola 型を直接使用
 │       ├── Clear
 │       ├── RouteAdd { target: CueTarget, to: EntityKey }  ← dola 型
@@ -321,17 +327,20 @@ CueIrScene
 ```peg
 // キューコマンド行（cuesheet モード内のみ有効）
 cue_cmd_line = {
-    (ASCII_EXCL | ZENKAKU_EXCL) ~ SPACE* ~ cue_cmd_body ~ NEWLINE
+    cue_cmd_marker ~ cue_cmd_body ~ NEWLINE
 }
 
-ZENKAKU_EXCL = { "！" }
+cue_cmd_marker = _{ "!" | "！" }
 
 cue_cmd_body = {
-    cue_keyframe_decl
-  | cue_keyframe_ref
-  | cue_wait_input
-  | cue_wait_choice
-  | cue_timeout
+    cue_mark
+    | cue_emote_def
+    | cue_choice_def
+    | cue_custom_def
+  | cue_seek
+  | cue_yield
+  | cue_select
+  | cue_wait
   | cue_clear
   | cue_route_add
   | cue_route_switch
@@ -339,41 +348,56 @@ cue_cmd_body = {
 }
 ```
 
-### 4.3 キーフレーム宣言・参照
+### 4.3 名前付き定義 + Mark ・ Seek（キーフレーム制御）
 
 ```peg
-// !keyframe <name>  /  ！キーフレーム <name>
-cue_keyframe_decl = {
-    ("keyframe" | "キーフレーム") ~ SPACE+ ~ cue_ident
+// !mark@名前  /  ！マーク＠名前
+cue_mark = {
+    ("mark" | "マーク") ~ at_marker ~ cue_ident
 }
 
-// !@<name>  /  !@<name>+<offset>
-cue_keyframe_ref = {
-    "@" ~ cue_ident ~ (SPACE* ~ ("+" | "-") ~ SPACE* ~ float_lit)?
+// !emote@名前(key)  /  ！表情＠名前（key）
+cue_emote_def = {
+    ("emote" | "表情") ~ at_marker ~ cue_ident ~ paren_open ~ SPACE* ~ cue_ident ~ SPACE* ~ paren_close
 }
+
+// !choice@名前(id, 「表示テキスト」)  /  ！選択肢＠名前（id, 「表示テキスト」）
+cue_choice_def = {
+    ("choice" | "選択肢") ~ at_marker ~ cue_ident ~ paren_open ~ SPACE* ~ cue_ident ~ SPACE* ~ "," ~ SPACE* ~ string_literal ~ SPACE* ~ paren_close
+}
+
+// !custom@名前(「command_name」, {json})  /  ！カスタム＠名前（「command_name」, {json}）
+cue_custom_def = {
+    ("custom" | "カスタム") ~ at_marker ~ cue_ident ~ paren_open ~ SPACE* ~ string_literal ~ SPACE* ~ "," ~ SPACE* ~ json_object ~ SPACE* ~ paren_close
+}
+
+// !seek(@名前)  /  !seek(@名前, offset)  /  ！シーク（＠名前, 0.5）
+cue_seek = {
+    ("seek" | "シーク") ~ paren_open ~ SPACE* ~ at_marker ~ cue_ident ~ (SPACE* ~ "," ~ SPACE* ~ float_lit)? ~ SPACE* ~ paren_close
+}
+
+// 共有プリミティブ
+at_marker = _{ "@" | "＠" }
+paren_open = _{ "(" | "（" }
+paren_close = _{ ")" | "）" }
 ```
 
 ### 4.4 Barrier 系コマンド
 
 ```peg
-// !wait_input  /  !wait_input[10.0]  /  ！入力待ち
-cue_wait_input = {
-    ("wait_input" | "入力待ち") ~ ("[" ~ float_lit ~ "]")?
+// !yield  /  !yield(10.0)  /  ！区切り
+cue_yield = {
+    ("yield" | "区切り") ~ (paren_open ~ float_lit ~ paren_close)?
 }
 
-// !wait_choice  /  !wait_choice[30.0]  /  ！選択肢待ち
-cue_wait_choice = {
-    ("wait_choice" | "選択肢待ち") ~ ("[" ~ float_lit ~ "]")?
+// !select  /  !select(30.0)  /  ！選択待ち
+cue_select = {
+    ("select" | "選択待ち") ~ (paren_open ~ float_lit ~ paren_close)?
 }
 
-// !timeout[2.0]  /  ！タイムアウト[2.0]
-cue_timeout = {
-    ("timeout" | "タイムアウト") ~ "[" ~ float_lit ~ "]"
-}
-```
-
-### 4.5 Clear コマンド
-
+// !wait(2.0)  /  ！待機（2.0）
+cue_wait = {
+    ("wait" | "待機") ~ paren_open ~ float_lit ~ paren_close
 ```peg
 // !clear  /  ！クリア
 cue_clear = { "clear" | "クリア" }
@@ -382,19 +406,19 @@ cue_clear = { "clear" | "クリア" }
 ### 4.6 Routing コマンド
 
 ```peg
-// !route_add[shell, actor:さくら:shell]  /  ！ルート追加[balloon, spot:stage]
+// !route_add(shell, actor:さくら:shell)  /  ！ルート追加（balloon, spot:stage）
 cue_route_add = {
-    ("route_add" | "ルート追加") ~ "[" ~ cue_target ~ "," ~ SPACE* ~ entity_key ~ "]"
+    ("route_add" | "ルート追加") ~ paren_open ~ cue_target ~ "," ~ SPACE* ~ entity_key ~ paren_close
 }
 
-// !route_switch[balloon, spot:stage_balloon]  /  ！ルート切替
+// !route_switch(balloon, spot:stage_balloon)  /  ！ルート切替
 cue_route_switch = {
-    ("route_switch" | "ルート切替") ~ "[" ~ cue_target ~ "," ~ SPACE* ~ entity_key ~ "]"
+    ("route_switch" | "ルート切替") ~ paren_open ~ cue_target ~ "," ~ SPACE* ~ entity_key ~ paren_close
 }
 
-// !route_remove[shell]  /  ！ルート削除[balloon]
+// !route_remove(shell)  /  ！ルート削除（balloon）
 cue_route_remove = {
-    ("route_remove" | "ルート削除") ~ "[" ~ cue_target ~ "]"
+    ("route_remove" | "ルート削除") ~ paren_open ~ cue_target ~ paren_close
 }
 ```
 
@@ -428,61 +452,44 @@ cue_target = { "shell" | "balloon" | "シェル" | "バルーン" }
 
 ```peg
 // 識別子（スペース・括弧・カンマ・改行以外の文字列）
-cue_ident = { (!(WHITESPACE | "(" | ")" | "[" | "]" | "," | NEWLINE) ~ ANY)+ }
+cue_ident = { (!(WHITESPACE | "(" | ")" | "（" | "）" | "," | NEWLINE) ~ ANY)+ }
 
 // 非負浮動小数点リテラル
 float_lit = { ASCII_DIGIT+ ~ ("." ~ ASCII_DIGIT+)? }
 ```
 
-### 4.10 エイリアス定義行
+### 4.10 名前付きコマンド定義
 
 ```peg
-// @alias名 = CueCommand(args)  /  @alias名 ＝ CueCommand(args)
-alias_def_line = {
-    "@" ~ cue_ident ~ SPACE* ~ ("=" | "＝") ~ SPACE* ~ alias_cmd_expr ~ NEWLINE
-}
-
-alias_cmd_expr = {
-    alias_choice_cmd
-  | alias_emote_cmd
-  | alias_custom_cmd
-}
-
-// Choice(id, "表示テキスト")
-alias_choice_cmd = {
-    ("Choice" | "選択肢") ~ "(" ~ SPACE* ~ cue_ident ~ SPACE* ~ "," ~ SPACE* ~ quoted_string ~ SPACE* ~ ")"
-}
-
-// Emote(key)
-alias_emote_cmd = {
-    ("Emote" | "表情") ~ "(" ~ SPACE* ~ cue_ident ~ SPACE* ~ ")"
-}
-
-// Custom("command_name", {json})
-alias_custom_cmd = {
-    ("Custom" | "カスタム") ~ "(" ~ SPACE* ~ quoted_string ~ SPACE* ~ "," ~ SPACE* ~ json_object ~ SPACE* ~ ")"
-}
+// 名前付き CueCommand 定義は !command@name(...) 形式で cue_cmd_body に含める
+// `string_literal` は pasta 既存のルールを再利用。`「」` がプライマリ、`""` がオルタナティブ。
 ```
 
 ---
 
-## 5. コマンドキーワード英日対応表
+## 5. コマンドキーワード正式対照表
 
-| 英語キーワード | 日本語キーワード | CueIR 出力型 |
-|-------------|---------------|-------------|
-| `keyframe` | `キーフレーム` | `CueIrCommand::KeyframeDecl` |
-| `wait_input` | `入力待ち` | `CueIrCommand::Barrier(WaitForInput)` |
-| `wait_choice` | `選択肢待ち` | `CueIrCommand::Barrier(WaitForChoice)` |
-| `timeout` | `タイムアウト` | `CueIrCommand::Barrier(Timeout)` |
-| `clear` | `クリア` | `CueIrCommand::Clear` |
-| `route_add` | `ルート追加` | `CueIrCommand::RouteAdd` |
-| `route_switch` | `ルート切替` | `CueIrCommand::RouteSwitch` |
-| `route_remove` | `ルート削除` | `CueIrCommand::RouteRemove` |
-| `shell` | `シェル` | `CueTarget::Shell` |
-| `balloon` | `バルーン` | `CueTarget::Balloon` |
-| `Choice` | `選択肢` | `CueCommand::Choice` |
-| `Emote` | `表情` | `CueCommand::Emote` |
-| `Custom` | `カスタム` | `CueCommand::Custom` |
+> **方針**: 英語キーワードを正規名、日本語キーワードを任意 alias とする。舞台用語は仕様理解を助ける注釈であり、実装・検索・レビューでは英語正規名を優先する。
+
+| 正規名 | 日本語 alias | 舞台用語メモ | CueIR 出力型 |
+|-------|-------------|--------------|-------------|
+| `mark` | `マーク` | きっかけ点 | `CueIrCommand::Mark` |
+| `seek` | `頭出し` | 頭出し | `CueIrCommand::Seek` |
+| `emote` | `表情` | 表情替え | `CueIrAliasDef` |
+| `choice` | `選択肢` | 応答候補 | `CueIrAliasDef` |
+| `custom` | `カスタム` | 特殊キュー | `CueIrAliasDef` |
+| `yield` | `入力待ち` | 客待ちに近い停止点 | `CueIrCommand::Barrier(WaitForInput)` |
+| `select` | `選択待ち` | 応答待ち | `CueIrCommand::Barrier(WaitForChoice)` |
+| `wait` | `待機` | 間を置く | `CueIrCommand::Barrier(Timeout)` |
+| `clear` | `クリア` | 表示整理 | `CueIrCommand::Clear` |
+| `route_add` | `ルート追加` | 配送先を立てる | `CueIrCommand::RouteAdd` |
+| `route_switch` | `ルート切替` | 配送先転換 | `CueIrCommand::RouteSwitch` |
+| `route_remove` | `ルート削除` | 配送先を外す | `CueIrCommand::RouteRemove` |
+| `shell` | `シェル` | 見た目の出し先 | `CueTarget::Shell` |
+| `balloon` | `バルーン` | 台詞の出し先 | `CueTarget::Balloon` |
+| `Choice` | `選択肢` | 応答候補 | `CueCommand::Choice` |
+| `Emote` | `表情` | 表情替え | `CueCommand::Emote` |
+| `Custom` | `カスタム` | 特殊キュー | `CueCommand::Custom` |
 
 ---
 
@@ -502,32 +509,41 @@ alias_custom_cmd = {
 
 | DSL 記法 | CueIR 出力 |
 |---------|-----------|
-| `!keyframe 名前` / `！キーフレーム 名前` | `Command(KeyframeDecl { name: "名前" })` |
-| `!@名前` | `Command(KeyframeRef { name: "名前", offset: 0.0 })` |
-| `!@名前+0.5` | `Command(KeyframeRef { name: "名前", offset: 0.5 })` |
-| `!wait_input` | `Command(Barrier(WaitForInput { timeout: None }))` |
-| `!wait_input[10.0]` | `Command(Barrier(WaitForInput { timeout: Some(10.0) }))` |
-| `!wait_choice[30.0]` | `Command(Barrier(WaitForChoice { timeout: Some(30.0) }))` |
-| `!timeout[2.0]` | `Command(Barrier(Timeout { duration: 2.0 }))` |
+| `!mark@名前` / `！マーク＠名前` | `Command(Mark { name: "名前" })` |
+| `!seek(@名前)` | `Command(Seek { name: "名前", offset: 0.0 })` |
+| `!seek(@名前, 0.5)` | `Command(Seek { name: "名前", offset: 0.5 })` |
+| `!emote@えもじ(smile)` | `CueIrAliasDef { name: "えもじ", command: Emote { key: "smile" } }` |
+| `!choice@はい(yes, 「はい！」)` | `CueIrAliasDef { name: "はい", command: Choice { id: "yes", text: "はい！" } }` |
+| `!custom@func(「bell」, {})` | `CueIrAliasDef { name: "func", command: Custom { command: "bell", params: {} } }` |
+| `!yield` / `！区切り` | `Command(Barrier(WaitForInput { timeout: None }))` |
+| `!yield(10.0)` | `Command(Barrier(WaitForInput { timeout: Some(10.0) }))` |
+| `!select(30.0)` / `！選択（30.0）` | `Command(Barrier(WaitForChoice { timeout: Some(30.0) }))` |
+| `!wait(2.0)` / `！待機（2.0）` | `Command(Barrier(Timeout { duration: 2.0 }))` |
 | `!clear` / `！クリア` | `Command(Clear)` |
-| `!route_add[shell, actor:さくら:shell]` | `Command(RouteAdd { target: Shell, to: Actor(さくら, Shell) })` |
-| `!route_add[balloon, spot:stage]` | `Command(RouteAdd { target: Balloon, to: Spot("stage") })` |
-| `!route_switch[balloon, spot:stage]` | `Command(RouteSwitch { target: Balloon, to: Spot("stage") })` |
-| `!route_remove[shell]` | `Command(RouteRemove { target: Shell })` |
+| `!route_add(shell, actor:さくら:shell)` | `Command(RouteAdd { target: Shell, to: Actor(さくら, Shell) })` |
+| `!route_add(balloon, spot:stage)` | `Command(RouteAdd { target: Balloon, to: Spot("stage") })` |
+| `!route_switch(balloon, spot:stage)` | `Command(RouteSwitch { target: Balloon, to: Spot("stage") })` |
+| `!route_remove(shell)` | `Command(RouteRemove { target: Shell })` |
 
-### 6.3 エイリアス定義行
+### 6.3 名前付きコマンド定義
 
 | DSL 記法 | CueIR 出力 |
 |---------|-----------|
-| `@えもじ = Emote(smile)` | `CueIrAliasDef { name: "えもじ", command: Emote { key: "smile" } }` |
-| `@はい = Choice(yes, "はい！")` | `CueIrAliasDef { name: "はい", command: Choice { id: "yes", text: "はい！" } }` |
-| `@func = Custom("bell", {})` | `CueIrAliasDef { name: "func", command: Custom { command: "bell", params: {} } }` |
+| `!emote@えもじ(smile)` | `CueIrAliasDef { name: "えもじ", command: Emote { key: "smile" } }` |
+| `!choice@はい(yes, 「はい！」)` | `CueIrAliasDef { name: "はい", command: Choice { id: "yes", text: "はい！" } }` |
+| `!custom@func(「bell」, {})` | `CueIrAliasDef { name: "func", command: Custom { command: "bell", params: {} } }` |
+
+> **文字列リテラル**: `「」`（プライマリ）および `""` （オルタナティブ）。pasta 既存の `string_literal` ルールを再利用する。
 
 ### 6.4 アクター配置行
 
 | DSL 記法 | 処理 |
 |---------|------|
-| `%さくら=0` | アクター "さくら" をスロット 0 に明示割り当て。CueIrScene のメタデータとして保持 |
+| `%さくら` | アクター "さくら" にスロット 0 を自動割り当て。CueIrScene のメタデータとして保持 |
+| `%さくら、うにゅう＝２` | カンマ区切りで複数アクター指定。C# enum 式自動番号付け（さくら=0, うにゅう=2） |
+| `%さくら、うにゅう、まりか` | さくら=0, うにゅう=1, まりか=2 と順番に自動採番 |
+
+> **`%` 行記法ルール**: C# enum 式自動番号付け。値は `u32`。全角数字は半角に正規化。詳細は design.md 参照。
 
 ---
 
@@ -539,13 +555,13 @@ alias_custom_cmd = {
 /// pasta DSL 文法解析エラー（行番号・カラム番号付き）
 #[derive(Debug, thiserror::Error)]
 pub enum CueParseError {
-    #[error("行 {line}:{col}: 不明なキューコマンド '{cmd}' — `!keyframe`, `!wait_input` 等を確認してください")]
+    #[error("行 {line}:{col}: 不明なキューコマンド '{cmd}' — `!mark@`, `!yield` 等を確認してください")]
     UnknownCommand { line: u32, col: u32, cmd: String },
 
     #[error("行 {line}:{col}: 負のオフセット秒数 '{value}' — 0.0 以上の値を指定してください")]
     NegativeFloat { line: u32, col: u32, value: f64 },
 
-    #[error("行 {line}:{col}: エイリアス定義の構文エラー — `@名前 = Emote(key)` 形式を確認してください")]
+    #[error("行 {line}:{col}: 名前付きコマンド定義の構文エラー — `!emote@名前(key)` 形式を確認してください")]
     InvalidAliasSyntax { line: u32, col: u32 },
 
     #[error("行 {line}:{col}: 不正なスロット番号 '{value}' — 0 以上の整数を指定してください")]
@@ -562,13 +578,22 @@ pub enum CueParseError {
 /// CueSheet 構築エラー（セマンティクス）— dola CueSheetBuilder が使用
 #[derive(Debug, thiserror::Error)]
 pub enum CueBuildError {
-    #[error("シーン '{scene}' でキーフレーム名 '{name}' が重複しています")]
-    DuplicateKeyframe { scene: String, name: String },
+    #[error("シーン '{scene}' でマーク名 '{name}' が重複しています")]
+    DuplicateMark { scene: String, name: String },
 
-    #[error("シーン '{scene}' でキーフレーム '{name}' は未宣言です — `!keyframe {name}` を事前に記述してください")]
-    UnknownKeyframe { scene: String, name: String },
+    #[error("シーン '{scene}' でマーク '{name}' は未登録です — `!mark@{name}` を事前に記述してください")]
+    UnknownMark { scene: String, name: String },
 
-    #[error("キーフレーム参照のオフセット '{value}' が負数です")]
+    #[error("シーン '{scene}' でマーカー名 '{name}' はエイリアスと同名です — マーカー名とエイリアス名は差別化が必要です")]
+    MarkAliasConflict { scene: String, name: String },
+
+    #[error("シーン '{scene}' でマーク '{name}' に actor 指定はできません — mark はグローバルなタイムライン参照点です")]
+    ActorScopedMarkUnsupported { scene: String, name: String },
+
+    #[error("シーン '{scene}' でマーク '{name}' は 2 回以上使用されています — 1 つの mark は 1 回だけ刻印可能です")]
+    MarkUsedMultipleTimes { scene: String, name: String },
+
+    #[error("マーク参照のオフセット '{value}' が負数です")]
     NegativeOffset { value: f64 },
 }
 ```
@@ -627,12 +652,12 @@ impl<R: DurationResolver, S: SlotRegistry> CueSheetBuilder<R, S> {
 
 Builder は `CueIrScene.entries` を順番に処理する:
 
-1. **KeyframeDecl**: `current_time` をキーフレームテーブルに名前付きで登録
-2. **KeyframeRef**: `current_time = keyframe_table[name] + offset`
+1. **Mark**: `current_time` をマークテーブルに名前付きで登録（MarkerRegistered 状態）。**エイリアステーブルに同名が存在する場合は `MarkAliasConflict` エラー。** actor 修飾付き名（例: `さくら:かぶせ`）は `ActorScopedMarkUnsupported` エラー。重複登録は `DuplicateMark` エラー。
+2. **Seek**: `current_time = mark_table[name] + offset`。マーカーが Stamped 済みの場合はその時刻を使用
 3. **Barrier / Clear / RouteAdd / RouteSwitch / RouteRemove**: SYSTEM_ACTOR の Cue として生成
 4. **Action**: 
    - アクター初出現時は RouteAdd を自動生成（Shell + Balloon 両方）
-   - fragments を順に処理: `Text` → `CueCommand::Text`, `AliasRef` → エイリアステーブル参照 → 未定義なら `Emote` フォールバック
+    - fragments を順に処理: `Text` → `CueCommand::Text`, `AliasRef` → マークテーブル確認（MarkerRegistered なら Stamped に更新、Stamped 済みなら `MarkUsedMultipleTimes` エラー）→ それ以外なら actor ローカル定義 → グローバル定義の順でエイリアステーブル参照 → 未定義なら `Emote` フォールバック
    - `DurationResolver.resolve_duration()` で所要時間を取得し `current_time` を前進
 
 ---
@@ -641,7 +666,7 @@ Builder は `CueIrScene.entries` を順番に処理する:
 
 | ファイル | 変更内容 |
 |---------|---------|
-| `grammar.pest` | `cue_cmd_line`・`cue_cmd_body`・各コマンドルール・`alias_def_line`・`cue_target`・`entity_key`・`float_lit`・`cue_ident` の追加 |
+| `grammar.pest` | `cue_cmd_line`・`cue_cmd_body`・各コマンドルール・`cue_emote_def`・`cue_choice_def`・`cue_custom_def`・`cue_target`・`entity_key`・`float_lit`・`cue_ident` の追加 |
 | `ast/*.rs` | `CueIrScene`, `CueIrEntry`, `CueIrAction`, `CueIrFragment`, `CueIrCommand`, `CueIrAliasDef` ノードの追加 |
 | `parse_scene.rs` | `&type:cuesheet` モードスコープ処理の追加 |
 | `parse_action.rs` | `@fragment` 分割ロジック、継続行 `\n` 結合処理の追加 |
@@ -669,25 +694,25 @@ Builder は `CueIrScene.entries` を順番に処理する:
 - 継続行が前行に `\n` 結合される
 - 継続行内 `@command` でパースエラーが出る
 
-### フェーズ B: Barrier + キーフレーム制御
+### フェーズ B: Barrier + Mark/Seek 制御
 
-**スコープ**: `!` コマンド行（KeyframeDecl / KeyframeRef / Barrier / Clear）
-
-| 対象 | 変更内容 |
-|------|---------|
-| `grammar.pest` | `cue_cmd_line` + 各 `cue_cmd_body` バリアント |
-| `ast/` | `CueIrCommand` enum（KeyframeDecl, KeyframeRef, Barrier, Clear） |
-| テスト | `!keyframe`, `!@name+offset`, `!wait_input[10.0]`, `!clear` のパース確認 |
-
-### フェーズ C: エイリアス定義 + Routing コマンド
-
-**スコープ**: `alias_def_line` + `!route_add` / `!route_switch` / `!route_remove`
+**スコープ**: `!` コマンド行（Mark / Seek / Barrier / Clear）
 
 | 対象 | 変更内容 |
 |------|---------|
-| `grammar.pest` | `alias_def_line` + `alias_cmd_expr`、`cue_route_add`・`cue_route_switch`・`cue_route_remove` + `entity_key` |
+| `grammar.pest` | `cue_cmd_line` + 各 `cue_cmd_body` バリアント（mark/seek/yield/select/wait/clear） |
+| `ast/` | `CueIrCommand` enum（Mark, Seek, Barrier, Clear） |
+| テスト | `!mark@名前`, `!seek(@名前, offset)`, `!yield(10.0)`, `!clear` のパース確認 |
+
+### フェーズ C: 名前付きコマンド定義 + Routing コマンド
+
+**スコープ**: `!emote@...` / `!choice@...` / `!custom@...` + `!route_add` / `!route_switch` / `!route_remove`
+
+| 対象 | 変更内容 |
+|------|---------|
+| `grammar.pest` | `cue_emote_def`・`cue_choice_def`・`cue_custom_def`、`cue_route_add`・`cue_route_switch`・`cue_route_remove` + `entity_key` |
 | `ast/` | `CueIrAliasDef`、`CueIrCommand::RouteAdd` / `RouteSwitch` / `RouteRemove` |
-| テスト | エイリアス定義パース、`!route_add[shell, actor:さくら:shell]` パース確認 |
+| テスト | エイリアス定義パース、`!route_add(shell, actor:さくら:shell)` パース確認 |
 
 ### フェーズ D: 完全機能（Custom / EntityRef）
 
@@ -708,27 +733,62 @@ Builder は `CueIrScene.entries` を順番に処理する:
 | 1行内複数 @command | `さくら：ふふ@笑顔　あ！@驚き` | `Action { fragments: [Text("ふふ"), AliasRef("笑顔"), Text("　あ！"), AliasRef("驚き")] }` |
 | 継続行 | `:続き` (前行あり) | 前行の fragments 末尾 Text に `\n続き` を結合 |
 | 継続行 @command エラー | `：@cmd` | `CueParseError::AtCommandInContinuation` |
-| KeyframeDecl | `!keyframe 挨拶後` | `Command(KeyframeDecl { name: "挨拶後" })` |
-| KeyframeRef + offset | `!@挨拶後+1.0` | `Command(KeyframeRef { name: "挨拶後", offset: 1.0 })` |
-| WaitForInput | `!wait_input[10.0]` | `Command(Barrier(WaitForInput { timeout: Some(10.0) }))` |
-| WaitForInput (no timeout) | `!wait_input` | `Command(Barrier(WaitForInput { timeout: None }))` |
-| Timeout | `!timeout[2.0]` | `Command(Barrier(Timeout { duration: 2.0 }))` |
+| Mark | `!mark@挨拶後` | `Command(Mark { name: "挨拶後" })` |
+| Seek + offset | `!seek(@挨拶後, 1.0)` | `Command(Seek { name: "挨拶後", offset: 1.0 })` |
+| WaitForInput | `!yield(10.0)` | `Command(Barrier(WaitForInput { timeout: Some(10.0) }))` |
+| WaitForInput (no timeout) | `!yield` | `Command(Barrier(WaitForInput { timeout: None }))` |
+| WaitForChoice | `!select(30.0)` | `Command(Barrier(WaitForChoice { timeout: Some(30.0) }))` |
+| Timeout | `!wait(2.0)` | `Command(Barrier(Timeout { duration: 2.0 }))` |
 | Clear | `!clear` | `Command(Clear)` |
 | Clear (日本語) | `！クリア` | `Command(Clear)` |
-| RouteAdd | `!route_add[shell, actor:さくら:shell]` | `Command(RouteAdd { target: Shell, to: Actor("さくら", Shell) })` |
-| RouteSwitch | `!route_switch[balloon, spot:stage]` | `Command(RouteSwitch { target: Balloon, to: Spot("stage") })` |
-| RouteRemove | `!route_remove[balloon]` | `Command(RouteRemove { target: Balloon })` |
-| エイリアス定義 | `@笑顔 = Emote(smile)` | `CueIrAliasDef { name: "笑顔", command: Emote { key: "smile" } }` |
-| 選択肢エイリアス | `@はい = Choice(yes, "はい！")` | `CueIrAliasDef { name: "はい", command: Choice { id: "yes", text: "はい！" } }` |
+| RouteAdd | `!route_add(shell, actor:さくら:shell)` | `Command(RouteAdd { target: Shell, to: Actor("さくら", Shell) })` |
+| RouteSwitch | `!route_switch(balloon, spot:stage)` | `Command(RouteSwitch { target: Balloon, to: Spot("stage") })` |
+| RouteRemove | `!route_remove(balloon)` | `Command(RouteRemove { target: Balloon })` |
+| 名前付き表情定義 | `!emote@笑顔(smile)` | `CueIrAliasDef { name: "笑顔", command: Emote { key: "smile" } }` |
+| actor ローカル表情定義 | `!emote@さくら:笑顔(sakura_smile)` | `CueIrAliasDef { scope_actor: Some("さくら"), name: "笑顔", command: Emote { key: "sakura_smile" } }` |
+| 名前付き選択肢定義 | `!choice@はい(yes, 「はい！」)` | `CueIrAliasDef { name: "はい", command: Choice { id: "yes", text: "はい！" } }` |
 
-### 11.2 後方互換性テスト
+### 11.2 Builder セマンティクステスト（dola 側）
 
-- `&type:cuesheet` なしのシーンで `!keyframe` が通常テキスト行として扱われること
+構文が正しくパースされた後、意味解決で検証すべき主要観点を以下に整理する。
+
+| 観点 | 入力 / 前提 | 期待結果 |
+|------|-------------|----------|
+| mark 名とエイリアス名の衝突 | `!emote@笑顔(smile)` 済みシーンで `!mark@笑顔` | `CueBuildError::MarkAliasConflict` |
+| actor 修飾付き mark 拒否 | `!mark@さくら:転換点` | `CueBuildError::ActorScopedMarkUnsupported` |
+| mark 重複登録 | `!mark@転換点` を同一シーンで 2 回定義 | `CueBuildError::DuplicateMark` |
+| mark 単回使用の正常系 | `!mark@転換点` 後にアクション行で `@転換点` を 1 回だけ使用 | 最初の使用位置に刻印され、ビルド成功 |
+| mark 多重使用拒否 | `!mark@転換点` 後にアクション行で `@転換点` を 2 回使用 | 2 回目で `CueBuildError::MarkUsedMultipleTimes` |
+| actor ローカル優先解決 | `!emote@笑顔(common)` と `!emote@さくら:笑顔(sakura_smile)` が共存し、`さくら：@笑顔` | `Emote { key: "sakura_smile" }` を採用 |
+| グローバル定義へのフォールバック | `!emote@会釈(common_bow)` のみ定義済みで `うにゅう：@会釈` | `Emote { key: "common_bow" }` を採用 |
+| 未定義 alias の Emote フォールバック | alias 未定義で `さくら：@happy` | `Emote { key: "happy" }` を生成 |
+| 未登録 mark 参照 | `!seek(@未登録)` | `CueBuildError::UnknownMark` |
+
+### 11.3 後方互換性テスト
+
+- `&type:cuesheet` なしのシーンで `!mark@name` が通常テキスト行として扱われること
 - `&type:cuesheet` なしのシーンで `@alias` が通常の pasta ランダムワード参照として動作すること
 
-### 11.3 インテグレーションテスト
+### 11.4 インテグレーションテスト
 
-- 付属サンプルファイル `cue.pasta`（セクション 12 参照）の全シーンがパースエラーなく `CueIrScene` に変換されること
+| サンプルシーン | 主観点 | 期待結果 |
+|--------------|--------|----------|
+| `起動挨拶` | 基本アクション行、継続行、`!yield`、`!select`、`!clear`、未定義 alias フォールバック | `CueIrScene` 生成成功 |
+| `デュエット挨拶` | `!mark`、`!seek(@name, offset)`、並列演出、`!wait` | `CueIrScene` 生成成功 |
+| `表情豊かな発話` | 1 行内複数 `@command` | fragment 順序が保持される |
+| `ローカル優先の表情` | actor ローカル alias 優先、グローバル fallback、mark 単回使用 | `CueIrScene` 生成成功、builder 正常系 fixture に流用可能 |
+| `舞台演出` | `!route_add` / `!route_switch` / `!route_remove` | `EntityKey` を保持した `CueIrCommand` 生成 |
+| `通常会話` | cuesheet モード外後方互換 | 拡張構文として扱わない |
+
+### 11.5 非受理サンプル観点
+
+`cue.pasta` は有効サンプルのみを保持し、拒否ケースは個別 fixture で管理する。
+
+| fixture 名の例 | 入力例 | 期待結果 |
+|---------------|--------|----------|
+| `invalid_actor_scoped_mark.pasta` | `!mark@さくら:転換点` | builder で `CueBuildError::ActorScopedMarkUnsupported` |
+| `invalid_mark_reuse.pasta` | `!mark@転換点` + `@転換点` を 2 回使用 | builder で `CueBuildError::MarkUsedMultipleTimes` |
+| `invalid_unknown_mark_seek.pasta` | `!seek(@未登録)` | builder で `CueBuildError::UnknownMark` |
 
 ---
 
@@ -745,12 +805,13 @@ Builder は `CueIrScene.entries` を順番に処理する:
 #          使用可能になります）。
 #
 # 拡張文法の 3 つの柱：
-#   1. キューシートモード  &type:cuesheet — シーン単位で拡張構文を有効化
-#   2. ! キューコマンド行  !keyframe / !wait_input 等 — 時系列・バリア制御
-#   3. エイリアス定義行   @alias = Emote(key) 等 — CueCommand の名前付き定義
+#   1. ! キューコマンド行  !mark@ / !seek(@...) / !yield 等 — 時系列・バリア制御
+#   2. アクション行中の @alias 参照 — インラインの CueCommand 挿入
+#   3. % 行のスロット指定  %さくら、うにゅう=1 等 — 既存配置文法の拡張利用
 #
 # ルーティング（RouteAdd）はアクション行の初出現から自動生成されます。
-# スロット割り当ては %actor=slot で明示でき、省略時は自動採番されます。
+# スロット割り当ては % 行でカンマ区切り指定でき、省略時は自動採番されます。
+# actor 修飾付き alias は `!command@actor:alias(...)` で定義できますが、mark は常にグローバル専用です。
 # ===========================================================================
 
 # ---------------------------------------------------------------------------
@@ -758,106 +819,144 @@ Builder は `CueIrScene.entries` を順番に処理する:
 # ---------------------------------------------------------------------------
 
 ＊起動挨拶
-    ＆type：cuesheet
 
-    %さくら=0
+    %さくら
 
-    @普通 = Emote(normal)
-    @笑顔 = Emote(smile)
-    @はい = Choice(yes, "はい、行きましょう！")
-    @いいえ = Choice(no, "今日は遠慮します")
+    !emote@普通(normal)
+    !emote@笑顔(smile)
+    !choice@はい(yes, 「はい、行きましょう！」)
+    !choice@いいえ(no, 「今日は遠慮します」)
 
     さくら：@普通
     さくら：こんにちは！今日はいい天気ですね。
     ：お散歩の季節ですね。
 
-    !keyframe 挨拶後
+    !mark@挨拶後
 
     さくら：@笑顔
     さくら：お散歩でも行きませんか？
 
-    !wait_input[10.0]
+    !yield(10.0)
 
     !clear
     さくら：@はい
     さくら：@いいえ
-    !wait_choice[30.0]
+    !select(30.0)
 
     さくら：@happy よかった！
 
 # ---------------------------------------------------------------------------
-# シーン 2: 並列演出
+# シーン 2: 並列演出（かぶせ）
 # ---------------------------------------------------------------------------
 
 ＊デュエット挨拶
-    ＆type：cuesheet
 
-    %さくら=0
-    %うにゅう=1
+    %さくら、うにゅう
 
-    @うれしい = Emote(happy)
-    @はにかみ = Emote(shy)
+    !emote@うれしい(happy)
+    !emote@はにかみ(shy)
 
     さくら：こんにちはー！
     うにゅう：ごきげんよう！
 
-    !keyframe 会話開始
+    !mark@会話開始
 
-    !@会話開始
+    !seek(@会話開始)
     さくら：ねえ、何か食べに行かない？
 
-    !@会話開始
+    !seek(@会話開始)
     うにゅう：いいですわね、ケーキはいかが？
 
-    !@会話開始+1.0
+    !seek(@会話開始, 1.0)
     さくら：@うれしい
     さくら：決まりだね！
 
-    !@会話開始+1.0
+    !seek(@会話開始, 1.0)
     うにゅう：@はにかみ
     うにゅう：では参りましょう。
 
-    !timeout[2.0]
-    !route_remove[balloon]
+    !wait(2.0)
+    !route_remove(balloon)
 
 # ---------------------------------------------------------------------------
 # シーン 3: 1 行内複数 @command
 # ---------------------------------------------------------------------------
 
 ＊表情豊かな発話
-    ＆type：cuesheet
 
-    %さくら=0
+    %さくら
 
-    @驚き = Emote(surprised)
-    @笑顔 = Emote(smile)
+    !emote@驚き(surprised)
+    !emote@笑顔(smile)
 
     さくら：ふふーんいいでしょ。@笑顔　あ！@驚き
+
+# ---------------------------------------------------------------------------
+# シーン 4: actor ローカル alias 解決 + mark 単回使用
+# ---------------------------------------------------------------------------
+
+＊ローカル優先の表情
+    ＆type：cuesheet
+
+    %さくら、うにゅう
+
+    !emote@会釈(common_bow)
+    !emote@笑顔(common_smile)
+    !emote@さくら:笑顔(sakura_smile)
+    !emote@うにゅう:笑顔(unyuu_smile)
+    !choice@さくら:承知(ok, 「もちろんです！」)
+
+    さくら：@笑顔 わたし専用の笑顔です。
+    うにゅう：@笑顔 わたくし専用の笑顔ですわ。
+    うにゅう：@会釈 グローバル定義にも戻れますの。
+
+    !mark@転換点
+    さくら：ここで@転換点 場面転換です。
+    !seek(@転換点, 0.5)
+    さくら：@承知 了解しました。
+
+＊ローカル優先の表情
+
+    %さくら、うにゅう
+
+    !emote@会釈(common_bow)
+    !emote@笑顔(common_smile)
+    !emote@さくら:笑顔(sakura_smile)
+    !emote@うにゅう:笑顔(unyuu_smile)
+    !choice@さくら:承知(ok, 「もちろんです！」)
+
+    さくら：@笑顔 わたし専用の笑顔です。
+    うにゅう：@笑顔 わたくし専用の笑顔ですわ。
+    うにゅう：@会釈 グローバル定義にも戻れますの。
+
+    !mark@転換点
+    さくら：ここで@転換点 場面転換です。
+    !seek(@転換点, 0.5)
+    さくら：@承知 了解しました。
 
 # ---------------------------------------------------------------------------
 # シーン 5: 明示 !route_add / !route_switch
 # ---------------------------------------------------------------------------
 
 ＊舞台演出
-    ＆type：cuesheet
 
-    !route_add[shell, actor:さくら:shell]
-    !route_add[balloon, spot:stage_balloon]
+    !route_add(shell, actor:さくら:shell)
+    !route_add(balloon, spot:stage_balloon)
 
     さくら：ここは舞台の上ですわ！
 
-    !route_switch[balloon, actor:さくら:balloon]
+    !route_switch(balloon, actor:さくら:balloon)
 
     さくら：通常バルーンに戻りましたわ。
 
 # ---------------------------------------------------------------------------
-# 通常 pasta シーン（後方互換性確認）
+# 通常 pasta シーン（拡張構文を使わない例）
 # ---------------------------------------------------------------------------
 
 ＊通常会話
-    さくら：こちらはキューシートモードではありません。
-    さくら：!keyframe のような行も通常テキストとして扱われます。
-    さくら：@happy も通常の pasta ランダムワード参照として動作します。
+    さくら：こちらは拡張構文を使わない通常会話です。
+    さくら：既存の会話行はそのまま書けます。
+    ：継続行も従来どおり使えます。
 ```
 
 ---
@@ -881,7 +980,7 @@ Rust 2024 Edition を使用。
 1. **pasta_dsl は時刻計算を行わない**: `CueIrScene` に `start_time` フィールドは存在しない。行の出現順序と構造のみを出力する。
 2. **エイリアス解決は dola CueSheetBuilder の責務**: pasta_dsl は `AliasRef(name)` をそのまま出力する。エイリアステーブルの構築と解決、未定義時の `Emote` フォールバックは dola 側で実行する。
 3. **RouteAdd 自動生成は dola CueSheetBuilder の責務**: pasta_dsl はアクション行の actor を `CueIrAction.actor` として出力するだけ。スロット割り当て判定と RouteAdd 自動生成は dola 側で実行する。
-4. **明示 RouteAdd/RouteSwitch は pasta_dsl がパースする**: `!route_add[target, entity_key]` / `!route_switch[target, entity_key]` は PEG で解析し `CueIrCommand::RouteAdd` / `RouteSwitch` として出力する。
+4. **明示 RouteAdd/RouteSwitch は pasta_dsl がパースする**: `!route_add(target, entity_key)` / `!route_switch(target, entity_key)` は PEG で解析し `CueIrCommand::RouteAdd` / `RouteSwitch` として出力する。
 5. **後方互換性は絶対**: `&type:cuesheet` を持たないシーンの挙動は一切変更しない。
 
 ---
@@ -900,7 +999,7 @@ Rust 2024 Edition を使用。
 | RoutingCommand | 配送制御: RouteAdd（追加）/ RouteSwitch（切替）/ RouteRemove（除去）|
 | SlotRegistry | アクター→スロット割り当て管理 API（dola 側トレイト）|
 | DurationResolver | アクション行の所要時間を外部注入するインターフェース（dola 側トレイト）|
-| 暗黙キーフレーム | アクション行の終了時点に自動的に設定される基準時刻の進行点 |
-| `%` 行 | アクター配置行。`%actor=slot_id` 形式でスロットを明示割り当て |
+| 暗黙マーク | アクション行の終了時点に自動的に設定される基準時刻の進行点 |
+| `%` 行 | アクター配置行。`%actor、actor＝N` 形式でスロットを割り当て（C# enum 式自動番号付け） |
 | pasta DSL | 行指向のドメイン固有言語。ゴーストスクリプトの記述に使用 |
 | 伺か | デスクトップマスコットアプリのプラットフォーム。本プロジェクトの文脈基盤 |

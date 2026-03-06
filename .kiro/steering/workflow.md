@@ -1,5 +1,7 @@
 # Workflow - 開発ワークフロー
 
+updated_at: 2026-03-07
+
 Kiro仕様駆動開発における作業フローと完了時アクション。
 
 ---
@@ -31,10 +33,10 @@ Spec: <spec-name>"
 
 **コミットタイプ**: `feat` / `fix` / `refactor` / `docs` / `test`
 
-### Step 2. 仕様フォルダを `completed/` に移動
+### Step 2. 仕様フォルダーを `completed/` に移動
 
 **移動を先に行い、移動後に `spec.json` を更新する。**
-（VS Code の不具合により、移動前にファイルを更新すると、エディタの確定操作で移動元に復活する場合がある）
+（VS Codeの不具合により、移動前にファイルを更新すると、エディターの確定操作で移動元に復活する場合がある）
 
 ```bash
 mv .kiro/specs/<spec-name> .kiro/specs/completed/
@@ -75,14 +77,14 @@ mv .kiro/specs/<spec-name> .kiro/specs/completed/
 
 #### 4-3. 必要に応じてフェーズ進捗率を更新
 
-Phase 内の仕様完了状況に応じて進捗バーとパーセンテージを更新。
+Phase内の仕様完了状況に応じて進捗バーとパーセンテージを更新。
 
 📍 **参照**: `.kiro/steering/focus.md` のROADMAP更新タイミング
 
 ### Step 5. 完了コミット & プッシュ
 
 仕様移動とメタデータ更新をコミットし、**まとめてプッシュ**する。
-（CIの無駄な多重実行を避けるため、プッシュは最後の1回のみ）
+（CIのムダな多重実行を避けるため、プッシュは最後の1回のみ）
 
 ```bash
 git add -A
@@ -92,14 +94,14 @@ git push origin <branch>
 
 ### 完了チェックリスト
 
-すべての Step を実行した後、以下を確認する：
+すべてのStepを実行した後、以下を確認する：
 
 - [ ] 全テストがパス（`cargo test`）
-- [ ] スペックフォルダが `.kiro/specs/completed/<spec-name>/` に存在
+- [ ] スペックフォルダーが `.kiro/specs/completed/<spec-name>/` に存在
 - [ ] `spec.json` の `phase` が `"implementation-complete"`
 - [ ] 移動元（`.kiro/specs/<spec-name>/`）にファイルが残っていない
 - [ ] ROADMAP更新済み（該当する場合）
-  - 仕様の状態列が ✅ 完了 になっている
+  - 仕様の状態列が✅完了になっている
   - 完了済み仕様数がインクリメントされている
 
 ---
@@ -149,11 +151,11 @@ git push origin <branch>
 
 ## 仕様フェーズフロー
 
-```
+```text
 requirements → design → tasks → implementation → implementation-complete
 ```
 
 各フェーズ移行時に進捗を確認し、完了時は上記アクションを実行。
 
 ---
-_Document patterns, not every workflow variation_
+Document patterns, not every workflow variation.

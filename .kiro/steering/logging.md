@@ -1,23 +1,25 @@
 # Logging Guidelines (tracing)
 
+updated_at: 2026-03-07
+
 このプロジェクトでは `tracing` クレートを使用した構造化ロギングを採用しています。
 
 ## 依存関係
 
 ```toml
-# ライブラリ (wintf)
+# ライブラリ（wintf, dola）
 tracing = { workspace = true }
 
-# アプリケーション (examples, bins)
+# アプリケーション（areka, examples）
 tracing-subscriber = { workspace = true }  # env-filter feature有効
 ```
 
 ## ログレベル選択基準
 
 | レベル | 用途 | 例 |
-|--------|------|-----|
+| -------- | ------ | ----- |
 | `error!` | 致命的エラー、回復不能な失敗 | COM API失敗、リソース作成失敗 |
-| `warn!` | 回復可能なエラー、警告、非推奨の使用 | 無効なパラメータ、フォールバック発生 |
+| `warn!` | 回復可能なエラー、警告、非推奨の使用 | 無効なパラメーター、フォールバック発生 |
 | `info!` | ライフサイクルイベント | 初期化完了、終了、ディスプレイ構成変更 |
 | `debug!` | 開発者向け詳細情報 | エンティティ作成、コマンド実行、状態変更 |
 | `trace!` | 高頻度イベント、詳細トレース | WMメッセージ、フレームごとの処理、描画詳細 |
@@ -48,15 +50,20 @@ debug!(x = pos.x, y = pos.y, "position");
 
 ## 書式パターン
 
-### 関数名プレフィックス
+### スコーププレフィックス
 
-ログメッセージには関数名をプレフィックスとして含める：
+ログメッセージには、コンポーネント名または関数名ベースのスコープ文字列を含める：
 
 ```rust
 info!("[GraphicsCore] Initialization completed");
 debug!(entity = %name, "[init_window_graphics] WindowGraphics created");
+info!("[ClipDemo] Creating ULW + DComp clip windows");
 trace!(frame = frame_count.0, "[commit_composition] DComp device not available");
 ```
+
+- フレームワーク内部は関数名ベースのプレフィックスを優先する
+- サンプルやアプリケーション層はコンポーネント名ベースのプレフィックスでもよい
+- 同一モジュール内で両形式を混在させるより、ファイル単位で一貫させる
 
 ### 構造化フィールド優先
 
@@ -95,21 +102,23 @@ fn main() {
 
 ```powershell
 # infoレベル以上
-$env:RUST_LOG="info"; cargo run --example taffy_flex_demo
+$env:RUST_LOG="info"; cargo run -p areka
 
 # debugレベルも表示
-$env:RUST_LOG="debug"; cargo run --example taffy_flex_demo
+$env:RUST_LOG="debug"; cargo run -p wintf --example clip_demo
 
 # wintfクレートのみtrace
-$env:RUST_LOG="wintf=trace"; cargo run --example taffy_flex_demo
+$env:RUST_LOG="wintf=trace"; cargo run -p wintf --example taffy_flex_demo_old
 
 # 特定モジュールのみ
-$env:RUST_LOG="wintf::ecs::graphics=debug"; cargo run --example taffy_flex_demo
+$env:RUST_LOG="wintf::ecs::graphics=debug"; cargo run -p wintf --example multi_backend_demo
 ```
 
 ## ライブラリ vs アプリケーション
 
-- **ライブラリ (wintf)**: `tracing`マクロでログを発行するのみ。Subscriber初期化は行わない。
-- **アプリケーション**: `tracing-subscriber`を使用してSubscriberを初期化。フィルタリングや出力形式を制御。
+- **ライブラリ（wintf, dola）**: `tracing`マクロでログを発行するのみ。Subscriber初期化は行わない。
+- **アプリケーション（areka, examples）**: `tracing-subscriber`を使用してSubscriberを初期化し、`RUST_LOG` で出力を制御する。
 
 これにより、ライブラリ使用時にSubscriber未設定であればログ出力はゼロコストとなる。
+
+Document logging patterns, not every call site.

@@ -1,6 +1,10 @@
 # Kiro spec.json スキーマ定義
 
+updated_at: 2026-03-07
+
 本プロジェクトにおける `.kiro/specs/{feature}/spec.json` の拡張スキーマを定義する。
+
+この文書は**厳格なバリデーター仕様**ではなく、現在のリポジトリで実際に使われているフィールドと、今後新規または更新対象の仕様で優先する値をまとめた運用ガイドである。`completed/`配下には旧フェーズ値を持つ履歴が残るため、履歴の完全正規化は前提にしない。
 
 ---
 
@@ -22,18 +26,36 @@
 
 ## phase（フェーズ）の値
 
+### 現在推奨する値
+
 | 値 | 説明 |
-|----|------|
+| ---- | ---- |
 | `init` | 初期化のみ |
 | `requirements-draft` | 要件定義作成中 |
+| `requirements-generated` | 要件定義生成済み・未承認 |
 | `requirements-approved` | 要件定義承認済み |
-| `design-draft` | 設計作成中 |
+| `design-generated` | 設計生成済み・未承認 |
 | `design-approved` | 設計承認済み |
-| `tasks-draft` | タスク作成中 |
+| `tasks-generated` | タスク生成済み・未承認 |
 | `tasks-approved` | タスク承認済み（実装可能） |
 | `in-progress` | 実装中 |
-| `completed` | 完了 |
+| `implementation` | 実装フェーズ中 |
+| `implementation-complete` | 実装完了・完了処理対象 |
+| `completed` | 完了済み履歴 |
 | `survey-completed` | 調査完了（調査系仕様専用） |
+| `rejected` | 却下 |
+
+### 履歴上の旧値
+
+以下は既存履歴で観測される値であり、参照時には受け入れるが、新規作成では原則使わない。
+
+- `approved`
+- `closed`
+- `complete`
+- `implemented`
+- `implementation-completed`
+- `not-started`
+- `validated`
 
 ---
 
@@ -44,13 +66,24 @@
   "requirements": {
     "generated": true,        // requirements.md 生成済みか
     "approved": false,        // 人間が承認したか
+    "generated_at": "ISO8601",// 任意: 生成日時
     "approved_at": "ISO8601", // 任意: 承認日時
     "note": "string"          // 任意: メモ
   },
   "design": { /* 同構造 */ },
-  "tasks": { /* 同構造 */ }
+  "tasks": { /* 同構造 */ },
+  "implementation": {
+    "completed": false,
+    "completed_at": "ISO8601",
+    "validated": false,
+    "validated_at": "ISO8601",
+    "note": "string"
+  }
 }
 ```
+
+- `implementation` オブジェクトは主に親仕様や完了済み履歴で使われる任意フィールド
+- `generated_at` や `approved_at` は存在してもしなくてもよい
 
 ---
 
@@ -71,7 +104,7 @@
 ### priority の定義
 
 | 値 | 意味 | 説明 |
-|----|------|------|
+| ---- | ---- | ---- |
 | `P0` | MVP必須 | 最小実行可能製品に必要 |
 | `P1` | 体験向上 | UX向上のために重要 |
 | `P2` | 高度機能 | 差別化機能 |
@@ -80,7 +113,7 @@
 ### tier の定義
 
 | 値 | 説明 |
-|----|------|
+| ---- | ---- |
 | 1 | 基盤層（他に依存しない） |
 | 2 | 基盤依存層 |
 | 3 | 上位層 |
@@ -110,7 +143,7 @@
 
 ## 特殊用途フィールド
 
-### 調査系仕様
+### 調査系メタデータ
 
 ```json
 {
@@ -172,7 +205,7 @@
   "created_at": "2025-01-01T00:00:00Z",
   "updated_at": "2025-01-01T00:00:00Z",
   "language": "ja",
-  "phase": "tasks-approved",
+  "phase": "completed",
   "approvals": {
     "requirements": { "generated": true, "approved": true },
     "design": { "generated": true, "approved": true },
@@ -206,18 +239,36 @@
 }
 ```
 
+### 調査系仕様テンプレート
+
+```json
+{
+  "feature_name": "future-requirements-survey",
+  "created_at": "2025-01-01T00:00:00Z",
+  "updated_at": "2025-01-01T00:00:00Z",
+  "language": "ja",
+  "phase": "survey-completed",
+  "approvals": {
+    "requirements": { "generated": true, "approved": true },
+    "design": { "generated": false, "approved": false },
+    "tasks": { "generated": false, "approved": false }
+  },
+  "ready_for_implementation": false
+}
+```
+
 ---
 
 ## 命名規則
 
 ### feature_name パターン
 
-```
+```text
 {layer}-{priority}-{feature-name}
 ```
 
 | layer | 説明 |
-|-------|------|
+| ------- | ------ |
 | `wintf` | UIフレームワーク層 |
 | `areka` | アプリケーション層 |
 | `kiro` | 開発プロセス支援 |
@@ -231,3 +282,5 @@
 1. **phase 変更時**: 必ず `updated_at` も更新
 2. **承認時**: `approvals.{phase}.approved = true` + `approved_at` 設定
 3. **子仕様作成時**: 親の `child_specifications.created` に追加、`pending` を減算
+4. **新規または更新対象の仕様**: 可能な限り「現在推奨する値」に寄せる
+5. **完了済み履歴**: 古い `phase` 値だけを理由に機械的な正規化はしない。必要な作業がある仕様だけ更新する

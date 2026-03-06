@@ -1,27 +1,33 @@
 # Technology Stack
 
+updated_at: 2026-03-07
+
 ## Architecture
 
-ECSアーキテクチャ（Entity Component System）をベースとした、Windows固有のグラフィックスAPIとの統合。論理ツリーとビジュアルツリーの二層構造により、アプリケーションロジックと描画処理を分離。
+Rust 2024を前提にしたマルチクレート構成です。wintfはbevy_ecsベースのWindows UIフレームワーク、dolaはプラットフォーム非依存の演出定義ライブラリ、arekaは両者を統合する実アプリ層です。ECSによる状態管理とWindowsネイティブAPIの直接利用を組み合わせ、論理ツリーとビジュアルツリーを分離します。
 
 ## Core Technologies
 
 - **Language**: Rust 2024 Edition
 - **Graphics**: DirectComposition, Direct2D, Direct3D11
-- **Text**: DirectWrite (縦書き・横書き対応)
-- **Imaging**: WIC (Windows Imaging Component)
+- **Text**: DirectWrite（縦書き・横書き対応）
+- **Imaging**: WIC（Windows Imaging Component）
 - **Window System**: Win32 API
 
 ## Key Libraries
 
 - **bevy_ecs** (0.18.0): ECSアーキテクチャの実装基盤
+- **bevy_app** (0.18.0): ECSスケジュールとアプリライフサイクル統合
 - **thiserror** (2): エラー型定義（全クレート共通）
-- **windows** (0.62.2): Windows API バインディング
+- **windows** (0.62.2): Windows APIバインディング
 - **windows-core** (0.62.2): Windows Core API
 - **taffy** (0.9.2): レイアウトエンジン
 - **euclid** (0.22.11): 2D/3D幾何計算
 - **async-executor** (1.13.3): 非同期タスク実行
+- **bevy_tasks** (0.18.0): タスク実行基盤
+- **tracing / tracing-subscriber**: 構造化ロギング
 - **windows-numerics** (0.3.1): Windows数値型サポート
+- **pasta_core** (git dependency): 外部DSLエンジン連携
 
 ### dola クレート依存
 - **serde** (1): シリアライズ/デシリアライズ基盤
@@ -37,22 +43,25 @@ Rust言語の型システムを最大限に活用。`unsafe`ブロックはWindo
 ### Code Quality
 - モジュール単位で責務を明確に分離（`com/`, `ecs/`, `api.rs`など）
 - Windows COMオブジェクトのライフタイム管理を厳密に実施
-- エラーハンドリングは `thiserror` を使用して構造化 enum を定義する（全クレート共通規約）
-- Windows API 境界では `windows::core::Result` を使用し、内部エラーへの変換は `#[from]` で行う
+- エラーハンドリングは `thiserror` を使用して構造化enumを定義する（全クレート共通規約）
+- Windows API境界では `windows::core::Result` を使用し、内部エラーへの変換は `#[from]` で行う
 
 ### Testing
-サンプルアプリケーション（`examples/areka.rs`, `examples/dcomp_demo.rs`）で動作確認を実施
+
+- `cargo test` を基準に、クレートごとの統合テストとin-sourceテストを併用する
+- wintfは`tests/`配下をドメイン別に分割し、トップレベルのエントリポイントから束ねる
+- examplesは手動検証とグラフィックス挙動確認の補助であり、テストの代替ではない
 
 ## Development Environment
 
 ### Required Tools
 - Rust 2024 Edition
-- Windows 10/11 (DirectComposition対応)
-- Visual Studio Build Tools (Windows SDKが必要)
+- Windows 10/11（DirectComposition対応）
+- Visual Studio Build Tools（Windows SDKが必要）
 
 ### Common Commands
 ```bash
-# Dev (サンプル実行): cargo run --example areka
+# Dev (サンプル実行): cargo run -p wintf --example taffy_flex_demo_old
 # Build: cargo build
 # Build (Release最適化): cargo build --release
 # Test: cargo test
@@ -63,8 +72,9 @@ Rust言語の型システムを最大限に活用。`unsafe`ブロックはWindo
 - **ECS採用**: 複雑なGUI要素の管理とヒットテストロジックをコンポーネントベースで実装
 - **DirectComposition**: ハードウェアアクセラレーションによる高速な合成処理と透過ウィンドウの実現
 - **DirectWrite**: 高品質な日本語テキストレンダリングと縦書き対応
-- **Workspace構成**: 将来的な機能拡張に備えたモノレポ構成（`crates/wintf`）
+- **Workspace構成**: フレームワーク、演出定義、実アプリを分離したモノレポ構成
 - **Release最適化**: サイズ最適化（`opt-level='z'`, `lto=true`）でバイナリサイズを削減
+- **構造化ログ**: `tracing` を全体規約とし、subscriber初期化はアプリ層で行う
 
 ---
-_Document standards and patterns, not every dependency_
+Document standards and patterns, not every dependency.

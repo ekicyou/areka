@@ -1,6 +1,8 @@
 # Product Overview
 
-**wintf** (Windows Tategaki Framework) は、Windows上で日本語の縦書き描画をサポートするため、bevy_ecsを基盤としたUI実装を提供するRustライブラリです。「伺か」のような日本語縦書きを必要とするデスクトップアプリケーションの基盤として設計されています。
+updated_at: 2026-03-07
+
+このワークスペースは、Windows向け縦書きUIフレームワークwintf、宣言的アニメーション基盤dola、それらを統合するデスクトップマスコット試作アプリarekaの3層で構成されています。目標は、「伺か」のような常駐キャラクターアプリをRustとWindowsネイティブAPIで実現できる基盤を整えることです。
 
 ## Core Capabilities
 
@@ -8,7 +10,9 @@
 - **2D描画**: DirectComposition、Direct2D、DirectWriteを活用した高品質な2D描画
 - **縦書きテキスト**: DirectWriteによる日本語縦書き・横書き両対応のテキストレンダリング
 - **透過ウィンドウ**: レイヤードウィンドウまたはDirectCompositionによる透過処理とヒットテスト
-- **画像表示**: WIC (Windows Imaging Component)を使用した透過画像の読み込みと描画
+- **画像表示**: WIC（Windows Imaging Component）を使用した透過画像の読み込みと描画
+- **演出オーケストレーション**: dolaによるアニメーション定義、CueSheetによる離散演出制御
+- **ゴースト試作統合**: arekaによるシェルとバルーンの2ウィンドウ構成、会話・表情・入力導線の統合検証
 
 ## Target Use Cases
 
@@ -19,22 +23,28 @@
 
 ## Value Proposition
 
-Rust言語による型安全性とメモリ安全性を保ちながら、Windows固有の低レベルAPI（DirectComposition、Direct2D、DirectWrite）を使用した日本語縦書き描画を実現します。既存のUIフレームワークでは困難な、透過ウィンドウと縦書きテキストを組み合わせた高度な表現が可能です。
+Rust言語による型安全性とメモリ安全性を保ちながら、Windows固有の低レベルAPIを使った透過ウィンドウ、縦書きテキスト、演出制御を一貫した設計で扱えます。既存UIフレームワークでは扱いづらい、日本語縦書きとデスクトップマスコット表現を中核ユースケースとしている点がこのプロジェクトの価値です。
 
 ## areka アプリケーション層
 
-**areka** は wintf を基盤としたデスクトップマスコット・プラットフォームです。「伺か」にインスピレーションを得た、ゴースト（キャラクター）常駐型のデスクトップアプリケーションを実現します。
+**areka**はwintfを基盤としたデスクトップマスコット・プラットフォームです。「伺か」にインスピレーションを得た、ゴースト（キャラクター）常駐型のデスクトップアプリケーションを実現します。
 
 ### 構成
 
-- **areka バイナリクレート** *(予定)*: wintf / dola を統合し、ゴースト実行環境を提供
+- **areka バイナリクレート**: wintf/dolaを統合し、ゴースト実行環境の試作を提供
 - **dola ライブラリクレート**: 宣言的アニメーション定義フォーマット（JSON/TOML/YAML）
-- **pasta** *(外部リポジトリ)*: 里々インスパイアの会話記述DSLスクリプトエンジン
+- **pasta** *(外部依存/連携先)*: 里々インスパイアの会話記述DSLスクリプトエンジン
+
+### 現在の進め方
+
+- wintfでWindowsネイティブUI基盤を先に固める
+- dolaでアニメーション定義とCue系データモデルを独立進化させる
+- arekaで実アプリ統合の妥当性を検証する
 
 ### アルファリリースターゲット: ぱすたさん
 
 | 属性 | 内容 |
-|------|------|
+| ------ | ------ |
 | 名前 | ぱすたさん |
 | 種別 | ゴースト（pasta DSL 解釈・実行） |
 | シェル | 1体キャラクター表示（透過ウィンドウ、60表情パターン） |
@@ -43,4 +53,4 @@ Rust言語による型安全性とメモリ安全性を保ちながら、Windows
 詳細: `doc/PASTA_PROFILE.md`, `doc/ROADMAP.md`
 
 ---
-_Focus on patterns and purpose, not exhaustive feature lists_
+Focus on patterns and purpose, not exhaustive feature lists.

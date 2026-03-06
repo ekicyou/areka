@@ -1,30 +1,33 @@
 # Project Structure
 
+updated_at: 2026-03-07
+
 ## Organization Philosophy
 
-**レイヤードアーキテクチャ** - Windows COM APIラッパー（`com/`）、ECSコンポーネント（`ecs/`）、メッセージハンドリング（ルート）の3層構造で責務を分離。論理ツリーとビジュアルツリーの二層構成により、アプリケーションロジックと描画処理を独立させる。
+**責務ごとのクレート分割** - wintfがWindows向けUI基盤、dolaが演出データモデル、arekaがアプリ統合を担う。wintf内ではCOMラッパー、ECSサブシステム、Win32メッセージ境界を分け、dolaは定義層から実行時層までを段階的なモジュールで構成する。
 
 ## Directory Patterns
 
 ### Workspace Root
 **Location**: `/`  
-**Purpose**: Cargoワークスペース設定、ドキュメント、CI/CD設定  
-**Example**: `Cargo.toml`, `README.md`, `.kiro/`
+**Purpose**: Cargoワークスペース設定、横断ドキュメント、開発ルール  
+**Example**: `Cargo.toml`, `README.md`, `doc/`, `.kiro/steering/`
 
 ### Library Crate
 **Location**: `/crates/wintf/`  
 **Purpose**: メインライブラリの実装  
 **Structure**:
 - `src/` - ライブラリソースコード
-- `examples/` - サンプルアプリケーション（`areka.rs`, `dcomp_demo.rs`）
+- `examples/` - 手動検証用サンプルアプリケーション
+- `tests/` - ドメイン別に整理された統合テスト
 
 ### COM Wrapper Layer
 **Location**: `/crates/wintf/src/com/`  
-**Purpose**: Windows COMインターフェースのRustラッパー  
+**Purpose**: Windows COMインターフェイスのRustラッパー  
 **Contains**:
 - `dcomp.rs` - DirectComposition API
 - `d3d11.rs` - Direct3D11 API
-- `dwrite.rs` - DirectWrite API (縦書き対応)
+- `dwrite.rs` - DirectWrite API（縦書き対応）
 - `wic.rs` - Windows Imaging Component
 - `animation.rs` - Windows Animation API
 - `d2d/` - Direct2D関連
@@ -34,12 +37,16 @@
 **Purpose**: ECSアーキテクチャのコンポーネント定義  
 **Structure**:
 - `common/` - 共通インフラ（階層伝播システム）
-- `layout/` - レイアウトシステム（taffy統合、配置計算）
-- `transform/` - 実験的変換（非推奨、WinUI3模倣）
-- `widget/` - UIウィジェット（Label、Rectangle等）
-- `window.rs` - ウィンドウ管理
-- `graphics.rs` - グラフィックスリソース
-- `world.rs` - ECS World / schedule管理
+- `window/` - ウィンドウ管理とWin32状態同期
+- `graphics/` - グラフィックスリソースと描画システム
+- `layout/` - taffy統合、配置計算、ヒット判定
+- `widget/` - UIウィジェット、テキスト、画像、ブラシ
+- `pointer/` - ポインター入力のバッファリングと配信
+- `drag/` - ドラッグ状態管理とディスパッチ
+- `cue/` - CueQueueとCueSheet配送のECS統合
+- `dola/` - DolaRuntimeのECS Component化
+- `world/` - schedule labels、vsync、フレーム進行
+- `window_proc/` - Win32メッセージ種別ごとのECSブリッジ
 
 #### ECS機能グループ詳細
 
@@ -48,41 +55,44 @@
 - 代表的な関数: `sync_simple_transforms<L,G,M>()`, `propagate_parent_transforms<L,G,M>()`
 - 特徴: 完全ジェネリック化、`Arrangement`/`Transform`両対応
 
-**2. Window Management** (`window.rs`, `window_system.rs`, `window_proc.rs`)
+**2. Window Management** (`window/`, `window_proc/`)
 - 責務: Win32ウィンドウのライフサイクル管理とECS統合
 - 代表的なコンポーネント: `Window`, `WindowHandle`, `WindowPos`, `WindowStyle`, `ZOrder`
 - 特徴: HWNDとEntityの双方向マッピング、マルチスレッド対応
 
-**3. Graphics Resources** (`graphics.rs`, `graphics/`)
+**3. Graphics Resources** (`graphics/`)
 - 責務: Direct2D/DirectCompositionリソースのライフサイクル管理
 - 代表的なコンポーネント: `GraphicsCore`, `WindowGraphics`, `Visual`, `Surface`, `DeviceContext`
 - 特徴: デバイスロスト対応、遅延初期化、階層的描画
 
 **4. Layout System** (`layout/`)
 - 責務: taffyレイアウトエンジン統合と配置計算
-- サブモジュール: `taffy.rs`, `metrics.rs`, `arrangement.rs`, `rect.rs`, `systems.rs`
+- サブモジュール: `taffy.rs`, `metrics.rs`, `arrangement.rs`, `rect.rs`, `systems/`, `hit_test/`, `hit_region/`
 - 代表的なコンポーネント: `TaffyStyle`, `TaffyComputedLayout`, `Arrangement`, `GlobalArrangement`, `Size`, `Offset`
 - 特徴: 軸平行変換最適化、Common Infrastructure活用、Surface生成最適化
 
-**5. Transform** (`transform/`, **非推奨**)
-- 責務: WinUI3/WPF/XAML `RenderTransform`模倣（回転・スキュー対応）
-- 代表的なコンポーネント: `Transform`, `GlobalTransform`, `Translate`, `Scale`, `Rotate`, `Skew`
-- **非推奨理由**: taffyレイアウトエンジンとの統合不足、軸平行変換最適化が適用できない
-- **推奨代替**: `Arrangement`ベースのLayout System
+**5. Input Systems** (`pointer/`, `drag/`)
+- 責務: ポインターイベントの収集、ヒットテスト、ドラッグ状態遷移
+- 代表的な型: ポインターバッファー、ドラッグコンテキスト、キャプチャガード
+- 特徴: Win32メッセージ境界とECSイベント処理を分離
 
 **6. Cue System** (`cue/`)
-- 責務: 離散コマンド配信の ECS 統合レイヤー
+- 責務: 離散コマンド配信のECS統合レイヤー
 - 代表的なコンポーネント: `CueQueue`（`dola::TimedSchedule<CueCommand>` を内包）, `CueSheetTracker`
 - 型の再エクスポート: `dola::cue::*`（`CueCommand`, `BarrierKind`, `RoutingCommand`, ドメイン型）を `pub use` で提供
 - 主要システム: `dispatch_pending_cue_sheets`
-- 特徴: `Entity::to_bits()` / `from_bits()` 変換を ECS 境界で実行、`EntityRef(u64)` のラウンドトリップ
+- 特徴: `Entity::to_bits()` / `from_bits()` 変換をECS境界で実行、`EntityRef(u64)` のラウンドトリップ
 
 **7. Dola Animator** (`dola/`)
-- 責務: `DolaRuntime` のエンティティごとの ECS Component 化
+- 責務: `DolaRuntime` のエンティティごとのECS Component化
 - 代表的なコンポーネント: `DolaAnimator`（`DolaRuntime` を内部所有、`unsafe impl Send + Sync`）
-- 主要システム: `tick_dola_animators`（`Query<&mut DolaAnimator>` + `Res<FrameTime>` で全エンティティ一括 tick）
-- 安全性保証: `Query<&mut>` の排他アクセスにより 1 tick 1 回・単一スレッドでの更新を型レベルで保証
+- 主要システム: `tick_dola_animators`（`Query<&mut DolaAnimator>` + `Res<FrameTime>` で全エンティティ一括tick）
+- 安全性保証: `Query<&mut>` の排他アクセスにより1 tick 1回・単一スレッドでの更新を型レベルで保証
 - 消費パターン: 後続システムが `Query<&DolaAnimator>` の `last_result()` で `UpdateResult` を読み取る
+
+**8. World Scheduling** (`world/`)
+- 責務: schedule label、vsync、フレーム時間管理
+- 特徴: グラフィックス更新、入力処理、アニメーション処理順序を明示する
 
 ### Message Handling
 **Location**: `/crates/wintf/src/`（ルート）  
@@ -95,7 +105,7 @@
 
 ## Naming Conventions
 
-- **Files**: `snake_case.rs` (Rust標準)
+- **Files**: `snake_case.rs`（Rust標準）
 - **Modules**: `snake_case`
 - **Types**: `PascalCase` (structs, enums, traits)
 - **Functions**: `snake_case`
@@ -169,6 +179,9 @@ COMリソースコンポーネント内部のアクセスメソッドは、COM�
   - `playback.rs` - 再生状態
   - `validate.rs` - バリデーション
   - `error.rs` - エラー型
+  - `compile/` - 解決・型変換
+  - `cue/` - CueSheet/TimedScheduleモデル
+  - `runtime/` - 実行系ファサード、インスタンス管理、補間、購読管理
 - `tests/` - テスト
 
 **Dependencies**: `serde` + feature flags (`json`, `toml`, `yaml`)
@@ -176,13 +189,13 @@ COMリソースコンポーネント内部のアクセスメソッドは、COM�
 ### Application Binary Crate
 **Location**: `/crates/areka/`  
 **Purpose**: デスクトップマスコット・プラットフォーム本体  
-**Status**: モック実装（シェル+バルーン2ウィンドウ表示、ドラッグ移動、ダブルクリック終了）  
+**Status**: 試作実装（シェル+バルーン2ウィンドウ表示、ドラッグ移動、ダブルクリック終了）  
 **Dependencies**: wintf, human-panic, tracing, tracing-subscriber, async-io, bevy_ecs, windows
 
 ### External: pasta DSL Engine
-**Repository**: https://github.com/ekicyou/pasta  
+**Repository**: [https://github.com/ekicyou/pasta](https://github.com/ekicyou/pasta)  
 **Purpose**: 里々インスパイアの会話記述DSLスクリプトエンジン  
-**Integration**: areka バイナリクレートが依存として取り込み
+**Integration**: arekaバイナリクレートが依存として取り込み
 
 ## Import Organization
 
@@ -201,10 +214,11 @@ use crate::ecs::window::*;
 
 ## Code Organization Principles
 
-- **レイヤー分離**: COM → ECS → Message Handling の依存方向を厳守
-- **COMライフタイム**: `windows-rs`提供のスマートポインタで直接管理
+- **レイヤー分離**: COM→ECS→Message Handlingの依存方向を厳守
+- **COMライフタイム**: `windows-rs`提供のスマートポインターで直接管理
 - **unsafe隔離**: `unsafe`ブロックはCOMラッパー層に集約し、安全なAPIを上位層に提供
 - **モジュール独立性**: 各モジュールは独立してテスト可能な単位として設計
+- **テスト入口の固定化**: `tests/{domain}.rs` は束ね役に留め、実テストはドメイン配下へ寄せる
 
 ---
-_Workspace構成により将来的な機能拡張（別クレート追加）が容易_
+Workspace構成により将来的な機能拡張（別クレート追加）が容易。
