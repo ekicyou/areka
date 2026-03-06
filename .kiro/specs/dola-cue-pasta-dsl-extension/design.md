@@ -124,7 +124,7 @@ sequenceDiagram
     Parser -->> Compiler: 汎用 AST（構造的トークン群）
     Compiler ->> Compiler: コマンド名の意味解決・型マッピング
     Compiler ->> IR: CueIrScene を構築
-    IR ->> Builder: build(ir_scene)
+        IR ->> Builder: build(ir_scene, resolver, slot_registry)
     loop CueIrEntry ごとに処理
         Builder ->> Resolver: resolve_duration(action_entry) -> f64
         Builder ->> Builder: current_time を更新
