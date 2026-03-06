@@ -64,17 +64,23 @@ graph LR
         Compiler["CueSheet コンパイラ\n(AST → CueIR 変換)"]
         IR["CueIR\n(CueIrScene, CueIrEntry)"]
         Builder["CueSheetBuilder\n(CueIR → CueSheet 変換)"]
-        Resolver["DurationResolver trait\n(start_time 算出)"]
-        Slot["SlotRegistry trait\n(スロット割り当て管理)"]
+        Resolver["DurationResolver trait\n(&impl で注入)"]
+        Slot["SlotRegistry trait\n(&mut impl で注入)"]
         Sheet["CueSheet\n(最終出力)"]
         Compiler --> IR
         IR --> Builder
-        Builder -- "resolve_duration()" --> Resolver
-        Builder -- "get_slot_assignment()" --> Slot
+        Builder -- "&impl" --> Resolver
+        Builder -- "&mut impl" --> Slot
         Builder --> Sheet
+    end
+    subgraph "areka ランタイム（永続層所有）"
+        ArekaSlot["具象 SlotRegistry\n(アプリ存続期間メモリ保持)"]
+        ArekaResolver["具象 DurationResolver"]
     end
     Script --> PEG
     AST -- "pasta AST" --> Compiler
+    ArekaSlot -. "&mut impl SlotRegistry" .-> Builder
+    ArekaResolver -. "&impl DurationResolver" .-> Builder
 ```
 
 **境界の責務分担**:
@@ -110,8 +116,8 @@ sequenceDiagram
     participant Compiler as "dola コンパイラ"
     participant IR as "CueIrScene"
     participant Builder as "CueSheetBuilder"
-    participant Resolver as "DurationResolver"
-    participant Slots as "SlotRegistry"
+    participant Resolver as "&impl DurationResolver"
+    participant Slots as "&mut impl SlotRegistry"
 
     ScriptAuthor ->> Parser: .pasta ファイルを渡す
     Parser ->> Parser: シーン内 ! 行の有無でモード判定
@@ -528,13 +534,20 @@ impl DurationResolver for FixedDurationResolver {
 | **目的** | アクター→スロット割り当て状態の管理 API |
 | **要件** | 5.4, 5.5 |
 
+**所有権と永続モデル**:
+
+- **トレイト定義・デフォルト実装**: dola クレートに配置（`dola::cue::builder`）
+- **永続層の所有者**: areka ランタイム。具象型を所有し、`CueSheetBuilder::build()` に `&mut impl SlotRegistry` として貸し出す
+- **永続スコープ**: アプリケーション起動〜終了（メモリ上保持）。シーン間で割り当て状態を維持し、アプリ再起動でリセット
+- **serde 対応**: 現スコープ外。将来ディスク永続化が必要な場合は areka 側の具象型に `Serialize`/`Deserialize` を追加する（トレイト定義には影響しない）
+
 **サービスインターフェース定義（配置モジュール: `dola::cue::builder`）**
 
 ```rust
 pub type SlotId = u32;
 
 /// アクター→スロット割り当てを管理するトレイト。
-/// スロット割り当てはセッションをまたいで永続する。
+/// 永続層は areka ランタイムが所有し、CueSheetBuilder に &mut で注入する。
 pub trait SlotRegistry {
     /// 指定 ActorKey の現在のスロット割り当てを返す。未割り当ては None。
     fn get_slot_assignment(&self, actor: &ActorKey) -> Option<SlotId>;
@@ -581,17 +594,18 @@ pub trait SlotRegistry {
 
 **サービスインターフェース定義**
 
+> **注入方式**: 構造体に型パラメータを持たず、`build()` メソッド引数で `&impl DurationResolver` / `&mut impl SlotRegistry` を受け取る。呼び出し元への型伝播を避けつつ、静的ディスパッチ（ゼロコスト抽象化）を維持する。トレイトオブジェクト (`dyn`) は他に手段がない場合に限り使用する Rust の慣例に従う。
+
 ```rust
 /// CueIrScene を CueSheet へ変換するビルダー。
-pub struct CueSheetBuilder<R: DurationResolver, S: SlotRegistry> {
-    resolver: R,
-    slot_registry: S,
-}
+/// 型パラメータを持たず、build() 呼び出し時に依存を注入する。
+pub struct CueSheetBuilder;
 
-impl<R: DurationResolver, S: SlotRegistry> CueSheetBuilder<R, S> {
-    pub fn new(resolver: R, slot_registry: S) -> Self;
-
+impl CueSheetBuilder {
     /// CueIrScene を CueSheet に変換する。
+    ///
+    /// - `resolver`: アクション行ごとの所要時間を返す（冪等・副作用なし → `&`）
+    /// - `slot_registry`: アクター→スロット割り当て状態（状態変更あり → `&mut`）
     ///
     /// # エラー
     /// - `CueBuildError::DuplicateMark`
@@ -600,7 +614,11 @@ impl<R: DurationResolver, S: SlotRegistry> CueSheetBuilder<R, S> {
     /// - `CueBuildError::ActorScopedMarkUnsupported`
     /// - `CueBuildError::MarkUsedMultipleTimes`
     /// - `CueBuildError::NegativeOffset`
-    pub fn build(&mut self, scene: CueIrScene) -> Result<CueSheet, CueBuildError>;
+    pub fn build(
+        scene: CueIrScene,
+        resolver: &impl DurationResolver,
+        slot_registry: &mut impl SlotRegistry,
+    ) -> Result<CueSheet, CueBuildError>;
 }
 ```
 
@@ -611,7 +629,7 @@ impl<R: DurationResolver, S: SlotRegistry> CueSheetBuilder<R, S> {
 // アクター属性を持たない制御キューの発行元
 pub const SYSTEM_ACTOR: ActorKey = ActorKey("__system__");
 
-build(scene):
+build(scene, resolver, slot_registry):
   current_time = 0.0
   mark_table: HashMap<String, f64> = {}
   mark_used: HashSet<String> = {}
