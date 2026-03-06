@@ -9,9 +9,9 @@
 
 **目的**: dola の `CueSheet` データモデル（`crates/dola/src/cue/`）をテキストで記述できるよう、pasta DSL の文法を拡張する。
 **利用者**: ゴーストスクリプト作者。既存の `pasta` 会話スクリプトとシームレスに共存する演出台本を書く。
-**影響範囲**: pasta_dsl パーサーへの文法ルール追加、dola クレートへの `CueSheetBuilder` / `DurationResolver` / `SlotRegistry` 追加。既存 pasta スクリプトへの破壊的変更はゼロ。
+**影響範囲**: pasta_core パーサーへの文法ルール追加（構造的 AST 出力のみ）、dola クレートへの `CueSheetBuilder` / `DurationResolver` / `SlotRegistry` / CueIR 型追加。既存 pasta スクリプトへの破壊的変更はゼロ。
 
-本設計書は **pasta_core 実装者向けの仕様指示書** として機能する。コード実装は本フェーズのスコープ外。
+本設計書は **pasta_core 実装者向けの文法仕様指示（PEG 文法セクション）** と、**dola CueSheet コンパイラの設計仕様（CueIR 以降のセクション）** の 2 部構成である。コード実装は本フェーズのスコープ外。
 
 ### ゴール
 
@@ -44,40 +44,47 @@
 
 ### アーキテクチャパターンと境界マップ
 
-**採用パターン: ハイブリッド（Option C）** — pasta_dsl が CueIR（中間表現）を出力し、dola `CueSheetBuilder` が時刻計算・ルーティング判定を担う。詳細は [research.md](research.md) の「決定 1」を参照。
+**採用パターン: ハイブリッド改（Option C'）** — pasta_core が構造的 AST（意味解釈なし）を出力し、dola が AST を CueIR へ変換（コンパイル）した上で `CueSheetBuilder` が時刻計算・ルーティング判定を担う。詳細は [research.md](research.md) の「決定 1」「決定 5」を参照。
+
+**依存方向**: pasta_core は誰からも依存されない独立クレート。dola が pasta_core の AST データ型を参照する一方向依存。
 
 ```mermaid
 graph LR
     subgraph "テキスト入力"
         Script[".pasta ファイル"]
     end
-    subgraph "pasta_dsl クレート"
+    subgraph "pasta_core クレート（意味解釈なし）"
         PEG["PEG 文法\n(grammar.pest 拡張)"]
-        AST["AST ノード\n(CueIrScene, CueIrEntry)"]
-        Parser["パーサー\n(parse_cue_scene)"]
+        AST["汎用 AST ノード\n(コマンド名・引数トークン群)"]
+        Parser["パーサー"]
         PEG --> Parser
         Parser --> AST
     end
-    subgraph "dola クレート"
-        Builder["CueSheetBuilder\n(IR → CueSheet 変換)"]
+    subgraph "dola クレート（意味解釈・コンパイル）"
+        Compiler["CueSheet コンパイラ\n(AST → CueIR 変換)"]
+        IR["CueIR\n(CueIrScene, CueIrEntry)"]
+        Builder["CueSheetBuilder\n(CueIR → CueSheet 変換)"]
         Resolver["DurationResolver trait\n(start_time 算出)"]
         Slot["SlotRegistry trait\n(スロット割り当て管理)"]
         Sheet["CueSheet\n(最終出力)"]
+        Compiler --> IR
+        IR --> Builder
         Builder -- "resolve_duration()" --> Resolver
         Builder -- "get_slot_assignment()" --> Slot
         Builder --> Sheet
     end
     Script --> PEG
-    AST -- "CueIrScene" --> Builder
+    AST -- "pasta AST" --> Compiler
 ```
 
 **境界の責務分担**:
 
 | 境界 | 責務 | 責務外 |
 |------|------|--------|
-| pasta_dsl PEG 文法 | 行の分類・構文解析・トークン抽出 | 時刻計算・ルーティング判定 |
-| pasta_dsl CueIR | 構造化 IR（順序・型・アクター情報） | `start_time` 値の確定 |
-| dola CueSheetBuilder | IR → CueSheet 変換、Duration 注入、RouteAdd 自動生成 | テキスト解析 |
+| pasta_core PEG 文法 | 行の分類・構文解析・トークン抽出（構造のみ） | コマンドの意味解釈・時刻計算・ルーティング判定 |
+| pasta_core AST | `!` + コマンド名 + 引数トークン群を構造的に保持 | dola 型への変換・CueIR の保持 |
+| dola CueSheet コンパイラ | pasta AST → CueIR 変換（コマンド名の意味解決・型マッピング） | テキスト解析（PEG 文法の責務） |
+| dola CueSheetBuilder | CueIR → CueSheet 変換、Duration 注入、RouteAdd 自動生成 | テキスト解析 |
 | DurationResolver | アクションごとの所要時間を返す | CueSheet 構築 |
 | SlotRegistry | アクター→スロット割り当てを管理 | テキスト解析・CueCommand 変換 |
 
@@ -99,7 +106,8 @@ graph LR
 ```mermaid
 sequenceDiagram
     actor ScriptAuthor as スクリプト作者
-    participant Parser as "pasta_dsl パーサー"
+    participant Parser as "pasta_core パーサー"
+    participant Compiler as "dola コンパイラ"
     participant IR as "CueIrScene"
     participant Builder as "CueSheetBuilder"
     participant Resolver as "DurationResolver"
@@ -107,8 +115,10 @@ sequenceDiagram
 
     ScriptAuthor ->> Parser: .pasta ファイルを渡す
     Parser ->> Parser: シーン内 ! 行の有無でモード判定
-    Parser ->> IR: CueIrEntry を順序付きで登録
-    IR ->> Builder: build(ir_scene, resolver, slot_registry)
+    Parser -->> Compiler: 汎用 AST（構造的トークン群）
+    Compiler ->> Compiler: コマンド名の意味解決・型マッピング
+    Compiler ->> IR: CueIrScene を構築
+    IR ->> Builder: build(ir_scene)
     loop CueIrEntry ごとに処理
         Builder ->> Resolver: resolve_duration(action_entry) -> f64
         Builder ->> Builder: current_time を更新
@@ -139,9 +149,9 @@ flowchart TD
 | 要件 | サマリー | コンポーネント | インターフェース | フロー |
 |------|---------|--------------|----------------|------|
 | 1.1–1.3 | 暗黙キーフレーム・初期時刻 0.0・シーンスコープ | CueSheetBuilder | `DurationResolver` | パースパイプライン |
-| 1.4–1.5 | パーサーは時刻を算出しない、Duration Resolver 注入 | CueIR・CueSheetBuilder | `DurationResolver` | パースパイプライン |
+| 1.4–1.5 | パーサーは時刻を算出しない、Duration Resolver 注入 | コンパイラ・CueIR・CueSheetBuilder | `DurationResolver` | パースパイプライン |
 | 2.1 | `!` / `！` 行認識 | PEG 文法 | `cue_cmd_line` ルール | — |
-| 2.2 | `!` 行有無でシーンモード判定 | パーサー | `CueIrScene` | パースパイプライン |
+| 2.2 | `!` 行有無でシーンモード判定 | パーサー | 汎用 AST | パースパイプライン |
 | 2.3 | コマンド種別一覧 | PEG `cue_cmd_body` | `CueIrCommand` enum | — |
 | 2.4 | 選択的日本語エイリアス | PEG キーワードルール | 対照表 | — |
 | 2.5 | mark 登録・seek 移動 | PEG + Builder | `CueIrCommand::Mark`, `Seek` | パースパイプライン |
@@ -178,8 +188,9 @@ flowchart TD
 
 | コンポーネント | 層 | 目的 | 要件カバレッジ | 主要依存 | 契約 |
 |------------|---|------|--------------|---------|------|
-| PEG 文法拡張 | pasta_dsl | `!` 行・名前付きコマンド定義の構文解析 | 2, 3, 4, 7 | pest 2.x (P0) | 文法ルール |
-| CueIR 型 | pasta_dsl | 解析済み中間表現（時刻なし） | 1.4, 1.5 | — | データ型 |
+| PEG 文法拡張 | pasta_core | `!` 行・名前付きコマンド定義の構造的構文解析（意味解釈なし） | 2, 3, 4, 7 | pest 2.x (P0) | 文法ルール |
+| CueSheet コンパイラ | dola | pasta AST → CueIR 変換（コマンド名の意味解決・dola 型マッピング） | 1.4, 2.1–2.10, 3.1–3.2, 4.1–4.5 | pasta_core AST (P0) | Compiler |
+| CueIR 型 | dola | 意味解釈済み中間表現（時刻なし） | 1.4, 1.5 | — | データ型 |
 | CueSheetBuilder | dola | CueIR → CueSheet 変換 | 1, 2, 3, 4, 5 | DurationResolver (P0), SlotRegistry (P0) | Service |
 | DurationResolver | dola | アクションの所要時間を外部注入 | 1.4, 1.5 | — | Trait |
 | SlotRegistry | dola | アクター→スロット割り当てを管理 | 5.4, 5.5 | — | Trait |
@@ -187,11 +198,11 @@ flowchart TD
 
 ---
 
-### pasta_dsl 層: PEG 文法拡張
+### pasta_core 層: PEG 文法拡張
 
 | フィールド | 詳細 |
 |---------|------|
-| **目的** | `!` コマンド行・名前付きコマンド定義・シーンモード暗黙判定の文法ルール追加 |
+| **目的** | `!` コマンド行・名前付きコマンド定義・シーンモード暗黙判定の構造的文法ルール追加。pasta_core はコマンドの意味を解釈せず、`!` + コマンド名 + 引数トークン群という構造のみを AST に保持する |
 | **要件** | 2.1–2.10, 3.1–3.2, 4.1–4.5, 7.1–7.2 |
 
 #### モード判定
@@ -370,21 +381,31 @@ float_lit = { ASCII_DIGIT+ ~ ("." ~ ASCII_DIGIT+)? }
 
 | ファイル | 変更内容 |
 |---------|---------|
-| `grammar.pest` | `cue_cmd_line`・定義系ルール・`cue_target`・`entity_key` 等の追加 |
-| `ast/*.rs` | `CueIrScene`, `CueIrEntry`, `CueIrAction`, `CueIrCommand`, `CueIrAliasDef` ノード追加 |
+| `grammar.pest` | `cue_cmd_line`・定義系ルール・`cue_target`・`entity_key` 等の構造的ルール追加（コマンドの意味解釈はしない） |
+| `ast/*.rs` | キューコマンド行の汎用 AST ノード追加（コマンド名・エイリアス名・引数トークン群を構造的に保持） |
 | `parse_scene.rs` | `!` 行有無によるモード判定処理追加 |
 | `parse_action.rs` | `@fragment` 分割ロジック、継続行 `\n` 結合処理 |
 
+**dola 側の変更対象ファイル推定**:
+
+| ファイル | 変更内容 |
+|---------|----------|
+| `crates/dola/src/cue/ir.rs` | `CueIrScene`, `CueIrEntry`, `CueIrAction`, `CueIrCommand`, `CueIrAliasDef` 型定義 |
+| `crates/dola/src/cue/compiler.rs` | pasta_core AST → CueIR 変換（コマンド名の意味解決・dola 型マッピング） |
+| `crates/dola/src/cue/builder.rs` | `CueSheetBuilder`・`DurationResolver`・`SlotRegistry` |
+
 ---
 
-### pasta_dsl 層: CueIR 型定義
+### dola 層: CueIR 型定義
 
 | フィールド | 詳細 |
 |---------|------|
-| **目的** | パーサー出力の中間表現。時刻なし・順序付き。ビルダー層が消費する |
+| **目的** | pasta_core AST をコンパイルした結果の中間表現。時刻なし・順序付き。CueSheetBuilder が消費する。dola 内部のドメイン型（`ActorKey`, `CueCommand`, `CueTarget`, `EntityKey`）を直接使用する |
 | **要件** | 1.4, 1.5, 2.1–2.10, 3.1–3.2, 4.1–4.5 |
 
-**Rust インターフェース定義（配置モジュール: `pasta_dsl::cue_ir`）**
+> **設計注記**: CueIR は dola クレート内に配置される。pasta_core は汎用 AST のみを出力し、CueIR を保持しない。pasta_core AST → CueIR への変換（コマンド名の意味解決・dola 型へのマッピング）は dola の CueSheet コンパイラが担う。
+
+**Rust インターフェース定義（配置モジュール: `dola::cue::ir`）**
 
 ```rust
 /// キューシートモードのシーン中間表現
@@ -746,7 +767,8 @@ CueSheet
 
 ### エラー戦略
 
-**パース層** (`CueParseError`): PEG 文法違反を検出。行番号・カラム番号・エラー種別・修正ヒントを含む。
+**パース層** (`CueParseError`): pasta_core PEG 文法の構文エラーを検出。行番号・カラム番号・エラー種別・修正ヒントを含む。
+**コンパイル層** (`CueCompileError`): pasta_core AST → CueIR 変換時のエラー（不明なコマンド名、不正な引数構造等）を検出。
 **ビルド層** (`CueBuildError`): 構文は正しいが意味的に不正なケースを検出。
 
 ### エラー型定義
@@ -808,7 +830,7 @@ pub enum CueBuildError {
 
 ### インテグレーションテスト
 
-- `.pasta` テキスト → `CueIrScene` → `CueSheet` のラウンドトリップ
+- `.pasta` テキスト → pasta_core AST → CueIR → `CueSheet` のラウンドトリップ
 - 暗黙キーフレームの累積: 複数アクション行で `start_time` が正しく前進するか
 - 並列演出: `!seek(@name, offset)` で同一基準時刻から複数 `Cue` が生成されるか
 - RouteAdd 自動生成: アクター初出現時に `RoutingCommand::RouteAdd` が先行 Cue として挿入されるか
@@ -829,8 +851,10 @@ pub enum CueBuildError {
 
 | 対象 | 変更内容 |
 |------|---------|
-| `grammar.pest` | `cue_cmd_line` 認識（モード判定用）、アクション行 `@cmd` フラグメント分割 |
-| `ast/` | `CueIrScene`, `CueIrAction`, `CueIrFragment` |
+| `grammar.pest`（pasta_core） | `cue_cmd_line` 認識（モード判定用）、アクション行 `@cmd` フラグメント分割 |
+| `ast/`（pasta_core） | キューコマンド行の汎用 AST ノード |
+| `dola::cue::ir` | `CueIrScene`, `CueIrAction`, `CueIrFragment` |
+| `dola::cue::compiler` | pasta_core AST → CueIR 変換（コマンド名の意味解決） |
 | `dola::cue::builder` | `DurationResolver` トレイト, `FixedDurationResolver`, `CueSheetBuilder::build()` (Action のみ) |
 | `dola::cue::builder` | `SlotRegistry` トレイト, `InMemorySlotRegistry` |
 
@@ -840,8 +864,10 @@ pub enum CueBuildError {
 
 | 対象 | 変更内容 |
 |------|---------|
-| `grammar.pest` | 各 `cue_cmd_body` バリアント（mark / seek / yield / select / wait / clear） |
-| `ast/` | `CueIrCommand` enum |
+| `grammar.pest`（pasta_core） | 各 `cue_cmd_body` バリアント（mark / seek / yield / select / wait / clear） |
+| `ast/`（pasta_core） | コマンド引数構造の詳細化 |
+| `dola::cue::ir` | `CueIrCommand` enum |
+| `dola::cue::compiler` | mark/seek/yield/select/wait/clear の意味解決 |
 | `dola::cue::builder` | Mark/Seek 処理, Barrier/Clear Cue 生成, エラーハンドリング |
 
 ### フェーズ C: 名前付きコマンド定義 + Routing
@@ -850,8 +876,10 @@ pub enum CueBuildError {
 
 | 対象 | 変更内容 |
 |------|---------|
-| `grammar.pest` | `cue_emote_def`・`cue_choice_def`・`cue_custom_def`（日本語エイリアス含む）、`cue_route_add`・`cue_route_switch`・`cue_route_remove` + `entity_key` ルール |
-| `ast/` | `CueIrAliasDef`、`CueIrCommand::RouteAdd` / `RouteSwitch` / `RouteRemove` |
+| `grammar.pest`（pasta_core） | `cue_emote_def`・`cue_choice_def`・`cue_custom_def`（日本語エイリアス含む）、`cue_route_add`・`cue_route_switch`・`cue_route_remove` + `entity_key` ルール |
+| `ast/`（pasta_core） | エイリアス定義・ルーティングコマンドの汎用 AST ノード |
+| `dola::cue::ir` | `CueIrAliasDef`、`CueIrCommand::RouteAdd` / `RouteSwitch` / `RouteRemove` |
+| `dola::cue::compiler` | emote/choice/custom/route_* の意味解決・dola 型マッピング |
 | `dola::cue::builder` | AliasTable 構築、エイリアス解決（actor ローカル優先）、RouteAdd 自動判定 |
 
 ### フェーズ D: 完全機能
