@@ -15,7 +15,6 @@ serde = { version = "1", features = ["derive"] }
 thiserror = { workspace = true }
 interpolation = "0.3.0"
 rand = { workspace = true }
-# pasta DSL integration (switch to versioned release when stable)
 pasta_core = { workspace = true }
 
 [dependencies.serde_json]

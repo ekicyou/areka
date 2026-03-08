@@ -27,7 +27,7 @@ Rust 2024を前提にしたマルチクレート構成です。wintfはbevy_ecs�
 - **bevy_tasks** (0.18.0): タスク実行基盤
 - **tracing / tracing-subscriber**: 構造化ロギング
 - **windows-numerics** (0.3.1): Windows数値型サポート
-- **pasta_core** (git dependency): 外部DSLエンジン連携
+- **pasta_core** (0.1.6): 外部DSLエンジン連携
 
 ### dola クレート依存
 - **serde** (1): シリアライズ/デシリアライズ基盤
