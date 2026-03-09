@@ -1,6 +1,6 @@
 # Technology Stack
 
-updated_at: 2026-03-07
+updated_at: 2026-03-09
 
 ## Architecture
 
@@ -22,7 +22,6 @@ Rust 2024を前提にしたマルチクレート構成です。wintfはbevy_ecs�
 - **windows** (0.62.2): Windows APIバインディング
 - **windows-core** (0.62.2): Windows Core API
 - **taffy** (0.9.2): レイアウトエンジン
-- **euclid** (0.22.11): 2D/3D幾何計算
 - **async-executor** (1.13.3): 非同期タスク実行
 - **bevy_tasks** (0.18.0): タスク実行基盤
 - **tracing / tracing-subscriber**: 構造化ロギング
@@ -74,6 +73,7 @@ Rust言語の型システムを最大限に活用。`unsafe`ブロックはWindo
 - **DirectWrite**: 高品質な日本語テキストレンダリングと縦書き対応
 - **Workspace構成**: フレームワーク、演出定義、実アプリを分離したモノレポ構成
 - **Release最適化**: サイズ最適化（`opt-level='z'`, `lto=true`）でバイナリサイズを削減
+- **レガシーAPI非推奨化**: `win_message_handler`, `win_thread_mgr`, `winproc` は `#[deprecated]` 指定済み。新規コードでは `ecs/window_proc/` 配下のモジュールを使用する
 - **構造化ログ**: `tracing` を全体規約とし、subscriber初期化はアプリ層で行う
 
 ---

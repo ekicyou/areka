@@ -1,6 +1,6 @@
 # Product Overview
 
-updated_at: 2026-03-07
+updated_at: 2026-03-09
 
 このワークスペースは、Windows向け縦書きUIフレームワークwintf、宣言的アニメーション基盤dola、それらを統合するデスクトップマスコット試作アプリarekaの3層で構成されています。目標は、「伺か」のような常駐キャラクターアプリをRustとWindowsネイティブAPIで実現できる基盤を整えることです。
 

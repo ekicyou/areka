@@ -1,6 +1,6 @@
 # Project Structure
 
-updated_at: 2026-03-07
+updated_at: 2026-03-09
 
 ## Organization Philosophy
 
@@ -28,7 +28,9 @@ updated_at: 2026-03-07
 - `dcomp.rs` - DirectComposition API
 - `d3d11.rs` - Direct3D11 API
 - `dwrite.rs` - DirectWrite API（縦書き対応）
+- `dxgi.rs` - DXGIインターフェイス
 - `wic.rs` - Windows Imaging Component
+- `ulw.rs` - UpdateLayeredWindow API
 - `animation.rs` - Windows Animation API
 - `d2d/` - Direct2D関連
 
@@ -46,6 +48,7 @@ updated_at: 2026-03-07
 - `cue/` - CueQueueとCueSheet配送のECS統合
 - `dola/` - DolaRuntimeのECS Component化
 - `world/` - schedule labels、vsync、フレーム進行
+- `app.rs` - アプリケーション状態管理（ウィンドウカウント、ディスプレイ構成変更）
 - `window_proc/` - Win32メッセージ種別ごとのECSブリッジ
 
 #### ECS機能グループ詳細
@@ -63,6 +66,7 @@ updated_at: 2026-03-07
 **3. Graphics Resources** (`graphics/`)
 - 責務: Direct2D/DirectCompositionリソースのライフサイクル管理
 - 代表的なコンポーネント: `GraphicsCore`, `WindowGraphics`, `Visual`, `Surface`, `DeviceContext`
+- サブモジュール: `compositor.rs`（`WindowD3D11Compositor` — レンダリングパイプライン）, `compositor_systems/`（コンポジットinit/render）, `visual_manager.rs`（Visualの挿入・管理API）, `command_list.rs`（D2Dコマンドリスト）
 - 特徴: デバイスロスト対応、遅延初期化、階層的描画
 
 **4. Layout System** (`layout/`)
@@ -94,14 +98,24 @@ updated_at: 2026-03-07
 - 責務: schedule label、vsync、フレーム時間管理
 - 特徴: グラフィックス更新、入力処理、アニメーション処理順序を明示する
 
+**9. Application State** (`app.rs`)
+- 責務: アプリケーション全体の状態管理
+- 代表的な構造体: `App`（ウィンドウカウント、ディスプレイ構成変更検出、メッセージウィンドウ管理）
+- 特徴: ECS Resourceとしてワールドに導入、ウィンドウの作成・破棄を追跡
+
 ### Message Handling
 **Location**: `/crates/wintf/src/`（ルート）  
 **Purpose**: Windowsメッセージループとスレッド管理  
 **Contains**:
-- `winproc.rs` - ウィンドウプロシージャ
-- `win_message_handler.rs` - メッセージハンドリング
-- `win_thread_mgr.rs` - スレッド管理
+- `winproc.rs` - ウィンドウプロシージャ ⚠️ `#[deprecated]`
+- `win_message_handler.rs` - メッセージハンドリング ⚠️ `#[deprecated]`
+- `win_thread_mgr.rs` - スレッド管理 ⚠️ `#[deprecated]`
+- `win_state.rs` - ウィンドウ状態管理
+- `win_style.rs` - ウィンドウスタイル定義
 - `api.rs` - Windows API safeラッパー
+- `process_singleton.rs` - プロセス単一実行制御
+
+> **注意**: `winproc.rs`, `win_message_handler.rs`, `win_thread_mgr.rs` は非推奨。新規コードでは `ecs/window_proc/` 配下のメッセージ種別別モジュールを使用すること。
 
 ## Naming Conventions
 
