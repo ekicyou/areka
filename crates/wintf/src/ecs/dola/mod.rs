@@ -85,14 +85,6 @@ impl DolaAnimator {
     pub fn runtime(&self) -> &DolaRuntime {
         &self.runtime
     }
-
-    /// 内部 DolaRuntime への可変参照（crate 内部限定）。
-    ///
-    /// DolaDocument のロード等、ランタイム操作に必要。
-    /// 外部コードからの直接 tick() 呼び出しを防止するために `pub(crate)` とする。
-    pub(crate) fn runtime_mut(&mut self) -> &mut DolaRuntime {
-        &mut self.runtime
-    }
 }
 
 impl Default for DolaAnimator {

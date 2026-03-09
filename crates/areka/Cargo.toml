@@ -1,5 +1,6 @@
 [package]
 name = "areka"
+workspace = "../.."
 description = "Desktop mascot platform for Windows"
 version.workspace = true
 edition.workspace = true

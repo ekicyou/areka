@@ -1,5 +1,6 @@
 [package]
 name = "dola"
+workspace = "../.."
 description = "Declarative Orchestration for Live Animation"
 version.workspace = true
 edition.workspace = true

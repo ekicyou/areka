@@ -10,8 +10,7 @@ use bevy_ecs::prelude::*;
 use windows::core::Result;
 use wintf::ecs::world::FrameCount;
 use wintf::ecs::{
-    DCompGraphicsResource, GraphicsCore, SurfaceGraphics, Visual, VisualGraphics,
-    visual_resource_management_system,
+    DCompGraphicsResource, SurfaceGraphics, Visual, VisualGraphics, visual_resource_management_system,
 };
 
 use super::common::setup_graphics;

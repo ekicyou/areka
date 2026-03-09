@@ -28,6 +28,9 @@ tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 pasta_core = "0.1.6"
 
+[patch.crates-io]
+pasta_core = { path = "vendors/pasta/crates/pasta_core" }
+
 [workspace.dependencies.bevy_app]
 version = "0.18.0"
 features = [

@@ -3,7 +3,7 @@
 //! 5.5: ループ内トリガー統合テスト, 5.6: E2E テスト
 
 use super::common::{extract_float, timed_trigger_doc};
-use dola::runtime::{DolaRuntime, EvaluatedValue, TriggerResult};
+use dola::runtime::{DolaRuntime, TriggerResult};
 use dola::{
     AnimationVariableDef, DolaDocumentBuilder, StoryboardBuilder, StoryboardEntry, TransitionDef,
     TransitionRef, TransitionValue,

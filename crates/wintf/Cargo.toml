@@ -1,5 +1,6 @@
 [package]
 name = "wintf"
+workspace = "../.."
 description = "Windows Tategaki Framework - Rust UI library with Japanese vertical text support"
 version.workspace = true
 edition.workspace = true

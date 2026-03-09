@@ -6,18 +6,6 @@ use wintf::ecs::{CompositionMode, Window};
 
 /// テスト用ヘルパー: DeferredWorld を使って find_owner_window_composition_mode を呼び出す
 fn query_composition_mode(world: &mut World, entity: Entity) -> Option<CompositionMode> {
-    // DeferredWorld を直接テストで使うことは困難なため、
-    // システムを利用してテストデータを収集する
-    #[derive(Resource, Default)]
-    struct TestResult(Option<CompositionMode>);
-
-    world.insert_resource(TestResult::default());
-
-    // テスト対象エンティティIDをリソースに保存
-    #[derive(Resource)]
-    struct TargetEntity(Entity);
-    world.insert_resource(TargetEntity(entity));
-
     // ChildOf チェーンを辿るロジックを直接テスト
     // find_owner_window_composition_mode は DeferredWorld が必要だが、
     // 同じロジックを World で再現する
