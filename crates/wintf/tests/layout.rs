@@ -1,5 +1,5 @@
 // tests/layout.rs — wintf layout domain test entry point
-#[path = "layout/arrangement_bounds_test.rs"]
+#[path = "layout/arrangement_bounds_test/mod.rs"]
 mod arrangement_bounds_test;
 #[path = "layout/box_style_consolidation_test.rs"]
 mod box_style_consolidation_test;
