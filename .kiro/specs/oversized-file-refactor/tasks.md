@@ -92,7 +92,7 @@
   - _Requirements: 2.1, 2.2, 2.3, 2.4, 2.6, 2.7, 4.1, 4.2, 4.4_
   - _Boundary: Module Splitter / loop controller_
 
-- [ ] 6. dola wave: 統合テスト分割
+- [x] 6. dola wave: 統合テスト分割
 - [x] 6.1 (P) conflict resolution テストの分割
   - 共有フィクスチャを runtime 用 common へ新設する場合は**本タスクが所有・書き込み**する
   - 観測: 同一テストが実行（インベントリ差分が空）、`cargo test -p dola` グリーン、各≤~600行
@@ -125,7 +125,7 @@
   - 観測: 同一テストが実行（インベントリ差分が空）、`cargo test -p dola` グリーン、各≤~600行
   - _Requirements: 3.1, 3.2, 3.3, 3.4, 3.5_
   - _Boundary: Integration Test Splitter / dola general tests_
-- [ ] 6.8 (P) compile integration テストの分割
+- [x] 6.8 (P) compile integration テストの分割
   - compile 用 common へトリガーヘルパー等を追記する場合は**本タスクが単独所有**する
   - 観測: 同一テストが実行（インベントリ差分が空）、`cargo test -p dola` グリーン、各≤~600行
   - _Requirements: 3.1, 3.2, 3.3, 3.4, 3.5_

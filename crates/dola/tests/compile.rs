@@ -5,7 +5,7 @@ mod common;
 mod boundary_test;
 #[path = "compile/error_test.rs"]
 mod error_test;
-#[path = "compile/integration_test.rs"]
+#[path = "compile/integration_test/mod.rs"]
 mod integration_test;
 #[path = "compile/metadata_test.rs"]
 mod metadata_test;
