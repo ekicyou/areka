@@ -32,7 +32,7 @@
   - 観測: 共通完了条件を満たす（状態モジュールが分割され `cargo test -p wintf` グリーン・インベントリ差分が空・公開API不変）
   - _Requirements: 2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 2.7, 4.1, 4.2, 4.4_
   - _Boundary: Module Splitter / drag state_
-- [ ] 3.2 (P) compositor render systems モジュールの分割（最高リスク・Pattern B）
+- [x] 3.2 (P) compositor render systems モジュールの分割（最高リスク・Pattern B）
   - 唯一のテスト無しファイルで Pattern B（本体の責務分割）を適用する。RAIIガードと再帰走査の凝集を保持し、必要なら3分割を許容する
   - private 項目を sub-module 跨ぎで共有する箇所は `pub(super)` / `pub(crate)` へ最小昇格する
   - 観測: 昇格した項目を列挙して可視性マッピングを明示し、外部可視性・パスが不変であること、`cargo test -p wintf` グリーン、各モジュール≤~600行
