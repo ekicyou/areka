@@ -96,8 +96,9 @@ impl Validate for DolaDocument {
                     });
                 }
 
-                // V16t: trigger_storyboard と variable/transition の排他チェック
-                if entry.trigger_storyboard.is_some() {
+                // V16t / V14t / V18t: トリガーエントリの検証（エラー追加順を保存）
+                if let Some(ref trigger_target) = entry.trigger_storyboard {
+                    // V16t: trigger_storyboard と variable/transition の排他チェック
                     if entry.variable.is_some() || entry.transition.is_some() {
                         errors.push(DolaError::TriggerExclusiveViolation {
                             storyboard: sb_name.clone(),
@@ -107,28 +108,22 @@ impl Validate for DolaDocument {
                                     .to_string(),
                         });
                     }
-                }
 
-                // V17t: トリガーエントリにトランジション固有フィールドが存在する場合はエラー
-                if entry.trigger_storyboard.is_some() {
+                    // V17t: トランジション固有フィールドの追加チェックは不要。
                     // TransitionRef にはfrom/to/easing/durationが含まれるため、
                     // transition自体があればV16tで検出済み。
-                    // ここではbetweenのfrom/toフィールドをチェック（betweenはタイミング制御なので許可とも取れるが
-                    // design.mdの記述に従い、betweenはトリガーでも使用可能とする）
-                }
+                    // betweenはタイミング制御なので許可とも取れるが
+                    // design.mdの記述に従い、betweenはトリガーでも使用可能とする。
 
-                // V14t: トリガー自己参照検出
-                if let Some(ref trigger_target) = entry.trigger_storyboard {
+                    // V14t: トリガー自己参照検出
                     if trigger_target == sb_name {
                         errors.push(DolaError::TriggerSelfReference {
                             storyboard: sb_name.clone(),
                             entry_index: entry_idx,
                         });
                     }
-                }
 
-                // V18t: トリガー対象ストーリーボード存在確認
-                if let Some(ref trigger_target) = entry.trigger_storyboard {
+                    // V18t: トリガー対象ストーリーボード存在確認
                     if !self.storyboard.contains_key(trigger_target) {
                         errors.push(DolaError::TriggerTargetNotFound {
                             storyboard: sb_name.clone(),

@@ -54,6 +54,14 @@ pub struct WindowD3D11Compositor {
     cached_size: (u32, u32),
 }
 
+// SAFETY: 保持リソースの跨スレッド安全性は以下の不変条件に依存する。
+// - composition_bitmap / staging_bitmap: `D2D1_FACTORY_TYPE_MULTI_THREADED` で生成された
+//   ファクトリ系列（GraphicsCore::new → create_d2d_factory）のオブジェクトであり、
+//   COM 呼び出しは D2D 内部ロックでシリアライズされる。
+// - hbitmap / memory_dc / dib_bits: プロセス全域で有効なハンドル/ポインタ値（移動自体は安全）。
+//   これらを実際に使用する箇所（composite_render_system / ulw_present_system / Drop）は
+//   いずれも `&mut WindowD3D11Compositor` 経由のため、ECS の借用規則により
+//   GDI 呼び出し・dib_bits アクセスの同時実行は発生しない。
 unsafe impl Send for WindowD3D11Compositor {}
 unsafe impl Sync for WindowD3D11Compositor {}
 
@@ -103,6 +111,14 @@ unsafe fn create_dib_section(
     width: u32,
     height: u32,
 ) -> windows::core::Result<(HBITMAP, HDC, *mut u8)> {
+    // 不変条件: 唯一の呼び出し元 create_inner は本関数の前に同寸法の
+    // D2D CreateBitmap を成功させているため、width/height はデバイスの
+    // 最大ビットマップサイズ（FL11 で 16384）以下であり、i32 への変換は
+    // 損失しない（biWidth の負化や `-(height as i32)` のオーバーフローは到達不能）。
+    debug_assert!(
+        width <= i32::MAX as u32 && height <= i32::MAX as u32,
+        "width/height must fit in i32 (guaranteed by preceding D2D CreateBitmap success)"
+    );
     let bmi = BITMAPINFO {
         bmiHeader: BITMAPINFOHEADER {
             biSize: mem::size_of::<BITMAPINFOHEADER>() as u32,
@@ -118,6 +134,11 @@ unsafe fn create_dib_section(
 
     let mut dib_bits: *mut std::ffi::c_void = std::ptr::null_mut();
     let hbitmap = unsafe { CreateDIBSection(None, &bmi, DIB_RGB_COLORS, &mut dib_bits, None, 0)? };
+    // NOTE(W3a-V): CreateDIBSection の成功契約上、有効な HBITMAP が返れば ppvBits も
+    // 非 null で設定されるため、「有効 hbitmap + null dib_bits」の組み合わせは
+    // API 契約上到達不能。万一この経路に入ると hbitmap を解放せず Err を返すため
+    // GDI ハンドルが 1 個リークするが、到達不能経路のエラー処理変更は本ループ対象外
+    // （エラー経路の整備は proposals.md P42 に記録）。
     if hbitmap.is_invalid() || dib_bits.is_null() {
         return Err(windows::core::Error::from(E_FAIL));
     }
@@ -129,6 +150,12 @@ unsafe fn create_dib_section(
     }
 
     // HBITMAP を DC に関連付け
+    // NOTE(W3a-V): SelectObject の失敗（戻り値 null / HGDI_ERROR）は検査していない。
+    // 直前で有効性を確認済みの memory_dc + DIBSECTION の組み合わせでは実用上失敗しないが、
+    // 万一失敗すると memory_dc は 1x1 ストックビットマップのままとなり、
+    // ULW は黙って空内容を提示する（検査追加はエラー経路の挙動変更のため P42 に記録）。
+    // Drop 側は DeleteDC → DeleteObject の順で解放するため、ストックビットマップの
+    // 復元（SelectObject(_old)）を省略しても GDI リークは発生しない。
     let _old = unsafe { SelectObject(memory_dc, hbitmap.into()) };
 
     Ok((hbitmap, memory_dc, dib_bits as *mut u8))
@@ -162,8 +189,7 @@ unsafe fn create_inner(
 impl WindowD3D11Compositor {
     /// 全4リソースを一括作成する。
     ///
-    /// # Safety
-    /// `dc` は有効な `ID2D1DeviceContext` であること。`width > 0`, `height > 0` であること。
+    /// `width > 0`, `height > 0` を前提とする（無効サイズは `Err` を返す）。
     pub fn new(dc: &ID2D1DeviceContext, width: u32, height: u32) -> windows::core::Result<Self> {
         let inner = unsafe { create_inner(dc, width, height)? };
         debug!(

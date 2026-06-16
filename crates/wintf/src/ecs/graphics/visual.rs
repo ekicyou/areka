@@ -46,6 +46,10 @@ pub fn find_owner_window_composition_mode(
     }
 
     // ChildOf チェーンを辿る
+    // NOTE(W3b-V): bevy の Relationship 管理は自己参照 ChildOf（A→A）を警告付きで
+    // 除去するが、間接巡回（A→B→A）は構築可能であり、その場合このループは終了しない
+    // （on_visual_add フックから同期的に呼ばれるため影響大）。通常の API 使用では
+    // 巡回は生成されないため前提の明文化に留める（巡回ガードの追加は P48 に記録）。
     let mut current = entity;
     loop {
         let parent = world.get::<ChildOf>(current).map(|c| c.parent());
@@ -80,7 +84,12 @@ fn on_visual_add(mut world: DeferredWorld, context: HookContext) {
     let is_dcomp_mode =
         find_owner_window_composition_mode(&world, entity) == Some(CompositionMode::DComp);
 
-    // コマンドを発行
+    // DComp モードの場合のみ DComp コンポーネントを挿入対象にする
+    let needs_visual_graphics = is_dcomp_mode && world.get::<VisualGraphics>(entity).is_none();
+    let needs_surface_graphics = is_dcomp_mode && world.get::<SurfaceGraphics>(entity).is_none();
+    let needs_surface_dirty = is_dcomp_mode && world.get::<SurfaceGraphicsDirty>(entity).is_none();
+
+    // コマンドを発行（チェック完了後に一度だけ commands を借用する）
     let mut cmds = world.commands();
     let mut entity_cmds = cmds.entity(entity);
 
@@ -90,33 +99,20 @@ fn on_visual_add(mut world: DeferredWorld, context: HookContext) {
         entity_cmds.insert(crate::ecs::layout::Arrangement::default());
     }
 
-    // DComp モードの場合のみ DComp コンポーネントを挿入
-    if is_dcomp_mode {
-        let needs_visual_graphics = world.get::<VisualGraphics>(entity).is_none();
-        let needs_surface_graphics = world.get::<SurfaceGraphics>(entity).is_none();
-        let needs_surface_dirty = world.get::<SurfaceGraphicsDirty>(entity).is_none();
-
-        // 再借用: commands は move 済みなので改めて取得
-        let mut cmds2 = world.commands();
-        let mut ec = cmds2.entity(entity);
-        if needs_visual_graphics {
-            ec.insert(VisualGraphics::default());
-        }
-        if needs_surface_graphics {
-            ec.insert(SurfaceGraphics::default());
-        }
-        if needs_surface_dirty {
-            ec.insert(SurfaceGraphicsDirty::default());
-        }
+    if needs_visual_graphics {
+        entity_cmds.insert(VisualGraphics::default());
+    }
+    if needs_surface_graphics {
+        entity_cmds.insert(SurfaceGraphics::default());
+    }
+    if needs_surface_dirty {
+        entity_cmds.insert(SurfaceGraphicsDirty::default());
     }
 
     // BrushInheritマーカーを挿入（継承解決システムで処理される）
     // Note: Brushesコンポーネントは挿入しない（オプショナル設計）
     if needs_brush_inherit {
-        let mut cmds3 = world.commands();
-        cmds3
-            .entity(entity)
-            .insert(crate::ecs::widget::BrushInherit);
+        entity_cmds.insert(crate::ecs::widget::BrushInherit);
     }
 }
 

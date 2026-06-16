@@ -40,6 +40,15 @@ pub fn compile_storyboard(
     start_time: f64,
 ) -> Result<CompiledStoryboard, Vec<DolaError>> {
     // Step 1: バリデーション (Task 3.1)
+    // NOTE(D2-V): デシリアライズ境界に関する整理 —
+    // doc は外部入力（JSON/TOML/YAML）または Builder API 由来だが、どの取り込み経路でも
+    // 本関数冒頭で必ず validate() を通過する（Builder はバリデーションを迂回できない。
+    // tests/compile/boundary_test.rs で特性化済み）。ネスト深度の制限（再帰的
+    // デシリアライズによるスタック枯渇防御）は各フォーマットパーサ側の責務であり、
+    // 本モジュールは再帰を持たない（トポロジカルソートは反復実装）。
+    // ただし validate() 内のトリガー循環検出（validate/rules.rs::dfs_detect_cycle）は
+    // 再帰 DFS のため、ストーリーボード連鎖長に比例したスタックを消費する（D3 境界、
+    // D3-V への申し送り）。数値フィールドの有限性・符号は検証されない（P8/P14/P20 参照）。
     doc.validate()?;
 
     // Step 2: ストーリーボード検索
@@ -54,10 +63,7 @@ pub fn compile_storyboard(
     let mut errors: Vec<DolaError> = Vec::new();
 
     // Step 3: 依存グラフ構築 & 循環検出 & トポソート (Task 4)
-    let graph = build_dependency_graph(storyboard_name, sb, &mut errors);
-    if !errors.is_empty() {
-        return Err(errors);
-    }
+    let graph = build_dependency_graph(sb);
 
     let sorted_indices = match topological_sort(&graph, sb.entry.len()) {
         Ok(order) => order,
@@ -86,20 +92,16 @@ pub fn compile_storyboard(
     // compiled triggers
     let mut triggers: Vec<CompiledTrigger> = Vec::new();
 
+    // SAFETY: topological_sort の成功時 result は 0..entry_count（= sb.entry.len()）の
+    // 置換であり、全要素が添字範囲内であることを保証する（下の添字アクセスは panic 不能）。
+    debug_assert!(sorted_indices.len() == sb.entry.len());
+    debug_assert!(sorted_indices.iter().all(|&i| i < sb.entry.len()));
+
     for &entry_idx in &sorted_indices {
         let entry = &sb.entry[entry_idx];
-        let kf_name = entry
-            .keyframe
-            .clone()
-            .unwrap_or_else(|| format!("__implicit_{}", entry_idx));
+        let kf_name = entry_keyframe_name(entry, entry_idx);
 
-        // Determine if this is a trigger entry
-        let is_trigger = entry.trigger_storyboard.is_some();
-
-        // Determine if this is a pure keyframe entry (no variable/transition/trigger)
-        let is_pure_kf = entry.variable.is_none() && entry.transition.is_none() && !is_trigger;
-
-        if is_trigger {
+        if let Some(ref target_storyboard) = entry.trigger_storyboard {
             // Trigger entry: resolve fire_time using same logic as pure KF
             let fire_time = resolve_pure_keyframe_time(
                 storyboard_name,
@@ -107,7 +109,6 @@ pub fn compile_storyboard(
                 entry,
                 &keyframe_times,
                 &entry_keyframe_time,
-                &sorted_indices,
                 &mut errors,
             );
             if let Some(t) = fire_time {
@@ -118,7 +119,7 @@ pub fn compile_storyboard(
                 // Create CompiledTrigger
                 triggers.push(CompiledTrigger {
                     fire_time: t,
-                    target_storyboard: entry.trigger_storyboard.clone().unwrap(),
+                    target_storyboard: target_storyboard.clone(),
                     start_offset: entry.trigger_start_offset,
                     source_entry_index: entry_idx,
                 });
@@ -126,7 +127,8 @@ pub fn compile_storyboard(
             continue;
         }
 
-        if is_pure_kf {
+        // Pure keyframe entry (no variable/transition; trigger は上で処理済み)
+        if entry.variable.is_none() && entry.transition.is_none() {
             // Pure Keyframe (Task 5.4)
             let kf_time = resolve_pure_keyframe_time(
                 storyboard_name,
@@ -134,7 +136,6 @@ pub fn compile_storyboard(
                 entry,
                 &keyframe_times,
                 &entry_keyframe_time,
-                &sorted_indices,
                 &mut errors,
             );
             if let Some(t) = kf_time {
@@ -221,6 +222,10 @@ pub fn compile_storyboard(
 
     for (var_name, mut segments) in var_segments {
         // Sort by start_time (Task 6.1)
+        // NOTE(D2-V): NaN 時刻は partial_cmp が None → Equal 扱いとなり panic しないが、
+        // ソート順は不定となる。後続の重複検査も NaN 比較（常に false）で素通りするため、
+        // NaN 時刻のセグメントは重複検出されずに出力へ伝播する（有限性検証は P14 参照。
+        // tests/compile/boundary_test.rs で特性化済み）。
         segments.sort_by(|a, b| {
             a.start_time
                 .partial_cmp(&b.start_time)
@@ -228,6 +233,8 @@ pub fn compile_storyboard(
         });
 
         // Overlap check (Task 6.2)
+        // NOTE(D2-V): 負の duration による反転セグメント（end < start）は、単独または
+        // 近接しない配置では本検査に掛からず出力へ伝播する（P20 参照）。
         for i in 1..segments.len() {
             if segments[i - 1].end_time > segments[i].start_time {
                 errors.push(DolaError::CompileError {
@@ -244,6 +251,7 @@ pub fn compile_storyboard(
         let var_def = doc.variable.get(&var_name);
 
         // Build CompiledVariableTimeline (Task 6.3)
+        // SAFETY: is_empty() ガードにより last()/first() の unwrap は panic 不能。
         let base_duration = if segments.is_empty() {
             0.0
         } else {
@@ -270,6 +278,9 @@ pub fn compile_storyboard(
     }
 
     // Build CompiledStoryboard (Task 6.4)
+    // NOTE(D2-V): f64::max は NaN を無視するため、NaN の base_duration（NaN 時刻
+    // セグメント由来）は total_base_duration へ伝播せず黙って脱落する。
+    // 負の base_duration（反転セグメント由来）も初期値 0.0 でマスクされる（P14/P20 参照）。
     let total_base_duration = timelines
         .values()
         .map(|tl| tl.base_duration)

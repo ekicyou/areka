@@ -176,6 +176,16 @@ impl BoxStyle {
     }
 }
 
+/// BoxSizeの指定軸のみをtaffyのサイズへ反映する（未指定軸はtaffyデフォルトを維持）
+fn apply_box_size(target: &mut taffy::Size<taffy::Dimension>, src: &BoxSize) {
+    if let Some(w) = src.width {
+        target.width = w.into();
+    }
+    if let Some(h) = src.height {
+        target.height = h.into();
+    }
+}
+
 /// BoxStyleからtaffy::Styleへの変換
 impl From<&BoxStyle> for taffy::Style {
     fn from(style: &BoxStyle) -> Self {
@@ -183,28 +193,13 @@ impl From<&BoxStyle> for taffy::Style {
 
         // Box系プロパティ変換
         if let Some(size) = &style.size {
-            if let Some(w) = size.width {
-                taffy_style.size.width = w.into();
-            }
-            if let Some(h) = size.height {
-                taffy_style.size.height = h.into();
-            }
+            apply_box_size(&mut taffy_style.size, size);
         }
         if let Some(min_size) = &style.min_size {
-            if let Some(w) = min_size.width {
-                taffy_style.min_size.width = w.into();
-            }
-            if let Some(h) = min_size.height {
-                taffy_style.min_size.height = h.into();
-            }
+            apply_box_size(&mut taffy_style.min_size, min_size);
         }
         if let Some(max_size) = &style.max_size {
-            if let Some(w) = max_size.width {
-                taffy_style.max_size.width = w.into();
-            }
-            if let Some(h) = max_size.height {
-                taffy_style.max_size.height = h.into();
-            }
+            apply_box_size(&mut taffy_style.max_size, max_size);
         }
         if let Some(margin) = &style.margin {
             taffy_style.margin = margin.0.into();

@@ -24,15 +24,11 @@ pub use types::*;
 // systems re-exports
 pub use systems::{
     clear_transient_pointer_state, debug_pointer_leave, debug_pointer_state_changes,
-    process_pointer_buffers,
 };
 
 // 後方互換性エイリアス（systems）
 #[allow(deprecated)]
-pub use systems::{
-    clear_transient_mouse_state, debug_mouse_leave, debug_mouse_state_changes,
-    process_mouse_buffers,
-};
+pub use systems::{clear_transient_mouse_state, debug_mouse_leave, debug_mouse_state_changes};
 
 // pub(crate) buffer helpers
 pub(crate) use buffers::{

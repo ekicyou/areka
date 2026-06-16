@@ -1,4 +1,5 @@
-// TODO: Implement DolaDocumentBuilder, StoryboardBuilder
+//! DolaDocument / Storyboard をコードから構築するビルダー API
+
 use crate::document::DolaDocument;
 use crate::error::DolaError;
 use crate::storyboard::{InterruptionPolicy, LoopOffset, Storyboard, StoryboardEntry};
@@ -109,6 +110,11 @@ impl StoryboardBuilder {
     }
 
     /// ストーリーボードを構築
+    ///
+    /// NOTE(D2-V): StoryboardBuilder はバリデーションを行わない（任意の Storyboard を
+    /// 構築できる）が、compile_storyboard は冒頭で必ず doc.validate() を実行するため、
+    /// 本ビルダー経由でもバリデーションを迂回して不正文書をコンパイルさせることは
+    /// できない（tests/compile/boundary_test.rs で特性化済み）。
     pub fn build(self) -> Storyboard {
         Storyboard {
             time_scale: self.time_scale,
@@ -123,5 +129,74 @@ impl StoryboardBuilder {
 impl Default for StoryboardBuilder {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::storyboard::LoopOffset;
+
+    // D2-T gap tests: tests/general/builder_test.rs が未カバーの Builder API 空白
+    // （loop_offset 設定・Default 実装・同名上書き・スキーマ検証連動）
+
+    #[test]
+    fn storyboard_builder_loop_offset_set() {
+        let sb = StoryboardBuilder::new()
+            .loop_offset(LoopOffset::Scalar(1.5))
+            .build();
+        assert_eq!(sb.loop_offset, Some(LoopOffset::Scalar(1.5)));
+    }
+
+    #[test]
+    fn storyboard_builder_loop_offset_default_none() {
+        assert_eq!(StoryboardBuilder::new().build().loop_offset, None);
+    }
+
+    #[test]
+    fn storyboard_builder_default_equals_new() {
+        assert_eq!(
+            StoryboardBuilder::default().build(),
+            StoryboardBuilder::new().build()
+        );
+    }
+
+    #[test]
+    fn document_builder_duplicate_name_last_wins() {
+        // BTreeMap::insert に基づく上書き挙動の固定（同名 variable は後勝ち）
+        let doc = DolaDocumentBuilder::new("1.0")
+            .variable(
+                "x",
+                AnimationVariableDef::Float {
+                    initial: 1.0,
+                    min: None,
+                    max: None,
+                },
+            )
+            .variable(
+                "x",
+                AnimationVariableDef::Float {
+                    initial: 2.0,
+                    min: None,
+                    max: None,
+                },
+            )
+            .build()
+            .unwrap();
+        assert_eq!(doc.variable.len(), 1);
+        assert!(matches!(
+            doc.variable.get("x"),
+            Some(AnimationVariableDef::Float { initial, .. }) if *initial == 2.0
+        ));
+    }
+
+    #[test]
+    fn document_builder_schema_mismatch_fails_validation() {
+        // build() はバリデーションを内包する: 不正スキーマバージョンで Err
+        let errs = DolaDocumentBuilder::new("0.5").build().unwrap_err();
+        assert!(
+            errs.iter()
+                .any(|e| matches!(e, DolaError::SchemaVersionMismatch { .. }))
+        );
     }
 }

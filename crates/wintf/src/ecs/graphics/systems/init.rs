@@ -3,7 +3,7 @@
 use crate::com::d2d::D2D1DeviceExt;
 use crate::com::dcomp::DCompositionDesktopDeviceExt;
 use crate::ecs::graphics::{
-    DCompGraphicsResource, GraphicsCore, HasGraphicsResources, VisualGraphics, WindowGraphics,
+    DCompGraphicsResource, GraphicsCore, HasGraphicsResources, WindowGraphics,
 };
 use crate::ecs::layout::GlobalArrangement;
 use bevy_ecs::name::Name;
@@ -46,6 +46,11 @@ pub fn calculate_surface_size_from_global_arrangement(
     let height = global_arrangement.bounds.bottom - global_arrangement.bounds.top;
 
     // サイズが0以下の場合はNone
+    // NOTE(W3a-V): 幅・高さが NaN の場合この比較は false となり素通りするが、
+    // 後段の `NaN.ceil() as u32 == 0`（float→int の飽和キャスト）により
+    // width_px == 0 ガードで None に収束する。+inf は u32::MAX へ飽和して
+    // Some を返し、下流の Surface 作成が Err（error ログ）で完結する
+    // （tests/graphics/surface_optimization_test.rs の NaN/inf 特性化テストで固定）。
     if width <= 0.0 || height <= 0.0 {
         return None;
     }
@@ -240,6 +245,9 @@ pub fn init_window_graphics(
         }
     }
 
+    // NOTE(W3a-V): この時点で dcomp_valid == true であり、その判定は dcomp_resource が
+    // Some かつ is_valid() の場合にのみ true になる（!dcomp_valid 分岐は全経路 return 済み）。
+    // よってこの unwrap は到達可能な全経路で発火しない。
     let dcomp_res = dcomp_resource.unwrap();
     for (entity, window, handle, _res, window_graphics, name) in query.iter_mut() {
         // DComp モードのみ処理
@@ -313,25 +321,4 @@ pub fn init_window_graphics(
             }
         }
     }
-}
-
-/// Visual初期化・再初期化 (Deprecated: Use Visual component)
-///
-/// Changed: GraphicsNeedsInitマーカーから、Changed<HasGraphicsResources> + needs_init()に移行
-/// 現在はvisual_resource_management_systemが担当
-pub fn init_window_visual(
-    _graphics: Res<GraphicsCore>,
-    _query: Query<
-        (
-            Entity,
-            &WindowGraphics,
-            &HasGraphicsResources,
-            Option<&mut VisualGraphics>,
-        ),
-        Or<(Without<VisualGraphics>, Changed<HasGraphicsResources>)>,
-    >,
-    _commands: Commands,
-    _frame_count: Res<crate::ecs::world::FrameCount>,
-) {
-    // Deprecated: Visual creation is now handled by visual_resource_management_system
 }

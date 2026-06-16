@@ -8,6 +8,9 @@ use taffy::prelude::*;
 #[repr(transparent)]
 pub struct TaffyStyle(pub(crate) Style);
 
+// taffy 0.9 の Style は CompactLength（calc 式用の *const () タグ付きポインタ）を含むため
+// 自動では Send/Sync にならない。wintf は calc 値を使用せず（Px/Percent/Auto のみ）、
+// Style は ECS のアクセス制御下でのみ読み書きされるため Send/Sync は安全。
 unsafe impl Send for TaffyStyle {}
 unsafe impl Sync for TaffyStyle {}
 
@@ -44,8 +47,13 @@ pub struct TaffyLayoutResource {
     node_to_entity: HashMap<NodeId, Entity>,
 }
 
-// TaffyTreeは内部的に*const ()を持つが、ECSのリソース管理により
-// 所有権とライフタイムは保証されるため、Send/Syncは安全
+// SAFETY: TaffyTree は内部のノードに taffy::Style を保持し、taffy 0.9 の Style は
+// CompactLength（calc 式用の *const () タグ付きポインタ）を含むため自動では Send/Sync に
+// ならない。wintf は calc 値を使用せず（Px/Percent/Auto のみ。dimension.rs の変換参照）、
+// TaffyTree とそのエンティティマッピングはこのリソースが排他所有する。アクセスは
+// 常に bevy_ecs のリソース借用機構（`ResMut<TaffyLayoutResource>` / `world.resource_mut`）
+// 経由で行われ、生ポインタが ECS スケジューラの制御外へ漏れることはないため Send/Sync は安全。
+// （同根の根拠は上記 `unsafe impl ... for TaffyStyle` を参照）
 unsafe impl Send for TaffyLayoutResource {}
 unsafe impl Sync for TaffyLayoutResource {}
 

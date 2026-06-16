@@ -246,7 +246,7 @@ pub trait DCompositionSurfaceExt {
         cliprect: Option<&RECT>,
         offsetx: i32,
         offsety: i32,
-    ) -> windows_core::Result<()>;
+    ) -> Result<()>;
 }
 
 impl DCompositionSurfaceExt for IDCompositionSurface {
@@ -277,7 +277,7 @@ impl DCompositionSurfaceExt for IDCompositionSurface {
         cliprect: Option<&RECT>,
         offsetx: i32,
         offsety: i32,
-    ) -> windows_core::Result<()> {
+    ) -> Result<()> {
         let scrollrect = scrollrect.map(|r| r as *const _);
         let cliprect = cliprect.map(|r| r as *const _);
         unsafe { self.Scroll(scrollrect, cliprect, offsetx, offsety) }

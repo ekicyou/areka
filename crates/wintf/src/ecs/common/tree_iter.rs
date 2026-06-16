@@ -236,4 +236,94 @@ mod tests {
         // 最前面（C4）から走査
         assert_eq!(result, vec![c4, c3, c2, c1, root]);
     }
+
+    // ===== W7b-T1 ギャップテスト =====
+    // 既存 1〜4 は走査順序（基本/単一/深い/幅広）を固定しているが、`next` の逐次契約、
+    // 走査完了後の None 終端、混在兄弟（子あり/子なしの interleaving）、collect が新規
+    // イテレータで全件返す等価性が未固定だった。
+
+    /// 5. `next` の逐次契約と走査完了後の None 終端
+    ///
+    /// 単一ノードに対し `next` を呼ぶと最初にそのノード、続けて呼ぶと `None`。
+    /// さらに呼んでも `None` のまま（スタック空からの `pop()?` で安定終端）。
+    #[test]
+    fn test_next_returns_none_after_exhaustion() {
+        let mut world = World::new();
+        let root = world.spawn_empty().id();
+
+        let mut traversal = DepthFirstReversePostOrder::new(root);
+        assert_eq!(traversal.next(&world), Some(root));
+        assert_eq!(traversal.next(&world), None);
+        // 完了後の追加呼び出しも None（多重呼び出し安全）
+        assert_eq!(traversal.next(&world), None);
+    }
+
+    /// 6. `next` 逐次取得が `collect` と同一順序を返す
+    ///
+    /// 同一ツリーに対し、`next` を 1 件ずつ呼んで構築した列が
+    /// `collect`（whileループ）の結果と完全一致することを固定する。
+    #[test]
+    fn test_next_step_by_step_matches_collect() {
+        let mut world = World::new();
+        let gc = world.spawn_empty().id();
+        let child = world.spawn_empty().id();
+        let root = world.spawn_empty().id();
+        world.entity_mut(child).add_children(&[gc]);
+        world.entity_mut(root).add_children(&[child]);
+
+        // collect 版
+        let expected = DepthFirstReversePostOrder::new(root).collect(&world);
+
+        // next 逐次版
+        let mut traversal = DepthFirstReversePostOrder::new(root);
+        let mut stepwise = Vec::new();
+        while let Some(e) = traversal.next(&world) {
+            stepwise.push(e);
+        }
+
+        assert_eq!(stepwise, expected);
+        assert_eq!(stepwise, vec![gc, child, root]);
+    }
+
+    /// 7. 混在兄弟（子あり/子なし）の interleaving 順序
+    ///
+    /// ```text
+    /// Root
+    /// ├── A (子なし)
+    /// └── B (最前面・子 B1 を持つ)
+    ///     └── B1
+    ///
+    /// 期待: B の子孫 B1 → B → A → Root
+    /// ```
+    /// 最前面（最後の子 B）のサブツリーを先に完全消化してから、子なしの A、最後に Root。
+    #[test]
+    fn test_mixed_siblings_with_and_without_children() {
+        let mut world = World::new();
+        let b1 = world.spawn_empty().id();
+        let a = world.spawn_empty().id();
+        let b = world.spawn_empty().id();
+        let root = world.spawn_empty().id();
+
+        world.entity_mut(b).add_children(&[b1]);
+        world.entity_mut(root).add_children(&[a, b]); // b が最前面
+
+        let result = collect_traversal_order(&world, root);
+
+        assert_eq!(result, vec![b1, b, a, root]);
+    }
+
+    /// 8. Children コンポーネントを持たないノードは葉として即返却される
+    ///
+    /// `world.get::<Children>(entity)` が None を返す枝（葉ノード）の終端を直接固定する。
+    /// 子を一切持たないルートでも走査は自身 1 件で完了する。
+    #[test]
+    fn test_node_without_children_component_is_leaf() {
+        let mut world = World::new();
+        let leaf = world.spawn_empty().id();
+        // Children を一切付与しない（get::<Children> は None）
+
+        let mut traversal = DepthFirstReversePostOrder::new(leaf);
+        assert_eq!(traversal.next(&world), Some(leaf));
+        assert_eq!(traversal.next(&world), None);
+    }
 }

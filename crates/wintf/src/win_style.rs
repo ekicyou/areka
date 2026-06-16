@@ -1,6 +1,4 @@
 #![allow(non_snake_case)]
-#![allow(unused_variables)]
-#![allow(dead_code)]
 
 use crate::api::*;
 use windows::Win32::{Foundation::*, UI::WindowsAndMessaging::*};
@@ -119,11 +117,6 @@ impl WinStyle {
     // 1ビットだけONの WINDOW_STYLE (その他の属性)
     //================================================================================
 
-    /// オーバーラップウィンドウを作成します。`WS_OVERLAPPED` と同じです。
-    pub fn WS_TILED(self, flag: bool) -> Self {
-        set_style(self, WS_TILED, flag)
-    }
-
     /// ウィンドウのタイトルバーに最大化ボタンを表示します。`WS_SYSMENU` スタイルも指定する必要があります。
     pub fn WS_MAXIMIZEBOX(self, flag: bool) -> Self {
         set_style(self, WS_MAXIMIZEBOX, flag)
@@ -214,7 +207,7 @@ impl WinStyle {
     //================================================================================
 
     /// ウィンドウに立体的な境界線を作成します。
-    /// WS_EX_CLIENTEDGE (0x200) と WS_EX_WINDOWEDGE (0x100) の組み合わせです。
+    /// WS_EX_WINDOWEDGE (0x100) の単独ビットです。
     pub fn WS_EX_WINDOWEDGE(self) -> Self {
         set_ex(self, WS_EX_WINDOWEDGE, true)
     }
@@ -378,15 +371,218 @@ fn set_ex(src: WinStyle, ex_style: WINDOW_EX_STYLE, flag: bool) -> WinStyle {
     WinStyle { ex_style, ..src }
 }
 
-#[inline(always)]
-fn set_ex2(src: WinStyle, on: WINDOW_EX_STYLE, off: WINDOW_EX_STYLE, flag: bool) -> WinStyle {
-    let org = src.ex_style.0;
-    let cleared = org & !(on.0 | off.0);
-    let new_ex_style_value = if flag {
-        cleared | on.0
-    } else {
-        cleared | off.0
-    };
-    let ex_style = WINDOW_EX_STYLE(new_ex_style_value);
-    WinStyle { ex_style, ..src }
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    //================================================================================
+    // コンストラクタ
+    //================================================================================
+
+    #[test]
+    fn default_is_all_zero() {
+        let s = WinStyle::default();
+        assert_eq!(s.style, WINDOW_STYLE(0));
+        assert_eq!(s.ex_style, WINDOW_EX_STYLE(0));
+        // 特性化: default() の座標は 0（with_style 系コンストラクタの CW_USEDEFAULT とは異なる）
+        assert_eq!((s.x, s.y, s.width, s.height), (0, 0, 0, 0));
+        assert_eq!(s.parent, None);
+    }
+
+    #[test]
+    fn ws_overlappedwindow_sets_composite_bits_and_default_geometry() {
+        let s = WinStyle::WS_OVERLAPPEDWINDOW();
+        assert_eq!(s.style, WS_OVERLAPPEDWINDOW);
+        assert_eq!(
+            s.style.0,
+            WS_OVERLAPPED.0
+                | WS_CAPTION.0
+                | WS_SYSMENU.0
+                | WS_THICKFRAME.0
+                | WS_MINIMIZEBOX.0
+                | WS_MAXIMIZEBOX.0
+        );
+        assert_eq!(s.ex_style, WINDOW_EX_STYLE(0));
+        assert_eq!(
+            (s.x, s.y, s.width, s.height),
+            (CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT)
+        );
+        assert_eq!(s.parent, None);
+    }
+
+    #[test]
+    fn ws_tiledwindow_equals_ws_overlappedwindow() {
+        assert_eq!(WinStyle::WS_TILEDWINDOW(), WinStyle::WS_OVERLAPPEDWINDOW());
+    }
+
+    #[test]
+    fn ws_popupwindow_is_popup_border_sysmenu() {
+        let s = WinStyle::WS_POPUPWINDOW();
+        assert_eq!(s.style, WS_POPUPWINDOW);
+        assert_eq!(s.style.0, WS_POPUP.0 | WS_BORDER.0 | WS_SYSMENU.0);
+    }
+
+    #[test]
+    fn ws_overlapped_constructor_is_zero_style_with_default_geometry() {
+        let s = WinStyle::WS_OVERLAPPED();
+        // WS_OVERLAPPED 定数は 0（スタイルビットなし）だが座標は CW_USEDEFAULT
+        assert_eq!(s.style, WINDOW_STYLE(0));
+        assert_eq!(s.x, CW_USEDEFAULT);
+    }
+
+    #[test]
+    fn ws_popup_constructor_sets_single_bit() {
+        assert_eq!(WinStyle::WS_POPUP().style, WS_POPUP);
+    }
+
+    //================================================================================
+    // 座標値、親ウィンドウ
+    //================================================================================
+
+    #[test]
+    fn position_size_parent_builders_update_only_their_fields() {
+        let parent = HWND(0x1234 as *mut _);
+        let s = WinStyle::WS_OVERLAPPEDWINDOW()
+            .position(10, -20)
+            .size(640, 480)
+            .parent(parent);
+        assert_eq!((s.x, s.y), (10, -20));
+        assert_eq!((s.width, s.height), (640, 480));
+        assert_eq!(s.parent, Some(parent));
+        // スタイルビットは座標・親設定で変化しない
+        assert_eq!(s.style, WS_OVERLAPPEDWINDOW);
+        assert_eq!(s.ex_style, WINDOW_EX_STYLE(0));
+    }
+
+    //================================================================================
+    // WINDOW_STYLE フラグの ON/OFF（set_style 経路）
+    //================================================================================
+
+    #[test]
+    fn style_flag_on_off_roundtrip_preserves_other_bits() {
+        let base = WinStyle::WS_OVERLAPPEDWINDOW();
+        let on = base.WS_VISIBLE(true);
+        assert_eq!(on.style.0, WS_OVERLAPPEDWINDOW.0 | WS_VISIBLE.0);
+        let off = on.WS_VISIBLE(false);
+        assert_eq!(off.style, WS_OVERLAPPEDWINDOW);
+    }
+
+    #[test]
+    fn style_flag_off_clears_only_target_bits() {
+        let s = WinStyle::WS_OVERLAPPEDWINDOW().WS_THICKFRAME(false);
+        assert_eq!(s.style.0, WS_OVERLAPPEDWINDOW.0 & !WS_THICKFRAME.0);
+    }
+
+    #[test]
+    fn ws_caption_off_clears_border_and_dlgframe_bits() {
+        // WS_CAPTION は WS_BORDER | WS_DLGFRAME の複合ビット。OFF は両ビットを同時に落とす
+        let s = WinStyle::default()
+            .WS_BORDER(true)
+            .WS_DLGFRAME(true)
+            .WS_CAPTION(false);
+        assert_eq!(s.style, WINDOW_STYLE(0));
+    }
+
+    #[test]
+    fn sizebox_and_thickframe_are_aliases() {
+        assert_eq!(
+            WinStyle::default().WS_SIZEBOX(true),
+            WinStyle::default().WS_THICKFRAME(true)
+        );
+    }
+
+    #[test]
+    fn iconic_and_minimize_are_aliases() {
+        assert_eq!(
+            WinStyle::default().WS_ICONIC(true),
+            WinStyle::default().WS_MINIMIZE(true)
+        );
+    }
+
+    #[test]
+    fn style_and_ex_style_setters_are_independent() {
+        let s = WinStyle::default().WS_EX_TOPMOST(true).WS_VISIBLE(true);
+        assert_eq!(s.style, WS_VISIBLE);
+        assert_eq!(s.ex_style, WS_EX_TOPMOST);
+    }
+
+    //================================================================================
+    // WINDOW_EX_STYLE フラグの ON/OFF（set_ex 経路）
+    //================================================================================
+
+    #[test]
+    fn ex_flag_on_off_roundtrip_preserves_other_bits() {
+        let on = WinStyle::default().WS_EX_TOPMOST(true).WS_EX_LAYERED(true);
+        assert_eq!(on.ex_style.0, WS_EX_TOPMOST.0 | WS_EX_LAYERED.0);
+        let off = on.WS_EX_TOPMOST(false);
+        assert_eq!(off.ex_style, WS_EX_LAYERED);
+    }
+
+    #[test]
+    fn ws_ex_overlappedwindow_is_windowedge_plus_clientedge() {
+        let s = WinStyle::default().WS_EX_OVERLAPPEDWINDOW();
+        assert_eq!(s.ex_style, WS_EX_OVERLAPPEDWINDOW);
+        assert_eq!(s.ex_style.0, WS_EX_WINDOWEDGE.0 | WS_EX_CLIENTEDGE.0);
+    }
+
+    #[test]
+    fn ws_ex_palettewindow_is_windowedge_toolwindow_topmost() {
+        let s = WinStyle::default().WS_EX_PALETTEWINDOW();
+        assert_eq!(s.ex_style, WS_EX_PALETTEWINDOW);
+        assert_eq!(
+            s.ex_style.0,
+            WS_EX_WINDOWEDGE.0 | WS_EX_TOOLWINDOW.0 | WS_EX_TOPMOST.0
+        );
+    }
+
+    #[test]
+    fn ws_ex_windowedge_sets_only_windowedge_bit() {
+        // WS_EX_WINDOWEDGE 定数は 0x100 の単独ビットであり CLIENTEDGE は立たない
+        let s = WinStyle::default().WS_EX_WINDOWEDGE();
+        assert_eq!(s.ex_style, WS_EX_WINDOWEDGE);
+        assert_eq!(s.ex_style.0 & WS_EX_CLIENTEDGE.0, 0);
+    }
+
+    //================================================================================
+    // WINDOW_EX_STYLE: ON/OFF 対（既定値へ戻す系）
+    //================================================================================
+
+    #[test]
+    fn rightscrollbar_clears_leftscrollbar_bit() {
+        let s = WinStyle::default().WS_EX_LEFTSCROLLBAR().WS_EX_RIGHTSCROLLBAR();
+        assert_eq!(s.ex_style, WINDOW_EX_STYLE(0));
+    }
+
+    #[test]
+    fn left_clears_right_bit() {
+        let s = WinStyle::default().WS_EX_RIGHT().WS_EX_LEFT();
+        assert_eq!(s.ex_style, WINDOW_EX_STYLE(0));
+    }
+
+    #[test]
+    fn ltrreading_clears_rtlreading_bit() {
+        let s = WinStyle::default().WS_EX_RTLREADING().WS_EX_LTRREADING();
+        assert_eq!(s.ex_style, WINDOW_EX_STYLE(0));
+    }
+
+    #[test]
+    fn layoutltr_clears_layoutrtl_bit() {
+        let s = WinStyle::default().WS_EX_LAYOUTRTL().WS_EX_LAYOUTLTR();
+        assert_eq!(s.ex_style, WINDOW_EX_STYLE(0));
+    }
+
+    //================================================================================
+    // Win32 API 依存経路（GUI 非依存のエラー伝播のみ検証）
+    //================================================================================
+
+    #[test]
+    fn new_with_null_hwnd_returns_err() {
+        // 無効 HWND では GetWindowLongPtrW が失敗し Err が伝播する（ウィンドウ生成不要）
+        assert!(WinStyle::new(HWND::default()).is_err());
+    }
+
+    #[test]
+    fn commit_to_null_hwnd_returns_err() {
+        assert!(WinStyle::WS_OVERLAPPEDWINDOW().commit(HWND::default()).is_err());
+    }
 }

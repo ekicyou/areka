@@ -175,3 +175,53 @@ fn test_bitmap_source_graphics_send_sync() {
     fn assert_send_sync<T: Send + Sync>() {}
     assert_send_sync::<BitmapSourceGraphics>();
 }
+
+// ============================================================
+// W5b-T 追加: resolve_path のデバイス非依存パス解決ロジック
+//
+// resolve_path は WIC/D2D に一切依存しない純粋なパス変換
+// （絶対パスはそのまま / 相対パスは実行ファイルディレクトリ基準で join）。
+// 既存テストはゼロだったため特性化する。
+// ============================================================
+
+#[test]
+fn test_resolve_path_absolute_is_returned_unchanged() {
+    use super::systems::resolve_path;
+    use std::path::Path;
+
+    // Windows 絶対パスはそのまま返る（current_exe を参照しない）
+    let abs = r"C:\some\absolute\image.png";
+    let resolved = resolve_path(abs).expect("absolute path resolves");
+    assert!(resolved.is_absolute(), "result should stay absolute");
+    assert_eq!(resolved, Path::new(abs));
+}
+
+#[test]
+fn test_resolve_path_relative_is_joined_under_exe_dir() {
+    use super::systems::resolve_path;
+
+    // 相対パスは実行ファイルのディレクトリ配下へ join される
+    let resolved = resolve_path("assets/logo.png").expect("relative path resolves");
+
+    // 期待値: current_exe().parent() に "assets/logo.png" を結合したもの
+    let exe = std::env::current_exe().expect("current_exe available in tests");
+    let exe_dir = exe.parent().expect("exe has a parent dir");
+    let expected = exe_dir.join("assets/logo.png");
+
+    assert_eq!(resolved, expected);
+    // 解決結果は実行ファイルディレクトリ配下（絶対パス）になる
+    assert!(resolved.is_absolute());
+    assert!(resolved.starts_with(exe_dir));
+    assert!(resolved.ends_with("logo.png"));
+}
+
+#[test]
+fn test_resolve_path_relative_preserves_subdirectories() {
+    use super::systems::resolve_path;
+
+    // ネストした相対パスのコンポーネントが保持される
+    let resolved = resolve_path("a/b/c.png").expect("nested relative path resolves");
+    let exe = std::env::current_exe().expect("current_exe available in tests");
+    let exe_dir = exe.parent().expect("exe has a parent dir");
+    assert_eq!(resolved, exe_dir.join("a/b/c.png"));
+}

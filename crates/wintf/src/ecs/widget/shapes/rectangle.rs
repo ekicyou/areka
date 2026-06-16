@@ -281,3 +281,80 @@ pub fn draw_rectangles(
         }
     }
 }
+
+// ============================================================
+// Tests（W5b-T 追加: デバイス非依存ロジックの特性化）
+//
+// draw_rectangles システム本体は Direct2D（DeviceContext/CommandList）依存で
+// ユニット到達不能。ここでは図形ウィジェットのデバイス非依存ロジック
+// （Rectangle 構築・色定数・色解決フォールバック）のみを特性化する。
+// ============================================================
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// `Rectangle::new()` と `Rectangle::default()` が等価なユニット値であること
+    #[test]
+    fn test_rectangle_new_equals_default() {
+        let a = Rectangle::new();
+        let b = Rectangle;
+        let c = Rectangle::default();
+        // ユニット構造体のため Debug 表現が一致することで同一性を確認
+        assert_eq!(format!("{a:?}"), format!("{b:?}"));
+        assert_eq!(format!("{a:?}"), format!("{c:?}"));
+    }
+
+    /// 内部用 `TRANSPARENT_COLOR` 定数が完全透明（α=0）であること
+    ///
+    /// `draw_rectangles` が描画前クリアに使用する定数。
+    #[test]
+    fn test_transparent_color_constant_is_fully_transparent() {
+        assert!((TRANSPARENT_COLOR.r - 0.0).abs() < f32::EPSILON);
+        assert!((TRANSPARENT_COLOR.g - 0.0).abs() < f32::EPSILON);
+        assert!((TRANSPARENT_COLOR.b - 0.0).abs() < f32::EPSILON);
+        assert!((TRANSPARENT_COLOR.a - 0.0).abs() < f32::EPSILON);
+    }
+
+    /// `Color` 型エイリアスが `D2D1_COLOR_F` であること（構築互換性の固定）
+    #[test]
+    fn test_color_type_alias_is_d2d_color() {
+        // Color 経由で構築した値が D2D1_COLOR_F として扱えることを固定
+        let c: Color = Color {
+            r: 0.25,
+            g: 0.5,
+            b: 0.75,
+            a: 1.0,
+        };
+        let d: D2D1_COLOR_F = c;
+        assert!((d.r - 0.25).abs() < f32::EPSILON);
+        assert!((d.g - 0.5).abs() < f32::EPSILON);
+        assert!((d.b - 0.75).abs() < f32::EPSILON);
+        assert!((d.a - 1.0).abs() < f32::EPSILON);
+    }
+
+    /// 非推奨 `colors` モジュール定数が `Brush` の対応色と同一の RGBA であること
+    ///
+    /// 旧 API（`colors::*`）と新 API（`Brush::*`）の色定義が一致していることを固定する。
+    /// （`colors` は #[deprecated] だが値の同一性は回帰検知対象）
+    #[test]
+    #[allow(deprecated)]
+    fn test_deprecated_colors_match_brush_constants() {
+        use crate::ecs::widget::brushes::Brush;
+
+        let pairs: [(Color, Brush); 6] = [
+            (colors::TRANSPARENT, Brush::TRANSPARENT),
+            (colors::BLACK, Brush::BLACK),
+            (colors::WHITE, Brush::WHITE),
+            (colors::RED, Brush::RED),
+            (colors::GREEN, Brush::GREEN),
+            (colors::BLUE, Brush::BLUE),
+        ];
+        for (legacy, brush) in pairs {
+            let bc = brush.as_color().expect("brush constant is Solid");
+            assert!((legacy.r - bc.r).abs() < f32::EPSILON);
+            assert!((legacy.g - bc.g).abs() < f32::EPSILON);
+            assert!((legacy.b - bc.b).abs() < f32::EPSILON);
+            assert!((legacy.a - bc.a).abs() < f32::EPSILON);
+        }
+    }
+}

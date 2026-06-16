@@ -58,6 +58,31 @@ struct ClipGuard<'a> {
     clip_type: ClipType,
 }
 
+/// geometricMask 付き PushLayer 用の `D2D1_LAYER_PARAMETERS1` を構築する。
+///
+/// Note: `geometricMask` への `transmute`（owned move）は既存挙動の維持であり、
+/// COM 参照リークを含む（P38 で修正提案済み。本関数は重複排除のみで挙動不変）。
+fn geometric_mask_layer_params(
+    geo_mask: ID2D1Geometry,
+    width: f32,
+    height: f32,
+) -> D2D1_LAYER_PARAMETERS1 {
+    D2D1_LAYER_PARAMETERS1 {
+        contentBounds: D2D_RECT_F {
+            left: 0.0,
+            top: 0.0,
+            right: width,
+            bottom: height,
+        },
+        geometricMask: unsafe { std::mem::transmute(Some(geo_mask)) },
+        maskAntialiasMode: D2D1_ANTIALIAS_MODE_PER_PRIMITIVE,
+        maskTransform: Matrix3x2::identity(),
+        opacity: 1.0,
+        opacityBrush: unsafe { std::mem::zeroed() },
+        layerOptions: D2D1_LAYER_OPTIONS1_NONE,
+    }
+}
+
 impl<'a> ClipGuard<'a> {
     /// クリップを Push し、RAII ガードを返す。
     ///
@@ -101,22 +126,7 @@ impl<'a> ClipGuard<'a> {
                 };
                 let geometry = factory.create_rounded_rectangle_geometry(&rounded_rect)?;
                 let geo_mask: ID2D1Geometry = geometry.cast()?;
-                let layer_params = D2D1_LAYER_PARAMETERS1 {
-                    contentBounds: D2D_RECT_F {
-                        left: 0.0,
-                        top: 0.0,
-                        right: width,
-                        bottom: height,
-                    },
-                    geometricMask: unsafe {
-                        std::mem::transmute(Some(geo_mask))
-                    },
-                    maskAntialiasMode: D2D1_ANTIALIAS_MODE_PER_PRIMITIVE,
-                    maskTransform: Matrix3x2::identity(),
-                    opacity: 1.0,
-                    opacityBrush: unsafe { std::mem::zeroed() },
-                    layerOptions: D2D1_LAYER_OPTIONS1_NONE,
-                };
+                let layer_params = geometric_mask_layer_params(geo_mask, width, height);
                 unsafe { dc.PushLayer(&layer_params, None) };
                 Ok(Self {
                     dc,
@@ -217,22 +227,7 @@ impl<'a> ClipGuard<'a> {
                 }
 
                 let geo_mask: ID2D1Geometry = path_geo.cast()?;
-                let layer_params = D2D1_LAYER_PARAMETERS1 {
-                    contentBounds: D2D_RECT_F {
-                        left: 0.0,
-                        top: 0.0,
-                        right: width,
-                        bottom: height,
-                    },
-                    geometricMask: unsafe {
-                        std::mem::transmute(Some(geo_mask))
-                    },
-                    maskAntialiasMode: D2D1_ANTIALIAS_MODE_PER_PRIMITIVE,
-                    maskTransform: Matrix3x2::identity(),
-                    opacity: 1.0,
-                    opacityBrush: unsafe { std::mem::zeroed() },
-                    layerOptions: D2D1_LAYER_OPTIONS1_NONE,
-                };
+                let layer_params = geometric_mask_layer_params(geo_mask, width, height);
                 unsafe { dc.PushLayer(&layer_params, None) };
                 Ok(Self {
                     dc,
@@ -296,6 +291,10 @@ unsafe fn draw_with_opacity(
         matrix.Anonymous.Anonymous._44 = opacity;
 
         // D2D1_COLORMATRIX_PROP_COLOR_MATRIX = 0
+        // SAFETY: matrix はスタック上の有効な D2D_MATRIX_5X4_F であり、
+        // from_raw_parts の長さはちょうど size_of::<D2D_MATRIX_5X4_F>() バイト
+        // （参照元の領域を超えない）。SetValue はバイト列を読み取りコピーするのみで
+        // スライスを保持しない。
         unsafe {
             effect.SetValue(
                 0,
@@ -695,6 +694,13 @@ pub fn composite_render_system(
         unsafe { dc.SetTransform(&Matrix3x2::identity()) };
 
         if let Err(e) = end_result {
+            // NOTE(W3a-V): デバイスロスト時はここに D2DERR_RECREATE_TARGET が返るが、
+            // 現状はログ出力のみで、プロダクションコードに GraphicsCore::invalidate() を
+            // 呼ぶ経路が存在しない（テスト・example のみ）。このため復旧機構
+            // （init_graphics_core → invalidate_dependent_components →
+            // compositor_init_system 再作成）は発火せず、ULW ウィンドウは最終提示
+            // フレームのまま恒久的に固まる（可用性の縮退）。HRESULT 検査による
+            // デバイスロスト検出の追加はエラー処理の挙動変更のため proposals.md P40 に記録。
             error!(
                 error = ?e,
                 "[composite_render_system] EndDraw failed"
@@ -737,6 +743,12 @@ pub fn composite_render_system(
             let stride = w as usize * 4;
             let total_bytes = stride * h as usize;
             if w > 0 && h > 0 {
+                // SAFETY: dib_bits は cached_size == (w, h) で CreateDIBSection した
+                // 32bpp top-down DIB の先頭を指し、確保サイズはちょうど w * h * 4 バイト
+                // （32bpp のため stride = w * 4 でパディングなし）。cached_size と DIB は
+                // new()/resize() で常に同時に設定されるため total_bytes は確保サイズと一致し、
+                // 範囲外読み出しは発生しない。乗算は CreateDIBSection が同じ積の確保に
+                // 成功している（実メモリに収まる）ため usize でオーバーフローしない。
                 let buf: &[u8] = unsafe { std::slice::from_raw_parts(dib_bits, total_bytes) };
                 // (15, 15) のピクセル — コンテンツ領域内のはず
                 let sample_x = 15usize.min(w as usize - 1);
@@ -796,6 +808,13 @@ pub fn ulw_present_system(mut query: Query<(&WindowHandle, &mut WindowD3D11Compo
 
         let hwnd = window_handle.hwnd;
         let (w, h) = compositor.cached_size();
+        // 不変条件: is_valid() == true ⇒ 直近の new()/resize() が成功 ⇒ 同寸法の
+        // D2D CreateBitmap（最大ビットマップサイズ ≦ 16384）と CreateDIBSection が
+        // 成功済み ⇒ w/h は i32::MAX を超えない。よって下の `as i32` は損失しない。
+        debug_assert!(
+            w <= i32::MAX as u32 && h <= i32::MAX as u32,
+            "cached_size must fit in i32 (guaranteed by successful resource creation)"
+        );
         let size: windows::Win32::Foundation::SIZE = crate::ecs::SizeI {
             width: w as i32,
             height: h as i32,

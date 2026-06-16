@@ -254,6 +254,15 @@ impl PointerBuffer {
         if self.samples.len() < 2 {
             return (0.0, 0.0);
         }
+        // 不変条件: 直上の早期 return により、ここに到達した時点で
+        // `self.samples.len() >= 2` が保証される。したがって
+        // (a) `back()` は必ず `Some`（`unwrap()` はパニックしない）、
+        // (b) usize 添字 `len() - 2` はアンダーフローせず（len>=2）かつ範囲内（< len）である。
+        // 内部不変条件チェック（リリースでは compile-out され挙動不変）。
+        debug_assert!(
+            self.samples.len() >= 2,
+            "calculate_velocity invariant: samples.len() >= 2 (guarded above)"
+        );
         let newest = self.samples.back().unwrap();
         let prev = &self.samples[self.samples.len() - 2];
         let dt = newest
@@ -544,5 +553,160 @@ mod tests {
         set.insert(PointerButton::XButton1);
         set.insert(PointerButton::XButton2);
         assert_eq!(set.len(), 5);
+    }
+
+    #[test]
+    fn test_velocity_calculation_two_samples_nonzero() {
+        // 2 サンプル間で非ゼロ速度を計算（既存テストは 1 サンプルの 0 ケースのみ）
+        let mut buffer = PointerBuffer::new();
+        let t0 = Instant::now();
+        buffer.push(PositionSample {
+            x: 0.0,
+            y: 0.0,
+            timestamp: t0,
+        });
+        buffer.push(PositionSample {
+            x: 100.0,
+            y: 50.0,
+            timestamp: t0 + std::time::Duration::from_millis(100),
+        });
+
+        // dx=100/0.1s=1000px/s, dy=50/0.1s=500px/s（最新2サンプル間）
+        let (vx, vy) = buffer.calculate_velocity();
+        assert!((vx - 1000.0).abs() < 1.0, "vx ≈ 1000px/s, got {vx}");
+        assert!((vy - 500.0).abs() < 1.0, "vy ≈ 500px/s, got {vy}");
+    }
+
+    #[test]
+    fn test_velocity_calculation_tiny_dt_guards_to_zero() {
+        // dt < 0.0001s（同一タイムスタンプ）では 0 を返す（ゼロ除算/発散ガード）
+        let mut buffer = PointerBuffer::new();
+        let t = Instant::now();
+        buffer.push(PositionSample {
+            x: 0.0,
+            y: 0.0,
+            timestamp: t,
+        });
+        buffer.push(PositionSample {
+            x: 100.0,
+            y: 100.0,
+            timestamp: t, // 同一タイムスタンプ → dt ≈ 0
+        });
+
+        let (vx, vy) = buffer.calculate_velocity();
+        assert_eq!(vx, 0.0, "微小 dt では vx=0");
+        assert_eq!(vy, 0.0, "微小 dt では vy=0");
+    }
+
+    #[test]
+    fn test_velocity_uses_latest_two_samples_only() {
+        // 3 サンプル以上でも「最新 2 サンプル間」のみで計算する
+        let mut buffer = PointerBuffer::new();
+        let t0 = Instant::now();
+        // 古いサンプル（無関係な大ジャンプ）
+        buffer.push(PositionSample {
+            x: 0.0,
+            y: 0.0,
+            timestamp: t0,
+        });
+        buffer.push(PositionSample {
+            x: 1000.0,
+            y: 0.0,
+            timestamp: t0 + std::time::Duration::from_millis(10),
+        });
+        // 最新 2 サンプル: 1000→1010 を 0.1s で
+        buffer.push(PositionSample {
+            x: 1010.0,
+            y: 0.0,
+            timestamp: t0 + std::time::Duration::from_millis(110),
+        });
+
+        let (vx, _vy) = buffer.calculate_velocity();
+        // 10px/0.1s = 100px/s（最初の大ジャンプは無視される）
+        assert!((vx - 100.0).abs() < 1.0, "最新2サンプルのみ: vx ≈ 100, got {vx}");
+    }
+
+    #[test]
+    fn test_pointer_buffer_clear_resets_to_empty() {
+        let mut buffer = PointerBuffer::new();
+        buffer.push(PositionSample {
+            x: 1.0,
+            y: 2.0,
+            timestamp: Instant::now(),
+        });
+        assert!(!buffer.is_empty());
+
+        buffer.clear();
+        assert!(buffer.is_empty());
+        assert_eq!(buffer.len(), 0);
+        // クリア後は速度計算も 0（サンプル < 2）
+        assert_eq!(buffer.calculate_velocity(), (0.0, 0.0));
+    }
+
+    #[test]
+    fn test_pointer_buffer_eviction_keeps_newest() {
+        // MAX_SAMPLES 超過で先頭（最古）が捨てられ、最新が保持される
+        let mut buffer = PointerBuffer::new();
+        let t0 = Instant::now();
+        for i in 0..(PointerBuffer::MAX_SAMPLES + 2) {
+            buffer.push(PositionSample {
+                x: i as f32,
+                y: 0.0,
+                timestamp: t0,
+            });
+        }
+        assert_eq!(buffer.len(), PointerBuffer::MAX_SAMPLES);
+        // 最新は最後に push した値
+        assert_eq!(
+            buffer.latest().unwrap().x,
+            (PointerBuffer::MAX_SAMPLES + 1) as f32
+        );
+    }
+
+    #[test]
+    fn test_wheel_buffer_saturates_at_i16_bounds() {
+        // saturating_add により i16 範囲を超えても飽和（オーバーフロー panic/ラップなし）
+        let mut buffer = WheelBuffer::default();
+        buffer.add_vertical(i16::MAX);
+        buffer.add_vertical(i16::MAX);
+        assert_eq!(buffer.vertical, i16::MAX, "正方向に飽和");
+
+        buffer.add_horizontal(i16::MIN);
+        buffer.add_horizontal(i16::MIN);
+        assert_eq!(buffer.horizontal, i16::MIN, "負方向に飽和");
+    }
+
+    #[test]
+    fn test_cursor_velocity_zero_is_zero_magnitude() {
+        // (0,0) の magnitude は 0（sqrt(0)）
+        let v = CursorVelocity::new(0.0, 0.0);
+        assert_eq!(v.magnitude, 0.0);
+        // Default も全成分 0
+        let d = CursorVelocity::default();
+        assert_eq!((d.x, d.y, d.magnitude), (0.0, 0.0, 0.0));
+    }
+
+    #[test]
+    fn test_hit_test_placeholder_returns_window_entity() {
+        // Phase 1 プレースホルダー: 常にウィンドウエンティティを返す
+        let mut world = bevy_ecs::world::World::new();
+        let window = world.spawn_empty().id();
+        let other = world.spawn_empty().id();
+
+        let hit = hit_test_placeholder(&world, window, (123.0, 456.0));
+        assert_eq!(hit, Some(window), "常に window_entity を返す");
+        assert_ne!(hit, Some(other), "他エンティティは返さない");
+    }
+
+    #[test]
+    fn test_hit_test_with_local_coords_passes_through_screen_coords() {
+        // Phase 1: スクリーン座標をそのままローカル座標として返す
+        let mut world = bevy_ecs::world::World::new();
+        let window = world.spawn_empty().id();
+
+        let result = hit_test_with_local_coords(&world, window, 300, 400);
+        let (entity, local) = result.expect("Phase 1 は常に Some");
+        assert_eq!(entity, window);
+        assert_eq!(local, PhysicalPoint::new(300, 400), "ローカル = スクリーン座標");
     }
 }

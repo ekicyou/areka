@@ -16,6 +16,11 @@ pub fn now() -> f64 {
 
     let mut counter: i64 = 0;
     let mut frequency: i64 = 0;
+    // SAFETY(panic 経路): QueryPerformanceCounter / QueryPerformanceFrequency は
+    // Windows XP 以降のシステムでは失敗せず（Microsoft docs）、frequency が 0 に
+    // なることもないため、Result は意図的に破棄している。仮に frequency = 0 でも
+    // f64 除算は panic せず inf を返すのみ（0/0 でも NaN であり panic しない）。
+    // 単調性は QPC のハードウェア保証に依存する（巻き戻りなし）。
     unsafe {
         let _ = QueryPerformanceCounter(&mut counter);
         let _ = QueryPerformanceFrequency(&mut frequency);

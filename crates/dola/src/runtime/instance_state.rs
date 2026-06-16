@@ -58,6 +58,10 @@ impl InstanceState {
     /// `InterruptionPolicy` に対応する終了状態を返す。
     ///
     /// `Never` ポリシーは終了状態に直接対応しないため `None` を返す。
+    ///
+    /// 不変条件: 返却される `Some(state)` は常に `is_terminal() == true`
+    /// （`conflict_resolver` の expect / debug_assert はこの不変条件に依存する。
+    /// tests/runtime/core_types_test.rs::from_policy_results_are_terminal で検証済み）。
     pub fn from_policy(policy: InterruptionPolicy) -> Option<InstanceState> {
         match policy {
             InterruptionPolicy::Cancel => Some(Self::Cancelled),

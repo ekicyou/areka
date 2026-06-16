@@ -73,7 +73,7 @@ impl Default for Label {
 
 /// Labelコンポーネント削除時のフック
 /// GraphicsCommandListをクリアしてChanged検出に対応
-fn on_label_remove(mut world: DeferredWorld, hook: bevy_ecs::lifecycle::HookContext) {
+fn on_label_remove(mut world: DeferredWorld, hook: HookContext) {
     let entity = hook.entity;
     // GraphicsCommandListを取得して中身をクリア(Changed検出のため)
     if let Some(mut cmd_list) = world.get_mut::<GraphicsCommandList>(entity) {
@@ -112,7 +112,7 @@ impl TextLayoutResource {
 
 /// TextLayoutコンポーネント削除時のフック
 /// COMオブジェクトはDropで自動解放されるため、ログ出力のみ
-fn on_text_layout_remove(_world: DeferredWorld, hook: bevy_ecs::lifecycle::HookContext) {
+fn on_text_layout_remove(_world: DeferredWorld, hook: HookContext) {
     #[cfg(debug_assertions)]
     trace!(entity = ?hook.entity, "[TextLayoutResource] Removed");
 }

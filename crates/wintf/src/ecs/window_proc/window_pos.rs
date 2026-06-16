@@ -105,8 +105,8 @@ pub(super) fn WM_WINDOWPOSCHANGED(
                                     // echo（自アプリ由来、DPI変更なし）→ bypass_change_detection で更新
                                     // Changed<WindowPos> を発火させない → apply_window_pos_changes 非トリガー
                                     let bypass = window_pos.bypass_change_detection();
-                                    bypass.position = Some(client_pos.into());
-                                    bypass.size = Some(client_size.into());
+                                    bypass.position = Some(client_pos);
+                                    bypass.size = Some(client_size);
 
                                     trace!(
                                         entity = ?entity,
@@ -133,13 +133,12 @@ pub(super) fn WM_WINDOWPOSCHANGED(
                                     // 発火しても、座標/サイズが同一なら Changed を発火させない。
                                     // これにより不要な SetWindowPos エコーバックループを防止し、
                                     // 高DPI環境でのフレームオフセット不一致による位置ズレを回避する。
-                                    let pos_changed =
-                                        window_pos.position != Some(corrected_pos.into());
-                                    let size_changed = window_pos.size != Some(client_size.into());
+                                    let pos_changed = window_pos.position != Some(corrected_pos);
+                                    let size_changed = window_pos.size != Some(client_size);
 
                                     if pos_changed || size_changed {
-                                        window_pos.position = Some(corrected_pos.into());
-                                        window_pos.size = Some(client_size.into());
+                                        window_pos.position = Some(corrected_pos);
+                                        window_pos.size = Some(client_size);
 
                                         if dpi_context.is_some() {
                                             debug!(

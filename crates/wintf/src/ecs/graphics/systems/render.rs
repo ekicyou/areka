@@ -5,70 +5,9 @@ use crate::ecs::graphics::{
     DCompGraphicsResource, GraphicsCommandList, GraphicsCore, SurfaceGraphics, SurfaceGraphicsDirty,
 };
 use crate::ecs::layout::GlobalArrangement;
-use bevy_ecs::hierarchy::Children;
 use bevy_ecs::name::Name;
 use bevy_ecs::prelude::*;
-use tracing::{error, trace};
-
-/// 旧描画方式: 親Surfaceが子を再帰的に描画
-/// Phase 4で廃止。自己描画方式（render_surface）に置き換え。
-/// ロールバック用に残している。
-#[allow(dead_code)]
-fn draw_recursive(
-    entity: Entity,
-    dc: &windows::Win32::Graphics::Direct2D::ID2D1DeviceContext,
-    widgets: &Query<(Option<&GlobalArrangement>, Option<&GraphicsCommandList>)>,
-    hierarchy: &Query<&Children>,
-    surface_query: &Query<&SurfaceGraphics>,
-    is_root: bool,
-) {
-    use windows::Win32::Graphics::Direct2D::Common::D2D1_COMPOSITE_MODE_SOURCE_OVER;
-    use windows::Win32::Graphics::Direct2D::D2D1_INTERPOLATION_MODE_LINEAR;
-
-    // Nested Surface Check
-    if !is_root && surface_query.contains(entity) {
-        return;
-    }
-
-    // Draw current entity
-    if let Ok((global_arr, cmd_list)) = widgets.get(entity) {
-        if let Some(arr) = global_arr {
-            trace!(
-                entity = ?entity,
-                m11 = arr.transform.M11,
-                m12 = arr.transform.M12,
-                m31 = arr.transform.M31,
-                m32 = arr.transform.M32,
-                bounds_left = arr.bounds.left,
-                bounds_top = arr.bounds.top,
-                bounds_right = arr.bounds.right,
-                bounds_bottom = arr.bounds.bottom,
-                "Setting transform"
-            );
-            dc.set_transform(&arr.transform);
-        }
-        if let Some(list) = cmd_list {
-            if let Some(command_list) = list.command_list() {
-                unsafe {
-                    dc.DrawImage(
-                        command_list,
-                        None,
-                        None,
-                        D2D1_INTERPOLATION_MODE_LINEAR,
-                        D2D1_COMPOSITE_MODE_SOURCE_OVER,
-                    );
-                }
-            }
-        }
-    }
-
-    // Recurse
-    if let Ok(children) = hierarchy.get(entity) {
-        for child in children.iter() {
-            draw_recursive(child, dc, widgets, hierarchy, surface_query, false);
-        }
-    }
-}
+use tracing::error;
 
 // ========== 描画システム ==========
 

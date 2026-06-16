@@ -2,7 +2,7 @@
 
 use std::collections::{HashMap, HashSet};
 
-use crate::compile::{CompiledTrigger, compile_storyboard};
+use crate::compile::{CompiledStoryboard, CompiledTrigger, compile_storyboard};
 use crate::document::DolaDocument;
 use crate::easing::{EasingFunction, EasingName};
 use crate::storyboard::LoopOffset;
@@ -90,48 +90,19 @@ impl DolaRuntime {
         start_time: f64,
         skip_conflict_gids: &HashSet<u64>,
     ) -> Result<StartResult, RuntimeError> {
-        // 1. ドキュメント取得
-        let doc = self
-            .document_store
-            .document()
-            .ok_or_else(|| RuntimeError::StoryboardNotFound(name.to_string()))?;
-
-        // ストーリーボード存在確認
-        if !doc.storyboard.contains_key(name) {
-            return Err(RuntimeError::StoryboardNotFound(name.to_string()));
-        }
-
-        // 2. コンパイル（セグメントは常に相対時間 0.0 起点で構築。
+        // 1. ドキュメント取得 → コンパイル → バリデーション
+        //    （セグメントは常に相対時間 0.0 起点で構築。
         //    壁時計時刻への変換は loop_start_time で行う）
-        let compiled = compile_storyboard(doc, name, 0.0).map_err(RuntimeError::CompileError)?;
+        let (compiled, loop_duration) = self.compile_and_validate(name, 0.0)?;
 
-        // 3. loop_count バリデーション
-        if compiled.loop_count <= 0 && compiled.loop_count != -1 {
-            return Err(RuntimeError::InvalidLoopCount(compiled.loop_count));
-        }
-
-        let loop_duration = compiled.total_base_duration / compiled.time_scale;
-
-        if loop_duration == 0.0 && compiled.loop_count == -1 {
-            return Err(RuntimeError::ZeroDurationWithLoop {
-                storyboard: name.to_string(),
-            });
-        }
-        if loop_duration < MIN_LOOP_DURATION && compiled.loop_count == -1 {
-            return Err(RuntimeError::TooShortDurationWithInfiniteLoop {
-                storyboard: name.to_string(),
-                duration: loop_duration,
-            });
-        }
-
-        // 4. end_time 算出（無限ループでも1周分の end_time を設定）
+        // 2. end_time 算出（無限ループでも1周分の end_time を設定）
         let end_time = start_time + loop_duration;
 
-        // 5. group_id 採番
+        // 3. group_id 採番
         let group_id = self.next_group_id;
         self.next_group_id += 1;
 
-        // 5.5 loop_offset 展開
+        // 3.5 loop_offset 展開
         let (lo_min, lo_max, lo_easing) = match &compiled.loop_offset {
             Some(LoopOffset::Scalar(v)) => {
                 (Some(0.0), *v, EasingFunction::Named(EasingName::Linear))
@@ -140,7 +111,7 @@ impl DolaRuntime {
             None => (None, 0.0, EasingFunction::Named(EasingName::Linear)),
         };
 
-        // 6. インスタンス作成
+        // 4. インスタンス作成
         self.instance_manager.create_instance(
             group_id,
             name,
@@ -158,7 +129,7 @@ impl DolaRuntime {
             compiled.triggers.len(),
         );
 
-        // 7. [Tier 3 Hook] 競合解決（skip_conflict_gids 内のインスタンスは除外）
+        // 5. [Tier 3 Hook] 競合解決（skip_conflict_gids 内のインスタンスは除外）
         let affected = conflict_resolver::resolve_conflicts_excluding(
             group_id,
             &compiled,
@@ -169,16 +140,16 @@ impl DolaRuntime {
             skip_conflict_gids,
         )?; // Never 競合時はここで Err(RuntimeError::Conflict) を返す
 
-        // 8. タイムテーブル挿入
+        // 6. タイムテーブル挿入
         self.timeline_manager.insert_entries(group_id, &compiled);
 
-        // 8.5 トリガー格納
+        // 6.5 トリガー格納
         if !compiled.triggers.is_empty() {
             self.trigger_store
                 .insert(group_id, compiled.triggers.clone());
         }
 
-        // 9. 状態遷移 Created → Playing
+        // 7. 状態遷移 Created → Playing
         self.instance_manager
             .transition(group_id, InstanceState::Playing)?;
 
@@ -191,22 +162,45 @@ impl DolaRuntime {
 
     /// 終了予定時刻のみ計算（インスタンス非生成）。
     pub fn calculate_end_time(&self, name: &str, start_time: f64) -> Result<f64, RuntimeError> {
+        let (_, loop_duration) = self.compile_and_validate(name, start_time)?;
+        Ok(start_time + loop_duration)
+    }
+
+    /// ドキュメント取得 → ストーリーボード存在確認 → コンパイル → ループ系バリデーション。
+    ///
+    /// `start_internal` と `calculate_end_time` で共通の検証フロー。
+    /// 成功時は（コンパイル結果, 1周分の実時間 loop_duration）を返す。
+    fn compile_and_validate(
+        &self,
+        name: &str,
+        base_time: f64,
+    ) -> Result<(CompiledStoryboard, f64), RuntimeError> {
         let doc = self
             .document_store
             .document()
             .ok_or_else(|| RuntimeError::StoryboardNotFound(name.to_string()))?;
 
+        // ストーリーボード存在確認
         if !doc.storyboard.contains_key(name) {
             return Err(RuntimeError::StoryboardNotFound(name.to_string()));
         }
 
         let compiled =
-            compile_storyboard(doc, name, start_time).map_err(RuntimeError::CompileError)?;
+            compile_storyboard(doc, name, base_time).map_err(RuntimeError::CompileError)?;
 
+        // loop_count バリデーション
         if compiled.loop_count <= 0 && compiled.loop_count != -1 {
             return Err(RuntimeError::InvalidLoopCount(compiled.loop_count));
         }
 
+        // NOTE(D1a-V 脆弱性所見): time_scale はスキーマ/コンパイル時に正値検証されて
+        // いないため、time_scale == 0.0 のとき loop_duration は +inf
+        // （total_base_duration > 0）または NaN（total_base_duration == 0）になる。
+        // inf/NaN は下の == / < 比較を素通りし end_time = start_time + loop_duration も
+        // inf/NaN となるため、該当インスタンスは自然終了・ループ・トリガー発火が
+        // 一切起きないまま生存し続ける（負値なら end_time が過去になり即 Conclude）。
+        // 現行挙動は tests/runtime/facade_test.rs::time_scale_boundary で固定済み。
+        // 入力検証の追加は外部観測可能な挙動変更となるため report/proposals.md P8 に記録。
         let loop_duration = compiled.total_base_duration / compiled.time_scale;
 
         if loop_duration == 0.0 && compiled.loop_count == -1 {
@@ -221,9 +215,7 @@ impl DolaRuntime {
             });
         }
 
-        let end_time = start_time + loop_duration;
-
-        Ok(end_time)
+        Ok((compiled, loop_duration))
     }
 
     /// 一時停止。
@@ -422,10 +414,24 @@ impl DolaRuntime {
                     if ts.fired {
                         continue;
                     }
+                    // SAFETY(panic 経路): trigger_states は create_instance で
+                    // 0..compiled.triggers.len() の添字から構築され、trigger_store には
+                    // 同一の compiled.triggers が同じ group_id で格納される
+                    // （start_internal ステップ 4 / 6.5）。両者は conclude/cancel で
+                    // 同時に削除され group_id は再利用されないため、
+                    // ts.trigger_index < triggers.len() が常に成立し添字 panic は発火しない。
+                    debug_assert!(
+                        ts.trigger_index < triggers.len(),
+                        "trigger_states/trigger_store invariant violated: index {} >= len {}",
+                        ts.trigger_index,
+                        triggers.len()
+                    );
                     let trigger = &triggers[ts.trigger_index];
                     // fire_time は compile 時の絶対時刻（start_time 基準）。
                     // ループ内での壁時計発火時刻:
                     //   loop_start_time + (fire_time - original_start_time) / time_scale
+                    // NOTE(D1a-V): time_scale == 0.0 では wall_fire_time が inf/NaN となり
+                    // トリガーは発火しない（compile_and_validate の NOTE / P8 参照）。
                     let relative_base_time = trigger.fire_time - inst.start_time;
                     let wall_fire_time =
                         inst.loop_start_time + relative_base_time / inst.time_scale;
@@ -445,6 +451,9 @@ impl DolaRuntime {
         }
 
         // Step 2: fired フラグを立てる
+        // （p.trigger_index は Step 1 で同一インスタンスの trigger_states を
+        //   enumerate した添字。Step 1〜2 間に trigger_states への変更はないため
+        //   範囲外 panic は発火しない）
         for p in &pending {
             if let Ok(inst) = self.instance_manager.get_mut(p.parent_group_id) {
                 inst.trigger_states[p.trigger_index].fired = true;

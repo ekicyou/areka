@@ -111,7 +111,6 @@ use bevy_ecs::prelude::*;
 ///     FlexContainer::default(),
 /// ));
 /// ```
-/// LayoutRootコンポーネント
 ///
 /// # ライフタイムイベント
 /// - `on_add`: `Arrangement::default()`を自動挿入

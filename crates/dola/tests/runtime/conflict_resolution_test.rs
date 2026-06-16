@@ -788,3 +788,329 @@ mod edge_cases {
         assert_eq!(r3.affected_group_ids, vec![r2.group_id]);
     }
 }
+
+// =========================================================================
+// D1b-T 追加: 競合検出の境界条件と終了経路の特性化
+// =========================================================================
+mod conflict_detection_boundaries {
+    use super::*;
+
+    /// Paused 状態のインスタンスも競合検出の対象（detect_overlaps は Playing/Paused 両方を見る）
+    #[test]
+    fn paused_instance_still_conflicts() {
+        let doc = make_doc_with_policy("fade", InterruptionPolicy::Cancel);
+        let mut rt = DolaRuntime::new();
+        let _opacity_id = rt.subscribe("opacity");
+        rt.load_document(doc).unwrap();
+
+        let r1 = rt.start("fade", 0.0).unwrap();
+        rt.update(0.5);
+        rt.pause(r1.group_id, 0.5).unwrap();
+
+        // Paused 中でも同一変数の新規 start は競合し、終了戦略が適用される
+        let r2 = rt.start("fade", 1.0).unwrap();
+        assert_eq!(r2.affected_group_ids, vec![r1.group_id]);
+        // Cancel 済みインスタンスへの resume は InvalidGroupId（削除済み）
+        assert!(matches!(
+            rt.resume(r1.group_id, 1.5),
+            Err(RuntimeError::InvalidGroupId(_))
+        ));
+    }
+
+    /// 特性化: 競合判定はストーリーボードローカル座標で行われ、wall-clock の
+    /// start_time を考慮しない。
+    ///
+    /// facade はすべての SB を base_time=0.0 でコンパイルし（`compile_and_validate(name, 0.0)`）、
+    /// `detect_overlaps` は `_start_time` 引数を使用せず compile 時座標どうしを比較する。
+    /// そのため壁時計上は重ならない [0,2] と [2,4] のスケジュールでも、
+    /// 同一変数を操作する Playing/Paused インスタンスがあれば常に競合扱いとなる（P11 参照）。
+    #[test]
+    fn time_shifted_start_on_same_variable_still_conflicts() {
+        let doc = make_doc_with_policy("fade", InterruptionPolicy::Cancel);
+        let mut rt = DolaRuntime::new();
+        let _opacity_id = rt.subscribe("opacity");
+        rt.load_document(doc).unwrap();
+
+        // 既存: 壁時計 [0.0, 2.0]
+        let r1 = rt.start("fade", 0.0).unwrap();
+        // 新規: 壁時計 [2.0, 4.0] — 壁時計上は隣接（非重複）だが現行実装では競合する
+        let r2 = rt.start("fade", 2.0).unwrap();
+        assert_eq!(
+            r2.affected_group_ids,
+            vec![r1.group_id],
+            "current behavior: overlap detection uses storyboard-local coordinates"
+        );
+    }
+
+    /// 新 SB が複数変数を操作し、各変数を別インスタンスが保持している場合、
+    /// 全インスタンスが affected に含まれる
+    #[test]
+    fn overlap_with_multiple_instances_affects_all() {
+        let mut variable = BTreeMap::new();
+        for name in ["x", "y"] {
+            variable.insert(
+                name.to_string(),
+                AnimationVariableDef::Float {
+                    initial: 0.0,
+                    min: None,
+                    max: None,
+                },
+            );
+        }
+
+        let make_sb = |vars: &[&str]| {
+            let mut b = StoryboardBuilder::new().interruption_policy(InterruptionPolicy::Cancel);
+            for v in vars {
+                b = b.entry(StoryboardEntry {
+                    variable: Some(v.to_string()),
+                    transition: Some(TransitionRef::Inline(TransitionDef {
+                        from: Some(TransitionValue::Scalar(0.0)),
+                        to: Some(TransitionValue::Scalar(100.0)),
+                        relative_to: None,
+                        easing: None,
+                        delay: 0.0,
+                        duration: Some(2.0),
+                    })),
+                    ..Default::default()
+                });
+            }
+            b.build()
+        };
+
+        let mut storyboard = BTreeMap::new();
+        storyboard.insert("sb_x".to_string(), make_sb(&["x"]));
+        storyboard.insert("sb_y".to_string(), make_sb(&["y"]));
+        storyboard.insert("sb_xy".to_string(), make_sb(&["x", "y"]));
+        let doc = DolaDocument {
+            schema_version: "1.0".to_string(),
+            variable,
+            transition: BTreeMap::new(),
+            storyboard,
+        };
+
+        let mut rt = DolaRuntime::new();
+        let _x_id = rt.subscribe("x");
+        let _y_id = rt.subscribe("y");
+        rt.load_document(doc).unwrap();
+
+        // gid1: x のみ、gid2: y のみ（変数が異なるため共存）
+        let r1 = rt.start("sb_x", 0.0).unwrap();
+        let r2 = rt.start("sb_y", 0.0).unwrap();
+        assert!(r2.affected_group_ids.is_empty());
+
+        // sb_xy は x・y 両方を操作 → 両インスタンスと競合
+        let r3 = rt.start("sb_xy", 0.5).unwrap();
+        let mut affected = r3.affected_group_ids.clone();
+        affected.sort_unstable();
+        assert_eq!(affected, vec![r1.group_id, r2.group_id]);
+    }
+}
+
+mod conflict_terminated_parent_triggers {
+    use super::*;
+    use dola::KeyframeRef;
+
+    /// 親（トリガー保持・未発火）が競合解決で終了した場合、トリガーは発火しない。
+    ///
+    /// 特性化（D1a-V 申し送りの stale-entry 領域）: conflict_resolver の終了経路は
+    /// instance_manager からインスタンスを除去するが、facade の trigger_store
+    /// エントリは残置される。process_triggers はインスタンス起点で走査するため
+    /// 残置エントリが読まれることはなく、外部観測上は「トリガーが発火しない」
+    /// 挙動として現れる（panic も発火もしないことを固定する）。
+    #[test]
+    fn conflict_terminated_parent_trigger_never_fires() {
+        // parent: opacity 0→100 (2.0s, kf1 at end=2.0) + trigger at kf1 → child
+        // interrupt: opacity を操作（親と競合）
+        let mut variable = BTreeMap::new();
+        variable.insert(
+            "opacity".to_string(),
+            AnimationVariableDef::Float {
+                initial: 0.0,
+                min: None,
+                max: None,
+            },
+        );
+
+        let parent = StoryboardBuilder::new()
+            .interruption_policy(InterruptionPolicy::Cancel)
+            .entry(StoryboardEntry {
+                variable: Some("opacity".to_string()),
+                transition: Some(TransitionRef::Inline(TransitionDef {
+                    from: Some(TransitionValue::Scalar(0.0)),
+                    to: Some(TransitionValue::Scalar(100.0)),
+                    relative_to: None,
+                    easing: None,
+                    delay: 0.0,
+                    duration: Some(2.0),
+                })),
+                keyframe: Some("kf1".to_string()),
+                ..Default::default()
+            })
+            .entry(StoryboardEntry {
+                trigger_storyboard: Some("child".to_string()),
+                at: Some(KeyframeRef::Single("kf1".to_string())),
+                ..Default::default()
+            })
+            .build();
+
+        let child = StoryboardBuilder::new()
+            .entry(StoryboardEntry {
+                variable: Some("opacity".to_string()),
+                transition: Some(TransitionRef::Inline(TransitionDef {
+                    from: Some(TransitionValue::Scalar(100.0)),
+                    to: Some(TransitionValue::Scalar(0.0)),
+                    relative_to: None,
+                    easing: None,
+                    delay: 0.0,
+                    duration: Some(1.0),
+                })),
+                ..Default::default()
+            })
+            .build();
+
+        let interrupt = StoryboardBuilder::new()
+            .entry(StoryboardEntry {
+                variable: Some("opacity".to_string()),
+                transition: Some(TransitionRef::Inline(TransitionDef {
+                    from: Some(TransitionValue::Scalar(0.0)),
+                    to: Some(TransitionValue::Scalar(50.0)),
+                    relative_to: None,
+                    easing: None,
+                    delay: 0.0,
+                    duration: Some(1.0),
+                })),
+                ..Default::default()
+            })
+            .build();
+
+        let mut storyboard = BTreeMap::new();
+        storyboard.insert("parent".to_string(), parent);
+        storyboard.insert("child".to_string(), child);
+        storyboard.insert("interrupt".to_string(), interrupt);
+        let doc = DolaDocument {
+            schema_version: "1.0".to_string(),
+            variable,
+            transition: BTreeMap::new(),
+            storyboard,
+        };
+
+        let mut rt = DolaRuntime::new();
+        let _opacity_id = rt.subscribe("opacity");
+        rt.load_document(doc).unwrap();
+
+        // 親開始（トリガーは t=2.0 で発火予定）
+        let r_parent = rt.start("parent", 0.0).unwrap();
+        rt.update(0.5);
+
+        // t=1.0: interrupt 開始 → 親が Cancel 終了（トリガー未発火のまま）
+        let r_int = rt.start("interrupt", 1.0).unwrap();
+        assert_eq!(r_int.affected_group_ids, vec![r_parent.group_id]);
+
+        // 発火予定時刻を過ぎても、終了済みの親のトリガーは発火しない
+        let result = rt.update(2.5);
+        assert!(
+            result.triggered.is_empty(),
+            "trigger of conflict-terminated parent must not fire: {:?}",
+            result.triggered
+        );
+        // さらに後続 update でも発火・panic しない
+        let result = rt.update(5.0);
+        assert!(result.triggered.is_empty());
+    }
+
+    /// トリガー起動された子が親と同一変数で時間重複しても、親は競合解決から除外される
+    /// （resolve_conflicts_excluding の skip_group_ids 経路の固定）
+    #[test]
+    fn triggered_child_excludes_parent_from_conflict() {
+        // parent: entry1 opacity 0→1 (1.0s, kf1) + entry2 opacity 1→0 (1.0s) → 全体 [0,2]
+        //         + trigger at kf1 → child（child は [1,2] で entry2 と重複）
+        let mut variable = BTreeMap::new();
+        variable.insert(
+            "opacity".to_string(),
+            AnimationVariableDef::Float {
+                initial: 0.0,
+                min: None,
+                max: None,
+            },
+        );
+
+        let parent = StoryboardBuilder::new()
+            .entry(StoryboardEntry {
+                variable: Some("opacity".to_string()),
+                transition: Some(TransitionRef::Inline(TransitionDef {
+                    from: Some(TransitionValue::Scalar(0.0)),
+                    to: Some(TransitionValue::Scalar(1.0)),
+                    relative_to: None,
+                    easing: None,
+                    delay: 0.0,
+                    duration: Some(1.0),
+                })),
+                keyframe: Some("kf1".to_string()),
+                ..Default::default()
+            })
+            .entry(StoryboardEntry {
+                variable: Some("opacity".to_string()),
+                transition: Some(TransitionRef::Inline(TransitionDef {
+                    from: Some(TransitionValue::Scalar(1.0)),
+                    to: Some(TransitionValue::Scalar(0.0)),
+                    relative_to: None,
+                    easing: None,
+                    delay: 0.0,
+                    duration: Some(1.0),
+                })),
+                ..Default::default()
+            })
+            .entry(StoryboardEntry {
+                trigger_storyboard: Some("child".to_string()),
+                at: Some(KeyframeRef::Single("kf1".to_string())),
+                ..Default::default()
+            })
+            .build();
+
+        let child = StoryboardBuilder::new()
+            .entry(StoryboardEntry {
+                variable: Some("opacity".to_string()),
+                transition: Some(TransitionRef::Inline(TransitionDef {
+                    from: Some(TransitionValue::Scalar(0.5)),
+                    to: Some(TransitionValue::Scalar(0.7)),
+                    relative_to: None,
+                    easing: None,
+                    delay: 0.0,
+                    duration: Some(1.0),
+                })),
+                ..Default::default()
+            })
+            .build();
+
+        let mut storyboard = BTreeMap::new();
+        storyboard.insert("parent".to_string(), parent);
+        storyboard.insert("child".to_string(), child);
+        let doc = DolaDocument {
+            schema_version: "1.0".to_string(),
+            variable,
+            transition: BTreeMap::new(),
+            storyboard,
+        };
+
+        let mut rt = DolaRuntime::new();
+        let _opacity_id = rt.subscribe("opacity");
+        rt.load_document(doc).unwrap();
+
+        rt.start("parent", 0.0).unwrap();
+
+        // t=1.0: トリガー発火 → 子 [1,2] は親の entry2 [1,2] と重複するが、
+        // 親は skip_group_ids により競合解決から除外される
+        let result = rt.update(1.0);
+        assert_eq!(result.triggered.len(), 1, "trigger should fire at t=1.0");
+        match &result.triggered[0] {
+            dola::runtime::TriggerResult::Started { start_result, .. } => {
+                assert!(
+                    start_result.affected_group_ids.is_empty(),
+                    "parent must be excluded from conflict resolution, got affected: {:?}",
+                    start_result.affected_group_ids
+                );
+            }
+            other => panic!("expected Started, got {other:?}"),
+        }
+    }
+}

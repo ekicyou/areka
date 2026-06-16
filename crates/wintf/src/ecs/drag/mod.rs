@@ -74,8 +74,6 @@ pub struct DraggingState {
     pub drag_start_pos: PhysicalPoint,
     /// ドラッグ開始時のBoxStyle.inset (left, top)（物理ピクセル）
     pub initial_inset: (f32, f32),
-    /// 前回ECSフレームの位置（デルタ計算用、現在は未使用）
-    pub prev_frame_pos: PhysicalPoint,
 }
 
 /// ドラッグ制約コンポーネント
@@ -112,3 +110,81 @@ impl DragConstraint {
 #[derive(Component)]
 #[component(storage = "SparseSet")]
 pub struct WindowDragging;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// DragConfig::default の既定値（threshold=5, enabled, move_window, 左ボタンのみ有効）。
+    #[test]
+    fn test_drag_config_default_values() {
+        let c = DragConfig::default();
+        assert_eq!(c.threshold, 5);
+        assert!(c.enabled);
+        assert!(c.move_window);
+        assert!(c.left_button, "左ボタンは既定で有効");
+        assert!(!c.right_button, "右ボタンは既定で無効");
+        assert!(!c.middle_button, "中ボタンは既定で無効");
+    }
+
+    /// 全 None の DragConstraint は座標を素通しする（制約なし）。
+    #[test]
+    fn test_drag_constraint_apply_no_bounds_passthrough() {
+        let constraint = DragConstraint {
+            min_x: None,
+            max_x: None,
+            min_y: None,
+            max_y: None,
+        };
+        assert_eq!(constraint.apply(123, -456), (123, -456));
+    }
+
+    /// 範囲内の座標は min/max 両指定でも変化しない。
+    #[test]
+    fn test_drag_constraint_apply_within_bounds_unchanged() {
+        let constraint = DragConstraint {
+            min_x: Some(0),
+            max_x: Some(100),
+            min_y: Some(0),
+            max_y: Some(100),
+        };
+        assert_eq!(constraint.apply(50, 60), (50, 60));
+    }
+
+    /// 下限未満は min にクランプされる（x/y 個別）。
+    #[test]
+    fn test_drag_constraint_apply_clamps_to_min() {
+        let constraint = DragConstraint {
+            min_x: Some(10),
+            max_x: None,
+            min_y: Some(20),
+            max_y: None,
+        };
+        assert_eq!(constraint.apply(-5, 0), (10, 20));
+    }
+
+    /// 上限超過は max にクランプされる（x/y 個別）。
+    #[test]
+    fn test_drag_constraint_apply_clamps_to_max() {
+        let constraint = DragConstraint {
+            min_x: None,
+            max_x: Some(200),
+            min_y: None,
+            max_y: Some(300),
+        };
+        assert_eq!(constraint.apply(999, 999), (200, 300));
+    }
+
+    /// X のみ制約・Y 無制約の混在ケース。
+    #[test]
+    fn test_drag_constraint_apply_axis_independent() {
+        let constraint = DragConstraint {
+            min_x: Some(0),
+            max_x: Some(10),
+            min_y: None,
+            max_y: None,
+        };
+        // X は上限 10 にクランプ、Y は素通し
+        assert_eq!(constraint.apply(50, -777), (10, -777));
+    }
+}

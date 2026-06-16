@@ -4,163 +4,12 @@
 //! バッファ内容の反映、一時状態のクリア、デバッグ監視を提供する。
 
 use bevy_ecs::prelude::*;
-use std::time::Instant;
 
-use super::buffers::{
-    BUTTON_BUFFERS, DOUBLE_CLICK_BUFFERS, MODIFIER_STATE, POINTER_BUFFERS, WHEEL_BUFFERS,
-};
-use super::types::{
-    CursorVelocity, DoubleClick, PhysicalPoint, PointerButton, PointerLeave, PointerState,
-    WheelDelta,
-};
+use super::types::{DoubleClick, PointerLeave, PointerState, WheelDelta};
 
 // ============================================================================
 // システム
 // ============================================================================
-
-/// ポインターバッファ処理システム
-///
-/// Inputスケジュールで実行され、バッファ内容をPointerStateコンポーネントに反映する。
-pub fn process_pointer_buffers(mut query: Query<(Entity, &mut PointerState)>) {
-    tracing::trace!("[process_pointer_buffers] Called");
-
-    // ButtonBufferの内容をPointerStateに反映（エンティティIDで照合）
-    // Note: BUTTON_BUFFERSのリセットはdispatch_pointer_eventsで行われる
-    BUTTON_BUFFERS.with(|buffers| {
-        let buffers = buffers.borrow();
-
-        for (entity, mut pointer) in query.iter_mut() {
-            // 各ボタンの処理（DOWN優先ルール）
-            for button in [
-                PointerButton::Left,
-                PointerButton::Right,
-                PointerButton::Middle,
-                PointerButton::XButton1,
-                PointerButton::XButton2,
-            ] {
-                if let Some(buf) = buffers.get(&(entity, button)) {
-                    let is_down = if buf.down_received {
-                        true
-                    } else if buf.up_received {
-                        false
-                    } else {
-                        // イベントなし - 現在の状態を維持
-                        match button {
-                            PointerButton::Left => pointer.left_down,
-                            PointerButton::Right => pointer.right_down,
-                            PointerButton::Middle => pointer.middle_down,
-                            PointerButton::XButton1 => pointer.xbutton1_down,
-                            PointerButton::XButton2 => pointer.xbutton2_down,
-                        }
-                    };
-
-                    match button {
-                        PointerButton::Left => pointer.left_down = is_down,
-                        PointerButton::Right => pointer.right_down = is_down,
-                        PointerButton::Middle => pointer.middle_down = is_down,
-                        PointerButton::XButton1 => pointer.xbutton1_down = is_down,
-                        PointerButton::XButton2 => pointer.xbutton2_down = is_down,
-                    }
-
-                    // ログ出力（ボタン状態が変化した場合）
-                    if buf.down_received || buf.up_received {
-                        tracing::trace!(
-                            entity = ?entity,
-                            button = ?button,
-                            is_down,
-                            "[process_pointer_buffers] Button state updated"
-                        );
-                    }
-                }
-            }
-        }
-    });
-
-    for (entity, mut pointer) in query.iter_mut() {
-        tracing::trace!(
-            entity = ?entity,
-            thread_id = ?std::thread::current().id(),
-            "[process_pointer_buffers] Checking POINTER_BUFFERS"
-        );
-
-        // PointerBuffer から位置と速度を取得
-        POINTER_BUFFERS.with(|buffers| {
-            let mut buffers = buffers.borrow_mut();
-            if let Some(buffer) = buffers.get_mut(&entity) {
-                tracing::trace!(
-                    entity = ?entity,
-                    "[process_pointer_buffers] Buffer found"
-                );
-
-                // 速度計算
-                let (vx, vy) = buffer.calculate_velocity();
-                pointer.velocity = CursorVelocity::new(vx, vy);
-
-                // 最新位置取得
-                if let Some(sample) = buffer.latest() {
-                    let old_x = pointer.client_point.x;
-                    let old_y = pointer.client_point.y;
-                    pointer.client_point = PhysicalPoint::new(sample.x as i32, sample.y as i32);
-                    // Note: local_point は hit_test 結果から設定（Phase 1ではclient_pointと同じ）
-                    pointer.local_point = pointer.client_point;
-
-                    tracing::trace!(
-                        entity = ?entity,
-                        old_x, old_y,
-                        new_x = pointer.client_point.x,
-                        new_y = pointer.client_point.y,
-                        "[process_pointer_buffers] Position updated"
-                    );
-                }
-
-                // バッファクリア
-                buffer.clear();
-            } else {
-                tracing::trace!(
-                    entity = ?entity,
-                    "[process_pointer_buffers] No buffer found"
-                );
-            }
-        });
-
-        // WheelBuffer からホイール情報を取得
-        WHEEL_BUFFERS.with(|buffers| {
-            let mut buffers = buffers.borrow_mut();
-            if let Some(buf) = buffers.get_mut(&entity) {
-                pointer.wheel = WheelDelta {
-                    vertical: buf.vertical,
-                    horizontal: buf.horizontal,
-                };
-                buf.reset();
-            }
-        });
-
-        // DoubleClick を取得
-        DOUBLE_CLICK_BUFFERS.with(|buffers| {
-            let mut buffers = buffers.borrow_mut();
-            if let Some(dc) = buffers.remove(&entity) {
-                pointer.double_click = dc;
-            }
-        });
-
-        // 修飾キー状態を取得
-        MODIFIER_STATE.with(|state| {
-            let state = state.borrow();
-            if let Some(&(shift, ctrl)) = state.get(&entity) {
-                pointer.shift_down = shift;
-                pointer.ctrl_down = ctrl;
-            }
-        });
-
-        pointer.timestamp = Instant::now();
-    }
-}
-
-/// 後方互換性エイリアス
-#[deprecated(since = "0.1.0", note = "Use process_pointer_buffers instead")]
-pub fn process_mouse_buffers(query: Query<(Entity, &mut PointerState)>) {
-    process_pointer_buffers(query);
-}
 
 /// 一時的ポインター状態クリアシステム（FrameFinalize）
 ///
@@ -276,4 +125,77 @@ pub fn debug_pointer_leave(leave_query: Query<Entity, Added<PointerLeave>>) {
 #[deprecated(since = "0.1.0", note = "Use debug_pointer_leave instead")]
 pub fn debug_mouse_leave(leave_query: Query<Entity, Added<PointerLeave>>) {
     debug_pointer_leave(leave_query);
+}
+
+// ============================================================================
+// テスト
+// ============================================================================
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// clear_transient_pointer_state は double_click を None に、wheel を既定値にリセットする。
+    /// （1フレームのみ有効な状態の FrameFinalize クリア）
+    #[test]
+    fn test_clear_transient_resets_double_click_and_wheel() {
+        let mut world = World::new();
+        let e = world
+            .spawn(PointerState {
+                double_click: DoubleClick::Left,
+                wheel: WheelDelta {
+                    vertical: 120,
+                    horizontal: -60,
+                },
+                // ボタン状態は transient ではないので保持されることを確認する
+                left_down: true,
+                ..Default::default()
+            })
+            .id();
+
+        let mut schedule = Schedule::default();
+        schedule.add_systems(clear_transient_pointer_state);
+        schedule.run(&mut world);
+
+        let s = world.get::<PointerState>(e).unwrap();
+        assert_eq!(s.double_click, DoubleClick::None, "double_click はリセット");
+        assert_eq!(s.wheel, WheelDelta::default(), "wheel はリセット");
+        assert!(s.left_down, "ボタン状態は transient ではなく保持される");
+    }
+
+    /// clear_transient_pointer_state は PointerLeave マーカーを除去する。
+    #[test]
+    fn test_clear_transient_removes_pointer_leave_marker() {
+        let mut world = World::new();
+        // PointerLeave マーカーのみを持つエンティティ（PointerState は削除済みを想定）
+        let leaving = world.spawn(PointerLeave).id();
+        // PointerState を持ち PointerLeave のないエンティティ（除去対象外）
+        let staying = world.spawn(PointerState::default()).id();
+
+        let mut schedule = Schedule::default();
+        schedule.add_systems(clear_transient_pointer_state);
+        schedule.run(&mut world);
+
+        assert!(
+            world.get::<PointerLeave>(leaving).is_none(),
+            "PointerLeave マーカーは除去される"
+        );
+        assert!(
+            world.get_entity(staying).is_ok(),
+            "PointerState 側エンティティは存続"
+        );
+    }
+
+    /// PointerState も PointerLeave もない状態でもパニックしない（空 World）。
+    #[test]
+    fn test_clear_transient_no_targets_is_noop() {
+        let mut world = World::new();
+        let e = world.spawn_empty().id();
+
+        let mut schedule = Schedule::default();
+        schedule.add_systems(clear_transient_pointer_state);
+        schedule.run(&mut world);
+
+        assert!(world.get_entity(e).is_ok());
+    }
 }

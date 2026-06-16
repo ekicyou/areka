@@ -42,14 +42,7 @@ pub fn mark_dirty_arrangement_trees(
     orphaned: RemovedComponents<ChildOf>,
     transforms: Query<(Option<&ChildOf>, &mut ArrangementTreeChanged)>,
 ) {
-    let changed_count = changed.iter().count();
-    if changed_count > 0 {
-        // Note: 頻繁に呼ばれるためログは抑制
-        // tracing::info!(
-        //     changed_count,
-        //     "[mark_dirty_arrangement_trees] Detected changed arrangements"
-        // );
-    }
+    // Note: このシステムは毎フレーム頻繁に呼ばれるため、変更件数のログ出力は意図的に抑制している
     mark_dirty_trees::<Arrangement, GlobalArrangement, ArrangementTreeChanged>(
         changed, orphaned, transforms,
     );

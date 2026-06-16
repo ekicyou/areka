@@ -66,6 +66,8 @@ fn find_parent_brushes(
 ) -> Option<Brushes> {
     let mut current = entity;
 
+    // NOTE(W3b-V): この走査は ChildOf チェーンの終端到達を前提とする
+    // （間接巡回 A→B→A があると終了しない。巡回ガードは P48 参照）。
     while let Ok(child_of) = parent_query.get(current) {
         let parent = child_of.parent();
 

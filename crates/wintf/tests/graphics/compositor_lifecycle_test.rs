@@ -216,3 +216,60 @@ fn test_compositor_increment_generation() {
 
     eprintln!("✅ increment_generation() が正しく動作する");
 }
+
+// ==========================================================================
+// W3a-V: 境界値・失敗経路の特性化テスト
+// ==========================================================================
+
+/// W3a-V: D2D 最大ビットマップサイズ（FL11 で 16384）を超える巨大サイズは
+/// CreateBitmap 段階で Err となり、panic / UB に至らないことを特性化する。
+#[test]
+fn new_with_size_exceeding_texture_limit_returns_err_without_panic() {
+    let core = GraphicsCore::new().expect("GraphicsCore 作成失敗");
+    let dc = core.device_context().expect("DeviceContext 取得失敗");
+
+    let result = WindowD3D11Compositor::new(dc, 100_000, 64);
+    assert!(result.is_err(), "最大ビットマップサイズ超過は Err で完結する");
+
+    eprintln!("✅ 巨大サイズの new() は Err で完結（panic なし）");
+}
+
+/// W3a-V: 負の i32 サイズが u32 へラップした巨大値（compositor_init_system の
+/// `size.width as u32` 経路の終端値）も Err で完結する（panic / UB なし）。
+#[test]
+fn new_with_negative_i32_wrapped_size_returns_err_without_panic() {
+    let core = GraphicsCore::new().expect("GraphicsCore 作成失敗");
+    let dc = core.device_context().expect("DeviceContext 取得失敗");
+
+    let wrapped = (-1i32) as u32; // 4294967295
+    let result = WindowD3D11Compositor::new(dc, wrapped, 64);
+    assert!(result.is_err(), "ラップ後の巨大幅は Err で完結する");
+
+    eprintln!("✅ 負値ラップ由来の巨大サイズも Err で完結（panic なし）");
+}
+
+/// W3a-V: resize() 失敗時は旧リソース・cached_size・generation を維持する
+/// （新リソース作成成功後にのみ inner を置き換える失敗安全性の特性化）。
+#[test]
+fn resize_failure_keeps_previous_resources_and_state() {
+    let core = GraphicsCore::new().expect("GraphicsCore 作成失敗");
+    let dc = core.device_context().expect("DeviceContext 取得失敗");
+
+    let mut compositor =
+        WindowD3D11Compositor::new(dc, 64, 64).expect("WindowD3D11Compositor 作成失敗");
+
+    let result = compositor.resize(dc, 100_000, 100_000);
+    assert!(result.is_err(), "巨大サイズへの resize は Err");
+
+    // 失敗時は旧状態が完全に保存される
+    assert!(compositor.is_valid(), "失敗時は旧リソースを維持する");
+    assert_eq!(compositor.cached_size(), (64, 64), "cached_size は旧値のまま");
+    assert_eq!(compositor.generation(), 0, "失敗時は generation 不変");
+    assert!(compositor.composition_bitmap().is_some());
+    assert!(compositor.staging_bitmap().is_some());
+    assert!(compositor.hbitmap().is_some());
+    assert!(compositor.memory_dc().is_some());
+    assert!(compositor.dib_bits().is_some());
+
+    eprintln!("✅ resize 失敗時に旧リソース・状態が維持される");
+}

@@ -329,4 +329,87 @@ mod metadata_tests {
         assert_eq!(tl.min_value, Some(-10.0));
         assert_eq!(tl.max_value, Some(100.0));
     }
+
+    // =========================================================
+    // D2-T gap tests: loop_offset の伝播
+    // =========================================================
+
+    fn single_var_storyboard_entry() -> StoryboardEntry {
+        StoryboardEntry {
+            variable: Some("x".to_string()),
+            transition: Some(TransitionRef::Inline(TransitionDef {
+                from: Some(TransitionValue::Scalar(0.0)),
+                to: Some(TransitionValue::Scalar(1.0)),
+                duration: Some(1.0),
+                ..Default::default()
+            })),
+            keyframe: Some("kf1".to_string()),
+            ..Default::default()
+        }
+    }
+
+    fn float_var_x() -> Vec<(&'static str, AnimationVariableDef)> {
+        vec![(
+            "x",
+            AnimationVariableDef::Float {
+                initial: 0.0,
+                min: None,
+                max: None,
+            },
+        )]
+    }
+
+    #[test]
+    fn loop_offset_scalar_propagated() {
+        let doc = make_doc_with_storyboard(
+            float_var_x(),
+            vec![],
+            "test",
+            StoryboardBuilder::new()
+                .loop_count(3)
+                .loop_offset(LoopOffset::Scalar(2.0))
+                .entry(single_var_storyboard_entry())
+                .build(),
+        );
+
+        let result = compile_storyboard(&doc, "test", 0.0).unwrap();
+        assert_eq!(result.loop_offset, Some(LoopOffset::Scalar(2.0)));
+    }
+
+    #[test]
+    fn loop_offset_range_propagated() {
+        let offset = LoopOffset::Range(LoopOffsetRange {
+            min: 0.5,
+            max: 1.5,
+            easing: EasingFunction::Named(EasingName::Linear),
+        });
+        let doc = make_doc_with_storyboard(
+            float_var_x(),
+            vec![],
+            "test",
+            StoryboardBuilder::new()
+                .loop_count(-1)
+                .loop_offset(offset.clone())
+                .entry(single_var_storyboard_entry())
+                .build(),
+        );
+
+        let result = compile_storyboard(&doc, "test", 0.0).unwrap();
+        assert_eq!(result.loop_offset, Some(offset));
+    }
+
+    #[test]
+    fn loop_offset_default_none_propagated() {
+        let doc = make_doc_with_storyboard(
+            float_var_x(),
+            vec![],
+            "test",
+            StoryboardBuilder::new()
+                .entry(single_var_storyboard_entry())
+                .build(),
+        );
+
+        let result = compile_storyboard(&doc, "test", 0.0).unwrap();
+        assert_eq!(result.loop_offset, None);
+    }
 }

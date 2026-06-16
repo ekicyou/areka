@@ -19,26 +19,10 @@
       "name": "Rust: Debug (binary path)",
       "type": "lldb",
       "request": "launch",
-      "program": "${workspaceFolder}/target/debug/sample_dcomp.exe",
+      "program": "${workspaceFolder}/target/debug/areka.exe",
       "cwd": "${workspaceFolder}",
       "env": { "RUST_BACKTRACE": "1" },
       "args": []
-    }
-  ],
-    "tasks": [
-    {
-      "label": "cargo build",
-      "type": "shell",
-      "command": "cargo",
-      "args": ["build"],
-      "problemMatcher": ["$rustc"]
-    },
-    {
-      "label": "cargo test",
-      "type": "shell",
-      "command": "cargo",
-      "args": ["test"],
-      "problemMatcher": ["$rustc"]
     }
   ]
 }

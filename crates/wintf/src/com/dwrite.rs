@@ -77,22 +77,12 @@ impl DWriteFactoryExt for IDWriteFactory2 {
             let text_param = text.param();
             let text_pcwstr = text_param.abi();
 
-            // Calculate string length and create slice
-            if text_pcwstr.is_null() {
-                // Empty string case
-                let empty: &[u16] = &[];
-                return self.CreateTextLayout(empty, text_format, max_width, max_height);
-            }
-
-            let mut len = 0;
-            let mut ptr = text_pcwstr.0 as *const u16;
-            while *ptr != 0 {
-                len += 1;
-                ptr = ptr.add(1);
-            }
-
-            // Create slice from raw pointer
-            let text_slice = core::slice::from_raw_parts(text_pcwstr.0 as *const u16, len);
+            // null PCWSTR は空文字列として扱う（as_wide は非 null 前提のため事前に分岐）
+            let text_slice: &[u16] = if text_pcwstr.is_null() {
+                &[]
+            } else {
+                text_pcwstr.as_wide()
+            };
 
             self.CreateTextLayout(text_slice, text_format, max_width, max_height)
         }

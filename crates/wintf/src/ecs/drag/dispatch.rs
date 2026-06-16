@@ -108,7 +108,7 @@ pub fn dispatch_drag_events(world: &mut World) {
                                 if let Some(pos) = wp.position {
                                     let size = wp.size.unwrap_or_default();
                                     if let Ok((wx, wy, _, _)) =
-                                        wh.client_to_window_coords(pos.into(), size.into())
+                                        wh.client_to_window_coords(pos, size)
                                     {
                                         initial_window_pos = crate::ecs::Point { x: wx, y: wy };
                                     }
@@ -118,7 +118,7 @@ pub fn dispatch_drag_events(world: &mut World) {
                             // WindowHandle がない場合はフォールバック
                             if let Some(wp) = world.get::<crate::ecs::window::WindowPos>(current) {
                                 if let Some(pos) = wp.position {
-                                    initial_window_pos = pos.into();
+                                    initial_window_pos = pos;
                                 }
                             }
                         }
@@ -157,7 +157,6 @@ pub fn dispatch_drag_events(world: &mut World) {
                     entity_mut.insert(crate::ecs::drag::DraggingState {
                         drag_start_pos: start_pos,
                         initial_inset: (initial_window_pos.x as f32, initial_window_pos.y as f32),
-                        prev_frame_pos: start_pos,
                     });
 
                     tracing::debug!(
@@ -378,15 +377,6 @@ pub fn dispatch_drag_events(world: &mut World) {
                 &event,
                 |h| h.0,
             );
-
-            // DraggingState.prev_frame_posを更新
-            if let Ok(mut entity_mut) = world.get_entity_mut(entity) {
-                if let Some(mut dragging_state) =
-                    entity_mut.get_mut::<crate::ecs::drag::DraggingState>()
-                {
-                    dragging_state.prev_frame_pos = flush_result.current_position;
-                }
-            }
         }
     }
 }

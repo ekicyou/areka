@@ -79,6 +79,13 @@ impl ID2D1CommandSink_Impl for RecCommandSink_Impl {
     }
 
     fn SetTransform(&self, transform: *const Matrix3x2) -> Result<()> {
+        // SAFETY 根拠: ID2D1CommandSink の各コールバックは D2D1 ランタイムの
+        // コマンドリスト再生（ID2D1CommandList::Stream）からのみ呼ばれ、
+        // 値構造体への *const 引数（transform/rect/cliprect/layerparameters1）は
+        // D2D1 が記録済みコマンドから渡す非 null ポインタである（null 許容の
+        // 引数は windows-rs 側で Option/null チェック付き as_ref に写像済み）。
+        // 無条件 deref の前提を debug ビルドで検査する。
+        debug_assert!(!transform.is_null());
         let transform = unsafe { *transform };
         self.push(DrawCommand::SetTransform(SetTransform::new(transform)));
         Ok(())
@@ -111,7 +118,15 @@ impl ID2D1CommandSink_Impl for RecCommandSink_Impl {
         measuringmode: DWRITE_MEASURING_MODE,
     ) -> Result<()> {
         unsafe {
+            // SAFETY 根拠: DWRITE_GLYPH_RUN 契約上 glyphIndices は必須フィールド
+            // （glyphAdvances/glyphOffsets と異なり null 不許可）であり、D2D1 は
+            // 記録時に検証済みのグリフランのみを再生する。from_raw_parts は
+            // len == 0 でも非 null・整列済みポインタを要求するため、
+            // 前提を debug ビルドで検査する（glyphCount as usize は
+            // u32 → usize の拡大変換のみで切り捨てなし）。
+            debug_assert!(!glyphrun.is_null());
             let glyph_run = &*glyphrun;
+            debug_assert!(!glyph_run.glyphIndices.is_null());
             let glyph_indices =
                 std::slice::from_raw_parts(glyph_run.glyphIndices, glyph_run.glyphCount as usize)
                     .to_vec();
@@ -186,6 +201,8 @@ impl ID2D1CommandSink_Impl for RecCommandSink_Impl {
         strokewidth: f32,
         strokestyle: Ref<ID2D1StrokeStyle>,
     ) -> Result<()> {
+        // SAFETY 根拠: SetTransform の注記参照（D2D1 再生契約により非 null）。
+        debug_assert!(!rect.is_null());
         let rect = unsafe { *rect };
         self.push(DrawCommand::DrawRectangle(DrawRectangle::new(
             rect,
@@ -285,6 +302,8 @@ impl ID2D1CommandSink_Impl for RecCommandSink_Impl {
     }
 
     fn FillRectangle(&self, rect: *const D2D_RECT_F, brush: Ref<ID2D1Brush>) -> Result<()> {
+        // SAFETY 根拠: SetTransform の注記参照（D2D1 再生契約により非 null）。
+        debug_assert!(!rect.is_null());
         let rect = unsafe { *rect };
         self.push(DrawCommand::FillRectangle(FillRectangle::new(
             rect,
@@ -298,6 +317,8 @@ impl ID2D1CommandSink_Impl for RecCommandSink_Impl {
         cliprect: *const D2D_RECT_F,
         antialiasmode: D2D1_ANTIALIAS_MODE,
     ) -> Result<()> {
+        // SAFETY 根拠: SetTransform の注記参照（D2D1 再生契約により非 null）。
+        debug_assert!(!cliprect.is_null());
         let cliprect = unsafe { *cliprect };
         self.push(DrawCommand::PushAxisAlignedClip(PushAxisAlignedClip::new(
             cliprect,
@@ -311,6 +332,8 @@ impl ID2D1CommandSink_Impl for RecCommandSink_Impl {
         layerparameters1: *const D2D1_LAYER_PARAMETERS1,
         layer: Ref<ID2D1Layer>,
     ) -> Result<()> {
+        // SAFETY 根拠: SetTransform の注記参照（D2D1 再生契約により非 null）。
+        debug_assert!(!layerparameters1.is_null());
         let params = unsafe { &*layerparameters1 };
         self.push(DrawCommand::PushLayer(PushLayer::new(
             params.contentBounds,

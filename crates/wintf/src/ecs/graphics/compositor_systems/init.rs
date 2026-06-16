@@ -51,6 +51,12 @@ pub fn compositor_init_system(
         let Some(size) = window_pos.size else {
             continue;
         };
+        // NOTE(W3a-V): SizeI は i32 のため負値は `as u32` でラップして巨大値になる
+        // （例: -1 → 4294967295）。その場合 WindowD3D11Compositor::new 内の
+        // D2D CreateBitmap が最大ビットマップサイズ超過で Err となり、下の error ログ
+        // のみで panic / UB には至らない（tests/graphics/compositor_init_system_test.rs::
+        // negative_window_pos_size_does_not_create_compositor_and_does_not_panic で固定）。
+        // 負値の事前スキップはログ挙動の変更を伴うため proposals.md P41 に記録。
         let w = size.width as u32;
         let h = size.height as u32;
         if w == 0 || h == 0 {

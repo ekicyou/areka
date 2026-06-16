@@ -19,34 +19,34 @@
 
 ## 実行記録（フェーズ0で確定し追記する）
 
-- ベースラインコミット: （タスク 1.5 で記録）
-- S7 初期化完了ログ文字列・タイムアウト: （タスク 1.3 で記録。タイムアウト既定60秒）
-- 既知フレーキースイート一覧: （タスク 1.2 で記録。参考: research.md 実測では wintf `tests/ecs` がワークスペース並列実行時のみ稀に失敗。`tracker_timeout` が有力容疑）
+- ベースラインコミット: `c6837ad`（2026-06-10、フェーズ0完了時点。以降の巻き戻し基準は常に「直近の正常コミット」）
+- S7 初期化完了ログ文字列・タイムアウト: 初期化完了ログ = `[GraphicsCore] Initialization completed`（`wintf::ecs::graphics::core`、INFO レベル）。タイムアウト = 60秒。補助確認: areka 側ログ `シェルウィンドウとバルーンウィンドウを生成しました`。合格条件: タイムアウト内に初期化完了ログが出現し、パニック・error レベルログ・異常終了コードがないこと（2026-06-10 実測: 起動約1秒で出現、stderr 空、強制終了まで正常稼働）
+- 既知フレーキースイート一覧（2026-06-10 実測、ワークスペース全量3回実行）: `wintf tests/ecs` の `cue_performance_test::bench_pop_ready_empty_queue`（3回中1回失敗、`cue_performance_test.rs:130` のタイミングアサーション。隔離実行2回は安定合格 → 負荷依存フレーキー確定）。research.md の `tracker_timeout` 容疑は今回3回では再現せず（同スイート内のタイミング依存テストとして引き続き要注意）
 
 ## Tasks
 
-- [ ] 1. フェーズ0: 環境準備とベースライン確立
-- [ ] 1.1 環境ゲート（S8）と検証コマンドのグリーン確認
+- [x] 1. フェーズ0: 環境準備とベースライン確立
+- [x] 1.1 環境ゲート（S8）と検証コマンドのグリーン確認
   - `git submodule update --init --recursive` を実行し、`vendors/pasta` サブモジュールが初期化済みであることを確認する（未初期化だとワークスペース全体がビルド不能）
   - S2（`cargo build --workspace` → `cargo test --workspace`）を全量実行し、失敗ゼロで完走することを確認する
   - S8 を満たせない場合はループ全体を停止する（本計画で唯一の全体停止条件）
   - 完了条件: S2 が失敗ゼロで完走した実行ログが確認できる
   - _Requirements: 2.5_
 
-- [ ] 1.2 既知フレーキースイート一覧の記録
+- [x] 1.2 既知フレーキースイート一覧の記録
   - ワークスペース全体のテストを複数回（最低3回）実行し、不安定に失敗するテストスイートを特定する
   - 特定結果（ゼロ件の場合もその旨）を本書「実行記録」節へ追記する（以降のフレーキー判定の参照情報とする）
   - 完了条件: 「実行記録」節に既知フレーキースイート一覧が記録されている
   - _Requirements: 2.5_
 
-- [ ] 1.3 起動テスト（S7）の初期化完了ログ文字列の確認
+- [x] 1.3 起動テスト（S7）の初期化完了ログ文字列の確認
   - `RUST_LOG=info` を設定して areka アプリケーションを起動し、初期化完了を示すログ行を特定する
   - 特定した文字列と判定タイムアウト（既定60秒）を本書「実行記録」節へ追記する
   - プロセスは確認後に終了させる（パニック・error レベルログ・異常終了コードがないことを確認）
   - 完了条件: 「実行記録」節に S7 の合否判定基準（初期化完了ログ文字列・タイムアウト）が記録されている
   - _Requirements: 4.6_
 
-- [ ] 1.4 マトリクス網羅性と実行プロトコルの確認記録
+- [x] 1.4 マトリクス網羅性と実行プロトコルの確認記録
   - 本書のセルタスクを design.md の領域表（19領域）×観点（T/S/V）と突き合わせ、全57セルがタスク化され漏れがないことを「マトリクス網羅性記録」節の表で確認する
   - 除外領域（`vendors/` 配下・`target/`・外部依存）がいずれの領域にも含まれないこと、横断設定が独立領域 X1 として存在することを確認する
   - 拡張観点（R2.6）は設計判断により列追加なし（clippy は S3 として検証ステップへ、依存監査は X1-V へ内包）であることを確認・記録する
@@ -56,125 +56,125 @@
   - 完了条件: 「マトリクス網羅性記録」節の表と本タスクの確認結果がセル断片 `report/cells/phase0-matrix.md` に記録されている
   - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 2.6, 3.1, 3.2, 3.3, 4.2, 4.3, 4.5, 5.4, 7.1, 7.2, 7.3, 7.4_
 
-- [ ] 1.5 レポート骨格の作成とベースラインコミットの確定
+- [x] 1.5 レポート骨格の作成とベースラインコミットの確定
   - `report/cells/` ディレクトリと `report/proposals.md`（提案様式のヘッダのみ）を作成する
   - ワークツリーがクリーンであることを確認し、フェーズ0の全記録（実行記録節・網羅性記録・レポート骨格）をコミットする
   - コミット後、そのハッシュを「実行記録」節へベースラインコミットとして追記し、追記を docs コミットとして確定する（以降の巻き戻し基準は常に「直近の正常コミット」）
   - 完了条件: 「実行記録」節にベースラインコミットハッシュが記録され、`git log` で確認できる
   - _Requirements: 4.4_
 
-- [ ] 2. A1: areka エントリポイント
-- [ ] 2.1 A1-T: テスト網羅性の調査と改善
+- [x] 2. A1: areka エントリポイント
+- [x] 2.1 A1-T: テスト網羅性の調査と改善
   - モジュール×テスト対応を調査する（現状テストゼロ・399 LOC）。GUI 非依存に検証可能な純粋ロジック（設定組み立て・初期化順序の前提条件等）を特定しテストを追加する
   - GUI/COM 依存でテスト化できない箇所は深掘り解析のうえ所見を断片に記録し、必要に応じて `report/proposals.md` へ提案を記録する
   - 完了条件: セル共通完了条件（前後 S2 グリーン、断片 `A1-T.md`、S10 コミット）を満たす
   - _Requirements: 2.1, 2.5, 2.7, 2.8, 4.1, 5.1_
   - _Boundary: crates/areka/src/_
 
-- [ ] 2.2 A1-S: シンプル化の検証と適用
+- [x] 2.2 A1-S: シンプル化の検証と適用
   - S6（karpathy-guidelines）基準でエントリポイントの簡素化候補を検証し、挙動を変えない簡素化を適用する
   - テスト保護のない箇所のロジック変更を要する簡素化は適用せず `report/proposals.md` へ記録する
   - 完了条件: セル共通完了条件（前後 S2 グリーン、断片 `A1-S.md`、S10 コミット）を満たす
   - _Requirements: 2.2, 2.5, 2.7, 2.8, 4.1, 5.1, 5.3_
   - _Boundary: crates/areka/src/_
 
-- [ ] 2.3 A1-V: 脆弱性レビューと非破壊対策
+- [x] 2.3 A1-V: 脆弱性レビューと非破壊対策
   - panic! 経路（実測1箇所）による DoS 可能性、外部入力（起動引数・環境変数・ファイルパス）の検証欠如、リソースリークを点検する
   - 挙動を変えない対策（内部チェック追加・debug_assert 等）のみ投入し、挙動変更を要する対策は `report/proposals.md` へ根拠付きで記録する
   - 完了条件: セル共通完了条件（前後 S2 グリーン、断片 `A1-V.md`、S10 コミット）を満たす
   - _Requirements: 2.3, 2.4, 2.5, 2.7, 2.8, 4.1, 5.1, 5.2_
   - _Boundary: crates/areka/src/_
 
-- [ ] 3. D1a: dola ランタイム中核
-- [ ] 3.1 D1a-T: テスト網羅性の調査と改善
+- [x] 3. D1a: dola ランタイム中核
+- [x] 3.1 D1a-T: テスト網羅性の調査と改善
   - ランタイムファサード・ループ制御・タイムライン管理・購読管理・再生状態のモジュール×テスト対応表を作成し、テスト空白を特定して S9 準拠でテストを追加する
   - 不要テスト（重複・死テスト）は根拠を断片に記録したうえで慎重に除外する
   - 完了条件: セル共通完了条件（前後 S2 グリーン、断片 `D1a-T.md`、S10 コミット）を満たす
   - _Requirements: 2.1, 2.5, 2.7, 2.8, 4.1, 5.1_
   - _Boundary: crates/dola/src/runtime/{facade,loop_controller}.rs, crates/dola/src/runtime/{timeline_manager,subscription_manager}/, crates/dola/src/playback.rs, crates/dola/tests/（該当ドメイン）_
 
-- [ ] 3.2 D1a-S: シンプル化の検証と適用
+- [x] 3.2 D1a-S: シンプル化の検証と適用
   - S6 基準で簡素化候補を検証し、挙動を変えない簡素化を適用する（unwrap 多数域のため変更は T セルで整備した回帰検知器の保護下で行う）
   - ロジック変更を要する簡素化は `report/proposals.md` へ記録する
   - 完了条件: セル共通完了条件（前後 S2 グリーン、断片 `D1a-S.md`、S10 コミット）を満たす
   - _Requirements: 2.2, 2.5, 2.7, 2.8, 4.1, 5.1, 5.3_
   - _Boundary: crates/dola/src/runtime/{facade,loop_controller}.rs, crates/dola/src/runtime/{timeline_manager,subscription_manager}/, crates/dola/src/playback.rs_
 
-- [ ] 3.3 D1a-V: 脆弱性レビューと非破壊対策
+- [x] 3.3 D1a-V: 脆弱性レビューと非破壊対策
   - unwrap/expect 多数域の panic 経路、整数変換の切り捨て・オーバーフロー、時刻計算の境界条件を点検する
   - 挙動を変えない対策のみ投入し、エラー応答や API シグネチャを変える対策は `report/proposals.md` へ記録する
   - 完了条件: セル共通完了条件（前後 S2 グリーン、断片 `D1a-V.md`、S10 コミット）を満たす
   - _Requirements: 2.3, 2.4, 2.5, 2.7, 2.8, 4.1, 5.1, 5.2_
   - _Boundary: crates/dola/src/runtime/{facade,loop_controller}.rs, crates/dola/src/runtime/{timeline_manager,subscription_manager}/, crates/dola/src/playback.rs_
 
-- [ ] 4. D1b: dola 補間・状態
-- [ ] 4.1 D1b-T: テスト網羅性の調査と改善
+- [x] 4. D1b: dola 補間・状態
+- [x] 4.1 D1b-T: テスト網羅性の調査と改善
   - 補間器・競合解決・ドキュメントストア・インスタンス管理・ストーリーボード/トランジション/イージング/値/変数のモジュール×テスト対応表を作成し、空白に S9 準拠でテストを追加する
   - 不要テストは根拠を断片に記録したうえで慎重に除外する
   - 完了条件: セル共通完了条件（前後 S2 グリーン、断片 `D1b-T.md`、S10 コミット）を満たす
   - _Requirements: 2.1, 2.5, 2.7, 2.8, 4.1, 5.1_
   - _Boundary: crates/dola/src/runtime/{conflict_resolver,document_store,types,clock,instance_state}.rs, crates/dola/src/runtime/{interpolator,instance_manager}/, crates/dola/src/{storyboard,transition,easing,value,variable}.rs, crates/dola/tests/（該当ドメイン）_
 
-- [ ] 4.2 D1b-S: シンプル化の検証と適用
+- [x] 4.2 D1b-S: シンプル化の検証と適用
   - S6 基準で簡素化候補を検証し、挙動を変えない簡素化を適用する
   - ロジック変更を要する簡素化は `report/proposals.md` へ記録する
   - 完了条件: セル共通完了条件（前後 S2 グリーン、断片 `D1b-S.md`、S10 コミット）を満たす
   - _Requirements: 2.2, 2.5, 2.7, 2.8, 4.1, 5.1, 5.3_
   - _Boundary: crates/dola/src/runtime/{conflict_resolver,document_store,types,clock,instance_state}.rs, crates/dola/src/runtime/{interpolator,instance_manager}/, crates/dola/src/{storyboard,transition,easing,value,variable}.rs_
 
-- [ ] 4.3 D1b-V: 脆弱性レビューと非破壊対策
+- [x] 4.3 D1b-V: 脆弱性レビューと非破壊対策
   - unwrap 多数域の panic 経路、補間計算の数値境界（NaN・無限大・ゼロ除算）、状態遷移の不変条件を点検する
   - 挙動を変えない対策のみ投入し、挙動変更を要する対策は `report/proposals.md` へ記録する
   - 完了条件: セル共通完了条件（前後 S2 グリーン、断片 `D1b-V.md`、S10 コミット）を満たす
   - _Requirements: 2.3, 2.4, 2.5, 2.7, 2.8, 4.1, 5.1, 5.2_
   - _Boundary: crates/dola/src/runtime/{conflict_resolver,document_store,types,clock,instance_state}.rs, crates/dola/src/runtime/{interpolator,instance_manager}/, crates/dola/src/{storyboard,transition,easing,value,variable}.rs_
 
-- [ ] 5. D2: dola コンパイル・DSL
-- [ ] 5.1 D2-T: テスト網羅性の調査と改善
+- [x] 5. D2: dola コンパイル・DSL
+- [x] 5.1 D2-T: テスト網羅性の調査と改善
   - in-source テストなしの compile/ と Builder API・エラー型について、統合テストとの過不足を整理しモジュール×テスト対応表を作成、空白に S9 準拠でテストを追加する
   - 不要テストは根拠を断片に記録したうえで慎重に除外する
   - 完了条件: セル共通完了条件（前後 S2 グリーン、断片 `D2-T.md`、S10 コミット）を満たす
   - _Requirements: 2.1, 2.5, 2.7, 2.8, 4.1, 5.1_
   - _Boundary: crates/dola/src/compile/, crates/dola/src/{builder,error}.rs, crates/dola/tests/（compile ドメイン）_
 
-- [ ] 5.2 D2-S: シンプル化の検証と適用
+- [x] 5.2 D2-S: シンプル化の検証と適用
   - S6 基準で解決・型変換ロジックと Builder API の簡素化候補を検証し、挙動を変えない簡素化を適用する
   - ロジック変更を要する簡素化は `report/proposals.md` へ記録する
   - 完了条件: セル共通完了条件（前後 S2 グリーン、断片 `D2-S.md`、S10 コミット）を満たす
   - _Requirements: 2.2, 2.5, 2.7, 2.8, 4.1, 5.1, 5.3_
   - _Boundary: crates/dola/src/compile/, crates/dola/src/{builder,error}.rs_
 
-- [ ] 5.3 D2-V: 脆弱性レビューと非破壊対策
+- [x] 5.3 D2-V: 脆弱性レビューと非破壊対策
   - 外部入力（JSON/TOML/YAML ドキュメント）のデシリアライズ境界・検証欠如・panic 経路・再帰深度を点検する
   - 挙動を変えない対策のみ投入し、挙動変更を要する対策は `report/proposals.md` へ記録する
   - 完了条件: セル共通完了条件（前後 S2 グリーン、断片 `D2-V.md`、S10 コミット）を満たす
   - _Requirements: 2.3, 2.4, 2.5, 2.7, 2.8, 4.1, 5.1, 5.2_
   - _Boundary: crates/dola/src/compile/, crates/dola/src/{builder,error}.rs_
 
-- [ ] 6. D3: dola 検証・Cue
-- [ ] 6.1 D3-T: テスト網羅性の調査と改善
+- [x] 6. D3: dola 検証・Cue
+- [x] 6.1 D3-T: テスト網羅性の調査と改善
   - 未テストの validate/ を最優先に、cue/・ドキュメント定義のモジュール×テスト対応表を作成し、空白に S9 準拠でテストを追加する
   - 不要テストは根拠を断片に記録したうえで慎重に除外する
   - 完了条件: セル共通完了条件（前後 S2 グリーン、断片 `D3-T.md`、S10 コミット）を満たす
   - _Requirements: 2.1, 2.5, 2.7, 2.8, 4.1, 5.1_
   - _Boundary: crates/dola/src/validate/, crates/dola/src/cue/, crates/dola/src/{document,lib}.rs, crates/dola/tests/（該当ドメイン）_
 
-- [ ] 6.2 D3-S: シンプル化の検証と適用
+- [x] 6.2 D3-S: シンプル化の検証と適用
   - S6 基準でバリデーションロジックと Cue モデルの簡素化候補を検証し、挙動を変えない簡素化を適用する
   - ロジック変更を要する簡素化は `report/proposals.md` へ記録する
   - 完了条件: セル共通完了条件（前後 S2 グリーン、断片 `D3-S.md`、S10 コミット）を満たす
   - _Requirements: 2.2, 2.5, 2.7, 2.8, 4.1, 5.1, 5.3_
   - _Boundary: crates/dola/src/validate/, crates/dola/src/cue/, crates/dola/src/{document,lib}.rs_
 
-- [ ] 6.3 D3-V: 脆弱性レビューと非破壊対策
+- [x] 6.3 D3-V: 脆弱性レビューと非破壊対策
   - バリデーション網羅性の欠落（不正ドキュメントの素通り）、スケジュール時刻の整数境界、panic 経路を点検する
   - 挙動を変えない対策のみ投入し、挙動変更を要する対策（検証の厳格化を含む）は `report/proposals.md` へ記録する
   - 完了条件: セル共通完了条件（前後 S2 グリーン、断片 `D3-V.md`、S10 コミット）を満たす
   - _Requirements: 2.3, 2.4, 2.5, 2.7, 2.8, 4.1, 5.1, 5.2_
   - _Boundary: crates/dola/src/validate/, crates/dola/src/cue/, crates/dola/src/{document,lib}.rs_
 
-- [ ] 7. W1: wintf レガシー・プロセス
-- [ ] 7.1 W1-T: テスト網羅性の調査と改善
+- [x] 7. W1: wintf レガシー・プロセス
+- [x] 7.1 W1-T: テスト網羅性の調査と改善
   - 非・非推奨部分（win_state / win_style / process_singleton / api）を優先してモジュール×テスト対応表を作成し、空白に S9 準拠でテストを追加する
   - 非推奨3モジュール（win_message_handler / win_thread_mgr / winproc、計約1,838 LOC）は削除候補（7.2 で判定）のため新規テスト追加の対象外とし、調査所見のみ断片に記録する
   - 不要テストは根拠を断片に記録したうえで慎重に除外する
@@ -182,7 +182,7 @@
   - _Requirements: 2.1, 2.5, 2.7, 2.8, 4.1, 5.1_
   - _Boundary: crates/wintf/src/{win_message_handler,win_thread_mgr,winproc,win_state,win_style,process_singleton,api}.rs, crates/wintf/tests/（該当ドメイン）_
 
-- [ ] 7.2 W1-S: シンプル化と非推奨コードの実証付き削除
+- [x] 7.2 W1-S: シンプル化と非推奨コードの実証付き削除
   - 非推奨指定モジュール（win_message_handler / win_thread_mgr / winproc）について、ワークスペース内（crates / examples / tests）での利用箇所を grep とビルド確認で実証調査する
   - 利用箇所ゼロを実証できたモジュールは削除し、S2 で挙動非破壊を確認する（最終起動テスト 21 でも再確認される）。実証できない場合は削除せず `report/proposals.md` へ削除候補として記録する
   - 残存コードに S6 基準の簡素化を適用する（本ワークスペースは `publish = false` のため後方互換性の考慮は不要）
@@ -190,326 +190,344 @@
   - _Requirements: 2.2, 2.5, 2.7, 2.8, 2.9, 2.10, 4.1, 5.1, 5.3_
   - _Boundary: crates/wintf/src/{win_message_handler,win_thread_mgr,winproc,win_state,win_style,process_singleton,api}.rs_
 
-- [ ] 7.3 W1-V: 脆弱性レビューと非破壊対策
+- [x] 7.3 W1-V: 脆弱性レビューと非破壊対策
   - プロセス単一実行制御（ミューテックス・ハンドルリーク）、Win32 API ラッパーの境界条件、panic 経路を点検する
   - 挙動を変えない対策のみ投入し、挙動変更を要する対策は `report/proposals.md` へ記録する
   - 完了条件: セル共通完了条件（前後 S2 グリーン、断片 `W1-V.md`、S10 コミット）を満たす
   - _Requirements: 2.3, 2.4, 2.5, 2.7, 2.8, 4.1, 5.1, 5.2_
   - _Boundary: crates/wintf/src/{win_message_handler,win_thread_mgr,winproc,win_state,win_style,process_singleton,api}.rs_
 
-- [ ] 8. W2: wintf COM層
-- [ ] 8.1 W2-T: テスト網羅性の調査と改善
+- [x] 8. W2: wintf COM層
+- [x] 8.1 W2-T: テスト網羅性の調査と改善
   - COM ラッパー層のうちデバイス非依存に検証可能な純粋ロジック（パラメータ変換・構造体構築・定数マッピング等）を特定し、S9 準拠でテストを追加する
   - デバイス依存でテスト化できない箇所（unsafe 最密集域）は深掘り解析のうえ所見と提案を記録する
   - 完了条件: セル共通完了条件（前後 S2 グリーン、断片 `W2-T.md`、S10 コミット）を満たす
   - _Requirements: 2.1, 2.5, 2.7, 2.8, 4.1, 5.1_
   - _Boundary: crates/wintf/src/com/, crates/wintf/tests/（該当ドメイン）_
 
-- [ ] 8.2 W2-S: シンプル化の検証と適用（unsafe 保守則適用）
+- [x] 8.2 W2-S: シンプル化の検証と適用（unsafe 保守則適用）
   - S6 基準で簡素化候補を検証する。テストで保護されない unsafe/COM 部分は、命名・コメント・自明な重複除去等の構造的整理に限定し、ロジック変更を伴う簡素化は `report/proposals.md` へ記録する
   - 完了条件: セル共通完了条件（前後 S2 グリーン、断片 `W2-S.md`、S10 コミット）を満たす
   - _Requirements: 2.2, 2.5, 2.7, 2.8, 4.1, 5.1, 5.3, 5.5_
   - _Boundary: crates/wintf/src/com/_
 
-- [ ] 8.3 W2-V: 脆弱性レビューと非破壊対策
+- [x] 8.3 W2-V: 脆弱性レビューと非破壊対策
   - unsafe ブロックの境界条件（ポインタ有効性・ライフタイム・Send/Sync 妥当性）、COM ハンドルのリーク・二重解放、整数変換の切り捨てを点検する
   - 挙動を変えない対策（debug_assert・安全性コメントの根拠明記・内部チェック追加）のみ投入し、挙動変更を要する対策は `report/proposals.md` へ記録する
   - 完了条件: セル共通完了条件（前後 S2 グリーン、断片 `W2-V.md`、S10 コミット）を満たす
   - _Requirements: 2.3, 2.4, 2.5, 2.7, 2.8, 4.1, 5.1, 5.2_
   - _Boundary: crates/wintf/src/com/_
 
-- [ ] 9. W3a: wintf コンポジタ・描画
-- [ ] 9.1 W3a-T: テスト網羅性の調査と改善
+- [x] 9. W3a: wintf コンポジタ・描画
+- [x] 9.1 W3a-T: テスト網羅性の調査と改善
   - compositor 系・render/surface/init/clip_sync systems・components のうちデバイス非依存に検証可能なロジックを特定し、S9 準拠でテストを追加する
   - GPU 依存でテスト化できない箇所は深掘り解析のうえ所見と提案を記録する
   - 完了条件: セル共通完了条件（前後 S2 グリーン、断片 `W3a-T.md`、S10 コミット）を満たす
   - _Requirements: 2.1, 2.5, 2.7, 2.8, 4.1, 5.1_
   - _Boundary: crates/wintf/src/ecs/graphics/（compositor 系・render/surface/init/clip_sync systems・components）, crates/wintf/tests/（該当ドメイン）_
 
-- [ ] 9.2 W3a-S: シンプル化の検証と適用（unsafe 保守則適用）
+- [x] 9.2 W3a-S: シンプル化の検証と適用（unsafe 保守則適用）
   - S6 基準で簡素化候補を検証する。テストで保護されない unsafe/GUI 部分は構造的整理に限定し、ロジック変更を伴う簡素化は `report/proposals.md` へ記録する
   - 完了条件: セル共通完了条件（前後 S2 グリーン、断片 `W3a-S.md`、S10 コミット）を満たす
   - _Requirements: 2.2, 2.5, 2.7, 2.8, 4.1, 5.1, 5.3, 5.5_
   - _Boundary: crates/wintf/src/ecs/graphics/（compositor 系・render/surface/init/clip_sync systems・components）_
 
-- [ ] 9.3 W3a-V: 脆弱性レビューと非破壊対策
+- [x] 9.3 W3a-V: 脆弱性レビューと非破壊対策
   - unsafe 境界・expect/unwrap の panic 経路・デバイスロスト時のリソースリーク・整数変換を点検する
   - 挙動を変えない対策のみ投入し、挙動変更を要する対策は `report/proposals.md` へ記録する
   - 完了条件: セル共通完了条件（前後 S2 グリーン、断片 `W3a-V.md`、S10 コミット）を満たす
   - _Requirements: 2.3, 2.4, 2.5, 2.7, 2.8, 4.1, 5.1, 5.2_
   - _Boundary: crates/wintf/src/ecs/graphics/（compositor 系・render/surface/init/clip_sync systems・components）_
 
-- [ ] 10. W3b: wintf グラフィックス資源
-- [ ] 10.1 W3b-T: テスト網羅性の調査と改善
+- [x] 10. W3b: wintf グラフィックス資源
+- [x] 10.1 W3b-T: テスト網羅性の調査と改善
   - visual/visual_manager/clip/core/dcomp_resource/command_list・残り systems のうちデバイス非依存に検証可能なロジック（Visual 階層管理・世代管理等）を特定し、S9 準拠でテストを追加する
   - GPU 依存でテスト化できない箇所は深掘り解析のうえ所見と提案を記録する
   - 完了条件: セル共通完了条件（前後 S2 グリーン、断片 `W3b-T.md`、S10 コミット）を満たす
   - _Requirements: 2.1, 2.5, 2.7, 2.8, 4.1, 5.1_
   - _Boundary: crates/wintf/src/ecs/graphics/（visual/visual_manager/clip/core/dcomp_resource/command_list・残り systems）, crates/wintf/tests/（該当ドメイン）_
 
-- [ ] 10.2 W3b-S: シンプル化の検証と適用（unsafe 保守則適用）
+- [x] 10.2 W3b-S: シンプル化の検証と適用（unsafe 保守則適用）
   - S6 基準で簡素化候補を検証する。テストで保護されない unsafe/GUI 部分は構造的整理に限定し、ロジック変更を伴う簡素化は `report/proposals.md` へ記録する
   - 完了条件: セル共通完了条件（前後 S2 グリーン、断片 `W3b-S.md`、S10 コミット）を満たす
   - _Requirements: 2.2, 2.5, 2.7, 2.8, 4.1, 5.1, 5.3, 5.5_
   - _Boundary: crates/wintf/src/ecs/graphics/（visual/visual_manager/clip/core/dcomp_resource/command_list・残り systems）_
 
-- [ ] 10.3 W3b-V: 脆弱性レビューと非破壊対策
+- [x] 10.3 W3b-V: 脆弱性レビューと非破壊対策
   - unsafe 境界・リソースの生成/破棄対称性・デバイスロスト再初期化経路・panic 経路を点検する
   - 挙動を変えない対策のみ投入し、挙動変更を要する対策は `report/proposals.md` へ記録する
   - 完了条件: セル共通完了条件（前後 S2 グリーン、断片 `W3b-V.md`、S10 コミット）を満たす
   - _Requirements: 2.3, 2.4, 2.5, 2.7, 2.8, 4.1, 5.1, 5.2_
   - _Boundary: crates/wintf/src/ecs/graphics/（visual/visual_manager/clip/core/dcomp_resource/command_list・残り systems）_
 
-- [ ] 11. W4a: wintf taffy・配置
-- [ ] 11.1 W4a-T: テスト網羅性の調査と改善
+- [x] 11. W4a: wintf taffy・配置
+- [x] 11.1 W4a-T: テスト網羅性の調査と改善
   - taffy 統合・arrangement・box_style・dimension 系のモジュール×テスト対応表を作成し、空白に S9 準拠でテストを追加する
   - 不要テストは根拠を断片に記録したうえで慎重に除外する
   - 完了条件: セル共通完了条件（前後 S2 グリーン、断片 `W4a-T.md`、S10 コミット）を満たす
   - _Requirements: 2.1, 2.5, 2.7, 2.8, 4.1, 5.1_
   - _Boundary: crates/wintf/src/ecs/layout/（taffy/arrangement/box_style/dimension 系）, crates/wintf/tests/（該当ドメイン）_
 
-- [ ] 11.2 W4a-S: シンプル化の検証と適用
+- [x] 11.2 W4a-S: シンプル化の検証と適用
   - S6 基準で配置計算・スタイル変換の簡素化候補を検証し、挙動を変えない簡素化を適用する
   - ロジック変更を要する簡素化は `report/proposals.md` へ記録する
   - 完了条件: セル共通完了条件（前後 S2 グリーン、断片 `W4a-S.md`、S10 コミット）を満たす
   - _Requirements: 2.2, 2.5, 2.7, 2.8, 4.1, 5.1, 5.3_
   - _Boundary: crates/wintf/src/ecs/layout/（taffy/arrangement/box_style/dimension 系）_
 
-- [ ] 11.3 W4a-V: 脆弱性レビューと非破壊対策
+- [x] 11.3 W4a-V: 脆弱性レビューと非破壊対策
   - unwrap の panic 経路、レイアウト計算の数値境界（負値・NaN・オーバーフロー）を点検する
   - 挙動を変えない対策のみ投入し、挙動変更を要する対策は `report/proposals.md` へ記録する
   - 完了条件: セル共通完了条件（前後 S2 グリーン、断片 `W4a-V.md`、S10 コミット）を満たす
   - _Requirements: 2.3, 2.4, 2.5, 2.7, 2.8, 4.1, 5.1, 5.2_
   - _Boundary: crates/wintf/src/ecs/layout/（taffy/arrangement/box_style/dimension 系）_
 
-- [ ] 12. W4b: wintf ヒットテスト・計測
-- [ ] 12.1 W4b-T: テスト網羅性の調査と改善
+- [x] 12. W4b: wintf ヒットテスト・計測
+- [x] 12.1 W4b-T: テスト網羅性の調査と改善
   - hit_test/hit_region/metrics/rect/monitor・window_pos systems のモジュール×テスト対応表を作成する（テスト比較的厚い領域のため過不足整理を重視）
   - 空白に S9 準拠でテストを追加し、重複・死テストは根拠を断片に記録したうえで慎重に除外する
   - 完了条件: セル共通完了条件（前後 S2 グリーン、断片 `W4b-T.md`、S10 コミット）を満たす
   - _Requirements: 2.1, 2.5, 2.7, 2.8, 4.1, 5.1_
   - _Boundary: crates/wintf/src/ecs/layout/（hit_test/hit_region/metrics/rect/monitor・window_pos systems）, crates/wintf/tests/（該当ドメイン）_
 
-- [ ] 12.2 W4b-S: シンプル化の検証と適用
+- [x] 12.2 W4b-S: シンプル化の検証と適用
   - S6 基準でヒットテスト・計測ロジックの簡素化候補を検証し、挙動を変えない簡素化を適用する
   - ロジック変更を要する簡素化は `report/proposals.md` へ記録する
   - 完了条件: セル共通完了条件（前後 S2 グリーン、断片 `W4b-S.md`、S10 コミット）を満たす
   - _Requirements: 2.2, 2.5, 2.7, 2.8, 4.1, 5.1, 5.3_
   - _Boundary: crates/wintf/src/ecs/layout/（hit_test/hit_region/metrics/rect/monitor・window_pos systems）_
 
-- [ ] 12.3 W4b-V: 脆弱性レビューと非破壊対策
+- [x] 12.3 W4b-V: 脆弱性レビューと非破壊対策
   - 座標変換の整数境界・モニタ構成変更時の境界条件・panic 経路を点検する
   - 挙動を変えない対策のみ投入し、挙動変更を要する対策は `report/proposals.md` へ記録する
   - 完了条件: セル共通完了条件（前後 S2 グリーン、断片 `W4b-V.md`、S10 コミット）を満たす
   - _Requirements: 2.3, 2.4, 2.5, 2.7, 2.8, 4.1, 5.1, 5.2_
   - _Boundary: crates/wintf/src/ecs/layout/（hit_test/hit_region/metrics/rect/monitor・window_pos systems）_
 
-- [ ] 13. W5a: wintf テキスト描画
-- [ ] 13.1 W5a-T: テスト網羅性の調査と改善
+- [x] 13. W5a: wintf テキスト描画
+- [x] 13.1 W5a-T: テスト網羅性の調査と改善
   - テキストウィジェットのうちデバイス非依存に検証可能なロジック（レイアウトパラメータ・スタイル解決等）を特定し、S9 準拠でテストを追加する
   - DirectWrite 依存でテスト化できない箇所は深掘り解析のうえ所見と提案を記録する
   - 完了条件: セル共通完了条件（前後 S2 グリーン、断片 `W5a-T.md`、S10 コミット）を満たす
   - _Requirements: 2.1, 2.5, 2.7, 2.8, 4.1, 5.1_
   - _Boundary: crates/wintf/src/ecs/widget/text/, crates/wintf/tests/（該当ドメイン）_
 
-- [ ] 13.2 W5a-S: シンプル化の検証と適用（unsafe 保守則適用）
+- [x] 13.2 W5a-S: シンプル化の検証と適用（unsafe 保守則適用）
   - S6 基準で簡素化候補を検証する。テストで保護されない unsafe/GUI 部分は構造的整理に限定し、ロジック変更を伴う簡素化は `report/proposals.md` へ記録する
   - 完了条件: セル共通完了条件（前後 S2 グリーン、断片 `W5a-S.md`、S10 コミット）を満たす
   - _Requirements: 2.2, 2.5, 2.7, 2.8, 4.1, 5.1, 5.3, 5.5_
   - _Boundary: crates/wintf/src/ecs/widget/text/_
 
-- [ ] 13.3 W5a-V: 脆弱性レビューと非破壊対策
+- [x] 13.3 W5a-V: 脆弱性レビューと非破壊対策
   - unsafe 境界・テキストリソースのリーク・外部入力（フォント名・テキスト内容）の検証・panic 経路を点検する
   - 挙動を変えない対策のみ投入し、挙動変更を要する対策は `report/proposals.md` へ記録する
   - 完了条件: セル共通完了条件（前後 S2 グリーン、断片 `W5a-V.md`、S10 コミット）を満たす
   - _Requirements: 2.3, 2.4, 2.5, 2.7, 2.8, 4.1, 5.1, 5.2_
   - _Boundary: crates/wintf/src/ecs/widget/text/_
 
-- [ ] 14. W5b: wintf 図形・画像・ブラシ
-- [ ] 14.1 W5b-T: テスト網羅性の調査と改善
+- [x] 14. W5b: wintf 図形・画像・ブラシ
+- [x] 14.1 W5b-T: テスト網羅性の調査と改善
   - 図形・画像ソース・ブラシのうちデバイス非依存に検証可能なロジックを特定し、S9 準拠でテストを追加する（bitmap_source/ の分離テストパターンを参考にする）
   - GPU/WIC 依存でテスト化できない箇所は深掘り解析のうえ所見と提案を記録する
   - 完了条件: セル共通完了条件（前後 S2 グリーン、断片 `W5b-T.md`、S10 コミット）を満たす
   - _Requirements: 2.1, 2.5, 2.7, 2.8, 4.1, 5.1_
   - _Boundary: crates/wintf/src/ecs/widget/{shapes,bitmap_source}/, crates/wintf/src/ecs/widget/brushes.rs, crates/wintf/tests/（該当ドメイン）_
 
-- [ ] 14.2 W5b-S: シンプル化の検証と適用（unsafe 保守則適用）
+- [x] 14.2 W5b-S: シンプル化の検証と適用（unsafe 保守則適用）
   - S6 基準で簡素化候補を検証する。テストで保護されない unsafe/GUI 部分は構造的整理に限定し、ロジック変更を伴う簡素化は `report/proposals.md` へ記録する
   - 完了条件: セル共通完了条件（前後 S2 グリーン、断片 `W5b-S.md`、S10 コミット）を満たす
   - _Requirements: 2.2, 2.5, 2.7, 2.8, 4.1, 5.1, 5.3, 5.5_
   - _Boundary: crates/wintf/src/ecs/widget/{shapes,bitmap_source}/, crates/wintf/src/ecs/widget/brushes.rs_
 
-- [ ] 14.3 W5b-V: 脆弱性レビューと非破壊対策
+- [x] 14.3 W5b-V: 脆弱性レビューと非破壊対策
   - 外部入力（画像ファイル・パス）の検証欠如、unsafe 境界、リソースリーク、整数変換（画像寸法）を点検する
   - 挙動を変えない対策のみ投入し、挙動変更を要する対策は `report/proposals.md` へ記録する
   - 完了条件: セル共通完了条件（前後 S2 グリーン、断片 `W5b-V.md`、S10 コミット）を満たす
   - _Requirements: 2.3, 2.4, 2.5, 2.7, 2.8, 4.1, 5.1, 5.2_
   - _Boundary: crates/wintf/src/ecs/widget/{shapes,bitmap_source}/, crates/wintf/src/ecs/widget/brushes.rs_
 
-- [ ] 15. W6a: wintf ポインター入力
-- [ ] 15.1 W6a-T: テスト網羅性の調査と改善
+- [x] 15. W6a: wintf ポインター入力
+- [x] 15.1 W6a-T: テスト網羅性の調査と改善
   - ポインターバッファリング・配信のモジュール×テスト対応表を作成し（テスト薄め領域）、空白に S9 準拠でテストを追加する
   - 不要テストは根拠を断片に記録したうえで慎重に除外する
   - 完了条件: セル共通完了条件（前後 S2 グリーン、断片 `W6a-T.md`、S10 コミット）を満たす
   - _Requirements: 2.1, 2.5, 2.7, 2.8, 4.1, 5.1_
   - _Boundary: crates/wintf/src/ecs/pointer/, crates/wintf/tests/（該当ドメイン）_
 
-- [ ] 15.2 W6a-S: シンプル化の検証と適用
+- [x] 15.2 W6a-S: シンプル化の検証と適用
   - S6 基準でイベント収集・配信ロジックの簡素化候補を検証し、挙動を変えない簡素化を適用する
   - ロジック変更を要する簡素化は `report/proposals.md` へ記録する
   - 完了条件: セル共通完了条件（前後 S2 グリーン、断片 `W6a-S.md`、S10 コミット）を満たす
   - _Requirements: 2.2, 2.5, 2.7, 2.8, 4.1, 5.1, 5.3_
   - _Boundary: crates/wintf/src/ecs/pointer/_
 
-- [ ] 15.3 W6a-V: 脆弱性レビューと非破壊対策
+- [x] 15.3 W6a-V: 脆弱性レビューと非破壊対策
   - 入力イベントの境界条件（座標範囲・ボタン状態の不整合）、バッファ枯渇、panic 経路を点検する
   - 挙動を変えない対策のみ投入し、挙動変更を要する対策は `report/proposals.md` へ記録する
   - 完了条件: セル共通完了条件（前後 S2 グリーン、断片 `W6a-V.md`、S10 コミット）を満たす
   - _Requirements: 2.3, 2.4, 2.5, 2.7, 2.8, 4.1, 5.1, 5.2_
   - _Boundary: crates/wintf/src/ecs/pointer/_
 
-- [ ] 16. W6b: wintf ドラッグ
-- [ ] 16.1 W6b-T: テスト網羅性の調査と改善
+- [x] 16. W6b: wintf ドラッグ
+- [x] 16.1 W6b-T: テスト網羅性の調査と改善
   - ドラッグ状態遷移・ディスパッチのモジュール×テスト対応表を作成し（テスト薄め領域）、空白に S9 準拠でテストを追加する
   - 不要テストは根拠を断片に記録したうえで慎重に除外する
   - 完了条件: セル共通完了条件（前後 S2 グリーン、断片 `W6b-T.md`、S10 コミット）を満たす
   - _Requirements: 2.1, 2.5, 2.7, 2.8, 4.1, 5.1_
   - _Boundary: crates/wintf/src/ecs/drag/, crates/wintf/tests/（該当ドメイン）_
 
-- [ ] 16.2 W6b-S: シンプル化の検証と適用
+- [x] 16.2 W6b-S: シンプル化の検証と適用
   - S6 基準で状態遷移・キャプチャガードの簡素化候補を検証し、挙動を変えない簡素化を適用する
   - ロジック変更を要する簡素化は `report/proposals.md` へ記録する
   - 完了条件: セル共通完了条件（前後 S2 グリーン、断片 `W6b-S.md`、S10 コミット）を満たす
   - _Requirements: 2.2, 2.5, 2.7, 2.8, 4.1, 5.1, 5.3_
   - _Boundary: crates/wintf/src/ecs/drag/_
 
-- [ ] 16.3 W6b-V: 脆弱性レビューと非破壊対策
+- [x] 16.3 W6b-V: 脆弱性レビューと非破壊対策
   - ドラッグ状態の不整合（キャプチャ解放漏れ）、座標計算の整数境界、panic 経路を点検する
   - 挙動を変えない対策のみ投入し、挙動変更を要する対策は `report/proposals.md` へ記録する
   - 完了条件: セル共通完了条件（前後 S2 グリーン、断片 `W6b-V.md`、S10 コミット）を満たす
   - _Requirements: 2.3, 2.4, 2.5, 2.7, 2.8, 4.1, 5.1, 5.2_
   - _Boundary: crates/wintf/src/ecs/drag/_
 
-- [ ] 17. W7a: wintf ウィンドウ・メッセージ
-- [ ] 17.1 W7a-T1: テスト網羅性の調査と改善（ウィンドウ管理）
+- [x] 17. W7a: wintf ウィンドウ・メッセージ
+- [x] 17.1 W7a-T1: テスト網羅性の調査と改善（ウィンドウ管理）
   - 未テストの ecs/window/ についてモジュール×テスト対応表を作成し、HWND/Entity マッピング・状態同期等のテスト可能ロジックに S9 準拠でテストを追加する（テスト空白の大領域のため事前分割サブセル1/2）
   - Win32 依存でテスト化できない箇所は深掘り解析のうえ所見と提案を記録する
   - 完了条件: セル共通完了条件（前後 S2 グリーン、断片 `W7a-T1.md`、S10 コミット）を満たす
   - _Requirements: 1.3, 2.1, 2.5, 2.7, 2.8, 4.1, 5.1_
   - _Boundary: crates/wintf/src/ecs/window/, crates/wintf/tests/（該当ドメイン）_
 
-- [ ] 17.2 W7a-T2: テスト網羅性の調査と改善（メッセージブリッジ）
+- [x] 17.2 W7a-T2: テスト網羅性の調査と改善（メッセージブリッジ）
   - ecs/window_proc/ についてモジュール×テスト対応表を作成し、メッセージ種別ごとの変換・ディスパッチロジックに S9 準拠でテストを追加する（事前分割サブセル2/2）
   - Win32 依存でテスト化できない箇所は深掘り解析のうえ所見と提案を記録する
   - 完了条件: セル共通完了条件（前後 S2 グリーン、断片 `W7a-T2.md`、S10 コミット）を満たす
   - _Requirements: 1.3, 2.1, 2.5, 2.7, 2.8, 4.1, 5.1_
   - _Boundary: crates/wintf/src/ecs/window_proc/, crates/wintf/tests/（該当ドメイン）_
 
-- [ ] 17.3 W7a-S: シンプル化の検証と適用（unsafe 保守則適用）
+- [x] 17.3 W7a-S: シンプル化の検証と適用（unsafe 保守則適用）
   - S6 基準で領域全体（window/ + window_proc/）の簡素化候補を検証する。テストで保護されない unsafe/GUI 部分は構造的整理に限定し、ロジック変更を伴う簡素化は `report/proposals.md` へ記録する
   - 完了条件: セル共通完了条件（前後 S2 グリーン、断片 `W7a-S.md`、S10 コミット）を満たす
   - _Requirements: 2.2, 2.5, 2.7, 2.8, 4.1, 5.1, 5.3, 5.5_
   - _Boundary: crates/wintf/src/ecs/window/, crates/wintf/src/ecs/window_proc/_
 
-- [ ] 17.4 W7a-V: 脆弱性レビューと非破壊対策
+- [x] 17.4 W7a-V: 脆弱性レビューと非破壊対策
   - unsafe 境界、HWND ライフサイクル（解放後使用・リーク）、メッセージパラメータの整数変換、マルチスレッド境界を点検する
   - 挙動を変えない対策のみ投入し、挙動変更を要する対策は `report/proposals.md` へ記録する
   - 完了条件: セル共通完了条件（前後 S2 グリーン、断片 `W7a-V.md`、S10 コミット）を満たす
   - _Requirements: 2.3, 2.4, 2.5, 2.7, 2.8, 4.1, 5.1, 5.2_
   - _Boundary: crates/wintf/src/ecs/window/, crates/wintf/src/ecs/window_proc/_
 
-- [ ] 18. W7b: wintf ECS基盤・World
-- [ ] 18.1 W7b-T1: テスト網羅性の調査と改善（共通インフラ）
+- [x] 18. W7b: wintf ECS基盤・World
+- [x] 18.1 W7b-T1: テスト網羅性の調査と改善（共通インフラ）
   - ecs/common/ の階層伝播システム（ジェネリック伝播ロジック）についてモジュール×テスト対応表を作成し、空白に S9 準拠でテストを追加する（テスト空白の大領域のため事前分割サブセル1/2）
   - 不要テストは根拠を断片に記録したうえで慎重に除外する
   - 完了条件: セル共通完了条件（前後 S2 グリーン、断片 `W7b-T1.md`、S10 コミット）を満たす
   - _Requirements: 1.3, 2.1, 2.5, 2.7, 2.8, 4.1, 5.1_
   - _Boundary: crates/wintf/src/ecs/common/, crates/wintf/tests/（該当ドメイン）_
 
-- [ ] 18.2 W7b-T2: テスト網羅性の調査と改善（World・アプリ状態）
+- [x] 18.2 W7b-T2: テスト網羅性の調査と改善（World・アプリ状態）
   - 未テストの ecs/world/（schedule labels・vsync・フレーム進行）と ecs/app.rs（ウィンドウカウント・ディスプレイ構成変更）についてモジュール×テスト対応表を作成し、テスト可能ロジックに S9 準拠でテストを追加する（事前分割サブセル2/2）
   - vsync 等の実時間依存でテスト化できない箇所は深掘り解析のうえ所見と提案を記録する
   - 完了条件: セル共通完了条件（前後 S2 グリーン、断片 `W7b-T2.md`、S10 コミット）を満たす
   - _Requirements: 1.3, 2.1, 2.5, 2.7, 2.8, 4.1, 5.1_
   - _Boundary: crates/wintf/src/ecs/world/, crates/wintf/src/ecs/app.rs, crates/wintf/tests/（該当ドメイン）_
 
-- [ ] 18.3 W7b-S: シンプル化の検証と適用
+- [x] 18.3 W7b-S: シンプル化の検証と適用
   - S6 基準で領域全体（common/ + world/ + app.rs）の簡素化候補を検証し、挙動を変えない簡素化を適用する。テスト保護のない箇所はロジック変更を避け構造的整理を優先する
   - ロジック変更を要する簡素化は `report/proposals.md` へ記録する
   - 完了条件: セル共通完了条件（前後 S2 グリーン、断片 `W7b-S.md`、S10 コミット）を満たす
   - _Requirements: 2.2, 2.5, 2.7, 2.8, 4.1, 5.1, 5.3_
   - _Boundary: crates/wintf/src/ecs/{common,world}/, crates/wintf/src/ecs/app.rs_
 
-- [ ] 18.4 W7b-V: 脆弱性レビューと非破壊対策
+- [x] 18.4 W7b-V: 脆弱性レビューと非破壊対策
   - フレーム時間計算の数値境界、スケジュール順序の不変条件、ディスプレイ構成変更時の境界条件、panic 経路を点検する
   - 挙動を変えない対策のみ投入し、挙動変更を要する対策は `report/proposals.md` へ記録する
   - 完了条件: セル共通完了条件（前後 S2 グリーン、断片 `W7b-V.md`、S10 コミット）を満たす
   - _Requirements: 2.3, 2.4, 2.5, 2.7, 2.8, 4.1, 5.1, 5.2_
   - _Boundary: crates/wintf/src/ecs/{common,world}/, crates/wintf/src/ecs/app.rs_
 
-- [ ] 19. W8: wintf Cue・Dola統合
-- [ ] 19.1 W8-T1: テスト網羅性の調査と改善（Cue 統合）
+- [x] 19. W8: wintf Cue・Dola統合
+- [x] 19.1 W8-T1: テスト網羅性の調査と改善（Cue 統合）
   - in-source テストゼロの ecs/cue/（CueQueue・CueSheetTracker・EntityRef ラウンドトリップ）についてモジュール×テスト対応表を作成し、S9 準拠でテストを追加する（テスト空白領域のため事前分割サブセル1/2）
   - 既知フレーキーテスト所在域（wintf `tests/ecs`、`tracker_timeout` が有力容疑）の安定化（タイミング依存の除去）を本セルの改善対象に含める
   - 完了条件: セル共通完了条件（前後 S2 グリーン、断片 `W8-T1.md`、S10 コミット）を満たし、フレーキー安定化の実施結果（または見送り根拠）が断片に記録されている
   - _Requirements: 1.3, 2.1, 2.5, 2.7, 2.8, 4.1, 5.1_
   - _Boundary: crates/wintf/src/ecs/cue/, crates/wintf/tests/（ecs ドメイン）_
 
-- [ ] 19.2 W8-T2: テスト網羅性の調査と改善（Dola 統合）
+- [x] 19.2 W8-T2: テスト網羅性の調査と改善（Dola 統合）
   - in-source テストゼロの ecs/dola/（DolaAnimator・tick システム・UpdateResult 消費）についてモジュール×テスト対応表を作成し、S9 準拠でテストを追加する（事前分割サブセル2/2）
   - テスト化できない箇所は深掘り解析のうえ所見と提案を記録する
   - 完了条件: セル共通完了条件（前後 S2 グリーン、断片 `W8-T2.md`、S10 コミット）を満たす
   - _Requirements: 1.3, 2.1, 2.5, 2.7, 2.8, 4.1, 5.1_
   - _Boundary: crates/wintf/src/ecs/dola/, crates/wintf/tests/（該当ドメイン）_
 
-- [ ] 19.3 W8-S: シンプル化の検証と適用（unsafe 保守則適用）
+- [x] 19.3 W8-S: シンプル化の検証と適用（unsafe 保守則適用）
   - S6 基準で領域全体（cue/ + dola/）の簡素化候補を検証する。テストで保護されない unsafe 部分（`unsafe impl Send + Sync` を含む）は構造的整理に限定し、ロジック変更を伴う簡素化は `report/proposals.md` へ記録する
   - 完了条件: セル共通完了条件（前後 S2 グリーン、断片 `W8-S.md`、S10 コミット）を満たす
   - _Requirements: 2.2, 2.5, 2.7, 2.8, 4.1, 5.1, 5.3, 5.5_
   - _Boundary: crates/wintf/src/ecs/{cue,dola}/_
 
-- [ ] 19.4 W8-V: 脆弱性レビューと非破壊対策
+- [x] 19.4 W8-V: 脆弱性レビューと非破壊対策
   - `unsafe impl Send + Sync` の妥当性（排他アクセス保証の根拠）、Entity ビット変換のラウンドトリップ安全性、スケジュール時刻の整数境界を点検する
   - 挙動を変えない対策のみ投入し、挙動変更を要する対策は `report/proposals.md` へ記録する
   - 完了条件: セル共通完了条件（前後 S2 グリーン、断片 `W8-V.md`、S10 コミット）を満たす
   - _Requirements: 2.3, 2.4, 2.5, 2.7, 2.8, 4.1, 5.1, 5.2_
   - _Boundary: crates/wintf/src/ecs/{cue,dola}/_
 
-- [ ] 20. X1: 横断プロジェクト設定
-- [ ] 20.1 X1-T: テスト構成の点検と改善
+- [x] 20. X1: 横断プロジェクト設定
+- [x] 20.1 X1-T: テスト構成の点検と改善
   - ワークスペース設定がテスト実行へ与える構成（テストエントリポイントの束ね規約・feature 組合せのビルド/テスト可否・dev-dependencies の整合）を点検し、設定起因のテスト漏れを特定・是正する
   - 自動化できない確認事項は所見として断片に記録し、必要に応じて `report/proposals.md` へ提案を記録する（CI 欠落の事実は所見として記録。CI 新設は本ループの対象外）
   - 完了条件: セル共通完了条件（前後 S2 グリーン、断片 `X1-T.md`、S10 コミット。変更なし時は no-change 断片）を満たす
   - _Requirements: 1.4, 2.1, 2.5, 2.7, 2.8, 4.1, 5.1_
   - _Boundary: ルート Cargo.toml, crates/*/Cargo.toml, .gitignore, .gitmodules, .vscode/_
 
-- [ ] 20.2 X1-S: 設定の簡素化と整理
+- [x] 20.2 X1-S: 設定の簡素化と整理
   - S6 基準でワークスペース設定・エディタ設定の簡素化候補を検証し、不要・古い設定を整理する（古いバイナリパス `sample_dcomp.exe` が残存する launch.json の修正を含む）
   - ビルド成果物の挙動（リリース最適化・LTO 等）を変える設定変更は適用せず `report/proposals.md` へ記録する
   - 完了条件: セル共通完了条件（前後 S2 グリーン、断片 `X1-S.md`、S10 コミット）を満たす
   - _Requirements: 1.4, 2.2, 2.5, 2.7, 2.8, 4.1, 5.1, 5.3_
   - _Boundary: ルート Cargo.toml, crates/*/Cargo.toml, .gitignore, .gitmodules, .vscode/_
 
-- [ ] 20.3 X1-V: 依存監査と設定の脆弱性点検
+- [x] 20.3 X1-V: 依存監査と設定の脆弱性点検
   - 依存クレートの既知脆弱性を調査する（`cargo audit` 相当の調査。ツール未導入の場合は依存一覧と公開アドバイザリの突き合わせで代替し、手順を断片に記録）
   - `.gitignore` / `.gitmodules` / ワークスペース依存固定の安全性を点検する。依存更新は挙動影響を評価のうえ慎重に適用し、挙動変更を伴う更新は `report/proposals.md` へ記録する
   - 完了条件: セル共通完了条件（前後 S2 グリーン、断片 `X1-V.md`、S10 コミット）を満たし、依存監査の調査結果が断片に記録されている
   - _Requirements: 1.4, 2.3, 2.4, 2.5, 2.7, 2.8, 4.1, 5.1, 5.2_
   - _Boundary: ルート Cargo.toml, crates/*/Cargo.toml, .gitignore, .gitmodules, .vscode/_
 
-- [ ] 21. 最終起動テスト（S7）の実行と完全解消
+- [x] 21. 最終起動テスト（S7）の実行と完全解消
   - 全セル完了後、S7 を実行する: `RUST_LOG=info` で areka を起動し、タイムアウト（実行記録節に記録した値、既定60秒）内に初期化完了ログ（実行記録節に記録した文字列）を確認してプロセスを終了する
   - パニック・error レベルログ・異常終了コードがないことを合格条件とする
   - 失敗した場合は kiro-debug により根本原因を解消してから再実行する（直近セル群のコミットを bisect 的に疑う）。合格するまで完了としない
   - 完了条件: S7 合格のエビデンス（起動ログ・終了コード）が `report/cells/final-launch.md` に記録され、解消のための修正があればコミットされている
   - _Requirements: 4.6, 4.7, 5.1_
 
-- [ ] 22. 改善内容レポートの集約と新規仕様提案の一括整理
+- [x] 22. 改善内容レポートの集約と新規仕様提案の一括整理
   - `report/cells/` の全断片を本書のセル一覧（マトリクス網羅性記録）と突き合わせ、欠落セルは no-change として補完記録のうえレポートに明記する
   - レビュー領域×レビュー観点ごとの実施結果（追加・除外したテスト、簡素化の内容、脆弱性の所見と対応）、巻き戻しが発生したセルとその理由、フレーキー判定記録を `report.md` に集約する（再実行時は全置換。断片が真実源）
   - `report/proposals.md` の提案候補を重複統合し、優先度付きの新規仕様提案として `report.md` の提案セクションに一括整理する
   - 完了条件: `.kiro/specs/codebase-review-loop/report.md` が全57セル分の実施結果を欠落なく含み、巻き戻し記録と新規仕様提案セクションを備えている
   - _Requirements: 4.3, 4.5, 6.1, 6.2, 6.3, 6.4_
+
+## Implementation Notes
+
+### セッション引き継ぎ（W4a 領域完了 → 12.1 W4b-T から再開）
+
+次セッションの `/kiro-impl codebase-review-loop` 再開用の状態記録。再開・消化後はこの小節を更新／削除してよい。
+
+- **進捗**: **全60セルタスク完了（20.3 X1-V まで全コミット済み・全19レビュー領域×3観点＝X1 含め完了）**、巻き戻し0件・累計 REJECTED 3回[W5a-T・W6a-T・W7b-V、いずれも第2ラウンドで是正済]。ベースライン S2 = 1713 passed / 0 failed（X1-V は no-change・cargo audit 脆弱性0）
+- **再開ポイント**: **全60セル＋タスク21＋タスク22 完了**（タスク21 S7 PASS＝コミット `ef4192a`、タスク22 report.md 生成＝独立レビュー round2 APPROVED）。**残は `/kiro-validate-impl codebase-review-loop`（GO/NO-GO ゲート）→ feature-level kiro-verify-completion のみ**。ワークツリーはクリーン想定
+- **申し送り**: 全セル完了。proposals は P1〜P75 記録済み（採番は P76 から）。**残: タスク21＝S7 起動テスト（`RUST_LOG=info` で areka 起動・実行記録節の初期化完了ログ「[GraphicsCore] Initialization completed」をタイムアウト60秒内に確認・パニック/error ログ/異常終了コードなしを合格条件・final-launch.md に記録）、タスク22＝レポート集約（全60セル断片＋proposals を report.md へ集約・P1↔P43 等重複統合・新規仕様提案の優先度付き整理）。全タスク完了後に `/kiro-validate-impl codebase-review-loop` → kiro-verify-completion**。**累計成果: テスト ~1424→1713（+289 特性化テスト）・デッドコード除去（W6a process_pointer_buffers 系 -302行・W6b prev_frame_pos）・フレーキー決定論化（cue_performance_test）・SAFETY 注記多数格上げ・事実誤認3件を敵対的レビューが捕捉是正**。事実検証の教訓: 本番挙動主張は実コード/実ファイルで裏取り。**横断申し送り（W5a-V 発見）: graphics/command_list.rs:29-33 の SAFETY コメントが windows-rs の COM 型を一律 !Send/!Sync と誤記（実際は型依存で ID2D1CommandList/IDWriteTextFormat/IDWriteTextLayout は Send+Sync 付与済み）。W3b 完了済みのため最終レポート（タスク22）で精度是正候補として集約**。記録正確性の教訓: 件数は git diff の実数と build/test 実測を必ず一致させること
+- **運用メモ**: BEFORE S2 は親検証済みベースラインの信頼で省略可（W2-S 以降の最適化）。W4a/W4b・W3a/W3b のファイル分担はそれぞれ W4a-T・W3a-T 断片に記録済み。フレーキー対応は下記既存メモのとおり
+- **以降の順序**: 11.3 W4a-V → 12.x W4b → 13.x W5a → 14.x W5b → 15.x W6a → 16.x W6b → 17.x W7a → 18.x W7b → 19.x W8 → 20.x X1（publish=true 申し送りあり、下記）→ 21 S7 起動テスト → 22 レポート集約（P1↔P43 重複統合）。全タスク完了後に `/kiro-validate-impl codebase-review-loop` → kiro-verify-completion を実施
+
+### 全体メモ
+
+- W1-S レビューで発見（X1 セルへの申し送り）: requirements.md 前提「本ワークスペースは publish = false」に対し、実際は `[workspace.package]` の `publish = false` を各クレート（areka/dola/wintf の Cargo.toml）が `publish = true` で明示上書きしている。X1-S/X1-V で意図確認と整合性判断を行うこと
+- W1-T/W1-S で確証: 非推奨指定（#![deprecated]）は win_message_handler.rs のみ。winproc.rs / win_thread_mgr.rs は #![allow(deprecated)] のみで現役（steering structure.md の記載は不正確 → P29 記録済み）
+- 既知フレーキー（wintf tests/ecs cue_performance_test::bench_pop_ready_empty_queue）は実時間ベンチで負荷依存。並行ビルド・クリーンビルド直後に発火しやすい。隔離再実行で安定合格すればパススルー
 
 ## マトリクス網羅性記録（R1.6）
 

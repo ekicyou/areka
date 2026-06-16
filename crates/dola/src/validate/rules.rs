@@ -25,6 +25,10 @@ pub(super) fn validate_schema_version(doc: &DolaDocument, errors: &mut Vec<DolaE
 }
 
 /// V12: 変数初期値の値域検証
+///
+/// NOTE(D3-V): NaN の initial/min/max は全比較（`<` / `>`）が false となるため
+/// 本検査を素通りする（数値フィールドの有限性検証の欠如は P14 参照。
+/// tests/validation/transition_test.rs::v12_nan_tests で現行挙動を特性化済み）。
 pub(super) fn validate_variable_ranges(doc: &DolaDocument, errors: &mut Vec<DolaError>) {
     for (var_name, var_def) in &doc.variable {
         match var_def {
@@ -194,26 +198,18 @@ pub(super) fn validate_transition_type_constraints(
     match var_def {
         AnimationVariableDef::Object { .. } => {
             // V10: Object 型 → to のみ許可、from/relative_to/easing 不可、to は Dynamic のみ
-            if trans_def.from.is_some() {
-                errors.push(DolaError::ObjectTransitionViolation {
-                    storyboard: sb_name.to_string(),
-                    entry_index: entry_idx,
-                    field: "from".to_string(),
-                });
-            }
-            if trans_def.relative_to.is_some() {
-                errors.push(DolaError::ObjectTransitionViolation {
-                    storyboard: sb_name.to_string(),
-                    entry_index: entry_idx,
-                    field: "relative_to".to_string(),
-                });
-            }
-            if trans_def.easing.is_some() {
-                errors.push(DolaError::ObjectTransitionViolation {
-                    storyboard: sb_name.to_string(),
-                    entry_index: entry_idx,
-                    field: "easing".to_string(),
-                });
+            for (field, is_present) in [
+                ("from", trans_def.from.is_some()),
+                ("relative_to", trans_def.relative_to.is_some()),
+                ("easing", trans_def.easing.is_some()),
+            ] {
+                if is_present {
+                    errors.push(DolaError::ObjectTransitionViolation {
+                        storyboard: sb_name.to_string(),
+                        entry_index: entry_idx,
+                        field: field.to_string(),
+                    });
+                }
             }
             if let Some(ref to) = trans_def.to {
                 if matches!(to, TransitionValue::Scalar(_)) {
@@ -258,29 +254,22 @@ pub(super) fn validate_transition_type_constraints(
                     min.map(|v| v as f64).unwrap_or(f64::NEG_INFINITY),
                     max.map(|v| v as f64).unwrap_or(f64::INFINITY),
                 ),
+                // SAFETY: 外側の match アームが Float | Integer のみを通すため、
+                // この分岐は到達不能（panic 不能）。
                 _ => unreachable!(),
             };
 
-            if let Some(TransitionValue::Scalar(val)) = &trans_def.from {
-                if *val < min_f || *val > max_f {
-                    errors.push(DolaError::ValueOutOfRange {
-                        variable: var_name.to_string(),
-                        field: "from".to_string(),
-                        value: *val,
-                        min: min_f,
-                        max: max_f,
-                    });
-                }
-            }
-            if let Some(TransitionValue::Scalar(val)) = &trans_def.to {
-                if *val < min_f || *val > max_f {
-                    errors.push(DolaError::ValueOutOfRange {
-                        variable: var_name.to_string(),
-                        field: "to".to_string(),
-                        value: *val,
-                        min: min_f,
-                        max: max_f,
-                    });
+            for (field, value) in [("from", &trans_def.from), ("to", &trans_def.to)] {
+                if let Some(TransitionValue::Scalar(val)) = value {
+                    if *val < min_f || *val > max_f {
+                        errors.push(DolaError::ValueOutOfRange {
+                            variable: var_name.to_string(),
+                            field: field.to_string(),
+                            value: *val,
+                            min: min_f,
+                            max: max_f,
+                        });
+                    }
                 }
             }
         }
@@ -288,6 +277,11 @@ pub(super) fn validate_transition_type_constraints(
 }
 
 /// V14-V17: loop_offset バリデーション
+///
+/// NOTE(D3-V): NaN の min/max（Scalar(NaN) 含む）は V14-V16 の全比較が false と
+/// なるため検出されずに通過し、ランタイムのループ遅延サンプリングへ流入する
+/// （有限性検証の欠如は P14 参照。tests/runtime/loop_offset_test.rs::
+/// nan_boundary_tests で現行挙動を特性化済み）。
 pub(super) fn validate_loop_offset(
     sb_name: &str,
     sb: &crate::storyboard::Storyboard,
@@ -366,6 +360,15 @@ pub(super) fn validate_trigger_cycles(doc: &DolaDocument, errors: &mut Vec<DolaE
 }
 
 /// DFS ヘルパー: 循環検出時にパスを返す
+///
+/// NOTE(D3-V): 本関数はトリガー連鎖の深さに比例してコールスタックを消費する
+/// 再帰実装であり、極端に深い trigger_storyboard 連鎖（数万 SB 規模）を持つ
+/// 細工文書でスタック枯渇（abort）の可能性がある（D2-V 申し送りの確認結果）。
+/// 明示スタックによる反復化は循環報告のメンバー・パス順序の同一性証明を要する
+/// 構造的ロジック変更のため本ループでは実施せず、P23 として提案記録済み
+/// （現実的な指示書規模では問題にならない。200 段チェーンは
+/// tests/trigger/validation_test.rs::v15t_long_chain_200_storyboards_validates_ok
+/// で動作をピン留め済み）。
 fn dfs_detect_cycle<'a>(
     node: &'a str,
     graph: &std::collections::HashMap<&'a str, Vec<&'a str>>,
@@ -385,6 +388,9 @@ fn dfs_detect_cycle<'a>(
                 }
             } else if in_stack.contains(next) {
                 // 循環検出: path から next の位置以降を抽出
+                // SAFETY: in_stack への挿入/除去は path への push/pop と常に対で
+                // 行われるため両者は同一の要素集合を保持する。in_stack に含まれる
+                // next は必ず path 内に存在し、position(..).unwrap() は panic 不能。
                 let start_pos = path.iter().position(|&n| n == next).unwrap();
                 let mut cycle: Vec<String> =
                     path[start_pos..].iter().map(|s| s.to_string()).collect();

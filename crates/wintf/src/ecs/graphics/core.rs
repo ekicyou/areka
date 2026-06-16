@@ -26,6 +26,14 @@ pub struct GraphicsCore {
     inner: Option<GraphicsCoreInner>,
 }
 
+// SAFETY 条件: 保持する COM ポインタの跨スレッド移動（Send）・参照共有（Sync）の健全性は
+// 各 API の同期特性に依拠する。d2d_factory は D2D1_FACTORY_TYPE_MULTI_THREADED で生成され、
+// 同一ファクトリ系列のオブジェクト（d2d / d2d_device_context）への COM 呼び出しは D2D が
+// 内部で直列化する。d3d は D3D11_CREATE_DEVICE_SINGLETHREADED を指定せず生成されるため
+// ID3D11Device はスレッドセーフ（dxgi は同一オブジェクトへの別インターフェース）。
+// dwrite_factory（DWRITE_FACTORY_TYPE_SHARED）もスレッドセーフ。
+// よって全フィールドが内部同期を持ち、外部同期前提の DComp 系（dcomp_resource.rs）とは
+// 異なり ECS スケジュール構成への追加前提を要しない。
 unsafe impl Send for GraphicsCore {}
 unsafe impl Sync for GraphicsCore {}
 

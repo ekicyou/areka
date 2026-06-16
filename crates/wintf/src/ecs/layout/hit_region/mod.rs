@@ -222,6 +222,15 @@ impl ColorMapData {
             return None;
         }
         let index = (pixel_y * self.width + pixel_x) as usize;
+        // 不変条件: index_map.len() == width * height（from_image で確立）。
+        // 上の範囲チェック（pixel_x < width && pixel_y < height）と合わせて
+        // index < index_map.len() が保証され、添字アクセスは常に範囲内。
+        // 手構築の ColorMapData で寸法と index_map 長が不整合な場合のみ debug で検出する
+        // （リリース挙動は不変）。
+        debug_assert!(
+            index < self.index_map.len(),
+            "ColorMapData invariant violated: index_map.len() must equal width*height"
+        );
         let region_id = self.index_map[index];
         if region_id == 0 {
             None
@@ -480,7 +489,10 @@ fn point_in_polygon(x: f32, y: f32, vertices: &[(f32, f32)]) -> bool {
 
         // 辺が判定点のY座標をまたぐかチェック
         if (yi > y) != (yj > y) {
-            // 交点のX座標を計算
+            // 交点のX座標を計算。
+            // ガード条件 (yi > y) != (yj > y) は「一方が y より大、他方が y 以下」を意味し、
+            // yi == yj だと両者は同符号で必ず等しくなるためここには到達しない。
+            // ゆえに除数 (yi - yj) は非ゼロであり、ゼロ除算は構造的に発生しない。
             let intersect_x = xj + (y - yj) / (yi - yj) * (xi - xj);
             if x < intersect_x {
                 inside = !inside;
@@ -492,9 +504,6 @@ fn point_in_polygon(x: f32, y: f32, vertices: &[(f32, f32)]) -> bool {
 
     inside
 }
-
-// ============================================================================
-// テスト
 
 // ============================================================================
 // テスト

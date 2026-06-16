@@ -9,12 +9,18 @@ mod boxstyle_coordinate_separation_test;
 mod client_area_positioning_test;
 #[path = "layout/component_conversion_test.rs"]
 mod component_conversion_test;
+#[path = "layout/component_hooks_test.rs"]
+mod component_hooks_test;
+#[path = "layout/dimension_conversion_test.rs"]
+mod dimension_conversion_test;
 #[path = "layout/feedback_loop_convergence_test.rs"]
 mod feedback_loop_convergence_test;
 #[path = "layout/graphics_sync_test.rs"]
 mod graphics_sync_test;
 #[path = "layout/hierarchical_bounds_test.rs"]
 mod hierarchical_bounds_test;
+#[path = "layout/metrics_test.rs"]
+mod metrics_test;
 #[path = "layout/taffy_advanced_test.rs"]
 mod taffy_advanced_test;
 #[path = "layout/taffy_child_order_test.rs"]

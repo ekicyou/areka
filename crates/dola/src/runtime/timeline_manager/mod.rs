@@ -266,6 +266,8 @@ fn evaluate_segments(
     }
 
     // 最終セグメントの end_time を超えている → 全終了
+    // SAFETY(panic 経路): 直前の is_empty() 早期 return により segments は非空のため
+    // unwrap は発火しない。
     let last_seg = segments.last().unwrap();
     if effective_time >= last_seg.end_time && last_seg.end_time > last_seg.start_time {
         return None;

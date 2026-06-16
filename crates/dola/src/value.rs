@@ -1,4 +1,4 @@
-// TODO: Implement DynamicValue
+//! フォーマット非依存の動的値型（DynamicValue）。
 use std::collections::BTreeMap;
 use std::hash::{Hash, Hasher};
 

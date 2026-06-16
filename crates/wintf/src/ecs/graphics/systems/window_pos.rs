@@ -20,7 +20,7 @@ use windows::Win32::UI::WindowsAndMessaging::SWP_NOMOVE;
 /// `SWP_NOMOVE` フラグで位置を固定する。これにより DPI 変更時の
 /// ウィンドウリサイズがドラッグ中でも正しく反映される。
 pub fn apply_window_pos_changes(
-    mut query: Query<
+    query: Query<
         (
             Entity,
             &WindowHandle,
@@ -31,10 +31,9 @@ pub fn apply_window_pos_changes(
         (Changed<WindowPos>, With<Window>),
     >,
 ) {
-    for (entity, window_handle, window_pos, name, is_dragging) in query.iter_mut() {
+    for (entity, window_handle, window_pos, name, is_dragging) in query.iter() {
         let entity_name = format_entity_name(entity, name);
 
-        // エコーバックチェック
         let position = window_pos.position.unwrap_or_default();
         let size = window_pos.size.unwrap_or_default();
 
@@ -113,6 +112,15 @@ pub fn apply_window_pos_changes(
 /// 依存コンポーネント無効化
 /// Phase 2: DComp Query（WindowGraphics, VisualGraphics, SurfaceGraphics）を除去し、
 /// WindowD3D11Compositorを追加。BitmapSourceGraphicsは維持（DComp非依存）。
+///
+/// NOTE(W3b-V): Phase 2 の除去により、本システムは DComp 系コンポーネント
+/// （WindowGraphics / VisualGraphics / SurfaceGraphics）を無効化しない。一方で
+/// 再初期化側（init_window_graphics / visual_resource_management_system）は
+/// `!is_valid()` を再作成の前提条件とするため、デバイスロスト時にこれらは旧デバイス
+/// 由来の COM ポインタを保持したまま「有効」と判定され続け、検出（P40）が実装されても
+/// DComp パイプラインは復旧しない（tests/graphics/window_pos_systems_test.rs の
+/// stale 特性化テストで現行挙動を固定。無効化対象の再追加は挙動変更のため
+/// P40 の設計判断・セル断片 W3b-V の分析を参照）。
 pub fn invalidate_dependent_components(
     graphics: Option<Res<GraphicsCore>>,
     dcomp_resource: Option<ResMut<DCompGraphicsResource>>,

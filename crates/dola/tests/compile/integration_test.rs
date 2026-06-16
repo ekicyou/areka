@@ -2,31 +2,8 @@
 //! Task 9.6
 
 use dola::*;
-use std::collections::BTreeMap;
 
-fn make_doc(
-    variables: Vec<(&str, AnimationVariableDef)>,
-    transitions: Vec<(&str, TransitionDef)>,
-    storyboard_name: &str,
-    sb: Storyboard,
-) -> DolaDocument {
-    let mut variable = BTreeMap::new();
-    for (name, def) in variables {
-        variable.insert(name.to_string(), def);
-    }
-    let mut transition = BTreeMap::new();
-    for (name, def) in transitions {
-        transition.insert(name.to_string(), def);
-    }
-    let mut storyboard = BTreeMap::new();
-    storyboard.insert(storyboard_name.to_string(), sb);
-    DolaDocument {
-        schema_version: "1.0".to_string(),
-        variable,
-        transition,
-        storyboard,
-    }
-}
+use super::common::make_doc_with_storyboard as make_doc;
 
 #[test]
 fn complex_multi_variable_mixed_placement() {
@@ -512,4 +489,121 @@ fn empty_storyboard_compiles() {
     assert_eq!(result.timelines.len(), 0);
     assert_eq!(result.total_base_duration, 0.0);
     assert_eq!(result.storyboard_name, "empty");
+}
+
+// =========================================================
+// D2-T gap tests: トリガーエントリの時刻解決（compile_storyboard 内ロジック）
+// =========================================================
+
+fn float_x_entry(duration: f64, kf: &str) -> StoryboardEntry {
+    StoryboardEntry {
+        variable: Some("x".to_string()),
+        transition: Some(TransitionRef::Inline(TransitionDef {
+            from: Some(TransitionValue::Scalar(0.0)),
+            to: Some(TransitionValue::Scalar(1.0)),
+            duration: Some(duration),
+            ..Default::default()
+        })),
+        keyframe: Some(kf.to_string()),
+        ..Default::default()
+    }
+}
+
+fn simple_child_storyboard() -> Storyboard {
+    StoryboardBuilder::new().entry(float_x_entry(1.0, "ckf")).build()
+}
+
+#[test]
+fn trigger_without_at_inherits_previous_entry_time() {
+    // at なしトリガーは配列直前エントリの keyframe 時刻で発火する
+    let parent = StoryboardBuilder::new()
+        // entry 0: x 0.0..1.0, kf1 = 1.0
+        .entry(float_x_entry(1.0, "kf1"))
+        // entry 1: trigger（at なし）→ fire_time = 1.0
+        .entry(StoryboardEntry {
+            trigger_storyboard: Some("child".to_string()),
+            ..Default::default()
+        })
+        .build();
+
+    let doc = DolaDocumentBuilder::new("1.0")
+        .variable(
+            "x",
+            AnimationVariableDef::Float {
+                initial: 0.0,
+                min: None,
+                max: None,
+            },
+        )
+        .storyboard("parent", parent)
+        .storyboard("child", simple_child_storyboard())
+        .build()
+        .unwrap();
+
+    let compiled = compile_storyboard(&doc, "parent", 0.0).unwrap();
+    assert_eq!(compiled.triggers.len(), 1);
+    assert_eq!(compiled.triggers[0].target_storyboard, "child");
+    assert!(
+        (compiled.triggers[0].fire_time - 1.0).abs() < 1e-9,
+        "fire_time should inherit previous entry keyframe time 1.0, got {}",
+        compiled.triggers[0].fire_time
+    );
+    assert_eq!(compiled.triggers[0].source_entry_index, 1);
+}
+
+#[test]
+fn entry_anchored_at_trigger_keyframe() {
+    // トリガーエントリの keyframe は fire_time（0秒完了）として登録され、
+    // 後続エントリの at 参照のアンカーとして使える
+    let parent = StoryboardBuilder::new()
+        // entry 0: x 0.0..1.0, kf1 = 1.0
+        .entry(float_x_entry(1.0, "kf1"))
+        // entry 1: trigger at kf1, keyframe "trig_kf" = 1.0
+        .entry(StoryboardEntry {
+            trigger_storyboard: Some("child".to_string()),
+            at: Some(KeyframeRef::Single("kf1".to_string())),
+            keyframe: Some("trig_kf".to_string()),
+            ..Default::default()
+        })
+        // entry 2: y at trig_kf → 1.0..2.0
+        .entry(StoryboardEntry {
+            variable: Some("y".to_string()),
+            transition: Some(TransitionRef::Inline(TransitionDef {
+                from: Some(TransitionValue::Scalar(0.0)),
+                to: Some(TransitionValue::Scalar(50.0)),
+                duration: Some(1.0),
+                ..Default::default()
+            })),
+            at: Some(KeyframeRef::Single("trig_kf".to_string())),
+            keyframe: Some("kf2".to_string()),
+            ..Default::default()
+        })
+        .build();
+
+    let doc = DolaDocumentBuilder::new("1.0")
+        .variable(
+            "x",
+            AnimationVariableDef::Float {
+                initial: 0.0,
+                min: None,
+                max: None,
+            },
+        )
+        .variable(
+            "y",
+            AnimationVariableDef::Float {
+                initial: 0.0,
+                min: None,
+                max: None,
+            },
+        )
+        .storyboard("parent", parent)
+        .storyboard("child", simple_child_storyboard())
+        .build()
+        .unwrap();
+
+    let compiled = compile_storyboard(&doc, "parent", 0.0).unwrap();
+    let tl_y = compiled.timelines.get("y").unwrap();
+    assert_eq!(tl_y.segments[0].start_time, 1.0);
+    assert_eq!(tl_y.segments[0].end_time, 2.0);
 }

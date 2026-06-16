@@ -220,6 +220,137 @@ mod v6_tests {
 }
 
 // =============================================================
+// V6 追加（D3-T）: KeyframeRef 全バリアント × between 参照の検証
+// =============================================================
+
+mod v6_ref_shape_tests {
+    use super::*;
+
+    /// ヘルパー: Float 変数 "x" への to=val トランジションエントリ
+    fn float_entry(val: f64) -> StoryboardEntry {
+        StoryboardEntry {
+            variable: Some("x".to_string()),
+            transition: Some(TransitionRef::Inline(TransitionDef {
+                from: None,
+                to: Some(TransitionValue::Scalar(val)),
+                relative_to: None,
+                easing: None,
+                delay: 0.0,
+                duration: Some(1.0),
+            })),
+            ..Default::default()
+        }
+    }
+
+    /// ヘルパー: 変数 "x" 定義済みドキュメントに sb1 として entries を設定
+    fn doc_with_entries(entries: Vec<StoryboardEntry>) -> DolaDocument {
+        let mut doc = minimal_valid_doc();
+        let mut variable = BTreeMap::new();
+        variable.insert(
+            "x".to_string(),
+            AnimationVariableDef::Float {
+                initial: 0.0,
+                min: None,
+                max: None,
+            },
+        );
+        doc.variable = variable;
+        let mut storyboard = BTreeMap::new();
+        storyboard.insert(
+            "sb1".to_string(),
+            Storyboard {
+                time_scale: 1.0,
+                loop_count: 1,
+                interruption_policy: InterruptionPolicy::Conclude,
+                loop_offset: None,
+                entry: entries,
+            },
+        );
+        doc.storyboard = storyboard;
+        doc
+    }
+
+    #[test]
+    fn at_multiple_with_one_undefined_detected() {
+        // Multiple のうち 1 件のみ未定義 → 未定義分だけがエラーになる
+        let mut e0 = float_entry(1.0);
+        e0.keyframe = Some("kf1".to_string());
+        let mut e1 = float_entry(2.0);
+        e1.at = Some(KeyframeRef::Multiple(vec![
+            "kf1".to_string(),
+            "missing".to_string(),
+        ]));
+        let doc = doc_with_entries(vec![e0, e1]);
+
+        let errors = doc.validate().unwrap_err();
+        assert!(errors.iter().any(|e| matches!(
+            e,
+            DolaError::UndefinedKeyframe { storyboard, name }
+            if storyboard == "sb1" && name == "missing"
+        )));
+        assert!(
+            !errors
+                .iter()
+                .any(|e| matches!(e, DolaError::UndefinedKeyframe { name, .. } if name == "kf1"))
+        );
+    }
+
+    #[test]
+    fn at_with_offset_single_undefined_detected() {
+        // WithOffset(Single) の参照先未定義もエラーになる
+        let mut e0 = float_entry(1.0);
+        e0.at = Some(KeyframeRef::WithOffset {
+            keyframes: KeyframeNames::Single("nonexistent".to_string()),
+            offset: 0.5,
+        });
+        let doc = doc_with_entries(vec![e0]);
+
+        let errors = doc.validate().unwrap_err();
+        assert!(errors.iter().any(|e| matches!(
+            e,
+            DolaError::UndefinedKeyframe { name, .. }
+            if name == "nonexistent"
+        )));
+    }
+
+    #[test]
+    fn at_with_offset_multiple_all_known_ok() {
+        // WithOffset(Multiple) で全参照先が既知（予約 "start" + 明示 KF）→ OK
+        let mut e0 = float_entry(1.0);
+        e0.keyframe = Some("kf1".to_string());
+        let mut e1 = float_entry(2.0);
+        e1.at = Some(KeyframeRef::WithOffset {
+            keyframes: KeyframeNames::Multiple(vec!["start".to_string(), "kf1".to_string()]),
+            offset: 0.25,
+        });
+        let doc = doc_with_entries(vec![e0, e1]);
+
+        assert!(doc.validate().is_ok());
+    }
+
+    #[test]
+    fn between_undefined_from_and_to_both_detected() {
+        // between の from / to 両方が未定義 → 2 件のエラーを蓄積
+        let mut e0 = float_entry(1.0);
+        e0.between = Some(BetweenKeyframes {
+            from: "no_from".to_string(),
+            to: "no_to".to_string(),
+        });
+        let doc = doc_with_entries(vec![e0]);
+
+        let errors = doc.validate().unwrap_err();
+        assert!(errors.iter().any(|e| matches!(
+            e,
+            DolaError::UndefinedKeyframe { name, .. } if name == "no_from"
+        )));
+        assert!(errors.iter().any(|e| matches!(
+            e,
+            DolaError::UndefinedKeyframe { name, .. } if name == "no_to"
+        )));
+    }
+}
+
+// =============================================================
 // V8: at と between は排他
 // =============================================================
 

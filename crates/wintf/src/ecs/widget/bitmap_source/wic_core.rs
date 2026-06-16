@@ -18,7 +18,14 @@ pub struct WicCore {
     factory: IWICImagingFactory2,
 }
 
-// IWICImagingFactory2はthread-free marshaling対応
+// SAFETY 条件: windows-rs 0.62.2 は WIC インターフェイス（`IWICImagingFactory2` 等）に
+// Send/Sync を自動生成しない（Imaging モジュールに `unsafe impl Send` が存在しない）ため、
+// この手動 impl は必須である。健全性は WIC の free-threaded（thread-free marshaling）特性に
+// 依拠する: ファクトリは `CLSCTX_INPROC_SERVER` で生成され、本プロセスは MTA
+// （`CoInitializeEx(COINIT_MULTITHREADED)`）で初期化されるため、`IWICImagingFactory2` は
+// 跨スレッドで直接アクセス可能。実利用上、`WicCore` は clone されて `WintfTaskPool` の
+// バックグラウンドワーカーへ move され（Send）、`factory()` の読み取り参照でデコードに
+// 用いられる（Sync）。
 unsafe impl Send for WicCore {}
 unsafe impl Sync for WicCore {}
 

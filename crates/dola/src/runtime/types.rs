@@ -27,6 +27,11 @@ pub enum EvaluatedValue {
 impl PartialEq for EvaluatedValue {
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
+            // NOTE(数値境界): Float(NaN) は IEEE 754 により自分自身と不等。NaN が
+            // 補間結果に混入した場合、差分検出は当該変数を毎フレーム「変化あり」と
+            // 判定し続ける（変更通知のスパム化）。NaN の流入は指示書数値の有限性
+            // 検証の欠如による（proposals.md P8/P14 参照。現行挙動は
+            // tests/runtime/core_types_test.rs::float_nan_is_never_equal_to_itself で固定）。
             (Self::Float(a), Self::Float(b)) => a == b,
             (Self::Integer(a), Self::Integer(b)) => a == b,
             (Self::Object(a), Self::Object(b)) => Rc::ptr_eq(a, b),

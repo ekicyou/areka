@@ -1,4 +1,4 @@
-// TODO: Implement Storyboard, StoryboardEntry, KeyframeRef, KeyframeNames, BetweenKeyframes, InterruptionPolicy
+//! ストーリーボード定義（Storyboard, StoryboardEntry, KeyframeRef, InterruptionPolicy 等）。
 use serde::{Deserialize, Serialize};
 
 use crate::easing::{EasingFunction, EasingName};

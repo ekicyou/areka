@@ -443,6 +443,18 @@ impl EcsWorld {
         }
 
         // FrameCount をインクリメント、FrameTime を更新
+        //
+        // 整数境界（W7b-V 点検）: FrameCount(u32) は毎 tick +1 で増加し、~60Hz では
+        // 2^32 到達に約828日の連続 tick を要する。到達時 debug ビルドは加算オーバーフローで
+        // panic、release はラップする。FrameCount.0 の消費は (1) 多数の tracing ログの
+        // `frame=` フィールドと (2) graphics/systems/surface.rs::mark_dirty_surfaces での
+        // `dirty.requested_frame = frame_count.0 as u64`（Changed<SurfaceGraphicsDirty>
+        // 検出をトリガーするための「変化ノンス」用途で、値自体は本番では読まれない。本番読み取りは
+        // 皆無で grep 上 graphics/tests.rs のみ）のみ。後者はラップ MAX→0 でも「前回値と異なる」
+        // 性質を満たすため Changed 検出は継続し、いずれの消費も算術上の大小比較・配列添字には
+        // 用いられないため、ラップしても観測挙動はログ値が 0 に戻るだけで正当性に影響しない。
+        // debug panic 化を避ける堅牢化（saturating/wrapping_add）は debug 挙動を変えるため
+        // P66 として記録。
         if let Some(mut frame_count) = self.world.get_resource_mut::<FrameCount>() {
             frame_count.0 += 1;
         }
@@ -494,7 +506,15 @@ impl EcsWorld {
         use crate::win_thread_mgr::{LAST_VSYNC_TICK, VSYNC_TICK_COUNT};
         use std::sync::atomic::Ordering;
 
-        // 現在のVSYNCカウンターを取得
+        // Ordering::Relaxed の妥当性（W7b-V 点検）:
+        // - VSYNC_TICK_COUNT は単一生産者（VSync スレッドの fetch_add）・単一消費者
+        //   （メインスレッドの本 load のみ）のモノトニックカウンタで、tick 要否は
+        //   「値が前回と異なるか」だけに依存する。カウンタ越しに共有データを渡さない
+        //   （実 tick 処理は同一スレッドの Rc<RefCell> で逐次化され、VSync スレッドとの
+        //   同期は別途 PostMessageW のメッセージキューが担う）ため、acquire/release は不要。
+        // - LAST_VSYNC_TICK はメインスレッドのみが load/store する（他スレッドからの
+        //   アクセスは存在しない）ため、より強い順序付けは観測挙動に影響しない。
+        // u64 カウンタの周回はおよそ 9.7×10^9 年規模（~60Hz）で実機到達不能。
         let current_tick = VSYNC_TICK_COUNT.load(Ordering::Relaxed);
         let last_tick = LAST_VSYNC_TICK.load(Ordering::Relaxed);
 

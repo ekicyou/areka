@@ -186,6 +186,35 @@ mod instance_state_transitions {
     }
 }
 
+mod instance_state_self_transitions {
+    use super::*;
+
+    /// D1b-T 追加: 自己遷移（同一状態への遷移）はすべて不正
+    #[test]
+    fn playing_to_playing_rejected() {
+        assert_eq!(
+            InstanceState::Playing.try_transition(InstanceState::Playing),
+            Err(InstanceState::Playing)
+        );
+    }
+
+    #[test]
+    fn paused_to_paused_rejected() {
+        assert_eq!(
+            InstanceState::Paused.try_transition(InstanceState::Paused),
+            Err(InstanceState::Paused)
+        );
+    }
+
+    #[test]
+    fn created_to_created_rejected() {
+        assert_eq!(
+            InstanceState::Created.try_transition(InstanceState::Created),
+            Err(InstanceState::Created)
+        );
+    }
+}
+
 mod instance_state_properties {
     use super::*;
 
@@ -219,6 +248,27 @@ mod instance_state_properties {
             Some(InstanceState::Compressed)
         );
         assert_eq!(InstanceState::from_policy(InterruptionPolicy::Never), None);
+    }
+
+    /// D1b-V 追加: from_policy が返す Some(state) は全て終了状態である
+    /// （conflict_resolver の expect / debug_assert が依存する不変条件）
+    #[test]
+    fn from_policy_results_are_terminal() {
+        let policies = [
+            InterruptionPolicy::Cancel,
+            InterruptionPolicy::Conclude,
+            InterruptionPolicy::Trim,
+            InterruptionPolicy::Compress,
+            InterruptionPolicy::Never,
+        ];
+        for policy in policies {
+            if let Some(state) = InstanceState::from_policy(policy) {
+                assert!(
+                    state.is_terminal(),
+                    "from_policy({policy:?}) returned non-terminal state {state:?}"
+                );
+            }
+        }
     }
 }
 
@@ -258,6 +308,29 @@ mod evaluated_value_tests {
         let v2 = EvaluatedValue::Object(Rc::new(DynamicValue::String("hello".to_string())));
         // 内容は同じだが異なる Rc ポインタなので等しくない
         assert_ne!(v1, v2);
+    }
+
+    /// D1b-T 追加: 異種バリアント間は値が数値的に同じでも常に不等
+    #[test]
+    fn cross_variant_never_equal() {
+        assert_ne!(EvaluatedValue::Float(1.0), EvaluatedValue::Integer(1));
+        assert_ne!(EvaluatedValue::Integer(1), EvaluatedValue::Float(1.0));
+        assert_ne!(
+            EvaluatedValue::Float(1.0),
+            EvaluatedValue::Object(Rc::new(DynamicValue::Float(1.0)))
+        );
+    }
+
+    /// D1b-V 追加: Float(NaN) は自分自身と不等（IEEE 754）。NaN 混入時は差分検出が
+    /// 毎フレーム「変化あり」と判定し続ける現行挙動の特性化（proposals.md P8/P14 参照）
+    #[test]
+    fn float_nan_is_never_equal_to_itself() {
+        let v = EvaluatedValue::Float(f64::NAN);
+        assert_ne!(v, v.clone());
+        assert_ne!(
+            EvaluatedValue::Float(f64::NAN),
+            EvaluatedValue::Float(f64::NAN)
+        );
     }
 
     #[test]
@@ -308,6 +381,49 @@ mod runtime_error_tests {
         let msg = format!("{err}");
         assert!(msg.contains("blink"));
         assert!(msg.contains("zero duration"));
+    }
+
+    /// D1b-T 追加: Display 未検証バリアントの固定（InvalidLoopCount）
+    #[test]
+    fn invalid_loop_count_display() {
+        let err = RuntimeError::InvalidLoopCount(-2);
+        let msg = format!("{err}");
+        assert!(msg.contains("-2"), "should contain the value: {msg}");
+        assert!(msg.contains("loop_count"), "should mention loop_count: {msg}");
+    }
+
+    /// D1b-T 追加: Display 未検証バリアントの固定（TooShortDurationWithInfiniteLoop）
+    #[test]
+    fn too_short_duration_with_infinite_loop_display() {
+        let err = RuntimeError::TooShortDurationWithInfiniteLoop {
+            storyboard: "spin".to_string(),
+            duration: 0.05,
+        };
+        let msg = format!("{err}");
+        assert!(msg.contains("spin"), "should contain storyboard name: {msg}");
+        assert!(msg.contains("0.050"), "should contain duration (3 digits): {msg}");
+        assert!(msg.contains("0.1"), "should contain MIN_LOOP_DURATION: {msg}");
+    }
+
+    /// D1b-T 追加: Display 未検証バリアントの固定（CompileError）
+    #[test]
+    fn compile_error_display() {
+        use dola::DolaError;
+        let err = RuntimeError::CompileError(vec![DolaError::ReservedKeyframeName {
+            name: "begin".to_string(),
+        }]);
+        let msg = format!("{err}");
+        assert!(msg.contains("compile error"), "should mention compile error: {msg}");
+        assert!(msg.contains("begin"), "should contain inner error detail: {msg}");
+    }
+
+    /// D1b-T 追加: Display 未検証バリアントの固定（InvalidVariableId）
+    #[test]
+    fn invalid_variable_id_display() {
+        let err = RuntimeError::InvalidVariableId(-7);
+        let msg = format!("{err}");
+        assert!(msg.contains("-7"), "should contain the id: {msg}");
+        assert!(msg.contains("variable_id"), "should mention variable_id: {msg}");
     }
 
     #[test]

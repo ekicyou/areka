@@ -14,9 +14,10 @@ use windows::Win32::Graphics::Direct2D::Common::D2D1_COLOR_F;
 ///
 /// 継承マーカー（Inherit）と単色（Solid）の2バリアントを持つ。
 /// 将来的にグラデーションブラシへの拡張が可能な設計。
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Default)]
 pub enum Brush {
     /// 親から継承（描画前に解決される）
+    #[default]
     Inherit,
     /// 単色
     Solid(D2D1_COLOR_F),
@@ -79,12 +80,6 @@ impl Brush {
     /// Inheritかどうか
     pub fn is_inherit(&self) -> bool {
         matches!(self, Brush::Inherit)
-    }
-}
-
-impl Default for Brush {
-    fn default() -> Self {
-        Brush::Inherit
     }
 }
 
@@ -285,5 +280,123 @@ mod tests {
         let brushes = Brushes::with_colors(fg, bg);
         assert_eq!(brushes.foreground, Brush::Solid(fg));
         assert_eq!(brushes.background, Brush::Solid(bg));
+    }
+
+    // === W5b-T 追加: デバイス非依存ロジックの特性化（既存挙動の固定） ===
+
+    /// `Brush::default()` が `Inherit` であること（Default 実装の固定）
+    #[test]
+    fn test_brush_default_is_inherit() {
+        let brush = Brush::default();
+        assert_eq!(brush, Brush::Inherit);
+        assert!(brush.is_inherit());
+        assert!(brush.as_color().is_none());
+    }
+
+    /// `Brush` の `PartialEq`: Solid は色成分まで含めて比較され、α だけ異なれば不等
+    #[test]
+    fn test_brush_partial_eq_distinguishes_color_and_variant() {
+        let opaque = Brush::Solid(D2D1_COLOR_F {
+            r: 1.0,
+            g: 0.0,
+            b: 0.0,
+            a: 1.0,
+        });
+        let transparent_red = Brush::Solid(D2D1_COLOR_F {
+            r: 1.0,
+            g: 0.0,
+            b: 0.0,
+            a: 0.0,
+        });
+        // 同一値の Solid は等しい
+        assert_eq!(opaque, opaque.clone());
+        // α 成分が異なれば不等（色成分も比較対象）
+        assert_ne!(opaque, transparent_red);
+        // バリアントが異なれば不等
+        assert_ne!(Brush::Inherit, opaque);
+    }
+
+    /// 既定色定数 `DEFAULT_FOREGROUND` / `DEFAULT_BACKGROUND` の値の固定
+    ///
+    /// `draw_rectangles` / draw 系の継承解決フォールバックが依存する定数。
+    /// 前景=黒(0,0,0,1)・背景=透明(0,0,0,0)。
+    #[test]
+    fn test_default_color_constants() {
+        // DEFAULT_FOREGROUND == Brush::BLACK
+        assert_eq!(DEFAULT_FOREGROUND, Brush::BLACK);
+        let fg = DEFAULT_FOREGROUND.as_color().expect("foreground is Solid");
+        assert!((fg.r - 0.0).abs() < f32::EPSILON);
+        assert!((fg.g - 0.0).abs() < f32::EPSILON);
+        assert!((fg.b - 0.0).abs() < f32::EPSILON);
+        assert!((fg.a - 1.0).abs() < f32::EPSILON);
+
+        // DEFAULT_BACKGROUND == Brush::TRANSPARENT
+        assert_eq!(DEFAULT_BACKGROUND, Brush::TRANSPARENT);
+        let bg = DEFAULT_BACKGROUND.as_color().expect("background is Solid");
+        assert!((bg.a - 0.0).abs() < f32::EPSILON);
+    }
+
+    /// `Brushes` の `Clone` + `PartialEq`（コンポーネント比較が値ベースであること）
+    #[test]
+    fn test_brushes_clone_and_eq() {
+        let brushes = Brushes::with_colors(
+            D2D1_COLOR_F {
+                r: 0.1,
+                g: 0.2,
+                b: 0.3,
+                a: 1.0,
+            },
+            D2D1_COLOR_F {
+                r: 0.4,
+                g: 0.5,
+                b: 0.6,
+                a: 0.5,
+            },
+        );
+        let cloned = brushes.clone();
+        assert_eq!(brushes, cloned);
+
+        // 片方のフィールドを変えれば不等（Changed 検出の前提）
+        let mut modified = brushes.clone();
+        modified.foreground = Brush::Inherit;
+        assert_ne!(brushes, modified);
+    }
+
+    /// `BrushInherit` マーカーの `Default`（ユニット構造体の構築可能性）
+    #[test]
+    fn test_brush_inherit_marker_default() {
+        let a = BrushInherit;
+        let b = BrushInherit::default();
+        assert_eq!(a, b);
+    }
+
+    /// 継承解決フォールバックの特性化（`draw_rectangles` のフォールバック式と等価）
+    ///
+    /// `draw_rectangles` は `brushes.foreground.as_color().unwrap_or_else(|| DEFAULT_FOREGROUND.as_color().unwrap())`
+    /// で色を解決する。Solid はその色、Inherit は既定前景（黒）へフォールバックすることを固定する。
+    /// （描画システム本体は GPU 依存だが、この色解決ロジック自体はデバイス非依存）
+    #[test]
+    fn test_foreground_color_resolution_fallback() {
+        let resolve = |fg: &Brush| -> D2D1_COLOR_F {
+            fg.as_color()
+                .unwrap_or_else(|| DEFAULT_FOREGROUND.as_color().unwrap())
+        };
+
+        // Solid はその色を返す
+        let red = D2D1_COLOR_F {
+            r: 1.0,
+            g: 0.0,
+            b: 0.0,
+            a: 1.0,
+        };
+        let resolved = resolve(&Brush::Solid(red));
+        assert_eq!(resolved, red);
+
+        // Inherit は既定前景（黒・不透明）へフォールバック
+        let fallback = resolve(&Brush::Inherit);
+        assert!((fallback.r - 0.0).abs() < f32::EPSILON);
+        assert!((fallback.g - 0.0).abs() < f32::EPSILON);
+        assert!((fallback.b - 0.0).abs() < f32::EPSILON);
+        assert!((fallback.a - 1.0).abs() < f32::EPSILON);
     }
 }

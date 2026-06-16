@@ -206,4 +206,42 @@ mod tests {
             _ => panic!("Expected Wait item"),
         }
     }
+
+    #[test]
+    fn test_typewriter_token_fire_event() {
+        let target = Entity::from_raw_u32(3).unwrap();
+        let token = TypewriterToken::FireEvent {
+            target,
+            event: TypewriterEventKind::Paused,
+        };
+        match token {
+            TypewriterToken::FireEvent { target: t, event } => {
+                assert_eq!(t, target);
+                assert_eq!(event, TypewriterEventKind::Paused);
+            }
+            _ => panic!("Expected FireEvent token"),
+        }
+    }
+
+    #[test]
+    fn test_timeline_item_fire_event() {
+        let target = Entity::from_raw_u32(9).unwrap();
+        let item = TimelineItem::FireEvent {
+            target,
+            event: TypewriterEventKind::Complete,
+            fire_at: 2.5,
+        };
+        match item {
+            TimelineItem::FireEvent {
+                target: t,
+                event,
+                fire_at,
+            } => {
+                assert_eq!(t, target);
+                assert_eq!(event, TypewriterEventKind::Complete);
+                assert!((fire_at - 2.5).abs() < f64::EPSILON);
+            }
+            _ => panic!("Expected FireEvent item"),
+        }
+    }
 }

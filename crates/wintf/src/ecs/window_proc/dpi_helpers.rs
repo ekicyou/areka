@@ -256,4 +256,135 @@ mod tests {
         let dpi = DPI::from_dpi(120, 120);
         assert!(calculate_physical_size_from_box_style(&bs, &dpi).is_none());
     }
+
+    // ================================================================
+    // correct_position_for_dpi_center_preserve tests
+    // （純粋エントリポイント。dpi_context / box_style / サイズ計算の各
+    //   フォールバック分岐と、実補正適用の writethrough を特性化する）
+    // ================================================================
+
+    use crate::ecs::window::DpiChangeContext;
+    use windows::Win32::Foundation::RECT;
+
+    fn make_box_style_px(w: f32, h: f32) -> BoxStyle {
+        BoxStyle {
+            size: Some(BoxSize {
+                width: Some(Dimension::Px(w)),
+                height: Some(Dimension::Px(h)),
+            }),
+            ..Default::default()
+        }
+    }
+
+    fn make_dpi_context(dpi: DPI) -> DpiChangeContext {
+        DpiChangeContext::new(dpi, RECT::default())
+    }
+
+    #[test]
+    fn test_correct_position_returns_input_when_dpi_context_none() {
+        // dpi_context が None（DPI 変更なし）→ client_pos をそのまま返す（補正不要）
+        let client_pos = Point { x: 100, y: 200 };
+        let client_size = SizeI { width: 800, height: 600 };
+        let bs = make_box_style_px(400.0, 300.0);
+        let dpi = DPI::from_dpi(120, 120);
+
+        let result = correct_position_for_dpi_center_preserve(
+            client_pos,
+            client_size,
+            &None,
+            Some(&bs),
+            &dpi,
+        );
+        assert_eq!(result.x, 100);
+        assert_eq!(result.y, 200);
+    }
+
+    #[test]
+    fn test_correct_position_returns_input_when_box_style_none() {
+        // dpi_context は Some だが box_style が None → フォールバックで client_pos 素通し
+        let client_pos = Point { x: 50, y: 75 };
+        let client_size = SizeI { width: 800, height: 600 };
+        let dpi = DPI::from_dpi(192, 192);
+        let ctx = Some(make_dpi_context(dpi));
+
+        let result =
+            correct_position_for_dpi_center_preserve(client_pos, client_size, &ctx, None, &dpi);
+        assert_eq!(result.x, 50);
+        assert_eq!(result.y, 75);
+    }
+
+    #[test]
+    fn test_correct_position_returns_input_when_size_not_px() {
+        // dpi_context は Some だが BoxStyle.size が非 Px → 物理サイズ計算不可でフォールバック
+        let client_pos = Point { x: 10, y: 20 };
+        let client_size = SizeI { width: 800, height: 600 };
+        let dpi = DPI::from_dpi(192, 192);
+        let ctx = Some(make_dpi_context(dpi));
+        let bs = BoxStyle {
+            size: Some(BoxSize {
+                width: Some(Dimension::Percent(100.0)),
+                height: Some(Dimension::Px(300.0)),
+            }),
+            ..Default::default()
+        };
+
+        let result = correct_position_for_dpi_center_preserve(
+            client_pos,
+            client_size,
+            &ctx,
+            Some(&bs),
+            &dpi,
+        );
+        assert_eq!(result.x, 10);
+        assert_eq!(result.y, 20);
+    }
+
+    #[test]
+    fn test_correct_position_returns_input_when_correction_is_zero() {
+        // 新旧サイズが一致（補正量 = (0,0)）→ client_pos 素通し
+        // BoxStyle 400×300 @ 192dpi(200%) → 物理 800×600。client_size も 800×600 で一致。
+        let client_pos = Point { x: 100, y: 200 };
+        let client_size = SizeI { width: 800, height: 600 };
+        let dpi = DPI::from_dpi(192, 192);
+        let ctx = Some(make_dpi_context(dpi));
+        let bs = make_box_style_px(400.0, 300.0);
+
+        let result = correct_position_for_dpi_center_preserve(
+            client_pos,
+            client_size,
+            &ctx,
+            Some(&bs),
+            &dpi,
+        );
+        assert_eq!(result.x, 100);
+        assert_eq!(result.y, 200);
+    }
+
+    #[test]
+    fn test_correct_position_applies_center_preserving_correction() {
+        // 実補正: 旧サイズ(client_size) 800×600 → 新サイズ(BoxStyle由来) 500×375。
+        // correction = ((800-500)/2, (600-375)/2) = (150, 112)。
+        // corrected = (100+150, 200+112) = (250, 312)。
+        // 新サイズ 500×375 は BoxStyle 400×300 @ 120dpi(125%) で導出される。
+        let client_pos = Point { x: 100, y: 200 };
+        let client_size = SizeI { width: 800, height: 600 };
+        let dpi = DPI::from_dpi(120, 120);
+        let ctx = Some(make_dpi_context(dpi));
+        let bs = make_box_style_px(400.0, 300.0);
+
+        let result = correct_position_for_dpi_center_preserve(
+            client_pos,
+            client_size,
+            &ctx,
+            Some(&bs),
+            &dpi,
+        );
+        assert_eq!(result.x, 250);
+        assert_eq!(result.y, 312);
+
+        // 中心保持の検証: 旧中心 ≈ 新中心（整数除算で Y は最大1px誤差）
+        let old_center_x = client_pos.x + client_size.width / 2;
+        let new_center_x = result.x + 500 / 2;
+        assert_eq!(old_center_x, new_center_x);
+    }
 }

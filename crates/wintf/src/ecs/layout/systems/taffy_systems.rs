@@ -54,18 +54,18 @@ pub fn build_taffy_styles_system(
 pub fn sync_taffy_tree_system(
     mut taffy_res: ResMut<TaffyLayoutResource>,
     // 新規エンティティ（TaffyStyleが追加されたがノードがまだ作成されていない）
-    new_entities: Query<(Entity, Option<&ChildOf>), Added<TaffyStyle>>,
+    new_entities: Query<Entity, Added<TaffyStyle>>,
     // TaffyStyleが変更されたエンティティ
     changed_styles: Query<(Entity, &TaffyStyle), Changed<TaffyStyle>>,
     // 階層が変更されたエンティティ
-    changed_hierarchy: Query<(Entity, Option<&ChildOf>), Changed<ChildOf>>,
+    changed_hierarchy: Query<&ChildOf, Changed<ChildOf>>,
     // ChildOfが削除されたエンティティ
     mut removed_hierarchy: RemovedComponents<ChildOf>,
     // Children コンポーネント（兄弟順序の権威的ソース）
     children_query: Query<&Children>,
 ) {
     // 新規エンティティにtaffyノードを作成
-    for (entity, _) in new_entities.iter() {
+    for entity in new_entities.iter() {
         if taffy_res.get_node(entity).is_none() {
             let _ = taffy_res.create_node(entity);
         }
@@ -81,10 +81,8 @@ pub fn sync_taffy_tree_system(
     // 階層変更を処理: Children コンポーネントの順序を権威的ソースとして使用
     // Step 1: changed_hierarchy から影響を受けた親エンティティを収集（重複排除）
     let mut affected_parents = std::collections::HashSet::new();
-    for (_entity, child_of) in changed_hierarchy.iter() {
-        if let Some(parent_ref) = child_of {
-            affected_parents.insert(parent_ref.parent());
-        }
+    for child_of in changed_hierarchy.iter() {
+        affected_parents.insert(child_of.parent());
     }
 
     // Step 2: 各影響親について Children の順序で taffy 子ノードを一括設定
@@ -136,34 +134,15 @@ pub fn compute_taffy_layout_system(
         for (root_entity, box_style) in roots.iter() {
             if let Some(root_node) = taffy_res.get_node(root_entity) {
                 // LayoutRootのBoxStyleからavailable_spaceを構築
-                let available_space = if let Some(style) = box_style {
-                    if let Some(size) = &style.size {
-                        taffy::Size {
-                            width: size.width.as_ref().map_or(AvailableSpace::MaxContent, |d| {
-                                match d {
-                                    Dimension::Px(px) => AvailableSpace::Definite(*px),
-                                    _ => AvailableSpace::MaxContent,
-                                }
-                            }),
-                            height: size
-                                .height
-                                .as_ref()
-                                .map_or(AvailableSpace::MaxContent, |d| match d {
-                                    Dimension::Px(px) => AvailableSpace::Definite(*px),
-                                    _ => AvailableSpace::MaxContent,
-                                }),
-                        }
-                    } else {
-                        taffy::Size {
-                            width: AvailableSpace::MaxContent,
-                            height: AvailableSpace::MaxContent,
-                        }
-                    }
-                } else {
-                    taffy::Size {
-                        width: AvailableSpace::MaxContent,
-                        height: AvailableSpace::MaxContent,
-                    }
+                // Px指定の軸のみDefinite、それ以外（Percent/Auto/未指定）はMaxContent
+                let to_available = |d: Option<Dimension>| match d {
+                    Some(Dimension::Px(px)) => AvailableSpace::Definite(px),
+                    _ => AvailableSpace::MaxContent,
+                };
+                let root_size = box_style.and_then(|style| style.size);
+                let available_space = taffy::Size {
+                    width: to_available(root_size.and_then(|s| s.width)),
+                    height: to_available(root_size.and_then(|s| s.height)),
                 };
 
                 let result = taffy_res

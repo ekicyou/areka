@@ -1,4 +1,5 @@
-// TODO: Implement DolaError
+//! Dola のバリデーション・コンパイルエラー型
+
 use std::fmt;
 
 /// Dola バリデーションエラー
@@ -294,3 +295,213 @@ impl fmt::Display for DolaError {
 }
 
 impl std::error::Error for DolaError {}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // D2-T gap tests: DolaError の Display 文字列（全21バリアント）と Error トレイトの直接検証
+    // （診断メッセージはユーザー向け挙動の一部であり、フォーマット崩れを回帰検知する）
+
+    fn s(v: &str) -> String {
+        v.to_string()
+    }
+
+    #[test]
+    fn display_schema_and_keyframe_variants() {
+        assert_eq!(
+            DolaError::SchemaVersionMismatch {
+                expected: s("1.0"),
+                found: s("0.5"),
+            }
+            .to_string(),
+            "Schema version mismatch: expected '1.0', found '0.5'"
+        );
+        assert_eq!(
+            DolaError::DuplicateKeyframe {
+                storyboard: s("sb"),
+                name: s("kf"),
+            }
+            .to_string(),
+            "Duplicate keyframe 'kf' in storyboard 'sb'"
+        );
+        assert_eq!(
+            DolaError::ReservedKeyframeName { name: s("start") }.to_string(),
+            "Reserved keyframe name 'start' cannot be user-defined"
+        );
+        assert_eq!(
+            DolaError::UndefinedKeyframe {
+                storyboard: s("sb"),
+                name: s("kf"),
+            }
+            .to_string(),
+            "Undefined keyframe 'kf' in storyboard 'sb'"
+        );
+        assert_eq!(
+            DolaError::KeyframeCycle {
+                storyboard: s("sb"),
+                cycle: vec![s("a"), s("b"), s("a")],
+            }
+            .to_string(),
+            "Keyframe cycle detected in storyboard 'sb': a -> b -> a"
+        );
+    }
+
+    #[test]
+    fn display_reference_and_entry_variants() {
+        assert_eq!(
+            DolaError::UndefinedVariable {
+                storyboard: s("sb"),
+                entry_index: 2,
+                name: s("x"),
+            }
+            .to_string(),
+            "Undefined variable 'x' in storyboard 'sb' entry 2"
+        );
+        assert_eq!(
+            DolaError::UndefinedTransition {
+                storyboard: s("sb"),
+                entry_index: 1,
+                name: s("fade"),
+            }
+            .to_string(),
+            "Undefined transition 'fade' in storyboard 'sb' entry 1"
+        );
+        assert_eq!(
+            DolaError::InvalidEntry {
+                storyboard: s("sb"),
+                entry_index: 3,
+                reason: s("bad entry"),
+            }
+            .to_string(),
+            "Invalid entry in storyboard 'sb' at index 3: bad entry"
+        );
+        assert_eq!(
+            DolaError::ObjectTransitionViolation {
+                storyboard: s("sb"),
+                entry_index: 0,
+                field: s("easing"),
+            }
+            .to_string(),
+            "Object transition violation in storyboard 'sb' entry 0: field 'easing' not allowed"
+        );
+        assert_eq!(
+            DolaError::MutuallyExclusive {
+                storyboard: s("sb"),
+                entry_index: 4,
+            }
+            .to_string(),
+            "Mutually exclusive fields 'to' and 'relative_to' both specified in storyboard 'sb' entry 4"
+        );
+        assert_eq!(
+            DolaError::TypeMismatch {
+                storyboard: s("sb"),
+                entry_index: 1,
+                reason: s("scalar expected"),
+            }
+            .to_string(),
+            "Type mismatch in storyboard 'sb' entry 1: scalar expected"
+        );
+        assert_eq!(
+            DolaError::CompileError {
+                storyboard: s("sb"),
+                entry_index: 2,
+                reason: s("boom"),
+            }
+            .to_string(),
+            "Compile error in storyboard 'sb' at entry 2: boom"
+        );
+    }
+
+    #[test]
+    fn display_value_out_of_range_variant() {
+        assert_eq!(
+            DolaError::ValueOutOfRange {
+                variable: s("x"),
+                field: s("initial"),
+                value: 5.0,
+                min: 0.0,
+                max: 1.0,
+            }
+            .to_string(),
+            "Value out of range for variable 'x': initial = 5, valid range [0, 1]"
+        );
+    }
+
+    #[test]
+    fn display_loop_offset_variants() {
+        assert_eq!(
+            DolaError::LoopOffsetNegativeMin {
+                storyboard: s("sb"),
+                value: -1.0,
+            }
+            .to_string(),
+            "loop_offset.min is negative in storyboard 'sb': -1"
+        );
+        assert_eq!(
+            DolaError::LoopOffsetNegativeMax {
+                storyboard: s("sb"),
+                value: -2.5,
+            }
+            .to_string(),
+            "loop_offset.max is negative in storyboard 'sb': -2.5"
+        );
+        assert_eq!(
+            DolaError::LoopOffsetRangeInverted {
+                storyboard: s("sb"),
+                min: 3.0,
+                max: 1.0,
+            }
+            .to_string(),
+            "loop_offset range inverted in storyboard 'sb': min 3 > max 1"
+        );
+    }
+
+    #[test]
+    fn display_trigger_variants() {
+        assert_eq!(
+            DolaError::TriggerSelfReference {
+                storyboard: s("sb"),
+                entry_index: 0,
+            }
+            .to_string(),
+            "Trigger self-reference in storyboard 'sb' entry 0: cannot trigger itself"
+        );
+        assert_eq!(
+            DolaError::TriggerCycle {
+                cycle: vec![s("A"), s("B"), s("A")],
+            }
+            .to_string(),
+            "Trigger cycle detected: A -> B -> A"
+        );
+        assert_eq!(
+            DolaError::TriggerExclusiveViolation {
+                storyboard: s("sb"),
+                entry_index: 1,
+                reason: s("variable not allowed"),
+            }
+            .to_string(),
+            "Trigger exclusive violation in storyboard 'sb' entry 1: variable not allowed"
+        );
+        assert_eq!(
+            DolaError::TriggerTargetNotFound {
+                storyboard: s("sb"),
+                entry_index: 2,
+                target: s("child"),
+            }
+            .to_string(),
+            "Trigger target storyboard 'child' not found in storyboard 'sb' entry 2"
+        );
+    }
+
+    #[test]
+    fn error_trait_object_usable() {
+        let e: Box<dyn std::error::Error> =
+            Box::new(DolaError::ReservedKeyframeName { name: s("start") });
+        assert_eq!(
+            e.to_string(),
+            "Reserved keyframe name 'start' cannot be user-defined"
+        );
+        assert!(e.source().is_none());
+    }
+}

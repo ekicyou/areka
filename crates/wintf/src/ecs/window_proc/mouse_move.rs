@@ -478,3 +478,100 @@ pub(super) fn WM_MOUSELEAVE(
 
     Some(LRESULT(0))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::collect_entities_to_leave;
+    use crate::ecs::pointer::PointerState;
+    use crate::ecs::window::Window;
+    use bevy_ecs::hierarchy::ChildOf;
+    use bevy_ecs::prelude::*;
+
+    // collect_entities_to_leave は World ベース（query + find_owner_window）でデバイス非依存。
+    // 当該ウィンドウ所属 / exclude 除外 / 他ウィンドウ保護 / PointerState 不在スキップ を特性化する。
+
+    fn spawn_window(world: &mut World, title: &str) -> Entity {
+        world
+            .spawn(Window {
+                title: title.to_string(),
+                ..Default::default()
+            })
+            .id()
+    }
+
+    #[test]
+    fn test_collect_excludes_target_and_collects_siblings() {
+        // 同一ウィンドウ配下の PointerState 保持者のうち、exclude 以外を収集する
+        let mut world = World::new();
+        let window = spawn_window(&mut world, "W");
+        let target = world
+            .spawn((ChildOf(window), PointerState::default()))
+            .id();
+        let other = world
+            .spawn((ChildOf(window), PointerState::default()))
+            .id();
+
+        let result = collect_entities_to_leave(&mut world, window, target);
+
+        // other は収集される。target（exclude）は含まれない。
+        assert!(result.contains(&other), "exclude 以外の保持者を収集");
+        assert!(!result.contains(&target), "exclude 対象は除外");
+        assert_eq!(result.len(), 1);
+    }
+
+    #[test]
+    fn test_collect_does_not_include_entities_without_pointer_state() {
+        // PointerState を持たないエンティティは収集対象外
+        let mut world = World::new();
+        let window = spawn_window(&mut world, "W");
+        let target = world
+            .spawn((ChildOf(window), PointerState::default()))
+            .id();
+        // PointerState なしの子（収集されないはず）
+        let _no_state = world.spawn(ChildOf(window)).id();
+
+        let result = collect_entities_to_leave(&mut world, window, target);
+        assert!(result.is_empty(), "PointerState 不在エンティティは収集されない");
+    }
+
+    #[test]
+    fn test_collect_protects_other_windows_pointer_state() {
+        // 別ウィンドウ配下の PointerState 保持者は収集しない（ウィンドウスコーピング）
+        let mut world = World::new();
+        let window_a = spawn_window(&mut world, "A");
+        let window_b = spawn_window(&mut world, "B");
+
+        let target_a = world
+            .spawn((ChildOf(window_a), PointerState::default()))
+            .id();
+        let widget_a = world
+            .spawn((ChildOf(window_a), PointerState::default()))
+            .id();
+        // 別ウィンドウ B 配下の保持者
+        let widget_b = world
+            .spawn((ChildOf(window_b), PointerState::default()))
+            .id();
+
+        let result = collect_entities_to_leave(&mut world, window_a, target_a);
+
+        assert!(result.contains(&widget_a), "同一ウィンドウ A の保持者は収集");
+        assert!(
+            !result.contains(&widget_b),
+            "別ウィンドウ B の PointerState は保護（非収集）"
+        );
+        assert_eq!(result.len(), 1);
+    }
+
+    #[test]
+    fn test_collect_returns_empty_when_only_excluded_holder_exists() {
+        // PointerState 保持者が exclude 1件のみ → 空
+        let mut world = World::new();
+        let window = spawn_window(&mut world, "W");
+        let target = world
+            .spawn((ChildOf(window), PointerState::default()))
+            .id();
+
+        let result = collect_entities_to_leave(&mut world, window, target);
+        assert!(result.is_empty());
+    }
+}

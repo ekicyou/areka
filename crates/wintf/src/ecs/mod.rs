@@ -38,14 +38,13 @@ pub use pointer::{
     OnPointerPressed, OnPointerReleased, Phase, PhysicalPoint, PointerButton, PointerEventHandler,
     PointerLeave, PointerState, WheelDelta, WindowPointerTracking, clear_transient_pointer_state,
     debug_pointer_leave, debug_pointer_state_changes, dispatch_pointer_events,
-    process_pointer_buffers,
 };
 pub use window::monitor::*;
 // 後方互換性エイリアス
 #[allow(deprecated)]
 pub use pointer::{
     MouseButton, MouseLeave, MouseState, WindowMouseTracking, clear_transient_mouse_state,
-    debug_mouse_leave, debug_mouse_state_changes, process_mouse_buffers,
+    debug_mouse_leave, debug_mouse_state_changes,
 };
 pub use widget::{
     BitmapSource, BitmapSourceGraphics, BitmapSourceResource, BoxedCommand, CommandSender, WicCore,

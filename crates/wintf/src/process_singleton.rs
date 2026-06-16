@@ -18,10 +18,13 @@ pub struct WinProcessSingleton {
     instance: HINSTANCE,
     window_class_name: HSTRING,
     ecs_window_class_name: HSTRING,
-    #[allow(dead_code)]
-    hidden_window: Option<HWND>,
 }
 
+// SAFETY: HINSTANCE は本プロセス実行イメージのモジュールハンドルで、プロセス生存中
+// 不変かつ解放されない（GetModuleHandleW(None) の戻り値）。HSTRING はアトミック参照
+// カウントの不変 UTF-16 文字列。本構造体は OnceLock 初期化後に一切変更されない
+// （全フィールド読み取り専用アクセスのみ）ため、スレッド間の共有（Sync）と
+// 所有権移動（Send）はいずれも安全。
 unsafe impl Send for WinProcessSingleton {}
 unsafe impl Sync for WinProcessSingleton {}
 
@@ -38,11 +41,13 @@ impl WinProcessSingleton {
         &self.ecs_window_class_name
     }
 
-    #[allow(dead_code)]
-    pub(crate) fn hidden_window(&self) -> Option<HWND> {
-        self.hidden_window
-    }
-
+    // NOTE(W1-V): 本初期化クロージャは非冪等（プロセスグローバルな RegisterClassExW を
+    // 2 回呼ぶ）。1つ目のクラス登録成功後に2つ目が失敗して panic した場合、OnceLock は
+    // 未初期化のまま残り、次の get_or_init はクロージャを再実行して1つ目の
+    // RegisterClassExW が ERROR_CLASS_ALREADY_EXISTS で 0 を返し、誤解を招くメッセージで
+    // 再 panic する（部分失敗からの回復不能）。RegisterClassExW の失敗は実用上リソース
+    // 枯渇時に限られるため現行挙動を維持し、冪等化（既登録の許容）・GetLastError を含む
+    // panic メッセージ改善は挙動変更を伴うため P31 として記録。
     pub(crate) fn get_or_init() -> &'static Self {
         WIN_PROCESS_SINGLETON.get_or_init(|| {
             debug!("Window class creation starting...");
@@ -89,8 +94,35 @@ impl WinProcessSingleton {
                 instance,
                 window_class_name,
                 ecs_window_class_name,
-                hidden_window: None,
             }
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // 注意: get_or_init はウィンドウクラス登録（RegisterClassExW）と
+    // プロセス DPI 設定というプロセスグローバルな副作用を持つが、
+    // ウィンドウ生成・メッセージループは伴わないためヘッドレスで実行可能。
+    // OnceLock により同一テストバイナリ内で初期化は 1 回に限定される。
+
+    #[test]
+    fn get_or_init_returns_same_static_instance() {
+        let a = WinProcessSingleton::get_or_init();
+        let b = WinProcessSingleton::get_or_init();
+        assert!(std::ptr::eq(a, b));
+    }
+
+    #[test]
+    fn get_or_init_exposes_expected_class_names_and_instance() {
+        let s = WinProcessSingleton::get_or_init();
+        assert_eq!(s.window_class_name().to_string(), "wintf_window_class");
+        assert_eq!(
+            s.ecs_window_class_name().to_string(),
+            "wintf_ecs_window_class"
+        );
+        assert!(!s.instance().is_invalid());
     }
 }

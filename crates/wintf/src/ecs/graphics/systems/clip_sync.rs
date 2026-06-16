@@ -134,6 +134,11 @@ pub fn clip_sync_system(
                 }
 
                 // クリップを適用
+                // NOTE(W3a-V): IDCompositionRectangleClip は IDCompositionClip を継承するため、
+                // 生存オブジェクトへの基底インターフェイス QueryInterface は常に成功する
+                // （デバイス状態に依存しないインプロセス呼び出し。直前の create_rectangle_clip
+                // 成功がオブジェクトの生存を保証）。この expect はデバイスロスト時を含め
+                // 到達可能な経路では発火しない。
                 let clip_interface: windows::Win32::Graphics::DirectComposition::IDCompositionClip =
                     rectangle_clip
                         .cast()

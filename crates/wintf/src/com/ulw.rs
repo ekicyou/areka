@@ -27,9 +27,26 @@ pub unsafe fn transfer_to_hbitmap(
     // Map でステージングビットマップのピクセルデータにアクセス
     let mapped = unsafe { staging.Map(D2D1_MAP_OPTIONS_READ)? };
 
+    // pitch / stride は u32 → usize の拡大変換のみ（切り捨てなし）
     let pitch = mapped.pitch as usize;
     let stride = (width as usize) * 4;
     let src = mapped.bits;
+
+    // SAFETY 不変条件: D2D1 の Map(D2D1_MAP_OPTIONS_READ) 契約により、
+    // 成功時 `bits` は非 null で `pitch` はマップされたビットマップの
+    // 1 行分のバイト数（幅 × 4 bytes/px, B8G8R8A8 前提）以上が保証される。
+    // 呼び出し元契約（# Safety）で `width` は staging のピクセル幅と一致するため
+    // 常に pitch >= stride が成立する。pitch < stride のまま下の行単位コピーへ
+    // 進むと src の行境界を越えた読み出し（OOB read）になるため、
+    // debug ビルドで不変条件を検査する（既存テスト
+    // tests/graphics/compositor_transfer_test.rs の全ケースで非発火を確認済み）。
+    debug_assert!(!src.is_null(), "Map succeeded but bits is null");
+    debug_assert!(
+        pitch >= stride,
+        "Map pitch ({pitch}) must be >= row stride ({stride}); \
+         width must match the staging bitmap width"
+    );
+    debug_assert!(!dib_bits.is_null(), "dib_bits must be non-null per # Safety");
 
     if pitch == stride {
         // pitch と stride が一致: 一括コピー

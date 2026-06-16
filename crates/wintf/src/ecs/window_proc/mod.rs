@@ -19,8 +19,18 @@ use std::cell::RefCell;
 use std::rc::{Rc, Weak};
 use std::sync::OnceLock;
 
-// SAFETY: EcsWorldはメインスレッドでのみアクセスされる
-// wndprocもメインスレッドから呼ばれるため安全
+// SAFETY: `SendWeak` は `Weak<RefCell<EcsWorld>>` を保持する。`Weak<RefCell<_>>` は
+// `RefCell` が `!Sync`・`Rc`/`Weak` が `!Send + !Sync` のため自動では Send/Sync を
+// 実装しない。この手動 impl は、弱参照を `static ECS_WORLD: OnceLock<SendWeak>` に
+// 格納する（OnceLock の T: Send + Sync 境界を満たす）ためにのみ必要である。
+// 健全性は「アクセスは常に単一スレッド（メインスレッド）」という不変条件に依拠する:
+//  - `set_ecs_world` は WinThreadMgr 初期化時にメインスレッドから1回だけ呼ばれる。
+//  - `try_get_ecs_world().upgrade()` で得た `Rc<RefCell<EcsWorld>>` を実際に借用
+//    （`borrow`/`borrow_mut`）するのは `ecs_wndproc` 経由の各ハンドラのみで、
+//    ウィンドウプロシージャはウィンドウを作成したメインスレッドからのみ呼ばれる。
+// したがって `RefCell` の借用規則も `Rc` の参照カウントも単一スレッド上でのみ
+// 操作され、データ競合は発生しない。OnceLock は弱参照ポインタの move/共有のみを担い、
+// 内部の RefCell/Rc を跨スレッドで実際に触ることはない。
 struct SendWeak(Weak<RefCell<crate::ecs::world::EcsWorld>>);
 unsafe impl Send for SendWeak {}
 unsafe impl Sync for SendWeak {}

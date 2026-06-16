@@ -254,4 +254,43 @@ mod transition_resolution_tests {
             Some(EasingFunction::Named(EasingName::BounceOut))
         );
     }
+
+    // =========================================================
+    // D2-T gap test: Integer 変数の initial からの from 推論
+    // =========================================================
+
+    #[test]
+    fn from_inferred_from_integer_initial_as_f64() {
+        // Integer 変数の初回エントリで from 省略 → initial (i64) が f64 へ変換され from になる
+        let doc = make_doc_with_storyboard(
+            vec![(
+                "idx",
+                AnimationVariableDef::Integer {
+                    initial: 7,
+                    min: None,
+                    max: None,
+                    typewriter: None,
+                },
+            )],
+            vec![],
+            "test",
+            StoryboardBuilder::new()
+                .entry(StoryboardEntry {
+                    variable: Some("idx".to_string()),
+                    transition: Some(TransitionRef::Inline(TransitionDef {
+                        from: None, // inferred as initial = 7 → Scalar(7.0)
+                        to: Some(TransitionValue::Scalar(10.0)),
+                        duration: Some(1.0),
+                        ..Default::default()
+                    })),
+                    keyframe: Some("kf1".to_string()),
+                    ..Default::default()
+                })
+                .build(),
+        );
+
+        let result = compile_storyboard(&doc, "test", 0.0).unwrap();
+        let tl = result.timelines.get("idx").unwrap();
+        assert_eq!(tl.segments[0].from_value, TransitionValue::Scalar(7.0));
+    }
 }

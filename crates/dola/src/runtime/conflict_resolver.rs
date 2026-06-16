@@ -3,7 +3,7 @@
 //! 同一変数の時間的重複を検出し、`InterruptionPolicy` に基づく
 //! 5種の終了戦略を group_id 単位で適用する。
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 use crate::compile::CompiledStoryboard;
 use crate::storyboard::InterruptionPolicy;
@@ -12,31 +12,10 @@ use super::instance_manager::InstanceManager;
 use super::instance_state::InstanceState;
 use super::subscription_manager::SubscriptionManager;
 use super::timeline_manager::TimelineManager;
-use super::types::RuntimeError;
+use super::types::{EvaluatedValue, RuntimeError};
 
-/// 競合を検出し終了戦略を適用する。影響を受けた group_id のリストを返す。
+/// 指定 group_id を除外して競合解決を行い、影響を受けた group_id のリストを返す。
 /// Never 競合が検出された場合は Err(RuntimeError::Conflict) を返す。
-#[allow(dead_code)]
-pub(crate) fn resolve_conflicts(
-    new_group_id: u64,
-    compiled: &CompiledStoryboard,
-    start_time: f64,
-    timeline_manager: &mut TimelineManager,
-    instance_manager: &mut InstanceManager,
-    subscription_manager: &mut SubscriptionManager,
-) -> Result<Vec<u64>, RuntimeError> {
-    resolve_conflicts_excluding(
-        new_group_id,
-        compiled,
-        start_time,
-        timeline_manager,
-        instance_manager,
-        subscription_manager,
-        &HashSet::new(),
-    )
-}
-
-/// 指定 group_id を除外して競合解決を行う。
 ///
 /// トリガー起動時、親インスタンスを除外して子の変数競合を解決するために使用。
 pub(crate) fn resolve_conflicts_excluding(
@@ -49,13 +28,7 @@ pub(crate) fn resolve_conflicts_excluding(
     skip_group_ids: &HashSet<u64>,
 ) -> Result<Vec<u64>, RuntimeError> {
     // 1. 競合検出
-    let conflicting = detect_overlaps(
-        compiled,
-        start_time,
-        timeline_manager,
-        instance_manager,
-        skip_group_ids,
-    );
+    let conflicting = detect_overlaps(compiled, timeline_manager, instance_manager, skip_group_ids);
 
     if conflicting.is_empty() {
         return Ok(vec![]);
@@ -84,46 +57,42 @@ pub(crate) fn resolve_conflicts_excluding(
             Err(_) => continue, // 既に削除済み
         };
 
-        match policy {
-            InterruptionPolicy::Cancel => {
-                apply_cancel(
+        // 戦略ごとに購読者へ伝播する確定値を収集する
+        let values = match policy {
+            // Cancel / Trim: start_time 時点の補間値で凍結・確定
+            InterruptionPolicy::Cancel | InterruptionPolicy::Trim => timeline_manager
+                .evaluate_all_for_group(gid, start_time, instance_manager.instances()),
+            // Conclude: 現在再生中セグメントの最終値にジャンプ
+            InterruptionPolicy::Conclude => timeline_manager
+                .collect_current_segment_final_values(
                     gid,
                     start_time,
-                    timeline_manager,
-                    instance_manager,
-                    subscription_manager,
-                );
-            }
-            InterruptionPolicy::Conclude => {
-                apply_conclude(
-                    gid,
-                    start_time,
-                    timeline_manager,
-                    instance_manager,
-                    subscription_manager,
-                );
-            }
-            InterruptionPolicy::Trim => {
-                apply_trim(
-                    gid,
-                    start_time,
-                    timeline_manager,
-                    instance_manager,
-                    subscription_manager,
-                );
-            }
-            InterruptionPolicy::Compress => {
-                apply_compress(
-                    gid,
-                    timeline_manager,
-                    instance_manager,
-                    subscription_manager,
-                );
-            }
+                    instance_manager.instances(),
+                ),
+            // Compress: ストーリーボード全体最終値にジャンプ
+            InterruptionPolicy::Compress => timeline_manager.collect_final_values(gid),
             InterruptionPolicy::Never => {
+                // SAFETY(panic 経路): 手前の Never チェックループが同一の
+                // `instance_manager.get` で `conflicting` 全件を走査し、Never を
+                // 1つでも検出した時点で早期 return している。チェックと本 match の
+                // 間に instance_manager への変更はない（remove はエラー経路のみ）
+                // ため、ここで Never は観測されない。
                 unreachable!("Never policy should have been handled above");
             }
-        }
+        };
+
+        // Never 以外は終了状態に1対1対応する（上の match で Never は除外済み）
+        let terminal_state = InstanceState::from_policy(policy)
+            .expect("non-Never policy maps to a terminal state");
+
+        terminate_instance(
+            gid,
+            values,
+            terminal_state,
+            timeline_manager,
+            instance_manager,
+            subscription_manager,
+        );
 
         affected.push(gid);
     }
@@ -131,12 +100,40 @@ pub(crate) fn resolve_conflicts_excluding(
     Ok(affected)
 }
 
+/// 収集済みの確定値を購読者へ伝播し、終了状態へ遷移してエントリを除去する。
+///
+/// 全終了戦略共通の後処理: 値伝播（name→id 変換）→ 終了遷移
+/// （`is_terminal()` → 自動削除）→ タイムテーブルエントリ削除。
+fn terminate_instance(
+    group_id: u64,
+    values: HashMap<String, EvaluatedValue>,
+    terminal_state: InstanceState,
+    timeline_manager: &mut TimelineManager,
+    instance_manager: &mut InstanceManager,
+    subscription_manager: &mut SubscriptionManager,
+) {
+    // 不変条件: 呼び出し元は from_policy 由来の終了状態のみを渡す
+    // （from_policy の Some は全て is_terminal — instance_state.rs 参照）。
+    debug_assert!(
+        terminal_state.is_terminal(),
+        "terminate_instance requires a terminal state, got {terminal_state:?}"
+    );
+
+    if !values.is_empty() {
+        let id_values = subscription_manager.convert_names_to_ids(&values);
+        subscription_manager.force_update_last_values(&id_values);
+    }
+
+    let _ = instance_manager.transition(group_id, terminal_state);
+
+    timeline_manager.remove_entries(group_id);
+}
+
 /// 新セグメントと既存タイムテーブルの時間重複を検出し、
 /// 競合する group_id のセットを返す。
 /// Playing/Paused 状態のインスタンスのみ対象。
 fn detect_overlaps(
     compiled: &CompiledStoryboard,
-    _start_time: f64,
     timeline_manager: &TimelineManager,
     instance_manager: &InstanceManager,
     skip_group_ids: &HashSet<u64>,
@@ -174,6 +171,10 @@ fn detect_overlaps(
                         let ex_end = existing_seg.end_time;
 
                         // 時間範囲の重複判定: start < other_end && end > other_start
+                        // NOTE(数値境界): セグメント時刻に NaN が含まれる場合は両比較が
+                        // false となり、当該セグメントは競合として検出されない（黙って
+                        // 素通り）。NaN の流入は指示書数値の有限性検証の欠如による
+                        // （proposals.md P8/P14 参照）。
                         if new_start < ex_end && new_end > ex_start {
                             conflicting.insert(entry.group_id);
                         }
@@ -186,103 +187,3 @@ fn detect_overlaps(
     conflicting
 }
 
-/// Cancel: start_time 時点の補間値で凍結 → Cancelled 遷移 → エントリ除去
-fn apply_cancel(
-    group_id: u64,
-    start_time: f64,
-    timeline_manager: &mut TimelineManager,
-    instance_manager: &mut InstanceManager,
-    subscription_manager: &mut SubscriptionManager,
-) {
-    // 1. start_time 時点の補間値を取得
-    let freeze_values =
-        timeline_manager.evaluate_all_for_group(group_id, start_time, instance_manager.instances());
-
-    // 2. 凍結値を購読者に伝播（name→id 変換）
-    if !freeze_values.is_empty() {
-        let id_values = subscription_manager.convert_names_to_ids(&freeze_values);
-        subscription_manager.force_update_last_values(&id_values);
-    }
-
-    // 3. Cancelled 遷移（is_terminal() → 自動削除）
-    let _ = instance_manager.transition(group_id, InstanceState::Cancelled);
-
-    // 4. タイムテーブルエントリ削除
-    timeline_manager.remove_entries(group_id);
-}
-
-/// Conclude: 現在再生中セグメントの最終値にジャンプ → Concluded 遷移 → エントリ除去
-fn apply_conclude(
-    group_id: u64,
-    start_time: f64,
-    timeline_manager: &mut TimelineManager,
-    instance_manager: &mut InstanceManager,
-    subscription_manager: &mut SubscriptionManager,
-) {
-    // 1. 現在再生中セグメントの最終値を取得
-    let final_values = timeline_manager.collect_current_segment_final_values(
-        group_id,
-        start_time,
-        instance_manager.instances(),
-    );
-
-    // 2. 最終値を購読者に伝播（name→id 変換）
-    if !final_values.is_empty() {
-        let id_values = subscription_manager.convert_names_to_ids(&final_values);
-        subscription_manager.force_update_last_values(&id_values);
-    }
-
-    // 3. Concluded 遷移（自動削除）
-    let _ = instance_manager.transition(group_id, InstanceState::Concluded);
-
-    // 4. タイムテーブルエントリ削除
-    timeline_manager.remove_entries(group_id);
-}
-
-/// Trim: start_time 時点の補間値で確定 → 購読者伝播 → Trimmed 遷移 → エントリ除去
-fn apply_trim(
-    group_id: u64,
-    start_time: f64,
-    timeline_manager: &mut TimelineManager,
-    instance_manager: &mut InstanceManager,
-    subscription_manager: &mut SubscriptionManager,
-) {
-    // 1. start_time 時点の補間値を取得（Cancel と同じパターン）
-    let trim_values =
-        timeline_manager.evaluate_all_for_group(group_id, start_time, instance_manager.instances());
-
-    // 2. 確定値を購読者に伝播（name→id 変換）
-    if !trim_values.is_empty() {
-        let id_values = subscription_manager.convert_names_to_ids(&trim_values);
-        subscription_manager.force_update_last_values(&id_values);
-    }
-
-    // 3. Trimmed 遷移（is_terminal() → 自動削除）
-    let _ = instance_manager.transition(group_id, InstanceState::Trimmed);
-
-    // 4. タイムテーブルエントリ削除
-    timeline_manager.remove_entries(group_id);
-}
-
-/// Compress: ストーリーボード全体最終値にジャンプ → Compressed 遷移 → エントリ除去
-fn apply_compress(
-    group_id: u64,
-    timeline_manager: &mut TimelineManager,
-    instance_manager: &mut InstanceManager,
-    subscription_manager: &mut SubscriptionManager,
-) {
-    // 1. 全セグメントの最終値を収集（既存 collect_final_values を再利用）
-    let final_values = timeline_manager.collect_final_values(group_id);
-
-    // 2. 最終値を購読者に伝播（name→id 変換）
-    if !final_values.is_empty() {
-        let id_values = subscription_manager.convert_names_to_ids(&final_values);
-        subscription_manager.force_update_last_values(&id_values);
-    }
-
-    // 3. Compressed 遷移（is_terminal() → 自動削除）
-    let _ = instance_manager.transition(group_id, InstanceState::Compressed);
-
-    // 4. タイムテーブルエントリ削除
-    timeline_manager.remove_entries(group_id);
-}

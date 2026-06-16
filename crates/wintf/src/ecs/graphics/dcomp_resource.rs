@@ -27,6 +27,12 @@ pub struct DCompGraphicsResource {
     inner: Option<DCompGraphicsResourceInner>,
 }
 
+// SAFETY 条件: 保持する COM ポインタの跨スレッド移動（Send）・参照共有（Sync）は
+// 「同一オブジェクトへの COM 呼び出しが同時に実行されない」ことを前提とする。
+// DComp デバイス（desktop / dcomp）は D2D（MULTI_THREADED ファクトリ系列）と異なり
+// 内部同期を持たない外部同期前提の API であり、ECS スケジュール構成（Res/ResMut の
+// 借用規則と、同一リソースへ並行アクセスしないシステム配置）が安全性条件を担う
+// （components.rs の DComp 系コンポーネント 3 種と同一条件）。
 unsafe impl Send for DCompGraphicsResource {}
 unsafe impl Sync for DCompGraphicsResource {}
 

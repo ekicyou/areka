@@ -36,6 +36,11 @@ pub struct WindowGraphics {
     generation: u32,
 }
 
+// SAFETY 条件: 保持する COM ポインタの跨スレッド移動（Send）・参照共有（Sync）は
+// 「同一オブジェクトへの COM 呼び出しが同時に実行されない」ことを前提とする。
+// device_context（D2D）は MULTI_THREADED ファクトリ系列のため内部同期されるが、
+// target（DComp）は外部同期前提であり、ECS スケジュール構成（&mut 排他または
+// 同一コンポーネントへ並行アクセスしないシステム配置）が安全性条件を担う。
 unsafe impl Send for WindowGraphics {}
 unsafe impl Sync for WindowGraphics {}
 
@@ -96,6 +101,8 @@ fn on_visual_graphics_remove(world: DeferredWorld, hook: HookContext) {
     }
 }
 
+// SAFETY 条件: WindowGraphics と同様。IDCompositionVisual3 への COM 呼び出しが
+// 同時に実行されないことを ECS スケジュール構成が担保する前提（DComp は外部同期前提）。
 unsafe impl Send for VisualGraphics {}
 unsafe impl Sync for VisualGraphics {}
 
@@ -173,6 +180,8 @@ pub struct SurfaceGraphics {
     pub size: (u32, u32),
 }
 
+// SAFETY 条件: WindowGraphics と同様。IDCompositionSurface への COM 呼び出しが
+// 同時に実行されないことを ECS スケジュール構成が担保する前提（DComp は外部同期前提）。
 unsafe impl Send for SurfaceGraphics {}
 unsafe impl Sync for SurfaceGraphics {}
 

@@ -24,6 +24,14 @@ pub struct WindowHandle {
     pub instance: HINSTANCE,
 }
 
+// SAFETY: `WindowHandle` は `hwnd: HWND` と `instance: HINSTANCE` を保持し、いずれも
+// windows-rs では `*mut c_void` の newtype で、自動では Send/Sync を実装しない
+// （windows-rs 0.62.2）ため、自動導出されない。よってこの手動 impl は冗長ではなく
+// 必須である。健全性: HWND/HINSTANCE は不透明な OS ハンドル（値渡しで所有権・解放
+// 責務を伴わない。ウィンドウ破棄は WM_NCDESTROY / DestroyWindow が担い、本構造体の
+// Drop ではない）であり、`WindowHandle` は ECS コンポーネントとしてメインスレッドの
+// システム・ライフサイクルフックからのみ参照される。`drag/context.rs` の
+// `WindowDragContext` と同じ crate 標準の HWND 取り扱い方針。
 unsafe impl Send for WindowHandle {}
 unsafe impl Sync for WindowHandle {}
 
@@ -270,5 +278,21 @@ fn on_window_handle_remove(
         unsafe {
             let _ = PostMessageW(Some(hwnd), WM_CLOSE, WPARAM(0), LPARAM(0));
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// `WindowHandle` は `hwnd: HWND` / `instance: HINSTANCE`（いずれも `*mut c_void`
+    /// newtype・非 Send/Sync）を内包するため手動 `unsafe impl Send/Sync` で Send+Sync を
+    /// 表明している。本テストはその不変条件をコンパイル時に固定する回帰検知器
+    /// （device 非依存・実 HWND 不要）。将来フィールドが追加され手動 impl が撤去されて
+    /// Send/Sync が壊れた場合に検出する。
+    #[test]
+    fn test_window_handle_is_send_sync() {
+        fn assert_send_sync<T: Send + Sync>() {}
+        assert_send_sync::<WindowHandle>();
     }
 }

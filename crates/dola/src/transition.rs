@@ -1,4 +1,4 @@
-// TODO: Implement TransitionDef, TransitionRef, TransitionValue
+//! トランジション定義（TransitionDef, TransitionRef, TransitionValue）。
 use serde::{Deserialize, Serialize};
 
 use crate::easing::EasingFunction;

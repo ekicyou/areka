@@ -213,6 +213,74 @@ fn test_hit_test_entity_ex_bounds_mode_region_none() {
     }
 }
 
+/// NamedRegions + 退化 bounds（幅0）→ Hit(None) フォールバック
+///
+/// bounds_width <= 0.0 の分岐（ゼロ除算回避のための早期 Hit(None)）を特性化する。
+/// 退化 bounds (50,0)-(50,100) は幅0だが、contains は x==50 の点を内側と判定するため
+/// 正規化座標計算の手前で Hit(None) を返す経路に到達する。
+#[test]
+fn test_hit_test_entity_ex_named_regions_degenerate_bounds_width() {
+    let mut world = World::new();
+
+    let region_map = HitRegionMap::builder()
+        .rect("head", 0.0, 0.0, 100.0, 100.0)
+        .build()
+        .unwrap();
+
+    let entity = world
+        .spawn((
+            make_global_arrangement(50.0, 0.0, 50.0, 100.0), // 幅0の退化 bounds
+            HitTest::named_regions(),
+            region_map,
+        ))
+        .id();
+
+    // x==50 は contains を通過し、bounds_width<=0 分岐で Hit(None) フォールバック
+    match hit_test_entity_ex(&world, entity, PhysicalPoint::new(50.0, 50.0)) {
+        RegionHit::Hit(None) => {}
+        other => panic!(
+            "Expected Hit(None) for degenerate bounds, got {:?}",
+            match other {
+                RegionHit::Miss => "Miss",
+                RegionHit::Hit(None) => "Hit(None)",
+                RegionHit::Hit(Some(ref s)) => s.as_str(),
+            }
+        ),
+    }
+}
+
+/// NamedRegions + 退化 bounds（高さ0）→ Hit(None) フォールバック
+#[test]
+fn test_hit_test_entity_ex_named_regions_degenerate_bounds_height() {
+    let mut world = World::new();
+
+    let region_map = HitRegionMap::builder()
+        .rect("head", 0.0, 0.0, 100.0, 100.0)
+        .build()
+        .unwrap();
+
+    let entity = world
+        .spawn((
+            make_global_arrangement(0.0, 50.0, 100.0, 50.0), // 高さ0の退化 bounds
+            HitTest::named_regions(),
+            region_map,
+        ))
+        .id();
+
+    // y==50 は contains を通過し、bounds_height<=0 分岐で Hit(None) フォールバック
+    match hit_test_entity_ex(&world, entity, PhysicalPoint::new(50.0, 50.0)) {
+        RegionHit::Hit(None) => {}
+        other => panic!(
+            "Expected Hit(None) for degenerate bounds, got {:?}",
+            match other {
+                RegionHit::Miss => "Miss",
+                RegionHit::Hit(None) => "Hit(None)",
+                RegionHit::Hit(Some(ref s)) => s.as_str(),
+            }
+        ),
+    }
+}
+
 /// hit_test_entity_ex: bounds外は Miss
 #[test]
 fn test_hit_test_entity_ex_outside_bounds() {
@@ -370,6 +438,27 @@ fn test_hit_test_in_window_ex_no_window_pos() {
     let mut world = World::new();
     let window = world
         .spawn(make_global_arrangement(0.0, 0.0, 100.0, 100.0))
+        .id();
+
+    let result = hit_test_in_window_ex(&world, window, PhysicalPoint::new(50.0, 50.0));
+    assert!(result.is_none());
+}
+
+/// hit_test_in_window_ex: WindowPos.position が None → None
+///
+/// 既存 ex テストは WindowPos コンポーネント不在のみ固定していた。
+/// position フィールドが None（`window_pos.position?` で early return）の経路を特性化する。
+#[test]
+fn test_hit_test_in_window_ex_position_none() {
+    let mut world = World::new();
+    let window = world
+        .spawn((
+            make_global_arrangement(0.0, 0.0, 100.0, 100.0),
+            WindowPos {
+                position: None,
+                ..Default::default()
+            },
+        ))
         .id();
 
     let result = hit_test_in_window_ex(&world, window, PhysicalPoint::new(50.0, 50.0));

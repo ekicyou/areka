@@ -210,6 +210,13 @@ impl D2D1DeviceContextExt for ID2D1DeviceContext {
         unsafe {
             let hstring = string.param();
             let hstring_borrow = hstring.borrow();
+            // SAFETY 根拠: この unwrap は失敗し得ない。`Ref<HSTRING>::as_ref()` は
+            // `Type<HSTRING>::is_null()` が None 判定の唯一の経路だが、HSTRING は
+            // CloneType（windows-core 0.62.2 windows.rs: `impl TypeKind for HSTRING`）
+            // であり `Type<T, CloneType>::is_null()` は常に false を返す
+            // （同 type.rs）。空 HSTRING（内部表現 null）でも Some(&HSTRING) が
+            // 返り、Deref で空スライス &[] として DrawText へ渡るため panic 経路は
+            // 到達不能（tests/com/d2d_ext_test.rs の空 HSTRING 特性化テストで保護）。
             let string = hstring_borrow.as_ref().unwrap();
             self.DrawText(
                 &string,

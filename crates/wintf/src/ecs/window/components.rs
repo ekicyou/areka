@@ -140,6 +140,14 @@ impl Default for Window {
     }
 }
 
+// SAFETY: `Window` は `parent: Option<HWND>` を保持し、`HWND`（windows-rs では
+// `*mut c_void` の newtype）は自動では Send/Sync を実装しない（windows-rs 0.62.2）
+// ため、自動導出されない。よってこの手動 impl は冗長ではなく必須である。
+// 健全性: 親 HWND は不透明なウィンドウ識別子（値渡しで所有権・解放責務を伴わない）
+// であり、`Window` は ECS コンポーネントとしてメインスレッドのシステム・フックから
+// のみ参照される。`title: String` / `composition_mode: CompositionMode` は
+// プレーンデータで自動的に Send+Sync。`drag/context.rs` の `WindowDragContext` と
+// 同じ crate 標準の HWND 取り扱い方針。
 unsafe impl Send for Window {}
 unsafe impl Sync for Window {}
 
@@ -224,6 +232,129 @@ fn on_window_add(mut world: DeferredWorld, context: HookContext) {
             dpi_x = dpi.dpi_x,
             dpi_y = dpi.dpi_y,
             "DPI pre-initialized with system DPI in on_window_add"
+        );
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // ===== unsafe impl Send/Sync の不変条件（W7a-V） =====
+
+    /// `Window` は `parent: Option<HWND>`（HWND は `*mut c_void` newtype・非 Send/Sync）
+    /// を内包するため手動 `unsafe impl Send/Sync` で Send+Sync を表明している。本テストは
+    /// その不変条件をコンパイル時に固定する回帰検知器（device 非依存）。将来 parent 以外に
+    /// 非 Send なフィールドが追加され手動 impl が撤去された場合に検出する。
+    #[test]
+    fn test_window_is_send_sync() {
+        fn assert_send_sync<T: Send + Sync>() {}
+        assert_send_sync::<Window>();
+    }
+
+    // ===== Window::default =====
+
+    #[test]
+    fn test_window_default_fields() {
+        let w = Window::default();
+        assert_eq!(w.title, "Window");
+        assert!(w.parent.is_none());
+        // composition_mode は ULW（CompositionMode::default）
+        assert_eq!(w.composition_mode(), CompositionMode::ULW);
+    }
+
+    // ===== WindowStyle::default =====
+
+    #[test]
+    fn test_window_style_default_is_popup_visible_layered() {
+        // ULW 透過ウィンドウは WS_POPUP | WS_VISIBLE / WS_EX_LAYERED を使用する
+        let style = WindowStyle::default();
+        assert_eq!(style.style, WS_POPUP | WS_VISIBLE);
+        assert_eq!(style.ex_style, WS_EX_LAYERED);
+    }
+
+    #[test]
+    fn test_window_style_default_does_not_use_overlappedwindow() {
+        // WS_OVERLAPPEDWINDOW を含まないこと（ドラッグ時サイズ縮小バグ回避のコメント根拠）
+        let style = WindowStyle::default();
+        assert_eq!(
+            style.style & WS_OVERLAPPEDWINDOW,
+            WS_POPUP & WS_OVERLAPPEDWINDOW,
+            "既定スタイルは WS_OVERLAPPEDWINDOW のキャプション/ボーダービットを含まない"
+        );
+        // 念のため WS_CAPTION（タイトルバー）が立っていないことを確認
+        assert_eq!(style.style & WS_CAPTION, WINDOW_STYLE(0));
+    }
+
+    #[test]
+    fn test_window_style_partial_eq() {
+        let a = WindowStyle::default();
+        let b = WindowStyle::default();
+        assert_eq!(a, b);
+        let c = WindowStyle {
+            style: WS_POPUP,
+            ex_style: WS_EX_LAYERED,
+        };
+        assert_ne!(a, c);
+    }
+
+    // ===== CompositionMode =====
+
+    #[test]
+    fn test_composition_mode_eq_distinguishes_variants() {
+        // 既定値・Debug は composition_mode_test.rs で固定済み。
+        // ここでは 2 バリアントの非等価性のみ補完する。
+        assert_ne!(CompositionMode::ULW, CompositionMode::DComp);
+    }
+
+    // ===== DpiChangeContext (thread_local set/take) =====
+
+    #[test]
+    fn test_dpi_change_context_new_stores_fields() {
+        let dpi = DPI::from_dpi(144, 144);
+        let rect = RECT {
+            left: 1,
+            top: 2,
+            right: 3,
+            bottom: 4,
+        };
+        let ctx = DpiChangeContext::new(dpi, rect);
+        assert_eq!(ctx.new_dpi, dpi);
+        assert_eq!(ctx.suggested_rect.left, 1);
+        assert_eq!(ctx.suggested_rect.bottom, 4);
+    }
+
+    #[test]
+    fn test_dpi_change_context_take_returns_none_when_unset() {
+        // set していない状態（または直前 take 済み）では None
+        // 同一テストスレッドで set しない限り空。先に drain して前提を揃える。
+        let _ = DpiChangeContext::take();
+        assert!(DpiChangeContext::take().is_none());
+    }
+
+    #[test]
+    fn test_dpi_change_context_set_then_take_consumes() {
+        // 前提を揃えるため先に drain
+        let _ = DpiChangeContext::take();
+
+        let dpi = DPI::from_dpi(120, 120);
+        let rect = RECT {
+            left: 10,
+            top: 20,
+            right: 110,
+            bottom: 120,
+        };
+        DpiChangeContext::set(DpiChangeContext::new(dpi, rect));
+
+        // 1回目の take は設定値を返す
+        let taken = DpiChangeContext::take().expect("context should be present after set");
+        assert_eq!(taken.new_dpi, dpi);
+        assert_eq!(taken.suggested_rect.right, 110);
+
+        // 2回目の take は消費済みで None
+        assert!(
+            DpiChangeContext::take().is_none(),
+            "take は消費的（take 後は None に戻る）"
         );
     }
 }

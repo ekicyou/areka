@@ -27,6 +27,16 @@ pub(crate) fn should_continue_loop(instance: &StoryboardInstance) -> bool {
     if instance.loop_count == -1 {
         return true;
     }
+    // 整数変換の安全性(D1a-V): loop_count は facade::compile_and_validate が
+    // 「-1 または正値」のみ許可する（loop_count <= 0 かつ != -1 は InvalidLoopCount）。
+    // -1 は上の早期 return で処理済みのため、ここでの `as u64` は常に正値の
+    // 無損失変換であり、負値の wrap（例: -2 → 約 1.8e19 ≒ 実質無限ループ化）は
+    // 発火しない。
+    debug_assert!(
+        instance.loop_count >= 1,
+        "loop_count invariant violated: {}",
+        instance.loop_count
+    );
     instance.loops_completed < instance.loop_count as u64
 }
 
@@ -154,6 +164,12 @@ pub(crate) fn process_loops(
     }
 
     // while ループで全終了済み周回を処理
+    // 時刻境界の注意(D1a-V): 反復回数は (current_time - end_time) / 周回長 に比例する。
+    // 無限ループ（loop_count == -1）は MIN_LOOP_DURATION（0.1s）が周回長の下限のため
+    // 停止性は保証されるが、巨大な時刻ジャンプ（壁時計補正等）では反復が膨大になり得る。
+    // 反復上限キャップや剰余スキップの導入は外部観測可能な挙動
+    // （loops_completed / loop_start_time / 乱数消費）を変えるため
+    // report/proposals.md P9 に記録。
     while current_time >= instance.end_time {
         advance_loop(instance, rng);
 
@@ -489,6 +505,19 @@ mod tests {
         let easing = EasingFunction::Named(EasingName::Linear);
         assert_eq!(apply_easing(&easing, 0.0), 0.0);
         assert_eq!(apply_easing(&easing, 0.5), 0.5);
+        assert_eq!(apply_easing(&easing, 1.0), 1.0);
+    }
+
+    #[test]
+    fn apply_easing_parametric_quadratic_bezier() {
+        // 対称制御点 (0, 0.5, 1) → 恒等写像に一致
+        let easing = EasingFunction::Parametric(crate::easing::ParametricEasing::QuadraticBezier {
+            x0: 0.0,
+            x1: 0.5,
+            x2: 1.0,
+        });
+        assert_eq!(apply_easing(&easing, 0.0), 0.0);
+        assert!((apply_easing(&easing, 0.5) - 0.5).abs() < 1e-9);
         assert_eq!(apply_easing(&easing, 1.0), 1.0);
     }
 

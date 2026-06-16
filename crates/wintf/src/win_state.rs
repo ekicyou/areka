@@ -1,4 +1,3 @@
-#![allow(non_snake_case)]
 #![allow(unused_variables)]
 
 use crate::api::get_window_long_ptr;
@@ -105,5 +104,88 @@ impl WinState for SimpleWinState {
 
     fn set_dpi(&mut self, dpi: f32) {
         self.dpi = dpi;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn simple_win_state_default_values() {
+        let s = SimpleWinState::default();
+        assert_eq!(s.hwnd(), HWND::default());
+        assert!(!s.mouse_tracking());
+        assert_eq!(s.dpi(), 96.0);
+    }
+
+    #[test]
+    fn simple_win_state_setters_roundtrip() {
+        let mut s = SimpleWinState::default();
+        let hwnd = HWND(0x1234 as *mut _);
+        s.set_hwnd(hwnd);
+        s.set_mouse_tracking(true);
+        s.set_dpi(144.0);
+        assert_eq!(s.hwnd(), hwnd);
+        assert!(s.mouse_tracking());
+        assert_eq!(s.dpi(), 144.0);
+    }
+
+    /// 必須メソッドのみ実装した最小実装（トレイトのデフォルト実装の検証用）
+    struct MinimalState {
+        hwnd: HWND,
+        dpi: f32,
+    }
+
+    impl WinState for MinimalState {
+        fn hwnd(&self) -> HWND {
+            self.hwnd
+        }
+        fn set_hwnd(&mut self, hwnd: HWND) {
+            self.hwnd = hwnd;
+        }
+        fn dpi(&self) -> f32 {
+            self.dpi
+        }
+        fn set_dpi(&mut self, dpi: f32) {
+            self.dpi = dpi;
+        }
+    }
+
+    #[test]
+    fn trait_default_mouse_tracking_is_true_and_setter_is_noop() {
+        let mut s = MinimalState {
+            hwnd: HWND::default(),
+            dpi: 96.0,
+        };
+        // デフォルト実装: mouse_tracking() は常に true、set_mouse_tracking は no-op
+        assert!(s.mouse_tracking());
+        s.set_mouse_tracking(false);
+        assert!(s.mouse_tracking());
+    }
+
+    #[test]
+    fn set_dpi_change_message_extracts_low_word_as_dpi() {
+        // WM_DPICHANGED: wparam の下位 16bit（X 軸 DPI）のみ採用し、
+        // 上位 16bit（Y 軸 DPI）と lparam（推奨 RECT）は無視される
+        let mut s = SimpleWinState::default();
+        s.set_dpi_change_message(WPARAM(96usize | (144usize << 16)), LPARAM(0));
+        assert_eq!(s.dpi(), 96.0);
+    }
+
+    #[test]
+    fn set_dpi_change_message_with_equal_xy_dpi() {
+        let mut s = SimpleWinState::default();
+        s.set_dpi_change_message(WPARAM(120usize | (120usize << 16)), LPARAM(0));
+        assert_eq!(s.dpi(), 120.0);
+    }
+
+    #[test]
+    fn effective_window_size_with_null_hwnd_returns_err() {
+        // HWND 未設定（null）ではスタイル取得（GetWindowLongPtrW）が失敗し
+        // Err が伝播する（ウィンドウ生成不要の GUI 非依存エラー経路）
+        let s = SimpleWinState::default();
+        let r = s.effective_window_size(windows_numerics::Vector2 { X: 100.0, Y: 100.0 });
+        assert!(r.is_err());
     }
 }

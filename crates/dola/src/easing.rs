@@ -1,4 +1,4 @@
-// TODO: Implement EasingFunction, EasingName, ParametricEasing
+//! イージング定義（EasingFunction, EasingName, ParametricEasing）。
 use serde::{Deserialize, Serialize};
 
 /// イージング関数（名前付き or パラメトリック）

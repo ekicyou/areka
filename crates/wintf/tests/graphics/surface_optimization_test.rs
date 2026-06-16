@@ -240,3 +240,51 @@ fn test_calculate_surface_size_from_global_arrangement_negative() {
     let result = calculate_surface_size_from_global_arrangement(&ga);
     assert_eq!(result, None);
 }
+
+// ========== W3a-V: NaN / inf 境界値の特性化テスト ==========
+
+#[test]
+fn test_calculate_surface_size_nan_bounds_returns_none() {
+    // W3a-V: NaN 幅は `width <= 0.0` 比較（false）を素通りするが、
+    // `NaN.ceil() as u32 == 0`（float→int 飽和キャスト）により
+    // width_px == 0 ガードで None に収束する（現行挙動の特性化）。
+    use wintf::ecs::Rect;
+
+    let ga = GlobalArrangement {
+        bounds: Rect {
+            left: 0.0,
+            top: 0.0,
+            right: f32::NAN,
+            bottom: 100.0,
+        },
+        ..Default::default()
+    };
+
+    let result = calculate_surface_size_from_global_arrangement(&ga);
+    assert_eq!(result, None, "NaN 幅は None に収束する");
+}
+
+#[test]
+fn test_calculate_surface_size_infinite_width_saturates_to_u32_max() {
+    // W3a-V: +inf 幅は `inf as u32` の飽和キャストで u32::MAX となり
+    // Some を返す（現行挙動の特性化。下流の create_surface が Err となり
+    // error ログで完結する。有限性検証の追加は挙動変更のため未実施）。
+    use wintf::ecs::Rect;
+
+    let ga = GlobalArrangement {
+        bounds: Rect {
+            left: 0.0,
+            top: 0.0,
+            right: f32::INFINITY,
+            bottom: 100.0,
+        },
+        ..Default::default()
+    };
+
+    let result = calculate_surface_size_from_global_arrangement(&ga);
+    assert_eq!(
+        result,
+        Some((u32::MAX, 100)),
+        "+inf 幅は u32::MAX へ飽和して Some を返す"
+    );
+}

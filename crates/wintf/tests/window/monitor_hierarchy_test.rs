@@ -4,7 +4,29 @@
 
 use bevy_ecs::hierarchy::ChildOf;
 use bevy_ecs::prelude::*;
+use windows::Win32::Foundation::RECT;
 use wintf::ecs::*;
+
+/// テスト用の合成 Monitor（実 HMONITOR 不要）。bounds から physical_size/top_left が導出される。
+fn make_test_monitor(handle: isize, left: i32, top: i32, right: i32, bottom: i32) -> Monitor {
+    Monitor {
+        handle,
+        bounds: RECT {
+            left,
+            top,
+            right,
+            bottom,
+        },
+        work_area: RECT {
+            left,
+            top,
+            right,
+            bottom,
+        },
+        dpi: 96,
+        is_primary: true,
+    }
+}
 
 // ===== Task 11.1: LayoutRoot Singleton生成とMonitor列挙テスト =====
 
@@ -420,5 +442,64 @@ fn test_existing_tests_still_pass() {
     assert!(
         world.get::<TaffyComputedLayout>(widget).is_some(),
         "Widget should have computed layout"
+    );
+}
+
+// ===== W4b-T: update_monitor_layout_system 単独テスト =====
+// 既存テストは initialize_layout_root / detect_display_change_system を固定していたが、
+// Monitor 変更時に BoxStyle.size/inset を再計算する update_monitor_layout_system は
+// 直接検証されていなかった。実 HMONITOR 不要のデバイス非依存ロジックのため特性化する。
+
+/// Changed<Monitor> 検出時に BoxStyle.size と inset が bounds から再計算される
+#[test]
+fn test_update_monitor_layout_recomputes_box_style() {
+    let mut world = World::new();
+
+    // Monitor + 空の BoxStyle を spawn（spawn 時の Added は Changed として扱われる）
+    let monitor = make_test_monitor(1, 100, 200, 1380, 1000); // 幅1280 x 高さ800, 左上(100,200)
+    let entity = world.spawn((monitor, BoxStyle::default())).id();
+
+    let mut schedule = Schedule::default();
+    schedule.add_systems(update_monitor_layout_system);
+    schedule.run(&mut world);
+
+    let box_style = world.get::<BoxStyle>(entity).unwrap();
+
+    // size = physical_size() = (1280, 800)
+    let size = box_style.size.as_ref().expect("size should be set");
+    assert_eq!(size.width, Some(Dimension::Px(1280.0)));
+    assert_eq!(size.height, Some(Dimension::Px(800.0)));
+
+    // inset = top_left() を Px、right/bottom は Auto
+    let inset = box_style.inset.as_ref().expect("inset should be set");
+    assert_eq!(inset.0.left, LengthPercentageAuto::Px(100.0));
+    assert_eq!(inset.0.top, LengthPercentageAuto::Px(200.0));
+    assert_eq!(inset.0.right, LengthPercentageAuto::Auto);
+    assert_eq!(inset.0.bottom, LengthPercentageAuto::Auto);
+}
+
+/// Monitor 未変更時は何も起きない（Changed フィルタにより BoxStyle は再計算されない）
+#[test]
+fn test_update_monitor_layout_skips_unchanged() {
+    let mut world = World::new();
+
+    let monitor = make_test_monitor(1, 0, 0, 800, 600);
+    let entity = world.spawn((monitor, BoxStyle::default())).id();
+
+    let mut schedule = Schedule::default();
+    schedule.add_systems(update_monitor_layout_system);
+
+    // 1回目: Added → 処理されて size/inset が設定される
+    schedule.run(&mut world);
+    assert!(world.get::<BoxStyle>(entity).unwrap().size.is_some());
+
+    // BoxStyle を None に戻し、Monitor を変更せず再実行
+    world.entity_mut(entity).get_mut::<BoxStyle>().unwrap().size = None;
+
+    // 2回目: Monitor は未変更（Changed なし）→ システムは対象外でスキップ
+    schedule.run(&mut world);
+    assert!(
+        world.get::<BoxStyle>(entity).unwrap().size.is_none(),
+        "未変更 Monitor は再計算されず、手動でリセットした size は None のまま"
     );
 }

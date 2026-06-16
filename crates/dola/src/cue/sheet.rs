@@ -13,6 +13,9 @@ pub struct CueSheet(Vec<Cue>);
 
 impl CueSheet {
     /// start_time 昇順でソートして構築（安定ソート）
+    ///
+    /// NOTE(D3-V): NaN の start_time は比較が Equal 扱い（`unwrap_or`）となるため
+    /// panic はしないが、NaN を含む場合のソート結果の位置は規定されない（P25 参照）。
     pub fn new(mut cues: Vec<Cue>) -> Self {
         cues.sort_by(|a, b| {
             a.start_time
@@ -84,6 +87,15 @@ impl CuePayload {
 ///
 /// `Cue::start_time` の最小値を 0 基準にし、`CuePayload::into_entry()` で Entry に変換。
 /// 絶対時刻への変換は `TimedSchedule::new(start_time)` が担当。
+///
+/// NOTE(D3-V): start_time の有限性は検証されない（CueSheet 経路には DolaDocument の
+/// validate() に相当する検証層がない — P25 参照）。非有限値の縮退は次のとおり
+/// （いずれも tests/cue/sheet_test.rs の特性化テストで固定済み）:
+/// - NaN の start_time は `f64::min` が NaN を無視するため最小値計算から脱落し、
+///   当該 Cue のオフセットは NaN となる（TimedSchedule 側の NaN ハザードへ接続）。
+/// - 全 Cue が +inf の場合、min = +inf となり inf - inf = NaN オフセットを生成する。
+/// - 一部の Cue のみ +inf の場合、オフセットは +inf となり TimedSchedule 上で
+///   永遠に配信されず is_completed() が true にならない（liveness 喪失）。
 pub fn compile_sheet(sheet: &CueSheet) -> Vec<CompiledCue> {
     if sheet.is_empty() {
         return Vec::new();

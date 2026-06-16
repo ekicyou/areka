@@ -77,6 +77,13 @@ impl<T: Clone + Debug> TimedSchedule<T> {
 
     /// エントリを時刻順ソート維持で挿入（0 ベース相対オフセット）。
     /// 降順ソートを維持する。
+    ///
+    /// NOTE(D3-V): NaN オフセットは `offset >= 0.0` が false となるため debug
+    /// ビルドでは下の debug_assert が発火する（tests/cue/schedule_test.rs で特性化済み）。
+    /// release ビルドでは素通りし、`partition_point` の前提（述語が前半 true /
+    /// 後半 false に分割されていること）を破るため、以後の挿入位置が不定となり
+    /// 配信順が黙って崩れ得る（panic はしない）。CueSheet 経路には DolaDocument の
+    /// validate() に相当する数値検証層がない（P25 参照）。
     pub fn insert(&mut self, entry: Entry<T>) {
         debug_assert!(
             entry.offset() >= 0.0,
@@ -92,6 +99,10 @@ impl<T: Clone + Debug> TimedSchedule<T> {
     }
 
     /// 複数エントリを一括挿入（内部で再ソート）。
+    ///
+    /// NOTE(D3-V): NaN オフセットの扱いは insert() と同様（debug_assert 発火 /
+    /// release 素通り）。ソート比較は NaN を Equal 扱い（`unwrap_or`）するため
+    /// panic はしないが、NaN を含む場合の順序は規定されない（P25 参照）。
     pub fn extend(&mut self, entries: impl IntoIterator<Item = Entry<T>>) {
         for entry in entries {
             debug_assert!(
@@ -116,6 +127,13 @@ impl<T: Clone + Debug> TimedSchedule<T> {
     /// 時刻到達済みの Payload を `ready_buffer` に、Routing を `routing_buffer` に
     /// 蒐集しながら進行。Barrier 到達（外部解決が必要）または末尾到達で停止。
     /// Routing は通過（停止しない）。冪等（同一時刻の再呼び出し安全）。
+    ///
+    /// NOTE(D3-V): `current_time`（または start_time）が NaN の場合 offset は NaN
+    /// となり、下の全ガード（負値チェック・冪等性チェック）と本体の
+    /// `entry_offset > offset` 比較がすべて false になるため、最初のバリアまでの
+    /// 全エントリが即時配信される（時刻入力の有限性は検証されない — P25 参照。
+    /// tests/cue/schedule_test.rs::tick_with_nan_time_delivers_all_pending_payloads
+    /// で特性化済み）。
     pub fn tick(&mut self, current_time: f64) {
         let offset = current_time - self.start_time;
         if offset < 0.0 {
@@ -156,28 +174,22 @@ impl<T: Clone + Debug> TimedSchedule<T> {
                 break; // まだ到達していない
             }
 
+            // SAFETY: 直前の while let Some(..) = self.entries.last() ガードにより
+            // entries は非空であるため、pop() の unwrap は panic 不能。
             let entry = self.entries.pop().unwrap();
             match entry {
                 Entry::Payload(_, payload) => {
                     self.ready_buffer.push(payload);
                 }
                 Entry::Barrier(barrier_offset, kind) => {
-                    // タイムアウトチェック
+                    // タイムアウトチェック（Timeout は duration が必須タイムアウト）
                     let timeout_dur = match &kind {
                         BarrierKind::WaitForInput { timeout } => *timeout,
                         BarrierKind::WaitForChoice { timeout } => *timeout,
                         BarrierKind::Timeout { duration } => Some(*duration),
                     };
 
-                    // Timeout バリアの即時解除チェック
-                    if let BarrierKind::Timeout { duration } = &kind {
-                        if offset >= barrier_offset + duration {
-                            // 既にタイムアウト済み → バリアスキップ
-                            continue;
-                        }
-                    }
-
-                    // タイムアウト解除チェック（WaitForInput/WaitForChoice）
+                    // タイムアウト解除チェック（全バリア種別共通）
                     if let Some(dur) = timeout_dur {
                         let timeout_abs = barrier_offset + dur;
                         if offset >= timeout_abs {

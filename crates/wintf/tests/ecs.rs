@@ -5,6 +5,10 @@ mod component_state_pattern_test;
 mod lazy_reinit_pattern_test;
 #[path = "ecs/resource_removal_detection_test.rs"]
 mod resource_removal_detection_test;
+#[path = "ecs/tree_propagation_test.rs"]
+mod tree_propagation_test;
+#[path = "ecs/world_lifecycle_test.rs"]
+mod world_lifecycle_test;
 
 // cue-system tests
 #[path = "ecs/cue_barrier_test.rs"]

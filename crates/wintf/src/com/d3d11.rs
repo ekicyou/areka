@@ -33,6 +33,10 @@ where
             featurelevel,
             immediatecontext,
         )
+        // NOTE: この unwrap は成功経路でのみ到達する。ppDevice（Some(&mut device)）を
+        // 非 null で渡しているため、D3D11CreateDevice の契約上 HRESULT 成功時には
+        // out パラメータが必ず書き込まれる（失敗時は map が実行されず unwrap に
+        // 到達しない）。
         .map(|()| device.unwrap())
     }
 }
@@ -65,6 +69,10 @@ impl D3D11DeviceExt for ID3D11Device {
         let mut texture2d: Option<ID3D11Texture2D> = None;
         let pptexture2d = Some(&mut texture2d as *mut _);
         unsafe { self.CreateTexture2D(pdesc, pinitialdata, pptexture2d)? }
+        // NOTE: `?` が失敗時に先行リターンするため、この unwrap は成功時のみ到達。
+        // ppTexture2D を非 null で渡しており、成功時の out パラメータ書き込みは
+        // API 契約で保証される（tests/com/d3d11_test.rs の幅 0 エラーテストで
+        // 失敗経路が unwrap に到達しないことを特性化済み）。
         Ok(texture2d.unwrap())
     }
 }

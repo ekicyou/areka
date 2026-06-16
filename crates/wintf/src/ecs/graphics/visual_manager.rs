@@ -41,12 +41,7 @@ pub fn insert_visual_with(world: &mut World, entity: Entity, visual: Visual) {
 /// Surface作成はDrawスケジュールでCommandList存在時に遅延実行する。
 ///
 /// Note: SurfaceGraphicsとSurfaceGraphicsDirtyはVisual.on_addで事前配置されている
-fn create_visual_only(
-    _commands: &mut Commands,
-    entity: Entity,
-    vg: &mut VisualGraphics,
-    dcomp: &IDCompositionDevice3,
-) {
+fn create_visual_only(entity: Entity, vg: &mut VisualGraphics, dcomp: &IDCompositionDevice3) {
     let visual_res = dcomp.create_visual();
     match visual_res {
         Ok(v3) => {
@@ -75,7 +70,9 @@ fn create_visual_only(
 /// Changed: Added<Visual> から Changed<VisualGraphics> + !is_valid() パターンに移行
 /// Visual.on_add で VisualGraphics::default() が挿入され、このシステムがGPUリソースを作成
 pub fn visual_resource_management_system(
-    mut commands: Commands,
+    // NOTE: Commands は Phase 6（Surface 作成の Draw スケジュール移行）以降未使用。
+    // パラメータ削除はシステムのアクセスセット変更にあたるため P45 として記録（P39 と同系統）。
+    _commands: Commands,
     graphics: Res<GraphicsCore>,
     dcomp_resource: Option<Res<DCompGraphicsResource>>,
     mut query: Query<
@@ -102,7 +99,7 @@ pub fn visual_resource_management_system(
                 entity = %entity_name,
                 "VisualGraphics initialization starting (Changed + !is_valid)"
             );
-            create_visual_only(&mut commands, entity, &mut vg, dcomp);
+            create_visual_only(entity, &mut vg, dcomp);
             trace!(
                 frame = frame_count.0,
                 entity = %entity_name,
@@ -132,6 +129,13 @@ pub fn window_visual_integration_system(
                     entity = %entity_name,
                     "SetRoot executing"
                 );
+                // SAFETY: target / visual は直前の二重 Some ガードで有効性を確認済みの
+                // COM ポインタ。SetRoot はインプロセスの DComp 呼び出しで、失敗は
+                // 戻り値 HRESULT で報告される（UB に至る経路はない）。
+                // NOTE(W3b-V): 失敗の黙殺（`let _ =`）は意図的 — SetRoot が失敗するのは
+                // 実質デバイスロスト時のみで、復旧は invalidate 系統が担う設計
+                // （ただし検出経路の不在は P40、DComp 側再初期化の不完全性は
+                // 本セル断片の分析を参照）。
                 unsafe {
                     let _ = target.SetRoot(visual);
                 }

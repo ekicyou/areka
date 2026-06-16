@@ -90,6 +90,10 @@ impl WinThreadMgrInner {
     }
 
     fn new() -> Result<Self> {
+        // NOTE(W1-V): CoInitializeEx の成功に対し Drop で CoUninitialize を呼ばないため、
+        // COM 初期化カウントがインスタンスごとに1つ残置される（プロセス常駐の単一
+        // インスタンス運用では実害なし）。解放の追加は終了時挙動の変更を伴うため
+        // P30 として記録。
         unsafe {
             CoInitializeEx(None, COINIT_MULTITHREADED).ok()?;
         }
@@ -119,6 +123,11 @@ impl WinThreadMgrInner {
         world.borrow_mut().set_message_window(message_window);
 
         // EcsWorldへの弱参照を登録（wndprocからアクセスするため）
+        // NOTE(W1-V): 登録先（ecs::window_proc::ECS_WORLD）は OnceLock のため初回登録で
+        // 固定され、2個目以降の WinThreadMgr の world は束縛されない（2個目の ECS
+        // ウィンドウのメッセージは初代 world へ配信され、初代 drop 後は upgrade 失敗で
+        // 黙って DefWindowProc へフォールバックする）。areka 本体は単一インスタンス
+        // 運用のため実害はないが、多重生成時の束縛不整合は P32 として記録。
         crate::ecs::set_ecs_world(Rc::downgrade(&world));
 
         // VSync監視スレッドを起動
@@ -148,6 +157,11 @@ impl WinThreadMgrInner {
     {
         let singleton = WinProcessSingleton::get_or_init();
         let window_name_hstring: HSTRING = window_name.into();
+        // NOTE(W1-V): into_boxed_ptr で確保したハンドラ Box の所有権は
+        // WM_NCCREATE（GWLP_USERDATA へ格納）→ WM_NCDESTROY（from_boxed_ptr で解放）の
+        // 経路で回収される。CreateWindowExW が WM_NCCREATE 送出前に失敗した場合は回収
+        // 経路がなく Box がリークする（エラー経路のみ・ウィンドウ生成を反復しない限り
+        // 実害は限定的）。エラー時解放の追加は P30 として記録。
         let boxed_ptr = handler.into_boxed_ptr();
 
         unsafe {
@@ -292,10 +306,16 @@ impl WinThreadMgrInner {
 
 impl Drop for WinThreadMgrInner {
     fn drop(&mut self) {
+        // 不変条件: vsync_thread_handle は new() で必ず Some に設定され、take は本 drop のみ
+        // （join がスキップされることはない）
+        debug_assert!(self.vsync_thread_handle.is_some());
+
         // VSync監視スレッドを停止
         self.vsync_thread_stop.store(true, Ordering::Relaxed);
 
         // スレッドの終了を待つ
+        // 安全性: join 完了 → DestroyWindow の順序により、VSync スレッドからの
+        // PostMessageW は常に有効な HWND へ送られる（破棄後送信は構造的に発生しない）
         if let Some(handle) = self.vsync_thread_handle.take() {
             let _ = handle.join();
         }
@@ -309,7 +329,14 @@ impl Drop for WinThreadMgrInner {
 /// VSync監視スレッドを起動
 /// DwmFlushを使用してVSyncと同期
 fn spawn_vsync_thread(message_window: HWND, stop_flag: Arc<AtomicBool>) -> thread::JoinHandle<()> {
+    // 不変条件: 唯一の呼び出し元（new()）は CreateWindowExW 成功直後の有効な HWND のみを渡す
+    debug_assert!(!message_window.is_invalid());
+
     // HWNDはSendではないので、isizeとして保持
+    // SAFETY(W1-V): HWND を isize として越境させるが、ウィンドウの生存期間は
+    // WinThreadMgrInner::drop が stop_flag 設定 → join → DestroyWindow の順で保証する
+    // （join 完了までウィンドウは破棄されないため、本スレッドの PostMessageW の送信先は
+    // 常に有効）。
     let message_window_ptr = message_window.0 as isize;
 
     thread::spawn(move || {

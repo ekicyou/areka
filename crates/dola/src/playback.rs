@@ -1,4 +1,3 @@
-// TODO: Implement PlaybackState, ScheduleRequest
 use serde::{Deserialize, Serialize};
 
 /// 再生状態列挙型

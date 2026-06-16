@@ -236,3 +236,75 @@ fn test_multiple_components_combined() {
     assert_eq!(style.flex_shrink, 1.0);
     assert_eq!(style.flex_basis, ::taffy::Dimension::auto());
 }
+
+// ===== W4a ギャップテスト: build_taffy_styles_system の未カバー分岐 =====
+
+/// BoxStyle を持たない LayoutRoot 単独エンティティにはデフォルトの TaffyStyle と
+/// TaffyComputedLayout / ArrangementTreeChanged が自動挿入される
+#[test]
+fn test_layout_root_only_gets_default_taffy_style() {
+    let mut world = World::new();
+    let entity = world.spawn(LayoutRoot).id();
+
+    let mut schedule = Schedule::default();
+    schedule.add_systems(build_taffy_styles_system);
+    schedule.run(&mut world);
+
+    let taffy_style = world
+        .get::<TaffyStyle>(entity)
+        .expect("LayoutRoot のみのエンティティにも TaffyStyle が挿入されるべき");
+    assert_eq!(
+        *taffy_style.style(),
+        ::taffy::Style::default(),
+        "BoxStyle がない場合は taffy デフォルトスタイルが適用されるべき"
+    );
+    assert!(
+        world.get::<TaffyComputedLayout>(entity).is_some(),
+        "TaffyComputedLayout も同時に挿入されるべき"
+    );
+    assert!(
+        world.get::<ArrangementTreeChanged>(entity).is_some(),
+        "ArrangementTreeChanged も同時に挿入されるべき"
+    );
+}
+
+/// BoxStyle の変更が既存 TaffyStyle に反映される（changed 分岐）
+#[test]
+fn test_box_style_change_updates_existing_taffy_style() {
+    let mut world = World::new();
+    let entity = world
+        .spawn(BoxStyle {
+            size: Some(BoxSize {
+                width: Some(Dimension::Px(100.0)),
+                height: Some(Dimension::Px(200.0)),
+            }),
+            ..Default::default()
+        })
+        .id();
+
+    let mut schedule = Schedule::default();
+    schedule.add_systems(build_taffy_styles_system);
+    schedule.run(&mut world);
+
+    // 初回: TaffyStyle が挿入され 100x200
+    {
+        let style = world.get::<TaffyStyle>(entity).unwrap().style().clone();
+        assert_eq!(style.size.width, ::taffy::Dimension::length(100.0));
+        assert_eq!(style.size.height, ::taffy::Dimension::length(200.0));
+    }
+
+    // BoxStyle を変更（Changed<BoxStyle> 発火）
+    {
+        let mut box_style = world.get_mut::<BoxStyle>(entity).unwrap();
+        box_style.size = Some(BoxSize {
+            width: Some(Dimension::Px(300.0)),
+            height: Some(Dimension::Px(400.0)),
+        });
+    }
+    schedule.run(&mut world);
+
+    // 変更が既存 TaffyStyle に反映される
+    let style = world.get::<TaffyStyle>(entity).unwrap().style().clone();
+    assert_eq!(style.size.width, ::taffy::Dimension::length(300.0));
+    assert_eq!(style.size.height, ::taffy::Dimension::length(400.0));
+}

@@ -43,11 +43,20 @@ pub fn visual_hierarchy_sync_system(
         let child_query = vg_queries.p0();
         for (_entity, child_of, child_vg, _child_name) in child_query.iter() {
             // parent_visualがNoneなら未同期
+            // NOTE(W3b-V): この検出は「キャッシュ未設定」のみを未同期と見なすため、
+            // 既に親 Visual を持つ子の ChildOf 変更（再ペアレント）は検出されない。
+            // 再ペアレント後は旧親の DComp Visual に接続されたまま ECS 階層と乖離し、
+            // 後で旧親側が別の未同期子により再同期されると remove_all_visuals で
+            // 切り離されたまま新親へ再接続されない（tests/visual/
+            // hierarchy_reparent_gap_test.rs で現行挙動を固定。修正は挙動変更のため
+            // P47 に記録）。
             if child_vg.parent_visual().is_none() {
                 let parent_entity = child_of.parent();
                 affected_parents.insert(parent_entity);
 
                 // 親の深さを計算（まだ計算していない場合）
+                // NOTE(W3b-V): この走査は ChildOf チェーンの終端到達を前提とする
+                // （間接巡回 A→B→A があると終了しない。巡回ガードは P48 参照）。
                 if !parent_depths.contains_key(&parent_entity) {
                     let mut depth = 0;
                     let mut current = parent_entity;
@@ -78,22 +87,13 @@ pub fn visual_hierarchy_sync_system(
     for parent_entity in sorted_parents {
         let parent_depth = parent_depths.get(&parent_entity).copied().unwrap_or(0);
 
-        // 親の Visual を取得
-        let parent_visual = {
+        // 親の Visual と名前（ログ用）を取得
+        let (parent_visual, parent_name) = {
             let parent_query = vg_queries.p1();
-            parent_query
-                .get(parent_entity)
-                .ok()
-                .and_then(|(pv, _)| pv.visual().cloned())
-        };
-
-        // 親の名前（ログ用）
-        let parent_name = {
-            let parent_query = vg_queries.p1();
-            parent_query
-                .get(parent_entity)
-                .ok()
-                .and_then(|(_, name)| name.map(|n| n.to_string()))
+            match parent_query.get(parent_entity) {
+                Ok((pv, name)) => (pv.visual().cloned(), name.map(|n| n.to_string())),
+                Err(_) => (None, None),
+            }
         };
         let parent_fallback = format!("Entity({:?})", parent_entity);
         let parent_display = parent_name.as_deref().unwrap_or(&parent_fallback);
@@ -234,21 +234,6 @@ pub fn visual_property_sync_system(
                     "[visual_property_sync] SetOffsetY failed"
                 );
             }
-
-            // デバッグ: Visual offset と GlobalArrangement.bounds の比較
-            // Note: ログは抑制（毎フレーム出力されるため）
-            // info!(
-            //     entity = %entity_name,
-            //     visual_offset_x = offset_x,
-            //     visual_offset_y = offset_y,
-            //     bounds_left = global_arrangement.bounds.left,
-            //     bounds_top = global_arrangement.bounds.top,
-            //     "[visual_property_sync] Offset comparison"
-            // );
-        } else {
-            // 正常パスのログは抑制
-            // #[cfg(debug_assertions)]
-            // eprintln!("[visual_property_sync] Entity={} (Window): offset skipped", entity_name);
         }
 
         // Opacity同期: Visual.opacityを読み取り、is_visible=falseなら0.0を設定

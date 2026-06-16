@@ -199,3 +199,91 @@ pub fn enumerate_monitors() -> Vec<Monitor> {
 
     monitors
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// テスト用合成 Monitor（実 HMONITOR 不要）。bounds から physical_size/top_left が導出される。
+    fn make_monitor(handle: isize, left: i32, top: i32, right: i32, bottom: i32) -> Monitor {
+        Monitor {
+            handle,
+            bounds: RECT {
+                left,
+                top,
+                right,
+                bottom,
+            },
+            work_area: RECT {
+                left,
+                top,
+                right: right - 40,
+                bottom: bottom - 40,
+            },
+            dpi: 96,
+            is_primary: true,
+        }
+    }
+
+    #[test]
+    fn test_physical_size_from_bounds() {
+        // 幅 = right - left, 高さ = bottom - top
+        let m = make_monitor(1, 100, 200, 1380, 1000);
+        assert_eq!(m.physical_size(), (1280.0, 800.0));
+    }
+
+    #[test]
+    fn test_physical_size_with_negative_origin() {
+        // 左上が負座標（セカンダリモニタが主モニタの左にある等）でも幅/高さは正
+        let m = make_monitor(2, -1920, 0, 0, 1080);
+        assert_eq!(m.physical_size(), (1920.0, 1080.0));
+    }
+
+    #[test]
+    fn test_top_left_from_bounds() {
+        let m = make_monitor(1, 100, 200, 1380, 1000);
+        assert_eq!(m.top_left(), (100.0, 200.0));
+    }
+
+    #[test]
+    fn test_top_left_with_negative_origin() {
+        let m = make_monitor(2, -1920, -100, 0, 980);
+        assert_eq!(m.top_left(), (-1920.0, -100.0));
+    }
+
+    #[test]
+    fn test_partial_eq_compares_handle_only() {
+        // PartialEq は handle のみで等価判定する（bounds/dpi/is_primary は無視）。
+        let a = make_monitor(42, 0, 0, 800, 600);
+        let mut b = make_monitor(42, 100, 100, 1920, 1080); // 異なる bounds
+        b.dpi = 144; // 異なる dpi
+        b.is_primary = false; // 異なる primary フラグ
+        assert_eq!(a, b, "handle が同一なら他フィールドが異なっても等価");
+
+        let c = make_monitor(99, 0, 0, 800, 600); // 同一 bounds, 異なる handle
+        assert_ne!(a, c, "handle が異なれば非等価");
+    }
+
+    #[test]
+    fn test_debug_format_contains_fields() {
+        let m = make_monitor(7, 0, 0, 800, 600);
+        let s = format!("{:?}", m);
+        assert!(s.contains("Monitor"));
+        assert!(s.contains("handle"));
+        // bounds はカスタム整形 "(left,top,right,bottom)"
+        assert!(s.contains("(0,0,800,600)"), "bounds は (l,t,r,b) 形式で整形される: {s}");
+        assert!(s.contains("is_primary"));
+    }
+
+    #[test]
+    fn test_monitor_error_display() {
+        assert_eq!(
+            MonitorError::GetMonitorInfoFailed.to_string(),
+            "GetMonitorInfoW failed"
+        );
+        assert_eq!(
+            MonitorError::GetDpiFailed.to_string(),
+            "GetDpiForMonitor failed"
+        );
+    }
+}

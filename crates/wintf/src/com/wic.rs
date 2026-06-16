@@ -12,7 +12,7 @@ pub trait WICImagingFactoryExt {
     fn create_decoder_from_filename<P0>(
         &self,
         wzfilename: P0,
-        pguidvendor: Option<*const GUID>,
+        pguidvendor: Option<&GUID>,
         dwdesiredaccess: GENERIC_ACCESS_RIGHTS,
         metadataoptions: WICDecodeOptions,
     ) -> Result<IWICBitmapDecoder>
@@ -28,7 +28,7 @@ impl WICImagingFactoryExt for IWICImagingFactory2 {
     fn create_decoder_from_filename<P0>(
         &self,
         wzfilename: P0,
-        pguidvendor: Option<*const GUID>,
+        pguidvendor: Option<&GUID>,
         dwdesiredaccess: GENERIC_ACCESS_RIGHTS,
         metadataoptions: WICDecodeOptions,
     ) -> Result<IWICBitmapDecoder>
@@ -38,7 +38,7 @@ impl WICImagingFactoryExt for IWICImagingFactory2 {
         unsafe {
             self.CreateDecoderFromFilename(
                 wzfilename,
-                pguidvendor,
+                pguidvendor.map(|guid| guid as *const GUID),
                 dwdesiredaccess,
                 metadataoptions,
             )
@@ -68,7 +68,7 @@ pub trait WICFormatConverterExt {
     fn init(
         &self,
         pisource: &IWICBitmapSource,
-        dstformat: *const GUID,
+        dstformat: &GUID,
         dither: WICBitmapDitherType,
         pipalette: Option<&IWICPalette>,
         alpha_threshold_percent: f64,
@@ -81,7 +81,7 @@ impl WICFormatConverterExt for IWICFormatConverter {
     fn init(
         &self,
         pisource: &IWICBitmapSource,
-        dstformat: *const GUID,
+        dstformat: &GUID,
         dither: WICBitmapDitherType,
         pipalette: Option<&IWICPalette>,
         alpha_threshold_percent: f64,
@@ -90,7 +90,7 @@ impl WICFormatConverterExt for IWICFormatConverter {
         unsafe {
             self.Initialize(
                 pisource,
-                dstformat,
+                dstformat as *const GUID,
                 dither,
                 pipalette,
                 alpha_threshold_percent,

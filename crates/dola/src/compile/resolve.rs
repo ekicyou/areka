@@ -2,7 +2,8 @@
 //!
 //! compile_storyboard() から呼び出される内部関数群。
 
-use std::collections::{HashMap, HashSet};
+use std::cmp::Reverse;
+use std::collections::{BinaryHeap, HashMap, HashSet};
 
 use crate::document::DolaDocument;
 use crate::error::DolaError;
@@ -12,6 +13,21 @@ use crate::validate::collect_keyframe_names_from_ref;
 use crate::variable::AnimationVariableDef;
 
 use super::types::VariableTypeHint;
+
+/// エントリのキーフレーム名を返す（未指定時は内部用の暗黙名 `__implicit_{idx}`）
+///
+/// NOTE(D2-V): バリデーションは `start` のみ予約し（V3）、`__implicit_` プレフィックスを
+/// 予約していないため、ユーザーが明示的に `keyframe = "__implicit_{n}"` を指定すると
+/// 別エントリの暗黙名と衝突し得る。衝突時は `kf_to_entry` / `keyframe_times` の
+/// HashMap 上書き（後勝ち）により明示名が黙ってシャドウされ、誤った時刻解決となる
+/// （panic はしない。tests/compile/boundary_test.rs で特性化、プレフィックス予約は
+/// バリデーション追加＝挙動変更のため P21 提案を参照）。
+pub(super) fn entry_keyframe_name(entry: &StoryboardEntry, idx: usize) -> String {
+    entry
+        .keyframe
+        .clone()
+        .unwrap_or_else(|| format!("__implicit_{}", idx))
+}
 
 /// キーフレーム依存グラフ
 /// adjacency[i] = set of entry indices that entry i depends on
@@ -23,20 +39,12 @@ pub(super) struct DependencyGraph {
 }
 
 /// Build dependency graph from storyboard entries (Task 4.1)
-pub(super) fn build_dependency_graph(
-    _storyboard_name: &str,
-    sb: &crate::storyboard::Storyboard,
-    _errors: &mut Vec<DolaError>,
-) -> DependencyGraph {
+pub(super) fn build_dependency_graph(sb: &crate::storyboard::Storyboard) -> DependencyGraph {
     let mut kf_to_entry: HashMap<String, usize> = HashMap::new();
 
     // First pass: map keyframe names to entry indices
     for (idx, entry) in sb.entry.iter().enumerate() {
-        let kf_name = entry
-            .keyframe
-            .clone()
-            .unwrap_or_else(|| format!("__implicit_{}", idx));
-        kf_to_entry.insert(kf_name, idx);
+        kf_to_entry.insert(entry_keyframe_name(entry, idx), idx);
     }
 
     let mut deps: HashMap<usize, HashSet<usize>> = HashMap::new();
@@ -58,13 +66,11 @@ pub(super) fn build_dependency_graph(
             }
         } else if let Some(ref between) = entry.between {
             // between: depends on from and to keyframes
-            if between.from != "start" {
-                if let Some(&dep_idx) = kf_to_entry.get(&between.from) {
-                    entry_deps.insert(dep_idx);
+            for name in [&between.from, &between.to] {
+                if name == "start" {
+                    continue; // pseudo-keyframe, always available
                 }
-            }
-            if between.to != "start" {
-                if let Some(&dep_idx) = kf_to_entry.get(&between.to) {
+                if let Some(&dep_idx) = kf_to_entry.get(name) {
                     entry_deps.insert(dep_idx);
                 }
             }
@@ -82,48 +88,44 @@ pub(super) fn topological_sort(
     graph: &DependencyGraph,
     entry_count: usize,
 ) -> Result<Vec<usize>, Vec<String>> {
-    let mut in_degree: HashMap<usize, usize> = HashMap::new();
-    let mut reverse_deps: HashMap<usize, Vec<usize>> = HashMap::new();
+    let mut in_degree: Vec<usize> = (0..entry_count)
+        .map(|idx| graph.deps.get(&idx).map_or(0, |s| s.len()))
+        .collect();
 
-    for idx in 0..entry_count {
-        in_degree.entry(idx).or_insert(0);
-    }
-
-    for (idx, dep_set) in &graph.deps {
-        in_degree.entry(*idx).or_insert(0);
+    // SAFETY: graph は build_dependency_graph で同一 storyboard から構築され、
+    // deps のキー・値はいずれも enumerate 由来のエントリ index（< entry_count）。
+    // したがって reverse_deps[dep] の添字アクセスは範囲内（呼び出し契約を表明）。
+    let mut reverse_deps: Vec<Vec<usize>> = vec![Vec::new(); entry_count];
+    for (&idx, dep_set) in &graph.deps {
         for &dep in dep_set {
-            *in_degree.entry(*idx).or_insert(0) += 0; // ensure entry exists
-            reverse_deps.entry(dep).or_default().push(*idx);
+            debug_assert!(
+                dep < entry_count && idx < entry_count,
+                "dependency graph indices must be < entry_count"
+            );
+            reverse_deps[dep].push(idx);
         }
     }
 
-    // Recompute in_degree properly
-    for idx in 0..entry_count {
-        let dep_count = graph.deps.get(&idx).map_or(0, |s| s.len());
-        in_degree.insert(idx, dep_count);
-    }
-
-    let mut queue: Vec<usize> = Vec::new();
-    for idx in 0..entry_count {
-        if in_degree[&idx] == 0 {
-            queue.push(idx);
-        }
-    }
-    // Sort descending so pop() gives smallest index first
-    queue.sort_by(|a, b| b.cmp(a));
+    // Min-heap so pop() gives smallest index first (deterministic order)
+    let mut queue: BinaryHeap<Reverse<usize>> = (0..entry_count)
+        .filter(|&idx| in_degree[idx] == 0)
+        .map(Reverse)
+        .collect();
 
     let mut result = Vec::new();
 
-    while let Some(node) = queue.pop() {
+    // NOTE(D2-V): Kahn 法による反復実装（再帰なし）。エントリ数に比例した
+    // ヒープ確保のみで、巨大文書でもスタック枯渇しない。
+    while let Some(Reverse(node)) = queue.pop() {
         result.push(node);
-        if let Some(dependents) = reverse_deps.get(&node) {
-            for &dep in dependents {
-                let deg = in_degree.get_mut(&dep).unwrap();
-                *deg -= 1;
-                if *deg == 0 {
-                    queue.push(dep);
-                    queue.sort_by(|a, b| b.cmp(a));
-                }
+        for &dependent in &reverse_deps[node] {
+            // SAFETY: in_degree[dependent] は dependent への入次数（deps は HashSet で
+            // 重複エッジなし）に初期化され、各エッジにつき本行で1回だけ減算されるため
+            // 0 を下回らない（usize アンダーフローは発生しない）。
+            debug_assert!(in_degree[dependent] > 0, "in_degree underflow");
+            in_degree[dependent] -= 1;
+            if in_degree[dependent] == 0 {
+                queue.push(Reverse(dependent));
             }
         }
     }
@@ -131,7 +133,7 @@ pub(super) fn topological_sort(
     if result.len() != entry_count {
         // Cycle detected: find cycle members
         let cycle_members: Vec<String> = (0..entry_count)
-            .filter(|idx| in_degree.get(idx).copied().unwrap_or(0) > 0)
+            .filter(|&idx| in_degree[idx] > 0)
             .map(|idx| {
                 // Try to find keyframe name for this entry
                 graph
@@ -155,7 +157,6 @@ pub(super) fn resolve_pure_keyframe_time(
     entry: &StoryboardEntry,
     keyframe_times: &HashMap<String, f64>,
     entry_keyframe_time: &HashMap<usize, f64>,
-    sorted_indices: &[usize],
     errors: &mut Vec<DolaError>,
 ) -> Option<f64> {
     if let Some(ref kf_ref) = entry.at {
@@ -173,9 +174,8 @@ pub(super) fn resolve_pure_keyframe_time(
             }
         }
     } else {
-        // at なし: 配列直前エントリの keyframe_time を継承
-        let prev_entry_idx = find_previous_entry_in_sort_order(entry_idx, sorted_indices);
-        match prev_entry_idx {
+        // at なし: 配列直前エントリ（元配列 index - 1）の keyframe_time を継承
+        match entry_idx.checked_sub(1) {
             Some(prev_idx) => {
                 if let Some(&t) = entry_keyframe_time.get(&prev_idx) {
                     Some(t)
@@ -208,14 +208,15 @@ pub(super) fn resolve_pure_keyframe_time(
     }
 }
 
-/// Find the previous entry (by original array index) in sorted order
-fn find_previous_entry_in_sort_order(entry_idx: usize, _sorted_indices: &[usize]) -> Option<usize> {
-    // "配列直前エントリ" = original array index - 1
-    if entry_idx > 0 {
-        Some(entry_idx - 1)
-    } else {
-        None
+/// All KFs must be resolved; take the latest
+/// （1つでも未解決、または names が空なら None）
+fn latest_keyframe_time(names: &[String], keyframe_times: &HashMap<String, f64>) -> Option<f64> {
+    let mut max_time: Option<f64> = None;
+    for name in names {
+        let t = *keyframe_times.get(name)?;
+        max_time = Some(max_time.map_or(t, |m: f64| m.max(t)));
     }
+    max_time
 }
 
 /// Resolve a KeyframeRef to a time value (Task 5.5)
@@ -225,34 +226,11 @@ pub(super) fn resolve_keyframe_ref_time(
 ) -> Option<f64> {
     match kf_ref {
         KeyframeRef::Single(name) => keyframe_times.get(name).copied(),
-        KeyframeRef::Multiple(names) => {
-            // All KFs must be resolved; take the latest
-            let mut max_time: Option<f64> = None;
-            for name in names {
-                match keyframe_times.get(name) {
-                    Some(&t) => {
-                        max_time = Some(max_time.map_or(t, |m: f64| m.max(t)));
-                    }
-                    None => return None,
-                }
-            }
-            max_time
-        }
+        KeyframeRef::Multiple(names) => latest_keyframe_time(names, keyframe_times),
         KeyframeRef::WithOffset { keyframes, offset } => {
             let base_time = match keyframes {
                 KeyframeNames::Single(name) => keyframe_times.get(name).copied(),
-                KeyframeNames::Multiple(names) => {
-                    let mut max_time: Option<f64> = None;
-                    for name in names {
-                        match keyframe_times.get(name) {
-                            Some(&t) => {
-                                max_time = Some(max_time.map_or(t, |m: f64| m.max(t)));
-                            }
-                            None => return None,
-                        }
-                    }
-                    max_time
-                }
+                KeyframeNames::Multiple(names) => latest_keyframe_time(names, keyframe_times),
             };
             base_time.map(|t| t + offset)
         }
@@ -294,6 +272,15 @@ pub(super) fn resolve_transition(
 
 /// Resolve entry timing (Tasks 5.1-5.3)
 /// Returns (segment_start, segment_end, keyframe_time)
+///
+/// NOTE(D2-V): delay / duration / offset は指示書由来の任意 f64 で、有限性・符号の
+/// 検証がない（P14/P20 参照）。f64 加算は panic しないが以下の静かな縮退がある:
+/// - 負の duration → segment_end < segment_start の反転セグメントが生成される（P20）
+/// - NaN の delay/duration → between の反転検査 `segment_start >= segment_end` が
+///   NaN 比較 false で素通りし、NaN 時刻のセグメントが出力へ伝播する（P14）
+/// - ±inf は inf 時刻として伝播する
+///
+/// 現行挙動は tests/compile/boundary_test.rs で特性化済み。
 pub(super) fn resolve_entry_timing(
     storyboard_name: &str,
     entry_idx: usize,

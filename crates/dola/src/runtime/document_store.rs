@@ -135,6 +135,15 @@ mod tests {
         assert_eq!(store.document().unwrap().schema_version, "1.0");
     }
 
+    /// D1b-T 追加: 初回 store が失敗した場合は None のまま（既存 doc なしの失敗パス）
+    #[test]
+    fn store_invalid_document_on_empty_store_keeps_none() {
+        let mut store = DocumentStore::new();
+        assert!(store.store(make_invalid_doc()).is_err());
+        assert!(store.document().is_none());
+        assert!(store.get_storyboard("fade").is_none());
+    }
+
     #[test]
     fn get_storyboard_found() {
         let mut store = DocumentStore::new();

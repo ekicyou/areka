@@ -242,3 +242,63 @@ pub fn find_owner_window(world: &World, entity: Entity) -> Option<Entity> {
 
     None
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_set_window_pos_command_new_stores_all_fields() {
+        let hwnd = HWND(0x1000 as *mut _);
+        let after = HWND(0x2000 as *mut _);
+        let cmd = SetWindowPosCommand::new(
+            hwnd,
+            10,
+            20,
+            300,
+            400,
+            SWP_NOACTIVATE,
+            Some(after),
+        );
+        assert_eq!(cmd.hwnd, hwnd);
+        assert_eq!(cmd.x, 10);
+        assert_eq!(cmd.y, 20);
+        assert_eq!(cmd.width, 300);
+        assert_eq!(cmd.height, 400);
+        assert_eq!(cmd.flags, SWP_NOACTIVATE);
+        assert_eq!(cmd.hwnd_insert_after, Some(after));
+    }
+
+    #[test]
+    fn test_set_window_pos_command_new_allows_none_insert_after() {
+        let cmd = SetWindowPosCommand::new(
+            HWND(0x1 as *mut _),
+            0,
+            0,
+            0,
+            0,
+            SET_WINDOW_POS_FLAGS(0),
+            None,
+        );
+        assert_eq!(cmd.hwnd_insert_after, None);
+    }
+
+    #[test]
+    fn test_is_self_initiated_false_at_rest() {
+        // guarded_set_window_pos スコープ外（ネストカウンタ 0）では false
+        // 注: SELF_INITIATED_DEPTH はプロセス共有の AtomicI32 だが、
+        // テストスレッドで guarded_set_window_pos を呼ばない限り 0 のまま。
+        assert!(!is_self_initiated());
+    }
+
+    #[test]
+    fn test_flush_empty_queue_is_noop() {
+        // 空キューの flush は early-return で SetWindowPos を呼ばずパニックしない。
+        // （このテスト内では enqueue していないため WINDOW_POS_COMMANDS は空。
+        //  thread_local かつ同一テストスレッドのため他テストの enqueue 残留はない）
+        SetWindowPosCommand::flush();
+        // 便利関数経由でも同様に no-op
+        flush_window_pos_commands();
+        assert!(!is_self_initiated());
+    }
+}

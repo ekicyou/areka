@@ -114,7 +114,10 @@ pub struct InsertBitmapSourceResource {
     pub source: IWICBitmapSource,
 }
 
-// IWICBitmapSourceはthread-free marshaling対応
+// SAFETY 条件: windows-rs 0.62.2 は `IWICBitmapSource` に Send を自動生成しないため
+// 本 impl は必須。健全性は WIC の free-threaded（thread-free marshaling）特性 + MTA 初期化
+// （`CoInitializeEx(COINIT_MULTITHREADED)`）に依拠し、デコードしたソースをバックグラウンド
+// ワーカー → メインスレッドへ Command として移送する経路（Send のみ。Sync は不要）で安全。
 unsafe impl Send for InsertBitmapSourceResource {}
 
 impl Command for InsertBitmapSourceResource {

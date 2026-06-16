@@ -112,7 +112,11 @@ impl InstanceManager {
             loop_offset_easing,
             trigger_states,
         };
+        // NOTE(不変条件): group_id は facade の next_group_id 単調増加カウンタで採番され
+        // 再利用されないため、正当な経路で既存キーと衝突しない。衝突時は旧インスタンスを
+        // 黙って上書きする（tests.rs::create_instance_with_same_group_id_overwrites で特性化済み）。
         self.instances.insert(group_id, instance);
+        // SAFETY(panic 経路): 直前の insert により必ず Some。
         self.instances.get(&group_id).unwrap()
     }
 
@@ -131,11 +135,12 @@ impl InstanceManager {
     }
 
     /// 状態遷移（try_transition 経由）。
+    ///
+    /// 不変条件: 終了状態への遷移は同時にインスタンスを自動削除するため、
+    /// `instances` マップに終了状態のインスタンスは存在しない
+    /// （`set_finish_deadline` / `check_finish_deadlines` の is_terminal チェックの前提）。
     pub fn transition(&mut self, group_id: u64, to: InstanceState) -> Result<(), RuntimeError> {
-        let instance = self
-            .instances
-            .get_mut(&group_id)
-            .ok_or(RuntimeError::InvalidGroupId(group_id))?;
+        let instance = self.get_mut(group_id)?;
 
         match instance.state.try_transition(to) {
             Ok(new_state) => {
@@ -146,29 +151,17 @@ impl InstanceManager {
                 }
                 Ok(())
             }
+            // NOTE(エラー表現): 不正な状態遷移も InvalidGroupId として報告される
+            // （遷移エラー専用バリアントが存在しない現行仕様。
+            // tests.rs::invalid_transition_on_existing_instance_reports_invalid_group_id で
+            // 特性化済み。エラー種別の分離は挙動変更を伴うため proposals.md P16 参照）。
             Err(_current) => Err(RuntimeError::InvalidGroupId(group_id)),
         }
     }
 
-    /// Pause: pause_start 記録 + Paused 遷移。
+    /// Pause: Paused 遷移（pause_start は facade が `set_pause_start` で設定する）。
     pub fn pause(&mut self, group_id: u64) -> Result<(), RuntimeError> {
-        let instance = self
-            .instances
-            .get_mut(&group_id)
-            .ok_or(RuntimeError::InvalidGroupId(group_id))?;
-
-        // Paused 遷移を試行
-        match instance.state.try_transition(InstanceState::Paused) {
-            Ok(new_state) => {
-                // pause_start は現在の effective_time 起点で記録
-                // ただし actual time を記録（resume 時に差分計算する）
-                // pause_start はfacade側のcurrent_timeを使うべきだが、
-                // facade が呼ぶ時に設定する設計のため、ここでは状態遷移のみ
-                instance.state = new_state;
-                Ok(())
-            }
-            Err(_) => Err(RuntimeError::InvalidGroupId(group_id)),
-        }
+        self.transition(group_id, InstanceState::Paused)
     }
 
     /// Pause 時の pause_start を設定する（facade から呼ばれる）。
@@ -177,25 +170,23 @@ impl InstanceManager {
         group_id: u64,
         current_time: f64,
     ) -> Result<(), RuntimeError> {
-        let instance = self
-            .instances
-            .get_mut(&group_id)
-            .ok_or(RuntimeError::InvalidGroupId(group_id))?;
-        instance.pause_start = Some(current_time);
+        self.get_mut(group_id)?.pause_start = Some(current_time);
         Ok(())
     }
 
     /// Resume: pause_accumulated 加算 + Playing 遷移 + end_time 再計算。
     pub fn resume(&mut self, group_id: u64, current_time: f64) -> Result<f64, RuntimeError> {
-        let instance = self
-            .instances
-            .get_mut(&group_id)
-            .ok_or(RuntimeError::InvalidGroupId(group_id))?;
+        let instance = self.get_mut(group_id)?;
 
         match instance.state.try_transition(InstanceState::Playing) {
             Ok(new_state) => {
                 // pause_accumulated 加算
                 if let Some(pause_start) = instance.pause_start.take() {
+                    // NOTE(数値境界): current_time < pause_start（非単調な時刻入力）の場合、
+                    // pause_duration が負となり pause_accumulated / end_time が過去方向へ
+                    // 補正される（早期終了の誘発）。現行 API は呼び出し側の時刻単調性を
+                    // 検証しない（検証追加は挙動変更を伴うため proposals.md P15 参照。
+                    // tests.rs::resume_with_time_before_pause_start_shrinks_end_time で特性化済み）。
                     let pause_duration = current_time - pause_start;
                     instance.pause_accumulated += pause_duration;
                     // end_time 再計算
@@ -214,11 +205,10 @@ impl InstanceManager {
         group_id: u64,
         deadline: f64,
     ) -> Result<(), RuntimeError> {
-        let instance = self
-            .instances
-            .get_mut(&group_id)
-            .ok_or(RuntimeError::InvalidGroupId(group_id))?;
+        let instance = self.get_mut(group_id)?;
 
+        // NOTE(防御): transition() の不変条件（終了遷移＝自動削除）により、マップ内に
+        // 終了状態のインスタンスは存在せず、この分岐は現行不変条件の下では到達しない。
         if instance.state.is_terminal() {
             return Err(RuntimeError::InvalidGroupId(group_id));
         }
@@ -228,6 +218,11 @@ impl InstanceManager {
     }
 
     /// Finish deadline が到達した group_id のリストを返却。
+    ///
+    /// NOTE(数値境界): deadline が NaN の場合 `current_time >= deadline` は常に false と
+    /// なり、当該 deadline は黙って発火しない（NaN 流入は指示書数値の有限性検証の
+    /// 欠如による: proposals.md P8/P14 参照）。is_terminal チェックは transition() の
+    /// 不変条件（終了遷移＝自動削除）により現行では常に false の防御チェック。
     pub fn check_finish_deadlines(&self, current_time: f64) -> Vec<u64> {
         self.instances
             .iter()

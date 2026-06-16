@@ -133,3 +133,87 @@ impl DPI {
         (self.to_physical_x(x), self.to_physical_y(y))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_default_is_96_dpi() {
+        let dpi = DPI::default();
+        assert_eq!(dpi.dpi_x, 96);
+        assert_eq!(dpi.dpi_y, 96);
+        // 96 DPI = 100% スケール
+        assert_eq!(dpi.scale_x(), 1.0);
+        assert_eq!(dpi.scale_y(), 1.0);
+    }
+
+    #[test]
+    fn test_from_dpi_stores_axes_independently() {
+        // X/Y は将来の拡張性のため独立保持される
+        let dpi = DPI::from_dpi(120, 144);
+        assert_eq!(dpi.dpi_x, 120);
+        assert_eq!(dpi.dpi_y, 144);
+        assert_eq!(dpi.scale_x(), 120.0 / 96.0); // 1.25
+        assert_eq!(dpi.scale_y(), 144.0 / 96.0); // 1.5
+    }
+
+    #[test]
+    fn test_from_wm_dpichanged_parses_loword_and_hiword() {
+        // WM_DPICHANGED の WPARAM は LOWORD=X DPI / HIWORD=Y DPI
+        // 0x00C00078 → X=0x0078=120, Y=0x00C0=192
+        let wparam = WPARAM(0x00C0_0078);
+        let dpi = DPI::from_WM_DPICHANGED(wparam, LPARAM(0));
+        assert_eq!(dpi.dpi_x, 120);
+        assert_eq!(dpi.dpi_y, 192);
+    }
+
+    #[test]
+    fn test_from_wm_dpichanged_masks_upper_bits() {
+        // 上位 32bit や 16bit を超える値はマスクされ下位16bitのみ採用される
+        // 下位 = 0x6060_6060 → X=0x6060, Y=0x6060
+        let wparam = WPARAM(0xFFFF_FFFF_6060_6060);
+        let dpi = DPI::from_WM_DPICHANGED(wparam, LPARAM(0));
+        assert_eq!(dpi.dpi_x, 0x6060);
+        assert_eq!(dpi.dpi_y, 0x6060);
+    }
+
+    #[test]
+    fn test_scale_at_192_dpi_is_2x() {
+        let dpi = DPI::from_dpi(192, 192);
+        assert_eq!(dpi.scale_x(), 2.0);
+        assert_eq!(dpi.scale_y(), 2.0);
+    }
+
+    #[test]
+    fn test_to_logical_y_and_size_and_point() {
+        let dpi = DPI::from_dpi(192, 192); // 200%
+        assert_eq!(dpi.to_logical_y(200), 100.0);
+        assert_eq!(dpi.to_logical_size(200, 400), (100.0, 200.0));
+        assert_eq!(dpi.to_logical_point(50, 80), (25.0, 40.0));
+    }
+
+    #[test]
+    fn test_to_physical_y_and_size_and_point() {
+        let dpi = DPI::from_dpi(192, 192); // 200%
+        assert_eq!(dpi.to_physical_y(100.0), 200);
+        assert_eq!(dpi.to_physical_size(100.0, 50.0), (200, 100));
+        assert_eq!(dpi.to_physical_point(25.0, 40.0), (50, 80));
+    }
+
+    #[test]
+    fn test_to_physical_rounds_half_away_from_zero() {
+        // 150% スケール: 1.0 dip → 1.5 px → round() = 2 (half away from zero)
+        let dpi = DPI::from_dpi(144, 144);
+        assert_eq!(dpi.scale_x(), 1.5);
+        assert_eq!(dpi.to_physical_x(1.0), 2); // 1.5 を最近接整数へ（.round() の偶数丸めではない）
+        assert_eq!(dpi.to_physical_x(3.0), 5); // 4.5 → 5（偶数丸めなら 4 になる）
+    }
+
+    #[test]
+    fn test_logical_physical_at_100_percent_is_identity() {
+        let dpi = DPI::default(); // 96 DPI
+        assert_eq!(dpi.to_logical_x(123), 123.0);
+        assert_eq!(dpi.to_physical_x(123.0), 123);
+    }
+}

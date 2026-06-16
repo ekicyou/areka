@@ -106,17 +106,6 @@ impl From<Dimension> for taffy::Dimension {
     }
 }
 
-// taffy::Dimensionからの変換
-impl From<taffy::Dimension> for Dimension {
-    fn from(_val: taffy::Dimension) -> Self {
-        // taffy::DimensionはCompactLengthを使用しているため、
-        // 内部表現から値を取り出す必要がある
-        // ここでは簡易的にデフォルト値を使用
-        // TODO: 正確な変換が必要な場合は実装を追加
-        Self::Auto
-    }
-}
-
 // ===== LengthPercentageAuto型: Auto, Length, Percentをサポート =====
 
 /// 長さ/パーセント/自動を表す型（マージンなどで使用）

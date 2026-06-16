@@ -60,6 +60,39 @@ fn test_point_in_polygon_insufficient_vertices() {
     assert!(!point_in_polygon(50.0, 0.0, &vertices));
 }
 
+/// 閉じ辺（最終頂点→始点）をまたぐ判定が正しいこと（W4b-T）
+///
+/// ray casting の `j = n-1` 初期化（最終頂点から始点への閉じ辺）が
+/// 正しく評価されることを、始点・終点をまたぐ水平位置の点で特性化する。
+#[test]
+fn test_point_in_polygon_closing_edge() {
+    // 上辺を共有しない台形: 閉じ辺 (0,100)->(0,0) が左端の縦辺
+    let vertices = vec![(0.0, 0.0), (80.0, 0.0), (60.0, 100.0), (0.0, 100.0)];
+    // 左端付近・閉じ辺の内側
+    assert!(point_in_polygon(10.0, 50.0, &vertices));
+    // 閉じ辺より左（外側）
+    assert!(!point_in_polygon(-10.0, 50.0, &vertices));
+}
+
+/// 退化 entity_size（幅0）でも Shapes 判定がパニックせず None を返す（W4b-T）
+///
+/// `local_x = rel_x * entity_size.width` が 0 に潰れるため、原点を含まない矩形では
+/// 領域ヒットしない。ゼロ除算・パニックを起こさないことを特性化する。
+#[test]
+fn test_shapes_hit_test_degenerate_entity_size() {
+    let map = HitRegionMap::builder()
+        .rect("away", 10.0, 10.0, 30.0, 30.0)
+        .build()
+        .unwrap();
+
+    let degenerate = Size {
+        width: 0.0,
+        height: 0.0,
+    };
+    // local 座標は (0,0) に潰れ、原点から外れた矩形にはヒットしない
+    assert_eq!(map.hit_test_region(0.5, 0.5, &degenerate), None);
+}
+
 // ========================================================================
 // ShapeRegion::Rect テスト
 // ========================================================================
@@ -382,6 +415,35 @@ fn test_color_map_data_hit_test_out_of_bounds() {
     assert_eq!(data.hit_test(5, 5), None);
 }
 
+/// ColorMapData::width()/height() アクセサ（W4b-T: 未検証だった）
+#[test]
+fn test_color_map_data_size_accessors() {
+    let data = ColorMapData {
+        index_map: vec![0u8; 12],
+        region_names: vec![],
+        width: 4,
+        height: 3,
+    };
+    assert_eq!(data.width(), 4);
+    assert_eq!(data.height(), 3);
+}
+
+/// ColorMapData::hit_test: region_id が region_names 範囲外の場合 None
+///
+/// index_map に region_names.len() を超える ID が混入した場合、
+/// `region_names.get(id-1)` が None を返し領域なし扱いとなる防御経路を特性化する。
+#[test]
+fn test_color_map_data_hit_test_id_out_of_range_names() {
+    let data = ColorMapData {
+        index_map: vec![9], // id=9 だが region_names は 1 件のみ
+        region_names: vec!["only".to_string()],
+        width: 1,
+        height: 1,
+    };
+    // id-1=8 は region_names 範囲外 → None
+    assert_eq!(data.hit_test(0, 0), None);
+}
+
 // ========================================================================
 // HitRegionMap ColorMap方式テスト
 // ========================================================================
@@ -550,4 +612,123 @@ fn test_error_display() {
         height: 10.0,
     };
     assert!(err.to_string().contains("-1"));
+}
+
+// ========================================================================
+// 整数境界・極値座標の特性化テスト（W4b-V）
+//
+// hit_test_region の ColorMap 分岐は正規化座標を `(rel * width as f32) as u32` で
+// ピクセル座標へ変換する。Rust の浮動小数 → 整数キャストは飽和的（負値→0、
+// 範囲超過→u32::MAX、NaN→0）であり、変換後は ColorMapData::hit_test の
+// 範囲チェック（pixel >= width/height → None）で吸収される。
+// 極値・負値・非有限の正規化座標がパニックせず None へ縮退することを固定する
+// （現状の安全な飽和挙動の特性化。挙動変更ではない）。
+// ========================================================================
+
+/// ヘルパ: 2x2 単色カラーマップ（全画素 id=1 = "fill"）
+fn make_fill_color_map_2x2() -> HitRegionMap {
+    HitRegionMap {
+        kind: RegionKind::ColorMap(ColorMapData {
+            index_map: vec![1, 1, 1, 1],
+            region_names: vec!["fill".to_string()],
+            width: 2,
+            height: 2,
+        }),
+    }
+}
+
+/// 範囲を大きく超える正の正規化座標は飽和キャストで u32::MAX 付近となり、
+/// ColorMapData::hit_test の範囲チェックで None へ縮退する（パニックしない）。
+#[test]
+fn test_color_map_extreme_positive_rel_saturates_to_none() {
+    let map = make_fill_color_map_2x2();
+    let entity_size = Size {
+        width: 100.0,
+        height: 100.0,
+    };
+    // rel = 1e10 → pixel = (1e10 * 2) as u32 = u32::MAX（飽和）→ 範囲外 → None
+    assert_eq!(map.hit_test_region(1e10, 1e10, &entity_size), None);
+    // f32::MAX でも同様に飽和して範囲外
+    assert_eq!(
+        map.hit_test_region(f32::MAX, f32::MAX, &entity_size),
+        None
+    );
+}
+
+/// 負の正規化座標は飽和キャストで 0 になり、境界(0,0)へ丸められて領域内に入り得る。
+/// パニックせず安全に判定されることを固定する（負 → 0 飽和の特性化）。
+#[test]
+fn test_color_map_negative_rel_saturates_to_zero_pixel() {
+    let map = make_fill_color_map_2x2();
+    let entity_size = Size {
+        width: 100.0,
+        height: 100.0,
+    };
+    // rel = -5.0 → pixel = (-10.0) as u32 = 0（飽和）→ (0,0) は範囲内・id=1 → "fill"
+    assert_eq!(map.hit_test_region(-5.0, -5.0, &entity_size), Some("fill"));
+}
+
+/// 非有限（NaN）正規化座標は飽和キャストで 0 になり、パニックしない。
+/// NaN → 0 飽和により (0,0) 画素として判定される現挙動を固定する。
+#[test]
+fn test_color_map_nan_rel_does_not_panic() {
+    let map = make_fill_color_map_2x2();
+    let entity_size = Size {
+        width: 100.0,
+        height: 100.0,
+    };
+    // NaN as u32 == 0 → (0,0) → id=1 → "fill"（パニックなし）
+    assert_eq!(
+        map.hit_test_region(f32::NAN, f32::NAN, &entity_size),
+        Some("fill")
+    );
+    // +inf as u32 == u32::MAX（飽和）→ 範囲外 → None
+    assert_eq!(
+        map.hit_test_region(f32::INFINITY, f32::INFINITY, &entity_size),
+        None
+    );
+}
+
+/// Shapes 分岐の極値正規化座標もパニックしないこと（local 座標が極大/非有限でも
+/// f32 比較は false 化するのみで添字アクセス等の危険操作がない）を固定する。
+#[test]
+fn test_shapes_extreme_and_nonfinite_rel_do_not_panic() {
+    let map = HitRegionMap::builder()
+        .rect("box", 10.0, 10.0, 30.0, 30.0)
+        .build()
+        .unwrap();
+    let entity_size = Size {
+        width: 100.0,
+        height: 100.0,
+    };
+    // 極大座標 → 矩形外 → None
+    assert_eq!(map.hit_test_region(1e10, 1e10, &entity_size), None);
+    // 負座標 → 矩形外 → None
+    assert_eq!(map.hit_test_region(-1e10, -1e10, &entity_size), None);
+    // NaN → すべての比較が false → None（パニックなし）
+    assert_eq!(
+        map.hit_test_region(f32::NAN, f32::NAN, &entity_size),
+        None
+    );
+}
+
+/// 退化矩形（幅0・高さ0 の Rect 領域）でも build を通過し、境界上の点で
+/// パニックせず判定されることを固定する。
+/// 注: build() は width<=0/height<=0 を弾くため、退化は x==x+width 等の縮退点で表現する。
+/// ここでは極小幅（境界包含 <= による点ヒット）の安全性を特性化する。
+#[test]
+fn test_shapes_zero_extent_rect_via_inclusive_boundary() {
+    // 幅・高さともに極小だが正の矩形（build を通過）
+    let map = HitRegionMap::builder()
+        .rect("pt", 50.0, 50.0, f32::MIN_POSITIVE, f32::MIN_POSITIVE)
+        .build()
+        .unwrap();
+    let entity_size = Size {
+        width: 100.0,
+        height: 100.0,
+    };
+    // local (50,50) ちょうど → 左上角は包含（>= かつ <=）→ "pt"
+    assert_eq!(map.hit_test_region(0.5, 0.5, &entity_size), Some("pt"));
+    // 明確に外側
+    assert_eq!(map.hit_test_region(0.1, 0.1, &entity_size), None);
 }

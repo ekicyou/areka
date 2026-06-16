@@ -300,6 +300,126 @@ mod tests {
         assert_eq!(set.len(), 2);
     }
 
+    // ── D3-T 追加ギャップテスト ──
+
+    #[test]
+    fn actor_key_new_display_as_str() {
+        let key = ActorKey::new("sakura");
+        assert_eq!(key.as_str(), "sakura");
+        assert_eq!(key.to_string(), "sakura"); // Display 実装
+
+        // From<String> / From<&str> の等価性
+        assert_eq!(ActorKey::from("kero"), ActorKey::from("kero".to_string()));
+    }
+
+    #[test]
+    fn entity_key_namespaces_are_distinct() {
+        use std::collections::HashSet;
+        // 同名でも名前空間（バリアント）が違えば別キー
+        let spot = EntityKey::Spot("x".to_string());
+        let balloon = EntityKey::Balloon("x".to_string());
+        let actor = EntityKey::Actor(ActorKey::from("x"), CueTarget::Shell);
+        assert_ne!(spot, balloon);
+        assert_ne!(spot, actor);
+
+        let mut set = HashSet::new();
+        set.insert(spot);
+        set.insert(balloon);
+        set.insert(actor);
+        assert_eq!(set.len(), 3);
+
+        // Actor の CueTarget スロット違いも別キー
+        let mut slots = HashSet::new();
+        slots.insert(EntityKey::Actor(ActorKey::from("a"), CueTarget::Shell));
+        slots.insert(EntityKey::Actor(ActorKey::from("a"), CueTarget::Balloon));
+        assert_eq!(slots.len(), 2);
+    }
+
+    #[test]
+    fn entity_key_serde_roundtrip() {
+        let keys = vec![
+            EntityKey::Actor(ActorKey::from("sakura"), CueTarget::Balloon),
+            EntityKey::Spot("spot1".to_string()),
+            EntityKey::Balloon("balloon1".to_string()),
+        ];
+        for key in keys {
+            let json = serde_json::to_string(&key).unwrap();
+            let parsed: EntityKey = serde_json::from_str(&json).unwrap();
+            assert_eq!(key, parsed);
+        }
+    }
+
+    #[test]
+    fn routing_command_serde_roundtrip() {
+        let cmds = vec![
+            RoutingCommand::RouteAdd {
+                target: CueTarget::Balloon,
+                to: EntityKey::Actor(ActorKey::from("sakura"), CueTarget::Balloon),
+            },
+            RoutingCommand::RouteSwitch {
+                target: CueTarget::Shell,
+                to: EntityKey::Spot("spot1".to_string()),
+            },
+            RoutingCommand::RouteRemove {
+                target: CueTarget::Shell,
+            },
+        ];
+        for cmd in cmds {
+            let json = serde_json::to_string(&cmd).unwrap();
+            let parsed: RoutingCommand = serde_json::from_str(&json).unwrap();
+            assert_eq!(cmd, parsed);
+        }
+    }
+
+    #[test]
+    fn cue_payload_and_cue_serde_roundtrip() {
+        // CuePayload 3 種のラウンドトリップ
+        let payloads = vec![
+            CuePayload::Command(CueCommand::Custom {
+                command: "fade".to_string(),
+                params: DynamicValue::Null,
+            }),
+            CuePayload::Barrier(BarrierKind::WaitForChoice { timeout: Some(3.0) }),
+            CuePayload::Routing(RoutingCommand::RouteRemove {
+                target: CueTarget::Balloon,
+            }),
+        ];
+        for payload in payloads {
+            let json = serde_json::to_string(&payload).unwrap();
+            let parsed: CuePayload = serde_json::from_str(&json).unwrap();
+            assert_eq!(payload, parsed);
+        }
+
+        // Cue 全体（PartialEq 非導出のためフィールドごとに検証）
+        let cue = Cue {
+            actor: ActorKey::from("sakura"),
+            start_time: 1.5,
+            payload: CueCommand::Text("hello".into()).into(),
+        };
+        let json = serde_json::to_string(&cue).unwrap();
+        let parsed: Cue = serde_json::from_str(&json).unwrap();
+        assert_eq!(parsed.actor, cue.actor);
+        assert_eq!(parsed.start_time, cue.start_time);
+        assert_eq!(parsed.payload, cue.payload);
+    }
+
+    // ── D3-V 境界特性化テスト ──
+
+    #[test]
+    fn entity_ref_u64_boundary_serde_roundtrip() {
+        // EntityRef は u64 全域（Entity::to_bits() 変換値）を保持する。
+        // i64::MAX 超の値（上位ビットが立つ Entity generation 等）も JSON 経由で
+        // 欠損なくラウンドトリップすることを固定する（serde_json は u64 を直接扱う。
+        // なお TOML の整数は i64 のため、TOML 直列化では i64::MAX 超は表現できない —
+        // 現行ワークスペースに CueCommand の TOML 直列化経路はない）。
+        for bits in [0u64, i64::MAX as u64, i64::MAX as u64 + 1, u64::MAX] {
+            let cmd = CueCommand::EntityRef(bits);
+            let json = serde_json::to_string(&cmd).unwrap();
+            let parsed: CueCommand = serde_json::from_str(&json).unwrap();
+            assert_eq!(cmd, parsed, "EntityRef({bits}) must roundtrip losslessly");
+        }
+    }
+
     #[test]
     fn cue_construction() {
         let cue = Cue {

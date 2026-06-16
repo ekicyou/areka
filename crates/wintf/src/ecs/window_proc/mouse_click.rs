@@ -451,3 +451,97 @@ fn find_ancestor_with_drag_config(
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::find_ancestor_with_drag_config;
+    use crate::ecs::drag::DragConfig;
+    use bevy_ecs::hierarchy::ChildOf;
+    use bevy_ecs::prelude::*;
+
+    // find_ancestor_with_drag_config は World ベースの ChildOf 走査でデバイス非依存。
+    // start 自身 / 祖先 / 不在 / 最近傍優先 の各分岐を特性化する。
+
+    #[test]
+    fn test_find_drag_config_on_start_entity_itself() {
+        // start 自身が DragConfig を持つ → (start, config) を返す
+        let mut world = World::new();
+        let start = world
+            .spawn(DragConfig {
+                threshold: 7,
+                ..Default::default()
+            })
+            .id();
+
+        let result = find_ancestor_with_drag_config(&world, start);
+        let (entity, config) = result.expect("start 自身の DragConfig を返す");
+        assert_eq!(entity, start);
+        assert_eq!(config.threshold, 7); // clone されたフィールド値を確認
+    }
+
+    #[test]
+    fn test_find_drag_config_on_ancestor() {
+        // start には DragConfig がなく、祖先（親の親）が持つ → 祖先 entity を返す
+        let mut world = World::new();
+        let grandparent = world
+            .spawn(DragConfig {
+                threshold: 12,
+                ..Default::default()
+            })
+            .id();
+        let parent = world.spawn(ChildOf(grandparent)).id();
+        let start = world.spawn(ChildOf(parent)).id();
+
+        let result = find_ancestor_with_drag_config(&world, start);
+        let (entity, config) = result.expect("祖先の DragConfig を返す");
+        assert_eq!(entity, grandparent);
+        assert_eq!(config.threshold, 12);
+    }
+
+    #[test]
+    fn test_find_drag_config_returns_none_when_absent() {
+        // チェーン上のどこにも DragConfig がない → None
+        let mut world = World::new();
+        let root = world.spawn_empty().id();
+        let parent = world.spawn(ChildOf(root)).id();
+        let start = world.spawn(ChildOf(parent)).id();
+
+        assert!(find_ancestor_with_drag_config(&world, start).is_none());
+    }
+
+    #[test]
+    fn test_find_drag_config_returns_none_for_isolated_entity() {
+        // ChildOf を持たない孤立エンティティで DragConfig なし → None（ループ終端）
+        let mut world = World::new();
+        let isolated = world.spawn_empty().id();
+
+        assert!(find_ancestor_with_drag_config(&world, isolated).is_none());
+    }
+
+    #[test]
+    fn test_find_drag_config_prefers_nearest_ancestor() {
+        // start と祖先の両方が DragConfig を持つ → 最近傍（start 自身）を優先
+        let mut world = World::new();
+        let grandparent = world
+            .spawn(DragConfig {
+                threshold: 99,
+                ..Default::default()
+            })
+            .id();
+        let parent = world.spawn(ChildOf(grandparent)).id();
+        let start = world
+            .spawn((
+                ChildOf(parent),
+                DragConfig {
+                    threshold: 3,
+                    ..Default::default()
+                },
+            ))
+            .id();
+
+        let result = find_ancestor_with_drag_config(&world, start);
+        let (entity, config) = result.expect("最近傍の DragConfig を返す");
+        assert_eq!(entity, start);
+        assert_eq!(config.threshold, 3); // 祖先の 99 ではなく start の 3
+    }
+}

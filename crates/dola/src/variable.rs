@@ -1,4 +1,4 @@
-// TODO: Implement AnimationVariableDef
+//! アニメーション変数定義（AnimationVariableDef）。
 use serde::{Deserialize, Serialize};
 
 use crate::value::DynamicValue;

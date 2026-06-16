@@ -255,6 +255,56 @@ fn convert_names_to_ids_basic() {
 }
 
 #[test]
+fn force_update_ignores_unsubscribed_id() {
+    let mut mgr = SubscriptionManager::new();
+    let x_id = mgr.subscribe("x");
+    mgr.unsubscribe(x_id).unwrap();
+
+    // 購読解除済み id への force_update は無視される
+    let mut vals = HashMap::new();
+    vals.insert(x_id, EvaluatedValue::Float(1.0));
+    mgr.force_update_last_values(&vals);
+
+    // 凍結値が存在しないため差分配信も発生しない
+    let changed = mgr.diff_and_update(HashMap::new());
+    assert!(changed.is_empty());
+}
+
+#[test]
+fn convert_names_to_ids_excludes_unsubscribed_name() {
+    let mut mgr = SubscriptionManager::new();
+    let x_id = mgr.subscribe("x");
+    let y_id = mgr.subscribe("y");
+    mgr.unsubscribe(x_id).unwrap();
+
+    let mut name_values = HashMap::new();
+    name_values.insert("x".to_string(), EvaluatedValue::Float(10.0));
+    name_values.insert("y".to_string(), EvaluatedValue::Float(20.0));
+
+    // unsubscribe 済みの x は変換されない
+    let id_values = mgr.convert_names_to_ids(&name_values);
+    assert_eq!(id_values.len(), 1);
+    assert_eq!(id_values[&y_id], EvaluatedValue::Float(20.0));
+}
+
+#[test]
+fn diff_and_update_ignores_values_for_unsubscribed_names() {
+    let mut mgr = SubscriptionManager::new();
+    let x_id = mgr.subscribe("x");
+    let y_id = mgr.subscribe("y");
+    mgr.unsubscribe(x_id).unwrap();
+
+    let mut values = HashMap::new();
+    values.insert("x".to_string(), EvaluatedValue::Float(10.0));
+    values.insert("y".to_string(), EvaluatedValue::Float(20.0));
+
+    // x は購読解除済み → y のみ差分配信
+    let changed = mgr.diff_and_update(values);
+    assert_eq!(changed.len(), 1);
+    assert_eq!(changed[0].0, y_id);
+}
+
+#[test]
 fn object_ptr_eq_comparison() {
     let mut mgr = SubscriptionManager::new();
     let obj_id = mgr.subscribe("obj");
