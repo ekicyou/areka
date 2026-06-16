@@ -3,7 +3,7 @@
 mod conflict_resolution_test;
 #[path = "runtime/core_types_test.rs"]
 mod core_types_test;
-#[path = "runtime/facade_test.rs"]
+#[path = "runtime/facade_test/mod.rs"]
 mod facade_test;
 #[path = "runtime/loop_integration_test.rs"]
 mod loop_integration_test;

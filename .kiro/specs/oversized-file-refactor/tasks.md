@@ -103,7 +103,7 @@
   - 観測: 同一テストが実行（インベントリ差分が空）、`cargo test -p dola` グリーン、各≤~600行
   - _Requirements: 3.1, 3.2, 3.3, 3.4, 3.5_
   - _Boundary: Integration Test Splitter / dola compile tests_
-- [ ] 6.3 (P) facade テストの分割
+- [x] 6.3 (P) facade テストの分割
   - runtime 用 common を 6.1 と共有するため、common 新設は 6.1 に委ねる
   - 観測: 同一テストが実行（インベントリ差分が空）、`cargo test -p dola` グリーン、各≤~600行
   - _Requirements: 3.1, 3.2, 3.3, 3.4, 3.5_
