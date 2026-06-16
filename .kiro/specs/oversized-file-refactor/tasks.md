@@ -42,7 +42,7 @@
   - 観測: 共通完了条件を満たす
   - _Requirements: 2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 2.7, 4.1, 4.2, 4.4_
   - _Boundary: Module Splitter / cue queue_
-- [ ] 3.4 (P) window position モジュールの分割
+- [x] 3.4 (P) window position モジュールの分割
   - 観測: 共通完了条件を満たす
   - _Requirements: 2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 2.7, 4.1, 4.2, 4.4_
   - _Boundary: Module Splitter / window position_
