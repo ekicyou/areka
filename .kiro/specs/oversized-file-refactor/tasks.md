@@ -109,7 +109,7 @@
   - _Requirements: 3.1, 3.2, 3.3, 3.4, 3.5_
   - _Boundary: Integration Test Splitter / dola runtime tests_
   - _Depends: 6.1_
-- [ ] 6.4 (P) loop offset テストの分割
+- [x] 6.4 (P) loop offset テストの分割
   - 観測: 同一テストが実行（インベントリ差分が空）、`cargo test -p dola` グリーン、各≤~600行
   - _Requirements: 3.1, 3.2, 3.3, 3.4, 3.5_
   - _Boundary: Integration Test Splitter / dola runtime tests_

@@ -7,5 +7,5 @@ mod core_types_test;
 mod facade_test;
 #[path = "runtime/loop_integration_test.rs"]
 mod loop_integration_test;
-#[path = "runtime/loop_offset_test.rs"]
+#[path = "runtime/loop_offset_test/mod.rs"]
 mod loop_offset_test;
