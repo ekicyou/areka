@@ -73,10 +73,6 @@ pub enum PointerButton {
     XButton2,
 }
 
-/// 後方互換性エイリアス
-#[deprecated(since = "0.1.0", note = "Use PointerButton instead")]
-pub type MouseButton = PointerButton;
-
 // ============================================================================
 // PointerState コンポーネント
 // ============================================================================
@@ -152,10 +148,6 @@ impl Default for PointerState {
     }
 }
 
-/// 後方互換性エイリアス
-#[deprecated(since = "0.1.0", note = "Use PointerState instead")]
-pub type MouseState = PointerState;
-
 // ============================================================================
 // PointerLeave マーカー
 // ============================================================================
@@ -170,10 +162,6 @@ pub type MouseState = PointerState;
 #[component(storage = "SparseSet")]
 pub struct PointerLeave;
 
-/// 後方互換性エイリアス
-#[deprecated(since = "0.1.0", note = "Use PointerLeave instead")]
-pub type MouseLeave = PointerLeave;
-
 // ============================================================================
 // WindowPointerTracking コンポーネント
 // ============================================================================
@@ -184,10 +172,6 @@ pub type MouseLeave = PointerLeave;
 /// `true` = TrackMouseEvent(TME_LEAVE) が有効
 #[derive(Component, Debug, Clone, Copy, Default)]
 pub struct WindowPointerTracking(pub bool);
-
-/// 後方互換性エイリアス
-#[deprecated(since = "0.1.0", note = "Use WindowPointerTracking instead")]
-pub type WindowMouseTracking = WindowPointerTracking;
 
 // ============================================================================
 // PointerBuffer
@@ -275,10 +259,6 @@ impl PointerBuffer {
         ((newest.x - prev.x) / dt, (newest.y - prev.y) / dt)
     }
 }
-
-/// 後方互換性エイリアス
-#[deprecated(since = "0.1.0", note = "Use PointerBuffer instead")]
-pub type MouseBuffer = PointerBuffer;
 
 // ============================================================================
 // ButtonBuffer

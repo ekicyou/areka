@@ -13,7 +13,7 @@
   - _Requirements: 3.5, 4.3, 4.5_
 
 - [ ] 2. Phase 1: wintf 死体コード削除
-- [ ] 2.1 確定リストの死体コード削除
+- [x] 2.1 確定リストの死体コード削除
   - mouse_* deprecated エイリアス群と mouse モジュール、opacity deprecated static を削除する
   - 参照ゼロの死体 example（旧実装）を削除する
   - 各削除の直前に grep で実利用ゼロを再検証し、参照が判明した項目は削除せず参照状況を報告対象として残す
@@ -155,3 +155,4 @@
   - **補助的厳格チェック = フルパス版** (`{crate}.txt`): Pattern A（in-source `mod tests` のファイル化、モジュール名 `tests` 維持）と Pattern B（テスト無し）ではフルパスも不変ゆえ、これらのタスクでは `cargo test -p {crate} --all-targets -- --list ... | grep ': test$' | sort` の差分も空であるべき。3.7/3.8・Pattern C（統合テスト分割）はネスト段が増えるためフルパスは変化し得る（リーフ多重集合のみ権威）。
   - in-source 単体テストの形: `module::path::tests::<fn>`（`::tests::` を含む行が456件/wintf）。Pattern A は親モジュール直下の `tests` を `{module}/tests.rs` へ移すのみ → フルパス完全保存。
 - **ベースライン**: 全3クレート `cargo test` グリーン（wintf 1102 / dola 580 / areka 22 テスト、DirectComposition環境、失敗ゼロ）。
+- **2.1 死体削除の知見**: research.md の確定リストのうち `Opacity` deprecated static (metrics.rs:65-92) は**真の死体ではなかった**。R1.7 grep-gate が `tests/layout/metrics_test.rs`・`tests/visual/component_test.rs` の実参照を検出し、削除せず除外（削除すればテスト消失でゴールデン違反）。実際に削除したのは types.rs の5エイリアス・systems.rs の3関数・mouse モジュール/再export・`taffy_flex_demo_old.rs` の4項目。metrics.rs は無改変。→ deprecated 表記でも grep で実参照を確認するまで削除しない原則を厳守。

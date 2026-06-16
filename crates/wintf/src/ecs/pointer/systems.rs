@@ -31,16 +31,6 @@ pub fn clear_transient_pointer_state(
     }
 }
 
-/// 後方互換性エイリアス
-#[deprecated(since = "0.1.0", note = "Use clear_transient_pointer_state instead")]
-pub fn clear_transient_mouse_state(
-    query: Query<&mut PointerState>,
-    commands: Commands,
-    leave_query: Query<Entity, With<PointerLeave>>,
-) {
-    clear_transient_pointer_state(query, commands, leave_query);
-}
-
 // ============================================================================
 // デバッグ用監視システム
 // ============================================================================
@@ -98,15 +88,6 @@ pub fn debug_pointer_state_changes(
     }
 }
 
-/// 後方互換性エイリアス
-#[deprecated(since = "0.1.0", note = "Use debug_pointer_state_changes instead")]
-pub fn debug_mouse_state_changes(
-    added_query: Query<(Entity, &PointerState), Added<PointerState>>,
-    changed_query: Query<(Entity, &PointerState), Changed<PointerState>>,
-) {
-    debug_pointer_state_changes(added_query, changed_query);
-}
-
 /// PointerLeave マーカーを監視するデバッグシステム
 ///
 /// Inputスケジュールで実行し、PointerLeaveの付与をログ出力する。
@@ -119,12 +100,6 @@ pub fn debug_pointer_leave(leave_query: Query<Entity, Added<PointerLeave>>) {
             "[PointerLeave Added] Leave detected"
         );
     }
-}
-
-/// 後方互換性エイリアス
-#[deprecated(since = "0.1.0", note = "Use debug_pointer_leave instead")]
-pub fn debug_mouse_leave(leave_query: Query<Entity, Added<PointerLeave>>) {
-    debug_pointer_leave(leave_query);
 }
 
 // ============================================================================
