@@ -67,7 +67,7 @@
   - _Boundary: Module Splitter / hit-test tests_
 
 - [ ] 4. wintf wave: 統合テスト分割
-- [ ] 4.1 (P) taffy advanced レイアウトテストの分割
+- [x] 4.1 (P) taffy advanced レイアウトテストの分割
   - テスト群別に sub-file へ分割し、ドメイン入口に `#[path] mod` 宣言を追加・旧宣言を削除する。共有 setup が生じる場合は common 所有権ルールに従う
   - 観測: 既存テストケースの内容・アサーション不変、同一テストが実行（インベントリ差分が空）、`cargo test -p wintf` グリーン、各≤~600行
   - _Requirements: 3.1, 3.2, 3.3, 3.4, 3.5_

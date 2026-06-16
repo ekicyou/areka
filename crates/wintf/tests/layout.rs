@@ -21,7 +21,7 @@ mod graphics_sync_test;
 mod hierarchical_bounds_test;
 #[path = "layout/metrics_test.rs"]
 mod metrics_test;
-#[path = "layout/taffy_advanced_test.rs"]
+#[path = "layout/taffy_advanced_test/mod.rs"]
 mod taffy_advanced_test;
 #[path = "layout/taffy_child_order_test.rs"]
 mod taffy_child_order_test;
