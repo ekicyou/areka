@@ -52,7 +52,7 @@
   - _Requirements: 2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 2.7, 4.1, 4.2, 4.4_
   - _Boundary: Module Splitter / pointer types_
   - _Depends: 2.1_
-- [ ] 3.6 (P) typewriter ウィジェットモジュールの分割
+- [x] 3.6 (P) typewriter ウィジェットモジュールの分割
   - 観測: 共通完了条件を満たす
   - _Requirements: 2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 2.7, 4.1, 4.2, 4.4_
   - _Boundary: Module Splitter / typewriter widget_
