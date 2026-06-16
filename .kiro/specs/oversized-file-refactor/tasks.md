@@ -56,7 +56,7 @@
   - 観測: 共通完了条件を満たす
   - _Requirements: 2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 2.7, 4.1, 4.2, 4.4_
   - _Boundary: Module Splitter / typewriter widget_
-- [ ] 3.7 (P) hit-region in-source テストモジュールの分割
+- [x] 3.7 (P) hit-region in-source テストモジュールの分割
   - structure.md のディレクトリモジュール化パターンに従い、テスト群を複数 sub-file へ分離する
   - 観測: 同一テストが実行され（インベントリ差分が空）、`cargo test -p wintf` グリーン、各≤~600行
   - _Requirements: 2.1, 2.2, 2.4, 2.5, 2.6, 2.7, 4.1, 4.2, 4.4_
