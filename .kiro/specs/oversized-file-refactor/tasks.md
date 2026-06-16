@@ -46,7 +46,7 @@
   - 観測: 共通完了条件を満たす
   - _Requirements: 2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 2.7, 4.1, 4.2, 4.4_
   - _Boundary: Module Splitter / window position_
-- [ ] 3.5 (P) pointer types モジュールの分割
+- [x] 3.5 (P) pointer types モジュールの分割
   - 死体削除（2.1）で deprecated エイリアスが除去された後の状態を分割する
   - 観測: 共通完了条件を満たす
   - _Requirements: 2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 2.7, 4.1, 4.2, 4.4_
@@ -155,4 +155,6 @@
   - **補助的厳格チェック = フルパス版** (`{crate}.txt`): Pattern A（in-source `mod tests` のファイル化、モジュール名 `tests` 維持）と Pattern B（テスト無し）ではフルパスも不変ゆえ、これらのタスクでは `cargo test -p {crate} --all-targets -- --list ... | grep ': test$' | sort` の差分も空であるべき。3.7/3.8・Pattern C（統合テスト分割）はネスト段が増えるためフルパスは変化し得る（リーフ多重集合のみ権威）。
   - in-source 単体テストの形: `module::path::tests::<fn>`（`::tests::` を含む行が456件/wintf）。Pattern A は親モジュール直下の `tests` を `{module}/tests.rs` へ移すのみ → フルパス完全保存。
 - **ベースライン**: 全3クレート `cargo test` グリーン（wintf 1102 / dola 580 / areka 22 テスト、DirectComposition環境、失敗ゼロ）。
+- **既知のフレーキーテスト**: `world_lifecycle_test::try_tick_world_increments_frame_count_each_call`（DirectComposition/GPU実行時依存）はフルスイートのGPU競合下で稀に失敗するが、単独実行・ベースラインでは成功する環境起因の揺らぎ。これ**単独**の失敗は回帰ではない。判定法: `cargo test -p wintf --test world_lifecycle_test try_tick_world_increments_frame_count_each_call` を単独再実行し成功すればフレーキー扱い。他のテスト失敗や単独でも再現する失敗は真の回帰として扱う。
+- **コミット注意**: 分割タスクは新規サブファイル（tests.rs 等）が生じる。`git add <module-dir>/` でディレクトリごとステージし、コミット後 `git status --porcelain` 清浄を必ず確認（rename のみ捕捉して新規ファイルを取りこぼす事故を防ぐ。task 3.4 で一度発生→amendで是正）。
 - **2.1 死体削除の知見**: research.md の確定リストのうち `Opacity` deprecated static (metrics.rs:65-92) は**真の死体ではなかった**。R1.7 grep-gate が `tests/layout/metrics_test.rs`・`tests/visual/component_test.rs` の実参照を検出し、削除せず除外（削除すればテスト消失でゴールデン違反）。実際に削除したのは types.rs の5エイリアス・systems.rs の3関数・mouse モジュール/再export・`taffy_flex_demo_old.rs` の4項目。metrics.rs は無改変。→ deprecated 表記でも grep で実参照を確認するまで削除しない原則を厳守。
