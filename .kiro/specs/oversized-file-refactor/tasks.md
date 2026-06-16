@@ -4,8 +4,8 @@
 >
 > **共有 common 所有権ルール（テスト分割タスクに適用）**: 共有 `common/mod.rs` を新設・追記する場合、その common ファイルは**単一タスクが所有・書き込み**し、他タスクは読み取りのみ（並行書き込み禁止）。新設が必要なら先行タスク化し後続を `_Depends_` で直列化する。
 
-- [ ] 1. Foundation: 検証ベースラインとガードレール
-- [ ] 1.1 挙動非破壊ゴールデンの取得とクリーンビルド確認
+- [x] 1. Foundation: 検証ベースラインとガードレール
+- [x] 1.1 挙動非破壊ゴールデンの取得とクリーンビルド確認
   - 全3クレート（wintf, dola, areka）のテスト名インベントリを「同一性ゴールデン」として取得・保存する
   - Windows（DirectComposition対応）環境で `cargo build` 全体グリーン、`cargo test` 全クレートグリーンを確認する
   - 死体削除フェーズで消えるテストが無いこと（R1の削除対象はすべて非テスト項目）を前提として明記する
@@ -146,3 +146,12 @@
   - 観測: ワークスペース全体ビルド・全テストグリーン、スコープ外ファイルの無改変が diff で確認され、全インベントリ差分が空
   - _Requirements: 4.1, 4.3, 5.1, 5.2, 5.3, 5.4, 6.1, 6.2, 6.3, 6.4_
   - _Depends: 2.1, 2.2, 3.1, 3.2, 3.3, 3.4, 3.5, 3.6, 3.7, 3.8, 4.1, 4.2, 4.3, 4.4, 5.1, 6.1, 6.2, 6.3, 6.4, 6.5, 6.6, 6.7, 6.8, 7.1_
+
+## Implementation Notes
+
+- **環境セットアップ**: worktreeでは git submodule `vendors/pasta` が未初期化。`git submodule update --init --recursive` を実行済み（`pasta_core` 依存解決に必須）。
+- **ゴールデン検証プロトコル（全分割タスク共通）**: ゴールデンは `.kiro/specs/oversized-file-refactor/golden/` に保存。
+  - **権威ある不変量 = リーフ名多重集合** (`{crate}.leaf.txt`): 各テスト名から最終 `::` 以降の関数名のみを抽出・sort した多重集合。分割でモジュールパスのネストが深くなっても不変ゆえ、全パターンで差分ゼロを要求できる。検証コマンド: `cargo test -p {crate} --all-targets -- --list 2>/dev/null | grep ': test$' | sed -E 's/^.*:://; s/: test$//' | sort` を golden と `diff` し、差分が空であること。
+  - **補助的厳格チェック = フルパス版** (`{crate}.txt`): Pattern A（in-source `mod tests` のファイル化、モジュール名 `tests` 維持）と Pattern B（テスト無し）ではフルパスも不変ゆえ、これらのタスクでは `cargo test -p {crate} --all-targets -- --list ... | grep ': test$' | sort` の差分も空であるべき。3.7/3.8・Pattern C（統合テスト分割）はネスト段が増えるためフルパスは変化し得る（リーフ多重集合のみ権威）。
+  - in-source 単体テストの形: `module::path::tests::<fn>`（`::tests::` を含む行が456件/wintf）。Pattern A は親モジュール直下の `tests` を `{module}/tests.rs` へ移すのみ → フルパス完全保存。
+- **ベースライン**: 全3クレート `cargo test` グリーン（wintf 1102 / dola 580 / areka 22 テスト、DirectComposition環境、失敗ゼロ）。
