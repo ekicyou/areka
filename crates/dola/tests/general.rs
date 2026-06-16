@@ -3,5 +3,5 @@
 mod builder_test;
 #[path = "general/core_types_test.rs"]
 mod core_types_test;
-#[path = "general/integration_test.rs"]
+#[path = "general/integration_test/mod.rs"]
 mod integration_test;
