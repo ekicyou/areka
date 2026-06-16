@@ -12,6 +12,7 @@
 
 - **In scope**:
   - 参照ゼロ確認済みの「真の死体」deprecated コードの削除（`ecs/pointer` の `mouse_*` エイリアス群、`taffy_flex_demo_old.rs`、`ecs/layout/metrics.rs` の `opacity` deprecated static）
+  - 作業中に発見し、grep で実参照ゼロを検証できた**確定リスト外の死体コード**の削除（後述の保護対象を除く）
   - 生きた src ファイルのうち600行を明確に超過するものの責務境界での分割（約10ファイル）
   - 生きた tests ファイルのうち600行を明確に超過するものの責務境界での分割（約12ファイル）
   - 分割に伴う `mod` 宣言・`pub use` 再エクスポートの再構成（呼び出し側を無改変に保つ）
@@ -43,6 +44,8 @@
 6. The リファクタリング作業 shall `dola::runtime::facade::update()`（`facade.rs`）を削除せず現状のまま維持する（20以上のテストで現役のため後方互換を維持する）。
 7. If 削除候補のいずれかが削除直前に実参照を持つと判明した場合, then the リファクタリング作業 shall 当該項目を削除せず、参照状況を報告対象として残す。
 8. When 死体削除フェーズの削除完了後, the 対象クレート shall `cargo test` がグリーンであることを示す。
+9. Where 作業中に確定リスト外の死体コード（未使用かつ grep で実参照ゼロを検証できるもの）を発見した場合, the リファクタリング作業 shall 削除前に grep で実利用ゼロを検証し、検証できたもののみを削除し、削除した項目を報告として記録する。
+10. The リファクタリング作業 shall 確定リスト外の死体削除において、スコープ外として保護される deprecated 3ファイル（`win_message_handler.rs` / `win_thread_mgr.rs` / `winproc.rs`）および `dola::runtime::facade::update()` を削除対象に含めない。
 
 ### Requirement 2: 生きた src ファイルの責務境界分割
 
