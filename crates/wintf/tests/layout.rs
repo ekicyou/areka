@@ -3,7 +3,7 @@
 mod arrangement_bounds_test;
 #[path = "layout/box_style_consolidation_test.rs"]
 mod box_style_consolidation_test;
-#[path = "layout/boxstyle_coordinate_separation_test.rs"]
+#[path = "layout/boxstyle_coordinate_separation_test/mod.rs"]
 mod boxstyle_coordinate_separation_test;
 #[path = "layout/client_area_positioning_test.rs"]
 mod client_area_positioning_test;
