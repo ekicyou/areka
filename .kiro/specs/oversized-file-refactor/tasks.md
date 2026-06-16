@@ -131,8 +131,8 @@
   - _Requirements: 3.1, 3.2, 3.3, 3.4, 3.5_
   - _Boundary: Integration Test Splitter / dola compile tests_
 
-- [ ] 7. areka wave: 製品ソース分割
-- [ ] 7.1 アプリケーション エントリ（main）モジュールの分割
+- [x] 7. areka wave: 製品ソース分割
+- [x] 7.1 アプリケーション エントリ（main）モジュールの分割
   - in-source テストを抽出し、エントリ本体とテストを分離する（バイナリクレートの可視性は子モジュールが親の private を参照可能なため昇格不要）
   - 観測: 本体とテストが分離して各≤~600行、`cargo test -p areka` グリーン、インベントリ差分が空、バイナリ挙動不変
   - _Requirements: 2.1, 2.5, 2.6, 2.7, 4.1, 4.2, 4.4_
