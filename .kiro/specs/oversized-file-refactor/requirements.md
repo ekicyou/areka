@@ -6,6 +6,8 @@
 
 このリファクタリングの受益者は本プロジェクトのメンテナ（開発者）であり、ここでの「観測可能な振る舞い」はビルド成功・テスト合格・公開API不変・ファイル規模縮小・死体コード消滅というメンテナ視点の成果として定義される。
 
+**行数運用基準（受入基準の定義）**: 「600行」はソフトな目安である。(1) 分割の**発火条件**は「600行を明確に超過＝600行超」とする。(2) 分割後の各モジュールは600行を**目標**としつつ、凝集度を損なわない範囲で**最大約650行まで許容**する（無理な機械分割で凝集を壊さない）。(3) 完了判定は「対象が責務境界で分割され、各モジュールが概ね600行以下（許容帯内）、かつ当該クレートの `cargo test` がグリーン」を満たすこと。
+
 ## Boundary Context
 
 - **In scope**:
@@ -51,7 +53,7 @@
 1. When src 分割フェーズを実行するとき, the リファクタリング作業 shall 確定済みの対象ファイル（`ecs/drag/state.rs`, `areka/src/main.rs`, `ecs/graphics/compositor_systems/render.rs`, `ecs/cue/queue.rs`, `ecs/layout/hit_region/tests.rs`, `ecs/window/window_pos.rs`, `ecs/pointer/types.rs`, `ecs/layout/hit_test/tests_ex.rs`, `dola/src/runtime/loop_controller.rs`, `ecs/widget/text/typewriter.rs`）を分割対象とする。
 2. When 1ファイルを分割するとき, the リファクタリング作業 shall 型定義・システム・ヘルパー・テストなどの責務 seam を境界として複数モジュールへ抽出する。
 3. While 分割を行っている間, the リファクタリング作業 shall `pub use` により公開APIを据え置き、呼び出し側のコードを無改変に保つ。
-4. The 分割後の各ファイル shall 目安600行に収まることを目標とし、凝集度を損なう無理な機械分割を行わない。
+4. The 分割後の各モジュール shall 600行を目安とし、凝集度を損なわない範囲で最大約650行までを許容する（分割の発火条件は「600行超」、凝集度を損なう無理な機械分割は行わない）。
 5. Where in-source の `#[cfg(test)] mod tests` を含むファイルを分割する場合, the リファクタリング作業 shall `structure.md` の既存パターン（`{module}/tests.rs` 分離またはディレクトリモジュール化）に従う。
 6. When 各 src ファイルの分割完了後, the 対象クレート shall `cargo test` がグリーンであることを示す。
 7. The リファクタリング作業 shall ファイル分割において機能追加・挙動変更・パフォーマンス最適化を一切行わない。
@@ -65,7 +67,7 @@
 1. When tests 分割フェーズを実行するとき, the リファクタリング作業 shall 確定済みの対象ファイル（`dola/tests/runtime/conflict_resolution_test.rs`, `dola/tests/compile/time_resolution_test.rs`, `dola/tests/runtime/facade_test.rs`, `wintf/tests/layout/taffy_advanced_test.rs`, `dola/tests/runtime/loop_offset_test.rs`, `wintf/tests/layout/boxstyle_coordinate_separation_test.rs`, `dola/tests/general/integration_test.rs`, `dola/tests/validation/transition_test.rs`, `wintf/tests/layout/taffy_layout_integration_test.rs`, `dola/tests/general/core_types_test.rs`, `wintf/tests/layout/arrangement_bounds_test.rs`, `dola/tests/compile/integration_test.rs`）を分割対象とする。
 2. When tests ファイルを分割するとき, the リファクタリング作業 shall `structure.md` のテスト命名規約（`tests/{domain}.rs` 入口は束ね役、`#[path]` による `mod` 宣言、ドメインプレフィックス除去、`taffy_` 等サブドメインプレフィックスの維持）に従う。
 3. While tests 分割を行っている間, the リファクタリング作業 shall 既存テストケースの内容・アサーションを変更せず、分割前と同一のテストが実行されることを保つ。
-4. The 分割後の各 tests ファイル shall 目安600行に収まることを目標とする。
+4. The 分割後の各 tests ファイル shall 600行を目安とし、テストグループの論理的まとまり（凝集度）を損なわない範囲で最大約650行までを許容する。
 5. When 各 tests ファイルの分割完了後, the 対象クレート shall `cargo test` がグリーンであり、分割前と同一のテストケースが実行されることを示す。
 
 ### Requirement 4: 挙動非破壊と後方互換の維持
