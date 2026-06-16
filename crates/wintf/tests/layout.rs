@@ -27,5 +27,5 @@ mod taffy_advanced_test;
 mod taffy_child_order_test;
 #[path = "layout/taffy_flex_layout_pure_test.rs"]
 mod taffy_flex_layout_pure_test;
-#[path = "layout/taffy_layout_integration_test.rs"]
+#[path = "layout/taffy_layout_integration_test/mod.rs"]
 mod taffy_layout_integration_test;

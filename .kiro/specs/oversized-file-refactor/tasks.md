@@ -76,7 +76,7 @@
   - 観測: 同一テストが実行（インベントリ差分が空）、`cargo test -p wintf` グリーン、各≤~600行
   - _Requirements: 3.1, 3.2, 3.3, 3.4, 3.5_
   - _Boundary: Integration Test Splitter / wintf layout tests_
-- [ ] 4.3 (P) taffy layout 統合テストの分割
+- [x] 4.3 (P) taffy layout 統合テストの分割
   - 観測: 同一テストが実行（インベントリ差分が空）、`cargo test -p wintf` グリーン、各≤~600行
   - _Requirements: 3.1, 3.2, 3.3, 3.4, 3.5_
   - _Boundary: Integration Test Splitter / wintf layout tests_
