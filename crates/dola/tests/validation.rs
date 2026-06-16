@@ -5,5 +5,5 @@ mod common;
 mod keyframe_test;
 #[path = "validation/schema_test.rs"]
 mod schema_test;
-#[path = "validation/transition_test.rs"]
+#[path = "validation/transition_test/mod.rs"]
 mod transition_test;
