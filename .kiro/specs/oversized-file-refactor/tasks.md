@@ -26,7 +26,7 @@
   - 観測: 追加削除した項目とスキップした項目の一覧が報告として記録され、`cargo test -p wintf` グリーン、インベントリ差分が空
   - _Requirements: 1.9, 1.10_
 
-- [ ] 3. wintf wave: 製品ソース分割
+- [x] 3. wintf wave: 製品ソース分割
 - [x] 3.1 (P) drag 状態モジュールの分割
   - in-source テスト抽出を第一手段とし、本体が目安を超える場合のみ責務 seam で追加分割する
   - 観測: 共通完了条件を満たす（状態モジュールが分割され `cargo test -p wintf` グリーン・インベントリ差分が空・公開API不変）
@@ -61,7 +61,7 @@
   - 観測: 同一テストが実行され（インベントリ差分が空）、`cargo test -p wintf` グリーン、各≤~600行
   - _Requirements: 2.1, 2.2, 2.4, 2.5, 2.6, 2.7, 4.1, 4.2, 4.4_
   - _Boundary: Module Splitter / hit-region tests_
-- [ ] 3.8 (P) hit-test 拡張 in-source テストモジュールの分割
+- [x] 3.8 (P) hit-test 拡張 in-source テストモジュールの分割
   - 観測: 同一テストが実行され（インベントリ差分が空）、`cargo test -p wintf` グリーン、各≤~600行
   - _Requirements: 2.1, 2.2, 2.4, 2.5, 2.6, 2.7, 4.1, 4.2, 4.4_
   - _Boundary: Module Splitter / hit-test tests_
