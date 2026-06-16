@@ -85,8 +85,8 @@
   - _Requirements: 3.1, 3.2, 3.3, 3.4, 3.5_
   - _Boundary: Integration Test Splitter / wintf layout tests_
 
-- [ ] 5. dola wave: 製品ソース分割
-- [ ] 5.1 loop controller モジュールの分割
+- [x] 5. dola wave: 製品ソース分割
+- [x] 5.1 loop controller モジュールの分割
   - in-source テスト抽出を第一手段とする
   - 観測: 共通完了条件を満たす（`cargo test -p dola` グリーン・インベントリ差分が空・公開API不変）
   - _Requirements: 2.1, 2.2, 2.3, 2.4, 2.6, 2.7, 4.1, 4.2, 4.4_
