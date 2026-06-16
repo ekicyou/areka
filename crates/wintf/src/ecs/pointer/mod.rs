@@ -26,10 +26,6 @@ pub use systems::{
     clear_transient_pointer_state, debug_pointer_leave, debug_pointer_state_changes,
 };
 
-// 後方互換性エイリアス（systems）
-#[allow(deprecated)]
-pub use systems::{clear_transient_mouse_state, debug_mouse_leave, debug_mouse_state_changes};
-
 // pub(crate) buffer helpers
 pub(crate) use buffers::{
     add_wheel_horizontal, add_wheel_vertical, push_pointer_sample, record_button_down,

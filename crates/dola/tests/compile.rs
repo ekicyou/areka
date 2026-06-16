@@ -5,13 +5,13 @@ mod common;
 mod boundary_test;
 #[path = "compile/error_test.rs"]
 mod error_test;
-#[path = "compile/integration_test.rs"]
+#[path = "compile/integration_test/mod.rs"]
 mod integration_test;
 #[path = "compile/metadata_test.rs"]
 mod metadata_test;
 #[path = "compile/serde_test.rs"]
 mod serde_test;
-#[path = "compile/time_resolution_test.rs"]
+#[path = "compile/time_resolution_test/mod.rs"]
 mod time_resolution_test;
 #[path = "compile/transition_test.rs"]
 mod transition_test;

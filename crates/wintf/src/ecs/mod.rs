@@ -15,12 +15,6 @@ pub mod world;
 pub use types::{Point, PointF, Rect, SizeI};
 pub use dola::{DolaAnimator, tick_dola_animators};
 
-/// 後方互換性のためのエイリアス
-#[deprecated(since = "0.1.0", note = "Use pointer module instead")]
-pub mod mouse {
-    pub use super::pointer::*;
-}
-
 pub use app::*;
 pub use bevy_ecs::hierarchy::{ChildOf, Children};
 pub use common::tree_system::*;
@@ -40,12 +34,6 @@ pub use pointer::{
     debug_pointer_leave, debug_pointer_state_changes, dispatch_pointer_events,
 };
 pub use window::monitor::*;
-// 後方互換性エイリアス
-#[allow(deprecated)]
-pub use pointer::{
-    MouseButton, MouseLeave, MouseState, WindowMouseTracking, clear_transient_mouse_state,
-    debug_mouse_leave, debug_mouse_state_changes,
-};
 pub use widget::{
     BitmapSource, BitmapSourceGraphics, BitmapSourceResource, BoxedCommand, CommandSender, WicCore,
     WintfTaskPool, draw_bitmap_sources,
