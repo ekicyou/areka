@@ -11,7 +11,7 @@ mod integration_test;
 mod metadata_test;
 #[path = "compile/serde_test.rs"]
 mod serde_test;
-#[path = "compile/time_resolution_test.rs"]
+#[path = "compile/time_resolution_test/mod.rs"]
 mod time_resolution_test;
 #[path = "compile/transition_test.rs"]
 mod transition_test;
