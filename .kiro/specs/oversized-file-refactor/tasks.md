@@ -38,7 +38,7 @@
   - 観測: 昇格した項目を列挙して可視性マッピングを明示し、外部可視性・パスが不変であること、`cargo test -p wintf` グリーン、各モジュール≤~600行
   - _Requirements: 2.1, 2.2, 2.4, 2.6, 2.7, 4.1, 4.2, 4.4_
   - _Boundary: Module Splitter / compositor render systems_
-- [ ] 3.3 (P) cue queue モジュールの分割
+- [x] 3.3 (P) cue queue モジュールの分割
   - 観測: 共通完了条件を満たす
   - _Requirements: 2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 2.7, 4.1, 4.2, 4.4_
   - _Boundary: Module Splitter / cue queue_
