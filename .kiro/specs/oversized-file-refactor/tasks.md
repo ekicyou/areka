@@ -138,14 +138,23 @@
   - _Requirements: 2.1, 2.5, 2.6, 2.7, 4.1, 4.2, 4.4_
   - _Boundary: Module Splitter / application entry_
 
-- [ ] 8. 最終検証とスコープガードレール確認
-- [ ] 8.1 ワークスペース全体検証
+- [x] 8. 最終検証とスコープガードレール確認
+- [x] 8.1 ワークスペース全体検証
   - `cargo build` 全体（examples 含む）がグリーンであることを確認し、deprecated 3ファイルの現役参照の健全性と公開APIの後方互換を実証する
   - examples と deprecated 3ファイルが本仕様を通じて無改変であることを git diff で確認する
   - 全クレートの `cargo test` グリーン、および全クレートのテスト名インベントリがゴールデンと完全一致（差分が空）であることを確認する
   - 観測: ワークスペース全体ビルド・全テストグリーン、スコープ外ファイルの無改変が diff で確認され、全インベントリ差分が空
   - _Requirements: 4.1, 4.3, 5.1, 5.2, 5.3, 5.4, 6.1, 6.2, 6.3, 6.4_
   - _Depends: 2.1, 2.2, 3.1, 3.2, 3.3, 3.4, 3.5, 3.6, 3.7, 3.8, 4.1, 4.2, 4.3, 4.4, 5.1, 6.1, 6.2, 6.3, 6.4, 6.5, 6.6, 6.7, 6.8, 7.1_
+
+## 最終検証結果 (task 8.1, GO)
+
+- `cargo build --all-targets` グリーン（workspace 全体・examples 含む）。
+- **ゴールデン リーフ多重集合 全3クレート完全一致**: wintf 1102 / dola 580 / areka 22。テストの消失・追加・リネーム・重複ゼロ（挙動非破壊の実証）。
+- `cargo test`（workspace 全体）グリーン、失敗ゼロ。
+- **スコープガードレール**（base=475c554..HEAD の git diff で実証）: deprecated 3ファイル（winproc.rs / win_message_handler.rs / win_thread_mgr.rs）と dola facade.rs は **diff 0行（無改変）**。examples の変更は `taffy_flex_demo_old.rs` の削除（R5.1 で許可された死体例）**のみ**。
+- **目標達成**: 対象範囲（live src+tests、保護・examples・vendors 除く）に **600行超ファイルがゼロ**（650超どころか 600-650 帯も該当なし）。
+- 公開API後方互換: 呼び出し側コード無改変で全テスト・examples がコンパイル＆パス（ビルド緑＋ゴールデン一致が実証）。
 
 ## Implementation Notes
 
