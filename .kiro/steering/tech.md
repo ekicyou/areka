@@ -1,6 +1,6 @@
 # Technology Stack
 
-updated_at: 2026-03-09
+updated_at: 2026-06-19
 
 ## Architecture
 
@@ -26,13 +26,18 @@ Rust 2024を前提にしたマルチクレート構成です。wintfはbevy_ecs�
 - **bevy_tasks** (0.18.0): タスク実行基盤
 - **tracing / tracing-subscriber**: 構造化ロギング
 - **windows-numerics** (0.3.1): Windows数値型サポート
-- **pasta_core** (0.1.6): 外部DSLエンジン連携
+- **ambassador** (0.5.0): トレイト委譲（delegation）マクロ。COM/状態ラッパーのボイラープレート削減に使用
+- **nonmax** (0.5.5): ニッチ最適化された非最大整数型
+- **pasta_core** (0.1.6): 里々インスパイアの会話DSLエンジン。`[patch.crates-io]` で `vendors/pasta/` のサブモジュールへ差し替え（後述の Key Technical Decisions 参照）
 
 ### dola クレート依存
 - **serde** (1): シリアライズ/デシリアライズ基盤
 - **serde_json** (1, feature: `json`): JSON対応（デフォルト有効）
 - **toml** (0.8, feature: `toml`): TOML対応
 - **serde_yaml** (0.9, feature: `yaml`): YAML対応
+- **interpolation** (0.3.0): イージング・補間計算の基盤（`easing.rs`, `runtime/interpolator/`）
+- **rand** (0.10.0): アニメーション系の乱数生成
+- **pasta_core**: DSL連携のための直接依存（wintf経由ではなくdolaが直接取り込む）
 
 ## Development Standards
 
@@ -75,6 +80,7 @@ Rust言語の型システムを最大限に活用。`unsafe`ブロックはWindo
 - **Release最適化**: サイズ最適化（`opt-level='z'`, `lto=true`）でバイナリサイズを削減
 - **レガシーAPI非推奨化**: `win_message_handler`, `win_thread_mgr`, `winproc` は `#[deprecated]` 指定済み。新規コードでは `ecs/window_proc/` 配下のモジュールを使用する
 - **構造化ログ**: `tracing` を全体規約とし、subscriber初期化はアプリ層で行う
+- **pasta のベンダリング**: 外部依存だった `pasta_core` を git サブモジュール（`vendors/pasta/`）として同梱し、`[patch.crates-io]` でローカルパスへ差し替える。wintf/dola/areka とDSLエンジンを同一ワークスペースで協調開発するための運用。クローン時は `git submodule update --init` が必要
 
 ---
 Document standards and patterns, not every dependency.
