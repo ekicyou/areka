@@ -1,6 +1,6 @@
 # Project Structure
 
-updated_at: 2026-03-09
+updated_at: 2026-06-19
 
 ## Organization Philosophy
 
@@ -50,6 +50,7 @@ updated_at: 2026-03-09
 - `world/` - schedule labels、vsync、フレーム進行
 - `app.rs` - アプリケーション状態管理（ウィンドウカウント、ディスプレイ構成変更）
 - `window_proc/` - Win32メッセージ種別ごとのECSブリッジ
+- `types.rs` - 共通幾何プリミティブ型（`Point`/`Size`/`Rect` 等）の唯一の定義箇所。`#[repr(C)]` でWin32/D2D1型とゼロコスト相互変換
 
 #### ECS機能グループ詳細
 
@@ -191,25 +192,28 @@ COMリソースコンポーネント内部のアクセスメソッドは、COM�
   - `value.rs` - 動的値
   - `builder.rs` - Builder API
   - `playback.rs` - 再生状態
-  - `validate.rs` - バリデーション
+  - `validate/` - バリデーション（`rules.rs` 等）
   - `error.rs` - エラー型
-  - `compile/` - 解決・型変換
+  - `compile/` - 解決・型変換（`resolve.rs`, `types.rs`）
   - `cue/` - CueSheet/TimedScheduleモデル
-  - `runtime/` - 実行系ファサード、インスタンス管理、補間、購読管理
+  - `runtime/` - 実行系。ファサード、インスタンス管理、補間、購読管理、タイムライン、ループ制御をサブディレクトリモジュールに分割（`instance_manager/`, `interpolator/`, `subscription_manager/`, `timeline_manager/`, `loop_controller/` 等）
 - `tests/` - テスト
 
-**Dependencies**: `serde` + feature flags (`json`, `toml`, `yaml`)
+> **モジュール分割パターン**: 600行リファクタ（`oversized-file-refactor`）以降、肥大化したファイルは `{module}/mod.rs` + サブモジュールのディレクトリ形式へ分割する方針。dola `runtime/` がその代表例。
+
+**Dependencies**: `serde` + feature flags (`json`, `toml`, `yaml`) ＋ `interpolation`, `rand`, `pasta_core`
 
 ### Application Binary Crate
 **Location**: `/crates/areka/`  
 **Purpose**: デスクトップマスコット・プラットフォーム本体  
 **Status**: 試作実装（シェル+バルーン2ウィンドウ表示、ドラッグ移動、ダブルクリック終了）  
-**Dependencies**: wintf, human-panic, tracing, tracing-subscriber, async-io, bevy_ecs, windows
+**Dependencies**: wintf, human-panic, thiserror, tracing, tracing-subscriber, async-io, bevy_ecs, windows
 
-### External: pasta DSL Engine
+### Vendored: pasta DSL Engine
+**Location**: `/vendors/pasta/`（git サブモジュール）  
 **Repository**: [https://github.com/ekicyou/pasta](https://github.com/ekicyou/pasta)  
 **Purpose**: 里々インスパイアの会話記述DSLスクリプトエンジン  
-**Integration**: arekaバイナリクレートが依存として取り込み
+**Integration**: `[patch.crates-io]` で `pasta_core` をローカルパスへ差し替え、ワークスペース内で協調開発する。dola が直接依存し、areka は wintf/dola 経由で利用する。クローン時は `git submodule update --init` が必要
 
 ## Import Organization
 
