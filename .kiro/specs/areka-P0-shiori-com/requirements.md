@@ -23,6 +23,7 @@
   - 毎秒ポーリング（OnSecondChange）等、SHIORI を駆動する上位タイミングロジック
   - SAORI、過去互換のための独自 IPC、OOP 自動マーシャリング
   - x86（32bit）でのネイティブ脳直結（本仕様は x64／CPU ネイティブ前提）
+  - ABI の後方互換保証・明示的バージョニング機構（本仕様の `IShiori`/`IShioriHost` はリリースまで**流動的な契約**として扱い、作りこみ段階のインターフェイス変動を許容する。変更時は in-tree の全実装者〔areka 本体・`areka-P0-shiori-host-32`・pasta〕を lockstep で更新する。契約の凍結・互換規律〔公開インターフェイス不変＋新 IID＋`QueryInterface`〕・protocol version の導入はリリース前マイルストーン／別仕様の責務）
 - **Adjacent expectations（隣接仕様・既存資産への期待）**:
   - `areka-P0-shiori-host-32` は、過去互換 DLL を本仕様で定義する**同じ `IShiori` を実装する一実装**として areka 本体へ提供されること（呼び出し側は区別しない）。あわせて、本仕様の正準 content プロトコルと過去互換 DLL のレガシー content（旧 SHIORI テキスト等）との**翻訳を実装側で吸収**すること（R1-6）
   - ネイティブ旗艦脳「ぱすたさん（pasta）」は、本仕様の `IShiori` を実装する受け皿として in-proc 経路で接続され、正準 content プロトコルを直接喋ること
