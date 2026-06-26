@@ -143,3 +143,45 @@
 ### 議題3由来（契約の安定化方針）
 
 - **D7. プレリリース流動契約 → リリース時凍結**: 本仕様の `IShiori`/`IShioriHost` は**リリースまで流動的な契約**とし、後方互換保証・明示的バージョニング機構は持たない（要件 Out of scope に明記）。作りこみ段階のインターフェイス変動を許容し、変更時は in-tree の全実装者（areka 本体・`areka-P0-shiori-host-32`・pasta）を **lockstep で再ビルド・更新**する。32bit 互換ホストは別バイナリ（プロセス／bitness 境界）だが同一リポジトリで共にビルド・出荷されるため lockstep が成立する。**リリース時点**（または第三者製ネイティブ脳が公開 ABI へ独立実装する段階）で、COM 標準の進化規律（公開インターフェイス不変＋新 IID の `IShiori2` 追加＋`QueryInterface`）と、json-rpc 採用時は protocol version を導入する——これは本 P0 ではなくリリース前マイルストーン／別仕様の責務。これにより §0・§5 で挙げた「ABI 後戻りコスト」リスクは*凍結*ではなく*プロセス（lockstep 再ビルド）*で緩和される。
+
+---
+
+## 8. 設計フェーズ調査・統合結果（design-generated）
+
+> 設計フェーズ（`/kiro-spec-design`）で実施した Light Discovery（拡張機能向け）と統合（Generalization / Build-vs-Adopt / Simplification）の結果。決定の正本は `design.md`。
+
+### 8.1 Discovery 種別と追加調査結果
+
+- **Discovery 種別: Light（拡張）**。既存ワークスペースへ独立 ABI クレートを追加する拡張であり、§1〜§7 のギャップ分析で大半が既調査。残る唯一の外部技術不確実性「windows-rs 0.62 のカスタム COM 定義の正確な技法」をサブエージェントで確定した。
+- **windows-core 0.62.x `#[interface]` 確定事項**（公式 docs.rs 0.62 + windows-rs ソースで検証、出典は §6 末尾の調査ログ参照）:
+  1. マクロは `windows_core::interface`（`windows::core::interface`）。`#[interface("<GUID 文字列>")] unsafe trait IXxx: IUnknown { ... }` の形。`IUnknown` 継承は**明示記述が必須**（修飾パス不可、issue #1687）。
+  2. メソッドは `unsafe trait` 上の `unsafe fn Method(&self, ...) -> windows_core::HRESULT`（raw HRESULT）。
+  3. **重要**: メタデータ生成インターフェイスと異なり、カスタム `#[interface]` は `#[implement(IXxx)]` 経由でも `_Impl` トレイトが **raw シグネチャ（`unsafe fn -> HRESULT`）のまま**で、`Result` を返す人間向けエルゴノミクスは**自動生成されない**。→ D4（手書き 2 層）の技術的必然を裏付け。
+  4. `HSTRING` は引数・戻り値・out-param に直接使用可。`windows-strings` の純 Rust 実装（`HStringHeader` + 内部 atomic refcount）で `WindowsCreateString`/`RoInitialize` を呼ばない。→ R4-2 を実証。
+  5. **in-proc 直 vtable 呼び出しではマーシャリング非発生**（proxy/stub 未登録のため）。→ R4-3 / R5-2 の不変条件を裏付け（結合テストで実証する）。
+  6. 実装の構築は `let obj: IShiori = MyBrain(...).into();`。呼び出しは `unsafe { obj.Method(...) }`（trait が unsafe）。
+  7. 複数戻り値は `*mut T` out-param + HRESULT。enum 風 status は `#[repr(i32)]`/HRESULT 分岐で表現。
+
+### 8.2 統合（Synthesis）結果
+
+- **Generalization**: R3 の「即時／遅延／失敗」は単一の「リクエスト結果」の特殊化。ergonomic 層で `RequestOutcome { Immediate(HSTRING), Deferred(CorrelationToken) }` + `ShioriError` のデータ enum に一般化し、ABI 面（raw）は HRESULT 3 値分岐に保つ（実装は最小、インターフェイスのみ一般化）。
+- **Build vs Adopt**:
+  - *Adopt*: windows-core `#[interface]`/`#[implement]`（プラットフォーム native の COM 定義機構）、json-rpc 2.0（正準 content プロトコル・D5。id/result/error が即時/遅延/失敗＋相関トークンへ素直に対応）、`windows::core::Result`/`thiserror`（steering 既定のエラー規約・R7）。
+  - *Build*: ergonomic 変換トレイト `ShioriExt` のみ手書き（§8.1-3 のとおり windows-rs が自動生成しないため必然）。
+- **Simplification**:
+  - バージョニング機構を作らない（D7・流動契約）。`IShiori2`/QueryInterface 規律・protocol version はリリース前マイルストーンへ繰り延べ。
+  - 能動通知と遅延完了を**単一 sink `IShioriHost`**（`Raise` / `Complete`）に統合（R6-1）。別 sink を作らない。
+  - 状態（Loaded/Unloaded）を ABI に持たせず脳実装側へ寄せ、ABI は未ロード拒否を HRESULT 契約として定めるのみ（2.4）。
+
+### 8.3 クレート分割の最終判断（§3 A/B/C の決着）
+
+- **採用: Option C（ハイブリッド）**。ABI 定義は独立クレート `crates/shiori-abi`（最小依存・`wintf`/`dola`/`bevy_ecs` 非依存）、in-proc アクティベーション配線と `IShioriHost` の areka 側実装は areka 本体に配置。
+- 理由: (1) 下流 `areka-P0-shiori-host-32`・pasta が `wintf` を引き込まず同 `IShiori` を実装できる（R5-4・隣接期待）、(2) 「ABI（安定契約）」と「アクティベーション（実装種別差の局所化点・R1-5）」を物理境界で表現、(3) workspace の `members = ["crates/*"]` グロブにより追加コスト極小。
+
+### 8.4 相関トークン発行主体の確定（設計レビューゲートでの修正）
+
+- R3-3 の「相関トークンを発行する」主体は **ABI=脳（`IShiori` 実装）側**。`Request` の `out_token` out-param で脳が遅延結果として返す。areka 本体は受領トークンを未完了 request へ対応付けて保持し `IShioriHost::Complete(token, ...)` で突合する。設計ドラフト初版の「areka が採番」記述を本確定に合わせて修正済み（レビューゲート 1 回目の局所修正、要件ギャップではない）。
+
+### 8.5 規模・リスク（設計後の更新）
+
+- §5 の Effort=M / Risk=Medium を維持。主リスクは (a) HSTRING [out] 所有権規約（callee 確保・caller 解放）の raw 層実装、(b) 流動契約の lockstep 運用（プロセスで緩和・D7）。x86 連鎖リスクは本仕様では回避済み。
