@@ -52,7 +52,7 @@
   - _Depends: 1.2, 1.3, 2.1, 2.2_
 
 - [ ] 4. Integration: areka 側 host 実装と in-proc アクティベーション（最小受け皿）
-- [ ] 4.1 areka 側 `IShioriHost` 実装（sink・突合枠・mailbox 投函）
+- [x] 4.1 areka 側 `IShioriHost` 実装（sink・突合枠・mailbox 投函）
   - `areka` クレートに `shiori-abi` の path 依存を追加し、`#[implement(IShioriHost)]` で `Raise`/`Complete` を実装する
   - 突合枠 `Option<CorrelationToken>` を所有し、`Complete` を thread-safe に areka のメールボックスへ投函して即返す。未知/stale トークンは `SHIORI_E_UNKNOWN_TOKEN` を返す。`[in]` HSTRING は保持時に clone する
   - 非循環所有: host 実装は脳へ強参照を持たない

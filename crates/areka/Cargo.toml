@@ -17,6 +17,8 @@ path = "src/main.rs"
 
 [dependencies]
 wintf = { version = "0.0.1", path = "../wintf" }
+shiori-abi = { path = "../shiori-abi" }
+windows-core = { workspace = true }
 human-panic = { workspace = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }
