@@ -1,6 +1,6 @@
 # Focus - ロードマップ管理
 
-updated_at: 2026-03-07
+updated_at: 2026-06-26
 
 arekaアルファリリースロードマップと`.kiro/specs/`配下の仕様ポートフォリオを整合させるための運用ガイド。
 
@@ -28,6 +28,21 @@ arekaアルファリリースロードマップと`.kiro/specs/`配下の仕様�
 | 待機（P1-P3） | `.kiro/specs/backlog/` |
 | 完了 | `.kiro/specs/completed/` |
 | 却下 | `.kiro/specs/_rejected/` |
+
+## 件数集計ルール
+
+進捗件数は **`spec.json` の `phase` 値ではなく、配置フォルダを基準**に数える（`phase` 値は履歴上ズレるため当てにしない）。
+
+| 配置 | 計上区分 |
+| ------ | ------ |
+| `.kiro/specs/` 直下（completed/backlog/_rejected 以外） | アクティブ（P0） |
+| `.kiro/specs/backlog/` | 待機（P1-P3） |
+| `.kiro/specs/completed/` | 完了 |
+| `.kiro/specs/_rejected/` | 却下（集計対象外・参考） |
+| `spec.json` を持たないディレクトリ（例: `shape-*`） | 構想段階（Phase 0）として別掲 |
+
+- 直下に `phase=completed` のまま残る仕様（例: 旧メタ仕様）があれば `completed/` への移動候補として棚卸しに挙げる
+- 棚卸しの基準実数は ROADMAP.md v1.1（2026-06-26）: 完了82 / アクティブ19 / 待機20 / 却下1 / 構想3
 
 ## 運用上の注意
 

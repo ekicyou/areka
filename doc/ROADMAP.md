@@ -3,9 +3,13 @@
 | 項目 | 内容 |
 |------|------|
 | **Document Title** | areka アルファリリースロードマップ |
-| **Version** | 1.0 |
-| **Date** | 2026-02-14 |
+| **Version** | 1.1 |
+| **Date** | 2026-06-26 |
 | **ゴール** | ぱすたさん（1体のデスクトップマスコット）のアルファリリース |
+
+> **v1.1 再ベースライン (2026-06-26)**: 仕様ポートフォリオの実態（122件）と地図の乖離を是正。
+> 完了済みの透過/レイヤードウィンドウ移行を「解決済み基盤資産」として顕在化し、バルーンの
+> 子仕様分割（balloon01〜06）と未記載仕様を反映した。件数は配置フォルダ基準で再計上。
 
 ---
 
@@ -13,13 +17,42 @@
 
 | フェーズ | 状態 | 進捗 |
 |---------|:----:|:----:|
-| Phase A: 基盤完成 | 🔵 進行中 | ████████░░ 80% |
-| Phase B: 表示層 | ⚪ 未着手 | ░░░░░░░░░░ 0% |
+| Phase A: 基盤完成 | 🔵 進行中 | █████████░ 90% |
+| Phase B: 表示層 | 🔵 進行中 | ██░░░░░░░░ 20%（仕様策定中） |
 | Phase C: コンテンツ | ⚪ 未着手 | ░░░░░░░░░░ 0% |
 | Phase D: アプリ統合 | ⚪ 未着手 | ░░░░░░░░░░ 0% |
 | Phase E: アルファ出荷 | ⚪ 未着手 | ░░░░░░░░░░ 0% |
 
-**完了済み仕様**: 67件 / **アクティブ仕様(P0)**: 6件 / **バックログ(P1-P3)**: 18件
+### 仕様ポートフォリオ実数（2026-06-26 棚卸し）
+
+| 配置 | 件数 | 意味 |
+|------|:----:|------|
+| `completed/` | **82** | 完了 |
+| `.kiro/specs/` 直下 | **19** | アクティブ（P0） |
+| `backlog/` | **20** | 待機（P1-P3） |
+| `_rejected/` | **1** | 却下 |
+| spec.json 未生成（`shape-*`） | 3 | 構想段階（Phase 0） |
+
+> 件数は **配置フォルダを基準**に数える（`spec.json` 内の phase 値は履歴上ズレることがあるため）。
+> 集計ルールの正本は `.kiro/steering/focus.md`。
+
+---
+
+## 解決済み基盤資産（地図に埋もれていた完了群）
+
+アルファの中核リスクと目された項目は、すでに完了済み。**仕切り直し・再設計は不要**。
+
+| 基盤 | 到達点 | 関連完了仕様 (`completed/`) |
+|------|--------|---------------------------|
+| **透過ウィンドウ / レイヤードウィンドウ移行** | DirectComposition → UpdateLayeredWindow(ULW) 移行を完遂。ULW がデフォルト | `wintf-dcomp-migration-0`〜`4`, `wintf-dcomp-to-layered-migration` |
+| **DComp ⇄ ULW 切替基盤** | ウィンドウ単位に `CompositionMode` で合成方式を選択（生成時固定） | `wintf-dcomp-migration-4-switchable-backend` |
+| **クリック透過** | `ULW_ALPHA`（`AC_SRC_ALPHA`）で透明ピクセルを別プロセスへ自動透過 | `wintf-P0-click-through`, `event-hit-test-alpha-mask` |
+| **イベント / ヒットテスト** | マウス・ドラッグ・親子ルーティング・名前付き領域・マルチウィンドウ検証まで完備 | `wintf-P0-event-system` と配下8仕様 |
+| **dola 演出ランタイム** | コア型・クロック・ファサード・競合解決・ループまで実装 | `dola-runtime-1`〜`5`, `dola-runtime-engine` ほか |
+
+> **却下された代替案**: `_rejected/wintf-P0-click-through-rgn` — `SetWindowRgn` は
+> `WS_EX_NOREDIRECTIONBITMAP` 上の DComp 描画をクリップしてしまい「描画は残すがクリックだけ透過」が
+> 両立できず却下（`setwindowrgn_compat_test.rs` で実証）。同じ轍は踏まないこと。
 
 ---
 
@@ -29,18 +62,11 @@
 
 | 仕様 | .kiro/specs/ | 状態 | 備考 |
 |------|-------------|:----:|------|
-| イベントシステム | `completed/wintf-P0-event-system` | ✅ 完了 | |
-| ├ ヒットテスト | `completed/event-hit-test` | ✅ 完了 | |
-| ├ ヒットテストキャッシュ | `completed/event-hit-test-cache` | ✅ 完了 | |
-| ├ マウス基本 | `completed/event-mouse-basic` | ✅ 完了 | |
-| ├ 親→子ルーティング | `completed/event-parent-to-child-routing` | ✅ 完了 | |
-| ├ イベント配信 | `completed/event-dispatch` | ✅ 完了 | |
-| ├ ドラッグシステム | `completed/event-drag-system` | ✅ 完了 | |
-| ├ ヒットテスト名前付き領域 | `completed/event-hit-test-named-regions` | ✅ 完了 | |
-| ├ マルチウィンドウイベント | `completed/multiwindow-event-validation` | ✅ 完了 | |
-| アニメーションシステム | `wintf-P0-animation-system` | ⚪ 未着手 | dola → wintf 統合 |
-| ├ dola 責務境界 | `completed/wintf-P0-dola-boundary` | ✅ 完了 | cue-system unblock |
+| イベントシステム（+配下8仕様） | `completed/wintf-P0-event-system` ほか | ✅ 完了 | hit-test/drag/routing/named-regions/multiwindow |
 | タイプライター | `completed/wintf-P0-typewriter` | ✅ 完了 | |
+| dola 責務境界 | `completed/wintf-P0-dola-boundary` | ✅ 完了 | cue-system unblock |
+| 透過/レイヤードウィンドウ移行 | （上記「解決済み基盤資産」参照） | ✅ 完了 | |
+| **アニメーションシステム** | `wintf-P0-animation-system` | 🔵 要件生成済 | **Phase A 残件 = 現フロント**。dola → wintf 統合 |
 
 ---
 
@@ -48,10 +74,19 @@
 
 **目標**: バルーン（吹き出し）の描画とウィンドウ配置（デスクトップ端固定等）の実装。
 
+> バルーンシステムは親仕様 `wintf-P0-balloon-system`（設計承認済）から、実装単位の子仕様
+> `balloon01`〜`06` に分割済み。`balloon07-ruby` / `balloon08-portrait` は P1（backlog）。
+
 | 仕様 | .kiro/specs/ | 状態 | 依存 |
 |------|-------------|:----:|------|
-| バルーンシステム | `wintf-P0-balloon-system` | ⚪ 未着手 | typewriter ✅ |
-| ウィンドウ配置 | `areka-P0-window-placement` | ⚪ 未着手 | event-system 🔵 |
+| バルーンシステム（親） | `wintf-P0-balloon-system` | 🔵 設計承認済(R✓D✓T✓) | typewriter ✅ |
+| ├ コア | `wintf-P0-balloon01-core` | 🔵 要件ドラフト | balloon-system |
+| ├ リファレンススキン | `wintf-P0-balloon02-reference-skin` | ⚪ init | balloon01 |
+| ├ コンテンツ | `wintf-P0-balloon03-content` | ⚪ init | balloon01 |
+| ├ 選択肢 | `wintf-P0-balloon04-choice` | ⚪ init | balloon03 |
+| ├ リンク | `wintf-P0-balloon05-link` | ⚪ init | balloon03 |
+| └ テキストエフェクト | `wintf-P0-balloon06-text-effects` | ⚪ init | balloon03 |
+| ウィンドウ配置 | `areka-P0-window-placement` | 🔵 要件ドラフト | event-system ✅ |
 
 ---
 
@@ -61,24 +96,26 @@
 
 | 仕様 | .kiro/specs/ | 状態 | 依存 |
 |------|-------------|:----:|------|
-| リファレンスシェル | `areka-P0-reference-shell` | ⚪ 未着手 | animation-system |
-| リファレンスバルーン | `areka-P0-reference-balloon` | ⚪ 未着手 | balloon-system |
-| リファレンスゴースト | `areka-P0-reference-ghost` | ⚪ 未着手 | reference-shell, reference-balloon |
-| pasta スクリプトエンジン | `completed/areka-P0-script-engine` | ✅ 完了 | 外部リポジトリ: [ekicyou/pasta](https://github.com/ekicyou/pasta) |
+| リファレンスシェル | `areka-P0-reference-shell` | ⚪ 要件ドラフト | animation-system |
+| リファレンスバルーン | `areka-P0-reference-balloon` | ⚪ 要件ドラフト | balloon-system |
+| リファレンスゴースト | `areka-P0-reference-ghost` | ⚪ 要件ドラフト | reference-shell, reference-balloon |
+| pasta スクリプトエンジン | `completed/areka-P0-script-engine` | ✅ 完了 | vendored: `vendors/pasta/`（[ekicyou/pasta](https://github.com/ekicyou/pasta)） |
 
 ---
 
 ## Phase D: アプリ統合
 
-**目標**: areka バイナリクレートの作成と、システムトレイ・永続化等のアプリケーション機能。
+**目標**: areka バイナリクレートの拡充と、システムトレイ・永続化等のアプリケーション機能。
+
+> areka バイナリクレートは試作実装済み（`crates/areka/`：シェル+バルーン2ウィンドウ、ドラッグ移動、
+> ダブルクリック終了）。本フェーズはその上に常駐アプリ機能を積む。
 
 | 仕様 | .kiro/specs/ | 状態 | 依存 |
 |------|-------------|:----:|------|
-| areka バイナリクレート | *(新規作成予定)* | ⚪ 未着手 | reference-ghost |
-| システムトレイ | `areka-P0-system-tray` | ⚪ 未着手 | areka crate |
-| 永続化 | `areka-P0-persistence` | ⚪ 未着手 | areka crate |
-| パッケージマネージャ | `areka-P0-package-manager` | ⚪ 未着手 | areka crate |
-| MCPサーバー | `areka-P0-mcp-server` | ⚪ 未着手 | areka crate |
+| システムトレイ | `areka-P0-system-tray` | ⚪ 要件ドラフト | areka crate |
+| 永続化 | `areka-P0-persistence` | ⚪ 要件ドラフト | areka crate |
+| パッケージマネージャ | `areka-P0-package-manager` | ⚪ 要件ドラフト | areka crate |
+| MCPサーバー | `areka-P0-mcp-server` | ⚪ 要件生成済 | areka crate |
 
 ---
 
@@ -98,13 +135,18 @@
 
 ```mermaid
 graph LR
+    subgraph Done["✅ 解決済み基盤"]
+        EVT[event-system]
+        ULW[透過/ULW移行]
+        CLICK[click-through]
+    end
+
     subgraph PhaseA["Phase A: 基盤完成"]
-        EVT[event-system 残件]
-        ANIM[animation-system]
+        ANIM[animation-system 🔵]
     end
 
     subgraph PhaseB["Phase B: 表示層"]
-        BLN[balloon-system]
+        BLN[balloon01-06]
         WPL[window-placement]
     end
 
@@ -115,7 +157,6 @@ graph LR
     end
 
     subgraph PhaseD["Phase D: アプリ統合"]
-        AREKA[areka crate]
         TRAY[system-tray]
         PERSIST[persistence]
     end
@@ -127,42 +168,41 @@ graph LR
 
     EVT --> BLN
     EVT --> WPL
+    ULW --> WPL
     ANIM --> SHELL
     BLN --> BALLOON
     WPL --> SHELL
     SHELL --> GHOST
     BALLOON --> GHOST
-    GHOST --> AREKA
-    AREKA --> TRAY
-    AREKA --> PERSIST
+    GHOST --> TRAY
+    GHOST --> PERSIST
     TRAY --> INTEG
     PERSIST --> INTEG
     INTEG --> RELEASE
 ```
 
-**クリティカルパス**: event-system → balloon-system → reference-balloon → reference-ghost → areka crate → 統合テスト → リリース
+**クリティカルパス**: animation-system → balloon01-06 → reference-balloon → reference-ghost → 統合テスト → リリース
 
 ---
 
-## 子仕様対応表
+## アクティブ仕様以外の関連仕様（棚卸し）
 
-| フェーズ | 対応仕様 (.kiro/specs/) |
-|---------|----------------------|
-| Phase A | `wintf-P0-event-system`, `wintf-P0-animation-system`, `event-hit-test-named-regions`, `multiwindow-event-validation` |
-| Phase B | `wintf-P0-balloon-system`, `areka-P0-window-placement` |
-| Phase C | `areka-P0-reference-shell`, `areka-P0-reference-balloon`, `areka-P0-reference-ghost` |
-| Phase D | `areka-P0-system-tray`, `areka-P0-persistence`, `areka-P0-package-manager`, `areka-P0-mcp-server` |
-| Phase E | *(統合テスト・リリースビルド仕様を新規作成)* |
+ロードマップ本体テーブルに載らないが `.kiro/specs/` 直下に実在する仕様。配置の妥当性を随時見直すこと。
 
-### アクティブ仕様以外の関連仕様
+| 仕様 | 分類 | 状態 | メモ |
+|------|------|:----:|------|
+| `ukagaka-desktop-mascot` | 旧メタ仕様 | ✅ 完了(phase) | 本ロードマップの前身。`completed/` への移動候補 |
+| `codebase-review-loop` | プロセス/レビュー | ✅ R✓D✓T✓ | リポジトリ全域レビュー運用 |
+| `future-requirements-survey` | 調査 | 調査完了 | `salvage-report` あり。backlog 化候補 |
+| `shape-brush-system` | UIウィジェット拡張 | 構想(Phase 0) | SPEC.md/STATUS.md のみ、`spec.json` 未生成 |
+| `shape-path-geometry` | UIウィジェット拡張 | 構想(Phase 0) | 同上 |
+| `shape-stroke-widgets` | UIウィジェット拡張 | 構想(Phase 0) | 同上 |
 
-| 仕様 | 分類 | 状態 |
-|------|------|:----:|
-| `shape-brush-system` | UIウィジェット拡張 | ⚪ P0アクティブ |
-| `shape-path-geometry` | UIウィジェット拡張 | ⚪ P0アクティブ |
-| `shape-stroke-widgets` | UIウィジェット拡張 | ⚪ P0アクティブ |
-| `future-requirements-survey` | 調査 | ⚪ P0アクティブ |
-| `docs-restructure` | ドキュメント | ✅ 完了 |
+### 棚卸しで判明した整理候補（housekeeping）
+
+- `ukagaka-desktop-mascot`（phase=completed）を `completed/` へ移動
+- `shape-*` 3件は `spec.json` を生成して正式化するか、未着手なら `backlog/` へ退避
+- `future-requirements-survey` は調査完了済み → 役割を終えたなら `backlog/` か `completed/` へ
 
 ---
 
@@ -170,9 +210,10 @@ graph LR
 
 フェーズの完了状況が変化した際は、以下を更新してください：
 
-1. **プログレスサマリー**: 該当フェーズの進捗バーと割合を更新
+1. **プログレスサマリー**: 該当フェーズの進捗バーと割合、および配置別件数を更新
 2. **各フェーズテーブル**: 該当仕様の「状態」列を ⚪ → 🔵 → ✅ に変更
-3. **依存関係図**: 完了ノードのスタイルを変更（任意）
+3. **解決済み基盤資産**: 新たに完了した基盤群があれば追記
+4. **依存関係図**: 完了ノードを `Done` サブグラフへ移動（任意）
 
 ---
 

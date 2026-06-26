@@ -1,6 +1,6 @@
 # Technology Stack
 
-updated_at: 2026-06-19
+updated_at: 2026-06-26
 
 ## Architecture
 
@@ -75,6 +75,7 @@ Rust言語の型システムを最大限に活用。`unsafe`ブロックはWindo
 
 - **ECS採用**: 複雑なGUI要素の管理とヒットテストロジックをコンポーネントベースで実装
 - **DirectComposition**: ハードウェアアクセラレーションによる高速な合成処理と透過ウィンドウの実現
+- **透過の合成方式は ULW/DComp 切替式（実装済み）**: 伺か型マスコットは「別プロセスのウィンドウ上に乗り、透明ピクセル上のクリックをその別プロセスへ透過させる」のが中核要件。これを満たせるのは実質 `UpdateLayeredWindow`（`ULW_ALPHA`/`AC_SRC_ALPHA` でアルファ0ピクセルがOSレベルで自動クリック透過）。そこでウィンドウ単位に `CompositionMode` enum で **ULW（デフォルト）⇄ DirectComposition** を選択する切替基盤を実装済み（生成時固定、生存中の動的切替は非対応）。COMラッパーは `com/ulw.rs`。`WM_NCHITTEST`→`HTTRANSPARENT` はプロセス境界を越えず別プロセス透過には使えない点に注意。`SetWindowRgn` 方式は DComp 描画をクリップするため却下済み（`_rejected/wintf-P0-click-through-rgn`）
 - **DirectWrite**: 高品質な日本語テキストレンダリングと縦書き対応
 - **Workspace構成**: フレームワーク、演出定義、実アプリを分離したモノレポ構成
 - **Release最適化**: サイズ最適化（`opt-level='z'`, `lto=true`）でバイナリサイズを削減
