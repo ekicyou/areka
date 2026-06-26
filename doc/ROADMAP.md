@@ -73,6 +73,25 @@ SERIKOを平坦サブセットとして内包する上位エンジン。native-f
 
 ---
 
+## M1 Specs (dependency order)
+
+新規 spec の brief は各 `.kiro/specs/<feature>/brief.md` に作成済み。依存順は以下（`/kiro-spec-init` または `/kiro-spec-batch` で着手可能）。`wintf-P0-animation-system` と `wintf-P0-balloon-system`＋`balloon01-06` は既存のため、新規ではなくスコープ拡張で対応。
+
+- [ ] wintf-P0-surface-hierarchy -- 汎用の階層アニメーション・サーフェス合成能力（wintf）。Dependencies: wintf-P0-animation-system
+- [ ] areka-P0-seriko-runtime -- SERIKO/MAYUNA を ukadoc 完全マップで解釈（areka）。Dependencies: wintf-P0-surface-hierarchy
+- [ ] areka-P0-shell-loader -- 伺かシェルパッケージ読込→surfaceモデル（areka）。Dependencies: areka-P0-seriko-runtime
+- [ ] areka-P0-sakura-script -- さくらスクリプト runner（優先度順, areka）。Dependencies: areka-P0-seriko-runtime, wintf-P0-balloon-system
+- [ ] areka-P0-balloon-loader -- 伺かバルーンパッケージ読込（areka）。Dependencies: wintf-P0-balloon-system
+- [ ] areka-P0-shiori-com -- 内部唯一ABI `IShiori`(COM)＋ネイティブin-proc（areka）。Dependencies: none
+- [ ] areka-P0-shiori-host-32 -- 32bit Rust 過去互換ホスト＋SAORI同居（areka）。Dependencies: areka-P0-shiori-com
+- [ ] areka-P0-compat-ghost-integration -- 実在里々ゴースト1体をE2E起動（M1北極星）。Dependencies: areka-P0-shell-loader, areka-P0-seriko-runtime, areka-P0-sakura-script, areka-P0-balloon-loader, areka-P0-shiori-host-32
+
+### 既存仕様のスコープ拡張（新規briefなし）
+- `wintf-P0-animation-system` -- dola→wintfバインディングに「階層サーフェス＋SERIKO再生プリミティブ」を追加
+- `wintf-P0-balloon-system`＋`balloon01-06` -- 「さくらスクリプト駆動＋balloonパッケージ読込」前提へ再スコープ
+
+---
+
 ## M2 — ぱすたさん（native旗艦・互換後続）
 
 | 仕様 | .kiro/specs/ | 状態 | 備考 |
