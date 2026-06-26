@@ -38,6 +38,7 @@
 - **相関トークン契約**: 遅延リクエストと後続完了応答を突き合わせるトークンの型・寿命・採番方針。
 - **エラー HRESULT 規約**: 成功（即時/遅延）・失敗の HRESULT マッピングと、`com-resource-naming-unification` 整合の命名。
 - **sink 寿命・非循環所有の不変条件（議題2）**: `IShioriHost` は脳が `Load`〜`Unload` 間 AddRef 保持し `Unload` で Release。所有方向 areka→脳→host を一方向（非循環）に保ち、host 実装は脳へ強参照を持たない。areka は脳解放前に必ず `Unload` を呼ぶ。
+- **リクエスト利用規律＋遅延完了タイムアウト（議題3）**: areka は同時に高々1リクエスト（単一 in-flight）。`Request`/`Load`/`Unload` は非ブロッキング（重い処理は `SHIORI_S_PENDING`＋`Complete`）。保留は `Complete`／`Unload`／設定可能な遅延完了タイムアウトで解消。突合枠（`Option<Token>`）と能動通知の最小受け皿（メールボックスへ thread-safe 投函）は areka 側 `IShioriHost` 実装が所有する。ECS/上位への完全な配送は本仕様外。
 
 ### Out of Boundary
 - json-rpc 本文・さくらスクリプトのパース／意味解釈（content は不透明）。
@@ -182,6 +183,7 @@ sequenceDiagram
 - COM ABI レベルでは `async fn` を公開できないため、`request` は**同期メソッド呼び出し**としてモデル化し、結果を即時/遅延/失敗の 3 値で返す（R3-1〜3・D1）。
 - 区別方式（D1）: 成功 HRESULT を分ける — `S_OK`=即時応答あり、カスタム成功コード `SHIORI_S_PENDING`=遅延、失敗=error HRESULT。応答 HSTRING と相関トークンは out-param で受ける。これにより呼び出し側は HRESULT で 3 値を機械的に判別可能（R3-5）。
 - 遅延完了は `Raise` とは別メソッド `Complete(token, response)` で `IShioriHost` へ配送（R6-4）。単一 sink が能動通知と遅延応答の双方を受ける（R6-1）。
+- 利用規律（議題3・アクターモデル）: areka は同時に高々1リクエスト。`Deferred` 中は `Complete`／`Unload`／**遅延完了タイムアウト**のいずれかで保留が解けるまで次 request を出さない。タイムアウト超過時は枠を放棄して次へ進み、遅れて来た `Complete` は `SHIORI_E_UNKNOWN_TOKEN`。タイムアウト値は設定可能（SSP 同様の無応答ガード）。`Request` は非ブロッキング要求（e2）のため、打ち切り不能な同期ハングは契約上回避する。
 
 ### ライフサイクル（load / unload と sink 受け渡し）
 
@@ -292,7 +294,8 @@ unsafe trait IShiori: IUnknown {
 
 ##### State Management
 - State model: `Unloaded` / `Loaded`（脳実装が保持）。
-- Concurrency: 単一脳・in-proc 前提。areka 本体スレッドからの逐次呼び出しを前提とする最小実装。
+- Concurrency（議題3・アクターモデル）: areka は**同時に高々1リクエスト**。`Request` が `Deferred`（`SHIORI_S_PENDING`）の間は、対応する `Complete` 受領（または `Unload`／遅延完了タイムアウトでの取消）まで**次の `Request` を発行しない**。脳は逐次 request 前提でよい。
+- 非ブロッキング要求（議題3 e2）: `Request`/`Load`/`Unload` は即時に戻ること。重い処理は `SHIORI_S_PENDING`＋後続 `Complete` で後送りする。in-proc 直 vtable は areka の呼び出しスレッド上で実行されるため、ブロックは areka 本体の凍結を招き安全に打ち切れない（同期ハングの強制打ち切りは不可・契約で回避）。
 
 #### IShioriHost
 
@@ -323,7 +326,7 @@ unsafe trait IShioriHost: IUnknown {
 }
 ```
 - Preconditions: 脳は `Load` で受け取った host を **AddRef して `Unload` まで保持**してよく、その間に `Raise`/`Complete` を呼ぶ（`Unload` 後は呼ばない・議題2）。`script`/`response` は呼び出し側（脳）所有の `*const HSTRING`（**借用**）— host(areka) は呼び出し中のみ参照可・解放しない。呼び出し後も内容を保持する場合は host 側で clone する。
-- Postconditions: areka 本体は token を未完了 request と突き合わせて応答を配送。突合不能トークンは error HRESULT。
+- Postconditions: areka 本体は token を**唯一の保留枠（`Option<Token>`）**と突き合わせて応答を配送する（単一 in-flight・議題3）。`Complete`/`Raise` は areka のアクターメールボックスへ **thread-safe に投函して即返す**（任意スレッドから呼ばれうるが、単一ループが順次処理）。突合不能/stale トークン（タイムアウト後・`Unload` 後・未知）は host が `SHIORI_E_UNKNOWN_TOKEN` を返す。
 - Invariants: 文字列は HSTRING（借用規約は上記 Preconditions）、in-proc 直 vtable。
 
 ### Ergonomic Layer（`shiori-abi/src/ergonomic.rs`, `outcome.rs`, `error.rs`）
@@ -384,6 +387,7 @@ impl ShioriExt for IShiori { /* unsafe raw 呼び出しをラップ */ }
 ### Domain Model
 - **正準 content プロトコル（D5）**: `IShiori`/`IShioriHost` 境界の content は **json-rpc 2.0** を採用する（採用判断のみ本仕様。パース/意味解釈は別仕様）。即時/遅延/失敗と相関トークンが json-rpc の `id`/`result`/`error` 構造に素直に対応（遅延＝`id` のみ先行、`result` は後続 `Complete` で配送）。通知＝`id` なし（Raise に対応）、バッチ要求も将来の高レート用途（D6）に適合。ABI 上は不透明 HSTRING のまま運ぶ（R1-6）。
 - **CorrelationToken（D2・R3-3）**: `u64`。in-proc 単一脳前提の最小実装。**トークンは脳（`IShiori` 実装）が遅延結果として発行**し、`Request` の `out_token` out-param 経由で返す（R3-3「相関トークンを発行する」の主体は ABI=脳側）。areka 本体は受け取ったトークンを未完了 request と対応付けて保持し、後続の `IShioriHost::Complete(token, ...)` で突き合わせる。寿命は対応する遅延 request の完了まで。再利用は完了後に許容（脳側の単調増加採番で衝突回避）。
+- 単一 in-flight（議題3）のため突合は `Option<Token>` 一枠へ縮退し、トークンは主に **stale/重複 `Complete` 防御**（タイムアウト/`Unload` 後に遅れて来た遅延応答をトークン不一致で弾く＝`SHIORI_E_UNKNOWN_TOKEN`）と、将来 in-flight を複数許す際の余地として機能する。突合枠は areka 側 `IShioriHost` 実装が所有する。
 - **不変条件**: 文字列は全て HSTRING/UTF-16。ABI に状態フィールドを持たず、ライフサイクル状態は脳実装側が保持する。
 
 ## Error Handling
@@ -397,7 +401,8 @@ impl ShioriExt for IShiori { /* unsafe raw 呼び出しをラップ */ }
 - **未ロード時 request**（2.4）: 専用 error HRESULT（例: `SHIORI_E_NOT_LOADED`）→ `ShioriError::NotLoaded`。
 - **load 失敗**（2.3）: error HRESULT → `ShioriError::LoadFailed(hr)`。
 - **request 失敗**（3.6）: error HRESULT → `ShioriError::RequestFailed(hr)`。
-- **突合不能な Complete トークン**: error HRESULT を host 側が返す。
+- **突合不能/stale な Complete トークン**（タイムアウト後・`Unload` 後・未知）: host が `SHIORI_E_UNKNOWN_TOKEN`（定義済み error HRESULT）を返す。
+- **遅延完了タイムアウト**（議題3 e1）: 保留 `Complete` が時間内に来ない場合、areka は保留枠を放棄して次 request を許可する。タイムアウト値は設定可能。`Request`/`Load`/`Unload` の非ブロッキング要求（e2）により打ち切り不能な同期ハングは契約上回避し、レガシー DLL の SSP 流強制打ち切りは out-of-proc `areka-P0-shiori-host-32` の責務とする。
 
 ### Monitoring
 - `tracing`（全体規約）で ABI 境界の呼び出し・HRESULT 結果を構造化ログ。詳細レベルは areka 本体側で設定。
