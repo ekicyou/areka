@@ -1,6 +1,9 @@
-# Project Structure
-
+---
+inclusion: always
 updated_at: 2026-06-19
+---
+
+# Project Structure
 
 ## Organization Philosophy
 

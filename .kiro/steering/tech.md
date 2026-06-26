@@ -1,6 +1,9 @@
-# Technology Stack
-
+---
+inclusion: always
 updated_at: 2026-06-26
+---
+
+# Technology Stack
 
 ## Architecture
 

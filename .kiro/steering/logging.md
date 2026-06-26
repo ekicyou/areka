@@ -1,6 +1,10 @@
-# Logging Guidelines (tracing)
-
+---
+inclusion: fileMatch
+fileMatchPattern: '**/*.rs'
 updated_at: 2026-03-07
+---
+
+# Logging Guidelines (tracing)
 
 このプロジェクトでは `tracing` クレートを使用した構造化ロギングを採用しています。
 

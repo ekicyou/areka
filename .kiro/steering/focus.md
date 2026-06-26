@@ -1,6 +1,9 @@
-# Focus - ロードマップ管理
-
+---
+inclusion: always
 updated_at: 2026-06-26
+---
+
+# Focus - ロードマップ管理
 
 arekaアルファリリースロードマップと`.kiro/specs/`配下の仕様ポートフォリオを整合させるための運用ガイド。
 
