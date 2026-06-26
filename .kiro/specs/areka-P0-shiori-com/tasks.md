@@ -18,7 +18,7 @@
   - _Boundary: shiori-abi/error.rs_
   - _Depends: 1.1_
 
-- [ ] 1.3 (P) 結果型と相関トークンの定義
+- [x] 1.3 (P) 結果型と相関トークンの定義
   - `RequestOutcome`（`Immediate(HSTRING)` / `Deferred(CorrelationToken)`）と `CorrelationToken`（`u64`・単調増加採番、ABI 非公開の Rust 内部表現）を定義する
   - 観測: `S_OK`+response→`Immediate`、`SHIORI_S_PENDING`+token→`Deferred` の構築と、トークン単調増加・完了後再利用ポリシーの単体テストが緑
   - _Requirements: 3.2, 3.3, 3.5_
