@@ -43,7 +43,7 @@
   - _Boundary: shiori-abi/interface.rs_
   - _Depends: 2.1_
 
-- [ ] 3. ShioriExt エルゴノミック変換層
+- [x] 3. ShioriExt エルゴノミック変換層
   - `&IShiori` に対する拡張トレイト `ShioriExt`（`load(&self, host: &IShioriHost)` / `unload` / `request`）を実装し、raw `unsafe` 呼び出しを `Result<RequestOutcome, ShioriError>` へ変換する（呼び出し側に raw/HRESULT を露出させない）
   - HRESULT マッピング: `S_OK`→`Immediate`、`SHIORI_S_PENDING`→`Deferred`、`SHIORI_E_NOT_LOADED`→`NotLoaded`、その他失敗→`ShioriError`。HSTRING 所有権規約（`[out]` move/Drop・`[in]` 借用）を正しく実装する
   - 観測: モック `IShiori` 経由で `request` が `Immediate`/`Deferred`/`Err` を返し分け、未ロード時に `NotLoaded` を返す単体テストが緑
@@ -92,3 +92,4 @@
 ## Implementation Notes
 - レビュー時に RED 再現目的で `git checkout`/破壊的 git を共有ワークツリーで実行しないこと（task 2.1 の成果を一時消失させかけた）。RED 再現はファイルのコピー退避で行う。
 - windows-core 0.62 のカスタム COM は `#[interface("v4-GUID")] unsafe trait X: IUnknown { unsafe fn .. -> HRESULT }`＋`#[implement(X)]`＋`X_Impl` で確立。`#![allow(non_snake_case)]` をモジュール先頭に置く（`#[interface]` は trait への非 doc 属性を拒否）。IID は dev 値で固定しリリース時凍結（D7）。
+- windows-core 0.62 の `#[interface]` が生成する raw メソッド（`Load`/`Request`/`Raise`/`Complete` 等）は**定義モジュール private**。別モジュール/別クレートから呼ぶ場合は `windows_core::Interface::vtable(self).<slot>(self.as_raw(), ..)` で vtable 直呼びする（task 3 で実証）。→ task 4.x/5.x で areka 側やモック脳が `IShioriHost::Raise/Complete` を呼ぶ際も同手法が必要（または ShioriExt のような公開ラッパー経由）。

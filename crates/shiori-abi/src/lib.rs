@@ -8,6 +8,7 @@
 //!
 //! 各 ABI モジュール（`interface` / `ergonomic` / `outcome` / `error`）は順次追加する。
 
+pub mod ergonomic;
 pub mod error;
 pub mod interface;
 pub mod outcome;
