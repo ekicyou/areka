@@ -61,7 +61,7 @@
   - _Boundary: areka / IShioriHost 実装_
   - _Depends: 2.2, 1.2_
 
-- [ ] 4.2 in-proc アクティベーション経路と利用規律（単一 in-flight・タイムアウト）
+- [x] 4.2 in-proc アクティベーション経路と利用規律（単一 in-flight・タイムアウト）
   - 同一プロセス内で `IShiori` 実装へ到達し、`Load` で areka 実装の sink を受け渡す最小経路を実装する
   - 単一 in-flight 規律（`Deferred` 中は対応する `Complete` まで次 `Request` を発行しない）、設定可能な遅延完了タイムアウトで保留枠を放棄し次 request を許可、`Unload` で保留取消。`Request`/`Load`/`Unload` は非ブロッキング前提
   - host 寿命: 脳が `Load`〜`Unload` 間 AddRef 保持し `Unload` で Release、areka は脳解放前に必ず `Unload` を呼ぶ

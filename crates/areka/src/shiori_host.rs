@@ -77,6 +77,14 @@ impl ShioriHostSink {
         *self.pending.lock().expect("pending mutex poisoned")
     }
 
+    /// 突合枠を空にする（保留取消・タイムアウト放棄時に areka が呼ぶ・task 4.2）。
+    ///
+    /// 突合枠が空になるため、以降に遅れて来る `Complete`（タイムアウト後・`Unload` 後の stale）は
+    /// トークン不一致で [`SHIORI_E_UNKNOWN_TOKEN`] により弾かれる（議題3）。
+    pub fn clear_pending_token(&self) {
+        *self.pending.lock().expect("pending mutex poisoned") = None;
+    }
+
     /// メールボックスから先頭メッセージを取り出す（FIFO・受け皿からの取り出し）。
     pub fn try_recv(&self) -> Option<HostMessage> {
         self.mailbox
