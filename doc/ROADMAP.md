@@ -144,23 +144,25 @@ graph LR
 
 ---
 
-## 仕様ポートフォリオ実数（2026-06-26 棚卸し）
+## 仕様ポートフォリオ実数（2026-06-26 畳み込み後）
 
 | 配置 | 件数 |
 |------|:----:|
-| `completed/` | 82 |
-| `.kiro/specs/` 直下（アクティブP0） | 19 |
-| `backlog/`（待機P1-P3） | 20 |
-| `_rejected/` | 1 |
-| `spec.json`未生成（`shape-*` 構想） | 3 |
+| `completed/` | 84 |
+| `.kiro/specs/` 直下（アクティブP0） | 17 |
+| `backlog/`（待機P1-P3） | 18（＋`shape-*` 3件は `spec.json` 未生成の構想） |
+| `_rejected/` | 3 |
 
 > 件数は配置フォルダ基準で数える（集計ルールの正本は `.kiro/steering/focus.md`）。
+> ※M1新規brief（8件）は `spec.json` 未生成。`/kiro-spec-init` 着手時に生成される。
 
-### 棚卸しで判明した整理候補（housekeeping）
-- `ukagaka-desktop-mascot`（phase=completed）を `completed/` へ移動
-- `shape-*` 3件は `spec.json` 生成で正式化、または `backlog/` へ退避
-- `future-requirements-survey`（調査完了）の役割が終われば `backlog/`/`completed/` へ
-- 関連: `codebase-review-loop`（レビュー運用）
+### 畳み込みログ（2026-06-26 実施）
+- `wintf-P1-clickthrough` → `_rejected/`（完了済みクリック透過に超越。旧DComp透過マップ前提）
+- `areka-P1-legacy-converter` → `_rejected/`（互換ベースウェアで伊辢をネイティブ実行する方針により役割消失）
+- `ukagaka-desktop-mascot` → `completed/`（旧メタ仕様・完了）
+- `future-requirements-survey` → `completed/`（調査完了）
+- `shape-brush-system` / `shape-path-geometry` / `shape-stroke-widgets` → `backlog/`（旧Dual Route Strategy由来・互換クリティカルパス外、保留）
+- `codebase-review-loop` → 維持（レビュー運用プロセス・現役）
 
 ---
 
