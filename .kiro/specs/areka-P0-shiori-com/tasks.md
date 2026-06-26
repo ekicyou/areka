@@ -77,7 +77,7 @@
   - _Requirements: 1.2, 3.1, 3.2, 4.1, 4.3, 5.2, 5.4_
   - _Depends: 3, 2.1_
 
-- [ ] 5.2 遅延応答と push 経路の結合テスト
+- [x] 5.2 遅延応答と push 経路の結合テスト
   - モック脳が `SHIORI_S_PENDING`＋token を返し、後で `IShioriHost::Complete(token, response)` を呼ぶ。areka sink が token を突き合わせて応答を配送する。`Raise` の能動通知配送も検証
   - 観測: 遅延完了が token 突合で配送され、`Raise` が届いて内容一致し、stale/未知トークンの `Complete` が `SHIORI_E_UNKNOWN_TOKEN` で拒否される結合テストが緑
   - _Requirements: 3.3, 6.1, 6.3, 6.4, 6.5_
