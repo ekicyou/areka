@@ -1,0 +1,18 @@
+[package]
+name = "shiori-abi"
+workspace = "../.."
+description = "SHIORI ABI definitions (IShiori / IShioriHost) as a minimal-dependency, wintf-independent crate"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[dependencies]
+windows-core = { workspace = true }
+thiserror = { workspace = true }
+
+[dependencies.windows]
+workspace = true
+features = ["Win32_System_Com"]

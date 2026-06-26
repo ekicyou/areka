@@ -62,8 +62,10 @@ SERIKOを平坦サブセットとして内包する上位エンジン。native-f
 ### T3 — SHIORI ホスト
 | 仕様 | .kiro/specs/ | 状態 | 備考 |
 |------|-------------|:----:|------|
-| `IShiori` COM ＋ ネイティブin-proc | *(新規)* | ⚪ | 内部唯一ABI。HSTRING/UTF-16。push=`IShioriHost`sink |
-| 32bit Rustホスト（過去互換） | *(新規)* `areka-shiori-host` | ⚪ | i686随伴バイナリ。flat-C/HGLOBAL/charset/SAORI同居/自前ループ/毎秒poll。自前IPC |
+| `IShiori` COM ＋ ネイティブin-proc | `completed/areka-P0-shiori-com` | ✅ | 内部唯一ABI。HSTRING/UTF-16。push=`IShioriHost`sink。**完了**（11タスク実装・検証GO・PRマージ） |
+| 簡易リファレンス COM-SHIORI | *(新規)* `areka-P0-shiori-reference` | ⚪ | 非テスト native 脳＋areka 実走デモ。content 不透明。DLL 契約の「正解見本」 |
+| 正準 content プロトコル | *(新規)* `areka-P0-shiori-protocol` | ⚪ | json-rpc 2.0 具体形（shiori-com の設計判断 D5 を着地）。content 語彙・id/result/error マッピング |
+| 32bit Rustホスト（過去互換） | *(新規)* `areka-P0-shiori-host-32` | ⚪ | i686随伴バイナリ。flat-C/HGLOBAL/charset/SAORI同居/自前ループ/毎秒poll。自前IPC。DLL 境界契約は本実装過程でリファレンスを見本に決定 |
 
 ### T4 — 統合（M1達成）
 | 仕様 | .kiro/specs/ | 状態 | 備考 |
@@ -82,8 +84,10 @@ SERIKOを平坦サブセットとして内包する上位エンジン。native-f
 - [ ] areka-P0-shell-loader -- 伺かシェルパッケージ読込→surfaceモデル（areka）。Dependencies: areka-P0-seriko-runtime
 - [ ] areka-P0-sakura-script -- さくらスクリプト runner（優先度順, areka）。Dependencies: areka-P0-seriko-runtime, wintf-P0-balloon-system
 - [ ] areka-P0-balloon-loader -- 伺かバルーンパッケージ読込（areka）。Dependencies: wintf-P0-balloon-system
-- [ ] areka-P0-shiori-com -- 内部唯一ABI `IShiori`(COM)＋ネイティブin-proc（areka）。Dependencies: none
-- [ ] areka-P0-shiori-host-32 -- 32bit Rust 過去互換ホスト＋SAORI同居（areka）。Dependencies: areka-P0-shiori-com
+- [x] areka-P0-shiori-com -- 内部唯一ABI `IShiori`(COM)＋ネイティブin-proc（areka）。Dependencies: none ※**完了（`completed/` へアーカイブ済み）**
+- [ ] areka-P0-shiori-reference -- 簡易リファレンス COM-SHIORI（非テスト native 脳＋areka 実走デモ、content 不透明）。Dependencies: areka-P0-shiori-com
+- [ ] areka-P0-shiori-protocol -- 正準 content プロトコル json-rpc 2.0 定義（D5 着地）。Dependencies: areka-P0-shiori-com
+- [ ] areka-P0-shiori-host-32 -- 32bit Rust 過去互換ホスト＋SAORI同居（areka）。Dependencies: areka-P0-shiori-com, areka-P0-shiori-reference
 - [ ] areka-P0-compat-ghost-integration -- 実在里々ゴースト1体をE2E起動（M1北極星）。Dependencies: areka-P0-shell-loader, areka-P0-seriko-runtime, areka-P0-sakura-script, areka-P0-balloon-loader, areka-P0-shiori-host-32
 
 ### 既存仕様のスコープ拡張（新規briefなし）
@@ -144,17 +148,18 @@ graph LR
 
 ---
 
-## 仕様ポートフォリオ実数（2026-06-26 畳み込み後）
+## 仕様ポートフォリオ実数（2026-06-26 畳み込み＋2026-06-27 shiori-com 完了反映）
 
 | 配置 | 件数 |
 |------|:----:|
-| `completed/` | 84 |
-| `.kiro/specs/` 直下（アクティブP0） | 17 |
+| `completed/` | 85 |
+| `.kiro/specs/` 直下（アクティブP0） | 16 |
 | `backlog/`（待機P1-P3） | 18（＋`shape-*` 3件は `spec.json` 未生成の構想） |
 | `_rejected/` | 3 |
 
 > 件数は配置フォルダ基準で数える（集計ルールの正本は `.kiro/steering/focus.md`）。
-> ※M1新規brief（8件）は `spec.json` 未生成。`/kiro-spec-init` 着手時に生成される。
+> ※M1新規brief（10件: 既存8＋discovery追加 `areka-P0-shiori-reference`/`areka-P0-shiori-protocol`）は `spec.json` 未生成。`/kiro-spec-init` 着手時に生成される。
+> ※2026-06-27: `areka-P0-shiori-com` を `completed/` へ（completed 84→85, アクティブP0 17→16）。
 
 ### 畳み込みログ（2026-06-26 実施）
 - `wintf-P1-clickthrough` → `_rejected/`（完了済みクリック透過に超越。旧DComp透過マップ前提）

@@ -1,6 +1,9 @@
-# Workflow - 開発ワークフロー
-
+---
+inclusion: always
 updated_at: 2026-06-16
+---
+
+# Workflow - 開発ワークフロー
 
 Kiro仕様駆動開発における作業フロー・ブランチ戦略・完了時アクション。
 

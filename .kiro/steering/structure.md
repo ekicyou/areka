@@ -1,10 +1,13 @@
-# Project Structure
+---
+inclusion: always
+updated_at: 2026-06-27
+---
 
-updated_at: 2026-06-19
+# Project Structure
 
 ## Organization Philosophy
 
-**責務ごとのクレート分割** - wintfがWindows向けUI基盤、dolaが演出データモデル、arekaがアプリ統合を担う。wintf内ではCOMラッパー、ECSサブシステム、Win32メッセージ境界を分け、dolaは定義層から実行時層までを段階的なモジュールで構成する。
+**責務ごとのクレート分割** - wintfがWindows向けUI基盤、dolaが演出データモデル、arekaがアプリ統合を担う。脳（SHIORI）との内部唯一ABIは独立した最小依存クレート shiori-abi（`IShiori`/`IShioriHost` のカスタムCOM定義＋エルゴノミック変換層）として分離し、UI基盤（wintf）に依存させない（下流32bitホスト/pastaが同ABIを共有するため）。wintf内ではCOMラッパー、ECSサブシステム、Win32メッセージ境界を分け、dolaは定義層から実行時層までを段階的なモジュールで構成する。
 
 ## Directory Patterns
 
