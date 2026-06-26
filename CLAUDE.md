@@ -30,9 +30,10 @@ Kiro-style Spec-Driven Development on an agentic SDLC
 - Phase 0 (optional): `/kiro-steering`, `/kiro-steering-custom`
 - Discovery: `/kiro-discovery "idea"` — determines action path, writes brief.md + roadmap.md for multi-spec projects
 - Phase 1 (Specification):
-  - Post-discovery single-spec entry: `/kiro-start {feature}` — on the harness worktree branch, inits the spec (consumes brief.md) and generates requirements (commits, no push). STOPs on the default branch.
+  - Post-discovery single-spec entry: `/kiro-start {feature}` — on the harness worktree branch, drives init → requirements (kiro-spec-requirements) → gap analysis (kiro-validate-gap, subagent) → requirements discussion (kiro-requirements-discussion, interactive in the chat window), committing each phase (no push). STOPs on the default branch.
   - Then step by step on the same branch:
-    - `/kiro-validate-gap {feature}` (optional: for existing codebase)
+    - `/kiro-validate-gap {feature}` (standalone re-run; already performed by `/kiro-start`)
+    - `/kiro-requirements-discussion {feature}` (standalone re-run; already performed by `/kiro-start`)
     - `/kiro-spec-design {feature} [-y]`
     - `/kiro-validate-design {feature}` (optional: design review)
     - `/kiro-spec-tasks {feature} [-y]`
@@ -51,7 +52,7 @@ Skills are located in `.claude/skills/kiro-*/SKILL.md`
 - Skills run inline with access to conversation context
 - Skills may delegate parallel research to subagents for efficiency
 - Additional files (templates, examples) can be added to skill directories
-- `kiro-start` — post-discovery single-spec entry (init + requirements on the harness worktree branch; no branch creation, no push)
+- `kiro-start` — post-discovery single-spec entry (init → requirements → gap analysis (subagent) → requirements discussion (interactive, chat window) on the harness worktree branch; no branch creation, no push)
 - `kiro-complete` — spec completion exit (DoD gate → archive → PR-based squash merge into `main`; the only path into the default branch)
 - `kiro-review` — task-local adversarial review protocol used by reviewer subagents
 - `kiro-debug` — root-cause-first debug protocol used by debugger subagents
