@@ -1,4 +1,7 @@
-//! `IShiori` raw COM インターフェイス定義（脳側が実装する唯一の内部 COM 境界）。
+//! `IShiori` / `IShioriHost` raw COM インターフェイス定義。
+//!
+//! `IShiori` は脳側が実装する唯一の内部 COM 境界、`IShioriHost` は areka 本体が実装し
+//! 脳へ渡す単一 sink（能動通知 `Raise`＋遅延応答 `Complete`）である（design.md §ABI Layer）。
 //!
 //! windows-core 0.62 のカスタム COM 定義技法（research §8 / §2 で確認）に従い、
 //! `#[interface(IID)]` 属性で `unsafe trait IShiori: IUnknown` を定義する。これにより
@@ -111,6 +114,64 @@ pub unsafe trait IShiori: IUnknown {
     ) -> HRESULT;
 }
 
+/// areka 本体が実装し脳へ渡す単一 sink（design.md §ABI Layer → IShioriHost, 要件 6.1〜6.5）。
+///
+/// IID（dev 用・流動契約 D7 によりリリースまで変動可。**リリース時に凍結**する）:
+/// `03BB53C6-6496-47FB-B1B7-84356A94A9C7`（本タスク task 2.2 で v4 採番。task 2.1 の
+/// `IShiori` IID `E7887AB4-...` とは別 GUID）。
+///
+/// ## 役割（design.md §IShioriHost・要件 6.1）
+/// **単一 sink** が能動通知（[`Raise`](IShioriHost::Raise)）と遅延応答
+/// （[`Complete`](IShioriHost::Complete)）の双方を受ける。脳（`IShiori` 実装）が
+/// [`IShiori::Load`] で受け取った host を AddRef して `Unload` まで保持し、その間に
+/// `Raise`/`Complete` を呼ぶ（`Unload` 後は呼ばない・議題2）。host の寿命管理（AddRef/Release）の
+/// 実装責務は areka 側（task 4.1）が負い、本層は契約面のみを定める。
+///
+/// ## HSTRING 所有権規約（議題1・design.md §IShioriHost Preconditions・要件 6.5）
+/// `Raise`/`Complete` の文字列引数（`script`/`response`）は `[in]`（`*const HSTRING`）= **借用**。
+/// 呼び出し側（脳）が所有し、host（areka）は**呼び出し中のみ参照可で解放してはならない**。
+/// 呼び出し後に内容を保持する場合は host 側で clone する（`IShiori` の `[in]` 規約と同一・
+/// モジュールレベル doc 参照）。
+///
+/// ## 相関トークンと未知トークン契約（議題3・design.md §IShioriHost Postconditions）
+/// `Complete` の `token` は [`IShiori::Request`] が `SHIORI_S_PENDING` 時に発行した相関トークン
+/// （`u64`）。areka 本体は token を唯一の保留枠（`Option<Token>`）と突き合わせて応答を配送する
+/// （単一 in-flight）。`Raise`/`Complete` は areka のアクターメールボックスへ thread-safe に投函して
+/// 即返す（任意スレッドから呼ばれうるが単一ループが順次処理）。突合不能/stale トークン
+/// （タイムアウト後・`Unload` 後・未知）は host が [`crate::error::SHIORI_E_UNKNOWN_TOKEN`] を返す。
+#[interface("03BB53C6-6496-47FB-B1B7-84356A94A9C7")]
+pub unsafe trait IShioriHost: IUnknown {
+    /// 能動通知（wakeup）。脳が areka へ自発的に通知内容を届ける（要件 6.1/6.3/6.5）。
+    ///
+    /// - `script`: `[in]` 通知内容（さくらスクリプト相当の不透明 HSTRING）。**借用**——
+    ///   host は呼び出し中の読み取りのみ可で解放しない。保持時は host 側で clone する。
+    ///
+    /// # 戻り値
+    /// 成功 = `S_OK` / 失敗 = error HRESULT（要件 7.1）。
+    ///
+    /// # Safety
+    /// `script` は呼び出し中有効な `*const HSTRING`（脳が所有）であること。
+    unsafe fn Raise(&self, script: *const HSTRING) -> HRESULT;
+
+    /// 遅延リクエストの完了応答を配送する（要件 6.1/6.4/6.5）。
+    ///
+    /// [`IShiori::Request`] が [`crate::error::SHIORI_S_PENDING`] を返した際に発行した相関トークンで
+    /// 元 request と突き合わせる（議題3）。
+    ///
+    /// - `token`: 相関トークン（`u64`）。`Request` が遅延時に `out_token` へ書き込んだ値。
+    /// - `response`: `[in]` 応答内容（不透明 HSTRING）。**借用**—— host は呼び出し中の読み取りのみ可で
+    ///   解放しない。保持時は host 側で clone する。
+    ///
+    /// # 戻り値
+    /// - 成功 = `S_OK`。
+    /// - 突合不能/stale トークン（タイムアウト後・`Unload` 後・未知）= [`crate::error::SHIORI_E_UNKNOWN_TOKEN`]（議題3）。
+    /// - その他の失敗 = error HRESULT。
+    ///
+    /// # Safety
+    /// `response` は呼び出し中有効な `*const HSTRING`（脳が所有）であること。
+    unsafe fn Complete(&self, token: u64, response: *const HSTRING) -> HRESULT;
+}
+
 #[cfg(test)]
 mod tests {
     //! 最小モック実装による vtable 健全性の単体証明。
@@ -183,5 +244,88 @@ mod tests {
         use windows_core::Interface;
         let expected = windows_core::GUID::from_u128(0xE7887AB4_525D_4520_9474_577528758C79);
         assert_eq!(<IShiori as Interface>::IID, expected, "IID は採番値に固定されていること");
+    }
+
+    // --- IShioriHost（sink）の vtable 健全性検証（task 2.2・要件 6.1〜6.5） ---
+
+    /// vtable 健全性検証用の最小モック host（areka 本体側 sink の代役）。
+    ///
+    /// `Raise`（能動通知）/`Complete`（遅延応答）が呼ばれたことと受領した内容を記録する。
+    /// 単一 sink が双方を受ける（要件 6.1）ことを 1 つの struct で証明する。
+    /// `Complete` は未知トークンに対し [`crate::error::SHIORI_E_UNKNOWN_TOKEN`] を返す（議題3）。
+    #[implement(IShioriHost)]
+    struct MockHost {
+        raised: std::cell::RefCell<Vec<HSTRING>>,
+        completed: std::cell::RefCell<Vec<(u64, HSTRING)>>,
+        valid_token: u64,
+    }
+
+    impl IShioriHost_Impl for MockHost_Impl {
+        unsafe fn Raise(&self, script: *const HSTRING) -> HRESULT {
+            // `[in]` 借用: 呼び出し中のみ参照可。保持する場合は clone する（所有権規約）。
+            let script = unsafe { (*script).clone() };
+            self.raised.borrow_mut().push(script);
+            HRESULT(0) // S_OK
+        }
+
+        unsafe fn Complete(&self, token: u64, response: *const HSTRING) -> HRESULT {
+            if token != self.valid_token {
+                // 突合不能/stale トークンは host が SHIORI_E_UNKNOWN_TOKEN を返す（議題3）。
+                return crate::error::SHIORI_E_UNKNOWN_TOKEN;
+            }
+            let response = unsafe { (*response).clone() };
+            self.completed.borrow_mut().push((token, response));
+            HRESULT(0) // S_OK
+        }
+    }
+
+    /// `IShioriHost` が IID 付きでコンパイルし、COM ポインタ経由で単一 sink が
+    /// `Raise`（能動通知）と `Complete`（遅延応答）の双方を受けられること（要件 6.1/6.3/6.4/6.5）。
+    /// 未知トークンの `Complete` が [`crate::error::SHIORI_E_UNKNOWN_TOKEN`] を返すことも観測（議題3）。
+    #[test]
+    fn ishiori_host_vtable_dispatch_works() {
+        let mock = MockHost {
+            raised: std::cell::RefCell::new(Vec::new()),
+            completed: std::cell::RefCell::new(Vec::new()),
+            valid_token: 42,
+        };
+        // `#[implement]` 生成の `From`/`into()` で COM インターフェイスポインタへ変換。
+        let host: IShioriHost = mock.into();
+
+        // Raise: 能動通知を vtable 経由で配送し、受領内容を観測する。
+        let script = HSTRING::from("\\h\\s[0]hello");
+        let hr = unsafe { host.Raise(&script) };
+        assert!(hr.is_ok(), "Raise は S_OK を返すこと: 0x{:08X}", hr.0);
+
+        // Complete（有効トークン）: 遅延応答を vtable 経由で配送する。
+        let response = HSTRING::from("response-body");
+        let hr = unsafe { host.Complete(42, &response) };
+        assert!(hr.is_ok(), "有効トークンの Complete は S_OK を返すこと: 0x{:08X}", hr.0);
+
+        // Complete（未知トークン）: 突合不能トークンは SHIORI_E_UNKNOWN_TOKEN（議題3）。
+        let hr = unsafe { host.Complete(999, &response) };
+        assert_eq!(
+            hr,
+            crate::error::SHIORI_E_UNKNOWN_TOKEN,
+            "未知トークンの Complete は SHIORI_E_UNKNOWN_TOKEN を返すこと"
+        );
+    }
+
+    /// `IShioriHost` の IID が本タスクで採番した v4 GUID に固定されていること（回帰防止）。
+    /// task 2.1 の `IShiori` IID と重複しないことも併せて検証する。
+    #[test]
+    fn ishiori_host_iid_is_fixed() {
+        use windows_core::Interface;
+        let expected = windows_core::GUID::from_u128(0x03BB53C6_6496_47FB_B1B7_84356A94A9C7);
+        assert_eq!(
+            <IShioriHost as Interface>::IID,
+            expected,
+            "IShioriHost の IID は採番値に固定されていること"
+        );
+        assert_ne!(
+            <IShioriHost as Interface>::IID,
+            <IShiori as Interface>::IID,
+            "IShioriHost と IShiori の IID は重複しないこと"
+        );
     }
 }

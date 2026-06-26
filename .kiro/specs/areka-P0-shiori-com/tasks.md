@@ -35,7 +35,7 @@
   - _Boundary: shiori-abi/interface.rs_
   - _Depends: 1.1_
 
-- [ ] 2.2 `IShioriHost` raw インターフェイスの定義
+- [x] 2.2 `IShioriHost` raw インターフェイスの定義
   - `#[interface(IID)]` で `IShioriHost`（`Raise(script)` / `Complete(token, response)`）を定義する。単一 sink が能動通知と遅延完了の双方を受ける
   - `script`/`response` は `[in]` 借用（呼び出し中のみ有効）の HSTRING 規約を doc 化する
   - 観測: `IShioriHost` が IID 付きでコンパイルし、`Raise`/`Complete` の vtable 形が design.md と一致すること
@@ -88,3 +88,7 @@
   - 観測: ライフサイクル遷移が成立し、未ロード時 request が拒否され、保留中の `Unload` で保留が取り消される結合テストが緑
   - _Requirements: 2.1, 2.2, 2.4_
   - _Depends: 4.2_
+
+## Implementation Notes
+- レビュー時に RED 再現目的で `git checkout`/破壊的 git を共有ワークツリーで実行しないこと（task 2.1 の成果を一時消失させかけた）。RED 再現はファイルのコピー退避で行う。
+- windows-core 0.62 のカスタム COM は `#[interface("v4-GUID")] unsafe trait X: IUnknown { unsafe fn .. -> HRESULT }`＋`#[implement(X)]`＋`X_Impl` で確立。`#![allow(non_snake_case)]` をモジュール先頭に置く（`#[interface]` は trait への非 doc 属性を拒否）。IID は dev 値で固定しリリース時凍結（D7）。
