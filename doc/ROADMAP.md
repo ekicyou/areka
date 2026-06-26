@@ -152,4 +152,4 @@ graph LR
 4. ポートフォリオ件数は配置フォルダ基準で再計上
 
 ## 旧ロードマップ
-v1.x（ボトムアップ表示層計画）および ukagaka-desktop-mascot ROADMAP は `doc/archive/` にアーカイブ。
+v1.x（ボトムアップ表示層計画）の本文は git 履歴に保存（本ファイルを上書き更新）。旧 ukagaka-desktop-mascot ROADMAP は `doc/archive/ROADMAP_ukagaka_meta.md` にアーカイブ済み。
