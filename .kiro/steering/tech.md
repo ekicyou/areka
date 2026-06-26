@@ -1,6 +1,6 @@
 # Technology Stack
 
-updated_at: 2026-06-19
+updated_at: 2026-06-26
 
 ## Architecture
 
@@ -75,12 +75,14 @@ Rust言語の型システムを最大限に活用。`unsafe`ブロックはWindo
 
 - **ECS採用**: 複雑なGUI要素の管理とヒットテストロジックをコンポーネントベースで実装
 - **DirectComposition**: ハードウェアアクセラレーションによる高速な合成処理と透過ウィンドウの実現
+- **透過の合成方式は ULW/DComp 切替式（実装済み）**: 伺か型マスコットは「別プロセスのウィンドウ上に乗り、透明ピクセル上のクリックをその別プロセスへ透過させる」のが中核要件。これを満たせるのは実質 `UpdateLayeredWindow`（`ULW_ALPHA`/`AC_SRC_ALPHA` でアルファ0ピクセルがOSレベルで自動クリック透過）。そこでウィンドウ単位に `CompositionMode` enum で **ULW（デフォルト）⇄ DirectComposition** を選択する切替基盤を実装済み（生成時固定、生存中の動的切替は非対応）。COMラッパーは `com/ulw.rs`。`WM_NCHITTEST`→`HTTRANSPARENT` はプロセス境界を越えず別プロセス透過には使えない点に注意。`SetWindowRgn` 方式は DComp 描画をクリップするため却下済み（`_rejected/wintf-P0-click-through-rgn`）
 - **DirectWrite**: 高品質な日本語テキストレンダリングと縦書き対応
 - **Workspace構成**: フレームワーク、演出定義、実アプリを分離したモノレポ構成
 - **Release最適化**: サイズ最適化（`opt-level='z'`, `lto=true`）でバイナリサイズを削減
 - **レガシーAPI非推奨化**: `win_message_handler`, `win_thread_mgr`, `winproc` は `#[deprecated]` 指定済み。新規コードでは `ecs/window_proc/` 配下のモジュールを使用する
 - **構造化ログ**: `tracing` を全体規約とし、subscriber初期化はアプリ層で行う
 - **pasta のベンダリング**: 外部依存だった `pasta_core` を git サブモジュール（`vendors/pasta/`）として同梱し、`[patch.crates-io]` でローカルパスへ差し替える。wintf/dola/areka とDSLエンジンを同一ワークスペースで協調開発するための運用。クローン時は `git submodule update --init` が必要
+- **ukadoc互換ベースウェア戦略（2026-06-26）**: areka を ukadoc準拠の互換ベースウェア（SSP代替）として確立する。SERIKO/MAYUNA完全マップ＋さくらスクリプト優先度順。SERIKO/さくらスクリプトランナーは「タイミング特化の下位層 dola」の上に建てる上位層。SERIKOを平坦サブセットに内包する**階層サーフェスエンジン**（エレメント→別サーフェス定義参照・wintf visual-tree＋dola nested-storyboard）。SHIORIは内部唯一ABI=`IShiori`(COM, HSTRING/UTF-16)、ネイティブ=in-proc COM、過去互換=32bit Rustホスト（flat-C/HGLOBAL/charset/SAORI同居/自前IPC）。詳細の正本は `doc/COMPAT_ARCHITECTURE.md`
 
 ---
 Document standards and patterns, not every dependency.

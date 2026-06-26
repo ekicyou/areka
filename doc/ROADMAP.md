@@ -1,96 +1,114 @@
-# areka ロードマップ — ぱすたさんアルファリリース
+# areka ロードマップ — ukadoc互換ベースウェア
 
 | 項目 | 内容 |
 |------|------|
-| **Document Title** | areka アルファリリースロードマップ |
-| **Version** | 1.0 |
-| **Date** | 2026-02-14 |
-| **ゴール** | ぱすたさん（1体のデスクトップマスコット）のアルファリリース |
+| **Document Title** | areka ロードマップ（互換ベースウェア戦略） |
+| **Version** | 2.0 |
+| **Date** | 2026-06-26 |
+| **ゴール** | ① ukadoc準拠の互換ベースウェア確立（既存伺かゴーストが動く）→ ② ぱすたさん（native旗艦ゴースト） |
+
+> **v2.0 戦略転換 (2026-06-26)**: 「ぱすたさん専用の試作」から **ukadoc準拠の互換ベースウェア（SSP代替）** へ
+> 狙いを定め直す。**互換ベースウェアを先行**、ぱすたさんは互換土台の上のnative旗艦として後続。
+> 確定した設計判断は [COMPAT_ARCHITECTURE.md](COMPAT_ARCHITECTURE.md)（議事の正本）を参照。
+> v1.x のボトムアップ表示層計画は本トラック体系へ再マップした（破棄ゼロ）。
 
 ---
 
-## プログレスサマリー
+## 戦略：二枚看板・互換先行
 
-| フェーズ | 状態 | 進捗 |
-|---------|:----:|:----:|
-| Phase A: 基盤完成 | 🔵 進行中 | ████████░░ 80% |
-| Phase B: 表示層 | ⚪ 未着手 | ░░░░░░░░░░ 0% |
-| Phase C: コンテンツ | ⚪ 未着手 | ░░░░░░░░░░ 0% |
-| Phase D: アプリ統合 | ⚪ 未着手 | ░░░░░░░░░░ 0% |
-| Phase E: アルファ出荷 | ⚪ 未着手 | ░░░░░░░░░░ 0% |
+- **二枚看板**: ①互換ベースウェア（既存伺か資産を動かす）／②ぱすたさん（native旗艦）
+- **互換先行の理由**: 既存ゴーストが実際に動く達成感がモチベーションを最大化し、最難関の互換部を前倒しで潰してリスクを早期に溶かす。
+- **互換契約**: ukadoc正典。SERIKO/MAYUNA完全マップ／さくらスクリプト優先度順／沈黙時はareka裁量＋対応表記録（詳細は [COMPAT_ARCHITECTURE.md](COMPAT_ARCHITECTURE.md) §2）。
 
-**完了済み仕様**: 67件 / **アクティブ仕様(P0)**: 6件 / **バックログ(P1-P3)**: 18件
+### 北極星（縦スライス）
+- **M1（互換ベースウェア）**: 実在の里々ベースゴースト1体が、SAORI込みで実際に表示・会話する。
+- **M2（ぱすたさん）**: 同じ土台の上で、ぱすたさん（native脳pasta＋階層サーフェスの本領）が動く。
 
 ---
 
-## Phase A: 基盤完成
+## 解決済み基盤資産（伺か土台の最難関は完了済み）
 
-**目標**: イベントシステム残件の完了と、dola アニメーション定義の wintf 統合。
+| 基盤 | 到達点 | 関連完了仕様 (`completed/`) |
+|------|--------|---------------------------|
+| 透過/レイヤードウィンドウ | DComp→ULW移行完遂、ULW既定 | `wintf-dcomp-migration-0`〜`4`, `wintf-dcomp-to-layered-migration` |
+| DComp⇄ULW切替基盤 | ウィンドウ単位 `CompositionMode` | `wintf-dcomp-migration-4-switchable-backend` |
+| クリック透過（別プロセスへ） | `ULW_ALPHA`/alpha=0で自動透過 | `wintf-P0-click-through`, `event-hit-test-alpha-mask` |
+| イベント/ヒットテスト | mouse/drag/routing/named-regions/multiwindow | `wintf-P0-event-system` ＋配下8仕様 |
+| dola演出ランタイム | コア/クロック/ファサード/競合/ループ/nested | `dola-runtime-1`〜`5`, `dola-nested-storyboard` ほか |
+
+> 却下: `_rejected/wintf-P0-click-through-rgn`（`SetWindowRgn`はDComp描画をクリップし両立不可）。
+
+---
+
+## トラック体系（M1: 互換ベースウェア先行）
+
+### T1 — 階層サーフェス／アニメーションエンジン
+SERIKOを平坦サブセットとして内包する上位エンジン。native-firstで建て、SERIKOローダは後付け。
 
 | 仕様 | .kiro/specs/ | 状態 | 備考 |
 |------|-------------|:----:|------|
-| イベントシステム | `completed/wintf-P0-event-system` | ✅ 完了 | |
-| ├ ヒットテスト | `completed/event-hit-test` | ✅ 完了 | |
-| ├ ヒットテストキャッシュ | `completed/event-hit-test-cache` | ✅ 完了 | |
-| ├ マウス基本 | `completed/event-mouse-basic` | ✅ 完了 | |
-| ├ 親→子ルーティング | `completed/event-parent-to-child-routing` | ✅ 完了 | |
-| ├ イベント配信 | `completed/event-dispatch` | ✅ 完了 | |
-| ├ ドラッグシステム | `completed/event-drag-system` | ✅ 完了 | |
-| ├ ヒットテスト名前付き領域 | `completed/event-hit-test-named-regions` | ✅ 完了 | |
-| ├ マルチウィンドウイベント | `completed/multiwindow-event-validation` | ✅ 完了 | |
-| アニメーションシステム | `wintf-P0-animation-system` | ⚪ 未着手 | dola → wintf 統合 |
-| ├ dola 責務境界 | `completed/wintf-P0-dola-boundary` | ✅ 完了 | cue-system unblock |
-| タイプライター | `completed/wintf-P0-typewriter` | ✅ 完了 | |
+| dola→wintf バインディング＋階層合成 | `wintf-P0-animation-system` | 🔵 要件生成済 | T1の心臓。スコープに階層サーフェス＋再生制御プリミティブを追加 |
+| SERIKOランタイム（完全マップ） | *(新規)* | ⚪ | pattern/interval/method 全集合。talk/mouse/bindトリガをwintfイベントへ結線 |
+| 階層参照拡張（areka-native） | *(新規)* | ⚪ | エレメント→別サーフェス定義参照。循環検出・多重インスタンス。典拠=areka |
+| シェルパッケージローダ | *(新規)* | ⚪ | descript.txt/surfaces.txt/surface*.png/collision。collisionをhit-testへ |
+
+### T2 — さくらスクリプト互換＋バルーン
+| 仕様 | .kiro/specs/ | 状態 | 備考 |
+|------|-------------|:----:|------|
+| バルーン（親→子分割） | `wintf-P0-balloon-system` ＋ `balloon01`〜`06` | 🔵 設計承認済/要件 | **さくらスクリプト駆動＋balloonパッケージ読込前提**へ再スコープ |
+| さくらスクリプトrunner | *(新規)* | ⚪ | ukadoc優先タグから。`\s[]`→サーフェス、テキスト/`\n`/`\w`/`\e`/選択肢→balloon |
+| balloonパッケージローダ | *(新規)* | ⚪ | balloon descript.txt/位置決め |
+
+### T3 — SHIORI ホスト
+| 仕様 | .kiro/specs/ | 状態 | 備考 |
+|------|-------------|:----:|------|
+| `IShiori` COM ＋ ネイティブin-proc | *(新規)* | ⚪ | 内部唯一ABI。HSTRING/UTF-16。push=`IShioriHost`sink |
+| 32bit Rustホスト（過去互換） | *(新規)* `areka-shiori-host` | ⚪ | i686随伴バイナリ。flat-C/HGLOBAL/charset/SAORI同居/自前ループ/毎秒poll。自前IPC |
+
+### T4 — 統合（M1達成）
+| 仕様 | .kiro/specs/ | 状態 | 備考 |
+|------|-------------|:----:|------|
+| 互換ゴースト統合 | *(新規)* | ⚪ | 実在里々ゴースト1体をE2E起動（shell＋balloon＋SHIORI＋SAORI） |
+| areka バイナリ拡充 | `crates/areka/`（試作済） | 🔵 | 2ウィンドウ試作の上にベースウェア機能を積む |
 
 ---
 
-## Phase B: 表示層
+## M1 Specs (dependency order)
 
-**目標**: バルーン（吹き出し）の描画とウィンドウ配置（デスクトップ端固定等）の実装。
+新規 spec の brief は各 `.kiro/specs/<feature>/brief.md` に作成済み。依存順は以下（`/kiro-spec-init` または `/kiro-spec-batch` で着手可能）。`wintf-P0-animation-system` と `wintf-P0-balloon-system`＋`balloon01-06` は既存のため、新規ではなくスコープ拡張で対応。
 
-| 仕様 | .kiro/specs/ | 状態 | 依存 |
-|------|-------------|:----:|------|
-| バルーンシステム | `wintf-P0-balloon-system` | ⚪ 未着手 | typewriter ✅ |
-| ウィンドウ配置 | `areka-P0-window-placement` | ⚪ 未着手 | event-system 🔵 |
+- [ ] wintf-P0-surface-hierarchy -- 汎用の階層アニメーション・サーフェス合成能力（wintf）。Dependencies: wintf-P0-animation-system
+- [ ] areka-P0-seriko-runtime -- SERIKO/MAYUNA を ukadoc 完全マップで解釈（areka）。Dependencies: wintf-P0-surface-hierarchy
+- [ ] areka-P0-shell-loader -- 伺かシェルパッケージ読込→surfaceモデル（areka）。Dependencies: areka-P0-seriko-runtime
+- [ ] areka-P0-sakura-script -- さくらスクリプト runner（優先度順, areka）。Dependencies: areka-P0-seriko-runtime, wintf-P0-balloon-system
+- [ ] areka-P0-balloon-loader -- 伺かバルーンパッケージ読込（areka）。Dependencies: wintf-P0-balloon-system
+- [ ] areka-P0-shiori-com -- 内部唯一ABI `IShiori`(COM)＋ネイティブin-proc（areka）。Dependencies: none
+- [ ] areka-P0-shiori-host-32 -- 32bit Rust 過去互換ホスト＋SAORI同居（areka）。Dependencies: areka-P0-shiori-com
+- [ ] areka-P0-compat-ghost-integration -- 実在里々ゴースト1体をE2E起動（M1北極星）。Dependencies: areka-P0-shell-loader, areka-P0-seriko-runtime, areka-P0-sakura-script, areka-P0-balloon-loader, areka-P0-shiori-host-32
 
----
-
-## Phase C: コンテンツ
-
-**目標**: ぱすたさんのリファレンス実装（シェル・バルーン・ゴーストの定義と素材）。
-
-| 仕様 | .kiro/specs/ | 状態 | 依存 |
-|------|-------------|:----:|------|
-| リファレンスシェル | `areka-P0-reference-shell` | ⚪ 未着手 | animation-system |
-| リファレンスバルーン | `areka-P0-reference-balloon` | ⚪ 未着手 | balloon-system |
-| リファレンスゴースト | `areka-P0-reference-ghost` | ⚪ 未着手 | reference-shell, reference-balloon |
-| pasta スクリプトエンジン | `completed/areka-P0-script-engine` | ✅ 完了 | 外部リポジトリ: [ekicyou/pasta](https://github.com/ekicyou/pasta) |
+### 既存仕様のスコープ拡張（新規briefなし）
+- `wintf-P0-animation-system` -- dola→wintfバインディングに「階層サーフェス＋SERIKO再生プリミティブ」を追加
+- `wintf-P0-balloon-system`＋`balloon01-06` -- 「さくらスクリプト駆動＋balloonパッケージ読込」前提へ再スコープ
 
 ---
 
-## Phase D: アプリ統合
+## M2 — ぱすたさん（native旗艦・互換後続）
 
-**目標**: areka バイナリクレートの作成と、システムトレイ・永続化等のアプリケーション機能。
-
-| 仕様 | .kiro/specs/ | 状態 | 依存 |
+| 仕様 | .kiro/specs/ | 状態 | 備考 |
 |------|-------------|:----:|------|
-| areka バイナリクレート | *(新規作成予定)* | ⚪ 未着手 | reference-ghost |
-| システムトレイ | `areka-P0-system-tray` | ⚪ 未着手 | areka crate |
-| 永続化 | `areka-P0-persistence` | ⚪ 未着手 | areka crate |
-| パッケージマネージャ | `areka-P0-package-manager` | ⚪ 未着手 | areka crate |
-| MCPサーバー | `areka-P0-mcp-server` | ⚪ 未着手 | areka crate |
+| リファレンスシェル | `areka-P0-reference-shell` | ⚪ | 階層サーフェスの本領をnativeで活用 |
+| リファレンスバルーン | `areka-P0-reference-balloon` | ⚪ | |
+| リファレンスゴースト | `areka-P0-reference-ghost` | ⚪ | pasta脳が `IShiori` をnative実装 |
+| pasta スクリプトエンジン | `completed/areka-P0-script-engine` | ✅ 完了 | vendored `vendors/pasta/` |
 
 ---
 
-## Phase E: アルファ出荷
+## アプリ統合・出荷（旧Phase D/E）
 
-**目標**: 統合テスト、ドキュメント最終化、リリースビルドの作成。
-
-| 仕様 | .kiro/specs/ | 状態 | 依存 |
-|------|-------------|:----:|------|
-| 統合テスト | *(新規作成予定)* | ⚪ 未着手 | Phase D 完了 |
-| README/ドキュメント最終化 | — | ⚪ 未着手 | 統合テスト |
-| リリースビルド | — | ⚪ 未着手 | ドキュメント完了 |
+| 仕様 | .kiro/specs/ | 状態 |
+|------|-------------|:----:|
+| システムトレイ / 永続化 / パッケージマネージャ / MCPサーバー | `areka-P0-system-tray`/`-persistence`/`-package-manager`/`-mcp-server` | ⚪ 要件 |
+| 統合テスト / ドキュメント / リリースビルド | *(新規予定)* | ⚪ |
 
 ---
 
@@ -98,84 +116,61 @@
 
 ```mermaid
 graph LR
-    subgraph PhaseA["Phase A: 基盤完成"]
-        EVT[event-system 残件]
-        ANIM[animation-system]
+    subgraph Done["✅ 解決済み基盤"]
+        ULW[透過/ULW/click-through]
+        EVT[event/hit-test/alpha-mask]
+        DOLA[dola runtime/nested]
     end
-
-    subgraph PhaseB["Phase B: 表示層"]
-        BLN[balloon-system]
-        WPL[window-placement]
+    subgraph M1["M1: 互換ベースウェア（先行）"]
+        T1[T1 階層サーフェスEngine＋SERIKO]
+        T2[T2 さくらScript＋balloon]
+        T3[T3 SHIORIホスト/IShiori＋32bit]
+        T4[T4 互換ゴースト統合]
     end
-
-    subgraph PhaseC["Phase C: コンテンツ"]
-        SHELL[reference-shell]
-        BALLOON[reference-balloon]
-        GHOST[reference-ghost]
+    subgraph M2["M2: ぱすたさん（後続）"]
+        GHOST[reference-ghost/pasta native]
     end
-
-    subgraph PhaseD["Phase D: アプリ統合"]
-        AREKA[areka crate]
-        TRAY[system-tray]
-        PERSIST[persistence]
-    end
-
-    subgraph PhaseE["Phase E: アルファ出荷"]
-        INTEG[統合テスト]
-        RELEASE[リリースビルド]
-    end
-
-    EVT --> BLN
-    EVT --> WPL
-    ANIM --> SHELL
-    BLN --> BALLOON
-    WPL --> SHELL
-    SHELL --> GHOST
-    BALLOON --> GHOST
-    GHOST --> AREKA
-    AREKA --> TRAY
-    AREKA --> PERSIST
-    TRAY --> INTEG
-    PERSIST --> INTEG
-    INTEG --> RELEASE
+    ULW --> T1
+    EVT --> T1
+    DOLA --> T1
+    T1 --> T2
+    T1 --> T4
+    T2 --> T4
+    T3 --> T4
+    T4 --> GHOST
 ```
 
-**クリティカルパス**: event-system → balloon-system → reference-balloon → reference-ghost → areka crate → 統合テスト → リリース
+**クリティカルパス（M1）**: animation-system＋階層Engine → SERIKO＋シェルローダ → さくらScript＋balloon → SHIORIホスト(里々) → 互換ゴースト統合
 
 ---
 
-## 子仕様対応表
+## 仕様ポートフォリオ実数（2026-06-26 畳み込み後）
 
-| フェーズ | 対応仕様 (.kiro/specs/) |
-|---------|----------------------|
-| Phase A | `wintf-P0-event-system`, `wintf-P0-animation-system`, `event-hit-test-named-regions`, `multiwindow-event-validation` |
-| Phase B | `wintf-P0-balloon-system`, `areka-P0-window-placement` |
-| Phase C | `areka-P0-reference-shell`, `areka-P0-reference-balloon`, `areka-P0-reference-ghost` |
-| Phase D | `areka-P0-system-tray`, `areka-P0-persistence`, `areka-P0-package-manager`, `areka-P0-mcp-server` |
-| Phase E | *(統合テスト・リリースビルド仕様を新規作成)* |
+| 配置 | 件数 |
+|------|:----:|
+| `completed/` | 84 |
+| `.kiro/specs/` 直下（アクティブP0） | 17 |
+| `backlog/`（待機P1-P3） | 18（＋`shape-*` 3件は `spec.json` 未生成の構想） |
+| `_rejected/` | 3 |
 
-### アクティブ仕様以外の関連仕様
+> 件数は配置フォルダ基準で数える（集計ルールの正本は `.kiro/steering/focus.md`）。
+> ※M1新規brief（8件）は `spec.json` 未生成。`/kiro-spec-init` 着手時に生成される。
 
-| 仕様 | 分類 | 状態 |
-|------|------|:----:|
-| `shape-brush-system` | UIウィジェット拡張 | ⚪ P0アクティブ |
-| `shape-path-geometry` | UIウィジェット拡張 | ⚪ P0アクティブ |
-| `shape-stroke-widgets` | UIウィジェット拡張 | ⚪ P0アクティブ |
-| `future-requirements-survey` | 調査 | ⚪ P0アクティブ |
-| `docs-restructure` | ドキュメント | ✅ 完了 |
+### 畳み込みログ（2026-06-26 実施）
+- `wintf-P1-clickthrough` → `_rejected/`（完了済みクリック透過に超越。旧DComp透過マップ前提）
+- `areka-P1-legacy-converter` → `_rejected/`（互換ベースウェアで伊辢をネイティブ実行する方針により役割消失）
+- `ukagaka-desktop-mascot` → `completed/`（旧メタ仕様・完了）
+- `future-requirements-survey` → `completed/`（調査完了）
+- `shape-brush-system` / `shape-path-geometry` / `shape-stroke-widgets` → `backlog/`（旧Dual Route Strategy由来・互換クリティカルパス外、保留）
+- `codebase-review-loop` → 維持（レビュー運用プロセス・現役）
 
 ---
 
 ## 更新ガイド
-
-フェーズの完了状況が変化した際は、以下を更新してください：
-
-1. **プログレスサマリー**: 該当フェーズの進捗バーと割合を更新
-2. **各フェーズテーブル**: 該当仕様の「状態」列を ⚪ → 🔵 → ✅ に変更
-3. **依存関係図**: 完了ノードのスタイルを変更（任意）
-
----
+1. トラック/マイルストーンの状態列を ⚪→🔮🔵→✅ に更新
+2. 新規完了基盤は「解決済み基盤資産」へ追記
+3. 設計判断の変更は [COMPAT_ARCHITECTURE.md](COMPAT_ARCHITECTURE.md) を正本として更新
+4. ポートフォリオ件数は配置フォルダ基準で再計上
 
 ## 旧ロードマップ
-
-本ロードマップは [ukagaka-desktop-mascot ROADMAP.md](archive/ROADMAP_ukagaka_meta.md) を置き換えるものです。旧ロードマップは `doc/archive/` にアーカイブ済みです。
+v1.x（ボトムアップ表示層計画）の本文は git 履歴に保存（本ファイルを上書き更新）。旧 ukagaka-desktop-mascot ROADMAP は `doc/archive/ROADMAP_ukagaka_meta.md` にアーカイブ済み。
