@@ -9,6 +9,8 @@
 
 **Users**: areka 本体（`IShiori` の消費側）、ネイティブ脳実装者（pasta／`IShiori` の実装側）、下流 `areka-P0-shiori-host-32`（過去互換 DLL を同 `IShiori` で実装する別バイナリ）が本 ABI を利用する。
 
+> **用語**: 本書で「**脳**」とは `IShiori` を実装し areka から呼び出される COM オブジェクト（＝ **COM-SHIORI**。ネイティブ脳 pasta、または過去互換 DLL を代理実装する 32bit ホスト）を指す。「**areka 本体**」は呼び出し側であり `IShioriHost`（sink）を実装する。すなわち「呼ぶ＝areka／呼ばれる＝脳（COM-SHIORI）」。
+
 **Impact**: 現状 areka は windows-rs 経由で既存 COM を「消費」「実装（`#[implement]`）」する流儀は確立しているが、**自前 GUID/vtable を持つカスタム COM インターフェイスを `#[interface]` で「定義」した実績はゼロ**。本仕様はこのプロジェクト初の技法（カスタム COM 定義）を、最小依存の独立 ABI クレート `crates/shiori-abi` として導入する。
 
 ### Goals
@@ -35,6 +37,7 @@
 - **正準 content プロトコルの選定**: `IShiori`/`IShioriHost` 境界の単一正準プロトコルとして json-rpc 2.0 を採用する選定判断（D5）。ABI 上は不透明 HSTRING のまま運ぶ。
 - **相関トークン契約**: 遅延リクエストと後続完了応答を突き合わせるトークンの型・寿命・採番方針。
 - **エラー HRESULT 規約**: 成功（即時/遅延）・失敗の HRESULT マッピングと、`com-resource-naming-unification` 整合の命名。
+- **sink 寿命・非循環所有の不変条件（議題2）**: `IShioriHost` は脳が `Load`〜`Unload` 間 AddRef 保持し `Unload` で Release。所有方向 areka→脳→host を一方向（非循環）に保ち、host 実装は脳へ強参照を持たない。areka は脳解放前に必ず `Unload` を呼ぶ。
 
 ### Out of Boundary
 - json-rpc 本文・さくらスクリプトのパース／意味解釈（content は不透明）。
@@ -194,7 +197,7 @@ stateDiagram-v2
 
 - `Load` は areka 実装の `IShioriHost`（sink）を引数で受け渡す機会を提供（R6-2）。sink は脳が能動通知・遅延応答に使用。
 - 未ロード状態の `Request` は有効処理として受理せず、error HRESULT で拒否（R2-4）。状態の所有者は脳実装側（`IShiori` 実装内）とする — ABI は状態を保持せず、拒否を HRESULT で表現する契約のみを定める。
-- sink ライフタイム: `Load` で渡された `IShioriHost` は COM 参照カウントで管理。脳⇄host 循環参照を避けるため、host は areka 本体が所有し脳へは借用相当（`IShioriHost` ポインタ）を渡す。脳は保持期間中 AddRef/Release を遵守する。
+- sink ライフタイム（議題2で確定・保持参照モデル）: `Load` で渡された `IShioriHost` を脳は **AddRef して `Unload` まで保持してよい**（非同期 `Raise`/`Complete` に必要）。`Unload` 受信時に脳は **Release し、以後 host を呼ばない**。**非循環不変条件**: 所有方向を areka（脳を所有）→ 脳（host を AddRef 保持）→ host（areka 実装）の一方向に保ち、**host 実装は脳へ強参照を持たない**。teardown 順序＝areka は脳を解放する前に必ず `Unload` を呼ぶ（脳が先に host を Release）。
 
 ## Requirements Traceability
 
@@ -319,7 +322,7 @@ unsafe trait IShioriHost: IUnknown {
     unsafe fn Complete(&self, token: u64, response: *const HSTRING) -> HRESULT;
 }
 ```
-- Preconditions: 脳は `Load` で受け取った host ポインタの生存期間内に呼ぶ（AddRef/Release 遵守）。`script`/`response` は呼び出し側（脳）所有の `*const HSTRING`（**借用**）— host(areka) は呼び出し中のみ参照可・解放しない。呼び出し後も内容を保持する場合は host 側で clone する。
+- Preconditions: 脳は `Load` で受け取った host を **AddRef して `Unload` まで保持**してよく、その間に `Raise`/`Complete` を呼ぶ（`Unload` 後は呼ばない・議題2）。`script`/`response` は呼び出し側（脳）所有の `*const HSTRING`（**借用**）— host(areka) は呼び出し中のみ参照可・解放しない。呼び出し後も内容を保持する場合は host 側で clone する。
 - Postconditions: areka 本体は token を未完了 request と突き合わせて応答を配送。突合不能トークンは error HRESULT。
 - Invariants: 文字列は HSTRING（借用規約は上記 Preconditions）、in-proc 直 vtable。
 
