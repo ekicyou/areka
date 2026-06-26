@@ -24,8 +24,8 @@
   - SAORI、過去互換のための独自 IPC、OOP 自動マーシャリング
   - x86（32bit）でのネイティブ脳直結（本仕様は x64／CPU ネイティブ前提）
 - **Adjacent expectations（隣接仕様・既存資産への期待）**:
-  - `areka-P0-shiori-host-32` は、過去互換 DLL を本仕様で定義する**同じ `IShiori` を実装する一実装**として areka 本体へ提供されること（呼び出し側は区別しない）
-  - ネイティブ旗艦脳「ぱすたさん（pasta）」は、本仕様の `IShiori` を実装する受け皿として in-proc 経路で接続されること
+  - `areka-P0-shiori-host-32` は、過去互換 DLL を本仕様で定義する**同じ `IShiori` を実装する一実装**として areka 本体へ提供されること（呼び出し側は区別しない）。あわせて、本仕様の正準 content プロトコルと過去互換 DLL のレガシー content（旧 SHIORI テキスト等）との**翻訳を実装側で吸収**すること（R1-6）
+  - ネイティブ旗艦脳「ぱすたさん（pasta）」は、本仕様の `IShiori` を実装する受け皿として in-proc 経路で接続され、正準 content プロトコルを直接喋ること
   - COM 基盤（windows-rs）および COM 命名規約（完了済み `com-resource-naming-unification`）に整合すること
 
 ## Requirements
@@ -39,6 +39,7 @@
 3. While 脳がネイティブ実装であるか過去互換 DLL 実装であるかにかかわらず, the IShiori ABI shall 呼び出し側へ同一のメソッド面と呼び出し規約を提供する。
 4. The IShiori ABI shall 実装種別（ネイティブ／過去互換）を呼び出し側に区別させる分岐をインターフェイス面に持たない。
 5. Where 実装種別による差異が存在する場合, the IShiori ABI shall その差異を生成（アクティベーション）経路にのみ局所化し、確立済みの `IShiori` 利用面には波及させない。
+6. The IShiori ABI shall リクエスト・応答・能動通知の本文（content）を単一の正準プロトコルで表現することを前提とし、実装種別（ネイティブ／過去互換）による content 差異を呼び出し側へ露出させない（差異は実装側で吸収する。ABI 上の文字列表現は R4 の HSTRING/UTF-16 のまま不透明とする）。
 
 ### Requirement 2: ライフサイクル（ロード／アンロード）
 **Objective:** areka 本体の開発者として、脳の初期化と終了を明示的に制御したい。これにより、脳のリソースを確実に確保・解放できる。
