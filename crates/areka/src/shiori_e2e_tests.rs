@@ -35,7 +35,7 @@ use shiori_abi::interface::{IShiori, IShiori_Impl, IShioriHost};
 use shiori_abi::outcome::CorrelationToken;
 use windows_core::{AsImpl, HRESULT, HSTRING, Interface, implement};
 
-use crate::shiori_host::{HostMessage, ShioriHostSink};
+use crate::shiori_host::HostMessage;
 use crate::shiori_session::{SessionRequest, ShioriSession};
 
 /// 遅延 request で脳が発行する固定相関トークン。
