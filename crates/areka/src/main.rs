@@ -44,6 +44,13 @@ mod shiori_session;
 #[cfg(test)]
 mod shiori_e2e_tests;
 
+/// ライフサイクルと単一 in-flight 規律の end-to-end 結合テスト（task 5.3）。
+/// 状態を保持するモック脳で `Load`→`Request`→`Unload` の遷移、未ロード時 request 拒否（NotLoaded）、
+/// `Deferred` 保留中の `Unload` 取消→再 Load 後の正常動作を通しシナリオで実証する
+/// （4.2 の inline 単体テスト・5.2 の遅延 push e2e と重複させない）。
+#[cfg(test)]
+mod shiori_lifecycle_e2e_tests;
+
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------

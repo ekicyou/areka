@@ -83,7 +83,7 @@
   - _Requirements: 3.3, 6.1, 6.3, 6.4, 6.5_
   - _Depends: 4.1, 4.2_
 
-- [ ] 5.3 ライフサイクルと単一 in-flight 規律の結合テスト
+- [x] 5.3 ライフサイクルと単一 in-flight 規律の結合テスト
   - `Load`→`Request`→`Unload` の遷移、未ロード時 `Request` 拒否（`NotLoaded`）、`Unload` での保留取消、`Deferred` 中に次 `Request` を出さない規律を検証する
   - 観測: ライフサイクル遷移が成立し、未ロード時 request が拒否され、保留中の `Unload` で保留が取り消される結合テストが緑
   - _Requirements: 2.1, 2.2, 2.4_
