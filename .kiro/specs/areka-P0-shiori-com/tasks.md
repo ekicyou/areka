@@ -10,7 +10,7 @@
   - 観測: `cargo build -p shiori-abi` が空の `lib` で成功し、依存ツリーに UI 基盤クレートが含まれないこと
   - _Requirements: 5.3_
 
-- [ ] 1.2 (P) エラー型と HRESULT 規約の定義
+- [x] 1.2 (P) エラー型と HRESULT 規約の定義
   - `ShioriError`（`thiserror`）と、カスタム HRESULT 定数 `SHIORI_S_PENDING`（成功・遅延）/ `SHIORI_E_NOT_LOADED` / `SHIORI_E_UNKNOWN_TOKEN`、および HRESULT⇄`ShioriError` 変換を定義する
   - 命名は既存 COM 規約（`com-resource-naming-unification`）と整合させる
   - 観測: `S_OK`/`SHIORI_S_PENDING`/各 error コード ⇄ `ShioriError` のマッピング単体テストが緑

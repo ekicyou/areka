@@ -6,5 +6,6 @@
 //! 同 ABI を共有できるよう、依存を `windows-core` / `windows`(`Win32_System_Com`) /
 //! `thiserror` に限定する。x64 / CPU ネイティブ前提（requirements.md 5.3）。
 //!
-//! 各 ABI モジュール（`interface` / `ergonomic` / `outcome` / `error`）は後続タスクで追加する。
-//! 本タスクはクレートの新規作成と最小依存配線のみを範囲とする。
+//! 各 ABI モジュール（`interface` / `ergonomic` / `outcome` / `error`）は順次追加する。
+
+pub mod error;
