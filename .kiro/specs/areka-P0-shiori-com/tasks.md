@@ -26,7 +26,7 @@
   - _Depends: 1.1_
 
 - [ ] 2. Core: raw COM ABI 層（カスタム `#[interface]` 定義）
-- [ ] 2.1 `IShiori` raw インターフェイスの定義
+- [x] 2.1 `IShiori` raw インターフェイスの定義
   - `#[interface(IID)]` で `IShiori`（`Load`/`Unload`/`Request`）を `unsafe fn -> HRESULT` 形で定義し、`Request` は `input`(`*const HSTRING`)・`out_response`(`*mut HSTRING`)・`out_token`(`*mut u64`) を取る
   - content は不透明 HSTRING として扱い（正準プロトコル json-rpc 採用は設計判断・本層ではパースしない）、in-proc 直 vtable によりマーシャリング非介在とする
   - HSTRING 所有権規約を doc 化: `[out]`=callee 確保/caller 解放（move-out/Drop）、`[in]`=借用
