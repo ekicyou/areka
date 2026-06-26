@@ -123,3 +123,14 @@
   3. IID 採番と命名（`IShiori`/`IShioriHost`、既存 COM 慣習との整合）。
   4. sink 受け渡しとライフサイクル状態の所有者。
 - **繰り越すリサーチ項目**: §4 の 1〜6。
+
+---
+
+## 7. 要件ディスカッション由来の追加設計判断（議題1: 同期/遅延リクエスト）
+
+> 議題1（request の同期性と非同期応答）で確定した要件変更に伴い、設計フェーズで詰める HOW を追記する。要件側の決定は requirements.md（R3 同期＋遅延、R6 遅延完了経路）に反映済み。COM ABI レベルでは `async fn` を公開できないため、「同期呼び出し＋遅延コールバック」でモデル化する点が前提。
+
+- **D1. request 結果の表現方式**: 「即時応答／遅延（HTTP 204 相当）／失敗」を COM ABI でどう区別するか。候補: (a) 成功 HRESULT を分ける（`S_OK`=即時応答あり、カスタム成功コード `SHIORI_S_PENDING`=遅延、失敗=error HRESULT）＋応答 HSTRING の out-param、(b) `#[repr(i32)]` の `ResCode` enum を out-param に追加。§4-5（エラー HRESULT 設計）の拡張。
+- **D2. 相関トークンの表現**: トークンの型・サイズ（例: u64 / GUID）、発行・寿命・再利用ポリシー。in-proc 単一脳前提での最小実装でよい。
+- **D3. 遅延完了メソッドのシグネチャ**: `IShioriHost` に `Raise` とは別に設ける完了メソッド（相関トークン＋応答 HSTRING を受け取る）の COM シグネチャ。§4-3（sink 受け渡し／ライフタイム）に併合して検討。
+- **D4. 2層構造（ABI＋エルゴノミック変換トレイト）**: 生 `#[interface]`（`unsafe fn -> HRESULT`）の上に、Rust 風の `Result<RequestOutcome, ShioriError>` を返す変換層を手書きで被せる方針。`windows` クレートが自動生成する人間向けラッパーを、自前インターフェイスでは手で再現する。`RequestOutcome { Immediate(HSTRING), Deferred(Token) }` のようなデータ enum は ABI 非公開（Rust 内部のみ）とする。§4-1（`#[interface]` 技法）に関連。

@@ -12,8 +12,8 @@
 
 ## Boundary Context
 - **In scope（本仕様が責務を持つ範囲）**:
-  - `IShiori` インターフェイスの面（ライフサイクル load/unload、リクエスト hrequest、文字列引数・戻り値の取り回し、エラー報告）の定義
-  - `IShioriHost`（sink）インターフェイスの面（脳からの能動通知 Raise）の定義
+  - `IShiori` インターフェイスの面（ライフサイクル load/unload、リクエスト hrequest（同期呼び出し＋遅延応答・相関トークン）、文字列引数・戻り値の取り回し、エラー報告）の定義
+  - `IShioriHost`（sink）インターフェイスの面（脳からの能動通知 Raise、および遅延リクエストの完了応答）の定義
   - ネイティブ脳の **in-proc アクティベーション**（追加 IPC を介さずに同一プロセス内で `IShiori` 実装へ到達する経路）
   - 文字列を **HSTRING/UTF-16** で取り回す契約と、その WinRT ランタイム非依存という制約
   - 呼び出し側に native／過去互換の区別を露出させないという**呼び出し面の不変条件**
@@ -49,13 +49,16 @@
 3. If ロード操作が失敗したとき, then the IShiori ABI shall 失敗を呼び出し側へ判別可能な形で報告する。
 4. While 脳がロードされていない状態のとき, the IShiori ABI shall リクエスト操作を有効な処理として受理しない。
 
-### Requirement 3: リクエスト処理（hrequest 相当）
-**Objective:** areka 本体の開発者として、脳へリクエストを送り応答を受け取りたい。これにより、会話・イベント等の問い合わせ結果を取得できる。
+### Requirement 3: リクエスト処理（hrequest 相当・同期呼び出し＋遅延応答）
+**Objective:** areka 本体の開発者として、脳へリクエストを送り応答を受け取りたい。即時応答できない問い合わせも、呼び出しをブロックせずに後から応答を受け取りたい。
 
 #### Acceptance Criteria
-1. When areka 本体が脳へリクエストを送るとき, the IShiori ABI shall リクエスト文字列を入力として受け取り、脳の応答文字列を返す。
-2. The IShiori ABI shall リクエスト引数および応答を HSTRING（UTF-16）として取り回す。
-3. If リクエスト処理が失敗したとき, then the IShiori ABI shall 失敗を呼び出し側へ判別可能な形で報告する。
+1. When areka 本体が脳へリクエストを送るとき, the IShiori ABI shall リクエストを同期的なメソッド呼び出しとして受け取り、結果を呼び出しの戻りとして返す。
+2. When 脳がリクエストに即時応答するとき, the IShiori ABI shall 応答文字列を伴う即時応答として結果を返す。
+3. When 脳がリクエストに即時応答せず後で応答するとき, the IShiori ABI shall 即時の応答文字列を伴わない遅延結果を返し、後続の応答と突き合わせるための相関トークンを発行する。
+4. The IShiori ABI shall リクエスト引数および即時応答文字列を HSTRING（UTF-16）として取り回す。
+5. The IShiori ABI shall 即時応答・遅延・失敗の各結果を呼び出し側が判別可能な形で返す。
+6. If リクエスト処理が失敗したとき, then the IShiori ABI shall 失敗を呼び出し側へ判別可能な形で報告する。
 
 ### Requirement 4: 文字列の取り回し（HSTRING/UTF-16, WinRT 非依存）
 **Objective:** 統合者として、脳とのすべての文字列受け渡しを単一の文字列表現で扱い、かつ WinRT ランタイムへの依存を持ち込みたくない。これにより、ネイティブ・過去互換の双方で同一の文字列契約を成立させられる。
@@ -74,14 +77,15 @@
 3. The IShiori ABI shall x64／CPU ネイティブを前提とし、x86（32bit）でのネイティブ直結を本仕様の対象としない。
 4. Where 脳がネイティブ実装である場合, the IShiori ABI shall その脳が `IShiori` を直接実装することで areka 本体へ接続できるようにする。
 
-### Requirement 6: push 経路（IShioriHost sink による能動 wakeup）
-**Objective:** ネイティブ脳の実装者として、areka 本体からの問い合わせを待たずに能動的に areka へ通知（wakeup）したい。これにより、脳起点の発話・イベント提示を実現できる。
+### Requirement 6: push 経路・遅延応答（IShioriHost sink による能動 wakeup と遅延リクエスト完了）
+**Objective:** ネイティブ脳の実装者として、areka 本体からの問い合わせを待たずに能動的に areka へ通知（wakeup）したい。あわせて、遅延扱いとしたリクエストの応答を後から areka へ届けたい。
 
 #### Acceptance Criteria
-1. The IShioriHost ABI shall areka 本体側が実装し脳へ渡す sink インターフェイスとして定義される。
-2. When 脳がロードされるとき, the IShiori ABI shall 脳が能動通知に使用できる `IShioriHost`（sink）を脳へ受け渡す機会を提供する。
+1. The IShioriHost ABI shall areka 本体側が実装し脳へ渡す単一の sink インターフェイスとして定義され、能動通知と遅延リクエスト応答の双方を受け取る。
+2. When 脳がロードされるとき, the IShiori ABI shall 脳が能動通知および遅延応答に使用できる `IShioriHost`（sink）を脳へ受け渡す機会を提供する。
 3. When 脳が能動的に areka へ通知するとき, the IShioriHost ABI shall 通知内容（スクリプト相当の文字列）を受け取る Raise 操作を提供する。
-4. The IShioriHost ABI shall Raise の通知内容を HSTRING（UTF-16）として取り回す。
+4. When 脳が遅延扱いとしたリクエストの応答を届けるとき, the IShioriHost ABI shall Raise とは別の完了操作を提供し、対応する相関トークンと応答文字列を受け取る。
+5. The IShioriHost ABI shall Raise の通知内容および遅延応答の完了内容を HSTRING（UTF-16）として取り回す。
 
 ### Requirement 7: エラー報告規約
 **Objective:** areka 本体の開発者として、脳操作の成否を一貫した方法で判別したい。これにより、失敗時に呼び出し側で適切に分岐・回復できる。
