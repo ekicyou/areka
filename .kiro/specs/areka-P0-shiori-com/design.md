@@ -283,9 +283,9 @@ unsafe trait IShiori: IUnknown {
     ) -> HRESULT;
 }
 ```
-- Preconditions: `Request` は `Load` 成功後のみ受理（未ロードは error HRESULT で拒否・2.4）。
-- Postconditions: `S_OK` 時 `out_response` に呼び出し側所有の HSTRING を書き込む。`SHIORI_S_PENDING` 時 `out_token` に有効トークンを書き込み `out_response` は空。
-- Invariants: 引数・戻り文字列は全て HSTRING。in-proc 直 vtable のためマーシャリング非介在（4.3）。
+- Preconditions: `Request` は `Load` 成功後のみ受理（未ロードは error HRESULT で拒否・2.4）。`input` は呼び出し側所有の `*const HSTRING`（**借用**）— callee は読み取りのみ、解放しない。
+- Postconditions: `S_OK` 時 `out_response` に **callee（脳実装）が確保した HSTRING を move-out** し、**caller（ergonomic 層）が Drop で解放**する（windows-core 標準 move セマンティクス）。`SHIORI_S_PENDING` 時 `out_token` に有効トークンを書き込み `out_response` は空（未書き込み＝解放対象なし）。error 時はいずれの out-param も未書き込み。
+- Invariants: 引数・戻り文字列は全て HSTRING。in-proc 直 vtable のためマーシャリング非介在（4.3）。**所有権規約（`[out]`=callee 確保/caller 解放、`[in]`=借用）は流動契約（D7）下でも初版で固定する不変条件**。
 
 ##### State Management
 - State model: `Unloaded` / `Loaded`（脳実装が保持）。
@@ -319,9 +319,9 @@ unsafe trait IShioriHost: IUnknown {
     unsafe fn Complete(&self, token: u64, response: *const HSTRING) -> HRESULT;
 }
 ```
-- Preconditions: 脳は `Load` で受け取った host ポインタの生存期間内に呼ぶ（AddRef/Release 遵守）。
+- Preconditions: 脳は `Load` で受け取った host ポインタの生存期間内に呼ぶ（AddRef/Release 遵守）。`script`/`response` は呼び出し側（脳）所有の `*const HSTRING`（**借用**）— host(areka) は呼び出し中のみ参照可・解放しない。呼び出し後も内容を保持する場合は host 側で clone する。
 - Postconditions: areka 本体は token を未完了 request と突き合わせて応答を配送。突合不能トークンは error HRESULT。
-- Invariants: 文字列は HSTRING、in-proc 直 vtable。
+- Invariants: 文字列は HSTRING（借用規約は上記 Preconditions）、in-proc 直 vtable。
 
 ### Ergonomic Layer（`shiori-abi/src/ergonomic.rs`, `outcome.rs`, `error.rs`）
 
@@ -408,7 +408,7 @@ impl ShioriExt for IShiori { /* unsafe raw 呼び出しをラップ */ }
 - 未ロード状態での `request` が `NotLoaded` を返す（2.4）。
 
 ### Integration Tests
-- `#[implement(IShiori)]` のモック脳を in-proc で立て、`ShioriExt::request` 経由で即時応答 HSTRING が往復し、内容が一致する（1.2, 3.1, 3.2, 4.1）— **HSTRING がマーシャリングなしで往復する不変条件の実証**（4.3）。
+- `#[implement(IShiori)]` のモック脳を in-proc で立て、`ShioriExt::request` 経由で即時応答 HSTRING が往復し、内容が一致する（1.2, 3.1, 3.2, 4.1）— **HSTRING がマーシャリングなしで往復する不変条件の実証**（4.3）。併せて HSTRING の Drop 回数を観測し、**二重解放・リークが発生しないこと（[out]=callee 確保/caller 解放、[in]=借用の所有権規約の実証）**を検証する。
 - 遅延経路: モック脳が `SHIORI_S_PENDING`+token を返し、後で `IShioriHost::Complete(token, response)` を呼び、areka 側 sink が token を突き合わせて応答を受領（3.3, 6.1, 6.4）。
 - `IShioriHost::Raise` の能動通知が areka 実装 sink に届き HSTRING 内容が一致（6.3, 6.5）。
 - load→request→unload のライフサイクル遷移と、unload 後 request 拒否（2.1, 2.2, 2.4）。
@@ -423,4 +423,4 @@ impl ShioriExt for IShiori { /* unsafe raw 呼び出しをラップ */ }
 ## Open Questions / Risks
 - **流動契約（D7）**: リリースまで `IShiori`/`IShioriHost`・IID・HRESULT マッピングは変動を許容。変更時は in-tree 全実装者（areka 本体・`areka-P0-shiori-host-32`・pasta）を lockstep 再ビルド。互換規律（公開不変＋新 IID＋`QueryInterface`）・protocol version 導入はリリース前マイルストーン／別仕様。本リスクは「凍結」ではなく「プロセス（lockstep）」で緩和（research §7 D7）。
 - **IID 採番**: 実装フェーズで `IShiori`/`IShioriHost` の v4 GUID を採番し定数化（research §4-1, §6）。
-- **HSTRING 所有権**: [out] HSTRING の callee 確保・caller 解放規約を raw 層で正確に実装する（research §6・windows-core HSTRING 内部仕様）。
+- **HSTRING 所有権（議題1で確定）**: `[out] HSTRING` = callee 確保・caller 解放（move-out/Drop）、`[in]`/`Raise`/`Complete` の `*const HSTRING` = 借用、と ABI 契約として固定（各 Service Interface の Pre/Postconditions・Invariants に明記済み）。結合テストで Drop 回数により二重解放/リーク非発生を実証する。流動契約（D7）下でもこの所有権規約は初版で凍結する。
