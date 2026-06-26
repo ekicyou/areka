@@ -4,7 +4,7 @@
 > 依存は番号順が基本。番号順で表せない横断依存のみ `_Depends:_` で明示する。`(P)` は直前の同位タスクと並行実行可能を表す。
 
 - [ ] 1. Foundation: クレート作成と基本型
-- [ ] 1.1 shiori-abi クレートの新規作成と最小依存配線
+- [x] 1.1 shiori-abi クレートの新規作成と最小依存配線
   - `crates/shiori-abi` を新規作成し、`windows-core` 0.62.2 / `windows`（`Win32_System_Com`）/ `thiserror` 2 への最小依存のみを宣言する
   - `wintf`/`dola`/`bevy_ecs` に依存させない（下流 32bit ターゲットでもビルド可能な最小構成を保つ・x64/CPU ネイティブ前提）
   - 観測: `cargo build -p shiori-abi` が空の `lib` で成功し、依存ツリーに UI 基盤クレートが含まれないこと
