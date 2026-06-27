@@ -46,6 +46,7 @@
 - さくらスクリプト／SAORI 本文の解釈・実行 → `areka-P0-sakura-script` ほか（content は不透明）。
 - レガシーテキスト ⇄ 正準モデルの翻訳実装 → `areka-P0-shiori-host-32`。
 - **レガシー wire の charset 符号化**（`Charset` ヘッダ解釈・既定 ANSI コードページ `CP_ACP`・対応文字集合）→ `areka-P0-shiori-host-32`。正準 content は UTF-16（HSTRING）であり charset 概念を持たない。既定は ANSI コードページ（`CP_ACP`・ロケール依存。JP では CP932）であって Shift_JIS と決め打たない。
+  - charset は専ら**レガシー COM-DLL の遺物**であり host-32 に閉じる。modern トランスポートは全て Unicode（現行 COM-SHIORI＝UTF-16/HSTRING、将来 STDIO 版 SHIORI（json-rpc）を定義する場合も **UTF-8 のみ**を認め charset 概念を持たない）。よって正準 content の符号化は各トランスポート所有であり、本仕様（content 契約）は charset を持たない。
 - これらを「ついで」で本仕様に取り込まない。
 
 ### Allowed Dependencies
