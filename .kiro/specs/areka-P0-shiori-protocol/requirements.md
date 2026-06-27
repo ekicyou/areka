@@ -78,13 +78,13 @@
 
 ### Requirement 5: レガシー wire への放出方針とキルスイッチ
 
-**Objective:** As a `areka-P0-shiori-host-32` の実装者, I want レガシー DLL wire へ何を必ず吐き何を任意で併載できるかを契約で知りたい, so that 旧 DLL を確実に動かしつつ、暴れる DLL を per-DLL で抑制できる
+**Objective:** As a `areka-P0-shiori-host-32` の実装者, I want レガシー DLL wire へ何を必ず吐き、何を既定で併載し、どう抑制できるかを契約で知りたい, so that 旧 DLL を確実に動かしつつ、暴れる DLL を per-DLL で opt-out できる
 
 #### Acceptance Criteria
 
 1. The レガシー wire 放出契約 shall レガシー SHIORI/3.0 wire に対して、対応表に従った `ReferenceN` を必ず放出することを規定する。
-2. Where 意味名エイリアスの併載が有効化されている場合, the レガシー wire 放出契約 shall `ReferenceN` に加えて意味名エイリアスを併載できることを許容する。
-3. The レガシー wire 放出契約 shall 意味名エイリアスの併載可否を per-DLL（DLL 単位）で切替可能とすること（暴れる DLL 用のキルスイッチ）を規定する。
+2. The レガシー wire 放出契約 shall 既定でレガシー SHIORI/3.0 wire に対し、`ReferenceN` に加えて意味名エイリアスを併載する（Requirement 10 の併載基準に従う）。
+3. The レガシー wire 放出契約 shall per-DLL（DLL 単位）で意味名エイリアスの併載を抑制できる opt-out フィルタ（暴れる DLL 用のキルスイッチ）を規定し、これを Requirement 10-3 の任意フィルタのレガシー wire における具体化とする。
 4. The レガシー wire 放出契約 shall `Reference0/1/2…` を消去または別名へ置換しないこと（旧 DLL が要求するため）を不変条件として規定する。
 
 ### Requirement 6: 予約 SHIORI ヘッダとの非衝突
