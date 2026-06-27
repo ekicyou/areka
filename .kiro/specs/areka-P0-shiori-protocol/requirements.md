@@ -104,6 +104,7 @@
 
 1. Where ukadoc が裁定を沈黙する箇所（追加ヘッダの可否・意味割り当て・GET/NOTIFY 分類等）がある場合, the 唯一の正本対応表 shall その areka 裁量による裁定を対応表へ記録する（COMPAT §2）。
 2. The 沈黙ルール記録 shall 各裁定について、典拠（ukadoc 条項の有無・SSP 二次参照の有無・areka 裁量の旨）を識別できる形で残す。
+3. The 仕様 shall 契約抽出元の ukadoc 該当ページ（SHIORI Event／SHIORI Resource）のピン留めスナップショット（出典 URL・取得日・sha256）を保持し、典拠参照の再現性と ukadoc 更新時の差分検証を可能にする。
 
 ### Requirement 8: content 文字列のエンコーディング規約と不透明性
 
