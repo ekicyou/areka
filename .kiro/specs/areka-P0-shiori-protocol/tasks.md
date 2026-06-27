@@ -4,7 +4,7 @@
 > 契約データの全タスクは**単一正本ファイルを書き換える**ため、共有ファイル競合により直列実行する（`(P)` は read-only 検証のみ）。
 > Rust 型・codegen・パーサ・doc/Web 生成器の実装は下流（スコープ外）。
 
-- [ ] 1. Foundation: 資産ルートと典拠ベースライン
+- [x] 1. Foundation: 資産ルートと典拠ベースライン
 - [x] 1.1 doc/shiori 資産ルートの確立（骨格 TOML ＋ 正本宣言 README）
   - `doc/shiori/shiori_protocol.toml` を新設し、`[meta]`/`[envelope]`/`[reserved_headers]`/`[[entry]]`（＋`[[entry.field]]`）/`[[silence_ruling]]` の table 階層と各 table の必須キーを骨格として確立する
   - 型語彙を小文字 Rust 準拠（`i32`/`u32`/`i64`/`bool`/`str`、大文字混在禁止）に固定し、各 table・entry・field に `description` をデータフィールドとして必須化する
@@ -16,7 +16,7 @@
   - Observable: SOURCES.md が3ページの URL/取得日/sha256 を網羅し、ディスク上の sha256 と完全一致する典拠ベースラインが確立される
   - _Requirements: 7.3, 11.6_
 
-- [ ] 2. Core: 契約固定部の符号化（meta / envelope / 予約ヘッダ）
+- [x] 2. Core: 契約固定部の符号化（meta / envelope / 予約ヘッダ）
 - [x] 2.1 契約メタ・バージョニング・不変条件の符号化
   - `[meta]` に `contract_version`/`prerelease`/`internal_encoding="utf-16"`/`content_opaque=true`/`legacy_coemit_default=true`/`reference_immutable=true`/`high_rate_safe` を符号化する
   - 正準 content は charset を持たず内部=UTF-16 とし、レガシー wire の charset 符号化は host-32 委譲である旨を `description` に明記する
@@ -38,7 +38,7 @@
   - _Depends: 1.1, 1.2_
   - _Boundary: shiori_protocol.toml_
 
-- [ ] 3. Core: ukadoc カタログ・フィールドスキーマ抽出
+- [x] 3. Core: ukadoc カタログ・フィールドスキーマ抽出
   - 本グループの全タスクは単一正本 `shiori_protocol.toml` を書き換えるため、共有ファイル競合により直列実行する（`(P)` 不可）
 - [x] 3.1 イベント抽出（ライフサイクル/時刻/通信系）
   - `ukadoc/list_shiori_event.html` から起動・終了・時刻・通信系イベントを `[[entry]]`（kind=event）へ抽出し、各 entry に id/category/dispatch/response/provenance、各 field に name(意味名)/reference/type/required/response_meaning/provenance/description を符号化する
@@ -66,7 +66,7 @@
   - _Depends: 3.3_
   - _Boundary: shiori_protocol.toml_
 
-- [ ] 4. Integration: 2投影整合・沈黙裁定の確立
+- [x] 4. Integration: 2投影整合・沈黙裁定の確立
 - [x] 4.1 意味名⇔ReferenceN 2投影と予約非衝突の確立
   - 全 field 行で canonical(`name`)/alias(`reference`) が単一行由来で同一値を指すことを保証し、canonical 優先規則を明記、別の対応表テーブルを作らない（R3 構造担保）
   - 全意味名が `[reserved_headers]` 確定集合と非衝突であることを保証し、衝突を検出した場合は `collision_policy` に従い是正する（是正の所有はこのタスク）
@@ -81,7 +81,7 @@
   - _Depends: 3.4_
   - _Boundary: shiori_protocol.toml_
 
-- [ ] 5. Validation: 構造・整合・生成アプローチ検証
+- [x] 5. Validation: 構造・整合・生成アプローチ検証
 - [x] 5.1 (P) 構造検証
   - 必須キー存在・型語彙（小文字 Rust 準拠・大文字混在なし）・全 table/entry/field の `description` 非空・意味名の予約非衝突（ゼロ違反のアサート）を検証する
   - Observable: 構造検証が全 entry/field で pass し、型語彙違反・大文字混在・description 欠落・予約衝突がゼロ
