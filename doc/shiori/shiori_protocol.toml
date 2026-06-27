@@ -8999,6 +8999,1564 @@ required = false
 provenance = "ukadoc"
 description = "ISO639準拠の2文字言語名。"
 
+# ----------------------------------------------------------------------
+# [[entry]] kind=resource - ukadoc Resource カタログ（要件 1.1/1.4/2.1/2.2/2.3）
+# 全 159 リソースを list_shiori_resource.html の <dl id> アンカー 1:1 で抽出。
+# リソースはイベントと同形（research §8.3）だがディスパッチされる事象ではなく、
+# baseware がリソース id を GET した際に SHIORI が返す名付き値。dispatch=get（応答期待）。
+# ----------------------------------------------------------------------
+
+[[entry]]
+id = "version"
+kind = "resource"
+category = "shiori_info"
+dispatch = "get"
+response = "text"
+provenance = "ukadoc"
+description = "SHIORIのロード直後に発生。 SHIORIはこのイベントに対し、SHIORIのバージョン情報を返却する（ SHIORIプロトコルのバージョンではない ）。"
+
+[[entry]]
+id = "craftman"
+kind = "resource"
+category = "shiori_info"
+dispatch = "get"
+response = "text"
+provenance = "ukadoc"
+description = "SHIORIのロード直後に発生。 SHIORIはこのイベントに対し、SHIORIの作者名を返却する。使用できるのは7ビット文字のみ。"
+
+[[entry]]
+id = "craftmanw"
+kind = "resource"
+category = "shiori_info"
+dispatch = "get"
+response = "text"
+provenance = "ukadoc"
+description = "SHIORIのロード直後に発生。 SHIORIはこのイベントに対し、SHIORIの作者名を返却する。7ビット文字に加え8ビット文字およびデフォルトエンコーディングのマルチバイト文字も使用可能。"
+
+[[entry]]
+id = "name"
+kind = "resource"
+category = "shiori_info"
+dispatch = "get"
+response = "text"
+provenance = "ukadoc"
+description = "SHIORIのロード直後に発生。 SHIORIはこのイベントに対し、SHIORIの名前を返却する（ ゴースト名ではない ）。使用できるのは7ビット文字のみ。"
+
+[[entry]]
+id = "log_path"
+kind = "resource"
+category = "shiori_info"
+dispatch = "get"
+response = "text"
+provenance = "ukadoc"
+description = "開発者用パレットの「開く」を操作した際に発生。SHIORIログファイルまでのフルパスを返す。 SHIORI Event : enable_log も参照。"
+
+[[entry]]
+id = "homeurl"
+kind = "resource"
+category = "ghost_info"
+dispatch = "get"
+response = "text"
+provenance = "ukadoc"
+description = "ネットワーク更新用ファイルの位置。 何かSHIORIに重大な不具合が生じた際のバックアップ用に descript.txtにも書ける 。 どちらの記述が優先されるかはdescript.txtの説明を参照。"
+
+[[entry]]
+id = "useorigin1"
+kind = "resource"
+category = "ghost_info"
+dispatch = "get"
+response = "text"
+provenance = "ukadoc"
+description = "ネットワーク更新時のファイル数の開始数値。 1でファイル数1から開始、0でMATERIAと同じ0から開始。"
+
+[[entry]]
+id = "username"
+kind = "resource"
+category = "ghost_info"
+dispatch = "get"
+response = "text"
+provenance = "ukadoc"
+description = "ユーザーの名称。"
+
+[[entry]]
+id = "sakura.defaultx"
+kind = "resource"
+category = "ghost_info"
+dispatch = "get"
+response = "text"
+provenance = "ukadoc"
+description = "本体側の画像ベースX座標。"
+
+[[entry]]
+id = "kero.defaultx"
+kind = "resource"
+category = "ghost_info"
+dispatch = "get"
+response = "text"
+provenance = "ukadoc"
+description = "相方側の画像ベースX座標。"
+
+[[entry]]
+id = "char*.defaultx"
+kind = "resource"
+category = "ghost_info"
+dispatch = "get"
+response = "text"
+provenance = "ukadoc"
+description = "2人目以降の相方側の画像ベースX座標。"
+
+[[entry]]
+id = "sakura.defaulty"
+kind = "resource"
+category = "ghost_info"
+dispatch = "get"
+response = "text"
+provenance = "ukadoc"
+description = "本体側の画像ベースY座標。"
+
+[[entry]]
+id = "kero.defaulty"
+kind = "resource"
+category = "ghost_info"
+dispatch = "get"
+response = "text"
+provenance = "ukadoc"
+description = "相方側の画像ベースY座標。"
+
+[[entry]]
+id = "char*.defaulty"
+kind = "resource"
+category = "ghost_info"
+dispatch = "get"
+response = "text"
+provenance = "ukadoc"
+description = "2人目以降の相方側の画像ベースY座標。"
+
+[[entry]]
+id = "sakura.defaultleft"
+kind = "resource"
+category = "ghost_info"
+dispatch = "get"
+response = "text"
+provenance = "ukadoc"
+description = "本体側のディスプレイ上でのデフォルトX座標。"
+
+[[entry]]
+id = "kero.defaultleft"
+kind = "resource"
+category = "ghost_info"
+dispatch = "get"
+response = "text"
+provenance = "ukadoc"
+description = "相方側のディスプレイ上でのデフォルトX座標。"
+
+[[entry]]
+id = "char*.defaultleft"
+kind = "resource"
+category = "ghost_info"
+dispatch = "get"
+response = "text"
+provenance = "ukadoc"
+description = "2人目以降のディスプレイ上でのデフォルトX座標。"
+
+[[entry]]
+id = "sakura.defaulttop"
+kind = "resource"
+category = "ghost_info"
+dispatch = "get"
+response = "text"
+provenance = "ukadoc"
+description = "本体側のディスプレイ上でのデフォルトY座標。(自由移動モードのみ有効)"
+
+[[entry]]
+id = "kero.defaulttop"
+kind = "resource"
+category = "ghost_info"
+dispatch = "get"
+response = "text"
+provenance = "ukadoc"
+description = "相方側のディスプレイ上でのデフォルトY座標。(自由移動モードのみ有効)"
+
+[[entry]]
+id = "char*.defaulttop"
+kind = "resource"
+category = "ghost_info"
+dispatch = "get"
+response = "text"
+provenance = "ukadoc"
+description = "2人目以降のディスプレイ上でのデフォルトY座標。(自由移動モードのみ有効)"
+
+[[entry]]
+id = "boxname.defaultleft"
+kind = "resource"
+category = "ghost_info"
+dispatch = "get"
+response = "text"
+provenance = "ukadoc"
+description = "入力ボックスの初期スクリーンX・Y座標。leftがX、topがY。 ボックス種類は以下の通り：communicatebox、scriptbox、addressbar、teachbox、dateinput、timeinput、ipinput、sliderinput、passwordinput、inputbox"
+
+[[entry]]
+id = "sakura.recommendsites"
+kind = "resource"
+category = "ghost_info"
+dispatch = "get"
+response = "text"
+provenance = "ukadoc"
+description = "本体側のおすすめリスト。 値は 項目名1[バイト値1]url1[バイト値1]バナー画像パス1[バイト値1]選択時トークスクリプト1[バイト値2]項目名2[バイト値1]... という形式で返す。 ただしその形式への変換はSHIORIが内部的に行っている場合があるので詳しくは各SHIORIの解説を参照。 トークスクリプト部分は単なる文字列ではなくさくらスクリプト。 url部分にurlの変わりにscript:から始まる記述でそのスクリプトが実行される（ \\![raise] なども可能）。"
+
+[[entry]]
+id = "sakura.portalsites"
+kind = "resource"
+category = "ghost_info"
+dispatch = "get"
+response = "text"
+provenance = "ukadoc"
+description = "本体側のポータルリスト。 値は 項目名1[バイト値1]url1[バイト値1]バナー画像パス1[バイト値1]選択時トークスクリプト1[バイト値2]項目名2[バイト値1]... という形式で返す。 ただしその形式への変換はSHIORIが内部的に行っている場合があるので詳しくは各SHIORIの解説を参照。 トークスクリプト部分は単なる文字列ではなくさくらスクリプト。 url部分にurlの変わりにscript:から始まる記述でそのスクリプトが実行される（ \\![raise] なども可能）。"
+
+[[entry]]
+id = "kero.recommendsites"
+kind = "resource"
+category = "ghost_info"
+dispatch = "get"
+response = "text"
+provenance = "ukadoc"
+description = "相方側のおすすめリスト。 値は 項目名1[バイト値1]url1[バイト値1]バナー画像パス1[バイト値1]選択時トークスクリプト1[バイト値2]項目名2[バイト値1]... という形式で返す。 ただしその形式への変換はSHIORIが内部的に行っている場合があるので詳しくは各SHIORIの解説を参照。 トークスクリプト部分は単なる文字列ではなくさくらスクリプト。 url部分にurlの変わりにscript:から始まる記述でそのスクリプトが実行される（ \\![raise] なども可能）。"
+
+[[entry]]
+id = "char*.recommendsites"
+kind = "resource"
+category = "ghost_info"
+dispatch = "get"
+response = "text"
+provenance = "ukadoc"
+description = "\\p[*]側のおすすめリスト。 値は 項目名1[バイト値1]url1[バイト値1]バナー画像パス1[バイト値1]選択時トークスクリプト1[バイト値2]項目名2[バイト値1]... という形式で返す。 ただしその形式への変換はSHIORIが内部的に行っている場合があるので詳しくは各SHIORIの解説を参照。 トークスクリプト部分は単なる文字列ではなくさくらスクリプト。 url部分にurlの変わりにscript:から始まる記述でそのスクリプトが実行される（ \\![raise] なども可能）。"
+
+[[entry]]
+id = "sakura.recommendbuttoncaption"
+kind = "resource"
+category = "ghost_info"
+dispatch = "get"
+response = "text"
+provenance = "ukadoc"
+description = "本体側のおすすめの名称。"
+
+[[entry]]
+id = "sakura.portalbuttoncaption"
+kind = "resource"
+category = "ghost_info"
+dispatch = "get"
+response = "text"
+provenance = "ukadoc"
+description = "本体側のポータルの名称。"
+
+[[entry]]
+id = "kero.recommendbuttoncaption"
+kind = "resource"
+category = "ghost_info"
+dispatch = "get"
+response = "text"
+provenance = "ukadoc"
+description = "相方側のおすすめの名称。"
+
+[[entry]]
+id = "char*.recommendbuttoncaption"
+kind = "resource"
+category = "ghost_info"
+dispatch = "get"
+response = "text"
+provenance = "ukadoc"
+description = "\\p[*]のおすすめの名称。"
+
+[[entry]]
+id = "updatebuttoncaption"
+kind = "resource"
+category = "ghost_info"
+dispatch = "get"
+response = "text"
+provenance = "ukadoc"
+description = "ネットワーク更新の名称。"
+
+[[entry]]
+id = "vanishbuttoncaption"
+kind = "resource"
+category = "ghost_info"
+dispatch = "get"
+response = "text"
+provenance = "ukadoc"
+description = "消滅通告の名称。"
+
+[[entry]]
+id = "readmebuttoncaption"
+kind = "resource"
+category = "ghost_info"
+dispatch = "get"
+response = "text"
+provenance = "ukadoc"
+description = "Read Me!の名称。"
+
+[[entry]]
+id = "vanishbuttonvisible"
+kind = "resource"
+category = "ghost_info"
+dispatch = "get"
+response = "text"
+provenance = "ukadoc"
+description = "消滅通告の表示。1で表示、0で非表示。"
+
+[[entry]]
+id = "sakura.popupmenu.visible"
+kind = "resource"
+category = "ghost_info"
+dispatch = "get"
+response = "text"
+provenance = "ukadoc"
+description = "本体側のオーナードローメニューの表示。1で表示、0で非表示。"
+
+[[entry]]
+id = "kero.popupmenu.visible"
+kind = "resource"
+category = "ghost_info"
+dispatch = "get"
+response = "text"
+provenance = "ukadoc"
+description = "相方側のオーナードローメニューの表示。1で表示、0で非表示。"
+
+[[entry]]
+id = "char*.popupmenu.visible"
+kind = "resource"
+category = "ghost_info"
+dispatch = "get"
+response = "text"
+provenance = "ukadoc"
+description = "\\p[*]のオーナードローメニューの表示。1で表示、0で非表示。"
+
+[[entry]]
+id = "sakura.popupmenu.type"
+kind = "resource"
+category = "ghost_info"
+dispatch = "get"
+response = "text"
+provenance = "ukadoc"
+description = "本体側のオーナードローメニューの変更。0で本体側メニュー、1で省略メニュー。"
+
+[[entry]]
+id = "kero.popupmenu.type"
+kind = "resource"
+category = "ghost_info"
+dispatch = "get"
+response = "text"
+provenance = "ukadoc"
+description = "相方側のオーナードローメニューの変更。0で本体側メニュー、1で省略メニュー。"
+
+[[entry]]
+id = "char*.popupmenu.type"
+kind = "resource"
+category = "ghost_info"
+dispatch = "get"
+response = "text"
+provenance = "ukadoc"
+description = "\\p[*]のオーナードローメニューの変更。0で本体側メニュー、1で省略メニュー。"
+
+[[entry]]
+id = "sakura.popupmenu.applybindtoself"
+kind = "resource"
+category = "ghost_info"
+dispatch = "get"
+response = "text"
+provenance = "ukadoc"
+description = "オーナードローメニューの種類を変更した時の着せ替えメニューの挙動を変える。 メニューの種類に応じて変える＝0 メニューが所属するスコープ（キャラクターID）の着せ替えを出す＝1 標準設定は1となり、SSP 2.7.25より前の挙動と異なるので、戻したい場合は明示的に0を設定すること。 2.7.26"
+
+[[entry]]
+id = "kero.popupmenu.applybindtoself"
+kind = "resource"
+category = "ghost_info"
+dispatch = "get"
+response = "text"
+provenance = "ukadoc"
+description = "オーナードローメニューの種類を変更した時の着せ替えメニューの挙動を変える。 メニューの種類に応じて変える＝0 メニューが所属するスコープ（キャラクターID）の着せ替えを出す＝1 標準設定は1となり、SSP 2.7.25より前の挙動と異なるので、戻したい場合は明示的に0を設定すること。 2.7.26"
+
+[[entry]]
+id = "char*.popupmenu.applybindtoself"
+kind = "resource"
+category = "ghost_info"
+dispatch = "get"
+response = "text"
+provenance = "ukadoc"
+description = "オーナードローメニューの種類を変更した時の着せ替えメニューの挙動を変える。 メニューの種類に応じて変える＝0 メニューが所属するスコープ（キャラクターID）の着せ替えを出す＝1 標準設定は1となり、SSP 2.7.25より前の挙動と異なるので、戻したい場合は明示的に0を設定すること。 2.7.26"
+
+[[entry]]
+id = "getaistate"
+kind = "resource"
+category = "ghost_info"
+dispatch = "get"
+response = "text"
+provenance = "ukadoc"
+description = "AIグラフのSHIORI/3.0版。 ゴースト内部状態(トーク数、好感度など)に関するレーダーチャートを描く。 以下のフォーマットで返す。 グラフ表示値群 [バイト値1] グラフラベル群 [バイト値1] グラフ加算値群 [バイト値1] グラフ最大値群 グラフ表示値群 グラフに表示したい値を半角数値・カンマ区切りで返してください。 2.4.26から小数点以下可。"
+
+[[entry]]
+id = "getaistateex"
+kind = "resource"
+category = "ghost_info"
+dispatch = "get"
+response = "text"
+provenance = "ukadoc"
+description = "getaistate の複数指定可能版。Reference0 に何個目のグラフ用のデータを要求しているか（0 スタート）が渡される。グラフを 2 個だけ表示したい場合は Reference0 が 0,1 の時に応答し 2 以上なら値なし（204）を返す。フォーマットは getaistate と同じ。"
+
+[[entry.field]]
+name = "graph_index"
+reference = 0
+type = "i32"
+required = true
+provenance = "ukadoc"
+description = "何個目のグラフ用のデータか（ゼロベース）。0、1、2…"
+
+[[entry]]
+id = "legacyinterface"
+kind = "resource"
+category = "ghost_info"
+dispatch = "get"
+response = "text"
+provenance = "ukadoc"
+description = "右クリックメニュー中の、レガシーインターフェースを使うか否か。 これに 0 を返すと、「ゴースト、シェル、バルーンの各切り替えボタン」が表示されなくなる。 materia582でのみ動作。"
+
+[[entry]]
+id = "other_homeurl_override"
+kind = "resource"
+category = "update_info"
+dispatch = "get"
+response = "text"
+provenance = "ukadoc"
+description = "\\![updateother] やシェル・バルーン同時更新機能において、更新対象の更新先 URL（homeurl）を強制的に置き換える。置き換える必要がない場合は 204 を返すか空文字列とする。"
+
+[[entry.field]]
+name = "target_kind"
+reference = 0
+type = "str"
+required = true
+provenance = "ukadoc"
+description = "更新対象の種類（shell, balloon, headline, plugin, language など）。"
+
+[[entry.field]]
+name = "target_name"
+reference = 1
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "更新対象の名前（descript.txt の name）。"
+
+[[entry.field]]
+name = "target_craftman"
+reference = 2
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "更新対象の作者名（descript.txt の craftmanname）。"
+
+[[entry.field]]
+name = "target_dirname"
+reference = 3
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "更新対象のフォルダ名。"
+
+[[entry.field]]
+name = "original_homeurl"
+reference = 4
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "本来更新に使用すべきだった homeurl。"
+
+[[entry]]
+id = "menu.sidebar.bitmap.filename"
+kind = "resource"
+category = "ownerdraw_menu_image"
+dispatch = "get"
+response = "text"
+provenance = "ukadoc"
+description = "サイドバー表示画像ファイル名。SHIORIの位置からの相対パス。"
+
+[[entry]]
+id = "menu.background.bitmap.filename"
+kind = "resource"
+category = "ownerdraw_menu_image"
+dispatch = "get"
+response = "text"
+provenance = "ukadoc"
+description = "バックグラウンド表示画像ファイル名。SHIORIの位置からの相対パス。"
+
+[[entry]]
+id = "menu.foreground.bitmap.filename"
+kind = "resource"
+category = "ownerdraw_menu_image"
+dispatch = "get"
+response = "text"
+provenance = "ukadoc"
+description = "フォアグラウンド表示画像ファイル名。SHIORIの位置からの相対パス。"
+
+[[entry]]
+id = "menu.background.font.color.r"
+kind = "resource"
+category = "ownerdraw_menu_color"
+dispatch = "get"
+response = "text"
+provenance = "ukadoc"
+description = "バックグラウンド文字色赤(0～255)"
+
+[[entry]]
+id = "menu.background.font.color.g"
+kind = "resource"
+category = "ownerdraw_menu_color"
+dispatch = "get"
+response = "text"
+provenance = "ukadoc"
+description = "バックグラウンド文字色緑(0～255)"
+
+[[entry]]
+id = "menu.background.font.color.b"
+kind = "resource"
+category = "ownerdraw_menu_color"
+dispatch = "get"
+response = "text"
+provenance = "ukadoc"
+description = "バックグラウンド文字色青(0～255)"
+
+[[entry]]
+id = "menu.foreground.font.color.r"
+kind = "resource"
+category = "ownerdraw_menu_color"
+dispatch = "get"
+response = "text"
+provenance = "ukadoc"
+description = "フォアグラウンド文字色赤(0～255)"
+
+[[entry]]
+id = "menu.foreground.font.color.g"
+kind = "resource"
+category = "ownerdraw_menu_color"
+dispatch = "get"
+response = "text"
+provenance = "ukadoc"
+description = "フォアグラウンド文字色緑(0～255)"
+
+[[entry]]
+id = "menu.foreground.font.color.b"
+kind = "resource"
+category = "ownerdraw_menu_color"
+dispatch = "get"
+response = "text"
+provenance = "ukadoc"
+description = "フォアグラウド文字色青(0～255)"
+
+[[entry]]
+id = "menu.separator.color.r"
+kind = "resource"
+category = "ownerdraw_menu_color"
+dispatch = "get"
+response = "text"
+provenance = "ukadoc"
+description = "セパレータ色赤(0～255)"
+
+[[entry]]
+id = "menu.separator.color.g"
+kind = "resource"
+category = "ownerdraw_menu_color"
+dispatch = "get"
+response = "text"
+provenance = "ukadoc"
+description = "セパレータ色緑(0～255)"
+
+[[entry]]
+id = "menu.separator.color.b"
+kind = "resource"
+category = "ownerdraw_menu_color"
+dispatch = "get"
+response = "text"
+provenance = "ukadoc"
+description = "セパレータ色青(0～255)"
+
+[[entry]]
+id = "menu.frame.color.r"
+kind = "resource"
+category = "ownerdraw_menu_color"
+dispatch = "get"
+response = "text"
+provenance = "ukadoc"
+description = "枠の色赤(0～255) 2.5.41"
+
+[[entry]]
+id = "menu.frame.color.g"
+kind = "resource"
+category = "ownerdraw_menu_color"
+dispatch = "get"
+response = "text"
+provenance = "ukadoc"
+description = "枠の色緑(0～255) 2.5.41"
+
+[[entry]]
+id = "menu.frame.color.b"
+kind = "resource"
+category = "ownerdraw_menu_color"
+dispatch = "get"
+response = "text"
+provenance = "ukadoc"
+description = "枠の色青(0～255) 2.5.41"
+
+[[entry]]
+id = "menu.disable.font.color.r"
+kind = "resource"
+category = "ownerdraw_menu_color"
+dispatch = "get"
+response = "text"
+provenance = "ukadoc"
+description = "選択不可文字色赤(0～255)"
+
+[[entry]]
+id = "menu.disable.font.color.g"
+kind = "resource"
+category = "ownerdraw_menu_color"
+dispatch = "get"
+response = "text"
+provenance = "ukadoc"
+description = "選択不可文字色緑(0～255)"
+
+[[entry]]
+id = "menu.disable.font.color.b"
+kind = "resource"
+category = "ownerdraw_menu_color"
+dispatch = "get"
+response = "text"
+provenance = "ukadoc"
+description = "選択不可文字色青(0～255)"
+
+[[entry]]
+id = "-"
+kind = "resource"
+category = "shortcut_key"
+dispatch = "get"
+response = "text"
+provenance = "ukadoc"
+description = "[変更不可] Languageの名称。"
+
+[[entry]]
+id = "activaterootbutton.caption"
+kind = "resource"
+category = "shortcut_key"
+dispatch = "get"
+response = "text"
+provenance = "ukadoc"
+description = "手前に出て来るの名称。"
+
+[[entry]]
+id = "addressbarbutton.caption"
+kind = "resource"
+category = "shortcut_key"
+dispatch = "get"
+response = "text"
+provenance = "ukadoc"
+description = "アドレスバーの名称。"
+
+[[entry]]
+id = "alignrootbutton.caption"
+kind = "resource"
+category = "shortcut_key"
+dispatch = "get"
+response = "text"
+provenance = "ukadoc"
+description = "キャラクター自由移動の名称。"
+
+[[entry]]
+id = "alwaysstayontopbutton.caption"
+kind = "resource"
+category = "shortcut_key"
+dispatch = "get"
+response = "text"
+provenance = "ukadoc"
+description = "常に手前に表示の名称。"
+
+[[entry]]
+id = "alwaystrayiconvisiblebutton.caption"
+kind = "resource"
+category = "shortcut_key"
+dispatch = "get"
+response = "text"
+provenance = "ukadoc"
+description = "常にトレイアイコンを表示の名称。"
+
+[[entry]]
+id = "balloonhistorybutton.caption"
+kind = "resource"
+category = "shortcut_key"
+dispatch = "get"
+response = "text"
+provenance = "ukadoc"
+description = "(最近使ったもの)バルーンの名称。"
+
+[[entry]]
+id = "balloonrootbutton.caption"
+kind = "resource"
+category = "shortcut_key"
+dispatch = "get"
+response = "text"
+provenance = "ukadoc"
+description = "バルーンの名称。"
+
+[[entry]]
+id = "biffallbutton.caption"
+kind = "resource"
+category = "shortcut_key"
+dispatch = "get"
+response = "text"
+provenance = "ukadoc"
+description = "全アカウントの名称。"
+
+[[entry]]
+id = "biffbutton.caption"
+kind = "resource"
+category = "shortcut_key"
+dispatch = "get"
+response = "text"
+provenance = "ukadoc"
+description = "メールチェックの名称。"
+
+[[entry]]
+id = "calendarbutton.caption"
+kind = "resource"
+category = "shortcut_key"
+dispatch = "get"
+response = "text"
+provenance = "ukadoc"
+description = "カレンダーの名称。"
+
+[[entry]]
+id = "callghosthistorybutton.caption"
+kind = "resource"
+category = "shortcut_key"
+dispatch = "get"
+response = "text"
+provenance = "ukadoc"
+description = "(最近使ったもの)他のゴーストを呼ぶの名称。"
+
+[[entry]]
+id = "callghostrootbutton.caption"
+kind = "resource"
+category = "shortcut_key"
+dispatch = "get"
+response = "text"
+provenance = "ukadoc"
+description = "他のゴーストを呼ぶの名称。"
+
+[[entry]]
+id = "callsstpsendboxbutton.caption"
+kind = "resource"
+category = "shortcut_key"
+dispatch = "get"
+response = "text"
+provenance = "ukadoc"
+description = "SSTPボックスの名称。"
+
+[[entry]]
+id = "char*.recommendsites.caption"
+kind = "resource"
+category = "shortcut_key"
+dispatch = "get"
+response = "text"
+provenance = "ukadoc"
+description = "\\p[*]を使用した際のおすすめの名称。"
+
+[[entry]]
+id = "charsetbutton.caption"
+kind = "resource"
+category = "shortcut_key"
+dispatch = "get"
+response = "text"
+provenance = "ukadoc"
+description = "文字コードの名称。"
+
+[[entry]]
+id = "closeballoonbutton.caption"
+kind = "resource"
+category = "shortcut_key"
+dispatch = "get"
+response = "text"
+provenance = "ukadoc"
+description = "バルーンを消すの名称。"
+
+[[entry]]
+id = "closebutton.caption"
+kind = "resource"
+category = "shortcut_key"
+dispatch = "get"
+response = "text"
+provenance = "ukadoc"
+description = "終了の名称。"
+
+[[entry]]
+id = "collisionvisiblebutton.caption"
+kind = "resource"
+category = "shortcut_key"
+dispatch = "get"
+response = "text"
+provenance = "ukadoc"
+description = "頭／顔／胸当たり判定表示の名称。"
+
+[[entry]]
+id = "configurationbutton.caption"
+kind = "resource"
+category = "shortcut_key"
+dispatch = "get"
+response = "text"
+provenance = "ukadoc"
+description = "設定の名称。"
+
+[[entry]]
+id = "configurationrootbutton.caption"
+kind = "resource"
+category = "shortcut_key"
+dispatch = "get"
+response = "text"
+provenance = "ukadoc"
+description = "設定の名称。"
+
+[[entry]]
+id = "debugballoonbutton.caption"
+kind = "resource"
+category = "shortcut_key"
+dispatch = "get"
+response = "text"
+provenance = "ukadoc"
+description = "バルーンマーカー全表示の名称。"
+
+[[entry]]
+id = "definedsurfaceonlybutton.caption"
+kind = "resource"
+category = "shortcut_key"
+dispatch = "get"
+response = "text"
+provenance = "ukadoc"
+description = "定義なしサーフェスを無視の名称。"
+
+[[entry]]
+id = "dressuprootbutton.caption"
+kind = "resource"
+category = "shortcut_key"
+dispatch = "get"
+response = "text"
+provenance = "ukadoc"
+description = "着せ替えの名称。"
+
+[[entry]]
+id = "duibutton.caption"
+kind = "resource"
+category = "shortcut_key"
+dispatch = "get"
+response = "text"
+provenance = "ukadoc"
+description = "開発用インターフェイスの名称。"
+
+[[entry]]
+id = "enableballoonmovebutton.caption"
+kind = "resource"
+category = "shortcut_key"
+dispatch = "get"
+response = "text"
+provenance = "ukadoc"
+description = "バルーン位置補正有効の名称。"
+
+[[entry]]
+id = "firststaffbutton.caption"
+kind = "resource"
+category = "shortcut_key"
+dispatch = "get"
+response = "text"
+provenance = "ukadoc"
+description = "バージョン情報の名称。"
+
+[[entry]]
+id = "ghostexplorerbutton.caption"
+kind = "resource"
+category = "shortcut_key"
+dispatch = "get"
+response = "text"
+provenance = "ukadoc"
+description = "ゴーストエクスプローラの名称。"
+
+[[entry]]
+id = "ghosthistorybutton.caption"
+kind = "resource"
+category = "shortcut_key"
+dispatch = "get"
+response = "text"
+provenance = "ukadoc"
+description = "(最近使ったもの)ゴーストに切り替えの名称。"
+
+[[entry]]
+id = "ghostinstallbutton.caption"
+kind = "resource"
+category = "shortcut_key"
+dispatch = "get"
+response = "text"
+provenance = "ukadoc"
+description = "ゴーストインストールの名称。"
+
+[[entry]]
+id = "ghostrootbutton.caption"
+kind = "resource"
+category = "shortcut_key"
+dispatch = "get"
+response = "text"
+provenance = "ukadoc"
+description = "ゴーストの名称。"
+
+[[entry]]
+id = "headlinesensehistorybutton.caption"
+kind = "resource"
+category = "shortcut_key"
+dispatch = "get"
+response = "text"
+provenance = "ukadoc"
+description = "(最近使ったもの)ヘッドラインの名称。"
+
+[[entry]]
+id = "headlinesenserootbutton.caption"
+kind = "resource"
+category = "shortcut_key"
+dispatch = "get"
+response = "text"
+provenance = "ukadoc"
+description = "ヘッドラインの名称。"
+
+[[entry]]
+id = "helpbutton.caption"
+kind = "resource"
+category = "shortcut_key"
+dispatch = "get"
+response = "text"
+provenance = "ukadoc"
+description = "説明書の名称。"
+
+[[entry]]
+id = "hidebutton.caption"
+kind = "resource"
+category = "shortcut_key"
+dispatch = "get"
+response = "text"
+provenance = "ukadoc"
+description = "アイコン化の名称。"
+
+[[entry]]
+id = "historyrootbutton.caption"
+kind = "resource"
+category = "shortcut_key"
+dispatch = "get"
+response = "text"
+provenance = "ukadoc"
+description = "最近使ったものの名称。"
+
+[[entry]]
+id = "inforootbutton.caption"
+kind = "resource"
+category = "shortcut_key"
+dispatch = "get"
+response = "text"
+provenance = "ukadoc"
+description = "情報の名称。"
+
+[[entry]]
+id = "leavepassivebutton.caption"
+kind = "resource"
+category = "shortcut_key"
+dispatch = "get"
+response = "text"
+provenance = "ukadoc"
+description = "制限モード強制解除の名称。"
+
+[[entry]]
+id = "messengerbutton.caption"
+kind = "resource"
+category = "shortcut_key"
+dispatch = "get"
+response = "text"
+provenance = "ukadoc"
+description = "SSPメッセンジャの名称。"
+
+[[entry]]
+id = "pluginhistorybutton.caption"
+kind = "resource"
+category = "shortcut_key"
+dispatch = "get"
+response = "text"
+provenance = "ukadoc"
+description = "(最近使ったもの)プラグインの名称。"
+
+[[entry]]
+id = "pluginrootbutton.caption"
+kind = "resource"
+category = "shortcut_key"
+dispatch = "get"
+response = "text"
+provenance = "ukadoc"
+description = "プラグインの名称。"
+
+[[entry]]
+id = "portalrootbutton.caption"
+kind = "resource"
+category = "shortcut_key"
+dispatch = "get"
+response = "text"
+provenance = "ukadoc"
+description = "ポータルの名称。"
+
+[[entry]]
+id = "purgeghostcachebutton.caption"
+kind = "resource"
+category = "shortcut_key"
+dispatch = "get"
+response = "text"
+provenance = "ukadoc"
+description = "ゴーストキャッシュ開放の名称。"
+
+[[entry]]
+id = "quitbutton.caption"
+kind = "resource"
+category = "shortcut_key"
+dispatch = "get"
+response = "text"
+provenance = "ukadoc"
+description = "全て終了の名称。"
+
+[[entry]]
+id = "rateofuseballoonbutton.caption"
+kind = "resource"
+category = "shortcut_key"
+dispatch = "get"
+response = "text"
+provenance = "ukadoc"
+description = "バルーン - 個別の名称。"
+
+[[entry]]
+id = "rateofusebutton.caption"
+kind = "resource"
+category = "shortcut_key"
+dispatch = "get"
+response = "text"
+provenance = "ukadoc"
+description = "使用頻度表示の名称。"
+
+[[entry]]
+id = "rateofuserootbutton.caption"
+kind = "resource"
+category = "shortcut_key"
+dispatch = "get"
+response = "text"
+provenance = "ukadoc"
+description = "使用率グラフの名称。"
+
+[[entry]]
+id = "rateofusetotalbutton.caption"
+kind = "resource"
+category = "shortcut_key"
+dispatch = "get"
+response = "text"
+provenance = "ukadoc"
+description = "ゴースト - 合算の名称。"
+
+[[entry]]
+id = "readmebutton.caption"
+kind = "resource"
+category = "shortcut_key"
+dispatch = "get"
+response = "text"
+provenance = "ukadoc"
+description = "キャラクタについての名称。"
+
+[[entry]]
+id = "termsbutton.caption"
+kind = "resource"
+category = "shortcut_key"
+dispatch = "get"
+response = "text"
+provenance = "ukadoc"
+description = "キャラクタの利用条件の名称。"
+
+[[entry]]
+id = "recommendrootbutton.caption"
+kind = "resource"
+category = "shortcut_key"
+dispatch = "get"
+response = "text"
+provenance = "ukadoc"
+description = "おすすめの名称。"
+
+[[entry]]
+id = "regionenabledbutton.caption"
+kind = "resource"
+category = "shortcut_key"
+dispatch = "get"
+response = "text"
+provenance = "ukadoc"
+description = "リージョンを切らずに表示の名称。"
+
+[[entry]]
+id = "reloadinfobutton.caption"
+kind = "resource"
+category = "shortcut_key"
+dispatch = "get"
+response = "text"
+provenance = "ukadoc"
+description = "動作情報再読み込みの名称。"
+
+[[entry]]
+id = "resetballoonpositionbutton.caption"
+kind = "resource"
+category = "shortcut_key"
+dispatch = "get"
+response = "text"
+provenance = "ukadoc"
+description = "バルーン位置初期化の名称。"
+
+[[entry]]
+id = "resettodefaultbutton.caption"
+kind = "resource"
+category = "shortcut_key"
+dispatch = "get"
+response = "text"
+provenance = "ukadoc"
+description = "設定を標準に戻すの名称。"
+
+[[entry]]
+id = "scriptlogbutton.caption"
+kind = "resource"
+category = "shortcut_key"
+dispatch = "get"
+response = "text"
+provenance = "ukadoc"
+description = "スクリプトログの名称。"
+
+[[entry]]
+id = "shellrootbutton.caption"
+kind = "resource"
+category = "shortcut_key"
+dispatch = "get"
+response = "text"
+provenance = "ukadoc"
+description = "シェルの名称。"
+
+[[entry]]
+id = "shellscaleotherbutton.caption"
+kind = "resource"
+category = "shortcut_key"
+dispatch = "get"
+response = "text"
+provenance = "ukadoc"
+description = "その他の倍率の名称。"
+
+[[entry]]
+id = "shellscalerootbutton.caption"
+kind = "resource"
+category = "shortcut_key"
+dispatch = "get"
+response = "text"
+provenance = "ukadoc"
+description = "シェル倍率の名称。"
+
+[[entry]]
+id = "sntpbutton.caption"
+kind = "resource"
+category = "shortcut_key"
+dispatch = "get"
+response = "text"
+provenance = "ukadoc"
+description = "時計合わせの名称。"
+
+[[entry]]
+id = "switchactivatewhentalkbutton.caption"
+kind = "resource"
+category = "shortcut_key"
+dispatch = "get"
+response = "text"
+provenance = "ukadoc"
+description = "喋る時は常時の名称。"
+
+[[entry]]
+id = "switchactivatewhentalkexceptupdatebutton.caption"
+kind = "resource"
+category = "shortcut_key"
+dispatch = "get"
+response = "text"
+provenance = "ukadoc"
+description = "更新時以外の名称。"
+
+[[entry]]
+id = "switchautobiffbutton.caption"
+kind = "resource"
+category = "shortcut_key"
+dispatch = "get"
+response = "text"
+provenance = "ukadoc"
+description = "自動メールチェックの名称。"
+
+[[entry]]
+id = "switchautoheadlinesensebutton.caption"
+kind = "resource"
+category = "shortcut_key"
+dispatch = "get"
+response = "text"
+provenance = "ukadoc"
+description = "自動ヘッドラインセンスの名称。"
+
+[[entry]]
+id = "switchblacklistingbutton.caption"
+kind = "resource"
+category = "shortcut_key"
+dispatch = "get"
+response = "text"
+provenance = "ukadoc"
+description = "ブラックリスティングの名称。"
+
+[[entry]]
+id = "switchcompatiblemodebutton.caption"
+kind = "resource"
+category = "shortcut_key"
+dispatch = "get"
+response = "text"
+provenance = "ukadoc"
+description = "旧仕様をサポートの名称。"
+
+[[entry]]
+id = "switchconsolealwaysvisiblebutton.caption"
+kind = "resource"
+category = "shortcut_key"
+dispatch = "get"
+response = "text"
+provenance = "ukadoc"
+description = "コンソール常時可視の名称。"
+
+[[entry]]
+id = "switchconsolevisiblebutton.caption"
+kind = "resource"
+category = "shortcut_key"
+dispatch = "get"
+response = "text"
+provenance = "ukadoc"
+description = "コンソール不可視の名称。"
+
+[[entry]]
+id = "switchdeactivatebutton.caption"
+kind = "resource"
+category = "shortcut_key"
+dispatch = "get"
+response = "text"
+provenance = "ukadoc"
+description = "喋り終わると裏へ沈むの名称。"
+
+[[entry]]
+id = "switchdontactivatebutton.caption"
+kind = "resource"
+category = "shortcut_key"
+dispatch = "get"
+response = "text"
+provenance = "ukadoc"
+description = "常に出て来ないの名称。"
+
+[[entry]]
+id = "switchdontforcealignbutton.caption"
+kind = "resource"
+category = "shortcut_key"
+dispatch = "get"
+response = "text"
+provenance = "ukadoc"
+description = "ゴースト設定の名称。"
+
+[[entry]]
+id = "switchduivisiblebutton.caption"
+kind = "resource"
+category = "shortcut_key"
+dispatch = "get"
+response = "text"
+provenance = "ukadoc"
+description = "開発用インターフェースの名称。"
+
+[[entry]]
+id = "switchforcealignfreebutton.caption"
+kind = "resource"
+category = "shortcut_key"
+dispatch = "get"
+response = "text"
+provenance = "ukadoc"
+description = "常に自由移動の名称。"
+
+[[entry]]
+id = "switchforcealignlimitbutton.caption"
+kind = "resource"
+category = "shortcut_key"
+dispatch = "get"
+response = "text"
+provenance = "ukadoc"
+description = "常に制限の名称。"
+
+[[entry]]
+id = "switchignoreserikomovebutton.caption"
+kind = "resource"
+category = "shortcut_key"
+dispatch = "get"
+response = "text"
+provenance = "ukadoc"
+description = "SERIKO Moveを無視の名称。"
+
+[[entry]]
+id = "switchlocalsstpbutton.caption"
+kind = "resource"
+category = "shortcut_key"
+dispatch = "get"
+response = "text"
+provenance = "ukadoc"
+description = "ローカルSSTPの名称。"
+
+[[entry]]
+id = "switchmovetodefaultpositionbutton.caption"
+kind = "resource"
+category = "shortcut_key"
+dispatch = "get"
+response = "text"
+provenance = "ukadoc"
+description = "シェル位置初期化の名称。"
+
+[[entry]]
+id = "switchproxybutton.caption"
+kind = "resource"
+category = "shortcut_key"
+dispatch = "get"
+response = "text"
+provenance = "ukadoc"
+description = "プロキシサーバを有効にするの名称。"
+
+[[entry]]
+id = "switchquietbutton.caption"
+kind = "resource"
+category = "shortcut_key"
+dispatch = "get"
+response = "text"
+provenance = "ukadoc"
+description = "サウンドを鳴らさないの名称。"
+
+[[entry]]
+id = "switchreloadbutton.caption"
+kind = "resource"
+category = "shortcut_key"
+dispatch = "get"
+response = "text"
+provenance = "ukadoc"
+description = "ゴースト再読み込みの名称。"
+
+[[entry]]
+id = "switchreloadtempghostbutton.caption"
+kind = "resource"
+category = "shortcut_key"
+dispatch = "get"
+response = "text"
+provenance = "ukadoc"
+description = "一時起動ゴーストを保持の名称。"
+
+[[entry]]
+id = "switchremotesstpbutton.caption"
+kind = "resource"
+category = "shortcut_key"
+dispatch = "get"
+response = "text"
+provenance = "ukadoc"
+description = "リモートSSTPの名称。"
+
+[[entry]]
+id = "switchrootbutton.caption"
+kind = "resource"
+category = "shortcut_key"
+dispatch = "get"
+response = "text"
+provenance = "ukadoc"
+description = "スイッチ類の名称。"
+
+[[entry]]
+id = "switchtalkghostbutton.caption"
+kind = "resource"
+category = "shortcut_key"
+dispatch = "get"
+response = "text"
+provenance = "ukadoc"
+description = "話すタイミングをゴースト任せの名称。"
+
+[[entry]]
+id = "systeminfobutton.caption"
+kind = "resource"
+category = "shortcut_key"
+dispatch = "get"
+response = "text"
+provenance = "ukadoc"
+description = "システム情報を提出の名称。"
+
+[[entry]]
+id = "updatebutton.caption"
+kind = "resource"
+category = "shortcut_key"
+dispatch = "get"
+response = "text"
+provenance = "ukadoc"
+description = "ネットワーク更新の名称。"
+
+[[entry]]
+id = "updatefmobutton.caption"
+kind = "resource"
+category = "shortcut_key"
+dispatch = "get"
+response = "text"
+provenance = "ukadoc"
+description = "FMOの整理／更新の名称。"
+
+[[entry]]
+id = "updateplatformbutton.caption"
+kind = "resource"
+category = "shortcut_key"
+dispatch = "get"
+response = "text"
+provenance = "ukadoc"
+description = "本体ネットワーク更新の名称。"
+
+[[entry]]
+id = "utilityrootbutton.caption"
+kind = "resource"
+category = "shortcut_key"
+dispatch = "get"
+response = "text"
+provenance = "ukadoc"
+description = "機能の名称。"
+
+[[entry]]
+id = "vanishbutton.caption"
+kind = "resource"
+category = "shortcut_key"
+dispatch = "get"
+response = "text"
+provenance = "ukadoc"
+description = "消滅通告の名称。"
+
+[[entry]]
+id = "aistatebutton.caption"
+kind = "resource"
+category = "shortcut_key"
+dispatch = "get"
+response = "text"
+provenance = "ukadoc"
+description = "AIグラフの名称。"
+
+[[entry]]
+id = "dictationbutton.caption"
+kind = "resource"
+category = "shortcut_key"
+dispatch = "get"
+response = "text"
+provenance = "ukadoc"
+description = "音声認識の名称。"
+
+[[entry]]
+id = "texttospeechbutton.caption"
+kind = "resource"
+category = "shortcut_key"
+dispatch = "get"
+response = "text"
+provenance = "ukadoc"
+description = "音声合成の名称。"
+
+[[entry]]
+id = "tooltip"
+kind = "resource"
+category = "tooltip"
+dispatch = "get"
+response = "sakura_script"
+provenance = "ukadoc"
+description = "シェルにおけるツールチップ内容の取得。シェルのサーフェスにマウスカーソルが乗った際に通知され、SHIORI はツールチップ文字列を応答する。シェル側設定がある場合はそちらが優先される。"
+
+[[entry.field]]
+name = "cursor_x"
+reference = 0
+type = "i32"
+required = true
+provenance = "ukadoc"
+description = "マウスカーソルの x 座標（ローカル座標）。"
+
+[[entry.field]]
+name = "cursor_y"
+reference = 1
+type = "i32"
+required = true
+provenance = "ukadoc"
+description = "マウスカーソルの y 座標（ローカル座標）。"
+
+[[entry.field]]
+name = "always_zero"
+reference = 2
+type = "i32"
+required = false
+provenance = "ukadoc"
+description = "常に 0。"
+
+[[entry.field]]
+name = "character_side"
+reference = 3
+type = "i32"
+required = false
+provenance = "ukadoc"
+description = "本体の場合は 0、相方の場合は 1。SSP/CROW では 2 以降もある。"
+
+[[entry.field]]
+name = "collision_id"
+reference = 4
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "当たり判定の識別子。"
+
+[[entry.field]]
+name = "always_zero2"
+reference = 5
+type = "i32"
+required = false
+provenance = "ukadoc"
+description = "常に 0。"
+
+[[entry]]
+id = "balloon_tooltip"
+kind = "resource"
+category = "tooltip"
+dispatch = "get"
+response = "sakura_script"
+provenance = "ukadoc"
+description = "バルーン選択肢上のツールチップ内容の取得。選択肢にマウスカーソルが乗った際に通知され、SHIORI はツールチップ文字列を応答する。"
+
+[[entry.field]]
+name = "choice_label"
+reference = 0
+type = "str"
+required = true
+provenance = "ukadoc"
+description = "選択肢のテキスト（ラベル）。"
+
+[[entry.field]]
+name = "choice_id"
+reference = 1
+type = "str"
+required = true
+provenance = "ukadoc"
+description = "選択肢の ID。"
+
+[[entry.field]]
+name = "extra_args"
+reference_variadic = true
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "拡張情報（\\q タグ内の 3 番目以降の引数）。Reference2 以降の可変長。"
+
 # ──────────────────────────────────────────────────────────────────────
 # [[silence_ruling]] — 沈黙裁定ログ（要件 7.x）
 # ukadoc が沈黙する裁定（GET/NOTIFY 分類・追加ヘッダ可否・意味割り当て等）の追跡。
