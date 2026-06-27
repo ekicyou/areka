@@ -22,12 +22,12 @@
   - `shiori_protocol.toml` の Event/Resource 単位フラグメントへの物理分割（≤600 行・カテゴリ純度・超過カテゴリの entry 境界でのサブ分割）
   - TOML 符号化形の刷新（entry/silence_ruling の id キー連想配列化、field の意味名キー inline table 化、共有テーブルの単一共有フラグメントへの集約）
   - フラグメント → 正準契約の決定的再構成機構の **契約・受け入れ基準**（マニフェスト/順序の固定、意味的同値ゲートの判定基準）
-  - 現行正本との意味的同値（無損失・冪等）の証明と provenance/description の保持
+  - 現行正本との意味的同値（無損失・冪等）の証明と provenance/description の保持。証明は**変換前後を突き合わせる一回限りの検証プログラム**（使い捨て・Python 等で可）で実施する（Requirement 9）
   - 完了仕様 `areka-P0-shiori-protocol` 要件3・11 の改訂（論理 SSOT の再定義）
   - `doc/shiori/README.md` の改訂（SSOT＝fragments の宣言）と旧 `shiori_protocol.toml` の削除
 - **Out of scope**:
   - 契約内容そのものの変更（event/resource の追加削除・field 意味/型/`ReferenceN` 位置・封筒マッピング・予約ヘッダ集合・沈黙裁定・バージョニング方針はすべて不変）
-  - 再構成機構・バリデータ・doc/Web 生成器・Rust codegen の **実装コード**（HOW・後続フェーズ／下流）
+  - 下流 consumer 向けの**恒久的**な再構成機構・バリデータ・doc/Web 生成器・Rust codegen の実装コード（HOW・後続フェーズ／下流）。※本仕様の移行・非破壊検証に用いる**使い捨ての一回限り変換／同値検証スクリプト**（恒久資産化しない・Python 等で可）は In scope に含む
   - COM ABI（`IShiori`/`IShioriHost`）・トランスポート・さくらスクリプト/SAORI 解釈（隣接仕様の領分）
 - **Adjacent expectations**:
   - 上流 `areka-P0-shiori-protocol`（completed）が本契約の正本所有者であり、本仕様はその要件3・11 を改訂継承する（completed の履歴は不変のまま系譜を残す）。
@@ -111,7 +111,7 @@
 #### Acceptance Criteria
 
 1. The 本仕様 shall 本仕様の完了後において `shiori_protocol.toml` を契約の正本とせず、フラグメント群を唯一の正本とする。
-2. The 本仕様 shall `shiori_protocol.toml` を tree から削除し、非権威の生成物としても残置しない。
+2. The 本仕様 shall `shiori_protocol.toml` を tree から削除し、非権威の生成物としても残置しない。削除は Requirement 9 の一回限り同値検証が合格した後に実施する（変換前内容を検証基準として捕捉してから削除する）。
 3. When 単一ファイル形式の正準ビューが必要となる場合, the 正準ビュー shall フラグメント群からのオンデマンド再構成（merge）によってのみ得られるものとし、tree に常設の単一ファイルを持たない。
 4. The 本仕様 shall `shiori_protocol.toml` 削除後、当該ファイルを指す既存参照（`doc/shiori/README.md`・完了仕様の記述等）が正本＝フラグメント群を指すよう整合させる。
 
@@ -136,3 +136,4 @@
 2. The 本仕様 shall 各 field の意味名・型・必須/任意・`ReferenceN` 位置・応答意味・provenance を不変に保つ。
 3. The 本仕様 shall 封筒マッピング・予約ヘッダ集合・沈黙裁定・バージョニング方針を不変に保つ。
 4. If 意味的同値ゲートが現行正本と再構成結果の間に差分を検出する場合, then the 受け入れ検証 shall 本仕様の成果物を不合格とし、契約セマンティクスが変化したものとして扱う。
+5. The 本仕様 shall 変換前 `shiori_protocol.toml` の parse 結果と変換後フラグメント結合（merge）の parse 結果を**プログラムで突き合わせる一回限りの同値検証**を移行時に実施する。検証プログラムは使い捨て（Python 等で可・恒久資産化しない）でよく、Requirement 3.4 の同値基準を満たすことを実証し、その合否結果を非破壊のエビデンスとして残す。
