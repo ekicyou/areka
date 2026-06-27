@@ -24,7 +24,7 @@ content_opaque = true
 legacy_coemit_default = true
 reference_immutable = true
 high_rate_safe = true
-description = "SHIORI 正準 content プロトコル契約のメタ情報。プレリリース段階（prerelease=true）の流動契約であり後方互換保証を持たず、契約変更時は in-tree 全実装者を lockstep 更新する（D7 整合）。正準 content の内部表現は常に UTF-16（HSTRING・shiori-com 整合）であり charset 概念を持たない（レガシー wire の charset byte 化は areka-P0-shiori-host-32 の責務）。content は不透明文字列として運び解釈しない（content_opaque）。レガシー wire では意味名エイリアスを既定併載し（legacy_coemit_default）、Reference0/1/2… は消去/改名しない（reference_immutable）。高レート通信余地（D6）を阻害しない封筒設計である（high_rate_safe）。"
+description = "SHIORI 正準 content プロトコル契約のメタ情報。プレリリース段階（prerelease=true）の流動契約であり後方互換保証を持たず、契約変更時は in-tree 全実装者を lockstep 更新する（D7 整合・要件 9.1/9.2）。正準 content の内部表現は常に UTF-16（HSTRING・shiori-com 整合）であり charset 概念を持たない。レガシー wire の charset byte 化は areka-P0-shiori-host-32 の責務であり、その既定 charset は ANSI コードページ（CP_ACP・ロケール依存。JP では CP932）であって Shift_JIS と決め打たない（要件 8.2）。content（さくらスクリプト/SAORI 引数）は不透明文字列として運び解釈/実行しない（content_opaque・要件 8.1/8.3）。レガシー wire では意味名エイリアスを既定併載し（legacy_coemit_default・要件 5.2/10.1）、Reference0/1/2… は消去/改名しない不変条件（reference_immutable・要件 5.4）。高レート通信余地（D6）を阻害しない封筒設計である旨を宣言する（high_rate_safe・要件 9.3）。"
 
 # ──────────────────────────────────────────────────────────────────────
 # [envelope] — json-rpc 2.0 封筒マッピング（要件 4.x）

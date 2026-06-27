@@ -17,7 +17,7 @@
   - _Requirements: 7.3, 11.6_
 
 - [ ] 2. Core: 契約固定部の符号化（meta / envelope / 予約ヘッダ）
-- [ ] 2.1 契約メタ・バージョニング・不変条件の符号化
+- [x] 2.1 契約メタ・バージョニング・不変条件の符号化
   - `[meta]` に `contract_version`/`prerelease`/`internal_encoding="utf-16"`/`content_opaque=true`/`legacy_coemit_default=true`/`reference_immutable=true`/`high_rate_safe` を符号化する
   - 正準 content は charset を持たず内部=UTF-16 とし、レガシー wire の charset 符号化は host-32 委譲である旨を `description` に明記する
   - Observable: `[meta]` が全必須キーを持ち、バージョニング（D7 流動・lockstep）・content 不透明性・レガシー併載既定・Reference 不変・高レート方針を表現する
