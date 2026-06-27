@@ -25,6 +25,7 @@
   - レガシーテキスト ⇄ 正準モデルの **翻訳実装** → `areka-P0-shiori-host-32`（翻訳が従う対応表＝契約は本仕様が定義する）
   - トランスポート（HSTRING の取り回し）→ `areka-P0-shiori-com`
   - 「1スキーマ→2表示」の投影機構・キルスイッチのデータ構造・json-rpc 封筒の実装表現など HOW（→ 設計フェーズ）
+  - 生成された Rust 型定義（event enum・フィールド struct 等）・codegen 機構 → 下流（設計・実装フェーズ／下流クレート）。本仕様の成果物は doc 台帳＋機械可読データまで（Requirement 11）
 - **Adjacent expectations**:
   - 上流 `areka-P0-shiori-com` は content を不透明 HSTRING として運ぶ。本仕様はその content の中身（正準プロトコル）の契約を定義し、ABI 面は変更しない。
   - 下流 `areka-P0-shiori-host-32` は本仕様の対応表に従ってレガシー wire を放出する。
@@ -138,3 +139,15 @@
 2. The 正準契約 shall 併載される意味名と `ReferenceN` が「両名の結合を表す単一スキーマの2投影」（Requirement 3）であり、両名が同一値を指すことを規定する。
 3. Where 特定の wire 経路で `ReferenceN` を省略したい場合, the 正準契約 shall その省略を契約の変更ではなく **areka 側の任意フィルタオプション** として許容する（フィルタ機構の実装は設計フェーズ）。
 4. The 正準契約 shall 消費側（脳）がいずれの名を読む/読まないかを消費側の自由とし、その選択が契約を変更しないことを規定する。
+
+### Requirement 11: 成果物・出力フォーマット
+
+**Objective:** As a 本仕様の実装者および下流 consumer（host-32・reference・pasta・投影機構）, I want 本仕様が出力する成果物とそのフォーマットを契約として固定したい, so that 下流が何を入力に取れるかが一意に定まり、契約のドリフトを防げる
+
+#### Acceptance Criteria
+
+1. The 仕様 shall 規範的契約を **doc 台帳（Markdown）** として出力する。台帳は (a) イベントカタログ（GET/NOTIFY 分類）、(b) 各イベントのフィールドスキーマ（意味名・型・必須/任意・`ReferenceN` 位置・応答意味・典拠）、(c) 唯一の正本対応表（意味名 ⇔ `ReferenceN`）、(d) json-rpc 封筒マッピング、(e) 予約 SHIORI ヘッダ集合、(f) 沈黙裁定ログ、(g) バージョニング方針、を含む。
+2. The 仕様 shall **機械可読データ（単一ファイル・TOML 形式）** を出力し、イベントカタログ・フィールドスキーマ・意味名 ⇔ `ReferenceN` 対応を符号化する。このファイルを Requirement 3 の「単一スキーマ（正本）」の具体的実体（single source of truth）とする。
+3. The 機械可読データファイル shall 意味名と `ReferenceN` の双方をそこから機械投影できる単一ソースであり（Requirement 3-2）、doc 台帳はその人間可読な規範的レンダリングとして同値性を保つ（同値性を維持する機構は設計フェーズ）。
+4. The 仕様 shall 生成された Rust 型（event enum・フィールド struct 等）を本仕様の成果物に**含めない**。Rust 型は機械可読データファイルから下流（設計・実装フェーズ／下流クレート）で生成されるものとし、本仕様は doc 台帳＋機械可読データまでを成果物とする。
+5. The 仕様 shall Requirement 7-3 のピン留め ukadoc スナップショット（`SOURCES.md`＋出典 URL・取得日・sha256）を成果物の典拠資産として保持する。
