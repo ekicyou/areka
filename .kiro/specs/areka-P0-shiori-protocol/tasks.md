@@ -82,7 +82,7 @@
   - _Boundary: shiori_protocol.toml_
 
 - [ ] 5. Validation: 構造・整合・生成アプローチ検証
-- [ ] 5.1 (P) 構造検証
+- [x] 5.1 (P) 構造検証
   - 必須キー存在・型語彙（小文字 Rust 準拠・大文字混在なし）・全 table/entry/field の `description` 非空・意味名の予約非衝突（ゼロ違反のアサート）を検証する
   - Observable: 構造検証が全 entry/field で pass し、型語彙違反・大文字混在・description 欠落・予約衝突がゼロ
   - _Requirements: 6.1, 11.3, 11.4_
