@@ -25,7 +25,7 @@
   - レガシーテキスト ⇄ 正準モデルの **翻訳実装** → `areka-P0-shiori-host-32`（翻訳が従う対応表＝契約は本仕様が定義する）
   - トランスポート（HSTRING の取り回し）→ `areka-P0-shiori-com`
   - 「1スキーマ→2表示」の投影機構・キルスイッチのデータ構造・json-rpc 封筒の実装表現など HOW（→ 設計フェーズ）
-  - 生成された Rust 型定義（event enum・フィールド struct 等）・codegen 機構 → 下流（設計・実装フェーズ／下流クレート）。本仕様の成果物は doc 台帳＋機械可読データまで（Requirement 11）
+  - 生成された Rust 型定義（event enum・フィールド struct 等）・codegen 機構・doc/Web の生成機構 → 下流（設計・実装フェーズ／下流クレート）。本仕様の成果物は **TOML 正本＋そこから生成した doc/Web レンダリング** まで（Requirement 11）
 - **Adjacent expectations**:
   - 上流 `areka-P0-shiori-com` は content を不透明 HSTRING として運ぶ。本仕様はその content の中身（正準プロトコル）の契約を定義し、ABI 面は変更しない。
   - 下流 `areka-P0-shiori-host-32` は本仕様の対応表に従ってレガシー wire を放出する。
@@ -142,12 +142,13 @@
 
 ### Requirement 11: 成果物・出力フォーマット
 
-**Objective:** As a 本仕様の実装者および下流 consumer（host-32・reference・pasta・投影機構）, I want 本仕様が出力する成果物とそのフォーマットを契約として固定したい, so that 下流が何を入力に取れるかが一意に定まり、契約のドリフトを防げる
+**Objective:** As a 本仕様の実装者および下流 consumer（host-32・reference・pasta・投影機構・doc/Web 生成）, I want 契約の正本を単一の機械可読ファイルに置き、そこから人間可読出力・型・wire 表現を生成できるよう成果物フォーマットを固定したい, so that 下流が何を入力に取れるかが一意に定まり、契約のドリフトを構造的に防げる
 
 #### Acceptance Criteria
 
-1. The 仕様 shall 規範的契約を **doc 台帳（Markdown）** として出力する。台帳は (a) イベントカタログ（GET/NOTIFY 分類）、(b) 各イベントのフィールドスキーマ（意味名・型・必須/任意・`ReferenceN` 位置・応答意味・典拠）、(c) 唯一の正本対応表（意味名 ⇔ `ReferenceN`）、(d) json-rpc 封筒マッピング、(e) 予約 SHIORI ヘッダ集合、(f) 沈黙裁定ログ、(g) バージョニング方針、を含む。
-2. The 仕様 shall **機械可読データ（単一ファイル・TOML 形式）** を出力し、イベントカタログ・フィールドスキーマ・意味名 ⇔ `ReferenceN` 対応を符号化する。このファイルを Requirement 3 の「単一スキーマ（正本）」の具体的実体（single source of truth）とする。
-3. The 機械可読データファイル shall 意味名と `ReferenceN` の双方をそこから機械投影できる単一ソースであり（Requirement 3-2）、doc 台帳はその人間可読な規範的レンダリングとして同値性を保つ（同値性を維持する機構は設計フェーズ）。
-4. The 仕様 shall 生成された Rust 型（event enum・フィールド struct 等）を本仕様の成果物に**含めない**。Rust 型は機械可読データファイルから下流（設計・実装フェーズ／下流クレート）で生成されるものとし、本仕様は doc 台帳＋機械可読データまでを成果物とする。
-5. The 仕様 shall Requirement 7-3 のピン留め ukadoc スナップショット（`SOURCES.md`＋出典 URL・取得日・sha256）を成果物の典拠資産として保持する。
+1. The 仕様 shall 契約の **正本（single source of truth）を機械可読データの単一ファイル（TOML 形式）** とする。正本は (a) イベントカタログ（GET/NOTIFY 分類）、(b) 各イベントのフィールドスキーマ（意味名・型・必須/任意・`ReferenceN` 位置・応答意味・典拠）、(c) 意味名 ⇔ `ReferenceN` 対応、(d) json-rpc 封筒マッピング、(e) 予約 SHIORI ヘッダ集合、(f) 沈黙裁定ログ、(g) バージョニング方針、を符号化し、Requirement 3 の「単一スキーマ（正本）」の実体とする。
+2. The 仕様 shall 人間可読な **doc 台帳／Web ページ** を、TOML 正本から **生成される派生レンダリング** として出力する（生成機構は設計・後続フェーズ）。doc/Web は正本ではなく、TOML 正本との同値が常に保たれる出力物とする。
+3. The TOML 正本 shall 各フィールドの型を **Rust 準拠の型名** で表記する（例: `i32`/`u32`/`i64`/`bool`/`String` 等。文字列値は所有型 `String`）。
+4. The TOML 正本 shall 各イベントおよび各フィールドに人間可読な説明（`description` 等のコメントフィールド）を **データとして** 保持する。これは TOML の `#` コメントがパース時に失われ生成に使えないためであり、生成される doc/Web ページがその説明文を含められるようにする。
+5. The 仕様 shall 生成された Rust 型（event enum・フィールド struct 等）を本仕様の成果物に **含めない**。Rust 型は TOML 正本から下流（設計・実装フェーズ／下流クレート）で生成されるものとし、本仕様の成果物は TOML 正本＋そこから生成した doc/Web レンダリングまでとする。
+6. The 仕様 shall Requirement 7-3 のピン留め ukadoc スナップショット（`SOURCES.md`＋出典 URL・取得日・sha256）を成果物の典拠資産として保持する。
