@@ -5,7 +5,7 @@
 > Rust 型・codegen・パーサ・doc/Web 生成器の実装は下流（スコープ外）。
 
 - [ ] 1. Foundation: 資産ルートと典拠ベースライン
-- [ ] 1.1 doc/shiori 資産ルートの確立（骨格 TOML ＋ 正本宣言 README）
+- [x] 1.1 doc/shiori 資産ルートの確立（骨格 TOML ＋ 正本宣言 README）
   - `doc/shiori/shiori_protocol.toml` を新設し、`[meta]`/`[envelope]`/`[reserved_headers]`/`[[entry]]`（＋`[[entry.field]]`）/`[[silence_ruling]]` の table 階層と各 table の必須キーを骨格として確立する
   - 型語彙を小文字 Rust 準拠（`i32`/`u32`/`i64`/`bool`/`str`、大文字混在禁止）に固定し、各 table・entry・field に `description` をデータフィールドとして必須化する
   - `doc/shiori/README.md` に「TOML=単一正本(SSOT)・doc/Web=TOML からの派生・Rust 型/codegen は下流生成・契約を本ファイル以外へ分散しない」を明記する

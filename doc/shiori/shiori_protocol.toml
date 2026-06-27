@@ -1,0 +1,98 @@
+# shiori_protocol.toml — SHIORI 正準 content プロトコル契約の単一正本（SSOT）
+#
+# 本ファイルは areka-P0-shiori-protocol 仕様の唯一の正本（single source of truth）。
+# カタログ／スキーマ／意味名⇔ReferenceN 対応表／json-rpc 封筒／予約ヘッダ集合／
+# 沈黙裁定ログ／バージョニング方針を 1 枚に符号化する。
+# doc/Web は本ファイルから生成される派生レンダリングであり、本ファイルが唯一の権威。
+#
+# 注: TOML の `#` コメントはパース時に失われ doc/Web 生成に使えないため、
+#     人間可読説明は全テーブル・全エントリ・全フィールドの `description` キー（データ）として保持する。
+#
+# 段階: task 1.1（SKELETON）。固定テーブル（meta/envelope/reserved_headers）は
+#       design.md §Data Models に従い代表値で符号化（task 2.x で確認・精緻化）。
+#       [[entry]]／[[silence_ruling]] はスキーマ全体を行使する実証用 1 件ずつ。
+#       ~261 event / ~158 resource の本格抽出は task 3.x。
+
+# ──────────────────────────────────────────────────────────────────────
+# [meta] — 契約メタ・既定・バージョニング（要件 9.x / 5.x / 8.x）
+# ──────────────────────────────────────────────────────────────────────
+[meta]
+contract_version = "0.x"
+prerelease = true
+internal_encoding = "utf-16"
+content_opaque = true
+legacy_coemit_default = true
+reference_immutable = true
+high_rate_safe = true
+description = "SHIORI 正準 content プロトコル契約のメタ情報。プレリリース段階（prerelease=true）の流動契約であり後方互換保証を持たず、契約変更時は in-tree 全実装者を lockstep 更新する（D7 整合）。正準 content の内部表現は常に UTF-16（HSTRING・shiori-com 整合）であり charset 概念を持たない（レガシー wire の charset byte 化は areka-P0-shiori-host-32 の責務）。content は不透明文字列として運び解釈しない（content_opaque）。レガシー wire では意味名エイリアスを既定併載し（legacy_coemit_default）、Reference0/1/2… は消去/改名しない（reference_immutable）。高レート通信余地（D6）を阻害しない封筒設計である（high_rate_safe）。"
+
+# ──────────────────────────────────────────────────────────────────────
+# [envelope] — json-rpc 2.0 封筒マッピング（要件 4.x）
+# 既存 shiori-com ABI 意味論（Request/Complete/Raise・CorrelationToken・SHIORI_S_PENDING）への被せ。
+# ──────────────────────────────────────────────────────────────────────
+[envelope]
+protocol = "jsonrpc-2.0"
+method_source = "event_id"
+params_style = "named"
+correlation = "token_eq_id"
+immediate_result = "result"
+error_failure = "error"
+deferred = "id_then_result"
+raise_notification = "notification_no_id"
+batch = true
+description = "正準 content の封筒は json-rpc 2.0。method は ukadoc イベント ID（method_source=event_id）、params は意味名フィールドの named 形式（params_style=named）。相関トークンと json-rpc id を一意対応させる（correlation=token_eq_id）。即時成功は同一 id の result（immediate_result）、失敗は同一 id の error（error_failure）へ写す。遅延（SHIORI_S_PENDING）は先行して id を確定し後続の Complete で同一 id の result を配送する（deferred=id_then_result）。Raise（能動通知）は id を持たない notification へ写す（raise_notification=notification_no_id）。バッチ要求を許容し高レート通信余地を確保する（batch=true）。本仕様は写像規約のみ定義し、配送機構は ABI/下流の責務。"
+
+# ──────────────────────────────────────────────────────────────────────
+# [reserved_headers] — 予約 SHIORI ヘッダ集合（要件 6.x）
+# 典拠: ukadoc/spec_shiori3.html（SHIORI/3.0 規約本体）。
+# 下記の値は seed 例（task 2.3 で全集合を spec_shiori3.html から確定）。
+# ──────────────────────────────────────────────────────────────────────
+[reserved_headers]
+request = ["ID", "Sender", "SecurityLevel", "Charset", "Reference*", "BaseID", "Status"]
+response = ["Value", "Marker", "Status", "Charset"]
+collision_policy = "rename_to_noncolliding"
+description = "予約 SHIORI ヘッダ集合。意味名（entry.field.name）はこれらと衝突してはならない（要件 6.1）。衝突時は collision_policy=rename_to_noncolliding に従い非衝突名へ是正する（要件 6.2）。Reference* はレガシー ReferenceN 系列（可変長含む）の予約を表す。典拠は ukadoc/spec_shiori3.html。本集合の確定責任は本仕様が所有し host-32 へ委譲しない（契約分散の回避）。現値は seed 例であり全集合の転記は本仕様の後続実装作業（task 2.3）。"
+
+# ──────────────────────────────────────────────────────────────────────
+# [[entry]] — 正準イベント／リソースカタログ（要件 1.x / 2.x / 10.x）
+# Event と Resource は同形のため単一 entry 型へ一般化。
+# 以下はスキーマ全体を行使する実証用 1 件（本格カタログ抽出は task 3.x）。
+# ──────────────────────────────────────────────────────────────────────
+[[entry]]
+id = "OnBoot"
+kind = "event"
+category = "boot"
+dispatch = "get"
+response = "sakura_script"
+provenance = "ukadoc"
+silence_ref = ["sr_dispatch_onboot"]
+description = "起動完了通知イベント（ベースウェア起動シーケンスの末尾）。GET 系（dispatch=get）として応答にさくらスクリプト（response=sakura_script）を期待する。本エントリは task 1.1 スケルトンの実証用代表エントリであり、ネストした [[entry.field]] とともにスキーマ全体（意味名⇔ReferenceN の 2 投影・型語彙・沈黙裁定参照）を行使する。典拠は ukadoc。GET/NOTIFY 分類に関与する沈黙裁定 sr_dispatch_onboot を参照する。"
+
+[[entry.field]]
+name = "shell_name"
+reference = 0
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "起動に使用されたシェル名。意味名（canonical）shell_name はレガシー wire の Reference0（alias）と同一値を指す 2 投影であり（field 行 1 枚由来・要件 3.2）、json-rpc の named params へは canonical、レガシー ReferenceN wire へは alias として投影される。任意フィールド（required=false）。典拠は ukadoc。"
+
+[[entry.field]]
+name = "ghost_history_words"
+reference = 1
+type = "i32"
+required = false
+provenance = "ukadoc"
+silence_ref = ["sr_dispatch_onboot"]
+description = "起動時に渡される付随情報の一例（累積トーク数など整数値）。型は小文字 Rust 準拠の i32（要件 11.3）。Reference1（alias）と意味名 ghost_history_words（canonical）の 2 投影。フィールド単位の沈黙裁定 sr_dispatch_onboot を参照し、意味割り当ての裁量根拠を追跡可能にする。任意フィールド。典拠は ukadoc。"
+
+# ──────────────────────────────────────────────────────────────────────
+# [[silence_ruling]] — 沈黙裁定ログ（要件 7.x）
+# ukadoc が沈黙する裁定（GET/NOTIFY 分類・追加ヘッダ可否・意味割り当て等）の追跡。
+# ──────────────────────────────────────────────────────────────────────
+[[silence_ruling]]
+id = "sr_dispatch_onboot"
+topic = "dispatch_class"
+basis = "ukadoc_clause"
+ruling = "OnBoot は応答にさくらスクリプトを返すことが ukadoc 記述から読み取れるため GET 系（dispatch=get）と裁定する。"
+ukadoc_anchor = "list_shiori_event.html#OnBoot"
+description = "OnBoot の GET/NOTIFY 分類に関する沈黙裁定の実証エントリ。topic=dispatch_class は分類対象、basis=ukadoc_clause は ukadoc 条項に典拠ありの区分を示す。ukadoc_anchor は再現性のためのピン留めスナップショット内アンカー。entry/field の silence_ref から本 id（sr_dispatch_onboot）が参照される。"
