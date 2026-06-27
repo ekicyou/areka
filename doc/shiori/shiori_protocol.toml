@@ -58,15 +58,35 @@ description = "予約 SHIORI ヘッダ集合。意味名（entry.field.name）�
 # Event と Resource は同形のため単一 entry 型へ一般化。
 # 以下はスキーマ全体を行使する実証用 1 件（本格カタログ抽出は task 3.x）。
 # ──────────────────────────────────────────────────────────────────────
+# 以下 task 3.1: ライフサイクル/時刻/通信系イベント抽出（97 件）。
+# カテゴリ slug: lifecycle/time/clock/network_update/mailcheck/rss/calendar/sstp/comm_other/send_failure/network_state。
+# 意味名（name）は ukadoc の各 ReferenceN 説明から導出した snake_case canonical 名であり、
+# reference（alias）と同一 field 行から 2 投影される（要件 3.2/3.3）。
 [[entry]]
-id = "OnBoot"
+id = "OnFirstBoot"
 kind = "event"
-category = "boot"
+category = "lifecycle"
 dispatch = "get"
 response = "sakura_script"
 provenance = "ukadoc"
-silence_ref = ["sr_dispatch_onboot"]
-description = "起動完了通知イベント（ベースウェア起動シーケンスの末尾）。GET 系（dispatch=get）として応答にさくらスクリプト（response=sakura_script）を期待する。本エントリは task 1.1 スケルトンの実証用代表エントリであり、ネストした [[entry.field]] とともにスキーマ全体（意味名⇔ReferenceN の 2 投影・型語彙・沈黙裁定参照）を行使する。典拠は ukadoc。GET/NOTIFY 分類に関与する沈黙裁定 sr_dispatch_onboot を参照する。"
+description = "初回起動した際に発生。SSP ではこのイベントに 204（無応答）の場合、続けて OnBoot が発生する。"
+
+[[entry.field]]
+name = "vanish_count"
+reference = 0
+type = "i32"
+required = false
+provenance = "ukadoc"
+description = "vanish された回数。"
+
+[[entry]]
+id = "OnBoot"
+kind = "event"
+category = "lifecycle"
+dispatch = "get"
+response = "sakura_script"
+provenance = "ukadoc"
+description = "起動した際に発生。SSP では OnGhostChanged/OnGhostCalled/OnFirstBoot/OnVanished に 204 の場合に続けて発生する。"
 
 [[entry.field]]
 name = "shell_name"
@@ -74,16 +94,3209 @@ reference = 0
 type = "str"
 required = false
 provenance = "ukadoc"
-description = "起動に使用されたシェル名。意味名（canonical）shell_name はレガシー wire の Reference0（alias）と同一値を指す 2 投影であり（field 行 1 枚由来・要件 3.2）、json-rpc の named params へは canonical、レガシー ReferenceN wire へは alias として投影される。任意フィールド（required=false）。典拠は ukadoc。"
+description = "起動時のシェル名。"
 
 [[entry.field]]
-name = "ghost_history_words"
+name = "last_crash_halt"
+reference = 6
+type = "str"
+required = false
+provenance = "ssp_secondary"
+description = "MATERIA/SSP のみ。前回の処理中に落ちた時に halt。"
+
+[[entry.field]]
+name = "last_crash_ghost_name"
+reference = 7
+type = "str"
+required = false
+provenance = "ssp_secondary"
+description = "MATERIA/SSP のみ。前回の処理中に落ちたゴースト名。"
+
+[[entry]]
+id = "OnClose"
+kind = "event"
+category = "lifecycle"
+dispatch = "get"
+response = "sakura_script"
+provenance = "ukadoc"
+description = "終了が指示された際に発生。SSP では OnGhostChanging/OnCloseAll に 204 の場合に続けて発生する。"
+
+[[entry.field]]
+name = "close_reason"
+reference = 0
+type = "str"
+required = false
+provenance = "ssp_secondary"
+description = "SSP のみ。終了理由。ユーザー終了で user、シャットダウンで system。"
+
+[[entry.field]]
+name = "close_menu_scope"
+reference = 1
+type = "i32"
+required = false
+provenance = "ssp_secondary"
+description = "SSP のみ。終了操作したメニューが属するキャラのスコープ番号（popupmenu.type 影響）。"
+
+[[entry.field]]
+name = "close_window_scope"
+reference = 2
+type = "i32"
+required = false
+provenance = "ssp_secondary"
+description = "SSP のみ。終了操作したウインドウのキャラのスコープ番号（popupmenu.type 非影響）。"
+
+[[entry]]
+id = "OnCloseAll"
+kind = "event"
+category = "lifecycle"
+dispatch = "get"
+response = "sakura_script"
+provenance = "ukadoc"
+description = "ベースウェア自体が終了する際に発生（すべて終了・唯一起動中ゴーストの終了・OS シャットダウン時）。"
+
+[[entry.field]]
+name = "close_reason"
+reference = 0
+type = "str"
+required = false
+provenance = "ssp_secondary"
+description = "SSP のみ。終了理由。ユーザー終了で user、シャットダウンで system。"
+
+[[entry.field]]
+name = "close_menu_scope"
+reference = 1
+type = "i32"
+required = false
+provenance = "ssp_secondary"
+description = "SSP のみ。終了操作したメニューが属するキャラのスコープ番号（popupmenu.type 影響）。"
+
+[[entry.field]]
+name = "close_window_scope"
+reference = 2
+type = "i32"
+required = false
+provenance = "ssp_secondary"
+description = "SSP のみ。終了操作したウインドウのキャラのスコープ番号（popupmenu.type 非影響）。"
+
+[[entry]]
+id = "OnGhostChanged"
+kind = "event"
+category = "lifecycle"
+dispatch = "get"
+response = "sakura_script"
+provenance = "ukadoc"
+description = "他のゴーストから自ゴーストに切り替えられた際に発生。204 の場合は続けて OnBoot が発生する。"
+
+[[entry.field]]
+name = "prev_ghost_internal_name"
+reference = 0
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "直前のゴーストの本体側の名前。"
+
+[[entry.field]]
+name = "prev_ghost_change_script"
+reference = 1
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "直前のゴーストの切り替え時のスクリプト。"
+
+[[entry.field]]
+name = "prev_ghost_name"
+reference = 2
+type = "str"
+required = false
+provenance = "ssp_secondary"
+description = "直前のゴーストの名前。SSP のみ。"
+
+[[entry.field]]
+name = "prev_ghost_path"
+reference = 3
+type = "str"
+required = false
+provenance = "ssp_secondary"
+description = "直前のゴーストのパス（ファイルの場所）。SSP のみ。"
+
+[[entry.field]]
+name = "new_shell_name"
+reference = 7
+type = "str"
+required = false
+provenance = "ssp_secondary"
+description = "切り替わったゴーストのシェル名。SSP のみ。"
+
+[[entry]]
+id = "OnGhostChanging"
+kind = "event"
+category = "lifecycle"
+dispatch = "get"
+response = "sakura_script"
+provenance = "ukadoc"
+description = "他のゴーストへの切り替え指示があった際に発生。204 の場合は続けて OnClose が発生する。"
+
+[[entry.field]]
+name = "new_ghost_internal_name"
+reference = 0
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "切り替わるゴーストの本体側の名前。"
+
+[[entry.field]]
+name = "change_trigger"
+reference = 1
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "手動で manual、システムによる切り替えで automatic。"
+
+[[entry.field]]
+name = "new_ghost_name"
+reference = 2
+type = "str"
+required = false
+provenance = "ssp_secondary"
+description = "切り替わるゴーストの名前。SSP のみ。"
+
+[[entry.field]]
+name = "new_ghost_path"
+reference = 3
+type = "str"
+required = false
+provenance = "ssp_secondary"
+description = "切り替わるゴーストのパス。SSP のみ。"
+
+[[entry]]
+id = "OnGhostCalled"
+kind = "event"
+category = "lifecycle"
+dispatch = "get"
+response = "sakura_script"
+provenance = "ukadoc"
+description = "他のゴーストから呼び出された際に発生。204 の場合は続けて OnBoot が発生する。"
+
+[[entry.field]]
+name = "caller_ghost_internal_name"
+reference = 0
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "呼び出したゴーストの本体側の名前。"
+
+[[entry.field]]
+name = "caller_call_script"
+reference = 1
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "呼び出したゴーストの呼び出し時のスクリプト。"
+
+[[entry.field]]
+name = "caller_ghost_name"
+reference = 2
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "呼び出したゴーストの名前。"
+
+[[entry.field]]
+name = "caller_ghost_path"
+reference = 3
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "呼び出したゴーストのパス。"
+
+[[entry.field]]
+name = "called_shell_name"
+reference = 7
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "呼び出されたゴーストのシェル名。"
+
+[[entry]]
+id = "OnGhostCalling"
+kind = "event"
+category = "lifecycle"
+dispatch = "get"
+response = "sakura_script"
+provenance = "ukadoc"
+description = "他のゴーストの呼び出しが指示された際に発生。"
+
+[[entry.field]]
+name = "callee_ghost_internal_name"
+reference = 0
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "呼び出すゴーストの本体側の名前。"
+
+[[entry.field]]
+name = "call_trigger"
+reference = 1
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "手動で manual、システムによる切り替えで automatic。"
+
+[[entry.field]]
+name = "callee_ghost_name"
+reference = 2
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "呼び出すゴーストの名前。"
+
+[[entry.field]]
+name = "callee_ghost_path"
+reference = 3
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "呼び出すゴーストのパス。"
+
+[[entry]]
+id = "OnGhostCallComplete"
+kind = "event"
+category = "lifecycle"
+dispatch = "get"
+response = "sakura_script"
+provenance = "ukadoc"
+description = "他のゴーストを呼び出し、そのゴーストが起動スクリプトを完了後に発生。"
+
+[[entry.field]]
+name = "caller_ghost_internal_name"
+reference = 0
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "呼び出したゴーストの本体側の名前。"
+
+[[entry.field]]
+name = "caller_boot_script"
+reference = 1
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "呼び出したゴーストの起動時のスクリプト。"
+
+[[entry.field]]
+name = "caller_ghost_name"
+reference = 2
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "呼び出したゴーストの名前。"
+
+[[entry.field]]
+name = "called_shell_name"
+reference = 7
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "呼び出したゴーストのシェル名。"
+
+[[entry]]
+id = "OnOtherGhostBooted"
+kind = "event"
+category = "lifecycle"
+dispatch = "get"
+response = "sakura_script"
+provenance = "ukadoc"
+description = "他のゴーストに呼び出された別ゴーストが起動した際に、無関係なゴーストに発生。"
+
+[[entry.field]]
+name = "booted_ghost_internal_name"
+reference = 0
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "起動したゴーストの本体側名。"
+
+[[entry.field]]
+name = "booted_ghost_boot_script"
+reference = 1
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "起動したゴーストの起動時のスクリプト。"
+
+[[entry.field]]
+name = "booted_ghost_name"
+reference = 2
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "起動したゴースト名。"
+
+[[entry.field]]
+name = "booted_shell_name"
+reference = 7
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "起動したゴーストのシェル名。"
+
+[[entry]]
+id = "OnOtherGhostChanged"
+kind = "event"
+category = "lifecycle"
+dispatch = "get"
+response = "sakura_script"
+provenance = "ukadoc"
+description = "他のゴースト間で切り替わった際に発生。"
+
+[[entry.field]]
+name = "prev_ghost_internal_name"
+reference = 0
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "直前のゴーストの本体側の名前。"
+
+[[entry.field]]
+name = "new_ghost_internal_name"
+reference = 1
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "切り替わったゴーストの本体側の名前。"
+
+[[entry.field]]
+name = "prev_ghost_change_script"
+reference = 2
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "直前のゴーストの切り替え時のスクリプト。"
+
+[[entry.field]]
+name = "new_ghost_change_script"
+reference = 3
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "切り替わったゴーストの切り替わり時のスクリプト。"
+
+[[entry.field]]
+name = "prev_ghost_name"
+reference = 4
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "直前のゴースト名。"
+
+[[entry.field]]
+name = "new_ghost_name"
+reference = 5
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "切り替わったゴースト名。"
+
+[[entry.field]]
+name = "prev_shell_name"
+reference = 14
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "直前のゴーストのシェル名。"
+
+[[entry.field]]
+name = "new_shell_name"
+reference = 15
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "切り替わったゴーストのシェル名。"
+
+[[entry]]
+id = "OnOtherGhostClosed"
+kind = "event"
+category = "lifecycle"
+dispatch = "get"
+response = "sakura_script"
+provenance = "ukadoc"
+description = "複数起動中、他のゴーストが終了された際に発生。"
+
+[[entry.field]]
+name = "closed_ghost_internal_name"
+reference = 0
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "終了したゴーストの本体側の名前。"
+
+[[entry.field]]
+name = "closed_ghost_last_script"
+reference = 1
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "終了したゴーストの最後のスクリプト。"
+
+[[entry.field]]
+name = "closed_ghost_name"
+reference = 2
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "終了したゴースト名。"
+
+[[entry.field]]
+name = "closed_shell_name"
+reference = 7
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "終了したゴーストのシェル名。"
+
+[[entry]]
+id = "OnShellChanged"
+kind = "event"
+category = "lifecycle"
+dispatch = "get"
+response = "sakura_script"
+provenance = "ukadoc"
+description = "他のシェルから切り替わった際に発生。"
+
+[[entry.field]]
+name = "current_shell_name"
+reference = 0
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "現在のシェル名。"
+
+[[entry.field]]
+name = "current_ghost_name"
+reference = 1
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "CROW では Reference0 と同じ、SSP では現在のゴースト名。"
+
+[[entry.field]]
+name = "current_shell_path"
+reference = 2
+type = "str"
+required = false
+provenance = "ssp_secondary"
+description = "SSP のみ。現在のシェルのパス。"
+
+[[entry]]
+id = "OnShellChanging"
+kind = "event"
+category = "lifecycle"
+dispatch = "get"
+response = "sakura_script"
+provenance = "ukadoc"
+description = "他のシェルへ切り替えた際に発生。"
+
+[[entry.field]]
+name = "new_shell_name"
+reference = 0
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "切り替わるシェル名。"
+
+[[entry.field]]
+name = "prev_shell_name"
+reference = 1
+type = "str"
+required = false
+provenance = "ssp_secondary"
+description = "SSP のみ。切り替わる前（現在）のシェル名。"
+
+[[entry.field]]
+name = "new_shell_path"
+reference = 2
+type = "str"
+required = false
+provenance = "ssp_secondary"
+description = "SSP のみ。切り替わるシェルのパス。"
+
+[[entry]]
+id = "OnDressupChanged"
+kind = "event"
+category = "lifecycle"
+dispatch = "get"
+response = "sakura_script"
+provenance = "ukadoc"
+description = "着せ替えが切替えられた際に発生。複数回通知される場合は最後のみ [GET] でそれ以外は [NOTIFY]。"
+
+[[entry.field]]
+name = "character_id"
+reference = 0
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "着せ替え対象のキャラクター ID。"
+
+[[entry.field]]
+name = "part_name"
+reference = 1
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "パーツの名称。"
+
+[[entry.field]]
+name = "part_enabled"
+reference = 2
+type = "bool"
+required = false
+provenance = "ukadoc"
+description = "有効になった時に 1、無効になった時に 0。"
+
+[[entry.field]]
+name = "part_category"
+reference = 3
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "パーツのカテゴリ名。"
+
+[[entry.field]]
+name = "change_source"
+reference = 4
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "スクリプト実行で script、メニュー実行で user。[2.5.90～]"
+
+[[entry]]
+id = "OnBalloonChange"
+kind = "event"
+category = "lifecycle"
+dispatch = "get"
+response = "sakura_script"
+provenance = "ukadoc"
+description = "他のバルーンから切り替わった際に発生。"
+
+[[entry.field]]
+name = "new_balloon_name"
+reference = 0
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "切り替わったバルーン名。"
+
+[[entry.field]]
+name = "new_balloon_path"
+reference = 1
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "切り替わったバルーンのパス。"
+
+[[entry]]
+id = "OnWindowStateRestore"
+kind = "event"
+category = "lifecycle"
+dispatch = "get"
+response = "sakura_script"
+provenance = "ukadoc"
+description = "最小化が解除された際に発生。"
+
+[[entry.field]]
+name = "restore_reason"
+reference = 0
+type = "str"
+required = false
+provenance = "ssp_secondary"
+description = "SSP のみ。最小化された理由（system/script/sakuraapi/user）。"
+
+[[entry]]
+id = "OnWindowStateMinimize"
+kind = "event"
+category = "lifecycle"
+dispatch = "get"
+response = "sakura_script"
+provenance = "ukadoc"
+description = "最小化が指示された際に発生。SSP のみ設定で喋らせることが可能。"
+
+[[entry.field]]
+name = "minimize_reason"
+reference = 0
+type = "str"
+required = false
+provenance = "ssp_secondary"
+description = "SSP のみ。最小化された理由（system/script/sakuraapi/user）。"
+
+[[entry]]
+id = "OnFullScreenAppMinimize"
+kind = "event"
+category = "lifecycle"
+dispatch = "get"
+response = "sakura_script"
+provenance = "ukadoc"
+description = "全画面表示アプリ起動に対する最小化の際に発生。OnWindowStateMinimize を上書きする。"
+
+[[entry.field]]
+name = "minimize_reason"
+reference = 0
+type = "str"
+required = false
+provenance = "ssp_secondary"
+description = "SSP のみ。最小化された理由。常に fullscreen。"
+
+[[entry]]
+id = "OnFullScreenAppRestore"
+kind = "event"
+category = "lifecycle"
+dispatch = "get"
+response = "sakura_script"
+provenance = "ukadoc"
+description = "全画面表示アプリ終了に対する最小化復帰の際に発生。OnWindowStateRestore を上書きする。"
+
+[[entry.field]]
+name = "restore_reason"
+reference = 0
+type = "str"
+required = false
+provenance = "ssp_secondary"
+description = "SSP のみ。最小化された理由。常に fullscreen。"
+
+[[entry]]
+id = "OnVirtualDesktopChanged"
+kind = "event"
+category = "lifecycle"
+dispatch = "get"
+response = "sakura_script"
+provenance = "ukadoc"
+description = "仮想デスクトップが切り替わった際に発生。現状 Windows 10 上のみ有効（実験的機能）。"
+
+[[entry.field]]
+name = "desktop_visibility"
+reference = 0
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "current/hidden/minimize のいずれか（仮想デスクトップ表示状態）。"
+
+[[entry.field]]
+name = "virtual_desktop_id"
+reference = 1
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "現在の仮想デスクトップ ID。"
+
+[[entry]]
+id = "OnCacheSuspend"
+kind = "event"
+category = "lifecycle"
+dispatch = "notify"
+response = "none"
+provenance = "ukadoc"
+description = "ゴーストキャッシュに入った際に発生。引数を持たない状態遷移通知。"
+
+[[entry]]
+id = "OnCacheRestore"
+kind = "event"
+category = "lifecycle"
+dispatch = "notify"
+response = "none"
+provenance = "ukadoc"
+description = "ゴーストキャッシュから出た際に発生。引数を持たない状態遷移通知。"
+
+[[entry]]
+id = "OnInitialize"
+kind = "event"
+category = "lifecycle"
+dispatch = "notify"
+response = "none"
+provenance = "ukadoc"
+description = "起動した際に発生。[NOTIFY] 通知のみで応答を期待しない。"
+
+[[entry.field]]
+name = "reload_flag"
+reference = 0
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "リロード時に reload、それ以外は空文字列または Reference0 自体が来ない。"
+
+[[entry]]
+id = "OnDestroy"
+kind = "event"
+category = "lifecycle"
+dispatch = "notify"
+response = "none"
+provenance = "ukadoc"
+description = "終了が指示された際に発生。[NOTIFY] 通知のみで応答を期待しない。"
+
+[[entry.field]]
+name = "reload_flag"
+reference = 0
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "リロード時に reload、それ以外は空文字列または Reference0 自体が来ない。"
+
+[[entry]]
+id = "OnSysResume"
+kind = "event"
+category = "lifecycle"
+dispatch = "get"
+response = "sakura_script"
+provenance = "ukadoc"
+description = "サスペンド（スリープ・休止状態）解除の際に発生。"
+
+[[entry.field]]
+name = "resume_reason"
+reference = 0
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "解除理由。通常 normal、スケジュール自動解除で auto、バッテリー切れ非常停止で critical（Vista 以降廃止）。"
+
+[[entry]]
+id = "OnSysSuspend"
+kind = "event"
+category = "lifecycle"
+dispatch = "notify"
+response = "none"
+provenance = "ukadoc"
+description = "サスペンド（スリープ・休止状態）開始の際に発生。[NOTIFY] 通知のみ。"
+
+[[entry]]
+id = "OnBasewareUpdating"
+kind = "event"
+category = "lifecycle"
+dispatch = "get"
+response = "sakura_script"
+provenance = "ukadoc"
+description = "本体更新時、ダウンロード後ファイル更新を開始する前に発生。無反応時は OnCloseAll/OnClose の順に発生。"
+
+[[entry.field]]
+name = "version_before"
+reference = 0
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "更新前のバージョン番号（例 2.3.58）。"
+
+[[entry.field]]
+name = "file_version_before"
+reference = 1
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "更新前のエクスプローラ表示バージョン番号（例 2.3.58.3000）。"
+
+[[entry]]
+id = "OnBasewareUpdated"
+kind = "event"
+category = "lifecycle"
+dispatch = "get"
+response = "sakura_script"
+provenance = "ukadoc"
+description = "本体更新終了後、ゴーストが起動する時に発生。無反応時は OnBoot が発生。"
+
+[[entry.field]]
+name = "version_after"
+reference = 0
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "更新後のバージョン番号（例 2.3.59）。"
+
+[[entry.field]]
+name = "file_version_after"
+reference = 1
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "更新後のエクスプローラ表示バージョン番号（例 2.3.59.3000）。"
+
+[[entry]]
+id = "OnSecondChange"
+kind = "event"
+category = "time"
+dispatch = "get"
+response = "sakura_script"
+provenance = "ukadoc"
+description = "1 秒ごとに発生。トーク再生不能時は Reference3=0 で NOTIFY 通知され、返答は無視される。"
+
+[[entry.field]]
+name = "os_uptime_hours"
+reference = 0
+type = "i32"
+required = false
+provenance = "ukadoc"
+description = "OS の連続起動時間（hour）。"
+
+[[entry.field]]
+name = "offscreen_flag"
+reference = 1
+type = "bool"
+required = false
+provenance = "ukadoc"
+description = "見切れ時に 1、それ以外は 0。"
+
+[[entry.field]]
+name = "overlap_flag"
+reference = 2
+type = "bool"
+required = false
+provenance = "ukadoc"
+description = "重なり時に 1、それ以外は 0。"
+
+[[entry.field]]
+name = "talkable_flag"
+reference = 3
+type = "bool"
+required = false
+provenance = "ukadoc"
+description = "トーク再生可能なときに 1、それ以外は 0。"
+
+[[entry.field]]
+name = "idle_seconds"
+reference = 4
+type = "i32"
+required = false
+provenance = "ssp_secondary"
+description = "SSP のみ。OS レベルで何も操作せず放置されている時間（秒）。"
+
+[[entry]]
+id = "OnMinuteChange"
+kind = "event"
+category = "time"
+dispatch = "get"
+response = "sakura_script"
+provenance = "ukadoc"
+description = "1 分ごとに発生。トーク再生不能時は Reference3=0 で NOTIFY 通知され、返答は無視される。"
+
+[[entry.field]]
+name = "os_uptime_hours"
+reference = 0
+type = "i32"
+required = false
+provenance = "ukadoc"
+description = "OS の連続起動時間（hour）。"
+
+[[entry.field]]
+name = "offscreen_flag"
+reference = 1
+type = "bool"
+required = false
+provenance = "ukadoc"
+description = "見切れ時に 1、それ以外は 0。"
+
+[[entry.field]]
+name = "overlap_flag"
+reference = 2
+type = "bool"
+required = false
+provenance = "ukadoc"
+description = "重なり時に 1、それ以外は 0。"
+
+[[entry.field]]
+name = "talkable_flag"
+reference = 3
+type = "bool"
+required = false
+provenance = "ukadoc"
+description = "トーク再生可能なときに 1、それ以外は 0。"
+
+[[entry.field]]
+name = "idle_seconds"
+reference = 4
+type = "i32"
+required = false
+provenance = "ssp_secondary"
+description = "SSP のみ。OS レベルで何も操作せず放置されている時間（秒）。"
+
+[[entry]]
+id = "OnHourTimeSignal"
+kind = "event"
+category = "time"
+dispatch = "get"
+response = "sakura_script"
+provenance = "ukadoc"
+description = "時報イベント。毎正時付近に発生。トーク再生不能時は再生可能になるまで待つ。"
+
+[[entry.field]]
+name = "os_uptime_hours"
+reference = 0
+type = "i32"
+required = false
+provenance = "ukadoc"
+description = "OS の連続起動時間（hour）。"
+
+[[entry.field]]
+name = "offscreen_flag"
+reference = 1
+type = "bool"
+required = false
+provenance = "ukadoc"
+description = "見切れ時に 1、それ以外は 0。"
+
+[[entry.field]]
+name = "overlap_flag"
+reference = 2
+type = "bool"
+required = false
+provenance = "ukadoc"
+description = "重なり時に 1、それ以外は 0。"
+
+[[entry.field]]
+name = "talkable_flag"
+reference = 3
+type = "bool"
+required = false
+provenance = "ukadoc"
+description = "常に 1（トーク再生可能になるまで待つため）。"
+
+[[entry.field]]
+name = "idle_seconds"
+reference = 4
+type = "i32"
+required = false
+provenance = "ssp_secondary"
+description = "SSP のみ。OS レベルで何も操作せず放置されている時間（秒）。"
+
+[[entry]]
+id = "OnSNTPBegin"
+kind = "event"
+category = "clock"
+dispatch = "get"
+response = "sakura_script"
+provenance = "ukadoc"
+description = "時計合わせ開始が指示された際に発生。"
+
+[[entry.field]]
+name = "server_name"
+reference = 0
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "接続先サーバ名。"
+
+[[entry]]
+id = "OnSNTPCompareEx"
+kind = "event"
+category = "clock"
+dispatch = "get"
+response = "sakura_script"
+provenance = "ukadoc"
+description = "サーバに接続が確立された際に発生。修正実行には \\6 タグを含むスクリプトを返す。"
+
+[[entry.field]]
+name = "server_name"
+reference = 0
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "接続先サーバ名。"
+
+[[entry.field]]
+name = "server_time"
+reference = 1
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "カンマ区切りのサーバ側現時刻（年,月,日,時,分,秒,ミリ秒）。"
+
+[[entry.field]]
+name = "local_time"
+reference = 2
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "カンマ区切りのローカル側現時刻（年,月,日,時,分,秒,ミリ秒）。"
+
+[[entry.field]]
+name = "time_diff_seconds"
+reference = 3
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "サーバとローカルの時刻差（秒・小数あり。正でローカル遅れ、負で進み）。"
+
+[[entry.field]]
+name = "time_diff_millis"
+reference = 4
+type = "i64"
+required = false
+provenance = "ukadoc"
+description = "サーバとローカルの時刻差（ミリ秒・整数）。"
+
+[[entry]]
+id = "OnSNTPCompare"
+kind = "event"
+category = "clock"
+dispatch = "get"
+response = "sakura_script"
+provenance = "ukadoc"
+description = "サーバに接続が確立された際に発生。修正実行には \\6 タグを含むスクリプトを返す。"
+
+[[entry.field]]
+name = "server_name"
+reference = 0
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "接続先サーバ名。"
+
+[[entry.field]]
+name = "server_time"
+reference = 1
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "カンマ区切りのサーバ側現時刻（年,月,日,時,分,秒。1 秒未満差はローカルと同じ）。"
+
+[[entry.field]]
+name = "local_time"
+reference = 2
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "カンマ区切りのローカル側現時刻（年,月,日,時,分,秒）。"
+
+[[entry.field]]
+name = "time_diff_seconds"
+reference = 3
+type = "i64"
+required = false
+provenance = "ukadoc"
+description = "サーバとローカルの時刻差（秒・常に正の整数）。"
+
+[[entry.field]]
+name = "time_diff_millis"
+reference = 4
+type = "i64"
+required = false
+provenance = "ssp_secondary"
+description = "SSP のみ。時刻差（ミリ秒・常に正の整数）。"
+
+[[entry]]
+id = "OnSNTPCorrectEx"
+kind = "event"
+category = "clock"
+dispatch = "get"
+response = "sakura_script"
+provenance = "ukadoc"
+description = "\\6 タグでローカル時刻をサーバ時刻に修正した際に発生。"
+
+[[entry.field]]
+name = "server_name"
+reference = 0
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "接続先サーバ名。"
+
+[[entry.field]]
+name = "server_time"
+reference = 1
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "カンマ区切りのサーバ側現時刻（年,月,日,時,分,秒,ミリ秒）。"
+
+[[entry.field]]
+name = "local_time"
+reference = 2
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "カンマ区切りのローカル側現時刻（年,月,日,時,分,秒,ミリ秒）。"
+
+[[entry.field]]
+name = "time_diff_seconds"
+reference = 3
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "時刻差（秒・小数あり。正でローカル遅れ、負で進み）。"
+
+[[entry.field]]
+name = "time_diff_millis"
+reference = 4
+type = "i64"
+required = false
+provenance = "ukadoc"
+description = "時刻差（ミリ秒・整数。正負は秒側と同様）。"
+
+[[entry]]
+id = "OnSNTPCorrect"
+kind = "event"
+category = "clock"
+dispatch = "get"
+response = "sakura_script"
+provenance = "ukadoc"
+description = "\\6 タグでローカル時刻をサーバ時刻に修正した際に発生。"
+
+[[entry.field]]
+name = "server_name"
+reference = 0
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "接続先サーバ名。"
+
+[[entry.field]]
+name = "server_time"
+reference = 1
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "カンマ区切りのサーバ側現時刻（年,月,日,時,分,秒。1 秒未満差はローカルと同じ）。"
+
+[[entry.field]]
+name = "local_time"
+reference = 2
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "カンマ区切りのローカル側現時刻（年,月,日,時,分,秒）。"
+
+[[entry.field]]
+name = "time_diff_seconds"
+reference = 3
+type = "i64"
+required = false
+provenance = "ukadoc"
+description = "時刻差（秒・整数。正でローカル遅れ、負で進み）。"
+
+[[entry.field]]
+name = "time_diff_millis"
+reference = 4
+type = "i64"
+required = false
+provenance = "ssp_secondary"
+description = "SSP のみ。時刻差（ミリ秒・整数）。"
+
+[[entry]]
+id = "OnSNTPFailure"
+kind = "event"
+category = "clock"
+dispatch = "get"
+response = "sakura_script"
+provenance = "ukadoc"
+description = "時計合わせに失敗した際に発生。"
+
+[[entry.field]]
+name = "server_name"
+reference = 0
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "接続先サーバ名。"
+
+[[entry]]
+id = "OnUpdateProcessExec"
+kind = "event"
+category = "network_update"
+dispatch = "get"
+response = "sakura_script"
+provenance = "ukadoc"
+description = "メニューなどから更新実行が指示された際に発生。スクリプトを返すと更新処理をカスタマイズできる。"
+
+[[entry.field]]
+name = "update_trigger"
+reference = 0
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "manual/auto/testonly のいずれか（更新実行の起動契機）。"
+
+[[entry]]
+id = "OnUpdateBegin"
+kind = "event"
+category = "network_update"
+dispatch = "get"
+response = "sakura_script"
+provenance = "ukadoc"
+description = "ネットワーク更新開始が指示された際に発生。"
+
+[[entry.field]]
+name = "ghost_name"
+reference = 0
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "ゴースト名。"
+
+[[entry.field]]
+name = "full_path"
+reference = 1
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "フルパス。"
+
+[[entry.field]]
+name = "update_target_kind"
+reference = 3
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "CROW ではゴースト更新で ghost・本体更新で baseware、SSP では更新対象種別。"
+
+[[entry.field]]
+name = "update_reason"
+reference = 4
+type = "str"
+required = false
+provenance = "ssp_secondary"
+description = "SSP 2.3 の更新実行理由。"
+
+[[entry]]
+id = "OnUpdateReady"
+kind = "event"
+category = "network_update"
+dispatch = "get"
+response = "sakura_script"
+provenance = "ukadoc"
+description = "更新ファイルが確認された際に発生。"
+
+[[entry.field]]
+name = "file_index"
+reference = 0
+type = "i32"
+required = false
+provenance = "ukadoc"
+description = "更新ファイル総数から 1 を引いた値（0 始まり連番）。"
+
+[[entry.field]]
+name = "updated_file_list"
+reference = 1
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "カンマ区切りの更新されたファイル名リスト。"
+
+[[entry.field]]
+name = "update_target_kind"
+reference = 3
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "更新対象種別（shell ghost balloon headline plugin）。"
+
+[[entry.field]]
+name = "update_reason"
+reference = 4
+type = "str"
+required = false
+provenance = "ssp_secondary"
+description = "SSP 2.3 の更新実行理由。"
+
+[[entry]]
+id = "OnUpdateComplete"
+kind = "event"
+category = "network_update"
+dispatch = "get"
+response = "sakura_script"
+provenance = "ukadoc"
+description = "ネットワーク更新が成功し完了した際に発生。"
+
+[[entry.field]]
+name = "success_reason"
+reference = 0
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "成功理由。"
+
+[[entry.field]]
+name = "updated_file_list"
+reference = 1
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "カンマ区切りの更新されたファイル名リスト。"
+
+[[entry.field]]
+name = "update_target_kind"
+reference = 3
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "CROW ではゴースト更新で ghost・本体更新で baseware、SSP では更新対象種別。"
+
+[[entry.field]]
+name = "update_reason"
+reference = 4
+type = "str"
+required = false
+provenance = "ssp_secondary"
+description = "SSP 2.3 の更新実行理由。"
+
+[[entry]]
+id = "OnUpdateFailure"
+kind = "event"
+category = "network_update"
+dispatch = "get"
+response = "sakura_script"
+provenance = "ukadoc"
+description = "ネットワーク更新に失敗した際に発生。"
+
+[[entry.field]]
+name = "failure_reason"
+reference = 0
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "失敗理由。"
+
+[[entry.field]]
+name = "updated_file_list"
+reference = 1
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "カンマ区切りの更新ファイル名リスト。SSP のみ失敗したファイル名。"
+
+[[entry.field]]
+name = "update_target_kind"
+reference = 3
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "CROW ではゴースト更新で ghost・本体更新で baseware、SSP では更新対象種別。"
+
+[[entry.field]]
+name = "update_reason"
+reference = 4
+type = "str"
+required = false
+provenance = "ssp_secondary"
+description = "SSP 2.3 の更新実行理由。"
+
+[[entry]]
+id = "OnUpdateOtherBegin"
+kind = "event"
+category = "network_update"
+dispatch = "get"
+response = "sakura_script"
+provenance = "ukadoc"
+description = "ゴースト以外のネットワーク更新開始が指示された際に発生。"
+
+[[entry.field]]
+name = "ghost_name"
+reference = 0
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "ゴースト名。"
+
+[[entry.field]]
+name = "full_path"
+reference = 1
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "フルパス。"
+
+[[entry.field]]
+name = "update_target_kind"
+reference = 3
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "更新対象種別。"
+
+[[entry.field]]
+name = "update_reason"
+reference = 4
+type = "str"
+required = false
+provenance = "ssp_secondary"
+description = "SSP 2.3 の更新実行理由。"
+
+[[entry]]
+id = "OnUpdateOtherReady"
+kind = "event"
+category = "network_update"
+dispatch = "get"
+response = "sakura_script"
+provenance = "ukadoc"
+description = "ゴースト以外の更新ファイルが確認された際に発生。"
+
+[[entry.field]]
+name = "file_index"
+reference = 0
+type = "i32"
+required = false
+provenance = "ukadoc"
+description = "更新ファイル総数から 1 を引いた値（0 始まり連番）。"
+
+[[entry.field]]
+name = "updated_file_list"
+reference = 1
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "カンマ区切りの更新されたファイル名リスト。"
+
+[[entry.field]]
+name = "update_target_kind"
+reference = 3
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "更新対象種別。"
+
+[[entry.field]]
+name = "update_reason"
+reference = 4
+type = "str"
+required = false
+provenance = "ssp_secondary"
+description = "SSP 2.3 の更新実行理由。"
+
+[[entry]]
+id = "OnUpdateOtherComplete"
+kind = "event"
+category = "network_update"
+dispatch = "get"
+response = "sakura_script"
+provenance = "ukadoc"
+description = "ゴースト以外のネットワーク更新が成功し完了した際に発生。"
+
+[[entry.field]]
+name = "success_reason"
+reference = 0
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "成功理由。"
+
+[[entry.field]]
+name = "updated_file_list"
+reference = 1
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "カンマ区切りの更新されたファイル名リスト。"
+
+[[entry.field]]
+name = "update_target_kind"
+reference = 3
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "更新対象種別。"
+
+[[entry.field]]
+name = "update_reason"
+reference = 4
+type = "str"
+required = false
+provenance = "ssp_secondary"
+description = "SSP 2.3 の更新実行理由。"
+
+[[entry]]
+id = "OnUpdateOtherFailure"
+kind = "event"
+category = "network_update"
+dispatch = "get"
+response = "sakura_script"
+provenance = "ukadoc"
+description = "ゴースト以外のネットワーク更新に失敗した際に発生。"
+
+[[entry.field]]
+name = "failure_reason"
+reference = 0
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "失敗理由。"
+
+[[entry.field]]
+name = "updated_file_list"
+reference = 1
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "カンマ区切りの更新されたファイル名リスト。"
+
+[[entry.field]]
+name = "update_target_kind"
+reference = 3
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "更新対象種別。"
+
+[[entry.field]]
+name = "update_reason"
+reference = 4
+type = "str"
+required = false
+provenance = "ssp_secondary"
+description = "SSP 2.3 の更新実行理由。"
+
+[[entry]]
+id = "OnUpdateCheckComplete"
+kind = "event"
+category = "network_update"
+dispatch = "get"
+response = "sakura_script"
+provenance = "ukadoc"
+description = "ネットワーク更新のチェックに成功した際に発生。"
+
+[[entry.field]]
+name = "success_reason"
+reference = 0
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "成功理由。"
+
+[[entry.field]]
+name = "updated_file_list"
+reference = 1
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "カンマ区切りの更新されたファイル名リスト。"
+
+[[entry.field]]
+name = "update_target_kind"
+reference = 3
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "更新対象種別。"
+
+[[entry.field]]
+name = "update_reason"
+reference = 4
+type = "str"
+required = false
+provenance = "ssp_secondary"
+description = "SSP 2.3 の更新実行理由（script のみ）。"
+
+[[entry]]
+id = "OnUpdateCheckFailure"
+kind = "event"
+category = "network_update"
+dispatch = "get"
+response = "sakura_script"
+provenance = "ukadoc"
+description = "ネットワーク更新のチェックに失敗した際に発生。"
+
+[[entry.field]]
+name = "failure_reason"
+reference = 0
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "失敗理由。"
+
+[[entry.field]]
+name = "update_reason"
+reference = 4
+type = "str"
+required = false
+provenance = "ssp_secondary"
+description = "SSP 2.3 の更新実行理由（script のみ）。"
+
+[[entry]]
+id = "OnUpdateResult"
+kind = "event"
+category = "network_update"
+dispatch = "get"
+response = "sakura_script"
+provenance = "ukadoc"
+description = "ネットワーク更新実行時に、一括更新も含めすべての更新結果を一括通知する。"
+
+[[entry.field]]
+name = "update_result_records"
+reference_variadic = true
+type = "str"
+required = true
+provenance = "ukadoc"
+description = "更新実行順の結果レコード（種別[\\1]OK/NG[\\1]ファイル数または失敗理由[\\1]失敗ファイル名）。\\1 はバイト値 1。Reference0 以降可変長。"
+
+[[entry]]
+id = "OnUpdateResultEx"
+kind = "event"
+category = "network_update"
+dispatch = "get"
+response = "sakura_script"
+provenance = "ukadoc"
+description = "ネットワーク更新実行時に、一括更新も含めすべての更新結果を一括通知する（対象名付き拡張版）。"
+
+[[entry.field]]
+name = "update_result_records"
+reference_variadic = true
+type = "str"
+required = true
+provenance = "ukadoc"
+description = "更新実行順の結果レコード（対象名[\\1]種別[\\1]OK/NG[\\1]ファイル数または失敗理由[\\1]失敗ファイル名）。\\1 はバイト値 1。Reference0 以降可変長。"
+
+[[entry]]
+id = "OnUpdateCheckResult"
+kind = "event"
+category = "network_update"
+dispatch = "get"
+response = "sakura_script"
+provenance = "ukadoc"
+description = "更新チェックのみオプション時に最後に発生。OnUpdateResult のエクスプローラ版。"
+
+[[entry.field]]
+name = "update_result_records"
+reference_variadic = true
+type = "str"
+required = true
+provenance = "ukadoc"
+description = "OnUpdateResult と同じ可変長更新結果レコード。"
+
+[[entry]]
+id = "OnUpdateCheckResultEx"
+kind = "event"
+category = "network_update"
+dispatch = "get"
+response = "sakura_script"
+provenance = "ukadoc"
+description = "更新チェックのみオプション時に最後に発生。OnUpdateResultEx のエクスプローラ版。"
+
+[[entry.field]]
+name = "update_result_records"
+reference_variadic = true
+type = "str"
+required = true
+provenance = "ukadoc"
+description = "OnUpdateResultEx と同じ可変長更新結果レコード。"
+
+[[entry]]
+id = "OnUpdateResultExplorer"
+kind = "event"
+category = "network_update"
+dispatch = "get"
+response = "sakura_script"
+provenance = "ukadoc"
+description = "ゴーストエクスプローラからネットワーク更新実行時に発生。OnUpdateResult のエクスプローラ版。"
+
+[[entry.field]]
+name = "update_result_records"
+reference_variadic = true
+type = "str"
+required = true
+provenance = "ukadoc"
+description = "OnUpdateResult と同じ可変長更新結果レコード。"
+
+[[entry]]
+id = "OnBIFFBegin"
+kind = "event"
+category = "mailcheck"
+dispatch = "get"
+response = "sakura_script"
+provenance = "ukadoc"
+description = "メールチェック開始が指示された際に発生。"
+
+[[entry.field]]
+name = "mail_server_name"
+reference = 2
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "チェックするメールサーバ名（SSP/CROW はアカウント名）。"
+
+[[entry]]
+id = "OnBIFFComplete"
+kind = "event"
+category = "mailcheck"
+dispatch = "get"
+response = "sakura_script"
+provenance = "ukadoc"
+description = "メールチェックが成功した際に発生。"
+
+[[entry.field]]
+name = "mail_count"
+reference = 0
+type = "i32"
+required = false
+provenance = "ukadoc"
+description = "スプールされているメールの通数（1 オリジン）。"
+
+[[entry.field]]
+name = "mail_bytes"
+reference = 1
+type = "i64"
+required = false
+provenance = "ukadoc"
+description = "スプールされているメールのバイト数。"
+
+[[entry.field]]
+name = "mail_server_name"
+reference = 2
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "チェックするメールサーバ名。"
+
+[[entry.field]]
+name = "mail_new_diff"
+reference = 3
+type = "i32"
+required = false
+provenance = "ukadoc"
+description = "メールの新着差分。"
+
+[[entry.field]]
+name = "top_result"
+reference = 4
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "全メールの TopResult（POP 全ヘッダリスト。メール毎バイト値 2 区切り・ヘッダ毎バイト値 1 区切り）。"
+
+[[entry.field]]
+name = "list_result"
+reference = 5
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "ListResult（メールサーバ上の ID。POP LIST 相当）。"
+
+[[entry.field]]
+name = "uidl_result"
+reference = 6
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "UidlResult（メール区別用 ID。POP UIDL 相当）。"
+
+[[entry.field]]
+name = "sender_title_list"
+reference = 7
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "バイト値 1 区切りの送信者とタイトル。"
+
+[[entry]]
+id = "OnBIFF2Complete"
+kind = "event"
+category = "mailcheck"
+dispatch = "get"
+response = "sakura_script"
+provenance = "ukadoc"
+description = "メールスプール数が増加した際に発生。SSP では OnBIFFComplete に応答しなかった場合のみ発生。"
+
+[[entry.field]]
+name = "mail_count"
+reference = 0
+type = "i32"
+required = false
+provenance = "ukadoc"
+description = "スプールされているメールの通数（1 オリジン）。"
+
+[[entry.field]]
+name = "mail_bytes"
+reference = 1
+type = "i64"
+required = false
+provenance = "ukadoc"
+description = "スプールされているメールのバイト数。"
+
+[[entry.field]]
+name = "mail_server_name"
+reference = 2
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "チェックするメールサーバ名（SSP/CROW はアカウント名）。"
+
+[[entry.field]]
+name = "top_result"
+reference = 3
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "全メールの TopResult。"
+
+[[entry]]
+id = "OnBIFFFailure"
+kind = "event"
+category = "mailcheck"
+dispatch = "get"
+response = "sakura_script"
+provenance = "ukadoc"
+description = "メールチェックに失敗した際に発生。"
+
+[[entry.field]]
+name = "failure_reason"
+reference = 0
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "失敗理由。"
+
+[[entry.field]]
+name = "mail_server_name"
+reference = 2
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "チェックするメールサーバ名（SSP/CROW はアカウント名）。"
+
+[[entry]]
+id = "OnHeadlinesenseBegin"
+kind = "event"
+category = "rss"
+dispatch = "get"
+response = "sakura_script"
+provenance = "ukadoc"
+description = "ヘッドラインセンス開始が指示された際に発生。"
+
+[[entry.field]]
+name = "site_name"
+reference = 0
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "ヘッドラインセンスするサイト名。"
+
+[[entry.field]]
+name = "site_url"
+reference = 1
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "ヘッドラインセンスする URL。"
+
+[[entry]]
+id = "OnHeadlinesenseComplete"
+kind = "event"
+category = "rss"
+dispatch = "get"
+response = "sakura_script"
+provenance = "ukadoc"
+description = "ヘッドラインセンスが正常終了した際に発生。取得成功かつ更新が無かった場合のみ通知。"
+
+[[entry.field]]
+name = "complete_reason"
+reference = 0
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "終了理由。現状 no update 固定。"
+
+[[entry]]
+id = "OnHeadlinesenseFailure"
+kind = "event"
+category = "rss"
+dispatch = "get"
+response = "sakura_script"
+provenance = "ukadoc"
+description = "ヘッドラインセンスに失敗した際に発生。"
+
+[[entry.field]]
+name = "failure_reason"
+reference = 0
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "終了理由（失敗理由）。"
+
+[[entry]]
+id = "OnRSSBegin"
+kind = "event"
+category = "rss"
+dispatch = "get"
+response = "sakura_script"
+provenance = "ukadoc"
+description = "RSS センス開始が指示された際に発生。無反応時は OnHeadlineSenseBegin が呼ばれる。"
+
+[[entry.field]]
+name = "site_name"
+reference = 0
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "RSS センスするサイト名。"
+
+[[entry.field]]
+name = "site_url"
+reference = 1
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "RSS センスする URL。"
+
+[[entry]]
+id = "OnRSSComplete"
+kind = "event"
+category = "rss"
+dispatch = "get"
+response = "sakura_script"
+provenance = "ukadoc"
+description = "RSS センスが正常終了した際に発生。無反応時はヘッドライン完了系イベントが呼ばれる。"
+
+[[entry.field]]
+name = "feed_site_or_noupdate"
+reference = 0
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "更新無し時は no update のみ、更新有り時は RSS 配信サイト名。"
+
+[[entry.field]]
+name = "feed_source_url"
+reference = 1
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "更新有り時のみ：RSS 配信元 URL（配信サイトを指す）。"
+
+[[entry.field]]
+name = "rss_items"
+reference = 2
+reference_variadic = true
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "更新有り時のみ：タイトル[\\1]URL[\\1]更新日時[\\1]作者名[\\1]内容。RSS 要素数分 Reference2 以降に続く。\\1 はバイト値 1。"
+
+[[entry]]
+id = "OnRSSFailure"
+kind = "event"
+category = "rss"
+dispatch = "get"
+response = "sakura_script"
+provenance = "ukadoc"
+description = "RSS センスに失敗した際に発生。無反応時は OnHeadlineSenseFailure が呼ばれる。"
+
+[[entry.field]]
+name = "failure_reason"
+reference = 0
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "終了理由（失敗理由）。"
+
+[[entry]]
+id = "OnSchedule5MinutesToGo"
+kind = "event"
+category = "calendar"
+dispatch = "get"
+response = "sakura_script"
+provenance = "ukadoc"
+description = "本体カレンダー機能に登録されたスケジュール時間の 5 分前に発生。"
+
+[[entry.field]]
+name = "event_type"
+reference = 0
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "イベントのタイプ。"
+
+[[entry.field]]
+name = "event_caption"
+reference = 1
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "イベントの内容（caption）。"
+
+[[entry.field]]
+name = "event_subtitle"
+reference = 2
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "追加データ（subtitle）。"
+
+[[entry.field]]
+name = "event_script"
+reference = 3
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "スクリプト（script）。"
+
+[[entry]]
+id = "OnScheduleRead"
+kind = "event"
+category = "calendar"
+dispatch = "get"
+response = "sakura_script"
+provenance = "ukadoc"
+description = "カレンダーアイコン上でマウスが静止しスケジュールが読まれるタイミングで発生。"
+
+[[entry.field]]
+name = "event_type"
+reference = 0
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "イベントのタイプ。"
+
+[[entry.field]]
+name = "event_caption"
+reference = 1
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "イベントの内容（caption）。"
+
+[[entry.field]]
+name = "event_subtitle"
+reference = 2
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "追加データ（subtitle）。"
+
+[[entry.field]]
+name = "event_script"
+reference = 3
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "スクリプト（script）。"
+
+[[entry]]
+id = "OnSchedulesenseBegin"
+kind = "event"
+category = "calendar"
+dispatch = "get"
+response = "sakura_script"
+provenance = "ukadoc"
+description = "スケジュールセンサが接続開始する際に発生。"
+
+[[entry.field]]
+name = "sensor_name"
+reference = 0
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "スケジュールセンサの名前。"
+
+[[entry]]
+id = "OnSchedulesenseComplete"
+kind = "event"
+category = "calendar"
+dispatch = "get"
+response = "sakura_script"
+provenance = "ukadoc"
+description = "スケジュールセンサの処理が完了した際に発生。"
+
+[[entry.field]]
+name = "sensor_name"
+reference = 0
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "スケジュールセンサの名前。"
+
+[[entry.field]]
+name = "schedule_data_count"
 reference = 1
 type = "i32"
 required = false
 provenance = "ukadoc"
-silence_ref = ["sr_dispatch_onboot"]
-description = "起動時に渡される付随情報の一例（累積トーク数など整数値）。型は小文字 Rust 準拠の i32（要件 11.3）。Reference1（alias）と意味名 ghost_history_words（canonical）の 2 投影。フィールド単位の沈黙裁定 sr_dispatch_onboot を参照し、意味割り当ての裁量根拠を追跡可能にする。任意フィールド。典拠は ukadoc。"
+description = "スケジュールセンサが返したスケジュールデータの数。"
+
+[[entry]]
+id = "OnSchedulesenseFailure"
+kind = "event"
+category = "calendar"
+dispatch = "get"
+response = "sakura_script"
+provenance = "ukadoc"
+description = "スケジュールセンサの処理に失敗した際に発生。"
+
+[[entry.field]]
+name = "failure_reason"
+reference = 0
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "失敗した理由（ヘッドラインセンサと共通）。"
+
+[[entry]]
+id = "OnSchedulepostBegin"
+kind = "event"
+category = "calendar"
+dispatch = "get"
+response = "sakura_script"
+provenance = "ukadoc"
+description = "スケジュールセンサが投稿モードで接続開始する際に発生。"
+
+[[entry.field]]
+name = "sensor_name"
+reference = 0
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "スケジュールセンサの名前。"
+
+[[entry]]
+id = "OnSchedulepostComplete"
+kind = "event"
+category = "calendar"
+dispatch = "get"
+response = "sakura_script"
+provenance = "ukadoc"
+description = "スケジュールセンサが投稿処理を完了した際に発生。"
+
+[[entry.field]]
+name = "sensor_name"
+reference = 0
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "スケジュールセンサの名前。"
+
+[[entry]]
+id = "OnSSTPBreak"
+kind = "event"
+category = "sstp"
+dispatch = "get"
+response = "sakura_script"
+provenance = "ukadoc"
+description = "SSTP がブレイクされた際に発生。"
+
+[[entry.field]]
+name = "break_script"
+reference = 0
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "中断の操作が起きたスクリプト。"
+
+[[entry.field]]
+name = "break_balloon_scope"
+reference = 1
+type = "i32"
+required = false
+provenance = "ukadoc"
+description = "中断操作が起きたバルーンのスコープ番号（本体 0・相方 1…）。"
+
+[[entry.field]]
+name = "break_char_offset"
+reference = 2
+type = "i32"
+required = false
+provenance = "ukadoc"
+description = "中断位置。スクリプト先頭からの文字数（さくらスクリプトのタグ含む）。"
+
+[[entry]]
+id = "OnSSTPBlacklisting"
+kind = "event"
+category = "sstp"
+dispatch = "get"
+response = "sakura_script"
+provenance = "ukadoc"
+description = "最終クライアントのブラックリスト行きが指示された際に発生。"
+
+[[entry.field]]
+name = "client_ip"
+reference = 0
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "最終クライアントの IP アドレス。"
+
+[[entry]]
+id = "OnExecuteHTTPComplete"
+kind = "event"
+category = "comm_other"
+dispatch = "get"
+response = "sakura_script"
+provenance = "ukadoc"
+description = "execute-http で正常に取得完了した際に発生。"
+
+[[entry.field]]
+name = "http_method"
+reference = 0
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "post/get/head/put/delete のいずれか。"
+
+[[entry.field]]
+name = "async_id"
+reference = 1
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "--sync/--async オプションで指定した文字列。"
+
+[[entry.field]]
+name = "target_url"
+reference = 2
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "対象の URL。"
+
+[[entry.field]]
+name = "response_body_or_path"
+reference = 3
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "--nofile 時は取得データ本体（改行はバイト値 1）、そうでなければ取得ファイルのフルパス。"
+
+[[entry.field]]
+name = "result_code"
+reference = 4
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "取得結果コード（timeout|fileio|200|204|403|404 等）。"
+
+[[entry.field]]
+name = "cookie"
+reference = 5
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "Cookie の文字列。"
+
+[[entry.field]]
+name = "response_headers"
+reference = 6
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "受け取った全レスポンスヘッダ（改行はバイト値 1 区切り）。[2.6.40]"
+
+[[entry]]
+id = "OnExecuteHTTPFailure"
+kind = "event"
+category = "comm_other"
+dispatch = "get"
+response = "sakura_script"
+provenance = "ukadoc"
+description = "execute-http で取得エラーした際に発生。Reference は OnExecuteHTTPComplete と同じ。"
+
+[[entry.field]]
+name = "http_method"
+reference = 0
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "post/get/head/put/delete のいずれか。"
+
+[[entry.field]]
+name = "async_id"
+reference = 1
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "--sync/--async オプションで指定した文字列。"
+
+[[entry.field]]
+name = "target_url"
+reference = 2
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "対象の URL。"
+
+[[entry.field]]
+name = "response_body_or_path"
+reference = 3
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "--nofile 時は取得データ本体（改行はバイト値 1）、そうでなければ取得ファイルのフルパス。"
+
+[[entry.field]]
+name = "result_code"
+reference = 4
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "取得結果コード（timeout|fileio|200|204|403|404 等）。"
+
+[[entry.field]]
+name = "cookie"
+reference = 5
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "Cookie の文字列。"
+
+[[entry.field]]
+name = "response_headers"
+reference = 6
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "受け取った全レスポンスヘッダ（改行はバイト値 1 区切り）。[2.6.40]"
+
+[[entry]]
+id = "OnExecuteHTTPProgress"
+kind = "event"
+category = "comm_other"
+dispatch = "get"
+response = "sakura_script"
+provenance = "ukadoc"
+description = "execute-http で --progress-notify を指定した際に発生。Reference は OnExecuteHTTPComplete と同じ。[2.6.44]"
+
+[[entry.field]]
+name = "http_method"
+reference = 0
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "post/get/head/put/delete のいずれか。"
+
+[[entry.field]]
+name = "async_id"
+reference = 1
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "--sync/--async オプションで指定した文字列。"
+
+[[entry.field]]
+name = "target_url"
+reference = 2
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "対象の URL。"
+
+[[entry.field]]
+name = "response_body_or_path"
+reference = 3
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "--nofile 時は取得データ本体（改行はバイト値 1）、そうでなければ取得ファイルのフルパス。"
+
+[[entry.field]]
+name = "result_code"
+reference = 4
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "取得結果コード（timeout|fileio|200|204|403|404 等）。"
+
+[[entry.field]]
+name = "cookie"
+reference = 5
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "Cookie の文字列。"
+
+[[entry.field]]
+name = "response_headers"
+reference = 6
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "受け取った全レスポンスヘッダ（改行はバイト値 1 区切り）。[2.6.40]"
+
+[[entry]]
+id = "OnExecuteHTTPStreaming"
+kind = "event"
+category = "comm_other"
+dispatch = "get"
+response = "sakura_script"
+provenance = "ukadoc"
+description = "execute-http で --streaming を指定した際に発生。Reference4 以外は OnExecuteHTTPComplete と同じ。"
+
+[[entry.field]]
+name = "http_method"
+reference = 0
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "post/get/head/put/delete のいずれか。"
+
+[[entry.field]]
+name = "async_id"
+reference = 1
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "--sync/--async オプションで指定した文字列。"
+
+[[entry.field]]
+name = "target_url"
+reference = 2
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "対象の URL。"
+
+[[entry.field]]
+name = "response_body_or_path"
+reference = 3
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "--nofile 時は取得データ本体、そうでなければ取得ファイルのフルパス。"
+
+[[entry.field]]
+name = "streaming_data"
+reference = 4
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "Streaming データのうち改行をバイト値 1 に置き換えたもの。"
+
+[[entry.field]]
+name = "cookie"
+reference = 5
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "Cookie の文字列。"
+
+[[entry.field]]
+name = "response_headers"
+reference = 6
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "受け取った全レスポンスヘッダ（改行はバイト値 1 区切り）。"
+
+[[entry]]
+id = "OnExecuteHTTPSSLInfo"
+kind = "event"
+category = "comm_other"
+dispatch = "get"
+response = "sakura_script"
+provenance = "ukadoc"
+description = "取得失敗（HTTP 200 以外）でも SSL/TLS レベルで接続成功した際に通知される。"
+
+[[entry.field]]
+name = "async_id"
+reference = 0
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "async ID（無ければ空）。"
+
+[[entry.field]]
+name = "target_url"
+reference = 1
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "取得 URL。"
+
+[[entry.field]]
+name = "http_response_code"
+reference = 2
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "HTTP レスポンスコード（エラーでも通知される）。"
+
+[[entry.field]]
+name = "tls_version"
+reference = 3
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "通信バージョン（例 TLSv1/SSLv3）。"
+
+[[entry.field]]
+name = "cipher"
+reference = 4
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "暗号化方法（例 AES256-SHA）。"
+
+[[entry.field]]
+name = "subject"
+reference = 5
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "発行先（X509_NAME_oneline 結果）。"
+
+[[entry.field]]
+name = "valid_from"
+reference = 6
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "有効期限開始日時（年,月,日,時,分,秒）。"
+
+[[entry.field]]
+name = "valid_to"
+reference = 7
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "有効期限終了日時（年,月,日,時,分,秒）。"
+
+[[entry.field]]
+name = "issuer"
+reference = 8
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "発行者（X509_NAME_oneline 結果）。"
+
+[[entry.field]]
+name = "cert_chain"
+reference = 9
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "証明書チェーン（CommonName をカンマ区切りで列挙）。[2.4.51～]"
+
+[[entry]]
+id = "OnExecuteRSSComplete"
+kind = "event"
+category = "comm_other"
+dispatch = "get"
+response = "sakura_script"
+provenance = "ukadoc"
+description = "\\![execute,rss-get/post] で正常に取得完了した際に発生。"
+
+[[entry.field]]
+name = "rss_items"
+reference = 0
+reference_variadic = true
+type = "str"
+required = true
+provenance = "ukadoc"
+description = "タイトル[\\1]URL[\\1]更新日時[\\1]作者名[\\1]内容。RSS 要素数分 Reference0 以降に続く。\\1 はバイト値 1。"
+
+[[entry]]
+id = "OnExecuteRSSFailure"
+kind = "event"
+category = "comm_other"
+dispatch = "get"
+response = "sakura_script"
+provenance = "ukadoc"
+description = "\\![execute,rss-get/post] で取得エラーした際に発生。"
+
+[[entry.field]]
+name = "rss_failure_info"
+reference = 0
+reference_variadic = true
+type = "str"
+required = true
+provenance = "ukadoc"
+description = "解析失敗時は Reference4=parse。他は OnExecuteHTTPFailure と同じ。Reference0 以降可変長。"
+
+[[entry]]
+id = "OnExecuteRSS_SSLInfo"
+kind = "event"
+category = "comm_other"
+dispatch = "get"
+response = "sakura_script"
+provenance = "ukadoc"
+description = "RSS 取得時に取得失敗でも SSL/TLS レベルで接続成功した際に通知される。"
+
+[[entry.field]]
+name = "ssl_info_fields"
+reference = 0
+reference_variadic = true
+type = "str"
+required = true
+provenance = "ukadoc"
+description = "OnExecuteHTTPSSLInfo と同じ SSL 情報。Reference0 以降可変長。"
+
+[[entry]]
+id = "OnExecuteWebSocketOpen"
+kind = "event"
+category = "comm_other"
+dispatch = "get"
+response = "sakura_script"
+provenance = "ukadoc"
+description = "WebSocket 接続確立時（HTTP 101 Upgrade 成功後）に発生。初回接続のみ発火。"
+
+[[entry.field]]
+name = "event_id"
+reference = 0
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "Sakura Script の --event オプションで指定されたイベント識別子。"
+
+[[entry.field]]
+name = "connection_url"
+reference = 1
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "接続 URL（ws:// または wss://）。"
+
+[[entry.field]]
+name = "status_or_reason"
+reference = 2
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "\"200\"（固定）。"
+
+[[entry]]
+id = "OnExecuteWebSocketReceive"
+kind = "event"
+category = "comm_other"
+dispatch = "get"
+response = "sakura_script"
+provenance = "ukadoc"
+description = "WebSocket 接続中にサーバーからデータフレームを受信するたびに発生。"
+
+[[entry.field]]
+name = "event_id"
+reference = 0
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "Sakura Script の --event オプションで指定されたイベント識別子。"
+
+[[entry.field]]
+name = "connection_url"
+reference = 1
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "接続 URL。"
+
+[[entry.field]]
+name = "frame_opcode"
+reference = 2
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "opcode 種別（1=テキスト UTF-8、2=バイナリ）。"
+
+[[entry.field]]
+name = "received_data"
+reference = 3
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "受信データ（テキストは UTF-8 で改行をバイト値 1、バイナリは Base64）。"
+
+[[entry]]
+id = "OnExecuteWebSocketReconnect"
+kind = "event"
+category = "comm_other"
+dispatch = "get"
+response = "sakura_script"
+provenance = "ukadoc"
+description = "エラー切断後の自動再接続が成功したときに発生。Open に相当する役割を担う。"
+
+[[entry.field]]
+name = "event_id"
+reference = 0
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "Sakura Script の --event オプションで指定されたイベント識別子。"
+
+[[entry.field]]
+name = "connection_url"
+reference = 1
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "接続 URL（ws:// または wss://）。"
+
+[[entry.field]]
+name = "status_or_reason"
+reference = 2
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "\"200\"（固定）。"
+
+[[entry]]
+id = "OnExecuteWebSocketClose"
+kind = "event"
+category = "comm_other"
+dispatch = "get"
+response = "sakura_script"
+provenance = "ukadoc"
+description = "WebSocket 接続が最終的に切断されたときに発生。Failure 時は発火しない。"
+
+[[entry.field]]
+name = "event_id"
+reference = 0
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "Sakura Script の --event オプションで指定されたイベント識別子。"
+
+[[entry.field]]
+name = "connection_url"
+reference = 1
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "接続 URL（ws:// または wss://）。"
+
+[[entry.field]]
+name = "status_or_reason"
+reference = 2
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "切断要因コード（1000=正常切断、userbreak=強制中断）。"
+
+[[entry]]
+id = "OnExecuteWebSocketFailure"
+kind = "event"
+category = "comm_other"
+dispatch = "get"
+response = "sakura_script"
+provenance = "ukadoc"
+description = "初回 Upgrade 失敗時、または自動再接続 5 回全失敗時に発生。"
+
+[[entry.field]]
+name = "event_id"
+reference = 0
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "Sakura Script の --event オプションで指定されたイベント識別子。"
+
+[[entry.field]]
+name = "connection_url"
+reference = 1
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "接続 URL（ws:// または wss://）。"
+
+[[entry.field]]
+name = "status_or_reason"
+reference = 2
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "エラー内容文字列（初回は SPHttp のエラー、全失敗時は reconnect failed 固定）。"
+
+[[entry]]
+id = "OnExecuteWebSocket_SSLInfo"
+kind = "event"
+category = "comm_other"
+dispatch = "get"
+response = "sakura_script"
+provenance = "ukadoc"
+description = "wss:// 接続時に SSL/TLS 接続が確立したときに発生。初回接続時のみ発火。"
+
+[[entry.field]]
+name = "event_id"
+reference = 0
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "Sakura Script の --event オプションで指定されたイベント識別子。"
+
+[[entry.field]]
+name = "ssl_info_fields"
+reference = 1
+reference_variadic = true
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "OnExecuteHTTPSSLInfo の Reference1 以降と同じ SSL 情報。Reference1 以降可変長。"
+
+[[entry]]
+id = "OnPingComplete"
+kind = "event"
+category = "comm_other"
+dispatch = "get"
+response = "sakura_script"
+provenance = "ukadoc"
+description = "\\![execute,ping] で指定回数の ping 実行完了時に発生。"
+
+[[entry.field]]
+name = "event_id"
+reference = 0
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "--event で指定した文字列そのもの。"
+
+[[entry.field]]
+name = "ping_summary"
+reference = 1
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "送信元アドレス[\\1]全送信回数[\\1]成功回数[\\1]失敗回数。\\1 はバイト値 1。"
+
+[[entry.field]]
+name = "ping_records"
+reference = 2
+reference_variadic = true
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "OK またはエラー情報[\\1]返答元アドレス[\\1]RTT(ms)。Reference2 以降に 1 回ごとの情報。\\1 はバイト値 1。"
+
+[[entry]]
+id = "OnPingProgress"
+kind = "event"
+category = "comm_other"
+dispatch = "get"
+response = "sakura_script"
+provenance = "ukadoc"
+description = "\\![execute,ping] で ping 実行中に発生（情報は不完全な場合がある）。"
+
+[[entry.field]]
+name = "event_id"
+reference = 0
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "--event で指定した文字列そのもの。"
+
+[[entry.field]]
+name = "ping_summary"
+reference = 1
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "送信元アドレス[\\1]全送信回数[\\1]成功回数[\\1]失敗回数。\\1 はバイト値 1。"
+
+[[entry.field]]
+name = "ping_records"
+reference = 2
+reference_variadic = true
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "OK またはエラー情報[\\1]返答元アドレス[\\1]RTT(ms)。Reference2 以降に 1 回ごとの情報。\\1 はバイト値 1。"
+
+[[entry]]
+id = "OnNSLookupComplete"
+kind = "event"
+category = "comm_other"
+dispatch = "get"
+response = "sakura_script"
+provenance = "ukadoc"
+description = "\\![execute,nslookup] で成功時に発生。"
+
+[[entry.field]]
+name = "event_id"
+reference = 0
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "--event で指定した文字列そのもの。"
+
+[[entry.field]]
+name = "host"
+reference = 1
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "--host で指定した文字列そのもの。"
+
+[[entry.field]]
+name = "lookup_direction"
+reference = 2
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "正引きで lookup、逆引きで reverse。"
+
+[[entry.field]]
+name = "lookup_result"
+reference = 3
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "実行結果。正引きで IP、逆引きでホスト名。"
+
+[[entry]]
+id = "OnNSLookupFailure"
+kind = "event"
+category = "comm_other"
+dispatch = "get"
+response = "sakura_script"
+provenance = "ukadoc"
+description = "\\![execute,nslookup] で失敗時に発生。"
+
+[[entry.field]]
+name = "event_id"
+reference = 0
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "--event で指定した文字列そのもの。"
+
+[[entry.field]]
+name = "host"
+reference = 1
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "--host で指定した文字列そのもの。"
+
+[[entry.field]]
+name = "lookup_direction"
+reference = 2
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "正引きで lookup、逆引きで reverse。"
+
+[[entry]]
+id = "OnRaisePluginFailure"
+kind = "event"
+category = "send_failure"
+dispatch = "get"
+response = "sakura_script"
+provenance = "ukadoc"
+description = "\\![raiseplugin] が失敗した際に発生。"
+
+[[entry.field]]
+name = "failure_reason"
+reference = 0
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "notfound/disabled または 204 など実行結果。"
+
+[[entry.field]]
+name = "plugin_name_or_id"
+reference = 1
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "プラグインの名前または ID。"
+
+[[entry.field]]
+name = "attempted_event_id"
+reference = 2
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "実行しようとしたイベント ID。"
+
+[[entry.field]]
+name = "attempted_event_references"
+reference = 3
+reference_variadic = true
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "実行しようとしたイベントの Reference。Reference3 以降可変長。"
+
+[[entry]]
+id = "OnNotifyPluginFailure"
+kind = "event"
+category = "send_failure"
+dispatch = "get"
+response = "sakura_script"
+provenance = "ukadoc"
+description = "\\![notifyplugin] が失敗した際に発生。"
+
+[[entry.field]]
+name = "failure_reason"
+reference = 0
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "notfound/disabled または 204 など実行結果。"
+
+[[entry.field]]
+name = "plugin_name_or_id"
+reference = 1
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "プラグインの名前または ID。"
+
+[[entry.field]]
+name = "attempted_event_id"
+reference = 2
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "実行しようとしたイベント ID。"
+
+[[entry.field]]
+name = "attempted_event_references"
+reference = 3
+reference_variadic = true
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "実行しようとしたイベントの Reference。Reference3 以降可変長。"
+
+[[entry]]
+id = "OnRaiseOtherFailure"
+kind = "event"
+category = "send_failure"
+dispatch = "get"
+response = "sakura_script"
+provenance = "ukadoc"
+description = "\\![raiseother] が失敗した際に発生。"
+
+[[entry.field]]
+name = "failure_reason"
+reference = 0
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "notfound/timecritical/passivemode/inductionmode/minimized または 204 等。複数対象時はバイト値 1 区切りリスト。"
+
+[[entry.field]]
+name = "ghost_name"
+reference = 1
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "ゴースト名または \\0 名。複数対象時はバイト値 1 区切りリスト。"
+
+[[entry.field]]
+name = "attempted_event_id"
+reference = 2
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "実行しようとしたイベント ID。"
+
+[[entry.field]]
+name = "attempted_event_references"
+reference = 3
+reference_variadic = true
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "実行しようとしたイベントの Reference。Reference3 以降可変長。"
+
+[[entry]]
+id = "OnNotifyOtherFailure"
+kind = "event"
+category = "send_failure"
+dispatch = "get"
+response = "sakura_script"
+provenance = "ukadoc"
+description = "\\![notifyother] が失敗した際に発生。"
+
+[[entry.field]]
+name = "failure_reason"
+reference = 0
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "notfound/timecritical/passivemode/inductionmode/minimized または 204 等。複数対象時はバイト値 1 区切りリスト。"
+
+[[entry.field]]
+name = "ghost_name"
+reference = 1
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "ゴースト名または \\0 名。複数対象時はバイト値 1 区切りリスト。"
+
+[[entry.field]]
+name = "attempted_event_id"
+reference = 2
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "実行しようとしたイベント ID。"
+
+[[entry.field]]
+name = "attempted_event_references"
+reference = 3
+reference_variadic = true
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "実行しようとしたイベントの Reference。Reference3 以降可変長。"
+
+[[entry]]
+id = "OnNetworkHeavy"
+kind = "event"
+category = "network_state"
+dispatch = "get"
+response = "sakura_script"
+provenance = "ukadoc"
+description = "相手サーバが時間内に応答しなかった際に発生。"
+
+[[entry.field]]
+name = "timeout_seconds"
+reference = 0
+type = "i32"
+required = false
+provenance = "ssp_secondary"
+description = "SSP のみ。タイムアウトするまでの時間（秒）。"
+
+[[entry.field]]
+name = "elapsed_seconds"
+reference = 1
+type = "i32"
+required = false
+provenance = "ssp_secondary"
+description = "SSP のみ。今までの経過時間（秒）。[2.6.42～]"
+
+[[entry]]
+id = "OnNetworkStatusChange"
+kind = "event"
+category = "network_state"
+dispatch = "get"
+response = "sakura_script"
+provenance = "ukadoc"
+description = "ネットワーク接続状態が変わった際に発生。起動直後のみ NOTIFY で通知。"
+
+[[entry.field]]
+name = "connection_status"
+reference = 0
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "online または offline。"
+
+[[entry.field]]
+name = "ip_address_list"
+reference = 1
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "現在のマシンに割り当てられている IP アドレスのバイト値 1 区切りリスト。"
+
+[[entry.field]]
+name = "connection_type"
+reference = 2
+type = "str"
+required = false
+provenance = "ssp_secondary"
+description = "接続の種類（cellular/ethernet/none/wifi/wimax/other/unknown）。[SSP 2.4.22]"
+
+[[entry.field]]
+name = "max_download_mbps"
+reference = 3
+type = "i32"
+required = false
+provenance = "ssp_secondary"
+description = "接続回線のダウンロード側最大通信速度（MBps）。[SSP 2.4.22]"
+
+[[entry.field]]
+name = "effective_download_mbps"
+reference = 4
+type = "i32"
+required = false
+provenance = "ssp_secondary"
+description = "接続回線のダウンロード側推定有効通信速度（MBps）。[SSP 2.5.26]"
+
+[[entry.field]]
+name = "metered_status"
+reference = 5
+type = "str"
+required = false
+provenance = "ssp_secondary"
+description = "従量課金回線かどうか（unknown/unrestricted/fixed/variable）。[SSP 2.6.15]"
 
 # ──────────────────────────────────────────────────────────────────────
 # [[silence_ruling]] — 沈黙裁定ログ（要件 7.x）

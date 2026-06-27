@@ -40,7 +40,7 @@
 
 - [ ] 3. Core: ukadoc カタログ・フィールドスキーマ抽出
   - 本グループの全タスクは単一正本 `shiori_protocol.toml` を書き換えるため、共有ファイル競合により直列実行する（`(P)` 不可）
-- [ ] 3.1 イベント抽出（ライフサイクル/時刻/通信系）
+- [x] 3.1 イベント抽出（ライフサイクル/時刻/通信系）
   - `ukadoc/list_shiori_event.html` から起動・終了・時刻・通信系イベントを `[[entry]]`（kind=event）へ抽出し、各 entry に id/category/dispatch/response/provenance、各 field に name(意味名)/reference/type/required/response_meaning/provenance/description を符号化する
   - GET/NOTIFY を `[NOTIFY]` マーカーで分類し、ukadoc が応答期待や意味を沈黙する箇所は `silence_ref` で裁定へ紐付ける
   - Observable: 当該カテゴリ群のイベントが意味名フィールド＋`ReferenceN`対応＋GET/NOTIFY分類付きで TOML に存在する
@@ -99,3 +99,7 @@
   - Observable: 生成アプローチが「入力=正本/出力=派生/同値保持」で文書化され受け入れ基準が定義される
   - _Requirements: 11.2, 11.5_
   - _Depends: 4.1_
+
+## Implementation Notes
+- 3.1: 意味名はスネークケース英語で ukadoc の Reference 説明から導出。カテゴリ slug は lowercase 英語固定（lifecycle/time/clock/network_update/mailcheck/rss/calendar/sstp/comm_other/send_failure/network_state）。Reference* 可変長は `reference_variadic=true`。予約ヘッダは PascalCase なので snake_case 意味名と構造的に非衝突。
+- 3.1→4.2 引き継ぎ: dispatch 文脈依存/沈黙ケースは 4.2 で `[[silence_ruling]]`(topic=dispatch_class) を付与すべし — (a) OnDressupChanged は `[GET]/[NOTIFY]` 文脈依存（現状 get 採用・裁定未付与）、(b) OnCacheSuspend/OnCacheRestore は ukadoc 無印だが notify 採用（既定 get からの逸脱）、(c) 骨格由来の `sr_dispatch_onboot` は 3.1 で OnBoot から参照解除され孤立 — 4.2 で適切に再割当 or 整理する。
