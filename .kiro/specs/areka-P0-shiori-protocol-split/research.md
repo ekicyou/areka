@@ -114,3 +114,69 @@
 
 ---
 （本書は kiro-validate-gap により生成。情報と選択肢の提示であり最終決定ではない。決定は要件ディスカッション・設計フェーズで行う。）
+
+---
+
+# 設計フェーズ追補（design.md 生成時・kiro-spec-design）
+
+## 7. ディスカバリ要約（設計フェーズ）
+
+- **ディスカバリ種別**: Extension（Light Discovery）。完了仕様の確定成果物（単一 TOML 正本）の物理ソース編成と符号化形のみを再編する拡張であり、コードへの破壊的影響は無い（§1.2 グリーンフィールド確認済み）。
+- **外部リサーチ**: 不要。標準 TOML v1.0.0 仕様内で完結し、新規外部依存を導入しない（§5）。判断材料は完了仕様の design.md（DP1 スキーマ・Revalidation Triggers）と実測 TOML（446 entry/802 field/9 silence_ruling/共有テーブル 5、dot/asterisk id 実在、reference_variadic 32、reference 無し 6）で揃う。
+- **設計フェーズで実測確認した追加事実**:
+  - 実 TOML には gap 分析が共有テーブルとして列挙していた `[mapping]` が**実在**する（完了仕様 design.md は本文に明示しなかったが、実ファイルは `single_source`/`canonical_key`/`alias_key`/`alias_variadic_key`/`canonical_priority`/`separate_mapping_table`/`reference_backed_by` を符号化）。よって共有フラグメント集約（要件 5.1）と同値ゲート比較対象（要件 3.4）は `[meta]`/`[mapping]`/`[envelope]`/`[reserved_headers]` の 4 共有テーブルを対象とする（design.md は 4 テーブルで一貫記述）。
+  - カテゴリは 36 順序で整列済み。entry 件数の上位は `shortcut_key`(93)・`ghost_info`(40)・`notify`(31)・`lifecycle`(29)・`os_state`(27)・`network_update`/`other`(24)・`mouse`(20)。inline 化（field ~7 行→1 行）で大半は ≤600 行に収まるが、最大級は entry 境界サブ分割の候補。最終的なサイズはサブ分割規則＋出力後検査に委ねる（design.md Open Questions）。
+
+## 8. 設計判断（Design Decisions）
+
+### Decision DD-1: 再構成（merge）順序の単一真実源 ＝ 明示マニフェスト
+- **Context**: 要件 3.1 は「明示マニフェストまたはファイル名数値接頭辞」を許容するが、二重管理の不整合リスクを避けるため単一の真実源を選ぶ必要がある（gap §6 DD-1）。
+- **Alternatives Considered**: A-1 明示マニフェスト／A-2 数値接頭辞辞書順／A-3 ハイブリッド（接頭辞既定＋マニフェスト上書き）。
+- **Selected Approach**: A-1。`fragments/_manifest.toml` が結合順を単独で決定する。`NN.` 数値接頭辞はファイル名に付すが、捜索・可読性の補助であって権威ではない（従属）。
+- **Rationale**: マニフェストはサブ分割（`shortcut_key.01/02`）の順序を曖昧さなく一望でき、レビューが容易。A-3 の二重固定は不整合リスクを生む。単一真実源の明示はドリフトの構造的排除と整合（completed の SSOT 精神）。
+- **Trade-offs**: フラグメント追加時のマニフェスト更新忘れがドリフト源になり得る（運用規律が要る）が、恒久 CI ゲートは下流スコープのため、本仕様は「単一真実源＝マニフェスト・接頭辞は従属」を明記してリスクを限定。
+
+### Decision DD-2: 意味的同値ゲートの判定基準（比較対象 8 要素＋正規化規則）
+- **Context**: 要件 3.4/9.4 が非破壊の唯一の証拠。符号化形が `array(reference 順)`→`inline(reference キー)` へ変わるため、配列インデックス依存を排除した順序非依存比較と reference/variadic 正規化が要る（gap §3.A 留意・R-N2）。
+- **Selected Approach**: `parse(旧 toml)` と `parse(merge(fragments))` を、(1) entry 集合 (2) 各 entry の field 集合 (3) 共有テーブル (4) silence_ruling (5) 全 description (6) 全 provenance (7) 封筒マッピング (8) 予約ヘッダ集合 の 8 要素で順序非依存に比較。正規化規則: field を「意味名→reference 値＋reference_variadic 有無」の写像へ正規化し、両保持 field（実測 32）は両キー一致、reference 無し field（実測 6）は両側欠如一致、任意キー（silence_ref/response_meaning/dispatch）は欠如/値の一致を条件とする。
+- **Rationale**: keyed 化により map 等価比較が自然成立。意味名キーで突き合わせれば配列順序消失（要件 4.5）が無害であることを構造的に示せる。
+- **Trade-offs**: 基準を緩く書くと非破壊証明が崩れる。正規化規則を厳密化することで担保（design.md §同値ゲート）。
+
+### Decision DD-5: フラグメント物理レイアウト ＝ kind 別ディレクトリ＋共有フラグメント
+- **Context**: フラット（D-1）か kind 別ディレクトリ（D-2）か。命名規約・サブ分割規則・`_shared.toml` 配置を確定する（gap §6 DD-5）。
+- **Selected Approach**: D-2。`doc/shiori/fragments/{events,resources}/NN.{category}[.NN].toml`＋`fragments/_shared.toml`＋`fragments/_manifest.toml`。1 カテゴリ=1 フラグメント（カテゴリ純度）、600 行超は entry 境界で `.01/.02` サブ分割、単一 entry は分割しない。
+- **Rationale**: 287/159 の物理分離が直感的で捜索が速い。要件 1.3 の「kind 非依存単一フラグメント形式」は**内部スキーマ形式**の話であり、ディレクトリ分離（物理整理）を禁じない（gap §3.D 注記・brief 保留事項の裁定）。`_shared.toml` は fragments/ 直下に置き共有テーブル＋全 silence_ruling を集約（要件 5.x）。
+- **Trade-offs**: マニフェスト順序が events/resources の 2 系統にまたがるが、単一マニフェスト（DD-1）が両者を統合して列挙するため曖昧さは生じない。
+
+### Decision DD-6: 完了仕様 要件3・11 改訂の文言と系譜の残し方
+- **Context**: completed/ 履歴を不変に保ちつつ論理 SSOT へ改訂継承する（要件 8.1–8.3）。完了仕様 design.md DP1（`array of entry`）・Revalidation Trigger との整合を改訂理由に明記するか（gap §6 DD-6）。
+- **Selected Approach**: `completed/` 配下は一切書き換えない。改訂は本仕様 requirements.md（要件 8）＋ design.md ＋ `doc/shiori/README.md` に「単一ファイル正本→論理 SSOT＝フラグメント群および決定的結合結果」への継承として記述。改訂理由として DP1 の keyed/inline 符号化形刷新・Revalidation Trigger 該当を明記。
+- **Rationale**: completed の履歴不変原則（structure 哲学・kiro 規約）を守りつつ、本仕様側で拡張改訂の系譜を追跡可能にする。
+- **Trade-offs**: completed/ の literal は古い文言のまま残るが、本仕様の継承記述が正本の現行解釈を与えるため矛盾しない（系譜として両立）。
+
+### Decision DD-7: README/典拠参照の整合
+- **Context**: `doc/shiori/README.md` の「正本＝1 枚」宣言を改訂し、ukadoc ピン留めスナップショット参照（要件 6.3）の整合を保つ（gap §6 DD-7）。
+- **Selected Approach**: README を「SSOT＝`fragments/`／`shiori_protocol.toml` は廃止（tree から削除）／正準ビューはオンデマンド merge／契約定義はフラグメント群へ集約し他ファイルへ分散させない」へ改訂。ukadoc 典拠（provenance・SOURCES.md・sha256）参照は維持。`shiori_protocol.toml` 削除後の既存参照を fragments 群へ整合（要件 7.4）。
+- **Rationale**: Q1=C-2（削除）確定（DD-4）に従い、README の旧前提（単一ファイル）を新前提（fragments＋オンデマンド merge）へ更新。典拠参照は契約セマンティクス不変ゆえそのまま継承。
+
+> **DD-3（移行手段）・DD-4（Q1）は要件ディスカッションで裁定済み**（research §6 のとおり）。DD-3＝使い捨て一回限り変換/検証スクリプト（Python 等・恒久資産化しない）を本仕様内で実施。DD-4＝C-2（削除・オンデマンド結合）。設計はこれに従い再オープンしない。
+
+## 9. シンセシス結果（Generalization / Build-vs-Adopt / Simplification）
+
+- **Generalization**: 要件 1–9 は「単一正本データの物理分割＋決定的再構成＋非破壊証明」という単一問題の諸側面。符号化スキーマ（4.x）・物理レイアウト（1.x/2.x）・共有集約（5.x）・再構成契約（3.x）・無損失（6.x/9.x）・要件改訂（7.x/8.x）を、共通の「フラグメント群＝論理 SSOT」抽象の下に統合した。entry は kind 非依存の単一 keyed スキーマへ一般化（event/resource を同形で扱う・完了仕様の一般化を継承）。
+- **Build vs. Adopt**: 一意性担保は TOML パーサのキー重複検出という**プラットフォーム標準機能を採用**（独自バリデータを作らない・要件 4.x）。順序固定は独自フォーマットでなく TOML マニフェストを採用。同値検証は使い捨て Python スクリプト＋標準 TOML パーサで足り、恒久ツールを作らない（DD-3）。
+- **Simplification**: 恒久的な再構成器・バリデータ・doc/Web 生成器・Rust codegen は本仕様から除外（後続/下流）。正準ビューを tree に常設せずオンデマンド merge に一本化（C-2）し、派生ドリフトの監視機構（C-1 が要した CI ゲート・banner 再生成運用）を構造的に不要化。マニフェストを単一真実源にして接頭辞との二重管理を排除（DD-1）。
+
+## 10. リスクと緩和（設計フェーズ）
+
+- **同値ゲートの厳密性不足** → 比較対象 8 要素＋reference/variadic/任意キーの正規化規則を受け入れ基準として明文化（DD-2）。
+- **最大級カテゴリの 600 行超過** → entry 境界サブ分割（`.01/.02`）＋出力後サイズ検査。inline 化で大半は収まる見込み。
+- **マニフェスト更新忘れによるドリフト** → 単一真実源＝マニフェスト固定・接頭辞従属の明記。恒久 CI は下流スコープ。
+- **completed/ 履歴不変違反** → literal 改変禁止・本仕様側の継承記述で改訂を表現（DD-6）。
+
+## References
+- 完了仕様 design.md（DP1 `array of entry`・Revalidation Triggers・table 階層）: `.kiro/specs/completed/areka-P0-shiori-protocol/design.md`
+- 完了仕様 requirements.md（要件3・11 の原文言・改訂対象）: `.kiro/specs/completed/areka-P0-shiori-protocol/requirements.md`
+- 実測正本: `doc/shiori/shiori_protocol.toml`（10,685 行・[meta]/[mapping]/[envelope]/[reserved_headers]＋446 [[entry]]＋802 [[entry.field]]＋9 [[silence_ruling]]）
+- 現行 README（改訂対象）: `doc/shiori/README.md`
+- ukadoc ピン留めスナップショット（典拠・読み取りのみ）: `.kiro/specs/completed/areka-P0-shiori-protocol/ukadoc/`
