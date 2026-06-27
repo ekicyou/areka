@@ -215,7 +215,7 @@ Event と Resource は同形のため単一 entry 型へ一般化（research §8
 | `dispatch` | `str` | event 時必須 | `"get"`（応答期待）または `"notify"`（通知のみ）（1.2）。resource は省略可 |
 | `response` | `str` | 必須 | 応答側の意味（Value の意味。例 `"sakura_script"`/`"text"`/`"none"`）（2.2） |
 | `provenance` | `str` | 必須 | 典拠（`"ukadoc"`/`"ssp_secondary"`/`"areka_discretion"`）（7.2） |
-| `silence_ref` | `str` | 任意 | 沈黙裁定が関与する場合 `[[silence_ruling]]` の `id` を参照（3.x/7.1） |
+| `silence_ref` | array of `str` | 任意 | 関与する沈黙裁定の `[[silence_ruling]]` `id` 群を参照（**複数裁定可**。同一エントリが dispatch_class と meaning_assignment 等で同時に裁定対象となる場合に対応）（3.x/7.1） |
 | `description` | `str` | 必須 | エントリの人間可読説明（データ・R11-4） |
 | `[[entry.field]]` | array of table | 任意 | 各フィールド定義（下記）。引数のないエントリは空 |
 
@@ -230,6 +230,7 @@ Event と Resource は同形のため単一 entry 型へ一般化（research §8
 | `required` | `bool` | 必須 | 必須/任意の区別（2.2） |
 | `response_meaning` | `str` | 任意 | 当該フィールドが応答側に持つ意味（2.2 応答側の意味） |
 | `provenance` | `str` | 必須 | 当該フィールドの典拠（`"ukadoc"`/`"ssp_secondary"`/`"areka_discretion"`）（7.2） |
+| `silence_ref` | array of `str` | 任意 | 当該フィールドに関与する沈黙裁定 `id` 群（フィールド単位の複数裁定追跡）（7.1） |
 | `description` | `str` | 必須 | フィールドの人間可読説明（データ・R11-4） |
 
 > **canonical 優先規則（3.4）**: 意味名と `ReferenceN` 解釈が食い違う場合、`name`（canonical）の解釈を優先する。`reference` は導出 alias であり独立権威を持たない（3.3）。これは正本が field 行 1 枚である構造から従う。
@@ -390,7 +391,7 @@ graph LR
 ### Integration Tests（契約整合）
 - 2 投影一致: 各 `[[entry.field]]` から canonical（name）と alias（reference）の 2 投影が同一 field に由来し、対応表が field 行以外に存在しない（3.2/10.2）。
 - 封筒被覆: `[envelope]` が即時/失敗/遅延/Raise/相関の 5 写像をすべて規定し、`areka-P0-shiori-com` の `Request`/`Complete`/`Raise`・`SHIORI_S_PENDING` 意味論へ一意対応する（4.1-4.5）。
-- 沈黙裁定追跡: `entry.silence_ref` が参照する `[[silence_ruling]]` が存在し、`basis` が典拠区分を持つ（7.1/7.2）。
+- 沈黙裁定追跡: `entry`/`field` の `silence_ref`（配列）が参照する各 `[[silence_ruling]]` が存在し、`basis` が典拠区分を持つ（複数裁定の網羅）（7.1/7.2）。
 - ukadoc 同値: スナップショット sha256 が `SOURCES.md` と一致し、典拠列（provenance）が ukadoc 記述有無と整合（7.3）。
 
 ### E2E（生成同値）
