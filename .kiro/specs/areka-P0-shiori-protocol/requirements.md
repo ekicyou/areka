@@ -125,14 +125,15 @@
 2. While プレリリース段階である間, the 正準 content プロトコル shall 後方互換保証を持たない流動契約とし、契約変更時は in-tree の全実装者を lockstep で更新する前提を宣言する。
 3. The 正準 content プロトコル shall 将来の高レート通信余地（`areka-P0-shiori-com` の D6）を阻害しない封筒設計であること（通知＝応答不要・バッチ要求の許容等）を方針として宣言する。
 
-### Requirement 10: native wire のエイリアス併載方針（未決・要裁定）
+### Requirement 10: 正準契約における意味名と `ReferenceN` の結合（併載基準＋任意フィルタ）
 
-**Objective:** As a 互換契約の裁定者, I want native（COM-SHIORI）wire に `ReferenceN` エイリアスを併載するか意味名のみ（pristine）かを契約として裁定したい, so that native 脳経路の wire 表現が一意に定まる
+**Objective:** As a 互換契約の裁定者, I want 本仕様を「意味名と `ReferenceN` の結合（対応）を成立させる契約」として位置づけ、併載を契約上の基準としつつ非利用・フィルタを別レイヤに分離したい, so that 契約は両名の結合を一意に定義し、消費側の利用/非利用や areka 側のフィルタは契約を変更しない別ポリシーとして扱える
 
-> **OPEN QUESTION（Q1・本仕様内では未裁定）**: native（COM-SHIORI／native 脳向け）wire に `ReferenceN` エイリアスを併載するか、意味名のみ（pristine）とするかは、**契約面の WHAT** であり要件として裁定する必要があるが、brief.md では未決のまま要件フェーズへ持ち越されている。暫定推奨は「**native は意味名のみ（pristine）**、レガシー wire のみ `ReferenceN`/意味名を併載（Requirement 5）」だが、本要件はこの推奨を拘束的 `shall` として確定していない。要件ディスカッションで裁定すること。
+> **裁定（Q1・要件ディスカッション #1 で確定）**: 本仕様は「native 脳が何を使うか（消費側の都合）」ではなく「どういう契約が成立しているか」を定める。契約の本質は意味名と `ReferenceN` の **結合（対応）** であり、契約上の基準表現は **両名の併載** とする。pristine（意味名のみ）は契約からの省略ではなく、**areka 側の任意フィルタ**（例: native 経路を pristine 化）として実現する。消費側が `ReferenceN` を使わない判断も自由であり、いずれも契約を変更しない。
 
 #### Acceptance Criteria
 
-1. The native wire 表現契約 shall native（COM-SHIORI）wire における `ReferenceN` エイリアス併載の可否を、要件ディスカッションでの裁定後に一意に規定する。
-2. Where native wire が意味名のみ（pristine）と裁定された場合, the native wire 表現契約 shall native wire に `ReferenceN` エイリアスを載せないことを規定する。
-3. Where native wire が併載と裁定された場合, the native wire 表現契約 shall native wire に `ReferenceN` エイリアスを意味名と併載することを規定する。
+1. The 正準契約 shall 各イベントの正準 content 表現に、意味名と対応表由来の `ReferenceN` エイリアスの **両方** を含めることを基準（既定）として規定する（wire 経路によらず併載を契約上の基準とする）。
+2. The 正準契約 shall 併載される意味名と `ReferenceN` が「両名の結合を表す単一スキーマの2投影」（Requirement 3）であり、両名が同一値を指すことを規定する。
+3. Where 特定の wire 経路で `ReferenceN` を省略したい場合, the 正準契約 shall その省略を契約の変更ではなく **areka 側の任意フィルタオプション** として許容する（フィルタ機構の実装は設計フェーズ）。
+4. The 正準契約 shall 消費側（脳）がいずれの名を読む/読まないかを消費側の自由とし、その選択が契約を変更しないことを規定する。
