@@ -50,7 +50,7 @@
 - これらを「ついで」で本仕様に取り込まない。
 
 ### Allowed Dependencies
-- **典拠（読み取りのみ）**: ピン留め ukadoc スナップショット `ukadoc/list_shiori_event.html` / `list_shiori_resource.html`（`SOURCES.md`＋URL/取得日/sha256）。
+- **典拠（読み取りのみ）**: ピン留め ukadoc スナップショット `ukadoc/list_shiori_event.html` / `list_shiori_resource.html` / `spec_shiori3.html`（SHIORI/3.0 規約・予約ヘッダ典拠）（`SOURCES.md`＋URL/取得日/sha256）。
 - **整合先（変更しない）**: `areka-P0-shiori-com` の ABI 意味論（`crates/shiori-abi`: `IShiori`/`IShioriHost`・`Request`/`Complete`/`Raise`・`CorrelationToken(u64)`・`SHIORI_S_PENDING`）・設計判断 D5/D6/D7。封筒マッピングはこの意味論へ被せる。
 - **方針整合**: COMPAT §5（上位設計）・§2（沈黙ルール）。
 - **依存制約**: 本仕様の成果物は **静的データファイル（TOML）＋生成された doc/Web** のみ。コード依存（serde/json-rpc クレート等）を `shiori-abi` 等へ追加しない（最小依存・32bit 可搬性を崩さない。投影機構を実装しないため不要）。
@@ -202,10 +202,12 @@ graph TB
 #### `[reserved_headers]` — 予約 SHIORI ヘッダ集合（6.x）
 | キー | 型 | 必須 | 意味 |
 |------|----|----|------|
-| `request` | array of `str` | 必須 | リクエスト予約ヘッダ集合（例 `["ID","Sender","SecurityLevel","Charset","Reference*","BaseID","Status"]`）（6.1） |
-| `response` | array of `str` | 必須 | レスポンス予約ヘッダ集合（例 `["Value","Marker","Status","Charset"]`）（6.1） |
+| `request` | array of `str` | 必須 | リクエスト予約ヘッダ集合（seed 例 `["ID","Sender","SecurityLevel","Charset","Reference*","BaseID","Status"]`。全集合は `ukadoc/spec_shiori3.html` で使われる範疇から確定）（6.1） |
+| `response` | array of `str` | 必須 | レスポンス予約ヘッダ集合（seed 例 `["Value","Marker","Status","Charset"]`。全集合は同上から確定）（6.1） |
 | `collision_policy` | `str` | 必須 | 意味名が予約と衝突した場合の是正方針（`"rename_to_noncolliding"`）（6.2） |
-| `description` | `str` | 必須 | 予約集合の典拠・人間可読説明（R11-4） |
+| `description` | `str` | 必須 | 予約集合の典拠（`spec_shiori3.html`）・人間可読説明（R11-4） |
+
+> **予約集合の確定責任（本仕様所有・委譲しない）**: 予約ヘッダ集合は意味名（`entry.field.name`）の非衝突を縛る契約データであり、本仕様が所有する（host-32 へは委譲しない＝契約分散の回避）。典拠は `ukadoc/spec_shiori3.html`（SHIORI/3.0 規約本体）で、**ukadoc で使われる範疇のヘッダ**を母集合とする。上記の値は seed 例であり、全集合の転記はイベントカタログ同様に本仕様の実装作業（ピン留め `spec_shiori3.html` から抽出）。
 
 #### `[[entry]]` — 正準イベント／リソースカタログ（1.x, 2.x, 10.x）
 Event と Resource は同形のため単一 entry 型へ一般化（research §8.3 Generalization）。
@@ -296,7 +298,7 @@ graph LR
 | 5.2 | 意味名併載既定 | `[meta] legacy_coemit_default=true` | — |
 | 5.3 | per-DLL opt-out キルスイッチ | 任意フィルタ宣言（10.3 具体化） | — |
 | 5.4 | Reference0/1/2… 不消去/不改名 | `[meta] reference_immutable=true` | — |
-| 6.1 | 予約ヘッダ非衝突保証 | `[reserved_headers]` + field.name 制約 | — |
+| 6.1 | 予約ヘッダ非衝突保証（集合は本仕様所有・典拠 spec_shiori3） | `[reserved_headers]`（spec_shiori3 由来）+ field.name 制約 | — |
 | 6.2 | 衝突時是正 | `[reserved_headers] collision_policy` | — |
 | 7.1 | 沈黙裁定を対応表へ記録 | `[[silence_ruling]]` | — |
 | 7.2 | 各裁定の典拠識別 | `silence_ruling.basis`, `*.provenance` | — |
