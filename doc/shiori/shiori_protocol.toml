@@ -3299,6 +3299,2389 @@ provenance = "ssp_secondary"
 description = "従量課金回線かどうか（unknown/unrestricted/fixed/variable）。[SSP 2.6.15]"
 
 # ──────────────────────────────────────────────────────────────────────
+# 以下 task 3.2: 入力ボックス/ダイアログ/選択肢/サーフェス/マウス/ゲームパッド/
+#               選択領域モード/音声認識・合成 系イベント抽出（58 件）。
+# カテゴリ slug: inputbox/dialog/choice/surface/mouse/gamepad/selection_mode/voice。
+# 意味名（name）は ukadoc の各 ReferenceN 説明から導出した snake_case canonical 名であり、
+# reference（alias）と同一 field 行から 2 投影される（要件 3.2/3.3）。
+# マウス系は ukadoc 共通 Reference レイアウト（0=X,1=Y,2=ホイール/0,3=スコープ,
+# 4=当たり判定,5=ボタン/方向,6=入力デバイス,7=連続クリック回数）に一貫した意味名を適用。
+# ──────────────────────────────────────────────────────────────────────
+
+# ── 入力ボックスイベント（inputbox）──
+[[entry]]
+id = "OnTeachStart"
+kind = "event"
+category = "inputbox"
+dispatch = "get"
+response = "sakura_script"
+provenance = "ukadoc"
+description = "TeachBox がオープンした際に発生。"
+
+[[entry]]
+id = "OnTeachInputCancel"
+kind = "event"
+category = "inputbox"
+dispatch = "get"
+response = "sakura_script"
+provenance = "ukadoc"
+description = "TeachBox が閉じられた際に発生。"
+
+[[entry.field]]
+name = "cancel_placeholder"
+reference = 0
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "空文字列。OnUserInputCancel と Reference 番号をあわせるための空席。"
+
+[[entry.field]]
+name = "cancel_reason"
+reference = 1
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "閉じられた場合は cancel。"
+
+[[entry]]
+id = "OnTeach"
+kind = "event"
+category = "inputbox"
+dispatch = "get"
+response = "sakura_script"
+provenance = "ukadoc"
+description = "TeachBox からの入力があった際に発生。"
+
+[[entry.field]]
+name = "input_history"
+reference = 0
+reference_variadic = true
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "入力された言葉の履歴。Reference0 が 1 回目～最新の入力が末尾（n 回目の入力が Reference[n-1]）。"
+
+[[entry]]
+id = "OnCommunicate"
+kind = "event"
+category = "inputbox"
+dispatch = "get"
+response = "sakura_script"
+provenance = "ukadoc"
+description = "CommunicateBox または他ゴーストからスクリプトを渡された際に発生。"
+
+[[entry.field]]
+name = "sender_name"
+reference = 0
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "Box からは user、ゴーストからはゴーストの本体側名。"
+
+[[entry.field]]
+name = "script_content"
+reference = 1
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "スクリプトの内容。"
+
+[[entry.field]]
+name = "extra_info"
+reference = 2
+reference_variadic = true
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "拡張情報。"
+
+[[entry]]
+id = "OnCommunicateInputCancel"
+kind = "event"
+category = "inputbox"
+dispatch = "get"
+response = "sakura_script"
+provenance = "ukadoc"
+description = "CommunicateBox が閉じられた際に発生。"
+
+[[entry.field]]
+name = "cancel_placeholder"
+reference = 0
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "空文字列。OnUserInputCancel と Reference 番号をあわせるための空席。"
+
+[[entry.field]]
+name = "cancel_reason"
+reference = 1
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "閉じられた場合は cancel。"
+
+[[entry]]
+id = "OnUserInput"
+kind = "event"
+category = "inputbox"
+dispatch = "get"
+response = "sakura_script"
+provenance = "ukadoc"
+description = "InputBox に入力され決定された際に発生。"
+
+[[entry.field]]
+name = "input_box_id"
+reference = 0
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "InputBox の ID。"
+
+[[entry.field]]
+name = "input_value"
+reference = 1
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "入力された内容。"
+
+[[entry.field]]
+name = "input_supplement"
+reference = 2
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "入力内容補足（sliderinput のみ最小,最大。ほかは空欄）。"
+
+[[entry.field]]
+name = "extra_reference"
+reference = 3
+reference_variadic = true
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "--reference= で指定した追加情報。"
+
+[[entry]]
+id = "OnUserInputCancel"
+kind = "event"
+category = "inputbox"
+dispatch = "get"
+response = "sakura_script"
+provenance = "ukadoc"
+description = "InputBox が閉じられた際に発生。タイムアウトかつ無応答時は互換性確保のため OnUserInput Reference1=timeout が送られる。"
+
+[[entry.field]]
+name = "input_event_id"
+reference = 0
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "入力のイベント ID。"
+
+[[entry.field]]
+name = "cancel_reason"
+reference = 1
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "タイムアウトした場合は timeout、閉じられた場合は close。"
+
+[[entry.field]]
+name = "input_supplement"
+reference = 2
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "入力内容補足（sliderinput のみ最小,最大。ほかは空欄）。"
+
+[[entry.field]]
+name = "extra_reference"
+reference = 3
+reference_variadic = true
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "--reference= で指定した追加情報。"
+
+[[entry]]
+id = "inputbox.autocomplete"
+kind = "event"
+category = "inputbox"
+dispatch = "get"
+response = "text"
+provenance = "ssp_secondary"
+description = "ボックス展開時に発生。バイト値 1 区切りでテキストのリストを返すと入力ボックスでオートコンプリートが動作する。"
+
+[[entry.field]]
+name = "box_kind"
+reference = 0
+type = "str"
+required = false
+provenance = "ssp_secondary"
+description = "入力ボックスの種類。inputbox・teachbox・communicatebox のいずれか。"
+
+[[entry.field]]
+name = "completion_event_id"
+reference = 1
+type = "str"
+required = false
+provenance = "ssp_secondary"
+description = "inputbox の場合のみ、入力完了時に起きるイベント名／識別子。"
+
+# ── ダイアログボックスイベント（dialog）──
+[[entry]]
+id = "OnSystemDialog"
+kind = "event"
+category = "dialog"
+dispatch = "get"
+response = "sakura_script"
+provenance = "ssp_secondary"
+description = "ファイル関連のダイアログで保存/OK が押された際に発生。"
+
+[[entry.field]]
+name = "dialog_kind"
+reference = 0
+type = "str"
+required = false
+provenance = "ssp_secondary"
+description = "open・save・folder・color のいずれか。"
+
+[[entry.field]]
+name = "event_id"
+reference = 1
+type = "str"
+required = false
+provenance = "ssp_secondary"
+description = "イベント ID。"
+
+[[entry.field]]
+name = "result_value"
+reference = 2
+type = "str"
+required = false
+provenance = "ssp_secondary"
+description = "ファイルのパスまたはカンマ区切りの RGB 値。"
+
+[[entry]]
+id = "OnSystemDialogCancel"
+kind = "event"
+category = "dialog"
+dispatch = "get"
+response = "sakura_script"
+provenance = "ssp_secondary"
+description = "ファイル関連のダイアログでキャンセルが押された際に発生。"
+
+[[entry.field]]
+name = "dialog_kind"
+reference = 0
+type = "str"
+required = false
+provenance = "ssp_secondary"
+description = "open・save・folder・color のいずれか。"
+
+[[entry.field]]
+name = "event_id"
+reference = 1
+type = "str"
+required = false
+provenance = "ssp_secondary"
+description = "イベント ID。"
+
+[[entry]]
+id = "OnConfigurationDialogHelp"
+kind = "event"
+category = "dialog"
+dispatch = "get"
+response = "sakura_script"
+provenance = "ssp_secondary"
+description = "設定ダイアログのヘルプボタンで項目をクリックした際に発生。"
+
+[[entry.field]]
+name = "dialog_id"
+reference = 0
+type = "str"
+required = false
+provenance = "ssp_secondary"
+description = "ダイアログ ID（setup/ghost/folder/display/dictation/talk/network/biff/application/messenger/international/developer 等）。"
+
+[[entry.field]]
+name = "dialog_title"
+reference = 1
+type = "str"
+required = false
+provenance = "ssp_secondary"
+description = "ダイアログタイトル。"
+
+[[entry.field]]
+name = "item_type_name"
+reference = 2
+type = "str"
+required = false
+provenance = "ssp_secondary"
+description = "項目タイプ:項目名。"
+
+[[entry.field]]
+name = "item_content_text"
+reference = 3
+type = "str"
+required = false
+provenance = "ssp_secondary"
+description = "項目内容テキスト。"
+
+[[entry]]
+id = "OnGhostTermsAccept"
+kind = "event"
+category = "dialog"
+dispatch = "get"
+response = "sakura_script"
+provenance = "ssp_secondary"
+description = "利用条件ダイアログで受諾が押された際に発生。右上の閉じるボタンではイベントは発生しない。"
+
+[[entry]]
+id = "OnGhostTermsDecline"
+kind = "event"
+category = "dialog"
+dispatch = "get"
+response = "sakura_script"
+provenance = "ssp_secondary"
+description = "利用条件ダイアログで拒否が押された際に発生。右上の閉じるボタンではイベントは発生しない。"
+
+# ── 選択肢イベント（choice）──
+[[entry]]
+id = "OnChoiceSelect"
+kind = "event"
+category = "choice"
+dispatch = "get"
+response = "sakura_script"
+provenance = "ukadoc"
+description = "選択肢が選択された際に発生。"
+
+[[entry.field]]
+name = "choice_id"
+reference = 0
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "選択された選択肢の ID。"
+
+[[entry.field]]
+name = "extra_choice_id"
+reference = 1
+reference_variadic = true
+type = "str"
+required = false
+provenance = "ssp_secondary"
+description = "CROW のみ。選択肢の 2 番目以降の ID。"
+
+[[entry]]
+id = "OnChoiceSelectEx"
+kind = "event"
+category = "choice"
+dispatch = "get"
+response = "sakura_script"
+provenance = "ssp_secondary"
+description = "選択肢が選択された際に発生。OnChoiceSelect よりも先に開始。"
+
+[[entry.field]]
+name = "choice_label"
+reference = 0
+type = "str"
+required = false
+provenance = "ssp_secondary"
+description = "選択肢のテキスト（ラベル）。"
+
+[[entry.field]]
+name = "choice_id"
+reference = 1
+type = "str"
+required = false
+provenance = "ssp_secondary"
+description = "選択肢の ID。"
+
+[[entry.field]]
+name = "extra_info"
+reference = 2
+reference_variadic = true
+type = "str"
+required = false
+provenance = "ssp_secondary"
+description = "拡張情報（\\q タグ内の 3 番目以降の引数）。"
+
+[[entry]]
+id = "OnChoiceEnter"
+kind = "event"
+category = "choice"
+dispatch = "get"
+response = "sakura_script"
+provenance = "ukadoc"
+description = "選択肢上にカーソルが乗った際と外れた際に発生。外れた際は Reference なしで発生する。"
+
+[[entry.field]]
+name = "choice_label"
+reference = 0
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "選択肢のテキスト（ラベル）。"
+
+[[entry.field]]
+name = "choice_id"
+reference = 1
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "選択肢の ID。"
+
+[[entry.field]]
+name = "extra_info"
+reference = 2
+reference_variadic = true
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "拡張情報（\\q タグ内の 3 番目以降の引数）。"
+
+[[entry]]
+id = "OnChoiceTimeout"
+kind = "event"
+category = "choice"
+dispatch = "get"
+response = "sakura_script"
+provenance = "ukadoc"
+description = "選択肢待ち時間がタイムアウトした際に発生。"
+
+[[entry.field]]
+name = "timeout_script"
+reference = 0
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "タイムアウトしたスクリプト。"
+
+[[entry]]
+id = "OnChoiceHover"
+kind = "event"
+category = "choice"
+dispatch = "get"
+response = "sakura_script"
+provenance = "ssp_secondary"
+description = "選択肢上で静止された際に発生。"
+
+[[entry.field]]
+name = "choice_label"
+reference = 0
+type = "str"
+required = false
+provenance = "ssp_secondary"
+description = "選択肢のテキスト（ラベル）。"
+
+[[entry.field]]
+name = "choice_id"
+reference = 1
+type = "str"
+required = false
+provenance = "ssp_secondary"
+description = "選択肢の ID。"
+
+[[entry.field]]
+name = "extra_info"
+reference = 2
+reference_variadic = true
+type = "str"
+required = false
+provenance = "ssp_secondary"
+description = "拡張情報（\\q タグ内の 3 番目以降の引数）。"
+
+[[entry]]
+id = "OnAnchorSelect"
+kind = "event"
+category = "choice"
+dispatch = "get"
+response = "sakura_script"
+provenance = "ukadoc"
+description = "\\_a ジャンパがクリックされた瞬間に発生。"
+
+[[entry.field]]
+name = "anchor_id"
+reference = 0
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "選択されたジャンパの ID。"
+
+[[entry]]
+id = "OnAnchorSelectEx"
+kind = "event"
+category = "choice"
+dispatch = "get"
+response = "sakura_script"
+provenance = "ssp_secondary"
+description = "\\_a ジャンパがクリックされた瞬間に発生。SHIORI が何も返さなかった場合のみ続けて OnAnchorSelect が発生する。"
+
+[[entry.field]]
+name = "anchor_text"
+reference = 0
+type = "str"
+required = false
+provenance = "ssp_secondary"
+description = "選択されたジャンパのテキスト。"
+
+[[entry.field]]
+name = "anchor_id"
+reference = 1
+type = "str"
+required = false
+provenance = "ssp_secondary"
+description = "選択されたジャンパの ID。"
+
+[[entry.field]]
+name = "extra_info"
+reference = 2
+reference_variadic = true
+type = "str"
+required = false
+provenance = "ssp_secondary"
+description = "拡張情報（\\_a タグ内の 2 番目以降の引数）。"
+
+[[entry]]
+id = "OnAnchorEnter"
+kind = "event"
+category = "choice"
+dispatch = "get"
+response = "sakura_script"
+provenance = "ssp_secondary"
+description = "\\_a ジャンパ上にカーソルが乗った際と外れた際に発生。"
+
+[[entry.field]]
+name = "anchor_text"
+reference = 0
+type = "str"
+required = false
+provenance = "ssp_secondary"
+description = "ジャンパのテキスト。"
+
+[[entry.field]]
+name = "anchor_id"
+reference = 1
+type = "str"
+required = false
+provenance = "ssp_secondary"
+description = "ジャンパの ID。"
+
+[[entry.field]]
+name = "extra_info"
+reference = 2
+reference_variadic = true
+type = "str"
+required = false
+provenance = "ssp_secondary"
+description = "拡張情報（\\_a タグ内の 2 番目以降の引数）。"
+
+[[entry]]
+id = "OnAnchorHover"
+kind = "event"
+category = "choice"
+dispatch = "get"
+response = "sakura_script"
+provenance = "ssp_secondary"
+description = "\\_a ジャンパ上で静止された際に発生。"
+
+[[entry.field]]
+name = "anchor_text"
+reference = 0
+type = "str"
+required = false
+provenance = "ssp_secondary"
+description = "ジャンパのテキスト。"
+
+[[entry.field]]
+name = "anchor_id"
+reference = 1
+type = "str"
+required = false
+provenance = "ssp_secondary"
+description = "ジャンパの ID。"
+
+[[entry.field]]
+name = "extra_info"
+reference = 2
+reference_variadic = true
+type = "str"
+required = false
+provenance = "ssp_secondary"
+description = "拡張情報（\\_a タグ内の 2 番目以降の引数）。"
+
+# ── サーフェスイベント（surface）──
+[[entry]]
+id = "OnSurfaceChange"
+kind = "event"
+category = "surface"
+dispatch = "notify"
+response = "none"
+provenance = "ukadoc"
+description = "サーフェスが変わった際に発生（[NOTIFY]）。"
+
+[[entry.field]]
+name = "self_surface_id"
+reference = 0
+type = "i32"
+required = false
+provenance = "ukadoc"
+description = "本体側の現在サーフェス。"
+
+[[entry.field]]
+name = "partner_surface_id"
+reference = 1
+type = "i32"
+required = false
+provenance = "ukadoc"
+description = "相方側の現在サーフェス。"
+
+[[entry.field]]
+name = "surface_detail"
+reference = 2
+type = "str"
+required = false
+provenance = "ssp_secondary"
+description = "SSP のみ。キャラ ID,サーフェス番号,幅,高さ。"
+
+[[entry]]
+id = "OnSurfaceRestore"
+kind = "event"
+category = "surface"
+dispatch = "get"
+response = "sakura_script"
+provenance = "ukadoc"
+description = "トーク後一定時間経過後に一度発生（SSP では喋りタイムアウト秒数+15 秒後）。"
+
+[[entry.field]]
+name = "self_surface_id"
+reference = 0
+type = "i32"
+required = false
+provenance = "ukadoc"
+description = "本体側の現在サーフェス。"
+
+[[entry.field]]
+name = "partner_surface_id"
+reference = 1
+type = "i32"
+required = false
+provenance = "ukadoc"
+description = "相方側の現在サーフェス。"
+
+[[entry]]
+id = "OnOtherSurfaceChange"
+kind = "event"
+category = "surface"
+dispatch = "notify"
+response = "none"
+provenance = "ssp_secondary"
+description = "自分以外の他ゴーストのサーフェスが変わった際に通知される。標準では無効で \\![set,othersurfacechange,true] による有効化が必要。"
+
+[[entry.field]]
+name = "ghost_name"
+reference = 0
+type = "str"
+required = false
+provenance = "ssp_secondary"
+description = "ゴースト名。"
+
+[[entry.field]]
+name = "ghost_sakura_name"
+reference = 1
+type = "str"
+required = false
+provenance = "ssp_secondary"
+description = "ゴースト Sakura 名。"
+
+[[entry.field]]
+name = "window_id"
+reference = 2
+type = "i32"
+required = false
+provenance = "ssp_secondary"
+description = "サーフェスが切り替わったウインドウ ID（Sakura=0）。"
+
+[[entry.field]]
+name = "new_surface_id"
+reference = 3
+type = "i32"
+required = false
+provenance = "ssp_secondary"
+description = "新サーフェス ID。"
+
+[[entry.field]]
+name = "old_surface_id"
+reference = 4
+type = "i32"
+required = false
+provenance = "ssp_secondary"
+description = "旧サーフェス ID。"
+
+[[entry.field]]
+name = "new_surface_rect"
+reference = 5
+type = "str"
+required = false
+provenance = "ssp_secondary"
+description = "新しいサーフェスの大きさ（座標：左,上,右,下）。"
+
+# ── マウスイベント（mouse）── 共通 Reference レイアウト（0=X,1=Y,2=ホイール/0,3=スコープ,4=当たり判定,5=ボタン,6=入力デバイス）
+[[entry]]
+id = "OnMouseClick"
+kind = "event"
+category = "mouse"
+dispatch = "get"
+response = "sakura_script"
+provenance = "ukadoc"
+description = "左・右（＋中）ボタンでクリックされ OnMouseUp に反応しない場合に発生。"
+
+[[entry.field]]
+name = "cursor_x"
+reference = 0
+type = "i32"
+required = false
+provenance = "ukadoc"
+description = "マウスカーソルの x 座標（ローカル座標）。"
+
+[[entry.field]]
+name = "cursor_y"
+reference = 1
+type = "i32"
+required = false
+provenance = "ukadoc"
+description = "マウスカーソルの y 座標（ローカル座標）。"
+
+[[entry.field]]
+name = "wheel_delta"
+reference = 2
+type = "i32"
+required = false
+provenance = "ukadoc"
+description = "常に 0。"
+
+[[entry.field]]
+name = "char_scope"
+reference = 3
+type = "i32"
+required = false
+provenance = "ukadoc"
+description = "本体は 0、相方は 1。SSP/CROW では 2 以降もある。"
+
+[[entry.field]]
+name = "collision_area_name"
+reference = 4
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "当たり判定の識別子。"
+
+[[entry.field]]
+name = "button_kind"
+reference = 5
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "左クリックは 0、右クリックは 1、中クリックは 2（互換仕様：OnMouseClickEx への移行を推奨）。"
+
+[[entry.field]]
+name = "input_device"
+reference = 6
+type = "str"
+required = false
+provenance = "ssp_secondary"
+description = "SSP/NINIX のみ。入力デバイス（touch/pen/eraser/mouse）。"
+
+[[entry]]
+id = "OnMouseClickEx"
+kind = "event"
+category = "mouse"
+dispatch = "get"
+response = "sakura_script"
+provenance = "ssp_secondary"
+description = "左・右以外のボタンでクリックされ OnMouseUpEx に反応しない場合に発生。"
+
+[[entry.field]]
+name = "cursor_x"
+reference = 0
+type = "i32"
+required = false
+provenance = "ssp_secondary"
+description = "マウスカーソルの x 座標（ローカル座標）。"
+
+[[entry.field]]
+name = "cursor_y"
+reference = 1
+type = "i32"
+required = false
+provenance = "ssp_secondary"
+description = "マウスカーソルの y 座標（ローカル座標）。"
+
+[[entry.field]]
+name = "wheel_delta"
+reference = 2
+type = "i32"
+required = false
+provenance = "ssp_secondary"
+description = "常に 0。"
+
+[[entry.field]]
+name = "char_scope"
+reference = 3
+type = "i32"
+required = false
+provenance = "ssp_secondary"
+description = "本体は 0、相方は 1。SSP/CROW では 2 以降もある。"
+
+[[entry.field]]
+name = "collision_area_name"
+reference = 4
+type = "str"
+required = false
+provenance = "ssp_secondary"
+description = "当たり判定の識別子。"
+
+[[entry.field]]
+name = "button_kind"
+reference = 5
+type = "str"
+required = false
+provenance = "ssp_secondary"
+description = "ホイールクリック/中ボタンは middle、拡張ボタン 1 は xbutton1、拡張ボタン 2 は xbutton2。"
+
+[[entry.field]]
+name = "input_device"
+reference = 6
+type = "str"
+required = false
+provenance = "ssp_secondary"
+description = "入力デバイス（touch/pen/eraser/mouse）。"
+
+[[entry]]
+id = "OnMouseDoubleClick"
+kind = "event"
+category = "mouse"
+dispatch = "get"
+response = "sakura_script"
+provenance = "ukadoc"
+description = "左・右ボタンでダブルクリックされた際に発生。"
+
+[[entry.field]]
+name = "cursor_x"
+reference = 0
+type = "i32"
+required = false
+provenance = "ukadoc"
+description = "マウスカーソルの x 座標（ローカル座標）。"
+
+[[entry.field]]
+name = "cursor_y"
+reference = 1
+type = "i32"
+required = false
+provenance = "ukadoc"
+description = "マウスカーソルの y 座標（ローカル座標）。"
+
+[[entry.field]]
+name = "wheel_delta"
+reference = 2
+type = "i32"
+required = false
+provenance = "ukadoc"
+description = "常に 0。"
+
+[[entry.field]]
+name = "char_scope"
+reference = 3
+type = "i32"
+required = false
+provenance = "ukadoc"
+description = "本体は 0、相方は 1。SSP/CROW では 2 以降もある。"
+
+[[entry.field]]
+name = "collision_area_name"
+reference = 4
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "当たり判定の識別子。"
+
+[[entry.field]]
+name = "button_kind"
+reference = 5
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "左クリックは 0、右クリックは 1。"
+
+[[entry.field]]
+name = "input_device"
+reference = 6
+type = "str"
+required = false
+provenance = "ssp_secondary"
+description = "SSP/NINIX のみ。入力デバイス（touch/pen/eraser/mouse）。"
+
+[[entry]]
+id = "OnMouseDoubleClickEx"
+kind = "event"
+category = "mouse"
+dispatch = "get"
+response = "sakura_script"
+provenance = "ssp_secondary"
+description = "左・右以外のボタンでダブルクリックされた際に発生。"
+
+[[entry.field]]
+name = "cursor_x"
+reference = 0
+type = "i32"
+required = false
+provenance = "ssp_secondary"
+description = "マウスカーソルの x 座標（ローカル座標）。"
+
+[[entry.field]]
+name = "cursor_y"
+reference = 1
+type = "i32"
+required = false
+provenance = "ssp_secondary"
+description = "マウスカーソルの y 座標（ローカル座標）。"
+
+[[entry.field]]
+name = "wheel_delta"
+reference = 2
+type = "i32"
+required = false
+provenance = "ssp_secondary"
+description = "常に 0。"
+
+[[entry.field]]
+name = "char_scope"
+reference = 3
+type = "i32"
+required = false
+provenance = "ssp_secondary"
+description = "本体は 0、相方は 1。SSP/CROW では 2 以降もある。"
+
+[[entry.field]]
+name = "collision_area_name"
+reference = 4
+type = "str"
+required = false
+provenance = "ssp_secondary"
+description = "当たり判定の識別子。"
+
+[[entry.field]]
+name = "button_kind"
+reference = 5
+type = "str"
+required = false
+provenance = "ssp_secondary"
+description = "ホイールクリック/中ボタンは middle、拡張ボタン 1 は xbutton1、拡張ボタン 2 は xbutton2。"
+
+[[entry.field]]
+name = "input_device"
+reference = 6
+type = "str"
+required = false
+provenance = "ssp_secondary"
+description = "入力デバイス（touch/pen/eraser/mouse）。"
+
+[[entry]]
+id = "OnMouseMultipleClick"
+kind = "event"
+category = "mouse"
+dispatch = "get"
+response = "sakura_script"
+provenance = "ssp_secondary"
+description = "3 回以上連続でクリックされた際に発生。無応答時は通常の OnMouseClick/OnMouseDoubleClick の流れに戻る。"
+
+[[entry.field]]
+name = "cursor_x"
+reference = 0
+type = "i32"
+required = false
+provenance = "ssp_secondary"
+description = "マウスカーソルの x 座標（ローカル座標）。"
+
+[[entry.field]]
+name = "cursor_y"
+reference = 1
+type = "i32"
+required = false
+provenance = "ssp_secondary"
+description = "マウスカーソルの y 座標（ローカル座標）。"
+
+[[entry.field]]
+name = "wheel_delta"
+reference = 2
+type = "i32"
+required = false
+provenance = "ssp_secondary"
+description = "常に 0。"
+
+[[entry.field]]
+name = "char_scope"
+reference = 3
+type = "i32"
+required = false
+provenance = "ssp_secondary"
+description = "本体は 0、相方は 1。それ以降 2～。"
+
+[[entry.field]]
+name = "collision_area_name"
+reference = 4
+type = "str"
+required = false
+provenance = "ssp_secondary"
+description = "当たり判定の識別子。"
+
+[[entry.field]]
+name = "button_kind"
+reference = 5
+type = "str"
+required = false
+provenance = "ssp_secondary"
+description = "左クリックは 0、右クリックは 1。"
+
+[[entry.field]]
+name = "input_device"
+reference = 6
+type = "str"
+required = false
+provenance = "ssp_secondary"
+description = "入力デバイス（touch/pen/eraser/mouse）。"
+
+[[entry.field]]
+name = "click_count"
+reference = 7
+type = "i32"
+required = false
+provenance = "ssp_secondary"
+description = "連続クリック回数。"
+
+[[entry]]
+id = "OnMouseMultipleClickEx"
+kind = "event"
+category = "mouse"
+dispatch = "get"
+response = "sakura_script"
+provenance = "ssp_secondary"
+description = "左・右以外のボタンで 3 回以上連続クリックされた際に発生。無応答時は通常の OnMouseClickEx/OnMouseDoubleClickEx の流れに戻る。"
+
+[[entry.field]]
+name = "cursor_x"
+reference = 0
+type = "i32"
+required = false
+provenance = "ssp_secondary"
+description = "マウスカーソルの x 座標（ローカル座標）。"
+
+[[entry.field]]
+name = "cursor_y"
+reference = 1
+type = "i32"
+required = false
+provenance = "ssp_secondary"
+description = "マウスカーソルの y 座標（ローカル座標）。"
+
+[[entry.field]]
+name = "wheel_delta"
+reference = 2
+type = "i32"
+required = false
+provenance = "ssp_secondary"
+description = "常に 0。"
+
+[[entry.field]]
+name = "char_scope"
+reference = 3
+type = "i32"
+required = false
+provenance = "ssp_secondary"
+description = "本体は 0、相方は 1。それ以降 2～。"
+
+[[entry.field]]
+name = "collision_area_name"
+reference = 4
+type = "str"
+required = false
+provenance = "ssp_secondary"
+description = "当たり判定の識別子。"
+
+[[entry.field]]
+name = "button_kind"
+reference = 5
+type = "str"
+required = false
+provenance = "ssp_secondary"
+description = "ホイールクリック/中ボタンは middle、拡張ボタン 1 は xbutton1、拡張ボタン 2 は xbutton2。"
+
+[[entry.field]]
+name = "input_device"
+reference = 6
+type = "str"
+required = false
+provenance = "ssp_secondary"
+description = "入力デバイス（touch/pen/eraser/mouse）。"
+
+[[entry.field]]
+name = "click_count"
+reference = 7
+type = "i32"
+required = false
+provenance = "ssp_secondary"
+description = "連続クリック回数。"
+
+[[entry]]
+id = "OnMouseUp"
+kind = "event"
+category = "mouse"
+dispatch = "get"
+response = "sakura_script"
+provenance = "ssp_secondary"
+description = "左・右のマウスボタンが放された際に発生。"
+
+[[entry.field]]
+name = "cursor_x"
+reference = 0
+type = "i32"
+required = false
+provenance = "ssp_secondary"
+description = "マウスカーソルの x 座標（ローカル座標）。"
+
+[[entry.field]]
+name = "cursor_y"
+reference = 1
+type = "i32"
+required = false
+provenance = "ssp_secondary"
+description = "マウスカーソルの y 座標（ローカル座標）。"
+
+[[entry.field]]
+name = "wheel_delta"
+reference = 2
+type = "i32"
+required = false
+provenance = "ssp_secondary"
+description = "常に 0。"
+
+[[entry.field]]
+name = "char_scope"
+reference = 3
+type = "i32"
+required = false
+provenance = "ssp_secondary"
+description = "本体は 0、相方は 1。SSP/CROW では 2 以降もある。"
+
+[[entry.field]]
+name = "collision_area_name"
+reference = 4
+type = "str"
+required = false
+provenance = "ssp_secondary"
+description = "当たり判定の識別子。"
+
+[[entry.field]]
+name = "button_kind"
+reference = 5
+type = "str"
+required = false
+provenance = "ssp_secondary"
+description = "左クリックは 0、右クリックは 1、中クリックは 2（互換仕様：OnMouseClickEx への移行を推奨）。"
+
+[[entry.field]]
+name = "input_device"
+reference = 6
+type = "str"
+required = false
+provenance = "ssp_secondary"
+description = "入力デバイス（touch/pen/eraser/mouse）。"
+
+[[entry]]
+id = "OnMouseUpEx"
+kind = "event"
+category = "mouse"
+dispatch = "get"
+response = "sakura_script"
+provenance = "ssp_secondary"
+description = "左・右以外のマウスボタンが放された際に発生。"
+
+[[entry.field]]
+name = "cursor_x"
+reference = 0
+type = "i32"
+required = false
+provenance = "ssp_secondary"
+description = "マウスカーソルの x 座標（ローカル座標）。"
+
+[[entry.field]]
+name = "cursor_y"
+reference = 1
+type = "i32"
+required = false
+provenance = "ssp_secondary"
+description = "マウスカーソルの y 座標（ローカル座標）。"
+
+[[entry.field]]
+name = "wheel_delta"
+reference = 2
+type = "i32"
+required = false
+provenance = "ssp_secondary"
+description = "常に 0。"
+
+[[entry.field]]
+name = "char_scope"
+reference = 3
+type = "i32"
+required = false
+provenance = "ssp_secondary"
+description = "本体は 0、相方は 1。SSP/CROW では 2 以降もある。"
+
+[[entry.field]]
+name = "collision_area_name"
+reference = 4
+type = "str"
+required = false
+provenance = "ssp_secondary"
+description = "当たり判定の識別子。"
+
+[[entry.field]]
+name = "button_kind"
+reference = 5
+type = "str"
+required = false
+provenance = "ssp_secondary"
+description = "ホイールクリック/中ボタンは middle、拡張ボタン 1 は xbutton1、拡張ボタン 2 は xbutton2。"
+
+[[entry.field]]
+name = "input_device"
+reference = 6
+type = "str"
+required = false
+provenance = "ssp_secondary"
+description = "入力デバイス（touch/pen/eraser/mouse）。"
+
+[[entry]]
+id = "OnMouseDown"
+kind = "event"
+category = "mouse"
+dispatch = "get"
+response = "sakura_script"
+provenance = "ssp_secondary"
+description = "左・右のマウスボタンが押された際に発生。"
+
+[[entry.field]]
+name = "cursor_x"
+reference = 0
+type = "i32"
+required = false
+provenance = "ssp_secondary"
+description = "マウスカーソルの x 座標（ローカル座標）。"
+
+[[entry.field]]
+name = "cursor_y"
+reference = 1
+type = "i32"
+required = false
+provenance = "ssp_secondary"
+description = "マウスカーソルの y 座標（ローカル座標）。"
+
+[[entry.field]]
+name = "wheel_delta"
+reference = 2
+type = "i32"
+required = false
+provenance = "ssp_secondary"
+description = "常に 0。"
+
+[[entry.field]]
+name = "char_scope"
+reference = 3
+type = "i32"
+required = false
+provenance = "ssp_secondary"
+description = "本体は 0、相方は 1。SSP/CROW では 2 以降もある。"
+
+[[entry.field]]
+name = "collision_area_name"
+reference = 4
+type = "str"
+required = false
+provenance = "ssp_secondary"
+description = "当たり判定の識別子。"
+
+[[entry.field]]
+name = "button_kind"
+reference = 5
+type = "str"
+required = false
+provenance = "ssp_secondary"
+description = "左クリックは 0、右クリックは 1、中クリックは 2（互換仕様：OnMouseClickEx への移行を推奨）。"
+
+[[entry.field]]
+name = "input_device"
+reference = 6
+type = "str"
+required = false
+provenance = "ssp_secondary"
+description = "入力デバイス（touch/pen/eraser/mouse）。"
+
+[[entry]]
+id = "OnMouseDownEx"
+kind = "event"
+category = "mouse"
+dispatch = "get"
+response = "sakura_script"
+provenance = "ssp_secondary"
+description = "左・右以外のマウスボタンが押された際に発生。"
+
+[[entry.field]]
+name = "cursor_x"
+reference = 0
+type = "i32"
+required = false
+provenance = "ssp_secondary"
+description = "マウスカーソルの x 座標（ローカル座標）。"
+
+[[entry.field]]
+name = "cursor_y"
+reference = 1
+type = "i32"
+required = false
+provenance = "ssp_secondary"
+description = "マウスカーソルの y 座標（ローカル座標）。"
+
+[[entry.field]]
+name = "wheel_delta"
+reference = 2
+type = "i32"
+required = false
+provenance = "ssp_secondary"
+description = "常に 0。"
+
+[[entry.field]]
+name = "char_scope"
+reference = 3
+type = "i32"
+required = false
+provenance = "ssp_secondary"
+description = "本体は 0、相方は 1。SSP/CROW では 2 以降もある。"
+
+[[entry.field]]
+name = "collision_area_name"
+reference = 4
+type = "str"
+required = false
+provenance = "ssp_secondary"
+description = "当たり判定の識別子。"
+
+[[entry.field]]
+name = "button_kind"
+reference = 5
+type = "str"
+required = false
+provenance = "ssp_secondary"
+description = "ホイールクリック/中ボタンは middle、拡張ボタン 1 は xbutton1、拡張ボタン 2 は xbutton2。"
+
+[[entry.field]]
+name = "input_device"
+reference = 6
+type = "str"
+required = false
+provenance = "ssp_secondary"
+description = "入力デバイス（touch/pen/eraser/mouse）。"
+
+[[entry]]
+id = "OnMouseMove"
+kind = "event"
+category = "mouse"
+dispatch = "get"
+response = "sakura_script"
+provenance = "ukadoc"
+description = "マウスが移動した際に発生。"
+
+[[entry.field]]
+name = "cursor_x"
+reference = 0
+type = "i32"
+required = false
+provenance = "ukadoc"
+description = "マウスカーソルの x 座標（ローカル座標）。"
+
+[[entry.field]]
+name = "cursor_y"
+reference = 1
+type = "i32"
+required = false
+provenance = "ukadoc"
+description = "マウスカーソルの y 座標（ローカル座標）。"
+
+[[entry.field]]
+name = "wheel_delta"
+reference = 2
+type = "i32"
+required = false
+provenance = "ukadoc"
+description = "マウスホイールの回転量および回転方向。"
+
+[[entry.field]]
+name = "char_scope"
+reference = 3
+type = "i32"
+required = false
+provenance = "ukadoc"
+description = "本体は 0、相方は 1。SSP/CROW では 2 以降もある。"
+
+[[entry.field]]
+name = "collision_area_name"
+reference = 4
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "当たり判定の識別子。"
+
+[[entry.field]]
+name = "always_zero"
+reference = 5
+type = "i32"
+required = false
+provenance = "ssp_secondary"
+description = "SSP/NINIX のみ。常に 0。"
+
+[[entry.field]]
+name = "input_device"
+reference = 6
+type = "str"
+required = false
+provenance = "ssp_secondary"
+description = "SSP のみ。入力デバイス（touch/pen/eraser/mouse）。"
+
+[[entry]]
+id = "OnMouseWheel"
+kind = "event"
+category = "mouse"
+dispatch = "get"
+response = "sakura_script"
+provenance = "ukadoc"
+description = "マウスホイールが回転した際に発生。タッチパネル環境では OnMouseGesture の up/down に無応答時の代替イベントとしても発生する。"
+
+[[entry.field]]
+name = "cursor_x"
+reference = 0
+type = "i32"
+required = false
+provenance = "ukadoc"
+description = "マウスカーソルの x 座標（ローカル座標）。"
+
+[[entry.field]]
+name = "cursor_y"
+reference = 1
+type = "i32"
+required = false
+provenance = "ukadoc"
+description = "マウスカーソルの y 座標（ローカル座標）。"
+
+[[entry.field]]
+name = "wheel_delta"
+reference = 2
+type = "i32"
+required = false
+provenance = "ukadoc"
+description = "マウスホイールの回転量および回転方向。"
+
+[[entry.field]]
+name = "char_scope"
+reference = 3
+type = "i32"
+required = false
+provenance = "ukadoc"
+description = "本体は 0、相方は 1。SSP/CROW では 2 以降もある。"
+
+[[entry.field]]
+name = "collision_area_name"
+reference = 4
+type = "str"
+required = false
+provenance = "ukadoc"
+description = "当たり判定の識別子。"
+
+[[entry.field]]
+name = "always_zero"
+reference = 5
+type = "i32"
+required = false
+provenance = "ssp_secondary"
+description = "SSP/NINIX のみ。常に 0。"
+
+[[entry.field]]
+name = "input_device"
+reference = 6
+type = "str"
+required = false
+provenance = "ssp_secondary"
+description = "SSP/NINIX のみ。入力デバイス（touch/pen/eraser/mouse）。"
+
+[[entry]]
+id = "OnMouseEnterAll"
+kind = "event"
+category = "mouse"
+dispatch = "get"
+response = "sakura_script"
+provenance = "ssp_secondary"
+description = "マウスがキャラクターウインドウに入った際に発生。"
+
+[[entry.field]]
+name = "cursor_x"
+reference = 0
+type = "i32"
+required = false
+provenance = "ssp_secondary"
+description = "マウスカーソルの x 座標（ローカル座標）。"
+
+[[entry.field]]
+name = "cursor_y"
+reference = 1
+type = "i32"
+required = false
+provenance = "ssp_secondary"
+description = "マウスカーソルの y 座標（ローカル座標）。"
+
+[[entry.field]]
+name = "wheel_delta"
+reference = 2
+type = "i32"
+required = false
+provenance = "ssp_secondary"
+description = "常に 0。"
+
+[[entry.field]]
+name = "char_scope"
+reference = 3
+type = "i32"
+required = false
+provenance = "ssp_secondary"
+description = "本体は 0、相方は 1。SSP/CROW では 2 以降もある。"
+
+[[entry.field]]
+name = "collision_area_name"
+reference = 4
+type = "str"
+required = false
+provenance = "ssp_secondary"
+description = "当たり判定の識別子。"
+
+[[entry.field]]
+name = "always_zero"
+reference = 5
+type = "i32"
+required = false
+provenance = "ssp_secondary"
+description = "常に 0。"
+
+[[entry.field]]
+name = "input_device"
+reference = 6
+type = "str"
+required = false
+provenance = "ssp_secondary"
+description = "入力デバイス（touch/pen/eraser/mouse）。"
+
+[[entry]]
+id = "OnMouseLeaveAll"
+kind = "event"
+category = "mouse"
+dispatch = "get"
+response = "sakura_script"
+provenance = "ssp_secondary"
+description = "マウスがキャラクターウインドウから出た際に発生。"
+
+[[entry.field]]
+name = "cursor_x"
+reference = 0
+type = "i32"
+required = false
+provenance = "ssp_secondary"
+description = "マウスカーソルの x 座標（ローカル座標）。"
+
+[[entry.field]]
+name = "cursor_y"
+reference = 1
+type = "i32"
+required = false
+provenance = "ssp_secondary"
+description = "マウスカーソルの y 座標（ローカル座標）。"
+
+[[entry.field]]
+name = "wheel_delta"
+reference = 2
+type = "i32"
+required = false
+provenance = "ssp_secondary"
+description = "常に 0。"
+
+[[entry.field]]
+name = "char_scope"
+reference = 3
+type = "i32"
+required = false
+provenance = "ssp_secondary"
+description = "本体は 0、相方は 1。SSP/CROW では 2 以降もある。"
+
+[[entry.field]]
+name = "collision_area_name"
+reference = 4
+type = "str"
+required = false
+provenance = "ssp_secondary"
+description = "当たり判定の識別子。"
+
+[[entry.field]]
+name = "always_zero"
+reference = 5
+type = "i32"
+required = false
+provenance = "ssp_secondary"
+description = "常に 0。"
+
+[[entry.field]]
+name = "input_device"
+reference = 6
+type = "str"
+required = false
+provenance = "ssp_secondary"
+description = "入力デバイス（touch/pen/eraser/mouse）。"
+
+[[entry]]
+id = "OnMouseEnter"
+kind = "event"
+category = "mouse"
+dispatch = "get"
+response = "sakura_script"
+provenance = "ssp_secondary"
+description = "マウスが当たり判定に入った際に発生。"
+
+[[entry.field]]
+name = "cursor_x"
+reference = 0
+type = "i32"
+required = false
+provenance = "ssp_secondary"
+description = "マウスカーソルの x 座標（ローカル座標）。"
+
+[[entry.field]]
+name = "cursor_y"
+reference = 1
+type = "i32"
+required = false
+provenance = "ssp_secondary"
+description = "マウスカーソルの y 座標（ローカル座標）。"
+
+[[entry.field]]
+name = "wheel_delta"
+reference = 2
+type = "i32"
+required = false
+provenance = "ssp_secondary"
+description = "常に 0。"
+
+[[entry.field]]
+name = "char_scope"
+reference = 3
+type = "i32"
+required = false
+provenance = "ssp_secondary"
+description = "本体は 0、相方は 1。SSP/CROW では 2 以降もある。"
+
+[[entry.field]]
+name = "collision_area_name"
+reference = 4
+type = "str"
+required = false
+provenance = "ssp_secondary"
+description = "当たり判定の識別子。"
+
+[[entry.field]]
+name = "always_zero"
+reference = 5
+type = "i32"
+required = false
+provenance = "ssp_secondary"
+description = "常に 0。"
+
+[[entry.field]]
+name = "input_device"
+reference = 6
+type = "str"
+required = false
+provenance = "ssp_secondary"
+description = "入力デバイス（touch/pen/eraser/mouse）。"
+
+[[entry]]
+id = "OnMouseLeave"
+kind = "event"
+category = "mouse"
+dispatch = "get"
+response = "sakura_script"
+provenance = "ssp_secondary"
+description = "マウスが当たり判定から出た際に発生。"
+
+[[entry.field]]
+name = "cursor_x"
+reference = 0
+type = "i32"
+required = false
+provenance = "ssp_secondary"
+description = "マウスカーソルの x 座標（ローカル座標）。"
+
+[[entry.field]]
+name = "cursor_y"
+reference = 1
+type = "i32"
+required = false
+provenance = "ssp_secondary"
+description = "マウスカーソルの y 座標（ローカル座標）。"
+
+[[entry.field]]
+name = "wheel_delta"
+reference = 2
+type = "i32"
+required = false
+provenance = "ssp_secondary"
+description = "常に 0。"
+
+[[entry.field]]
+name = "char_scope"
+reference = 3
+type = "i32"
+required = false
+provenance = "ssp_secondary"
+description = "本体は 0、相方は 1。SSP/CROW では 2 以降もある。"
+
+[[entry.field]]
+name = "collision_area_name"
+reference = 4
+type = "str"
+required = false
+provenance = "ssp_secondary"
+description = "当たり判定の識別子。"
+
+[[entry.field]]
+name = "always_zero"
+reference = 5
+type = "i32"
+required = false
+provenance = "ssp_secondary"
+description = "常に 0。"
+
+[[entry.field]]
+name = "input_device"
+reference = 6
+type = "str"
+required = false
+provenance = "ssp_secondary"
+description = "入力デバイス（touch/pen/eraser/mouse）。"
+
+[[entry]]
+id = "OnMouseDragStart"
+kind = "event"
+category = "mouse"
+dispatch = "get"
+response = "sakura_script"
+provenance = "ssp_secondary"
+description = "マウスをドラッグし始めた際に発生。パッシブモードでは抑制される。"
+
+[[entry.field]]
+name = "cursor_x"
+reference = 0
+type = "i32"
+required = false
+provenance = "ssp_secondary"
+description = "マウスカーソルの x 座標（ローカル座標）。"
+
+[[entry.field]]
+name = "cursor_y"
+reference = 1
+type = "i32"
+required = false
+provenance = "ssp_secondary"
+description = "マウスカーソルの y 座標（ローカル座標）。"
+
+[[entry.field]]
+name = "wheel_delta"
+reference = 2
+type = "i32"
+required = false
+provenance = "ssp_secondary"
+description = "マウスホイールの回転量および回転方向。"
+
+[[entry.field]]
+name = "char_scope"
+reference = 3
+type = "i32"
+required = false
+provenance = "ssp_secondary"
+description = "本体は 0、相方は 1。SSP/CROW では 2 以降もある。"
+
+[[entry.field]]
+name = "collision_area_name"
+reference = 4
+type = "str"
+required = false
+provenance = "ssp_secondary"
+description = "当たり判定の識別子。"
+
+[[entry.field]]
+name = "button_kind"
+reference = 5
+type = "str"
+required = false
+provenance = "ssp_secondary"
+description = "左クリックは 0、右クリックは 1。"
+
+[[entry.field]]
+name = "input_device"
+reference = 6
+type = "str"
+required = false
+provenance = "ssp_secondary"
+description = "入力デバイス（touch/pen/eraser/mouse）。"
+
+[[entry]]
+id = "OnMouseDragEnd"
+kind = "event"
+category = "mouse"
+dispatch = "get"
+response = "sakura_script"
+provenance = "ssp_secondary"
+description = "マウスをドラッグし終えた際に発生。パッシブモードでは抑制される。"
+
+[[entry.field]]
+name = "cursor_x"
+reference = 0
+type = "i32"
+required = false
+provenance = "ssp_secondary"
+description = "マウスカーソルの x 座標（ローカル座標）。"
+
+[[entry.field]]
+name = "cursor_y"
+reference = 1
+type = "i32"
+required = false
+provenance = "ssp_secondary"
+description = "マウスカーソルの y 座標（ローカル座標）。"
+
+[[entry.field]]
+name = "wheel_delta"
+reference = 2
+type = "i32"
+required = false
+provenance = "ssp_secondary"
+description = "マウスホイールの回転量および回転方向。"
+
+[[entry.field]]
+name = "char_scope"
+reference = 3
+type = "i32"
+required = false
+provenance = "ssp_secondary"
+description = "本体は 0、相方は 1。SSP/CROW では 2 以降もある。"
+
+[[entry.field]]
+name = "collision_area_name"
+reference = 4
+type = "str"
+required = false
+provenance = "ssp_secondary"
+description = "当たり判定の識別子。"
+
+[[entry.field]]
+name = "button_kind"
+reference = 5
+type = "str"
+required = false
+provenance = "ssp_secondary"
+description = "左クリックは 0、右クリックは 1。"
+
+[[entry.field]]
+name = "input_device"
+reference = 6
+type = "str"
+required = false
+provenance = "ssp_secondary"
+description = "入力デバイス（touch/pen/eraser/mouse）。"
+
+[[entry]]
+id = "OnMouseHover"
+kind = "event"
+category = "mouse"
+dispatch = "get"
+response = "sakura_script"
+provenance = "ssp_secondary"
+description = "マウスが静止している際に発生。"
+
+[[entry.field]]
+name = "cursor_x"
+reference = 0
+type = "i32"
+required = false
+provenance = "ssp_secondary"
+description = "マウスカーソルの x 座標（ローカル座標）。"
+
+[[entry.field]]
+name = "cursor_y"
+reference = 1
+type = "i32"
+required = false
+provenance = "ssp_secondary"
+description = "マウスカーソルの y 座標（ローカル座標）。"
+
+[[entry.field]]
+name = "wheel_delta"
+reference = 2
+type = "i32"
+required = false
+provenance = "ssp_secondary"
+description = "常に 0。"
+
+[[entry.field]]
+name = "char_scope"
+reference = 3
+type = "i32"
+required = false
+provenance = "ssp_secondary"
+description = "本体は 0、相方は 1。SSP/CROW では 2 以降もある。"
+
+[[entry.field]]
+name = "collision_area_name"
+reference = 4
+type = "str"
+required = false
+provenance = "ssp_secondary"
+description = "当たり判定の識別子。"
+
+[[entry.field]]
+name = "always_zero"
+reference = 5
+type = "i32"
+required = false
+provenance = "ssp_secondary"
+description = "常に 0。"
+
+[[entry.field]]
+name = "input_device"
+reference = 6
+type = "str"
+required = false
+provenance = "ssp_secondary"
+description = "入力デバイス（touch/pen/eraser/mouse）。"
+
+[[entry]]
+id = "OnMouseGesture"
+kind = "event"
+category = "mouse"
+dispatch = "get"
+response = "sakura_script"
+provenance = "ssp_secondary"
+description = "マウスを右ドラッグまたはホイールをドラッグした際に発生。Reference レイアウトは他マウスイベントと異なる。タッチパネル環境で up/down に無応答時は OnMouseWheel が代替発生する。"
+
+[[entry.field]]
+name = "char_scope"
+reference = 0
+type = "i32"
+required = false
+provenance = "ssp_secondary"
+description = "本体は 0、相方は 1。SSP/CROW では 2 以降もある。"
+
+[[entry.field]]
+name = "cursor_xy"
+reference = 1
+type = "str"
+required = false
+provenance = "ssp_secondary"
+description = "マウスカーソルの xy 座標（バイト値 1 区切り）。"
+
+[[entry.field]]
+name = "collision_area_name"
+reference = 2
+type = "str"
+required = false
+provenance = "ssp_secondary"
+description = "当たり判定の識別子。"
+
+[[entry.field]]
+name = "drag_start_xy"
+reference = 3
+type = "str"
+required = false
+provenance = "ssp_secondary"
+description = "右ドラッグを開始したマウスカーソルの xy 座標（バイト値 1 区切り）。"
+
+[[entry.field]]
+name = "drag_start_collision_area_name"
+reference = 4
+type = "str"
+required = false
+provenance = "ssp_secondary"
+description = "右ドラッグを開始した当たり判定の識別子。"
+
+[[entry.field]]
+name = "gesture_direction"
+reference = 5
+type = "str"
+required = false
+provenance = "ssp_secondary"
+description = "ジェスチャー方向（left_up/up/right_up/left/right/left_down/down/right_down/circle.cw/circle.ccw/end）。"
+
+[[entry.field]]
+name = "gesture_angle"
+reference = 6
+type = "i32"
+required = false
+provenance = "ssp_secondary"
+description = "ジェスチャー移動角度。右 0 度から反時計回りに 360 度。"
+
+# ── ゲームパッドイベント（gamepad）──
+[[entry]]
+id = "OnGamepadButtonDown"
+kind = "event"
+category = "gamepad"
+dispatch = "get"
+response = "sakura_script"
+provenance = "ssp_secondary"
+description = "ゲームパッドのボタンが押された瞬間に発生。全ゴーストにブロードキャストされる。"
+
+[[entry.field]]
+name = "pad_index"
+reference = 0
+type = "i32"
+required = false
+provenance = "ssp_secondary"
+description = "パッドインデックス。"
+
+[[entry.field]]
+name = "button_name"
+reference = 1
+type = "str"
+required = false
+provenance = "ssp_secondary"
+description = "ボタン名（A/B/X/Y/LB/RB/LSB/RSB/Start/Back/DPadUp/DPadDown/DPadLeft/DPadRight）。"
+
+[[entry]]
+id = "OnGamepadButtonUp"
+kind = "event"
+category = "gamepad"
+dispatch = "get"
+response = "sakura_script"
+provenance = "ssp_secondary"
+description = "ゲームパッドのボタンが離された瞬間に発生。全ゴーストにブロードキャストされる。"
+
+[[entry.field]]
+name = "pad_index"
+reference = 0
+type = "i32"
+required = false
+provenance = "ssp_secondary"
+description = "パッドインデックス。"
+
+[[entry.field]]
+name = "button_name"
+reference = 1
+type = "str"
+required = false
+provenance = "ssp_secondary"
+description = "ボタン名（A/B/X/Y/LB/RB/LSB/RSB/Start/Back/DPadUp/DPadDown/DPadLeft/DPadRight）。"
+
+[[entry]]
+id = "OnGamepadAxisMove"
+kind = "event"
+category = "gamepad"
+dispatch = "get"
+response = "sakura_script"
+provenance = "ssp_secondary"
+description = "ゲームパッドのアナログスティック/トリガーの値が前回通知時から大きく変化した際に発生。全ゴーストにブロードキャストされる。"
+
+[[entry.field]]
+name = "pad_index"
+reference = 0
+type = "i32"
+required = false
+provenance = "ssp_secondary"
+description = "パッドインデックス。"
+
+[[entry.field]]
+name = "axis_name"
+reference = 1
+type = "str"
+required = false
+provenance = "ssp_secondary"
+description = "軸名（LeftStickX/LeftStickY/RightStickX/RightStickY/LeftTrigger/RightTrigger）。"
+
+[[entry.field]]
+name = "axis_raw_value"
+reference = 2
+type = "i32"
+required = false
+provenance = "ssp_secondary"
+description = "生値（整数）。範囲はベースウェアの実装に依存する。"
+
+[[entry.field]]
+name = "axis_normalized_value"
+reference = 3
+type = "str"
+required = false
+provenance = "ssp_secondary"
+description = "正規化値（小数）。スティックは -1.0～1.0、トリガーは 0.0～1.0。通常はこちらを使用する。"
+
+[[entry]]
+id = "OnGamepadConnected"
+kind = "event"
+category = "gamepad"
+dispatch = "get"
+response = "sakura_script"
+provenance = "ssp_secondary"
+description = "ゲームパッドが接続された際に発生。SSP 起動時に既に接続されていた場合も発生する。全ゴーストにブロードキャストされる。"
+
+[[entry.field]]
+name = "pad_index"
+reference = 0
+type = "i32"
+required = false
+provenance = "ssp_secondary"
+description = "パッドインデックス。"
+
+[[entry]]
+id = "OnGamepadDisconnected"
+kind = "event"
+category = "gamepad"
+dispatch = "get"
+response = "sakura_script"
+provenance = "ssp_secondary"
+description = "ゲームパッドが切断された際に発生。全ゴーストにブロードキャストされる。"
+
+[[entry.field]]
+name = "pad_index"
+reference = 0
+type = "i32"
+required = false
+provenance = "ssp_secondary"
+description = "パッドインデックス。"
+
+# ── 選択領域モードイベント（selection_mode）──
+[[entry]]
+id = "OnSelectModeBegin"
+kind = "event"
+category = "selection_mode"
+dispatch = "get"
+response = "sakura_script"
+provenance = "ssp_secondary"
+description = "\\![enter,selectrect] 実行後に矩形選択モードに入った際に発生。"
+
+[[entry.field]]
+name = "char_scope"
+reference = 0
+type = "i32"
+required = false
+provenance = "ssp_secondary"
+description = "本体は 0、相方は 1。SSP/CROW では 2 以降もある。"
+
+[[entry.field]]
+name = "select_mode"
+reference = 1
+type = "str"
+required = false
+provenance = "ssp_secondary"
+description = "選択モード。今のところ rect のみ。"
+
+[[entry]]
+id = "OnSelectModeCancel"
+kind = "event"
+category = "selection_mode"
+dispatch = "get"
+response = "sakura_script"
+provenance = "ssp_secondary"
+description = "\\![leave,selectrect] 実行後に未選択または空の選択領域だった場合に発生。"
+
+[[entry.field]]
+name = "char_scope"
+reference = 0
+type = "i32"
+required = false
+provenance = "ssp_secondary"
+description = "本体は 0、相方は 1。SSP/CROW では 2 以降もある。"
+
+[[entry.field]]
+name = "select_mode"
+reference = 1
+type = "str"
+required = false
+provenance = "ssp_secondary"
+description = "選択モード。今のところ rect のみ。"
+
+[[entry]]
+id = "OnSelectModeComplete"
+kind = "event"
+category = "selection_mode"
+dispatch = "get"
+response = "sakura_script"
+provenance = "ssp_secondary"
+description = "\\![leave,selectrect] 実行後に矩形選択モードが解除された際に発生。"
+
+[[entry.field]]
+name = "char_scope"
+reference = 0
+type = "i32"
+required = false
+provenance = "ssp_secondary"
+description = "本体は 0、相方は 1。SSP/CROW では 2 以降もある。"
+
+[[entry.field]]
+name = "select_mode"
+reference = 1
+type = "str"
+required = false
+provenance = "ssp_secondary"
+description = "選択モード。今のところ rect のみ。"
+
+[[entry.field]]
+name = "select_rect"
+reference = 2
+type = "str"
+required = false
+provenance = "ssp_secondary"
+description = "選択結果（長方形枠）。カンマ区切りで左,上,右,下の座標。"
+
+[[entry]]
+id = "OnSelectModeMouseDown"
+kind = "event"
+category = "selection_mode"
+dispatch = "get"
+response = "sakura_script"
+provenance = "ssp_secondary"
+description = "矩形選択モード中にマウスボタンが押された際に発生。"
+
+[[entry.field]]
+name = "char_scope"
+reference = 0
+type = "i32"
+required = false
+provenance = "ssp_secondary"
+description = "本体は 0、相方は 1。SSP/CROW では 2 以降もある。"
+
+[[entry.field]]
+name = "select_mode"
+reference = 1
+type = "str"
+required = false
+provenance = "ssp_secondary"
+description = "選択モード。今のところ rect のみ。"
+
+[[entry.field]]
+name = "mouse_position"
+reference = 2
+type = "str"
+required = false
+provenance = "ssp_secondary"
+description = "マウスの位置。カンマ区切りで X(横),Y(縦) 座標。"
+
+[[entry]]
+id = "OnSelectModeMouseUp"
+kind = "event"
+category = "selection_mode"
+dispatch = "get"
+response = "sakura_script"
+provenance = "ssp_secondary"
+description = "矩形選択モード中にマウスボタンが離された際に発生。"
+
+[[entry.field]]
+name = "char_scope"
+reference = 0
+type = "i32"
+required = false
+provenance = "ssp_secondary"
+description = "本体は 0、相方は 1。SSP/CROW では 2 以降もある。"
+
+[[entry.field]]
+name = "select_mode"
+reference = 1
+type = "str"
+required = false
+provenance = "ssp_secondary"
+description = "選択モード。今のところ rect のみ。"
+
+[[entry.field]]
+name = "mouse_position"
+reference = 2
+type = "str"
+required = false
+provenance = "ssp_secondary"
+description = "マウスの位置。カンマ区切りで X(横),Y(縦) 座標。"
+
+# ── 音声認識・合成イベント（voice）──
+[[entry]]
+id = "OnSpeechSynthesisStatus"
+kind = "event"
+category = "voice"
+dispatch = "notify"
+response = "none"
+provenance = "ssp_secondary"
+description = "起動時と音声合成機能が ON/OFF された時に発生（[NOTIFY/他GET] 文脈依存）。"
+
+[[entry.field]]
+name = "enabled_flag"
+reference = 0
+type = "bool"
+required = false
+provenance = "ssp_secondary"
+description = "0/1（無効/有効）。"
+
+[[entry]]
+id = "OnVoiceRecognitionStatus"
+kind = "event"
+category = "voice"
+dispatch = "notify"
+response = "none"
+provenance = "ssp_secondary"
+description = "起動時と音声認識機能が ON/OFF された時に発生（[NOTIFY/他GET] 文脈依存）。"
+
+[[entry.field]]
+name = "enabled_flag"
+reference = 0
+type = "bool"
+required = false
+provenance = "ssp_secondary"
+description = "0/1（無効/有効）。"
+
+[[entry]]
+id = "OnVoiceRecognitionWord"
+kind = "event"
+category = "voice"
+dispatch = "get"
+response = "sakura_script"
+provenance = "ssp_secondary"
+description = "音声認識で単語が認識された際に発生。"
+
+[[entry.field]]
+name = "char_scope"
+reference = 0
+type = "i32"
+required = false
+provenance = "ssp_secondary"
+description = "本体は 0、相方は 1。SSP/CROW では 2 以降もある。"
+
+[[entry.field]]
+name = "recognized_word"
+reference = 1
+type = "str"
+required = false
+provenance = "ssp_secondary"
+description = "認識した単語。最初の名前呼びかけ時はキャラ名そのものになり、その際はメニュー表示が望ましい。"
+
+# ──────────────────────────────────────────────────────────────────────
 # [[silence_ruling]] — 沈黙裁定ログ（要件 7.x）
 # ukadoc が沈黙する裁定（GET/NOTIFY 分類・追加ヘッダ可否・意味割り当て等）の追跡。
 # ──────────────────────────────────────────────────────────────────────
