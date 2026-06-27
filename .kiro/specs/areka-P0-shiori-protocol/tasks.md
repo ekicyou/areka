@@ -53,7 +53,7 @@
   - _Requirements: 1.1, 1.2, 1.3, 1.4, 2.1, 2.2, 2.3_
   - _Depends: 3.1_
   - _Boundary: shiori_protocol.toml_
-- [ ] 3.3 イベント抽出（インストール/更新/システム/残カテゴリ網羅）
+- [x] 3.3 イベント抽出（インストール/更新/システム/残カテゴリ網羅）
   - 残る全 ukadoc イベントカテゴリを抽出し、Event ページの網羅（約 261 件）を完成する
   - Observable: ukadoc Event ページの全カテゴリが TOML に網羅され、欠落カテゴリがゼロ
   - _Requirements: 1.1, 1.2, 1.3, 1.4, 2.1, 2.2, 2.3_
@@ -103,4 +103,5 @@
 ## Implementation Notes
 - 3.1: 意味名はスネークケース英語で ukadoc の Reference 説明から導出。カテゴリ slug は lowercase 英語固定（lifecycle/time/clock/network_update/mailcheck/rss/calendar/sstp/comm_other/send_failure/network_state）。Reference* 可変長は `reference_variadic=true`。予約ヘッダは PascalCase なので snake_case 意味名と構造的に非衝突。
 - 3.1→4.2 引き継ぎ: dispatch 文脈依存/沈黙ケースは 4.2 で `[[silence_ruling]]`(topic=dispatch_class) を付与すべし — (a) OnDressupChanged は `[GET]/[NOTIFY]` 文脈依存（現状 get 採用・裁定未付与）、(b) OnCacheSuspend/OnCacheRestore は ukadoc 無印だが notify 採用（既定 get からの逸脱）、(c) 骨格由来の `sr_dispatch_onboot` は 3.1 で OnBoot から参照解除され孤立 — 4.2 で適切に再割当 or 整理する。
+- 3.3: Event ページ網羅は **`<dl id=...>` アンカー集合 ⇔ TOML event id の 1:1 アサーション**で機械検証（caption/widget アンカー除外: ghost_*/supported_*/caption_*）。ドット形式 ID（`OnUpdate.OnDownloadBegin`/`OnUpdateOther.*`/`OnHeadlinesense.OnFind`）は **verbatim 保持**しカテゴリは兄弟（network_update/rss）へ寄せる。`OnUpdateOther.OnMD5CompareComplete/Failure` は ukadoc に Reference0 が無く field は Reference1 始まり（捏造禁止・原文忠実）。列挙意味は `response_meaning` 不使用の既存形に倣い field.description へ符号化。→ 3.4(resource) も同様に list_shiori_resource.html の `<dl>` アンカー 1:1 で網羅検証すべし。
 - 3.2→4.2 引き継ぎ: 文脈依存 dispatch を 4.2 で `[[silence_ruling]]`(topic=dispatch_class) に裁定 — OnSpeechSynthesisStatus/OnVoiceRecognitionStatus は `[NOTIFY/他GET]`（現状 notify 採用）、OnOtherSurfaceChange は無印だが通知意味で notify 採用、*InputCancel 系（OnTeachInputCancel/OnCommunicateInputCancel/OnUserInputCancel）は応答期待が沈黙（現状 get/sakura_script 既定）。OnMouseClick/ClickEx の R2 は ukadoc「常に0」だが位置整合で wheel_delta 命名（OnMouseWheel/Move では always_zero）。
