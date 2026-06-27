@@ -31,7 +31,7 @@
   - _Requirements: 4.1, 4.2, 4.3, 4.4, 4.5, 9.3_
   - _Depends: 1.1_
   - _Boundary: shiori_protocol.toml_
-- [ ] 2.3 予約 SHIORI ヘッダ集合の確定
+- [x] 2.3 予約 SHIORI ヘッダ集合の確定
   - ピン留め `ukadoc/spec_shiori3.html` を解析し、ukadoc で使われる範疇の request/response 予約ヘッダ集合を `[reserved_headers]` へ確定（seed でなく確定集合）し、`collision_policy` を符号化する
   - Observable: `[reserved_headers].request/response` が spec_shiori3 由来の確定集合を保持し、典拠が `description` に記録される
   - _Requirements: 6.1, 6.2_

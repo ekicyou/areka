@@ -44,14 +44,14 @@ description = "正準 content の封筒は json-rpc 2.0（protocol=jsonrpc-2.0�
 
 # ──────────────────────────────────────────────────────────────────────
 # [reserved_headers] — 予約 SHIORI ヘッダ集合（要件 6.x）
-# 典拠: ukadoc/spec_shiori3.html（SHIORI/3.0 規約本体）。
-# 下記の値は seed 例（task 2.3 で全集合を spec_shiori3.html から確定）。
+# 典拠: ukadoc/spec_shiori3.html（SHIORI/3.0 規約本体）の #request / #response 章。
+# 下記は spec_shiori3.html から確定した ukadoc 範疇の予約ヘッダ全集合（task 2.3）。
 # ──────────────────────────────────────────────────────────────────────
 [reserved_headers]
-request = ["ID", "Sender", "SecurityLevel", "Charset", "Reference*", "BaseID", "Status"]
-response = ["Value", "Marker", "Status", "Charset"]
+request = ["Charset", "Sender", "SenderType", "SecurityLevel", "SecurityOrigin", "Status", "ID", "BaseID", "Reference*", "X-SSTP-PassThru-*"]
+response = ["Charset", "Sender", "Value", "ValueNotify", "SecurityLevel", "Marker", "ErrorLevel", "ErrorDescription", "BalloonOffset", "Reference*", "Age", "MarkerSend", "X-SSTP-PassThru-*"]
 collision_policy = "rename_to_noncolliding"
-description = "予約 SHIORI ヘッダ集合。意味名（entry.field.name）はこれらと衝突してはならない（要件 6.1）。衝突時は collision_policy=rename_to_noncolliding に従い非衝突名へ是正する（要件 6.2）。Reference* はレガシー ReferenceN 系列（可変長含む）の予約を表す。典拠は ukadoc/spec_shiori3.html。本集合の確定責任は本仕様が所有し host-32 へ委譲しない（契約分散の回避）。現値は seed 例であり全集合の転記は本仕様の後続実装作業（task 2.3）。"
+description = "予約 SHIORI ヘッダ集合。意味名（entry.field.name）はこれらと衝突してはならない（要件 6.1）。衝突時は collision_policy=rename_to_noncolliding に従い非衝突名へ是正する（要件 6.2）。典拠は ukadoc/spec_shiori3.html の #request / #response 章であり、本集合はその ukadoc 範疇で定義される予約ヘッダの確定集合である（要件 6.1/11.4）。request は #request 章の各ヘッダ定義（Charset/Sender/SenderType/SecurityLevel/SecurityOrigin/Status/ID/BaseID/Reference*/X-SSTP-PassThru-*）から確定。Reference* は可変長 ReferenceN 系列（spec の『Reference の後には数字が入る。入れられる行数は制限なし』）を表すトークンで、field schema の reference_variadic と対応する。X-SSTP-PassThru-* は接頭辞可変ヘッダ族を表す。リクエスト行のメソッド（GET/NOTIFY）はヘッダではなく request-line のため非収録。response は #response 章の各ヘッダ定義（Charset/Sender/Value/ValueNotify/SecurityLevel/Marker/ErrorLevel/ErrorDescription/BalloonOffset/Reference*/Age/MarkerSend/X-SSTP-PassThru-*）から確定。レスポンスは Reference0 と Reference1～ が個別に記述されるが可変長系列として Reference* に統合した。ステータスコード（200/204/311/312/400/500）は status-line でありヘッダではないため非収録。本集合の確定責任は本仕様が所有し host-32 へ委譲しない（契約分散の回避）。"
 
 # ──────────────────────────────────────────────────────────────────────
 # [[entry]] — 正準イベント／リソースカタログ（要件 1.x / 2.x / 10.x）
