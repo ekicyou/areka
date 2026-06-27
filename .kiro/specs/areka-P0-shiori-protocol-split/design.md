@@ -334,7 +334,7 @@ graph TB
 - **比較対象 8 要素（順序非依存・過不足なく一致）**（3.4）:
   1. entry 集合（id をキーとする集合）
   2. 各 entry の field 集合（entry id × field 意味名をキーとする集合）
-  3. 共有テーブル（`[meta]`/`[mapping]`/`[envelope]`/`[reserved_headers]` の各キー・値）
+  3. 共有テーブル（`[meta]`/`[mapping]`/`[envelope]`/`[reserved_headers]` の各キー・値。ただし `[mapping]` は素直な値一致ではなく下記「`[mapping]` 意味保存例外」に従う）
   4. silence_ruling（id をキーとする集合と各値）
   5. 全 description（entry・field・silence_ruling・共有テーブルのデータ文字列）
   6. 全 provenance（entry・field・silence_ruling）
@@ -345,7 +345,9 @@ graph TB
   - **両保持 field（`reference` ＋ `reference_variadic`）**: 両キーをそのまま比較対象に含める（固定開始 N＋可変長末尾の双方が一致すること）。実測 32 件。
   - **reference 無し field**: `reference`/`reference_variadic` をいずれも持たない（None）正規化形とし、両側とも欠如することを一致条件とする。実測 6 件。
   - **任意キーの欠如同値**: `silence_ref`・`response_meaning`・`dispatch`（resource で省略可）等の任意キーは「欠如（None）」と「値あり」を区別し、両側の欠如/値が一致することを条件とする。
-- **合否（要件 9.4）**: 8 要素がすべて一致＝合格（非破壊が証明された）。1 つでも差分があれば不合格とし、契約セマンティクスが変化したものとして成果物を棄却する。
+  - **`[mapping]` 意味保存例外（4.6）**: `[mapping]` は記述データ（`canonical_key`/`alias_key`/`alias_variadic_key`/`reference_backed_by` 等）が新しいテーブルキー表現へ正当に変わるため、要素3 の素直な値一致ではなく「値キー⇄テーブルキー対応の同一性（意味保存）」として正規化比較する。新旧で指す対応関係が同一であることを一致条件とし、表現差そのものは差分と見なさない。
+  - **残差ゼロ（閉包条件・要件 3.4/9.2/9.4）**: 両側（旧 parse／新 merge）の全キー集合が上記 8 要素＋正規化規則で完全に被覆され、いずれの要素にも割り当てられない**未被覆キー（残差キー）が存在しないこと**を一致条件に含める。想定外の新規キーが片側・両側に現れた場合は残差ありとして不合格とし、「比較対象外のキーに契約情報が紛れる」抜け穴を塞ぐ。
+- **合否（要件 9.4）**: 8 要素がすべて一致**かつ残差キーがゼロ**＝合格（非破壊が証明された）。1 つでも差分があるか未被覆キーが残れば不合格とし、契約セマンティクスが変化したものとして成果物を棄却する。
 - **エビデンス**: 合否結果を非破壊のエビデンスとして残す（9.5）。
 
 **Implementation Notes**
@@ -487,7 +489,8 @@ graph TB
 - **決定的・冪等 merge**: `_manifest.toml` 順の merge が同一フラグメント群に対し同一正準ビューを生成する（2 回 merge して同値・3.1/3.2）。
 - **意味的同値ゲート（8 要素）**: `parse(旧 toml)` と `parse(merge(fragments))` が、entry 集合・field 集合・共有テーブル・silence_ruling・全 description・全 provenance・封筒マッピング・予約ヘッダ集合の各要素で順序非依存に過不足なく一致する（3.3/3.4/9.4）。
 - **reference 正規化同値**: `reference`/`reference_variadic` 両保持 field（32 件）・reference 無し field（6 件）が正規化規則に従い両側一致する（4.5/9.2・DD-2）。
-- **マッピング意味保存**: `[mapping]` の `canonical_key`/`alias_key`/`alias_variadic_key`/`reference_backed_by` 等の記述データが新キー表現でも同一意味（値キーとテーブルキーの対応）を保つ（4.6）。
+- **マッピング意味保存**: `[mapping]` の `canonical_key`/`alias_key`/`alias_variadic_key`/`reference_backed_by` 等の記述データが新キー表現でも同一意味（値キーとテーブルキーの対応）を保つ（4.6・同値ゲートの意味保存例外として受け入れ基準化）。
+- **残差ゼロ（閉包）**: 旧 parse／新 merge 双方の全キーが 8 要素＋正規化規則で被覆され、未被覆キー（残差）がゼロである（3.4/9.2/9.4）。
 
 ### E2E（移行・削除の受け入れ）
 - **無損失移行の実証**: 一回限り変換＋同値ゲートが合格し、その合否エビデンスが残る（9.5）。
