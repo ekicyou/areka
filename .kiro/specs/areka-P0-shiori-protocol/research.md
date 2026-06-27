@@ -153,3 +153,53 @@
 - host-32 のレガシー wire 翻訳モジュールの実装 — `areka-P0-shiori-host-32`。
 - さくらスクリプト／SAORI 本文の解釈・実行 — `areka-P0-sakura-script` ほか（content は不透明）。
 - COM ABI 面（`IShiori`/`IShioriHost`）・トランスポート（HSTRING 取り回し）— `areka-P0-shiori-com`（完了・変更しない）。
+
+---
+
+## 8. 設計フェーズ追補（Discovery + Synthesis 結果 / kiro-spec-design）
+
+> 本節は設計生成フェーズ（`/kiro-spec-design`）で実施した軽量ディスカバリ（Extension／統合中心）と設計シンセシスの結果を記録する。正本決定は `design.md`。本節は背景・典拠の記録。
+
+### 8.1 ディスカバリ種別と範囲
+
+- **種別: Light / 統合中心（Extension）**。本仕様は完了済み `areka-P0-shiori-com` の `IShiori` ABI（content を不透明 HSTRING で運ぶ）の「content の中身＝正準プロトコル」を定義する拡張であり、ABI 面・トランスポートには一切手を入れない。
+- 新規ディスカバリ対象は (a) ukadoc 一次資料（ピン留め HTML 2 枚）の構造抽出、(b) TOML 正本スキーマ形状の確定、の 2 点。封筒マッピング（R4）は既存 ABI 意味論（§1.2 表）への被せであり新規通信機構なし。
+
+### 8.2 ukadoc 一次資料の構造抽出（典拠: `ukadoc/list_shiori_event.html` / `list_shiori_resource.html`）
+
+スナップショットを解析し、TOML スキーマが保持すべき構造を確定した（全イベント列挙は実装作業＝下流。ここでは形状のみ）。
+
+- **Event ページ**: イベントは `<dl id="EventName">` ブロックで、カテゴリ見出し（起動/終了、時間、マウス、サーフェス、バルーン、インストール、通信、Notify 等の約 28 区分）にグルーピング。総数 ~261。
+- **各イベントの形**: `id`（イベント名 `OnXxx`）／説明文／`Reference0…ReferenceN`（各 Reference に意味記述。最大 `Reference9` ＋可変長 `Reference*`）／対応ベースウェア（Materia/SSP/CROW/Ninix とバージョン制約）。
+- **GET/NOTIFY マーカー**: 説明文中に `[NOTIFY]` の明示があれば NOTIFY コマンド発行、無印は GET（応答期待）。文言は「説明文中に[NOTIFY]と記載があるSHIORI Eventは、普通NOTIFYコマンドで発行されます。何も記載がない場合は普通GETコマンドで発行されます。」`[NOTIFY/他GET]` 等の文脈依存表記も存在。→ ukadoc が分類を明示しない/文脈依存な箇所は **R7 沈黙裁定**で確定し典拠列へ記録する。
+- **応答**: 戻り値は Value（イベントはさくらスクリプト相当、リソースはプレーンテキスト）。応答なしは Status 204。
+- **Resource ページ**: `<dl id="resource-id">`（小文字 ID、例 `version`/`craftman`/`username`/`other_homeurl_override`）。約 158。**イベントと同形の `ReferenceN`/Value 構造を共有**（Reference を持つリソースも持たないリソースもある）。戻りはプレーンテキスト。
+- **予約ヘッダ**: 両ページに HTTP 様ヘッダの独立した列挙節は無い。SHIORI/3.0 リクエスト/レスポンスの予約ヘッダ集合（`ID`/`Sender`/`SecurityLevel`/`Charset`/`Status`/`BaseID`/`Reference*`/`Value`/`Marker` 等）は R6 の対象として本仕様が **TOML 正本の `[reserved_headers]` セクションで確定集合として定義**する（典拠は ukadoc SHIORI/3.0 規約＋沈黙裁定）。
+
+### 8.3 設計シンセシス（Generalization / Build-vs-Adopt / Simplification）
+
+**Generalization（一般化）**:
+- ukadoc 解析の結果、**Event（GET/NOTIFY）と Resource は同一の `ReferenceN`/Value 形状を共有する**ことが判明。よって TOML 正本は両者を 1 種類の `[[entry]]` テーブルへ一般化し、`kind = "event" | "resource"` の判別子と、event 側のみ `dispatch = "get" | "notify"` を持たせる。スキーマを 2 系統に割らず単一の entry スキーマで全カタログ（~419 件）を保持できる。これは R1（カタログ所有）・R11-1（単一 TOML 正本）を構造で満たす。
+- 意味名（canonical）と `ReferenceN`（alias）は **entry 内の各 field 定義が `name`（意味名）と `reference`（N 位置）の両方を持つ 1 行**から機械投影される。対応表を別テーブルに二重に持たず、field 定義 1 枚＝R3「単一スキーマ→2投影」の実体とする。
+
+**Build vs Adopt（構築 vs 採用）**:
+- **Adopt**: json-rpc 2.0（D5 で採用確定・封筒）、TOML（R11 で形式確定・正本）、ukadoc（COMPAT §2 で正典）。封筒は既存 `shiori-abi` の `Request`/`Complete`/`Raise`・`CorrelationToken(u64)`・`SHIORI_S_PENDING` 意味論（§1.2）へ被せるのみで新規構築なし。
+- **Build（最小）**: 本仕様が新規定義するのは「契約データ（TOML 正本の table 階層・キー規約・封筒/予約ヘッダ/沈黙ログの表現）」のみ。パーサ・投影機構・codegen・doc 生成器の**実装はスコープ外**（R11-2/-5・下流）。doc/Web 生成は「アプローチ（TOML→レンダリングの派生・同値保持）」を設計レベルで規定するに留める。
+
+**Simplification（単純化）**:
+- 「1スキーマ→2表示」の投影機構・キルスイッチのデータ構造・json-rpc 実装表現は HOW として除外（要件 Out of scope）。設計は TOML スキーマ（WHAT）の確定に集中。
+- 置き場所は research §3 の Option C（doc 正本＋種データ）ではなく、R11 が「**TOML を単一正本、doc/Web はそこから生成される派生**」と確定済みのため、**TOML を唯一正本とし doc/Web を派生**とする一本化（Option A/C の二重管理リスクを構造的に解消）。種データと doc の正/副が R11 で確定しているため迷いは無い。
+
+### 8.4 確定した主要設計判断（design.md に反映）
+
+- **DP1 単一 TOML 正本の table 階層**: `[meta]`（versioning/charset/provenance 既定）＋`[envelope]`（json-rpc 封筒マッピング）＋`[reserved_headers]`（R6 予約集合）＋`[[entry]]`（event/resource 共通カタログ。各 entry に `[[entry.field]]` で意味名⇔ReferenceN を保持）＋`[[silence_ruling]]`（R7 沈黙裁定ログ）。
+- **DP2 field 行＝R3 の単一スキーマ**: `name`（意味名 canonical）・`reference`（ReferenceN の N。alias 投影元）・`type`（小文字 Rust 準拠型 `i32`/`u32`/`i64`/`bool`/`str`）・`required`（bool）・`response`（応答側意味）・`provenance`（典拠）・`description`（人間可読・データ）。意味名と ReferenceN は同一 field 行の 2 投影。
+- **DP3 封筒マッピングは表で正準化**: method=event id、params=意味名フィールド、相関トークン↔`id`、即時=`result`/失敗=`error`/遅延=`id`先行＋後続`result`/Raise=notification（`id`なし）。既存 ABI 意味論へ一意対応（§1.2）。
+- **DP4 レガシー併載とキルスイッチは契約データで規定**: `[meta] legacy_coemit_default = true`、per-DLL opt-out は契約上「許容されるフィルタオプション」として宣言（実装は設計/下流）。`Reference0/1/2…` の不消去/不改名を不変条件として `[meta]` または entry レベルで明記。
+- **DP5 型名は小文字 Rust 準拠**（R11-3）、**description はコメントでなくデータフィールド**（R11-4）、**Rust 型/codegen は成果物に含めない**（R11-5）、**ピン留め snapshot＋SOURCES.md を典拠資産**（R7-3/R11-6）。
+
+### 8.5 リスク・未決（設計時点）
+
+- リスクは依然 (a) ukadoc 網羅の完全性（実装作業）、(b) 「1スキーマ→2投影」のドリフト防止（field 行 1 枚に集約することで構造的に低減）、(c) 沈黙裁定の追跡品質（`[[silence_ruling]]` ＋ entry/field の `provenance` 列で担保）。
+- **R10/Q1 は要件ディスカッション #1 で裁定済み**（併載が契約上の基準、pristine は areka 側任意フィルタ）。設計は本裁定に従い、未決の要件ギャップは無い。
+- 依存追加なし（TOML は静的データファイル。`shiori-abi` 最小依存・32bit 可搬性に無影響。投影機構を実装しないため serde/json-rpc クレート採否は下流判断）。
