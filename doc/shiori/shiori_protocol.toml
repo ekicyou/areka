@@ -643,6 +643,7 @@ category = "lifecycle"
 dispatch = "get"
 response = "sakura_script"
 provenance = "ukadoc"
+silence_ref = ["sr_dispatch_dressup_changed"]
 description = "着せ替えが切替えられた際に発生。複数回通知される場合は最後のみ [GET] でそれ以外は [NOTIFY]。"
 
 [[entry.field]]
@@ -810,6 +811,7 @@ category = "lifecycle"
 dispatch = "notify"
 response = "none"
 provenance = "ukadoc"
+silence_ref = ["sr_dispatch_cache_unmarked_notify"]
 description = "ゴーストキャッシュに入った際に発生。引数を持たない状態遷移通知。"
 
 [[entry]]
@@ -819,6 +821,7 @@ category = "lifecycle"
 dispatch = "notify"
 response = "none"
 provenance = "ukadoc"
+silence_ref = ["sr_dispatch_cache_unmarked_notify"]
 description = "ゴーストキャッシュから出た際に発生。引数を持たない状態遷移通知。"
 
 [[entry]]
@@ -3658,6 +3661,7 @@ category = "network_state"
 dispatch = "get"
 response = "sakura_script"
 provenance = "ukadoc"
+silence_ref = ["sr_dispatch_network_dedup"]
 description = "相手サーバが時間内に応答しなかった際に発生。"
 
 [[entry.field]]
@@ -3683,6 +3687,7 @@ category = "network_state"
 dispatch = "get"
 response = "sakura_script"
 provenance = "ukadoc"
+silence_ref = ["sr_dispatch_network_dedup"]
 description = "ネットワーク接続状態が変わった際に発生。起動直後のみ NOTIFY で通知。"
 
 [[entry.field]]
@@ -3760,6 +3765,7 @@ category = "inputbox"
 dispatch = "get"
 response = "sakura_script"
 provenance = "ukadoc"
+silence_ref = ["sr_response_inputcancel_silent"]
 description = "TeachBox が閉じられた際に発生。"
 
 [[entry.field]]
@@ -3837,6 +3843,7 @@ category = "inputbox"
 dispatch = "get"
 response = "sakura_script"
 provenance = "ukadoc"
+silence_ref = ["sr_response_inputcancel_silent"]
 description = "CommunicateBox が閉じられた際に発生。"
 
 [[entry.field]]
@@ -3904,6 +3911,7 @@ category = "inputbox"
 dispatch = "get"
 response = "sakura_script"
 provenance = "ukadoc"
+silence_ref = ["sr_response_inputcancel_silent"]
 description = "InputBox が閉じられた際に発生。タイムアウトかつ無応答時は互換性確保のため OnUserInput Reference1=timeout が送られる。"
 
 [[entry.field]]
@@ -4413,6 +4421,7 @@ category = "surface"
 dispatch = "notify"
 response = "none"
 provenance = "ssp_secondary"
+silence_ref = ["sr_dispatch_othersurfacechange_notify"]
 description = "自分以外の他ゴーストのサーフェスが変わった際に通知される。標準では無効で \\![set,othersurfacechange,true] による有効化が必要。"
 
 [[entry.field]]
@@ -4495,7 +4504,8 @@ reference = 2
 type = "i32"
 required = false
 provenance = "ukadoc"
-description = "常に 0。"
+silence_ref = ["sr_meaning_mouseclick_wheel_delta"]
+description = "常に 0。OnMouseWheel/OnMouseMove と Reference 位置を整合させるため wheel_delta 命名（値は常に 0）。"
 
 [[entry.field]]
 name = "char_scope"
@@ -4560,7 +4570,8 @@ reference = 2
 type = "i32"
 required = false
 provenance = "ssp_secondary"
-description = "常に 0。"
+silence_ref = ["sr_meaning_mouseclick_wheel_delta"]
+description = "常に 0。OnMouseWheel/OnMouseMove と Reference 位置を整合させるため wheel_delta 命名（値は常に 0）。"
 
 [[entry.field]]
 name = "char_scope"
@@ -4625,7 +4636,8 @@ reference = 2
 type = "i32"
 required = false
 provenance = "ukadoc"
-description = "常に 0。"
+silence_ref = ["sr_meaning_mouseclick_wheel_delta"]
+description = "常に 0。OnMouseWheel/OnMouseMove と Reference 位置を整合させるため wheel_delta 命名（値は常に 0）。"
 
 [[entry.field]]
 name = "char_scope"
@@ -4690,7 +4702,8 @@ reference = 2
 type = "i32"
 required = false
 provenance = "ssp_secondary"
-description = "常に 0。"
+silence_ref = ["sr_meaning_mouseclick_wheel_delta"]
+description = "常に 0。OnMouseWheel/OnMouseMove と Reference 位置を整合させるため wheel_delta 命名（値は常に 0）。"
 
 [[entry.field]]
 name = "char_scope"
@@ -4755,7 +4768,8 @@ reference = 2
 type = "i32"
 required = false
 provenance = "ssp_secondary"
-description = "常に 0。"
+silence_ref = ["sr_meaning_mouseclick_wheel_delta"]
+description = "常に 0。OnMouseWheel/OnMouseMove と Reference 位置を整合させるため wheel_delta 命名（値は常に 0）。"
 
 [[entry.field]]
 name = "char_scope"
@@ -4828,7 +4842,8 @@ reference = 2
 type = "i32"
 required = false
 provenance = "ssp_secondary"
-description = "常に 0。"
+silence_ref = ["sr_meaning_mouseclick_wheel_delta"]
+description = "常に 0。OnMouseWheel/OnMouseMove と Reference 位置を整合させるため wheel_delta 命名（値は常に 0）。"
 
 [[entry.field]]
 name = "char_scope"
@@ -4901,7 +4916,8 @@ reference = 2
 type = "i32"
 required = false
 provenance = "ssp_secondary"
-description = "常に 0。"
+silence_ref = ["sr_meaning_mouseclick_wheel_delta"]
+description = "常に 0。OnMouseWheel/OnMouseMove と Reference 位置を整合させるため wheel_delta 命名（値は常に 0）。"
 
 [[entry.field]]
 name = "char_scope"
@@ -4966,7 +4982,8 @@ reference = 2
 type = "i32"
 required = false
 provenance = "ssp_secondary"
-description = "常に 0。"
+silence_ref = ["sr_meaning_mouseclick_wheel_delta"]
+description = "常に 0。OnMouseWheel/OnMouseMove と Reference 位置を整合させるため wheel_delta 命名（値は常に 0）。"
 
 [[entry.field]]
 name = "char_scope"
@@ -5031,7 +5048,8 @@ reference = 2
 type = "i32"
 required = false
 provenance = "ssp_secondary"
-description = "常に 0。"
+silence_ref = ["sr_meaning_mouseclick_wheel_delta"]
+description = "常に 0。OnMouseWheel/OnMouseMove と Reference 位置を整合させるため wheel_delta 命名（値は常に 0）。"
 
 [[entry.field]]
 name = "char_scope"
@@ -5096,7 +5114,8 @@ reference = 2
 type = "i32"
 required = false
 provenance = "ssp_secondary"
-description = "常に 0。"
+silence_ref = ["sr_meaning_mouseclick_wheel_delta"]
+description = "常に 0。OnMouseWheel/OnMouseMove と Reference 位置を整合させるため wheel_delta 命名（値は常に 0）。"
 
 [[entry.field]]
 name = "char_scope"
@@ -5291,7 +5310,8 @@ reference = 2
 type = "i32"
 required = false
 provenance = "ssp_secondary"
-description = "常に 0。"
+silence_ref = ["sr_meaning_mouseclick_wheel_delta"]
+description = "常に 0。OnMouseWheel/OnMouseMove と Reference 位置を整合させるため wheel_delta 命名（値は常に 0）。"
 
 [[entry.field]]
 name = "char_scope"
@@ -5356,7 +5376,8 @@ reference = 2
 type = "i32"
 required = false
 provenance = "ssp_secondary"
-description = "常に 0。"
+silence_ref = ["sr_meaning_mouseclick_wheel_delta"]
+description = "常に 0。OnMouseWheel/OnMouseMove と Reference 位置を整合させるため wheel_delta 命名（値は常に 0）。"
 
 [[entry.field]]
 name = "char_scope"
@@ -5421,7 +5442,8 @@ reference = 2
 type = "i32"
 required = false
 provenance = "ssp_secondary"
-description = "常に 0。"
+silence_ref = ["sr_meaning_mouseclick_wheel_delta"]
+description = "常に 0。OnMouseWheel/OnMouseMove と Reference 位置を整合させるため wheel_delta 命名（値は常に 0）。"
 
 [[entry.field]]
 name = "char_scope"
@@ -5486,7 +5508,8 @@ reference = 2
 type = "i32"
 required = false
 provenance = "ssp_secondary"
-description = "常に 0。"
+silence_ref = ["sr_meaning_mouseclick_wheel_delta"]
+description = "常に 0。OnMouseWheel/OnMouseMove と Reference 位置を整合させるため wheel_delta 命名（値は常に 0）。"
 
 [[entry.field]]
 name = "char_scope"
@@ -5681,7 +5704,8 @@ reference = 2
 type = "i32"
 required = false
 provenance = "ssp_secondary"
-description = "常に 0。"
+silence_ref = ["sr_meaning_mouseclick_wheel_delta"]
+description = "常に 0。OnMouseWheel/OnMouseMove と Reference 位置を整合させるため wheel_delta 命名（値は常に 0）。"
 
 [[entry.field]]
 name = "char_scope"
@@ -6064,6 +6088,7 @@ category = "voice"
 dispatch = "notify"
 response = "none"
 provenance = "ssp_secondary"
+silence_ref = ["sr_dispatch_status_notify_other_get"]
 description = "起動時と音声合成機能が ON/OFF された時に発生（[NOTIFY/他GET] 文脈依存）。"
 
 [[entry.field]]
@@ -6081,6 +6106,7 @@ category = "voice"
 dispatch = "notify"
 response = "none"
 provenance = "ssp_secondary"
+silence_ref = ["sr_dispatch_status_notify_other_get"]
 description = "起動時と音声認識機能が ON/OFF された時に発生（[NOTIFY/他GET] 文脈依存）。"
 
 [[entry.field]]
@@ -7372,6 +7398,7 @@ category = "os_state"
 dispatch = "get"
 response = "sakura_script"
 provenance = "ukadoc"
+silence_ref = ["sr_dispatch_os_startup_notify_other_get"]
 description = "デスクトップ（プライマリスクリーン）の解像度／色深度が変更された際に発生。[起動時NOTIFY/他GET]"
 
 [[entry.field]]
@@ -7405,6 +7432,7 @@ category = "os_state"
 dispatch = "notify"
 response = "none"
 provenance = "ukadoc"
+silence_ref = ["sr_dispatch_displayhandover_notify_other_get"]
 description = "スクリーン間を跨いでウインドウを移動させた際に発生。[NOTIFY/他GET]"
 
 [[entry.field]]
@@ -7446,6 +7474,7 @@ category = "os_state"
 dispatch = "get"
 response = "sakura_script"
 provenance = "ukadoc"
+silence_ref = ["sr_dispatch_os_startup_notify_other_get"]
 description = "スクリーンの解像度／色深度が変更された際に発生。マルチモニタ対応。[起動時NOTIFY/他GET]"
 
 [[entry.field]]
@@ -7480,6 +7509,7 @@ category = "os_state"
 dispatch = "get"
 response = "sakura_script"
 provenance = "ukadoc"
+silence_ref = ["sr_dispatch_os_startup_notify_other_get"]
 description = "残りバッテリー量を通知。起動時のみ[NOTIFY]で通知され、他はGET。"
 
 [[entry.field]]
@@ -7575,6 +7605,7 @@ category = "os_state"
 dispatch = "get"
 response = "sakura_script"
 provenance = "ukadoc"
+silence_ref = ["sr_dispatch_os_startup_notify_other_get"]
 description = "OSがタブレット機の操作に最適化された状態に切り替えられた際に発生。  起動直後にNOTIFY(喋れない)で通知され、切り替わった時にGET(喋れる)で通知される。"
 
 [[entry.field]]
@@ -7592,6 +7623,7 @@ category = "os_state"
 dispatch = "get"
 response = "sakura_script"
 provenance = "ukadoc"
+silence_ref = ["sr_dispatch_os_startup_notify_other_get"]
 description = "OSがダークテーマ(暗めの表示)に切り替えられた際に発生。  起動直後にNOTIFY(喋れない)で通知され、切り替わった時にGET(喋れる)で通知される。"
 
 [[entry.field]]
@@ -7617,6 +7649,7 @@ category = "os_state"
 dispatch = "get"
 response = "sakura_script"
 provenance = "ukadoc"
+silence_ref = ["sr_dispatch_os_startup_notify_other_get"]
 description = "OSの更新確認日時・更新実行日時と、履歴情報の通知。  起動直後にNOTIFY(喋れない)で通知され、更新が実行された時に少し遅れてGET(喋れる)で通知される。"
 
 [[entry.field]]
@@ -7708,6 +7741,7 @@ category = "os_state"
 dispatch = "get"
 response = "sakura_script"
 provenance = "ukadoc"
+silence_ref = ["sr_dispatch_os_startup_notify_other_get"]
 description = "ゴミ箱にファイルが投げ込まれた時や、エクスプローラ上でゴミ箱を空にした時に発生し、起動中の全ゴーストに通知される。   また、ゴースト起動時に[NOTIFY]で通知される。"
 
 [[entry.field]]
@@ -8246,6 +8280,7 @@ category = "other"
 dispatch = "get"
 response = "sakura_script"
 provenance = "ukadoc"
+silence_ref = ["sr_dispatch_os_startup_notify_other_get"]
 description = "言語設定が変更された際と、起動直後に通知される。  起動直後に通知される場合は必ずNOTIFYとなり、イベントに応答してしゃべることはできない。"
 
 [[entry.field]]
@@ -10578,9 +10613,73 @@ description = "拡張情報（\\q タグ内の 3 番目以降の引数）。Refe
 # ukadoc が沈黙する裁定（GET/NOTIFY 分類・追加ヘッダ可否・意味割り当て等）の追跡。
 # ──────────────────────────────────────────────────────────────────────
 [[silence_ruling]]
-id = "sr_dispatch_onboot"
+id = "sr_dispatch_dressup_changed"
 topic = "dispatch_class"
 basis = "ukadoc_clause"
-ruling = "OnBoot は応答にさくらスクリプトを返すことが ukadoc 記述から読み取れるため GET 系（dispatch=get）と裁定する。"
-ukadoc_anchor = "list_shiori_event.html#OnBoot"
-description = "OnBoot の GET/NOTIFY 分類に関する沈黙裁定の実証エントリ。topic=dispatch_class は分類対象、basis=ukadoc_clause は ukadoc 条項に典拠ありの区分を示す。ukadoc_anchor は再現性のためのピン留めスナップショット内アンカー。entry/field の silence_ref から本 id（sr_dispatch_onboot）が参照される。"
+ruling = "OnDressupChanged は ukadoc が「複数同時通知の場合、一番最後の OnDressupChanged は [GET]、それ以外は [NOTIFY]」と文脈依存で記述する。正準カタログは単一 dispatch しか持てないため、応答（さくらスクリプト）を期待できる最後の通知＝[GET] を採用し dispatch=get と裁定する。意味変更の受け取りは ukadoc 指示どおり後続の OnNotifyDressupInfo を利用する。"
+ukadoc_anchor = "list_shiori_event.html#OnDressupChanged"
+description = "OnDressupChanged の文脈依存 GET/NOTIFY 分類（一番最後=[GET]/それ以外=[NOTIFY]）に対する裁定。topic=dispatch_class、basis=ukadoc_clause（ukadoc が両分類を明記）。応答可能な GET を正準採用した根拠を記録する。entry の silence_ref から参照される。"
+
+[[silence_ruling]]
+id = "sr_dispatch_cache_unmarked_notify"
+topic = "dispatch_class"
+basis = "ukadoc_clause"
+ruling = "OnCacheSuspend / OnCacheRestore（ゴーストキャッシュへの退避・復帰の通知）は既定の GET 想定（無印=GET の既定規則）と異なり、ukadoc の当該 dl ブロックが [NOTIFY] でくくられた通知系イベントである。応答を期待しない一方向通知として dispatch=notify・response=none を採用する。"
+ukadoc_anchor = "list_shiori_event.html#OnCacheSuspend"
+description = "OnCacheSuspend/OnCacheRestore の通知系分類に対する裁定。既定 GET からの逸脱を、ukadoc の [NOTIFY] グルーピングを典拠に notify 採用とする（basis=ukadoc_clause、topic=dispatch_class）。両 entry の silence_ref から参照される。"
+
+[[silence_ruling]]
+id = "sr_dispatch_status_notify_other_get"
+topic = "dispatch_class"
+basis = "ukadoc_clause"
+ruling = "OnSpeechSynthesisStatus / OnVoiceRecognitionStatus は ukadoc が [NOTIFY/他GET] と表記する文脈依存イベント（起動時や一斉通知では NOTIFY、その他文脈では GET）。状態変化の一方向通知としての性格が主であるため dispatch=notify・response=none を正準採用し、GET 文脈は本裁定で別扱いとして記録する。"
+ukadoc_anchor = "list_shiori_event.html#OnSpeechSynthesisStatus"
+description = "OnSpeechSynthesisStatus/OnVoiceRecognitionStatus の [NOTIFY/他GET] 文脈依存分類に対する裁定。notify を正準採用した根拠を記録（basis=ukadoc_clause、topic=dispatch_class）。両 entry の silence_ref から参照される。"
+
+[[silence_ruling]]
+id = "sr_dispatch_othersurfacechange_notify"
+topic = "dispatch_class"
+basis = "areka_discretion"
+ruling = "OnOtherSurfaceChange は ukadoc が GET/NOTIFY マーカーを明示せず（標準では無効・要 set othersurfacechange=true）、文面は「通知されます」と一方向通知の意味づけのみを与える。応答期待の明示が沈黙しているため、通知意味に従い areka 裁量で dispatch=notify・response=none を採用する。"
+ukadoc_anchor = "list_shiori_event.html#OnOtherSurfaceChange"
+description = "OnOtherSurfaceChange の GET/NOTIFY 無印（応答期待沈黙）に対する裁定。通知意味づけを根拠に areka 裁量で notify 採用（basis=areka_discretion、topic=dispatch_class）。entry の silence_ref から参照される。"
+
+[[silence_ruling]]
+id = "sr_dispatch_os_startup_notify_other_get"
+topic = "dispatch_class"
+basis = "ukadoc_clause"
+ruling = "OS 状態系（OnDisplayChange/OnDisplayChangeEx/OnBatteryNotify/OnTabletMode/OnDarkTheme/OnOSUpdateInfo/OnRecycleBinStatusUpdate/OnLanguageChange）は ukadoc が「起動直後/一斉通知は NOTIFY（応答なし）、変化発生時は GET（応答可）」という文脈依存分類を与える。変化通知に応答できる GET 文脈を正準採用し dispatch=get とする。OnLanguageChange は起動時通知が必ず NOTIFY でイベントに応答できない旨も明記されるが、設定変更通知の GET 文脈を正準とする本家族裁定に含める。"
+ukadoc_anchor = "list_shiori_event.html#OnDisplayChange"
+description = "OS 状態系イベント群の「起動時NOTIFY/変化時GET」文脈依存分類に対する家族裁定。応答可能な GET を正準採用した根拠を記録（basis=ukadoc_clause、topic=dispatch_class）。対象 8 entry の silence_ref から参照される。"
+
+[[silence_ruling]]
+id = "sr_dispatch_displayhandover_notify_other_get"
+topic = "dispatch_class"
+basis = "ukadoc_clause"
+ruling = "OnDisplayHandover（スクリーン間のウインドウ移動通知）は ukadoc が [NOTIFY/他GET] と表記する文脈依存イベント。位置確定/移動の一方向通知としての性格が主であるため dispatch=notify・response=none を正準採用する。"
+ukadoc_anchor = "list_shiori_event.html#OnDisplayHandover"
+description = "OnDisplayHandover の [NOTIFY/他GET] 文脈依存分類に対する裁定。notify を正準採用した根拠を記録（basis=ukadoc_clause、topic=dispatch_class）。entry の silence_ref から参照される。"
+
+[[silence_ruling]]
+id = "sr_response_inputcancel_silent"
+topic = "dispatch_class"
+basis = "areka_discretion"
+ruling = "*InputCancel 系（OnTeachInputCancel/OnCommunicateInputCancel/OnUserInputCancel）は入力ボックスのキャンセル発生イベントだが、ukadoc が応答期待（GET/NOTIFY 分類）を明示せず沈黙する。これらは入力フローの一部でゴーストが応答さくらスクリプトを返し得るため、areka 裁量で他の input 系イベントに倣い dispatch=get・response=sakura_script を既定採用する。"
+ukadoc_anchor = "list_shiori_event.html#OnUserInputCancel"
+description = "*InputCancel 系の応答期待沈黙に対する裁定。input 系の既定（get/sakura_script）を areka 裁量で採用した根拠を記録（basis=areka_discretion、topic=dispatch_class）。対象 3 entry の silence_ref から参照される。"
+
+[[silence_ruling]]
+id = "sr_meaning_mouseclick_wheel_delta"
+topic = "meaning_assignment"
+basis = "areka_discretion"
+ruling = "OnMouseClick/OnMouseClickEx の Reference2 は ukadoc 記述が「常に0」で固定値（意味なしダミー）だが、同形のマウス系イベント OnMouseWheel/OnMouseMove では Reference2 が wheel_delta（ホイール回転量）を担う。位置（Reference 番号）整合と意味名の一貫性を優先し、Click/ClickEx の Reference2 にも wheel_delta を意味名割り当てする（値は常に 0）。常に 0 の固定意味を明示する OnMouseWheel/OnMouseMove の Reference5（always_zero）とは対照的に、Click 側は位置整合のため wheel_delta 命名を採る areka 裁量裁定である。"
+ukadoc_anchor = "list_shiori_event.html#OnMouseClick"
+description = "OnMouseClick/OnMouseClickEx の Reference2（ukadoc「常に0」）への意味名割り当てに対する裁定。マウス系の Reference 位置整合を優先し wheel_delta 命名を採用（basis=areka_discretion、topic=meaning_assignment）。両 entry の wheel_delta field の silence_ref から参照される。"
+
+[[silence_ruling]]
+id = "sr_dispatch_network_dedup"
+topic = "dispatch_class"
+basis = "areka_discretion"
+ruling = "ネットワーク状態系 OnNetworkHeavy / OnNetworkStatusChange は ukadoc が GET/NOTIFY マーカーを明示せず分類が沈黙する。両者とも応答可能なイベントとして扱える（重い通信の警告・接続状態変化の通知に対しゴーストが応答さくらスクリプトを返し得る）ため、areka 裁量で dispatch=get・response=sakura_script を採用する。両イベントは似た網羅範囲を持つため一裁定へ集約（重複裁定の整理）する。"
+ukadoc_anchor = "list_shiori_event.html#OnNetworkStatusChange"
+description = "OnNetworkHeavy/OnNetworkStatusChange の GET/NOTIFY 無印（分類沈黙）に対する裁定。get/sakura_script を areka 裁量で採用し両イベントを一裁定へ集約（basis=areka_discretion、topic=dispatch_class）。両 entry の silence_ref から参照される。"

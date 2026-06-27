@@ -74,7 +74,7 @@
   - _Requirements: 3.1, 3.2, 3.4, 6.1, 6.2, 10.2, 10.3, 10.4_
   - _Depends: 2.3, 3.4_
   - _Boundary: shiori_protocol.toml_
-- [ ] 4.2 沈黙裁定ログの記録
+- [x] 4.2 沈黙裁定ログの記録
   - GET/NOTIFY 沈黙・意味割り当て・追加ヘッダ可否等の areka 裁量裁定を `[[silence_ruling]]` へ記録し、各裁定に `basis`(典拠区分)/`ruling`/`ukadoc_anchor` を付与、entry/field の `silence_ref`（配列）から参照する
   - Observable: 全沈黙箇所が `[[silence_ruling]]` に記録され、`basis` 付きで entry/field から参照される
   - _Requirements: 1.3, 7.1, 7.2_
