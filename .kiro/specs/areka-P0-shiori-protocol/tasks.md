@@ -67,7 +67,7 @@
   - _Boundary: shiori_protocol.toml_
 
 - [ ] 4. Integration: 2投影整合・沈黙裁定の確立
-- [ ] 4.1 意味名⇔ReferenceN 2投影と予約非衝突の確立
+- [x] 4.1 意味名⇔ReferenceN 2投影と予約非衝突の確立
   - 全 field 行で canonical(`name`)/alias(`reference`) が単一行由来で同一値を指すことを保証し、canonical 優先規則を明記、別の対応表テーブルを作らない（R3 構造担保）
   - 全意味名が `[reserved_headers]` 確定集合と非衝突であることを保証し、衝突を検出した場合は `collision_policy` に従い是正する（是正の所有はこのタスク）
   - Observable: 全 field が予約非衝突かつ2投影が単一 field 由来で、対応表が field 行以外に存在しない
@@ -103,6 +103,7 @@
 ## Implementation Notes
 - 3.1: 意味名はスネークケース英語で ukadoc の Reference 説明から導出。カテゴリ slug は lowercase 英語固定（lifecycle/time/clock/network_update/mailcheck/rss/calendar/sstp/comm_other/send_failure/network_state）。Reference* 可変長は `reference_variadic=true`。予約ヘッダは PascalCase なので snake_case 意味名と構造的に非衝突。
 - 3.1→4.2 引き継ぎ: dispatch 文脈依存/沈黙ケースは 4.2 で `[[silence_ruling]]`(topic=dispatch_class) を付与すべし — (a) OnDressupChanged は `[GET]/[NOTIFY]` 文脈依存（現状 get 採用・裁定未付与）、(b) OnCacheSuspend/OnCacheRestore は ukadoc 無印だが notify 採用（既定 get からの逸脱）、(c) 骨格由来の `sr_dispatch_onboot` は 3.1 で OnBoot から参照解除され孤立 — 4.2 で適切に再割当 or 整理する。
+- 4.1: 802 field を機械検証（342 distinct 意味名 vs 18 予約ヘッダ＝衝突ゼロ・大小区別あり/なし両方）。canonical 優先規則は新設 top-level `[mapping]` policy table（`single_source="entry.field"`/`canonical_key="name"`/`alias_key="reference"`/`canonical_priority=true`/`separate_mapping_table=false`/`reference_backed_by`＋description）に符号化。**design は5テーブル想定だが policy-only の6番目を追加**（reviewer 許容判定・データ分散せず R3 補強）→ 5.1 構造検証の top-level keys 期待集合は **{meta, mapping, envelope, reserved_headers, entry, silence_ruling}** の6。ReferenceN 無し6 field は `reference_variadic=true`（pure `Reference*` 可変長尾）の正規例外。
 - 3.4: Resource ページ 159件 全 kind=resource 抽出（event 287 と合わせ entry=446）。1:1 アサーション（159 `<dl>` ⇔ 159 resource id, MISSING/SURPLUS=0）。category slug=shiori_info(5)/ghost_info(40)/update_info(1)/ownerdraw_menu_image(3)/ownerdraw_menu_color(15)/shortcut_key(93)/tooltip(2)。`*.caption` は実リソース（widget でない）。全 resource dispatch="get"、tooltip/balloon_tooltip は response="sakura_script"・他 scalar は "text"。ReferenceN 引数を持つ 4件（tooltip/balloon_tooltip/getaistateex/other_homeurl_override）のみ field 化、残 155 は引数なし scalar。→ 4.1(2投影) は event+resource 全 446 entry の field を対象に canonical/alias 整合を検証すること。
 - 3.3: Event ページ網羅は **`<dl id=...>` アンカー集合 ⇔ TOML event id の 1:1 アサーション**で機械検証（caption/widget アンカー除外: ghost_*/supported_*/caption_*）。ドット形式 ID（`OnUpdate.OnDownloadBegin`/`OnUpdateOther.*`/`OnHeadlinesense.OnFind`）は **verbatim 保持**しカテゴリは兄弟（network_update/rss）へ寄せる。`OnUpdateOther.OnMD5CompareComplete/Failure` は ukadoc に Reference0 が無く field は Reference1 始まり（捏造禁止・原文忠実）。列挙意味は `response_meaning` 不使用の既存形に倣い field.description へ符号化。→ 3.4(resource) も同様に list_shiori_resource.html の `<dl>` アンカー 1:1 で網羅検証すべし。
 - 3.2→4.2 引き継ぎ: 文脈依存 dispatch を 4.2 で `[[silence_ruling]]`(topic=dispatch_class) に裁定 — OnSpeechSynthesisStatus/OnVoiceRecognitionStatus は `[NOTIFY/他GET]`（現状 notify 採用）、OnOtherSurfaceChange は無印だが通知意味で notify 採用、*InputCancel 系（OnTeachInputCancel/OnCommunicateInputCancel/OnUserInputCancel）は応答期待が沈黙（現状 get/sakura_script 既定）。OnMouseClick/ClickEx の R2 は ukadoc「常に0」だが位置整合で wheel_delta 命名（OnMouseWheel/Move では always_zero）。
