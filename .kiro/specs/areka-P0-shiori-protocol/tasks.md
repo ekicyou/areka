@@ -88,7 +88,7 @@
   - _Requirements: 6.1, 11.3, 11.4_
   - _Depends: 4.1_
   - _Boundary: 構造検証（read-only）_
-- [ ] 5.2 (P) 契約整合検証
+- [x] 5.2 (P) 契約整合検証
   - 2投影が単一 field 由来であること、`[envelope]` の5写像が ABI 意味論へ一意対応すること、`silence_ref` 参照先が存在し `basis` を持つこと、ukadoc スナップショット sha256 が `SOURCES.md` と一致し provenance が ukadoc 記述有無と整合することを検証する
   - Observable: 整合検証が pass し、封筒被覆・2投影・沈黙参照・典拠同値が確認される
   - _Requirements: 3.2, 4.1, 4.2, 4.3, 4.4, 4.5, 7.1, 7.2, 7.3, 10.2, 11.6_
