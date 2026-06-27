@@ -35,7 +35,7 @@
 - **唯一の正本対応表**: 意味名（canonical）⇔ `Reference0/1/2…`（alias）の対応を、1 枚のスキーマ（field 定義）から機械投影される 2 表示として規定（3.x）。本仕様がこの正本の所有者。
 - **json-rpc 封筒マッピング契約**: method=イベント ID、params=意味名フィールド、相関トークン↔`id`、即時/遅延/失敗/Raise → `result`/`error`/notification の対応（4.x）。
 - **レガシー wire 放出契約**: `ReferenceN` 必須放出・意味名併載の既定・per-DLL opt-out キルスイッチ・`Reference0/1/2…` 不消去/不改名の不変条件（5.x）。
-- **予約 SHIORI ヘッダ集合と非衝突保証**（6.x）、**沈黙裁定追跡フォーマット**（7.x）、**content エンコーディング/charset 規約と不透明性**（8.x）、**バージョニング方針宣言**（9.x）。
+- **予約 SHIORI ヘッダ集合と非衝突保証**（6.x）、**沈黙裁定追跡フォーマット**（7.x）、**content エンコーディング（内部=UTF-16）と不透明性**（8.x。レガシー charset byte 化は host-32 委譲）、**バージョニング方針宣言**（9.x）。
 - **正準契約における意味名⇔`ReferenceN` の結合**（併載＝契約上の基準、pristine＝areka 側任意フィルタ）（10.x）。
 - **成果物フォーマット**: 単一 TOML 正本（上記すべてを符号化）＋そこから生成される doc/Web 派生レンダリング＋ピン留め ukadoc スナップショット（11.x）。
 
@@ -45,6 +45,7 @@
 - 生成された Rust 型・codegen 機構・doc/Web 生成器の実装 → 下流（設計/実装フェーズ・下流クレート）。
 - さくらスクリプト／SAORI 本文の解釈・実行 → `areka-P0-sakura-script` ほか（content は不透明）。
 - レガシーテキスト ⇄ 正準モデルの翻訳実装 → `areka-P0-shiori-host-32`。
+- **レガシー wire の charset 符号化**（`Charset` ヘッダ解釈・既定 ANSI コードページ `CP_ACP`・対応文字集合）→ `areka-P0-shiori-host-32`。正準 content は UTF-16（HSTRING）であり charset 概念を持たない。既定は ANSI コードページ（`CP_ACP`・ロケール依存。JP では CP932）であって Shift_JIS と決め打たない。
 - これらを「ついで」で本仕様に取り込まない。
 
 ### Allowed Dependencies
@@ -176,7 +177,7 @@ graph TB
 |------|----|----|------|
 | `contract_version` | `str` | 必須 | 契約版（プレリリースは流動。例 `"0.x"`）。D7 整合（9.1） |
 | `prerelease` | `bool` | 必須 | プレリリース段階か。`true` の間は後方互換保証なし・lockstep 更新前提（9.2） |
-| `charset` | `str` | 必須 | content 文字列の charset 規約。`Charset` ヘッダとの対応規則を `description` に明記（8.2） |
+| `internal_encoding` | `str` | 必須 | 正準 content の内部表現エンコーディング。常に `"utf-16"`（HSTRING・shiori-com 整合）。正準 content に charset 概念は無く、レガシー wire の charset byte 化は host-32 の責務（8.2） |
 | `content_opaque` | `bool` | 必須 | content（さくらスクリプト/SAORI 引数）を不透明文字列として運び解釈しない不変条件（8.1/8.3）。常に `true` |
 | `legacy_coemit_default` | `bool` | 必須 | レガシー wire で意味名エイリアスを既定併載するか（5.2/10.1）。既定 `true` |
 | `reference_immutable` | `bool` | 必須 | `Reference0/1/2…` を消去/改名しない不変条件（5.4）。常に `true` |
@@ -300,7 +301,7 @@ graph LR
 | 7.2 | 各裁定の典拠識別 | `silence_ruling.basis`, `*.provenance` | — |
 | 7.3 | ukadoc ピン留めスナップショット保持 | `ukadoc/`＋`SOURCES.md` | — |
 | 8.1 | content を不透明文字列で運ぶ | `[meta] content_opaque=true` | — |
-| 8.2 | charset 規約・Charset ヘッダ対応 | `[meta] charset` | — |
+| 8.2 | 内部表現=UTF-16・charset byte 化は host-32 委譲 | `[meta] internal_encoding`, Out of Boundary | — |
 | 8.3 | content を解釈/実行しない | `[meta] content_opaque=true`（不変条件） | — |
 | 9.1 | バージョニング方針（D7 整合） | `[meta] contract_version` | — |
 | 9.2 | プレリリース流動契約・lockstep | `[meta] prerelease=true` | — |

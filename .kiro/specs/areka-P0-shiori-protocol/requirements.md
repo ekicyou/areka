@@ -114,7 +114,7 @@
 #### Acceptance Criteria
 
 1. The 正準 content プロトコル shall さくらスクリプト本文・SAORI 引数等の content を json-rpc の文字列フィールドへ不透明に載せ、その解釈を本仕様の対象外（別仕様）とする。
-2. The 正準 content プロトコル shall content 文字列のエンコーディング/charset 規約を定義し、`Charset` ヘッダ等の文字集合情報との対応を規定する。
+2. The 正準 content プロトコル shall 正準 content の内部表現を UTF-16（HSTRING）と規定する。レガシー wire の charset 符号化（`Charset` ヘッダ解釈・既定 ANSI コードページ `CP_ACP`・対応文字集合）は `areka-P0-shiori-host-32` の責務とし、本仕様はその委譲境界を明記するに留める（正準 content は charset 概念を持たない）。
 3. While content を不透明文字列として運ぶ間, the 正準 content プロトコル shall その文字列の中身を解釈・実行しない。
 
 ### Requirement 9: バージョニング方針の宣言
