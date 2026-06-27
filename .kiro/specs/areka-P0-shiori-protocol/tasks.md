@@ -11,7 +11,7 @@
   - `doc/shiori/README.md` に「TOML=単一正本(SSOT)・doc/Web=TOML からの派生・Rust 型/codegen は下流生成・契約を本ファイル以外へ分散しない」を明記する
   - Observable: 骨格 TOML が valid な TOML としてパースでき design.md の table 階層・必須キーを満たし、README が正本/派生関係を宣言している
   - _Requirements: 3.1, 11.1, 11.2, 11.3, 11.4, 11.5_
-- [ ] 1.2 ukadoc 典拠スナップショットのベースライン確定
+- [x] 1.2 ukadoc 典拠スナップショットのベースライン確定
   - ピン留め3ページ（`list_shiori_event.html`/`list_shiori_resource.html`/`spec_shiori3.html`）の on-disk sha256 が `ukadoc/SOURCES.md` の記録と一致し、各ページの出典 URL・取得日・sha256 が SOURCES.md に網羅されていることを典拠ベースラインとして確立する
   - Observable: SOURCES.md が3ページの URL/取得日/sha256 を網羅し、ディスク上の sha256 と完全一致する典拠ベースラインが確立される
   - _Requirements: 7.3, 11.6_
