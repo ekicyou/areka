@@ -40,7 +40,7 @@ error_failure = "error"
 deferred = "id_then_result"
 raise_notification = "notification_no_id"
 batch = true
-description = "正準 content の封筒は json-rpc 2.0。method は ukadoc イベント ID（method_source=event_id）、params は意味名フィールドの named 形式（params_style=named）。相関トークンと json-rpc id を一意対応させる（correlation=token_eq_id）。即時成功は同一 id の result（immediate_result）、失敗は同一 id の error（error_failure）へ写す。遅延（SHIORI_S_PENDING）は先行して id を確定し後続の Complete で同一 id の result を配送する（deferred=id_then_result）。Raise（能動通知）は id を持たない notification へ写す（raise_notification=notification_no_id）。バッチ要求を許容し高レート通信余地を確保する（batch=true）。本仕様は写像規約のみ定義し、配送機構は ABI/下流の責務。"
+description = "正準 content の封筒は json-rpc 2.0（protocol=jsonrpc-2.0・要件 4.1）。各写像は areka-P0-shiori-com の内部 SHIORI ABI（IShiori/IShioriHost）意味論へ 1:1 対応する被せである。method は ukadoc イベント ID（method_source=event_id・要件 4.1）であり、ABI の Request に渡されるイベント ID が json-rpc method に一致する。params は意味名フィールドの named 形式（params_style=named・要件 4.1）。相関は CorrelationToken（u64）と json-rpc id を一意対応させる（correlation=token_eq_id・要件 4.5）。即時成功（IShiori::Request が S_OK＋応答 HSTRING を返す経路）は同一 id の result へ写す（immediate_result=result・要件 4.2）。失敗（error HRESULT を返す経路）は同一 id の error へ写す（error_failure=error・要件 4.2）。遅延（Request が SHIORI_S_PENDING＋相関トークンを返し、後に IShioriHost::Complete(token, response) で完了する経路）は先行して id を確定し後続で同一 id の result を配送する（deferred=id_then_result・要件 4.3）。Raise（IShioriHost::Raise(script) による能動通知）は id を持たない notification へ写す（raise_notification=notification_no_id・要件 4.4）。バッチ要求を許容し高レート通信余地（D6）を確保する（batch=true・要件 9.3）。本仕様は写像規約のみ定義し、配送機構は ABI／下流の責務。"
 
 # ──────────────────────────────────────────────────────────────────────
 # [reserved_headers] — 予約 SHIORI ヘッダ集合（要件 6.x）

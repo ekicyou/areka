@@ -24,7 +24,7 @@
   - _Requirements: 5.1, 5.2, 5.3, 5.4, 8.1, 8.2, 8.3, 9.1, 9.2, 9.3, 10.1_
   - _Depends: 1.1_
   - _Boundary: shiori_protocol.toml_
-- [ ] 2.2 json-rpc 封筒マッピングの符号化
+- [x] 2.2 json-rpc 封筒マッピングの符号化
   - `[envelope]` に method=event_id・params=named・correlation=token_eq_id・immediate=result・failure=error・deferred=id_then_result・raise=notification_no_id・batch を符号化する
   - 各写像が `areka-P0-shiori-com` の ABI 意味論（`Request`/`Complete`/`Raise`・`CorrelationToken`・`SHIORI_S_PENDING`）へ一意対応することを `description` に明記する
   - Observable: `[envelope]` が即時/失敗/遅延/Raise/相関の5写像を全て規定し、ABI 意味論へ一意対応する
