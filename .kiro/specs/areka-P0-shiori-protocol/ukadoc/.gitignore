@@ -1,0 +1,4 @@
+# ukadoc 一次資料の生HTMLは第三者著作物（UKADOC Project）のため追跡しない。
+# 再取得は SOURCES.md の 出典URL＋sha256 で再現・検証する。
+# in-tree 同梱に切り替える場合はこの行を削除すること。
+*.html
