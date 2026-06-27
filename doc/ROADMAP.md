@@ -64,7 +64,7 @@ SERIKOを平坦サブセットとして内包する上位エンジン。native-f
 |------|-------------|:----:|------|
 | `IShiori` COM ＋ ネイティブin-proc | `completed/areka-P0-shiori-com` | ✅ | 内部唯一ABI。HSTRING/UTF-16。push=`IShioriHost`sink。**完了**（11タスク実装・検証GO・PRマージ） |
 | 簡易リファレンス COM-SHIORI | *(新規)* `areka-P0-shiori-reference` | ⚪ | 非テスト native 脳＋areka 実走デモ。content 不透明。DLL 契約の「正解見本」 |
-| 正準 content プロトコル | *(新規)* `areka-P0-shiori-protocol` | ⚪ | json-rpc 2.0 具体形（shiori-com の設計判断 D5 を着地）。content 語彙・id/result/error マッピング |
+| 正準 content プロトコル | *(新規)* `areka-P0-shiori-protocol` | ⚪ | json-rpc 2.0 具体形（shiori-com の設計判断 D5 を着地）。content 語彙・id/result/error マッピング。**ukadoc 全イベントカタログ＋`ReferenceN`↔意味名の規範的対応表を正本所有**（host-32 は翻訳をこの表に従って実装） |
 | 32bit Rustホスト（過去互換） | *(新規)* `areka-P0-shiori-host-32` | ⚪ | i686随伴バイナリ。flat-C/HGLOBAL/charset/SAORI同居/自前ループ/毎秒poll。自前IPC。DLL 境界契約は本実装過程でリファレンスを見本に決定 |
 
 ### T4 — 統合（M1達成）
