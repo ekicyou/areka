@@ -24,7 +24,7 @@
   - フラグメント → 正準契約の決定的再構成機構の **契約・受け入れ基準**（マニフェスト/順序の固定、意味的同値ゲートの判定基準）
   - 現行正本との意味的同値（無損失・冪等）の証明と provenance/description の保持
   - 完了仕様 `areka-P0-shiori-protocol` 要件3・11 の改訂（論理 SSOT の再定義）
-  - `doc/shiori/README.md` の改訂（SSOT＝fragments の宣言・派生の地位）
+  - `doc/shiori/README.md` の改訂（SSOT＝fragments の宣言）と旧 `shiori_protocol.toml` の削除
 - **Out of scope**:
   - 契約内容そのものの変更（event/resource の追加削除・field 意味/型/`ReferenceN` 位置・封筒マッピング・予約ヘッダ集合・沈黙裁定・バージョニング方針はすべて不変）
   - 再構成機構・バリデータ・doc/Web 生成器・Rust codegen の **実装コード**（HOW・後続フェーズ／下流）
@@ -32,7 +32,7 @@
 - **Adjacent expectations**:
   - 上流 `areka-P0-shiori-protocol`（completed）が本契約の正本所有者であり、本仕様はその要件3・11 を改訂継承する（completed の履歴は不変のまま系譜を残す）。
   - 下流 consumer（`areka-P0-shiori-host-32`・`areka-P0-shiori-reference`・pasta native 脳・後続の doc/Web 生成器・Rust codegen）は、入力が「単一ファイル `shiori_protocol.toml`」から「フラグメント群（または再構成された正準ビュー）」へ移ることを lockstep で取り込む。契約セマンティクスは不変ゆえ、影響は符号化形・入力ソースのみに限定される。
-  - **未決の設計判断（Q1）**: `shiori_protocol.toml` を「非権威の生成物として tree に残置（暫定推奨・下流無改修）」とするか「tree から削除しオンデマンド結合に一本化」するかは、本要件では確定せず設計フェーズで裁定する。Requirement 7 は処遇の選択肢に依らず満たすべき不変条件（正本でない・残す場合は正本との同値・編集禁止表示）を規定する。
+  - **Q1 裁定済み（要件ディスカッション #1）**: `shiori_protocol.toml` の処遇は **C-2（tree から削除しオンデマンド結合へ一本化）** に確定（現 consumer ゼロ・将来も単一ファイル入力を使わないことを開発者が確認）。Requirement 7 が削除を規定する。
 
 ## Requirements
 
@@ -102,16 +102,18 @@
 2. The 分割後フラグメント群 shall 全 entry・全 field・全 silence_ruling の provenance を無損失で保持する。
 3. The 分割後フラグメント群 shall ukadoc ピン留めスナップショット（出典 URL・取得日・sha256 等の典拠資産）への参照整合を維持する。
 
-### Requirement 7: 旧単一ファイルの派生レンダリングへの降格
+### Requirement 7: 旧単一ファイル `shiori_protocol.toml` の廃止
 
-**Objective:** As a 移行期の下流 consumer, I want `shiori_protocol.toml` を正本でなく派生（または廃止）として扱いたい, so that 正本がフラグメント群へ一本化されつつ移行期の互換が保てる
+**Objective:** As a 互換契約の管理者, I want `shiori_protocol.toml` を正本でなく廃止（tree から削除）として扱いたい, so that 正本がフラグメント群へ一本化され派生ドリフトを構造的に排除できる
+
+> **Q1 裁定（要件ディスカッション #1 で確定）**: gap 分析 §1.2 の通り現時点で `shiori_protocol.toml` を参照する実装上の consumer はゼロであり、将来も単一ファイル入力を利用しないことを開発者が確認した。したがって処遇は **C-2（削除）** に確定する。非権威の生成物として tree に残置する選択肢（C-1）は採らない。
 
 #### Acceptance Criteria
 
-1. The `shiori_protocol.toml` shall 本仕様の完了後において契約の正本ではなく、フラグメント群が正本となる。
-2. Where `shiori_protocol.toml` を非権威の生成物として tree に残置する場合, the `shiori_protocol.toml` shall フラグメント群からの再構成結果と意味的に同値であり、doc/Web と同格の派生レンダリングとして扱われる。
-3. Where `shiori_protocol.toml` を非権威の生成物として残置する場合, the `shiori_protocol.toml` shall その先頭に「fragments から生成・直接編集禁止」である旨をデータとして明示する。
-4. The 本仕様 shall `shiori_protocol.toml` を tree に残置するか削除してオンデマンド結合へ一本化するかの処遇（Q1）を、設計フェーズで裁定する未決の設計判断として明示する。
+1. The 本仕様 shall 本仕様の完了後において `shiori_protocol.toml` を契約の正本とせず、フラグメント群を唯一の正本とする。
+2. The 本仕様 shall `shiori_protocol.toml` を tree から削除し、非権威の生成物としても残置しない。
+3. When 単一ファイル形式の正準ビューが必要となる場合, the 正準ビュー shall フラグメント群からのオンデマンド再構成（merge）によってのみ得られるものとし、tree に常設の単一ファイルを持たない。
+4. The 本仕様 shall `shiori_protocol.toml` 削除後、当該ファイルを指す既存参照（`doc/shiori/README.md`・完了仕様の記述等）が正本＝フラグメント群を指すよう整合させる。
 
 ### Requirement 8: 完了仕様の SSOT 要件の改訂
 
@@ -122,7 +124,7 @@
 1. The 本仕様 shall 完了仕様 `areka-P0-shiori-protocol` の要件3・要件11 における「単一ファイル正本（single source of truth＝1 枚の TOML）」を、「論理 SSOT＝フラグメント群およびその決定的結合結果」へ改訂する。
 2. The 改訂 shall 二重定義禁止・全 description のデータ保持・provenance 維持・派生 doc/Web との同値/冪等という不変条件（精神）を維持する。
 3. The 改訂 shall 完了仕様の `completed/` 配下の履歴を不変のまま残し、改訂が本仕様側で系譜（拡張改訂）として追跡可能であることを保証する。
-4. The 本仕様 shall `doc/shiori/README.md` を、SSOT がフラグメント群であり `shiori_protocol.toml` が派生（または廃止）である旨へ改訂する。
+4. The 本仕様 shall `doc/shiori/README.md` を、SSOT がフラグメント群であり `shiori_protocol.toml` は廃止（tree から削除）された旨へ改訂する。
 
 ### Requirement 9: 契約セマンティクスの非破壊保証
 
