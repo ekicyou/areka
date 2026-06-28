@@ -59,3 +59,4 @@ arekaアルファリリースロードマップと`.kiro/specs/`配下の仕様�
 📍 `.kiro/specs/*/spec.json` … 各仕様の phase/approvals（件数は配置フォルダ基準で数える）
 📍 `doc/COMPAT_ARCHITECTURE.md` … 設計判断の正本
 📍 `doc/ROADMAP.md` … 旧パスのポインタ stub（正本は steering/roadmap.md）
+📍 `.kiro/steering/two-tunnel.md` … 二坑モデル規律の正本（`inclusion: manual` で非常駐）

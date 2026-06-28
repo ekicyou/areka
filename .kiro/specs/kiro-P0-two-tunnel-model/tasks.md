@@ -43,7 +43,7 @@
   - _Requirements: 1.5, 8.1, 8.2, 8.3, 8.4, 8.5, 8.6, NFR-1_
   - _Depends: 2_
   - _Boundary: workflow.md_
-- [ ] 4.2 (P) focus.md に two-tunnel.md 参照を追記（常駐 lean ポインタ・任意最小）
+- [x] 4.2 (P) focus.md に two-tunnel.md 参照を追記（常駐 lean ポインタ・任意最小）
   - `focus.md` の「参照先」節に `two-tunnel.md`（二坑規律正本・`inclusion: manual`）への参照を 1 行追記する。Task 4.1 とは別ファイル境界ゆえ並列可。
   - 完了状態: `focus.md` から `two-tunnel.md` への参照行が存在する。
   - _Requirements: 1.4, 1.5_
