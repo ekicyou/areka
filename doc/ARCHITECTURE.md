@@ -168,7 +168,7 @@ Windows Animation Manager の概念をプラットフォーム非依存のデー
 5. **[.kiro/steering/structure.md](../.kiro/steering/structure.md)** — ディレクトリ構造、命名規則の詳細
 6. **[doc/spec/README.md](spec/README.md)** — wintf 詳細設計仕様の概要
 7. **[doc/spec/ 各章](spec/)** — 興味のある領域から各章を読む
-8. **[doc/ROADMAP.md](ROADMAP.md)** — 開発計画とタスクの全体像
+8. **[.kiro/steering/roadmap.md](../.kiro/steering/roadmap.md)** — 開発計画とタスクの全体像（ロードマップ正本。`doc/ROADMAP.md` はポインタ）
 
 ---
 

@@ -75,7 +75,7 @@ mv .kiro/specs/<spec-name> .kiro/specs/completed/
 
 ### Step 6. ROADMAP更新（該当する場合）
 
-仕様が `doc/ROADMAP.md` に記載されている場合、以下を更新する（参照タイミングは `.kiro/steering/focus.md`）。
+仕様が `.kiro/steering/roadmap.md`（ロードマップ正本）に記載されている場合、以下を更新する（参照タイミングは `.kiro/steering/focus.md`）。`doc/ROADMAP.md` はポインタ stub のため更新対象ではない。
 
 #### 6-1. 仕様テーブルの状態列を更新
 
@@ -138,7 +138,7 @@ gh pr merge --squash --delete-branch --subject "<subject>" --body "<body>"
 - [ ] `spec.json` の `phase` が `"completed"` + `updated_at` 更新済み
 - [ ] 移動元（`.kiro/specs/<spec-name>/`）にファイルが残っていない
 - [ ] 参照パス更新済み
-- [ ] `doc/ROADMAP.md` 更新済み（該当する場合: 状態列✅ + 完了数インクリメント）
+- [ ] `.kiro/steering/roadmap.md`（正本）更新済み（該当する場合: Specs 状態 `[x]` + 完了数インクリメント）
 - [ ] 完了コミット済み
 - [ ] PRベースでmainへ統合済み（PR可の場合）／ローカル保持（PR不可の場合）
 

@@ -60,7 +60,7 @@ areka は「ぱすたさん専用の試作」から、**ukadoc準拠の互換ベ
 | ① 互換ベースウェア | 実在の里々ベースゴースト1体が、SAORI込みで表示・会話（ukadoc準拠） |
 | ② ぱすたさん（native旗艦） | ゴースト（pasta DSL 解釈・実行）、階層サーフェスの本領、透過・縦書きタイプライターバルーン |
 
-詳細: `doc/COMPAT_ARCHITECTURE.md`, `doc/PASTA_PROFILE.md`, `doc/ROADMAP.md`
+詳細: `doc/COMPAT_ARCHITECTURE.md`, `doc/PASTA_PROFILE.md`, `.kiro/steering/roadmap.md`（ロードマップ正本）
 
 ---
 Focus on patterns and purpose, not exhaustive feature lists.
