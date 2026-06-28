@@ -113,6 +113,23 @@ emo2 が起動して喋る。下記 5 トラックを結線して達成（⓪ �
 - **M-dialogue** ＝ sakura:`sakura-dialogue-tags` ＋ conductor:`input-events`(dblclick/choice) ＋ render:`choice-render`
 - **M-e2e** ＝ `areka-P0-emo2-conformance-e2e`（全エンジン統合・OnClose＋boot→talk→touch→menu→close 一周適合・M1 ゴール充足）
 
+### クロスエンジン I/O（並走依存チェック）
+
+> 一部ユニットは**複数エンジンに入出力**を持つ（例: 撫で反応＝render が入力／SHIORI が出力）。図に線は引かないが**並走性に影響するので依存をチェック**。conductor への指示はほぼ SHIORI 層から。
+
+**並走安全（M-boot 済なら独立着手可・依存は M-boot のみ）**:
+- conductor:`idle-talk`（OnSecondChange→SHIORI→sakura）
+- shell-anim:`mayuna-compose` / `shell-anim-loop`
+- ghost:`position-persist`（自己＋window-placement）
+
+**クロスエンジン結合（I/O 契約を先に1つ決めれば両側を並列実装可）**:
+- **撫で（M-life）**: render:`collision-geometry`（入力 mouse→region/actor）⟷ conductor:`input-events`（出力 OnMouseMove→SHIORI）。先に **region/actor I/O 契約**。
+- **選択肢/メニュー（M-dialogue）**: sakura:`sakura-dialogue-tags`（`\q` 出力）⟷ render:`choice-render`（表示）⟷ conductor:`input-events`（OnChoiceSelectEx）。先に **\q/選択 契約**。
+- **二人立ち（M-dual）**: shell-anim:`dual-surface` ⟷ render:`dual-window` ⟷ ghost:`window-placement`。先に **2窓/surface 契約**。
+- **移動 `\![move]`**: sakura:`sakura-dialogue-tags` ⟷ ghost:`window-placement`（キャラ移動＝窓移動）。
+
+> **結論**: エンジン所有での並走は原則可。ただし上記**結合クラスタは I/O 契約を先決してから**両側を並列実装する（契約未定で並走すると齟齬）。完全独立ユニットは即着手可。
+
 ## 制約
 
 - Rust 2024・マルチクレート（wintf/dola/areka ＋最小依存 `shiori-abi`）。32bit 可搬性を崩さない。
