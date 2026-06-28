@@ -196,3 +196,41 @@ error: failed to load source for dependency `pasta_core`
 1. 本ギャップ分析を要件ディスカッション（kiro-requirements-discussion）で精査し、§6 の論点を設計判断として収集する。
 2. requirements 承認後 `/kiro-design kiro-P0-two-tunnel-model` で design 生成 → §4 の Option を確定。
 3. design で特に **要件 4（CI bootstrap＋依存ガード PoC＋submodule init）** を最優先に詰める。
+
+---
+
+## 9. Design Phase — Synthesis & Decisions（2026-06-28・design 生成時に追記）
+
+> kiro-spec-design（Light discovery）で §4–§7 の論点を確定した記録。design.md の「Key Decisions」と対応。
+
+### 9.1 Discovery 分類
+
+**Light（Extension）**。新規システムではなく、既存 2 パターン（steering 二層 focus→roadmap／葉ノード publish=false `shiori-abi`＋`examples/<dir>/main.rs` `taffy_flex_demo`）の統合・拡張。新規外部依存・新規アーキテクチャ変更なし → full discovery 不要。WebSearch/WebFetch 不要（外部ライブラリ新規採用なし）。
+
+### 9.2 Synthesis 3 レンズ
+
+- **Generalization**: R1/R5/R6/R7（規律系）はすべて「二坑規律の正本を 1 文書に集約し常駐側から参照する」一般問題の変奏 → `two-tunnel.md`（manual）一葉に集約し、workflow.md は参照のみ（No Hidden Shared Ownership 回避）。R4 系（4.1–4.7）は「命綱の機械執行」一般問題 → 単一スクリプト `check-isolation.ps1` に集約。
+- **Build vs Adopt**: 依存方向ガードで cargo-deny（adopt）vs 自前 metadata 走査（build）を評価 → **build（自前 metadata 走査）を選定**。理由: (a) cargo-deny `bans` は outbound 表現が主で「特定クレートへの被依存（inbound）禁止」の表現可否が PoC 依存・不確実、(b) CI/ローカル両環境への別途インストールを要し二坑モデルが戒める依存負債になる、(c) metadata の resolve グラフ走査は追加依存ゼロで inbound-edge 不変条件を直接表現できる。steering 配置は既存 focus→roadmap 二層を **adopt**（C3）。クレート骨格は `shiori-abi`＋`taffy_flex_demo` を **adopt**。
+- **Simplification**: xtask クレート新設（A3）は本仕様スコープを広げる投機的抽象として**棄却**。CI bootstrap（B1/B2）は乗り物がローカル DoD ゲートに確定したため**不要化**（要件外）。pilot は空 `src/lib.rs`＋examples のみの最小構成。
+
+### 9.3 確定した設計判断（§6 論点への回答）
+
+| §6 論点 | 確定 | design.md 反映先 |
+|---------|------|------------------|
+| 6-1 依存方向ガード手段 | **cargo metadata ＋ check-isolation.ps1**（cargo-deny 不採用） | Key Decisions / check-isolation.ps1 Batch Contract |
+| 6-2 機械チェックの乗り物 | ローカル workflow DoD ゲート（確定済・議題1） | Architecture / 隔離ゲートフロー |
+| 6-3 pilot worktree ライフサイクル | 運用記述として workflow.md（pilot crate は永続・隔離保全、throwaway worktree の破棄は運用） | workflow.md 拡張（運用節） |
+| 6-4 テンプレ example 配置 | `examples/_template/`（build 対象・腐敗検出に入る）・`main.rs` 必須規約 | File Structure / examples 規約 |
+| 6-5 go ゲート記法の宿主 | roadmap.md 既存 `Dependencies:` 拡張 `_Depends(confirmed):` | roadmap.md 拡張 / Key Decisions |
+| 6-6 steering 二層化 | two-tunnel.md（manual）＋ 常駐側 lean 参照 | Architecture / two-tunnel.md component |
+| 6-7 依存マップ＝手動チェックリスト | 確定済（自動化は契約外）・two-tunnel.md に明文化 | two-tunnel.md 依存マップ節 |
+
+### 9.4 Boundary 決定の根拠
+
+- 3 つの独立責務シーム（steering 規律 / pilot crate / 機械ゲート）は並行実装可能で、単一 spec に収めても境界が明確（split 不要）。
+- inbound edge ゼロ（命綱）が唯一の機械執行不変条件であり、ガードロジックの単一所有者は check-isolation.ps1。
+- 既存規約（workflow ブランチ/完了・completed/ 不変）は不変境界として尊重（追記のみ）。
+
+### 9.5 Design Review Gate 結果
+
+**1 回目で通過（repair 不要）**。Mechanical checks 全合格（全要件 ID＋NFR-1–5 が traceability に出現、Boundary 4 節充足、File Structure 具体パス充足、orphan component なし、boundary↔file 整合）。Judgment review でも spec gap なし（R4 の「既存 CI 不在」隠れ依存は乗り物=ローカル DoD ゲート確定により解消済み）。
