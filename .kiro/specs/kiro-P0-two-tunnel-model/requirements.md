@@ -11,7 +11,7 @@
 
 ## Introduction
 
-本仕様は、エージェント駆動開発における**誤った方向の可逆性（reversibility）**を最優先する開発規律「**二坑モデル**」を、ルール（steering 文書）＋インフラ（知見クレート `crates/pilot`・CI 依存方向ガード・workflow ゲート）として確立する。
+本仕様は、エージェント駆動開発における**誤った方向の可逆性（reversibility）**を最優先する開発規律「**二坑モデル**」を、ルール（steering 文書）＋インフラ（知見クレート `crates/pilot`・機械ゲート〈依存方向ガード・ローカル workflow 統合〉・workflow ゲート）として確立する。
 
 ### 背景
 
@@ -41,11 +41,12 @@
 - **In scope**:
   - 二坑モデルの steering 文書化（`.kiro/steering/` に正規文書として確立）。
   - 知見クレート `crates/pilot` の新設（Cargo.toml・workspace 統合・`examples/<spec>/` 規約・テンプレ example＋README 雛形）。
-  - CI 統合（知見クレートの `cargo build --examples` ＋ production→pilot 依存禁止の機械チェック）。
+  - 機械ゲート統合（知見クレートの `cargo build --examples` ＋ production→pilot 依存禁止の機械チェックを、ローカルの workflow 完了ゲート〈`/kiro-complete` の DoD ゲート〉に統合）。
   - workflow.md への二坑統合（先進坑フェーズ・go ハードゲート・依存マップ重点検証ルール・削除/隔離規律）。
 - **Out of scope**:
   - 既存ロードマップの二坑分解（M1 を pilot/main へ割り直す作業）。本モデル確立後の後続 discovery（別作業・本仕様ではない）。
   - 個別の先進坑/本坑 spec の実装そのもの（本仕様はモデルとインフラの確立まで）。
+  - リモート CI（GitHub Actions 等）の新設（未リリースゆえ当面不要・後続候補）。マージは本チャット駆動の `/kiro-complete` に集約されるため、機械チェックはローカル完了ゲートで成立する。
   - 並列実行基盤（workflow/agent fan-out）の新規開発（既存の Agent/Workflow 機構を運用で使う）。
   - production クレート（wintf/dola/areka/shiori-abi 等）への機能追加。
 - **Adjacent expectations**:
@@ -103,17 +104,19 @@
 
 ---
 
-### Requirement 4: CI 強制（examples ビルド ＋ 依存方向ガード）
+### Requirement 4: 機械ゲート強制（examples ビルド ＋ 依存方向ガード・ローカル workflow 統合）
 
-**Objective:** 開発者/AI として、二坑モデルの不変条件を人手でなく機械で守りたい。それにより規律が形骸化せず確実に維持される。
+**Objective:** 開発者/AI として、二坑モデルの不変条件を人手でなく機械で守りたい。それにより規律が形骸化せず確実に維持される。本仕様では未リリース repo の運用実態（マージは本チャット駆動の `/kiro-complete` に集約）に合わせ、機械チェックをリモート CI ではなくローカルの workflow 完了ゲートで成立させる。
 
 #### Acceptance Criteria
 
-1. The CI Pipeline **shall** 知見クレートの先進坑コードを `cargo build --examples` 相当でビルドし、腐敗（ビルド破綻）を検出する。
-2. The CI Pipeline **shall** production クレートが知見クレート（先進坑コード）に依存していないことを機械的に検証する。
-3. If production クレートから知見クレートへの依存が検出された場合, then the CI Pipeline **shall** 当該変更を失敗として扱う。
-4. If 知見クレートの先進坑コードがビルドに失敗した場合, then the CI Pipeline **shall** 当該変更を失敗として扱う。
-5. The CI Pipeline **shall** これらのチェックを既存の CI ワークフローに統合し、変更時に自動で実行する。
+1. The Isolation Gate **shall** 知見クレートの先進坑コードを `cargo build --examples` 相当でビルドし、腐敗（ビルド破綻）を検出する。
+2. The Isolation Gate **shall** production クレートが知見クレート（先進坑コード）に依存していないことを機械的に検証する。
+3. If production クレートから知見クレートへの依存が検出された場合, then the Isolation Gate **shall** 当該変更を失敗として扱う。
+4. If 知見クレートの先進坑コードがビルドに失敗した場合, then the Isolation Gate **shall** 当該変更を失敗として扱う。
+5. The Isolation Gate **shall** これらのチェックをローカルの workflow 完了ゲート（`/kiro-complete` の DoD ゲート）に統合し、`main` へのマージ前に実行する。
+6. The Isolation Gate **shall** すべての cargo 系ステップの前段で `git submodule update --init --recursive` を実行し、worktree での submodule 未populate による失敗を防ぐ。
+7. Where 将来 repo がリリースに近づきリモート CI が必要になる場合, the Isolation Gate のチェックロジック **shall** リモート CI（GitHub Actions 等）へ後続 spec で移設できる形（再利用可能なスクリプト/コマンド）で実装される。リモート CI の新設自体は本仕様の対象外とする。
 
 ---
 
@@ -186,7 +189,7 @@ The Pilot Crate **shall** 最小依存・`publish = false`・葉ノードを維�
 
 ### NFR-3: 機械的厳守
 
-The Two-Tunnel Model **shall** 命綱（葉ノード隔離）を人手の規律でなく CI による機械チェックで厳守する。
+The Two-Tunnel Model **shall** 命綱（葉ノード隔離）を人手の規律でなく機械チェックで厳守する。本仕様では当該チェックをローカルの workflow 完了ゲート（`/kiro-complete` の DoD ゲート）に統合する形で成立させ、リモート CI（GitHub Actions）への展開は後続候補として必須としない。
 
 ### NFR-4: 完了仕様の不変尊重
 
@@ -207,7 +210,7 @@ The Two-Tunnel Model の成果物（steering 文書・README 一次記録・規�
 | 二坑モデル steering 文書 | Markdown | `.kiro/steering/` |
 | workflow 二坑統合 | Markdown（既存拡張） | `.kiro/steering/workflow.md` |
 | 知見クレート | Rust crate | `crates/pilot/`（`Cargo.toml`, `examples/<spec>/{main.rs, README.md}`, テンプレ example） |
-| CI 依存方向ガード ＋ examples ビルド | CI 設定 | 既存 CI ワークフロー |
+| 隔離ゲート（依存方向ガード ＋ examples ビルド） | スクリプト/コマンド ＋ workflow 統合 | ローカル workflow 完了ゲート（`/kiro-complete` DoD・`workflow.md`） |
 
 ### B. 用語と境界連続性
 
@@ -220,7 +223,7 @@ The Two-Tunnel Model の成果物（steering 文書・README 一次記録・規�
 
 以下は user-observable behavior ではなく実装方針の選択であり、design フェーズで詰める（要件のスコープ曖昧性ではない）。
 
-- CI 依存方向ガードの具体実装（`cargo metadata` 解析 / `cargo-deny` 等の選定）。
+- 隔離ゲートの依存方向ガードの具体実装手段（`cargo metadata` 解析 / `cargo-deny` 等の選定）。※乗り物はローカル workflow ゲートに確定済（議題1）。手段の選定のみ design 送り。
 - pilot worktree のライフサイクル（いつ捨てるか）の運用詳細。
 - テンプレ example の具体的な形（雛形コードと README 雛形の詳細）。
 

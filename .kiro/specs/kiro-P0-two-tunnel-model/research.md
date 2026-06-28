@@ -171,7 +171,7 @@ error: failed to load source for dependency `pasta_core`
 要件付録 C の 3 論点を、実地調査で具体化した上で再掲・拡張する。
 
 1. **【最優先・C1】CI 依存方向ガードの実装手段**: A1 cargo-deny（導入済）/ A2 cargo metadata 自前 / A3 xtask の三択。inbound-edge 禁止（誰も pilot に依存しない）の表現可否を design で PoC 確認。**Research Needed: cargo-deny `bans` で「特定クレートへの被依存禁止」を表現できるか実証。**
-2. **【最優先・隠れ前提】CI 基盤を本仕様で新設する範囲**: `.github/workflows` 不在。submodule init 必須。production フル build（Windows ランナー）と、依存ガード＋pilot build（OS 非依存）のジョブ分割方針。**「既存 CI に統合」が成立しない以上、CI bootstrap の範囲確定が要ディスカッション。**
+2. **【解決済み・議題1】機械チェックの乗り物 = ローカル workflow ゲート（GitHub Actions 新設は対象外）**: 未リリース repo を GitHub CI で重くしない開発者判断。マージは本チャット駆動の `/kiro-complete` に集約されるため、隔離チェック（`cargo build --examples -p pilot` ＋ 依存方向ガード ＋ `git submodule update --init --recursive` 前段）を `/kiro-complete` の DoD ゲート（既存の `cargo test --workspace` に並置）へ統合する形で NFR-3「機械的厳守」を満たす。要件 R4 を「CI Pipeline」→「Isolation Gate（ローカル workflow 統合）」へ改稿済（R4-5/4-6/4-7・NFR-3）。リモート CI 化は repo がリリースに近づいた際の後続候補。**残る design 論点は実装手段（cargo-deny / cargo metadata / xtask）の選定のみ（下記 §6-1 / §4.A）。**
 3. **【C2】pilot worktree のライフサイクル（いつ捨てるか）**: 要件外（運用詳細）だが、worktree＋submodule 制約と絡む。pilot crate は永続（隔離保全）だが、探索用 throwaway worktree の破棄タイミングは運用記述として workflow へ。
 4. **【C3】テンプレ example の配置**: `examples/_template/` （build 対象・腐敗検出に入る）vs `templates/`（build 対象外）。`main.rs` 必須規約で「README だけのフォルダが example 認識されない」問題を担保。
 5. **go ゲート記法の表現先**: `_Depends(confirmed): pilot` を (a) spec.json スキーマ拡張（kiro-spec-schema.md に新フィールド）／(b) roadmap.md の既存自由テキスト `Dependencies:` の拡張／(c) tasks.md の `_Requirements:` 類似記法、のどこに置くか。既存 `dependencies` 配列との二重管理回避が論点。
@@ -185,8 +185,8 @@ error: failed to load source for dependency `pasta_core`
 
 - steering: **C3 二層**（既存 focus→roadmap 規約と整合）。
 - pilot crate: `shiori-abi`（publish=false 葉）＋`wintf/examples/<dir>/main.rs` の合成で範例どおり。
-- CI: **依存ガード（OS 非依存・A1 or A2）＋ pilot examples build を最小 job で先に成立** させ、production フル build（Windows）は同一ワークフロー内で別 job。**submodule init を全 cargo 系ステップの前段に必須化**。
-- ガード手段: 当環境に `cargo-deny` 導入済ゆえ A1 を第一候補に PoC、不適なら A2 へフォールバック。
+- 機械チェックの乗り物: **ローカル workflow 完了ゲート（`/kiro-complete` DoD）に確定（議題1）**。GitHub Actions 新設は対象外。`git submodule update --init --recursive` → `cargo build --examples -p pilot` → 依存方向ガード を DoD ゲートに統合（既存 `cargo test --workspace` に並置）。
+- ガード手段（design 送り）: 当環境に `cargo-deny` 導入済ゆえ A1 を第一候補に PoC、不適なら A2（cargo metadata 自前）へフォールバック。乗り物がローカルゆえ「CI ランナーへの別インストール」懸念は当面解消（ローカル実行環境に導入済）。
 - go ゲート記法: roadmap.md の既存 `Dependencies:` 自由テキスト拡張（最小コスト）を第一候補、厳密化が要れば spec.json スキーマ拡張。
 
 ---
