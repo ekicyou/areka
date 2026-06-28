@@ -45,7 +45,7 @@
   - _Boundary: ReferenceBrain_
   - _Depends: 2.1_
 
-- [ ] 2.6 リファレンス見本ドキュメント（module-level doc）
+- [x] 2.6 リファレンス見本ドキュメント（module-level doc）
   - 脳モジュールの module-level doc に、各経路（ロード／アンロード・即時・遅延・Raise）の正解見本説明、content 不透明・固定／エコー方針、下流（host-32／reference-ghost）の参照位置づけを集約する
   - 正準 content プロトコルは完了仕様 `areka-P0-shiori-protocol`（`doc/shiori/fragments/`）の責務であり参照・複製しない旨を明示する
   - 観測: 脳モジュールの doc が各経路・content 不透明方針・下流位置づけ・protocol 委譲を記載している

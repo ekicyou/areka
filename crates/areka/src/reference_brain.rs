@@ -1,14 +1,77 @@
-//! 製品コード（非 `#[cfg(test)]`）のリファレンス脳。
+//! 製品コード（非 `#[cfg(test)]`）の **SHIORI リファレンス脳**。
 //!
-//! 上流 `areka-P0-shiori-com` の `IShiori` を `#[implement(IShiori)]` で実装する
-//! 最小の native リファレンス脳。content（リクエスト・応答・通知の本文）は不透明な
-//! HSTRING（UTF-16）のままエコーで取り回し、解析・スキーマ検証・意味づけを行わない
-//! （要件 1.4／8.1）。
+//! 上流 `areka-P0-shiori-com` の `IShiori` を `#[implement(IShiori)]` で実装する最小の
+//! native リファレンス脳であり、`IShiori` 実装の **正解見本（canonical reference example）**
+//! として下流が参照する位置づけにある（要件 7.1／7.3）。本 doc は脳が扱う全経路の正解見本、
+//! content 不透明（固定／エコー）方針、正準 content プロトコルの委譲、下流の参照位置づけを
+//! 集約する（要件 7.1／7.2／7.3／8.2）。
 //!
-//! 本タスク時点でライフサイクル（Load/Unload）・ロード状態保持・未ロード拒否（2.1）と、
-//! ロード済み Request の即時エコー応答（2.2・受信 content を不解釈のまま往復）を実装する。
-//! 遅延応答＋Complete（2.3）、能動通知 Raise（2.4）、`shiori_create` コンストラクタ（3.x）、
-//! module-level の完全リファレンス doc（2.6）は後続タスクで配線する。
+//! # 各経路の正解見本（IShiori path reference examples・要件 7.1）
+//!
+//! 本脳が実装する各経路は、`IShiori` を実装する下流脳がそのまま倣える正解見本である。
+//! 実装の詳細は各メソッドの doc を参照（本節は経路の要約と意図）。
+//!
+//! ## ロード／アンロード（Load／Unload）— ライフサイクルと保持参照モデル
+//! [`Load`](IShiori_Impl::Load) は受け取った raw host を `IShioriHost::from_raw_borrowed`
+//! ＋`.cloned()` で **AddRef 保持**（`held_host`）し、Loaded へ遷移する。
+//! [`Unload`](IShiori_Impl::Unload) は保持 host を drop（**Release**）し Unloaded へ戻す。
+//! ロード状態は [`AtomicBool`]（`loaded`）で保持する。Unload 後は host を呼ばない。
+//!
+//! ## 未ロード拒否（not-loaded rejection）
+//! 未ロード状態での [`Request`](IShiori_Impl::Request) は、有効な処理として受理せず
+//! [`SHIORI_E_NOT_LOADED`] を返す（out-param 未書込・判別可能な失敗）。
+//!
+//! ## 即時応答（immediate response）— 固定／エコー
+//! ロード済み・既定の `Request` は `S_OK` を返し、応答 HSTRING を `out_response` へ
+//! **move-out** する。本見本は受信 content をそのまま返す **エコー**（無加工コピー）で
+//! 不透明性を実証する。
+//!
+//! ## 遅延応答（deferred response）— PENDING＋トークン＋Complete
+//! 遅延武装時（[`arm_defer_next`](ReferenceBrain::arm_defer_next) の CONTROL）の `Request`
+//! は即時応答ではなく [`SHIORI_S_PENDING`]＋採番トークン（[`CorrelationTokenAllocator`] による
+//! 単調増加採番）を返し、`out_token` へ書き出す。完了は後で
+//! [`complete_pending`](ReferenceBrain::complete_pending) が保持 host へ **vtable 直呼び**で
+//! `Complete(token, response)` を発火する。
+//!
+//! ## 能動通知（active notification）— Raise
+//! [`fire_raise`](ReferenceBrain::fire_raise) は保持 host へ **vtable 直呼び**で `Raise(script)`
+//! を発火する。`script` は固定または既知の不透明文字列を呼び出し側が供給する。
+//!
+//! ## 生成入口（construction entry）— `shiori_create`
+//! [`shiori_create`] は `IShiori` 実体を生成する **唯一の純粋C コンストラクタ**
+//! （`extern "system"`＝COM 標準呼出規約＋`#[unsafe(no_mangle)]`＝C リンケージ）。成功時は
+//! 参照カウント 1 の `IShiori` を out へ move-out する（writes-on-success 不変条件）。
+//!
+//! # content 不透明・固定／エコー方針（opaque content policy・要件 7.2／8.2）
+//!
+//! content（リクエスト・応答・通知の本文）は **不透明な UTF-16 HSTRING** のまま
+//! 固定／エコーで取り回す。本脳は content を **解析・スキーマ検証・分割・デコード・意味づけ・
+//! 内容分岐しない**。即時応答は受信 content の純粋なエコー（無加工コピー）、遅延応答・能動通知は
+//! 呼び出し側供給の固定／既知文字列をそのまま往復させる。即時／遅延の判別も content ではなく
+//! CONTROL フラグ（`defer_next`）で行う。content を不解釈のまま往復・一致させることで不透明性を
+//! 実証する（要件 1.4／8.1）。
+//!
+//! # 正準 content プロトコルの委譲（delegation・要件 7.2／8.2）
+//!
+//! 正準 content プロトコル（リクエスト・応答・通知本文の語彙・スキーマ・意味論）は、完了仕様
+//! **`areka-P0-shiori-protocol`**（論理 SSOT＝`doc/shiori/fragments/`）の責務である。本リファレンス脳は
+//! content を不透明に取り回す立場であり、その語彙を **参照・複製しない**（SSOT の二重定義禁止・
+//! 要件 8.2）。本 doc・本コードには json-rpc スキーマやさくらスクリプトの意味論を一切持ち込まない。
+//! content の構造・意味が必要な場合は `areka-P0-shiori-protocol` を唯一の正本として参照すること。
+//!
+//! # 下流の参照位置づけ（downstream reference role・要件 7.3）
+//!
+//! 本リファレンス脳と [`shiori_create`] の生成契約は、下流が `IShiori` 実装の正解見本として参照する:
+//! - **`areka-P0-shiori-host-32`**（DLL ホスト）— 32bit DLL ホスティング側が、本見本の
+//!   `shiori_create` 生成契約（`extern "system"` 署名・`GetProcAddress("shiori_create")` で引ける形・
+//!   refcount 1 の `IShiori` を move-out）と `Load/Unload/Request/Complete/Raise` の経路を参照する。
+//! - **`areka-P0-reference-ghost`**（pasta 旗艦脳）— pasta native 旗艦脳が、本見本の `IShiori`
+//!   実装パターン（保持参照モデル・即時／遅延・能動通知・content 不透明方針）を正解見本として参照する。
+//!
+//! # 上流設計 SSOT への参照
+//!
+//! アーキテクチャ上の上流設計 SSOT は `doc/COMPAT_ARCHITECTURE.md` §5 を参照（本 doc では内容を
+//! 複製しない・参照リンクのみ）。
 
 #![allow(non_snake_case)] // `#[implement(IShiori)]` の生成面が PascalCase メソッドを要求する。
 
