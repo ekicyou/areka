@@ -49,6 +49,17 @@ areka（**x64**）が最小 SSP 互換ベースウェアとして、適合対象
 - 位置づけ: 旧「汎用シーングラフは M2 後ろ倒し」の**部分的前倒し**（データ構造のみ M1・上位演出エンジンは依然 M2）。
 - **アニメーションエンジンは2つ**（記憶 areka-two-animation-engines）: ①**さくらスクリプト再生エンジン**（talk timeline）＋ ②**シェルアニメーションエンジン**（SERIKO ループ）。`conductor`（SHIORI イベント循環）→ ① へ script。**① は下流が2つに分岐**: shell アニメ（`\s` 等）は ② へ／**テキスト（typewriter）は render(text-layer) へ直接**（テキスト描画はシェルアニメではないため ② を経由しない）。② は surface 合成を render に毎フレーム駆動。両 engine は **dola（完了・タイミング層）**上。
 
+## 構築（初期化）モデル — 各エンジンのコンストラクタ
+
+> コンストラクタ＝そのエンジンを構築する**定義入力**。独立 spec でも各エンジン unit に埋め込みでも可＝**埋め込み方針**（別 unit を増やさない）。記憶 areka-engine-construction-model。
+
+- **root（親）**: ルート定義 `install.txt` がゴースト全体の親コンストラクタ。
+- **ghost**: `areka-P0-package-mount` が root 定義を解決して構築（以下を子として構築）。
+- **SHIORI / host-32**: コンストラクタ＝ゴーストフォルダ定義（`ghost/master/descript.txt` の `shiori,pasta.dll` ＋ dir）。
+- **shell-anim-engine（②）**: コンストラクタ＝**SERIKO/shell 定義（`surfaces.txt`）＋ balloon 定義（balloon descript）**（統一エンジンゆえ両方が構築入力）。
+- **sakura-engine（①）**: コンストラクタ＝**さくらスクリプト**（SHIORI 応答ごと・**runtime・per-talk・transient**）。
+- 構築は2系: **load-time**（root→ghost→{SHIORI, shell-anim-engine}・一度）と **runtime**（script→sakura-engine・都度）。
+
 ## M1 実装ユニット（実現可能な粒度）
 
 > **粒度基準**: 1ユニット＝「コードを走らせて観測できる**単一 pass/fail** を持ち、それを観測するのに別ユニットを先に作る必要がない」もの。done が複数の独立観測に割れるなら粗すぎ→分割。
