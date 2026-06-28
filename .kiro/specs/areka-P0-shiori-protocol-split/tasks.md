@@ -20,7 +20,7 @@
   - _Requirements: 1.3, 4.1, 4.2, 4.3, 4.4, 4.5, 4.6_
   - _Boundary: フラグメント符号化スキーマ_
 
-- [ ] 2.2 (P) 共有フラグメントの集約生成
+- [x] 2.2 (P) 共有フラグメントの集約生成
   - `[meta]`/`[mapping]`/`[envelope]`/`[reserved_headers]` と全 9 silence_ruling を単一の共有フラグメントへ集約する
   - silence_ref の文字列参照が集約後も解決可能であることを保つ
   - observable: 共有フラグメント `_shared.toml` が書き出され、4 共有テーブル＋9 件の keyed silence_ruling を含み単独で parse できる
@@ -100,3 +100,8 @@
 - スクリプトは**リポジトリ tree に置かない／コミットしない**（恒久資産化禁止・Non-Goals）。配置先はセッション scratchpad の固定パス `MIGRATE.py`（累積・決定的・冪等な単一プログラム）。後続 task の fresh subagent は既存スクリプトを Read して該当ステージを追記する。
 - 入力: `doc/shiori/shiori_protocol.toml`（`tomllib`）。baseline: scratchpad の `baseline.json`。
 - 出力（保持・コミット対象）: `doc/shiori/fragments/_shared.toml`, `events/NN.<category>[.NN].toml`, `resources/NN.<category>[.NN].toml`, `_manifest.toml`, および最小エビデンス（3.3）。
+
+### 申し送り（task 2.2 完了時点で判明）
+- `silence_ref` はソースで**常に id の配列（list）**として保持されている（スカラ単一値ではない）。task 2.3 の entry/field 符号化はこの array 形を保存し、`_shared.toml` の 9 keyed ruling id へ解決可能であり続けること。実測 35 occurrences（entry 20＋field 15、各 1 要素配列）。
+- `_remap_mapping_table`（4.6）の唯一の値変更は `canonical_key: "name" → "field_table_key"`（旧 `name` 値列が keyed inline のキーへ移ったため）。他キーは verbatim。task 2.3 以降もこの retarget を維持し旧表現へ regress させない。
+- 既存 stage（baseline/convert/dupcheck/shared）を壊さず追記すること。MIGRATE.py の helper（`load_old`/`_emit_entry`/`_emit_field_inline`/`_emit_silence`/`_toml_quote_key`/`_toml_quote_string`）を再利用する。
