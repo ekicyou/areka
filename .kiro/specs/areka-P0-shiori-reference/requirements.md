@@ -85,11 +85,13 @@ content（リクエスト・応答・通知の本文）は本仕様では**不�
 
 #### Acceptance Criteria
 1. When 実走デモ経路が起動するとき, the areka demo path shall リファレンス脳を正準コンストラクタ `shiori_create`（要件 9）経由で取得し、in-proc アクティベーションで挿し（ロードし）、利用可能な状態にする。
-2. When リファレンス脳がアクティベーションされた後, the areka demo path shall 即時応答・遅延応答・能動通知（Raise）の各経路を含む数往復のリクエストをドライブする。
+2. When リファレンス脳がアクティベーションされた後, the areka demo path shall 即時応答・遅延応答・能動通知（Raise）の各経路を含む数往復のリクエストを、OnBoot 形の不透明リクエストを例にドライブする。
 3. When 数往復のドライブが完了したとき, the areka demo path shall リファレンス脳をアンロードして後始末する。
-4. The areka demo path shall 即時応答・遅延応答・能動通知の各経路の疎通結果を、利用者または開発者が観測可能な形で示す。
+4. The areka demo path shall 即時応答・遅延応答・能動通知の各経路の疎通結果を、開発者が構造化 tracing ログで観測可能な形で示す（視覚 UX・会話描画には依存しない）。
 5. While 遅延応答が未完了のとき, the areka demo path shall 既存セッション規律（単一インフライト・相関トークンの突き合わせ・タイムアウト）に従って完了を待ち合わせる。
 6. If アクティベーション・リクエスト・後始末のいずれかが失敗したとき, then the areka demo path shall 失敗を判別可能な形で報告し、後始末を試みる。
+7. The areka demo path shall デモのドライブを OnBoot 形の不透明リクエストによる最小疎通実演に限定し、会話描画・さくらスクリプト解釈・トークナイズ・balloon 反映を行わない（→ `areka-P0-sakura-script` ほか下流）。
+8. The areka demo path shall フラグまたは環境変数で明示的に有効化されたときにのみ起動し、既定（通常の areka 起動）では駆動しない。
 
 ### Requirement 7: リファレンスとしてのドキュメント化
 **Objective:** 下流実装者として、リファレンス脳と実走デモ経路が「正解見本」として参照できるよう文書化されていてほしい。これにより、`host-32`／pasta が `IShiori` を実装する際の参照点が明確になる。
