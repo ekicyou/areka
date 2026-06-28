@@ -36,7 +36,7 @@
   - _Requirements: 5.1, 5.2_
   - _Boundary: ReferenceBrain_
 
-- [ ] 2.5 純粋C コンストラクタ shiori_create
+- [x] 2.5 純粋C コンストラクタ shiori_create
   - `IShiori` 実体生成の唯一の純粋C コンストラクタ `shiori_create` を、COM 標準呼出規約（`extern "system"`）＋C リンケージ（`#[unsafe(no_mangle)]`、edition 2024 形）で公開する
   - 成功時は参照カウント 1 の `IShiori` を出力引数へ move-out し成功 HRESULT を返す。失敗時は出力を書き込まず判別可能な失敗 HRESULT を返す
   - 対象を COM（x64／ARM64・in-proc）生成入口に限定する（過去互換 flat-C・32bit DLL ホスティングは対象外）

@@ -129,6 +129,38 @@ impl Default for ReferenceBrain {
     }
 }
 
+/// `IShiori` 実体を生成する唯一の純粋C コンストラクタ（COM in-proc 生成入口の正解見本）。
+///
+/// 成功時は参照カウント 1 の `IShiori` を `out` へ move-out し `S_OK` を返す。失敗時は
+/// `out` を書き込まず判別可能な失敗 HRESULT を返す（writes-on-success 不変条件・要件 9.3／9.4）。
+/// 生成入口はこの 1 関数のみで、露出する型は `IShiori` に限る（要件 9.1）。対象は COM
+/// （x64／ARM64・in-proc）生成入口に限定し、過去互換 flat-C・32bit DLL ホスティングは対象外
+/// （要件 9.7）。
+///
+/// 呼出規約は Windows COM 標準の `extern "system"`（＝`__stdcall`・x64／ARM64 では `extern "C"`
+/// と同一 ABI だが、COM ABI・`IShiori` vtable との整合で正準表記は `system`・要件 9.2）。C リンケージ
+/// （非マングル）は `#[unsafe(no_mangle)]` が担保する（edition 2024 形）。本仕様では in-tree
+/// シンボル直呼びで実走するが、本署名は将来 host-32 が `GetProcAddress("shiori_create")` で
+/// 引ける形を満たす（要件 9.6・正解見本）。
+///
+/// # Safety
+/// `out` は非 NULL の有効な書込先ポインタであること（呼び出し側が保証）。`out` が NULL の
+/// 場合は防御的に `E_POINTER` を返し、何も書き込まない。成功時 `out` が受け取る `IShiori` は
+/// 参照カウント 1 で、呼び出し側が `Release`（drop）する義務を負う。
+#[unsafe(no_mangle)]
+pub unsafe extern "system" fn shiori_create(out: *mut *mut c_void) -> HRESULT {
+    // 前提の防御: out が NULL なら何も書き込まず判別可能な失敗を返す（要件 9.4）。
+    if out.is_null() {
+        return windows::Win32::Foundation::E_POINTER;
+    }
+    // refcount 1 の IShiori を構築し、所有権を out へ move-out する。
+    let brain: IShiori = ReferenceBrain::new().into(); // refcount 1
+    // Safety: `out` は非 NULL の有効な書込先（呼び出し側保証・上で NULL を排除済み）。
+    // into_raw は参照を変えずに所有権を移譲する（caller が単一参照を所有・Release 義務）。
+    unsafe { *out = brain.into_raw() };
+    S_OK
+}
+
 impl IShiori_Impl for ReferenceBrain_Impl {
     /// host を AddRef 保持し Loaded へ遷移する。成功=`S_OK`（要件 2.1）。
     unsafe fn Load(&self, host: *mut c_void) -> HRESULT {
@@ -500,6 +532,68 @@ mod tests {
             sink_impl.try_recv(),
             Some(HostMessage::Raised(script)),
             "保持 host へ固定（既知の不透明）文字列で Raise が発火すること"
+        );
+    }
+
+    /// `shiori_create` が成功時に refcount 1 の `IShiori` を out へ move-out し `S_OK` を
+    /// 返すこと（要件 9.1/9.3/9.6/9.7）。
+    ///
+    /// - 有効な out ポインタ（NULL 初期化）を渡すと `S_OK`＋out 非 NULL。
+    /// - out へ渡された単一参照を `IShiori::from_raw` で adopt（AddRef せず採用）し、
+    ///   IUnknown vtable の AddRef/Release を一往復して count の +1/-1 整合を確認することで
+    ///   「呼び出し側へ正確に 1 つの所有参照が手渡された」ことを実証する。
+    /// - 生成物が実体として ReferenceBrain であること（Load 前 Request が
+    ///   `SHIORI_E_NOT_LOADED`）を COM ポインタ経由で確認する。
+    #[test]
+    fn shiori_create_outputs_refcount_one_ishiori_on_success() {
+        let mut out: *mut c_void = core::ptr::null_mut();
+        // 純粋C コンストラクタを vtable 非経由で直呼びする（in-tree シンボル直呼び）。
+        let hr = unsafe { shiori_create(&mut out) };
+        assert!(hr.is_ok(), "shiori_create は成功時 S_OK を返すこと, got 0x{:08X}", hr.0);
+        assert!(!out.is_null(), "成功時は out へ非 NULL の IShiori を書き出すこと");
+
+        // 手渡された単一参照を adopt（from_raw は AddRef しない）。
+        let brain = unsafe { IShiori::from_raw(out) };
+
+        // 生成物が実体 ReferenceBrain であること（Load 前 Request → NOT_LOADED）。
+        let hr_req = unsafe { call_request(&brain) };
+        assert_eq!(
+            hr_req, SHIORI_E_NOT_LOADED,
+            "生成直後（未ロード）の Request は SHIORI_E_NOT_LOADED を返すこと, got 0x{:08X}",
+            hr_req.0
+        );
+
+        // refcount 1 検証: IUnknown へ cast（+1）してから AddRef/Release を一往復し、
+        // 既知ベースライン周りの +1/-1 整合（AddRef=3 / Release=2）を確認する。
+        let unk: windows_core::IUnknown = brain.cast().expect("IUnknown へ cast");
+        let after_add = unsafe { (Interface::vtable(&unk).AddRef)(unk.as_raw()) };
+        let after_rel = unsafe { (Interface::vtable(&unk).Release)(unk.as_raw()) };
+        assert_eq!(
+            after_add, 3,
+            "AddRef は cast 後ベースライン 2 から 3 を返すこと（単一ベース参照の実証）, got {after_add}"
+        );
+        assert_eq!(
+            after_rel, 2,
+            "Release は AddRef 直後の 3 から 2 を返すこと（+1/-1 整合）, got {after_rel}"
+        );
+        // unk drop → 1、brain drop → 0（解放）。リーク／二重解放なく単一参照が手渡されたことを実証。
+    }
+
+    /// `shiori_create(NULL)` は判別可能な失敗 HRESULT（`E_POINTER`）を返し、out を書き込まない
+    /// こと（writes-on-success 不変条件・要件 9.4）。
+    #[test]
+    fn shiori_create_with_null_out_returns_failure_without_writing() {
+        let hr = unsafe { shiori_create(core::ptr::null_mut()) };
+        assert!(
+            hr.is_err(),
+            "out が NULL のとき shiori_create は失敗 HRESULT を返すこと, got 0x{:08X}",
+            hr.0
+        );
+        assert_eq!(
+            hr,
+            windows::Win32::Foundation::E_POINTER,
+            "NULL out の失敗は判別可能な E_POINTER であること, got 0x{:08X}",
+            hr.0
         );
     }
 }
