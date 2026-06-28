@@ -49,8 +49,8 @@ updated_at: 2026-06-28
 - [x] areka-P0-shiori-com -- 内部唯一 ABI `IShiori`(COM)＋ネイティブ in-proc。Dependencies: none
 - [x] areka-P0-shiori-protocol -- 正準 content プロトコル json-rpc 2.0 定義（D5 着地）。Dependencies: areka-P0-shiori-com
 - [x] areka-P0-shiori-protocol-split -- 単一 TOML 正本をフラグメント群へ非破壊分割し論理 SSOT 化。Dependencies: areka-P0-shiori-protocol
-- [ ] areka-P0-shiori-reference -- 簡易リファレンス COM-SHIORI（「正解見本」DLL 契約・content 不透明）。Dependencies: areka-P0-shiori-com 〔brief・**次の着手候補（依存充足済み）**〕
-- [ ] areka-P0-shiori-host-32 -- 32bit Rust 過去互換ホスト＋SAORI 同居。Dependencies: areka-P0-shiori-com, areka-P0-shiori-reference 〔brief・reference 待ち〕
+- [x] areka-P0-shiori-reference -- 簡易リファレンス COM-SHIORI（「正解見本」DLL 契約・content 不透明）。Dependencies: areka-P0-shiori-com 〔completed/・非テスト native 脳＋areka 実走デモ＋shiori_create 生成入口〕
+- [ ] areka-P0-shiori-host-32 -- 32bit Rust 過去互換ホスト＋SAORI 同居。Dependencies: areka-P0-shiori-com, areka-P0-shiori-reference 〔brief・**次の着手候補（reference 完了・依存充足済み）**〕
 - [ ] wintf-P0-surface-hierarchy -- 汎用の階層アニメーション・サーフェス合成（wintf）。Dependencies: wintf-P0-animation-system 〔brief〕
 - [ ] areka-P0-seriko-runtime -- SERIKO/MAYUNA を ukadoc 完全マップで解釈（areka）。Dependencies: wintf-P0-surface-hierarchy 〔brief〕
 - [ ] areka-P0-shell-loader -- 伺かシェルパッケージ読込→surface モデル（areka）。Dependencies: areka-P0-seriko-runtime 〔brief〕
@@ -74,9 +74,9 @@ animation-system＋surface-hierarchy → seriko-runtime＋shell-loader → sakur
 ## ポートフォリオ実数（2026-06-28・配置フォルダ基準）
 | 配置 | 件数 |
 |------|:----:|
-| `completed/` | 97 |
+| `completed/` | 98 |
 | `.kiro/specs/` 直下（active P0・spec.json 保持） | 17 |
-| `.kiro/specs/` 直下（brief のみ・構想/未 init） | 9 |
+| `.kiro/specs/` 直下（brief のみ・構想/未 init） | 8 |
 | `backlog/`（待機 P1-P3） | 21 |
 | `_rejected/` | 3 |
 
