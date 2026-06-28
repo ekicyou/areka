@@ -2,8 +2,8 @@
 
 > 本仕様の実装は「使い捨ての一回限り移行・検証プログラム（Python 等・恒久資産化しない）」でフラグメント群を生成し、意味的同値ゲート合格後に旧単一ファイルを削除する**非破壊の物理／符号化形リファクタ**である。完了後に残す資産はフラグメント群・共有フラグメント・再構成マニフェスト・改訂ドキュメント・合否エビデンスのみ（スクリプト自体は残さない）。
 
-- [ ] 1. Foundation: 移行・検証スクリプト基盤と入力 baseline 捕捉
-- [ ] 1.1 移行/検証スクリプトの足場と旧 TOML 前提検証・baseline 捕捉
+- [x] 1. Foundation: 移行・検証スクリプト基盤と入力 baseline 捕捉
+- [x] 1.1 移行/検証スクリプトの足場と旧 TOML 前提検証・baseline 捕捉
   - 使い捨ての移行/検証プログラム（TOML v1.0.0 パーサ）を用意し、旧 `shiori_protocol.toml` を parse する
   - 前提検証: 446 entry（event 287／resource 159）・802 field・9 silence_ruling・共有テーブル 5 の存在をカウント検証し、欠落時は中断する
   - 変換前 parse 結果を正規化した baseline として捕捉する（削除前に検証基準を確定）
@@ -83,3 +83,20 @@
   - _Requirements: 8.1, 8.2, 8.3_
   - _Boundary: 完了仕様 要件改訂・README 改訂_
   - _Depends: 4.1_
+
+## Implementation Notes
+
+### Ground Truth（旧 `doc/shiori/shiori_protocol.toml` の実測パース・2026-06-28 確定）
+実装は設計書 prose の「実測」数値ではなく**以下の実パース値**を真とすること。意味的同値ゲート（3.3）は数値をハードコードせず baseline vs merge の集合比較で判定するため、下記の差異はゲート論理を変えない（count-agnostic・自己修正的）。
+- entry=446（event 287／resource 159）, field=802, silence_ruling=9 ← 設計と一致（task 1.1 主要前提カウント）。
+- 共有テーブル=**4**（`meta`/`mapping`/`envelope`/`reserved_headers`）。設計の「5」は実態と不一致。task 1.1 の前提検証は「4 共有テーブル＋silence_ruling コレクション(9)」で行い、リテラル「5」で hard-fail しない。
+- field reference 内訳: 両保持(reference＋reference_variadic)=**22**, reference のみ=774, reference_variadic のみ=**6**, どちらも無し=**0**, variadic 合計=**28**。設計 prose の「両保持 32・reference 無し 6」は不正確。正規化規則の意図（意味名→reference 値＋variadic 有無の写像で集合比較）は不変だが、件数は上記実測を用いる。
+- silence_ref 出現=35（entry 20＋field 15）。設計の「44」は不一致。
+- field キー宇宙: name, reference(796), type, required, provenance, description, reference_variadic(28), silence_ref(15)。`response_meaning` キーは実データに**存在しない**（設計が任意例示したが未使用）。任意キーは存在するもののみ保持・比較する。
+- entry キー宇宙: id, kind, category, dispatch, response, provenance, description, silence_ref(20)。
+- カテゴリ: event 29 種・resource 7 種（計 36）。最大は resource `shortcut_key`=93・`ghost_info`=40, event `notify`=31・`lifecycle`=29・`os_state`=27。inline 化で大半 ≤600 行だが超過カテゴリは entry 境界サブ分割対象。
+
+### 使い捨て移行スクリプトの配置契約（全 task 1.1–3.3 共通）
+- スクリプトは**リポジトリ tree に置かない／コミットしない**（恒久資産化禁止・Non-Goals）。配置先はセッション scratchpad の固定パス `MIGRATE.py`（累積・決定的・冪等な単一プログラム）。後続 task の fresh subagent は既存スクリプトを Read して該当ステージを追記する。
+- 入力: `doc/shiori/shiori_protocol.toml`（`tomllib`）。baseline: scratchpad の `baseline.json`。
+- 出力（保持・コミット対象）: `doc/shiori/fragments/_shared.toml`, `events/NN.<category>[.NN].toml`, `resources/NN.<category>[.NN].toml`, `_manifest.toml`, および最小エビデンス（3.3）。
