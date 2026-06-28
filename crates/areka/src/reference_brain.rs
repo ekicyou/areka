@@ -35,8 +35,8 @@ pub struct ReferenceBrain {
     loaded: AtomicBool,
     /// `Load` で AddRef 保持した host（`Unload` で Release）。
     ///
-    /// 遅延 `Complete`（task 2.3・[`complete_pending`](ReferenceBrain::complete_pending)）で
-    /// vtable 直呼び発火する保持 host。能動 `Raise` は task 2.4 で消費する。
+    /// 遅延 `Complete`（task 2.3・[`complete_pending`](ReferenceBrain::complete_pending)）および
+    /// 能動 `Raise`（task 2.4・[`fire_raise`](ReferenceBrain::fire_raise)）で vtable 直呼び発火する保持 host。
     held_host: RefCell<Option<IShioriHost>>,
     /// 遅延応答の相関トークンアロケータ（単調増加採番・Decision 5）。
     ///
@@ -102,6 +102,24 @@ impl ReferenceBrain {
         unsafe {
             (Interface::vtable(host).Complete)(host.as_raw(), token.0, response as *const HSTRING)
         }
+    }
+
+    /// 保持 host へ能動通知 `Raise(script)` を発火する（要件 5.1／5.2）。
+    ///
+    /// 保持 host へ **vtable 直呼び**で `Raise` を発火する（ABI private な raw メソッドへ別クレートから
+    /// 到達する唯一の手段・[`complete_pending`](ReferenceBrain::complete_pending) と同一技法）。`script` は
+    /// 固定または既知の不透明 HSTRING を呼び出し側（デモ・task 3.1）が供給する。脳は内容を解析・スキーマ
+    /// 検証・意味づけせず、不透明 content のまま渡す（要件 5.2／1.4／8.1）。
+    ///
+    /// 戻り値は host の `Raise` が返した HRESULT。host が未保持（`Load` 未呼び／`Unload` 済み）の場合は
+    /// 呼び出し前提を満たさないため panic する（呼び出し側はライフサイクル上、`Load` 後・`Unload` 前にのみ
+    /// 本メソッドを呼ぶ）。
+    pub fn fire_raise(&self, script: &HSTRING) -> HRESULT {
+        let held = self.held_host.borrow();
+        let host = held.as_ref().expect("host held");
+        // Safety: `host` は Load で AddRef 保持した有効な IShioriHost。raw `Raise` は ABI private のため
+        // vtable 直呼びで到達する。`script` は本呼び出し中有効な `*const HSTRING`（[in] 借用・解放しない）。
+        unsafe { (Interface::vtable(host).Raise)(host.as_raw(), script as *const HSTRING) }
     }
 }
 
@@ -448,6 +466,40 @@ mod tests {
                 response,
             }),
             "保持 host へ対応トークンと応答文字列で Complete が発火すること"
+        );
+    }
+
+    /// `fire_raise` で保持 host へ能動通知 `Raise(script)` を固定（既知の不透明）文字列で
+    /// 発火し、host が同一内容を受領すること（要件 5.1/5.2）。
+    ///
+    /// `script` はさくらスクリプト様の既知の不透明文字列。脳は内容を解釈せず（要件 5.2）、
+    /// host が厳密一致で受領することで content 不透明性（往復）を実証する。観測には
+    /// [`ShioriHostSink`] を host として用い、[`HostMessage::Raised`] を突合する。
+    #[test]
+    fn fire_raise_fires_raise_on_held_host_with_fixed_content() {
+        let brain: IShiori = ReferenceBrain::new().into();
+        let sink = ShioriHostSink::new();
+        let host: IShioriHost = sink.into();
+
+        let hr_load = unsafe { call_load(&brain, host.as_raw() as *mut c_void) };
+        assert!(hr_load.is_ok(), "Load は S_OK を返すこと, got 0x{:08X}", hr_load.0);
+
+        // 既知の不透明文字列（さくらスクリプト様）を能動通知として発火する。
+        let inner = unsafe { windows_core::AsImpl::<ReferenceBrain>::as_impl(&brain) };
+        let script = HSTRING::from("\\h\\s[0]known-opaque-raise");
+        let hr_raise = inner.fire_raise(&script);
+        assert!(
+            hr_raise.is_ok(),
+            "fire_raise は host から S_OK を受け取ること, got 0x{:08X}",
+            hr_raise.0
+        );
+
+        // 保持 host が同一の不透明文字列を受領していること（厳密一致＝往復・不解釈）。
+        let sink_impl = unsafe { windows_core::AsImpl::<ShioriHostSink>::as_impl(&host) };
+        assert_eq!(
+            sink_impl.try_recv(),
+            Some(HostMessage::Raised(script)),
+            "保持 host へ固定（既知の不透明）文字列で Raise が発火すること"
         );
     }
 }

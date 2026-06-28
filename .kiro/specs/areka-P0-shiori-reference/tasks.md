@@ -30,7 +30,7 @@
   - _Requirements: 4.1, 4.2, 4.4_
   - _Boundary: ReferenceBrain_
 
-- [ ] 2.4 能動通知 Raise
+- [x] 2.4 能動通知 Raise
   - 保持 host へ vtable 直呼びで `Raise(script)` を発火し、通知内容を固定または既知の不透明文字列として渡す（内容を解釈しない）
   - 観測: 保持 host へ `Raise` を固定文字列で発火するユニットテストが通る
   - _Requirements: 5.1, 5.2_
