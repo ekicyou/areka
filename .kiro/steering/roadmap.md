@@ -45,18 +45,25 @@ updated_at: 2026-06-28
 ## Specs (dependency order)
 
 > `[x]`=完了（`completed/`）, `[ ]`=未完了。「brief」= `brief.md` 済・`spec.json` 未生成（`/kiro-start` または `/kiro-spec-init` で着手）。「拡張」= 既存 spec のスコープ拡張（新規 brief なし）。
+> **二坑種別**（[two-tunnel.md](two-tunnel.md) 要件 1.3／6.5）: 各本坑に【直行】＝方向・実現可能性・手順が十分確実ゆえ先進坑を経ず本坑着手可、【pilot要】＝怪しい seam を持ち先進坑の go を前提とする（`_Depends(confirmed):` で名指し）、【統合】＝収束点の統合 spec（先進坑非対象）。先進坑コードは `crates/pilot/examples/<spec-name>/` に隔離（現状 `_template` のみ・実先進坑ゼロ）。
 
 - [x] areka-P0-shiori-com -- 内部唯一 ABI `IShiori`(COM)＋ネイティブ in-proc。Dependencies: none
 - [x] areka-P0-shiori-protocol -- 正準 content プロトコル json-rpc 2.0 定義（D5 着地）。Dependencies: areka-P0-shiori-com
 - [x] areka-P0-shiori-protocol-split -- 単一 TOML 正本をフラグメント群へ非破壊分割し論理 SSOT 化。Dependencies: areka-P0-shiori-protocol
-- [x] areka-P0-shiori-reference -- 簡易リファレンス COM-SHIORI（「正解見本」DLL 契約・content 不透明）。Dependencies: areka-P0-shiori-com 〔completed/・非テスト native 脳＋areka 実走デモ＋shiori_create 生成入口〕
-- [ ] areka-P0-shiori-host-32 -- 32bit Rust 過去互換ホスト＋SAORI 同居。Dependencies: areka-P0-shiori-com, areka-P0-shiori-reference 〔brief・**次の着手候補（reference 完了・依存充足済み）**〕
-- [ ] wintf-P0-surface-hierarchy -- 汎用の階層アニメーション・サーフェス合成（wintf）。Dependencies: wintf-P0-animation-system 〔brief〕
-- [ ] areka-P0-seriko-runtime -- SERIKO/MAYUNA を ukadoc 完全マップで解釈（areka）。Dependencies: wintf-P0-surface-hierarchy 〔brief〕
-- [ ] areka-P0-shell-loader -- 伺かシェルパッケージ読込→surface モデル（areka）。Dependencies: areka-P0-seriko-runtime 〔brief〕
-- [ ] areka-P0-sakura-script -- さくらスクリプト runner（優先度順, areka）。Dependencies: areka-P0-seriko-runtime, wintf-P0-balloon-system 〔brief〕
-- [ ] areka-P0-balloon-loader -- 伺かバルーンパッケージ読込（areka）。Dependencies: wintf-P0-balloon-system 〔brief〕
-- [ ] areka-P0-compat-ghost-integration -- 実在里々ゴースト1体を E2E 起動（M1 北極星）。Dependencies: areka-P0-shell-loader, areka-P0-seriko-runtime, areka-P0-sakura-script, areka-P0-balloon-loader, areka-P0-shiori-host-32 〔brief〕
+- [x] areka-P0-shiori-reference -- 簡易リファレンス COM-SHIORI（「正解見本」DLL 契約・content 不透明）。Dependencies: areka-P0-shiori-com 〔completed/・本坑 deliverable（pilot ではない）・非テスト native 脳＋areka 実走デモ＋shiori_create 生成入口〕
+- [ ] areka-P0-shiori-host-32 【pilot要】-- 32bit Rust 過去互換ホスト＋SAORI 同居。Dependencies: areka-P0-shiori-com, areka-P0-shiori-reference ／ _Depends(confirmed): pilot/shiori-host-32 〔brief・**次の着手候補**。怪しい seam＝クロス bitness IPC／自前メッセージループ／SAORI 同居（要件 7.2 被覆）。先進坑で go 確認後に本坑着手（**開発者合意済 2026-06-28**）。HGLOBAL/charset マーシャリングは ukadoc 正典で確実ゆえ先進坑の検証範囲外〕
+- [ ] wintf-P0-surface-hierarchy 【直行】-- 汎用の階層アニメーション・サーフェス合成（wintf）。Dependencies: wintf-P0-animation-system 〔brief・透過/合成基盤は解決済み（ULW/DComp）の増分ゆえ直行〕
+- [ ] areka-P0-seriko-runtime 【直行】-- SERIKO/MAYUNA を ukadoc 完全マップで解釈（areka）。Dependencies: wintf-P0-surface-hierarchy 〔brief・ukadoc 正典で仕様確定ゆえ直行〕
+- [ ] areka-P0-shell-loader 【直行】-- 伺かシェルパッケージ読込→surface モデル（areka）。Dependencies: areka-P0-seriko-runtime 〔brief・文書化済フォーマット読込ゆえ直行〕
+- [ ] areka-P0-sakura-script 【直行】-- さくらスクリプト runner（優先度順, areka）。Dependencies: areka-P0-seriko-runtime, wintf-P0-balloon-system 〔brief・ukadoc 優先度順マップで確定ゆえ直行〕
+- [ ] areka-P0-balloon-loader 【直行】-- 伺かバルーンパッケージ読込（areka）。Dependencies: wintf-P0-balloon-system 〔brief・文書化済フォーマット読込ゆえ直行〕
+- [ ] areka-P0-compat-ghost-integration 【統合】-- 実在里々ゴースト1体を E2E 起動（M1 北極星）。Dependencies: areka-P0-shell-loader, areka-P0-seriko-runtime, areka-P0-sakura-script, areka-P0-balloon-loader, areka-P0-shiori-host-32 〔brief・収束点の統合 spec（先進坑非対象）。統合サプライズのリスクは各上流の go で前倒し吸収〕
+
+### 二坑モデル依存マップ検証（要件 7・spec 分解時の手動チェックリスト）
+- **被覆（7.2）**: 不確実な本坑は host-32 のみ→`_Depends(confirmed): pilot/shiori-host-32` で go ゲート付与済。他本坑は【直行】判定（要件 6.5・上記各行の理由）。
+- **孤児なし（7.3）**: 先進坑は host-32 用 1 本のみ（未掘削）。対応本坑を持たない pilot・参照されない pilot なし。
+- **循環なし／DAG（7.4）**: 上記 Dependencies は DAG（循環なし）。
+- **合否基準明示（7.5）**: `pilot/shiori-host-32` の go 基準＝クロス bitness で実 32bit shiori.dll を 1 往復（load→request→unload）成功＋SAORI 同居 1 例＋窓持ち SHIORI のメッセージループ生存。go／違う／直す を開発者が判定。
 
 ### 既存仕様のスコープ拡張（新規 brief なし）
 - wintf-P0-animation-system -- dola→wintf バインディングに「階層サーフェス＋SERIKO 再生プリミティブ」を追加（T1 の心臓・要件生成済）。
@@ -69,14 +76,14 @@ updated_at: 2026-06-28
 - areka-P0-system-tray / -persistence / -package-manager / -mcp-server / -window-placement（要件ドラフト）。
 
 ## クリティカルパス（M1）
-animation-system＋surface-hierarchy → seriko-runtime＋shell-loader → sakura-script＋balloon（balloon-system/loader） → shiori-host-32（reference 経由） → compat-ghost-integration
+animation-system＋surface-hierarchy → seriko-runtime＋shell-loader → sakura-script＋balloon（balloon-system/loader） → 〔pilot/shiori-host-32 go〕→ shiori-host-32（reference 経由） → compat-ghost-integration
 
 ## ポートフォリオ実数（2026-06-28・配置フォルダ基準）
 | 配置 | 件数 |
 |------|:----:|
-| `completed/` | 98 |
+| `completed/` | 99 |
 | `.kiro/specs/` 直下（active P0・spec.json 保持） | 17 |
-| `.kiro/specs/` 直下（brief のみ・構想/未 init） | 8 |
+| `.kiro/specs/` 直下（brief のみ・構想/未 init） | 7 |
 | `backlog/`（待機 P1-P3） | 21 |
 | `_rejected/` | 3 |
 
