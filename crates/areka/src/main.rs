@@ -59,6 +59,13 @@ mod shiori_e2e_tests;
 #[cfg(test)]
 mod shiori_lifecycle_e2e_tests;
 
+/// 製品 `ReferenceBrain` × `ShioriSession` の end-to-end 結合テスト（task 5.1）。
+/// `shiori_create` で取得した本物の製品脳を `ShioriSession` 越しに駆動し、即時→遅延+Complete→
+/// Raise→unload の数往復・単一 in-flight 拒否・決定的タイムアウト・stale Complete 拒否・
+/// unload 後始末を実時間 sleep に依存せず検証する（モック e2e と重複させず製品脳の配線を実証）。
+#[cfg(test)]
+mod shiori_reference_e2e_tests;
+
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------

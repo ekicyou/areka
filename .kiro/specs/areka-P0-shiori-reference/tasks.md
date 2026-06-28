@@ -80,8 +80,8 @@
   - _Boundary: main.rs_
   - _Depends: 3.2_
 
-- [ ] 5. テストと検証
-- [ ] 5.1 (P) 統合テスト（ShioriSession 越しデモ経路）
+- [x] 5. テストと検証
+- [x] 5.1 (P) 統合テスト（ShioriSession 越しデモ経路）
   - 即時→遅延+Complete→Raise→unload の数往復を `ShioriSession` 経由で駆動し、`poll_completions` が完了／通知を drain し保留が解除されることを検証する
   - 単一 in-flight（遅延保留中の次 `request` が `RequestInFlight` で拒否）、`expire_if_elapsed` の決定的タイムアウト、タイムアウト後の stale `Complete` が `SHIORI_E_UNKNOWN_TOKEN` で弾かれること、失敗注入時の `unload` 後始末を検証する
   - 観測: 上記経路の統合テストが決定的に（実時間 sleep に依存せず）通る
