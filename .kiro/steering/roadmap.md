@@ -47,7 +47,7 @@ areka（**x64**）が最小 SSP 互換ベースウェアとして、適合対象
 - **element に他サーフェス参照可**: SERIKO の element に画像だけでなく**他サーフェスを指定可**（入れ子）。surface 合成は再帰的＝入れ子アニメの基盤。
 - **element 配置＝D2D 変換行列**: 基本 X,Y でなく **D2D 変換行列**を内部表現。x,y は単位行列の特例。回転・拡縮など D2D が普通に出来る構造をそのまま取り込む。emo2 は単位平行移動＋平面 overlay のみ使うが、**構造（行列＋入れ子＋統一エンジン）は最初から持つ**。
 - 位置づけ: 旧「汎用シーングラフは M2 後ろ倒し」の**部分的前倒し**（データ構造のみ M1・上位演出エンジンは依然 M2）。
-- **アニメーションエンジンは2つ**（記憶 areka-two-animation-engines）: ①**さくらスクリプト再生エンジン**（talk timeline・上層）→ ②**シェルアニメーションエンジン**（SERIKO ループ・中層）→ レンダリングエンジン（下層）。さくら engine が shell engine を叩き、shell engine が render を叩く。両 engine は **dola（完了・タイミング層）**上。`conductor` は SHIORI イベント循環でさくら engine に script を渡す。
+- **アニメーションエンジンは2つ**（記憶 areka-two-animation-engines）: ①**さくらスクリプト再生エンジン**（talk timeline）＋ ②**シェルアニメーションエンジン**（SERIKO ループ）。`conductor`（SHIORI イベント循環）→ ① へ script。**① は下流が2つに分岐**: shell アニメ（`\s` 等）は ② へ／**テキスト（typewriter）は render(text-layer) へ直接**（テキスト描画はシェルアニメではないため ② を経由しない）。② は surface 合成を render に毎フレーム駆動。両 engine は **dola（完了・タイミング層）**上。
 
 ## M1 実装ユニット（実現可能な粒度）
 
