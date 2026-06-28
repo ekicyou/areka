@@ -1,0 +1,237 @@
+# event / category=comm_other — areka-P0-shiori-protocol-split category fragment.
+# 18 keyed entry table(s), source order preserved. Category-pure; entry-boundary only.
+# Generated deterministically; do not hand-edit. Merge order: _manifest.toml (task 2.4) is authoritative.
+
+[entry."OnExecuteHTTPComplete"]
+"kind" = "event"
+"category" = "comm_other"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ukadoc"
+"description" = "execute-http で正常に取得完了した際に発生。"
+[entry."OnExecuteHTTPComplete".field]
+"http_method" = { "reference" = 0, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "post/get/head/put/delete のいずれか。" }
+"async_id" = { "reference" = 1, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "--sync/--async オプションで指定した文字列。" }
+"target_url" = { "reference" = 2, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "対象の URL。" }
+"response_body_or_path" = { "reference" = 3, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "--nofile 時は取得データ本体（改行はバイト値 1）、そうでなければ取得ファイルのフルパス。" }
+"result_code" = { "reference" = 4, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "取得結果コード（timeout|fileio|200|204|403|404 等）。" }
+"cookie" = { "reference" = 5, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "Cookie の文字列。" }
+"response_headers" = { "reference" = 6, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "受け取った全レスポンスヘッダ（改行はバイト値 1 区切り）。[2.6.40]" }
+
+[entry."OnExecuteHTTPFailure"]
+"kind" = "event"
+"category" = "comm_other"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ukadoc"
+"description" = "execute-http で取得エラーした際に発生。Reference は OnExecuteHTTPComplete と同じ。"
+[entry."OnExecuteHTTPFailure".field]
+"http_method" = { "reference" = 0, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "post/get/head/put/delete のいずれか。" }
+"async_id" = { "reference" = 1, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "--sync/--async オプションで指定した文字列。" }
+"target_url" = { "reference" = 2, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "対象の URL。" }
+"response_body_or_path" = { "reference" = 3, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "--nofile 時は取得データ本体（改行はバイト値 1）、そうでなければ取得ファイルのフルパス。" }
+"result_code" = { "reference" = 4, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "取得結果コード（timeout|fileio|200|204|403|404 等）。" }
+"cookie" = { "reference" = 5, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "Cookie の文字列。" }
+"response_headers" = { "reference" = 6, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "受け取った全レスポンスヘッダ（改行はバイト値 1 区切り）。[2.6.40]" }
+
+[entry."OnExecuteHTTPProgress"]
+"kind" = "event"
+"category" = "comm_other"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ukadoc"
+"description" = "execute-http で --progress-notify を指定した際に発生。Reference は OnExecuteHTTPComplete と同じ。[2.6.44]"
+[entry."OnExecuteHTTPProgress".field]
+"http_method" = { "reference" = 0, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "post/get/head/put/delete のいずれか。" }
+"async_id" = { "reference" = 1, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "--sync/--async オプションで指定した文字列。" }
+"target_url" = { "reference" = 2, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "対象の URL。" }
+"response_body_or_path" = { "reference" = 3, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "--nofile 時は取得データ本体（改行はバイト値 1）、そうでなければ取得ファイルのフルパス。" }
+"result_code" = { "reference" = 4, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "取得結果コード（timeout|fileio|200|204|403|404 等）。" }
+"cookie" = { "reference" = 5, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "Cookie の文字列。" }
+"response_headers" = { "reference" = 6, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "受け取った全レスポンスヘッダ（改行はバイト値 1 区切り）。[2.6.40]" }
+
+[entry."OnExecuteHTTPStreaming"]
+"kind" = "event"
+"category" = "comm_other"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ukadoc"
+"description" = "execute-http で --streaming を指定した際に発生。Reference4 以外は OnExecuteHTTPComplete と同じ。"
+[entry."OnExecuteHTTPStreaming".field]
+"http_method" = { "reference" = 0, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "post/get/head/put/delete のいずれか。" }
+"async_id" = { "reference" = 1, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "--sync/--async オプションで指定した文字列。" }
+"target_url" = { "reference" = 2, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "対象の URL。" }
+"response_body_or_path" = { "reference" = 3, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "--nofile 時は取得データ本体、そうでなければ取得ファイルのフルパス。" }
+"streaming_data" = { "reference" = 4, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "Streaming データのうち改行をバイト値 1 に置き換えたもの。" }
+"cookie" = { "reference" = 5, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "Cookie の文字列。" }
+"response_headers" = { "reference" = 6, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "受け取った全レスポンスヘッダ（改行はバイト値 1 区切り）。" }
+
+[entry."OnExecuteHTTPSSLInfo"]
+"kind" = "event"
+"category" = "comm_other"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ukadoc"
+"description" = "取得失敗（HTTP 200 以外）でも SSL/TLS レベルで接続成功した際に通知される。"
+[entry."OnExecuteHTTPSSLInfo".field]
+"async_id" = { "reference" = 0, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "async ID（無ければ空）。" }
+"target_url" = { "reference" = 1, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "取得 URL。" }
+"http_response_code" = { "reference" = 2, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "HTTP レスポンスコード（エラーでも通知される）。" }
+"tls_version" = { "reference" = 3, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "通信バージョン（例 TLSv1/SSLv3）。" }
+"cipher" = { "reference" = 4, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "暗号化方法（例 AES256-SHA）。" }
+"subject" = { "reference" = 5, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "発行先（X509_NAME_oneline 結果）。" }
+"valid_from" = { "reference" = 6, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "有効期限開始日時（年,月,日,時,分,秒）。" }
+"valid_to" = { "reference" = 7, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "有効期限終了日時（年,月,日,時,分,秒）。" }
+"issuer" = { "reference" = 8, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "発行者（X509_NAME_oneline 結果）。" }
+"cert_chain" = { "reference" = 9, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "証明書チェーン（CommonName をカンマ区切りで列挙）。[2.4.51～]" }
+
+[entry."OnExecuteRSSComplete"]
+"kind" = "event"
+"category" = "comm_other"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ukadoc"
+"description" = "\\![execute,rss-get/post] で正常に取得完了した際に発生。"
+[entry."OnExecuteRSSComplete".field]
+"rss_items" = { "reference" = 0, "reference_variadic" = true, "type" = "str", "required" = true, "provenance" = "ukadoc", "description" = "タイトル[\\1]URL[\\1]更新日時[\\1]作者名[\\1]内容。RSS 要素数分 Reference0 以降に続く。\\1 はバイト値 1。" }
+
+[entry."OnExecuteRSSFailure"]
+"kind" = "event"
+"category" = "comm_other"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ukadoc"
+"description" = "\\![execute,rss-get/post] で取得エラーした際に発生。"
+[entry."OnExecuteRSSFailure".field]
+"rss_failure_info" = { "reference" = 0, "reference_variadic" = true, "type" = "str", "required" = true, "provenance" = "ukadoc", "description" = "解析失敗時は Reference4=parse。他は OnExecuteHTTPFailure と同じ。Reference0 以降可変長。" }
+
+[entry."OnExecuteRSS_SSLInfo"]
+"kind" = "event"
+"category" = "comm_other"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ukadoc"
+"description" = "RSS 取得時に取得失敗でも SSL/TLS レベルで接続成功した際に通知される。"
+[entry."OnExecuteRSS_SSLInfo".field]
+"ssl_info_fields" = { "reference" = 0, "reference_variadic" = true, "type" = "str", "required" = true, "provenance" = "ukadoc", "description" = "OnExecuteHTTPSSLInfo と同じ SSL 情報。Reference0 以降可変長。" }
+
+[entry."OnExecuteWebSocketOpen"]
+"kind" = "event"
+"category" = "comm_other"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ukadoc"
+"description" = "WebSocket 接続確立時（HTTP 101 Upgrade 成功後）に発生。初回接続のみ発火。"
+[entry."OnExecuteWebSocketOpen".field]
+"event_id" = { "reference" = 0, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "Sakura Script の --event オプションで指定されたイベント識別子。" }
+"connection_url" = { "reference" = 1, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "接続 URL（ws:// または wss://）。" }
+"status_or_reason" = { "reference" = 2, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "\"200\"（固定）。" }
+
+[entry."OnExecuteWebSocketReceive"]
+"kind" = "event"
+"category" = "comm_other"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ukadoc"
+"description" = "WebSocket 接続中にサーバーからデータフレームを受信するたびに発生。"
+[entry."OnExecuteWebSocketReceive".field]
+"event_id" = { "reference" = 0, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "Sakura Script の --event オプションで指定されたイベント識別子。" }
+"connection_url" = { "reference" = 1, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "接続 URL。" }
+"frame_opcode" = { "reference" = 2, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "opcode 種別（1=テキスト UTF-8、2=バイナリ）。" }
+"received_data" = { "reference" = 3, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "受信データ（テキストは UTF-8 で改行をバイト値 1、バイナリは Base64）。" }
+
+[entry."OnExecuteWebSocketReconnect"]
+"kind" = "event"
+"category" = "comm_other"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ukadoc"
+"description" = "エラー切断後の自動再接続が成功したときに発生。Open に相当する役割を担う。"
+[entry."OnExecuteWebSocketReconnect".field]
+"event_id" = { "reference" = 0, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "Sakura Script の --event オプションで指定されたイベント識別子。" }
+"connection_url" = { "reference" = 1, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "接続 URL（ws:// または wss://）。" }
+"status_or_reason" = { "reference" = 2, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "\"200\"（固定）。" }
+
+[entry."OnExecuteWebSocketClose"]
+"kind" = "event"
+"category" = "comm_other"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ukadoc"
+"description" = "WebSocket 接続が最終的に切断されたときに発生。Failure 時は発火しない。"
+[entry."OnExecuteWebSocketClose".field]
+"event_id" = { "reference" = 0, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "Sakura Script の --event オプションで指定されたイベント識別子。" }
+"connection_url" = { "reference" = 1, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "接続 URL（ws:// または wss://）。" }
+"status_or_reason" = { "reference" = 2, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "切断要因コード（1000=正常切断、userbreak=強制中断）。" }
+
+[entry."OnExecuteWebSocketFailure"]
+"kind" = "event"
+"category" = "comm_other"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ukadoc"
+"description" = "初回 Upgrade 失敗時、または自動再接続 5 回全失敗時に発生。"
+[entry."OnExecuteWebSocketFailure".field]
+"event_id" = { "reference" = 0, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "Sakura Script の --event オプションで指定されたイベント識別子。" }
+"connection_url" = { "reference" = 1, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "接続 URL（ws:// または wss://）。" }
+"status_or_reason" = { "reference" = 2, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "エラー内容文字列（初回は SPHttp のエラー、全失敗時は reconnect failed 固定）。" }
+
+[entry."OnExecuteWebSocket_SSLInfo"]
+"kind" = "event"
+"category" = "comm_other"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ukadoc"
+"description" = "wss:// 接続時に SSL/TLS 接続が確立したときに発生。初回接続時のみ発火。"
+[entry."OnExecuteWebSocket_SSLInfo".field]
+"event_id" = { "reference" = 0, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "Sakura Script の --event オプションで指定されたイベント識別子。" }
+"ssl_info_fields" = { "reference" = 1, "reference_variadic" = true, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "OnExecuteHTTPSSLInfo の Reference1 以降と同じ SSL 情報。Reference1 以降可変長。" }
+
+[entry."OnPingComplete"]
+"kind" = "event"
+"category" = "comm_other"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ukadoc"
+"description" = "\\![execute,ping] で指定回数の ping 実行完了時に発生。"
+[entry."OnPingComplete".field]
+"event_id" = { "reference" = 0, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "--event で指定した文字列そのもの。" }
+"ping_summary" = { "reference" = 1, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "送信元アドレス[\\1]全送信回数[\\1]成功回数[\\1]失敗回数。\\1 はバイト値 1。" }
+"ping_records" = { "reference" = 2, "reference_variadic" = true, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "OK またはエラー情報[\\1]返答元アドレス[\\1]RTT(ms)。Reference2 以降に 1 回ごとの情報。\\1 はバイト値 1。" }
+
+[entry."OnPingProgress"]
+"kind" = "event"
+"category" = "comm_other"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ukadoc"
+"description" = "\\![execute,ping] で ping 実行中に発生（情報は不完全な場合がある）。"
+[entry."OnPingProgress".field]
+"event_id" = { "reference" = 0, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "--event で指定した文字列そのもの。" }
+"ping_summary" = { "reference" = 1, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "送信元アドレス[\\1]全送信回数[\\1]成功回数[\\1]失敗回数。\\1 はバイト値 1。" }
+"ping_records" = { "reference" = 2, "reference_variadic" = true, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "OK またはエラー情報[\\1]返答元アドレス[\\1]RTT(ms)。Reference2 以降に 1 回ごとの情報。\\1 はバイト値 1。" }
+
+[entry."OnNSLookupComplete"]
+"kind" = "event"
+"category" = "comm_other"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ukadoc"
+"description" = "\\![execute,nslookup] で成功時に発生。"
+[entry."OnNSLookupComplete".field]
+"event_id" = { "reference" = 0, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "--event で指定した文字列そのもの。" }
+"host" = { "reference" = 1, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "--host で指定した文字列そのもの。" }
+"lookup_direction" = { "reference" = 2, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "正引きで lookup、逆引きで reverse。" }
+"lookup_result" = { "reference" = 3, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "実行結果。正引きで IP、逆引きでホスト名。" }
+
+[entry."OnNSLookupFailure"]
+"kind" = "event"
+"category" = "comm_other"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ukadoc"
+"description" = "\\![execute,nslookup] で失敗時に発生。"
+[entry."OnNSLookupFailure".field]
+"event_id" = { "reference" = 0, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "--event で指定した文字列そのもの。" }
+"host" = { "reference" = 1, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "--host で指定した文字列そのもの。" }
+"lookup_direction" = { "reference" = 2, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "正引きで lookup、逆引きで reverse。" }

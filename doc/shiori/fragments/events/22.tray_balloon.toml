@@ -1,0 +1,25 @@
+# event / category=tray_balloon — areka-P0-shiori-protocol-split category fragment.
+# 2 keyed entry table(s), source order preserved. Category-pure; entry-boundary only.
+# Generated deterministically; do not hand-edit. Merge order: _manifest.toml (task 2.4) is authoritative.
+
+[entry."OnTrayBalloonClick"]
+"kind" = "event"
+"category" = "tray_balloon"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ukadoc"
+"description" = "トレイアイコンのバルーンをクリックして消した際に発生。"
+[entry."OnTrayBalloonClick".field]
+"balloon_title" = { "reference" = 0, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "タイトル文字列。" }
+"balloon_text" = { "reference" = 1, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "表示テキスト。" }
+
+[entry."OnTrayBalloonTimeout"]
+"kind" = "event"
+"category" = "tray_balloon"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ukadoc"
+"description" = "トレイアイコンのバルーンをタイムアウトや閉じるボタンで消した際に発生。"
+[entry."OnTrayBalloonTimeout".field]
+"balloon_title" = { "reference" = 0, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "タイトル文字列。" }
+"balloon_text" = { "reference" = 1, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "表示テキスト。" }

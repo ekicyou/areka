@@ -1,0 +1,54 @@
+# event / category=mailcheck — areka-P0-shiori-protocol-split category fragment.
+# 4 keyed entry table(s), source order preserved. Category-pure; entry-boundary only.
+# Generated deterministically; do not hand-edit. Merge order: _manifest.toml (task 2.4) is authoritative.
+
+[entry."OnBIFFBegin"]
+"kind" = "event"
+"category" = "mailcheck"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ukadoc"
+"description" = "メールチェック開始が指示された際に発生。"
+[entry."OnBIFFBegin".field]
+"mail_server_name" = { "reference" = 2, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "チェックするメールサーバ名（SSP/CROW はアカウント名）。" }
+
+[entry."OnBIFFComplete"]
+"kind" = "event"
+"category" = "mailcheck"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ukadoc"
+"description" = "メールチェックが成功した際に発生。"
+[entry."OnBIFFComplete".field]
+"mail_count" = { "reference" = 0, "type" = "i32", "required" = false, "provenance" = "ukadoc", "description" = "スプールされているメールの通数（1 オリジン）。" }
+"mail_bytes" = { "reference" = 1, "type" = "i64", "required" = false, "provenance" = "ukadoc", "description" = "スプールされているメールのバイト数。" }
+"mail_server_name" = { "reference" = 2, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "チェックするメールサーバ名。" }
+"mail_new_diff" = { "reference" = 3, "type" = "i32", "required" = false, "provenance" = "ukadoc", "description" = "メールの新着差分。" }
+"top_result" = { "reference" = 4, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "全メールの TopResult（POP 全ヘッダリスト。メール毎バイト値 2 区切り・ヘッダ毎バイト値 1 区切り）。" }
+"list_result" = { "reference" = 5, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "ListResult（メールサーバ上の ID。POP LIST 相当）。" }
+"uidl_result" = { "reference" = 6, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "UidlResult（メール区別用 ID。POP UIDL 相当）。" }
+"sender_title_list" = { "reference" = 7, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "バイト値 1 区切りの送信者とタイトル。" }
+
+[entry."OnBIFF2Complete"]
+"kind" = "event"
+"category" = "mailcheck"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ukadoc"
+"description" = "メールスプール数が増加した際に発生。SSP では OnBIFFComplete に応答しなかった場合のみ発生。"
+[entry."OnBIFF2Complete".field]
+"mail_count" = { "reference" = 0, "type" = "i32", "required" = false, "provenance" = "ukadoc", "description" = "スプールされているメールの通数（1 オリジン）。" }
+"mail_bytes" = { "reference" = 1, "type" = "i64", "required" = false, "provenance" = "ukadoc", "description" = "スプールされているメールのバイト数。" }
+"mail_server_name" = { "reference" = 2, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "チェックするメールサーバ名（SSP/CROW はアカウント名）。" }
+"top_result" = { "reference" = 3, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "全メールの TopResult。" }
+
+[entry."OnBIFFFailure"]
+"kind" = "event"
+"category" = "mailcheck"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ukadoc"
+"description" = "メールチェックに失敗した際に発生。"
+[entry."OnBIFFFailure".field]
+"failure_reason" = { "reference" = 0, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "失敗理由。" }
+"mail_server_name" = { "reference" = 2, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "チェックするメールサーバ名（SSP/CROW はアカウント名）。" }

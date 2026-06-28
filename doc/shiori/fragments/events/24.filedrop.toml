@@ -1,0 +1,143 @@
+# event / category=filedrop — areka-P0-shiori-protocol-split category fragment.
+# 13 keyed entry table(s), source order preserved. Category-pure; entry-boundary only.
+# Generated deterministically; do not hand-edit. Merge order: _manifest.toml (task 2.4) is authoritative.
+
+[entry."OnFileDropping"]
+"kind" = "event"
+"category" = "filedrop"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ukadoc"
+"description" = "ファイルをドラッグしたままのカーソルがゴースト上に乗った際に発生。"
+[entry."OnFileDropping".field]
+"file_path" = { "reference" = 0, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "ドラッグしているファイルパス。" }
+"char_scope" = { "reference" = 1, "type" = "i32", "required" = false, "provenance" = "ukadoc", "description" = "ドロップされたキャラクターのスコープ番号。本体側0、相方1、3人目以降は2以降。" }
+
+[entry."OnFileDropped"]
+"kind" = "event"
+"category" = "filedrop"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ukadoc"
+"description" = "[旧仕様]ファイルがDnDされた際に発生。"
+[entry."OnFileDropped".field]
+"file_path" = { "reference" = 0, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "ドロップされたファイルパス。" }
+"char_scope" = { "reference" = 1, "type" = "i32", "required" = false, "provenance" = "ukadoc", "description" = "ドロップされたキャラクターのスコープ番号。本体側0、相方1、3人目以降は2以降。" }
+"mime_type" = { "reference" = 2, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "ドロップされたファイルのMIMEタイプ(SSP 2.7.98以降)。" }
+
+[entry."OnFileDrop"]
+"kind" = "event"
+"category" = "filedrop"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ukadoc"
+"description" = "[旧仕様]ファイルがDnDされた際に発生。"
+[entry."OnFileDrop".field]
+"file_path" = { "reference" = 0, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "ドロップされたファイルパス。" }
+"char_scope" = { "reference" = 1, "type" = "i32", "required" = false, "provenance" = "ukadoc", "description" = "ドロップされたキャラクターのスコープ番号。本体側0、相方1、3人目以降は2以降。" }
+"mime_type" = { "reference" = 2, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "ドロップされたファイルのMIMEタイプ(SSP 2.7.98以降)。" }
+
+[entry."OnFileDrop2"]
+"kind" = "event"
+"category" = "filedrop"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ukadoc"
+"description" = "ファイルがDnDされた際に発生。このイベントが現時点での最新仕様となる。"
+[entry."OnFileDrop2".field]
+"file_path" = { "reference" = 0, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "ドロップされたファイルパス。複数ファイル/ディレクトリがあればbyte値1で区切る。" }
+"char_scope" = { "reference" = 1, "type" = "i32", "required" = false, "provenance" = "ukadoc", "description" = "ドロップされたキャラクターのスコープ番号。本体側0、相方1、3人目以降は2以降。" }
+"mime_type" = { "reference" = 2, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "ドロップされたファイルのMIMEタイプ(SSP 2.7.98以降)。複数ファイル/ディレクトリがあればbyte値1で区切る。" }
+
+[entry."OnFileDropEx"]
+"kind" = "event"
+"category" = "filedrop"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ukadoc"
+"description" = "[旧仕様]ファイルがDnDされた際に発生。"
+[entry."OnFileDropEx".field]
+"file_path" = { "reference" = 0, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "ドロップされたファイルパス。複数ファイル/ディレクトリがあればbyte値1で区切る。" }
+"char_scope" = { "reference" = 1, "type" = "i32", "required" = false, "provenance" = "ukadoc", "description" = "ドロップされたキャラクターのスコープ番号。本体側0、相方1、3人目以降は2以降。" }
+"mime_type" = { "reference" = 2, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "ドロップされたファイルのMIMEタイプ(SSP 2.7.98以降)。複数ファイル/ディレクトリがあればbyte値1で区切る。" }
+
+[entry."OnOtherObjectDropping"]
+"kind" = "event"
+"category" = "filedrop"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ukadoc"
+"description" = "「ファイル」として扱えないもののカーソルがゴースト上に乗った際に発生。例：Windowsの「マイコンピュータ」など"
+[entry."OnOtherObjectDropping".field]
+"char_scope" = { "reference" = 0, "type" = "i32", "required" = false, "provenance" = "ukadoc", "description" = "ドロップされたキャラクターのスコープ番号。本体側0、相方1、3人目以降は2以降。" }
+"object_name" = { "reference" = 1, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "ドロップされたものの名前(OSの言語設定に影響される)。   複数ある場合はバイト値1区切り。" }
+"object_id" = { "reference" = 2, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "ドロップされたもののOSの言語設定に識別されないIDのようなもの。   複数ある場合はバイト値1区切り。以下はWindows上の例。      PC(マイコンピュータ) = ::{20D04FE0-3AEA-1069-A2D8-08002B30309D}  ゴミ箱 = ::{645FF040-5081-101B-9F08-00AA002F954E}  (マイ)ネットワーク = ::{F02C1A0D-BE21-4350-88B0-7367FC96EF3C}" }
+
+[entry."OnOtherObjectDropped"]
+"kind" = "event"
+"category" = "filedrop"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ukadoc"
+"description" = "「ファイル」として扱えないものをゴースト上にドロップした際に発生。例：Windowsの「マイコンピュータ」など。   Referenceは OnOtherObjectDropping とまったく同じ。"
+
+[entry."OnDirectoryDrop"]
+"kind" = "event"
+"category" = "filedrop"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ukadoc"
+"description" = "ディレクトリがDnD された際に発生。"
+[entry."OnDirectoryDrop".field]
+"directory_path" = { "reference" = 0, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "ドロップされたディレクトリのパス。" }
+"char_scope" = { "reference" = 1, "type" = "i32", "required" = false, "provenance" = "ukadoc", "description" = "ドロップされたキャラクターのスコープ番号。本体側0、相方1、3人目以降は2以降。" }
+
+[entry."OnWallpaperChange"]
+"kind" = "event"
+"category" = "filedrop"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ukadoc"
+"description" = "画像ファイルのDnDによって壁紙が変更された際に発生。"
+[entry."OnWallpaperChange".field]
+"file_path" = { "reference" = 0, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "ドロップされたファイルパス。" }
+
+[entry."OnUpdatedataCreating"]
+"kind" = "event"
+"category" = "filedrop"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ukadoc"
+"description" = "ゴーストフォルダがDnDされた際に発生。"
+
+[entry."OnUpdatedataCreated"]
+"kind" = "event"
+"category" = "filedrop"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ukadoc"
+"description" = "updates2.dauが作成された際に発生。"
+
+[entry."OnNarCreating"]
+"kind" = "event"
+"category" = "filedrop"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ukadoc"
+"description" = "install.txtの入ったゴーストフォルダがDnDされた際に発生。"
+[entry."OnNarCreating".field]
+"nar_object_name" = { "reference" = 0, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "narにするオブジェクト名。" }
+"nar_file_path" = { "reference" = 1, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "作成されるnarのファイル名と絶対パス。" }
+"install_identifier" = { "reference" = 2, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "※識別子。インストールの識別子参照。" }
+
+[entry."OnNarCreated"]
+"kind" = "event"
+"category" = "filedrop"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ukadoc"
+"description" = "narファイルが作成された際に発生。"
+[entry."OnNarCreated".field]
+"nar_object_name" = { "reference" = 0, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "narにするオブジェクト名。" }
+"nar_file_path" = { "reference" = 1, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "作成されたnarのファイル名と絶対パス。" }
+"install_identifier" = { "reference" = 2, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "※識別子。インストールの識別子参照。" }

@@ -1,0 +1,301 @@
+# event / category=network_update — areka-P0-shiori-protocol-split category fragment.
+# 24 keyed entry table(s), source order preserved. Category-pure; entry-boundary only.
+# Generated deterministically; do not hand-edit. Merge order: _manifest.toml (task 2.4) is authoritative.
+
+[entry."OnUpdateProcessExec"]
+"kind" = "event"
+"category" = "network_update"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ukadoc"
+"description" = "メニューなどから更新実行が指示された際に発生。スクリプトを返すと更新処理をカスタマイズできる。"
+[entry."OnUpdateProcessExec".field]
+"update_trigger" = { "reference" = 0, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "manual/auto/testonly のいずれか（更新実行の起動契機）。" }
+
+[entry."OnUpdateBegin"]
+"kind" = "event"
+"category" = "network_update"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ukadoc"
+"description" = "ネットワーク更新開始が指示された際に発生。"
+[entry."OnUpdateBegin".field]
+"ghost_name" = { "reference" = 0, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "ゴースト名。" }
+"full_path" = { "reference" = 1, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "フルパス。" }
+"update_target_kind" = { "reference" = 3, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "CROW ではゴースト更新で ghost・本体更新で baseware、SSP では更新対象種別。" }
+"update_reason" = { "reference" = 4, "type" = "str", "required" = false, "provenance" = "ssp_secondary", "description" = "SSP 2.3 の更新実行理由。" }
+
+[entry."OnUpdateReady"]
+"kind" = "event"
+"category" = "network_update"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ukadoc"
+"description" = "更新ファイルが確認された際に発生。"
+[entry."OnUpdateReady".field]
+"file_index" = { "reference" = 0, "type" = "i32", "required" = false, "provenance" = "ukadoc", "description" = "更新ファイル総数から 1 を引いた値（0 始まり連番）。" }
+"updated_file_list" = { "reference" = 1, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "カンマ区切りの更新されたファイル名リスト。" }
+"update_target_kind" = { "reference" = 3, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "更新対象種別（shell ghost balloon headline plugin）。" }
+"update_reason" = { "reference" = 4, "type" = "str", "required" = false, "provenance" = "ssp_secondary", "description" = "SSP 2.3 の更新実行理由。" }
+
+[entry."OnUpdateComplete"]
+"kind" = "event"
+"category" = "network_update"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ukadoc"
+"description" = "ネットワーク更新が成功し完了した際に発生。"
+[entry."OnUpdateComplete".field]
+"success_reason" = { "reference" = 0, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "成功理由。" }
+"updated_file_list" = { "reference" = 1, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "カンマ区切りの更新されたファイル名リスト。" }
+"update_target_kind" = { "reference" = 3, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "CROW ではゴースト更新で ghost・本体更新で baseware、SSP では更新対象種別。" }
+"update_reason" = { "reference" = 4, "type" = "str", "required" = false, "provenance" = "ssp_secondary", "description" = "SSP 2.3 の更新実行理由。" }
+
+[entry."OnUpdateFailure"]
+"kind" = "event"
+"category" = "network_update"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ukadoc"
+"description" = "ネットワーク更新に失敗した際に発生。"
+[entry."OnUpdateFailure".field]
+"failure_reason" = { "reference" = 0, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "失敗理由。" }
+"updated_file_list" = { "reference" = 1, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "カンマ区切りの更新ファイル名リスト。SSP のみ失敗したファイル名。" }
+"update_target_kind" = { "reference" = 3, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "CROW ではゴースト更新で ghost・本体更新で baseware、SSP では更新対象種別。" }
+"update_reason" = { "reference" = 4, "type" = "str", "required" = false, "provenance" = "ssp_secondary", "description" = "SSP 2.3 の更新実行理由。" }
+
+[entry."OnUpdateOtherBegin"]
+"kind" = "event"
+"category" = "network_update"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ukadoc"
+"description" = "ゴースト以外のネットワーク更新開始が指示された際に発生。"
+[entry."OnUpdateOtherBegin".field]
+"ghost_name" = { "reference" = 0, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "ゴースト名。" }
+"full_path" = { "reference" = 1, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "フルパス。" }
+"update_target_kind" = { "reference" = 3, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "更新対象種別。" }
+"update_reason" = { "reference" = 4, "type" = "str", "required" = false, "provenance" = "ssp_secondary", "description" = "SSP 2.3 の更新実行理由。" }
+
+[entry."OnUpdateOtherReady"]
+"kind" = "event"
+"category" = "network_update"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ukadoc"
+"description" = "ゴースト以外の更新ファイルが確認された際に発生。"
+[entry."OnUpdateOtherReady".field]
+"file_index" = { "reference" = 0, "type" = "i32", "required" = false, "provenance" = "ukadoc", "description" = "更新ファイル総数から 1 を引いた値（0 始まり連番）。" }
+"updated_file_list" = { "reference" = 1, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "カンマ区切りの更新されたファイル名リスト。" }
+"update_target_kind" = { "reference" = 3, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "更新対象種別。" }
+"update_reason" = { "reference" = 4, "type" = "str", "required" = false, "provenance" = "ssp_secondary", "description" = "SSP 2.3 の更新実行理由。" }
+
+[entry."OnUpdateOtherComplete"]
+"kind" = "event"
+"category" = "network_update"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ukadoc"
+"description" = "ゴースト以外のネットワーク更新が成功し完了した際に発生。"
+[entry."OnUpdateOtherComplete".field]
+"success_reason" = { "reference" = 0, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "成功理由。" }
+"updated_file_list" = { "reference" = 1, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "カンマ区切りの更新されたファイル名リスト。" }
+"update_target_kind" = { "reference" = 3, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "更新対象種別。" }
+"update_reason" = { "reference" = 4, "type" = "str", "required" = false, "provenance" = "ssp_secondary", "description" = "SSP 2.3 の更新実行理由。" }
+
+[entry."OnUpdateOtherFailure"]
+"kind" = "event"
+"category" = "network_update"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ukadoc"
+"description" = "ゴースト以外のネットワーク更新に失敗した際に発生。"
+[entry."OnUpdateOtherFailure".field]
+"failure_reason" = { "reference" = 0, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "失敗理由。" }
+"updated_file_list" = { "reference" = 1, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "カンマ区切りの更新されたファイル名リスト。" }
+"update_target_kind" = { "reference" = 3, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "更新対象種別。" }
+"update_reason" = { "reference" = 4, "type" = "str", "required" = false, "provenance" = "ssp_secondary", "description" = "SSP 2.3 の更新実行理由。" }
+
+[entry."OnUpdate.OnDownloadBegin"]
+"kind" = "event"
+"category" = "network_update"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ukadoc"
+"description" = "ファイルダウンロード開始の際に発生。"
+[entry."OnUpdate.OnDownloadBegin".field]
+"download_file_name" = { "reference" = 0, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "ダウンロードするファイル名。" }
+"file_index" = { "reference" = 1, "type" = "i32", "required" = false, "provenance" = "ukadoc", "description" = "（CROW 以外）ダウンロード中の更新ファイルの番号（0 から始まる連番）。" }
+"file_total_minus_one" = { "reference" = 2, "type" = "i32", "required" = false, "provenance" = "ukadoc", "description" = "（CROW 以外）更新を行うファイルの総数から 1 引かれたもの（0 から始まる連番）。" }
+"update_target_kind" = { "reference" = 3, "type" = "str", "required" = false, "provenance" = "ssp_secondary", "description" = "（SSP のみ）更新対象種別（shell ghost balloon headline plugin 等）。" }
+"update_reason" = { "reference" = 4, "type" = "str", "required" = false, "provenance" = "ssp_secondary", "description" = "SSP 2.3 の更新実行理由。" }
+
+[entry."OnUpdate.OnMD5CompareBegin"]
+"kind" = "event"
+"category" = "network_update"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ukadoc"
+"description" = "MD5 の照合開始の際に発生。"
+[entry."OnUpdate.OnMD5CompareBegin".field]
+"compare_file_name" = { "reference" = 0, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "比較するファイル名。" }
+"correct_md5" = { "reference" = 1, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "正しい MD5 値。" }
+"downloaded_md5" = { "reference" = 2, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "落としたファイルの MD5 値。" }
+"update_target_kind" = { "reference" = 3, "type" = "str", "required" = false, "provenance" = "ssp_secondary", "description" = "SSP。更新対象種別（shell ghost balloon headline plugin 等）。" }
+"update_reason" = { "reference" = 4, "type" = "str", "required" = false, "provenance" = "ssp_secondary", "description" = "SSP 2.3 の更新実行理由。" }
+
+[entry."OnUpdate.OnMD5CompareComplete"]
+"kind" = "event"
+"category" = "network_update"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ukadoc"
+"description" = "MD5 が一致した際に発生。"
+[entry."OnUpdate.OnMD5CompareComplete".field]
+"downloaded_file_name" = { "reference" = 0, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "落としたファイル名。" }
+"correct_md5" = { "reference" = 1, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "正しい MD5 値。" }
+"downloaded_md5" = { "reference" = 2, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "落としたファイルの MD5 値。" }
+"update_target_kind" = { "reference" = 3, "type" = "str", "required" = false, "provenance" = "ssp_secondary", "description" = "SSP。更新対象種別（shell ghost balloon headline plugin 等）。" }
+"update_reason" = { "reference" = 4, "type" = "str", "required" = false, "provenance" = "ssp_secondary", "description" = "SSP 2.3 の更新実行理由。" }
+
+[entry."OnUpdate.OnMD5CompareFailure"]
+"kind" = "event"
+"category" = "network_update"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ukadoc"
+"description" = "MD5 が一致しなかった際に発生。"
+[entry."OnUpdate.OnMD5CompareFailure".field]
+"downloaded_file_name" = { "reference" = 0, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "落としたファイル名。" }
+"correct_md5" = { "reference" = 1, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "正しい MD5 値。" }
+"downloaded_md5" = { "reference" = 2, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "落としたファイルの MD5 値。" }
+"update_target_kind" = { "reference" = 3, "type" = "str", "required" = false, "provenance" = "ssp_secondary", "description" = "SSP。更新対象種別（shell ghost balloon headline plugin 等）。" }
+"update_reason" = { "reference" = 4, "type" = "str", "required" = false, "provenance" = "ssp_secondary", "description" = "SSP 2.3 の更新実行理由。" }
+
+[entry."OnUpdateOther.OnDownloadBegin"]
+"kind" = "event"
+"category" = "network_update"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ukadoc"
+"description" = "ゴースト以外のファイルダウンロード開始の際に発生。"
+[entry."OnUpdateOther.OnDownloadBegin".field]
+"download_file_name" = { "reference" = 0, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "ダウンロードするファイル名。" }
+"file_index" = { "reference" = 1, "type" = "i32", "required" = false, "provenance" = "ukadoc", "description" = "ダウンロード中の更新ファイルの番号（0 から始まる連番）。" }
+"file_total_minus_one" = { "reference" = 2, "type" = "i32", "required" = false, "provenance" = "ukadoc", "description" = "更新を行うファイルの総数から 1 引かれたもの（0 から始まる連番）。" }
+"update_target_kind" = { "reference" = 3, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "更新対象種別（shell ghost balloon headline plugin 等）。" }
+"update_reason" = { "reference" = 4, "type" = "str", "required" = false, "provenance" = "ssp_secondary", "description" = "SSP 2.3 の更新実行理由。" }
+
+[entry."OnUpdateOther.OnMD5CompareBegin"]
+"kind" = "event"
+"category" = "network_update"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ukadoc"
+"description" = "ゴースト以外の MD5 の照合開始の際に発生。"
+[entry."OnUpdateOther.OnMD5CompareBegin".field]
+"compare_file_name" = { "reference" = 0, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "比較するファイル名。" }
+"correct_md5" = { "reference" = 1, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "正しい MD5 値。" }
+"downloaded_md5" = { "reference" = 2, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "落としたファイルの MD5 値。" }
+"update_target_kind" = { "reference" = 3, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "更新対象種別（shell ghost balloon headline plugin 等）。" }
+"update_reason" = { "reference" = 4, "type" = "str", "required" = false, "provenance" = "ssp_secondary", "description" = "SSP 2.3 の更新実行理由。" }
+
+[entry."OnUpdateOther.OnMD5CompareComplete"]
+"kind" = "event"
+"category" = "network_update"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ukadoc"
+"description" = "ゴースト以外の MD5 が一致した際に発生。"
+[entry."OnUpdateOther.OnMD5CompareComplete".field]
+"correct_md5" = { "reference" = 1, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "正しい MD5 値。" }
+"downloaded_md5" = { "reference" = 2, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "落としたファイルの MD5 値。" }
+"update_target_kind" = { "reference" = 3, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "更新対象種別（shell ghost balloon headline plugin 等）。" }
+"update_reason" = { "reference" = 4, "type" = "str", "required" = false, "provenance" = "ssp_secondary", "description" = "SSP 2.3 の更新実行理由。" }
+
+[entry."OnUpdateOther.OnMD5CompareFailure"]
+"kind" = "event"
+"category" = "network_update"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ukadoc"
+"description" = "ゴースト以外の MD5 が一致しなかった際に発生。"
+[entry."OnUpdateOther.OnMD5CompareFailure".field]
+"correct_md5" = { "reference" = 1, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "正しい MD5 値。" }
+"downloaded_md5" = { "reference" = 2, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "落としたファイルの MD5 値。" }
+"update_target_kind" = { "reference" = 3, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "更新対象種別（shell ghost balloon headline plugin 等）。" }
+"update_reason" = { "reference" = 4, "type" = "str", "required" = false, "provenance" = "ssp_secondary", "description" = "SSP 2.3 の更新実行理由。" }
+
+[entry."OnUpdateCheckComplete"]
+"kind" = "event"
+"category" = "network_update"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ukadoc"
+"description" = "ネットワーク更新のチェックに成功した際に発生。"
+[entry."OnUpdateCheckComplete".field]
+"success_reason" = { "reference" = 0, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "成功理由。" }
+"updated_file_list" = { "reference" = 1, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "カンマ区切りの更新されたファイル名リスト。" }
+"update_target_kind" = { "reference" = 3, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "更新対象種別。" }
+"update_reason" = { "reference" = 4, "type" = "str", "required" = false, "provenance" = "ssp_secondary", "description" = "SSP 2.3 の更新実行理由（script のみ）。" }
+
+[entry."OnUpdateCheckFailure"]
+"kind" = "event"
+"category" = "network_update"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ukadoc"
+"description" = "ネットワーク更新のチェックに失敗した際に発生。"
+[entry."OnUpdateCheckFailure".field]
+"failure_reason" = { "reference" = 0, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "失敗理由。" }
+"update_reason" = { "reference" = 4, "type" = "str", "required" = false, "provenance" = "ssp_secondary", "description" = "SSP 2.3 の更新実行理由（script のみ）。" }
+
+[entry."OnUpdateResult"]
+"kind" = "event"
+"category" = "network_update"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ukadoc"
+"description" = "ネットワーク更新実行時に、一括更新も含めすべての更新結果を一括通知する。"
+[entry."OnUpdateResult".field]
+"update_result_records" = { "reference_variadic" = true, "type" = "str", "required" = true, "provenance" = "ukadoc", "description" = "更新実行順の結果レコード（種別[\\1]OK/NG[\\1]ファイル数または失敗理由[\\1]失敗ファイル名）。\\1 はバイト値 1。Reference0 以降可変長。" }
+
+[entry."OnUpdateResultEx"]
+"kind" = "event"
+"category" = "network_update"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ukadoc"
+"description" = "ネットワーク更新実行時に、一括更新も含めすべての更新結果を一括通知する（対象名付き拡張版）。"
+[entry."OnUpdateResultEx".field]
+"update_result_records" = { "reference_variadic" = true, "type" = "str", "required" = true, "provenance" = "ukadoc", "description" = "更新実行順の結果レコード（対象名[\\1]種別[\\1]OK/NG[\\1]ファイル数または失敗理由[\\1]失敗ファイル名）。\\1 はバイト値 1。Reference0 以降可変長。" }
+
+[entry."OnUpdateCheckResult"]
+"kind" = "event"
+"category" = "network_update"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ukadoc"
+"description" = "更新チェックのみオプション時に最後に発生。OnUpdateResult のエクスプローラ版。"
+[entry."OnUpdateCheckResult".field]
+"update_result_records" = { "reference_variadic" = true, "type" = "str", "required" = true, "provenance" = "ukadoc", "description" = "OnUpdateResult と同じ可変長更新結果レコード。" }
+
+[entry."OnUpdateCheckResultEx"]
+"kind" = "event"
+"category" = "network_update"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ukadoc"
+"description" = "更新チェックのみオプション時に最後に発生。OnUpdateResultEx のエクスプローラ版。"
+[entry."OnUpdateCheckResultEx".field]
+"update_result_records" = { "reference_variadic" = true, "type" = "str", "required" = true, "provenance" = "ukadoc", "description" = "OnUpdateResultEx と同じ可変長更新結果レコード。" }
+
+[entry."OnUpdateResultExplorer"]
+"kind" = "event"
+"category" = "network_update"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ukadoc"
+"description" = "ゴーストエクスプローラからネットワーク更新実行時に発生。OnUpdateResult のエクスプローラ版。"
+[entry."OnUpdateResultExplorer".field]
+"update_result_records" = { "reference_variadic" = true, "type" = "str", "required" = true, "provenance" = "ukadoc", "description" = "OnUpdateResult と同じ可変長更新結果レコード。" }

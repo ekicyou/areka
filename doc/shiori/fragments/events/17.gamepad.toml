@@ -1,0 +1,58 @@
+# event / category=gamepad — areka-P0-shiori-protocol-split category fragment.
+# 5 keyed entry table(s), source order preserved. Category-pure; entry-boundary only.
+# Generated deterministically; do not hand-edit. Merge order: _manifest.toml (task 2.4) is authoritative.
+
+[entry."OnGamepadButtonDown"]
+"kind" = "event"
+"category" = "gamepad"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ssp_secondary"
+"description" = "ゲームパッドのボタンが押された瞬間に発生。全ゴーストにブロードキャストされる。"
+[entry."OnGamepadButtonDown".field]
+"pad_index" = { "reference" = 0, "type" = "i32", "required" = false, "provenance" = "ssp_secondary", "description" = "パッドインデックス。" }
+"button_name" = { "reference" = 1, "type" = "str", "required" = false, "provenance" = "ssp_secondary", "description" = "ボタン名（A/B/X/Y/LB/RB/LSB/RSB/Start/Back/DPadUp/DPadDown/DPadLeft/DPadRight）。" }
+
+[entry."OnGamepadButtonUp"]
+"kind" = "event"
+"category" = "gamepad"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ssp_secondary"
+"description" = "ゲームパッドのボタンが離された瞬間に発生。全ゴーストにブロードキャストされる。"
+[entry."OnGamepadButtonUp".field]
+"pad_index" = { "reference" = 0, "type" = "i32", "required" = false, "provenance" = "ssp_secondary", "description" = "パッドインデックス。" }
+"button_name" = { "reference" = 1, "type" = "str", "required" = false, "provenance" = "ssp_secondary", "description" = "ボタン名（A/B/X/Y/LB/RB/LSB/RSB/Start/Back/DPadUp/DPadDown/DPadLeft/DPadRight）。" }
+
+[entry."OnGamepadAxisMove"]
+"kind" = "event"
+"category" = "gamepad"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ssp_secondary"
+"description" = "ゲームパッドのアナログスティック/トリガーの値が前回通知時から大きく変化した際に発生。全ゴーストにブロードキャストされる。"
+[entry."OnGamepadAxisMove".field]
+"pad_index" = { "reference" = 0, "type" = "i32", "required" = false, "provenance" = "ssp_secondary", "description" = "パッドインデックス。" }
+"axis_name" = { "reference" = 1, "type" = "str", "required" = false, "provenance" = "ssp_secondary", "description" = "軸名（LeftStickX/LeftStickY/RightStickX/RightStickY/LeftTrigger/RightTrigger）。" }
+"axis_raw_value" = { "reference" = 2, "type" = "i32", "required" = false, "provenance" = "ssp_secondary", "description" = "生値（整数）。範囲はベースウェアの実装に依存する。" }
+"axis_normalized_value" = { "reference" = 3, "type" = "str", "required" = false, "provenance" = "ssp_secondary", "description" = "正規化値（小数）。スティックは -1.0～1.0、トリガーは 0.0～1.0。通常はこちらを使用する。" }
+
+[entry."OnGamepadConnected"]
+"kind" = "event"
+"category" = "gamepad"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ssp_secondary"
+"description" = "ゲームパッドが接続された際に発生。SSP 起動時に既に接続されていた場合も発生する。全ゴーストにブロードキャストされる。"
+[entry."OnGamepadConnected".field]
+"pad_index" = { "reference" = 0, "type" = "i32", "required" = false, "provenance" = "ssp_secondary", "description" = "パッドインデックス。" }
+
+[entry."OnGamepadDisconnected"]
+"kind" = "event"
+"category" = "gamepad"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ssp_secondary"
+"description" = "ゲームパッドが切断された際に発生。全ゴーストにブロードキャストされる。"
+[entry."OnGamepadDisconnected".field]
+"pad_index" = { "reference" = 0, "type" = "i32", "required" = false, "provenance" = "ssp_secondary", "description" = "パッドインデックス。" }

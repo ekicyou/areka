@@ -1,0 +1,73 @@
+# event / category=urldrop — areka-P0-shiori-protocol-split category fragment.
+# 6 keyed entry table(s), source order preserved. Category-pure; entry-boundary only.
+# Generated deterministically; do not hand-edit. Merge order: _manifest.toml (task 2.4) is authoritative.
+
+[entry."OnURLDragDropping"]
+"kind" = "event"
+"category" = "urldrop"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ukadoc"
+"description" = "URLがドロップされようとして、マウスカーソルが重なった際に発生。   このイベントは受け入れ可能なすべてのURLで発生する。"
+[entry."OnURLDragDropping".field]
+"url" = { "reference" = 0, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "ドロップされたURL。" }
+"char_scope" = { "reference" = 1, "type" = "i32", "required" = false, "provenance" = "ukadoc", "description" = "ドロップされたキャラクターのスコープ番号。本体側0、相方1、3人目以降は2以降。" }
+
+[entry."OnURLDropping"]
+"kind" = "event"
+"category" = "urldrop"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ukadoc"
+"description" = "URLがドロップされた後で、ダウンロードを開始する時に発生。   このイベントはダウンロード処理前に発生する。他(homeurlインストールやfeed(RSS)インストール)では発生しない。"
+[entry."OnURLDropping".field]
+"url" = { "reference" = 0, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "ドロップされたURL。" }
+"char_scope" = { "reference" = 1, "type" = "i32", "required" = false, "provenance" = "ukadoc", "description" = "ドロップされたキャラクターのスコープ番号。本体側0、相方1、3人目以降は2以降。" }
+
+[entry."OnURLDropped"]
+"kind" = "event"
+"category" = "urldrop"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ukadoc"
+"description" = "ドロップされたURLを受領し終わった際に発生。   このイベントはNARインストールの直前、ダウンロード処理完了直後に発生する。他(homeurlインストールやfeed(RSS)インストール)では発生しない。"
+[entry."OnURLDropped".field]
+"local_path" = { "reference" = 0, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "ダウンロードし終わったファイルのローカルパス。" }
+"url" = { "reference" = 1, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "ドロップされたURL。" }
+"char_scope" = { "reference" = 2, "type" = "i32", "required" = false, "provenance" = "ukadoc", "description" = "ドロップされたキャラクターのスコープ番号。本体側0、相方1、3人目以降は2以降。" }
+
+[entry."OnURLDropFailure"]
+"kind" = "event"
+"category" = "urldrop"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ukadoc"
+"description" = "ドロップされたURLの受領に失敗したかキャンセルされた際に発生。   このイベントはNARインストールを試行しようとして失敗した際に発生する。他(homeurlインストールやfeed(RSS)インストール)では発生しない。"
+[entry."OnURLDropFailure".field]
+"local_path" = { "reference" = 0, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "ダウンロードし終わった分のファイルのローカルパス。" }
+"failure_reason" = { "reference" = 1, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "※失敗理由" }
+"url" = { "reference" = 2, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "ドロップされたURL。" }
+"char_scope" = { "reference" = 3, "type" = "i32", "required" = false, "provenance" = "ukadoc", "description" = "ドロップされたキャラクターのスコープ番号。本体側0、相方1、3人目以降は2以降。" }
+
+[entry."OnURLQuery"]
+"kind" = "event"
+"category" = "urldrop"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ukadoc"
+"description" = "URLがキャラクターウィンドウにドラッグ＆ドロップされた際に通知される。  これに対してスクリプトを返すと、通常のダウンロード処理がキャンセルされる。  ゴースト側でURLを独自に処理したい場合のみスクリプトを返すこと。"
+[entry."OnURLQuery".field]
+"url" = { "reference" = 0, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "URLパス。" }
+"char_scope" = { "reference" = 1, "type" = "i32", "required" = false, "provenance" = "ukadoc", "description" = "本体の場合は0、相方の場合は1。SSP/CROWでは2以降もある。" }
+"mime_type" = { "reference" = 2, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "ドロップされたURLのMIMEタイプ" }
+"pending_action" = { "reference" = 3, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "反応しなかった場合にSSPがこの後実行予定の処理。   feed・nar・homeurl・unknownのいずれか。   unknownの場合は本体が処理に対応できないURLであり、本体側ではこれ以上の処理ができないことを示す。   それ以外はそのまま \\![execute,install,url] に渡すと処理の続きが行われる。" }
+
+[entry."OnXUkagakaLinkOpen"]
+"kind" = "event"
+"category" = "urldrop"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ukadoc"
+"description" = "下記形式のWeb関連づけを開いた、またはドロップした場合に、指定したゴーストに通知される。  x-ukagaka-link:type=event&ghost=(descript.txtの\"name\"か\"sakura.name\")&info=(Reference0に入る文字列)  文字コードはUTF-8固定＋URLエンコード済  サンプル：x-ukagaka-link:type=event&ghost=Emily&info=sweet-potato-feeding  SecurityLevelは必ずexternalになる。"
+[entry."OnXUkagakaLinkOpen".field]
+"link_info" = { "reference" = 0, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "info=以降に指定した文字列(URLデコード済)" }

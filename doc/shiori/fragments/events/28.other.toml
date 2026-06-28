@@ -1,0 +1,276 @@
+# event / category=other — areka-P0-shiori-protocol-split category fragment.
+# 24 keyed entry table(s), source order preserved. Category-pure; entry-boundary only.
+# Generated deterministically; do not hand-edit. Merge order: _manifest.toml (task 2.4) is authoritative.
+
+[entry."OnKeyPress"]
+"kind" = "event"
+"category" = "other"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ukadoc"
+"description" = "本体がアクティブな状態でキーが入力された際に発生。"
+[entry."OnKeyPress".field]
+"key_char" = { "reference" = 0, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "入力されたキー。(キートップに書かれた文字)" }
+"virtual_key_code" = { "reference" = 1, "type" = "i32", "required" = false, "provenance" = "ukadoc", "description" = "入力されたキー。(Win32仮想キーコード)" }
+"repeat_count" = { "reference" = 2, "type" = "i32", "required" = false, "provenance" = "ssp_secondary", "description" = "※SSPのみ キーの押しっぱなしカウント。" }
+"char_window_id" = { "reference" = 3, "type" = "i32", "required" = false, "provenance" = "ssp_secondary", "description" = "※SSPのみ キーイベントが来たキャラクターウインドウID。" }
+"modifier_keys" = { "reference" = 4, "type" = "str", "required" = false, "provenance" = "ssp_secondary", "description" = "※SSPのみ 修飾キーがカンマ区切りで列挙される。例：\"ctrl,alt\"" }
+
+[entry."OnRecommendsiteChoice"]
+"kind" = "event"
+"category" = "other"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ukadoc"
+"description" = "メニューからサイトのリンクが選択された際に発生。"
+[entry."OnRecommendsiteChoice".field]
+"site_name" = { "reference" = 0, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "選択されたサイト名。" }
+"site_url" = { "reference" = 1, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "選択されたサイトのURL。" }
+"thumbnail_url" = { "reference" = 2, "type" = "str", "required" = false, "provenance" = "ssp_secondary", "description" = "※SSPのみ 重ねた時に表示されるサムネイル画像のURL/パス" }
+"menu_kind" = { "reference" = 3, "type" = "str", "required" = false, "provenance" = "ssp_secondary", "description" = "※SSPのみ recommendかportal" }
+"side_index" = { "reference" = 4, "type" = "i32", "required" = false, "provenance" = "ssp_secondary", "description" = "※SSPのみ 0か1 (0=sakuraか1=keroか)" }
+"menu_index" = { "reference" = 5, "type" = "i32", "required" = false, "provenance" = "ssp_secondary", "description" = "※SSPのみ 数値 メニューの上から何番目か (0からはじまる点に注意)" }
+
+[entry."OnTranslate"]
+"kind" = "event"
+"category" = "other"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ukadoc"
+"description" = "SHIORIがMAKOTOのトランスレート機能を兼任するためのイベント。 主に、GETコマンドのSHIORI Eventに対してベースウェアへスクリプトが返却された場合に、それに応じて発行される。 OnTranslateの元となったSHIORI Eventに対して、SHIORI内部での操作を経てベースウェアへ返却されたスクリプトが、ベースウェアによる環境変数の展開などの後に再びSHIORIに送られる。SHIORIはこのスクリプトに対して再度何らかの処理を行ってベースウェアに最終的なスクリプトとして返却できる。 なおOnTranslate自身では再度発生しない。"
+[entry."OnTranslate".field]
+"original_script" = { "reference" = 0, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "元のスクリプト。" }
+"origin_kind" = { "reference" = 1, "type" = "str", "required" = false, "provenance" = "ssp_secondary", "description" = "※SSPのみ コミュニケートの場合、communicate。 SSTP SENDの場合、sstp-send。 Owned SSTPの場合、owned。 非ローカルSSTPの場合、remote。 トランスレートしない指定の場合、notranslate。 プラグインからのスクリプトの場合、plugin-script プラグインからのイベント反応の場合、plugin-event 該当するものがカンマ区切りで返る。※該当がない場合欠番となる。" }
+"origin_event_id" = { "reference" = 2, "type" = "str", "required" = false, "provenance" = "ssp_secondary", "description" = "※SSPのみ このスクリプトが発生したイベントID 。イベントが原因ではない場合欠番。" }
+"origin_references" = { "reference" = 3, "type" = "str", "required" = false, "provenance" = "ssp_secondary", "description" = "※SSPのみ バイト値1区切りの上記イベントのReference 。イベントが原因ではない場合欠番。" }
+
+[entry."OnAITalk"]
+"kind" = "event"
+"category" = "other"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ukadoc"
+"description" = "\\aタグ実行などにより、ランダムトーク発話を求められた際に発生。"
+
+[entry."OnOtherGhostTalk"]
+"kind" = "event"
+"category" = "other"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ukadoc"
+"description" = "他のゴーストが話した際に発生。\\![set,otherghosttalk,true]で有効に。"
+[entry."OnOtherGhostTalk".field]
+"ghost_name" = { "reference" = 0, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "ゴースト名。" }
+"ghost_internal_name" = { "reference" = 1, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "ゴーストの本体側名。" }
+"talk_kind" = { "reference" = 2, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "トークを中断した場合、break。 コミュニケートの場合、communicate。 SSTP SENDの場合、sstp-send。 Owned SSTPの場合、owned。 非ローカルSSTPの場合、remote。 トランスレートしない指定の場合、notranslate プラグインからのスクリプトの場合、plugin-script プラグインからのイベント反応の場合、plugin-event 該当するものがカンマ区切りで返る。" }
+"talk_event_id" = { "reference" = 3, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "他ゴーストの話したイベントID。" }
+"talk_script" = { "reference" = 4, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "他ゴーストの話した内容のスクリプト。" }
+"talk_references" = { "reference" = 5, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "バイト値1区切りの他ゴーストに渡されたReference。" }
+
+[entry."OnEmbryoExist"]
+"kind" = "event"
+"category" = "other"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ukadoc"
+"description" = "SSP起動時、先にmateria.exeが起動されていた際に発生。"
+
+[entry."OnNekodorifExist"]
+"kind" = "event"
+"category" = "other"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ukadoc"
+"description" = "SSP起動時、先に猫どりふが起動されていた際に発生。"
+
+[entry."OnSoundStop"]
+"kind" = "event"
+"category" = "other"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ukadoc"
+"description" = "サウンドが終了した際に発生。"
+[entry."OnSoundStop".field]
+"sound_file_name" = { "reference" = 0, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "再生ファイル名。" }
+"stop_reason" = { "reference" = 1, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "終了理由 end＝再生終了 close＝再生ウインドウを閉じた [SSP 2.6.65]" }
+
+[entry."OnSoundLoop"]
+"kind" = "event"
+"category" = "other"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ukadoc"
+"description" = "サウンドがループ再生中に、最後まで再生して次のループに入ろうとする際に発生。"
+[entry."OnSoundLoop".field]
+"sound_file_name" = { "reference" = 0, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "再生ファイル名。" }
+
+[entry."OnSoundError"]
+"kind" = "event"
+"category" = "other"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ukadoc"
+"description" = "サウンド処理に失敗した際に発生。"
+[entry."OnSoundError".field]
+"error_command" = { "reference" = 0, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "エラーを起こした再生コマンド。現在のところplay固定。" }
+"engine_error_code" = { "reference" = 1, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "サウンド再生エンジン内部のエラーコード(数値)。" }
+"sound_file_name" = { "reference" = 2, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "再生ファイル名。" }
+"engine_error_message" = { "reference" = 3, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "サウンド再生エンジンから出力されたエラーメッセージ。" }
+
+[entry."OnMusicPlayEx"]
+"kind" = "event"
+"category" = "other"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ukadoc"
+"description" = "Windows標準のメディアプレイヤーアプリなど、対応した音楽再生ソフトで再生中の曲情報をゴーストに通知する。   このイベントに反応しない場合はOnMusicPlayにフォールバックする。   ブラウザでの動画・音楽再生は全部OnVideoPlayEx扱いになるので注意。"
+[entry."OnMusicPlayEx".field]
+"song_title" = { "reference" = 0, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "曲タイトル" }
+"artist_name" = { "reference" = 1, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "アーティスト名" }
+
+[entry."OnVideoPlayEx"]
+"kind" = "event"
+"category" = "other"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ukadoc"
+"description" = "Windows標準のメディアプレイヤーアプリなど、対応した音楽再生ソフトで再生中の動画情報をゴーストに通知する。"
+
+[entry."OnMusicPlay"]
+"kind" = "event"
+"category" = "other"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ukadoc"
+"description" = "Windows標準のメディアプレイヤーアプリなど、対応した音楽再生ソフトで再生中の曲情報をゴーストに通知する。"
+[entry."OnMusicPlay".field]
+"song_title" = { "reference" = 0, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "曲タイトル" }
+"artist_name" = { "reference" = 1, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "アーティスト名" }
+
+[entry."OnTextDrop"]
+"kind" = "event"
+"category" = "other"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ukadoc"
+"description" = "テキストデータがDnDされた際に発生。"
+[entry."OnTextDrop".field]
+"text_content" = { "reference" = 0, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "テキスト内容。(改行はバイト値1)" }
+"char_id" = { "reference" = 1, "type" = "i32", "required" = false, "provenance" = "ukadoc", "description" = "DnDされたキャラクターのID。" }
+
+[entry."OnShellScaling"]
+"kind" = "event"
+"category" = "other"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ukadoc"
+"description" = "シェル倍率が変更された際に発生。"
+[entry."OnShellScaling".field]
+"horizontal_scale_after" = { "reference" = 0, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "横方向の変更された後の倍率。（パーセント）" }
+"horizontal_scale_before" = { "reference" = 1, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "横方向の変更される前の倍率。（パーセント）" }
+"vertical_scale_after" = { "reference" = 2, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "縦方向の変更された後の倍率。（パーセント）" }
+"vertical_scale_before" = { "reference" = 3, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "縦方向の変更される前の倍率。（パーセント）" }
+
+[entry."OnBalloonScaling"]
+"kind" = "event"
+"category" = "other"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ukadoc"
+"description" = "バルーン倍率が変更された際に発生。"
+[entry."OnBalloonScaling".field]
+"horizontal_scale_after" = { "reference" = 0, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "横方向の変更された後の倍率。（パーセント）" }
+"horizontal_scale_before" = { "reference" = 1, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "横方向の変更される前の倍率。（パーセント）" }
+"vertical_scale_after" = { "reference" = 2, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "縦方向の変更された後の倍率。（パーセント）" }
+"vertical_scale_before" = { "reference" = 3, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "縦方向の変更される前の倍率。（パーセント）" }
+
+[entry."OnLanguageChange"]
+"kind" = "event"
+"category" = "other"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ukadoc"
+"description" = "言語設定が変更された際と、起動直後に通知される。  起動直後に通知される場合は必ずNOTIFYとなり、イベントに応答してしゃべることはできない。"
+"silence_ref" = ["sr_dispatch_os_startup_notify_other_get"]
+[entry."OnLanguageChange".field]
+"language_name" = { "reference" = 0, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "言語名(name)" }
+"language_id" = { "reference" = 1, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "言語ID(langid)" }
+"language_dir_path" = { "reference" = 2, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "言語設定ファイル群を格納したフォルダのフルパス" }
+"help_url" = { "reference" = 3, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "ヘルプが記載されているURL" }
+
+[entry."OnResetWindowPos"]
+"kind" = "event"
+"category" = "other"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ukadoc"
+"description" = "シェル位置初期化メニューが選ばれた際に通知される。  反応しない場合はデフォルトのシェル位置初期化処理 ( \\![execute,resetwindowpos] ) が行われる。"
+
+[entry."OnExtractArchiveComplete"]
+"kind" = "event"
+"category" = "other"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ukadoc"
+"description" = "アーカイブの解凍が正常に完了した際に発生する。"
+[entry."OnExtractArchiveComplete".field]
+"event_identifier" = { "reference" = 0, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "Sakura Scriptの--eventオプションで指定されたイベント識別子。" }
+"extracted_file_count" = { "reference" = 1, "type" = "i32", "required" = false, "provenance" = "ukadoc", "description" = "解凍されたファイル数。" }
+"compressed_bytes" = { "reference" = 2, "type" = "i64", "required" = false, "provenance" = "ukadoc", "description" = "圧縮サイズ（バイト）。" }
+"uncompressed_bytes" = { "reference" = 3, "type" = "i64", "required" = false, "provenance" = "ukadoc", "description" = "非圧縮サイズ（バイト）。" }
+
+[entry."OnExtractArchiveFailure"]
+"kind" = "event"
+"category" = "other"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ukadoc"
+"description" = "アーカイブの解凍が失敗した際に発生する。"
+[entry."OnExtractArchiveFailure".field]
+"event_identifier" = { "reference" = 0, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "Sakura Scriptの--eventオプションで指定されたイベント識別子。" }
+"error_detail" = { "reference" = 1, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "エラー内容。※エラーコード一覧を参照。" }
+
+[entry."OnCompressArchiveComplete"]
+"kind" = "event"
+"category" = "other"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ukadoc"
+"description" = "アーカイブの圧縮が正常に完了した際に発生する。"
+[entry."OnCompressArchiveComplete".field]
+"event_identifier" = { "reference" = 0, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "Sakura Scriptの--eventオプションで指定されたイベント識別子。" }
+"compressed_file_count" = { "reference" = 1, "type" = "i32", "required" = false, "provenance" = "ukadoc", "description" = "圧縮されたファイル数。" }
+"compressed_bytes" = { "reference" = 2, "type" = "i64", "required" = false, "provenance" = "ukadoc", "description" = "圧縮サイズ（バイト）。" }
+"uncompressed_bytes" = { "reference" = 3, "type" = "i64", "required" = false, "provenance" = "ukadoc", "description" = "非圧縮サイズ（バイト）。" }
+
+[entry."OnCompressArchiveFailure"]
+"kind" = "event"
+"category" = "other"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ukadoc"
+"description" = "アーカイブの圧縮が失敗した際に発生する。"
+[entry."OnCompressArchiveFailure".field]
+"event_identifier" = { "reference" = 0, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "Sakura Scriptの--eventオプションで指定されたイベント識別子。" }
+"error_detail" = { "reference" = 1, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "エラー内容。※エラーコード一覧を参照。" }
+
+[entry."property.get"]
+"kind" = "event"
+"category" = "other"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ukadoc"
+"description" = "activeghostlist(ゴースト名/パス/ID).extによる拡張プロパティ取得時に発生。 取得できたプロパティの値を返す。"
+[entry."property.get".field]
+"property_name" = { "reference" = 0, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "拡張プロパティの名前。" }
+
+[entry."property.set"]
+"kind" = "event"
+"category" = "other"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ukadoc"
+"description" = "activeghostlist(ゴースト名/パス/ID).extによる拡張プロパティ設定時に発生。 成功時204、失敗時適切なステータスコードを返す。"
+[entry."property.set".field]
+"property_name" = { "reference" = 0, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "拡張プロパティの名前。" }
+"property_value" = { "reference" = 1, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "設定すべき値。" }

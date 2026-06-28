@@ -1,0 +1,155 @@
+# resource / category=shortcut_key (sub-fragment .02) — areka-P0-shiori-protocol-split category fragment.
+# 19 keyed entry table(s), source order preserved. Category-pure; entry-boundary only.
+# Generated deterministically; do not hand-edit. Merge order: _manifest.toml (task 2.4) is authoritative.
+
+[entry."switchignoreserikomovebutton.caption"]
+"kind" = "resource"
+"category" = "shortcut_key"
+"dispatch" = "get"
+"response" = "text"
+"provenance" = "ukadoc"
+"description" = "SERIKO Moveを無視の名称。"
+
+[entry."switchlocalsstpbutton.caption"]
+"kind" = "resource"
+"category" = "shortcut_key"
+"dispatch" = "get"
+"response" = "text"
+"provenance" = "ukadoc"
+"description" = "ローカルSSTPの名称。"
+
+[entry."switchmovetodefaultpositionbutton.caption"]
+"kind" = "resource"
+"category" = "shortcut_key"
+"dispatch" = "get"
+"response" = "text"
+"provenance" = "ukadoc"
+"description" = "シェル位置初期化の名称。"
+
+[entry."switchproxybutton.caption"]
+"kind" = "resource"
+"category" = "shortcut_key"
+"dispatch" = "get"
+"response" = "text"
+"provenance" = "ukadoc"
+"description" = "プロキシサーバを有効にするの名称。"
+
+[entry."switchquietbutton.caption"]
+"kind" = "resource"
+"category" = "shortcut_key"
+"dispatch" = "get"
+"response" = "text"
+"provenance" = "ukadoc"
+"description" = "サウンドを鳴らさないの名称。"
+
+[entry."switchreloadbutton.caption"]
+"kind" = "resource"
+"category" = "shortcut_key"
+"dispatch" = "get"
+"response" = "text"
+"provenance" = "ukadoc"
+"description" = "ゴースト再読み込みの名称。"
+
+[entry."switchreloadtempghostbutton.caption"]
+"kind" = "resource"
+"category" = "shortcut_key"
+"dispatch" = "get"
+"response" = "text"
+"provenance" = "ukadoc"
+"description" = "一時起動ゴーストを保持の名称。"
+
+[entry."switchremotesstpbutton.caption"]
+"kind" = "resource"
+"category" = "shortcut_key"
+"dispatch" = "get"
+"response" = "text"
+"provenance" = "ukadoc"
+"description" = "リモートSSTPの名称。"
+
+[entry."switchrootbutton.caption"]
+"kind" = "resource"
+"category" = "shortcut_key"
+"dispatch" = "get"
+"response" = "text"
+"provenance" = "ukadoc"
+"description" = "スイッチ類の名称。"
+
+[entry."switchtalkghostbutton.caption"]
+"kind" = "resource"
+"category" = "shortcut_key"
+"dispatch" = "get"
+"response" = "text"
+"provenance" = "ukadoc"
+"description" = "話すタイミングをゴースト任せの名称。"
+
+[entry."systeminfobutton.caption"]
+"kind" = "resource"
+"category" = "shortcut_key"
+"dispatch" = "get"
+"response" = "text"
+"provenance" = "ukadoc"
+"description" = "システム情報を提出の名称。"
+
+[entry."updatebutton.caption"]
+"kind" = "resource"
+"category" = "shortcut_key"
+"dispatch" = "get"
+"response" = "text"
+"provenance" = "ukadoc"
+"description" = "ネットワーク更新の名称。"
+
+[entry."updatefmobutton.caption"]
+"kind" = "resource"
+"category" = "shortcut_key"
+"dispatch" = "get"
+"response" = "text"
+"provenance" = "ukadoc"
+"description" = "FMOの整理／更新の名称。"
+
+[entry."updateplatformbutton.caption"]
+"kind" = "resource"
+"category" = "shortcut_key"
+"dispatch" = "get"
+"response" = "text"
+"provenance" = "ukadoc"
+"description" = "本体ネットワーク更新の名称。"
+
+[entry."utilityrootbutton.caption"]
+"kind" = "resource"
+"category" = "shortcut_key"
+"dispatch" = "get"
+"response" = "text"
+"provenance" = "ukadoc"
+"description" = "機能の名称。"
+
+[entry."vanishbutton.caption"]
+"kind" = "resource"
+"category" = "shortcut_key"
+"dispatch" = "get"
+"response" = "text"
+"provenance" = "ukadoc"
+"description" = "消滅通告の名称。"
+
+[entry."aistatebutton.caption"]
+"kind" = "resource"
+"category" = "shortcut_key"
+"dispatch" = "get"
+"response" = "text"
+"provenance" = "ukadoc"
+"description" = "AIグラフの名称。"
+
+[entry."dictationbutton.caption"]
+"kind" = "resource"
+"category" = "shortcut_key"
+"dispatch" = "get"
+"response" = "text"
+"provenance" = "ukadoc"
+"description" = "音声認識の名称。"
+
+[entry."texttospeechbutton.caption"]
+"kind" = "resource"
+"category" = "shortcut_key"
+"dispatch" = "get"
+"response" = "text"
+"provenance" = "ukadoc"
+"description" = "音声合成の名称。"
