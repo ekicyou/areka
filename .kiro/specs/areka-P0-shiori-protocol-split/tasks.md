@@ -11,7 +11,7 @@
   - _Requirements: 9.5_
   - _Boundary: 一回限り移行・検証スクリプト_
 
-- [ ] 2. Core: 符号化変換とフラグメント・共有・マニフェスト生成
+- [x] 2. Core: 符号化変換とフラグメント・共有・マニフェスト生成
 - [x] 2.1 keyed/inline 符号化変換ロジック
   - 各 entry を id キー連想テーブルへ、各 field を意味名キー inline table（1 field = 1 行）へ、各 silence_ruling を id キー連想テーブルへ変換する
   - キーを常時 quote し dot/asterisk 混じり id（`OnUpdate.OnDownloadBegin`・`char*.defaultx` 等）を破綻なく表現する。`reference`/`reference_variadic` を保持（両保持 32 件・reference 無し 6 件）、応答意味・provenance・description・silence_ref を inline 値として保持する
@@ -36,7 +36,7 @@
   - _Boundary: フラグメント物理レイアウト_
   - _Depends: 2.1_
 
-- [ ] 2.4 再構成マニフェスト生成
+- [x] 2.4 再構成マニフェスト生成
   - 全フラグメントの結合順を単一真実源として列挙し、サブ分割（`.01/.02`）順序と共有フラグメント取り込み位置を曖昧さなく固定する（`NN.` 接頭辞は捜索補助・従属であって権威でない）
   - observable: `_manifest.toml` が全フラグメントを決定的な結合順で列挙し、欠落・重複参照がない
   - _Requirements: 3.1_
