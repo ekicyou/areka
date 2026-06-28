@@ -114,7 +114,7 @@ content（リクエスト・応答・通知の本文）は本仕様では**不�
 
 #### Acceptance Criteria
 1. The reference COM-SHIORI shall `IShiori` 実体を生成する唯一の純粋Cコンストラクタ関数（正準名 `shiori_create`）をエクスポートし、`IShiori` の生成をこの入口に一元化する。
-2. The shiori_create constructor shall 対象プラットフォーム（x64／ARM64）で最も標準的な呼出規約＝プラットフォーム標準 C ABI（Rust 表記 `extern "C"`）に従う。x86 を対象外とするため対象各プラットフォームでは呼出規約が一意に定まり、`extern "C"` と `extern "system"` は同一 ABI となる。
+2. The shiori_create constructor shall Windows COM の標準呼出規約（`STDAPICALLTYPE`＝`__stdcall`、Rust 表記 `extern "system"`）に従い、C リンケージ（名前非マングル）を `#[unsafe(no_mangle)]` で担保する。対象は x64／ARM64（x86 除外）で呼出規約は一意であり、これらのターゲットでは `extern "system"` と `extern "C"` は同一 ABI だが、COM ABI・`IShiori` vtable 規約・STDAPI 慣行との整合のため正準表記は `extern "system"` とする。
 3. When shiori_create が `IShiori` 実体の生成に成功するとき, the shiori_create constructor shall 参照カウント 1 の `IShiori` を出力引数経由で呼び出し側へ渡し（`HRESULT shiori_create(IShiori** out)` 形）、成功を表す HRESULT を返す。
 4. If shiori_create が生成に失敗したとき, then the shiori_create constructor shall 出力を生成せず、失敗を判別可能な HRESULT として返す。
 5. The areka demo path shall shiori_create が返した `IShiori` を所有し、`Load(host)`→リクエスト数往復→`Unload` の後に参照を解放（Release）する。

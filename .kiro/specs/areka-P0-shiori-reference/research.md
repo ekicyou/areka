@@ -105,7 +105,7 @@
 4. **doc の置き場所（要件 7）**: 「正解見本」文書を `doc/`（COMPAT_ARCHITECTURE と並ぶ独立文書）に置くか、リファレンス脳 module の module-level doc に集約するか、両方か。下流（host-32／pasta）が参照しやすい単一の参照点を決める。
 5. **デモの起動形態**: areka 本体起動時に常に走らせるか、フラグ/環境変数でデモを有効化するか、example バイナリに切り出すか。R6 の「実アプリ上で動く証明」と通常起動時の UI 体験（シェル/バルーン）の両立。
 6. **トークン採番**: 遅延トークンを固定値にするか `CorrelationTokenAllocator`（既存）で採番するか。リファレンスとしては採番を見せる方が見本価値が高い可能性。
-7. **コンストラクタ取得機構（要件 9）**: 純粋Cコンストラクタ `shiori_create`（`extern "C"`・`#[no_mangle]`・`HRESULT shiori_create(IShiori** out)`）を、(A) リファレンスを実 `cdylib` 化し areka が `LoadLibraryW`＋`GetProcAddress("shiori_create")` で実 DLL 境界を渡って取得するか、(B) in-tree シンボル直呼びへ縮退するか。「DLL 契約の正解見本」を名乗るなら (A) が忠実だが、デモ配線（§6-1/2）の複雑さとのトレードオフで決定。シンボル可視性・エクスポート設定（`.def`／`cdylib` crate-type）も併せて確定する。
+7. **コンストラクタ取得機構（要件 9）**: 純粋Cコンストラクタ `shiori_create`（`extern "system"`＝COM 標準 stdcall・`#[unsafe(no_mangle)]`・`HRESULT shiori_create(IShiori** out)`）を、(A) リファレンスを実 `cdylib` 化し areka が `LoadLibraryW`＋`GetProcAddress("shiori_create")` で実 DLL 境界を渡って取得するか、(B) in-tree シンボル直呼びへ縮退するか。「DLL 契約の正解見本」を名乗るなら (A) が忠実だが、デモ配線（§6-1/2）の複雑さとのトレードオフで決定。シンボル可視性・エクスポート設定（`.def`／`cdylib` crate-type）も併せて確定する。
 8. **ARM64 ビルド（要件 8.3）**: 対象が x64 ＋ ARM64 へ拡張。content 不透明・呼出規約一意（x86 除外）のため実装差は無い想定だが、ARM64 ターゲットのビルド/CI 確認とクロスビルド経路を設計フェーズで点検する。
 
 ## 7. 設計フェーズへの推奨
@@ -138,11 +138,11 @@
 
 ### Decision 2: コンストラクタ取得機構 `shiori_create`（§6-7）
 - **Context**: R9 が「`IShiori` を生成する唯一の純粋 C コンストラクタ `shiori_create`」を要求。実 DLL 境界（cdylib＋`LoadLibraryW`）越しに取得するか、in-tree シンボル直呼びか。
-- **Alternatives**: (A) リファレンスを `cdylib` 化し areka が `LoadLibraryW`＋`GetProcAddress("shiori_create")` で実 DLL 境界を渡る。(B) in-tree モジュールが `extern "C"` `#[no_mangle]` で `shiori_create` を公開し、areka が直接シンボル呼び出し。
-- **Selected**: (B)。リファレンス脳は areka 内部モジュール（`reference_brain.rs`）として `pub extern "C" fn shiori_create(out: *mut *mut c_void) -> HRESULT` を `#[no_mangle]` で公開し、デモドライバは in-tree でこの関数を直接呼ぶ。署名・所有権（参照カウント 1 を out 引数で move-out、失敗時 out 未書込・失敗 HRESULT）は R9.2〜R9.4 を厳密に満たす純粋 C 入口形を採る。
+- **Alternatives**: (A) リファレンスを `cdylib` 化し areka が `LoadLibraryW`＋`GetProcAddress("shiori_create")` で実 DLL 境界を渡る。(B) in-tree モジュールが `extern "system"` `#[unsafe(no_mangle)]` で `shiori_create` を公開し、areka が直接シンボル呼び出し。
+- **Selected**: (B)。リファレンス脳は areka 内部モジュール（`reference_brain.rs`）として `pub unsafe extern "system" fn shiori_create(out: *mut *mut c_void) -> HRESULT` を `#[unsafe(no_mangle)]` で公開し、デモドライバは in-tree でこの関数を直接呼ぶ。呼出規約は COM/STDAPI 標準の stdcall（`extern "system"`・x64/ARM64 で `extern "C"` と同一 ABI）、C リンケージ（非マングル）は `#[unsafe(no_mangle)]`。署名・所有権（参照カウント 1 を out 引数で move-out、失敗時 out 未書込・失敗 HRESULT）は R9.2〜R9.4 を厳密に満たす純粋 C 入口形を採る。
 - **Rationale**: R9.7 が本コンストラクタ契約の対象を **COM（x64/ARM64・in-proc）経路の生成入口に限定**し、32bit DLL ホスティング固有の DLL 境界は明示的に `areka-P0-shiori-host-32` の責務。cdylib 化は §6-1/2 のスレッド・配線複雑さを増やすだけで R6 の「実アプリ（areka 本体）で動く証明」に寄与しない。純粋 C 署名そのものが下流の「正解見本」であり、DLL ロード経路は host-32 が本見本を参照して実装する。
 - **Trade-offs**: ✅ 配線最小・スレッド規律単純・署名は忠実な見本。❌ 実 DLL ロード経路は本仕様で実走しない（host-32 の責務に正しく委譲）。
-- **Follow-up**: `extern "C"` シンボルが in-tree 直呼びでも `#[no_mangle]` 名で解決できること、将来 host-32 が同シンボルを `GetProcAddress` で引ける署名であることを doc で明記。
+- **Follow-up**: `extern "system"` シンボルが in-tree 直呼びでも `#[unsafe(no_mangle)]` 名で解決できること、将来 host-32 が同シンボルを `GetProcAddress` で引ける署名であることを doc で明記。
 
 ### Decision 3: 観測手段とビルド構成（§6-3）
 - **Selected**: 各経路（load/即時/遅延/Raise/unload/shiori_create）を `tracing::info!` で出力（`logging.md` 準拠・スコーププレフィックス `[ref-brain]`/`[shiori-demo]`・構造化フィールド優先）。デモは debug ビルド（`windows_subsystem="windows"` 非適用＝コンソール有）または `RUST_LOG` 制御で観測。
@@ -157,7 +157,7 @@
 - **Rationale**: リファレンスとして「単調増加トークン採番を見せる」見本価値が高い。既存アロケータ再利用で新規実装ゼロ。
 
 ### Decision 6: ARM64 ビルド（§6-8）
-- **Selected**: x64 ＋ ARM64（CPU ネイティブ前提・x86 除外）。`extern "C"` と `extern "system"` は対象各プラットフォームで同一 ABI（R9.2）。実装差は無く、ビルド／CI 上の ARM64 ターゲット確認のみ。
+- **Selected**: x64 ＋ ARM64（CPU ネイティブ前提・x86 除外）。正準呼出規約は COM 標準 `extern "system"`（stdcall）で、対象各プラットフォームでは `extern "C"` と同一 ABI（R9.2）。実装差は無く、ビルド／CI 上の ARM64 ターゲット確認のみ。
 - **Rationale**: content 不透明・呼出規約一意のため、ソース上の分岐は不要。
 
 ## Build-vs-Adopt / Simplification（Synthesis 結果）

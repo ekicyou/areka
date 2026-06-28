@@ -29,7 +29,7 @@ content（リクエスト・応答・通知の本文）は本仕様では**不�
 
 ### This Spec Owns
 - **リファレンス脳の `IShiori` 実装面**: 固定／エコー応答ロジック、遅延（`SHIORI_S_PENDING`＋トークン発行）、能動通知（Raise）、未ロード拒否（`SHIORI_E_NOT_LOADED`）を単一の製品コード脳へ統合（要件 1, 2, 3, 4, 5）。
-- **純粋 C コンストラクタ契約**: `IShiori` 実体生成の唯一の入口 `shiori_create`（`extern "C"` ・`HRESULT shiori_create(IShiori** out)` 形）の定義・実装。COM（x64／ARM64・in-proc）経路の生成入口に限定（要件 9）。
+- **純粋 C コンストラクタ契約**: `IShiori` 実体生成の唯一の入口 `shiori_create`（`extern "system"`・`HRESULT shiori_create(IShiori** out)` 形・C リンケージは `#[unsafe(no_mangle)]`）の定義・実装。COM（x64／ARM64・in-proc）経路の生成入口に限定（要件 9）。
 - **実走デモ経路（デモドライバ）**: areka 本体から `shiori_create` 経由で脳を取得し、`activate`→数往復 `request`→遅延完了待ち合わせ→`Raise`→`unload` を駆動し、各経路を `tracing` で観測する配線。フラグ／環境変数で明示有効化されたときのみ駆動（要件 6）。
 - **リファレンスとしての doc 化**: 各経路の正解見本説明・content 不透明方針・下流位置づけを、リファレンス脳モジュールの module-level doc に集約（要件 7）。
 
@@ -124,7 +124,7 @@ graph TB
 | Upstream ABI | shiori-abi（in-tree path 依存） | `IShiori`/`IShioriHost`/`ShioriExt`/`RequestOutcome`/`CorrelationTokenAllocator`/HRESULT 定数 | 不変採用（要件 1.3/8.3） |
 | Host 受け皿 | areka `shiori_host`/`shiori_session`（既存） | `ShioriHostSink`・`ShioriSession`・`HostMessage` | 不変採用。デモ配線で dead_code 解消 |
 | Observability | tracing / tracing-subscriber | 各経路の info ログ（`logging.md` 準拠） | subscriber は `main.rs` 既設。`RUST_LOG` 制御 |
-| Build target | Rust 2024・x64／ARM64（CPU ネイティブ・x86 除外） | `extern "C"` == `extern "system"`（呼出規約一意） | ARM64 はビルド/CI 確認のみ・ソース分岐なし（要件 8.3, 9.2） |
+| Build target | Rust 2024・x64／ARM64（CPU ネイティブ・x86 除外） | `extern "system"`（COM 標準・stdcall。x64/ARM64 で `extern "C"` と同一 ABI） | ARM64 はビルド/CI 確認のみ・ソース分岐なし（要件 8.3, 9.2） |
 
 > cdylib／`LoadLibraryW`＋`GetProcAddress` は本仕様では採用しない（host-32 の責務）。`shiori_create` は in-tree シンボル直呼びで実走させる（research.md Decision 2）。
 
@@ -135,7 +135,7 @@ graph TB
 crates/areka/src/
 ├── reference_brain.rs   # 新規: 製品コードのリファレンス脳。#[implement(IShiori)] 実装
 │                        #   （即時/エコー・遅延+トークン・Raise・未ロード拒否）＋
-│                        #   pub extern "C" fn shiori_create(out) コンストラクタ＋
+│                        #   pub unsafe extern "system" fn shiori_create(out) コンストラクタ＋
 │                        #   module-level doc（正解見本・content 不透明方針・下流位置づけ＝要件7）
 ├── shiori_demo.rs       # 新規: デモドライバ。shiori_create で脳取得→ShioriSession で
 │                        #   activate→数往復 request（即時/遅延）→poll_completions 待ち合わせ→
@@ -224,7 +224,7 @@ stateDiagram-v2
 | 6.1–6.8 | 実走デモ経路・観測・セッション規律・フラグゲート | shiori_demo, ShioriSession, main.rs | `activate`/`request`/`poll_completions`/`expire_if_elapsed`/`unload`／tracing | シーケンス全体 |
 | 7.1–7.3 | リファレンス doc 化・content 不透明方針・下流位置づけ | reference_brain module doc | module-level `//!` doc | — |
 | 8.1–8.3 | content 不透明性・スコープ境界・x64/ARM64 | reference_brain（規律） | HSTRING 不透明取り回し・非実装事項 | 状態図 |
-| 9.1–9.7 | 純粋C コンストラクタ `shiori_create`・所有権・COM 限定 | shiori_create, shiori_demo | `extern "C" HRESULT shiori_create(IShiori** out)` | シーケンス 生成 |
+| 9.1–9.7 | 純粋C コンストラクタ `shiori_create`・所有権・COM 限定 | shiori_create, shiori_demo | `extern "system" HRESULT shiori_create(IShiori** out)` | シーケンス 生成 |
 
 ## Components and Interfaces
 
@@ -299,7 +299,7 @@ impl IShiori_Impl for ReferenceBrain_Impl {
 
 **Responsibilities & Constraints**
 - `IShiori` 生成をこの入口に一元化する（要件 9.1）。
-- プラットフォーム標準 C ABI（`extern "C"`・x64/ARM64 で `extern "system"` と同一）に従う（要件 9.2）。
+- Windows COM 標準呼出規約（`extern "system"`＝`__stdcall`・x64/ARM64 で `extern "C"` と同一 ABI）に従い、C リンケージは `#[unsafe(no_mangle)]` で担保（要件 9.2）。
 - 成功時、参照カウント 1 の `IShiori` を出力引数へ move-out し成功 HRESULT を返す（要件 9.3）。
 - 失敗時、出力を生成せず判別可能な失敗 HRESULT を返す（要件 9.4）。
 - 対象を COM（x64/ARM64・in-proc）生成入口に限定。過去互換 flat-C・32bit DLL は対象外（要件 9.7）。
@@ -313,15 +313,15 @@ impl IShiori_Impl for ReferenceBrain_Impl {
 /// 失敗時 out 未書込・失敗 HRESULT を返す。
 /// 署名は HRESULT shiori_create(IShiori** out) に対応（c_void** で受け、IShiori へ写す）。
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn shiori_create(out: *mut *mut core::ffi::c_void) -> HRESULT;
+pub unsafe extern "system" fn shiori_create(out: *mut *mut core::ffi::c_void) -> HRESULT;
 ```
-> edition 2024 では `#[unsafe(no_mangle)]`・`unsafe extern "C"` 形が必須（本 workspace は `edition = "2024"`）。x64/ARM64 では `extern "C"` == `extern "system"`（呼出規約一意・要件 9.2）。
+> 呼出規約は COM/STDAPI 標準の `extern "system"`（＝stdcall）。x64/ARM64 では `extern "C"` と同一 ABI だが、COM ABI・`IShiori` vtable との整合で正準表記は `system`（要件 9.2）。edition 2024 では `#[unsafe(no_mangle)]`・`unsafe extern "system"` 形が必須（本 workspace は `edition = "2024"`）。C リンケージ（非マングル）は `#[unsafe(no_mangle)]` が担保する。
 - Preconditions: `out` は非 NULL の有効な書込先ポインタ（呼び出し側が保証）。
 - Postconditions: 成功時のみ `out` へ書込（writes-on-success）＝refcount 1 の `IShiori`（caller が Release 義務）＋`S_OK`。失敗時は `out` を書き込まず（未書込不変条件）失敗 HRESULT を返す。
 - Invariants: 生成入口はこの 1 関数のみ。`IShiori` 以外の型を露出しない。失敗時 out 未書込は §Testing Strategy の不変条件テストで固定する（要件 9.3/9.4）。
 
 **Implementation Notes**
-- Integration: in-tree シンボル直呼び（`shiori_demo` から直接呼出）。実 DLL ロード（`LoadLibraryW`＋`GetProcAddress("shiori_create")`）は本仕様では実走しないが、`#[unsafe(no_mangle)]`・`unsafe extern "C"`（edition 2024）署名は将来 host-32 が `GetProcAddress` で引ける形を満たす（要件 9.6・正解見本）。
+- Integration: in-tree シンボル直呼び（`shiori_demo` から直接呼出）。実 DLL ロード（`LoadLibraryW`＋`GetProcAddress("shiori_create")`）は本仕様では実走しないが、`#[unsafe(no_mangle)]`・`unsafe extern "system"`（edition 2024）署名は将来 host-32 が `GetProcAddress` で引ける形を満たす（要件 9.6・正解見本）。
 - Validation: 成功 HRESULT は `S_OK`。失敗 HRESULT は判別可能な error（生成失敗時）。
 - Risks: cdylib 化しないため実 DLL 境界は未実走（host-32 へ委譲・research.md Decision 2）。署名の忠実性で見本価値を担保。
 
