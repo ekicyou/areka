@@ -39,17 +39,39 @@ areka（**x64**）が最小 SSP 互換ベースウェアとして、適合対象
 - 先進坑: `crates/pilot/examples/shiori-host-32/`。
 - **go 基準**: x64 から 32bit `pasta.dll` を 1 往復（load→OnBoot→`Value` 受領→unload）成功 ＋ 窓持ち SHIORI のメッセージループ生存。SAORI は emo2 未使用ゆえ対象外。
 
-## M1 実装マイルストーン（emo2 の見える増分・spec ではなく到達点）
+## M1 実装ユニット（実現可能な粒度）
 
-> 各マイルストーンは「**動く emo2 の増分**」。spec を先に量産せず、着手時に最小の作業単位を切り、検証済みコードで到達を判定する。
+> **粒度基準**: 1ユニット＝「コードを走らせて観測できる**単一 pass/fail** を持ち、それを観測するのに別ユニットを先に作る必要がない」もの。done が複数の独立観測に割れるなら粗すぎ→分割。
+> 正規名は**暫定**（着手時に確定）。**spec 工場にしない**＝下記はユニット名の登録であり brief.md 群ではない。着手時に最小 spec/task を just-in-time で切る。
+> **粒度の真実**: 作業は **M-boot に前倒し集中**（11ユニット＝M1 の山）。「最初の起動」が本体で以降は薄い増分。
 
-- **pilot** — 32bit `pasta.dll` 1 往復検証（耐力壁 go）
-- **S0 骨格** — emo2 が起動挨拶を喋る（むらさき静止 surface0 ＋最小バルーン）。host-32 本実装＋package mount＋shell/sakura/balloon 各最小（`\p \s \n \w \e` ＋テキスト）
-- **S1 二人＋表情** — むらさき(side0)＆エモ(side1) ＋ `\s[]` 表情切替（kero 丸ごと差替＋surface alias）
-- **S2 着せ替え** — むらさきの MAYUNA bind 多層合成（overlay z-order・8 bindgroup）
-- **S3 生命感** — まばたき（random / bind+random）＋矩形 collision ＋ OnMouseMove 撫で ＋ OnSecondChange 自発会話
-- **S4 対話** — ダブルクリックメニュー・`\q` 選択肢・`\_l`・`\![move]` ＋ OnChoiceSelectEx ＋ OnClose
-- **S5 北極星 E2E** — emo2 を vendoring（submodule）し boot→talk→touch→menu→close 一周を適合テスト化
+### M-boot ＝ `areka-P0-emo2-boot`（最初の可視結果・最重量＝11ユニット）
+emo2 が起動して喋る。下記 3 トラックを結線して達成。
+
+**host-32（耐力壁・`pilot/shiori-host-32` がトラックを gate）**
+- `pilot/shiori-host-32` — 使い捨て feasibility。✔ go: 32bit pasta.dll 1往復
+- `areka-P0-host32-ipc` — x64↔32bit helper＋pipe＋handshake/lifecycle。✔ 往復 echo
+- `areka-P0-host32-shiori-load` — LoadLibrary pasta.dll＋load/unload/request 解決＋load(ghostdir)。✔ load 成功・無crash
+- `areka-P0-host32-request` — SHIORI/3.0 build＋marshal＋response Value＋charset。✔ x64 が emo2 OnBoot の Value 受領
+- `areka-P0-host32-lifecycle` — helper msg loop＋OnSecondChange poll＋unload＋crash監視。✔ N秒運転→clean unload
+
+**parsers（並行・単体テスト可・host 不要）**
+- `areka-P0-sakura-parse` — emo2 タグ subset→token。✔ boot script を token 化
+- `areka-P0-shell-parse` — surfaces.txt/descript→surface モデル。✔ emo2 shell parse
+- `areka-P0-balloon-parse` — balloon descript/Ns マージ→モデル。✔ emo2-kakukaku parse
+- `areka-P0-package-mount` — install.txt/dir→mount。✔ emo2 layout 解決
+
+**render / runtime（`areka-mock-shell` 実コードから増分）**
+- `areka-P0-shell-render` — surface モデル→窓。✔ emo2 surface0 表示
+- `areka-P0-balloon-render` — token→バルーン text＋scroll。✔ script がバルーン描画
+- `areka-P0-conductor` — host↔parse↔render 結線・event loop。✔ OnBoot→script→描画
+
+### 増分マイルストーン（M-boot の動く土台へ加算）
+- **M-dual** `areka-P0-dual-surface` — side0/1 両立＋`\s[]`＋alias。✔ むらさき＆エモ表情切替
+- **M-mayuna** `areka-P0-mayuna-compose` — MAYUNA bind 多層 overlay。✔ むらさき着せ替え合成
+- **M-life** `areka-P0-seriko-blink`（✔ まばたき）＋ `areka-P0-collision-touch`（✔ 撫で発火）＋ `areka-P0-idle-talk`（✔ OnSecondChange 自発会話）
+- **M-dialogue** `areka-P0-menu-choice` — dblclick メニュー＋`\q`＋OnChoiceSelectEx＋`\_l`＋`\![move]`。✔ 選択対話
+- **M-e2e** `areka-P0-emo2-conformance-e2e` — OnClose＋emo2 vendoring＋boot→talk→touch→menu→close 一周。✔ 適合（M1 ゴール `areka-P0-emo2-conformance` 充足）
 
 ## 制約
 
