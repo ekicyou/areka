@@ -51,7 +51,7 @@
   - _Boundary: focus.md_
 
 - [ ] 5. 整合検証
-- [ ] 5.1 (P) 構造的隔離・クレート構造の検証
+- [x] 5.1 (P) 構造的隔離・クレート構造の検証
   - submodule init 後、`cargo metadata` で `pilot`=ワークスペースメンバー/`publish=false`、`src/lib.rs` が空 lib（公開 API なし）、探索コードが `examples/` のみに存在、`cargo build --examples -p pilot`（`_template` 含む）通過、`cargo run -p pilot --example _template` 実行を確認する。
   - 「Cargo の `examples/` は他クレートから依存できず、空 lib は API 露出なし」ゆえ inbound edge が構造的に発生し得ないこと、および他クレートの `Cargo.toml` に `pilot` 依存が無いことを確認する（命綱の構造的担保の検証）。
   - 完了状態: 上記 cargo コマンドが全て成功し、`pilot` への inbound 依存が存在しないことを確認できる。
