@@ -91,12 +91,21 @@ emo2 が起動して喋る。下記 3 トラックを結線して達成。
 - `areka-P0-surface-engine` — **シェルもバルーンも同一の surface 合成**。element＝{画像 | 他サーフェス参照（入れ子）}、配置＝**D2D 変換行列**。✔ surface0 ＋バルーン枠を surface として表示
 - `areka-P0-text-layer` — バルーン文字を **engine 上に被せる層**（token→glyph→surface 領域）。✔ script がバルーンに描画＋scroll
 
-### 増分マイルストーン（M-boot の動く土台へ加算）
-- **M-dual** `areka-P0-dual-surface` — side0/1 両立＋`\s[]`＋alias。✔ むらさき＆エモ表情切替
-- **M-mayuna** `areka-P0-mayuna-compose` — MAYUNA bind 多層 overlay。✔ むらさき着せ替え合成
-- **M-life** `areka-P0-shell-anim-loop`（shell-anim-engine の SERIKO ループ＝✔ まばたき random/bind+random）＋ `areka-P0-collision-touch`（✔ 撫で発火）＋ `areka-P0-idle-talk`（✔ OnSecondChange 自発会話）
-- **M-dialogue** `areka-P0-menu-choice` — dblclick メニュー＋`\q`＋OnChoiceSelectEx＋`\_l`＋`\![move]`。✔ 選択対話
-- **M-e2e** `areka-P0-emo2-conformance-e2e` — OnClose＋emo2 vendoring＋boot→talk→touch→menu→close 一周。✔ 適合（M1 ゴール `areka-P0-emo2-conformance` 充足）
+### 増分（M-boot 後・**エンジン別＝並走可能**）
+
+> 増分はエンジンへ帰属させる。**別エンジンに属する増分は並列着手可**（spanning する旧 unit はエンジン単位に分割済）。マイルストーン（M-dual 等）はエンジン横断の**統合点**であって作業単位ではない。
+
+- **② shell-anim-engine**: `areka-P0-dual-surface`（side0/1＋surface alias）／ `areka-P0-mayuna-compose`（MAYUNA bind 多層）／ `areka-P0-shell-anim-loop`（SERIKO ループ＝blink random/bind+random）
+- **① sakura-engine**: `areka-P0-sakura-dialogue-tags`（`\q`/`\_l`/`\![move]`）
+- **conductor**: `areka-P0-idle-talk`（OnSecondChange 自発会話）／ `areka-P0-input-events`（OnMouseMove/OnMouseDoubleClick/OnChoiceSelectEx 配信）
+- **render-engine**: `areka-P0-collision-geometry`（collision→region/actor 写像）／ `areka-P0-choice-render`（選択肢表示）／ `areka-P0-dual-window`（kero 2nd 窓）
+
+**統合点（マイルストーン＝横断結合）**:
+- **M-dual** ＝ shell-anim:`dual-surface` ＋ render:`dual-window`
+- **M-mayuna** ＝ shell-anim:`mayuna-compose`
+- **M-life** ＝ shell-anim:`shell-anim-loop` ＋ conductor:`idle-talk` ＋ conductor:`input-events`(撫で) ＋ render:`collision-geometry`
+- **M-dialogue** ＝ sakura:`sakura-dialogue-tags` ＋ conductor:`input-events`(dblclick/choice) ＋ render:`choice-render`
+- **M-e2e** ＝ `areka-P0-emo2-conformance-e2e`（全エンジン統合・OnClose＋boot→talk→touch→menu→close 一周適合・M1 ゴール充足）
 
 ## 制約
 
