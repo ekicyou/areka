@@ -67,7 +67,7 @@
   - _Boundary: 意味的同値ゲート, 一回限り移行・検証スクリプト_
   - _Depends: 3.2_
 
-- [ ] 4. Finalization: 旧ファイル削除・README 改訂・要件改訂継承
+- [x] 4. Finalization: 旧ファイル削除・README 改訂・要件改訂継承
 - [x] 4.1 旧単一ファイル削除と README 改訂・典拠参照整合
   - 同値ゲート合格後に `shiori_protocol.toml` を tree から削除する（非権威の生成物としても残置しない）
   - `doc/shiori/README.md` を「SSOT＝fragments／`shiori_protocol.toml` は廃止（削除）／正準ビューはオンデマンド merge」へ改訂し、ukadoc ピン留めスナップショット参照（provenance・SOURCES.md・sha256）の整合を保ち、削除後の既存参照がフラグメント群を指すよう整合する
@@ -76,7 +76,7 @@
   - _Boundary: 完了仕様 要件改訂・README 改訂_
   - _Depends: 3.3_
 
-- [ ] 4.2 完了仕様 要件3・11 の改訂継承記述
+- [x] 4.2 完了仕様 要件3・11 の改訂継承記述
   - 完了仕様 `areka-P0-shiori-protocol` の要件3・11（単一ファイル正本）を「論理 SSOT＝フラグメント群および決定的結合結果」へ改訂継承する記述を本仕様 docs／README に置き、`completed/` 配下は一切書き換えない
   - 二重定義禁止・全 description のデータ保持・provenance 維持・派生同値/冪等の精神維持を明記し、改訂理由（DP1 `array of entry` の符号化形刷新・Revalidation Trigger 該当）を系譜として残す
   - observable: 論理 SSOT への改訂継承が README＋本仕様に記述され、`completed/` 配下のファイルは無改変のまま系譜が追跡可能

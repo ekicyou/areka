@@ -57,9 +57,20 @@ doc/Web 派生レンダリングは、正本フラグメント群の正準ビュ
 
 - 契約抽出元の ukadoc ピン留めスナップショット（出典 URL・取得日・sha256 を含む `SOURCES.md`）は、`.kiro/specs/completed/areka-P0-shiori-protocol/ukadoc/` に典拠資産として保持される。フラグメント群の `provenance` 列および各 `silence_ruling` はこのスナップショットを典拠として参照する。sha256 によりスナップショットの同一性を担保する。
 
-## 完了仕様 要件3・11 の改訂継承
+## 完了仕様 要件3・11 の改訂継承（系譜）
 
-> （詳細は後続仕様 `areka-P0-shiori-protocol-split` の requirements.md 要件8・design.md DD-6 に記す。`completed/` 配下の履歴は不変のまま、改訂は本仕様側で系譜として追跡する。）
+完了仕様 `areka-P0-shiori-protocol` は、その要件3（単一正本対応表）・要件11-1（正本＝単一 TOML ファイル）において **「単一ファイル正本（single source of truth＝1 枚の TOML）」** を中核不変条件として置いていた。後続仕様 `areka-P0-shiori-protocol-split` は、これを以下へ **改訂継承** する。
+
+- **改訂内容（要件 8.1）**: 「単一ファイル正本（＝`shiori_protocol.toml` 1 枚）」を、**「論理 SSOT＝フラグメント群（`fragments/`）およびその決定的・冪等な結合（merge）結果」** へ改訂する。正本の所在は単一ファイルからフラグメント群へ移り、単一ファイル形式が必要な場合の正準ビューはフラグメント群からのオンデマンド merge で得る（tree に常設しない）。
+- **維持する不変条件の精神（要件 8.2）**: 改訂は契約セマンティクスを一切変えない非破壊リファクタであり、完了仕様 SSOT 要件の **精神を維持** する——
+  - **単一権威・二重定義禁止**: 各契約データ（各 entry・各 field・各 silence_ruling・各共有テーブル）はフラグメント群全体で唯一の場所にのみ存在する。keyed 符号化により id・意味名の一意性はパーサ自身が機械担保する。
+  - **全 description のデータ保持**: 全 entry（446）・全 field（802）・全 silence_ruling（9）・全共有テーブルの `description`（コメントでなくデータ）を無損失で保持する。
+  - **provenance 維持**: 全 entry・全 field・全 silence_ruling の provenance（典拠）を無損失で保持し、ukadoc ピン留めスナップショット（sha256）への参照整合を保つ。
+  - **派生 doc/Web との同値/冪等**: doc/Web は正本（フラグメント群の正準ビュー）から生成される派生であり、常に正本と同値・決定的（冪等）である。
+- **改訂理由（系譜・Revalidation Trigger 該当）**: 完了仕様 design.md の設計判断 **DP1（`array of entry`）** —— `[[entry]]`／`[[entry.field]]` 配列による符号化 —— を、**id キー連想テーブル＋意味名キー inline table（keyed/inline）符号化形へ刷新** したことが本改訂の本質である。これは完了仕様が「下流再検証を要する変更（Revalidation Trigger）」と明記した「TOML 正本の table 階層・符号化形の変更」に該当する意図的な設計判断であり、下流 consumer（host-32・reference・pasta・後続 codegen・doc/Web 生成）は入力ソース形態（単一ファイル→フラグメント群／正準ビュー）と符号化形を lockstep で取り込む。
+- **履歴不変と系譜追跡（要件 8.3）**: 本改訂は **`completed/` 配下のファイルを一切書き換えない**。完了仕様の履歴は不変のまま保たれ、改訂継承の記述は後続仕様側（本 README＋`areka-P0-shiori-protocol-split` の requirements.md 要件8・design.md DD-6）に置くことで、拡張改訂の系譜として追跡可能とする。
+
+> 上記により、完了仕様の「単一ファイル正本」不変条件は literal には `fragments/` 群へ移管され、その精神（単一権威・二重定義禁止・無損失・派生同値/冪等）は完全に維持される。非破壊は移行時の一回限り意味的同値ゲート（8 要素＋残差ゼロ）合格で証明済み（前掲「非破壊移行の証拠」）。
 
 ## ファイル一覧
 
