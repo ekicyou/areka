@@ -68,7 +68,7 @@
   - _Depends: 3.2_
 
 - [ ] 4. Finalization: 旧ファイル削除・README 改訂・要件改訂継承
-- [ ] 4.1 旧単一ファイル削除と README 改訂・典拠参照整合
+- [x] 4.1 旧単一ファイル削除と README 改訂・典拠参照整合
   - 同値ゲート合格後に `shiori_protocol.toml` を tree から削除する（非権威の生成物としても残置しない）
   - `doc/shiori/README.md` を「SSOT＝fragments／`shiori_protocol.toml` は廃止（削除）／正準ビューはオンデマンド merge」へ改訂し、ukadoc ピン留めスナップショット参照（provenance・SOURCES.md・sha256）の整合を保ち、削除後の既存参照がフラグメント群を指すよう整合する
   - observable: `shiori_protocol.toml` が tree から消え、README が fragments を正本と宣言し、旧ファイルへの残存参照がゼロ
