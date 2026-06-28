@@ -64,12 +64,16 @@ areka（**x64**）が最小 SSP 互換ベースウェアとして、適合対象
 
 > **粒度基準**: 1ユニット＝「コードを走らせて観測できる**単一 pass/fail** を持ち、それを観測するのに別ユニットを先に作る必要がない」もの。done が複数の独立観測に割れるなら粗すぎ→分割。
 > 正規名は**暫定**（着手時に確定）。**spec 工場にしない**＝下記はユニット名の登録であり brief.md 群ではない。着手時に最小 spec/task を just-in-time で切る。
-> **粒度の真実**: 作業は **M-boot に前倒し集中**（11ユニット＝M1 の山）。「最初の起動」が本体で以降は薄い増分。
+> **粒度の真実**: 作業は **M-boot に前倒し集中**（約16ユニット＝M1 の山）。「最初の起動」が本体で以降は薄い増分。
 
-### M-boot ＝ `areka-P0-emo2-boot`（最初の可視結果・最重量＝11ユニット）
-emo2 が起動して喋る。下記 3 トラックを結線して達成。
+### M-boot ＝ `areka-P0-emo2-boot`（最初の可視結果・最重量＝約16ユニット）
+emo2 が起動して喋る。下記 5 トラックを結線して達成（⓪ ゴーストエンジンが全体を統括）。
 
-**SHIORI 通信層エンジン host-32（耐力壁・`pilot/shiori-host-32` がトラックを gate）**
+**⓪ ゴーストエンジン（最上位 owner・全エンジンを統括）**
+- `areka-P0-ghost-setup` — ゴースト lifecycle（package-mount で構築→boot 統括→close）。✔ install.txt から起動〜終了を統括
+- `areka-P0-window-placement` — サーフェス窓の生成＋既定位置＋ドラッグ（`areka-mock-shell` 実コードから）。✔ むらさき/エモ窓が出てドラッグ移動
+
+**① SHIORI 通信層エンジン host-32（耐力壁・`pilot/shiori-host-32` がトラックを gate）**
 - `pilot/shiori-host-32` — 使い捨て feasibility。✔ go: 32bit pasta.dll 1往復
 - `areka-P0-host32-ipc` — x64↔32bit helper＋pipe＋handshake/lifecycle。✔ 往復 echo
 - `areka-P0-host32-shiori-load` — LoadLibrary pasta.dll＋load/unload/request 解決＋load(ghostdir)。✔ load 成功・無crash
@@ -94,12 +98,13 @@ emo2 が起動して喋る。下記 3 トラックを結線して達成。
 ### 増分（M-boot 後・**エンジン別＝並走可能**）
 
 > 増分はエンジンへ帰属させる。**別エンジンに属する増分は並列着手可**（spanning する旧 unit はエンジン単位に分割済）。マイルストーン（M-dual 等）はエンジン横断の**統合点**であって作業単位ではない。
-> **トラック全6**: ①SHIORI 通信層(host-32)・②parser/loader・③conductor・④sakura-engine・⑤shell-anim-engine・⑥render-engine。このうち **①SHIORI 通信層 と ②parser/loader は M-boot で完了**し増分を持たない（前倒し）。下記は増分を持つ ③〜⑥。
+> **トラック全7**: ⓪ゴーストエンジン(owner)・①SHIORI 通信層(host-32)・②parser/loader・③conductor・④sakura-engine・⑤shell-anim-engine・⑥render-engine。⓪は最上位 owner（lifecycle/窓配置/位置永続化）。**①SHIORI 通信層・②parser/loader・⓪の大半は M-boot で完了**。増分を持つのは ③〜⑥ ＋ ⓪の位置永続化。
 
 - **② shell-anim-engine**: `areka-P0-dual-surface`（side0/1＋surface alias）／ `areka-P0-mayuna-compose`（MAYUNA bind 多層）／ `areka-P0-shell-anim-loop`（SERIKO ループ＝blink random/bind+random）
 - **① sakura-engine**: `areka-P0-sakura-dialogue-tags`（`\q`/`\_l`/`\![move]`）
 - **conductor**: `areka-P0-idle-talk`（OnSecondChange 自発会話）／ `areka-P0-input-events`（OnMouseMove/OnMouseDoubleClick/OnChoiceSelectEx 配信）
 - **render-engine**: `areka-P0-collision-geometry`（collision→region/actor 写像）／ `areka-P0-choice-render`（選択肢表示）／ `areka-P0-dual-window`（kero 2nd 窓）
+- **⓪ ゴーストエンジン**: `areka-P0-position-persist`（`ghost.dat` 位置の保存/復元・ghost レベル永続化）
 
 **統合点（マイルストーン＝横断結合）**:
 - **M-dual** ＝ shell-anim:`dual-surface` ＋ render:`dual-window`
