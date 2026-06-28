@@ -1,0 +1,80 @@
+# event / category=rss — areka-P0-shiori-protocol-split category fragment.
+# 7 keyed entry table(s), source order preserved. Category-pure; entry-boundary only.
+# Generated deterministically; do not hand-edit. Merge order: _manifest.toml (task 2.4) is authoritative.
+
+[entry."OnHeadlinesenseBegin"]
+"kind" = "event"
+"category" = "rss"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ukadoc"
+"description" = "ヘッドラインセンス開始が指示された際に発生。"
+[entry."OnHeadlinesenseBegin".field]
+"site_name" = { "reference" = 0, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "ヘッドラインセンスするサイト名。" }
+"site_url" = { "reference" = 1, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "ヘッドラインセンスする URL。" }
+
+[entry."OnHeadlinesenseComplete"]
+"kind" = "event"
+"category" = "rss"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ukadoc"
+"description" = "ヘッドラインセンスが正常終了した際に発生。取得成功かつ更新が無かった場合のみ通知。"
+[entry."OnHeadlinesenseComplete".field]
+"complete_reason" = { "reference" = 0, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "終了理由。現状 no update 固定。" }
+
+[entry."OnHeadlinesenseFailure"]
+"kind" = "event"
+"category" = "rss"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ukadoc"
+"description" = "ヘッドラインセンスに失敗した際に発生。"
+[entry."OnHeadlinesenseFailure".field]
+"failure_reason" = { "reference" = 0, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "終了理由（失敗理由）。" }
+
+[entry."OnHeadlinesense.OnFind"]
+"kind" = "event"
+"category" = "rss"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ukadoc"
+"description" = "読み上げるべきヘッドラインセンスがあった際に発生。"
+[entry."OnHeadlinesense.OnFind".field]
+"site_name" = { "reference" = 0, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "ヘッドラインセンスするサイト名。" }
+"site_url" = { "reference" = 1, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "ヘッドラインセンスする URL。" }
+"find_phase" = { "reference" = 2, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "OnFind フェーズ。First（1 ページ目）/First and Last（1 ページ目で次がない）/Last（最後のページ）/Next（いずれでもないページ）のいずれか。" }
+"headline_content" = { "reference" = 3, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "ヘッドラインの内容。内容はベースウェア側でサニタイズ済み。ベースウェア側で制御用の SakuraScript が追加されている場合がある。" }
+
+[entry."OnRSSBegin"]
+"kind" = "event"
+"category" = "rss"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ukadoc"
+"description" = "RSS センス開始が指示された際に発生。無反応時は OnHeadlineSenseBegin が呼ばれる。"
+[entry."OnRSSBegin".field]
+"site_name" = { "reference" = 0, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "RSS センスするサイト名。" }
+"site_url" = { "reference" = 1, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "RSS センスする URL。" }
+
+[entry."OnRSSComplete"]
+"kind" = "event"
+"category" = "rss"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ukadoc"
+"description" = "RSS センスが正常終了した際に発生。無反応時はヘッドライン完了系イベントが呼ばれる。"
+[entry."OnRSSComplete".field]
+"feed_site_or_noupdate" = { "reference" = 0, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "更新無し時は no update のみ、更新有り時は RSS 配信サイト名。" }
+"feed_source_url" = { "reference" = 1, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "更新有り時のみ：RSS 配信元 URL（配信サイトを指す）。" }
+"rss_items" = { "reference" = 2, "reference_variadic" = true, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "更新有り時のみ：タイトル[\\1]URL[\\1]更新日時[\\1]作者名[\\1]内容。RSS 要素数分 Reference2 以降に続く。\\1 はバイト値 1。" }
+
+[entry."OnRSSFailure"]
+"kind" = "event"
+"category" = "rss"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ukadoc"
+"description" = "RSS センスに失敗した際に発生。無反応時は OnHeadlineSenseFailure が呼ばれる。"
+[entry."OnRSSFailure".field]
+"failure_reason" = { "reference" = 0, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "終了理由（失敗理由）。" }

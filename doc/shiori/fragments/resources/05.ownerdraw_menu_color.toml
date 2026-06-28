@@ -1,0 +1,123 @@
+# resource / category=ownerdraw_menu_color — areka-P0-shiori-protocol-split category fragment.
+# 15 keyed entry table(s), source order preserved. Category-pure; entry-boundary only.
+# Generated deterministically; do not hand-edit. Merge order: _manifest.toml (task 2.4) is authoritative.
+
+[entry."menu.background.font.color.r"]
+"kind" = "resource"
+"category" = "ownerdraw_menu_color"
+"dispatch" = "get"
+"response" = "text"
+"provenance" = "ukadoc"
+"description" = "バックグラウンド文字色赤(0～255)"
+
+[entry."menu.background.font.color.g"]
+"kind" = "resource"
+"category" = "ownerdraw_menu_color"
+"dispatch" = "get"
+"response" = "text"
+"provenance" = "ukadoc"
+"description" = "バックグラウンド文字色緑(0～255)"
+
+[entry."menu.background.font.color.b"]
+"kind" = "resource"
+"category" = "ownerdraw_menu_color"
+"dispatch" = "get"
+"response" = "text"
+"provenance" = "ukadoc"
+"description" = "バックグラウンド文字色青(0～255)"
+
+[entry."menu.foreground.font.color.r"]
+"kind" = "resource"
+"category" = "ownerdraw_menu_color"
+"dispatch" = "get"
+"response" = "text"
+"provenance" = "ukadoc"
+"description" = "フォアグラウンド文字色赤(0～255)"
+
+[entry."menu.foreground.font.color.g"]
+"kind" = "resource"
+"category" = "ownerdraw_menu_color"
+"dispatch" = "get"
+"response" = "text"
+"provenance" = "ukadoc"
+"description" = "フォアグラウンド文字色緑(0～255)"
+
+[entry."menu.foreground.font.color.b"]
+"kind" = "resource"
+"category" = "ownerdraw_menu_color"
+"dispatch" = "get"
+"response" = "text"
+"provenance" = "ukadoc"
+"description" = "フォアグラウド文字色青(0～255)"
+
+[entry."menu.separator.color.r"]
+"kind" = "resource"
+"category" = "ownerdraw_menu_color"
+"dispatch" = "get"
+"response" = "text"
+"provenance" = "ukadoc"
+"description" = "セパレータ色赤(0～255)"
+
+[entry."menu.separator.color.g"]
+"kind" = "resource"
+"category" = "ownerdraw_menu_color"
+"dispatch" = "get"
+"response" = "text"
+"provenance" = "ukadoc"
+"description" = "セパレータ色緑(0～255)"
+
+[entry."menu.separator.color.b"]
+"kind" = "resource"
+"category" = "ownerdraw_menu_color"
+"dispatch" = "get"
+"response" = "text"
+"provenance" = "ukadoc"
+"description" = "セパレータ色青(0～255)"
+
+[entry."menu.frame.color.r"]
+"kind" = "resource"
+"category" = "ownerdraw_menu_color"
+"dispatch" = "get"
+"response" = "text"
+"provenance" = "ukadoc"
+"description" = "枠の色赤(0～255) 2.5.41"
+
+[entry."menu.frame.color.g"]
+"kind" = "resource"
+"category" = "ownerdraw_menu_color"
+"dispatch" = "get"
+"response" = "text"
+"provenance" = "ukadoc"
+"description" = "枠の色緑(0～255) 2.5.41"
+
+[entry."menu.frame.color.b"]
+"kind" = "resource"
+"category" = "ownerdraw_menu_color"
+"dispatch" = "get"
+"response" = "text"
+"provenance" = "ukadoc"
+"description" = "枠の色青(0～255) 2.5.41"
+
+[entry."menu.disable.font.color.r"]
+"kind" = "resource"
+"category" = "ownerdraw_menu_color"
+"dispatch" = "get"
+"response" = "text"
+"provenance" = "ukadoc"
+"description" = "選択不可文字色赤(0～255)"
+
+[entry."menu.disable.font.color.g"]
+"kind" = "resource"
+"category" = "ownerdraw_menu_color"
+"dispatch" = "get"
+"response" = "text"
+"provenance" = "ukadoc"
+"description" = "選択不可文字色緑(0～255)"
+
+[entry."menu.disable.font.color.b"]
+"kind" = "resource"
+"category" = "ownerdraw_menu_color"
+"dispatch" = "get"
+"response" = "text"
+"provenance" = "ukadoc"
+"description" = "選択不可文字色青(0～255)"

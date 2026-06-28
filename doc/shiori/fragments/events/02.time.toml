@@ -1,0 +1,45 @@
+# event / category=time — areka-P0-shiori-protocol-split category fragment.
+# 3 keyed entry table(s), source order preserved. Category-pure; entry-boundary only.
+# Generated deterministically; do not hand-edit. Merge order: _manifest.toml (task 2.4) is authoritative.
+
+[entry."OnSecondChange"]
+"kind" = "event"
+"category" = "time"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ukadoc"
+"description" = "1 秒ごとに発生。トーク再生不能時は Reference3=0 で NOTIFY 通知され、返答は無視される。"
+[entry."OnSecondChange".field]
+"os_uptime_hours" = { "reference" = 0, "type" = "i32", "required" = false, "provenance" = "ukadoc", "description" = "OS の連続起動時間（hour）。" }
+"offscreen_flag" = { "reference" = 1, "type" = "bool", "required" = false, "provenance" = "ukadoc", "description" = "見切れ時に 1、それ以外は 0。" }
+"overlap_flag" = { "reference" = 2, "type" = "bool", "required" = false, "provenance" = "ukadoc", "description" = "重なり時に 1、それ以外は 0。" }
+"talkable_flag" = { "reference" = 3, "type" = "bool", "required" = false, "provenance" = "ukadoc", "description" = "トーク再生可能なときに 1、それ以外は 0。" }
+"idle_seconds" = { "reference" = 4, "type" = "i32", "required" = false, "provenance" = "ssp_secondary", "description" = "SSP のみ。OS レベルで何も操作せず放置されている時間（秒）。" }
+
+[entry."OnMinuteChange"]
+"kind" = "event"
+"category" = "time"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ukadoc"
+"description" = "1 分ごとに発生。トーク再生不能時は Reference3=0 で NOTIFY 通知され、返答は無視される。"
+[entry."OnMinuteChange".field]
+"os_uptime_hours" = { "reference" = 0, "type" = "i32", "required" = false, "provenance" = "ukadoc", "description" = "OS の連続起動時間（hour）。" }
+"offscreen_flag" = { "reference" = 1, "type" = "bool", "required" = false, "provenance" = "ukadoc", "description" = "見切れ時に 1、それ以外は 0。" }
+"overlap_flag" = { "reference" = 2, "type" = "bool", "required" = false, "provenance" = "ukadoc", "description" = "重なり時に 1、それ以外は 0。" }
+"talkable_flag" = { "reference" = 3, "type" = "bool", "required" = false, "provenance" = "ukadoc", "description" = "トーク再生可能なときに 1、それ以外は 0。" }
+"idle_seconds" = { "reference" = 4, "type" = "i32", "required" = false, "provenance" = "ssp_secondary", "description" = "SSP のみ。OS レベルで何も操作せず放置されている時間（秒）。" }
+
+[entry."OnHourTimeSignal"]
+"kind" = "event"
+"category" = "time"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ukadoc"
+"description" = "時報イベント。毎正時付近に発生。トーク再生不能時は再生可能になるまで待つ。"
+[entry."OnHourTimeSignal".field]
+"os_uptime_hours" = { "reference" = 0, "type" = "i32", "required" = false, "provenance" = "ukadoc", "description" = "OS の連続起動時間（hour）。" }
+"offscreen_flag" = { "reference" = 1, "type" = "bool", "required" = false, "provenance" = "ukadoc", "description" = "見切れ時に 1、それ以外は 0。" }
+"overlap_flag" = { "reference" = 2, "type" = "bool", "required" = false, "provenance" = "ukadoc", "description" = "重なり時に 1、それ以外は 0。" }
+"talkable_flag" = { "reference" = 3, "type" = "bool", "required" = false, "provenance" = "ukadoc", "description" = "常に 1（トーク再生可能になるまで待つため）。" }
+"idle_seconds" = { "reference" = 4, "type" = "i32", "required" = false, "provenance" = "ssp_secondary", "description" = "SSP のみ。OS レベルで何も操作せず放置されている時間（秒）。" }

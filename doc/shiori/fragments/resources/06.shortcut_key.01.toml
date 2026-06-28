@@ -1,0 +1,595 @@
+# resource / category=shortcut_key (sub-fragment .01) — areka-P0-shiori-protocol-split category fragment.
+# 74 keyed entry table(s), source order preserved. Category-pure; entry-boundary only.
+# Generated deterministically; do not hand-edit. Merge order: _manifest.toml (task 2.4) is authoritative.
+
+[entry."-"]
+"kind" = "resource"
+"category" = "shortcut_key"
+"dispatch" = "get"
+"response" = "text"
+"provenance" = "ukadoc"
+"description" = "[変更不可] Languageの名称。"
+
+[entry."activaterootbutton.caption"]
+"kind" = "resource"
+"category" = "shortcut_key"
+"dispatch" = "get"
+"response" = "text"
+"provenance" = "ukadoc"
+"description" = "手前に出て来るの名称。"
+
+[entry."addressbarbutton.caption"]
+"kind" = "resource"
+"category" = "shortcut_key"
+"dispatch" = "get"
+"response" = "text"
+"provenance" = "ukadoc"
+"description" = "アドレスバーの名称。"
+
+[entry."alignrootbutton.caption"]
+"kind" = "resource"
+"category" = "shortcut_key"
+"dispatch" = "get"
+"response" = "text"
+"provenance" = "ukadoc"
+"description" = "キャラクター自由移動の名称。"
+
+[entry."alwaysstayontopbutton.caption"]
+"kind" = "resource"
+"category" = "shortcut_key"
+"dispatch" = "get"
+"response" = "text"
+"provenance" = "ukadoc"
+"description" = "常に手前に表示の名称。"
+
+[entry."alwaystrayiconvisiblebutton.caption"]
+"kind" = "resource"
+"category" = "shortcut_key"
+"dispatch" = "get"
+"response" = "text"
+"provenance" = "ukadoc"
+"description" = "常にトレイアイコンを表示の名称。"
+
+[entry."balloonhistorybutton.caption"]
+"kind" = "resource"
+"category" = "shortcut_key"
+"dispatch" = "get"
+"response" = "text"
+"provenance" = "ukadoc"
+"description" = "(最近使ったもの)バルーンの名称。"
+
+[entry."balloonrootbutton.caption"]
+"kind" = "resource"
+"category" = "shortcut_key"
+"dispatch" = "get"
+"response" = "text"
+"provenance" = "ukadoc"
+"description" = "バルーンの名称。"
+
+[entry."biffallbutton.caption"]
+"kind" = "resource"
+"category" = "shortcut_key"
+"dispatch" = "get"
+"response" = "text"
+"provenance" = "ukadoc"
+"description" = "全アカウントの名称。"
+
+[entry."biffbutton.caption"]
+"kind" = "resource"
+"category" = "shortcut_key"
+"dispatch" = "get"
+"response" = "text"
+"provenance" = "ukadoc"
+"description" = "メールチェックの名称。"
+
+[entry."calendarbutton.caption"]
+"kind" = "resource"
+"category" = "shortcut_key"
+"dispatch" = "get"
+"response" = "text"
+"provenance" = "ukadoc"
+"description" = "カレンダーの名称。"
+
+[entry."callghosthistorybutton.caption"]
+"kind" = "resource"
+"category" = "shortcut_key"
+"dispatch" = "get"
+"response" = "text"
+"provenance" = "ukadoc"
+"description" = "(最近使ったもの)他のゴーストを呼ぶの名称。"
+
+[entry."callghostrootbutton.caption"]
+"kind" = "resource"
+"category" = "shortcut_key"
+"dispatch" = "get"
+"response" = "text"
+"provenance" = "ukadoc"
+"description" = "他のゴーストを呼ぶの名称。"
+
+[entry."callsstpsendboxbutton.caption"]
+"kind" = "resource"
+"category" = "shortcut_key"
+"dispatch" = "get"
+"response" = "text"
+"provenance" = "ukadoc"
+"description" = "SSTPボックスの名称。"
+
+[entry."char*.recommendsites.caption"]
+"kind" = "resource"
+"category" = "shortcut_key"
+"dispatch" = "get"
+"response" = "text"
+"provenance" = "ukadoc"
+"description" = "\\p[*]を使用した際のおすすめの名称。"
+
+[entry."charsetbutton.caption"]
+"kind" = "resource"
+"category" = "shortcut_key"
+"dispatch" = "get"
+"response" = "text"
+"provenance" = "ukadoc"
+"description" = "文字コードの名称。"
+
+[entry."closeballoonbutton.caption"]
+"kind" = "resource"
+"category" = "shortcut_key"
+"dispatch" = "get"
+"response" = "text"
+"provenance" = "ukadoc"
+"description" = "バルーンを消すの名称。"
+
+[entry."closebutton.caption"]
+"kind" = "resource"
+"category" = "shortcut_key"
+"dispatch" = "get"
+"response" = "text"
+"provenance" = "ukadoc"
+"description" = "終了の名称。"
+
+[entry."collisionvisiblebutton.caption"]
+"kind" = "resource"
+"category" = "shortcut_key"
+"dispatch" = "get"
+"response" = "text"
+"provenance" = "ukadoc"
+"description" = "頭／顔／胸当たり判定表示の名称。"
+
+[entry."configurationbutton.caption"]
+"kind" = "resource"
+"category" = "shortcut_key"
+"dispatch" = "get"
+"response" = "text"
+"provenance" = "ukadoc"
+"description" = "設定の名称。"
+
+[entry."configurationrootbutton.caption"]
+"kind" = "resource"
+"category" = "shortcut_key"
+"dispatch" = "get"
+"response" = "text"
+"provenance" = "ukadoc"
+"description" = "設定の名称。"
+
+[entry."debugballoonbutton.caption"]
+"kind" = "resource"
+"category" = "shortcut_key"
+"dispatch" = "get"
+"response" = "text"
+"provenance" = "ukadoc"
+"description" = "バルーンマーカー全表示の名称。"
+
+[entry."definedsurfaceonlybutton.caption"]
+"kind" = "resource"
+"category" = "shortcut_key"
+"dispatch" = "get"
+"response" = "text"
+"provenance" = "ukadoc"
+"description" = "定義なしサーフェスを無視の名称。"
+
+[entry."dressuprootbutton.caption"]
+"kind" = "resource"
+"category" = "shortcut_key"
+"dispatch" = "get"
+"response" = "text"
+"provenance" = "ukadoc"
+"description" = "着せ替えの名称。"
+
+[entry."duibutton.caption"]
+"kind" = "resource"
+"category" = "shortcut_key"
+"dispatch" = "get"
+"response" = "text"
+"provenance" = "ukadoc"
+"description" = "開発用インターフェイスの名称。"
+
+[entry."enableballoonmovebutton.caption"]
+"kind" = "resource"
+"category" = "shortcut_key"
+"dispatch" = "get"
+"response" = "text"
+"provenance" = "ukadoc"
+"description" = "バルーン位置補正有効の名称。"
+
+[entry."firststaffbutton.caption"]
+"kind" = "resource"
+"category" = "shortcut_key"
+"dispatch" = "get"
+"response" = "text"
+"provenance" = "ukadoc"
+"description" = "バージョン情報の名称。"
+
+[entry."ghostexplorerbutton.caption"]
+"kind" = "resource"
+"category" = "shortcut_key"
+"dispatch" = "get"
+"response" = "text"
+"provenance" = "ukadoc"
+"description" = "ゴーストエクスプローラの名称。"
+
+[entry."ghosthistorybutton.caption"]
+"kind" = "resource"
+"category" = "shortcut_key"
+"dispatch" = "get"
+"response" = "text"
+"provenance" = "ukadoc"
+"description" = "(最近使ったもの)ゴーストに切り替えの名称。"
+
+[entry."ghostinstallbutton.caption"]
+"kind" = "resource"
+"category" = "shortcut_key"
+"dispatch" = "get"
+"response" = "text"
+"provenance" = "ukadoc"
+"description" = "ゴーストインストールの名称。"
+
+[entry."ghostrootbutton.caption"]
+"kind" = "resource"
+"category" = "shortcut_key"
+"dispatch" = "get"
+"response" = "text"
+"provenance" = "ukadoc"
+"description" = "ゴーストの名称。"
+
+[entry."headlinesensehistorybutton.caption"]
+"kind" = "resource"
+"category" = "shortcut_key"
+"dispatch" = "get"
+"response" = "text"
+"provenance" = "ukadoc"
+"description" = "(最近使ったもの)ヘッドラインの名称。"
+
+[entry."headlinesenserootbutton.caption"]
+"kind" = "resource"
+"category" = "shortcut_key"
+"dispatch" = "get"
+"response" = "text"
+"provenance" = "ukadoc"
+"description" = "ヘッドラインの名称。"
+
+[entry."helpbutton.caption"]
+"kind" = "resource"
+"category" = "shortcut_key"
+"dispatch" = "get"
+"response" = "text"
+"provenance" = "ukadoc"
+"description" = "説明書の名称。"
+
+[entry."hidebutton.caption"]
+"kind" = "resource"
+"category" = "shortcut_key"
+"dispatch" = "get"
+"response" = "text"
+"provenance" = "ukadoc"
+"description" = "アイコン化の名称。"
+
+[entry."historyrootbutton.caption"]
+"kind" = "resource"
+"category" = "shortcut_key"
+"dispatch" = "get"
+"response" = "text"
+"provenance" = "ukadoc"
+"description" = "最近使ったものの名称。"
+
+[entry."inforootbutton.caption"]
+"kind" = "resource"
+"category" = "shortcut_key"
+"dispatch" = "get"
+"response" = "text"
+"provenance" = "ukadoc"
+"description" = "情報の名称。"
+
+[entry."leavepassivebutton.caption"]
+"kind" = "resource"
+"category" = "shortcut_key"
+"dispatch" = "get"
+"response" = "text"
+"provenance" = "ukadoc"
+"description" = "制限モード強制解除の名称。"
+
+[entry."messengerbutton.caption"]
+"kind" = "resource"
+"category" = "shortcut_key"
+"dispatch" = "get"
+"response" = "text"
+"provenance" = "ukadoc"
+"description" = "SSPメッセンジャの名称。"
+
+[entry."pluginhistorybutton.caption"]
+"kind" = "resource"
+"category" = "shortcut_key"
+"dispatch" = "get"
+"response" = "text"
+"provenance" = "ukadoc"
+"description" = "(最近使ったもの)プラグインの名称。"
+
+[entry."pluginrootbutton.caption"]
+"kind" = "resource"
+"category" = "shortcut_key"
+"dispatch" = "get"
+"response" = "text"
+"provenance" = "ukadoc"
+"description" = "プラグインの名称。"
+
+[entry."portalrootbutton.caption"]
+"kind" = "resource"
+"category" = "shortcut_key"
+"dispatch" = "get"
+"response" = "text"
+"provenance" = "ukadoc"
+"description" = "ポータルの名称。"
+
+[entry."purgeghostcachebutton.caption"]
+"kind" = "resource"
+"category" = "shortcut_key"
+"dispatch" = "get"
+"response" = "text"
+"provenance" = "ukadoc"
+"description" = "ゴーストキャッシュ開放の名称。"
+
+[entry."quitbutton.caption"]
+"kind" = "resource"
+"category" = "shortcut_key"
+"dispatch" = "get"
+"response" = "text"
+"provenance" = "ukadoc"
+"description" = "全て終了の名称。"
+
+[entry."rateofuseballoonbutton.caption"]
+"kind" = "resource"
+"category" = "shortcut_key"
+"dispatch" = "get"
+"response" = "text"
+"provenance" = "ukadoc"
+"description" = "バルーン - 個別の名称。"
+
+[entry."rateofusebutton.caption"]
+"kind" = "resource"
+"category" = "shortcut_key"
+"dispatch" = "get"
+"response" = "text"
+"provenance" = "ukadoc"
+"description" = "使用頻度表示の名称。"
+
+[entry."rateofuserootbutton.caption"]
+"kind" = "resource"
+"category" = "shortcut_key"
+"dispatch" = "get"
+"response" = "text"
+"provenance" = "ukadoc"
+"description" = "使用率グラフの名称。"
+
+[entry."rateofusetotalbutton.caption"]
+"kind" = "resource"
+"category" = "shortcut_key"
+"dispatch" = "get"
+"response" = "text"
+"provenance" = "ukadoc"
+"description" = "ゴースト - 合算の名称。"
+
+[entry."readmebutton.caption"]
+"kind" = "resource"
+"category" = "shortcut_key"
+"dispatch" = "get"
+"response" = "text"
+"provenance" = "ukadoc"
+"description" = "キャラクタについての名称。"
+
+[entry."termsbutton.caption"]
+"kind" = "resource"
+"category" = "shortcut_key"
+"dispatch" = "get"
+"response" = "text"
+"provenance" = "ukadoc"
+"description" = "キャラクタの利用条件の名称。"
+
+[entry."recommendrootbutton.caption"]
+"kind" = "resource"
+"category" = "shortcut_key"
+"dispatch" = "get"
+"response" = "text"
+"provenance" = "ukadoc"
+"description" = "おすすめの名称。"
+
+[entry."regionenabledbutton.caption"]
+"kind" = "resource"
+"category" = "shortcut_key"
+"dispatch" = "get"
+"response" = "text"
+"provenance" = "ukadoc"
+"description" = "リージョンを切らずに表示の名称。"
+
+[entry."reloadinfobutton.caption"]
+"kind" = "resource"
+"category" = "shortcut_key"
+"dispatch" = "get"
+"response" = "text"
+"provenance" = "ukadoc"
+"description" = "動作情報再読み込みの名称。"
+
+[entry."resetballoonpositionbutton.caption"]
+"kind" = "resource"
+"category" = "shortcut_key"
+"dispatch" = "get"
+"response" = "text"
+"provenance" = "ukadoc"
+"description" = "バルーン位置初期化の名称。"
+
+[entry."resettodefaultbutton.caption"]
+"kind" = "resource"
+"category" = "shortcut_key"
+"dispatch" = "get"
+"response" = "text"
+"provenance" = "ukadoc"
+"description" = "設定を標準に戻すの名称。"
+
+[entry."scriptlogbutton.caption"]
+"kind" = "resource"
+"category" = "shortcut_key"
+"dispatch" = "get"
+"response" = "text"
+"provenance" = "ukadoc"
+"description" = "スクリプトログの名称。"
+
+[entry."shellrootbutton.caption"]
+"kind" = "resource"
+"category" = "shortcut_key"
+"dispatch" = "get"
+"response" = "text"
+"provenance" = "ukadoc"
+"description" = "シェルの名称。"
+
+[entry."shellscaleotherbutton.caption"]
+"kind" = "resource"
+"category" = "shortcut_key"
+"dispatch" = "get"
+"response" = "text"
+"provenance" = "ukadoc"
+"description" = "その他の倍率の名称。"
+
+[entry."shellscalerootbutton.caption"]
+"kind" = "resource"
+"category" = "shortcut_key"
+"dispatch" = "get"
+"response" = "text"
+"provenance" = "ukadoc"
+"description" = "シェル倍率の名称。"
+
+[entry."sntpbutton.caption"]
+"kind" = "resource"
+"category" = "shortcut_key"
+"dispatch" = "get"
+"response" = "text"
+"provenance" = "ukadoc"
+"description" = "時計合わせの名称。"
+
+[entry."switchactivatewhentalkbutton.caption"]
+"kind" = "resource"
+"category" = "shortcut_key"
+"dispatch" = "get"
+"response" = "text"
+"provenance" = "ukadoc"
+"description" = "喋る時は常時の名称。"
+
+[entry."switchactivatewhentalkexceptupdatebutton.caption"]
+"kind" = "resource"
+"category" = "shortcut_key"
+"dispatch" = "get"
+"response" = "text"
+"provenance" = "ukadoc"
+"description" = "更新時以外の名称。"
+
+[entry."switchautobiffbutton.caption"]
+"kind" = "resource"
+"category" = "shortcut_key"
+"dispatch" = "get"
+"response" = "text"
+"provenance" = "ukadoc"
+"description" = "自動メールチェックの名称。"
+
+[entry."switchautoheadlinesensebutton.caption"]
+"kind" = "resource"
+"category" = "shortcut_key"
+"dispatch" = "get"
+"response" = "text"
+"provenance" = "ukadoc"
+"description" = "自動ヘッドラインセンスの名称。"
+
+[entry."switchblacklistingbutton.caption"]
+"kind" = "resource"
+"category" = "shortcut_key"
+"dispatch" = "get"
+"response" = "text"
+"provenance" = "ukadoc"
+"description" = "ブラックリスティングの名称。"
+
+[entry."switchcompatiblemodebutton.caption"]
+"kind" = "resource"
+"category" = "shortcut_key"
+"dispatch" = "get"
+"response" = "text"
+"provenance" = "ukadoc"
+"description" = "旧仕様をサポートの名称。"
+
+[entry."switchconsolealwaysvisiblebutton.caption"]
+"kind" = "resource"
+"category" = "shortcut_key"
+"dispatch" = "get"
+"response" = "text"
+"provenance" = "ukadoc"
+"description" = "コンソール常時可視の名称。"
+
+[entry."switchconsolevisiblebutton.caption"]
+"kind" = "resource"
+"category" = "shortcut_key"
+"dispatch" = "get"
+"response" = "text"
+"provenance" = "ukadoc"
+"description" = "コンソール不可視の名称。"
+
+[entry."switchdeactivatebutton.caption"]
+"kind" = "resource"
+"category" = "shortcut_key"
+"dispatch" = "get"
+"response" = "text"
+"provenance" = "ukadoc"
+"description" = "喋り終わると裏へ沈むの名称。"
+
+[entry."switchdontactivatebutton.caption"]
+"kind" = "resource"
+"category" = "shortcut_key"
+"dispatch" = "get"
+"response" = "text"
+"provenance" = "ukadoc"
+"description" = "常に出て来ないの名称。"
+
+[entry."switchdontforcealignbutton.caption"]
+"kind" = "resource"
+"category" = "shortcut_key"
+"dispatch" = "get"
+"response" = "text"
+"provenance" = "ukadoc"
+"description" = "ゴースト設定の名称。"
+
+[entry."switchduivisiblebutton.caption"]
+"kind" = "resource"
+"category" = "shortcut_key"
+"dispatch" = "get"
+"response" = "text"
+"provenance" = "ukadoc"
+"description" = "開発用インターフェースの名称。"
+
+[entry."switchforcealignfreebutton.caption"]
+"kind" = "resource"
+"category" = "shortcut_key"
+"dispatch" = "get"
+"response" = "text"
+"provenance" = "ukadoc"
+"description" = "常に自由移動の名称。"
+
+[entry."switchforcealignlimitbutton.caption"]
+"kind" = "resource"
+"category" = "shortcut_key"
+"dispatch" = "get"
+"response" = "text"
+"provenance" = "ukadoc"
+"description" = "常に制限の名称。"

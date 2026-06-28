@@ -1,0 +1,36 @@
+# event / category=voice — areka-P0-shiori-protocol-split category fragment.
+# 3 keyed entry table(s), source order preserved. Category-pure; entry-boundary only.
+# Generated deterministically; do not hand-edit. Merge order: _manifest.toml (task 2.4) is authoritative.
+
+[entry."OnSpeechSynthesisStatus"]
+"kind" = "event"
+"category" = "voice"
+"dispatch" = "notify"
+"response" = "none"
+"provenance" = "ssp_secondary"
+"description" = "起動時と音声合成機能が ON/OFF された時に発生（[NOTIFY/他GET] 文脈依存）。"
+"silence_ref" = ["sr_dispatch_status_notify_other_get"]
+[entry."OnSpeechSynthesisStatus".field]
+"enabled_flag" = { "reference" = 0, "type" = "bool", "required" = false, "provenance" = "ssp_secondary", "description" = "0/1（無効/有効）。" }
+
+[entry."OnVoiceRecognitionStatus"]
+"kind" = "event"
+"category" = "voice"
+"dispatch" = "notify"
+"response" = "none"
+"provenance" = "ssp_secondary"
+"description" = "起動時と音声認識機能が ON/OFF された時に発生（[NOTIFY/他GET] 文脈依存）。"
+"silence_ref" = ["sr_dispatch_status_notify_other_get"]
+[entry."OnVoiceRecognitionStatus".field]
+"enabled_flag" = { "reference" = 0, "type" = "bool", "required" = false, "provenance" = "ssp_secondary", "description" = "0/1（無効/有効）。" }
+
+[entry."OnVoiceRecognitionWord"]
+"kind" = "event"
+"category" = "voice"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ssp_secondary"
+"description" = "音声認識で単語が認識された際に発生。"
+[entry."OnVoiceRecognitionWord".field]
+"char_scope" = { "reference" = 0, "type" = "i32", "required" = false, "provenance" = "ssp_secondary", "description" = "本体は 0、相方は 1。SSP/CROW では 2 以降もある。" }
+"recognized_word" = { "reference" = 1, "type" = "str", "required" = false, "provenance" = "ssp_secondary", "description" = "認識した単語。最初の名前呼びかけ時はキャラ名そのものになり、その際はメニュー表示が望ましい。" }

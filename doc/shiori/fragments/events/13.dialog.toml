@@ -1,0 +1,55 @@
+# event / category=dialog — areka-P0-shiori-protocol-split category fragment.
+# 5 keyed entry table(s), source order preserved. Category-pure; entry-boundary only.
+# Generated deterministically; do not hand-edit. Merge order: _manifest.toml (task 2.4) is authoritative.
+
+[entry."OnSystemDialog"]
+"kind" = "event"
+"category" = "dialog"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ssp_secondary"
+"description" = "ファイル関連のダイアログで保存/OK が押された際に発生。"
+[entry."OnSystemDialog".field]
+"dialog_kind" = { "reference" = 0, "type" = "str", "required" = false, "provenance" = "ssp_secondary", "description" = "open・save・folder・color のいずれか。" }
+"event_id" = { "reference" = 1, "type" = "str", "required" = false, "provenance" = "ssp_secondary", "description" = "イベント ID。" }
+"result_value" = { "reference" = 2, "type" = "str", "required" = false, "provenance" = "ssp_secondary", "description" = "ファイルのパスまたはカンマ区切りの RGB 値。" }
+
+[entry."OnSystemDialogCancel"]
+"kind" = "event"
+"category" = "dialog"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ssp_secondary"
+"description" = "ファイル関連のダイアログでキャンセルが押された際に発生。"
+[entry."OnSystemDialogCancel".field]
+"dialog_kind" = { "reference" = 0, "type" = "str", "required" = false, "provenance" = "ssp_secondary", "description" = "open・save・folder・color のいずれか。" }
+"event_id" = { "reference" = 1, "type" = "str", "required" = false, "provenance" = "ssp_secondary", "description" = "イベント ID。" }
+
+[entry."OnConfigurationDialogHelp"]
+"kind" = "event"
+"category" = "dialog"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ssp_secondary"
+"description" = "設定ダイアログのヘルプボタンで項目をクリックした際に発生。"
+[entry."OnConfigurationDialogHelp".field]
+"dialog_id" = { "reference" = 0, "type" = "str", "required" = false, "provenance" = "ssp_secondary", "description" = "ダイアログ ID（setup/ghost/folder/display/dictation/talk/network/biff/application/messenger/international/developer 等）。" }
+"dialog_title" = { "reference" = 1, "type" = "str", "required" = false, "provenance" = "ssp_secondary", "description" = "ダイアログタイトル。" }
+"item_type_name" = { "reference" = 2, "type" = "str", "required" = false, "provenance" = "ssp_secondary", "description" = "項目タイプ:項目名。" }
+"item_content_text" = { "reference" = 3, "type" = "str", "required" = false, "provenance" = "ssp_secondary", "description" = "項目内容テキスト。" }
+
+[entry."OnGhostTermsAccept"]
+"kind" = "event"
+"category" = "dialog"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ssp_secondary"
+"description" = "利用条件ダイアログで受諾が押された際に発生。右上の閉じるボタンではイベントは発生しない。"
+
+[entry."OnGhostTermsDecline"]
+"kind" = "event"
+"category" = "dialog"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ssp_secondary"
+"description" = "利用条件ダイアログで拒否が押された際に発生。右上の閉じるボタンではイベントは発生しない。"
