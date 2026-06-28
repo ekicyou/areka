@@ -21,7 +21,7 @@
   - _Requirements: 2.4, 2.5, 2.6, 3.1, 3.2, 3.3, 3.4_
   - _Boundary: crates/pilot_
 
-- [ ] 2. (P) two-tunnel.md（二坑規律の詳細正本）を作成
+- [x] 2. (P) two-tunnel.md（二坑規律の詳細正本）を作成
   - `.kiro/steering/two-tunnel.md` を `inclusion: manual` で新規作成する（Task 1 のクレートとは別境界ゆえ並列可）。
   - 章立てに全規律を含める: ①概要＋可逆性最優先方針、②先進坑と本坑（定義・役割分担・何を掘るかの判断基準・直行許容）、③命綱と削除/隔離規律（葉ノード隔離・隔離保全許可・掘り直し禁止＝コピペ donor 禁止・品質基準・検疫所効果・空 lib＋examples-only の構造的担保・唯一の inbound 経路を変更レビューで捕捉する人手レビュー規律・機械チェックは defer で将来別途依頼可）、④ハードゲート（go 前提依存・BLOCKED・人間判断・記法 `_Depends(confirmed):`〈宿主は roadmap.md〉・直行許容）、⑤依存マップ重点検証の手動チェックリスト（被覆/孤児なし/DAG/各エッジ合否基準/不適合時 not-ready/適用タイミング: discovery・`/kiro-spec-batch`）、⑥先進坑の一次記録 README 3 幕規約（本坑 design は README 検証結果を参照し二重化しない・subagent が `.md` を書けない制約の代替手順）。
   - 完了状態: `two-tunnel.md` が `inclusion: manual` を持ち、上記 6 領域の全規律へ見出しから到達できる（要件 1.4 の「各規律へ到達できる参照」を内部見出しで担保）。
