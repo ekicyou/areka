@@ -71,8 +71,8 @@
   - _Boundary: ShioriDemoDriver_
   - _Depends: 3.1_
 
-- [ ] 4. main 統合（フラグゲートフック）
-- [ ] 4.1 メッセージループ前のデモフック配線
+- [x] 4. main 統合（フラグゲートフック）
+- [x] 4.1 メッセージループ前のデモフック配線
   - `WinThreadMgr` 構築後・`mgr.run()` 呼び出し前に、フラグ／環境変数が有効なときのみ `run_demo()` を main スレッドで同期呼び出しする
   - デモ配線により不要となった `shiori_host`／`shiori_session` の `#![allow(dead_code)]` を整理する
   - 観測: フラグ有効時に通常起動経路でデモが一度駆動され、既定では駆動されない（`mgr.run()` の UI 立ち上げを阻害しない）

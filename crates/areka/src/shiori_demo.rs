@@ -12,10 +12,6 @@
 //! 会話描画には依存しない（要件 6.7）。フラグ／環境変数ゲートと失敗時クリーンアップ規律は
 //! 後続タスク 3.2、`main.rs` への配線は task 4.1 が担う（本ファイルでは扱わない）。
 
-// task 4.1 が `run_demo` を `main.rs` へ配線し、3.2 がゲートを追加するまで `run_demo` は
-// このクレート内から呼ばれない（shiori_host.rs / shiori_session.rs の確立済みパターンに倣う）。
-#![allow(dead_code)]
-
 use core::ptr;
 
 use shiori_abi::interface::IShiori;

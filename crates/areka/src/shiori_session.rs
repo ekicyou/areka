@@ -42,8 +42,6 @@
 //! 後送りされ、本セッションのいずれのメソッドも同期ハングしない。in-proc 直 vtable のため
 //! OOP マーシャリングは介在しない（要件 5.2）。
 
-#![allow(dead_code)] // セッション API の一部は本タスクでは結合テストからのみ利用する。
-
 use std::time::Duration;
 
 use shiori_abi::ergonomic::ShioriExt;
@@ -90,6 +88,9 @@ pub struct ShioriSession {
     /// areka 実装の sink（単一 in-flight 突合枠＋メールボックスを所有）。脳が `Load`〜`Unload` 間保持する。
     host: IShioriHost,
     /// 設定可能な遅延完了タイムアウト（議題3 e1）。経過時間との比較は注入された経過時間で行う。
+    // デモ駆動経路は遅延を Complete で即解消するためタイムアウトを参照しない。本フィールドは
+    // タイムアウト経路を検証する結合テスト（task 5.x の `expire_if_elapsed`/`with_timeout`）からのみ読まれる。
+    #[allow(dead_code)]
     timeout: Duration,
     /// 現在保留中の相関トークン（単一 in-flight）。`Deferred` でセットし、解消（`Complete`/`Unload`/
     /// タイムアウト）でクリアする。host 側突合枠（[`ShioriHostSink`]）と同期して扱う。
@@ -134,12 +135,16 @@ impl ShioriSession {
     }
 
     /// 遅延完了タイムアウトを上書きする（議題3 e1・設定可能）。
+    // デモ駆動経路では使わない。タイムアウト経路を検証する結合テスト（task 5.x）からのみ利用する。
+    #[allow(dead_code)]
     pub fn with_timeout(mut self, timeout: Duration) -> Self {
         self.timeout = timeout;
         self
     }
 
     /// 現在の遅延完了タイムアウト設定（議題3 e1）。
+    // デモ駆動経路では使わない。タイムアウト設定を観測する結合テスト（task 5.x）からのみ利用する。
+    #[allow(dead_code)]
     pub fn timeout(&self) -> Duration {
         self.timeout
     }
@@ -150,11 +155,15 @@ impl ShioriSession {
     }
 
     /// 現在保留中の相関トークン（観測用）。
+    // デモ駆動経路は保留有無（`is_pending`）のみ観測する。保留トークンを照合する結合テスト（task 5.x）からのみ利用する。
+    #[allow(dead_code)]
     pub fn pending_token(&self) -> Option<CorrelationToken> {
         self.pending
     }
 
     /// areka 実装の sink（`IShioriHost`）への参照（脳→host 通知の観測・テスト用）。
+    // デモ駆動経路は `poll_completions` 越しに観測する。sink を直接観測する結合テスト（task 5.x）からのみ利用する。
+    #[allow(dead_code)]
     pub fn host(&self) -> &IShioriHost {
         &self.host
     }
@@ -216,6 +225,8 @@ impl ShioriSession {
     ///
     /// # 戻り値
     /// 放棄した場合 `true`（保留が解除され次 request 可能）、未超過 or 非保留なら `false`。
+    // デモ駆動経路は遅延を Complete で即解消するため使わない。タイムアウト経路を検証する結合テスト（task 5.x）からのみ利用する。
+    #[allow(dead_code)]
     pub fn expire_if_elapsed(&mut self, elapsed: Duration) -> bool {
         if self.pending.is_some() && elapsed >= self.timeout {
             // 保留枠を放棄: areka 側保留解除＋host 側突合枠クリア（stale Complete を弾く）。

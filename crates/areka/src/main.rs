@@ -130,6 +130,13 @@ fn main() -> Result<()> {
     println!("  終了:         シェル画像をダブルクリック");
     println!();
 
+    // リファレンス脳の実走デモ（要件 6.1/6.8）。環境変数 `AREKA_SHIORI_DEMO` が有効な
+    // ときのみ main スレッドで同期駆動する（既定 OFF）。診断目的のため失敗しても通常
+    // 起動を中断せず、`mgr.run()` の UI 立ち上げを阻害しないよう必ずその前に完走させる。
+    if let Err(e) = shiori_demo::run_demo_if_enabled() {
+        tracing::error!(error = %e, "[main] shiori reference demo failed");
+    }
+
     // ブロッキングメッセージループ
     mgr.run()?;
 
