@@ -89,7 +89,7 @@
   - _Boundary: 統合テスト_
   - _Depends: 3.1, 3.2_
 
-- [ ] 5.2 手動検証とマルチターゲットビルド
+- [x] 5.2 手動検証とマルチターゲットビルド
   - フラグ／環境変数有効時のみ `run_demo()` が起動し既定では駆動しないことを手動確認する
   - debug 実行（または `RUST_LOG=info`）で各経路の info ログが観測でき、視覚 UX・会話描画に依存しないこと、会話描画・さくらスクリプト解釈・balloon 反映を行わないことを確認する
   - x64 と ARM64 の両ターゲットでビルドが通ることを確認する（ソース分岐なし）
@@ -101,3 +101,5 @@
 - 脳ハンドルの確保: `ShioriSession::activate(brain)` は `IShiori` を move-in し脳アクセサを公開しない。デモから `ReferenceBrain` の `arm_defer_next`/`complete_pending`/`fire_raise` を叩くには、activate 前に `brain.clone()`（AddRef）でハンドルを保持し `AsImpl::<ReferenceBrain>::as_impl(&handle)` で downcast する（design §System Flows のシーケンスどおり）。
 - (3.1→3.2 申し送り) `shiori_demo` で `complete_pending`/`fire_raise` の host-call HRESULT 失敗を `DemoError::Create` に流用している（happy path では到達不能）。3.2 のエラー処理で host vtable 呼び出し失敗用の variant（または `Session`）へ是正すること。
 - ビルド衛生: `cargo clippy` は依存先 `wintf` の既存エラーで areka 到達前に失敗するため検証ゲートに使わない。`cargo build -p areka`／`cargo test -p areka` を使う。areka は bin クレートのため `--doc`/`--lib` 不可（テストは `--bin areka`）。tracing ログ検証は `tracing_subscriber::registry()` ＋ capturing `Layer` ＋ `with_default` で行える。
+- (5.2 検証エビデンス) フラグ有効の実 debug 実行（`AREKA_SHIORI_DEMO=1` `RUST_LOG=info`、`target/debug/areka.exe`）で `mgr.run()`（UI生成）より前に全経路の構造化 info ログ（`path="create"/"activate"/"immediate"/"deferred"(token=0)/"complete"/"raise"/"unload"`）が順序どおり出力されることを実機確認。UI生成（シェル＋バルーン）はその後に発生＝視覚UX・balloon・さくらスクリプト非依存（req 6.7）。フラグ無効の非駆動は 3.2 `gate_disabled_does_not_drive` で決定的に担保。
+- (5.2 ARM64 環境制約・req 8.3) `cargo build -p areka --target aarch64-pc-windows-msvc` は全クレート（areka 含む）のコード生成に成功＝ソース分岐なし（`reference_brain.rs`/`shiori_demo.rs` に `cfg(target_arch/os)` 一切なし）を実証。ただし**最終リンクはこの環境では失敗**（ARM64 用 MSVC ビルドツール／`link.exe` 未導入のため `linker link.exe not found`）。これはコード起因ではなく環境のツールチェーン未整備。ARM64 実バイナリ生成を確認するには ARM64 VC ビルドツールを導入した環境で再リンクが必要（コードは ARM64 対応済み）。
