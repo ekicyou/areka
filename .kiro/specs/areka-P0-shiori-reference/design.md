@@ -312,15 +312,16 @@ impl IShiori_Impl for ReferenceBrain_Impl {
 /// 成功時 out へ refcount 1 の IShiori を move-out し S_OK を返す。
 /// 失敗時 out 未書込・失敗 HRESULT を返す。
 /// 署名は HRESULT shiori_create(IShiori** out) に対応（c_void** で受け、IShiori へ写す）。
-#[no_mangle]
-pub extern "C" fn shiori_create(out: *mut *mut core::ffi::c_void) -> HRESULT;
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn shiori_create(out: *mut *mut core::ffi::c_void) -> HRESULT;
 ```
-- Preconditions: `out` は有効な書込先ポインタ。
-- Postconditions: 成功=`out` に refcount 1 の `IShiori`（caller が Release 義務）＋`S_OK`。失敗=`out` 未書込＋失敗 HRESULT。
-- Invariants: 生成入口はこの 1 関数のみ。`IShiori` 以外の型を露出しない。
+> edition 2024 では `#[unsafe(no_mangle)]`・`unsafe extern "C"` 形が必須（本 workspace は `edition = "2024"`）。x64/ARM64 では `extern "C"` == `extern "system"`（呼出規約一意・要件 9.2）。
+- Preconditions: `out` は非 NULL の有効な書込先ポインタ（呼び出し側が保証）。
+- Postconditions: 成功時のみ `out` へ書込（writes-on-success）＝refcount 1 の `IShiori`（caller が Release 義務）＋`S_OK`。失敗時は `out` を書き込まず（未書込不変条件）失敗 HRESULT を返す。
+- Invariants: 生成入口はこの 1 関数のみ。`IShiori` 以外の型を露出しない。失敗時 out 未書込は §Testing Strategy の不変条件テストで固定する（要件 9.3/9.4）。
 
 **Implementation Notes**
-- Integration: in-tree シンボル直呼び（`shiori_demo` から直接呼出）。実 DLL ロード（`LoadLibraryW`＋`GetProcAddress("shiori_create")`）は本仕様では実走しないが、`#[no_mangle]`・`extern "C"` 署名は将来 host-32 が `GetProcAddress` で引ける形を満たす（要件 9.6・正解見本）。
+- Integration: in-tree シンボル直呼び（`shiori_demo` から直接呼出）。実 DLL ロード（`LoadLibraryW`＋`GetProcAddress("shiori_create")`）は本仕様では実走しないが、`#[unsafe(no_mangle)]`・`unsafe extern "C"`（edition 2024）署名は将来 host-32 が `GetProcAddress` で引ける形を満たす（要件 9.6・正解見本）。
 - Validation: 成功 HRESULT は `S_OK`。失敗 HRESULT は判別可能な error（生成失敗時）。
 - Risks: cdylib 化しないため実 DLL 境界は未実走（host-32 へ委譲・research.md Decision 2）。署名の忠実性で見本価値を担保。
 
