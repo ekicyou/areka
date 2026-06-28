@@ -176,7 +176,7 @@ error: failed to load source for dependency `pasta_core`
 4. **【C3】テンプレ example の配置**: `examples/_template/` （build 対象・腐敗検出に入る）vs `templates/`（build 対象外）。`main.rs` 必須規約で「README だけのフォルダが example 認識されない」問題を担保。
 5. **go ゲート記法の表現先**: `_Depends(confirmed): pilot` を (a) spec.json スキーマ拡張（kiro-spec-schema.md に新フィールド）／(b) roadmap.md の既存自由テキスト `Dependencies:` の拡張／(c) tasks.md の `_Requirements:` 類似記法、のどこに置くか。既存 `dependencies` 配列との二重管理回避が論点。
 6. **steering 二層化**: 二坑詳細を `two-tunnel.md`（manual）に切り出し、`focus.md`/`workflow.md`（always）からは lean 参照に留める（既存 focus→roadmap 二層と整合）。要件 1-5 と 8-1 の協調設計。
-7. **依存マップ検証（要件 7）の自動 vs 手動**: 被覆/孤児/DAG/合否基準を、`/kiro-spec-batch` の wave 概念と接続した自動チェックにするか、ディスカッション時の手動 checklist にするか。本仕様スコープ（モデル確立）では手動 checklist 規約が下限、自動化は後続候補。
+7. **【解決済み・議題2】依存マップ検証（要件 7）= 手動チェックリスト規律に一本化**: 自動チェックツール化は本仕様の契約から除外（Out of scope に明記）。理由: 被覆判断と合否基準の妥当性は本質的に人間の判断で機械化できず、自動化可能な孤児/DAG も十数ノードの小グラフでは目視で数秒。roadmap 自由テキストのパーサ保守はチェック対象より重く、二坑モデルが戒める負の遺産になる。R7 を「The Dependency Map Checklist」（steering 文書化・分解時に目視適用）へ改稿済。不便が生じた時点で自動化を別途依頼する想定。
 8. **NFR-4 整合**: `completed/kiro-P0-roadmap-management` は不変。二坑規律はそれを置換せず steering 群へ追補する形を design で明示。
 
 ---

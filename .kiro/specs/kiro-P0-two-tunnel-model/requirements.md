@@ -47,6 +47,7 @@
   - 既存ロードマップの二坑分解（M1 を pilot/main へ割り直す作業）。本モデル確立後の後続 discovery（別作業・本仕様ではない）。
   - 個別の先進坑/本坑 spec の実装そのもの（本仕様はモデルとインフラの確立まで）。
   - リモート CI（GitHub Actions 等）の新設（未リリースゆえ当面不要・後続候補）。マージは本チャット駆動の `/kiro-complete` に集約されるため、機械チェックはローカル完了ゲートで成立する。
+  - 依存マップ検証（R7）の自動チェックツール化（被覆判断・合否基準は人間の判断・対象グラフは小規模ゆえ目視で足りる。不便が生じた時点で別途依頼する想定であり、本仕様の契約には含めない）。
   - 並列実行基盤（workflow/agent fan-out）の新規開発（既存の Agent/Workflow 機構を運用で使う）。
   - production クレート（wintf/dola/areka/shiori-abi 等）への機能追加。
 - **Adjacent expectations**:
@@ -148,17 +149,18 @@
 
 ---
 
-### Requirement 7: 先進坑⟷本坑 依存マップの重点検証
+### Requirement 7: 先進坑⟷本坑 依存マップの重点検証（手動チェックリスト規律）
 
-**Objective:** 開発者/AI として、分解時に先進坑と本坑の依存関係が健全であることを厳密に検証したい。それにより不確実な本坑が go ゲートを持たずに進む事態を防げる。
+**Objective:** 開発者/AI として、分解時に先進坑と本坑の依存関係が健全であることを厳密に検証したい。それにより不確実な本坑が go ゲートを持たずに進む事態を防げる。本仕様ではこれを steering に明文化した**手動チェックリスト規律**として確立する（自動チェックツールは作らない。被覆判断・合否基準の妥当性は本質的に人間の判断であり、対象グラフも小規模ゆえ目視で足りる）。
 
 #### Acceptance Criteria
 
-1. The Dependency Map Validation **shall** 被覆（不確実な本坑は必ず対応する go ゲートを持つ）を検証する。
-2. The Dependency Map Validation **shall** 孤児なし（どの先進坑・本坑も依存関係上で孤立しない）を検証する。
-3. The Dependency Map Validation **shall** 循環なし（依存グラフが DAG である）を検証する。
-4. The Dependency Map Validation **shall** 各エッジに合否基準（go/違う/直す を判定する基準）が明示されていることを検証する。
-5. If 依存マップ検証を通過しない場合, then the Dependency Map Validation **shall** 当該本坑 spec を ready にしない。
+1. The Dependency Map Checklist **shall** `.kiro/steering/` に文書化され、spec 分解時（discovery / `/kiro-spec-batch`）に開発者/AI が目視で適用する手動規律として定義される。
+2. The Dependency Map Checklist **shall** 被覆（不確実な本坑は必ず対応する go ゲートを持つ）の確認項目を含む。
+3. The Dependency Map Checklist **shall** 孤児なし（どの先進坑・本坑も依存関係上で孤立しない）の確認項目を含む。
+4. The Dependency Map Checklist **shall** 循環なし（依存グラフが DAG である）の確認項目を含む。
+5. The Dependency Map Checklist **shall** 各エッジに合否基準（go/違う/直す を判定する基準）が明示されていることの確認項目を含む。
+6. If チェックリストのいずれかの項目を満たさない場合, then the 規律 **shall** 当該本坑 spec を ready にしないことを定める。
 
 ---
 
