@@ -2,13 +2,13 @@
 //!
 //! 上流 `areka-P0-shiori-com` の `IShiori` を `#[implement(IShiori)]` で実装する
 //! 最小の native リファレンス脳。content（リクエスト・応答・通知の本文）は不透明な
-//! HSTRING（UTF-16）のまま固定／エコーで取り回し、解析・スキーマ検証・意味づけを行わない
+//! HSTRING（UTF-16）のままエコーで取り回し、解析・スキーマ検証・意味づけを行わない
 //! （要件 1.4／8.1）。
 //!
-//! 本タスク（2.1）はライフサイクル（Load/Unload）とロード状態保持・未ロード拒否を実装する。
-//! 即時／エコー応答の完全仕様（2.2）、遅延応答＋Complete（2.3）、能動通知 Raise（2.4）、
-//! `shiori_create` コンストラクタ（3.x）、module-level の完全リファレンス doc（2.6）は
-//! 後続タスクで配線する。
+//! 本タスク時点でライフサイクル（Load/Unload）・ロード状態保持・未ロード拒否（2.1）と、
+//! ロード済み Request の即時エコー応答（2.2・受信 content を不解釈のまま往復）を実装する。
+//! 遅延応答＋Complete（2.3）、能動通知 Raise（2.4）、`shiori_create` コンストラクタ（3.x）、
+//! module-level の完全リファレンス doc（2.6）は後続タスクで配線する。
 
 #![allow(non_snake_case)] // `#[implement(IShiori)]` の生成面が PascalCase メソッドを要求する。
 
@@ -23,12 +23,6 @@ use windows_core::{HRESULT, HSTRING, Interface, implement};
 
 /// `S_OK`（成功・即時応答）の HRESULT。
 const S_OK: HRESULT = HRESULT(0);
-
-/// ロード済み状態での `Request` が返す最小の即時応答（content 不透明・固定文字列）。
-///
-/// 本タスク（2.1）ではロード状態遷移の実証のため最小の機能する即時応答を返す。
-/// 完全な即時／エコー応答セマンティクスと検証は task 2.2 で配線する。
-const LOADED_RESPONSE: &str = "\\h\\s[0]reference-brain-loaded";
 
 /// 製品コードの最小リファレンス脳（`#[implement(IShiori)]`）。
 ///
@@ -91,14 +85,18 @@ impl IShiori_Impl for ReferenceBrain_Impl {
         S_OK
     }
 
-    /// 未ロード時は [`SHIORI_E_NOT_LOADED`]（out-param 未書込）。ロード時は最小の即時応答を
-    /// `out_response` へ move-out し `S_OK` を返す（要件 2.3／2.4）。
+    /// 未ロード時は [`SHIORI_E_NOT_LOADED`]（out-param 未書込）。ロード時は受信 content の
+    /// 即時エコー応答を `out_response` へ move-out し `S_OK` を返す（要件 1.4／3.1／3.2／3.3／3.4／8.1）。
     ///
-    /// content は不透明 HSTRING のまま取り回し、`input` を解釈・パースしない（要件 1.4／8.1）。
-    /// ロード時の完全な即時／エコー応答セマンティクスは task 2.2 で配線する。
+    /// content は不透明 HSTRING（UTF-16）のまま取り回し、`input` を解析・スキーマ検証・分割・
+    /// デコード・内容分岐しない。エコーは純粋なコピー（受信 content をそのまま往復）であり、
+    /// 不解釈のまま一致することで content 不透明性を実証する（要件 1.4／8.1）。
+    ///
+    /// 即時／遅延の判別機構は task 2.3 で導入する。本タスク（2.2）では、ロード済みの Request は
+    /// 常に即時（同期）エコー応答とする。
     unsafe fn Request(
         &self,
-        _input: *const HSTRING,
+        input: *const HSTRING,
         out_response: *mut HSTRING,
         _out_token: *mut u64,
     ) -> HRESULT {
@@ -106,8 +104,13 @@ impl IShiori_Impl for ReferenceBrain_Impl {
             // 未ロード: 有効な処理として受理せず判別可能な失敗を返す。out-param は未書込（要件 2.4）。
             return SHIORI_E_NOT_LOADED;
         }
-        // ロード済み: callee 確保の HSTRING を move-out（所有権規約・caller 解放）。content 不透明。
-        unsafe { core::ptr::write(out_response, HSTRING::from(LOADED_RESPONSE)) };
+        // ロード済み: `input` は [in] 借用（読み取りのみ・解放しない）。エコーのため clone で
+        // 所有 HSTRING を得る。content は不透明 UTF-16 のまま無加工コピーする（要件 1.4／8.1）。
+        // Safety: `input` は呼び出し中有効な HSTRING raw ポインタ（ABI 所有権規約）。
+        let echoed = unsafe { (*input).clone() };
+        // callee 確保の HSTRING を move-out（所有権規約・caller 解放）。
+        // Safety: `out_response` は未初期化の有効な出力スロット（caller 確保・上書き対象）。
+        unsafe { core::ptr::write(out_response, echoed) };
         S_OK
     }
 }
@@ -154,6 +157,25 @@ mod tests {
                 &mut out_token as *mut u64,
             )
         }
+    }
+
+    /// COM ポインタ経由（vtable 直呼び）で `Request` を呼び、HRESULT と move-out された
+    /// 応答 HSTRING の両方を返すヘルパ（即時応答の往復観測用）。
+    ///
+    /// # Safety
+    /// `brain` は有効な `IShiori` COM ポインタ。
+    unsafe fn call_request_with(brain: &IShiori, input: &HSTRING) -> (HRESULT, HSTRING) {
+        let mut out_response = HSTRING::new();
+        let mut out_token: u64 = 0;
+        let hr = unsafe {
+            (Interface::vtable(brain).Request)(
+                brain.as_raw(),
+                input as *const HSTRING,
+                &mut out_response as *mut HSTRING,
+                &mut out_token as *mut u64,
+            )
+        };
+        (hr, out_response)
     }
 
     /// COM ポインタ経由（vtable 直呼び）で `Load` を呼ぶヘルパ。
@@ -226,6 +248,30 @@ mod tests {
         assert_eq!(
             hr_after, SHIORI_E_NOT_LOADED,
             "Unload 後の Request は再び SHIORI_E_NOT_LOADED を返すこと"
+        );
+    }
+
+    /// ロード済みの即時応答が受信 content の不解釈エコーであること（要件 1.4/3.1/3.2/3.3/3.4/8.1）。
+    ///
+    /// 解析・スキーマ検証を試みれば破綻する不透明 content（さくらスクリプト様＋非 ASCII＋絵文字）を
+    /// 渡し、`S_OK`＋`out_response == input` を厳密一致で検証する。content を UTF-16 のまま
+    /// 往復させ、内容を不解釈のまま一致させることで不透明性を実証する。
+    #[test]
+    fn loaded_request_echoes_opaque_content_unchanged() {
+        let brain: IShiori = ReferenceBrain::new().into();
+        let host: IShioriHost = DummyHost.into();
+
+        let hr_load = unsafe { call_load(&brain, host.as_raw() as *mut c_void) };
+        assert!(hr_load.is_ok(), "Load は S_OK を返すこと, got 0x{:08X}", hr_load.0);
+
+        // 解析・検証を試みれば破綻する不透明 content（さくらスクリプト様・非 ASCII・絵文字）。
+        let input = HSTRING::from("\\h\\s[0]日本語opaque😶");
+        let (hr, out_response) = unsafe { call_request_with(&brain, &input) };
+
+        assert_eq!(hr, S_OK, "ロード済みの即時応答は S_OK を返すこと, got 0x{:08X}", hr.0);
+        assert_eq!(
+            out_response, input,
+            "即時応答は受信 content の不解釈エコー（厳密一致）であること"
         );
     }
 }
