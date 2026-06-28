@@ -137,6 +137,21 @@ emo2 が起動して喋る。下記 5 トラックを結線して達成（⓪ �
 - **M1 のメニュー＝バルーン `\q` 選択肢**（emo2 の double-click メニュー）＝ `choice-render`＋`sakura-dialogue-tags`＋`input-events`。
 - **owner-draw メニュー（SSP 風 右クリック system メニュー・ゴースト管理 chrome）は M2**（OS owner-draw・上記 balloon 選択肢とは別物）。
 
+## 着手手順（just-in-time briefing・spec 工場回避）
+
+> brief は**前もって量産しない**（balloon-system の spec 工場の轍を踏まない）。着手するユニットの brief だけを着手時に書く。
+
+1. 次ユニットを選ぶ（`pilot/shiori-host-32` → M-boot の⓪①②＋③〜⑥最小 → 増分）。
+2. ロードマップから**そのユニットの依存を読む**: M-boot 前提か／pilot ゲート下か／クロスエンジン I/O 結合クラスタ（契約先決要）か／並走安全か。
+3. `/kiro-discovery`（再入・「ロードマップから次の仕様をブリーフィング」）または `/kiro-spec-init <unit>` で**そのユニットの brief を1つだけ**生成。
+4. 以降は通常フロー（kiro-start → design → tasks → impl）。**`/kiro-spec-batch` は使わない**（一括＝工場化）。
+
+**依存の所在**（機械可読の per-unit `Dependencies:` 行は持たない・人/AI がロードマップから導出）:
+- 順序ゲート＝「M-boot 前提」「pilot が host-32 トラックを gate」
+- 並走単位＝エンジン別帰属（⓪〜⑥）
+- クロスエンジン結合＝I/O 契約4クラスタ（撫で/選択肢/二人立ち/移動）＝channel 契約（並行モデル節）
+- 並走安全＝完全独立ユニットのリスト（クロスエンジン I/O 節）
+
 ## 制約
 
 - Rust 2024・マルチクレート（wintf/dola/areka ＋最小依存 `shiori-abi`）。32bit 可搬性を崩さない。
