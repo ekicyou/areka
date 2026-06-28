@@ -38,6 +38,14 @@ mod shiori_host;
 /// `Unload` 保留取消・設定可能タイムアウトの利用規律を所有する（task 4.2）。
 mod shiori_session;
 
+/// 製品コード（非テスト）のリファレンス脳。`#[implement(IShiori)]` 実装＋純粋C
+/// コンストラクタ `shiori_create` を所有する正解見本（task 2.x/9.x）。
+mod reference_brain;
+
+/// 実走デモドライバ。`shiori_create`→`ShioriSession` で activate→数往復 request→
+/// `poll_completions`→Raise 観測→unload を駆動し tracing で観測する（task 3.x）。
+mod shiori_demo;
+
 /// 遅延応答と push 経路の end-to-end 結合テスト（task 5.2）。
 /// モック脳が `SHIORI_S_PENDING`＋token を返し、後で保持 host へ `Complete`/`Raise` を発火する
 /// 一連の流れを `ShioriSession` 越しに 1 シナリオで通す（4.1/4.2 の単体テストと重複させない）。
