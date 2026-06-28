@@ -6,7 +6,7 @@
 
 - [ ] 1. crates/pilot 検疫所クレートの新設（命綱の構造的担保）
   - 前提（全 1.x・5.1 共通）: worktree では submodule（`vendors/pasta`）が未populate のため、pilot の全 cargo 操作（`build`/`run`/`metadata`）の前段で `git submodule update --init --recursive` が必要（design §Architecture・要件 4 補足）。これは環境アクションでありコード成果物ではない。
-- [ ] 1.1 pilot クレート骨格（Cargo.toml・空 lib・クレート README）
+- [x] 1.1 pilot クレート骨格（Cargo.toml・空 lib・クレート README）
   - `crates/pilot/Cargo.toml` を作成（`name="pilot"`, `publish=false`, version/edition/license 等は workspace 継承, `[dependencies]` は空）。`crates/shiori-abi/Cargo.toml` を構造範例とする。
   - `crates/pilot/src/lib.rs` を空 lib（`//! pilot quarantine crate` のドキュメントコメントのみ・公開 item なし）で作成する。これが命綱（公開 API を露出しない）の構造的担保の核心。
   - `crates/pilot/README.md` にクレートの役割（検疫所・空 lib ＝命綱の構造的担保）と `two-tunnel.md` への参照を記載。
