@@ -69,7 +69,7 @@ areka（**x64**）が最小 SSP 互換ベースウェアとして、適合対象
 ### M-boot ＝ `areka-P0-emo2-boot`（最初の可視結果・最重量＝11ユニット）
 emo2 が起動して喋る。下記 3 トラックを結線して達成。
 
-**host-32（耐力壁・`pilot/shiori-host-32` がトラックを gate）**
+**SHIORI 通信層エンジン host-32（耐力壁・`pilot/shiori-host-32` がトラックを gate）**
 - `pilot/shiori-host-32` — 使い捨て feasibility。✔ go: 32bit pasta.dll 1往復
 - `areka-P0-host32-ipc` — x64↔32bit helper＋pipe＋handshake/lifecycle。✔ 往復 echo
 - `areka-P0-host32-shiori-load` — LoadLibrary pasta.dll＋load/unload/request 解決＋load(ghostdir)。✔ load 成功・無crash
@@ -94,6 +94,7 @@ emo2 が起動して喋る。下記 3 トラックを結線して達成。
 ### 増分（M-boot 後・**エンジン別＝並走可能**）
 
 > 増分はエンジンへ帰属させる。**別エンジンに属する増分は並列着手可**（spanning する旧 unit はエンジン単位に分割済）。マイルストーン（M-dual 等）はエンジン横断の**統合点**であって作業単位ではない。
+> **トラック全6**: ①SHIORI 通信層(host-32)・②parser/loader・③conductor・④sakura-engine・⑤shell-anim-engine・⑥render-engine。このうち **①SHIORI 通信層 と ②parser/loader は M-boot で完了**し増分を持たない（前倒し）。下記は増分を持つ ③〜⑥。
 
 - **② shell-anim-engine**: `areka-P0-dual-surface`（side0/1＋surface alias）／ `areka-P0-mayuna-compose`（MAYUNA bind 多層）／ `areka-P0-shell-anim-loop`（SERIKO ループ＝blink random/bind+random）
 - **① sakura-engine**: `areka-P0-sakura-dialogue-tags`（`\q`/`\_l`/`\![move]`）
