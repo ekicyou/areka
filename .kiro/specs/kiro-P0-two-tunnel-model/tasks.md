@@ -13,7 +13,7 @@
   - 完了状態: submodule init 後に `cargo metadata` が `pilot` をワークスペースメンバー（`publish=false`）として解決し、`cargo build -p pilot` が成功する。`src/lib.rs` に公開 API が存在しない。
   - _Requirements: 2.1, 2.2, 2.3, 2.7, 4.1, 4.2, NFR-2, NFR-3_
   - _Boundary: crates/pilot_
-- [ ] 1.2 テンプレ example ＋ examples 配置規約
+- [x] 1.2 テンプレ example ＋ examples 配置規約
   - `crates/pilot/examples/_template/main.rs` を依存ゼロの最小コード（`println!` 程度）で作成。
   - `crates/pilot/examples/_template/README.md` を 3 幕（動機→概要→検証結果）の雛形で作成（対応本坑 spec 名指し欄・実行法 `cargo run -p pilot --example <spec>`・判定/学び/日付欄を含む）。
   - 1 仕様=1 フォルダ（`examples/<spec-name>/`・`main.rs` 必須）の配置規約を確立し crate README に明記（`two-tunnel.md` の README 規約と整合・並列時の merge 衝突ゼロ）。
