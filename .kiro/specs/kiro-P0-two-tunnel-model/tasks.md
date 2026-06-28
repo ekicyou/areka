@@ -4,7 +4,7 @@
 >
 > **並列の地図**: Task 1（crates/pilot 境界）・Task 2（two-tunnel.md 境界）・Task 3（roadmap.md 境界）は相互に独立で並列可。Task 4 は Task 2 を参照するため後続。Task 5 は検証。
 
-- [ ] 1. crates/pilot 検疫所クレートの新設（命綱の構造的担保）
+- [x] 1. crates/pilot 検疫所クレートの新設（命綱の構造的担保）
   - 前提（全 1.x・5.1 共通）: worktree では submodule（`vendors/pasta`）が未populate のため、pilot の全 cargo 操作（`build`/`run`/`metadata`）の前段で `git submodule update --init --recursive` が必要（design §Architecture・要件 4 補足）。これは環境アクションでありコード成果物ではない。
 - [x] 1.1 pilot クレート骨格（Cargo.toml・空 lib・クレート README）
   - `crates/pilot/Cargo.toml` を作成（`name="pilot"`, `publish=false`, version/edition/license 等は workspace 継承, `[dependencies]` は空）。`crates/shiori-abi/Cargo.toml` を構造範例とする。
@@ -35,7 +35,7 @@
   - _Requirements: 6.4_
   - _Boundary: roadmap.md_
 
-- [ ] 4. workflow 統合 ＋ 常駐ポインタ
+- [x] 4. workflow 統合 ＋ 常駐ポインタ
 - [x] 4.1 workflow.md に二坑統合節を追記
   - `workflow.md` に二坑統合節を追記する: 先進坑フェーズと既存フロー（requirements→design→tasks→implementation→complete）の関係、go ハードゲートを本坑着手の前提条件として、依存マップ重点検証ルール、削除/隔離規律、先進坑の多重並列運用（既存 Agent/Workflow 機構を用い新規基盤を開発しない）。二坑詳細は `two-tunnel.md` へ委譲し要約＋参照に留める（常駐コスト抑制）。
   - 機械ゲート/DoD ゲート統合は追加しない。既存の「ブランチ＆マージ戦略」「実装完了時のアクション」「仕様フェーズフロー」は不変（追記のみ）。
@@ -50,7 +50,7 @@
   - _Depends: 2_
   - _Boundary: focus.md_
 
-- [ ] 5. 整合検証
+- [x] 5. 整合検証
 - [x] 5.1 (P) 構造的隔離・クレート構造の検証
   - submodule init 後、`cargo metadata` で `pilot`=ワークスペースメンバー/`publish=false`、`src/lib.rs` が空 lib（公開 API なし）、探索コードが `examples/` のみに存在、`cargo build --examples -p pilot`（`_template` 含む）通過、`cargo run -p pilot --example _template` 実行を確認する。
   - 「Cargo の `examples/` は他クレートから依存できず、空 lib は API 露出なし」ゆえ inbound edge が構造的に発生し得ないこと、および他クレートの `Cargo.toml` に `pilot` 依存が無いことを確認する（命綱の構造的担保の検証）。
@@ -58,7 +58,7 @@
   - _Requirements: 2.1, 2.2, 2.6, 3.4, 4.1, 4.2, NFR-2, NFR-3_
   - _Depends: 1.1, 1.2_
   - _Boundary: crates/pilot_
-- [ ] 5.2 (P) ドキュメント整合検証
+- [x] 5.2 (P) ドキュメント整合検証
   - 次を確認する: `two-tunnel.md` に全規律（命綱・ハードゲート・依存マップ・削除/隔離・README 規約・inbound 人手レビュー規律・defer 方針）が到達可能、常駐側（`workflow.md`/`focus.md`）から `two-tunnel.md` へ参照が辿れる、`workflow.md` は追記のみで既存規約（PR ベース・main 直 push 禁止・完了手順）が不変、`roadmap.md` に go 記法凡例が存在、`completed/kiro-P0-roadmap-management` が未改変、全成果物がテキストベースで Git 追跡可能。
   - `(P)` は Task 5.1（`crates/pilot` 境界）との並列を指す。自身の依存（Task 2/3/4 と同一ドキュメント群）とは並列しない。
   - 完了状態: 上記整合チェックが全てパスし、`workflow.md` の既存規約に対する変更が無い（追記のみ）ことを確認できる。
