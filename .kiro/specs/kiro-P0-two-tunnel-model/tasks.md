@@ -36,7 +36,7 @@
   - _Boundary: roadmap.md_
 
 - [ ] 4. workflow 統合 ＋ 常駐ポインタ
-- [ ] 4.1 workflow.md に二坑統合節を追記
+- [x] 4.1 workflow.md に二坑統合節を追記
   - `workflow.md` に二坑統合節を追記する: 先進坑フェーズと既存フロー（requirements→design→tasks→implementation→complete）の関係、go ハードゲートを本坑着手の前提条件として、依存マップ重点検証ルール、削除/隔離規律、先進坑の多重並列運用（既存 Agent/Workflow 機構を用い新規基盤を開発しない）。二坑詳細は `two-tunnel.md` へ委譲し要約＋参照に留める（常駐コスト抑制）。
   - 機械ゲート/DoD ゲート統合は追加しない。既存の「ブランチ＆マージ戦略」「実装完了時のアクション」「仕様フェーズフロー」は不変（追記のみ）。
   - 完了状態: `workflow.md` の diff が追記のみで既存節を改変せず、二坑統合節から `two-tunnel.md` への参照があり、機械ゲート/DoD 統合の記述を含まない。
