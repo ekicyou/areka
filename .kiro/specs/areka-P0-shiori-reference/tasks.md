@@ -23,7 +23,7 @@
   - _Requirements: 1.4, 3.1, 3.2, 3.3, 3.4, 8.1_
   - _Boundary: ReferenceBrain_
 
-- [ ] 2.3 遅延応答（pending＋トークン）と Complete 発火
+- [x] 2.3 遅延応答（pending＋トークン）と Complete 発火
   - 遅延扱い時に即時応答文字列を伴わず `SHIORI_S_PENDING`＋採番した相関トークンを返し、トークンを完了まで突合可能に保持する
   - 保持 host へ vtable 直呼びで `Complete(token, response)` を発火し、対応トークンと応答文字列を渡す
   - 観測: 遅延 `Request` が `SHIORI_S_PENDING`＋トークンを返し、保持 host へ `Complete` を発火するユニットテストが通る
