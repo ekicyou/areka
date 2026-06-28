@@ -1,16 +1,16 @@
 {
   "feature_name": "areka-P0-shiori-reference",
   "created_at": "2026-06-27T04:43:10Z",
-  "updated_at": "2026-06-27T04:43:10Z",
+  "updated_at": "2026-06-28T00:00:00Z",
   "language": "ja",
-  "phase": "requirements-generated",
+  "phase": "design-generated",
   "approvals": {
     "requirements": {
       "generated": true,
-      "approved": false
+      "approved": true
     },
     "design": {
-      "generated": false,
+      "generated": true,
       "approved": false
     },
     "tasks": {

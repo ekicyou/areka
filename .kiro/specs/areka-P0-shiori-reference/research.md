@@ -114,3 +114,59 @@
 - **変更しない境界の明文化**: shiori-abi・`ShioriHostSink`・`ShioriSession` は不変。リファレンス脳は ABI 面を変えず、既存セッション規律を利用する（要件 1.3/6.5/8.3）。
 - **content 不透明性の徹底**: 応答は固定文字列 or 受信 content のエコーのみ。パース・スキーマ・意味づけを一切持ち込まない（要件 1.4/8.1）。正準プロトコル・DLL ホスト・pasta・conformance は本仕様で実装しない（要件 8.2）。
 - **持ち越すリサーチ**: §6 の 6 項目を design.md の Discovery/技術調査で確定する。
+
+---
+
+# 設計フェーズ追記（Discovery: Light / Extension）
+
+> 上記ギャップ分析（§1〜§7）に対し、設計フェーズで §6 の Research Needed 8 項目を決定した記録。既存コードの実シグネチャ確認（`shiori-abi`・`shiori_host.rs`・`shiori_session.rs`・`main.rs`・既存テストモック）に基づく。
+
+## Discovery サマリ（設計フェーズ）
+- **Discovery Scope**: Extension（light discovery）。新規アルゴリズム・外部依存なし。確定済み ABI（`shiori-abi`）と既存受け皿（`ShioriHostSink`/`ShioriSession`）の再構成が中心。
+- **検証済み実シグネチャ**: `IShiori::{Load,Unload,Request}`（`Request(input:*const HSTRING, out_response:*mut HSTRING, out_token:*mut u64)->HRESULT`）、`IShioriHost::{Raise,Complete}`、`ShioriExt::{load,unload,request}->Result<RequestOutcome,ShioriError>`、`CorrelationTokenAllocator::next()->CorrelationToken`、`ShioriSession::{activate,request,poll_completions,expire_if_elapsed,unload}`、`HostMessage::{Raised,Completed}`、HRESULT 定数（`SHIORI_S_PENDING`=0x20A1_0001 / `SHIORI_E_NOT_LOADED`=0xA0A1_0002 / `SHIORI_E_UNKNOWN_TOKEN`=0xA0A1_0003）。
+- **昇格元テンプレ**: `MockBrain`（即時 move-out）/`DeferringBrain`（host を `from_raw_borrowed`＋`cloned()` で AddRef 保持、vtable 直呼びで `Complete`/`Raise`）/`StatefulBrain`（`AtomicBool` ＋未ロード拒否）の和集合を 1 つの製品コード脳へ統合。
+
+## 設計判断（§6 Research Needed の決定）
+
+### Decision 1: デモ駆動スレッドと遅延待ち合わせ（§6-1 / §6-2）
+- **Context**: `#[implement(IShiori)]` 生成 COM オブジェクトは `!Send`/`!Sync` 想定。`main.rs` は `WinThreadMgr` ブロッキングメッセージループ＋`bevy_ecs` World＋async `CommandSender` で動く。どのスレッドで脳を生成・駆動し `poll_completions` を回すか。
+- **Alternatives**: (A) bevy World system／async タスクに `poll_completions` を相乗り（毎フレーム drain）。(B) `mgr.run()` 前に main スレッドで同期完結するデモ関数を一度だけ駆動。
+- **Selected**: (B)。デモ脳・`ShioriSession`・`poll_completions` を **すべて main スレッド上**で、`mgr.run()`（メッセージループ）に入る前に同期完結させる。リファレンス脳は遅延 request に対し `Request` 内で即トークンを発行し、`Complete` をデモドライバが明示トリガするタイミング（request 直後の同一ループ反復）で同期発火する。`poll_completions` を同ループで drain して突き合わせる。
+- **Rationale**: COM スレッドアフィニティ問題（COM オブジェクトと sink・session が同一スレッドに収まる）と遅延待ち合わせ問題（タイマ／クロスタスク不要・決定的）を同時に解消。`ShioriSession` の単一 in-flight・`poll_completions`・`expire_if_elapsed` 利用面をそのまま使う。実時間 sleep 非依存。
+- **Trade-offs**: ✅ 配線最小・決定的・スレッド規律単純。❌ 「非同期実行系での遅延圧送」の実演にはならない（本仕様の狙いは各経路の疎通証明であり、非同期圧送は下流／別仕様の範疇のため許容）。
+- **Follow-up**: メッセージループ前駆動が UI 立ち上げ（シェル/バルーン）を阻害しないこと（同期完結のため短時間）を実装時に確認。
+
+### Decision 2: コンストラクタ取得機構 `shiori_create`（§6-7）
+- **Context**: R9 が「`IShiori` を生成する唯一の純粋 C コンストラクタ `shiori_create`」を要求。実 DLL 境界（cdylib＋`LoadLibraryW`）越しに取得するか、in-tree シンボル直呼びか。
+- **Alternatives**: (A) リファレンスを `cdylib` 化し areka が `LoadLibraryW`＋`GetProcAddress("shiori_create")` で実 DLL 境界を渡る。(B) in-tree モジュールが `extern "C"` `#[no_mangle]` で `shiori_create` を公開し、areka が直接シンボル呼び出し。
+- **Selected**: (B)。リファレンス脳は areka 内部モジュール（`reference_brain.rs`）として `pub extern "C" fn shiori_create(out: *mut *mut c_void) -> HRESULT` を `#[no_mangle]` で公開し、デモドライバは in-tree でこの関数を直接呼ぶ。署名・所有権（参照カウント 1 を out 引数で move-out、失敗時 out 未書込・失敗 HRESULT）は R9.2〜R9.4 を厳密に満たす純粋 C 入口形を採る。
+- **Rationale**: R9.7 が本コンストラクタ契約の対象を **COM（x64/ARM64・in-proc）経路の生成入口に限定**し、32bit DLL ホスティング固有の DLL 境界は明示的に `areka-P0-shiori-host-32` の責務。cdylib 化は §6-1/2 のスレッド・配線複雑さを増やすだけで R6 の「実アプリ（areka 本体）で動く証明」に寄与しない。純粋 C 署名そのものが下流の「正解見本」であり、DLL ロード経路は host-32 が本見本を参照して実装する。
+- **Trade-offs**: ✅ 配線最小・スレッド規律単純・署名は忠実な見本。❌ 実 DLL ロード経路は本仕様で実走しない（host-32 の責務に正しく委譲）。
+- **Follow-up**: `extern "C"` シンボルが in-tree 直呼びでも `#[no_mangle]` 名で解決できること、将来 host-32 が同シンボルを `GetProcAddress` で引ける署名であることを doc で明記。
+
+### Decision 3: 観測手段とビルド構成（§6-3）
+- **Selected**: 各経路（load/即時/遅延/Raise/unload/shiori_create）を `tracing::info!` で出力（`logging.md` 準拠・スコーププレフィックス `[ref-brain]`/`[shiori-demo]`・構造化フィールド優先）。デモは debug ビルド（`windows_subsystem="windows"` 非適用＝コンソール有）または `RUST_LOG` 制御で観測。
+- **Rationale**: R6.4 は「開発者が構造化 tracing ログで観測可能」を要求し視覚 UX 非依存。release のコンソール非表示は debug 実行／`RUST_LOG` で回避。
+
+### Decision 4: doc の置き場所（§6-4）
+- **Selected**: 単一の参照点をリファレンス脳モジュール（`reference_brain.rs`）の module-level doc（`//!`）に集約し、各経路（ロード／アンロード・即時・遅延・Raise・`shiori_create`）の正解見本説明・content 不透明方針・下流位置づけを記述。`doc/COMPAT_ARCHITECTURE.md` §5 からの参照リンクのみ追加（内容複製はしない）。
+- **Rationale**: R7 が「下流が参照しやすい単一の参照点」を要求。content 語彙の二重定義禁止（R8.1・正準プロトコルは `areka-P0-shiori-protocol`／`doc/shiori/fragments/`）に整合させ、module doc は content スキーマを持たず不透明方針のみ記す。
+
+### Decision 5: トークン採番（§6-6）
+- **Selected**: 遅延トークンは `CorrelationTokenAllocator`（既存・`shiori-abi`）を脳内に保持して `next()` で採番。固定値は使わない。
+- **Rationale**: リファレンスとして「単調増加トークン採番を見せる」見本価値が高い。既存アロケータ再利用で新規実装ゼロ。
+
+### Decision 6: ARM64 ビルド（§6-8）
+- **Selected**: x64 ＋ ARM64（CPU ネイティブ前提・x86 除外）。`extern "C"` と `extern "system"` は対象各プラットフォームで同一 ABI（R9.2）。実装差は無く、ビルド／CI 上の ARM64 ターゲット確認のみ。
+- **Rationale**: content 不透明・呼出規約一意のため、ソース上の分岐は不要。
+
+## Build-vs-Adopt / Simplification（Synthesis 結果）
+- **Generalization**: 即時／遅延／Raise／未ロード拒否は「1 つの `IShiori` 実装の各経路」であり、3 テストモックの和集合を **単一リファレンス脳**へ統合（インターフェイス＝`IShiori` のまま、実装は最小）。脳とデモドライバの 2 責務に分離（脳＝見本性、ドライバ＝本体実走性）。
+- **Adopt**: `shiori-abi`（`IShiori`/`ShioriExt`/`CorrelationTokenAllocator`/HRESULT 定数）・areka `ShioriHostSink`/`ShioriSession` を不変で採用。新規アルゴリズム・外部依存なし。
+- **Simplification**: cdylib／LoadLibrary 経路を排除（host-32 へ委譲）。非同期圧送・タイマ・クロススレッド待ち合わせを排除（同期 main-thread 駆動）。`example` バイナリ案は不採用（R6 の「areka 本体で動く証明」を満たすため main フック＋フラグゲートを採用）。
+
+## Risks & Mitigations（設計フェーズ）
+- **COM スレッドアフィニティ** — main スレッド同期完結で回避（Decision 1）。
+- **release コンソール非表示と観測** — debug 実行／`RUST_LOG` で回避（Decision 3）。
+- **`#![allow(dead_code)]` 解消** — デモ配線が入ると `shiori_host`/`shiori_session` の dead_code が解消（ギャップ §2.2）。実装時に `main.rs` の allow 属性整理を確認。
+- **境界逸脱（content 語彙の混入）** — 応答は固定文字列 or エコーのみ。パース／スキーマ／意味づけ禁止（R8.1）。doc は不透明方針のみ（Decision 4）。
