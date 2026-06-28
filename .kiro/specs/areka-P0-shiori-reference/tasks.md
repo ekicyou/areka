@@ -53,7 +53,7 @@
   - _Depends: 2.1, 2.5_
 
 - [ ] 3. デモドライバ
-- [ ] 3.1 セッション駆動と各経路の観測
+- [x] 3.1 セッション駆動と各経路の観測
   - `shiori_create` で `IShiori` を取得・所有し、`ShioriSession::activate` で in-proc アクティベーションする
   - OnBoot 形の不透明リクエストを例に、即時応答・遅延応答・能動通知（Raise）を含む数往復をドライブし、既存セッション規律（単一 in-flight・相関トークン突合・タイムアウト）に従い `poll_completions` を同一ループで drain して遅延完了を待ち合わせる
   - 即時応答・遅延応答（最低 1 回ずつ）・Raise（最低 1 回）を実演し、完了後 `unload` で後始末して `IShiori` を Release する
@@ -96,3 +96,8 @@
   - 観測: フラグ有効 debug 実行で各経路の info ログが出力され、x64／ARM64 双方のビルドが成功する
   - _Requirements: 6.7, 6.8, 8.3_
   - _Depends: 4.1_
+
+## Implementation Notes
+- 脳ハンドルの確保: `ShioriSession::activate(brain)` は `IShiori` を move-in し脳アクセサを公開しない。デモから `ReferenceBrain` の `arm_defer_next`/`complete_pending`/`fire_raise` を叩くには、activate 前に `brain.clone()`（AddRef）でハンドルを保持し `AsImpl::<ReferenceBrain>::as_impl(&handle)` で downcast する（design §System Flows のシーケンスどおり）。
+- (3.1→3.2 申し送り) `shiori_demo` で `complete_pending`/`fire_raise` の host-call HRESULT 失敗を `DemoError::Create` に流用している（happy path では到達不能）。3.2 のエラー処理で host vtable 呼び出し失敗用の variant（または `Session`）へ是正すること。
+- ビルド衛生: `cargo clippy` は依存先 `wintf` の既存エラーで areka 到達前に失敗するため検証ゲートに使わない。`cargo build -p areka`／`cargo test -p areka` を使う。areka は bin クレートのため `--doc`/`--lib` 不可（テストは `--bin areka`）。tracing ログ検証は `tracing_subscriber::registry()` ＋ capturing `Layer` ＋ `with_default` で行える。
