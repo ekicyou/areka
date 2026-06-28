@@ -105,6 +105,8 @@
 4. **doc の置き場所（要件 7）**: 「正解見本」文書を `doc/`（COMPAT_ARCHITECTURE と並ぶ独立文書）に置くか、リファレンス脳 module の module-level doc に集約するか、両方か。下流（host-32／pasta）が参照しやすい単一の参照点を決める。
 5. **デモの起動形態**: areka 本体起動時に常に走らせるか、フラグ/環境変数でデモを有効化するか、example バイナリに切り出すか。R6 の「実アプリ上で動く証明」と通常起動時の UI 体験（シェル/バルーン）の両立。
 6. **トークン採番**: 遅延トークンを固定値にするか `CorrelationTokenAllocator`（既存）で採番するか。リファレンスとしては採番を見せる方が見本価値が高い可能性。
+7. **コンストラクタ取得機構（要件 9）**: 純粋Cコンストラクタ `shiori_create`（`extern "C"`・`#[no_mangle]`・`HRESULT shiori_create(IShiori** out)`）を、(A) リファレンスを実 `cdylib` 化し areka が `LoadLibraryW`＋`GetProcAddress("shiori_create")` で実 DLL 境界を渡って取得するか、(B) in-tree シンボル直呼びへ縮退するか。「DLL 契約の正解見本」を名乗るなら (A) が忠実だが、デモ配線（§6-1/2）の複雑さとのトレードオフで決定。シンボル可視性・エクスポート設定（`.def`／`cdylib` crate-type）も併せて確定する。
+8. **ARM64 ビルド（要件 8.3）**: 対象が x64 ＋ ARM64 へ拡張。content 不透明・呼出規約一意（x86 除外）のため実装差は無い想定だが、ARM64 ターゲットのビルド/CI 確認とクロスビルド経路を設計フェーズで点検する。
 
 ## 7. 設計フェーズへの推奨
 

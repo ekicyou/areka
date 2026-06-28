@@ -15,6 +15,7 @@ content（リクエスト・応答・通知の本文）は本仕様では**不�
 ## Boundary Context
 - **In scope（本仕様が責務を持つ範囲）**:
   - 最小の native リファレンス脳を、製品コード（非テスト）として `IShiori` を実装する形で提供すること（固定／エコー応答、遅延／Raise の最小実演を含む）
+  - COM-SHIORI（x64／ARM64）が `IShiori` を生成する唯一の純粋Cコンストラクタ・エクスポート契約（`shiori_create`）の定義・実装、および areka がそれ経由で脳を取得すること
   - areka 本体から、リファレンス脳を in-proc アクティベーションで挿し、リクエストを数往復ドライブし、後始末（unload）する**実走デモ経路**
   - 即時応答（同期）、遅延応答（pending ＋後続完了）、能動通知（Raise）の各経路を実アプリ上で疎通させること
   - リファレンス脳と実走デモ経路の参照点としての**ドキュメント化**
@@ -25,11 +26,11 @@ content（リクエスト・応答・通知の本文）は本仕様では**不�
   - さくらスクリプトの解釈・実行
   - DLL 適合（conformance）テストキット（`areka-P0-shiori-host-32` 実装過程で決定）
   - content の意味づけ・スキーマ・解析（本仕様では content は不透明文字列のまま固定／エコー）
-  - 毎秒ポーリング等の上位タイミングロジック、x86（32bit）ネイティブ直結（x64／CPU ネイティブ前提）
+  - 毎秒ポーリング等の上位タイミングロジック、x86（32bit）ネイティブ直結（対象は x64 ＋ ARM64／CPU ネイティブ前提・x86 除外）
 - **Adjacent expectations（隣接仕様・既存資産への期待）**:
   - 上流 `areka-P0-shiori-com`（完成）が提供する `IShiori`/`IShioriHost` ABI と `shiori-abi` の公開 API（`ShioriExt`・`#[implement(IShiori)]`）を、本リファレンス脳は変更せずに利用すること
   - areka 本体が既に備える in-proc アクティベーション受け皿（`IShioriHost` sink／セッション規律：単一インフライト・遅延突き合わせ・タイムアウト・後始末）を、本仕様の実走デモ経路は利用すること
-  - 下流 `areka-P0-shiori-host-32`／`areka-P0-reference-ghost` は、本リファレンス脳を `IShiori` 実装の見本として参照すること（DLL 契約境界は host-32 実装過程で本リファレンスを見本に決定）
+  - 下流 `areka-P0-shiori-host-32`／`areka-P0-reference-ghost` は、本リファレンス脳を `IShiori` 実装と純粋Cコンストラクタ（`shiori_create`）の見本として参照すること（COM 経路の生成入口契約は本仕様が確定。過去互換 flat-C／32bit ホスティング固有の DLL 境界は host-32 実装過程で決定）
   - `areka-P0-shiori-protocol` は、本リファレンス脳が将来 json-rpc content を採用する際の起点となること
   - ABI は流動契約として扱われ、上流 ABI が変動した場合は in-tree 実装者として本リファレンス脳も追従して更新されること
 
@@ -83,7 +84,7 @@ content（リクエスト・応答・通知の本文）は本仕様では**不�
 **Objective:** 統合者として、areka 本体からリファレンス脳を挿して数往復ドライブし後始末する最小デモ経路がほしい。これにより、ABI の各経路が実アプリ上で end-to-end に疎通することを観測できる。
 
 #### Acceptance Criteria
-1. When 実走デモ経路が起動するとき, the areka demo path shall リファレンス脳を in-proc アクティベーションで挿し（ロードし）、利用可能な状態にする。
+1. When 実走デモ経路が起動するとき, the areka demo path shall リファレンス脳を正準コンストラクタ `shiori_create`（要件 9）経由で取得し、in-proc アクティベーションで挿し（ロードし）、利用可能な状態にする。
 2. When リファレンス脳がアクティベーションされた後, the areka demo path shall 即時応答・遅延応答・能動通知（Raise）の各経路を含む数往復のリクエストをドライブする。
 3. When 数往復のドライブが完了したとき, the areka demo path shall リファレンス脳をアンロードして後始末する。
 4. The areka demo path shall 即時応答・遅延応答・能動通知の各経路の疎通結果を、利用者または開発者が観測可能な形で示す。
@@ -104,4 +105,16 @@ content（リクエスト・応答・通知の本文）は本仕様では**不�
 #### Acceptance Criteria
 1. The reference SHIORI brain shall リクエスト・応答・通知の content を、上流 ABI が定める不透明な文字列表現（UTF-16）のまま取り回し、解析・スキーマ検証・意味づけを行わない。
 2. The reference SHIORI brain shall 正準 content プロトコル、32bit DLL ホスティング、pasta 旗艦脳、さくらスクリプト解釈、適合（conformance）テストキットを実装しない。
-3. The reference SHIORI brain shall x64／CPU ネイティブ前提（x86 除外）に従い、上流 ABI の流動契約（変更時は in-tree 実装者を追従更新）に整合する。
+3. The reference SHIORI brain shall x64 ＋ ARM64（CPU ネイティブ前提・x86 除外）に従い、上流 ABI の流動契約（変更時は in-tree 実装者を追従更新）に整合する。
+
+### Requirement 9: 純粋Cコンストラクタ・エクスポート契約（COM-SHIORI 生成入口）
+**Objective:** 下流実装者（`areka-P0-shiori-host-32`・`areka-P0-reference-ghost`）として、COM-SHIORI が `IShiori` 実体を生成する唯一の入口＝純粋Cコンストラクタの契約を、リファレンスが正解見本として定義・実装してほしい。これにより、DLL 境界の生成契約が一点に確定し、下流が同一の入口形を踏襲できる。
+
+#### Acceptance Criteria
+1. The reference COM-SHIORI shall `IShiori` 実体を生成する唯一の純粋Cコンストラクタ関数（正準名 `shiori_create`）をエクスポートし、`IShiori` の生成をこの入口に一元化する。
+2. The shiori_create constructor shall 対象プラットフォーム（x64／ARM64）で最も標準的な呼出規約＝プラットフォーム標準 C ABI（Rust 表記 `extern "C"`）に従う。x86 を対象外とするため対象各プラットフォームでは呼出規約が一意に定まり、`extern "C"` と `extern "system"` は同一 ABI となる。
+3. When shiori_create が `IShiori` 実体の生成に成功するとき, the shiori_create constructor shall 参照カウント 1 の `IShiori` を出力引数経由で呼び出し側へ渡し（`HRESULT shiori_create(IShiori** out)` 形）、成功を表す HRESULT を返す。
+4. If shiori_create が生成に失敗したとき, then the shiori_create constructor shall 出力を生成せず、失敗を判別可能な HRESULT として返す。
+5. The areka demo path shall shiori_create が返した `IShiori` を所有し、`Load(host)`→リクエスト数往復→`Unload` の後に参照を解放（Release）する。
+6. The reference COM-SHIORI shall この純粋Cコンストラクタ・エクスポート契約を、下流（`areka-P0-shiori-host-32`・`areka-P0-reference-ghost`）が DLL 境界の生成契約の正解見本として参照できる形で提供する。
+7. The reference COM-SHIORI shall 本コンストラクタ契約の対象を COM（x64／ARM64・in-proc）経路の生成入口に限定し、過去互換 flat-C（`load`/`unload`/`request`）・32bit DLL ホスティングは対象外（→ `areka-P0-shiori-host-32`）とする。
