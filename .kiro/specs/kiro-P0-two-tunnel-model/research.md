@@ -116,6 +116,8 @@ error: failed to load source for dependency `pasta_core`
 
 ### 4.A CI 依存方向ガードの実装（要件 4-2/4-3・設計論点 C1）
 
+> **【設計ディスカッションで覆る/descope】**: 本節の機械ガード（依存方向ガード）実装手段の選定は、設計ディスカッション（議題1）で**本仕様の契約外（defer）**に決定。命綱（葉ノード隔離）は `crates/pilot` の**構造**（空 lib ＋ 探索コードは `examples/` のみ）で構造的に担保することとなり、専用の機械チェック（`cargo metadata` 走査 / `cargo-deny` 等）は採用しない（不便が顕在化した時点で別途依頼する YAGNI 方針）。以下の A1/A2/A3 比較は歴史的記録として残すが、現在の設計には反映されない。
+
 | Option | 内容 | ✅ | ❌ |
 |--------|------|----|----|
 | **A1: cargo-deny `bans.deny`** | `deny.toml` で `pilot` クレートへの依存を禁止 edge として宣言 | 宣言的・当環境に 0.19.9 導入済・将来の他依存規律にも転用可 | CI ランナーへの別インストール要・submodule init 必須・edge 単位の禁止表現の検証要 |
@@ -171,7 +173,8 @@ error: failed to load source for dependency `pasta_core`
 要件付録 C の 3 論点を、実地調査で具体化した上で再掲・拡張する。
 
 1. **【最優先・C1】CI 依存方向ガードの実装手段**: A1 cargo-deny（導入済）/ A2 cargo metadata 自前 / A3 xtask の三択。inbound-edge 禁止（誰も pilot に依存しない）の表現可否を design で PoC 確認。**Research Needed: cargo-deny `bans` で「特定クレートへの被依存禁止」を表現できるか実証。**
-2. **【解決済み・議題1】機械チェックの乗り物 = ローカル workflow ゲート（GitHub Actions 新設は対象外）**: 未リリース repo を GitHub CI で重くしない開発者判断。マージは本チャット駆動の `/kiro-complete` に集約されるため、隔離チェック（`cargo build --examples -p pilot` ＋ 依存方向ガード ＋ `git submodule update --init --recursive` 前段）を `/kiro-complete` の DoD ゲート（既存の `cargo test --workspace` に並置）へ統合する形で NFR-3「機械的厳守」を満たす。要件 R4 を「CI Pipeline」→「Isolation Gate（ローカル workflow 統合）」へ改稿済（R4-5/4-6/4-7・NFR-3）。リモート CI 化は repo がリリースに近づいた際の後続候補。**残る design 論点は実装手段（cargo-deny / cargo metadata / xtask）の選定のみ（下記 §6-1 / §4.A）。**
+   - **【設計ディスカッションで覆る/descope】**: 機械ガードそのものが設計ディスカッションで defer（契約外）に決定したため、この実装手段選定の論点は消滅。命綱は pilot の構造（空 lib ＋ examples-only）で構造的に担保し、唯一の inbound 経路（Cargo.toml への一行依存追加）は人手レビューで捕捉する。機械チェックは将来 inbound 依存混入が現実の問題化した時点で別途依頼する。
+2. **【解決済み・議題1 → 設計ディスカッションで descope】機械チェックの乗り物**: 当初は機械チェックの乗り物 = ローカル workflow ゲート（`/kiro-complete` DoD・GitHub Actions 新設は対象外）と決定していた。**【設計ディスカッションで覆る/descope】**: その後の設計ディスカッションで**機械チェック（隔離ゲート）自体が本仕様の契約外（defer）**に決定。命綱は `crates/pilot` の構造（空 lib ＋ examples-only）で構造的に担保し、唯一の inbound 経路（Cargo.toml への一行依存追加）は人手レビューで捕捉する。よって「DoD ゲートへの隔離ゲート統合」「実装手段（cargo-deny / cargo metadata / xtask）の選定」の論点は消滅。要件 R4 も「命綱の構造的担保（機械自動化は defer）」へ改稿済（R4-1〜4-4・NFR-3 は構造的担保へ）。機械チェック化はリモート CI 同様、inbound 依存混入が現実の問題化した時点の後続候補。
 3. **【C2】pilot worktree のライフサイクル（いつ捨てるか）**: 要件外（運用詳細）だが、worktree＋submodule 制約と絡む。pilot crate は永続（隔離保全）だが、探索用 throwaway worktree の破棄タイミングは運用記述として workflow へ。
 4. **【C3】テンプレ example の配置**: `examples/_template/` （build 対象・腐敗検出に入る）vs `templates/`（build 対象外）。`main.rs` 必須規約で「README だけのフォルダが example 認識されない」問題を担保。
 5. **go ゲート記法の表現先**: `_Depends(confirmed): pilot` を (a) spec.json スキーマ拡張（kiro-spec-schema.md に新フィールド）／(b) roadmap.md の既存自由テキスト `Dependencies:` の拡張／(c) tasks.md の `_Requirements:` 類似記法、のどこに置くか。既存 `dependencies` 配列との二重管理回避が論点。
@@ -183,11 +186,13 @@ error: failed to load source for dependency `pasta_core`
 
 ## 7. 推奨（design への申し送り・決定ではない）
 
-- steering: **C3 二層**（既存 focus→roadmap 規約と整合）。
-- pilot crate: `shiori-abi`（publish=false 葉）＋`wintf/examples/<dir>/main.rs` の合成で範例どおり。
-- 機械チェックの乗り物: **ローカル workflow 完了ゲート（`/kiro-complete` DoD）に確定（議題1）**。GitHub Actions 新設は対象外。`git submodule update --init --recursive` → `cargo build --examples -p pilot` → 依存方向ガード を DoD ゲートに統合（既存 `cargo test --workspace` に並置）。
-- ガード手段（design 送り）: 当環境に `cargo-deny` 導入済ゆえ A1 を第一候補に PoC、不適なら A2（cargo metadata 自前）へフォールバック。乗り物がローカルゆえ「CI ランナーへの別インストール」懸念は当面解消（ローカル実行環境に導入済）。
-- go ゲート記法: roadmap.md の既存 `Dependencies:` 自由テキスト拡張（最小コスト）を第一候補、厳密化が要れば spec.json スキーマ拡張。
+> **【設計ディスカッションで覆る/descope】**: 本節の「機械チェックの乗り物」「ガード手段」の推奨は、設計ディスカッションで機械チェック自体が defer（契約外）になったため失効。命綱は `crates/pilot` の構造（空 lib ＋ examples-only）で構造的に担保し、inbound 依存は人手レビューで捕捉する。下記の該当 2 項目は歴史的記録。
+
+- steering: **C3 二層**（既存 focus→roadmap 規約と整合）。【有効】
+- pilot crate: `shiori-abi`（publish=false 葉）＋`wintf/examples/<dir>/main.rs` の合成で範例どおり。【有効】※命綱は空 lib ＋ examples-only の構造で担保。
+- ~~機械チェックの乗り物: ローカル workflow 完了ゲート（`/kiro-complete` DoD）に確定（議題1）。~~ **【descope】機械チェック自体が契約外（defer）。隔離ゲートは設けない。**
+- ~~ガード手段（design 送り）: cargo-deny A1 第一候補 / A2 フォールバック。~~ **【descope】依存方向ガードは実装しない（構造的担保＋人手レビュー）。**
+- go ゲート記法: roadmap.md の既存 `Dependencies:` 自由テキスト拡張（最小コスト）を第一候補、厳密化が要れば spec.json スキーマ拡張。【有効】
 
 ---
 
@@ -202,6 +207,8 @@ error: failed to load source for dependency `pasta_core`
 ## 9. Design Phase — Synthesis & Decisions（2026-06-28・design 生成時に追記）
 
 > kiro-spec-design（Light discovery）で §4–§7 の論点を確定した記録。design.md の「Key Decisions」と対応。
+>
+> **【設計ディスカッションで覆る/descope】（2026-06-28・design 生成後の設計ディスカッション）**: 本シンセシスは「機械ゲート（依存方向ガード `check-isolation.ps1` ＋ ローカル DoD ゲート統合）」を含む三層アーキテクチャを前提としていたが、その後の設計ディスカッションで**機械ゲートを本仕様の契約から除外（descope）**。命綱（葉ノード隔離）は `crates/pilot` の**構造**（空 lib ＋ 探索コードは `examples/` のみ）で構造的に担保し、唯一の inbound 経路（Cargo.toml への一行依存追加）は人手レビューで捕捉する。アーキテクチャは steering 規律層 ＋ pilot 検疫所層の**二層**となり、機械ゲート層・`check-isolation.ps1`・DoD ゲート統合は廃止された。以下の §9.2〜§9.5 のうち機械ガード/DoD ゲートに言及する箇所は歴史的記録であり、現在の design.md は構造的担保に置き換わっている。
 
 ### 9.1 Discovery 分類
 
@@ -210,15 +217,15 @@ error: failed to load source for dependency `pasta_core`
 ### 9.2 Synthesis 3 レンズ
 
 - **Generalization**: R1/R5/R6/R7（規律系）はすべて「二坑規律の正本を 1 文書に集約し常駐側から参照する」一般問題の変奏 → `two-tunnel.md`（manual）一葉に集約し、workflow.md は参照のみ（No Hidden Shared Ownership 回避）。R4 系（4.1–4.7）は「命綱の機械執行」一般問題 → 単一スクリプト `check-isolation.ps1` に集約。
-- **Build vs Adopt**: 依存方向ガードで cargo-deny（adopt）vs 自前 metadata 走査（build）を評価 → **build（自前 metadata 走査）を選定**。理由: (a) cargo-deny `bans` は outbound 表現が主で「特定クレートへの被依存（inbound）禁止」の表現可否が PoC 依存・不確実、(b) CI/ローカル両環境への別途インストールを要し二坑モデルが戒める依存負債になる、(c) metadata の resolve グラフ走査は追加依存ゼロで inbound-edge 不変条件を直接表現できる。steering 配置は既存 focus→roadmap 二層を **adopt**（C3）。クレート骨格は `shiori-abi`＋`taffy_flex_demo` を **adopt**。
-- **Simplification**: xtask クレート新設（A3）は本仕様スコープを広げる投機的抽象として**棄却**。CI bootstrap（B1/B2）は乗り物がローカル DoD ゲートに確定したため**不要化**（要件外）。pilot は空 `src/lib.rs`＋examples のみの最小構成。
+- **Build vs Adopt**: ~~依存方向ガードで cargo-deny（adopt）vs 自前 metadata 走査（build）を評価 → build（自前 metadata 走査）を選定。~~ **【設計ディスカッションで覆る/descope】**: 機械ガード自体が defer（契約外）となったため build/adopt の評価は無効化。命綱は機械ガードを**作らず**、`crates/pilot` の構造（空 lib ＋ examples-only）で構造的に担保する（neither build nor adopt — 構造で済ませる最小化）。steering 配置は既存 focus→roadmap 二層を **adopt**（C3）。クレート骨格は `shiori-abi`＋`taffy_flex_demo` を **adopt**。
+- **Simplification**: xtask クレート新設（A3）は本仕様スコープを広げる投機的抽象として**棄却**。CI bootstrap（B1/B2）は**不要化**（要件外）。**【設計ディスカッションで覆る/descope・さらなる単純化】**: 機械ガード（`check-isolation.ps1`）と DoD ゲート統合も **descope** され、命綱は pilot の構造（空 `src/lib.rs` ＋ examples のみ）で構造的に担保する最小構成へ収斂。スクリプト・ゲート・統合先がすべて不要となり、二坑モデルが戒める add-only 肥大を設計自身が回避した形。
 
 ### 9.3 確定した設計判断（§6 論点への回答）
 
 | §6 論点 | 確定 | design.md 反映先 |
 |---------|------|------------------|
-| 6-1 依存方向ガード手段 | **cargo metadata ＋ check-isolation.ps1**（cargo-deny 不採用） | Key Decisions / check-isolation.ps1 Batch Contract |
-| 6-2 機械チェックの乗り物 | ローカル workflow DoD ゲート（確定済・議題1） | Architecture / 隔離ゲートフロー |
+| 6-1 依存方向ガード手段 | ~~cargo metadata ＋ check-isolation.ps1~~ → **【descope】機械ガードは defer（契約外）。命綱は構造的担保（空 lib ＋ examples-only）** | Key Decisions「命綱の担保 = 構造的」/「命綱の機械自動化 = defer」 |
+| 6-2 機械チェックの乗り物 | ~~ローカル workflow DoD ゲート（議題1）~~ → **【descope】隔離ゲート自体を設けない。命綱は構造で担保・inbound 依存は人手レビュー** | Architecture（二層）/ go ゲートフローのみ |
 | 6-3 pilot worktree ライフサイクル | 運用記述として workflow.md（pilot crate は永続・隔離保全、throwaway worktree の破棄は運用） | workflow.md 拡張（運用節） |
 | 6-4 テンプレ example 配置 | `examples/_template/`（build 対象・腐敗検出に入る）・`main.rs` 必須規約 | File Structure / examples 規約 |
 | 6-5 go ゲート記法の宿主 | roadmap.md 既存 `Dependencies:` 拡張 `_Depends(confirmed):` | roadmap.md 拡張 / Key Decisions |
@@ -227,10 +234,12 @@ error: failed to load source for dependency `pasta_core`
 
 ### 9.4 Boundary 決定の根拠
 
-- 3 つの独立責務シーム（steering 規律 / pilot crate / 機械ゲート）は並行実装可能で、単一 spec に収めても境界が明確（split 不要）。
-- inbound edge ゼロ（命綱）が唯一の機械執行不変条件であり、ガードロジックの単一所有者は check-isolation.ps1。
+- ~~3 つの独立責務シーム（steering 規律 / pilot crate / 機械ゲート）は並行実装可能~~ → **【descope】機械ゲート層を廃止し、2 つの独立責務シーム（steering 規律 / pilot crate）に縮小**。単一 spec に収めても境界が明確（split 不要）。
+- ~~inbound edge ゼロ（命綱）が唯一の機械執行不変条件であり、ガードロジックの単一所有者は check-isolation.ps1。~~ → **【descope】inbound edge ゼロ（命綱）は `crates/pilot` の構造（空 lib ＋ examples-only）で構造的に担保。機械執行・ガードスクリプトは持たず、唯一の inbound 経路（Cargo.toml への一行依存追加）は人手レビューで捕捉。**
 - 既存規約（workflow ブランチ/完了・completed/ 不変）は不変境界として尊重（追記のみ）。
 
 ### 9.5 Design Review Gate 結果
 
 **1 回目で通過（repair 不要）**。Mechanical checks 全合格（全要件 ID＋NFR-1–5 が traceability に出現、Boundary 4 節充足、File Structure 具体パス充足、orphan component なし、boundary↔file 整合）。Judgment review でも spec gap なし（R4 の「既存 CI 不在」隠れ依存は乗り物=ローカル DoD ゲート確定により解消済み）。
+
+> **【設計ディスカッションで覆る/descope】**: この Design Review Gate は機械ゲート版 design.md を対象とした記録。設計ディスカッションの descope（機械ゲート廃止・命綱を構造的担保へ）を受けて design.md は再改稿され、R4 系は構造的担保基準（4.1 空 lib ＋ examples-only / 4.2 公開 API なし / 4.3 inbound 経路の人手レビュー / 4.4 機械チェック defer）の traceability に置き換わった。改稿後 design.md でも全 8 要件＋NFR-1–5 の traceability は維持されている。

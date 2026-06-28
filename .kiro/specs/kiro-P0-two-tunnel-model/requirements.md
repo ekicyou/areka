@@ -11,7 +11,7 @@
 
 ## Introduction
 
-本仕様は、エージェント駆動開発における**誤った方向の可逆性（reversibility）**を最優先する開発規律「**二坑モデル**」を、ルール（steering 文書）＋インフラ（知見クレート `crates/pilot`・機械ゲート〈依存方向ガード・ローカル workflow 統合〉・workflow ゲート）として確立する。
+本仕様は、エージェント駆動開発における**誤った方向の可逆性（reversibility）**を最優先する開発規律「**二坑モデル**」を、ルール（steering 文書）＋最小の器（知見クレート `crates/pilot`・命綱は同クレートの構造で担保）として確立する。専用の機械ゲートや自動チェックツールは本仕様の契約に含めず、不便が顕在化した時点で別途依頼する（YAGNI 方針）。
 
 ### 背景
 
@@ -41,13 +41,15 @@
 - **In scope**:
   - 二坑モデルの steering 文書化（`.kiro/steering/` に正規文書として確立）。
   - 知見クレート `crates/pilot` の新設（Cargo.toml・workspace 統合・`examples/<spec>/` 規約・テンプレ example＋README 雛形）。
-  - 機械ゲート統合（知見クレートの `cargo build --examples` ＋ production→pilot 依存禁止の機械チェックを、ローカルの workflow 完了ゲート〈`/kiro-complete` の DoD ゲート〉に統合）。
+  - 命綱の構造的担保（`crates/pilot` の空 lib ＋ examples-only 構造による葉ノード隔離）と、inbound 依存追加を捕捉する人手レビュー規律の steering 明文化。
   - workflow.md への二坑統合（先進坑フェーズ・go ハードゲート・依存マップ重点検証ルール・削除/隔離規律）。
 - **Out of scope**:
   - 既存ロードマップの二坑分解（M1 を pilot/main へ割り直す作業）。本モデル確立後の後続 discovery（別作業・本仕様ではない）。
   - 個別の先進坑/本坑 spec の実装そのもの（本仕様はモデルとインフラの確立まで）。
-  - リモート CI（GitHub Actions 等）の新設（未リリースゆえ当面不要・後続候補）。マージは本チャット駆動の `/kiro-complete` に集約されるため、機械チェックはローカル完了ゲートで成立する。
+  - 命綱の機械チェック自動執行（`cargo metadata` 走査 / `cargo-deny` 等による依存方向ガード・examples 腐敗検出）。構造的隔離＋人手レビューで足りるため本仕様の契約外とし、不便が顕在化した時点で別途依頼する。
+  - リモート CI（GitHub Actions 等）の新設（未リリースゆえ当面不要・後続候補）。`.github/` ディレクトリは本仕様では作成しない。
   - 依存マップ検証（R7）の自動チェックツール化（被覆判断・合否基準は人間の判断・対象グラフは小規模ゆえ目視で足りる。不便が生じた時点で別途依頼する想定であり、本仕様の契約には含めない）。
+  - 開発便宜のチェックランナー（`cargo fmt`/`clippy`/`test`/`build` を束ねる `check.ps1` 等）。二坑契約ではなく開発エルゴノミクスゆえ本仕様外（必要なら別途・小物）。
   - 並列実行基盤（workflow/agent fan-out）の新規開発（既存の Agent/Workflow 機構を運用で使う）。
   - production クレート（wintf/dola/areka/shiori-abi 等）への機能追加。
 - **Adjacent expectations**:
@@ -105,19 +107,18 @@
 
 ---
 
-### Requirement 4: 機械ゲート強制（examples ビルド ＋ 依存方向ガード・ローカル workflow 統合）
+### Requirement 4: 命綱の構造的担保（機械自動化は defer）
 
-**Objective:** 開発者/AI として、二坑モデルの不変条件を人手でなく機械で守りたい。それにより規律が形骸化せず確実に維持される。本仕様では未リリース repo の運用実態（マージは本チャット駆動の `/kiro-complete` に集約）に合わせ、機械チェックをリモート CI ではなくローカルの workflow 完了ゲートで成立させる。
+**Objective:** 開発者/AI として、命綱（葉ノード隔離＝production が先進坑コードに依存しない）を確実にしたい。本仕様ではこれを `crates/pilot` の**構造**（空 lib ＋ 探索コードは `examples/` のみ）で担保する。Cargo の `examples/` は他クレートから依存できず、空 lib は依存しても意味のある API を公開しないため、先進坑コードへの被依存は構造的に発生しない。専用の機械チェック（依存方向ガード・examples 腐敗検出）は、構造＋人手レビューで足りるため本仕様の契約に含めず、不便が顕在化した時点で別途依頼する（R7 と同じ YAGNI 方針）。
 
 #### Acceptance Criteria
 
-1. The Isolation Gate **shall** 知見クレートの先進坑コードを `cargo build --examples` 相当でビルドし、腐敗（ビルド破綻）を検出する。
-2. The Isolation Gate **shall** production クレートが知見クレート（先進坑コード）に依存していないことを機械的に検証する。
-3. If production クレートから知見クレートへの依存が検出された場合, then the Isolation Gate **shall** 当該変更を失敗として扱う。
-4. If 知見クレートの先進坑コードがビルドに失敗した場合, then the Isolation Gate **shall** 当該変更を失敗として扱う。
-5. The Isolation Gate **shall** これらのチェックをローカルの workflow 完了ゲート（`/kiro-complete` の DoD ゲート）に統合し、`main` へのマージ前に実行する。
-6. The Isolation Gate **shall** すべての cargo 系ステップの前段で `git submodule update --init --recursive` を実行し、worktree での submodule 未populate による失敗を防ぐ。
-7. Where 将来 repo がリリースに近づきリモート CI が必要になる場合, the Isolation Gate のチェックロジック **shall** リモート CI（GitHub Actions 等）へ後続 spec で移設できる形（再利用可能なスクリプト/コマンド）で実装される。リモート CI の新設自体は本仕様の対象外とする。
+1. The Pilot Crate **shall** 空（または最小）の `lib.rs` を持ち、探索コードを `examples/` 配下のみに置くことで、先進坑コードが他クレートから依存され得ない構造を保証する。
+2. The Pilot Crate **shall** production が依存して意味を持つ公開 API を `lib.rs` に持たない（空 lib 目標）。
+3. The Two-Tunnel Discipline **shall** 唯一の inbound 経路（他クレートの `Cargo.toml` に `pilot` 依存を追加する一行）を変更レビューで捕捉する運用規律を steering に明記する。
+4. Where 将来 inbound 依存の混入が現実の問題になった場合, the Two-Tunnel Discipline **shall** 機械チェック（`cargo metadata` 走査 / `cargo-deny` 等）の追加を別途依頼できる旨を明記する（本仕様では実装しない）。
+
+> **補足（先進坑 examples のビルド）**: 先進坑 example を実際にビルド/実行する際は、worktree での submodule 未populate を避けるため `git submodule update --init --recursive` を前段に要する（既知制約・research §3）。これは運用手順であり、機械ゲートとしては強制しない。
 
 ---
 
@@ -189,9 +190,9 @@ The Two-Tunnel Model **shall** 既存の kiro-style ワークフロー（spec �
 
 The Pilot Crate **shall** 最小依存・`publish = false`・葉ノードを維持し、ワークスペースの 32bit 可搬性とビルド健全性を損なわない。
 
-### NFR-3: 機械的厳守
+### NFR-3: 命綱の構造的担保
 
-The Two-Tunnel Model **shall** 命綱（葉ノード隔離）を人手の規律でなく機械チェックで厳守する。本仕様では当該チェックをローカルの workflow 完了ゲート（`/kiro-complete` の DoD ゲート）に統合する形で成立させ、リモート CI（GitHub Actions）への展開は後続候補として必須としない。
+The Two-Tunnel Model **shall** 命綱（葉ノード隔離）を `crates/pilot` の構造（空 lib ＋ 探索コードは `examples/` のみ）で担保し、専用の機械チェックによる自動執行は本仕様では必須としない。将来 inbound 依存の混入が問題化した際に機械チェック（`cargo metadata` 走査 / `cargo-deny` 等）を追加できる余地を残す設計とする。
 
 ### NFR-4: 完了仕様の不変尊重
 
@@ -211,8 +212,8 @@ The Two-Tunnel Model の成果物（steering 文書・README 一次記録・規�
 |--------|------|----------|
 | 二坑モデル steering 文書 | Markdown | `.kiro/steering/` |
 | workflow 二坑統合 | Markdown（既存拡張） | `.kiro/steering/workflow.md` |
-| 知見クレート | Rust crate | `crates/pilot/`（`Cargo.toml`, `examples/<spec>/{main.rs, README.md}`, テンプレ example） |
-| 隔離ゲート（依存方向ガード ＋ examples ビルド） | スクリプト/コマンド ＋ workflow 統合 | ローカル workflow 完了ゲート（`/kiro-complete` DoD・`workflow.md`） |
+| 知見クレート | Rust crate | `crates/pilot/`（`Cargo.toml`, 空 `src/lib.rs`, `examples/<spec>/{main.rs, README.md}`, テンプレ example） |
+| 命綱の構造的担保 | クレート構造（空 lib ＋ examples-only）＋ 人手レビュー規律 | `crates/pilot/`・steering 文書 |
 
 ### B. 用語と境界連続性
 
@@ -225,9 +226,10 @@ The Two-Tunnel Model の成果物（steering 文書・README 一次記録・規�
 
 以下は user-observable behavior ではなく実装方針の選択であり、design フェーズで詰める（要件のスコープ曖昧性ではない）。
 
-- 隔離ゲートの依存方向ガードの具体実装手段（`cargo metadata` 解析 / `cargo-deny` 等の選定）。※乗り物はローカル workflow ゲートに確定済（議題1）。手段の選定のみ design 送り。
 - pilot worktree のライフサイクル（いつ捨てるか）の運用詳細。
 - テンプレ example の具体的な形（雛形コードと README 雛形の詳細）。
+
+> 注: 命綱の機械チェック実装手段（`cargo metadata` / `cargo-deny` 等）は、設計ディスカッション（議題1）で**本仕様の契約外（defer）**に決定。命綱は `crates/pilot` の構造（空 lib ＋ examples-only）で担保し、機械自動化は不便が顕在化した時点で別途依頼する。
 
 ### D. 関連仕様・参照
 
