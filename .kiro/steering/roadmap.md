@@ -130,6 +130,12 @@ emo2 が起動して喋る。下記 5 トラックを結線して達成（⓪ �
 
 > **結論**: エンジン所有での並走は原則可。ただし上記**結合クラスタは I/O 契約を先決してから**両側を並列実装する（契約未定で並走すると齟齬）。完全独立ユニットは即着手可。
 
+### マウス制御の所有 ＆ メニュー方針
+
+- **総合的なマウス制御＝⑥render-engine の責務**（独立仕様は作らない）。窓のマウスメッセージ・**alpha hit-test**・ドラッグは**完了済み基盤**（`event-mouse-basic`/`event-drag-system`/`event-hit-test`/`event-hit-test-alpha-mask`）の上に render が所有。M1 新規は `collision-geometry`（hit→ゴースト collision region/actor 写像＝「範囲」のみ）だけ。render が入力を解決し conductor:`input-events` が SHIORI へ配信。
+- **M1 のメニュー＝バルーン `\q` 選択肢**（emo2 の double-click メニュー）＝ `choice-render`＋`sakura-dialogue-tags`＋`input-events`。
+- **owner-draw メニュー（SSP 風 右クリック system メニュー・ゴースト管理 chrome）は M2**（OS owner-draw・上記 balloon 選択肢とは別物）。
+
 ## 制約
 
 - Rust 2024・マルチクレート（wintf/dola/areka ＋最小依存 `shiori-abi`）。32bit 可搬性を崩さない。
@@ -144,4 +150,4 @@ emo2 が起動して喋る。下記 5 トラックを結線して達成（⓪ �
 
 ## M2 以降
 
-**M1 完成後に、実物を見て組み直す。** 本ロードマップでは扱わない（pasta の native x64・`IShiori` in-proc 化、縦書き・ベクトル描画・AI、互換面拡大＝Shift_JIS/SAORI/里々・YAYA 網羅/NAR 等はその時に）。
+**M1 完成後に、実物を見て組み直す。** 本ロードマップでは扱わない（pasta の native x64・`IShiori` in-proc 化、縦書き・ベクトル描画・AI、**owner-draw 右クリック system メニュー（ゴースト管理 chrome）**、互換面拡大＝Shift_JIS/SAORI/里々・YAYA 網羅/NAR 等はその時に）。
