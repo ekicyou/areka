@@ -44,7 +44,7 @@
   - _Depends: 2.2, 2.3_
 
 - [ ] 3. Validation: 構造検証・決定的 merge・意味的同値ゲート
-- [ ] 3.1 フラグメント構造検証
+- [x] 3.1 フラグメント構造検証
   - 結合した entry id 集合・各 entry の field 意味名集合・silence_ruling id 集合に重複がないこと、quote が破綻しないこと、各フラグメント ≤600 行かつ entry 無分割、全 description/provenance が非空、共有テーブル＋silence が共有フラグメントのみに存在し silence_ref が解決可能であることを検査する
   - observable: 構造検査が全項目 pass を出力し、違反時は該当フラグメント/キーを特定して fail する
   - _Requirements: 1.4, 2.1, 2.3, 2.4, 4.1, 4.2, 4.3, 4.4, 5.1, 5.2, 5.3, 6.1, 6.2_
