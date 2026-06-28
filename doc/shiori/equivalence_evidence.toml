@@ -1,0 +1,70 @@
+# equivalence_evidence.toml — areka-P0-shiori-protocol-split
+# Semantic-equivalence gate verdict (design DD-2, task 3.3). MINIMAL,
+# DETERMINISTIC evidence (no wall-clock): verdict + 8-element results +
+# residual-zero + reference-normalization counts + [mapping] exception +
+# a lightweight git-blob pointer to the pre-deletion source. This verdict
+# AUTHORIZES the task-4.1 deletion of doc/shiori/shiori_protocol.toml;
+# the blob pointer keeps the baseline permanently recoverable from git
+# history regardless of the later delete commit. NO normalized dump is
+# embedded (design: no permanent normalized-dump artifact).
+# Generated deterministically by the disposable migration script; do not hand-edit.
+
+[gate]
+"spec" = "areka-P0-shiori-protocol-split"
+"verdict" = "PASS"
+"elements_pass" = true
+"residual_zero" = true
+"residual_key_count" = 0
+"mapping_meaning_preservation_exception_applied" = true
+
+[gate.counts]
+"entry_total" = 446
+"field_total" = 802
+"silence_ruling" = 9
+
+[gate.reference_normalization]
+# DD-2 reference normalization buckets (asserted equal on BOTH sides and
+# equal to Ground Truth). variadic_total = both + variadic_only.
+"both" = 22
+"variadic_only" = 6
+"reference_only" = 774
+"none" = 0
+"variadic_total" = 28
+
+[gate.source_pointer]
+# Lightweight pointer to the pre-deletion source blob. Recover with:
+#   git cat-file -p <blob_sha>
+"path" = "doc/shiori/shiori_protocol.toml"
+"blob_sha" = "ffca545e4123e4aea6002106c3a332b00ab2d598"
+
+[[gate.element]]
+"name" = "1. entry set (keyed by id)"
+"result" = "PASS"
+
+[[gate.element]]
+"name" = "2. field set (entry id x field meaning name)"
+"result" = "PASS"
+
+[[gate.element]]
+"name" = "3. shared tables (meta/mapping/envelope/reserved_headers)"
+"result" = "PASS"
+
+[[gate.element]]
+"name" = "4. silence_ruling (keyed by id + each value)"
+"result" = "PASS"
+
+[[gate.element]]
+"name" = "5. all descriptions (entry/field/silence/shared-table)"
+"result" = "PASS"
+
+[[gate.element]]
+"name" = "6. all provenance (entry/field; silence basis/ukadoc_anchor)"
+"result" = "PASS"
+
+[[gate.element]]
+"name" = "7. envelope mapping (all keys/values)"
+"result" = "PASS"
+
+[[gate.element]]
+"name" = "8. reserved_headers set (request/response/collision_policy)"
+"result" = "PASS"

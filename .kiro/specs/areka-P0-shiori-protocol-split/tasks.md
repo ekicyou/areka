@@ -43,7 +43,7 @@
   - _Boundary: 再構成マニフェスト_
   - _Depends: 2.2, 2.3_
 
-- [ ] 3. Validation: 構造検証・決定的 merge・意味的同値ゲート
+- [x] 3. Validation: 構造検証・決定的 merge・意味的同値ゲート
 - [x] 3.1 フラグメント構造検証
   - 結合した entry id 集合・各 entry の field 意味名集合・silence_ruling id 集合に重複がないこと、quote が破綻しないこと、各フラグメント ≤600 行かつ entry 無分割、全 description/provenance が非空、共有テーブル＋silence が共有フラグメントのみに存在し silence_ref が解決可能であることを検査する
   - observable: 構造検査が全項目 pass を出力し、違反時は該当フラグメント/キーを特定して fail する
@@ -58,7 +58,7 @@
   - _Boundary: 再構成マニフェスト, 一回限り移行・検証スクリプト_
   - _Depends: 3.1_
 
-- [ ] 3.3 意味的同値ゲートと非破壊エビデンス
+- [x] 3.3 意味的同値ゲートと非破壊エビデンス
   - `parse(旧 TOML baseline)` と `parse(merge(fragments))` を 8 要素（entry 集合／field 集合／共有テーブル／silence_ruling／全 description／全 provenance／封筒マッピング／予約ヘッダ集合）で順序非依存に比較する
   - reference 正規化（両保持 32・reference 無し 6・任意キー欠如同値）・残差ゼロ（閉包条件）・`[mapping]` 意味保存例外を適用し、1 つでも差分または未被覆キーがあれば不合格として成果物を棄却する
   - 合格時は合否結果＋削除コミット参照の最小エビデンスを残す（正規化ダンプの恒久同梱はしない）
@@ -105,3 +105,8 @@
 - `silence_ref` はソースで**常に id の配列（list）**として保持されている（スカラ単一値ではない）。task 2.3 の entry/field 符号化はこの array 形を保存し、`_shared.toml` の 9 keyed ruling id へ解決可能であり続けること。実測 35 occurrences（entry 20＋field 15、各 1 要素配列）。
 - `_remap_mapping_table`（4.6）の唯一の値変更は `canonical_key: "name" → "field_table_key"`（旧 `name` 値列が keyed inline のキーへ移ったため）。他キーは verbatim。task 2.3 以降もこの retarget を維持し旧表現へ regress させない。
 - 既存 stage（baseline/convert/dupcheck/shared）を壊さず追記すること。MIGRATE.py の helper（`load_old`/`_emit_entry`/`_emit_field_inline`/`_emit_silence`/`_toml_quote_key`/`_toml_quote_string`）を再利用する。
+
+### 同値ゲート合格（task 3.3 完了時点・task 4.1 への申し送り）
+- **意味的同値ゲートは実データで PASS**（8 要素全一致＋残差ゼロ両側、reference 内訳 22/6/774/0/28＝Ground Truth 一致、mapping 4.6 意味保存例外適用）。**これにより旧 `shiori_protocol.toml` の削除（task 4.1）が正式に認可された**（req 7.2/9.5）。
+- 最小エビデンス: `doc/shiori/equivalence_evidence.toml`（fragments/ 外・コミット済み）。旧ファイル pre-deletion blob sha = `ffca545e4123e4aea6002106c3a332b00ab2d598`（`git rev-parse HEAD:doc/shiori/shiori_protocol.toml` と一致・git 履歴に恒久保存ゆえ削除後も baseline 復元可能）。
+- task 4.1 は同値ゲート合格済みを前提に削除を実施してよい。削除後 README 等の参照を fragments 群へ整合させる。
