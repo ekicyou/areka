@@ -3,7 +3,7 @@
 ## Project Description (Input)
 `areka-P0-shiori-com` で `IShiori`/`IShioriHost` ABI は定義・実装済みだが、脳（COM-SHIORI）の実装はすべてテスト用モック（`#[cfg(test)]`）のみであり、非テストで実走可能な「正解見本」となるリファレンス脳が存在しない。このため、(1) ABI が実アプリで動く証明、(2) 下流（`areka-P0-shiori-host-32` の DLL ホスト／`areka-P0-reference-ghost` の pasta）が満たすべき `IShiori` 契約の参照点、が欠落している。
 
-本仕様は、最小・非テストの**リファレンス COM-SHIORI（native 脳）**を `IShiori` を実装する形で提供し、areka 本体から in-proc アクティベーションで挿して、request→即時応答／遅延→Complete／Raise の各経路が実アプリ上で動くことを示す。content は不透明のまま固定／エコー応答とし、正準 content プロトコルの確定は別仕様 `areka-P0-shiori-protocol` に委譲する。上位設計の正本は `doc/COMPAT_ARCHITECTURE.md` §5。隣接（完成）は `areka-P0-shiori-com`（`IShiori`/`IShioriHost` ABI）。
+本仕様は、最小・非テストの**リファレンス COM-SHIORI（native 脳）**を `IShiori` を実装する形で提供し、areka 本体から in-proc アクティベーションで挿して、request→即時応答／遅延→Complete／Raise の各経路が実アプリ上で動くことを示す。content は不透明のまま固定／エコー応答とする。正準 content プロトコルは完了仕様 `areka-P0-shiori-protocol` が確定済みで、その論理 SSOT は `doc/shiori/fragments/`（フラグメント群＋決定的結合）にある。本リファレンスは content 語彙を持たず（SSOT 二重定義禁止に整合）、不透明／エコーに留める。上位設計の正本は `doc/COMPAT_ARCHITECTURE.md` §5。隣接（完成）は `areka-P0-shiori-com`（`IShiori`/`IShioriHost` ABI）。
 
 ## Introduction
 本仕様は、`areka-P0-shiori-com` で確立された `IShiori`/`IShioriHost` ABI に対する、最小かつ非テストの**リファレンス実装（native 脳）**と、その**実走デモ経路**を定義する。リファレンス脳は `shiori-abi` の公開 API（`ShioriExt` / `#[implement(IShiori)]`）を用いて製品コード（非 `#[cfg(test)]`）として実装され、areka 本体は in-proc アクティベーションでこの脳を挿し、数往復のリクエストをドライブして後始末する。
@@ -19,7 +19,7 @@ content（リクエスト・応答・通知の本文）は本仕様では**不�
   - 即時応答（同期）、遅延応答（pending ＋後続完了）、能動通知（Raise）の各経路を実アプリ上で疎通させること
   - リファレンス脳と実走デモ経路の参照点としての**ドキュメント化**
 - **Out of scope（本仕様が責務を持たない範囲）**:
-  - 正準 json-rpc content プロトコルの定義・確定 → `areka-P0-shiori-protocol`
+  - 正準 content プロトコルの定義・確定（完了済み・論理 SSOT＝`doc/shiori/fragments/`）→ `areka-P0-shiori-protocol`。本リファレンスは content 語彙を参照・複製しない（二重定義禁止に整合）
   - 過去互換 DLL（32bit shiori.dll 等）のホスティング → `areka-P0-shiori-host-32`
   - pasta（native 旗艦脳）の実装 → `areka-P0-reference-ghost`（M2）
   - さくらスクリプトの解釈・実行
@@ -95,7 +95,7 @@ content（リクエスト・応答・通知の本文）は本仕様では**不�
 
 #### Acceptance Criteria
 1. The reference documentation shall リファレンス脳が実装する `IShiori` の各経路（ロード／アンロード・即時応答・遅延応答・能動通知）を正解見本として説明する。
-2. The reference documentation shall content を不透明・固定／エコーとして扱う方針と、正準 content プロトコルが別仕様（`areka-P0-shiori-protocol`）の責務である旨を明示する。
+2. The reference documentation shall content を不透明・固定／エコーとして扱う方針と、正準 content プロトコルが完了仕様 `areka-P0-shiori-protocol`（論理 SSOT＝`doc/shiori/fragments/`）の責務であり、本リファレンスはそれを参照・複製しない旨を明示する。
 3. The reference documentation shall 下流（`areka-P0-shiori-host-32`・`areka-P0-reference-ghost`）が本リファレンスを見本として参照する位置づけを示す。
 
 ### Requirement 8: content の不透明性とスコープ境界
