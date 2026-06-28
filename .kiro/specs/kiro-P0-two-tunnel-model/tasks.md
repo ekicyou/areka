@@ -28,7 +28,7 @@
   - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 3.5, 3.6, 4.3, 4.4, 5.1, 5.2, 5.3, 5.4, 5.5, 6.1, 6.2, 6.3, 6.4, 6.5, 7.1, 7.2, 7.3, 7.4, 7.5, 7.6_
   - _Boundary: two-tunnel.md_
 
-- [ ] 3. (P) roadmap.md に go ゲート記法凡例を追記
+- [x] 3. (P) roadmap.md に go ゲート記法凡例を追記
   - `.kiro/steering/roadmap.md` に `_Depends(confirmed): <pilot-spec>` の凡例節を追記する（既存 `Dependencies:` 自由テキスト慣行の拡張・`spec.json` の `dependencies` 配列とは別レイヤで二重管理を回避）。
   - 凡例は self-contained（記法の正規の意味＝先進坑 go 必須の確定前提依存は `two-tunnel.md` ハードゲート節を相互参照）ゆえ Task 2 に実装依存せず並列可。記法の文字列・宿主は本仕様で確定。
   - 完了状態: `roadmap.md` に `_Depends(confirmed):` の意味（先進坑 go 必須の確定前提依存）と既存 `Dependencies:` との区別を示す凡例が存在する。
