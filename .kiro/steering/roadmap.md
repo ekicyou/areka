@@ -39,6 +39,16 @@ areka（**x64**）が最小 SSP 互換ベースウェアとして、適合対象
 - 先進坑: `crates/pilot/examples/shiori-host-32/`。
 - **go 基準**: x64 から 32bit `pasta.dll` を 1 往復（load→OnBoot→`Value` 受領→unload）成功 ＋ 窓持ち SHIORI のメッセージループ生存。SAORI は emo2 未使用ゆえ対象外。
 
+## 横断データ構造（M1 着手時から組み込む）
+
+> 後付けが高コストな基盤構造ゆえ**最初から正しく持つ**（最小実装・構造は拡張可能）。詳細は記憶 areka-unified-shell-balloon-graphics。
+
+- **シェル/バルーン統一**: 描画エンジン上でシェルとバルーンを**区別しない**。バルーン＝シェル surface 上に被さる**文字レンダリング層**。バルーン枠も surface＝普通にアニメ可。
+- **element に他サーフェス参照可**: SERIKO の element に画像だけでなく**他サーフェスを指定可**（入れ子）。surface 合成は再帰的＝入れ子アニメの基盤。
+- **element 配置＝D2D 変換行列**: 基本 X,Y でなく **D2D 変換行列**を内部表現。x,y は単位行列の特例。回転・拡縮など D2D が普通に出来る構造をそのまま取り込む。emo2 は単位平行移動＋平面 overlay のみ使うが、**構造（行列＋入れ子＋統一エンジン）は最初から持つ**。
+- 位置づけ: 旧「汎用シーングラフは M2 後ろ倒し」の**部分的前倒し**（データ構造のみ M1・上位演出エンジンは依然 M2）。
+- **アニメーションエンジンは2つ**（記憶 areka-two-animation-engines）: ①**さくらスクリプト再生エンジン**（talk timeline・上層）→ ②**シェルアニメーションエンジン**（SERIKO ループ・中層）→ レンダリングエンジン（下層）。さくら engine が shell engine を叩き、shell engine が render を叩く。両 engine は **dola（完了・タイミング層）**上。`conductor` は SHIORI イベント循環でさくら engine に script を渡す。
+
 ## M1 実装ユニット（実現可能な粒度）
 
 > **粒度基準**: 1ユニット＝「コードを走らせて観測できる**単一 pass/fail** を持ち、それを観測するのに別ユニットを先に作る必要がない」もの。done が複数の独立観測に割れるなら粗すぎ→分割。
@@ -61,15 +71,19 @@ emo2 が起動して喋る。下記 3 トラックを結線して達成。
 - `areka-P0-balloon-parse` — balloon descript/Ns マージ→モデル。✔ emo2-kakukaku parse
 - `areka-P0-package-mount` — install.txt/dir→mount。✔ emo2 layout 解決
 
-**render / runtime（`areka-mock-shell` 実コードから増分）**
-- `areka-P0-shell-render` — surface モデル→窓。✔ emo2 surface0 表示
-- `areka-P0-balloon-render` — token→バルーン text＋scroll。✔ script がバルーン描画
-- `areka-P0-conductor` — host↔parse↔render 結線・event loop。✔ OnBoot→script→描画
+**runtime 制御階層（上→下に駆動・両 anim engine は dola 上）**
+- `areka-P0-conductor` — SHIORI イベント循環（OnSecondChange pump・host-32 送受・Value を sakura-engine へ）。✔ OnBoot→Value 受領→再生開始
+- `areka-P0-sakura-engine` — **さくらスクリプト再生エンジン**（talk timeline: `\w/\_w` wait・`\s` で shell-engine へ surface 指令・text を text-layer へ・seq）。✔ boot script を時系列再生
+- `areka-P0-shell-anim-engine` — **シェルアニメーションエンジン**（SERIKO ループ＋surface 状態＋MAYUNA bind・render を毎フレーム駆動）。M-boot は静的＋指令適用、ループ(blink)は M-life。✔ 指令された surface を表示
+
+**render engine（統一・`areka-mock-shell`＋dola から増分）**
+- `areka-P0-surface-engine` — **シェルもバルーンも同一の surface 合成**。element＝{画像 | 他サーフェス参照（入れ子）}、配置＝**D2D 変換行列**。✔ surface0 ＋バルーン枠を surface として表示
+- `areka-P0-text-layer` — バルーン文字を **engine 上に被せる層**（token→glyph→surface 領域）。✔ script がバルーンに描画＋scroll
 
 ### 増分マイルストーン（M-boot の動く土台へ加算）
 - **M-dual** `areka-P0-dual-surface` — side0/1 両立＋`\s[]`＋alias。✔ むらさき＆エモ表情切替
 - **M-mayuna** `areka-P0-mayuna-compose` — MAYUNA bind 多層 overlay。✔ むらさき着せ替え合成
-- **M-life** `areka-P0-seriko-blink`（✔ まばたき）＋ `areka-P0-collision-touch`（✔ 撫で発火）＋ `areka-P0-idle-talk`（✔ OnSecondChange 自発会話）
+- **M-life** `areka-P0-shell-anim-loop`（shell-anim-engine の SERIKO ループ＝✔ まばたき random/bind+random）＋ `areka-P0-collision-touch`（✔ 撫で発火）＋ `areka-P0-idle-talk`（✔ OnSecondChange 自発会話）
 - **M-dialogue** `areka-P0-menu-choice` — dblclick メニュー＋`\q`＋OnChoiceSelectEx＋`\_l`＋`\![move]`。✔ 選択対話
 - **M-e2e** `areka-P0-emo2-conformance-e2e` — OnClose＋emo2 vendoring＋boot→talk→touch→menu→close 一周。✔ 適合（M1 ゴール `areka-P0-emo2-conformance` 充足）
 
