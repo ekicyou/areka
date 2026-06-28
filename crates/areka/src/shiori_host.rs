@@ -19,8 +19,6 @@
 //! メールボックスは「受け皿」までを本仕様が所有する（thread-safe queue の最小実装）。
 //! ECS/bevy への実際の配送は本仕様スコープ外であり、ここでは取り出して検証できる最小形に留める。
 
-#![allow(dead_code)] // メールボックス取り出し API 等は task 4.1 範囲では結合テストからのみ利用する。
-
 use std::collections::VecDeque;
 use std::sync::Mutex;
 
