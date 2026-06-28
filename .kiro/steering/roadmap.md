@@ -81,3 +81,14 @@ animation-system＋surface-hierarchy → seriko-runtime＋shell-loader → sakur
 | `_rejected/` | 3 |
 
 > 件数は **配置フォルダ基準**で数える（`phase` 値は履歴上ズレる）。集計・更新タイミング・配置ルールの運用正本は [focus.md](focus.md)。
+
+## 凡例: 依存記法（`Dependencies:` と `_Depends(confirmed):`）
+
+本ファイルの Specs 一覧は spec 間の依存を**自由テキスト**で表記する。二種の記法を使い分ける：
+
+- **`Dependencies: <spec>, <spec>`**（通常の依存メモ）— 「この spec はこれらの spec の上に建つ」という**順序上の依存**を示す非ゲート注記。着手の絶対ブロックを意味しない（依存先の進行度に応じて並行着手の判断余地がある）。本一覧の既存表記はこれ。
+- **`_Depends(confirmed): <pilot-spec>`**（確定前提依存・ハードゲート）— **先進坑 go 必須の確定前提依存**。当該本坑 spec は名指しした先進坑（pilot・先進坑）の **go 判定が下るまで着手不能（BLOCKED）**。go は開発者が先進坑の出力を見て下す人間判断であり、自動判定ではない。`Dependencies:` の通常注記とは異なり、これは**確定済みのハードゲート前提**を明示的にマークする記法。
+
+**運用上の注意（二重管理回避）**:
+- `_Depends(confirmed):` は **roadmap.md の自由テキストにのみ**置く。spec.json の `dependencies` 配列には**記載しない**（同一事実を二箇所で保守すると齟齬の温床になるため・二重管理回避）。
+- ゲート規律の全容（先進坑/本坑の役割・go 判定・BLOCKED 扱い・直行許容など）は本凡例の対象外。記法の意味は本節で自己完結するが、ゲート運用の正本は [two-tunnel.md](two-tunnel.md) の「ハードゲート」節を参照。

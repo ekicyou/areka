@@ -1,0 +1,14 @@
+[package]
+name = "pilot"
+workspace = "../.."
+description = "Pilot (先進坑) quarantine crate: throwaway exploration code + 一次記録. publish=false, leaf node. 探索コードは examples/ のみ・lib は空（命綱の構造的担保）."
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+# [dependencies] は空（最小依存）。先進坑が依存を要する場合のみ最小限追加し、
+# 葉ノード隔離（inbound ゼロ）と 32bit 可搬性を崩さないこと。
+[dependencies]
