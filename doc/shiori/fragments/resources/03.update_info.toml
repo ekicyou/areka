@@ -1,0 +1,17 @@
+# resource / category=update_info — areka-P0-shiori-protocol-split category fragment.
+# 1 keyed entry table(s), source order preserved. Category-pure; entry-boundary only.
+# Generated deterministically; do not hand-edit. Merge order: _manifest.toml (task 2.4) is authoritative.
+
+[entry."other_homeurl_override"]
+"kind" = "resource"
+"category" = "update_info"
+"dispatch" = "get"
+"response" = "text"
+"provenance" = "ukadoc"
+"description" = "\\![updateother] やシェル・バルーン同時更新機能において、更新対象の更新先 URL（homeurl）を強制的に置き換える。置き換える必要がない場合は 204 を返すか空文字列とする。"
+[entry."other_homeurl_override".field]
+"target_kind" = { "reference" = 0, "type" = "str", "required" = true, "provenance" = "ukadoc", "description" = "更新対象の種類（shell, balloon, headline, plugin, language など）。" }
+"target_name" = { "reference" = 1, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "更新対象の名前（descript.txt の name）。" }
+"target_craftman" = { "reference" = 2, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "更新対象の作者名（descript.txt の craftmanname）。" }
+"target_dirname" = { "reference" = 3, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "更新対象のフォルダ名。" }
+"original_homeurl" = { "reference" = 4, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "本来更新に使用すべきだった homeurl。" }

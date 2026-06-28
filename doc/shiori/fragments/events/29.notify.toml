@@ -1,0 +1,297 @@
+# event / category=notify — areka-P0-shiori-protocol-split category fragment.
+# 31 keyed entry table(s), source order preserved. Category-pure; entry-boundary only.
+# Generated deterministically; do not hand-edit. Merge order: _manifest.toml (task 2.4) is authoritative.
+
+[entry."basewareversion"]
+"kind" = "event"
+"category" = "notify"
+"dispatch" = "notify"
+"response" = "none"
+"provenance" = "ukadoc"
+"description" = "ベースウェアの情報を通知。[NOTIFY]"
+[entry."basewareversion".field]
+"version_number" = { "reference" = 0, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "バージョン番号。" }
+"baseware_id" = { "reference" = 1, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "本体の識別。" }
+"version_detail" = { "reference" = 2, "type" = "str", "required" = false, "provenance" = "ssp_secondary", "description" = "※SSPのみ バージョン情報の詳細な数値。" }
+
+[entry."hwnd"]
+"kind" = "event"
+"category" = "notify"
+"dispatch" = "notify"
+"response" = "none"
+"provenance" = "ukadoc"
+"description" = "hwndを通知。[NOTIFY]"
+[entry."hwnd".field]
+"ghost_hwnd_list" = { "reference" = 0, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "ゴーストのhwnd。バイト値１区切りで各スコープ。" }
+"balloon_hwnd_list" = { "reference" = 1, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "バルーンのhwnd。バイト値１区切りで各スコープ。" }
+
+[entry."uniqueid"]
+"kind" = "event"
+"category" = "notify"
+"dispatch" = "notify"
+"response" = "none"
+"provenance" = "ukadoc"
+"description" = "unique IDを通知。[NOTIFY]"
+[entry."uniqueid".field]
+"ghost_unique_id" = { "reference" = 0, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "ゴーストのユニークID。特殊なSSTPを送信する際に使用する。" }
+
+[entry."capability"]
+"kind" = "event"
+"category" = "notify"
+"dispatch" = "notify"
+"response" = "none"
+"provenance" = "ukadoc"
+"description" = "SHIORI拡張実装状態を通知。[NOTIFY]"
+
+[entry."ownerghostname"]
+"kind" = "event"
+"category" = "notify"
+"dispatch" = "notify"
+"response" = "none"
+"provenance" = "ukadoc"
+"description" = "現在のゴースト名を通知。[NOTIFY]"
+[entry."ownerghostname".field]
+"owner_ghost_name" = { "reference" = 0, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "現在のゴースト名。" }
+
+[entry."otherghostname"]
+"kind" = "event"
+"category" = "notify"
+"dispatch" = "notify"
+"response" = "none"
+"provenance" = "ukadoc"
+"description" = "他に起動しているゴーストの本体側名を通知。[NOTIFY]"
+
+[entry."installedsakuraname"]
+"kind" = "event"
+"category" = "notify"
+"dispatch" = "notify"
+"response" = "none"
+"provenance" = "ukadoc"
+"description" = "インストールされているゴーストのsakura.nameを通知。[NOTIFY]   必ずinstalledghostnameの前に通知される。   また、同じゴーストを示す、installedsakuraname/installedkeroname/installedghostnameのReferenceの番号は一致することが保証される。"
+
+[entry."installedkeroname"]
+"kind" = "event"
+"category" = "notify"
+"dispatch" = "notify"
+"response" = "none"
+"provenance" = "ukadoc"
+"description" = "インストールされているゴーストのkero.nameを通知。[NOTIFY]   必ずinstalledghostnameの前に通知される。   また、同じゴーストを示す、installedsakuraname/installedkeroname/installedghostnameのReferenceの番号は一致することが保証される。"
+
+[entry."installedghostname"]
+"kind" = "event"
+"category" = "notify"
+"dispatch" = "notify"
+"response" = "none"
+"provenance" = "ukadoc"
+"description" = "インストールされているゴーストを通知。[NOTIFY]"
+
+[entry."installedshellname"]
+"kind" = "event"
+"category" = "notify"
+"dispatch" = "notify"
+"response" = "none"
+"provenance" = "ukadoc"
+"description" = "インストールされているシェルを通知。[NOTIFY]"
+
+[entry."installedballoonname"]
+"kind" = "event"
+"category" = "notify"
+"dispatch" = "notify"
+"response" = "none"
+"provenance" = "ukadoc"
+"description" = "インストールされているバルーンを通知。[NOTIFY]"
+
+[entry."installedheadlinename"]
+"kind" = "event"
+"category" = "notify"
+"dispatch" = "notify"
+"response" = "none"
+"provenance" = "ukadoc"
+"description" = "インストールされているRSS/ヘッドラインを通知。[NOTIFY]"
+
+[entry."installedplugin"]
+"kind" = "event"
+"category" = "notify"
+"dispatch" = "notify"
+"response" = "none"
+"provenance" = "ukadoc"
+"description" = "インストールされているプラグインを通知。[NOTIFY]"
+
+[entry."configuredbiffname"]
+"kind" = "event"
+"category" = "notify"
+"dispatch" = "notify"
+"response" = "none"
+"provenance" = "ukadoc"
+"description" = "設定済みメールチェックアカウントのリストを通知する。\\![biff,アカウント名]で利用できる。[NOTIFY]"
+
+[entry."ghostpathlist"]
+"kind" = "event"
+"category" = "notify"
+"dispatch" = "notify"
+"response" = "none"
+"provenance" = "ukadoc"
+"description" = "ゴースト格納フォルダ（SSPの本体設定->フォルダ のゴーストの設定）のパスを通知。[NOTIFY]"
+
+[entry."balloonpathlist"]
+"kind" = "event"
+"category" = "notify"
+"dispatch" = "notify"
+"response" = "none"
+"provenance" = "ukadoc"
+"description" = "バルーン格納フォルダ（SSPの本体設定->フォルダ のバルーンの設定）のパスを通知。[NOTIFY]"
+
+[entry."headlinepathlist"]
+"kind" = "event"
+"category" = "notify"
+"dispatch" = "notify"
+"response" = "none"
+"provenance" = "ukadoc"
+"description" = "ヘッドライン格納フォルダ（SSPの本体設定->フォルダ のヘッドラインの設定）のパスを通知。[NOTIFY]"
+
+[entry."pluginpathlist"]
+"kind" = "event"
+"category" = "notify"
+"dispatch" = "notify"
+"response" = "none"
+"provenance" = "ukadoc"
+"description" = "プラグイン格納フォルダ（SSPの本体設定->フォルダ のプラグインの設定）のパスを通知。[NOTIFY]"
+
+[entry."calendarskinpathlist"]
+"kind" = "event"
+"category" = "notify"
+"dispatch" = "notify"
+"response" = "none"
+"provenance" = "ukadoc"
+"description" = "カレンダースキン格納フォルダのパスを通知。[NOTIFY]"
+
+[entry."calendarpluginpathlist"]
+"kind" = "event"
+"category" = "notify"
+"dispatch" = "notify"
+"response" = "none"
+"provenance" = "ukadoc"
+"description" = "カレンダーのスケジュールセンサ格納フォルダのパスを通知。[NOTIFY]"
+
+[entry."rateofusegraph"]
+"kind" = "event"
+"category" = "notify"
+"dispatch" = "notify"
+"response" = "none"
+"provenance" = "ukadoc"
+"description" = "使ってるぞグラフの情報を通知。[NOTIFY]"
+
+[entry."enable_log"]
+"kind" = "event"
+"category" = "notify"
+"dispatch" = "notify"
+"response" = "none"
+"provenance" = "ukadoc"
+"description" = "開発用パレットの「SHIORI内部ログ機能有効」のON/OFF。[NOTIFY]  SHIORI Resource : log_path も参照。"
+[entry."enable_log".field]
+"enabled_flag" = { "reference" = 0, "type" = "bool", "required" = false, "provenance" = "ukadoc", "description" = "ONなら1、OFFなら0" }
+
+[entry."enable_debug"]
+"kind" = "event"
+"category" = "notify"
+"dispatch" = "notify"
+"response" = "none"
+"provenance" = "ukadoc"
+"description" = "開発用パレットの「SHIORIデバッグモード有効」のON/OFF。[NOTIFY]"
+[entry."enable_debug".field]
+"enabled_flag" = { "reference" = 0, "type" = "bool", "required" = false, "provenance" = "ukadoc", "description" = "ONなら1、OFFなら0" }
+
+[entry."OnNotifySelfInfo"]
+"kind" = "event"
+"category" = "notify"
+"dispatch" = "notify"
+"response" = "none"
+"provenance" = "ukadoc"
+"description" = "ゴースト自身の情報を通知。[NOTIFY]"
+[entry."OnNotifySelfInfo".field]
+"ghost_name" = { "reference" = 0, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "ゴースト名。" }
+"sakura_name" = { "reference" = 1, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "本体側の名前。" }
+"kero_name" = { "reference" = 2, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "相方側の名前。" }
+"shell_name" = { "reference" = 3, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "現在のシェル名。" }
+"shell_path" = { "reference" = 4, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "現在のシェルへの絶対パス。" }
+"balloon_name" = { "reference" = 5, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "現在のバルーン名。" }
+"balloon_path" = { "reference" = 6, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "現在のバルーンへの絶対パス。" }
+
+[entry."OnNotifyBalloonInfo"]
+"kind" = "event"
+"category" = "notify"
+"dispatch" = "notify"
+"response" = "none"
+"provenance" = "ukadoc"
+"description" = "現在使用中のバルーン情報を通知。[NOTIFY]"
+[entry."OnNotifyBalloonInfo".field]
+"balloon_name" = { "reference" = 0, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "選択しているバルーンの名前" }
+"balloon_path" = { "reference" = 1, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "選択しているバルーンのフルパス" }
+"surface_id_list" = { "reference" = 2, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "サーフェス番号リスト [キャラID＋コロン＋カンマ区切り＋スペース] 例：0:0,1,2,3 1:0,1" }
+
+[entry."OnNotifyShellInfo"]
+"kind" = "event"
+"category" = "notify"
+"dispatch" = "notify"
+"response" = "none"
+"provenance" = "ukadoc"
+"description" = "現在使用中のシェル情報を通知。[NOTIFY]"
+[entry."OnNotifyShellInfo".field]
+"shell_name" = { "reference" = 0, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "選択しているシェルの名前" }
+"shell_path" = { "reference" = 1, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "選択しているシェルのフルパス" }
+"surface_id_list" = { "reference" = 2, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "サーフェス番号リスト [カンマ区切り] 例：0,1,2,3,4,5,6,7,8,10,11" }
+
+[entry."OnNotifyDressupInfo"]
+"kind" = "event"
+"category" = "notify"
+"dispatch" = "notify"
+"response" = "none"
+"provenance" = "ukadoc"
+"description" = "着せ替えの情報を通知。  起動時のみ[NOTIFY]で、メニューから切替などユーザーによる操作なら[GET]で送られる。  このイベントの前に発生するOnDressupChangedも参照すること。"
+
+[entry."OnNotifyUserInfo"]
+"kind" = "event"
+"category" = "notify"
+"dispatch" = "notify"
+"response" = "none"
+"provenance" = "ukadoc"
+"description" = "ユーザーの入力情報を通知。起動時＋情報が更新された際に通知。[NOTIFY]"
+[entry."OnNotifyUserInfo".field]
+"user_call_name" = { "reference" = 0, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "呼び方。" }
+"user_full_name" = { "reference" = 1, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "フルネーム。" }
+"user_birthday" = { "reference" = 2, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "誕生日。(2003,5,5のようにカンマ区切りで)" }
+"user_gender" = { "reference" = 3, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "性別。male(男),female(女),undef(未定義)のいずれか。" }
+
+[entry."OnNotifyOSInfo"]
+"kind" = "event"
+"category" = "notify"
+"dispatch" = "notify"
+"response" = "none"
+"provenance" = "ukadoc"
+"description" = "OS情報を通知。[NOTIFY]"
+[entry."OnNotifyOSInfo".field]
+"os_name" = { "reference" = 0, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "OSのシステム,バージョン,表示用の名前 [カンマ区切り]" }
+"cpu_info" = { "reference" = 1, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "CPUタイプ,クロックMHz,追加情報 [カンマ区切り]" }
+"memory_info" = { "reference" = 2, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "物理,仮想メモリ(KB) [カンマ区切り]" }
+"os_uptime_minutes" = { "reference" = 3, "type" = "i32", "required" = false, "provenance" = "ukadoc", "description" = "システム起動からの経過分。" }
+
+[entry."OnNotifyFontInfo"]
+"kind" = "event"
+"category" = "notify"
+"dispatch" = "notify"
+"response" = "none"
+"provenance" = "ukadoc"
+"description" = "システムにインストールされているフォントを通知。[NOTIFY]"
+
+[entry."OnNotifyInternationalInfo"]
+"kind" = "event"
+"category" = "notify"
+"dispatch" = "notify"
+"response" = "none"
+"provenance" = "ukadoc"
+"description" = "タイムゾーン、ロケール(言語)名など、国際化関連の情報を通知する。[NOTIFY]"
+[entry."OnNotifyInternationalInfo".field]
+"utc_offset_minutes" = { "reference" = 0, "type" = "i32", "required" = false, "provenance" = "ukadoc", "description" = "UTCからの時刻のずれ。単位は分。負の値＝早い 正の値＝遅い   たとえば、日本標準時の場合、9時間早いので、-540になる。" }
+"dst_active_flag" = { "reference" = 1, "type" = "bool", "required" = false, "provenance" = "ukadoc", "description" = "夏時間が有効か否か。有効=1 無効=0" }
+"country_code" = { "reference" = 2, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "ISO3166準拠の2文字国名。" }
+"language_code" = { "reference" = 3, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "ISO639準拠の2文字言語名。" }

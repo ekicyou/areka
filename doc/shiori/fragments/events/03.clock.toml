@@ -1,0 +1,79 @@
+# event / category=clock — areka-P0-shiori-protocol-split category fragment.
+# 6 keyed entry table(s), source order preserved. Category-pure; entry-boundary only.
+# Generated deterministically; do not hand-edit. Merge order: _manifest.toml (task 2.4) is authoritative.
+
+[entry."OnSNTPBegin"]
+"kind" = "event"
+"category" = "clock"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ukadoc"
+"description" = "時計合わせ開始が指示された際に発生。"
+[entry."OnSNTPBegin".field]
+"server_name" = { "reference" = 0, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "接続先サーバ名。" }
+
+[entry."OnSNTPCompareEx"]
+"kind" = "event"
+"category" = "clock"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ukadoc"
+"description" = "サーバに接続が確立された際に発生。修正実行には \\6 タグを含むスクリプトを返す。"
+[entry."OnSNTPCompareEx".field]
+"server_name" = { "reference" = 0, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "接続先サーバ名。" }
+"server_time" = { "reference" = 1, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "カンマ区切りのサーバ側現時刻（年,月,日,時,分,秒,ミリ秒）。" }
+"local_time" = { "reference" = 2, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "カンマ区切りのローカル側現時刻（年,月,日,時,分,秒,ミリ秒）。" }
+"time_diff_seconds" = { "reference" = 3, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "サーバとローカルの時刻差（秒・小数あり。正でローカル遅れ、負で進み）。" }
+"time_diff_millis" = { "reference" = 4, "type" = "i64", "required" = false, "provenance" = "ukadoc", "description" = "サーバとローカルの時刻差（ミリ秒・整数）。" }
+
+[entry."OnSNTPCompare"]
+"kind" = "event"
+"category" = "clock"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ukadoc"
+"description" = "サーバに接続が確立された際に発生。修正実行には \\6 タグを含むスクリプトを返す。"
+[entry."OnSNTPCompare".field]
+"server_name" = { "reference" = 0, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "接続先サーバ名。" }
+"server_time" = { "reference" = 1, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "カンマ区切りのサーバ側現時刻（年,月,日,時,分,秒。1 秒未満差はローカルと同じ）。" }
+"local_time" = { "reference" = 2, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "カンマ区切りのローカル側現時刻（年,月,日,時,分,秒）。" }
+"time_diff_seconds" = { "reference" = 3, "type" = "i64", "required" = false, "provenance" = "ukadoc", "description" = "サーバとローカルの時刻差（秒・常に正の整数）。" }
+"time_diff_millis" = { "reference" = 4, "type" = "i64", "required" = false, "provenance" = "ssp_secondary", "description" = "SSP のみ。時刻差（ミリ秒・常に正の整数）。" }
+
+[entry."OnSNTPCorrectEx"]
+"kind" = "event"
+"category" = "clock"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ukadoc"
+"description" = "\\6 タグでローカル時刻をサーバ時刻に修正した際に発生。"
+[entry."OnSNTPCorrectEx".field]
+"server_name" = { "reference" = 0, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "接続先サーバ名。" }
+"server_time" = { "reference" = 1, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "カンマ区切りのサーバ側現時刻（年,月,日,時,分,秒,ミリ秒）。" }
+"local_time" = { "reference" = 2, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "カンマ区切りのローカル側現時刻（年,月,日,時,分,秒,ミリ秒）。" }
+"time_diff_seconds" = { "reference" = 3, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "時刻差（秒・小数あり。正でローカル遅れ、負で進み）。" }
+"time_diff_millis" = { "reference" = 4, "type" = "i64", "required" = false, "provenance" = "ukadoc", "description" = "時刻差（ミリ秒・整数。正負は秒側と同様）。" }
+
+[entry."OnSNTPCorrect"]
+"kind" = "event"
+"category" = "clock"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ukadoc"
+"description" = "\\6 タグでローカル時刻をサーバ時刻に修正した際に発生。"
+[entry."OnSNTPCorrect".field]
+"server_name" = { "reference" = 0, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "接続先サーバ名。" }
+"server_time" = { "reference" = 1, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "カンマ区切りのサーバ側現時刻（年,月,日,時,分,秒。1 秒未満差はローカルと同じ）。" }
+"local_time" = { "reference" = 2, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "カンマ区切りのローカル側現時刻（年,月,日,時,分,秒）。" }
+"time_diff_seconds" = { "reference" = 3, "type" = "i64", "required" = false, "provenance" = "ukadoc", "description" = "時刻差（秒・整数。正でローカル遅れ、負で進み）。" }
+"time_diff_millis" = { "reference" = 4, "type" = "i64", "required" = false, "provenance" = "ssp_secondary", "description" = "SSP のみ。時刻差（ミリ秒・整数）。" }
+
+[entry."OnSNTPFailure"]
+"kind" = "event"
+"category" = "clock"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ukadoc"
+"description" = "時計合わせに失敗した際に発生。"
+[entry."OnSNTPFailure".field]
+"server_name" = { "reference" = 0, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "接続先サーバ名。" }

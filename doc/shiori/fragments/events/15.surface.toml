@@ -1,0 +1,42 @@
+# event / category=surface — areka-P0-shiori-protocol-split category fragment.
+# 3 keyed entry table(s), source order preserved. Category-pure; entry-boundary only.
+# Generated deterministically; do not hand-edit. Merge order: _manifest.toml (task 2.4) is authoritative.
+
+[entry."OnSurfaceChange"]
+"kind" = "event"
+"category" = "surface"
+"dispatch" = "notify"
+"response" = "none"
+"provenance" = "ukadoc"
+"description" = "サーフェスが変わった際に発生（[NOTIFY]）。"
+[entry."OnSurfaceChange".field]
+"self_surface_id" = { "reference" = 0, "type" = "i32", "required" = false, "provenance" = "ukadoc", "description" = "本体側の現在サーフェス。" }
+"partner_surface_id" = { "reference" = 1, "type" = "i32", "required" = false, "provenance" = "ukadoc", "description" = "相方側の現在サーフェス。" }
+"surface_detail" = { "reference" = 2, "type" = "str", "required" = false, "provenance" = "ssp_secondary", "description" = "SSP のみ。キャラ ID,サーフェス番号,幅,高さ。" }
+
+[entry."OnSurfaceRestore"]
+"kind" = "event"
+"category" = "surface"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ukadoc"
+"description" = "トーク後一定時間経過後に一度発生（SSP では喋りタイムアウト秒数+15 秒後）。"
+[entry."OnSurfaceRestore".field]
+"self_surface_id" = { "reference" = 0, "type" = "i32", "required" = false, "provenance" = "ukadoc", "description" = "本体側の現在サーフェス。" }
+"partner_surface_id" = { "reference" = 1, "type" = "i32", "required" = false, "provenance" = "ukadoc", "description" = "相方側の現在サーフェス。" }
+
+[entry."OnOtherSurfaceChange"]
+"kind" = "event"
+"category" = "surface"
+"dispatch" = "notify"
+"response" = "none"
+"provenance" = "ssp_secondary"
+"description" = "自分以外の他ゴーストのサーフェスが変わった際に通知される。標準では無効で \\![set,othersurfacechange,true] による有効化が必要。"
+"silence_ref" = ["sr_dispatch_othersurfacechange_notify"]
+[entry."OnOtherSurfaceChange".field]
+"ghost_name" = { "reference" = 0, "type" = "str", "required" = false, "provenance" = "ssp_secondary", "description" = "ゴースト名。" }
+"ghost_sakura_name" = { "reference" = 1, "type" = "str", "required" = false, "provenance" = "ssp_secondary", "description" = "ゴースト Sakura 名。" }
+"window_id" = { "reference" = 2, "type" = "i32", "required" = false, "provenance" = "ssp_secondary", "description" = "サーフェスが切り替わったウインドウ ID（Sakura=0）。" }
+"new_surface_id" = { "reference" = 3, "type" = "i32", "required" = false, "provenance" = "ssp_secondary", "description" = "新サーフェス ID。" }
+"old_surface_id" = { "reference" = 4, "type" = "i32", "required" = false, "provenance" = "ssp_secondary", "description" = "旧サーフェス ID。" }
+"new_surface_rect" = { "reference" = 5, "type" = "str", "required" = false, "provenance" = "ssp_secondary", "description" = "新しいサーフェスの大きさ（座標：左,上,右,下）。" }

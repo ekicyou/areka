@@ -1,0 +1,55 @@
+# event / category=send_failure — areka-P0-shiori-protocol-split category fragment.
+# 4 keyed entry table(s), source order preserved. Category-pure; entry-boundary only.
+# Generated deterministically; do not hand-edit. Merge order: _manifest.toml (task 2.4) is authoritative.
+
+[entry."OnRaisePluginFailure"]
+"kind" = "event"
+"category" = "send_failure"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ukadoc"
+"description" = "\\![raiseplugin] が失敗した際に発生。"
+[entry."OnRaisePluginFailure".field]
+"failure_reason" = { "reference" = 0, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "notfound/disabled または 204 など実行結果。" }
+"plugin_name_or_id" = { "reference" = 1, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "プラグインの名前または ID。" }
+"attempted_event_id" = { "reference" = 2, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "実行しようとしたイベント ID。" }
+"attempted_event_references" = { "reference" = 3, "reference_variadic" = true, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "実行しようとしたイベントの Reference。Reference3 以降可変長。" }
+
+[entry."OnNotifyPluginFailure"]
+"kind" = "event"
+"category" = "send_failure"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ukadoc"
+"description" = "\\![notifyplugin] が失敗した際に発生。"
+[entry."OnNotifyPluginFailure".field]
+"failure_reason" = { "reference" = 0, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "notfound/disabled または 204 など実行結果。" }
+"plugin_name_or_id" = { "reference" = 1, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "プラグインの名前または ID。" }
+"attempted_event_id" = { "reference" = 2, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "実行しようとしたイベント ID。" }
+"attempted_event_references" = { "reference" = 3, "reference_variadic" = true, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "実行しようとしたイベントの Reference。Reference3 以降可変長。" }
+
+[entry."OnRaiseOtherFailure"]
+"kind" = "event"
+"category" = "send_failure"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ukadoc"
+"description" = "\\![raiseother] が失敗した際に発生。"
+[entry."OnRaiseOtherFailure".field]
+"failure_reason" = { "reference" = 0, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "notfound/timecritical/passivemode/inductionmode/minimized または 204 等。複数対象時はバイト値 1 区切りリスト。" }
+"ghost_name" = { "reference" = 1, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "ゴースト名または \\0 名。複数対象時はバイト値 1 区切りリスト。" }
+"attempted_event_id" = { "reference" = 2, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "実行しようとしたイベント ID。" }
+"attempted_event_references" = { "reference" = 3, "reference_variadic" = true, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "実行しようとしたイベントの Reference。Reference3 以降可変長。" }
+
+[entry."OnNotifyOtherFailure"]
+"kind" = "event"
+"category" = "send_failure"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ukadoc"
+"description" = "\\![notifyother] が失敗した際に発生。"
+[entry."OnNotifyOtherFailure".field]
+"failure_reason" = { "reference" = 0, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "notfound/timecritical/passivemode/inductionmode/minimized または 204 等。複数対象時はバイト値 1 区切りリスト。" }
+"ghost_name" = { "reference" = 1, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "ゴースト名または \\0 名。複数対象時はバイト値 1 区切りリスト。" }
+"attempted_event_id" = { "reference" = 2, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "実行しようとしたイベント ID。" }
+"attempted_event_references" = { "reference" = 3, "reference_variadic" = true, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "実行しようとしたイベントの Reference。Reference3 以降可変長。" }

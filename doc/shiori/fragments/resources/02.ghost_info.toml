@@ -1,0 +1,325 @@
+# resource / category=ghost_info — areka-P0-shiori-protocol-split category fragment.
+# 40 keyed entry table(s), source order preserved. Category-pure; entry-boundary only.
+# Generated deterministically; do not hand-edit. Merge order: _manifest.toml (task 2.4) is authoritative.
+
+[entry."homeurl"]
+"kind" = "resource"
+"category" = "ghost_info"
+"dispatch" = "get"
+"response" = "text"
+"provenance" = "ukadoc"
+"description" = "ネットワーク更新用ファイルの位置。 何かSHIORIに重大な不具合が生じた際のバックアップ用に descript.txtにも書ける 。 どちらの記述が優先されるかはdescript.txtの説明を参照。"
+
+[entry."useorigin1"]
+"kind" = "resource"
+"category" = "ghost_info"
+"dispatch" = "get"
+"response" = "text"
+"provenance" = "ukadoc"
+"description" = "ネットワーク更新時のファイル数の開始数値。 1でファイル数1から開始、0でMATERIAと同じ0から開始。"
+
+[entry."username"]
+"kind" = "resource"
+"category" = "ghost_info"
+"dispatch" = "get"
+"response" = "text"
+"provenance" = "ukadoc"
+"description" = "ユーザーの名称。"
+
+[entry."sakura.defaultx"]
+"kind" = "resource"
+"category" = "ghost_info"
+"dispatch" = "get"
+"response" = "text"
+"provenance" = "ukadoc"
+"description" = "本体側の画像ベースX座標。"
+
+[entry."kero.defaultx"]
+"kind" = "resource"
+"category" = "ghost_info"
+"dispatch" = "get"
+"response" = "text"
+"provenance" = "ukadoc"
+"description" = "相方側の画像ベースX座標。"
+
+[entry."char*.defaultx"]
+"kind" = "resource"
+"category" = "ghost_info"
+"dispatch" = "get"
+"response" = "text"
+"provenance" = "ukadoc"
+"description" = "2人目以降の相方側の画像ベースX座標。"
+
+[entry."sakura.defaulty"]
+"kind" = "resource"
+"category" = "ghost_info"
+"dispatch" = "get"
+"response" = "text"
+"provenance" = "ukadoc"
+"description" = "本体側の画像ベースY座標。"
+
+[entry."kero.defaulty"]
+"kind" = "resource"
+"category" = "ghost_info"
+"dispatch" = "get"
+"response" = "text"
+"provenance" = "ukadoc"
+"description" = "相方側の画像ベースY座標。"
+
+[entry."char*.defaulty"]
+"kind" = "resource"
+"category" = "ghost_info"
+"dispatch" = "get"
+"response" = "text"
+"provenance" = "ukadoc"
+"description" = "2人目以降の相方側の画像ベースY座標。"
+
+[entry."sakura.defaultleft"]
+"kind" = "resource"
+"category" = "ghost_info"
+"dispatch" = "get"
+"response" = "text"
+"provenance" = "ukadoc"
+"description" = "本体側のディスプレイ上でのデフォルトX座標。"
+
+[entry."kero.defaultleft"]
+"kind" = "resource"
+"category" = "ghost_info"
+"dispatch" = "get"
+"response" = "text"
+"provenance" = "ukadoc"
+"description" = "相方側のディスプレイ上でのデフォルトX座標。"
+
+[entry."char*.defaultleft"]
+"kind" = "resource"
+"category" = "ghost_info"
+"dispatch" = "get"
+"response" = "text"
+"provenance" = "ukadoc"
+"description" = "2人目以降のディスプレイ上でのデフォルトX座標。"
+
+[entry."sakura.defaulttop"]
+"kind" = "resource"
+"category" = "ghost_info"
+"dispatch" = "get"
+"response" = "text"
+"provenance" = "ukadoc"
+"description" = "本体側のディスプレイ上でのデフォルトY座標。(自由移動モードのみ有効)"
+
+[entry."kero.defaulttop"]
+"kind" = "resource"
+"category" = "ghost_info"
+"dispatch" = "get"
+"response" = "text"
+"provenance" = "ukadoc"
+"description" = "相方側のディスプレイ上でのデフォルトY座標。(自由移動モードのみ有効)"
+
+[entry."char*.defaulttop"]
+"kind" = "resource"
+"category" = "ghost_info"
+"dispatch" = "get"
+"response" = "text"
+"provenance" = "ukadoc"
+"description" = "2人目以降のディスプレイ上でのデフォルトY座標。(自由移動モードのみ有効)"
+
+[entry."boxname.defaultleft"]
+"kind" = "resource"
+"category" = "ghost_info"
+"dispatch" = "get"
+"response" = "text"
+"provenance" = "ukadoc"
+"description" = "入力ボックスの初期スクリーンX・Y座標。leftがX、topがY。 ボックス種類は以下の通り：communicatebox、scriptbox、addressbar、teachbox、dateinput、timeinput、ipinput、sliderinput、passwordinput、inputbox"
+
+[entry."sakura.recommendsites"]
+"kind" = "resource"
+"category" = "ghost_info"
+"dispatch" = "get"
+"response" = "text"
+"provenance" = "ukadoc"
+"description" = "本体側のおすすめリスト。 値は 項目名1[バイト値1]url1[バイト値1]バナー画像パス1[バイト値1]選択時トークスクリプト1[バイト値2]項目名2[バイト値1]... という形式で返す。 ただしその形式への変換はSHIORIが内部的に行っている場合があるので詳しくは各SHIORIの解説を参照。 トークスクリプト部分は単なる文字列ではなくさくらスクリプト。 url部分にurlの変わりにscript:から始まる記述でそのスクリプトが実行される（ \\![raise] なども可能）。"
+
+[entry."sakura.portalsites"]
+"kind" = "resource"
+"category" = "ghost_info"
+"dispatch" = "get"
+"response" = "text"
+"provenance" = "ukadoc"
+"description" = "本体側のポータルリスト。 値は 項目名1[バイト値1]url1[バイト値1]バナー画像パス1[バイト値1]選択時トークスクリプト1[バイト値2]項目名2[バイト値1]... という形式で返す。 ただしその形式への変換はSHIORIが内部的に行っている場合があるので詳しくは各SHIORIの解説を参照。 トークスクリプト部分は単なる文字列ではなくさくらスクリプト。 url部分にurlの変わりにscript:から始まる記述でそのスクリプトが実行される（ \\![raise] なども可能）。"
+
+[entry."kero.recommendsites"]
+"kind" = "resource"
+"category" = "ghost_info"
+"dispatch" = "get"
+"response" = "text"
+"provenance" = "ukadoc"
+"description" = "相方側のおすすめリスト。 値は 項目名1[バイト値1]url1[バイト値1]バナー画像パス1[バイト値1]選択時トークスクリプト1[バイト値2]項目名2[バイト値1]... という形式で返す。 ただしその形式への変換はSHIORIが内部的に行っている場合があるので詳しくは各SHIORIの解説を参照。 トークスクリプト部分は単なる文字列ではなくさくらスクリプト。 url部分にurlの変わりにscript:から始まる記述でそのスクリプトが実行される（ \\![raise] なども可能）。"
+
+[entry."char*.recommendsites"]
+"kind" = "resource"
+"category" = "ghost_info"
+"dispatch" = "get"
+"response" = "text"
+"provenance" = "ukadoc"
+"description" = "\\p[*]側のおすすめリスト。 値は 項目名1[バイト値1]url1[バイト値1]バナー画像パス1[バイト値1]選択時トークスクリプト1[バイト値2]項目名2[バイト値1]... という形式で返す。 ただしその形式への変換はSHIORIが内部的に行っている場合があるので詳しくは各SHIORIの解説を参照。 トークスクリプト部分は単なる文字列ではなくさくらスクリプト。 url部分にurlの変わりにscript:から始まる記述でそのスクリプトが実行される（ \\![raise] なども可能）。"
+
+[entry."sakura.recommendbuttoncaption"]
+"kind" = "resource"
+"category" = "ghost_info"
+"dispatch" = "get"
+"response" = "text"
+"provenance" = "ukadoc"
+"description" = "本体側のおすすめの名称。"
+
+[entry."sakura.portalbuttoncaption"]
+"kind" = "resource"
+"category" = "ghost_info"
+"dispatch" = "get"
+"response" = "text"
+"provenance" = "ukadoc"
+"description" = "本体側のポータルの名称。"
+
+[entry."kero.recommendbuttoncaption"]
+"kind" = "resource"
+"category" = "ghost_info"
+"dispatch" = "get"
+"response" = "text"
+"provenance" = "ukadoc"
+"description" = "相方側のおすすめの名称。"
+
+[entry."char*.recommendbuttoncaption"]
+"kind" = "resource"
+"category" = "ghost_info"
+"dispatch" = "get"
+"response" = "text"
+"provenance" = "ukadoc"
+"description" = "\\p[*]のおすすめの名称。"
+
+[entry."updatebuttoncaption"]
+"kind" = "resource"
+"category" = "ghost_info"
+"dispatch" = "get"
+"response" = "text"
+"provenance" = "ukadoc"
+"description" = "ネットワーク更新の名称。"
+
+[entry."vanishbuttoncaption"]
+"kind" = "resource"
+"category" = "ghost_info"
+"dispatch" = "get"
+"response" = "text"
+"provenance" = "ukadoc"
+"description" = "消滅通告の名称。"
+
+[entry."readmebuttoncaption"]
+"kind" = "resource"
+"category" = "ghost_info"
+"dispatch" = "get"
+"response" = "text"
+"provenance" = "ukadoc"
+"description" = "Read Me!の名称。"
+
+[entry."vanishbuttonvisible"]
+"kind" = "resource"
+"category" = "ghost_info"
+"dispatch" = "get"
+"response" = "text"
+"provenance" = "ukadoc"
+"description" = "消滅通告の表示。1で表示、0で非表示。"
+
+[entry."sakura.popupmenu.visible"]
+"kind" = "resource"
+"category" = "ghost_info"
+"dispatch" = "get"
+"response" = "text"
+"provenance" = "ukadoc"
+"description" = "本体側のオーナードローメニューの表示。1で表示、0で非表示。"
+
+[entry."kero.popupmenu.visible"]
+"kind" = "resource"
+"category" = "ghost_info"
+"dispatch" = "get"
+"response" = "text"
+"provenance" = "ukadoc"
+"description" = "相方側のオーナードローメニューの表示。1で表示、0で非表示。"
+
+[entry."char*.popupmenu.visible"]
+"kind" = "resource"
+"category" = "ghost_info"
+"dispatch" = "get"
+"response" = "text"
+"provenance" = "ukadoc"
+"description" = "\\p[*]のオーナードローメニューの表示。1で表示、0で非表示。"
+
+[entry."sakura.popupmenu.type"]
+"kind" = "resource"
+"category" = "ghost_info"
+"dispatch" = "get"
+"response" = "text"
+"provenance" = "ukadoc"
+"description" = "本体側のオーナードローメニューの変更。0で本体側メニュー、1で省略メニュー。"
+
+[entry."kero.popupmenu.type"]
+"kind" = "resource"
+"category" = "ghost_info"
+"dispatch" = "get"
+"response" = "text"
+"provenance" = "ukadoc"
+"description" = "相方側のオーナードローメニューの変更。0で本体側メニュー、1で省略メニュー。"
+
+[entry."char*.popupmenu.type"]
+"kind" = "resource"
+"category" = "ghost_info"
+"dispatch" = "get"
+"response" = "text"
+"provenance" = "ukadoc"
+"description" = "\\p[*]のオーナードローメニューの変更。0で本体側メニュー、1で省略メニュー。"
+
+[entry."sakura.popupmenu.applybindtoself"]
+"kind" = "resource"
+"category" = "ghost_info"
+"dispatch" = "get"
+"response" = "text"
+"provenance" = "ukadoc"
+"description" = "オーナードローメニューの種類を変更した時の着せ替えメニューの挙動を変える。 メニューの種類に応じて変える＝0 メニューが所属するスコープ（キャラクターID）の着せ替えを出す＝1 標準設定は1となり、SSP 2.7.25より前の挙動と異なるので、戻したい場合は明示的に0を設定すること。 2.7.26"
+
+[entry."kero.popupmenu.applybindtoself"]
+"kind" = "resource"
+"category" = "ghost_info"
+"dispatch" = "get"
+"response" = "text"
+"provenance" = "ukadoc"
+"description" = "オーナードローメニューの種類を変更した時の着せ替えメニューの挙動を変える。 メニューの種類に応じて変える＝0 メニューが所属するスコープ（キャラクターID）の着せ替えを出す＝1 標準設定は1となり、SSP 2.7.25より前の挙動と異なるので、戻したい場合は明示的に0を設定すること。 2.7.26"
+
+[entry."char*.popupmenu.applybindtoself"]
+"kind" = "resource"
+"category" = "ghost_info"
+"dispatch" = "get"
+"response" = "text"
+"provenance" = "ukadoc"
+"description" = "オーナードローメニューの種類を変更した時の着せ替えメニューの挙動を変える。 メニューの種類に応じて変える＝0 メニューが所属するスコープ（キャラクターID）の着せ替えを出す＝1 標準設定は1となり、SSP 2.7.25より前の挙動と異なるので、戻したい場合は明示的に0を設定すること。 2.7.26"
+
+[entry."getaistate"]
+"kind" = "resource"
+"category" = "ghost_info"
+"dispatch" = "get"
+"response" = "text"
+"provenance" = "ukadoc"
+"description" = "AIグラフのSHIORI/3.0版。 ゴースト内部状態(トーク数、好感度など)に関するレーダーチャートを描く。 以下のフォーマットで返す。 グラフ表示値群 [バイト値1] グラフラベル群 [バイト値1] グラフ加算値群 [バイト値1] グラフ最大値群 グラフ表示値群 グラフに表示したい値を半角数値・カンマ区切りで返してください。 2.4.26から小数点以下可。"
+
+[entry."getaistateex"]
+"kind" = "resource"
+"category" = "ghost_info"
+"dispatch" = "get"
+"response" = "text"
+"provenance" = "ukadoc"
+"description" = "getaistate の複数指定可能版。Reference0 に何個目のグラフ用のデータを要求しているか（0 スタート）が渡される。グラフを 2 個だけ表示したい場合は Reference0 が 0,1 の時に応答し 2 以上なら値なし（204）を返す。フォーマットは getaistate と同じ。"
+[entry."getaistateex".field]
+"graph_index" = { "reference" = 0, "type" = "i32", "required" = true, "provenance" = "ukadoc", "description" = "何個目のグラフ用のデータか（ゼロベース）。0、1、2…" }
+
+[entry."legacyinterface"]
+"kind" = "resource"
+"category" = "ghost_info"
+"dispatch" = "get"
+"response" = "text"
+"provenance" = "ukadoc"
+"description" = "右クリックメニュー中の、レガシーインターフェースを使うか否か。 これに 0 を返すと、「ゴースト、シェル、バルーンの各切り替えボタン」が表示されなくなる。 materia582でのみ動作。"

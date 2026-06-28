@@ -1,0 +1,283 @@
+# event / category=os_state — areka-P0-shiori-protocol-split category fragment.
+# 27 keyed entry table(s), source order preserved. Category-pure; entry-boundary only.
+# Generated deterministically; do not hand-edit. Merge order: _manifest.toml (task 2.4) is authoritative.
+
+[entry."OnScreenSaverStart"]
+"kind" = "event"
+"category" = "os_state"
+"dispatch" = "notify"
+"response" = "none"
+"provenance" = "ukadoc"
+"description" = "スクリーンセーバーが起動した際に発生。[NOTIFY]"
+[entry."OnScreenSaverStart".field]
+"saver_name" = { "reference" = 0, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "スクリーンセーバ名" }
+"saver_path" = { "reference" = 1, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "スクリーンセーバ実行ファイルのパス" }
+"saver_wait_seconds" = { "reference" = 2, "type" = "i32", "required" = false, "provenance" = "ukadoc", "description" = "スクリーンセーバ実行までの待ち時間(秒)" }
+
+[entry."OnScreenSaverEnd"]
+"kind" = "event"
+"category" = "os_state"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ukadoc"
+"description" = "スクリーンセーバーが終了した際に発生。"
+[entry."OnScreenSaverEnd".field]
+"saver_name" = { "reference" = 0, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "スクリーンセーバ名" }
+"saver_path" = { "reference" = 1, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "スクリーンセーバ実行ファイルのパス" }
+"saver_wait_seconds" = { "reference" = 2, "type" = "i32", "required" = false, "provenance" = "ukadoc", "description" = "スクリーンセーバ実行までの待ち時間(秒)" }
+
+[entry."OnSessionLock"]
+"kind" = "event"
+"category" = "os_state"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ukadoc"
+"description" = "ログイン状態のままロック画面に戻った際に発生。Windowsの場合は簡易ユーザー切り替えでも発生する。   本イベントはNOTIFYではないが、当然何を実行してもユーザーには見えないので注意。"
+
+[entry."OnSessionUnlock"]
+"kind" = "event"
+"category" = "os_state"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ukadoc"
+"description" = "ロック画面から通常の操作に戻った際に発生。Windowsの場合は簡易ユーザー切り替えでも発生する。"
+
+[entry."OnSessionDisconnect"]
+"kind" = "event"
+"category" = "os_state"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ukadoc"
+"description" = "簡易ユーザー切り替えで他のユーザーアカウントへの切り替え操作を行った時に発生する。   Windows上ではOnSessionLockとセットで通知され、さらに強制最小化されるためOnWindowStateMinimizeも発生する。   この挙動はWindows特有の制約であり、他のOS上で同様の動きになるとは限らない点に注意。"
+
+[entry."OnSessionReconnect"]
+"kind" = "event"
+"category" = "os_state"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ukadoc"
+"description" = "簡易ユーザー切り替えで実行中のユーザーアカウントに戻ってきた時に発生する。   Windows上ではOnSessionUnlockとセットで通知され、さらに強制最小化されたのが解除されるためOnWindowStateRestoreも発生する。   この挙動はWindows特有の制約であり、他のOS上で同様の動きになるとは限らない点に注意。"
+
+[entry."OnCPULoadHigh"]
+"kind" = "event"
+"category" = "os_state"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ukadoc"
+"description" = "CPU負荷が高い時に発生する。(今のところおおよそ80％ぐらいが少し続いたら発動)"
+[entry."OnCPULoadHigh".field]
+"load_percent" = { "reference" = 0, "type" = "i32", "required" = false, "provenance" = "ukadoc", "description" = "現在の負荷率％" }
+
+[entry."OnCPULoadLow"]
+"kind" = "event"
+"category" = "os_state"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ukadoc"
+"description" = "CPU負荷が高い状態から低く戻った時に発動する。(今のところHigh発動後60％を下回った時)"
+[entry."OnCPULoadLow".field]
+"load_percent" = { "reference" = 0, "type" = "i32", "required" = false, "provenance" = "ukadoc", "description" = "現在の負荷率％" }
+
+[entry."OnMemoryLoadHigh"]
+"kind" = "event"
+"category" = "os_state"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ukadoc"
+"description" = "メモリ使用量が高い時に発生する。(今のところおおよそ80％ぐらいが少し続いたら発動)"
+[entry."OnMemoryLoadHigh".field]
+"usage_percent" = { "reference" = 0, "type" = "i32", "required" = false, "provenance" = "ukadoc", "description" = "現在の使用量％" }
+
+[entry."OnMemoryLoadLow"]
+"kind" = "event"
+"category" = "os_state"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ukadoc"
+"description" = "メモリ使用量が高い状態から低く戻った時に発動する。(今のところHigh発動後60％を下回った時)"
+[entry."OnMemoryLoadLow".field]
+"usage_percent" = { "reference" = 0, "type" = "i32", "required" = false, "provenance" = "ukadoc", "description" = "現在の使用量％" }
+
+[entry."OnDisplayChange"]
+"kind" = "event"
+"category" = "os_state"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ukadoc"
+"description" = "デスクトップ（プライマリスクリーン）の解像度／色深度が変更された際に発生。[起動時NOTIFY/他GET]"
+"silence_ref" = ["sr_dispatch_os_startup_notify_other_get"]
+[entry."OnDisplayChange".field]
+"color_depth_bpp" = { "reference" = 0, "type" = "i32", "required" = false, "provenance" = "ukadoc", "description" = "変化後の色深度（bpp）" }
+"screen_width" = { "reference" = 1, "type" = "i32", "required" = false, "provenance" = "ukadoc", "description" = "変化後の解像度（width）" }
+"screen_height" = { "reference" = 2, "type" = "i32", "required" = false, "provenance" = "ukadoc", "description" = "変化後の解像度（height）" }
+
+[entry."OnDisplayHandover"]
+"kind" = "event"
+"category" = "os_state"
+"dispatch" = "notify"
+"response" = "none"
+"provenance" = "ukadoc"
+"description" = "スクリーン間を跨いでウインドウを移動させた際に発生。[NOTIFY/他GET]"
+"silence_ref" = ["sr_dispatch_displayhandover_notify_other_get"]
+[entry."OnDisplayHandover".field]
+"handover_phase" = { "reference" = 0, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "init (位置初期化完了時) か update (初期化後の更新) 。  initは起動後ウインドウの位置が決定した際に通知され、OnBootより前とは限らない。" }
+"char_scope" = { "reference" = 1, "type" = "i32", "required" = false, "provenance" = "ukadoc", "description" = "本体の場合は0、相方の場合は1。SSP/CROWでは2以降もある。" }
+"rect_before" = { "reference" = 2, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "移動前 左,上,右,下,ビット深度,プライマリモニタかどうか(0/1) init時は空欄  例： 0,0,1600,900,32,1" }
+"rect_after" = { "reference" = 3, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "移動後 左,上,右,下,ビット深度,プライマリモニタかどうか(0/1)" }
+
+[entry."OnDisplayChangeEx"]
+"kind" = "event"
+"category" = "os_state"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ukadoc"
+"description" = "スクリーンの解像度／色深度が変更された際に発生。マルチモニタ対応。[起動時NOTIFY/他GET]"
+"silence_ref" = ["sr_dispatch_os_startup_notify_other_get"]
+[entry."OnDisplayChangeEx".field]
+"change_phase" = { "reference" = 0, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "init (起動時通知) か update (起動後の更新)" }
+
+[entry."OnDisplayPowerStatus"]
+"kind" = "event"
+"category" = "os_state"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ukadoc"
+"description" = "モニタの電源がON/OFFされた時に発生する。単純にON/OFFされた時だけでなく、ノート型で蓋を閉じた時も対象となる。"
+[entry."OnDisplayPowerStatus".field]
+"power_on_flag" = { "reference" = 0, "type" = "bool", "required" = false, "provenance" = "ukadoc", "description" = "1 = ON / 0 = OFF" }
+
+[entry."OnBatteryNotify"]
+"kind" = "event"
+"category" = "os_state"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ukadoc"
+"description" = "残りバッテリー量を通知。起動時のみ[NOTIFY]で通知され、他はGET。"
+"silence_ref" = ["sr_dispatch_os_startup_notify_other_get"]
+[entry."OnBatteryNotify".field]
+"battery_percent" = { "reference" = 0, "type" = "i32", "required" = false, "provenance" = "ukadoc", "description" = "残りバッテリー％。" }
+"remaining_time" = { "reference" = 1, "type" = "i32", "required" = false, "provenance" = "ukadoc", "description" = "残り時間。不明の場合は-1。" }
+"power_source" = { "reference" = 2, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "offline(バッテリー駆動)・online(電源供給中)・backup(UPSなど補助電源) のいずれか。" }
+"battery_state_list" = { "reference" = 3, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "以下の状態を示す文字列をカンマ区切りで通知。例： low,charging   high：バッテリー残量が2/3以上  low：バッテリー残量が1/3以下 (OnBatteryLowも発生)  critical：バッテリー残量が5％以下 (OnBatteryCriticalも発生)  charging：バッテリーが充電中（OnBatteryChargingStart/Stopも発生）  no_battery：バッテリーが取り外されている  power_saving：バッテリー節約機能がON (SSP 2.3.94以降/Windows 10以降)" }
+
+[entry."OnBatteryLow"]
+"kind" = "event"
+"category" = "os_state"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ukadoc"
+"description" = "バッテリー残量が少なめ(OnBatteryNotify Reference3がlow以下)になった際に発生する。  外部アプリ「きのこ」が通知するイベントに同名の物があるので注意。  「きのこ」との互換用イベントとして実装されている。"
+
+[entry."OnBatteryCritical"]
+"kind" = "event"
+"category" = "os_state"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ukadoc"
+"description" = "バッテリー残量が極端に少なく(OnBatteryNotify Reference3がcritical以下)になった際に発生する。  外部アプリ「きのこ」が通知するイベントに同名の物があるので注意。  「きのこ」との互換用イベントとして実装されている。"
+
+[entry."OnBatteryChargingStart"]
+"kind" = "event"
+"category" = "os_state"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ukadoc"
+"description" = "バッテリーの充電を開始した場合に発生する。 「Androidの伺か」互換イベント。"
+
+[entry."OnBatteryChargingStop"]
+"kind" = "event"
+"category" = "os_state"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ukadoc"
+"description" = "バッテリーの充電を停止した場合に発生する。満充電になった時とは限らない。 「Androidの伺か」互換イベント。"
+
+[entry."OnDeviceArrival"]
+"kind" = "event"
+"category" = "os_state"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ukadoc"
+"description" = "デバイスを検出された際に発生。"
+
+[entry."OnDeviceRemove"]
+"kind" = "event"
+"category" = "os_state"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ukadoc"
+"description" = "デバイスを削除された際に発生。"
+
+[entry."OnTabletMode"]
+"kind" = "event"
+"category" = "os_state"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ukadoc"
+"description" = "OSがタブレット機の操作に最適化された状態に切り替えられた際に発生。  起動直後にNOTIFY(喋れない)で通知され、切り替わった時にGET(喋れる)で通知される。"
+"silence_ref" = ["sr_dispatch_os_startup_notify_other_get"]
+[entry."OnTabletMode".field]
+"tablet_mode_flag" = { "reference" = 0, "type" = "bool", "required" = false, "provenance" = "ukadoc", "description" = "0/1：1がタブレットモード(OSがタブレット機の操作に最適化された状態)、0がモードOFF" }
+
+[entry."OnDarkTheme"]
+"kind" = "event"
+"category" = "os_state"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ukadoc"
+"description" = "OSがダークテーマ(暗めの表示)に切り替えられた際に発生。  起動直後にNOTIFY(喋れない)で通知され、切り替わった時にGET(喋れる)で通知される。"
+"silence_ref" = ["sr_dispatch_os_startup_notify_other_get"]
+[entry."OnDarkTheme".field]
+"app_dark_flag" = { "reference" = 0, "type" = "bool", "required" = false, "provenance" = "ukadoc", "description" = "0/1：アプリ設定 1がダークテーマ、0が通常（明るい）テーマ" }
+"system_dark_flag" = { "reference" = 1, "type" = "bool", "required" = false, "provenance" = "ukadoc", "description" = "0/1：システム設定 1がダークテーマ、0が通常（明るい）テーマ (2.6.29)" }
+
+[entry."OnOSUpdateInfo"]
+"kind" = "event"
+"category" = "os_state"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ukadoc"
+"description" = "OSの更新確認日時・更新実行日時と、履歴情報の通知。  起動直後にNOTIFY(喋れない)で通知され、更新が実行された時に少し遅れてGET(喋れる)で通知される。"
+"silence_ref" = ["sr_dispatch_os_startup_notify_other_get"]
+[entry."OnOSUpdateInfo".field]
+"check_datetime" = { "reference" = 0, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "確認日時 年,月,日,時,分,秒 半角カンマ区切り ローカル時刻" }
+"apply_datetime" = { "reference" = 1, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "実行日時 年,月,日,時,分,秒 半角カンマ区切り ローカル時刻" }
+
+[entry."OnRecycleBinEmpty"]
+"kind" = "event"
+"category" = "os_state"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ukadoc"
+"description" = "\\![execute,emptyrecyclebin]でゴミ箱を空にした時に発生する。   スクリプトを実行したゴーストだけでなく、起動中の全ゴーストにもOnRecycleBinEmptyFromOtherが通知される。"
+[entry."OnRecycleBinEmpty".field]
+"bin_file_count" = { "reference" = 0, "type" = "i32", "required" = false, "provenance" = "ukadoc", "description" = "現在ゴミ箱に入っているファイルの数(空にした直後なのでふつうは0)" }
+"bin_total_bytes" = { "reference" = 1, "type" = "i64", "required" = false, "provenance" = "ukadoc", "description" = "現在ゴミ箱に入っているファイルのサイズ(空にした直後なのでふつうは0) 単位バイト" }
+"bin_count_delta" = { "reference" = 2, "type" = "i32", "required" = false, "provenance" = "ukadoc", "description" = "現在ゴミ箱に入っているファイルの数の直前との差(空にした直後なのでふつうは負の値)" }
+"bin_bytes_delta" = { "reference" = 3, "type" = "i64", "required" = false, "provenance" = "ukadoc", "description" = "現在ゴミ箱に入っているファイルのサイズの直前との差(空にした直後なのでふつうは負の値) 単位バイト" }
+"empty_success_flag" = { "reference" = 4, "type" = "bool", "required" = false, "provenance" = "ukadoc", "description" = "正常に空にできたら1、何かエラーが起きたら0(もとから空っぽでも0)" }
+"invoker_ghost_internal_name" = { "reference" = 5, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "タグを実行したゴーストの本体側の名前(sakuraname)。" }
+
+[entry."OnRecycleBinEmptyFromOther"]
+"kind" = "event"
+"category" = "os_state"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ukadoc"
+"description" = "\\![execute,emptyrecyclebin]でゴミ箱を空にする指示を出したゴースト以外に送られる。  ReferenceはOnRecycleBinEmptyと同じ。"
+
+[entry."OnRecycleBinStatusUpdate"]
+"kind" = "event"
+"category" = "os_state"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ukadoc"
+"description" = "ゴミ箱にファイルが投げ込まれた時や、エクスプローラ上でゴミ箱を空にした時に発生し、起動中の全ゴーストに通知される。   また、ゴースト起動時に[NOTIFY]で通知される。"
+"silence_ref" = ["sr_dispatch_os_startup_notify_other_get"]
+[entry."OnRecycleBinStatusUpdate".field]
+"bin_file_count" = { "reference" = 0, "type" = "i32", "required" = false, "provenance" = "ukadoc", "description" = "現在ゴミ箱に入っているファイルの数" }
+"bin_total_bytes" = { "reference" = 1, "type" = "i64", "required" = false, "provenance" = "ukadoc", "description" = "現在ゴミ箱に入っているファイルのサイズ 単位バイト" }
+"bin_count_delta" = { "reference" = 2, "type" = "i32", "required" = false, "provenance" = "ukadoc", "description" = "現在ゴミ箱に入っているファイルの数の直前との差" }
+"bin_bytes_delta" = { "reference" = 3, "type" = "i64", "required" = false, "provenance" = "ukadoc", "description" = "現在ゴミ箱に入っているファイルのサイズの直前との差 単位バイト" }
+"compat_dummy_one" = { "reference" = 4, "type" = "bool", "required" = false, "provenance" = "ukadoc", "description" = "常に1 (OnRecycleBinEmptyとの互換用のダミー)" }
+"compat_dummy_empty" = { "reference" = 5, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "常に空 (OnRecycleBinEmptyとの互換用のダミー)" }
