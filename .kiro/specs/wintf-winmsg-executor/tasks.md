@@ -69,7 +69,7 @@
   - _Boundary: window_proc handlers_
   - _Depends: 3.1_
 
-- [ ] 3.3 (P) WindowRegistry（NonSend 所有とリコンサイル）
+- [x] 3.3 (P) WindowRegistry（NonSend 所有とリコンサイル）
   - 生成済みウィンドウハンドルを Entity キーで保持する NonSend リソースを実装する（!Send を保持＝UI スレッド束縛・Send 偽装はしない）
   - `Window` コンポーネント破棄を検知するリコンサイルで該当要素を drop し、ハンドル破棄（DestroyWindow）を Entity ライフサイクルに一致させる
   - 除去後に空になったら終了シグナルを発火できる接点を用意する
@@ -164,4 +164,5 @@
 - workspace cargo を回す前に `git submodule update --init`（vendors/pasta）が必要（worktree では未populate のことがある）。ビルド/テストは PowerShell で実行（Git Bash の coreutils `link.exe` が MSVC link を遮蔽する）。
 - **task 3.1 配置是正（3.2 で実施）**: 3.1 は `dispatch_window_message` を `runtime/wndproc_bridge.rs` に置いたが、design.md:188/443 は ECS 層（`ecs/window_proc/mod.rs`）配置を指定。旧 `ecs_wndproc`（ECS層）が同関数を共有呼びするには ECS 層配置が必須（ecs→runtime の上向き依存禁止・design:54）。よって 3.2 で `dispatch_window_message` を `ecs/window_proc/mod.rs` へ移設し、`runtime/wndproc_bridge.rs::make_wndproc` はそれを呼ぶよう繋ぎ替える（WndState/make_wndproc は維持・3.1 テストは緑のまま）。
 - **旧経路の共存維持（開発者決定 2026-06-30）**: 「最終的には完全撤去。ただし移行が確認できるまで旧コードを残す（知見転記漏れの保険）」。よって 3.2 では旧グローバル/GWLP 解決（`ECS_WORLD`/`SendWeak`/`set_ecs_world`/`try_get_ecs_world`/`get_entity_from_hwnd`）と `ecs_wndproc` を**撤去せず存続**させる。`ecs_wndproc` は entity/world を自己解決して新設 `dispatch_window_message` へ委譲する薄いシムへ縮約（業務ロジックは移行済みハンドラ側に集約）。実際の撤去は 4.5（legacy teardown）へ寄せる。各フェーズで lib ビルド＋既存テスト＋example 緑を維持（design の Phase チェックポイント遵守）。
+- **WindowRegistry 配置（3.3）= runtime 層**: `Window<WndState>`（!Send・ライブラリ型）を保持し WndState（3.1・runtime）に依存するため runtime に置く（設計 File Structure も window_factory 等 Window<S> building block を runtime/ へ集約）。NonSend リソースとして World へ挿入予定。reconcile（`RemovedComponents<Window>` 駆動）も runtime 定義とし、schedule への結線は WinApp（runtime→World）が 4.3 で行う（ECS→runtime の上向き依存を作らない）。唯一の上向きエッジ create_windows(ECS)→factory/registry(runtime) は設計公認で 3.4 の領分。3.3 では旧 create_windows / WindowHandle / process_singleton に触れない（共存維持）。`reconcile_window_registry<W: 'static>` は generic（ヘッドレステスト seam）ゆえ、4.3 の schedule 登録時は具体型 `reconcile_window_registry::<wintf_winmsg_executor::util::Window<WndState>>`（turbofish）で monomorphize して登録する（in-code 文書化済 window_registry.rs:105-107）。`shutdown_hook: Option<Box<dyn Fn()>>` の実 Event（event_listener）注入は 4.2 領分。
 - **WM_NCCREATE/WM_NCDESTROY のみ 3.2 で非移行**: この 2 つは entity 確立/解体の lifecycle 特例で「窓の畳み方の反転」（task 4.1）の領分。現行シグネチャ `(hwnd,message,wparam,lparam)` のまま `ecs_wndproc` から直呼びし、`dispatch_window_message` 表には含めない。NCCREATE は lpCreateParams から entity を確立する message ゆえ引数化不可。3.2 の (world,entity) 引数一様移行の対象は entity 解決後メッセージ（WM_CLOSE/ERASEBKGND/PAINT/DISPLAYCHANGE/WINDOWPOSCHANGED/DPICHANGED/mouse/keyboard）。**WM_CLOSE は移行対象**（dispatch 表経由・本体は world/entity を `_` で無視するが統一シグネチャに従う・entity 確立解体を伴わないため特例ではない）。
