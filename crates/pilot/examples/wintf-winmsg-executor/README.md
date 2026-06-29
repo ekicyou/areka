@@ -38,8 +38,9 @@
   - `block_on` の future 完了（3 タスク join）による清掃終了を確認（tail race 回避に終了時 notify を数発）。
 - 実行法: `cargo run -p pilot --example wintf-winmsg-executor`（wall-clock 約 6 秒で自動終了）。
   - 注: worktree では前段に `git submodule update --init --recursive`（`vendors/pasta` 未populate 回避）。
-  - 依存: `wintf-winmsg-executor = "0.0.3"`（暫定・0.0.4 は crates.io index 未伝播。差分は
-    `util::get_instance_handle` 公開のみで本先進坑は未使用ゆえ API 互換）, `event-listener = "5"`。
+  - 依存: `wintf-winmsg-executor = "0.0.5"`（検証は 0.0.3 で実施・0.0.5 で再ビルド確認済み＝API 互換。
+    0.0.5 は共有クラスに `CS_DBLCLKS` ＋既定カーソルを内蔵＝本坑で wintf 側 dblclick 補填が不要化）,
+    `event-listener = "5"`。
 
 ## 検証結果
 

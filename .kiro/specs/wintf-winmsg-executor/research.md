@@ -161,9 +161,12 @@
    PostQuitMessage→WM_QUIT で break」を、`block_on` の future 完了駆動へどう写像するか。
    README 学び（block_on は loop 先行 quit で panic）を踏まえ、終了 future の設計（tick タスク・
    全窓 close の検知）をどこに置くか。
-3. **ウィンドウクラス登録方式**: ライブラリ `util::Window<S>` の内部クラス登録を全面採用するか、
-   CS_DBLCLKS・カスタム class style・複数クラスの要求とどう両立するか（案1/案2）。
-   → ライブラリの class style 指定能力は design 期に要ソース調査（Research Needed）。
+3. **ウィンドウクラス登録方式 → 確定（設計討議②・上流修正で解消）**: ライブラリの共有クラスは
+   `style=0`（CS_DBLCLKS なし・0.0.3）だったため当初は wintf 側 `SetClassLongPtrW` 補填案を検討したが、
+   **フォーク上流 0.0.5 でクラス登録に `CS_DBLCLKS` ＋既定カーソル（`LoadCursorW(IDC_ARROW)`）を内蔵**
+   （`src/util/window.rs` の `CLASS_REGISTRATION.call_once`）。最初に生成される `EXECUTOR_WINDOW` が
+   共有クラスを CS_DBLCLKS 込みで産むため全実窓へ自動波及。**wintf 側 `DblClkClassFixup` は撤去**し、
+   要件 7.1 の pin を `=0.0.5` へ更新。CS_HREDRAW/VREDRAW は合成窓（DComp/ULW）に無影響ゆえ非採用。
 4. **共有状態 S の粒度**: `util::Window<S>` の S を `Rc<RefCell<EcsWorld>>`（単一 World 共有）と
    するか、per-window state を別に持つか。GWLP_USERDATA 全廃後の Entity↔HWND 対応の保持場所。
 5. **UI 構築入口（`world.spawn` / WintfTaskPool）の扱い** → **【確定済み・要件討議②・2026-06-29: Option 1（温存）】**:
@@ -197,7 +200,9 @@
 > ギャップ分析（上記）は要件討議の素材。本節以降は design 期の調査結果・合成判断・残リスクを記録する。
 > 設計の自己完結記述は design.md 側にあり、本節はその根拠・代替比較・調査ログを保持する。
 
-## 採用クレート 0.0.3 確定 API（§6 Research Needed の解決）
+## 採用クレート 確定 API（§6 Research Needed の解決・ソース確認は 0.0.3、pin は 0.0.5）
+
+> 注: 下記 API は 0.0.3 ソースで確認したが 0.0.3〜0.0.5 で互換（先進坑を 0.0.5 で再ビルド確認済み）。差分はクラス登録の `CS_DBLCLKS`＋既定カーソル内蔵（設計判断 #3）のみ。pin は `=0.0.5`。
 
 design 期に crate registry ソースを直接確認（`c:\rust\cargo\registry\src\index.crates.io-*\wintf-winmsg-executor-0.0.3\src\`）。
 

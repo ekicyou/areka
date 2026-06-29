@@ -6,7 +6,7 @@ wintf のメッセージループ・ウィンドウ起動・UI スレッド asyn
 
 ## Introduction
 
-本仕様は、wintf の UI スレッド基盤（メッセージループ・ウィンドウ生成・UI スレッド async・60Hz ECS tick 起床）を、Windows 低レベル知見に基づく外部クレート `wintf-winmsg-executor`（v0.0.3）ベースへ置き換える横断リファクタである。自作のメッセージポンプ・`GWLP_USERDATA` 手詰め・手組み executor を撤去し、挙動の正しさを高めつつトラブル余地を縮小する。tokio 非依存を維持し、スレッド跨ぎ起床は `event_listener` で実現する。本坑は先進坑 `pilot/wintf-winmsg-executor` の go 判定（開発者承認・2026-06-29 取得済み）を前提依存として持つ。先進坑で検証済みの事実（起床安定性・再入整合・状態アクセス・清掃終了）は先進坑 README を正本とし、本仕様では二重化しない。
+本仕様は、wintf の UI スレッド基盤（メッセージループ・ウィンドウ生成・UI スレッド async・60Hz ECS tick 起床）を、Windows 低レベル知見に基づく外部クレート `wintf-winmsg-executor`（v0.0.5・CS_DBLCLKS 内蔵版）ベースへ置き換える横断リファクタである。自作のメッセージポンプ・`GWLP_USERDATA` 手詰め・手組み executor を撤去し、挙動の正しさを高めつつトラブル余地を縮小する。tokio 非依存を維持し、スレッド跨ぎ起床は `event_listener` で実現する。本坑は先進坑 `pilot/wintf-winmsg-executor` の go 判定（開発者承認・2026-06-29 取得済み）を前提依存として持つ。先進坑で検証済みの事実（起床安定性・再入整合・状態アクセス・清掃終了）は先進坑 README を正本とし、本仕様では二重化しない。
 
 ## Boundary Context
 
@@ -102,7 +102,7 @@ wintf のメッセージループ・ウィンドウ起動・UI スレッド asyn
 
 #### Acceptance Criteria
 
-1. The wintf shall 採用クレート `wintf-winmsg-executor` をバージョン v0.0.3 に固定（pin）して取り込む。
+1. The wintf shall 採用クレート `wintf-winmsg-executor` をバージョン v0.0.5（共有ウィンドウクラスに `CS_DBLCLKS` ＋既定カーソルを内蔵した版・フォーク上流で修正済み）に固定（pin）して取り込む。これによりダブルクリック有効化を wintf 側の後付け（`DblClkClassFixup`）なしでライブラリ側が提供する。
 2. The wintf shall スレッド跨ぎ起床のために `event_listener` クレートを依存に追加する。
 3. The wintf 開発プロセス shall 先進坑 `pilot/wintf-winmsg-executor` の go 判定（開発者承認・取得済み）を本坑着手の前提依存として満たす。
 4. The wintf 実装 shall 先進坑コードをコピー流用せず、先進坑 README の検証結果（知見）を参照して一から実装する。

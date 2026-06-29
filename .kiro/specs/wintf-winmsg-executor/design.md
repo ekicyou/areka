@@ -2,7 +2,7 @@
 
 ## Overview
 
-本仕様は、wintf の UI スレッド基盤（メッセージループ・ウィンドウ生成・UI スレッド async・60Hz ECS tick 起床）を、自作実装から外部クレート `wintf-winmsg-executor` v0.0.3 ベースへ置き換える横断リファクタである。自作の `PeekMessageW` ポンプ、`GWLP_USERDATA` 手詰め、`async-executor` 手組み executor を撤去し、`MessageLoop`/`block_on`/`spawn_local`/`util::Window<S>` へ写像する。スレッド跨ぎ起床は `event_listener` で実現し、tokio 非依存を維持する。
+本仕様は、wintf の UI スレッド基盤（メッセージループ・ウィンドウ生成・UI スレッド async・60Hz ECS tick 起床）を、自作実装から外部クレート `wintf-winmsg-executor` v0.0.5 ベースへ置き換える横断リファクタである。自作の `PeekMessageW` ポンプ、`GWLP_USERDATA` 手詰め、`async-executor` 手組み executor を撤去し、`MessageLoop`/`block_on`/`spawn_local`/`util::Window<S>` へ写像する。スレッド跨ぎ起床は `event_listener` で実現し、tokio 非依存を維持する。
 
 **Purpose**: wintf 開発者に対し、Windows 低レベル知見に基づく洗練された UI スレッド基盤を提供し、自作コードの不正確な挙動リスクとトラブル余地を縮小する。
 
@@ -17,7 +17,7 @@
 - UI スレッド async を `spawn_local`/`block_on` へ移行し、tokio 非依存・`!Send` future 許容を保つ（要件 3）。
 - 60Hz ECS tick を `event_listener` ブリッジ＋ async tick タスクへ移行し、13 本スケジュール構成・順序を不変に保つ（要件 4）。
 - deprecated レガシーと旧 `WinThreadMgr` API を撤去し、新 facade へ全 examples ＋ areka を追従させる（要件 5・6）。
-- 採用クレートを `=0.0.3` に pin し、`event-listener` を依存に追加する（要件 7）。
+- 採用クレートを `=0.0.5` に pin し、`event-listener` を依存に追加する（要件 7）。
 
 ### Non-Goals
 
@@ -37,7 +37,7 @@
 - **UI スレッド async 層**: `spawn_local`/`block_on` を用いた UI スレッド単一 async 実行。
 - **60Hz tick 起床ブリッジ層**: `event_listener::Event` ↔ async tick タスク ↔ ECS 再入ガードの結線。
 - **新公開 facade**: `WinThreadMgr` の代替となる新公開 API（`WinApp`）の形状と構築フロー。
-- **依存追加**: `wintf-winmsg-executor = "=0.0.3"`・`event-listener = "5"` の取り込みと tech.md 反映。
+- **依存追加**: `wintf-winmsg-executor = "=0.0.5"`・`event-listener = "5"` の取り込みと tech.md 反映。
 
 ### Out of Boundary
 
@@ -49,7 +49,7 @@
 
 ### Allowed Dependencies
 
-- 外部: `wintf-winmsg-executor` v0.0.3（`MessageLoop`/`block_on`/`spawn_local`/`util::Window<S>`/`WindowType`/`WindowMessage`/`FilterResult`）、`event-listener` v5（`Event`/`Listener`）、`windows` 0.62、`windows-core` 0.62。
+- 外部: `wintf-winmsg-executor` v0.0.5（`MessageLoop`/`block_on`/`spawn_local`/`util::Window<S>`/`WindowType`/`WindowMessage`/`FilterResult`）、`event-listener` v5（`Event`/`Listener`）、`windows` 0.62、`windows-core` 0.62。
 - 内部（依存方向 `COM → ECS → Message/Runtime` を厳守）: `ecs::world::EcsWorld`（`try_tick_world`/`try_tick_on_vsync`/`set_message_window`）、`ecs::App`、`ecs::window`（`Window`/`WindowStyle`/`WindowPos`/`CompositionMode`/`WindowHandle`/`flush_window_pos_commands`）、`ecs::window_proc::*` の各ハンドラ関数、`ecs::widget::bitmap_source::WintfTaskPool`（温存・参照のみ）。
 - 依存制約: Message/Runtime 層は ECS を下層として利用してよいが、ECS から新 facade への上向き依存を作らない。`win_thread_mgr`/`winproc`/`win_message_handler` への新規依存は作らない（撤去対象）。
 
@@ -61,7 +61,7 @@
 - `world()` が返す共有状態型（`Rc<RefCell<EcsWorld>>`）の変更。
 - ウィンドウ生成経路（`Window`/`WindowStyle`/`WindowPos` コンポーネント spawn → `create_windows`）の宣言的契約の変更。
 - 終了規律（最後のウィンドウ破棄→ループ終了）の観測挙動の変更。
-- 採用クレートバージョン pin（`=0.0.3`）の変更。
+- 採用クレートバージョン pin（`=0.0.5`）の変更。
 
 ## Architecture
 
@@ -79,12 +79,12 @@
 
 維持すべき統合点: 宣言的ウィンドウ生成（`Window` コンポーネント spawn → `create_windows`）、13 本スケジュールの実行（`try_tick_world`）、`CompositionMode`→ex_style 選択、`flush_window_pos_commands()` の World 借用解放後フラッシュ規律、ダブルクリック終了（areka）。
 
-### 採用クレート 0.0.3 の確定 API（ソース確認結果）
+### 採用クレート 0.0.5（pin）の確定 API（ソース確認結果）
 
-design 期に crate registry ソース（`util/window.rs`・`lib.rs`）を直接確認した（research.md §6 解決）:
+design 期に crate registry ソース（`util/window.rs`・`lib.rs`）を直接確認した（research.md §6 解決）。API は 0.0.3〜0.0.5 で互換（先進坑を 0.0.5 で再ビルド確認済み）。差分は下記クラス登録のみ:
 
 - **`util::Window<S>`**: `new`/`new_ex`/`new_checked`/`new_checked_ex(window_type, ex_style, state, wndproc)`。`wndproc: Fn(Pin<&S>, WindowMessage) -> Option<LRESULT>`（`new_*` 系）、`FnMut`（`new_checked_*` 系・内部 `RefCell` で再入防止）。`hwnd()`/`state() -> Pin<&S>` を提供。Drop で `DestroyWindow`。
-- **クラス登録**: ライブラリは**単一クラス** `w!("wintf-winmsg-executor")` を `Once` で 1 回登録。`WNDCLASSW` は **`style = 0`（CS_DBLCLKS なし）**、カーソル・名前は固定で**パラメタライズ不可**。HINSTANCE はライブラリ内部の `get_instance_handle()`（`__ImageBase` 方式＝**DLL でも正しい**）で取得（要件 2.5 を内部で充足。0.0.3 で既に `__ImageBase`。私有ゆえ wintf からは呼べないが `new_ex` 経由で恩恵を受ける）。
+- **クラス登録**: ライブラリは**単一クラス** `w!("wintf-winmsg-executor")` を `Once` で 1 回登録。`WNDCLASSW` の `style` は 0.0.3 では `0`（CS_DBLCLKS なし）だったが、**0.0.5 で `style = CS_DBLCLKS` ＋ `hCursor = LoadCursorW(IDC_ARROW)` を内蔵**（最初に生成される `EXECUTOR_WINDOW` が共有クラスを CS_DBLCLKS 込みで産み、全実窓へ自動波及＝wintf 側 dblclick 補填が不要）。クラス名は固定。HINSTANCE はライブラリ内部の `get_instance_handle()`（`__ImageBase` 方式＝**DLL でも正しい**）で取得（要件 2.5 を内部で充足。0.0.3 で既に `__ImageBase`・0.0.4 で `pub` 化。私有でも `new_ex` 経由で恩恵を受ける）。
 - **状態機構**: `UserData<S,F>{ state, wndproc }` を `Box` 確保し `GWLP_USERDATA` へ格納（**ライブラリが GWLP_USERDATA を占有**）。`WM_NCCREATE` で `GWLP_WNDPROC` を型付き wndproc へ差し替え。`WM_CLOSE` は内部で握り潰し（`DestroyWindow` を呼ばない＝Window<S> drop で破棄）、`WM_NCDESTROY` で `UserData` を解放。
 - **`spawn_local<T:'static>(fut) -> JoinHandle<T>`**: `!Send` future 可（同一スレッド runnable）。wake は内部 `EXECUTOR_WINDOW`（MessageOnly）への `PostMessageW(WM_USER, runnable*)`。`JoinHandle` drop で detach（バックグラウンド継続）。
 - **`block_on(fut) -> T`**: 内部で `MessageLoop` を作り future 完了時 `quit()`。**ループが future より先に quit すると `expect("received unexpected quit message")` で panic**（要件 1.4 の規律根拠）。
@@ -109,7 +109,7 @@ graph TB
     subgraph WindowLayer
         WinFactory[EcsWindowFactory]
         Dispatch[EntityWndprocBridge]
-        ClassFix[DblClkClassFixup]
+        Registry[WindowRegistry NonSend]
     end
     subgraph AsyncTickLayer
         UiAsync[spawn_local UI async]
@@ -117,7 +117,7 @@ graph TB
         TickTask[AsyncTickTask]
     end
     subgraph Library
-        Lib[wintf-winmsg-executor 0.0.3]
+        Lib[wintf-winmsg-executor 0.0.5]
         EvList[event-listener 5]
     end
     subgraph ECS
@@ -134,9 +134,9 @@ graph TB
     Loop --> Lib
     Quit --> Loop
     WinFactory --> Lib
-    WinFactory --> ClassFix
-    Dispatch --> World
     WinFactory --> Dispatch
+    WinFactory --> Registry
+    Dispatch --> World
     UiAsync --> Lib
     TickBridge --> EvList
     TickTask --> TickBridge
@@ -150,20 +150,20 @@ graph TB
 - 選定パターン: 新 facade `WinApp` がライフサイクルを統括（旧 `WinThreadMgr` の owner 役を継承）し、メッセージ/ウィンドウ/async/tick の各層へ委譲。
 - 境界分離: 「ライブラリ委譲で済む処理」（pump・状態保持・wake）と「wintf 固有結線」（Entity 配送・13 本 tick・終了規律・CS_DBLCLKS）を明確に分離。
 - 既存パターン保持: 宣言的ウィンドウ生成（`Window` コンポーネント → `create_windows`）、`try_tick_world` の 13 本順序、`flush_window_pos_commands` 規律、`CompositionMode`→ex_style 選択。
-- 新コンポーネント根拠: `EntityWndprocBridge`（GWLP_USERDATA 全廃の代替配送）、`VsyncEventBridge`/`AsyncTickTask`（メッセージ pop からの脱却）、`DblClkClassFixup`（ライブラリクラスへ CS_DBLCLKS 補填）、`ShutdownPolicy`（block_on panic 規律）。
+- 新コンポーネント根拠: `EntityWndprocBridge`（GWLP_USERDATA 全廃の代替配送）、`WindowRegistry`（`Window<S>` 所有・寿命/終了管理）、`VsyncEventBridge`/`AsyncTickTask`（メッセージ pop からの脱却）、`ShutdownPolicy`（block_on panic 規律）。CS_DBLCLKS はライブラリ 0.0.5 がクラスに内蔵するため wintf 側コンポーネントを設けない。
 - Steering 準拠: `unsafe` は Win32 境界に限定（structure.md）、`tracing` ログ規約、依存方向 COM→ECS→Message を維持。
 
 ### Technology Stack
 
 | Layer | Choice / Version | Role in Feature | Notes |
 |-------|------------------|-----------------|-------|
-| Window System | wintf-winmsg-executor `=0.0.3` | メッセージループ・ウィンドウ生成・UI async の基盤 | 極初期版ゆえ完全 pin（要件 7.1）。差分 0.0.4 は `get_instance_handle` 公開のみで本坑未使用 |
+| Window System | wintf-winmsg-executor `=0.0.5` | メッセージループ・ウィンドウ生成・UI async の基盤 | 極初期版ゆえ完全 pin（要件 7.1）。0.0.5 は共有クラスに `CS_DBLCLKS` ＋既定カーソルを内蔵（dblclick 補填不要）。0.0.4 で `get_instance_handle` 公開 |
 | Messaging / Events | event-listener `5` | スレッド跨ぎ tick 起床（VSync→UI async） | tokio 非依存（要件 4・7.2） |
 | Runtime / Async | （撤去）async-executor | `executor_normal`/`spawn_normal` を `spawn_local` へ置換 | UI async からは撤去。`WintfTaskPool` 経由の利用が残れば依存は残置 |
 | Infrastructure | windows `0.62` / windows-core `0.62` | Win32 API バインディング（既存） | `WindowMessage` は windows 0.62 newtype（`HWND`/`WPARAM`/`LPARAM`） |
 | Task Pool（温存） | bevy_tasks `0.18` | 背景ワーカープール `WintfTaskPool`（Out of scope） | 議題②・不変更。`world.spawn` 経路で areka が利用継続 |
 
-> 詳細な API シグネチャ・終了規律・クラス登録仕様は research.md（§採用クレート 0.0.3 確定 API）に格納。本書の判断は上表と各コンポーネントブロックで自己完結する。
+> 詳細な API シグネチャ・終了規律・クラス登録仕様は research.md（§採用クレート 0.0.5 確定 API）に格納。本書の判断は上表と各コンポーネントブロックで自己完結する。
 
 ## File Structure Plan
 
@@ -191,7 +191,7 @@ crates/wintf/src/
 - `crates/wintf/src/ecs/world/mod.rs` — `VSYNC_TICK_COUNT`/`LAST_VSYNC_TICK` の参照元（`use crate::win_thread_mgr::...`）を移設先へ更新。`try_tick_world`（13 本）は不変。`world.spawn`（WintfTaskPool）は不変。
 - `crates/wintf/src/ecs/app.rs` — `WM_LAST_WINDOW_DESTROYED` PostMessage 終了通知を、`ShutdownPolicy` が観測できる経路（`event_listener` or `MessageLoop::quit` 連動）へ接続。`set_message_window`/message_window 保持は新 facade 配下で再定義。
 - `crates/wintf/src/lib.rs` — `mod win_thread_mgr`/`mod winproc`/`mod win_message_handler` を削除、`mod runtime` を追加。`pub use` を新 facade へ差し替え。
-- `crates/wintf/Cargo.toml` — `wintf-winmsg-executor = "=0.0.3"`・`event-listener = "5"` を追加。UI async からの `async-executor` 直接依存は撤去（WintfTaskPool 残置なら `bevy_tasks` は残る）。
+- `crates/wintf/Cargo.toml` — `wintf-winmsg-executor = "=0.0.5"`・`event-listener = "5"` を追加。UI async からの `async-executor` 直接依存は撤去（WintfTaskPool 残置なら `bevy_tasks` は残る）。
 - 全 examples（`crates/wintf/examples/*`）＋ `crates/areka/src/main.rs`・`shiori_demo.rs` — `WinThreadMgr::new()/world()/run()` を `WinApp::new()/world()/run()` へ追従。`dcomp_demo.rs` の `create_window`/`spawn_normal` は新 API（宣言的生成 ＋ `spawn_ui_local`）へ書き換え。
 - `crates/wintf/src/process_singleton.rs` — 2 クラス登録を撤去（ライブラリがクラス登録を担う）。DPI awareness 設定は `runtime` へ移設。HINSTANCE 公開が他所で必要なら最小ヘルパへ縮約、不要なら撤去。
 - `crates/wintf/tests/thread_mgr.rs` — 新 facade 名・API へ追従、または撤去/再構成。
@@ -264,7 +264,7 @@ Entity は `GWLP_USERDATA` ではなくクロージャ capture（`create_windows
 | 2.2 | ex-style 受け渡し口で NOREDIRECTIONBITMAP 指定 | EcsWindowFactory | `new_checked_ex(ex_style)` | 配送 |
 | 2.3 | GWLP_USERDATA 手詰めなしで共有状態アクセス | EntityWndprocBridge | `Pin<&S>` クロージャ | 配送 |
 | 2.4 | 旧 ecs_wndproc と同等の Entity 配送 | EntityWndprocBridge | `dispatch_window_message` | 配送 |
-| 2.5 | HINSTANCE/クラス登録を新基盤整合・生成失敗なし | EcsWindowFactory, DblClkClassFixup | library class + fixup | 配送 |
+| 2.5 | HINSTANCE/クラス登録を新基盤整合・生成失敗なし（dblclick はライブラリ 0.0.5 内蔵） | EcsWindowFactory | library class (CS_DBLCLKS 内蔵) | 配送 |
 | 3.1 | spawn_local/block_on で UI async | UI async (WinApp) | `WinApp::spawn_ui_local` | 起動・tick 駆動 |
 | 3.2 | 待機中もループ進行を妨げない | UI async, MessageLoopDriver | `spawn_local` wake | 起動・tick 駆動 |
 | 3.3 | tokio 非依存・!Send future 許容 | UI async | `spawn_local<T:'static>` | — |
@@ -279,7 +279,7 @@ Entity は `GWLP_USERDATA` ではなくクロージャ capture（`create_windows
 | 6.1 | 新 API 追従後 examples/areka が回帰なし | WinApp, 全 consumers | `WinApp` 公開 API | 起動・tick 駆動 |
 | 6.2 | 32bit 可搬性維持・host-32 別プロセス不変 | （不変更） | — | — |
 | 6.3 | 旧 API を新 facade へ置換・公開 IF 提供 | WinApp | `new`/`world`/`run`/`spawn_ui_local` | — |
-| 7.1 | wintf-winmsg-executor を =0.0.3 で pin | Cargo.toml | — | — |
+| 7.1 | wintf-winmsg-executor を =0.0.5 で pin（CS_DBLCLKS 内蔵版） | Cargo.toml | — | — |
 | 7.2 | event-listener を依存追加 | Cargo.toml | — | — |
 | 7.3 | 先進坑 go 判定を前提依存として満たす | （前提充足・取得済み） | — | — |
 | 7.4 | 先進坑コード非コピー・README 知見参照で実装 | 全コンポーネント | — | — |
@@ -293,7 +293,6 @@ Entity は `GWLP_USERDATA` ではなくクロージャ capture（`create_windows
 | ShutdownPolicy | Message | block_on panic 回避の終了規律 | 1.3, 1.4, 1.5 | App, MessageLoopDriver (P0) | Service, Event |
 | EcsWindowFactory | Window | util::Window<S> 生成・ex_style・class fixup | 2.1, 2.2, 2.5 | wintf-winmsg-executor (P0), CompositionMode (P1) | Service, State |
 | EntityWndprocBridge | Window | クロージャ wndproc→ECS ハンドラ配送・Entity 解決 | 2.3, 2.4, 4.3 | EcsWorld (P0), window_proc handlers (P0) | Service, State |
-| DblClkClassFixup | Window | ライブラリクラスへ CS_DBLCLKS 補填 | 2.5 | Win32 class API (P0) | Service |
 | VsyncEventBridge | Async/Tick | DwmFlush→event_listener notify | 4.1, 4.4 | event-listener (P0) | Event |
 | AsyncTickTask | Async/Tick | event 起床→13 本 tick→再待機 | 4.2, 4.3, 4.5 | EcsWorld (P0), VsyncEventBridge (P0) | Service, State |
 | WindowRegistry | Window | `Window<S>` 所有（NonSend）・寿命/最後の窓検知/終了起点 | 1.3, 2.1, 5.2 | EcsWorld (P0) | State, Event |
@@ -413,7 +412,7 @@ impl WinApp {
 **Dependencies**
 - External: wintf-winmsg-executor `util::Window` — 生成・状態束ね（P0）。
 - Inbound: `create_windows`（排他システム）— 呼び出し元（P0）。
-- Outbound: DblClkClassFixup — CS_DBLCLKS 補填（P0）。EntityWndprocBridge — クロージャ本体（P0）。
+- Outbound: EntityWndprocBridge — クロージャ本体（P0）。WindowRegistry — 生成した `Window<S>` の所有先（P0）。
 
 **Contracts**: Service [x] / State [x]
 - State: 生成した `Window<S>` は **`WindowRegistry(HashMap<Entity, Window<S>>)`（NonSend リソース・World 内＝UI スレッド専用棚）が所有**する（`Window<S>` は `hwnd` を持つ `!Send` ゆえ bevy Component 不可・NonSend が正規の家。`Send` 偽装は UI スレッド束縛＝`DestroyWindow` のスレッドアフィニティの命綱を切るため禁止）。`S = WndState { world: Weak<RefCell<EcsWorld>>, entity: Entity }`（**強 Rc ではなく Weak**＝自己循環リーク回避・破棄中は `upgrade()`→`None` で安全）。ライブラリが `GWLP_USERDATA` に `UserData<S,F>` を保持し、wintf は `GWLP_USERDATA` を使わない（手詰め全廃・要件 2.3）。
@@ -469,24 +468,7 @@ impl WinApp {
 - Integration: 旧 `OnceLock<SendWeak>` グローバル World 参照・`GWLP_USERDATA` Entity 手詰めをともに撤去。配送は `S = WndState{ Weak, Entity }`、寿命/終了は registry が担う二分構成（配送と寿命の責務分離）。
 - Risks: リコンサイルの実行スケジュール位置（despawn 反映後・描画前）を実装フェーズで確定（リスク Low）。
 
-#### DblClkClassFixup
-
-| Field | Detail |
-|-------|--------|
-| Intent | ライブラリ登録クラス（`style=0`）へ CS_DBLCLKS を補填し WM_*DBLCLK を有効化 |
-| Requirements | 2.5 |
-
-**Responsibilities & Constraints**
-- ライブラリの `WNDCLASSW` は `style=0`（CS_DBLCLKS なし）でパラメタライズ不可。CS_DBLCLKS が無いと OS が `WM_LBUTTONDBLCLK` 等を合成せず、areka のダブルクリック終了が成立しない（structure.md・`mouse_dblclick_wheel` ハンドラ）。
-- 対策（採用案）: 最初のウィンドウ生成後、`SetClassLongPtrW(hwnd, GCL_STYLE, current | CS_DBLCLKS)` でクラススタイルへ CS_DBLCLKS を OR 追加する。クラスはプロセス共有・1 回限りの補填で全ウィンドウへ波及する。`EcsWindowFactory` が初回生成直後に 1 度だけ実行する。
-- 代替案（不採用）: クロージャ wndproc 内でダブルクリックを自前検出（`GetDoubleClickTime`＋座標判定）。CS_DBLCLKS 補填が単純・確実なため不採用とするが、補填が将来版で不可になった場合のフォールバックとして research.md に記録。
-
-**Contracts**: Service [x]
-- `fn ensure_dblclks(hwnd: HWND)`（初回のみ・冪等）。
-
-**Implementation Notes**
-- Integration: ライブラリのクラス名は固定（`w!("wintf-winmsg-executor")`）だが、`SetClassLongPtrW` は HWND 経由でクラスを書き換えるため名前依存はない。
-- Risks: ライブラリ将来版でクラス style がパラメタライズ可能になれば本 fixup は不要化（pin=0.0.3 ゆえ当面は本方式）。
+> **ダブルクリック有効化（CS_DBLCLKS）について（設計討議②・上流修正で解消）**: 当初はライブラリの共有クラスが `style=0`（CS_DBLCLKS なし・0.0.3）だったため wintf 側 `DblClkClassFixup`（`SetClassLongPtrW` 補填）を設計していたが、**フォーク上流 0.0.5 でクラス登録に `CS_DBLCLKS` ＋既定カーソル（`LoadCursorW(IDC_ARROW)`）を内蔵**（`src/util/window.rs` の `CLASS_REGISTRATION.call_once`）。最初に生成される `EXECUTOR_WINDOW` が共有クラスを CS_DBLCLKS 込みで産むため全実窓へ自動波及し、**wintf 側コンポーネントは不要**。本設計は `DblClkClassFixup` を持たず、要件 7.1 の pin を `=0.0.5` とする（areka 検証: 先進坑を 0.0.5 で再ビルド・API 互換確認済み）。CS_HREDRAW/VREDRAW は合成窓（DComp/ULW）に無影響ゆえ非採用。
 
 ### Async / Tick 層
 
@@ -557,7 +539,7 @@ impl WinApp {
 ### Unit Tests
 - `dispatch_window_message`: 代表メッセージ（`WM_LBUTTONDBLCLK`・`WM_WINDOWPOSCHANGED`・`WM_DPICHANGED`・`WM_NCDESTROY`）で旧 `ecs_wndproc` と同一ハンドラへ配送し同一 `Option<LRESULT>` を返すこと（要件 2.4）。
 - `ShutdownPolicy`: 最後のウィンドウ破棄シグナルで shutdown future が完了し、`block_on` 相当が panic せず復帰すること（要件 1.4・headless 可能な範囲で）。
-- `DblClkClassFixup::ensure_dblclks`: 冪等性（複数回呼んでも CS_DBLCLKS が 1 度だけ OR される・状態が壊れない）。
+- ダブルクリック有効化: ライブラリ 0.0.5 のクラス内蔵 `CS_DBLCLKS` により TopLevel 窓で `WM_LBUTTONDBLCLK` が配送されること（example/手動・要件 2.5/6.1。wintf 側補填コンポーネントは無いためライブラリ挙動の確認に帰着）。
 - 再入ガード: `IS_TICK_FLUSH_IN_PROGRESS` が tick 中 `true`・スコープ離脱で `false` に戻ること（現行 vsync.rs テスト踏襲）。
 
 ### Integration Tests
@@ -590,6 +572,6 @@ graph TB
 
 ## Open Questions / Risks
 
-- **CS_DBLCLKS 補填方式**: `SetClassLongPtrW(GCL_STYLE)` による補填を採用（本書確定）。将来版でクラス style がパラメタライズ可能になれば不要化。実装フェーズで初回生成タイミングの確実性を検証する（リスク Low）。
+- **CS_DBLCLKS → 解決済み（設計討議②・上流 0.0.5）**: フォーク上流がクラス登録に `CS_DBLCLKS` ＋既定カーソルを内蔵。wintf 側 `DblClkClassFixup` は撤去・pin を `=0.0.5` へ。残課題なし（実機ダブルクリック終了の最終確認は実装フェーズ E2E で）。
 - **`Window<S>` 所有権の保持先 → 確定（設計討議①）**: `WindowRegistry(HashMap<Entity, Window<S>>)` の `NonSend` リソース（World 内）。`Window<S>` は `!Send` ゆえ Component 不可・`Send` 偽装禁止。`RemovedComponents<Window>` リコンサイルで要素 drop→`DestroyWindow`、Entity ライフサイクルに一致。`S = WndState{ Weak<RefCell<EcsWorld>>, Entity }`。
 - **message_window の要否 → 確定（設計討議①）**: 撤去。VSync は event_listener 化、終了は `WindowRegistry::is_empty()` 由来の shutdown_signal 化で PostMessage 宛先が消える。`App::set_message_window`／message_window 保持を削除（実装フェーズで残骸参照ゼロを確認・要件 5.2）。

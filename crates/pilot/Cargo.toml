@@ -14,9 +14,9 @@ publish = false
 #
 # 先進坑 wintf-winmsg-executor 用の探索依存（使い捨て前提）。
 [dependencies]
-# NOTE: 一時的に 0.0.3 で開発（0.0.4 は crates.io インデックス未伝播・差分は get_instance_handle 公開のみ）。
-# 伝播後に "0.0.4" へ戻す。先進坑コードは new_ex 経由ゆえ API 互換。
-wintf-winmsg-executor = "0.0.3"
+# 0.0.5: クラス登録に CS_DBLCLKS ＋ 既定カーソルを内蔵（フォーク上流で修正）。
+# 本坑 wintf 置換ではこの版を pin し、wintf 側の DblClkClassFixup を撤去する。
+wintf-winmsg-executor = "0.0.5"
 event-listener = "5"
 windows = { workspace = true }
 windows-core = { workspace = true }
