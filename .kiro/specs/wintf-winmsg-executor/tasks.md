@@ -33,7 +33,7 @@
   - _Requirements: 1.1, 1.2_
   - _Boundary: MessageLoopDriver_
 
-- [ ] 2.2 (P) VSync 起床ブリッジ
+- [x] 2.2 (P) VSync 起床ブリッジ
   - 専用 VSync スレッドが `DwmFlush` で vblank を検出し、共有 `event_listener::Event` を全リスナ起床で notify する
   - Event は WinApp が所有し、スレッド生存期間を stop→join の順序規律で管理する
   - 周期はモニターのリフレッシュレートに追従し、固定 16.67ms を前提にしない

@@ -24,6 +24,10 @@ use crate::ecs::world::EcsWorld;
 /// `MessageLoop::run` へ委譲する `MessageLoopDriver` を提供する。
 mod message_loop;
 
+/// VSync 起床ブリッジ層。専用スレッドの `DwmFlush` vblank 検出を共有
+/// `event_listener::Event` で UI スレッドへ通知する `VsyncEventBridge` を提供する。
+mod tick_bridge;
+
 /// UI スレッド基盤の owner。旧 `WinThreadMgr` を置換する新公開 facade。
 ///
 /// COM 初期化・DPI awareness 設定・`EcsWorld` 生成を統括し、共有 World ハンドルの
