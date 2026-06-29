@@ -17,7 +17,8 @@ wintf のメッセージループ・ウィンドウ起動・UI スレッド asyn
   - UI スレッド async の `spawn_local`/`block_on` への移行。
   - 60Hz ECS tick の `event_listener` ブリッジ＋ async tick タスクへの移行（ECS 再入ガードとライブラリの nested-message 再入防止の整合）。
   - deprecated レガシー（`wndproc`／`win_thread_mgr`／`win_message_handler`）の撤去。
-  - 既存 examples（emo2-boot 系を含む）の回帰確認。
+  - **公開 API 方針（議題①確定・2026-06-29）**: `WinThreadMgr` の公開 API（`new`/`world`/`run` 等）を温存せず、`wintf-winmsg-executor` ベースの新 facade（新公開 API）へ全面置換する。`WinThreadMgr` 自体を撤去対象とし、全 examples ＋ areka 本体を新 API へ追従改修する。
+  - 既存 examples（emo2-boot 系を含む）の新 API への追従改修と回帰確認。
 - **Out of scope**:
   - 背景重処理用 `bevy_tasks::TaskPool` の廃止・再設計（必要なら別仕様。UI スレッド async とは別レイヤ）。
   - 透過合成方式（ULW/DComp 切替）のロジックそのものの変更（拡張スタイル受け渡し口を使うのみ）。
@@ -81,8 +82,8 @@ wintf のメッセージループ・ウィンドウ起動・UI スレッド asyn
 
 #### Acceptance Criteria
 
-1. When 新基盤への移行が完了する, the wintf shall deprecated レガシー実装（`wndproc`／`win_thread_mgr`／`win_message_handler` 相当）を撤去する。
-2. The wintf shall 撤去後にレガシー実装への参照を残さず、ビルドおよび既存テストが成功する。
+1. When 新基盤への移行が完了する, the wintf shall deprecated レガシー実装（`wndproc`／`win_thread_mgr`／`win_message_handler` 相当）および公開 facade `WinThreadMgr` を撤去する。
+2. The wintf shall 撤去後にレガシー実装および旧 `WinThreadMgr` API への参照を残さず、ビルドおよび既存テストが成功する。
 
 ### Requirement 6: 既存 examples の回帰防止
 
@@ -90,9 +91,9 @@ wintf のメッセージループ・ウィンドウ起動・UI スレッド asyn
 
 #### Acceptance Criteria
 
-1. When 基盤置換後に既存 examples（emo2-boot 系を含む）を実行する, the wintf shall 置換前と同等の動作を回帰なく提供する。
+1. When 既存 examples（emo2-boot 系を含む）および areka 本体を新 facade（新公開 API）へ追従改修した上で実行する, the wintf shall 置換前と同等の動作を回帰なく提供する。
 2. The wintf shall 置換後も 32bit 可搬性を崩さず、host-32 を別プロセスとする現行構成を変更しない。
-3. Where 利用側 spec（`areka-P0-window-placement` 等の窓生成系）が旧 API（`WinThreadMgr`/`create_window`）に依存していた, the wintf shall 移行後 API への追従に必要な公開インターフェースを提供する。
+3. Where 利用側（全 examples ＋ areka 本体、および `areka-P0-window-placement` 等の窓生成系 spec）が旧 `WinThreadMgr`/`create_window` API に依存していた, the wintf shall 旧 API を新 facade（新公開 API）へ置き換え、利用側が追従するための公開インターフェースを提供する。
 
 ### Requirement 7: 採用クレートのバージョン固定と前提依存
 

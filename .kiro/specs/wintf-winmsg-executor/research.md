@@ -153,9 +153,10 @@
 
 ## 5. 設計判断項目（要件討議へ送る）
 
-1. **公開 API の互換方針**: `WinThreadMgr` の `new`/`world`/`run` を内部置換で温存（Option A/C）か、
-   新 facade へ移行して利用側を追従（Option B）か。要件 6.1（回帰なし）と要件 6.3（利用側 spec への
-   公開 IF 提供）のバランス。
+1. **公開 API の互換方針** → **【確定済み・要件討議①・2026-06-29: Option B】**: `WinThreadMgr` を
+   温存せず新 facade（新公開 API）へ全面置換し、`WinThreadMgr` 自体を撤去、全 examples ＋ areka 本体を
+   新 API へ追従改修する。要件 5（撤去）・要件 6.1/6.3（新 API 追従＋公開 IF 提供）へ反映済み。
+   facade の具体 API 形状（new/world/run 相当の代替・構築フロー）は design 期で確定。
 2. **`run()`/`block_on` の終了セマンティクス**: 現行「最後の窓→WM_LAST_WINDOW_DESTROYED→
    PostQuitMessage→WM_QUIT で break」を、`block_on` の future 完了駆動へどう写像するか。
    README 学び（block_on は loop 先行 quit で panic）を踏まえ、終了 future の設計（tick タスク・
