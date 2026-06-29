@@ -189,3 +189,85 @@
   `expect("received unexpected quit message")`）。
 - 既存30種超メッセージハンドラ（`ecs/window_proc/*`）を閉包 wndproc 上へ束ねる際の dispatch 形と、
   `Pin<&S>` 経由 World 借用の整合（modal/nested 再入時の RefCell 借用と ECS 借用の二重借用回避）。
+
+---
+
+# 設計フェーズ追記（design generation・2026-06-29）
+
+> ギャップ分析（上記）は要件討議の素材。本節以降は design 期の調査結果・合成判断・残リスクを記録する。
+> 設計の自己完結記述は design.md 側にあり、本節はその根拠・代替比較・調査ログを保持する。
+
+## 採用クレート 0.0.3 確定 API（§6 Research Needed の解決）
+
+design 期に crate registry ソースを直接確認（`c:\rust\cargo\registry\src\index.crates.io-*\wintf-winmsg-executor-0.0.3\src\`）。
+
+### `util::Window<S>`（`util/window.rs`）
+- API: `new`/`new_ex(window_type, ex_style, state, wndproc)`、`new_checked`/`new_checked_ex(...)`。
+  - `new_*`: `wndproc: Fn(Pin<&S>, WindowMessage) -> Option<LRESULT> + 'static`。
+  - `new_checked_*`: `FnMut(...)`。内部で `RefCell<F>` を持ち、`try_borrow_mut().ok()?` で**ネスト/モーダル再入を阻止**（再入時は default wndproc へフォールバック）。
+- `WindowType` は `TopLevel` / `MessageOnly` の 2 値のみ（カスタムクラスタイプ指定不可）。
+- `hwnd()`/`state() -> Pin<&S>`。Drop で `DestroyWindow`。`WindowMessage{hwnd,msg,wparam,lparam}` は windows 0.62 newtype。
+- **クラス登録**: `w!("wintf-winmsg-executor")` を `static Once` で 1 回登録。`WNDCLASSW` は `std::mem::zeroed()`＝**`style=0`（CS_DBLCLKS なし・HREDRAW/VREDRAW なし）**、カーソル未設定、名前固定。**スタイル/名前/複数クラスはパラメタライズ不可**（§6・設計判断3 の Unknown を解決＝「不可」）。
+- **HINSTANCE**: ライブラリ内部 `get_instance_handle()` が **`__ImageBase` 方式**（`devblogs` oldnewthing）。0.0.3 で**既に DLL 安全**（`GetModuleHandle(NULL)` ではない）。私有関数ゆえ wintf からは呼べないが `new_ex` 経由で恩恵を受ける。→ **研究 note #7／README の「0.0.4 で `__ImageBase` 化」記述は不正確**。0.0.3 で既に `__ImageBase`。0.0.4 差分は同関数の `pub` 公開のみ。要件 2.5 の HINSTANCE 取得はライブラリ内部で充足され、wintf 側の `GetModuleHandleW(None)` は不要化。
+- **状態保持**: `UserData<S,F>{state,wndproc}` を `Box` 化し `GWLP_USERDATA` へ格納（`wndproc_setup`→`WM_NCCREATE` で `GWLP_WNDPROC` を型付き wndproc へ差し替え）。**ライブラリが GWLP_USERDATA を占有**＝wintf は Entity を GWLP_USERDATA へ手詰めできない（手詰め全廃が必然）。`WM_CLOSE` はライブラリが握り潰し（`DestroyWindow` を呼ばず Window<S> drop で破棄）、`WM_NCDESTROY` で `UserData` 解放。
+
+### `lib.rs`（`spawn_local`/`block_on`/`MessageLoop`）
+- `spawn_local<T:'static>(fut) -> JoinHandle<T>`: `!Send` future 可（同一スレッド runnable）。wake は内部 `EXECUTOR_WINDOW`（MessageOnly 窓）への `PostMessageW(WM_USER=MSG_ID_WAKE, runnable*)`。`JoinHandle` drop で detach。
+- `block_on(fut) -> T`: 内部で `MessageLoop::new()` → future 完了時 `quit()` → `run_loop(Forward)` → `poll_ready(task).expect("received unexpected quit message")`。**ループが future より先に quit すると panic**（§6・終了規律を解決）。
+- `MessageLoop::run(filter: Fn(&MessageLoop,&MSG)->FilterResult)`: `GetMessageW` ループ。`WH_MSGFILTER` フック（`msg_filter_hook.rs`）でモーダル内部ループ中も filter 駆動。`quit()`（即時フラグ）／`quit_when_idle()`（`PostQuitMessage(0)`）。**filter 内から `MessageLoop::run` 再帰呼び出しは panic**（nested_message_loop テスト）。wake メッセージは filter で drop 不可（ライブラリ保護）。
+
+## 既存 wintf 側の確認結果（配送・tick・終了の現行結線）
+- `create_windows`（`ecs/window/window_system.rs`）が現役の唯一の窓生成路（排他システム・宣言的）。`entity.to_bits()`→`lpCreateParams`→`WM_NCCREATE`→`GWLP_USERDATA`。`CompositionMode`→ex_style 選択（ULW=`WS_EX_LAYERED`/DComp=`WS_EX_NOREDIRECTIONBITMAP`）。
+- `ecs_wndproc`（`ecs/window_proc/mod.rs`）= 30 種超 `match`。World 参照は `static ECS_WORLD: OnceLock<SendWeak>`、Entity は `get_entity_from_hwnd`（GWLP_USERDATA）。
+- tick: `WinThreadMgrInner::run` の `WM_VSYNC` pop→`try_tick_on_vsync`→`try_tick_world`（13 本）。再入ガード `IS_TICK_FLUSH_IN_PROGRESS`（`ecs/world/vsync.rs`）。`VSYNC_TICK_COUNT`/`LAST_VSYNC_TICK` は `win_thread_mgr` 所属。
+- 終了: `App::on_window_destroyed`（`ecs/app.rs`）が `WM_LAST_WINDOW_DESTROYED` を message_window へ PostMessage→`run` が `PostQuitMessage(0)`。
+- consumer パターン: 全 examples ＋ areka が `WinThreadMgr::new()→world()→run()`。`world.spawn`（WintfTaskPool・議題②温存）が areka UI 構築入口。`create_window`/`spawn_normal` は `dcomp_demo.rs` のみ。areka は**ダブルクリック終了**（CS_DBLCLKS 依存・structure.md 確認）。
+
+## Design Decisions
+
+### Decision: 新 facade を `WinApp` として新設（議題①= Option B 確定の具体化）
+- Context: `WinThreadMgr` 撤去・新公開 API への全面置換（要件 5.1/6.3 確定）。
+- Selected Approach: `crates/wintf/src/runtime/` に `WinApp`（owner）を新設。公開 API を旧 3 点（`new`/`world`/`run`）に意味対応＋ `spawn_ui_local`（旧 `spawn_normal` 相当・`!Send` 可）。
+- Rationale: 旧 3 点へ意味対応させることで consumer 追従コストを最小化（要件 6.1）。owner 役（COM/DPI 初期化・VSync スレッド・終了規律の所有）を 1 箇所へ集約。
+- Trade-offs: 新規ファイル群だがレガシーと物理分離でき撤去が機械的。
+
+### Decision: ウィンドウ生成は `new_checked_ex` を採用（`new_ex` ではなく）
+- Alternatives: (A) `new_ex`（`Fn`・自前再入防御）, (B) `new_checked_ex`（`FnMut`＋ライブラリ `RefCell` 再入防御）。
+- Selected: (B)。Rationale: wndproc 再入防止をライブラリ標準機構へ委譲でき（要件 4.3）、先進坑が `new_checked_ex` で nested 719 回 PASS を実証。`FnMut` 許容で実装自由度も高い。
+
+### Decision: Entity 配送は GWLP_USERDATA 全廃＋クロージャ capture
+- Context: ライブラリが GWLP_USERDATA を占有するため Entity を従来の場所へ置けない（§設計判断4）。
+- Selected: `create_windows` が生成時に entity を知るので、wndproc クロージャへ `(Rc<RefCell<EcsWorld>>, Entity)` を capture。`get_entity_from_hwnd`／`ECS_WORLD: OnceLock<SendWeak>` を撤去。`ecs_wndproc` の `match` 表は純関数 `dispatch_window_message(world, entity, msg)` へ移設。
+- Rationale: 単一 World 共有・per-window クロージャという構造で手詰め全廃が成立（要件 2.3/2.4）。先進坑が `Pin<&S>` 経由 state 到達を実証。
+
+### Decision: CS_DBLCLKS は `SetClassLongPtrW(GCL_STYLE)` で補填
+- Context: ライブラリクラスは `style=0`＝CS_DBLCLKS 無し。areka のダブルクリック終了・`mouse_dblclick_wheel` ハンドラが機能しない（要件 2.5/6.1 の回帰リスク）。
+- Alternatives: (A) クラス style にライブラリ経由で CS_DBLCLKS 指定（**不可**＝API なし）, (B) 初回窓生成後に `SetClassLongPtrW(hwnd, GCL_STYLE, cur|CS_DBLCLKS)` でクラス共有補填, (C) wndproc 内で自前ダブルクリック検出。
+- Selected: (B)。Rationale: クラスはプロセス共有ゆえ 1 回の補填で全窓へ波及。単純・確実。(C) はフォールバックとして記録。
+- Follow-up: 初回生成タイミングの確実性を実装フェーズで検証。将来版で style パラメタライズ可能化なら不要化。
+
+### Decision: 終了規律＝shutdown future を `block_on` で待つ（PostQuitMessage を撃たない）
+- Context: `block_on` は loop 先行 quit で panic（要件 1.4）。
+- Selected: `run()` は `block_on(shutdown_signal.await)`。`App::on_window_destroyed`（最後の窓）が `event_listener::Event`（shutdown_signal）を notify→future 完了→`block_on` 正常復帰。`WM_LAST_WINDOW_DESTROYED` PostMessage を撤去。未完 UI async タスクを残したまま `PostQuitMessage` しない（README 終了規律）。tail race は終了時 notify 補填で回避。
+- Trade-offs: message_window の存在意義（VSync PostMessage 宛先）が tick の event_listener 化で消えるため、message_window/`set_message_window` は撤去候補。
+
+### Decision: 再入ガード `IS_TICK_FLUSH_IN_PROGRESS` は安全側に残置（議題6）
+- Context: 新モデルで message pop 由来の tick 再起動は構造的に減るが、`flush_window_pos_commands`→`SetWindowPos`→同期 `WM_WINDOWPOSCHANGED` 経路は残る。
+- Selected: ECS ガード（`IS_TICK_FLUSH_IN_PROGRESS`）＋ライブラリ `new_checked_ex` の `RefCell`（wndproc 再入防止）の**二重防御を維持**。先進坑が両者の非衝突（`double_tick=false`）を実証。
+- Rationale: 安全側委譲。完全委譲はリスクが高く、要件 4.3 を確実に満たすため二重化を選択。
+
+## Synthesis Outcomes（design-synthesis 適用）
+- **Generalization**: 4 層（メッセージ/窓/async/tick）は「UI スレッド単一の owner（`WinApp`）が委譲する薄いアダプタ群」に一般化。owner が lifecycle/初期化/終了規律を一括所有（areka concurrency-model のメモリと整合）。
+- **Build vs Adopt**: pump・状態保持・wake・モーダル対応・wndproc 再入防止は**全てライブラリ採用**（自作撤去）。スレッド跨ぎ起床は `event_listener` 採用（tokio 不採用＝要件制約）。wintf 固有結線（Entity 配送・13 本 tick・終了規律・CS_DBLCLKS 補填）のみ自作。
+- **Simplification**: tick タスクは**単一**（単一 World 共有ゆえ。先進坑の 3 タスクはストレス検証用で本番不要）。`WM_VSYNC`/message_window/`OnceLock<SendWeak>`/`get_entity_from_hwnd`/`process_singleton` 2 クラス登録を**撤去**（重複機構の排除）。
+
+## Risks & Mitigations
+- 生成後 style/title/pos 反映の順序ミス → 現行 `to_window_coords_for_creation` を生成後 `SetWindowPos` へ移植・初期化ステップを明示。
+- tick が 1 vblank を超過時の積み残し → `VSYNC_TICK_COUNT` 差分検知で複数 notify を 1 tick へ間引き（現行踏襲）。
+- `Window<S>` 所有権保持先（`WindowHandle` 併設 vs World マップ）→ Entity ライフサイクルと Drop=`DestroyWindow` 一致を前提に実装フェーズ確定（どちらでも境界は閉じる）。
+- ビルド未実施（vendors/pasta submodule 未populate 回避）→ 静的ソース解析で確定。実ビルド/実行検証は実装フェーズ。
+
+## References
+- crate source: `c:\rust\cargo\registry\src\index.crates.io-*\wintf-winmsg-executor-0.0.3\src\{lib.rs,util/window.rs,util/msg_filter_hook.rs}` — 0.0.3 確定 API の一次根拠。
+- 先進坑 README: `crates/pilot/examples/wintf-winmsg-executor/README.md` — 検証結果（go 判定・起床安定性・再入整合・終了規律）の正本（二重化しない・要件 7.4）。
+- steering: `tech.md`（依存・レガシー非推奨方針）, `structure.md`（Message Handling 配置・ダブルクリック終了）。
