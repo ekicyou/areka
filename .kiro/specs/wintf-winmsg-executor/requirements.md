@@ -20,7 +20,7 @@ wintf のメッセージループ・ウィンドウ起動・UI スレッド asyn
   - **公開 API 方針（議題①確定・2026-06-29）**: `WinThreadMgr` の公開 API（`new`/`world`/`run` 等）を温存せず、`wintf-winmsg-executor` ベースの新 facade（新公開 API）へ全面置換する。`WinThreadMgr` 自体を撤去対象とし、全 examples ＋ areka 本体を新 API へ追従改修する。
   - 既存 examples（emo2-boot 系を含む）の新 API への追従改修と回帰確認。
 - **Out of scope**:
-  - 背景重処理用 `bevy_tasks::TaskPool` の廃止・再設計（必要なら別仕様。UI スレッド async とは別レイヤ）。
+  - 背景重処理用 `bevy_tasks::TaskPool`（`WintfTaskPool` ＝ ECS が `EcsWorld::new()` で Resource として生成・管理する常駐ワーカープール。areka の UI 構築入口 `world.spawn(CommandSender)` を含む）の廃止・再設計（必要なら別仕様。UI スレッドとは無縁な別レイヤで、`spawn_local`（UI スレッド単一）では代替不可）。
   - 透過合成方式（ULW/DComp 切替）のロジックそのものの変更（拡張スタイル受け渡し口を使うのみ）。
   - ECS スケジュール（13 本）の構成・順序の変更。
   - emo2 互換機能の新規実装（M1 emo2-boot ユニット側の領分）。
@@ -60,9 +60,10 @@ wintf のメッセージループ・ウィンドウ起動・UI スレッド asyn
 
 #### Acceptance Criteria
 
-1. When UI スレッド上で async タスクを実行する必要がある, the wintf UI スレッド async 層 shall 手組みの `async-executor::Executor` ＋ `mpsc` drain ではなく `wintf-winmsg-executor` の `spawn_local`/`block_on` を用いてタスクを実行する。
+1. When UI スレッド上で async タスクを実行する必要がある, the wintf UI スレッド async 層 shall 手組みの UI スレッド async 実行器（`async-executor::Executor`＝`executor_normal` ／ `spawn_normal` 経路）ではなく `wintf-winmsg-executor` の `spawn_local`/`block_on` を用いてタスクを実行する。
 2. While UI スレッド async タスクが待機状態にある, the wintf UI スレッド async 層 shall メッセージループの進行を妨げずに当該タスクを起床可能な状態で保持する。
 3. The wintf UI スレッド async 層 shall tokio に依存せず、`Send`/`Sync` を要求しない future を UI スレッド上で実行できる。
+4. The wintf UI スレッド async 層 shall 背景ワーカープール `WintfTaskPool`（`bevy_tasks::TaskPool` ＋ `world.spawn(CommandSender)` ＋ `CommandSender` mpsc drain・ECS が Resource として管理）を移行対象に含めず、現行構成のまま温存する（議題②確定・2026-06-29。当該プールは UI スレッドとは別の常駐ワーカー群で走り、`spawn_local` では代替できないため別レイヤとする）。
 
 ### Requirement 4: 60Hz ECS tick 起床ブリッジの移行
 

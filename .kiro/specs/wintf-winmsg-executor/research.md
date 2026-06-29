@@ -166,10 +166,12 @@
    → ライブラリの class style 指定能力は design 期に要ソース調査（Research Needed）。
 4. **共有状態 S の粒度**: `util::Window<S>` の S を `Rc<RefCell<EcsWorld>>`（単一 World 共有）と
    するか、per-window state を別に持つか。GWLP_USERDATA 全廃後の Entity↔HWND 対応の保持場所。
-5. **UI 構築入口（`world.spawn` / WintfTaskPool）の扱い**: 背景 TaskPool は Out of scope だが、
-   areka の UI 構築は現状 `world.spawn(CommandSender)`（mpsc drain）経由。新 `spawn_local` へ
-   移すか、TaskPool 経路を温存して触らないか。要件 3 の対象（UI スレッド async = executor_normal）と
-   背景 TaskPool の線引きを討議で確定する。
+5. **UI 構築入口（`world.spawn` / WintfTaskPool）の扱い** → **【確定済み・要件討議②・2026-06-29: Option 1（温存）】**:
+   `WintfTaskPool` は `bevy_tasks::TaskPool` を `EcsWorld::new()` で Resource 生成する ECS 管理の常駐
+   背景ワーカープールであり、UI スレッド（`WinThreadMgr`/`wintf-winmsg-executor`）とは無縁な別レイヤ。
+   要件 3 の移行対象は UI スレッド async（`executor_normal`/`spawn_normal`）のみとし、`WintfTaskPool` ＋
+   areka の `world.spawn(CommandSender)` 経路は触らず温存する（`spawn_local` は UI スレッド単一ゆえ
+   背景プールの代替にならない）。要件 3.4 ＋ Boundary Context Out of scope へ反映済み。再設計が要れば別 spec。
 6. **再入ガードの委譲度**（要件 4.3）: `IS_TICK_FLUSH_IN_PROGRESS` を新モデル + ライブラリ RefCell へ
    どこまで委譲し、どこを安全側に残すか。
 7. **HINSTANCE 取得**（要件 2.5）: 現行 `GetModuleHandleW(None)`。0.0.3 では `get_instance_handle`
