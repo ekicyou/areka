@@ -1,0 +1,65 @@
+# event / category=vanish — areka-P0-shiori-protocol-split category fragment.
+# 6 keyed entry table(s), source order preserved. Category-pure; entry-boundary only.
+# Generated deterministically; do not hand-edit. Merge order: _manifest.toml (task 2.4) is authoritative.
+
+[entry."OnVanishSelecting"]
+"kind" = "event"
+"category" = "vanish"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ukadoc"
+"description" = "消滅が指示された際に発生。"
+
+[entry."OnVanishSelected"]
+"kind" = "event"
+"category" = "vanish"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ukadoc"
+"description" = "確認ダイアログでYESが選択された際に発生。"
+
+[entry."OnVanishCancel"]
+"kind" = "event"
+"category" = "vanish"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ukadoc"
+"description" = "確認ダイアログでNOが選択された際に発生。"
+
+[entry."OnVanishButtonHold"]
+"kind" = "event"
+"category" = "vanish"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ukadoc"
+"description" = "消滅イベント中ダブルクリックでキャンセルされた際に発生。"
+[entry."OnVanishButtonHold".field]
+"interrupted_script" = { "reference" = 0, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "中断の操作が起きたスクリプト。" }
+"balloon_scope" = { "reference" = 1, "type" = "i32", "required" = false, "provenance" = "ukadoc", "description" = "中断の操作が起きたバルーンのスコープ番号。本体側0、相方側1、それ以降も。" }
+"interrupt_char_pos" = { "reference" = 2, "type" = "i32", "required" = false, "provenance" = "ukadoc", "description" = "中断位置。スクリプト先頭からの文字数で表現。文字数はさくらスクリプトのタグも含めたもの。 例）\\s[2]あいうえお の「あ」までで中断された場合、6" }
+
+[entry."OnVanished"]
+"kind" = "event"
+"category" = "vanish"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ukadoc"
+"description" = "直前のゴーストの消滅により自分に切り替わった際に発生。 SSPでは、このイベントにスクリプトが返されなかった（204）場合、続けてOnBootが発生する。 またSSPでは同時起動中の他のゴーストが消滅した際に、OnOtherGhostVanishedへスクリプトが返却されなかった際にも発生するため注意。この場合OnBootへのフォールバックはない。"
+[entry."OnVanished".field]
+"vanished_ghost_internal_name" = { "reference" = 0, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "消滅したゴーストの本体側の名前。" }
+"vanished_select_script" = { "reference" = 1, "type" = "str", "required" = false, "provenance" = "ssp_secondary", "description" = "※SSPのみ 消滅したゴーストのOnVanishSelectedイベントのスクリプト。" }
+"vanished_ghost_name" = { "reference" = 2, "type" = "str", "required" = false, "provenance" = "ssp_secondary", "description" = "※SSPのみ 消滅したゴースト名。" }
+"new_shell_name" = { "reference" = 7, "type" = "str", "required" = false, "provenance" = "ssp_secondary", "description" = "※SSPのみ 切り替わったゴーストのシェル名。" }
+
+[entry."OnOtherGhostVanished"]
+"kind" = "event"
+"category" = "vanish"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ukadoc"
+"description" = "複数起動中、他のゴーストが消滅した際に発生。"
+[entry."OnOtherGhostVanished".field]
+"vanished_ghost_internal_name" = { "reference" = 0, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "消滅したゴーストの本体側の名前。" }
+"vanished_select_script" = { "reference" = 1, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "消滅したゴーストのOnVanishSelectedイベントのスクリプト。" }
+"vanished_ghost_name" = { "reference" = 2, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "消滅したゴースト名。" }
+"new_shell_name" = { "reference" = 7, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "切り替わったゴーストのシェル名。" }

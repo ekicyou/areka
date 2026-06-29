@@ -1,0 +1,26 @@
+{
+  "feature_name": "areka-P0-shiori-com",
+  "created_at": "2026-06-26T12:11:58Z",
+  "updated_at": "2026-06-27T12:00:00Z",
+  "language": "ja",
+  "phase": "completed",
+  "approvals": {
+    "requirements": {
+      "generated": true,
+      "approved": true
+    },
+    "design": {
+      "generated": true,
+      "approved": true
+    },
+    "tasks": {
+      "generated": true,
+      "approved": true
+    },
+    "implementation": {
+      "completed": true,
+      "completed_at": "2026-06-27T12:00:00Z"
+    }
+  },
+  "ready_for_implementation": true
+}

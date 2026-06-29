@@ -1,6 +1,9 @@
-# Workflow - 開発ワークフロー
-
+---
+inclusion: always
 updated_at: 2026-06-16
+---
+
+# Workflow - 開発ワークフロー
 
 Kiro仕様駆動開発における作業フロー・ブランチ戦略・完了時アクション。
 
@@ -72,7 +75,7 @@ mv .kiro/specs/<spec-name> .kiro/specs/completed/
 
 ### Step 6. ROADMAP更新（該当する場合）
 
-仕様が `doc/ROADMAP.md` に記載されている場合、以下を更新する（参照タイミングは `.kiro/steering/focus.md`）。
+仕様が `.kiro/steering/roadmap.md`（ロードマップ正本）に記載されている場合、以下を更新する（参照タイミングは `.kiro/steering/focus.md`）。`doc/ROADMAP.md` はポインタ stub のため更新対象ではない。
 
 #### 6-1. 仕様テーブルの状態列を更新
 
@@ -135,7 +138,7 @@ gh pr merge --squash --delete-branch --subject "<subject>" --body "<body>"
 - [ ] `spec.json` の `phase` が `"completed"` + `updated_at` 更新済み
 - [ ] 移動元（`.kiro/specs/<spec-name>/`）にファイルが残っていない
 - [ ] 参照パス更新済み
-- [ ] `doc/ROADMAP.md` 更新済み（該当する場合: 状態列✅ + 完了数インクリメント）
+- [ ] `.kiro/steering/roadmap.md`（正本）更新済み（該当する場合: Specs 状態 `[x]` + 完了数インクリメント）
 - [ ] 完了コミット済み
 - [ ] PRベースでmainへ統合済み（PR可の場合）／ローカル保持（PR不可の場合）
 
@@ -190,3 +193,44 @@ requirements → design → tasks → implementation → completed
 
 ---
 Document patterns, not every workflow variation.
+
+## 二坑統合（先進坑・本坑）
+
+> **二坑規律の詳細正本は `.kiro/steering/two-tunnel.md`（`inclusion: manual`）。本節は要約＋参照に留め、常駐コストを抑える。**
+
+二坑モデル（先進坑＝pilot・使い捨て検証 / 本坑＝main・完成品）を既存の spec 駆動ワークフローへ上乗せする。最適化対象は手応えの速さでなく**誤った方向の可逆性**である。各規律の詳細・判断基準・記法は `two-tunnel.md` を権威とし、ここでは既存フローとの接点のみ示す。
+
+### 先進坑フェーズと既存フローの関係
+
+- 方向・実現可能性・手順が怪しい所だけ、本坑着手の**前**に先進坑（`crates/pilot/examples/<spec>/`）で確認する。よく分かっている所は先進坑を経ず直に本坑へ（掘りすぎ防止）。
+- 本坑 spec は既存フロー（requirements → design → tasks → implementation → complete）を従来どおり辿る。先進坑はこのフローの**前段**に位置し、本坑 design は先進坑 README の検証結果を参照する（二重化しない）。
+- 詳細: `two-tunnel.md`「先進坑/本坑の定義」「先進坑の一次記録（README 3 幕）」。
+
+### go ハードゲート（本坑着手の前提条件）
+
+- 各本坑 spec は、方向を確定する先進坑の **go 判定**を前提依存に持つ。go に至るまで当該本坑 spec は**着手不能（BLOCKED）**として扱う。
+- go 判定は開発者が出力を見て下す**人間判断**であり、自動判定にはしない。spec 上の記法（`_Depends(confirmed): <pilot-spec>`）は `roadmap.md` の凡例と `two-tunnel.md` を参照。
+- 詳細: `two-tunnel.md`「ハードゲート」。
+
+### 依存マップ重点検証ルール
+
+- spec 分解時（discovery / `/kiro-spec-batch`）に、先進坑⟷本坑の依存関係を**手動チェックリスト**で目視検証する（被覆・孤児なし・DAG・各エッジの合否基準明示）。いずれか満たさなければ当該本坑 spec を ready にしない。
+- 自動チェックツールは設けない（対象グラフは小規模・合否は人間判断）。詳細: `two-tunnel.md`「依存マップ重点検証（手動チェックリスト）」。
+
+### 削除/隔離規律
+
+- **命綱（葉ノード隔離）**: 出荷グラフ上のいかなるクレートも先進坑コードに依存しない。
+- **隔離保全**: 命綱が満たされている限り、先進坑コードは物理削除せず知見クレート `crates/pilot` へ隔離保全してよい（検疫所効果で production を常時クリーンに保つ）。
+- **掘り直し禁止（コピペ donor 禁止）**: 本坑は先進坑の知見を「見てクリーンに掘り直す」。先進坑コードをコピペ流用しない。
+- 詳細: `two-tunnel.md`「削除/隔離規律」。
+
+### 先進坑の多重並列運用
+
+- 先進坑は細粒度・独立（1 仕様 = 1 フォルダ）ゆえ多重並列で掘れる。並列実行には**既存の Agent / Workflow 機構**を運用で用い、新規の並列実行基盤は開発しない。
+
+### 既存規約との整合（上乗せ・非置換）
+
+二坑規律は上記の既存規約を**変更しない上乗せ**である：
+
+- 「ブランチ＆マージ戦略（PR ベース・`main` 直 push 禁止）」は不変。先進坑・本坑とも同一ワークツリーブランチ上で進み、統合は完了時の単一 PR に集約する。
+- 「実装完了時のアクション」「タスク完了時のアクション」「仕様フェーズフロー」は不変。二坑ゲート・隔離規律はこれらと整合し、置き換えない。

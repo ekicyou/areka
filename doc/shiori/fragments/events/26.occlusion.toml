@@ -1,0 +1,47 @@
+# event / category=occlusion — areka-P0-shiori-protocol-split category fragment.
+# 4 keyed entry table(s), source order preserved. Category-pure; entry-boundary only.
+# Generated deterministically; do not hand-edit. Merge order: _manifest.toml (task 2.4) is authoritative.
+
+[entry."OnOverlap"]
+"kind" = "event"
+"category" = "occlusion"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ukadoc"
+"description" = "キャラクター（サーフェス）のウインドウが重なった時に発生。 重なり状態が変わった際に逐次通知されるので、「重ならなくなった」も工夫すれば検出できる。"
+[entry."OnOverlap".field]
+"overlap_pairs" = { "reference" = 0, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "ID-ID [\\1] ID-ID [\\1] ID-ID ... [\\1] はバイト値1 例：0-1 [\\1] 0-2 で、0番ウインドウと1番ウインドウ、0番ウインドウと2番ウインドウが重なっていることを示す。" }
+"overlap_pairs_prev" = { "reference" = 1, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "Reference0と同じフォーマットで、状態が変わる前（＝1回前のイベント発生時のReference0）が通知される。" }
+
+[entry."OnOtherOverlap"]
+"kind" = "event"
+"category" = "occlusion"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ukadoc"
+"description" = "他も含めて全起動中のキャラクター（サーフェス）のウインドウが重なった時に発生。OnOverlapのグローバル版。 重なり状態が変わった際に逐次通知されるので、「重ならなくなった」も工夫すれば検出できる。 自分自身の情報も一緒に通知されるので注意。"
+[entry."OnOtherOverlap".field]
+"overlap_pairs" = { "reference" = 0, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "Sakura名/ID-Sakura名/ID [\\1] Sakura名/ID-Sakura名/ID [\\1] Sakura名/ID-Sakura名/ID ... [\\1] はバイト値1 例：Emily/0-マリ/1 [\\1] マリ/0-所長たん/1" }
+"overlap_pairs_prev" = { "reference" = 1, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "Reference0と同じフォーマットで、状態が変わる前（＝1回前のイベント発生時のReference0）が通知される。" }
+
+[entry."OnOffscreen"]
+"kind" = "event"
+"category" = "occlusion"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ukadoc"
+"description" = "キャラクター（サーフェス）のウインドウがモニタ（作業領域）外にひっかかった、あるいは出た時に発生。見切れ。 見切れ状態が変わった際に逐次通知されるので、「見切れなくなった」も工夫すれば検出できる。"
+[entry."OnOffscreen".field]
+"offscreen_ids" = { "reference" = 0, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "ID [\\1] ID [\\1] ID ... [\\1] はバイト値1 例：1 [\\1] 2 で、1番ウインドウと2番ウインドウが見切れていることを示す。" }
+"offscreen_ids_prev" = { "reference" = 1, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "Reference0と同じフォーマットで、状態が変わる前（＝1回前のイベント発生時のReference0）が通知される。" }
+
+[entry."OnOtherOffscreen"]
+"kind" = "event"
+"category" = "occlusion"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ukadoc"
+"description" = "他を含めてキャラクター（サーフェス）のウインドウがモニタ（作業領域）外にひっかかった、あるいは出た時に発生。見切れ。OnOffscreenのグローバル版。 見切れ状態が変わった際に逐次通知されるので、「見切れなくなった」も工夫すれば検出できる。 自分自身の情報も一緒に通知されるので注意。"
+[entry."OnOtherOffscreen".field]
+"offscreen_ids" = { "reference" = 0, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "Sakura名/ID [\\1] Sakura名/ID [\\1] Sakura名/ID ... [\\1] はバイト値1 例：Emily/1 [\\1] 所長たん/0" }
+"offscreen_ids_prev" = { "reference" = 1, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "Reference0と同じフォーマットで、状態が変わる前（＝1回前のイベント発生時のReference0）が通知される。" }

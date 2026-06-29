@@ -1,0 +1,27 @@
+# resource / category=ownerdraw_menu_image — areka-P0-shiori-protocol-split category fragment.
+# 3 keyed entry table(s), source order preserved. Category-pure; entry-boundary only.
+# Generated deterministically; do not hand-edit. Merge order: _manifest.toml (task 2.4) is authoritative.
+
+[entry."menu.sidebar.bitmap.filename"]
+"kind" = "resource"
+"category" = "ownerdraw_menu_image"
+"dispatch" = "get"
+"response" = "text"
+"provenance" = "ukadoc"
+"description" = "サイドバー表示画像ファイル名。SHIORIの位置からの相対パス。"
+
+[entry."menu.background.bitmap.filename"]
+"kind" = "resource"
+"category" = "ownerdraw_menu_image"
+"dispatch" = "get"
+"response" = "text"
+"provenance" = "ukadoc"
+"description" = "バックグラウンド表示画像ファイル名。SHIORIの位置からの相対パス。"
+
+[entry."menu.foreground.bitmap.filename"]
+"kind" = "resource"
+"category" = "ownerdraw_menu_image"
+"dispatch" = "get"
+"response" = "text"
+"provenance" = "ukadoc"
+"description" = "フォアグラウンド表示画像ファイル名。SHIORIの位置からの相対パス。"

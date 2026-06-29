@@ -1,0 +1,106 @@
+# event / category=choice — areka-P0-shiori-protocol-split category fragment.
+# 9 keyed entry table(s), source order preserved. Category-pure; entry-boundary only.
+# Generated deterministically; do not hand-edit. Merge order: _manifest.toml (task 2.4) is authoritative.
+
+[entry."OnChoiceSelect"]
+"kind" = "event"
+"category" = "choice"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ukadoc"
+"description" = "選択肢が選択された際に発生。"
+[entry."OnChoiceSelect".field]
+"choice_id" = { "reference" = 0, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "選択された選択肢の ID。" }
+"extra_choice_id" = { "reference" = 1, "reference_variadic" = true, "type" = "str", "required" = false, "provenance" = "ssp_secondary", "description" = "CROW のみ。選択肢の 2 番目以降の ID。" }
+
+[entry."OnChoiceSelectEx"]
+"kind" = "event"
+"category" = "choice"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ssp_secondary"
+"description" = "選択肢が選択された際に発生。OnChoiceSelect よりも先に開始。"
+[entry."OnChoiceSelectEx".field]
+"choice_label" = { "reference" = 0, "type" = "str", "required" = false, "provenance" = "ssp_secondary", "description" = "選択肢のテキスト（ラベル）。" }
+"choice_id" = { "reference" = 1, "type" = "str", "required" = false, "provenance" = "ssp_secondary", "description" = "選択肢の ID。" }
+"extra_info" = { "reference" = 2, "reference_variadic" = true, "type" = "str", "required" = false, "provenance" = "ssp_secondary", "description" = "拡張情報（\\q タグ内の 3 番目以降の引数）。" }
+
+[entry."OnChoiceEnter"]
+"kind" = "event"
+"category" = "choice"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ukadoc"
+"description" = "選択肢上にカーソルが乗った際と外れた際に発生。外れた際は Reference なしで発生する。"
+[entry."OnChoiceEnter".field]
+"choice_label" = { "reference" = 0, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "選択肢のテキスト（ラベル）。" }
+"choice_id" = { "reference" = 1, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "選択肢の ID。" }
+"extra_info" = { "reference" = 2, "reference_variadic" = true, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "拡張情報（\\q タグ内の 3 番目以降の引数）。" }
+
+[entry."OnChoiceTimeout"]
+"kind" = "event"
+"category" = "choice"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ukadoc"
+"description" = "選択肢待ち時間がタイムアウトした際に発生。"
+[entry."OnChoiceTimeout".field]
+"timeout_script" = { "reference" = 0, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "タイムアウトしたスクリプト。" }
+
+[entry."OnChoiceHover"]
+"kind" = "event"
+"category" = "choice"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ssp_secondary"
+"description" = "選択肢上で静止された際に発生。"
+[entry."OnChoiceHover".field]
+"choice_label" = { "reference" = 0, "type" = "str", "required" = false, "provenance" = "ssp_secondary", "description" = "選択肢のテキスト（ラベル）。" }
+"choice_id" = { "reference" = 1, "type" = "str", "required" = false, "provenance" = "ssp_secondary", "description" = "選択肢の ID。" }
+"extra_info" = { "reference" = 2, "reference_variadic" = true, "type" = "str", "required" = false, "provenance" = "ssp_secondary", "description" = "拡張情報（\\q タグ内の 3 番目以降の引数）。" }
+
+[entry."OnAnchorSelect"]
+"kind" = "event"
+"category" = "choice"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ukadoc"
+"description" = "\\_a ジャンパがクリックされた瞬間に発生。"
+[entry."OnAnchorSelect".field]
+"anchor_id" = { "reference" = 0, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "選択されたジャンパの ID。" }
+
+[entry."OnAnchorSelectEx"]
+"kind" = "event"
+"category" = "choice"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ssp_secondary"
+"description" = "\\_a ジャンパがクリックされた瞬間に発生。SHIORI が何も返さなかった場合のみ続けて OnAnchorSelect が発生する。"
+[entry."OnAnchorSelectEx".field]
+"anchor_text" = { "reference" = 0, "type" = "str", "required" = false, "provenance" = "ssp_secondary", "description" = "選択されたジャンパのテキスト。" }
+"anchor_id" = { "reference" = 1, "type" = "str", "required" = false, "provenance" = "ssp_secondary", "description" = "選択されたジャンパの ID。" }
+"extra_info" = { "reference" = 2, "reference_variadic" = true, "type" = "str", "required" = false, "provenance" = "ssp_secondary", "description" = "拡張情報（\\_a タグ内の 2 番目以降の引数）。" }
+
+[entry."OnAnchorEnter"]
+"kind" = "event"
+"category" = "choice"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ssp_secondary"
+"description" = "\\_a ジャンパ上にカーソルが乗った際と外れた際に発生。"
+[entry."OnAnchorEnter".field]
+"anchor_text" = { "reference" = 0, "type" = "str", "required" = false, "provenance" = "ssp_secondary", "description" = "ジャンパのテキスト。" }
+"anchor_id" = { "reference" = 1, "type" = "str", "required" = false, "provenance" = "ssp_secondary", "description" = "ジャンパの ID。" }
+"extra_info" = { "reference" = 2, "reference_variadic" = true, "type" = "str", "required" = false, "provenance" = "ssp_secondary", "description" = "拡張情報（\\_a タグ内の 2 番目以降の引数）。" }
+
+[entry."OnAnchorHover"]
+"kind" = "event"
+"category" = "choice"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ssp_secondary"
+"description" = "\\_a ジャンパ上で静止された際に発生。"
+[entry."OnAnchorHover".field]
+"anchor_text" = { "reference" = 0, "type" = "str", "required" = false, "provenance" = "ssp_secondary", "description" = "ジャンパのテキスト。" }
+"anchor_id" = { "reference" = 1, "type" = "str", "required" = false, "provenance" = "ssp_secondary", "description" = "ジャンパの ID。" }
+"extra_info" = { "reference" = 2, "reference_variadic" = true, "type" = "str", "required" = false, "provenance" = "ssp_secondary", "description" = "拡張情報（\\_a タグ内の 2 番目以降の引数）。" }

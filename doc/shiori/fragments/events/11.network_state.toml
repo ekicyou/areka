@@ -1,0 +1,31 @@
+# event / category=network_state — areka-P0-shiori-protocol-split category fragment.
+# 2 keyed entry table(s), source order preserved. Category-pure; entry-boundary only.
+# Generated deterministically; do not hand-edit. Merge order: _manifest.toml (task 2.4) is authoritative.
+
+[entry."OnNetworkHeavy"]
+"kind" = "event"
+"category" = "network_state"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ukadoc"
+"description" = "相手サーバが時間内に応答しなかった際に発生。"
+"silence_ref" = ["sr_dispatch_network_dedup"]
+[entry."OnNetworkHeavy".field]
+"timeout_seconds" = { "reference" = 0, "type" = "i32", "required" = false, "provenance" = "ssp_secondary", "description" = "SSP のみ。タイムアウトするまでの時間（秒）。" }
+"elapsed_seconds" = { "reference" = 1, "type" = "i32", "required" = false, "provenance" = "ssp_secondary", "description" = "SSP のみ。今までの経過時間（秒）。[2.6.42～]" }
+
+[entry."OnNetworkStatusChange"]
+"kind" = "event"
+"category" = "network_state"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ukadoc"
+"description" = "ネットワーク接続状態が変わった際に発生。起動直後のみ NOTIFY で通知。"
+"silence_ref" = ["sr_dispatch_network_dedup"]
+[entry."OnNetworkStatusChange".field]
+"connection_status" = { "reference" = 0, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "online または offline。" }
+"ip_address_list" = { "reference" = 1, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "現在のマシンに割り当てられている IP アドレスのバイト値 1 区切りリスト。" }
+"connection_type" = { "reference" = 2, "type" = "str", "required" = false, "provenance" = "ssp_secondary", "description" = "接続の種類（cellular/ethernet/none/wifi/wimax/other/unknown）。[SSP 2.4.22]" }
+"max_download_mbps" = { "reference" = 3, "type" = "i32", "required" = false, "provenance" = "ssp_secondary", "description" = "接続回線のダウンロード側最大通信速度（MBps）。[SSP 2.4.22]" }
+"effective_download_mbps" = { "reference" = 4, "type" = "i32", "required" = false, "provenance" = "ssp_secondary", "description" = "接続回線のダウンロード側推定有効通信速度（MBps）。[SSP 2.5.26]" }
+"metered_status" = { "reference" = 5, "type" = "str", "required" = false, "provenance" = "ssp_secondary", "description" = "従量課金回線かどうか（unknown/unrestricted/fixed/variable）。[SSP 2.6.15]" }

@@ -1,0 +1,25 @@
+# event / category=sstp — areka-P0-shiori-protocol-split category fragment.
+# 2 keyed entry table(s), source order preserved. Category-pure; entry-boundary only.
+# Generated deterministically; do not hand-edit. Merge order: _manifest.toml (task 2.4) is authoritative.
+
+[entry."OnSSTPBreak"]
+"kind" = "event"
+"category" = "sstp"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ukadoc"
+"description" = "SSTP がブレイクされた際に発生。"
+[entry."OnSSTPBreak".field]
+"break_script" = { "reference" = 0, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "中断の操作が起きたスクリプト。" }
+"break_balloon_scope" = { "reference" = 1, "type" = "i32", "required" = false, "provenance" = "ukadoc", "description" = "中断操作が起きたバルーンのスコープ番号（本体 0・相方 1…）。" }
+"break_char_offset" = { "reference" = 2, "type" = "i32", "required" = false, "provenance" = "ukadoc", "description" = "中断位置。スクリプト先頭からの文字数（さくらスクリプトのタグ含む）。" }
+
+[entry."OnSSTPBlacklisting"]
+"kind" = "event"
+"category" = "sstp"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ukadoc"
+"description" = "最終クライアントのブラックリスト行きが指示された際に発生。"
+[entry."OnSSTPBlacklisting".field]
+"client_ip" = { "reference" = 0, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "最終クライアントの IP アドレス。" }

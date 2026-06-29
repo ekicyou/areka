@@ -1,0 +1,238 @@
+# _manifest.toml — areka-P0-shiori-protocol-split reconstruction manifest.
+# SINGLE SOURCE OF TRUTH for fragment merge order (design DD-1).
+# The [[fragment]] array order IS the merge order; NN. prefixes are a
+# subordinate search aid. Generated deterministically; do not hand-edit.
+
+[manifest]
+"spec" = "areka-P0-shiori-protocol-split"
+"merge_order_rule" = "Single source of truth for fragment merge order (DD-1). The fragments MUST be concatenated in the exact order of the [[fragment]] array below; the NN. filename prefixes are a search aid and are NOT authoritative. Order: _shared.toml first (shared tables + 9 silence_ruling), then events/ category fragments in ascending NN order, then resources/ in ascending NN order; sub-divided fragments (.01,.02,...) in ascending sub order."
+"fragment_count" = 38
+
+[[fragment]]
+"path" = "_shared.toml"
+"role" = "shared"
+"kind" = "shared"
+
+[[fragment]]
+"path" = "events/01.lifecycle.toml"
+"role" = "category"
+"kind" = "event"
+"category" = "lifecycle"
+
+[[fragment]]
+"path" = "events/02.time.toml"
+"role" = "category"
+"kind" = "event"
+"category" = "time"
+
+[[fragment]]
+"path" = "events/03.clock.toml"
+"role" = "category"
+"kind" = "event"
+"category" = "clock"
+
+[[fragment]]
+"path" = "events/04.network_update.toml"
+"role" = "category"
+"kind" = "event"
+"category" = "network_update"
+
+[[fragment]]
+"path" = "events/05.mailcheck.toml"
+"role" = "category"
+"kind" = "event"
+"category" = "mailcheck"
+
+[[fragment]]
+"path" = "events/06.rss.toml"
+"role" = "category"
+"kind" = "event"
+"category" = "rss"
+
+[[fragment]]
+"path" = "events/07.calendar.toml"
+"role" = "category"
+"kind" = "event"
+"category" = "calendar"
+
+[[fragment]]
+"path" = "events/08.sstp.toml"
+"role" = "category"
+"kind" = "event"
+"category" = "sstp"
+
+[[fragment]]
+"path" = "events/09.comm_other.toml"
+"role" = "category"
+"kind" = "event"
+"category" = "comm_other"
+
+[[fragment]]
+"path" = "events/10.send_failure.toml"
+"role" = "category"
+"kind" = "event"
+"category" = "send_failure"
+
+[[fragment]]
+"path" = "events/11.network_state.toml"
+"role" = "category"
+"kind" = "event"
+"category" = "network_state"
+
+[[fragment]]
+"path" = "events/12.inputbox.toml"
+"role" = "category"
+"kind" = "event"
+"category" = "inputbox"
+
+[[fragment]]
+"path" = "events/13.dialog.toml"
+"role" = "category"
+"kind" = "event"
+"category" = "dialog"
+
+[[fragment]]
+"path" = "events/14.choice.toml"
+"role" = "category"
+"kind" = "event"
+"category" = "choice"
+
+[[fragment]]
+"path" = "events/15.surface.toml"
+"role" = "category"
+"kind" = "event"
+"category" = "surface"
+
+[[fragment]]
+"path" = "events/16.mouse.toml"
+"role" = "category"
+"kind" = "event"
+"category" = "mouse"
+
+[[fragment]]
+"path" = "events/17.gamepad.toml"
+"role" = "category"
+"kind" = "event"
+"category" = "gamepad"
+
+[[fragment]]
+"path" = "events/18.selection_mode.toml"
+"role" = "category"
+"kind" = "event"
+"category" = "selection_mode"
+
+[[fragment]]
+"path" = "events/19.voice.toml"
+"role" = "category"
+"kind" = "event"
+"category" = "voice"
+
+[[fragment]]
+"path" = "events/20.vanish.toml"
+"role" = "category"
+"kind" = "event"
+"category" = "vanish"
+
+[[fragment]]
+"path" = "events/21.balloon.toml"
+"role" = "category"
+"kind" = "event"
+"category" = "balloon"
+
+[[fragment]]
+"path" = "events/22.tray_balloon.toml"
+"role" = "category"
+"kind" = "event"
+"category" = "tray_balloon"
+
+[[fragment]]
+"path" = "events/23.install.toml"
+"role" = "category"
+"kind" = "event"
+"category" = "install"
+
+[[fragment]]
+"path" = "events/24.filedrop.toml"
+"role" = "category"
+"kind" = "event"
+"category" = "filedrop"
+
+[[fragment]]
+"path" = "events/25.urldrop.toml"
+"role" = "category"
+"kind" = "event"
+"category" = "urldrop"
+
+[[fragment]]
+"path" = "events/26.occlusion.toml"
+"role" = "category"
+"kind" = "event"
+"category" = "occlusion"
+
+[[fragment]]
+"path" = "events/27.os_state.toml"
+"role" = "category"
+"kind" = "event"
+"category" = "os_state"
+
+[[fragment]]
+"path" = "events/28.other.toml"
+"role" = "category"
+"kind" = "event"
+"category" = "other"
+
+[[fragment]]
+"path" = "events/29.notify.toml"
+"role" = "category"
+"kind" = "event"
+"category" = "notify"
+
+[[fragment]]
+"path" = "resources/01.shiori_info.toml"
+"role" = "category"
+"kind" = "resource"
+"category" = "shiori_info"
+
+[[fragment]]
+"path" = "resources/02.ghost_info.toml"
+"role" = "category"
+"kind" = "resource"
+"category" = "ghost_info"
+
+[[fragment]]
+"path" = "resources/03.update_info.toml"
+"role" = "category"
+"kind" = "resource"
+"category" = "update_info"
+
+[[fragment]]
+"path" = "resources/04.ownerdraw_menu_image.toml"
+"role" = "category"
+"kind" = "resource"
+"category" = "ownerdraw_menu_image"
+
+[[fragment]]
+"path" = "resources/05.ownerdraw_menu_color.toml"
+"role" = "category"
+"kind" = "resource"
+"category" = "ownerdraw_menu_color"
+
+[[fragment]]
+"path" = "resources/06.shortcut_key.01.toml"
+"role" = "category"
+"kind" = "resource"
+"category" = "shortcut_key"
+"sub" = 1
+
+[[fragment]]
+"path" = "resources/06.shortcut_key.02.toml"
+"role" = "category"
+"kind" = "resource"
+"category" = "shortcut_key"
+"sub" = 2
+
+[[fragment]]
+"path" = "resources/07.tooltip.toml"
+"role" = "category"
+"kind" = "resource"
+"category" = "tooltip"

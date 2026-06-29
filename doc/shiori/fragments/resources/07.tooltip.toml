@@ -1,0 +1,30 @@
+# resource / category=tooltip — areka-P0-shiori-protocol-split category fragment.
+# 2 keyed entry table(s), source order preserved. Category-pure; entry-boundary only.
+# Generated deterministically; do not hand-edit. Merge order: _manifest.toml (task 2.4) is authoritative.
+
+[entry."tooltip"]
+"kind" = "resource"
+"category" = "tooltip"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ukadoc"
+"description" = "シェルにおけるツールチップ内容の取得。シェルのサーフェスにマウスカーソルが乗った際に通知され、SHIORI はツールチップ文字列を応答する。シェル側設定がある場合はそちらが優先される。"
+[entry."tooltip".field]
+"cursor_x" = { "reference" = 0, "type" = "i32", "required" = true, "provenance" = "ukadoc", "description" = "マウスカーソルの x 座標（ローカル座標）。" }
+"cursor_y" = { "reference" = 1, "type" = "i32", "required" = true, "provenance" = "ukadoc", "description" = "マウスカーソルの y 座標（ローカル座標）。" }
+"always_zero" = { "reference" = 2, "type" = "i32", "required" = false, "provenance" = "ukadoc", "description" = "常に 0。" }
+"character_side" = { "reference" = 3, "type" = "i32", "required" = false, "provenance" = "ukadoc", "description" = "本体の場合は 0、相方の場合は 1。SSP/CROW では 2 以降もある。" }
+"collision_id" = { "reference" = 4, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "当たり判定の識別子。" }
+"always_zero2" = { "reference" = 5, "type" = "i32", "required" = false, "provenance" = "ukadoc", "description" = "常に 0。" }
+
+[entry."balloon_tooltip"]
+"kind" = "resource"
+"category" = "tooltip"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ukadoc"
+"description" = "バルーン選択肢上のツールチップ内容の取得。選択肢にマウスカーソルが乗った際に通知され、SHIORI はツールチップ文字列を応答する。"
+[entry."balloon_tooltip".field]
+"choice_label" = { "reference" = 0, "type" = "str", "required" = true, "provenance" = "ukadoc", "description" = "選択肢のテキスト（ラベル）。" }
+"choice_id" = { "reference" = 1, "type" = "str", "required" = true, "provenance" = "ukadoc", "description" = "選択肢の ID。" }
+"extra_args" = { "reference_variadic" = true, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "拡張情報（\\q タグ内の 3 番目以降の引数）。Reference2 以降の可変長。" }

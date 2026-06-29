@@ -1,0 +1,80 @@
+# event / category=calendar — areka-P0-shiori-protocol-split category fragment.
+# 7 keyed entry table(s), source order preserved. Category-pure; entry-boundary only.
+# Generated deterministically; do not hand-edit. Merge order: _manifest.toml (task 2.4) is authoritative.
+
+[entry."OnSchedule5MinutesToGo"]
+"kind" = "event"
+"category" = "calendar"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ukadoc"
+"description" = "本体カレンダー機能に登録されたスケジュール時間の 5 分前に発生。"
+[entry."OnSchedule5MinutesToGo".field]
+"event_type" = { "reference" = 0, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "イベントのタイプ。" }
+"event_caption" = { "reference" = 1, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "イベントの内容（caption）。" }
+"event_subtitle" = { "reference" = 2, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "追加データ（subtitle）。" }
+"event_script" = { "reference" = 3, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "スクリプト（script）。" }
+
+[entry."OnScheduleRead"]
+"kind" = "event"
+"category" = "calendar"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ukadoc"
+"description" = "カレンダーアイコン上でマウスが静止しスケジュールが読まれるタイミングで発生。"
+[entry."OnScheduleRead".field]
+"event_type" = { "reference" = 0, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "イベントのタイプ。" }
+"event_caption" = { "reference" = 1, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "イベントの内容（caption）。" }
+"event_subtitle" = { "reference" = 2, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "追加データ（subtitle）。" }
+"event_script" = { "reference" = 3, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "スクリプト（script）。" }
+
+[entry."OnSchedulesenseBegin"]
+"kind" = "event"
+"category" = "calendar"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ukadoc"
+"description" = "スケジュールセンサが接続開始する際に発生。"
+[entry."OnSchedulesenseBegin".field]
+"sensor_name" = { "reference" = 0, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "スケジュールセンサの名前。" }
+
+[entry."OnSchedulesenseComplete"]
+"kind" = "event"
+"category" = "calendar"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ukadoc"
+"description" = "スケジュールセンサの処理が完了した際に発生。"
+[entry."OnSchedulesenseComplete".field]
+"sensor_name" = { "reference" = 0, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "スケジュールセンサの名前。" }
+"schedule_data_count" = { "reference" = 1, "type" = "i32", "required" = false, "provenance" = "ukadoc", "description" = "スケジュールセンサが返したスケジュールデータの数。" }
+
+[entry."OnSchedulesenseFailure"]
+"kind" = "event"
+"category" = "calendar"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ukadoc"
+"description" = "スケジュールセンサの処理に失敗した際に発生。"
+[entry."OnSchedulesenseFailure".field]
+"failure_reason" = { "reference" = 0, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "失敗した理由（ヘッドラインセンサと共通）。" }
+
+[entry."OnSchedulepostBegin"]
+"kind" = "event"
+"category" = "calendar"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ukadoc"
+"description" = "スケジュールセンサが投稿モードで接続開始する際に発生。"
+[entry."OnSchedulepostBegin".field]
+"sensor_name" = { "reference" = 0, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "スケジュールセンサの名前。" }
+
+[entry."OnSchedulepostComplete"]
+"kind" = "event"
+"category" = "calendar"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ukadoc"
+"description" = "スケジュールセンサが投稿処理を完了した際に発生。"
+[entry."OnSchedulepostComplete".field]
+"sensor_name" = { "reference" = 0, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "スケジュールセンサの名前。" }

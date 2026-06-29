@@ -1,0 +1,36 @@
+# event / category=balloon — areka-P0-shiori-protocol-split category fragment.
+# 3 keyed entry table(s), source order preserved. Category-pure; entry-boundary only.
+# Generated deterministically; do not hand-edit. Merge order: _manifest.toml (task 2.4) is authoritative.
+
+[entry."OnBalloonBreak"]
+"kind" = "event"
+"category" = "balloon"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ukadoc"
+"description" = "SSTP以外でブレイクされた際に発生。"
+[entry."OnBalloonBreak".field]
+"interrupted_script" = { "reference" = 0, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "中断の操作が起きたスクリプト。" }
+"balloon_scope" = { "reference" = 1, "type" = "i32", "required" = false, "provenance" = "ukadoc", "description" = "中断の操作が起きたバルーンのスコープ番号。本体側0、相方側1、それ以降も。" }
+"interrupt_char_pos" = { "reference" = 2, "type" = "i32", "required" = false, "provenance" = "ukadoc", "description" = "中断位置。スクリプト先頭からの文字数で表現。文字数はさくらスクリプトのタグも含めたもの。 例）\\s[2]あいうえお の「あ」までで中断された場合、6" }
+
+[entry."OnBalloonClose"]
+"kind" = "event"
+"category" = "balloon"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ukadoc"
+"description" = "バルーンを閉じた際に発生。"
+[entry."OnBalloonClose".field]
+"displayed_script" = { "reference" = 0, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "閉じる際に表示されていたスクリプト。" }
+
+[entry."OnBalloonTimeout"]
+"kind" = "event"
+"category" = "balloon"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ukadoc"
+"description" = "選択肢以外でバルーンがタイムアウトした際に発生。"
+[entry."OnBalloonTimeout".field]
+"displayed_script" = { "reference" = 0, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "タイムアウトした際に表示されていたスクリプト。" }
+"remaining_time" = { "reference" = 1, "type" = "i32", "required" = false, "provenance" = "ukadoc", "description" = "残り時間。" }

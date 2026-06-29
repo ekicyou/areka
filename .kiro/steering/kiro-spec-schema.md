@@ -1,6 +1,10 @@
-# Kiro spec.json スキーマ定義
-
+---
+inclusion: fileMatch
+fileMatchPattern: '.kiro/specs/**'
 updated_at: 2026-03-07
+---
+
+# Kiro spec.json スキーマ定義
 
 本プロジェクトにおける `.kiro/specs/{feature}/spec.json` の拡張スキーマを定義する。
 

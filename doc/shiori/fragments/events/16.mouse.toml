@@ -1,0 +1,325 @@
+# event / category=mouse — areka-P0-shiori-protocol-split category fragment.
+# 20 keyed entry table(s), source order preserved. Category-pure; entry-boundary only.
+# Generated deterministically; do not hand-edit. Merge order: _manifest.toml (task 2.4) is authoritative.
+
+[entry."OnMouseClick"]
+"kind" = "event"
+"category" = "mouse"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ukadoc"
+"description" = "左・右（＋中）ボタンでクリックされ OnMouseUp に反応しない場合に発生。"
+[entry."OnMouseClick".field]
+"cursor_x" = { "reference" = 0, "type" = "i32", "required" = false, "provenance" = "ukadoc", "description" = "マウスカーソルの x 座標（ローカル座標）。" }
+"cursor_y" = { "reference" = 1, "type" = "i32", "required" = false, "provenance" = "ukadoc", "description" = "マウスカーソルの y 座標（ローカル座標）。" }
+"wheel_delta" = { "reference" = 2, "type" = "i32", "required" = false, "provenance" = "ukadoc", "description" = "常に 0。OnMouseWheel/OnMouseMove と Reference 位置を整合させるため wheel_delta 命名（値は常に 0）。", "silence_ref" = ["sr_meaning_mouseclick_wheel_delta"] }
+"char_scope" = { "reference" = 3, "type" = "i32", "required" = false, "provenance" = "ukadoc", "description" = "本体は 0、相方は 1。SSP/CROW では 2 以降もある。" }
+"collision_area_name" = { "reference" = 4, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "当たり判定の識別子。" }
+"button_kind" = { "reference" = 5, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "左クリックは 0、右クリックは 1、中クリックは 2（互換仕様：OnMouseClickEx への移行を推奨）。" }
+"input_device" = { "reference" = 6, "type" = "str", "required" = false, "provenance" = "ssp_secondary", "description" = "SSP/NINIX のみ。入力デバイス（touch/pen/eraser/mouse）。" }
+
+[entry."OnMouseClickEx"]
+"kind" = "event"
+"category" = "mouse"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ssp_secondary"
+"description" = "左・右以外のボタンでクリックされ OnMouseUpEx に反応しない場合に発生。"
+[entry."OnMouseClickEx".field]
+"cursor_x" = { "reference" = 0, "type" = "i32", "required" = false, "provenance" = "ssp_secondary", "description" = "マウスカーソルの x 座標（ローカル座標）。" }
+"cursor_y" = { "reference" = 1, "type" = "i32", "required" = false, "provenance" = "ssp_secondary", "description" = "マウスカーソルの y 座標（ローカル座標）。" }
+"wheel_delta" = { "reference" = 2, "type" = "i32", "required" = false, "provenance" = "ssp_secondary", "description" = "常に 0。OnMouseWheel/OnMouseMove と Reference 位置を整合させるため wheel_delta 命名（値は常に 0）。", "silence_ref" = ["sr_meaning_mouseclick_wheel_delta"] }
+"char_scope" = { "reference" = 3, "type" = "i32", "required" = false, "provenance" = "ssp_secondary", "description" = "本体は 0、相方は 1。SSP/CROW では 2 以降もある。" }
+"collision_area_name" = { "reference" = 4, "type" = "str", "required" = false, "provenance" = "ssp_secondary", "description" = "当たり判定の識別子。" }
+"button_kind" = { "reference" = 5, "type" = "str", "required" = false, "provenance" = "ssp_secondary", "description" = "ホイールクリック/中ボタンは middle、拡張ボタン 1 は xbutton1、拡張ボタン 2 は xbutton2。" }
+"input_device" = { "reference" = 6, "type" = "str", "required" = false, "provenance" = "ssp_secondary", "description" = "入力デバイス（touch/pen/eraser/mouse）。" }
+
+[entry."OnMouseDoubleClick"]
+"kind" = "event"
+"category" = "mouse"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ukadoc"
+"description" = "左・右ボタンでダブルクリックされた際に発生。"
+[entry."OnMouseDoubleClick".field]
+"cursor_x" = { "reference" = 0, "type" = "i32", "required" = false, "provenance" = "ukadoc", "description" = "マウスカーソルの x 座標（ローカル座標）。" }
+"cursor_y" = { "reference" = 1, "type" = "i32", "required" = false, "provenance" = "ukadoc", "description" = "マウスカーソルの y 座標（ローカル座標）。" }
+"wheel_delta" = { "reference" = 2, "type" = "i32", "required" = false, "provenance" = "ukadoc", "description" = "常に 0。OnMouseWheel/OnMouseMove と Reference 位置を整合させるため wheel_delta 命名（値は常に 0）。", "silence_ref" = ["sr_meaning_mouseclick_wheel_delta"] }
+"char_scope" = { "reference" = 3, "type" = "i32", "required" = false, "provenance" = "ukadoc", "description" = "本体は 0、相方は 1。SSP/CROW では 2 以降もある。" }
+"collision_area_name" = { "reference" = 4, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "当たり判定の識別子。" }
+"button_kind" = { "reference" = 5, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "左クリックは 0、右クリックは 1。" }
+"input_device" = { "reference" = 6, "type" = "str", "required" = false, "provenance" = "ssp_secondary", "description" = "SSP/NINIX のみ。入力デバイス（touch/pen/eraser/mouse）。" }
+
+[entry."OnMouseDoubleClickEx"]
+"kind" = "event"
+"category" = "mouse"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ssp_secondary"
+"description" = "左・右以外のボタンでダブルクリックされた際に発生。"
+[entry."OnMouseDoubleClickEx".field]
+"cursor_x" = { "reference" = 0, "type" = "i32", "required" = false, "provenance" = "ssp_secondary", "description" = "マウスカーソルの x 座標（ローカル座標）。" }
+"cursor_y" = { "reference" = 1, "type" = "i32", "required" = false, "provenance" = "ssp_secondary", "description" = "マウスカーソルの y 座標（ローカル座標）。" }
+"wheel_delta" = { "reference" = 2, "type" = "i32", "required" = false, "provenance" = "ssp_secondary", "description" = "常に 0。OnMouseWheel/OnMouseMove と Reference 位置を整合させるため wheel_delta 命名（値は常に 0）。", "silence_ref" = ["sr_meaning_mouseclick_wheel_delta"] }
+"char_scope" = { "reference" = 3, "type" = "i32", "required" = false, "provenance" = "ssp_secondary", "description" = "本体は 0、相方は 1。SSP/CROW では 2 以降もある。" }
+"collision_area_name" = { "reference" = 4, "type" = "str", "required" = false, "provenance" = "ssp_secondary", "description" = "当たり判定の識別子。" }
+"button_kind" = { "reference" = 5, "type" = "str", "required" = false, "provenance" = "ssp_secondary", "description" = "ホイールクリック/中ボタンは middle、拡張ボタン 1 は xbutton1、拡張ボタン 2 は xbutton2。" }
+"input_device" = { "reference" = 6, "type" = "str", "required" = false, "provenance" = "ssp_secondary", "description" = "入力デバイス（touch/pen/eraser/mouse）。" }
+
+[entry."OnMouseMultipleClick"]
+"kind" = "event"
+"category" = "mouse"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ssp_secondary"
+"description" = "3 回以上連続でクリックされた際に発生。無応答時は通常の OnMouseClick/OnMouseDoubleClick の流れに戻る。"
+[entry."OnMouseMultipleClick".field]
+"cursor_x" = { "reference" = 0, "type" = "i32", "required" = false, "provenance" = "ssp_secondary", "description" = "マウスカーソルの x 座標（ローカル座標）。" }
+"cursor_y" = { "reference" = 1, "type" = "i32", "required" = false, "provenance" = "ssp_secondary", "description" = "マウスカーソルの y 座標（ローカル座標）。" }
+"wheel_delta" = { "reference" = 2, "type" = "i32", "required" = false, "provenance" = "ssp_secondary", "description" = "常に 0。OnMouseWheel/OnMouseMove と Reference 位置を整合させるため wheel_delta 命名（値は常に 0）。", "silence_ref" = ["sr_meaning_mouseclick_wheel_delta"] }
+"char_scope" = { "reference" = 3, "type" = "i32", "required" = false, "provenance" = "ssp_secondary", "description" = "本体は 0、相方は 1。それ以降 2～。" }
+"collision_area_name" = { "reference" = 4, "type" = "str", "required" = false, "provenance" = "ssp_secondary", "description" = "当たり判定の識別子。" }
+"button_kind" = { "reference" = 5, "type" = "str", "required" = false, "provenance" = "ssp_secondary", "description" = "左クリックは 0、右クリックは 1。" }
+"input_device" = { "reference" = 6, "type" = "str", "required" = false, "provenance" = "ssp_secondary", "description" = "入力デバイス（touch/pen/eraser/mouse）。" }
+"click_count" = { "reference" = 7, "type" = "i32", "required" = false, "provenance" = "ssp_secondary", "description" = "連続クリック回数。" }
+
+[entry."OnMouseMultipleClickEx"]
+"kind" = "event"
+"category" = "mouse"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ssp_secondary"
+"description" = "左・右以外のボタンで 3 回以上連続クリックされた際に発生。無応答時は通常の OnMouseClickEx/OnMouseDoubleClickEx の流れに戻る。"
+[entry."OnMouseMultipleClickEx".field]
+"cursor_x" = { "reference" = 0, "type" = "i32", "required" = false, "provenance" = "ssp_secondary", "description" = "マウスカーソルの x 座標（ローカル座標）。" }
+"cursor_y" = { "reference" = 1, "type" = "i32", "required" = false, "provenance" = "ssp_secondary", "description" = "マウスカーソルの y 座標（ローカル座標）。" }
+"wheel_delta" = { "reference" = 2, "type" = "i32", "required" = false, "provenance" = "ssp_secondary", "description" = "常に 0。OnMouseWheel/OnMouseMove と Reference 位置を整合させるため wheel_delta 命名（値は常に 0）。", "silence_ref" = ["sr_meaning_mouseclick_wheel_delta"] }
+"char_scope" = { "reference" = 3, "type" = "i32", "required" = false, "provenance" = "ssp_secondary", "description" = "本体は 0、相方は 1。それ以降 2～。" }
+"collision_area_name" = { "reference" = 4, "type" = "str", "required" = false, "provenance" = "ssp_secondary", "description" = "当たり判定の識別子。" }
+"button_kind" = { "reference" = 5, "type" = "str", "required" = false, "provenance" = "ssp_secondary", "description" = "ホイールクリック/中ボタンは middle、拡張ボタン 1 は xbutton1、拡張ボタン 2 は xbutton2。" }
+"input_device" = { "reference" = 6, "type" = "str", "required" = false, "provenance" = "ssp_secondary", "description" = "入力デバイス（touch/pen/eraser/mouse）。" }
+"click_count" = { "reference" = 7, "type" = "i32", "required" = false, "provenance" = "ssp_secondary", "description" = "連続クリック回数。" }
+
+[entry."OnMouseUp"]
+"kind" = "event"
+"category" = "mouse"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ssp_secondary"
+"description" = "左・右のマウスボタンが放された際に発生。"
+[entry."OnMouseUp".field]
+"cursor_x" = { "reference" = 0, "type" = "i32", "required" = false, "provenance" = "ssp_secondary", "description" = "マウスカーソルの x 座標（ローカル座標）。" }
+"cursor_y" = { "reference" = 1, "type" = "i32", "required" = false, "provenance" = "ssp_secondary", "description" = "マウスカーソルの y 座標（ローカル座標）。" }
+"wheel_delta" = { "reference" = 2, "type" = "i32", "required" = false, "provenance" = "ssp_secondary", "description" = "常に 0。OnMouseWheel/OnMouseMove と Reference 位置を整合させるため wheel_delta 命名（値は常に 0）。", "silence_ref" = ["sr_meaning_mouseclick_wheel_delta"] }
+"char_scope" = { "reference" = 3, "type" = "i32", "required" = false, "provenance" = "ssp_secondary", "description" = "本体は 0、相方は 1。SSP/CROW では 2 以降もある。" }
+"collision_area_name" = { "reference" = 4, "type" = "str", "required" = false, "provenance" = "ssp_secondary", "description" = "当たり判定の識別子。" }
+"button_kind" = { "reference" = 5, "type" = "str", "required" = false, "provenance" = "ssp_secondary", "description" = "左クリックは 0、右クリックは 1、中クリックは 2（互換仕様：OnMouseClickEx への移行を推奨）。" }
+"input_device" = { "reference" = 6, "type" = "str", "required" = false, "provenance" = "ssp_secondary", "description" = "入力デバイス（touch/pen/eraser/mouse）。" }
+
+[entry."OnMouseUpEx"]
+"kind" = "event"
+"category" = "mouse"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ssp_secondary"
+"description" = "左・右以外のマウスボタンが放された際に発生。"
+[entry."OnMouseUpEx".field]
+"cursor_x" = { "reference" = 0, "type" = "i32", "required" = false, "provenance" = "ssp_secondary", "description" = "マウスカーソルの x 座標（ローカル座標）。" }
+"cursor_y" = { "reference" = 1, "type" = "i32", "required" = false, "provenance" = "ssp_secondary", "description" = "マウスカーソルの y 座標（ローカル座標）。" }
+"wheel_delta" = { "reference" = 2, "type" = "i32", "required" = false, "provenance" = "ssp_secondary", "description" = "常に 0。OnMouseWheel/OnMouseMove と Reference 位置を整合させるため wheel_delta 命名（値は常に 0）。", "silence_ref" = ["sr_meaning_mouseclick_wheel_delta"] }
+"char_scope" = { "reference" = 3, "type" = "i32", "required" = false, "provenance" = "ssp_secondary", "description" = "本体は 0、相方は 1。SSP/CROW では 2 以降もある。" }
+"collision_area_name" = { "reference" = 4, "type" = "str", "required" = false, "provenance" = "ssp_secondary", "description" = "当たり判定の識別子。" }
+"button_kind" = { "reference" = 5, "type" = "str", "required" = false, "provenance" = "ssp_secondary", "description" = "ホイールクリック/中ボタンは middle、拡張ボタン 1 は xbutton1、拡張ボタン 2 は xbutton2。" }
+"input_device" = { "reference" = 6, "type" = "str", "required" = false, "provenance" = "ssp_secondary", "description" = "入力デバイス（touch/pen/eraser/mouse）。" }
+
+[entry."OnMouseDown"]
+"kind" = "event"
+"category" = "mouse"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ssp_secondary"
+"description" = "左・右のマウスボタンが押された際に発生。"
+[entry."OnMouseDown".field]
+"cursor_x" = { "reference" = 0, "type" = "i32", "required" = false, "provenance" = "ssp_secondary", "description" = "マウスカーソルの x 座標（ローカル座標）。" }
+"cursor_y" = { "reference" = 1, "type" = "i32", "required" = false, "provenance" = "ssp_secondary", "description" = "マウスカーソルの y 座標（ローカル座標）。" }
+"wheel_delta" = { "reference" = 2, "type" = "i32", "required" = false, "provenance" = "ssp_secondary", "description" = "常に 0。OnMouseWheel/OnMouseMove と Reference 位置を整合させるため wheel_delta 命名（値は常に 0）。", "silence_ref" = ["sr_meaning_mouseclick_wheel_delta"] }
+"char_scope" = { "reference" = 3, "type" = "i32", "required" = false, "provenance" = "ssp_secondary", "description" = "本体は 0、相方は 1。SSP/CROW では 2 以降もある。" }
+"collision_area_name" = { "reference" = 4, "type" = "str", "required" = false, "provenance" = "ssp_secondary", "description" = "当たり判定の識別子。" }
+"button_kind" = { "reference" = 5, "type" = "str", "required" = false, "provenance" = "ssp_secondary", "description" = "左クリックは 0、右クリックは 1、中クリックは 2（互換仕様：OnMouseClickEx への移行を推奨）。" }
+"input_device" = { "reference" = 6, "type" = "str", "required" = false, "provenance" = "ssp_secondary", "description" = "入力デバイス（touch/pen/eraser/mouse）。" }
+
+[entry."OnMouseDownEx"]
+"kind" = "event"
+"category" = "mouse"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ssp_secondary"
+"description" = "左・右以外のマウスボタンが押された際に発生。"
+[entry."OnMouseDownEx".field]
+"cursor_x" = { "reference" = 0, "type" = "i32", "required" = false, "provenance" = "ssp_secondary", "description" = "マウスカーソルの x 座標（ローカル座標）。" }
+"cursor_y" = { "reference" = 1, "type" = "i32", "required" = false, "provenance" = "ssp_secondary", "description" = "マウスカーソルの y 座標（ローカル座標）。" }
+"wheel_delta" = { "reference" = 2, "type" = "i32", "required" = false, "provenance" = "ssp_secondary", "description" = "常に 0。OnMouseWheel/OnMouseMove と Reference 位置を整合させるため wheel_delta 命名（値は常に 0）。", "silence_ref" = ["sr_meaning_mouseclick_wheel_delta"] }
+"char_scope" = { "reference" = 3, "type" = "i32", "required" = false, "provenance" = "ssp_secondary", "description" = "本体は 0、相方は 1。SSP/CROW では 2 以降もある。" }
+"collision_area_name" = { "reference" = 4, "type" = "str", "required" = false, "provenance" = "ssp_secondary", "description" = "当たり判定の識別子。" }
+"button_kind" = { "reference" = 5, "type" = "str", "required" = false, "provenance" = "ssp_secondary", "description" = "ホイールクリック/中ボタンは middle、拡張ボタン 1 は xbutton1、拡張ボタン 2 は xbutton2。" }
+"input_device" = { "reference" = 6, "type" = "str", "required" = false, "provenance" = "ssp_secondary", "description" = "入力デバイス（touch/pen/eraser/mouse）。" }
+
+[entry."OnMouseMove"]
+"kind" = "event"
+"category" = "mouse"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ukadoc"
+"description" = "マウスが移動した際に発生。"
+[entry."OnMouseMove".field]
+"cursor_x" = { "reference" = 0, "type" = "i32", "required" = false, "provenance" = "ukadoc", "description" = "マウスカーソルの x 座標（ローカル座標）。" }
+"cursor_y" = { "reference" = 1, "type" = "i32", "required" = false, "provenance" = "ukadoc", "description" = "マウスカーソルの y 座標（ローカル座標）。" }
+"wheel_delta" = { "reference" = 2, "type" = "i32", "required" = false, "provenance" = "ukadoc", "description" = "マウスホイールの回転量および回転方向。" }
+"char_scope" = { "reference" = 3, "type" = "i32", "required" = false, "provenance" = "ukadoc", "description" = "本体は 0、相方は 1。SSP/CROW では 2 以降もある。" }
+"collision_area_name" = { "reference" = 4, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "当たり判定の識別子。" }
+"always_zero" = { "reference" = 5, "type" = "i32", "required" = false, "provenance" = "ssp_secondary", "description" = "SSP/NINIX のみ。常に 0。" }
+"input_device" = { "reference" = 6, "type" = "str", "required" = false, "provenance" = "ssp_secondary", "description" = "SSP のみ。入力デバイス（touch/pen/eraser/mouse）。" }
+
+[entry."OnMouseWheel"]
+"kind" = "event"
+"category" = "mouse"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ukadoc"
+"description" = "マウスホイールが回転した際に発生。タッチパネル環境では OnMouseGesture の up/down に無応答時の代替イベントとしても発生する。"
+[entry."OnMouseWheel".field]
+"cursor_x" = { "reference" = 0, "type" = "i32", "required" = false, "provenance" = "ukadoc", "description" = "マウスカーソルの x 座標（ローカル座標）。" }
+"cursor_y" = { "reference" = 1, "type" = "i32", "required" = false, "provenance" = "ukadoc", "description" = "マウスカーソルの y 座標（ローカル座標）。" }
+"wheel_delta" = { "reference" = 2, "type" = "i32", "required" = false, "provenance" = "ukadoc", "description" = "マウスホイールの回転量および回転方向。" }
+"char_scope" = { "reference" = 3, "type" = "i32", "required" = false, "provenance" = "ukadoc", "description" = "本体は 0、相方は 1。SSP/CROW では 2 以降もある。" }
+"collision_area_name" = { "reference" = 4, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "当たり判定の識別子。" }
+"always_zero" = { "reference" = 5, "type" = "i32", "required" = false, "provenance" = "ssp_secondary", "description" = "SSP/NINIX のみ。常に 0。" }
+"input_device" = { "reference" = 6, "type" = "str", "required" = false, "provenance" = "ssp_secondary", "description" = "SSP/NINIX のみ。入力デバイス（touch/pen/eraser/mouse）。" }
+
+[entry."OnMouseEnterAll"]
+"kind" = "event"
+"category" = "mouse"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ssp_secondary"
+"description" = "マウスがキャラクターウインドウに入った際に発生。"
+[entry."OnMouseEnterAll".field]
+"cursor_x" = { "reference" = 0, "type" = "i32", "required" = false, "provenance" = "ssp_secondary", "description" = "マウスカーソルの x 座標（ローカル座標）。" }
+"cursor_y" = { "reference" = 1, "type" = "i32", "required" = false, "provenance" = "ssp_secondary", "description" = "マウスカーソルの y 座標（ローカル座標）。" }
+"wheel_delta" = { "reference" = 2, "type" = "i32", "required" = false, "provenance" = "ssp_secondary", "description" = "常に 0。OnMouseWheel/OnMouseMove と Reference 位置を整合させるため wheel_delta 命名（値は常に 0）。", "silence_ref" = ["sr_meaning_mouseclick_wheel_delta"] }
+"char_scope" = { "reference" = 3, "type" = "i32", "required" = false, "provenance" = "ssp_secondary", "description" = "本体は 0、相方は 1。SSP/CROW では 2 以降もある。" }
+"collision_area_name" = { "reference" = 4, "type" = "str", "required" = false, "provenance" = "ssp_secondary", "description" = "当たり判定の識別子。" }
+"always_zero" = { "reference" = 5, "type" = "i32", "required" = false, "provenance" = "ssp_secondary", "description" = "常に 0。" }
+"input_device" = { "reference" = 6, "type" = "str", "required" = false, "provenance" = "ssp_secondary", "description" = "入力デバイス（touch/pen/eraser/mouse）。" }
+
+[entry."OnMouseLeaveAll"]
+"kind" = "event"
+"category" = "mouse"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ssp_secondary"
+"description" = "マウスがキャラクターウインドウから出た際に発生。"
+[entry."OnMouseLeaveAll".field]
+"cursor_x" = { "reference" = 0, "type" = "i32", "required" = false, "provenance" = "ssp_secondary", "description" = "マウスカーソルの x 座標（ローカル座標）。" }
+"cursor_y" = { "reference" = 1, "type" = "i32", "required" = false, "provenance" = "ssp_secondary", "description" = "マウスカーソルの y 座標（ローカル座標）。" }
+"wheel_delta" = { "reference" = 2, "type" = "i32", "required" = false, "provenance" = "ssp_secondary", "description" = "常に 0。OnMouseWheel/OnMouseMove と Reference 位置を整合させるため wheel_delta 命名（値は常に 0）。", "silence_ref" = ["sr_meaning_mouseclick_wheel_delta"] }
+"char_scope" = { "reference" = 3, "type" = "i32", "required" = false, "provenance" = "ssp_secondary", "description" = "本体は 0、相方は 1。SSP/CROW では 2 以降もある。" }
+"collision_area_name" = { "reference" = 4, "type" = "str", "required" = false, "provenance" = "ssp_secondary", "description" = "当たり判定の識別子。" }
+"always_zero" = { "reference" = 5, "type" = "i32", "required" = false, "provenance" = "ssp_secondary", "description" = "常に 0。" }
+"input_device" = { "reference" = 6, "type" = "str", "required" = false, "provenance" = "ssp_secondary", "description" = "入力デバイス（touch/pen/eraser/mouse）。" }
+
+[entry."OnMouseEnter"]
+"kind" = "event"
+"category" = "mouse"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ssp_secondary"
+"description" = "マウスが当たり判定に入った際に発生。"
+[entry."OnMouseEnter".field]
+"cursor_x" = { "reference" = 0, "type" = "i32", "required" = false, "provenance" = "ssp_secondary", "description" = "マウスカーソルの x 座標（ローカル座標）。" }
+"cursor_y" = { "reference" = 1, "type" = "i32", "required" = false, "provenance" = "ssp_secondary", "description" = "マウスカーソルの y 座標（ローカル座標）。" }
+"wheel_delta" = { "reference" = 2, "type" = "i32", "required" = false, "provenance" = "ssp_secondary", "description" = "常に 0。OnMouseWheel/OnMouseMove と Reference 位置を整合させるため wheel_delta 命名（値は常に 0）。", "silence_ref" = ["sr_meaning_mouseclick_wheel_delta"] }
+"char_scope" = { "reference" = 3, "type" = "i32", "required" = false, "provenance" = "ssp_secondary", "description" = "本体は 0、相方は 1。SSP/CROW では 2 以降もある。" }
+"collision_area_name" = { "reference" = 4, "type" = "str", "required" = false, "provenance" = "ssp_secondary", "description" = "当たり判定の識別子。" }
+"always_zero" = { "reference" = 5, "type" = "i32", "required" = false, "provenance" = "ssp_secondary", "description" = "常に 0。" }
+"input_device" = { "reference" = 6, "type" = "str", "required" = false, "provenance" = "ssp_secondary", "description" = "入力デバイス（touch/pen/eraser/mouse）。" }
+
+[entry."OnMouseLeave"]
+"kind" = "event"
+"category" = "mouse"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ssp_secondary"
+"description" = "マウスが当たり判定から出た際に発生。"
+[entry."OnMouseLeave".field]
+"cursor_x" = { "reference" = 0, "type" = "i32", "required" = false, "provenance" = "ssp_secondary", "description" = "マウスカーソルの x 座標（ローカル座標）。" }
+"cursor_y" = { "reference" = 1, "type" = "i32", "required" = false, "provenance" = "ssp_secondary", "description" = "マウスカーソルの y 座標（ローカル座標）。" }
+"wheel_delta" = { "reference" = 2, "type" = "i32", "required" = false, "provenance" = "ssp_secondary", "description" = "常に 0。OnMouseWheel/OnMouseMove と Reference 位置を整合させるため wheel_delta 命名（値は常に 0）。", "silence_ref" = ["sr_meaning_mouseclick_wheel_delta"] }
+"char_scope" = { "reference" = 3, "type" = "i32", "required" = false, "provenance" = "ssp_secondary", "description" = "本体は 0、相方は 1。SSP/CROW では 2 以降もある。" }
+"collision_area_name" = { "reference" = 4, "type" = "str", "required" = false, "provenance" = "ssp_secondary", "description" = "当たり判定の識別子。" }
+"always_zero" = { "reference" = 5, "type" = "i32", "required" = false, "provenance" = "ssp_secondary", "description" = "常に 0。" }
+"input_device" = { "reference" = 6, "type" = "str", "required" = false, "provenance" = "ssp_secondary", "description" = "入力デバイス（touch/pen/eraser/mouse）。" }
+
+[entry."OnMouseDragStart"]
+"kind" = "event"
+"category" = "mouse"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ssp_secondary"
+"description" = "マウスをドラッグし始めた際に発生。パッシブモードでは抑制される。"
+[entry."OnMouseDragStart".field]
+"cursor_x" = { "reference" = 0, "type" = "i32", "required" = false, "provenance" = "ssp_secondary", "description" = "マウスカーソルの x 座標（ローカル座標）。" }
+"cursor_y" = { "reference" = 1, "type" = "i32", "required" = false, "provenance" = "ssp_secondary", "description" = "マウスカーソルの y 座標（ローカル座標）。" }
+"wheel_delta" = { "reference" = 2, "type" = "i32", "required" = false, "provenance" = "ssp_secondary", "description" = "マウスホイールの回転量および回転方向。" }
+"char_scope" = { "reference" = 3, "type" = "i32", "required" = false, "provenance" = "ssp_secondary", "description" = "本体は 0、相方は 1。SSP/CROW では 2 以降もある。" }
+"collision_area_name" = { "reference" = 4, "type" = "str", "required" = false, "provenance" = "ssp_secondary", "description" = "当たり判定の識別子。" }
+"button_kind" = { "reference" = 5, "type" = "str", "required" = false, "provenance" = "ssp_secondary", "description" = "左クリックは 0、右クリックは 1。" }
+"input_device" = { "reference" = 6, "type" = "str", "required" = false, "provenance" = "ssp_secondary", "description" = "入力デバイス（touch/pen/eraser/mouse）。" }
+
+[entry."OnMouseDragEnd"]
+"kind" = "event"
+"category" = "mouse"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ssp_secondary"
+"description" = "マウスをドラッグし終えた際に発生。パッシブモードでは抑制される。"
+[entry."OnMouseDragEnd".field]
+"cursor_x" = { "reference" = 0, "type" = "i32", "required" = false, "provenance" = "ssp_secondary", "description" = "マウスカーソルの x 座標（ローカル座標）。" }
+"cursor_y" = { "reference" = 1, "type" = "i32", "required" = false, "provenance" = "ssp_secondary", "description" = "マウスカーソルの y 座標（ローカル座標）。" }
+"wheel_delta" = { "reference" = 2, "type" = "i32", "required" = false, "provenance" = "ssp_secondary", "description" = "マウスホイールの回転量および回転方向。" }
+"char_scope" = { "reference" = 3, "type" = "i32", "required" = false, "provenance" = "ssp_secondary", "description" = "本体は 0、相方は 1。SSP/CROW では 2 以降もある。" }
+"collision_area_name" = { "reference" = 4, "type" = "str", "required" = false, "provenance" = "ssp_secondary", "description" = "当たり判定の識別子。" }
+"button_kind" = { "reference" = 5, "type" = "str", "required" = false, "provenance" = "ssp_secondary", "description" = "左クリックは 0、右クリックは 1。" }
+"input_device" = { "reference" = 6, "type" = "str", "required" = false, "provenance" = "ssp_secondary", "description" = "入力デバイス（touch/pen/eraser/mouse）。" }
+
+[entry."OnMouseHover"]
+"kind" = "event"
+"category" = "mouse"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ssp_secondary"
+"description" = "マウスが静止している際に発生。"
+[entry."OnMouseHover".field]
+"cursor_x" = { "reference" = 0, "type" = "i32", "required" = false, "provenance" = "ssp_secondary", "description" = "マウスカーソルの x 座標（ローカル座標）。" }
+"cursor_y" = { "reference" = 1, "type" = "i32", "required" = false, "provenance" = "ssp_secondary", "description" = "マウスカーソルの y 座標（ローカル座標）。" }
+"wheel_delta" = { "reference" = 2, "type" = "i32", "required" = false, "provenance" = "ssp_secondary", "description" = "常に 0。OnMouseWheel/OnMouseMove と Reference 位置を整合させるため wheel_delta 命名（値は常に 0）。", "silence_ref" = ["sr_meaning_mouseclick_wheel_delta"] }
+"char_scope" = { "reference" = 3, "type" = "i32", "required" = false, "provenance" = "ssp_secondary", "description" = "本体は 0、相方は 1。SSP/CROW では 2 以降もある。" }
+"collision_area_name" = { "reference" = 4, "type" = "str", "required" = false, "provenance" = "ssp_secondary", "description" = "当たり判定の識別子。" }
+"always_zero" = { "reference" = 5, "type" = "i32", "required" = false, "provenance" = "ssp_secondary", "description" = "常に 0。" }
+"input_device" = { "reference" = 6, "type" = "str", "required" = false, "provenance" = "ssp_secondary", "description" = "入力デバイス（touch/pen/eraser/mouse）。" }
+
+[entry."OnMouseGesture"]
+"kind" = "event"
+"category" = "mouse"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ssp_secondary"
+"description" = "マウスを右ドラッグまたはホイールをドラッグした際に発生。Reference レイアウトは他マウスイベントと異なる。タッチパネル環境で up/down に無応答時は OnMouseWheel が代替発生する。"
+[entry."OnMouseGesture".field]
+"char_scope" = { "reference" = 0, "type" = "i32", "required" = false, "provenance" = "ssp_secondary", "description" = "本体は 0、相方は 1。SSP/CROW では 2 以降もある。" }
+"cursor_xy" = { "reference" = 1, "type" = "str", "required" = false, "provenance" = "ssp_secondary", "description" = "マウスカーソルの xy 座標（バイト値 1 区切り）。" }
+"collision_area_name" = { "reference" = 2, "type" = "str", "required" = false, "provenance" = "ssp_secondary", "description" = "当たり判定の識別子。" }
+"drag_start_xy" = { "reference" = 3, "type" = "str", "required" = false, "provenance" = "ssp_secondary", "description" = "右ドラッグを開始したマウスカーソルの xy 座標（バイト値 1 区切り）。" }
+"drag_start_collision_area_name" = { "reference" = 4, "type" = "str", "required" = false, "provenance" = "ssp_secondary", "description" = "右ドラッグを開始した当たり判定の識別子。" }
+"gesture_direction" = { "reference" = 5, "type" = "str", "required" = false, "provenance" = "ssp_secondary", "description" = "ジェスチャー方向（left_up/up/right_up/left/right/left_down/down/right_down/circle.cw/circle.ccw/end）。" }
+"gesture_angle" = { "reference" = 6, "type" = "i32", "required" = false, "provenance" = "ssp_secondary", "description" = "ジェスチャー移動角度。右 0 度から反時計回りに 360 度。" }

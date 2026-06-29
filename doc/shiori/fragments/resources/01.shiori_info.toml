@@ -1,0 +1,43 @@
+# resource / category=shiori_info — areka-P0-shiori-protocol-split category fragment.
+# 5 keyed entry table(s), source order preserved. Category-pure; entry-boundary only.
+# Generated deterministically; do not hand-edit. Merge order: _manifest.toml (task 2.4) is authoritative.
+
+[entry."version"]
+"kind" = "resource"
+"category" = "shiori_info"
+"dispatch" = "get"
+"response" = "text"
+"provenance" = "ukadoc"
+"description" = "SHIORIのロード直後に発生。 SHIORIはこのイベントに対し、SHIORIのバージョン情報を返却する（ SHIORIプロトコルのバージョンではない ）。"
+
+[entry."craftman"]
+"kind" = "resource"
+"category" = "shiori_info"
+"dispatch" = "get"
+"response" = "text"
+"provenance" = "ukadoc"
+"description" = "SHIORIのロード直後に発生。 SHIORIはこのイベントに対し、SHIORIの作者名を返却する。使用できるのは7ビット文字のみ。"
+
+[entry."craftmanw"]
+"kind" = "resource"
+"category" = "shiori_info"
+"dispatch" = "get"
+"response" = "text"
+"provenance" = "ukadoc"
+"description" = "SHIORIのロード直後に発生。 SHIORIはこのイベントに対し、SHIORIの作者名を返却する。7ビット文字に加え8ビット文字およびデフォルトエンコーディングのマルチバイト文字も使用可能。"
+
+[entry."name"]
+"kind" = "resource"
+"category" = "shiori_info"
+"dispatch" = "get"
+"response" = "text"
+"provenance" = "ukadoc"
+"description" = "SHIORIのロード直後に発生。 SHIORIはこのイベントに対し、SHIORIの名前を返却する（ ゴースト名ではない ）。使用できるのは7ビット文字のみ。"
+
+[entry."log_path"]
+"kind" = "resource"
+"category" = "shiori_info"
+"dispatch" = "get"
+"response" = "text"
+"provenance" = "ukadoc"
+"description" = "開発者用パレットの「開く」を操作した際に発生。SHIORIログファイルまでのフルパスを返す。 SHIORI Event : enable_log も参照。"

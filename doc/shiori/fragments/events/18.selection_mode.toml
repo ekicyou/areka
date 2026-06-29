@@ -1,0 +1,61 @@
+# event / category=selection_mode — areka-P0-shiori-protocol-split category fragment.
+# 5 keyed entry table(s), source order preserved. Category-pure; entry-boundary only.
+# Generated deterministically; do not hand-edit. Merge order: _manifest.toml (task 2.4) is authoritative.
+
+[entry."OnSelectModeBegin"]
+"kind" = "event"
+"category" = "selection_mode"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ssp_secondary"
+"description" = "\\![enter,selectrect] 実行後に矩形選択モードに入った際に発生。"
+[entry."OnSelectModeBegin".field]
+"char_scope" = { "reference" = 0, "type" = "i32", "required" = false, "provenance" = "ssp_secondary", "description" = "本体は 0、相方は 1。SSP/CROW では 2 以降もある。" }
+"select_mode" = { "reference" = 1, "type" = "str", "required" = false, "provenance" = "ssp_secondary", "description" = "選択モード。今のところ rect のみ。" }
+
+[entry."OnSelectModeCancel"]
+"kind" = "event"
+"category" = "selection_mode"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ssp_secondary"
+"description" = "\\![leave,selectrect] 実行後に未選択または空の選択領域だった場合に発生。"
+[entry."OnSelectModeCancel".field]
+"char_scope" = { "reference" = 0, "type" = "i32", "required" = false, "provenance" = "ssp_secondary", "description" = "本体は 0、相方は 1。SSP/CROW では 2 以降もある。" }
+"select_mode" = { "reference" = 1, "type" = "str", "required" = false, "provenance" = "ssp_secondary", "description" = "選択モード。今のところ rect のみ。" }
+
+[entry."OnSelectModeComplete"]
+"kind" = "event"
+"category" = "selection_mode"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ssp_secondary"
+"description" = "\\![leave,selectrect] 実行後に矩形選択モードが解除された際に発生。"
+[entry."OnSelectModeComplete".field]
+"char_scope" = { "reference" = 0, "type" = "i32", "required" = false, "provenance" = "ssp_secondary", "description" = "本体は 0、相方は 1。SSP/CROW では 2 以降もある。" }
+"select_mode" = { "reference" = 1, "type" = "str", "required" = false, "provenance" = "ssp_secondary", "description" = "選択モード。今のところ rect のみ。" }
+"select_rect" = { "reference" = 2, "type" = "str", "required" = false, "provenance" = "ssp_secondary", "description" = "選択結果（長方形枠）。カンマ区切りで左,上,右,下の座標。" }
+
+[entry."OnSelectModeMouseDown"]
+"kind" = "event"
+"category" = "selection_mode"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ssp_secondary"
+"description" = "矩形選択モード中にマウスボタンが押された際に発生。"
+[entry."OnSelectModeMouseDown".field]
+"char_scope" = { "reference" = 0, "type" = "i32", "required" = false, "provenance" = "ssp_secondary", "description" = "本体は 0、相方は 1。SSP/CROW では 2 以降もある。" }
+"select_mode" = { "reference" = 1, "type" = "str", "required" = false, "provenance" = "ssp_secondary", "description" = "選択モード。今のところ rect のみ。" }
+"mouse_position" = { "reference" = 2, "type" = "str", "required" = false, "provenance" = "ssp_secondary", "description" = "マウスの位置。カンマ区切りで X(横),Y(縦) 座標。" }
+
+[entry."OnSelectModeMouseUp"]
+"kind" = "event"
+"category" = "selection_mode"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ssp_secondary"
+"description" = "矩形選択モード中にマウスボタンが離された際に発生。"
+[entry."OnSelectModeMouseUp".field]
+"char_scope" = { "reference" = 0, "type" = "i32", "required" = false, "provenance" = "ssp_secondary", "description" = "本体は 0、相方は 1。SSP/CROW では 2 以降もある。" }
+"select_mode" = { "reference" = 1, "type" = "str", "required" = false, "provenance" = "ssp_secondary", "description" = "選択モード。今のところ rect のみ。" }
+"mouse_position" = { "reference" = 2, "type" = "str", "required" = false, "provenance" = "ssp_secondary", "description" = "マウスの位置。カンマ区切りで X(横),Y(縦) 座標。" }

@@ -1,0 +1,81 @@
+# event / category=install — areka-P0-shiori-protocol-split category fragment.
+# 7 keyed entry table(s), source order preserved. Category-pure; entry-boundary only.
+# Generated deterministically; do not hand-edit. Merge order: _manifest.toml (task 2.4) is authoritative.
+
+[entry."OnInstallBegin"]
+"kind" = "event"
+"category" = "install"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ukadoc"
+"description" = "アーカイブのインストール開始の際に発生。"
+
+[entry."OnInstallComplete"]
+"kind" = "event"
+"category" = "install"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ukadoc"
+"description" = "インストールが正常終了した際に発生。"
+[entry."OnInstallComplete".field]
+"install_identifier" = { "reference" = 0, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "インストールした物の※識別子。" }
+"install_name" = { "reference" = 1, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "インストールした物の名前（install.txtのname指定）。" }
+"install_name2" = { "reference" = 2, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "インストールした物の名前2（ghost with balloonなどの場合のballoon側の名前）。" }
+
+[entry."OnInstallCompleteEx"]
+"kind" = "event"
+"category" = "install"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ukadoc"
+"description" = "インストールが正常終了した際に発生。 このイベントが無かった場合OnInstallCompleteが発生。"
+[entry."OnInstallCompleteEx".field]
+"install_identifier" = { "reference" = 0, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "インストールした物の※識別子。複数の場合はバイト値1区切り。" }
+"install_name" = { "reference" = 1, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "インストールした物の名前。複数の場合はバイト値1区切り。" }
+"install_path" = { "reference" = 2, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "インストールした場所。複数の場合はバイト値1区切り。" }
+
+[entry."OnInstallCompleteAll"]
+"kind" = "event"
+"category" = "install"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ukadoc"
+"description" = "複数のnarをD&Dした時などに、インストールがすべて正常終了した際に、OnInstallComplete/同Exの後に、最後に発生。"
+[entry."OnInstallCompleteAll".field]
+"install_identifier" = { "reference" = 0, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "インストールした物の※識別子。複数の場合はバイト値1区切り。" }
+"install_name" = { "reference" = 1, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "インストールした物の名前。複数の場合はバイト値1区切り。" }
+"install_path" = { "reference" = 2, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "インストールした場所。複数の場合はバイト値1区切り。" }
+
+[entry."OnInstallFailure"]
+"kind" = "event"
+"category" = "install"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ukadoc"
+"description" = "インストールに失敗した際に発生。"
+[entry."OnInstallFailure".field]
+"failure_reason" = { "reference" = 0, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "※失敗理由。" }
+
+[entry."OnInstallRefuse"]
+"kind" = "event"
+"category" = "install"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ukadoc"
+"description" = "インストールするファイルが他のゴーストを指名していた際に発生。"
+[entry."OnInstallRefuse".field]
+"accept_ghost_internal_name" = { "reference" = 0, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "指定されたゴーストの本体側名（install.txtのaccept指定、つまり本来渡すべき相手）。" }
+"install_identifier" = { "reference" = 1, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "インストールしようとした物の※識別子。" }
+"install_name" = { "reference" = 2, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "インストールしようとした物の名前。" }
+
+[entry."OnInstallReroute"]
+"kind" = "event"
+"category" = "install"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ukadoc"
+"description" = "インストールするファイルが他のゴーストを指名していた際、かつ、指名対象ゴーストが一緒に起動していた時に発生。以降のインストールイベントは指名対象ゴースト側に発生する。"
+[entry."OnInstallReroute".field]
+"accept_ghost_internal_name" = { "reference" = 0, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "指定されたゴーストの本体側名（install.txtのaccept指定、つまり本来渡すべき相手）。" }
+"install_identifier" = { "reference" = 1, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "インストールした物の※識別子。" }
+"install_name" = { "reference" = 2, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "インストールした物の名前。" }

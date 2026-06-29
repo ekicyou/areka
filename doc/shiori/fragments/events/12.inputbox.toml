@@ -1,0 +1,95 @@
+# event / category=inputbox — areka-P0-shiori-protocol-split category fragment.
+# 8 keyed entry table(s), source order preserved. Category-pure; entry-boundary only.
+# Generated deterministically; do not hand-edit. Merge order: _manifest.toml (task 2.4) is authoritative.
+
+[entry."OnTeachStart"]
+"kind" = "event"
+"category" = "inputbox"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ukadoc"
+"description" = "TeachBox がオープンした際に発生。"
+
+[entry."OnTeachInputCancel"]
+"kind" = "event"
+"category" = "inputbox"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ukadoc"
+"description" = "TeachBox が閉じられた際に発生。"
+"silence_ref" = ["sr_response_inputcancel_silent"]
+[entry."OnTeachInputCancel".field]
+"cancel_placeholder" = { "reference" = 0, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "空文字列。OnUserInputCancel と Reference 番号をあわせるための空席。" }
+"cancel_reason" = { "reference" = 1, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "閉じられた場合は cancel。" }
+
+[entry."OnTeach"]
+"kind" = "event"
+"category" = "inputbox"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ukadoc"
+"description" = "TeachBox からの入力があった際に発生。"
+[entry."OnTeach".field]
+"input_history" = { "reference" = 0, "reference_variadic" = true, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "入力された言葉の履歴。Reference0 が 1 回目～最新の入力が末尾（n 回目の入力が Reference[n-1]）。" }
+
+[entry."OnCommunicate"]
+"kind" = "event"
+"category" = "inputbox"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ukadoc"
+"description" = "CommunicateBox または他ゴーストからスクリプトを渡された際に発生。"
+[entry."OnCommunicate".field]
+"sender_name" = { "reference" = 0, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "Box からは user、ゴーストからはゴーストの本体側名。" }
+"script_content" = { "reference" = 1, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "スクリプトの内容。" }
+"extra_info" = { "reference" = 2, "reference_variadic" = true, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "拡張情報。" }
+
+[entry."OnCommunicateInputCancel"]
+"kind" = "event"
+"category" = "inputbox"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ukadoc"
+"description" = "CommunicateBox が閉じられた際に発生。"
+"silence_ref" = ["sr_response_inputcancel_silent"]
+[entry."OnCommunicateInputCancel".field]
+"cancel_placeholder" = { "reference" = 0, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "空文字列。OnUserInputCancel と Reference 番号をあわせるための空席。" }
+"cancel_reason" = { "reference" = 1, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "閉じられた場合は cancel。" }
+
+[entry."OnUserInput"]
+"kind" = "event"
+"category" = "inputbox"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ukadoc"
+"description" = "InputBox に入力され決定された際に発生。"
+[entry."OnUserInput".field]
+"input_box_id" = { "reference" = 0, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "InputBox の ID。" }
+"input_value" = { "reference" = 1, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "入力された内容。" }
+"input_supplement" = { "reference" = 2, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "入力内容補足（sliderinput のみ最小,最大。ほかは空欄）。" }
+"extra_reference" = { "reference" = 3, "reference_variadic" = true, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "--reference= で指定した追加情報。" }
+
+[entry."OnUserInputCancel"]
+"kind" = "event"
+"category" = "inputbox"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ukadoc"
+"description" = "InputBox が閉じられた際に発生。タイムアウトかつ無応答時は互換性確保のため OnUserInput Reference1=timeout が送られる。"
+"silence_ref" = ["sr_response_inputcancel_silent"]
+[entry."OnUserInputCancel".field]
+"input_event_id" = { "reference" = 0, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "入力のイベント ID。" }
+"cancel_reason" = { "reference" = 1, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "タイムアウトした場合は timeout、閉じられた場合は close。" }
+"input_supplement" = { "reference" = 2, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "入力内容補足（sliderinput のみ最小,最大。ほかは空欄）。" }
+"extra_reference" = { "reference" = 3, "reference_variadic" = true, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "--reference= で指定した追加情報。" }
+
+[entry."inputbox.autocomplete"]
+"kind" = "event"
+"category" = "inputbox"
+"dispatch" = "get"
+"response" = "text"
+"provenance" = "ssp_secondary"
+"description" = "ボックス展開時に発生。バイト値 1 区切りでテキストのリストを返すと入力ボックスでオートコンプリートが動作する。"
+[entry."inputbox.autocomplete".field]
+"box_kind" = { "reference" = 0, "type" = "str", "required" = false, "provenance" = "ssp_secondary", "description" = "入力ボックスの種類。inputbox・teachbox・communicatebox のいずれか。" }
+"completion_event_id" = { "reference" = 1, "type" = "str", "required" = false, "provenance" = "ssp_secondary", "description" = "inputbox の場合のみ、入力完了時に起きるイベント名／識別子。" }

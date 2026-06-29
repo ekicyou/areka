@@ -1,0 +1,338 @@
+# event / category=lifecycle — areka-P0-shiori-protocol-split category fragment.
+# 29 keyed entry table(s), source order preserved. Category-pure; entry-boundary only.
+# Generated deterministically; do not hand-edit. Merge order: _manifest.toml (task 2.4) is authoritative.
+
+[entry."OnFirstBoot"]
+"kind" = "event"
+"category" = "lifecycle"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ukadoc"
+"description" = "初回起動した際に発生。SSP ではこのイベントに 204（無応答）の場合、続けて OnBoot が発生する。"
+[entry."OnFirstBoot".field]
+"vanish_count" = { "reference" = 0, "type" = "i32", "required" = false, "provenance" = "ukadoc", "description" = "vanish された回数。" }
+
+[entry."OnBoot"]
+"kind" = "event"
+"category" = "lifecycle"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ukadoc"
+"description" = "起動した際に発生。SSP では OnGhostChanged/OnGhostCalled/OnFirstBoot/OnVanished に 204 の場合に続けて発生する。"
+[entry."OnBoot".field]
+"shell_name" = { "reference" = 0, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "起動時のシェル名。" }
+"last_crash_halt" = { "reference" = 6, "type" = "str", "required" = false, "provenance" = "ssp_secondary", "description" = "MATERIA/SSP のみ。前回の処理中に落ちた時に halt。" }
+"last_crash_ghost_name" = { "reference" = 7, "type" = "str", "required" = false, "provenance" = "ssp_secondary", "description" = "MATERIA/SSP のみ。前回の処理中に落ちたゴースト名。" }
+
+[entry."OnClose"]
+"kind" = "event"
+"category" = "lifecycle"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ukadoc"
+"description" = "終了が指示された際に発生。SSP では OnGhostChanging/OnCloseAll に 204 の場合に続けて発生する。"
+[entry."OnClose".field]
+"close_reason" = { "reference" = 0, "type" = "str", "required" = false, "provenance" = "ssp_secondary", "description" = "SSP のみ。終了理由。ユーザー終了で user、シャットダウンで system。" }
+"close_menu_scope" = { "reference" = 1, "type" = "i32", "required" = false, "provenance" = "ssp_secondary", "description" = "SSP のみ。終了操作したメニューが属するキャラのスコープ番号（popupmenu.type 影響）。" }
+"close_window_scope" = { "reference" = 2, "type" = "i32", "required" = false, "provenance" = "ssp_secondary", "description" = "SSP のみ。終了操作したウインドウのキャラのスコープ番号（popupmenu.type 非影響）。" }
+
+[entry."OnCloseAll"]
+"kind" = "event"
+"category" = "lifecycle"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ukadoc"
+"description" = "ベースウェア自体が終了する際に発生（すべて終了・唯一起動中ゴーストの終了・OS シャットダウン時）。"
+[entry."OnCloseAll".field]
+"close_reason" = { "reference" = 0, "type" = "str", "required" = false, "provenance" = "ssp_secondary", "description" = "SSP のみ。終了理由。ユーザー終了で user、シャットダウンで system。" }
+"close_menu_scope" = { "reference" = 1, "type" = "i32", "required" = false, "provenance" = "ssp_secondary", "description" = "SSP のみ。終了操作したメニューが属するキャラのスコープ番号（popupmenu.type 影響）。" }
+"close_window_scope" = { "reference" = 2, "type" = "i32", "required" = false, "provenance" = "ssp_secondary", "description" = "SSP のみ。終了操作したウインドウのキャラのスコープ番号（popupmenu.type 非影響）。" }
+
+[entry."OnGhostChanged"]
+"kind" = "event"
+"category" = "lifecycle"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ukadoc"
+"description" = "他のゴーストから自ゴーストに切り替えられた際に発生。204 の場合は続けて OnBoot が発生する。"
+[entry."OnGhostChanged".field]
+"prev_ghost_internal_name" = { "reference" = 0, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "直前のゴーストの本体側の名前。" }
+"prev_ghost_change_script" = { "reference" = 1, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "直前のゴーストの切り替え時のスクリプト。" }
+"prev_ghost_name" = { "reference" = 2, "type" = "str", "required" = false, "provenance" = "ssp_secondary", "description" = "直前のゴーストの名前。SSP のみ。" }
+"prev_ghost_path" = { "reference" = 3, "type" = "str", "required" = false, "provenance" = "ssp_secondary", "description" = "直前のゴーストのパス（ファイルの場所）。SSP のみ。" }
+"new_shell_name" = { "reference" = 7, "type" = "str", "required" = false, "provenance" = "ssp_secondary", "description" = "切り替わったゴーストのシェル名。SSP のみ。" }
+
+[entry."OnGhostChanging"]
+"kind" = "event"
+"category" = "lifecycle"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ukadoc"
+"description" = "他のゴーストへの切り替え指示があった際に発生。204 の場合は続けて OnClose が発生する。"
+[entry."OnGhostChanging".field]
+"new_ghost_internal_name" = { "reference" = 0, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "切り替わるゴーストの本体側の名前。" }
+"change_trigger" = { "reference" = 1, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "手動で manual、システムによる切り替えで automatic。" }
+"new_ghost_name" = { "reference" = 2, "type" = "str", "required" = false, "provenance" = "ssp_secondary", "description" = "切り替わるゴーストの名前。SSP のみ。" }
+"new_ghost_path" = { "reference" = 3, "type" = "str", "required" = false, "provenance" = "ssp_secondary", "description" = "切り替わるゴーストのパス。SSP のみ。" }
+
+[entry."OnGhostCalled"]
+"kind" = "event"
+"category" = "lifecycle"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ukadoc"
+"description" = "他のゴーストから呼び出された際に発生。204 の場合は続けて OnBoot が発生する。"
+[entry."OnGhostCalled".field]
+"caller_ghost_internal_name" = { "reference" = 0, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "呼び出したゴーストの本体側の名前。" }
+"caller_call_script" = { "reference" = 1, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "呼び出したゴーストの呼び出し時のスクリプト。" }
+"caller_ghost_name" = { "reference" = 2, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "呼び出したゴーストの名前。" }
+"caller_ghost_path" = { "reference" = 3, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "呼び出したゴーストのパス。" }
+"called_shell_name" = { "reference" = 7, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "呼び出されたゴーストのシェル名。" }
+
+[entry."OnGhostCalling"]
+"kind" = "event"
+"category" = "lifecycle"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ukadoc"
+"description" = "他のゴーストの呼び出しが指示された際に発生。"
+[entry."OnGhostCalling".field]
+"callee_ghost_internal_name" = { "reference" = 0, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "呼び出すゴーストの本体側の名前。" }
+"call_trigger" = { "reference" = 1, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "手動で manual、システムによる切り替えで automatic。" }
+"callee_ghost_name" = { "reference" = 2, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "呼び出すゴーストの名前。" }
+"callee_ghost_path" = { "reference" = 3, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "呼び出すゴーストのパス。" }
+
+[entry."OnGhostCallComplete"]
+"kind" = "event"
+"category" = "lifecycle"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ukadoc"
+"description" = "他のゴーストを呼び出し、そのゴーストが起動スクリプトを完了後に発生。"
+[entry."OnGhostCallComplete".field]
+"caller_ghost_internal_name" = { "reference" = 0, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "呼び出したゴーストの本体側の名前。" }
+"caller_boot_script" = { "reference" = 1, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "呼び出したゴーストの起動時のスクリプト。" }
+"caller_ghost_name" = { "reference" = 2, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "呼び出したゴーストの名前。" }
+"called_shell_name" = { "reference" = 7, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "呼び出したゴーストのシェル名。" }
+
+[entry."OnOtherGhostBooted"]
+"kind" = "event"
+"category" = "lifecycle"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ukadoc"
+"description" = "他のゴーストに呼び出された別ゴーストが起動した際に、無関係なゴーストに発生。"
+[entry."OnOtherGhostBooted".field]
+"booted_ghost_internal_name" = { "reference" = 0, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "起動したゴーストの本体側名。" }
+"booted_ghost_boot_script" = { "reference" = 1, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "起動したゴーストの起動時のスクリプト。" }
+"booted_ghost_name" = { "reference" = 2, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "起動したゴースト名。" }
+"booted_shell_name" = { "reference" = 7, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "起動したゴーストのシェル名。" }
+
+[entry."OnOtherGhostChanged"]
+"kind" = "event"
+"category" = "lifecycle"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ukadoc"
+"description" = "他のゴースト間で切り替わった際に発生。"
+[entry."OnOtherGhostChanged".field]
+"prev_ghost_internal_name" = { "reference" = 0, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "直前のゴーストの本体側の名前。" }
+"new_ghost_internal_name" = { "reference" = 1, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "切り替わったゴーストの本体側の名前。" }
+"prev_ghost_change_script" = { "reference" = 2, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "直前のゴーストの切り替え時のスクリプト。" }
+"new_ghost_change_script" = { "reference" = 3, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "切り替わったゴーストの切り替わり時のスクリプト。" }
+"prev_ghost_name" = { "reference" = 4, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "直前のゴースト名。" }
+"new_ghost_name" = { "reference" = 5, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "切り替わったゴースト名。" }
+"prev_shell_name" = { "reference" = 14, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "直前のゴーストのシェル名。" }
+"new_shell_name" = { "reference" = 15, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "切り替わったゴーストのシェル名。" }
+
+[entry."OnOtherGhostClosed"]
+"kind" = "event"
+"category" = "lifecycle"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ukadoc"
+"description" = "複数起動中、他のゴーストが終了された際に発生。"
+[entry."OnOtherGhostClosed".field]
+"closed_ghost_internal_name" = { "reference" = 0, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "終了したゴーストの本体側の名前。" }
+"closed_ghost_last_script" = { "reference" = 1, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "終了したゴーストの最後のスクリプト。" }
+"closed_ghost_name" = { "reference" = 2, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "終了したゴースト名。" }
+"closed_shell_name" = { "reference" = 7, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "終了したゴーストのシェル名。" }
+
+[entry."OnShellChanged"]
+"kind" = "event"
+"category" = "lifecycle"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ukadoc"
+"description" = "他のシェルから切り替わった際に発生。"
+[entry."OnShellChanged".field]
+"current_shell_name" = { "reference" = 0, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "現在のシェル名。" }
+"current_ghost_name" = { "reference" = 1, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "CROW では Reference0 と同じ、SSP では現在のゴースト名。" }
+"current_shell_path" = { "reference" = 2, "type" = "str", "required" = false, "provenance" = "ssp_secondary", "description" = "SSP のみ。現在のシェルのパス。" }
+
+[entry."OnShellChanging"]
+"kind" = "event"
+"category" = "lifecycle"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ukadoc"
+"description" = "他のシェルへ切り替えた際に発生。"
+[entry."OnShellChanging".field]
+"new_shell_name" = { "reference" = 0, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "切り替わるシェル名。" }
+"prev_shell_name" = { "reference" = 1, "type" = "str", "required" = false, "provenance" = "ssp_secondary", "description" = "SSP のみ。切り替わる前（現在）のシェル名。" }
+"new_shell_path" = { "reference" = 2, "type" = "str", "required" = false, "provenance" = "ssp_secondary", "description" = "SSP のみ。切り替わるシェルのパス。" }
+
+[entry."OnDressupChanged"]
+"kind" = "event"
+"category" = "lifecycle"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ukadoc"
+"description" = "着せ替えが切替えられた際に発生。複数回通知される場合は最後のみ [GET] でそれ以外は [NOTIFY]。"
+"silence_ref" = ["sr_dispatch_dressup_changed"]
+[entry."OnDressupChanged".field]
+"character_id" = { "reference" = 0, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "着せ替え対象のキャラクター ID。" }
+"part_name" = { "reference" = 1, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "パーツの名称。" }
+"part_enabled" = { "reference" = 2, "type" = "bool", "required" = false, "provenance" = "ukadoc", "description" = "有効になった時に 1、無効になった時に 0。" }
+"part_category" = { "reference" = 3, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "パーツのカテゴリ名。" }
+"change_source" = { "reference" = 4, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "スクリプト実行で script、メニュー実行で user。[2.5.90～]" }
+
+[entry."OnBalloonChange"]
+"kind" = "event"
+"category" = "lifecycle"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ukadoc"
+"description" = "他のバルーンから切り替わった際に発生。"
+[entry."OnBalloonChange".field]
+"new_balloon_name" = { "reference" = 0, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "切り替わったバルーン名。" }
+"new_balloon_path" = { "reference" = 1, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "切り替わったバルーンのパス。" }
+
+[entry."OnWindowStateRestore"]
+"kind" = "event"
+"category" = "lifecycle"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ukadoc"
+"description" = "最小化が解除された際に発生。"
+[entry."OnWindowStateRestore".field]
+"restore_reason" = { "reference" = 0, "type" = "str", "required" = false, "provenance" = "ssp_secondary", "description" = "SSP のみ。最小化された理由（system/script/sakuraapi/user）。" }
+
+[entry."OnWindowStateMinimize"]
+"kind" = "event"
+"category" = "lifecycle"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ukadoc"
+"description" = "最小化が指示された際に発生。SSP のみ設定で喋らせることが可能。"
+[entry."OnWindowStateMinimize".field]
+"minimize_reason" = { "reference" = 0, "type" = "str", "required" = false, "provenance" = "ssp_secondary", "description" = "SSP のみ。最小化された理由（system/script/sakuraapi/user）。" }
+
+[entry."OnFullScreenAppMinimize"]
+"kind" = "event"
+"category" = "lifecycle"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ukadoc"
+"description" = "全画面表示アプリ起動に対する最小化の際に発生。OnWindowStateMinimize を上書きする。"
+[entry."OnFullScreenAppMinimize".field]
+"minimize_reason" = { "reference" = 0, "type" = "str", "required" = false, "provenance" = "ssp_secondary", "description" = "SSP のみ。最小化された理由。常に fullscreen。" }
+
+[entry."OnFullScreenAppRestore"]
+"kind" = "event"
+"category" = "lifecycle"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ukadoc"
+"description" = "全画面表示アプリ終了に対する最小化復帰の際に発生。OnWindowStateRestore を上書きする。"
+[entry."OnFullScreenAppRestore".field]
+"restore_reason" = { "reference" = 0, "type" = "str", "required" = false, "provenance" = "ssp_secondary", "description" = "SSP のみ。最小化された理由。常に fullscreen。" }
+
+[entry."OnVirtualDesktopChanged"]
+"kind" = "event"
+"category" = "lifecycle"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ukadoc"
+"description" = "仮想デスクトップが切り替わった際に発生。現状 Windows 10 上のみ有効（実験的機能）。"
+[entry."OnVirtualDesktopChanged".field]
+"desktop_visibility" = { "reference" = 0, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "current/hidden/minimize のいずれか（仮想デスクトップ表示状態）。" }
+"virtual_desktop_id" = { "reference" = 1, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "現在の仮想デスクトップ ID。" }
+
+[entry."OnCacheSuspend"]
+"kind" = "event"
+"category" = "lifecycle"
+"dispatch" = "notify"
+"response" = "none"
+"provenance" = "ukadoc"
+"description" = "ゴーストキャッシュに入った際に発生。引数を持たない状態遷移通知。"
+"silence_ref" = ["sr_dispatch_cache_unmarked_notify"]
+
+[entry."OnCacheRestore"]
+"kind" = "event"
+"category" = "lifecycle"
+"dispatch" = "notify"
+"response" = "none"
+"provenance" = "ukadoc"
+"description" = "ゴーストキャッシュから出た際に発生。引数を持たない状態遷移通知。"
+"silence_ref" = ["sr_dispatch_cache_unmarked_notify"]
+
+[entry."OnInitialize"]
+"kind" = "event"
+"category" = "lifecycle"
+"dispatch" = "notify"
+"response" = "none"
+"provenance" = "ukadoc"
+"description" = "起動した際に発生。[NOTIFY] 通知のみで応答を期待しない。"
+[entry."OnInitialize".field]
+"reload_flag" = { "reference" = 0, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "リロード時に reload、それ以外は空文字列または Reference0 自体が来ない。" }
+
+[entry."OnDestroy"]
+"kind" = "event"
+"category" = "lifecycle"
+"dispatch" = "notify"
+"response" = "none"
+"provenance" = "ukadoc"
+"description" = "終了が指示された際に発生。[NOTIFY] 通知のみで応答を期待しない。"
+[entry."OnDestroy".field]
+"reload_flag" = { "reference" = 0, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "リロード時に reload、それ以外は空文字列または Reference0 自体が来ない。" }
+
+[entry."OnSysResume"]
+"kind" = "event"
+"category" = "lifecycle"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ukadoc"
+"description" = "サスペンド（スリープ・休止状態）解除の際に発生。"
+[entry."OnSysResume".field]
+"resume_reason" = { "reference" = 0, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "解除理由。通常 normal、スケジュール自動解除で auto、バッテリー切れ非常停止で critical（Vista 以降廃止）。" }
+
+[entry."OnSysSuspend"]
+"kind" = "event"
+"category" = "lifecycle"
+"dispatch" = "notify"
+"response" = "none"
+"provenance" = "ukadoc"
+"description" = "サスペンド（スリープ・休止状態）開始の際に発生。[NOTIFY] 通知のみ。"
+
+[entry."OnBasewareUpdating"]
+"kind" = "event"
+"category" = "lifecycle"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ukadoc"
+"description" = "本体更新時、ダウンロード後ファイル更新を開始する前に発生。無反応時は OnCloseAll/OnClose の順に発生。"
+[entry."OnBasewareUpdating".field]
+"version_before" = { "reference" = 0, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "更新前のバージョン番号（例 2.3.58）。" }
+"file_version_before" = { "reference" = 1, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "更新前のエクスプローラ表示バージョン番号（例 2.3.58.3000）。" }
+
+[entry."OnBasewareUpdated"]
+"kind" = "event"
+"category" = "lifecycle"
+"dispatch" = "get"
+"response" = "sakura_script"
+"provenance" = "ukadoc"
+"description" = "本体更新終了後、ゴーストが起動する時に発生。無反応時は OnBoot が発生。"
+[entry."OnBasewareUpdated".field]
+"version_after" = { "reference" = 0, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "更新後のバージョン番号（例 2.3.59）。" }
+"file_version_after" = { "reference" = 1, "type" = "str", "required" = false, "provenance" = "ukadoc", "description" = "更新後のエクスプローラ表示バージョン番号（例 2.3.59.3000）。" }
