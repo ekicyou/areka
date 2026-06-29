@@ -14,10 +14,13 @@ use bevy_ecs::prelude::*;
 use windows::Win32::Foundation::*;
 use windows::Win32::UI::Controls::WM_MOUSELEAVE;
 use windows::Win32::UI::WindowsAndMessaging::*;
+use wintf_winmsg_executor::util::WindowMessage;
 
 use std::cell::RefCell;
 use std::rc::{Rc, Weak};
 use std::sync::OnceLock;
+
+use crate::ecs::world::EcsWorld;
 
 // SAFETY: `SendWeak` は `Weak<RefCell<EcsWorld>>` を保持する。`Weak<RefCell<_>>` は
 // `RefCell` が `!Sync`・`Rc`/`Weak` が `!Send + !Sync` のため自動では Send/Sync を
@@ -48,48 +51,107 @@ pub(super) fn try_get_ecs_world() -> Option<Rc<RefCell<crate::ecs::world::EcsWor
     ECS_WORLD.get().and_then(|weak| weak.0.upgrade())
 }
 
-/// ECS専用のウィンドウプロシージャ
+/// ECS専用のウィンドウプロシージャ（レガシー経路の薄いシム）
+///
+/// 統一シグネチャ移行（タスク 3.2）後、本関数は以下の薄いシムである:
+/// - `WM_NCCREATE` / `WM_NCDESTROY` はエンティティ確立／後始末のライフサイクル特例として
+///   `lifecycle` の現行シグネチャ `(hwnd, message, wparam, lparam)` ハンドラを直接呼ぶ
+///   （NCCREATE は entity 未解決、NCDESTROY は despawn + GWLP クリアを担う）。
+/// - それ以外は `get_entity_from_hwnd` + `try_get_ecs_world` で `entity`/`world` を自己解決し
+///   （どちらか `None` なら `DefWindowProcW` へ委譲）、`WindowMessage` を組んで
+///   ECS 層の純関数 `dispatch_window_message(&world, entity, &msg)` へ橋渡しする。
+///
+/// 振り分け表本体は `dispatch_window_message`（ECS 層）が単一の真実の源となり、新経路
+/// （`runtime::wndproc_bridge::make_wndproc`）と本レガシー経路が同一表を共有する。
+/// 実行時挙動は移行前の `ecs_wndproc` と同一。
 pub(crate) extern "system" fn ecs_wndproc(
     hwnd: HWND,
     message: u32,
     wparam: WPARAM,
     lparam: LPARAM,
 ) -> LRESULT {
-    let result = match message {
-        WM_NCCREATE => lifecycle::WM_NCCREATE(hwnd, message, wparam, lparam),
-        WM_NCDESTROY => lifecycle::WM_NCDESTROY(hwnd, message, wparam, lparam),
-        WM_ERASEBKGND => lifecycle::WM_ERASEBKGND(hwnd, message, wparam, lparam),
-        WM_PAINT => lifecycle::WM_PAINT(hwnd, message, wparam, lparam),
-        WM_CLOSE => lifecycle::WM_CLOSE(hwnd, message, wparam, lparam),
-        WM_WINDOWPOSCHANGED => window_pos::WM_WINDOWPOSCHANGED(hwnd, message, wparam, lparam),
-        WM_DISPLAYCHANGE => lifecycle::WM_DISPLAYCHANGE(hwnd, message, wparam, lparam),
-        WM_DPICHANGED => window_pos::WM_DPICHANGED(hwnd, message, wparam, lparam),
-        // マウスメッセージ
-        WM_NCHITTEST => mouse_move::WM_NCHITTEST(hwnd, message, wparam, lparam),
-        WM_MOUSEMOVE => mouse_move::WM_MOUSEMOVE(hwnd, message, wparam, lparam),
-        WM_MOUSELEAVE => mouse_move::WM_MOUSELEAVE(hwnd, message, wparam, lparam),
-        WM_LBUTTONDOWN => mouse_click::WM_LBUTTONDOWN(hwnd, message, wparam, lparam),
-        WM_LBUTTONUP => mouse_click::WM_LBUTTONUP(hwnd, message, wparam, lparam),
-        WM_RBUTTONDOWN => mouse_click::WM_RBUTTONDOWN(hwnd, message, wparam, lparam),
-        WM_RBUTTONUP => mouse_click::WM_RBUTTONUP(hwnd, message, wparam, lparam),
-        WM_MBUTTONDOWN => mouse_click::WM_MBUTTONDOWN(hwnd, message, wparam, lparam),
-        WM_MBUTTONUP => mouse_click::WM_MBUTTONUP(hwnd, message, wparam, lparam),
-        WM_XBUTTONDOWN => mouse_click::WM_XBUTTONDOWN(hwnd, message, wparam, lparam),
-        WM_XBUTTONUP => mouse_click::WM_XBUTTONUP(hwnd, message, wparam, lparam),
-        WM_LBUTTONDBLCLK => mouse_dblclick_wheel::WM_LBUTTONDBLCLK(hwnd, message, wparam, lparam),
-        WM_RBUTTONDBLCLK => mouse_dblclick_wheel::WM_RBUTTONDBLCLK(hwnd, message, wparam, lparam),
-        WM_MBUTTONDBLCLK => mouse_dblclick_wheel::WM_MBUTTONDBLCLK(hwnd, message, wparam, lparam),
-        WM_XBUTTONDBLCLK => mouse_dblclick_wheel::WM_XBUTTONDBLCLK(hwnd, message, wparam, lparam),
-        WM_MOUSEWHEEL => mouse_dblclick_wheel::WM_MOUSEWHEEL(hwnd, message, wparam, lparam),
-        WM_MOUSEHWHEEL => mouse_dblclick_wheel::WM_MOUSEHWHEEL(hwnd, message, wparam, lparam),
-        WM_KEYDOWN => keyboard::WM_KEYDOWN(hwnd, message, wparam, lparam),
-        WM_CANCELMODE => keyboard::WM_CANCELMODE(hwnd, message, wparam, lparam),
-        WM_ACTIVATE => keyboard::WM_ACTIVATE(hwnd, message, wparam, lparam),
-        WM_CAPTURECHANGED => keyboard::WM_CAPTURECHANGED(hwnd, message, wparam, lparam),
-        _ => None,
+    // ライフサイクル特例: entity 未解決（NCCREATE）／drop 駆動（NCDESTROY）のため直接呼ぶ。
+    match message {
+        WM_NCCREATE => {
+            return lifecycle::WM_NCCREATE(hwnd, message, wparam, lparam)
+                .unwrap_or_else(|| unsafe { DefWindowProcW(hwnd, message, wparam, lparam) });
+        }
+        WM_NCDESTROY => {
+            return lifecycle::WM_NCDESTROY(hwnd, message, wparam, lparam)
+                .unwrap_or_else(|| unsafe { DefWindowProcW(hwnd, message, wparam, lparam) });
+        }
+        _ => {}
+    }
+
+    // entity / world を自己解決（旧挙動: いずれか None なら DefWindowProcW 委譲）。
+    let Some(entity) = get_entity_from_hwnd(hwnd) else {
+        return unsafe { DefWindowProcW(hwnd, message, wparam, lparam) };
+    };
+    let Some(world) = try_get_ecs_world() else {
+        return unsafe { DefWindowProcW(hwnd, message, wparam, lparam) };
     };
 
-    result.unwrap_or_else(|| unsafe { DefWindowProcW(hwnd, message, wparam, lparam) })
+    let msg = WindowMessage {
+        hwnd,
+        msg: message,
+        wparam,
+        lparam,
+    };
+
+    dispatch_window_message(&world, entity, &msg)
+        .unwrap_or_else(|| unsafe { DefWindowProcW(hwnd, message, wparam, lparam) })
+}
+
+/// Windows メッセージを Entity 配送する純関数（要件 2.4・設計 EntityWndprocBridge）。
+///
+/// `world`/`entity` を引数で受け取り、旧 `ecs_wndproc` の自己解決
+/// （`try_get_ecs_world` ＋ `get_entity_from_hwnd`）を排する。各ハンドラへ統一シグネチャ
+/// `(world, entity, hwnd, wparam, lparam)` で配送する。`None` 返却時はライブラリ／レガシー
+/// 呼び出し側が `DefWindowProcW` へ委譲する。
+///
+/// 本表は旧 `ecs_wndproc` の振り分け表から `WM_NCCREATE`／`WM_NCDESTROY`
+/// （エンティティ確立／後始末のライフサイクル特例・タスク 4.1 所管）を除いたものである。
+/// 新経路（`runtime::wndproc_bridge`）とレガシー経路（`ecs_wndproc`）が本関数を共有する。
+pub(crate) fn dispatch_window_message(
+    world: &Rc<RefCell<EcsWorld>>,
+    entity: Entity,
+    msg: &WindowMessage,
+) -> Option<LRESULT> {
+    let hwnd = msg.hwnd;
+    let wparam = msg.wparam;
+    let lparam = msg.lparam;
+
+    match msg.msg {
+        WM_ERASEBKGND => lifecycle::WM_ERASEBKGND(world, entity, hwnd, wparam, lparam),
+        WM_PAINT => lifecycle::WM_PAINT(world, entity, hwnd, wparam, lparam),
+        WM_CLOSE => lifecycle::WM_CLOSE(world, entity, hwnd, wparam, lparam),
+        WM_WINDOWPOSCHANGED => window_pos::WM_WINDOWPOSCHANGED(world, entity, hwnd, wparam, lparam),
+        WM_DISPLAYCHANGE => lifecycle::WM_DISPLAYCHANGE(world, entity, hwnd, wparam, lparam),
+        WM_DPICHANGED => window_pos::WM_DPICHANGED(world, entity, hwnd, wparam, lparam),
+        // マウスメッセージ
+        WM_NCHITTEST => mouse_move::WM_NCHITTEST(world, entity, hwnd, wparam, lparam),
+        WM_MOUSEMOVE => mouse_move::WM_MOUSEMOVE(world, entity, hwnd, wparam, lparam),
+        WM_MOUSELEAVE => mouse_move::WM_MOUSELEAVE(world, entity, hwnd, wparam, lparam),
+        WM_LBUTTONDOWN => mouse_click::WM_LBUTTONDOWN(world, entity, hwnd, wparam, lparam),
+        WM_LBUTTONUP => mouse_click::WM_LBUTTONUP(world, entity, hwnd, wparam, lparam),
+        WM_RBUTTONDOWN => mouse_click::WM_RBUTTONDOWN(world, entity, hwnd, wparam, lparam),
+        WM_RBUTTONUP => mouse_click::WM_RBUTTONUP(world, entity, hwnd, wparam, lparam),
+        WM_MBUTTONDOWN => mouse_click::WM_MBUTTONDOWN(world, entity, hwnd, wparam, lparam),
+        WM_MBUTTONUP => mouse_click::WM_MBUTTONUP(world, entity, hwnd, wparam, lparam),
+        WM_XBUTTONDOWN => mouse_click::WM_XBUTTONDOWN(world, entity, hwnd, wparam, lparam),
+        WM_XBUTTONUP => mouse_click::WM_XBUTTONUP(world, entity, hwnd, wparam, lparam),
+        WM_LBUTTONDBLCLK => mouse_dblclick_wheel::WM_LBUTTONDBLCLK(world, entity, hwnd, wparam, lparam),
+        WM_RBUTTONDBLCLK => mouse_dblclick_wheel::WM_RBUTTONDBLCLK(world, entity, hwnd, wparam, lparam),
+        WM_MBUTTONDBLCLK => mouse_dblclick_wheel::WM_MBUTTONDBLCLK(world, entity, hwnd, wparam, lparam),
+        WM_XBUTTONDBLCLK => mouse_dblclick_wheel::WM_XBUTTONDBLCLK(world, entity, hwnd, wparam, lparam),
+        WM_MOUSEWHEEL => mouse_dblclick_wheel::WM_MOUSEWHEEL(world, entity, hwnd, wparam, lparam),
+        WM_MOUSEHWHEEL => mouse_dblclick_wheel::WM_MOUSEHWHEEL(world, entity, hwnd, wparam, lparam),
+        WM_KEYDOWN => keyboard::WM_KEYDOWN(world, entity, hwnd, wparam, lparam),
+        WM_CANCELMODE => keyboard::WM_CANCELMODE(world, entity, hwnd, wparam, lparam),
+        WM_ACTIVATE => keyboard::WM_ACTIVATE(world, entity, hwnd, wparam, lparam),
+        WM_CAPTURECHANGED => keyboard::WM_CAPTURECHANGED(world, entity, hwnd, wparam, lparam),
+        _ => None,
+    }
 }
 
 /// hwndからEntity IDを取得するヘルパー関数
@@ -98,5 +160,90 @@ pub(crate) fn get_entity_from_hwnd(hwnd: HWND) -> Option<Entity> {
     unsafe {
         let entity_bits = GetWindowLongPtrW(hwnd, GWLP_USERDATA);
         Entity::try_from_bits(entity_bits as u64)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::ecs::App;
+    use crate::ecs::world::EcsWorld;
+
+    /// テスト用 `WindowMessage` を組む（hwnd 等は配送に無関係なメッセージ向け）。
+    fn msg(message: u32) -> WindowMessage {
+        WindowMessage {
+            hwnd: HWND(std::ptr::null_mut()),
+            msg: message,
+            wparam: WPARAM(0),
+            lparam: LPARAM(0),
+        }
+    }
+
+    /// `dispatch_window_message` は代表メッセージ `WM_ERASEBKGND` を `Some(LRESULT(1))` に
+    /// ルーティングする（移行後も `lifecycle::WM_ERASEBKGND` の挙動が不変・要件 2.4）。
+    /// ヘッドレス: 実 HWND / メッセージループ不要。
+    #[test]
+    fn dispatch_routes_erasebkgnd_to_some_lresult_1() {
+        let world = Rc::new(RefCell::new(EcsWorld::new()));
+        let entity = world.borrow_mut().world_mut().spawn(()).id();
+
+        let ret = dispatch_window_message(&world, entity, &msg(WM_ERASEBKGND));
+        assert_eq!(
+            ret,
+            Some(LRESULT(1)),
+            "WM_ERASEBKGND は背景消去抑止の Some(LRESULT(1)) を返すべき"
+        );
+    }
+
+    /// `dispatch_window_message` は配送表に無いメッセージ（`WM_USER`）を `None` にする
+    /// （既定手続き委譲・要件 2.4）。
+    #[test]
+    fn dispatch_returns_none_for_unhandled_message() {
+        let world = Rc::new(RefCell::new(EcsWorld::new()));
+        let entity = world.borrow_mut().world_mut().spawn(()).id();
+
+        let ret = dispatch_window_message(&world, entity, &msg(WM_USER));
+        assert!(
+            ret.is_none(),
+            "配送表に無い WM_USER は None（DefWindowProcW 委譲）であるべき"
+        );
+    }
+
+    /// `dispatch_window_message` は `WM_DISPLAYCHANGE` を `lifecycle::WM_DISPLAYCHANGE` に
+    /// 配送し、`App` リソースの display change フラグを立てる（業務ロジック不変・要件 2.4/5.2）。
+    /// `None` 返却（DefWindowProcW 委譲）も併せて確認する。ヘッドレス: World への直接操作のみ。
+    #[test]
+    fn dispatch_displaychange_marks_app_display_change() {
+        let world = Rc::new(RefCell::new(EcsWorld::new()));
+        let entity = {
+            let mut w = world.borrow_mut();
+            w.world_mut().insert_resource(App::new());
+            w.world_mut().spawn(()).id()
+        };
+
+        // 事前条件: フラグ未設定。
+        assert!(
+            !world
+                .borrow()
+                .world()
+                .resource::<App>()
+                .display_configuration_changed(),
+            "初期状態は display change 未設定"
+        );
+
+        let ret = dispatch_window_message(&world, entity, &msg(WM_DISPLAYCHANGE));
+
+        // WM_DISPLAYCHANGE は DefWindowProcW 委譲（None）。
+        assert!(ret.is_none(), "WM_DISPLAYCHANGE は None を返すべき");
+
+        // 業務ロジック: App の display change フラグが立つ。
+        assert!(
+            world
+                .borrow()
+                .world()
+                .resource::<App>()
+                .display_configuration_changed(),
+            "WM_DISPLAYCHANGE 配送後は display change が設定されるべき"
+        );
     }
 }

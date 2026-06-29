@@ -47,7 +47,7 @@ pub use window::{
     WindowStyle, ZOrder, find_owner_window, flush_window_pos_commands, guarded_set_window_pos,
     is_self_initiated,
 };
-pub(crate) use window_proc::{ecs_wndproc, set_ecs_world};
+pub(crate) use window_proc::{dispatch_window_message, ecs_wndproc, set_ecs_world};
 pub use world::{
     FrameCount, FrameFinalize, Input, Layout, PostLayout, PreLayout, PreRenderSurface, UISetup,
     Update,

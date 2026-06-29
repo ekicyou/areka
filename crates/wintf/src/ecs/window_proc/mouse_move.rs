@@ -4,9 +4,15 @@
 
 #![allow(non_snake_case)]
 
+use std::cell::RefCell;
+use std::rc::Rc;
+
+use bevy_ecs::prelude::Entity;
 use tracing::{debug, trace};
 use windows::Win32::Foundation::*;
 use windows::Win32::UI::WindowsAndMessaging::*;
+
+use crate::ecs::world::EcsWorld;
 
 /// メッセージハンドラの戻り値型
 type HandlerResult = Option<LRESULT>;
@@ -17,8 +23,9 @@ type HandlerResult = Option<LRESULT>;
 /// HTCLIENT / HTTRANSPARENT を返す（クリックスルー対応）。
 #[inline]
 pub(super) fn WM_NCHITTEST(
+    world: &Rc<RefCell<EcsWorld>>,
+    entity: Entity,
     hwnd: HWND,
-    _message: u32,
     _wparam: WPARAM,
     lparam: LPARAM,
 ) -> HandlerResult {
@@ -46,18 +53,8 @@ pub(super) fn WM_NCHITTEST(
         }
     }
 
-    // Entity 取得
-    let Some(entity) = super::get_entity_from_hwnd(hwnd) else {
-        return None;
-    };
-
-    // World 取得
-    let Some(world) = super::try_get_ecs_world() else {
-        return None;
-    };
-
     // キャッシュ付きヒットテスト実行
-    crate::ecs::pointer::nchittest_cache::cached_nchittest(hwnd, (x, y), entity, &world)
+    crate::ecs::pointer::nchittest_cache::cached_nchittest(hwnd, (x, y), entity, world)
 }
 
 /// 当該ウィンドウに属し、exclude と異なるエンティティの PointerState 保持者を収集する。
@@ -88,8 +85,9 @@ pub(super) fn collect_entities_to_leave(
 /// 初回移動時にTrackMouseEventを設定。
 #[inline]
 pub(super) fn WM_MOUSEMOVE(
+    world: &Rc<RefCell<EcsWorld>>,
+    window_entity: Entity,
     hwnd: HWND,
-    _message: u32,
     wparam: WPARAM,
     lparam: LPARAM,
 ) -> HandlerResult {
@@ -100,10 +98,6 @@ pub(super) fn WM_MOUSEMOVE(
     use std::time::Instant;
     use windows::Win32::UI::Input::KeyboardAndMouse::{
         TME_LEAVE, TRACKMOUSEEVENT, TrackMouseEvent,
-    };
-
-    let Some(window_entity) = super::get_entity_from_hwnd(hwnd) else {
-        return None;
     };
 
     // 位置取得（物理ピクセル、クライアント座標）
@@ -121,7 +115,7 @@ pub(super) fn WM_MOUSEMOVE(
     // ドラッグ中のSetWindowPosはWorld借用外で実行する（WM_WINDOWPOSCHANGED同期発火対策）
     let mut deferred_set_window_pos: Option<(HWND, i32, i32)> = None;
 
-    if let Some(world) = super::try_get_ecs_world() {
+    {
         if let Ok(mut world_borrow) = world.try_borrow_mut() {
             // TrackMouseEvent 設定（ウィンドウに対して）
             if let Ok(mut entity_ref) = world_borrow.world_mut().get_entity_mut(window_entity) {
@@ -428,19 +422,16 @@ pub(super) fn WM_MOUSEMOVE(
 /// PointerLeaveマーカーを付与する（他ウィンドウのPointerStateは保持）。
 #[inline]
 pub(super) fn WM_MOUSELEAVE(
+    world: &Rc<RefCell<EcsWorld>>,
+    window_entity: Entity,
     hwnd: HWND,
-    _message: u32,
     _wparam: WPARAM,
     _lparam: LPARAM,
 ) -> HandlerResult {
     use crate::ecs::pointer::{PointerLeave, PointerState, WindowPointerTracking};
     use crate::ecs::window::find_owner_window;
 
-    let Some(window_entity) = super::get_entity_from_hwnd(hwnd) else {
-        return None;
-    };
-
-    if let Some(world) = super::try_get_ecs_world() {
+    {
         if let Ok(mut world_borrow) = world.try_borrow_mut() {
             // PointerStateを持つ全エンティティを収集（当該ウィンドウに属するもののみ）
             let mut entities_with_pointer_state = Vec::new();

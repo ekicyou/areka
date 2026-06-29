@@ -1,9 +1,10 @@
-//! ウィンドウ手続きブリッジと配送純関数。
+//! ウィンドウ手続きブリッジ。
 //!
 //! ライブラリ（`wintf-winmsg-executor`）の `Window<S>` は wndproc を
 //! `FnMut(Pin<&S>, WindowMessage) -> Option<LRESULT>` クロージャとして受け取る。
-//! 本ユニットはその状態 `S = WndState` を定め、クロージャを `dispatch_window_message`
-//! 純関数へ橋渡しする「メカニズム」と、その配送の「構造」を提供する。
+//! 本ユニットはその状態 `S = WndState` を定め、クロージャを ECS 層の配送純関数
+//! `crate::ecs::dispatch_window_message` へ橋渡しする「メカニズム」を提供する
+//! （配送表本体は ECS 層が単一の真実の源として保持し、レガシー `ecs_wndproc` と共有する）。
 //!
 //! # 共有状態アクセス（要件 2.3）
 //! 旧経路は `GWLP_USERDATA` への Entity 手詰めと `OnceLock<SendWeak>` グローバル、
@@ -24,13 +25,13 @@
 
 use std::cell::RefCell;
 use std::pin::Pin;
-use std::rc::{Rc, Weak};
+use std::rc::Weak;
 
 use bevy_ecs::prelude::Entity;
 use windows::Win32::Foundation::LRESULT;
-use windows::Win32::UI::WindowsAndMessaging::WM_ERASEBKGND;
 use wintf_winmsg_executor::util::WindowMessage;
 
+use crate::ecs::dispatch_window_message;
 use crate::ecs::world::EcsWorld;
 
 /// wndproc クロージャが生成時に capture する共有状態。
@@ -76,43 +77,18 @@ pub(crate) fn make_wndproc()
             return None;
         }
 
+        // 配送表本体は ECS 層の `dispatch_window_message`（単一の真実の源）が担う。
+        // レガシー経路（`ecs_wndproc`）と同一表を共有する（要件 2.4）。
         dispatch_window_message(&world, entity, &msg)
-    }
-}
-
-/// Windows メッセージを Entity 配送する純関数（要件 2.4）。
-///
-/// `None` 返却時はライブラリが `DefWindowProcW` へ委譲する（`Window` 内部の
-/// `unwrap_or_else(DefWindowProcW)` と同義）。`world`/`entity` を引数で受け取り、
-/// 旧 `ecs_wndproc` の自己解決（`try_get_ecs_world`＋`get_entity_from_hwnd`）を排する。
-///
-/// 本タスク（3.1）では代表メッセージのアームのみをインラインで実装し、それ以外は `None`
-/// を返す（既定手続き委譲）。旧 `ecs_wndproc` の 30 種超 `match` 表と各移設ハンドラ
-/// （`lifecycle`/`mouse_*`/`keyboard`/`window_pos`/`dpi_helpers`）への呼び出しは後続タスク
-/// 3.2 で本関数へ移設する。
-pub(crate) fn dispatch_window_message(
-    world: &Rc<RefCell<EcsWorld>>,
-    entity: Entity,
-    msg: &WindowMessage,
-) -> Option<LRESULT> {
-    // 代表アーム（インライン）: WM_ERASEBKGND は背景消去を抑止して "処理済み"（非ゼロ）を
-    // 返す。これによりクロージャ→純関数→ライブラリへの橋渡し経路と、world/entity 引数の
-    // 受領を最小コストで実証する（World の深い変更を要さない代表メッセージ）。
-    // world/entity は本アームでは消費しないが、3.2 の移設で各ハンドラへ渡る引数である。
-    let _ = (world, entity);
-
-    match msg.msg {
-        WM_ERASEBKGND => Some(LRESULT(1)),
-        // 非代表メッセージは None（DefWindowProcW 委譲）。完全な配送表は 3.2 で移設する。
-        _ => None,
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::rc::Rc;
     use windows::Win32::Foundation::{HWND, LPARAM, WPARAM};
-    use windows::Win32::UI::WindowsAndMessaging::WM_USER;
+    use windows::Win32::UI::WindowsAndMessaging::{WM_ERASEBKGND, WM_USER};
 
     /// テスト用 `WndState` を組み立てる。
     fn make_state(world: &Rc<RefCell<EcsWorld>>) -> WndState {

@@ -60,7 +60,7 @@
   - _Requirements: 2.3, 2.4_
   - _Boundary: EntityWndprocBridge_
 
-- [ ] 3.2 ウィンドウ手続きハンドラの統一シグネチャ移行
+- [x] 3.2 ウィンドウ手続きハンドラの統一シグネチャ移行
   - 既存ハンドラ群（lifecycle / mouse / keyboard / window_pos / dpi 等・計 31 箇所の自己解決）を、World と Entity を引数で受け取る統一シグネチャへ機械的に移行する
   - グローバル World 参照（`OnceLock` 保持の弱参照）と HWND→Entity 解決（GWLP_USERDATA 依存）を撤去する
   - 各ハンドラ内部の業務ロジックは不変に保つ
@@ -162,3 +162,6 @@
 - runtime の各 building block（MessageLoopDriver / VsyncEventBridge / AsyncTickTask）は WinApp::run へ未結線の間、scoped `#[allow(dead_code)]` を帯びる。task 4.3 の結線後に allow を外す（dead_code 警告 3 件は想定内・新規警告ではない）。
 - tick 再入ガード `IS_TICK_FLUSH_IN_PROGRESS` は `ecs::world::engage_tick_flush_guard()`（RAII・進行中なら `None`）/ `is_tick_flush_in_progress()` で再利用可能（task 2.3 で追加）。legacy `try_tick_on_vsync` は不変のまま並存。
 - workspace cargo を回す前に `git submodule update --init`（vendors/pasta）が必要（worktree では未populate のことがある）。ビルド/テストは PowerShell で実行（Git Bash の coreutils `link.exe` が MSVC link を遮蔽する）。
+- **task 3.1 配置是正（3.2 で実施）**: 3.1 は `dispatch_window_message` を `runtime/wndproc_bridge.rs` に置いたが、design.md:188/443 は ECS 層（`ecs/window_proc/mod.rs`）配置を指定。旧 `ecs_wndproc`（ECS層）が同関数を共有呼びするには ECS 層配置が必須（ecs→runtime の上向き依存禁止・design:54）。よって 3.2 で `dispatch_window_message` を `ecs/window_proc/mod.rs` へ移設し、`runtime/wndproc_bridge.rs::make_wndproc` はそれを呼ぶよう繋ぎ替える（WndState/make_wndproc は維持・3.1 テストは緑のまま）。
+- **旧経路の共存維持（開発者決定 2026-06-30）**: 「最終的には完全撤去。ただし移行が確認できるまで旧コードを残す（知見転記漏れの保険）」。よって 3.2 では旧グローバル/GWLP 解決（`ECS_WORLD`/`SendWeak`/`set_ecs_world`/`try_get_ecs_world`/`get_entity_from_hwnd`）と `ecs_wndproc` を**撤去せず存続**させる。`ecs_wndproc` は entity/world を自己解決して新設 `dispatch_window_message` へ委譲する薄いシムへ縮約（業務ロジックは移行済みハンドラ側に集約）。実際の撤去は 4.5（legacy teardown）へ寄せる。各フェーズで lib ビルド＋既存テスト＋example 緑を維持（design の Phase チェックポイント遵守）。
+- **WM_NCCREATE/WM_NCDESTROY のみ 3.2 で非移行**: この 2 つは entity 確立/解体の lifecycle 特例で「窓の畳み方の反転」（task 4.1）の領分。現行シグネチャ `(hwnd,message,wparam,lparam)` のまま `ecs_wndproc` から直呼びし、`dispatch_window_message` 表には含めない。NCCREATE は lpCreateParams から entity を確立する message ゆえ引数化不可。3.2 の (world,entity) 引数一様移行の対象は entity 解決後メッセージ（WM_CLOSE/ERASEBKGND/PAINT/DISPLAYCHANGE/WINDOWPOSCHANGED/DPICHANGED/mouse/keyboard）。**WM_CLOSE は移行対象**（dispatch 表経由・本体は world/entity を `_` で無視するが統一シグネチャに従う・entity 確立解体を伴わないため特例ではない）。

@@ -4,8 +4,14 @@
 
 #![allow(non_snake_case)]
 
+use std::cell::RefCell;
+use std::rc::Rc;
+
+use bevy_ecs::prelude::Entity;
 use windows::Win32::Foundation::*;
 use windows::Win32::UI::WindowsAndMessaging::*;
+
+use crate::ecs::world::EcsWorld;
 
 /// メッセージハンドラの戻り値型
 type HandlerResult = Option<LRESULT>;
@@ -61,8 +67,9 @@ pub(super) fn WM_NCDESTROY(
 /// ULW が全画面を管理するため、背景消去をスキップする
 #[inline]
 pub(super) fn WM_ERASEBKGND(
+    _world: &Rc<RefCell<EcsWorld>>,
+    _entity: Entity,
     _hwnd: HWND,
-    _message: u32,
     _wparam: WPARAM,
     _lparam: LPARAM,
 ) -> HandlerResult {
@@ -75,26 +82,19 @@ pub(super) fn WM_ERASEBKGND(
 /// - `CompositionMode::ULW` またはフォールバック → `BeginPaint`/`EndPaint` 最小ペア
 #[inline]
 pub(super) fn WM_PAINT(
+    world: &Rc<RefCell<EcsWorld>>,
+    entity: Entity,
     hwnd: HWND,
-    _message: u32,
     _wparam: WPARAM,
     _lparam: LPARAM,
 ) -> HandlerResult {
     // Entity から CompositionMode を判定
-    let is_dcomp = if let Some(entity) = super::get_entity_from_hwnd(hwnd) {
-        if let Some(world_rc) = super::try_get_ecs_world() {
-            if let Ok(world_borrow) = world_rc.try_borrow() {
-                world_borrow
-                    .world()
-                    .get::<crate::ecs::window::Window>(entity)
-                    .map(|w| w.composition_mode() == crate::ecs::window::CompositionMode::DComp)
-                    .unwrap_or(false)
-            } else {
-                false
-            }
-        } else {
-            false
-        }
+    let is_dcomp = if let Ok(world_borrow) = world.try_borrow() {
+        world_borrow
+            .world()
+            .get::<crate::ecs::window::Window>(entity)
+            .map(|w| w.composition_mode() == crate::ecs::window::CompositionMode::DComp)
+            .unwrap_or(false)
     } else {
         false
     };
@@ -119,8 +119,9 @@ pub(super) fn WM_PAINT(
 /// DestroyWindowを呼び出してウィンドウを破棄する
 #[inline]
 pub(super) fn WM_CLOSE(
+    _world: &Rc<RefCell<EcsWorld>>,
+    _entity: Entity,
     hwnd: HWND,
-    _message: u32,
     _wparam: WPARAM,
     _lparam: LPARAM,
 ) -> HandlerResult {
@@ -133,19 +134,18 @@ pub(super) fn WM_CLOSE(
 /// Appリソースのmark_display_changeを呼び出す
 #[inline]
 pub(super) fn WM_DISPLAYCHANGE(
+    world: &Rc<RefCell<EcsWorld>>,
+    _entity: Entity,
     _hwnd: HWND,
-    _message: u32,
     _wparam: WPARAM,
     _lparam: LPARAM,
 ) -> HandlerResult {
-    if let Some(world) = super::try_get_ecs_world() {
-        if let Ok(mut world_borrow) = world.try_borrow_mut() {
-            if let Some(mut app) = world_borrow
-                .world_mut()
-                .get_resource_mut::<crate::ecs::App>()
-            {
-                app.mark_display_change();
-            }
+    if let Ok(mut world_borrow) = world.try_borrow_mut() {
+        if let Some(mut app) = world_borrow
+            .world_mut()
+            .get_resource_mut::<crate::ecs::App>()
+        {
+            app.mark_display_change();
         }
     }
     None // DefWindowProcWに委譲
