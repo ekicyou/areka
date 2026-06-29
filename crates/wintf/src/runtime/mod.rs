@@ -28,6 +28,10 @@ mod message_loop;
 /// `event_listener::Event` で UI スレッドへ通知する `VsyncEventBridge` を提供する。
 mod tick_bridge;
 
+/// ウィンドウ手続きブリッジ層。ライブラリの wndproc クロージャから `dispatch_window_message`
+/// 純関数へ Entity 配送を橋渡しする `WndState`/`make_wndproc` を提供する。
+mod wndproc_bridge;
+
 /// UI スレッド基盤の owner。旧 `WinThreadMgr` を置換する新公開 facade。
 ///
 /// COM 初期化・DPI awareness 設定・`EcsWorld` 生成を統括し、共有 World ハンドルの
