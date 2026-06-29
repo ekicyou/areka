@@ -443,7 +443,7 @@ impl WinApp {
 - State: World 参照はクロージャ capture（旧 `OnceLock<SendWeak>` グローバル参照を撤去）。
 
 **Implementation Notes**
-- Integration: ハンドラ関数のシグネチャは `(hwnd, message, wparam, lparam) -> Option<LRESULT>` を維持できる（`WindowMessage` から再構成）。Entity を引数に必要とするハンドラ（lifecycle/window_pos 等）は capture 値を渡す形へ薄く改修。
+- Integration: 旧ハンドラは内部で `try_get_ecs_world()` ＋ `get_entity_from_hwnd(hwnd)` を自己呼び出しして World/Entity を解決していた（`ecs/window_proc/*` 7 ファイル・**計 31 箇所**・実測）。`ECS_WORLD: OnceLock<SendWeak>` と `get_entity_from_hwnd` の撤去に伴い、これら 31 箇所すべてを「`dispatch_window_message` から `(world: &Rc<RefCell<EcsWorld>>, entity: Entity)` を引数で受け取る統一シグネチャ」へ機械的に置換する（自己解決 → 引数受領）。各ハンドラは hwnd／メッセージ引数に加え world・entity を引数として受け取る薄い改修で、内部の業務ロジックは不変。31 箇所の解決点の列挙と引数置換は tasks フェーズで明示タスク化する（「シグネチャ無改修」ではなく「Entity/World 引数を足す一様改修」が正確な範囲）。
 - Validation: 旧 `ecs_wndproc` と同等の配送結果（要件 2.4）。dblclick・mouse・keyboard・WINDOWPOSCHANGED・DPICHANGED・DISPLAYCHANGE を網羅。
 - Risks（要件 4.3）: `new_checked_ex` の `RefCell` が wndproc 自体の再入を阻止する一方、ハンドラ内 World 借用と AsyncTickTask の World 借用が二重借用に至らないよう、双方が `try_borrow(_mut)` で安全スキップする規律を保つ。先進坑が nested `WM_WINDOWPOSCHANGED` 719 回で `reentry_body_ran=false`/`double_tick=false` を実証（README 参照）。
 
