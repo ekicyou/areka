@@ -186,7 +186,7 @@ crates/wintf/src/
 ### Modified Files
 - `crates/wintf/src/ecs/window/window_system.rs` — `create_windows` を `EcsWindowFactory` 経由の `util::Window<S>` 生成へ書き換え。`CreateWindowExW` 直呼び・`entity_bits` の `lpCreateParams` 手渡しを撤去。生成した `Window<S>` の所有権保持先を確定（後述 State Management）。
 - `crates/wintf/src/ecs/window_proc/mod.rs` — `ecs_wndproc`（`extern "system"`）を撤去し、振り分け表（30 種超 `match`）を `EntityWndprocBridge` が呼ぶ純関数 `dispatch_window_message(world, entity, msg) -> Option<LRESULT>` へ移設。`get_entity_from_hwnd`（GWLP_USERDATA 依存）・`ECS_WORLD: OnceLock<SendWeak>`・`set_ecs_world` を撤去。
-- `crates/wintf/src/ecs/window_proc/lifecycle.rs` — `WM_NCCREATE`/`WM_NCDESTROY` の `GWLP_USERDATA` 読み書きを撤去（Entity は bridge が capture/解決）。`WM_NCDESTROY` の despawn は維持。`WM_CLOSE` の `DestroyWindow` 呼び出しはライブラリの WM_CLOSE 握り潰しと整合する形へ調整（後述 Integration）。
+- `crates/wintf/src/ecs/window_proc/lifecycle.rs` — **窓の畳み方を反転（設計討議①確定）**。`WM_NCCREATE` の `GWLP_USERDATA` 手詰めを撤去（ライブラリが占有）。`WM_CLOSE` は `DestroyWindow` 直叩きをやめ、対象 Entity の**除去要求**（despawn／`Window` 除去コマンドの enqueue）へ変更（ライブラリは WM_CLOSE を握り潰し窓を即破壊しない・`window.rs:284`）。実破壊は `WindowRegistry` から要素が drop される時の `Window<S>::drop`→`DestroyWindow` が駆動。`WM_NCDESTROY` は **ECS 後始末（despawn／`borrow_mut`）を持たない**（drop の結果として同期再入するため二重 borrow を回避。despawn は除去要求側で既済）。
 - `crates/wintf/src/ecs/world/vsync.rs` — `try_tick_on_vsync`（VSYNC カウンタ差分検知）を `AsyncTickTask` 駆動へ寄せる。`IS_TICK_FLUSH_IN_PROGRESS` 再入ガードは安全側に残置（後述 Reentry）。`WM_VSYNC` 由来カウンタ（`VSYNC_TICK_COUNT`/`LAST_VSYNC_TICK`）の所属を `win_thread_mgr` から `runtime`/`vsync` へ移す。
 - `crates/wintf/src/ecs/world/mod.rs` — `VSYNC_TICK_COUNT`/`LAST_VSYNC_TICK` の参照元（`use crate::win_thread_mgr::...`）を移設先へ更新。`try_tick_world`（13 本）は不変。`world.spawn`（WintfTaskPool）は不変。
 - `crates/wintf/src/ecs/app.rs` — `WM_LAST_WINDOW_DESTROYED` PostMessage 終了通知を、`ShutdownPolicy` が観測できる経路（`event_listener` or `MessageLoop::quit` 連動）へ接続。`set_message_window`/message_window 保持は新 facade 配下で再定義。
@@ -296,6 +296,7 @@ Entity は `GWLP_USERDATA` ではなくクロージャ capture（`create_windows
 | DblClkClassFixup | Window | ライブラリクラスへ CS_DBLCLKS 補填 | 2.5 | Win32 class API (P0) | Service |
 | VsyncEventBridge | Async/Tick | DwmFlush→event_listener notify | 4.1, 4.4 | event-listener (P0) | Event |
 | AsyncTickTask | Async/Tick | event 起床→13 本 tick→再待機 | 4.2, 4.3, 4.5 | EcsWorld (P0), VsyncEventBridge (P0) | Service, State |
+| WindowRegistry | Window | `Window<S>` 所有（NonSend）・寿命/最後の窓検知/終了起点 | 1.3, 2.1, 5.2 | EcsWorld (P0) | State, Event |
 
 ### Runtime Facade 層
 
@@ -345,7 +346,7 @@ impl WinApp {
 - Invariants: `world()` が返す `Rc` は単一 World（複数ウィンドウで共有）。
 
 ##### State Management
-- State model: `Rc<RefCell<EcsWorld>>`（単一 World・UI スレッド単独所有）。
+- State model: `WinApp` が `Rc<RefCell<EcsWorld>>` の**唯一の strong 所有者**（`world()` は strong clone を返す）。一方、wndproc クロージャの状態 `S` と各種コールバックは **`Weak<RefCell<EcsWorld>>` で掴む**（registry↔World の自己循環リーク回避・破棄中は `upgrade()`→`None` で安全）。`Window<S>` 群は `WindowRegistry`（NonSend リソース）が保持（後述）。
 - Concurrency strategy: UI スレッド単一。VSync スレッドとは `event_listener::Event`（notify）と `Atomic` カウンタのみで通信（共有データを跨がない）。
 
 **Implementation Notes**
@@ -384,13 +385,14 @@ impl WinApp {
 **Responsibilities & Constraints**
 - 旧終了経路（最後のウィンドウ破棄→`WM_LAST_WINDOW_DESTROYED`→`PostQuitMessage`）を、**`block_on` が待つ shutdown future の完了**へ写像する。すなわち `run()` は `block_on(async { shutdown_signal.await })` し、最後のウィンドウ破棄で shutdown_signal を完了させる。
 - 原則: 未完の UI async タスクを残したまま `PostQuitMessage`（=`quit_when_idle`）を撃たない。shutdown future を完了させて `block_on` を正常復帰させる（README 終了規律）。`quit_when_idle` は idle 到達まで待つため、未完タスクの完了余地を残す選択肢として補助的に用いてよい。
-- `App::on_window_destroyed`（最後のウィンドウ）が shutdown_signal を発火する（`event_listener::Event` か `Rc<Cell<bool>>`＋ tick タスクからの観測のいずれか。`app.rs` は UI スレッド単一ゆえ後者で十分だが、tick タスクが await できる `event_listener` を推奨）。
+- **shutdown_signal の所在と注入方向（設計討議①確定）**: shutdown_signal は **`event_listener::Event` で確定**（`Rc<Cell<bool>>` ポーリング案は await 不能・tail race 補填と相性が悪く不採用）。Event は **ECS 層が所有**（`WindowRegistry`(NonSend) に併設、または `App`/`EcsWorld` フィールド）し、`WinApp` 構築時に **facade が下向きに注入**する（ECS→上位 facade の上向き依存を作らない・依存方向 COM→ECS→Runtime を厳守）。`run()` の `block_on` future はこの Event を `listen().await` する。
+- **発火点**: tick 後半のリコンサイルシステムが `WindowRegistry` から最後の要素を除去し `registry.is_empty()` となった時点で shutdown_signal を notify（最後の窓の生存数を握る registry が終了起点を兼ねる）。
 
 **Contracts**: Service [x] / Event [x]
-- Event: `shutdown_signal: event_listener::Event`。Published by: `App::on_window_destroyed`（最後のウィンドウ破棄時）。Subscribed by: `run()` の `block_on` future。
+- Event: `shutdown_signal: event_listener::Event`（**ECS 層所有・facade 下向き注入**）。Published by: `WindowRegistry` リコンサイル（`is_empty()` 時）。Subscribed by: `run()` の `block_on` future。
 
 **Implementation Notes**
-- Integration: `app.rs` の `WM_LAST_WINDOW_DESTROYED` PostMessage を撤去し、shutdown_signal 発火へ置換。`message_window` の存在意義（VSync PostMessage の宛先）は tick が event_listener 化されるため縮小／撤去可能。
+- Integration: `app.rs` の `WM_LAST_WINDOW_DESTROYED` PostMessage と `message_window` を**撤去**（VSync は event_listener 化、終了は registry 由来 shutdown_signal 化されるため PostMessage 宛先が不要）。
 - Validation: 全ウィンドウ close→panic なし・ハングなし（要件 1.4/1.5）。先進坑が「3 タスク join で panic せず復帰」を実証（README 参照）。
 - Risks: tail race（タスク完了直後の wake 取りこぼし）。先進坑は「終了時 notify を数発」で回避。本坑も shutdown 時に notify を補う実装規律を踏襲。
 
@@ -406,7 +408,7 @@ impl WinApp {
 **Responsibilities & Constraints**
 - 旧 `create_windows` の直 `CreateWindowExW` を `util::Window::new_checked_ex(WindowType::TopLevel, ex_style, state, wndproc)` へ置換。`new_checked_ex`（`FnMut`＋内部 `RefCell`）を採用し、ライブラリ標準の wndproc 再入防止を得る（要件 4.3）。
 - `ex_style` は現行同様 `CompositionMode` から算出（ULW=`WS_EX_LAYERED` / DComp=`WS_EX_NOREDIRECTIONBITMAP`・要件 2.2）。ウィンドウタイトル・`WINDOW_STYLE`・座標は別途 `SetWindowText`/`SetWindowLongPtrW(GWL_STYLE)`/`SetWindowPos` で適用する（ライブラリの `new_*` は `WINDOW_STYLE(0)`・`CW_USEDEFAULT`・名前なしで生成するため、生成後に現行 `WindowStyle`/`WindowPos`/`title` を反映する初期化ステップが要る）。
-- 生成した `Window<S>` の所有権を ECS 側（`WindowHandle` コンポーネントに併設、または World 保持のマップ）で保持し、Drop=`DestroyWindow` の生存期間を Entity ライフサイクルに一致させる。
+- 生成した `Window<S>` の所有権は **`WindowRegistry`（NonSend リソース・`HashMap<Entity, Window<S>>`）** で保持し、Drop=`DestroyWindow` の生存期間を Entity ライフサイクルに一致させる（`Window<S>` は `!Send` ゆえ Component 不可・NonSend が正規の家）。
 
 **Dependencies**
 - External: wintf-winmsg-executor `util::Window` — 生成・状態束ね（P0）。
@@ -414,7 +416,7 @@ impl WinApp {
 - Outbound: DblClkClassFixup — CS_DBLCLKS 補填（P0）。EntityWndprocBridge — クロージャ本体（P0）。
 
 **Contracts**: Service [x] / State [x]
-- State: `Window<S>`（`S = Rc<RefCell<EcsWorld>>`）。ライブラリが `GWLP_USERDATA` に `UserData<S,F>` を保持（wintf は GWLP_USERDATA を使わない＝手詰め全廃・要件 2.3）。
+- State: 生成した `Window<S>` は **`WindowRegistry(HashMap<Entity, Window<S>>)`（NonSend リソース・World 内＝UI スレッド専用棚）が所有**する（`Window<S>` は `hwnd` を持つ `!Send` ゆえ bevy Component 不可・NonSend が正規の家。`Send` 偽装は UI スレッド束縛＝`DestroyWindow` のスレッドアフィニティの命綱を切るため禁止）。`S = WndState { world: Weak<RefCell<EcsWorld>>, entity: Entity }`（**強 Rc ではなく Weak**＝自己循環リーク回避・破棄中は `upgrade()`→`None` で安全）。ライブラリが `GWLP_USERDATA` に `UserData<S,F>` を保持し、wintf は `GWLP_USERDATA` を使わない（手詰め全廃・要件 2.3）。
 
 **Implementation Notes**
 - Integration: HINSTANCE はライブラリ内部 `__ImageBase`（DLL 安全）で処理されるため、wintf 側の `GetModuleHandleW(None)`／`process_singleton` クラス登録は撤去（要件 2.5）。重複登録の懸念はライブラリの `Once` が排除。
@@ -429,10 +431,10 @@ impl WinApp {
 | Requirements | 2.3, 2.4, 4.3 |
 
 **Responsibilities & Constraints**
-- `Fn(Pin<&S>, WindowMessage) -> Option<LRESULT>` クロージャを構築し、`S = Rc<RefCell<EcsWorld>>`、当該 `Entity` を capture する（`create_windows` が生成時に entity を知る）。
+- `Fn(Pin<&S>, WindowMessage) -> Option<LRESULT>` クロージャを構築する。**`S = WndState { world: Weak<RefCell<EcsWorld>>, entity: Entity }`**（生成時に確定・以後不変。`create_windows` が entity を知る）。クロージャは `Pin<&S>` から `entity` を直接読み（`Entity` は `Copy`）、`world.upgrade()` で World を得る。
 - クロージャは `WindowMessage{ hwnd, msg, wparam, lparam }` を `dispatch_window_message(world, entity, msg)` へ橋渡し。`dispatch_window_message` は旧 `ecs_wndproc` の 30 種超 `match` 表をそのまま移設した純関数で、各ハンドラ（`lifecycle`/`mouse_*`/`keyboard`/`window_pos`/`dpi_helpers`）を呼ぶ。
-- Entity 解決は `GWLP_USERDATA` を使わず capture した `Entity` を用いる（手詰め全廃・要件 2.3）。`get_entity_from_hwnd` は撤去。
-- World 借用は `Pin<&S>` 経由で `RefCell::try_borrow(_mut)`。借用失敗（再入）は安全スキップ（現行ハンドラの `try_borrow` 規律を踏襲）。
+- Entity 解決は `S.entity` を直接用い、`GWLP_USERDATA`／`get_entity_from_hwnd`／`OnceLock<SendWeak>` グローバルをすべて撤去（手詰め・グローバル状態全廃・要件 2.3）。
+- World 借用は `S.world.upgrade()` 後に `RefCell::try_borrow(_mut)`。借用失敗（再入）または `upgrade()`→`None`（破棄中）は安全スキップ（現行ハンドラの `try_borrow` 規律を踏襲）。
 
 **Dependencies**
 - Inbound: EcsWindowFactory — クロージャ提供先（P0）。
@@ -446,6 +448,26 @@ impl WinApp {
 - Integration: 旧ハンドラは内部で `try_get_ecs_world()` ＋ `get_entity_from_hwnd(hwnd)` を自己呼び出しして World/Entity を解決していた（`ecs/window_proc/*` 7 ファイル・**計 31 箇所**・実測）。`ECS_WORLD: OnceLock<SendWeak>` と `get_entity_from_hwnd` の撤去に伴い、これら 31 箇所すべてを「`dispatch_window_message` から `(world: &Rc<RefCell<EcsWorld>>, entity: Entity)` を引数で受け取る統一シグネチャ」へ機械的に置換する（自己解決 → 引数受領）。各ハンドラは hwnd／メッセージ引数に加え world・entity を引数として受け取る薄い改修で、内部の業務ロジックは不変。31 箇所の解決点の列挙と引数置換は tasks フェーズで明示タスク化する（「シグネチャ無改修」ではなく「Entity/World 引数を足す一様改修」が正確な範囲）。
 - Validation: 旧 `ecs_wndproc` と同等の配送結果（要件 2.4）。dblclick・mouse・keyboard・WINDOWPOSCHANGED・DPICHANGED・DISPLAYCHANGE を網羅。
 - Risks（要件 4.3）: `new_checked_ex` の `RefCell` が wndproc 自体の再入を阻止する一方、ハンドラ内 World 借用と AsyncTickTask の World 借用が二重借用に至らないよう、双方が `try_borrow(_mut)` で安全スキップする規律を保つ。先進坑が nested `WM_WINDOWPOSCHANGED` 719 回で `reentry_body_ran=false`/`double_tick=false` を実証（README 参照）。
+
+#### WindowRegistry
+
+| Field | Detail |
+|-------|--------|
+| Intent | `Window<S>` の所有・寿命管理・最後の窓検知・終了起点（NonSend） |
+| Requirements | 1.3, 2.1, 5.2 |
+
+**Responsibilities & Constraints**
+- `HashMap<Entity, Window<S>>` を **`NonSend` リソース**として World 内に保持（＝UI スレッド専用棚）。`Window<S>` は `hwnd` を持つ `!Send` ゆえ bevy Component 不可・**`Send` 偽装禁止**（UI スレッド束縛＝`DestroyWindow` のスレッドアフィニティの命綱）。`NonSend` は bevy が「メインスレッド専用」をスケジューラ層で強制する正規機構ゆえ、全アクセス・全 drop が UI スレッドに釘付けになる。
+- `create_windows`（排他システム）が生成直後に `insert(entity, window)`。寿命は Entity ライフサイクルに一致。
+- **リコンサイル**: `RemovedComponents<Window>` を読むシステム（tick 後半）が、破棄された Entity を `remove(&entity)` → `Window<S>::drop` → `DestroyWindow` → `WM_NCDESTROY`。この除去 drop は World 借用中に `WM_NCDESTROY` を同期再入させるが、クロージャは `try_borrow` 失敗で安全スキップ（後始末を持たない）。
+- **終了起点**: `remove` 後 `is_empty()` が真なら shutdown_signal（`event_listener::Event`）を notify（ShutdownPolicy へ）。最後の窓の生存数を握る registry が終了検知を兼ねる。
+
+**Contracts**: State [x] / Event [x]
+- Event: `shutdown_signal` を `is_empty()` 時に notify（Subscribed by: `run()` の `block_on`）。
+
+**Implementation Notes**
+- Integration: 旧 `OnceLock<SendWeak>` グローバル World 参照・`GWLP_USERDATA` Entity 手詰めをともに撤去。配送は `S = WndState{ Weak, Entity }`、寿命/終了は registry が担う二分構成（配送と寿命の責務分離）。
+- Risks: リコンサイルの実行スケジュール位置（despawn 反映後・描画前）を実装フェーズで確定（リスク Low）。
 
 #### DblClkClassFixup
 
@@ -569,5 +591,5 @@ graph TB
 ## Open Questions / Risks
 
 - **CS_DBLCLKS 補填方式**: `SetClassLongPtrW(GCL_STYLE)` による補填を採用（本書確定）。将来版でクラス style がパラメタライズ可能になれば不要化。実装フェーズで初回生成タイミングの確実性を検証する（リスク Low）。
-- **`Window<S>` 所有権の保持先**: `WindowHandle` コンポーネント併設 or World 保持マップ。Entity ライフサイクルと Drop=`DestroyWindow` を一致させる前提で実装フェーズに最終確定（リスク Low・どちらでも境界は閉じる）。
-- **message_window の要否**: tick が event_listener 化されるため VSync の PostMessage 宛先が不要化。`App::set_message_window`／message_window 保持は撤去候補（ShutdownPolicy が event_listener 化される前提）。実装フェーズで残骸参照の有無を確認（要件 5.2）。
+- **`Window<S>` 所有権の保持先 → 確定（設計討議①）**: `WindowRegistry(HashMap<Entity, Window<S>>)` の `NonSend` リソース（World 内）。`Window<S>` は `!Send` ゆえ Component 不可・`Send` 偽装禁止。`RemovedComponents<Window>` リコンサイルで要素 drop→`DestroyWindow`、Entity ライフサイクルに一致。`S = WndState{ Weak<RefCell<EcsWorld>>, Entity }`。
+- **message_window の要否 → 確定（設計討議①）**: 撤去。VSync は event_listener 化、終了は `WindowRegistry::is_empty()` 由来の shutdown_signal 化で PostMessage 宛先が消える。`App::set_message_window`／message_window 保持を削除（実装フェーズで残骸参照ゼロを確認・要件 5.2）。
