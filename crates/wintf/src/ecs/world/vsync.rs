@@ -26,6 +26,35 @@ impl Drop for TickFlushGuard {
     }
 }
 
+/// tick+flush 再入ガードの現在値を返す（`true` ならガードスコープ進行中）。
+///
+/// `try_tick_on_vsync`（レガシー WndProc 経路）と新 `AsyncTickTask`（runtime 層）が
+/// 同一の `IS_TICK_FLUSH_IN_PROGRESS` を共有し、二重に tick が走らないことを保証する
+/// ための `pub(crate)` アクセサ。既存挙動は変えない（読み取りのみ）。
+///
+/// 現状の lib 経路では `AsyncTickTask` のテスト・後続結線でのみ参照されるため
+/// dead_code を許容する（兄弟 building block と同方針）。
+#[allow(dead_code)]
+pub(crate) fn is_tick_flush_in_progress() -> bool {
+    IS_TICK_FLUSH_IN_PROGRESS.get()
+}
+
+/// tick+flush 再入ガードを engage する RAII ハンドルを返す。
+///
+/// `Some(guard)` を返した場合のみガードを獲得できており（このスコープが
+/// `IS_TICK_FLUSH_IN_PROGRESS` の owner）、`guard` の drop で `false` に戻る。
+/// 既に進行中（`true`）なら `None` を返し、呼び出し側は安全側スキップする。
+///
+/// レガシー `try_tick_on_vsync` は自前で同フラグを set/guard しており（挙動不変）、
+/// 本ヘルパは新 `AsyncTickTask` が同一フラグを再利用して二重防御するために提供する。
+pub(crate) fn engage_tick_flush_guard() -> Option<impl Drop> {
+    if IS_TICK_FLUSH_IN_PROGRESS.get() {
+        return None;
+    }
+    IS_TICK_FLUSH_IN_PROGRESS.set(true);
+    Some(TickFlushGuard)
+}
+
 /// VSYNC駆動のtick実行を提供するトレイト
 ///
 /// `Rc<RefCell<EcsWorld>>`に実装され、WndProcから安全にtickを呼び出せる。

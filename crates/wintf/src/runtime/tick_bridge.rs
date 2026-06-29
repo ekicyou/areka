@@ -20,12 +20,17 @@
 //! `WinApp` の drop に生存期間が委譲される。本タスクの時点では結線は行わず、
 //! ブリッジ自身が自前のスレッドを所有し Drop で join する。
 
+use std::cell::RefCell;
+use std::rc::{Rc, Weak};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread::{self, JoinHandle};
 
+use event_listener::Event;
 use tracing::{debug, trace};
 use windows::Win32::Graphics::Dwm::DwmFlush;
+
+use crate::ecs::world::EcsWorld;
 
 /// VSync 専用スレッドの vblank 検出を共有 `event_listener::Event` へ橋渡しする
 /// RAII ユニット。
@@ -128,6 +133,104 @@ fn vsync_loop(event: Arc<event_listener::Event>, stop: Arc<AtomicBool>) {
     }
 }
 
+/// 60Hz UI スレッド async tick タスク（要件 4.2 / 4.3 / 4.5）。
+///
+/// `VsyncEventBridge` が共有する `event_listener::Event` の起床通知を待ち、起床ごとに
+/// 1 フレーム分の ECS tick（`try_tick_world` の 13 本スケジュール）を実行して再待機する
+/// ループを `spawn_local` で UI スレッドに投入する。複数 tick タスクは不要（単一 World）。
+///
+/// # 再入の二重防御（要件 4.3）
+/// 本タスクの 1 フレーム実行は [`tick_one_frame`] を通し、`IS_TICK_FLUSH_IN_PROGRESS`
+/// 再入ガード（`crate::ecs::world::engage_tick_flush_guard`）を engage する。これは
+/// ライブラリ側 wndproc 再入防止（`RefCell` の借用チェック）と二重防御になり、
+/// nested-message やレガシー `try_tick_on_vsync` 経路と同一フラグを共有して二重 tick を防ぐ。
+///
+/// # 結線
+/// 本タスクの `WinApp::run` への結線は後続タスク（run 全結線）で行う。本タスクは spawn
+/// エントリのみを提供する。
+pub(crate) struct AsyncTickTask;
+
+impl AsyncTickTask {
+    /// 60Hz tick ループを UI スレッドの `spawn_local` で投入する。
+    ///
+    /// - `event`: `VsyncEventBridge::event()` から得た共有 vblank 通知（`Arc<Event>`）。
+    /// - `world`: 共有 World への `Weak`（強参照を持たない・設計 State Management）。
+    ///   shutdown 時は `upgrade()` が `None` を返し、ループは安全に終了する。
+    ///
+    /// 投入のみ行い実行はメッセージループ（`block_on`/`MessageLoop::run`）に委ねる。
+    // NOTE: `WinApp::run` の全結線（後続タスク 4.3）で呼ばれる。それまで lib ビルドでは
+    // 未使用となるため、兄弟 building block（`MessageLoopDriver` 等）と同様に dead_code 許容。
+    #[allow(dead_code)]
+    pub(crate) fn spawn(
+        event: Arc<Event>,
+        world: Weak<RefCell<EcsWorld>>,
+    ) -> wintf_winmsg_executor::JoinHandle<()> {
+        wintf_winmsg_executor::spawn_local(run_async_tick(event, world))
+    }
+}
+
+/// 1 フレーム分の ECS tick を同期実行する（独立テスト可能なコア・要件 4.3）。
+///
+/// 1. `IS_TICK_FLUSH_IN_PROGRESS` 再入ガードを engage する。既に進行中なら（再入）
+///    `false` を返して安全側スキップする（二重 tick なし）。
+/// 2. World を `try_borrow_mut` する。借用失敗（再入・別経路が借用中）なら tick せず
+///    `false` を返す（安全側スキップ・二重 tick なし）。
+/// 3. 借用成功時のみ `try_tick_world()`（13 本スケジュール・順序不変）→
+///    `flush_window_pos_commands()` を実行し `true` を返す。
+///
+/// `flush_window_pos_commands()` は World 借用解放後に呼ぶ（同期 `WM_WINDOWPOSCHANGED`
+/// が World を借用しても競合しない）。レガシー `try_tick_on_vsync` と同じ規律。
+pub(crate) fn tick_one_frame(world: &Rc<RefCell<EcsWorld>>) -> bool {
+    // ── 再入防止ガード（レガシー vsync.rs と共有・二重防御）─────────
+    let Some(_guard) = crate::ecs::world::engage_tick_flush_guard() else {
+        trace!("[tick_one_frame] Re-entry blocked by IS_TICK_FLUSH_IN_PROGRESS");
+        return false;
+    };
+
+    // RefCell 借用を試みる。既に借用中（再入）なら安全側スキップ（false）。
+    let ticked = match world.try_borrow_mut() {
+        Ok(mut world) => {
+            world.try_tick_world();
+            true
+        }
+        Err(_) => {
+            // 借用失敗（再入時）— 安全にスキップ。エラーではない。
+            false
+        }
+    };
+    // World 借用スコープ終了後に SetWindowPos コマンドをフラッシュ。
+    crate::ecs::window::flush_window_pos_commands();
+
+    ticked
+    // _guard drop で IS_TICK_FLUSH_IN_PROGRESS = false に戻る
+}
+
+/// 60Hz tick ループ本体（`spawn_local` で UI スレッドに駆動される async タスク）。
+///
+/// notify 取りこぼし防止規律（設計）: await の **前** に `listener = event.listen()` を
+/// arm する。これにより `tick_one_frame` 実行中に届いた notify も次の `listener.await`
+/// で捕捉でき、1 フレームを取りこぼさない。World の `Weak` は毎フレーム `upgrade()` し、
+/// `None`（shutdown で strong 所有者が drop 済み）なら安全にループを終了する。
+async fn run_async_tick(event: Arc<Event>, world: Weak<RefCell<EcsWorld>>) {
+    debug!("AsyncTickTask started (60Hz UI-thread tick loop)");
+    loop {
+        // 先に listen() を arm（処理中に届く notify を落とさない）。
+        let listener = event.listen();
+
+        // strong 所有者が生存しているか確認。None なら shutdown — 終了。
+        let Some(world) = world.upgrade() else {
+            debug!("AsyncTickTask stopping (world dropped — shutdown)");
+            return;
+        };
+
+        // 起床を待機（次 vblank notify まで UI スレッドを譲る）。
+        listener.await;
+
+        // 1 フレーム実行（13 本スケジュール）。再入・借用失敗は安全側スキップ。
+        tick_one_frame(&world);
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -152,5 +255,61 @@ mod tests {
 
         // drop で stop→join。スレッドが clean に終われば本テストはハングせず復帰する。
         drop(bridge);
+    }
+
+    // ── AsyncTickTask (task 2.3) ──────────────────────────────────
+
+    /// 再入安全スキップ（要件 4.3）: World が既に `borrow_mut` 済みのとき
+    /// `tick_one_frame` は tick せず `false` を返す（二重 tick なし・panic なし）。
+    ///
+    /// この経路は World 借用に失敗するため 13 本スケジュールを実行せず、
+    /// GPU/window 不要でヘッドレス実行できる。
+    #[test]
+    fn tick_one_frame_safe_skips_when_world_borrowed() {
+        use std::cell::RefCell;
+        use std::rc::Rc;
+
+        let world = Rc::new(RefCell::new(crate::ecs::world::EcsWorld::new()));
+
+        // World を借用したまま tick_one_frame を呼ぶ → try_borrow_mut が失敗。
+        let _held = world.borrow_mut();
+        let ticked = tick_one_frame(&world);
+
+        assert!(
+            !ticked,
+            "borrow_mut が握られている間は安全スキップで false を返すべき"
+        );
+        // ガードは借用失敗後に確実に解放されていること（リーク無し）。
+        assert!(
+            !crate::ecs::world::is_tick_flush_in_progress(),
+            "安全スキップ後は再入ガードが false に戻っているべき"
+        );
+    }
+
+    /// 再入ガードのトグル（要件 4.3）: `engage_tick_flush_guard` のスコープ中は
+    /// `IS_TICK_FLUSH_IN_PROGRESS` が true、drop 後に false へ戻る。さらに
+    /// 進行中の再 engage は `None`（安全スキップ）になる。
+    #[test]
+    fn reentry_guard_toggles_and_blocks_nested_engage() {
+        assert!(!crate::ecs::world::is_tick_flush_in_progress());
+
+        let guard = crate::ecs::world::engage_tick_flush_guard()
+            .expect("最初の engage はガードを獲得できる");
+        assert!(
+            crate::ecs::world::is_tick_flush_in_progress(),
+            "engage スコープ中は true"
+        );
+
+        // 再入: 進行中は None を返す（二重 tick 防止）。
+        assert!(
+            crate::ecs::world::engage_tick_flush_guard().is_none(),
+            "進行中の再 engage は None（安全スキップ）であるべき"
+        );
+
+        drop(guard);
+        assert!(
+            !crate::ecs::world::is_tick_flush_in_progress(),
+            "guard drop 後は false へ戻る"
+        );
     }
 }

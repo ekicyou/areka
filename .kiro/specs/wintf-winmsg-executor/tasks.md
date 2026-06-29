@@ -41,7 +41,7 @@
   - _Requirements: 4.1, 4.4_
   - _Boundary: VsyncEventBridge_
 
-- [ ] 2.3 60Hz async tick タスク
+- [x] 2.3 60Hz async tick タスク
   - `spawn_local` した UI スレッド async タスクが、起床通知を待って 1 フレーム分の ECS tick（13 本スケジュール）を実行し再待機するループを実装する
   - 13 本の構成・実行順序は不変とし、既存の tick 実行経路をそのまま呼ぶ
   - ECS 再入ガード（tick フラッシュ進行中フラグ）を安全側に残置し、ライブラリの wndproc 再入防止と二重防御させる
@@ -156,3 +156,9 @@
   - 完了状態: 代表 example と areka が手動確認で回帰なく動作し、ダブルクリック終了と背景プール温存が実機で確認される
   - _Requirements: 6.1, 2.5, 3.4_
   - _Depends: 4.4_
+
+## Implementation Notes
+
+- runtime の各 building block（MessageLoopDriver / VsyncEventBridge / AsyncTickTask）は WinApp::run へ未結線の間、scoped `#[allow(dead_code)]` を帯びる。task 4.3 の結線後に allow を外す（dead_code 警告 3 件は想定内・新規警告ではない）。
+- tick 再入ガード `IS_TICK_FLUSH_IN_PROGRESS` は `ecs::world::engage_tick_flush_guard()`（RAII・進行中なら `None`）/ `is_tick_flush_in_progress()` で再利用可能（task 2.3 で追加）。legacy `try_tick_on_vsync` は不変のまま並存。
+- workspace cargo を回す前に `git submodule update --init`（vendors/pasta）が必要（worktree では未populate のことがある）。ビルド/テストは PowerShell で実行（Git Bash の coreutils `link.exe` が MSVC link を遮蔽する）。
