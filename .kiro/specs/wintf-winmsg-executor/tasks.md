@@ -8,7 +8,7 @@
 
 ## 1. Foundation: 依存とランタイム基盤の足場
 
-- [ ] 1.1 採用クレートの依存追加とバージョン pin
+- [x] 1.1 採用クレートの依存追加とバージョン pin
   - `wintf-winmsg-executor` を `=0.0.5`（共有クラスに CS_DBLCLKS ＋既定カーソル内蔵版）に pin し、`event-listener` を依存に追加する
   - tech.md に採用クレート・event_listener・tokio 非依存方針を反映する
   - 先進坑 `pilot/wintf-winmsg-executor` の go 判定（取得済み）を前提依存として満たすことを確認する
