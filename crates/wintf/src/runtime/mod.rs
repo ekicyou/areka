@@ -20,6 +20,10 @@ use windows::core::Result;
 
 use crate::ecs::world::EcsWorld;
 
+/// メッセージループ層。ライブラリ（`wintf-winmsg-executor`）の `block_on` /
+/// `MessageLoop::run` へ委譲する `MessageLoopDriver` を提供する。
+mod message_loop;
+
 /// UI スレッド基盤の owner。旧 `WinThreadMgr` を置換する新公開 facade。
 ///
 /// COM 初期化・DPI awareness 設定・`EcsWorld` 生成を統括し、共有 World ハンドルの
