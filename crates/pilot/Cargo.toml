@@ -11,4 +11,12 @@ publish = false
 
 # [dependencies] は空（最小依存）。先進坑が依存を要する場合のみ最小限追加し、
 # 葉ノード隔離（inbound ゼロ）と 32bit 可搬性を崩さないこと。
+#
+# 先進坑 wintf-winmsg-executor 用の探索依存（使い捨て前提）。
 [dependencies]
+# NOTE: 一時的に 0.0.3 で開発（0.0.4 は crates.io インデックス未伝播・差分は get_instance_handle 公開のみ）。
+# 伝播後に "0.0.4" へ戻す。先進坑コードは new_ex 経由ゆえ API 互換。
+wintf-winmsg-executor = "0.0.3"
+event-listener = "5"
+windows = { workspace = true }
+windows-core = { workspace = true }
