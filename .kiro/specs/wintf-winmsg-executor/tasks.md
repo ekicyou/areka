@@ -15,7 +15,7 @@
   - 完了状態: 新依存を含む wintf がクレート解決し、`cargo build` が依存エラーなく通る
   - _Requirements: 7.1, 7.2, 7.3_
 
-- [ ] 1.2 runtime モジュール新設と WinApp facade の骨格
+- [x] 1.2 runtime モジュール新設と WinApp facade の骨格
   - 新しい runtime レイヤを設け、`WinApp` を UI スレッド基盤の owner として導入する（旧 `WinThreadMgr` 置換の新公開 facade）
   - COM 初期化（`COINIT_MULTITHREADED`）・DPI awareness 設定・`EcsWorld`（`Rc<RefCell<EcsWorld>>`）生成を WinApp に集約する（旧 process_singleton / WinThreadMgr から移設）
   - 公開 API（new / world / UI async 投入口 / run）のシグネチャを確定し、run は最小スタブとする
