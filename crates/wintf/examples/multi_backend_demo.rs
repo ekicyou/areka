@@ -63,7 +63,7 @@ fn main() -> Result<()> {
         )
         .init();
 
-    let mgr = WinThreadMgr::new()?;
+    let mgr = WinApp::new()?;
     let world = mgr.world();
 
     world.borrow().spawn(|tx| async move {

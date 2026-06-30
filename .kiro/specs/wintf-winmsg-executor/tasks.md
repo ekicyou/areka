@@ -114,7 +114,7 @@
   - _Boundary: WinApp_
   - _Depends: 2.1, 2.3, 4.2_
 
-- [ ] 4.4 利用側（examples・areka）の新 API 追従
+- [x] 4.4 利用側（examples・areka）の新 API 追従
   - 全 examples と areka 本体の `WinThreadMgr::new/world/run` を `WinApp` 新 API へ追従改修する
   - `dcomp_demo` の旧 `create_window` / `spawn_normal` 利用を、宣言的生成と UI async 投入口へ書き換える
   - 背景プール（WintfTaskPool / world.spawn 経路）は温存し触らない
@@ -159,6 +159,8 @@
 
 ## Implementation Notes
 
+- **タスク順序の再整列（4.5 は 5.x の後・開発者 steer から導出）**: 開発者決定「旧コードは移行が確認できるまで残す（撤去は最終）」。移行確認＝5.3 手動 E2E。よって legacy 撤去（4.5）は検証前に安全網を外さぬよう **5.1→5.2→5.3→4.5** の順で実行する（4.5 の依存は 4.4 のみゆえ 5.x 先行は依存的に可）。5.3 は手動 E2E ゆえ開発者確認の gate（STOP の可能性）。5.x で新経路の不具合が出たら legacy を reference に修正可能。
+- **dcomp_demo 書換（4.4・記録）**: 旧 dcomp_demo は命令的 WinMessageHandler ＋ create_window による 3D カードめくり記憶ゲーム。ECS draw 層に 3D カードフリップ widget が無く faithful port 不可ゆえ、設計意図（新 API 実演）に沿って **宣言的 DComp デモ**（CompositionMode::DComp 窓＋Rectangle/Label カードグリッド＋spawn_ui_local 実演）へ recast。ゲームロジックは意図的にドロップ（example ＝手動検証補助でテスト代替でない）。module doc に経緯記載。要 5.3 で代表 example の回帰確認。
 - **Phase 4 = 逐次 live cutover（開発者決定 2026-06-30）**: 4.1→4.2→4.3→4.4→4.5 を 1 タスクずつ implementer→review→commit。各コミットは「コンパイル緑＋lib テスト緑＋boundary」で検証。ランタイム/example 実行検証は **4.4（build）＋5.3（手動E2E）に集約**（旧経路と新経路の共有 lifecycle ハンドラ＋create 経路が flip するため、4.1〜4.4 の中間コミットは一時的に実行不可・squash-merge で消える）。design Migration Strategy 順序と一致。「旧コードは reference として保持・実撤去は 4.5」の共存 steer は維持。
 - **【要対応 gap】factory が Window.parent 未転送（4.3 レビューで発見・3.4 由来）**: 旧 create_windows は `Window.parent` を `CreateWindowExW` の parent 引数へ渡していたが、新 EcsWindowFactory（3.4）は `WindowType::TopLevel` 固定で parent を無視。areka シェル+バルーンが親子窓か独立トップレベルかで影響。**5.3 E2E 前（4.4 追従改修時 or 専用修正）に factory の parent 転送可否を確認・必要なら補修すること**（ライブラリ `new_checked_ex` の parent 受け渡し口を確認）。4.3 範囲外ゆえ 4.3 はブロックしない。
 - **4.3 解釈（全結線・cutover 心臓部）**: 「WinApp::run 全結線」は run の tick/block_on 結線だけでなく、新経路を実働させる create_windows 切替＋reconcile 結線を含む（これ無しでは「new→world→run で生成/tick/終了が一体動作」が成立しない＝design「全結線」の含意）。境界 "WinApp" を超えて window_system.rs / ecs/world を最小限触る（boundary 拡張・記録済）。設計判断:
