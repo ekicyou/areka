@@ -90,6 +90,8 @@ IPC 方式の真の決定因子は throughput でも payload サイズでもな�
 
 **bitness 安全規約（方式共通）**: 跨ぐのは生バイト列のみ（§5.4）。フレーミングは**固定幅 LE 長さ prefix（u32 LE）**。payload に**ポインタ/HANDLE/struct を載せない**（同一マシンで endian 共通だが固定幅で明示）。親 x64 が i686 helper exe を `CreateProcess`/`std::process::Command` で起動（exe パスは §3.2 の 2 段ビルド成果物を arg/env で受け渡し）。
 
+**速度は決定因子でない（補足・2026-06-30）**: ローカル pipe 往復は現代 Windows で **~µs オーダ**、SHIORI の cadence は **OnSecondChange=1 Hz ＋人間操作ペース（体感予算 ~数十 ms）**ゆえ IPC レイテンシは要求を 3〜6 桁下回り**非律速**。応答性を決めるのは脳（`pasta.dll`）処理＋描画＋ **`IShiori` の `PENDING`/`Complete` 非同期**（UI スレッドを脳で塞がない）であって transport の生速度ではない。共有メモリの優位は**大 payload 時のみ**で SHIORI の小メッセージ（数百 B〜数 KB）には不要。modern browser（Chromium Mojo / Firefox IPDL）も **「制御＝named pipe/unix socket」＋「bulk＝共有メモリ＋handle passing」のハイブリッド**で、小メッセージは pipe・大データのみ shm。host-32 は payload 小ゆえ **bulk 路不要＝named pipe 単独で十分**（本坑）。旧 SSTP 期の「共有メモリで速度を稼ぐ」発想は host-32 の通信レートには非適用。→ stdio/named pipe の選択は**速度でなくループ共存エルゴノミクス**で決する。
+
 ### 3.2 32bit helper のビルド/配置構成（R1/R7・要研究）
 
 #### Option A: 同一 example 内に親 main＋helper を内包し実行時に自己再起動
