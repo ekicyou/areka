@@ -1,0 +1,33 @@
+＃ dispatch.pasta - OnTalk カテゴリディスパッチャ
+＃
+＃ OnTalk イベント発生時、以下の比率でカテゴリプールを選択する。
+＃ 同名 ＊OnTalk のシャッフル＆順次消費により比率を実現。
+＃
+＃   通常トーク : スキット : 季節トーク = 5 : 2 : 1
+＃
+＃   ＞通常トーク → talk.pasta  (＊通常トーク × 54)
+＃   ＞スキット   → skit.pasta  (＊スキット × 17)
+＃   ＞季節トーク → event.pasta (＊季節トーク × 1)
+＃
+＃ 比率変更は ＊OnTalk エントリの増減で行う。
+
+＊OnTalk
+　＞通常トーク
+＊OnTalk
+　＞通常トーク
+＊OnTalk
+　＞通常トーク
+＊OnTalk
+　＞通常トーク
+＊OnTalk
+　＞通常トーク
+
+＊OnTalk
+　＞スキット
+＊OnTalk
+　＞スキット
+＊OnTalk
+　＞スキット
+
+＊OnTalk
+　＞季節トーク

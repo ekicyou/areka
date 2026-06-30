@@ -1,0 +1,42 @@
+[package]
+name = "emo2"
+version = "2.0.0"
+edition = "2024"
+
+[loader]
+pasta_patterns = ["dic/*.pasta"]
+lua_search_paths = [
+    "profile/pasta/save/lua",   # ユーザー保存スクリプト
+    "scripts",                   # ユーザー作成スクリプト（カスタマイズ用）
+    "profile/pasta/pasta_scripts", # pasta 標準ランタイム
+    "profile/pasta/cache/lua",   # トランスパイル済みキャッシュ
+    "scriptlibs",                # 追加ライブラリ
+]
+transpiled_output_dir = "profile/pasta/cache/lua"
+
+[logging]
+file_path = "profile/pasta/logs/pasta.log"
+rotation_days = 7
+level = "info"
+
+[ghost]
+talk_interval_min = 15
+talk_interval_max = 30
+
+[talk]
+script_wait_normal = 50
+script_wait_period = 1000
+script_wait_comma = 500
+script_wait_strong = 500
+script_wait_leader = 200
+
+[actor."むらさき"]
+spot = 0
+budoux = [29,30,30,29]
+
+[actor."エモ"]
+spot = 1
+budoux = [18,20]
+
+[persistence]
+data_dir = "profile/pasta/save"

@@ -1,0 +1,116 @@
+＃ touch.pasta - タッチ反応
+＃ emo-gs dic/talks/event.lua の TOUCH 関数を移植（emo2-talk-port）
+＃ 各部位4バリエーション × 4キー = 16シーンに拡張（emo2-te-12）
+＃ OnMouseMove は Lua コードブロックで actor×region ルーティング
+＃ OnMouseDoubleClick は menu.pasta に移管済み
+
+＊OnMouseMove
+　＞on_mouse_move
+```lua
+function SCENE.on_mouse_move(act)
+    local save, var = act:init_scene(SCENE)
+    act:transfer_req_to_var()
+    local td = require("touch_detect")
+    local log = require "@pasta_log"
+    local actor = var.r3
+    local region = var.r4
+
+    -- 空regionはSSPがcollision領域外で送る正常値。ログ不要で即リターン
+    if region == nil or region == "" then return nil end
+
+    if actor == nil then
+        log.warn({event="OnMouseMove", warn="nil_actor", region=region})
+        return nil
+    end
+
+    log.trace({event="OnMouseMove", actor=actor, region=region})
+
+    local fired = td.check(actor, region)
+    if not fired then return nil end
+
+    local key = region .. actor
+    log.info({event="touch_fired", key=key})
+    return act:call(SCENE.__global_name__, key, {})
+end
+```
+　・Head0通常
+　むらさき：＠笑顔　撫でて伸ばすタイプなんや～。
+　　　エモ：＠冷笑　うそっぽ～い。
+
+　・Head0照れ
+　むらさき：＠静観　ん‥‥、\w9＠可愛いor小悪魔　なでなでしてくれるん？
+　　　エモ：＠冷笑　ご主人が犬を撫でる感じ。
+　むらさき：＠怒り　犬やないねん！
+
+　・Head0受け流し
+　むらさき：＠いたずら笑顔　撫でてくれるんや‥‥。\w5＠笑顔　ま、ええけど。
+　　　エモ：＠通常　嬉しそう。
+　むらさき：＠照れ怒り　ち゛が！
+
+　・Head0掛け合い
+　　　エモ：＠冷笑　撫でられて気持ちいい？
+　むらさき：＠静観　‥‥え、\w9＠照れ　見てたん？
+　　　エモ：＠笑顔　ずっと見てるよ。
+　むらさき：＠照れ怒り　やめてや！
+
+　・Bust0通常
+　むらさき：＠笑顔　えっち、すけっち、わんたっち～♪
+　　　エモ：＠冷笑　‥‥昭和の香りがするよ。
+
+　・Bust0怒り
+　むらさき：＠驚き　ちょっ‥‥！\w5＠照れ怒り　あかんて！
+　　　エモ：＠通常　若いつぼみは繊細だからね。
+　むらさき：＠怒り　そういうこと言う！？
+
+　・Bust0受け流し
+　むらさき：＠いたずら笑顔　ふーん。\w5＠笑顔　こないだより慣れてきとるやん。
+　　　エモ：＠通常　どっちが？
+　むらさき：＠小悪魔笑顔　‥‥どっちやろね？
+
+　・Bust0掛け合い
+　　　エモ：＠笑顔　今ちょっと嬉しそうだった。
+　むらさき：＠照れ怒り　ちゃうわ！
+　　　エモ：＠冷笑　顔は嬉しいって言ってる。
+　むらさき：＠怒り　もう！！
+
+　・Head1通常
+　　　エモ：＠不安　な、なんだよう。
+　むらさき：＠笑顔　仕方ないなあ～、%usernameったらもう♪
+
+　・Head1ツッコミ
+　　　エモ：＠冷笑　なでなで成分、補充。
+　むらさき：＠通常　補充できるんや。
+　　　エモ：＠ジト　次は三十分後です。
+
+　・Head1無関心
+　　　エモ：＠通常　‥‥。
+　むらさき：＠笑顔　いつまでも撫でてられそう。
+　　　エモ：＠静観　どうぞ。
+　むらさき：＠驚き　ええんか？！
+
+　・Head1掛け合い
+　むらさき：＠笑顔　可愛いやん、エモ。
+　　　エモ：＠照れ　…別に。
+　むらさき：＠いたずら笑顔　動じてるやん。
+　　　エモ：＠照れ怒り　動じてない。
+
+　・Bust1通常
+　　　エモ：＠照れ怒り　さ、触らないでよ！
+　むらさき：＠笑顔　もう、%usernameったら、いたずらっ子やねぇ。
+
+　・Bust1無関心
+　　　エモ：＠通常　圧力センサーが反応した。
+　むらさき：＠通常　なんや？
+　　　エモ：＠静観　ロボットみたいな感触がした。
+　むらさき：＠通常　エモの感想がロボットや。
+
+　・Bust1ツッコミ
+　　　エモ：＠ジト　‥‥セクハラです。
+　むらさき：＠笑顔　えもってセクハラ対象なん？
+　　　エモ：＠冷笑　対象です。
+
+　・Bust1掛け合い
+　むらさき：＠いたずら笑顔　触られてんで。
+　　　エモ：＠照れ　‥‥知ってる。
+　むらさき：＠笑顔　顔赤くなってない？
+　　　エモ：＠照れ怒り　なってない。

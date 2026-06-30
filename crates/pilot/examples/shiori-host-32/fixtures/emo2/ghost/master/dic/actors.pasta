@@ -1,0 +1,57 @@
+＃ actors.pasta - アクター辞書（emo2）
+＃ emo-gs の Surface ID 体系に基づくアクター定義
+
+＃ むらさき（sakura, spot 0）- 25表情 + ランダムセット2個
+＃ 5軸コード形式: {腕}{紅}{口}{眉}{目} — 腕A/B勾配ランダム選択（主腕2:副腕1）
+％むらさき
+＃　むらさきの全ての表情は、関数呼び出しで実装する。
+＃　「＠通常」⇒「ACTOR.通常(act) 」の呼び出し。
+```lua
+local M = require("murasaki1000")
+
+function ACTOR.通常(act) return M.build("A0813","A0813","B0813") end
+function ACTOR.照れ(act) return M.build("A1643","A1643","B1643") end
+function ACTOR.驚き(act) return M.build("A0B13","B0B13","B0B13") end
+function ACTOR.不安(act) return M.build("B0733","B0733","A0733") end
+function ACTOR.落胆(act) return M.build("A0635","A0635","B0635") end
+function ACTOR.笑顔(act) return M.build("B0814","B0814","A0814") end
+function ACTOR.静観(act) return M.build("A0815","A0815","B0815") end
+function ACTOR.怒り(act) return M.build("A0723","A0723","B0723") end
+function ACTOR.冷笑(act) return M.build("A0134","A0134","B0134") end
+function ACTOR.苦笑(act) return M.build("A0134","A0134","B0134") end
+function ACTOR.照れ怒り(act) return M.build("B1623","B1623","A1623") end
+function ACTOR.ぴえん(act) return M.build("B0B41","B0B41","A0B41") end
+function ACTOR.びえー(act) return M.build("B0B41","B0B41","A0B41") end
+function ACTOR.ジト(act) return M.build("A0712","A0712","B0712","A0812","A0812","B0812") end
+function ACTOR.へえ(act) return M.build("A0342","A0342","B0342") end
+function ACTOR.いたずら笑顔(act) return M.build("B1332","B1332","A1332") end
+function ACTOR.可愛い笑顔(act) return M.build("A1213") end
+function ACTOR.小悪魔笑顔(act) return M.build("B1213") end
+function ACTOR.興奮笑顔(act) return M.build("B1124","B1124","A1124") end
+function ACTOR.期待大(act) return M.build("B1315","B1315","A1315") end
+function ACTOR.期待外れ(act) return M.build("B0511","B0511","A0511") end
+function ACTOR.期待通り(act) return M.build("B0823","B0823","A0823") end
+function ACTOR.憤り(act) return M.build("B0423","B0423","A0423") end
+function ACTOR.強い怒り(act) return M.build("B1523","B1523","A1523") end
+function ACTOR.そんなあ(act) return M.build("B1C44","B1C44","A1C44") end
+function ACTOR.通常or静観(act) return M.build("A0813","A0813","B0813","A0815","A0815","B0815") end
+function ACTOR.可愛いor小悪魔(act) return M.build("A1213","B1213") end
+```
+
+
+＃ エモ（kero, spot 1）- 11表情（kero.surface.alias 完全準拠）
+＃ 静観・怒り・照れ怒り・ジト は2バリアント定義、alias解決により SSP がランダム選択
+％エモ
+　＠通常：\s[通常]
+　＠照れ：\s[照れ]
+　＠驚き：\s[驚き]
+　＠不安：\s[不安]
+　＠落胆：\s[落胆]
+　＠笑顔：\s[笑顔]
+　＠静観：\s[静観]
+　＠怒り：\s[怒り]
+　＠冷笑：\s[冷笑]
+　＠照れ怒り：\s[照れ怒り]
+　＠ジト：\s[ジト]
+＃ ランダム表情セット（大人になってもシナリオで使用）
+　＠通常or静観：\s[通常],\s[静観]
