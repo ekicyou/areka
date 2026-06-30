@@ -206,7 +206,8 @@ sequenceDiagram
 **フロー上の判断**:
 
 - **HWND ハンドシェイク**: 別 side-channel（pipe 等）を混ぜず Window Message に統一。親 HWND を helper 起動引数で seed し、helper が自 HWND を HELLO（1st WM_COPYDATA）で返す。
-- **再入受領**: 親は `SendMessage(helperHwnd, WM_COPYDATA, REQUEST)` で待機中も、helper からの応答 sent message（2nd WM_COPYDATA）を再入受領する。実装は `SendMessageTimeout` でタイムアウト併用（要件 2.3）。
+- **再入受領（受け皿セル方式・議題 2 確定）**: 親は `response_slot: Cell<Option<Vec<u8>>>`（WndProc とは window user data `GWLP_USERDATA` or thread-local で共有）を持つ。`send_request` は ①slot を空に → ②`SendMessageTimeout(helperHwnd, WM_COPYDATA, REQUEST)` で送出（親はここでブロック）。待機中に helper が返す RESPONSE(2nd WM_COPYDATA) を親の WndProc が**再入受領**し payload を slot へ格納して即 return → ③`SendMessageTimeout` が戻ったら slot から取り出す（空なら `Timeout`）。
+- **デッドロック回避（最優先・議題 2）**: ①応答を受ける親 WndProc は**それ以上の跨プロセス `SendMessage` を発行せず即 return**する（待機が厳密な入れ子＝REQUEST 待ち ⊃ RESPONSE 待ち ⊃ 非ブロッキング WndProc となり**循環待ちが構造的に発生しない**）。②両方向とも `SendMessageTimeout`（タイムアウト＋`SMTO_ABORTIFHUNG`）で wedged peer をハングさせない（要件 2.3）。③single-in-flight ゆえ往復は同時に 1 つ（往復の交錯なし）。万一 i686↔x64 で再入配送が成立しなければ named pipe へ後退（Revalidation Trigger 済）。
 - **HGLOBAL 所有権**: SHIORI3 規約（要求 HGLOBAL は DLL が解放／応答 HGLOBAL はホストが解放）は **helper プロセス内に閉じる**。HGLOBAL は 32bit ローカルゆえ IPC を跨がない（COMPAT §85・research.md §5.4）。
 - **`OnBoot` 1 種**: 橋の往復機構検証ゆえ `OnBoot` で代表（`OnFirstBoot` は別送しない・往復経路は同一・要件 4.1）。
 
@@ -370,7 +371,7 @@ enum IpcError { Timeout, SendFailed, PeerGone }
 **Implementation Notes**
 - Integration: 親/helper で `ipc.rs` を共有しプロトコルの単一ソースとする。
 - Validation: 1 往復の実走観測自体が go 基準 (1) の一部（research.md §3.1.1）。
-- Risks: 跨ビットネス HWND 表現の取り違え（u32 LE 規約を厳守）。先進坑で実走確認する。
+- Risks: 跨ビットネス HWND 表現の取り違え（u32 LE 規約を厳守）。再入配送が i686↔x64 で想定どおり働くかは先進坑で実走確認（不成立なら named pipe 後退＝Revalidation Trigger）。デッドロック回避規約は System Flows「再入受領／デッドロック回避」を参照（応答 WndProc は非ブロッキング・両方向 `SendMessageTimeout`・single-in-flight ＝循環待ちなし）。
 
 #### Shiori3Codec
 
