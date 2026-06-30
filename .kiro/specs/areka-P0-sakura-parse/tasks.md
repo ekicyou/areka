@@ -1,6 +1,6 @@
 # 実装計画
 
-- [ ] 1. Foundation: `areka-parsers` クレートを新設する
+- [x] 1. Foundation: `areka-parsers` クレートを新設する
   - `crates/areka-parsers/` を作成し `Cargo.toml`（package = "areka-parsers"・edition 2024・依存は std のみ、任意で既存 workspace の `tracing`）を定義する
   - `src/lib.rs`（`pub mod sakura;`）と `src/sakura/mod.rs`（公開面集約のスケルトン）を置く。`areka` は変更しない（bin のまま）
   - workspace の `members = ["crates/*"]` により本クレートが自動的にメンバーへ含まれることを確認する
