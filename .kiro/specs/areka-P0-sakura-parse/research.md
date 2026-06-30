@@ -204,3 +204,38 @@ arg       = quoted | raw ;                                        (* "…"(, 内
 text      = { textchar | "\\" | "\%" } ;
 (* 除外: tag が "]" 後にさらに "[" を持つ旧 2 連形（\q 旧仕様のみ）→ ②非対象・①は Raw/Text で吸収 *)
 ```
+
+---
+
+## 8. 設計フェーズ決定（design.md 生成時・確定）
+
+> `/kiro-spec-design` 実行で確定した設計判断。§4 の持ち越し論点に対する裁定結果と synthesis 結論。design.md が自己完結の正本であり、本節はその根拠ログ。
+
+### 8.1 discovery 種別と synthesis 結論
+
+- **Discovery 種別 = light（拡張・統合フォーカス）**: ロジックはグリーンフィールドだが、外部リサーチ不要（構文モデルは §7 で確定済み・外部依存ゼロ）。整合対象は areka 構造・dola `CueCommand` パターン・steering 規約で、Grep/Read による既存パターン分析が中心。新規外部依存の WebSearch 検証は不要（手書き線形スキャナ＋std のみ）。
+- **Generalization（synthesis #1）**: 待ち時間 3 表記（`\w[n]`/`\wN`/`\_w[ms]`）を単一 `Wait(Duration)` へ一般化（要件 3.4 が明示要求）。寛容パススルーは「区切れたが意味未対応（`GenericCommand`/`Raw`）」と「区切れない不正（`Raw`）」の 2 シームへ一般化。これ以上のカテゴリ分割（待ち/描画/制御の入れ子 enum）は YAGNI ゆえ却下＝フラット enum 維持（§3.3 i）。
+- **Build vs Adopt（synthesis #2）**: 字句解析は **build（手書き線形スキャナ）**。nom/pest/winnow/正規表現は emo2 subset 規模（約 12 種）に対し過剰＋新規依存ゆえ却下（§3.2）。待ち時間正規化型は **adopt（std `std::time::Duration`）**。命令モデルは dola `CueCommand` の**パターンを adopt（型は再定義）**＝直接の型依存はしない（純粋・並走安全維持）。
+- **Simplification（synthesis #3）**: `thiserror` エラー型を**定義しない**（寛容パススルーゆえ送出しない・§4 #5 裁定）。戻り値は `Vec<Instruction>` 直返し（`Result` 不要）。serde 派生を**外す**（シリアライズ計画なし・YAGNI・§4 #3 裁定）。Option C2（別クレート）は消費者 1 つ＝YAGNI ゆえ却下。
+
+### 8.2 §4 持ち越し論点の裁定
+
+| # | 論点 | 裁定 |
+|---|------|------|
+| 1 | 配置（最重要） | **Option A / C1**: areka に `lib.rs` 新設＋`sakura` モジュール公開。型（`model.rs`）と関数（`lexer`/`decode`/`parse`）をモジュール内分割。下流 engine は `areka::sakura::Instruction` を直接 import。Option B（bin mod）は I/O 契約共有不能ゆえ却下、C2（別クレート）は YAGNI ゆえ却下。 |
+| 2 | 拡張シームの形 | `#[non_exhaustive] enum Instruction` **＋** 汎用 `Raw` / `GenericCommand` variant の**両方**（variant 追加は後方互換・消費側 `match` は `_ =>` 必須）。 |
+| 3 | I/O 契約の公開と serde | `pub` は `parse` ＋ `Instruction` ＋値型（`SurfaceArg`/`NewLineRatio`/`Choice`/`MoveArgs`）。lexer の `Token` は `pub(crate)`（非公開）。**serde 派生なし**。`#[derive(Clone, Debug, PartialEq)]`（`f32`/`Duration` ゆえ `Eq`/`Hash` なし）。 |
+| 4 | テスト資産 | in-source `#[cfg(test)] mod tests`（`sakura/tests.rs`）。emo2 実 boot script のリポジトリ同梱可否は未確定（OPEN QUESTION #3）だが、タグ個別の手書きフィクスチャで done の網羅性（要件 12.4）を担保可能ゆえ**非ブロッキング**。insta 等スナップショット依存は導入しない。 |
+| 5 | エラー方針 | `Vec<Instruction>` 直返し（失敗なし）。`thiserror` エラー型は定義しない。 |
+| 6 | 値正規化規約 | 型の**外形は確定**（`Wait(Duration)` / `NewLineRatio(f32)` / `Choice{disp,target,references}` / `MoveArgs{args:Vec<String>}` / `Cursor{x,y}` は文字列保持）。内部定数（`\w`/`\wN` 基準 ms・素 `\n` 既定比率）は実装時裁定（OPEN QUESTION #1/#2）＝型契約に影響せず。`Cursor`/`MoveArgs` は意味割当をせず生引数保持＝「decode = 構文区切り＋引数分割」と Out of Boundary（実行・意味割当は別 spec）を両立。 |
+| 7 | roadmap pass/fail 整合 | roadmap L86「boot script を token 化」に対し確定要件は「完全 decode 済み型付き命令列」＝**意図的な要件昇格**（§4 #7）。design.md はこの昇格を反映。roadmap 文言更新は steering 領分・本 spec 外（kiro-complete 時に整合確認）。 |
+
+### 8.3 依存方向（design.md 確定・実装/レビューで違反はエラー扱い）
+
+`model`（型・依存なし） ← `lexer`（model のみ） ← `decode`（model + lexer） ← `parse`（lexer + decode）。各層は左の層のみを import し、上方向（右→左）の import は禁止。`tracing` は `decode` の任意発行のみ。host-32/conductor/wintf/dola/shiori-abi へのコード依存は全層で禁止（純粋・並走安全）。
+
+### 8.4 設計レビューゲート結果
+
+- **Mechanical checks**: 全 numeric requirement ID（1.1〜13.8）が traceability 表に出現 ✓ / Boundary 4 節（Owns・Out・Allowed・Revalidation）populated ✓ / File Structure Plan に具体パス ✓ / boundary ↔ file 整合 ✓ / orphan component なし（model/lexer/decode/parse/tests は全て file マップ済み）✓。
+- **Judgment review**: 境界明示・依存方向明示・interface 具体（signature ＋ pre/post/invariant）・`\q` 旧形除外と「Move decode = 構文区切り」で要件 7.1 と Out of Boundary の緊張を解消。OPEN QUESTION 3 件は値定数のみで型契約に影響せず＝真の spec gap ではない。
+- **結果**: **1 パス目で通過**（修復パスなし）。
