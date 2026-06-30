@@ -42,10 +42,13 @@ use windows::Win32::UI::HiDpi::{
     DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2, SetProcessDpiAwarenessContext,
 };
 use windows::Win32::UI::WindowsAndMessaging::{
-    GWL_EXSTYLE, GetCursorPos, GetWindowLongPtrW, GetWindowRect, SWP_FRAMECHANGED, SWP_NOACTIVATE,
-    SWP_NOMOVE, SWP_NOSIZE, SWP_NOZORDER, SetWindowLongPtrW, SetWindowPos, WINDOW_EX_STYLE,
-    WM_CLOSE, WM_LBUTTONDOWN, WS_EX_NOREDIRECTIONBITMAP, WS_EX_TOPMOST, WS_EX_TRANSPARENT,
+    GWL_EXSTYLE, GetClientRect, GetCursorPos, GetWindowLongPtrW, SW_SHOW,
+    SWP_FRAMECHANGED, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE, SWP_NOZORDER, SetWindowLongPtrW,
+    SetWindowPos, ShowWindow, WINDOW_EX_STYLE, WM_CLOSE, WM_LBUTTONDOWN,
+    WS_EX_NOREDIRECTIONBITMAP, WS_EX_TOPMOST, WS_EX_TRANSPARENT,
 };
+// ClientToScreen は Gdi モジュール（read-only な client→screen 座標写像）。
+use windows::Win32::Graphics::Gdi::ClientToScreen;
 use windows::core::{Interface, Result};
 
 /// 不透明円の半径（物理ピクセル, R4.1）。
@@ -234,9 +237,31 @@ fn make_window(state: Rc<AppState>) -> Window<Rc<AppState>> {
                     Some(LRESULT(0))
                 }
                 WM_LBUTTONDOWN => {
-                    // 受領ログ＝T3 の証跡（R6.1/R6.2）。不透明円の内側を踏んだクリックだけが
-                    // ここへ届く（円外＝WS_EX_TRANSPARENT で背面へ抜ける／4.x で配線）。
-                    println!("[click] WM_LBUTTONDOWN 受領（不透明円クリック）→ 色トグル＋DComp 再描画");
+                    // 受領ログ＝T3 の証跡（R6.1/R6.2）。期待では不透明円の内側を踏んだクリックだけが
+                    // ここへ届く（円外＝WS_EX_TRANSPARENT で背面へ抜ける）。
+                    // 検証強化（T2/T3/T6 の一意判定）: クリックのクライアント座標（lParam）を取り、
+                    // 描画円（クライアント中心・半径 RADIUS）の内外を判定してログに残す。
+                    // 「円外なのに受領」が出れば WS_EX_TRANSPARENT の透過漏れ＝核心 Unknown の否定証跡。
+                    let lp = msg.lparam.0;
+                    let click_x = (lp & 0xFFFF) as i16 as i32;
+                    let click_y = ((lp >> 16) & 0xFFFF) as i16 as i32;
+                    let mut cr = RECT::default();
+                    // SAFETY: Win32 境界。read-only。msg.hwnd は有効窓。
+                    let _ = unsafe { GetClientRect(msg.hwnd, &mut cr) };
+                    let ccx = cr.right / 2;
+                    let ccy = cr.bottom / 2;
+                    let ddx = (click_x - ccx) as i64;
+                    let ddy = (click_y - ccy) as i64;
+                    let r = RADIUS as i64;
+                    let inside = ddx * ddx + ddy * ddy <= r * r;
+                    println!(
+                        "[click] WM_LBUTTONDOWN 受領 client=({click_x},{click_y}) 円中心=({ccx},{ccy}) → {} → 色トグル＋DComp 再描画",
+                        if inside {
+                            "円内（正常受領）"
+                        } else {
+                            "円外（!! WS_EX_TRANSPARENT 透過漏れ !!）"
+                        }
+                    );
 
                     // 円色インデックスを反転し（R6.3）、新色で DComp 再描画する。
                     // GDI/WM_PAINT/InvalidateRect は使わず DComp 描画パス（draw_circle）のみ再利用
@@ -280,7 +305,10 @@ fn build_pipeline(hwnd: HWND) -> Result<DCompPipeline> {
     // 窓の物理矩形（PMv2 ＝物理ピクセル）。surface サイズ＝矩形サイズ。
     let mut rect = RECT::default();
     // SAFETY: Win32 境界。`hwnd` は直前に生成した有効窓。out 引数 `rect` は書き込み専用。
-    unsafe { GetWindowRect(hwnd, &mut rect)? };
+    // DComp の CreateTargetForHwnd は**クライアント領域**に合成するため、surface は client サイズに
+    // 合わせる（窓全体だと枠ぶんズレて見える円と判定円が一致しない・R4.1/R7.2）。
+    // GetClientRect は (0,0,client_w,client_h) を返す（PMv2 ＝物理ピクセル）。
+    unsafe { GetClientRect(hwnd, &mut rect)? };
     let width = (rect.right - rect.left).max(1) as u32;
     let height = (rect.bottom - rect.top).max(1) as u32;
 
@@ -449,28 +477,48 @@ fn spawn_cursor_worker(
             let hwnd = HWND(raw_hwnd as *mut _);
 
             let mut pt = POINT::default();
-            let mut wr = RECT::default();
-            // SAFETY: Win32 境界。`GetCursorPos`/`GetWindowRect` はともに read-only で
+            let mut cr = RECT::default();
+            // SAFETY: Win32 境界。`GetCursorPos`/`GetClientRect` はともに read-only で
             // out 引数へ書き込むのみ。`hwnd` は main が生かし続ける有効窓
             // （done+join で本ワーカ停止後に Window が drop される）。スタイル変更はしない。
             let read_ok = unsafe {
-                GetCursorPos(&mut pt).is_ok() && GetWindowRect(hwnd, &mut wr).is_ok()
+                GetCursorPos(&mut pt).is_ok() && GetClientRect(hwnd, &mut cr).is_ok()
             };
 
             if read_ok {
-                // 円内 = 不透明 = クリック透過 OFF（false）／円外 = 透明 = ON（true）。
-                let desired = !alpha_is_opaque(pt, wr);
+                // 判定はクライアント領域基準（R4.1「クライアント中央」）。DComp は client area に
+                // 合成するため、見える円（client 中心に描画）と判定円を一致させるには client 矩形を
+                // スクリーン座標へ写して中心を求める（窓矩形だと枠ぶんズレる）。GetClientRect は
+                // (0,0,cw,ch) ゆえ ClientToScreen で左上・右下をスクリーン座標へ写す。
+                let mut tl = POINT { x: cr.left, y: cr.top };
+                let mut br = POINT { x: cr.right, y: cr.bottom };
+                // SAFETY: Win32 境界。`ClientToScreen` は read-only な座標写像（point を in/out）。
+                let map_ok = unsafe {
+                    ClientToScreen(hwnd, &mut tl).as_bool() && ClientToScreen(hwnd, &mut br).as_bool()
+                };
 
-                // 初回（last==None）または変化時のみ publish + notify（未変化は黙る・R3.3）。
-                if last != Some(desired) {
-                    desired_passthrough.store(desired, Ordering::Release);
-                    state_changed.notify(usize::MAX);
-                    println!(
-                        "[cursor] desired click-through = {} (cursor=({}, {}) win=[{},{},{},{}])",
-                        if desired { "ON(透過)" } else { "OFF(不透過)" },
-                        pt.x, pt.y, wr.left, wr.top, wr.right, wr.bottom
-                    );
-                    last = Some(desired);
+                if map_ok {
+                    let client_screen = RECT {
+                        left: tl.x,
+                        top: tl.y,
+                        right: br.x,
+                        bottom: br.y,
+                    };
+                    // 円内 = 不透明 = クリック透過 OFF（false）／円外 = 透明 = ON（true）。
+                    let desired = !alpha_is_opaque(pt, client_screen);
+
+                    // 初回（last==None）または変化時のみ publish + notify（未変化は黙る・R3.3）。
+                    if last != Some(desired) {
+                        desired_passthrough.store(desired, Ordering::Release);
+                        state_changed.notify(usize::MAX);
+                        println!(
+                            "[cursor] desired click-through = {} (cursor=({}, {}) client_screen=[{},{},{},{}])",
+                            if desired { "ON(透過)" } else { "OFF(不透過)" },
+                            pt.x, pt.y,
+                            client_screen.left, client_screen.top, client_screen.right, client_screen.bottom
+                        );
+                        last = Some(desired);
+                    }
                 }
             }
 
@@ -611,6 +659,15 @@ fn main() {
     // ハンドルは block_on 復帰まで生かす（Drop で DestroyWindow される）。
     let _window = make_window(state.clone());
     println!("[window] NOREDIRECTIONBITMAP|TOPMOST|TRANSPARENT 窓を生成（初期クリック透過 ON）");
+
+    // 窓を可視化する（R2.1「ウィンドウを表示する」）。Window::new_ex は WS_VISIBLE を
+    // 立てず ShowWindow も呼ばないため、明示的に SW_SHOW しないと画面に何も出ない
+    // （NOREDIRECTIONBITMAP ＋ DComp 描画が完了していても窓自体が非表示なら不可視）。
+    // SAFETY: 窓所有スレッド（UI）から自窓の HWND に対して呼ぶ。
+    unsafe {
+        let _ = ShowWindow(_window.hwnd(), SW_SHOW);
+    }
+    println!("[window] ShowWindow(SW_SHOW) で可視化");
 
     // DComp パイプライン構築＋初回描画（透明 Clear ＋ 中心に不透明円）。
     // 失敗は握り潰さず警告（NOREDIRECTIONBITMAP 窓は描画なしだと画面に何も出ない＝T1 で気付く）。
