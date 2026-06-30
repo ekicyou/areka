@@ -355,7 +355,8 @@ impl NewLineRatio {
 - Postconditions: variant は値正規化済み（`Wait` は表記差を吸収した単一 `Duration`、`NewLine` は比率値）。
 - Invariants: `Surface` の中身は入力バイト列を改変しない（要件 2.3）。`#[non_exhaustive]` により下流の `match` は `_ =>` を要する（variant 追加が後方互換）。
 
-> **値型の暫定確定**（research §4 #6・未閉じ論点を OPEN QUESTIONS にも再掲）:
+> **値型・値定数の確定**（ukadoc 一次確認済み・research §4 #6）:
+> - 待ち時間 = **n × 50ms**（`\_w` は絶対 ms）、`\n` 既定比率 = **1.0**（`\n[percent]`=percent/100・`\n[half]`=0.5・負値は戻り）。
 > - `Cursor { x, y }` の x/y は**文字列のまま保持**（em/lh 単位の数値解釈は surface/render 層の責務・パーサは区切りのみ）。
 > - `MoveArgs.args` は**生引数列を保持**（dx/dy/base の意味割当は window-placement の責務。「decode」= 構文区切り＋引数分割であって意味解釈ではない）。これにより要件 7.1 の「引数を decode」と Out of Boundary（移動実行・引数の意味割当は別 spec）が両立する。
 > - `SystemVar(String)` は `%` を除いたキーワード（例 `username`）を保持。
@@ -419,8 +420,8 @@ pub(crate) enum Token {
 **Responsibilities & Constraints**
 - `Token` を 1:1（または `\![*]` ＋ `\q` の結合のように局所的に畳んで）`Instruction` へ写像。
 - emo2 subset（要件 2〜9）は型付き命令へ decode。値正規化規約（research §4 #6・本書 model 節の暫定確定）に従う:
-  - 待ち時間 `\w[n]`/`\wN`/`\_w[ms]` → 単一 `Wait(Duration)`（要件 3.4）。`\_w` は絶対 ms（要件 3.3）。`\w[n]`/`\wN` の単位は ukadoc 既定 wait 量に従う（OPEN QUESTION #1）。
-  - `\n[percent]` → `NewLine(NewLineRatio(percent/100.0))`、素の `\n` → 既定比率（OPEN QUESTION #2）。
+  - 待ち時間 `\w[n]`/`\wN`/`\_w[ms]` → 単一 `Wait(Duration)`（要件 3.4）。**`\w[n]`/`\wN` = n × 50ms**（ukadoc 確定: 1 ウェイト=50ms・短縮形 n は 1-9・`\w9`=450ms）、**`\_w[ms]` = 絶対 ms**（要件 3.3）。
+  - `\n[percent]` → `NewLine(NewLineRatio(percent/100.0))`（`\n[150]`=1.5）、**素の `\n` → 1.0（100%=1 行）**、`\n[half]` → 0.5、負値は戻り（`NewLineRatio` に符号付きで保持）。いずれも ukadoc 確定。
   - `\q[disp,target,refs...]` → `Choice { disp, target, references }`（要件 5.1/5.2）。`\![*]` マーカーは Choice へ畳む／単独なら `GenericCommand`（要件 5.4）。旧 2 連形 `\q[ID][タイトル]` は Choice 化せず、宙に浮く 2 個目の `[...]` は `Raw` で保持（要件 5.3）。
   - `\![move,...]` → `Move(MoveArgs)`、move 以外の `\!` → `GenericCommand { name, raw_args }`（要件 7）。
   - `\p[n]` → `SpeakerScope`、`\s[...]` → `Surface`（無加工）、`\_l`/`\e`/`\c`/`\-` → 各制御命令（要件 2/6）。
@@ -511,7 +512,7 @@ pub fn parse(input: &str) -> Vec<Instruction>;
 ### Unit Tests（in-source `#[cfg(test)] mod tests`・host 非依存）
 
 - **構文（要件 13）**: `\\`→`\`・`\%`→`%`・角内 `\]`→`]` のエスケープ、`"a,b"` を 1 引数・`""`→`"` のクォート、`\X[...]` の `]` 終端、未知タグ `\foo[a,b]` の構文区切り＋`Raw` 吸収を各々固定。
-- **値正規化（要件 3/4）**: `\w[100]`/`\w9`/`\_w[500]` の Duration 等価、`\n[150]`→比率 1.5・素 `\n`→既定比率を境界値で固定。
+- **値正規化（要件 3/4）**: `\w9`→450ms（=9×50）/`\w[2]`→100ms/`\_w[500]`→500ms が各々正しい `Duration` へ、`\n[150]`→1.5・素 `\n`→1.0・`\n[half]`→0.5 を境界値で固定。
 - **Choice（要件 5）**: `\q[はい,OnYes]`→`Choice { disp:"はい", target:"OnYes", references:[] }`、第 3 引数付き `\q[t,id,r0,r1]`→`references:["r0","r1"]`、旧 2 連 `\q[ID][タイトル]` が隣接命令を壊さず `Raw` 吸収されることを固定。
 - **Move と汎用 `\!`（要件 7）**: `\![move,10,20,...]`→`Move`、`\![open,sliderinput]`→`GenericCommand { name:"open", raw_args:[...] }` を固定。
 - **不透明保持（要件 2）**: `\s[10]`/`\s[エイリアス]` の中身が無改変で `Surface` に入ることを固定。
@@ -532,10 +533,10 @@ pub fn parse(input: &str) -> Vec<Instruction>;
 
 ---
 
-## Open Questions / Risks（設計フェーズで未確定・実装着手前に裁定推奨）
+## Open Questions / Risks（実装着手前の確認事項）
 
-> いずれも `Instruction` の**外形（variant 名・構造）には影響せず**、内部の値正規化定数のみに関わる。型契約を確定させたまま実装時に詰められるため、本設計は型・境界・責務を確定済みとして FINALIZE する。下記は実装テストのフィクスチャ確定時に裁定する。
+> 値正規化定数は設計ディスカッションで ukadoc 一次ソースにより**確定済み**（型契約は元から不変）。残るは実装時のテスト素材調達のみ。
 
-1. **`\w[n]` / `\wN` の基準 ms**: `\_w[ms]` は絶対 ms で確定。`\w[n]`/`\wN` の 1 単位 ms 値は ukadoc 既定 wait 量に従う（一次確認は実装時）。`Wait(Duration)` という型は確定ゆえ外形不変。
-2. **素の `\n` の既定比率**: `\n[percent]`→`percent/100.0` は確定（`\n[150]`=1.5）。引数なし `\n` の既定比率値（1.0 が有力）は実装時に確定。`NewLineRatio(f32)` 型は確定。
-3. **emo2 実 boot script フィクスチャの取り込み**: 実スクリプトをリポジトリ同梱するか（ライセンス・所在）。同梱しない場合は代表抜粋を手書きフィクスチャ化。done の網羅性（要件 12.4: タグ個別検証）は手書きフィクスチャで担保可能ゆえブロッキングではない。
+1. **【確定】`\w` 基準 ms**: `\w[n]`/`\wN` = **n × 50ms**（ukadoc「時間×50ms分・設定可能 1-9」・`\w9`=450ms）。`\_w[ms]` = 絶対 ms。型 `Wait(Duration)`。
+2. **【確定】`\n` 比率**: 素の `\n` = **1.0**（100%=1 行）。`\n[percent]` = percent/100（`\n[150]`=1.5）、`\n[half]` = 0.5、負値は戻り（符号付き）。型 `NewLineRatio(f32)`。
+3. **【残・実装時】emo2 実 boot script フィクスチャ**: 作者所有ゆえライセンス問題なし。実 boot script を 1 本同梱（integration 代表例）＋タグ個別の手書きフィクスチャ（要件 12.4 の網羅）が推奨。型契約に影響せず非ブロッキング。
