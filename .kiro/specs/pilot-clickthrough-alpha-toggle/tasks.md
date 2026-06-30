@@ -29,7 +29,7 @@
   - _Depends: 1.2_
 
 - [ ] 3. Core: DComp 透過窓（NOREDIRECTIONBITMAP・視覚透過）
-- [ ] 3.1 (P) NOREDIRECTIONBITMAP トップモスト透過窓の生成と最小ライフサイクル
+- [x] 3.1 (P) NOREDIRECTIONBITMAP トップモスト透過窓の生成と最小ライフサイクル
   - `Window::new_ex(WindowType::TopLevel, WINDOW_EX_STYLE(WS_EX_NOREDIRECTIONBITMAP | WS_EX_TOPMOST | WS_EX_TRANSPARENT), state, wndproc)` で窓を生成する（初期状態＝クリックスルー ON）。`WS_EX_LAYERED` は付けない、`WM_NCHITTEST` は wndproc に書かない（自前ハンドルしない）
   - wndproc は `Fn`（`FnMut` 不可）。内部可変は `Cell` で持つ。`WM_CLOSE` を受領してシャットダウン event を notify し、`block_on(async{..})` の await 中の future を完了させる（lib は `WM_CLOSE` を握り `DestroyWindow` しない＝アプリ側で終了シグナルを出す。窓破棄は `Window` の Drop が担う）
   - 本タスクは「窓ローカルなクローズ機構（block_on ループ＋WM_CLOSE→event→future 完了）」までを担う。ワーカ join・初回状態収束の完全結線は 5.1（カーソルワーカは 4.1 で初めて存在するため本タスクでは join できない）

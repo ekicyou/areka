@@ -10,9 +10,18 @@
 //! （窓は `WS_EX_NOREDIRECTIONBITMAP` で生成するため GDI/`WM_PAINT` は画面に出ない）。
 //! 葉ノード隔離（examples 配下のみ・inbound 依存ゼロ）は厳守する。
 
-use windows::Win32::Foundation::{POINT, RECT};
+use std::pin::Pin;
+use std::rc::Rc;
+
+use event_listener::Event;
+use wintf_winmsg_executor::block_on;
+use wintf_winmsg_executor::util::{Window, WindowMessage, WindowType};
+use windows::Win32::Foundation::{LRESULT, POINT, RECT};
 use windows::Win32::UI::HiDpi::{
     DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2, SetProcessDpiAwarenessContext,
+};
+use windows::Win32::UI::WindowsAndMessaging::{
+    WINDOW_EX_STYLE, WM_CLOSE, WS_EX_NOREDIRECTIONBITMAP, WS_EX_TOPMOST, WS_EX_TRANSPARENT,
 };
 
 /// 不透明円の半径（物理ピクセル, R4.1）。
@@ -70,12 +79,88 @@ fn init_dpi_awareness() {
     }
 }
 
+/// 透過トップモスト窓に紐づく共有状態（`!Send` で良い＝`Rc`／`HWND` を内包する後続
+/// タスクの拡張点, R2.5）。窓を閉じる契機を `block_on` の future へ伝える shutdown
+/// `Event` を保持する。
+///
+/// 本タスク（3.1）では shutdown 配線のみ。DComp デバイス／ビジュアルツリー（3.2）・
+/// 描画円の色（3.3）・カーソルワーカ／スタイルトグル（4.x/5.x）はここに追加される。
+struct AppState {
+    /// 窓クローズ（`WM_CLOSE`）で notify され、`block_on` の await を完了させる。
+    shutdown: Event,
+}
+
+impl AppState {
+    fn new() -> Self {
+        Self {
+            shutdown: Event::new(),
+        }
+    }
+}
+
+/// NOREDIRECTIONBITMAP・トップモスト・クリック透過の三点セット ex_style で
+/// トップレベル窓を生成する（設計 TransparentWindow コンポーネント, R2.1/R2.3）。
+///
+/// 起動時初期状態は **クリック透過 ON**（`WS_EX_TRANSPARENT` を初期 ex_style に含む）。
+/// `WS_EX_NOREDIRECTIONBITMAP` は視覚的透過（redirection surface を持たず GDI/`WM_PAINT`
+/// が画面に出ない → DComp 前提）のため、`WS_EX_TOPMOST` は最前面固定のため固定で付す。
+///
+/// `WS_EX_TRANSPARENT` の動的トグルはタスク 4.2 の責務（ここでは初期値のみ）。
+/// `WS_EX_LAYERED` は付けない（R2.3）。`WM_NCHITTEST` は自前処理しない（R2.4）。
+///
+/// wndproc クロージャは `Fn`（`FnMut` ではない）ため、状態変更は `Cell`/`RefCell` ／
+/// `event_listener::Event::notify`（&self）で行う。`WM_CLOSE` で shutdown を notify し、
+/// `block_on(async { shutdown.await })` を完了させて清掃終了させる。ライブラリの
+/// `wndproc_typed` は `WM_CLOSE` で `DestroyWindow` を呼ばず `LRESULT(0)` を返すため、
+/// 窓の実破棄は `Window` の `Drop`（`block_on` 復帰後の drop）が担う。
+fn make_window(state: Rc<AppState>) -> Window<Rc<AppState>> {
+    // 初期 ex_style = NOREDIRECTIONBITMAP | TOPMOST | TRANSPARENT（= クリック透過 ON）。
+    let ex_style = WINDOW_EX_STYLE(
+        WS_EX_NOREDIRECTIONBITMAP.0 | WS_EX_TOPMOST.0 | WS_EX_TRANSPARENT.0,
+    );
+
+    Window::new_ex(
+        WindowType::TopLevel,
+        ex_style,
+        state,
+        move |state: Pin<&Rc<AppState>>, msg: WindowMessage| -> Option<LRESULT> {
+            let s: &AppState = state.get_ref();
+            match msg.msg {
+                WM_CLOSE => {
+                    // shutdown を通知して block_on の future を完了させる（清掃終了）。
+                    // ライブラリは WM_CLOSE で DestroyWindow を呼ばない＝LRESULT(0) を返す。
+                    s.shutdown.notify(usize::MAX);
+                    Some(LRESULT(0))
+                }
+                // 他メッセージは DefWindowProc にフォールバック（None）。
+                // WM_NCHITTEST は自前処理しない（R2.4）。WM_LBUTTONDOWN（3.3）・
+                // DComp 構築（3.2）・スタイルトグル（4.2）は本タスクの責務外。
+                _ => None,
+            }
+        },
+    )
+    .expect("透過トップモスト窓の生成に失敗（Window::new_ex）")
+}
+
 fn main() {
     init_dpi_awareness();
     println!("=== pilot: clickthrough-alpha-toggle 先進坑 ===");
 
-    // 窓生成・DComp パイプライン・カーソルワーカ・トグル制御は後続タスク
-    // （2.x/3.x/4.x/5.x）で実装する。本タスクは PMv2 起動骨組み＋起動ログのみ。
+    let state = Rc::new(AppState::new());
+    // 窓を生成（初期: NOREDIRECTIONBITMAP|TOPMOST|TRANSPARENT = クリック透過 ON）。
+    // ハンドルは block_on 復帰まで生かす（Drop で DestroyWindow される）。
+    let _window = make_window(state.clone());
+    println!("[window] NOREDIRECTIONBITMAP|TOPMOST|TRANSPARENT 窓を生成（初期クリック透過 ON）");
+
+    // メッセージループ：WM_CLOSE → shutdown notify → この future 完了でループ終了。
+    let shutdown = state.shutdown.listen();
+    block_on(async move {
+        shutdown.await;
+    });
+    println!("[window] WM_CLOSE 受領 → shutdown 完了・清掃終了");
+
+    // DComp パイプライン（3.2）・描画円の色（3.3）・カーソルワーカ／スタイルトグル
+    // （4.x）・ワーカ join／初期状態収束（5.1）は後続タスクで実装する。
 }
 
 #[cfg(test)]
