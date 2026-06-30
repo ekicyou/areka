@@ -77,6 +77,19 @@
 
 > **推奨の方向性（決定でなく情報）**: 先進坑の「最小 1 往復＋使い捨て」目的には **Option B（stdio）か Option A（named pipe）** が妥当。stdio は最小実装で go 基準(1)往復を最短検証でき、named pipe は本坑 `areka-P0-host32-ipc`（pipe＋handshake/lifecycle と明記・roadmap）に方向が近く知見の転用価値が高い。**どちらを先進坑で掘るかは要件ディスカッション/design の判断事項**。共有メモリは先進坑では非推奨（過剰）。
 
+#### 3.1.1 決定因子＝メッセージループ共存（要件ディスカッションで深掘り・2026-06-30）
+
+IPC 方式の真の決定因子は throughput でも payload サイズでもなく、**helper の窓持ち SHIORI 用メッセージループ（要件 5）と IPC read の共存**である。IPC read が `GetMessage` ループを塞いではならない。
+
+- **stdio（匿名パイプ）**: overlapped 不可ゆえ blocking read → **専用 reader スレッド必須**（I/O スレッドが read → UI スレッドへ post → UI スレッドが `pasta.dll` request → 応答を I/O スレッドへ戻して write）。最小コード・`std::process::Command` で完結・プロセス終了=EOF で生存監視が自然。
+- **named pipe**: overlapped I/O ＋ `MsgWaitForMultipleObjectsEx` で**単一スレッドで窓メッセージとパイプ完了を同時待機**可。全二重・broken pipe で crash 即検出・roadmap `host32-ipc`（pipe＋handshake/lifecycle）一致・OnSecondChange タイマも自然。コード量は中。
+
+**刻み（要件ディスカッション合意）**:
+- **先進坑 = stdio ＋ reader スレッド**。根拠: IPC 方式は go-gating な未知ではない（stdio も named pipe も cross-bitness で確実に動く既知技術）。先進坑が潰す未知は「x64 が 32bit DLL を駆動できるか」＋「i686 ビルド成立」ゆえ、最安の stdio で 1 往復＋ループ生存を実証する。
+- **本坑 = named pipe ＋ overlapped ＋ `MsgWaitForMultipleObjectsEx`**（全二重・メッセージループ統合が綺麗・crash 検出堅牢・roadmap host32-ipc / COMPAT §5 第一候補と一致）。最終決定は `/kiro-design`。
+
+**bitness 安全規約（方式共通）**: 跨ぐのは生バイト列のみ（§5.4）。フレーミングは**固定幅 LE 長さ prefix（u32 LE）**。payload に**ポインタ/HANDLE/struct を載せない**（同一マシンで endian 共通だが固定幅で明示）。親 x64 が i686 helper exe を `CreateProcess`/`std::process::Command` で起動（exe パスは §3.2 の 2 段ビルド成果物を arg/env で受け渡し）。
+
 ### 3.2 32bit helper のビルド/配置構成（R1/R7・要研究）
 
 #### Option A: 同一 example 内に親 main＋helper を内包し実行時に自己再起動
