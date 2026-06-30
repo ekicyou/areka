@@ -35,7 +35,7 @@
 - **デコード層（Decode）**: 構文分割済みの生タグ → 値正規化済みの型付き命令。待ち時間の Duration 統一、`\n[percent]` の比率 decode、`\q[disp,target]` の分離、`\![move,...]` の引数 decode、`\p[n]` 話者スコープ、`\s[...]` 不透明保持、`\_l`/`\e`/`\c`/`\-` の制御命令化、`%username` トークン化、テキストラン化（要件 2〜9）。**意味デコードは emo2 subset に限る**。
 - **命令モデル（型）**: 下流 `areka-P0-sakura-engine` と共有する型付き命令 enum `Instruction` ＋付随する値型（`Duration`/`NewLineRatio`/`MoveArgs`/`Choice` 等）。これがクロスエンジン I/O 契約の片側であり、本パーサが**生成者**、engine が**消費者**。型の正本は本パーサが所有する。
 - **寛容パススルー方針**: 未知タグ・不正トークンの raw/generic 命令としての吸収（要件 10/13.8）。
-- **host 非依存の単体テスト**: emo2 subset を網羅する変換テスト（boot script を代表例に含むが限定しない・要件 12）。
+- **host 非依存の単体テスト**: emo2 subset と構文を網羅する変換テスト（題材は代表的な手書き／インラインのさくらスクリプト・特定ゴースト実体ファイルの同梱不要・要件 12）。
 
 ### Out of Boundary
 
@@ -132,7 +132,7 @@ crates/areka-parsers/        # 【新規クレート】パーサーファミリ�
         ├── lexer.rs        # 構文層: 手書き線形スキャナ。文字列 → 構文トークン列（生タグ／bare／shorthand／sysvar／text）。エスケープ・クォート・角括弧引数を処理
         ├── decode.rs       # 意味層: 構文トークン → Instruction。emo2 subset の値正規化（待ち時間／比率／Choice／Move）。未対応は Raw/GenericCommand へ
         ├── parse.rs        # 公開 facade: `pub fn parse(input: &str) -> Vec<Instruction>`。lexer → decode を結線
-        └── tests.rs        # in-source 単体テスト（要件 2〜13 のタグ別 ＋ 寛容パススルー ＋ 空入力 ＋ emo2 boot script 代表例）
+        └── tests.rs        # in-source 単体テスト（要件 2〜13 のタグ別 ＋ 寛容パススルー ＋ 空入力 ＋ 代表 OnBoot インライン例）
 ```
 
 > モジュール内分割（model / lexer / decode / parse）は型（I/O 契約）と関数（実装）を分離し、下流 engine は `areka_parsers::sakura::Instruction` のみ import すれば足りる。lexer の構文トークン型は `lexer.rs` 内に閉じ、公開しない（`Instruction` のみ公開）。クレート名 `areka-parsers`（package）／lib 名 `areka_parsers`（`shiori-abi` と同じハイフン命名の前例に倣う）。
@@ -234,7 +234,7 @@ flowchart TD
 | 12.1 | UTF-8 前提・charset 変換しない | lexer | `char_indices` 走査・変換なし | — |
 | 12.2 | 同一入力に同一出力の純粋関数 | parse | 外部状態・host 非依存 | — |
 | 12.3 | emo2 subset を host 非依存単体テストで検証 | tests | `#[cfg(test)] mod tests` | — |
-| 12.4 | boot script 1 本に限定せずタグ個別検証 | tests | タグ別テストケース群 | — |
+| 12.4 | 特定ゴースト実スクリプトに依存せずタグ個別検証 | tests | タグ別テストケース群 | — |
 | 13.1 | bare/shorthand タグを規則で終端し後続を巻き込まない | lexer | bare/shorthand 例外テーブル | — |
 | 13.2 | `\X[...]` を `]` まで引数範囲として区切る | lexer | 角括弧スキャン | — |
 | 13.3 | 角括弧内 `,` で複数引数分割 | lexer | 引数分割 | — |
@@ -521,7 +521,13 @@ pub fn parse(input: &str) -> Vec<Instruction>;
 
 ### Integration Tests（host 不要・代表シナリオ）
 
-- **emo2 boot script 代表例（要件 12.3/12.4）**: emo2 の boot script を題材に、想定命令列への変換を 1 シナリオで固定（フィクスチャ取り込み可否は OPEN QUESTION #3）。**boot script に現れないタグ（`\q`/`\![move]` 等）は個別単体テストで別途検証**し、done を boot script 1 本に限定しない（要件 12.4）。
+- **代表 OnBoot シナリオ（要件 12.3/12.4）**: 複数タグ＋テキスト混在の**手書き／インライン**さくらスクリプトで想定命令列への変換を固定。題材として作者提供の実 OnBoot 例を**インラインフィクスチャ**に用いてよい（ゴーストファイルの同梱は不要）。これ 1 本で `\![bind,...]`×6→`GenericCommand`、`\s[1000]`/`\s[通常]`（日本語エイリアス）→不透明 `Surface`、`\_w[450/950]`→`Wait`、`\n`→1.0／`\n[150]`→1.5、`\p[0/1]`、`\e`→`End` を一括検証できる:
+
+```text
+\p[0]\s[1000]\![bind,腕,伸び,1]\![bind,紅,差し,0]\![bind,口,にこっ,1]\![bind,眉,通常,1]\![bind,目,笑顔,1]\![bind,まばたき,----,1]こんばんわー！\_w[450]夜の部、\_w[450]\n開幕やー！\_w[450]\n[150]\p[1]\s[通常]夜更かしはお肌に\n悪いよ。\_w[950]\e
+```
+
+- 上記に**現れない**タグ（`\q` / `\![move]` / `%username` / 各エスケープ `\\`・`\%`・`\]` / 引数クォート / `\q` 旧2連形）は**個別の手書き単体テストで網羅**（要件 12.4）。emo2 実物の通し検証は下流 E2E 適合ユニット（M-e2e）の領分。
 
 > E2E/UI・Performance テストは本 spec の対象外（純粋関数・host 非依存・線形アルゴリズムゆえ性能目標なし）。
 
@@ -535,8 +541,8 @@ pub fn parse(input: &str) -> Vec<Instruction>;
 
 ## Open Questions / Risks（実装着手前の確認事項）
 
-> 値正規化定数は設計ディスカッションで ukadoc 一次ソースにより**確定済み**（型契約は元から不変）。残るは実装時のテスト素材調達のみ。
+> 設計ディスカッションで全件**確定済み**（値定数は ukadoc 一次ソース・テスト題材は手書き／インライン方針）。型契約に影響する未決事項はゼロ。
 
 1. **【確定】`\w` 基準 ms**: `\w[n]`/`\wN` = **n × 50ms**（ukadoc「時間×50ms分・設定可能 1-9」・`\w9`=450ms）。`\_w[ms]` = 絶対 ms。型 `Wait(Duration)`。
 2. **【確定】`\n` 比率**: 素の `\n` = **1.0**（100%=1 行）。`\n[percent]` = percent/100（`\n[150]`=1.5）、`\n[half]` = 0.5、負値は戻り（符号付き）。型 `NewLineRatio(f32)`。
-3. **【残・実装時】emo2 実 boot script フィクスチャ**: 作者所有ゆえライセンス問題なし。実 boot script を 1 本同梱（integration 代表例）＋タグ個別の手書きフィクスチャ（要件 12.4 の網羅）が推奨。型契約に影響せず非ブロッキング。
+3. **【確定】テスト題材 = 手書き／インライン**: ゴースト実体ファイル（emo2 等）の同梱は**しない**。構文・各 subset タグ・寛容パススルー・`\q` 旧形を網羅する手書き入力で検証し、作者提供の実 OnBoot 例 1 本をインライン代表フィクスチャに用いる（小さく特定ファイル依存なし）。emo2 は脳 pasta.dll 由来の特殊構文ゆえ、ゴースト丸ごとを代表に据えるのは不適（parser テストは統制された入力が適切）。実物の通し検証は下流 E2E（M-e2e）。
