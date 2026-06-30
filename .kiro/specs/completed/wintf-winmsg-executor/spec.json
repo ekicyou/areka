@@ -1,9 +1,9 @@
 {
   "feature_name": "wintf-winmsg-executor",
   "created_at": "2026-06-29T11:04:35Z",
-  "updated_at": "2026-06-29T13:10:00Z",
+  "updated_at": "2026-06-30T08:35:00Z",
   "language": "ja",
-  "phase": "tasks-approved",
+  "phase": "completed",
   "approvals": {
     "requirements": {
       "generated": true,
@@ -16,6 +16,10 @@
     "tasks": {
       "generated": true,
       "approved": true
+    },
+    "implementation": {
+      "completed": true,
+      "completed_at": "2026-06-30T08:35:00Z"
     }
   },
   "ready_for_implementation": true

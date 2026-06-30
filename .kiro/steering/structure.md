@@ -107,19 +107,23 @@ updated_at: 2026-06-27
 - 代表的な構造体: `App`（ウィンドウカウント、ディスプレイ構成変更検出、メッセージウィンドウ管理）
 - 特徴: ECS Resourceとしてワールドに導入、ウィンドウの作成・破棄を追跡
 
-### Message Handling
-**Location**: `/crates/wintf/src/`（ルート）  
-**Purpose**: Windowsメッセージループとスレッド管理  
-**Contains**:
-- `winproc.rs` - ウィンドウプロシージャ ⚠️ `#[deprecated]`
-- `win_message_handler.rs` - メッセージハンドリング ⚠️ `#[deprecated]`
-- `win_thread_mgr.rs` - スレッド管理 ⚠️ `#[deprecated]`
+### UI スレッド基盤 / Message Handling
+**Location**: `/crates/wintf/src/runtime/`（新 facade）＋ `/crates/wintf/src/`（ルート補助）  
+**Purpose**: UI スレッド基盤（メッセージループ・ウィンドウ生成・UI スレッド async・60Hz tick・終了規律）  
+**Contains（runtime/ = 新 facade `WinApp`・spec `wintf-winmsg-executor` で外部クレ化完了）**:
+- `runtime/mod.rs` - 公開 facade `WinApp`（`new`/`world`/`run`/`spawn_ui_local`）。COM/DPI 初期化・World 所有・全結線
+- `runtime/message_loop.rs` - `MessageLoopDriver`（`block_on`/`MessageLoop::run` 委譲）＋ `ShutdownPolicy`（`event_listener::Event` 終了規律）
+- `runtime/tick_bridge.rs` - `VsyncEventBridge`（DwmFlush→event_listener notify）＋ `AsyncTickTask`（13 schedule tick）
+- `runtime/wndproc_bridge.rs` - `WndState`/`make_wndproc`（ライブラリ `Window::new_ex` クロージャ→`dispatch_window_message` 配送・GWLP 不使用）
+- `runtime/window_registry.rs` - `WindowRegistry`（NonSend・`Window<S>` 所有・reconcile で寿命/終了管理）
+- `runtime/window_factory.rs` - `EcsWindowFactory`（`util::Window::new_ex` 生成・style/pos/title 反映）
+
+**ルート補助モジュール**:
 - `win_state.rs` - ウィンドウ状態管理
 - `win_style.rs` - ウィンドウスタイル定義
 - `api.rs` - Windows API safeラッパー
-- `process_singleton.rs` - プロセス単一実行制御
 
-> **注意**: `winproc.rs`, `win_message_handler.rs`, `win_thread_mgr.rs` は非推奨。新規コードでは `ecs/window_proc/` 配下のメッセージ種別別モジュールを使用すること。
+> **注意**: 旧 deprecated モジュール（`winproc.rs` / `win_message_handler.rs` / `win_thread_mgr.rs` / `process_singleton.rs`）は spec `wintf-winmsg-executor` の完了に伴い**撤去済み**。メッセージ配送は `ecs/window_proc/` 配下の `dispatch_window_message` ＋ 種別別ハンドラ、UI スレッド基盤は `runtime/` の `WinApp` facade を用いること。クラス登録・HINSTANCE はライブラリ（`wintf-winmsg-executor`）が担う。
 
 ## Naming Conventions
 
