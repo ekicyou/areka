@@ -9,4 +9,11 @@
 //! 依存方向は `model ← lexer ← decode ← parse`。本 `mod.rs` は
 //! `parse` / `Instruction` / 値型を公開面へ `pub use` で集約する。
 //!
-//! 現時点ではスケルトン（空モジュール）であり、公開 API はまだ存在しない。
+//! 現時点では `model`（命令モデル型）のみを公開する。
+
+mod model;
+
+#[cfg(test)]
+mod model_tests;
+
+pub use model::{Choice, Instruction, MoveArgs, NewLineRatio, SurfaceArg};

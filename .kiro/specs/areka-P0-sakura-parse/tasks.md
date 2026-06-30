@@ -7,7 +7,7 @@
   - 観測: `cargo build -p areka-parsers` が成功し、空の `sakura` モジュールがビルドできる
   - _Requirements: 12.2_
 
-- [ ] 2. (P) 命令モデル型（下流共有 I/O 契約）を定義する
+- [x] 2. (P) 命令モデル型（下流共有 I/O 契約）を定義する
   - フラットな `#[non_exhaustive] enum Instruction` の全 variant（Text / SpeakerScope / Surface / Wait / NewLine / Choice / Cursor / End / Clear / Quit / Move / SystemVar / GenericCommand / Raw）と付随する値型（SurfaceArg / NewLineRatio / Choice / MoveArgs）を定義する
   - 不透明 NewType に読み取り専用アクセサ（サーフェス文字列・改行比率）を付け、別クレートの下流が中身を読めるようにする
   - 派生は Clone / Debug / PartialEq のみ（serde・Eq・Hash は付さない）。木構造は持たないフラット表現とする
