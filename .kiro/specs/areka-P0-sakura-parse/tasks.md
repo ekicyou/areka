@@ -32,7 +32,7 @@
   - _Boundary: lexer_
 
 - [ ] 4. 意味層（Decode）を実装する
-- [ ] 4.1 emo2 subset の値正規化デコード
+- [x] 4.1 emo2 subset の値正規化デコード
   - 構文トークンを `Instruction` へ写像し、待ち時間（`\w[n]`/`\wN` = n×50ms・`\_w[ms]` = 絶対 ms）を単一 Wait へ、改行（素の `\n`=1.0・`\n[percent]`=percent/100・`\n[half]`=0.5・負値は戻り）を比率へ正規化する
   - `\q[タイトル,ID,...]` を disp/target ＋追加 references に分離、`\![move,...]` を Move へ、`\p[n]`/`\_l[x,y]`/`\e`/`\c`/`\-` を各命令へ、`\s[...]` を不透明保持、`%keyword` を非展開トークンへ写す。未デコード文字列断片を残さない
   - 観測: 各 subset タグの decode 結果（値正規化・境界値込み）が期待 `Instruction` と一致する単体テストが green
@@ -64,4 +64,5 @@
 
 ## Implementation Notes
 - 3.1: lexer.rs に暫定 `#![allow(dead_code)]`（消費側 decode 未結線のため）。lexer の `Token::Raw` は定義のみで未 emit、`scan_bracket_args` の `closed` フラグは `let _ = closed;` で保留——いずれも 3.2 のエスケープ／クォート／未閉じ吸収の plug point。**4.x で decode が lexer を消費したら `#![allow(dead_code)]` を絞る/除去**（真の dead を隠さぬよう）。`Token`/`lex` は `pub(crate)`、mod.rs の `pub use` には出さない（公開面は `Instruction`＋`parse` のみ）。model の不透明 NewType は `pub fn new` で構築可（dola `ActorKey` 前例）。
+- 4.1: 4.2 への seam は `decode_passthrough_{tag,bang,bare,raw}` が **`Instruction::Raw` のみ emit**（`GenericCommand`/`Choice`-fold は未生成）。4.2 はこれらの本体を GenericCommand／Raw（旧 `\q` 2連）／Choice（`\![*]`）の実規則へ差し替える。decode.rs にも暫定 `#![allow(dead_code)]`（消費側 parse 未結線）——**Task 5 で parse が decode を結線したら lexer.rs と decode.rs 両方の allow を絞る/除去**。定数: `WAIT_UNIT_MS=50`、`\_w`=絶対ms（×50しない）、newline は half→0.5／percent÷100／既定1.0／符号保持。bare `\-`→Quit（req 6.4）。
 - 3.2: 既知の微小エッジ（非ブロッキング・レビュー合格）——**単独クォート空引数 `\s[""]` が 0 引数に畳まれる**（`scan_bracket_args` の finalize ヒューリスティック `!cur.is_empty()||!args.is_empty()` がクォート消費済み空と無内容を区別できないため）。厳密 req 13.4 は 1 個の空文字列引数を含意。`["",x]`/`[a,""]` はカンマで正しく空引数化される。OnBoot/decode(4.x) には影響なし。**Task 6 で `\s[""]`→1 空引数のテストを足し、必要なら lexer 側に `quote_consumed` フラグで対処**。未閉じ `"` は設計通り EOI まで Raw 吸収（後続 `]` も飲む）。

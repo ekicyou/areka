@@ -21,4 +21,9 @@ mod lexer;
 #[cfg(test)]
 mod lexer_tests;
 
+mod decode;
+
+#[cfg(test)]
+mod decode_tests;
+
 pub use model::{Choice, Instruction, MoveArgs, NewLineRatio, SurfaceArg};
