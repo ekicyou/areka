@@ -158,12 +158,12 @@ crates/pilot/examples/shiori-host-32/
 └── fixtures/emo2/          # 取り込み済（変更なし）。ghostdir = fixtures/emo2/ghost/master/。
 ```
 
-> **モジュール物理配置の注**: 先進坑の使い捨て品質ゆえ、`ipc.rs`/`shiori3.rs` を `main.rs`/`helper.rs` から `#[path]`/`mod` で取り込むか、各バイナリにインライン展開するかは実装裁量（葉ノード隔離さえ崩さなければよい）。helper を `examples/` の 2 本目バイナリにする具体（別 `[[example]]` か `src/bin` 相当か）は実装時に確定するが、**i686 別ターゲットビルドの別バイナリ**である点は固定（要件 7.5・research.md §3.2 Option B）。
+> **モジュール物理配置の注**: 先進坑の使い捨て品質ゆえ、`ipc.rs`/`shiori3.rs` を `main.rs`/`helper.rs` から `#[path]`/`mod` で取り込むか各バイナリにインライン展開するかは実装裁量（葉ノード隔離さえ崩さなければよい）。**helper は明示 `[[example]]` で独立ターゲット化（議題 3 確定）**: `pilot/Cargo.toml` に `[[example]] name = "shiori-host-32-helper", path = "examples/shiori-host-32/helper.rs"`（同フォルダ `helper.rs` を独立 example 化。サブフォルダの `helper.rs` は auto-discovery 対象外ゆえ自動 example `shiori-host-32`(main.rs) と非衝突）。**i686 別ターゲットビルドの別バイナリ**である点は固定（要件 7.5・research.md §3.2 Option B）。
 
 ### Modified Files
 
 - `crates/pilot/examples/shiori-host-32/README.md` — `_template/README.md` からコピー後、3 幕（動機 → 概要・実行法 → 検証結果）を埋める。動機の幕で本坑 `areka-P0-host32-*` 群を名指し。
-- `crates/pilot/Cargo.toml` — 既存依存（`wintf-winmsg-executor`/`windows`/`windows-core`/`event-listener`）で足りる想定。helper を 2 本目バイナリにするための `[[example]]`/`[[bin]]` 宣言追加が必要なら最小限で（葉ノード隔離・32bit 可搬性を崩さない）。
+- `crates/pilot/Cargo.toml` — 既存依存（`wintf-winmsg-executor`/`windows`/`windows-core`/`event-listener`）で足りる。**helper 用に明示 `[[example]]` を 1 つ追加**（議題 3 確定）: `[[example]] name = "shiori-host-32-helper", path = "examples/shiori-host-32/helper.rs"`。葉ノード隔離・32bit 可搬性を崩さない。
 
 > 各ファイルは単一責務。`ipc.rs`＝トランスポート規約、`shiori3.rs`＝ワイヤ形式の組立/parse、`main.rs`＝親オーケストレーション、`helper.rs`＝helper オーケストレーション＋DLL 駆動。依存方向は **ipc → (shiori3, helper-proxy)** を上位が使う向き（下位は上位を import しない）。
 
@@ -322,7 +322,7 @@ impl ProcessHost {
 - Invariants: helper は常に別プロセス（in-proc ロードしない）。
 
 **Implementation Notes**
-- Integration: helper exe パスは README「実行法」幕に明記（2 段ビルド手順）。
+- Integration（議題 3 確定）: 親は helper exe パスを **環境変数 `HELPER_EXE`（無ければ第 1 引数）**で受ける。helper exe = `target\i686-pc-windows-msvc\debug\examples\shiori-host-32-helper.exe`。2 段ビルド手順は README「実行法」幕に必須記載。
 - Validation: `poll_exit` の None/Some で go(2) の Crashed/CleanExit を観測。
 - Risks: helper exe パス解決（親 cwd 相対 or 環境変数）。先進坑ゆえ手動指定で可。
 
@@ -504,7 +504,8 @@ enum ProxyError { LoadLibraryFailed, EntryNotFound, LoadFailed, RequestFailed }
 | Requirements | 6.1, 6.2, 6.3, 6.4, 6.5 |
 
 **Responsibilities & Constraints（summary-only）**
-- `_template/README.md` をコピーし、動機（本坑 `areka-P0-host32-*` 名指し）→ 概要・実行法（`cargo run -p pilot --example shiori-host-32`／helper の 2 段ビルド手順／nar 展開—本 fixture は取り込み済ゆえ展開済）→ 検証結果（go/違う/直す ＋ 学び ＋ 日付）を埋める。
+- `_template/README.md` をコピーし、動機（本坑 `areka-P0-host32-*` 名指し）→ 概要・**実行法（必須項目・議題 3 確定）**→ 検証結果（go/違う/直す ＋ 学び ＋ 日付）を埋める。
+- **「実行法」幕の必須 3 項目**（再現性＝go 検証の前提・要件 6.1）: ①helper の i686 ビルド `cargo build -p pilot --example shiori-host-32-helper --target i686-pc-windows-msvc`（PowerShell）／②生成 exe 実パス `target\i686-pc-windows-msvc\debug\examples\shiori-host-32-helper.exe`／③親起動 `$env:HELPER_EXE = "<exe パス>"; cargo run -p pilot --example shiori-host-32`（親は `HELPER_EXE`／第 1 引数で受領）。fixture 取り込み済ゆえ nar 展開は不要。
 - go 基準 (1)(2) の充足状況を検証結果の幕に反映。go 判定そのものは開発者の人間判断に委ねる（要件 6.5）。
 
 **Implementation Note**: `.md` 書き込みはハーネス制約により親エージェントが書く or PowerShell here-string（`@'…'@`・列 0 閉じ）で UTF-8 書き込み（two-tunnel 3.6・MEMORY harness-shell-quirks）。
