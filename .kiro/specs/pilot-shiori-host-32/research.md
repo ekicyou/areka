@@ -198,7 +198,39 @@ IPC 方式の真の決定因子は throughput でも payload サイズでもな�
 
 **残る go-gating でない未知（design で詰める）**: `request` の HGLOBAL 所有権の実挙動・`load` の ghostdir 実引数・WM_COPYDATA 往復の再入（応答）実装。
 
+## 7. 設計フェーズ synthesis 成果（design-generation・2026-06-30）
+
+> `/kiro-design` の synthesis（generalization / build-vs-adopt / simplification）を §1–§6 の findings へ適用した結果。design.md の判断根拠として記録。discovery 種別は **light（統合フォーカス）**——§1–§6 で discovery と de-risk が完了済ゆえ再調査は不要、synthesis と drafting に徹した。
+
+### 7.1 Generalization（一般化）
+
+- **R1（helper lifecycle）＋ R2（自前 IPC）は単一の Window-Message チャンネルへ収束**。WM_COPYDATA で HWND ハンドシェイク・request/response・生存連動を一本化できるため、別々の「プロセス管理層」と「IPC 層」を立てる必要がない。境界は `ProcessHost`（プロセス起動/監視）と `IpcChannel`（WM_COPYDATA 規約）に分けるが、トランスポートは 1 パラダイム。
+- **R3（DLL load）＋ R4（OnBoot/Value）は「helper=SHIORI3 バイト proxy／x64=SHIORI3 組立・parse」の 1 構造**。helper は `ShioriByteProxy`（ロジックなし byte 通し）、x64 は `Shiori3Codec`（組立/parse）。本坑 x64 過去互換 `IShiori` アダプタのミニチュアという形が要件横断で一貫する。
+
+### 7.2 Build vs. Adopt（採用 vs 自作）
+
+| 対象 | 決定 | 理由 |
+|------|------|------|
+| IPC トランスポート | **Adopt: WM_COPYDATA**（OS marshalled）。named pipe / 共有メモリ / stdio を却下 | helper メッセージ窓 WndProc へ OS 同期配送＝overlapped/reader スレッド/手動フレーミングが不要（`cbData`=長さ）。legacy=pull・payload 小ゆえ全二重/push/大データ不要（§3.1.1・§3.1 補足の速度非律速論）。requirements で WM_COPYDATA 強推奨が確定済 |
+| helper メッセージループ | **Adopt: `wintf-winmsg-executor` 0.0.5**。raw Win32 自前ループを却下 | i686 ビルド実証済（§6）。`pilot/wintf-winmsg-executor` のループ運用知見あり（発想元参照・コピペ donor 禁止） |
+| 子プロセス起動 | **Adopt: `std::process::Command`** | std で完結・子終了=異常検出フックが自然（§4 R1 評価 Low） |
+| SHIORI3 build/parse | **Build（最小自作）** | `key: value` CRLF＋空行終端の単純形式（§4 R4 評価 Low・`emo2-conformance-scope §1` 根拠）。既存ライブラリ不要 |
+| COM `IShiori` 配線 | **却下（スコープ外）** | go 基準は「x64 親が `Value:` 受領」で充足（議題 #5=(A)確定）。COM 面は本坑 `areka-P0-host32-request` 領分 |
+
+### 7.3 Simplification（簡素化）
+
+- **named pipe / 共有メモリ / stdio reader スレッド / 手動フレーミングを全て削除**。WM_COPYDATA 一本化で当該複雑性が消滅（§3.1.1 の「(B) が de-risk しようとした難所そのものが存在しない」）。
+- **COM アパートメント・`IShiori`・HSTRING マーシャリングを削除**（COM 面スコープ外・helper は HSTRING を持たない）。
+- **`OnFirstBoot` 別送を削除**（`OnBoot` 1 種で代表・往復経路同一・要件 4.1／議題 #7）。
+- 残す抽象は最小 6 コンポーネント（ParentDriver / ProcessHost / IpcChannel / Shiori3Codec / HelperMessageWindow / ShioriByteProxy）＋ README3Act。各々単一責務・先進坑の使い捨て品質に見合う粒度。
+
+### 7.4 設計レビューゲート結果（design-generation）
+
+- **機械チェック**: 要件 ID 全 33 件（1.1–7.5）が traceability 表に存在 ✓／Boundary 4 節 populated ✓／File Structure Plan 具体パス ✓／全 7 コンポーネントが File Structure Plan にファイル帰属あり（orphan なし）✓。
+- **判断レビュー**: 要件カバレッジ・アーキ準備・境界明確性・実行可能性すべて充足。**1 pass で通過**（修復パスなし）。
+- **要件ギャップなし**: §5.3 の論点 7 件はすべて requirements ディスカッションの確定決定（§3.1.1・§5.4・議題 #5/#7）で解決済。残る `request` の HGLOBAL 所有権実挙動・`load` ghostdir 実引数・WM_COPYDATA 往復再入の実装詳細は **go-gating でない実走 discovery**（§6 で明記）＝先進坑の成果物（知見）として README に記録する性質であり、設計を papering-over するギャップではない。
+
 ---
 
 > 本書は情報提供であり決定ではない（two-tunnel／kiro-validate-gap 原則）。go 判定は開発者の人間判断（要件 6.5・two-tunnel ハードゲート）。
-> 次フェーズ: 要件ディスカッション（上記 §5.3 を論点に）→ `/kiro-design pilot-shiori-host-32`。
+> フェーズ進捗: 要件ディスカッション確定 → **design-generation 完了（design.md・本 §7）** → 次は設計ディスカッション（`/kiro-design` 内）→ `/kiro-spec-tasks`。
