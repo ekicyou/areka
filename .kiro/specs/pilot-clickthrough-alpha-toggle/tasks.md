@@ -8,7 +8,7 @@
   - 観測: `main.rs` に `init_dpi_awareness`／`alpha_is_opaque`／`#[cfg(test)]`／`RADIUS` の grep ヒットが 0 件になり、`cargo build -p pilot --example pilot-clickthrough-alpha-toggle` が（空 main で）成功する
   - _Requirements: 1.1, 1.5_
 
-- [ ] 1.2 `_template` から再 scaffold し PMv2 DPI 認識を設定した最小起動骨組み
+- [x] 1.2 `_template` から再 scaffold し PMv2 DPI 認識を設定した最小起動骨組み
   - 前段準備: worktree では `git submodule update --init --recursive` を実行後に `cargo build` が通ること（`wintf-winmsg-executor` 0.0.5・workspace `windows` features の依存解決）。これが満たせないと本タスクの成果物に到達できない
   - `crates/pilot/examples/_template/main.rs` を雛形として `crates/pilot/examples/pilot-clickthrough-alpha-toggle/main.rs` を DComp 前提で置き直す（1.1 で削除した中身の代わり）
   - `main` 冒頭で `SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2)` を呼び、失敗時は警告ログを出す
