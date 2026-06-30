@@ -13,9 +13,12 @@
 //!
 //! エスケープ（`\\` / `\%` / 角内 `\]`・要件 13.5-13.7）、引数クォート
 //! （`"..."` / `""`・要件 13.4）、未閉じ `[`/`"` 等の寛容境界吸収（要件 10.3/13.8）は
-//! **タスク 3.2 の領分**ゆえ本ファイルでは扱わない。3.2 はこの線形スキャナの
-//! 各読み取りヘルパ（角括弧引数走査・テキスト走査）にエスケープ／クォート解決と
-//! `Raw` 吸収を差し込む。`Raw` variant はその吸収先として今から定義しておく。
+//! **タスク 3.2 で実装済み**:
+//! - `\\` → リテラル `\`、`\%` → リテラル `%` は `lex` のテキスト走査で解決する。
+//! - 角内 `\]` → リテラル `]`、クォート `"..."`（内側 `,` 保護・`""` → `"`）は
+//!   `scan_bracket_args` で解決する。
+//! - 未閉じ `[` / 未閉じ `"` は `\` から入力末尾までを `Token::Raw` として吸収し、
+//!   走査を中断しない（前後の正常トークンは欠落しない）。
 //!
 //! 本モジュールの実体は現状テストからのみ参照される（`decode`＝タスク 4.x が
 //! 唯一の非テスト消費者になる）。それまでの dead_code 警告は意図的に抑止する。
@@ -37,7 +40,7 @@ pub(crate) enum Token {
     SysVar(String),
     /// タグ間プレーンテキスト。
     Text(String),
-    /// 区切れたが正準でない／不正（タスク 3.2 が吸収先として使用）。
+    /// 区切れたが正準でない／不正（未閉じ `[` / `"` 等を verbatim 吸収・要件 10.3/13.8）。
     Raw(String),
 }
 
@@ -48,7 +51,8 @@ const SHORTHAND_WORDS: &[char] = &['w'];
 ///
 /// - 入力は UTF-8 前提（要件 12.1）。`char_indices` で 1 パス線形走査する。
 /// - トークンは入力順を保持する（要件 9.2/1.3）。
-/// - 本タスク（3.1）はエスケープ／クォート／寛容境界を扱わない（3.2 が追加）。
+/// - エスケープ（`\\`/`\%`/角内 `\]`）・引数クォート（`"..."`/`""`）・未閉じ境界の
+///   `Raw` 吸収を解決する（タスク 3.2・要件 13.4-13.8/10.3）。解析は中断しない。
 pub(crate) fn lex(input: &str) -> Vec<Token> {
     let mut tokens: Vec<Token> = Vec::new();
     // 蓄積中のテキストラン（タグ／sysvar の手前で flush する）。
@@ -68,6 +72,21 @@ pub(crate) fn lex(input: &str) -> Vec<Token> {
         let (_, c) = chars[i];
         match c {
             '\\' => {
+                // エスケープ `\\` / `\%`（要件 13.5/13.6）: タグ開始でなくリテラル
+                // 1 文字としてテキストへ取り込む（flush せず text ランを継続）。
+                match chars.get(i + 1).map(|&(_, c)| c) {
+                    Some('\\') => {
+                        text.push('\\');
+                        i += 2;
+                        continue;
+                    }
+                    Some('%') => {
+                        text.push('%');
+                        i += 2;
+                        continue;
+                    }
+                    _ => {}
+                }
                 flush_text!();
                 let (tok, next) = scan_tag(&chars, i);
                 tokens.push(tok);
@@ -132,8 +151,15 @@ fn scan_tag(chars: &[(usize, char)], i: usize) -> (Token, usize) {
 
     // 角括弧があれば引数を走査、無ければ bare タグ。
     if let Some(&(_, '[')) = chars.get(j) {
-        let (args, next) = scan_bracket_args(chars, j);
-        (Token::Tag { word, args }, next)
+        match scan_bracket_args(chars, j) {
+            BracketScan::Closed { args, next } => (Token::Tag { word, args }, next),
+            // 未閉じ `[` / `"`（要件 10.3/13.8）: 区切れないため `\` から入力末尾までを
+            // 1 単位の `Raw` として吸収し、走査を中断しない（クラッシュさせない）。
+            BracketScan::Unclosed => {
+                let raw: String = chars[i..].iter().map(|&(_, c)| c).collect();
+                (Token::Raw(raw), chars.len())
+            }
+        }
     } else {
         // 角括弧なし。word は通常 1 文字（`\e` `\c` `\-` `\n` 等）。
         // 1 文字のみを bare として消費し、残りはテキスト／後続走査へ委ねる。
@@ -142,28 +168,77 @@ fn scan_tag(chars: &[(usize, char)], i: usize) -> (Token, usize) {
     }
 }
 
-/// `[` から始まる角括弧引数をカンマ区切りで走査する。`j` は `[` の位置。
-/// `]` の次の添字を返す。
+/// `scan_bracket_args` の結果。閉じた `]` まで正しく区切れたか、未閉じかを区別する。
+enum BracketScan {
+    /// `]` で閉じた。`args` は確定引数、`next` は `]` の次の添字。
+    Closed { args: Vec<String>, next: usize },
+    /// `]`（または閉じ `"`）が無いまま入力末尾に達した（寛容 `Raw` 吸収対象）。
+    Unclosed,
+}
+
+/// `[` から始まる角括弧引数を走査する。`j` は `[` の位置。
 ///
-/// 本タスク（3.1）では単純なカンマ分割のみ（エスケープ `\]`・クォート `"..."` は
-/// タスク 3.2 が本関数へ差し込む）。`]` が無い未閉じケースの寛容吸収も 3.2 の領分。
-fn scan_bracket_args(chars: &[(usize, char)], j: usize) -> (Vec<String>, usize) {
+/// 区切り規則（要件 13.3/13.4/13.7）:
+/// - カンマ `,` を引数区切りとする。
+/// - 角括弧内のエスケープ `\]` はリテラルの `]` として引数へ取り込む（要件 13.7）。
+/// - クォート `"..."` は囲まれた全体を 1 引数扱い（内側 `,` を保護）、二重化 `""` は
+///   リテラル `"` として取り込む（要件 13.4）。
+///
+/// `]` が現れないまま末尾に達した（または `"` が閉じないまま末尾）場合は
+/// `Unclosed` を返し、呼び出し側が `Raw` として吸収する（要件 10.3/13.8）。
+fn scan_bracket_args(chars: &[(usize, char)], j: usize) -> BracketScan {
     debug_assert_eq!(chars.get(j).map(|&(_, c)| c), Some('['));
     let mut args: Vec<String> = Vec::new();
     let mut cur = String::new();
     let mut k = j + 1; // `[` の次から。
-    let mut closed = false;
 
-    while let Some(&(_, c)) = chars.get(k) {
+    loop {
+        let Some(&(_, c)) = chars.get(k) else {
+            // 閉じ `]` 無しで末尾 → 未閉じ（寛容 `Raw` 吸収）。
+            return BracketScan::Unclosed;
+        };
         match c {
             ']' => {
                 k += 1;
-                closed = true;
-                break;
+                // 引数を確定: `[]`（空）は引数 0 個。何か読んだら最後の 1 個を push。
+                if !cur.is_empty() || !args.is_empty() {
+                    args.push(cur);
+                }
+                return BracketScan::Closed { args, next: k };
             }
             ',' => {
                 args.push(std::mem::take(&mut cur));
                 k += 1;
+            }
+            '\\' if chars.get(k + 1).map(|&(_, c)| c) == Some(']') => {
+                // 角内 `\]` → リテラル `]`（要件 13.7）。
+                cur.push(']');
+                k += 2;
+            }
+            '"' => {
+                // クォート開始（要件 13.4）。閉じ `"` まで読み、内側 `,` は保護。
+                // 二重化 `""` はリテラル `"` として取り込む。
+                k += 1; // 開き `"` を消費。
+                loop {
+                    let Some(&(_, qc)) = chars.get(k) else {
+                        // クォート未閉じで末尾 → 未閉じ（寛容 `Raw` 吸収）。
+                        return BracketScan::Unclosed;
+                    };
+                    if qc == '"' {
+                        if chars.get(k + 1).map(|&(_, c)| c) == Some('"') {
+                            // `""` → リテラル `"`。
+                            cur.push('"');
+                            k += 2;
+                        } else {
+                            // クォート終端。
+                            k += 1;
+                            break;
+                        }
+                    } else {
+                        cur.push(qc);
+                        k += 1;
+                    }
+                }
             }
             other => {
                 cur.push(other);
@@ -171,15 +246,6 @@ fn scan_bracket_args(chars: &[(usize, char)], j: usize) -> (Vec<String>, usize) 
             }
         }
     }
-
-    // 引数を確定: `[]`（空）は引数 0 個。何か読んだら最後の 1 個を push。
-    if !cur.is_empty() || !args.is_empty() {
-        args.push(cur);
-    }
-
-    // 未閉じ（`closed == false`）の寛容処理はタスク 3.2 が担う。
-    let _ = closed;
-    (args, k)
 }
 
 /// `%` で始まるシステム変数を走査する。`i` は `%` の位置。次の添字を返す。

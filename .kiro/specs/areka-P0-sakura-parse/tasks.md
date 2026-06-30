@@ -24,7 +24,7 @@
   - _Requirements: 8.1, 9.1, 9.2, 12.1, 13.1, 13.2, 13.3_
   - _Boundary: lexer_
   - _Depends: 1_
-- [ ] 3.2 エスケープ・引数クォート・寛容な境界処理
+- [x] 3.2 エスケープ・引数クォート・寛容な境界処理
   - エスケープ `\\`→`\`・`\%`→`%`・角括弧内 `\]`→`]` をリテラルとして取り込み、引数クォート `"..."`（内側 `,` を保護・`""`→`"`）を 1 引数として扱う
   - 未閉じ `[`/`"`・未知タグなど区切れない入力を Raw トークンへ吸収し、走査を中断しない
   - 観測: 各エスケープ／クォート／未閉じ・未知ケースの lex 結果が単体テストで固定され、前後の正常トークンが欠落しない
@@ -64,3 +64,4 @@
 
 ## Implementation Notes
 - 3.1: lexer.rs に暫定 `#![allow(dead_code)]`（消費側 decode 未結線のため）。lexer の `Token::Raw` は定義のみで未 emit、`scan_bracket_args` の `closed` フラグは `let _ = closed;` で保留——いずれも 3.2 のエスケープ／クォート／未閉じ吸収の plug point。**4.x で decode が lexer を消費したら `#![allow(dead_code)]` を絞る/除去**（真の dead を隠さぬよう）。`Token`/`lex` は `pub(crate)`、mod.rs の `pub use` には出さない（公開面は `Instruction`＋`parse` のみ）。model の不透明 NewType は `pub fn new` で構築可（dola `ActorKey` 前例）。
+- 3.2: 既知の微小エッジ（非ブロッキング・レビュー合格）——**単独クォート空引数 `\s[""]` が 0 引数に畳まれる**（`scan_bracket_args` の finalize ヒューリスティック `!cur.is_empty()||!args.is_empty()` がクォート消費済み空と無内容を区別できないため）。厳密 req 13.4 は 1 個の空文字列引数を含意。`["",x]`/`[a,""]` はカンマで正しく空引数化される。OnBoot/decode(4.x) には影響なし。**Task 6 で `\s[""]`→1 空引数のテストを足し、必要なら lexer 側に `quote_consumed` フラグで対処**。未閉じ `"` は設計通り EOI まで Raw 吸収（後続 `]` も飲む）。
