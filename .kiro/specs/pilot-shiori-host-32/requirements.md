@@ -72,7 +72,7 @@ areka（x64）が適合対象ゴースト emo2 を「そのまま」起動する
 
 #### Acceptance Criteria
 
-1. When helper がリクエストを発行する, the host-32 先進坑 shall SHIORI/3.0 形式の `OnBoot`（初回 `OnFirstBoot` 相当）リクエスト 1 種を組み立てて `request` で `pasta.dll` へ渡す。
+1. When helper がリクエストを発行する, the host-32 先進坑 shall SHIORI/3.0 形式の `OnBoot` リクエスト 1 種を組み立てて `request` で `pasta.dll` へ渡す（議題 #7 確定: 橋の往復機構の検証ゆえ `OnBoot` 1 種で代表させ、`OnFirstBoot` は別途送らない。`OnBoot`/`OnFirstBoot` の差は pasta.dll の脳内分岐で往復経路は同一）。
 2. When `pasta.dll` が応答を返す, the host-32 先進坑 shall 応答から `Value:`（emo2 の起動挨拶さくらスクリプト本体）を取り出して marshal する。
 3. When `Value:` が取り出された, the host-32 先進坑 shall その `Value:` を IPC 経由で x64 親プロセスへ返送し、x64 側で受領できるようにする。
 4. The host-32 先進坑 shall リクエスト/レスポンスの charset を emo2 の UTF-8 として扱う。
