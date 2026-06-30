@@ -15,8 +15,16 @@
 #[path = "ipc.rs"]
 mod ipc;
 
+// SHIORI/3.0 ワイヤコーデック（x64 親側に閉じる・helper からは参照しない）。
+// design.md Shiori3Codec §376–411 / research.md §5.4。本タスク（2.1）では
+// 親ターゲットへ取り込むところまで（ParentDriver からの実呼び出しは後続タスク）。
+#[path = "shiori3.rs"]
+mod shiori3;
+
 fn main() {
     println!("pilot shiori-host-32 (x64 parent): skeleton placeholder");
     // 共有プロトコルが親ターゲットへ取り込まれていることの最小確認（design.md §372）。
     let _ = ipc::DEFAULT_TIMEOUT;
+    // SHIORI3 コーデックが親ターゲットへ取り込まれていることの最小確認（design.md §376）。
+    let _ = shiori3::module_loaded();
 }

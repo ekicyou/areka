@@ -18,7 +18,7 @@
   - _Boundary: IpcChannel_
 
 - [ ] 2. Core: x64 親側コンポーネント
-- [ ] 2.1 (P) SHIORI/3.0 OnBoot 組立と Value 抽出（x64）
+- [x] 2.1 (P) SHIORI/3.0 OnBoot 組立と Value 抽出（x64）
   - `OnBoot` を `GET SHIORI/3.0`＋必須ヘッダ（`ID: OnBoot`／`Charset: UTF-8`／`Sender`）CRLF＋空行終端で **UTF-8** 生成（GET ＝応答を返す経路・NOTIFY でない）
   - 応答バイト列から `Value:`（さくらスクリプト本体）を UTF-8 で抽出、不在で None
   - 観測: 生成バイト列が SHIORI/3.0 GET 形式になり、`Value:` 入り応答から本体を抽出できる（単体テストで確認）
