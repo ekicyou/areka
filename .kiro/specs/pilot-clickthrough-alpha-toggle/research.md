@@ -101,3 +101,38 @@ workspace `[workspace.dependencies.windows].features` に必要 feature が全�
 
 ---
 _本書は kiro-validate-gap が生成したギャップ分析（情報提供・選択肢提示であり最終決定ではない）。次フェーズ: 要件ディスカッション → `/kiro-design pilot-clickthrough-alpha-toggle`。_
+
+---
+
+## 7. 設計フェーズ synthesis と確定設計判断（kiro-spec-design）
+
+> 本節は設計生成フェーズ（discovery type: light／既存先進坑パターンの拡張・integration-focused）で §3 の持ち越し論点を確定した記録。API ギャップはゼロ（§2 総括）のため外部 web research は不要、既存 example `wintf-winmsg-executor/main.rs` と workspace `windows` features の確認で十分と判断。
+
+### Decision 1: スレッド跨ぎ共有モデル（§3.1 / §6.4 を確定）
+- **Alternatives**: (a) ワーカ判定→UI 適用（HWND を跨がない）/ (b) ワーカ直接 API 適用（unsafe impl Send）。
+- **Selected**: (a)。ワーカは `GetCursorPos`＋`GetWindowRect`（読み取り専用 API・別スレッド可）＋ `alpha_is_opaque` 判定のみ。望ましい状態は `Arc<AtomicBool> desired_passthrough` で公開、`SetWindowLongPtr`/`SetWindowPos`（スタイル変更）は窓所有 UI スレッドの spawn_local タスクのみが実行。
+- **Rationale**: Win32 で window スタイル変更は所有スレッドが行うのが安全（別スレッド変更は再入リスク）。既存 example の event_listener パターンにそのまま乗る。検証対象（OS 挙動）にスレッド要因ノイズを混ぜない。
+- **notify 方式**: 「変化時のみ notify」を採用（毎フレーム notify ではなく）。ワーカが判定主体である責務分離と整合し、UI 起床自体を抑制。UI 側でも `applied` と比較する二重ガードで R5.4（非変化時 API 非呼出）を保証。
+
+### Decision 2: 座標手順（§3.2 ディスカッション #1 の残課題＝具体手順を確定）
+- **Context**: 描画円＝マスク円一致方針（Option A・固定(960,540)破棄）は要件ディスカッションで決定済み。残るは GetCursorPos 物理座標と窓クライアント中心円の物理位置を求める具体手順。
+- **Selected**: PMv2 認識プロセスでは `GetCursorPos` も `GetWindowRect` も**仮想スクリーンの物理ピクセル座標**を返すため、両者を同一基準で比較でき **DPI 変換不要**。円中心 = 窓矩形中心 `((left+right)/2,(top+bottom)/2)`、半径 200（物理px）、`dx*dx+dy*dy<=r*r` で判定。描画も PMv2 でクライアントが物理pxゆえ同一中心・同一半径の円が一致。
+- **Rationale**: 窓位置からの実算出ゆえマルチモニタ/高DPI（T7）に自動整合。プライマリ前提（R7.3 禁止）に陥らない。
+- **Follow-up**: 実機で見た目と判定がずれる場合のみ per-monitor 補助（`MonitorFromPoint`/`GetDpiForMonitor`）を検討（T7・既存 `crates/wintf/src/ecs/window/monitor.rs` に GetDpiForMonitor 実利用例あり）。
+
+### Decision 3: REPORT.md「指定フォーマット」定義（§3.3 を確定）
+- **Selected**: REPORT.md は T1〜T8 合否台帳（合否欄＋証跡欄）＋必須合格基準充足＋総合判定（go/違う/直す＋日付＋理由・学び・人間記入）。design.md「Testing Strategy」にテンプレート全文を定義。
+- **役割分担**: README 3 幕＝動機/概要/検証結果サマリ（結論・正本）、REPORT＝T1〜T8 詳細台帳（根拠）。README が結論・REPORT が根拠。two-tunnel.md「本坑 design は README の検証結果を参照し二重化しない」と整合（go 知見の正本は README 側）。
+
+### Decision 4: 状態変化最適化の起点フレーム（§3.4 を確定）
+- **Selected**: 窓を初期 ex_style=`WS_EX_TRANSPARENT|WS_EX_TOPMOST`（クリックスルー ON）で生成。UI 側 `applied` 初期値も ON に一致。ワーカ初回判定は `last`=未確定とし初回のみ無条件に desired 確定＋notify。
+- **Rationale**: 「起動時にカーソルが円内」でも初回 1 回だけ正しく OFF へ適用、以降は変化時のみ。初期生成状態（ON）とカーソルが実際に円外なら applied 一致で API 呼出ゼロ。「変化時のみ API 呼出」と「起動時の正しい初期状態保証」を両立。
+
+### Synthesis 結論
+- **Build-vs-adopt**: 全インフラ（窓生成・wndproc・block_on/spawn_local・event_listener 起床・AtomicBool done・GDI 描画）は既存 example から adopt。新規 build は αマスク純関数 1 個と状態差分トグルのみ＝新規概念ほぼゼロ（§4 Option A・§5 工数 S を追認）。
+- **Simplification**: 単一 `main.rs` 集約（先進坑ゆえファイル分割せず・要件 5.4 品質緩和）。production・pilot/lib.rs・pilot/Cargo.toml への変更ゼロ（依存追加なし）。
+- **残置 Unknown（設計で潰せない）**: `WS_EX_TRANSPARENT` 単独のプロセス越え透過の成否（§3.5・T2/T6）＝go ゲート本体・実機検証専用。
+
+### 設計レビューゲート結果
+- Mechanical: 全 numeric requirement ID（R1〜R10 の全 .M）が traceability 表＋コンポーネントブロックに出現／Boundary 4 節 populated／File Structure 具体パス／orphan component なし／boundary↔file 整合（examples-only）。**PASS**。
+- Judgment: 責務境界明示・契約具体（rust シグネチャ・state model・Ordering）・§3 持ち越し 4 論点すべて確定・spec gap なし。**修復パス 0 回で PASS**。
