@@ -13,6 +13,10 @@
 use std::cell::Cell;
 use std::pin::Pin;
 use std::rc::Rc;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::thread;
+use std::time::Duration;
 
 use event_listener::Event;
 use wintf_winmsg_executor::block_on;
@@ -38,8 +42,8 @@ use windows::Win32::UI::HiDpi::{
     DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2, SetProcessDpiAwarenessContext,
 };
 use windows::Win32::UI::WindowsAndMessaging::{
-    GetWindowRect, WINDOW_EX_STYLE, WM_CLOSE, WM_LBUTTONDOWN, WS_EX_NOREDIRECTIONBITMAP,
-    WS_EX_TOPMOST, WS_EX_TRANSPARENT,
+    GetCursorPos, GetWindowRect, WINDOW_EX_STYLE, WM_CLOSE, WM_LBUTTONDOWN,
+    WS_EX_NOREDIRECTIONBITMAP, WS_EX_TOPMOST, WS_EX_TRANSPARENT,
 };
 use windows::core::{Interface, Result};
 
@@ -63,9 +67,8 @@ const RADIUS: i32 = 200;
 /// 実レンダリング α バッファのサンプリングは行わない（プレースホルダ円の継ぎ目, R4.3。
 /// 実装は本坑の責務）。差し替え可能な独立シーム（R4.2）。
 ///
-/// 非テストコードからの呼び出しはタスク 4.x（カーソルワーカ）が配線するまで無いため
-/// `#[allow(dead_code)]` を付す。
-#[allow(dead_code)]
+/// 非テストコードからはカーソル監視ワーカ（タスク 4.1・`spawn_cursor_worker`）が
+/// 16ms ごとに呼ぶ（円内外 → desired click-through 判定）。
 fn alpha_is_opaque(cursor: POINT, win_rect: RECT) -> bool {
     // 円中心 = 窓矩形の中心（タスク 3.2 の描画円と同一算出, R2.2/R4.1）。
     let cx = (win_rect.left + win_rect.right) / 2;
@@ -408,6 +411,73 @@ fn draw_circle(pipeline: &DCompPipeline, color: D2D1_COLOR_F) -> Result<()> {
     Ok(())
 }
 
+/// カーソル監視ワーカを別 `std::thread` で起動する（タスク 4.1・R3.1/R3.2/R3.3/R10.2）。
+///
+/// UI スレッドでも tokio でもない独立 OS スレッド上で 16ms ごとに以下を回す:
+/// 1. `GetCursorPos` + `GetWindowRect`（ともに read-only な Win32 API）で物理座標を読む（R3.4）。
+/// 2. `alpha_is_opaque(pt, wr)` で不透明円の内外を判定する。
+/// 3. desired click-through を `desired_passthrough` に公開する
+///    — 円の**外**（`alpha_is_opaque==false`）= クリック透過 ON（`true`, R5.2）／
+///    円の**内**（`alpha_is_opaque==true`）= クリック透過 OFF（`false`, R5.1）。
+/// 4. desired が前ループから**変化したとき（および初回）だけ** `state_changed` を notify する
+///    （未変化フレームでは notify しない・R3.3／R5.4 を下支え）。変化はログ＋座標で残す（T4 証跡）。
+///
+/// **スレッド越え HWND**: UI スレッド固有でない read-only API しか触らないため、`HWND` を
+/// 生の `isize`（`hwnd.0 as isize`）で渡し、ワーカ内で `HWND(raw as *mut _)` で再構築する。
+/// これによりポインタ幅依存（32/64bit）を保ったまま `AppState`（`!Send`）に `unsafe impl Send`
+/// を付けずに済む。スタイル変更 API（`SetWindowLongPtr`/`SetWindowPos`）はここでは一切呼ばない
+/// （UI スレッド専有・タスク 4.2 の StateApplier の責務）。
+///
+/// `done` が立つとループを抜けて清掃終了する（R8.2）。`done` の read は `Acquire`、
+/// publish は `Release`／count 系は `Relaxed`（reference example の作法に準拠）。
+fn spawn_cursor_worker(
+    hwnd: HWND,
+    desired_passthrough: Arc<AtomicBool>,
+    state_changed: Arc<Event>,
+    done: Arc<AtomicBool>,
+) -> thread::JoinHandle<()> {
+    // HWND を生の isize にしてから move（read-only API 専用・unsafe impl Send 不要）。
+    let raw_hwnd: isize = hwnd.0 as isize;
+
+    thread::spawn(move || {
+        // 前ループの desired。初回は未設定（None）扱いで必ず publish + notify する。
+        let mut last: Option<bool> = None;
+
+        while !done.load(Ordering::Acquire) {
+            // ワーカ内で HWND を再構築（生 isize → ポインタ）。read-only API のみに使用。
+            let hwnd = HWND(raw_hwnd as *mut _);
+
+            let mut pt = POINT::default();
+            let mut wr = RECT::default();
+            // SAFETY: Win32 境界。`GetCursorPos`/`GetWindowRect` はともに read-only で
+            // out 引数へ書き込むのみ。`hwnd` は main が生かし続ける有効窓
+            // （done+join で本ワーカ停止後に Window が drop される）。スタイル変更はしない。
+            let read_ok = unsafe {
+                GetCursorPos(&mut pt).is_ok() && GetWindowRect(hwnd, &mut wr).is_ok()
+            };
+
+            if read_ok {
+                // 円内 = 不透明 = クリック透過 OFF（false）／円外 = 透明 = ON（true）。
+                let desired = !alpha_is_opaque(pt, wr);
+
+                // 初回（last==None）または変化時のみ publish + notify（未変化は黙る・R3.3）。
+                if last != Some(desired) {
+                    desired_passthrough.store(desired, Ordering::Release);
+                    state_changed.notify(usize::MAX);
+                    println!(
+                        "[cursor] desired click-through = {} (cursor=({}, {}) win=[{},{},{},{}])",
+                        if desired { "ON(透過)" } else { "OFF(不透過)" },
+                        pt.x, pt.y, wr.left, wr.top, wr.right, wr.bottom
+                    );
+                    last = Some(desired);
+                }
+            }
+
+            thread::sleep(Duration::from_millis(16));
+        }
+    })
+}
+
 fn main() {
     init_dpi_awareness();
     println!("=== pilot: clickthrough-alpha-toggle 先進坑 ===");
@@ -437,6 +507,21 @@ fn main() {
         Err(e) => eprintln!("[dcomp][warn] DComp パイプライン構築に失敗: {e}"),
     }
 
+    // カーソル監視ワーカ（タスク 4.1）を別 std::thread で起動。
+    // desired_passthrough = ワーカが公開する希望クリック透過状態（初期 true = 起動時 ON と整合）。
+    // state_changed = 変化時に UI を起こす wake イベント（消費側 StateApplier は 4.2 で配線）。
+    // done = ワーカ停止フラグ（block_on 復帰後に立てて join → 清掃終了）。
+    let desired_passthrough = Arc::new(AtomicBool::new(true));
+    let state_changed = Arc::new(Event::new());
+    let worker_done = Arc::new(AtomicBool::new(false));
+    let worker = spawn_cursor_worker(
+        _window.hwnd(),
+        desired_passthrough.clone(),
+        state_changed.clone(),
+        worker_done.clone(),
+    );
+    println!("[cursor] 監視ワーカ起動（別 std::thread・16ms ポーリング・desired 公開＋変化時 notify）");
+
     // メッセージループ：WM_CLOSE → shutdown notify → この future 完了でループ終了。
     let shutdown = state.shutdown.listen();
     block_on(async move {
@@ -444,9 +529,17 @@ fn main() {
     });
     println!("[window] WM_CLOSE 受領 → shutdown 完了・清掃終了");
 
+    // done を立ててワーカを停止 → join で確実に終わらせる（R8.2・「done でワーカ停止」を観測可能に）。
+    worker_done.store(true, Ordering::Release);
+    if worker.join().is_err() {
+        eprintln!("[cursor][warn] 監視ワーカの join に失敗（パニック終了）");
+    } else {
+        println!("[cursor] 監視ワーカ停止（done → join 完了）");
+    }
+
     // 描画円の色トグル on-click（3.3）は wndproc の WM_LBUTTONDOWN で実装済み。
-    // カーソルワーカ／スタイルトグル（4.x）・ワーカ join／初期状態収束（5.1）は
-    // 後続タスクで実装する。
+    // desired を読んでスタイルを実適用する StateApplier（SetWindowLongPtr+SetWindowPos で
+    // WS_EX_TRANSPARENT をトグル）はタスク 4.2、listen-then-spawn の初期状態収束は 5.1 で配線する。
 }
 
 #[cfg(test)]

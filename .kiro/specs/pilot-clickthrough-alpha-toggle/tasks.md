@@ -58,7 +58,7 @@
   - _Depends: 3.2_
 
 - [ ] 4. Core: トグル機構（判定／適用の責務分離）
-- [ ] 4.1 カーソル監視ワーカ（16ms・別 std::thread・判定・desired 公開・変化時 notify）
+- [x] 4.1 カーソル監視ワーカ（16ms・別 std::thread・判定・desired 公開・変化時 notify）
   - UI とは別の `std::thread` で 16ms 周期に `GetCursorPos`＋`GetWindowRect` を呼び、`alpha_is_opaque` で判定する。HWND は生値（`isize`）で受け取りワーカ内で再構成し、読み取り専用 API のみ呼ぶ（スタイル変更はしない＝`unsafe impl Send` ラッパ不要）
   - 望ましいクリックスルー状態を `AtomicBool desired_passthrough`（円外=ON／円内=OFF）で公開し、前回から変化したとき（および初回）だけ `event_listener::Event` で UI を起床する
   - `done: AtomicBool` が立ったらループを抜けて正常終了する。tokio は使わない（`event_listener`＋`std::thread`）
