@@ -33,7 +33,7 @@
   - _Depends: 1.2_
 
 - [ ] 3. Core: i686 helper 側コンポーネント
-- [ ] 3.1 (P) pasta.dll 動的ロードとバイト proxy（i686）
+- [x] 3.1 (P) pasta.dll 動的ロードとバイト proxy（i686）
   - `LoadLibraryW`＋`GetProcAddress` で `load`/`unload`/`request`（cdecl flat-C・返り値 `bool`(1byte)・pasta 実ソース確定）を解決し関数ポインタ化
   - `load(ghostdir)` は ghostdir を **ANSI(Shift_JIS)** で HGLOBAL 化して呼びクラッシュせず完了。`request` は受信バイト列を HGLOBAL 化して渡し応答 HGLOBAL からバイト取得（**入力 HGLOBAL は DLL 解放／応答 HGLOBAL はホスト解放**・HGLOBAL は IPC を跨がない）
   - ロード/解決失敗は観測可能な形で返す。SHIORI3 ロジックは持たない（バイト proxy に徹する）

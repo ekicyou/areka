@@ -17,8 +17,50 @@
 #[path = "ipc.rs"]
 mod ipc;
 
+// ShioriByteProxy（pasta.dll 動的ロード＋バイト proxy・design.md §445–495）は helper（i686）
+// 専用ゆえ helper.rs からのみ取り込む（main.rs=x64 には載せない・unsafe FFI を本境界へ集約）。
+#[path = "shiori_proxy.rs"]
+mod shiori_proxy;
+
 fn main() {
+    // i686 セルフテスト観測（task 3.1・go 基準(1) precursor・requirements 3.3）:
+    //   shiori-host-32-helper.exe --selftest-load <ghostdir>
+    // pasta.dll を動的ロード→3 エントリ解決→load(ghostdir) 無 crash 完了→unload を実行し、
+    // 結果を標準出力へ出す（親が観測）。ghostdir 省略時は fixtures の emo2 ghost/master を既定。
+    // ※ cargo test 経由の観測は同 example の ipc.rs #[cfg(test)] が i686 でビルド不能
+    //    （usize >> 32 overflow・本タスク境界外）なため、本実行時セルフテストでも観測できる。
+    let args: Vec<String> = std::env::args().collect();
+    if args.iter().any(|a| a == "--selftest-load") {
+        let ghostdir = args
+            .iter()
+            .position(|a| a == "--selftest-load")
+            .and_then(|i| args.get(i + 1))
+            .map(std::path::PathBuf::from)
+            .unwrap_or_else(default_fixture_ghostdir);
+        match shiori_proxy::selftest_load(&ghostdir) {
+            Ok(msg) => {
+                println!("{msg}");
+                std::process::exit(0);
+            }
+            Err(e) => {
+                eprintln!("selftest_load FAILED: {e:?}");
+                std::process::exit(2);
+            }
+        }
+    }
+
     println!("pilot shiori-host-32-helper (i686 helper): skeleton placeholder");
     // 共有プロトコルが helper ターゲットへ取り込まれていることの最小確認。
     let _ = ipc::DEFAULT_TIMEOUT;
+}
+
+/// ビルド時の crate ルートから fixtures の emo2 ghostdir（pasta.dll の在処）を組み立てる。
+fn default_fixture_ghostdir() -> std::path::PathBuf {
+    std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("examples")
+        .join("shiori-host-32")
+        .join("fixtures")
+        .join("emo2")
+        .join("ghost")
+        .join("master")
 }

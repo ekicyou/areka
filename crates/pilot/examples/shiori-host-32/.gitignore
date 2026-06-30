@@ -1,0 +1,3 @@
+# pasta.dll の load() が実行時に fixture ghostdir 内へ生成する runtime キャッシュ
+# （lua cache・ログ・save state 等）。検証成果物ではないので追跡しない。
+fixtures/emo2/ghost/master/profile/

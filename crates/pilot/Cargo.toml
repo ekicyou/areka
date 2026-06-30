@@ -18,9 +18,19 @@ publish = false
 # 本坑 wintf 置換ではこの版を pin し、wintf 側の DblClkClassFixup を撤去する。
 wintf-winmsg-executor = "0.0.5"
 event-listener = "5"
-# host-32 先進坑 IpcChannel（ipc.rs）が COPYDATASTRUCT を要するため、ワークスペース
-# 既定 features に Win32_System_DataExchange を追加（WM_COPYDATA ペイロード構造体の所在）。
-windows = { workspace = true, features = ["Win32_System_DataExchange"] }
+# host-32 先進坑の追加 features（いずれもワークスペース既定への加算・最小）:
+# - Win32_System_DataExchange: IpcChannel（ipc.rs）の COPYDATASTRUCT（WM_COPYDATA ペイロード）。
+# - Win32_System_Memory: ShioriByteProxy（shiori_proxy.rs・task 3.1）の GlobalAlloc/GlobalFree
+#   （pasta の HGLOBAL 規約・GMEM_FIXED）。
+# - Win32_Globalization: 同 proxy の WideCharToMultiByte(CP_ACP)＝ghostdir を ANSI(Shift_JIS)
+#   エンコード（pasta to_ansi_str との charset 対称・design §493）。
+# LoadLibraryW/GetProcAddress/FreeLibrary（Win32_System_LibraryLoader）と HGLOBAL/HMODULE
+# （Win32_Foundation）はワークスペース既定で供給済。
+windows = { workspace = true, features = [
+    "Win32_System_DataExchange",
+    "Win32_System_Memory",
+    "Win32_Globalization",
+] }
 windows-core = { workspace = true }
 
 # host-32 先進坑 helper（i686 別ターゲットビルドの独立バイナリ・議題 3 確定）。
