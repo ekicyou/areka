@@ -24,7 +24,7 @@
   - 観測: 生成バイト列が SHIORI/3.0 GET 形式になり、`Value:` 入り応答から本体を抽出できる（単体テストで確認）
   - _Requirements: 4.1, 4.2, 4.4_
   - _Boundary: Shiori3Codec_
-- [ ] 2.2 (P) helper プロセスの起動と生存監視（x64）
+- [x] 2.2 (P) helper プロセスの起動と生存監視（x64）
   - `HELPER_EXE`（無ければ第 1 引数）で helper exe パスを受け、ghostdir と親 HWND を引数/環境で渡して起動
   - 子プロセスハンドルで終了コード/生死を IPC レイヤと直交に監視し、clean / 異常終了を観測可能な形で記録
   - 観測: 親が helper exe を起動し、その終了コードを取得できる（helper スケルトンの起動→終了で確認）
