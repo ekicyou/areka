@@ -486,12 +486,17 @@ fn spawn_cursor_worker(
 /// 呼べるため、ワーカ（4.1・別スレッド）ではなくここで適用する（設計 Architecture
 /// 「判定・適用の分離」）。ワーカ（4.1）は一切変更しない。
 ///
-/// ループ（取りこぼし防止・await 前に毎回 listener を張り直す）:
-/// 1. `let listener = state_changed.listen();`（await 前に張る → notify を逃さない）。
+/// ループ（**取りこぼし防止＋起動時初期状態収束**・listener-first poll-then-await・タスク 5.1）:
+/// 1. `let listener = state_changed.listen();`（await **前**に張る → notify を逃さない）。
 /// 2. `applied_done`（＝block_on 復帰後に立つ shutdown フラグ）が立っていれば break。
-/// 3. `listener.await`（ワーカの notify か終了 notify で起床）。
-/// 4. 起床後に再度 `applied_done` を確認して break（終了 notify への即応）。
-/// 5. `desired_passthrough` を `Acquire` で読み、ローカル `applied` と比較する。
+/// 3. **無条件の初期 poll**: `desired_passthrough` を `Acquire` で読み、ローカル `applied` と
+///    比較して差分時のみ適用する（下記）。これにより、await の前に一度必ず希望状態へ収束し、
+///    起動時にカーソルが円**内**で始まった場合の初回 OFF を確実に一度だけ適用する
+///    （notify が pending でなくても収束する・設計「起動時初期状態確定」）。
+/// 4. `listener.await`（ワーカの notify か終了 notify で起床）。poll と await の間に届いた
+///    notify は手順 1 で張った listener が確実に捕捉する（lost wakeup なし）。
+/// 5. 起床後はループ先頭へ戻り、再び listener を張り直してから `applied_done` を確認し
+///    （終了 notify への即応）、次の poll を行う。
 ///
 /// **差分時（`desired != applied`）のみ**:
 ///   - 現在の `GetWindowLongPtrW(hwnd, GWL_EXSTYLE)` を読み、`WS_EX_TRANSPARENT` ビット
@@ -511,9 +516,9 @@ fn spawn_cursor_worker(
 /// で渡し、UI スレッド内で `HWND(raw as *mut _)` に再構成する（このタスクは UI スレッド上で
 /// 動くため所有スレッドからの呼出になり、スタイル変更 API を正当に呼べる）。
 ///
-/// 終了: `applied_done`（block_on 復帰後の shutdown 後始末で立てて notify される想定）で
-/// ループを抜ける。最終的なライフサイクル配線（listen-then-spawn の初期状態収束・
-/// done 立て＋join 順序）はタスク 5.1 の責務。本タスクは StateApplier 消費側のみ。
+/// 終了: `applied_done`（block_on 復帰後の shutdown 後始末で立てて notify される）で
+/// ループを抜ける。最終的なライフサイクル配線（初期状態収束・done 立て＋join 順序）は
+/// タスク 5.1（本関数のループ順序＋main の配線）で確定する。
 fn spawn_state_applier(
     hwnd: HWND,
     desired_passthrough: Arc<AtomicBool>,
@@ -528,17 +533,17 @@ fn spawn_state_applier(
         let mut applied: bool = true;
 
         loop {
-            // await 前に listener を張る（notify 取りこぼし防止）。
+            // await 前に listener を張る（notify 取りこぼし防止）。次の poll と await の間に
+            // 届く notify を確実に捕捉する。
             let listener = state_changed.listen();
             if applied_done.load(Ordering::Acquire) {
                 break;
             }
-            listener.await;
-            if applied_done.load(Ordering::Acquire) {
-                break;
-            }
 
-            // ワーカが公開した希望クリック透過状態。
+            // 無条件の初期 poll（listener-first poll-then-await・タスク 5.1）。
+            // listener を張った後・await の前に希望状態を読んで差分収束する。これにより
+            // 起動初回は notify の有無に関わらず一度必ず収束し（円内始動なら初回 OFF を一度だけ
+            // 適用）、かつ poll〜await 間に来た notify も上の listener が捕捉する（lost wakeup なし）。
             let desired = desired_passthrough.load(Ordering::Acquire);
 
             // 差分時のみスタイル適用＋ログ。非差分時は style API を一切呼ばない（R5.4）。
@@ -588,6 +593,11 @@ fn spawn_state_applier(
                 applied = desired;
             }
             // desired == applied のときは何もしない（style API 非呼出・ログ非出力・R5.4）。
+
+            // poll で収束させた後に await（手順 1 で張った listener で起床）。次の起床は
+            // ワーカの変化 notify か終了 notify。起床後はループ先頭へ戻り、listener を張り直して
+            // applied_done を確認してから次の poll を行う（終了 notify への即応）。
+            listener.await;
         }
     });
 }
@@ -636,10 +646,19 @@ fn main() {
     );
     println!("[cursor] 監視ワーカ起動（別 std::thread・16ms ポーリング・desired 公開＋変化時 notify）");
 
-    // 状態変化適用タスク（StateApplier・タスク 4.2）を UI スレッドへ spawn_local。
-    // ワーカの desired/state_changed を消費し、差分時のみ WS_EX_TRANSPARENT を加除する
-    // （UI スレッド専有・スタイル変更は窓所有スレッドのみ）。block_on より前に spawn して
-    // executor に駆動させる。applier_done は終了用フラグ（最終配線は 5.1）。
+    // 状態変化適用タスク（StateApplier・タスク 4.2／ループ順序確定は 5.1）を UI スレッドへ
+    // spawn_local。ワーカの desired/state_changed を消費し、差分時のみ WS_EX_TRANSPARENT を
+    // 加除する（UI スレッド専有・スタイル変更は窓所有スレッドのみ）。block_on より前に spawn
+    // して executor に駆動させる。
+    //
+    // 起動時初期状態収束（タスク 5.1・R8.1/R8.2 前提）: applier のループは listener-first
+    // poll-then-await（listener を張る → 無条件 poll で差分収束 → await）なので、worker の
+    // 初回 notify が applier の最初の listen より先に発火しても取りこぼさない。block_on が
+    // executor を駆動した最初のパスで applier は desired_passthrough を必ず poll し、起動時に
+    // カーソルが円**内**なら初回 OFF を一度だけ適用、円**外**なら applied(ON) と一致して
+    // style API を一切呼ばない。worker は初回判定を無条件に publish+notify する（4.1）ため、
+    // applier の初回 poll 時点で desired_passthrough は有効値を保持する。spawn 順
+    // （worker → applier）はこの idiom により頑健（順序非依存）。applier_done は終了用フラグ。
     let applier_done = Arc::new(AtomicBool::new(false));
     spawn_state_applier(
         _window.hwnd(),
@@ -656,13 +675,21 @@ fn main() {
     });
     println!("[window] WM_CLOSE 受領 → shutdown 完了・清掃終了");
 
-    // StateApplier（spawn_local タスク）へ終了を伝える。block_on 復帰後は executor が駆動を
-    // 止めるためタスクは drop で停止するが、明示フラグ＋notify で listener.await を即起床させ
-    // クリーンに break させる（最終的なライフサイクル配線は 5.1 の責務）。
+    // ── ライフサイクル終了（唯一の確定 shutdown 経路・タスク 5.1・R8.1/R8.2）──
+    // WM_CLOSE → shutdown.notify → 上の block_on(shutdown.await) 復帰 → ここでテアダウン。
+    //
+    // (1) StateApplier（spawn_local タスク）終了: applied_done を立て（Release）、
+    //     state_changed を notify して applier の pending な listener.await を即起床させる。
+    //     起床後 applier はループ先頭で applied_done を見て break しタスク終了する
+    //     （これで spawn_local タスクがプロセスを生かし続けない）。block_on 復帰後は executor
+    //     が回らないが、明示フラグ＋notify で確実にループを畳む（drop 任せにしない）。
     applier_done.store(true, Ordering::Release);
     state_changed.notify(usize::MAX);
 
-    // done を立ててワーカを停止 → join で確実に終わらせる（R8.2・「done でワーカ停止」を観測可能に）。
+    // (2) カーソルワーカ（別 std::thread）終了: done を立て（Release）→ join で確実に合流する
+    //     （R8.2）。ワーカは 16ms スリープ間隔で done(Acquire) を観測しループを抜けるため、
+    //     join は最大 ~16ms 待つだけ（許容）。二重 join はせず、panic 終了時も join の Err を
+    //     ログに残してプロセスは正常終了させる（hang/panic なし）。
     worker_done.store(true, Ordering::Release);
     if worker.join().is_err() {
         eprintln!("[cursor][warn] 監視ワーカの join に失敗（パニック終了）");
@@ -670,9 +697,9 @@ fn main() {
         println!("[cursor] 監視ワーカ停止（done → join 完了）");
     }
 
-    // 描画円の色トグル on-click（3.3）は wndproc の WM_LBUTTONDOWN で実装済み。
-    // desired を読んでスタイルを実適用する StateApplier（SetWindowLongPtr+SetWindowPos で
-    // WS_EX_TRANSPARENT をトグル）はタスク 4.2、listen-then-spawn の初期状態収束は 5.1 で配線する。
+    // ここで _window が drop され DestroyWindow される（ライブラリの Window::Drop）。
+    // ワーカは既に join 済みで HWND を触らない＝use-after-free なし。残留スレッドなしで
+    // プロセスは正常終了する（R8.1）。
 }
 
 #[cfg(test)]

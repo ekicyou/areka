@@ -77,7 +77,7 @@
   - _Depends: 4.1_
 
 - [ ] 5. Integration: 起動初期状態とライフサイクル
-- [ ] 5.1 起動時初期状態確定とライフサイクル結線
+- [x] 5.1 起動時初期状態確定とライフサイクル結線
   - 窓を初期 ex_style = `WS_EX_NOREDIRECTIONBITMAP | WS_EX_TOPMOST | WS_EX_TRANSPARENT`（クリックスルー ON）で生成し、UI 側 `applied` 初期値を ON に一致させる
   - 初回 notify 取りこぼし防止のため、UI で `event.listen()` を確立してからワーカを spawn する（listen-then-spawn）。ワーカは初回を無条件判定とする＝StateApplier（4.2）の差分適用が起動時カーソル円内でも正しく初回 OFF へ収束する
   - 窓クローズ→`block_on` の future 完了→`done` を `store(true)`→ワーカ join で正常終了する（最終 notify で UI 側 listen を確実に解除）
