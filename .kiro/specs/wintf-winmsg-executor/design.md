@@ -260,8 +260,8 @@ Entity は `GWLP_USERDATA` ではなくクロージャ capture（`create_windows
 | 1.3 | 終了経路引き継ぎ＋未完 async 完了後に清掃終了 | ShutdownPolicy | shutdown future | 起動・tick 駆動 |
 | 1.4 | async タスクより先の loop 終了で panic しない | ShutdownPolicy | block_on 規律 | 起動・tick 駆動 |
 | 1.5 | 終了時にハング/panic なし | ShutdownPolicy, MessageLoopDriver | — | 起動・tick 駆動 |
-| 2.1 | util::Window<S> でウィンドウ＋状態を束ねる | EcsWindowFactory | `util::Window::new_checked_ex` | 配送 |
-| 2.2 | ex-style 受け渡し口で NOREDIRECTIONBITMAP 指定 | EcsWindowFactory | `new_checked_ex(ex_style)` | 配送 |
+| 2.1 | util::Window<S> でウィンドウ＋状態を束ねる | EcsWindowFactory | `util::Window::new_ex`（再入可・5.3 修正） | 配送 |
+| 2.2 | ex-style 受け渡し口で NOREDIRECTIONBITMAP 指定 | EcsWindowFactory | `new_ex(ex_style)` | 配送 |
 | 2.3 | GWLP_USERDATA 手詰めなしで共有状態アクセス | EntityWndprocBridge | `Pin<&S>` クロージャ | 配送 |
 | 2.4 | 旧 ecs_wndproc と同等の Entity 配送 | EntityWndprocBridge | `dispatch_window_message` | 配送 |
 | 2.5 | HINSTANCE/クラス登録を新基盤整合・生成失敗なし（dblclick はライブラリ 0.0.5 内蔵） | EcsWindowFactory | library class (CS_DBLCLKS 内蔵) | 配送 |
@@ -405,7 +405,7 @@ impl WinApp {
 | Requirements | 2.1, 2.2, 2.5 |
 
 **Responsibilities & Constraints**
-- 旧 `create_windows` の直 `CreateWindowExW` を `util::Window::new_checked_ex(WindowType::TopLevel, ex_style, state, wndproc)` へ置換。`new_checked_ex`（`FnMut`＋内部 `RefCell`）を採用し、ライブラリ標準の wndproc 再入防止を得る（要件 4.3）。
+- 旧 `create_windows` の直 `CreateWindowExW` を `util::Window::new_ex(WindowType::TopLevel, ex_style, state, wndproc)` へ置換。**`new_ex`（`Fn`・内部 `RefCell` なし＝wndproc 再入可）を採用する**（当初設計は `new_checked_ex`（`FnMut`＋RefCell で再入防止）だったが、5.3 実機検証でドラッグがちらつく回帰が判明。wintf のドラッグは `WM_MOUSEMOVE`→`guarded_set_window_pos`→SetWindowPos が同期発火する WM_WINDOWPOSCHANGED に wndproc が再入して WindowPos を echo-bypass 更新する設計に依存しており、RefCell の再入阻止下ではこの更新が失われるため）。tick 二重実行防止は ECS 側ガード（`IS_TICK_FLUSH_IN_PROGRESS`＋World `try_borrow_mut`）＋`make_wndproc` の `try_borrow` 安全スキップで担保する（旧 `ecs_wndproc` と同じ単一防御・要件 4.3）。
 - `ex_style` は現行同様 `CompositionMode` から算出（ULW=`WS_EX_LAYERED` / DComp=`WS_EX_NOREDIRECTIONBITMAP`・要件 2.2）。ウィンドウタイトル・`WINDOW_STYLE`・座標は別途 `SetWindowText`/`SetWindowLongPtrW(GWL_STYLE)`/`SetWindowPos` で適用する（ライブラリの `new_*` は `WINDOW_STYLE(0)`・`CW_USEDEFAULT`・名前なしで生成するため、生成後に現行 `WindowStyle`/`WindowPos`/`title` を反映する初期化ステップが要る）。
 - 生成した `Window<S>` の所有権は **`WindowRegistry`（NonSend リソース・`HashMap<Entity, Window<S>>`）** で保持し、Drop=`DestroyWindow` の生存期間を Entity ライフサイクルに一致させる（`Window<S>` は `!Send` ゆえ Component 不可・NonSend が正規の家）。
 
@@ -446,7 +446,7 @@ impl WinApp {
 **Implementation Notes**
 - Integration: 旧ハンドラは内部で `try_get_ecs_world()` ＋ `get_entity_from_hwnd(hwnd)` を自己呼び出しして World/Entity を解決していた（`ecs/window_proc/*` 7 ファイル・**計 31 箇所**・実測）。`ECS_WORLD: OnceLock<SendWeak>` と `get_entity_from_hwnd` の撤去に伴い、これら 31 箇所すべてを「`dispatch_window_message` から `(world: &Rc<RefCell<EcsWorld>>, entity: Entity)` を引数で受け取る統一シグネチャ」へ機械的に置換する（自己解決 → 引数受領）。各ハンドラは hwnd／メッセージ引数に加え world・entity を引数として受け取る薄い改修で、内部の業務ロジックは不変。31 箇所の解決点の列挙と引数置換は tasks フェーズで明示タスク化する（「シグネチャ無改修」ではなく「Entity/World 引数を足す一様改修」が正確な範囲）。
 - Validation: 旧 `ecs_wndproc` と同等の配送結果（要件 2.4）。dblclick・mouse・keyboard・WINDOWPOSCHANGED・DPICHANGED・DISPLAYCHANGE を網羅。
-- Risks（要件 4.3）: `new_checked_ex` の `RefCell` が wndproc 自体の再入を阻止する一方、ハンドラ内 World 借用と AsyncTickTask の World 借用が二重借用に至らないよう、双方が `try_borrow(_mut)` で安全スキップする規律を保つ。先進坑が nested `WM_WINDOWPOSCHANGED` 719 回で `reentry_body_ran=false`/`double_tick=false` を実証（README 参照）。
+- Risks（要件 4.3）: **`new_ex` 採用により wndproc は再入可**（5.3 回帰修正・上記参照）。ドラッグ中の同期 WM_WINDOWPOSCHANGED 再入はこの設計が要求するもので、ハンドラ内 World 借用と AsyncTickTask の World 借用が二重借用に至らないよう、双方が `try_borrow(_mut)` で安全スキップする規律＋`IS_TICK_FLUSH_IN_PROGRESS` ガードで二重 tick を防ぐ（旧 `ecs_wndproc` 再入経路と同等の単一防御で実機検証済み）。先進坑のヘッドレス検証（nested `WM_WINDOWPOSCHANGED` 719 回で `double_tick=false`）はライブラリ RefCell 下での「再入 blocked」ケースだったが、areka 実機ドラッグは「再入 needed」ケースであり `new_ex` でこれを満たす。
 
 #### WindowRegistry
 
@@ -504,7 +504,7 @@ impl WinApp {
 **Responsibilities & Constraints**
 - `spawn_local` された UI スレッド async タスク。ループ: `vblank_event.listen().await` → World を `try_borrow_mut` → `try_tick_world()`（13 本・順序不変・要件 4.5）→ `flush_window_pos_commands()` → 再 `listen().await`。
 - 13 本スケジュール（Input→Update→PreLayout→Layout→PostLayout→UISetup→GraphicsSetup→Draw→PreRenderSurface→RenderSurface→Composition→CommitComposition→FrameFinalize）の構成・順序は不変（要件 4.5・`try_tick_world` をそのまま呼ぶ）。
-- 再入ガード（要件 4.3）: `IS_TICK_FLUSH_IN_PROGRESS`（thread_local・`vsync.rs`）を**安全側に残置**する。新モデルではメッセージ pop からの tick 再起動経路が構造的に減るが、`flush_window_pos_commands()`→`SetWindowPos`→同期 `WM_WINDOWPOSCHANGED`→（ハンドラ内 World 借用）の経路は残るため、ECS ガードと `new_checked_ex` の `RefCell`（wndproc 再入防止）の二重防御を維持する。先進坑が両者の非衝突を実証（README 参照）。
+- 再入ガード（要件 4.3）: `IS_TICK_FLUSH_IN_PROGRESS`（thread_local・`vsync.rs`）を**安全側に残置**する。新モデルではメッセージ pop からの tick 再起動経路が構造的に減るが、`flush_window_pos_commands()`→`SetWindowPos`→同期 `WM_WINDOWPOSCHANGED`→（ハンドラ内 World 借用）の経路は残る。**`new_ex` 採用（5.3 修正）で wndproc 再入は許容される**ため、二重 tick 防止は ECS ガード（`IS_TICK_FLUSH_IN_PROGRESS`）＋World `try_borrow_mut` の安全スキップという**単一防御**で担保する（旧 `ecs_wndproc` 再入経路と同等・実機検証済み）。同期 WM_WINDOWPOSCHANGED 再入はドラッグの WindowPos echo-bypass 更新に必要であり、阻止してはならない。
 
 **Dependencies**
 - Inbound: VsyncEventBridge — 起床通知（P0）。
