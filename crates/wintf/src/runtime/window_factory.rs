@@ -39,8 +39,9 @@ use tracing::{debug, error};
 use windows::Win32::Foundation::HWND;
 use windows::Win32::UI::HiDpi::GetDpiForSystem;
 use windows::Win32::UI::WindowsAndMessaging::{
-    SWP_NOACTIVATE, SWP_NOZORDER, SW_SHOW, SetWindowLongPtrW, SetWindowPos, SetWindowTextW,
-    ShowWindow, CW_USEDEFAULT, GWL_STYLE, WS_EX_LAYERED,
+    SWP_FRAMECHANGED, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE, SWP_NOZORDER, SW_SHOW, SetParent,
+    SetWindowLongPtrW, SetWindowPos, SetWindowTextW, ShowWindow, CW_USEDEFAULT, GWL_STYLE,
+    WS_EX_LAYERED,
 };
 use windows::core::HSTRING;
 use wintf_winmsg_executor::util::{get_instance_handle, Window as LibWindow, WindowType};
@@ -116,6 +117,7 @@ impl EcsWindowFactory {
         };
         let title = window.title.clone();
         let composition_mode = window.composition_mode();
+        let parent = window.parent;
         let style = entity_ref.get::<WindowStyle>().copied().unwrap_or_default();
         let pos = entity_ref.get::<WindowPos>().copied().unwrap_or_default();
 
@@ -149,6 +151,24 @@ impl EcsWindowFactory {
 
         // --- 4. 生成後初期化（style / pos / title 反映・要件 2.1） ---
         Self::apply_initial_state(hwnd, &style, &pos, ex_style, &title);
+
+        // --- 4a. 親ウィンドウ反映（`Window.parent` 転送・要件 2.1 の旧経路パリティ） ---
+        // 旧 create_windows は `window.parent` を `CreateWindowExW` の hWndParent へ渡していたが、
+        // ライブラリの `new_ex`（WindowType::TopLevel）は親 HWND を受け取らない。生成後に
+        // `SetParent` で反映してパリティを回復する。`parent: None`（現行 areka/全 example）の
+        // 場合は呼ばずスキップ＝挙動完全不変。
+        // NOTE(セマンティクス): `SetParent` は標準の「親（子ウィンドウ）」設定 API。
+        // `CreateWindowExW` の hWndParent は非子ウィンドウ（WS_POPUP 等）では「オーナー」を
+        // 意味するため、WS_CHILD を持たない窓では厳密一致しない（ライブラリが生成時 hWndParent
+        // を露出しないための近似）。子ウィンドウ用途（WS_CHILD）では一致する。
+        if let Some(parent_hwnd) = parent {
+            // SAFETY: Win32 境界。有効 hwnd を有効 parent_hwnd の子へ再設定するのみ。
+            // 失敗（無効 parent 等）は Err を返すが致命的ではないため無視（旧経路も生成失敗時
+            // は当該 Entity をスキップする方針）。
+            unsafe {
+                let _ = SetParent(hwnd, Some(parent_hwnd));
+            }
+        }
 
         // --- 4b. ウィンドウを表示（旧 create_windows の ShowWindow(SW_SHOW) 同等） ---
         // ライブラリは `WINDOW_STYLE(0)`（WS_VISIBLE なし）で生成するため、スタイルに
@@ -205,6 +225,26 @@ impl EcsWindowFactory {
         // SetWindowLongPtrW はスタイルビットの設定のみで、所有権・寿命に影響しない。
         unsafe {
             SetWindowLongPtrW(hwnd, GWL_STYLE, style.style.0 as isize);
+        }
+
+        // スタイル変更を非クライアント領域（フレーム）へ反映する。
+        // ライブラリは `WINDOW_STYLE(0)` で生成するため、上の `SetWindowLongPtrW(GWL_STYLE)` で
+        // 後から WS_CAPTION/WS_BORDER 等を立てても、`SWP_FRAMECHANGED` を伴う SetWindowPos が
+        // ないとフレーム（タイトルバー・クローズボタン）が再計算・再描画されない（旧 create_windows
+        // は生成時に style を渡すため最初からフレームが描かれていた）。フレームレス窓（既定
+        // WS_POPUP・現行 areka/全 example）では非クライアント領域が無いため実質無害。
+        // SAFETY: Win32 境界。位置・サイズ・z オーダーは変えず（NOMOVE/NOSIZE/NOZORDER）、
+        // フレーム再計算（FRAMECHANGED）のみを要求する。
+        unsafe {
+            let _ = SetWindowPos(
+                hwnd,
+                None,
+                0,
+                0,
+                0,
+                0,
+                SWP_FRAMECHANGED | SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE,
+            );
         }
 
         // 座標・サイズ（旧経路と同一算出）。CW_USEDEFAULT を含む場合は OS 既定維持で省略。
