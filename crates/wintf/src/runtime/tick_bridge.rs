@@ -158,9 +158,7 @@ impl AsyncTickTask {
     ///   shutdown 時は `upgrade()` が `None` を返し、ループは安全に終了する。
     ///
     /// 投入のみ行い実行はメッセージループ（`block_on`/`MessageLoop::run`）に委ねる。
-    // NOTE: `WinApp::run` の全結線（後続タスク 4.3）で呼ばれる。それまで lib ビルドでは
-    // 未使用となるため、兄弟 building block（`MessageLoopDriver` 等）と同様に dead_code 許容。
-    #[allow(dead_code)]
+    // `WinApp::run`（task 4.3 結線済み）が呼ぶ。
     pub(crate) fn spawn(
         event: Arc<Event>,
         world: Weak<RefCell<EcsWorld>>,

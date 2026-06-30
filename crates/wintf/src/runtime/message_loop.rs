@@ -49,9 +49,7 @@ impl MessageLoopDriver {
     ///
     /// `future` 完了前にメッセージループが quit した場合（`future` / spawn 済みタスクが
     /// `PostQuitMessage` を呼んだ場合など）に panic する（ライブラリ仕様）。
-    // NOTE: `WinApp::run` の全結線（後続タスク）で利用される主経路。現状は
-    // ヘッドレステストのみが呼び出すため lib ビルドでは未使用となる。
-    #[allow(dead_code)]
+    // `WinApp::run`（task 4.3 結線済み）が shutdown future の駆動主経路として利用する。
     pub(crate) fn block_on<T>(future: impl Future<Output = T>) -> T {
         block_on(future)
     }
@@ -98,9 +96,7 @@ impl MessageLoopDriver {
 /// shutdown future の `listen()` arm と notify の間でタスク完了直後の wake を取りこぼす
 /// 競合（先進坑が観測）に対し、[`notify_shutdown`] を終了時に補助的に撃つ規律を踏襲する。
 //
-// NOTE: `run()` の `block_on(shutdown_future(...))` 結線は task 4.3 の領分。それまで
-// lib ビルドでは未使用となるため、兄弟 building block（MessageLoopDriver 等）と同様に
-// scoped dead_code 許容。
+// `run()` の `block_on(shutdown_future(...))` 結線は task 4.3 で完了済み。
 pub(crate) struct ShutdownPolicy;
 
 impl ShutdownPolicy {
@@ -113,7 +109,6 @@ impl ShutdownPolicy {
     ///
     /// `run()`（task 4.3）はこの future を [`MessageLoopDriver::block_on`] へ渡し、最後の
     /// ウィンドウ破棄で notify されると future が完了してループを正常復帰させる。
-    #[allow(dead_code)]
     pub(crate) fn shutdown_future(event: Rc<Event>) -> impl Future<Output = ()> {
         async move {
             // await 前に arm（処理中・arm 直後に届く notify も落とさない）。
@@ -128,8 +123,7 @@ impl ShutdownPolicy {
     /// 防御的へ複数回撃っても冪等（`event_listener` は arm 済みリスナのみ起床し、未 arm の
     /// notify は次の arm へ持ち越されない＝余分な副作用なし）。`WinApp::new()` が registry の
     /// shutdown hook に同じ `notify(usize::MAX)` を仕込む（正常経路）一方、本 helper は run
-    /// 側の終了時 tail race 補填（task 4.3 で結線）に用いる。
-    #[allow(dead_code)]
+    /// 側の終了時 tail race 補填（task 4.3 で結線済み）に用いる。
     pub(crate) fn notify_shutdown(event: &Event) {
         event.notify(usize::MAX);
     }

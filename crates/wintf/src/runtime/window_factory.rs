@@ -62,7 +62,6 @@ use windows::Win32::UI::WindowsAndMessaging::WINDOW_EX_STYLE;
 /// - `DComp`→ `(style.ex_style & !WS_EX_LAYERED) | WS_EX_NOREDIRECTIONBITMAP`。
 ///
 /// 副作用なしで単体テストできるよう独立関数に切り出す。
-#[allow(dead_code)]
 fn compute_ex_style(composition_mode: CompositionMode, style: &WindowStyle) -> WINDOW_EX_STYLE {
     use windows::Win32::UI::WindowsAndMessaging::WS_EX_NOREDIRECTIONBITMAP;
     match composition_mode {
@@ -78,11 +77,9 @@ fn compute_ex_style(composition_mode: CompositionMode, style: &WindowStyle) -> W
 ///
 /// 後続タスク 4.3 の書き換え後 `create_windows`（`&mut World` 排他システム）から
 /// 呼び出される想定で、エントリポイント [`EcsWindowFactory::create_window`] を
-/// `&mut World` シグネチャで提供する。
-#[allow(dead_code)]
+/// `&mut World` シグネチャで提供する。`create_windows`（task 4.3 結線済み）が呼ぶ。
 pub(crate) struct EcsWindowFactory;
 
-#[allow(dead_code)]
 impl EcsWindowFactory {
     /// `entity` の宣言的ウィンドウデータからライブラリウィンドウを生成し登録する。
     ///

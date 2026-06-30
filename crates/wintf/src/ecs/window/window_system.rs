@@ -15,11 +15,60 @@ use windows::core::*;
 // - Monitor::on_add
 // Arrangement::on_add が GlobalArrangement と ArrangementTreeChanged を自動挿入します。
 
-/// 未作成のWindowを検出して作成する排他システム
+/// 未作成のWindowを検出してライブラリ経由で作成する排他システム（task 4.3 cutover）。
 ///
 /// 排他システムにすることで、WindowHandleの追加が即時反映され、
 /// 同じフレーム内の後続スケジュールでWindowHandleが参照可能になる。
+///
+/// # 共存分岐（task 4.3 解釈 (2)）
+/// `EcsWorldSelfRef`（NonSend リソース・外側 `Weak<RefCell<EcsWorld>>`）の有無で分岐する:
+/// - **不在**: 旧 `WinThreadMgr` facade 経路（self-ref を注入しない）では何もしない
+///   （早期 return・panic も二重生成もしない）。旧経路のウィンドウ生成は cutover 後
+///   意図的に不活性で、意味は 4.4（examples の `WinApp` 切替）で復元される。
+/// - **在**: `WinApp` 経路。宣言的クエリにマッチする各 Entity に対し
+///   [`EcsWindowFactory::create_window`] を呼ぶ（ライブラリの `Window<WndState>` を生成し
+///   style/pos/title を反映、`WindowRegistry` へ格納、`WindowHandle`+`HasGraphicsResources`
+///   を insert）。これが設計公認の単一上向きエッジ（ecs→runtime）。
+///
+/// 旧 `CreateWindowExW` 直呼び本体は [`create_windows_legacy`] として保持する（撤去は 4.5）。
 pub fn create_windows(world: &mut World) {
+    // self-ref（外側 World への Weak）を取得。未注入＝旧 WinThreadMgr 経路ゆえ no-op。
+    let Some(self_ref) = world.get_non_send_resource::<crate::ecs::world::EcsWorldSelfRef>() else {
+        // 旧 facade 経路では何もしない（panic なし・二重生成なし）。
+        return;
+    };
+    let ecs_world: std::rc::Weak<std::cell::RefCell<crate::ecs::world::EcsWorld>> =
+        self_ref.0.clone();
+
+    // 宣言的クエリ（旧経路と同一条件）で未生成 Window Entity を収集（borrow を即解放）。
+    let mut system_state: SystemState<
+        Query<
+            Entity,
+            (
+                With<Window>,
+                Without<WindowHandle>,
+            ),
+        >,
+    > = SystemState::new(world);
+    let entities_to_create: Vec<Entity> = system_state.get(world).iter().collect();
+
+    // 各 Entity をファクトリ経由で生成（ライブラリ生成・registry 格納・handle 反映）。
+    for entity in entities_to_create {
+        crate::runtime::window_factory::EcsWindowFactory::create_window(
+            world,
+            entity,
+            ecs_world.clone(),
+        );
+    }
+}
+
+/// 旧 `CreateWindowExW` 直呼びによるウィンドウ生成（reference・撤去は task 4.5）。
+///
+/// task 4.3 cutover で [`create_windows`] をライブラリ経由ファクトリへ差し替えたため、
+/// 本体は実呼び出しから外れた。知見転記漏れの保険として撤去せず保持する（開発者の
+/// keep-old-code steer・撤去は 4.5 legacy teardown）。
+#[allow(dead_code)]
+pub fn create_windows_legacy(world: &mut World) {
     // SystemStateを使ってクエリとリソースにアクセス
     let mut system_state: SystemState<(
         Query<
@@ -171,5 +220,44 @@ pub fn create_windows(world: &mut World) {
                 );
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// task 4.3 解釈 (2): `EcsWorldSelfRef` 未注入（旧 `WinThreadMgr` 経路相当）では
+    /// `create_windows` は何もしない（早期 return）。`Window` Entity を spawn しても
+    /// `WindowHandle` は付かず、panic も二重生成も起きない。
+    ///
+    /// self-ref 在の新経路（ファクトリ生成）は実 HWND を要するため
+    /// `runtime/window_factory.rs` のヘッドレステスト（`factory_creates_...`）が担う。
+    /// 本テストは「未注入なら no-op」の共存ガードのみを headless で検証する。
+    #[test]
+    fn create_windows_noops_without_self_ref() {
+        let mut world = World::new();
+        // create_windows が読む FrameCount は新経路では参照しないが、legacy 互換のため
+        // 念のため挿入しておく（新 create_windows は self-ref 不在で即 return する）。
+        world.insert_resource(crate::ecs::world::FrameCount::default());
+
+        // Window コンポーネント付き Entity を spawn（self-ref は注入しない＝旧経路相当）。
+        let entity = world.spawn(Window::default()).id();
+
+        // self-ref 不在ゆえ no-op（panic しない）。
+        create_windows(&mut world);
+
+        // WindowHandle は付与されないべき（生成されていない）。
+        assert!(
+            world.get::<WindowHandle>(entity).is_none(),
+            "self-ref 未注入時は create_windows が no-op で WindowHandle を付けないべき"
+        );
+        // HasGraphicsResources も付かない。
+        assert!(
+            world
+                .get::<crate::ecs::graphics::HasGraphicsResources>(entity)
+                .is_none(),
+            "self-ref 未注入時は HasGraphicsResources も付かないべき"
+        );
     }
 }

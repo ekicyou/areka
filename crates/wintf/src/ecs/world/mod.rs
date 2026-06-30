@@ -14,9 +14,26 @@ use bevy_ecs::message::Messages;
 use bevy_ecs::prelude::*;
 use bevy_ecs::schedule::*;
 use bevy_ecs::system::*;
+use std::cell::RefCell;
+use std::rc::Weak;
 use std::time::Instant;
 use tracing::trace;
 use windows::Win32::Foundation::HWND;
+
+/// 外側 `Rc<RefCell<EcsWorld>>` への弱参照を保持する NonSend リソース（task 4.3）。
+///
+/// `create_windows`（排他システム）は bevy の `&mut World` しか持たないが、ウィンドウ生成
+/// ファクトリ（runtime 層 `EcsWindowFactory`）は wndproc クロージャの `WndState` 用に
+/// **外側**の `Weak<RefCell<EcsWorld>>`（共有 World ハンドルの弱参照）を必要とする。
+///
+/// 本リソースを **ECS 層**で定義することで `create_windows` が読むのは ECS 型のまま
+/// （ecs→runtime の上向き依存を作らない）。`Weak` を保持する `!Send` 型ゆえ bevy が
+/// 自動的に NonSend として扱う（`Send` 偽装はしない）。
+///
+/// 注入は `WinApp`（runtime）が `new()`/`run()` 開始時に `Rc::downgrade(&self.world)` を
+/// insert する（facade から下向き）。`create_windows` はこのリソースの有無で新経路
+/// （ファクトリ生成）/ 旧 `WinThreadMgr` 経路（no-op）を分岐する（task 4.3 解釈 (1)/(2)）。
+pub struct EcsWorldSelfRef(pub Weak<RefCell<EcsWorld>>);
 
 /// ECSワールドのラッパー
 /// 初期化ロジックや拡張機能をここに集約

@@ -18,9 +18,11 @@ use windows::Win32::System::Com::*;
 use windows::Win32::UI::HiDpi::*;
 use windows::core::Result;
 
-use crate::ecs::world::EcsWorld;
+use crate::ecs::world::{EcsWorld, EcsWorldSelfRef, FrameFinalize};
+use crate::runtime::message_loop::{MessageLoopDriver, ShutdownPolicy};
+use crate::runtime::tick_bridge::{AsyncTickTask, VsyncEventBridge};
+use crate::runtime::window_registry::{reconcile_window_registry, WindowRegistry};
 use crate::runtime::wndproc_bridge::WndState;
-use window_registry::WindowRegistry;
 
 /// `WinApp` が World へ確保する本番 `WindowRegistry` の具体型。
 ///
@@ -44,12 +46,18 @@ mod wndproc_bridge;
 /// ウィンドウ所有・寿命管理層。生成済み `Window<WndState>`（`!Send`）を Entity キーで
 /// 保持する NonSend リソース `WindowRegistry` と、`Window` コンポーネント破棄を検知して
 /// 該当要素を drop（`DestroyWindow`）するリコンサイル `reconcile_window_registry` を提供する。
-mod window_registry;
+///
+/// `pub(crate)`: `WinApp::run`（task 4.3）が `reconcile_window_registry` を schedule へ
+/// 登録する（runtime→World）ため、クレート内から参照可能にする。
+pub(crate) mod window_registry;
 
 /// ECS ウィンドウ生成ファクトリ層。宣言的ウィンドウ生成をライブラリの再入安全な
 /// `util::Window::new_checked_ex` 経由へ置換し、生成後に style/pos/title を反映して
-/// `WindowRegistry` へ格納する `EcsWindowFactory` を提供する（live cutover は 4.1/4.3）。
-mod window_factory;
+/// `WindowRegistry` へ格納する `EcsWindowFactory` を提供する（live cutover は 4.3）。
+///
+/// `pub(crate)`: `create_windows`（ECS 層）が `EcsWindowFactory::create_window` を呼ぶ
+/// 設計公認の単一上向きエッジ（ecs→runtime）のため、クレート内から参照可能にする。
+pub(crate) mod window_factory;
 
 /// UI スレッド基盤の owner。旧 `WinThreadMgr` を置換する新公開 facade。
 ///
@@ -67,8 +75,8 @@ pub struct WinApp {
     /// 生じない。よって WinApp が `Event` を所有するのが一貫かつ最小（4.2 解釈・開発者決定）。
     ///
     /// `new()` で生成し、`WindowRegistry` の shutdown hook に `notify(usize::MAX)` を仕込む。
-    /// `run()` の `block_on(ShutdownPolicy::shutdown_future(...))` 結線は task 4.3。
-    #[allow(dead_code)]
+    /// `run()` が `block_on(ShutdownPolicy::shutdown_future(self.shutdown.clone()))` で待つ
+    /// （task 4.3 で結線済み）。
     shutdown: Rc<event_listener::Event>,
 }
 
@@ -146,11 +154,80 @@ impl WinApp {
         Rc::clone(&self.world)
     }
 
-    /// UI スレッドのメッセージループを開始する（旧 `WinThreadMgr::run` 相当）。
+    /// 新経路の結線（self-ref 注入 + reconcile 登録）を World へ施す（冪等・task 4.3）。
     ///
-    /// 最小スタブ。`AsyncTickTask` の spawn・`ShutdownPolicy` future の `block_on` 等の
-    /// 完全な結線は後続タスク（run の全結線）で実装する。現状は即時復帰する。
+    /// `run()` 開始時に呼ぶ。複数回呼んでも安全:
+    /// - `EcsWorldSelfRef`（外側 `Weak<RefCell<EcsWorld>>`）を NonSend リソースとして
+    ///   insert する（`create_windows` がこれを読んで新経路/旧経路を分岐）。既存なら上書き
+    ///   （同一 World への Weak ゆえ等価）。
+    /// - `reconcile_window_registry::<Window<WndState>>`（本番単相化）を **遅め schedule**
+    ///   `FrameFinalize` へ登録する。
+    ///
+    /// # reconcile を `FrameFinalize` に置く理由（task 4.3 解釈 (3)）
+    /// `try_tick_world`（`ecs/world/mod.rs`）は 13 本スケジュールを `Input … FrameFinalize`
+    /// の順で回し、本クレートは `clear_trackers`/`clear_all` を **どこでも呼ばない**
+    /// （grep 済み・確認）。bevy の `RemovedComponents<Window>` は `clear_trackers` まで
+    /// バッファに残り、各登録システムは自分の read カーソルで「各除去を一度だけ」観測する。
+    /// よって配置による取りこぼしは構造的に起きないが、WM_CLOSE の despawn が
+    /// `UISetup`（create と同じ）等の前段で起きても **同一 tick の最終段**で確実に
+    /// reconcile される `FrameFinalize`（13 本目）を選ぶ（破棄→registry drop→空遷移 hook→
+    /// shutdown notify を 1 フレーム内で閉じる）。
+    ///
+    /// # 重複登録について
+    /// `add_systems` を複数回呼ぶと同じ system 関数が重複登録され得る。`run()` を複数回
+    /// 呼ぶ運用は想定しない（メッセージループは 1 度）ため実害はないが、念のため呼び出しは
+    /// `run()` 冒頭の 1 箇所に集約する。
+    fn wire_new_path(&self) {
+        let weak = Rc::downgrade(&self.world);
+        let mut ecs = self.world.borrow_mut();
+        let w = ecs.world_mut();
+        // self-ref（外側 Weak）を注入（create_windows の新経路分岐スイッチ）。
+        w.insert_non_send_resource(EcsWorldSelfRef(weak));
+        drop(ecs);
+
+        // reconcile を遅め schedule（FrameFinalize）へ登録（runtime→World・上向き依存なし）。
+        // 本番単相化 `Window<WndState>` で turbofish して登録する。
+        self.world.borrow_mut().add_systems(
+            FrameFinalize,
+            reconcile_window_registry::<wintf_winmsg_executor::util::Window<WndState>>,
+        );
+    }
+
+    /// UI スレッドのメッセージループを開始する（旧 `WinThreadMgr::run` 相当・task 4.3 全結線）。
+    ///
+    /// 最小フロー `WinApp::new → world → run` でメッセージループ・tick・終了が一体動作する
+    /// 心臓部。手順:
+    /// 1. 新経路を結線（[`wire_new_path`](Self::wire_new_path)・self-ref 注入 + reconcile 登録）。
+    /// 2. `VsyncEventBridge` をローカルに生成（`run` の間 `WinApp` 相当で所有・Drop で
+    ///    VSync スレッド stop→join）。
+    /// 3. `AsyncTickTask::spawn` で 60Hz tick ループを UI スレッドへ投入（JoinHandle は
+    ///    `run` の間ローカル保持・World は `Weak`）。
+    /// 4. `MessageLoopDriver::block_on(ShutdownPolicy::shutdown_future(self.shutdown.clone()))`
+    ///    で、最後のウィンドウ破棄（registry 空遷移 hook→Event notify）まで OS メッセージ
+    ///    ループを駆動する。future 完了でループが **先行 quit せず** 正常復帰する
+    ///    （"received unexpected quit message" panic を構造的に回避）。
+    /// 5. 復帰時、ローカルの `VsyncEventBridge` が drop（VSync stop→join）し、tick の
+    ///    `JoinHandle` も drop される。tail race 補填として終了時に防御的 notify を撃つ。
+    ///
+    /// # 戻り値
+    /// 正常終了時 `Ok(())`。COM/DPI は `new()` で初期化済み。
     pub fn run(&self) -> Result<()> {
+        // 1. 新経路結線（self-ref 注入 + reconcile 登録・冪等）。
+        self.wire_new_path();
+
+        // 2. VSync ブリッジを run の間ローカル所有（Drop で stop→join）。
+        let bridge = VsyncEventBridge::new();
+
+        // 3. 60Hz tick ループを UI スレッドへ投入（World は Weak・shutdown で upgrade None 終了）。
+        let _tick = AsyncTickTask::spawn(bridge.event().clone(), Rc::downgrade(&self.world));
+
+        // 4. shutdown future が完了するまでメッセージループを駆動（先行 quit せず復帰）。
+        MessageLoopDriver::block_on(ShutdownPolicy::shutdown_future(Rc::clone(&self.shutdown)));
+
+        // 5. tail race 補填の防御的 notify（冪等・arm 済みリスナのみ起床）。
+        ShutdownPolicy::notify_shutdown(&self.shutdown);
+
+        // bridge / _tick はここで drop（VSync stop→join・tick JoinHandle 破棄）。
         Ok(())
     }
 
@@ -201,6 +278,39 @@ mod tests {
         // hook が WinApp 所有の Event を notify したので arm 済み listener が起床する
         // （ハングしない = shutdown future が完了する経路が結線されている）。
         listener.wait();
+    }
+
+    /// task 4.3: `wire_new_path` 後の World 状態を検証する（headless）。
+    /// 1. `EcsWorldSelfRef`（NonSend・外側 Weak）が World に注入される（create_windows の
+    ///    新経路分岐スイッチ）。その Weak は WinApp の strong World を upgrade できる。
+    /// 2. `reconcile_window_registry` が `FrameFinalize` へ登録され、空 World の 1 tick が
+    ///    panic せず回る（reconcile 登録が schedule を壊さない＝結線が健全）。
+    ///
+    /// 実 block_on ループ（実窓 + close イベント要）は回さない。full new→world→run の E2E は
+    /// 4.4（examples 切替）+ 5.3（手動）の領分。
+    #[test]
+    fn wire_new_path_injects_self_ref_and_schedules_reconcile() {
+        let app = WinApp::new().expect("WinApp::new should succeed headless");
+        app.wire_new_path();
+
+        {
+            let world = app.world();
+            let ecs = app.world.borrow();
+            // (1) EcsWorldSelfRef が注入され、外側 World を upgrade できる。
+            let self_ref = ecs
+                .world()
+                .get_non_send_resource::<EcsWorldSelfRef>()
+                .expect("wire_new_path should inject EcsWorldSelfRef");
+            assert!(
+                self_ref.0.upgrade().is_some(),
+                "注入された Weak は WinApp の strong World を upgrade できるべき"
+            );
+            drop(ecs);
+            let _ = world; // strong clone（self-ref upgrade の生存保証は self.world）。
+        }
+
+        // (2) reconcile 登録後、空 World で 1 tick 回しても panic しない（schedule 健全）。
+        app.world.borrow_mut().try_tick_world();
     }
 
     /// 終了シグナルは `WinApp` が strong 所有する（`shutdown` フィールド存在の確認も兼ねる）。

@@ -106,7 +106,7 @@
   - _Boundary: ShutdownPolicy, WinApp_
   - _Depends: 4.1_
 
-- [ ] 4.3 WinApp::run の全結線と UI スレッド async
+- [x] 4.3 WinApp::run の全結線と UI スレッド async
   - run で async tick タスクを `spawn_local` し、shutdown future を `block_on` し、VSync ブリッジ・レジストリ・Event の生存期間を WinApp が所有する
   - UI スレッド単一の async 投入口（spawn_ui_local 相当）を提供し、手組み executor（async-executor + spawn_normal）経路を置換する（tokio 非依存・!Send future 許容）
   - 完了状態: `WinApp::new → world → run` の最小フローでメッセージループ・tick・終了が一体で動作する
@@ -160,6 +160,14 @@
 ## Implementation Notes
 
 - **Phase 4 = 逐次 live cutover（開発者決定 2026-06-30）**: 4.1→4.2→4.3→4.4→4.5 を 1 タスクずつ implementer→review→commit。各コミットは「コンパイル緑＋lib テスト緑＋boundary」で検証。ランタイム/example 実行検証は **4.4（build）＋5.3（手動E2E）に集約**（旧経路と新経路の共有 lifecycle ハンドラ＋create 経路が flip するため、4.1〜4.4 の中間コミットは一時的に実行不可・squash-merge で消える）。design Migration Strategy 順序と一致。「旧コードは reference として保持・実撤去は 4.5」の共存 steer は維持。
+- **【要対応 gap】factory が Window.parent 未転送（4.3 レビューで発見・3.4 由来）**: 旧 create_windows は `Window.parent` を `CreateWindowExW` の parent 引数へ渡していたが、新 EcsWindowFactory（3.4）は `WindowType::TopLevel` 固定で parent を無視。areka シェル+バルーンが親子窓か独立トップレベルかで影響。**5.3 E2E 前（4.4 追従改修時 or 専用修正）に factory の parent 転送可否を確認・必要なら補修すること**（ライブラリ `new_checked_ex` の parent 受け渡し口を確認）。4.3 範囲外ゆえ 4.3 はブロックしない。
+- **4.3 解釈（全結線・cutover 心臓部）**: 「WinApp::run 全結線」は run の tick/block_on 結線だけでなく、新経路を実働させる create_windows 切替＋reconcile 結線を含む（これ無しでは「new→world→run で生成/tick/終了が一体動作」が成立しない＝design「全結線」の含意）。境界 "WinApp" を超えて window_system.rs / ecs/world を最小限触る（boundary 拡張・記録済）。設計判断:
+  - **(1) self-weak resource**: create_windows（&mut World・bevy World しか持たない）が factory 用の `Weak<RefCell<EcsWorld>>`（WndState 用）を得る経路として、ECS 層に NonSend リソース（例 `EcsWorldSelfRef(Weak<RefCell<EcsWorld>>)`・ecs/world 定義＝ECS→ECS）を新設し WinApp が new()/run() で注入。create_windows はこれを読み factory へ渡す（唯一の上向きエッジ create_windows→factory は設計公認）。
+  - **(2) create_windows 切替**: window_system.rs の旧 create_windows 本体は `create_windows_legacy`（#[allow(dead_code)]・共存温存・撤去 4.5）へ退避し、新 create_windows は EcsWindowFactory 経由（self-weak resource 未注入時は何もしない安全動作＝旧 WinThreadMgr 経路でも panic しない）。schedule 登録名は据置。
+  - **(3) reconcile 結線**: WinApp が `world.add_systems(<late schedule>, reconcile_window_registry::<Window<WndState>>)`（runtime→World・ECS schedule 定義に runtime 型を持ち込まない）。RemovedComponents<Window> が tracker クリア前に読める遅め schedule に配置（実装者が try_tick_world の clear_trackers タイミングを確認し決定）。
+  - **(4) run() 結線**: VsyncEventBridge::new()（WinApp 所有・drop で stop→join）→ AsyncTickTask::spawn(bridge.event().clone(), Rc::downgrade(&world)) → block_on(ShutdownPolicy::shutdown_future(self.shutdown.clone()))。spawn_ui_local は既存。
+  - **(5) dead_code 解除**: 結線された building block（MessageLoopDriver/VsyncEventBridge/AsyncTickTask/ShutdownPolicy/WinApp.shutdown/factory/registry reconcile）の scoped #[allow(dead_code)] を外す（想定 3 件警告も解消）。
+  - 検証: 旧経路（WinThreadMgr）と新経路の二重生成を避けるため、新 create_windows は self-weak 未注入時 no-op。full run 復帰・実窓表示の E2E は 4.4（examples 切替後）＋5.3（手動）。4.3 自体はコンパイル緑＋lib テスト緑＋（可能なら）headless な run 部品テスト。
 - **4.2 解釈（共存遵守＋building block）**: 新終了シグナル＝`event_listener::Event` を **WinApp（runtime）所有**（design:387 は「ECS 層所有」だが、その根拠は reconcile が ECS の場合の上向き依存回避。本坑は WindowRegistry/reconcile を runtime 配置（3.3 決定）ゆえ notify が runtime→runtime で完結し上向き依存なし＝WinApp 所有が一貫・最小）。WinApp::new() で Event 生成→WindowRegistry を World へ確保（既存なら流用）→`set_shutdown_hook(notify Event)` を注入。run の `block_on(shutdown_future)` 結線は **4.3**。旧 `WM_LAST_WINDOW_DESTROYED`/`message_window`/`App::on_window_destroyed` PostMessage 経路は**温存**（旧 WinThreadMgr 専用・撤去は 4.5）＝app.rs に触れない。4.2 検証は「Event notify→shutdown future/listener 完了」「registry 空 hook→Event 発火」をヘッドレス単体で（full run 復帰は 4.3/5.3）。tail race は終了時 notify(usize::MAX)＋run 側 listen 先行 arm で回避（4.3 で本結線）。
 - **4.1 解釈（共存遵守）**: 新経路に必須なのは **WM_CLOSE 反転（DestroyWindow 直叩き→対象 Entity の despawn 要求）** のみ。WM_NCCREATE の GWLP 手詰めと WM_NCDESTROY の ECS 後始末は **旧経路専用コード**（新経路はライブラリが NCCREATE/NCDESTROY を所有し wintf の当該ハンドラを呼ばない・dispatch 表からも除外済 3.2）。ゆえに 4.1 ではこれらを**撤去せず温存**し、実撤去は 4.5 へ（task 4.1 bullet 2/3 の「撤去」は 4.5 へ繰延・開発者の keep-old-code steer 優先）。WM_CLOSE の despawn→`RemovedComponents<Window>`→reconcile→registry drop→DestroyWindow の完結は reconcile 結線（4.3）後ゆえ、4.1 単体検証は「WM_CLOSE ハンドラが entity を despawn する」まで（full close→destroy は 4.3/5.3 で検証）。同期再入の二重借用回避は make_wndproc の try_borrow safe-skip（3.1）＋reconcile が破棄手続きで ECS 後始末を持たないことで担保。
 

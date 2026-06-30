@@ -48,10 +48,8 @@ type ShutdownHook = Box<dyn Fn()>;
 /// `Send` 偽装はしない。`W = Window<WndState>` が `!Send` であることにより本リソースも
 /// `!Send` となり、bevy が NonSend として（メインスレッド専用で）強制する。
 //
-// NOTE: `create_windows`（task 3.4）が insert、`WinApp::run`（task 4.3）が reconcile を
-// schedule へ結線するまで lib ビルドでは未使用。兄弟 building block（MessageLoopDriver
-// /VsyncEventBridge/AsyncTickTask）と同様に scoped dead_code 許容。
-#[allow(dead_code)]
+// `create_windows`（task 4.3）が factory 経由で insert、`WinApp::run`（task 4.3）が
+// reconcile を schedule へ結線済み（wired）。
 pub(crate) struct WindowRegistry<W = LibWindow<WndState>> {
     /// Entity → 生成済みウィンドウ。`remove`/drop で `DestroyWindow` が走る。
     map: HashMap<Entity, W>,
@@ -59,7 +57,6 @@ pub(crate) struct WindowRegistry<W = LibWindow<WndState>> {
     shutdown_hook: Option<ShutdownHook>,
 }
 
-#[allow(dead_code)]
 impl<W> WindowRegistry<W> {
     /// 空のレジストリを生成する（フック未注入）。
     pub(crate) fn new() -> Self {
@@ -119,10 +116,7 @@ impl<W> WindowRegistry<W> {
 /// 登録できるのは具体型のみのため、`'static` 境界を付し本番では `W = Window<WndState>` で
 /// 単相化される。headless テストはダミー `W` で同じ反復ロジックを検証する。
 ///
-/// 本システムは schedule へ自動登録しない。登録は `WinApp`（task 4.3）が行う。
-//
-// NOTE: dead_code 許容理由は `WindowRegistry` と同じ（4.3 結線まで未使用）。
-#[allow(dead_code)]
+/// 本システムは schedule へ自動登録しない。登録は `WinApp`（task 4.3 結線済み）が行う。
 pub(crate) fn reconcile_window_registry<W: 'static>(
     mut removed: RemovedComponents<Window>,
     mut registry: NonSendMut<WindowRegistry<W>>,
