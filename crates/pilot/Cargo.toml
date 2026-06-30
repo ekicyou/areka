@@ -20,3 +20,11 @@ wintf-winmsg-executor = "0.0.5"
 event-listener = "5"
 windows = { workspace = true }
 windows-core = { workspace = true }
+
+# host-32 先進坑 helper（i686 別ターゲットビルドの独立バイナリ・議題 3 確定）。
+# サブフォルダの helper.rs は auto-discovery 対象外ゆえ明示宣言する。
+# 親 x64 entry（examples/shiori-host-32/main.rs）は auto-discovery で example
+# `shiori-host-32` として解決されるため宣言不要（非衝突）。
+[[example]]
+name = "shiori-host-32-helper"
+path = "examples/shiori-host-32/helper.rs"

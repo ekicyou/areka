@@ -4,7 +4,7 @@
 > 実装は design.md のコンポーネント/契約・research.md の確定決定に従う。**葉ノード隔離（命綱）厳守**・使い捨て品質可。ビルドは PowerShell（i686 リンカトラップ回避）。
 
 - [ ] 1. Foundation: 先進坑スキャフォールド＋2 段ビルド基盤＋IPC 契約
-- [ ] 1.1 example フォルダ生成・helper 独立ターゲット宣言・親/helper 最小スケルトン
+- [x] 1.1 example フォルダ生成・helper 独立ターゲット宣言・親/helper 最小スケルトン
   - `_template` を `examples/shiori-host-32/` へコピーし、親 `main.rs`（x64）と helper `helper.rs`（i686）の最小スケルトンを置く
   - `pilot/Cargo.toml` に helper 用 `[[example]]`（name=`shiori-host-32-helper`, path=`examples/shiori-host-32/helper.rs`）を追加
   - 探索コードは `examples/shiori-host-32/` のみに置き、production クレートへの inbound 依存を一切作らない（葉ノード隔離・空 lib＋examples-only を崩さない）
