@@ -172,6 +172,8 @@ sequenceDiagram
 
 窓は初期 ex_style = `WS_EX_TRANSPARENT | WS_EX_TOPMOST`（＝クリックスルー ON）で生成する。UI 側の `applied` 初期値を「ON（透過）」と一致させて持つ。ワーカは起動直後の初回判定で `last` を「未確定」とし、初回は無条件に desired を確定＋notify する。これにより「カーソルが起動時に円内」の場合でも初回 1 回だけ正しく OFF へ適用され、以降は変化時のみ適用される。初期生成状態（ON）とカーソルが実際に円外なら applied と一致し API 呼出ゼロで整合する。
 
+**起動順序（初回 notify 取りこぼし防止・design-validation 確認事項3）**: `event_listener` は listen 確立前の notify を保持しないため、**UI 側で `event.listen()` を確立してからワーカを spawn する**（listen-then-spawn）。これが取りづらい構成の場合は、代替として **UI 起動直後に desired を一度ポーリングして初回適用**し、以降の差分のみワーカ起床に委ねる。いずれかで初回 OFF 適用の確実性を担保する（「起動時にカーソルが円内」の稀ケースで初回 T3 観測がぶれない）。
+
 ### 座標手順（R4.4, R7・research.md §3.2 解決済み）
 
 PMv2 認識プロセスでは `GetCursorPos` も `GetWindowRect` も**仮想スクリーンの物理ピクセル座標**を返す。両者を同一基準で比較できるため DPI 変換は不要。手順:
@@ -260,7 +262,7 @@ fn alpha_is_opaque(cursor: POINT, win_rect: RECT) -> bool;
 
 ##### State Management
 - State model: `Arc<AtomicBool> desired_passthrough`、`Arc<Event>`、`Arc<AtomicBool> done`。
-- Concurrency strategy: HWND はワーカ起動時に値コピー（読み取り専用 API のみ使用・スタイル変更はしない）。`Ordering::Relaxed`/`Acquire`/`Release` を done に適用（既存 example 準拠）。
+- Concurrency strategy: ワーカへ渡すのは **HWND の生値（`isize`）**であり、ワーカスレッド内で `HWND(raw as *mut _)` に再構成して `GetCursorPos`/`GetWindowRect` の**読み取り専用 API のみ**を呼ぶ。スタイル変更（`SetWindowLongPtr`/`SetWindowPos`）は窓所有スレッド（UI）専有ゆえ、ワーカへ `AppState` ごと渡す必要がなく **`unsafe impl Send` ラッパは不要**（R2.5 は跨ぎ共有を「許容」するが本設計は生値＋読み取り専用に narrowing して安全側に倒す）。`done` には `Ordering::Relaxed`/`Acquire`/`Release` を適用（既存 example 準拠）。
 
 ### UI 層
 
@@ -357,6 +359,8 @@ fn alpha_is_opaque(cursor: POINT, win_rect: RECT) -> bool;
 
 **合格基準**（R9.3/R9.4）: T1・T2・T3・T4・T6 が ✅ 必須。T5・T7・T8 は ✅ または軽微な条件付き合格（理由明記）。**go 判定は開発者（人間）が下す。Claude Code 単独で合格判定して次フェーズに進まない**（R9.6）。
 
+**検証手順注記（境界チャタリング対策・design-validation 確認事項1）**: T4（状態切替の発火）・T5（非変化時の非発火）の検証では、カーソルを**円境界でゆっくり一度だけまたぐ**こと。境界線上で高速に往復させると 16ms 周期で ON↔OFF が連発し、観測（特に T5 の負の証跡）が濁る。これは検証手順で回避する。境界に不感帯を設けるヒステリシスは**先進坑では実装しない（YAGNI）**。本番で必要になれば本坑 `wintf-clickthrough-alpha-toggle` で導入する（Open Questions 参照）。
+
 ### REPORT.md フォーマット（R9.5・research.md §3.3 で定義）
 
 `REPORT.md` は T1〜T8 の詳細記録（合否・証跡）を担い、README 3 幕とは役割を分担する: **README = 動機／概要／検証結果サマリ（go・違う・直す ＋ 学び ＋ 日付）の一次記録正本**、**REPORT = T1〜T8 の機械的な合否・証跡の詳細台帳**。README が結論、REPORT が根拠。
@@ -394,4 +398,5 @@ REPORT.md の構造（テンプレート）:
 
 - **核心 Unknown（research.md §3.5）**: `WS_EX_LAYERED` 無し・`WS_EX_TRANSPARENT` 単独でプロセス境界を越えてクリックが背面別プロセスへ落ちるか。設計では潰せず T2/T6 実機検証が go ゲートの本体。実装中に挙動疑義があれば推測せず開発者へ質問（R10.4）。
 - **DPI 座標（research.md §3.2 解決済み・残課題は手順のみ）**: PMv2 で GetCursorPos と GetWindowRect が同一物理座標基準のため変換不要、と本設計は判断。万一実機で円の見た目と判定がずれる場合は per-monitor 補助（`MonitorFromPoint`/`GetDpiForMonitor`）を検討（T7）。
+- **境界チャタリング（design-validation 確認事項1）**: 円境界線上でカーソルを高速往復させると 16ms 周期で ON↔OFF が連発し得る。先進坑では検証手順（ゆっくり一度だけまたぐ）で回避し、ヒステリシス（不感帯）は実装しない（YAGNI）。本番要件として顕在化したら本坑で不感帯を導入する。
 - **不確実点は質問（R10.4）**: Win32 API/クレート仕様の不確実点に遭遇したら推測で進めず開発者に確認する。
