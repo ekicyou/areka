@@ -1,6 +1,10 @@
 //! ウィンドウライフサイクルおよびディスプレイ変更ハンドラ
 //!
-//! WM_NCCREATE, WM_NCDESTROY, WM_ERASEBKGND, WM_PAINT, WM_CLOSE, WM_DISPLAYCHANGE
+//! WM_ERASEBKGND, WM_PAINT, WM_CLOSE, WM_DISPLAYCHANGE
+//!
+//! NOTE: WM_NCCREATE / WM_NCDESTROY（GWLP_USERDATA への Entity 格納・破棄時 despawn）は
+//! 旧 `ecs_wndproc` 専用だったため撤去した（task 4.5）。新経路ではウィンドウ生成・破棄を
+//! ライブラリ／`WindowRegistry` の drop 駆動が所管する。
 
 #![allow(non_snake_case)]
 
@@ -9,58 +13,11 @@ use std::rc::Rc;
 
 use bevy_ecs::prelude::Entity;
 use windows::Win32::Foundation::*;
-use windows::Win32::UI::WindowsAndMessaging::*;
 
 use crate::ecs::world::EcsWorld;
 
 /// メッセージハンドラの戻り値型
 type HandlerResult = Option<LRESULT>;
-
-/// WM_NCCREATE: ウィンドウ作成時の非クライアント領域初期化
-///
-/// Entity IDをGWLP_USERDATAに保存する
-#[inline]
-pub(super) fn WM_NCCREATE(
-    hwnd: HWND,
-    _message: u32,
-    _wparam: WPARAM,
-    lparam: LPARAM,
-) -> HandlerResult {
-    let cs = lparam.0 as *const CREATESTRUCTW;
-    if !cs.is_null() {
-        let entity_bits = unsafe { (*cs).lpCreateParams as isize };
-        // Entity IDをGWLP_USERDATAに保存（ID 0も有効）
-        unsafe { SetWindowLongPtrW(hwnd, GWLP_USERDATA, entity_bits) };
-    }
-    None // DefWindowProcWに委譲
-}
-
-/// WM_NCDESTROY: ウィンドウ破棄時のクリーンアップ
-///
-/// Entity IDを取得してエンティティを削除し、GWLP_USERDATAをクリアする
-#[inline]
-pub(super) fn WM_NCDESTROY(
-    hwnd: HWND,
-    _message: u32,
-    _wparam: WPARAM,
-    _lparam: LPARAM,
-) -> HandlerResult {
-    // Entity IDを取得してエンティティを削除
-    if let Some(entity) = super::get_entity_from_hwnd(hwnd) {
-        if let Some(world) = super::try_get_ecs_world() {
-            let mut world = world.borrow_mut();
-
-            // エンティティを削除（関連する全コンポーネントも削除される）
-            // on_window_handle_removedシステムが自動的にApp通知を行う
-            world.world_mut().despawn(entity);
-        }
-    }
-
-    // GWLP_USERDATAをクリア
-    unsafe { SetWindowLongPtrW(hwnd, GWLP_USERDATA, 0) };
-
-    None // DefWindowProcWに委譲
-}
 
 /// WM_ERASEBKGND: 背景消去要求
 ///

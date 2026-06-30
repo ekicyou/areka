@@ -346,13 +346,13 @@ impl EcsWorld {
         }
     }
 
-    /// メッセージウィンドウのHWNDを設定
+    /// メッセージウィンドウのHWNDを設定（格納のみ）。
+    ///
+    /// NOTE: 旧経路では App リソースへも伝播していたが、`App::set_message_window`/
+    /// `WM_LAST_WINDOW_DESTROYED` PostMessage 経路の撤去（task 4.5）に伴い、本メソッドは
+    /// EcsWorld 側の HWND 格納のみを担う。
     pub fn set_message_window(&mut self, hwnd: HWND) {
         self.message_window = Some(hwnd);
-        // Appリソースにもメッセージウィンドウを設定
-        if let Some(mut app) = self.world.get_resource_mut::<crate::ecs::app::App>() {
-            app.set_message_window(hwnd);
-        }
     }
 
     /// メッセージウィンドウのHWNDを取得
@@ -520,7 +520,7 @@ impl EcsWorld {
     /// 他のモーダルループ関連メッセージ（WM_ENTERSIZEMOVEなど）で同様の問題が
     /// 発見された場合、該当メッセージ処理でこの関数を呼び出すだけで対応可能。
     pub fn try_tick_on_vsync(&mut self) -> bool {
-        use crate::win_thread_mgr::{LAST_VSYNC_TICK, VSYNC_TICK_COUNT};
+        use self::vsync::{LAST_VSYNC_TICK, VSYNC_TICK_COUNT};
         use std::sync::atomic::Ordering;
 
         // Ordering::Relaxed の妥当性（W7b-V 点検）:

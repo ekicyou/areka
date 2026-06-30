@@ -24,13 +24,11 @@
 //! クロージャ capture の `WndState` から読む）。HINSTANCE はライブラリ内部 `__ImageBase`
 //! （DLL 安全）で処理されるため、`instance` はライブラリの `get_instance_handle()` を使う。
 //!
-//! # 結線は後続タスク（4.1/4.3）の領分
-//! 本ファクトリは building block であり、ここでは旧 `create_windows`（レガシー
-//! `process_singleton` クラスでの直生成経路）は LIVE のまま据え置く。`create_windows` を
-//! 本ファクトリへ差し替える live cutover（reconcile の schedule 登録・WM_CLOSE 反転を含む）
-//! は後続タスク 4.1/4.3 で行う。それまで本コードは未結線のため、兄弟 building block
-//! （`MessageLoopDriver`/`VsyncEventBridge`/`AsyncTickTask`/`WindowRegistry`）同様に
-//! scoped dead_code 許容とする。
+//! # 結線
+//! `create_windows`（`ecs::window::window_system`）は本ファクトリ経由でウィンドウを生成する
+//! （task 4.3 cutover 済み）。旧 `process_singleton` の 2 クラス登録・`CreateWindowExW`
+//! 直呼び経路は撤去済み（task 4.5）。生成はライブラリの共有クラス（`get_instance_handle()` +
+//! 内蔵 `CS_DBLCLKS`）に一本化され、`WindowRegistry` 格納・`WindowHandle` 反映までを担う。
 
 use std::cell::RefCell;
 use std::rc::Weak;

@@ -2,9 +2,37 @@
 
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
+use std::sync::atomic::AtomicU64;
 use tracing::trace;
 
 use super::EcsWorld;
+
+// ============================================================
+// VSYNC優先レンダリング用カウンター
+//
+// モーダルループ（ウィンドウドラッグ等）中でも WndProc（WM_WINDOWPOSCHANGED）から
+// VSYNC タイミングを検知して world tick を実行可能にするためのプロセスグローバル
+// カウンター。旧 `win_thread_mgr` から本モジュールへ移設した（同モジュール撤去・task 4.5）。
+//
+// NOTE: 新 `WinApp` 経路の VSync 駆動は `runtime::tick_bridge`（`VsyncEventBridge` +
+// `AsyncTickTask` → `tick_one_frame`）が担い、本カウンターをインクリメントする生産者は
+// もう存在しない。そのため `VsyncTick::try_tick_on_vsync`（WM_WINDOWPOSCHANGED から
+// 呼ばれる）は新経路ではカウンター不変ゆえ常に tick をスキップ（`false`）し、tick は
+// async ループ側で行われる。本カウンター・トレイトはディスパッチ等価性（移行前後で
+// WM_WINDOWPOSCHANGED ハンドラの構造を変えない）のため保持する。
+// ============================================================
+
+/// VSYNC到来回数カウンター（旧 VSync スレッドがインクリメントしていた）。
+/// メインスレッドが load() で読み取り tick 要否を判断する。
+pub(crate) static VSYNC_TICK_COUNT: AtomicU64 = AtomicU64::new(0);
+
+/// 前回処理した tick_count 値（メインスレッドのみ更新）。
+/// `try_tick_on_vsync()` 内で `VSYNC_TICK_COUNT` と比較し、異なれば tick を実行する。
+pub(crate) static LAST_VSYNC_TICK: AtomicU64 = AtomicU64::new(0);
+
+// デバッグ用: WndProc経由のtick回数を計測（旧 win_thread_mgr から移設）。
+#[cfg(debug_assertions)]
+pub(crate) static DEBUG_WNDPROC_TICK_COUNT: AtomicU64 = AtomicU64::new(0);
 
 thread_local! {
     /// tick+flush の再入防止ガード。
@@ -28,12 +56,9 @@ impl Drop for TickFlushGuard {
 
 /// tick+flush 再入ガードの現在値を返す（`true` ならガードスコープ進行中）。
 ///
-/// `try_tick_on_vsync`（レガシー WndProc 経路）と新 `AsyncTickTask`（runtime 層）が
-/// 同一の `IS_TICK_FLUSH_IN_PROGRESS` を共有し、二重に tick が走らないことを保証する
-/// ための `pub(crate)` アクセサ。既存挙動は変えない（読み取りのみ）。
-///
-/// 現状の lib 経路では `AsyncTickTask` のテスト・後続結線でのみ参照されるため
-/// dead_code を許容する（兄弟 building block と同方針）。
+/// WndProc 経路（`VsyncTick::try_tick_on_vsync`・WM_WINDOWPOSCHANGED から）と
+/// 新 `AsyncTickTask`（runtime 層 `tick_one_frame`）が同一の `IS_TICK_FLUSH_IN_PROGRESS`
+/// を共有し、二重に tick が走らないことを保証するための `pub(crate)` アクセサ。
 #[allow(dead_code)]
 pub(crate) fn is_tick_flush_in_progress() -> bool {
     IS_TICK_FLUSH_IN_PROGRESS.get()
@@ -45,8 +70,9 @@ pub(crate) fn is_tick_flush_in_progress() -> bool {
 /// `IS_TICK_FLUSH_IN_PROGRESS` の owner）、`guard` の drop で `false` に戻る。
 /// 既に進行中（`true`）なら `None` を返し、呼び出し側は安全側スキップする。
 ///
-/// レガシー `try_tick_on_vsync` は自前で同フラグを set/guard しており（挙動不変）、
-/// 本ヘルパは新 `AsyncTickTask` が同一フラグを再利用して二重防御するために提供する。
+/// WndProc 経路の `VsyncTick::try_tick_on_vsync` は自前で同フラグを set/guard しており
+/// （挙動不変）、本ヘルパは新 `AsyncTickTask`（`tick_one_frame`）が同一フラグを再利用して
+/// 二重防御するために提供する。
 pub(crate) fn engage_tick_flush_guard() -> Option<impl Drop> {
     if IS_TICK_FLUSH_IN_PROGRESS.get() {
         return None;
@@ -104,7 +130,6 @@ impl VsyncTick for Rc<RefCell<EcsWorld>> {
                 // デバッグビルドのみ: WndProc経由のtick回数をカウント
                 #[cfg(debug_assertions)]
                 if result {
-                    use crate::win_thread_mgr::DEBUG_WNDPROC_TICK_COUNT;
                     use std::sync::atomic::Ordering;
                     DEBUG_WNDPROC_TICK_COUNT.fetch_add(1, Ordering::Relaxed);
                 }

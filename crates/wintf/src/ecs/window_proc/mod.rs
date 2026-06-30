@@ -17,101 +17,19 @@ use windows::Win32::UI::WindowsAndMessaging::*;
 use wintf_winmsg_executor::util::WindowMessage;
 
 use std::cell::RefCell;
-use std::rc::{Rc, Weak};
-use std::sync::OnceLock;
+use std::rc::Rc;
 
 use crate::ecs::world::EcsWorld;
 
-// SAFETY: `SendWeak` は `Weak<RefCell<EcsWorld>>` を保持する。`Weak<RefCell<_>>` は
-// `RefCell` が `!Sync`・`Rc`/`Weak` が `!Send + !Sync` のため自動では Send/Sync を
-// 実装しない。この手動 impl は、弱参照を `static ECS_WORLD: OnceLock<SendWeak>` に
-// 格納する（OnceLock の T: Send + Sync 境界を満たす）ためにのみ必要である。
-// 健全性は「アクセスは常に単一スレッド（メインスレッド）」という不変条件に依拠する:
-//  - `set_ecs_world` は WinThreadMgr 初期化時にメインスレッドから1回だけ呼ばれる。
-//  - `try_get_ecs_world().upgrade()` で得た `Rc<RefCell<EcsWorld>>` を実際に借用
-//    （`borrow`/`borrow_mut`）するのは `ecs_wndproc` 経由の各ハンドラのみで、
-//    ウィンドウプロシージャはウィンドウを作成したメインスレッドからのみ呼ばれる。
-// したがって `RefCell` の借用規則も `Rc` の参照カウントも単一スレッド上でのみ
-// 操作され、データ競合は発生しない。OnceLock は弱参照ポインタの move/共有のみを担い、
-// 内部の RefCell/Rc を跨スレッドで実際に触ることはない。
-struct SendWeak(Weak<RefCell<crate::ecs::world::EcsWorld>>);
-unsafe impl Send for SendWeak {}
-unsafe impl Sync for SendWeak {}
-
-static ECS_WORLD: OnceLock<SendWeak> = OnceLock::new();
-
-/// EcsWorldへの弱参照を登録（WinThreadMgr初期化時に呼ばれる）
-#[inline]
-pub(crate) fn set_ecs_world(world: Weak<RefCell<crate::ecs::world::EcsWorld>>) {
-    let _ = ECS_WORLD.set(SendWeak(world));
-}
-
-/// EcsWorldへの参照を取得（try_borrow_mut可能な状態で）
-pub(super) fn try_get_ecs_world() -> Option<Rc<RefCell<crate::ecs::world::EcsWorld>>> {
-    ECS_WORLD.get().and_then(|weak| weak.0.upgrade())
-}
-
-/// ECS専用のウィンドウプロシージャ（レガシー経路の薄いシム）
-///
-/// 統一シグネチャ移行（タスク 3.2）後、本関数は以下の薄いシムである:
-/// - `WM_NCCREATE` / `WM_NCDESTROY` はエンティティ確立／後始末のライフサイクル特例として
-///   `lifecycle` の現行シグネチャ `(hwnd, message, wparam, lparam)` ハンドラを直接呼ぶ
-///   （NCCREATE は entity 未解決、NCDESTROY は despawn + GWLP クリアを担う）。
-/// - それ以外は `get_entity_from_hwnd` + `try_get_ecs_world` で `entity`/`world` を自己解決し
-///   （どちらか `None` なら `DefWindowProcW` へ委譲）、`WindowMessage` を組んで
-///   ECS 層の純関数 `dispatch_window_message(&world, entity, &msg)` へ橋渡しする。
-///
-/// 振り分け表本体は `dispatch_window_message`（ECS 層）が単一の真実の源となり、新経路
-/// （`runtime::wndproc_bridge::make_wndproc`）と本レガシー経路が同一表を共有する。
-/// 実行時挙動は移行前の `ecs_wndproc` と同一。
-pub(crate) extern "system" fn ecs_wndproc(
-    hwnd: HWND,
-    message: u32,
-    wparam: WPARAM,
-    lparam: LPARAM,
-) -> LRESULT {
-    // ライフサイクル特例: entity 未解決（NCCREATE）／drop 駆動（NCDESTROY）のため直接呼ぶ。
-    match message {
-        WM_NCCREATE => {
-            return lifecycle::WM_NCCREATE(hwnd, message, wparam, lparam)
-                .unwrap_or_else(|| unsafe { DefWindowProcW(hwnd, message, wparam, lparam) });
-        }
-        WM_NCDESTROY => {
-            return lifecycle::WM_NCDESTROY(hwnd, message, wparam, lparam)
-                .unwrap_or_else(|| unsafe { DefWindowProcW(hwnd, message, wparam, lparam) });
-        }
-        _ => {}
-    }
-
-    // entity / world を自己解決（旧挙動: いずれか None なら DefWindowProcW 委譲）。
-    let Some(entity) = get_entity_from_hwnd(hwnd) else {
-        return unsafe { DefWindowProcW(hwnd, message, wparam, lparam) };
-    };
-    let Some(world) = try_get_ecs_world() else {
-        return unsafe { DefWindowProcW(hwnd, message, wparam, lparam) };
-    };
-
-    let msg = WindowMessage {
-        hwnd,
-        msg: message,
-        wparam,
-        lparam,
-    };
-
-    dispatch_window_message(&world, entity, &msg)
-        .unwrap_or_else(|| unsafe { DefWindowProcW(hwnd, message, wparam, lparam) })
-}
-
 /// Windows メッセージを Entity 配送する純関数（要件 2.4・設計 EntityWndprocBridge）。
 ///
-/// `world`/`entity` を引数で受け取り、旧 `ecs_wndproc` の自己解決
-/// （`try_get_ecs_world` ＋ `get_entity_from_hwnd`）を排する。各ハンドラへ統一シグネチャ
-/// `(world, entity, hwnd, wparam, lparam)` で配送する。`None` 返却時はライブラリ／レガシー
-/// 呼び出し側が `DefWindowProcW` へ委譲する。
+/// `world`/`entity` を引数で受け取り、各ハンドラへ統一シグネチャ
+/// `(world, entity, hwnd, wparam, lparam)` で配送する。`None` 返却時は呼び出し側
+/// （`runtime::wndproc_bridge` のライブラリ wndproc クロージャ）が `DefWindowProcW` へ委譲する。
 ///
-/// 本表は旧 `ecs_wndproc` の振り分け表から `WM_NCCREATE`／`WM_NCDESTROY`
-/// （エンティティ確立／後始末のライフサイクル特例・タスク 4.1 所管）を除いたものである。
-/// 新経路（`runtime::wndproc_bridge`）とレガシー経路（`ecs_wndproc`）が本関数を共有する。
+/// 本表は `WM_NCCREATE`／`WM_NCDESTROY`（エンティティ確立／後始末のライフサイクル特例）を
+/// 含まない。新経路ではウィンドウ生成・破棄をライブラリ／`WindowRegistry` の drop 駆動が
+/// 所管する（NCCREATE/NCDESTROY の自前処理は撤去済み・task 4.5）。
 pub(crate) fn dispatch_window_message(
     world: &Rc<RefCell<EcsWorld>>,
     entity: Entity,
@@ -151,15 +69,6 @@ pub(crate) fn dispatch_window_message(
         WM_ACTIVATE => keyboard::WM_ACTIVATE(world, entity, hwnd, wparam, lparam),
         WM_CAPTURECHANGED => keyboard::WM_CAPTURECHANGED(world, entity, hwnd, wparam, lparam),
         _ => None,
-    }
-}
-
-/// hwndからEntity IDを取得するヘルパー関数
-#[inline]
-pub(crate) fn get_entity_from_hwnd(hwnd: HWND) -> Option<Entity> {
-    unsafe {
-        let entity_bits = GetWindowLongPtrW(hwnd, GWLP_USERDATA);
-        Entity::try_from_bits(entity_bits as u64)
     }
 }
 

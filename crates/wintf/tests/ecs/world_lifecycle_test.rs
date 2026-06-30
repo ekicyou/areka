@@ -5,8 +5,8 @@
 //! ラベル登録、message_window 設定、Default 等価性）を固定する。
 //!
 //! 注: vsync 駆動経路（`try_tick_on_vsync` の VSYNC_TICK_COUNT/LAST_VSYNC_TICK
-//! 比較）は `win_thread_mgr` の `pub(crate)` プロセスグローバル atomic に依存し、
-//! 実 ~16ms vsync スレッドが駆動するため統合テストからは決定的に検証不能
+//! 比較）は `ecs::world::vsync` の `pub(crate)` プロセスグローバル atomic に依存し、
+//! 実 vsync スレッドが駆動するため統合テストからは決定的に検証不能
 //! （W7b-T2 断片の所見参照）。本ファイルは device 非依存の `try_tick_world`
 //! 経路のみを対象とする（既存 taffy_flex_layout_pure_test 同様、Window/
 //! WindowHandle を持たない World では graphics 系システムが no-op となる）。
@@ -116,10 +116,10 @@ fn new_ecs_world_has_no_message_window() {
     );
 }
 
-/// `set_message_window` が EcsWorld と App リソースの双方へ HWND を反映する。
-/// HWND は格納のみ（Win32 API 非呼出）のためダミーポインタで検証可能。
+/// `set_message_window` が EcsWorld へ HWND を格納する（格納のみ・Win32 API 非呼出）。
+/// 旧経路の App リソースへの伝播は撤去済み（task 4.5）。App リソースの存在は別途確認する。
 #[test]
-fn set_message_window_stores_hwnd_in_world_and_app() {
+fn set_message_window_stores_hwnd_in_world() {
     let mut ecs_world = EcsWorld::new();
     let fake_hwnd = HWND(0x1234 as *mut _);
 
@@ -130,9 +130,7 @@ fn set_message_window_stores_hwnd_in_world_and_app() {
         Some(fake_hwnd),
         "EcsWorld 側に message_window が保持される"
     );
-    // App リソースにも伝播（set_message_window は app.set_message_window を呼ぶ）。
-    // App は message_window を private 保持するため、リソースの存在のみ確認
-    // （値の往復は app.rs in-source テストと window_count で別途固定）。
+    // App リソースは EcsWorld::new で挿入される（message_window への伝播はもう行わない）。
     assert!(
         ecs_world.world().get_resource::<App>().is_some(),
         "App リソースが存在する"

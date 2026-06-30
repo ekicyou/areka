@@ -123,7 +123,7 @@
   - _Boundary: consumers (examples, areka)_
   - _Depends: 4.3_
 
-- [ ] 4.5 レガシーコードの撤去
+- [x] 4.5 レガシーコードの撤去
   - deprecated レガシー（自作ポンプ／旧 wndproc／巨大メッセージトレイト）と旧 `WinThreadMgr` facade、2 クラス登録（process_singleton）を撤去する
   - モジュール宣言・公開エクスポートを新 facade へ差し替え、UI async からの async-executor 直接依存を撤去する
   - 完了状態: 旧 API・旧モジュールへの参照が残らず、ビルドおよび既存テストが成功する

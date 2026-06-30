@@ -2,16 +2,11 @@
 
 use bevy_ecs::prelude::*;
 use tracing::{debug, info};
-use windows::Win32::{
-    Foundation::{HWND, LPARAM, WPARAM},
-    UI::WindowsAndMessaging::PostMessageW,
-};
 
 /// アプリケーション全体の状態を管理するリソース
 #[derive(Resource, Default)]
 pub struct App {
     window_count: usize,
-    message_window: Option<isize>,
     display_configuration_changed: bool,
 }
 
@@ -19,11 +14,6 @@ impl App {
     /// 新しいAppリソースを作成
     pub fn new() -> Self {
         Self::default()
-    }
-
-    /// メッセージウィンドウのHWNDを設定
-    pub fn set_message_window(&mut self, hwnd: HWND) {
-        self.message_window = Some(hwnd.0 as isize);
     }
 
     /// ディスプレイ構成が変更されたことをマーク
@@ -54,6 +44,11 @@ impl App {
 
     /// ウィンドウが破棄されたときに呼ばれる
     /// 最後のウィンドウが閉じられた場合はtrueを返す
+    ///
+    /// NOTE: 新 `WinApp` 経路のアプリ終了は `WindowRegistry` の空遷移
+    /// （`reconcile_window_registry` → `ShutdownPolicy::notify_shutdown`）が駆動する。
+    /// 旧 `WM_LAST_WINDOW_DESTROYED` を message_window へ PostMessage する経路は撤去した
+    /// （task 4.5）。本メソッドは window_count の追跡と「最後のウィンドウか」の判定のみを担う。
     pub fn on_window_destroyed(&mut self, entity: Entity) -> bool {
         self.window_count = self.window_count.saturating_sub(1);
         debug!(
@@ -63,17 +58,7 @@ impl App {
         );
 
         if self.window_count == 0 {
-            info!("[App] Last window closed. Quitting application...");
-            if let Some(hwnd_raw) = self.message_window {
-                unsafe {
-                    let _ = PostMessageW(
-                        Some(HWND(hwnd_raw as *mut _)),
-                        crate::win_thread_mgr::WM_LAST_WINDOW_DESTROYED,
-                        WPARAM(0),
-                        LPARAM(0),
-                    );
-                }
-            }
+            info!("[App] Last window closed.");
             true
         } else {
             false
@@ -125,7 +110,7 @@ mod tests {
     }
 
     /// 残りウィンドウがある間の `on_window_destroyed` は count を 1 減らし false を返す
-    /// （= 最後のウィンドウではない）。message_window=None のため PostMessageW 分岐は不発。
+    /// （= 最後のウィンドウではない）。
     #[test]
     fn test_on_window_destroyed_decrements_and_returns_false_while_windows_remain() {
         let mut app = App::new();
@@ -139,7 +124,6 @@ mod tests {
     }
 
     /// 最後のウィンドウ破棄で count が 0 になり true を返す（最後のウィンドウ検出）。
-    /// message_window=None のため WM_LAST_WINDOW_DESTROYED の PostMessageW は実行されない。
     #[test]
     fn test_on_window_destroyed_returns_true_when_last_window_closed() {
         let mut app = App::new();

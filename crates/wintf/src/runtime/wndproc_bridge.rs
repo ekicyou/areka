@@ -4,11 +4,11 @@
 //! `FnMut(Pin<&S>, WindowMessage) -> Option<LRESULT>` クロージャとして受け取る。
 //! 本ユニットはその状態 `S = WndState` を定め、クロージャを ECS 層の配送純関数
 //! `crate::ecs::dispatch_window_message` へ橋渡しする「メカニズム」を提供する
-//! （配送表本体は ECS 層が単一の真実の源として保持し、レガシー `ecs_wndproc` と共有する）。
+//! （配送表本体は ECS 層 `dispatch_window_message` が単一の真実の源として保持する）。
 //!
 //! # 共有状態アクセス（要件 2.3）
-//! 旧経路は `GWLP_USERDATA` への Entity 手詰めと `OnceLock<SendWeak>` グローバル、
-//! `get_entity_from_hwnd` で World/Entity を自己解決していた。本ブリッジでは生成時に
+//! 旧経路は `GWLP_USERDATA` への Entity 手詰めとグローバルな弱参照、HWND からの
+//! 自己解決で World/Entity を取得していた（撤去済み・task 4.5）。本ブリッジでは生成時に
 //! 確定した `WndState{ world: Weak<RefCell<EcsWorld>>, entity }` をクロージャが直接
 //! capture する（`GWLP_USERDATA` 手詰めなし・グローバル状態なし）。`Entity` は `Copy`
 //! のため pinned state から直接読める。
@@ -61,9 +61,8 @@ pub(crate) struct WndState {
 /// 3. World を `try_borrow`。失敗（再入）なら `None`（安全スキップ）。
 /// 4. 成功時のみ `dispatch_window_message(&world, entity, &msg)` を呼ぶ。
 //
-// NOTE: `EcsWindowFactory`／`create_windows`（後続タスク）への結線で利用される。
-// それまで lib ビルドでは未使用となるため、兄弟 building block（`AsyncTickTask` 等）と
-// 同様に dead_code 許容。
+// `EcsWindowFactory::create_window`（`create_windows` 経由）がウィンドウ生成時に呼び、
+// 返したクロージャをライブラリの `Window::new_ex` へ渡す（task 4.3 結線済み）。
 pub(crate) fn make_wndproc()
 -> impl Fn(Pin<&WndState>, WindowMessage) -> Option<LRESULT> {
     move |state: Pin<&WndState>, msg: WindowMessage| -> Option<LRESULT> {
@@ -80,8 +79,7 @@ pub(crate) fn make_wndproc()
             return None;
         }
 
-        // 配送表本体は ECS 層の `dispatch_window_message`（単一の真実の源）が担う。
-        // レガシー経路（`ecs_wndproc`）と同一表を共有する（要件 2.4）。
+        // 配送表本体は ECS 層の `dispatch_window_message`（単一の真実の源）が担う（要件 2.4）。
         dispatch_window_message(&world, entity, &msg)
     }
 }
