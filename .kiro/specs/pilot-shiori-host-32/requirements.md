@@ -28,6 +28,7 @@ areka（x64）が適合対象ゴースト emo2 を「そのまま」起動する
   - **Downstream（この先進坑の go がゲートする本坑）**: `areka-P0-host32-ipc` / `areka-P0-host32-shiori-load` / `areka-P0-host32-request` / `areka-P0-host32-lifecycle`。これらは go 判定後に着手する別物であり、本先進坑はその実装を所有しない。
   - **命綱（不変条件）**: 出荷グラフ上のいかなる production クレート（wintf/dola/areka/shiori-abi）も本先進坑コードに依存してはならない（葉ノード隔離）。
   - **SHIORI3 build/parse の配置と検証粒度（議題 #5 で確定・本坑方向と整合）**: 先進坑でも **32bit helper はバイト proxy に徹し、SHIORI/3.0 リクエスト組立と `Value:` parse は x64 親側**で行う（本坑の x64 過去互換 `IShiori` アダプタのミニチュア。詳細は research.md §5.4）。go 基準(1) は「**x64 親プロセスが `Value:` 文字列を受領・確認できる**」ことで充足とし、内部 ABI `IShiori`（COM）面への接続は本坑 `areka-P0-host32-request` 領分（先進坑では対象外）。
+  - **IPC 方式（議題で確定・決定 B）**: 先進坑の自前 IPC（要件 2）は **named pipe（overlapped I/O ＋ `MsgWaitForMultipleObjectsEx` で窓メッセージとパイプ完了を単一スレッド同時待機）**を採用する。stdio でなく named pipe を選ぶのは速度理由ではなく、本坑 `host32-ipc` の難所「overlapped pipe × 窓持ちメッセージループの統合」を**先進坑で前倒し de-risk する**ため（技術調査の前倒し）。詳細・速度非決定の根拠は research.md §3.1.1。
   - **検証前提（go の前提条件・議題 1 で確定）**: go 検証には emo2 ゴースト一式が必要。検証フィクスチャは emo2 配布物 `emo2.nar`（zip 形式）を `crates/pilot/examples/shiori-host-32/fixtures/emo2/` へ展開して用意し、**リポジトリへ取り込む**（ワークツリー/クローンでの**再現性を優先**。emo2 は本リポジトリ作者自作ゴーストゆえライセンス問題なし。トレードオフ＝`pasta.dll` 3.3MB バイナリが履歴に残る点は再現性を優先して受容）。SHIORI `load` に渡す **ghostdir は `fixtures/emo2/ghost/master/`**（`pasta.dll`＝PE Machine 0x014C/32bit ＋ `descript.txt`＝`charset,UTF-8`/`shiori,pasta.dll` の在処）。この配置手順（nar 展開）は README「概要・実行法」の幕に明記する。
 
 ## Requirements

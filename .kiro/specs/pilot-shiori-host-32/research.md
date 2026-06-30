@@ -84,9 +84,10 @@ IPC 方式の真の決定因子は throughput でも payload サイズでもな�
 - **stdio（匿名パイプ）**: overlapped 不可ゆえ blocking read → **専用 reader スレッド必須**（I/O スレッドが read → UI スレッドへ post → UI スレッドが `pasta.dll` request → 応答を I/O スレッドへ戻して write）。最小コード・`std::process::Command` で完結・プロセス終了=EOF で生存監視が自然。
 - **named pipe**: overlapped I/O ＋ `MsgWaitForMultipleObjectsEx` で**単一スレッドで窓メッセージとパイプ完了を同時待機**可。全二重・broken pipe で crash 即検出・roadmap `host32-ipc`（pipe＋handshake/lifecycle）一致・OnSecondChange タイマも自然。コード量は中。
 
-**刻み（要件ディスカッション合意）**:
-- **先進坑 = stdio ＋ reader スレッド**。根拠: IPC 方式は go-gating な未知ではない（stdio も named pipe も cross-bitness で確実に動く既知技術）。先進坑が潰す未知は「x64 が 32bit DLL を駆動できるか」＋「i686 ビルド成立」ゆえ、最安の stdio で 1 往復＋ループ生存を実証する。
-- **本坑 = named pipe ＋ overlapped ＋ `MsgWaitForMultipleObjectsEx`**（全二重・メッセージループ統合が綺麗・crash 検出堅牢・roadmap host32-ipc / COMPAT §5 第一候補と一致）。最終決定は `/kiro-design`。
+**刻み（要件ディスカッションで決定＝(B)・2026-06-30）**:
+- **先進坑 = named pipe ＋ overlapped ＋ `MsgWaitForMultipleObjectsEx`**（＝本坑と同方式）。**決定 (B)**: stdio の最小性より、本坑 `host32-ipc` の真の難所「**overlapped pipe × 窓持ちメッセージループの単一スレッド統合**」を先進坑で**前倒し de-risk する**価値を採る。go-gating な耐力壁（DLL 駆動）に加え、この統合パターンも先進坑で実証することで本坑の不確実性を最大限削る。
+- **本坑 = 同方式を knowledge から綺麗に掘り直す**（roadmap host32-ipc / COMPAT §5 第一候補と一致）。先進坑 README の検証結果を参照し二重化しない（two-tunnel 3.5）。
+- 速度は非決定因子（下記補足）。stdio を捨て named pipe を選んだのも速度理由ではなく**統合難所の前倒し**。
 
 **bitness 安全規約（方式共通）**: 跨ぐのは生バイト列のみ（§5.4）。フレーミングは**固定幅 LE 長さ prefix（u32 LE）**。payload に**ポインタ/HANDLE/struct を載せない**（同一マシンで endian 共通だが固定幅で明示）。親 x64 が i686 helper exe を `CreateProcess`/`std::process::Command` で起動（exe パスは §3.2 の 2 段ビルド成果物を arg/env で受け渡し）。
 
