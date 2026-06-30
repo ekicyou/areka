@@ -16,4 +16,9 @@ mod model;
 #[cfg(test)]
 mod model_tests;
 
+mod lexer;
+
+#[cfg(test)]
+mod lexer_tests;
+
 pub use model::{Choice, Instruction, MoveArgs, NewLineRatio, SurfaceArg};

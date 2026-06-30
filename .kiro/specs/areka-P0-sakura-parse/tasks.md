@@ -17,7 +17,7 @@
   - _Depends: 1_
 
 - [ ] 3. 構文層（Lexer）を実装する
-- [ ] 3.1 (P) さくらスクリプトの一般構文分割スキャナ
+- [x] 3.1 (P) さくらスクリプトの一般構文分割スキャナ
   - `char_indices` による手書き線形スキャナで、正準タグ（`\` ＋ワード＋ `[...]`）・bare タグ（`\e` `\c` `\-` `\n`）・`\wN` 短縮・`%keyword`・タグ間テキストを構文トークンへ分割する
   - 角括弧内をカンマ区切りで複数引数へ分割する。UTF-8 を `char_indices` で走査し charset 変換はしない
   - 観測: `\s[1000]` `\p[0]` `%username` `\w2` `\![a,b,c]` `こんにちは` が期待トークン列へ分割される単体テストが green
@@ -61,3 +61,6 @@
   - 観測: `cargo test -p areka-parsers` が全 green で、上記網羅ケースと OnBoot 通し例が含まれる
   - _Requirements: 1.5, 5.3, 12.3, 12.4_
   - _Depends: 5_
+
+## Implementation Notes
+- 3.1: lexer.rs に暫定 `#![allow(dead_code)]`（消費側 decode 未結線のため）。lexer の `Token::Raw` は定義のみで未 emit、`scan_bracket_args` の `closed` フラグは `let _ = closed;` で保留——いずれも 3.2 のエスケープ／クォート／未閉じ吸収の plug point。**4.x で decode が lexer を消費したら `#![allow(dead_code)]` を絞る/除去**（真の dead を隠さぬよう）。`Token`/`lex` は `pub(crate)`、mod.rs の `pub use` には出さない（公開面は `Instruction`＋`parse` のみ）。model の不透明 NewType は `pub fn new` で構築可（dola `ActorKey` 前例）。
