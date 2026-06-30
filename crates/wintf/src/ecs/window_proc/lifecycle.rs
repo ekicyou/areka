@@ -1,68 +1,32 @@
 //! ウィンドウライフサイクルおよびディスプレイ変更ハンドラ
 //!
-//! WM_NCCREATE, WM_NCDESTROY, WM_ERASEBKGND, WM_PAINT, WM_CLOSE, WM_DISPLAYCHANGE
+//! WM_ERASEBKGND, WM_PAINT, WM_CLOSE, WM_DISPLAYCHANGE
+//!
+//! NOTE: WM_NCCREATE / WM_NCDESTROY（GWLP_USERDATA への Entity 格納・破棄時 despawn）は
+//! 旧 `ecs_wndproc` 専用だったため撤去した（task 4.5）。新経路ではウィンドウ生成・破棄を
+//! ライブラリ／`WindowRegistry` の drop 駆動が所管する。
 
 #![allow(non_snake_case)]
 
+use std::cell::RefCell;
+use std::rc::Rc;
+
+use bevy_ecs::prelude::Entity;
 use windows::Win32::Foundation::*;
-use windows::Win32::UI::WindowsAndMessaging::*;
+
+use crate::ecs::world::EcsWorld;
 
 /// メッセージハンドラの戻り値型
 type HandlerResult = Option<LRESULT>;
-
-/// WM_NCCREATE: ウィンドウ作成時の非クライアント領域初期化
-///
-/// Entity IDをGWLP_USERDATAに保存する
-#[inline]
-pub(super) fn WM_NCCREATE(
-    hwnd: HWND,
-    _message: u32,
-    _wparam: WPARAM,
-    lparam: LPARAM,
-) -> HandlerResult {
-    let cs = lparam.0 as *const CREATESTRUCTW;
-    if !cs.is_null() {
-        let entity_bits = unsafe { (*cs).lpCreateParams as isize };
-        // Entity IDをGWLP_USERDATAに保存（ID 0も有効）
-        unsafe { SetWindowLongPtrW(hwnd, GWLP_USERDATA, entity_bits) };
-    }
-    None // DefWindowProcWに委譲
-}
-
-/// WM_NCDESTROY: ウィンドウ破棄時のクリーンアップ
-///
-/// Entity IDを取得してエンティティを削除し、GWLP_USERDATAをクリアする
-#[inline]
-pub(super) fn WM_NCDESTROY(
-    hwnd: HWND,
-    _message: u32,
-    _wparam: WPARAM,
-    _lparam: LPARAM,
-) -> HandlerResult {
-    // Entity IDを取得してエンティティを削除
-    if let Some(entity) = super::get_entity_from_hwnd(hwnd) {
-        if let Some(world) = super::try_get_ecs_world() {
-            let mut world = world.borrow_mut();
-
-            // エンティティを削除（関連する全コンポーネントも削除される）
-            // on_window_handle_removedシステムが自動的にApp通知を行う
-            world.world_mut().despawn(entity);
-        }
-    }
-
-    // GWLP_USERDATAをクリア
-    unsafe { SetWindowLongPtrW(hwnd, GWLP_USERDATA, 0) };
-
-    None // DefWindowProcWに委譲
-}
 
 /// WM_ERASEBKGND: 背景消去要求
 ///
 /// ULW が全画面を管理するため、背景消去をスキップする
 #[inline]
 pub(super) fn WM_ERASEBKGND(
+    _world: &Rc<RefCell<EcsWorld>>,
+    _entity: Entity,
     _hwnd: HWND,
-    _message: u32,
     _wparam: WPARAM,
     _lparam: LPARAM,
 ) -> HandlerResult {
@@ -75,26 +39,19 @@ pub(super) fn WM_ERASEBKGND(
 /// - `CompositionMode::ULW` またはフォールバック → `BeginPaint`/`EndPaint` 最小ペア
 #[inline]
 pub(super) fn WM_PAINT(
+    world: &Rc<RefCell<EcsWorld>>,
+    entity: Entity,
     hwnd: HWND,
-    _message: u32,
     _wparam: WPARAM,
     _lparam: LPARAM,
 ) -> HandlerResult {
     // Entity から CompositionMode を判定
-    let is_dcomp = if let Some(entity) = super::get_entity_from_hwnd(hwnd) {
-        if let Some(world_rc) = super::try_get_ecs_world() {
-            if let Ok(world_borrow) = world_rc.try_borrow() {
-                world_borrow
-                    .world()
-                    .get::<crate::ecs::window::Window>(entity)
-                    .map(|w| w.composition_mode() == crate::ecs::window::CompositionMode::DComp)
-                    .unwrap_or(false)
-            } else {
-                false
-            }
-        } else {
-            false
-        }
+    let is_dcomp = if let Ok(world_borrow) = world.try_borrow() {
+        world_borrow
+            .world()
+            .get::<crate::ecs::window::Window>(entity)
+            .map(|w| w.composition_mode() == crate::ecs::window::CompositionMode::DComp)
+            .unwrap_or(false)
     } else {
         false
     };
@@ -116,15 +73,25 @@ pub(super) fn WM_PAINT(
 
 /// WM_CLOSE: ウィンドウクローズ要求
 ///
-/// DestroyWindowを呼び出してウィンドウを破棄する
+/// 対象 Entity の除去要求（despawn）として処理する。`DestroyWindow` を直叩きせず、
+/// `Window` コンポーネント消失を `RemovedComponents<Window>`（reconcile_window_registry・
+/// タスク 3.3）が検知し、レジストリ要素 drop 駆動で `DestroyWindow` させることで
+/// ハンドル破棄を Entity ライフサイクルに一致させる（要件 1.3）。
+///
+/// 同期再入時の二重借用を避けるため `try_borrow_mut` を用い、既に借用中なら
+/// safe-skip する（パニックさせない）。`Some(LRESULT(0))` を返して既定手続きの
+/// `DestroyWindow` を抑止する（破棄は reconcile 経由・要件 2.3）。
 #[inline]
 pub(super) fn WM_CLOSE(
-    hwnd: HWND,
-    _message: u32,
+    world: &Rc<RefCell<EcsWorld>>,
+    entity: Entity,
+    _hwnd: HWND,
     _wparam: WPARAM,
     _lparam: LPARAM,
 ) -> HandlerResult {
-    let _ = unsafe { DestroyWindow(hwnd) };
+    if let Ok(mut w) = world.try_borrow_mut() {
+        w.world_mut().despawn(entity);
+    }
     Some(LRESULT(0))
 }
 
@@ -133,20 +100,105 @@ pub(super) fn WM_CLOSE(
 /// Appリソースのmark_display_changeを呼び出す
 #[inline]
 pub(super) fn WM_DISPLAYCHANGE(
+    world: &Rc<RefCell<EcsWorld>>,
+    _entity: Entity,
     _hwnd: HWND,
-    _message: u32,
     _wparam: WPARAM,
     _lparam: LPARAM,
 ) -> HandlerResult {
-    if let Some(world) = super::try_get_ecs_world() {
-        if let Ok(mut world_borrow) = world.try_borrow_mut() {
-            if let Some(mut app) = world_borrow
-                .world_mut()
-                .get_resource_mut::<crate::ecs::App>()
-            {
-                app.mark_display_change();
-            }
+    if let Ok(mut world_borrow) = world.try_borrow_mut() {
+        if let Some(mut app) = world_borrow
+            .world_mut()
+            .get_resource_mut::<crate::ecs::App>()
+        {
+            app.mark_display_change();
         }
     }
     None // DefWindowProcWに委譲
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use windows::Win32::Foundation::HWND;
+
+    /// テスト用に `Window` コンポーネント付き Entity を spawn する。
+    /// ヘッドレス: `on_window_add` フックはコマンドを deferred enqueue するのみで
+    /// （実窓を inline 生成しない）、コマンド未フラッシュのため OS リソースに触れない。
+    fn spawn_window_entity(world: &Rc<RefCell<EcsWorld>>) -> Entity {
+        world
+            .borrow_mut()
+            .world_mut()
+            .spawn(crate::ecs::window::Window::default())
+            .id()
+    }
+
+    /// WM_CLOSE は対象 Entity を despawn し（`DestroyWindow` 直叩きをしない）、
+    /// `Some(LRESULT(0))`（既定破棄抑止）を返す（要件 1.3 / 2.3）。
+    /// ヘッドレス: 実 HWND / メッセージループ不要。
+    #[test]
+    fn wm_close_despawns_target_entity() {
+        let world = Rc::new(RefCell::new(EcsWorld::new()));
+        let entity = spawn_window_entity(&world);
+
+        // 事前条件: Entity は生存している。
+        assert!(
+            world.borrow().world().get_entity(entity).is_ok(),
+            "spawn 直後は Entity が生存しているべき"
+        );
+
+        let ret = WM_CLOSE(
+            &world,
+            entity,
+            HWND(std::ptr::null_mut()),
+            WPARAM(0),
+            LPARAM(0),
+        );
+
+        // 既定 DestroyWindow 抑止のため Some(LRESULT(0))。
+        assert_eq!(
+            ret,
+            Some(LRESULT(0)),
+            "WM_CLOSE は既定破棄抑止の Some(LRESULT(0)) を返すべき"
+        );
+
+        // 反転: 除去要求として Entity が despawn されている。
+        assert!(
+            world.borrow().world().get_entity(entity).is_err(),
+            "WM_CLOSE 後は対象 Entity が despawn されているべき（除去要求）"
+        );
+    }
+
+    /// world が既に `borrow_mut` 保持中でも WM_CLOSE はパニックせず safe-skip する
+    /// （`try_borrow_mut` による同期再入の二重借用回避・要件 2.3）。
+    /// 借用失敗のため Entity は残存する。
+    #[test]
+    fn wm_close_safe_skips_when_world_already_borrowed() {
+        let world = Rc::new(RefCell::new(EcsWorld::new()));
+        let entity = spawn_window_entity(&world);
+
+        // world を borrow_mut 保持したまま WM_CLOSE を呼ぶ（再入相当）。
+        let guard = world.borrow_mut();
+        let ret = WM_CLOSE(
+            &world,
+            entity,
+            HWND(std::ptr::null_mut()),
+            WPARAM(0),
+            LPARAM(0),
+        );
+        drop(guard);
+
+        // パニックせず Some(LRESULT(0)) を返す。
+        assert_eq!(
+            ret,
+            Some(LRESULT(0)),
+            "再入時も Some(LRESULT(0)) を返す（safe-skip）"
+        );
+
+        // try_borrow_mut 失敗のため despawn されず Entity は残存。
+        assert!(
+            world.borrow().world().get_entity(entity).is_ok(),
+            "借用中の再入では despawn されず Entity が残存するべき"
+        );
+    }
 }

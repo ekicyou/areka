@@ -5,10 +5,16 @@
 
 #![allow(non_snake_case)]
 
+use std::cell::RefCell;
+use std::rc::Rc;
+
 use bevy_ecs::change_detection::DetectChangesMut;
+use bevy_ecs::prelude::Entity;
 use tracing::{debug, trace, warn};
 use windows::Win32::Foundation::*;
 use windows::Win32::UI::WindowsAndMessaging::*;
+
+use crate::ecs::world::EcsWorld;
 
 /// メッセージハンドラの戻り値型
 type HandlerResult = Option<LRESULT>;
@@ -28,8 +34,9 @@ type HandlerResult = Option<LRESULT>;
 /// - 外部リサイズ時のみ: 物理px / DPI.scale → 論理px に変換して更新
 #[inline]
 pub(super) fn WM_WINDOWPOSCHANGED(
-    hwnd: HWND,
-    _message: u32,
+    world: &Rc<RefCell<EcsWorld>>,
+    entity: Entity,
+    _hwnd: HWND,
     _wparam: WPARAM,
     lparam: LPARAM,
 ) -> HandlerResult {
@@ -39,8 +46,8 @@ pub(super) fn WM_WINDOWPOSCHANGED(
     // ------------------------------------------------------------------
     // ① 第1借用セクション: DPI更新, echo判定に基づきWindowPos更新, BoxStyle更新
     // ------------------------------------------------------------------
-    if let Some(entity) = super::get_entity_from_hwnd(hwnd) {
-        if let Some(world) = super::try_get_ecs_world() {
+    {
+        {
             // DpiChangeContextを先に取得（try_tick_on_vsync前に消費する必要がある）
             // is_echo にかかわらず常に実行
             let dpi_context = crate::ecs::window::DpiChangeContext::take();
@@ -276,8 +283,9 @@ pub(super) fn WM_WINDOWPOSCHANGED(
 /// ③ guarded_set_window_pos: suggested_rect の位置のみ（SWP_NOSIZE 維持）
 #[inline]
 pub(super) fn WM_DPICHANGED(
+    world: &Rc<RefCell<EcsWorld>>,
+    entity: Entity,
     hwnd: HWND,
-    _message: u32,
     wparam: WPARAM,
     lparam: LPARAM,
 ) -> HandlerResult {
@@ -307,8 +315,8 @@ pub(super) fn WM_DPICHANGED(
     // ① World borrow: DPI コンポーネントを直接更新（Changed<DPI> 発火）
     // DPI コンポーネントが WM_WINDOWPOSCHANGED の tick 前に更新されている必要がある
     // （Changed<DPI> を update_arrangements_system が検知するため）
-    if let Some(entity) = super::get_entity_from_hwnd(hwnd) {
-        if let Some(world) = super::try_get_ecs_world() {
+    {
+        {
             if let Ok(mut world_borrow) = world.try_borrow_mut() {
                 if let Ok(mut entity_ref) = world_borrow.world_mut().get_entity_mut(entity) {
                     if let Some(mut dpi_comp) = entity_ref.get_mut::<crate::ecs::window::DPI>() {

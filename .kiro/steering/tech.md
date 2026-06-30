@@ -25,8 +25,10 @@ Rust 2024を前提にしたマルチクレート構成です。wintfはbevy_ecs�
 - **windows** (0.62.2): Windows APIバインディング
 - **windows-core** (0.62.2): Windows Core API
 - **taffy** (0.9.2): レイアウトエンジン
-- **async-executor** (1.13.3): 非同期タスク実行
-- **bevy_tasks** (0.18.0): タスク実行基盤
+- **wintf-winmsg-executor** (=0.0.5): Windows メッセージループ・ウィンドウ生成・UI スレッド async の基盤クレ（`winmsg-executor` フォーク）。極初期版ゆえ完全 pin（`=`）。共有ウィンドウクラスに `CS_DBLCLKS` ＋既定カーソルを内蔵
+- **event-listener** (5): スレッド跨ぎの起床通知（VSync スレッド→UI スレッド async tick）。tokio 非依存
+- ~~**async-executor**~~: 撤去済み（spec `wintf-winmsg-executor` 完了時）。UI スレッド async は `wintf-winmsg-executor` の `spawn_local` へ移行。背景プール `WintfTaskPool` は `bevy_tasks` ベースで async-executor 非依存
+- **bevy_tasks** (0.18.0): 背景ワーカープール `WintfTaskPool` の実行基盤（`world.spawn` 経路・UI スレッドとは別レイヤ）
 - **tracing / tracing-subscriber**: 構造化ロギング
 - **windows-numerics** (0.3.1): Windows数値型サポート
 - **ambassador** (0.5.0): トレイト委譲（delegation）マクロ。COM/状態ラッパーのボイラープレート削減に使用
@@ -82,7 +84,8 @@ Rust言語の型システムを最大限に活用。`unsafe`ブロックはWindo
 - **DirectWrite**: 高品質な日本語テキストレンダリングと縦書き対応
 - **Workspace構成**: フレームワーク、演出定義、実アプリを分離したモノレポ構成
 - **Release最適化**: サイズ最適化（`opt-level='z'`, `lto=true`）でバイナリサイズを削減
-- **レガシーAPI非推奨化**: `win_message_handler`, `win_thread_mgr`, `winproc` は `#[deprecated]` 指定済み。新規コードでは `ecs/window_proc/` 配下のモジュールを使用する
+- **UI スレッド基盤の外部クレ化（tokio 非依存・置換完了）**: メッセージループ・ウィンドウ生成・UI スレッド async・60Hz ECS tick 起床を、自作実装から `wintf-winmsg-executor`（=0.0.5）ベースへ**置換完了**（spec `wintf-winmsg-executor`・新 facade `WinApp`）。`MessageLoop`/`block_on`/`spawn_local`/`util::Window<S>`（`new_ex`・wndproc 再入可）へ写像し、スレッド跨ぎ起床は `event_listener` で実現。tokio 非採用（`!Send` future を UI スレッド単一で実行）。背景重処理用 `WintfTaskPool`（`bevy_tasks` ＋ `world.spawn`）は別レイヤとして温存。ドラッグの同期 WM_WINDOWPOSCHANGED 再入に依存するため `new_checked_ex`（RefCell 再入阻止）ではなく `new_ex` を採用し、tick 二重実行は ECS ガード（`IS_TICK_FLUSH_IN_PROGRESS`＋`try_borrow_mut`）で防ぐ
+- **レガシー UI 基盤の撤去（完了）**: 旧自作 `win_message_handler` / `win_thread_mgr` / `winproc` / `process_singleton` は spec `wintf-winmsg-executor` 完了に伴い**撤去済み**。メッセージ配送は `ecs/window_proc/` の `dispatch_window_message`、UI スレッド基盤は `runtime/` の `WinApp` facade を使用する
 - **構造化ログ**: `tracing` を全体規約とし、subscriber初期化はアプリ層で行う
 - **pasta のベンダリング**: 外部依存だった `pasta_core` を git サブモジュール（`vendors/pasta/`）として同梱し、`[patch.crates-io]` でローカルパスへ差し替える。wintf/dola/areka とDSLエンジンを同一ワークスペースで協調開発するための運用。クローン時は `git submodule update --init` が必要
 - **ukadoc互換ベースウェア戦略（2026-06-26）**: areka を ukadoc準拠の互換ベースウェア（SSP代替）として確立する。SERIKO/MAYUNA完全マップ＋さくらスクリプト優先度順。SERIKO/さくらスクリプトランナーは「タイミング特化の下位層 dola」の上に建てる上位層。SERIKOを平坦サブセットに内包する**階層サーフェスエンジン**（エレメント→別サーフェス定義参照・wintf visual-tree＋dola nested-storyboard）。SHIORIは内部唯一ABI=`IShiori`(COM, HSTRING/UTF-16)、ネイティブ=in-proc COM、過去互換=32bit Rustホスト（flat-C/HGLOBAL/charset/SAORI同居/自前IPC）。詳細の正本は `doc/COMPAT_ARCHITECTURE.md`

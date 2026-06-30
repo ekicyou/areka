@@ -23,7 +23,7 @@ pub struct BitmapSourceResource {
 // には `unsafe impl Send` が一切存在しない）ため、この手動 impl は冗長ではなく必須である。
 // 健全性は WIC オブジェクトのスレッドモデルに依拠する: WIC は free-threaded（thread-free
 // marshaling）であり、本プロセスは MTA（`CoInitializeEx(COINIT_MULTITHREADED)`、
-// win_thread_mgr.rs）で初期化されるため、`IWICBitmapSource` は跨スレッド移動（Send）・
+// `runtime::WinApp::new`）で初期化されるため、`IWICBitmapSource` は跨スレッド移動（Send）・
 // 参照共有（Sync）とも直接アクセス可能。実利用上、本リソースはバックグラウンド
 // （`WintfTaskPool` ワーカー）でデコード生成され mpsc 経由でメインスレッドへ移送（Send）、
 // 以後は `source()` による読み取り専用参照（D2D ビットマップ生成・αマスク生成の

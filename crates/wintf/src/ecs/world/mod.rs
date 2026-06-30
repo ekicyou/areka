@@ -14,9 +14,26 @@ use bevy_ecs::message::Messages;
 use bevy_ecs::prelude::*;
 use bevy_ecs::schedule::*;
 use bevy_ecs::system::*;
+use std::cell::RefCell;
+use std::rc::Weak;
 use std::time::Instant;
 use tracing::trace;
 use windows::Win32::Foundation::HWND;
+
+/// 外側 `Rc<RefCell<EcsWorld>>` への弱参照を保持する NonSend リソース（task 4.3）。
+///
+/// `create_windows`（排他システム）は bevy の `&mut World` しか持たないが、ウィンドウ生成
+/// ファクトリ（runtime 層 `EcsWindowFactory`）は wndproc クロージャの `WndState` 用に
+/// **外側**の `Weak<RefCell<EcsWorld>>`（共有 World ハンドルの弱参照）を必要とする。
+///
+/// 本リソースを **ECS 層**で定義することで `create_windows` が読むのは ECS 型のまま
+/// （ecs→runtime の上向き依存を作らない）。`Weak` を保持する `!Send` 型ゆえ bevy が
+/// 自動的に NonSend として扱う（`Send` 偽装はしない）。
+///
+/// 注入は `WinApp`（runtime）が `new()`/`run()` 開始時に `Rc::downgrade(&self.world)` を
+/// insert する（facade から下向き）。`create_windows` はこのリソースの有無で新経路
+/// （ファクトリ生成）/ 旧 `WinThreadMgr` 経路（no-op）を分岐する（task 4.3 解釈 (1)/(2)）。
+pub struct EcsWorldSelfRef(pub Weak<RefCell<EcsWorld>>);
 
 /// ECSワールドのラッパー
 /// 初期化ロジックや拡張機能をここに集約
@@ -329,13 +346,13 @@ impl EcsWorld {
         }
     }
 
-    /// メッセージウィンドウのHWNDを設定
+    /// メッセージウィンドウのHWNDを設定（格納のみ）。
+    ///
+    /// NOTE: 旧経路では App リソースへも伝播していたが、`App::set_message_window`/
+    /// `WM_LAST_WINDOW_DESTROYED` PostMessage 経路の撤去（task 4.5）に伴い、本メソッドは
+    /// EcsWorld 側の HWND 格納のみを担う。
     pub fn set_message_window(&mut self, hwnd: HWND) {
         self.message_window = Some(hwnd);
-        // Appリソースにもメッセージウィンドウを設定
-        if let Some(mut app) = self.world.get_resource_mut::<crate::ecs::app::App>() {
-            app.set_message_window(hwnd);
-        }
     }
 
     /// メッセージウィンドウのHWNDを取得
@@ -503,7 +520,7 @@ impl EcsWorld {
     /// 他のモーダルループ関連メッセージ（WM_ENTERSIZEMOVEなど）で同様の問題が
     /// 発見された場合、該当メッセージ処理でこの関数を呼び出すだけで対応可能。
     pub fn try_tick_on_vsync(&mut self) -> bool {
-        use crate::win_thread_mgr::{LAST_VSYNC_TICK, VSYNC_TICK_COUNT};
+        use self::vsync::{LAST_VSYNC_TICK, VSYNC_TICK_COUNT};
         use std::sync::atomic::Ordering;
 
         // Ordering::Relaxed の妥当性（W7b-V 点検）:
@@ -535,6 +552,130 @@ impl EcsWorld {
 impl Default for EcsWorld {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+#[cfg(test)]
+mod tick_order_tests {
+    //! 統合テスト（task 5.2・要件 4.2/4.5）: tick の 13 本スケジュール **実行順序不変**。
+    //!
+    //! `try_tick_world` は 13 本のスケジュールを固定順で回す（`Input … FrameFinalize`）。
+    //! 起床ブリッジ（`AsyncTickTask`/`VsyncEventBridge`）の置換にあたり、この構成・順序を
+    //! **変更しない**ことが要件 4.5 の中核不変条件。本テストは各スケジュールへ実行順を記録する
+    //! プローブシステムを 1 本ずつ差し込み、空 World で `try_tick_world` を 1 周回して、
+    //! **実際の実行順序**が固定 13 本列と完全一致することを直接実証する（headless・GPU 不要：
+    //! 空 World では window/graphics システムは生成対象ゼロで no-op）。
+    //!
+    //! VSync 起床→tick→再待機の async ループ 1 周（`spawn_local` executor + 実 Event 必須）は
+    //! headless に再現不能のため E2E 5.3 へ委譲する。本テストはその 1 周の **核**（13 本 tick の
+    //! 構成・順序）を固定する（`tick_one_frame` の再入安全・借用スキップは
+    //! `runtime/tick_bridge.rs` のユニットテストが担保）。
+
+    use super::*;
+
+    /// 各スケジュールのプローブが実行順にラベル名を push する記録リソース。
+    #[derive(Resource, Default)]
+    struct TickOrderLog(Vec<&'static str>);
+
+    /// 固定 13 本スケジュールの期待実行順（設計 Testing Strategy / schedule_labels.rs の不変条件）。
+    const EXPECTED_ORDER: [&str; 13] = [
+        "Input",
+        "Update",
+        "PreLayout",
+        "Layout",
+        "PostLayout",
+        "UISetup",
+        "GraphicsSetup",
+        "Draw",
+        "PreRenderSurface",
+        "RenderSurface",
+        "Composition",
+        "CommitComposition",
+        "FrameFinalize",
+    ];
+
+    /// (要件 4.5) 13 本スケジュールが実行順不変であることを、実 tick の実行順記録で検証する。
+    #[test]
+    fn try_tick_world_runs_thirteen_schedules_in_fixed_order() {
+        let mut ecs = EcsWorld::new();
+
+        // 記録リソースを挿入し、各スケジュールへ「自分のラベル名を push する」プローブを
+        // 1 本ずつ登録する。既存システムと同居しても push 順は schedule 境界で確定する
+        // （`try_tick_world` が schedule 単位で逐次 `try_run_schedule` するため）。
+        ecs.world_mut().insert_resource(TickOrderLog::default());
+
+        macro_rules! probe {
+            ($label:expr, $name:literal) => {
+                ecs.add_systems($label, |mut log: ResMut<TickOrderLog>| {
+                    log.0.push($name);
+                });
+            };
+        }
+        probe!(Input, "Input");
+        probe!(Update, "Update");
+        probe!(PreLayout, "PreLayout");
+        probe!(Layout, "Layout");
+        probe!(PostLayout, "PostLayout");
+        probe!(UISetup, "UISetup");
+        probe!(GraphicsSetup, "GraphicsSetup");
+        probe!(Draw, "Draw");
+        probe!(PreRenderSurface, "PreRenderSurface");
+        probe!(RenderSurface, "RenderSurface");
+        probe!(Composition, "Composition");
+        probe!(CommitComposition, "CommitComposition");
+        probe!(FrameFinalize, "FrameFinalize");
+
+        // 空 World を 1 周 tick（window/graphics は生成対象ゼロで no-op・headless 安全）。
+        let ticked = ecs.try_tick_world();
+        assert!(ticked, "システム登録済みの World は try_tick_world が true を返すべき");
+
+        let order = ecs.world().resource::<TickOrderLog>().0.clone();
+        assert_eq!(
+            order.len(),
+            13,
+            "tick は厳密に 13 本のスケジュールを実行すべき（構成不変・要件 4.5）"
+        );
+        assert_eq!(
+            order, EXPECTED_ORDER,
+            "13 本スケジュールの実行順序は固定列と完全一致すべき（順序不変・要件 4.5）"
+        );
+    }
+
+    /// (要件 4.2) 起床ごとの 1 tick が冪等に 13 本を回す（2 周目も同一順序で安定）。
+    #[test]
+    fn repeated_ticks_keep_thirteen_schedule_order_stable() {
+        let mut ecs = EcsWorld::new();
+        ecs.world_mut().insert_resource(TickOrderLog::default());
+        // 単一プローブで全スケジュールを記録（macro 再掲を避け Input のみ別関数で代表確認は
+        // 上テスト済み。ここは「2 周で順序がブレない」ことに焦点を当て全 13 本に再登録）。
+        macro_rules! probe {
+            ($label:expr, $name:literal) => {
+                ecs.add_systems($label, |mut log: ResMut<TickOrderLog>| {
+                    log.0.push($name);
+                });
+            };
+        }
+        probe!(Input, "Input");
+        probe!(Update, "Update");
+        probe!(PreLayout, "PreLayout");
+        probe!(Layout, "Layout");
+        probe!(PostLayout, "PostLayout");
+        probe!(UISetup, "UISetup");
+        probe!(GraphicsSetup, "GraphicsSetup");
+        probe!(Draw, "Draw");
+        probe!(PreRenderSurface, "PreRenderSurface");
+        probe!(RenderSurface, "RenderSurface");
+        probe!(Composition, "Composition");
+        probe!(CommitComposition, "CommitComposition");
+        probe!(FrameFinalize, "FrameFinalize");
+
+        ecs.try_tick_world();
+        ecs.try_tick_world();
+
+        let order = ecs.world().resource::<TickOrderLog>().0.clone();
+        assert_eq!(order.len(), 26, "2 周で 13×2 本が実行されるべき");
+        assert_eq!(&order[..13], EXPECTED_ORDER, "1 周目の順序が固定列と一致");
+        assert_eq!(&order[13..], EXPECTED_ORDER, "2 周目も同一順序で安定（順序不変）");
     }
 }
 

@@ -4,7 +4,13 @@
 
 #![allow(non_snake_case)]
 
+use std::cell::RefCell;
+use std::rc::Rc;
+
+use bevy_ecs::prelude::Entity;
 use windows::Win32::Foundation::*;
+
+use crate::ecs::world::EcsWorld;
 
 /// メッセージハンドラの戻り値型
 type HandlerResult = Option<LRESULT>;
@@ -12,8 +18,9 @@ type HandlerResult = Option<LRESULT>;
 /// WM_KEYDOWN: キー押下
 #[inline]
 pub(super) fn WM_KEYDOWN(
+    world: &Rc<RefCell<EcsWorld>>,
+    _entity: Entity,
     _hwnd: HWND,
-    _message: u32,
     wparam: WPARAM,
     _lparam: LPARAM,
 ) -> HandlerResult {
@@ -34,18 +41,16 @@ pub(super) fn WM_KEYDOWN(
         } = state_snapshot
         {
             // DragAccumulatorResourceにEnded遷移を記録
-            if let Some(world) = super::try_get_ecs_world() {
-                if let Ok(world_borrow) = world.try_borrow() {
-                    if let Some(accumulator) = world_borrow
-                        .world()
-                        .get_resource::<crate::ecs::drag::DragAccumulatorResource>(
-                    ) {
-                        accumulator.set_transition(crate::ecs::drag::DragTransition::Ended {
-                            entity,
-                            end_pos: start_pos,
-                            cancelled: true,
-                        });
-                    }
+            if let Ok(world_borrow) = world.try_borrow() {
+                if let Some(accumulator) = world_borrow
+                    .world()
+                    .get_resource::<crate::ecs::drag::DragAccumulatorResource>(
+                ) {
+                    accumulator.set_transition(crate::ecs::drag::DragTransition::Ended {
+                        entity,
+                        end_pos: start_pos,
+                        cancelled: true,
+                    });
                 }
             }
         }
@@ -63,8 +68,9 @@ pub(super) fn WM_KEYDOWN(
 /// WM_CANCELMODE: システムキャンセル
 #[inline]
 pub(super) fn WM_CANCELMODE(
+    world: &Rc<RefCell<EcsWorld>>,
+    _entity: Entity,
     _hwnd: HWND,
-    _message: u32,
     _wparam: WPARAM,
     _lparam: LPARAM,
 ) -> HandlerResult {
@@ -81,18 +87,16 @@ pub(super) fn WM_CANCELMODE(
     } = state_snapshot
     {
         // DragAccumulatorResourceにEnded遷移を記録
-        if let Some(world) = super::try_get_ecs_world() {
-            if let Ok(world_borrow) = world.try_borrow() {
-                if let Some(accumulator) = world_borrow
-                    .world()
-                    .get_resource::<crate::ecs::drag::DragAccumulatorResource>(
-                ) {
-                    accumulator.set_transition(crate::ecs::drag::DragTransition::Ended {
-                        entity,
-                        end_pos: start_pos,
-                        cancelled: true,
-                    });
-                }
+        if let Ok(world_borrow) = world.try_borrow() {
+            if let Some(accumulator) = world_borrow
+                .world()
+                .get_resource::<crate::ecs::drag::DragAccumulatorResource>(
+            ) {
+                accumulator.set_transition(crate::ecs::drag::DragTransition::Ended {
+                    entity,
+                    end_pos: start_pos,
+                    cancelled: true,
+                });
             }
         }
     }
@@ -113,8 +117,9 @@ pub(super) fn WM_CANCELMODE(
 /// WM_CANCELMODEはモーダルダイアログやメニュー表示時にのみ送られ、
 /// Alt+Tabでは送られないため、WM_ACTIVATEで補完する必要がある。
 pub(super) fn WM_ACTIVATE(
+    world: &Rc<RefCell<EcsWorld>>,
+    _entity: Entity,
     _hwnd: HWND,
-    _message: u32,
     wparam: WPARAM,
     _lparam: LPARAM,
 ) -> HandlerResult {
@@ -137,18 +142,16 @@ pub(super) fn WM_ACTIVATE(
             );
 
             // DragAccumulatorResourceにEnded(cancelled)遷移を記録
-            if let Some(world) = super::try_get_ecs_world() {
-                if let Ok(world_borrow) = world.try_borrow() {
-                    if let Some(accumulator) = world_borrow
-                        .world()
-                        .get_resource::<crate::ecs::drag::DragAccumulatorResource>(
-                    ) {
-                        accumulator.set_transition(crate::ecs::drag::DragTransition::Ended {
-                            entity,
-                            end_pos: start_pos,
-                            cancelled: true,
-                        });
-                    }
+            if let Ok(world_borrow) = world.try_borrow() {
+                if let Some(accumulator) = world_borrow
+                    .world()
+                    .get_resource::<crate::ecs::drag::DragAccumulatorResource>(
+                ) {
+                    accumulator.set_transition(crate::ecs::drag::DragTransition::Ended {
+                        entity,
+                        end_pos: start_pos,
+                        cancelled: true,
+                    });
                 }
             }
 
@@ -174,8 +177,9 @@ pub(super) fn WM_ACTIVATE(
 ///
 /// 冪等性: DragState が既に Idle / JustEnded の場合は何もしない。
 pub(super) fn WM_CAPTURECHANGED(
+    world: &Rc<RefCell<EcsWorld>>,
+    _entity: Entity,
     _hwnd: HWND,
-    _message: u32,
     _wparam: WPARAM,
     _lparam: LPARAM,
 ) -> HandlerResult {
@@ -216,18 +220,16 @@ pub(super) fn WM_CAPTURECHANGED(
         entity, start_pos, ..
     } = state_snapshot
     {
-        if let Some(world) = super::try_get_ecs_world() {
-            if let Ok(world_borrow) = world.try_borrow() {
-                if let Some(accumulator) = world_borrow
-                    .world()
-                    .get_resource::<crate::ecs::drag::DragAccumulatorResource>()
-                {
-                    accumulator.set_transition(crate::ecs::drag::DragTransition::Ended {
-                        entity,
-                        end_pos: start_pos,
-                        cancelled: true,
-                    });
-                }
+        if let Ok(world_borrow) = world.try_borrow() {
+            if let Some(accumulator) = world_borrow
+                .world()
+                .get_resource::<crate::ecs::drag::DragAccumulatorResource>()
+            {
+                accumulator.set_transition(crate::ecs::drag::DragTransition::Ended {
+                    entity,
+                    end_pos: start_pos,
+                    cancelled: true,
+                });
             }
         }
     }

@@ -1,672 +1,211 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-use ambassador::*;
-use std::path::*;
-use std::sync::*;
-use windows::{
-    Win32::{
-        Foundation::*, Graphics::Direct2D::Common::*, Graphics::Direct2D::*, Graphics::Direct3D::*,
-        Graphics::Direct3D11::*, Graphics::DirectComposition::*, Graphics::DirectWrite::*,
-        Graphics::Dxgi::Common::*, Graphics::Gdi::*, Graphics::Imaging::*, UI::Animation::*,
-        UI::HiDpi::*, UI::WindowsAndMessaging::*,
-    },
-    core::*,
-};
-use windows_numerics::*;
-use wintf::{
-    com::{animation::*, d2d::*, d3d11::*, dcomp::*, dwrite::*, wic::*},
-    *,
-};
+//! # DComp Demo
+//!
+//! `CompositionMode::DComp` を使用した DirectComposition ベースの宣言的描画デモ。
+//!
+//! ## 移行に関する注記（task 4.4）
+//!
+//! 旧 `dcomp_demo` は `WinThreadMgr::create_window` の命令的経路で `WinMessageHandler`
+//! を実装した `DemoWindow`（DirectComposition の 3D カードフリップによる神経衰弱ゲーム）を
+//! 生成していた。`WinApp` 新 facade は宣言的ウィンドウ生成（`Window` + `BoxStyle` を
+//! 持つ Entity を spawn）へ一本化され、命令的 `create_window` は consumer から撤去された。
+//!
+//! ECS 描画層には 3D カードフリップ相当のアニメーションウィジェットが存在しないため、
+//! 旧カードゲームのインタラクションをそのまま忠実に移植することはできない。本デモは
+//! その意図（DComp パイプライン上にカード状のグリッドを描画する）を、宣言的な
+//! `Rectangle` + `Label` ウィジェットによるカードグリッドとして等価に再構成する。
+//! `spawn_ui_local`（旧 `spawn_normal` 相当・UI スレッド単一 async）の利用例も併せて示す。
+//!
+//! ## 使用法
+//!
+//! ```bash
+//! cargo run -p wintf --example dcomp_demo
+//! ```
+
+use bevy_ecs::name::Name;
+use bevy_ecs::prelude::*;
+use std::time::Duration;
+use tracing::info;
+use tracing_subscriber::EnvFilter;
+use windows::Win32::Graphics::Direct2D::Common::D2D1_COLOR_F;
+use windows::core::Result;
+use wintf::ecs::layout::LengthPercentageAuto;
+use wintf::ecs::layout::{BoxMargin, BoxPosition, BoxSize, BoxStyle, Dimension};
+use wintf::ecs::widget::brushes::Brushes;
+use wintf::ecs::widget::shapes::Rectangle;
+use wintf::ecs::widget::text::label::Label;
+use wintf::ecs::{ChildOf, CompositionMode, Point, Window, WindowPos};
+use wintf::*;
 
 const CARD_ROWS: usize = 3;
 const CARD_COLUMNS: usize = 6;
-const CARD_MARGIN: f32 = 15.0;
-const CARD_WIDTH: f32 = 150.0;
-const CARD_HEIGHT: f32 = 210.0;
-const CARD_SIZE: Vector2 = Vector2 {
-    X: CARD_WIDTH,
-    Y: CARD_HEIGHT,
-};
 
-const WINDOW_WIDTH: f32 = (CARD_WIDTH + CARD_MARGIN) * (CARD_COLUMNS as f32) + CARD_MARGIN;
-const WINDOW_HEIGHT: f32 = (CARD_HEIGHT + CARD_MARGIN) * (CARD_ROWS as f32) + CARD_MARGIN;
-const WINDOW_SIZE: Vector2 = Vector2 {
-    X: WINDOW_WIDTH,
-    Y: WINDOW_HEIGHT,
-};
+/// DComp デモウィンドウを識別するマーカー
+#[derive(Debug, Clone, Copy, Component, PartialEq, Hash)]
+pub struct DCompDemoWindow;
 
 fn main() -> Result<()> {
     human_panic::setup_panic!();
 
-    let mgr = WinThreadMgr::new()?;
-    let window = Arc::new(DemoWindow::new()?);
-    let style = WinStyle::WS_OVERLAPPED()
-        .WS_CAPTION(true)
-        .WS_SYSMENU(true)
-        .WS_MINIMIZEBOX(true)
-        .WS_VISIBLE(true)
-        .WS_EX_NOREDIRECTIONBITMAP(true);
+    tracing_subscriber::fmt()
+        .with_env_filter(
+            EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info")),
+        )
+        .init();
 
-    let _ = mgr.create_window(window.clone(), "Sample Window", style)?;
-    println!("spawn_normal: set");
-    let move_win = window.clone();
-    mgr.spawn_normal(async move {
-        println!("spawn_normal: execute: hwnd={:?}", move_win.hwnd());
-    })
-    .detach();
+    let mgr = WinApp::new()?;
+    let world = mgr.world();
+
+    // 宣言的にカードグリッドウィンドウを生成（背景プール経路 world.spawn は温存）。
+    world.borrow().spawn(|tx| async move {
+        info!("[DCompDemo] Creating DComp card-grid window");
+        let _ = tx.send(Box::new(|world: &mut World| {
+            create_dcomp_demo_window(world);
+        }));
+
+        // 60秒後に自動終了
+        async_io::Timer::after(Duration::from_secs(60)).await;
+
+        info!("[DCompDemo] Closing window");
+        let _ = tx.send(Box::new(close_window));
+    });
+
+    // 旧 `spawn_normal` 相当の UI スレッド単一 async（`!Send` 可）の利用例。
+    // fire-and-forget のため JoinHandle はそのまま drop する（投入＝実行確定）。
+    let _ = mgr.spawn_ui_local(async {
+        info!("[DCompDemo] spawn_ui_local: UI async task running");
+    });
+
+    println!("\nDComp Demo:");
+    println!("  CompositionMode::DComp を使用した DirectComposition 描画");
+    println!("  {CARD_ROWS}x{CARD_COLUMNS} のカードグリッドを宣言的に描画します。");
+    println!("\n60秒後に自動的にWindowを閉じてアプリ終了します。");
+
     mgr.run()
 }
 
-#[derive(PartialEq)]
-enum Status {
-    Hidden,
-    Selected,
-    Matched,
-}
-
-struct Card {
-    status: Status,
-    value: u8,
-    offset: Vector2,
-    variable: IUIAnimationVariable2,
-    rotation: Option<IDCompositionRotateTransform3D>,
-}
-
-#[derive(Delegate)]
-#[delegate(WinState, target = "win_state")]
-struct DemoWindow {
-    win_state: SimpleWinState,
-    format: IDWriteTextFormat,
-    image: IWICFormatConverter,
-    manager: IUIAnimationManager2,
-    library: IUIAnimationTransitionLibrary2,
-    first: Option<usize>,
-    cards: Vec<Card>,
-    d3d: Option<ID3D11Device>,
-    dcomp: Option<IDCompositionDevice3>,
-    target: Option<IDCompositionTarget>,
-}
-
-unsafe impl Send for DemoWindow {}
-unsafe impl Sync for DemoWindow {}
-
-#[allow(deprecated)]
-impl WinMessageHandler for DemoWindow {
-    fn WM_CREATE(&mut self, _wparam: WPARAM, _lparam: LPARAM) -> Option<LRESULT> {
-        eprintln!("WM_CREATE");
-        self.create_handler().expect("WM_CREATE");
-        Some(LRESULT(0))
-    }
-
-    fn WM_DESTROY(&mut self, _wparam: WPARAM, _lparam: LPARAM) -> Option<LRESULT> {
-        self.post_quit_message(0)
-    }
-
-    fn WM_LBUTTONUP(&mut self, _wparam: WPARAM, lparam: LPARAM) -> Option<LRESULT> {
-        self.click_handler(lparam).expect("WM_LBUTTONUP");
-        Some(LRESULT(0))
-    }
-
-    fn WM_PAINT(&mut self, _wparam: WPARAM, _lparam: LPARAM) -> Option<LRESULT> {
-        self.paint_handler().unwrap_or_else(|_| {
-            // デバイスロスはレンダリングの失敗を引き起こす可能性がありますが、
-            // 致命的とは見なされるべきではありません。
-            if cfg!(debug_assertions) {
-                println!("WM_PAINT failed");
-            }
-            self.d3d = None;
-        });
-        Some(LRESULT(0))
-    }
-
-    fn WM_DPICHANGED(&mut self, wparam: WPARAM, lparam: LPARAM) -> Option<LRESULT> {
-        self.dpi_changed_handler(wparam, lparam)
-            .expect("WM_DPICHANGED");
-        Some(LRESULT(0))
+/// ウィンドウを閉じる
+fn close_window(world: &mut World) {
+    let mut query = world.query_filtered::<Entity, With<DCompDemoWindow>>();
+    if let Some(window) = query.iter(world).next() {
+        info!("[DCompDemo] Removing Window entity {:?}", window);
+        world.despawn(window);
     }
 }
 
-impl DemoWindow {
-    fn new() -> Result<Self> {
-        let manager = create_animation_manager()?;
-
-        use rand::{seq::*, *};
-        let mut rng = rand::rng();
-        let mut values = [b'?'; CARD_ROWS * CARD_COLUMNS];
-
-        for i in 0..values.len() / 2 {
-            let value = rng.random_range(b'A'..=b'Z');
-            values[i * 2] = value;
-            values[i * 2 + 1] = value + b'a' - b'A';
-        }
-
-        values.shuffle(&mut rng);
-        let mut cards = Vec::new();
-
-        for value in values {
-            cards.push(Card {
-                status: Status::Hidden,
-                value,
-                offset: Default::default(),
-                variable: manager.create_animation_variable(0.0)?,
-                rotation: None,
-            });
-        }
-
-        if cfg!(debug_assertions) {
-            println!("deck:");
-            for row in 0..CARD_ROWS {
-                for column in 0..CARD_COLUMNS {
-                    print!(
-                        " {}",
-                        char::from_u32(cards[row * CARD_COLUMNS + column].value as u32)
-                            .expect("char")
-                    );
-                }
-                println!();
-            }
-        }
-
-        let library = create_animation_transition_library()?;
-
-        Ok(DemoWindow {
-            win_state: Default::default(),
-            format: create_text_format()?,
-            image: create_image()?,
-            manager,
-            library,
-            first: None,
-            cards,
-            d3d: None,
-            dcomp: None,
-            target: None,
-        })
-    }
-
-    fn create_device_resources(&mut self) -> Result<()> {
-        debug_assert!(self.d3d.is_none());
-        let d3d = create_device_3d()?;
-        let dxgi = d3d.cast()?;
-        let d2d = d2d_create_device(&dxgi)?;
-        self.d3d = Some(d3d);
-        let desktop = dcomp_create_desktop_device(&d2d)?;
-        let dcomp: IDCompositionDevice3 = desktop.cast()?;
-
-        // 以前のターゲットを最初にリリースします。そうしないと `CreateTargetForHwnd` が HWND が占有されていることを検出します。
-        self.target = None;
-        let target = desktop.create_target_for_hwnd(self.hwnd(), true)?;
-        let root_visual = dcomp.create_visual()?;
-        root_visual.set_backface_visibility(DCOMPOSITION_BACKFACE_VISIBILITY_HIDDEN)?;
-        target.set_root(&root_visual)?;
-        self.target = Some(target);
-
-        // 描画リソースの作成
-        let dc = d2d.create_device_context(D2D1_DEVICE_CONTEXT_OPTIONS_NONE)?;
-
-        let brush = dc.create_solid_color_brush(
-            &D2D1_COLOR_F {
-                r: 0.0,
-                g: 0.0,
-                b: 0.0,
-                a: 1.0,
+/// DComp モードのカードグリッドウィンドウを宣言的に生成する。
+fn create_dcomp_demo_window(world: &mut World) {
+    // Window Entity (ルート) — CompositionMode::DComp を指定
+    let window_entity = world
+        .spawn((
+            Name::new("DCompDemo-Window"),
+            DCompDemoWindow,
+            BoxStyle {
+                position: Some(BoxPosition::Absolute),
+                flex_direction: Some(taffy::FlexDirection::Column),
+                size: Some(BoxSize {
+                    width: Some(Dimension::Px(980.0)),
+                    height: Some(Dimension::Px(690.0)),
+                }),
+                ..Default::default()
             },
-            None,
-        )?;
+            WindowPos {
+                position: Some(Point { x: 100, y: 100 }),
+                ..Default::default()
+            },
+            Window {
+                title: "wintf - DComp Demo".to_string(),
+                composition_mode: CompositionMode::DComp,
+                ..Default::default()
+            },
+        ))
+        .id();
 
-        let bitmap = dc.create_bitmap_from_wic_bitmap(&self.image)?;
-        let dpi = self.dpi();
-        let scale = dpi / 96.0;
-        let card_size_px = Vector2 {
-            X: CARD_SIZE.X * scale,
-            Y: CARD_SIZE.Y * scale,
-        };
-        let card_size = SIZE {
-            cx: card_size_px.X.ceil() as i32,
-            cy: card_size_px.Y.ceil() as i32,
-        };
+    // カードグリッド（行ごとに横並び）
+    for row in 0..CARD_ROWS {
+        let row_entity = world
+            .spawn((
+                Name::new(format!("CardRow-{row}")),
+                Rectangle::new(),
+                Brushes::with_foreground(D2D1_COLOR_F {
+                    r: 0.12,
+                    g: 0.12,
+                    b: 0.16,
+                    a: 1.0,
+                }),
+                BoxStyle {
+                    flex_direction: Some(taffy::FlexDirection::Row),
+                    flex_grow: Some(1.0),
+                    ..Default::default()
+                },
+                ChildOf(window_entity),
+            ))
+            .id();
 
-        for row in 0..CARD_ROWS {
-            for column in 0..CARD_COLUMNS {
-                let card = &mut self.cards[row * CARD_COLUMNS + column];
-                let offset_logical = Vector2 {
-                    X: (CARD_WIDTH + CARD_MARGIN) * (column as f32) + CARD_MARGIN,
-                    Y: (CARD_HEIGHT + CARD_MARGIN) * (row as f32) + CARD_MARGIN,
-                };
-                card.offset = Vector2 {
-                    X: offset_logical.X * scale,
-                    Y: offset_logical.Y * scale,
-                };
-
-                if card.status == Status::Matched {
-                    continue;
-                }
-
-                let front_visual = dcomp.create_visual()?;
-                front_visual.set_backface_visibility(DCOMPOSITION_BACKFACE_VISIBILITY_HIDDEN)?;
-                front_visual.set_offset_x(card.offset.X)?;
-                front_visual.set_offset_y(card.offset.Y)?;
-                root_visual.add_visual(&front_visual, false, None)?;
-
-                let back_visual = dcomp.create_visual()?;
-                back_visual.set_backface_visibility(DCOMPOSITION_BACKFACE_VISIBILITY_HIDDEN)?;
-                back_visual.set_offset_x(card.offset.X)?;
-                back_visual.set_offset_y(card.offset.Y)?;
-                root_visual.add_visual(&back_visual, false, None)?;
-
-                let front_surface = dcomp.create_surface(
-                    card_size.cx as u32,
-                    card_size.cy as u32,
-                    DXGI_FORMAT_B8G8R8A8_UNORM,
-                    DXGI_ALPHA_MODE_PREMULTIPLIED,
-                )?;
-                front_visual.set_content(&front_surface)?;
-                draw_card_front(&front_surface, card.value, &self.format, &brush, dpi)?;
-
-                let back_surface = dcomp.create_surface(
-                    card_size.cx as u32,
-                    card_size.cy as u32,
-                    DXGI_FORMAT_B8G8R8A8_UNORM,
-                    DXGI_ALPHA_MODE_PREMULTIPLIED,
-                )?;
-                back_visual.set_content(&back_surface)?;
-                draw_card_back(&back_surface, &bitmap, card.offset, dpi)?;
-
-                let rotation = dcomp.create_rotate_transform_3d()?;
-
-                if card.status == Status::Selected {
-                    rotation.set_angle(180.0)?;
-                }
-
-                rotation.set_axis_z(0.0)?;
-                rotation.set_axis_y(1.0)?;
-                create_effect(&dcomp, &front_visual, &rotation, true, dpi)?;
-                create_effect(&dcomp, &back_visual, &rotation, false, dpi)?;
-                card.rotation = Some(rotation);
-            }
-        }
-
-        dcomp.commit()?;
-        self.dcomp = Some(dcomp);
-        Ok(())
-    }
-
-    fn click_handler(&mut self, lparam: LPARAM) -> Result<()> {
-        let dpi = self.dpi();
-        let scale = dpi / 96.0;
-        let x = lparam.0 as u16 as f32;
-        let y = (lparam.0 >> 16) as f32;
-
-        let width = CARD_WIDTH * scale;
-        let height = CARD_HEIGHT * scale;
-        let mut next = None;
-
-        for (index, card) in self.cards.iter().enumerate() {
-            if x > card.offset.X
-                && y > card.offset.Y
-                && x < card.offset.X + width
-                && y < card.offset.Y + height
-            {
-                next = Some(index);
-                break;
-            }
-        }
-
-        if let Some(next) = next {
-            if Some(next) == self.first {
-                if cfg!(debug_assertions) {
-                    println!("same card");
-                }
-                return Ok(());
-            }
-
-            if self.cards[next].status == Status::Matched {
-                if cfg!(debug_assertions) {
-                    println!("previous match");
-                }
-                return Ok(());
-            }
-
-            let dcomp = self.dcomp.as_ref().expect("IDCompositionDesktopDevice");
-            let stats = dcomp.get_frame_statistics()?;
-
-            let next_frame: f64 = stats.nextEstimatedFrameTime as f64 / stats.timeFrequency as f64;
-
-            self.manager.update(next_frame)?;
-            let storyboard = self.manager.create_storyboard()?;
-            let key_frame = add_show_transition(&self.library, &storyboard, &self.cards[next])?;
-
-            if let Some(first) = self.first.take() {
-                let final_value = if b'a' - b'A'
-                    == u8::abs_diff(self.cards[first].value, self.cards[next].value)
-                {
-                    self.cards[first].status = Status::Matched;
-                    self.cards[next].status = Status::Matched;
-                    90.0
-                } else {
-                    self.cards[first].status = Status::Hidden;
-                    0.0
-                };
-
-                add_hide_transition(
-                    &self.library,
-                    &storyboard,
-                    key_frame,
-                    final_value,
-                    &self.cards[first],
-                )?;
-
-                add_hide_transition(
-                    &self.library,
-                    &storyboard,
-                    key_frame,
-                    final_value,
-                    &self.cards[next],
-                )?;
-
-                storyboard.schedule(next_frame)?;
-                update_animation(dcomp, &self.cards[first])?;
-                update_animation(dcomp, &self.cards[next])?;
-            } else {
-                self.first = Some(next);
-                self.cards[next].status = Status::Selected;
-                storyboard.schedule(next_frame)?;
-                update_animation(dcomp, &self.cards[next])?;
-            }
-
-            dcomp.commit()?;
-        } else if cfg!(debug_assertions) {
-            println!("missed");
-        }
-
-        Ok(())
-    }
-
-    fn paint_handler(&mut self) -> Result<()> {
-        if let Some(device) = &self.d3d {
-            if cfg!(debug_assertions) {
-                println!("check device");
-            }
-            device.get_device_removed_reason()?;
-        } else {
-            if cfg!(debug_assertions) {
-                println!("build device");
-            }
-            self.create_device_resources()?;
-        }
-
-        unsafe { ValidateRect(Some(self.hwnd()), None).ok() }
-    }
-
-    fn dpi_changed_handler(&mut self, wparam: WPARAM, lparam: LPARAM) -> Result<()> {
-        self.set_dpi_change_message(wparam, lparam);
-
-        if cfg!(debug_assertions) {
-            println!("dpi changed: {:?}", self.dpi());
-        }
-
-        let rect = unsafe { &*(lparam.0 as *const RECT) };
-        let size_vec = self.effective_window_size(WINDOW_SIZE)?;
-        let size = SIZE {
-            cx: size_vec.X.ceil() as i32,
-            cy: size_vec.Y.ceil() as i32,
-        };
-
-        unsafe {
-            SetWindowPos(
-                self.hwnd(),
-                None,
-                rect.left,
-                rect.top,
-                size.cx,
-                size.cy,
-                SWP_NOACTIVATE | SWP_NOZORDER,
-            )
-        }?;
-
-        self.d3d = None;
-        Ok(())
-    }
-
-    fn create_handler(&mut self) -> Result<()> {
-        let monitor = unsafe { MonitorFromWindow(self.hwnd(), MONITOR_DEFAULTTONEAREST) };
-        let mut dpi = (0, 0);
-        unsafe { GetDpiForMonitor(monitor, MDT_EFFECTIVE_DPI, &mut dpi.0, &mut dpi.1) }?;
-        self.set_dpi(dpi.0 as f32);
-
-        if cfg!(debug_assertions) {
-            println!("initial dpi: {:?}", self.dpi());
-        }
-
-        let size_vec = self.effective_window_size(WINDOW_SIZE)?;
-        let size = SIZE {
-            cx: size_vec.X.ceil() as i32,
-            cy: size_vec.Y.ceil() as i32,
-        };
-
-        unsafe {
-            SetWindowPos(
-                self.hwnd(),
-                None,
-                0,
-                0,
-                size.cx,
-                size.cy,
-                SWP_NOACTIVATE | SWP_NOMOVE | SWP_NOZORDER,
-            )
+        for column in 0..CARD_COLUMNS {
+            create_card(world, row_entity, row, column);
         }
     }
+
+    info!(
+        "[DCompDemo] DComp card-grid window created (entity={:?})",
+        window_entity
+    );
 }
 
-fn create_text_format() -> Result<IDWriteTextFormat> {
-    let factory = dwrite_create_factory(DWRITE_FACTORY_TYPE_SHARED)?;
+/// 1 枚のカード（裏面想定の "?" ラベル付き矩形）を生成する。
+fn create_card(world: &mut World, parent: Entity, row: usize, column: usize) {
+    // カード色は行・列で軽く変化させる（装飾目的）。
+    let shade = 0.55 + 0.12 * ((row + column) % 3) as f32;
+    let card = world
+        .spawn((
+            Name::new(format!("Card-{row}-{column}")),
+            Rectangle::new(),
+            Brushes::with_foreground(D2D1_COLOR_F {
+                r: shade,
+                g: 0.45,
+                b: 0.75,
+                a: 1.0,
+            }),
+            BoxStyle {
+                flex_direction: Some(taffy::FlexDirection::Column),
+                justify_content: Some(taffy::JustifyContent::Center),
+                align_items: Some(taffy::AlignItems::Center),
+                flex_grow: Some(1.0),
+                margin: Some(BoxMargin(wintf::ecs::layout::Rect {
+                    left: LengthPercentageAuto::Px(15.0),
+                    right: LengthPercentageAuto::Px(15.0),
+                    top: LengthPercentageAuto::Px(15.0),
+                    bottom: LengthPercentageAuto::Px(15.0),
+                })),
+                ..Default::default()
+            },
+            ChildOf(parent),
+        ))
+        .id();
 
-    let format = factory.create_text_format(
-        w!("Candara"),
-        None,
-        DWRITE_FONT_WEIGHT_NORMAL,
-        DWRITE_FONT_STYLE_NORMAL,
-        DWRITE_FONT_STRETCH_NORMAL,
-        CARD_HEIGHT / 2.0,
-        w!("en"),
-    )?;
-
-    format.set_text_alignment(DWRITE_TEXT_ALIGNMENT_CENTER)?;
-    format.set_paragraph_alignment(DWRITE_PARAGRAPH_ALIGNMENT_CENTER)?;
-    Ok(format)
-}
-
-fn create_image() -> Result<IWICFormatConverter> {
-    let factory = wic_factory()?;
-    let path = if Path::new("dcomp_demo.jpg").exists() {
-        h!("dcomp_demo.jpg")
-    } else {
-        h!("crates/wintf/examples/dcomp_demo.jpg")
-    };
-    let decoder = factory.create_decoder_from_filename(
-        path,
-        None,
-        GENERIC_READ,
-        WICDecodeMetadataCacheOnDemand,
-    )?;
-    let source = decoder.frame(0)?;
-    let image = factory.create_format_converter()?;
-    image.init(
-        &source,
-        &GUID_WICPixelFormat32bppBGR,
-        WICBitmapDitherTypeNone,
-        None,
-        0.0,
-        WICBitmapPaletteTypeMedianCut,
-    )?;
-    Ok(image)
-}
-
-fn create_device_3d() -> Result<ID3D11Device> {
-    d3d11_create_device(
-        None,
-        D3D_DRIVER_TYPE_HARDWARE,
-        HMODULE::default(),
-        D3D11_CREATE_DEVICE_BGRA_SUPPORT,
-        None,
-        D3D11_SDK_VERSION,
-        None,
-        None,
-    )
-}
-
-fn add_show_transition(
-    library: &IUIAnimationTransitionLibrary2,
-    storyboard: &IUIAnimationStoryboard2,
-    card: &Card,
-) -> Result<UI_ANIMATION_KEYFRAME> {
-    let duration = (180.0 - card.variable.get_value()?) / 180.0;
-    let transition = create_transition(library, duration, 180.0)?;
-    storyboard.add_transition(&card.variable, &transition)?;
-    storyboard.add_keyframe_after_transition(&transition)
-}
-
-fn add_hide_transition(
-    library: &IUIAnimationTransitionLibrary2,
-    storyboard: &IUIAnimationStoryboard2,
-    key_frame: UI_ANIMATION_KEYFRAME,
-    final_value: f64,
-    card: &Card,
-) -> Result<()> {
-    let transition = create_transition(library, 1.0, final_value)?;
-    storyboard.add_transition_at_keyframe(&card.variable, &transition, key_frame)
-}
-
-fn update_animation(dcomp: &IDCompositionDevice3, card: &Card) -> Result<()> {
-    // 1. 空の DirectComposition アニメーションを作成
-    let animation = dcomp.create_animation()?;
-
-    // 2. UI Animation 変数のカーブを DComp アニメーションへコピー
-    card.variable.get_curve(&animation)?;
-
-    // 3. 回転トランスフォームの Angle にセット（以後 DComp 側で自動進行）
-    card.rotation
-        .as_ref()
-        .expect("IDCompositionRotateTransform3D")
-        .set_angle_animation(&animation)
-}
-
-fn create_transition(
-    library: &IUIAnimationTransitionLibrary2,
-    duration: f64,
-    final_value: f64,
-) -> Result<IUIAnimationTransition2> {
-    library.create_accelerate_decelerate_transition(duration, final_value, 0.2, 0.8)
-}
-
-fn create_effect(
-    dcomp: &IDCompositionDevice3,
-    visual: &IDCompositionVisual3,
-    rotation: &IDCompositionRotateTransform3D,
-    front: bool,
-    dpi: f32,
-) -> Result<()> {
-    let scale = dpi / 96.0;
-    let width = CARD_WIDTH * scale;
-    let height = CARD_HEIGHT * scale;
-
-    let pre_matrix = Matrix4x4::translation(-width / 2.0, -height / 2.0, 0.0)
-        * Matrix4x4::rotation_y(if front { 180.0 } else { 0.0 });
-
-    let pre_transform = dcomp.create_matrix_transform_3d()?;
-    pre_transform.set_matrix(&pre_matrix)?;
-
-    let post_matrix = Matrix4x4::perspective_projection(width * 2.0)
-        * Matrix4x4::translation(width / 2.0, height / 2.0, 0.0);
-
-    let post_transform = dcomp.create_matrix_transform_3d()?;
-    post_transform.set_matrix(&post_matrix)?;
-
-    let transform = dcomp.create_transform_3d_group(&[
-        pre_transform.cast().ok(),
-        rotation.cast().ok(),
-        post_transform.cast().ok(),
-    ])?;
-
-    visual.set_effect(&transform)
-}
-
-fn draw_card_front(
-    surface: &IDCompositionSurface,
-    value: u8,
-    format: &IDWriteTextFormat,
-    brush: &ID2D1SolidColorBrush,
-    dpi: f32,
-) -> Result<()> {
-    let (dc, dc_offset) = surface.begin_draw(None)?;
-    unsafe { dc.SetDpi(dpi, dpi) };
-    let scale = dpi / 96.0;
-    let dc_offset = Vector2 {
-        X: dc_offset.x as f32 / scale,
-        Y: dc_offset.y as f32 / scale,
-    };
-    dc.set_transform(&Matrix3x2::translation(dc_offset.X, dc_offset.Y));
-
-    dc.clear(Some(&D2D1_COLOR_F {
-        r: 1.0,
-        g: 1.0,
-        b: 1.0,
-        a: 1.0,
-    }));
-
-    let string = HSTRING::from_wide(&[value as _]);
-    dc.draw_text(
-        &string,
-        format,
-        &D2D_RECT_F {
-            left: 0.0,
-            top: 0.0,
-            right: CARD_WIDTH,
-            bottom: CARD_HEIGHT,
+    world.spawn((
+        Name::new(format!("CardLabel-{row}-{column}")),
+        Label {
+            text: "?".to_string(),
+            font_family: "Candara".to_string(),
+            font_size: 64.0,
+            ..Default::default()
         },
-        brush,
-        D2D1_DRAW_TEXT_OPTIONS_NONE,
-        DWRITE_MEASURING_MODE_NATURAL,
-    );
-
-    surface.end_draw()
-}
-
-fn draw_card_back(
-    surface: &IDCompositionSurface,
-    bitmap: &ID2D1Bitmap1,
-    offset: Vector2,
-    dpi: f32,
-) -> Result<()> {
-    let (dc, dc_offset) = surface.begin_draw(None)?;
-    let dc: ID2D1DeviceContext7 = dc.cast()?;
-    unsafe { dc.SetDpi(dpi, dpi) };
-    let scale = dpi / 96.0;
-    let dc_offset = Vector2 {
-        X: dc_offset.x as f32 / scale,
-        Y: dc_offset.y as f32 / scale,
-    };
-    dc.set_transform(&Matrix3x2::translation(dc_offset.X, dc_offset.Y));
-
-    let offset = Vector2 {
-        X: offset.X / scale,
-        Y: offset.Y / scale,
-    };
-    let left = offset.X;
-    let top = offset.Y;
-
-    dc.draw_bitmap(
-        bitmap,
-        None,
-        1.0,
-        D2D1_INTERPOLATION_MODE_LINEAR,
-        Some(&D2D_RECT_F {
-            left,
-            top,
-            right: left + CARD_WIDTH,
-            bottom: top + CARD_HEIGHT,
+        Brushes::with_foreground(D2D1_COLOR_F {
+            r: 1.0,
+            g: 1.0,
+            b: 1.0,
+            a: 1.0,
         }),
-        None,
-    );
-
-    surface.end_draw()
+        BoxStyle {
+            size: Some(BoxSize {
+                width: None,
+                height: Some(Dimension::Px(80.0)),
+            }),
+            ..Default::default()
+        },
+        ChildOf(card),
+    ));
 }

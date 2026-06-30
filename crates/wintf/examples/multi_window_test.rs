@@ -11,7 +11,7 @@ fn main() -> Result<()> {
 
     human_panic::setup_panic!();
 
-    let mgr = WinThreadMgr::new()?;
+    let mgr = WinApp::new()?;
     let world = mgr.world();
 
     // 3つのウィンドウを作成

@@ -4,8 +4,14 @@
 
 #![allow(non_snake_case)]
 
+use std::cell::RefCell;
+use std::rc::Rc;
+
+use bevy_ecs::prelude::Entity;
 use tracing::{debug, info, trace};
 use windows::Win32::Foundation::*;
+
+use crate::ecs::world::EcsWorld;
 
 /// メッセージハンドラの戻り値型
 type HandlerResult = Option<LRESULT>;
@@ -16,6 +22,8 @@ type HandlerResult = Option<LRESULT>;
 /// PointerState がない場合は付与する。
 #[inline]
 fn handle_button_message(
+    world: &Rc<RefCell<EcsWorld>>,
+    window_entity: Entity,
     hwnd: HWND,
     wparam: WPARAM,
     lparam: LPARAM,
@@ -24,10 +32,6 @@ fn handle_button_message(
 ) -> HandlerResult {
     use crate::ecs::layout::hit_test::{PhysicalPoint as HitTestPoint, hit_test_in_window};
     use crate::ecs::pointer::{PhysicalPoint, PointerState};
-
-    let Some(window_entity) = super::get_entity_from_hwnd(hwnd) else {
-        return None;
-    };
 
     // クリック位置を取得
     let x = (lparam.0 & 0xFFFF) as i16 as i32;
@@ -47,17 +51,13 @@ fn handle_button_message(
     let ctrl = (wparam_val & 0x08) != 0;
 
     // スクリーン座標を事前計算（フォールバック処理でも使用）
-    let (screen_x, screen_y) = if let Some(world) = super::try_get_ecs_world() {
-        if let Ok(world_borrow) = world.try_borrow() {
-            let window_pos = world_borrow
-                .world()
-                .get::<crate::ecs::window::WindowPos>(window_entity);
-            if let Some(wp) = window_pos {
-                if let Some(pos) = wp.position {
-                    (x + pos.x, y + pos.y)
-                } else {
-                    (x, y)
-                }
+    let (screen_x, screen_y) = if let Ok(world_borrow) = world.try_borrow() {
+        let window_pos = world_borrow
+            .world()
+            .get::<crate::ecs::window::WindowPos>(window_entity);
+        if let Some(wp) = window_pos {
+            if let Some(pos) = wp.position {
+                (x + pos.x, y + pos.y)
             } else {
                 (x, y)
             }
@@ -69,7 +69,7 @@ fn handle_button_message(
     };
 
     // hit_test でターゲットエンティティを特定し、PointerState を確保
-    if let Some(world) = super::try_get_ecs_world() {
+    {
         if let Ok(mut world_borrow) = world.try_borrow_mut() {
             if let Some(target_entity) = hit_test_in_window(
                 world_borrow.world(),
@@ -242,13 +242,9 @@ fn handle_button_message(
                 } => *drag_hwnd == hwnd,
                 crate::ecs::drag::DragStateSnapshot::Preparing { entity, .. }
                 | crate::ecs::drag::DragStateSnapshot::JustStarted { entity, .. } => {
-                    if let Some(world) = super::try_get_ecs_world() {
-                        if let Ok(world_borrow) = world.try_borrow() {
-                            crate::ecs::window::find_owner_window(world_borrow.world(), *entity)
-                                == Some(window_entity)
-                        } else {
-                            false
-                        }
+                    if let Ok(world_borrow) = world.try_borrow() {
+                        crate::ecs::window::find_owner_window(world_borrow.world(), *entity)
+                            == Some(window_entity)
                     } else {
                         false
                     }
@@ -257,7 +253,7 @@ fn handle_button_message(
             };
 
             if should_end {
-                if let Some(world) = super::try_get_ecs_world() {
+                {
                     if let Ok(world_borrow) = world.try_borrow() {
                         if let crate::ecs::drag::DragStateSnapshot::Dragging { entity, .. }
                         | crate::ecs::drag::DragStateSnapshot::Preparing { entity, .. }
@@ -299,12 +295,15 @@ fn handle_button_message(
 /// WM_LBUTTONDOWN: 左ボタン押下
 #[inline]
 pub(super) fn WM_LBUTTONDOWN(
+    world: &Rc<RefCell<EcsWorld>>,
+    entity: Entity,
     hwnd: HWND,
-    _message: u32,
     wparam: WPARAM,
     lparam: LPARAM,
 ) -> HandlerResult {
     handle_button_message(
+        world,
+        entity,
         hwnd,
         wparam,
         lparam,
@@ -316,12 +315,15 @@ pub(super) fn WM_LBUTTONDOWN(
 /// WM_LBUTTONUP: 左ボタン解放
 #[inline]
 pub(super) fn WM_LBUTTONUP(
+    world: &Rc<RefCell<EcsWorld>>,
+    entity: Entity,
     hwnd: HWND,
-    _message: u32,
     wparam: WPARAM,
     lparam: LPARAM,
 ) -> HandlerResult {
     handle_button_message(
+        world,
+        entity,
         hwnd,
         wparam,
         lparam,
@@ -333,12 +335,15 @@ pub(super) fn WM_LBUTTONUP(
 /// WM_RBUTTONDOWN: 右ボタン押下
 #[inline]
 pub(super) fn WM_RBUTTONDOWN(
+    world: &Rc<RefCell<EcsWorld>>,
+    entity: Entity,
     hwnd: HWND,
-    _message: u32,
     wparam: WPARAM,
     lparam: LPARAM,
 ) -> HandlerResult {
     handle_button_message(
+        world,
+        entity,
         hwnd,
         wparam,
         lparam,
@@ -350,12 +355,15 @@ pub(super) fn WM_RBUTTONDOWN(
 /// WM_RBUTTONUP: 右ボタン解放
 #[inline]
 pub(super) fn WM_RBUTTONUP(
+    world: &Rc<RefCell<EcsWorld>>,
+    entity: Entity,
     hwnd: HWND,
-    _message: u32,
     wparam: WPARAM,
     lparam: LPARAM,
 ) -> HandlerResult {
     handle_button_message(
+        world,
+        entity,
         hwnd,
         wparam,
         lparam,
@@ -367,12 +375,15 @@ pub(super) fn WM_RBUTTONUP(
 /// WM_MBUTTONDOWN: 中ボタン押下
 #[inline]
 pub(super) fn WM_MBUTTONDOWN(
+    world: &Rc<RefCell<EcsWorld>>,
+    entity: Entity,
     hwnd: HWND,
-    _message: u32,
     wparam: WPARAM,
     lparam: LPARAM,
 ) -> HandlerResult {
     handle_button_message(
+        world,
+        entity,
         hwnd,
         wparam,
         lparam,
@@ -384,12 +395,15 @@ pub(super) fn WM_MBUTTONDOWN(
 /// WM_MBUTTONUP: 中ボタン解放
 #[inline]
 pub(super) fn WM_MBUTTONUP(
+    world: &Rc<RefCell<EcsWorld>>,
+    entity: Entity,
     hwnd: HWND,
-    _message: u32,
     wparam: WPARAM,
     lparam: LPARAM,
 ) -> HandlerResult {
     handle_button_message(
+        world,
+        entity,
         hwnd,
         wparam,
         lparam,
@@ -401,8 +415,9 @@ pub(super) fn WM_MBUTTONUP(
 /// WM_XBUTTONDOWN: 拡張ボタン押下
 #[inline]
 pub(super) fn WM_XBUTTONDOWN(
+    world: &Rc<RefCell<EcsWorld>>,
+    entity: Entity,
     hwnd: HWND,
-    _message: u32,
     wparam: WPARAM,
     lparam: LPARAM,
 ) -> HandlerResult {
@@ -413,14 +428,15 @@ pub(super) fn WM_XBUTTONDOWN(
     } else {
         crate::ecs::pointer::PointerButton::XButton2
     };
-    handle_button_message(hwnd, wparam, lparam, button, true)
+    handle_button_message(world, entity, hwnd, wparam, lparam, button, true)
 }
 
 /// WM_XBUTTONUP: 拡張ボタン解放
 #[inline]
 pub(super) fn WM_XBUTTONUP(
+    world: &Rc<RefCell<EcsWorld>>,
+    entity: Entity,
     hwnd: HWND,
-    _message: u32,
     wparam: WPARAM,
     lparam: LPARAM,
 ) -> HandlerResult {
@@ -430,7 +446,7 @@ pub(super) fn WM_XBUTTONUP(
     } else {
         crate::ecs::pointer::PointerButton::XButton2
     };
-    handle_button_message(hwnd, wparam, lparam, button, false)
+    handle_button_message(world, entity, hwnd, wparam, lparam, button, false)
 }
 
 /// target_entity自身または祖先（ChildOf辿り）からDragConfigを持つエンティティを探す。

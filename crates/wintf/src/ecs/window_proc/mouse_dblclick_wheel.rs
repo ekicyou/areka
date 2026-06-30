@@ -4,8 +4,14 @@
 
 #![allow(non_snake_case)]
 
+use std::cell::RefCell;
+use std::rc::Rc;
+
+use bevy_ecs::prelude::Entity;
 use tracing::debug;
 use windows::Win32::Foundation::*;
+
+use crate::ecs::world::EcsWorld;
 
 /// メッセージハンドラの戻り値型
 type HandlerResult = Option<LRESULT>;
@@ -24,17 +30,15 @@ type HandlerResult = Option<LRESULT>;
 /// - `lparam`: クリック座標（クライアント座標）
 /// - `double_click`: ダブルクリック種別
 fn handle_double_click_message(
-    hwnd: HWND,
+    world: &Rc<RefCell<EcsWorld>>,
+    window_entity: Entity,
+    _hwnd: HWND,
     wparam: WPARAM,
     lparam: LPARAM,
     double_click: crate::ecs::pointer::DoubleClick,
 ) -> HandlerResult {
     use crate::ecs::layout::hit_test::{PhysicalPoint as HitTestPoint, hit_test_in_window};
     use crate::ecs::pointer::{PhysicalPoint, PointerState};
-
-    let Some(window_entity) = super::get_entity_from_hwnd(hwnd) else {
-        return None;
-    };
 
     // クリック位置を取得
     let x = (lparam.0 & 0xFFFF) as i16 as i32;
@@ -56,7 +60,7 @@ fn handle_double_click_message(
     };
 
     // hit_test でターゲットエンティティを特定し、PointerState を確保
-    if let Some(world) = super::try_get_ecs_world() {
+    {
         if let Ok(mut world_borrow) = world.try_borrow_mut() {
             if let Some(target_entity) = hit_test_in_window(
                 world_borrow.world(),
@@ -126,23 +130,34 @@ fn handle_double_click_message(
 /// WM_LBUTTONDBLCLK: 左ボタンダブルクリック
 #[inline]
 pub(super) fn WM_LBUTTONDBLCLK(
+    world: &Rc<RefCell<EcsWorld>>,
+    entity: Entity,
     hwnd: HWND,
-    _message: u32,
     wparam: WPARAM,
     lparam: LPARAM,
 ) -> HandlerResult {
-    handle_double_click_message(hwnd, wparam, lparam, crate::ecs::pointer::DoubleClick::Left)
+    handle_double_click_message(
+        world,
+        entity,
+        hwnd,
+        wparam,
+        lparam,
+        crate::ecs::pointer::DoubleClick::Left,
+    )
 }
 
 /// WM_RBUTTONDBLCLK: 右ボタンダブルクリック
 #[inline]
 pub(super) fn WM_RBUTTONDBLCLK(
+    world: &Rc<RefCell<EcsWorld>>,
+    entity: Entity,
     hwnd: HWND,
-    _message: u32,
     wparam: WPARAM,
     lparam: LPARAM,
 ) -> HandlerResult {
     handle_double_click_message(
+        world,
+        entity,
         hwnd,
         wparam,
         lparam,
@@ -153,12 +168,15 @@ pub(super) fn WM_RBUTTONDBLCLK(
 /// WM_MBUTTONDBLCLK: 中ボタンダブルクリック
 #[inline]
 pub(super) fn WM_MBUTTONDBLCLK(
+    world: &Rc<RefCell<EcsWorld>>,
+    entity: Entity,
     hwnd: HWND,
-    _message: u32,
     wparam: WPARAM,
     lparam: LPARAM,
 ) -> HandlerResult {
     handle_double_click_message(
+        world,
+        entity,
         hwnd,
         wparam,
         lparam,
@@ -169,8 +187,9 @@ pub(super) fn WM_MBUTTONDBLCLK(
 /// WM_XBUTTONDBLCLK: 拡張ボタンダブルクリック
 #[inline]
 pub(super) fn WM_XBUTTONDBLCLK(
+    world: &Rc<RefCell<EcsWorld>>,
+    entity: Entity,
     hwnd: HWND,
-    _message: u32,
     wparam: WPARAM,
     lparam: LPARAM,
 ) -> HandlerResult {
@@ -180,21 +199,18 @@ pub(super) fn WM_XBUTTONDBLCLK(
     } else {
         crate::ecs::pointer::DoubleClick::XButton2
     };
-    handle_double_click_message(hwnd, wparam, lparam, double_click)
+    handle_double_click_message(world, entity, hwnd, wparam, lparam, double_click)
 }
 
 /// WM_MOUSEWHEEL: 垂直ホイール回転
 #[inline]
 pub(super) fn WM_MOUSEWHEEL(
-    hwnd: HWND,
-    _message: u32,
+    _world: &Rc<RefCell<EcsWorld>>,
+    entity: Entity,
+    _hwnd: HWND,
     wparam: WPARAM,
     _lparam: LPARAM,
 ) -> HandlerResult {
-    let Some(entity) = super::get_entity_from_hwnd(hwnd) else {
-        return None;
-    };
-
     // GET_WHEEL_DELTA_WPARAM: HIWORD of wParam (signed)
     let delta = ((wparam.0 >> 16) & 0xFFFF) as i16;
     crate::ecs::pointer::add_wheel_vertical(entity, delta);
@@ -205,15 +221,12 @@ pub(super) fn WM_MOUSEWHEEL(
 /// WM_MOUSEHWHEEL: 水平ホイール回転
 #[inline]
 pub(super) fn WM_MOUSEHWHEEL(
-    hwnd: HWND,
-    _message: u32,
+    _world: &Rc<RefCell<EcsWorld>>,
+    entity: Entity,
+    _hwnd: HWND,
     wparam: WPARAM,
     _lparam: LPARAM,
 ) -> HandlerResult {
-    let Some(entity) = super::get_entity_from_hwnd(hwnd) else {
-        return None;
-    };
-
     let delta = ((wparam.0 >> 16) & 0xFFFF) as i16;
     crate::ecs::pointer::add_wheel_horizontal(entity, delta);
 

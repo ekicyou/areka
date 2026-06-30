@@ -11,4 +11,12 @@ publish = false
 
 # [dependencies] は空（最小依存）。先進坑が依存を要する場合のみ最小限追加し、
 # 葉ノード隔離（inbound ゼロ）と 32bit 可搬性を崩さないこと。
+#
+# 先進坑 wintf-winmsg-executor 用の探索依存（使い捨て前提）。
 [dependencies]
+# 0.0.5: クラス登録に CS_DBLCLKS ＋ 既定カーソルを内蔵（フォーク上流で修正）。
+# 本坑 wintf 置換ではこの版を pin し、wintf 側の DblClkClassFixup を撤去する。
+wintf-winmsg-executor = "0.0.5"
+event-listener = "5"
+windows = { workspace = true }
+windows-core = { workspace = true }

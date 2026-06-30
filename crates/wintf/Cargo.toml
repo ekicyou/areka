@@ -16,8 +16,8 @@ serde = ["dep:serde"]
 
 [dependencies]
 ambassador ={ workspace = true }
-async-executor = { workspace = true }
-async-task = { workspace = true }
+event-listener = { workspace = true }
+wintf-winmsg-executor = { workspace = true }
 bevy_app = { workspace = true }
 bevy_ecs = { workspace = true }
 bevy_tasks = { workspace = true }
