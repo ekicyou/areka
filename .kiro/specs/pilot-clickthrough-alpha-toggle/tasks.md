@@ -86,7 +86,7 @@
   - _Depends: 3.3, 4.1, 4.2_
 
 - [ ] 6. Validation: 一次記録と手動検証
-- [ ] 6.1 (P) REPORT.md テンプレートと README 3 幕の整備
+- [x] 6.1 (P) REPORT.md テンプレートと README 3 幕の整備
   - `REPORT.md` を design 定義のフォーマットで作成する（検証日／実行コマンド／環境、T1〜T8 合否・証跡台帳、必須合格基準 T1・T2・T3・T4・T6 の充足欄、人間が記入する総合判定 go／違う／直す＋理由・学び）
   - `README.md` を 3 幕で整える（動機＝対応本坑 `wintf-clickthrough-alpha-toggle` を名指し、概要＝実行法 `cargo run -p pilot --example pilot-clickthrough-alpha-toggle`、検証結果＝判定欄）
   - 観測: `REPORT.md` と `README.md` が所定フォーマットで存在し、T1〜T8 の空台帳と実行コマンドが揃っている
