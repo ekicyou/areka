@@ -128,11 +128,30 @@ _本書は kiro-validate-gap が生成したギャップ分析（情報提供・
 - **Selected**: 窓を初期 ex_style=`WS_EX_TRANSPARENT|WS_EX_TOPMOST`（クリックスルー ON）で生成。UI 側 `applied` 初期値も ON に一致。ワーカ初回判定は `last`=未確定とし初回のみ無条件に desired 確定＋notify。
 - **Rationale**: 「起動時にカーソルが円内」でも初回 1 回だけ正しく OFF へ適用、以降は変化時のみ。初期生成状態（ON）とカーソルが実際に円外なら applied 一致で API 呼出ゼロ。「変化時のみ API 呼出」と「起動時の正しい初期状態保証」を両立。
 
+### Decision 5: 視覚的透過の実現機構（R2.2/R2.3 を確定・設計再実行で解決）
+
+- **Context**: 旧 design.md は「透過の見え方（全域透明＋円のみ可視）は実機確認が要る」と視覚的透過機構を runtime 観測に先送りしていた。これは「どの Win32 API で視覚透過を達成するか」という設計判断を runtime に punt した欠陥。本 pilot の検証対象は `WS_EX_TRANSPARENT` 動的トグルゆえ、視覚機構自体が透明領域でクリックを透過させてはならない（さもないとトグル検証が汚染され pilot が無意味になる）。
+- **Alternatives と棄却理由**:
+  - (a) `WS_EX_LAYERED` + `SetLayeredWindowAttributes(LWA_COLORKEY)`: カラーキー透明ピクセルが**自動でクリック透過**しトグル検証を汚染。さらに `WS_EX_LAYERED` 付与が必要で R2.3（layered 不付与）違反。**棄却**。
+  - (b) `SetWindowRgn` で円クリップ: クリップ除外領域がリージョン経由で**クリック透過**しトグルを汚染。任意ピクセル単位αマスク（本来用途）も表現不能。**棄却**。
+  - (c) **DWM extend-frame glass**（`DwmExtendFrameIntoClientArea(hwnd, &MARGINS{ -1,-1,-1,-1 })`）: 非 layered・redirected 窓に sheet-of-glass を適用。GPU（DWM）合成で視覚透過。クライアントは黒で塗った領域がガラス（背面透過）として抜け、不透明円は黒以外の単色で可視。
+- **Selected**: (c) DWM extend-frame glass。
+- **Rationale**: DWM ガラス透過は**純粋に視覚効果**であり窓は全矩形でヒットテストされ続ける。よってクリック透過は `WS_EX_TRANSPARENT` トグル単独で制御され、視覚機構が検証対象を汚染しない。これは本坑が採る DirectComposition シナリオ（DComp も視覚αを与えつつヒットテストは全矩形・トグルで制御）を忠実に写し、`tech.md`「DComp 描画を捨てられない」前提と「`WS_EX_LAYERED` 不付与」制約の双方と整合する。
+- **依存**: `DwmExtendFrameIntoClientArea` ＝ `windows::Win32::Graphics::Dwm`（feature `Win32_Graphics_Dwm`・workspace 有効済み）、`MARGINS` ＝ `windows::Win32::UI::Controls`（feature `Win32_UI_Controls`・workspace 有効済み）。**新規依存・新規 feature 不要**（workspace Cargo.toml line 66/77 で確認）。
+- **GDI 注意点（既知・軽微）**: GDI はαを書かないため「背景＝黒（→透過）／不透明円＝黒以外の単色（→可視）」の塗り分け規約を用いる。円縁の軽微なエッジ・アーティファクトは先進坑（品質緩和・R1.5）で許容。実機で初めて判明する不確実点ではない。
+- **核心 Unknown との分離**: 視覚的透過は本決定で確定済み。残る実機 Unknown は `WS_EX_TRANSPARENT` 単独でのプロセス越え**クリック**透過の成否（§3.5・T2/T6）のみ。DWM ガラスはヒットテストに無影響ゆえこの核心 Unknown の純度を保つ。
+
 ### Synthesis 結論
 - **Build-vs-adopt**: 全インフラ（窓生成・wndproc・block_on/spawn_local・event_listener 起床・AtomicBool done・GDI 描画）は既存 example から adopt。新規 build は αマスク純関数 1 個と状態差分トグルのみ＝新規概念ほぼゼロ（§4 Option A・§5 工数 S を追認）。
 - **Simplification**: 単一 `main.rs` 集約（先進坑ゆえファイル分割せず・要件 5.4 品質緩和）。production・pilot/lib.rs・pilot/Cargo.toml への変更ゼロ（依存追加なし）。
-- **残置 Unknown（設計で潰せない）**: `WS_EX_TRANSPARENT` 単独のプロセス越え透過の成否（§3.5・T2/T6）＝go ゲート本体・実機検証専用。
+- **視覚的透過機構（Decision 5）**: DWM extend-frame glass を adopt（プラットフォーム native 機構）。layered/colorkey/region は検証汚染ゆえ build/adopt いずれも棄却。新規依存ゼロ。
+- **残置 Unknown（設計で潰せない）**: `WS_EX_TRANSPARENT` 単独のプロセス越え**クリック**透過の成否（§3.5・T2/T6）＝go ゲート本体・実機検証専用。視覚的透過は Decision 5 で確定済みゆえ Unknown から除外。
 
 ### 設計レビューゲート結果
 - Mechanical: 全 numeric requirement ID（R1〜R10 の全 .M）が traceability 表＋コンポーネントブロックに出現／Boundary 4 節 populated／File Structure 具体パス／orphan component なし／boundary↔file 整合（examples-only）。**PASS**。
 - Judgment: 責務境界明示・契約具体（rust シグネチャ・state model・Ordering）・§3 持ち越し 4 論点すべて確定・spec gap なし。**修復パス 0 回で PASS**。
+
+### 設計再実行（merge mode・視覚的透過機構の確定）
+- **トリガ**: 実装中に判明した設計欠陥＝旧 design.md/design-validation.md が視覚的透過機構を runtime 観測に先送り（「透過の見え方は実機確認が要る」を Risks に記載）。これは「どの Win32 API で視覚透過を達成するか」という設計判断の punt であり欠陥。
+- **解決**: Decision 5（DWM extend-frame glass）で確定。design.md に「視覚的透過方式」節を新設し、TransparentWindow コンポーネント・Technology Stack・Allowed Dependencies・File Structure・Traceability(R2)・Open Questions を merge 更新。旧 Risks の視覚透過先送り項目を除去（核心 Unknown＝クリック透過は維持）。
+- **再レビューゲート**: Mechanical 全 ID 維持・boundary/file/orphan 健全＝**PASS**。Judgment 視覚透過機構決定済み・棄却代替明記・核心 Unknown 純度維持・spec gap なし＝**修復パス 0 回で PASS**。

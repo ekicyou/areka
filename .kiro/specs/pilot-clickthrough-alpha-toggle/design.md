@@ -12,6 +12,7 @@
 
 ### Goals
 - `WS_EX_LAYERED` 無し・`WS_EX_TRANSPARENT` 単独で別プロセス透過が成立するかを実機で検証可能な最小検証台を提供する（R2, R5）。
+- 視覚的透過は **DWM extend-frame glass（`DwmExtendFrameIntoClientArea`・margins = -1）** で実現し、当たり判定（クリック透過）を **`WS_EX_TRANSPARENT` 動的トグル単独**に委ねることで、視覚機構がトグル検証を汚染しない検証台を成立させる（R2.2/R2.3）。
 - カーソル位置に応じてクリックスルー ON/OFF を自動切替し、状態変化フレームでのみ拡張スタイル API を呼ぶ（R3, R5）。
 - 描画円とαマスク判定円を実スクリーン物理座標で一致させ、高 DPI・マルチモニタでも見た目と判定が一致する（R4, R7）。
 - T1〜T8 の手動検証手順と一次記録（`REPORT.md` ＋ README 3 幕）を確立する（R9）。
@@ -42,7 +43,7 @@
 ### Allowed Dependencies
 - `wintf-winmsg-executor = "0.0.5"`（UI スレッド基盤・crates.io・既存整備済み）。
 - `event-listener = "5"`、`windows = { workspace = true }`、`windows-core = { workspace = true }`。
-- workspace の `windows` features（`Win32_UI_WindowsAndMessaging`・`Win32_UI_HiDpi`・`Win32_Graphics_Gdi`・`Win32_Foundation`・`Win32_System_Threading`）はすべて有効済み。
+- workspace の `windows` features（`Win32_UI_WindowsAndMessaging`・`Win32_UI_HiDpi`・`Win32_Graphics_Gdi`・`Win32_Foundation`・`Win32_System_Threading`・`Win32_Graphics_Dwm`・`Win32_UI_Controls`）はすべて有効済み。
 - **制約**: 新規依存追加禁止。他クレートからの inbound 依存（`pilot = { path = ... }`）禁止。tokio 禁止。32bit 可搬性を崩さない。
 
 ### Revalidation Triggers
@@ -61,7 +62,7 @@
 - **wndproc クロージャ**: `move |state: Pin<&S>, msg: WindowMessage| -> Option<LRESULT>`。`WM_LBUTTONDOWN`/`WM_PAINT`/`WM_ERASEBKGND` をクロージャ内で完結処理。`None` 返却で `DefWindowProc` フォールバック。`GWLP_USERDATA` 手詰め不要。`WM_NCHITTEST` は分岐に書かない（＝自前ハンドルしない・R2.4）。
 - **メッセージループ**: `block_on(async { .. })` 駆動、`spawn_local` で UI スレッド async タスク。
 - **クロススレッド起床**: `Arc<event_listener::Event>` をワーカ `std::thread` から `notify`、UI 側 async で `event.listen(); listener.await;`（tokio 非依存・R3.3/R10.2）。`AtomicBool` done フラグでワーカ正常終了（R8.2）。
-- **描画**: GDI（`BeginPaint`/`FillRect`/`CreateSolidBrush`）。redirected 窓（ex_style に `WS_EX_NOREDIRECTIONBITMAP` を付けない）なら GDI が画面に出る。
+- **描画**: GDI（`BeginPaint`/`FillRect`/`CreateSolidBrush`/`Ellipse`）。redirected 窓（ex_style に `WS_EX_NOREDIRECTIONBITMAP` を付けない）なら GDI が画面に出る。視覚的透過は後述の DWM extend-frame glass で実現し、GDI が黒で塗った領域がガラス（背面透過）として抜ける。
 
 維持すべき既存パターン: state は UI スレッド内 `Rc`（`!Send` 許容）。本 pilot の差分は「別スレッドのカーソルワーカが UI スレッドへ望ましい状態を伝える」点のみ（後述の責務分離で HWND をスレッド跨ぎしない）。
 
@@ -99,6 +100,20 @@ graph TB
 - New components rationale: αマスク純関数（差替シーム R4）と状態差分トグル（R5 核心）だけが新規結線。
 - Steering compliance: 葉ノード隔離（two-tunnel.md 命綱）厳守。品質基準は緩めてよいが隔離は厳守（要件 5.4）。
 
+### 視覚的透過方式（決定済み・R2.2/R2.3）
+
+**採用機構: DWM extend-frame glass（`DwmExtendFrameIntoClientArea` ＋ `MARGINS { -1, -1, -1, -1 }`）**。非 layered・redirected なトップレベル窓に「sheet of glass」（margins = -1）を適用し、GPU 合成（DWM）でクライアント領域を視覚的に透過させる。クライアントは「透明にしたい領域を黒で塗る」と DWM ガラスが背面を透けさせ、不透明円は黒以外の単色で塗ると可視のまま残る。
+
+この機構の核心は **視覚的透過と当たり判定の完全分離**である。DWM ガラス透過は純粋に見た目だけの効果であり、窓は依然として全矩形でヒットテストされる。したがって**クリック透過（pass-through）は `WS_EX_TRANSPARENT` 動的トグル単独でのみ制御**され、視覚機構が本 pilot の検証対象（トグル）を汚染しない。これは本坑が採る DirectComposition シナリオ（DComp も視覚αを与えつつヒットテストは全矩形・トグルで制御）を忠実に写し、`tech.md` の「DComp 描画を捨てられない」前提と「`WS_EX_LAYERED` 不付与」制約の双方と整合する。
+
+**棄却した代替案（汚染ゆえ不適格）**:
+- `WS_EX_LAYERED` + `SetLayeredWindowAttributes(LWA_COLORKEY)`: カラーキー透明ピクセルが**自動でクリックを透過**してしまい、トグル単独制御という検証前提を崩す。加えて `WS_EX_LAYERED` の付与が必要で R2.3（layered 不付与）に違反。
+- `SetWindowRgn` による円クリップ: クリップ除外領域がリージョン経由で**クリックを透過**しトグルを汚染する。さらに任意のピクセル単位αマスク（本来の用途）を表現できない。
+
+**GDI のα注意点（既知・軽微・先進坑では許容）**: GDI はαを書き込まないため、ガラス上では「背景＝黒（→透過）／不透明円＝黒以外の単色（→可視）」の塗り分け規約を用いる。円縁にうっすらエッジ・アーティファクトが出ることがあるが、先進坑（品質基準緩和・R1.5）では許容する。これは既知・軽微・文書化済みの注意点であり、実機で初めて判明する不確実点ではない。
+
+**依存**: `DwmExtendFrameIntoClientArea` は `windows::Win32::Graphics::Dwm`（feature `Win32_Graphics_Dwm`・workspace 有効済み）。`MARGINS` は `windows::Win32::UI::Controls`（feature `Win32_UI_Controls`・workspace 有効済み）。**新規依存・新規 feature の追加は不要**。
+
 ### Technology Stack
 
 | Layer | Choice / Version | Role in Feature | Notes |
@@ -106,6 +121,7 @@ graph TB
 | UI スレッド基盤 | wintf-winmsg-executor 0.0.5 | Window 生成・wndproc・block_on/spawn_local | crates.io・既存整備済み |
 | 並行 / イベント | event-listener 5 ＋ std::thread | クロススレッド起床・ワーカスレッド | tokio 禁止（R10.2） |
 | Win32 バインディング | windows 0.62.2 系（workspace） | スタイル制御・カーソル・DPI・GDI 描画 | features 全有効・32bit 可搬 |
+| 視覚的透過 | DWM extend-frame glass（`DwmExtendFrameIntoClientArea`/`MARGINS`） | 非 layered での GPU 合成視覚透過（当たり判定は全矩形のまま） | `Win32_Graphics_Dwm`＋`Win32_UI_Controls` 有効済み・新規依存なし |
 | 言語 | Rust 2024 | 実装言語 | R10.1 |
 
 ## File Structure Plan
@@ -122,7 +138,7 @@ crates/pilot/examples/pilot-clickthrough-alpha-toggle/
 - DPI 初期化（`main` 冒頭で `SetProcessDpiAwarenessContext(PMv2)`）。
 - αマスク純関数 `alpha_is_opaque(cursor: POINT, win_rect: RECT) -> bool`（差替シーム R4）。
 - カーソル監視ワーカ（`std::thread`・16ms ループ・判定・`AtomicBool` 更新・変化時 notify）。
-- UI スレッド: `Window::new_ex` で透過トップモスト窓生成、wndproc クロージャ（`WM_PAINT` 円描画／`WM_LBUTTONDOWN` 受領＋色トグル＋ログ）、`spawn_local` 適用タスク（差分時のみスタイル適用＋ログ）。
+- UI スレッド: `Window::new_ex` で透過トップモスト窓生成 → 窓セットアップ時に `DwmExtendFrameIntoClientArea(hwnd, &MARGINS{ -1,-1,-1,-1 })` で全面ガラス化（視覚的透過）、wndproc クロージャ（`WM_PAINT`: 背景を黒で塗り＝透過／窓中心に不透明円を黒以外の単色で描画／`WM_LBUTTONDOWN` 受領＋色トグル＋ログ）、`spawn_local` 適用タスク（差分時のみスタイル適用＋ログ）。
 - 終了処理（窓 close → `done` セット → ワーカ join）。
 
 ### Created Files
@@ -190,7 +206,7 @@ PMv2 認識プロセスでは `GetCursorPos` も `GetWindowRect` も**仮想ス�
 | Requirement | Summary | Components | Flows |
 |-------------|---------|------------|-------|
 | 1.1–1.5 | 葉ノード隔離・知見一次成果・_template コピー | File Structure（examples 配下のみ・inbound ゼロ） | — |
-| 2.1–2.5 | 透過トップモスト窓・中央円・TRANSPARENT 単独・NCHITTEST 不介入 | TransparentWindow | 起動時初期状態 |
+| 2.1–2.5 | 透過トップモスト窓・中央円・TRANSPARENT 単独・NCHITTEST 不介入・視覚透過は DWM glass（layered 不付与） | TransparentWindow（DWM glass） | 起動時初期状態 |
 | 3.1–3.4 | 16ms 別スレッド・event_listener 起床・マスク問合せ | CursorWorker | 判定・適用フロー |
 | 4.1–4.4 | 円判定純関数・差替シーム・仮実装・物理座標 | AlphaMask | 座標手順 |
 | 5.1–5.5 | 円内 OFF／円外 ON・変化時のみ適用・非変化時非呼出・ログ | StateApplier | 判定・適用フロー |
@@ -208,7 +224,7 @@ PMv2 認識プロセスでは `GetCursorPos` も `GetWindowRect` も**仮想ス�
 | AlphaMask | 判定 | カーソルの円内/外を物理座標で判定する純関数 | 4.1–4.4, 7.2 | windows POINT/RECT (P0) | Service |
 | CursorWorker | 並行 | 16ms 周期で位置取得・判定・状態公開・変化時起床 | 3.1–3.4, 5.1/5.2 | AlphaMask (P0), event_listener (P0) | State, Event |
 | StateApplier | UI | desired と applied の差分時のみスタイル適用＋ログ | 5.3–5.5 | windows style API (P0), CursorWorker (P0) | State |
-| TransparentWindow | UI | 透過トップモスト窓生成・円描画・クリック受領 | 2.1–2.5, 6.1–6.3 | wintf-winmsg-executor (P0) | State |
+| TransparentWindow | UI | 透過トップモスト窓生成・DWM glass 視覚透過・円描画・クリック受領 | 2.1–2.5, 6.1–6.3 | wintf-winmsg-executor (P0), Dwm/MARGINS (P0) | State |
 | Lifecycle | 起動/終了 | 窓 close→done セット→ワーカ join | 8.1, 8.2 | AtomicBool done (P0) | State |
 
 ### 判定層
@@ -293,18 +309,20 @@ fn alpha_is_opaque(cursor: POINT, win_rect: RECT) -> bool;
 
 | Field | Detail |
 |-------|--------|
-| Intent | 透過トップモスト窓を生成し円を描画・不透明円のクリックを受領 |
+| Intent | 透過トップモスト窓を生成し（DWM glass で視覚透過）円を描画・不透明円のクリックを受領 |
 | Requirements | 2.1–2.5, 6.1, 6.2, 6.3 |
 
 **Responsibilities & Constraints**
 - `Window::new_ex(WindowType::TopLevel, WINDOW_EX_STYLE(WS_EX_TRANSPARENT | WS_EX_TOPMOST), state, wndproc)` で透過トップモスト窓を生成（R2.1）。
-- 全域透明・中央に不透明円を描画。描画円はαマスク判定円と同一領域（R2.2）。透過は `WS_EX_LAYERED` を付けず実現するか実機で検証（R2.3・後述リスク）。
+- 窓セットアップ時に `DwmExtendFrameIntoClientArea(hwnd, &MARGINS{ cxLeftWidth:-1, cxRightWidth:-1, cyTopHeight:-1, cyBottomHeight:-1 })` を呼び、DWM extend-frame glass で**視覚的透過を確定**する（R2.3・「視覚的透過方式」節）。`WS_EX_LAYERED` は付けない。視覚透過はガラス機構が担い、クリック透過は `WS_EX_TRANSPARENT` トグル単独が担う（責務分離）。
+- 全域透明・中央に不透明円を描画。描画円はαマスク判定円と同一領域（R2.2）。
 - `WM_NCHITTEST` を wndproc 分岐に書かない＝自前ハンドルしない（R2.4）。
-- `WM_PAINT` で窓中心に半径 200px の円を GDI（`CreateSolidBrush`＋`Ellipse` 等）で描画。色は state の現在色。
+- `WM_PAINT` で**背景を黒で塗り（＝DWM ガラスにより透過）**、窓中心に半径 200px の不透明円を GDI（`CreateSolidBrush`＋`Ellipse` 等）で**黒以外の単色**で描画（＝可視・色は state の現在色）。GDI はαを書かないため「黒＝透過／非黒＝可視」の塗り分け規約に従う（「視覚的透過方式」節）。
 - `WM_LBUTTONDOWN` を受領（R6.1）、ログ出力（R6.2）、円の色をトグル変更し `InvalidateRect` で再描画（R6.3）。
 
 **Dependencies**
 - External: wintf-winmsg-executor::util::Window — 窓生成と wndproc（P0）
+- External: windows Dwm::DwmExtendFrameIntoClientArea ＋ UI::Controls::MARGINS — 視覚的透過（P0）
 
 **Contracts**: State [x]
 
@@ -313,9 +331,9 @@ fn alpha_is_opaque(cursor: POINT, win_rect: RECT) -> bool;
 - Persistence: なし（実行時のみ）。
 
 **Implementation Notes**
-- Integration: state を `Pin<&Rc<AppState>>` で wndproc から安全アクセス（既存 example 準拠）。
-- Validation: `WS_EX_LAYERED` 不付与での別プロセス透過の成否は T2/T6 実機検証（核心 Unknown・research.md §3.5）。
-- Risks: redirected 窓で GDI を画面に出すため `WS_EX_NOREDIRECTIONBITMAP` は付けない。透過の見え方（全域透明＋円のみ可視）は実機確認が要る。
+- Integration: state を `Pin<&Rc<AppState>>` で wndproc から安全アクセス（既存 example 準拠）。視覚的透過は `DwmExtendFrameIntoClientArea`（margins = -1）で窓セットアップ時に確定（「視覚的透過方式」節・決定済み）。
+- Validation: `WS_EX_LAYERED` 不付与での**別プロセス・クリック透過**の成否は T2/T6 実機検証（核心 Unknown・research.md §3.5）。視覚的透過そのものは DWM ガラスで決定済みであり実機 Unknown ではない（DWM ガラスはヒットテストに影響しないため、トグル検証を汚染しない）。
+- Risks: redirected 窓で GDI を画面に出すため `WS_EX_NOREDIRECTIONBITMAP` は付けない。GDI のα非対応により円縁に軽微なエッジ・アーティファクトが出得るが先進坑では許容（既知・軽微）。
 
 #### Lifecycle
 
@@ -396,7 +414,7 @@ REPORT.md の構造（テンプレート）:
 
 ## Open Questions / Risks
 
-- **核心 Unknown（research.md §3.5）**: `WS_EX_LAYERED` 無し・`WS_EX_TRANSPARENT` 単独でプロセス境界を越えてクリックが背面別プロセスへ落ちるか。設計では潰せず T2/T6 実機検証が go ゲートの本体。実装中に挙動疑義があれば推測せず開発者へ質問（R10.4）。
+- **核心 Unknown（research.md §3.5）**: `WS_EX_LAYERED` 無し・`WS_EX_TRANSPARENT` 単独でプロセス境界を越えて**クリック**が背面別プロセスへ落ちるか。設計では潰せず T2/T6 実機検証が go ゲートの本体。実装中に挙動疑義があれば推測せず開発者へ質問（R10.4）。**注**: 視覚的透過の見え方は DWM extend-frame glass で決定済み（「視覚的透過方式」節）であり、もはや実機 Unknown ではない。DWM ガラスはヒットテストに影響しないため、この核心 Unknown（クリック透過）の純度を保つ。
 - **DPI 座標（research.md §3.2 解決済み・残課題は手順のみ）**: PMv2 で GetCursorPos と GetWindowRect が同一物理座標基準のため変換不要、と本設計は判断。万一実機で円の見た目と判定がずれる場合は per-monitor 補助（`MonitorFromPoint`/`GetDpiForMonitor`）を検討（T7）。
 - **境界チャタリング（design-validation 確認事項1）**: 円境界線上でカーソルを高速往復させると 16ms 周期で ON↔OFF が連発し得る。先進坑では検証手順（ゆっくり一度だけまたぐ）で回避し、ヒステリシス（不感帯）は実装しない（YAGNI）。本番要件として顕在化したら本坑で不感帯を導入する。
 - **不確実点は質問（R10.4）**: Win32 API/クレート仕様の不確実点に遭遇したら推測で進めず開発者に確認する。
