@@ -1,7 +1,7 @@
 # Implementation Plan
 
 - [ ] 1. Foundation: 既存実装の撤去と DComp 前提の最小起動骨組み
-- [ ] 1.1 既存実装コード（GDI 時代の main.rs 中身）の削除
+- [x] 1.1 既存実装コード（GDI 時代の main.rs 中身）の削除
   - `crates/pilot/examples/pilot-clickthrough-alpha-toggle/main.rs` から旧設計（GDI 描画前提）の実装を撤去する。具体的には `init_dpi_awareness`／`alpha_is_opaque`／`const RADIUS`／`#[cfg(test)] mod tests`／旧 `use` を削除し、プレースホルダ `fn main() {}` のみへ戻す
   - 旧 doc コメントの「2.2 の GDI 描画円」等 GDI 前提の記述も削除する（後続 1.2 で DComp 前提の骨組みを置き直す）
   - `README.md`（一次記録）は残す（整備は 6.1）。`REPORT.md` はまだ存在しない（6.1 で新規作成）ので触れない
