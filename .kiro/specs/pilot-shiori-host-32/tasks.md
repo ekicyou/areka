@@ -10,7 +10,7 @@
   - 探索コードは `examples/shiori-host-32/` のみに置き、production クレートへの inbound 依存を一切作らない（葉ノード隔離・空 lib＋examples-only を崩さない）
   - 観測: `cargo run -p pilot --example shiori-host-32`（x64）と `cargo build -p pilot --example shiori-host-32-helper --target i686-pc-windows-msvc`（i686・PowerShell）が**両方ビルド成功**する
   - _Requirements: 1.5, 7.1, 7.2, 7.3, 7.4, 7.5_
-- [ ] 1.2 WM_COPYDATA IPC 契約モジュール（親/helper 共有）
+- [x] 1.2 WM_COPYDATA IPC 契約モジュール（親/helper 共有）
   - メッセージ種別タグ（HELLO/LOAD/REQUEST/RESPONSE/UNLOAD）を `dwData` の**低 32bit** に載せる規約、ペイロード＝生バイト列・長さは `cbData`、HWND は **u32 LE** 表現で受け渡し（跨ビットネス安全・ポインタ/HANDLE/struct を載せない）
   - `SendMessageTimeout`（タイムアウト＋`SMTO_ABORTIFHUNG`）を IPC 送出の基本規約として定義
   - 観測: 親/helper 双方から import できる共有プロトコルが定義され、タグが低 32bit に収まる単体テストが通る
@@ -85,3 +85,8 @@
   - `Shiori3Codec` の OnBoot 組立／`Value:` 抽出、IPC タグの低 32bit 境界の単体テスト
   - 観測: build_onboot/parse_value・タグ境界の単体テストが通る（要件 4.1/4.2/2.1 の受入確認）
   - _Requirements: 2.1, 4.1, 4.2_
+
+## Implementation Notes
+
+- 1.2: `windows` 0.62.2 では `COPYDATASTRUCT` は `Win32_System_DataExchange` feature 配下（`Win32_UI_WindowsAndMessaging` でない）。pilot crate の `windows` 依存に crate-scoped で feature 追加が必要。後続で WM 系の windows 型を使うタスクは feature 不足の E0432 に注意。
+- 共有モジュールは各バイナリで `#[path = "ipc.rs"] mod ipc;`（main.rs/helper.rs 双方）。同方式を shiori3.rs 等の他共有モジュールにも適用予定。

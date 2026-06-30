@@ -9,6 +9,14 @@
 //! 葉ノード隔離（命綱・要件 7.2）: コードは本フォルダ配下のみ。production クレートへの
 //! inbound 依存を作らない。
 
+// IpcChannel の WM_COPYDATA プロトコルを親/helper で共有する単一ソース
+// （design.md §150–153 / §168・物理共有は #[path] 取り込みが標準）。
+// 本タスク（1.2）では規約モジュールをコンパイルに取り込むところまで（実走は後続タスク）。
+#[path = "ipc.rs"]
+mod ipc;
+
 fn main() {
     println!("pilot shiori-host-32 (x64 parent): skeleton placeholder");
+    // 共有プロトコルが親ターゲットへ取り込まれていることの最小確認（design.md §372）。
+    let _ = ipc::DEFAULT_TIMEOUT;
 }

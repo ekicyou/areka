@@ -11,6 +11,14 @@
 //! `pasta.dll` 動的ロードなどの実体は後続タスクで実装する。
 //! 葉ノード隔離（命綱・要件 7.2）: コードは本フォルダ配下のみ。
 
+// 親と同一の WM_COPYDATA プロトコル（IpcChannel）を helper ターゲットへも取り込む。
+// 同一 ipc.rs を #[path] で共有することで跨ビットネス規約の単一ソース化を担保する
+// （design.md §150–153 / §168 / §372）。
+#[path = "ipc.rs"]
+mod ipc;
+
 fn main() {
     println!("pilot shiori-host-32-helper (i686 helper): skeleton placeholder");
+    // 共有プロトコルが helper ターゲットへ取り込まれていることの最小確認。
+    let _ = ipc::DEFAULT_TIMEOUT;
 }
