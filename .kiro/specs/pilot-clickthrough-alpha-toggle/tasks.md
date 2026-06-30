@@ -1,7 +1,7 @@
 # Implementation Plan
 
-- [ ] 1. Foundation: example 雛形と DPI 初期化
-- [ ] 1.1 `_template` から example を作成し PMv2 DPI 認識を設定した最小起動骨組み
+- [x] 1. Foundation: example 雛形と DPI 初期化
+- [x] 1.1 `_template` から example を作成し PMv2 DPI 認識を設定した最小起動骨組み
   - 前段準備: worktree では `git submodule update --init --recursive` を実行後に `cargo build` が通ること（`wintf-winmsg-executor` 0.0.5・workspace `windows` features の依存解決）。これが満たせないと本タスクの成果物に到達できない
   - `crates/pilot/examples/_template/` の `main.rs`・`README.md` を `crates/pilot/examples/pilot-clickthrough-alpha-toggle/` へコピーして着手する
   - `main` 冒頭で `SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2)` を呼び、失敗時は警告ログを出す
