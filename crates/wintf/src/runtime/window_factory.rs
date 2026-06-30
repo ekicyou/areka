@@ -1,9 +1,9 @@
 //! ECS ウィンドウ生成ファクトリ（`EcsWindowFactory`）。
 //!
 //! 宣言的ウィンドウ生成（`Window` コンポーネント spawn）を、自作 `CreateWindowExW`
-//! 直呼びからライブラリ（`wintf-winmsg-executor`）の再入安全なウィンドウ生成
-//! （`util::Window::new_checked_ex`）へ置換する移行アダプタを提供する（設計
-//! EcsWindowFactory）。生成した `Window<WndState>` は [`WindowRegistry`] が所有し
+//! 直呼びからライブラリ（`wintf-winmsg-executor`）のウィンドウ生成（`util::Window::new_ex`・
+//! **wndproc 再入可**）へ置換する移行アダプタを提供する（設計 EcsWindowFactory／再入要否は
+//! 下記 §再入方針）。生成した `Window<WndState>` は [`WindowRegistry`] が所有し
 //! （NonSend・Drop=`DestroyWindow`）、`HWND` は `WindowHandle`/`HasGraphicsResources`
 //! として Entity へ反映する（グラフィクス経路）。
 //!
@@ -124,14 +124,23 @@ impl EcsWindowFactory {
         // --- 2. ex_style 算出（要件 2.2） ---
         let ex_style = compute_ex_style(composition_mode, &style);
 
-        // --- 3. ライブラリ生成（要件 2.1・再入安全な new_checked_ex） ---
+        // --- 3. ライブラリ生成（要件 2.1） ---
+        // `new_ex`（`Fn`・RefCell ラップなし＝**wndproc 再入可**）を採用する。
+        // `new_checked_ex`（`FnMut`＋内部 RefCell）は同一窓 wndproc の再入を阻止するが、
+        // wintf のドラッグは `WM_MOUSEMOVE`→`guarded_set_window_pos`→SetWindowPos が
+        // **同期発火する WM_WINDOWPOSCHANGED に wndproc が再入して WindowPos を echo-bypass
+        // 更新する**設計（mouse_move.rs / window_pos.rs）に依存しており、RefCell 阻止下では
+        // この更新が失われ ECS と OS 位置がズレてドラッグがちらつく（5.3 実機回帰）。
+        // 旧 `ecs_wndproc`（素の extern fn＝再入可）と同じ単一防御へ戻す: tick 二重実行は
+        // ECS 側ガード（`IS_TICK_FLUSH_IN_PROGRESS`＋World `try_borrow_mut`）が担保する
+        // （make_wndproc 側の `try_borrow` 安全スキップと二重防御・要件 4.3）。
         let state = WndState {
             world: ecs_world,
             entity,
         };
         let wndproc = make_wndproc();
         let lib_window =
-            match LibWindow::new_checked_ex(WindowType::TopLevel, ex_style, state, wndproc) {
+            match LibWindow::new_ex(WindowType::TopLevel, ex_style, state, wndproc) {
                 Ok(w) => w,
                 Err(e) => {
                     error!(entity = ?entity, error = ?e, "ライブラリウィンドウ生成に失敗");

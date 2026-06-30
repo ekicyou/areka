@@ -46,11 +46,15 @@ pub(crate) struct WndState {
     pub entity: Entity,
 }
 
-/// `Window::new_checked_ex` 互換の wndproc クロージャを構築する。
+/// `Window::new_ex` 互換の wndproc クロージャを構築する。
 ///
-/// 返すクロージャのシグネチャは `FnMut(Pin<&WndState>, WindowMessage) -> Option<LRESULT>`
-/// で、ライブラリの `new_checked_ex`（内部 `RefCell` で wndproc 自体の再入を阻止）へ
-/// そのまま渡せる。クロージャは以下の規律で配送する:
+/// 返すクロージャのシグネチャは `Fn(Pin<&WndState>, WindowMessage) -> Option<LRESULT>`
+/// で、ライブラリの `new_ex`（RefCell ラップなし＝**wndproc 再入可**）へそのまま渡せる。
+/// `new_checked_ex`（内部 `RefCell` で再入阻止）は採用しない: wintf のドラッグが同期発火する
+/// WM_WINDOWPOSCHANGED への wndproc 再入で WindowPos を echo-bypass 更新する設計に依存する
+/// ため（`window_factory` §再入方針・5.3 実機回帰）。再入安全性は手順 3 の World `try_borrow`
+/// 安全スキップ＋ECS 側 tick ガード（`IS_TICK_FLUSH_IN_PROGRESS`）で担保する。
+/// クロージャは以下の規律で配送する:
 ///
 /// 1. pinned state から `entity` を直接読む（`Entity: Copy`）。
 /// 2. `world.upgrade()`→`None` なら `None`（破棄中・安全スキップ）。
@@ -60,9 +64,8 @@ pub(crate) struct WndState {
 // NOTE: `EcsWindowFactory`／`create_windows`（後続タスク）への結線で利用される。
 // それまで lib ビルドでは未使用となるため、兄弟 building block（`AsyncTickTask` 等）と
 // 同様に dead_code 許容。
-#[allow(dead_code)]
 pub(crate) fn make_wndproc()
--> impl FnMut(Pin<&WndState>, WindowMessage) -> Option<LRESULT> {
+-> impl Fn(Pin<&WndState>, WindowMessage) -> Option<LRESULT> {
     move |state: Pin<&WndState>, msg: WindowMessage| -> Option<LRESULT> {
         // Entity は Copy のため pinned state から直接読める（手詰めなし・要件 2.3）。
         let entity = state.entity;
@@ -115,7 +118,7 @@ mod tests {
     fn closure_safe_skips_when_world_dropped() {
         let world = Rc::new(RefCell::new(EcsWorld::new()));
         let state = make_state(&world);
-        let mut wndproc = make_wndproc();
+        let wndproc = make_wndproc();
 
         // strong 所有者を drop → Weak::upgrade が None になる。
         drop(world);
@@ -134,7 +137,7 @@ mod tests {
     fn closure_safe_skips_when_world_borrowed() {
         let world = Rc::new(RefCell::new(EcsWorld::new()));
         let state = make_state(&world);
-        let mut wndproc = make_wndproc();
+        let wndproc = make_wndproc();
 
         // World を借用したままクロージャを呼ぶ → try_borrow 失敗で安全スキップ。
         let _held = world.borrow_mut();
@@ -153,7 +156,7 @@ mod tests {
     fn closure_routes_representative_message() {
         let world = Rc::new(RefCell::new(EcsWorld::new()));
         let state = make_state(&world);
-        let mut wndproc = make_wndproc();
+        let wndproc = make_wndproc();
 
         let boxed = Box::pin(state);
 
