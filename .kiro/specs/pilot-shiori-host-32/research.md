@@ -179,6 +179,24 @@ IPC 方式の真の決定因子は throughput でも payload サイズでもな�
 **先進坑への反映（議題 #5 = (A) 確定）**:
 - 先進坑も **helper = バイト proxy・x64 親で SHIORI3 組立／`Value:` parse**。go 基準(1) は「x64 親が `Value:` を受領・確認」で充足とし、COM `IShiori` 接続は本坑領分（対象外）。これにより先進坑の形が本坑 x64 アダプタの**ミニチュア**になり、知見が直接転用できる。
 
+## 6. 技術調査結果（要件フェーズで先行 de-risk・2026-06-30）
+
+> 開発者要望「技術調査を先に」により、go の前提を握る環境未知を要件フェーズで先行実証。実機検証ゆえ design へ確証として引き継ぐ（README 検証結果とは別の事前調査記録）。
+
+| 調査項目 | 結果 | 方法 |
+|---|---|---|
+| **i686-pc-windows-msvc ビルド成立**（#1 High リスク・§4） | ✅ **GO** | 最小 bin を `cargo build --target i686-pc-windows-msvc` → PE Machine **0x014C** 生成 → 実行成功。MSVC x86 リンカ在。rustup target 導入済（aarch64/i686/x86_64） |
+| **`pasta.dll` の SHIORI エクスポート＋呼出規約** | ✅ `load`/`unload`/`request` を**装飾なし＝cdecl flat-C** で確認（PE32・machine 0x014C・export 181 件中に存在） | committed fixture の PE export table を解析 |
+| **`windows` 0.62.2 ＋ `wintf-winmsg-executor` 0.0.5 の i686 ビルド** | ✅ **GO**（全 stack コンパイル完走） | scratch bin に依存追加し i686 ビルド |
+
+**これが解いた設計不確実性**:
+- **#1 High リスク（i686 ビルド）消滅** → go の最大の環境前提が立った。
+- **gap §3.3 メッセージループ実装（Cat-B #4）**: `wintf-winmsg-executor`（i686 ビルド検証済）を **helper で流用**で確定可。raw Win32 自前ループは不要。
+- `pasta.dll` の cdecl flat-C 確認 → §5.2 item 4（`request` シグネチャ）の前提が固まる。
+- いずれも **Option D（WM_COPYDATA）** を後押し: 親 x64・helper 双方が `wintf-winmsg-executor` で窓を持てば、WM_COPYDATA が WndProc へ自然配送＝統合作業ゼロ。
+
+**残る go-gating でない未知（design で詰める）**: `request` の HGLOBAL 所有権の実挙動・`load` の ghostdir 実引数・WM_COPYDATA 往復の再入（応答）実装。
+
 ---
 
 > 本書は情報提供であり決定ではない（two-tunnel／kiro-validate-gap 原則）。go 判定は開発者の人間判断（要件 6.5・two-tunnel ハードゲート）。
