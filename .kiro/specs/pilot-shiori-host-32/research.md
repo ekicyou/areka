@@ -133,6 +133,28 @@
 6. **N 秒運転の N の値**と clean unload の合否観測方法（プロセス終了コード／ログ／メッセージループ停止確認のどれを一次記録にするか）。
 7. **OnBoot/OnFirstBoot の区別**: 先進坑では `OnBoot` 1 種で足りるか（初回扱いの `OnFirstBoot` 相当を 1 リクエストで代表させてよいか・要件 4.1 の「1 種」と整合）。
 
+### 5.4 確定した設計方向（要件ディスカッションで合意・本坑へ引き継ぎ）
+
+> 本節は先進坑 spec の範囲を超える**本坑アーキ方向**だが、先進坑の知見転用先として要件ディスカッションで合意したため記録する。正本反映は本坑 design ／ `doc/COMPAT_ARCHITECTURE.md` 更新時に行う。
+
+**用語（便宜上の呼称）**:
+- **SHIORI4** = areka 正準 content（json-rpc 相当・構造化）。`IShiori` 境界を流れる**不透明 HSTRING**（`interface.rs`：本層ではパースしない・正準 content）。
+- **SHIORI3** = レガシーワイヤ形式（`key: value` CRLF ＋空行終端・SHIORI/3.0）。
+
+**変換配置（どこで SHIORI4⇄SHIORI3 を変換するか）**:
+- conductor/main は **SHIORI4 のみ**を扱う（ワイヤ非依存・呼び出し側に native/過去互換の分岐を出さない＝COMPAT §75）。
+- **SHIORI4 ⇄ SHIORI3 変換 ＋ charset 符号化は x64 過去互換 `IShiori` アダプタ**が担う（`IShiori` の**下**・IPC の**上**）。32bit helper は **SHIORI3 ロジックを一切持たない**バイト proxy に徹する。
+- 根拠: COMPAT §5（75/85/86）・`interface.rs`（content 不透明・正準 content）。
+
+**プロセス間メモリ表現（HGLOBAL も HSTRING も跨がない）**:
+- x64⟷x86 IPC を跨ぐのは **charset 符号化済みの生バイト列のみ**。
+- **HGLOBAL = 32bit helper ローカル**: `GlobalAlloc` で確保し pasta.dll へ渡す。SHIORI3 所有権規約（要求 HGLOBAL は DLL が解放／応答 HGLOBAL はホストが解放）ゆえ 32bit ローカル確保が必須。プロセスローカルで跨げない（COMPAT §85 明記）。
+- **HSTRING = x64 ローカル**: バッキングは UTF-16 ヒープ（プロセスローカル）。HSTRING は WinRT プリミティブゆえ標準 OOP マーシャラを持つが、areka は `IShiori` を **in-proc 直 vtable**で呼び OOP 自動マーシャリングを発生させない（COMPAT §92/93）ため、**HSTRING はそもそもプロセスを跨がない**。
+- 対称性: 各プロセスが自前の「文字列/メモリ通貨」（x64=HSTRING／x86=HGLOBAL）を持ち、橋を渡るのは生バイト列のみ。
+
+**先進坑への反映（議題 #5 = (A) 確定）**:
+- 先進坑も **helper = バイト proxy・x64 親で SHIORI3 組立／`Value:` parse**。go 基準(1) は「x64 親が `Value:` を受領・確認」で充足とし、COM `IShiori` 接続は本坑領分（対象外）。これにより先進坑の形が本坑 x64 アダプタの**ミニチュア**になり、知見が直接転用できる。
+
 ---
 
 > 本書は情報提供であり決定ではない（two-tunnel／kiro-validate-gap 原則）。go 判定は開発者の人間判断（要件 6.5・two-tunnel ハードゲート）。

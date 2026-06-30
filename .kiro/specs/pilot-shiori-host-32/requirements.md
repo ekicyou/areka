@@ -27,6 +27,7 @@ areka（x64）が適合対象ゴースト emo2 を「そのまま」起動する
   - **Upstream（前提とする既存物）**: `crates/shiori-abi`（内部唯一 ABI `IShiori`/`IShioriHost`・HSTRING/UTF-16）が最終橋渡し先の内部契約として存在する。`crates/pilot`（空 lib ＋ examples-only の検疫所構造）が受け皿として存在する。emo2 実物 `pasta.dll`（32bit SHIORI/3.0・UTF-8・SAORI 不使用）が検証ターゲットとして実在する。設計判断の正本は `doc/COMPAT_ARCHITECTURE.md`。
   - **Downstream（この先進坑の go がゲートする本坑）**: `areka-P0-host32-ipc` / `areka-P0-host32-shiori-load` / `areka-P0-host32-request` / `areka-P0-host32-lifecycle`。これらは go 判定後に着手する別物であり、本先進坑はその実装を所有しない。
   - **命綱（不変条件）**: 出荷グラフ上のいかなる production クレート（wintf/dola/areka/shiori-abi）も本先進坑コードに依存してはならない（葉ノード隔離）。
+  - **SHIORI3 build/parse の配置と検証粒度（議題 #5 で確定・本坑方向と整合）**: 先進坑でも **32bit helper はバイト proxy に徹し、SHIORI/3.0 リクエスト組立と `Value:` parse は x64 親側**で行う（本坑の x64 過去互換 `IShiori` アダプタのミニチュア。詳細は research.md §5.4）。go 基準(1) は「**x64 親プロセスが `Value:` 文字列を受領・確認できる**」ことで充足とし、内部 ABI `IShiori`（COM）面への接続は本坑 `areka-P0-host32-request` 領分（先進坑では対象外）。
   - **検証前提（go の前提条件・議題 1 で確定）**: go 検証には emo2 ゴースト一式が必要。検証フィクスチャは emo2 配布物 `emo2.nar`（zip 形式）を `crates/pilot/examples/shiori-host-32/fixtures/emo2/` へ展開して用意し、**リポジトリへ取り込む**（ワークツリー/クローンでの**再現性を優先**。emo2 は本リポジトリ作者自作ゴーストゆえライセンス問題なし。トレードオフ＝`pasta.dll` 3.3MB バイナリが履歴に残る点は再現性を優先して受容）。SHIORI `load` に渡す **ghostdir は `fixtures/emo2/ghost/master/`**（`pasta.dll`＝PE Machine 0x014C/32bit ＋ `descript.txt`＝`charset,UTF-8`/`shiori,pasta.dll` の在処）。この配置手順（nar 展開）は README「概要・実行法」の幕に明記する。
 
 ## Requirements
