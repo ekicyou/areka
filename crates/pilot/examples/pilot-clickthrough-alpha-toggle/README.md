@@ -24,7 +24,12 @@
 
 ## 検証結果
 
-- 判定: go / 違う / 直す   ← いずれかを残す（**人間が確定**・タスク 6.2／`REPORT.md` 総合判定）
-- 学び:
-  - （得られた知見。本坑をクリーンに掘り直すための材料。コピペ donor にはしない）
-- 日付: YYYY-MM-DD
+- 判定: go / 違う / 直す   ← **未確定（人間が確定する・タスク 6.2／`REPORT.md` 総合判定）**
+- 観測の要点（事実・詳細は `REPORT.md`）:
+  - T1 ✅（`ShowWindow` 欠落の実装欠陥を修正後、円が表示）/ T3 ✅（円内クリック受領）/ T4 ✅（ON↔OFF 切替発火）。
+  - **T2 ❌・T6 ❌（核心）**: `WS_EX_NOREDIRECTIONBITMAP`（DComp）窓では、`WS_EX_TRANSPARENT` を立てても（作成時・動的トグルとも）**クリックが背面別プロセスへ透過せず窓が受領し続ける**。ex_style に TRANSPARENT ビットが立つことはログで確認済み・座標交絡も排除済み。
+- 暫定の学び（人間の go 判定の材料・判定そのものは保留）:
+  - 「DComp 描画を捨てず `WS_EX_TRANSPARENT` **単独**トグルで別プロセス透過」という当初仮説は**この構成では不成立**。
+  - 権威ソース調査でも `WS_EX_TRANSPARENT` は DWM/合成窓で効かず、定石は `WS_EX_LAYERED|WS_EX_TRANSPARENT`。しかし `WS_EX_LAYERED` は `WS_EX_NOREDIRECTIONBITMAP` の**代替＝排他**で DComp 描画と衝突しうる（R2.3 が layered 不付与を課した背景と一致）。同一状況の MS Q&A も**未解決**。
+  - ⇒ 既存 **ULW ルート**（alpha-0 自動透過）の妥当性が相対的に補強された。次手候補（A〜D）は `REPORT.md` 参照（いずれも開発者の承認が必要）。
+- 日付: 2026-06-30
