@@ -10,7 +10,7 @@
 
 - **In scope**:
   - 透過トップモスト窓＋中央の不透明領域を持つ最小 PoC の実装（`crates/pilot/examples/pilot-clickthrough-alpha-toggle/`、`_template` をコピーして着手）。
-  - 別スレッドが 16ms 周期でカーソル位置を取得し、仮のαマスク関数（画面中央 (960,540) 半径 200px の円判定）に問い合わせ、円内＝クリックスルー OFF／円外＝クリックスルー ON を動的に切り替える挙動。
+  - 別スレッドが 16ms 周期でカーソル位置を取得し、仮のαマスク関数（ウィンドウ中央を中心とする半径 200px の円判定。描画される不透明円と同一領域・実スクリーン物理座標で判定）に問い合わせ、円内＝クリックスルー OFF／円外＝クリックスルー ON を動的に切り替える挙動。
   - 状態変化したフレームでのみ拡張スタイルを適用する状態変化最適化。
   - 試験項目 T1〜T8 の人間との手動検証。
   - `REPORT.md`（指定フォーマット）と README 3 幕の作成。
@@ -44,7 +44,7 @@
 
 #### Acceptance Criteria
 1. When PoC を起動したとき, the pilot application shall 透過したトップモストのウィンドウを表示する。
-2. The pilot application shall ウィンドウ全域を透明とし、中央に不透明な四角領域を定義する。
+2. The pilot application shall ウィンドウ全域を透明とし、中央に不透明な円領域を定義する。この描画される不透明円は、αマスクの判定領域（R4）と同一の領域とする。
 3. The pilot application shall `WS_EX_LAYERED` を付けず `WS_EX_TRANSPARENT` 単独で別プロセス透過を成立させる。
 4. The pilot application shall `WM_NCHITTEST` を自前ハンドルしない。
 5. The pilot application shall HWND が `!Send` であっても Win32 慣例に従い状態をスレッド跨ぎで共有してよい。
@@ -64,9 +64,10 @@
 **Objective:** As a 開発者, I want αマスク判定が独立した関数として差し替え可能であること, so that PoC では仮の円判定を使い、将来（本坑）は実描画αバッファ参照に差し替えられる
 
 #### Acceptance Criteria
-1. The alpha-mask function shall 画面中央 (960,540) 半径 200px の円の外側を透明扱い、内側を不透明扱いと判定する（仮実装）。
+1. The alpha-mask function shall ウィンドウクライアント中央を中心とする半径 200px の円の外側を透明扱い、内側を不透明扱いと判定する（仮実装）。この判定領域は R2.2 で描画する不透明円と一致させる。
 2. The alpha-mask function shall カーソル位置を入力として透明／不透明の判定を返す独立した差し替えシームとして実装される。
 3. Where 仮の円判定が用いられる場合, the pilot shall 実描画αバッファ参照を実装しない。
+4. The alpha-mask judgment shall プライマリモニタ専用の固定スクリーン座標を前提とせず、カーソルの物理スクリーン座標と、ウィンドウ位置から実算出した円の物理スクリーン位置とを同一座標基準で比較する。
 
 ### Requirement 5: 状態変化検出と拡張スタイル適用（状態変化最適化）
 
@@ -84,9 +85,9 @@
 **Objective:** As a 開発者, I want 不透明領域へのクリックが当該プロセスに届きフィードバックされること, so that 不透明領域が実際にクリック可能であることを目視確認できる
 
 #### Acceptance Criteria
-1. When 不透明な四角領域がクリックされたとき, the pilot application shall ウィンドウプロシージャで `WM_LBUTTONDOWN` を受領する。
-2. When 不透明な四角領域がクリックされたとき, the pilot application shall その受領をログに出力する。
-3. When 不透明な四角領域がクリックされたとき, the pilot application shall 四角領域の色をトグル変更する。
+1. When 不透明な円領域がクリックされたとき, the pilot application shall ウィンドウプロシージャで `WM_LBUTTONDOWN` を受領する。
+2. When 不透明な円領域がクリックされたとき, the pilot application shall その受領をログに出力する。
+3. When 不透明な円領域がクリックされたとき, the pilot application shall 円領域の色をトグル変更する。
 
 ### Requirement 7: DPI 認識とマルチモニタ／高 DPI 整合
 
@@ -94,7 +95,7 @@
 
 #### Acceptance Criteria
 1. When `main` が開始するとき, the pilot application shall 冒頭で `SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2)` を呼び出す。
-2. While 高 DPI 環境（150% 等）で稼働している間, the pilot application shall 円判定が見た目の不透明領域と一致するようカーソル座標を扱う。
+2. While 高 DPI 環境（150% 等）で稼働している間, the pilot application shall 円の判定領域と画面に見えている不透明円が一致するよう、カーソルの物理スクリーン座標と窓位置から実算出した円の物理位置で判定する。
 3. The pilot application shall マルチモニタ・高 DPI 環境を前提とし、プライマリモニタのみを前提にしない。
 
 ### Requirement 8: 終了処理
