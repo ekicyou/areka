@@ -91,6 +91,19 @@ impl<W> WindowRegistry<W> {
     pub(crate) fn is_empty(&self) -> bool {
         self.map.is_empty()
     }
+
+    /// 注入済み shutdown hook を発火する（注入されていれば）。
+    ///
+    /// 通常経路では [`reconcile_window_registry`] が空遷移時に内部発火するが、本番型
+    /// （`Window<WndState>` 保持＝実 HWND 必須）の registry を headless で空遷移させるのは
+    /// 困難なため、`WinApp::new()` の hook 注入結線（task 4.2）を単体検証する seam として
+    /// 公開する。テスト専用（`cfg(test)`）。
+    #[cfg(test)]
+    pub(crate) fn fire_shutdown_hook(&self) {
+        if let Some(hook) = self.shutdown_hook.as_ref() {
+            hook();
+        }
+    }
 }
 
 /// `Window` コンポーネント破棄を検知して registry 要素を drop するリコンサイルシステム。

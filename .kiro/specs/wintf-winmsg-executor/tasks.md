@@ -97,7 +97,7 @@
   - _Boundary: window_proc lifecycle, WindowRegistry_
   - _Depends: 3.2, 3.3, 3.4_
 
-- [ ] 4.2 終了規律（ShutdownPolicy）の結線
+- [x] 4.2 終了規律（ShutdownPolicy）の結線
   - 終了シグナルを ECS 層が所有する `event_listener::Event` とし、WinApp 構築時に下向き注入する（上向き依存を作らない）
   - 最後の窓が消えた（レジストリ空）時点でシグナルを notify し、run が待つ shutdown future を完了させて正常復帰させる
   - 旧 `WM_LAST_WINDOW_DESTROYED` / message_window 経路を撤去し、tail race 回避に終了時 notify を補う
@@ -160,6 +160,7 @@
 ## Implementation Notes
 
 - **Phase 4 = 逐次 live cutover（開発者決定 2026-06-30）**: 4.1→4.2→4.3→4.4→4.5 を 1 タスクずつ implementer→review→commit。各コミットは「コンパイル緑＋lib テスト緑＋boundary」で検証。ランタイム/example 実行検証は **4.4（build）＋5.3（手動E2E）に集約**（旧経路と新経路の共有 lifecycle ハンドラ＋create 経路が flip するため、4.1〜4.4 の中間コミットは一時的に実行不可・squash-merge で消える）。design Migration Strategy 順序と一致。「旧コードは reference として保持・実撤去は 4.5」の共存 steer は維持。
+- **4.2 解釈（共存遵守＋building block）**: 新終了シグナル＝`event_listener::Event` を **WinApp（runtime）所有**（design:387 は「ECS 層所有」だが、その根拠は reconcile が ECS の場合の上向き依存回避。本坑は WindowRegistry/reconcile を runtime 配置（3.3 決定）ゆえ notify が runtime→runtime で完結し上向き依存なし＝WinApp 所有が一貫・最小）。WinApp::new() で Event 生成→WindowRegistry を World へ確保（既存なら流用）→`set_shutdown_hook(notify Event)` を注入。run の `block_on(shutdown_future)` 結線は **4.3**。旧 `WM_LAST_WINDOW_DESTROYED`/`message_window`/`App::on_window_destroyed` PostMessage 経路は**温存**（旧 WinThreadMgr 専用・撤去は 4.5）＝app.rs に触れない。4.2 検証は「Event notify→shutdown future/listener 完了」「registry 空 hook→Event 発火」をヘッドレス単体で（full run 復帰は 4.3/5.3）。tail race は終了時 notify(usize::MAX)＋run 側 listen 先行 arm で回避（4.3 で本結線）。
 - **4.1 解釈（共存遵守）**: 新経路に必須なのは **WM_CLOSE 反転（DestroyWindow 直叩き→対象 Entity の despawn 要求）** のみ。WM_NCCREATE の GWLP 手詰めと WM_NCDESTROY の ECS 後始末は **旧経路専用コード**（新経路はライブラリが NCCREATE/NCDESTROY を所有し wintf の当該ハンドラを呼ばない・dispatch 表からも除外済 3.2）。ゆえに 4.1 ではこれらを**撤去せず温存**し、実撤去は 4.5 へ（task 4.1 bullet 2/3 の「撤去」は 4.5 へ繰延・開発者の keep-old-code steer 優先）。WM_CLOSE の despawn→`RemovedComponents<Window>`→reconcile→registry drop→DestroyWindow の完結は reconcile 結線（4.3）後ゆえ、4.1 単体検証は「WM_CLOSE ハンドラが entity を despawn する」まで（full close→destroy は 4.3/5.3 で検証）。同期再入の二重借用回避は make_wndproc の try_borrow safe-skip（3.1）＋reconcile が破棄手続きで ECS 後始末を持たないことで担保。
 
 - runtime の各 building block（MessageLoopDriver / VsyncEventBridge / AsyncTickTask）は WinApp::run へ未結線の間、scoped `#[allow(dead_code)]` を帯びる。task 4.3 の結線後に allow を外す（dead_code 警告 3 件は想定内・新規警告ではない）。
