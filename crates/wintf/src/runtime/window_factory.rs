@@ -41,8 +41,8 @@ use tracing::{debug, error};
 use windows::Win32::Foundation::HWND;
 use windows::Win32::UI::HiDpi::GetDpiForSystem;
 use windows::Win32::UI::WindowsAndMessaging::{
-    SWP_NOACTIVATE, SWP_NOZORDER, SetWindowLongPtrW, SetWindowPos, SetWindowTextW, CW_USEDEFAULT,
-    GWL_STYLE, WS_EX_LAYERED,
+    SWP_NOACTIVATE, SWP_NOZORDER, SW_SHOW, SetWindowLongPtrW, SetWindowPos, SetWindowTextW,
+    ShowWindow, CW_USEDEFAULT, GWL_STYLE, WS_EX_LAYERED,
 };
 use windows::core::HSTRING;
 use wintf_winmsg_executor::util::{get_instance_handle, Window as LibWindow, WindowType};
@@ -151,6 +151,18 @@ impl EcsWindowFactory {
 
         // --- 4. 生成後初期化（style / pos / title 反映・要件 2.1） ---
         Self::apply_initial_state(hwnd, &style, &pos, ex_style, &title);
+
+        // --- 4b. ウィンドウを表示（旧 create_windows の ShowWindow(SW_SHOW) 同等） ---
+        // ライブラリは `WINDOW_STYLE(0)`（WS_VISIBLE なし）で生成するため、スタイルに
+        // WS_VISIBLE を持たないウィンドウ（例: WindowStyle 未設定でデフォルトの
+        // multi_backend_demo ULW 窓）はこの ShowWindow がないと不可視のままになる
+        // （5.3 実機回帰: ULW 窓が見えない）。旧 create_windows が呼んでいた表示呼び出しを
+        // 復元する。SAFETY: Win32 境界。生成直後の有効 HWND に対する表示要求のみ。
+        // 同期発火する WM_WINDOWPOSCHANGED は tick の World 借用中ゆえ wndproc closure の
+        // try_borrow 失敗で安全スキップされる（生成時メッセージは ECS 更新不要）。
+        unsafe {
+            let _ = ShowWindow(hwnd, SW_SHOW);
+        }
 
         // --- 5. WindowRegistry（NonSend）へ格納（要件 2.1） ---
         if let Some(mut registry) =

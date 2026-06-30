@@ -149,7 +149,7 @@
   - _Requirements: 2.1, 4.1, 4.2, 4.5, 1.3, 1.5, 6.2_
   - _Depends: 4.4_
 
-- [ ] 5.3 E2E・手動検証（examples / areka）
+- [x] 5.3 E2E・手動検証（examples / areka）
   - 複数ウィンドウ・ULW/DComp 両モードの代表 example が新 facade 上で回帰なく描画することを確認する
   - areka 本体でシェル＋バルーン表示・ドラッグ移動・**ダブルクリック終了**（ライブラリ 0.0.5 内蔵 CS_DBLCLKS）が成立することを確認する
   - 背景プール（world.spawn 経路）による UI 構築が温存され機能することを確認する
@@ -159,6 +159,7 @@
 
 ## Implementation Notes
 
+- **【5.3 実機回帰修正②】factory に `ShowWindow(SW_SHOW)` 復元（ULW 窓不可視を修正）**: 旧 create_windows は `ShowWindow(SW_SHOW)` を呼んでいたが新 factory（3.4）は未呼び出し。ライブラリは `WINDOW_STYLE(0)`（show-state hidden）で生成し、`WindowStyle` の WS_VISIBLE を後から `SetWindowLongPtrW(GWL_STYLE)` で立てても**実表示はされない**（ShowWindow か SWP_SHOWWINDOW が必要）。`WindowStyle` 未設定でデフォルト（`WS_POPUP | WS_VISIBLE`・components.rs:172）の multi_backend_demo ULW 窓が不可視になっていた。`apply_initial_state` 直後に `ShowWindow(hwnd, SW_SHOW)` を復元。生成時同期メッセージは tick 借用中ゆえ wndproc closure の try_borrow 失敗で安全スキップ。実機で ULW 窓可視・両モードドラッグ安定を確認（開発者 GO 2026-06-30）。**潜在事項**: caption 付き窓（WS_OVERLAPPEDWINDOW 等）を将来使う場合、後付け style 適用にはフレーム再描画の `SWP_FRAMECHANGED` が要る（現 consumer は全て WS_POPUP フレームレスゆえ未発現）。**5.3 完了**: areka(表示/ドラッグ/ダブルクリック終了 exit0/背景プール)・multi_backend_demo(ULW+DComp 表示/両モードドラッグ安定/60s timer 自動終了で shutdown チェーン完動)。DComp 窓にクローズボタンが無いのは仕様（WS_POPUP フレームレス）、multi のダブルクリック無反応も仕様（dblclick 未 bind・60s 自動終了）。
 - **【5.3 実機回帰修正】wndproc は `new_ex`（再入可）で生成する（design の `new_checked_ex` 採用を上書き）**: design.md は要件 4.3 の二重防御として `util::Window::new_checked_ex`（`FnMut`＋内部 `RefCell` で wndproc 再入阻止）を採用したが、**5.3 手動 E2E で areka のドラッグがちらつく回帰**を発見。根本原因: ドラッグは `WM_MOUSEMOVE`→World 借用解放→`guarded_set_window_pos`→`SetWindowPos`→**同期発火する WM_WINDOWPOSCHANGED に wndproc が再入し WindowPos を echo-bypass 更新する**設計（mouse_move.rs:399-414 / window_pos.rs の `is_self_initiated` echo 機構）に依存。`new_checked_ex` の RefCell が同一窓 wndproc の再入を阻止 → 入れ子 WM_WINDOWPOSCHANGED が DefWindowProc 送りになり WindowPos 更新が失われ ECS と OS の位置がズレてちらつく。旧 `ecs_wndproc`（素の extern fn＝再入可）はこの再入で正しく動いていた。**修正**: factory を `new_ex`（`Fn`・RefCell なし＝再入可）へ、`make_wndproc` を `FnMut`→`Fn` へ。tick 二重実行防止は ECS 側ガード（`IS_TICK_FLUSH_IN_PROGRESS`＋World `try_borrow_mut`）＋make_wndproc の `try_borrow` 安全スキップで担保（旧経路と同じ単一防御＝実績あり・要件 4.3 維持）。先進坑はヘッドレスで「再入 blocked」を検証していたが areka ドラッグは「再入 needed」のケースで盲点だった。crate ソース（`util/window.rs`）で `new_checked_ex` が内部 `RefCell::new(wndproc)` で再入検出する一方 `new_ex` は素通しと確認済。実機で areka ドラッグ滑らか・ダブルクリック終了 exit 0 を確認（開発者 2026-06-30）。**design.md の該当記述（new_checked_ex 採用）は kiro-complete の doc 同期で new_ex へ要修正。**
 
 - **タスク順序の再整列（4.5 は 5.x の後・開発者 steer から導出）**: 開発者決定「旧コードは移行が確認できるまで残す（撤去は最終）」。移行確認＝5.3 手動 E2E。よって legacy 撤去（4.5）は検証前に安全網を外さぬよう **5.1→5.2→5.3→4.5** の順で実行する（4.5 の依存は 4.4 のみゆえ 5.x 先行は依存的に可）。5.3 は手動 E2E ゆえ開発者確認の gate（STOP の可能性）。5.x で新経路の不具合が出たら legacy を reference に修正可能。
