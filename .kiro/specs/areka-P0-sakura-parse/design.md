@@ -6,7 +6,7 @@
 
 **Users**: 第一の利用者は下流の `areka-P0-sakura-engine`（命令列の消費・再生）。次いで `conductor`（Value を本パーサへ渡す結線）。本パーサ自身は host 非依存・純粋・単体テスト可能であり、host を起動せず並走安全に検証される。
 
-**Impact**: 現状 `crates/areka` には bin（`main.rs`）しか存在せず、純粋ロジックを下流と共有できる公開面が無い。本設計は areka に `lib.rs` を新設してライブラリ面を生やし、`sakura` モジュール（型 = 下流共有 I/O 契約、関数 = パーサ）を公開する。これは bin-only だった areka 構造への最小の追加であり、既存 `shiori_*` bin モジュールには手を入れない。
+**Impact**: 現状 `crates/areka` は bin（`main.rs`）のみで、純粋ロジックを下流と共有できる公開面が無い。純粋・`std` のみ・host 非依存のパーサーを、重い `areka`（`windows`/`bevy_ecs`/`wintf`/D2D 依存）に同居させて下流に重依存を強いるのは不適切。よって本設計は**新クレート `areka-parsers`**（パーサーファミリ共通・純粋・`std` のみ・host 非依存）を新設し、その中に `sakura` モジュール（型 = 下流共有 I/O 契約、関数 = パーサ）を置く。`areka-parsers` は M-boot のパーサー4兄弟（sakura / shell / balloon / package-mount）の共通の住処であり、いずれも同一の依存素性を持つ（**本 spec は `sakura` モジュールのみを作る**。兄弟パーサーは各 spec が着手時に自分のモジュールを追加する＝空スタブは作らない）。`areka` は **bin のまま**変更しない。下流 `areka-P0-sakura-engine` は重い areka ではなく軽量な `areka-parsers` に依存して `Instruction` を得る。
 
 ### Goals
 
@@ -62,7 +62,7 @@
 - `Instruction` enum の **variant 追加・名称変更・フィールド構造変更**（`#[non_exhaustive]` ゆえ variant 追加は後方互換だが、消費側の `match` 網羅は影響を受ける）。
 - 値型（`NewLineRatio` の内部表現、`MoveArgs` の構造、`Duration` 正規化規約、`Choice` のフィールド）の変更。
 - 戻り値型（`Vec<Instruction>` 直返し ⇄ `Result` 化）の変更。
-- 命令モデル型の**所有クレートの移動**（areka lib → 別クレート）。
+- 命令モデル型の**所有クレートの移動**（`areka-parsers` → 他クレート）。
 - 寛容パススルーの吸収先 variant（`Raw` / `GenericCommand`）の意味変更。
 
 ## Architecture
@@ -77,12 +77,12 @@
 
 ### Architecture Pattern & Boundary Map
 
-選択パターン: **2 層パイプライン（Lexer → Decode）＋フラット命令モデルの分離配置**（research §6 推奨 = Option A / C1）。areka に `lib.rs` を新設し `sakura` モジュールを公開、その中で型（`model`）と関数（lexer / decode / parse facade）をモジュール分割する。
+選択パターン: **2 層パイプライン（Lexer → Decode）＋フラット命令モデルの分離配置**。配置は設計ディスカッションで **Option C2（パーサー専用クレート）** に確定: 新クレート **`areka-parsers`**（パーサーファミリ共通・純粋／`std` のみ）に `sakura` モジュールを置き、その中で型（`model`）と関数（lexer / decode / parse facade）をモジュール分割する。当初案の areka lib 化（Option A/C1）は、純粋パーサーを重い areka に同居させ下流に重依存を強いるため破棄した（research §8.5）。
 
 ```mermaid
 graph TB
     Input[sakura script string]
-    subgraph sakura_module[areka lib sakura module]
+    subgraph sakura_module[areka-parsers sakura module]
         Lexer[lexer: general syntactic split]
         Decode[decode: emo2 subset value normalization]
         Model[model: Instruction enum and value types]
@@ -104,7 +104,7 @@ graph TB
 - **選択パターン**: Lexer（構文・全スクリプト）と Decode（意味・emo2 subset 限定）の 2 層分離。Lexer の出力 = 構文トークン（生タグ／テキスト／bare／sysvar）、Decode が各構文トークンを `Instruction` へ正規化。下流が再パース不要なのは Decode が値を decode しきるため（要件 1.2）。
 - **責務分離**: 構文の頑健性（要件 13）は Lexer に閉じ、意味の正しさ（要件 2〜9）は Decode に閉じる。寛容パススルー（要件 10）は両層に跨るが、Lexer は「区切れない不正」を、Decode は「区切れたが意味未対応」を、それぞれ別 variant（`Raw` / `GenericCommand`）へ吸収する明確なシームを持つ。
 - **既存パターン踏襲**: フラット enum ＋汎用枠 ＋ NewType（dola `CueCommand` 準拠）。手書き線形スキャナ（依存ゼロ）。`thiserror` 不使用（送出しない方針）。`tracing` 発行のみ。
-- **新コンポーネント根拠**: `lib.rs` 新設は「下流と型を共有する I/O 契約」要件（共有可能な公開面）と「areka 内モジュール」brief 制約を両立する唯一の手段（Option B = bin mod は外部から見えず I/O 契約共有が成立しない）。
+- **新コンポーネント根拠**: 新クレート `areka-parsers` は「下流と型を共有する I/O 契約（公開面）」と「純粋パーサーを重い areka から分離する」要請を両立する。Option B（areka bin mod）は外部から型が見えず契約共有が成立せず、Option A（areka lib 化）は純粋パーサーを重依存クレートに同居させるため不採用。パーサー4兄弟は全て同一素性（純粋／std／host 非依存）ゆえ `areka-parsers` に役割集約する（brief は配置を「着手時に確定」と open にしていた）。
 - **steering 整合**: 最小実装＋薄い拡張シーム（roadmap 実装規律）、UTF-8 前提（tech.md）、`tracing` 規約（logging.md）、命名規約（structure.md）。
 
 ### Technology Stack
@@ -122,26 +122,28 @@ graph TB
 ### Directory Structure
 
 ```
-crates/areka/src/
-├── lib.rs                  # 【新規】ライブラリルート。`pub mod sakura;` のみ宣言
-├── main.rs                 # 【変更】bin ルート。`use areka::sakura;` は当面不要（結線は conductor 着手時）
-└── sakura/                 # 【新規】さくらスクリプトパーサ（純粋・host 非依存）
-    ├── mod.rs              # `sakura` モジュールルート。`pub use` で公開面を集約（parse / Instruction / 値型）
-    ├── model.rs            # 命令モデル型（下流 engine 共有 I/O 契約）: Instruction enum ＋ NewLineRatio / MoveArgs / Choice / SurfaceArg / SpeakerScope 等の値型
-    ├── lexer.rs            # 構文層: 手書き線形スキャナ。文字列 → 構文トークン列（生タグ／bare／shorthand／sysvar／text）。エスケープ・クォート・角括弧引数を処理
-    ├── decode.rs           # 意味層: 構文トークン → Instruction。emo2 subset の値正規化（待ち時間／比率／Choice／Move）。未対応は Raw/GenericCommand へ
-    ├── parse.rs            # 公開 facade: `pub fn parse(input: &str) -> Vec<Instruction>`。lexer → decode を結線
-    └── tests.rs            # in-source 単体テスト（要件 2〜13 のタグ別 ＋ 寛容パススルー ＋ 空入力 ＋ emo2 boot script 代表例）
+crates/areka-parsers/        # 【新規クレート】パーサーファミリ共通（純粋・std のみ・host 非依存）
+├── Cargo.toml              # 【新規】package = "areka-parsers"。依存は std（＋任意で tracing）のみ
+└── src/
+    ├── lib.rs              # 【新規】ライブラリルート。`pub mod sakura;`（兄弟 shell/balloon/package は各 spec が追加）
+    └── sakura/             # 【新規】本 spec の成果物（さくらスクリプトパーサ）
+        ├── mod.rs          # `pub use` で公開面を集約（parse / Instruction / 値型）
+        ├── model.rs        # 命令モデル型（下流 engine 共有 I/O 契約）: Instruction enum ＋ NewLineRatio / MoveArgs / Choice / SurfaceArg / SpeakerScope 等の値型
+        ├── lexer.rs        # 構文層: 手書き線形スキャナ。文字列 → 構文トークン列（生タグ／bare／shorthand／sysvar／text）。エスケープ・クォート・角括弧引数を処理
+        ├── decode.rs       # 意味層: 構文トークン → Instruction。emo2 subset の値正規化（待ち時間／比率／Choice／Move）。未対応は Raw/GenericCommand へ
+        ├── parse.rs        # 公開 facade: `pub fn parse(input: &str) -> Vec<Instruction>`。lexer → decode を結線
+        └── tests.rs        # in-source 単体テスト（要件 2〜13 のタグ別 ＋ 寛容パススルー ＋ 空入力 ＋ emo2 boot script 代表例）
 ```
 
-> モジュール内分割（model / lexer / decode / parse）は research §6 の C1 構成。型（I/O 契約）と関数（実装）を分離し、下流 engine は `areka::sakura::Instruction` のみ import すれば足りる。lexer の構文トークン型は `lexer.rs` 内に閉じ、公開しない（`Instruction` のみ公開）。
+> モジュール内分割（model / lexer / decode / parse）は型（I/O 契約）と関数（実装）を分離し、下流 engine は `areka_parsers::sakura::Instruction` のみ import すれば足りる。lexer の構文トークン型は `lexer.rs` 内に閉じ、公開しない（`Instruction` のみ公開）。クレート名 `areka-parsers`（package）／lib 名 `areka_parsers`（`shiori-abi` と同じハイフン命名の前例に倣う）。
 
 ### Modified Files
 
-- `crates/areka/Cargo.toml` — `[[bin]]` に加え `[lib]`（`name = "areka"`, `path = "src/lib.rs"`）を追加。bin はそのまま残す（lib ＋ bin の二面クレート化）。新規外部依存の追加は不要（`tracing` は既存）。
-- `crates/areka/src/main.rs` — 構造変更は最小。既存 `mod shiori_*;` 宣言はそのまま。lib 化により bin が同名 lib を参照可能になるが、本 spec では parser の結線（`conductor` 経由の呼び出し）は範囲外ゆえ `main.rs` への呼び出し追加はしない（lib 側の自己完結＋単体テストで done）。
+- `crates/areka-parsers/Cargo.toml` — 【新規】`package.name = "areka-parsers"`、`edition = "2024"`。依存は std のみ（＋任意で既存 workspace の `tracing`）。外部 parser 依存は追加しない。
+- workspace ルート `Cargo.toml` — `members = ["crates/*"]` ゆえ新クレートは**自動的に**メンバーへ含まれる（編集不要）。
+- `crates/areka` — **変更なし**（bin のまま）。本 spec では parser の結線（`conductor` 経由の呼び出し）は範囲外ゆえ areka には一切手を入れない（done = `areka-parsers` 自己完結＋単体テスト）。将来 areka が parser を使う際は `areka-parsers` を依存に追加するだけ。
 
-> bin と lib が同居する場合、`main.rs` 内の既存 `mod xxx;` は bin クレートのモジュールとして従来どおり機能し、`lib.rs` 配下の `sakura` とは独立する。両者の責務は重ならない（bin = host/SHIORI 結線、lib = 純粋 parser）。
+> `areka-parsers` は純粋パーサー専用クレートゆえ、`areka` の host/SHIORI 依存とは完全に切り離される。下流エンジンも本クレートに依存して `Instruction` を得るだけで、areka の重依存（windows/bevy_ecs/wintf）を引き込まない。
 
 ## System Flows
 
@@ -334,6 +336,18 @@ pub struct Choice {
 #[derive(Clone, Debug, PartialEq)]
 pub struct MoveArgs {
     pub args: Vec<String>,
+}
+
+// --- 共有 I/O 契約の読み取りアクセサ（公開クレート areka-parsers の公開面）---
+// 不透明 NewType はフィールドを pub にせず読み取り専用メソッドで公開する（dola ActorKey 流儀）。
+// これが無いと別クレートの下流 engine が中身を読めず、I/O 契約が機能しない（設計ディスカッション議題1）。
+impl SurfaceArg {
+    /// \s[...] の不透明中身を読み取る（改変不可・要件 2.3）。
+    pub fn as_str(&self) -> &str { &self.0 }
+}
+impl NewLineRatio {
+    /// \n の比率（150 → 1.5）を読み取る。
+    pub fn ratio(&self) -> f32 { self.0 }
 }
 ```
 

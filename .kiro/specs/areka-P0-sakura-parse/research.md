@@ -239,3 +239,16 @@ text      = { textchar | "\\" | "\%" } ;
 - **Mechanical checks**: 全 numeric requirement ID（1.1〜13.8）が traceability 表に出現 ✓ / Boundary 4 節（Owns・Out・Allowed・Revalidation）populated ✓ / File Structure Plan に具体パス ✓ / boundary ↔ file 整合 ✓ / orphan component なし（model/lexer/decode/parse/tests は全て file マップ済み）✓。
 - **Judgment review**: 境界明示・依存方向明示・interface 具体（signature ＋ pre/post/invariant）・`\q` 旧形除外と「Move decode = 構文区切り」で要件 7.1 と Out of Boundary の緊張を解消。OPEN QUESTION 3 件は値定数のみで型契約に影響せず＝真の spec gap ではない。
 - **結果**: **1 パス目で通過**（修復パスなし）。
+
+### 8.5 設計ディスカッション裁定（§8.2 #1・§8.1 synthesis #3 を上書き）
+
+> 設計ディスカッション（議題1）で配置判断を覆した。本節が §8.2 #1（Option A/C1）および §8.1 synthesis #3 の「Option C2 却下」に**優先する**。
+
+- **配置 = Option C2（パーサー専用クレート）に確定**: 新クレート **`areka-parsers`**（純粋・`std` のみ・host 非依存）を新設し、`sakura` モジュールを置く。当初の areka lib 化（A/C1）は破棄。
+- **覆した根拠**:
+  1. **重依存の漏れ**: パーサーは純粋・std のみ。重い `areka`（windows/bevy_ecs/wintf/D2D）に同居させると、下流 `sakura-engine` が型1個のために areka 全体へ依存する＝アーキテクチャ臭。専用クレートなら下流は軽量依存で済む。
+  2. **議題1（フィールド可視性）の根治**: 共有契約を重バイナリに埋めたことが `SurfaceArg`/`NewLineRatio` の「別クレートから読めない」穴の遠因。公開前提の専用クレートへ出せば問題が消える（＋NewType は `as_str()`/`ratio()` アクセサで読み取り公開＝dola `ActorKey` 流儀）。
+  3. **役割集約**: M-boot のパーサー4兄弟（sakura/shell/balloon/package-mount）は全員が同一素性（純粋/std/host 非依存）。役割で1クレートに束ねるのが自然でクレート乱立も防ぐ。roadmap「横断構造は最初から正しく持つ」と整合。brief も配置を「着手時に確定」と open にしていた（制約違反でない）。
+- **YAGNI 規律**: 本 spec が作るのは `areka-parsers` クレート＋`sakura` モジュール**のみ**。兄弟（shell/balloon/package）の空スタブは作らない＝各 spec が着手時に自分のモジュールを追加（balloon-system の空 spec 工場を踏まない）。
+- **areka 影響**: なし（bin のまま・lib 化しない）。
+- **議題1（アクセサ）はこの裁定に吸収**: 専用クレート化＋NewType アクセサ追加で I/O 契約が機能する形に確定。
