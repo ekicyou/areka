@@ -223,8 +223,10 @@ mod tests {
             MsgTag::Response,
             MsgTag::Unload,
         ] {
-            // 低 32bit のみ占有（ULONG_PTR/usize の上位 32bit は常に 0）。
-            let as_dwdata = tag.as_u32() as usize;
+            // 低 32bit のみ占有（ULONG_PTR の上位 32bit は常に 0）。
+            // 評価は u64 で行う（i686 では usize=32bit ゆえ `usize >> 32` が
+            // overflow lint でコンパイルエラーになる・跨ビットネス可搬性）。
+            let as_dwdata = u64::from(tag.as_u32());
             assert_eq!(
                 as_dwdata >> 32,
                 0,

@@ -90,3 +90,5 @@
 
 - 1.2: `windows` 0.62.2 では `COPYDATASTRUCT` は `Win32_System_DataExchange` feature 配下（`Win32_UI_WindowsAndMessaging` でない）。pilot crate の `windows` 依存に crate-scoped で feature 追加が必要。後続で WM 系の windows 型を使うタスクは feature 不足の E0432 に注意。
 - 共有モジュールは各バイナリで `#[path = "ipc.rs"] mod ipc;`（main.rs/helper.rs 双方）。同方式を shiori3.rs 等の他共有モジュールにも適用予定。
+- 3.1 で発覚（1.2 由来の i686 限定欠陥を修正）: i686 では `usize`=32bit ゆえ `(x as usize) >> 32` が overflow lint でコンパイルエラー。低32bit占有検査等の dwData/ULONG_PTR 演算は `u64` で評価すること（跨ビットネス可搬）。x64 の `cargo test` だけでは i686 コンパイル欠陥を検出できない → 共有モジュールは i686 でも `cargo test --target i686-pc-windows-msvc` を回す。
+- 3.1: pasta ABI を実ソース `vendors/pasta/crates/pasta_shiori/src/windows.rs`＋`util/hglobal/mod.rs` でバイト正確確認（矛盾ゼロ）。HGLOBAL=`GlobalAlloc(GMEM_FIXED)` 生ポインタ（GlobalLock 不要）／入力は DLL 解放・request 返り値はホスト解放／`request` の `len` は in/out（入力長を先に書く）／Shift_JIS は windows crate の CP_ACP（WideCharToMultiByte）で encoding_rs 不要。
