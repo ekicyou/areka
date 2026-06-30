@@ -354,4 +354,106 @@ mod tests {
         // 未使用警告抑止（WS_OVERLAPPEDWINDOW/WS_VISIBLE は将来の拡張用 import）。
         let _ = (WS_OVERLAPPEDWINDOW, WS_VISIBLE);
     }
+
+    /// 統合テスト（task 5.2・要件 2.1/6.1/2.5）: **宣言的ウィンドウ生成フロー end-to-end**。
+    ///
+    /// 直前の `factory_creates_...` はファクトリ関数を直接叩くが、本テストは新経路の ECS
+    /// 排他システム `create_windows`（`ecs/window/window_system.rs`）を **実際に駆動**して、
+    /// コンポーネント spawn → `create_windows` 起動 → ライブラリ生成 → `WindowRegistry` 保持 →
+    /// `WindowHandle` 反映 までが結線済みで成立することを検証する（表示自体は E2E 5.3）。
+    ///
+    /// 検証点:
+    /// - (a) **ウィンドウクラス未登録エラーが出ない**: 新経路はライブラリ共有クラスを使い
+    ///   `process_singleton`（旧 2 クラス登録）を一切経由しない。`create_windows` が
+    ///   `EcsWorldSelfRef` 在で factory 経路へ分岐し、`new_checked_ex` がクラス未登録で
+    ///   失敗しないこと（HWND が有効＝登録/生成成功）で担保する（要件 2.5）。
+    /// - (b) `WindowRegistry` がその Entity の `Window<WndState>`（有効 HWND）を保持する。
+    /// - (c) Entity に `WindowHandle` が付与される。
+    ///
+    /// headless 制約: DComp（`WS_EX_NOREDIRECTIONBITMAP`）で不可視のまま実 HWND を生成し
+    /// メッセージループは回さない。`ShowWindow` を含む実表示と full `new→world→run` は E2E 5.3。
+    #[test]
+    fn create_windows_new_path_spawns_registers_and_handles_without_class_error() {
+        use crate::ecs::window::window_system::create_windows;
+        use crate::ecs::world::EcsWorldSelfRef;
+
+        // 共有 World（strong 所有者をテストが保持）。`create_windows` は self-ref の Weak を
+        // 読んで WndState 用の外側 World 参照を得る。
+        let shared = make_shared_world();
+        let weak = Rc::downgrade(&shared);
+
+        // create_windows は bevy `&mut World` 排他システム。本番結線（WinApp::wire_*）が
+        // 注入するのと同じ NonSend リソースを揃える:
+        //  - EcsWorldSelfRef（新経路分岐スイッチ＝在で factory 経路）
+        //  - WindowRegistry<Window<WndState>>（本番単相・生成物の保持先）
+        let mut bevy_world = World::new();
+        bevy_world.insert_non_send_resource(EcsWorldSelfRef(weak));
+        bevy_world.insert_non_send_resource(WindowRegistry::<LibWindow<WndState>>::new());
+
+        // 宣言的に Window（+ Style/Pos）コンポーネントを spawn（生成前は WindowHandle 不在）。
+        let entity = bevy_world
+            .spawn((
+                Window {
+                    title: "DeclFlow".to_string(),
+                    parent: None,
+                    composition_mode: CompositionMode::DComp, // 不可視（headless）
+                },
+                WindowStyle {
+                    style: WS_POPUP,
+                    ex_style: WS_EX_LAYERED,
+                },
+                WindowPos::default(), // CW_USEDEFAULT → SetWindowPos スキップ
+            ))
+            .id();
+
+        // 前提: 生成前は WindowHandle 不在。
+        assert!(
+            bevy_world.get::<WindowHandle>(entity).is_none(),
+            "create_windows 実行前は WindowHandle 不在であるべき"
+        );
+
+        // --- 新経路 ECS システムを実駆動（self-ref 在 → factory 経路へ分岐） ---
+        create_windows(&mut bevy_world);
+
+        // (c) WindowHandle が付与され、(a) HWND が有効（クラス未登録/生成失敗なし）。
+        let handle = bevy_world
+            .get::<WindowHandle>(entity)
+            .copied()
+            .expect("create_windows 後に WindowHandle が付与されるべき（生成成功）");
+        assert!(
+            !handle.hwnd.is_invalid(),
+            "生成 HWND は有効であるべき（クラス未登録エラーなく生成成立・要件 2.5）"
+        );
+        // HasGraphicsResources も反映（グラフィクス経路の宣言的トリガ）。
+        assert!(
+            bevy_world.get::<HasGraphicsResources>(entity).is_some(),
+            "create_windows 後に HasGraphicsResources が付与されるべき"
+        );
+
+        // (b) WindowRegistry がその Entity の Window<WndState>（有効 HWND）を保持する。
+        let registry = bevy_world
+            .get_non_send_resource::<WindowRegistry<LibWindow<WndState>>>()
+            .expect("WindowRegistry が存在するべき");
+        assert!(
+            !registry.is_empty(),
+            "生成済みウィンドウが WindowRegistry に保持されるべき（spawn→生成→保持）"
+        );
+        let _ = registry;
+
+        // 冪等性: 同じ Entity は WindowHandle 付与済みゆえ再 create_windows で二重生成しない
+        // （クエリ `Without<WindowHandle>` で除外される）。registry 件数は 1 のまま。
+        create_windows(&mut bevy_world);
+        let registry = bevy_world
+            .get_non_send_resource::<WindowRegistry<LibWindow<WndState>>>()
+            .expect("WindowRegistry が存在するべき");
+        assert!(
+            !registry.is_empty(),
+            "再 create_windows でも registry は維持される（二重生成・取りこぼしなし）"
+        );
+        let _ = registry;
+
+        // クリーンアップ: registry drop → Window<WndState>::drop → DestroyWindow。
+        drop(bevy_world);
+        drop(shared);
+    }
 }

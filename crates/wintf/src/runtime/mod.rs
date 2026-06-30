@@ -313,6 +313,105 @@ mod tests {
         app.world.borrow_mut().try_tick_world();
     }
 
+    /// 統合テスト（task 5.2・要件 1.3/1.5/2.1）: **close→reconcile→shutdown チェーン end-to-end**。
+    ///
+    /// `new_wires_registry_shutdown_hook_to_notify_event` は hook を直接発火する seam テスト。
+    /// 本テストは実 `Window<WndState>`（実 HWND）を WinApp の World へ生成し、その `Window`
+    /// コンポーネントを除去 → 実 `reconcile_window_registry`（schedule 駆動）が registry を
+    /// 空へ遷移させ → 注入済み shutdown hook が WinApp 所有 `Event` を notify し → arm 済み
+    /// listener が **ハングせず** 起床する、という close→shutdown の本番チェーンを実 reconcile
+    /// で貫通検証する（要件 1.3「終了要求で清掃終了」/ 1.5「ハング・panic なし」）。
+    ///
+    /// これは `run()` の `block_on(shutdown_future)` が最後の窓クローズで **先行 quit せず**
+    /// future 完了で正常復帰する経路の核（最後の窓 close → Event notify）を結線実証する。
+    /// full `run()` の block_on 復帰（メッセージループ実駆動＋OS close イベント）は E2E 5.3。
+    ///
+    /// headless 制約: DComp で不可視のまま実 HWND を生成（GDI 非表示）、メッセージループは
+    /// 回さず reconcile を直接 schedule 実行する。
+    #[test]
+    fn close_to_reconcile_to_shutdown_chain_wakes_listener() {
+        use crate::ecs::window::{CompositionMode, Window, WindowHandle, WindowStyle};
+        use crate::ecs::world::EcsWorldSelfRef;
+        use crate::runtime::window_factory::EcsWindowFactory;
+        use bevy_ecs::schedule::Schedule;
+        use windows::Win32::UI::WindowsAndMessaging::{WS_EX_LAYERED, WS_POPUP};
+
+        let app = WinApp::new().expect("WinApp::new should succeed headless");
+        // 新経路結線（self-ref 注入 + reconcile を FrameFinalize へ登録 + shutdown hook は
+        // new() で既に WinApp 所有 Event へ結線済み）。
+        app.wire_new_path();
+
+        // 終了シグナルへ先に listen() を arm（reconcile 空遷移の notify を取りこぼさない）。
+        let listener = app.shutdown.listen();
+
+        let weak = Rc::downgrade(&app.world);
+
+        // 実 Window<WndState>（実 HWND）を 1 枚生成し registry へ格納（DComp で不可視）。
+        let entity = {
+            let world = app.world();
+            let mut ecs = world.borrow_mut();
+            let w = ecs.world_mut();
+            // self-ref は wire_new_path で注入済みだが、明示確認（factory 分岐の前提）。
+            assert!(
+                w.get_non_send_resource::<EcsWorldSelfRef>().is_some(),
+                "wire_new_path が EcsWorldSelfRef を注入しているべき"
+            );
+            let entity = w
+                .spawn((
+                    Window {
+                        title: "ShutdownChain".to_string(),
+                        parent: None,
+                        composition_mode: CompositionMode::DComp,
+                    },
+                    WindowStyle {
+                        style: WS_POPUP,
+                        ex_style: WS_EX_LAYERED,
+                    },
+                ))
+                .id();
+            EcsWindowFactory::create_window(w, entity, weak.clone());
+            // 生成済み・registry 非空・ハンドル付与を確認（最後の窓が在る状態）。
+            assert!(
+                w.get::<WindowHandle>(entity).is_some(),
+                "factory 生成後に WindowHandle が付与されるべき"
+            );
+            let reg = w
+                .get_non_send_resource::<ProdWindowRegistry>()
+                .expect("ProdWindowRegistry が存在するべき");
+            assert!(!reg.is_empty(), "生成直後の registry は非空（窓が在る）");
+            entity
+        };
+
+        // 最後の窓を close 相当（`Window` コンポーネント除去）→ 実 reconcile を 1 周。
+        {
+            let world = app.world();
+            let mut ecs = world.borrow_mut();
+            let w = ecs.world_mut();
+            w.entity_mut(entity).remove::<Window>();
+
+            // 本番 reconcile（`Window<WndState>` 単相）を schedule 実行（FrameFinalize 相当）。
+            // registry が空へ遷移し、注入済み hook が WinApp 所有 Event を notify する。
+            let mut sched = Schedule::default();
+            sched.add_systems(
+                reconcile_window_registry::<wintf_winmsg_executor::util::Window<WndState>>,
+            );
+            sched.run(w);
+
+            // 空遷移を確認（最後の窓が消えた）。
+            let reg = w
+                .get_non_send_resource::<ProdWindowRegistry>()
+                .expect("ProdWindowRegistry が存在するべき");
+            assert!(
+                reg.is_empty(),
+                "最後の Window 除去後 reconcile で registry は空へ遷移するべき"
+            );
+        }
+
+        // 空遷移 hook が WinApp 所有 Event を notify したので arm 済み listener が起床する。
+        // ハングしない = run() の shutdown future が完了して block_on が正常復帰できる経路。
+        listener.wait();
+    }
+
     /// 終了シグナルは `WinApp` が strong 所有する（`shutdown` フィールド存在の確認も兼ねる）。
     /// 構築直後は未 notify ゆえ、新規 arm した listener は即起床しない（false-positive 防止）。
     #[test]
