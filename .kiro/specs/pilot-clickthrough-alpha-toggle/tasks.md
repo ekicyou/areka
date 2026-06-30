@@ -49,7 +49,7 @@
   - _Boundary: TransparentWindow_
   - _Depends: 3.1, 2.1_
 
-- [ ] 3.3 クリック受領による色トグルと DComp 再描画
+- [x] 3.3 クリック受領による色トグルと DComp 再描画
   - `WM_LBUTTONDOWN` を受領してログ出力し、円の塗り色をトグル変更して DComp 経路で再描画する（D2D 再 `FillEllipse`＋`Present`＋`Commit`）
   - 再描画に GDI／`WM_PAINT`／`InvalidateRect` を用いない（DComp visual tree のみ）
   - 観測: 中央円をクリックするとログが出て円の色が変わる

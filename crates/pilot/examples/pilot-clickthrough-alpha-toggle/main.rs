@@ -38,8 +38,8 @@ use windows::Win32::UI::HiDpi::{
     DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2, SetProcessDpiAwarenessContext,
 };
 use windows::Win32::UI::WindowsAndMessaging::{
-    GetWindowRect, WINDOW_EX_STYLE, WM_CLOSE, WS_EX_NOREDIRECTIONBITMAP, WS_EX_TOPMOST,
-    WS_EX_TRANSPARENT,
+    GetWindowRect, WINDOW_EX_STYLE, WM_CLOSE, WM_LBUTTONDOWN, WS_EX_NOREDIRECTIONBITMAP,
+    WS_EX_TOPMOST, WS_EX_TRANSPARENT,
 };
 use windows::core::{Interface, Result};
 
@@ -183,6 +183,16 @@ impl AppState {
     fn current_color(&self) -> D2D1_COLOR_F {
         COLORS[self.color_index.get()]
     }
+
+    /// 円色インデックスを次へ巡回（`COLORS` 長で剰余）し、新しい現在色を返す（R6.3）。
+    ///
+    /// クリック色トグル（3.3）が `WM_LBUTTONDOWN` で呼ぶ。`Cell` の interior mutability で
+    /// `Fn` wndproc から安全に反転できる（`&self`・単一 UI スレッド・再入なし）。
+    fn toggle_color(&self) -> D2D1_COLOR_F {
+        let next = (self.color_index.get() + 1) % COLORS.len();
+        self.color_index.set(next);
+        COLORS[next]
+    }
 }
 
 /// NOREDIRECTIONBITMAP・トップモスト・クリック透過の三点セット ex_style で
@@ -219,9 +229,31 @@ fn make_window(state: Rc<AppState>) -> Window<Rc<AppState>> {
                     s.shutdown.notify(usize::MAX);
                     Some(LRESULT(0))
                 }
+                WM_LBUTTONDOWN => {
+                    // 受領ログ＝T3 の証跡（R6.1/R6.2）。不透明円の内側を踏んだクリックだけが
+                    // ここへ届く（円外＝WS_EX_TRANSPARENT で背面へ抜ける／4.x で配線）。
+                    println!("[click] WM_LBUTTONDOWN 受領（不透明円クリック）→ 色トグル＋DComp 再描画");
+
+                    // 円色インデックスを反転し（R6.3）、新色で DComp 再描画する。
+                    // GDI/WM_PAINT/InvalidateRect は使わず DComp 描画パス（draw_circle）のみ再利用
+                    // ＝Clear(透明)＋FillEllipse(新色)＋EndDraw＋Commit（設計「視覚的透過方式」節）。
+                    let color = s.toggle_color();
+                    match s.pipeline.borrow().as_ref() {
+                        Some(pipeline) => {
+                            if let Err(e) = draw_circle(pipeline, color) {
+                                eprintln!("[dcomp][warn] 色トグル後の再描画に失敗: {e}");
+                            }
+                        }
+                        // パイプライン未構築（初期化失敗時）。色は既に反転済みで次回描画に反映。
+                        None => eprintln!(
+                            "[dcomp][warn] pipeline 未構築のため再描画をスキップ（色のみ反転）"
+                        ),
+                    }
+                    Some(LRESULT(0))
+                }
                 // 他メッセージは DefWindowProc にフォールバック（None）。
-                // WM_NCHITTEST は自前処理しない（R2.4）。WM_LBUTTONDOWN（3.3）・
-                // DComp 構築（3.2）・スタイルトグル（4.2）は本タスクの責務外。
+                // WM_NCHITTEST は自前処理しない（R2.4）。DComp 構築（3.2）・
+                // カーソルワーカ／スタイルトグル（4.x/5.x）は本タスクの責務外。
                 _ => None,
             }
         },
@@ -412,8 +444,9 @@ fn main() {
     });
     println!("[window] WM_CLOSE 受領 → shutdown 完了・清掃終了");
 
-    // 描画円の色トグル on-click（3.3）・カーソルワーカ／スタイルトグル（4.x）・
-    // ワーカ join／初期状態収束（5.1）は後続タスクで実装する。
+    // 描画円の色トグル on-click（3.3）は wndproc の WM_LBUTTONDOWN で実装済み。
+    // カーソルワーカ／スタイルトグル（4.x）・ワーカ join／初期状態収束（5.1）は
+    // 後続タスクで実装する。
 }
 
 #[cfg(test)]
