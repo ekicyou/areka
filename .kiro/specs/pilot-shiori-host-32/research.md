@@ -90,12 +90,12 @@ IPC 方式の真の決定因子は throughput でも payload サイズでもな�
 - **stdio（匿名パイプ）**: overlapped 不可ゆえ blocking read → **専用 reader スレッド必須**（I/O スレッドが read → UI スレッドへ post → UI スレッドが `pasta.dll` request → 応答を I/O スレッドへ戻して write）。最小コード・`std::process::Command` で完結・プロセス終了=EOF で生存監視が自然。
 - **named pipe**: overlapped I/O ＋ `MsgWaitForMultipleObjectsEx` で**単一スレッドで窓メッセージとパイプ完了を同時待機**可。全二重・broken pipe で crash 即検出・roadmap `host32-ipc`（pipe＋handshake/lifecycle）一致・OnSecondChange タイマも自然。コード量は中。
 
-**刻み（要件ディスカッションで決定＝(B)・2026-06-30）**:
-- **先進坑 = named pipe ＋ overlapped ＋ `MsgWaitForMultipleObjectsEx`**（＝本坑と同方式）。**決定 (B)**: stdio の最小性より、本坑 `host32-ipc` の真の難所「**overlapped pipe × 窓持ちメッセージループの単一スレッド統合**」を先進坑で**前倒し de-risk する**価値を採る。go-gating な耐力壁（DLL 駆動）に加え、この統合パターンも先進坑で実証することで本坑の不確実性を最大限削る。
-- **本坑 = 同方式を knowledge から綺麗に掘り直す**（roadmap host32-ipc / COMPAT §5 第一候補と一致）。先進坑 README の検証結果を参照し二重化しない（two-tunnel 3.5）。
-- 速度は非決定因子（下記補足）。stdio を捨て named pipe を選んだのも速度理由ではなく**統合難所の前倒し**。
-
-**再考（2026-06-30・要 developer 決定）**: Option D（WM_COPYDATA）の再評価により **(B)=named pipe の決定を再考中**。WM_COPYDATA は helper のメッセージループの WndProc へ自然配送され、(B) が de-risk しようとした「overlapped pipe × メッセージループ統合」の難所**そのものを消す**（統合作業が発生しない）。host-32 の小メッセージ req/resp・single-in-flight・伺かドメイン idiom・最小コードの観点で WM_COPYDATA 優位。named pipe の利（全二重/大データ/push）は legacy=pull 専用・payload 小ゆえ非適用。**最終決定は developer**（決定後に本節と requirements の決定 B 記述を更新する）。
+**方式の決定（要件ディスカッション・2026-06-30）**:
+- **最終決定は設計議題**（`/kiro-design`）。要件フェーズでは IPC 方式をハード固定しない（開発者判断）。
+- **強く推奨 = Option D（WM_COPYDATA）**: HWND 交換も含め通信を **Window Message に一本化**。helper の `wintf-winmsg-executor` メッセージループの WndProc へ自然配送＝(B) が de-risk しようとした「overlapped pipe × メッセージループ統合」の難所**そのものが存在しない**。最小・single-in-flight 同期 req/resp・伺か idiom。技術調査（§6）で i686 ビルド／`wintf-winmsg-executor` i686／cdecl flat-C を実証済で前提も固い。
+- **named pipe（Option A）は設計上の強い理由がある場合のみ受容**（全二重/大データ/push が要るとき。但し legacy=pull 専用・payload 小ゆえ host-32 では通常不要）。
+- 速度は非決定因子（下記補足）。選択はメッセージループ共存エルゴノミクスで決する。
+- **HWND ハンドシェイク**: 別 side-channel（pipe 等）を混ぜず **Window Message パラダイムに統一**（例: 親 HWND を seed し helper が自 HWND を hello メッセージで返す）。具体は design で確定。
 
 **bitness 安全規約（方式共通）**: 跨ぐのは生バイト列のみ（§5.4）。フレーミングは**固定幅 LE 長さ prefix（u32 LE）**。payload に**ポインタ/HANDLE/struct を載せない**（同一マシンで endian 共通だが固定幅で明示）。親 x64 が i686 helper exe を `CreateProcess`/`std::process::Command` で起動（exe パスは §3.2 の 2 段ビルド成果物を arg/env で受け渡し）。
 
