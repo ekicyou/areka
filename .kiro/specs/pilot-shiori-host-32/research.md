@@ -196,7 +196,7 @@ IPC 方式の真の決定因子は throughput でも payload サイズでもな�
 - `pasta.dll` の cdecl flat-C 確認 → §5.2 item 4（`request` シグネチャ）の前提が固まる。
 - いずれも **Option D（WM_COPYDATA）** を後押し: 親 x64・helper 双方が `wintf-winmsg-executor` で窓を持てば、WM_COPYDATA が WndProc へ自然配送＝統合作業ゼロ。
 
-**残る go-gating でない未知（design で詰める）**: `request` の HGLOBAL 所有権の実挙動・`load` の ghostdir 実引数・WM_COPYDATA 往復の再入（応答）実装。
+**残る go-gating でない未知（design で詰める）**: ~~`request` の HGLOBAL 所有権の実挙動・`load` の ghostdir 実引数~~（**2026-06-30 pasta 実ソース `pasta_shiori/src/windows.rs` で確定**: `load(HGLOBAL,usize)->bool`/`unload()->bool`/`request(HGLOBAL,*mut usize)->HGLOBAL`・入力 HGLOBAL は callee 解放/`request` 返り値は caller 解放・**`load` dir=ANSI(Shift_JIS)/`request`=UTF-8** の charset 非対称・OnBoot は GET）・WM_COPYDATA 往復の再入（応答）実装。実行時挙動（spawn_actor スレッド/block-on-reply）は先進坑実走で確認。
 
 ## 7. 設計フェーズ synthesis 成果（design-generation・2026-06-30）
 

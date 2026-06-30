@@ -450,7 +450,7 @@ impl Shiori3Codec {
 
 **Responsibilities & Constraints**
 - `LoadLibraryW(pasta.dll)`＋`GetProcAddress` で `load`/`unload`/`request`（cdecl flat-C・research.md §6 で装飾なし確認済）を解決し関数ポインタへ transmute。
-- `load(ghostdir)` を呼び、クラッシュせず完了させる（要件 3.3）。
+- `load(ghostdir)` を呼び、クラッシュせず完了させる（要件 3.3）。**ghostdir は ANSI(Shift_JIS) でエンコード**して HGLOBAL 化する（pasta `load` は `to_ansi_str()` で ANSI decode・実ソース確認）。
 - `request` は受信バイト列を `GlobalAlloc` で HGLOBAL 化して DLL へ渡し、応答 HGLOBAL からバイト列を取り出す。**HGLOBAL 所有権規約**（要求 HGLOBAL は DLL 解放／応答 HGLOBAL はホスト解放）は helper プロセス内に閉じる（COMPAT §85・research.md §5.4）。
 - ロード/解決失敗は観測可能な形で親へ返す（要件 3.4）。**SHIORI3 ロジックは持たない**（バイト proxy）。
 
@@ -463,16 +463,17 @@ impl Shiori3Codec {
 
 ##### Service Interface
 ```rust
-// flat-C cdecl シグネチャ（SHIORI/3.0・research.md §6 で undecorated 確認）。
-type LoadFn    = unsafe extern "C" fn(h: HGLOBAL, len: usize) -> BOOL;
-type UnloadFn  = unsafe extern "C" fn() -> BOOL;
-type RequestFn = unsafe extern "C" fn(h: HGLOBAL, len: *mut usize) -> HGLOBAL;
+// flat-C cdecl シグネチャ（pasta 実ソース pasta_shiori/src/windows.rs で確定・2026-06-30）。
+// 返り値は Rust `bool`(1 byte) で Win32 BOOL(i32) ではない（呼び出し側も bool で受ける）。
+type LoadFn    = unsafe extern "C" fn(hdir: HGLOBAL, len: usize) -> bool;        // hdir は ANSI(Shift_JIS)
+type UnloadFn  = unsafe extern "C" fn() -> bool;
+type RequestFn = unsafe extern "C" fn(req: HGLOBAL, len: *mut usize) -> HGLOBAL; // req は UTF-8
 
 struct ShioriEntries { load: LoadFn, unload: UnloadFn, request: RequestFn }
 
 impl ShioriByteProxy {
     fn load_dll(dll_path: &Path) -> Result<ShioriEntries, ProxyError>;
-    /// ghostdir を HGLOBAL 化して load。要求 HGLOBAL は DLL が解放。
+    /// ghostdir を ANSI(Shift_JIS) で HGLOBAL 化して load。要求 HGLOBAL は DLL(callee) が解放。
     fn shiori_load(e: &ShioriEntries, ghostdir: &Path) -> Result<(), ProxyError>;
     /// request バイト列を HGLOBAL 化して渡し、応答 HGLOBAL からバイト列を取り出す。
     /// 応答 HGLOBAL は本関数（ホスト側）が GlobalFree する。
@@ -487,9 +488,10 @@ enum ProxyError { LoadLibraryFailed, EntryNotFound, LoadFailed, RequestFailed }
 - Invariants: `unsafe` 境界は本コンポーネントに集約。HGLOBAL は IPC を跨がない（プロセスローカル）。
 
 **Implementation Notes**
-- Integration: 実際の `load`/`request` の引数 ABI（HGLOBAL の渡し方・長さの out param）は実物 DLL で実走確認（research.md §6「残る未知」）。本シグネチャは COMPAT §5 の像に基づく想定で、実走で是正する。
+- Integration（実ソース確定・2026-06-30）: `load`/`unload`/`request` の ABI・所有権・charset は pasta 実ソース `pasta_shiori/src/windows.rs` で**確定**（もはや想定でない・議題 1 解決）。`load(hdir: HGLOBAL, len) -> bool`（hdir は **ANSI/Shift_JIS** dir・callee が解放）／`unload() -> bool`／`request(req: HGLOBAL, len: *mut usize) -> HGLOBAL`（req は **UTF-8**・callee が req を解放／返り値 HGLOBAL は **caller(ホスト) が解放**）。返り値は Rust `bool`(1 byte)。OnBoot は `GET SHIORI/3.0`（pasta は GET=block-on-reply／NOTIFY=即 204・空/不正は 204）。
+- **charset 非対称（重要）**: `load` の ghostdir は **ANSI(Shift_JIS)** エンコード（pasta `to_ansi_str()`）・`request` は **UTF-8**（`to_utf8_str()`）。先進坑の ghostdir は ASCII パスゆえ ANSI≡UTF-8 バイト等価で実害なしだが、正準は ANSI ゆえ load 引数は ANSI 化する（本坑/非 ASCII パス対応）。
 - Validation: `load` 無 crash 完了（3.3）・`request` 応答取得（4.2）を IPC で親へ返し観測。
-- Risks: HGLOBAL 所有権の実挙動・`request` の正確なシグネチャ（go-gating でない未知・design で詰め切れず実走で確定する点を README に記録）。
+- Risks: 静的 ABI は実ソースで確定済。残るは**実行時挙動**（`load`→`spawn_actor` のスレッド生成／`request` の block-on-reply 応答）の実走確認のみ＝先進坑の本検証そのもの。
 
 ### 一次記録レイヤ
 
