@@ -37,6 +37,11 @@ mod wndproc_bridge;
 /// 該当要素を drop（`DestroyWindow`）するリコンサイル `reconcile_window_registry` を提供する。
 mod window_registry;
 
+/// ECS ウィンドウ生成ファクトリ層。宣言的ウィンドウ生成をライブラリの再入安全な
+/// `util::Window::new_checked_ex` 経由へ置換し、生成後に style/pos/title を反映して
+/// `WindowRegistry` へ格納する `EcsWindowFactory` を提供する（live cutover は 4.1/4.3）。
+mod window_factory;
+
 /// UI スレッド基盤の owner。旧 `WinThreadMgr` を置換する新公開 facade。
 ///
 /// COM 初期化・DPI awareness 設定・`EcsWorld` 生成を統括し、共有 World ハンドルの
