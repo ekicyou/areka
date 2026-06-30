@@ -39,7 +39,7 @@
   - _Boundary: TransparentWindow_
   - _Depends: 1.2_
 
-- [ ] 3.2 DComp パイプライン構築と初回描画（透明クリア＋不透明円）
+- [x] 3.2 DComp パイプライン構築と初回描画（透明クリア＋不透明円）
   - D3D11CreateDevice(BGRA)→DXGI factory→`IDXGIFactory2::CreateSwapChainForComposition`（premultiplied alpha）→`DCompositionCreateDevice`→`CreateTargetForHwnd(hwnd, topmost)`→`CreateVisual`→`SetContent(swapchain)`→`SetRoot`→`Commit` の visual tree を構築する
   - back buffer に Direct2D で描画する: `Clear`(透明 α=0)→窓中心・半径 `RADIUS`(=200) の `FillEllipse`(不透明 α=1)。描画円は AlphaMask（2.1）の判定円と同一定数・同一中心算出を共有する（R2.2／R4.1）。`Present`＋`Commit`
   - GDI／`WM_PAINT`／`InvalidateRect`／DWM extend-frame glass は描画経路に使わない（NOREDIRECTIONBITMAP 窓は redirection surface を持たず GDI/glass は画面に出ない＝DComp visual tree が唯一の描画手段）
@@ -100,3 +100,8 @@
   - 観測: `REPORT.md` に T1〜T8 の合否・証跡が埋まり、必須合格基準の充足が判定され、人間が総合判定（go／違う／直す）を記入している
   - _Requirements: 9.1, 9.2, 9.3, 9.4, 9.6, 10.4_
   - _Depends: 5.1, 6.1_
+
+## Implementation Notes
+
+- 3.2: 判定円（`alpha_is_opaque`）も描画円（DComp surface）も `GetWindowRect` 中心基準で算出している。R4.1 の文言は「クライアント中央」だが、ボーダーレスの `WindowType::TopLevel` ツール窓では client≈window で中心が一致する（design.md §座標手順で T7 へ委譲済み）。**T7/6.2 の目視で「見えている円」と「判定円」がズレないか一度確認すること**。ズレた場合のみ本坑でクライアント矩形基準へ補正。
+- 3.2: DComp は `IDCompositionSurface` 経路（`CreateSurface`→`BeginDraw::<ID2D1DeviceContext>`→`EndDraw`→`Commit`）を採用（swapchain 経路より配線が単純）。`BeginDraw` が返す atlas オフセット POINT を円中心へ加算して吸収（`SetTransform`/windows-numerics 名指し回避）。描画 DC は `SetDpi(96)` で 1DIP=1px 固定し PMv2 物理px の判定円と一致させている。

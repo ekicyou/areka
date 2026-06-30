@@ -10,19 +10,38 @@
 //! （窓は `WS_EX_NOREDIRECTIONBITMAP` で生成するため GDI/`WM_PAINT` は画面に出ない）。
 //! 葉ノード隔離（examples 配下のみ・inbound 依存ゼロ）は厳守する。
 
+use std::cell::Cell;
 use std::pin::Pin;
 use std::rc::Rc;
 
 use event_listener::Event;
 use wintf_winmsg_executor::block_on;
 use wintf_winmsg_executor::util::{Window, WindowMessage, WindowType};
-use windows::Win32::Foundation::{LRESULT, POINT, RECT};
+use windows::Win32::Foundation::{HMODULE, HWND, LRESULT, POINT, RECT};
+use windows::Win32::Graphics::Direct2D::Common::D2D1_COLOR_F;
+use windows::Win32::Graphics::Direct2D::{
+    D2D1CreateDevice, D2D1_ELLIPSE, ID2D1Device, ID2D1DeviceContext,
+};
+use windows::Win32::Graphics::Direct3D::D3D_DRIVER_TYPE_HARDWARE;
+use windows::Win32::Graphics::Direct3D11::{
+    D3D11CreateDevice, D3D11_CREATE_DEVICE_BGRA_SUPPORT, D3D11_SDK_VERSION, ID3D11Device,
+};
+use windows::Win32::Graphics::DirectComposition::{
+    DCompositionCreateDevice3, IDCompositionDesktopDevice, IDCompositionDevice2,
+    IDCompositionSurface, IDCompositionTarget, IDCompositionVisual2,
+};
+use windows::Win32::Graphics::Dxgi::Common::{
+    DXGI_ALPHA_MODE_PREMULTIPLIED, DXGI_FORMAT_B8G8R8A8_UNORM,
+};
+use windows::Win32::Graphics::Dxgi::IDXGIDevice;
 use windows::Win32::UI::HiDpi::{
     DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2, SetProcessDpiAwarenessContext,
 };
 use windows::Win32::UI::WindowsAndMessaging::{
-    WINDOW_EX_STYLE, WM_CLOSE, WS_EX_NOREDIRECTIONBITMAP, WS_EX_TOPMOST, WS_EX_TRANSPARENT,
+    GetWindowRect, WINDOW_EX_STYLE, WM_CLOSE, WS_EX_NOREDIRECTIONBITMAP, WS_EX_TOPMOST,
+    WS_EX_TRANSPARENT,
 };
+use windows::core::{Interface, Result};
 
 /// 不透明円の半径（物理ピクセル, R4.1）。
 ///
@@ -79,22 +98,90 @@ fn init_dpi_awareness() {
     }
 }
 
-/// 透過トップモスト窓に紐づく共有状態（`!Send` で良い＝`Rc`／`HWND` を内包する後続
-/// タスクの拡張点, R2.5）。窓を閉じる契機を `block_on` の future へ伝える shutdown
-/// `Event` を保持する。
+/// 不透明円の塗りつぶし色パレット（タスク 3.3 のクリック色トグルで巡回する候補）。
 ///
-/// 本タスク（3.1）では shutdown 配線のみ。DComp デバイス／ビジュアルツリー（3.2）・
-/// 描画円の色（3.3）・カーソルワーカ／スタイルトグル（4.x/5.x）はここに追加される。
+/// すべて α = 1.0（完全不透明・R4.1）。トグルは色のみ変え、円の幾何（中心・半径）と
+/// クリック透過（`WS_EX_TRANSPARENT`）には一切干渉しない（責務分離・設計「視覚的透過方式」節）。
+/// premultiplied surface ゆえ α = 1 では RGB はそのまま使える。
+const COLORS: [D2D1_COLOR_F; 2] = [
+    // インディゴ（初期色）。
+    D2D1_COLOR_F {
+        r: 0.30,
+        g: 0.20,
+        b: 0.80,
+        a: 1.0,
+    },
+    // オレンジ（トグル先）。
+    D2D1_COLOR_F {
+        r: 0.95,
+        g: 0.55,
+        b: 0.10,
+        a: 1.0,
+    },
+];
+
+/// DComp 視覚パイプラインの COM インターフェース群（UI スレッド専有・`!Send` 許容, R2.5）。
+///
+/// これらは**ドロップすると合成ツリーが崩壊する**ため（target/visual/device の解放は
+/// composition を破棄する）、窓が生きている間 `AppState` 内で保持し続ける。
+/// `desktop` から `IDCompositionDevice2`（CreateVisual/CreateSurface/Commit）へ cast した
+/// `device` を描画に用いる。`target`/`visual` は SetRoot/SetContent 済みで保持のみ目的。
+///
+/// `swapchain` ではなく `IDCompositionSurface` を visual content に用いる（設計「視覚的
+/// 透過方式」節が明示的に許可する同等最小の代替。surface.BeginDraw が D2D デバイス
+/// コンテキストを直接返すため、swapchain＋D2D-over-DXGI-surface より配線が単純）。
+#[allow(dead_code)] // d3d/d2d_device/target/visual は保持専用（ドロップ抑止）。surface/device は描画で使用。
+struct DCompPipeline {
+    /// D3D11 デバイス（BGRA 対応・DComp/D2D の土台）。保持専用。
+    d3d: ID3D11Device,
+    /// D2D デバイス（DComp の rendering device 兼 surface 描画系列）。保持専用。
+    d2d_device: ID2D1Device,
+    /// DComp デスクトップデバイス（CreateTargetForHwnd を持つ）。保持専用。
+    desktop: IDCompositionDesktopDevice,
+    /// CreateVisual/CreateSurface/Commit を持つデバイス（描画・Commit で使用）。
+    device: IDCompositionDevice2,
+    /// 窓に紐づく composition target（SetRoot 済み）。保持専用（ドロップで合成破棄）。
+    target: IDCompositionTarget,
+    /// ルートビジュアル（SetContent(surface) 済み）。保持専用。
+    visual: IDCompositionVisual2,
+    /// 視覚内容を供給する surface（BeginDraw/EndDraw で D2D 描画）。再描画で使用。
+    surface: IDCompositionSurface,
+    /// surface のピクセルサイズ（= 窓矩形の物理サイズ）。円中心算出に使用。
+    width: u32,
+    height: u32,
+}
+
+/// 透過トップモスト窓に紐づく共有状態（`!Send` で良い＝`Rc`／`HWND`／COM を内包する, R2.5）。
+/// 窓を閉じる契機を `block_on` の future へ伝える shutdown `Event` を保持する。
+///
+/// 本タスク（3.2）で DComp パイプライン（`pipeline`）と円の現在色インデックス
+/// （`color_index`）を追加した。色トグルon-click（3.3）・カーソルワーカ／スタイルトグル
+/// （4.x/5.x）は後続で配線される。`pipeline` は `RefCell` 等で包まず、wndproc が `Fn`
+/// ゆえ後続 3.3 の再描画は `&DCompPipeline`＋`Cell<usize>` の現在色読みで行える（COM 呼出は
+/// `&self` メソッド）。
 struct AppState {
     /// 窓クローズ（`WM_CLOSE`）で notify され、`block_on` の await を完了させる。
     shutdown: Event,
+    /// 現在の円色インデックス（`COLORS` への添字）。初期色＝0。クリック色トグル（3.3）が
+    /// 反転に使う。本タスクでは初期描画の色決定にのみ読む。
+    color_index: Cell<usize>,
+    /// DComp 視覚パイプライン。窓セットアップ後に `Some` が入り、以降ドロップしない
+    /// （ドロップ＝合成ツリー崩壊）。初期化前は `None`。
+    pipeline: std::cell::RefCell<Option<DCompPipeline>>,
 }
 
 impl AppState {
     fn new() -> Self {
         Self {
             shutdown: Event::new(),
+            color_index: Cell::new(0),
+            pipeline: std::cell::RefCell::new(None),
         }
+    }
+
+    /// 現在の円色（`COLORS[color_index]`）。
+    fn current_color(&self) -> D2D1_COLOR_F {
+        COLORS[self.color_index.get()]
     }
 }
 
@@ -142,6 +229,153 @@ fn make_window(state: Rc<AppState>) -> Window<Rc<AppState>> {
     .expect("透過トップモスト窓の生成に失敗（Window::new_ex）")
 }
 
+/// DComp 視覚パイプラインを構築する（設計「視覚的透過方式」節・R2.2/R2.3）。
+///
+/// チェーン: `D3D11CreateDevice`(BGRA) → `IDXGIDevice` → `D2D1CreateDevice` →
+/// `DCompositionCreateDevice3`(=`IDCompositionDesktopDevice`) → cast
+/// `IDCompositionDevice2`（CreateVisual/CreateSurface/Commit 系列）→
+/// `CreateSurface`(BGRA8・premultiplied) → `CreateVisual` → `SetContent(surface)` →
+/// `CreateTargetForHwnd(hwnd, topmost=true)` → `SetRoot(visual)`。Commit は初回描画後に行う。
+///
+/// surface サイズは窓の物理矩形（PMv2 ゆえ `GetWindowRect` は物理ピクセル, R7.2）。
+/// `WS_EX_LAYERED` は使わない（視覚透過は DComp visual の per-pixel α が担う）。GDI/`WM_PAINT`/
+/// `DwmExtendFrameIntoClientArea` は一切使わない（NOREDIRECTIONBITMAP 窓では画面に出ない）。
+fn build_pipeline(hwnd: HWND) -> Result<DCompPipeline> {
+    // 窓の物理矩形（PMv2 ＝物理ピクセル）。surface サイズ＝矩形サイズ。
+    let mut rect = RECT::default();
+    // SAFETY: Win32 境界。`hwnd` は直前に生成した有効窓。out 引数 `rect` は書き込み専用。
+    unsafe { GetWindowRect(hwnd, &mut rect)? };
+    let width = (rect.right - rect.left).max(1) as u32;
+    let height = (rect.bottom - rect.top).max(1) as u32;
+
+    // 1) D3D11 デバイス（BGRA 対応フラグ・D2D 相互運用に必須）。
+    let mut d3d: Option<ID3D11Device> = None;
+    // SAFETY: Win32/COM 境界。out 引数 `ppDevice`(Some(&mut d3d)) を非 null で渡すため
+    // HRESULT 成功時に必ず書き込まれる（`?` が失敗経路を先行リターン）。他 out は None。
+    unsafe {
+        D3D11CreateDevice(
+            None, // 既定アダプタ。
+            D3D_DRIVER_TYPE_HARDWARE,
+            HMODULE::default(),
+            D3D11_CREATE_DEVICE_BGRA_SUPPORT,
+            None, // 既定のフィーチャレベル列。
+            D3D11_SDK_VERSION,
+            Some(&mut d3d),
+            None, // 取得したフィーチャレベルは不要。
+            None, // immediate context は不要（D2D 経由で描く）。
+        )?;
+    }
+    let d3d = d3d.expect("D3D11CreateDevice 成功時は ppDevice が書き込まれる");
+
+    // 2) DXGI デバイス（同一 D3D11 デバイスの別インターフェース）。
+    let dxgi: IDXGIDevice = d3d.cast()?;
+
+    // 3) D2D デバイス（DComp の rendering device 兼 surface 描画系列）。
+    // SAFETY: Win32/COM 境界。`dxgi` は有効。第2引数 None で既定プロパティ。
+    let d2d_device: ID2D1Device = unsafe { D2D1CreateDevice(&dxgi, None)? };
+
+    // 4) DComp デスクトップデバイス（rendering device に D2D デバイスを渡す＝repo 準拠）。
+    // SAFETY: Win32/COM 境界。`d2d_device` は有効・IUnknown として渡る。
+    let desktop: IDCompositionDesktopDevice = unsafe { DCompositionCreateDevice3(&d2d_device)? };
+    // CreateVisual/CreateSurface/Commit を持つ基底デバイス（DesktopDevice は Device2 を継承）。
+    let device: IDCompositionDevice2 = desktop.cast()?;
+
+    // 5) 視覚内容の surface（BGRA8・premultiplied α）。
+    // SAFETY: Win32/COM 境界。引数はすべて値・既定列挙。out は Result で受ける。
+    let surface: IDCompositionSurface = unsafe {
+        device.CreateSurface(
+            width,
+            height,
+            DXGI_FORMAT_B8G8R8A8_UNORM,
+            DXGI_ALPHA_MODE_PREMULTIPLIED,
+        )?
+    };
+
+    // 6) ルートビジュアル → surface を content に。
+    // SAFETY: Win32/COM 境界。`device`/`surface` は有効。
+    let visual: IDCompositionVisual2 = unsafe { device.CreateVisual()? };
+    // SAFETY: Win32/COM 境界。`surface` は IUnknown として content に設定可能。
+    unsafe { visual.SetContent(&surface)? };
+
+    // 7) 窓に紐づく composition target（topmost=true）→ ルート設定。
+    // SAFETY: Win32/COM 境界。`hwnd` は有効窓。topmost で最前面合成。
+    let target: IDCompositionTarget = unsafe { desktop.CreateTargetForHwnd(hwnd, true)? };
+    // SAFETY: Win32/COM 境界。`visual` は IDCompositionVisual。
+    unsafe { target.SetRoot(&visual)? };
+
+    Ok(DCompPipeline {
+        d3d,
+        d2d_device,
+        desktop,
+        device,
+        target,
+        visual,
+        surface,
+        width,
+        height,
+    })
+}
+
+/// パイプラインの surface に「透明 Clear ＋ 不透明円」を描画し Commit する（R2.2/R4.1/R7.2）。
+///
+/// 手順: `surface.BeginDraw::<ID2D1DeviceContext>()`（surface 用 D2D コンテキスト＋atlas
+/// オフセット POINT を返す）→ `Clear(α=0)`（背面が透ける）→ 現在色で `FillEllipse`
+/// （中心＝surface 中心＋atlas オフセット・半径 `RADIUS`・α=1）→ `surface.EndDraw()` →
+/// `device.Commit()`。
+///
+/// 円中心はクライアント中心 `(width/2, height/2)`（物理ピクセル）。これは判定円
+/// （`alpha_is_opaque` の `((left+right)/2,(top+bottom)/2)` ＝窓矩形中心）を窓ローカル座標へ
+/// 平行移動したものと一致し、描画円と判定円が同一窓の同一中心・同一半径 `RADIUS` を指す
+/// （R2.2/R4.1）。atlas オフセットは surface 割当原点の補正で、中心に加算する（SetTransform/
+/// Matrix を介さず加算で吸収＝windows-numerics 非依存）。GDI/`WM_PAINT` は使わない。
+fn draw_circle(pipeline: &DCompPipeline, color: D2D1_COLOR_F) -> Result<()> {
+    // surface 用の D2D デバイスコンテキスト＋割当原点（atlas オフセット）。
+    // BeginDraw は描画状態の DC を返す（明示の BeginDraw/EndDraw は surface 側が括る）。
+    let mut offset = POINT::default();
+    // SAFETY: Win32/COM 境界。`updaterect=None` で全面更新。`offset` は out。返る DC は
+    // この surface を対象とする描画用コンテキスト。
+    let dc: ID2D1DeviceContext = unsafe { pipeline.surface.BeginDraw(None, &mut offset)? };
+
+    // PMv2 ＝物理ピクセル基準で描くため DPI を 96（1 DIP = 1px）に固定。
+    // SAFETY: Win32/COM 境界。`dc` は有効。
+    unsafe { dc.SetDpi(96.0, 96.0) };
+
+    // 透明クリア（α=0）＝背面（別プロセス）が透ける（R2.2）。
+    let transparent = D2D1_COLOR_F {
+        r: 0.0,
+        g: 0.0,
+        b: 0.0,
+        a: 0.0,
+    };
+    // SAFETY: Win32/COM 境界。`dc` は有効・色は値ポインタ。
+    unsafe { dc.Clear(Some(&transparent)) };
+
+    // 不透明円ブラシ（現在色・α=1）。
+    // SAFETY: Win32/COM 境界。`color` は値ポインタ。brushproperties=None で既定。
+    let brush = unsafe { dc.CreateSolidColorBrush(&color, None)? };
+
+    // 円中心 = surface 中心（物理px）＋ atlas オフセット。半径 = RADIUS。
+    // 中心算出は判定円（窓矩形中心）と同一基準のローカル平行移動（R2.2/R4.1）。
+    let cx = offset.x as f32 + (pipeline.width as f32) / 2.0;
+    let cy = offset.y as f32 + (pipeline.height as f32) / 2.0;
+    // windows-numerics を名指しせず構築するため Default + フィールド代入。
+    let mut ellipse = D2D1_ELLIPSE::default();
+    ellipse.point.X = cx;
+    ellipse.point.Y = cy;
+    ellipse.radiusX = RADIUS as f32;
+    ellipse.radiusY = RADIUS as f32;
+    // SAFETY: Win32/COM 境界。`ellipse` は値ポインタ・`brush` は ID2D1Brush。
+    unsafe { dc.FillEllipse(&ellipse, &brush) };
+
+    // surface 描画確定 → composition へ反映。
+    // SAFETY: Win32/COM 境界。BeginDraw と対。
+    unsafe { pipeline.surface.EndDraw()? };
+    // SAFETY: Win32/COM 境界。視覚ツリーの変更を DWM へコミット。
+    unsafe { pipeline.device.Commit()? };
+
+    Ok(())
+}
+
 fn main() {
     init_dpi_awareness();
     println!("=== pilot: clickthrough-alpha-toggle 先進坑 ===");
@@ -152,6 +386,25 @@ fn main() {
     let _window = make_window(state.clone());
     println!("[window] NOREDIRECTIONBITMAP|TOPMOST|TRANSPARENT 窓を生成（初期クリック透過 ON）");
 
+    // DComp パイプライン構築＋初回描画（透明 Clear ＋ 中心に不透明円）。
+    // 失敗は握り潰さず警告（NOREDIRECTIONBITMAP 窓は描画なしだと画面に何も出ない＝T1 で気付く）。
+    match build_pipeline(_window.hwnd()) {
+        Ok(pipeline) => {
+            let color = state.current_color();
+            if let Err(e) = draw_circle(&pipeline, color) {
+                eprintln!("[dcomp][warn] 初回描画に失敗: {e}");
+            } else {
+                println!(
+                    "[dcomp] パイプライン構築＋初回描画 完了（surface {}x{}・透明 Clear ＋ 中心に不透明円 r={RADIUS}）",
+                    pipeline.width, pipeline.height
+                );
+            }
+            // COM 群を保持（ドロップ＝合成ツリー崩壊）。block_on 復帰時の state ドロップまで生かす。
+            *state.pipeline.borrow_mut() = Some(pipeline);
+        }
+        Err(e) => eprintln!("[dcomp][warn] DComp パイプライン構築に失敗: {e}"),
+    }
+
     // メッセージループ：WM_CLOSE → shutdown notify → この future 完了でループ終了。
     let shutdown = state.shutdown.listen();
     block_on(async move {
@@ -159,8 +412,8 @@ fn main() {
     });
     println!("[window] WM_CLOSE 受領 → shutdown 完了・清掃終了");
 
-    // DComp パイプライン（3.2）・描画円の色（3.3）・カーソルワーカ／スタイルトグル
-    // （4.x）・ワーカ join／初期状態収束（5.1）は後続タスクで実装する。
+    // 描画円の色トグル on-click（3.3）・カーソルワーカ／スタイルトグル（4.x）・
+    // ワーカ join／初期状態収束（5.1）は後続タスクで実装する。
 }
 
 #[cfg(test)]
