@@ -75,6 +75,12 @@
 - **概要**: `CreateFileMapping`＋`MapViewOfFile`＋名前付きイベントで signal。
 - **トレードオフ**: ✅ 大容量・低コピー。❌ 同期プリミティブ自前管理が重く、使い捨て先進坑には**過剰**。1 往復検証には不要な複雑性。
 
+#### Option D: WM_COPYDATA（窓メッセージによるプロセス間バッファコピー）★再評価で浮上・2026-06-30★
+- **概要**: 親が `SendMessage(helperHwnd, WM_COPYDATA, selfHwnd, &COPYDATASTRUCT)`。OS が `lpData`（`cbData` バイト）を受信側アドレス空間へコピーし WndProc へ**同期配送**。応答は helper→親へ **2nd WM_COPYDATA**（親は SendMessage 待機中も着信 sent message を処理＝再入受領）。HWND 交換は起動時の小ハンドシェイク（親 HWND を arg、helper HWND を hello で返す）。
+- **跨ビットネス**: x64↔x86 OK。ペイロードは OS がバイトコピー（bitness 安全）。HWND はシステムハンドルで跨いで有効。`dwData`(ULONG_PTR) はタグ用途・低 32bit のみ使えば可搬。
+- **トレードオフ**: ✅✅ **helper の窓メッセージループに WndProc へ自然配送**＝overlapped / `MsgWaitForMultipleObjectsEx` / reader スレッド / 手動フレーミングが**全て不要**（`cbData` が長さ）。✅ 旧ローカル SSTP の実機構＝伺かドメイン idiom・実績。✅ single-in-flight 同期 req/resp にピタリ。❌ 両側に窓が要る（areka も helper も既に窓持ち＝非問題・pilot は message-only window 1 個）。❌ 応答は 2nd WM_COPYDATA（再入 SendMessage か `SendMessageTimeout`）。❌ SendMessage 専用（PostMessage 不可）。△ UIPI は integrity 跨ぎのみ（同ユーザ同 integrity 非問題）。crash 監視はプロセスハンドル wait で別途（IPC 直交）。
+- **本評価**: host-32 の実ワークロード（小メッセージ・req/resp・single-in-flight・helper 窓持ち・legacy は pull 専用 COMPAT §89）には**最も素直**。**(B)=named pipe の動機「overlapped pipe × メッセージループ統合の難所を前倒し de-risk」は、WM_COPYDATA では当該難所が存在しないため消滅する**。
+
 > **推奨の方向性（決定でなく情報）**: 先進坑の「最小 1 往復＋使い捨て」目的には **Option B（stdio）か Option A（named pipe）** が妥当。stdio は最小実装で go 基準(1)往復を最短検証でき、named pipe は本坑 `areka-P0-host32-ipc`（pipe＋handshake/lifecycle と明記・roadmap）に方向が近く知見の転用価値が高い。**どちらを先進坑で掘るかは要件ディスカッション/design の判断事項**。共有メモリは先進坑では非推奨（過剰）。
 
 #### 3.1.1 決定因子＝メッセージループ共存（要件ディスカッションで深掘り・2026-06-30）
@@ -88,6 +94,8 @@ IPC 方式の真の決定因子は throughput でも payload サイズでもな�
 - **先進坑 = named pipe ＋ overlapped ＋ `MsgWaitForMultipleObjectsEx`**（＝本坑と同方式）。**決定 (B)**: stdio の最小性より、本坑 `host32-ipc` の真の難所「**overlapped pipe × 窓持ちメッセージループの単一スレッド統合**」を先進坑で**前倒し de-risk する**価値を採る。go-gating な耐力壁（DLL 駆動）に加え、この統合パターンも先進坑で実証することで本坑の不確実性を最大限削る。
 - **本坑 = 同方式を knowledge から綺麗に掘り直す**（roadmap host32-ipc / COMPAT §5 第一候補と一致）。先進坑 README の検証結果を参照し二重化しない（two-tunnel 3.5）。
 - 速度は非決定因子（下記補足）。stdio を捨て named pipe を選んだのも速度理由ではなく**統合難所の前倒し**。
+
+**再考（2026-06-30・要 developer 決定）**: Option D（WM_COPYDATA）の再評価により **(B)=named pipe の決定を再考中**。WM_COPYDATA は helper のメッセージループの WndProc へ自然配送され、(B) が de-risk しようとした「overlapped pipe × メッセージループ統合」の難所**そのものを消す**（統合作業が発生しない）。host-32 の小メッセージ req/resp・single-in-flight・伺かドメイン idiom・最小コードの観点で WM_COPYDATA 優位。named pipe の利（全二重/大データ/push）は legacy=pull 専用・payload 小ゆえ非適用。**最終決定は developer**（決定後に本節と requirements の決定 B 記述を更新する）。
 
 **bitness 安全規約（方式共通）**: 跨ぐのは生バイト列のみ（§5.4）。フレーミングは**固定幅 LE 長さ prefix（u32 LE）**。payload に**ポインタ/HANDLE/struct を載せない**（同一マシンで endian 共通だが固定幅で明示）。親 x64 が i686 helper exe を `CreateProcess`/`std::process::Command` で起動（exe パスは §3.2 の 2 段ビルド成果物を arg/env で受け渡し）。
 
