@@ -19,8 +19,8 @@ use std::thread;
 use std::time::Duration;
 
 use event_listener::Event;
-use wintf_winmsg_executor::block_on;
 use wintf_winmsg_executor::util::{Window, WindowMessage, WindowType};
+use wintf_winmsg_executor::{block_on, spawn_local};
 use windows::Win32::Foundation::{HMODULE, HWND, LRESULT, POINT, RECT};
 use windows::Win32::Graphics::Direct2D::Common::D2D1_COLOR_F;
 use windows::Win32::Graphics::Direct2D::{
@@ -42,8 +42,9 @@ use windows::Win32::UI::HiDpi::{
     DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2, SetProcessDpiAwarenessContext,
 };
 use windows::Win32::UI::WindowsAndMessaging::{
-    GetCursorPos, GetWindowRect, WINDOW_EX_STYLE, WM_CLOSE, WM_LBUTTONDOWN,
-    WS_EX_NOREDIRECTIONBITMAP, WS_EX_TOPMOST, WS_EX_TRANSPARENT,
+    GWL_EXSTYLE, GetCursorPos, GetWindowLongPtrW, GetWindowRect, SWP_FRAMECHANGED, SWP_NOACTIVATE,
+    SWP_NOMOVE, SWP_NOSIZE, SWP_NOZORDER, SetWindowLongPtrW, SetWindowPos, WINDOW_EX_STYLE,
+    WM_CLOSE, WM_LBUTTONDOWN, WS_EX_NOREDIRECTIONBITMAP, WS_EX_TOPMOST, WS_EX_TRANSPARENT,
 };
 use windows::core::{Interface, Result};
 
@@ -478,6 +479,119 @@ fn spawn_cursor_worker(
     })
 }
 
+/// 状態変化適用タスク（StateApplier・UI スレッド専有・タスク 4.2・R5.3/R5.4/R5.5）。
+///
+/// `spawn_local`（**別 `std::thread` ではない**）で UI スレッド上に async タスクを起こす。
+/// スタイル変更 API（`SetWindowLongPtrW`/`SetWindowPos`）は窓所有スレッド（UI）でのみ
+/// 呼べるため、ワーカ（4.1・別スレッド）ではなくここで適用する（設計 Architecture
+/// 「判定・適用の分離」）。ワーカ（4.1）は一切変更しない。
+///
+/// ループ（取りこぼし防止・await 前に毎回 listener を張り直す）:
+/// 1. `let listener = state_changed.listen();`（await 前に張る → notify を逃さない）。
+/// 2. `applied_done`（＝block_on 復帰後に立つ shutdown フラグ）が立っていれば break。
+/// 3. `listener.await`（ワーカの notify か終了 notify で起床）。
+/// 4. 起床後に再度 `applied_done` を確認して break（終了 notify への即応）。
+/// 5. `desired_passthrough` を `Acquire` で読み、ローカル `applied` と比較する。
+///
+/// **差分時（`desired != applied`）のみ**:
+///   - 現在の `GetWindowLongPtrW(hwnd, GWL_EXSTYLE)` を読み、`WS_EX_TRANSPARENT` ビット
+///     **だけ**を加除（desired==ON で立てる・OFF で落とす）して `new_ex` を算出する。
+///     `WS_EX_NOREDIRECTIONBITMAP`/`WS_EX_TOPMOST`（および他ビット）は保存（R5.3）。
+///   - `SetWindowLongPtrW(hwnd, GWL_EXSTYLE, new_ex)` ＋
+///     `SetWindowPos(hwnd, None, 0,0,0,0, SWP_FRAMECHANGED|SWP_NOMOVE|SWP_NOSIZE|
+///     SWP_NOZORDER|SWP_NOACTIVATE)`（R5.3）。
+///   - `applied = desired` を更新し、遷移（"ON→OFF"／"OFF→ON"）をログ（R5.5・T4 証跡）。
+///
+/// **非差分時（`desired == applied`）**: スタイル API を一切呼ばず、遷移ログも出さない
+/// （R5.4・T5 証跡＝no-op パスは style 呼出ゼロ）。ワーカの「変化時のみ notify」と
+/// この `applied` ガードの二重防御は意図的（設計「判定・適用フロー」）。
+///
+/// `applied` の初期値は窓初期 ex_style（`WS_EX_TRANSPARENT` 含む＝クリック透過 ON）と
+/// 一致させて `true`（設計 State Management）。スレッド越え HWND はワーカと同様に生 `isize`
+/// で渡し、UI スレッド内で `HWND(raw as *mut _)` に再構成する（このタスクは UI スレッド上で
+/// 動くため所有スレッドからの呼出になり、スタイル変更 API を正当に呼べる）。
+///
+/// 終了: `applied_done`（block_on 復帰後の shutdown 後始末で立てて notify される想定）で
+/// ループを抜ける。最終的なライフサイクル配線（listen-then-spawn の初期状態収束・
+/// done 立て＋join 順序）はタスク 5.1 の責務。本タスクは StateApplier 消費側のみ。
+fn spawn_state_applier(
+    hwnd: HWND,
+    desired_passthrough: Arc<AtomicBool>,
+    state_changed: Arc<Event>,
+    applied_done: Arc<AtomicBool>,
+) {
+    // HWND を生の isize にしてから move（ポインタ幅 32/64bit 保持）。
+    let raw_hwnd: isize = hwnd.0 as isize;
+
+    spawn_local(async move {
+        // ローカル applied。窓初期 ex_style（TRANSPARENT 含む＝クリック透過 ON）と一致＝true。
+        let mut applied: bool = true;
+
+        loop {
+            // await 前に listener を張る（notify 取りこぼし防止）。
+            let listener = state_changed.listen();
+            if applied_done.load(Ordering::Acquire) {
+                break;
+            }
+            listener.await;
+            if applied_done.load(Ordering::Acquire) {
+                break;
+            }
+
+            // ワーカが公開した希望クリック透過状態。
+            let desired = desired_passthrough.load(Ordering::Acquire);
+
+            // 差分時のみスタイル適用＋ログ。非差分時は style API を一切呼ばない（R5.4）。
+            if desired != applied {
+                // UI スレッド内で HWND を再構成（所有スレッドゆえスタイル変更 API を呼べる）。
+                let hwnd = HWND(raw_hwnd as *mut _);
+
+                // 現在の ex_style を読み、WS_EX_TRANSPARENT ビットだけを加除して new_ex を算出。
+                // NOREDIRECTIONBITMAP/TOPMOST（および他ビット）は保存（R5.3）。
+                // SAFETY: Win32 境界。`hwnd` は main が生かす有効窓。`GetWindowLongPtrW` は
+                // read-only。ポインタ幅（32/64bit）は windows クレートの isize で吸収。
+                let cur = unsafe { GetWindowLongPtrW(hwnd, GWL_EXSTYLE) };
+                let transparent_bit = WS_EX_TRANSPARENT.0 as isize;
+                let new_ex = if desired {
+                    cur | transparent_bit // ON＝WS_EX_TRANSPARENT を立てる（R5.2）。
+                } else {
+                    cur & !transparent_bit // OFF＝WS_EX_TRANSPARENT を落とす（R5.1）。
+                };
+
+                // ex_style を実適用 → SWP_FRAMECHANGED で OS にスタイル変更を反映（R5.3）。
+                // SAFETY: Win32 境界。`hwnd` は UI スレッドが所有する有効窓。`SetWindowLongPtrW`/
+                // `SetWindowPos` は窓所有スレッドからの呼出（本タスクは UI スレッド上で動く）。
+                unsafe {
+                    SetWindowLongPtrW(hwnd, GWL_EXSTYLE, new_ex);
+                    if let Err(e) = SetWindowPos(
+                        hwnd,
+                        None,
+                        0,
+                        0,
+                        0,
+                        0,
+                        SWP_FRAMECHANGED | SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE,
+                    ) {
+                        eprintln!("[applier][warn] SetWindowPos(SWP_FRAMECHANGED) 失敗: {e}");
+                    }
+                }
+
+                // 遷移ログ（R5.5・T4 証跡）。変化したときのみ出す。
+                println!(
+                    "[applier] click-through {} (WS_EX_TRANSPARENT {} ・ex_style 0x{:X}→0x{:X})",
+                    if applied { "ON→OFF" } else { "OFF→ON" },
+                    if desired { "add" } else { "remove" },
+                    cur as u32,
+                    new_ex as u32,
+                );
+
+                applied = desired;
+            }
+            // desired == applied のときは何もしない（style API 非呼出・ログ非出力・R5.4）。
+        }
+    });
+}
+
 fn main() {
     init_dpi_awareness();
     println!("=== pilot: clickthrough-alpha-toggle 先進坑 ===");
@@ -522,12 +636,31 @@ fn main() {
     );
     println!("[cursor] 監視ワーカ起動（別 std::thread・16ms ポーリング・desired 公開＋変化時 notify）");
 
+    // 状態変化適用タスク（StateApplier・タスク 4.2）を UI スレッドへ spawn_local。
+    // ワーカの desired/state_changed を消費し、差分時のみ WS_EX_TRANSPARENT を加除する
+    // （UI スレッド専有・スタイル変更は窓所有スレッドのみ）。block_on より前に spawn して
+    // executor に駆動させる。applier_done は終了用フラグ（最終配線は 5.1）。
+    let applier_done = Arc::new(AtomicBool::new(false));
+    spawn_state_applier(
+        _window.hwnd(),
+        desired_passthrough.clone(),
+        state_changed.clone(),
+        applier_done.clone(),
+    );
+    println!("[applier] 状態変化適用タスク起動（spawn_local・UI スレッド・差分時のみ WS_EX_TRANSPARENT 加除）");
+
     // メッセージループ：WM_CLOSE → shutdown notify → この future 完了でループ終了。
     let shutdown = state.shutdown.listen();
     block_on(async move {
         shutdown.await;
     });
     println!("[window] WM_CLOSE 受領 → shutdown 完了・清掃終了");
+
+    // StateApplier（spawn_local タスク）へ終了を伝える。block_on 復帰後は executor が駆動を
+    // 止めるためタスクは drop で停止するが、明示フラグ＋notify で listener.await を即起床させ
+    // クリーンに break させる（最終的なライフサイクル配線は 5.1 の責務）。
+    applier_done.store(true, Ordering::Release);
+    state_changed.notify(usize::MAX);
 
     // done を立ててワーカを停止 → join で確実に終わらせる（R8.2・「done でワーカ停止」を観測可能に）。
     worker_done.store(true, Ordering::Release);

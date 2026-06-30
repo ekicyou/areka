@@ -67,7 +67,7 @@
   - _Boundary: CursorWorker_
   - _Depends: 2.1, 3.1_
 
-- [ ] 4.2 状態変化適用タスク（UI スレッド・差分時のみ WS_EX_TRANSPARENT を加除）
+- [x] 4.2 状態変化適用タスク（UI スレッド・差分時のみ WS_EX_TRANSPARENT を加除）
   - `spawn_local` の async タスクで `event.listen().await` 起床後、`desired_passthrough` を読みローカル `applied` と比較する
   - 差分があるときのみ `SetWindowLongPtr(GWL_EXSTYLE)`＋`SetWindowPos(SWP_FRAMECHANGED|SWP_NOMOVE|SWP_NOSIZE|SWP_NOZORDER|SWP_NOACTIVATE)` で **`WS_EX_TRANSPARENT` のみ**を加除する。`WS_EX_NOREDIRECTIONBITMAP`／`WS_EX_TOPMOST` は保持する。差分が無い間はスタイル適用 API を呼ばない
   - 切替時に「ON→OFF」「OFF→ON」と座標をログ出力する
