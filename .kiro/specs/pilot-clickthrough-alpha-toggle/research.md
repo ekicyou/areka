@@ -128,30 +128,36 @@ _本書は kiro-validate-gap が生成したギャップ分析（情報提供・
 - **Selected**: 窓を初期 ex_style=`WS_EX_TRANSPARENT|WS_EX_TOPMOST`（クリックスルー ON）で生成。UI 側 `applied` 初期値も ON に一致。ワーカ初回判定は `last`=未確定とし初回のみ無条件に desired 確定＋notify。
 - **Rationale**: 「起動時にカーソルが円内」でも初回 1 回だけ正しく OFF へ適用、以降は変化時のみ。初期生成状態（ON）とカーソルが実際に円外なら applied 一致で API 呼出ゼロ。「変化時のみ API 呼出」と「起動時の正しい初期状態保証」を両立。
 
-### Decision 5: 視覚的透過の実現機構（R2.2/R2.3 を確定・設計再実行で解決）
+### Decision 5: 視覚的透過の実現機構（R2.2/R2.3 を確定・DComp に再確定）
 
-- **Context**: 旧 design.md は「透過の見え方（全域透明＋円のみ可視）は実機確認が要る」と視覚的透過機構を runtime 観測に先送りしていた。これは「どの Win32 API で視覚透過を達成するか」という設計判断を runtime に punt した欠陥。本 pilot の検証対象は `WS_EX_TRANSPARENT` 動的トグルゆえ、視覚機構自体が透明領域でクリックを透過させてはならない（さもないとトグル検証が汚染され pilot が無意味になる）。
+> **改訂履歴（設計ディスカッション）**: 当初本 Decision は (c) **DWM extend-frame glass** を採用していたが、これは誤りと判明し **DirectComposition（DComp）に置換**した。理由: 本 pilot の窓は `WS_EX_NOREDIRECTIONBITMAP`（DComp 描画必須・絶対要件）で生成するため **redirection surface を持たず、GDI(WM_PAINT) も DWM extend-frame glass も画面に何も出さない（inoperative）**。DWM glass は「忠実度が低い」のではなく**この必須窓では機能しない**。以下は確定版（DComp）。
+
+- **Context**: 本 pilot の検証対象は `WS_EX_TRANSPARENT` 動的トグルゆえ、視覚機構自体が透明領域でクリックを透過させてはならない（さもないとトグル検証が汚染され pilot が無意味になる）。さらに本機能の存在理由は **DComp の GPU 描画を捨てないこと**（ULW の CPU ビットマップが DComp swapchain 合成と両立しないため ULW を捨てる）であり、`WS_EX_NOREDIRECTIONBITMAP` は絶対要件である。
 - **Alternatives と棄却理由**:
-  - (a) `WS_EX_LAYERED` + `SetLayeredWindowAttributes(LWA_COLORKEY)`: カラーキー透明ピクセルが**自動でクリック透過**しトグル検証を汚染。さらに `WS_EX_LAYERED` 付与が必要で R2.3（layered 不付与）違反。**棄却**。
-  - (b) `SetWindowRgn` で円クリップ: クリップ除外領域がリージョン経由で**クリック透過**しトグルを汚染。任意ピクセル単位αマスク（本来用途）も表現不能。**棄却**。
-  - (c) **DWM extend-frame glass**（`DwmExtendFrameIntoClientArea(hwnd, &MARGINS{ -1,-1,-1,-1 })`）: 非 layered・redirected 窓に sheet-of-glass を適用。GPU（DWM）合成で視覚透過。クライアントは黒で塗った領域がガラス（背面透過）として抜け、不透明円は黒以外の単色で可視。
-- **Selected**: (c) DWM extend-frame glass。
-- **Rationale**: DWM ガラス透過は**純粋に視覚効果**であり窓は全矩形でヒットテストされ続ける。よってクリック透過は `WS_EX_TRANSPARENT` トグル単独で制御され、視覚機構が検証対象を汚染しない。これは本坑が採る DirectComposition シナリオ（DComp も視覚αを与えつつヒットテストは全矩形・トグルで制御）を忠実に写し、`tech.md`「DComp 描画を捨てられない」前提と「`WS_EX_LAYERED` 不付与」制約の双方と整合する。
-- **依存**: `DwmExtendFrameIntoClientArea` ＝ `windows::Win32::Graphics::Dwm`（feature `Win32_Graphics_Dwm`・workspace 有効済み）、`MARGINS` ＝ `windows::Win32::UI::Controls`（feature `Win32_UI_Controls`・workspace 有効済み）。**新規依存・新規 feature 不要**（workspace Cargo.toml line 66/77 で確認）。
-- **GDI 注意点（既知・軽微）**: GDI はαを書かないため「背景＝黒（→透過）／不透明円＝黒以外の単色（→可視）」の塗り分け規約を用いる。円縁の軽微なエッジ・アーティファクトは先進坑（品質緩和・R1.5）で許容。実機で初めて判明する不確実点ではない。
-- **核心 Unknown との分離**: 視覚的透過は本決定で確定済み。残る実機 Unknown は `WS_EX_TRANSPARENT` 単独でのプロセス越え**クリック**透過の成否（§3.5・T2/T6）のみ。DWM ガラスはヒットテストに無影響ゆえこの核心 Unknown の純度を保つ。
+  - (a) `WS_EX_LAYERED` + `SetLayeredWindowAttributes(LWA_COLORKEY)`: カラーキー透明ピクセルが**自動でクリック透過**しトグル検証を汚染。さらに `WS_EX_LAYERED` 付与が必要で R2.3（layered 不付与）違反。**棄却（汚染）**。
+  - (b) `SetWindowRgn` で円クリップ: クリップ除外領域がリージョン経由で**クリック透過**しトグルを汚染。任意ピクセル単位αマスク（本来用途）も表現不能。**棄却（汚染）**。
+  - (c) **DWM extend-frame glass**（`DwmExtendFrameIntoClientArea` ＋ `MARGINS`）: `WS_EX_NOREDIRECTIONBITMAP` 窓には redirection surface が無いため**画面に何も出ず機能しない（inoperative）**。`wintf-winmsg-executor` example 自身が文書化（「NOREDIRECTIONBITMAP の窓は redirection surface を持たず GDI(WM_PAINT) の描画が画面に出ない（DComp 描画が要る）」）。**棄却（必須窓で機能しない）**。
+  - (d) **DirectComposition visual tree**: `WS_EX_NOREDIRECTIONBITMAP` 窓にピクセルを出す**唯一の方法**。visual tree の per-pixel α を DWM が GPU 合成（CPU ビットマップなし）。production の描画経路そのもの。
+- **Selected**: (d) DirectComposition visual tree。DComp は好みではなく、この窓では**強制（唯一の描画手段）**である。
+- **パイプライン**: `D3D11CreateDevice`（BGRA）→ DXGI factory → `IDXGIFactory2::CreateSwapChainForComposition`（premultiplied alpha）→ `DCompositionCreateDevice` → `IDCompositionDevice::CreateTargetForHwnd(hwnd, topmost=true)` → `CreateVisual` → `visual.SetContent(swapchain)` → `target.SetRoot(visual)` → `device.Commit()`。描画は swapchain バックバッファ上の Direct2D（`ID2D1DeviceContext`）で `Clear(transparent)`（α=0＝背面透過）＋ 中心に半径 200 の不透明円 `FillEllipse`（α=1）→ Present → Commit。`IDCompositionSurface` を用いる構成も等価に最小な代替として許容。再描画は setup 時 1 回＋`WM_LBUTTONDOWN` 色トグル時のみ（`WM_PAINT`/GDI/`InvalidateRect` は不使用）。
+- **Rationale**: DComp visual α は**純粋に視覚効果**であり窓は全矩形でヒットテストされ続ける。よってクリック透過は `WS_EX_TRANSPARENT` トグル単独で制御され、視覚機構が検証対象を汚染しない。これはまさに本坑が採る production DirectComposition 経路そのものであり、`tech.md`「DComp 描画を捨てられない」前提と「`WS_EX_LAYERED` 不付与」制約の双方と整合する。pilot が **実物の DComp / NOREDIRECTIONBITMAP 窓（production 等価）でクリック透過を検証する**点が眼目。
+- **依存**: `windows::Win32::Graphics::Direct3D11`・`Dxgi`（＋`Dxgi_Common`）・`DirectComposition`・`Direct2D`（＋`Direct2D_Common`）・`Direct3D` を使用。いずれも workspace `windows` 0.62.2 features で**有効済み**（Cargo.toml ~58–82 行で `Win32_Graphics_Direct2D_Common`・`Win32_Graphics_Direct3D`・`Win32_Graphics_Direct3D11`・`Win32_Graphics_DirectComposition`・`Win32_Graphics_Dxgi_Common` を確認）。**新規依存・新規 feature 不要**。`DwmExtendFrameIntoClientArea`/`MARGINS` は不使用。
+- **実装コスト（許容・正当化）**: DComp/D3D/D2D セットアップは GDI より明らかにコード量が多いが、実際の production 描画経路を de-risk するため正当化される。R10.4 に従い windows-crate の DComp/D2D API 仕様の不確実点は推測せず開発者に確認。
+- **核心 Unknown との分離**: 視覚的透過の機構は本決定で確定済み。残る実機 Unknown は `WS_EX_TRANSPARENT` 単独でのプロセス越え**クリック**透過の成否（§3.5・T2/T6）のみ。DComp visual はヒットテストに無影響ゆえこの核心 Unknown の純度を保つ。
 
 ### Synthesis 結論
-- **Build-vs-adopt**: 全インフラ（窓生成・wndproc・block_on/spawn_local・event_listener 起床・AtomicBool done・GDI 描画）は既存 example から adopt。新規 build は αマスク純関数 1 個と状態差分トグルのみ＝新規概念ほぼゼロ（§4 Option A・§5 工数 S を追認）。
+- **Build-vs-adopt**: インフラの大半（窓生成・wndproc・block_on/spawn_local・event_listener 起床・AtomicBool done）は既存 example から adopt。新規 build は αマスク純関数 1 個と状態差分トグル、加えて **DComp/D3D/D2D 描画セットアップ**（`WS_EX_NOREDIRECTIONBITMAP` 窓ゆえ必須）。GDI 描画は採用しない（この窓では機能しない）。
 - **Simplification**: 単一 `main.rs` 集約（先進坑ゆえファイル分割せず・要件 5.4 品質緩和）。production・pilot/lib.rs・pilot/Cargo.toml への変更ゼロ（依存追加なし）。
-- **視覚的透過機構（Decision 5）**: DWM extend-frame glass を adopt（プラットフォーム native 機構）。layered/colorkey/region は検証汚染ゆえ build/adopt いずれも棄却。新規依存ゼロ。
-- **残置 Unknown（設計で潰せない）**: `WS_EX_TRANSPARENT` 単独のプロセス越え**クリック**透過の成否（§3.5・T2/T6）＝go ゲート本体・実機検証専用。視覚的透過は Decision 5 で確定済みゆえ Unknown から除外。
+- **視覚的透過機構（Decision 5）**: DirectComposition visual tree を adopt（`WS_EX_NOREDIRECTIONBITMAP` 窓の唯一の描画手段・production 経路と同一）。DWM glass は inoperative、layered/colorkey/region は検証汚染ゆえいずれも棄却。新規依存ゼロ。
+- **残置 Unknown（設計で潰せない）**: `WS_EX_TRANSPARENT` 単独のプロセス越え**クリック**透過の成否（§3.5・T2/T6）＝go ゲート本体・実機検証専用。今回は実物の DComp / NOREDIRECTIONBITMAP 窓（production 等価）で検証する。視覚的透過の機構は Decision 5 で確定済みゆえ Unknown から除外。
 
 ### 設計レビューゲート結果
 - Mechanical: 全 numeric requirement ID（R1〜R10 の全 .M）が traceability 表＋コンポーネントブロックに出現／Boundary 4 節 populated／File Structure 具体パス／orphan component なし／boundary↔file 整合（examples-only）。**PASS**。
 - Judgment: 責務境界明示・契約具体（rust シグネチャ・state model・Ordering）・§3 持ち越し 4 論点すべて確定・spec gap なし。**修復パス 0 回で PASS**。
 
 ### 設計再実行（merge mode・視覚的透過機構の確定）
-- **トリガ**: 実装中に判明した設計欠陥＝旧 design.md/design-validation.md が視覚的透過機構を runtime 観測に先送り（「透過の見え方は実機確認が要る」を Risks に記載）。これは「どの Win32 API で視覚透過を達成するか」という設計判断の punt であり欠陥。
-- **解決**: Decision 5（DWM extend-frame glass）で確定。design.md に「視覚的透過方式」節を新設し、TransparentWindow コンポーネント・Technology Stack・Allowed Dependencies・File Structure・Traceability(R2)・Open Questions を merge 更新。旧 Risks の視覚透過先送り項目を除去（核心 Unknown＝クリック透過は維持）。
-- **再レビューゲート**: Mechanical 全 ID 維持・boundary/file/orphan 健全＝**PASS**。Judgment 視覚透過機構決定済み・棄却代替明記・核心 Unknown 純度維持・spec gap なし＝**修復パス 0 回で PASS**。
+- **トリガ（第1次）**: 旧 design.md/design-validation.md が視覚的透過機構を runtime 観測に先送り（「透過の見え方は実機確認が要る」を Risks に記載）した設計判断の punt 欠陥。
+- **暫定解（第1次・後に誤りと判明）**: Decision 5 を当初 DWM extend-frame glass で確定したが、`WS_EX_NOREDIRECTIONBITMAP` 窓では redirection surface が無く DWM glass も GDI も画面に出ない（inoperative）ため誤りであった。
+- **トリガ（第2次・設計ディスカッション）**: 上記の誤りを是正。`WS_EX_NOREDIRECTIONBITMAP` は DComp 描画維持のための絶対要件であり、その窓にピクセルを出す唯一の方法は DComp visual tree であると確定。
+- **解決（確定）**: Decision 5 を **DirectComposition visual tree** に再確定。design.md の「視覚的透過方式」節を DComp 機構（D3D11→DXGI composition swapchain→IDCompositionDevice/target/visual→D2D 描画）に置換し、Overview・Goals・Existing Architecture Analysis・TransparentWindow コンポーネント・Technology Stack・Allowed Dependencies・File Structure・Traceability(R2)・起動時初期状態・StateApplier(new_ex 計算)・Open Questions を merge 更新。ex_style を `WS_EX_NOREDIRECTIONBITMAP | WS_EX_TOPMOST | WS_EX_TRANSPARENT` に更新（トグルは TRANSPARENT のみ加除・他2ビット固定）。`DwmExtendFrameIntoClientArea`/`MARGINS`/glass/「黒で塗る」参照を全除去（棄却理由の歴史的注記のみ残置）。
+- **再レビューゲート**: Mechanical 全 ID 維持・boundary/file/orphan 健全＝**PASS**。Judgment 視覚透過機構決定済み（DComp・強制）・棄却代替明記（glass=inoperative/layered/region=汚染）・核心 Unknown 純度維持・spec gap なし＝**修復パス 0 回で PASS**。
