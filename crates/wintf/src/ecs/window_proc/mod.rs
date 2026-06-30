@@ -246,4 +246,102 @@ mod tests {
             "WM_DISPLAYCHANGE 配送後は display change が設定されるべき"
         );
     }
+
+    /// 代表メッセージ ① ダブルクリック `WM_LBUTTONDBLCLK`（要件 2.4・設計 Testing Strategy）。
+    /// `dispatch_window_message` は `mouse_dblclick_wheel::WM_LBUTTONDBLCLK` へ配送する。
+    /// ヘッドレス: hit 領域を持たない最小 World（bare entity）では hit_test がターゲット
+    /// 無しを返し、何も挿入せず `Some(LRESULT(0))` を返す（旧 `ecs_wndproc` 同等）。
+    /// 実 HWND / hit 領域を要する深い検証（PointerState 挿入）は 5.2/5.3 へ委譲する。
+    #[test]
+    fn dispatch_routes_lbuttondblclk_to_some_lresult_0() {
+        let world = Rc::new(RefCell::new(EcsWorld::new()));
+        let entity = world.borrow_mut().world_mut().spawn(()).id();
+
+        // lparam=0（クリック座標 (0,0)）でも hit 領域なし → ターゲット無し → 無操作。
+        let ret = dispatch_window_message(&world, entity, &msg(WM_LBUTTONDBLCLK));
+        assert_eq!(
+            ret,
+            Some(LRESULT(0)),
+            "WM_LBUTTONDBLCLK はダブルクリック処理後 Some(LRESULT(0)) を返すべき（panic 無し）"
+        );
+    }
+
+    /// 代表メッセージ ② `WM_WINDOWPOSCHANGED`（要件 2.4・設計 Testing Strategy）。
+    /// `dispatch_window_message` は `window_pos::WM_WINDOWPOSCHANGED` へ配送する。
+    /// 非 null の `WINDOWPOS` ポインタを `lparam` に設定するが、`WindowHandle` コンポーネント
+    /// 不在のため `client_coords` が `None` となり座標更新はスキップされる。最終的に
+    /// `None`（DefWindowProcW 委譲）を返す（旧 `ecs_wndproc` 同等）。ヘッドレス: 実 HWND 不要。
+    #[test]
+    fn dispatch_routes_windowposchanged_to_none() {
+        let world = Rc::new(RefCell::new(EcsWorld::new()));
+        let entity = world.borrow_mut().world_mut().spawn(()).id();
+
+        // スタックに実体のある WINDOWPOS を用意し、その生ポインタを lparam に渡す
+        // （ハンドラは null 判定後に dereference するため、非 null かつ有効な番地が必要）。
+        let windowpos = WINDOWPOS {
+            hwnd: HWND(std::ptr::null_mut()),
+            hwndInsertAfter: HWND(std::ptr::null_mut()),
+            x: 100,
+            y: 200,
+            cx: 640,
+            cy: 480,
+            flags: SET_WINDOW_POS_FLAGS(0),
+        };
+        let m = WindowMessage {
+            hwnd: HWND(std::ptr::null_mut()),
+            msg: WM_WINDOWPOSCHANGED,
+            wparam: WPARAM(0),
+            lparam: LPARAM(&windowpos as *const WINDOWPOS as isize),
+        };
+
+        let ret = dispatch_window_message(&world, entity, &m);
+        assert!(
+            ret.is_none(),
+            "WM_WINDOWPOSCHANGED は None（DefWindowProcW 委譲）を返すべき"
+        );
+    }
+
+    /// 代表メッセージ ③ `WM_DPICHANGED`（要件 2.4・設計 Testing Strategy）。
+    /// `dispatch_window_message` は `window_pos::WM_DPICHANGED` へ配送する。
+    /// `DPI` コンポーネント不在のため DPI 更新はスキップされ、`guarded_set_window_pos` は
+    /// null HWND で `Err`（warn ログのみ・panic 無し）となるが、ハンドラは常に
+    /// `Some(LRESULT(0))` を返す（旧 `ecs_wndproc` 同等）。ヘッドレス: 実 HWND 不要。
+    #[test]
+    fn dispatch_routes_dpichanged_to_some_lresult_0() {
+        let world = Rc::new(RefCell::new(EcsWorld::new()));
+        let entity = world.borrow_mut().world_mut().spawn(()).id();
+
+        // wparam HIWORD/LOWORD = 新 DPI（96）, lparam=0 → suggested_rect は default。
+        let m = WindowMessage {
+            hwnd: HWND(std::ptr::null_mut()),
+            msg: WM_DPICHANGED,
+            wparam: WPARAM(((96u32) << 16 | 96u32) as usize),
+            lparam: LPARAM(0),
+        };
+
+        let ret = dispatch_window_message(&world, entity, &m);
+        assert_eq!(
+            ret,
+            Some(LRESULT(0)),
+            "WM_DPICHANGED は処理後 Some(LRESULT(0)) を返すべき（panic 無し）"
+        );
+    }
+
+    /// 代表メッセージ ④ 非クライアント破棄 `WM_NCDESTROY`（要件 2.4・設計 Testing Strategy）。
+    /// `WM_NCDESTROY` は配送表からライフサイクル特例として除外されており（タスク 3.2／旧
+    /// `ecs_wndproc` シムが直接処理）、新経路 `dispatch_window_message` では表に無いため
+    /// `None`（DefWindowProcW 委譲）を返すのが設計どおりの「旧手続きと同等」結果である。
+    /// 新経路でのウィンドウ破棄は WindowRegistry の drop 駆動（タスク 4.1）であり、本配送
+    /// 純関数の所管外であることをここで固定する。ヘッドレス: 実 HWND 不要。
+    #[test]
+    fn dispatch_returns_none_for_ncdestroy_excluded_from_table() {
+        let world = Rc::new(RefCell::new(EcsWorld::new()));
+        let entity = world.borrow_mut().world_mut().spawn(()).id();
+
+        let ret = dispatch_window_message(&world, entity, &msg(WM_NCDESTROY));
+        assert!(
+            ret.is_none(),
+            "WM_NCDESTROY は配送表に無く None（DefWindowProcW 委譲）であるべき（破棄は registry drop 駆動）"
+        );
+    }
 }
