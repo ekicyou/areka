@@ -31,7 +31,9 @@
 
 use super::lexer::Token;
 use super::model::{Choice, Instruction, MoveArgs, NewLineRatio, SurfaceArg};
+use std::iter::Peekable;
 use std::time::Duration;
+use std::vec;
 
 /// 1 ウェイト単位（`\w[n]` / `\wN` の n に乗ずる基準。ukadoc 確定: 50ms）。
 const WAIT_UNIT_MS: u64 = 50;
@@ -42,8 +44,88 @@ const WAIT_UNIT_MS: u64 = 50;
 /// - 全 `Token` がいずれかの `Instruction` へ写像され、未デコード文字列断片は残さない
 ///   （要件 1.2）。出力順は入力順（要件 1.3）。
 /// - 失敗しない（`Vec` を返す・`Result` でない・要件 10.2）。
+///
+/// **シーケンス認識（タスク 4.2）**: 大半のトークンは 1:1 写像だが、
+/// 一部は隣接トークンを見て局所的に畳む（design L421）:
+/// - 旧 2 連 `\q[ID][タイトル]`（`Tag{q|q*,[1]}` ＋ 直後 `Text("[...]")`）→ 単一 `Raw`
+///   （Choice 化せず丸ごと吸収・要件 5.3）。
+/// - 選択肢マーカー `\![*]`（`Tag{!,["*"]}`）＋ 直後の現行 `\q[...]` → マーカーを
+///   Choice へ畳む（要件 5.4）。単独なら `GenericCommand`。
+///
+/// そのため `Vec<Token>` を peekable に走査する（`map` でなく明示ループ）。
 pub(crate) fn decode(tokens: Vec<Token>) -> Vec<Instruction> {
-    tokens.into_iter().map(decode_token).collect()
+    let mut out = Vec::with_capacity(tokens.len());
+    let mut it = tokens.into_iter().peekable();
+    while let Some(token) = it.next() {
+        match token {
+            // 選択肢マーカー `\![*]`: 直後が現行 `\q[...]` なら畳んで Choice、単独なら
+            // GenericCommand（要件 5.4・design L425）。
+            Token::Tag { word, args } if is_choice_marker(&word, &args) => {
+                out.push(fold_choice_marker(&mut it));
+            }
+            // 旧 2 連 `\q[ID][タイトル]` / `\q*[...]`: 直後 `Text("[...]")` を併せて
+            // 単一 `Raw` に吸収（Choice 化しない・要件 5.3）。
+            Token::Tag { word, args } if is_legacy_q_head(&word, &args, it.peek()) => {
+                out.push(fold_legacy_q(&word, &args, &mut it));
+            }
+            other => out.push(decode_token(other)),
+        }
+    }
+    out
+}
+
+/// `\![*]`（選択肢マーカー）か判定する: word=`!`・引数がちょうど `["*"]`（要件 5.4）。
+fn is_choice_marker(word: &str, args: &[String]) -> bool {
+    word == "!" && args.len() == 1 && args[0] == "*"
+}
+
+/// 選択肢マーカー `\![*]` を解決する。直後が現行 `\q[...]`（`Tag{q,..}`）なら
+/// その `\q` を Choice として消化し、マーカーを畳んで未デコード文字列を残さない
+/// （要件 5.4）。直後が現行 `\q` でなければ単独マーカー＝`GenericCommand { name:"*" }`。
+fn fold_choice_marker(it: &mut Peekable<vec::IntoIter<Token>>) -> Instruction {
+    if let Some(Token::Tag { word, .. }) = it.peek()
+        && word == "q"
+    {
+        // 現行 `\q[...]`（単一ブラケット）を消化して Choice 化（マーカーを吸収）。
+        if let Some(Token::Tag { args, .. }) = it.next() {
+            return decode_choice(args);
+        }
+    }
+    // 単独 `\![*]`: 種別 `*` の汎用コマンド。
+    Instruction::GenericCommand {
+        name: "*".to_string(),
+        raw_args: Vec::new(),
+    }
+}
+
+/// 旧 2 連 `\q` の先頭タグか判定する。
+///
+/// lexer は `\q[ID][タイトル]` を `Tag{q,[ID]}` ＋ `Text("[タイトル]")` に分割し、
+/// `\q*[ID][タイトル]` を `Tag{q*,[ID]}` ＋ `Text("[タイトル]")` に分割する（実トークン形）。
+/// 旧形の弁別条件:
+/// - word が `q`（現行形と同綴）または `q*`（旧専用綴り）。
+/// - 直後トークンが `Text` で、`[` 始まり `]` 終わり（宙に浮く 2 個目の `[...]`）。
+///
+/// `q*` は word 自体が現行 `q` と異なるため、後続 Text が無くとも現行 Choice には
+/// ならない（`decode_tag` の subset 外 → Raw 経路へ）。本判定が拾うのは「現行 `q` の
+/// 綴りだが直後に浮く `[...]` がある」旧形と、「`q*` ＋ 浮く `[...]`」旧形の双方。
+fn is_legacy_q_head(word: &str, args: &[String], next: Option<&Token>) -> bool {
+    (word == "q" || word == "q*")
+        && args.len() == 1
+        && matches!(next, Some(Token::Text(t)) if t.starts_with('[') && t.ends_with(']'))
+}
+
+/// 旧 2 連 `\q` を単一 `Raw` へ畳む。先頭タグ（`\q[ID]` / `\q*[ID]`）と直後の浮く
+/// `Text("[タイトル]")` を結合し、元の見かけを復元した `Raw` を 1 個だけ産む
+/// （Choice 化しない・情報を失わない・要件 5.3）。
+fn fold_legacy_q(word: &str, args: &[String], it: &mut Peekable<vec::IntoIter<Token>>) -> Instruction {
+    // 先頭タグの概形（`\q[ID]` 等）を復元。
+    let mut raw = reconstruct_tag(word, args);
+    // 直後の浮く `Text("[...]")` を取り込む（判定済みなので必ず存在する）。
+    if let Some(Token::Text(t)) = it.next() {
+        raw.push_str(&t);
+    }
+    Instruction::Raw(raw)
 }
 
 /// 単一の構文トークンを `Instruction` へ写像する。
@@ -178,31 +260,43 @@ fn speaker_scope_n(arg: Option<&String>) -> u32 {
 }
 
 // ───────────────────────────────────────────────────────────────────
-// タスク 4.1 / 4.2 シーム（寛容パススルー）
+// タスク 4.2 寛容パススルー規則（要件 10/11.2/13.8）
 //
-// 以下は **タスク 4.2 の領分**（`move` 以外の `\!` → GenericCommand、subset 外
-// タグ・不正トークン → Raw、`\q` 旧 2 連形、`\![*]` マーカー）の明示的な接続点。
-// タスク 4.1 では emo2 subset の正しい decode を最優先し、subset 外は意味を
-// 詐称しない最小プレースホルダ（生情報を失わない `Raw`）に留める。4.2 がこれらを
-// 正式な吸収規則（GenericCommand / Raw / Choice 畳み込み）へ差し替える。
+// emo2 subset 外タグ・`move` 以外の `\!`・不正トークンの吸収先。`move` 以外の
+// `\!` は `GenericCommand`（種別＋生引数保持）、それ以外（subset 外正準タグ・
+// subset 外 bare・lexer Raw 断片）は生情報を失わない `Raw` へ。いずれもエラーを
+// 送出せず解析を中断しない（要件 10.2）。`\q` 旧 2 連形・`\![*]` マーカーは
+// シーケンス依存ゆえ `decode` の peekable 走査側で捕捉する（fold_* 群）。
 // ───────────────────────────────────────────────────────────────────
 
-/// 【タスク 4.2 シーム】subset 外の正準タグ。生情報を保持して `Raw` 化（最小）。
+/// 【タスク 4.2】subset 外の正準タグ（`\b` `\i` `\q*[..]` 等）→ 構文区切りのまま `Raw`
+/// 保持（要件 11.2/13.8）。生情報を復元して失わない。
 fn decode_passthrough_tag(word: String, args: Vec<String>) -> Instruction {
     Instruction::Raw(reconstruct_tag(&word, &args))
 }
 
-/// 【タスク 4.2 シーム】`move` 以外（および空）の `\!`。生情報を保持して `Raw` 化（最小）。
+/// 【タスク 4.2】`move` 以外の `\!` → `GenericCommand { name, raw_args }`（要件 7.2/7.3）。
+///
+/// 第 1 引数をコマンド種別 `name`、残りを生引数 `raw_args` として保持する
+/// （意味解釈・構造化はしない・design L426/L517）。引数が空（`\![]`）の場合は
+/// 種別空・生引数空の汎用コマンドとし、情報を捨てずエラーも送出しない（要件 10.2）。
+///
+/// なお `\![*]` 選択肢マーカー（要件 5.4）は `decode` のシーケンス走査で先に
+/// 捕捉されるため、本関数へは到達しない（到達しても種別 `*` の GenericCommand となり破綻しない）。
 fn decode_passthrough_bang(args: Vec<String>) -> Instruction {
-    Instruction::Raw(reconstruct_tag("!", &args))
+    let mut it = args.into_iter();
+    let name = it.next().unwrap_or_default();
+    let raw_args: Vec<String> = it.collect();
+    Instruction::GenericCommand { name, raw_args }
 }
 
-/// 【タスク 4.2 シーム】subset 外の bare タグ。生情報を保持して `Raw` 化（最小）。
+/// 【タスク 4.2】subset 外の bare タグ（`\0` `\1` 等）→ 生情報を保持して `Raw`（要件 11.2）。
 fn decode_passthrough_bare(c: char) -> Instruction {
     Instruction::Raw(format!("\\{c}"))
 }
 
-/// 【タスク 4.2 シーム】lexer が区切れず `Raw` 吸収した断片。そのまま `Raw` で保持。
+/// 【タスク 4.2】lexer が区切れず `Raw` 吸収した不正断片（未閉じ `[`/`"`）→ そのまま
+/// `Raw` で保持（要件 10.1/13.8）。decode 側で意味を詐称しない。
 fn decode_passthrough_raw(s: String) -> Instruction {
     Instruction::Raw(s)
 }

@@ -220,3 +220,182 @@ fn mixed_subset_tags_order_preserved_no_undecoded_fragment() {
         ],
     );
 }
+
+// ════════════════════════════════════════════════════════════════════
+// タスク 4.2: 寛容パススルー・GenericCommand・旧 `\q` 吸収
+// ════════════════════════════════════════════════════════════════════
+
+// ── move 以外の `\!` → GenericCommand（要件 7.2/7.3）─────────────────
+
+/// `\![open,sliderinput]` → `GenericCommand { name:"open", raw_args:["sliderinput"] }`
+/// （第 1 引数=種別、残り=生引数・design L517・要件 7.2/7.3）。
+#[test]
+fn non_move_bang_to_generic_command() {
+    assert_eq!(
+        dec(r"\![open,sliderinput]"),
+        vec![Instruction::GenericCommand {
+            name: "open".to_string(),
+            raw_args: vec!["sliderinput".to_string()],
+        }],
+    );
+}
+
+/// `\![raise,arm]` も同様（種別 raise・残り arm・要件 7.2/7.3）。
+#[test]
+fn non_move_bang_raise_to_generic_command() {
+    assert_eq!(
+        dec(r"\![raise,arm]"),
+        vec![Instruction::GenericCommand {
+            name: "raise".to_string(),
+            raw_args: vec!["arm".to_string()],
+        }],
+    );
+}
+
+/// 引数 1 個のみ（生引数なし）の `\![bind]` → `GenericCommand { name:"bind", raw_args:[] }`。
+#[test]
+fn non_move_bang_single_arg_generic_command() {
+    assert_eq!(
+        dec(r"\![bind]"),
+        vec![Instruction::GenericCommand {
+            name: "bind".to_string(),
+            raw_args: vec![],
+        }],
+    );
+}
+
+/// 引数空の `\![]` も種別空の GenericCommand（情報を捨てず・エラーにしない・要件 10.2）。
+#[test]
+fn empty_bang_to_generic_command_empty_name() {
+    assert_eq!(
+        dec(r"\![]"),
+        vec![Instruction::GenericCommand {
+            name: String::new(),
+            raw_args: vec![],
+        }],
+    );
+}
+
+// ── `\![*]` 選択肢マーカー（要件 5.4）────────────────────────────────
+
+/// `\![*]` が後続の現行 `\q[...]` を伴う場合、マーカーを Choice へ畳み、
+/// 未デコードのマーカー文字列を残さない（要件 5.4・design L425）。
+#[test]
+fn choice_marker_folds_into_following_choice() {
+    assert_eq!(
+        dec(r"\![*]\q[はい,OnYes]"),
+        vec![Instruction::Choice(Choice {
+            disp: "はい".to_string(),
+            target: "OnYes".to_string(),
+            references: vec![],
+        })],
+    );
+}
+
+/// `\![*]` 単独（後続が現行 `\q` でない）→ `GenericCommand { name:"*" }`（design L425）。
+#[test]
+fn standalone_choice_marker_to_generic_command() {
+    assert_eq!(
+        dec(r"\![*]"),
+        vec![Instruction::GenericCommand {
+            name: "*".to_string(),
+            raw_args: vec![],
+        }],
+    );
+}
+
+// ── 旧 2 連ブラケット `\q` → Raw（Choice 化しない・要件 5.3）──────────
+
+/// 旧 2 連形 `\q[ID][タイトル]` は現行 Choice 化せず、丸ごと `Raw` で吸収する
+/// （要件 5.3・design L425「Choice 化せず…Raw で保持」）。
+#[test]
+fn legacy_double_bracket_q_to_raw_not_choice() {
+    assert_eq!(
+        dec(r"\q[ID][タイトル]"),
+        vec![Instruction::Raw(r"\q[ID][タイトル]".to_string())],
+    );
+}
+
+/// 旧 2 連形 `\q*[ID][タイトル]`（`*` 付き）も丸ごと `Raw`（要件 5.3）。
+#[test]
+fn legacy_double_bracket_q_star_to_raw() {
+    assert_eq!(
+        dec(r"\q*[ID][タイトル]"),
+        vec![Instruction::Raw(r"\q*[ID][タイトル]".to_string())],
+    );
+}
+
+/// 旧 2 連形は前後の正常命令を破壊しない（隣接命令保持・要件 5.3/10.3）。
+#[test]
+fn legacy_q_preserves_neighbors() {
+    assert_eq!(
+        dec(r"\e\q[ID][タイトル]\c"),
+        vec![
+            Instruction::End,
+            Instruction::Raw(r"\q[ID][タイトル]".to_string()),
+            Instruction::Clear,
+        ],
+    );
+}
+
+/// 現行単一ブラケット `\q[はい,OnYes]` は引き続き Choice へ decode（4.1 の維持・要件 5.1）。
+/// 旧形と現行形の弁別が正しいことを固定。
+#[test]
+fn modern_single_bracket_q_still_choice() {
+    assert_eq!(
+        dec(r"\q[はい,OnYes]"),
+        vec![Instruction::Choice(Choice {
+            disp: "はい".to_string(),
+            target: "OnYes".to_string(),
+            references: vec![],
+        })],
+    );
+}
+
+// ── subset 外タグ・不正トークン → Raw（要件 10.1/11.2）───────────────
+
+/// emo2 subset 外の正準タグ `\foo[a,b]` → `Raw`（構文区切り＋raw 保持・要件 11.2/13.8）。
+#[test]
+fn unknown_tag_absorbed_as_raw() {
+    assert_eq!(
+        dec(r"\foo[a,b]"),
+        vec![Instruction::Raw(r"\foo[a,b]".to_string())],
+    );
+}
+
+/// subset 外の bare タグ `\0` → `Raw`（要件 11.2）。
+#[test]
+fn unknown_bare_tag_absorbed_as_raw() {
+    assert_eq!(dec(r"\0"), vec![Instruction::Raw(r"\0".to_string())]);
+}
+
+/// lexer が区切れず Raw 吸収した不正断片（未閉じ `[`）は decode でも Raw のまま
+/// （要件 10.1/13.8）。前後の正常命令は欠落しない（要件 10.3）。
+#[test]
+fn unclosed_bracket_raw_preserves_neighbors() {
+    assert_eq!(
+        dec(r"\e\s[1000"),
+        vec![Instruction::End, Instruction::Raw(r"\s[1000".to_string())],
+    );
+}
+
+/// 未知タグ・旧 `\q`・不正トークンが混在しても解析を中断せず、
+/// 周囲の正常命令を保持する（要件 10.1/10.2/10.3 の総合固定）。
+#[test]
+fn lenient_passthrough_never_aborts_keeps_valid_neighbors() {
+    let out = dec(r"\p[0]\foo[x]こんにちは\![open,a]\q[ID][タイトル]\e");
+    assert_eq!(
+        out,
+        vec![
+            Instruction::SpeakerScope { n: 0 },
+            Instruction::Raw(r"\foo[x]".to_string()),
+            Instruction::Text("こんにちは".to_string()),
+            Instruction::GenericCommand {
+                name: "open".to_string(),
+                raw_args: vec!["a".to_string()],
+            },
+            Instruction::Raw(r"\q[ID][タイトル]".to_string()),
+            Instruction::End,
+        ],
+    );
+}
