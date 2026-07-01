@@ -70,6 +70,7 @@ DComp パスは現状すでに独立経路として隔離されており（ULW �
 1. When ビジュアルツリーを構築・更新する, the wintf 表示基盤 shall `IDCompositionVisual3` に代えて WUC のコンテナビジュアル／スプライトビジュアルを用いる。
 2. When 親子関係（ChildOf）と Z 順が変化する, the wintf 表示基盤 shall 現行の追加・除去・全除去（`AddVisual`/`RemoveVisual`/`RemoveAllVisuals` 相当）ロジックに従って、移行前と同一のツリー構造・同一の重なり順を再現する。
 3. The wintf 表示基盤 shall ビジュアルの配置・変換に関する利用者可視な結果（位置・Z 順）を移行前と等価に保つ。
+4. When ビジュアルに現行のクリップ（角丸矩形クリップ・`IDCompositionRectangleClip` 相当／角丸半径・DPI スケール込み）が適用されている, the wintf 表示基盤 shall それを WUC のクリップ型へ等価写像し、移行前と同一のクリップ結果（角丸・矩形範囲）を再現する。
 
 ### Requirement 6: 描画サーフェスの WUC 移行（D2D 直描き経路の維持）
 **Objective:** As a wintf 保守者, I want サーフェス生成と描画を DComp サーフェスから WUC の描画サーフェスへ差し替えたい, so that 既存の D2D 描画コードをそのまま用いつつ WUC でサーフェスを合成できる
@@ -108,7 +109,7 @@ DComp パスは現状すでに独立経路として隔離されており（ULW �
 1. The wintf 表示基盤 shall 当たり判定（ヒットテスト・ウィンドウ ex-style によるクリックスルー機構）の振る舞いを本移行で変更しない。
 2. While DComp 経路を WUC へ置換する間, the wintf 表示基盤 shall ULW 経路とそのモード選択機構を残置し、除去・整理しない。
 3. Where DComp モードでウィンドウ透過フラグ（`WS_EX_NOREDIRECTIONBITMAP`）を用いていた, the wintf 表示基盤 shall 移行後も同フラグによる透過挙動を DComp 時と同一に保つ。
-4. The wintf 表示基盤 shall WUC 新能力（合成アニメーション・エフェクト）や将来拡張のための投機的抽象を本 spec で導入しない。
+4. The wintf 表示基盤 shall WUC 新能力（合成アニメーション・エフェクト）や将来拡張のための投機的抽象を本 spec で導入しない。ただし移行前から稼働している既存表示機能（例: 角丸クリップ）の WUC への等価写像は「新能力の追加」に当たらず、等価移行の対象に含む。
 
 ### Requirement 10: 既存本体コードへの変更前提示（推測改変の禁止）
 **Objective:** As a 依頼者, I want 既存本体コードを触る前に対象ファイルと変更内容の提示を受けたい, so that 推測による書き換えを防ぎ変更範囲を統制できる
