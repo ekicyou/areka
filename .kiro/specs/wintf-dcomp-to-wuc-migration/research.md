@@ -1,3 +1,118 @@
+# 調査・設計判断ログ: wintf-dcomp-to-wuc-migration
+
+> 本書は gap 分析（後半「§ ギャップ分析」に原文保持）に加え、design フェーズの discovery 発見と設計判断を記録する。
+> 言語: ja（spec.json）。更新日: 2026-07-01（design フェーズ追記）。
+
+## Summary（design 追記）
+
+- **Feature**: `wintf-dcomp-to-wuc-migration`
+- **Discovery Scope**: Extension（既存 wintf 表示バックエンドの純粋等価移行 / light discovery）
+- **Key Findings**:
+  1. `windows` 0.62.2 のディスク上 crate ソースで WUC 型・interop trait の実 API 形状を実確認（下記 §A）。全必須型・全メソッドが存在。numerics は別 crate `windows-numerics` 0.3 に分離（`Foundation_Numerics` feature 経由ではない）。
+  2. サーフェス束ね方が唯一の構造変化: DComp `visual.SetContent(surface)`（直付け）→ WUC `sprite_visual.SetBrush(CreateSurfaceBrushWithSurface(surface))`（brush 一段挟む）。生成・解除の両経路（surface.rs L174 / L259）に波及。
+  3. clip の `RoundedRectangleIndividual`（4 角独立半径）は WUC `CompositionRoundedRectangleGeometry`（`CornerRadius` 単一 Vector2）に 1:1 が無い。→ 個別半径は `CompositionPathGeometry`（カスタムパス）で等価写像する設計判断で解決（下記 §B-Decision-7）。areka 本体での個別半径構築は無く example/`clip_sync`/ULW guard のみ利用のため、ビルド・挙動等価目的で写像を実装する（要件破綻ではない）。
+  4. DispatcherQueue は `DQTYPE_THREAD_CURRENT` で既存 pump に相乗り（公式 Win32 チュートリアル実証）。pump 非差し替えの要件 3.2 が成立。
+  5. サーフェス D2D 層のビット等価キャプチャは既存 `com/wic.rs`（`IWICBitmapSource::CopyPixels`）＋ D2D の WIC render target で自己完結可能（R8.6 の主受け入れ手段）。合成層は Desktop Duplication を採る（R8.7・下記 §B-Decision-8）。
+
+---
+
+## A. `windows` 0.62.2 WUC 実 API 確認（crate ソース実読）
+
+**ソース**: `C:\Users\maz-o\.cargo\registry\src\index.crates.io-6f17d22bba15001f\windows-0.62.2\`、numerics は `windows-numerics-0.3.0`。
+
+| グループ | Rust パス | 主要シグネチャ（抜粋） | gating feature |
+|---|---|---|---|
+| Compositor | `windows::UI::Composition::Compositor` | `new()`, `CreateContainerVisual()`, `CreateSpriteVisual()`, `CreateSurfaceBrushWithSurface(P0: Param<ICompositionSurface>)`, `CreateInsetClip()`, `CreateRoundedRectangleGeometry()`, `CreateGeometricClipWithGeometry(P0: Param<CompositionGeometry>)`, `CreatePathGeometry(...)` | `UI_Composition` |
+| DesktopWindowTarget | `windows::UI::Composition::Desktop::DesktopWindowTarget` | `SetRoot(P0: Param<Visual>)`, `Root()`, `IsTopmost()` | `UI_Composition_Desktop` |
+| GraphicsDevice | `windows::UI::Composition::CompositionGraphicsDevice` | `CreateDrawingSurface(size: Foundation::Size, fmt: DirectXPixelFormat, alpha: DirectXAlphaMode)` | `UI_Composition` |
+| Visual/Sprite/Container | `windows::UI::Composition::{Visual, ContainerVisual, SpriteVisual, VisualCollection, CompositionSurfaceBrush}` | `Visual::SetOffset(Vector3)`, `SetOpacity(f32)`, `SetSize(Vector2)`, `SetClip(P0: Param<CompositionClip>)`; `ContainerVisual::Children()->VisualCollection`; `VisualCollection::{InsertAtTop, InsertAtBottom, InsertAbove, InsertBelow, Remove, RemoveAll, Count}`; `SpriteVisual::SetBrush(P0: Param<CompositionBrush>)` | `UI_Composition` |
+| Interop | `windows::Win32::System::WinRT::Composition::{ICompositorInterop, ICompositorDesktopInterop, ICompositionDrawingSurfaceInterop, ICompositionGraphicsDeviceInterop}` | `ICompositorInterop::CreateGraphicsDevice(P0: Param<IUnknown>)` [pass ID2D1Device]; `ICompositorDesktopInterop::CreateDesktopWindowTarget(hwnd: HWND, istopmost: BOOL)`; `ICompositionDrawingSurfaceInterop::BeginDraw(updaterect: *const RECT, iid: *const GUID, updateobject: *mut *mut c_void, updateoffset: *mut POINT)` / `EndDraw()` / `Resize(POINT)` | `Win32_System_WinRT_Composition` |
+| DispatcherQueue | `windows::Win32::System::WinRT::{CreateDispatcherQueueController, DispatcherQueueOptions, DISPATCHERQUEUE_THREAD_TYPE, DISPATCHERQUEUE_THREAD_APARTMENTTYPE}` ＋ `windows::System::DispatcherQueueController` | `CreateDispatcherQueueController(options, *mut Option<DispatcherQueueController>)`; `DispatcherQueueOptions{ dwSize:u32, threadType, apartmentType }`; `DQTYPE_THREAD_CURRENT=2`, `DQTAT_COM_NONE=0`/`DQTAT_COM_ASTA=1`; `DispatcherQueueController::ShutdownQueueAsync()->IAsyncAction` | `Win32_System_WinRT`（関数・options）＋`System`（WinRT controller） |
+| Numerics | `windows_numerics::{Vector2, Vector3}`（別 crate 0.3） | `Vector3{X,Y,Z:f32}`, `Vector2{X,Y:f32}`。**`Foundation_Numerics` feature からは供給されない** | crate `windows-numerics = "0.3"` を追加 |
+
+**pixel format 写像**: `DXGI_FORMAT_B8G8R8A8_UNORM` → `DirectXPixelFormat::B8G8R8A8UIntNormalized`、`DXGI_ALPHA_MODE_PREMULTIPLIED` → `DirectXAlphaMode::Premultiplied`（`Graphics_DirectX` feature）。
+
+**BeginDraw の要点**: DComp と同じ atlas offset 意味論（`updateoffset` を D2D の `SetTransform` M31/M32 に反映する既存ロジックがそのまま流用可）。`iid=&ID2D1DeviceContext::IID` を渡し `updateobject` に返る raw ポインタを `com/wuc.rs` の wrapper が cast する。返る D2D DC は `CreateGraphicsDevice` に渡した既存 `GraphicsCore.d2d` 由来＝デバイス共有。
+
+**最終 features（ルート Cargo.toml `windows` に追加）**: `UI_Composition`, `UI_Composition_Desktop`, `Win32_System_WinRT`, `Win32_System_WinRT_Composition`, `System`, `Foundation`, `Graphics_DirectX`。加えて `windows-numerics = "0.3"` を dependency に追加。既存 `Win32_System_Com`/`Win32_Foundation`/`Win32_Graphics_Direct2D` 系は流用。
+
+---
+
+## B. 設計判断（design.md へ反映）
+
+### Decision-1: 実装アプローチ = Option C（混成）
+- **Context**: 純粋等価移行。schedule 構造と消費側改修を最小化しつつ、スパイク（R1）を段階分離したい。
+- **Alternatives**: A（in-place 全差し替え）、B（WUC 専用コンポーネント新設・DComp 並存）、C（Ext/Resource 新設＋コンポーネント内部型 in-place）。
+- **Selected**: C。新規は `com/wuc.rs`（interop Ext）と `WucGraphicsResource`（Compositor＋CompositionGraphicsDevice＋DispatcherQueueController 保持）に限定。既存 `WindowGraphics`/`VisualGraphics`/`SurfaceGraphics` の内部保持型のみ WUC 型へ差し替え、コンポーネント名・アクセサ形は維持。schedule 構造据え置き（`commit_composition` のみ除去）。
+- **Rationale**: 消費 6 システムをアクセサ経由の最小改修に抑え、等価性を守りやすい。DComp 二重化（B）の冗長・schedule 複雑化を回避。
+- **Trade-offs**: 層の順序依存（features→スパイク→device→target→tree→surface→frame）を計画で管理する必要。
+
+### Decision-2: デバイス層 — Compositor ＋ CompositionGraphicsDevice
+- `Compositor::new()` → `cast::<ICompositorInterop>()` → `CreateGraphicsDevice(graphics.d2d_device())` → `CompositionGraphicsDevice`。`WucGraphicsResource`（lazy 単一）に両者を保持。DComp の `IDCompositionDesktopDevice`/`Device3` は廃止。lazy-init・単一インスタンスのライフサイクル方針は現行踏襲（要件 2.2）。
+
+### Decision-3: DispatcherQueue — DQTYPE_THREAD_CURRENT で pump 相乗り
+- `Compositor` 生成前に `CreateDispatcherQueueController(DispatcherQueueOptions{ dwSize, DQTYPE_THREAD_CURRENT, DQTAT_COM_* })`。controller は Compositor より長寿命に `WucGraphicsResource` へ保持し、終了時 `ShutdownQueueAsync` でドレイン（要件 3.3）。既存 `wintf-winmsg-executor` の `GetMessage`/`DispatchMessage` pump を差し替えない（要件 3.2）。
+- **apartment 種別の確定**: areka の現状 COM 初期化状況（`CoInitializeEx`/`RoInitialize` の有無・STA/MTA）に依存。既に STA 初期化済みなら `DQTAT_COM_NONE`、未初期化なら `DQTAT_COM_ASTA`。**R1 スパイクで実測して確定**（design では選択規則を提示、値は spike が決める）。
+
+### Decision-4: ターゲット束縛 — DesktopWindowTarget
+- `Compositor.cast::<ICompositorDesktopInterop>()::CreateDesktopWindowTarget(hwnd, istopmost)` → `DesktopWindowTarget`。`WindowGraphics` の内部 `IDCompositionTarget` を `DesktopWindowTarget` へ差し替え。root 束縛は `target.SetRoot(root_visual)`（`window_visual_integration_system` の `SetRoot` を WUC 型で維持）。HWND・ライフサイクル対応は不変（要件 4.2）。
+
+### Decision-5: ビジュアル木 — Container/Sprite ＋ VisualCollection
+- 生成: `CreateContainerVisual`/`CreateSpriteVisual`（surface を持つ描画対象は Sprite、純コンテナは Container）。
+- z 順写像: 現行は `remove_all_visuals()` → Children 順に `add_visual(child,false,None)`。WUC 等価は `Children().RemoveAll()` → Children 順に `InsertAtTop(child)`（逐次 InsertAtTop で反復順＝最終 z 順が一致）。offset は `SetOffset(Vector3{x,y,0})`、opacity は `SetOpacity(f32)`（要件 5.2/5.3）。
+- **注意**: DComp `SetOffsetX2/Y2` は個別軸 setter だったが WUC は `SetOffset(Vector3)` の一括。既存 `visual_property_sync_system` が両軸を同時計算しているため写像は自然。
+
+### Decision-6: サーフェス — CompositionDrawingSurface ＋ SurfaceBrush（構造変化）
+- 生成: `CompositionGraphicsDevice::CreateDrawingSurface(Size, B8G8R8A8UIntNormalized, Premultiplied)`。
+- 描画: `cast::<ICompositionDrawingSurfaceInterop>()::BeginDraw(null_rect, &ID2D1DeviceContext::IID, &out_dc, &out_offset)` → D2D DC＋offset → 既存の `SetTransform`/`Clear`/`DrawImage`/`EndDraw` をそのまま（要件 6.2・offset 適用ロジック流用）。
+- **束ね方（唯一の構造変化）**: `visual.SetContent(surface)` → `sprite_visual.SetBrush(compositor.CreateSurfaceBrushWithSurface(surface))`（要件 6.3）。解除は `sprite_visual.SetBrush(None)`。`SurfaceGraphics` に `CompositionSurfaceBrush` 保持を追加（brush ライフタイム管理）。波及: `deferred_surface_creation_system`（生成＋束ね）・`cleanup_surface_on_commandlist_removed`（解除）。B8G8R8A8/PREMUL は WUC でも同指定で画素等価（要件 6.4）。swapchain 経路は非採用（要件 6.5）。
+
+### Decision-7: clip 等価写像（3 変種）
+- **Rectangle**（半径 0）→ `Compositor.CreateInsetClip()`（inset 0）を rect 範囲へ。角丸なしゆえ inset で等価。
+- **RoundedRectangle { radius }**（全角統一）→ `CreateRoundedRectangleGeometry()`（`SetCornerRadius(Vector2{r,r})`＋`SetSize`）→ `CreateGeometricClipWithGeometry(geometry)`。
+- **RoundedRectangleIndividual**（4 角独立）→ WUC に単一 clip 型の直接等価が無い。`Compositor.CreatePathGeometry(path)` で角ごとの弧を組んだ `CompositionPath` を構築 → `CreateGeometricClipWithGeometry`。areka 本体は個別半径を構築しないが `clip_sync.rs` が enum 全変種を扱うため、ビルド・挙動等価目的で写像を実装（要件 5.4・9.4「既存機能の等価移行」に含む・新能力ではない）。
+- DPI スケール（`scale_x`/`scale_y` を半径・矩形へ乗算）は現行 `clip_sync_system` と同一計算を WUC 側で維持（要件 5.4）。
+- `SetClip(clip)` / `SetClip(None)`（clear）を WUC `Visual::SetClip` で維持。
+
+### Decision-8: フレーム反映 — Commit 廃止・暗黙反映
+- `commit_composition` システムと `dcomp.commit()` を除去。WUC は DispatcherQueue が pump 上で tick する際に暗黙反映（要件 7.1）。`CommitComposition` schedule slot は `ulw_present_system` が残るため保持し、DComp commit システムのみ登録解除。フレーム境界のデータフロー（1 フレームで適用される変更集合）は不変（要件 7.2）。観測等価性は R8 の受け入れハーネスで担保（要件 7.3）。
+
+### Decision-9: 描画等価性検証ハーネス（R8）
+- **主受け入れ手段 = 自動ピクセル差分**（要件 8.5）。
+- **サーフェス（D2D）層**（要件 8.6・決定論的）: D2D 描画コードは移行前後で不変。オフスクリーン WIC ビットマップ（`IWICImagingFactory2` の `CreateBitmap` ＋ D2D WIC render target、または既存 `com/wic.rs` の `CopyPixels` 読み戻し）へ同一 CommandList を描画し、ハッシュ一致／差分ゼロで自動比較。既存 `image` crate（examples/tests で使用実績）でハッシュ・PNG 出力。
+- **合成層**（配置・z 順・不透明度・clip／要件 8.7）: `PrintWindow` は DComp/WUC content で黒画像化するため不採用。**Desktop Duplication API**（`IDXGIOutputDuplication`）で合成後フレームをキャプチャし、固定シーンで移行前後を比較。DWM タイミング非決定性は「静止シーンで安定するまで待機してからキャプチャ」で吸収。決定論的キャプチャ不能な範囲（例: DWM アニメ過渡）のみ目視を残差フォールバック（要件 8.7）。
+- **32bit 可搬**（要件 8.4）＋**release z/LTO 疎通**（要件 8.1）はビルドマトリクスで検証。
+
+### Decision-10: スコープ境界（隣接非侵）
+- `compute_ex_style` の DComp 分岐（`WS_EX_NOREDIRECTIONBITMAP`）は不変で流用（要件 9.3・DWM 合成は DComp/WUC 共通ゆえ透過等価成立見込み・R1 で確認）。当たり判定・ULW アーム・`CompositionMode` enum は非改変（要件 9.1/9.2）。WUC 新能力・投機的抽象は非導入（要件 9.4）。
+
+## Architecture Pattern Evaluation
+
+| Option | 説明 | 長所 | リスク | 判定 |
+|---|---|---|---|---|
+| A in-place 全差し替え | Ext/Resource/コンポーネント全て内部差し替え | 新規最小 | SurfaceBrush 構造変化が in-place に収まらぬ箇所 | 却下 |
+| B WUC 専用新設・並存 | 型で DComp/WUC 分離 | 段階移行安全 | 二重コンポーネントで schedule/クエリ複雑化・冗長 | 却下 |
+| **C 混成** | Ext/Resource 新設＋コンポーネント内部 in-place | スパイク分離＋消費側改修最小の両立 | 層順序依存の計画管理 | **採用** |
+
+## Risks & Mitigations（design 追記）
+
+- **R-High（サーフェス束ね）**: SetContent→SurfaceBrush の構造変化 → `SurfaceGraphics` に brush 保持追加・生成/解除両経路を単一システムで対称化。R1 スパイクで 1 surface 表示を先行検証。
+- **R-Med（DispatcherQueue apartment）**: `DQTAT_COM_NONE` vs `ASTA` の選択が現状 COM 初期化に依存 → R1 スパイクで実測確定。
+- **R-Med（clip 個別半径）**: WUC 直接等価なし → PathGeometry 写像。areka 本体未使用ゆえ実害小だがビルド等価のため実装。
+- **R-Med（32bit×WUC runtime）**: i686 ビルドは実績あるが WUC ランタイム動作は未実証 → R1 スパイクを i686 でも走らせる。
+- **R-Med（合成層キャプチャの非決定性）**: DWM タイミング → 静止シーン安定待ちキャプチャ＋残差目視フォールバック。
+
+## References（design 追記）
+
+- [Using the Visual Layer with Win32 — Microsoft Learn](https://learn.microsoft.com/en-us/windows/uwp/composition/using-the-visual-layer-with-win32) — DispatcherQueue の DQTYPE_THREAD_CURRENT 相乗り、DesktopWindowTarget 束縛の正準パターン。
+- [CreateDispatcherQueueController — Microsoft Learn](https://learn.microsoft.com/en-us/windows/win32/api/dispatcherqueue/nf-dispatcherqueue-createdispatcherqueuecontroller) — options 構造・apartment 種別。
+- [ICompositionDrawingSurfaceInterop::BeginDraw — Microsoft Learn](https://learn.microsoft.com/en-us/windows/win32/api/windows.ui.composition.interop/nf-windows-ui-composition-interop-icompositiondrawingsurfaceinterop-begindraw) — D2D DC ＋ offset out-param 意味論。
+- `windows` 0.62.2 crate ソース（ディスク実読）・`windows-numerics` 0.3.0。
+
+---
+
+## § ギャップ分析（kiro-validate-gap 由来・原文保持）
+
 # ギャップ分析: wintf-dcomp-to-wuc-migration
 
 > 対象: 表示合成バックエンドを DirectComposition（DComp）から Windows.UI.Composition（WUC）へ**純粋等価移行**する。
