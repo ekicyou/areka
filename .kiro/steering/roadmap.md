@@ -206,3 +206,29 @@ _Depends(confirmed): pilot-clickthrough-alpha-toggle
 - 孤児なし: pilot は対応本坑を名指し、本坑は pilot を `_Depends(confirmed):` で参照 ✓
 - 循環なし／DAG: pilot → main の単一エッジ（巡回なし）✓
 - 合否基準明示: go 基準（T1・T2・T3・T4・T6 必須）を上記に明示 ✓
+
+---
+
+## wintf 基盤層: 表示合成バックエンドの WUC 移行（M1 外・wintf 基盤層）
+
+> **位置づけ**: 上記クリックスルーと同じく M1（emo2-boot）とは別軸の **wintf 基盤層**改善。表示バックエンドを **DirectComposition → Windows.UI.Composition（WUC / `Compositor`・`DesktopWindowTarget`）** へ寄せる。M1 ユニット群（⓪〜⑥）には含めない。
+
+### 動機と前提
+
+- 表示合成の依存を DComp から WUC へ移し、DirectComposition 依存を廃す。**純粋等価移行**（見た目・再描画を変えない）が要件。WUC 新能力（アニメ/エフェクト）活用は M2 以降。
+- **調査（2026-07-01・`/kiro-discovery`）で GO-with-caveats 確定**: `windows` 0.62.2 に WUC 全型＋interop trait（`ICompositorDesktopInterop` 等 5 種）が存在。耐力壁級 Unknown 無し＝**pilot は切らない**（本坑一本）。caveats: ① `Compositor` 生成前に UI スレッドで `CreateDispatcherQueueController(DQTYPE_THREAD_CURRENT)`（**既存 message pump に相乗り・差し替え無し**）／② `Commit()` 廃止（暗黙反映）／③ サーフェス→`SpriteVisual.Brush` に brush が一段挟まる。`WS_EX_NOREDIRECTIONBITMAP` はそのまま流用可。
+
+### spec 分割（2 本・ULW 除去は独立）
+
+- **`wintf-dcomp-to-wuc-migration`（本坑・brief 済み・着手可）**: **①DComp→WUC 差し替えのみ**。当たり判定・ULW とは独立ゆえ**クリックスルーを待たず今すぐ着手可**。ULW アーム（`compositor.rs`/`ulw.rs`/`compositor_systems`）と `CompositionMode` enum には手を入れない。brief: `.kiro/specs/wintf-dcomp-to-wuc-migration/brief.md`。
+- **`wintf-ulw-removal`（本坑・brief 済み）**: ULW 一式除去＋`CompositionMode` collapse（GPU 合成単独へ）。brief: `.kiro/specs/wintf-ulw-removal/brief.md`。
+  ```
+  _Depends: wintf-clickthrough-alpha-toggle（完了）
+  ```
+  **ULW を安全に消せるのは、本坑クリックスルーが完了して「ULW 無しでも別プロセス透過が成立」と確認できてから**（クリックスルー brief の並走方針＝「完全有効なら ULW 破棄／当面は並走・即時撤去しない」に一致）。`wintf-dcomp-to-wuc-migration` とは触るファイルが別ゆえ**独立**（順序任意・両完了後に `CompositionMode` は WUC 単独へ最終 collapse）。クリックスルーのα源は ULW compositor の staging αバッファではなく per-widget `AlphaMask` を使う想定（design で確認）。
+
+### 依存マップ検証（two-tunnel 手動チェックリスト）
+
+- 順序ゲート: `wintf-ulw-removal` は `wintf-clickthrough-alpha-toggle` 完了が前提（ULW 破棄の安全網）✓
+- 独立性: `wintf-dcomp-to-wuc-migration`（表示層）は `wintf-clickthrough-alpha-toggle`（当たり判定層）とも `wintf-ulw-removal`（ULW 側・別ファイル群）とも独立・順序任意 ✓
+- 循環なし／DAG: clickthrough → ulw-removal の単一エッジのみ（wuc-migration は独立ノード・巡回なし）✓
