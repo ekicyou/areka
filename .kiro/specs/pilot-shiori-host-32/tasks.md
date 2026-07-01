@@ -64,7 +64,7 @@
   - 観測: helper が N 秒生存後 clean unload し、**終了コード 0 を親が観測**する＝**go 基準(2) 充足**
   - _Requirements: 1.3, 5.2, 5.4_
   - _Depends: 4.1_
-- [ ] 5.2 異常系: IPC タイムアウトと helper 異常終了検出
+- [x] 5.2 異常系: IPC タイムアウトと helper 異常終了検出
   - 無応答 helper に対し `SendMessageTimeout` が所定時間で Timeout を返しハングしない。helper 強制終了を親が終了コードで検出
   - 観測: 無応答時に Timeout、強制終了時に異常検出が観測でき、**いずれもハングしない**
   - _Requirements: 1.4, 2.3, 2.4_

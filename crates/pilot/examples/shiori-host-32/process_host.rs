@@ -141,6 +141,19 @@ impl ProcessHost {
         let status = handle.child.wait()?;
         Ok(ExitKind::classify(status.code()))
     }
+
+    /// helper を**強制終了**する（task 5.2・異常系観測用の ADDITIVE ヘルパ）。
+    ///
+    /// `std::process::Child::kill()` で子プロセスを強制終了させ、その後の
+    /// `poll_exit_kind` / `wait_kind` が clean(0) ではない異常終了（`Terminated` または
+    /// 非ゼロ `Abnormal`）を観測できるようにする（要件 1.4「予期せぬ終了の検出・記録」・2.4）。
+    /// 既存の spawn/poll/wait ロジックは変更しない（純粋に追加のみ）。
+    ///
+    /// Windows では `TerminateProcess` 相当で、終了コードは非 0（通常 1）になる。
+    /// clean unload（UNLOAD → exit 0）とは明確に区別される観測点。
+    pub fn terminate(handle: &mut HelperHandle) -> std::io::Result<()> {
+        handle.child.kill()
+    }
 }
 
 // ============================================================================

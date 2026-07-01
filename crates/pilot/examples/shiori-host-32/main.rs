@@ -72,6 +72,24 @@ fn main() {
     // ghostdir は SHIORI `load` 対象（design.md §320）。本フォルダ相対の固定パス。
     let ghostdir = Path::new("crates/pilot/examples/shiori-host-32/fixtures/emo2/ghost/master");
 
+    // --- 異常系セルフテストモード（task 5.2・design.md §521 IPC / §528 helper 異常終了）---
+    // `--selftest-errors` で 2 つの異常系を観測する:
+    //   (1) IPC タイムアウト（要件 2.3）: 無応答 target へ send_request が bounded に Timeout を返す。
+    //   (2) helper 強制終了検出（要件 1.4/2.4）: 実 i686 helper を kill し親が異常終了を検出。
+    // いずれも **ハングしない**（bounded）ことが本質。両方 PASS で exit 0。
+    if std::env::args().any(|a| a == "--selftest-errors") {
+        match drive_selftest_errors(ghostdir) {
+            Ok(()) => {
+                println!("=== --selftest-errors: 両異常系 PASS（IPC Timeout ＋ helper 異常終了検出・いずれもハングせず） ===");
+                std::process::exit(0);
+            }
+            Err(e) => {
+                eprintln!("=== --selftest-errors FAIL: {e} ===");
+                std::process::exit(1);
+            }
+        }
+    }
+
     let helper_exe = match resolve_helper_exe() {
         Some(p) => p,
         None => {
@@ -312,6 +330,236 @@ fn drive_go_criterion_2(session: &mut HelperSession) -> Result<(), String> {
         }
         Err(e) => Err(format!("go 基準(2) 不成立: clean unload 待ちに失敗（{e}）")),
     }
+}
+
+// ============================================================================
+// 異常系セルフテスト（task 5.2・design.md §521 IPC / §528 helper 異常終了）
+//
+// 2 つの異常系を x64 親側で観測する。BOTH must NOT hang（bounded）:
+//   err(1) IPC タイムアウト（要件 2.3・design.md §340/§525）
+//   err(2) helper 強制終了検出（要件 1.4/2.4・design.md §528/§224–226）
+// ============================================================================
+
+/// err(1) の Timeout 観測に使う短いタイムアウト（wedge の 3s より十分短い）。
+const ERR_IPC_TIMEOUT: Duration = Duration::from_millis(500);
+/// err(1) の wedged 窓が REQUEST 受領時にブロックする時間（Timeout より十分長い）。
+const ERR_WEDGE_SLEEP: Duration = Duration::from_secs(3);
+/// err(1) の Timeout 判定の上限マージン（bounded ＝ ハングしない・§340）。
+/// SendMessageTimeout(500ms) が返るまでを寛容に見積もる。wedge(3s) より十分短ければ合格。
+const ERR_TIMEOUT_UPPER_BOUND: Duration = Duration::from_millis(1500);
+/// err(2) で helper の HELLO を待つ上限（起動確認・bounded）。
+const ERR_HELLO_TIMEOUT: Duration = Duration::from_secs(5);
+
+/// 異常系 2 種を続けて観測する（task 5.2）。両方 PASS で `Ok(())`。
+fn drive_selftest_errors(ghostdir: &Path) -> Result<(), String> {
+    drive_err_ipc_timeout()?;
+    drive_err_helper_abnormal_exit(ghostdir)?;
+    Ok(())
+}
+
+/// err(1) IPC タイムアウト（要件 2.3・design.md §340/§525）。
+///
+/// 別スレッド上に **無応答（wedged）** message-only 窓を立て、その WndProc が REQUEST 受領時に
+/// `ERR_WEDGE_SLEEP`(3s) スリープしてブロックする（＝無応答 helper の模擬）。main スレッドから
+/// 短い `ERR_IPC_TIMEOUT`(500ms) で `ipc::send_request` を撃ち、`Err(IpcError::Timeout)` が
+/// **タイムアウト時間で**返ること（wedge の 3s を待たずに abort＝ハングしない）を観測する。
+///
+/// SendMessageTimeout は**別スレッド**宛なら caller を実際にブロックし `timeout_ms` を honor する
+/// （同一スレッド宛は deadlock ゆえ別スレッドの wedged 窓を用いる・task 指示）。SMTO_ABORTIFHUNG
+/// ＋ timeout_ms が wedge を on-time に打ち切る（ipc.rs §155–206）。
+fn drive_err_ipc_timeout() -> Result<(), String> {
+    use std::sync::mpsc;
+
+    println!("--- err(1) IPC タイムアウト観測（要件 2.3・design.md §340/§525）---");
+
+    // wedged 窓を別スレッドで生成し、その HWND(u32) を main へ返す。窓・ループはそのスレッドに
+    // 閉じる（窓アフィニティ）。REQUEST 受領で WndProc が 3s スリープ＝無応答を模擬する。
+    let (hwnd_tx, hwnd_rx) = mpsc::channel::<u32>();
+    let stop = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let stop_thread = stop.clone();
+
+    let wedge = std::thread::spawn(move || {
+        // WndProc: REQUEST(WM_COPYDATA) を受けたら wedge_sleep ブロックして応答しない（無応答）。
+        let window = match wintf_winmsg_executor::util::Window::new_checked(
+            wintf_winmsg_executor::util::WindowType::MessageOnly,
+            (),
+            move |_state: Pin<&()>,
+                  msg: wintf_winmsg_executor::util::WindowMessage|
+                  -> Option<windows::Win32::Foundation::LRESULT> {
+                if msg.msg == windows::Win32::UI::WindowsAndMessaging::WM_COPYDATA {
+                    // 無応答 helper の模擬: REQUEST を捌かず長時間ブロックする。
+                    // caller（別スレッドの SendMessageTimeout）は SMTO_ABORTIFHUNG＋timeout で
+                    // これを待たずに打ち切る（＝ハングしない）。
+                    std::thread::sleep(ERR_WEDGE_SLEEP);
+                    return Some(windows::Win32::Foundation::LRESULT(0));
+                }
+                None
+            },
+        ) {
+            Ok(w) => w,
+            Err(e) => {
+                eprintln!("[err(1)] wedged 窓生成に失敗: {e:?}");
+                return;
+            }
+        };
+        // HWND を main へ渡す。
+        let hwnd_u32 = u32::from_le_bytes(ipc::encode_hwnd_le(window.hwnd()));
+        let _ = hwnd_tx.send(hwnd_u32);
+
+        // stop まで軽くメッセージループを回す（WndProc が呼ばれるよう窓スレッドで pump）。
+        // ハートビートで GetMessage を起こし、stop フラグで抜ける（bounded）。
+        wintf_winmsg_executor::MessageLoop::run(|msg_loop, _msg| {
+            if stop_thread.load(std::sync::atomic::Ordering::Relaxed) {
+                msg_loop.quit();
+            }
+            wintf_winmsg_executor::FilterResult::Forward
+        });
+        drop(window);
+    });
+
+    // wedged 窓の HWND を受け取る（bounded・起動失敗で即エラー）。
+    let wedge_hwnd_u32 = hwnd_rx
+        .recv_timeout(Duration::from_secs(5))
+        .map_err(|_| "wedged 窓の HWND を受領できなかった（窓生成失敗の可能性）".to_string())?;
+    let wedge_hwnd = ipc::hwnd_from_u32(wedge_hwnd_u32);
+    println!("[err(1)] wedged 窓（別スレッド・REQUEST で {ERR_WEDGE_SLEEP:?} ブロック）: hwnd(u32)={wedge_hwnd_u32:#010x}");
+
+    // wedged 窓のループが回り始めるまで軽く待つ（heartbeat で WndProc が呼ばれる状態に）。
+    // ここは短い固定待ち（bounded）で十分。
+    std::thread::sleep(Duration::from_millis(100));
+
+    // send_request に渡す受け皿（応答は来ない＝single-in-flight・take は None になる）。
+    let slot = ipc::ResponseSlot::new();
+    // self_hwnd は形式上の送信元（wedged 窓は使わない）。適当な非 0 でよいが、正当性のため
+    // wedge_hwnd を流用（WPARAM に載るだけ・応答は来ないので無関係）。
+    let self_hwnd = wedge_hwnd;
+
+    // ★ 観測: 短い timeout で send_request。wedge(3s) を待たず timeout(500ms) 付近で
+    //   Err(Timeout) が返ること＝ハングしない（要件 2.3・design.md §340）。
+    let started = Instant::now();
+    let result = ipc::send_request(
+        wedge_hwnd,
+        self_hwnd,
+        MsgTag::Request,
+        b"GET SHIORI/3.0\r\nID: OnBoot\r\n\r\n",
+        ERR_IPC_TIMEOUT,
+        &slot,
+    );
+    let elapsed = started.elapsed();
+
+    // wedge スレッドを停止させる（bounded・後始末）。stop → heartbeat 相当で抜ける…が
+    // MessageLoop はメッセージ駆動ゆえ、確実に起こすため自窓へ PostMessage を撃つ。
+    stop.store(true, std::sync::atomic::Ordering::Relaxed);
+    unsafe {
+        let _ = windows::Win32::UI::WindowsAndMessaging::PostMessageW(
+            Some(wedge_hwnd),
+            0, // WM_NULL
+            windows::Win32::Foundation::WPARAM(0),
+            windows::Win32::Foundation::LPARAM(0),
+        );
+    }
+    let _ = wedge.join();
+
+    // 判定: Err(Timeout) かつ elapsed が bounded（timeout 近傍・wedge の 3s より十分短い）。
+    match result {
+        Err(ipc::IpcError::Timeout) => {
+            if elapsed >= ERR_WEDGE_SLEEP {
+                return Err(format!(
+                    "err(1) 不成立: Timeout は返ったが elapsed={elapsed:?} が wedge({ERR_WEDGE_SLEEP:?}) 以上＝ハングした疑い"
+                ));
+            }
+            if elapsed > ERR_TIMEOUT_UPPER_BOUND {
+                return Err(format!(
+                    "err(1) 不成立: Timeout は返ったが elapsed={elapsed:?} が上限 {ERR_TIMEOUT_UPPER_BOUND:?} を超過（bounded でない）"
+                ));
+            }
+            println!(
+                "[err(1)] IPC timeout observed in {}ms (timeout={:?}, wedge={:?}, bounded, no hang) PASS",
+                elapsed.as_millis(),
+                ERR_IPC_TIMEOUT,
+                ERR_WEDGE_SLEEP
+            );
+            Ok(())
+        }
+        Err(other) => Err(format!(
+            "err(1) 不成立: 期待は IpcError::Timeout だが {other:?} が返った（elapsed={elapsed:?}）"
+        )),
+        Ok(bytes) => Err(format!(
+            "err(1) 不成立: 無応答 wedge に対し応答が返った（{} バイト・Timeout であるべき）",
+            bytes.len()
+        )),
+    }
+}
+
+/// err(2) helper 強制終了検出（要件 1.4/2.4・design.md §528/§224–226 Crashed 遷移）。
+///
+/// 実 i686 helper を `ProcessHost::spawn` で起動し、HELLO 到達で稼働を確認した後、
+/// `ProcessHost::terminate`（`Child::kill()`）で**強制終了**する。その後 `wait_kind` で
+/// 親が終了種別を観測し、**`ExitKind::Clean` ではない**（`Terminated` または非ゼロ `Abnormal`）
+/// ＝異常終了を検出できること（clean unload の exit 0 と明確に区別）を確認する。すべて bounded。
+fn drive_err_helper_abnormal_exit(ghostdir: &Path) -> Result<(), String> {
+    println!("--- err(2) helper 強制終了検出（要件 1.4/2.4・design.md §528）---");
+
+    let helper_exe = match resolve_helper_exe() {
+        Some(p) => p,
+        None => {
+            return Err(
+                "HELPER_EXE 未設定かつ argv に helper exe なし。err(2) には実 i686 helper が必要（$env:HELPER_EXE を設定）".to_string(),
+            );
+        }
+    };
+    println!("[err(2)] helper_exe = {}", helper_exe.display());
+
+    // 親 message-only 窓（HELLO 受け皿）を立て、helper を起動する。
+    let parent = ParentMessageWindow::create()?;
+    let parent_hwnd_u32 = parent.hwnd_u32();
+    let mut handle = ProcessHost::spawn(&helper_exe, ghostdir, parent_hwnd_u32)
+        .map_err(|e| format!("helper 起動失敗: {e}"))?;
+    println!("[err(2)] helper 起動 OK（HELLO を待機・稼働確認）");
+
+    // HELLO 受領で稼働確認（bounded）。届かなくても kill は可能だが、稼働状態からの
+    // 強制終了を観測するため HELLO を待つ。
+    match parent.pump_until_hello_or(ERR_HELLO_TIMEOUT) {
+        Some(h) => println!("[err(2)] helper 稼働確認 OK（HELLO 受領・helper hwnd(u32)={h:#010x}）"),
+        None => {
+            // 稼働確認できずとも観測は続行（強制終了自体は成立する）。ただし記録する。
+            eprintln!("[err(2)] HELLO を {ERR_HELLO_TIMEOUT:?} 内に受領できず（稼働確認省略・kill は続行）");
+        }
+    }
+
+    // 起動直後に既に落ちていないことを確認（落ちていたら kill の意味がない）。
+    if let Some(kind) = ProcessHost::poll_exit_kind(&mut handle) {
+        return Err(format!(
+            "err(2) 準備失敗: kill 前に helper が既に終了していた（{kind:?}）"
+        ));
+    }
+
+    // ★ 強制終了（TerminateProcess 相当・要件 1.4 の「予期せぬ終了」を模擬）。
+    let killed_at = Instant::now();
+    ProcessHost::terminate(&mut handle).map_err(|e| format!("helper の強制終了に失敗: {e}"))?;
+    println!("[err(2)] helper を強制終了（Child::kill）");
+
+    // 親が終了種別を観測する（bounded＝wait は kill 済みゆえ即返る）。
+    let kind = ProcessHost::wait_kind(handle).map_err(|e| format!("終了待ちに失敗: {e}"))?;
+    let detect_elapsed = killed_at.elapsed();
+
+    // 判定: clean(0) では**ない**こと＝異常を検出できた（要件 1.4「予期せぬ終了の検出・記録」）。
+    if kind.is_clean() {
+        return Err(format!(
+            "err(2) 不成立: 強制終了したのに ExitKind::Clean と観測された（異常検出できず）"
+        ));
+    }
+    let code_str = match kind {
+        ExitKind::Abnormal(c) => format!("{c}"),
+        ExitKind::Terminated => "none(Terminated)".to_string(),
+        ExitKind::Clean => unreachable!(),
+    };
+    println!(
+        "[err(2)] force-killed helper detected: kind={kind:?} code={code_str} (detected in {}ms, bounded, no hang) PASS",
+        detect_elapsed.as_millis()
+    );
+    drop(parent);
+    Ok(())
 }
 
 /// 生存窓の後、helper のメッセージループがまだ REQUEST を捌けることを示す任意プローブ（bounded）。
