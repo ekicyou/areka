@@ -17,6 +17,7 @@
 - `SendMessageTimeout`（`SMTO_ABORTIFHUNG`）で timeout / wedge を検出し、無限待機を防ぐ。
 - pasta 非依存の **echo 往復**（request bytes → 同一 response bytes）を無クラッシュで観測できる。
 - helper を i686（32bit）ターゲットでビルドでき、32bit 可搬性（shift overflow 回避・生バイトのみ跨ぐ）を維持する。
+- ホスト側（`shiori-host32-ipc` / `shiori-host32-host`）は **x64 と arm64 の両方でネイティブビルド**でき（CPU 非依存・64bit 幅統一）、x86 SHIORI（pasta.dll）を駆動する helper のみ i686 に隔離する。arm64 上では i686 helper は x86 エミュレーションで実行され、WM_COPYDATA が native/emulation 境界を跨ぐ。
 
 ### Non-Goals
 
@@ -63,7 +64,7 @@
 - **REQUEST responder の差し替え境界の変更**: helper の REQUEST ブランチを下流が pasta 駆動へ差し替える「置換点」の位置・形が変わった場合。
 - **依存方向の変更**: 本ユニットが `shiori-abi` 等へ新たに依存する／させる方向転換が生じた場合。
 - **transport の後退**: WM_COPYDATA 再入方式が成立せず named pipe 等へ後退する場合（pilot で go 済ゆえ現時点では不要だが、triggers として明示）。
-- **クレート配置・構成の確定**: 後述の Open Decision（単一 / ペア / proto+embed）は design discussion で確定し、確定後にタスク生成へ進む。
+- **クレート配置・構成の確定**: design discussion #1 で **Option B-2（3クレート `shiori-host32-ipc` / `-host` / `-helper`）** に確定済み。以後この配置・依存方向・命名の変更は下流へ再検証を強制する。
 
 ## Architecture
 
@@ -118,13 +119,12 @@ graph TB
 ### Dependency Direction
 
 ```
-ipc（共有プロトコル・型/framing）
-   → ProcessHost（x64・std-only）
-   → ParentMessageWindow / HelperMessageWindow（windows + wintf-winmsg-executor）
-   → 送信パス（send_request）／respond（helper）
+shiori-host32-ipc（proto：型/framing/IpcError・全ターゲット可搬 x64/arm64/i686）
+   ├→ shiori-host32-host（x64/arm64：ProcessHost・ParentMessageWindow・送信パス send_request）
+   └→ shiori-host32-helper（i686：HelperMessageWindow・respond echo）
 ```
 
-各層は左のみを import する。`ipc` はプロトコル定義の単一ソースであり、x64/i686 双方から共有される。`ProcessHost` は `windows` 型（HWND 等）を引きずらず u32 ワイヤ値で親 HWND を子へ渡す。REQUEST responder（`respond`）は helper 窓層に属し、下流はこの層を編集して echo→pasta を差し替える。
+各クレートは左のみを cargo 依存する（host / helper は共に proto = `shiori-host32-ipc` を一方向依存し、host↔helper 間のコード依存は無い＝プロセス境界で WM_COPYDATA のみ）。`shiori-host32-ipc` はプロトコル定義の単一ソースであり、x64/arm64/i686 の全ターゲットから共有される。`ProcessHost` は `windows` 型（HWND 等）を引きずらず u32 ワイヤ値で親 HWND を子へ渡す。REQUEST responder（`respond`）は helper クレートに属し、下流 `shiori-host32-shiori-load` はこの helper クレートを編集して echo→pasta を差し替える。
 
 ### Technology Stack
 
@@ -135,36 +135,44 @@ ipc（共有プロトコル・型/framing）
 | メッセージループ／窓 | `wintf-winmsg-executor` 0.0.5 | message-only 窓生成・`MessageLoop::run`・WndProc dispatch | i686 実行時 GO（pilot 実証・raw Win32 fallback 不要）。完全 pin（`=0.0.5`） |
 | スレッド跨ぎ通知 | `event-listener` 5 | 必要時のみ（heartbeat 相当の起床） | tokio 禁止 |
 | エラー型 | `thiserror` 2 | 構造化エラー enum | 全クレート共通規約（pilot の素 enum を昇格） |
-| ビルドターゲット | i686-pc-windows-msvc | helper の 32bit ビルド | **PowerShell 必須**（Git Bash の GNU link.exe が MSVC link を遮蔽）。`rustup target add` 導入済 |
+| ビルドターゲット（ホスト） | x86_64 / aarch64-pc-windows-msvc | `-ipc` / `-host` のネイティブビルド | CPU 非依存・64bit 幅統一。arm64 上では i686 helper を x86 エミュで実行 |
+| ビルドターゲット（helper） | i686-pc-windows-msvc | `-ipc` / `-helper` の 32bit ビルド | **PowerShell 必須**（Git Bash の GNU link.exe が MSVC link を遮蔽）。`rustup target add` 導入済 |
 
 ## File Structure Plan
 
-> **確定（design discussion #1）**: クレート**配置と構成**は brief が「依頼者へ提示して確認を取る」ことを要求していた設計判断であり、design discussion で **Option B-1（単一クレート・helper を `[[bin]]` 内包）／クレート名 `shiori-host32-ipc`** に確定した。命名は既存 `shiori-abi` と同じ `shiori-` ドメイン接頭辞で揃え、後日クレート名だけで所属ドメイン（SHIORI）・トラック（host32）・ユニット（ipc）が判別できるようにする（汎用的な `host32-ipc` は不採用）。将来 proto 共有が必要になれば `ipc` モジュールを別クレートへ切り出せる（可逆・現時点では YAGNI）。下記のモジュール責務の粒度はこの確定によって不変。
+> **確定（design discussion #1）**: クレート**配置と構成**は brief が「依頼者へ提示して確認を取る」ことを要求していた設計判断であり、design discussion で **Option B-2（3クレート）** に確定した。根拠は arm64: areka 最終成果物（wintf 含む）は **x64 と arm64 の両方でネイティブ動作**が要件で、x86 SHIORI（pasta.dll）を呼ぶ helper のみ i686。3クレートに割ると「64bit ホスト＝x64/arm64」と「i686 helper」の**ターゲット分離が `cfg` でなく crate 境界で構造的に表現**され、cross-compile された死にコードや `cfg` 分岐の綱渡りが生じない（単一クレート B-1 は dead-code 除去で成果物に無駄は出ないが、arm64 を含む3ターゲットの `cfg` 分岐が増えるため不採用）。命名は既存 `shiori-abi` と同じ `shiori-` ドメイン接頭辞で揃え、クレート名だけで所属（SHIORI/host32）・役割（ipc=proto / host / helper）が判別できるようにする。モジュール責務の粒度は不変（クレート境界へ配分するのみ）。
 
-### Directory Structure（確定案 Option B-1 / `shiori-host32-ipc`）
+### Directory Structure（確定案 Option B-2 / 3クレート）
 
 ```
-crates/shiori-host32-ipc/             # 新設 production クレート（確定名）
-├── Cargo.toml                        # lib + [[bin]] helper。windows feature = DataExchange 追加
+crates/shiori-host32-ipc/             # proto：ワイヤ規約（全ターゲット可搬 x64/arm64/i686）
+├── Cargo.toml                        # windows feature = Win32_System_DataExchange（＋ WindowsAndMessaging / Foundation）
+└── src/
+    └── lib.rs                        # ipc：MsgTag / u32LE HWND / cbData / framing / ResponseSlot / send_copydata / send_request ＋ IpcError（thiserror）
+
+crates/shiori-host32-host/            # x64 + arm64 ネイティブ・ホスト側 transport lib（shiori-host32-ipc 依存）
+├── Cargo.toml                        # windows + wintf-winmsg-executor
 ├── src/
-│   ├── lib.rs                        # 公開 API 再エクスポート（x64 側 transport の入口）
-│   ├── ipc.rs                        # 共有プロトコル：MsgTag / u32LE HWND / cbData / framing / ResponseSlot / 送信規約。両ターゲットビルド
-│   ├── error.rs                      # thiserror エラー enum（IpcError / SpawnError / HandshakeError）
-│   ├── process_host.rs               # x64：ProcessHost（spawn / poll_exit / ExitKind）。std-only（windows 非依存）
-│   ├── parent_window.rs              # x64：ParentMessageWindow（HELLO記録 / RESPONSE再入受領 / pump_until_hello）＋ 送信パス send_request
-│   └── bin/
-│       └── helper.rs                 # i686：HelperMessageWindow（HELLO送出 / REQUEST受領 / respond echo / msg loop）。[[bin]] で i686 独立ビルド
+│   ├── lib.rs                        # 公開 API（送信 API の入口）
+│   ├── error.rs                      # SpawnError / HandshakeError（thiserror）
+│   ├── process_host.rs               # ProcessHost（spawn / poll_exit / ExitKind）。std-only（windows 非依存）
+│   └── parent_window.rs              # ParentMessageWindow（HELLO記録 / RESPONSE再入受領 / pump_until_hello / ハンドシェイクゲート）＋ 送信パス send_request
 └── tests/
-    └── echo_roundtrip.rs             # 往復 echo 統合テスト（Requirement 6 のゲート指標・親→helper→親の実 WM_COPYDATA 往復）
+    └── echo_roundtrip.rs             # 往復 echo 統合テスト（Requirement 6 のゲート指標・i686 helper を事前ビルドして spawn）
+
+crates/shiori-host32-helper/          # i686 のみ・helper 実行バイナリ（shiori-host32-ipc 依存）
+├── Cargo.toml                        # windows + wintf-winmsg-executor
+└── src/
+    └── main.rs                       # HelperMessageWindow（HELLO送出 / REQUEST受領 / respond echo / msg loop）＝下流 shiori-load の差し替え点
 ```
 
-> `ipc.rs` は x64 lib と i686 bin の**双方**からビルドされる共有モジュール。pilot の `#[path = "ipc.rs"] mod ipc;` 物理共有パターンを、単一クレート内の**通常の `mod` 共有**へ格上げする。helper が `src/bin/helper.rs` から `use shiori_host32_ipc::ipc;`（lib 経由）で共有規約を参照するか、`#[path]` で直接取り込むかは実装細部（タスクで確定）。
+> 共有規約は `shiori-host32-ipc`（proto）クレートを **cargo 依存**で共有する（`-host` / `-helper` が依存）。pilot の `#[path = "ipc.rs"] mod ipc;` 物理共有は不要化。ターゲット分離は crate 境界で担保され、`-host` は x86_64/aarch64、`-helper` は i686 でビルドされる（`cfg` / `required-features` 不要）。
 
 ### Modified Files
 
-- `Cargo.toml`（ワークスペースルート）: `members = ["crates/*"]` の glob で新クレートは自動メンバー化されるため**変更不要**。ただし新クレートの `Cargo.toml` が `windows` の `Win32_System_DataExchange` feature を追加で要求する（ワークスペース既定の windows features には未含のため、新クレート側で `features = [...]` を明示するか、ワークスペース features を拡張する — どちらにするかはタスクで確定）。
+- `Cargo.toml`（ワークスペースルート）: `members = ["crates/*"]` の glob で 3 クレートは自動メンバー化されるため**変更不要**。各クレートの `Cargo.toml` が `windows` の `Win32_System_DataExchange`（＋ `Win32_UI_WindowsAndMessaging` / `Win32_Foundation`）feature を明示する（Memory/Globalization は下流 pasta proxy 用ゆえ本ユニットでは不要）。
 
-> 各ファイルは単一責務: `ipc.rs`=プロトコル、`error.rs`=エラー型、`process_host.rs`=プロセス、`parent_window.rs`=x64 窓＋送信、`bin/helper.rs`=i686 窓＋echo。往復 echo テストのみ `tests/` に置く（examples はテストの代替にしない）。
+> 各クレート／ファイルは単一責務: `shiori-host32-ipc`=プロトコル＋`IpcError`、`shiori-host32-host`（`error.rs`=Spawn/Handshake エラー・`process_host.rs`=プロセス・`parent_window.rs`=x64/arm64 窓＋送信）、`shiori-host32-helper`（`main.rs`=i686 窓＋echo）。往復 echo テストは `-host` の `tests/` に置く（examples はテストの代替にしない）。
 
 ## System Flows
 
@@ -243,7 +251,7 @@ stateDiagram-v2
 | 6.1 | request bytes → 対応 response bytes | HelperMessageWindow（respond echo） | `respond(&[u8]) -> Vec<u8>`（echo） | echo 往復 |
 | 6.2 | response と request の照合可能な観測 | tests/echo_roundtrip | 統合テスト assertion | echo 往復 |
 | 6.3 | echo 中 無クラッシュ・無デッドロック | 全体 | 統合テスト（往復成立・両プロセス生存） | echo 往復 |
-| 7.1 | i686 ターゲットビルド可能 | bin/helper ＋ Cargo.toml | `[[bin]]` ＋ i686 target ビルド | ビルド |
+| 7.1 | i686 ターゲットビルド可能 | shiori-host32-helper（bin crate） | helper クレート ＋ i686 target ビルド | ビルド |
 | 7.2 | 32bit ポインタ幅で shift overflow なし | ipc | dwData/HWND 演算は u64 cast で評価 | framing |
 | 7.3 | 双方向で生バイトのみ表現・32bit 可搬 | ipc | 生バイト規約 | framing |
 | 8.1 | SHIORI3 の build/parse/charset を行わない | 境界（negative） | echo のみ・SHIORI 非依存 | — |
@@ -441,7 +449,7 @@ impl ParentMessageWindow {
 - 起動時に親へ **HELLO**（自 HWND u32 LE）を 1st WM_COPYDATA で送出（送出先の親 HWND は arg/env の u32 ワイヤ値）。
 - WndProc で **REQUEST** を受領 → `respond(&payload)` → RESPONSE を 1 通返送（`send_copydata`）→ **即 return**（それ以上跨プロセス SendMessage を発行しない）。
 - **`respond` は echo**: `fn respond(req: &[u8]) -> Vec<u8> { req.to_vec() }`。pasta 非依存の単純 echo で、これが Requirement 6 の「意味を持たない生バイト往復」を成立させる。**これが下流 `host32-shiori-load` の差し替え点**（echo 行を pasta 駆動へ置換）である。trait RequestHandler 等の抽象は設けない（YAGNI・下流が同クレートを編集して差し替える）。
-- helper は i686 `[[bin]]` として独立ビルド。`usize=32bit` の shift overflow を u64 cast で回避（ipc 経由）。
+- helper は `shiori-host32-helper` クレート（binary crate）として i686 で独立ビルド。`usize=32bit` の shift overflow を u64 cast で回避（ipc 経由）。
 
 **Dependencies**
 
@@ -540,10 +548,10 @@ fn main() { /* 親HWND を arg/env で取得 → 窓生成 → HELLO 送出 → 
 
 > 以下のうち **§1・§2 は design discussion #1 で確定済み**。§3〜§5 は入力と矛盾しない範囲で本設計が方向を確定済みの実装細部（タスクで具体化）。
 
-1. **[確定・design discussion #1] クレート配置・構成と命名**: **Option B-1（単一クレート `crates/shiori-host32-ipc`・helper を `[[bin]]` 内包）／クレート名 `shiori-host32-ipc`** に確定。理由: transport は独立 lifecycle・依存（`wintf-winmsg-executor`・i686 target）を持ち、`shiori-abi` 相乗り（Option A）は最小依存純度を壊す。単一クレートなら共有 `ipc` モジュールが自然に `mod` 共有でき、ワークスペースメンバー増分も +1 で M1 最小実装方針に最も整合（代替: Option C=+2 / Option B-2=+3 は現時点 YAGNI）。命名は既存 `shiori-abi` と同じ `shiori-` ドメイン接頭辞で揃え、クレート名だけで所属（SHIORI/host32/ipc）を判別可能にする。将来 proto 共有が要れば `ipc` を可逆に切り出せる。
-2. **[確定・design discussion #1] `windows` feature の最小セットとビルド配線**: B-1 確定に伴い次の1案に寄せる — (a) 共有 `ipc` は単一クレート内の**通常 `mod` 共有**（`lib.rs` 経由）、(b) `windows` feature は `shiori-host32-ipc` の Cargo.toml で `Win32_System_DataExchange`（＋ `Win32_UI_WindowsAndMessaging` / `Win32_Foundation`）を明示（Memory/Globalization は pasta proxy 用＝下流ゆえ不要）、(c) i686 `[[bin]]` helper は x64 lib ビルド時に巻き込まれないよう `required-features` もしくは target 条件で分離。細部（`required-features` 名等）はタスクで確定するが、配線方針は本確定で一意。
+1. **[確定・design discussion #1] クレート配置・構成と命名**: **Option B-2（3クレート）** に確定。`crates/shiori-host32-ipc`（proto・全ターゲット可搬）／`crates/shiori-host32-host`（x64+arm64 ホスト lib）／`crates/shiori-host32-helper`（i686 helper bin）。`-host` / `-helper` は `-ipc` を一方向依存し、host↔helper 間のコード依存は無い（プロセス境界で WM_COPYDATA のみ）。根拠: areka 最終成果物は **x64 と arm64 の両方でネイティブ動作**が要件であり、x86 SHIORI（pasta.dll）を呼ぶ helper のみ i686。3クレートに割ると「64bit ホスト＝x64/arm64」と「i686 helper」の**ターゲット分離が `cfg` でなく crate 境界で構造的に表現**され、cross-compile された死にコードや `cfg` 分岐の綱渡りが生じない（単一クレート B-1 は dead-code 除去で無駄は出ないが arm64 を含む3ターゲットの `cfg` 分岐が増える）。命名は `shiori-abi` と同じ `shiori-` 接頭辞で所属を自明化。
+2. **[確定・design discussion #1] `windows` feature とビルド配線**: B-2 確定に伴い — (a) 共有 `ipc` は `shiori-host32-ipc`（proto）クレートを **cargo 依存**で共有（`-host` / `-helper` が依存）、pilot の `#[path]` 物理共有は不要化、(b) `windows` feature は各クレートの Cargo.toml で `Win32_System_DataExchange`（＋ `Win32_UI_WindowsAndMessaging` / `Win32_Foundation`）を明示（Memory/Globalization は pasta proxy 用＝下流ゆえ不要）、(c) target 分離は crate 境界で担保：`-host` は x86_64/aarch64、`-helper` は i686 でビルド（`cfg` / `required-features` 不要）。
 3. **[再入受領の production 品質] window state 共有パターン**: `wintf-winmsg-executor` の `Window<S>`（`Pin<&S>` state 共有）を踏襲し、`ResponseSlot`（RefCell）/`Cell` を UI スレッド固定・single-in-flight 前提で用いる。独自ラッパを立てるかは実装細部（設計方針は pilot 構造の忠実な踏襲）。
 4. **[i686 ビルド／テスト規律] PowerShell 手順の固定化**: production クレートでの i686 target ビルド＋往復 echo 統合テストの手順（helper ビルド → 親テスト）を README/steering にどう固定するか（`rustup target add i686-pc-windows-msvc` は導入済）。
 5. **[ハンドシェイクゲート（3.3）の具体形]** 完了前の往復抑止を、型（helper HWND を要求する送信 API）で表すか、実行時 `Err(HandshakeIncomplete)` で表すか。設計は「未確定送信を拒否する」ことを要求し、表現手段はタスクで確定。
 
-> §1・§2 は design discussion #1 で確定済み（クレート = `shiori-host32-ipc`・Option B-1・ビルド配線1案）。§3〜§5 は入力（requirements/research）と矛盾しない範囲で本設計が方向を確定済みの実装細部であり、要件レベルの gap や矛盾ではない。以降はタスク生成へ進める。
+> §1・§2 は design discussion #1 で確定済み（3クレート B-2・`shiori-host32-ipc` / `-host` / `-helper`・arm64 を正式ターゲット化）。§3〜§5 は入力（requirements/research）と矛盾しない範囲で本設計が方向を確定済みの実装細部であり、要件レベルの gap や矛盾ではない。以降はタスク生成へ進める。
