@@ -1,0 +1,13 @@
+[package]
+name = "areka-parsers"
+workspace = "../.."
+description = "Pure, std-only parser family for areka (sakura script and siblings); host-independent"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[dependencies]
+tracing = { workspace = true }
