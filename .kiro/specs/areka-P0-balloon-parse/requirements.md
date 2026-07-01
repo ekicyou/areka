@@ -16,8 +16,8 @@ emo2 のバルーン定義（`descript.txt` ＋ サーフェス別上書き `bal
   - `areka_parsers::balloon` モジュールと、バルーンモデル型（descript フィールド＋マージ済みサーフェス別状態）の定義。
   - `descript.txt`（base 共通既定）の解析。
   - `balloons0s.txt`（sakura 側）／`balloonk0s.txt`（kero 側）のサーフェス別差分解析と、base への順マージ（overlay 上書き）。
-  - 座標フィールドの**負値＝反対端基準**という符号意味を保持した解析（`validrect` / `wordwrappoint` / `windowposition`）。
-  - font・anchor 文字色・origin・スクロール矢印（`arrow0`/`arrow1`）・バルーン本体画像参照の解析。
+  - 座標フィールドの符号意味を保持した解析。`validrect` / `wordwrappoint` は**負値＝反対端基準**（ベース画像の右下からの相対座標）、`windowposition` は**基本位置からの調整量で符号は方向を示す**（y は下が＋・上が－）。いずれも符号を失わずモデルへ保持する。
+  - font・anchor 文字色・origin・スクロール矢印（`arrow0`/`arrow1`）の解析。バルーン本体画像参照（descript に明示行は無く命名規約由来）のサーフェス別解決。
   - emo2 fixture に対する単体テスト。
 - **Out of scope（本 spec が担わない振る舞い）**:
   - バルーン描画・文字レイアウト・折返し実行（下流 `areka-P0-text-layer` の領分）。
@@ -55,7 +55,7 @@ emo2 のバルーン定義（`descript.txt` ＋ サーフェス別上書き `bal
 5. When 入力 descript に `font.height`（例: `28`）行が含まれるとき, the balloon parser shall フォント高をモデルへ反映する。
 6. When 入力 descript に `font.color.r` / `font.color.g` / `font.color.b` 行が含まれるとき, the balloon parser shall 本文文字色（RGB）をモデルへ反映する。
 7. When 入力 descript に `anchor.font.color.r` / `anchor.font.color.g` / `anchor.font.color.b` 行が含まれるとき, the balloon parser shall リンク（アンカー）文字色（RGB）をモデルへ反映する。
-8. When 入力 descript にバルーン本体画像（例: sakura 側 `balloons0.png`、kero 側 `balloonk0.png`）を参照しうる情報が含まれるとき, the balloon parser shall バルーン本体画像参照をサーフェス別に解決できる形でモデルへ反映する。
+8. Where バルーン本体画像は descript 等に明示ファイル名が記述されず SSP 命名規約（`balloon{s|k}{ID}.png`・偶数=左向き／奇数=右向き。例: sakura 側 `balloons0.png`、kero 側 `balloonk0.png`）で導出される場合, the balloon parser shall サーフェス種別（sakura／kero）とサーフェス ID を保持し、下流がファイル I/O 無しに命名規約でバルーン本体画像を解決できる形でモデルへ反映する。
 9. When 入力 descript に `arrow0.x` / `arrow0.y` / `arrow1.x` / `arrow1.y` 行が含まれるとき, the balloon parser shall スクロール矢印座標をモデルへ反映する。
 
 ### Requirement 3: 座標フィールドの負値＝反対端基準の保持
@@ -64,7 +64,7 @@ emo2 のバルーン定義（`descript.txt` ＋ サーフェス別上書き `bal
 
 #### Acceptance Criteria
 
-1. When 入力に `windowposition.x` / `windowposition.y`（例: kero で x=266・y=-129）が含まれるとき, the balloon parser shall 値の符号を保持したままウィンドウ位置をモデルへ反映する。
+1. When 入力に `windowposition.x` / `windowposition.y`（例: sakura で x=266・y=-129、kero で x=-190・y=-75）が含まれるとき, the balloon parser shall 値の符号を保持したままウィンドウ位置をモデルへ反映する（符号は反対端基準ではなく基本位置からの調整方向を示す。y は下が＋・上が－）。
 2. When 入力に `wordwrappoint.x` / `wordwrappoint.y`（例: `x,-34`）が含まれるとき, the balloon parser shall 折返し点座標を、負値＝右端基準と区別できる符号付き値としてモデルへ反映する。
 3. When 入力に `validrect.top` / `validrect.bottom` / `validrect.left` / `validrect.right`（例: `bottom,-56`）が含まれるとき, the balloon parser shall 有効矩形の各辺を、負値＝反対端基準と区別できる符号付き値としてモデルへ反映する。
 4. The balloon parser shall これらの座標値について、正値と負値を情報として失わずモデルに保持し、基準端の解釈を下流が判定できる形で提供する。
