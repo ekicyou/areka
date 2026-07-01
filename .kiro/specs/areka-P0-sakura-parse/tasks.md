@@ -54,7 +54,7 @@
   - _Boundary: parse_
   - _Depends: 4.2_
 
-- [ ] 6. Validation: subset・構文網羅と代表 OnBoot の通し検証
+- [x] 6. Validation: subset・構文網羅と代表 OnBoot の通し検証
   - 構文（エスケープ／クォート／角括弧／未知タグ）・値正規化（待ち時間・改行の境界値）・Choice（旧 2 連形が隣接命令を壊さない）・不透明 Surface・寛容パススルー・純粋関数契約（空入力・順序・同一入力等価・UTF-8 日本語）を網羅する単体テスト群を整備する
   - 作者提供の実 OnBoot 例をインライン代表フィクスチャとして、想定命令列への通し変換を固定する（`\![bind]`×6→GenericCommand、`\s[通常]` 不透明、`\_w`→Wait、`\n`/`\n[150]`、`\e`→End）
   - 特定ゴースト実体ファイルは同梱せず、`\q`/`\![move]`/`%username` など OnBoot 例に現れないタグは個別の手書きテストで網羅する
@@ -66,4 +66,4 @@
 - 3.1: lexer.rs に暫定 `#![allow(dead_code)]`（消費側 decode 未結線のため）。lexer の `Token::Raw` は定義のみで未 emit、`scan_bracket_args` の `closed` フラグは `let _ = closed;` で保留——いずれも 3.2 のエスケープ／クォート／未閉じ吸収の plug point。**4.x で decode が lexer を消費したら `#![allow(dead_code)]` を絞る/除去**（真の dead を隠さぬよう）。`Token`/`lex` は `pub(crate)`、mod.rs の `pub use` には出さない（公開面は `Instruction`＋`parse` のみ）。model の不透明 NewType は `pub fn new` で構築可（dola `ActorKey` 前例）。
 - 4.2: `decode` は peekable 化（`vec::IntoIter` over Token）——旧 `\q` 検出と `\![*]` fold が後続トークン依存のため。lexer トークン形: `\q[ID][タイトル]`→`Tag{q,[ID]}`+`Text("[タイトル]")`、`\q*…`は `*` が word に残り `Tag{q*,…}`、`\![*]`→`Tag{!,[*]}`。旧 `\q`/`\q*`→head tag＋宙吊り `[...]` を**単一 Raw** に再構成（Choice 化せず・req 5.3 が正本）。`\![*]`＋後続 `\q`→Choice fold、単独 `\![*]`→`GenericCommand{name:"*"}`。非move `\!`→`GenericCommand{name=第1引数, raw_args=残り}`、`\!move` は Move 維持。**design.md L500 の Error-Categories 表セル（5.3 を「Choice(第1ブラケットのみ)＋Raw」と記載）は要件 item89・L425 と矛盾——別 docs コミットで「Raw 丸ごと吸収・Choice化せず」へ修正済み**。
 - 4.1: 4.2 への seam は `decode_passthrough_{tag,bang,bare,raw}` が **`Instruction::Raw` のみ emit**（`GenericCommand`/`Choice`-fold は未生成）。4.2 はこれらの本体を GenericCommand／Raw（旧 `\q` 2連）／Choice（`\![*]`）の実規則へ差し替える。decode.rs にも暫定 `#![allow(dead_code)]`（消費側 parse 未結線）——**Task 5 で parse が decode を結線したら lexer.rs と decode.rs 両方の allow を絞る/除去**。定数: `WAIT_UNIT_MS=50`、`\_w`=絶対ms（×50しない）、newline は half→0.5／percent÷100／既定1.0／符号保持。bare `\-`→Quit（req 6.4）。
-- 3.2: 既知の微小エッジ（非ブロッキング・レビュー合格）——**単独クォート空引数 `\s[""]` が 0 引数に畳まれる**（`scan_bracket_args` の finalize ヒューリスティック `!cur.is_empty()||!args.is_empty()` がクォート消費済み空と無内容を区別できないため）。厳密 req 13.4 は 1 個の空文字列引数を含意。`["",x]`/`[a,""]` はカンマで正しく空引数化される。OnBoot/decode(4.x) には影響なし。**Task 6 で `\s[""]`→1 空引数のテストを足し、必要なら lexer 側に `quote_consumed` フラグで対処**。未閉じ `"` は設計通り EOI まで Raw 吸収（後続 `]` も飲む）。
+- 3.2: 既知の微小エッジ（非ブロッキング・レビュー合格）——**単独クォート空引数 `\s[""]` が 0 引数に畳まれる**（`scan_bracket_args` の finalize ヒューリスティック `!cur.is_empty()||!args.is_empty()` がクォート消費済み空と無内容を区別できないため）。厳密 req 13.4 は 1 個の空文字列引数を含意。`["",x]`/`[a,""]` はカンマで正しく空引数化される。OnBoot/decode(4.x) には影響なし。**→ Task 6 で解決済み**: lexer に `quote_consumed` フラグ追加（`"` open で true・`,` で reset・`]` の finalize 第3条件 `|| quote_consumed`）。`\s[""]`→1 空引数、`[]`→0 引数維持、`["",x]`/`[a,""]` 不変。req 13.4 充足。未閉じ `"` は設計通り EOI まで Raw 吸収（後続 `]` も飲む）。

@@ -29,5 +29,8 @@ mod parse;
 #[cfg(test)]
 mod parse_tests;
 
+#[cfg(test)]
+mod validation_tests;
+
 pub use model::{Choice, Instruction, MoveArgs, NewLineRatio, SurfaceArg};
 pub use parse::parse;

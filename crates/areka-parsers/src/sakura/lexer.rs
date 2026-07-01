@@ -189,6 +189,10 @@ fn scan_bracket_args(chars: &[(usize, char)], j: usize) -> BracketScan {
     debug_assert_eq!(chars.get(j).map(|&(_, c)| c), Some('['));
     let mut args: Vec<String> = Vec::new();
     let mut cur = String::new();
+    // 現在の引数でクォート `"..."` が開かれたか（要件 13.4）。sole `[""]` を
+    // 空文字列 1 引数として確定するための識別子。`cur` が空でも「クォートを
+    // 消費した」ことを覚え、`[]`（真の空・0 引数）と区別する。
+    let mut quote_consumed = false;
     let mut k = j + 1; // `[` の次から。
 
     loop {
@@ -199,14 +203,18 @@ fn scan_bracket_args(chars: &[(usize, char)], j: usize) -> BracketScan {
         match c {
             ']' => {
                 k += 1;
-                // 引数を確定: `[]`（空）は引数 0 個。何か読んだら最後の 1 個を push。
-                if !cur.is_empty() || !args.is_empty() {
+                // 引数を確定: `[]`（真の空）は引数 0 個。何か読んだ／カンマで
+                // 既に push 済み／クォートを消費した（sole `[""]`・要件 13.4）
+                // いずれかなら最後の 1 個を push する。
+                if !cur.is_empty() || !args.is_empty() || quote_consumed {
                     args.push(cur);
                 }
                 return BracketScan::Closed { args, next: k };
             }
             ',' => {
                 args.push(std::mem::take(&mut cur));
+                // 次の引数は新規。クォート消費フラグをリセットする。
+                quote_consumed = false;
                 k += 1;
             }
             '\\' if chars.get(k + 1).map(|&(_, c)| c) == Some(']') => {
@@ -217,6 +225,8 @@ fn scan_bracket_args(chars: &[(usize, char)], j: usize) -> BracketScan {
             '"' => {
                 // クォート開始（要件 13.4）。閉じ `"` まで読み、内側 `,` は保護。
                 // 二重化 `""` はリテラル `"` として取り込む。
+                // この引数はクォートを消費した（sole `[""]` を空 1 引数へ確定するため）。
+                quote_consumed = true;
                 k += 1; // 開き `"` を消費。
                 loop {
                     let Some(&(_, qc)) = chars.get(k) else {
