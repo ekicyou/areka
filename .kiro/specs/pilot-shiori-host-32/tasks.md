@@ -59,7 +59,7 @@
   - _Depends: 2.1, 2.2, 3.1, 3.2_
 
 - [ ] 5. Integration/Validation: go 基準 2＋異常系
-- [ ] 5.1 メッセージループ N 秒生存 → clean unload の結線・観測
+- [x] 5.1 メッセージループ N 秒生存 → clean unload の結線・観測
   - ループを N 秒運転後、親が UNLOAD を送り helper が `unload`→`FreeLibrary`→終了コード 0 で正常終了
   - 観測: helper が N 秒生存後 clean unload し、**終了コード 0 を親が観測**する＝**go 基準(2) 充足**
   - _Requirements: 1.3, 5.2, 5.4_

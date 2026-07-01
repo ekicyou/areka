@@ -32,11 +32,12 @@ mod process_host;
 mod parent_window;
 
 use std::path::{Path, PathBuf};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use ipc::MsgTag;
-use parent_window::ParentMessageWindow;
-use process_host::{ExitKind, ProcessHost};
+use parent_window::{ParentMessageWindow, ParentShared};
+use process_host::{ExitKind, HelperHandle, ProcessHost};
+use std::pin::Pin;
 
 /// HWND ハンドシェイク待ちの上限（ハーネスを塞がぬよう短く・design.md §208）。
 const HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(5);
@@ -44,6 +45,13 @@ const HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(5);
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(5);
 /// UNLOAD 送出のタイムアウト（clean unload 指示）。
 const UNLOAD_TIMEOUT: Duration = Duration::from_secs(3);
+
+/// go 基準(2) のメッセージループ生存観測窓 N（要件 5.2・design.md §214–232）。
+/// helper の message loop がこの N 秒を破綻なく生存し続けることを親が観測する。
+/// helper 側 backstop（`run_helper` の 30s・helper.rs §88）より十分短く、ハーネス安全な短尺。
+const SURVIVAL_WINDOW: Duration = Duration::from_secs(4);
+/// 生存窓の間、親が helper 生死を `poll_exit` する間隔（この刻みで N 秒を消化する）。
+const SURVIVAL_POLL_INTERVAL: Duration = Duration::from_millis(250);
 
 /// helper exe パスを解決する（design.md §324 確定）:
 /// 環境変数 `HELPER_EXE`（無ければ第 1 CLI 引数）。どちらも無ければ `None`。
@@ -75,34 +83,75 @@ fn main() {
         }
     };
 
-    // 全体駆動（go 基準(1)・design.md §172–204）。失敗は観測可能に出して非ゼロ終了（ハングしない）。
-    match drive_go_criterion_1(&helper_exe, ghostdir) {
-        Ok(value) => {
-            // ★ go 基準(1) の観測点（design.md §198/§203）: emo2 OnBoot の Value（起動挨拶さくら）。
-            println!("=== go 基準(1) OBSERVABLE: emo2 OnBoot Value ===");
-            println!("Value: {value}");
-            println!("=== go 基準(1) PASS: x64 親が i686 helper 越しに OnBoot Value を受領 ===");
-            std::process::exit(0);
-        }
+    // 全体駆動。失敗は観測可能に出して非ゼロ終了（ハングしない・要件 2.3）。
+    //
+    // 構成（design.md §172–232）:
+    //   [go 基準(1)] setup（helper 起動＋HELLO＋OnBoot 1 往復）→ Value 受領・確認。
+    //   [go 基準(2)] 同一 helper を N 秒生存させ（poll_exit で生存監視）→ UNLOAD → clean unload
+    //               → 終了コード 0 を親が観測（design.md §230: 終了コード 0 ＋親側観測ログを一次記録）。
+    // UNLOAD は go(1) では送らず、go(2) の生存窓の**後**に送る（設計変更点・§221「N 秒後」）。
+    match drive(&helper_exe, ghostdir) {
+        Ok(()) => std::process::exit(0),
         Err(e) => {
-            eprintln!("=== go 基準(1) FAIL: {e} ===");
+            eprintln!("=== FAIL: {e} ===");
             std::process::exit(1);
         }
     }
 }
 
-/// go 基準(1) の全体駆動（design.md §172–204）。成功で emo2 OnBoot の `Value:` を返す。
+/// 全体駆動（go 基準(1)＋(2)）。go(1) の 1 往復成功後、同じ helper で go(2) の生存→clean unload を観測する。
+fn drive(helper_exe: &Path, ghostdir: &Path) -> Result<(), String> {
+    // 親 message-only 窓は go(1)/go(2) を通じて生存させる（RESPONSE 受け皿・HELLO 受け皿）。
+    let parent = ParentMessageWindow::create()?;
+
+    // --- setup + go 基準(1): 往復して Value を受領（UNLOAD はまだ送らない）---
+    let mut session = drive_go_criterion_1(&parent, helper_exe, ghostdir)?;
+
+    // ★ go 基準(1) の観測点（design.md §198/§203）: emo2 OnBoot の Value（起動挨拶さくら）。
+    println!("=== go 基準(1) OBSERVABLE: emo2 OnBoot Value ===");
+    println!("Value: {}", session.value);
+    println!("=== go 基準(1) PASS: x64 親が i686 helper 越しに OnBoot Value を受領 ===");
+
+    // --- go 基準(2): N 秒メッセージループ生存 → UNLOAD → clean unload → 終了コード 0 観測 ---
+    drive_go_criterion_2(&mut session)?;
+
+    Ok(())
+}
+
+/// go 基準(1) の 1 往復で確立した「生きた helper セッション」（go(2) がこれを引き継ぐ）。
 ///
-/// a. 親 message-only 窓生成 → HWND 取得。
+/// 窓・handle・helper HWND を保持し、UNLOAD 未送出のまま go(2) の生存窓へ渡す。
+struct HelperSession<'p> {
+    /// 親 message-only 窓（RESPONSE 受け皿・go(2) 中も生存）。
+    parent: &'p ParentMessageWindow,
+    /// helper 子プロセスハンドル（生存監視・clean unload 待ちの単一ソース）。
+    /// clean unload 待ち（`wait_clean`）で所有権を消費するため `Option`（`take` して wait へ渡す）。
+    handle: Option<HelperHandle>,
+    /// 親窓 HWND（UNLOAD の from）。
+    parent_hwnd: windows::Win32::Foundation::HWND,
+    /// helper メッセージ窓 HWND（UNLOAD / 追加 REQUEST の宛先）。
+    helper_hwnd: windows::Win32::Foundation::HWND,
+    /// go(1) で受領した OnBoot の Value（親が確認済み）。
+    value: String,
+}
+
+/// go 基準(1) の全体駆動（design.md §172–204）。成功で「生きた helper セッション」を返す。
+///
+/// **設計変更点（task 5.1）**: UNLOAD はここでは送らない。go 基準(2) の生存窓の**後**に送る
+/// （design.md §221「N 秒後」）。ゆえに戻り値は Value 文字列ではなく、UNLOAD 未送出のまま
+/// go(2) へ引き継ぐ `HelperSession`（helper 稼働中・handle 保持）とする。
+///
+/// a. 親 message-only 窓は呼び出し側（`drive`）が生成・保持（go(2) 中も生存）。
 /// b. ProcessHost::spawn（real parent HWND を u32 で渡す）→ helper が HELLO を送る。
 /// c. 親ループを HELLO 受領まで pump（HWND ハンドシェイク・bounded・ハングしない）。
 /// d. Shiori3Codec::build_onboot → OnBoot SHIORI/3.0 bytes。
 /// e. send_request（REQUEST 送出 → RESPONSE 再入受領・受け皿セル方式・design.md §209）。
 /// f. parse_value → Value を取り出す（go 基準(1) 観測）。
-/// g. UNLOAD 送出 → ProcessHost::wait_clean で終了コード 0 確認。
-fn drive_go_criterion_1(helper_exe: &Path, ghostdir: &Path) -> Result<String, String> {
-    // a. 親 message-only 窓を先に立てる（helper 起動前・HELLO 受け皿）。
-    let parent = ParentMessageWindow::create()?;
+fn drive_go_criterion_1<'p>(
+    parent: &'p ParentMessageWindow,
+    helper_exe: &Path,
+    ghostdir: &Path,
+) -> Result<HelperSession<'p>, String> {
     let parent_hwnd_u32 = parent.hwnd_u32();
     let parent_hwnd = ipc::hwnd_from_u32(parent_hwnd_u32);
     println!("[go(1)] 親 message-only 窓 生成: hwnd(u32)={parent_hwnd_u32:#010x}");
@@ -165,31 +214,129 @@ fn drive_go_criterion_1(helper_exe: &Path, ghostdir: &Path) -> Result<String, St
         return Err("Value: が空（起動挨拶さくらスクリプトが空）".to_string());
     }
 
-    // g. UNLOAD 送出（片道）→ clean unload（design.md §199–202・要件 1.3/5.3）。
-    if let Err(e) = ipc::send_copydata(
-        helper_hwnd,
+    // UNLOAD はここでは送らない（設計変更点・task 5.1）。go(2) の生存窓の後に送る（§221）。
+    // helper 稼働中のまま session を go(2) へ引き継ぐ。
+    Ok(HelperSession {
+        parent,
+        handle: Some(handle),
         parent_hwnd,
+        helper_hwnd,
+        value,
+    })
+}
+
+/// go 基準(2) の駆動（要件 1.3/5.2/5.4・design.md §214–232）。
+///
+/// 前提: `session` は go(1) で確立した稼働中の helper（UNLOAD 未送出）。
+/// 手順:
+///   1. **生存窓**: helper を N 秒（`SURVIVAL_WINDOW`）生かし、`ProcessHost::poll_exit` で
+///      刻みごとに生存（`None`）を確認する。途中で終了していれば go(2) 失敗（loop が破綻＝要件 5.2 不成立）。
+///   2. 生存窓の後に UNLOAD を送出（design.md §221「N 秒後」）。
+///   3. `ProcessHost::wait_clean` で終了コードを取得し、**0 / `ExitKind::Clean`** を親が観測する
+///      （design.md §230: 終了コード 0 ＋親側観測ログを一次記録・要件 1.3/5.4）。非ゼロなら失敗。
+///
+/// 全ステップは bounded: 生存窓は N（`SURVIVAL_WINDOW`）＋刻み、UNLOAD は `UNLOAD_TIMEOUT`。
+/// clean unload 待ち（`wait_clean`）は helper が UNLOAD で即 clean 終了するため実質即返り、
+/// 最悪でも helper 側 backstop（`run_helper` 30s・helper.rs §88）が上限を保証する（ハングしない）。
+fn drive_go_criterion_2(session: &mut HelperSession) -> Result<(), String> {
+    println!(
+        "=== go 基準(2): メッセージループ {SURVIVAL_WINDOW:?} 生存 → clean unload を観測 ==="
+    );
+
+    // --- 1. 生存窓: N 秒間 helper が生きていることを poll_exit で刻みごとに観測（要件 5.2）---
+    let started = Instant::now();
+    let mut polls = 0u64;
+    let handle = session
+        .handle
+        .as_mut()
+        .ok_or_else(|| "go 基準(2) 内部エラー: helper handle が既に消費済み".to_string())?;
+    while started.elapsed() < SURVIVAL_WINDOW {
+        // 生死監視（IPC レイヤと直交・要件 2.4/1.2）。稼働中なら None。
+        if let Some(kind) = ProcessHost::poll_exit_kind(handle) {
+            // 生存窓の途中で helper が終了した＝ループが N 秒生存できなかった（要件 5.2 不成立）。
+            let elapsed = started.elapsed();
+            return Err(format!(
+                "go 基準(2) 不成立: helper が生存窓 {SURVIVAL_WINDOW:?} を待たず {elapsed:?} で終了した \
+                 （メッセージループが破綻・{kind:?}・UNLOAD 未送出）"
+            ));
+        }
+        polls += 1;
+        std::thread::sleep(SURVIVAL_POLL_INTERVAL);
+    }
+    let survived = started.elapsed();
+    println!(
+        "[go(2)] helper survived {:.2}s（poll_exit={} 回 すべて alive=None・メッセージループ生存・要件 5.2）",
+        survived.as_secs_f64(),
+        polls
+    );
+
+    // 任意: 生存後もループが REQUEST を捌けることを示す（bounded・失敗しても致命ではない）。
+    let _ = mid_window_probe(session);
+
+    // --- 2. 生存窓の後に UNLOAD 送出（design.md §221「N 秒後」・要件 5.3）---
+    match ipc::send_copydata(
+        session.helper_hwnd,
+        session.parent_hwnd,
         MsgTag::Unload,
         &[],
         UNLOAD_TIMEOUT,
     ) {
-        // UNLOAD 送出失敗は致命ではない（helper は max_run 上限で自律停止する）。観測のみ。
-        eprintln!("[go(1)] UNLOAD 送出失敗（helper は上限で自律停止・観測のみ）: {e:?}");
-    } else {
-        println!("[go(1)] UNLOAD 送出 OK");
+        Ok(()) => println!("[go(2)] UNLOAD 送出 OK（N 秒生存後・clean unload 指示）"),
+        Err(e) => {
+            // UNLOAD 送出失敗は致命ではない（helper は backstop で自律停止する）が、観測して記録。
+            eprintln!("[go(2)] UNLOAD 送出失敗（helper は backstop 上限で自律停止・観測のみ）: {e:?}");
+        }
     }
 
-    // clean unload を待って終了コードを確認（要件 1.3・go 基準(2) の一部だが往復完了の締め）。
+    // --- 3. clean unload を待って終了コード 0 を親が観測（要件 1.3/5.4・design.md §230）---
+    //     helper 子ハンドルを消費して wait（`session.handle` を take で取り出す）。
+    let handle = session
+        .handle
+        .take()
+        .ok_or_else(|| "go 基準(2) 内部エラー: helper handle が既に消費済み".to_string())?;
     match ProcessHost::wait_clean(handle) {
         Ok(code) => {
             let kind = ExitKind::classify(Some(code));
-            println!("[go(1)] helper exited: code={code} kind={kind:?}");
-            if !kind.is_clean() {
-                eprintln!("[go(1)] 警告: helper が clean(0) で終了しなかった（{kind:?}）");
+            println!("[go(2)] helper exited code={code} kind={kind:?}（親が終了コードを観測）");
+            if kind.is_clean() {
+                println!(
+                    "=== go 基準(2) PASS: helper survived {:.2}s → clean unload → exit code=0 kind=Clean を親が観測（要件 1.3/5.2/5.4・design.md §230） ===",
+                    survived.as_secs_f64()
+                );
+                Ok(())
+            } else {
+                Err(format!(
+                    "go 基準(2) 不成立: helper が clean(0) で終了しなかった（code={code} {kind:?}）"
+                ))
             }
         }
-        Err(e) => eprintln!("[go(1)] wait_clean 失敗（観測のみ）: {e}"),
+        Err(e) => Err(format!("go 基準(2) 不成立: clean unload 待ちに失敗（{e}）")),
     }
+}
 
-    Ok(value)
+/// 生存窓の後、helper のメッセージループがまだ REQUEST を捌けることを示す任意プローブ（bounded）。
+/// 失敗しても go(2) は致命扱いしない（生存＋clean unload が本質・これは「まだ動く」補足観測）。
+fn mid_window_probe(session: &HelperSession) -> Result<(), ()> {
+    let onboot = shiori3::build_onboot(std::path::Path::new(""));
+    let shared: Pin<&ParentShared> = session.parent.shared();
+    match ipc::send_request(
+        session.helper_hwnd,
+        session.parent_hwnd,
+        MsgTag::Request,
+        &onboot,
+        REQUEST_TIMEOUT,
+        shared.response_slot(),
+    ) {
+        Ok(resp) => {
+            println!(
+                "[go(2)] 生存後の追加 REQUEST に helper が応答（{} バイト）＝ループは生存後も稼働中",
+                resp.len()
+            );
+            Ok(())
+        }
+        Err(e) => {
+            eprintln!("[go(2)] 追加 REQUEST は失敗（補足観測のみ・致命ではない）: {e:?}");
+            Err(())
+        }
+    }
 }
