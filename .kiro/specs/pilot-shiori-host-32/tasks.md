@@ -3,7 +3,7 @@
 > 種別: **先進坑（pilot・使い捨て）**。成果物はコードでなく知見（go／違う／直す ＋ 学び）。一次記録は `crates/pilot/examples/shiori-host-32/README.md`（3 幕）。
 > 実装は design.md のコンポーネント/契約・research.md の確定決定に従う。**葉ノード隔離（命綱）厳守**・使い捨て品質可。ビルドは PowerShell（i686 リンカトラップ回避）。
 
-- [ ] 1. Foundation: 先進坑スキャフォールド＋2 段ビルド基盤＋IPC 契約
+- [x] 1. Foundation: 先進坑スキャフォールド＋2 段ビルド基盤＋IPC 契約
 - [x] 1.1 example フォルダ生成・helper 独立ターゲット宣言・親/helper 最小スケルトン
   - `_template` を `examples/shiori-host-32/` へコピーし、親 `main.rs`（x64）と helper `helper.rs`（i686）の最小スケルトンを置く
   - `pilot/Cargo.toml` に helper 用 `[[example]]`（name=`shiori-host-32-helper`, path=`examples/shiori-host-32/helper.rs`）を追加
@@ -17,7 +17,7 @@
   - _Requirements: 2.1, 2.3_
   - _Boundary: IpcChannel_
 
-- [ ] 2. Core: x64 親側コンポーネント
+- [x] 2. Core: x64 親側コンポーネント
 - [x] 2.1 (P) SHIORI/3.0 OnBoot 組立と Value 抽出（x64）
   - `OnBoot` を `GET SHIORI/3.0`＋必須ヘッダ（`ID: OnBoot`／`Charset: UTF-8`／`Sender`）CRLF＋空行終端で **UTF-8** 生成（GET ＝応答を返す経路・NOTIFY でない）
   - 応答バイト列から `Value:`（さくらスクリプト本体）を UTF-8 で抽出、不在で None
@@ -32,7 +32,7 @@
   - _Boundary: ProcessHost_
   - _Depends: 1.2_
 
-- [ ] 3. Core: i686 helper 側コンポーネント
+- [x] 3. Core: i686 helper 側コンポーネント
 - [x] 3.1 (P) pasta.dll 動的ロードとバイト proxy（i686）
   - `LoadLibraryW`＋`GetProcAddress` で `load`/`unload`/`request`（cdecl flat-C・返り値 `bool`(1byte)・pasta 実ソース確定）を解決し関数ポインタ化
   - `load(ghostdir)` は ghostdir を **ANSI(Shift_JIS)** で HGLOBAL 化して呼びクラッシュせず完了。`request` は受信バイト列を HGLOBAL 化して渡し応答 HGLOBAL からバイト取得（**入力 HGLOBAL は DLL 解放／応答 HGLOBAL はホスト解放**・HGLOBAL は IPC を跨がない）
@@ -49,7 +49,7 @@
   - _Boundary: HelperMessageWindow_
   - _Depends: 1.2, 3.1_
 
-- [ ] 4. Integration: 親⇄helper 1 往復結線（go 基準 1）
+- [x] 4. Integration: 親⇄helper 1 往復結線（go 基準 1）
 - [x] 4.1 全体駆動・HWND ハンドシェイク・受け皿セル再入受領・OnBoot 往復
   - 親を駆動: helper 起動 → 親メッセージ窓生成 → HELLO で HWND ハンドシェイク → OnBoot 組立 → REQUEST 送出（`SendMessageTimeout`）
   - **受け皿セル方式**で RESPONSE を再入受領（応答 WndProc は非ブロッキング・両方向 Timeout・single-in-flight ＝**循環待ちなしのデッドロック回避**）→ `Value:` を parse → 標準出力
@@ -58,7 +58,7 @@
   - _Boundary: ParentDriver, IpcChannel_
   - _Depends: 2.1, 2.2, 3.1, 3.2_
 
-- [ ] 5. Integration/Validation: go 基準 2＋異常系
+- [x] 5. Integration/Validation: go 基準 2＋異常系
 - [x] 5.1 メッセージループ N 秒生存 → clean unload の結線・観測
   - ループを N 秒運転後、親が UNLOAD を送り helper が `unload`→`FreeLibrary`→終了コード 0 で正常終了
   - 観測: helper が N 秒生存後 clean unload し、**終了コード 0 を親が観測**する＝**go 基準(2) 充足**
@@ -70,7 +70,7 @@
   - _Requirements: 1.4, 2.3, 2.4_
   - _Depends: 5.1_
 
-- [ ] 6. Validation: 実走 go 検証と README 一次記録
+- [x] 6. Validation: 実走 go 検証と README 一次記録
 - [x] 6.1 実 pasta.dll での go 基準実走検証
   - emo2 fixture に対し full pilot を実走し、go 基準(1) Value 受領と go 基準(2) ループ生存 → clean unload を観測。実行時挙動（`request` の block-on-reply・`load` 起点 `spawn_actor` スレッド）も観測・記録
   - 観測: 実 pasta.dll で go 基準(1)(2) の充足/不充足が観測され、結果（数値・ログ）が記録される
