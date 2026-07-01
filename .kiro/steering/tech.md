@@ -1,6 +1,6 @@
 ---
 inclusion: always
-updated_at: 2026-06-26
+updated_at: 2026-07-01
 ---
 
 # Technology Stack
@@ -12,7 +12,7 @@ Rust 2024を前提にしたマルチクレート構成です。wintfはbevy_ecs�
 ## Core Technologies
 
 - **Language**: Rust 2024 Edition
-- **Graphics**: DirectComposition, Direct2D, Direct3D11
+- **Graphics**: Direct2D, Direct3D11 ＋ 合成層（**移行中: DirectComposition → Windows.UI.Composition**・下記 Key Technical Decisions 参照）
 - **Text**: DirectWrite（縦書き・横書き対応）
 - **Imaging**: WIC（Windows Imaging Component）
 - **Window System**: Win32 API
@@ -79,8 +79,11 @@ Rust言語の型システムを最大限に活用。`unsafe`ブロックはWindo
 ## Key Technical Decisions
 
 - **ECS採用**: 複雑なGUI要素の管理とヒットテストロジックをコンポーネントベースで実装
-- **DirectComposition**: ハードウェアアクセラレーションによる高速な合成処理と透過ウィンドウの実現
-- **透過の合成方式は ULW/DComp 切替式（実装済み）**: 伺か型マスコットは「別プロセスのウィンドウ上に乗り、透明ピクセル上のクリックをその別プロセスへ透過させる」のが中核要件。これを満たせるのは実質 `UpdateLayeredWindow`（`ULW_ALPHA`/`AC_SRC_ALPHA` でアルファ0ピクセルがOSレベルで自動クリック透過）。そこでウィンドウ単位に `CompositionMode` enum で **ULW（デフォルト）⇄ DirectComposition** を選択する切替基盤を実装済み（生成時固定、生存中の動的切替は非対応）。COMラッパーは `com/ulw.rs`。`WM_NCHITTEST`→`HTTRANSPARENT` はプロセス境界を越えず別プロセス透過には使えない点に注意。`SetWindowRgn` 方式は DComp 描画をクリップするため却下済み（`_rejected/wintf-P0-click-through-rgn`）
+- **合成層（DirectComposition → Windows.UI.Composition へ移行決定・実装移行中）**: ハードウェアアクセラレーション合成の基盤。現状は DirectComposition（`com/dcomp.rs`）だが、**Windows.UI.Composition（`Compositor`/`DesktopWindowTarget`/`CompositionDrawingSurface`）へ移行決定**（`windows` 0.62.2 で GO-with-caveats 確定・DispatcherQueue は既存 message pump に相乗り・`Commit()` は暗黙反映へ）。briefed spec: `wintf-dcomp-to-wuc-migration`。
+- **透過の合成方式（旧「ULW 一択」結論を撤回・新方針確定・実装移行中）**: 伺か型マスコットは「別プロセスのウィンドウ上に乗り、透明ピクセル上のクリックをその別プロセスへ透過させる」のが中核要件。**現状の実装**はウィンドウ単位に `CompositionMode` enum で **ULW（デフォルト）⇄ DirectComposition** を選ぶ切替基盤（生成時固定・COMラッパー `com/ulw.rs`）。
+  - **~~実質 ULW 一択~~ ← 撤回**: 先進坑 `pilot-clickthrough-alpha-toggle`（**✅ go 済み 2026-07-01・開発者承認**）が、**`WS_EX_TRANSPARENT` 動的トグル方式**（**表示層＝合成 visual/content と 当たり判定層＝HWND スタイルの二層分離**・別スレッドのカーソル監視＋αマスク連動）で **DComp/GPU 合成を維持したまま別プロセスクリック透過が成立**することを実証（他社 3D マスコット実績のある手段）。ULW（CPU ビットマップ）は GPU 合成と併用不可で「3D 描画を諦める踏み絵」だったが、その制約は解けた。
+  - **決定済み方針**: ① 表示合成を **Windows.UI.Composition** へ、② 別プロセス透過は **`WS_EX_TRANSPARENT` 動的トグル**へ、③ **ULW ルートは除去**（当面はクリックスルー本坑の検証期間中のみ並走）。実装は briefed specs `wintf-clickthrough-alpha-toggle`／`wintf-ulw-removal`／`wintf-dcomp-to-wuc-migration` で進行。
+  - **不変の却下事項**: `WM_NCHITTEST`→`HTTRANSPARENT` はプロセス境界を越えず別プロセス透過に使えない。`SetWindowRgn` 方式は DComp 描画をクリップするため却下済み（`_rejected/wintf-P0-click-through-rgn`）。正本は `doc/COMPAT_ARCHITECTURE.md`／`.kiro/steering/roadmap.md`。
 - **DirectWrite**: 高品質な日本語テキストレンダリングと縦書き対応
 - **Workspace構成**: フレームワーク、演出定義、実アプリを分離したモノレポ構成
 - **Release最適化**: サイズ最適化（`opt-level='z'`, `lto=true`）でバイナリサイズを削減

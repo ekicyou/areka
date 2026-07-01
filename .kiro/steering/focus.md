@@ -1,6 +1,6 @@
 ---
 inclusion: always
-updated_at: 2026-06-26
+updated_at: 2026-07-01
 ---
 
 # Focus - ロードマップ管理
@@ -46,6 +46,7 @@ arekaアルファリリースロードマップと`.kiro/specs/`配下の仕様�
 
 - 直下に `phase=completed` のまま残る仕様（例: 旧メタ仕様）があれば `completed/` への移動候補として棚卸しに挙げる
 - 棚卸しの基準実数（2026-06-28・clean slate 後）: 完了99（歴史） / **active = 0**（憶測仕様を全伐採・実装ファーストで着手時に作る）。backlog・`_rejected/`・旧戦略メモは削除（git 履歴に保全）。ロードマップは **M1 のみ**（M2+ は M1 完成後に再構築）
+- 棚卸しの基準実数（2026-07-01 更新）: 完了 **103**（歴史） / **spec.json 有りの active = 0**（不変） / **直下の brief-only（spec.json 無し＝Phase 0 構想）= 7**（`/kiro-discovery` で just-in-time 生成した**着手可能フロント**: wintf 基盤層 `wintf-dcomp-to-wuc-migration`・`wintf-clickthrough-alpha-toggle`・`wintf-ulw-removal`／M1 parser `areka-P0-shell-parse`・`areka-P0-balloon-parse`・`areka-P0-package-mount`／M1 host-32 `areka-P0-host32-ipc`）。`/kiro-start <name>` で本坑ライフサイクル入り＝その時点で spec.json が生えて active へ遷移。件数は配置フォルダ＋spec.json 有無基準（brief-only は Phase 0 別掲）
 
 ## 運用上の注意
 
