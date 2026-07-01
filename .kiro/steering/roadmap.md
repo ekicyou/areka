@@ -36,6 +36,8 @@ areka（**x64**）が最小 SSP 互換ベースウェアとして、適合対象
 
 「**x64 areka が emo2 の 32bit `pasta.dll` を駆動できるか**」が M1 の生死を分ける。ここだけ先進坑（pilot・使い捨て）で先に検証し、**go 判定（開発者・人間判断）**を取ってから本実装へ。二坑モデル規律は [two-tunnel.md](two-tunnel.md)。
 
+> **✅ 検証済（2026-07-01・先進坑 `completed/pilot-shiori-host-32`）**: go 基準(1)(2) を実 emo2 `pasta.dll` で実走充足。耐力壁は突破。一次記録は [README](../../crates/pilot/examples/shiori-host-32/README.md)（3 幕）。最終 go 判定は開発者が同記録を見て下す人間判断。
+
 - 先進坑: `crates/pilot/examples/shiori-host-32/`。
 - **go 基準**: x64 から 32bit `pasta.dll` を 1 往復（load→OnBoot→`Value` 受領→unload）成功 ＋ 窓持ち SHIORI のメッセージループ生存。SAORI は emo2 未使用ゆえ対象外。
 
@@ -75,7 +77,7 @@ emo2 が起動して喋る。下記 5 トラックを結線して達成（⓪ �
 - `areka-P0-window-placement` — サーフェス窓の生成＋既定位置＋ドラッグ（`areka-mock-shell` 実コードから）。✔ むらさき/エモ窓が出てドラッグ移動
 
 **① SHIORI 通信層エンジン host-32（耐力壁・`pilot/shiori-host-32` がトラックを gate）**
-- `pilot/shiori-host-32` — 使い捨て feasibility。✔ go: 32bit pasta.dll 1往復
+- `pilot/shiori-host-32` — 使い捨て feasibility。**✅ 完了（2026-07-01・spec=`completed/pilot-shiori-host-32`・コードは `crates/pilot/examples/shiori-host-32/` に隔離保全）**: go 基準(1)(2) 実走充足＝32bit pasta.dll 1往復（x64 親が emo2 OnBoot `Value` 受領）＋窓持ちループ N秒生存→clean unload。跨ビットネス再入 WM_COPYDATA・`wintf-winmsg-executor` i686 実行時とも GO（fallback 不要）。→ 下流 `areka-P0-host32-*` の go ゲート充足（着手可・最終 go 判定は開発者）
 - `areka-P0-host32-ipc` — x64↔32bit helper＋pipe＋handshake/lifecycle。✔ 往復 echo
 - `areka-P0-host32-shiori-load` — LoadLibrary pasta.dll＋load/unload/request 解決＋load(ghostdir)。✔ load 成功・無crash
 - `areka-P0-host32-request` — SHIORI/3.0 build＋marshal＋response Value＋charset。✔ x64 が emo2 OnBoot の Value 受領
