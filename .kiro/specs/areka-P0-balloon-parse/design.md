@@ -413,6 +413,7 @@ acceptance criteria から導出。全テストは in-source（`*_tests.rs`）�
 ### Fixture 取り込み方式（研究 §5-8 の how 判断）
 
 - 採用: 検証に必要な最小の fixture 抜粋を**テスト内リテラル**として持つ（研究 §5-8 候補 (b)）。クレート境界を跨ぐ相対 `include_str!`（候補 a）の脆さを避け、`emo2-kakukaku` の確定値（base の該当行＋s0s/k0s 全差分行）を各テストに直書きする。これにより areka-parsers クレート単体で純粋・自己完結にテスト可能（要件 6.4）。fixture 実ファイルは正本・回帰時の照合元として `crates/pilot/.../emo2-kakukaku/` に残る。
+- **出所明示（乖離リスク対策）**: 直書きするテスト内リテラルには、採取元の正本ファイル名と行（例: `// 正本: crates/pilot/examples/shiori-host-32/fixtures/emo2/emo2-kakukaku/balloons0s.txt`）をテストコメントで明示し、`validation_tests` にも「正本 fixture の該当行から採取」と記す。これにより将来 fixture が改訂された際の照合起点を残す。正本 fixture とテストリテラルの**自動照合**（doc-test／helper による正本参照）は本 spec のスコープ外とし、将来拡張の余地として残す。
 
 ## Open Questions / Risks
 
