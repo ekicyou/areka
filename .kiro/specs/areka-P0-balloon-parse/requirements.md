@@ -26,7 +26,7 @@ emo2 のバルーン定義（`descript.txt` ＋ サーフェス別上書き `bal
   - 他 parser（shell / package）の領分。
 - **Adjacent expectations（隣接系への期待・非所有）**:
   - sakura/kero の左右配置は shell descript の `*.balloon.alignment` が決めるものであり、バルーン単体では決まらない。本 spec はバルーン定義側のみを解析し、この配置決定を所有しない（下流エンジンが shell 側と突き合わせる）。
-  - `balloonk0s.txt`（kero 側差分）は本リポジトリの fixture では実データが vendored 済みだが、`k0s` に対応する PNG（`balloonk0.png`）と s0s に対応する PNG は fixture に同梱される。実データ検証の主対象は s0s とし、k0s は構造対応（解析・マージ経路）が働くことを検証対象とする。
+  - `balloons0s.txt`（sakura 側差分）と `balloonk0s.txt`（kero 側差分）はいずれも本リポジトリの fixture に実データが vendored 済みであり、対応する PNG（`balloons0.png`／`balloonk0.png`）も fixture に同梱される。実データ検証は s0s・k0s の両サーフェスを対象とし、両側それぞれの確定値（符号を含む）を単体テストで固定する。
 
 ## Requirements
 
@@ -99,5 +99,5 @@ emo2 のバルーン定義（`descript.txt` ＋ サーフェス別上書き `bal
 
 1. The balloon parser shall emo2 fixture（`emo2-kakukaku` の `descript.txt` ＋ `balloons0s.txt`／`balloonk0s.txt`）を入力として解析でき、単体テストで結果を観測できる。
 2. When emo2 fixture を base descript ＋ s0s でマージして解析したとき, the balloon parser shall sakura 側の確定値（例: `windowposition` x=266・y=-129、`wordwrappoint.x,-49`、`validrect.bottom,-56`）を、符号を保持したマージ済みモデルとして生成する。
-3. When emo2 fixture を base descript ＋ k0s でマージして解析したとき, the balloon parser shall kero 側の差分が構造的に解析・マージされたマージ済みモデルを生成する。
+3. When emo2 fixture を base descript ＋ k0s でマージして解析したとき, the balloon parser shall kero 側の確定値（例: `windowposition` x=-190・y=-75、`validrect.bottom,-70`）を、符号を保持したマージ済みモデルとして生成する。
 4. The balloon parser shall 純粋関数・単体テストのみで結果が観測可能であり、描画・合成・host 実行を要さずに検証できる。
