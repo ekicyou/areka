@@ -76,14 +76,15 @@
   - 観測: 実 pasta.dll で go 基準(1)(2) の充足/不充足が観測され、結果（数値・ログ）が記録される
   - _Requirements: 4.5, 5.4, 6.4_
   - _Depends: 4.1, 5.1_
-- [ ] 6.2 README 3 幕 一次記録
+- [x] 6.2 README 3 幕 一次記録
   - `_template/README.md` をコピーし、動機（本坑 `areka-P0-host32-*` 群を名指し）→ 概要・**実行法（必須 3 項目: i686 ビルドコマンド／生成 exe パス／`HELPER_EXE` での渡し方）**→ 検証結果（go/違う/直す ＋ 学び ＋ 日付）を記述。go 判定は人間判断に委ね、判断材料の提供に徹する
   - 観測: README に 3 幕が揃い、実行法 3 項目と go 基準充足状況（判定材料）が記載される
   - _Requirements: 6.1, 6.2, 6.3, 6.4, 6.5_
   - _Depends: 6.1_
-- [ ]* 6.3 補助単体テスト（任意・MVP 後でも可）
+- [x]* 6.3 補助単体テスト（任意・MVP 後でも可）＝**既存でカバー済**
   - `Shiori3Codec` の OnBoot 組立／`Value:` 抽出、IPC タグの低 32bit 境界の単体テスト
   - 観測: build_onboot/parse_value・タグ境界の単体テストが通る（要件 4.1/4.2/2.1 の受入確認）
+  - 実績: 当該単体テストは task 1.2（`ipc::tests::msgtag_fits_in_low_32bits_and_roundtrips`）・task 2.1（`shiori3::tests::build_onboot_*`／`parse_value_*`）で実装済・12 テスト緑。追加作業不要。
   - _Requirements: 2.1, 4.1, 4.2_
 
 ## Implementation Notes
