@@ -1,0 +1,81 @@
+charset,UTF-8
+type,shell
+name,「コンフィズリー」＆「City-Pop'n」
+
+craftman,ekicyou
+craftmanw,えちょ
+craftmanurl,https://ekicyou.github.io/ghost_dev/emo2/
+
+seriko.use_self_alpha,1
+seriko.alignmenttodesktop,bottom
+
+sakura.defaultx,0
+kero.defaultx,0
+
+sakura.balloon.alignment,left
+kero.balloon.alignment,right
+
+// ===== 着せ替え定義 — surface1000 用 =====
+
+// --- 腕 ---
+sakura.bindgroup1100.name,腕,伸び
+sakura.bindgroup1100.default,1
+sakura.bindgroup1101.name,腕,組み
+
+// --- 口 ---
+sakura.bindgroup1200.name,口,笑顔1
+sakura.bindgroup1201.name,口,笑顔2
+sakura.bindgroup1202.name,口,口開
+sakura.bindgroup1203.name,口,うや？
+sakura.bindgroup1204.name,口,うう‥
+sakura.bindgroup1205.name,口,む？
+sakura.bindgroup1206.name,口,‥‥
+sakura.bindgroup1207.name,口,にこっ
+sakura.bindgroup1207.default,1
+sakura.bindgroup1208.name,口,小口
+sakura.bindgroup1209.name,口,中口
+sakura.bindgroup1210.name,口,うぇ～
+sakura.bindgroup1211.name,口,ハァ～
+
+// --- 目 ---
+sakura.bindgroup1300.name,目,べそ
+sakura.bindgroup1301.name,目,ジトー
+sakura.bindgroup1302.name,目,通常
+sakura.bindgroup1302.default,1
+sakura.bindgroup1303.name,目,笑顔
+sakura.bindgroup1304.name,目,静観
+sakura.bindgroup1305.name,目,半目
+
+// --- まばたき ---
+sakura.bindgroup1400.name,まばたき,通常
+sakura.bindgroup1401.name,まばたき,半目
+sakura.bindgroup1402.name,まばたき,ジトー
+sakura.bindgroup1403.name,まばたき,----
+
+// --- 眉 ---
+sakura.bindgroup1500.name,眉,通常
+sakura.bindgroup1500.default,1
+sakura.bindgroup1501.name,眉,オコ
+sakura.bindgroup1502.name,眉,悲しみ
+sakura.bindgroup1503.name,眉,シュン
+
+// --- 紅 ---
+sakura.bindgroup1600.name,紅,差し
+
+// --- キラリ ---
+sakura.bindgroup1700.name,キラリ,キラリ1
+sakura.bindgroup1701.name,キラリ,キラリ2
+
+// --- 髪飾り ---
+sakura.bindgroup1800.name,髪飾り,リボン
+sakura.bindgroup1800.default,1
+sakura.bindgroup1801.name,髪飾り,ボンボン
+
+// --- 着せ替えオプション ---
+sakura.bindoption0.group,腕,mustselect
+sakura.bindoption1.group,口,mustselect
+sakura.bindoption2.group,眉,mustselect
+sakura.bindoption3.group,目,mustselect
+
+// --- メニュー自動生成 ---
+sakura.menu,auto
