@@ -50,7 +50,7 @@
   - _Depends: 1.2, 3.1_
 
 - [ ] 4. Integration: 親⇄helper 1 往復結線（go 基準 1）
-- [ ] 4.1 全体駆動・HWND ハンドシェイク・受け皿セル再入受領・OnBoot 往復
+- [x] 4.1 全体駆動・HWND ハンドシェイク・受け皿セル再入受領・OnBoot 往復
   - 親を駆動: helper 起動 → 親メッセージ窓生成 → HELLO で HWND ハンドシェイク → OnBoot 組立 → REQUEST 送出（`SendMessageTimeout`）
   - **受け皿セル方式**で RESPONSE を再入受領（応答 WndProc は非ブロッキング・両方向 Timeout・single-in-flight ＝**循環待ちなしのデッドロック回避**）→ `Value:` を parse → 標準出力
   - 観測: 親が emo2 の OnBoot 応答 `Value:`（起動挨拶さくらスクリプト）を受領し標準出力に表示する＝**go 基準(1) 充足**
@@ -93,3 +93,5 @@
 - 3.1 で発覚（1.2 由来の i686 限定欠陥を修正）: i686 では `usize`=32bit ゆえ `(x as usize) >> 32` が overflow lint でコンパイルエラー。低32bit占有検査等の dwData/ULONG_PTR 演算は `u64` で評価すること（跨ビットネス可搬）。x64 の `cargo test` だけでは i686 コンパイル欠陥を検出できない → 共有モジュールは i686 でも `cargo test --target i686-pc-windows-msvc` を回す。
 - 3.1: pasta ABI を実ソース `vendors/pasta/crates/pasta_shiori/src/windows.rs`＋`util/hglobal/mod.rs` でバイト正確確認（矛盾ゼロ）。HGLOBAL=`GlobalAlloc(GMEM_FIXED)` 生ポインタ（GlobalLock 不要）／入力は DLL 解放・request 返り値はホスト解放／`request` の `len` は in/out（入力長を先に書く）／Shift_JIS は windows crate の CP_ACP（WideCharToMultiByte）で encoding_rs 不要。
 - 3.2（重大 positive finding・design §443 Risk 撤回）: **`wintf-winmsg-executor` 0.0.5 の i686 実行時挙動 GO**（ビルドは既実証・実行時は本先進坑で初確認）。message-only 窓生成・`MessageLoop::run`・WndProc dispatch・WM_COPYDATA 配送すべて i686 で機能。raw Win32 ループ後退（Revalidation Trigger）不要＝本坑 helper もこの版を流用可。窓が idle でも `want_quit`/deadline を再評価するため heartbeat（WM_NULL 定期 post）を使用（loopback selftest 用足場・実 parent 駆動 4.1 では inbound REQUEST/UNLOAD がループを起こすので再検討可）。API: `Window::new_checked(WindowType::MessageOnly, ..)`＋`MessageLoop::run`＋`FilterResult`。
+- 4.1（go 基準(1) 実証・design §210 の賭け成立）: **跨ビットネス再入 WM_COPYDATA 配送 GO**。x64 親が `SendMessageTimeout` でブロック中、i686 helper の RESPONSE(2nd WM_COPYDATA) が親 WndProc へ**再入配送**され受け皿セル(`ResponseSlot`)へ格納→復帰で取得＝named pipe 後退不要。デッドロック回避＝応答 WndProc は payload 格納後**即 return**（それ以上跨プロセス SendMessage しない）・両方向 `SMTO_ABORTIFHUNG`＋timeout・single-in-flight。emo2 OnBoot Value は時刻連動で毎回変化＝live pasta 駆動の証拠。
+- 環境 flake（4.1 で観測）: `cargo test`/`cargo run` が稀に rustup shim エラー `rustc.exe … not applicable to stable` を出す（pilot でなく環境）。回避＝`cargo +stable ...` か生成 exe 直実行。後続タスクで再発したら同手で回避。

@@ -34,7 +34,7 @@ const SENDER: &str = "arekapilot";
 /// 要件 4.1）。本パラメータは design.md Service Interface §399 のシグネチャ整合
 /// （`build_onboot(ghostdir: &Path) -> Vec<u8>`）のために受け取るが、ワイヤ生成には
 /// 用いない（後続タスクで `load` と同一の値を共有する呼び出し側の便宜）。
-fn build_onboot(ghostdir: &Path) -> Vec<u8> {
+pub fn build_onboot(ghostdir: &Path) -> Vec<u8> {
     let _ = ghostdir; // ワイヤ非関与（上記 doc 参照・シグネチャ整合のため保持）。
     let mut req = String::new();
     req.push_str("GET SHIORI/3.0\r\n");
@@ -52,7 +52,7 @@ fn build_onboot(ghostdir: &Path) -> Vec<u8> {
 /// さくらスクリプト本体を `Some(String)` で返す。`Value:` が無ければ `None`
 /// （例: `SHIORI/3.0 204 No Content`）。`Value:` と `Value: ` の空白差・CRLF/LF
 /// いずれの改行にも頑健。
-fn parse_value(response: &[u8]) -> Option<String> {
+pub fn parse_value(response: &[u8]) -> Option<String> {
     // UTF-8 として解釈（要件 4.4）。不正バイトは None 扱いにせず lossy 回避のため from_utf8。
     let text = std::str::from_utf8(response).ok()?;
     for line in text.split("\r\n").flat_map(|l| l.split('\n')) {

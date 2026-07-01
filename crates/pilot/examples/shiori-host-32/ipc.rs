@@ -14,6 +14,7 @@
 
 #![allow(dead_code)] // 本タスクは規約とビルディングブロックの確立のみ。実走呼び出しは後続タスク。
 
+use core::cell::RefCell;
 use core::time::Duration;
 
 use windows::Win32::Foundation::{HWND, LPARAM, LRESULT, WPARAM};
@@ -205,6 +206,109 @@ pub fn send_copydata(
 }
 
 // ============================================================================
+// 5. 受け皿セル（ResponseSlot）＋ 1 往復 send_request（再入受領・task 4.1）
+// ============================================================================
+
+/// **受け皿セル**（design.md §209・議題 2 確定）。親の応答 WndProc と `send_request` が
+/// 共有する single-in-flight の応答格納先。
+///
+/// 往復は同時に 1 つ（`Invariants: single-in-flight`・design.md §369）ゆえ内部可変は
+/// `RefCell` で足りる（UI スレッド固定・reader スレッド不要）。`send_request` が送出前に
+/// `clear()` し、応答 WndProc が `store()` し、`SendMessageTimeout` 復帰後に `take()` する。
+///
+/// **デッドロック回避の核**（design.md §210）: 応答を受ける WndProc は本セルへ payload を
+/// 格納して**即 return**するのみ。それ以上の跨プロセス `SendMessage` を発行しない
+/// （REQUEST 待ち ⊃ RESPONSE 受領 WndProc の厳密な入れ子 ＝ 循環待ちなし）。
+#[derive(Default)]
+pub struct ResponseSlot {
+    inner: RefCell<Option<Vec<u8>>>,
+}
+
+impl ResponseSlot {
+    pub fn new() -> Self {
+        Self {
+            inner: RefCell::new(None),
+        }
+    }
+
+    /// 送出直前に空にする（前往復の残骸を排除・single-in-flight の前提）。
+    pub fn clear(&self) {
+        *self.inner.borrow_mut() = None;
+    }
+
+    /// 応答 WndProc が RESPONSE payload を格納する（再入受領・即 return）。
+    pub fn store(&self, bytes: Vec<u8>) {
+        *self.inner.borrow_mut() = Some(bytes);
+    }
+
+    /// `SendMessageTimeout` 復帰後に取り出す（`None` なら未受領＝Timeout）。
+    pub fn take(&self) -> Option<Vec<u8>> {
+        self.inner.borrow_mut().take()
+    }
+}
+
+/// **1 往復送信**（design.md §353–365・IpcChannel Service Interface）。
+///
+/// `send_copydata`（片道）を土台に、応答（helper→親の 2nd WM_COPYDATA）を**受け皿セル方式**で
+/// 再入受領する（design.md §209）。手順:
+///   1. `slot.clear()` — 受け皿を空に（single-in-flight）。
+///   2. `SendMessageTimeout(target, WM_COPYDATA, REQUEST)` — 親はここでブロック。
+///      待機中、Windows が helper の RESPONSE(2nd WM_COPYDATA) を親 WndProc へ**再入配送**し、
+///      WndProc が `slot.store()` して即 return する（跨プロセス SendMessage を発行しない・§210）。
+///   3. `SendMessageTimeout` 復帰後 `slot.take()` — `Some(bytes)=>Ok`、空=>`Err(Timeout)`。
+///
+/// `SMTO_ABORTIFHUNG` ＋ `timeout` で wedged peer をハングさせない（要件 2.3）。往復は
+/// single-in-flight（同時に 1 つ・design.md §369）。
+///
+/// # Safety
+/// `target` は有効な HWND（ハンドシェイクで確定）。`payload` は本呼び出し中生存。
+/// `slot` は親の応答 WndProc が参照する受け皿と**同一**でなければならない（再入受領の要）。
+pub fn send_request(
+    target: HWND,
+    self_hwnd: HWND,
+    tag: MsgTag,
+    payload: &[u8],
+    timeout: Duration,
+    slot: &ResponseSlot,
+) -> Result<Vec<u8>, IpcError> {
+    // ① 受け皿を空に（前往復の残骸排除・single-in-flight）。
+    slot.clear();
+
+    // ② REQUEST を同期送出（親はここでブロック）。待機中に RESPONSE が再入配送され、
+    //    親 WndProc が slot.store() する（design.md §209）。
+    let cds = COPYDATASTRUCT {
+        dwData: tag.as_u32() as usize, // 低 32bit のみ（跨ビットネス安全）
+        cbData: payload.len() as u32,  // メッセージ境界 = cbData（手動フレーミング不要）
+        lpData: payload.as_ptr() as *mut core::ffi::c_void,
+    };
+    let timeout_ms = timeout.as_millis().min(u32::MAX as u128) as u32;
+    let mut result: usize = 0;
+    // SAFETY: target 有効前提。&cds は本呼び出し中生存。SMTO_ABORTIFHUNG＋timeout でハングしない。
+    let ret: LRESULT = unsafe {
+        SendMessageTimeoutW(
+            target,
+            WM_COPYDATA,
+            WPARAM(self_hwnd.0 as usize),
+            LPARAM(&cds as *const COPYDATASTRUCT as isize),
+            SMTO_ABORTIFHUNG,
+            timeout_ms,
+            Some(&mut result as *mut usize),
+        )
+    };
+
+    if ret.0 == 0 {
+        // 0 = REQUEST 送出自体がタイムアウト/失敗（helper が REQUEST を捌けなかった）。
+        return Err(IpcError::Timeout);
+    }
+
+    // ③ 受け皿から応答を取り出す。再入受領が成立していれば Some、未受領なら Timeout。
+    match slot.take() {
+        Some(bytes) => Ok(bytes),
+        None => Err(IpcError::Timeout),
+    }
+}
+
+// ============================================================================
 // 単体テスト（観測可能な受け入れ基準・task 1.2）
 // ============================================================================
 
@@ -276,5 +380,27 @@ mod tests {
     #[test]
     fn payload_has_no_fixed_header() {
         assert_eq!(PAYLOAD_HEADER_LEN, 0);
+    }
+
+    /// 受け皿セル（ResponseSlot）の semantics（task 4.1・design.md §209）:
+    /// clear→take=None、store→take=Some（1 回で消費）、再 take=None（single-in-flight）。
+    #[test]
+    fn response_slot_clear_store_take_semantics() {
+        let slot = ResponseSlot::new();
+        // 初期/clear 後は空（未受領 = Timeout 相当）。
+        assert_eq!(slot.take(), None);
+        slot.clear();
+        assert_eq!(slot.take(), None);
+
+        // WndProc が store → send_request が take で 1 回だけ取り出す。
+        slot.store(b"Value: hello".to_vec());
+        assert_eq!(slot.take().as_deref(), Some(&b"Value: hello"[..]));
+        // 取り出し済みは空（次往復のため）。
+        assert_eq!(slot.take(), None);
+
+        // clear は残骸を排除する（前往復の応答を次往復に持ち越さない）。
+        slot.store(b"stale".to_vec());
+        slot.clear();
+        assert_eq!(slot.take(), None);
     }
 }
