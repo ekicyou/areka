@@ -163,9 +163,46 @@ emo2 が起動して喋る。下記 5 トラックを結線して達成（⓪ �
 ## ポートフォリオ（2026-06-28・clean slate）
 
 - `.kiro/specs/` 直下 active = **0**（憶測仕様を全伐採し更地化。実装ファーストで着手時に作る）。
-- `completed/` = 99（歴史・M1 が立つ土台の記録）。
+- `completed/` = 100（歴史・M1 が立つ土台の記録。2026-07-01 `pilot-clickthrough-alpha-toggle` を go 済みでアーカイブ＝+1）。
 - 旧 active/brief（M1 憶測・M2 reference・出荷層）・backlog（P1-P3）・`_rejected/`・旧戦略メモは**削除**（git 履歴に保全。必要時に復元可）。
 
 ## M2 以降
 
 **M1 完成後に、実物を見て組み直す。** 本ロードマップでは扱わない（pasta の native x64・`IShiori` in-proc 化、縦書き・ベクトル描画・AI、**owner-draw 右クリック system メニュー（ゴースト管理 chrome）**、互換面拡大＝Shift_JIS/SAORI/里々・YAYA 網羅/NAR 等はその時に）。
+
+---
+
+## wintf 基盤先進坑: クリック透過 αトグル方式（M1 外・wintf 基盤層）
+
+> **位置づけ**: 本トラックは M1（emo2-boot）とは別軸の **wintf 基盤層**の改善。M1 ユニット群（⓪〜⑥）には含めない。ここに記すのは two-tunnel.md（line 87）が `_Depends(confirmed):` ゲートの宿主を roadmap.md と定めているため。
+
+### 動機（既存「ULW 一択」結論の穴）
+
+[tech.md](tech.md) line 83 / 本ファイル line 30 は別プロセス透過を **「実質 ULW 一択」** と断定し ULW/DComp 切替式を「実装完了済み」と記録する。しかしこの結論は **HTTRANSPARENT・SetWindowRgn・ULW** の 3 択比較で、**`WS_EX_TRANSPARENT` 動的トグル方式（winit `set_cursor_hittest` 相当・プロセス境界を越える第 4 の手）を検討していない**。
+
+**真の動機は「DComp 描画を捨てられない」こと（開発者）。** ULW は CPU ビットマップ方式で **DComp スワップチェーン合成と併用不可**（記憶 areka-transparency-requires-layered-window）。すなわち 3D（DComp/GPU 合成）ウィンドウにとって ULW はそもそも選択肢になり得ず、ULW は別プロセス透過のために 3D 描画を諦める踏み絵になっている。`WS_EX_TRANSPARENT` 動的トグル（別スレッドのカーソル監視＋αマスク問い合わせで透明領域のみ透過・CPU 転送なし）は **DComp 描画を維持したまま別プロセス透過を成立させる事実上唯一の現実解**。**他社 3D マスコットが採用している実証済み手段**でもある（ただし十分な検証・エンバグ対応を要する前提）。既存「ULW 一択」結論と矛盾する新方向ゆえ **先進坑で先に潰す**（二坑モデル教義）。
+
+### pilot（先進坑・使い捨て・✅ **go 済み** 2026-07-01）: `pilot-clickthrough-alpha-toggle`
+
+- 配置: `crates/pilot/examples/pilot-clickthrough-alpha-toggle/`（README 3 幕＋ REPORT.md が一次記録）。spec は `.kiro/specs/completed/pilot-clickthrough-alpha-toggle/` へアーカイブ済み。
+- 検証: 透過トップモスト窓＋中央不透明領域、16ms 周期ワーカ（`event_listener`＋`std::thread`・tokio 禁止）がカーソル位置→αマスク関数（仮・円判定）を問い合わせ、状態変化時のみ `SetWindowLongPtr(GWL_EXSTYLE)`＋`SetWindowPos(SWP_FRAMECHANGED)` で `WS_EX_TRANSPARENT` を付け外し。DPI per-monitor-v2。
+- **go 基準**（人間判断）: 試験項目 T1〜T8 のうち **T1・T2・T3・T4・T6 が ✅ 必須**、T5・T7・T8 は ✅ または軽微な条件付き合格（理由明記）。レポートは合否問わず作成し依頼者の判断を仰ぐ（AI 単独で go 判定しない）。
+- **✅ go 結果（2026-07-01・開発者承認）**: 核心 Unknown 肯定的決着＝**DComp 描画を捨てず `WS_EX_TRANSPARENT` 動的トグルで別プロセスクリック透過が成立**。必須配合（当初想定に無かった）: ① **`WS_EX_LAYERED` を"同伴フラグ"として立てる**（ULW/SLWA 非呼出＝レイヤード描画には使わない。無いと透過が効かない）／② **枠なし窓 `WS_POPUP`（client==window）**。最重要原理: **表示層（DComp visual・content は surface でも合成 swapchain でも可＝3D/Live2D 拡張可）と当たり判定層（HWND スタイル）は独立**。ドラッグ移動の罠（ドラッグ中は位置に関わらず `WS_EX_TRANSPARENT` を外したまま維持）も知見化。詳細は REPORT.md。**⇒ 当初の「`WS_EX_LAYERED` 不使用」前提は撤回**（本坑へ申し送り）。
+
+### main（本坑）: `wintf-clickthrough-alpha-toggle`
+
+```
+_Depends(confirmed): pilot-clickthrough-alpha-toggle
+```
+
+- ~~pilot の go 判定が出るまで **BLOCKED**~~ → **✅ go 済み（2026-07-01）＝着手可**。pilot 知見はクリーンに掘り直す（コピペ donor 禁止・README/REPORT 検証結果を参照）。**申し送り必須**: ex_style = `WS_EX_NOREDIRECTIONBITMAP|WS_EX_TOPMOST|WS_EX_LAYERED|WS_EX_TRANSPARENT`（LAYERED はフラグのみ・TRANSPARENT のみ動的トグル）／枠なし窓／表示=DComp・当たり判定=HWND スタイルの二層分離／ドラッグ中は透過 OFF 維持。
+- 本体 wintf へ `WS_EX_TRANSPARENT` 動的トグルを導入し、本体αマスク（実描画αバッファ／`AlphaMask::is_hit`）参照でキャラ領域のみクリック可にする。
+- **ULW との共存方針（開発者決定）**: 至上要件は **DComp 描画の維持**。本方式は DComp 経路に透過能力を授けるもの。本仕様が完全に有効と判断されれば **ULW ルートは破棄**。ただし他社実績ある手段とはいえ**十分な検証期間・エンバグ対応**を置き、**当面は ULW と並走**させる。tech.md/本ファイルの「ULW 一択」記述は本トラック確定時に更新対象。
+- 接続先候補（調査済み）: `CompositionMode`（`ecs/window/components.rs`・生成時固定）／`compute_ex_style()`（`runtime/window_factory.rs`）／`HitTestMode::AlphaMask`・`AlphaMask::is_hit`（`ecs/layout/hit_test/`・`ecs/widget/bitmap_source/`）／`VsyncEventBridge`（`event_listener`・`runtime/tick_bridge.rs`）／D2D1 staging αバッファ（`ecs/graphics/compositor.rs`）。
+
+### 依存マップ検証（two-tunnel 手動チェックリスト）
+
+- 被覆: 不確実な本坑 `wintf-clickthrough-alpha-toggle` は go ゲート pilot を持つ ✓
+- 孤児なし: pilot は対応本坑を名指し、本坑は pilot を `_Depends(confirmed):` で参照 ✓
+- 循環なし／DAG: pilot → main の単一エッジ（巡回なし）✓
+- 合否基準明示: go 基準（T1・T2・T3・T4・T6 必須）を上記に明示 ✓

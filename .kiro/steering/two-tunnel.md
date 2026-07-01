@@ -81,10 +81,18 @@ go 判定は**開発者が先進坑の出力を見て下す（人間判断）**�
 go 判定の前提依存は spec 上で次の記法で表現する。
 
 ```
-_Depends(confirmed): pilot/<spec-name>
+_Depends(confirmed): pilot-<spec-name>
 ```
 
 この依存記法の**宿主は `roadmap.md`**（spec の pilot/main 種別と go ゲート依存を表現する場所）。本坑 spec が、どの先進坑の go を前提とするかを `_Depends(confirmed):` で名指しすることで、ゲート関係を可視化する。
+
+### 命名規約 — 先進坑 spec は `pilot-` 接頭辞（必須）
+
+**先進坑（pilot）の spec 名は `pilot-` 接頭辞を付ける**（例: `pilot-clickthrough-alpha-toggle`）。`.kiro/specs/` の一覧・`/kiro-start <name>` 等のコマンド表示・依存記法のいずれでも、**名前だけで先進坑と一目で判別できる**ようにするため。
+
+- 本坑（main）は接頭辞を付けない（基盤層なら `wintf-` 等の領域接頭辞は可）。例: 本坑 `wintf-clickthrough-alpha-toggle`。
+- 例 example フォルダも spec 名に一致させる: `crates/pilot/examples/pilot-<spec-name>/`（1 仕様 = 1 フォルダ・traceability）。
+- spec 名が `pilot-` で自明ゆえ、`_Depends(confirmed):` は接頭辞付き名をそのまま参照する（旧 `pilot/<name>` のパス修飾は不要）。
 
 ### 直行許容（要件 6.5）
 
