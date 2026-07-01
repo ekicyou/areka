@@ -265,7 +265,8 @@ sequenceDiagram
 **Implementation Notes**
 - Integration: `dcomp_resource.rs` の `DCompGraphicsResource::{new, invalidate, is_valid}` を 1:1 で置換。
 - Validation: R1 スパイクで DispatcherQueue tick が pump 上で配送されることを確認。
-- Risks: apartment 種別ミスは初期化失敗を招く（R1 で吸収）。DispatcherQueue drop 順（Compositor より後）を型のフィールド順で保証。
+- Risks: apartment 種別ミスは初期化失敗を招く（R1 で吸収）。
+- **Drop 順の不変条件（明文化）**: `WucGraphicsResourceInner` のフィールド宣言順を `compositor` → `graphics_device` → `dq_controller`（**controller を最後**に宣言）で固定し、Rust の宣言順 drop により DispatcherQueueController が Compositor より**後**に drop されることを保証する。`invalidate()` の null 化も同順（controller を最後に解放）。この順序保証は R1 スパイクの受け入れ項目「終了時ドレイン成立」で検証する（要件 3.3）。
 
 ### interop
 
@@ -387,6 +388,7 @@ trait DrawingSurfaceInteropExt {
 - **サーフェス層ビット等価**（`surface_pixel_equivalence_test.rs`・要件 8.6）: 同一 `GraphicsCommandList` を (a) 移行前 D2D 出力（参照ゴールデン）と (b) WUC surface の `BeginDraw` D2D 出力へ描画し、WIC `CopyPixels` 読み戻し→ハッシュ一致／差分ゼロを自動判定。D2D 描画コード不変ゆえ確実な回帰ガード。
 - **合成層キャプチャ比較**（要件 8.7）: 固定シーン（visual 配置・z 順・opacity・clip 各変種）を Desktop Duplication でキャプチャし、移行前後を比較。`PrintWindow` は DComp/WUC content で黒画像化するため不採用。DWM タイミング非決定性は静止シーン安定待ちで吸収。決定論的キャプチャ不能な過渡のみ目視を残差フォールバック。
 - **透過共存**（要件 9.3）: `WS_EX_NOREDIRECTIONBITMAP`＋`DesktopWindowTarget` で per-pixel alpha が DComp 時と同一に成立することを R1 スパイクで確認。
+- **DispatcherQueue 終了ドレイン**（要件 3.3・R1 スパイク受入項目）: プロセス終了時に `ShutdownQueueAsync` が保留分をドレインし、`WucGraphicsResourceInner` の drop 順（controller を最後に宣言）に起因する shutdown クラッシュが無いことを R1 スパイクで確認する。
 
 ### Performance / 可搬性
 - **release z/LTO 疎通**（要件 8.1）: WUC features 追加後に `opt-level='z'`, `lto=true`, `codegen-units=1` でビルド通過を CI/手動で確認。
