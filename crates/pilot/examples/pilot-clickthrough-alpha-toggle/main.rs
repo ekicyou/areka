@@ -42,10 +42,11 @@ use windows::Win32::UI::HiDpi::{
     DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2, SetProcessDpiAwarenessContext,
 };
 use windows::Win32::UI::WindowsAndMessaging::{
-    GWL_EXSTYLE, GetClientRect, GetCursorPos, GetWindowLongPtrW, SW_SHOW,
-    SWP_FRAMECHANGED, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE, SWP_NOZORDER, SetWindowLongPtrW,
-    SetWindowPos, ShowWindow, WINDOW_EX_STYLE, WM_CLOSE, WM_LBUTTONDOWN,
-    WS_EX_NOREDIRECTIONBITMAP, WS_EX_TOPMOST, WS_EX_TRANSPARENT,
+    GWL_EXSTYLE, GWL_STYLE, GetClientRect, GetCursorPos, GetWindowLongPtrW, IDC_CROSS, LoadCursorW,
+    SW_SHOW, SWP_FRAMECHANGED, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE, SWP_NOZORDER, SetCursor,
+    SetWindowLongPtrW, SetWindowPos, ShowWindow, WINDOW_EX_STYLE, WM_CLOSE, WM_LBUTTONDOWN,
+    WM_SETCURSOR, WS_EX_LAYERED, WS_EX_NOREDIRECTIONBITMAP, WS_EX_TOPMOST, WS_EX_TRANSPARENT,
+    WS_POPUP,
 };
 // ClientToScreen は Gdi モジュール（read-only な client→screen 座標写像）。
 use windows::Win32::Graphics::Gdi::ClientToScreen;
@@ -210,7 +211,14 @@ impl AppState {
 /// が画面に出ない → DComp 前提）のため、`WS_EX_TOPMOST` は最前面固定のため固定で付す。
 ///
 /// `WS_EX_TRANSPARENT` の動的トグルはタスク 4.2 の責務（ここでは初期値のみ）。
-/// `WS_EX_LAYERED` は付けない（R2.3）。`WM_NCHITTEST` は自前処理しない（R2.4）。
+/// `WM_NCHITTEST` は自前処理しない（R2.4）。
+///
+/// 【6.2 検証実験・開発者指示 / wakagomo 記事】`WS_EX_TRANSPARENT` は**単独では**マウス透過が
+/// 効かず（合成窓では窓がイベントを吸う）、`WS_EX_LAYERED` を**フラグとして併設**して初めて
+/// 効く、との経験則を検証する。`WS_EX_LAYERED` は**フラグのみ**（`UpdateLayeredWindow`/
+/// `SetLayeredWindowAttributes` は呼ばない＝レイヤード描画としては使わない）。DComp
+/// （NOREDIRECTIONBITMAP）と共存できるか＝描画が消えないか／クリックが透過するかを実測する。
+/// これは当初 R2.3（layered 不付与）からの意図的な逸脱であり、結果は REPORT.md に記録する。
 ///
 /// wndproc クロージャは `Fn`（`FnMut` ではない）ため、状態変更は `Cell`/`RefCell` ／
 /// `event_listener::Event::notify`（&self）で行う。`WM_CLOSE` で shutdown を notify し、
@@ -218,9 +226,10 @@ impl AppState {
 /// `wndproc_typed` は `WM_CLOSE` で `DestroyWindow` を呼ばず `LRESULT(0)` を返すため、
 /// 窓の実破棄は `Window` の `Drop`（`block_on` 復帰後の drop）が担う。
 fn make_window(state: Rc<AppState>) -> Window<Rc<AppState>> {
-    // 初期 ex_style = NOREDIRECTIONBITMAP | TOPMOST | TRANSPARENT（= クリック透過 ON）。
+    // 初期 ex_style = NOREDIRECTIONBITMAP | TOPMOST | LAYERED | TRANSPARENT（= クリック透過 ON）。
+    // LAYERED はフラグのみ（ULW/SLWA 非呼出）＝マウス透過を効かせるための同伴フラグ（実験）。
     let ex_style = WINDOW_EX_STYLE(
-        WS_EX_NOREDIRECTIONBITMAP.0 | WS_EX_TOPMOST.0 | WS_EX_TRANSPARENT.0,
+        WS_EX_NOREDIRECTIONBITMAP.0 | WS_EX_TOPMOST.0 | WS_EX_LAYERED.0 | WS_EX_TRANSPARENT.0,
     );
 
     Window::new_ex(
@@ -230,6 +239,18 @@ fn make_window(state: Rc<AppState>) -> Window<Rc<AppState>> {
         move |state: Pin<&Rc<AppState>>, msg: WindowMessage| -> Option<LRESULT> {
             let s: &AppState = state.get_ref();
             match msg.msg {
+                WM_SETCURSOR => {
+                    // 診断用（開発者要望）: 手カーソルにする。この窓は透過 OFF（＝カーソルが
+                    // 判定円内でクリックを受ける状態）のときだけ WM_SETCURSOR を受け取るため、
+                    // 「手が出ている範囲」＝反応（乗っかっている）領域が一目で分かる。
+                    // 返り値 TRUE(=1) で DefWindowProc に既定カーソルへ戻させない。
+                    if let Ok(cross) = unsafe { LoadCursorW(None, IDC_CROSS) } {
+                        unsafe {
+                            let _ = SetCursor(Some(cross));
+                        }
+                    }
+                    Some(LRESULT(1))
+                }
                 WM_CLOSE => {
                     // shutdown を通知して block_on の future を完了させる（清掃終了）。
                     // ライブラリは WM_CLOSE で DestroyWindow を呼ばない＝LRESULT(0) を返す。
@@ -658,7 +679,29 @@ fn main() {
     // 窓を生成（初期: NOREDIRECTIONBITMAP|TOPMOST|TRANSPARENT = クリック透過 ON）。
     // ハンドルは block_on 復帰まで生かす（Drop で DestroyWindow される）。
     let _window = make_window(state.clone());
-    println!("[window] NOREDIRECTIONBITMAP|TOPMOST|TRANSPARENT 窓を生成（初期クリック透過 ON）");
+    println!("[window] NOREDIRECTIONBITMAP|TOPMOST|LAYERED|TRANSPARENT 窓を生成（初期クリック透過 ON・LAYERED はフラグのみ/実験）");
+
+    // 枠なし（WS_POPUP）にして「クライアント == ウィンドウ」を成立させる。
+    // 非クライアント領域（タイトルバー/枠）があると、DComp（CreateTargetForHwnd は
+    // **ウィンドウ原点**から合成）と GetClientRect（**クライアント原点**）がずれ、
+    // 見える円（描画）より反応領域（判定）がタイトルバーぶん**下**にずれる（6.2 検証で判明）。
+    // WS_POPUP は caption/border を持たないため client==window となり、DComp 原点・
+    // GetClientRect・判定がすべて一致する。マスコット窓は本来クローム不要。
+    // SAFETY: 窓所有スレッド（UI）から自窓へ。GWL_STYLE/GWL_EXSTYLE は独立で LAYERED/
+    // TRANSPARENT 等 ex_style には触れない。SWP_FRAMECHANGED で非クライアント再計算を反映。
+    unsafe {
+        let _ = SetWindowLongPtrW(_window.hwnd(), GWL_STYLE, WS_POPUP.0 as isize);
+        let _ = SetWindowPos(
+            _window.hwnd(),
+            None,
+            0,
+            0,
+            0,
+            0,
+            SWP_FRAMECHANGED | SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE,
+        );
+    }
+    println!("[window] WS_POPUP 化（枠なし＝client==window でタイトルバー由来の縦ズレを解消）");
 
     // 窓を可視化する（R2.1「ウィンドウを表示する」）。Window::new_ex は WS_VISIBLE を
     // 立てず ShowWindow も呼ばないため、明示的に SW_SHOW しないと画面に何も出ない
