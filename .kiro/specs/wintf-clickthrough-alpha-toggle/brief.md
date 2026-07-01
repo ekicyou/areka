@@ -1,7 +1,7 @@
 # Brief: wintf-clickthrough-alpha-toggle（本坑 / main・完成品）
 
 > **種別**: 本坑（main）。通常の kiro ライフサイクル（requirements → design → tasks → impl → complete）。PR ベース squash マージで `main` へ統合。
-> **ゲート**: `_Depends(confirmed): pilot-clickthrough-alpha-toggle`。先進坑の go 判定が出るまで **BLOCKED**（go 前着手は二坑規律違反）。
+> **ゲート**: `_Depends(confirmed): pilot-clickthrough-alpha-toggle`。~~go 判定が出るまで BLOCKED~~ → **✅ go 済み（2026-07-01・開発者承認）＝着手可**。pilot 一次記録は `crates/pilot/examples/pilot-clickthrough-alpha-toggle/`（README/REPORT）。申し送り: ex_style に `WS_EX_LAYERED`（フラグのみ）同伴＋`WS_EX_TRANSPARENT` 動的トグル／枠なし窓（client==window）／表示=DComp・当たり判定=HWND スタイルの二層分離（3D/Live2D は表示 content を swapchain へ差替で拡張可）／ドラッグ中は位置に関わらず透過 OFF 維持。コピペ流用せずクリーンに掘り直す。
 > 規律の正本: `.kiro/steering/two-tunnel.md`。
 
 ## Problem
