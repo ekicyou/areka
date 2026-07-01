@@ -22,12 +22,9 @@
 //! **タスク 4.2 の領分**であり、ここでは `decode_passthrough` という明示的な
 //! シーム関数へ委ねる（現状は最小プレースホルダ。4.2 がここを実装する）。
 
-// `decode` の唯一の非テスト消費者は `parse`（タスク 5）であり、本タスク（4.1）では
-// まだ結線されていない。それまでの dead_code 警告は意図的に抑止する（lexer.rs と同様）。
-// **タスク 5 で `parse` が `decode` を消費したら、この `#![allow(dead_code)]` を絞る/除去する**
-// （真の dead を隠さぬよう）。タスク 4.2 のシーム関数（`decode_passthrough_*`）も同様に
-// 結線後に実体化される。
-#![allow(dead_code)]
+// `decode` は `parse`（タスク 5）から非テスト経路で結線済み。タスク 4.2 の
+// シーム関数（`decode_passthrough_*`）も `decode_token` / `decode_tag` / `decode_bang`
+// 経由で到達されるため、モジュール全体の dead_code 抑止は不要（除去済み）。
 
 use super::lexer::Token;
 use super::model::{Choice, Instruction, MoveArgs, NewLineRatio, SurfaceArg};

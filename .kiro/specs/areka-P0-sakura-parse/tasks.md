@@ -46,7 +46,7 @@
   - _Requirements: 5.3, 5.4, 7.2, 7.3, 10.1, 10.2, 11.2_
   - _Boundary: decode_
 
-- [ ] 5. Integration: `parse` 公開関数で Lexer→Decode を結線する
+- [x] 5. Integration: `parse` 公開関数で Lexer→Decode を結線する
   - `pub fn parse(input: &str) -> Vec<Instruction>` を公開し、字句解析→デコードを順に呼んで命令列を返す（`mod.rs` で parse / Instruction / 値型を公開面へ集約）
   - 空入力で空の命令列、混在入力で入力順を保持、同一入力で同一出力（純粋）、命令を実行せずエラーも送出しない
   - 観測: `areka_parsers::sakura::parse("")` が空 Vec を返し、複数タグ＋テキスト混在入力が順序保持の命令列を返す単体テストが green
