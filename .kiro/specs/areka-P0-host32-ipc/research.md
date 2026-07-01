@@ -178,3 +178,40 @@ brief は「pilot は `examples/` 隔離ゆえ本坑は `crates/` 直下の新�
 - **候補アプローチ**: Option B（新クレート・単一 or ペア）／Option C（proto 共有＋helper 内包）が本命。Option A（`shiori-abi` 拡張）は依存純度を壊すため非推奨。配置は design 議題。
 - **Research フラグ**: 両 target ビルド構成・echo↔pasta シーム・`shiori-abi` 非依存方針・i686 ビルド規律・thiserror 化・R3.3 ゲート化（§4）。
 - **見積り**: Effort M（3–7 日）／ Risk Low〜Medium（実現可能性は pilot go で解消済・残余は production 化と構成設計）。
+
+---
+
+## 8. 設計フェーズ・ディスカバリと統合 (Design Discovery & Synthesis) — 2026-07-01
+
+> `kiro-spec-design` により追記。ディスカバリ種別 = **light（Extension / Complex Integration・pilot が feasibility を go 実証済ゆえ external web research 不要）**。全依存はピン済（`windows` 0.62.2 / `wintf-winmsg-executor` 0.0.5 / `event-listener` 5 / `thiserror` 2）で pilot 実行時検証済。ディスカバリは pilot 実装（`ipc.rs` / `process_host.rs` / `parent_window.rs` / `helper_window.rs`）と既存ワークスペース規約（structure.md / tech.md / `/Cargo.toml`）の精読に限定。
+
+### 8.1 統合レンズ (Synthesis)
+
+**Generalization**:
+- R2〜R7 は「x64↔i686 の生バイト WM_COPYDATA トランスポート」という単一問題の変奏。共有 `ipc` モジュール（`MsgTag` / u32 LE HWND / `cbData` framing / `ResponseSlot` / 送信規約）を x64/i686 双方から共有する単一ソースとして設計し、跨ビットネス規約のズレを構造的に排除する。凍結する cross-unit seam は **WM_COPYDATA ワイヤ形式**（MsgTag ＋ framing）であって responder 実装ではない。
+
+**Build vs. Adopt**:
+- **Adopt**: `wintf-winmsg-executor` 0.0.5（message-only 窓・`MessageLoop::run`・WndProc dispatch。i686 実行時 GO を pilot が実証＝raw Win32 fallback 不要）。`SendMessageTimeout`（`SMTO_ABORTIFHUNG`）は Win32 ネイティブでハング回避を担う既存 API。`std::process`（spawn/try_wait）で生存監視。`thiserror` でエラー型。
+- **Build**: production transport 一式（pilot は examples 隔離ゆえ丸ごと Missing）＋ **pasta 非依存の echo responder**（pilot の REQUEST は `ShioriByteProxy::shiori_request` を hardwire し selftest は entries=None で実往復しないため、echo 往復は genuinely 新規）。named pipe は不要（pilot が WM_COPYDATA 再入で go 実証・後退トリガのみ記録）。
+
+**Simplification**:
+- **`trait RequestHandler` を設けない（YAGNI）**。helper の REQUEST ブランチは平関数 `respond(&[u8]) -> Vec<u8>`（echo）とし、下流 `host32-shiori-load` が同クレートを編集して echo 行を pasta 駆動へ差し替える。差し替え点は「responder 実装」であって seam ではない（seam はワイヤ形式）。research §2.1 が候補とした trait/callback 注入は要件ディスカッションで YAGNI と確定済のため design では採らない。
+- **distinct PeerGone を設けない**。送信失敗と timeout は `IpcError`（Timeout/SendFailed）に一様化。peer の生死は R1 の `poll_exit`（Clean/Abnormal/Terminated）で**別系統**に観測（R5 と R1 の関心分離）。research §4-8 の「PeerGone 分離観測」は不採用と確定。
+- **常駐 lifecycle 状態機械を最小化**。helper の状態は echo 実証に必要な最小に留め、常駐 msg loop / OnSecondChange / unload 監視は Out of Boundary（下流 `host32-lifecycle`）。
+
+### 8.2 設計判断 (Design Decisions)
+
+| # | 判断 | 決定 | 根拠 / トレース |
+|---|------|------|-----------------|
+| D1 | クレート配置・構成 | **Option B-1（単一クレート・helper を `[[bin]]` 内包）を推奨**。ただし brief 明示要求により **design discussion で依頼者確認**（design.md Open Questions §1） | research §3・§6。`shiori-abi` 相乗り（A）は最小依存純度を壊す |
+| D2 | `shiori-abi` 依存 | **非依存**（bytes seam の純度維持・ABI 実装は下流で結線） | research §4-7・§6 |
+| D3 | REQUEST responder 差し替え | 平関数 `respond`（echo）を helper 窓層に置き、下流が編集差し替え。trait 抽象なし | 要件ディスカッション確定（YAGNI） |
+| D4 | 送信失敗の表現 | Timeout/SendFailed に一様化・distinct PeerGone なし。生死は ExitKind で別系統 | 要件ディスカッション確定 |
+| D5 | エラー型 | pilot 素 enum を `thiserror` へ昇格（IpcError / SpawnError / HandshakeError） | research §4-6・structure.md 規約 |
+| D6 | `windows` feature | 本ユニットは `Win32_System_DataExchange`（＋ WindowsAndMessaging / Foundation）で足りる想定（Memory/Globalization は下流 pasta proxy 用ゆえ不要）。ビルド配線はタスクで確定 | research §4-2 |
+| D7 | ハンドシェイクゲート（3.3） | 完了前の往復を型/実行時で拒否（`HandshakeIncomplete`）。具体形はタスクで確定 | research §4-5 |
+| D8 | 32bit 可搬 | dwData/HWND shift 評価は `u64` cast（i686 `usize=32bit` overflow 回避）。i686 ビルド/テストは PowerShell 必須 | README 学び 3・brief |
+
+### 8.3 設計レビューゲート結果
+
+- **合格（1 パス・修復なし）**。機械チェック: 全 31 要件 ID が traceability に存在／Boundary 4 セクション充足（Owns5・Out3・Allowed5・Triggers3+）／File Structure Plan に具体パス／orphan コンポーネントなし／placeholder なし。判断レビュー: 要件網羅・アーキ準備性・境界明確性・実行可能性いずれも充足。要件レベルの gap/矛盾なし。唯一の真の未決事項（クレート配置）は brief 要求どおり Open Question として surface（papering over せず）。
