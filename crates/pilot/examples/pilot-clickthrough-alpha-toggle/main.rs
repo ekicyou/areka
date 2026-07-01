@@ -42,14 +42,17 @@ use windows::Win32::UI::HiDpi::{
     DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2, SetProcessDpiAwarenessContext,
 };
 use windows::Win32::UI::WindowsAndMessaging::{
-    GWL_EXSTYLE, GWL_STYLE, GetClientRect, GetCursorPos, GetWindowLongPtrW, IDC_CROSS, LoadCursorW,
-    SW_SHOW, SWP_FRAMECHANGED, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE, SWP_NOZORDER, SetCursor,
-    SetWindowLongPtrW, SetWindowPos, ShowWindow, WINDOW_EX_STYLE, WM_CLOSE, WM_LBUTTONDOWN,
+    GWL_EXSTYLE, GWL_STYLE, GetClientRect, GetCursorPos, GetWindowLongPtrW, GetWindowRect,
+    IDC_CROSS, LoadCursorW, SW_SHOW, SWP_FRAMECHANGED, SWP_NOACTIVATE, SWP_NOMOVE,
+    SWP_NOSIZE, SWP_NOZORDER, SetCursor, SetWindowLongPtrW, SetWindowPos, ShowWindow,
+    WINDOW_EX_STYLE, WM_CLOSE, WM_LBUTTONDBLCLK, WM_LBUTTONDOWN, WM_LBUTTONUP, WM_MOUSEMOVE,
     WM_SETCURSOR, WS_EX_LAYERED, WS_EX_NOREDIRECTIONBITMAP, WS_EX_TOPMOST, WS_EX_TRANSPARENT,
     WS_POPUP,
 };
 // ClientToScreen は Gdi モジュール（read-only な client→screen 座標写像）。
 use windows::Win32::Graphics::Gdi::ClientToScreen;
+// SetCapture/ReleaseCapture は Input::KeyboardAndMouse モジュール（feature 有効済み）。
+use windows::Win32::UI::Input::KeyboardAndMouse::{ReleaseCapture, SetCapture};
 use windows::core::{Interface, Result};
 
 /// 不透明円の半径（物理ピクセル, R4.1）。
@@ -176,14 +179,27 @@ struct AppState {
     /// DComp 視覚パイプライン。窓セットアップ後に `Some` が入り、以降ドロップしない
     /// （ドロップ＝合成ツリー崩壊）。初期化前は `None`。
     pipeline: std::cell::RefCell<Option<DCompPipeline>>,
+    /// StateApplier を起こす wake イベント（ワーカと共有）。ドラッグ終了時に wndproc から
+    /// notify して透過状態を再収束させる。
+    state_changed: Arc<Event>,
+    /// ドラッグ中フラグ（wndproc が設定・StateApplier が参照）。true の間は applier が
+    /// `WS_EX_TRANSPARENT` トグルを抑止し、**表示位置に関わらずクリック透過 OFF を維持**する。
+    /// ＝ドラッグ中にカーソルが判定円を外れても透過 ON へ戻さない（SetCapture 喪失＝ドラッグ
+    /// 崩壊の防止。実装者が嵌まりやすい要点として明示制御する）。
+    dragging: Arc<AtomicBool>,
+    /// ドラッグ開始時の「カーソル − 窓原点」オフセット（物理スクリーン座標）。移動追従に使う。
+    drag_anchor: Cell<(i32, i32)>,
 }
 
 impl AppState {
-    fn new() -> Self {
+    fn new(state_changed: Arc<Event>, dragging: Arc<AtomicBool>) -> Self {
         Self {
             shutdown: Event::new(),
             color_index: Cell::new(0),
             pipeline: std::cell::RefCell::new(None),
+            state_changed,
+            dragging,
+            drag_anchor: Cell::new((0, 0)),
         }
     }
 
@@ -299,11 +315,83 @@ fn make_window(state: Rc<AppState>) -> Window<Rc<AppState>> {
                             "[dcomp][warn] pipeline 未構築のため再描画をスキップ（色のみ反転）"
                         ),
                     }
+
+                    // ドラッグ移動開始（開発者要望＋知見収集の要点）: 不透明部を掴んで窓を動かす。
+                    // ドラッグ中は**表示位置に関わらず** WS_EX_TRANSPARENT を外したまま維持する必要が
+                    // ある（外れるとマウスキャプチャが切れドラッグが崩壊する）。ここで dragging=true、
+                    // SetCapture で以降のマウスを本窓へ固定、アンカー（カーソル − 窓原点）を記録する。
+                    let mut cur = POINT::default();
+                    let mut win = RECT::default();
+                    // SAFETY: Win32 境界。read-only。msg.hwnd は有効窓。
+                    let anchored = unsafe {
+                        GetCursorPos(&mut cur).is_ok() && GetWindowRect(msg.hwnd, &mut win).is_ok()
+                    };
+                    if anchored {
+                        s.drag_anchor.set((cur.x - win.left, cur.y - win.top));
+                        // SAFETY: Win32 境界。窓所有スレッド（UI）から自窓へキャプチャ。
+                        unsafe {
+                            let _ = SetCapture(msg.hwnd);
+                        }
+                        s.dragging.store(true, Ordering::Release);
+                        println!(
+                            "[drag] 開始（SetCapture・dragging=true・以降は位置に関わらず WS_EX_TRANSPARENT を外したまま維持）"
+                        );
+                    }
+                    Some(LRESULT(0))
+                }
+                WM_MOUSEMOVE => {
+                    // ドラッグ中のみ窓を追従移動（DComp 合成内容・判定円も窓と一緒に動く）。
+                    if s.dragging.load(Ordering::Acquire) {
+                        let mut cur = POINT::default();
+                        // SAFETY: Win32 境界。read-only。
+                        if unsafe { GetCursorPos(&mut cur) }.is_ok() {
+                            let (ax, ay) = s.drag_anchor.get();
+                            // SAFETY: Win32 境界。窓所有スレッド（UI）から自窓を移動。サイズ/Z順/
+                            // アクティブ化は変えない。
+                            unsafe {
+                                let _ = SetWindowPos(
+                                    msg.hwnd,
+                                    None,
+                                    cur.x - ax,
+                                    cur.y - ay,
+                                    0,
+                                    0,
+                                    SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE,
+                                );
+                            }
+                        }
+                        Some(LRESULT(0))
+                    } else {
+                        None
+                    }
+                }
+                WM_LBUTTONUP => {
+                    // ドラッグ終了: dragging=false・ReleaseCapture。その後 state_changed を notify して
+                    // StateApplier を起こし、現在のカーソル位置に応じた透過状態へ再収束させる
+                    // （ドラッグ中は抑止していたため、ここで一度リコンサイルが要る）。
+                    if s.dragging.swap(false, Ordering::AcqRel) {
+                        // SAFETY: Win32 境界。キャプチャ解除。
+                        unsafe {
+                            let _ = ReleaseCapture();
+                        }
+                        s.state_changed.notify(usize::MAX);
+                        println!("[drag] 終了（ReleaseCapture・dragging=false・透過状態を再収束）");
+                        Some(LRESULT(0))
+                    } else {
+                        None
+                    }
+                }
+                WM_LBUTTONDBLCLK => {
+                    // ダブルクリックで終了（開発者要望）。枠なし窓＝閉じる UI が無いため。
+                    // WM_CLOSE と同じ経路: shutdown を notify → block_on の future 完了 →
+                    // 後始末（applier/worker 停止 → join）→ `_window` drop で DestroyWindow → 正常終了。
+                    // ＝T8（正常終了）の実機トリガも兼ねる。円（不透明部）上でのみ届く。
+                    println!("[window] ダブルクリック → shutdown（正常終了）");
+                    s.shutdown.notify(usize::MAX);
                     Some(LRESULT(0))
                 }
                 // 他メッセージは DefWindowProc にフォールバック（None）。
-                // WM_NCHITTEST は自前処理しない（R2.4）。DComp 構築（3.2）・
-                // カーソルワーカ／スタイルトグル（4.x/5.x）は本タスクの責務外。
+                // WM_NCHITTEST は自前処理しない（R2.4）。
                 _ => None,
             }
         },
@@ -593,6 +681,7 @@ fn spawn_state_applier(
     desired_passthrough: Arc<AtomicBool>,
     state_changed: Arc<Event>,
     applied_done: Arc<AtomicBool>,
+    dragging: Arc<AtomicBool>,
 ) {
     // HWND を生の isize にしてから move（ポインタ幅 32/64bit 保持）。
     let raw_hwnd: isize = hwnd.0 as isize;
@@ -616,7 +705,11 @@ fn spawn_state_applier(
             let desired = desired_passthrough.load(Ordering::Acquire);
 
             // 差分時のみスタイル適用＋ログ。非差分時は style API を一切呼ばない（R5.4）。
-            if desired != applied {
+            // ドラッグ中は透過トグルを抑止＝表示位置に関わらず WS_EX_TRANSPARENT を外したまま
+            // 維持する（ドラッグ開始は円内＝OFF ゆえ applied は OFF。ここで ON へ戻すと SetCapture が
+            // 切れドラッグが崩壊するため、dragging 中は一切適用しない）。終了時に WM_LBUTTONUP が
+            // state_changed を notify して本ループを起こし、ここで改めて再収束させる。
+            if desired != applied && !dragging.load(Ordering::Acquire) {
                 // UI スレッド内で HWND を再構成（所有スレッドゆえスタイル変更 API を呼べる）。
                 let hwnd = HWND(raw_hwnd as *mut _);
 
@@ -675,8 +768,12 @@ fn main() {
     init_dpi_awareness();
     println!("=== pilot: clickthrough-alpha-toggle 先進坑 ===");
 
-    let state = Rc::new(AppState::new());
-    // 窓を生成（初期: NOREDIRECTIONBITMAP|TOPMOST|TRANSPARENT = クリック透過 ON）。
+    // ワーカ⇔UI の wake イベントとドラッグ中フラグは wndproc（AppState 内）と worker/applier の
+    // 双方から使うため、AppState より先に生成して共有する。
+    let state_changed = Arc::new(Event::new());
+    let dragging = Arc::new(AtomicBool::new(false));
+    let state = Rc::new(AppState::new(state_changed.clone(), dragging.clone()));
+    // 窓を生成（初期: NOREDIRECTIONBITMAP|TOPMOST|LAYERED|TRANSPARENT = クリック透過 ON）。
     // ハンドルは block_on 復帰まで生かす（Drop で DestroyWindow される）。
     let _window = make_window(state.clone());
     println!("[window] NOREDIRECTIONBITMAP|TOPMOST|LAYERED|TRANSPARENT 窓を生成（初期クリック透過 ON・LAYERED はフラグのみ/実験）");
@@ -736,7 +833,6 @@ fn main() {
     // state_changed = 変化時に UI を起こす wake イベント（消費側 StateApplier は 4.2 で配線）。
     // done = ワーカ停止フラグ（block_on 復帰後に立てて join → 清掃終了）。
     let desired_passthrough = Arc::new(AtomicBool::new(true));
-    let state_changed = Arc::new(Event::new());
     let worker_done = Arc::new(AtomicBool::new(false));
     let worker = spawn_cursor_worker(
         _window.hwnd(),
@@ -765,6 +861,7 @@ fn main() {
         desired_passthrough.clone(),
         state_changed.clone(),
         applier_done.clone(),
+        dragging.clone(),
     );
     println!("[applier] 状態変化適用タスク起動（spawn_local・UI スレッド・差分時のみ WS_EX_TRANSPARENT 加除）");
 
