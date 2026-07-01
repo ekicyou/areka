@@ -1,6 +1,6 @@
 ---
 inclusion: always
-updated_at: 2026-06-27
+updated_at: 2026-07-01
 ---
 
 # Project Structure
@@ -36,6 +36,8 @@ updated_at: 2026-06-27
 - `ulw.rs` - UpdateLayeredWindow API
 - `animation.rs` - Windows Animation API
 - `d2d/` - Direct2D関連
+
+> **移行中の注意（2026-07-01・方針確定・実装移行中）**: `dcomp.rs`（DirectComposition）は **Windows.UI.Composition（`Compositor`/`DesktopWindowTarget`）へ移行決定**、`ulw.rs`（ULW）は**除去予定**（別プロセス透過は `WS_EX_TRANSPARENT` 動的トグル方式へ）。`ecs/graphics/` の `compositor.rs`（`WindowD3D11Compositor`）/`compositor_systems/` は ULW 専用ゆえ ULW 除去で撤去対象。briefed specs: `wintf-dcomp-to-wuc-migration`／`wintf-ulw-removal`／`wintf-clickthrough-alpha-toggle`。正本は `roadmap.md`／`doc/COMPAT_ARCHITECTURE.md`。
 
 ### ECS Component Layer
 **Location**: `/crates/wintf/src/ecs/`  
@@ -215,6 +217,24 @@ COMリソースコンポーネント内部のアクセスメソッドは、COM�
 **Purpose**: デスクトップマスコット・プラットフォーム本体  
 **Status**: 試作実装（シェル+バルーン2ウィンドウ表示、ドラッグ移動、ダブルクリック終了）  
 **Dependencies**: wintf, human-panic, thiserror, tracing, tracing-subscriber, async-io, bevy_ecs, windows
+
+### Parser Crate
+**Location**: `/crates/areka-parsers/`
+**Purpose**: 伺か資産（さくらスクリプト / surfaces.txt / balloon descript / install.txt）の**純粋パーサ群**。UI・COM 非依存（`std` ＋ `tracing` のみ）。
+**Pattern**（`areka-P0-sakura-parse` が確立・M1 の `shell`/`balloon`/`package` parser もこれに接ぎ木）:
+- モジュール分割: `src/sakura/`（既存）＋今後 `shell/`・`balloon/`・`package/`
+- API: `pub fn parse(&str) -> Vec<Model>`（**`Result` 無しの寛容パース**・未知は `Raw` 変種へ吸収）
+- 値型: NewType＋opaque inner＋read-only accessor、enum は `#[non_exhaustive]`（拡張シームのみ）
+- テスト: in-source `#[cfg(test)]`、emo2 実 fixture で検証・**過剰実装禁止**（emo2 使用分のみ）
+**Dependencies**: `tracing` のみ（外部パーサ非依存）
+
+### SHIORI ABI Crate
+**Location**: `/crates/shiori-abi/`
+**Purpose**: 脳（SHIORI）との**内部唯一 ABI**。`IShiori`/`IShioriHost` のカスタム COM 定義（HSTRING/UTF-16・IID 既定義）＋エルゴノミック変換層。UI 基盤（wintf）に依存させない最小依存クレート（下流 32bit ホスト/pasta が同 ABI を共有）。x64 native 脳は in-proc COM、過去互換は 32bit Rust ホスト（host-32）が IPC 越しに同 ABI を実装。
+
+### Pilot (Two-Tunnel Knowledge) Crate
+**Location**: `/crates/pilot/`
+**Purpose**: 二坑モデルの**先進坑（pilot・使い捨て）知見クレート**。**空（最小）`lib.rs` ＋ 探索コードは `examples/<spec-name>/` のみ**という構造で葉ノード隔離を担保（出荷グラフから被依存しない＝可逆性の構造的担保）。完了 pilot はここへ隔離保全（例: `examples/pilot-clickthrough-alpha-toggle/`・`examples/shiori-host-32/`）。規律の正本は `.kiro/steering/two-tunnel.md`。
 
 ### Vendored: pasta DSL Engine
 **Location**: `/vendors/pasta/`（git サブモジュール）  

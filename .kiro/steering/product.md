@@ -1,6 +1,6 @@
 ---
 inclusion: always
-updated_at: 2026-06-19
+updated_at: 2026-07-01
 ---
 
 # Product Overview
@@ -49,7 +49,7 @@ areka は「ぱすたさん専用の試作」から、**ukadoc準拠の互換ベ
 
 ### 現在の進め方
 
-- wintfでWindowsネイティブUI基盤を先に固める（透過/ULW・当たり判定は完了済み）
+- wintfでWindowsネイティブUI基盤を先に固める（透過/ULW・当たり判定は完了済み。**2026-07 方針転換: 表示合成は DirectComposition → Windows.UI.Composition へ移行決定・別プロセス透過は `WS_EX_TRANSPARENT` 動的トグルへ・ULW 除去予定**＝詳細は tech.md／roadmap.md）
 - dolaを「タイミングに特化した下位層」と位置づけ、SERIKO/さくらスクリプトランナーをその上に建てる
 - 互換ベースウェアとして実在ゴースト1体を動かす縦スライスを先に通し、その後ぱすたさんをnative旗艦として実装する
 

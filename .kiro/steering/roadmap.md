@@ -163,7 +163,8 @@ emo2 が起動して喋る。下記 5 トラックを結線して達成（⓪ �
 ## ポートフォリオ（2026-06-28・clean slate）
 
 - `.kiro/specs/` 直下 active = **0**（憶測仕様を全伐採し更地化。実装ファーストで着手時に作る）。
-- `completed/` = 100（歴史・M1 が立つ土台の記録。2026-07-01 `pilot-clickthrough-alpha-toggle` を go 済みでアーカイブ＝+1）。
+- **2026-07-01 追記・着手可能フロント（brief 済み・未着手）**: `/kiro-discovery` で「安全並走バッチ」の brief を just-in-time 生成。① wintf 基盤層 `wintf-dcomp-to-wuc-migration`（表示バックエンド WUC 移行）／`wintf-clickthrough-alpha-toggle`（既存 brief）。② M1 parser 並走 `areka-P0-shell-parse`・`areka-P0-balloon-parse`・`areka-P0-package-mount`（`areka-parsers` へ `shell`/`balloon`/`package` モジュール追加・host 不要・単体テスト可）。③ M1 host-32 `areka-P0-host32-ipc`（pilot go 済で解禁・bytes-over-wire transport・別プロセスゆえ非衝突）。これら 5〜6 本は相互非衝突で即並走可（`ecs/graphics` 系は wuc-migration に一本化）。`wintf-ulw-removal` は clickthrough 完了待ち（brief 済み・ゲート下）。
+- `completed/` = 103（歴史・M1 が立つ土台の記録。2026-07-01 `pilot-clickthrough-alpha-toggle`・`pilot-shiori-host-32` を go 済みでアーカイブ）。
 - 旧 active/brief（M1 憶測・M2 reference・出荷層）・backlog（P1-P3）・`_rejected/`・旧戦略メモは**削除**（git 履歴に保全。必要時に復元可）。
 
 ## M2 以降
@@ -178,7 +179,7 @@ emo2 が起動して喋る。下記 5 トラックを結線して達成（⓪ �
 
 ### 動機（既存「ULW 一択」結論の穴）
 
-[tech.md](tech.md) line 83 / 本ファイル line 30 は別プロセス透過を **「実質 ULW 一択」** と断定し ULW/DComp 切替式を「実装完了済み」と記録する。しかしこの結論は **HTTRANSPARENT・SetWindowRgn・ULW** の 3 択比較で、**`WS_EX_TRANSPARENT` 動的トグル方式（winit `set_cursor_hittest` 相当・プロセス境界を越える第 4 の手）を検討していない**。
+[tech.md](tech.md) / 本ファイル line 30 はかつて別プロセス透過を **「実質 ULW 一択」** と断定し ULW/DComp 切替式を「実装完了済み」と記録していた（**2026-07-01 撤回済み**: 下記 pilot go を受け tech.md「Key Technical Decisions」／product.md／structure.md を新方針へ是正・steering 同期完了）。旧結論は **HTTRANSPARENT・SetWindowRgn・ULW** の 3 択比較で、**`WS_EX_TRANSPARENT` 動的トグル方式（winit `set_cursor_hittest` 相当・プロセス境界を越える第 4 の手）を検討していなかった**。
 
 **真の動機は「DComp 描画を捨てられない」こと（開発者）。** ULW は CPU ビットマップ方式で **DComp スワップチェーン合成と併用不可**（記憶 areka-transparency-requires-layered-window）。すなわち 3D（DComp/GPU 合成）ウィンドウにとって ULW はそもそも選択肢になり得ず、ULW は別プロセス透過のために 3D 描画を諦める踏み絵になっている。`WS_EX_TRANSPARENT` 動的トグル（別スレッドのカーソル監視＋αマスク問い合わせで透明領域のみ透過・CPU 転送なし）は **DComp 描画を維持したまま別プロセス透過を成立させる事実上唯一の現実解**。**他社 3D マスコットが採用している実証済み手段**でもある（ただし十分な検証・エンバグ対応を要する前提）。既存「ULW 一択」結論と矛盾する新方向ゆえ **先進坑で先に潰す**（二坑モデル教義）。
 
@@ -197,7 +198,7 @@ _Depends(confirmed): pilot-clickthrough-alpha-toggle
 
 - ~~pilot の go 判定が出るまで **BLOCKED**~~ → **✅ go 済み（2026-07-01）＝着手可**。pilot 知見はクリーンに掘り直す（コピペ donor 禁止・README/REPORT 検証結果を参照）。**申し送り必須**: ex_style = `WS_EX_NOREDIRECTIONBITMAP|WS_EX_TOPMOST|WS_EX_LAYERED|WS_EX_TRANSPARENT`（LAYERED はフラグのみ・TRANSPARENT のみ動的トグル）／枠なし窓／表示=DComp・当たり判定=HWND スタイルの二層分離／ドラッグ中は透過 OFF 維持。
 - 本体 wintf へ `WS_EX_TRANSPARENT` 動的トグルを導入し、本体αマスク（実描画αバッファ／`AlphaMask::is_hit`）参照でキャラ領域のみクリック可にする。
-- **ULW との共存方針（開発者決定）**: 至上要件は **DComp 描画の維持**。本方式は DComp 経路に透過能力を授けるもの。本仕様が完全に有効と判断されれば **ULW ルートは破棄**。ただし他社実績ある手段とはいえ**十分な検証期間・エンバグ対応**を置き、**当面は ULW と並走**させる。tech.md/本ファイルの「ULW 一択」記述は本トラック確定時に更新対象。
+- **ULW との共存方針（開発者決定）**: 至上要件は **DComp 描画の維持**。本方式は DComp 経路に透過能力を授けるもの。本仕様が完全に有効と判断されれば **ULW ルートは破棄**。ただし他社実績ある手段とはいえ**十分な検証期間・エンバグ対応**を置き、**当面は ULW と並走**させる。tech.md/product.md/structure.md の「ULW 一択」記述は **2026-07-01 に撤回・新方針へ更新済み**（pilot go を受けた steering 同期）。
 - 接続先候補（調査済み）: `CompositionMode`（`ecs/window/components.rs`・生成時固定）／`compute_ex_style()`（`runtime/window_factory.rs`）／`HitTestMode::AlphaMask`・`AlphaMask::is_hit`（`ecs/layout/hit_test/`・`ecs/widget/bitmap_source/`）／`VsyncEventBridge`（`event_listener`・`runtime/tick_bridge.rs`）／D2D1 staging αバッファ（`ecs/graphics/compositor.rs`）。
 
 ### 依存マップ検証（two-tunnel 手動チェックリスト）
@@ -206,3 +207,29 @@ _Depends(confirmed): pilot-clickthrough-alpha-toggle
 - 孤児なし: pilot は対応本坑を名指し、本坑は pilot を `_Depends(confirmed):` で参照 ✓
 - 循環なし／DAG: pilot → main の単一エッジ（巡回なし）✓
 - 合否基準明示: go 基準（T1・T2・T3・T4・T6 必須）を上記に明示 ✓
+
+---
+
+## wintf 基盤層: 表示合成バックエンドの WUC 移行（M1 外・wintf 基盤層）
+
+> **位置づけ**: 上記クリックスルーと同じく M1（emo2-boot）とは別軸の **wintf 基盤層**改善。表示バックエンドを **DirectComposition → Windows.UI.Composition（WUC / `Compositor`・`DesktopWindowTarget`）** へ寄せる。M1 ユニット群（⓪〜⑥）には含めない。
+
+### 動機と前提
+
+- 表示合成の依存を DComp から WUC へ移し、DirectComposition 依存を廃す。**純粋等価移行**（見た目・再描画を変えない）が要件。WUC 新能力（アニメ/エフェクト）活用は M2 以降。
+- **調査（2026-07-01・`/kiro-discovery`）で GO-with-caveats 確定**: `windows` 0.62.2 に WUC 全型＋interop trait（`ICompositorDesktopInterop` 等 5 種）が存在。耐力壁級 Unknown 無し＝**pilot は切らない**（本坑一本）。caveats: ① `Compositor` 生成前に UI スレッドで `CreateDispatcherQueueController(DQTYPE_THREAD_CURRENT)`（**既存 message pump に相乗り・差し替え無し**）／② `Commit()` 廃止（暗黙反映）／③ サーフェス→`SpriteVisual.Brush` に brush が一段挟まる。`WS_EX_NOREDIRECTIONBITMAP` はそのまま流用可。
+
+### spec 分割（2 本・ULW 除去は独立）
+
+- **`wintf-dcomp-to-wuc-migration`（本坑・brief 済み・着手可）**: **①DComp→WUC 差し替えのみ**。当たり判定・ULW とは独立ゆえ**クリックスルーを待たず今すぐ着手可**。ULW アーム（`compositor.rs`/`ulw.rs`/`compositor_systems`）と `CompositionMode` enum には手を入れない。brief: `.kiro/specs/wintf-dcomp-to-wuc-migration/brief.md`。
+- **`wintf-ulw-removal`（本坑・brief 済み）**: ULW 一式除去＋`CompositionMode` collapse（GPU 合成単独へ）。brief: `.kiro/specs/wintf-ulw-removal/brief.md`。
+  ```
+  _Depends: wintf-clickthrough-alpha-toggle（完了）
+  ```
+  **ULW を安全に消せるのは、本坑クリックスルーが完了して「ULW 無しでも別プロセス透過が成立」と確認できてから**（クリックスルー brief の並走方針＝「完全有効なら ULW 破棄／当面は並走・即時撤去しない」に一致）。`wintf-dcomp-to-wuc-migration` とは触るファイルが別ゆえ**独立**（順序任意・両完了後に `CompositionMode` は WUC 単独へ最終 collapse）。クリックスルーのα源は ULW compositor の staging αバッファではなく per-widget `AlphaMask` を使う想定（design で確認）。
+
+### 依存マップ検証（two-tunnel 手動チェックリスト）
+
+- 順序ゲート: `wintf-ulw-removal` は `wintf-clickthrough-alpha-toggle` 完了が前提（ULW 破棄の安全網）✓
+- 独立性: `wintf-dcomp-to-wuc-migration`（表示層）は `wintf-clickthrough-alpha-toggle`（当たり判定層）とも `wintf-ulw-removal`（ULW 側・別ファイル群）とも独立・順序任意 ✓
+- 循環なし／DAG: clickthrough → ulw-removal の単一エッジのみ（wuc-migration は独立ノード・巡回なし）✓
