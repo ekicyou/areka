@@ -147,3 +147,48 @@
 
 1. 本ギャップ分析を踏まえ requirements discussion で §5 の設計判断項目（特に 1・2・4・5）を詰める。
 2. `/kiro-design areka-P0-balloon-parse` で技術設計へ進む（facade API 形状・モデル型・分割粒度・マージ規則・fixture 取り込みを設計文書化）。
+
+---
+
+## 9. 設計フェーズ記録（Design Phase Log）— 2026-07-01
+
+> 生成: kiro-spec-design。design.md 生成に伴う discovery 種別・synthesis 結論・設計判断の確定を記録。
+
+### 9.1 Discovery 種別
+
+- **Light discovery（Extension）**。本 spec は既存 `areka-parsers` クレートへ `sakura` 確立パターンを踏襲した兄弟モジュールを追加する拡張であり、外部 API・新規依存・非同期・I/O が無い。深いコードベース調査は §1〜§7 のギャップ分析で既に完了済み。追加の WebSearch/WebFetch は不要（純粋 Rust・追加依存ゼロ・vendored fixture）。sakura モジュール実体（`mod.rs`/`model.rs`/`parse.rs`）と emo2 fixture 3 ファイルを再確認して確定値を採取した。
+
+### 9.2 Synthesis（3 レンズ）
+
+- **Generalization**: R2（base フィールド）と R4（サーフェス別上書き）は「フィールド集合の後勝ちマージ」という単一問題の変種。→ `RawFields`（フィールドスロット集合）を base/overlay 共通の中間表現とし、`merge_side(base, overlay, kind)` を 1 つのマージ器に一般化（サーフェスは `kind` 引数で差分吸収）。実装スコープは emo2 使用フィールドに限定（インタフェースのみ一般化）。
+- **Build vs Adopt**: kv パースは `str::split_once(',')` で足り、外部パーサ／設定クレート（serde 等）を導入しない（過剰依存回避・sakura と同じ std のみ方針）。マージも「後勝ち overlay」の単純規則ゆえ既製ライブラリ不要。→ 全面 build（薄い自前実装）。
+- **Simplification**: sakura の 5 層（model/lexer/decode/parse）を機械的に複製せず、**独立 lexer を廃し** kv 収集を `parse` に統合、balloon 固有の `merge` のみ追加（Option B）。画像参照はファイル名文字列を持たず `SurfaceKind`＋ID の構造のみ（不要な導出を下流へ）。座標は符号意味を計算せず符号付き `i32`＋型名分類で保持（`is_from_far_edge()` 等の述語を作らない＝過剰実装回避）。
+
+### 9.3 設計判断の確定（§5 論点への回答）
+
+| §5 論点 | 確定 |
+|---|---|
+| 5-1 facade API 形状 | 候補 (a) `parse(descript, s0s, k0s) -> Balloon`（両サーフェス内包・下流再マージ不要）。サーフェス区別は `Balloon::sakura()`/`kero()` の別 `BalloonSide` で型表現（R4.5）。 |
+| 5-2 値型 NewType 方針 | 座標は符号付き `i32` を保持、符号意味は**型名**（`WindowPosition`/`WordWrapPoint`/`ValidRect`）＋doc で分類。述語アクセサ（`is_from_far_edge`）は作らない（R3.4「符号保持で足りる」・過剰実装禁止）。 |
+| 5-3 lexer 分割 | 独立 lexer 不要。kv 収集は `parse` に統合（Option B）。 |
+| 5-4 k0s 検証深度 | **両サーフェス実データ検証**を採用。確定版 requirements（Boundary Context・R6.3）が k0s vendored 済みへ更新済みゆえ矛盾なし。 |
+| 5-5 画像参照解決 | how = (b) 構造のみ保持（`SurfaceKind`＋surface ID）。ファイル名導出は下流（命名規約 `balloon{s|k}{ID}.png`）。本 spec は I/O 非依存。 |
+| 5-6 未知行保持粒度 | 未使用/未知行は診断目的の生保持（`RawFields` 内・非公開）に留め、モデル公開面へは出さない（R5.1 は保持義務を課さない）。 |
+| 5-7 重複キー・行フォーマット寛容度 | 同一ファイル内同キーは後勝ち。CRLF/LF・BOM・前後空白・空値を parse で寛容化（sakura の局所吸収・全域継続に倣う）。 |
+| 5-8 fixture 取り込み | (b) 検証最小抜粋をテスト内リテラルに直書き。クレート境界跨ぎ `include_str!` の脆さを回避し areka-parsers 単体で自己完結（R6.4）。実 fixture は正本として残す。 |
+
+### 9.4 確定 fixture マージ値（テスト固定対象・符号確認済み）
+
+- **sakura（base+s0s）**: windowposition(266,-129) / wordwrappoint.x=-49（base -34 を上書き）・y=0 / validrect(top=46,bottom=-56,left=36,right=-44) / arrow0(15,90) / arrow1(15,-110) / font "Yu Gothic UI" h=28 / font.color(0,0,0) / anchor.font.color(180,40,40) / kind=Sakura,id=0。
+- **kero（base+k0s）**: windowposition(-190,-75) / wordwrappoint.x=-34（k0s に無し＝base 保持）・y=0 / validrect(top=40,bottom=-70,left=24,right=-48) / arrow0(9,54) / arrow1(9,-125) / kind=Kero,id=0。
+
+### 9.5 分割方針・依存方向（確定）
+
+- ファイル: `balloon/{mod.rs, model.rs, model_tests.rs, parse.rs, parse_tests.rs, merge.rs, merge_tests.rs, validation_tests.rs}` ＋ `lib.rs` に `pub mod balloon;` 追加。
+- 依存方向: `model ← parse ← merge ← facade(mod.rs)`（上方向依存禁止）。sakura を import しない独立モジュール。
+
+### 9.6 設計レビューゲート結果
+
+- Mechanical checks: 要件 ID 全網羅（1.1〜6.4）／Boundary 4 セクション充填／File Structure Plan 具体パス充填／Boundary↔File 整合／orphan component 無し — **全 pass**。
+- Judgment review: 要件カバレッジ・アーキ準備性・境界明確性・実装可能性 — **全 pass**。
+- 修復パス: **0 回**（初回で通過）。真の要件ギャップ・矛盾なし（§5-4 の brief 食い違いは確定版 requirements で解消済み）。
