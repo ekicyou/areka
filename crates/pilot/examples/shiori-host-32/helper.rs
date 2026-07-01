@@ -22,6 +22,11 @@ mod ipc;
 #[path = "shiori_proxy.rs"]
 mod shiori_proxy;
 
+// HelperMessageWindow（message-only 窓＋メッセージループ・design.md §415–443）も helper（i686）
+// 専用。`wintf-winmsg-executor` の窓/ループを本境界へ閉じる（task 3.2）。
+#[path = "helper_window.rs"]
+mod helper_window;
+
 fn main() {
     // i686 セルフテスト観測（task 3.1・go 基準(1) precursor・requirements 3.3）:
     //   shiori-host-32-helper.exe --selftest-load <ghostdir>
@@ -49,9 +54,67 @@ fn main() {
         }
     }
 
+    // in-process loopback セルフテスト（task 3.2・go 基準(2) helper 側の核・要件 5.1/5.2/5.3）:
+    //   shiori-host-32-helper.exe --selftest-loop <secs>
+    // stand-in parent 窓が HELLO を実 WM_COPYDATA で受領・helper HWND を復号確認 →
+    // N 秒ループ生存 → UNLOAD 清掃終了、までを単独実証する（実クロスプロセス親は task 4.1）。
+    if args.iter().any(|a| a == "--selftest-loop") {
+        let secs = args
+            .iter()
+            .position(|a| a == "--selftest-loop")
+            .and_then(|i| args.get(i + 1))
+            .and_then(|s| s.parse::<u64>().ok())
+            .unwrap_or(3); // 既定 3 秒（ハーネスを塞がぬよう短く）。
+        match helper_window::selftest_loop(secs) {
+            Ok(()) => {
+                println!("selftest_loop OK: HELLO 受領＋{secs}s ループ生存＋clean unload（要件 5.1/5.2/5.3）");
+                std::process::exit(0);
+            }
+            Err(e) => {
+                eprintln!("selftest_loop FAILED: {e}");
+                std::process::exit(3);
+            }
+        }
+    }
+
+    // 本番 helper 実行経路（親が起動・design.md §415–443）:
+    //   親が PARENT_HWND（u32 10 進）と GHOSTDIR を env（無ければ arg[2]/arg[1]）で渡す
+    //   （process_host.rs の PARENT_HWND_ENV / GHOSTDIR_ENV と同名・spawn の arg 並びに一致）。
+    // pasta を eager ロードし窓を立て HELLO を送り、UNLOAD までループを回して clean unload する。
+    // 実クロスプロセス往復（親駆動）は task 4.1 で完成。ここでは helper 側を起動しループを回す。
+    if let Some(parent_hwnd) = read_parent_hwnd(&args) {
+        let ghostdir = read_ghostdir(&args).unwrap_or_else(default_fixture_ghostdir);
+        // UNLOAD が来なくても暴走しないよう上限（先進坑・ハーネス保護）。親駆動時は UNLOAD で早期停止。
+        let code = helper_window::run_helper(parent_hwnd, &ghostdir, std::time::Duration::from_secs(30));
+        std::process::exit(code);
+    }
+
     println!("pilot shiori-host-32-helper (i686 helper): skeleton placeholder");
+    println!("  modes: --selftest-load <ghostdir> | --selftest-loop <secs> | (env PARENT_HWND[+GHOSTDIR] で本番起動)");
     // 共有プロトコルが helper ターゲットへ取り込まれていることの最小確認。
     let _ = ipc::DEFAULT_TIMEOUT;
+}
+
+/// 親 HWND（u32 ワイヤ値）を env `PARENT_HWND`（無ければ arg[2]・10 進）から読む
+/// （process_host.rs::PARENT_HWND_ENV / spawn の argv[2] と同名・同並び）。
+fn read_parent_hwnd(args: &[String]) -> Option<u32> {
+    if let Ok(v) = std::env::var("PARENT_HWND") {
+        if let Ok(n) = v.trim().parse::<u32>() {
+            return Some(n);
+        }
+    }
+    // arg[2] = parent_hwnd（process_host.rs::spawn の argv 並び）。arg[0]=exe, arg[1]=ghostdir。
+    args.get(2).and_then(|s| s.trim().parse::<u32>().ok())
+}
+
+/// ghostdir を env `GHOSTDIR`（無ければ arg[1]）から読む（process_host.rs::GHOSTDIR_ENV と同名）。
+fn read_ghostdir(args: &[String]) -> Option<std::path::PathBuf> {
+    if let Ok(v) = std::env::var("GHOSTDIR") {
+        if !v.trim().is_empty() {
+            return Some(std::path::PathBuf::from(v));
+        }
+    }
+    args.get(1).map(std::path::PathBuf::from)
 }
 
 /// ビルド時の crate ルートから fixtures の emo2 ghostdir（pasta.dll の在処）を組み立てる。

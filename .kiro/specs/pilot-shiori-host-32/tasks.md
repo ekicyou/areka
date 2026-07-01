@@ -41,7 +41,7 @@
   - _Requirements: 3.1, 3.2, 3.3, 3.4, 4.2_
   - _Boundary: ShioriByteProxy_
   - _Depends: 1.1_
-- [ ] 3.2 helper メッセージ窓とループ（i686）
+- [x] 3.2 helper メッセージ窓とループ（i686）
   - `wintf-winmsg-executor` で message-only 窓を生成しメッセージループを回す。起動時に親へ HELLO（自 HWND を u32 LE）を 1st WM_COPYDATA で送る
   - WndProc で REQUEST を受領しバイト proxy を駆動、応答を 2nd WM_COPYDATA で親へ返す。UNLOAD でループ停止 → clean unload
   - 観測: helper 起動で窓生成＋親へ HELLO 送出、N 秒間ループが破綻せず回り続ける
@@ -92,3 +92,4 @@
 - 共有モジュールは各バイナリで `#[path = "ipc.rs"] mod ipc;`（main.rs/helper.rs 双方）。同方式を shiori3.rs 等の他共有モジュールにも適用予定。
 - 3.1 で発覚（1.2 由来の i686 限定欠陥を修正）: i686 では `usize`=32bit ゆえ `(x as usize) >> 32` が overflow lint でコンパイルエラー。低32bit占有検査等の dwData/ULONG_PTR 演算は `u64` で評価すること（跨ビットネス可搬）。x64 の `cargo test` だけでは i686 コンパイル欠陥を検出できない → 共有モジュールは i686 でも `cargo test --target i686-pc-windows-msvc` を回す。
 - 3.1: pasta ABI を実ソース `vendors/pasta/crates/pasta_shiori/src/windows.rs`＋`util/hglobal/mod.rs` でバイト正確確認（矛盾ゼロ）。HGLOBAL=`GlobalAlloc(GMEM_FIXED)` 生ポインタ（GlobalLock 不要）／入力は DLL 解放・request 返り値はホスト解放／`request` の `len` は in/out（入力長を先に書く）／Shift_JIS は windows crate の CP_ACP（WideCharToMultiByte）で encoding_rs 不要。
+- 3.2（重大 positive finding・design §443 Risk 撤回）: **`wintf-winmsg-executor` 0.0.5 の i686 実行時挙動 GO**（ビルドは既実証・実行時は本先進坑で初確認）。message-only 窓生成・`MessageLoop::run`・WndProc dispatch・WM_COPYDATA 配送すべて i686 で機能。raw Win32 ループ後退（Revalidation Trigger）不要＝本坑 helper もこの版を流用可。窓が idle でも `want_quit`/deadline を再評価するため heartbeat（WM_NULL 定期 post）を使用（loopback selftest 用足場・実 parent 駆動 4.1 では inbound REQUEST/UNLOAD がループを起こすので再検討可）。API: `Window::new_checked(WindowType::MessageOnly, ..)`＋`MessageLoop::run`＋`FilterResult`。
