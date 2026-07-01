@@ -71,7 +71,7 @@
   - _Depends: 5.1_
 
 - [ ] 6. Validation: 実走 go 検証と README 一次記録
-- [ ] 6.1 実 pasta.dll での go 基準実走検証
+- [x] 6.1 実 pasta.dll での go 基準実走検証
   - emo2 fixture に対し full pilot を実走し、go 基準(1) Value 受領と go 基準(2) ループ生存 → clean unload を観測。実行時挙動（`request` の block-on-reply・`load` 起点 `spawn_actor` スレッド）も観測・記録
   - 観測: 実 pasta.dll で go 基準(1)(2) の充足/不充足が観測され、結果（数値・ログ）が記録される
   - _Requirements: 4.5, 5.4, 6.4_
@@ -95,3 +95,4 @@
 - 3.2（重大 positive finding・design §443 Risk 撤回）: **`wintf-winmsg-executor` 0.0.5 の i686 実行時挙動 GO**（ビルドは既実証・実行時は本先進坑で初確認）。message-only 窓生成・`MessageLoop::run`・WndProc dispatch・WM_COPYDATA 配送すべて i686 で機能。raw Win32 ループ後退（Revalidation Trigger）不要＝本坑 helper もこの版を流用可。窓が idle でも `want_quit`/deadline を再評価するため heartbeat（WM_NULL 定期 post）を使用（loopback selftest 用足場・実 parent 駆動 4.1 では inbound REQUEST/UNLOAD がループを起こすので再検討可）。API: `Window::new_checked(WindowType::MessageOnly, ..)`＋`MessageLoop::run`＋`FilterResult`。
 - 4.1（go 基準(1) 実証・design §210 の賭け成立）: **跨ビットネス再入 WM_COPYDATA 配送 GO**。x64 親が `SendMessageTimeout` でブロック中、i686 helper の RESPONSE(2nd WM_COPYDATA) が親 WndProc へ**再入配送**され受け皿セル(`ResponseSlot`)へ格納→復帰で取得＝named pipe 後退不要。デッドロック回避＝応答 WndProc は payload 格納後**即 return**（それ以上跨プロセス SendMessage しない）・両方向 `SMTO_ABORTIFHUNG`＋timeout・single-in-flight。emo2 OnBoot Value は時刻連動で毎回変化＝live pasta 駆動の証拠。
 - 環境 flake（4.1 で観測）: `cargo test`/`cargo run` が稀に rustup shim エラー `rustc.exe … not applicable to stable` を出す（pilot でなく環境）。回避＝`cargo +stable ...` か生成 exe 直実行。後続タスクで再発したら同手で回避。
+- 6.1（重要・従来認識の訂正）: **`load`→`spawn_actor` 内部スレッドは利用可能ソースで未確認**。`vendors/pasta` に `spawn_actor`/thread シンボル皆無、`pasta_shiori/src/shiori.rs:83` は single-threaded と明記。design §495／research §6 は仮説を立てただけ。かつ実ロードは prebuilt emo2 `pasta.dll`（fixture）でその内部は vendored source から検証不能。**確認できた実行時挙動は block-on-reply のみ（3–6ms 同期往復）**。actor スレッドは behavioral evidence（go(1)＋go(2)生存後の2応答→clean unload）に格下げ。README(6.2) と memory はこの正直な記録に従う。live go 数値: Value 293–543B・RESPONSE 376–626B（実行毎変化＝live）・survived 4.0s poll=16・exit0 Clean。

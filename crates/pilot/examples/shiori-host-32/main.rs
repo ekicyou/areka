@@ -130,10 +130,56 @@ fn drive(helper_exe: &Path, ghostdir: &Path) -> Result<(), String> {
     println!("Value: {}", session.value);
     println!("=== go 基準(1) PASS: x64 親が i686 helper 越しに OnBoot Value を受領 ===");
 
+    // go(1) の観測記録を保持（go(2) 後の一次記録サマリで再掲・design.md §230）。
+    let request_roundtrip = session.request_roundtrip;
+    let response_bytes = session.response_bytes;
+    let value_bytes = session.value_bytes;
+
     // --- go 基準(2): N 秒メッセージループ生存 → UNLOAD → clean unload → 終了コード 0 観測 ---
-    drive_go_criterion_2(&mut session)?;
+    let go2 = drive_go_criterion_2(&mut session)?;
+
+    // === 一次記録サマリ（design.md §230: 終了コード 0 ＋親側観測ログを一次記録）===
+    // 数値を自己完結の 1 ブロックに集約する。go 判定そのものは開発者の人間判断（要件 6.4/6.5）。
+    println!("=== GO 検証記録 (実 pasta.dll / emo2) ===");
+    println!(
+        "go(1): Value={} bytes 受領 [PASS] / RESPONSE={} bytes / REQUEST→RESPONSE 同期往復={} ms (block-on-reply)",
+        value_bytes,
+        response_bytes,
+        request_roundtrip.as_millis()
+    );
+    println!(
+        "go(2): survived {:.2}s (poll={} 回 alive / probe: 生存後 REQUEST {}) → clean unload exit={} kind={:?} [PASS]",
+        go2.survived.as_secs_f64(),
+        go2.polls,
+        if go2.post_survival_response_bytes.is_some() { "応答あり" } else { "応答なし" },
+        go2.exit_code,
+        go2.exit_kind,
+    );
+    println!(
+        "load→spawn_actor: design.md §495 が load 時 actor スレッドを仮説化したが利用可能ソースでは未確認\
+         （vendors/pasta に該当シンボル無し・pasta_shiori/src/shiori.rs は single-threaded と明記／\
+         かつ実ロードは prebuilt emo2 pasta.dll でその内部は vendored source から検証不能）\
+         ⇒ 挙動証拠のみに格下げ: helper が go(1) 要求＋go(2) 生存後要求（実 2 応答）を処理し clean unload\
+         ＝リクエスト処理ループが生存窓を跨いで稼働（代理証拠・x64 親は helper 内スレッド数を直接観測できない）"
+    );
+    println!("（go 判定は README・人間判断・要件 6.5）===");
 
     Ok(())
+}
+
+/// go 基準(2) の観測記録（一次記録サマリ用・数値のみ）。
+struct Go2Record {
+    /// N 秒生存窓で実際に生存した実時間。
+    survived: Duration,
+    /// 生存窓中の poll_exit 回数（すべて alive=None）。
+    polls: u64,
+    /// 生存後の追加 REQUEST に helper が返した応答バイト数（None=応答なし）。
+    /// Some ＝ pasta の actor ループが生存後も稼働継続していることの親可視な証拠。
+    post_survival_response_bytes: Option<usize>,
+    /// clean unload で親が観測した終了コード。
+    exit_code: i32,
+    /// 終了コードの分類（Clean を期待）。
+    exit_kind: ExitKind,
 }
 
 /// go 基準(1) の 1 往復で確立した「生きた helper セッション」（go(2) がこれを引き継ぐ）。
@@ -151,6 +197,12 @@ struct HelperSession<'p> {
     helper_hwnd: windows::Win32::Foundation::HWND,
     /// go(1) で受領した OnBoot の Value（親が確認済み）。
     value: String,
+    /// go(1) 観測記録: OnBoot REQUEST→RESPONSE 同期往復に要した実時間（block-on-reply 実証）。
+    request_roundtrip: Duration,
+    /// go(1) 観測記録: 受領した RESPONSE バイト数（実 pasta 応答・run ごとに変動しうる）。
+    response_bytes: usize,
+    /// go(1) 観測記録: 受領した Value のバイト数（さくらスクリプト本体・run ごとに変動しうる）。
+    value_bytes: usize,
 }
 
 /// go 基準(1) の全体駆動（design.md §172–204）。成功で「生きた helper セッション」を返す。
@@ -207,8 +259,14 @@ fn drive_go_criterion_1<'p>(
     // e. REQUEST 送出 → RESPONSE を受け皿セルで再入受領（design.md §209・要件 2.2/4.3）。
     //    親はここで SendMessageTimeout にブロックし、待機中に helper の RESPONSE を
     //    親 WndProc が再入受領して受け皿セルへ格納する（デッドロック回避・§210）。
+    //    ★ 観測記録（task 6.1・design.md §492/§495・research.md §6）:
+    //      `send_request` 直前〜直後の実時間を計測する。ここは SendMessageTimeout で
+    //      helper の RESPONSE 再入受領まで**親が同期ブロック**する区間そのもの。非自明な
+    //      往復時間の後に**同一同期呼び出し内で**有効な Value が返る＝親は pasta の応答を
+    //      待った（GET=block-on-reply）ことの実証（fire-and-forget ではない）。
     let shared = parent.shared();
     let slot = shared.response_slot();
+    let req_started = Instant::now();
     let response = ipc::send_request(
         helper_hwnd,
         parent_hwnd,
@@ -223,7 +281,12 @@ fn drive_go_criterion_1<'p>(
              Revalidation Trigger＝named pipe 後退を人間判断）"
         )
     })?;
+    let request_roundtrip = req_started.elapsed();
     println!("[go(1)] RESPONSE 再入受領 OK（{} バイト）", response.len());
+    println!(
+        "[go(1)] REQUEST→RESPONSE 同期往復 {} ms（block-on-reply: 親は pasta 応答まで同期ブロック・design.md §492）",
+        request_roundtrip.as_millis()
+    );
 
     // f. Value を parse（design.md §198・要件 4.2）。
     let value = shiori3::parse_value(&response)
@@ -234,12 +297,16 @@ fn drive_go_criterion_1<'p>(
 
     // UNLOAD はここでは送らない（設計変更点・task 5.1）。go(2) の生存窓の後に送る（§221）。
     // helper 稼働中のまま session を go(2) へ引き継ぐ。
+    let value_bytes = value.len();
     Ok(HelperSession {
         parent,
         handle: Some(handle),
         parent_hwnd,
         helper_hwnd,
         value,
+        request_roundtrip,
+        response_bytes: response.len(),
+        value_bytes,
     })
 }
 
@@ -256,7 +323,7 @@ fn drive_go_criterion_1<'p>(
 /// 全ステップは bounded: 生存窓は N（`SURVIVAL_WINDOW`）＋刻み、UNLOAD は `UNLOAD_TIMEOUT`。
 /// clean unload 待ち（`wait_clean`）は helper が UNLOAD で即 clean 終了するため実質即返り、
 /// 最悪でも helper 側 backstop（`run_helper` 30s・helper.rs §88）が上限を保証する（ハングしない）。
-fn drive_go_criterion_2(session: &mut HelperSession) -> Result<(), String> {
+fn drive_go_criterion_2(session: &mut HelperSession) -> Result<Go2Record, String> {
     println!(
         "=== go 基準(2): メッセージループ {SURVIVAL_WINDOW:?} 生存 → clean unload を観測 ==="
     );
@@ -289,7 +356,10 @@ fn drive_go_criterion_2(session: &mut HelperSession) -> Result<(), String> {
     );
 
     // 任意: 生存後もループが REQUEST を捌けることを示す（bounded・失敗しても致命ではない）。
-    let _ = mid_window_probe(session);
+    //   ★ 観測記録（task 6.1）: これが返せば「go(1) と go(2) 生存後」の**2 応答**が揃う。
+    //     helper 内の pasta actor ループが生存窓を跨いで稼働し続けたことの親可視な代理証拠
+    //     （x64 親は helper 内スレッド数を直接観測できないため・design.md §230）。
+    let post_survival_response_bytes = mid_window_probe(session).ok();
 
     // --- 2. 生存窓の後に UNLOAD 送出（design.md §221「N 秒後」・要件 5.3）---
     match ipc::send_copydata(
@@ -321,7 +391,13 @@ fn drive_go_criterion_2(session: &mut HelperSession) -> Result<(), String> {
                     "=== go 基準(2) PASS: helper survived {:.2}s → clean unload → exit code=0 kind=Clean を親が観測（要件 1.3/5.2/5.4・design.md §230） ===",
                     survived.as_secs_f64()
                 );
-                Ok(())
+                Ok(Go2Record {
+                    survived,
+                    polls,
+                    post_survival_response_bytes,
+                    exit_code: code,
+                    exit_kind: kind,
+                })
             } else {
                 Err(format!(
                     "go 基準(2) 不成立: helper が clean(0) で終了しなかった（code={code} {kind:?}）"
@@ -564,7 +640,7 @@ fn drive_err_helper_abnormal_exit(ghostdir: &Path) -> Result<(), String> {
 
 /// 生存窓の後、helper のメッセージループがまだ REQUEST を捌けることを示す任意プローブ（bounded）。
 /// 失敗しても go(2) は致命扱いしない（生存＋clean unload が本質・これは「まだ動く」補足観測）。
-fn mid_window_probe(session: &HelperSession) -> Result<(), ()> {
+fn mid_window_probe(session: &HelperSession) -> Result<usize, ()> {
     let onboot = shiori3::build_onboot(std::path::Path::new(""));
     let shared: Pin<&ParentShared> = session.parent.shared();
     match ipc::send_request(
@@ -580,7 +656,7 @@ fn mid_window_probe(session: &HelperSession) -> Result<(), ()> {
                 "[go(2)] 生存後の追加 REQUEST に helper が応答（{} バイト）＝ループは生存後も稼働中",
                 resp.len()
             );
-            Ok(())
+            Ok(resp.len())
         }
         Err(e) => {
             eprintln!("[go(2)] 追加 REQUEST は失敗（補足観測のみ・致命ではない）: {e:?}");
