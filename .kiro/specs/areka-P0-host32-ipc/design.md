@@ -139,12 +139,12 @@ ipc（共有プロトコル・型/framing）
 
 ## File Structure Plan
 
-> **重要（Open Decision）**: クレート**配置と構成**は brief が「依頼者へ提示して確認を取る」ことを要求している設計判断であり、design discussion で確定する（後述 Open Questions / Risks §1）。本節は **推奨案（Option B-1: 単一クレート・helper を `[[bin]]` 内包）** を具体化した File Structure Plan を示す。ペア構成（Option B-2）・proto+embed 構成（Option C）が確定した場合、下記のモジュール責務は維持したままクレート境界のみ組み替える（責務の粒度は不変）。
+> **確定（design discussion #1）**: クレート**配置と構成**は brief が「依頼者へ提示して確認を取る」ことを要求していた設計判断であり、design discussion で **Option B-1（単一クレート・helper を `[[bin]]` 内包）／クレート名 `shiori-host32-ipc`** に確定した。命名は既存 `shiori-abi` と同じ `shiori-` ドメイン接頭辞で揃え、後日クレート名だけで所属ドメイン（SHIORI）・トラック（host32）・ユニット（ipc）が判別できるようにする（汎用的な `host32-ipc` は不採用）。将来 proto 共有が必要になれば `ipc` モジュールを別クレートへ切り出せる（可逆・現時点では YAGNI）。下記のモジュール責務の粒度はこの確定によって不変。
 
-### Directory Structure（推奨案 Option B-1）
+### Directory Structure（確定案 Option B-1 / `shiori-host32-ipc`）
 
 ```
-crates/host32-ipc/                    # 新設 production クレート（仮名・命名も §1 で確定）
+crates/shiori-host32-ipc/             # 新設 production クレート（確定名）
 ├── Cargo.toml                        # lib + [[bin]] helper。windows feature = DataExchange 追加
 ├── src/
 │   ├── lib.rs                        # 公開 API 再エクスポート（x64 側 transport の入口）
@@ -158,7 +158,7 @@ crates/host32-ipc/                    # 新設 production クレート（仮名�
     └── echo_roundtrip.rs             # 往復 echo 統合テスト（Requirement 6 のゲート指標・親→helper→親の実 WM_COPYDATA 往復）
 ```
 
-> `ipc.rs` は x64 lib と i686 bin の**双方**からビルドされる共有モジュール。pilot の `#[path = "ipc.rs"] mod ipc;` 物理共有パターンを、単一クレート内の**通常の `mod` 共有**へ格上げする。helper が `src/bin/helper.rs` から `use host32_ipc::ipc;`（lib 経由）で共有規約を参照するか、`#[path]` で直接取り込むかは実装細部（タスクで確定）。
+> `ipc.rs` は x64 lib と i686 bin の**双方**からビルドされる共有モジュール。pilot の `#[path = "ipc.rs"] mod ipc;` 物理共有パターンを、単一クレート内の**通常の `mod` 共有**へ格上げする。helper が `src/bin/helper.rs` から `use shiori_host32_ipc::ipc;`（lib 経由）で共有規約を参照するか、`#[path]` で直接取り込むかは実装細部（タスクで確定）。
 
 ### Modified Files
 
@@ -538,12 +538,12 @@ fn main() { /* 親HWND を arg/env で取得 → 窓生成 → HELLO 送出 → 
 
 ## Open Questions / Risks
 
-> 以下は design discussion で確定すべき設計判断（本ユニットの入力＝requirements.md / research.md で一意に決められないもの）。**§1 はタスク生成前に依頼者確認が必須**（brief が明示要求）。
+> 以下のうち **§1・§2 は design discussion #1 で確定済み**。§3〜§5 は入力と矛盾しない範囲で本設計が方向を確定済みの実装細部（タスクで具体化）。
 
-1. **[要・依頼者確認] クレート配置・構成と命名**: 本設計は **Option B-1（単一クレート `crates/host32-ipc`・helper を `[[bin]]` 内包）** を推奨する。理由: transport は独立 lifecycle・依存（`wintf-winmsg-executor`・i686 target）を持ち、`shiori-abi` 相乗り（Option A）は最小依存純度を壊す。単一クレートなら共有 `ipc` モジュールが自然に `mod` 共有でき、ワークスペースメンバーも 1 つで済む。代替: Option B-2（proto/x64lib/helper を 3 クレートに分割）／Option C（proto 共有クレート ＋ x64 lib が helper を内包）。**クレート数（B-1=1 / C=2 / B-2=3）と命名（`host32-ipc` 系・仮）は M1 の最小実装方針と照らして確定**。いずれの案でも本設計のモジュール責務の粒度は不変（クレート境界のみ組み替え）。
-2. **[両ターゲットビルド構成] `windows` feature の最小セットとビルド配線**: 単一クレートで x64 lib ＋ i686 `[[bin]]` を両ターゲットビルドする際、`windows` の feature は本ユニットでは `Win32_System_DataExchange`（＋ WindowsAndMessaging / Foundation）で足りるか（Memory/Globalization は pasta proxy 用＝下流ゆえ不要のはず）。ワークスペース features を拡張するか新クレート側で明示するか。→ タスクで確定（設計上は「DataExchange 追加のみ」を前提）。
+1. **[確定・design discussion #1] クレート配置・構成と命名**: **Option B-1（単一クレート `crates/shiori-host32-ipc`・helper を `[[bin]]` 内包）／クレート名 `shiori-host32-ipc`** に確定。理由: transport は独立 lifecycle・依存（`wintf-winmsg-executor`・i686 target）を持ち、`shiori-abi` 相乗り（Option A）は最小依存純度を壊す。単一クレートなら共有 `ipc` モジュールが自然に `mod` 共有でき、ワークスペースメンバー増分も +1 で M1 最小実装方針に最も整合（代替: Option C=+2 / Option B-2=+3 は現時点 YAGNI）。命名は既存 `shiori-abi` と同じ `shiori-` ドメイン接頭辞で揃え、クレート名だけで所属（SHIORI/host32/ipc）を判別可能にする。将来 proto 共有が要れば `ipc` を可逆に切り出せる。
+2. **[確定・design discussion #1] `windows` feature の最小セットとビルド配線**: B-1 確定に伴い次の1案に寄せる — (a) 共有 `ipc` は単一クレート内の**通常 `mod` 共有**（`lib.rs` 経由）、(b) `windows` feature は `shiori-host32-ipc` の Cargo.toml で `Win32_System_DataExchange`（＋ `Win32_UI_WindowsAndMessaging` / `Win32_Foundation`）を明示（Memory/Globalization は pasta proxy 用＝下流ゆえ不要）、(c) i686 `[[bin]]` helper は x64 lib ビルド時に巻き込まれないよう `required-features` もしくは target 条件で分離。細部（`required-features` 名等）はタスクで確定するが、配線方針は本確定で一意。
 3. **[再入受領の production 品質] window state 共有パターン**: `wintf-winmsg-executor` の `Window<S>`（`Pin<&S>` state 共有）を踏襲し、`ResponseSlot`（RefCell）/`Cell` を UI スレッド固定・single-in-flight 前提で用いる。独自ラッパを立てるかは実装細部（設計方針は pilot 構造の忠実な踏襲）。
 4. **[i686 ビルド／テスト規律] PowerShell 手順の固定化**: production クレートでの i686 target ビルド＋往復 echo 統合テストの手順（helper ビルド → 親テスト）を README/steering にどう固定するか（`rustup target add i686-pc-windows-msvc` は導入済）。
 5. **[ハンドシェイクゲート（3.3）の具体形]** 完了前の往復抑止を、型（helper HWND を要求する送信 API）で表すか、実行時 `Err(HandshakeIncomplete)` で表すか。設計は「未確定送信を拒否する」ことを要求し、表現手段はタスクで確定。
 
-> 上記はいずれも**入力（requirements/research）と矛盾しない範囲で本設計が方向を確定済み**の実装細部・確認事項であり、要件レベルの gap や矛盾ではない。§1 のみ brief が明示的に依頼者確認を要求している設計判断のため、design discussion で確定してからタスク生成へ進む。
+> §1・§2 は design discussion #1 で確定済み（クレート = `shiori-host32-ipc`・Option B-1・ビルド配線1案）。§3〜§5 は入力（requirements/research）と矛盾しない範囲で本設計が方向を確定済みの実装細部であり、要件レベルの gap や矛盾ではない。以降はタスク生成へ進める。
