@@ -418,7 +418,7 @@ impl ParentMessageWindow {
 ##### State Management
 
 - State model: `ParentShared { helper_hwnd: Cell<Option<u32>>, response_slot: ResponseSlot, 観測カウンタ }`。`wintf-winmsg-executor` が state を窓と同居させ WndProc へ `Pin<&S>` で渡す（UI スレッド固定ゆえ `Cell`/`RefCell`）。
-- Concurrency strategy: single-in-flight・再入受領・厳密ネスト。heartbeat は別スレッドから `PostMessageW(WM_NULL)` で GetMessage を起こす（bounded ループ制御）。
+- Concurrency strategy: single-in-flight・再入受領・厳密ネスト。**heartbeat（別スレッドからの `PostMessageW(WM_NULL)`）は bounded な pump フェーズ（`pump_until_hello_or` のハンドシェイク待機）専用**である。`send_request` 実行中は親が `SendMessageTimeout` でブロックし `MessageLoop` を回さないため、この間に WndProc へ再入するのは **helper が `SendMessage` で送る RESPONSE のみ**（同期送出＝OS が再入配送）で、キューに積まれた WM_NULL（`PostMessage`）はブロック中は配送されない。仮に WndProc が WM_NULL／非 WM_COPYDATA を受けても `None`（DefWindowProc 委譲）で即 return するため、`ResponseSlot` の `clear→store→take` 不変条件（InFlight↔Ready 状態機械）を壊さない。
 
 **Implementation Notes**
 
@@ -532,6 +532,7 @@ fn main() { /* 親HWND を arg/env で取得 → 窓生成 → HELLO 送出 → 
 2. **ハンドシェイク timeout**（3.4）: helper を起動しない／HELLO を送らせない条件で `pump_until_hello_or` が上限時間で `None` を返す。
 3. **応答 timeout / wedge**（5.2, 5.3）: 応答しない helper に対し `send_request` が上限時間で `IpcError::Timeout` を返し、親がハングしない。
 4. **helper 異常終了検出**（1.4）: helper 強制終了（`terminate`）を親が `poll_exit_kind` で `Abnormal`/`Terminated` として非ブロッキング検出。
+5. **不正フレーム隔離**（2.5）: 親窓へ実 WM_COPYDATA で未知タグ／`cbData` 不整合フレームを送り、観測カウンタ（`unknown_tags` 等）が増加し、破損 payload が上位（`ResponseSlot` / 呼び出し側）へ渡らないことを確認する（framing 関数の単体テストでは覆えない **WndProc 受信経路の隔離**を実配送で検証）。
 
 > i686 ビルド前提の統合テストは **PowerShell** で実行する（`cargo test`/`cargo build --target i686-pc-windows-msvc`）。往復 echo は helper exe（i686）を要するため、テスト手順（helper のビルド → 親テスト）を README/steering に固定する（Open Questions §4）。
 
