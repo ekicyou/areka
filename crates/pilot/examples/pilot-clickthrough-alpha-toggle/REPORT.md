@@ -49,6 +49,20 @@
 - **【最重要の罠】ドラッグ中は表示位置に関わらず `WS_EX_TRANSPARENT` を外したまま維持する**: ドラッグ中にカーソルが（追従遅延等で）判定円を外れると、通常なら applier が透過 ON へ戻す→**`SetCapture` が無効化されドラッグが崩壊**する。対策として `dragging: Arc<AtomicBool>` を設け、**ドラッグ中は applier の透過トグルを一切抑止**（`if desired != applied && !dragging`）、終了時に `state_changed` を notify して透過状態を再収束させる。modal な `HTCAPTION` 任せにせず自前 `SetCapture`＋明示フラグで制御すると挙動が読め、この罠を確実に回避できる（実装者が嵌まりやすい要点）。
 - **ダブルクリック終了（`WM_LBUTTONDBLCLK`→shutdown）**: 枠なし窓は閉じる UI が無いため。`WM_CLOSE` と同じ清掃経路に合流し、T8 の正常終了を実機で確認する手段も兼ねた（クラスは `CS_DBLCLKS` 登録済み＝dblclk が届く）。
 
+## 設計の最重要洞察：表示層と当たり判定層は独立した別レイヤー
+
+本 pilot の一番深い結論。「DComp を保ったままクリックスルー」を成立させた根本原理は、**表示と当たり判定が別々のレイヤーに属し独立に制御できる**こと:
+
+- **表示レイヤー ＝ DirectComposition visual tree**。これは HWND の redirection 描画の**「外」にあるコンポジタ層**で、`Commit` した内容を DWM が保持する（WM_PAINT/ULW 不要で維持される＝"置きっぱなし"が効く）。`WS_EX_NOREDIRECTIONBITMAP` で redirection surface を消すと、表示はこの DComp 層だけが担う。**visual の content には `IDCompositionSurface` でも合成用 swapchain（`CreateSwapChainForComposition`）でも載せられる** ＝ D3D の 3D／Live2D 等の GPU 描画をそのまま透過合成できる。
+- **当たり判定レイヤー ＝ HWND の窓矩形＋拡張スタイル**。`WS_EX_TRANSPARENT`（それを効かせる `WS_EX_LAYERED` フラグ）で制御。**DComp の per-pixel α は当たり判定に一切関与しない**。
+
+この2層が独立ゆえ:
+1. `WS_EX_NOREDIRECTIONBITMAP` と `WS_EX_LAYERED` は**表示手段として競合しない**（LAYERED を ULW/SLWA で表示に使わず、当たり判定スイッチとしてのみ借りるため）。ドキュメントの「should not mix」は"表示の二重化を避けよ"の意であって、両ビットを立てること自体のハード禁止ではない（実測: ex_style `0x280028` で両立）。
+2. だから **DComp の GPU 描画（3D／Live2D 含む）を維持したまま、当たり判定だけ `WS_EX_TRANSPARENT` トグルで別制御**できる。
+3. これが **3D／Live2D デスクトップマスコットが「透過表示＋キャラ部だけクリック受領」を実現している技術的からくり**：合成 swapchain に GPU でキャラを描き、DComp で per-pixel 透過合成し、αマスク連動の `WS_EX_TRANSPARENT` トグルでキャラ以外をクリックスルーさせる。本 pilot はその最小骨格（円＝キャラ相当）を実証した。
+
+本坑はこの「**表示 ＝ DComp（surface でも swapchain でも可）／当たり判定 ＝ HWND スタイル**」の分離を設計の土台に据えること。将来 3D／Live2D を載せる場合も、当たり判定側（αマスク→トグル）はこの pilot と同一のまま、表示側の content を swapchain に差し替えるだけで拡張できる。
+
 ## 本坑（wintf-clickthrough-alpha-toggle）への申し送り
 
 - ex_style は `WS_EX_NOREDIRECTIONBITMAP | WS_EX_TOPMOST | WS_EX_LAYERED | WS_EX_TRANSPARENT`（TRANSPARENT のみ動的トグル・他は固定）。`WS_EX_LAYERED` はフラグのみ・ULW/SLWA 非呼出。
