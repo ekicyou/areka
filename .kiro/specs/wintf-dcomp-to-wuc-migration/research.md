@@ -110,7 +110,7 @@ brief 記載の各ファイル・接続先を実在確認した。**全て実在
 4. **clip（角丸）等価**: DComp `IDCompositionRectangleClip`（角丸 8 半径・DPI スケール）の WUC 写像（`InsetClip`＋`CompositionRoundedRectangleGeometry`/`CompositionGeometricClip` 等）が「新能力導入禁止（要件 9.4）」に抵触しない等価範囲か。
 5. **32bit（i686）× WUC/DispatcherQueue**: WinRT interop の 32bit 動作（memory では host-32 で i686 ビルド実績あり・WUC は別）。
 6. **透過共存**: `WS_EX_NOREDIRECTIONBITMAP`＋`DesktopWindowTarget` の透過が DComp 時と同一に成立するか（DWM 合成は共通で成立見込みだが要検証）。
-7. **等価性検証手段**: 既存に描画回帰テスト（ピクセル比較）基盤があるか、無ければ R8 の受入をどう自動/半自動化するか。
+7. **等価性検証手段（方針決定済み・機構は design で確定）**: ディスカッション議題 1 で **自動ピクセル差分ハーネスを主たる受け入れ手段とする（R8.5/8.6）** と決定。design で確定すべきは**キャプチャ機構**——(a) サーフェス（D2D）層は WIC ビットマップ等へのレンダバックでビット等価比較可能（D2D 描画コード不変ゆえ確実な回帰ガード）、(b) 合成層（配置・Z 順・不透明度・clip）のキャプチャは DComp/WUC content で `PrintWindow` が黒画像化する等の癖があり、Desktop Duplication / DWM サムネイル等の決定論的キャプチャ手段の選定と DWM タイミング非決定性の扱いが要検証。決定論的キャプチャ不能な範囲のみ目視を残差フォールバック（R8.7）。
 
 ### 設計への推奨
 - **推奨アプローチ**: Option C（混成）を叩き台に。features 追加→R1 スパイク先行→デバイス/ターゲット/木/サーフェス/反映の順で層ごとに等価確認しながら in-place 差し替え。新規は Resource（`WucGraphicsResource`）と Ext（`com/wuc.rs`）に限定し、コンポーネント名と schedule 構造は温存して等価性を守る。
