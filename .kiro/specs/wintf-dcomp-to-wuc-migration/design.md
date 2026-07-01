@@ -349,8 +349,8 @@ trait DrawingSurfaceInteropExt {
 
 **Implementation Notes**
 - Integration: areka 本体は個別半径を構築せず（example/ULW guard のみ）だが `clip_sync.rs` が enum 全変種を扱うためビルド・挙動等価目的で全写像を実装。
-- Validation: 各変種を固定シーンで合成層キャプチャ比較（R8.7）。
-- Risks: PathGeometry の弧構築が DComp 個別半径と幾何一致するかは合成層キャプチャで確認（過渡は残差目視フォールバック）。
+- Validation: clip 各変種（特に個別半径 `RoundedRectangleIndividual`）は**決定論的ビットマップサンプル比較**で検証する——当該 clip 幾何を既知フィル（例: 全面塗り）に適用してオフスクリーン WIC render target へ描画し、`CopyPixels` で読み戻して**基準ビットマップサンプルとピクセル等価判定**する。合成層の全画面キャプチャ・目視残差には委ねない（要件 8.6）。
+- Risks: PathGeometry の弧構築が DComp 個別半径と幾何一致するかは上記ビットマップサンプル比較で決定論的に確認する。曖昧な差分閾値は設けず**ビット等価を基準**とする（弧丸め誤差で厳密一致が崩れる場合のみ、その画素範囲を明示して扱いを個別判断）。
 
 ### visual-tree（要約のみ）
 
@@ -386,7 +386,8 @@ trait DrawingSurfaceInteropExt {
 
 ### E2E / 描画等価性（R8・主受け入れ手段）
 - **サーフェス層ビット等価**（`surface_pixel_equivalence_test.rs`・要件 8.6）: **ゴールデン取得＝ランタイム二重描画方式**（永続ゴールデンを repo に持たない）。同一 `GraphicsCommandList` をテスト実行時にその場で (a) D2D 直描き（WIC render target・参照基準）と (b) WUC surface の `BeginDraw` D2D 出力の両方へ描画し、WIC `CopyPixels` 読み戻し→ハッシュ一致／差分ゼロを自動判定する。D2D 描画コードは移行で不変ゆえ「D2D 直描き基準」＝「移行前サーフェス出力」と論理等価であり、固定ゴールデンのバイナリ資産管理・腐敗を避けつつ決定論的回帰を担保する（個別シーンの過去凍結が必要になれば固定 commit ゴールデンへ拡張可）。
-- **合成層キャプチャ比較**（要件 8.7）: 固定シーン（visual 配置・z 順・opacity・clip 各変種）を Desktop Duplication でキャプチャし、移行前後を比較。`PrintWindow` は DComp/WUC content で黒画像化するため不採用。DWM タイミング非決定性は静止シーン安定待ちで吸収。決定論的キャプチャ不能な過渡のみ目視を残差フォールバック。
+- **clip 形状のビット等価**（要件 8.6・個別半径含む全変種）: clip はオフスクリーンで決定論的に検証できるため合成層キャプチャに載せない。既知フィルへ clip 幾何を適用して WIC render target へ描画→`CopyPixels`→**基準ビットマップサンプルとピクセル等価判定**（`clip_sync_system › Validation` 参照）。
+- **合成層キャプチャ比較**（要件 8.7）: 固定シーン（visual 配置・z 順・opacity）を Desktop Duplication でキャプチャし、移行前後を比較。`PrintWindow` は DComp/WUC content で黒画像化するため不採用。DWM タイミング非決定性は静止シーン安定待ちで吸収。決定論的キャプチャ不能な過渡のみ目視を残差フォールバック。
 - **透過共存**（要件 9.3）: `WS_EX_NOREDIRECTIONBITMAP`＋`DesktopWindowTarget` で per-pixel alpha が DComp 時と同一に成立することを R1 スパイクで確認。
 - **DispatcherQueue 終了ドレイン**（要件 3.3・R1 スパイク受入項目）: プロセス終了時に `ShutdownQueueAsync` が保留分をドレインし、`WucGraphicsResourceInner` の drop 順（controller を最後に宣言）に起因する shutdown クラッシュが無いことを R1 スパイクで確認する。
 
