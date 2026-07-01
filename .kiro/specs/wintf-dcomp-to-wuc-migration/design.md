@@ -385,7 +385,7 @@ trait DrawingSurfaceInteropExt {
 - `invalidate_dependent_components` 経由のデバイスロスト→再生成が WUC Resource でも成立。
 
 ### E2E / 描画等価性（R8・主受け入れ手段）
-- **サーフェス層ビット等価**（`surface_pixel_equivalence_test.rs`・要件 8.6）: 同一 `GraphicsCommandList` を (a) 移行前 D2D 出力（参照ゴールデン）と (b) WUC surface の `BeginDraw` D2D 出力へ描画し、WIC `CopyPixels` 読み戻し→ハッシュ一致／差分ゼロを自動判定。D2D 描画コード不変ゆえ確実な回帰ガード。
+- **サーフェス層ビット等価**（`surface_pixel_equivalence_test.rs`・要件 8.6）: **ゴールデン取得＝ランタイム二重描画方式**（永続ゴールデンを repo に持たない）。同一 `GraphicsCommandList` をテスト実行時にその場で (a) D2D 直描き（WIC render target・参照基準）と (b) WUC surface の `BeginDraw` D2D 出力の両方へ描画し、WIC `CopyPixels` 読み戻し→ハッシュ一致／差分ゼロを自動判定する。D2D 描画コードは移行で不変ゆえ「D2D 直描き基準」＝「移行前サーフェス出力」と論理等価であり、固定ゴールデンのバイナリ資産管理・腐敗を避けつつ決定論的回帰を担保する（個別シーンの過去凍結が必要になれば固定 commit ゴールデンへ拡張可）。
 - **合成層キャプチャ比較**（要件 8.7）: 固定シーン（visual 配置・z 順・opacity・clip 各変種）を Desktop Duplication でキャプチャし、移行前後を比較。`PrintWindow` は DComp/WUC content で黒画像化するため不採用。DWM タイミング非決定性は静止シーン安定待ちで吸収。決定論的キャプチャ不能な過渡のみ目視を残差フォールバック。
 - **透過共存**（要件 9.3）: `WS_EX_NOREDIRECTIONBITMAP`＋`DesktopWindowTarget` で per-pixel alpha が DComp 時と同一に成立することを R1 スパイクで確認。
 - **DispatcherQueue 終了ドレイン**（要件 3.3・R1 スパイク受入項目）: プロセス終了時に `ShutdownQueueAsync` が保留分をドレインし、`WucGraphicsResourceInner` の drop 順（controller を最後に宣言）に起因する shutdown クラッシュが無いことを R1 スパイクで確認する。
