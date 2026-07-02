@@ -25,7 +25,7 @@
   - _Requirements: 1.2, 3.4, 3.5, 3.6_
   - _Boundary: HelperLoadWiring_
   - _Depends: 1, 2_
-- [ ] 3.2 LOAD フレームのトリガ分類
+- [x] 3.2 LOAD フレームのトリガ分類
   - 分類純関数に「Load 受領→ロード実行トリガ」の分岐を追加し、従来の「既知だが無視」を置換する（ペイロードにパスを期待しない）
   - 既存分類（未知タグ・宣言長不整合→IgnoreBad）の非回帰
   - 観測可能な完了: 分類テストが TriggerLoad 分岐を検証して green（既存分類テストも通過）
@@ -170,3 +170,4 @@
 - Task 1: `vendors/pasta` の flat-C 3 署名は正確源とバイト一致（`extern "C"`≡`extern "cdecl"`・`load(HGLOBAL,usize)->bool`・`unload()->bool`・`request(HGLOBAL,*mut usize)->HGLOBAL`・Rust bool 1byte・`#[unsafe(no_mangle)]` 無装飾）。**入力 HGLOBAL は callee(DLL) が `GlobalFree` する規約**（`ShioriString::capture` の `has_free:true`）＝ホスト/testdll は自ら解放しない（testdll は逆に load 入力を GlobalFree して二重解放検出器とする）。load dir は ANSI(CP_ACP)・`GlobalAlloc(GMEM_FIXED=0)`。詳細は research.md §9。
 - Task 2: `spawn` の**関数引数順** `(helper_exe, load_dir, shiori_name, parent_hwnd)` と**子 arg 順**（arg1=parent_hwnd/arg2=load_dir/arg3=shiori_name）は別物。位置引数を stand-in で観測するには `.bat` が必要（`cmd /c "..."` 単一コマンドでは `%1..%3` 非展開）。新 pub const `LOAD_DIR_ENV`/`SHIORI_NAME_ENV`/`LOAD_ACK_TIMEOUT(30s)` は `process_host.rs` に定義済みだが **`lib.rs` の crate-root 再エクスポートは未追加**（SpawnContract boundary 外ゆえ保留）。後続タスク 6/7 でこれらを使う際は `lib.rs` へ再エクスポート追加するか module パス（`process_host::LOAD_ACK_TIMEOUT`）で参照すること。
 - Task 3.1: helper 起動パラメーター取得は純関数 `resolve_param(arg, env) -> Option<String>`（arg 優先・trim・空→env・両空→None）へ一般化。ラッパは `parent_hwnd_arg_env`(arg1/HOST32_PARENT_HWND)・`load_dir_arg_env`(arg2/HOST32_LOAD_DIR)・`shiori_name_arg_env`(arg3/HOST32_SHIORI_NAME)。main() は load_dir/shiori_name 欠落で `exit(2)`。**設計ドリフト（Task 3.2/6 で要調整）**: `HelperShared.load_dir` は設計 §320 では `PathBuf` だが 3.1 は取得生値の `String` で保持中（無条件 `#[allow(dead_code)]` 付き・未読取ゆえ）。Task 6 で `load_dir.join(&shiori_name)`（設計 §321・絶対 DLL パス組立）を行う際に `PathBuf` へ変換するか join 地点で `PathBuf::from` すること。shiori_name も `String` 保持。
+- Task 3.2: `InboundAction::TriggerLoad` 変種を新設し `classify_inbound` が `MsgTag::Load`（ペイロード無視）を TriggerLoad へ分類（IgnoreKnown から分離・R4.1）。`handle_message` の TriggerLoad アームは **no-crash プレースホルダ（eprintln のみ・`Some(LRESULT(0))`）**＝**Task 6 がここを proxy 確立＋load＋ack[1]/[0] 返送へ置換する**。ack/proxy/LOAD カウンタ/`mod shiori_proxy` は未着手（Task 5.1/6 の領分）。

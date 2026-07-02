@@ -64,8 +64,13 @@ fn respond(req: &[u8]) -> Vec<u8> {
 enum InboundAction {
     /// `Request` を受領。同梱の echo bytes を `Response` として親へ返送すべき。
     Reply(Vec<u8>),
-    /// framing 上は正当だが本 helper が応答しないタグ（`Hello`/`Load`/`Response`/`Unload`）。
-    /// crash させず無視する（記録のみ）。
+    /// `Load` を受領＝SHIORI ロード実行のトリガ（要件 4.1）。従来の「既知だが無視」を置換する。
+    /// **ペイロードを持たない**（wire でパスを運ばない・パスは arg/env の `load_dir` から得る）ため、
+    /// 受領フレームのペイロード有無を問わずこの動作へ写像される。実際のロード結線（proxy 確立・
+    /// `load` 呼出・ack 返送）は下流タスク（Task 6・WndProc の LOAD 結線）が担う。
+    TriggerLoad,
+    /// framing 上は正当だが本 helper が応答しないタグ（`Hello`/`Response`/`Unload`）。
+    /// crash させず無視する（記録のみ）。`Load` は `TriggerLoad` へ分離済みゆえ含まない。
     IgnoreKnown(MsgTag),
     /// 未知タグ・長さ不整合など不正フレーム。crash させず記録のみ・上位へ渡さない（要件 2.5）。
     IgnoreBad(FramingError),
@@ -79,6 +84,9 @@ enum InboundAction {
 fn classify_inbound(dw_data: usize, declared_len: usize, data: &[u8]) -> InboundAction {
     match copydata_payload(dw_data, declared_len, data) {
         Ok((MsgTag::Request, payload)) => InboundAction::Reply(respond(payload)),
+        // Load はロード実行トリガ（要件 4.1）。ペイロードは無視（有無を問わず TriggerLoad）。
+        // IgnoreKnown の一般アームより先に分離して受ける。
+        Ok((MsgTag::Load, _)) => InboundAction::TriggerLoad,
         Ok((tag, _)) => InboundAction::IgnoreKnown(tag),
         Err(err) => InboundAction::IgnoreBad(err),
     }
@@ -172,8 +180,16 @@ fn handle_message(s: &HelperShared, self_hwnd: HWND, msg: &WindowMessage) -> Opt
                 Err(e) => eprintln!("[helper] RESPONSE 送出失敗（観測）: {e:?}"),
             }
         }
+        InboundAction::TriggerLoad => {
+            // 本タスク（3.2）では分類のみを結線し、ロード実行（proxy 確立・load 呼出）と
+            // ack 返送は行わない（Task 6・WndProc の LOAD 結線の領分）。enum 網羅性を保つ
+            // ための最小プレースホルダとして受領を記録するのみで即 return する。
+            // Task 6 が本アームを「proxy 確立 → load → ack[1]/[0] 返送」へ置換する。
+            eprintln!("[helper] LOAD トリガ受領（結線は Task 6）");
+        }
         InboundAction::IgnoreKnown(tag) => {
-            // Hello/Load/Response/Unload は helper が能動応答しない。記録のみ（無応答）。
+            // Hello/Response/Unload は helper が能動応答しない。記録のみ（無応答）。
+            // Load は TriggerLoad へ分離済みゆえここには来ない。
             eprintln!("[helper] 応答対象外タグ受領（無視）: {tag:?}");
         }
         InboundAction::IgnoreBad(err) => {
@@ -413,13 +429,31 @@ mod classify_tests {
     }
 
     // 要件 4.2: 応答対象外の既知タグは IgnoreKnown（無応答・crash なし）。
+    // 注: Load は本タスク（3.2）で TriggerLoad へ分離したため、ここから除外する（R4.1）。
     #[test]
     fn known_nonrequest_tags_are_ignored() {
-        for tag in [MsgTag::Hello, MsgTag::Load, MsgTag::Response, MsgTag::Unload] {
+        for tag in [MsgTag::Hello, MsgTag::Response, MsgTag::Unload] {
             let raw = tag.as_u32() as usize;
             let action = classify_inbound(raw, 0, b"");
             assert_eq!(action, InboundAction::IgnoreKnown(tag));
         }
+    }
+
+    // 要件 4.1: Load 受領はロード実行トリガ（TriggerLoad）へ分類される。従来の
+    // 「既知だが無視（IgnoreKnown）」を置換する。ペイロードにパスを期待しない
+    // ゆえ、ペイロード有無を問わず TriggerLoad であること。
+    #[test]
+    fn load_classifies_to_trigger_load() {
+        let raw = MsgTag::Load.as_u32() as usize;
+
+        // ペイロード無し。
+        let action = classify_inbound(raw, 0, b"");
+        assert_eq!(action, InboundAction::TriggerLoad);
+
+        // ペイロード有り（wire でパスを運ばないため、内容は無視され同じく TriggerLoad）。
+        let payload = b"C:\\ghost\\master\\ignored-path";
+        let action = classify_inbound(raw, payload.len(), payload);
+        assert_eq!(action, InboundAction::TriggerLoad);
     }
 
     // 要件 2.5: 未知タグは crash させず IgnoreBad（記録のみ）。
