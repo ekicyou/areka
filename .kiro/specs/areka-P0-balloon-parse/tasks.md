@@ -2,8 +2,8 @@
 
 > `areka-parsers` クレートへ `balloon` モジュールを追加し、emo2 バルーン設定を幾何＋フォント subset の型付きモデルへ写像する parser を実装する。model→parse→fixture の一方向依存ゆえ全タスクは逐次（並行機会なし・`(P)` なし）。既存 `sakura`/foundation 規律を全面踏襲（`Result` 無し寛容 facade・NewType/opaque＋read-only accessor・`#[non_exhaustive]`・in-source `#[cfg(test)]`・新規外部依存ゼロ）。
 
-- [ ] 1. Foundation: `balloon` モジュールの足場を新設する
-- [ ] 1.1 `areka-parsers` に `balloon` モジュールを追加し公開面を集約する
+- [x] 1. Foundation: `balloon` モジュールの足場を新設する
+- [x] 1.1 `areka-parsers` に `balloon` モジュールを追加し公開面を集約する
   - `crates/areka-parsers/src/lib.rs` に `pub mod balloon;` を 1 行追加する（既存 `charset`/`kv`/`sakura` は無変更）
   - `balloon/mod.rs` を新設し、`mod model; mod parse;` 宣言＋公開 facade/型の `pub use` 集約のみを置く（`sakura/mod.rs`・`kv/mod.rs` 流儀）
   - 新規外部依存を追加しない（`Cargo.toml` 変更なし・std のみ）
