@@ -92,6 +92,14 @@ fn classify_inbound(dw_data: usize, declared_len: usize, data: &[u8]) -> Inbound
 struct HelperShared {
     /// 親のメッセージ窓 HWND（u32 ワイヤ値）。HELLO 送出先＆RESPONSE 返送先。
     parent_hwnd: u32,
+    /// ロード対象のリソース根（arg2/`HOST32_LOAD_DIR` 由来・R3.4）。LOAD トリガ結線（下流タスク）で
+    /// `load_dir\<SHIORI名>` の DLL 特定と flat-C `load` 引数に用いる。本タスクでは保持のみ（非読取）。
+    #[allow(dead_code)]
+    load_dir: String,
+    /// 受領した SHIORI 名（arg3/`HOST32_SHIORI_NAME` 由来）。そのまま使用し descript.txt を解釈しない
+    /// （R3.6）。本タスクでは保持のみ・非読取（LOAD 結線は下流タスク）。
+    #[allow(dead_code)]
+    shiori_name: String,
     /// 観測カウンタ: 送出した HELLO 数。
     hellos_sent: Cell<u64>,
     /// 観測カウンタ: 受領した REQUEST 数。
@@ -103,9 +111,11 @@ struct HelperShared {
 }
 
 impl HelperShared {
-    fn new(parent_hwnd: u32) -> Self {
+    fn new(parent_hwnd: u32, load_dir: String, shiori_name: String) -> Self {
         Self {
             parent_hwnd,
+            load_dir,
+            shiori_name,
             hellos_sent: Cell::new(0),
             requests_handled: Cell::new(0),
             responses_sent: Cell::new(0),
@@ -187,8 +197,10 @@ impl HelperMessageWindow {
     /// message-only 窓を生成し、起動時に親へ HELLO（自 HWND を u32 LE・要件 3.1）を送出する。
     ///
     /// `parent_hwnd` は親から受けた u32 ワイヤ値（HELLO 送出先＆RESPONSE 返送先）。
-    fn create(parent_hwnd: u32) -> Result<Self, String> {
-        let shared = HelperShared::new(parent_hwnd);
+    /// `load_dir`／`shiori_name` は arg/env 由来のロード対象パラメーター（R3.4）で `HelperShared` へ
+    /// 保持する（LOAD トリガ結線は下流タスクの領分・本タスクでは保持のみ）。
+    fn create(parent_hwnd: u32, load_dir: String, shiori_name: String) -> Result<Self, String> {
+        let shared = HelperShared::new(parent_hwnd, load_dir, shiori_name);
         // Fn（非 FnMut）ゆえ new を用いる。self_hwnd は WndProc の msg.hwnd から得る。
         let window = Window::new(
             WindowType::MessageOnly,
@@ -224,27 +236,72 @@ impl HelperMessageWindow {
     }
 }
 
-/// 親 HWND の u32 ワイヤ値を arg（第 1 引数）または env（`HOST32_PARENT_HWND`）から取得する。
+/// arg-n 優先・env fallback の**決定的な純関数**（design.md §322・R3.4/3.5）。
 ///
-/// arg 優先。いずれも無い／解釈不能なら `None`（呼び出し側が起動失敗として扱う）。
-fn parent_hwnd_from_env() -> Option<u32> {
-    if let Some(v) = std::env::args().nth(1).and_then(|a| a.trim().parse::<u32>().ok()) {
-        return Some(v);
-    }
-    std::env::var("HOST32_PARENT_HWND")
-        .ok()
-        .and_then(|s| s.trim().parse::<u32>().ok())
+/// arg 値・env 値を引数として受け取り（`std::env` を直接読まない＝単体テスト可能）、それぞれ
+/// `trim` した上で**空でない最初の値**を採用する。arg が空文字／空白のみなら env へ委ね、両者とも
+/// 空／不在なら `None` を返す（呼出側が必須パラメーター欠落として起動失敗＝`exit(2)` に用いる）。
+/// 採用値は `trim` 済み。`parent_hwnd`／`load_dir`／`shiori_name` の 3 適用で共用する。
+/// **値は arg/env から取得し cwd からは推測しない**（R3.4）。
+fn resolve_param(arg: Option<String>, env: Option<String>) -> Option<String> {
+    let pick = |v: Option<String>| -> Option<String> {
+        v.map(|s| s.trim().to_string()).filter(|s| !s.is_empty())
+    };
+    pick(arg).or_else(|| pick(env))
+}
+
+/// 実 args/env を読む薄いラッパ（`resolve_param` へ委譲）。
+///
+/// 親 HWND の u32 ワイヤ値を arg（第 1 引数・index 1）優先・env（`HOST32_PARENT_HWND`）fallback で
+/// 取得し、10 進 u32 へ parse する。値の取得規約は [`resolve_param`] と共通（arg 優先・空 trim）。
+/// parse 不能なら `None`（呼出側が起動失敗として扱う）。
+fn parent_hwnd_arg_env() -> Option<u32> {
+    resolve_param(std::env::args().nth(1), std::env::var("HOST32_PARENT_HWND").ok())
+        .and_then(|s| s.parse::<u32>().ok())
+}
+
+/// 実 args/env を読む薄いラッパ（`resolve_param` へ委譲）。
+///
+/// `load_dir` を arg（第 2 引数・index 2）優先・env（`HOST32_LOAD_DIR`）fallback で取得する。
+/// env キー名は host 側（Task 2）が確定した `HOST32_LOAD_DIR` と厳密一致させる。
+/// **値は arg/env から取得し cwd から推測しない**（R3.4）。
+fn load_dir_arg_env() -> Option<String> {
+    resolve_param(std::env::args().nth(2), std::env::var("HOST32_LOAD_DIR").ok())
+}
+
+/// 実 args/env を読む薄いラッパ（`resolve_param` へ委譲）。
+///
+/// SHIORI 名を arg（第 3 引数・index 3）優先・env（`HOST32_SHIORI_NAME`）fallback で取得する。
+/// env キー名は host 側（Task 2）が確定した `HOST32_SHIORI_NAME` と厳密一致させる。
+/// helper は受領した SHIORI 名をそのまま使用し、descript.txt を自ら解釈しない（R3.6）。
+fn shiori_name_arg_env() -> Option<String> {
+    resolve_param(std::env::args().nth(3), std::env::var("HOST32_SHIORI_NAME").ok())
 }
 
 fn main() {
-    let Some(parent_hwnd) = parent_hwnd_from_env() else {
+    let Some(parent_hwnd) = parent_hwnd_arg_env() else {
         eprintln!(
             "[helper] 親 HWND（u32 ワイヤ値）が未指定です。arg1 または env HOST32_PARENT_HWND で渡してください。"
         );
         std::process::exit(2);
     };
 
-    let win = match HelperMessageWindow::create(parent_hwnd) {
+    // load_dir・SHIORI 名は arg/env から取得（cwd 推測禁止・R3.4）。欠落は決定的な起動失敗＝
+    // exit(2)（R3.5・parent_hwnd 前例と同型）。親は HELLO 不達＋プロセス終了で決定的に観測する。
+    let Some(load_dir) = load_dir_arg_env() else {
+        eprintln!(
+            "[helper] load_dir が未指定です。arg2 または env HOST32_LOAD_DIR で渡してください。"
+        );
+        std::process::exit(2);
+    };
+    let Some(shiori_name) = shiori_name_arg_env() else {
+        eprintln!(
+            "[helper] SHIORI 名が未指定です。arg3 または env HOST32_SHIORI_NAME で渡してください。"
+        );
+        std::process::exit(2);
+    };
+
+    let win = match HelperMessageWindow::create(parent_hwnd, load_dir, shiori_name) {
         Ok(w) => w,
         Err(e) => {
             eprintln!("[helper] 窓生成/HELLO 失敗: {e}");
@@ -258,6 +315,59 @@ fn main() {
     // `win` は本スコープで生存し続け、Drop（窓破棄）は main 終了時。
     let _keep_alive = &win;
     MessageLoop::run(|_msg_loop, _msg| FilterResult::Forward);
+}
+
+#[cfg(test)]
+mod resolve_param_tests {
+    use super::*;
+
+    // R3.4: arg 優先。arg=Some, env=Some → arg（parent_hwnd/load_dir/shiori_name 3 適用の共通観点）。
+    #[test]
+    fn arg_takes_priority_over_env() {
+        let got = resolve_param(Some("C:\\ghost\\master".to_string()), Some("C:\\env".to_string()));
+        assert_eq!(got.as_deref(), Some("C:\\ghost\\master"));
+    }
+
+    // R3.4: env fallback。arg=None → env（load_dir/shiori_name が env のみ供給された経路）。
+    #[test]
+    fn env_used_when_arg_absent() {
+        let got = resolve_param(None, Some("shiori.dll".to_string()));
+        assert_eq!(got.as_deref(), Some("shiori.dll"));
+    }
+
+    // R3.4: arg が空文字/空白のみ → env へ（trim 後に空でない最初の値を採る・parent_hwnd と同型）。
+    #[test]
+    fn blank_arg_falls_through_to_env() {
+        assert_eq!(
+            resolve_param(Some("   ".to_string()), Some("fallback".to_string())).as_deref(),
+            Some("fallback")
+        );
+        assert_eq!(
+            resolve_param(Some(String::new()), Some("fallback".to_string())).as_deref(),
+            Some("fallback")
+        );
+    }
+
+    // R3.4: arg も env も空白のみ → None（両欠落と等価に扱う）。
+    #[test]
+    fn blank_arg_and_blank_env_yield_none() {
+        assert_eq!(resolve_param(Some("  ".to_string()), Some("\t".to_string())), None);
+    }
+
+    // R3.5: arg=None, env=None → None（必須パラメーター欠落＝呼出側が exit(2) の判定に用いる）。
+    #[test]
+    fn both_absent_yield_none() {
+        assert_eq!(resolve_param(None, None), None);
+    }
+
+    // 採用値は trim される（cwd 推測でなく arg/env 由来の値を正規化して返す）。
+    #[test]
+    fn adopted_value_is_trimmed() {
+        assert_eq!(
+            resolve_param(Some("  C:\\ghost\\master  ".to_string()), None).as_deref(),
+            Some("C:\\ghost\\master")
+        );
+    }
 }
 
 #[cfg(test)]
@@ -382,8 +492,12 @@ mod loopback_tests {
             u32::from_le_bytes(encode_hwnd_le(parent.hwnd()));
 
         // --- helper 窓生成（HELLO は create 内で親へ送出）---
-        let helper = HelperMessageWindow::create(parent_hwnd_u32)
-            .expect("HelperMessageWindow 生成に失敗");
+        let helper = HelperMessageWindow::create(
+            parent_hwnd_u32,
+            "C:\\ghost\\master".to_string(),
+            "shiori.dll".to_string(),
+        )
+        .expect("HelperMessageWindow 生成に失敗");
         let helper_hwnd_u32 = u32::from_le_bytes(encode_hwnd_le(helper.hwnd()));
 
         // HELLO 送出経路が動いた: 親が helper HWND を復号一致で受領（要件 3.1）。
