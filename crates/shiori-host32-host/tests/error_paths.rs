@@ -297,7 +297,8 @@ fn helper_abnormal_exit_is_detected_nonblocking() {
 
     // 窓不要ゆえ parent_hwnd は任意値（helper は HELLO 送出に使うが、本テストは HELLO を観測しない）。
     let arbitrary_parent_hwnd: u32 = 0;
-    let handle = spawn(&helper_exe, &ghostdir, arbitrary_parent_hwnd)
+    // 本テストは実 LOAD をしないため shiori_name は妥当な既定でよい（契約上は必須引数）。
+    let handle = spawn(&helper_exe, &ghostdir, "shiori.dll", arbitrary_parent_hwnd)
         .expect("i686 helper の spawn に失敗（helper exe を確認）");
     let mut guard = HelperGuard { handle };
 
