@@ -95,7 +95,8 @@
 
 ## 6. design フェーズへの申し送り（Research Needed / 決定待ち）
 
-R1. **「本体の実描画 α バッファ」(R2.3) の具体的取得源**: (a) per-widget `AlphaMask`（WIC 静止画 α・現実的）／(b) WUC GPU 合成結果の CPU readback（新設・大工事・現状経路なし）／(c) ハイブリッド。R2.4「表示更新に追随」の充足度が (a)/(b) で変わる。**最重要**。
+R1. ~~**「本体の実描画 α バッファ」(R2.3) の具体的取得源**: (a) per-widget `AlphaMask`（WIC 静止画 α・現実的）／(b) WUC GPU 合成結果の CPU readback（新設・大工事・現状経路なし）／(c) ハイブリッド。R2.4「表示更新に追随」の充足度が (a)/(b) で変わる。**最重要**。~~
+   **【解決済み・2026-07-02 要件ディスカッション議題1】**: (a)/(b)/(c) の二択は誤前提。既存 `hit_test`／`hit_test_in_window`（`ecs/layout/hit_test/mod.rs` L437/L464）が **座標→`Option<Entity>`（`None`＝透過）** を返す**汎用・合成バックエンド非依存**の当たり判定関数として既に存在する。GPU フレームバッファの CPU readback は**不要**。「実描画α」はシーングラフ評価が体現する（各エンティティの `HitTest` モード＝`Bounds` 合成α〔`opacity×foreground.a` 閾値〕／`AlphaMask` per-widget ピクセル判定／`NamedRegions`、ツリー走査で複数 widget の OR 集約は自動）。→ 要件 R2.1〜R2.4 を「αバッファ readback」から「シーングラフ・ヒットテスト（`Option<Entity>`／`None`＝透過）」へ改訂済み。§6-R5（マルチ widget 集約）も本走査で自動解決ゆえ消滅。残る設計論点は「ヒットテストを走らせる実行スレッド（UI スレッド World アクセス）と、ワーカ（`GetCursorPos`）からの起床境界」＝§6-R2/R3 に集約。
 R2. **カーソル監視ワーカが α 判定に使う状態の受け渡し方式**: ワーカは UI スレッド World を触れない。α マスク＋bounds＋ウィンドウ位置＋DPI の**スナップショットを Arc 共有**（`VsyncEventBridge` 同様の Arc パターン）か、ワーカは `GetCursorPos` だけ行い判定は UI スレッド側で行うか。判定の実行スレッド境界の確定。
 R3. **座標変換チェーンの正典**（R8）: `GetCursorPos`（スクリーン物理）→ウィンドウ client 原点→`global.bounds` 正規化→マスク座標。既存 `hit_test_in_window` を再利用するか、ワーカ用に軽量複製するか。DPI 変化・モニタ跨ぎ時の再スナップショット契機。
 R4. **ドラッグ抑止フラグの導管**（R5）: 既存 `WindowDragContextResource`（Arc<Mutex>）へ相乗りか、pilot 同様 `dragging: Arc<AtomicBool>` を新設して drag state 遷移時に更新するか。終了時の「再収束」notify の発火点（`JustEnded` 遷移）。

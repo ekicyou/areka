@@ -21,7 +21,7 @@
   - `WM_NCHITTEST`→`HTTRANSPARENT` 経由の透過（プロセス境界を越えず本要件では採用不可）。
 - **Adjacent expectations**:
   - 表示合成は既存の GPU 合成層（DComp/WUC）が担い、本機能はその表示を変更しない。表示層と当たり判定層は独立し、本機能は当たり判定層のみを制御する。
-  - `AlphaMask` の生成・実描画 α バッファは既存グラフィックス経路が提供し、本機能はその参照側である。
+  - 本体の既存ヒットテスト（`hit_test`／`hit_test_in_window` によるシーングラフ評価）と各エンティティの `HitTest` モード・`AlphaMask` 生成は既存経路が提供し、本機能はその参照側である。
   - 拡張スタイル反映・ウィンドウ生成基盤（既存のスタイル適用・facade）は本機能が利用する前提として存在する。
 
 ## Requirements
@@ -37,16 +37,16 @@
 3. The click-through 機構 shall クリック透過を成立させるために GPU 合成描画（合成層の表示内容）を無効化・省略しない。
 4. Where キャラクターの表示内容が 2D サーフェスまたは合成スワップチェーン（3D／Live2D 相当）のいずれである場合, the click-through 機構 shall 当たり判定の挙動を表示内容の種類に依存させない。
 
-### Requirement 2: α マスク連動のキャラクター領域クリック受領
+### Requirement 2: ヒットテスト連動のキャラクター領域クリック受領
 
-**Objective:** マスコット利用者として、見えているキャラクターのピクセル領域だけがクリックを受け取り、見えない透明ピクセルはクリックを受け取らないでほしい。それにより見た目と操作範囲が一致する。
+**Objective:** マスコット利用者として、見えているキャラクター領域だけがクリックを受け取り、見えない透明領域はクリックを受け取らないでほしい。それにより見た目と操作範囲が一致する。
 
 #### Acceptance Criteria
 
-1. When カーソルがキャラクターの実描画 α マスク上で不透明（当たり）と判定される位置にある, the click-through 機構 shall そのウィンドウでクリックを受領可能な状態にする。
-2. When カーソルが実描画 α マスク上で透明（非当たり）と判定される位置にある, the click-through 機構 shall そのウィンドウをクリック透過状態にする。
-3. The click-through 機構 shall 当たり判定に本体の実描画 α バッファ（実際に表示されているキャラクターの α）を参照し、固定矩形や外部の仮マスクに依存しない。
-4. When キャラクターの表示内容が更新され実描画 α マスクが変化した, the click-through 機構 shall 更新後の α マスクに基づいて当たり判定領域を追随させる。
+1. When カーソル位置が本体のヒットテスト（`hit_test_in_window`／シーングラフ評価）でいずれかのエンティティにヒットする（`Option<Entity>` が `Some`）, the click-through 機構 shall そのウィンドウでクリックを受領可能な状態にする。
+2. When カーソル位置が本体のヒットテストでどのエンティティにもヒットしない（`Option<Entity>` が `None`）, the click-through 機構 shall そのウィンドウをクリック透過状態にする。
+3. The click-through 機構 shall 当たり判定に本体の既存ヒットテスト（各エンティティの `HitTest` モード＝`Bounds` 合成α／`AlphaMask` ピクセル単位／`NamedRegions` に従うシーングラフ評価）を参照し、固定矩形や外部の仮マスクに依存しない。合成バックエンド（ULW／WUC）に依存せず、GPU フレームバッファの CPU readback を要求しない。
+4. When 表示シーングラフ（エンティティ配置・α・`AlphaMask`）が更新された, the click-through 機構 shall 更新後のヒットテスト結果に基づいて当たり判定領域を追随させる。
 
 ### Requirement 3: カーソル監視と状態変化最適化
 
@@ -108,7 +108,7 @@
 #### Acceptance Criteria
 
 1. While per-monitor-v2 の高 DPI 環境, the click-through 機構 shall 見えているキャラクター領域と当たり判定領域を座標一致させる。
-2. While 複数モニタにまたがる、または DPI 倍率の異なるモニタ間を移動する状況, the click-through 機構 shall α マスク判定に用いるカーソル座標とマスク座標の対応を保ち、当たり判定を破綻させない。
+2. While 複数モニタにまたがる、または DPI 倍率の異なるモニタ間を移動する状況, the click-through 機構 shall ヒットテストに用いるカーソル座標（`GetCursorPos` 物理座標）とシーングラフ座標の対応を保ち、当たり判定を破綻させない。
 3. When ウィンドウが移動した, the click-through 機構 shall 移動後の位置でも見た目のキャラクター領域と当たり判定領域の一致を維持する。
 
 ### Requirement 9: リリースビルド互換・可搬性・依存最小
