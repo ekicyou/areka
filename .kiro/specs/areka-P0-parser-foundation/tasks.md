@@ -1,7 +1,7 @@
 # Implementation Plan
 
-- [ ] 1. Foundation: 依存導入とモジュール土台
-- [ ] 1.1 encoding_rs 依存導入と共通基盤モジュールの公開面・スタブ整備
+- [x] 1. Foundation: 依存導入とモジュール土台
+- [x] 1.1 encoding_rs 依存導入と共通基盤モジュールの公開面・スタブ整備
   - ルート workspace 依存に encoding_rs 0.8 を追加し、areka-parsers から workspace 参照で解決する
   - クレート description の "std-only" 相当文言を "minimal-dependency" 相当へ更新する（承認済み意図的逸脱の明記）
   - areka_parsers に charset／kv の2モジュールを公開宣言として追加する（既存 sakura は無変更）

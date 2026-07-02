@@ -13,6 +13,7 @@ repository = "https://github.com/ekicyou/areka"
 publish = false
 
 [workspace.dependencies]
+encoding_rs = "0.8"
 human-panic = "2.0.6"
 rand = "0.10.0"
 windows-numerics = "0.3.1"
