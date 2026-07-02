@@ -43,7 +43,8 @@ emo2 のバルーン設定（balloon `descript.txt` ＋ 画像別 `balloonsXXs.t
 3. The balloon parser shall 自動折返し点 `wordwrappoint`（x, および存在すれば y）をモデルに含める。
 4. The balloon parser shall テキスト描画有効矩形 `validrect`（top, bottom, left, right）をモデルに含める。
 5. The balloon parser shall フォント設定 `font.name`・`font.height`・`font.color`（r, g, b）をモデルに含める。
-6. Where モデル化対象キーが入力に存在しないとき, the balloon parser shall 当該値を「未指定」として表現し, 組込み既定値で埋めない。
+6. Where モデル化対象キーがどの層にも存在しないとき, the balloon parser shall 当該値を「未指定（None）」として 0 やその他の固定値と**区別可能な**形で表現し, 組込み既定値・ゼロ値で代替しない。
+   - 根拠: 正典 ukadoc（`descript_balloon`）は `origin`・`wordwrappoint`・`validrect` の省略時値を明示的に「不明」と記載しており, parser が焼き込める権威ある既定値が存在しない（`windowposition.x/y` のみ既定 `0` が明記されるが emo2 は両画像別層で必ず明示するため未到達）。省略時の真の値はバルーン画像サイズ等に依存する計算であり得るため, その決定は画像サイズを知る消費側（render/text-layer）へ委ねる。parser は「ファイルに無い」という事実を `None` で欠落なく伝えることのみを担う。
 7. The balloon parser shall choice/link/scroll 系キー（cursor・anchor・number・arrow・sstpmarker・sstpmessage・onlinemarker・communicatebox・marker）をモデル化せず, 幾何＋フォント subset に限定する。
 8. The balloon parser shall モデルの各値へ読み取り専用のアクセス手段を提供し, 将来のキー追加に対する拡張の余地を型に残す。
 
@@ -54,7 +55,7 @@ emo2 のバルーン設定（balloon `descript.txt` ＋ 画像別 `balloonsXXs.t
 1. When 呼び出し側がバルーン `descript.txt`（既定層）と画像別ファイル（`balloonsXXs.txt` または `balloonkXXs.txt`・上書き層）の両方を渡したとき, the balloon parser shall 両者を 1 つのバルーンモデルへマージする。
 2. When 同一キーが画像別層と descript 層の双方に存在するとき, the balloon parser shall 画像別層の値を優先する。
 3. When あるキーが画像別層に存在せず descript 層のみに存在するとき, the balloon parser shall descript 層の値を採用する。
-4. When あるキーがどちらの層にも存在しないとき, the balloon parser shall 当該値を「未指定」として表現する。
+4. When あるキーがどちらの層にも存在しないとき, the balloon parser shall 当該値を「未指定（None）」として 0 やその他の固定値と区別可能な形で表現する（R2.6 と同一方針＝ゼロ値・組込み既定で代替しない）。
 5. Where 呼び出し側が descript 層のみ（画像別層なし）を渡したとき, the balloon parser shall descript 層の値のみからモデルを構築する。
 
 ### Requirement 4: バルーン座標の符号解釈
