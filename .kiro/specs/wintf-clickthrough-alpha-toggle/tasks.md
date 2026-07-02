@@ -17,7 +17,7 @@
   - _Boundary: ClickThroughRegistry_
 
 - [ ] 2. Core: カーソル監視ワーカと判定ロジック
-- [ ] 2.1 (P) カーソル監視ワーカ（別スレッド・`event_listener` 起床・RAII）
+- [x] 2.1 (P) カーソル監視ワーカ（別スレッド・`event_listener` 起床・RAII）
   - 専用ワーカスレッドで `GetCursorPos`（screen physical）を継続取得し、カーソル移動時のみ `event_listener::Event` で UI スレッドを起床する。`&World` は触れない
   - 最新座標を原子的に保持し、`latest_pos.store(...)` → `event.notify(...)` の順序を厳守（逆順による座標遅延レース回避）。tokio・外部 async ランタイム不使用
   - `Arc<AtomicBool>` stop_flag ＋ `Drop` で `stop→join` の RAII（`VsyncEventBridge` 準拠）
