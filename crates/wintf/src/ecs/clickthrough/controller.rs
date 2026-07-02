@@ -26,6 +26,7 @@ use crate::ecs::hit_test_in_window;
 use crate::ecs::world::EcsWorld;
 use crate::ecs::{PhysicalPoint, WindowPos};
 use crate::win_style::{apply_click_through, apply_layered_companion};
+use windows::Win32::Foundation::{HWND, POINT};
 
 use super::{ClickThroughRegistry, CursorMonitorBridge, DesiredState};
 
@@ -117,16 +118,19 @@ pub(crate) fn prune_dead_targets(world: &World, registry: &mut ClickThroughRegis
 /// - `world`: ECS tick 完了後（`GlobalArrangement`／`AlphaMask`／`DragState` 確定後）の
 ///   settled World 参照。単一 UI スレッドで tick と排他されるため中間状態を読まない。
 /// - `registry`: 監視対象窓と `last_applied`。差分ガードの真実源。
-/// - `cursor_screen`: ワーカ最新カーソル座標（screen physical・`i32`）。
+/// - `screen_to_client`: 対象 HWND の screen physical カーソルを client physical へ変換する
+///   関数（production は `screen_to_client_point`＝OS `ScreenToClient` に委譲）。`None` は
+///   当該窓 skip（無効 HWND 等）。テストは決定的な模擬変換を注入して状態機械のみ検証する。
 ///
 /// # 各対象窓の処理
 /// 0. `layered_applied` が偽なら `apply_layered_companion` で `WS_EX_LAYERED` 同伴フラグを
 ///    1 回立てる（pilot REPORT 必須条件: DComp 窓は `WS_EX_TRANSPARENT` 単独ではマウス
 ///    透過が効かない）。成功時のみ真へ書き戻し、失敗時は当該窓を skip（次サイクル再試行）。
-/// 1. `WindowPos.position`（クライアント原点・screen physical）を World から取得。
-///    無い窓（未マップ等）はスキップ。
-/// 2. `client = cursor_screen - position` を計算し（座標変換は既存 `hit_test_in_window`
-///    へ委譲＝screen 前提の変換チェーンをそのまま再利用・R8）、`hit_test_in_window` を呼ぶ。
+/// 1. `WindowPos.position` の有無で未マップ窓を判定し、無ければスキップ（mapped-guard）。
+/// 2. `screen_to_client(hwnd)` で client physical を得て `hit_test_in_window` を呼ぶ。座標変換は
+///    OS(`ScreenToClient`)へ委譲する（NCHITTEST キャッシュ・OS 入力経路と同一）。`cursor -
+///    WindowPos.position` の手引き算は、高 DPI・マルチモニタで position が窓の真の物理
+///    クライアント原点とズレると判定と表示がずれるため採らない（4.2 実動検証で発覚）。
 /// 3. `snapshot_drag_state()`（一度読み・下記）と `last_applied` を渡して
 ///    [`resolve_transition`] で desired を決める。`None`（差分なし or ドラッグ抑止）は skip。
 /// 4. 変化時のみ `apply_click_through` を **1 回** 適用し、**`Ok` の時だけ** レジストリの
@@ -141,7 +145,7 @@ pub(crate) fn prune_dead_targets(world: &World, registry: &mut ClickThroughRegis
 pub(crate) fn evaluate_targets(
     world: &World,
     registry: &mut ClickThroughRegistry,
-    cursor_screen: PhysicalPoint,
+    mut screen_to_client: impl FnMut(HWND) -> Option<PointF>,
 ) {
     // 窓破棄追随（R7.2 / Error Handling: Lifecycle）: 巡回前に、World 上に生存しない対象
     // （despawn 済み Entity・`Window` コンポーネント喪失）をレジストリから刈り取る。これにより
@@ -176,18 +180,24 @@ pub(crate) fn evaluate_targets(
             }
         }
 
-        // 窓クライアント原点（screen physical）。未マップ等で無ければスキップ。
-        let Some(pos) = world.get::<WindowPos>(window).and_then(|wp| wp.position) else {
+        // 未マップ窓（WindowPos.position 未確定）はスキップ（mapped-guard）。
+        if world
+            .get::<WindowPos>(window)
+            .and_then(|wp| wp.position)
+            .is_none()
+        {
             trace!(?window, "clickthrough: WindowPos.position 未確定 — skip");
             continue;
-        };
+        }
 
-        // screen physical カーソル → 当該窓のクライアント physical（cursor - 原点）。
-        // 座標系対応（DPI/マルチモニタ/移動）は既存 hit_test_in_window の変換チェーンへ委譲。
-        let client = PointF::new(
-            (cursor_screen.x - pos.x) as f32,
-            (cursor_screen.y - pos.y) as f32,
-        );
+        // screen physical カーソル → 当該窓の client physical。変換は OS(ScreenToClient)へ
+        // 委譲する（NCHITTEST キャッシュ・OS 入力経路と同一）。`cursor - WindowPos.position` の
+        // 手引き算は高 DPI・マルチモニタで position が窓の真の物理クライアント原点とズレると
+        // 判定領域が表示とズレるため使わない（4.2 実動検証で発覚）。失敗（無効 HWND 等）は skip。
+        let Some(client) = screen_to_client(hwnd) else {
+            trace!(?window, "clickthrough: screen→client 変換失敗 — skip");
+            continue;
+        };
 
         let hit = hit_test_in_window(world, window, client);
 
@@ -208,6 +218,26 @@ pub(crate) fn evaluate_targets(
                 warn!(?window, error = %e, "clickthrough: apply_click_through 失敗 — skip");
             }
         }
+    }
+}
+
+/// screen physical → client physical を OS(`ScreenToClient`)へ委譲する変換（production 用）。
+///
+/// NCHITTEST キャッシュ（`pointer::nchittest_cache`）・OS 入力経路（`window_proc::mouse_click`）と
+/// 同一の変換で、frame/DPI/マルチモニタを OS に委ねる。`WindowPos.position` を手引き算する旧実装は、
+/// 高 DPI・マルチモニタで position が窓の真の物理クライアント原点とズレると判定と表示がずれるため
+/// 採らない（4.2 実動検証で発覚）。無効 HWND 等で失敗した場合は `None`。
+fn screen_to_client_point(hwnd: HWND, screen: PhysicalPoint) -> Option<PointF> {
+    use windows::Win32::Graphics::Gdi::ScreenToClient;
+    let mut pt = POINT {
+        x: screen.x,
+        y: screen.y,
+    };
+    // SAFETY: Win32 境界。ScreenToClient は hwnd と POINT への有効ポインタを要する。所有権不変。
+    if unsafe { ScreenToClient(hwnd, &mut pt).as_bool() } {
+        Some(PointF::new(pt.x as f32, pt.y as f32))
+    } else {
+        None
     }
 }
 
@@ -412,7 +442,9 @@ async fn run_click_through(
         match world_rc.try_borrow() {
             Ok(ecs_world) => {
                 let mut reg = registry.borrow_mut();
-                evaluate_targets(ecs_world.world(), &mut reg, cursor);
+                evaluate_targets(ecs_world.world(), &mut reg, |hwnd| {
+                    screen_to_client_point(hwnd, cursor)
+                });
             }
             Err(_) => {
                 trace!("clickthrough: World borrow 失敗 — このサイクルを安全スキップ");
@@ -641,6 +673,16 @@ mod tests {
         ex & WS_EX_TRANSPARENT.0 != 0
     }
 
+    /// テスト用 screen→client 変換の模擬。`world_with_hittable_window` が用いる
+    /// WindowPos.position=(100,200) を模して `client = cursor - (100,200)` を返す。
+    ///
+    /// production は `screen_to_client_point`（OS `ScreenToClient`）が実 HWND の実座標で
+    /// 変換するが、状態機械テストは実 HWND 座標に依存させず決定的な模擬変換で検証する
+    /// （座標変換の正しさは OS ScreenToClient に委ねる＝4.2 実動検証で確認）。
+    fn sim_s2c(cursor: PhysicalPoint) -> impl Fn(HWND) -> Option<PointF> {
+        move |_hwnd| Some(PointF::new((cursor.x - 100) as f32, (cursor.y - 200) as f32))
+    }
+
     /// 原点 (100,200) の窓に、client (50,50)=screen (150,250) で当たる子を仕込んだ
     /// World を作る。窓 Entity を返す。cursor screen (150,250) が hit、(0,0) が no-hit。
     fn world_with_hittable_window(world: &mut World) -> Entity {
@@ -681,7 +723,7 @@ mod tests {
             reg.set_last_applied(window, DesiredState::Transparent);
 
             // cursor screen (150,250) → client (50,50) → widget にヒット。
-            evaluate_targets(&world, &mut reg, PhysicalPoint::new(150, 250));
+            evaluate_targets(&world, &mut reg, sim_s2c(PhysicalPoint::new(150, 250)));
 
             assert_eq!(
                 reg.last_applied(window),
@@ -711,7 +753,7 @@ mod tests {
             reg.register(window, hwnd); // 既定 Opaque
 
             // cursor screen (0,0) → client (-100,-200) → widget に当たらない（no-hit）。
-            evaluate_targets(&world, &mut reg, PhysicalPoint::new(0, 0));
+            evaluate_targets(&world, &mut reg, sim_s2c(PhysicalPoint::new(0, 0)));
 
             assert_eq!(
                 reg.last_applied(window),
@@ -741,12 +783,12 @@ mod tests {
             reg.set_last_applied(window, DesiredState::Transparent);
 
             // 1 回目: hit → Opaque へ変化。
-            evaluate_targets(&world, &mut reg, PhysicalPoint::new(150, 250));
+            evaluate_targets(&world, &mut reg, sim_s2c(PhysicalPoint::new(150, 250)));
             assert_eq!(reg.last_applied(window), Some(DesiredState::Opaque));
             assert!(!is_transparent(hwnd));
 
             // 2 回目: 同一 hit・last_applied=Opaque → resolve_transition が None → 無適用・不変。
-            evaluate_targets(&world, &mut reg, PhysicalPoint::new(150, 250));
+            evaluate_targets(&world, &mut reg, sim_s2c(PhysicalPoint::new(150, 250)));
             assert_eq!(
                 reg.last_applied(window),
                 Some(DesiredState::Opaque),
@@ -793,7 +835,7 @@ mod tests {
             reg.set_last_applied(window, DesiredState::Transparent);
 
             // JustEnded は抑止解除。hit=Some（screen 150,250）→ Opaque へ再収束。
-            evaluate_targets(&world, &mut reg, PhysicalPoint::new(150, 250));
+            evaluate_targets(&world, &mut reg, sim_s2c(PhysicalPoint::new(150, 250)));
             assert_eq!(
                 reg.last_applied(window),
                 Some(DesiredState::Opaque),
@@ -831,7 +873,7 @@ mod tests {
             reg.register(window, hwnd); // layered_applied = false
 
             // 初回評価: hit の有無に関わらず同伴フラグが立つ（cursor は hit 位置）。
-            evaluate_targets(&world, &mut reg, PhysicalPoint::new(150, 250));
+            evaluate_targets(&world, &mut reg, sim_s2c(PhysicalPoint::new(150, 250)));
 
             assert!(is_layered(hwnd), "初回評価で WS_EX_LAYERED が立つべき");
             assert_eq!(
@@ -841,7 +883,7 @@ mod tests {
             );
 
             // 2 回目の評価でも LAYERED は保持されたまま（落とさない・冪等）。
-            evaluate_targets(&world, &mut reg, PhysicalPoint::new(0, 0));
+            evaluate_targets(&world, &mut reg, sim_s2c(PhysicalPoint::new(0, 0)));
             assert!(is_layered(hwnd), "以後の評価でも LAYERED は保持される");
         }));
         destroy_test_hwnd(hwnd);
@@ -862,7 +904,7 @@ mod tests {
             let mut reg = ClickThroughRegistry::new();
             reg.register(window, hwnd); // Opaque
 
-            evaluate_targets(&world, &mut reg, PhysicalPoint::new(10, 10));
+            evaluate_targets(&world, &mut reg, sim_s2c(PhysicalPoint::new(10, 10)));
 
             // position 未確定ゆえ skip・last_applied は初期 Opaque のまま。
             assert_eq!(reg.last_applied(window), Some(DesiredState::Opaque));
@@ -959,7 +1001,7 @@ mod tests {
 
             // 破棄後の評価: prune で対象から外れ、hit=Some でも apply が走らない。
             // cursor screen (150,250) は本来 hit=Some → Opaque へ動くはずだが、prune 済みゆえ不変。
-            evaluate_targets(&world, &mut reg, PhysicalPoint::new(150, 250));
+            evaluate_targets(&world, &mut reg, sim_s2c(PhysicalPoint::new(150, 250)));
 
             assert!(reg.is_empty(), "破棄窓は評価前 prune で除去される");
             assert!(

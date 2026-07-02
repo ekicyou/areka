@@ -32,7 +32,7 @@ CursorMonitorBridge                    ClickThroughController (async loop)
                                          drag = snapshot_drag_state()（1 パス 1 回読み・ループ前）
                                          各対象窓について:
                                            未適用なら apply_layered_companion(hwnd)（初回 1 回・冪等）
-                                           client = cursor_screen - WindowPos.position
+                                           client = ScreenToClient(hwnd, cursor_screen)  ← OS 変換に委譲
                                            hit = hit_test_in_window(world, window, client)
                                            desired = resolve_transition(hit, &drag, last_applied)
                                            desired が None（差分なし/ドラッグ抑止）→ skip
@@ -48,7 +48,7 @@ CursorMonitorBridge                    ClickThroughController (async loop)
 - **順序不変条件（store→notify）**: ワーカは移動検知時に `latest_pos.store(...)` を **先に**、その後で `cursor_event.notify(usize::MAX)` を行う。逆順だと UI 側が 1 通知分古い座標を読む稀レースが生じる（`VsyncEventBridge` と同一規律）。
 - **`event_listener` 起床（tokio 非使用）**: スレッド跨ぎ通知は既存の `event_listener` 起床パターンに倣う。tokio 等の外部非同期ランタイムは持ち込まない。UI ループは `wintf_winmsg_executor::spawn_local` で UI スレッドに投入される。
 - **listen-before-work 規律**: UI ループは待機の **前** に `listener = wake_event.listen()` を arm する。処理中に届く notify を落とさない（取りこぼし防止）。
-- **既存シーングラフ・ヒットテスト連動**: 判定は `hit_test_in_window(&World, window, client_point) -> Option<Entity>` に委ねる。`Some`→不透過、`None`→透過。座標変換（DPI／マルチモニタ／ウィンドウ移動）は既存 `hit_test_in_window` の変換チェーンへ委譲する（`client = cursor_screen - WindowPos.position` を i32 で計算し、呼び出し時に `PointF::new(x as f32, y as f32)` へキャスト）。
+- **既存シーングラフ・ヒットテスト連動**: 判定は `hit_test_in_window(&World, window, client_point) -> Option<Entity>` に委ねる。`Some`→不透過、`None`→透過。screen physical カーソル → client physical の変換は **OS の `ScreenToClient(hwnd, cursor)` に委譲**する（NCHITTEST キャッシュ・OS 入力経路と同一の変換）。`cursor_screen - WindowPos.position` の手引き算は、高 DPI・マルチモニタで `WindowPos.position` が窓の真の物理クライアント原点とズレると判定領域が表示とズレるため採らない（4.2 実動検証で発覚・訂正）。`hit_test_in_window` は受け取った client physical に `WindowPos.position` を足して screen 空間で走査する（DPI/マルチモニタ/移動は `ScreenToClient` が吸収）。
 - **差分ガード（`last_applied`）**: `resolve_transition` が「今回望ましい状態」と `last_applied` を比較し、同一なら `None`（再適用しない）、異なる時のみ `Some(desired)`（ちょうど 1 回適用）を返す。真実源は `ClickThroughRegistry` で、書き戻しは `apply_click_through` が `Ok` の時のみ（`Err` は据え置き＋`warn!`・次サイクル再試行）。
 - **二重起床（カーソル移動 notify ＋ VSync tick）**: UI ループはワーカのカーソル移動 notify と、VSync tick（vblank 毎）の relay の **いずれでも** 起床する（単一の共有 `Arc<Event>` を両者が notify・select 併用なし）。カーソルが静止していても表示シーングラフは更新され得る（SERIKO アニメ・サーフェス差し替えでαが変化）ため、tick 相乗りで毎フレーム再評価して起床契機への依存を断つ。差分ガードにより実際の `SetWindowPos` は変化時のみ発火するので、毎フレーム評価でも適用コストは増えない。
 - **post-tick 評価**: ヒットテストは当該フレームの ECS 更新スケジュール完了後（`GlobalArrangement`／`AlphaMask`／`DragState` が確定した settled World）に実行する。tick 途中（レイアウト未確定・αマスク生成前）の中間状態は読まない。VSync tick は relay タスクが「vblank を待って `wake_event.notify`」する形で中継し、評価は常に settled な World を読む。
