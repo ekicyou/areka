@@ -83,11 +83,12 @@ emo2 が起動して喋る。下記 5 トラックを結線して達成（⓪ �
 - `areka-P0-host32-request` — SHIORI/3.0 build＋marshal＋response Value＋charset。✔ x64 が emo2 OnBoot の Value 受領
 - `areka-P0-host32-lifecycle` — helper msg loop＋OnSecondChange poll＋unload＋crash監視。✔ N秒運転→clean unload
 
-**parsers（並行・単体テスト可・host 不要）**
+**parsers（単体テスト可・host 不要。foundation が先行依存＝完全並行ではない）**
 - `areka-P0-sakura-parse` — emo2 タグ subset→token。✔ boot script を token 化
-- `areka-P0-shell-parse` — surfaces.txt/descript→surface モデル。✔ emo2 shell parse
-- `areka-P0-balloon-parse` — balloon descript/Ns マージ→モデル。✔ emo2-kakukaku parse
-- `areka-P0-package-mount` — install.txt/dir→mount。✔ emo2 layout 解決
+- `areka-P0-parser-foundation` — **パーサー共通基盤**: charset デコード（冒頭 `charset` 行→encoding_rs 再デコード・全パーサー共通）＋ KV 読み込み（素朴マップ・surface 以外の全パーサー共通）。✔ charset 付き入力→KV マップ化（旧 `areka-P0-balloon-parse` を 2026-07-02 開発リジェクト→リネーム。知見は同 brief に集約）
+- `areka-P0-shell-parse` — surfaces.txt/descript→surface モデル（foundation 依存）。✔ emo2 shell parse
+- `areka-P0-balloon-parse` — balloon 3段参照優先度（sXXs/kXXs 起点＞descript＞既定）解決→モデル（foundation 依存・着手時に再切り出し）。✔ emo2-kakukaku parse
+- `areka-P0-package-mount` — install.txt/dir→mount（foundation 依存）。✔ emo2 layout 解決
 
 **runtime 制御階層（上→下に駆動・両 anim engine は dola 上）**
 - `areka-P0-conductor` — SHIORI イベント循環（OnSecondChange pump・host-32 送受・Value を sakura-engine へ）。✔ OnBoot→Value 受領→再生開始

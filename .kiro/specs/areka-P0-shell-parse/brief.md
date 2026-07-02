@@ -1,6 +1,6 @@
 # Brief: areka-P0-shell-parse（本坑 / main・M1 M-boot / parser トラック）
 
-> **種別**: 本坑（main）。M1 `areka-P0-emo2-boot` の **parser トラック**（roadmap「parsers＝並行・単体テスト可・host 不要」）。**依存は無し＝即着手可・安全並走**（`shell-parse ∥ balloon-parse ∥ package-mount` の一員）。
+> **種別**: 本坑（main）。M1 `areka-P0-emo2-boot` の **parser トラック**（roadmap「parsers＝並行・単体テスト可・host 不要」）。**依存: `areka-P0-parser-foundation`（charset デコード＋KV 共通基盤・2026-07-02 新設）が先行**。foundation 完了後は `shell-parse ∥ balloon-parse ∥ package-mount` で並走安全（同クレート別モジュール・非衝突）。
 > **規律**: emo2 が実際に使う機能のみ実装（過剰・予測実装は禁止）。拡張は型の `#[non_exhaustive]` シームのみ残す。
 
 ## Problem
