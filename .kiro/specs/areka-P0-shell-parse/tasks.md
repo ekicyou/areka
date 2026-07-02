@@ -19,8 +19,8 @@
   - _Boundary: model_
   - _Depends: 1.1_
 
-- [ ] 3. Core: surfaces.txt 構文層（lexer）
-- [ ] 3.1 (P) surfaces.txt をブロック/行/CSV へ区切る構文スキャナを実装する
+- [x] 3. Core: surfaces.txt 構文層（lexer）
+- [x] 3.1 (P) surfaces.txt をブロック/行/CSV へ区切る構文スキャナを実装する
   - 行指向の線形スキャナで、ブロック（surfaceNNN / surface.appendNNN / descript / kero.surface.alias）境界と、ブロック内の CSV・ドット付きキー・[id,...] 配列値を字句分割する（意味割当はしない）
   - コメント行・空行を無視し、charset 行と descript ブロックをスキップ対象として認識する
   - 未閉じブロック・未知先頭語を寛容に吸収して走査を中断せず、内部トークンはモジュール外非公開にする
