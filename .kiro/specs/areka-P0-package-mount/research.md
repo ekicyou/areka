@@ -159,3 +159,27 @@ A の内側の設計判断を具体化した中庸案。`package::resolve(ghost_
   - マウントモデルのパス表現（`PathBuf` 絶対 or 相対、下流 host-32 の CP_ACP 前提との受け渡し境界）（設計判断④）。
   - submodule 分割粒度の最終決定（設計判断⑤）。
 - **正典参照済み（追加調査不要）**: `seriko.defaultsurfacedirectoryname` 既定=`master`、`shell/master` 必須、`shiori` canonical 既定=`shiori.dll`（ただし R2.3 で推測禁止）。
+
+---
+
+## 7. 設計フェーズ確定事項（design.md 反映済み・2026-07-02）
+
+> ディスカバリ種別: **light**（既存 `areka-parsers` クレートへの extension・接ぎ木点が確立済み）。ukadoc 既定値は §1.5/§4 で正典確認済みのため追加 web リサーチ不要。設計レビューゲート: **1 パス通過（修正なし）**。
+
+**採用アーキテクチャ**: Option A の器（`package` module 追加・`sakura` 規約踏襲）＋ Option C の中身（`resolve(&Path) -> Result<MountModel, MountError>`・`std::fs` を `resolve` に閉じ込め・charset/KV は foundation 委譲）。submodule は `kv` 流儀で `model` ＋ `resolve` の 2 本（`sakura` の 4 分割は不要）。
+
+**5 つの開放設計判断の確定**:
+
+| # | 判断項目 | 確定 | 根拠 |
+|---|----------|------|------|
+| ① | エラー方針（`Result` か欠落保持か） | **ハイブリッド**。致命（`Err(MountError)`）＝起点不在(StartPointMissing)・起点読取不能(StartPointUnreadable)・shell dir 不在(ShellDirMissing)。非致命（`Option`）＝`shiori` 未指定・名前値未指定 | R1.6/3.3/5.1 が「不在＝現実の失敗」、R2.3 が「shiori 未指定は非致命の欠落」を示唆＝候補(b)が要件最整合 |
+| ② | `shiori` 未指定の表現 | **`ShioriMount.file: Option<String>`（None）**。ukadoc canonical 既定 `shiori.dll` を**推測採用しない** | R2.3 が既定推測を明示的に禁止（要件が ukadoc 既定を上書き） |
+| ③ | クレート純度と `std::fs` | **I/O を `resolve` submodule に局所化**し、`lib.rs` doc に「`package` のみローカルツリー走査を許容」と補記。トレイト注入（Option B）は過剰実装ゆえ不採用 | R4.2「ローカルディレクトリツリーとその中のテキストファイルのみを入力」が I/O 許容を示唆・R5.2 過剰実装禁止 |
+| ④ | マウントモデルの形状 | `MountModel{ names: GhostNames, shiori: ShioriMount, shell: ShellMount }`。パスは **`PathBuf`**（`ghost_root` に `join`）。`#[non_exhaustive]`＋`Clone,Debug,PartialEq,Eq`（文字列/パスのみゆえ `Eq` 付与可）。CP_ACP 変換は消費側（host-32）境界の責務 | 本 spec は「パス文字列の解決まで」所有（brief/Boundary）。sakura の最小 derive 流儀踏襲（ただし `f32`/`Duration` 不在ゆえ `Eq` 追加） |
+| ⑤ | submodule 分割粒度 | **`model` ＋ `resolve` の 2 本**（facade は `resolve.rs` の `pub fn` を `mod.rs` で `pub use`）。字句/意味分離は不要（KV は foundation 済） | `kv` の「単一責務ゆえ内部最小」を範とする・過剰分割回避（R5.2） |
+
+**設計判断⑥（`type,ghost` 受理失敗）**: 要件ディスカッション #1 で解決済（SSP 所在ベース識別）。design では `type` 分岐を作らず、識別は `ghost/master/descript.txt` の所在で行う（R1.2/1.3）。設計判断①に包含され独立判断としては消滅。
+
+**参照キー確定（R5.2 過剰実装禁止の徹底）**: `resolve` が参照する descript キーは `name` / `sakura.name` / `kero.name` / `shiori` / `seriko.defaultsurfacedirectoryname` の 5 つのみ。`type`（所在識別ゆえ非参照）・`id`・`charset`（foundation decode が吸収）・`craftman`・`homeurl` 等は無視。
+
+**観測可能失敗の範囲確定**: 致命は 3 種（起点不在・起点読取不能・shell dir 不在）に限定。**SHIORI DLL の物理存在確認は行わない**（host-32 の責務）。SHIORI ディレクトリ `ghost/master` は起点 descript.txt の親ゆえ存在確定済み。
