@@ -140,8 +140,8 @@ A の内側の設計判断を具体化した中庸案。`package::resolve(ghost_
 5. **submodule 分割粒度（過剰実装回避）。**
    `sakura` は `model/lexer/decode/parse` の 4 分割だが package の責務は小さい。判断: `model`＋`resolve`（＋公開 facade は `resolve` に同居 or `mod.rs` の `pub use` のみ）で足りるか、それとも parse（KV→フィールド抽出）と resolve（ツリー解決）を分けるか。過剰分割は `kv` mod.rs の「単一責務ゆえ内部 1 本」の判断を範とする。
 
-6. **`type,ghost` 受理失敗の扱い。**
-   R1.2 は「`type,ghost` を含むとき受理」。含まない/別 type（例 `type,shell`）のときの挙動が未明示。判断: これを致命 `Err`（ゴーストパッケージではない）とするか、非致命とするか。emo2 起点は `type,ghost` を持つため主経路は通るが、失敗系テストの定義に必要。
+6. **`type,ghost` 受理失敗の扱い。** → **【要件ディスカッション #1 で解決済（2026-07-02・SSP 準拠）】**
+   ~~R1.2 は「`type,ghost` を含むとき受理」。含まない/別 type のときの挙動が未明示。~~ ukadoc `type,種別`（ghost）＝「省略不可／**SSP では ghost/master にある descript.txt なら ghost と識別される**」＋`manual_ghost`「これがないと本体に認識されない」より、**SSP は所在ベース識別**と確定。要件を改訂: 識別は `ghost/master/descript.txt` の所在で行い（R1.2）、`type,ghost` は確認的で欠落は失敗としない（R1.3）、失敗は descript.txt 不在のみ（R1.6）。過剰な type-mismatch 分岐は作らない（Req 5.2 過剰実装禁止＋SSP 所在識別）。設計判断としては消滅（残る fatal/非致命の型表現は設計判断①に包含）。
 
 ---
 

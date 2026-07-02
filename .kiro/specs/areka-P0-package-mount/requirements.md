@@ -13,7 +13,7 @@
 ## Boundary Context
 
 - **In scope**:
-  - 展開済みゴーストパッケージの `ghost/master/descript.txt` を起点とした、ゴースト識別（`type,ghost` の確認）と名前情報（`name`／`sakura.name`／`kero.name`）の取得。
+  - 展開済みゴーストパッケージの `ghost/master/descript.txt` を起点とした、ゴースト識別（**SSP 準拠の所在ベース識別**＝`ghost/master` に descript.txt が所在すれば ghost と識別。`type,ghost` は確認的フィールドで、その欠落自体は失敗としない）と名前情報（`name`／`sakura.name`／`kero.name`）の取得。
   - SHIORI マウント先ディレクトリの解決（`ghost/master`）と、そこで宣言される SHIORI ファイル名（emo2 では `pasta.dll`）の取得。
   - shell マウント先ディレクトリの解決（ukadoc の既定シェルディレクトリ名規約に従い、指定が無ければ `master` = `shell/master`）。
   - 解決結果を単一のマウントモデル値として返すこと。
@@ -40,10 +40,11 @@
 #### Acceptance Criteria
 
 1. When 展開済みゴーストパッケージのルートパスが与えられたとき, the package loader shall `ghost/master/descript.txt` を起点として読み込む。
-2. When `ghost/master/descript.txt` が `type,ghost` を含むとき, the package loader shall それをゴーストパッケージとして受理する。
-3. When 起点定義に `name`／`sakura.name`／`kero.name` が含まれるとき, the package loader shall それらの名前値をマウントモデルに含める。
-4. The package loader shall 起点定義ファイルの文字コード判定と KV 読み込みを `areka-P0-parser-foundation` が提供する共通基盤（charset デコード＋KV マップ化）に委ね、本 spec では文字コード判定や KV 分割ロジックを重複実装しない。
-5. If `ghost/master/descript.txt` が存在しないとき, then the package loader shall マウント解決の失敗として観測可能に表現する（黙って空を返さない）。
+2. When `ghost/master/descript.txt` が所在するとき, the package loader shall それをゴーストパッケージとして受理する（SSP 準拠の**所在ベース識別**＝ukadoc `type,種別`「ghost/master にある descript.txt なら ghost と識別される」）。
+3. Where 起点定義に `type,ghost` が含まれるとき, the package loader shall それを確認的フィールドとして扱う。`type` は ukadoc 上「省略不可」だが SSP は所在で識別するため, the package loader shall `type` 行の欠落自体を失敗として扱わない（所在ベース識別を優先する）。
+4. When 起点定義に `name`／`sakura.name`／`kero.name` が含まれるとき, the package loader shall それらの名前値をマウントモデルに含める。
+5. The package loader shall 起点定義ファイルの文字コード判定と KV 読み込みを `areka-P0-parser-foundation` が提供する共通基盤（charset デコード＋KV マップ化）に委ね、本 spec では文字コード判定や KV 分割ロジックを重複実装しない。
+6. If `ghost/master/descript.txt` が存在しないとき, then the package loader shall マウント解決の失敗として観測可能に表現する（黙って空を返さない＝ukadoc「これがないと本体に認識されない」に対応）。
 
 ### Requirement 2: SHIORI マウント先の解決
 
