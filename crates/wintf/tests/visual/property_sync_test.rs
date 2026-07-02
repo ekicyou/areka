@@ -7,12 +7,9 @@
 
 use bevy_ecs::prelude::*;
 use windows::core::Result;
-use wintf::com::dcomp::DCompositionDeviceExt;
-use wintf::ecs::{
-    DCompGraphicsResource, Visual, VisualGraphics, Window, visual_property_sync_system,
-};
+use wintf::ecs::{Visual, VisualGraphics, Window, visual_property_sync_system};
 
-use super::common::setup_graphics;
+use super::common::{WucVisualFactory, setup_graphics};
 
 fn run_sync(world: &mut World) {
     let mut schedule = Schedule::default();
@@ -20,14 +17,13 @@ fn run_sync(world: &mut World) {
     schedule.run(world);
 }
 
-/// 実 Visual を持つテストワールドをセットアップして (world, dcomp) を返す
-fn setup() -> Result<(World, DCompGraphicsResource)> {
+/// 実 Visual を持つテストワールドをセットアップして (world, factory) を返す
+fn setup() -> Result<(World, WucVisualFactory)> {
     let graphics = setup_graphics()?;
-    let d2d = graphics.d2d_device().expect("d2d device");
-    let dcomp_resource = DCompGraphicsResource::new(d2d)?;
+    let factory = WucVisualFactory::new(&graphics)?;
     let mut world = World::new();
     world.insert_resource(graphics);
-    Ok((world, dcomp_resource))
+    Ok((world, factory))
 }
 
 /// 非 Window エンティティ: offset + opacity の両方を設定する経路が完走する
@@ -36,9 +32,8 @@ fn setup() -> Result<(World, DCompGraphicsResource)> {
 /// GlobalArrangement を連鎖挿入するため、クエリの全要求コンポーネントが揃う。
 #[test]
 fn syncs_offset_and_opacity_for_non_window_entity() -> Result<()> {
-    let (mut world, dcomp_resource) = setup()?;
-    let dcomp = dcomp_resource.dcomp().expect("dcomp device");
-    let visual = dcomp.create_visual()?;
+    let (mut world, factory) = setup()?;
+    let visual = factory.create_visual()?;
 
     world.spawn((
         Visual {
@@ -56,7 +51,7 @@ fn syncs_offset_and_opacity_for_non_window_entity() -> Result<()> {
 /// 無効な VisualGraphics（COM Visual なし）はスキップされる
 #[test]
 fn skips_entity_with_invalid_visual_graphics() -> Result<()> {
-    let (mut world, _dcomp_resource) = setup()?;
+    let (mut world, _factory) = setup()?;
 
     world.spawn((Visual::default(), VisualGraphics::default()));
     world.flush();
@@ -69,9 +64,8 @@ fn skips_entity_with_invalid_visual_graphics() -> Result<()> {
 /// Window エンティティは offset 設定がスキップされ opacity のみ設定される
 #[test]
 fn window_entity_skips_offset_branch() -> Result<()> {
-    let (mut world, dcomp_resource) = setup()?;
-    let dcomp = dcomp_resource.dcomp().expect("dcomp device");
-    let visual = dcomp.create_visual()?;
+    let (mut world, factory) = setup()?;
+    let visual = factory.create_visual()?;
 
     world.spawn((
         Window::default(),
@@ -87,9 +81,8 @@ fn window_entity_skips_offset_branch() -> Result<()> {
 /// is_visible=false は opacity 0.0 の分岐を通る
 #[test]
 fn invisible_visual_takes_zero_opacity_branch() -> Result<()> {
-    let (mut world, dcomp_resource) = setup()?;
-    let dcomp = dcomp_resource.dcomp().expect("dcomp device");
-    let visual = dcomp.create_visual()?;
+    let (mut world, factory) = setup()?;
+    let visual = factory.create_visual()?;
 
     world.spawn((
         Visual {
@@ -108,9 +101,8 @@ fn invisible_visual_takes_zero_opacity_branch() -> Result<()> {
 /// 範囲外 opacity は clamped_opacity() 経由でクランプされる分岐を通る
 #[test]
 fn out_of_range_opacity_is_clamped_before_set() -> Result<()> {
-    let (mut world, dcomp_resource) = setup()?;
-    let dcomp = dcomp_resource.dcomp().expect("dcomp device");
-    let visual = dcomp.create_visual()?;
+    let (mut world, factory) = setup()?;
+    let visual = factory.create_visual()?;
 
     world.spawn((
         Visual {

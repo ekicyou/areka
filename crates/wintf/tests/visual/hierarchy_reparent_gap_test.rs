@@ -9,12 +9,21 @@
 
 use bevy_ecs::hierarchy::ChildOf;
 use bevy_ecs::prelude::*;
+use windows::UI::Composition::{ContainerVisual, Visual as WucVisual};
 use windows::core::{Interface, Result};
-use wintf::com::dcomp::*;
-use wintf::ecs::DCompGraphicsResource;
 use wintf::ecs::{Visual, VisualGraphics, visual_hierarchy_sync_system};
 
-use super::common::setup_graphics;
+use super::common::{WucVisualFactory, setup_graphics};
+
+/// WUC 移行: DComp の add_visual(insertAbove=false, ref=None) は
+/// ContainerVisual.Children().InsertAtBottom に対応。
+fn add_child(parent: &WucVisual, child: &WucVisual) -> Result<()> {
+    parent
+        .cast::<ContainerVisual>()?
+        .Children()?
+        .InsertAtBottom(child)?;
+    Ok(())
+}
 
 fn run_sync(world: &mut World) {
     let mut schedule = Schedule::default();
@@ -27,34 +36,29 @@ fn run_sync(world: &mut World) {
 #[test]
 fn reparent_keeps_stale_parent_visual_cache() -> Result<()> {
     let graphics = setup_graphics()?;
-    let d2d = graphics.d2d_device().expect("D2Dデバイスが無効");
-    let dcomp_resource = DCompGraphicsResource::new(d2d).expect("DCompGraphicsResource作成失敗");
-    let dcomp = dcomp_resource
-        .dcomp()
-        .expect("dcomp device should exist")
-        .clone();
+    let factory = WucVisualFactory::new(&graphics)?;
 
     let mut world = World::new();
     world.insert_resource(graphics);
 
     // 親A（同期済み状態を構築）
-    let visual_a = dcomp.create_visual()?;
+    let visual_a = factory.create_visual()?;
     let parent_a = world
         .spawn((Visual::default(), VisualGraphics::new(visual_a.clone())))
         .id();
 
     // 親B
-    let visual_b = dcomp.create_visual()?;
+    let visual_b = factory.create_visual()?;
     let parent_b = world
         .spawn((Visual::default(), VisualGraphics::new(visual_b.clone())))
         .id();
     let _ = parent_b; // ECS 階層上の新親（DComp 側は同期されないことを検証する）
 
     // 子: 親Aに同期済み（parent_visual キャッシュ = visual_a、DComp 上も A に接続）
-    let visual_c = dcomp.create_visual()?;
+    let visual_c = factory.create_visual()?;
     let mut child_vg = VisualGraphics::new(visual_c.clone());
     child_vg.set_parent_visual(Some(visual_a.clone()));
-    visual_a.add_visual(&visual_c, false, None)?;
+    add_child(&visual_a, &visual_c)?;
     let child = world
         .spawn((Visual::default(), child_vg, ChildOf(parent_a)))
         .id();
@@ -92,30 +96,25 @@ fn reparent_keeps_stale_parent_visual_cache() -> Result<()> {
 #[test]
 fn old_parent_resync_detaches_moved_child_without_reattach() -> Result<()> {
     let graphics = setup_graphics()?;
-    let d2d = graphics.d2d_device().expect("D2Dデバイスが無効");
-    let dcomp_resource = DCompGraphicsResource::new(d2d).expect("DCompGraphicsResource作成失敗");
-    let dcomp = dcomp_resource
-        .dcomp()
-        .expect("dcomp device should exist")
-        .clone();
+    let factory = WucVisualFactory::new(&graphics)?;
 
     let mut world = World::new();
     world.insert_resource(graphics);
 
     // 親A・親B・同期済みの子（A に接続）
-    let visual_a = dcomp.create_visual()?;
+    let visual_a = factory.create_visual()?;
     let parent_a = world
         .spawn((Visual::default(), VisualGraphics::new(visual_a.clone())))
         .id();
-    let visual_b = dcomp.create_visual()?;
+    let visual_b = factory.create_visual()?;
     let parent_b = world
         .spawn((Visual::default(), VisualGraphics::new(visual_b.clone())))
         .id();
 
-    let visual_c = dcomp.create_visual()?;
+    let visual_c = factory.create_visual()?;
     let mut child_vg = VisualGraphics::new(visual_c.clone());
     child_vg.set_parent_visual(Some(visual_a.clone()));
-    visual_a.add_visual(&visual_c, false, None)?;
+    add_child(&visual_a, &visual_c)?;
     let moved_child = world
         .spawn((Visual::default(), child_vg, ChildOf(parent_a)))
         .id();
@@ -124,7 +123,7 @@ fn old_parent_resync_detaches_moved_child_without_reattach() -> Result<()> {
     world.entity_mut(moved_child).insert(ChildOf(parent_b));
 
     // 新しい未同期の子 D を A の下に追加 → A が affected_parents 入りして再同期される
-    let visual_d = dcomp.create_visual()?;
+    let visual_d = factory.create_visual()?;
     let new_child = world
         .spawn((
             Visual::default(),

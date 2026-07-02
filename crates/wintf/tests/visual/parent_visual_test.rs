@@ -4,23 +4,35 @@
 //! on_remove フックによる自動削除をテストする。
 
 use bevy_ecs::prelude::*;
-use windows::core::Result;
-use wintf::com::dcomp::*;
-use wintf::ecs::DCompGraphicsResource;
+use windows::UI::Composition::{ContainerVisual, Visual};
+use windows::core::{Interface, Result};
 use wintf::ecs::VisualGraphics;
 
-use super::common::setup_graphics;
+use super::common::{WucVisualFactory, setup_graphics};
+
+/// WUC 移行: DComp の add_visual(insertAbove=false, ref=None) 相当。
+fn add_child(parent: &Visual, child: &Visual) -> Result<()> {
+    parent
+        .cast::<ContainerVisual>()?
+        .Children()?
+        .InsertAtBottom(child)?;
+    Ok(())
+}
+
+/// WUC 移行: DComp の remove_visual 相当。
+fn remove_child(parent: &Visual, child: &Visual) -> Result<()> {
+    parent.cast::<ContainerVisual>()?.Children()?.Remove(child)?;
+    Ok(())
+}
 
 /// VisualGraphics が parent_visual フィールドを持つことを確認
 #[test]
 fn test_visual_graphics_has_parent_visual_field() -> Result<()> {
     let graphics = setup_graphics()?;
-    let d2d = graphics.d2d_device().expect("D2Dデバイスが無効");
-    let dcomp_resource = DCompGraphicsResource::new(d2d).expect("DCompGraphicsResource作成失敗");
-    let dcomp = dcomp_resource.dcomp().expect("dcomp device should exist");
+    let factory = WucVisualFactory::new(&graphics)?;
 
     // Visual を作成
-    let visual = dcomp.create_visual()?;
+    let visual = factory.create_visual()?;
     let vg = VisualGraphics::new(visual);
 
     // 初期状態では parent_visual は None
@@ -36,12 +48,10 @@ fn test_visual_graphics_has_parent_visual_field() -> Result<()> {
 #[test]
 fn test_visual_graphics_new_with_parent() -> Result<()> {
     let graphics = setup_graphics()?;
-    let d2d = graphics.d2d_device().expect("D2Dデバイスが無効");
-    let dcomp_resource = DCompGraphicsResource::new(d2d).expect("DCompGraphicsResource作成失敗");
-    let dcomp = dcomp_resource.dcomp().expect("dcomp device should exist");
+    let factory = WucVisualFactory::new(&graphics)?;
 
-    let parent_visual = dcomp.create_visual()?;
-    let child_visual = dcomp.create_visual()?;
+    let parent_visual = factory.create_visual()?;
+    let child_visual = factory.create_visual()?;
 
     // 親を指定して作成
     let vg = VisualGraphics::new_with_parent(child_visual.clone(), Some(parent_visual.clone()));
@@ -56,13 +66,11 @@ fn test_visual_graphics_new_with_parent() -> Result<()> {
 #[test]
 fn test_visual_graphics_set_parent_visual() -> Result<()> {
     let graphics = setup_graphics()?;
-    let d2d = graphics.d2d_device().expect("D2Dデバイスが無効");
-    let dcomp_resource = DCompGraphicsResource::new(d2d).expect("DCompGraphicsResource作成失敗");
-    let dcomp = dcomp_resource.dcomp().expect("dcomp device should exist");
+    let factory = WucVisualFactory::new(&graphics)?;
 
-    let parent1 = dcomp.create_visual()?;
-    let parent2 = dcomp.create_visual()?;
-    let child = dcomp.create_visual()?;
+    let parent1 = factory.create_visual()?;
+    let parent2 = factory.create_visual()?;
+    let child = factory.create_visual()?;
 
     let mut vg = VisualGraphics::new(child);
 
@@ -89,15 +97,13 @@ fn test_visual_graphics_set_parent_visual() -> Result<()> {
 #[test]
 fn test_visual_graphics_on_remove_simulation() -> Result<()> {
     let graphics = setup_graphics()?;
-    let d2d = graphics.d2d_device().expect("D2Dデバイスが無効");
-    let dcomp_resource = DCompGraphicsResource::new(d2d).expect("DCompGraphicsResource作成失敗");
-    let dcomp = dcomp_resource.dcomp().expect("dcomp device should exist");
+    let factory = WucVisualFactory::new(&graphics)?;
 
-    let parent = dcomp.create_visual()?;
-    let child = dcomp.create_visual()?;
+    let parent = factory.create_visual()?;
+    let child = factory.create_visual()?;
 
     // 子を親に追加
-    parent.add_visual(&child, false, None)?;
+    add_child(&parent, &child)?;
 
     // VisualGraphics として管理
     let vg = VisualGraphics::new_with_parent(child.clone(), Some(parent.clone()));
@@ -106,13 +112,13 @@ fn test_visual_graphics_on_remove_simulation() -> Result<()> {
     if let Some(p) = vg.parent_visual() {
         if let Some(v) = vg.visual() {
             // エラーは無視（親が先に削除されている場合など）
-            let _ = p.remove_visual(v);
+            let _ = remove_child(p, v);
         }
     }
 
     // 削除後、再度削除を試みるとエラーになる（存在しないVisual）
     // これは仕様通りの動作
-    let result = parent.remove_visual(&child);
+    let result = remove_child(&parent, &child);
     // 既に削除済みなのでエラーが返るはず
     eprintln!("Remove after on_remove: {:?}", result);
 
@@ -123,20 +129,18 @@ fn test_visual_graphics_on_remove_simulation() -> Result<()> {
 #[test]
 fn test_visual_graphics_ecs_lifecycle() -> Result<()> {
     let graphics = setup_graphics()?;
-    let d2d = graphics.d2d_device().expect("D2Dデバイスが無効");
-    let dcomp_resource = DCompGraphicsResource::new(d2d).expect("DCompGraphicsResource作成失敗");
-    let dcomp = dcomp_resource.dcomp().expect("dcomp device should exist");
+    let factory = WucVisualFactory::new(&graphics)?;
 
     let mut world = World::new();
 
     // 親エンティティを作成
-    let parent_visual = dcomp.create_visual()?;
+    let parent_visual = factory.create_visual()?;
     let parent_vg = VisualGraphics::new(parent_visual.clone());
     let parent_entity = world.spawn(parent_vg).id();
 
     // 子エンティティを作成（親を参照）
-    let child_visual = dcomp.create_visual()?;
-    parent_visual.add_visual(&child_visual, false, None)?;
+    let child_visual = factory.create_visual()?;
+    add_child(&parent_visual, &child_visual)?;
     let child_vg =
         VisualGraphics::new_with_parent(child_visual.clone(), Some(parent_visual.clone()));
     let child_entity = world.spawn(child_vg).id();
