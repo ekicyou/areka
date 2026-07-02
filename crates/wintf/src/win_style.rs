@@ -349,6 +349,44 @@ impl WinStyle {
     }
 }
 
+//================================================================================
+// クリック透過（WS_EX_TRANSPARENT 動的トグル）
+//================================================================================
+
+/// 対象 HWND の `WS_EX_TRANSPARENT` を `transparent` フラグに一致させ、`FRAMECHANGED` で反映する。
+///
+/// 現在の ex-style を読み戻し、`WS_EX_TRANSPARENT` ビットのみを set/clear して
+/// `SetWindowLongPtr(GWL_EXSTYLE)` で書き戻し、`SetWindowPos(SWP_FRAMECHANGED | SWP_NOMOVE |
+/// SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE)` で非クライアント領域へ反映する
+/// (`apply_initial_state` のレシピ準拠)。他の ex-style ビット（`WS_EX_LAYERED` 等）には触れない。
+pub fn apply_click_through(hwnd: HWND, transparent: bool) -> Result<()> {
+    // 現在の ex-style を読み、TRANSPARENT ビットのみを目標へ一致させる。
+    let current = get_window_long_ptr(hwnd, GWL_EXSTYLE)?;
+    let mask = WS_EX_TRANSPARENT.0 as isize;
+    let next = if transparent {
+        current | mask
+    } else {
+        current & !mask
+    };
+    set_window_long_ptr(hwnd, GWL_EXSTYLE, next)?;
+
+    // スタイル変更を非クライアント領域へ反映する。位置・サイズ・z オーダー・アクティブ化は
+    // 変えず（NOMOVE/NOSIZE/NOZORDER/NOACTIVATE）、フレーム再計算（FRAMECHANGED）のみ要求する。
+    // SAFETY: Win32 境界。SetWindowPos に安全ラッパは無いため直接呼ぶ。所有権・寿命に影響しない。
+    unsafe {
+        SetWindowPos(
+            hwnd,
+            None,
+            0,
+            0,
+            0,
+            0,
+            SWP_FRAMECHANGED | SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE,
+        )?;
+    }
+    Ok(())
+}
+
 #[inline(always)]
 fn set_style(src: WinStyle, style: WINDOW_STYLE, flag: bool) -> WinStyle {
     let org = src.style.0;
@@ -584,5 +622,92 @@ mod tests {
     #[test]
     fn commit_to_null_hwnd_returns_err() {
         assert!(WinStyle::WS_OVERLAPPEDWINDOW().commit(HWND::default()).is_err());
+    }
+
+    //================================================================================
+    // apply_click_through: WS_EX_TRANSPARENT 動的トグル
+    //================================================================================
+
+    #[test]
+    fn apply_click_through_toggles_only_transparent_bit() {
+        use windows::Win32::System::LibraryLoader::GetModuleHandleW;
+        use windows::Win32::UI::WindowsAndMessaging::{
+            CreateWindowExW, DestroyWindow, WINDOW_STYLE,
+        };
+        use windows::core::w;
+
+        // 実所有 HWND を用意（"Static" 定義済クラス・非表示ポップアップ）。
+        // 初期 ex-style に WS_EX_TRANSPARENT 以外のビット（TOOLWINDOW/NOREDIRECTIONBITMAP）を
+        // 立てておき、トグル後に「TRANSPARENT のみが変化し他ビットは保存」を検証する。
+        let initial_ex = WS_EX_TOOLWINDOW | WS_EX_NOREDIRECTIONBITMAP;
+
+        // SAFETY: Win32 境界。定義済 "Static" クラスで非表示ポップアップを生成する。
+        // hinstance は現行モジュール。失敗時は hwnd が無効となるため下で検証する。
+        let hwnd = unsafe {
+            let hinstance = GetModuleHandleW(None).expect("GetModuleHandleW");
+            CreateWindowExW(
+                initial_ex,
+                w!("Static"),
+                w!("wintf-click-through-test"),
+                WINDOW_STYLE(WS_POPUP.0),
+                0,
+                0,
+                0,
+                0,
+                None,
+                None,
+                Some(hinstance.into()),
+                None,
+            )
+        }
+        .expect("CreateWindowExW should create a hidden test window");
+
+        // テスト本体を closure に包み、途中で panic しても必ず DestroyWindow する。
+        let result = std::panic::catch_unwind(|| {
+            let before = get_window_long_ptr(hwnd, GWL_EXSTYLE).expect("read ex-style before") as u32;
+            // 前提: 初期状態で TRANSPARENT は立っておらず、他ビットは立っている
+            assert_eq!(before & WS_EX_TRANSPARENT.0, 0, "TRANSPARENT must start clear");
+            let non_transparent_before = before & !WS_EX_TRANSPARENT.0;
+
+            // ON: TRANSPARENT を立てる
+            apply_click_through(hwnd, true).expect("apply true");
+            let on = get_window_long_ptr(hwnd, GWL_EXSTYLE).expect("read ex-style on") as u32;
+            assert_ne!(on & WS_EX_TRANSPARENT.0, 0, "TRANSPARENT must be set after true");
+            assert_eq!(
+                on & !WS_EX_TRANSPARENT.0,
+                non_transparent_before,
+                "non-TRANSPARENT bits must be preserved after ON"
+            );
+
+            // OFF: TRANSPARENT を落とす
+            apply_click_through(hwnd, false).expect("apply false");
+            let off = get_window_long_ptr(hwnd, GWL_EXSTYLE).expect("read ex-style off") as u32;
+            assert_eq!(off & WS_EX_TRANSPARENT.0, 0, "TRANSPARENT must be clear after false");
+            assert_eq!(
+                off & !WS_EX_TRANSPARENT.0,
+                non_transparent_before,
+                "non-TRANSPARENT bits must be preserved after OFF"
+            );
+
+            // 冪等: 既に OFF の状態で false を再適用しても不変
+            apply_click_through(hwnd, false).expect("apply false idempotent");
+            let off2 = get_window_long_ptr(hwnd, GWL_EXSTYLE).expect("read ex-style off2") as u32;
+            assert_eq!(off2, off, "idempotent OFF must not change ex-style");
+        });
+
+        // SAFETY: Win32 境界。生成した所有ウィンドウを破棄する（テスト後始末）。
+        unsafe {
+            let _ = DestroyWindow(hwnd);
+        }
+
+        if let Err(e) = result {
+            std::panic::resume_unwind(e);
+        }
+    }
+
+    #[test]
+    fn apply_click_through_null_hwnd_returns_err() {
+        // 無効 HWND では GetWindowLongPtrW が失敗し Err が伝播する（ウィンドウ生成不要）
+        assert!(apply_click_through(HWND::default(), true).is_err());
     }
 }

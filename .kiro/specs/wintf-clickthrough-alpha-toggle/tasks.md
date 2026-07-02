@@ -3,7 +3,7 @@
 > 着手前規律（R6.5）: 既存コードへ触れるタスク（1.1／3.2／4.1）は、編集前に「変更対象ファイルと変更内容」を依頼者へ提示し確認を得てから着手する。追加 ex-style・`WM_NCHITTEST` ハンドラ・依存追加が必要と判断した場合は独断で入れず理由を添えて確認する（R6.4）。
 
 - [ ] 1. Foundation: ex-style 動的トグル API とモジュール骨格
-- [ ] 1.1 `WS_EX_TRANSPARENT` 動的トグル最小 API の実装
+- [x] 1.1 `WS_EX_TRANSPARENT` 動的トグル最小 API の実装
   - 対象 HWND の `WS_EX_TRANSPARENT` ビットのみを引数フラグへ一致させ、`SetWindowLongPtr(GWL_EXSTYLE)` ＋ `SetWindowPos(SWP_FRAMECHANGED|SWP_NOMOVE|SWP_NOSIZE|SWP_NOZORDER|SWP_NOACTIVATE)` で反映する（`apply_initial_state` のレシピ準拠）
   - `WS_EX_LAYERED` は操作しない・`WM_NCHITTEST`→`HTTRANSPARENT` ハンドラは追加しない。既存 `WinStyle::commit`・既存ビルダーは不変
   - ユニットテスト: 適用後に現在 ex-style を読み戻し、`WS_EX_TRANSPARENT` のみが変化し `WS_EX_NOREDIRECTIONBITMAP` 等の他ビットが保存されること（観測可能な完了条件）
