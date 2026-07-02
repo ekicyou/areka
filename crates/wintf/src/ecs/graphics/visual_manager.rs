@@ -1,12 +1,12 @@
-use crate::com::dcomp::DCompositionDeviceExt;
 use crate::ecs::graphics::{GraphicsCore, Visual, VisualGraphics, WindowGraphics};
 use bevy_ecs::name::Name;
 use bevy_ecs::prelude::*;
 use tracing::{debug, error, trace};
-use windows::Win32::Graphics::DirectComposition::*;
+use windows::UI::Composition::Compositor;
+use windows::core::Interface;
 
-use super::dcomp_resource::DCompGraphicsResource;
 use super::format_entity_name;
+use super::wuc_resource::WucGraphicsResource;
 
 /// デフォルトのVisualコンポーネントをEntityに挿入する (R3)
 ///
@@ -41,12 +41,16 @@ pub fn insert_visual_with(world: &mut World, entity: Entity, visual: Visual) {
 /// Surface作成はDrawスケジュールでCommandList存在時に遅延実行する。
 ///
 /// Note: SurfaceGraphicsとSurfaceGraphicsDirtyはVisual.on_addで事前配置されている
-fn create_visual_only(entity: Entity, vg: &mut VisualGraphics, dcomp: &IDCompositionDevice3) {
-    let visual_res = dcomp.create_visual();
+fn create_visual_only(entity: Entity, vg: &mut VisualGraphics, compositor: &Compositor) {
+    // SpriteVisual は ContainerVisual を継承し、brush（surface 束ね）も子（階層）も持てるため
+    // 全 Visual を SpriteVisual で統一する。基底 WUC `Visual` へ格納する。
+    let visual_res = compositor
+        .CreateSpriteVisual()
+        .and_then(|sprite| sprite.cast::<windows::UI::Composition::Visual>());
     match visual_res {
-        Ok(v3) => {
+        Ok(v) => {
             // VisualGraphicsを直接更新（既にVisual.on_addで配置済み）
-            *vg = VisualGraphics::new(v3.clone());
+            *vg = VisualGraphics::new(v.clone());
 
             // SurfaceGraphicsとSurfaceGraphicsDirtyはVisual.on_addで事前配置済み
             // 明示的なset_changed()は不要（VisualGraphicsの更新でChanged検知される）
@@ -74,7 +78,7 @@ pub fn visual_resource_management_system(
     // パラメータ削除はシステムのアクセスセット変更にあたるため P45 として記録（P39 と同系統）。
     _commands: Commands,
     graphics: Res<GraphicsCore>,
-    dcomp_resource: Option<Res<DCompGraphicsResource>>,
+    wuc_resource: Option<Res<WucGraphicsResource>>,
     mut query: Query<
         (Entity, &Visual, &mut VisualGraphics, Option<&Name>),
         Changed<VisualGraphics>,
@@ -85,8 +89,8 @@ pub fn visual_resource_management_system(
         return;
     }
 
-    let dcomp = match dcomp_resource.as_ref().and_then(|r| r.dcomp()) {
-        Some(d) => d,
+    let compositor = match wuc_resource.as_ref().and_then(|r| r.compositor()) {
+        Some(c) => c,
         None => return,
     };
 
@@ -99,7 +103,7 @@ pub fn visual_resource_management_system(
                 entity = %entity_name,
                 "VisualGraphics initialization starting (Changed + !is_valid)"
             );
-            create_visual_only(entity, &mut vg, dcomp);
+            create_visual_only(entity, &mut vg, compositor);
             trace!(
                 frame = frame_count.0,
                 entity = %entity_name,
@@ -129,16 +133,13 @@ pub fn window_visual_integration_system(
                     entity = %entity_name,
                     "SetRoot executing"
                 );
-                // SAFETY: target / visual は直前の二重 Some ガードで有効性を確認済みの
-                // COM ポインタ。SetRoot はインプロセスの DComp 呼び出しで、失敗は
-                // 戻り値 HRESULT で報告される（UB に至る経路はない）。
+                // target / visual は直前の二重 Some ガードで有効性を確認済み。
+                // DesktopWindowTarget::SetRoot は WUC の安全メソッド（unsafe 不要）で、
+                // 失敗は Result で報告される。
                 // NOTE(W3b-V): 失敗の黙殺（`let _ =`）は意図的 — SetRoot が失敗するのは
                 // 実質デバイスロスト時のみで、復旧は invalidate 系統が担う設計
-                // （ただし検出経路の不在は P40、DComp 側再初期化の不完全性は
-                // 本セル断片の分析を参照）。
-                unsafe {
-                    let _ = target.SetRoot(visual);
-                }
+                // （ただし検出経路の不在は P40 を参照）。
+                let _ = target.SetRoot(visual);
             }
         }
     }

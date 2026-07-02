@@ -299,13 +299,12 @@ impl EcsWorld {
                 ),
             );
 
-            // CommitComposition: ULW 画面転送 + DComp コミット
+            // CommitComposition: ULW 画面転送
+            // Note: DComp の commit_composition は WUC 移行で削除（要件 7.1・暗黙反映へ）。
+            // schedule 自体と ulw_present_system は残置する。
             schedules.add_systems(
                 CommitComposition,
-                (
-                    crate::ecs::graphics::compositor_systems::ulw_present_system,
-                    crate::ecs::graphics::commit_composition,
-                ),
+                crate::ecs::graphics::compositor_systems::ulw_present_system,
             );
 
             // FrameFinalizeスケジュール: 一時的ポインター状態クリア

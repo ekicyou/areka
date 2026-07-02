@@ -50,21 +50,21 @@
   - _Boundary: WucGraphicsResource_
   - _Depends: 1.2, 1.3_
 
-- [ ] 2.2 合成ターゲット束縛を DesktopWindowTarget へ差し替え
+- [x] 2.2 合成ターゲット束縛を DesktopWindowTarget へ差し替え
   - `WindowGraphics` の内部 `IDCompositionTarget` を `DesktopWindowTarget` へ、`create_window_graphics_for_hwnd` を `CreateDesktopWindowTarget(hwnd, topmost)` へ、root 束縛を `target.SetRoot(root_visual)` へ写像
   - 観測可能な完了: ウィンドウの合成ターゲットが同一 HWND に束縛された `DesktopWindowTarget` となり、root visual が設定される
   - _Requirements: 4.1, 4.2_
   - _Boundary: WindowGraphics_
   - _Depends: 2.1_
 
-- [ ] 2.3 ビジュアル木同期を WUC Container/Sprite へ差し替え
+- [x] 2.3 ビジュアル木同期を WUC Container/Sprite へ差し替え
   - `VisualGraphics` 内部型を WUC `Visual` へ、生成を `CreateSpriteVisual`（描画対象）/`CreateContainerVisual`（純コンテナ）へ、木同期を `Children().RemoveAll()`→Children 順 `InsertAtTop`、property を `SetOffset(Vector3)`/`SetOpacity(f32)` へ写像
   - 観測可能な完了: 親子関係・Z 順・offset・opacity が移行前と同一のツリー構造・重なり順・配置で再現される
   - _Requirements: 5.1, 5.2, 5.3_
   - _Boundary: VisualGraphics_
   - _Depends: 2.2_
 
-- [ ] 2.4 サーフェス生成・束ね・描画を WUC へ差し替え
+- [x] 2.4 サーフェス生成・束ね・描画を WUC へ差し替え
   - `SurfaceGraphics` に `CompositionSurfaceBrush` 保持を追加し、生成を `CreateDrawingSurface`（B8G8R8A8/PREMUL）＋`CreateSurfaceBrushWithSurface`＋`SpriteVisual.SetBrush`、解除を `SetBrush(None)`、`render_surface` を interop `BeginDraw`（既存 offset 適用ロジック流用）へ写像する
   - content 束縛に swapchain 経路は用いない
   - 観測可能な完了: サーフェスが生成され brush で Sprite に束ねられて D2D 描画が表示され、解除経路で brush が解放されて黒画像化しない
@@ -72,7 +72,7 @@
   - _Boundary: SurfaceGraphics_
   - _Depends: 2.3_
 
-- [ ] 2.5 clip 3 変種を WUC clip 型へ等価写像
+- [x] 2.5 clip 3 変種を WUC clip 型へ等価写像
   - `Rectangle`→`InsetClip`、`RoundedRectangle`→`CreateRoundedRectangleGeometry`＋`GeometricClip`、`RoundedRectangleIndividual`（4 角独立半径）→`CreatePathGeometry`＋`GeometricClip`、DPI スケールを半径・矩形へ乗算、`Visual::SetClip`/clear を維持
   - 観測可能な完了: 各 `ClipShape` 変種が対応する WUC clip を生成し、DPI 乗算後の形状で visual に適用される（新能力は導入しない）
   - _Requirements: 5.4, 9.4_
@@ -80,7 +80,7 @@
   - _Depends: 2.3_
 
 - [ ] 3. 統合: フレーム反映モデル移行と DComp 撤去
-- [ ] 3.1 明示 Commit を廃し暗黙反映へ移行、ライブ Resource 登録を切替
+- [x] 3.1 明示 Commit を廃し暗黙反映へ移行、ライブ Resource 登録を切替
   - `commit_composition` システムを削除し `CommitComposition` schedule から登録解除（`ulw_present_system` は同 schedule に残置）、`world/mod.rs` の**ライブ Resource 登録**を `DCompGraphicsResource`→`WucGraphicsResource` へ切替、`window_pos` の invalidate 経路を WUC Resource へ差し替え
   - 観測可能な完了: 明示 `Commit()` 呼び出しが無く DispatcherQueue ティックで反映され、アプリが移行前と等価に描画し、`ulw_present_system` が従来通り動作する
   - _Requirements: 7.1, 7.2, 7.3_
@@ -123,6 +123,13 @@
 
 - **i686/arm64 descope（owner ekicyou 2026-07-02）**: wintf は表示合成レイヤーで **x64 or arm64 のみ**。i686（x86）は SHIORI 駆動 helper 専用の別クレートで、wintf は i686 ターゲットにならない。ゆえに task 1.1 の i686 節・task 1.5・task 4.4 の i686 ランタイム・要件 8.4 の 32bit 可搬は本移行では x64 のみで判定（arch 矛盾の spec 誤り）。arm64 検証も後回し＝x64 完了後にオプション別仕様。**当面 x64 のみを意識する**。（参考: full wintf lib を i686 build すると既存 `api.rs`/`window_factory.rs` の `SetWindowLongPtr` isize/i32 不一致で落ちるが wintf x86 非対象ゆえ修正不要）
 - **1.1 完了（x64）**: ルート `Cargo.toml` に WUC features＋`windows-numerics=0.3.1` は着手時点で working tree に存在。x64 `cargo build -p wintf`（exit 0）・`cargo build -p wintf --release`（z/LTO・exit 0）通過。DComp feature `Win32_Graphics_DirectComposition` 残置確認。
+- **2.2〜3.1 完了（コア合成カットオーバー一体）**: components 3型（WindowGraphics→DesktopWindowTarget / VisualGraphics→WUC Visual / SurfaceGraphics→CompositionDrawingSurface＋CompositionSurfaceBrush）＋消費側システムを in-place で WUC 化し、init.rs で WucGraphicsResource を lazy 登録（ライブ切替）。`cargo build -p wintf` green・`cargo test -p wintf --lib` **503 passed/0 failed**・`dcomp_demo`（WUC バックエンド）実起動で WucGraphicsResource 初期化・全 Visual 生成・エラー/panic なしを実測。主要判断:
+  - **z順序（要件5.2）**: DComp `add_visual(insertabove=false, ref=None)`＝兄弟最下部挿入。Children [A,B,C] 反復で最終スタック C,B,A。WUC で同一再現は **`InsertAtBottom`**（design の素朴な `InsertAtTop` は誤り）。検算一致。
+  - **SpriteVisual.Size（後追い修正・reviewer 適用）**: WUC の SpriteVisual は自身の Size 内にのみ brush 描画（DComp SetContent は不要だった）。live パイプラインは Size 未設定＝空描画の恐れ→ `deferred_surface_creation` で surface と同一物理サイズを `sprite.SetSize` する修正を適用。
+  - **commit_composition 削除**（要件7.1）: `CommitComposition` schedule から解除、`ulw_present_system` 残置。暗黙反映へ。
+  - **DComp 定義残置**: `dcomp_resource.rs`/`com/dcomp.rs` はライブ参照ゼロだが定義は残す（撤去は 3.2）。
+  - **テスト追従**: `graphics/tests.rs`・`tests/visual/{child_order,hierarchy_sync,common}` を WUC 型へ更新（骨抜きにせず実挙動維持）。
+  - **⚠ clip 個別半径の制約（要件5.4/9.4/task4.2 影響・要 owner 判断）**: `RoundedRectangleIndividual`（4角独立半径）は本来 `CreatePathGeometry`＋`CompositionPath` だが、`CompositionPath::Create` は `IGeometrySource2D`（Win2D=CanvasGeometry）必須で **windows 0.62.2 単体では構築不可**（registry 確認済）。設計の PathGeometry 前提は Win2D 見落とし＝spec と現実の齟齬。暫定対応: **4角の最大半径で均一角丸へ縮約**（全角同値なら厳密一致・非均一は近似＋warn ログ）。areka 本体は個別半径未使用（example/ULW guard のみ）ゆえ実害限定。**task 4.2 の個別半径ビット等価は Win2D 導入なしには非均一ケースで達成不可**——4.2 で scope 調整 or Win2D 依存追加の判断が要る。`Rectangle` は InsetClip（Visual サイズ相対）でなく明示サイズの radius=0 GeometricClip で写像（live パイプラインは Visual サイズ非設定のため絶対矩形が必要）。
 - **2.1 完了（WucGraphicsResource・DComp 並存）**: `ecs/graphics/wuc_resource.rs` 新規＋`mod.rs` re-export。`dcomp_resource.rs` を 1:1 テンプレに WUC 化（`Option<Inner>`・`unsafe Send/Sync`・手動 Debug・`#[derive(Resource)]`）。Inner フィールド順 `compositor→graphics_device→dq_controller`（controller 最後 drop）。`new()` は `DQTAT_COM_NONE`→`Compositor::new()`→`ICompositorInterop::create_graphics_device` の順。テスト `wuc_graphics_resource_lifecycle` PASS（MTA 再現・new/invalidate/new_empty/drop 健全）。**ライブ登録の切替と消費側改変は 3.1 の領分で本タスクは並存追加のみ・green build 維持**（dcomp_resource.rs/world/mod.rs/消費側システム未変更）。
 - **1.4 完了（機構実証・owner 承認 2026-07-02）**: 透過機構は `wuc_spike` で実証済——`WS_EX_NOREDIRECTIONBITMAP` 窓＋`B8G8R8A8`/`Premultiplied` サーフェス＋alpha<1（0.85）クリアがエラーなく生成・描画・SetRoot 成立。DComp との厳密な目視ピクセル等価は task 4.1（サーフェス層ビット等価）/4.3（合成層キャプチャ）へ委譲し、1.4 は機構実証で完了扱い（owner 承認）。
 - **1.3 完了・R1 GO（最重要・apartment 決着）**: `examples/wuc_spike.rs`（自己完結の生 Win32 窓＋WUC 最小往復）を実行し **R1 GO** を実測確定。**核心発見: 本番 UI スレッドは `CoInitializeEx(COINIT_MULTITHREADED)`＝MTA（`WinApp::new` L98）であり、design.md §2.1 の「STA 前提」は誤り**。MTA スレッドでは `CreateDispatcherQueueController(DQTAT_COM_NONE)`（apartment 不変）で成立し、**`Compositor::new()` が MTA 上で起動する**（WUC は MTA の UI スレッドで動作＝移行成立）。ShutdownQueueAsync ドレインは controller を最後に drop する順序で成立・shutdown クラッシュなし。**→ task 2.1 の `WucGraphicsResource` は apartment に `DQTAT_COM_NONE` を使う（ASTA ではない）こと。design §2.1 の apartment 記述はこの実測で上書き。** 厳密ピクセル等価は task 4.1 のランタイム二重描画ハーネスの領分（本スパイクは往復機構と threading 前提の GO を担保）。

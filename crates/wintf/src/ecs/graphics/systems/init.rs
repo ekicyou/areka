@@ -1,15 +1,16 @@
 // ========== ヘルパー関数 ==========
 
 use crate::com::d2d::D2D1DeviceExt;
-use crate::com::dcomp::DCompositionDesktopDeviceExt;
-use crate::ecs::graphics::{
-    DCompGraphicsResource, GraphicsCore, HasGraphicsResources, WindowGraphics,
-};
+use crate::com::wuc::CompositorDesktopInteropExt;
+use crate::ecs::graphics::wuc_resource::WucGraphicsResource;
+use crate::ecs::graphics::{GraphicsCore, HasGraphicsResources, WindowGraphics};
 use crate::ecs::layout::GlobalArrangement;
 use bevy_ecs::name::Name;
 use bevy_ecs::prelude::*;
 use tracing::{debug, error, info};
 use windows::Win32::Foundation::*;
+use windows::Win32::System::WinRT::Composition::ICompositorDesktopInterop;
+use windows::core::Interface;
 
 /// エンティティ名をログ用にフォーマットする
 ///
@@ -70,20 +71,21 @@ pub fn calculate_surface_size_from_global_arrangement(
 /// HWNDに対してWindowGraphicsリソースを作成する
 fn create_window_graphics_for_hwnd(
     graphics: &GraphicsCore,
-    dcomp_resource: &DCompGraphicsResource,
+    wuc_resource: &WucGraphicsResource,
     hwnd: HWND,
 ) -> windows::core::Result<WindowGraphics> {
     use windows::Win32::Graphics::Direct2D::D2D1_DEVICE_CONTEXT_OPTIONS_NONE;
 
-    if !graphics.is_valid() || !dcomp_resource.is_valid() {
+    if !graphics.is_valid() || !wuc_resource.is_valid() {
         return Err(windows::core::Error::from(E_FAIL));
     }
 
-    // 1. CompositionTarget作成（DCompGraphicsResource から取得）
-    let desktop = dcomp_resource
-        .desktop()
+    // 1. DesktopWindowTarget作成（WucGraphicsResource の Compositor から interop 経由で取得）
+    let compositor = wuc_resource
+        .compositor()
         .ok_or(windows::core::Error::from(E_FAIL))?;
-    let target = desktop.create_target_for_hwnd(hwnd, true)?;
+    let desktop_interop = compositor.cast::<ICompositorDesktopInterop>()?;
+    let target = desktop_interop.create_desktop_window_target(hwnd, true)?;
 
     // 2. DeviceContext作成
     let d2d = graphics
@@ -180,13 +182,13 @@ pub fn init_graphics_core(
 
 /// WindowGraphics初期化・再初期化
 ///
-/// WindowGraphics初期化・再初期化（DComp モード専用）
+/// WindowGraphics初期化・再初期化（DComp モードの Window に対し WUC バックエンドで作成）
 ///
 /// CompositionMode::DComp の Window にのみ WindowGraphics を作成する。
-/// DCompGraphicsResource が未初期化の場合はここで遅延初期化する。
+/// WucGraphicsResource が未初期化の場合はここで遅延初期化する。
 pub fn init_window_graphics(
     graphics: Res<GraphicsCore>,
-    dcomp_resource: Option<ResMut<DCompGraphicsResource>>,
+    wuc_resource: Option<ResMut<WucGraphicsResource>>,
     mut query: Query<
         (
             Entity,
@@ -216,26 +218,26 @@ pub fn init_window_graphics(
         return;
     }
 
-    // DCompGraphicsResource の遅延初期化
-    let dcomp_valid = dcomp_resource.as_ref().map_or(false, |r| r.is_valid());
-    if !dcomp_valid {
+    // WucGraphicsResource の遅延初期化
+    let wuc_valid = wuc_resource.as_ref().map_or(false, |r| r.is_valid());
+    if !wuc_valid {
         if let Some(d2d) = graphics.d2d_device() {
-            match DCompGraphicsResource::new(d2d) {
+            match WucGraphicsResource::new(d2d) {
                 Ok(new_resource) => {
                     info!(
                         frame = frame_count.0,
-                        "[init_window_graphics] DCompGraphicsResource lazily initialized"
+                        "[init_window_graphics] WucGraphicsResource lazily initialized"
                     );
                     commands.insert_resource(new_resource);
                     // insert_resource はコマンドキューなのでこのフレームでは使えない
-                    // 次フレームで DCompGraphicsResource が利用可能になる
+                    // 次フレームで WucGraphicsResource が利用可能になる
                     return;
                 }
                 Err(e) => {
                     error!(
                         frame = frame_count.0,
                         error = ?e,
-                        "[init_window_graphics] DCompGraphicsResource initialization failed"
+                        "[init_window_graphics] WucGraphicsResource initialization failed"
                     );
                     return;
                 }
@@ -245,10 +247,10 @@ pub fn init_window_graphics(
         }
     }
 
-    // NOTE(W3a-V): この時点で dcomp_valid == true であり、その判定は dcomp_resource が
-    // Some かつ is_valid() の場合にのみ true になる（!dcomp_valid 分岐は全経路 return 済み）。
+    // NOTE(W3a-V): この時点で wuc_valid == true であり、その判定は wuc_resource が
+    // Some かつ is_valid() の場合にのみ true になる（!wuc_valid 分岐は全経路 return 済み）。
     // よってこの unwrap は到達可能な全経路で発火しない。
-    let dcomp_res = dcomp_resource.unwrap();
+    let wuc_res = wuc_resource.unwrap();
     for (entity, window, handle, _res, window_graphics, name) in query.iter_mut() {
         // DComp モードのみ処理
         if window.composition_mode() != CompositionMode::DComp {
@@ -263,7 +265,7 @@ pub fn init_window_graphics(
                     entity = %entity_name,
                     "[init_window_graphics] WindowGraphics creating new"
                 );
-                match create_window_graphics_for_hwnd(&graphics, &dcomp_res, handle.hwnd) {
+                match create_window_graphics_for_hwnd(&graphics, &wuc_res, handle.hwnd) {
                     Ok(wg) => {
                         debug!(
                             frame = frame_count.0,
@@ -291,7 +293,7 @@ pub fn init_window_graphics(
                         "[init_window_graphics] WindowGraphics re-initializing"
                     );
                     let old_generation = wg.generation();
-                    match create_window_graphics_for_hwnd(&graphics, &dcomp_res, handle.hwnd) {
+                    match create_window_graphics_for_hwnd(&graphics, &wuc_res, handle.hwnd) {
                         Ok(new_wg) => {
                             // 古いgenerationを引き継いでインクリメント
                             let new_generation = old_generation.wrapping_add(1);

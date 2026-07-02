@@ -1,14 +1,17 @@
 use super::init::{calculate_surface_size_from_global_arrangement, format_entity_name};
-use crate::com::dcomp::DCompositionDeviceExt;
+use crate::ecs::graphics::wuc_resource::WucGraphicsResource;
 use crate::ecs::graphics::{
-    DCompGraphicsResource, GraphicsCommandList, GraphicsCore, SurfaceCreationStats,
-    SurfaceGraphics, SurfaceGraphicsDirty, VisualGraphics,
+    GraphicsCommandList, GraphicsCore, SurfaceCreationStats, SurfaceGraphics, SurfaceGraphicsDirty,
+    VisualGraphics,
 };
 use crate::ecs::layout::GlobalArrangement;
 use bevy_ecs::name::Name;
 use bevy_ecs::prelude::*;
 use tracing::{debug, error, trace, warn};
-use windows::Win32::Graphics::Dxgi::Common::*;
+use windows::Foundation::Size;
+use windows::Graphics::DirectX::{DirectXAlphaMode, DirectXPixelFormat};
+use windows::UI::Composition::{CompositionBrush, SpriteVisual};
+use windows::core::Interface;
 
 // ========== Layout-to-Graphics Synchronization Systems ==========
 
@@ -77,7 +80,7 @@ pub fn mark_dirty_surfaces(
 /// ここでは直接更新（set_surface）する。commands.insert() は使用しない。
 pub fn deferred_surface_creation_system(
     graphics: Res<GraphicsCore>,
-    dcomp_resource: Option<Res<DCompGraphicsResource>>,
+    wuc_resource: Option<Res<WucGraphicsResource>>,
     // 統合クエリ: SurfaceGraphicsを持ち、GlobalArrangementまたはGraphicsCommandListが変更されたEntity
     // SurfaceGraphicsは事前配置されている前提
     mut query: Query<
@@ -98,8 +101,11 @@ pub fn deferred_surface_creation_system(
         return;
     }
 
-    let dcomp = match dcomp_resource.as_ref().and_then(|r| r.dcomp()) {
-        Some(d) => d,
+    let (compositor, graphics_device) = match wuc_resource.as_ref() {
+        Some(r) => match (r.compositor(), r.graphics_device()) {
+            (Some(c), Some(gd)) => (c, gd),
+            _ => return,
+        },
         None => return,
     };
 
@@ -154,44 +160,83 @@ pub fn deferred_surface_creation_system(
             );
         }
 
-        // Surface作成
-        let surface_res = dcomp.create_surface(
-            width,
-            height,
-            DXGI_FORMAT_B8G8R8A8_UNORM,
-            DXGI_ALPHA_MODE_PREMULTIPLIED,
+        // Surface作成（B8G8R8A8・Premultiplied・要件 6.4。DComp の
+        // DXGI_FORMAT_B8G8R8A8_UNORM + DXGI_ALPHA_MODE_PREMULTIPLIED と等価）。
+        let surface_res = graphics_device.CreateDrawingSurface(
+            Size {
+                Width: width as f32,
+                Height: height as f32,
+            },
+            DirectXPixelFormat::B8G8R8A8UIntNormalized,
+            DirectXAlphaMode::Premultiplied,
         );
 
         match surface_res {
             Ok(surface) => {
-                // VisualにSurfaceを設定
+                // WUC: surface を SurfaceBrush で束ね、SpriteVisual.SetBrush で適用する
+                // （DComp の visual.SetContent(surface) 一段に対し、brush が一段挟まる・要件 6.3）。
+                let brush = match compositor.CreateSurfaceBrushWithSurface(&surface) {
+                    Ok(b) => b,
+                    Err(e) => {
+                        error!(
+                            entity = %entity_name,
+                            error = ?e,
+                            "[deferred_surface_creation] CreateSurfaceBrushWithSurface FAILED"
+                        );
+                        continue;
+                    }
+                };
+
+                // VisualにBrushを設定（SpriteVisual へ cast して SetBrush）
                 if let Some(visual) = visual_graphics.visual() {
                     trace!(
                         entity = %entity_name,
-                        "[deferred_surface_creation] SetContent calling"
+                        "[deferred_surface_creation] SetBrush calling"
                     );
-                    unsafe {
-                        match visual.SetContent(&surface) {
-                            Ok(_) => trace!(
-                                entity = %entity_name,
-                                "[deferred_surface_creation] SetContent SUCCESS"
-                            ),
-                            Err(e) => error!(
-                                entity = %entity_name,
-                                error = ?e,
-                                "[deferred_surface_creation] SetContent FAILED"
-                            ),
+                    match visual.cast::<SpriteVisual>() {
+                        Ok(sprite) => {
+                            // WUC 固有: SpriteVisual は自身の Size 内にのみ brush を描画する
+                            // （DComp の SetContent(surface) は surface の自然サイズで描画するため
+                            // Visual サイズ設定が不要だった）。live パイプラインは Visual に Size を
+                            // 設定しないため、surface と同一の物理サイズを SpriteVisual に設定して
+                            // 空描画を防ぎ、DComp の SetContent と等価な描画範囲を保つ（要件 6.3/8.2）。
+                            if let Err(e) = sprite.SetSize(windows_numerics::Vector2 {
+                                X: width as f32,
+                                Y: height as f32,
+                            }) {
+                                error!(
+                                    entity = %entity_name,
+                                    error = ?e,
+                                    "[deferred_surface_creation] SetSize FAILED"
+                                );
+                            }
+                            match sprite.SetBrush(&brush) {
+                                Ok(_) => trace!(
+                                    entity = %entity_name,
+                                    "[deferred_surface_creation] SetBrush SUCCESS"
+                                ),
+                                Err(e) => error!(
+                                    entity = %entity_name,
+                                    error = ?e,
+                                    "[deferred_surface_creation] SetBrush FAILED"
+                                ),
+                            }
                         }
+                        Err(e) => error!(
+                            entity = %entity_name,
+                            error = ?e,
+                            "[deferred_surface_creation] cast to SpriteVisual FAILED"
+                        ),
                     }
                 } else {
                     warn!(
                         entity = %entity_name,
-                        "[deferred_surface_creation] NO VISUAL! SetContent skipped"
+                        "[deferred_surface_creation] NO VISUAL! SetBrush skipped"
                     );
                 }
 
-                // 直接更新（commands.insert()ではなく）
-                surface_graphics.set_surface(surface, (width, height));
+                // 直接更新（commands.insert()ではなく）。surface と brush を保持（brush 寿命固定）。
+                surface_graphics.set_surface(surface, brush, (width, height));
                 // SurfaceGraphicsDirtyのChangedをトリガー
                 dirty.requested_frame = dirty.requested_frame.wrapping_add(1);
 
@@ -252,15 +297,15 @@ pub fn cleanup_surface_on_commandlist_removed(
                 "[cleanup_surface_on_commandlist_removed] Clearing SurfaceGraphics"
             );
 
-            // VisualのContentをクリア（Req 1.3）
+            // Visual の Brush をクリア（Req 1.3）。DComp の SetContent(None) に対応。
             if let Some(visual) = visual_graphics.visual() {
-                unsafe {
-                    // nullptrを設定してSurfaceを解除
-                    let _ = visual.SetContent(None);
+                if let Ok(sprite) = visual.cast::<SpriteVisual>() {
+                    // None を設定して Brush を解除
+                    let _ = sprite.SetBrush(None::<&CompositionBrush>);
                 }
             }
 
-            // SurfaceGraphicsをクリア（コンポーネント自体は残す）
+            // SurfaceGraphics（surface + brush）をクリア（コンポーネント自体は残す）
             surface_graphics.clear();
 
             stats.record_deleted();

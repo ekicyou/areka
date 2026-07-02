@@ -1,13 +1,15 @@
 use super::init::format_entity_name;
 use crate::com::d2d::D2D1DeviceContextExt;
-use crate::com::dcomp::{DCompositionDeviceExt, DCompositionSurfaceExt};
+use crate::com::wuc::DrawingSurfaceInteropExt;
 use crate::ecs::graphics::{
-    DCompGraphicsResource, GraphicsCommandList, GraphicsCore, SurfaceGraphics, SurfaceGraphicsDirty,
+    GraphicsCommandList, GraphicsCore, SurfaceGraphics, SurfaceGraphicsDirty,
 };
 use crate::ecs::layout::GlobalArrangement;
 use bevy_ecs::name::Name;
 use bevy_ecs::prelude::*;
 use tracing::error;
+use windows::Win32::System::WinRT::Composition::ICompositionDrawingSurfaceInterop;
+use windows::core::Interface;
 
 // ========== 描画システム ==========
 
@@ -55,7 +57,21 @@ pub fn render_surface(
             None => continue,
         };
 
-        let (dc, offset) = match surface_ref.begin_draw(None) {
+        // WUC: CompositionDrawingSurface を ICompositionDrawingSurfaceInterop へ cast して
+        // BeginDraw（必ず None＝全面。Some(部分矩形) は WUC で E_INVALIDARG になる・task 1.2 実測）。
+        let surface_interop = match surface_ref.cast::<ICompositionDrawingSurfaceInterop>() {
+            Ok(si) => si,
+            Err(err) => {
+                error!(
+                    entity = %entity_name,
+                    error = ?err,
+                    "cast to ICompositionDrawingSurfaceInterop failed"
+                );
+                continue;
+            }
+        };
+
+        let (dc, offset) = match surface_interop.begin_draw(None) {
             Ok(result) => {
                 // 正常パスのログは抑制
                 // eprintln!("[render_surface] BeginDraw succeeded for Entity={}, offset=({}, {})", entity_name, result.1.x, result.1.y);
@@ -125,7 +141,7 @@ pub fn render_surface(
         }
 
         // EndDraw
-        if let Err(e) = surface_ref.end_draw() {
+        if let Err(e) = surface_interop.end_draw() {
             error!(error = ?e, "EndDraw failed");
         }
 
@@ -134,41 +150,6 @@ pub fn render_surface(
     }
 }
 
-/// DirectCompositionのすべての変更を確定する
-pub fn commit_composition(
-    dcomp_resource: Option<Res<DCompGraphicsResource>>,
-    frame_count: Res<crate::ecs::world::FrameCount>,
-) {
-    let Some(dcomp_resource) = dcomp_resource else {
-        // DCompGraphicsResource 未初期化（DComp ウィンドウなし）: 正常スキップ
-        return;
-    };
-
-    if !dcomp_resource.is_valid() {
-        // DComp デバイス無効化中: 次フレームで再初期化予定
-        return;
-    }
-
-    let dcomp = match dcomp_resource.dcomp() {
-        Some(d) => d,
-        None => {
-            return;
-        }
-    };
-
-    match dcomp.commit() {
-        Ok(()) => {
-            // 正常時はログ出力を抑制（毎フレーム出力されるため）
-            // デバッグ時はコメントを外して有効化
-            // eprintln!("[Frame {}] [commit_composition] Commit成功", frame_count.0);
-        }
-        Err(e) => {
-            error!(
-                frame = frame_count.0,
-                error = ?e,
-                hresult = format!("0x{:08X}", e.code().0),
-                "[commit_composition] Commit failed"
-            );
-        }
-    }
-}
+// Note: DComp の `commit_composition` システムは WUC 移行で削除された（要件 7.1）。
+// WUC は DispatcherQueue 経由で変更が暗黙反映されるため明示的な commit は不要。
+// `CommitComposition` schedule 自体と `ulw_present_system` は残置される。

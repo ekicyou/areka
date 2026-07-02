@@ -1,10 +1,9 @@
 use bevy_ecs::lifecycle::HookContext;
 use bevy_ecs::prelude::*;
 use bevy_ecs::world::DeferredWorld;
+use windows::UI::Composition::Desktop::DesktopWindowTarget;
+use windows::UI::Composition::{CompositionDrawingSurface, CompositionSurfaceBrush, Visual};
 use windows::Win32::Graphics::Direct2D::*;
-use windows::Win32::Graphics::DirectComposition::*;
-
-use crate::com::dcomp::DCompositionVisualExt;
 
 /// GPUリソースを使用するエンティティを宣言するマーカーコンポーネント
 ///
@@ -24,7 +23,7 @@ pub struct HasGraphicsResources;
 
 #[derive(Debug)]
 struct WindowGraphicsInner {
-    pub target: IDCompositionTarget,
+    pub target: DesktopWindowTarget,
     pub device_context: ID2D1DeviceContext,
 }
 
@@ -36,16 +35,16 @@ pub struct WindowGraphics {
     generation: u32,
 }
 
-// SAFETY 条件: 保持する COM ポインタの跨スレッド移動（Send）・参照共有（Sync）は
-// 「同一オブジェクトへの COM 呼び出しが同時に実行されない」ことを前提とする。
+// SAFETY 条件: 保持する COM/WinRT ポインタの跨スレッド移動（Send）・参照共有（Sync）は
+// 「同一オブジェクトへの呼び出しが同時に実行されない」ことを前提とする。
 // device_context（D2D）は MULTI_THREADED ファクトリ系列のため内部同期されるが、
-// target（DComp）は外部同期前提であり、ECS スケジュール構成（&mut 排他または
-// 同一コンポーネントへ並行アクセスしないシステム配置）が安全性条件を担う。
+// target（WUC DesktopWindowTarget）は UI スレッドアフィニティを持ち、ECS スケジュール構成
+// （&mut 排他または同一コンポーネントへ並行アクセスしないシステム配置）が安全性条件を担う。
 unsafe impl Send for WindowGraphics {}
 unsafe impl Sync for WindowGraphics {}
 
 impl WindowGraphics {
-    pub fn new(target: IDCompositionTarget, device_context: ID2D1DeviceContext) -> Self {
+    pub fn new(target: DesktopWindowTarget, device_context: ID2D1DeviceContext) -> Self {
         Self {
             inner: Some(WindowGraphicsInner {
                 target,
@@ -71,7 +70,7 @@ impl WindowGraphics {
         self.generation = self.generation.wrapping_add(1);
     }
 
-    pub fn get_target(&self) -> Option<&IDCompositionTarget> {
+    pub fn get_target(&self) -> Option<&DesktopWindowTarget> {
         self.inner.as_ref().map(|i| &i.target)
     }
 
@@ -84,25 +83,31 @@ impl WindowGraphics {
 #[derive(Component)]
 #[component(on_remove = on_visual_graphics_remove)]
 pub struct VisualGraphics {
-    inner: Option<IDCompositionVisual3>,
-    /// 親Visual参照（RemoveVisual用にキャッシュ）
-    /// 階層同期時にAddVisualと同時に設定される
-    parent_visual: Option<IDCompositionVisual3>,
+    inner: Option<Visual>,
+    /// 親Visual参照（子削除用にキャッシュ）
+    /// 階層同期時に子挿入と同時に設定される
+    parent_visual: Option<Visual>,
 }
 
 // on_remove フック: 親Visualから自分を削除
 fn on_visual_graphics_remove(world: DeferredWorld, hook: HookContext) {
     // 親Visualから自分を削除
     // エラーは無視（親が先に削除されている場合など）
+    // DComp の `parent.remove_visual(visual)` は WUC では `parent.Children()?.Remove(visual)` に対応。
+    // 基底 Visual は Children を持たないため ContainerVisual へ cast してから Children を得る。
     if let Some(vg) = world.get::<VisualGraphics>(hook.entity) {
         if let (Some(parent), Some(visual)) = (&vg.parent_visual, &vg.inner) {
-            let _ = parent.remove_visual(visual); // エラー無視
+            use windows::core::Interface;
+            let _ = parent
+                .cast::<windows::UI::Composition::ContainerVisual>()
+                .and_then(|cv| cv.Children())
+                .and_then(|c| c.Remove(visual)); // エラー無視
         }
     }
 }
 
-// SAFETY 条件: WindowGraphics と同様。IDCompositionVisual3 への COM 呼び出しが
-// 同時に実行されないことを ECS スケジュール構成が担保する前提（DComp は外部同期前提）。
+// SAFETY 条件: WindowGraphics と同様。WUC Visual への呼び出しが
+// 同時に実行されないことを ECS スケジュール構成が担保する前提（UI スレッドアフィニティ）。
 unsafe impl Send for VisualGraphics {}
 unsafe impl Sync for VisualGraphics {}
 
@@ -127,7 +132,7 @@ impl Default for VisualGraphics {
 }
 
 impl VisualGraphics {
-    pub fn new(visual: IDCompositionVisual3) -> Self {
+    pub fn new(visual: Visual) -> Self {
         Self {
             inner: Some(visual),
             parent_visual: None,
@@ -135,10 +140,7 @@ impl VisualGraphics {
     }
 
     /// 親Visualを指定してVisualGraphicsを作成
-    pub fn new_with_parent(
-        visual: IDCompositionVisual3,
-        parent_visual: Option<IDCompositionVisual3>,
-    ) -> Self {
+    pub fn new_with_parent(visual: Visual, parent_visual: Option<Visual>) -> Self {
         Self {
             inner: Some(visual),
             parent_visual,
@@ -154,18 +156,18 @@ impl VisualGraphics {
         self.inner.is_some()
     }
 
-    /// IDCompositionVisual3への参照を取得する
-    pub fn visual(&self) -> Option<&IDCompositionVisual3> {
+    /// WUC Visual への参照を取得する
+    pub fn visual(&self) -> Option<&Visual> {
         self.inner.as_ref()
     }
 
     /// 親Visualへの参照を取得する
-    pub fn parent_visual(&self) -> Option<&IDCompositionVisual3> {
+    pub fn parent_visual(&self) -> Option<&Visual> {
         self.parent_visual.as_ref()
     }
 
     /// 親Visualを設定/更新する
-    pub fn set_parent_visual(&mut self, parent: Option<IDCompositionVisual3>) {
+    pub fn set_parent_visual(&mut self, parent: Option<Visual>) {
         self.parent_visual = parent;
     }
 }
@@ -176,25 +178,35 @@ impl VisualGraphics {
 /// mark_dirty_surfacesシステムでAdded<SurfaceGraphics>として検出される
 #[derive(Component, Debug, Default)]
 pub struct SurfaceGraphics {
-    inner: Option<IDCompositionSurface>,
+    inner: Option<CompositionDrawingSurface>,
+    /// surface を束ねる SurfaceBrush（要件 6.3）。
+    /// DComp は visual.SetContent(surface) 一段だったが、WUC は brush が一段挟まる。
+    /// brush を保持し損ねると surface が解放され黒画像化するため、寿命をここで固定する。
+    brush: Option<CompositionSurfaceBrush>,
     pub size: (u32, u32),
 }
 
-// SAFETY 条件: WindowGraphics と同様。IDCompositionSurface への COM 呼び出しが
-// 同時に実行されないことを ECS スケジュール構成が担保する前提（DComp は外部同期前提）。
+// SAFETY 条件: WindowGraphics と同様。CompositionDrawingSurface / CompositionSurfaceBrush への
+// 呼び出しが同時に実行されないことを ECS スケジュール構成が担保する前提（UI スレッドアフィニティ）。
 unsafe impl Send for SurfaceGraphics {}
 unsafe impl Sync for SurfaceGraphics {}
 
 impl SurfaceGraphics {
-    pub fn new(surface: IDCompositionSurface, size: (u32, u32)) -> Self {
+    pub fn new(
+        surface: CompositionDrawingSurface,
+        brush: CompositionSurfaceBrush,
+        size: (u32, u32),
+    ) -> Self {
         Self {
             inner: Some(surface),
+            brush: Some(brush),
             size,
         }
     }
 
     pub fn invalidate(&mut self) {
         self.inner = None;
+        self.brush = None;
         self.size = (0, 0);
     }
 
@@ -202,27 +214,39 @@ impl SurfaceGraphics {
         self.inner.is_some()
     }
 
-    /// IDCompositionSurfaceへの参照を取得
-    pub fn surface(&self) -> Option<&IDCompositionSurface> {
+    /// CompositionDrawingSurface への参照を取得
+    pub fn surface(&self) -> Option<&CompositionDrawingSurface> {
         self.inner.as_ref()
     }
 
-    /// Surfaceを設定（既存のコンポーネントを直接更新）
+    /// SurfaceBrush への参照を取得
+    pub fn brush(&self) -> Option<&CompositionSurfaceBrush> {
+        self.brush.as_ref()
+    }
+
+    /// Surface と brush を設定（既存のコンポーネントを直接更新）
     ///
     /// commands.insert()の代わりにこのメソッドを使用することで、
     /// 同一フレーム内で変更が即座に反映される。
     /// サイズが異なる場合のみ更新し、Changedフラグを適切に管理。
-    pub fn set_surface(&mut self, surface: IDCompositionSurface, size: (u32, u32)) {
+    pub fn set_surface(
+        &mut self,
+        surface: CompositionDrawingSurface,
+        brush: CompositionSurfaceBrush,
+        size: (u32, u32),
+    ) {
         self.inner = Some(surface);
+        self.brush = Some(brush);
         self.size = size;
     }
 
-    /// Surfaceをクリア（invalidateと同じだが意図を明確に）
+    /// Surface と brush をクリア（invalidateと同じだが意図を明確に）
     ///
     /// commands.remove()の代わりにこのメソッドを使用することで、
     /// コンポーネント自体は残したまま内容だけをクリアする。
     pub fn clear(&mut self) {
         self.inner = None;
+        self.brush = None;
         self.size = (0, 0);
     }
 }
