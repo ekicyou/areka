@@ -3,6 +3,8 @@
 > **⚠ スコープ拡大（2026-07-02・/kiro-discovery 再入）**: 本仕様は当初「host-32 flat-C load 層の結線」だけだったが、設計ディスカッションで **IShiori ABI の根幹的欠陥（`load_dir` 欠落）** が判明。開発者判断により **IShiori / IShioriHost / IShiori コンストラクタ関数の ABI 契約是正まで本仕様に畳む**（分割せず 1 仕様完結）。理由: `load_dir` の根幹性・所有権・lifecycle(Drop) の推論は host-32 flat-C 層と IShiori COM 層を**地続きに貫く**ため、**context 継続性**を優先。1-feature=1-branch=1-PR より継続性を上位に置く開発者決定。名前 `host32-shiori-load` は拡大後スコープをやや過小表現するが、継続性のため改名しない。
 >
 > M1 `areka-P0-emo2-boot`「① SHIORI 通信層エンジン host-32」トラック。go ゲートは先進坑 `pilot-shiori-host-32`（✅ go 済 2026-07-01）で充足済み。
+>
+> **⚠ 既存 spec 文書の陳腐化**: 現存の `requirements.md`（R1–R6）・`design.md`・`design-validation.md`（GO 判定）・`research.md` §8–12 は**拡大前（WS-A のみ）**の成果物。拡大後の正は本 brief。`/kiro-spec-requirements` → `/kiro-design` で再生成するまで、旧文書（特に旧 GO 判定）を信用しないこと。
 
 ## Problem
 
@@ -29,7 +31,7 @@
 **下から上まで `load_dir` が per-instance で貫通し、teardown が RAII で一貫する。**
 
 - host-32: x64 親が実 i686 helper 越しに SHIORI DLL を `LoadLibraryW` → `load(load_dir)` 成功（`true`）まで駆動し無クラッシュ観測。helper 内に `load`/`unload`/`request` 3 fn ポインタを保持する常設 `ShioriByteProxy` が立つ。
-- IShiori: `Load(host, load_dir)` が per-instance の load_dir を COM 契約面で受け、`Unload` は消え Drop(RAII) が teardown を持ち、メソッドは型付き COM 引数で安全化される。コンストラクタ関数の ABI も是正される。
+- IShiori: **`IShioriFactory::create` が生成＋load を融合**し per-instance の load_dir を COM 契約面で受け、`IShiori` は `Get`/`Notify` へ痩身、`Unload` は消え Drop(RAII) が teardown を持ち、メソッドは型付き COM 引数で安全化される。module entry は `shiori_factory` へ是正される。
 
 ## Approach
 
@@ -70,7 +72,7 @@
 
 - **In**:
   - **[WS-A]** helper の `Load` トリガ結線／`ShioriByteProxy`（3 エクスポート解決・`load` 呼出・ANSI 符号化・HGLOBAL 所有権・Drop courtesy unload）／`spawn` 起動パラメーター拡張（load_dir・SHIORI 名 arg＋env・cwd=load_dir）／最小 SHIORI DLL fixture crate／LOAD E2E（成功・失敗・無クラッシュ）。
-  - **[WS-B]** `IShiori`/`IShioriHost` の ABI 是正（`Load(host, load_dir)`・`unsafe` 除去・`Unload` 削除→Drop・型付き COM 引数）／IShiori コンストラクタ関数 ABI 是正／`ergonomic`（`ShioriExt`）・mock/test の追随／consumer（`shiori-protocol`/`-reference`）の波及更新。
+  - **[WS-B]** `IShiori`/`IShioriHost` の ABI 是正（factory 融合 create・`Get`/`Notify` 分離・`GetProperty`/`SetProperty` 新設・`unsafe` 除去・`Unload` 削除→Drop・型付き COM 引数）／module entry `shiori_factory`＋`IShioriFactory` 新設／`ergonomic`（`ShioriExt`・安全メソッド化に伴う存廃再検討）・mock/test の追随／consumer（`shiori-protocol`/`-reference`・`ShioriSession`）の波及更新。**ABI 証明は reference/mock backend で行う**（互換 backend の factory 実装は下流）。
 - **Out**:
   - `request` の**呼出**・SHIORI/3.0 build/marshal・Value parse・request の UTF-8 charset（→ `areka-P0-host32-request`）。※`request` fn ポインタの解決は本仕様。
   - 常駐メッセージループ生存・`OnSecondChange` poll・crash 監視の lifecycle（→ `areka-P0-host32-lifecycle`）。※teardown の Drop courtesy unload は本仕様。
@@ -99,7 +101,7 @@
 - **Downstream**:
   - `areka-P0-host32-request`（proxy の `request` 呼出）／`areka-P0-host32-lifecycle`（常駐＋unload 恒常呼出）。
   - IShiori consumer: `areka-P0-shiori-protocol`/`-reference`（是正 ABI へ追随・本仕様内で更新）。
-  - x64 IShiori 過去互換アダプタ（host-32 を IShiori として提示・是正後 `Load(host, load_dir)` を消費）。
+  - x64 過去互換アダプタ＝**host-32 backend の `IShioriFactory` 実装**（`create`=spawn＋LOAD トリガ＋ack、`Get`=request wire）。`Get` 結線が必須ゆえ**下流 `areka-P0-host32-request` の領分**——本仕様は両半（ABI＝reference/mock・flat-C load＝WS-A E2E）を個別に証明し、結線は下流が行う。
 
 ## Existing Spec Touchpoints
 
@@ -120,9 +122,9 @@
 
 ## Open Questions（design で決める・discovery のブロッカーではない）
 
-1. **IShiori 安全メソッドの実装可否**: windows-core 0.62 の `#[interface]` で `unsafe` を外し型付き COM 引数（`Ref<T>`/`OutRef<T>`/`&HSTRING`）／`Request` の out-param（応答・token）を安全表現できるか。不可なら最小 `unsafe` を局所化する落としどころ。
-2. **factory の詳細**: `IShioriFactory` の新規 IID 採番／`create` の out-param 形（`OutRef<IShiori>` vs raw）／host-32 x64 過去互換アダプタが**独自 factory**（別 backend）として `IShioriFactory` を実装する形。`shiori_factory` の C 入口署名確定。
-6. **プロパティシステム semantics**: `GetProperty`/`SetProperty` の key 名前空間（SSP `list_propertysystem` の dotted パス・汎用 vs `ext.` 拡張）・同期契約・スレッド安全性（brain 任意スレッドから呼ばれうる）・欠落 key の扱い（error vs 空）・host-32 越しの実現（compat は sakura `\![get,property]`/イベント経由か・native は同期コールバックか）を design で確定。M1 で emo2 が使う最小 key 集合に絞る。
-3. **consumer 波及範囲**: `shiori-protocol`/`-reference`/ergonomic/mock の具体的更新点を design で網羅（IShiori impl・呼出側）。
-4. **ABI 一次源再確認**: 実装前に `git submodule update --init` で `vendors/pasta` を展開し flat-C 署名をバイト正確に再確認（`[patch.crates-io] pasta_core` の path 健全化も兼ねる）。
-5. **記憶訂正**: `areka-engine-construction-model` の「dir を construction に隠す」解釈を D1 に沿って訂正（load_dir は load 契約に必須）。
+1. **IShiori 安全メソッドの実装可否**: windows-core 0.62 の `#[interface]` で `unsafe` を外し型付き COM 引数（`Ref<T>`/`OutRef<T>`/`&HSTRING`）／`Get` の応答（`RequestOutcome`＝即時/遅延+token）を `Result` で安全表現できるか。不可なら最小 `unsafe` を局所化する落としどころ。
+2. **factory の詳細**: `IShioriFactory` の新規 IID 採番／`create` の out 形（`OutRef<IShiori>` vs `Result<IShiori>` 直返し vs raw）／`shiori_factory` の C 入口署名確定。互換 backend の factory 実装自体は下流（Downstream 節）。
+3. **プロパティシステム semantics**: `GetProperty`/`SetProperty` の key 名前空間（SSP `list_propertysystem` の dotted パス・汎用 vs `ext.` 拡張）・同期契約・**再入**（brain が `Get` 処理中に同期で呼び戻す＝sink は mailbox 投函でなく**同期応答**が必要）・スレッド安全性（brain 任意スレッドから呼ばれうる）・欠落 key の扱い（error vs 空）・host-32 越しの実現（compat は SHIORI3 wire にプロパティ手続きが無いため sakura script/イベント経由か・native は同期コールバックか）を design で確定。M1 で emo2 が使う最小 key 集合に絞る。
+4. **consumer 波及範囲**: `shiori-protocol`/`-reference`/`ShioriSession`/ergonomic/mock の具体的更新点を design で網羅（`ShioriExt` は安全メソッド化で存在意義ごと再検討・`RequestOutcome`→`GetOutcome` 改名検討含む）。
+5. **ABI 一次源再確認**: 実装前に `git submodule update --init` で `vendors/pasta` を展開し flat-C 署名をバイト正確に再確認（`[patch.crates-io] pasta_core` の path 健全化も兼ねる）。
+6. ~~**記憶訂正**~~ **✅済（2026-07-02）**: `areka-engine-construction-model` へ D1 訂正を追記済み。
