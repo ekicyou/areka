@@ -265,3 +265,174 @@ fn ansi_encode(path: &Path) -> Result<Vec<u8>, ProxyError> {
     buf.truncate(written as usize);
     Ok(buf)
 }
+
+#[cfg(test)]
+mod tests {
+    //! Task 5.2: プロキシの i686 単体テスト（design §387 Validation・Testing Strategy Unit #6・
+    //! 確定設計判断 (d)）。3 本立て:
+    //! 1. 純関数部（ANSI(CP_ACP) 符号化）の決定的検証。
+    //! 2. `kernel32.dll` への load で `EntryNotFound` を決定的に証明（エクスポート欠落態様・R6.2）。
+    //! 3. testdll を直接 `load`→`drop` し、courtesy unload の実呼出（観測マーカー）と無 panic を確認
+    //!    （R2.2・E2E では Drop 経路が実行されない補完）。
+
+    use super::*;
+    use std::path::{Path, PathBuf};
+
+    // ---------------------------------------------------------------------
+    // 1. 純関数部の検証: ANSI(CP_ACP) 符号化
+    // ---------------------------------------------------------------------
+
+    /// ASCII パスは CP_ACP でも同一バイト列に符号化される（NUL 終端は付けない＝正味長）。
+    /// 環境依存の少ない ASCII で決定的に検証する。
+    #[test]
+    fn ansi_encode_ascii_is_identity_no_nul() {
+        let p = Path::new(r"C:\ghost\master");
+        let bytes = ansi_encode(p).expect("ASCII path must encode");
+        // ASCII は CP_ACP でそのままの 1 バイト列。NUL 終端規約: ansi_encode は終端を付けない。
+        assert_eq!(bytes, br"C:\ghost\master".to_vec());
+        // 末尾に NUL が付いていないこと（正味長）。
+        assert_ne!(bytes.last(), Some(&0u8));
+        assert_eq!(bytes.len(), r"C:\ghost\master".len());
+    }
+
+    /// 空パスは空バイト列（防御的許容・確保 0 バイトも有効）。
+    #[test]
+    fn ansi_encode_empty_is_empty() {
+        let bytes = ansi_encode(Path::new("")).expect("empty path encodes to empty");
+        assert!(bytes.is_empty());
+    }
+
+    /// 日本語混じりは CP_ACP(=日本語ロケールで Shift_JIS)の複数バイトへ符号化され、ASCII 部と
+    /// 混在する。バイト内容はロケール依存ゆえ「非空・ASCII 区切り '\\' を含む・元 UTF-8 と異なる」
+    /// のみ決定的に確認する（環境依存の強い部分は緩く・純関数が panic せず往復する証拠）。
+    #[test]
+    fn ansi_encode_mixed_japanese_is_multibyte() {
+        let p = Path::new(r"C:\ゴースト");
+        let bytes = ansi_encode(p).expect("mixed path must encode without panic");
+        assert!(!bytes.is_empty());
+        // ASCII 前置部（`C:\`）はそのまま先頭に載る。
+        assert_eq!(&bytes[..3], br"C:\");
+        // CP_ACP は UTF-8 と異なる符号化ゆえバイト列は元 UTF-8 と一致しない（SJIS 等）。
+        assert_ne!(bytes, r"C:\ゴースト".as_bytes().to_vec());
+    }
+
+    // ---------------------------------------------------------------------
+    // 2. kernel32.dll で EntryNotFound（R6.2・設計判断 (d)）
+    // ---------------------------------------------------------------------
+
+    /// `kernel32.dll` は必ず存在し LoadLibraryW は成功するが、`load`/`unload`/`request` の
+    /// SHIORI エクスポートを持たない。ゆえに `ShioriByteProxy::load` は解決段で
+    /// `ProxyError::EntryNotFound` を**決定的**に返す（エクスポート欠落態様の証明・R6.2）。
+    /// 半構築を残さないため内部で FreeLibrary 済み（Err = 状態残さず）。
+    #[test]
+    fn kernel32_yields_entry_not_found() {
+        let dll = Path::new(r"C:\Windows\System32\kernel32.dll");
+        let load_dir = std::env::temp_dir(); // 実在 dir（符号化・確保段には到達しない）。
+        let result = ShioriByteProxy::load(dll, &load_dir);
+        match result {
+            Err(ProxyError::EntryNotFound(sym)) => {
+                // 最初に解決を試みるのは "load"（3 解決の先頭）。
+                assert_eq!(sym, "load", "kernel32 は SHIORI load を持たない");
+            }
+            // Ok は kernel32 が SHIORI エクスポートを持たない以上あり得ない。他 ProxyError も不可。
+            // ShioriByteProxy は Debug 非実装ゆえ Result 全体は整形せず、Err 変種のみ整形する。
+            Err(e) => panic!("expected EntryNotFound(\"load\"), got other error {e:?}"),
+            Ok(_) => panic!("expected EntryNotFound(\"load\"), but load unexpectedly succeeded"),
+        }
+    }
+
+    // ---------------------------------------------------------------------
+    // 3. testdll 直接 load→drop で courtesy unload 実証（R2.2・E2E 補完）
+    // ---------------------------------------------------------------------
+
+    /// testdll の `shiori.dll` を解決する。
+    /// 優先順: env `HOST32_TESTDLL_DLL` → `CARGO_MANIFEST_DIR` から target 探索。
+    /// **silent skip 禁止**: 見つからなければ明確に panic（設計判断 (d)）。
+    fn resolve_testdll() -> PathBuf {
+        if let Ok(p) = std::env::var("HOST32_TESTDLL_DLL") {
+            let path = PathBuf::from(p);
+            assert!(
+                path.is_file(),
+                "HOST32_TESTDLL_DLL={} が実ファイルでない",
+                path.display()
+            );
+            return path;
+        }
+        // crates/shiori-host32-helper から見た workspace target。
+        let manifest = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        let target_root = manifest.join("../../target/i686-pc-windows-msvc");
+        for profile in ["debug", "release"] {
+            let candidate = target_root.join(profile).join("shiori.dll");
+            if candidate.is_file() {
+                return candidate;
+            }
+        }
+        panic!(
+            "testdll shiori.dll not found. まず PowerShell で \
+             `cargo build -p shiori-host32-testdll --target i686-pc-windows-msvc` を実行するか、\
+             env HOST32_TESTDLL_DLL に絶対パスを設定すること（silent skip 禁止・設計判断 (d)）。\
+             探索した base: {}",
+            target_root.display()
+        );
+    }
+
+    /// testdll を直接 `load`→`drop` し、Drop の courtesy `unload` が実呼出されること
+    /// （unload 観測マーカーのファイル作成）と、Drop 全体が無 panic で完了することを確認する
+    /// （R2.2 の受入証拠・E2E は helper をプロセスごと落とすため Drop が走らない、その補完）。
+    ///
+    /// env `HOST32_TESTDLL_UNLOAD_MARKER` はプロセス global ゆえ、本テストは testdll を load する
+    /// 唯一のテストにして競合を避ける（他テストは testdll 非依存）。
+    #[test]
+    fn testdll_drop_invokes_courtesy_unload() {
+        let src_dll = resolve_testdll();
+
+        // 一時 dir を load_dir とし、そこへ shiori.dll をコピー（絶対 dll_path＝load_dir\shiori.dll・
+        // cwd=load_dir 慣習の縮図）。テスト固有名で衝突を避ける。
+        let unique = format!(
+            "host32_proxy_test_{}_{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_nanos())
+                .unwrap_or(0)
+        );
+        let load_dir = std::env::temp_dir().join(&unique);
+        std::fs::create_dir_all(&load_dir).expect("create temp load_dir");
+        let dll_path = load_dir.join("shiori.dll");
+        std::fs::copy(&src_dll, &dll_path).expect("copy shiori.dll into load_dir");
+
+        // unload 観測マーカーの一時パス（load 前に未作成であること）。
+        let marker = load_dir.join("unload.marker");
+        assert!(!marker.exists(), "marker は load 前に未作成");
+
+        // SAFETY: edition 2024 では set_var は unsafe（プロセス global 変更）。本テストは testdll を
+        // load する唯一のテストゆえ他テストと競合しない。set は load 前に行う。
+        unsafe {
+            std::env::set_var("HOST32_TESTDLL_UNLOAD_MARKER", &marker);
+        }
+
+        // load 成功（testdll の load は入力 HGLOBAL を GlobalFree し true 返し）。
+        let proxy = ShioriByteProxy::load(&dll_path, &load_dir)
+            .expect("testdll load must succeed");
+
+        // まだ Drop していないのでマーカーは未作成。
+        assert!(!marker.exists(), "unload はまだ呼ばれていない");
+
+        // Drop → courtesy unload 実呼出 → testdll が marker ファイルを作成。無 panic で完了。
+        drop(proxy);
+
+        assert!(
+            marker.exists(),
+            "Drop の courtesy unload が呼ばれ marker が作成されるはず（R2.2）"
+        );
+        let content = std::fs::read(&marker).expect("read marker");
+        assert_eq!(content, b"unloaded", "testdll unload が書くマーカー内容");
+
+        // 後始末（best-effort）: env・一時 dir を掃除。
+        // SAFETY: set_var と同じく unsafe。以後 testdll を load するテストは無い。
+        unsafe {
+            std::env::remove_var("HOST32_TESTDLL_UNLOAD_MARKER");
+        }
+        let _ = std::fs::remove_dir_all(&load_dir);
+    }
+}

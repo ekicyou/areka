@@ -54,7 +54,7 @@
   - _Requirements: 1.1, 2.1, 2.3, 4.2, 4.4, 4.5, 4.7, 6.1, 6.2, 6.3, 13.3_
   - _Boundary: ShioriByteProxy_
   - _Depends: 1_
-- [ ] 5.2 プロキシの i686 単体テスト
+- [x] 5.2 プロキシの i686 単体テスト
   - パス組立・ANSI 符号化の純関数部の検証
   - kernel32.dll に対する load 解決失敗で EntryNotFound を決定的に証明（エクスポート欠落態様）
   - testdll を直接 load→drop し、courtesy unload の実呼出（unload 観測マーカー）と無 panic を確認（E2E では Drop 経路が実行されない補完）
@@ -173,3 +173,4 @@
 - Task 3.2: `InboundAction::TriggerLoad` 変種を新設し `classify_inbound` が `MsgTag::Load`（ペイロード無視）を TriggerLoad へ分類（IgnoreKnown から分離・R4.1）。`handle_message` の TriggerLoad アームは **no-crash プレースホルダ（eprintln のみ・`Some(LRESULT(0))`）**＝**Task 6 がここを proxy 確立＋load＋ack[1]/[0] 返送へ置換する**。ack/proxy/LOAD カウンタ/`mod shiori_proxy` は未着手（Task 5.1/6 の領分）。
 - Task 4: 新設 `crates/shiori-host32-testdll`（`[lib] name="shiori"` cdylib → `shiori.dll`）。i686 ビルドで `target/i686-pc-windows-msvc/debug/shiori.dll` 生成・dumpbin で `load`/`unload`/`request` **無装飾**エクスポート確認。**重要（Task 5.1 proxy へ）**: windows 0.62.2 では `GlobalFree` は `Win32_System_Memory` ではなく **`windows::Win32::Foundation::GlobalFree`**（`GlobalFree(Option<HGLOBAL>) -> Result<HGLOBAL>`・`let _ =` で無視）。`GlobalAlloc` は `Win32_System_Memory`。`HGLOBAL` も `Win32_Foundation`。testdll の env 契約: `HOST32_TESTDLL_LOAD_FAIL=1`→load false・`HOST32_TESTDLL_UNLOAD_MARKER=<path>`→unload 時ファイル作成（Task 5.2/7 の観測手段）。
 - Task 5.1: `crates/shiori-host32-helper/src/shiori_proxy.rs` 新設（`#![allow(dead_code)]`＝Task 6 が consume 時に外す）。公開 API は `ShioriByteProxy::load(dll_path: &Path, load_dir: &Path) -> Result<Self, ProxyError>`（**dll_path は絶対パス＝Task 6 が `load_dir.join(shiori_name)` を渡す**）。`ProxyError`＝`LoadLibraryFailed/EntryNotFound/EncodingFailed/LoadReturnedFalse`（`#[derive(Debug)]`）。入力 HGLOBAL は callee 解放（proxy は GlobalFree しない）。途中失敗は内部 FreeLibrary。**Drop が唯一の teardown**（courtesy unload→FreeLibrary・結果無視）＝Task 6 は proxy を HelperShared に保持するだけでよく明示 unload 呼出は不要。helper Cargo.toml に windows features `Win32_System_LibraryLoader`/`Win32_System_Memory`/`Win32_Globalization` 追加済み。WideCharToMultiByte フラグ=0（CP_ACP に WC_COMPOSITECHECK は ERROR_INVALID_FLAGS 危険）。main.rs は `mod shiori_proxy;` 宣言のみ（WndProc 結線は Task 6）。
+- Task 5.2: proxy の i686 単体テスト（`shiori_proxy.rs` の test mod・21 件 green）。`kernel32.dll` load→`EntryNotFound("load")` で欠落態様を決定的証明。**testdll 解決の再利用パターン**（Task 7 E2E でも同型）: env `HOST32_TESTDLL_DLL` 優先→`CARGO_MANIFEST_DIR/../../target/i686-pc-windows-msvc/{debug,release}/shiori.dll` 探索→**不在は panic（silent skip 禁止）**。Drop teardown 実証は testdll を一時 dir へコピー→`HOST32_TESTDLL_UNLOAD_MARKER` 設定→load Ok→drop→マーカー `b"unloaded"` 生成を assert。**2 段ビルド必須**（testdll i686 build →helper test）。edition 2024 の `set_var`/`remove_var` は `unsafe`。
