@@ -5,3 +5,4 @@ pub mod dcomp;
 pub mod dwrite;
 pub mod ulw;
 pub mod wic;
+pub mod wuc;

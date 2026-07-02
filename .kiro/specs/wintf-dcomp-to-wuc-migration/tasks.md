@@ -11,7 +11,7 @@
   - _Requirements: 8.1_
   - _Descoped (owner 2026-07-02): i686 ビルドは対象外。wintf は表示合成レイヤーで x64/arm64 のみ、i686 は helper 専用クレート。要件 8.4 の 32bit 可搬節は wintf にはアーキ矛盾ゆえ x64 のみで判定。arm64 検証も後回し（x64 完了後の別仕様）。_
 
-- [ ] 1.2 com/wuc interop Ext ラッパー群を実装し往復を単体テスト
+- [x] 1.2 com/wuc interop Ext ラッパー群を実装し往復を単体テスト
   - `ICompositorInterop::CreateGraphicsDevice`・`ICompositorDesktopInterop::CreateDesktopWindowTarget`・`ICompositionDrawingSurfaceInterop::BeginDraw`/`EndDraw` を `Result` 返却の安全ラッパーへ包み、unsafe を局所化する
   - `begin_draw` は IID＋void** out-param から D2D DC を cast し `(ID2D1DeviceContext3, POINT)` を返す（現行 com/dcomp.rs の signature と byte 一致・下流 render_surface 差分ゼロ）
   - 観測可能な完了: BeginDraw wrapper の往復単体テスト（atlas offset 非ゼロケース含む）が通る
@@ -121,3 +121,4 @@
 
 - **i686/arm64 descope（owner ekicyou 2026-07-02）**: wintf は表示合成レイヤーで **x64 or arm64 のみ**。i686（x86）は SHIORI 駆動 helper 専用の別クレートで、wintf は i686 ターゲットにならない。ゆえに task 1.1 の i686 節・task 1.5・task 4.4 の i686 ランタイム・要件 8.4 の 32bit 可搬は本移行では x64 のみで判定（arch 矛盾の spec 誤り）。arm64 検証も後回し＝x64 完了後にオプション別仕様。**当面 x64 のみを意識する**。（参考: full wintf lib を i686 build すると既存 `api.rs`/`window_factory.rs` の `SetWindowLongPtr` isize/i32 不一致で落ちるが wintf x86 非対象ゆえ修正不要）
 - **1.1 完了（x64）**: ルート `Cargo.toml` に WUC features＋`windows-numerics=0.3.1` は着手時点で working tree に存在。x64 `cargo build -p wintf`（exit 0）・`cargo build -p wintf --release`（z/LTO・exit 0）通過。DComp feature `Win32_Graphics_DirectComposition` 残置確認。
+- **1.2 完了・WUC BeginDraw の実挙動発見**: `com/wuc.rs` に interop Ext 3種＋`create_dispatcher_queue_controller` 実装。`begin_draw` は dcomp.rs L254-259 と byte 一致。往復テスト `com::wuc::tests::begin_draw_roundtrip` PASS（atlas updateoffset=(1,2) 実測・非ゼロ観測）。**重要（後続 2.4 render_surface へ）**: WUC `ICompositionDrawingSurfaceInterop::BeginDraw` に `Some(部分矩形)` を渡すと `E_INVALIDARG (0x80070057)`。本番 `render_surface` は `begin_draw(None)`（全面）のみ使うため影響なし。移行後も **None 経路のみ**を使うこと。apartment 種別実測: cargo test スレッドは COM 未初期化ゆえ `DQTAT_COM_ASTA` で成功（design §2.1 と一致）。
