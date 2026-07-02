@@ -16,5 +16,5 @@ pub mod parent_window;
 pub mod process_host;
 
 pub use error::{HandshakeError, SpawnError};
-pub use parent_window::{ParentMessageWindow, WindowCreationError};
+pub use parent_window::{ParentMessageWindow, SendError, WindowCreationError};
 pub use process_host::{ExitKind, HelperHandle, PARENT_HWND_ENV, poll_exit, poll_exit_kind, spawn};

@@ -43,7 +43,7 @@
   - _Requirements: 3.2, 3.4_
   - _Boundary: ParentMessageWindow_
   - _Depends: 2.2_
-- [ ] 4.3 送信パス（再入受領・ハンドシェイクゲート・timeout）
+- [x] 4.3 送信パス（再入受領・ハンドシェイクゲート・timeout）
   - `send_request`：`slot.clear → SendMessageTimeout(REQUEST) → slot.take`。RESPONSE は親 WndProc へ再入配送され store 後即 return（跨プロセス SendMessage なし＝デッドロック回避の核）
   - ハンドシェイク未完の送信を拒否（`HandshakeError::Incomplete`）、上限時間内未応答は `IpcError::Timeout`（`SMTO_ABORTIFHUNG`）。heartbeat は pump フェーズ専用（in-flight 中は `SendMessageTimeout` がブロックし WM_NULL は配送されず `clear→store→take` 不変条件を壊さない）
   - 観測可能な完了: 単一往復が無デッドロックで成立し、未ハンドシェイク送信が `Incomplete` で弾かれ、無応答時に `Timeout` で復帰することを観測できる
@@ -76,3 +76,5 @@
 - 3: helper は親HWNDを **arg1 優先・fallback env `HOST32_PARENT_HWND`** の **10進 u32**（`parse::<u32>()`）で取得する。**task 4.1 `ProcessHost::spawn` はこの規約（同一 env キー名・10進表現・引数順）で親HWNDを渡す**こと。統合 task 5.1 で実往復として整合を担保する（cross-task 契約）。
 - 3: wintf-winmsg-executor 0.0.5 の message-only 窓は **同一 i686 プロセス内で2組独立生成すると2組目が `WindowCreationError`** になる実行時制約あり。helper のセルフテストは窓を1組に集約した単一 loopback テストにし、不正フレーム分類は窓なし純関数（`classify_inbound`）へ切り出して独立検証する。
 - 環境: subagent の出力トランスクリプト（tasks/*.output）は0バイトで永続化されない＝消失した未コミット作業は復元不能。**未コミット実装をレビューへ回す前に scratchpad へバックアップ**し、レビュアーには **`git checkout`/`restore`/`stash`/`reset`/`clean` 禁止**（ミューテーション検証は Edit で戻す）を課すこと（task 3 は初回レビュアーの git 復元＋APIクラッシュで実装消失→再実装した）。
+- 4.2: `ParentMessageWindow::create` は `WindowCreationError`（thiserror・parent_window.rs）を返す。design §413 は `HandshakeError` と記すが「窓生成失敗はハンドシェイク意味論以前」ゆえ型分離した（設計逸脱・実装が正・妥当）。heartbeat は別スレッド `PostMessageW(WM_NULL)` 25ms 間隔＋deadline 再評価で `pump_until_hello_or` の pump フェーズ専用。
+- 4.3: `send_request` は `SendError { Handshake(HandshakeError), Ipc(IpcError) }`（両 `#[from]`・lib.rs re-export）を返す。design §417 は `Result<Vec<u8>, IpcError>` と記すが、ゲート拒否（handshake 層・要件3.3）と transport 失敗（要件5.x）の型不整合を層分離で解決したもの（設計逸脱・実装が正）。**design.md §417 の型表記は実装 `SendError` に後追い更新する余地あり**（非ブロッキング）。RESPONSE 再入 store→即 return・heartbeat 不干渉（in-flight は SendMessageTimeout ブロックで WM_NULL 非配送）で `clear→store→take` 不変を保つ。
