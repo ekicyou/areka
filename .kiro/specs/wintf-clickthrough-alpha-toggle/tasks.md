@@ -2,7 +2,7 @@
 
 > 着手前規律（R6.5）: 既存コードへ触れるタスク（1.1／3.2／4.1）は、編集前に「変更対象ファイルと変更内容」を依頼者へ提示し確認を得てから着手する。追加 ex-style・`WM_NCHITTEST` ハンドラ・依存追加が必要と判断した場合は独断で入れず理由を添えて確認する（R6.4）。
 
-- [ ] 1. Foundation: ex-style 動的トグル API とモジュール骨格
+- [x] 1. Foundation: ex-style 動的トグル API とモジュール骨格
 - [x] 1.1 `WS_EX_TRANSPARENT` 動的トグル最小 API の実装
   - 対象 HWND の `WS_EX_TRANSPARENT` ビットのみを引数フラグへ一致させ、`SetWindowLongPtr(GWL_EXSTYLE)` ＋ `SetWindowPos(SWP_FRAMECHANGED|SWP_NOMOVE|SWP_NOSIZE|SWP_NOZORDER|SWP_NOACTIVATE)` で反映する（`apply_initial_state` のレシピ準拠）
   - `WS_EX_LAYERED` は操作しない・`WM_NCHITTEST`→`HTTRANSPARENT` ハンドラは追加しない。既存 `WinStyle::commit`・既存ビルダーは不変
@@ -16,7 +16,7 @@
   - _Requirements: 1.5, 3.2_
   - _Boundary: ClickThroughRegistry_
 
-- [ ] 2. Core: カーソル監視ワーカと判定ロジック
+- [x] 2. Core: カーソル監視ワーカと判定ロジック
 - [x] 2.1 (P) カーソル監視ワーカ（別スレッド・`event_listener` 起床・RAII）
   - 専用ワーカスレッドで `GetCursorPos`（screen physical）を継続取得し、カーソル移動時のみ `event_listener::Event` で UI スレッドを起床する。`&World` は触れない
   - 最新座標を原子的に保持し、`latest_pos.store(...)` → `event.notify(...)` の順序を厳守（逆順による座標遅延レース回避）。tokio・外部 async ランタイム不使用
@@ -33,7 +33,7 @@
   - _Boundary: ClickThroughController_
   - _Depends: 1.2_
 
-- [ ] 3. Integration: 判定ループ結線と起動フック
+- [x] 3. Integration: 判定ループ結線と起動フック
 - [x] 3.1 UI スレッド判定・適用ループの結線（二重起床・post-tick 評価）
   - `spawn_local` の async ループを UI スレッドで駆動。起床契機はカーソル移動 notify と既存 VSync tick の二重化。listen-before-work 規律を踏襲
   - 評価は当該フレームの ECS tick 完了後（post-tick・`GlobalArrangement`／`AlphaMask`／`DragState` 確定後）に実行。レジストリの各対象窓についてワーカ最新カーソル座標を窓クライアント座標へ変換し `hit_test_in_window` を呼ぶ（座標変換は既存経路へ委譲）
@@ -50,7 +50,7 @@
   - _Boundary: runtime wiring_
   - _Depends: 3.1_
 
-- [ ] 4. areka 実効化・検証・ドキュメント
+- [x] 4. areka 実効化・検証・ドキュメント
 - [x] 4.1 areka の WUC 化と機構登録
   - shell 窓・balloon 窓を `CompositionMode::DComp`（WUC）へ切替え（`ex_style` は factory の `compute_ex_style` が自動計算ゆえ変更不要）、両 window Entity を機構へ登録する
   - wintf ライブラリの ULW バックエンドは残置（本坑では areka のみ WUC 化）。後続 `wintf-ulw-removal` が areka を巻き込まない状態を作る
