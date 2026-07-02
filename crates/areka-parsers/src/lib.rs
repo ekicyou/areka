@@ -7,3 +7,4 @@
 pub mod charset;
 pub mod kv;
 pub mod sakura;
+pub mod shell;

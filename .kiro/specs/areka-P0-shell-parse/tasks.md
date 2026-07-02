@@ -1,7 +1,7 @@
 # Implementation Plan
 
-- [ ] 1. Foundation: shell モジュール雛形とクレート登録
-- [ ] 1.1 shell モジュールを areka-parsers に接ぎ木し、公開面の骨格を用意する
+- [x] 1. Foundation: shell モジュール雛形とクレート登録
+- [x] 1.1 shell モジュールを areka-parsers に接ぎ木し、公開面の骨格を用意する
   - クレートに新モジュールを追加し、既存 3 兄弟（charset / kv / sakura）と非衝突に並存させる
   - 四層（model / lexer / decode / parse）のサブモジュール宣言と、公開面を一点集約する骨格を置く
   - 外部依存を一切増やさない（tracing のみ）ことを維持する
