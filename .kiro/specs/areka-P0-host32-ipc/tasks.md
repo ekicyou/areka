@@ -7,7 +7,7 @@
   - _Requirements: 7.1_
 
 - [ ] 2. 共有プロトコル（shiori-host32-ipc / proto）
-- [ ] 2.1 WM_COPYDATA framing と HWND 符号化・不正フレーム検出
+- [x] 2.1 WM_COPYDATA framing と HWND 符号化・不正フレーム検出
   - `MsgTag`（`dwData` 低32bit・Hello/Load/Request/Response/Unload）、生バイト payload 規約（`cbData`=長さ・固定ヘッダ長0）、HWND の u32 LE 符号化／復元を実装する
   - 未知タグと `cbData`／実長 不整合を破損として検出する（framing 関数レベル）。shift 評価は必ず u64 cast（i686 の `usize`=32bit overflow 回避）
   - 観測可能な完了: 単体テストが x64 と i686 の両ターゲットで green（`MsgTag` u32 往復＋低32bit占有 `u64>>32==0`・未知タグ→Err・HWND u32LE 往復・`cbData` 不整合の拒否）
