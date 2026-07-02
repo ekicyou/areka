@@ -51,7 +51,7 @@
   - _Depends: 3.1_
 
 - [ ] 4. areka 実効化・検証・ドキュメント
-- [ ] 4.1 areka の WUC 化と機構登録
+- [x] 4.1 areka の WUC 化と機構登録
   - shell 窓・balloon 窓を `CompositionMode::DComp`（WUC）へ切替え（`ex_style` は factory の `compute_ex_style` が自動計算ゆえ変更不要）、両 window Entity を機構へ登録する
   - wintf ライブラリの ULW バックエンドは残置（本坑では areka のみ WUC 化）。後続 `wintf-ulw-removal` が areka を巻き込まない状態を作る
   - 観測可能な完了条件: areka がビルドでき、起動で shell/balloon が GPU 合成（WUC）経路のマスコットとして表示され、機構へ登録されていること
