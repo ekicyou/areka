@@ -11,6 +11,8 @@
 
 本フィーチャは M1 `areka-P0-emo2-boot` の parser トラック共通基盤であり、host 非依存・依存追加最小・単体テストで検証可能な純粋処理として成立する。正典は ukadoc（emo2 fixture は最小適合サンプルにすぎない）。
 
+charset 宣言が無いファイルの既定エンコードは、ukadoc の「省略時は OS 標準／SSP 設定依存」を純粋関数へ持ち込まないため、**呼び出し側（エンジン）が ANSI／UTF-8 を引数で指定**する方式を採る。SHIORI/4 ゴーストはエンジンが UTF-8 固定で渡す。`decode` 自身は環境から既定を読み取らず、引数に従うことで決定性（純粋性）を保つ。
+
 ## Boundary Context
 
 - **In scope（本フィーチャが所有する振る舞い）**:
@@ -24,6 +26,7 @@
   - ファイルの読み込み I/O（バイト列は呼び出し側が渡す）。
 - **Adjacent expectations（隣接する期待）**:
   - `decode` は全パーサー（sakura 辞書系を含む）が例外なく前段で利用する。`kv` は surface 以外の全パーサーが利用する。後続 spec（`areka-P0-balloon-parse`／`areka-P0-shell-parse`／`areka-P0-package-mount`）は本基盤に先行依存する。
+  - charset 宣言が無いファイルの**既定エンコードは呼び出し側（エンジン）が引数で指定**する（ANSI／UTF-8 の切り替え）。`decode` は環境（OS ロケール等）から既定を読み取らず、引数に従う（純粋性の維持）。**SHIORI/4 ゴーストはエンジンが UTF-8 固定で渡す**。ANSI 指定が具体的にどの文字コードへ写像されるかは design 判断（本フィーチャ外の各 spec／エンジンが決定する ANSI コードページ解決を含む）。
   - 既存 `areka_parsers` の規律（`Result` を返さない寛容処理・panic しない・`tracing` のみ・in-source テスト・公開パス経由の契約固定）を踏襲する。
 
 ## Requirements
@@ -37,7 +40,7 @@
 1. When 呼び出し側がバイト列を渡す, the Decode module shall 冒頭部を ASCII としてプリスキャンし `charset,<文字コード名>` の宣言を探索する。
 2. Where charset 宣言行が冒頭部に存在する, the Decode module shall 宣言された文字コード名を抽出する。
 3. When charset 名を抽出する, the Decode module shall 宣言行前後の空白・大文字小文字差・行末（CRLF／LF）を寛容に扱って抽出する。
-4. If バイト列の冒頭部に charset 宣言行が見つからない, then the Decode module shall 宣言なしとして扱い、既定エンコードによるデコードへ進む（Requirement 2.3）。
+4. If バイト列の冒頭部に charset 宣言行が見つからない, then the Decode module shall 宣言なしとして扱い、呼び出し側が指定した既定エンコードによるデコードへ進む（Requirement 2.3）。
 5. The Decode module shall charset 名が ASCII で表現されるという前提のもと、実エンコードに関わらず宣言の走査を成立させる。
 
 ### Requirement 2: 宣言エンコードによる全体デコード
@@ -48,10 +51,11 @@
 
 1. When charset 宣言が抽出できた, the Decode module shall 宣言されたエンコードでバイト列全体をデコードして文字列を返す。
 2. When 宣言が Shift_JIS などの非 UTF-8 エンコードである, the Decode module shall そのエンコードとして全体をデコードする（デコード後の文字列は当該ゴーストの意図した文字列と一致する）。
-3. If charset 宣言が存在しない, then the Decode module shall 既定エンコードとして UTF-8 を用いてデコードする。
-4. If 宣言された文字コード名が未対応または解釈不能である, then the Decode module shall 既定エンコード（UTF-8）へ寛容にフォールバックしてデコードを継続する。
-5. If バイト列が宣言エンコードとして不正な並びを含む, then the Decode module shall デコードを中断せず、破綻しない（不正部を代替文字等で吸収して）文字列を返す。
-6. The Decode module shall デコード結果として単一の文字列を返し、エラー型を返さず、panic しない。
+3. The Decode module shall 既定エンコード指定（ANSI または UTF-8）を呼び出し側からの引数として受け取り、環境（OS ロケール等）からは読み取らない。
+4. If charset 宣言が存在しない, then the Decode module shall 呼び出し側が指定した既定エンコード（ANSI または UTF-8）を用いてデコードする。
+5. If 宣言された文字コード名が未対応または解釈不能である, then the Decode module shall 呼び出し側指定の既定エンコード（ANSI または UTF-8）へ寛容にフォールバックしてデコードを継続する。
+6. If バイト列が宣言エンコードとして不正な並びを含む, then the Decode module shall デコードを中断せず、破綻しない（不正部を代替文字等で吸収して）文字列を返す。
+7. The Decode module shall デコード結果として単一の文字列を返し、エラー型を返さず、panic しない。
 
 ### Requirement 3: charset デコードの純粋性
 
@@ -59,8 +63,8 @@
 
 #### Acceptance Criteria
 
-1. The Decode module shall 入力としてバイト列を受け取り、ファイルパスやファイルシステムへアクセスしない。
-2. When 同一のバイト列を複数回デコードする, the Decode module shall 常に同一の文字列を返す（純粋関数として決定的である）。
+1. The Decode module shall 入力としてバイト列と既定エンコード指定（ANSI／UTF-8）を受け取り、ファイルパスやファイルシステム・OS ロケール等の環境状態へアクセスしない。
+2. When 同一のバイト列と同一の既定エンコード指定を複数回デコードする, the Decode module shall 常に同一の文字列を返す（引数に対して決定的な純粋関数である）。
 3. The Decode module shall 外部の可変状態を保持せず、副作用（ログ出力を除く）を持たない。
 
 ### Requirement 4: KV マップ化
@@ -108,3 +112,4 @@
 2. The parser foundation shall 非 UTF-8（Shift_JIS）合成入力を用いた単体テストで、宣言エンコードによる全体デコードが文字化けを起こさないことを検証する。
 3. When fixture 由来の期待値をテストへ記述する, the parser foundation tests shall 期待値をリテラルで直書きし、採取元の正本ファイル名と行を明示する（クレート跨ぎの `include_str!` 依存を避ける）。
 4. The parser foundation shall 公開 API パスを経由するテストで契約を固定する。
+5. The parser foundation shall charset 宣言の無い入力に対し、既定エンコード指定（ANSI／UTF-8）ごとに指定どおりのエンコードでデコードされることを単体テストで検証する。

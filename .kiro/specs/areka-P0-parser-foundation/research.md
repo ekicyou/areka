@@ -113,6 +113,7 @@
 3. **SJIS 合成テストの正本化**: fixture に SJIS 実ファイルが無い（R7.2）。合成入力のバイト列と期待文字列をどう作り、どう「採取元」を記録するか（`encoding_rs::SHIFT_JIS.encode` でラウンドトリップ生成 vs 手打ちバイト literal）。
 4. **KV マップ型の選択**: `HashMap`（R4.8 順序非保持と整合）か `BTreeMap`（決定的テスト比較が容易・順序は "保持しない" 要件に反しない）か。テスト決定性の観点も含めて design 判断。
 5. **`encoding_rs` の依存宣言場所**: `crates/areka-parsers/Cargo.toml` 直書き vs `[workspace.dependencies]` 集約。バージョン固定方針（他 workspace 依存はほぼバージョン明記）。
+6. **既定エンコード指定 API と ANSI の具体写像**（要件ディスカッション #1 で確定した方針の design 落とし込み）: `decode` は既定エンコードを引数で受け取る（ANSI／UTF-8 の切り替え・SHIORI/4 は UTF-8 固定）。(a) 引数を `{Ansi, Utf8}` の 2 値 enum とし、`Ansi` を固定コードページ（伺か JP 文脈では CP932=Shift_JIS 相当）へ写像するか、(b) エンジン側が OS ANSI コードページを解決して具体エンコード（`encoding_rs::Encoding` ラベル）を渡すか。**純粋性（R3）維持のため `decode` 自身は OS ロケールを読まない**——(a) は areka 内で決定的だが非 JP ロケール差を捨象、(b) は決定性を保ちつつ ANSI 解決の責務をエンジンへ寄せる。design で確定。
 
 ---
 
