@@ -173,7 +173,8 @@ emo2 が起動して喋る。下記 5 トラックを結線して達成（⓪ �
 
 ## 制約
 
-- Rust 2024・マルチクレート（wintf/dola/areka ＋最小依存 `shiori-abi`）。32bit 可搬性を崩さない。
+- Rust 2024・マルチクレート（wintf/dola/areka ＋ `areka-parsers` ＋最小依存 `shiori-abi` ＋ host-32 3クレート `shiori-host32-ipc`/`-host`/`-helper`）。
+- **32bit 可搬性の適用範囲＝host-32 系（`shiori-host32-*`／`shiori-abi`）のみ**。wintf/areka 本体は x64＋arm64 ネイティブ（i686 検証を本体 spec に課さない）。
 - 透過は ULW/DComp 切替式（実装済み・ULW 既定）。SHIORI 内部唯一 ABI=`IShiori`(COM, HSTRING/UTF-16)。過去互換は 32bit Rust ホスト（flat-C/HGLOBAL/charset/自前 IPC）。
 - 設計判断の変更は [doc/COMPAT_ARCHITECTURE.md](../../doc/COMPAT_ARCHITECTURE.md) を正本として更新。
 
@@ -182,6 +183,7 @@ emo2 が起動して喋る。下記 5 トラックを結線して達成（⓪ �
 - `.kiro/specs/` 直下 active = **0**（憶測仕様を全伐採し更地化。実装ファーストで着手時に作る）。
 - **2026-07-01 追記・着手可能フロント（brief 済み・未着手）**: `/kiro-discovery` で「安全並走バッチ」の brief を just-in-time 生成。① wintf 基盤層 `wintf-dcomp-to-wuc-migration`（表示バックエンド WUC 移行）／`wintf-clickthrough-alpha-toggle`（既存 brief）。② M1 parser 並走 `areka-P0-shell-parse`・`areka-P0-balloon-parse`・`areka-P0-package-mount`（`areka-parsers` へ `shell`/`balloon`/`package` モジュール追加・host 不要・単体テスト可）。③ M1 host-32 `areka-P0-host32-ipc`（pilot go 済で解禁・bytes-over-wire transport・別プロセスゆえ非衝突）→ **✅ 2026-07-02 完了・アーカイブ（`completed/areka-P0-host32-ipc`）。下流 `areka-P0-host32-shiori-load` が次フロント**。これら 5〜6 本は相互非衝突で即並走可（`ecs/graphics` 系は wuc-migration に一本化）。`wintf-ulw-removal` は clickthrough 完了待ち（brief 済み・ゲート下）。
 - `completed/` = 104（歴史・M1 が立つ土台の記録。2026-07-01 `pilot-clickthrough-alpha-toggle`・`pilot-shiori-host-32` を go 済みでアーカイブ／2026-07-02 `areka-P0-host32-ipc` を実装完了でアーカイブ）。
+- **2026-07-02 更新（本日終業時点）**: `completed/` = **110**（上記に加え `areka-P0-parser-foundation`・`areka-P0-shell-parse`・`areka-P0-balloon-parse`・`areka-P0-package-mount`・`wintf-dcomp-to-wuc-migration` 等を完了アーカイブ）。**②parsers トラック全完了・M-boot 6/16**。brief-only = 2（`wintf-clickthrough-alpha-toggle`＝着手可／`wintf-ulw-removal`＝ゲート下）。**次フロント**: shiori:`areka-P0-host32-shiori-load`（逐次チェーン先頭）／emo:`areka-P0-emo-surface`／ghost:`areka-P0-window-placement`／wintf:`wintf-clickthrough-alpha-toggle`。
 - 旧 active/brief（M1 憶測・M2 reference・出荷層）・backlog（P1-P3）・`_rejected/`・旧戦略メモは**削除**（git 履歴に保全。必要時に復元可）。
 
 ## M2 以降

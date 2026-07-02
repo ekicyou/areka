@@ -1,6 +1,6 @@
 ---
 inclusion: always
-updated_at: 2026-07-01
+updated_at: 2026-07-02
 ---
 
 # Technology Stack
@@ -12,7 +12,7 @@ Rust 2024を前提にしたマルチクレート構成です。wintfはbevy_ecs�
 ## Core Technologies
 
 - **Language**: Rust 2024 Edition
-- **Graphics**: Direct2D, Direct3D11 ＋ 合成層（**移行中: DirectComposition → Windows.UI.Composition**・下記 Key Technical Decisions 参照）
+- **Graphics**: Direct2D, Direct3D11 ＋ 合成層（**Windows.UI.Composition＝WUC・✅2026-07-02 DComp から移行完了**・下記 Key Technical Decisions 参照）
 - **Text**: DirectWrite（縦書き・横書き対応）
 - **Imaging**: WIC（Windows Imaging Component）
 - **Window System**: Win32 API
@@ -33,6 +33,7 @@ Rust 2024を前提にしたマルチクレート構成です。wintfはbevy_ecs�
 - **windows-numerics** (0.3.1): Windows数値型サポート
 - **ambassador** (0.5.0): トレイト委譲（delegation）マクロ。COM/状態ラッパーのボイラープレート削減に使用
 - **nonmax** (0.5.5): ニッチ最適化された非最大整数型
+- **encoding_rs** (0.8): 伺か資産の charset デコード（`areka-parsers` の `charset` module・意図的依存追加＝2026-07-02 承認済）
 - **pasta_core** (0.1.6): 里々インスパイアの会話DSLエンジン。`[patch.crates-io]` で `vendors/pasta/` のサブモジュールへ差し替え（後述の Key Technical Decisions 参照）
 
 ### dola クレート依存
@@ -65,8 +66,14 @@ Rust言語の型システムを最大限に活用。`unsafe`ブロックはWindo
 
 ### Required Tools
 - Rust 2024 Edition
-- Windows 10/11（DirectComposition対応）
+- Windows 10/11（Windows.UI.Composition 対応）
 - Visual Studio Build Tools（Windows SDKが必要）
+
+### マルチアーキテクチャ・ターゲット（host-32 トラック）
+- 最終成果物は **x64＋arm64 ネイティブ両対応**、**i686 は 32bit SHIORI 駆動の helper のみ**（ターゲットは crate 境界で分離・`cfg` 分岐回避）
+- rustup targets: `i686-pc-windows-msvc`（helper）／`aarch64-pc-windows-msvc`（arm64。VS2022 の `Microsoft.VisualStudio.Component.VC.Tools.ARM64` が必須＝無いと最終リンクのみ落ちる）
+- **クロスターゲットのビルドは必ず PowerShell で**実行（Git Bash は GNU coreutils の `link.exe` が MSVC link を遮蔽しリンクエラー）
+- **32bit 可搬性制約の適用範囲＝host-32 系（`shiori-host32-*`／`shiori-abi`）のみ**。wintf/areka 本体（x64+arm64）の spec に i686 ビルド検証を課さない（`api.rs` の isize 契約で元々 i686 非対象）
 
 ### Common Commands
 ```bash
@@ -80,9 +87,9 @@ Rust言語の型システムを最大限に活用。`unsafe`ブロックはWindo
 
 - **ECS採用**: 複雑なGUI要素の管理とヒットテストロジックをコンポーネントベースで実装
 - **合成層（Windows.UI.Composition＝WUC・✅2026-07-02 移行完了）**: ハードウェアアクセラレーション合成の基盤。DComp（旧 `com/dcomp.rs`）から **Windows.UI.Composition（`Compositor`/`DesktopWindowTarget`/`CompositionDrawingSurface`＋`CompositionSurfaceBrush`）へ純粋等価移行完了**（interop は `com/wuc.rs`・resource は `ecs/graphics/wuc_resource.rs`・DispatcherQueue は既存 message pump に相乗り＝`DQTAT_COM_NONE`・`Commit()` 廃止→vsync tick の暗黙反映）。旧 `com/dcomp.rs`／`dcomp_resource.rs` は撤去済み。**WUC はスレッド親和ゆえ WUC を触る graphics schedule は UI スレッド固定**（`ExecutorKind::SingleThreaded`）。完了 spec: `.kiro/specs/completed/wintf-dcomp-to-wuc-migration/`。
-- **透過の合成方式（旧「ULW 一択」結論を撤回・新方針確定・実装移行中）**: 伺か型マスコットは「別プロセスのウィンドウ上に乗り、透明ピクセル上のクリックをその別プロセスへ透過させる」のが中核要件。**現状の実装**はウィンドウ単位に `CompositionMode` enum で **ULW（デフォルト）⇄ DirectComposition** を選ぶ切替基盤（生成時固定・COMラッパー `com/ulw.rs`）。
+- **透過の合成方式（旧「ULW 一択」結論を撤回・新方針確定・実装移行中）**: 伺か型マスコットは「別プロセスのウィンドウ上に乗り、透明ピクセル上のクリックをその別プロセスへ透過させる」のが中核要件。**現状の実装**はウィンドウ単位に `CompositionMode` enum で **ULW（デフォルト）⇄ GPU 合成（WUC・旧 DComp アームから移行済み）** を選ぶ切替基盤（生成時固定・COMラッパー `com/ulw.rs`）。
   - **~~実質 ULW 一択~~ ← 撤回**: 先進坑 `pilot-clickthrough-alpha-toggle`（**✅ go 済み 2026-07-01・開発者承認**）が、**`WS_EX_TRANSPARENT` 動的トグル方式**（**表示層＝合成 visual/content と 当たり判定層＝HWND スタイルの二層分離**・別スレッドのカーソル監視＋αマスク連動）で **DComp/GPU 合成を維持したまま別プロセスクリック透過が成立**することを実証（他社 3D マスコット実績のある手段）。ULW（CPU ビットマップ）は GPU 合成と併用不可で「3D 描画を諦める踏み絵」だったが、その制約は解けた。
-  - **決定済み方針**: ① 表示合成を **Windows.UI.Composition** へ、② 別プロセス透過は **`WS_EX_TRANSPARENT` 動的トグル**へ、③ **ULW ルートは除去**（当面はクリックスルー本坑の検証期間中のみ並走）。実装は briefed specs `wintf-clickthrough-alpha-toggle`／`wintf-ulw-removal`／`wintf-dcomp-to-wuc-migration` で進行。
+  - **決定済み方針**: ① 表示合成を **Windows.UI.Composition** へ（**✅ `wintf-dcomp-to-wuc-migration` 2026-07-02 完了**）、② 別プロセス透過は **`WS_EX_TRANSPARENT` 動的トグル**へ（本坑 `wintf-clickthrough-alpha-toggle`・brief 済・着手可）、③ **ULW ルートは除去**（`wintf-ulw-removal`・②完了待ちのゲート下。当面はクリックスルー本坑の検証期間中のみ並走）。
   - **不変の却下事項**: `WM_NCHITTEST`→`HTTRANSPARENT` はプロセス境界を越えず別プロセス透過に使えない。`SetWindowRgn` 方式は DComp 描画をクリップするため却下済み（`_rejected/wintf-P0-click-through-rgn`）。正本は `doc/COMPAT_ARCHITECTURE.md`／`.kiro/steering/roadmap.md`。
 - **DirectWrite**: 高品質な日本語テキストレンダリングと縦書き対応
 - **Workspace構成**: フレームワーク、演出定義、実アプリを分離したモノレポ構成
@@ -91,7 +98,7 @@ Rust言語の型システムを最大限に活用。`unsafe`ブロックはWindo
 - **レガシー UI 基盤の撤去（完了）**: 旧自作 `win_message_handler` / `win_thread_mgr` / `winproc` / `process_singleton` は spec `wintf-winmsg-executor` 完了に伴い**撤去済み**。メッセージ配送は `ecs/window_proc/` の `dispatch_window_message`、UI スレッド基盤は `runtime/` の `WinApp` facade を使用する
 - **構造化ログ**: `tracing` を全体規約とし、subscriber初期化はアプリ層で行う
 - **pasta のベンダリング**: 外部依存だった `pasta_core` を git サブモジュール（`vendors/pasta/`）として同梱し、`[patch.crates-io]` でローカルパスへ差し替える。wintf/dola/areka とDSLエンジンを同一ワークスペースで協調開発するための運用。クローン時は `git submodule update --init` が必要
-- **ukadoc互換ベースウェア戦略（2026-06-26）**: areka を ukadoc準拠の互換ベースウェア（SSP代替）として確立する。SERIKO/MAYUNA完全マップ＋さくらスクリプト優先度順。SERIKO/さくらスクリプトランナーは「タイミング特化の下位層 dola」の上に建てる上位層。SERIKOを平坦サブセットに内包する**階層サーフェスエンジン**（エレメント→別サーフェス定義参照・wintf visual-tree＋dola nested-storyboard）。SHIORIは内部唯一ABI=`IShiori`(COM, HSTRING/UTF-16)、ネイティブ=in-proc COM、過去互換=32bit Rustホスト（flat-C/HGLOBAL/charset/SAORI同居/自前IPC）。詳細の正本は `doc/COMPAT_ARCHITECTURE.md`
+- **ukadoc互換ベースウェア戦略（2026-06-26）**: areka を ukadoc準拠の互換ベースウェア（SSP代替）として確立する。SERIKO/MAYUNA完全マップ＋さくらスクリプト優先度順。SERIKO/さくらスクリプトランナーは「タイミング特化の下位層 dola」の上に建てる上位層。SERIKOを平坦サブセットに内包する**階層サーフェスエンジン**（エレメント→別サーフェス定義参照・wintf visual-tree＋dola nested-storyboard）。SHIORIは内部唯一ABI=`IShiori`(COM, HSTRING/UTF-16)、ネイティブ=in-proc COM、過去互換=32bit Rustホスト（flat-C/HGLOBAL/charset/SAORI同居/自前IPC。**IPC は WM_COPYDATA 一本化＋再入 RESPONSE・x64⟷x86 を跨ぐのは生バイト列のみ**＝`areka-P0-host32-ipc` 2026-07-02 完了・3クレート `shiori-host32-ipc`/`-host`/`-helper`）。詳細の正本は `doc/COMPAT_ARCHITECTURE.md`
 
 ---
 Document standards and patterns, not every dependency.

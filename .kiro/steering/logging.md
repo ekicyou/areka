@@ -1,7 +1,7 @@
 ---
 inclusion: fileMatch
 fileMatchPattern: '**/*.rs'
-updated_at: 2026-03-07
+updated_at: 2026-07-02
 ---
 
 # Logging Guidelines (tracing)
@@ -11,10 +11,10 @@ updated_at: 2026-03-07
 ## 依存関係
 
 ```toml
-# ライブラリ（wintf, dola）
+# ライブラリクレート全般（wintf, dola, areka-parsers, shiori-abi, shiori-host32-* 等）
 tracing = { workspace = true }
 
-# アプリケーション（areka, examples）
+# アプリケーション（areka, examples, shiori-host32-helper 実行体）
 tracing-subscriber = { workspace = true }  # env-filter feature有効
 ```
 
