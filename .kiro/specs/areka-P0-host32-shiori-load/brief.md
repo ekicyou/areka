@@ -45,7 +45,7 @@
 5. 最小 SHIORI DLL fixture（i686 cdylib）で成功／失敗を決定的 E2E 観測。
 
 **WS-B: IShiori ABI 是正**（拡大スコープ・下記 D1/D6/D7 に従う・**Option B factory 採用**）
-1. **factory 新設**: `shiori_factory(out) -> IShioriFactory`（module entry・旧 `shiori_create` を置換）＋ `IShioriFactory::create(load_dir: &HSTRING, host: Ref<IShioriHost>, out: OutRef<IShiori>)`＝**生成＋load 融合**の per-ghost instance 生成。factory=backend（native/host-32 互換/mock）、instance=ゴースト。
+1. **factory 新設**: `shiori_factory(out) -> IShioriFactory`（module entry・旧 `shiori_create` を置換）＋ `IShioriFactory::create(load_dir: &HSTRING, shiori_name: &HSTRING, host: Ref<IShioriHost>) -> Result<IShiori>`＝**生成＋load 融合**の per-ghost instance 生成。factory=backend（native/host-32 互換/mock）、instance=ゴースト。
 2. **`IShiori` 痩身＋GET/NOTIFY 分離**: `Get(input: &HSTRING) -> Result<RequestOutcome>`（GET SHIORI/3.0 後継・応答あり）＋ `Notify(input: &HSTRING) -> Result<()>`（NOTIFY SHIORI/3.0 後継・応答なし・片道）。**`Load`/`Unload` メソッド消滅**（load は factory.create に融合・teardown は Drop(RAII)）。
 3. **`unsafe` 除去＝型付き COM 引数**: IF 借用は `Ref<'_, T>`（`&IShioriHost` は二重ポインタゆえ不可）／OUT は `OutRef<'_, T>`／文字列は `&HSTRING`。生 `*mut c_void` は避けられる範囲で避ける。
 4. **`IShioriHost` 役割拡充＋安全化**: `Raise`/`Complete` に加え **`GetProperty(key)->HSTRING`／`SetProperty(key,value)`（共有変数/プロパティアクセス・同期 brain→host）を新設**。`key`=SSP プロパティシステムの dotted パス（ukadoc `list_propertysystem` 準拠）。sink は共同所有ゆえ host は `Ref` 渡し（callee clone）。
@@ -61,7 +61,8 @@
 - **D4 [fixture] host-32 トラック所有の最小 SHIORI DLL**（i686 cdylib `shiori-host32-testdll`・`crate-type=["cdylib"]`・`[lib] name="shiori"`）を主役。`load→false` 強制で失敗パス決定的テスト化。本物 emo2 `pasta.dll` は `HOST32_PASTA_DLL` env-gated 任意 confidence（pilot go 済が根拠・CI 必須にしない）。`crates/pilot` 非依存（葉ノード隔離）。
 - **D5 [ack] load-ack = `MsgTag::Response` 1byte bool**（`[1]`=成功）。親 `send_request(MsgTag::Load, &[], t)` の再入 RESPONSE 経路にそのまま乗る（凍結 wire 不改変・実コードで裏取り済）。
 - **D6 [IShiori ABI] factory 採用（Option B）＋ sink 拡充**:
-  - **factory**: `shiori_factory() -> IShioriFactory`／`IShioriFactory::create(load_dir, host) -> IShiori`（生成＋load 融合・旧 `shiori_create` 置換）。factory=backend・instance=per-ghost（load_dir で独立）。→ **`IShiori::Load` は無駄ゆえ廃止**（create に融合）。
+  - **factory**: `shiori_factory() -> IShioriFactory`／`IShioriFactory::create(load_dir, shiori_name, host) -> IShiori`（生成＋load 融合・旧 `shiori_create` 置換）。factory=backend・instance=per-ghost（load_dir で独立）。→ **`IShiori::Load` は無駄ゆえ廃止**（create に融合）。
+  - **`shiori_name` は単一 create の普遍引数（2026-07-02 確定）**: descript `shiori,<名>` を親（package-mount）が解決して渡す（呼び出し側は常時保有＝負荷なし）。互換 backend は spawn に直用・native backend は無視/検証可。**2 種 create 案（非対応 create をエラーにする分割）は却下**＝単一 create で閉じる。
   - **`IShiori`**: `Get`（=旧 `Request`・GET SHIORI/3.0 後継・応答あり `RequestOutcome`）＋ `Notify`（NOTIFY SHIORI/3.0 後継・`Result<()>` のみ・応答なし片道）。`Load`/`Unload` 消滅・teardown=Drop。
   - **`IShioriHost`**: `Raise`/`Complete`＋**`GetProperty`/`SetProperty` 新設**（共有変数アクセス＝sink の正当な役割・ukadoc プロパティシステム準拠）。
   - **安全化**: `unsafe` 除去・IF 借用は `Ref<'_,T>`（`&T` は二重ポインタで不可）・OUT は `OutRef<'_,T>`・文字列 `&HSTRING`。C エクスポート入口（`shiori_factory`）は `extern "system"`＋raw out-param 維持。
