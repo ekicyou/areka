@@ -106,3 +106,65 @@ R6. ~~**areka 実効化と移行順序**（R1/R7）: 本坑は「wintf に機構
 R7. **`SetWindowPos(SWP_FRAMECHANGED)` の副作用範囲**: トグル毎の FRAMECHANGED が WUC 合成・z オーダー・フォーカスへ与える影響の設計時確認（pilot は共存を実測、本坑本体経路で再確認要）。
 R8. **ex-style 差分適用 API の置き場**: `WinStyle::commit` は FRAMECHANGED 非対応。トグル専用の最小 API（TRANSPARENT ビットのみ add/remove＋FRAMECHANGED）を `win_style.rs` に足すか、新モジュールに閉じるか（R6.4/R6.5 の「独断で追加しない」規律との整合）。
 R9. **「独断で追加しない」制約の運用**（R6.4/R6.5・R9.3）: `WS_EX_LAYERED` 同伴は pilot 実証済で要件本文にも織り込み済（R6.2）。それ以外の ex-style／NCHITTEST／依存追加が実装中に必要化した場合の依頼者確認フローを design に明記。
+
+---
+
+## 7. 設計フェーズ discovery（2026-07-02・kiro-spec-design）
+
+- **Discovery 種別**: Light（Extension・新規機構追加が主体・既存改変は結線点のみ）。並行 subagent 3 本で既存コードアンカー（署名・行番号・型）を実測確認。外部 WebSearch は不要（新規クレートなし・windows 0.62.2 既知 API のみ）。
+
+### 7.1 実測アンカー（subagent 検証済み）
+
+| 対象 | 事実（署名・型・行） |
+|---|---|
+| `hit_test` | `pub fn hit_test(world: &World, root: Entity, screen_point: PhysicalPoint) -> Option<Entity>`（mod.rs L437・screen physical） |
+| `hit_test_in_window` | `pub fn hit_test_in_window(world: &World, window: Entity, client_point: PhysicalPoint) -> Option<Entity>`（L464・client physical→窓位置加算→`hit_test`） |
+| `HitTestMode` | `Bounds`(default)/`None`/`AlphaMask`/`NamedRegions`（L70） |
+| `VsyncEventBridge` | `Arc<event_listener::Event>`＋`Arc<AtomicBool>` stop_flag＋`Option<JoinHandle<()>>`（L43）。`thread::Builder::new().name("wintf-vsync").spawn`（L65）。`notify(usize::MAX)`（L125）。`Drop`→`stop`＝`stop_flag.store(true)→join`（L95-110） |
+| UI async | `run_async_tick`（L212）: `event.listen()` を tick **前**に arm→`await`（L216/225）。`wintf_winmsg_executor::spawn_local`（L166）。`world: Weak<RefCell<EcsWorld>>` |
+| `WinStyle::commit` | `SetWindowLongPtr(GWL_STYLE/GWL_EXSTYLE)` のみ・**FRAMECHANGED 呼ばず**（L24-27）。`WS_EX_TRANSPARENT(bool)`（L247）／`WS_EX_LAYERED(bool)`（L287） |
+| `apply_initial_state` | `SetWindowLongPtrW(GWL_STYLE)`→`SetWindowPos(hwnd,None,0,0,0,0, SWP_FRAMECHANGED|SWP_NOMOVE|SWP_NOSIZE|SWP_NOZORDER|SWP_NOACTIVATE)`（window_factory.rs L216-248）＝トグル API のレシピ元 |
+| `compute_ex_style` | ULW→`ex_style` そのまま／DComp→`(ex_style & !WS_EX_LAYERED) | WS_EX_NOREDIRECTIONBITMAP`（L64） |
+| `CompositionMode` | `ULW`(default)/`DComp`・生成時固定（不変）（components.rs L100） |
+| `DragState` | `Idle/Preparing/JustStarted/Dragging/JustEnded`・`thread_local!`・`snapshot_drag_state() -> DragStateSnapshot`（state/mod.rs L215） |
+| `WindowDragContextResource` | `Arc<Mutex<WindowDragContext>>`・明示 `unsafe impl Send+Sync`（context.rs L48） |
+| `AlphaMask` | `Vec<u8>+u32`・`Send+Sync` 自動導出・`from_pbgra32(&[u8],u32,u32,u32)->Self`（L33）／`is_hit(&self,u32,u32)->bool`（L67） |
+| `GetCursorPos` | workspace 内 production 使用 0 件（pilot example のみ）＝完全新規 |
+| areka 窓 | shell（main.rs L181 付近）＋balloon（L242 付近）とも `..Default::default()`＝ULW。`composition_mode: CompositionMode::DComp` 付与で WUC 化・`ex_style` 変更不要（factory 自動計算） |
+
+## 8. 設計判断（Design Decisions）
+
+### Decision: 判定は UI スレッド・ワーカは GetCursorPos のみ（§6-R2/R3 解決）
+- **Context**: `hit_test_in_window` は `&World`（UI スレッド単独所有）を要する。ワーカ（別スレッド）は World を触れない。
+- **Alternatives**: (A) αマスク＋bounds＋位置＋DPI のスナップショットを Arc でワーカへ共有し判定もワーカで行う。(B) ワーカは `GetCursorPos` のみ・判定/適用は UI スレッド。
+- **Selected**: (B)。ワーカ＝`GetCursorPos`＋`event_listener` notify、UI ループ＝`hit_test_in_window`／`snapshot_drag_state`／ex-style 適用。
+- **Rationale**: スナップショット共有（A）は座標変換の二重化・整合ずれ（DPI 変化/モニタ跨ぎ/表示更新追随）のリスクを持つ。(B) は既存 `hit_test_in_window` の変換チェーンをそのまま再利用し、常に最新 World で判定＝R2.4「表示更新に追随」を構造的に満たす。§6-R3（座標変換の正典）も「既存 `hit_test_in_window` 再利用・軽量複製しない」で確定。
+- **Trade-offs**: ワーカ↔UI の 1 ホップ起床が入るが `VsyncEventBridge` と同一で無害。判定は UI スレッド負荷だが差分ガード＋変化時のみ適用で軽量。
+
+### Decision: ex-style トグルは win_style.rs へ最小関数追加（§6-R8 解決）
+- **Selected**: `pub fn apply_click_through(hwnd, transparent) -> Result<()>` を `win_style.rs` に追加。`WS_EX_TRANSPARENT` ビットのみ add/remove＋`SetWindowPos(SWP_FRAMECHANGED|NOMOVE|NOSIZE|NOZORDER|NOACTIVATE)`（`apply_initial_state` レシピ準拠）。既存 `commit`/ビルダーは不変。
+- **Rationale**: `commit` は FRAMECHANGED 非対応でトグル不可。ex-style 適用ロジックの既存集約先は `win_style.rs`＝置き場として自然。LAYERED は触れない（DComp 生成時に factory が除去済み・同伴は生成時領分）＝R6.2 遵守。
+
+### Decision: ドラッグ抑止は snapshot_drag_state 読み取り（§6-R4 解決）
+- **Selected**: 新 `Arc<AtomicBool>` を設けず、UI ループが毎サイクル `snapshot_drag_state()` を読む。`Dragging` 中は透過 ON 抑止（透過 OFF 維持）、`JustEnded` 観測サイクルで抑止解除・再収束。
+- **Rationale**: 判定が UI スレッドに閉じるため（上記 Decision B）、ワーカ↔UI 間で `dragging` フラグを共有する必要がない。`snapshot_drag_state` は読み取り専用・thread_local ゆえ UI スレッドから直接読める。新規共有状態ゼロ＝最小。pilot の `dragging: Arc<AtomicBool>` は本設計のスレッド境界では不要。
+
+### Decision: マルチウィンドウは単一ワーカ＋レジストリ巡回（§6-R5 解決）
+- **Selected**: `CursorMonitorBridge` は 1 本（全対象窓共通のカーソル起床源）。`ClickThroughRegistry` が対象窓（Entity+HWND+`last_applied`）を保持し、UI ループが各窓を巡回判定・適用。ウィンドウ内複数 widget の α 集約（OR）は `hit_test_in_window` のツリー走査で自動（§6-R1 で解決済み）。
+- **Rationale**: カーソルは 1 つゆえ監視ワーカを窓ごとに増やす必要がない。差分ガード状態は窓単位（レジストリ内 `last_applied`）で保持。
+
+### Decision: areka を WUC 化（§6-R6 で確定済み・設計反映）
+- shell/balloon 2 窓に `composition_mode: CompositionMode::DComp` 付与＋機構登録。`ex_style` 変更不要。wintf ライブラリ ULW は残置（撤去は別坑）。
+
+## 9. 設計 synthesis 結果
+
+- **Generalization**: R1（GPU 合成維持透過）・R2（αマスク連動受領）は「シーングラフ・ヒットテスト（`Option<Entity>`／`None`＝透過）を ex-style へ写像する」1 つの汎用問題。表示内容の種別（2D/swapchain/Live2D）非依存（R1.4）もこの写像で自然に成立（`hit_test` が種別非依存）。→ `ClickThroughController` を単一の判定→適用機構として設計。
+- **Build vs Adopt**: スレッド跨ぎ起床＝`event_listener`（Adopt・`VsyncEventBridge` テンプレ踏襲）／当たり判定＝既存 `hit_test_in_window`（Adopt・二重化回避）／ドラッグ判定＝既存 `snapshot_drag_state`（Adopt）／ex-style FRAMECHANGED＝`apply_initial_state` レシピ（Adopt）。新規 Build は「カーソル監視ワーカ」と「TRANSPARENT トグル関数」のみ（既存 capability に無い＝grep 実証）。新規クレート Build 皆無（R9.3）。
+- **Simplification**: (a) GPU readback 経路を新設しない（§6-R1）。(b) αマスクのスナップショット共有を廃し判定を UI スレッドへ寄せる（座標変換二重化を消す）。(c) ドラッグ抑止の新 `Arc<AtomicBool>` を廃し `snapshot_drag_state` 直読み。(d) 監視ワーカは 1 本（窓ごとに増やさない）。結果、新規共有状態は `Arc<event_listener::Event>`＋`Arc<AtomicI64>`(最新座標)＋`Arc<AtomicBool>`(stop) の 3 つのみ＝`VsyncEventBridge` とほぼ同型。
+
+## 10. リスクと緩和（設計時点）
+
+- **座標変換（R8）**: 既存 `hit_test_in_window`（screen physical 前提）へ全面委譲し二重化しない。高 DPI 150%・モニタ跨ぎは pilot 未検証域ゆえ areka 実動で目視確認（Testing Strategy E2E）。
+- **`SWP_FRAMECHANGED` 副作用（§6-R7）**: `SWP_NOZORDER|NOACTIVATE|NOMOVE|NOSIZE` で限定。pilot 共存実測済だが本坑 WUC 本体経路で再確認。差分ガードで連打回避。
+- **機構登録の取りこぼし**: areka WUC 化後は ULW 自動αヒットテストが消えるため、機構未登録だと透過しない。登録を areka 窓 spawn と同所で行い漏れを防ぐ。
+- **R6.4/R6.5 運用**: 追加 ex-style／NCHITTEST／依存が必要化したら独断追加せず依頼者確認。変更対象は Modified Files に限定し着手前提示。
