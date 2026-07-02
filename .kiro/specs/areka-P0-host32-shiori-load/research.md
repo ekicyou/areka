@@ -121,13 +121,15 @@ proxy 実装はアプローチ A、**fixture 供給だけを別立て**にする
 
 > 以下は「情報と選択肢」であり最終決定ではない。requirements.md/spec.json は改変しない。
 
-1. **(a) LOAD wire payload の符号化と dll path の運び先**
-   - 論点: dll path と ghostdir を「(i) `ProcessHost::spawn` の既存引数/cwd で運ぶ」か「(ii) `MsgTag::Load` の payload バイト列で運ぶ」か。ghostdir は既に spawn が cwd＋arg で運んでいる（`process_host.rs:125-137`・helper は cwd=ghostdir で起動）。
-   - 選択肢: (i) spawn 経由のみ（LOAD payload は空 or トリガのみ）＝最小・transport 追加なし。(ii) LOAD payload に dll path（＋ghostdir）を UTF-8/UTF-16 で載せる＝spawn を汚さず自己完結。(iii) 混在（ghostdir=cwd、dll path=LOAD payload）。
-   - transcode: `LoadLibraryW` は UTF-16 必須、`load` dir は ANSI(CP_ACP)。wire では中立（UTF-8/UTF-16）で運び helper 内で変換する案が有力。
-   - 制約: transport（framing・MsgTag 定義・HWND 符号化）は改変不可。payload のセマンティクスは本ユニットが新設してよい。
+1. **(a) load 入力の運び先 — ✅ 決着（2026-07-02・要件ディスカッション #1）**
+   - **決定**: load 入力（**load_dir と SHIORI 名**）は helper の**プロセス起動パラメーター（明示的コマンドライン引数＋env fallback）**で供給する。`spawn` がこれらを渡す（`parent_hwnd` と同じ arg＋env 規約）。**LOAD メッセージは wire でパスを運ばず、ロード実行のトリガに純化**する。→ requirements R1.2/R1.5・R2.1・R3.1・Boundary 反映済み。
+   - **根拠（ukadoc 正典）**: SHIORI は `descript.txt` の `shiori,<ファイル名>`（既定 `shiori.dll`・`descript_ghost#shiori,ファイル名`）で**名前を与えられる**存在。`pasta.dll` はその一例。ゆえに起動引数に load_dir だけでなく **SHIORI 名**が必須。名前解決（descript 参照）は親／`package-mount` の領分で、helper は名前を受け取るのみ。
+   - **現状訂正**: 本 §6 初版は「ghostdir は既に spawn が cwd＋arg で運んでいる」と記したが、実コード（`process_host.rs:130-135`）では **ghostdir は `current_dir` のみ・arg 化されていない**（arg1＋env は `parent_hwnd`）。よって cwd 依存をやめ load_dir を明示 arg 化するのが本決定の実装差分。
+   - **spawn 契約拡張**: `spawn(helper_exe, ghostdir, parent_hwnd)` → load_dir と SHIORI 名を明示 arg（＋env fallback）で追加。これは上流 `shiori-host32-host` の**起動パラメーター契約の拡張**であり、凍結された WM_COPYDATA wire/framing/`MsgTag` 定義は改変しない。
+   - **transcode（helper 内）**: `LoadLibraryW`＝UTF-16（`load_dir\<SHIORI名>` を結合）／`load` の dir 引数＝ANSI(CP_ACP)。wire 符号化論点は消滅（パスは wire を通らない）。起動引数の Rust `OsString`/`PathBuf` からそのまま各 API へ変換。
 
 2. **(b) load-ack の形（凍結 REQUEST/RESPONSE ワイヤを改変しない）**
+   - 前提更新（(a) 決着の影響）: パスは起動パラメーターで供給済みゆえ、**LOAD は payload を持たない（空）トリガ**になった。残る論点は「トリガの送出手段」と「bool 結果 ack の載せ方」のみ。
    - 論点: `load` の bool 結果を親へどう返すか。transport の framing/MsgTag は改変不可。
    - 選択肢: (i) `MsgTag::Response` に 1 バイト（0/1）を載せて既存の再入 RESPONSE 経路（`ResponseSlot`）で受ける＝新タグ不要・`send_request`(REQUEST→RESPONSE) の往復にそのまま乗る。(ii) LOAD を `send_request` 相当で送り、その RESPONSE を ack とみなす。
    - 現状: 親側 WndProc は `Response` を `StoreResponse`→slot へ store（`parent_window.rs:188`）。`Load` は `IgnoreKnown`。**LOAD を親が送る手段**（`send_request(MsgTag::Load, ...)` を許すか）も論点＝親側 send は transport の `send_request` が任意タグを取れる（`parent_window.rs:320`）ため追加なしで可能。

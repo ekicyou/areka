@@ -15,8 +15,8 @@ M1 `areka-P0-emo2-boot` の「① SHIORI 通信層エンジン host-32」トラ�
 - **In scope（本ユニットが担う観測可能な振る舞い）**:
   - helper の echo stub（`respond`）置換＝`MsgTag::Load` の受領・処理の結線。
   - helper 内 FFI プロキシ（`ShioriByteProxy`）による `pasta.dll` の `LoadLibraryW` ロードと、`load`／`unload`／`request` の **3 エクスポートの解決**（fn ポインタ保持・モジュールハンドル所有）。
-  - `load(ghostdir)` の**呼出**: ghostdir を ANSI(CP_ACP/Shift_JIS) 符号化し、そのバイト結果を `load` へ渡して bool 結果を観測する。load 入力バッファの所有権規約（DLL 側が解放）を守る。
-  - x64 親 → helper の LOAD 入力契約（`pasta.dll` の所在と ghostdir の受け渡し）と、`load` の bool 結果を親へ返す ack。
+  - `load(load_dir)` の**呼出**: load_dir（= ghostdir）を ANSI(CP_ACP/Shift_JIS) 符号化し、そのバイト結果を `load` へ渡して bool 結果を観測する。load 入力バッファの所有権規約（DLL 側が解放）を守る。
+  - **load 入力（load_dir・SHIORI 名）は helper の起動パラメーター（明示的コマンドライン引数＋env fallback）で供給する**（`spawn` が渡す・cwd 依存にしない）。LOAD メッセージは wire でパスを運ぶ器ではなく**ロード実行のトリガ**とし、`load` の bool 結果を親へ返す ack を伴う。
   - 観測指標: 実 emo2 `pasta.dll` を実 i686 helper 越しに `load` 成功（`true`）・無クラッシュで E2E に観測。
 - **Out of scope（本ユニットが所有しないもの）**:
   - `request` の**呼出**・SHIORI/3.0 の組立/marshal・`Value` parse・request の UTF-8 charset（→ 下流 `areka-P0-host32-request`）。※`request` fn ポインタの**解決**は本ユニット、**呼出はしない**。
@@ -24,7 +24,8 @@ M1 `areka-P0-emo2-boot` の「① SHIORI 通信層エンジン host-32」トラ�
   - transport 層（spawn／WM_COPYDATA framing／`ResponseSlot`／HELLO／timeout）の改変（`areka-P0-host32-ipc` 完了済・`MsgTag::Load` は定義済みで本ユニットは結線するのみ）。
   - 里々/YAYA・SAORI・native x64 化（M2 以降）。
 - **Adjacent expectations（隣接仕様への期待）**:
-  - **上流 `areka-P0-host32-ipc`（完了・改変不可）**: `MsgTag{Hello,Load,Request,Response,Unload}`／WM_COPYDATA framing（`dwData` 低 32bit タグ・`cbData`=生バイト長・固定ヘッダ長 0）／HWND の u32 LE 符号化／`send_copydata`・`send_request`・`ResponseSlot`／`SMTO_ABORTIFHUNG`+timeout／`ProcessHost::spawn(helper_exe, ghostdir, parent_hwnd)`（ghostdir を helper の作業ディレクトリとして、parent_hwnd を helper 起動引数として既に運ぶ）を提供する。本ユニットはこれらを利用し、変更しない。
+  - **上流 `areka-P0-host32-ipc`（完了・凍結 wire は改変不可）**: `MsgTag{Hello,Load,Request,Response,Unload}`／WM_COPYDATA framing（`dwData` 低 32bit タグ・`cbData`=生バイト長・固定ヘッダ長 0）／HWND の u32 LE 符号化／`send_copydata`・`send_request`・`ResponseSlot`／`SMTO_ABORTIFHUNG`+timeout を提供する（本ユニットはこの **wire/framing/`MsgTag` 定義を改変しない**）。`ProcessHost::spawn(...)` は現状 ghostdir を cwd のみ・parent_hwnd を arg1＋env で運ぶ。**本ユニットは spawn の起動パラメーター契約を拡張**し、load_dir と SHIORI 名を明示的コマンドライン引数（＋env fallback）として追加で渡す（cwd 依存をやめる）。これは launch パラメーターの拡張であって、凍結された WM_COPYDATA wire には及ばない。
+  - **SHIORI 名の出所（ukadoc 正典）**: SHIORI DLL 名は `descript.txt` の `shiori,<ファイル名>`（既定 `shiori.dll`・ukadoc `descript_ghost#shiori,ファイル名`）で与えられる。emo2 の `pasta.dll` はその一例にすぎない。**名前解決（descript 参照）は親／`package-mount` の領分**であり、helper は SHIORI 名を起動パラメーターとして受け取るのみで descript を解釈しない。
   - **参照専用 `pilot-shiori-host-32`（go 済・コピペ禁止）**: FFI シーケンス／charset 非対称／HGLOBAL 所有権規約の一次記録（README 学び #4–#6）。知見のみ参照し、コードは隔離する（葉ノード隔離＝production クレートは `crates/pilot` へ inbound 依存しない）。
   - **正本 `vendors/pasta`（`crates/pasta_shiori`）と `doc/COMPAT_ARCHITECTURE.md`**: flat-C ABI と過去互換経路のバイト正確源。
 
@@ -36,10 +37,11 @@ M1 `areka-P0-emo2-boot` の「① SHIORI 通信層エンジン host-32」トラ�
 
 #### Acceptance Criteria
 
-1. When helper が `MsgTag::Load` の WM_COPYDATA フレームを受領し, the host-32 helper shall そのフレームを `pasta.dll` ロード要求として処理へ回す（現行の「既知だが無応答（無視）」扱いをやめる）。
-2. When helper が LOAD 要求を処理する, the host-32 helper shall LOAD payload から `load` に必要な入力（`pasta.dll` の所在と ghostdir）を取り出す。
+1. When helper が `MsgTag::Load` の WM_COPYDATA フレームを受領し, the host-32 helper shall そのフレームを **SHIORI ロード実行のトリガ**として処理へ回す（現行の「既知だが無応答（無視）」扱いをやめる）。
+2. When helper が LOAD トリガを処理する, the host-32 helper shall `load` に必要な入力——**load_dir（ゴーストの `ghost/master` ディレクトリ）と SHIORI 名（`descript.txt` の `shiori,<ファイル名>`・既定 `shiori.dll`）**——を, LOAD payload ではなく **helper の起動パラメーター（コマンドライン引数）** から取得する。
 3. If 受領した LOAD フレームが framing 規約（既知タグ・宣言長と実長の一致）に整合しない, then the host-32 helper shall クラッシュせず不正フレームとして記録のみ行い, 上位へ伝播させない。
 4. The host-32 helper shall LOAD の処理において上流 transport の凍結 seam（WM_COPYDATA の framing・`MsgTag` 定義・HWND 符号化）を改変しない。
+5. The host-32 shall load_dir と SHIORI 名を helper の**明示的な起動パラメーター**（`parent_hwnd` と同じ「コマンドライン引数＋env fallback」規約）として供給し, cwd への暗黙依存で推測しない。この起動パラメーター契約の拡張は上流 `shiori-host32-host::spawn` の引数に及ぶが, 凍結された WM_COPYDATA wire/framing/`MsgTag` 定義には及ばない。
 
 ### Requirement 2: pasta.dll のロードと 3 エクスポート解決（ShioriByteProxy）
 
@@ -47,7 +49,7 @@ M1 `areka-P0-emo2-boot` の「① SHIORI 通信層エンジン host-32」トラ�
 
 #### Acceptance Criteria
 
-1. When LOAD 要求で `pasta.dll` の所在が与えられる, the ShioriByteProxy shall その DLL を実行時にロードし, ロード成功時にモジュールハンドルを所有する。
+1. When LOAD トリガを受け, the ShioriByteProxy shall 起動パラメーターの load_dir と SHIORI 名から DLL パス（load_dir 直下の SHIORI 名ファイル）を構成し, その DLL を `LoadLibraryW` で実行時にロードし, ロード成功時にモジュールハンドルを所有する。
 2. When DLL ロードに成功した, the ShioriByteProxy shall `load`／`unload`／`request` の 3 エクスポートを解決し, 呼出可能な形で保持する。
 3. If `pasta.dll` のロードに失敗する, then the ShioriByteProxy shall クラッシュせず失敗として扱い, 親が「load 未成功」を観測できるようにする。
 4. If 3 エクスポートのいずれかが解決できない, then the ShioriByteProxy shall クラッシュせず失敗として扱い, 親が「load 未成功」を観測できるようにする。
@@ -60,7 +62,7 @@ M1 `areka-P0-emo2-boot` の「① SHIORI 通信層エンジン host-32」トラ�
 
 #### Acceptance Criteria
 
-1. When ShioriByteProxy が `load` を呼び出す前に, the host-32 helper shall ghostdir を ANSI(CP_ACP / Shift_JIS) バイト列へ符号化する。
+1. When ShioriByteProxy が `load` を呼び出す前に, the host-32 helper shall load_dir（= ghostdir・起動パラメーター由来）を ANSI(CP_ACP / Shift_JIS) バイト列へ符号化する。
 2. When ghostdir の符号化が完了した, the host-32 helper shall 符号化バイト列を入力バッファとして `load` を呼び出し, その bool 返り値を取得する。
 3. The host-32 helper shall `load` の返り値を Rust `bool`（1 バイト）として解釈する（Win32 BOOL としては解釈しない）。
 4. The host-32 helper shall `load` に渡した入力バッファの所有権を DLL 側の解放に委ね, ホスト側で二重解放しない。
