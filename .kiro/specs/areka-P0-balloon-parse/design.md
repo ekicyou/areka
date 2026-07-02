@@ -4,15 +4,15 @@
 
 **Purpose**: 本機能は、emo2 のバルーン定義ファイル群（`descript.txt` ＋ サーフェス別上書き `balloons0s.txt`／`balloonk0s.txt`）を型付き**バルーンモデル**へ寛容に解析する parser を、既存 `areka-parsers` クレートの `balloon` モジュールとして提供する。統一グラフィック方針（バルーン＝シェル surface 上の文字層）に基づき、下流 `areka-P0-text-layer`／`areka-P0-surface-engine` が消費するバルーン枠・文字領域・座標のモデル生成源を確立する。
 
-**Users**: 下流エンジン開発者が、host 環境やファイル I/O に依存せず `areka_parsers::balloon` の公開純粋関数からマージ済みバルーンモデルを取得し、バルーン描画・文字レイアウト・surface 合成の入力として消費する。
+**Users**: 下流エンジン開発者が、host 環境やファイル I/O に依存せず `areka_parsers::balloon` の公開純粋関数から解決済みバルーンモデルを取得し、バルーン描画・文字レイアウト・surface 合成の入力として消費する。
 
 **Impact**: 既存 `areka-parsers` クレートは現在 `sakura` モジュールのみを公開する。本 spec は兄弟モジュール `balloon` を追加する（`lib.rs` の `pub mod balloon;` 1 行＋新規ディレクトリ）。追加依存はゼロ（`tracing` のみ・sakura と同一）。sakura モジュールおよび他コードには変更を加えない。
 
 ### Goals
 
-- `areka_parsers::balloon` として、base descript ＋ サーフェス別差分（s0s／k0s）を入力に単一のマージ済みバルーンモデルを返す純粋・寛容パースを提供する。
+- `areka_parsers::balloon` として、descript 共通設定 ＋ サーフェス別テーブル（s0s／k0s）を入力に、3段参照優先度で解決した単一のバルーンモデルを返す純粋・寛容パースを提供する。
 - 座標フィールドの**符号意味をフィールド種別ごとに正しく保持**する（validrect／wordwrappoint は反対端基準、windowposition は方向調整）。
-- base → サーフェス別 overlay マージを sakura／kero を取り違えず適用する。
+- サーフェス別テーブル（起点）→ descript 共通設定 → 内部既定値 の3段参照優先度による値解決を、sakura／kero を取り違えず適用する。
 - emo2 実物 fixture（`emo2-kakukaku`）の s0s・k0s 両サーフェスの確定値を単体テストで固定し、純粋関数のみで検証可能にする。
 
 ### Non-Goals
@@ -27,9 +27,9 @@
 
 ### This Spec Owns
 
-- `areka_parsers::balloon` モジュールと、その公開面（マージ済みバルーンモデル型 `Balloon`／サーフェス種別 `SurfaceKind`／値型群と read-only アクセサ、公開関数 `parse`）。
+- `areka_parsers::balloon` モジュールと、その公開面（解決済みバルーンモデル型 `Balloon`／サーフェス種別 `SurfaceKind`／値型群と read-only アクセサ、公開関数 `parse`）。
 - `descript.txt`（base 共通既定）の kv 行解析と、emo2 使用フィールドのモデルへの意味割当。
-- `balloons0s.txt`（sakura 側）／`balloonk0s.txt`（kero 側）のサーフェス別差分解析と、base への overlay マージ規則。
+- `balloons0s.txt`（sakura 側）／`balloonk0s.txt`（kero 側）のサーフェス別テーブル解析と、これを起点に descript 共通・内部既定へフォールバックする3段参照優先度解決。
 - 座標フィールドの**符号保持**（validrect／wordwrappoint／windowposition それぞれの符号意味を失わずモデルへ保持）。
 - バルーン本体画像参照のサーフェス別解決に必要な情報の保持（サーフェス種別＋サーフェス ID）。命名規約 `balloon{s|k}{ID}.png` を下流が I/O 無しに導出できる形。
 - 上記に対する emo2 fixture 単体テスト（I/O 契約の固定）。
@@ -58,7 +58,7 @@
 
 - `Balloon` 型の公開面（フィールド／アクセサ／`SurfaceKind`／画像参照の表現）の変更。
 - 座標の符号意味の分類方法（どのアクセサがどの符号意味を返すか）の変更。
-- overlay マージ規則（後勝ち・サーフェス区別）の変更。
+- 参照優先度規則（起点 surface ＞ descript 共通 ＞ 内部既定・サーフェス区別）の変更。
 - 公開関数 `parse` のシグネチャ（入力の数・順序・戻り値の形）の変更。
 - 画像参照解決に必要な保持情報（サーフェス種別／ID）の増減。
 
@@ -72,7 +72,7 @@
 - **モデル規律**: `#[non_exhaustive]`・最小派生（`Clone, Debug, PartialEq` のみ。`f32` を含むため `Eq`/`Hash`/`serde` を付さない）・不透明 NewType ＋ read-only アクセサ（`SurfaceArg`／`NewLineRatio`）・コメントに要件番号を紐づける文化。
 - **寛容パース規律**: 公開 facade は `Result` を返さず、空入力→既定値、失敗しない・panic しない。未対応／不正トークンは情報を失わず生保持し後続解析を継続（局所吸収・全域継続）。`tracing` のみ・純粋・決定的・host 非依存・I/O なし。
 
-**sakura との差分**: balloon の構文は `key,value` の 1 行 1 フィールドであり、sakura のさくらスクリプト（`\tag[args]` のタグ列）とは根本的に異なる（研究 §3）。したがって sakura の lexer／decode をそのまま流用できず、独立 lexer は不要。また sakura は `&str → Vec<Instruction>`（単一入力→列）だが、balloon は「base ＋ overlay → 単一モデル」でありマージという sakura に前例のない新概念が入る。
+**sakura との差分**: balloon の構文は `key,value` の 1 行 1 フィールドであり、sakura のさくらスクリプト（`\tag[args]` のタグ列）とは根本的に異なる（研究 §3）。したがって sakura の lexer／decode をそのまま流用できず、独立 lexer は不要。また sakura は `&str → Vec<Instruction>`（単一入力→列）だが、balloon は「サーフェス別テーブル（起点）＋ descript 共通設定 ＋ 内部既定 → 単一モデル」であり、**3段参照優先度による値解決**という sakura に前例のない新概念が入る。
 
 ### Architecture Pattern & Boundary Map
 
@@ -82,7 +82,7 @@
 - **依存方向**: `model ← parse ← merge ← facade(mod.rs)`。各層は左のみを import し上方向へは依存しない。
   - `model` — 型定義（他層に依存しない）。
   - `parse` — descript／s0s／k0s の 1 ファイル文字列を中間フィールド集合（`RawFields`）へ寛容解析（model に依存）。
-  - `merge` — base ＋ overlay の `RawFields` を後勝ちで統合し、確定した `Balloon` モデルへ変換（model／parse に依存）。
+  - `merge` — サーフェス別テーブル（起点）→ descript 共通設定 → 内部既定値 の参照優先度で各フィールドを解決し、確定した `Balloon` モデルへ変換（model／parse に依存）。
   - `mod.rs` — 公開 facade `pub fn parse(descript, s0s, k0s) -> Balloon` を結線し、最小公開面のみ `pub use`（全層に依存）。
 
 ```mermaid
@@ -96,9 +96,9 @@ graph LR
 
 **Architecture Integration**:
 - Selected pattern: レイヤ分割パーサ（model/parse/merge/facade）。sakura と対称ではないが分割思想は一致。
-- Domain boundaries: parse=構文＋フィールド収集、merge=overlay＋モデル確定、model=型。マージ関心を独立ファイルで明示。
+- Domain boundaries: parse=構文＋フィールド収集、merge=3段参照優先度による値解決＋モデル確定、model=型。参照優先度解決の関心を独立ファイルで明示。
 - Existing patterns preserved: 公開面集約・寛容パース・不透明 NewType・in-source テスト・要件番号コメント。
-- New components rationale: `merge` は sakura に前例のない balloon 固有関心（研究 §3）ゆえ独立させる。
+- New components rationale: `merge` は sakura に前例のない balloon 固有関心（サーフェス別テーブル起点の3段参照優先度解決・研究 §3）ゆえ独立させる。
 - Steering compliance: Rust 2024・`tracing` のみ・`Result` 無し寛容パース（steering `tech.md` の `thiserror` 一般規約からの逸脱は sakura が既に確立済み・研究 §1.3）・過剰実装禁止（emo2 使用フィールドのみ）。
 
 ### Technology Stack
@@ -122,8 +122,8 @@ crates/areka-parsers/src/
     ├── model_tests.rs          # model 単体テスト（NewType アクセサ・符号保持・既定値）
     ├── parse.rs                # descript/s0s/k0s 文字列 -> RawFields（kv 寛容収集）
     ├── parse_tests.rs          # parse 単体テスト（空/未知行/CRLF/BOM/重複キー後勝ち）
-    ├── merge.rs                # base + overlay -> Balloon（後勝ち overlay + サーフェス確定）
-    ├── merge_tests.rs          # merge 単体テスト（base 保持/overlay 上書き/overlay 単独）
+    ├── merge.rs                # surface(起点) + descript(共通) -> Balloon（3段参照優先度解決 + サーフェス確定）
+    ├── merge_tests.rs          # merge 単体テスト（起点採用/descript フォールバック/内部既定フォールバック）
     └── validation_tests.rs     # emo2 fixture 横断テスト（s0s/k0s 確定値の固定）
 ```
 
@@ -135,31 +135,31 @@ crates/areka-parsers/src/
 
 ## System Flows
 
-kv 行 → フィールド収集 → base←overlay マージ → 確定モデルの直線パイプラインであり分岐は寛容吸収のみ。facade の結線を 1 図で示す。
+kv 行 → フィールド収集 → 3段参照優先度解決（起点→descript→内部既定）→ 確定モデルの直線パイプラインであり分岐は寛容吸収のみ。facade の結線を 1 図で示す。
 
 ```mermaid
 flowchart TB
-    In_descript[descript string base] --> P1[parse RawFields base]
-    In_s0s[s0s string sakura overlay] --> P2[parse RawFields sakura]
-    In_k0s[k0s string kero overlay] --> P3[parse RawFields kero]
-    P1 --> M1[merge base plus sakura]
-    P2 --> M1
-    P1 --> M2[merge base plus kero]
-    P3 --> M2
+    In_descript[descript string common settings] --> P1[parse RawFields common]
+    In_s0s[s0s string sakura surface table origin] --> P2[parse RawFields sakura]
+    In_k0s[k0s string kero surface table origin] --> P3[parse RawFields kero]
+    P2 --> M1[resolve sakura s0s over descript over default]
+    P1 --> M1
+    P3 --> M2[resolve kero k0s over descript over default]
+    P1 --> M2
     M1 --> Out[Balloon sakura side plus kero side]
     M2 --> Out
 ```
 
-- **マージ方向**: base を共通既定とし overlay を後勝ちで上書き（要件 4.1/4.2）。overlay に無いフィールドは base を保持（4.3）。base に無く overlay のみのフィールド（例: `windowposition`）は overlay 値を採用（4.4）。
-- **サーフェス区別**: sakura 側は base＋s0s、kero 側は base＋k0s を別々にマージし、単一 `Balloon` へ両サーフェス確定値を取り違えず内包（4.5）。
-- **寛容分岐**: 未知 kv 行・不正値は生保持等で吸収し後続を継続（要件 5）。空入力→既定モデル（要件 1.4）。
+- **参照優先度**: 各フィールドを サーフェス別テーブル（第1参照・起点）→ `descript` 共通設定（第2参照）→ 内部既定値（第3参照）の順で解決（要件 4.1）。サーフェス別テーブルと `descript` の双方にあれば起点優先（4.2）、サーフェス別テーブルに無ければ `descript`（4.3）、双方に無ければ内部既定（4.4）。起点にのみあるフィールド（例: `windowposition`）は第1参照でそのまま採用。
+- **サーフェス区別**: sakura 側は s0s 起点、kero 側は k0s 起点で（いずれも `descript`・内部既定へフォールバックして）別々に全フィールドを解決し、単一 `Balloon` へ両サーフェス確定値を取り違えず内包（4.5）。
+- **寛容分岐**: 未知 kv 行・不正値は生保持等で吸収し後続を継続（要件 5）。空入力→内部既定のみのモデル（要件 1.4）。
 
 ## Requirements Traceability
 
 | Requirement | Summary | Components | Interfaces | Flows |
 |-------------|---------|------------|------------|-------|
 | 1.1 | `balloon` 公開面（モデル型＋解析関数） | mod.rs, model | `pub use` / `parse` | facade |
-| 1.2 | base＋s0s/k0s → 単一マージ済みモデル・I/O 非依存 | mod.rs, merge | `parse(descript,s0s,k0s)->Balloon` | 全体 |
+| 1.2 | descript＋s0s/k0s → 単一解決済みモデル・I/O 非依存 | mod.rs, merge | `parse(descript,s0s,k0s)->Balloon` | 全体 |
 | 1.3 | `Result` 無し寛容パース・失敗/panic せず | parse, merge | `parse` 戻り値 `Balloon` | 寛容分岐 |
 | 1.4 | 空/全未知 → 既定値のみの有効モデル | model, parse | `Balloon::default` 相当 | 寛容分岐 |
 | 1.5 | 不透明 NewType＋non_exhaustive＋最小派生 | model | 値型＋アクセサ | — |
@@ -176,10 +176,10 @@ flowchart TB
 | 3.2 | `wordwrappoint.x/y` の符号（反対端基準）保持 | model, merge | `wordwrap_point()` | merge |
 | 3.3 | `validrect.*` の符号（反対端基準）保持 | model, merge | `valid_rect()` | merge |
 | 3.4 | 正/負値を失わず保持・基準端解釈は下流 | model | 符号付き `i32` アクセサ | — |
-| 4.1 | base 既定 ＋ overlay 上書きマージ規則 | merge | `merge` | merge |
-| 4.2 | 同一フィールド → overlay 優先 | merge | `merge` | merge |
-| 4.3 | overlay 無 → base 保持 | merge | `merge` | merge |
-| 4.4 | base 無・overlay 有 → overlay 採用 | merge | `merge` | merge |
+| 4.1 | 3段参照優先度（起点→descript→内部既定） | merge | `resolve_side` | merge |
+| 4.2 | 起点とdescript双方にあり → 起点優先 | merge | `resolve_side` | merge |
+| 4.3 | 起点に無 → descript 共通採用 | merge | `resolve_side` | merge |
+| 4.4 | 起点にもdescriptにも無 → 内部既定採用 | merge, model | `resolve_side` | merge |
 | 4.5 | sakura/kero を区別・取り違えない | model, merge | `sakura()` / `kero()` | facade |
 | 5.1 | 未使用フィールドを解釈せず寛容に扱う | parse | RawFields（意味割当せず） | 寛容分岐 |
 | 5.2 | 未知行を寛容に取り込み後続継続 | parse | RawFields.unknown 等 | 寛容分岐 |
@@ -195,7 +195,7 @@ flowchart TB
 |-----------|-------|--------|--------------|------------------|-----------|
 | `model` | 型 | `Balloon`／`SurfaceKind`／値型と read-only アクセサ | 1.4, 1.5, 2.*, 3.*, 4.5 | なし | State |
 | `parse` | 構文 | 1 ファイル文字列→`RawFields`（kv 寛容収集） | 1.3, 2.*, 5.* | model (P0) | Service |
-| `merge` | 意味/統合 | base＋overlay→確定 `Balloon`（後勝ち・サーフェス区別・符号保持） | 3.*, 4.* | model (P0), parse (P0) | Service |
+| `merge` | 意味/統合 | surface 起点＋descript 共通＋内部既定の3段参照優先度で確定 `Balloon` を解決（サーフェス区別・符号保持） | 3.*, 4.* | model (P0), parse (P0) | Service |
 | `mod.rs` facade | 公開 | `parse(descript,s0s,k0s)->Balloon` 結線＋最小公開面 | 1.1, 1.2, 6.4 | 全層 (P0) | Service |
 
 ### 型層
@@ -204,15 +204,15 @@ flowchart TB
 
 | Field | Detail |
 |-------|--------|
-| Intent | マージ済みバルーンモデルと値型・サーフェス種別を定義し、read-only アクセサで公開する |
+| Intent | 解決済みバルーンモデルと値型・サーフェス種別を定義し、read-only アクセサで公開する |
 | Requirements | 1.4, 1.5, 2.1〜2.9, 3.1〜3.4, 4.5 |
 
 **Responsibilities & Constraints**
-- `Balloon` は sakura 側・kero 側の確定値を両方内包する集約ルート（要件 4.5「取り違えない」を型で表現）。両サーフェスは同一 `BalloonSide` 型で保持する。
+- `Balloon` は sakura 側・kero 側の確定値を両方内包する集約ルート（要件 4.5「取り違えない」を型で表現）。両サーフェスは同一 `BalloonSide` 型で保持する。**共通/サーフェス別を型で区別しない**（研究 §5-1 の候補 (b)・設計ディスカッション #1 で確定）: サーフェス別テーブルが起点でどのフィールドも上書きされうるため、各 `BalloonSide` は全フィールドを「起点→ descript 共通 → 内部既定」の3段参照優先度で解決した確定値として保持する。`descript` 由来の共通値は両サーフェスに同値で複製されうる（コストはバルーン1定義ぶんで無視可能）。下流は常に `sakura()`／`kero()` から全フィールドの確定値を取得でき、共通/別で取得口が分かれない。
 - 座標は符号付き `i32` を保持（要件 3.4）。**符号意味はフィールド種別で固定**され値では区別しない: `windowposition` は方向調整（y は下が＋・上が－）、`wordwrappoint`／`validrect` は反対端基準（負値＝右/下端からの相対）。この分類はアクセサの doc コメントと型名（`WindowPosition`／`WordWrapPoint`／`ValidRect`）で表現し、実座標解決は下流に委ねる（過剰実装禁止・研究 §5-2 の「符号保持で足りる」を採用）。
 - `#[non_exhaustive]`（`SurfaceKind` 等の enum）・派生は `Clone, Debug, PartialEq` のみ（sakura に整合。`serde`/`Eq`/`Hash` を付さない）。
 - 不透明 NewType ＋ read-only アクセサ。フィールドは非公開、下流は公開アクセサ経由でのみ読む。
-- 既定値: 空/未知入力でも有効なモデルを構成できるよう `Default` 相当を提供（要件 1.4）。既定は emo2 base の中立値（座標 0・色 0・フォント空等）とし、下流が「未設定」を判別できる形。
+- 既定値（3段参照優先度の第3参照＝内部既定値）: 起点テーブルにも `descript` にも無いフィールドに適用する。空/未知入力でも有効なモデルを構成できるよう `Default` 相当を提供（要件 1.4/4.4）。既定は中立値（座標 0・色 0・フォント空等）とし、下流が「未設定」を判別できる形。
 
 **Contracts**: State [x]
 
@@ -242,25 +242,29 @@ pub struct ValidRect { top: i32, bottom: i32, left: i32, right: i32 }
 #[derive(Clone, Debug, PartialEq)]
 pub struct Color { r: u8, g: u8, b: u8 }
 
-/// 片サーフェスの確定値。要件 4.5。
+/// 片サーフェスの確定値。**全フィールドを3段参照優先度で解決した結果を保持する**
+/// （共通/別を型で区別せず、`descript` 由来の共通値も各サーフェスに解決済みで内包）。要件 4.5。
 #[derive(Clone, Debug, PartialEq)]
 pub struct BalloonSide {
     // kind: SurfaceKind, surface_id: u32,
-    // window_position / wordwrap_point / valid_rect / arrow0 / arrow1 ...
+    // is_balloon(2.1), use_self_alpha(2.2), origin(2.3),
+    // font_name(2.4), font_height(2.5), font_color(2.6), anchor_font_color(2.7),
+    // window_position(3.1), wordwrap_point(3.2), valid_rect(3.3), arrow0(2.9), arrow1(2.9)
 }
-// アクセサ: kind()/surface_id()/window_position()/wordwrap_point()/valid_rect()/arrow0()/arrow1()
+// アクセサ: kind()/surface_id()/is_balloon()/use_self_alpha()/origin()/font_name()/
+//          font_height()/font_color()/anchor_font_color()/
+//          window_position()/wordwrap_point()/valid_rect()/arrow0()/arrow1()
 
-/// マージ済みバルーンモデル（sakura/kero 両側＋共通既定）。要件 1.4/1.5/4.5。
+/// 解決済みバルーンモデル（sakura/kero 両側の器）。要件 1.4/1.5/4.5。
+/// 共通/サーフェス別の区別は持たず、両サーフェスとも全フィールド確定値を `BalloonSide` に持つ。
 #[non_exhaustive]
 #[derive(Clone, Debug, PartialEq)]
 pub struct Balloon {
-    // 共通: is_balloon(2.1), use_self_alpha(2.2), origin(2.3),
-    //        font_name(2.4), font_height(2.5), font_color(2.6), anchor_font_color(2.7)
     // サーフェス別: sakura() -> &BalloonSide, kero() -> &BalloonSide (4.5)
 }
 ```
 
-> 上記はスケッチであり、フィールドの最終配置（共通値を `Balloon` 直下に置き、サーフェス依存値のみ `BalloonSide` に置く境界）は emo2 fixture の実データ分布（共通=font/color/type、サーフェス別=windowposition/validrect/wordwrappoint/arrow）に従って確定する。arrow は s0s/k0s で値が異なる（サーフェス別）。
+> `Balloon` はサーフェス別の器に徹し、フィールドは全て `BalloonSide` が全サーフェス分保持する（設計ディスカッション #1）。これにより「どのフィールドが共通でどれがサーフェス別か」という配置判断そのものが不要になり、検証レポート明確化1が指摘した配置ぶれのリスク（要件 4.3/4.5）が構造的に消える。emo2 実データでは `descript` 由来（font/color/origin/type/use_self_alpha）が両側同値に、起点テーブル由来（windowposition/validrect/wordwrappoint/arrow）が各サーフェスで異なる値に解決される。
 
 **Implementation Notes**
 - Integration: 下流 `text-layer`（wordwrap_point/font/valid_rect 消費）・`surface-engine`（画像参照＝kind＋surface_id 消費）。
@@ -295,7 +299,7 @@ fn parse_fields(input: &str) -> RawFields;
 - Invariants: 純粋・決定的・I/O なし・panic せず・`Result` でない（要件 1.3）。
 
 **Implementation Notes**
-- Integration: `merge` が base/overlay の `RawFields` を消費。
+- Integration: `merge` が surface（起点）/descript（共通）の `RawFields` を消費。
 - Validation: parse_tests で空/未知/CRLF/BOM/重複キー後勝ち/分割不能行を固定。
 - Risks: `RawFields` の粒度は emo2 使用フィールドに限定（過剰実装禁止）。未知行保持は診断用途に留め、モデル公開面へは出さない。
 
@@ -305,31 +309,32 @@ fn parse_fields(input: &str) -> RawFields;
 
 | Field | Detail |
 |-------|--------|
-| Intent | base の `RawFields` にサーフェス別 overlay を後勝ちで統合し、符号保持しつつ確定 `Balloon` を構築する |
+| Intent | サーフェス別テーブル（起点）の `RawFields` を第1参照に、descript 共通・内部既定へフォールバックして各フィールドを解決し、符号保持しつつ確定 `Balloon` を構築する |
 | Requirements | 3.1〜3.4, 4.1〜4.5 |
 
 **Responsibilities & Constraints**
-- フィールド単位 overlay: overlay に値があれば overlay を、無ければ base を採用（要件 4.2/4.3）。base に無く overlay のみのフィールド（`windowposition`）も overlay 採用（4.4）。
-- サーフェス別に 2 回統合（base＋s0s→sakura 側、base＋k0s→kero 側）し、`SurfaceKind` と surface ID（emo2 は 0）を各 `BalloonSide` に固定（4.5・要件 2.8）。両側を単一 `Balloon` に格納し取り違えない。
+- フィールド単位の3段参照優先度解決: 起点テーブル（surface）に値があれば採用、無ければ `descript`、それも無ければ内部既定を採用（要件 4.1/4.2/4.3/4.4）。起点にのみあるフィールド（`windowposition`）は第1参照でそのまま採用（4.4）。
+- サーフェス別に 2 回解決（s0s 起点→sakura 側、k0s 起点→kero 側。いずれも `descript`・内部既定へフォールバック）し、`SurfaceKind` と surface ID（emo2 は 0）を各 `BalloonSide` に固定（4.5・要件 2.8）。両側を単一 `Balloon` に格納し取り違えない。
 - 収集済み文字列を model 値型へ変換する際、**符号をそのまま `i32` へ**保持（要件 3.4）。符号意味の分類は変換先の型（`WindowPosition`/`WordWrapPoint`/`ValidRect`）で表現し、この層は値を解釈・変換しない。
-- 変換不能・欠落は既定値でフォールバック（要件 1.4）・panic せず（5.3）。
+- 変換不能・欠落は内部既定でフォールバック（要件 1.4/4.4）・panic せず（5.3）。
 
 **Contracts**: Service [x]
 
 ##### Service Interface
 
 ```rust
-// 内部（非公開）: base + overlay(RawFields) → 片サーフェスの確定値。
-fn merge_side(base: &RawFields, overlay: &RawFields, kind: SurfaceKind) -> BalloonSide;
+// 内部（非公開）: サーフェス別テーブル(起点) + descript(共通) → 片サーフェスの全フィールド確定値。
+// 各フィールドを surface → descript → 内部既定 の順で解決する。
+fn resolve_side(surface: &RawFields, descript: &RawFields, kind: SurfaceKind) -> BalloonSide;
 ```
-- Preconditions: base/overlay は `parse_fields` の出力。
-- Postconditions: overlay 優先・base フォールバックの確定 `BalloonSide`。符号保持。
+- Preconditions: surface/descript は `parse_fields` の出力。
+- Postconditions: surface（起点）優先・descript 共通フォールバック・内部既定を最終フォールバックとする確定 `BalloonSide`。符号保持。
 - Invariants: 純粋・決定的・panic せず。
 
 **Implementation Notes**
-- Integration: facade が `merge_side` を sakura/kero 2 回呼び `Balloon` を組む。
-- Validation: merge_tests で「base のみ／overlay 上書き／overlay 単独（windowposition）／base 保持（k0s に無い wordwrappoint）」を固定。
-- Risks: **マージ方向（base←overlay 後勝ち）とサーフェス（s0s/k0s）の取り違え**（研究 §6）。テストで両方向・両サーフェスを分離固定。
+- Integration: facade が `resolve_side` を sakura（s0s 起点）/kero（k0s 起点）で 2 回呼び `Balloon` を組む。
+- Validation: merge_tests で「起点採用（s0s に windowposition あり）／descript フォールバック（k0s に wordwrappoint 無 → descript -34）／内部既定フォールバック（両方に無し）／起点による descript 上書き（wordwrappoint.x descript -34 → s0s -49）」を固定。
+- Risks: **参照優先度（surface 起点＞descript 共通＞既定）とサーフェス（s0s/k0s）の取り違え**（研究 §6）。テストで各優先度段・両サーフェスを分離固定。
 
 ### 公開層
 
@@ -341,7 +346,7 @@ fn merge_side(base: &RawFields, overlay: &RawFields, kind: SurfaceKind) -> Ballo
 | Requirements | 1.1, 1.2, 6.4 |
 
 **Responsibilities & Constraints**
-- 公開関数 `parse(descript, s0s, k0s) -> Balloon`（研究 §5-1 候補 (a) を採用: 両サーフェスを 1 モデルに内包・下流が再マージ不要＝要件 1.2/4.5 を最小 API で満たす）。3 入力すべて `&str`。
+- 公開関数 `parse(descript, s0s, k0s) -> Balloon`（研究 §5-1 候補 (a) を採用: 両サーフェスを 1 モデルに内包・下流が再解決不要＝要件 1.2/4.5 を最小 API で満たす）。3 入力すべて `&str`（`descript` は共通設定、`s0s`/`k0s` は各サーフェスの起点テーブル）。
 - `mod model; mod parse; mod merge;` を private 宣言し、`pub use model::{Balloon, SurfaceKind, ...値型}; pub use self::parse::parse;` で最小公開面のみ外部へ。
 - `lib.rs` に `pub mod balloon;` を追加（唯一の crate 変更）。
 
@@ -350,8 +355,8 @@ fn merge_side(base: &RawFields, overlay: &RawFields, kind: SurfaceKind) -> Ballo
 ##### Service Interface
 
 ```rust
-/// emo2 バルーン定義（base descript ＋ サーフェス別差分 s0s/k0s）を
-/// 単一のマージ済みバルーンモデルへ変換する純粋・寛容関数。要件 1.1/1.2。
+/// emo2 バルーン定義（descript 共通設定 ＋ サーフェス別テーブル s0s/k0s）を
+/// 3段参照優先度で解決した単一のバルーンモデルへ変換する純粋・寛容関数。要件 1.1/1.2。
 pub fn parse(descript: &str, s0s: &str, k0s: &str) -> Balloon;
 ```
 - Preconditions: 3 入力は UTF-8。空文字列可（要件 1.4）。
@@ -367,7 +372,7 @@ pub fn parse(descript: &str, s0s: &str, k0s: &str) -> Balloon;
 
 ### Domain Model
 
-- **集約ルート** `Balloon`: 1 バルーン定義の確定状態。共通既定（type/use_self_alpha/origin/font/色）＋サーフェス別確定値（`BalloonSide` × sakura/kero）。
+- **集約ルート** `Balloon`: sakura/kero 各 `BalloonSide` を内包する器。共通/サーフェス別の区別は型に持たせず、各 `BalloonSide` が全フィールド（type/use_self_alpha/origin/font/色/windowposition/validrect/wordwrappoint/arrow）を3段参照優先度で解決した確定値として保持する（設計ディスカッション #1）。
 - **値オブジェクト** `WindowPosition`/`WordWrapPoint`/`ValidRect`/`Point`/`Color`/`SurfaceKind`: 不透明 NewType または最小構造＋read-only アクセサ。
 - **不変条件**: 座標は符号を失わない（要件 3.4）。sakura/kero は別 `BalloonSide` で分離（4.5）。すべて `Default` 相当で有効モデルを構成可能（1.4）。
 - **画像参照**: ファイル名文字列は保持せず、`SurfaceKind` ＋ surface ID を保持する（研究 §5-5 の how 判断で (b) を採用: 構造のみ保持し導出は下流）。命名規約 `balloon{s|k}{ID}.png`（偶数=左向き/奇数=右向き）は下流が I/O 無しに導出（要件 2.8・過剰実装禁止に整合）。
@@ -401,12 +406,12 @@ acceptance criteria から導出。全テストは in-source（`*_tests.rs`）�
 - **model — 符号保持アクセサ往復**（3.1/3.2/3.4）: `WindowPosition(y=-129)`・`WordWrapPoint(x=-49)`・`ValidRect(bottom=-56)` を構築しアクセサが負値を欠落なく返すことを固定。
 - **model — 既定モデルの有効性**（1.4/1.5）: `Default` 相当が全アクセサで中立値を返し、`#[non_exhaustive]`・最小派生（`Clone/Debug/PartialEq`）でコンパイルされることを固定。
 - **parse — 寛容収集**（1.3/5.1/5.2/5.3）: 空文字列→空収集、未知行（`cursor.style,square`・`number.xr,-170`）を吸収し後続の認識キーが欠落しないこと、CRLF/BOM/前後空白/空値/重複キー後勝ちを固定。
-- **merge — overlay 規則**（4.1〜4.4）: (a) overlay 上書き（`wordwrappoint.x` base -34 → s0s -49）、(b) base 保持（k0s に `wordwrappoint` 無 → base -34 維持）、(c) overlay 単独（base に無い `windowposition` を overlay 採用）を分離固定。
+- **merge — 3段参照優先度**（4.1〜4.4）: (a) 起点による上書き（`wordwrappoint.x` descript -34 → s0s 起点 -49）、(b) descript フォールバック（k0s に `wordwrappoint` 無 → descript -34 維持）、(c) 起点のみ（descript に無い `windowposition` を s0s/k0s 起点から採用）、(d) 内部既定フォールバック（起点・descript 双方に無いフィールド）を分離固定。
 
 ### Integration Tests（emo2 fixture 横断・validation_tests）
 
-- **sakura 側確定値**（6.1/6.2）: base descript＋s0s をマージし、`sakura()` が `windowposition (266,-129)`・`wordwrap_point.x=-49`・`validrect (top=46,bottom=-56,left=36,right=-44)`・`arrow0 (15,90)`・`arrow1 (15,-110)`・`font_name="Yu Gothic UI"`・`font_height=28`・`font_color=(0,0,0)`・`anchor_font_color=(180,40,40)`・`kind=Sakura`・`surface_id=0` を符号保持で返すことを固定。
-- **kero 側確定値**（6.1/6.3）: base descript＋k0s をマージし、`kero()` が `windowposition (-190,-75)`・`validrect (top=40,bottom=-70,left=24,right=-48)`・`arrow0 (9,54)`・`arrow1 (9,-125)`・base 由来の `wordwrap_point.x=-34`（k0s に無し＝base 保持）・`kind=Kero`・`surface_id=0` を返すことを固定。
+- **sakura 側確定値**（6.1/6.2）: s0s 起点で（descript・内部既定へフォールバックして）解決し、`sakura()` が `windowposition (266,-129)`・`wordwrap_point.x=-49`・`validrect (top=46,bottom=-56,left=36,right=-44)`・`arrow0 (15,90)`・`arrow1 (15,-110)`・`font_name="Yu Gothic UI"`・`font_height=28`・`font_color=(0,0,0)`・`anchor_font_color=(180,40,40)`・`kind=Sakura`・`surface_id=0` を符号保持で返すことを固定（font/color は descript 共通フォールバック由来）。
+- **kero 側確定値**（6.1/6.3）: k0s 起点で（descript・内部既定へフォールバックして）解決し、`kero()` が `windowposition (-190,-75)`・`validrect (top=40,bottom=-70,left=24,right=-48)`・`arrow0 (9,54)`・`arrow1 (9,-125)`・descript 由来の `wordwrap_point.x=-34`（k0s に無し＝descript フォールバック）・`kind=Kero`・`surface_id=0` を返すことを固定。
 - **サーフェス取り違え防止**（4.5）: 単一 `parse` 呼び出しの戻り `Balloon` で `sakura()` と `kero()` の `windowposition` が入れ替わっていない（266/-129 vs -190/-75）ことを固定。
 - **純粋性/host 非依存**（6.4）: 同一入力の 2 回 `parse` が `PartialEq` で等しいこと、ファイル I/O・host 実行なしで完結することを固定。
 

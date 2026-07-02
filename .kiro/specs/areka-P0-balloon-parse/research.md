@@ -179,8 +179,8 @@
 
 ### 9.4 確定 fixture マージ値（テスト固定対象・符号確認済み）
 
-- **sakura（base+s0s）**: windowposition(266,-129) / wordwrappoint.x=-49（base -34 を上書き）・y=0 / validrect(top=46,bottom=-56,left=36,right=-44) / arrow0(15,90) / arrow1(15,-110) / font "Yu Gothic UI" h=28 / font.color(0,0,0) / anchor.font.color(180,40,40) / kind=Sakura,id=0。
-- **kero（base+k0s）**: windowposition(-190,-75) / wordwrappoint.x=-34（k0s に無し＝base 保持）・y=0 / validrect(top=40,bottom=-70,left=24,right=-48) / arrow0(9,54) / arrow1(9,-125) / kind=Kero,id=0。
+- **sakura（s0s 起点→descript→既定）**: windowposition(266,-129) / wordwrappoint.x=-49（descript -34 を起点が上書き）・y=0 / validrect(top=46,bottom=-56,left=36,right=-44) / arrow0(15,90) / arrow1(15,-110) / font "Yu Gothic UI" h=28 / font.color(0,0,0) / anchor.font.color(180,40,40) / kind=Sakura,id=0。
+- **kero（k0s 起点→descript→既定）**: windowposition(-190,-75) / wordwrappoint.x=-34（k0s に無し＝descript フォールバック）・y=0 / validrect(top=40,bottom=-70,left=24,right=-48) / arrow0(9,54) / arrow1(9,-125) / kind=Kero,id=0。
 
 ### 9.5 分割方針・依存方向（確定）
 
@@ -192,3 +192,12 @@
 - Mechanical checks: 要件 ID 全網羅（1.1〜6.4）／Boundary 4 セクション充填／File Structure Plan 具体パス充填／Boundary↔File 整合／orphan component 無し — **全 pass**。
 - Judgment review: 要件カバレッジ・アーキ準備性・境界明確性・実装可能性 — **全 pass**。
 - 修復パス: **0 回**（初回で通過）。真の要件ギャップ・矛盾なし（§5-4 の brief 食い違いは確定版 requirements で解消済み）。
+
+### 9.7 設計ディスカッション記録 — 2026-07-02
+
+> 設計検証（GO）後の設計ディスカッションで確定した事項。design.md／requirements.md へ反映済み。
+
+- **参照優先度の是正（開発者指摘・最重要）**: マージの概念モデルを **base 起点＋overlay 上書き** から、正しい **3段参照優先度** へ全面是正した。各フィールド値は **(1) サーフェス別テーブル `balloonsXXs`/`balloonkXXs`（起点・第1参照）→ (2) `descript.txt` 共通設定（第2参照）→ (3) 内部既定値（第3参照）** の順で解決する。**解決結果の確定値は不変**（§9.4 のテスト期待値は同一）で、変わったのは概念フレーミング・型モデル・ドキュメント記述。requirements R4（タイトル・Objective・全受入基準）／Introduction／Boundary Context／R6.2/6.3、design.md 全体（Overview/Architecture/System Flows/model/merge/Testing/Traceability）を是正。
+- **§5-1 の型モデルを (b) 全フィールド per-surface へ確定（設計ディスカッション #1）**: 上記の是正により「共通 vs サーフェス別」を型で区別しないモデルが必然となった。`Balloon` は sakura/kero 各 `BalloonSide` を内包する器に徹し、各 `BalloonSide` が全フィールド（font/color/origin/type/use_self_alpha を含む）を3段参照優先度で解決した確定値として保持する。`descript` 由来の共通値は両サーフェスへ同値で解決・複製（コストはバルーン1定義ぶんで無視可能）。これにより検証レポート明確化1が指摘した「共通/別のフィールド配置ぶれ」リスク（R4.3/4.5）が構造的に消滅。`merge_side` は `resolve_side(surface, descript, kind)` に改称。
+- **検証レポート明確化3（自明修正・カテゴリA）**: fixture テスト内リテラルに採取元の正本ファイル名・行のコメントを義務付け、自動照合は本 spec スコープ外と明記（design.md「Fixture 取り込み方式」）。
+- **検証レポート明確化2**: 未使用フィールドの生保持は §5-6 の確定どおり（非公開 `RawFields` 内・診断目的・公開契約にしない）で据え置き。
