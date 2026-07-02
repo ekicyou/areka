@@ -102,7 +102,7 @@
   - _Requirements: 1.1, 8.1, 8.3, 9.1, 9.2, 10.1, 11.1, 11.3, 11.4_
   - _Boundary: InterfaceLayer_
   - _Depends: 1_
-- [ ] 8.2 エラー語彙の刷新と Get 結果表現の改名
+- [x] 8.2 エラー語彙の刷新と Get 結果表現の改名
   - SHIORI_E_NOT_LOADED／NotLoaded を削除、LoadFailed→CreateFailed・RequestFailed→GetFailed へ改名、NotifyFailed／PropertyNotFound／UnknownToken と SHIORI_E_PROPERTY_NOT_FOUND(0xA0A1_0004) を新設
   - RequestOutcome→GetOutcome 改名（変種・token/allocator 不変）
   - 観測可能な完了: HRESULT 採番固定テスト（0xA0A1_0004・削除定数の不在）が green
@@ -180,3 +180,4 @@
 
 ### WS-B（ABI 是正）
 - Task 8.1: `interface.rs` 全面書換え完了。**新 IID 3 本**（実装時採番・固定回帰テスト済）: `IShioriFactory=7E072AA3-2288-444E-A42F-779428A9545A` / `IShiori=327998D4-8491-4912-BA85-6B8F52831B14` / `IShioriHost=15E93FE3-7635-496C-9F0F-7B07027EAF98`（旧 IShiori E7887AB4…/旧 IShioriHost 03BB53C6… とは全て不一致）。署名: `IShioriFactory::CreateInstance(&HSTRING, &HSTRING, Ref<IShioriHost>, OutRef<IShiori>)->Result<()>`／`IShiori::Get(&HSTRING,&mut HSTRING,&mut u64)->HRESULT`（成功2値 S_OK/SHIORI_S_PENDING ゆえ生返し）・`Notify(&HSTRING)->Result<()>`／`IShioriHost::{Raise,Complete,GetProperty,SetProperty}->Result<()>`。全メソッド **pub**。**windows-core 作法**: `OutRef::write(Some(iface))?` で move-out・`Ref::as_ref()` で借用・error は `HRESULT.into()`／`err.code()` 判定。旧 `ShioriExt`（ergonomic.rs 空化）・旧 mock roundtrip（tests/ 撤去）削除済。**Task 8.1 以降 crates/areka は赤**（9.x で追随・10.1 で全体 green 回復・中間 commit は squash で消える）＝WS-B 中は `cargo test -p shiori-abi` 単体で判定。GetProperty 欠落 key の error 定数 `SHIORI_E_PROPERTY_NOT_FOUND=0xA0A1_0004` は **Task 8.2 で error.rs へ採番**（8.1 は in-file ローカル定数で先取り実証）。
+- Task 8.2: `error.rs` 語彙刷新＋`outcome.rs` 改名完了。**削除**: `SHIORI_E_NOT_LOADED`/`ShioriError::NotLoaded`（ゼロ参照でコンパイル証明）。**改名**: `LoadFailed→CreateFailed(HRESULT)`・`RequestFailed→GetFailed(HRESULT)`・`RequestOutcome→GetOutcome`（`Immediate(HSTRING)`/`Deferred(CorrelationToken)` 変種・`CorrelationToken`/allocator 不変）。**新設**: `ShioriError::{NotifyFailed(HRESULT), PropertyNotFound, UnknownToken}`・`SHIORI_E_PROPERTY_NOT_FOUND=make_shiori_failure(0x0004)=0xA0A1_0004`。**存置**: `SHIORI_S_PENDING(0x20A1_0001)`/`SHIORI_E_UNKNOWN_TOKEN(0xA0A1_0003)`/`Com` catch-all。`hresult_to_shiori_error`: UNKNOWN_TOKEN→UnknownToken・PROPERTY_NOT_FOUND→PropertyNotFound・他→Com。8.3 の安全面はこの語彙を使う。

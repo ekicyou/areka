@@ -1,11 +1,11 @@
-//! `RequestOutcome` / `CorrelationToken`（ABI 非公開の Rust 内部表現）。
+//! `GetOutcome` / `CorrelationToken`（ABI 非公開の Rust 内部表現）。
 //!
 //! ergonomic 層が raw COM 呼び出しの結果を Rust 風に型化するためのデータ型を定義する
 //! （design.md §Components and Interfaces → Ergonomic Layer / §Data Models → CorrelationToken (D2·R3-3),
 //! 要件 3.2/3.3/3.5）。
 //!
-//! - [`RequestOutcome`][] — request の成功結果。即時応答 [`RequestOutcome::Immediate`]（要件 3.2）と
-//!   遅延結果 [`RequestOutcome::Deferred`]（要件 3.3）の 2 値分岐。COM 面には出さない内部表現（D4）。
+//! - [`GetOutcome`][] — `Get` の成功結果。即時応答 [`GetOutcome::Immediate`]（要件 3.2）と
+//!   遅延結果 [`GetOutcome::Deferred`]（要件 3.3）の 2 値分岐。COM 面には出さない内部表現（D4）。
 //! - [`CorrelationToken`][] — 遅延リクエストと後続の完了応答（`IShioriHost::Complete`）を突き合わせる
 //!   `u64` トークン（design.md §Data Models D2）。
 //! - [`CorrelationTokenAllocator`][] — 単調増加採番アロケータ。完了後再利用は単調増加で衝突回避する
@@ -15,13 +15,13 @@ use std::sync::atomic::{AtomicU64, Ordering};
 
 use windows_core::HSTRING;
 
-/// request の成功結果（ABI 非公開の Rust 内部表現・D4）。
+/// `Get` の成功結果（ABI 非公開の Rust 内部表現・D4）。
 ///
-/// ergonomic 層が raw `Request` の HRESULT を判別して構築する（COM 面には出さない）。
+/// ergonomic 層が raw `Get` の HRESULT を判別して構築する（COM 面には出さない）。
 /// HRESULT → variant のルーティング（`S_OK`→`Immediate` / `SHIORI_S_PENDING`→`Deferred`）は
 /// ergonomic 層の責務であり、本型はその受け皿となるデータ表現を提供する（要件 3.2/3.3/3.5）。
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum RequestOutcome {
+pub enum GetOutcome {
     /// 即時応答。応答文字列を HSTRING で内包する（要件 3.2）。
     Immediate(HSTRING),
     /// 遅延結果。後続の完了応答と突き合わせる相関トークンを内包する（要件 3.3）。
@@ -66,15 +66,15 @@ mod tests {
     use super::*;
     use windows_core::HSTRING;
 
-    // --- RequestOutcome 構築（要件 3.2/3.5・design.md §Testing Strategy） ---
+    // --- GetOutcome 構築（要件 3.2/3.5・design.md §Testing Strategy） ---
 
     /// 即時応答は応答文字列付きで `Immediate` として構築できること（要件 3.2）。
     #[test]
     fn immediate_holds_response_hstring() {
         let response = HSTRING::from("pong");
-        let outcome = RequestOutcome::Immediate(response.clone());
+        let outcome = GetOutcome::Immediate(response.clone());
         match outcome {
-            RequestOutcome::Immediate(got) => assert_eq!(got, response),
+            GetOutcome::Immediate(got) => assert_eq!(got, response),
             other => panic!("expected Immediate, got {other:?}"),
         }
     }
@@ -83,9 +83,9 @@ mod tests {
     #[test]
     fn deferred_holds_correlation_token() {
         let token = CorrelationToken(42);
-        let outcome = RequestOutcome::Deferred(token);
+        let outcome = GetOutcome::Deferred(token);
         match outcome {
-            RequestOutcome::Deferred(got) => assert_eq!(got, CorrelationToken(42)),
+            GetOutcome::Deferred(got) => assert_eq!(got, CorrelationToken(42)),
             other => panic!("expected Deferred, got {other:?}"),
         }
     }
@@ -93,10 +93,10 @@ mod tests {
     /// 即時/遅延は判別可能な別 variant であること（要件 3.5）。
     #[test]
     fn immediate_and_deferred_are_distinct_variants() {
-        let immediate = RequestOutcome::Immediate(HSTRING::from("x"));
-        let deferred = RequestOutcome::Deferred(CorrelationToken(1));
-        assert!(matches!(immediate, RequestOutcome::Immediate(_)));
-        assert!(matches!(deferred, RequestOutcome::Deferred(_)));
+        let immediate = GetOutcome::Immediate(HSTRING::from("x"));
+        let deferred = GetOutcome::Deferred(CorrelationToken(1));
+        assert!(matches!(immediate, GetOutcome::Immediate(_)));
+        assert!(matches!(deferred, GetOutcome::Deferred(_)));
     }
 
     // --- CorrelationToken の素朴な性質 ---
