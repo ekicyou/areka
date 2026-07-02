@@ -5,7 +5,7 @@
 > 正典: ukadoc（SSP 仕様）。emo2 fixture は最小サンプル。
 
 - [ ] 1. Foundation: `package` module の接ぎ木とスケルトン
-- [ ] 1.1 `areka-parsers` クレートへ `package` module を接ぎ木する
+- [x] 1.1 `areka-parsers` クレートへ `package` module を接ぎ木する
   - `lib.rs` に `package` module を公開追加し、doc コメントに「`package` module のみローカルディレクトリツリー走査（`std::fs`）を行い、他 module は従来どおり純粋関数群」である旨を補記する
   - `package` の `mod.rs` を作成し、公開面（`MountModel`・付随型・`MountError`・`resolve`）を集約する枠と、内部依存方向（`model ← resolve`）の doc を置く
   - `mod.rs` の module doc に「本 module は parser ファミリ内で唯一 I/O（`std::fs` 読取のみ）と `Result` を持つ。理由＝マウントは物理不在という現実の失敗を持つため（`sakura` の寛容パースと意図的に非対称）」を明記する
