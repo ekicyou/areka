@@ -41,7 +41,7 @@
   - _Boundary: package::resolve_
 
 - [ ] 4. Validation: テスト
-- [ ] 4.1 (P) `resolve` の単体テスト（欠落・境界系）を追加する
+- [x] 4.1 (P) `resolve` の単体テスト（欠落・境界系）を追加する
   - 起点不在→起点不在失敗、`shiori` 未指定→ファイル名 `None`（既定へ推測しないことを検証）、`seriko.defaultsurfacedirectoryname` 未指定かつ `shell/master` 実在→既定 `master` フォールバック、shell 指定だがディレクトリ不在→shell 不在失敗、`type,ghost` 欠落でも所在ベースで受理→`Ok`、descript.txt をディレクトリとして作成し読取失敗→起点読取不能失敗（クロスプラットフォームで確実に誘発可能）
   - 観測可能な完了: 上記 6 ケースの単体テストが緑となり、失敗型の全 3 variant が実行検証される
   - _Requirements: 1.2, 1.3, 2.3, 3.1, 3.3, 5.1_

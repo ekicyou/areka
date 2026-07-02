@@ -175,3 +175,139 @@ fn resolve_missing_shell_dir_yields_shell_dir_missing() {
     // --- Cleanup（best-effort）---
     let _ = fs::remove_dir_all(&root);
 }
+
+// ---------------------------------------------------------------------------
+// 正常・境界系マトリクス（4.1）— 「推測しない」寛容受理を証明する。
+//
+// 失敗系 3 経路（不在・読取不能・shell 不在）は上記 3.2 で検証済み。ここでは
+// 起点が正常に読める場合の 3 つの境界を assert する：`shiori` 未指定なら
+// 既定へ推測せず `None`（Req 2.3）／`seriko.defaultsurfacedirectoryname`
+// 未指定なら既定 `master` へフォールバック（Req 3.1）／`type` 欠落でも所在
+// ベースで受理し `Ok`（Req 1.2/1.3）。これで 6 シナリオ全マトリクスが揃う。
+// ---------------------------------------------------------------------------
+
+/// `shiori` 未指定 → `shiori.file == None`（既定 `"shiori.dll"` へ推測しない・Req 2.3）。
+///
+/// descript に `shiori,` 行を含めず、shell dir は実在させる。`resolve` は `Ok` を
+/// 返し、SHIORI ファイル名は **推測されず** `None` であることを assert する。
+#[test]
+fn resolve_missing_shiori_yields_file_none() {
+    // --- Arrange: shiori 行を持たない正常な descript.txt ＋ 実在 shell dir ---
+    let root = unique_temp_dir("missing_shiori_yields_file_none");
+    let _ = fs::remove_dir_all(&root);
+
+    let ghost_master = root.join("ghost").join("master");
+    fs::create_dir_all(&ghost_master).expect("create ghost/master");
+
+    let shell_dir = root.join("shell").join("master");
+    fs::create_dir_all(&shell_dir).expect("create shell/master");
+
+    let descript = ghost_master.join("descript.txt");
+    // shiori 行を **あえて含めない**。
+    fs::write(
+        &descript,
+        "charset,UTF-8\n\
+         type,ghost\n\
+         name,テスト\n\
+         seriko.defaultsurfacedirectoryname,master\n"
+            .as_bytes(),
+    )
+    .expect("write descript.txt");
+
+    // --- Act ---
+    let result = resolve(&root, DefaultEncoding::Utf8);
+
+    // --- Assert: Ok かつ shiori.file は推測されず None ---
+    let model = result.expect("shiori 未指定でも Ok（マウント点は所在で決まる）");
+    assert!(
+        model.shiori.file.is_none(),
+        "shiori 未指定は None であるべき（\"shiori.dll\" 等へ推測しない）: {:?}",
+        model.shiori.file
+    );
+    // dir 自体は起点の親として確定している。
+    assert_eq!(model.shiori.dir, ghost_master);
+
+    // --- Cleanup（best-effort）---
+    let _ = fs::remove_dir_all(&root);
+}
+
+/// `seriko.defaultsurfacedirectoryname` 未指定 かつ `shell/master` 実在
+/// → 既定 `master` フォールバック（Req 3.1）。
+///
+/// shell 名の指定行を含めず、`shell/master` を実在させる。`resolve` は既定
+/// `master` へフォールバックし、`model.shell.dir == root/shell/master` を assert する。
+#[test]
+fn resolve_missing_shell_name_falls_back_to_master() {
+    // --- Arrange: shell 名指定なし ＋ 実在する shell/master ---
+    let root = unique_temp_dir("missing_shell_name_falls_back_to_master");
+    let _ = fs::remove_dir_all(&root);
+
+    let ghost_master = root.join("ghost").join("master");
+    fs::create_dir_all(&ghost_master).expect("create ghost/master");
+
+    let shell_master = root.join("shell").join("master");
+    fs::create_dir_all(&shell_master).expect("create shell/master");
+
+    let descript = ghost_master.join("descript.txt");
+    // seriko.defaultsurfacedirectoryname を **あえて含めない**。
+    fs::write(
+        &descript,
+        b"charset,UTF-8\ntype,ghost\nname,fallback\n",
+    )
+    .expect("write descript.txt");
+
+    // --- Act ---
+    let result = resolve(&root, DefaultEncoding::Utf8);
+
+    // --- Assert: Ok かつ既定 master へフォールバック ---
+    let model = result.expect("shell 名未指定でも実在 master へフォールバックし Ok");
+    assert_eq!(
+        model.shell.dir, shell_master,
+        "shell 名未指定は既定 master へフォールバックする"
+    );
+    assert!(model.shell.dir.is_dir(), "フォールバックした shell dir は実在する");
+
+    // --- Cleanup（best-effort）---
+    let _ = fs::remove_dir_all(&root);
+}
+
+/// `type,ghost` 欠落でも所在ベースで受理 → `Ok`（Req 1.2/1.3）。
+///
+/// descript に `type` 行を一切含めず（`charset` と `name` のみ）、shell dir は実在
+/// させる。`type` 欠落は失敗ではなく、マウントは物理所在で識別されるため `resolve`
+/// は `Ok` を返すことを assert する。
+#[test]
+fn resolve_missing_type_is_accepted() {
+    // --- Arrange: type 行を持たない descript.txt ＋ 実在 shell dir ---
+    let root = unique_temp_dir("missing_type_is_accepted");
+    let _ = fs::remove_dir_all(&root);
+
+    let ghost_master = root.join("ghost").join("master");
+    fs::create_dir_all(&ghost_master).expect("create ghost/master");
+
+    let shell_dir = root.join("shell").join("master");
+    fs::create_dir_all(&shell_dir).expect("create shell/master");
+
+    let descript = ghost_master.join("descript.txt");
+    // type 行を **あえて含めない**（charset と name のみ）。
+    fs::write(
+        &descript,
+        "charset,UTF-8\n\
+         name,no-type\n\
+         seriko.defaultsurfacedirectoryname,master\n"
+            .as_bytes(),
+    )
+    .expect("write descript.txt");
+
+    // --- Act ---
+    let result = resolve(&root, DefaultEncoding::Utf8);
+
+    // --- Assert: type 欠落は失敗ではない（所在ベース識別）→ Ok ---
+    let model = result.expect("type 欠落でも所在ベースで受理し Ok を返す");
+    // 名前情報は読めており、マウントも所在で確定する。
+    assert_eq!(model.names.name, Some("no-type".to_string()));
+    assert_eq!(model.shell.dir, shell_dir);
+
+    // --- Cleanup（best-effort）---
+    let _ = fs::remove_dir_all(&root);
+}
