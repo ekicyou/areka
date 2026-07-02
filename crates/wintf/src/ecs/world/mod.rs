@@ -101,12 +101,44 @@ impl EcsWorld {
                 schedules.insert(sc);
             }
 
-            schedules.insert(Schedule::new(GraphicsSetup));
+            // WUC（Windows.UI.Composition）はスレッド親和 API であり、かつ DispatcherQueue は
+            // 「メッセージポンプが回るスレッド」に居ないと合成 commit が永遠に flush されない。
+            // try_tick_world は UI スレッド（AsyncTickTask の spawn_local）から呼ばれるため、
+            // WUC オブジェクトに触る schedule を SingleThreaded executor に固定して
+            // 「全 WUC 呼び出し＝UI スレッド」を構造的に保証する。
+            //
+            // 背景（2026-07-02 実測）: DComp は free-threaded で MultiThreaded executor
+            // （worker スレッド実行）でも動作していたが、WUC 移行でこの前提が崩れた。
+            // worker スレッドで CreateDispatcherQueueController(DQTYPE_THREAD_CURRENT) が走ると
+            // DispatcherQueue がポンプの無い worker に紐づき、エラーを一切出さないまま
+            // 画面へ何も合成されない（dcomp_demo: 窓は visible・SetBrush/SetRoot 全成功・
+            // 内容だけ出ない／ECS 非依存でメインスレッド生成の wuc_spike: 表示される、で切り分け確定）。
+            {
+                let mut sc = Schedule::new(GraphicsSetup);
+                sc.set_executor_kind(ExecutorKind::SingleThreaded);
+                schedules.insert(sc);
+            }
             schedules.insert(Schedule::new(Draw));
-            schedules.insert(Schedule::new(PreRenderSurface));
-            schedules.insert(Schedule::new(RenderSurface));
-            schedules.insert(Schedule::new(Composition));
-            schedules.insert(Schedule::new(CommitComposition));
+            {
+                let mut sc = Schedule::new(PreRenderSurface);
+                sc.set_executor_kind(ExecutorKind::SingleThreaded);
+                schedules.insert(sc);
+            }
+            {
+                let mut sc = Schedule::new(RenderSurface);
+                sc.set_executor_kind(ExecutorKind::SingleThreaded);
+                schedules.insert(sc);
+            }
+            {
+                let mut sc = Schedule::new(Composition);
+                sc.set_executor_kind(ExecutorKind::SingleThreaded);
+                schedules.insert(sc);
+            }
+            {
+                let mut sc = Schedule::new(CommitComposition);
+                sc.set_executor_kind(ExecutorKind::SingleThreaded);
+                schedules.insert(sc);
+            }
             schedules.insert(Schedule::new(FrameFinalize));
         }
 
