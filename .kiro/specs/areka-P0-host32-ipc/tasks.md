@@ -6,7 +6,7 @@
   - 観測可能な完了: `cargo build`（host・x64）と PowerShell での `cargo build -p shiori-host32-helper --target i686-pc-windows-msvc` が空雛形で成功し、ワークスペースが3メンバーを認識する
   - _Requirements: 7.1_
 
-- [ ] 2. 共有プロトコル（shiori-host32-ipc / proto）
+- [x] 2. 共有プロトコル（shiori-host32-ipc / proto）
 - [x] 2.1 WM_COPYDATA framing と HWND 符号化・不正フレーム検出
   - `MsgTag`（`dwData` 低32bit・Hello/Load/Request/Response/Unload）、生バイト payload 規約（`cbData`=長さ・固定ヘッダ長0）、HWND の u32 LE 符号化／復元を実装する
   - 未知タグと `cbData`／実長 不整合を破損として検出する（framing 関数レベル）。shift 評価は必ず u64 cast（i686 の `usize`=32bit overflow 回避）
@@ -27,7 +27,7 @@
   - _Boundary: shiori-host32-helper (HelperMessageWindow, respond)_
   - _Depends: 2.2_
 
-- [ ] 4. ホスト側（shiori-host32-host / x64+arm64）
+- [x] 4. ホスト側（shiori-host32-host / x64+arm64）
 - [x] 4.1 (P) ProcessHost（spawn・非ブロッキング生存監視）
   - `std::process::Command` で helper を起動（親 HWND は u32 ワイヤ値で arg/env に渡す・`windows` 非依存の std-only）、`try_wait` ベースの `poll_exit` / `poll_exit_kind` を実装する
   - `ExitKind` 分類（0=Clean／非0=Abnormal(i32)／コードなし=Terminated）、spawn 失敗は `SpawnError`（稼働中 helper 不在を維持）
@@ -50,7 +50,7 @@
   - _Requirements: 3.3, 4.1, 4.2, 4.3, 4.4, 5.1, 5.2, 5.3_
   - _Depends: 4.2, 2.2_
 
-- [ ] 5. 統合・検証
+- [x] 5. 統合・検証
 - [x] 5.1 往復 echo 統合テスト（M1 ゲート指標）
   - 親窓生成 → i686 helper spawn → HELLO 受領（helper HWND 確定）→ 任意 request bytes を `send_request` → 同一 bytes を response として受領し照合 → 両プロセス生存を確認する
   - 観測可能な完了: PowerShell で（事前ビルドした i686 helper を用いて）`cargo test` の echo 往復が無クラッシュ・無デッドロックで green になる
