@@ -46,7 +46,7 @@
   - _Requirements: 4.2, 4.3, 4.4, 6.1, 6.2_
   - _Boundary: decode_
 
-- [ ] 4.3 animationN 集約（interval 3 種・疎 pattern・負センチネル）を実装する
+- [x] 4.3 animationN 集約（interval 3 種・疎 pattern・負センチネル）を実装する
   - animationN.interval と複数の animationN.patternM を同一 animation ID へ束ね、interval を始点とする状態機械を実装する
   - interval を bind / random,K / bind+random,K の 3 種として正規化する
   - pattern を index 明示保持（連番前提なし・疎許容）し、負のサーフェス参照 ID をセンチネルとして失わず保持する（意味付けは下流）
