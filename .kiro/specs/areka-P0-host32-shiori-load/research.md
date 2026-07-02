@@ -176,7 +176,7 @@ get_property(key) -> Result<HSTRING>
 
 #### B-2: 安全面レイヤの配置（→ §6 設計判断の材料・R12.5）
 `Result<IShiori>`/`Result<RequestOutcome>`/`Result<HSTRING>` 直返しは vtable に載らない（§2.1）ため、安全面をどこに置くかの選択肢:
-- **案 a（インヘレント第 2 impl）**: `#[interface]` 生成の `unsafe fn Get(..)` と別名で `impl IShiori { pub fn get(..) -> Result<RequestOutcome> }` を同クレートに追加（複数 inherent impl は合法・PascalCase=vtable / snake_case=安全面で命名衝突なし）。**利用側は `use` 追加なしでメソッドが見える**のが利点。`ShioriExt` トレイトは廃止できる。
+- **案 a（インヘレント第 2 impl）← ✅ 採用（discussion #1・wintf 手法）**: `#[interface]` 生成の `unsafe fn Get(..)` と別名で `impl IShiori { pub fn get(..) -> Result<RequestOutcome> }` を同クレートに追加（複数 inherent impl は合法・PascalCase=vtable / snake_case=安全面で命名衝突なし）。**利用側は `use` 追加なしでメソッドが見える**のが利点。`ShioriExt` トレイトは廃止する。
 - **案 b（拡張トレイト存続）**: 現行 `ShioriExt` 型式を `Get`/`Notify`/`create` 対応へ改める。差分最小だが、トレイト import の儀式が残り、安全化後の存在意義が薄い（brief 開放質問 4 の問題意識どおり）。
 - **案 c（newtype ラッパ）**: `Shiori(IShiori)` 等で完全に面を分離。安全性の見通しは最良だが COM ポインタとの相互変換の儀式が増え、consumer 差分も最大。
 - いずれでも中身は既存 `ergonomic.rs` の HRESULT マッピング流用。**メソッド `pub` 化による vtable 直呼びハック全廃**（§2.2-3）は案に依らず適用可能。
@@ -217,7 +217,7 @@ R10.3「brain が `Get` 処理中に呼んでも**同期**で値応答」の実�
 
 ## 6. 設計ディスカッションへ挙げる設計判断事項（分析であり決定ではない）
 
-1. **(a) windows-core 実装可否の確定形**: §2 により「非 unsafe 署名は不可・型付き引数と `Result<()>` は可・値返し `Result<T>` と成功 2 値分岐は安全面レイヤ担当」がソース根拠付きで確定。**独立 spike は不要**とし、本仕様の最初の ABI タスク（スケルトン＋vtable dispatch テスト）で最終実証を兼ねる、という進め方の可否。あわせて「メソッド `pub` 化で vtable 直呼びハックを全廃する」改善を波及範囲に含めるか。
+1. **(a) windows-core 実装可否の確定形** — **✅ 決着（2026-07-02 discussion #1）**: **薄い unsafe ラッパ二層を採用（wintf 確立手法）**。vtable 面=`unsafe` PascalCase メソッド（型付き引数 `Ref`/`OutRef`/`&HSTRING` で本体を空洞化）／安全面=**snake_case のインヘレント安全メソッド**（`Get`→`get`・`Notify`→`notify`・`create`／`get_property`／`set_property`）が `Result` 値返しを担う。**`ShioriExt` トレイト形式は廃止**し snake_case インヘレントへ置換。**独立 spike 不要**——最初の ABI スケルトンタスク（既存 vtable dispatch テストと同型）で compile 実証を兼ねる。メソッド `pub` 化による vtable 直呼びハック全廃を**波及範囲に含める**（R12.5 に反映済み）。
 2. **(b) GetProperty 同期応答の実現位置**: sink 内蔵プロパティストア（案 a・推奨寄り）vs areka ECS への同期コールバック（案 b・並行モデルと衝突リスク）vs ハイブリッド（案 c）。「`Get` 呼出中に areka がストアロックを保持しない」再入規約の明文化を含む。M1 最小 key 集合の確定も design 論点。
 3. **(c) spawn シグネチャの進化形**: 位置引数拡張（案 a・最小差分）vs `SpawnConfig` struct（案 b・将来拡張耐性）。arg 順序（arg1=parent_hwnd 維持か）・env キー名（`HOST32_LOAD_DIR`/`HOST32_SHIORI_NAME`）・`echo_roundtrip.rs`/`error_paths.rs` の吸収方針。
 4. **(d) testdll 成果物の E2E 解決**: env override 名＋target-dir 探索順（`resolve_helper_exe` 慣行踏襲）と、load_dir の成立方式（一時 dir へ dll コピー vs target dir 直指し）。「エクスポート欠落 DLL」失敗態様の fixture をどこまで作り込むか（別ビルド variant vs 不在ケースで代表）。

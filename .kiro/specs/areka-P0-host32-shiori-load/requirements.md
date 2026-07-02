@@ -169,7 +169,7 @@ M1 `areka-P0-emo2-boot` の「① SHIORI 通信層エンジン host-32」トラ�
 
 1. The shiori-abi の interface 契約面（`IShioriFactory`・`IShiori`・`IShioriHost` の各操作） shall 呼出側から見える署名において raw ポインタを排した型付き契約（文字列は HSTRING 参照・interface は型付き参照渡し・出力は型付き out 表現または Result 直返し）とする。
 2. The C エクスポート入口（`shiori_factory`）のみ shall `extern "system"`＋raw out-param を維持する（GetProcAddress 互換のための唯一の例外）。
-3. Where windows-core の interface 定義機構が特定箇所で非 `unsafe`／型付き表現を許さない, the 実装 shall 最小の `unsafe` を当該箇所に局所化しつつ、契約面（利用側から見える型付き署名）を保つ（zero-unsafe を硬性の受入条件としない。実装可否の確定は design フェーズの検証項目）。
+3. The vtable 面（`#[interface]` 生成） shall windows-core マクロ制約により `unsafe` 署名を保持するが、型付き引数（`Ref<'_,T>`／`OutRef<'_,T>`／`&HSTRING`／`&mut` out）を採用してメソッド本体から raw ポインタ操作を排し `unsafe` を空洞化する（zero-unsafe を硬性の受入条件としない）。利用者が触る安全面（型付き `Result` 署名）は Requirement 12.5 の安全面レイヤが担う。
 4. The 既存 IID 群 shall dev-stage の流動契約として再採番してよい（旧 IID との互換維持を要求しない）。
 
 ### Requirement 12: [WS-B] consumer 波及更新と ABI 証明
@@ -182,7 +182,7 @@ M1 `areka-P0-emo2-boot` の「① SHIORI 通信層エンジン host-32」トラ�
 2. The reference brain shall 新 `IShiori`（`Get`/`Notify`）の実装・reference の `IShioriFactory` 実装・module entry `shiori_factory` を備える。
 3. The セッション層（現行 activate が `load(host)` を呼ぶ経路） shall factory 経由の生成（create に load 融合済み）へ移行する。
 4. The host sink 実装 shall `GetProperty` に対して同期応答できる（M1 で必要な最小のプロパティ応答意味論・詳細 semantics は design で確定）。
-5. The ergonomic 層（`ShioriExt` 相当） shall 新 ABI の型付き安全メソッド化を踏まえ、存続・改廃を design フェーズで確定する（要件としては「consumer が新 ABI で機能を維持する」ことのみを要求する）。
+5. The 安全面レイヤ shall 薄い unsafe ラッパ二層（wintf 確立手法・discussion #1 確定）として提供される: vtable 面の `unsafe` PascalCase メソッド（`Get`/`Notify`/`Raise`/…）に対し、利用者が触る **snake_case のインヘレント安全メソッド**（`get`→`Result<RequestOutcome>`・`notify`→`Result<()>`・`create`→`Result<IShiori>`・`get_property`→`Result<HSTRING>`・`set_property` 等）が `Result` 値返しを担う。拡張トレイト形式（`ShioriExt`）は当該 snake_case インヘレント安全メソッドへ置換して廃止する。consumer は当該安全面で機能を維持し、メソッド `pub` 化により既存の vtable 直呼びハックを解消する。
 6. The 新 ABI の証明 shall reference／mock backend で行い、host-32 互換 backend の factory 実装（create=spawn＋LOAD＋ack・Get=request wire）は要求しない（下流 `areka-P0-host32-request` の領分）。
 
 ### Requirement 13: 開発制約の遵守（横断）
