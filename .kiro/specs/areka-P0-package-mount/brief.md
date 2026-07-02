@@ -1,6 +1,6 @@
 # Brief: areka-P0-package-mount（本坑 / main・M1 M-boot / parser・loader トラック）
 
-> **種別**: 本坑（main）。M1 `areka-P0-emo2-boot` の **parser/loader トラック**（並行・単体テスト可・host 不要）。**依存は無し＝即着手可・安全並走**（`shell-parse ∥ balloon-parse ∥ package-mount`）。
+> **種別**: 本坑（main）。M1 `areka-P0-emo2-boot` の **parser/loader トラック**（並行・単体テスト可・host 不要）。**依存: `areka-P0-parser-foundation`（charset デコード＋KV 共通基盤・2026-07-02 新設）が先行**。foundation 完了後は `shell-parse ∥ balloon-parse ∥ package-mount` で並走安全。
 > **位置づけ**: ゴースト全体の**親コンストラクタ入力の解決**（`install.txt`→レイアウト）。runtime では `ghost-setup` がこれを使ってゴーストを構築し、`shell-parse`/`balloon-parse` へファイルパスを供給する。単体では fixture tree に対し独立にテスト可。
 
 ## Problem
