@@ -28,7 +28,7 @@
   - _Depends: 2.2_
 
 - [ ] 4. ホスト側（shiori-host32-host / x64+arm64）
-- [ ] 4.1 (P) ProcessHost（spawn・非ブロッキング生存監視）
+- [x] 4.1 (P) ProcessHost（spawn・非ブロッキング生存監視）
   - `std::process::Command` で helper を起動（親 HWND は u32 ワイヤ値で arg/env に渡す・`windows` 非依存の std-only）、`try_wait` ベースの `poll_exit` / `poll_exit_kind` を実装する
   - `ExitKind` 分類（0=Clean／非0=Abnormal(i32)／コードなし=Terminated）、spawn 失敗は `SpawnError`（稼働中 helper 不在を維持）
   - 観測可能な完了: stand-in プロセス（`cmd.exe /c exit N`）で spawn＋非ブロッキング poll＋ExitKind 分類＋spawn 失敗→`SpawnError` の単体テストが x64 で green
