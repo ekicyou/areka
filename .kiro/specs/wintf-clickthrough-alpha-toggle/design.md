@@ -114,7 +114,13 @@ graph TB
 
 ### 判定実行スレッド境界（設計上の中核決定）
 
-ワーカ（別スレッド）は `&World` を触れない（UI スレッド単独所有）。したがって**ワーカは `GetCursorPos`（物理座標取得）のみを行い、`event_listener::Event` で UI スレッドを起床する**。ヒットテスト（`hit_test_in_window`）・ドラッグ判定・ex-style 適用はすべて UI スレッド側の async ループで実行する。これにより αマスク・bounds・DPI・ウィンドウ位置のスナップショットをワーカへ共有する必要が消滅し（座標変換の二重化・整合リスクを回避）、判定は常に最新の `World` に対して行われる（R2.4「表示更新に追随」を構造的に満たす）。座標変換は既存 `hit_test_in_window` を**そのまま再利用**する（軽量複製しない）。
+ワーカ（別スレッド）は `&World` を触れない（UI スレッド単独所有）。したがって**ワーカは `GetCursorPos`（物理座標取得）のみを行い、`event_listener::Event` で UI スレッドを起床する**。ヒットテスト（`hit_test_in_window`）・ドラッグ判定・ex-style 適用はすべて UI スレッド側の async ループで実行する。これにより αマスク・bounds・DPI・ウィンドウ位置のスナップショットをワーカへ共有する必要が消滅し（座標変換の二重化・整合リスクを回避）、判定は常に最新の `World` に対して行われる。座標変換は既存 `hit_test_in_window` を**そのまま再利用**する（軽量複製しない）。
+
+#### 起床契機と評価タイミング（tick 相乗り・post-tick 評価）
+
+判定ループの起床契機は**二重化**する: (1) ワーカのカーソル移動 notify（即応性）、(2) 既存 `VsyncEventBridge` の tick（vblank 毎）。カーソルが静止していても表示シーングラフは更新され得る（SERIKO アニメ・サーフェス差し替えでαが変化＝R2.4）、また `DragState::JustEnded` はカーソル移動と独立に起こる（R5.2）ため、tick 相乗りで**毎フレーム再評価**して起床契機への依存を断つ。差分ガード（`last_applied` 比較）により実際の `SetWindowPos` は変化時のみ発火するので、毎フレーム評価でも適用コストは増えない（カーソル移動 notify は即応性のため残す＝二重化で取りこぼしなし）。
+
+**評価は ECS tick の完了後（post-tick）に行う**（設計上の中核制約）。`GlobalArrangement`（bounds）・`AlphaMask`・`DragState` は ECS の各システム（レイアウト／αマスク生成／ドラッグ状態遷移）が当該 tick 内で更新するため、これらが**すべて確定した後**にヒットテストを走らせる。tick 途中（レイアウト未確定・αマスク生成前）に評価すると中間状態を読み、R8 座標一致・R2 判定が乱れる。したがって click-through 評価は当該フレームの ECS 更新スケジュールが完了した最終段（post-update）に配置し、settled な `World` を 1 回だけ読む。
 
 ### Technology Stack
 
@@ -172,10 +178,11 @@ sequenceDiagram
     participant D as snapshot_drag_state
     participant S as Target HWND
 
+    Note over L: 起床 = カーソル移動 notify OR VSync tick / 評価は ECS tick 完了後(post-tick)
     L->>E: listen arm before work
     W->>W: GetCursorPos physical
-    W->>E: notify all
-    E-->>L: wake
+    W->>E: notify all (cursor moved)
+    E-->>L: wake (or VSync tick)
     L->>D: read drag snapshot
     alt dragging in progress
         L->>L: force transparent OFF keep, skip toggle
@@ -203,6 +210,8 @@ sequenceDiagram
 - **差分ガード**: `last_applied` と `desired` が同一なら `SetWindowPos` を呼ばない（R3.2）。変化時のみ 1 回適用（R3.3）。
 - **物理座標の窓ローカル化**: ワーカが得た `GetCursorPos`（screen physical）を、対象窓のクライアント原点で `hit_test_in_window` 用の client physical へ変換して問い合わせる（R8）。座標系対応は既存 `hit_test`（screen physical 前提）に委ねる。
 - **マルチウィンドウ**: レジストリ内の各対象窓に対し順次判定・適用する（areka は shell/balloon の 2 窓）。
+- **起床契機（二重化）**: UI ループはワーカのカーソル移動 notify と既存 `VsyncEventBridge` の tick（vblank 毎）の**いずれでも**起床する。静止カーソル時の表示更新追随（R2.4）・ドラッグ終了再収束（R5.2）を起床契機に依存せず保証する。
+- **post-tick 評価**: ヒットテストは当該フレームの ECS 更新スケジュール完了後（`GlobalArrangement`／`AlphaMask`／`DragState` が確定した最終段）に実行する。tick 途中の中間状態は読まない（R2／R8 の整合保証）。
 
 ## Requirements Traceability
 
@@ -216,7 +225,7 @@ sequenceDiagram
 | 2.1 | Some→受領可 | ClickThroughController | `hit_test_in_window`→`Some` | 同上 |
 | 2.2 | None→透過 | ClickThroughController | `hit_test_in_window`→`None` | 同上 |
 | 2.3 | シーングラフ参照・readback 不要 | ClickThroughController | `hit_test_in_window`, `HitTestMode` | — |
-| 2.4 | 表示更新に追随 | ClickThroughController（UI スレッド最新 World 参照） | `hit_test_in_window` | 同上 |
+| 2.4 | 表示更新に追随（tick 毎 post-tick 再評価） | ClickThroughController（VSync tick 相乗り・ECS tick 完了後評価） | `hit_test_in_window` | カーソル移動→収束 |
 | 3.1 | カーソル継続監視＋判定 | CursorMonitorBridge, ClickThroughController | `GetCursorPos` | 同上 |
 | 3.2 | 同一状態は再適用しない | ClickThroughController（差分ガード） | `ClickThroughRegistry` | 差分ガード |
 | 3.3 | 変化時 1 回適用 | ClickThroughController, ExStyleToggle | `apply_click_through` | 差分ガード |
@@ -225,7 +234,7 @@ sequenceDiagram
 | 4.2 | tokio 非使用 | CursorMonitorBridge, ClickThroughController | event_listener 5 | — |
 | 4.3 | UI スレッドで適用 | ClickThroughController | `spawn_local` ループ | 同上 |
 | 5.1 | ドラッグ中透過 ON しない | ClickThroughController | `snapshot_drag_state` | ドラッグ抑止 |
-| 5.2 | ドラッグ終了で再収束 | ClickThroughController | `snapshot_drag_state`（JustEnded） | ドラッグ抑止 |
+| 5.2 | ドラッグ終了で再収束（tick 起床で保証） | ClickThroughController | `snapshot_drag_state`（JustEnded）＋VSync tick | ドラッグ抑止 |
 | 5.3 | 差分最適化の ON 切替も抑止 | ClickThroughController | 同上 | ドラッグ抑止 |
 | 6.1 | TRANSPARENT 動的付与・除去 | ExStyleToggle | `apply_click_through` | — |
 | 6.2 | LAYERED は同伴フラグのみ | ExStyleToggle（描画不使用） | — | — |
@@ -314,7 +323,7 @@ impl CursorMonitorBridge {
 | Requirements | 1.1–1.5, 2.1–2.4, 3.2, 3.3, 4.3, 5.1–5.3, 8.1–8.3 |
 
 **Responsibilities & Constraints**
-- `spawn_local` の async ループとして UI スレッドで駆動（`run_async_tick` と同じ listen-before-work 規律: `event.listen()` を判定**前**に arm→`await`→処理→再ループで再 arm）。
+- `spawn_local` の async ループとして UI スレッドで駆動（`run_async_tick` と同じ listen-before-work 規律: `event.listen()` を判定**前**に arm→`await`→処理→再ループで再 arm）。起床契機はカーソル移動 notify と VSync tick の二重化。**評価は当該フレームの ECS tick 完了後（post-tick）に行い**、`GlobalArrangement`／`AlphaMask`／`DragState` が確定した settled World を読む（tick 途中では評価しない）。
 - 起床ごとに: (1) `snapshot_drag_state()` を読む。ドラッグ中なら透過 ON への切替を抑止し透過 OFF を維持（R5.1/R5.3）。`JustEnded` 観測時は抑止解除し再収束（R5.2）。(2) 非ドラッグ時、レジストリの各対象窓について、ワーカ最新カーソル座標（screen physical）を窓クライアント座標へ変換し `hit_test_in_window(&World, window, client_point)` を呼ぶ。(3) `Some`→不透過（desired = TRANSPARENT 除去）、`None`→透過（desired = TRANSPARENT 付与）。(4) `desired` が `last_applied` と異なる時のみ `ExStyleToggle` で 1 回適用し `last_applied` を更新（R3.2/R3.3）。
 - World アクセスは UI スレッドに閉じる（ワーカは判定に関与しない）＝R2.4「表示更新に追随」を最新 World 参照で満たす。
 - 座標変換は既存 `hit_test_in_window`（screen physical 前提の変換チェーン）へ委譲し、DPI/マルチモニタ/ウィンドウ移動を既存経路で吸収（R8）。
@@ -471,6 +480,7 @@ pub fn apply_click_through(hwnd: HWND, transparent: bool) -> windows::core::Resu
 ### Integration Tests
 - `CursorMonitorBridge` RAII: `spawn`→`drop` でワーカが確実に stop/join されること（`VsyncEventBridge` テスト準拠）。
 - UI ループ結線: `ClickThroughController::start` 後、`event_listener` 起床で `hit_test_in_window` が呼ばれ、変化時のみ `apply_click_through` が起きること（差分ガードの結線確認）。
+- tick 相乗り再評価: カーソル移動なしでも VSync tick 起床で再評価が走り、表示更新（αマスク変化）後に透過が追随すること（R2.4）／`JustEnded` が tick で拾われ再収束すること（R5.2）。評価が ECS tick 完了後（settled World）に行われること（post-tick 順序）。
 - ウィンドウ破棄時にレジストリから除去され適用がスキップされること（7.2 非破壊）。
 
 ### E2E / Manual Verification（areka 実動）
