@@ -28,14 +28,13 @@
 //!   `decode_append_block` を実装し `Shell.appends` を充填する。append の animation 群は
 //!   `decode_animations` を再利用する（同一集約規則ゆえヘルパを共用）。
 //! - `kero.surface.alias` 写像 → タスク 4.5 が `decode_alias_block` を実装し
-//!   `Shell.aliases` を充填する。
+//!   `Shell.aliases` を充填する（不透明キー・順序付き ID・重複保持）。
 //! - subset 外・不正の寛容吸収の最終化 → タスク 4.6。
-//! 現段階ではこれらのシーム関数は枠のみ（空を返す/何もしない）に留める。
 
 use super::lexer::Token;
 use super::model::{
-    Animation, AppendTarget, Collision, CollisionName, Element, ElementPath, Interval, Pattern,
-    Shell, Surface, SurfaceAppend,
+    AliasKey, Animation, AppendTarget, Collision, CollisionName, Element, ElementPath, Interval,
+    Pattern, Shell, Surface, SurfaceAlias, SurfaceAppend,
 };
 
 /// 構文トークン列を値正規化済みの `Shell` へ写像する（mod 内・`parse` が結線する）。
@@ -109,8 +108,8 @@ fn dispatch_block(shell: &mut Shell, header: &[String], body: &[Vec<String>]) {
         return;
     }
     if head == "kero.surface.alias" {
-        // alias 写像はタスク 4.5 の領分。現段階では吸収のみ（何も積まない）。
-        decode_alias_block(shell, header);
+        // alias 写像（要件 8）。本体各行の `KEY,[id,...]` を opaque キー＋順序付き ID へ写す。
+        decode_alias_block(shell, body);
         return;
     }
     if head.starts_with("surface.append") {
@@ -413,11 +412,53 @@ fn parse_target_element(field: &str) -> AppendTarget {
     }
 }
 
-/// `kero.surface.alias` ブロックを `SurfaceAlias` 群へ decode する枠（タスク 4.5）。
+/// `kero.surface.alias` ブロックの本体行群を `SurfaceAlias` 群へ decode し `shell.aliases` へ積む（要件 8）。
 ///
-/// タスク 4.1 では何も積まない（吸収のみ）。タスク 4.5 が各 `KEY,[id,...]` 行を
-/// opaque キー＋順序付き数値 ID リストへ写像し（重複キー保持）、`shell.aliases` へ
-/// push する。
-fn decode_alias_block(_shell: &mut Shell, _header: &[String]) {
-    // タスク 4.5 で実装。現段階は寛容吸収（要件 9.2）。
+/// 各本体行は lexer が CSV 分割済みで、`KEY,[id,...]` は field[0]==KEY・field[1]=="[id,...]"
+/// として届く（`[...]` 内カンマは lexer が保護するため 1 フィールド・要件 8.1）。
+///
+/// - **キーは不透明**（field[0]）: 数値（`6`）・日本語（`静観`）いずれも意味解釈せず
+///   verbatim に `AliasKey` へ包む（数値 parse しない・要件 8.2）。
+/// - **値は順序付き数値 ID**: field[1] の角括弧を剥がし、内側をカンマ分割して u32 へ
+///   写す（出現順保持・要件 8.3）。非数値・空要素は既定 0 に倒す（要件 3.3・パニックしない）。
+/// - **重複キーは潰さない**: `shell.aliases` は `Vec` ゆえ各行を単純 push し、同一キーの
+///   複数出現を全保持する（衝突解決は下流・要件 8.4）。出現順を保つ。
+/// - キー欠落（空行相当）は寛容に読み飛ばす。値欠落・空 `[]` は空 ids で保持する（要件 9.2）。
+///
+/// 失敗しない（`Result` でない・パニックしない・要件 2.x）。
+fn decode_alias_block(shell: &mut Shell, body: &[Vec<String>]) {
+    for fields in body {
+        // キーは field[0]。欠落した崩れ行（空フィールド列）は読み飛ばす（要件 9.2）。
+        let key = match fields.first() {
+            Some(k) => k,
+            None => continue,
+        };
+        shell.aliases.push(SurfaceAlias {
+            // キーは不透明・無加工（数値 parse しない・要件 8.2）。
+            key: AliasKey::new(key.clone()),
+            // 値 `[id,...]` を順序付き u32 リストへ（角括弧剥がし＋カンマ分割・要件 8.3）。
+            ids: parse_alias_ids(fields.get(1).map(String::as_str).unwrap_or("")),
+        });
+    }
+}
+
+/// alias 値フィールド `[id,id,...]` を順序付き `Vec<u32>` へ写す（要件 8.3）。
+///
+/// - 前後の `[` `]` を剥がす（無ければ全体をそのまま扱う寛容措置・要件 9.2）。
+/// - 内側をカンマ分割し各要素を u32 化する。空要素・非数値は既定 0（要件 3.3・パニックしない）。
+/// - 空（`[]` または空文字列）は空 `Vec` を返す（要件 9.2）。
+fn parse_alias_ids(value: &str) -> Vec<u32> {
+    // 角括弧を防御的に剥がす（`[2106,2206]` → `2106,2206`）。無ければそのまま。
+    let inner = value
+        .strip_prefix('[')
+        .and_then(|s| s.strip_suffix(']'))
+        .unwrap_or(value)
+        .trim();
+    if inner.is_empty() {
+        return Vec::new();
+    }
+    inner
+        .split(',')
+        .map(|s| s.trim().parse::<u32>().unwrap_or(0))
+        .collect()
 }
