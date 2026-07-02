@@ -13,9 +13,17 @@
 //!   overflow を回避する（要件 7.2）。
 //!
 //! 送信プリミティブ（`send_copydata` / `send_request`）・`ResponseSlot`・
-//! `IpcError` は下流タスクの領分ゆえ本モジュールには含まない。
+//! `IpcError` も本モジュールに同居する（跨ビットネス共有の単一ソース）。
+//! 送信関数は `SendMessageTimeoutW`（`SMTO_ABORTIFHUNG` ＋上限時間）で
+//! 無限待機を構造的に排除する（要件 5.3）。実往復の再入受領は実窓を要すため
+//! 統合タスクで検証する（本モジュールは型・timeout 契約・slot 消費の確立まで）。
 
-use windows::Win32::Foundation::HWND;
+use core::cell::RefCell;
+use core::time::Duration;
+
+use windows::Win32::Foundation::{HWND, LPARAM, LRESULT, WPARAM};
+use windows::Win32::System::DataExchange::COPYDATASTRUCT;
+use windows::Win32::UI::WindowsAndMessaging::{SMTO_ABORTIFHUNG, SendMessageTimeoutW, WM_COPYDATA};
 
 /// 跨プロセス payload の固定ヘッダ長。
 ///
@@ -145,6 +153,254 @@ pub enum FramingError {
     UnknownTag(u32),
     /// 宣言長 `cbData` と実 payload 長が不整合。
     LengthMismatch { declared: usize, actual: usize },
+}
+
+/// 送信・往復トランスポート層の構造化エラー（要件 5.2 / 5.3・design.md §486-506）。
+///
+/// **一様な失敗報告**: peer の生死やハングを distinct なバリアントで区別せず、
+/// 到達不能・timeout・ハング peer の中断（`SMTO_ABORTIFHUNG`）は一律
+/// `Timeout` / `SendFailed` に集約する（distinct な PeerGone は設けない）。
+/// peer の生死は送信結果に混ぜず、上位の `ExitKind`（ProcessHost・別タスク）で
+/// 観測する（Requirement 1 と 5 の分離）。
+///
+/// framing レベルの不正フレーム（[`FramingError`]）は `CorruptFrame` へ
+/// `From` で持ち上げ、呼び出し側が `?` で一様に扱えるようにする
+/// （task 2.1 CONCERNS 統合）。
+#[derive(thiserror::Error, Debug)]
+pub enum IpcError {
+    /// 応答が上限時間内に返らなかった（要件 5.2）、または
+    /// ハング peer が `SMTO_ABORTIFHUNG` で中断された（要件 5.3）。
+    #[error("ipc request timed out or peer was hung")]
+    Timeout,
+    /// `SendMessageTimeoutW` が 0 を返した（送出そのものの失敗）。
+    #[error("ipc send failed")]
+    SendFailed,
+    /// 受信フレームが framing 規約に整合しない（未知タグ・長さ不整合など）。
+    #[error("corrupt ipc frame: {0}")]
+    CorruptFrame(FramingError),
+}
+
+impl From<FramingError> for IpcError {
+    #[inline]
+    fn from(err: FramingError) -> Self {
+        IpcError::CorruptFrame(err)
+    }
+}
+
+impl core::fmt::Display for FramingError {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        match self {
+            FramingError::UnknownTag(raw) => write!(f, "unknown message tag {raw:#x}"),
+            FramingError::LengthMismatch { declared, actual } => {
+                write!(f, "length mismatch: declared {declared}, actual {actual}")
+            }
+        }
+    }
+}
+
+impl core::error::Error for FramingError {}
+
+/// single-in-flight の応答受け皿（要件 4.1 / 4.3・design.md §328-331）。
+///
+/// UI スレッド固定かつ往復は同時に 1 つ（single-in-flight）ゆえ、内部同期は
+/// [`RefCell`] で足りる（`Mutex` 不要）。応答 WndProc が再入で [`store`](Self::store)
+/// し、[`send_request`] 側が [`take`](Self::take) する共有参照モデルであり、
+/// `send_request` と WndProc は同一の `&ResponseSlot` を参照する。
+///
+/// 状態機械: `clear`（残骸排除＝None 化）→ 送信ブロック中に WndProc が `store`
+/// → 復帰後 `take` で 1 回消費（再 `take` は `None`）。
+#[derive(Debug, Default)]
+pub struct ResponseSlot {
+    inner: RefCell<Option<Vec<u8>>>,
+}
+
+impl ResponseSlot {
+    /// 空の受け皿を生成する。
+    #[inline]
+    pub fn new() -> Self {
+        Self {
+            inner: RefCell::new(None),
+        }
+    }
+
+    /// 受け皿を空にする（前回往復の残骸を排除・single-in-flight の前提確立）。
+    #[inline]
+    pub fn clear(&self) {
+        *self.inner.borrow_mut() = None;
+    }
+
+    /// 応答バイト列を格納する（再入 WndProc から呼ばれる）。
+    ///
+    /// single-in-flight 前提ゆえ、既存値があれば最新格納で上書きする。
+    #[inline]
+    pub fn store(&self, bytes: Vec<u8>) {
+        *self.inner.borrow_mut() = Some(bytes);
+    }
+
+    /// 格納済み応答を 1 回だけ取り出す（消費後は空・再 `take` は `None`）。
+    #[inline]
+    pub fn take(&self) -> Option<Vec<u8>> {
+        self.inner.borrow_mut().take()
+    }
+}
+
+/// `SendMessageTimeoutW` へ渡す `Duration` をミリ秒 `u32` に飽和変換する。
+///
+/// `u32::MAX` ミリ秒（約 49.7 日）で上限をクランプし、無限待機を構造的に
+/// 排除する（要件 5.3）。
+#[inline]
+fn timeout_millis(timeout: Duration) -> u32 {
+    timeout.as_millis().min(u32::MAX as u128) as u32
+}
+
+/// 生バイト payload を WM_COPYDATA として片道送出する（要件 2.1 / 5.3・design.md §315）。
+///
+/// `SendMessageTimeoutW` に `SMTO_ABORTIFHUNG` ＋上限時間を与え、送出先がハング中でも
+/// 上限時間で復帰する（無限待機の構造的排除）。戻り 0（失敗 / timeout / hung peer）は
+/// 一律 [`IpcError::SendFailed`] とする。
+///
+/// - `dwData`: `tag.as_u32()`（低 32bit のみ有意・跨ビットネス安全）。
+/// - `cbData`: `payload.len()`（メッセージ境界＝固定ヘッダ長 0）。
+/// - `lpData`: `payload` を指す。ポインタ自体はワイヤに載らず OS が `cbData` バイトを marshal する。
+/// - `wParam`: 送信側自身の HWND（`self_hwnd`）。
+///
+/// # Safety
+/// `SendMessageTimeoutW` は FFI。`target` は有効な HWND（ハンドシェイク確定済）であること、
+/// `payload` は本呼び出し中生存すること（`SendMessage` は同期ゆえ復帰まで生存が保証される）。
+pub fn send_copydata(
+    target: HWND,
+    self_hwnd: HWND,
+    tag: MsgTag,
+    payload: &[u8],
+    timeout: Duration,
+) -> Result<(), IpcError> {
+    let cds = COPYDATASTRUCT {
+        dwData: tag.as_u32() as usize,
+        cbData: payload.len() as u32,
+        lpData: payload.as_ptr() as *mut core::ffi::c_void,
+    };
+    let timeout_ms = timeout_millis(timeout);
+
+    let mut result: usize = 0;
+    // SAFETY: target は有効 HWND 前提。&cds は本呼び出し中生存し、その lpData が指す
+    // payload も同期送信中生存する。SMTO_ABORTIFHUNG ＋ timeout_ms により無期限
+    // ブロックしない（要件 5.3）。
+    let ret: LRESULT = unsafe {
+        SendMessageTimeoutW(
+            target,
+            WM_COPYDATA,
+            WPARAM(self_hwnd.0 as usize),
+            LPARAM(&cds as *const COPYDATASTRUCT as isize),
+            SMTO_ABORTIFHUNG,
+            timeout_ms,
+            Some(&mut result as *mut usize),
+        )
+    };
+
+    // 戻り 0 = 送出失敗 / timeout / hung peer の中断。一律失敗として報告する
+    // （distinct PeerGone を設けない・design.md §286）。
+    if ret.0 == 0 {
+        return Err(IpcError::SendFailed);
+    }
+    Ok(())
+}
+
+/// 1 往復送信（再入受領・single-in-flight・要件 4.1 / 4.3 / 5.2・design.md §319）。
+///
+/// 手順:
+///   1. `slot.clear()` — 受け皿を空に（single-in-flight の前提確立）。
+///   2. [`send_copydata`] で REQUEST を同期送出。親はここでブロックし、待機中に
+///      Windows が helper の RESPONSE（2nd WM_COPYDATA）を親 WndProc へ再入配送し、
+///      WndProc が `slot.store()` して即 return する（跨プロセス SendMessage を発行しない）。
+///   3. 復帰後 `slot.take()` — `Some(bytes)` なら `Ok`、`None`（上限内未受領）なら
+///      [`IpcError::Timeout`]。
+///
+/// `slot` は親の応答 WndProc が参照するものと同一 `&ResponseSlot`。往復は同時に 1 つ。
+///
+/// **注意**: 実際の再入往復は実窓を要すため統合 task（4.3 / 5.1）で検証する。本関数は
+/// timeout 契約と slot 消費ロジックの確立まで。
+///
+/// # Safety
+/// [`send_copydata`] の Safety 前提（有効 `target`・`payload` 生存）を引き継ぐ。
+pub fn send_request(
+    target: HWND,
+    self_hwnd: HWND,
+    tag: MsgTag,
+    payload: &[u8],
+    timeout: Duration,
+    slot: &ResponseSlot,
+) -> Result<Vec<u8>, IpcError> {
+    // ① 受け皿を空に（前回残骸排除・single-in-flight）。
+    slot.clear();
+
+    // ② REQUEST を同期送出。ブロック中に RESPONSE が再入配送され slot.store される。
+    send_copydata(target, self_hwnd, tag, payload, timeout)?;
+
+    // ③ 復帰後に受領済み応答を取り出す。未受領（None）は timeout。
+    slot.take().ok_or(IpcError::Timeout)
+}
+
+#[cfg(test)]
+mod slot_error_tests {
+    use super::*;
+
+    // Unit Test 3（design 533・要件 4.3）: ResponseSlot clear/store/take semantics
+    #[test]
+    fn slot_clear_then_take_is_none() {
+        let slot = ResponseSlot::new();
+        slot.clear();
+        assert_eq!(slot.take(), None);
+    }
+
+    #[test]
+    fn slot_store_then_take_is_some_once() {
+        let slot = ResponseSlot::new();
+        slot.store(b"resp".to_vec());
+        assert_eq!(slot.take(), Some(b"resp".to_vec()));
+    }
+
+    #[test]
+    fn slot_take_after_consume_is_none() {
+        let slot = ResponseSlot::new();
+        slot.store(b"resp".to_vec());
+        let _ = slot.take();
+        assert_eq!(slot.take(), None, "consumed slot must be empty");
+    }
+
+    #[test]
+    fn slot_clear_evicts_stale() {
+        let slot = ResponseSlot::new();
+        slot.store(b"stale".to_vec());
+        slot.clear();
+        assert_eq!(slot.take(), None, "clear must evict stale residue");
+    }
+
+    #[test]
+    fn slot_store_overwrites_latest() {
+        // single-in-flight 前提: 最新格納で上書き
+        let slot = ResponseSlot::new();
+        slot.store(b"first".to_vec());
+        slot.store(b"second".to_vec());
+        assert_eq!(slot.take(), Some(b"second".to_vec()));
+    }
+
+    // IpcError バリアント構築・Display/Debug（要件 5.2/5.3）
+    #[test]
+    fn ipc_error_variants_display() {
+        let timeout = IpcError::Timeout;
+        let send_failed = IpcError::SendFailed;
+        assert!(!format!("{timeout}").is_empty());
+        assert!(!format!("{send_failed}").is_empty());
+        assert!(!format!("{timeout:?}").is_empty());
+    }
+
+    // From<FramingError> 持ち上げ（task 2.1 CONCERNS 統合）
+    #[test]
+    fn framing_error_lifts_into_ipc_error() {
+        let fe = FramingError::UnknownTag(9);
+        let ie: IpcError = fe.into();
+        assert!(matches!(ie, IpcError::CorruptFrame(_)));
+    }
 }
 
 #[cfg(test)]

@@ -12,7 +12,7 @@
   - 未知タグと `cbData`／実長 不整合を破損として検出する（framing 関数レベル）。shift 評価は必ず u64 cast（i686 の `usize`=32bit overflow 回避）
   - 観測可能な完了: 単体テストが x64 と i686 の両ターゲットで green（`MsgTag` u32 往復＋低32bit占有 `u64>>32==0`・未知タグ→Err・HWND u32LE 往復・`cbData` 不整合の拒否）
   - _Requirements: 2.1, 2.2, 2.3, 2.4, 2.5, 7.2, 7.3_
-- [ ] 2.2 エラー型・ResponseSlot・送信プリミティブ
+- [x] 2.2 エラー型・ResponseSlot・送信プリミティブ
   - `IpcError`（thiserror・`Timeout` / `SendFailed`。distinct な PeerGone は設けない）、`ResponseSlot`（single-in-flight・`clear→store→take` の1回消費）を実装する
   - `send_copydata`（`SendMessageTimeoutW` ＋ `SMTO_ABORTIFHUNG` ＋上限時間）と `send_request`（再入受領・1往復）を実装する
   - 観測可能な完了: `ResponseSlot` の clear/store/take 単体テストが green、`IpcError` バリアントが定義され、送信関数が上限時間付きで x64/i686 双方コンパイルできる
@@ -67,3 +67,9 @@
   - 観測可能な完了: 依存グラフに `shiori-abi`/pasta が無いことを確認でき、文書化した PowerShell 手順どおりに i686 helper がビルド・テストできる（R8 の negative 基準を充足）
   - _Requirements: 8.1, 8.2, 8.3, 8.4, 7.1_
   - _Depends: 5.1_
+
+## Implementation Notes
+
+- 2.2: `IpcError` に第3バリアント `CorruptFrame(FramingError)`＋`From<FramingError>` を追加（task 本文の Timeout/SendFailed 列挙に加えて）。2.1 の framing エラーを `?` で一様化する ergonomic seam で、design File Structure Plan（§145-149 の FramingError doc）が想定済み。純加算・要件違反なし。併せて `FramingError` に `Display`+`core::error::Error` を追加（thiserror が `#[error]` 内包型に Display を要求するため。既存バリアント/`copydata_payload` シグネチャは不変）。
+- 環境: `vendors/pasta` submodule はワークツリーで未展開だと `[patch.crates-io] pasta_core` の path 解決に失敗し全 cargo が転ぶ。実装開始前に `git submodule update --init vendors/pasta` 済（本フィーチャの新クレートは pasta 非依存だが、ワークスペース解決に必要）。
+- ビルド規律: i686 ターゲット（`--target i686-pc-windows-msvc`）の cargo build/test は**必ず PowerShell** で実行する（Git Bash の GNU coreutils `link.exe` が MSVC link を遮蔽し `'\377\376'` エラーになる）。
