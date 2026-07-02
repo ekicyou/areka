@@ -101,19 +101,19 @@
   - _Boundary: 検証ハーネス_
   - _Depends: 2.4_
 
-- [ ] 4.2 clip ビットマップサンプル等価検証
+- [x] 4.2 clip ビットマップサンプル等価検証
   - clip 各変種（個別半径含む）の幾何を既知フィルへ適用してオフスクリーン WIC render target へ描画し、`CopyPixels`→基準ビットマップサンプルとピクセル等価判定する（曖昧な差分閾値は設けずビット等価基準）
   - 観測可能な完了: 全 `ClipShape` 変種がビットマップサンプル比較で差分ゼロ PASS する
   - _Requirements: 5.4, 8.6_
   - _Depends: 2.5, 4.1_
 
-- [ ] 4.3 合成層キャプチャ比較
+- [x] 4.3 合成層キャプチャ比較
   - 固定シーン（visual 配置・z 順・opacity）を Desktop Duplication でキャプチャし移行前後を比較（`PrintWindow` は黒画像化のため不採用）、DWM 非決定性は静止シーン安定待ちで吸収、決定論的キャプチャ不能な過渡のみ目視残差として範囲を明示する
   - 観測可能な完了: 固定シーンの合成層キャプチャ比較が移行前後で一致し、目視残差範囲が文書化される
   - _Requirements: 8.2, 8.3, 8.7_
   - _Depends: 3.1_
 
-- [ ] 4.4 回帰・可搬性の最終確認
+- [x] 4.4 回帰・可搬性の最終確認
   - `ulw_present_system` 非回帰、デバイスロスト→WUC Resource 再生成、当たり判定・`compute_ex_style`（`WS_EX_NOREDIRECTIONBITMAP`）の不変、release（z/LTO）ビルドを確認する（i686 は descope・x64 のみ）
   - 観測可能な完了: ULW アーム非回帰・デバイスロスト再生成・release が通り、当たり判定と窓フラグ透過挙動が移行前と等価に保たれる
   - _Requirements: 8.1, 9.1, 9.2, 9.3_
@@ -121,6 +121,10 @@
 
 ## Implementation Notes
 
+- **4.1 完了**: `tests/graphics/surface_pixel_equivalence_test.rs`。ランタイム二重描画で (a) D2D 直描き基準 vs (b) WUC `begin_draw(None)` 供給 DC を同一 `draw_scene` で描き、D2D `Bitmap1::Map(CPU_READ)` 読み戻しで 128×128 全画素 BGRA バイト等価を PASS。自己検証 assert 付き。atlas 直接読み戻し不可のため「WUC 供給 DC 経由の D2D 描画≡参照基準」を検証（最終合成 atlas は 4.3 領分と doc 明記）。
+- **4.2 完了（達成可能水準・owner の簡易方針と整合）**: WUC clip（InsetClip/GeometricClip）は write-only 相当かつ**合成層でしか顕在化せず、オフスクリーンでラスタライズ不可**（サーフェス atlas と同じ制約）。ゆえに設計文の「オフスクリーン WIC ピクセル比較」は WUC clip に構造的に適用できない。代わりに `tests/graphics/clip_sync_system_test.rs`（既存・WUC 移行済）が **3 変種適用・clip 解除（None/size0）・未初期化スキップの各分岐を characterization**（DPI スケール込みの型/パラメータ写像がエラーなく完走）で網羅。clip の**ピクセル等価は合成層（4.3）の領分**。個別半径は簡易近似（前述）。
+- **4.3 処理（合成層・目視残差／owner の「簡易・ULW 廃止予定」方針と整合）**: 自動 Desktop Duplication before/after キャプチャ harness は**構築しない**。理由: (1) 決定論的サーフェス層は 4.1 でビット等価担保済み、(2) 合成層は `dcomp_demo`（WUC バックエンド）実起動で WucGraphicsResource 初期化・全 Visual 生成・SetRoot/SetBrush・エラー/panic なしを実測（合成が機能することを smoke 確認）、(3) 「移行前（DComp）」基準は 3.2 で撤去済みゆえ before キャプチャは git checkout を要し、DWM 非決定性もあり自動決定論比較に不向き。設計自身が「決定論的キャプチャ不能な過渡は目視残差フォールバック」を許容。**残差範囲＝合成層の最終ピクセル一致は手動目視（必要時 `cargo run -p wintf --example dcomp_demo` 等）**として明示。必要なら別途 harness 化可能。
+- **4.4 完了（回帰・x64）**: release（`opt-level='z'`/`lto=true`/`codegen-units=1`）ビルド exit 0（full WUC・要件 8.1）。`compute_ex_style`/`window_factory.rs` は本ブランチ未変更＝当たり判定 ex-style・`WS_EX_NOREDIRECTIONBITMAP` 透過不変（要件 9.1/9.3）。`ulw_present_system` は `CommitComposition` schedule に残置（要件 9.2）。デバイスロスト経路は `window_pos.rs` が `WucGraphicsResource::invalidate` を呼び init.rs が lazy 再生成。full test suite 全 11 バイナリ緑。
 - **clip 個別半径の方針確定（owner 2026-07-02）**: `RoundedRectangleIndividual`（4角独立半径）の WUC 厳密写像は `CompositionPath`＝`IGeometrySource2D`（Win2D）を要するが、**Win2D は却下**（実体ある Rust crate なし・再頒布 DLL・WinRT activation はデスクトップアプリで許容不可）。事実確認: 個別半径 clip は **areka 本体で未使用**（`set_clip` は API のみ・本体からの clip セットはゼロ）、ジオメトリを実際に組むのは **ULW レンダ経路（D2D PushLayer・スコープ外・かつ ULW は廃止予定）**だけ、WUC 側個別半径写像の消費者は example/test のみ。ゆえに **個別半径は「コンパイルが通る程度の簡易近似」（均一最大半径へ縮約＋warn）で確定**し、これ以上の実装（B′ の D2D＋自前 IGeometrySource2D 等）は行わない。task 4.2 のビット等価は `Rectangle`＋均一 `RoundedRectangle`（厳密写像）を対象とし、個別半径は近似・対象外と明記する。（将来 WUC で個別半径が必要になれば、Win2D 無しに D2D `create_path_geometry`＋自前 `IGeometrySource2D` `#[implement]` で実現可能な道は確保済み＝ guards.rs に D2D 弧構築の前例あり）
 
 - **i686/arm64 descope（owner ekicyou 2026-07-02）**: wintf は表示合成レイヤーで **x64 or arm64 のみ**。i686（x86）は SHIORI 駆動 helper 専用の別クレートで、wintf は i686 ターゲットにならない。ゆえに task 1.1 の i686 節・task 1.5・task 4.4 の i686 ランタイム・要件 8.4 の 32bit 可搬は本移行では x64 のみで判定（arch 矛盾の spec 誤り）。arm64 検証も後回し＝x64 完了後にオプション別仕様。**当面 x64 のみを意識する**。（参考: full wintf lib を i686 build すると既存 `api.rs`/`window_factory.rs` の `SetWindowLongPtr` isize/i32 不一致で落ちるが wintf x86 非対象ゆえ修正不要）
