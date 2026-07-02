@@ -19,7 +19,7 @@
   - _Requirements: 2.1, 4.1, 4.3, 5.2, 5.3_
   - _Depends: 2.1_
 
-- [ ] 3. helper プロセス（shiori-host32-helper / i686）
+- [x] 3. helper プロセス（shiori-host32-helper / i686）
   - `wintf-winmsg-executor` の message-only 窓＋`MessageLoop::run` を i686 で回し、起動時に親へ HELLO（自 HWND を u32 LE）を送出する
   - WndProc で REQUEST を受領 → `respond`（echo：受信 payload をそのまま返す）→ RESPONSE を1通返送 → 即 return（それ以上の跨プロセス SendMessage を発行しない）。`respond` は plain fn の echo（下流 `shiori-host32-shiori-load` の差し替え点・trait 抽象は設けない）
   - 観測可能な完了: PowerShell で i686 helper バイナリがビルドでき、in-process／loopback セルフテストで HELLO 送出＋REQUEST→echo RESPONSE＋bounded ループ生存（無クラッシュ）を観測できる
@@ -73,3 +73,6 @@
 - 2.2: `IpcError` に第3バリアント `CorruptFrame(FramingError)`＋`From<FramingError>` を追加（task 本文の Timeout/SendFailed 列挙に加えて）。2.1 の framing エラーを `?` で一様化する ergonomic seam で、design File Structure Plan（§145-149 の FramingError doc）が想定済み。純加算・要件違反なし。併せて `FramingError` に `Display`+`core::error::Error` を追加（thiserror が `#[error]` 内包型に Display を要求するため。既存バリアント/`copydata_payload` シグネチャは不変）。
 - 環境: `vendors/pasta` submodule はワークツリーで未展開だと `[patch.crates-io] pasta_core` の path 解決に失敗し全 cargo が転ぶ。実装開始前に `git submodule update --init vendors/pasta` 済（本フィーチャの新クレートは pasta 非依存だが、ワークスペース解決に必要）。
 - ビルド規律: i686 ターゲット（`--target i686-pc-windows-msvc`）の cargo build/test は**必ず PowerShell** で実行する（Git Bash の GNU coreutils `link.exe` が MSVC link を遮蔽し `'\377\376'` エラーになる）。
+- 3: helper は親HWNDを **arg1 優先・fallback env `HOST32_PARENT_HWND`** の **10進 u32**（`parse::<u32>()`）で取得する。**task 4.1 `ProcessHost::spawn` はこの規約（同一 env キー名・10進表現・引数順）で親HWNDを渡す**こと。統合 task 5.1 で実往復として整合を担保する（cross-task 契約）。
+- 3: wintf-winmsg-executor 0.0.5 の message-only 窓は **同一 i686 プロセス内で2組独立生成すると2組目が `WindowCreationError`** になる実行時制約あり。helper のセルフテストは窓を1組に集約した単一 loopback テストにし、不正フレーム分類は窓なし純関数（`classify_inbound`）へ切り出して独立検証する。
+- 環境: subagent の出力トランスクリプト（tasks/*.output）は0バイトで永続化されない＝消失した未コミット作業は復元不能。**未コミット実装をレビューへ回す前に scratchpad へバックアップ**し、レビュアーには **`git checkout`/`restore`/`stash`/`reset`/`clean` 禁止**（ミューテーション検証は Edit で戻す）を課すこと（task 3 は初回レビュアーの git 復元＋APIクラッシュで実装消失→再実装した）。
