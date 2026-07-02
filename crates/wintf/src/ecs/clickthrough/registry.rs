@@ -37,6 +37,12 @@ pub(crate) struct ClickThroughTarget {
     pub(crate) hwnd: HWND,
     /// 直近に適用済みの透過状態（差分ガードの基準・初期 `Opaque`）。
     pub(crate) last_applied: DesiredState,
+    /// `WS_EX_LAYERED` 同伴フラグを適用済みか（初期 `false`・pilot 必須条件）。
+    ///
+    /// DComp 窓は factory（`compute_ex_style`）が生成時に LAYERED を除去するため、
+    /// `WS_EX_TRANSPARENT` 単独ではマウス透過が効かない（pilot REPORT 実証）。機構が
+    /// 登録窓の初回評価時に `apply_layered_companion` で 1 回立て、成功時に真へ倒す。
+    pub(crate) layered_applied: bool,
 }
 
 /// 監視対象窓と適用済み状態を保持するレジストリ。
@@ -53,19 +59,23 @@ impl ClickThroughRegistry {
         Self::default()
     }
 
-    /// 監視対象窓を登録する。`last_applied` は既定（`Opaque`）で初期化する。
+    /// 監視対象窓を登録する。`last_applied` は既定（`Opaque`）、`layered_applied` は
+    /// `false` で初期化する。
     ///
-    /// 同一 window Entity が既に登録済みの場合は HWND を更新し `last_applied` を
-    /// `Opaque` へリセットして重複させない（dedupe by Entity）。
+    /// 同一 window Entity が既に登録済みの場合は HWND を更新し `last_applied`／
+    /// `layered_applied` をリセットして重複させない（dedupe by Entity。HWND が
+    /// 変わり得るため同伴フラグも再適用が必要）。
     pub(crate) fn register(&mut self, window: Entity, hwnd: HWND) {
         if let Some(target) = self.targets.iter_mut().find(|t| t.window == window) {
             target.hwnd = hwnd;
             target.last_applied = DesiredState::default();
+            target.layered_applied = false;
         } else {
             self.targets.push(ClickThroughTarget {
                 window,
                 hwnd,
                 last_applied: DesiredState::default(),
+                layered_applied: false,
             });
         }
     }
@@ -103,6 +113,17 @@ impl ClickThroughRegistry {
     pub(crate) fn set_last_applied(&mut self, window: Entity, state: DesiredState) -> bool {
         if let Some(target) = self.targets.iter_mut().find(|t| t.window == window) {
             target.last_applied = state;
+            true
+        } else {
+            false
+        }
+    }
+
+    /// 指定 window の `layered_applied` を真へ倒す（同伴フラグ適用成功後の書き戻し・
+    /// 未登録なら何もせず `false`）。
+    pub(crate) fn mark_layered_applied(&mut self, window: Entity) -> bool {
+        if let Some(target) = self.targets.iter_mut().find(|t| t.window == window) {
+            target.layered_applied = true;
             true
         } else {
             false
@@ -178,12 +199,38 @@ mod tests {
         reg.register(e, hwnd(1));
         // 状態を進めてから再登録。
         assert!(reg.set_last_applied(e, DesiredState::Transparent));
+        assert!(reg.mark_layered_applied(e));
         reg.register(e, hwnd(2));
 
         assert_eq!(reg.len(), 1);
-        // 再登録は HWND を更新し last_applied を Opaque へリセットする。
+        // 再登録は HWND を更新し last_applied を Opaque へ・layered_applied を false へリセットする。
         assert_eq!(reg.last_applied(e), Some(DesiredState::Opaque));
         assert_eq!(reg.iter().next().map(|t| t.hwnd), Some(hwnd(2)));
+        assert_eq!(
+            reg.iter().next().map(|t| t.layered_applied),
+            Some(false),
+            "再登録（HWND 更新）で同伴フラグは再適用が必要"
+        );
+    }
+
+    #[test]
+    fn layered_applied_defaults_false_and_marks_true() {
+        let mut world = World::new();
+        let e = world.spawn_empty().id();
+        let mut reg = ClickThroughRegistry::new();
+        reg.register(e, hwnd(1));
+
+        assert_eq!(
+            reg.iter().next().map(|t| t.layered_applied),
+            Some(false),
+            "初期は未適用（false）"
+        );
+        assert!(reg.mark_layered_applied(e));
+        assert_eq!(reg.iter().next().map(|t| t.layered_applied), Some(true));
+
+        // 未登録 Entity への mark は false。
+        let other = world.spawn_empty().id();
+        assert!(!reg.mark_layered_applied(other));
     }
 
     #[test]

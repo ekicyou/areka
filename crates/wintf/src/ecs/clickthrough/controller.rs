@@ -25,7 +25,7 @@ use crate::ecs::drag::{DragStateSnapshot, snapshot_drag_state};
 use crate::ecs::hit_test_in_window;
 use crate::ecs::world::EcsWorld;
 use crate::ecs::{PhysicalPoint, WindowPos};
-use crate::win_style::apply_click_through;
+use crate::win_style::{apply_click_through, apply_layered_companion};
 
 use super::{ClickThroughRegistry, CursorMonitorBridge, DesiredState};
 
@@ -120,6 +120,9 @@ pub(crate) fn prune_dead_targets(world: &World, registry: &mut ClickThroughRegis
 /// - `cursor_screen`: ワーカ最新カーソル座標（screen physical・`i32`）。
 ///
 /// # 各対象窓の処理
+/// 0. `layered_applied` が偽なら `apply_layered_companion` で `WS_EX_LAYERED` 同伴フラグを
+///    1 回立てる（pilot REPORT 必須条件: DComp 窓は `WS_EX_TRANSPARENT` 単独ではマウス
+///    透過が効かない）。成功時のみ真へ書き戻し、失敗時は当該窓を skip（次サイクル再試行）。
 /// 1. `WindowPos.position`（クライアント原点・screen physical）を World から取得。
 ///    無い窓（未マップ等）はスキップ。
 /// 2. `client = cursor_screen - position` を計算し（座標変換は既存 `hit_test_in_window`
@@ -151,12 +154,28 @@ pub(crate) fn evaluate_targets(
     // 巡回中に `registry` を可変借用して書き戻すため、対象の列挙を先にスナップショット
     // する（`iter` の不変借用と `set_last_applied` の可変借用の重複を避ける）。
     // 対象は areka で 2 窓のみ・汎用でも小数のため Vec 収集のコストは無視できる。
-    let targets: Vec<(Entity, windows::Win32::Foundation::HWND, DesiredState)> = registry
+    let targets: Vec<(Entity, windows::Win32::Foundation::HWND, DesiredState, bool)> = registry
         .iter()
-        .map(|t| (t.window, t.hwnd, t.last_applied))
+        .map(|t| (t.window, t.hwnd, t.last_applied, t.layered_applied))
         .collect();
 
-    for (window, hwnd, last_applied) in targets {
+    for (window, hwnd, last_applied, layered_applied) in targets {
+        // `WS_EX_LAYERED` 同伴フラグを初回評価で 1 回立てる（pilot REPORT 必須条件:
+        // DComp 窓は TRANSPARENT 単独ではマウス透過が効かない）。適用成功時のみ真へ倒し、
+        // 失敗はこの窓を当該サイクル skip（`last_applied` と同じ据え置き・次サイクル再試行）。
+        if !layered_applied {
+            match apply_layered_companion(hwnd) {
+                Ok(()) => {
+                    debug!(?window, "clickthrough: WS_EX_LAYERED 同伴フラグ適用");
+                    registry.mark_layered_applied(window);
+                }
+                Err(e) => {
+                    warn!(?window, error = %e, "clickthrough: apply_layered_companion 失敗 — skip");
+                    continue;
+                }
+            }
+        }
+
         // 窓クライアント原点（screen physical）。未マップ等で無ければスキップ。
         let Some(pos) = world.get::<WindowPos>(window).and_then(|wp| wp.position) else {
             trace!(?window, "clickthrough: WindowPos.position 未確定 — skip");
@@ -784,6 +803,47 @@ mod tests {
 
         // thread_local を Idle に戻す（他テストへの汚染防止）。JustEnded→reset_to_idle。
         reset_to_idle();
+        destroy_test_hwnd(hwnd);
+        if let Err(e) = result {
+            std::panic::resume_unwind(e);
+        }
+    }
+
+    /// 現在の ex-style に LAYERED ビットが立っているか読み戻す。
+    fn is_layered(hwnd: HWND) -> bool {
+        use windows::Win32::UI::WindowsAndMessaging::WS_EX_LAYERED as EX_LAYERED;
+        let ex = get_window_long_ptr(hwnd, GWL_EXSTYLE).expect("read ex-style") as u32;
+        ex & EX_LAYERED.0 != 0
+    }
+
+    /// (e) LAYERED 同伴フラグ: 登録窓は初回評価で `WS_EX_LAYERED` が立ち（pilot 必須条件）、
+    /// レジストリの `layered_applied` が真へ倒れる。以後の評価で重複適用しない（冪等）。
+    #[test]
+    fn eval_applies_layered_companion_on_first_pass() {
+        let mut world = World::new();
+        let window = world_with_hittable_window(&mut world);
+        let hwnd = create_test_hwnd();
+
+        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            assert!(!is_layered(hwnd), "seed: LAYERED must start clear");
+
+            let mut reg = ClickThroughRegistry::new();
+            reg.register(window, hwnd); // layered_applied = false
+
+            // 初回評価: hit の有無に関わらず同伴フラグが立つ（cursor は hit 位置）。
+            evaluate_targets(&world, &mut reg, PhysicalPoint::new(150, 250));
+
+            assert!(is_layered(hwnd), "初回評価で WS_EX_LAYERED が立つべき");
+            assert_eq!(
+                reg.iter().next().map(|t| t.layered_applied),
+                Some(true),
+                "適用成功後に layered_applied が真へ倒れるべき"
+            );
+
+            // 2 回目の評価でも LAYERED は保持されたまま（落とさない・冪等）。
+            evaluate_targets(&world, &mut reg, PhysicalPoint::new(0, 0));
+            assert!(is_layered(hwnd), "以後の評価でも LAYERED は保持される");
+        }));
         destroy_test_hwnd(hwnd);
         if let Err(e) = result {
             std::panic::resume_unwind(e);

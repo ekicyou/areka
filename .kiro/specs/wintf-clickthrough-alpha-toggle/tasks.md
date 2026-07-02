@@ -82,6 +82,8 @@
 
 ## Implementation Notes
 
+- **`WS_EX_LAYERED` 同伴フラグは透過成立の必須条件（4.2 実動検証で発覚・2026-07-02 依頼者確認済み＝R6.4 充足）**: 初回実動検証でクリック透過が不成立。原因は design が pilot 知見を誤転写していたこと——pilot REPORT（`crates/pilot/examples/pilot-clickthrough-alpha-toggle/REPORT.md` L15/L18/L68）は「`WS_EX_TRANSPARENT` 単独では DComp 窓のマウス透過が効かず窓が全クリックを吸う。`WS_EX_LAYERED` をフラグのみ（ULW/SLWA 非呼出）併設して成立（実測 ex_style 0x280028 で DComp 描画と共存）」と実証していたが、design は「単独で成立する pilot 実証済み」と逆に記載していた。修正: `win_style::apply_layered_companion`（LAYERED を立てるのみ・冪等）を新設し、`evaluate_targets` が登録窓の初回評価で 1 回適用（`ClickThroughTarget.layered_applied` フラグ・成功時のみ真・失敗は次サイクル再試行）。factory `compute_ex_style` は byte-for-byte 契約ゆえ不変。design/docs の該当記述は訂正済み。**教訓: pilot の REPORT.md（実測台帳）を正とし、spec 転写を鵜呑みにしない**。
+
 - `PhysicalPoint` は文脈で2型ある: `crate::ecs::PhysicalPoint`（=`Point`・**i32**、cursor/registry/drag 用）と `crate::ecs::layout::hit_test::PhysicalPoint`（=`PointF`・**f32**、`hit_test_in_window` の引数型）。座標変換は i32 のまま `client = cursor_screen - WindowPos.position` を計算し、`hit_test_in_window` 呼び出し時に `PointF::new(x as f32, y as f32)` へ明示キャストする（符号: client = cursor − position）。3.1 で確認済み。
 - クリック透過機構の結線 API（3.1 確定）: `ClickThroughController::start(world: Weak<RefCell<EcsWorld>>, registry: Rc<RefCell<ClickThroughRegistry>>, wake_event: Arc<event_listener::Event>) -> ClickThroughHandle`。二重起床は**単一の共有 `Arc<Event>`** を cursor worker と VSync tick 源の両方が notify する方式（select 併用なし）。`CursorMonitorBridge::spawn(wake_event.clone())` で worker が同一 event を叩く。tick 源が wake_event を post-tick で notify する結線は **3.2 の領分**。registry は `Rc<RefCell<..>>` 共有ゆえ start 後に窓を register/remove 可能（handle 経由）。
 - `last_applied` 単一所有: 書き戻しは `apply_click_through` が `Ok` の時のみ（`Err` は据え置き＋`warn!`・次サイクル再試行）。

@@ -9,7 +9,7 @@
 - **表示層（display layer）**: GPU 合成による見た目。WUC（Windows.UI.Composition）/ DComp（DirectComposition）の visual/content で構成する。キャラクターが 2D サーフェスか合成スワップチェーン（3D／Live2D 相当）かに依らず、描画内容はこの層が担う。
 - **当たり判定層（hit-testing layer）**: そのウィンドウがクリックを受け取るか、背面プロセスへ通すか。HWND の `WS_EX_TRANSPARENT` 拡張スタイルの有無で決まる。
 
-**本機構は当たり判定層のみを制御し、表示層には一切触れない。** ex-style（`WS_EX_TRANSPARENT` ビット）のトグルだけを行い、合成 visual/content の生成・更新・破棄には関与しない。これにより「別プロセス透過のために GPU 描画を諦める踏み絵」を回避する——見た目は GPU 合成のまま、当たり判定だけをカーソル位置に応じて動的に切り替える。
+**本機構は当たり判定層のみを制御し、表示層には一切触れない。** ex-style の操作（`WS_EX_LAYERED` 同伴フラグの初回付与＋`WS_EX_TRANSPARENT` ビットの動的トグル）だけを行い、合成 visual/content の生成・更新・破棄には関与しない。これにより「別プロセス透過のために GPU 描画を諦める踏み絵」を回避する——見た目は GPU 合成のまま、当たり判定だけをカーソル位置に応じて動的に切り替える。
 
 当たり判定の情報源は既存のシーングラフ・ヒットテスト `hit_test_in_window(&World, window, client_point) -> Option<Entity>` である。`Some(entity)` は「いずれかのエンティティにヒット（不透過・自窓で受領）」、`None` は「どのエンティティにもヒットせず（透過・背面へ通過）」を意味する。各エンティティの `HitTest` モード（`Bounds` 合成α／`AlphaMask` ピクセル単位／`NamedRegions`）はシーングラフ評価が honored するため、「実描画α」はこのツリー評価が体現する。GPU フレームバッファの CPU readback は要求しない。
 
@@ -31,6 +31,7 @@ CursorMonitorBridge                    ClickThroughController (async loop)
                                        evaluate_targets(settled &World, ...)
                                          drag = snapshot_drag_state()（1 パス 1 回読み・ループ前）
                                          各対象窓について:
+                                           未適用なら apply_layered_companion(hwnd)（初回 1 回・冪等）
                                            client = cursor_screen - WindowPos.position
                                            hit = hit_test_in_window(world, window, client)
                                            desired = resolve_transition(hit, &drag, last_applied)
@@ -41,6 +42,7 @@ CursorMonitorBridge                    ClickThroughController (async loop)
 
 判定フローの要点:
 
+- **`WS_EX_LAYERED` 同伴フラグ（透過成立の必須条件）**: `WS_EX_TRANSPARENT` は**単独では別プロセスへのマウス透過を成立させない**（pilot 実証: DComp 窓では窓が全クリックを吸う）。機構は登録窓の初回評価時に `apply_layered_companion` で `WS_EX_LAYERED` を 1 回立てる（冪等・落とさない）。LAYERED はフラグのみで、レイヤード描画（`UpdateLayeredWindow`/`SetLayeredWindowAttributes`）は呼ばない。DComp 描画（`WS_EX_NOREDIRECTIONBITMAP`）と共存する（pilot 実測 ex_style `0x280028`）。
 - **`WS_EX_TRANSPARENT` の動的トグル**: 透過 ON=ビット付与、OFF=ビット除去。`apply_click_through` が `SetWindowLongPtr(GWL_EXSTYLE)` ＋ `SetWindowPos(SWP_FRAMECHANGED)` で反映する。TRANSPARENT ビット以外の ex-style は保存する。
 - **別スレッドのカーソル監視（`CursorMonitorBridge`）**: 専用ワーカスレッドが `GetCursorPos`（screen physical）を固定短周期（12ms）でポーリングし、UI スレッドの描画を阻害しない。ワーカは `&World`／ECS に一切触れない（座標取得のみ）。
 - **順序不変条件（store→notify）**: ワーカは移動検知時に `latest_pos.store(...)` を **先に**、その後で `cursor_event.notify(usize::MAX)` を行う。逆順だと UI 側が 1 通知分古い座標を読む稀レースが生じる（`VsyncEventBridge` と同一規律）。
@@ -65,17 +67,19 @@ ULW は CPU ビットマップ方式であり、`UpdateLayeredWindow` に渡す 
 
 ### (c) Layered 描画（`UpdateLayeredWindow`／`SetLayeredWindowAttributes`）
 
-`WS_EX_LAYERED` を用いた **描画**（`UpdateLayeredWindow`／`SetLayeredWindowAttributes` による内容・α供給）は GPU 合成と両立しない（(a) と同根の CPU ビットマップ問題）。本機構は `WS_EX_LAYERED` を描画用途に使わない。DComp/WUC 経路では生成時に factory（`compute_ex_style`）が `WS_EX_LAYERED` を除去し `WS_EX_NOREDIRECTIONBITMAP` を付与済みである。`WS_EX_LAYERED` は当たり判定を効かせる **同伴フラグ用途のみ** に許容し、本トグル API は `WS_EX_TRANSPARENT` ビットのみを触る。追加の ex-style 付与や `WM_NCHITTEST` ハンドラが必要と判断された場合は、独断追加せず理由を添えて依頼者へ確認する。
+`WS_EX_LAYERED` を用いた **描画**（`UpdateLayeredWindow`／`SetLayeredWindowAttributes` による内容・α供給）は GPU 合成と両立しない（(a) と同根の CPU ビットマップ問題）。本機構は `WS_EX_LAYERED` を描画用途に使わない。DComp/WUC 経路では生成時に factory（`compute_ex_style`）が `WS_EX_LAYERED` を除去し `WS_EX_NOREDIRECTIONBITMAP` を付与するため、機構が登録窓の初回評価時に `apply_layered_companion` で立て直す。`WS_EX_LAYERED` は当たり判定を効かせる **同伴フラグ用途のみ**（ULW/SLWA 非呼出・pilot 実証の必須条件——これが無いと `WS_EX_TRANSPARENT` 単独ではマウス透過が効かず窓が全クリックを吸う）に許容し、本トグル API は `WS_EX_TRANSPARENT` ビットのみを触る。追加の ex-style 付与や `WM_NCHITTEST` ハンドラが必要と判断された場合は、独断追加せず理由を添えて依頼者へ確認する（LAYERED 同伴は 2026-07-02 実動検証を受け依頼者確認済み）。
 
 ## 4. API 使用例
 
-### 4.1 ex-style トグル（`win_style::apply_click_through`）
+### 4.1 ex-style トグル（`win_style::apply_click_through`／`apply_layered_companion`）
 
-対象 HWND の `WS_EX_TRANSPARENT` を `transparent` フラグに一致させ、`SetWindowPos(SWP_FRAMECHANGED)` で反映する。他の ex-style ビットには触れない。
+`apply_click_through` は対象 HWND の `WS_EX_TRANSPARENT` を `transparent` フラグに一致させ、`SetWindowPos(SWP_FRAMECHANGED)` で反映する。他の ex-style ビットには触れない。`apply_layered_companion` は透過成立の必須条件である `WS_EX_LAYERED` を同伴フラグとして立てる（冪等・落とさない・レイヤード描画非呼出）。
 
 ```rust
-use wintf::win_style::apply_click_through;
+use wintf::win_style::{apply_click_through, apply_layered_companion};
 
+// 同伴フラグ（必須条件・通常は機構が登録窓の初回評価で自動適用）。
+apply_layered_companion(hwnd)?;
 // 透過 ON（透明領域上・背面へ通過させたい）。
 apply_click_through(hwnd, true)?;
 // 透過 OFF（キャラ領域上・自窓で受領したい）。
@@ -86,9 +90,10 @@ apply_click_through(hwnd, false)?;
 
 ```rust
 pub fn apply_click_through(hwnd: HWND, transparent: bool) -> windows::core::Result<()>;
+pub fn apply_layered_companion(hwnd: HWND) -> windows::core::Result<()>;
 ```
 
-通常は機構（`evaluate_targets`）が差分ガードを通して自動で呼ぶため、アプリ側が直接叩く必要はない。
+通常は機構（`evaluate_targets`）が同伴フラグ適用・差分ガードを通したトグルを自動で行うため、アプリ側が直接叩く必要はない。
 
 ### 4.2 機構の起動（`ClickThroughController::start`）
 

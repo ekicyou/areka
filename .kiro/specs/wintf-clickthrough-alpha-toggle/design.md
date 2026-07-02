@@ -397,7 +397,7 @@ fn resolve_transition(
 
 **Responsibilities & Constraints**
 - 既存 `WinStyle::commit` は `SetWindowPos(SWP_FRAMECHANGED)` を呼ばないため動的トグルに使えない。本 API は `WS_EX_TRANSPARENT` ビットのみを対象に、現在の ex-style を読み・当該ビットを add/remove・`SetWindowLongPtr(GWL_EXSTYLE)`＋`SetWindowPos(SWP_FRAMECHANGED|SWP_NOMOVE|SWP_NOSIZE|SWP_NOZORDER|SWP_NOACTIVATE)` を適用する（`apply_initial_state` のレシピ準拠）。
-- **`WS_EX_LAYERED` は本 API では操作しない**。DComp 経路では生成時に factory（`compute_ex_style`）が LAYERED を除去し `WS_EX_NOREDIRECTIONBITMAP` を付与済み。同伴フラグとして LAYERED が必要な場合も、それは生成時 ex-style の領分であり本トグルは TRANSPARENT ビットのみを触る（R6.2）。実装中に LAYERED 付与・NCHITTEST ハンドラが必要と判断された場合は独断追加せず依頼者確認（R6.4）。
+- **`WS_EX_LAYERED` 同伴フラグは別 API（`apply_layered_companion`）で登録窓へ 1 回立てる**（2026-07-02 実動検証で確定・依頼者確認済み＝R6.4 充足）。pilot REPORT の実証どおり、DComp 窓では `WS_EX_TRANSPARENT` 単独ではマウス透過が効かず窓が全クリックを吸う。LAYERED はフラグのみ・レイヤード描画（`UpdateLayeredWindow`/`SetLayeredWindowAttributes`）非呼出（R6.2 同伴フラグ用途）。factory（`compute_ex_style`）は生成時に LAYERED を除去するため、機構が登録窓の初回評価時に立て直す（factory は byte-for-byte 契約ゆえ不変）。トグル API 本体は従来どおり TRANSPARENT ビットのみを触る。
 - 既存 `WinStyle` ビルダー・`commit` は不変。
 
 **Dependencies**
@@ -410,6 +410,10 @@ fn resolve_transition(
 /// 対象 HWND の WS_EX_TRANSPARENT を transparent フラグに一致させ、FRAMECHANGED で反映する。
 /// 他の ex-style ビット（LAYERED 等）には触れない。
 pub fn apply_click_through(hwnd: HWND, transparent: bool) -> windows::core::Result<()>;
+
+/// 対象 HWND に WS_EX_LAYERED を同伴フラグとして立てる（クリック透過の必須条件・冪等）。
+/// レイヤード描画（ULW/SLWA）は呼ばない。落とす操作は提供しない（立てるのみ）。
+pub fn apply_layered_companion(hwnd: HWND) -> windows::core::Result<()>;
 ```
 - Preconditions: UI スレッドから呼ぶ（HWND は生成済み）。
 - Postconditions: `WS_EX_TRANSPARENT` が `transparent` と一致。フレーム更新済み。
@@ -495,7 +499,7 @@ pub fn apply_click_through(hwnd: HWND, transparent: bool) -> windows::core::Resu
 
 ## Open Questions / 運用規律
 
-- **R6.4/R6.5 の確認フロー**: `WS_EX_LAYERED` の追加付与や `WM_NCHITTEST` ハンドラ、追加 ex-style、依存追加が実装中に必要と判断された場合、独断で追加せず、理由を添えて依頼者へ確認する。本設計は現時点でこれらを不要としている（`compute_ex_style` が DComp で LAYERED を除去済み・`WS_EX_TRANSPARENT` 単独トグルで別プロセス透過が成立する pilot 実証済み）。
+- **R6.4/R6.5 の確認フロー**: `WM_NCHITTEST` ハンドラ、追加 ex-style、依存追加が実装中に必要と判断された場合、独断で追加せず、理由を添えて依頼者へ確認する。**`WS_EX_LAYERED` 同伴フラグは 2026-07-02 の実動検証（透過せず）を受け依頼者確認の上で採用済み**——pilot REPORT が実証したとおり `WS_EX_TRANSPARENT` 単独では DComp 窓のマウス透過は成立せず（当初設計の「単独で成立」は pilot 知見の誤転写だった）、LAYERED をフラグのみ（ULW/SLWA 非呼出）で併設して成立する（実測 ex_style 0x280028 で DComp 描画と共存）。
 - **変更対象の事前提示（R6.5）**: 既存コードへの改変は File Structure Plan の Modified Files（`win_style.rs` トグル追加、`runtime/mod.rs` 起動フック、`ecs/mod.rs` 宣言、`areka/src/main.rs` DComp 化＋登録）に限定する。実装着手前にこの一覧を提示し確認を得る。
 - **`SWP_FRAMECHANGED` 副作用の本坑再確認**: pilot は共存を実測済みだが、本坑本体経路（WUC 合成・z オーダー・フォーカス）での影響を実装時に再確認する（`SWP_NOZORDER|SWP_NOACTIVATE|SWP_NOMOVE|SWP_NOSIZE` で限定）。
 
