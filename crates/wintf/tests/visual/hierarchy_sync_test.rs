@@ -4,29 +4,23 @@
 
 use bevy_ecs::hierarchy::{ChildOf, Children};
 use bevy_ecs::prelude::*;
-use windows::core::Result;
-use wintf::com::dcomp::*;
-use wintf::ecs::DCompGraphicsResource;
+use windows::UI::Composition::ContainerVisual;
+use windows::core::{Interface, Result};
 use wintf::ecs::{Visual, VisualGraphics, visual_hierarchy_sync_system};
 
-use super::common::setup_graphics;
+use super::common::{WucVisualFactory, setup_graphics};
 
 /// ChildOf追加時にVisual階層が同期されることを確認
 #[test]
 fn test_childof_addition_syncs_visual_hierarchy() -> Result<()> {
     let graphics = setup_graphics()?;
-    let d2d = graphics.d2d_device().expect("D2Dデバイスが無効");
-    let dcomp_resource = DCompGraphicsResource::new(d2d).expect("DCompGraphicsResource作成失敗");
-    let dcomp = dcomp_resource
-        .dcomp()
-        .expect("dcomp device should exist")
-        .clone();
+    let factory = WucVisualFactory::new(&graphics)?;
 
     let mut world = World::new();
     world.insert_resource(graphics);
 
     // 親エンティティを作成
-    let parent_visual = dcomp.create_visual()?;
+    let parent_visual = factory.create_visual()?;
     let parent_entity = world
         .spawn((
             Visual::default(),
@@ -35,7 +29,7 @@ fn test_childof_addition_syncs_visual_hierarchy() -> Result<()> {
         .id();
 
     // 子エンティティを作成（親なし）
-    let child_visual = dcomp.create_visual()?;
+    let child_visual = factory.create_visual()?;
     let child_entity = world
         .spawn((Visual::default(), VisualGraphics::new(child_visual.clone())))
         .id();
@@ -64,18 +58,13 @@ fn test_childof_addition_syncs_visual_hierarchy() -> Result<()> {
 #[test]
 fn test_childof_change_moves_visual_to_new_parent() -> Result<()> {
     let graphics = setup_graphics()?;
-    let d2d = graphics.d2d_device().expect("D2Dデバイスが無効");
-    let dcomp_resource = DCompGraphicsResource::new(d2d).expect("DCompGraphicsResource作成失敗");
-    let dcomp = dcomp_resource
-        .dcomp()
-        .expect("dcomp device should exist")
-        .clone();
+    let factory = WucVisualFactory::new(&graphics)?;
 
     let mut world = World::new();
     world.insert_resource(graphics);
 
     // 親1を作成
-    let parent1_visual = dcomp.create_visual()?;
+    let parent1_visual = factory.create_visual()?;
     let parent1_entity = world
         .spawn((
             Visual::default(),
@@ -84,7 +73,7 @@ fn test_childof_change_moves_visual_to_new_parent() -> Result<()> {
         .id();
 
     // 親2を作成
-    let parent2_visual = dcomp.create_visual()?;
+    let parent2_visual = factory.create_visual()?;
     let parent2_entity = world
         .spawn((
             Visual::default(),
@@ -93,10 +82,15 @@ fn test_childof_change_moves_visual_to_new_parent() -> Result<()> {
         .id();
 
     // 子を親1の下に作成
-    let child_visual = dcomp.create_visual()?;
+    let child_visual = factory.create_visual()?;
     let mut child_vg = VisualGraphics::new(child_visual.clone());
     child_vg.set_parent_visual(Some(parent1_visual.clone()));
-    parent1_visual.add_visual(&child_visual, false, None)?;
+    // WUC 移行: DComp の add_visual(insertAbove=false, ref=None) は
+    // ContainerVisual.Children().InsertAtBottom に対応。
+    parent1_visual
+        .cast::<ContainerVisual>()?
+        .Children()?
+        .InsertAtBottom(&child_visual)?;
 
     let child_entity = world
         .spawn((Visual::default(), child_vg, ChildOf(parent1_entity)))
@@ -126,18 +120,13 @@ fn test_childof_change_moves_visual_to_new_parent() -> Result<()> {
 #[test]
 fn test_children_order_change_syncs_zorder() -> Result<()> {
     let graphics = setup_graphics()?;
-    let d2d = graphics.d2d_device().expect("D2Dデバイスが無効");
-    let dcomp_resource = DCompGraphicsResource::new(d2d).expect("DCompGraphicsResource作成失敗");
-    let dcomp = dcomp_resource
-        .dcomp()
-        .expect("dcomp device should exist")
-        .clone();
+    let factory = WucVisualFactory::new(&graphics)?;
 
     let mut world = World::new();
     world.insert_resource(graphics);
 
     // 親を作成
-    let parent_visual = dcomp.create_visual()?;
+    let parent_visual = factory.create_visual()?;
     let parent_entity = world
         .spawn((
             Visual::default(),
@@ -146,7 +135,7 @@ fn test_children_order_change_syncs_zorder() -> Result<()> {
         .id();
 
     // 子1を作成
-    let child1_visual = dcomp.create_visual()?;
+    let child1_visual = factory.create_visual()?;
     let child1_entity = world
         .spawn((
             Visual::default(),
@@ -156,7 +145,7 @@ fn test_children_order_change_syncs_zorder() -> Result<()> {
         .id();
 
     // 子2を作成
-    let child2_visual = dcomp.create_visual()?;
+    let child2_visual = factory.create_visual()?;
     let child2_entity = world
         .spawn((
             Visual::default(),
@@ -187,18 +176,13 @@ fn test_children_order_change_syncs_zorder() -> Result<()> {
 #[test]
 fn test_entities_without_visual_graphics_are_skipped() -> Result<()> {
     let graphics = setup_graphics()?;
-    let d2d = graphics.d2d_device().expect("D2Dデバイスが無効");
-    let dcomp_resource = DCompGraphicsResource::new(d2d).expect("DCompGraphicsResource作成失敗");
-    let dcomp = dcomp_resource
-        .dcomp()
-        .expect("dcomp device should exist")
-        .clone();
+    let factory = WucVisualFactory::new(&graphics)?;
 
     let mut world = World::new();
     world.insert_resource(graphics);
 
     // 親を作成（VisualGraphicsあり、GPUリソースあり）
-    let parent_visual = dcomp.create_visual()?;
+    let parent_visual = factory.create_visual()?;
     let parent_entity = world
         .spawn((
             Visual::default(),

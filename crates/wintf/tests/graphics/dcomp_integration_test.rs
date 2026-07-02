@@ -1,22 +1,31 @@
-//! DComp パイプライン統合テスト (Task 12)
+//! WUC パイプライン統合テスト (Task 12)
+//!
+//! WUC 移行: 旧 DComp パイプライン統合テスト。ライブパイプラインが WUC へ切り替わったため
+//! WucGraphicsResource を用いる。`invalidate_dependent_components` は WucGraphicsResource を
+//! ResMut で消費する（window_pos.rs）。
 
 use bevy_ecs::hierarchy::ChildOf;
 use bevy_ecs::prelude::*;
+use windows::Win32::System::Com::{COINIT_MULTITHREADED, CoInitializeEx};
 use wintf::ecs::world::FrameCount;
 use wintf::ecs::{
-    CompositionMode, DCompGraphicsResource, GraphicsCore, SurfaceGraphics, SurfaceGraphicsDirty,
-    Visual, VisualGraphics, Window,
+    CompositionMode, GraphicsCore, SurfaceGraphics, SurfaceGraphicsDirty, Visual, VisualGraphics,
+    Window, WucGraphicsResource,
 };
 
 /// テスト用ワールドをセットアップ
 fn setup_world() -> World {
+    // WucGraphicsResource::new は DQTAT_COM_NONE を使うため COM 初期化済みスレッドを要求する。
+    unsafe {
+        let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
+    }
     let graphics = GraphicsCore::new().expect("GraphicsCore作成失敗");
     let d2d = graphics.d2d_device().expect("D2Dデバイスが無効");
-    let dcomp_resource = DCompGraphicsResource::new(d2d).expect("DCompGraphicsResource作成失敗");
+    let wuc_resource = WucGraphicsResource::new(d2d).expect("WucGraphicsResource作成失敗");
 
     let mut world = World::new();
     world.insert_resource(graphics);
-    world.insert_resource(dcomp_resource);
+    world.insert_resource(wuc_resource);
     world.insert_resource(FrameCount(1));
     world.insert_resource(wintf::ecs::SurfaceCreationStats::default());
     world
@@ -113,13 +122,13 @@ fn test_orphan_visual_does_not_get_dcomp_components() {
 // ========================================================================
 
 #[test]
-fn test_invalidate_dependent_components_invalidates_dcomp_resource() {
+fn test_invalidate_dependent_components_invalidates_wuc_resource() {
     let mut world = setup_world();
 
-    // DCompGraphicsResource が valid であることを確認
+    // WucGraphicsResource が valid であることを確認
     {
-        let dcr = world.resource::<DCompGraphicsResource>();
-        assert!(dcr.is_valid(), "DCompGraphicsResource should start valid");
+        let wgr = world.resource::<WucGraphicsResource>();
+        assert!(wgr.is_valid(), "WucGraphicsResource should start valid");
     }
 
     // GraphicsCore を無効化
@@ -130,10 +139,10 @@ fn test_invalidate_dependent_components_invalidates_dcomp_resource() {
     schedule.add_systems(wintf::ecs::invalidate_dependent_components);
     schedule.run(&mut world);
 
-    // DCompGraphicsResource が無効化されていることを確認
-    let dcr = world.resource::<DCompGraphicsResource>();
+    // WucGraphicsResource が無効化されていることを確認
+    let wgr = world.resource::<WucGraphicsResource>();
     assert!(
-        !dcr.is_valid(),
-        "DCompGraphicsResource should be invalidated after GraphicsCore invalidation"
+        !wgr.is_valid(),
+        "WucGraphicsResource should be invalidated after GraphicsCore invalidation"
     );
 }

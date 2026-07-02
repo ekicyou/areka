@@ -1,6 +1,6 @@
 //! window_pos.rs 系システムのギャップテスト (W3b-T)
 //!
-//! - invalidate_dependent_components: DCompGraphicsResource 連動は既存テスト
+//! - invalidate_dependent_components: WucGraphicsResource 連動は既存テスト
 //!   （dcomp_integration_test）で固定済みだが、WindowD3D11Compositor /
 //!   BitmapSourceGraphics の無効化ループと no-op 経路は未検証だったため追加する。
 //! - apply_window_pos_changes: SetWindowPosCommand キュー（TLS）は覗き見 API が
@@ -121,52 +121,68 @@ fn invalidate_noop_when_graphics_valid() {
     assert!(comp.is_valid(), "valid GraphicsCore must not invalidate");
 }
 
-/// GraphicsCore 無効時でも DComp 系コンポーネント（VisualGraphics / SurfaceGraphics）は
+/// GraphicsCore 無効時でも WUC 系コンポーネント（VisualGraphics / SurfaceGraphics）は
 /// 無効化されず stale なまま「有効」と判定され続ける（Phase 2 で無効化対象から除外された
 /// 現行挙動の固定）。再初期化側は `!is_valid()` を前提とするため、デバイスロスト検出
-/// （P40）が実装されてもこのままでは DComp パイプラインは復旧しない（W3b-V 断片参照）
+/// （P40）が実装されてもこのままでは WUC パイプラインは復旧しない（W3b-V 断片参照）
+///
+/// WUC 移行: invalidate_dependent_components は WucGraphicsResource を無効化する。
 #[test]
-fn invalidate_leaves_dcomp_graphics_components_stale() {
-    use windows::Win32::Graphics::Dxgi::Common::{
-        DXGI_ALPHA_MODE_PREMULTIPLIED, DXGI_FORMAT_B8G8R8A8_UNORM,
-    };
-    use wintf::com::dcomp::DCompositionDeviceExt;
-    use wintf::ecs::{DCompGraphicsResource, SurfaceGraphics, VisualGraphics};
+fn invalidate_leaves_wuc_graphics_components_stale() {
+    use windows::Foundation::Size;
+    use windows::Graphics::DirectX::{DirectXAlphaMode, DirectXPixelFormat};
+    use windows::UI::Composition::Visual;
+    use windows::Win32::System::Com::{COINIT_MULTITHREADED, CoInitializeEx};
+    use windows::core::Interface;
+    use wintf::ecs::{SurfaceGraphics, VisualGraphics, WucGraphicsResource};
 
+    unsafe {
+        let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
+    }
     let mut graphics = GraphicsCore::new().expect("GraphicsCore creation");
     let d2d = graphics.d2d_device().expect("d2d device");
-    let dcomp_resource = DCompGraphicsResource::new(d2d).expect("DCompGraphicsResource");
-    let dcomp = dcomp_resource.dcomp().expect("dcomp device").clone();
+    let wuc_resource = WucGraphicsResource::new(d2d).expect("WucGraphicsResource");
+    let compositor = wuc_resource.compositor().expect("compositor").clone();
+    let gd = wuc_resource.graphics_device().expect("graphics_device").clone();
 
-    let visual = dcomp.create_visual().expect("visual");
-    let surface = dcomp
-        .create_surface(
-            4,
-            4,
-            DXGI_FORMAT_B8G8R8A8_UNORM,
-            DXGI_ALPHA_MODE_PREMULTIPLIED,
+    let visual: Visual = compositor
+        .CreateSpriteVisual()
+        .expect("visual")
+        .cast()
+        .expect("cast to Visual");
+    let surface = gd
+        .CreateDrawingSurface(
+            Size {
+                Width: 4.0,
+                Height: 4.0,
+            },
+            DirectXPixelFormat::B8G8R8A8UIntNormalized,
+            DirectXAlphaMode::Premultiplied,
         )
         .expect("surface");
+    let brush = compositor
+        .CreateSurfaceBrushWithSurface(&surface)
+        .expect("brush");
 
     // デバイスロストを模擬
     graphics.invalidate();
 
     let mut world = World::new();
     world.insert_resource(graphics);
-    world.insert_resource(dcomp_resource);
+    world.insert_resource(wuc_resource);
     let entity = world
         .spawn((
             VisualGraphics::new(visual),
-            SurfaceGraphics::new(surface, (4, 4)),
+            SurfaceGraphics::new(surface, brush, (4, 4)),
         ))
         .id();
 
     run_invalidate(&mut world);
 
-    // DCompGraphicsResource は無効化される（既存設計どおり）
+    // WucGraphicsResource は無効化される（既存設計どおり）
     assert!(
-        !world.resource::<DCompGraphicsResource>().is_valid(),
-        "DCompGraphicsResource should be invalidated"
+        !world.resource::<WucGraphicsResource>().is_valid(),
+        "WucGraphicsResource should be invalidated"
     );
 
     // 一方 VisualGraphics / SurfaceGraphics は旧デバイス由来の COM ポインタを

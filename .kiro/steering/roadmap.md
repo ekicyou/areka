@@ -222,7 +222,7 @@ _Depends(confirmed): pilot-clickthrough-alpha-toggle
 
 ### spec 分割（2 本・ULW 除去は独立）
 
-- **`wintf-dcomp-to-wuc-migration`（本坑・brief 済み・着手可）**: **①DComp→WUC 差し替えのみ**。当たり判定・ULW とは独立ゆえ**クリックスルーを待たず今すぐ着手可**。ULW アーム（`compositor.rs`/`ulw.rs`/`compositor_systems`）と `CompositionMode` enum には手を入れない。brief: `.kiro/specs/wintf-dcomp-to-wuc-migration/brief.md`。
+- **✅ 完了 `wintf-dcomp-to-wuc-migration`（本坑・2026-07-02 完了）**: **①DComp→WUC 差し替えのみ**。当たり判定・ULW とは独立。ULW アーム（`compositor.rs`/`ulw.rs`/`compositor_systems`）と `CompositionMode` enum には手を入れず完了。実装後: WUC を触る graphics schedule は UI スレッド固定（DispatcherQueue 親和性）・`CompositionMode` 既定は ULW のまま。spec: `.kiro/specs/completed/wintf-dcomp-to-wuc-migration/`。
 - **`wintf-ulw-removal`（本坑・brief 済み）**: ULW 一式除去＋`CompositionMode` collapse（GPU 合成単独へ）。brief: `.kiro/specs/wintf-ulw-removal/brief.md`。
   ```
   _Depends: wintf-clickthrough-alpha-toggle（完了）
@@ -232,5 +232,5 @@ _Depends(confirmed): pilot-clickthrough-alpha-toggle
 ### 依存マップ検証（two-tunnel 手動チェックリスト）
 
 - 順序ゲート: `wintf-ulw-removal` は `wintf-clickthrough-alpha-toggle` 完了が前提（ULW 破棄の安全網）✓
-- 独立性: `wintf-dcomp-to-wuc-migration`（表示層）は `wintf-clickthrough-alpha-toggle`（当たり判定層）とも `wintf-ulw-removal`（ULW 側・別ファイル群）とも独立・順序任意 ✓
+- 独立性: `wintf-dcomp-to-wuc-migration`（表示層・**✅2026-07-02 完了**）は `wintf-clickthrough-alpha-toggle`（当たり判定層）とも `wintf-ulw-removal`（ULW 側・別ファイル群）とも独立・順序任意 ✓
 - 循環なし／DAG: clickthrough → ulw-removal の単一エッジのみ（wuc-migration は独立ノード・巡回なし）✓

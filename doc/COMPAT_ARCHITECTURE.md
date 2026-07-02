@@ -100,6 +100,14 @@ areka は「ぱすたさん専用の試作」から、**ukadoc準拠の互換ベ
 - balloon描画・typewriter・WIC画像・event/drag/pointer・dola runtime・cue/pasta-cue 連携。
 - 非同期基盤（`async-executor`/`bevy_tasks`）・world scheduling（vsync/frame）→ OnSecondChangeクロックとrequest非同期圧送（UIを止めない）の土台。
 
+### 合成バックエンド判断: DirectComposition → Windows.UI.Composition（WUC）移行（2026-07-02・spec `wintf-dcomp-to-wuc-migration`）
+
+- **判断**: wintf の表示合成バックエンドを **DirectComposition（DComp）から WinRT の Windows.UI.Composition（WUC）へ純粋等価移行**し、DComp 依存を廃する。device（`Compositor`＋`CompositionGraphicsDevice`）／target（`DesktopWindowTarget`）／visual 木（`ContainerVisual`/`SpriteVisual`）／surface（`CompositionDrawingSurface`＋`CompositionSurfaceBrush`）／frame-apply（明示 `Commit()` 廃止→DispatcherQueue 暗黙反映）を WUC 相当へ写像。描画結果・再描画・入力は不変。
+- **理由**: 合成基盤を WUC 系へ寄せ、将来の合成機能（本 spec では非活用）への地ならしと DComp 依存の廃止。
+- **スレッド前提（実測確定）**: 本番 UI スレッドは MTA（`WinApp::new` の `CoInitializeEx(COINIT_MULTITHREADED)`）。WUC は MTA 上で動作し、DispatcherQueue は **`DQTAT_COM_NONE`**（apartment 不変）で生成する（既存 message pump に相乗り・pump 非差し替え）。設計初稿の「STA 前提／ASTA」は R1 スパイクの実測で否定。
+- **非スコープ（残置）**: ULW アーム・`CompositionMode` enum・クリック透過（当たり判定層）・`compute_ex_style`（`WS_EX_NOREDIRECTIONBITMAP`）は不変。ULW 一式の除去は別 spec `wintf-ulw-removal`。
+- **既知の制約**: WUC の per-corner 角丸 clip（`RoundedRectangleIndividual`）は `CompositionPath`＝`IGeometrySource2D`（Win2D）を要し windows 0.62.2 単体では厳密構築不可。areka 本体は個別半径未使用のため均一半径近似で写す（要検討: Win2D 依存の是非）。
+
 ---
 
 ## 7. 未決・要設計（spec化時に詰める）

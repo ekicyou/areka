@@ -2,8 +2,17 @@
 ///
 /// このテストはGraphicsCore、WindowGraphics、Visual、Surfaceの
 /// Option<T>ラップと状態遷移機能をテストします。
-use wintf::ecs::DCompGraphicsResource;
-use wintf::ecs::{GraphicsCore, SurfaceGraphics, VisualGraphics};
+///
+/// WUC 移行: Visual/Surface は WUC オブジェクト（SpriteVisual / CompositionDrawingSurface）で構築する。
+use wintf::ecs::{GraphicsCore, SurfaceGraphics, VisualGraphics, WucGraphicsResource};
+
+/// WucGraphicsResource::new は DQTAT_COM_NONE を使うため COM 初期化済みスレッドを要求する。
+fn init_com_mta() {
+    use windows::Win32::System::Com::{COINIT_MULTITHREADED, CoInitializeEx};
+    unsafe {
+        let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
+    }
+}
 
 #[test]
 fn test_graphics_core_invalidate_and_is_valid() {
@@ -40,14 +49,20 @@ fn test_graphics_core_invalidate_and_is_valid() {
 
 #[test]
 fn test_visual_new_and_invalidate() {
-    use wintf::com::dcomp::DCompositionDeviceExt;
+    use windows::UI::Composition::Visual;
+    use windows::core::Interface;
 
+    init_com_mta();
     let graphics = GraphicsCore::new().expect("GraphicsCore作成失敗");
     let d2d = graphics.d2d_device().expect("D2Dデバイスが無効");
-    let dcomp_resource = DCompGraphicsResource::new(d2d).expect("DCompGraphicsResource作成失敗");
-    let dcomp = dcomp_resource.dcomp().expect("dcomp device should exist");
+    let wuc_resource = WucGraphicsResource::new(d2d).expect("WucGraphicsResource作成失敗");
+    let compositor = wuc_resource.compositor().expect("compositor should exist");
 
-    let visual_raw = dcomp.create_visual().expect("Visual作成失敗");
+    let visual_raw: Visual = compositor
+        .CreateSpriteVisual()
+        .expect("CreateSpriteVisual")
+        .cast()
+        .expect("cast to Visual");
     let mut visual = VisualGraphics::new(visual_raw);
 
     // 初期状態: 有効
@@ -71,24 +86,31 @@ fn test_visual_new_and_invalidate() {
 
 #[test]
 fn test_surface_new_and_invalidate() {
-    use windows::Win32::Graphics::Dxgi::Common::*;
-    use wintf::com::dcomp::DCompositionDeviceExt;
+    use windows::Foundation::Size;
+    use windows::Graphics::DirectX::{DirectXAlphaMode, DirectXPixelFormat};
 
+    init_com_mta();
     let graphics = GraphicsCore::new().expect("GraphicsCore作成失敗");
     let d2d = graphics.d2d_device().expect("D2Dデバイスが無効");
-    let dcomp_resource = DCompGraphicsResource::new(d2d).expect("DCompGraphicsResource作成失敗");
-    let dcomp = dcomp_resource.dcomp().expect("dcomp device should exist");
+    let wuc_resource = WucGraphicsResource::new(d2d).expect("WucGraphicsResource作成失敗");
+    let compositor = wuc_resource.compositor().expect("compositor should exist");
+    let gd = wuc_resource.graphics_device().expect("graphics_device");
 
-    let surface_raw = dcomp
-        .create_surface(
-            800,
-            600,
-            DXGI_FORMAT_B8G8R8A8_UNORM,
-            DXGI_ALPHA_MODE_PREMULTIPLIED,
+    let surface_raw = gd
+        .CreateDrawingSurface(
+            Size {
+                Width: 800.0,
+                Height: 600.0,
+            },
+            DirectXPixelFormat::B8G8R8A8UIntNormalized,
+            DirectXAlphaMode::Premultiplied,
         )
         .expect("Surface作成失敗");
+    let brush = compositor
+        .CreateSurfaceBrushWithSurface(&surface_raw)
+        .expect("CreateSurfaceBrushWithSurface");
 
-    let mut surface = SurfaceGraphics::new(surface_raw, (800, 600));
+    let mut surface = SurfaceGraphics::new(surface_raw, brush, (800, 600));
 
     // 初期状態: 有効
     assert!(surface.is_valid(), "Surface should be valid after creation");

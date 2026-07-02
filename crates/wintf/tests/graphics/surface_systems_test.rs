@@ -1,37 +1,44 @@
 //! W3a-T: Surface 系 ECS システムのヘッドレステスト
 //!
-//! 実 DComp デバイスを用い、以下を Schedule 経由で実行して検証する。
+//! 実 WUC デバイスを用い、以下を Schedule 経由で実行して検証する。
 //! - deferred_surface_creation_system: 作成・スキップ・同サイズ no-op・リサイズ + 統計
 //! - cleanup_surface_on_commandlist_removed: CommandList 削除時の Surface クリア + 統計
 //! - render_surface: Changed<SurfaceGraphicsDirty> 駆動の自己描画（begin_draw/end_draw）
-//! - commit_composition: リソース有無の両経路
+//!
+//! WUC 移行: commit_composition は廃止（要件 7.1・WUC の暗黙リフレクション）。
+//! 旧 commit_composition テスト群は削除した。
 
 use bevy_ecs::prelude::*;
 use bevy_ecs::schedule::ExecutorKind;
+use windows::Foundation::Size;
+use windows::Graphics::DirectX::{DirectXAlphaMode, DirectXPixelFormat};
+use windows::UI::Composition::Visual;
+use windows::Win32::System::Com::{COINIT_MULTITHREADED, CoInitializeEx};
+use windows::core::Interface;
 use wintf::com::d2d::{D2D1CommandListExt, D2D1DeviceContextExt, D2D1DeviceExt};
-use wintf::com::dcomp::DCompositionDeviceExt;
 use wintf::ecs::layout::GlobalArrangement;
 use wintf::ecs::world::FrameCount;
 use wintf::ecs::{
-    DCompGraphicsResource, GraphicsCommandList, GraphicsCore, Rect, SurfaceCreationStats,
-    SurfaceGraphics, SurfaceGraphicsDirty, VisualGraphics, cleanup_surface_on_commandlist_removed,
-    commit_composition, deferred_surface_creation_system, render_surface,
+    GraphicsCommandList, GraphicsCore, Rect, SurfaceCreationStats, SurfaceGraphics,
+    SurfaceGraphicsDirty, VisualGraphics, WucGraphicsResource,
+    cleanup_surface_on_commandlist_removed, deferred_surface_creation_system, render_surface,
 };
 use windows::Win32::Graphics::Direct2D::Common::{D2D1_COLOR_F, D2D_RECT_F};
 use windows::Win32::Graphics::Direct2D::D2D1_DEVICE_CONTEXT_OPTIONS_NONE;
-use windows::Win32::Graphics::Dxgi::Common::{
-    DXGI_ALPHA_MODE_PREMULTIPLIED, DXGI_FORMAT_B8G8R8A8_UNORM,
-};
 use windows_numerics::Matrix3x2;
 
 fn setup_world() -> World {
+    // WucGraphicsResource::new は DQTAT_COM_NONE を使うため COM 初期化済みスレッドを要求する。
+    unsafe {
+        let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
+    }
     let core = GraphicsCore::new().expect("GraphicsCore 作成失敗");
     let d2d = core.d2d_device().expect("d2d device");
-    let dcomp_resource = DCompGraphicsResource::new(d2d).expect("DCompGraphicsResource 作成失敗");
+    let wuc_resource = WucGraphicsResource::new(d2d).expect("WucGraphicsResource 作成失敗");
 
     let mut world = World::new();
     world.insert_resource(core);
-    world.insert_resource(dcomp_resource);
+    world.insert_resource(wuc_resource);
     world.insert_resource(SurfaceCreationStats::default());
     world.insert_resource(FrameCount(1));
     world
@@ -56,15 +63,16 @@ fn make_global_arrangement(width: f32, height: f32) -> GlobalArrangement {
     }
 }
 
-/// 実 DComp ビジュアル付きの Surface 生成対象エンティティをスポーンする
+/// 実 WUC ビジュアル付きの Surface 生成対象エンティティをスポーンする
 fn spawn_surface_target(world: &mut World, width: f32, height: f32) -> Entity {
-    let visual = {
-        let resource = world.resource::<DCompGraphicsResource>();
-        resource
-            .dcomp()
-            .expect("dcomp device")
-            .create_visual()
-            .expect("create_visual")
+    let visual: Visual = {
+        let resource = world.resource::<WucGraphicsResource>();
+        let compositor = resource.compositor().expect("compositor");
+        compositor
+            .CreateSpriteVisual()
+            .expect("CreateSpriteVisual")
+            .cast()
+            .expect("cast to Visual")
     };
     world
         .spawn((
@@ -260,15 +268,25 @@ fn make_filled_command_list(core: &GraphicsCore, w: f32, h: f32) -> GraphicsComm
     GraphicsCommandList::new(cl)
 }
 
-/// 実 IDCompositionSurface を作成する
+/// 実 WUC CompositionDrawingSurface + SurfaceBrush を作成する
 fn create_real_surface(world: &World, w: u32, h: u32) -> SurfaceGraphics {
-    let resource = world.resource::<DCompGraphicsResource>();
-    let surface = resource
-        .dcomp()
-        .expect("dcomp")
-        .create_surface(w, h, DXGI_FORMAT_B8G8R8A8_UNORM, DXGI_ALPHA_MODE_PREMULTIPLIED)
-        .expect("create_surface");
-    SurfaceGraphics::new(surface, (w, h))
+    let resource = world.resource::<WucGraphicsResource>();
+    let compositor = resource.compositor().expect("compositor");
+    let gd = resource.graphics_device().expect("graphics_device");
+    let surface = gd
+        .CreateDrawingSurface(
+            Size {
+                Width: w as f32,
+                Height: h as f32,
+            },
+            DirectXPixelFormat::B8G8R8A8UIntNormalized,
+            DirectXAlphaMode::Premultiplied,
+        )
+        .expect("CreateDrawingSurface");
+    let brush = compositor
+        .CreateSurfaceBrushWithSurface(&surface)
+        .expect("CreateSurfaceBrushWithSurface");
+    SurfaceGraphics::new(surface, brush, (w, h))
 }
 
 #[test]
@@ -321,37 +339,9 @@ fn render_surface_skips_invalid_surface_without_error() {
 }
 
 // ==========================================================================
-// commit_composition
+// commit_composition — WUC 移行で廃止（要件 7.1）
 // ==========================================================================
-
-#[test]
-fn commit_composition_without_dcomp_resource_is_noop() {
-    let mut world = World::new();
-    world.insert_resource(FrameCount(1));
-    // DCompGraphicsResource なし → 正常スキップ
-
-    let mut schedule = single_system_schedule(commit_composition);
-    schedule.run(&mut world);
-}
-
-#[test]
-fn commit_composition_commits_valid_device() {
-    let mut world = setup_world();
-
-    let mut schedule = single_system_schedule(commit_composition);
-    schedule.run(&mut world);
-
-    // commit 後もリソースは有効なまま
-    assert!(world.resource::<DCompGraphicsResource>().is_valid());
-}
-
-#[test]
-fn commit_composition_skips_invalidated_resource() {
-    let mut world = setup_world();
-    world.resource_mut::<DCompGraphicsResource>().invalidate();
-
-    let mut schedule = single_system_schedule(commit_composition);
-    schedule.run(&mut world);
-
-    assert!(!world.resource::<DCompGraphicsResource>().is_valid());
-}
+// 旧テスト（commit_composition_without_dcomp_resource_is_noop /
+// commit_composition_commits_valid_device / commit_composition_skips_invalidated_resource）は、
+// commit_composition システムそのものが削除されたため撤去した。WUC は暗黙リフレクションで
+// 反映するため明示 commit の概念がなく、これらのテストは対象を失った。
