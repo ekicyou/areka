@@ -134,10 +134,11 @@ proxy 実装はアプローチ A、**fixture 供給だけを別立て**にする
    - 選択肢: (i) `MsgTag::Response` に 1 バイト（0/1）を載せて既存の再入 RESPONSE 経路（`ResponseSlot`）で受ける＝新タグ不要・`send_request`(REQUEST→RESPONSE) の往復にそのまま乗る。(ii) LOAD を `send_request` 相当で送り、その RESPONSE を ack とみなす。
    - 現状: 親側 WndProc は `Response` を `StoreResponse`→slot へ store（`parent_window.rs:188`）。`Load` は `IgnoreKnown`。**LOAD を親が送る手段**（`send_request(MsgTag::Load, ...)` を許すか）も論点＝親側 send は transport の `send_request` が任意タグを取れる（`parent_window.rs:320`）ため追加なしで可能。
 
-3. **(c) emo2 pasta.dll test-fixture の供給（pilot 依存なし）**
-   - 論点: 実 fixture は現状 `crates/pilot/examples/shiori-host-32/fixtures/emo2/...`。host32 crate テストがこれを参照すると葉ノード隔離違反。
-   - 選択肢: (c-1) host32 側に fixture ディレクトリを別途用意（二重取り込み）。(c-2) env（`HOST32_PASTA_DLL`/`HOST32_GHOSTDIR`）で注入し、無ければ明確な panic で fail（`echo_roundtrip.rs` の `HOST32_HELPER_EXE` 方式と同型・無言スキップで緑を偽装しない）。(c-3) build script コピー（pilot 参照になりグレー＝非推奨）。
-   - 補足: fixture は 3.4MB。二重取り込みのリポジトリ肥大 vs CI での env 設定手間のトレードオフ。
+3. **(c) test-fixture の供給 — ✅ 決着（2026-07-02・要件ディスカッション #2）**
+   - **決定**: 本物 emo2 `pasta.dll`（3.4MB）を主 fixture にせず、**host-32 トラックが所有する自作の最小 SHIORI DLL fixture**（i686 cdylib・flat-C ABI 実装・既定名 `shiori.dll`・数KB）を**主役**にする。本物 `pasta.dll` は**任意・env-gated（`HOST32_PASTA_DLL`）の confidence** に格下げ（CI 必須ゲートにしない）。→ requirements R5 全面改訂で反映。
+   - **根拠**: このユニットの観測は「`load`→bool・無クラッシュ」のみで、helper の FFI パスは DLL 中身に非依存＝簡易 DLL で同一パスを網羅。本物 `pasta.dll` の実ロード可否は先進坑 `pilot-shiori-host-32` が go 済（2026-07-01）＝耐力壁は突破済み。ロードマップ done-line「✔ load 成功・無crash」も本物指定なし。
+   - **利点**: ① fixture 肥大なし（数KB）② `crates/pilot` 非参照＝**葉ノード隔離を自然遵守**（旧 c-1/c-2/c-3 のジレンマ消滅）③ `load`→`false`／ロード失敗を故意に模擬でき、**R2.3/R2.4/R4.4 の失敗パスを決定的にテスト化**（本物 DLL では困難）④ `request`/OnBoot 最小対応を持たせれば下流 `host32-request`/`-lifecycle` が再利用できる共有資産。
+   - **design 送りの実装論点**: i686 cdylib を workspace にどう組むか（helper 同様の i686 専用ビルド扱い・別 crate/example/`build.rs` で C dll 生成 等）、fixture ghost dir の最小構成（`shiori.dll`＋必要なら `descript.txt`）。本物 pasta の任意検証は env 注入（設定済みで欠落なら明示 fail・無言スキップ禁止）。
 
 4. **(d) teardown unload/FreeLibrary を本ユニットの検証で行使するか**
    - 論点: load 成功観測後、テスト後始末で `unload`/`FreeLibrary` を呼ぶか、load-only 観測に留めるか。常駐 lifecycle は下流所有を維持。

@@ -2,11 +2,11 @@
 
 ## Project Description (Input)
 
-M1 `areka-P0-emo2-boot` の「① SHIORI 通信層エンジン host-32」トラック第2ユニット。上流 `areka-P0-host32-ipc`（bytes-over-wire transport・完了済）が残した `MsgTag::Load` seam の上に、実 `pasta.dll` の実行時ロードを結線する。x64 areka は emo2 の 32bit `pasta.dll` を in-proc ロードできない（ビット幅不一致）ため、上流が生バイト往復 transport（helper spawn／WM_COPYDATA framing／HELLO handshake／再入 RESPONSE／timeout）を完成させたが、helper 側は現在 `respond(req) -> req.to_vec()` の echo stub にすぎず実 SHIORI DLL を触らない。`MsgTag::Load(2)` はワイヤ互換のため定義済みだが未処理（helper では現在無視）。この seam を埋めない限り emo2 の脳は一度も動かない。本ユニットは helper に `ShioriByteProxy` を新設して echo stub を差し替え、実 i686 helper 越しに実 emo2 `pasta.dll` を `LoadLibraryW` → `load(ghostdir)` 成功（`true`）まで、クラッシュ無しで駆動できることを観測可能にする。
+M1 `areka-P0-emo2-boot` の「① SHIORI 通信層エンジン host-32」トラック第2ユニット。上流 `areka-P0-host32-ipc`（bytes-over-wire transport・完了済）が残した `MsgTag::Load` seam の上に、実 `pasta.dll` の実行時ロードを結線する。x64 areka は emo2 の 32bit `pasta.dll` を in-proc ロードできない（ビット幅不一致）ため、上流が生バイト往復 transport（helper spawn／WM_COPYDATA framing／HELLO handshake／再入 RESPONSE／timeout）を完成させたが、helper 側は現在 `respond(req) -> req.to_vec()` の echo stub にすぎず実 SHIORI DLL を触らない。`MsgTag::Load(2)` はワイヤ互換のため定義済みだが未処理（helper では現在無視）。この seam を埋めない限り emo2 の脳は一度も動かない。本ユニットは helper に `ShioriByteProxy` を新設して echo stub を差し替え、実 i686 helper 越しに SHIORI DLL を `LoadLibraryW` → `load(load_dir)` 成功（`true`）まで、クラッシュ無しで駆動できることを観測可能にする（検証の主役は host-32 トラック所有の最小 SHIORI DLL fixture・本物 emo2 `pasta.dll` の実ロード可否は先進坑 `pilot-shiori-host-32` が go 済ゆえ任意 confidence）。
 
 ## Introduction
 
-本仕様は host-32 トラックの第2ユニットとして、上流 `areka-P0-host32-ipc` が凍結した WM_COPYDATA transport の上に「実 SHIORI DLL のロード」というセマンティクスを載せる。到達目標は、x64 親プロセスが実 i686 helper プロセス越しに実 emo2 `pasta.dll` を **`LoadLibraryW` → 3 エクスポート解決 → `load(ghostdir)` を呼び出し、成功結果（`true`）をクラッシュ無しで観測できる**ことである。これにより下流ユニット（`request` 呼出・常駐 lifecycle）が載る常設プロキシの足場が確立する。
+本仕様は host-32 トラックの第2ユニットとして、上流 `areka-P0-host32-ipc` が凍結した WM_COPYDATA transport の上に「実 SHIORI DLL のロード」というセマンティクスを載せる。到達目標は、x64 親プロセスが実 i686 helper プロセス越しに SHIORI DLL を **`LoadLibraryW` → 3 エクスポート解決 → `load(load_dir)` を呼び出し、成功結果（`true`）をクラッシュ無しで観測できる**ことである（検証の主役は host-32 トラック所有の最小 SHIORI DLL fixture）。これにより下流ユニット（`request` 呼出・常駐 lifecycle）が載る常設プロキシの足場が確立する。
 
 本ユニットは **transport 層を一切改変しない**。`MsgTag::Load` は上流で定義済みであり、本ユニットはその結線（helper 側の受領・処理）と、helper 内 FFI プロキシの新設、`load` の呼出のみを担う。`request` の呼出、`unload` の恒常呼出、SHIORI/3.0 セマンティクス、常駐 lifecycle は明示的に対象外である。
 
@@ -17,7 +17,7 @@ M1 `areka-P0-emo2-boot` の「① SHIORI 通信層エンジン host-32」トラ�
   - helper 内 FFI プロキシ（`ShioriByteProxy`）による `pasta.dll` の `LoadLibraryW` ロードと、`load`／`unload`／`request` の **3 エクスポートの解決**（fn ポインタ保持・モジュールハンドル所有）。
   - `load(load_dir)` の**呼出**: load_dir（= ghostdir）を ANSI(CP_ACP/Shift_JIS) 符号化し、そのバイト結果を `load` へ渡して bool 結果を観測する。load 入力バッファの所有権規約（DLL 側が解放）を守る。
   - **load 入力（load_dir・SHIORI 名）は helper の起動パラメーター（明示的コマンドライン引数＋env fallback）で供給する**（`spawn` が渡す・cwd 依存にしない）。LOAD メッセージは wire でパスを運ぶ器ではなく**ロード実行のトリガ**とし、`load` の bool 結果を親へ返す ack を伴う。
-  - 観測指標: 実 emo2 `pasta.dll` を実 i686 helper 越しに `load` 成功（`true`）・無クラッシュで E2E に観測。
+  - 観測指標: **host-32 トラック所有の最小 SHIORI DLL fixture**（i686 cdylib・既定名 `shiori.dll`）を実 i686 helper 越しに `load` 成功（`true`）・無クラッシュで E2E 観測（失敗パスも決定的に観測）。本物 emo2 `pasta.dll` は任意・env-gated の confidence（pilot go 済ゆえ必須にしない）。
 - **Out of scope（本ユニットが所有しないもの）**:
   - `request` の**呼出**・SHIORI/3.0 の組立/marshal・`Value` parse・request の UTF-8 charset（→ 下流 `areka-P0-host32-request`）。※`request` fn ポインタの**解決**は本ユニット、**呼出はしない**。
   - 常駐メッセージループの生存監視・`OnSecondChange` poll・`unload` の**恒常呼出**・crash 監視の lifecycle（→ 下流 `areka-P0-host32-lifecycle`）。※`unload` fn ポインタの解決は本ユニット。テスト後始末の courtesy `unload`／`FreeLibrary` は許容だが常駐 lifecycle は所有しない。
@@ -79,16 +79,19 @@ M1 `areka-P0-emo2-boot` の「① SHIORI 通信層エンジン host-32」トラ�
 3. The host-32 helper shall load 結果の返送を上流 transport の凍結 seam（WM_COPYDATA の REQUEST/RESPONSE ワイヤ形式）を改変しない範囲で行う。
 4. If `load` が未成功（`false`）またはロード/解決失敗であった, then the x64 親 shall その未成功をクラッシュせず観測できる。
 
-### Requirement 5: 実バイナリを用いた E2E ロード観測
+### Requirement 5: E2E ロード観測（簡易 SHIORI DLL 主役・本物 pasta 任意）
 
-**Objective:** As a areka 開発者, I want 実 i686 helper と実 emo2 `pasta.dll` fixture を用いた E2E で load 成功を観測する, so that host-32 トラックの「脳がロードできる」ことを確証できる
+**Objective:** As a areka 開発者, I want host-32 トラックが所有する自作の最小 SHIORI DLL fixture を主役に、実 i686 helper 越しで load 成功／失敗を決定的に観測する, so that fixture 肥大・葉ノード隔離違反を避けつつ「脳がロードできる」seam を確証できる（本物 pasta の実ロード可否は先進坑 `pilot-shiori-host-32` が go 済）
 
 #### Acceptance Criteria
 
-1. When x64 親が実 i686 helper を起動し, LOAD 要求を送って実 emo2 `pasta.dll` を対象に `load(ghostdir)` を駆動する, the host-32 helper shall `load` を成功（`true`）させ, 親がその成功をクラッシュ無しで観測できる。
-2. While 上記 E2E ロード観測が進行する, the host-32 shall いずれのプロセスもクラッシュさせない（無クラッシュを観測可能な成功条件とする）。
-3. The host-32 shall 本ユニットの観測契約を `load` の同期 bool 返却と無クラッシュのみに限定し, 実バイナリの内部スレッド等の未確認の内部前提には依存しない。
-4. Where テスト後始末が必要な場合, the host-32 helper shall courtesy の `unload`／`FreeLibrary` を行ってよいが, これは常駐 lifecycle の所有ではなく後始末に限る。
+1. When x64 親が実 i686 helper を起動し, LOAD トリガを送って **host-32 トラック所有の最小 SHIORI DLL fixture**（i686 cdylib・flat-C ABI 実装・既定名 `shiori.dll`）を起動パラメーター `(load_dir, SHIORI 名)` で対象に `load(load_dir)` を駆動する, the host-32 helper shall `load` を成功（`true`）させ, 親がその成功をクラッシュ無しで観測できる。
+2. When 最小 SHIORI DLL fixture が `load`→`false` またはロード/解決失敗を模擬する, the x64 親 shall その「load 未成功」をクラッシュ無しで決定的に観測できる（R2.3/R2.4/R4.4 の失敗パスを実テスト化）。
+3. While 上記 E2E ロード観測が進行する, the host-32 shall いずれのプロセスもクラッシュさせない（無クラッシュを観測可能な成功条件とする）。
+4. The host-32 shall 本ユニットの観測契約を `load` の同期 bool 返却と無クラッシュのみに限定し, 実バイナリの内部スレッド等の未確認の内部前提には依存しない。
+5. Where テスト後始末が必要な場合, the host-32 helper shall courtesy の `unload`／`FreeLibrary` を行ってよいが, これは常駐 lifecycle の所有ではなく後始末に限る。
+6. Where 本物 emo2 `pasta.dll` に対する確認を行う場合, the host-32 shall それを **任意・env-gated（例 `HOST32_PASTA_DLL`）の confidence 検証**として扱い（CI 必須ゲートにしない・pilot go 済が根拠）, env 設定済みで fixture 欠落なら無言スキップせず明示 fail する。
+7. The host-32 shall 最小 SHIORI DLL fixture を **host-32 トラック所有**（`crates/pilot` 非依存）として持ち, 葉ノード隔離を破らない。
 
 ### Requirement 6: 32bit 可搬性とビルド健全性
 
