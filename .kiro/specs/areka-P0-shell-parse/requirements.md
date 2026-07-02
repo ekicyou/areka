@@ -12,7 +12,7 @@ emo2 の `surfaces.txt`（SERIKO/2.0）を**シェルサーフェスモデル**�
 
 - **In scope**:
   - `areka_parsers::shell` モジュールの新設と、シェルサーフェスモデル型（surface 定義・element overlay・SERIKO animation/interval・collision 矩形・surface alias）の定義。
-  - `descript` ヘッダブロック（`charset` / `version`）の解釈。
+  - `descript` ヘッダブロック（`charset` 行 / `version`）の**寛容スキップ**（上流 `parser-foundation` がデコード消費済みのため非保持。将来の header 保持は `#[non_exhaustive]` シームで後日）。
   - surface 定義ブロック（`surfaceNNN { ... }`）のパース：ID とその element/collision/animation。
   - element overlay リスト（`elementN,overlay,path,x,y`）と、animation パターンの `overlay` メソッド（負 ID `overlay,-1` はレイヤクリアとして表現）。
   - SERIKO animation ブロック（`animationN.interval,...` と `animationN.patternM,overlay,...`）で、interval は `bind` / `random,N` / `bind+random,N` の 3 種のみ。
@@ -58,15 +58,16 @@ emo2 の `surfaces.txt`（SERIKO/2.0）を**シェルサーフェスモデル**�
 3. If 構文的に区切れたが意味未対応または不正なトークンが存在する, then the shell parser shall そのトークンを寛容に保持（未知は破棄せず生保持相当で吸収）し、パース全体を失敗させない。
 4. The shell parser shall 外部状態・ファイル I/O・ホスト環境に依存せず、同一入力に対して常に同一の出力を返す。
 
-### Requirement 3: descript ヘッダブロックの解釈
+### Requirement 3: descript ヘッダと charset 行の寛容スキップ（非保持）
 
-**Objective:** As a パーサ利用者, I want `surfaces.txt` 先頭の `charset` 行と `descript { version }` ブロックを解釈できること, so that シェルの記述バージョンと文字コード宣言をモデルに反映できる。
+**Objective:** As a パーサ利用者, I want `surfaces.txt` 先頭の `charset` 行と `descript { ... }` ブロックを安全に読み飛ばせること, so that 上流（`parser-foundation`）が既にデコード消費したヘッダ情報を shell parser が重複保持せず、後続の surface 定義パースを妨げない。
 
 #### Acceptance Criteria
 
-1. When 入力に先頭 `charset,VALUE` 行が存在する, the shell parser shall その charset 宣言値を不透明文字列としてモデルに保持する。
-2. When 入力に `descript { version,N }` ブロックが存在する, the shell parser shall その version 値をモデルに保持する。
-3. If `charset` 行または `descript` ブロックが欠落する, then the shell parser shall 既定（未指定）として扱い、パースを失敗させない。
+1. When 入力に先頭 `charset,VALUE` 行が存在する, the shell parser shall 当該行を寛容に読み飛ばし、charset 値をモデルに保持しない（charset 判定・デコードは上流 `parser-foundation` が担い、本 parser はデコード済み `&str` を受け取るため再保持は不要）。
+2. When 入力に `descript { ... }`（例 `version,N`）ブロックが存在する, the shell parser shall 当該ブロックを寛容に読み飛ばし、その内容をモデルに保持しない。
+3. If `charset` 行または `descript` ブロックが欠落する, then the shell parser shall 追加処理を要さず（既定状態）、パースを失敗させない。
+4. Where 将来 descript version 等の header 情報を下流が必要とする場合, the shell parser shall その保持をモデル型の `#[non_exhaustive]` 拡張シームで後日追加できる（2 例目の実需が生じるまで追加しない）。
 
 ### Requirement 4: surface 定義ブロックのパース
 
