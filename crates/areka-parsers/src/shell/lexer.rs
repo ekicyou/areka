@@ -154,6 +154,7 @@ fn peek_next_significant<'a>(lines: &[&'a str], start: usize) -> Option<(usize, 
 /// 返り値: (本体トークン列, 終端行インデックス, 閉じたか)。
 /// - 閉じた場合、終端インデックスは `}` の行。
 /// - `}` 無しで EOF に達した場合、`closed=false`（呼び出し側が `Raw` 吸収する・要件 9.2）。
+///
 /// 本体内の空行・コメント行は無視する（要件 9.1）。
 fn scan_block_body(lines: &[&str], start: usize) -> (Vec<Token>, usize, bool) {
     let mut body: Vec<Token> = Vec::new();

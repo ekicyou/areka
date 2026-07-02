@@ -132,7 +132,7 @@ fn dispatch_block(shell: &mut Shell, header: &[String], body: &[Vec<String>]) {
             collisions,
             animations,
         });
-        return;
+        // 末尾分岐ゆえ早期 return は不要（この後は未知ブロック吸収コメントのみ）。
     }
 
     // 未知ブロック（未対応ヘッダ）は寛容に吸収する（要件 9.2）。何も積まない。

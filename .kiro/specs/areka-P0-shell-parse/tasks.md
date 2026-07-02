@@ -78,7 +78,7 @@
   - _Requirements: 2.3, 4.5, 5.7, 6.3, 9.2, 10.4_
   - _Boundary: decode_
 
-- [ ] 5. Integration: 公開 facade（parse）と公開面集約
+- [x] 5. Integration: 公開 facade（parse）と公開面集約
 - [x] 5.1 純粋関数 parse を結線し、モデル型と公開関数を一点集約する
   - 構文層と意味層を結線した単一公開関数で、デコード済み文字列から部分認識を含むモデルを返す（Result を返さない）
   - 空入力で空のモデルを返し、同一入力で同一出力・副作用なし・パニックなしを保証する
@@ -87,7 +87,7 @@
   - _Requirements: 2.1, 2.2, 2.4, 9.3, 11.1_
   - _Boundary: parse, mod_
 
-- [ ] 6. Validation: ukadoc 準拠自前テスト（主軸）＋emo2 スモーク
+- [x] 6. Validation: ukadoc 準拠自前テスト（主軸）＋emo2 スモーク
 - [x] 6.1 ukadoc 準拠の自前 in-source 適合テスト（主軸）を作成する
   - surface 定義＋element＋collision＋animation（bind/random/bind+random）＋surface.append（範囲）＋alias（重複キー）＋負 ID＋コメント/空行を含む最小 surfaces.txt 断片を自作し、公開 parse 経由でモデル全構成を end-to-end 検証する
   - 仕様解釈は ukadoc を正典とし（emo2 の偶発的内容を正解根拠にしない）、期待値はリテラル直書きにする
