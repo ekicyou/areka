@@ -11,7 +11,7 @@
 //! 公開面集約のスケルトン。後続タスクで以下を順次埋める:
 //! - `model`   : マウントモデル・失敗型の正本（`MountModel` / 付随値型 / `MountError`）
 //! - `resolve` : ツリー解決 + `std::fs` 存在確認 + descript 読込合成 + 既定
-//!               フォールバック（公開 facade `pub fn resolve`）
+//!   フォールバック（公開 facade `pub fn resolve`）
 //!
 //! 依存方向は一方向（`model ← resolve`）。本 `mod.rs` は `resolve` と
 //! モデル型群を公開面へ `pub use` で集約する。
