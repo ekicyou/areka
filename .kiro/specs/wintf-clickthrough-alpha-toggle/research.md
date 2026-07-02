@@ -101,7 +101,8 @@ R2. **カーソル監視ワーカが α 判定に使う状態の受け渡し方�
 R3. **座標変換チェーンの正典**（R8）: `GetCursorPos`（スクリーン物理）→ウィンドウ client 原点→`global.bounds` 正規化→マスク座標。既存 `hit_test_in_window` を再利用するか、ワーカ用に軽量複製するか。DPI 変化・モニタ跨ぎ時の再スナップショット契機。
 R4. **ドラッグ抑止フラグの導管**（R5）: 既存 `WindowDragContextResource`（Arc<Mutex>）へ相乗りか、pilot 同様 `dragging: Arc<AtomicBool>` を新設して drag state 遷移時に更新するか。終了時の「再収束」notify の発火点（`JustEnded` 遷移）。
 R5. **適用単位（per-window）とマルチウィンドウ**: トグルは HWND 単位。areka は shell/balloon の 2 窓。各窓に監視器を持つか、単一ワーカが全対象窓を巡回するか。ウィンドウ内複数 widget の α 集約（OR）方針。
-R6. **areka 実効化と移行順序**（R1/R7）: 本坑は「wintf に機構を用意」まで。areka を `CompositionMode::DComp`(WUC) へ切替える実効化は `wintf-dcomp-to-wuc-migration`／`wintf-ulw-removal` との順序に依存。本坑スコープが「機構提供のみ」か「areka での実動確認まで」かの線引き。
+R6. ~~**areka 実効化と移行順序**（R1/R7）: 本坑は「wintf に機構を用意」まで。areka を `CompositionMode::DComp`(WUC) へ切替える実効化は `wintf-dcomp-to-wuc-migration`／`wintf-ulw-removal` との順序に依存。本坑スコープが「機構提供のみ」か「areka での実動確認まで」かの線引き。~~
+   **【解決済み・2026-07-02 要件ディスカッション議題2】**: スコープは **(B) areka 実動確認まで**。合成バックエンドは `wintf-dcomp-to-wuc-migration`（コミット `2a30e9a`・純粋等価移行）で既に WUC 化済ゆえ、areka は `CompositionMode::DComp` へオプトインするだけで WUC 経路に載る。本坑で **areka を WUC 化**し実マスコットでクリック透過を実動確認する（R1 AC5・In scope 追記）。狙いは、クリックパススルー導入と同時に areka を WUC ベースへ移し、**後続 `wintf-ulw-removal` が areka デモを巻き込まない状態**を作ること（R7 AC4）。wintf ライブラリの ULW バックエンド自体は並走期間中は残置（撤去は別坑）。
 R7. **`SetWindowPos(SWP_FRAMECHANGED)` の副作用範囲**: トグル毎の FRAMECHANGED が WUC 合成・z オーダー・フォーカスへ与える影響の設計時確認（pilot は共存を実測、本坑本体経路で再確認要）。
 R8. **ex-style 差分適用 API の置き場**: `WinStyle::commit` は FRAMECHANGED 非対応。トグル専用の最小 API（TRANSPARENT ビットのみ add/remove＋FRAMECHANGED）を `win_style.rs` に足すか、新モジュールに閉じるか（R6.4/R6.5 の「独断で追加しない」規律との整合）。
 R9. **「独断で追加しない」制約の運用**（R6.4/R6.5・R9.3）: `WS_EX_LAYERED` 同伴は pilot 実証済で要件本文にも織り込み済（R6.2）。それ以外の ex-style／NCHITTEST／依存追加が実装中に必要化した場合の依頼者確認フローを design に明記。

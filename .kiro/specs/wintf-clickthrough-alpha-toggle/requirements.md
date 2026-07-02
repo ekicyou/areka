@@ -13,6 +13,7 @@
   - スレッド跨ぎ通知は既存の `event_listener` 起床パターンに倣う（tokio 非使用）。
   - ドラッグ移動中は表示位置に関わらずクリック透過を抑止し続ける挙動。
   - `docs/click_through.md` の新規作成（仕組み概要・ULW/HTTRANSPARENT/Layered を採らない理由・API 使用例・既知の制約）。
+  - areka 本体の合成経路を WUC（`CompositionMode::DComp`）へ切替え、実マスコットでクリック透過を実動確認する。本坑で areka を WUC 化することで、後続の `wintf-ulw-removal` が areka デモを巻き込まない状態を作る。
   - 既存機能の非破壊性とリリースビルド互換の検証。
 - **Out of scope**:
   - ULW バックエンドの即時撤去（並走期間中は残置する。撤去は別坑 `wintf-ulw-removal`）。
@@ -36,6 +37,7 @@
 2. When 透明領域上のクリックが背面の別プロセスウィンドウへ届いた, the click-through 機構 shall 自ウィンドウでそのクリックを受領しない。
 3. The click-through 機構 shall クリック透過を成立させるために GPU 合成描画（合成層の表示内容）を無効化・省略しない。
 4. Where キャラクターの表示内容が 2D サーフェスまたは合成スワップチェーン（3D／Live2D 相当）のいずれである場合, the click-through 機構 shall 当たり判定の挙動を表示内容の種類に依存させない。
+5. When areka 本体を WUC（`CompositionMode::DComp`）経路のマスコットとして表示した, the click-through 機構 shall 透明領域のクリックを背面プロセスへ透過させ、キャラクター領域のクリックを受領する動作を実マスコットで成立させる。
 
 ### Requirement 2: ヒットテスト連動のキャラクター領域クリック受領
 
@@ -100,6 +102,7 @@
 1. While 検証期間, the click-through 機構 shall 既存の ULW バックエンド経路を撤去せず並走可能な状態で残す。
 2. The click-through 機構 shall 既存の透過・ヒットテスト・ウィンドウ管理などの既存機能を破壊しない。
 3. When 本方式が完全に有効と判断され ULW ルート破棄が決定された, the 実装者 shall `tech.md`／`roadmap.md` の「ULW 一択」相当記述の更新対象を明示できる状態を保つ。
+4. The click-through 機構 shall areka 本体を WUC（`CompositionMode::DComp`）経路へ移行し、areka が後続の ULW 撤去（別坑 `wintf-ulw-removal`）の影響を受けない状態にする。ただし wintf ライブラリの ULW バックエンド自体は並走期間中は残置する（撤去は別坑）。
 
 ### Requirement 8: 高 DPI・マルチモニタ環境での座標一致
 
