@@ -17,6 +17,42 @@ use crate::ecs::world::EcsWorld;
 /// メッセージハンドラの戻り値型
 type HandlerResult = Option<LRESULT>;
 
+/// WM_SETCURSOR: 診断用の十字カーソル（環境変数 `WINTF_CROSSHAIR=1` のときのみ有効）。
+///
+/// クライアント領域（`HTCLIENT`）上でカーソルを `IDC_CROSS` に差し替え、`Some(LRESULT(1))` を
+/// 返して既定処理を止める。クリック透過中（`WS_EX_TRANSPARENT`）の窓は WM_SETCURSOR を受け取ら
+/// ない（入力は背面プロセスへ抜ける）ため、**十字が出る領域＝この窓が反応する（不透過）領域**＝
+/// クリック透過の当たり判定域の可視化になる（表示と判定のズレ確認に使う）。
+///
+/// 環境変数未設定時・非クライアント時は `None`（`DefWindowProcW` へ委譲）を返し、通常の挙動を
+/// **一切変えない**（既定 OFF の純粋な診断アドオン）。フラグはプロセス起動時に一度だけ評価する。
+#[inline]
+pub(super) fn WM_SETCURSOR(
+    _world: &Rc<RefCell<EcsWorld>>,
+    _entity: Entity,
+    _hwnd: HWND,
+    _wparam: WPARAM,
+    lparam: LPARAM,
+) -> HandlerResult {
+    use std::sync::OnceLock;
+    static ENABLED: OnceLock<bool> = OnceLock::new();
+    if !*ENABLED.get_or_init(|| std::env::var_os("WINTF_CROSSHAIR").is_some()) {
+        return None;
+    }
+    // LOWORD(lparam) = ヒットテスト結果。HTCLIENT 上のみ十字化（枠・スクロールバー等は既定）。
+    let hit_test = (lparam.0 & 0xFFFF) as i32;
+    if hit_test != HTCLIENT as i32 {
+        return None;
+    }
+    // SAFETY: Win32 境界。LoadCursorW(IDC_CROSS)→SetCursor。所有権・寿命に影響しない。
+    unsafe {
+        if let Ok(cursor) = LoadCursorW(None, IDC_CROSS) {
+            let _ = SetCursor(Some(cursor));
+        }
+    }
+    Some(LRESULT(1))
+}
+
 /// WM_NCHITTEST: 非クライアント領域ヒットテスト
 ///
 /// クライアント領域判定を実装し、キャッシュ付きhit_testを呼び出す。
