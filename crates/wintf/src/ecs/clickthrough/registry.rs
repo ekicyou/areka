@@ -113,6 +113,16 @@ impl ClickThroughRegistry {
     pub(crate) fn iter(&self) -> impl Iterator<Item = &ClickThroughTarget> {
         self.targets.iter()
     }
+
+    /// 述語が `false` を返す対象を一括除去する（窓破棄追随のバルク版・R7.2 非破壊）。
+    ///
+    /// `remove` は Entity 指定の単発除去だが、本メソッドは「World 上に生存しない窓」を
+    /// まとめて刈り取る（`prune_dead_targets` が World 参照で述語を与える）。除去件数を返す。
+    pub(crate) fn retain<F: FnMut(&ClickThroughTarget) -> bool>(&mut self, mut keep: F) -> usize {
+        let before = self.targets.len();
+        self.targets.retain(|t| keep(t));
+        before - self.targets.len()
+    }
 }
 
 #[cfg(test)]

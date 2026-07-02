@@ -42,7 +42,7 @@
   - _Requirements: 1.1, 1.3, 1.4, 2.1, 2.2, 2.3, 2.4, 3.3, 4.3, 5.2, 8.1, 8.2, 8.3_
   - _Boundary: ClickThroughController_
   - _Depends: 1.1, 2.1, 2.2_
-- [ ] 3.2 WinApp 起動フックと窓ライフサイクル結線
+- [x] 3.2 WinApp 起動フックと窓ライフサイクル結線
   - `runtime` の結線点で機構（ワーカ生成・event 共有・async ループ）を起動し、監視対象窓を登録する最小フックを追加。既存 tick/vsync 結線に相乗り
   - 窓破棄時にレジストリから除去。shutdown（World 失効）で async ループ終了・ワーカ join。既存の透過・ヒットテスト・ウィンドウ管理を破壊しない
   - 観測可能な完了条件: `WinApp` 起動でワーカ＋判定ループが稼働し、機構ハンドル drop（shutdown）で停止・join されること。窓破棄で対象から外れ適用がスキップされること
@@ -85,3 +85,4 @@
 - クリック透過機構の結線 API（3.1 確定）: `ClickThroughController::start(world: Weak<RefCell<EcsWorld>>, registry: Rc<RefCell<ClickThroughRegistry>>, wake_event: Arc<event_listener::Event>) -> ClickThroughHandle`。二重起床は**単一の共有 `Arc<Event>`** を cursor worker と VSync tick 源の両方が notify する方式（select 併用なし）。`CursorMonitorBridge::spawn(wake_event.clone())` で worker が同一 event を叩く。tick 源が wake_event を post-tick で notify する結線は **3.2 の領分**。registry は `Rc<RefCell<..>>` 共有ゆえ start 後に窓を register/remove 可能（handle 経由）。
 - `last_applied` 単一所有: 書き戻しは `apply_click_through` が `Ok` の時のみ（`Err` は据え置き＋`warn!`・次サイクル再試行）。
 - cargo は **PowerShell 必須**（Git Bash の coreutils `link.exe` が MSVC link を遮蔽）。worktree では `git submodule update --init`（vendors/pasta）済み。
+- areka（4.1）向け登録面（3.2 確定）: `wintf::ecs::clickthrough::ClickThroughRegistryHandle`（**pub** NonSend リソース・`run()` で World へ挿入済み）を `world.get_non_send_resource::<ClickThroughRegistryHandle>()` で取得し `register(entity, hwnd)` する。eval ループと**同一 `Rc<RefCell<ClickThroughRegistry>>`** を共有ゆえ登録は即反映。窓破棄は `prune_dead_targets`（entity 存在判定・`evaluate_targets` 冒頭で自動除去）が処理するので areka 側の明示 remove は必須でない（despawn で十分）。

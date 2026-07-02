@@ -83,6 +83,29 @@ pub(crate) fn resolve_transition(
     }
 }
 
+/// World 上に生存しない対象窓をレジストリから刈り取る（窓破棄追随・R7.2 / Lifecycle）。
+///
+/// 除去条件: window Entity が既に despawn 済み（`world.get_entity(window).is_err()`）。
+/// これが「窓破棄」の正準シグナルである。areka の窓 close は `world.despawn(entity)` で
+/// 行われ（`on_window_handle_remove`→`WM_CLOSE`→`DestroyWindow` の起点）、Entity と共に
+/// 対象が消える。したがって Entity 生存確認だけで破棄追随が成立する。
+///
+/// これを [`evaluate_targets`] の巡回前に呼ぶことで、破棄済み窓の無効 HWND へ
+/// `apply_click_through` を撃つ経路（`Err` スパム）を構造的に断つ。除去件数を返す
+/// （テスト・観測用）。areka の窓登録／破棄（task 4.1）は非同期ゆえ、機構側は「今 World に
+/// 在る Entity の対象だけを見る」ことで窓ライフサイクルに追随する（既存窓ライフサイクル
+/// ファイルは不変）。
+///
+/// NOTE: `remove::<Window>` のみ（Entity は残す）で HWND が破棄される稀な過渡状態は、
+/// `evaluate_targets` の `apply_click_through` が `Err` をグレースフルに warn+skip する
+/// 既存経路（`last_applied` 据え置き・次サイクル再試行）が受け止める。prune は「Entity 消滅」
+/// という単一・明快な破棄シグナルに限定し、`Window` コンポーネント有無へ結合しない
+/// （eval コアの純粋性を保ち、`Window` を持たない汎用対象も破棄までは監視できる）。
+pub(crate) fn prune_dead_targets(world: &World, registry: &mut ClickThroughRegistry) -> usize {
+    // Entity が World 上に生存している対象のみ残す（despawn 済みは刈り取る）。
+    registry.retain(|t| world.get_entity(t.window).is_ok())
+}
+
 /// settled な `&World` に対しレジストリの全対象窓を 1 回巡回評価する同期コア
 /// （post-tick 評価の本体・独立テスト可能・要件 2.1/2.2/2.4/3.2/3.3/5.x/8.x）。
 ///
@@ -117,6 +140,11 @@ pub(crate) fn evaluate_targets(
     registry: &mut ClickThroughRegistry,
     cursor_screen: PhysicalPoint,
 ) {
+    // 窓破棄追随（R7.2 / Error Handling: Lifecycle）: 巡回前に、World 上に生存しない対象
+    // （despawn 済み Entity・`Window` コンポーネント喪失）をレジストリから刈り取る。これにより
+    // 破棄済み窓の無効 HWND へ `apply_click_through` を撃たない（Err スパム回避）。
+    prune_dead_targets(world, registry);
+
     // ドラッグスナップショットは 1 パスで一度だけ読む（全窓で同一・UI スレッド）。
     let drag = snapshot_drag_state();
 
@@ -273,6 +301,56 @@ impl ClickThroughHandle {
     /// ワーカ最新カーソル座標（screen physical）を読む（テスト・結線用）。
     pub(crate) fn latest_cursor(&self) -> PhysicalPoint {
         self.monitor.latest_cursor()
+    }
+}
+
+/// アプリ側（`crates/areka`・task 4.1）が監視対象窓を登録／除去するための **公開** ハンドル。
+///
+/// クリック透過機構は `WinApp::run`（`runtime/mod.rs` 結線点）で起動され、その共有レジストリ
+/// （`Rc<RefCell<ClickThroughRegistry>>`）がこの newtype に包まれて World へ **NonSend リソース**
+/// として挿入される。areka の `run_setup`（`&mut World` を持つ）は
+/// `world.get_non_send_resource::<ClickThroughRegistryHandle>()` で取得し、生成した shell/balloon
+/// の 2 窓（window Entity ＋ HWND）を [`register`](Self::register) で登録する。
+///
+/// # なぜ NonSend リソースか
+/// areka は窓を **非同期生成**する（`run_setup` は command 経由で後から `&mut World` を得る）。
+/// `ClickThroughController::start` は `run()` 冒頭で走るため、登録面を World に置いておけば
+/// start 後の任意タイミングで登録できる。レジストリ本体は UI スレッド単独所有（`!Send`）ゆえ
+/// NonSend リソースが妥当（`Rc`/`RefCell` は `!Send`）。
+///
+/// # 破棄追随
+/// 登録済み窓が破棄されても、[`remove`](Self::remove) の明示除去に加え、機構内部の
+/// [`prune_dead_targets`] が毎評価で World 生存を確認して自動的に刈り取る（二重の安全弁）。
+pub struct ClickThroughRegistryHandle {
+    registry: Rc<RefCell<ClickThroughRegistry>>,
+}
+
+impl ClickThroughRegistryHandle {
+    /// 共有レジストリを包んで登録面を作る（`runtime/mod.rs` 結線点が呼ぶ）。
+    pub(crate) fn new(registry: Rc<RefCell<ClickThroughRegistry>>) -> Self {
+        Self { registry }
+    }
+
+    /// 監視対象窓を登録する（areka の非同期窓生成に追随・task 4.1）。
+    ///
+    /// 同一 window Entity の再登録は HWND 更新＋`last_applied` リセット（dedupe）。
+    pub fn register(&self, window: Entity, hwnd: windows::Win32::Foundation::HWND) {
+        self.registry.borrow_mut().register(window, hwnd);
+    }
+
+    /// 監視対象窓を明示除去する（窓破棄時・R7.2 非破壊）。存在すれば `true`。
+    pub fn remove(&self, window: Entity) -> bool {
+        self.registry.borrow_mut().remove(window)
+    }
+
+    /// 登録済み対象窓数（テスト・観測用）。
+    pub fn len(&self) -> usize {
+        self.registry.borrow().len()
+    }
+
+    /// 登録済み対象が無いか（テスト・観測用）。
+    pub fn is_empty(&self) -> bool {
+        self.registry.borrow().is_empty()
     }
 }
 
@@ -733,6 +811,131 @@ mod tests {
         if let Err(e) = result {
             std::panic::resume_unwind(e);
         }
+    }
+
+    // ========================================================================
+    // prune_dead_targets（窓破棄追随・R7.2 / Lifecycle）
+    // ========================================================================
+
+    use crate::ecs::window::{CompositionMode, Window as WinComp, WindowStyle};
+    use windows::Win32::UI::WindowsAndMessaging::{WS_EX_LAYERED, WS_POPUP};
+
+    /// `Window` コンポーネントを持つ生きた窓 Entity を spawn する（prune テスト用最小構成）。
+    fn spawn_live_window(world: &mut World) -> Entity {
+        world
+            .spawn((
+                WinComp {
+                    title: "PruneTest".to_string(),
+                    parent: None,
+                    composition_mode: CompositionMode::DComp,
+                },
+                WindowStyle {
+                    style: WS_POPUP,
+                    ex_style: WS_EX_LAYERED,
+                },
+            ))
+            .id()
+    }
+
+    /// despawn 済み Entity は prune で除去される（無効 HWND への適用を未然に断つ）。
+    #[test]
+    fn prune_removes_despawned_window_entity() {
+        let mut world = World::new();
+        let live = spawn_live_window(&mut world);
+        let dead = spawn_live_window(&mut world);
+
+        let mut reg = ClickThroughRegistry::new();
+        reg.register(live, HWND::default());
+        reg.register(dead, HWND::default());
+        assert_eq!(reg.len(), 2);
+
+        // 1 窓を despawn（破棄相当）。
+        world.despawn(dead);
+
+        let removed = prune_dead_targets(&world, &mut reg);
+        assert_eq!(removed, 1, "despawn 済み Entity 1 件が除去されるべき");
+        assert_eq!(reg.len(), 1);
+        assert!(reg.last_applied(live).is_some(), "生存窓は残る");
+        assert!(reg.last_applied(dead).is_none(), "破棄窓は除去される");
+    }
+
+    /// `Window` コンポーネントを持たない対象でも、Entity が生存する限り prune は除去しない
+    /// （prune は Entity 消滅のみを破棄シグナルとする＝eval コアの純粋性・汎用対象も監視可）。
+    #[test]
+    fn prune_keeps_live_entity_without_window_component() {
+        let mut world = World::new();
+        let bare = world.spawn_empty().id(); // Window コンポーネントなし・生きた Entity。
+
+        let mut reg = ClickThroughRegistry::new();
+        reg.register(bare, HWND::default());
+        assert_eq!(reg.len(), 1);
+
+        let removed = prune_dead_targets(&world, &mut reg);
+        assert_eq!(removed, 0, "生存 Entity は Window 有無に関わらず残す");
+        assert_eq!(reg.len(), 1);
+    }
+
+    /// 破棄窓（despawn 済み Entity）は `evaluate_targets` の巡回対象から外れ、
+    /// `apply_click_through` が撃たれない。実 HWND を握って seed し、despawn 後の評価で
+    /// ex-style が **変化しない**ことを確認する（破棄窓へ適用が走れば seed 状態が動くため、
+    /// 不変 = 適用スキップの観測）。
+    #[test]
+    fn eval_skips_apply_for_destroyed_window() {
+        let mut world = World::new();
+        let window = world_with_hittable_window(&mut world);
+        let hwnd = create_test_hwnd();
+
+        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            // seed: TRANSPARENT を立て last_applied=Transparent。
+            apply_click_through(hwnd, true).expect("seed transparent");
+            assert!(is_transparent(hwnd), "seed: TRANSPARENT set");
+
+            let mut reg = ClickThroughRegistry::new();
+            reg.register(window, hwnd);
+            reg.set_last_applied(window, DesiredState::Transparent);
+
+            // 窓破棄相当: Entity を despawn（areka の close パスと同じ正準シグナル）。
+            world.despawn(window);
+
+            // 破棄後の評価: prune で対象から外れ、hit=Some でも apply が走らない。
+            // cursor screen (150,250) は本来 hit=Some → Opaque へ動くはずだが、prune 済みゆえ不変。
+            evaluate_targets(&world, &mut reg, PhysicalPoint::new(150, 250));
+
+            assert!(reg.is_empty(), "破棄窓は評価前 prune で除去される");
+            assert!(
+                is_transparent(hwnd),
+                "破棄窓へは apply が走らず ex-style は seed のまま不変であるべき"
+            );
+        }));
+        destroy_test_hwnd(hwnd);
+        if let Err(e) = result {
+            std::panic::resume_unwind(e);
+        }
+    }
+
+    // ========================================================================
+    // ClickThroughRegistryHandle（areka 登録面・NonSend リソース）
+    // ========================================================================
+
+    /// 公開ハンドル経由の register/remove が共有レジストリへ反映される（areka 4.1 の登録面）。
+    #[test]
+    fn registry_handle_register_remove_reflects_shared_registry() {
+        let registry = StdRc::new(StdRefCell::new(ClickThroughRegistry::new()));
+        let handle = ClickThroughRegistryHandle::new(StdRc::clone(&registry));
+
+        let mut w = World::new();
+        let e = w.spawn_empty().id();
+        let hwnd = create_test_hwnd();
+
+        assert!(handle.is_empty());
+        handle.register(e, hwnd);
+        assert_eq!(handle.len(), 1);
+        assert_eq!(registry.borrow().len(), 1, "共有レジストリへ反映される");
+
+        assert!(handle.remove(e));
+        assert!(handle.is_empty());
+        assert!(registry.borrow().is_empty());
+        destroy_test_hwnd(hwnd);
     }
 
     // ========================================================================
