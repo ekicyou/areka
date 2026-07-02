@@ -58,7 +58,7 @@
   - _Requirements: 1.5, 7.1, 7.4, 6.4, 6.5_
   - _Boundary: crates/areka_
   - _Depends: 3.2_
-- [ ] 4.2 areka 実動検証（透過・座標一致・ドラッグ安定）
+- [x] 4.2 areka 実動検証（透過・座標一致・ドラッグ安定）
   - 透明領域クリック→背面プロセスへ透過、キャラ領域クリック→areka が受領を目視確認
   - 高 DPI 150% ＋ マルチモニタ（異倍率）＋ ウィンドウ移動で、見た目のキャラ領域と当たり判定領域が一致すること。キャラ不透明部を掴んでのドラッグ中に透過が入らず、終了後に再収束すること
   - 観測可能な完了条件: 上記検証項目のチェックリストが実マスコットで全て満たされること
@@ -82,6 +82,7 @@
 
 ## Implementation Notes
 
+- **4.2 実動確認 完了（2026-07-02 開発者 "OK"）＋ areka の HitTest 設定が最後の鍵**: 実マスコットで「キャラ部だけ受領・透明部は背面へ透過・キャラ掴んでドラッグ移動・ダブルクリック終了」を目視確認。**発覚した最終原因**: `hit_test` は窓 Entity 配下を走査し `HitTestMode` 既定は `Bounds`＝**窓の全矩形が常時ヒット**→機構は永遠に Opaque→透過しない。areka の Shell-Window/Shell-Image は HitTest 未設定だった。修正（`crates/areka/src/main.rs`・R6.5 で変更提示→承認済み）: **Shell-Window に `HitTest::none()`**（全面ヒット回避）・**Shell-Image に `HitTest::alpha_mask()`**（αピクセル判定・`generate_alpha_mask_system` が `Added<BitmapSourceResource>`＋`With<HitTest>`＋`AlphaMask` の時だけマスク生成）。バルーンは全面矩形ゆえ現状維持。機構・座標・αヒットテスト自体は wintf 側で正しく、切り分けは検証台 `crates/areka/examples/clickthrough_two_rects.rs`（＋ env ゲート十字診断 `WINTF_CROSSHAIR`）で単独実証。**教訓: クリック透過を使う窓は「窓/コンテナ=HitTest::none()・可視コンテンツ=Bounds/AlphaMask」を明示設定する**（[[areka-clickthrough-hittest-config]]）。
 - **座標変換は OS `ScreenToClient` へ委譲（4.2 実動検証で判定領域が表示とズレて発覚・2026-07-02）**: `evaluate_targets` の `client = cursor_screen - WindowPos.position` 手引き算が高 DPI・マルチモニタで表示とズレた（右へ行くほどズレ＝スケール差）。真因: `hit_test_in_window` は内部で `screen = client + WindowPos.position` を再計算し、`GlobalArrangement.bounds` は `WindowPos.position` アンカー空間。そこへ真の物理 `GetCursorPos` を `cursor - position` で入れると空間不整合。OS 入力経路（`window_proc::mouse_click`）・NCHITTEST キャッシュ（`pointer::nchittest_cache`）は共に `ScreenToClient(hwnd, screen)` → `hit_test_in_window` の正準経路を使っており、これに合わせた。修正: `evaluate_targets` を `screen_to_client: impl FnMut(HWND)->Option<PointF>` 注入に変更（production=`screen_to_client_point`＝OS `ScreenToClient`／テスト=決定的模擬 `sim_s2c`）。frame/DPI/マルチモニタは OS が吸収。**教訓: screen→client 変換は手計算せず OS `ScreenToClient` を使う（既存 NCHITTEST 経路が正典）**。
 - **`WS_EX_LAYERED` 同伴フラグは透過成立の必須条件（4.2 実動検証で発覚・2026-07-02 依頼者確認済み＝R6.4 充足）**: 初回実動検証でクリック透過が不成立。原因は design が pilot 知見を誤転写していたこと——pilot REPORT（`crates/pilot/examples/pilot-clickthrough-alpha-toggle/REPORT.md` L15/L18/L68）は「`WS_EX_TRANSPARENT` 単独では DComp 窓のマウス透過が効かず窓が全クリックを吸う。`WS_EX_LAYERED` をフラグのみ（ULW/SLWA 非呼出）併設して成立（実測 ex_style 0x280028 で DComp 描画と共存）」と実証していたが、design は「単独で成立する pilot 実証済み」と逆に記載していた。修正: `win_style::apply_layered_companion`（LAYERED を立てるのみ・冪等）を新設し、`evaluate_targets` が登録窓の初回評価で 1 回適用（`ClickThroughTarget.layered_applied` フラグ・成功時のみ真・失敗は次サイクル再試行）。factory `compute_ex_style` は byte-for-byte 契約ゆえ不変。design/docs の該当記述は訂正済み。**教訓: pilot の REPORT.md（実測台帳）を正とし、spec 転写を鵜呑みにしない**。
 

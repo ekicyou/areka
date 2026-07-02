@@ -17,7 +17,7 @@ use windows::core::Result;
 use wintf::ecs::Point;
 use wintf::ecs::drag::{DragConfig, DragEvent, OnDrag};
 use wintf::ecs::layout::{
-    BoxMargin, BoxPosition, BoxSize, BoxStyle, Dimension, LengthPercentageAuto, Rect,
+    BoxMargin, BoxPosition, BoxSize, BoxStyle, Dimension, HitTest, LengthPercentageAuto, Rect,
 };
 use wintf::ecs::pointer::{DoubleClick, OnPointerPressed, Phase, PointerState};
 use wintf::ecs::widget::bitmap_source::{BitmapSource, CommandSender};
@@ -246,6 +246,8 @@ fn create_shell_window(world: &mut World) -> Entity {
                 }),
                 ..Default::default()
             },
+            // 窓自身はヒット対象外（全面ヒットで透過を殺さない）。当たりは子の画像（α判定）が担う。
+            HitTest::none(),
             DragConfig::default(),
             OnDrag(on_shell_drag),
             OnPointerPressed(on_shell_pressed),
@@ -256,6 +258,8 @@ fn create_shell_window(world: &mut World) -> Entity {
     world.spawn((
         Name::new("Shell-Image"),
         BitmapSource::new(SHELL_IMAGE_PATH),
+        // キャラの不透明ピクセルだけ受領・透明部は背面へ透過（αマスク自動生成の必須条件）。
+        HitTest::alpha_mask(),
         BoxStyle {
             size: Some(BoxSize {
                 width: Some(Dimension::Px(320.0)),
