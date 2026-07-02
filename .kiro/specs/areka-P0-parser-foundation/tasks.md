@@ -9,7 +9,7 @@
   - Observable: `cargo build -p areka-parsers` と `cargo test -p areka-parsers`（スタブ状態）が encoding_rs 解決済み・両モジュール宣言済みで緑になる
   - _Requirements: 2.1, 2.2_
 
-- [ ] 2. charset モジュール（宣言検出＋全体デコード）
+- [x] 2. charset モジュール（宣言検出＋全体デコード）
 - [x] 2.1 (P) 既定エンコード指定型の定義
   - ANSI／UTF-8 の2値選択を表す公開型を定義する（`#[non_exhaustive]`・最小派生）
   - Ansi→CP932(Shift_JIS)／Utf8→UTF-8 の固定写像を持つ（環境非依存・呼び出し側が渡した指定のみで決定）
@@ -27,7 +27,7 @@
   - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 5.2_
   - _Boundary: charset::prescan_
   - _Depends: 1.1_
-- [ ] 2.3 charset デコード facade
+- [x] 2.3 charset デコード facade
   - プリスキャン結果のラベルを encoding_rs のラベル解決へ渡し、解決可＝宣言エンコード採用／未対応・宣言なし＝呼び出し側指定の既定へ寛容フォールバックする
   - 選定エンコードでバイト列全体をデコードし、不正並びは代替文字（U+FFFD 等）で吸収して破棄せず、必要時のみ診断ログを出し、単一 String を返す
   - Result を返さず panic せず、ファイルシステム・OS ロケール等の環境状態を参照せず、同一（バイト列, 既定指定）に対し決定的である
