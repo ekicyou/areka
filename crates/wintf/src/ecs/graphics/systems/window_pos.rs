@@ -1,7 +1,7 @@
 use super::init::format_entity_name;
 use crate::ecs::drag::WindowDragging;
-use crate::ecs::graphics::DCompGraphicsResource;
 use crate::ecs::graphics::GraphicsCore;
+use crate::ecs::graphics::wuc_resource::WucGraphicsResource;
 use crate::ecs::graphics::compositor::WindowD3D11Compositor;
 use crate::ecs::widget::bitmap_source::BitmapSourceGraphics;
 use crate::ecs::window::{SetWindowPosCommand, Window, WindowHandle, WindowPos};
@@ -123,7 +123,7 @@ pub fn apply_window_pos_changes(
 /// P40 の設計判断・セル断片 W3b-V の分析を参照）。
 pub fn invalidate_dependent_components(
     graphics: Option<Res<GraphicsCore>>,
-    dcomp_resource: Option<ResMut<DCompGraphicsResource>>,
+    wuc_resource: Option<ResMut<WucGraphicsResource>>,
     mut compositor_query: Query<&mut WindowD3D11Compositor>,
     mut bitmap_source_query: Query<&mut BitmapSourceGraphics>,
 ) {
@@ -133,9 +133,9 @@ pub fn invalidate_dependent_components(
                 "[invalidate_dependent_components] GraphicsCore invalid - invalidating all dependent components"
             );
 
-            // DCompGraphicsResource の無効化
-            if let Some(mut dcr) = dcomp_resource {
-                dcr.invalidate();
+            // WucGraphicsResource の無効化
+            if let Some(mut wgr) = wuc_resource {
+                wgr.invalidate();
             }
 
             for mut comp in compositor_query.iter_mut() {

@@ -1,27 +1,33 @@
-//! W3a-T: clip_sync_system（DComp モードのクリップ同期）のヘッドレステスト
+//! W3a-T: clip_sync_system（WUC モードのクリップ同期）のヘッドレステスト
 //!
-//! 実 DComp デバイスを用いて clip_sync_system を Schedule 経由で実行する。
-//! IDCompositionRectangleClip は write-only COM オブジェクトで適用結果を
-//! 読み戻せないため、各分岐（3 バリアント適用・クリップ解除・リソース未初期化
-//! スキップ）がエラーなく完走することの characterization に留める
+//! 実 WUC デバイスを用いて clip_sync_system を Schedule 経由で実行する。
+//! WUC の InsetClip は write-only 相当で適用結果を読み戻せないため、
+//! 各分岐（3 バリアント適用・クリップ解除・リソース未初期化スキップ）が
+//! エラーなく完走することの characterization に留める
 //! （詳細は W3a-T 断片の R2.8 所見を参照）。
 
 use bevy_ecs::prelude::*;
 use bevy_ecs::schedule::ExecutorKind;
-use wintf::com::dcomp::DCompositionDeviceExt;
+use windows::UI::Composition::Visual as WucVisual;
+use windows::Win32::System::Com::{COINIT_MULTITHREADED, CoInitializeEx};
+use windows::core::Interface;
 use wintf::ecs::layout::Arrangement;
 use wintf::ecs::{
-    ClipShape, DCompGraphicsResource, GraphicsCore, Size, Visual, VisualGraphics, clip_sync_system,
+    ClipShape, GraphicsCore, Size, Visual, VisualGraphics, WucGraphicsResource, clip_sync_system,
 };
 
 fn setup_world() -> World {
+    // WucGraphicsResource::new は DQTAT_COM_NONE を使うため COM 初期化済みスレッドを要求する。
+    unsafe {
+        let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
+    }
     let core = GraphicsCore::new().expect("GraphicsCore 作成失敗");
     let d2d = core.d2d_device().expect("d2d device");
-    let dcomp_resource = DCompGraphicsResource::new(d2d).expect("DCompGraphicsResource 作成失敗");
+    let wuc_resource = WucGraphicsResource::new(d2d).expect("WucGraphicsResource 作成失敗");
 
     let mut world = World::new();
     world.insert_resource(core);
-    world.insert_resource(dcomp_resource);
+    world.insert_resource(wuc_resource);
     world
 }
 
@@ -32,12 +38,16 @@ fn clip_schedule() -> Schedule {
     schedule
 }
 
-/// Visual + 実 DComp ビジュアル + サイズ付き Arrangement のエンティティを生成
+/// Visual + 実 WUC ビジュアル + サイズ付き Arrangement のエンティティを生成
 fn spawn_clip_entity(world: &mut World, visual: Visual, width: f32, height: f32) -> Entity {
-    let dcomp_visual = {
-        let resource = world.resource::<DCompGraphicsResource>();
-        let dcomp = resource.dcomp().expect("dcomp device");
-        dcomp.create_visual().expect("create_visual")
+    let wuc_visual: WucVisual = {
+        let resource = world.resource::<WucGraphicsResource>();
+        let compositor = resource.compositor().expect("compositor");
+        compositor
+            .CreateSpriteVisual()
+            .expect("CreateSpriteVisual")
+            .cast()
+            .expect("cast to Visual")
     };
 
     // Visual の on_add フックが Arrangement → GlobalArrangement を連鎖挿入する
@@ -47,7 +57,7 @@ fn spawn_clip_entity(world: &mut World, visual: Visual, width: f32, height: f32)
     world.get_mut::<Arrangement>(entity).unwrap().size = Size { width, height };
     world
         .entity_mut(entity)
-        .insert(VisualGraphics::new(dcomp_visual));
+        .insert(VisualGraphics::new(wuc_visual));
     entity
 }
 
@@ -138,8 +148,8 @@ fn clip_sync_clears_clip_when_size_is_zero() {
 }
 
 #[test]
-fn clip_sync_skips_when_dcomp_resource_is_absent() {
-    // DCompGraphicsResource なし（ULW モード相当）→ 早期リターン
+fn clip_sync_skips_when_wuc_resource_is_absent() {
+    // WucGraphicsResource なし（ULW モード相当）→ 早期リターン
     let core = GraphicsCore::new().expect("GraphicsCore 作成失敗");
     let mut world = World::new();
     world.insert_resource(core);

@@ -1,5 +1,4 @@
 use super::init::format_entity_name;
-use crate::com::dcomp::DCompositionVisualExt;
 use crate::ecs::graphics::{Visual, VisualGraphics};
 use crate::ecs::layout::{Arrangement, GlobalArrangement};
 use crate::ecs::window::Window;
@@ -7,6 +6,7 @@ use bevy_ecs::hierarchy::{ChildOf, Children};
 use bevy_ecs::name::Name;
 use bevy_ecs::prelude::*;
 use tracing::{debug, error};
+use windows::core::Interface;
 
 /// ChildOf変更またはVisualGraphics追加を検出してVisual階層を同期するシステム (R3, R6, R7)
 ///
@@ -99,10 +99,35 @@ pub fn visual_hierarchy_sync_system(
         let parent_display = parent_name.as_deref().unwrap_or(&parent_fallback);
 
         if let Some(ref parent_visual) = parent_visual {
-            // 親の既存 Visual 子をすべて削除して Z-order をリセット
-            let _ = parent_visual.remove_all_visuals();
+            // 親の VisualCollection を取得（WUC。基底 Visual は Children を持たないため
+            // ContainerVisual/SpriteVisual へ cast する必要があるが、Children() は
+            // ICompositor経由で cast 済みのため Visual からは呼べない。SpriteVisual へ cast）。
+            let parent_children = match parent_visual
+                .cast::<windows::UI::Composition::ContainerVisual>()
+                .and_then(|cv| cv.Children())
+            {
+                Ok(c) => c,
+                Err(e) => {
+                    error!(
+                        parent = %parent_display,
+                        error = ?e,
+                        "[visual_hierarchy_sync] Children() failed"
+                    );
+                    continue;
+                }
+            };
 
-            // Children コンポーネントの順序で子 Visual を再追加
+            // 親の既存 Visual 子をすべて削除して Z-order をリセット
+            let _ = parent_children.RemoveAll();
+
+            // Children コンポーネントの順序で子 Visual を再追加。
+            //
+            // Z順序等価性（要件 5.2）: DComp の `add_visual(insertabove=false, ref=None)` は
+            // 「子リストの先頭（＝全兄弟の下・最初に描画）へ挿入」。Children を [A,B,C] の順に
+            // 反復して毎回この呼び出しを行うと、最終スタック（下→上）は C,B,A（最後に反復した
+            // 子が最下・最初の子が最上）になる。WUC で同一スタックを再現するには、同じ反復順で
+            // `InsertAtBottom` を呼ぶ（InsertAtBottom(A)→[A], InsertAtBottom(B)→[B,A],
+            // InsertAtBottom(C)→[C,B,A]）。ゆえに InsertAtTop ではなく InsertAtBottom を選ぶ。
             if let Ok(children) = children_query.get(parent_entity) {
                 for child_entity in children.iter() {
                     let mut child_query = vg_queries.p0();
@@ -117,20 +142,20 @@ pub fn visual_hierarchy_sync_system(
                         let child_fallback = format!("Entity({:?})", child_entity);
                         let child_display = child_name_str.as_deref().unwrap_or(&child_fallback);
 
-                        if let Err(e) = parent_visual.add_visual(&child_visual, false, None) {
+                        if let Err(e) = parent_children.InsertAtBottom(&child_visual) {
                             error!(
                                 child = %child_display,
                                 depth = parent_depth + 1,
                                 parent = %parent_display,
                                 error = ?e,
-                                "[visual_hierarchy_sync] AddVisual failed"
+                                "[visual_hierarchy_sync] InsertAtBottom failed"
                             );
                         } else {
                             debug!(
                                 child = %child_display,
                                 depth = parent_depth + 1,
                                 parent = %parent_display,
-                                "[visual_hierarchy_sync] AddVisual success"
+                                "[visual_hierarchy_sync] InsertAtBottom success"
                             );
                         }
 
@@ -220,18 +245,18 @@ pub fn visual_property_sync_system(
             let offset_x = arrangement.offset.x * scale_x;
             let offset_y = arrangement.offset.y * scale_y;
 
-            if let Err(e) = visual_com.set_offset_x(offset_x) {
+            // WUC は SetOffset(Vector3) 1 回で x,y を設定（DComp は SetOffsetX2/Y2 の 2 回）。
+            // z は DComp 非設定に合わせ 0.0。
+            let offset = windows_numerics::Vector3 {
+                X: offset_x,
+                Y: offset_y,
+                Z: 0.0,
+            };
+            if let Err(e) = visual_com.SetOffset(offset) {
                 error!(
                     entity = %entity_name,
                     error = ?e,
-                    "[visual_property_sync] SetOffsetX failed"
-                );
-            }
-            if let Err(e) = visual_com.set_offset_y(offset_y) {
-                error!(
-                    entity = %entity_name,
-                    error = ?e,
-                    "[visual_property_sync] SetOffsetY failed"
+                    "[visual_property_sync] SetOffset failed"
                 );
             }
         }
@@ -242,7 +267,7 @@ pub fn visual_property_sync_system(
         } else {
             visual_component.clamped_opacity()
         };
-        if let Err(e) = visual_com.set_opacity(opacity_value) {
+        if let Err(e) = visual_com.SetOpacity(opacity_value) {
             error!(
                 entity = %entity_name,
                 error = ?e,

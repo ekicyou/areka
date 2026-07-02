@@ -10,19 +10,40 @@ use bevy_ecs::prelude::*;
 use windows::core::Result;
 use wintf::ecs::world::FrameCount;
 use wintf::ecs::{
-    DCompGraphicsResource, SurfaceGraphics, Visual, VisualGraphics, visual_resource_management_system,
+    SurfaceGraphics, Visual, VisualGraphics, WucGraphicsResource, visual_resource_management_system,
 };
 
-use super::common::setup_graphics;
+use super::common::{init_com_mta, setup_graphics};
 
 /// テスト用のワールドをセットアップするヘルパー関数
+///
+/// WUC 移行: ヘッドレスで `WucGraphicsResource` を複数回生成すると teardown レースで
+/// `STATUS_ACCESS_VIOLATION` を起こしうるため、生成直後に「ならし」用
+/// `CompositionDrawingSurface` を 1 枚作って DispatcherQueue を安定させる
+/// （`visual/common/mod.rs::WucVisualFactory` と同一の対策）。
 fn setup_world_with_graphics() -> Result<World> {
+    use windows::Foundation::Size;
+    use windows::Graphics::DirectX::{DirectXAlphaMode, DirectXPixelFormat};
+
+    init_com_mta();
     let graphics = setup_graphics()?;
     let d2d = graphics.d2d_device().expect("D2Dデバイスが無効");
-    let dcomp_resource = DCompGraphicsResource::new(d2d)?;
+    let wuc_resource = WucGraphicsResource::new(d2d)?;
+    // ならしサーフェス（DispatcherQueue 安定化）。
+    let _warmup = wuc_resource
+        .graphics_device()
+        .expect("graphics_device")
+        .CreateDrawingSurface(
+            Size {
+                Width: 1.0,
+                Height: 1.0,
+            },
+            DirectXPixelFormat::B8G8R8A8UIntNormalized,
+            DirectXAlphaMode::Premultiplied,
+        )?;
     let mut world = World::new();
     world.insert_resource(graphics);
-    world.insert_resource(dcomp_resource);
+    world.insert_resource(wuc_resource);
     world.insert_resource(FrameCount(1));
     Ok(world)
 }

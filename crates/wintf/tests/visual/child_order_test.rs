@@ -7,11 +7,9 @@
 use bevy_ecs::hierarchy::{ChildOf, Children};
 use bevy_ecs::prelude::*;
 use windows::core::Result;
-use wintf::com::dcomp::*;
-use wintf::ecs::DCompGraphicsResource;
 use wintf::ecs::{Visual, VisualGraphics, visual_hierarchy_sync_system};
 
-use super::common::setup_graphics;
+use super::common::{WucVisualFactory, setup_graphics};
 
 /// テスト用マーカーコンポーネント（アーキタイプを変えるために使用）
 #[derive(Component, Default)]
@@ -27,18 +25,13 @@ struct ExtraMarkerB;
 #[test]
 fn test_different_archetype_siblings_visual_hierarchy_sync() -> Result<()> {
     let graphics = setup_graphics()?;
-    let d2d = graphics.d2d_device().expect("D2Dデバイスが無効");
-    let dcomp_resource = DCompGraphicsResource::new(d2d).expect("DCompGraphicsResource作成失敗");
-    let dcomp = dcomp_resource
-        .dcomp()
-        .expect("dcomp device should exist")
-        .clone();
+    let factory = WucVisualFactory::new(&graphics)?;
 
     let mut world = World::new();
     world.insert_resource(graphics);
 
     // 親エンティティ（VisualGraphics あり）
-    let parent_visual = dcomp.create_visual()?;
+    let parent_visual = factory.create_visual()?;
     let parent_entity = world
         .spawn((
             Visual::default(),
@@ -47,7 +40,7 @@ fn test_different_archetype_siblings_visual_hierarchy_sync() -> Result<()> {
         .id();
 
     // child_a: 通常のアーキタイプ（Visual + VisualGraphics + ChildOf）
-    let child_a_visual = dcomp.create_visual()?;
+    let child_a_visual = factory.create_visual()?;
     let child_a = world
         .spawn((
             Visual::default(),
@@ -57,7 +50,7 @@ fn test_different_archetype_siblings_visual_hierarchy_sync() -> Result<()> {
         .id();
 
     // child_b: ExtraMarkerA 付き（異なるアーキタイプ）
-    let child_b_visual = dcomp.create_visual()?;
+    let child_b_visual = factory.create_visual()?;
     let child_b = world
         .spawn((
             Visual::default(),
@@ -68,7 +61,7 @@ fn test_different_archetype_siblings_visual_hierarchy_sync() -> Result<()> {
         .id();
 
     // child_c: ExtraMarkerB 付き（さらに別のアーキタイプ）
-    let child_c_visual = dcomp.create_visual()?;
+    let child_c_visual = factory.create_visual()?;
     let child_c = world
         .spawn((
             Visual::default(),
@@ -115,17 +108,12 @@ fn test_different_archetype_siblings_visual_hierarchy_sync() -> Result<()> {
 #[test]
 fn test_children_without_visual_graphics_are_safely_skipped() -> Result<()> {
     let graphics = setup_graphics()?;
-    let d2d = graphics.d2d_device().expect("D2Dデバイスが無効");
-    let dcomp_resource = DCompGraphicsResource::new(d2d).expect("DCompGraphicsResource作成失敗");
-    let dcomp = dcomp_resource
-        .dcomp()
-        .expect("dcomp device should exist")
-        .clone();
+    let factory = WucVisualFactory::new(&graphics)?;
 
     let mut world = World::new();
     world.insert_resource(graphics);
 
-    let parent_visual = dcomp.create_visual()?;
+    let parent_visual = factory.create_visual()?;
     let parent_entity = world
         .spawn((
             Visual::default(),
@@ -134,7 +122,7 @@ fn test_children_without_visual_graphics_are_safely_skipped() -> Result<()> {
         .id();
 
     // child_a: VisualGraphics あり
-    let child_a_visual = dcomp.create_visual()?;
+    let child_a_visual = factory.create_visual()?;
     let child_a = world
         .spawn((
             Visual::default(),
@@ -147,7 +135,7 @@ fn test_children_without_visual_graphics_are_safely_skipped() -> Result<()> {
     let _child_no_vg = world.spawn(ChildOf(parent_entity)).id();
 
     // child_c: VisualGraphics あり
-    let child_c_visual = dcomp.create_visual()?;
+    let child_c_visual = factory.create_visual()?;
     let child_c = world
         .spawn((
             Visual::default(),
@@ -181,17 +169,12 @@ fn test_children_without_visual_graphics_are_safely_skipped() -> Result<()> {
 #[test]
 fn test_many_siblings_alternating_archetypes_visual_hierarchy() -> Result<()> {
     let graphics = setup_graphics()?;
-    let d2d = graphics.d2d_device().expect("D2Dデバイスが無効");
-    let dcomp_resource = DCompGraphicsResource::new(d2d).expect("DCompGraphicsResource作成失敗");
-    let dcomp = dcomp_resource
-        .dcomp()
-        .expect("dcomp device should exist")
-        .clone();
+    let factory = WucVisualFactory::new(&graphics)?;
 
     let mut world = World::new();
     world.insert_resource(graphics);
 
-    let parent_visual = dcomp.create_visual()?;
+    let parent_visual = factory.create_visual()?;
     let parent_entity = world
         .spawn((
             Visual::default(),
@@ -202,7 +185,7 @@ fn test_many_siblings_alternating_archetypes_visual_hierarchy() -> Result<()> {
     // 交互に異なるアーキタイプの子を spawn
     let mut child_entities = Vec::new();
     for i in 0..5 {
-        let child_visual = dcomp.create_visual()?;
+        let child_visual = factory.create_visual()?;
         let entity = if i % 2 == 0 {
             world
                 .spawn((
