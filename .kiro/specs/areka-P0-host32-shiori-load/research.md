@@ -151,3 +151,79 @@ proxy 実装はアプローチ A、**fixture 供給だけを別立て**にする
 
 - 上記リサーチフラグ（特に vendors/pasta 展開と ABI 一次確認）と設計判断 a〜d を要件ディスカッションで詰める。
 - 確定後 `/kiro-design areka-P0-host32-shiori-load` で設計文書を生成する。
+
+---
+
+# 設計フェーズ discovery ＆ synthesis（2026-07-02・design 生成時追記）
+
+> 種別: **Extension（light discovery）**。上流 transport は凍結・利用可能で、本ユニットは既存 seam（helper の `respond` echo・`classify_inbound` の `Load` 分岐）へ結線するのみ。新規 greenfield ではない。
+
+## 8. 設計フェーズ discovery（既存資産の一次確認）
+
+light discovery を既存コードの直読で実施した（外部 WebSearch は不要——依存は全て社内既存 API と Win32 の枯れた FFI）。確認済み事実:
+
+- **helper の差し替え点は 2 箇所**（`crates/shiori-host32-helper/src/main.rs`）:
+  - `fn respond(req)->req.to_vec()`（L54-56・echo stub）。
+  - `fn classify_inbound(...)`（L79-85）が `MsgTag::Load` を `InboundAction::IgnoreKnown(Load)` へ写像（L82 の `Ok((tag,_))` 総称アーム）。classify_tests（L307-313）が「Load は IgnoreKnown」を固定しており、**このテスト期待の書き換えが Load 結線の一次差分**。
+  - WndProc `handle_message`（L145-176）は `InboundAction` を見て副作用（`send_copydata(Response)`・カウンタ）を行う。純ロジック／副作用の分離が既に確立済み。
+- **親→helper の LOAD 送出手段は追加コード不要**: `ParentMessageWindow::send_request(tag, payload, timeout)`（`parent_window.rs:320`）は **任意タグ**を取れる。親側 `classify_inbound`（`parent_window.rs:81-95`）は `MsgTag::Response`→`StoreResponse` を**送出タグに関係なく**処理し `ResponseSlot` へ store する。ゆえに親が `send_request(MsgTag::Load, &[], t)` を発行し、helper が `Response`（1 byte bool）を返せば、**既存の再入 RESPONSE 経路（`send_request`→`SendMessageTimeout`→WndProc `StoreResponse`→`slot.take`）にそのまま乗る**（凍結 wire 不改変・設計判断 b の裏取り）。
+- **spawn の起動パラメーター規約は arg1＋env の実績あり**: `process_host.rs:125-137` の `spawn(helper_exe, ghostdir, parent_hwnd)` は parent_hwnd を **arg1（10進 u32）＋ env `HOST32_PARENT_HWND`** で渡し、ghostdir は **`current_dir` のみ（arg 化されていない）**。helper 側 `parent_hwnd_from_env()`（`main.rs:230-237`）は arg1 優先・env fallback。**この既存 2 経路パターンを load_dir・SHIORI 名へ横展開する**のが本ユニットの spawn 契約拡張（設計判断 a）。
+- **FFI 足場は helper に皆無**: `Cargo.toml`（L17-23）の windows features は `DataExchange`/`WindowsAndMessaging`/`Foundation` のみ。`LibraryLoader`/`Memory`/`Globalization` は未宣言＝意図的追加（リサーチフラグ 2）。
+- **ABI 一次源は本 worktree で未展開**: `git submodule status` が `-048d646…vendors/pasta`（leading `-`＝未 init）。`vendors/pasta/crates/pasta_shiori/src/windows.rs` は**読めない**。`[patch.crates-io] pasta_core = { path = "vendors/pasta/crates/pasta_core" }`（workspace `Cargo.toml:34-35`）の path 先も**欠落**＝`git submodule update --init` 未実行だと workspace 全体 cargo が壊れうる。ABI は pilot `shiori_proxy.rs` の二次記録（windows.rs:50/63/76 を引用）に依拠。**design 実装着手前に submodule 展開＋ABI バイト再確認が前提**（リサーチフラグ 1・下記 Risk R1）。
+- **fixture cdylib の前例は無い**: workspace のどの crate も `crate-type=["cdylib"]` を宣言していない。テスト用最小 SHIORI DLL は**新規 i686 cdylib crate**として起こす（helper と同じ i686 専用ビルド扱い）。
+
+## 9. Synthesis（3 レンズ適用）
+
+### 9.1 Generalization
+- R2（3 エクスポート解決）・R3（load 呼出＋charset）・R4（ack）・R6（cdecl ABI）は「**helper 内 FFI プロキシ `ShioriByteProxy` という単一境界**」の別断面。プロキシ型に module handle＋3 fn ポインタ＋HGLOBAL 所有権＋ANSI 符号化＋`unsafe` を集約すれば、これら全要件が 1 コンポーネントで充足し、下流 request/lifecycle が同じ型に `request` 呼出・常駐 unload を**追加**できる（インタフェースを一般化・実装は load のみ）。
+- R1（Load 結線）・R4（ack）は「**`InboundAction` enum に `LoadDll` バリアントを 1 つ足し、WndProc が proxy を構築→`load`→bool を `Response` で返す**」という既存純ロジック分離パターンの再適用。新パターンを発明しない。
+
+### 9.2 Build vs. Adopt
+- **Adopt（既存）**: 上流 transport 一式（`send_request`/`ResponseSlot`/`copydata_payload`/framing）、Win32 の `LoadLibraryW`/`GetProcAddress`/`GlobalAlloc`/`WideCharToMultiByte`（windows crate 0.62.2・既存 workspace 依存）。charset は windows crate の `CP_ACP` で足り、`encoding_rs` は**不要**（brief 制約と一致）。
+- **Build（新規・最小）**: `ShioriByteProxy`（helper 内・pilot はコピペせず知見のみ）、最小 SHIORI DLL fixture（host-32 トラック所有の新 i686 cdylib crate）。いずれも「既存解が無い／葉ノード隔離で pilot を参照できない」ため自作が正当。
+
+### 9.3 Simplification
+- **trait 抽象を設けない**（YAGNI・凍結 seam は WM_COPYDATA wire であって proxy 実装ではない）。`ShioriByteProxy` は具体型 1 つ。
+- **独立クレート化（アプローチ B）を却下**: i686 専用クレートを増やすと x64 ビルドの cfg/target 分離が煩雑。proxy は helper と同じ i686 ゆえ **helper 内モジュール分離（新ファイル `shiori_proxy.rs`）で足りる**（アプローチ A 採用）。
+- **LOAD payload を空トリガに純化**（設計判断 a 決着）＝wire 符号化論点が消滅。パスは起動パラメーター経由。
+- **ack に新タグを設けない**（設計判断 b）＝既存 `MsgTag::Response`（1 byte bool）で足りる。
+- **fixture は本物 pasta を主役にしない**（設計判断 c 決着）＝数KB の自作 DLL で FFI パス全網羅＋失敗パスを決定的化。
+
+## 10. Design Decisions（design.md の裏付け）
+
+### Decision: (a) load 入力は起動パラメーター（arg＋env）で供給・LOAD は空トリガ
+- **選択**: `spawn` を拡張し load_dir と SHIORI 名を **arg（arg2/arg3）＋env fallback（`HOST32_LOAD_DIR`/`HOST32_SHIORI_NAME`）** で渡す。LOAD メッセージは payload 空のトリガに純化。
+- **根拠**: parent_hwnd の既存 arg1＋env 規約の横展開＝実績パターン。wire は不改変。SHIORI 名は ukadoc `descript.txt` `shiori,<名>`（既定 `shiori.dll`）由来だが、descript 解釈は親／package-mount の領分で helper は名前を受け取るのみ。
+- **Trade-off**: ✅ 凍結 wire 不改変・cwd 依存排除。❌ spawn シグネチャ変更が上流 `shiori-host32-host` に及ぶ（launch パラメーター拡張であって wire ではない・許容）。
+
+### Decision: (b) load-ack は MsgTag::Response（1 byte bool）で既存再入経路に乗せる
+- **選択**: 親は `send_request(MsgTag::Load, &[], timeout)` で LOAD トリガを送る。helper は `load` の bool を `[0u8]`/`[1u8]` 1 バイトとして `MsgTag::Response` で返送。親は `ResponseSlot` で受領し `bytes==[1]` を成功と判定。
+- **代替**: 専用 ack タグ追加（却下＝`MsgTag` 定義は凍結・改変不可）。
+- **根拠**: 親の `Response`→`StoreResponse` は送出タグ非依存。追加 wire ゼロ。single-in-flight・SMTO_ABORTIFHUNG timeout の無デッドロック保証をそのまま継承。
+- **Follow-up**: helper `classify_inbound` を「`Load`→新 `LoadDll` トリガ」へ、WndProc を「proxy 構築→load→`Response(1 byte)` 返送」へ結線。
+
+### Decision: (c) 最小 SHIORI DLL fixture を新 i686 cdylib crate として host-32 トラックに持つ
+- **選択**: 新 crate `crates/shiori-host32-testdll`（`crate-type=["cdylib"]`・既定成果物名 `shiori.dll`・flat-C `load`/`unload`/`request` を最小実装）。i686-pc-windows-msvc 専用ビルド（helper と同じ扱い）。E2E テストは env（`HOST32_TESTDLL` 等）で解決、無ければ target 配下を探索し無ければ明示 panic（`echo_roundtrip.rs` 方式）。本物 emo2 pasta は `HOST32_PASTA_DLL` env-gated の任意 confidence。
+- **代替**: 本物 pasta を主 fixture（却下＝3.4MB・pilot 配下参照は葉ノード隔離違反・失敗パス模擬困難）。fixture を pilot からコピー（却下＝production→pilot グレーゾーン）。
+- **根拠**: helper の FFI パスは DLL 中身に非依存。数KB DLL で load 成功／`load→false`／解決失敗を決定的網羅。`crates/pilot` を一切参照しないため葉ノード隔離を自然遵守。
+- **Follow-up**: cdylib は名前が `shiori.dll` になるよう `[lib] name` を設定。ghost fixture 最小構成（`ghost/master/shiori.dll`）を testdll crate の `tests` 用にどう配置するか（build 出力を直接指すのが最小）。
+
+### Decision: (d) teardown は ShioriByteProxy の Drop に courtesy unload + FreeLibrary（RAII）
+- **選択**: `ShioriByteProxy`（実体は解決済みエントリを持つ型）の `Drop` で `unload()` を呼び（bool 失敗は致命としない）続けて `FreeLibrary`。常駐 lifecycle（恒常 unload・生存監視）は下流所有のまま。
+- **根拠**: pilot `ShioriEntries` の Drop 方式＝プロセス／DLL リーク防止・RAII 一貫。要件 5.5 の「courtesy は許容・常駐所有ではない」に整合。`unload` fn ポインタ解決は本ユニット（要件 2.6）。
+- **Trade-off**: ✅ リーク防止・後始末が確定的。❌ プロセス終了時 Drop でも二重にならないよう module handle は型で一意所有（多重 Drop を型で防止）。
+
+## 11. Risks & Mitigations（設計フェーズ更新）
+
+- **R1（High→設計前提化）ABI 一次源未検証**: `vendors/pasta` submodule 未展開ゆえ `pasta_shiori/src/windows.rs` のバイト正確な署名を本 worktree で確認できない。→ **実装着手前に `git submodule update --init` を実行し、windows.rs:50/63/76 で `load(HGLOBAL,usize)->bool` / `unload()->bool` / `request(HGLOBAL,*mut usize)->HGLOBAL` を再確認**（design 前提条件として明記）。同時に `[patch.crates-io] pasta_core` の path 解決も回復し workspace cargo 健全性を担保。
+- **R2（Medium）unsafe FFI の production 品質再実装**: transmute・生ポインタ・二重解放禁止（load 入力 HGLOBAL は DLL 解放）。→ `unsafe` を `ShioriByteProxy` 型に集約、pilot の所有権規約（入力=callee 解放）を SAFETY コメントで固定。fixture DLL で `load→false`・解決失敗を決定的テスト化。
+- **R3（Medium）i686 ビルドトラップ**: PowerShell 必須（Git Bash link.exe 遮蔽）。`usize`=32bit ゆえ dwData/ULONG_PTR は u64 評価。→ 既存 `copydata_payload` の u64 マスク方針を踏襲。fixture cdylib と helper を `cargo build --target i686-pc-windows-msvc` で回す。
+- **R4（Low）実バイナリ内部前提**: pasta 内部スレッド等の仮説に依存しない（要件 5.4）。→ 観測契約を `load` 同期 bool＋無クラッシュのみに限定。
+
+## 12. References
+- pilot 知見 donor（参照のみ・コピペ禁止）: `crates/pilot/examples/shiori-host-32/shiori_proxy.rs`（FFI シーケンス・HGLOBAL 所有権・charset 非対称・ABI 二次記録 windows.rs:50/63/76）。
+- 上流凍結 transport: `crates/shiori-host32-ipc/src/lib.rs`（`MsgTag`・`send_request`・`ResponseSlot`・`copydata_payload`）、`crates/shiori-host32-host/src/{process_host.rs,parent_window.rs}`（`spawn`・`ParentMessageWindow::send_request`・`classify_inbound`）。
+- 既存結線点: `crates/shiori-host32-helper/src/main.rs`（`respond`・`classify_inbound`・`InboundAction`・`handle_message`）。
+- E2E テスト前例: `crates/shiori-host32-host/tests/echo_roundtrip.rs`（実 helper spawn＋実 WM_COPYDATA 往復・exe 解決・HelperGuard）。
+- ABI バイト正確源（要 submodule 展開）: `vendors/pasta/crates/pasta_shiori/src/windows.rs`・正本 `doc/COMPAT_ARCHITECTURE.md`。
+- ukadoc（SHIORI 名の出所・正典）: `descript.txt` の `shiori,<ファイル名>`（既定 `shiori.dll`）。
