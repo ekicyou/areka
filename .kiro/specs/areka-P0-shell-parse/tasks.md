@@ -96,7 +96,7 @@
   - _Boundary: validation_tests_
   - _Depends: 5.1_
 
-- [ ] 6.2 emo2 fixture スモークと subset 外吸収の検証を追加する
+- [x] 6.2 emo2 fixture スモークと subset 外吸収の検証を追加する
   - emo2 実物 fixture の代表抜粋をリテラルで parse し、パニックせず・スコープ内機能（surface/element/animation/collision/append/alias）を解釈し切ることを確認する（唯一の適合基準とはしない）
   - subset 外機能を含む断片が吸収され、隣接する認識可能ブロックを壊さないことを確認する
   - スモーク＋吸収テストが緑になる

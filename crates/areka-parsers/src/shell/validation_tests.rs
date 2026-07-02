@@ -277,3 +277,330 @@ fn comment_and_blank_only_input_yields_empty_shell() {
         }
     );
 }
+
+// --- タスク 6.2: emo2 実物 fixture スモーク（要件 10.3）と subset 外吸収（要件 4.5/5.7/6.3/9.2）---
+//
+// 6.1 の自前適合断片が「唯一の適合基準」（ukadoc）を厳密照合するのに対し、ここでは
+// emo2 実物 fixture（crates/pilot/examples/shiori-host-32/fixtures/emo2/shell/master/surfaces.txt）
+// の代表抜粋を**リテラル転記**し、パニックせず・スコープ内機能（surface/element/animation/
+// collision/append/alias）を解釈し切ることを**緩め**に確認する（emo2 は最小適合サンプルであって
+// 書式の聖典ではない・要件 10.2/10.3）。`include_str!` はクレート跨ぎを避けるため用いない。
+
+/// emo2 実物 fixture の代表抜粋（VERBATIM 転記）を `parse` に通し、パニックせず
+/// スコープ内機能を解釈し切ることをスモーク検証する（要件 10.3）。
+///
+/// 転記元の実行（fixture 行番号は 2026-07-02 時点）:
+/// - surface0（L10-13）: `element0,overlay,surface0.png,0,0`（element overlay）。
+/// - surface1000（L20-117 抜粋）: `collision0,93,62,271,130,Head` / `animation1100.interval,bind` /
+///   `animation1400.interval,bind+random,4` ＋疎 pattern（pattern1/2/3・pattern0 欠番）。
+/// - surface1100（L125-128）: 単一 element overlay のヘルパー surface。
+/// - surface1410（L211-215）: 複数 element（element0/element1）。
+/// - surface.append10,2100-2110,2200-2210（L415-419）: 範囲ターゲット＋collision。
+/// - surface.append2110（L443-448）: random interval＋負 ID センチネル pattern（`-1`）。
+/// - kero.surface.alias（L458-507 抜粋）: 数値/日本語キー・重複キー・複数 ID。
+///
+/// アサートは 6.1 より緩く「パースが通り・スコープ内機能が解釈されている」ことに絞る
+/// （非空・期待 kind の存在）。偶発的な全値の固定化はしない（要件 10.3）。
+#[test]
+fn emo2_fixture_representative_excerpt_smoke() {
+    // emo2 実物 fixture からの VERBATIM 抜粋（改行・区切り・番号は転記元のまま）。
+    let input = "\
+charset,UTF-8
+descript
+{
+version,1
+}
+
+//########################################################################################
+// \\0
+//########################################################################################
+surface0
+{
+element0,overlay,surface0.png,0,0
+}
+
+surface1000
+{
+// --- collision ---
+collision0,93,62,271,130,Head
+collision1,133,270,229,326,Bust
+
+// --- 腕 [z=1] ---
+animation1100.interval,bind
+animation1100.pattern0,overlay,1100,0,0,0
+
+// まばたき [z=4]：通常
+animation1400.interval,bind+random,4
+animation1400.pattern1,overlay,1412,0,0,0
+animation1400.pattern2,overlay,1411,150,0,0
+animation1400.pattern3,overlay,1410,22,0,0
+}
+
+// --- 腕 ---
+surface1100
+{
+element0,overlay,purple/0/base1.png,0,0
+}
+
+surface1410
+{
+element0,overlay,purple/a/eyebase.png,0,0
+element1,overlay,purple/4/normal.png,0,0
+}
+
+//\\1
+surface.append10,2100-2110,2200-2210
+{
+collision0,52,38,156,80,Head
+collision1,82,163,140,186,Bust
+}
+
+surface.append2110
+{
+animation0.interval,random,4
+animation0.pattern0,overlay,2106,0,0,0
+animation0.pattern3,overlay,-1,160,0,0
+}
+
+//########################################################################################
+//エイリアス
+kero.surface.alias
+{
+0,[2100]
+6,[2106,2206]
+通常,[2100]
+静観,[2106,2206]
+100,[2100]
+100,[2100]
+}
+";
+
+    // (a) パニックしない（スモークの第一義・要件 10.3）。
+    let shell = parse(input);
+
+    // (b) スコープ内機能が解釈され切っている（非空・期待 kind の存在）。
+
+    // --- surface / element ---
+    assert!(!shell.surfaces.is_empty(), "surface が解釈されていない");
+    // surface0 の存在と単一 element overlay。
+    let s0 = shell
+        .surfaces
+        .iter()
+        .find(|s| s.id == 0)
+        .expect("surface0 が存在しない");
+    assert_eq!(s0.elements.len(), 1);
+    assert_eq!(s0.elements[0].layer, 0);
+    // 画像パスは不透明保持（無加工・要件 4.3）。
+    assert_eq!(s0.elements[0].path.as_str(), "surface0.png");
+    // 複数 element を持つ surface1410（element0/element1）。
+    let s1410 = shell
+        .surfaces
+        .iter()
+        .find(|s| s.id == 1410)
+        .expect("surface1410 が存在しない");
+    assert_eq!(s1410.elements.len(), 2, "複数 element が解釈されていない");
+
+    // --- collision（surface1000）---
+    let s1000 = shell
+        .surfaces
+        .iter()
+        .find(|s| s.id == 1000)
+        .expect("surface1000 が存在しない");
+    assert_eq!(s1000.collisions.len(), 2, "collision が解釈されていない");
+    // ukadoc 順序 left/top/right/bottom（要件 6.1）で転記値が入っている。
+    assert_eq!(
+        s1000.collisions[0],
+        Collision {
+            index: 0,
+            left: 93,
+            top: 62,
+            right: 271,
+            bottom: 130,
+            name: CollisionName::new("Head".to_string()),
+        }
+    );
+
+    // --- animation（interval 3 種と疎 pattern）---
+    // bind interval（animation1100）。
+    let a1100 = s1000
+        .animations
+        .iter()
+        .find(|a| a.id == 1100)
+        .expect("animation1100 が存在しない");
+    assert_eq!(a1100.interval, Interval::Bind);
+    // bind+random,4 interval（animation1400）＋疎 pattern（pattern0 欠番・1/2/3 のみ）。
+    let a1400 = s1000
+        .animations
+        .iter()
+        .find(|a| a.id == 1400)
+        .expect("animation1400 が存在しない");
+    assert_eq!(a1400.interval, Interval::BindRandom { k: 4 });
+    assert_eq!(a1400.patterns.len(), 3, "疎 pattern が解釈されていない");
+    // pattern index は転記元の 1/2/3（連番前提を置かない・要件 5.4）。
+    assert_eq!(
+        a1400.patterns.iter().map(|p| p.index).collect::<Vec<_>>(),
+        vec![1, 2, 3]
+    );
+
+    // --- append（範囲ターゲット＋負 ID センチネル）---
+    assert!(!shell.appends.is_empty(), "append が解釈されていない");
+    // 範囲ターゲットを持つ append（surface.append10,2100-2110,2200-2210）。
+    let range_append = shell
+        .appends
+        .iter()
+        .find(|a| {
+            a.targets
+                .contains(&AppendTarget::Range { start: 2100, end: 2110 })
+        })
+        .expect("範囲ターゲットの append が存在しない");
+    // ヘッダ数値 10 は第1要素 Single、範囲は展開せず記述子保持（要件 7.2）。
+    assert_eq!(
+        range_append.targets,
+        vec![
+            AppendTarget::Single(10),
+            AppendTarget::Range { start: 2100, end: 2110 },
+            AppendTarget::Range { start: 2200, end: 2210 },
+        ]
+    );
+    assert_eq!(range_append.collisions.len(), 2);
+    // 負 ID センチネル pattern を持つ append（surface.append2110）。
+    let blink_append = shell
+        .appends
+        .iter()
+        .find(|a| a.targets == vec![AppendTarget::Single(2110)])
+        .expect("surface.append2110 が存在しない");
+    assert_eq!(blink_append.animations.len(), 1);
+    let blink_anim = &blink_append.animations[0];
+    assert_eq!(blink_anim.interval, Interval::Random { k: 4 });
+    // `pattern3,overlay,-1,...` の -1 は負センチネルとして i64 保持（要件 5.5）。
+    let neg = blink_anim
+        .patterns
+        .iter()
+        .find(|p| p.surface_id < 0)
+        .expect("負 ID センチネル pattern が存在しない");
+    assert_eq!(neg.surface_id, -1);
+
+    // --- alias（数値/日本語キー・重複キー・複数 ID）---
+    assert!(!shell.aliases.is_empty(), "alias が解釈されていない");
+    // 日本語キーが不透明保持されている（要件 8.2）。
+    assert!(
+        shell.aliases.iter().any(|a| a.key.as_str() == "通常"),
+        "日本語 alias キーが解釈されていない"
+    );
+    // 複数 ID を持つ alias（`6,[2106,2206]`）。
+    let alias6 = shell
+        .aliases
+        .iter()
+        .find(|a| a.key.as_str() == "6")
+        .expect("alias キー 6 が存在しない");
+    assert_eq!(alias6.ids, vec![2106, 2206]);
+    // 重複キー `100`（fixture に 2 回出現）は潰さず全保持（要件 8.4）。
+    let key100_count = shell.aliases.iter().filter(|a| a.key.as_str() == "100").count();
+    assert_eq!(key100_count, 2, "重複 alias キーが潰されている");
+}
+
+/// subset 外機能を含む emo2 風の複合断片を**公開 `parse` 経由**で通し、subset 外が
+/// 吸収され（materialize されない）、隣接する認識可能ブロックが壊れないことを検証する
+/// （要件 4.5/5.7/6.3/9.2）。
+///
+/// タスク 4.6 は同性質を decode レイヤの合成断片で検証済み。ここは**バリデーション層で
+/// 公開 facade を通す**補完で、emo2 風の実在感ある断片を用いる（重複ではない）。
+///
+/// 断片は認識可能ブロックの「間」に subset 外を挟む:
+/// - 非 overlay element メソッド（`element1,base,...`）→ 吸収（overlay 兄弟は残る・要件 4.5）。
+/// - 非 overlay pattern メソッド（`pattern0,replace,...`）→ 吸収（overlay 兄弟は残る・要件 5.7）。
+/// - 3 種以外の interval（`sometimes` / `periodic`）→ 正規化せず既定 Bind へ倒す（要件 5.7）。
+/// - `collisionex`（円/楕円/多角形）→ 吸収（純 collision は残る・要件 6.3）。
+#[test]
+fn subset_out_features_absorbed_via_public_parse_without_breaking_neighbors() {
+    let input = "\
+charset,UTF-8
+
+// 先頭の認識可能 surface（完全に解釈されるべき）。
+surface100
+{
+element0,overlay,body.png,0,0
+collision0,10,20,110,220,Head
+animation0.interval,bind
+animation0.pattern0,overlay,200,0,0,0
+}
+
+// 間に挟む subset 外を含む surface。valid 行のみ materialize される。
+surface200
+{
+// 非 overlay element メソッド（base）は吸収され、overlay 兄弟は残る（要件 4.5）。
+element0,base,bg.png,0,0
+element1,overlay,face.png,0,0
+
+// collisionex（多角形）は吸収され、純 collision は残る（要件 6.3）。
+collisionex0,polygon,1,2,3,4,5,6,Face
+collision0,30,40,130,240,Bust
+
+// 3 種以外の interval（sometimes）は正規化されず既定 Bind へ倒れ、pattern は失われない（要件 5.7）。
+animation0.interval,sometimes,5
+// 非 overlay pattern メソッド（replace）は吸収され、overlay 兄弟は残る（要件 5.7）。
+animation0.pattern0,replace,900,0,0,0
+animation0.pattern1,overlay,901,50,0,0
+}
+
+// 末尾の認識可能 surface（完全に解釈されるべき）。
+surface300
+{
+element0,overlay,tail.png,7,8
+}
+";
+
+    let shell = parse(input);
+
+    // --- 隣接する認識可能ブロックが壊れていないこと ---
+    let s100 = shell
+        .surfaces
+        .iter()
+        .find(|s| s.id == 100)
+        .expect("先頭 surface100 が壊れた");
+    assert_eq!(s100.elements.len(), 1);
+    assert_eq!(s100.elements[0].path.as_str(), "body.png");
+    assert_eq!(s100.collisions.len(), 1);
+    assert_eq!(s100.animations.len(), 1);
+    assert_eq!(s100.animations[0].interval, Interval::Bind);
+    assert_eq!(s100.animations[0].patterns.len(), 1);
+
+    let s300 = shell
+        .surfaces
+        .iter()
+        .find(|s| s.id == 300)
+        .expect("末尾 surface300 が壊れた");
+    assert_eq!(s300.elements.len(), 1);
+    assert_eq!(s300.elements[0].path.as_str(), "tail.png");
+    assert_eq!(s300.elements[0].x, 7);
+    assert_eq!(s300.elements[0].y, 8);
+
+    // --- subset 外が吸収され、valid 行のみ materialize されていること ---
+    let s200 = shell
+        .surfaces
+        .iter()
+        .find(|s| s.id == 200)
+        .expect("中間 surface200 が消えた");
+
+    // element: base 吸収・overlay のみ残る。転記した唯一の overlay は face.png（layer 1）。
+    assert_eq!(s200.elements.len(), 1, "非 overlay element が吸収されていない");
+    assert_eq!(s200.elements[0].layer, 1);
+    assert_eq!(s200.elements[0].path.as_str(), "face.png");
+
+    // collision: collisionex 吸収・純 collision のみ残る。
+    assert_eq!(
+        s200.collisions.len(),
+        1,
+        "collisionex が吸収されていない"
+    );
+    assert_eq!(s200.collisions[0].name.as_str(), "Bust");
+    assert_eq!(s200.collisions[0].left, 30);
+
+    // animation: sometimes は既定 Bind へ倒れ、replace pattern は吸収・overlay pattern のみ残る。
+    assert_eq!(s200.animations.len(), 1);
+    let a = &s200.animations[0];
+    assert_eq!(a.interval, Interval::Bind, "非 3 種 interval が正規化された");
+    assert_eq!(a.patterns.len(), 1, "非 overlay pattern が吸収されていない");
+    assert_eq!(a.patterns[0].index, 1);
+    assert_eq!(a.patterns[0].surface_id, 901);
+}
