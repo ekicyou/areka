@@ -34,7 +34,7 @@
   - _Depends: 1.2_
 
 - [ ] 3. Integration: 判定ループ結線と起動フック
-- [ ] 3.1 UI スレッド判定・適用ループの結線（二重起床・post-tick 評価）
+- [x] 3.1 UI スレッド判定・適用ループの結線（二重起床・post-tick 評価）
   - `spawn_local` の async ループを UI スレッドで駆動。起床契機はカーソル移動 notify と既存 VSync tick の二重化。listen-before-work 規律を踏襲
   - 評価は当該フレームの ECS tick 完了後（post-tick・`GlobalArrangement`／`AlphaMask`／`DragState` 確定後）に実行。レジストリの各対象窓についてワーカ最新カーソル座標を窓クライアント座標へ変換し `hit_test_in_window` を呼ぶ（座標変換は既存経路へ委譲）
   - 判定結果で desired を決め、`last_applied` と異なる時のみトグル API を 1 回適用し、適用成功後にレジストリへ書き戻す単一経路。表示層（GPU 合成）は変更しない
@@ -78,3 +78,10 @@
   - _Requirements: 10.1, 10.2, 10.3, 7.3, 6.3_
   - _Boundary: docs_
   - _Depends: 3.1_
+
+## Implementation Notes
+
+- `PhysicalPoint` は文脈で2型ある: `crate::ecs::PhysicalPoint`（=`Point`・**i32**、cursor/registry/drag 用）と `crate::ecs::layout::hit_test::PhysicalPoint`（=`PointF`・**f32**、`hit_test_in_window` の引数型）。座標変換は i32 のまま `client = cursor_screen - WindowPos.position` を計算し、`hit_test_in_window` 呼び出し時に `PointF::new(x as f32, y as f32)` へ明示キャストする（符号: client = cursor − position）。3.1 で確認済み。
+- クリック透過機構の結線 API（3.1 確定）: `ClickThroughController::start(world: Weak<RefCell<EcsWorld>>, registry: Rc<RefCell<ClickThroughRegistry>>, wake_event: Arc<event_listener::Event>) -> ClickThroughHandle`。二重起床は**単一の共有 `Arc<Event>`** を cursor worker と VSync tick 源の両方が notify する方式（select 併用なし）。`CursorMonitorBridge::spawn(wake_event.clone())` で worker が同一 event を叩く。tick 源が wake_event を post-tick で notify する結線は **3.2 の領分**。registry は `Rc<RefCell<..>>` 共有ゆえ start 後に窓を register/remove 可能（handle 経由）。
+- `last_applied` 単一所有: 書き戻しは `apply_click_through` が `Ok` の時のみ（`Err` は据え置き＋`warn!`・次サイクル再試行）。
+- cargo は **PowerShell 必須**（Git Bash の coreutils `link.exe` が MSVC link を遮蔽）。worktree では `git submodule update --init`（vendors/pasta）済み。
