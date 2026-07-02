@@ -87,7 +87,7 @@ emo2 が起動して喋る。下記 5 トラックを結線して達成（⓪ �
 - `areka-P0-sakura-parse` — emo2 タグ subset→token。✔ boot script を token 化
 - `areka-P0-parser-foundation` — **パーサー共通基盤**: charset デコード（冒頭 `charset` 行→encoding_rs 再デコード・全パーサー共通）＋ KV 読み込み（素朴マップ・surface 以外の全パーサー共通）。✔ charset 付き入力→KV マップ化（旧 `areka-P0-balloon-parse` を 2026-07-02 開発リジェクト→リネーム。知見は同 brief に集約）。**✅ 完了（2026-07-02・spec=`completed/areka-P0-parser-foundation`）**: `charset::decode`（BOM 読飛→冒頭ASCIIプリスキャン→宣言/既定 encoding_rs デコード）＋ `kv::parse_kv`（素朴 BTreeMap・後勝ち・trim）を `areka-parsers` に確立（encoding_rs 0.8 承認済追加・144 テスト緑）。下流 `shell-parse ∥ balloon-parse ∥ package-mount` の foundation 依存を充足
 - `areka-P0-shell-parse` — surfaces.txt/descript→surface モデル（foundation 依存）。✔ emo2 shell parse
-- `areka-P0-balloon-parse` — balloon 3段参照優先度（sXXs/kXXs 起点＞descript＞既定）解決→モデル（foundation 依存・着手時に再切り出し）。✔ emo2-kakukaku parse
+- `areka-P0-balloon-parse` — balloon 3段参照優先度（sXXs/kXXs 起点＞descript＞既定）解決→モデル（foundation 依存・着手時に再切り出し）。✔ emo2-kakukaku parse。**✅ 完了（2026-07-02・spec=`completed/areka-P0-balloon-parse`）**: `areka_parsers::balloon`（`model`＝幾何＋フォント subset 型群・`Option` 直持ちで未指定＝`None` を `Some(0)` と区別・`#[non_exhaustive]`／`parse`＝descript＋画像別の後勝ち2層マージ→exact-key 写像・符号保持・寛容 None 降格）を確立。emo2-kakukaku 実物 fixture（R5.1/5.2/5.3）を charset→parse_str で適合検証、distractor キー非漏洩も固定（172 テスト緑・新規依存ゼロ）
 - `areka-P0-package-mount` — install.txt/dir→mount（foundation 依存）。✔ emo2 layout 解決
 
 **runtime 制御階層（上→下に駆動・両 anim engine は dola 上）**

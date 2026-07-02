@@ -4,6 +4,7 @@
 //! 下流エンジンは型付き命令モデルのみを import して利用する。
 //! 兄弟モジュール（shell / balloon / package 等）は各 spec が追加する。
 
+pub mod balloon;
 pub mod charset;
 pub mod kv;
 pub mod sakura;
