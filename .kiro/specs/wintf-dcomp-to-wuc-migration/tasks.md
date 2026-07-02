@@ -38,6 +38,8 @@
   - _Depends: 1.3_
   - _Descoped (owner 2026-07-02): wintf は i686 非対象（表示合成は x64/arm64 のみ・i686 は helper 専用）。本タスクは実施しない。_
 
+> **タスク再編（owner 承認 2026-07-02「無理ならタスク整理して実行」）**: 設計 Option C の in-place 型差し替えでは、`components.rs` の 3 コンポーネント（WindowGraphics.target / VisualGraphics.inner / SurfaceGraphics.inner）とその消費側システムが `SetRoot(target, visual)` 等で**型レベルで一体**であり、2.2〜2.5 を個別に green build できない。よって **2.2・2.3・2.4・2.5・3.1（ライブ登録切替）を「コア合成カットオーバー」一体ユニットとして実装**し、3.1 完了時点で green build を復帰させる（中間の赤は squash-merge で消える・[[areka-commit-as-you-go]]）。3.2（DComp 定義撤去）・4.x は従来どおり別立て。各サブタスクは論理単位でコミットしつつ、検証・完了マークは green 復帰時にまとめて行う。
+
 - [ ] 2. コア: 層別 DComp→WUC 差し替え（層順序厳守）
 - [x] 2.1 WucGraphicsResource を実装し合成デバイス層を WUC 化
   - **着手前**: 本タスク以降が触る既存本体ファイルと変更内容を design.md「File Structure Plan」に基づき依頼者へ提示して確認を得る（要件 10.1／不確実 API は 10.2 に従い確認）
