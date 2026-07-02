@@ -217,6 +217,8 @@ R10.3「brain が `Get` 処理中に呼んでも**同期**で値応答」の実�
 
 ## 6. 設計ディスカッションへ挙げる設計判断事項（分析であり決定ではない）
 
+> **✅ 全項目決着（2026-07-02・設計フェーズ）**: (a) は discussion #1 で、(b)〜(g) は設計生成時に §8 の記録どおり確定し、`design.md` に反映済み。
+
 1. **(a) windows-core 実装可否の確定形** — **✅ 決着（2026-07-02 discussion #1）**: **薄い unsafe ラッパ二層を採用（wintf 確立手法）**。vtable 面=`unsafe` PascalCase メソッド（型付き引数 `Ref`/`OutRef`/`&HSTRING` で本体を空洞化）／安全面=**snake_case のインヘレント安全メソッド**（`Get`→`get`・`Notify`→`notify`・`create`／`get_property`／`set_property`）が `Result` 値返しを担う。**`ShioriExt` トレイト形式は廃止**し snake_case インヘレントへ置換。**独立 spike 不要**——最初の ABI スケルトンタスク（既存 vtable dispatch テストと同型）で compile 実証を兼ねる。メソッド `pub` 化による vtable 直呼びハック全廃を**波及範囲に含める**（R12.5 に反映済み）。
 2. **(b) GetProperty 同期応答の実現位置**: sink 内蔵プロパティストア（案 a・推奨寄り）vs areka ECS への同期コールバック（案 b・並行モデルと衝突リスク）vs ハイブリッド（案 c）。「`Get` 呼出中に areka がストアロックを保持しない」再入規約の明文化を含む。M1 最小 key 集合の確定も design 論点。
 3. **(c) spawn シグネチャの進化形**: 位置引数拡張（案 a・最小差分）vs `SpawnConfig` struct（案 b・将来拡張耐性）。arg 順序（arg1=parent_hwnd 維持か）・env キー名（`HOST32_LOAD_DIR`/`HOST32_SHIORI_NAME`）・`echo_roundtrip.rs`/`error_paths.rs` の吸収方針。
@@ -233,3 +235,44 @@ R10.3「brain が `Get` 処理中に呼んでも**同期**で値応答」の実�
 - **プロパティシステムの M1 最小 key 集合**: ukadoc プロパティシステム（`mcp__ukadoc__` で `list_propertysystem` 系を参照）から emo2 が実際に使う dotted パスを特定し、GetProperty の欠落 key 応答を決める。
 - **Load 用 timeout の適正値**: WndProc 内同期 `LoadLibraryW`＋`load()` の所要（testdll は数 ms・pasta 実 DLL は actor 起動込み）を計測し、E2E と親側呼出規約の timeout を確定。
 - **`#[implement]` と新 interface 群の結線最終確認**: §2 の静的証明を最初の ABI タスクでコンパイル実証（独立 spike にしない前提の確認事項）。
+
+---
+
+## 8. 設計フェーズ Discovery 補強と設計判断の確定（2026-07-02・design 生成時）
+
+### 8.1 Light Discovery（Extension 型）— 実コード再検証の結果
+
+§1 の全事実をソース直読で再確認した（差異なし）:
+
+- `process_host.rs`: `spawn(helper_exe, ghostdir, parent_hwnd)` は `ghostdir` を `current_dir` のみで運ぶ。`PARENT_HWND_ENV`＝「arg1 優先・env fallback・10進 u32」契約と `spawn_command` seam を確認。
+- `helper main.rs`: `classify_inbound` が `Load` を `InboundAction::IgnoreKnown` に分類（67–85 行）。`HelperShared` は `parent_hwnd`＋`Cell<u64>` カウンタのみ。`REPLY_TIMEOUT=5s`。`parent_hwnd_from_env()`（arg1→env）。helper `Cargo.toml` の windows features は 3 種のみ（LibraryLoader/Memory/Globalization が不足）。
+- `shiori-abi`: `interface.rs` の raw 署名（`Load(*mut c_void)`/`Unload`/`Request(*const,*mut,*mut)`）、`ergonomic.rs` の `ShioriExt` vtable 直呼び＋HRESULT 3 分岐マッピング、`error.rs` の `SHIORI_S_PENDING(0x20A1_0001)`/`SHIORI_E_NOT_LOADED(0xA0A1_0002)`/`SHIORI_E_UNKNOWN_TOKEN(0xA0A1_0003)`＋FACILITY 0xA1・customer bit 規約、`outcome.rs` の `RequestOutcome`/`CorrelationToken`/`CorrelationTokenAllocator`。
+- `areka` consumer: `reference_brain.rs`（`loaded: AtomicBool`・`held_host: RefCell<Option<IShioriHost>>`・`shiori_create` C 入口）、`shiori_session.rs`/`shiori_host.rs`/e2e 群の `call_raise`/`call_complete` vtable 直呼びハック（grep 実測で多数）。
+- workspace `Cargo.toml`: members は `crates/*` ワイルドカード → testdll crate は配置のみで自動参加。`[patch.crates-io] pasta_core` 未展開問題も再確認。
+
+### 8.2 §6 開放判断の確定（design.md へ反映済み）
+
+| 項目 | 決定 | 根拠 |
+|---|---|---|
+| (a) 二層構造 | **✅ 済（discussion #1）**: 薄い unsafe ラッパ二層・snake_case インヘレント安全面・`ShioriExt` 廃止・メソッド `pub` 化 | wintf 確立手法・§2 静的証明 |
+| (b) GetProperty 同期応答 | **案 a（sink 内蔵ストア）採用**: `Mutex<HashMap<String, HSTRING>>` を sink に内蔵し `GetProperty` は即答・`SetProperty` は即書き。**再入規約**「areka は `Get`/`Notify` 呼出中にプロパティストアのロックを保持しない」を契約化。欠落 key は **`SHIORI_E_PROPERTY_NOT_FOUND`（新設・失敗 HRESULT）** で決定的に観測（空 HSTRING 返しは「空値の key」と区別不能ゆえ却下）。M1 最小 key 集合（ukadoc プロパティシステムの dotted パス）は実装フェーズで確定する注記を design に明記 | 実装最小・並行モデル（案 b の ECS 同期コールバック）との衝突回避・R1.2 と同じ「暗黙既定値で続行しない」哲学 |
+| (c) spawn シグネチャ | **案 a（位置引数拡張）採用**: `spawn(helper_exe, load_dir, shiori_name, parent_hwnd)`。子への供給は arg1=parent_hwnd（現行 helper 読み取り互換を維持）・arg2=load_dir・arg3=shiori_name＋env 3 種（`HOST32_PARENT_HWND`/`HOST32_LOAD_DIR`/`HOST32_SHIORI_NAME`）＋cwd=load_dir 維持。`SpawnConfig` struct は本仕様単独では YAGNI（下流 lifecycle でパラメーターが実際に増えた時に導入すればよい）。吸収は `echo_roundtrip.rs:132`/`error_paths.rs:300` の 2 箇所のみ | 最小差分・`PARENT_HWND_ENV` 慣行の同型拡張 |
+| (d) testdll E2E 解決 | env `HOST32_TESTDLL_DLL` 優先 → `target/i686-pc-windows-msvc/{debug,release}/shiori.dll` 探索 → 不在なら明確 panic（`resolve_helper_exe` 慣行）。load_dir 成立は **一時 dir へ DLL コピー**方式を採用（`load_dir\shiori.dll` と cwd=load_dir の伺か慣習を同時検証・target dir 直指しは load_dir の意味が薄まるため却下）。**エクスポート欠落 fixture は別ビルド variant を作らない**: 欠落態様は helper クレートの i686 単体テストで `kernel32.dll`（`load` エクスポートを持たない実在 DLL）に対する解決失敗（`EntryNotFound`）として決定的に検証し、E2E の失敗パスは「DLL 不在」＋「env 強制 `load`→false」で代表する（「あらゆる ProxyError → ack[0]」は単一の写像コードパスであり E2E 2 態様で貫通が証明できる） | cargo feature variant は同一 target-dir でのアーティファクト衝突リスク・段取り複雑化に見合わない |
+| (e) 実装順序 | WS-A / WS-B は**完全並行タスクグループ**（§1.2 の依存グラフ実測どおり）。順序制約は「submodule 展開 → WS-A proxy 実装（署名バイト確認 R13.5）」のみ。submodule 展開は workspace cargo 解決の全体前提でもあるため**最初のタスク**とする | §1.2 実測 |
+| (f) error.rs 語彙 | `SHIORI_E_NOT_LOADED`／`ShioriError::NotLoaded` は**削除**（create 融合で「未ロード状態の IShiori」が契約上消滅）。`LoadFailed`→**`CreateFailed`**・`RequestFailed`→**`GetFailed`** に改名、**`NotifyFailed`** を新設。`SHIORI_E_PROPERTY_NOT_FOUND = make_shiori_failure(0x0004)`＋`ShioriError::PropertyNotFound` を新設。`SHIORI_E_UNKNOWN_TOKEN` は存置し、安全面での判別性向上のため **`ShioriError::UnknownToken`** 変種を新設（従来は `Com` 落ち）。`Com` は catch-all として存置 | 語彙とABI 契約の整合・判別可能性 |
+| (g) 改名と Notify 観測 | `RequestOutcome`→**`GetOutcome`** に改名（`Immediate`/`Deferred` 変種・`CorrelationToken`/allocator は不変）。reference brain の `Notify` 観測は **`notifications: RefCell<Vec<HSTRING>>` 受領ログ**（`AsImpl` ダウンキャストで test から読む既存慣行）で担保 | `Get` との命名整合・応答なし片道の観測可能性 |
+
+### 8.3 追加の設計確定（§7 持ち越し分の決着）
+
+- **Load 用 timeout 方針**: 凍結 wire の `send_request` は呼出ごとに timeout を取るため ipc 改変不要。host クレートに **`pub const LOAD_ACK_TIMEOUT: Duration = Duration::from_secs(30)`** を推奨既定として新設し、LOAD の `send_request(MsgTag::Load, &[], LOAD_ACK_TIMEOUT)` と E2E で使用する（echo の 5s と別建て。実 DLL は actor 起動等で load が数百 ms〜数秒かかりうる・`SMTO_ABORTIFHUNG` がハング検出を担保）。実測調整は実装フェーズ。
+- **helper 必須起動パラメーター欠落時**: `parent_hwnd` 前例と同じ**起動時 exit(2)**（HELLO 不達＋プロセス終了として親から決定的に観測可能）。半構成の helper を生かさない（R3.5）。
+- **Load 再受領（proxy 確立済みで再度 Load）**: reload-in-place はしない（R2.4）。確立済みなら **ack[1] を冪等再送**（`load` を再呼出しない）。
+- **ack ペイロード契約**: `MsgTag::Response`・厳密 1 byte・`[0x01]`=成功／`[0x00]`=失敗。定数は host/helper 各クレートでローカル定義（凍結 ipc へ定数追加はしない・E2E が両端一致を固定）。
+- **新 IID 採番**: 3 interface とも実装時に新規 v4 GUID を採番（PowerShell `[guid]::NewGuid()`）し、既存慣行どおり IID 固定回帰テストで固定（旧 IID との相違も assert）。
+- **プロパティ key 名前空間**: ukadoc プロパティシステムの dotted パス準拠（契約面のみ・R10.5）。M1 最小 key 集合は実装フェーズで ukadoc MCP を参照して確定。
+
+### 8.4 Synthesis（design-synthesis 適用結果）
+
+- **一般化**: (i) helper 起動パラメーター供給は「arg-n 優先・env fallback・`pub const` env キー」の**単一パターン**へ一般化（parent_hwnd/load_dir/shiori_name の 3 適用）。(ii) 安全面レイヤは「vtable=unsafe PascalCase／安全面=snake_case インヘレント」の**単一規約**で 3 interface（Factory/Shiori/Host）へ一様適用。(iii) D1/D7 は WS-A（proxy）と WS-B（session/brain）で同一原則の 2 実現として設計。
+- **Build vs Adopt**: windows-core `#[interface]`/`#[implement]` を継続採用（§2 で制約込み実証済み・自作 vtable は不採用）。FFI は Win32 API 直（LoadLibraryW/GetProcAddress/GlobalAlloc/WideCharToMultiByte）で新規外部依存ゼロ。fixture も `windows` クレートのみ。
+- **単純化**: 新設クレートは testdll の 1 個のみ（proxy は helper 内モジュール・factory/安全面は既存 shiori-abi 内）。helper に trait 抽象を導入しない（前 spec の YAGNI 判断を踏襲）。`ShioriExt` トレイトを廃止し層を 1 枚減らす。`SpawnConfig` struct を導入しない。エクスポート欠落 DLL variant を作らない。reload-in-place を作らない。
