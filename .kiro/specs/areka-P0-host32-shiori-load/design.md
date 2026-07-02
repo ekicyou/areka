@@ -322,6 +322,7 @@ pub fn spawn(
 - 起動パラメーター取得: `parent_hwnd_from_env` を一般化した「arg-n 優先・env fallback」純関数で load_dir（arg2/`HOST32_LOAD_DIR`）・shiori_name（arg3/`HOST32_SHIORI_NAME`）を取得。**値は arg/env から取得し cwd から推測しない**（R3.4）。欠落時は exit(2)（R3.5・parent_hwnd 前例）。
 - 本仕様の範囲で呼ぶのは `load` のみ（`request` 呼出は下流・R4.3。courtesy unload は Drop 経由の例外）。
 - ロード失敗後も WndProc/メッセージループは継続（プロセス生存・R6.4）。
+- **RefCell 再入規律（不変条件・validation issue #1）**: `proxy` の `RefCell` borrow を `send_copydata`（ブロッキング SMTO・WndProc 再入を許す）越しに**保持しない**。「proxy 確立→borrow 終了→ack 送出」の順序を固定し、再入 WndProc からの borrow 衝突（`BorrowMutError` panic＝R6.4 違反）を構造的に排除する（sink の R10.3 再入規約と同型の規律）。
 
 **Contracts**: Service [x] / Event [x]
 
@@ -383,7 +384,7 @@ impl Drop for ShioriByteProxy { /* courtesy unload（best-effort・結果無視�
 
 **Implementation Notes**
 - Integration: pilot `shiori_proxy.rs` は**知見参照のみ**（コピペ禁止・R13.4）。`dwData`/ULONG_PTR 由来の演算は u64 幅（R13.3・本モジュールでは該当箇所最小）。
-- Validation: i686 単体テスト（PowerShell・R13.2）——パス組立・ANSI 符号化の純関数部＋`kernel32.dll` への `EntryNotFound`（エクスポート欠落態様の決定的証明・設計判断 (d)）。
+- Validation: i686 単体テスト（PowerShell・R13.2）——パス組立・ANSI 符号化の純関数部＋`kernel32.dll` への `EntryNotFound`（エクスポート欠落態様の決定的証明・設計判断 (d)）＋**Drop teardown 実証**（i686 テストプロセス内で testdll を直接 `load`→drop し、courtesy `unload` の実呼出（testdll の unload 観測マーカー）と無 panic を確認・R2.2 の受入証拠・validation issue #2。E2E は helper をプロセスとして落とすため Drop 経路が実行されない補完）。
 - Risks: FFI 本体は pilot 実証済みだがコピペ禁止での再実装＋二重解放規約の厳守が要注意（Medium）。
 
 #### TestDll（`shiori-host32-testdll` 新設クレート）
@@ -396,7 +397,7 @@ impl Drop for ShioriByteProxy { /* courtesy unload（best-effort・結果無視�
 **Responsibilities & Constraints**
 - `crate-type=["cdylib"]`・`[lib] name="shiori"` → 出力 `shiori.dll`（数 KB 規模・R7.1）。flat-C 3 エクスポート（`#[unsafe(no_mangle)] pub unsafe extern "cdecl"`）を実装。
 - `load`: 受領 HGLOBAL を `GlobalFree`（callee 解放規約の忠実な再現＝ホスト側二重解放バグの検出器を兼ねる）。env `HOST32_TESTDLL_LOAD_FAIL=1`（spawn 前に親が set→子が継承）で `false` を強制（R7.2）。
-- `unload`: `true` 返し。`request`: 最小 stub（null 返し・本仕様では呼ばれないが解決対象・R4.2）。
+- `unload`: `true` 返し＋Where env（例 `HOST32_TESTDLL_UNLOAD_MARKER`=ファイルパス）指定時は観測マーカー（ファイル作成）で呼出を観測可能化（Drop teardown テストの決定的証拠・R2.2・validation issue #2）。`request`: 最小 stub（null 返し・本仕様では呼ばれないが解決対象・R4.2）。
 - 依存は `windows`（`Win32_Foundation`/`Win32_System_Memory`）のみ・`crates/pilot` 非依存（R7.7）。x64 ビルドでも無害（未使用 dll ができるだけ）。
 
 **Contracts**: Service [x]（flat-C・§ShioriByteProxy の署名と同一）
@@ -664,6 +665,7 @@ pub unsafe extern "system" fn shiori_factory(out: *mut *mut c_void) -> HRESULT
 3. `spawn` 契約: arg1..3＋env 3 種＋cwd の同値供給（既存 stand-in 手法の拡張・R3.1/3.2/3.3）。
 4. `error.rs`: `0xA0A1_0004` 採番固定・削除定数の不在・新語彙マッピング（R8.6/10.5 系）。
 5. `ShioriHostSink` プロパティストア: set→get 往復・欠落 key=`PropertyNotFound`・`Get` 実装内からの `get_property` 再入同期応答（R10.3）・別スレッド set（スレッド安全）。
+6. `ShioriByteProxy` Drop teardown（i686・validation issue #2）: テストプロセス内で testdll を直接 `load`→drop し、courtesy `unload` の実呼出（testdll の unload 観測マーカー）と `FreeLibrary` 後の無 panic を確認（R2.1/R2.2 の受入証拠・E2E では Drop 経路が実行されないことの補完）。
 
 ### Integration Tests
 
