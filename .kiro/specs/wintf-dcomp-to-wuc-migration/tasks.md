@@ -4,11 +4,12 @@
 > **変更前提示ゲート（要件 10.1/10.2）**: 既存本体コードを触る各タスク（2.1 以降）は、着手前に design.md「File Structure Plan」の対象ファイルと変更内容を依頼者へ提示して確認を得る。不確実な Win32/WinRT API・クレート仕様は推測せず確認する。
 
 - [ ] 1. 基盤: features・interop・スパイク検証
-- [ ] 1.1 WUC features と windows-numerics をルート Cargo.toml へ追加しビルド疎通
+- [x] 1.1 WUC features と windows-numerics をルート Cargo.toml へ追加しビルド疎通
   - `windows` に `UI_Composition`/`UI_Composition_Desktop`/`Win32_System_WinRT`/`Win32_System_WinRT_Composition`/`System`/`Foundation`/`Graphics_DirectX` を追加し、`windows-numerics = "0.3"` を依存追加
   - 既存 DComp features（`Win32_Graphics_DirectComposition`）は残置（ULW/`CompositionMode` enum が参照）
-  - 観測可能な完了: `cargo build` と `cargo build --release`（`opt-level='z'`・`lto=true`）が x64 で通過し、i686 ターゲットもビルド成功する
-  - _Requirements: 8.1, 8.4_
+  - 観測可能な完了: `cargo build` と `cargo build --release`（`opt-level='z'`・`lto=true`）が x64 で通過する
+  - _Requirements: 8.1_
+  - _Descoped (owner 2026-07-02): i686 ビルドは対象外。wintf は表示合成レイヤーで x64/arm64 のみ、i686 は helper 専用クレート。要件 8.4 の 32bit 可搬節は wintf にはアーキ矛盾ゆえ x64 のみで判定。arm64 検証も後回し（x64 完了後の別仕様）。_
 
 - [ ] 1.2 com/wuc interop Ext ラッパー群を実装し往復を単体テスト
   - `ICompositorInterop::CreateGraphicsDevice`・`ICompositorDesktopInterop::CreateDesktopWindowTarget`・`ICompositionDrawingSurfaceInterop::BeginDraw`/`EndDraw` を `Result` 返却の安全ラッパーへ包み、unsafe を局所化する
@@ -35,6 +36,7 @@
   - 観測可能な完了: i686 ビルドのスパイクが x64 と同一の 1 サーフェス等価描画を表示する
   - _Requirements: 8.4_
   - _Depends: 1.3_
+  - _Descoped (owner 2026-07-02): wintf は i686 非対象（表示合成は x64/arm64 のみ・i686 は helper 専用）。本タスクは実施しない。_
 
 - [ ] 2. コア: 層別 DComp→WUC 差し替え（層順序厳守）
 - [ ] 2.1 WucGraphicsResource を実装し合成デバイス層を WUC 化
@@ -110,7 +112,12 @@
   - _Depends: 3.1_
 
 - [ ] 4.4 回帰・可搬性の最終確認
-  - `ulw_present_system` 非回帰、デバイスロスト→WUC Resource 再生成、当たり判定・`compute_ex_style`（`WS_EX_NOREDIRECTIONBITMAP`）の不変、release（z/LTO）ビルド、i686 ランタイムを確認する
-  - 観測可能な完了: ULW アーム非回帰・デバイスロスト再生成・release/i686 が通り、当たり判定と窓フラグ透過挙動が移行前と等価に保たれる
-  - _Requirements: 8.1, 8.4, 9.1, 9.2, 9.3_
+  - `ulw_present_system` 非回帰、デバイスロスト→WUC Resource 再生成、当たり判定・`compute_ex_style`（`WS_EX_NOREDIRECTIONBITMAP`）の不変、release（z/LTO）ビルドを確認する（i686 は descope・x64 のみ）
+  - 観測可能な完了: ULW アーム非回帰・デバイスロスト再生成・release が通り、当たり判定と窓フラグ透過挙動が移行前と等価に保たれる
+  - _Requirements: 8.1, 9.1, 9.2, 9.3_
   - _Depends: 3.1, 3.2_
+
+## Implementation Notes
+
+- **i686/arm64 descope（owner ekicyou 2026-07-02）**: wintf は表示合成レイヤーで **x64 or arm64 のみ**。i686（x86）は SHIORI 駆動 helper 専用の別クレートで、wintf は i686 ターゲットにならない。ゆえに task 1.1 の i686 節・task 1.5・task 4.4 の i686 ランタイム・要件 8.4 の 32bit 可搬は本移行では x64 のみで判定（arch 矛盾の spec 誤り）。arm64 検証も後回し＝x64 完了後にオプション別仕様。**当面 x64 のみを意識する**。（参考: full wintf lib を i686 build すると既存 `api.rs`/`window_factory.rs` の `SetWindowLongPtr` isize/i32 不一致で落ちるが wintf x86 非対象ゆえ修正不要）
+- **1.1 完了（x64）**: ルート `Cargo.toml` に WUC features＋`windows-numerics=0.3.1` は着手時点で working tree に存在。x64 `cargo build -p wintf`（exit 0）・`cargo build -p wintf --release`（z/LTO・exit 0）通過。DComp feature `Win32_Graphics_DirectComposition` 残置確認。
