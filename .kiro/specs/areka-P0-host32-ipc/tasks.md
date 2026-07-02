@@ -36,7 +36,7 @@
   - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5_
   - _Boundary: ProcessHost_
   - _Depends: 1_
-- [ ] 4.2 (P) ParentMessageWindow（HELLO 記録・ハンドシェイク）
+- [x] 4.2 (P) ParentMessageWindow（HELLO 記録・ハンドシェイク）
   - message-only 親窓を生成し、WndProc で HELLO payload を復号して helper HWND を共有状態へ記録＝ハンドシェイク完了を観測する
   - `pump_until_hello_or(timeout)` を bounded に回し（heartbeat で無入力でも起床）、期限内未受領は `HandshakeError::Timeout` とする
   - 観測可能な完了: 親窓生成後、HELLO 受領で helper HWND が確定し pump が `Some(hwnd)` を返す／未受領で `None`（Timeout）を返すことを観測できる
