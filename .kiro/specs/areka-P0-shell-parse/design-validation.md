@@ -53,3 +53,11 @@
 - **判定: GO**
 - **根拠**: 要件ディスカッションで確定した 4 論点と research の 6 設計決定がすべて design.md 本文で解決され、アーキ整合・境界・追跡性・実行可能性に致命的欠落がない。残る 2 点は fixture/ukadoc で一意に定まる実装細目の明確化候補であり、実装移行のブロッカーではない。
 - **次ステップ**: 明確化候補 1・2 を設計ディスカッションで軽く確認のうえ、`/kiro-spec-tasks areka-P0-shell-parse` でタスク生成へ進む。
+
+---
+
+## 追記（設計ディスカッション #1 後・2026-07-02）
+
+> 本レポートは design-generated スナップショットに対する GO 判定である。判定後の設計ディスカッション #1 で、明確化候補 1（`surface.append` ヘッダ数値）を正典（ukadoc）準拠へ**是正**した。よって上記「§7.2.1 append 範囲展開＝parse 時 inclusive 展開 `Vec<u32>`」の記述は**現行 design.md では無効**。
+>
+> **確定内容**: パーサは append ターゲットを**展開せず記述子で保持**（`SurfaceAppend.targets: Vec<AppendTarget>`・`AppendTarget = Single(u32) | Range{start,end}`）。ヘッダ数値は id リストの第1要素として一様に扱い、「カテゴリ番号」の二役分岐は廃止。範囲の個別 ID 展開と surface 定義ツリーへの転記は下流のツリー構築側の責務。詳細は research.md §7.2(1)/§7.4・design.md §Data Models を参照。GO 判定自体は変更なし。

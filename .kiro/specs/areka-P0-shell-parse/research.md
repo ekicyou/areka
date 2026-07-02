@@ -162,7 +162,7 @@ Option B の四層を主軸としつつ、`descript { ... }` ブロック内の 
 
 ### 7.2 主要決定事項の確定（§6 の 6 項目）
 
-1. **surface.append 範囲展開**: **parse 時に inclusive 展開**（`a-b` は端点包含・ukadoc `surface0-2`=0,1,2 準拠）。`SurfaceAppend.targets: Vec<u32>`。要件 7.2「解決」= parse 時展開と解釈。
+1. **surface.append ターゲット保持**: **parse 時に展開しない・記述子で保持**（設計ディスカッション #1 で確定）。`SurfaceAppend.targets: Vec<AppendTarget>`（`AppendTarget = Single(u32) | Range{start,end}`・`#[non_exhaustive]`）。ヘッダ数値も列挙・範囲と同格の第1要素として一様に保持（fixture 由来の「カテゴリ番号」特別扱いは廃止）。範囲 `a-b` の inclusive 展開（ukadoc `surface0-2`=0,1,2 準拠）と surface 定義ツリーへの転記は**下流のツリー構築側の責務**。要件 7.2 は「ターゲット指定の忠実な捕捉」＝parse は転記のみ、と解釈。
 2. **surface 定義 vs append 統一/別型**: **別トップレベル型**（`Surface` と `SurfaceAppend`）。内部 collision/animation は同一型を共有（要件 7.3「同一のモデル表現」を型共有で満たす）。
 3. **重複 alias キー保持**: **順序保持 `Vec<SurfaceAlias>`**（`SurfaceAlias{ key: AliasKey(opaque), ids: Vec<u32> }`）。BTreeMap/multimap 不可（要件 8.4・全出現保持）。
 4. **pattern index 疎保持**: `Pattern{ index: u32, ... }` を `Vec<Pattern>` で保持。連番前提を置かず疎許容（fixture の `pattern1/2/3` 欠番例準拠・要件 5.4）。
@@ -175,11 +175,11 @@ Option B の四層を主軸としつつ、`descript { ... }` ブロック内の 
 - `animation*.pattern*,描画メソッド,サーフェス番号,ウェイト,X,Y`。**負サーフェス番号: `-1`=当該アニメ停止 / `-2`=全アニメ停止**（描画メソッド/XY は無視）→ `Pattern.surface_id: i64` でセンチネル保持し「レイヤクリア」意味付けは下流委譲（要件 5.5）。
 - `animation*.interval` は `+` で組合せ（SSP のみ）→ emo2 は `bind`/`random,N`/`bind+random,N` の 3 種のみ（`Interval` enum・他は吸収）。
 - `overlay` = ベースへ新規レイヤ重ね（着せ替えでは add/bind と同効果）。
-- `surface0-2` 記法 = 0,1,2（範囲 inclusive）→ `expand_targets` 端点包含の根拠。
+- `surface0-2` 記法 = 0,1,2（範囲 inclusive）→ `AppendTarget::Range` の意味（両端含む）の根拠。展開自体は下流。`surface`/`surface.append` 直後の数値は id リストの第1要素（`surface0-2` の先頭 `0` を含むのと一様）。
 
 ### 7.4 設計フェーズで生じた解決済み論点（非ブロッキング）
 
-- **surface.append ヘッダ数値の扱い**: `surface.append10,2100-2110,2200-2210`（ヘッダ `10` はカテゴリ番号・実ターゲットは後続列挙）と `surface.append2200 { ... }`（列挙なし・ヘッダ自身がターゲット）の 2 形が fixture に共存。**決定: 後続に列挙/範囲フィールドがあればそれらのみをターゲットとし、列挙が無ければヘッダ数値自身をターゲットとする**（両 fixture 形と整合・要件 7.1/7.2 を満たす）。ukadoc に明示のない実装細目だが fixture で一意に定まるため質問不要。
+- **surface.append ヘッダ数値の扱い**（設計ディスカッション #1 で正典準拠へ**是正**）: 当初 design は fixture 由来で「ヘッダ `10` はカテゴリ番号・後続列挙のみがターゲット」と推測していたが、ukadoc の surface スコープ id リスト文法（`surface0-2` が先頭 `0` を含む 0,1,2 と一様に解釈される）に照らすと、`surface`/`surface.append` 直後の数値は **id リストの第1要素**である。**確定: ヘッダ数値を第1要素として一様に保持し、二役分岐は設けない**（`surface.append10,2100-2110,2200-2210` → `[Single(10), Range{2100,2110}, Range{2200,2210}]`／`surface.append2200 { ... }` → `[Single(2200)]`）。emo2 で surface 10 が未定義でも、実在しない対象への append を無視するのは下流の役割。emo2 は聖典にあらず・正典は ukadoc（議論 #2 原則の適用）。
 
 ### 7.5 レビューゲート結果
 

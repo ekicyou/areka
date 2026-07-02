@@ -23,6 +23,7 @@
 - emo2 未使用の SERIKO method（`overlayfast`/`base`/`replace`/`interpolate`/`asis`/`move`/`add`/`reduce`）・interval（`sometimes`/`periodic`/`always`/`runonce`/`never`/`talk,n` 等）・`collisionex`（円/楕円/多角形）・element 座標オフセット。
 - charset バイト列のデコード（`areka-parsers::charset` 共通基盤の領分。本 parser は UTF-8 デコード済み `&str` を入力に取る）。
 - PNG 画像の読み込み・検証（パーサはパス文字列を保持するのみ）。
+- **`surface.append` のターゲット範囲展開（`a-b` → 個別 ID 群）と、追記内容の surface 定義ツリーへの転記（流し込み）**。パーサは「これは追記定義であり、対象は〈このターゲット指定（ヘッダ数値・列挙・範囲を第1要素から順に保持）〉である」と転記するのみ。範囲の展開と実サーフェスへの結び付けはツリー構築側（下流）の責務。
 
 ## Boundary Commitments
 
@@ -30,7 +31,7 @@
 
 - `areka_parsers::shell` モジュールと、その公開面に集約されるシェルサーフェスモデル型（`Shell` ルート・`Surface`・`Element`・`Animation`・`Interval`・`Pattern`・`Collision`・`SurfaceAppend`・`SurfaceAlias` と opaque NewType `ElementPath` / `AliasKey` / `CollisionName`）。
 - 単一公開 facade `pub fn parse(input: &str) -> Shell`（`Result` 無し・寛容パス・純粋決定的）。
-- surfaces.txt 固有の構文解析（ブロック `surfaceNNN { ... }` / ドット付きキー `animationN.interval` / 行指向 CSV / `[id,...]` 配列値）と、意味正規化（`animationN` 集約・`surface.append` ターゲット範囲展開・alias 写像）。
+- surfaces.txt 固有の構文解析（ブロック `surfaceNNN { ... }` / ドット付きキー `animationN.interval` / 行指向 CSV / `[id,...]` 配列値）と、意味正規化（`animationN` 集約・`surface.append` ターゲット指定捕捉〔範囲は記述子で保持・展開しない〕・alias 写像）。
 - 上記モデル型の**正本**（型定義の所有権）。下流はこれを import するのみで再定義しない。
 
 ### Out of Boundary
@@ -52,7 +53,7 @@
 - モデル公開型のシグネチャ変更（フィールド追加/削除・accessor 変更）。`#[non_exhaustive]` variant 追加は後方互換ゆえ再検証不要だが、既存 variant の意味変更は要再検証。
 - `parse` の関数シグネチャ変更（入出力型）。
 - opaque NewType の accessor 契約変更（`as_str` / `id` 等の read-only 面）。
-- surface.append のターゲット解決方針変更（parse 時展開 → 記述子保持への転換など）。
+- surface.append のターゲット保持方針変更（範囲記述子保持 ⇄ parse 時展開の転換・展開責務の parser/下流間の移動）。
 - 依存方向の変更（外部 crate 追加・他モジュールへの依存追加）。
 
 ## Architecture
@@ -156,7 +157,7 @@ graph TB
     AliasBlock{kero surface alias block}
     Comment{comment or blank or unknown}
     BuildSurface[collect elements collisions animations]
-    ExpandTargets[expand target ids ranges inclusive]
+    CaptureTargets[capture target specs single range no expand]
     MapAlias[map key to id list order preserving]
     Absorb[tolerantly absorb continue]
     Assemble[assemble Shell root]
@@ -169,11 +170,11 @@ graph TB
     Iterate --> AliasBlock
     Iterate --> Comment
     SurfaceBlock --> BuildSurface
-    AppendBlock --> ExpandTargets
+    AppendBlock --> CaptureTargets
     AliasBlock --> MapAlias
     Comment --> Absorb
     BuildSurface --> Assemble
-    ExpandTargets --> Assemble
+    CaptureTargets --> Assemble
     MapAlias --> Assemble
     Absorb --> Assemble
 ```
@@ -181,7 +182,7 @@ graph TB
 **Flow-level decisions**:
 - **charset 行 / descript ブロックの寛容スキップ**: 先頭 `charset,VALUE` 行と `descript { ... }` ブロック（fixture では `descript` / `{` / `version,1` / `}` の複数行形）を認識して読み飛ばし、モデルに保持しない（要件 3.1/3.2）。欠落時も既定状態で継続（要件 3.3）。
 - **animationN 集約**: `animationN.interval,...` と複数の `animationN.patternM,...` を同一 animation ID `N` の下へ束ねる意味層状態機械。interval 行は始点（ukadoc: 一連 animation 定義で最初に記述）。
-- **append ターゲット範囲展開**: `surface.appendNNN,tgt,a-b,...` の全ターゲット（ヘッダ `NNN` を含むか否かは §Data Models で確定）を parse 時に inclusive 展開して `Vec<u32>` へ解決する（要件 7.2）。
+- **append ターゲット指定の捕捉（展開しない）**: `surface.appendNNN,tgt,a-b,...` のターゲット指定を、ヘッダ数値 `NNN` を**第1要素**とし後続の列挙・範囲を続けた順序付きリスト（`Single`/`Range` 記述子）として**そのまま保持**する。範囲 `a-b` の個別 ID 展開と、対象 surface ツリーへの転記（流し込み）は下流の責務（要件 7.2・ヘッダ数値の特別扱いはしない）。
 - **未知/不正の局所吸収**: 認識できない行/ブロックは吸収して後続の認識可能ブロックのパースを継続する（要件 9.2/9.3）。パニックしない。
 
 ## Requirements Traceability
@@ -216,8 +217,8 @@ graph TB
 | 6.1 | collision 行を index/矩形/名へ | decode, model | `Collision` | — |
 | 6.2 | 領域名を opaque 保持 | model | `CollisionName` | — |
 | 6.3 | 矩形以外（collisionex）を寛容吸収 | decode | passthrough シーム | 局所吸収 |
-| 7.1 | `surface.appendNNN { ... }` を追記定義保持 | decode, model | `SurfaceAppend` | append ブロック |
-| 7.2 | 複数列挙・範囲ターゲットを全解決 | decode | `expand_targets` | 範囲展開 |
+| 7.1 | `surface.appendNNN { ... }` を追記定義（ターゲット指定＋collision/animation）保持 | decode, model | `SurfaceAppend` | append ブロック |
+| 7.2 | 複数列挙・範囲ターゲットを記述子で捕捉（展開・転記は下流） | decode, model | `parse_targets`, `AppendTarget` | ターゲット捕捉 |
 | 7.3 | 追記の collision/animation を通常と同一表現 | model | 共有 `Collision`/`Animation` | — |
 | 8.1 | alias エントリを key→id リスト写像保持 | decode, model | `SurfaceAlias` | alias 写像 |
 | 8.2 | alias キーを opaque 保持・非解釈 | model | `AliasKey` | — |
@@ -253,12 +254,12 @@ graph TB
 | Field | Detail |
 |-------|--------|
 | Intent | シェルサーフェスモデルの下流共有 I/O 契約型を定義（型の正本） |
-| Requirements | 1.1, 1.2, 1.3, 1.4, 1.5, 3.4, 5.5, 8.4, 10.5 |
+| Requirements | 1.1, 1.2, 1.3, 1.4, 1.5, 3.4, 5.5, 7.2, 8.4, 10.5 |
 
 **Responsibilities & Constraints**
 - 全公開型に `#[derive(Clone, Debug, PartialEq)]`（座標に `i64`/`u32` を使い浮動小数を持たないため `Eq`/`Hash` 付与も可能だが、sakura 規律に倣い `serde` は付さず、最小派生に留める）。
 - opaque NewType（`ElementPath` / `AliasKey` / `CollisionName`）はフィールド非公開・`new()` コンストラクタ＋read-only accessor（`as_str`）のみ公開（要件 1.3・dola `ActorKey` 流儀）。
-- enum（`Interval`）は `#[non_exhaustive]`（要件 1.4）。将来の interval/method 追加を後方互換に保つ。ルート `Shell` 型も将来の descript header 保持に備えフィールド追加余地を残す（要件 3.4・ただし 2 例目の実需まで追加しない・要件 10.5）。
+- 公開 enum（`Interval`・`AppendTarget`）は `#[non_exhaustive]`（要件 1.4）。将来の interval/method・ターゲット指定種別追加を後方互換に保つ。ルート `Shell` 型も将来の descript header 保持に備えフィールド追加余地を残す（要件 3.4・ただし 2 例目の実需まで追加しない・要件 10.5）。
 - 意味の解釈を下流に委譲する値（element パス・alias キー・collision 名）は opaque 保持し、パーサは解釈しない。
 
 **Dependencies**
@@ -356,13 +357,27 @@ impl CollisionName {
     pub fn as_str(&self) -> &str { &self.0 }
 }
 
-/// surface.append 追記定義（ターゲット展開済み・要件 7）。
+/// surface.append 追記定義（ターゲット指定は記述子で保持・展開しない・要件 7）。
 /// collision/animation は通常 surface と同一型（要件 7.3）。
 #[derive(Clone, Debug, PartialEq)]
 pub struct SurfaceAppend {
-    pub targets: Vec<u32>,           // 複数列挙・範囲を parse 時に inclusive 展開（要件 7.2）
+    /// ターゲット指定（ヘッダ数値を第1要素とする単一/範囲の順序付きリスト）。
+    /// 範囲の個別 ID 展開・実 surface ツリーへの転記は下流の責務（要件 7.2）。
+    pub targets: Vec<AppendTarget>,
     pub collisions: Vec<Collision>,
     pub animations: Vec<Animation>,
+}
+
+/// surface.append のターゲット指定要素（parse 時展開しない・要件 7.2）。
+/// `surface.append10,2100-2110` → `[Single(10), Range{start:2100,end:2110}]`。
+/// ヘッダ数値も列挙要素と同格の第1要素（カテゴリ番号等の特別扱いはしない）。
+#[non_exhaustive]
+#[derive(Clone, Debug, PartialEq)]
+pub enum AppendTarget {
+    /// 単一 surface ID。
+    Single(u32),
+    /// 範囲指定 `a-b`（両端含む・展開は下流のツリー構築側が担う）。
+    Range { start: u32, end: u32 },
 }
 
 /// kero.surface.alias の 1 エントリ KEY,[id,...]（要件 8）。
@@ -425,7 +440,7 @@ impl AliasKey {
 - **charset 行 / descript ブロックのスキップ**: retain せず読み飛ばす（要件 3.1/3.2/3.3）。
 - **surface ブロック decode**: element/collision/animation 行を対応型へ。element はレイヤ昇順で保持（要件 4.4）。overlay 以外の element method は寛容吸収（要件 4.5）。
 - **animationN 集約**: `animationN.interval` と複数 `animationN.patternM` を同一 ID `N` の `Animation` へ束ねる状態機械。interval が始点（ukadoc 準拠）。pattern index は明示保持し疎を許容（要件 5.4・fixture に `pattern1/2/3` のみの例あり）。3 種以外の interval は寛容吸収（要件 5.7）。
-- **append ターゲット範囲展開**: `expand_targets` が `NNN` / 単一 ID / `a-b` 範囲（inclusive・ukadoc `surface0-2`=0,1,2 に準拠）を parse 時に `Vec<u32>` へ全展開（要件 7.2）。collision/animation は通常 surface と同一型で保持（要件 7.3）。
+- **append ターゲット指定の捕捉（展開しない）**: `parse_targets` がヘッダ数値 `NNN`・単一 ID・`a-b` 範囲を、出現順の `Vec<AppendTarget>`（`Single`/`Range`）へ**そのまま捕捉**する。ヘッダ数値は第1要素として一様に扱い、範囲の個別 ID 展開・実 surface ツリーへの転記は下流に委ねる（要件 7.2）。collision/animation は通常 surface と同一型で保持（要件 7.3）。
 - **alias 写像**: 各 `KEY,[id,...]` を `SurfaceAlias` へ。キーは opaque、値は順序付き数値 ID（要件 8.1-8.3）。重複キーは潰さず `Vec` に全出現保持（要件 8.4）。
 - **寛容吸収**: subset 外・不正・collisionex は passthrough シーム（明示関数）へ委ね、値を詐称せず・パニックせず・後続継続（要件 2.3/6.3/9.2/10.4）。
 
@@ -441,9 +456,11 @@ impl AliasKey {
 // mod 内 pub(crate)。parse が結線する。
 pub(crate) fn decode(tokens: Vec<Token>) -> Shell;
 
-// append ターゲット解決（inclusive 範囲展開・要件 7.2）。
-// 入力例: ["10", "2100-2110", "2200-2210"] -> [10, 2100..=2110, 2200..=2210]
-fn expand_targets(fields: &[String]) -> Vec<u32>;
+// append ターゲット指定を記述子リストへ捕捉（展開しない・要件 7.2）。
+// ヘッダ数値を第1要素とし後続列挙・範囲を続ける。
+// 入力例: header="10", rest=["2100-2110", "2200-2210"]
+//   -> [Single(10), Range{2100,2110}, Range{2200,2210}]
+fn parse_targets(header: &str, rest: &[String]) -> Vec<AppendTarget>;
 ```
 
 - Preconditions: `tokens` は lexer 出力（構文区切り済み）。
@@ -451,7 +468,7 @@ fn expand_targets(fields: &[String]) -> Vec<u32>;
 - Invariants: 失敗しない（`Result` でない・エラー送出しない・要件 2.3）。同一入力で同一出力。
 
 **Implementation Notes**
-- Integration: `expand_targets` の範囲端点包含は ukadoc（`surface0-2` = 0,1,2）を正典として inclusive で確定。ヘッダ `NNN`（`surface.append10` の `10`）自体をターゲットに含めるかは、fixture の実データ（`surface.append10,2100-2110,2200-2210` はヘッダ `10` が実 surface でなくカテゴリ番号的に使われ、実ターゲットは後続列挙）から**後続の列挙/範囲フィールドのみをターゲットとし、ヘッダ数値は列挙が無い場合（`surface.append2200 { ... }`）に限りそれ自身をターゲットとする**（fixture 準拠・§Open Questions で確認）。
+- Integration: `parse_targets` はターゲット指定を**転記するのみで展開しない**。`surface.append<キーワード>` 直後の数値は、ukadoc の surface スコープ id リスト文法（`surface0-2` が先頭 `0` を含む 0,1,2 と一様に解釈される）に従い**id リストの第1要素**として扱う。ゆえに `surface.append10,2100-2110,2200-2210` → `[Single(10), Range{2100,2110}, Range{2200,2210}]`、`surface.append2200 { ... }` → `[Single(2200)]`。ヘッダ数値を「カテゴリ番号」として除外する二役分岐は設けない（emo2 で surface 10 が未定義でも、実在しない対象への append を無視するのは下流の役割であり、パーサは指定を忠実に保持する）。範囲 `a-b` の inclusive 展開（`surface0-2`=0,1,2 の根拠）は下流のツリー構築側が担う。
 - Validation: 非数トークン・欠損フィールドは既定値へ倒すか passthrough（要件 2.3）。
 - Risks: animationN 集約で interval 前に pattern が来る崩れた入力でも、後から interval を紐付けるか既定 interval で吸収してパニックしない。
 
@@ -485,7 +502,7 @@ pub fn parse(input: &str) -> Shell;
 - Invariants: 純粋・決定的・副作用なし・非パニック。
 
 **Implementation Notes**
-- Integration: `mod.rs` が `pub use parse::parse; pub use model::{Shell, Surface, Element, ElementPath, Animation, Interval, Pattern, Collision, CollisionName, SurfaceAppend, SurfaceAlias, AliasKey};` で公開面集約（要件 11.1）。
+- Integration: `mod.rs` が `pub use parse::parse; pub use model::{Shell, Surface, Element, ElementPath, Animation, Interval, Pattern, Collision, CollisionName, SurfaceAppend, AppendTarget, SurfaceAlias, AliasKey};` で公開面集約（要件 11.1）。
 - Validation: `parse("")` が空 `Shell`・`parse(fixture)` が非パニックであることを test で担保。
 - Risks: なし（結線のみ）。
 
@@ -496,7 +513,7 @@ pub fn parse(input: &str) -> Shell;
 - **集約ルート**: `Shell`。子 `Surface` / `SurfaceAppend` / `SurfaceAlias` は `Shell` に所有され、トランザクション境界は「1 回の `parse` 呼び出し」。
 - **不変条件**:
   - `Element.layer` はレイヤインデックス昇順で `Surface.elements` に格納（要件 4.4）。
-  - `SurfaceAppend.targets` は inclusive 展開済み・重複可（fixture 準拠）。
+  - `SurfaceAppend.targets` は範囲記述子（`Single`/`Range`）を出現順・重複可で保持（展開・転記は下流）。
   - `SurfaceAlias` は出現順・重複キー保持（要件 8.4）。
   - `Pattern.index` は疎（連番前提を置かない・要件 5.4）。
   - opaque NewType（`ElementPath`/`AliasKey`/`CollisionName`）の中身は無加工・read-only。
@@ -511,7 +528,7 @@ ukadoc（SERIKO/surfaces.txt 正典・MCP 参照）で確定した行文法:
 | pattern | `animation*.pattern*,描画メソッド,サーフェス番号,ウェイト,X,Y` | `Pattern { index, surface_id, wait, x, y }`。負サーフェス番号（`-1`/`-2`）はセンチネル保持（要件 5.5） |
 | interval | `animation*.interval,インターバル`（`+` で組合せ・SSP のみ） | `Interval::Bind` / `Random{k}` / `BindRandom{k}`（emo2 3 種のみ・要件 5.7 で他は吸収） |
 | overlay | `overlay`（ベースへ新規レイヤ重ね） | element/pattern の method 判定（overlay のみ値化・他は吸収） |
-| 範囲 | `surface0-2` 記法は 0,1,2 を意味（inclusive） | `expand_targets` の端点包含展開の根拠（要件 7.2） |
+| 範囲 | `surface0-2` 記法は 0,1,2 を意味（inclusive） | `AppendTarget::Range` の意味（両端含む）の根拠。展開は下流（要件 7.2） |
 | alias/name | `name,定義名` は `surface.alias` と同様 `\s[]` で ID 代替 | alias キーは opaque・`\s[]` 中身は非解釈（要件 8.2） |
 
 > 上記は decode の値正規化の**正典根拠**。emo2 fixture は最小適合サンプルであり、書式の聖典ではない（要件 10.2）。
@@ -553,7 +570,7 @@ ukadoc（SERIKO/surfaces.txt 正典・MCP 参照）で確定した行文法:
    - pattern `overlay,1100,0,0,0` と負 ID `overlay,-1,80,0,0` → `Pattern{surface_id:-1,...}`（要件 5.4/5.5）。
    - 疎 pattern（`pattern1`/`pattern2`/`pattern3` のみ・`pattern0` 欠番）→ index 明示保持（要件 5.4）。
    - collision `collision0,93,62,271,130,Head` → 矩形＋opaque 名（要件 6.1/6.2・ukadoc `始点/終点` 順）。
-   - `expand_targets(["2100-2110"])` → inclusive `[2100..=2110]`、`["10","2100-2110","2200-2210"]` の混在展開（要件 7.2・端点包含は ukadoc 正典）。
+   - `parse_targets("10", ["2100-2110","2200-2210"])` → `[Single(10), Range{2100,2110}, Range{2200,2210}]`（展開せず記述子保持・ヘッダ数値は第1要素・要件 7.2）、`parse_targets("2200", [])` → `[Single(2200)]`。
    - alias `静観,[2106,2206]`（日本語キー opaque）・`6,[2106,2206]`（数値キー opaque）・重複キー（`100` 2 回）保持（要件 8.2/8.3/8.4）。
 4. **parse_tests**: `parse("")` → 空 `Shell`（要件 2.2）、同一入力の決定性（要件 2.4）、facade 結線。
 

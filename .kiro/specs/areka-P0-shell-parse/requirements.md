@@ -16,7 +16,7 @@ emo2 の `surfaces.txt`（SERIKO/2.0）を**シェルサーフェスモデル**�
   - surface 定義ブロック（`surfaceNNN { ... }`）のパース：ID とその element/collision/animation。
   - element overlay リスト（`elementN,overlay,path,x,y`）と、animation パターンの `overlay` メソッド（負 ID `overlay,-1` はレイヤクリアとして表現）。
   - SERIKO animation ブロック（`animationN.interval,...` と `animationN.patternM,overlay,...`）で、interval は `bind` / `random,N` / `bind+random,N` の 3 種のみ。
-  - `surface.appendNNN` 追記ブロック（既存 surface へ collision/animation を追加）と、ターゲット指定の複数列挙・範囲指定（例 `surface.append10,2100-2110,2200-2210`）の解決。
+  - `surface.appendNNN` 追記ブロック（既存 surface へ collision/animation を追加）と、ターゲット指定の複数列挙・範囲指定（例 `surface.append10,2100-2110,2200-2210`）の**捕捉**（ヘッダ数値を第1要素とする ID・範囲リストで保持。範囲展開と surface ツリーへの転記は下流）。
   - collision 矩形リスト（`collisionN,left,top,right,bottom,name`・name は `Head`/`Bust` 等の不透明文字列）。
   - `kero.surface.alias` ブロック：alias キー（数値・日本語文字列いずれも）から surface ID リスト（`[id,...]`）への写像。alias キー・値は**不透明に保持**し、`\s[]` 中身の意味解釈は行わない。
   - **ukadoc 準拠の自前テスト定義**（in-source `#[cfg(test)]`・機能ごとの最小 `surfaces.txt` 断片を自作）を主軸とし、emo2 実物 fixture は実サンプルのスモークテストとして併用。
@@ -111,8 +111,8 @@ emo2 の `surfaces.txt`（SERIKO/2.0）を**シェルサーフェスモデル**�
 
 #### Acceptance Criteria
 
-1. When 入力に `surface.appendNNN { ... }` ブロックが存在する, the shell parser shall その追記対象 surface ID と、ブロック内の collision/animation を追記定義としてモデルに保持する。
-2. When 追記ブロックのターゲット指定が複数列挙（例 `surface.append10,2100`）または範囲（例 `2100-2110`）を含む, the shell parser shall 指定されたすべての対象 surface ID を解決し、追記定義をそれらへ関連付ける。
+1. When 入力に `surface.appendNNN { ... }` ブロックが存在する, the shell parser shall その追記対象指定（ヘッダ数値を第1要素とする ID・範囲のリスト）と、ブロック内の collision/animation を追記定義としてモデルに保持する。
+2. When 追記ブロックのターゲット指定が複数列挙（例 `surface.append10,2100`）または範囲（例 `2100-2110`）を含む, the shell parser shall そのターゲット指定を（ヘッダ数値と後続の列挙・範囲を同格に扱った）単一 ID・範囲の順序付きリストとして**そのまま保持**する（範囲の個別 ID への展開、および対象 surface 定義ツリーへの転記は下流のツリー構築側の責務であり、パーサは行わない）。
 3. The shell parser shall 追記ブロックの collision/animation を、通常 surface ブロックと同一のモデル表現で保持する。
 
 ### Requirement 8: surface alias 透過（不透明写像）
