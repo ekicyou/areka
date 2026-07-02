@@ -59,7 +59,7 @@
 
 ## Constraints
 
-- Rust 2024・`windows` 0.62.2 系・`event_listener` 5・**tokio 禁止**。32bit 可搬性を崩さない。
+- Rust 2024・`windows` 0.62.2 系・`event_listener` 5・**tokio 禁止**。（本機構は areka／wintf 本体＝x64＋arm64 ネイティブ側。i686/32bit は SHIORI helper 隔離トラックゆえ本機構の検証対象外。開発者指示 2026-07-02）
 - マルチモニタ・高 DPI 環境を仮定（per-monitor-v2）。
 - 既存リリース最適化（`opt-level='z'`, `lto=true`）と互換。
 - 既存本体コードは推測で書き換えない（変更前に対象と内容を依頼者へ提示）。

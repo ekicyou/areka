@@ -55,7 +55,7 @@
 | R6 ex-style 構成制約 | TRANSPARENT 動的・LAYERED 同伴・NCHITTEST 不使用 | `WinStyle` ビルダー・pilot レシピ確定 | **Low**: レシピ確定済（要「独断で LAYERED/NCHITTEST 追加しない」規律の実装反映） |
 | R7 ULW 並走・非破壊 | ULW 撤去せず既存機能維持 | ULW 経路現存・`CompositionMode` 残置 | **Low**: 追加のみ＝非破壊は構造的に容易 |
 | R8 高 DPI・マルチモニタ座標一致 | スクリーン物理⇔αマスク座標の対応維持 | `hit_test` の物理座標変換・`DPI` component・pilot PMv2 検証（部分） | **Unknown/Constraint**: ワーカ座標系（`GetCursorPos`＝物理）→ウィンドウ→bounds→マスクの変換破綻回避（DPI 変化・モニタ跨ぎ） |
-| R9 リリース互換・依存最小 | opt-level z / lto・32bit・新規大型クレート無 | 既存依存のみで実装可（windows・event_listener） | **Low**: 新規クレート不要見込み |
+| R9 リリース互換・依存最小 | opt-level z / lto・新規大型クレート無（i686/32bit は helper 隔離トラックゆえ本機構の検証対象外） | 既存依存のみで実装可（windows・event_listener） | **Low**: 新規クレート不要見込み |
 | R10 ドキュメント整備 | `docs/click_through.md` 新規 | pilot README/REPORT が下敷き | **Missing**: `docs/click_through.md`（新規作成タスク） |
 
 ## 4. 実装アプローチ選択肢

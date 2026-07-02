@@ -133,7 +133,7 @@ graph TB
 | Hit-test / Drag | 既存 wintf モジュール | 当たり判定・ドラッグ状態の読み取り | 改変なし（参照側） |
 | Application | crates/areka | shell/balloon 窓を `CompositionMode::DComp` へ | 実動確認対象 |
 
-> 新規依存の追加はなし（R9.3）。すべて既存ワークスペース内クレート・既存外部依存で実装可能。
+> 新規依存の追加はなし（R9.2）。すべて既存ワークスペース内クレート・既存外部依存で実装可能。
 
 ## File Structure Plan
 
@@ -249,8 +249,7 @@ sequenceDiagram
 | 8.2 | マルチモニタ座標対応維持 | ClickThroughController | `GetCursorPos`→`hit_test_in_window` | 同上 |
 | 8.3 | 移動後も一致維持 | ClickThroughController（毎サイクル最新 World） | `hit_test_in_window` | 同上 |
 | 9.1 | opt-level z / lto 互換 | 全コンポーネント（依存追加なし） | — | — |
-| 9.2 | 32bit 可搬性維持 | 全コンポーネント | — | — |
-| 9.3 | 依存最小 | 全コンポーネント | — | — |
+| 9.2 | 依存最小 | 全コンポーネント | — | — |
 | 10.1 | docs/click_through.md 新規 | docs/click_through.md | — | — |
 | 10.2 | 概要・不採用理由・使用例・制約 | docs/click_through.md | — | — |
 | 10.3 | COMPAT_ARCHITECTURE 更新対象明示 | docs/click_through.md（申し送り記載） | — | — |
@@ -492,7 +491,7 @@ pub fn apply_click_through(hwnd: HWND, transparent: bool) -> windows::core::Resu
 
 ### Build / Compatibility
 - リリースビルド（`opt-level='z'`, `lto=true`）で機構込みビルド・動作（9.1）。
-- 32bit ターゲットでビルドが通る（依存追加なしゆえ可搬性維持）（9.2/9.3）。
+- 新規依存の追加なし＝依存最小を維持（9.2）。i686（32bit）ビルドは本機構の検証対象外（x64＋arm64 本体側。i686 は SHIORI helper 隔離トラック）。
 
 ## Open Questions / 運用規律
 

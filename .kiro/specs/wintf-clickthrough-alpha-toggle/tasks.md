@@ -64,11 +64,12 @@
   - 観測可能な完了条件: 上記検証項目のチェックリストが実マスコットで全て満たされること
   - _Requirements: 1.1, 1.2, 2.1, 2.2, 5.1, 5.2, 8.1, 8.2, 8.3, 7.2_
   - _Depends: 4.1_
-- [ ] 4.3 (P) リリースビルド互換・32bit 可搬性検証
+- [x] 4.3 (P) リリースビルド互換・依存最小検証
   - 機構込みでリリース最適化（`opt-level='z'`, `lto=true`）ビルド・動作すること
-  - 32bit ターゲットでビルドが通ること（依存追加なしで可搬性維持）
-  - 観測可能な完了条件: リリースビルド成果物が生成・起動し、i686 ターゲットのビルドが完走すること
-  - _Requirements: 9.1, 9.2, 9.3_
+  - 新規依存を追加せず依存最小を維持すること（`Cargo.toml` 差分なし）
+  - 観測可能な完了条件: リリースビルド成果物（`target/release/areka.exe`）が生成されること
+  - i686（32bit）ビルドは本機構の検証対象外（開発者指示 2026-07-02）: 本機構は areka／wintf 本体（x64＋arm64 ネイティブ）側で動作し、i686 は SHIORI helper 隔離トラックゆえ。詳細は Implementation Notes 参照
+  - _Requirements: 9.1, 9.2_
   - _Boundary: build config_
   - _Depends: 4.1_
 - [x] 4.4 (P) `docs/click_through.md` の作成
@@ -85,4 +86,6 @@
 - クリック透過機構の結線 API（3.1 確定）: `ClickThroughController::start(world: Weak<RefCell<EcsWorld>>, registry: Rc<RefCell<ClickThroughRegistry>>, wake_event: Arc<event_listener::Event>) -> ClickThroughHandle`。二重起床は**単一の共有 `Arc<Event>`** を cursor worker と VSync tick 源の両方が notify する方式（select 併用なし）。`CursorMonitorBridge::spawn(wake_event.clone())` で worker が同一 event を叩く。tick 源が wake_event を post-tick で notify する結線は **3.2 の領分**。registry は `Rc<RefCell<..>>` 共有ゆえ start 後に窓を register/remove 可能（handle 経由）。
 - `last_applied` 単一所有: 書き戻しは `apply_click_through` が `Ok` の時のみ（`Err` は据え置き＋`warn!`・次サイクル再試行）。
 - cargo は **PowerShell 必須**（Git Bash の coreutils `link.exe` が MSVC link を遮蔽）。worktree では `git submodule update --init`（vendors/pasta）済み。
+- **32bit/i686 検証はスコープ外（4.3・開発者指示 2026-07-02）**: 本機構は areka／wintf 本体（**x64＋arm64 ネイティブ**）の UI スレッド上で動作し、i686（32bit）は x86 SHIORI 駆動 helper のみに隔離されるトラックゆえ本機構は含まれない。当初 tasks/requirements が steering roadmap の全体制約「32bit 可搬性を崩さない」を誤って本機構の i686 ビルド完走検証へ転写していたため、requirements Req9.2（32bit）を削除し 9.3→9.2（依存最小）へ繰り上げ、design/tasks/brief/research を整合。**参考実測**: 検証時 `cargo build -p wintf --target i686-pc-windows-msvc` は既存の `crates/wintf/src/api.rs`（`Get/SetWindowLongPtrW` の `isize` 契約 vs i686 の `i32`）由来 E0308 で失敗するが、これは本坑の変更前から存在する wintf 共有基盤の既存非互換であり本機構の回帰ではない（本坑差分に api.rs は含まれない）。steering roadmap の 32bit 制約は host-32／shiori-abi トラックには有効ゆえ steering は変更しない。
+- 4.3 完了エビデンス（release/依存最小）: `cargo build --release -p areka` exit 0・`target/release/areka.exe`（2,497,536 bytes）生成・`opt-level='z'`/`lto=true`/`codegen-units=1` 適用確認（Req9.1）。本坑差分は clickthrough／areka のみで `Cargo.toml` 差分なし＝新規依存ゼロ（Req9.2）。GUI 実起動は headless 環境ゆえ未実施（実動確認は 4.2 の領分）。
 - areka（4.1）向け登録面（3.2 確定）: `wintf::ecs::clickthrough::ClickThroughRegistryHandle`（**pub** NonSend リソース・`run()` で World へ挿入済み）を `world.get_non_send_resource::<ClickThroughRegistryHandle>()` で取得し `register(entity, hwnd)` する。eval ループと**同一 `Rc<RefCell<ClickThroughRegistry>>`** を共有ゆえ登録は即反映。窓破棄は `prune_dead_targets`（entity 存在判定・`evaluate_targets` 冒頭で自動除去）が処理するので areka 側の明示 remove は必須でない（despawn で十分）。
