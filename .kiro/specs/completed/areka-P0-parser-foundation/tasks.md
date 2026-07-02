@@ -1,0 +1,62 @@
+# Implementation Plan
+
+- [x] 1. Foundation: 依存導入とモジュール土台
+- [x] 1.1 encoding_rs 依存導入と共通基盤モジュールの公開面・スタブ整備
+  - ルート workspace 依存に encoding_rs 0.8 を追加し、areka-parsers から workspace 参照で解決する
+  - クレート description の "std-only" 相当文言を "minimal-dependency" 相当へ更新する（承認済み意図的逸脱の明記）
+  - areka_parsers に charset／kv の2モジュールを公開宣言として追加する（既存 sakura は無変更）
+  - 両モジュールの公開面集約（公開関数・型の再エクスポートとテストモジュール宣言）を骨組みとして用意し、内部は最小スタブで置く。以降の各サブタスクは自コンポーネント内部の実装のみを埋め、公開面集約は変更しない（(P) 並列時のファイル衝突を排除）
+  - Observable: `cargo build -p areka-parsers` と `cargo test -p areka-parsers`（スタブ状態）が encoding_rs 解決済み・両モジュール宣言済みで緑になる
+  - _Requirements: 2.1, 2.2_
+
+- [x] 2. charset モジュール（宣言検出＋全体デコード）
+- [x] 2.1 (P) 既定エンコード指定型の定義
+  - ANSI／UTF-8 の2値選択を表す公開型を定義する（`#[non_exhaustive]`・最小派生）
+  - Ansi→CP932(Shift_JIS)／Utf8→UTF-8 の固定写像を持つ（環境非依存・呼び出し側が渡した指定のみで決定）
+  - 公開面集約は 1.1 で確定済み。本タスクは自コンポーネント内部に閉じる（並列安全）
+  - Observable: 型の構築・派生・エンコード写像を検証する単体テストが緑になる
+  - _Requirements: 2.3, 2.4, 2.5_
+  - _Boundary: charset::DefaultEncoding_
+  - _Depends: 1.1_
+- [x] 2.2 (P) 冒頭プリスキャンによる charset 宣言検出
+  - 先頭の BOM バイト列を読み飛ばしてから、先頭〜最初の非 ASCII バイト／上限 4096 バイトの範囲を行単位で走査する
+  - `charset,<名>` をカンマ区切りのみ・キー大小無視・前後 trim・CRLF/LF 寛容で抽出し、未検出は「宣言なし」として返す
+  - charset 名が ASCII である前提のもと、実エンコードに依らず宣言走査を成立させる
+  - 公開面集約は 1.1 で確定済み。本タスクは自コンポーネント内部に閉じる（並列安全）
+  - Observable: 検出／大小差・空白・CRLF 寛容／BOM 付き `charset,UTF-8` 検出／宣言なし判定／非 ASCII・4096 上限打ち切りの prescan テストが緑になる
+  - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 5.2_
+  - _Boundary: charset::prescan_
+  - _Depends: 1.1_
+- [x] 2.3 charset デコード facade
+  - プリスキャン結果のラベルを encoding_rs のラベル解決へ渡し、解決可＝宣言エンコード採用／未対応・宣言なし＝呼び出し側指定の既定へ寛容フォールバックする
+  - 選定エンコードでバイト列全体をデコードし、不正並びは代替文字（U+FFFD 等）で吸収して破棄せず、必要時のみ診断ログを出し、単一 String を返す
+  - Result を返さず panic せず、ファイルシステム・OS ロケール等の環境状態を参照せず、同一（バイト列, 既定指定）に対し決定的である
+  - Observable: 宣言 UTF-8 の全体デコード／未対応ラベルの既定フォールバック／不正並びの吸収／BOM 寛容／決定性を検証する decode テストが緑になる
+  - _Requirements: 2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 2.7, 3.1, 3.2, 3.3, 5.2, 6.1, 6.2, 6.3_
+  - _Boundary: charset::decode_
+  - _Depends: 2.1, 2.2_
+
+- [x] 3. kv モジュール（フラット KV マップ化）
+- [x] 3.1 (P) デコード済み文字列の素朴 KV マップ化
+  - 入力を CRLF/LF 両対応で行に分割し、各行を最初のカンマで key/value に分割、前後空白を trim する
+  - 空行・カンマ無し行はスキップ、同一キーは後勝ちで上書き、値は文字列のまま保持（分類・型付け・専用スロットなし）、順序非保持、空入力は空マップを返す
+  - Result を返さず panic せず、副作用は診断ログのみとする
+  - 公開面集約は 1.1 で確定済み。本タスクは自コンポーネント内部に閉じる（並列安全）
+  - Observable: 後勝ち上書き／空行・カンマ無し行スキップ／key・value trim／CRLF と LF で同結果／値中カンマ保持／空入力→空マップの parse テストが緑になる
+  - _Requirements: 4.1, 4.2, 4.3, 4.4, 4.5, 4.6, 4.7, 4.8, 5.1, 5.3, 6.1, 6.2, 6.3_
+  - _Boundary: kv::parse_kv_
+  - _Depends: 1.1_
+
+- [x] 4. Integration: 公開パス契約テスト
+- [x] 4.1 公開 API 経由の契約固定テスト（decode→kv 通し・emo2 fixture＋Shift_JIS 合成）
+  - emo2 `descript.txt`（UTF-8）由来のリテラル入力を decode（既定 Utf8）→parse_kv に通し、`type`／`name` の期待値を固定する。採取元の正本ファイル名・行をコメントで明示する
+  - charset 行なしファイル（`balloons0s.txt`）由来のリテラル入力を既定 Utf8 で通し、値が文字列のまま保持されること（数値化しない）を固定する。採取元をコメント明示する
+  - Shift_JIS 合成入力（`SHIFT_JIS.encode` のラウンドトリップで生成）で宣言優先デコードが文字化けしないことを固定し、`for_label(b"Shift_JIS")` 解決の生き証人であるとコメント明示する（fixture に SJIS 実ファイル無し）
+  - charset 宣言なし入力を Ansi／Utf8 の既定別に通し、指定どおりのエンコードでデコードされることを固定する
+  - Observable: `cargo test -p areka-parsers` が全公開パス契約ケース（emo2 UTF-8・charset なし・SJIS 合成・既定別）を含めて緑になる
+  - _Requirements: 7.1, 7.2, 7.3, 7.4, 7.5, 2.2, 5.2_
+  - _Boundary: charset validation_tests, kv validation_tests_
+  - _Depends: 2.3, 3.1_
+
+## Implementation Notes
+- 3.1: `parse_kv` は trim 後にキーが空になる行（`,v` 等）を格納せずスキップする（R4.5/R6.2 の寛容規律に整合・要件は空キー行を明示しないため妥当なエッジ判断）。後続 spec が空キー行を必要とする場合は本基盤の再点検が必要。
