@@ -135,7 +135,7 @@ flowchart TD
   read["std::fs::read(descript) → bytes"]
   read_err{"読取成功?"}
   err_read["Err(MountError::StartPointUnreadable)"]
-  decode["charset::decode(bytes, DefaultEncoding::Utf8) → String"]
+  decode["charset::decode(bytes, default_encoding) → String\n（既定は呼び出し側指定・package は判断しない）"]
   kv["kv::parse_kv(String) → BTreeMap"]
   names["name / sakura.name / kero.name を取得（無ければ None）"]
   shiori["shiori,<file> を取得（無ければ None＝推測しない）"]
@@ -157,7 +157,9 @@ flowchart TD
 
 **フローの要点**:
 - **識別は所在ベース**（SSP 準拠）: `ghost/master/descript.txt` が所在すれば ghost として受理する（Req 1.2）。`type,ghost` は確認的で、`type` 行の欠落自体は失敗としない（Req 1.3）。type-mismatch の分岐は作らない（過剰実装禁止・Req 5.2）。
-- **decode の既定エンコーディング**: descript.txt は `charset` 宣言を含むが、その適用は foundation の `decode` が BOM/宣言を吸収する範囲に委ねる。呼び出しの既定引数は `DefaultEncoding::Utf8`（emo2 は `charset,UTF-8` 宣言あり）。charset 判定ロジック自体は本 spec で重複実装しない（Req 1.5）。
+- **decode の既定エンコーディングは package が判断しない（設計ディスカッション #1）**: charset の検出とデコードは foundation の `decode`（`charset,<name>` を prescan して優先・BOM/宣言吸収）が専任する。**既定はゴースト種別で異なる**: 既存 32bit SHIORI（レガシー）ゴーストの descript.txt は charset 省略時 **ANSI（Shift_JIS）** が既定。一方 IShiori＝SHIORI4 ゴーストは **charset 必須＋UTF-8**（非 UTF-8 の拒否エンフォースは SHIORI 同一性を持つ下流＝host-32/ghost-setup の領分・本 spec の Boundary Out）。
+  - **鶏卵構造とその解**: 「IShiori か否か」の判定には descript.txt を読む必要があり、読むにはエンコーディングが要る。解は `charset` 宣言（prescan は ASCII ゆえ本体エンコーディングに関係なく読める）への依存＝**宣言があれば種別に関わらず正しく読め、宣言が無ければレガシー＝ANSI とみなす**。
+  - **ゆえに固定既定はハードコードしない**: 固定 `Utf8` はレガシー ANSI ゴーストを文字化けで誤読し種別判定の土台を壊す。`resolve` は `default_encoding: DefaultEncoding` を**呼び出し側（種別文脈/baseware 設定を知る層）から受け取り** `decode` へ素通しする。**SSP 準拠の既定値は ANSI（レガシー既定）**であり、呼び出し側がそれを渡す。emo2 は `charset,UTF-8` 宣言ありゆえ prescan が UTF-8 を選び、渡す既定に関わらず結果不変。charset 判定ロジック自体は本 spec で重複実装しない（Req 1.5）。
 - **致命/非致命の境界**（設計判断①）: 致命（`Err`）＝起点 descript.txt 不在（Req 1.6/5.1）・shell ディレクトリ不在（Req 3.3/5.1）。非致命（型で保持）＝`shiori` 未指定（`Option::None`・Req 2.3）・名前値未指定（`Option::None`・Req 1.4）。
 - **SHIORI ディレクトリ実体・DLL 実体の存在確認は行わない**: Req 2.1 は SHIORI ディレクトリを `ghost/master`（起点 descript.txt が置かれる＝存在確定済み）と解決するのみ。DLL ファイルの物理存在確認は host-32 トラックの責務（本 spec の観測可能失敗は起点不在・shell dir 不在の 2 種に限る）。
 
@@ -276,7 +278,7 @@ pub enum MountError {
 
 **Responsibilities & Constraints**
 - 唯一の I/O 保有点。`std::fs::read`（descript 読取）・`Path::exists`（ディレクトリ存在確認）を本 module 内に閉じ込める。
-- descript 読み込みは `std::fs::read` → `charset::decode(bytes, DefaultEncoding::Utf8)` → `kv::parse_kv(&str)` の合成。charset 判定/KV 分割は再実装しない（Req 1.5）。
+- descript 読み込みは `std::fs::read` → `charset::decode(bytes, default_encoding)` → `kv::parse_kv(&str)` の合成。`default_encoding` は呼び出し側から受け取り素通しする（package はエンコーディング既定を判断しない・設計ディスカッション #1）。charset 判定/KV 分割は再実装しない（Req 1.5）。
 - 参照キーは `name` / `sakura.name` / `kero.name` / `shiori` / `seriko.defaultsurfacedirectoryname` のみ（Req 5.2）。`type` は所在ベース識別のため参照不要（分岐を作らない・Req 1.3）。`id.emo2` 等のカンマ無し行は `parse_kv` が自動スキップ。
 - `install.txt` / balloon 系キー / NAR には一切触れない（Req 5.3）。
 
@@ -293,8 +295,13 @@ pub enum MountError {
 /// SHIORI/shell の 2 点マウントを解決する。
 ///
 /// - `ghost_root`: 展開済みゴーストパッケージのルート（`ghost/` `shell/` を含む階層）。
+/// - `default_encoding`: descript.txt に `charset` 宣言が無い場合に用いる既定エンコード。
+///   既存 32bit SHIORI（レガシー）ゴーストは charset 省略時 ANSI(Shift_JIS)、IShiori/SHIORI4 は
+///   charset 必須＋UTF-8。種別判定は descript を読んで初めて可能なため、本 module は既定を
+///   ハードコードせず（固定 Utf8 はレガシー ANSI ゴーストを誤読する）、呼び出し側が指定する。
+///   SSP 準拠の既定は ANSI。非 UTF-8 拒否のエンフォースは下流の SHIORI 層（設計ディスカッション #1）。
 /// 成功時 `MountModel`、致命的欠落時 `MountError` を返す。
-pub fn resolve(ghost_root: &Path) -> Result<MountModel, MountError>;
+pub fn resolve(ghost_root: &Path, default_encoding: DefaultEncoding) -> Result<MountModel, MountError>;
 
 // module 内定数
 const GHOST_MASTER: &str = "ghost/master";       // SHIORI マウント先（Req 2.1）
