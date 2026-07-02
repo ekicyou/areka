@@ -6,7 +6,7 @@
   - 観測可能な完了: workspace の cargo 解決（`cargo metadata`）が成功し、署名照合の結果が research.md に追記されている
   - _Requirements: 4.6, 13.5_
 
-- [ ] 2. (P) 親プロセスの helper 起動パラメーター契約を load_dir・SHIORI 名込みへ拡張
+- [x] 2. (P) 親プロセスの helper 起動パラメーター契約を load_dir・SHIORI 名込みへ拡張
   - spawn を「arg1=parent_hwnd（互換維持）・arg2=load_dir・arg3=SHIORI 名」へ拡張し、同値を env（HOST32_LOAD_DIR／HOST32_SHIORI_NAME）へ二重供給、cwd=load_dir を維持する
   - LOAD 用 ack 待機の推奨既定 timeout 定数（30 秒）を公開する
   - 既存の spawn 呼出 2 箇所（echo 往復・エラーパステスト）を新契約へ吸収する
@@ -164,3 +164,8 @@
   - 観測可能な完了: 上記 3 点がすべて確認され、WS-A E2E（タスク 7）と WS-B テスト（タスク 8〜9）が同一ツリーで同時に green
   - _Requirements: 12.1, 13.1, 13.2_
   - _Depends: 7.2, 9.4_
+
+## Implementation Notes
+
+- Task 1: `vendors/pasta` の flat-C 3 署名は正確源とバイト一致（`extern "C"`≡`extern "cdecl"`・`load(HGLOBAL,usize)->bool`・`unload()->bool`・`request(HGLOBAL,*mut usize)->HGLOBAL`・Rust bool 1byte・`#[unsafe(no_mangle)]` 無装飾）。**入力 HGLOBAL は callee(DLL) が `GlobalFree` する規約**（`ShioriString::capture` の `has_free:true`）＝ホスト/testdll は自ら解放しない（testdll は逆に load 入力を GlobalFree して二重解放検出器とする）。load dir は ANSI(CP_ACP)・`GlobalAlloc(GMEM_FIXED=0)`。詳細は research.md §9。
+- Task 2: `spawn` の**関数引数順** `(helper_exe, load_dir, shiori_name, parent_hwnd)` と**子 arg 順**（arg1=parent_hwnd/arg2=load_dir/arg3=shiori_name）は別物。位置引数を stand-in で観測するには `.bat` が必要（`cmd /c "..."` 単一コマンドでは `%1..%3` 非展開）。新 pub const `LOAD_DIR_ENV`/`SHIORI_NAME_ENV`/`LOAD_ACK_TIMEOUT(30s)` は `process_host.rs` に定義済みだが **`lib.rs` の crate-root 再エクスポートは未追加**（SpawnContract boundary 外ゆえ保留）。後続タスク 6/7 でこれらを使う際は `lib.rs` へ再エクスポート追加するか module パス（`process_host::LOAD_ACK_TIMEOUT`）で参照すること。
