@@ -6,10 +6,9 @@
 //! `com/dcomp.rs` の Ext trait パターン（`#[inline(always)]`・`Result` 返却・
 //! `unsafe` の局所化）に倣い、それらを安全な Rust wrapper へ包む。
 //!
-//! 特に [`DrawingSurfaceInteropExt::begin_draw`] は現行 `com/dcomp.rs` の
-//! [`DCompositionSurfaceExt::begin_draw`](crate::com::dcomp::DCompositionSurfaceExt::begin_draw)
-//! と戻り型・cast ロジックを完全一致させ、下流 `render_surface` のコードを
-//! byte-identical に保つ。
+//! 特に [`DrawingSurfaceInteropExt::begin_draw`] は移行前の DComp 版
+//! `DCompositionSurfaceExt::begin_draw`（撤去済み・task 3.2）と戻り型・cast ロジックを
+//! 完全一致させて設計されており、下流 `render_surface` のコードを byte-identical に保つ。
 
 use windows::UI::Composition::CompositionGraphicsDevice;
 use windows::UI::Composition::Desktop::DesktopWindowTarget;
@@ -75,9 +74,8 @@ impl CompositorDesktopInteropExt for ICompositorDesktopInterop {
 pub trait DrawingSurfaceInteropExt {
     /// BeginDraw — 更新矩形を渡し D2D デバイスコンテキストと atlas offset を得る。
     ///
-    /// 戻り型・cast ロジックは現行 `com/dcomp.rs` の
-    /// [`DCompositionSurfaceExt::begin_draw`](crate::com::dcomp::DCompositionSurfaceExt::begin_draw)
-    /// と完全一致させ、下流 `render_surface` の差分をゼロに保つ。
+    /// 戻り型・cast ロジックは移行前の DComp 版 `begin_draw`（撤去済み・task 3.2）と
+    /// 完全一致させて設計されており、下流 `render_surface` の差分をゼロに保つ。
     fn begin_draw(&self, update_rect: Option<&RECT>) -> Result<(ID2D1DeviceContext3, POINT)>;
     /// EndDraw — 描画を終了する。
     fn end_draw(&self) -> Result<()>;

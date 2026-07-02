@@ -87,7 +87,7 @@
   - _Depends: 2.1, 2.4, 2.5_
   - _Boundary: world schedule, render.rs, window_pos.rs_
 
-- [ ] 3.2 消費ゼロ化した DComp 定義を撤去し正本を更新
+- [x] 3.2 消費ゼロ化した DComp 定義を撤去し正本を更新
   - 3.1 でライブ登録が WUC へ移った後、**dead となった** `dcomp_resource.rs`/`com/dcomp.rs` の定義・登録のみ撤去する（`CompositionMode` enum と ULW アームが参照する DComp は残置・3.1 のライブ登録行には再度触れない）、`doc/COMPAT_ARCHITECTURE.md` を DComp→WUC 移行判断で正本更新
   - 観測可能な完了: 合成パスに DComp 参照が残らず（enum/ULW 残置分を除く）ビルドが通り、COMPAT 正本に移行判断が反映される
   - _Requirements: 9.2, 10.3_
@@ -123,6 +123,8 @@
 
 - **i686/arm64 descope（owner ekicyou 2026-07-02）**: wintf は表示合成レイヤーで **x64 or arm64 のみ**。i686（x86）は SHIORI 駆動 helper 専用の別クレートで、wintf は i686 ターゲットにならない。ゆえに task 1.1 の i686 節・task 1.5・task 4.4 の i686 ランタイム・要件 8.4 の 32bit 可搬は本移行では x64 のみで判定（arch 矛盾の spec 誤り）。arm64 検証も後回し＝x64 完了後にオプション別仕様。**当面 x64 のみを意識する**。（参考: full wintf lib を i686 build すると既存 `api.rs`/`window_factory.rs` の `SetWindowLongPtr` isize/i32 不一致で落ちるが wintf x86 非対象ゆえ修正不要）
 - **1.1 完了（x64）**: ルート `Cargo.toml` に WUC features＋`windows-numerics=0.3.1` は着手時点で working tree に存在。x64 `cargo build -p wintf`（exit 0）・`cargo build -p wintf --release`（z/LTO・exit 0）通過。DComp feature `Win32_Graphics_DirectComposition` 残置確認。
+- **3.2 完了（dead DComp 撤去・COMPAT 更新）**: ライブ参照ゼロ化した `ecs/graphics/dcomp_resource.rs`（DCompGraphicsResource）・`com/dcomp.rs`（DComposition*Ext 群）を撤去（mod 宣言・re-export も除去）。dead テスト `tests/com/dcomp_test.rs`・`tests/graphics/dcomp_resource_test.rs` と `core_accessor_test.rs` の DComp Debug テストを削除（モジュール宣言も追従）。`wuc.rs` の doc intra-link を平文化。`CompositionMode` enum・ULW アーム・`Win32_Graphics_DirectComposition` feature（`com/animation.rs` が使用）は残置。`doc/COMPAT_ARCHITECTURE.md` §6 に DComp→WUC 移行判断を記録（要件 10.3）。`cargo build -p wintf --tests` green・`cargo test -p wintf` 全緑（com 80→61・graphics 152→145＝削除 dead テスト分ぴったり）。
+- **WUC test crash 真因（最終・後続参考）**: ヘッドレス（pump なし）で `WucGraphicsResource` を複数生成すると DispatcherQueue の未ドレイン teardown work で 2 個目以降が `STATUS_ACCESS_VIOLATION`。修正（テスト側）: 構築直後に 1×1 warmup `CompositionDrawingSurface` を保持し DQ 安定化（`tests/visual/common/mod.rs`）。設計ノート（非ブロッカー）: `WucGraphicsResource` に drain/pump hook 公開の検討余地。
 - **2.2〜3.1 完了（コア合成カットオーバー一体）**: components 3型（WindowGraphics→DesktopWindowTarget / VisualGraphics→WUC Visual / SurfaceGraphics→CompositionDrawingSurface＋CompositionSurfaceBrush）＋消費側システムを in-place で WUC 化し、init.rs で WucGraphicsResource を lazy 登録（ライブ切替）。`cargo build -p wintf` green・`cargo test -p wintf --lib` **503 passed/0 failed**・`dcomp_demo`（WUC バックエンド）実起動で WucGraphicsResource 初期化・全 Visual 生成・エラー/panic なしを実測。主要判断:
   - **z順序（要件5.2）**: DComp `add_visual(insertabove=false, ref=None)`＝兄弟最下部挿入。Children [A,B,C] 反復で最終スタック C,B,A。WUC で同一再現は **`InsertAtBottom`**（design の素朴な `InsertAtTop` は誤り）。検算一致。
   - **SpriteVisual.Size（後追い修正・reviewer 適用）**: WUC の SpriteVisual は自身の Size 内にのみ brush 描画（DComp SetContent は不要だった）。live パイプラインは Size 未設定＝空描画の恐れ→ `deferred_surface_creation` で surface と同一物理サイズを `sprite.SetSize` する修正を適用。

@@ -27,8 +27,6 @@ mod core_ecs_test;
 mod core_test;
 #[path = "graphics/dcomp_integration_test.rs"]
 mod dcomp_integration_test;
-#[path = "graphics/dcomp_resource_test.rs"]
-mod dcomp_resource_test;
 #[path = "graphics/init_window_graphics_test.rs"]
 mod init_window_graphics_test;
 #[path = "graphics/reinit_unit_test.rs"]
