@@ -94,7 +94,7 @@
   - _Depends: 3.1_
 
 - [ ] 4. 検証: 描画等価性ハーネスと回帰
-- [ ] 4.1 サーフェス層ビット等価ハーネス（ランタイム二重描画）
+- [x] 4.1 サーフェス層ビット等価ハーネス（ランタイム二重描画）
   - 同一 `GraphicsCommandList` をその場で (a) D2D 直描き（WIC render target・参照基準）と (b) WUC surface `BeginDraw` D2D 出力へ描画し、WIC `CopyPixels` 読み戻し→ハッシュ一致／差分ゼロを自動判定する（永続ゴールデンを repo に持たない）
   - 観測可能な完了: `surface_pixel_equivalence_test` が代表シーンでビット等価 PASS する
   - _Requirements: 8.5, 8.6_
