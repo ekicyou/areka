@@ -18,7 +18,7 @@
   - _Requirements: 2.1, 4.1, 6.1, 6.2, 6.3_
   - _Boundary: com/wuc Ext_
 
-- [ ] 1.3 R1 スパイク example で最小往復と等価描画を先行検証
+- [x] 1.3 R1 スパイク example で最小往復と等価描画を先行検証
   - DispatcherQueue コントローラ（`DQTYPE_THREAD_CURRENT`・既存 pump 相乗り）＋`DesktopWindowTarget`＋D2D `BeginDraw` で 1 サーフェスを表示する最小往復
   - apartment 種別（`DQTAT_COM_NONE` vs `ASTA`）を現状 COM 初期化状態から実測確定し、終了時 `ShutdownQueueAsync` ドレインと drop 順（controller 最後）が成立することを確認
   - 観測可能な完了: `wuc_spike` example が 1 サーフェスを移行前と等価に描画し、等価不成立なら全面移行へ進まず原因究明する判断が記録される
@@ -121,4 +121,5 @@
 
 - **i686/arm64 descope（owner ekicyou 2026-07-02）**: wintf は表示合成レイヤーで **x64 or arm64 のみ**。i686（x86）は SHIORI 駆動 helper 専用の別クレートで、wintf は i686 ターゲットにならない。ゆえに task 1.1 の i686 節・task 1.5・task 4.4 の i686 ランタイム・要件 8.4 の 32bit 可搬は本移行では x64 のみで判定（arch 矛盾の spec 誤り）。arm64 検証も後回し＝x64 完了後にオプション別仕様。**当面 x64 のみを意識する**。（参考: full wintf lib を i686 build すると既存 `api.rs`/`window_factory.rs` の `SetWindowLongPtr` isize/i32 不一致で落ちるが wintf x86 非対象ゆえ修正不要）
 - **1.1 完了（x64）**: ルート `Cargo.toml` に WUC features＋`windows-numerics=0.3.1` は着手時点で working tree に存在。x64 `cargo build -p wintf`（exit 0）・`cargo build -p wintf --release`（z/LTO・exit 0）通過。DComp feature `Win32_Graphics_DirectComposition` 残置確認。
+- **1.3 完了・R1 GO（最重要・apartment 決着）**: `examples/wuc_spike.rs`（自己完結の生 Win32 窓＋WUC 最小往復）を実行し **R1 GO** を実測確定。**核心発見: 本番 UI スレッドは `CoInitializeEx(COINIT_MULTITHREADED)`＝MTA（`WinApp::new` L98）であり、design.md §2.1 の「STA 前提」は誤り**。MTA スレッドでは `CreateDispatcherQueueController(DQTAT_COM_NONE)`（apartment 不変）で成立し、**`Compositor::new()` が MTA 上で起動する**（WUC は MTA の UI スレッドで動作＝移行成立）。ShutdownQueueAsync ドレインは controller を最後に drop する順序で成立・shutdown クラッシュなし。**→ task 2.1 の `WucGraphicsResource` は apartment に `DQTAT_COM_NONE` を使う（ASTA ではない）こと。design §2.1 の apartment 記述はこの実測で上書き。** 厳密ピクセル等価は task 4.1 のランタイム二重描画ハーネスの領分（本スパイクは往復機構と threading 前提の GO を担保）。
 - **1.2 完了・WUC BeginDraw の実挙動発見**: `com/wuc.rs` に interop Ext 3種＋`create_dispatcher_queue_controller` 実装。`begin_draw` は dcomp.rs L254-259 と byte 一致。往復テスト `com::wuc::tests::begin_draw_roundtrip` PASS（atlas updateoffset=(1,2) 実測・非ゼロ観測）。**重要（後続 2.4 render_surface へ）**: WUC `ICompositionDrawingSurfaceInterop::BeginDraw` に `Some(部分矩形)` を渡すと `E_INVALIDARG (0x80070057)`。本番 `render_surface` は `begin_draw(None)`（全面）のみ使うため影響なし。移行後も **None 経路のみ**を使うこと。apartment 種別実測: cargo test スレッドは COM 未初期化ゆえ `DQTAT_COM_ASTA` で成功（design §2.1 と一致）。
