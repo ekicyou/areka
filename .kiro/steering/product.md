@@ -1,6 +1,6 @@
 ---
 inclusion: always
-updated_at: 2026-07-01
+updated_at: 2026-07-02
 ---
 
 # Product Overview
@@ -10,9 +10,9 @@ updated_at: 2026-07-01
 ## Core Capabilities
 
 - **ウィンドウ管理**: Win32 APIを使用したウィンドウの生成、管理、メッセージ処理
-- **2D描画**: DirectComposition、Direct2D、DirectWriteを活用した高品質な2D描画
+- **2D描画**: Windows.UI.Composition（WUC・2026-07-02 DComp から移行完了）、Direct2D、DirectWriteを活用した高品質な2D描画
 - **縦書きテキスト**: DirectWriteによる日本語縦書き・横書き両対応のテキストレンダリング
-- **透過ウィンドウ**: レイヤードウィンドウまたはDirectCompositionによる透過処理とヒットテスト
+- **透過ウィンドウ**: GPU 合成（WUC）＋`WS_EX_TRANSPARENT` 動的トグルによる透過処理とヒットテスト（ULW は除去予定・当面並走）
 - **画像表示**: WIC（Windows Imaging Component）を使用した透過画像の読み込みと描画
 - **演出オーケストレーション**: dolaによるアニメーション定義、CueSheetによる離散演出制御
 - **ゴースト試作統合**: arekaによるシェルとバルーンの2ウィンドウ構成、会話・表情・入力導線の統合検証
@@ -22,7 +22,7 @@ updated_at: 2026-07-01
 - 「伺か」のようなデスクトップマスコットアプリケーション
 - 日本語縦書きテキストを必要とするWindows向けGUIアプリケーション
 - 透過ウィンドウと高度なインタラクションを持つデスクトップツール
-- DirectComposition/Direct2Dを使用した高パフォーマンスな2D描画アプリケーション
+- WUC/Direct2Dを使用した高パフォーマンスな2D描画アプリケーション
 
 ## Value Proposition
 
@@ -49,7 +49,8 @@ areka は「ぱすたさん専用の試作」から、**ukadoc準拠の互換ベ
 
 ### 現在の進め方
 
-- wintfでWindowsネイティブUI基盤を先に固める（透過/ULW・当たり判定は完了済み。**2026-07 方針転換: 表示合成は DirectComposition → Windows.UI.Composition へ移行決定・別プロセス透過は `WS_EX_TRANSPARENT` 動的トグルへ・ULW 除去予定**＝詳細は tech.md／roadmap.md）
+- wintfでWindowsネイティブUI基盤を先に固める（透過/ULW・当たり判定は完了済み。**2026-07 方針転換: 表示合成は DirectComposition → Windows.UI.Composition へ✅移行完了（07-02）・別プロセス透過は `WS_EX_TRANSPARENT` 動的トグルを wintf 本体へ✅実装完了（07-02・`wintf-clickthrough-alpha-toggle`）・ULW 除去は `wintf-ulw-removal` で着手可**＝詳細は tech.md／roadmap.md）
+- **M1 のエンジン固有名（2026-07-02 確定）**: 7トラック ⓪〜⑥＝**`ghost` / `shiori` / `parsers` / `kanade` / `sakura` / `seriko` / `emo`**。コード/spec/会話の参照はこの名で統一（正本は roadmap.md「エンジン固有名」節。`emo` エンジンと適合ゴースト `emo2` は別概念）
 - dolaを「タイミングに特化した下位層」と位置づけ、SERIKO/さくらスクリプトランナーをその上に建てる
 - 互換ベースウェアとして実在ゴースト1体を動かす縦スライスを先に通し、その後ぱすたさんをnative旗艦として実装する
 

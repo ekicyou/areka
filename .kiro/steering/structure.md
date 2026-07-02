@@ -1,6 +1,6 @@
 ---
 inclusion: always
-updated_at: 2026-07-01
+updated_at: 2026-07-02
 ---
 
 # Project Structure
@@ -28,7 +28,7 @@ updated_at: 2026-07-01
 **Location**: `/crates/wintf/src/com/`  
 **Purpose**: Windows COMインターフェイスのRustラッパー  
 **Contains**:
-- `dcomp.rs` - DirectComposition API
+- `wuc.rs` - Windows.UI.Composition interop（`Compositor`/`DesktopWindowTarget`・旧 `dcomp.rs` は撤去済み）
 - `d3d11.rs` - Direct3D11 API
 - `dwrite.rs` - DirectWrite API（縦書き対応）
 - `dxgi.rs` - DXGIインターフェイス
@@ -70,9 +70,9 @@ updated_at: 2026-07-01
 - 特徴: HWNDとEntityの双方向マッピング、マルチスレッド対応
 
 **3. Graphics Resources** (`graphics/`)
-- 責務: Direct2D/DirectCompositionリソースのライフサイクル管理
+- 責務: Direct2D/WUC（Windows.UI.Composition）リソースのライフサイクル管理
 - 代表的なコンポーネント: `GraphicsCore`, `WindowGraphics`, `Visual`, `Surface`, `DeviceContext`
-- サブモジュール: `compositor.rs`（`WindowD3D11Compositor` — レンダリングパイプライン）, `compositor_systems/`（コンポジットinit/render）, `visual_manager.rs`（Visualの挿入・管理API）, `command_list.rs`（D2Dコマンドリスト）
+- サブモジュール: `wuc_resource.rs`（WUC リソース・UI スレッド固定）, `compositor.rs`（`WindowD3D11Compositor` — ULW 専用・除去予定）, `compositor_systems/`（同・ULW 専用）, `visual_manager.rs`（Visualの挿入・管理API）, `command_list.rs`（D2Dコマンドリスト）
 - 特徴: デバイスロスト対応、遅延初期化、階層的描画
 
 **4. Layout System** (`layout/`)
@@ -155,7 +155,7 @@ updated_at: 2026-07-01
 COMオブジェクトをラップするECSコンポーネントは、以下の命名規則に従う：
 
 #### GPUリソース (`XxxGraphics`)
-- **特性**: Direct3D/Direct2D/DirectCompositionデバイスに依存
+- **特性**: Direct3D/Direct2D/WUC（Windows.UI.Composition）デバイスに依存
 - **デバイスロスト対応**: `invalidate()`メソッドと`generation`フィールドを実装
 - **命名**: `XxxGraphics`サフィックス
 - **例**:
@@ -182,10 +182,10 @@ COMオブジェクトをラップするECSコンポーネントは、以下の�
 - **マーカーコンポーネント**: 用途に応じた名前（例: `HasGraphicsResources`, `GraphicsNeedsInit`）
 
 #### COMアクセスメソッド命名
-COMリソースコンポーネント内部のアクセスメソッドは、COMインターフェイス型に対応：
-- `WindowGraphics::target()` → `Option<&IDCompositionTarget>`
-- `VisualGraphics::visual()` → `Option<&IDCompositionVisual3>`
-- `SurfaceGraphics::surface()` → `Option<&IDCompositionSurface>`
+COMリソースコンポーネント内部のアクセスメソッドは、COM/WinRT インターフェイス型に対応（例は命名パターンを示す。DComp→WUC 移行済みのため実際の戻り型は WUC 系＝`Compositor`/`SpriteVisual`/`CompositionDrawingSurface` 等）：
+- `WindowGraphics::target()` → 合成ターゲット型
+- `VisualGraphics::visual()` → visual 型
+- `SurfaceGraphics::surface()` → surface 型
 - `TextLayoutResource::get()` → `Option<&IDWriteTextLayout>`
 
 ### Animation Definition Crate
@@ -215,22 +215,39 @@ COMリソースコンポーネント内部のアクセスメソッドは、COM�
 ### Application Binary Crate
 **Location**: `/crates/areka/`  
 **Purpose**: デスクトップマスコット・プラットフォーム本体  
-**Status**: 試作実装（シェル+バルーン2ウィンドウ表示、ドラッグ移動、ダブルクリック終了）  
+**Status**: 試作実装（シェル+バルーン2ウィンドウ表示、ドラッグ移動、ダブルクリック終了）＋ SHIORI 契約チェーン e2e（`shiori_host`/`shiori_session`/`reference_brain`＝native 脳デモ・`shiori_create` 入口）  
 **Dependencies**: wintf, human-panic, thiserror, tracing, tracing-subscriber, async-io, bevy_ecs, windows
 
 ### Parser Crate
 **Location**: `/crates/areka-parsers/`
-**Purpose**: 伺か資産（さくらスクリプト / surfaces.txt / balloon descript / install.txt）の**純粋パーサ群**。UI・COM 非依存（`std` ＋ `tracing` のみ）。
-**Pattern**（`areka-P0-sakura-parse` が確立・M1 の `shell`/`balloon`/`package` parser もこれに接ぎ木）:
-- モジュール分割: `src/sakura/`（既存）＋今後 `shell/`・`balloon/`・`package/`
-- API: `pub fn parse(&str) -> Vec<Model>`（**`Result` 無しの寛容パース**・未知は `Raw` 変種へ吸収）
-- 値型: NewType＋opaque inner＋read-only accessor、enum は `#[non_exhaustive]`（拡張シームのみ）
-- テスト: in-source `#[cfg(test)]`、emo2 実 fixture で検証・**過剰実装禁止**（emo2 使用分のみ）
-**Dependencies**: `tracing` のみ（外部パーサ非依存）
+**Purpose**: 伺か資産（さくらスクリプト / surfaces.txt / balloon descript / ghost descript.txt）の**純粋パーサ群**（M1 の②parsers トラック・**2026-07-02 全モジュール実装完了**）。UI・COM 非依存。
+**Modules**（foundation 2 ＋ parser 4）:
+- `charset/` - **共通基盤**: BOM 読飛→冒頭 ASCII プリスキャン→charset 宣言/既定 encoding_rs 再デコード（全パーサー共通の入口）
+- `kv/` - **共通基盤**: KV 読み込み（素朴 BTreeMap・後勝ち・trim）
+- `sakura/` - さくらスクリプト emo2 subset→token（パターン確立元）
+- `shell/` - surfaces.txt→SERIKO/2.0 subset 型付きモデル（四層 model←lexer←decode←parse）
+- `balloon/` - balloon descript→幾何＋フォント型付きモデル（descript＋画像別の後勝ち2層マージ）
+- `package/` - `ghost/master/descript.txt` 起点の SHIORI/shell 2点マウント解決（`install.txt` は NAR 配置マニフェスト＝起動時不使用でスコープ外）
+**Pattern**:
+- API: `pub fn parse(&str) -> Model`（**`Result` 無しの寛容パース**・未知は passthrough/`Raw` へ吸収）。**例外**: `package` は致命失敗3種（起点不在/読取不能/shell 不在）を `MountError` で観測可能化
+- **parse は忠実な転記層**（範囲非展開・記述子保持）＝展開・実ツリー構築は下流のエンジン構築側
+- 値型: NewType＋opaque inner＋read-only accessor、enum は `#[non_exhaustive]`（拡張シームのみ）、未指定は `Option`（`None` と `Some(0)` を区別）
+- テスト: in-source `#[cfg(test)]`、ukadoc 準拠自前テスト主軸＋emo2 実 fixture スモーク・**過剰実装禁止**（emo2 使用分のみ）
+**Dependencies**: `tracing`＋`encoding_rs`（意図的追加・承認済。外部パーサ非依存）
 
 ### SHIORI ABI Crate
 **Location**: `/crates/shiori-abi/`
 **Purpose**: 脳（SHIORI）との**内部唯一 ABI**。`IShiori`/`IShioriHost` のカスタム COM 定義（HSTRING/UTF-16・IID 既定義）＋エルゴノミック変換層。UI 基盤（wintf）に依存させない最小依存クレート（下流 32bit ホスト/pasta が同 ABI を共有）。x64 native 脳は in-proc COM、過去互換は 32bit Rust ホスト（host-32）が IPC 越しに同 ABI を実装。
+
+### Host-32 Crates（32bit SHIORI ブリッジ・3クレート）
+**Location**: `/crates/shiori-host32-ipc/`・`/crates/shiori-host32-host/`・`/crates/shiori-host32-helper/`
+**Purpose**: x64/arm64 の areka から 32bit SHIORI DLL（emo2 の `pasta.dll` 等）を駆動する過去互換ブリッジ（M1 ①shiori トラック・`areka-P0-host32-ipc` 2026-07-02 完了）。
+**Pattern**（ターゲットを **crate 境界で分離**＝`cfg` 分岐回避）:
+- `shiori-host32-ipc` - プロトコル定義（bytes-over-wire・両側共有）
+- `shiori-host32-host` - x64＋arm64 側ホスト
+- `shiori-host32-helper` - **i686 専用** helper 実行体（`wintf-winmsg-executor` の message pump 上）
+- トランスポートは **WM_COPYDATA 一本化＋再入 RESPONSE**（named pipe 不要）。x64⟷x86 を跨ぐのは生バイト列のみ
+- 下流ユニット（shiori-load／request／lifecycle）はこの seam の上に増分
 
 ### Pilot (Two-Tunnel Knowledge) Crate
 **Location**: `/crates/pilot/`
@@ -250,10 +267,10 @@ use std::sync::Arc;
 
 // 外部クレート（アルファベット順）
 use bevy_ecs::prelude::*;
-use windows::Win32::Graphics::DirectComposition::*;
+use windows::UI::Composition::*;
 
 // 内部モジュール（相対パス）
-use crate::com::dcomp::*;
+use crate::com::wuc::*;
 use crate::ecs::window::*;
 ```
 
