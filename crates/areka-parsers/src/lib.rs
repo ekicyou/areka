@@ -10,6 +10,7 @@
 //! I/O 許容は「マウントは物理不在という現実の失敗を持つ」ための意図的逸脱で、
 //! `resolve` サブモジュール内に局所化されている（詳細は `package` module doc）。
 
+pub mod balloon;
 pub mod charset;
 pub mod kv;
 pub mod package;

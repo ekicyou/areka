@@ -1,0 +1,26 @@
+{
+  "feature_name": "areka-P0-balloon-parse",
+  "created_at": "2026-07-02T05:09:56Z",
+  "updated_at": "2026-07-02T07:36:00Z",
+  "language": "ja",
+  "phase": "completed",
+  "approvals": {
+    "requirements": {
+      "generated": true,
+      "approved": true
+    },
+    "design": {
+      "generated": true,
+      "approved": true
+    },
+    "tasks": {
+      "generated": true,
+      "approved": true
+    },
+    "implementation": {
+      "completed": true,
+      "completed_at": "2026-07-02T07:36:00Z"
+    }
+  },
+  "ready_for_implementation": true
+}
