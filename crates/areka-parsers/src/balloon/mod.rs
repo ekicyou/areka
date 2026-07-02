@@ -14,6 +14,10 @@ mod parse;
 #[cfg(test)]
 mod model_tests;
 
+#[cfg(test)]
+mod parse_tests;
+
 pub use model::{
     BalloonModel, Font, FontColor, Origin, ValidRect, WindowPosition, WordWrapPoint,
 };
+pub use parse::{parse, parse_str};

@@ -11,7 +11,7 @@
   - `lib.rs` は `shell-parse`/`package-mount` と共有するシームゆえ追加位置のマージ順に留意する
   - _Requirements: 1.1_
 
-- [ ] 2. Core: バルーンモデル型と解析 facade を実装する
+- [x] 2. Core: バルーンモデル型と解析 facade を実装する
 - [x] 2.1 バルーンモデル型を定義し単体テストで契約を固定する
   - `balloon/model.rs` に集約ルート `BalloonModel` と sub-struct（`WindowPosition`/`Origin`/`WordWrapPoint`/`ValidRect`/`Font`/`FontColor`）を定義する
   - 各モデル化スカラを `Option<T>` 直持ちとし、座標成分（x/y・t/b/l/r）と色成分（r/g/b）を個別に `Option` 化して部分欠落を欠落なく表現する（未指定＝`None`）
@@ -22,7 +22,7 @@
   - _Requirements: 2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 2.7, 2.8, 3.4, 4.1, 4.2, 4.3, 4.5, 5.4, 5.5_
   - _Boundary: balloon::model_
 
-- [ ] 2.2 2 層マージと KV→型写像を担う公開 facade を実装し単体テストで固定する
+- [x] 2.2 2 層マージと KV→型写像を担う公開 facade を実装し単体テストで固定する
   - `balloon/parse.rs` に公開 facade `parse(descript, image: Option)`（KV マップ 2 層入口）と便宜入口 `parse_str`（デコード済み文字列を内部で `kv::parse_kv` へ委譲）を実装する
   - 2 層マージ（D4）: descript 基層マップへ画像別層マップを後勝ち `insert` で重ね合わせた 1 マップから 1 回写像する（画像別優先・画像別欠落時 descript 継承・descript のみ許容を単一機構で満たす）
   - マージ済みマップから各モデル化キーを引いて `i32`/`u32`/`u8` へ整数パースし対応スカラへ束ねる。`font.color.{r,g,b}` の 3 キーを個別に引き `FontColor` へ束ねる。負値は符号付きのまま保持しピクセル解決は行わない
