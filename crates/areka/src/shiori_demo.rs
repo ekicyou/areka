@@ -1,125 +1,119 @@
-//! 実走デモドライバ（要件 6）。
+//! 実走デモドライバ（要件 12.1）。
 //!
-//! `reference_brain::shiori_create` で脳を取得し、`ShioriSession` で activate →
-//! 即時／遅延の数往復 request → `poll_completions` 待ち合わせ → Raise 観測 → unload
-//! までを駆動し、各経路を `tracing::info!` で観測する。フラグ／環境変数ゲートで
-//! 起動を制御する（要件 6.8）。
+//! `reference_brain::shiori_factory` で factory を取得し、`ShioriSession` で activate → 即時 get →
+//! 遅延 get+complete → raise → notify → drop teardown までを駆動し、各経路を `tracing::info!` で
+//! 観測する。フラグ／環境変数ゲートで起動を制御する（design.md §ConsumerFollowup・要件 12.1）。
 //!
-//! ## 本タスク（3.1）の範囲: 駆動＋観測（happy path）＋[`DemoError`] 型定義
-//! `run_demo` は `shiori_create`→`ShioriSession::activate`→即時／遅延+Complete／Raise／
-//! unload を 1 ループで駆動し、各経路を構造化 `tracing::info!`（`logging.md` 準拠）で観測可能
-//! にする（design.md §System Flows → デモ駆動シーケンス・要件 4.3/5.3/6.1〜6.5/9.5）。視覚 UX・
-//! 会話描画には依存しない（要件 6.7）。フラグ／環境変数ゲートと失敗時クリーンアップ規律は
-//! 後続タスク 3.2、`main.rs` への配線は task 4.1 が担う（本ファイルでは扱わない）。
+//! ## 駆動モデル（session 越し＋脳ハンドル併用）
+//! [`ShioriSession`] は `IShiori` を factory 経由で生成・保持するが脳アクセサを公開しない。遅延武装
+//! （`arm_defer_next`）・能動通知（`fire_raise`）・遅延完了（`complete_pending`）といった **脳側の
+//! 駆動** には [`ReferenceBrain`] 実体への到達が要る。そこで factory から **1 つの脳を create し、
+//! その脳（`IShiori`）で session を、その脳実体（`ReferenceBrain`）で脳駆動を** 行う——同一インス
+//! タンスなので session の突合枠と脳の採番トークンが整合する。session と同じ host（sink）を共有する
+//! ことで、脳→host の complete/raise が session の `poll_completions` で観測できる。
 
 use core::ptr;
 
-use shiori_abi::interface::IShiori;
+use shiori_abi::interface::{IShiori, IShioriFactory, IShioriHost};
 use windows_core::{AsImpl, HRESULT, HSTRING, Interface};
 
-use crate::reference_brain::{ReferenceBrain, shiori_create};
-use crate::shiori_host::HostMessage;
+use crate::reference_brain::{ReferenceBrain, shiori_factory};
+use crate::shiori_host::{HostMessage, ShioriHostSink};
 use crate::shiori_session::{SessionError, SessionRequest, ShioriSession};
 
 /// デモドライバ固有のエラー（駆動経路の失敗を型化する）。
-///
-/// 本タスク（3.1）の happy path では実際には返らないが、失敗報告／クリーンアップ規律を担う
-/// 後続タスク（3.2）と遅延完了タイムアウト経路（5.1）が消費する。`Timeout` は 3.2/5.1 用に
-/// 先行定義しており、3.1 の happy path では未使用。
 #[derive(thiserror::Error, Debug)]
-#[allow(dead_code)] // `Timeout` は task 3.2/5.1 が消費する先行定義（3.1 happy path では未使用）。
+#[allow(dead_code)] // `Timeout` は遅延タイムアウト経路用の先行定義（happy path では未使用）。
 pub enum DemoError {
-    /// `shiori_create` が失敗 HRESULT を返した（生成入口の失敗・要件 9.3/9.4）。
-    #[error("shiori_create failed: 0x{:08X}", .0.0)]
+    /// `shiori_factory` が失敗 HRESULT を返した（生成入口の失敗）。
+    #[error("shiori_factory failed: 0x{:08X}", .0.0)]
     Create(HRESULT),
-    /// `ShioriSession` 操作（activate/request/unload）が失敗した（利用規律 or HRESULT 由来）。
+    /// `ShioriSession` 操作（activate/get/notify）が失敗した（利用規律 or HRESULT 由来）。
     #[error(transparent)]
     Session(#[from] SessionError),
-    /// 遅延完了がタイムアウトした（task 3.2/5.1 が消費する先行定義）。
+    /// ホスト呼び出し（`complete_pending`/`fire_raise`）が失敗した（HRESULT 由来）。
+    #[error(transparent)]
+    Shiori(#[from] shiori_abi::error::ShioriError),
+    /// 遅延完了がタイムアウトした（先行定義）。
     #[error("deferred completion timed out")]
     Timeout,
 }
 
 /// OnBoot 形の不透明リクエスト content（固定）。誰にも解析されない不透明 HSTRING。
-///
-/// content 不透明性を保つため、この文字列は脳のエコーで往復するだけで、誰も解析・分割・
-/// 意味づけしない（要件 1.4/8.1）。
 const ONBOOT_CONTENT: &str = "\\0\\h\\s[0]OnBoot\\e";
-
 /// 遅延完了で脳→host へ送らせる固定応答 content（不透明）。
 const DEFERRED_RESPONSE: &str = "\\0\\h\\s[0]deferred-onboot-reply\\e";
-
-/// 能動通知（Raise）で脳→host へ送らせる固定スクリプト content（不透明）。
+/// 能動通知（raise）で脳→host へ送らせる固定スクリプト content（不透明）。
 const RAISE_SCRIPT: &str = "\\h\\s[0]active-notification\\e";
+/// 片道通知（notify）で脳へ送る固定 content（不透明）。
+const NOTIFY_CONTENT: &str = "NOTIFY SHIORI/3.0 OnFirstBoot";
 
-/// in-proc リファレンス脳を取得し、即時・遅延+Complete・Raise・unload の各経路を駆動して
-/// `tracing::info!` で観測可能にする（design.md §System Flows → デモ駆動シーケンス）。
-///
-/// 既存セッション規律（単一 in-flight・相関トークン突合・タイムアウト）に従い、遅延完了は
-/// 同一ループで [`ShioriSession::poll_completions`] を drain して待ち合わせる。完了後 `unload`
-/// で後始末し、保持していた `IShiori` 参照を Release する（要件 9.5）。
-///
-/// 視覚 UX・バルーン・さくらスクリプト描画には依存しない（要件 6.7）。各経路の疎通結果は
-/// 構造化 `tracing::info!`（フィールド `path` を含む）で出力する（`logging.md` 準拠）。
+/// factory を取得し、即時→遅延+complete→raise→notify→drop teardown の各経路を駆動して
+/// `tracing::info!` で観測可能にする（design.md §ConsumerFollowup）。
 pub fn run_demo() -> Result<(), DemoError> {
-    // 1. 生成入口: `shiori_create` で refcount 1 の IShiori を取得・所有する（要件 9.x）。
+    // 1. 生成入口: `shiori_factory` で refcount 1 の IShioriFactory を取得・所有する。
     let mut out: *mut core::ffi::c_void = ptr::null_mut();
-    // Safety: `out` は有効な書込先スタックスロット。成功時 refcount 1 の IShiori が書き込まれる。
-    let hr = unsafe { shiori_create(&mut out) };
+    // Safety: `out` は有効な書込先スタックスロット。成功時 refcount 1 の IShioriFactory が書き込まれる。
+    let hr = unsafe { shiori_factory(&mut out) };
     if hr.is_err() {
-        // 生成入口の失敗は型化して報告する（要件 6.6/9.3）。activate 前なので後始末対象は無い。
-        tracing::error!(hr = format!("0x{:08X}", hr.0), "[shiori-demo] shiori_create failed");
+        tracing::error!(hr = format!("0x{:08X}", hr.0), "[shiori-demo] shiori_factory failed");
         return Err(DemoError::Create(hr));
     }
-    // Safety: 成功 HRESULT のため `out` は refcount 1 の有効な IShiori。from_raw は AddRef せず adopt。
-    let brain: IShiori = unsafe { IShiori::from_raw(out) };
-    tracing::info!(path = "create", "[shiori-demo] shiori_create succeeded, IShiori adopted");
+    // Safety: 成功 HRESULT のため `out` は refcount 1 の有効な IShioriFactory。from_raw は AddRef せず adopt。
+    let factory: IShioriFactory = unsafe { IShioriFactory::from_raw(out) };
+    tracing::info!(path = "create", "[shiori-demo] shiori_factory succeeded, IShioriFactory adopted");
 
-    // 2. 脳実体への型付きハンドルを保つため CLONE（AddRef）する。`activate` は IShiori を MOVE
-    //    するため、遅延完了／Raise の発火に必要な ReferenceBrain への到達手段を別途確保する
-    //    （design.md シーケンス「Demo->>Brain: trigger deferred / trigger raise」）。
-    let brain_handle = brain.clone();
-    // Safety: `brain_handle` は `shiori_create`（= ReferenceBrain）から得た IShiori であり、
-    // 実装実体が ReferenceBrain であることが保証される。as_impl は借用ビューを返す。
-    let ref_brain = unsafe { AsImpl::<ReferenceBrain>::as_impl(&brain_handle) };
-
-    // 3. アクティベーション: brain を MOVE して in-proc Load（sink 受け渡し・要件 5.1/6.2）。
-    //    ここでの失敗は後始末対象（session）が成立していないため、報告のみで早期 return する。
-    let mut session = match ShioriSession::activate(brain) {
-        Ok(s) => s,
+    // 2. host（sink）を生成し、その host を共有する脳を factory 経由で create する。
+    //    脳（IShiori）で session を、脳実体（ReferenceBrain）で脳駆動を行う（同一インスタンス）。
+    let host: IShioriHost = ShioriHostSink::new().into();
+    let brain: IShiori = match factory.create(
+        &HSTRING::from("C:/ghost/master"),
+        &HSTRING::from("reference"),
+        &host,
+    ) {
+        Ok(b) => b,
         Err(e) => {
-            tracing::error!(error = %e, "[shiori-demo] session activation failed");
-            return Err(DemoError::Session(e));
+            tracing::error!(error = %e, "[shiori-demo] brain create failed");
+            return Err(DemoError::Session(SessionError::Shiori(e)));
         }
     };
-    tracing::info!(path = "activate", "[shiori-demo] session activated (Load delivered sink)");
+    // 脳駆動用ハンドル（session が brain を move するため、駆動用に AddRef した参照を確保）。
+    let brain_handle = brain.clone();
+    // Safety: `brain_handle` は `factory.create`（= ReferenceBrain）から得た IShiori。
+    let ref_brain = unsafe { AsImpl::<ReferenceBrain>::as_impl(&brain_handle) };
 
-    // 4. 駆動本体を closure seam の背後に置き、成功／失敗いずれでも unload 後始末を試みる
-    //    （要件 6.6）。各経路ログは `drive_paths` が、失敗報告＋クリーンアップは
-    //    `drive_and_cleanup` が担う。
-    let result = drive_and_cleanup(&mut session, ref_brain, drive_paths);
+    // 3. session を「同じ脳＋同じ host」で確立する。session は脳を move で保持する。
+    //    ここでは activate ではなく、既に create 済みの brain/host で session を組み立てるため、
+    //    session の内部生成をバイパスして同一インスタンスを共有する専用コンストラクタを用いる。
+    let mut session = ShioriSession::from_parts(brain, host.clone());
+    tracing::info!(path = "activate", "[shiori-demo] session established (shared brain + sink)");
 
-    // 5. 残った参照を Release して IShiori を解放する（session が brain を、handle が clone を保持）。
+    // 4. 駆動本体（即時→遅延+complete→raise→notify）。失敗しても drop teardown へ進む。
+    let result = drive_paths(&mut session, ref_brain);
+    if let Err(ref e) = result {
+        tracing::error!(error = %e, "[shiori-demo] demo driving failed; will drop for teardown");
+    }
+
+    // 5. drop teardown: session を drop（保留取消→brain drop）し、駆動ハンドル・host も drop する。
     drop(session);
     drop(brain_handle);
+    drop(host);
+    if result.is_ok() {
+        tracing::info!(path = "unload", "[shiori-demo] session dropped (teardown)");
+    }
 
     result
 }
 
-/// アクティベーション後の各駆動経路（即時／遅延+Complete／Raise）のみを駆動する。
-///
-/// unload はここでは行わない。後始末（unload）は [`drive_and_cleanup`] が成功／失敗いずれの
-/// 場合も一度だけ実行することで、二重 unload を避けつつ要件 6.6 のクリーンアップ規律を満たす。
+/// 即時／遅延+complete／raise／notify の各経路を session 越し＋脳ハンドル併用で駆動する。
 fn drive_paths(session: &mut ShioriSession, ref_brain: &ReferenceBrain) -> Result<(), DemoError> {
     let onboot = HSTRING::from(ONBOOT_CONTENT);
 
-    // 即時応答経路: 脳が S_OK＋応答 HSTRING を返す（content はエコーで不透明往復）。
-    let immediate = session.request(&onboot).map_err(DemoError::Session)?;
+    // 即時応答経路: session 越しの get が S_OK＋応答 HSTRING（エコー）を返す。
+    let immediate = session.get(&onboot).map_err(DemoError::Session)?;
     let SessionRequest::Immediate(immediate_response) = immediate else {
-        // happy path では即時のはず。万一遅延が返ったら利用規律違反として扱う。
         return Err(DemoError::Session(SessionError::RequestInFlight));
     };
-    // content 不透明性: 即時応答は受信 content のエコー（厳密一致）であることを観測する。
     debug_assert_eq!(immediate_response, onboot, "即時応答は OnBoot content のエコー");
     tracing::info!(
         path = "immediate",
@@ -127,11 +121,10 @@ fn drive_paths(session: &mut ShioriSession, ref_brain: &ReferenceBrain) -> Resul
         "[shiori-demo] immediate response received"
     );
 
-    // 遅延応答＋Complete 経路: 次 request を遅延武装し、PENDING＋トークンを受ける（単一 in-flight）。
+    // 遅延応答＋complete 経路: 脳を遅延武装 → session get で Deferred(token) を受ける（単一 in-flight）。
     ref_brain.arm_defer_next();
-    let deferred = session.request(&onboot).map_err(DemoError::Session)?;
+    let deferred = session.get(&onboot).map_err(DemoError::Session)?;
     let SessionRequest::Deferred(token) = deferred else {
-        // 遅延武装したのに即時が返ったら経路不成立。
         return Err(DemoError::Session(SessionError::RequestInFlight));
     };
     tracing::info!(
@@ -140,14 +133,10 @@ fn drive_paths(session: &mut ShioriSession, ref_brain: &ReferenceBrain) -> Resul
         "[shiori-demo] deferred pending issued (single in-flight)"
     );
 
-    // 脳→host へ Complete(token, response) を発火する（突合枠は session が request 時にセット済み）。
-    // ホスト呼び出しの失敗 HRESULT は生成入口ではないため Create ではなく Session(Shiori) で型化する。
+    // 脳→host complete を safe メソッドで発火（突合枠は session が get 時にセット済み）。
     let deferred_response = HSTRING::from(DEFERRED_RESPONSE);
-    let hr_complete = ref_brain.complete_pending(&deferred_response);
-    if hr_complete.is_err() {
-        return Err(host_call_err(hr_complete));
-    }
-    // 同一ループで poll_completions を drain して遅延完了を待ち合わせる（要件 6.4 経路）。
+    ref_brain.complete_pending(&deferred_response).map_err(DemoError::Shiori)?;
+    // 同一ループで poll_completions を drain して遅延完了を待ち合わせる。
     let drained = session.poll_completions();
     let completed = drained.iter().find_map(|m| match m {
         HostMessage::Completed { token: t, response } if *t == token => Some(response.clone()),
@@ -162,13 +151,9 @@ fn drive_paths(session: &mut ShioriSession, ref_brain: &ReferenceBrain) -> Resul
         "[shiori-demo] deferred completion drained"
     );
 
-    // 能動通知（Raise）経路: 脳→host へ Raise(script) を発火し、メールボックスから drain する。
-    // ここの失敗 HRESULT も生成入口ではないため Create ではなく Session(Shiori) で型化する。
+    // 能動通知（raise）経路: 脳→host raise を safe メソッドで発火し、メールボックスから drain する。
     let raise_script = HSTRING::from(RAISE_SCRIPT);
-    let hr_raise = ref_brain.fire_raise(&raise_script);
-    if hr_raise.is_err() {
-        return Err(host_call_err(hr_raise));
-    }
+    ref_brain.fire_raise(&raise_script).map_err(DemoError::Shiori)?;
     let drained = session.poll_completions();
     let raised = drained.iter().find_map(|m| match m {
         HostMessage::Raised(script) => Some(script.clone()),
@@ -181,54 +166,21 @@ fn drive_paths(session: &mut ShioriSession, ref_brain: &ReferenceBrain) -> Resul
         "[shiori-demo] active notification drained"
     );
 
+    // 片道通知（notify）経路: session 越しに notify を発行する（応答なし・受領ログへ記録される）。
+    session
+        .notify(&HSTRING::from(NOTIFY_CONTENT))
+        .map_err(DemoError::Session)?;
+    tracing::info!(path = "notify", "[shiori-demo] one-way notify delivered");
+
     Ok(())
 }
 
-/// 駆動 closure を実行し、成否にかかわらず best-effort で `unload` 後始末を試みる（要件 6.6）。
-///
-/// 駆動失敗（生成失敗を除く activate 後の全失敗 = セッション規律違反・ホスト呼び出し HRESULT・
-/// 遅延タイムアウト）は `tracing::error!` で報告したうえで、いずれの失敗でも unload を試みる。
-/// 成功経路では `path="unload"` info を引き続き出力する（task 3.1 の観測基準を維持）。
-fn drive_and_cleanup<F>(
-    session: &mut ShioriSession,
-    ref_brain: &ReferenceBrain,
-    drive: F,
-) -> Result<(), DemoError>
-where
-    F: FnOnce(&mut ShioriSession, &ReferenceBrain) -> Result<(), DemoError>,
-{
-    let result = drive(session, ref_brain);
-    if let Err(ref e) = result {
-        tracing::error!(error = %e, "[shiori-demo] demo driving failed; attempting cleanup");
-    }
-    // 成功／失敗いずれでも一度だけ unload 後始末を試みる（要件 6.6）。
-    match session.unload() {
-        Ok(()) => {
-            tracing::info!(path = "unload", "[shiori-demo] session unloaded (cleanup)");
-        }
-        Err(e) => {
-            tracing::error!(error = %e, "[shiori-demo] cleanup unload failed");
-        }
-    }
-    result
-}
-
-/// ホスト呼び出し（`complete_pending`/`fire_raise`）由来の失敗 HRESULT を型化する。
-///
-/// これらは生成入口（`shiori_create`）ではないため [`DemoError::Create`] ではなく、設計の
-/// `{Create, Session, Timeout}` 分類のうち `Session`（HRESULT を shiori エラーで包む）に写す。
-fn host_call_err(hr: HRESULT) -> DemoError {
-    DemoError::Session(SessionError::Shiori(shiori_abi::error::ShioriError::Com(
-        windows_core::Error::from(hr),
-    )))
-}
-
-/// デモ駆動を有効化する環境変数名（design.md §ShioriDemoDriver Implementation Notes）。
+/// デモ駆動を有効化する環境変数名（design.md §ConsumerFollowup Implementation Notes）。
 const DEMO_ENV: &str = "AREKA_SHIORI_DEMO";
 
 /// 与えられた値からデモ有効化を判定する純粋ヘルパ（env アクセスなし・単体テスト可能）。
 ///
-/// 空・`0`・`false`（大小無視）は無効、それ以外の非空値は有効とする（要件 6.8）。
+/// 空・`0`・`false`（大小無視）は無効、それ以外の非空値は有効とする。
 fn demo_enabled_from(value: Option<&str>) -> bool {
     match value.map(str::trim) {
         Some(v) => !v.is_empty() && v != "0" && !v.eq_ignore_ascii_case("false"),
@@ -236,14 +188,12 @@ fn demo_enabled_from(value: Option<&str>) -> bool {
     }
 }
 
-/// 環境変数 [`DEMO_ENV`] からデモ有効化を判定する（要件 6.8）。
+/// 環境変数 [`DEMO_ENV`] からデモ有効化を判定する。
 pub fn demo_enabled() -> bool {
     demo_enabled_from(std::env::var(DEMO_ENV).ok().as_deref())
 }
 
 /// 有効フラグを入力に取り、有効時のみ [`run_demo`] を駆動する純粋入力コア（単体テスト可能）。
-///
-/// 無効時はデモを起動せず `Ok(())` を返す（既定の通常起動では駆動しない・要件 6.8）。
 fn run_demo_if_enabled_with(enabled: bool) -> Result<(), DemoError> {
     if !enabled {
         tracing::debug!(
@@ -255,9 +205,7 @@ fn run_demo_if_enabled_with(enabled: bool) -> Result<(), DemoError> {
     run_demo()
 }
 
-/// 環境変数ゲートを評価し、明示有効化時のみデモを駆動する（要件 6.8）。
-///
-/// task 4.1 が `mgr.run()` の前にこの関数を `main` へ配線する。
+/// 環境変数ゲートを評価し、明示有効化時のみデモを駆動する。
 pub fn run_demo_if_enabled() -> Result<(), DemoError> {
     run_demo_if_enabled_with(demo_enabled())
 }
@@ -270,9 +218,6 @@ mod tests {
     use tracing_subscriber::prelude::*;
 
     /// イベントのレベル＋フィールドを文字列化して捕捉する最小 Layer。
-    ///
-    /// `on_event` は（max-level フィルタを設定しない限り）全レベルのイベントを受け取る。
-    /// 失敗注入テストで ERROR レベル発生を表明できるよう、レベルを行頭に埋め込んで記録する。
     #[derive(Clone, Default)]
     struct Capture(Arc<Mutex<Vec<String>>>);
 
@@ -282,7 +227,6 @@ mod tests {
             ev: &tracing::Event<'_>,
             _: tracing_subscriber::layer::Context<'_, S>,
         ) {
-            // 行頭にレベルを埋め込む（例: "level=ERROR ..."）。
             let mut buf = format!("level={}", ev.metadata().level());
             struct V<'a>(&'a mut String);
             impl Visit for V<'_> {
@@ -296,8 +240,8 @@ mod tests {
         }
     }
 
-    /// デモ駆動で即時・遅延+Complete・Raise・unload の各経路が tracing info ログとして
-    /// 出力され、全体が `Ok(())` で完走すること（観測基準・要件 6.x）。
+    /// デモ駆動で即時・遅延+complete・raise・notify・teardown の各経路が tracing info ログとして
+    /// 出力され、全体が `Ok(())` で完走すること（観測基準）。
     #[test]
     fn demo_drives_all_paths_and_emits_info_logs() {
         let cap = Capture::default();
@@ -311,11 +255,11 @@ mod tests {
         assert!(all.contains("path=\"deferred\""), "deferred path logged: {all}");
         assert!(all.contains("path=\"complete\""), "complete path logged: {all}");
         assert!(all.contains("path=\"raise\""), "raise path logged: {all}");
-        assert!(all.contains("path=\"unload\""), "unload path logged: {all}");
+        assert!(all.contains("path=\"notify\""), "notify path logged: {all}");
+        assert!(all.contains("path=\"unload\""), "teardown (unload) path logged: {all}");
     }
 
-    /// ゲート無効時はデモが起動しないこと（要件 6.8 / 観測基準）。
-    /// `run_demo_if_enabled_with(false)` は `Ok(())` を返し、駆動経路ログを一切出さない。
+    /// ゲート無効時はデモが起動しないこと（観測基準）。
     #[test]
     fn gate_disabled_does_not_drive() {
         let cap = Capture::default();
@@ -331,7 +275,7 @@ mod tests {
         );
     }
 
-    /// ゲート解析（純粋）の境界値（要件 6.8）。
+    /// ゲート解析（純粋）の境界値。
     #[test]
     fn gate_parsing_pure() {
         assert!(!super::demo_enabled_from(None));
@@ -344,7 +288,7 @@ mod tests {
         assert!(super::demo_enabled_from(Some("true")));
     }
 
-    /// ゲート有効時はデモが駆動され、各経路ログが出ること（要件 6.8）。
+    /// ゲート有効時はデモが駆動され、各経路ログが出ること。
     #[test]
     fn gate_enabled_drives() {
         let cap = Capture::default();
@@ -355,54 +299,6 @@ mod tests {
         });
         let all = logs.lock().unwrap().join("\n");
         assert!(all.contains("path=\"immediate\""), "enabled gate drives immediate: {all}");
-        assert!(all.contains("path=\"unload\""), "enabled gate drives unload: {all}");
-    }
-
-    /// 失敗注入時も後始末（unload）が試みられ、`tracing::error!` で報告されること（要件 6.6）。
-    ///
-    /// run_demo と同手順でセッションを建てて脳をダウンキャストし、必ず失敗する駆動 closure を
-    /// `drive_and_cleanup` に渡す。戻り値が `Err(Timeout)`、ERROR イベント発生、そして後始末
-    /// unload ログ（成功 info もしくは失敗 error）が観測できることを表明する。
-    #[test]
-    fn failure_injection_reports_and_attempts_cleanup() {
-        use windows_core::{AsImpl, Interface};
-
-        let cap = Capture::default();
-        let logs = cap.0.clone();
-        let sub = tracing_subscriber::registry().with(cap);
-        tracing::subscriber::with_default(sub, || {
-            // run_demo と同様にセッションを建てる。
-            let mut out: *mut core::ffi::c_void = core::ptr::null_mut();
-            let hr = unsafe { super::shiori_create(&mut out) };
-            assert!(hr.is_ok(), "shiori_create ok");
-            let brain: shiori_abi::interface::IShiori = unsafe { Interface::from_raw(out) };
-            let brain_handle = brain.clone();
-            let ref_brain =
-                unsafe { AsImpl::<super::ReferenceBrain>::as_impl(&brain_handle) };
-            let mut session =
-                super::ShioriSession::activate(brain).expect("activate ok");
-
-            // 必ず失敗する駆動 closure を注入する。
-            let result = super::drive_and_cleanup(&mut session, ref_brain, |_s, _b| {
-                Err(super::DemoError::Timeout)
-            });
-
-            assert!(
-                matches!(result, Err(super::DemoError::Timeout)),
-                "injected failure propagates as Timeout"
-            );
-
-            drop(session);
-            drop(brain_handle);
-        });
-
-        let all = logs.lock().unwrap().join("\n");
-        // 失敗報告: ERROR レベルのイベントが発生していること。
-        assert!(all.contains("level=ERROR"), "failure reported via tracing::error!: {all}");
-        // 後始末: クリーンアップ unload が試みられたこと（成功 info もしくは失敗 error ログ）。
-        assert!(
-            all.contains("path=\"unload\"") || all.contains("cleanup unload failed"),
-            "cleanup unload attempted: {all}"
-        );
+        assert!(all.contains("path=\"unload\""), "enabled gate drives teardown: {all}");
     }
 }

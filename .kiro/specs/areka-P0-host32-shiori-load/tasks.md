@@ -124,7 +124,7 @@
 
 - [ ] 9. areka consumer の新 ABI 追随（WS-B 波及）
   - 注: areka は単一コンパイル単位ゆえ、9.1〜9.3 の途中は crate がコンパイル不能（旧 ABI 参照が混在）。各サブタスクの観測は「当該ファイルの新 ABI 追随差分（テストコード込み）の完成」とし、`cargo test -p areka` の green 判定は 9.4 で束ねて検証する
-- [ ] 9.1 正解見本: reference brain 痩身と ReferenceFactory・module entry
+- [x] 9.1 正解見本: reference brain 痩身と ReferenceFactory・module entry
   - ReferenceBrain を Get/Notify 実装へ痩身（loaded フラグ・Load/Unload 削除・host/load_dir/shiori_name は construction 時確定の不変フィールド）、Notify は受領ログで片道性を観測可能化
   - ReferenceFactory（CreateInstance で brain 構築・host clone 保持・load_dir/shiori_name を保持し観測可能に・失敗時 out 未書込）と C 入口 shiori_factory（E_POINTER 防御・refcount 1 move-out・shiori_create 残置しない）
   - vtable 直呼びを safe メソッドへ置換
@@ -132,7 +132,7 @@
   - _Requirements: 1.3, 8.3, 8.4, 8.5, 8.6, 9.3, 10.4, 11.2, 12.2_
   - _Boundary: ReferenceFactory, ReferenceBrain, EntryPoint_
   - _Depends: 8.1, 8.3_
-- [ ] 9.2 (P) sink のプロパティアクセス新設
+- [x] 9.2 (P) sink のプロパティアクセス新設
   - ShioriHostSink へ内蔵プロパティストア（Mutex<HashMap>）＋GetProperty 同期即答（欠落 key=PropertyNotFound）＋SetProperty 即書き＋areka 側充填 API
   - 再入規約「areka は Get/Notify 呼出中にストアのロックを保持しない」を doc 契約化
   - key は SSP プロパティシステムの dotted パス名前空間（M1 最小 key 集合は実装フェーズ確定＝本タスクは契約面のみ）
@@ -140,7 +140,7 @@
   - _Requirements: 10.2, 10.3, 10.4, 10.5, 12.4_
   - _Boundary: ShioriHostSink_
   - _Depends: 8.3_
-- [ ] 9.3 セッション層の factory 移行と Drop teardown
+- [x] 9.3 セッション層の factory 移行と Drop teardown
   - activate を factory 経由生成へ（sink 生成→create(load_dir, shiori_name, host)→load 完了済み brain 受領）
   - unload() メソッド削除→impl Drop（保留取消→brain 解放の順序固定）、request→get 追随（単一 in-flight・timeout・poll_completions の規律維持）
   - 「unload 後の拒否」系テストは「drop 後は参照不在」へ書換え
@@ -148,7 +148,7 @@
   - _Requirements: 2.1, 12.3_
   - _Boundary: ShioriSession_
   - _Depends: 8.3, 9.1_
-- [ ] 9.4 demo・e2e テスト群の追随と直呼びハック全廃（areka crate green ゲート）
+- [x] 9.4 demo・e2e テスト群の追随と直呼びハック全廃（areka crate green ゲート）
   - shiori_demo/main を factory 生成・get/notify・Drop teardown の系列へ追随
   - shiori_e2e/lifecycle_e2e/reference_e2e テスト群を新 ABI へ追随し、vtable 直呼びヘルパ（call_load/call_request/call_raise/call_complete）を全廃
   - 観測可能な完了: 9.1〜9.3 の全 src 追随が揃い areka がコンパイル可能になった上で `cargo test -p areka`（x64）が green・ワークスペースから旧 ABI 参照（ShioriExt/shiori_create/Load/Unload/Request/RequestOutcome）が消えている（＝本タスクが areka crate の green ゲート）
@@ -183,3 +183,4 @@
 - Task 8.2: `error.rs` 語彙刷新＋`outcome.rs` 改名完了。**削除**: `SHIORI_E_NOT_LOADED`/`ShioriError::NotLoaded`（ゼロ参照でコンパイル証明）。**改名**: `LoadFailed→CreateFailed(HRESULT)`・`RequestFailed→GetFailed(HRESULT)`・`RequestOutcome→GetOutcome`（`Immediate(HSTRING)`/`Deferred(CorrelationToken)` 変種・`CorrelationToken`/allocator 不変）。**新設**: `ShioriError::{NotifyFailed(HRESULT), PropertyNotFound, UnknownToken}`・`SHIORI_E_PROPERTY_NOT_FOUND=make_shiori_failure(0x0004)=0xA0A1_0004`。**存置**: `SHIORI_S_PENDING(0x20A1_0001)`/`SHIORI_E_UNKNOWN_TOKEN(0xA0A1_0003)`/`Com` catch-all。`hresult_to_shiori_error`: UNKNOWN_TOKEN→UnknownToken・PROPERTY_NOT_FOUND→PropertyNotFound・他→Com。8.3 の安全面はこの語彙を使う。
 - Task 8.3: `ergonomic.rs` に **snake_case インヘレント第2impl** を再構築（ShioriExt 非復活）。**9.x consumer はこれを使う**（vtable 直呼びハック不要）: `IShioriFactory::create(&HSTRING,&HSTRING,&IShioriHost)->Result<IShiori,ShioriError>`（内部で `host=Ref::from(Some(host))`・`out=(&mut out).into()` OutRef・失敗時 out 未取り出し＝半構築非露出）／`IShiori::{get(&HSTRING)->Result<GetOutcome>, notify->Result<()>}`（**get 分岐順序固定: `hr==SHIORI_S_PENDING`→Deferred → `is_ok()`→Immediate → else→GetFailed**）／`IShioriHost::{raise, complete(CorrelationToken,&HSTRING), get_property(&HSTRING)->Result<HSTRING>, set_property}`。写像: notify→NotifyFailed・complete UNKNOWN_TOKEN→UnknownToken・get_property PROPERTY_NOT_FOUND→PropertyNotFound。
 - Task 8.4: `tests/mock_brain_roundtrip.rs` 新 ABI 再構築（5 テスト green）。**Task 8（WS-B ABI 層）完遂**＝`cargo test -p shiori-abi` 32 lib＋5 roundtrip green・警告0。roundtrip は `#[implement]` mock factory/brain/host＋安全面 `factory.create→brain.get/notify`・HSTRING bit 一致（sentinel 日本語含む）・TrackedResponse で alloc==drop 均衡（N=10_000 で二重解放/リーク検出）・clone 生存。**注**: サブエージェント 1 回目が API 接続断で中途終了→作業ツリー clean 確認→新規実装者で仕切り直し成功。**次は Task 9（areka consumer 追随）で areka を新 ABI へ＝赤を解消**。
+- Task 9（9.1〜9.4 一体移行・areka green ゲート）: `crates/areka` 8 ファイルを新 ABI へ全面追随。`cargo test -p areka` **61 passed 警告0**・workspace `cargo build` green・旧 COM ABI 参照（ShioriExt/shiori_create/RequestOutcome/call_* ヘルパ/COM の .Load/.Unload/.Request 直呼び）消滅（doc 言及のみ残存）。**9.1** reference_brain.rs: ReferenceBrain 痩身（loaded/Load/Unload 削除・host/load_dir/shiori_name は不変フィールドで観測可能=D1 貫通証拠）・ReferenceFactory(`#[implement(IShioriFactory)]`・失敗時 out 未書込)・C 入口 `shiori_factory`(E_POINTER/refcount1/shiori_create 残置なし)・Notify 受領ログ。**9.2** shiori_host.rs: `properties: Mutex<HashMap<String,HSTRING>>`・GetProperty 同期即答/欠落 key→PropertyNotFound・SetProperty 即書き・再入規約 doc+再入テスト（Get 内から get_property 呼び戻し無デッドロック）・`set_property_value` 充填 API。**9.3** shiori_session.rs: activate→factory.create 経由・unload() 削除→impl Drop(保留取消→brain drop)・request→get。**9.4** demo/main/e2e 追随・vtable 直呼びハック全廃。**test 専用 seam**: `ShioriSession::from_parts(brain, host)`（demo/reference-e2e が factory 生成 brain を session と ReferenceBrain ハンドルで共有）＝session は brain accessor を出さない。**注**: activate/activate_with_timeout は from_parts 経由の production ゆえ bin で未使用→`#[allow(dead_code)]`（round1 REJECT の唯一指摘・修正済）。プロパティ store のスレッド安全性テストは IShioriHost 非 Send ゆえ Arc<ShioriHostSink> 越しに検証。

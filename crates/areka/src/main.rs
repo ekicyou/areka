@@ -38,31 +38,30 @@ mod shiori_host;
 /// `Unload` 保留取消・設定可能タイムアウトの利用規律を所有する（task 4.2）。
 mod shiori_session;
 
-/// 製品コード（非テスト）のリファレンス脳。`#[implement(IShiori)]` 実装＋純粋C
-/// コンストラクタ `shiori_create` を所有する正解見本（task 2.x/9.x）。
+/// 製品コード（非テスト）のリファレンス脳＋ファクトリ＋C 入口。`#[implement(IShiori)]`/
+/// `#[implement(IShioriFactory)]` 実装＋純粋C コンストラクタ `shiori_factory` を所有する正解見本。
 mod reference_brain;
 
-/// 実走デモドライバ。`shiori_create`→`ShioriSession` で activate→数往復 request→
-/// `poll_completions`→Raise 観測→unload を駆動し tracing で観測する（task 3.x）。
+/// 実走デモドライバ。`shiori_factory`→`ShioriSession` で activate→数往復 get→
+/// `poll_completions`→raise/notify 観測→drop teardown を駆動し tracing で観測する。
 mod shiori_demo;
 
-/// 遅延応答と push 経路の end-to-end 結合テスト（task 5.2）。
-/// モック脳が `SHIORI_S_PENDING`＋token を返し、後で保持 host へ `Complete`/`Raise` を発火する
-/// 一連の流れを `ShioriSession` 越しに 1 シナリオで通す（4.1/4.2 の単体テストと重複させない）。
+/// 遅延応答と push 経路の end-to-end 結合テスト。
+/// モック脳が `SHIORI_S_PENDING`＋token を返し、後で保持 host へ safe `complete`/`raise` を発火する
+/// 一連の流れを `ShioriSession` 越しに 1 シナリオで通す（sink/session の単体テストと重複させない）。
 #[cfg(test)]
 mod shiori_e2e_tests;
 
-/// ライフサイクルと単一 in-flight 規律の end-to-end 結合テスト（task 5.3）。
-/// 状態を保持するモック脳で `Load`→`Request`→`Unload` の遷移、未ロード時 request 拒否（NotLoaded）、
-/// `Deferred` 保留中の `Unload` 取消→再 Load 後の正常動作を通しシナリオで実証する
-/// （4.2 の inline 単体テスト・5.2 の遅延 push e2e と重複させない）。
+/// ライフサイクルと単一 in-flight 規律の end-to-end 結合テスト。
+/// 新 ABI の生成〜利用〜teardown（factory create→get→drop teardown・「未ロード状態」は存在しない）と、
+/// `Deferred` 保留中の drop 取消→再 activate 後の正常動作を通しシナリオで実証する。
 #[cfg(test)]
 mod shiori_lifecycle_e2e_tests;
 
-/// 製品 `ReferenceBrain` × `ShioriSession` の end-to-end 結合テスト（task 5.1）。
-/// `shiori_create` で取得した本物の製品脳を `ShioriSession` 越しに駆動し、即時→遅延+Complete→
-/// Raise→unload の数往復・単一 in-flight 拒否・決定的タイムアウト・stale Complete 拒否・
-/// unload 後始末を実時間 sleep に依存せず検証する（モック e2e と重複させず製品脳の配線を実証）。
+/// 製品 `ReferenceFactory`/`ReferenceBrain` × `ShioriSession` の end-to-end 結合テスト。
+/// `shiori_factory` で取得した本物の製品 factory/brain を `ShioriSession` 越しに駆動し、
+/// load_dir/shiori_name の貫通（D1）・即時→遅延+complete→raise→notify の数往復・単一 in-flight 拒否・
+/// 決定的タイムアウト・stale complete 拒否・drop teardown を実時間 sleep に依存せず検証する。
 #[cfg(test)]
 mod shiori_reference_e2e_tests;
 
