@@ -15,3 +15,4 @@ pub mod charset;
 pub mod kv;
 pub mod package;
 pub mod sakura;
+pub mod shell;
