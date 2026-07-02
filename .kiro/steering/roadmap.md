@@ -56,8 +56,8 @@ areka（**x64**）が最小 SSP 互換ベースウェアとして、適合対象
 
 > コンストラクタ＝そのエンジンを構築する**定義入力**。独立 spec でも各エンジン unit に埋め込みでも可＝**埋め込み方針**（別 unit を増やさない）。記憶 areka-engine-construction-model。
 
-- **root（親）**: ルート定義 `install.txt` がゴースト全体の親コンストラクタ。
-- **ghost**: `areka-P0-package-mount` が root 定義を解決して構築（以下を子として構築）。
+- **root（親）**: ゴースト起動時の構築起点定義 `ghost/master/descript.txt` がゴースト全体の親コンストラクタ（`install.txt` は NAR インストーラ配置マニフェスト＝**起動時不使用**・ukadoc 論拠）。
+- **ghost**: `areka-P0-package-mount` が起点定義 `ghost/master/descript.txt` を解決してマウントモデルを構築（以下を子として構築）。
 - **SHIORI / host-32**: コンストラクタ＝ゴーストフォルダ定義（`ghost/master/descript.txt` の `shiori,pasta.dll` ＋ dir）。
 - **shell-anim-engine（②）**: コンストラクタ＝**SERIKO/shell 定義（`surfaces.txt`）＋ balloon 定義（balloon descript）**（統一エンジンゆえ両方が構築入力）。
 - **sakura-engine（①）**: コンストラクタ＝**さくらスクリプト**（SHIORI 応答ごと・**runtime・per-talk・transient**）。
@@ -73,7 +73,7 @@ areka（**x64**）が最小 SSP 互換ベースウェアとして、適合対象
 emo2 が起動して喋る。下記 5 トラックを結線して達成（⓪ ゴーストエンジンが全体を統括）。
 
 **⓪ ゴーストエンジン（最上位 owner・全エンジンを統括）**
-- `areka-P0-ghost-setup` — ゴースト lifecycle（package-mount で構築→boot 統括→close）。✔ install.txt から起動〜終了を統括
+- `areka-P0-ghost-setup` — ゴースト lifecycle（package-mount で構築→boot 統括→close）。✔ descript.txt 起点のマウントから起動〜終了を統括
 - `areka-P0-window-placement` — サーフェス窓の生成＋既定位置＋ドラッグ（`areka-mock-shell` 実コードから）。✔ むらさき/エモ窓が出てドラッグ移動
 
 **① SHIORI 通信層エンジン host-32（耐力壁・`pilot/shiori-host-32` がトラックを gate）**
@@ -88,7 +88,7 @@ emo2 が起動して喋る。下記 5 トラックを結線して達成（⓪ �
 - `areka-P0-parser-foundation` — **パーサー共通基盤**: charset デコード（冒頭 `charset` 行→encoding_rs 再デコード・全パーサー共通）＋ KV 読み込み（素朴マップ・surface 以外の全パーサー共通）。✔ charset 付き入力→KV マップ化（旧 `areka-P0-balloon-parse` を 2026-07-02 開発リジェクト→リネーム。知見は同 brief に集約）。**✅ 完了（2026-07-02・spec=`completed/areka-P0-parser-foundation`）**: `charset::decode`（BOM 読飛→冒頭ASCIIプリスキャン→宣言/既定 encoding_rs デコード）＋ `kv::parse_kv`（素朴 BTreeMap・後勝ち・trim）を `areka-parsers` に確立（encoding_rs 0.8 承認済追加・144 テスト緑）。下流 `shell-parse ∥ balloon-parse ∥ package-mount` の foundation 依存を充足
 - `areka-P0-shell-parse` — surfaces.txt/descript→surface モデル（foundation 依存）。✔ emo2 shell parse
 - `areka-P0-balloon-parse` — balloon 3段参照優先度（sXXs/kXXs 起点＞descript＞既定）解決→モデル（foundation 依存・着手時に再切り出し）。✔ emo2-kakukaku parse。**✅ 完了（2026-07-02・spec=`completed/areka-P0-balloon-parse`）**: `areka_parsers::balloon`（`model`＝幾何＋フォント subset 型群・`Option` 直持ちで未指定＝`None` を `Some(0)` と区別・`#[non_exhaustive]`／`parse`＝descript＋画像別の後勝ち2層マージ→exact-key 写像・符号保持・寛容 None 降格）を確立。emo2-kakukaku 実物 fixture（R5.1/5.2/5.3）を charset→parse_str で適合検証、distractor キー非漏洩も固定（172 テスト緑・新規依存ゼロ）
-- `areka-P0-package-mount` — install.txt/dir→mount（foundation 依存）。✔ emo2 layout 解決
+- `areka-P0-package-mount` — `ghost/master/descript.txt`＋dir→mount（foundation 依存・起点は descript.txt。`install.txt`＝NAR 配置マニフェストは起動時不使用ゆえスコープ外）。✔ emo2 layout 解決。**✅ 完了（2026-07-02・spec=`completed/areka-P0-package-mount`）**: descript.txt 起点で SHIORI（dir=`ghost/master`・file は `Option` 推測禁止）＋shell（既定 `master` フォールバック・物理存在確認）の2点マウントを解決する `package` module を `areka-parsers` に確立。所在ベース識別（`type` 分岐なし）・foundation（`charset::decode`/`kv::parse_kv`）委譲・致命失敗3種（起点不在/読取不能/shell 不在）を `MountError` で観測可能化・emo2 実 fixture 統合テスト green（164 テスト・回帰なし・clippy clean）。下流 `ghost-setup`/`host-32`/`shell-parse` へ `MountModel` を供給
 
 **runtime 制御階層（上→下に駆動・両 anim engine は dola 上）**
 - `areka-P0-conductor` — SHIORI イベント循環（OnSecondChange pump・host-32 送受・Value を sakura-engine へ）。✔ OnBoot→Value 受領→再生開始
