@@ -42,13 +42,13 @@
 4. load-ack = `MsgTag::Response` 1byte bool（凍結 wire 上・新タグ不要）。
 5. 最小 SHIORI DLL fixture（i686 cdylib）で成功／失敗を決定的 E2E 観測。
 
-**WS-B: IShiori ABI 是正**（拡大スコープ・下記 D1/D6/D7 に従う）
-1. `IShiori::Load(&self, host: &IShioriHost, load_dir: &HSTRING) -> Result<()>` へ（`load_dir` 必須・UTF-16／アダプタが ANSI 変換）。
-2. `unsafe` 除去＝型付き COM 引数へ（`HSTRING` 値/参照・`IShioriHost` 参照・out-param 安全化）。
-3. `Unload` メソッド削除＝teardown は Drop(RAII)。上（IShiori impl の Drop）から下（`ShioriByteProxy::Drop` の courtesy unload+FreeLibrary）まで一貫。
-4. `IShioriHost`（`Raise`/`Complete`）を同原則で安全化。
-5. IShiori コンストラクタ関数の ABI 是正。
-6. consumer（`shiori-protocol`/`-reference`・ergonomic・mock/test）の波及更新。
+**WS-B: IShiori ABI 是正**（拡大スコープ・下記 D1/D6/D7 に従う・**Option B factory 採用**）
+1. **factory 新設**: `shiori_factory(out) -> IShioriFactory`（module entry・旧 `shiori_create` を置換）＋ `IShioriFactory::create(load_dir: &HSTRING, host: Ref<IShioriHost>, out: OutRef<IShiori>)`＝**生成＋load 融合**の per-ghost instance 生成。factory=backend（native/host-32 互換/mock）、instance=ゴースト。
+2. **`IShiori` 痩身**: `Request(input: &HSTRING) -> Result<RequestOutcome>` のみ。**`Load`/`Unload` メソッド消滅**（load は factory.create に融合・teardown は Drop(RAII)）。
+3. **`unsafe` 除去＝型付き COM 引数**: IF 借用は `Ref<'_, T>`（`&IShioriHost` は二重ポインタゆえ不可）／OUT は `OutRef<'_, T>`／文字列は `&HSTRING`。生 `*mut c_void` は避けられる範囲で避ける。
+4. **`IShioriHost` 役割拡充＋安全化**: `Raise`/`Complete` に加え **`GetProperty(key)->HSTRING`／`SetProperty(key,value)`（共有変数/プロパティアクセス・同期 brain→host）を新設**。`key`=SSP プロパティシステムの dotted パス（ukadoc `list_propertysystem` 準拠）。sink は共同所有ゆえ host は `Ref` 渡し（callee clone）。
+5. teardown は Drop(RAII) 全層一貫（IShiori impl Drop → `ShioriByteProxy::Drop` の courtesy unload+FreeLibrary）。
+6. consumer（`shiori-protocol`/`-reference`・`ShioriExt`・`ShioriSession::activate`→factory 経由へ・mock/test）の波及更新。
 
 ## Confirmed Decisions（本ディスカッションで確定・継続性の核）
 
@@ -58,7 +58,12 @@
 - **D3 [名前] SHIORI 名は descript.txt `shiori,<ファイル名>`**（既定 `shiori.dll`・ukadoc `descript_ghost#shiori,ファイル名`）。emo2 の `pasta.dll` は一例。名前解決（descript 参照）は親／`package-mount` の領分・helper は受け取るのみ。
 - **D4 [fixture] host-32 トラック所有の最小 SHIORI DLL**（i686 cdylib `shiori-host32-testdll`・`crate-type=["cdylib"]`・`[lib] name="shiori"`）を主役。`load→false` 強制で失敗パス決定的テスト化。本物 emo2 `pasta.dll` は `HOST32_PASTA_DLL` env-gated 任意 confidence（pilot go 済が根拠・CI 必須にしない）。`crates/pilot` 非依存（葉ノード隔離）。
 - **D5 [ack] load-ack = `MsgTag::Response` 1byte bool**（`[1]`=成功）。親 `send_request(MsgTag::Load, &[], t)` の再入 RESPONSE 経路にそのまま乗る（凍結 wire 不改変・実コードで裏取り済）。
-- **D6 [IShiori] ABI 是正**: `Load` に `load_dir:HSTRING` 追加／`unsafe` 除去（型付き COM 引数）／`Unload` メソッド削除（teardown は Drop）。`IShioriHost` 同原則。コンストラクタ関数 ABI 是正。
+- **D6 [IShiori ABI] factory 採用（Option B）＋ sink 拡充**:
+  - **factory**: `shiori_factory() -> IShioriFactory`／`IShioriFactory::create(load_dir, host) -> IShiori`（生成＋load 融合・旧 `shiori_create` 置換）。factory=backend・instance=per-ghost（load_dir で独立）。→ **`IShiori::Load` は無駄ゆえ廃止**（create に融合）。
+  - **`IShiori`**: `Request` のみ（`Load`/`Unload` 消滅・teardown=Drop）。
+  - **`IShioriHost`**: `Raise`/`Complete`＋**`GetProperty`/`SetProperty` 新設**（共有変数アクセス＝sink の正当な役割・ukadoc プロパティシステム準拠）。
+  - **安全化**: `unsafe` 除去・IF 借用は `Ref<'_,T>`（`&T` は二重ポインタで不可）・OUT は `OutRef<'_,T>`・文字列 `&HSTRING`。C エクスポート入口（`shiori_factory`）は `extern "system"`＋raw out-param 維持。
+  - host 渡しは `Ref`（sink 共同所有ゆえ callee clone・by-value 不採用）。
 - **D7 [teardown] Drop(RAII) 全層一貫**: teardown は best-effort（どうせ畳む）。helper ハング等はプロセス lifecycle（kill・下流 `host32-lifecycle`）で処理し戻り値では扱わない。reload-in-place は areka=1 helper=1 ゴースト＝再生成で足る（YAGNI）。
 
 ## Scope
@@ -115,8 +120,9 @@
 
 ## Open Questions（design で決める・discovery のブロッカーではない）
 
-1. **IShiori 安全メソッドの実装可否**: windows-core 0.62 の `#[interface]` で `unsafe` を外し型付き COM 引数／`Request` の out-param（応答・token）を安全表現できるか。不可なら最小 `unsafe` を局所化する落としどころ。
-2. **IShiori コンストラクタ関数の署名**: factory（`shiori_create` 系）の是正後 ABI。`load_dir` は `Load` 引数で供給決定ゆえコンストラクタは load_dir 不要が既定だが、per-instance 生成の形（COM 生成規約・戻り値）を design で確定。
+1. **IShiori 安全メソッドの実装可否**: windows-core 0.62 の `#[interface]` で `unsafe` を外し型付き COM 引数（`Ref<T>`/`OutRef<T>`/`&HSTRING`）／`Request` の out-param（応答・token）を安全表現できるか。不可なら最小 `unsafe` を局所化する落としどころ。
+2. **factory の詳細**: `IShioriFactory` の新規 IID 採番／`create` の out-param 形（`OutRef<IShiori>` vs raw）／host-32 x64 過去互換アダプタが**独自 factory**（別 backend）として `IShioriFactory` を実装する形。`shiori_factory` の C 入口署名確定。
+6. **プロパティシステム semantics**: `GetProperty`/`SetProperty` の key 名前空間（SSP `list_propertysystem` の dotted パス・汎用 vs `ext.` 拡張）・同期契約・スレッド安全性（brain 任意スレッドから呼ばれうる）・欠落 key の扱い（error vs 空）・host-32 越しの実現（compat は sakura `\![get,property]`/イベント経由か・native は同期コールバックか）を design で確定。M1 で emo2 が使う最小 key 集合に絞る。
 3. **consumer 波及範囲**: `shiori-protocol`/`-reference`/ergonomic/mock の具体的更新点を design で網羅（IShiori impl・呼出側）。
 4. **ABI 一次源再確認**: 実装前に `git submodule update --init` で `vendors/pasta` を展開し flat-C 署名をバイト正確に再確認（`[patch.crates-io] pasta_core` の path 健全化も兼ねる）。
 5. **記憶訂正**: `areka-engine-construction-model` の「dir を construction に隠す」解釈を D1 に沿って訂正（load_dir は load 契約に必須）。
