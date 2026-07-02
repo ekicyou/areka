@@ -15,7 +15,7 @@
   - _Boundary: SpawnContract_
   - _Depends: 1_
 
-- [ ] 3. helper 受領側の起動パラメーター取得と LOAD トリガ分類
+- [x] 3. helper 受領側の起動パラメーター取得と LOAD トリガ分類
 - [x] 3.1 起動パラメーター取得の一般化と欠落時の決定的失敗
   - arg-n 優先・env fallback の取得純関数を load_dir（arg2）・SHIORI 名（arg3）へ一般化する（値は cwd から推測しない）
   - 必須パラメーター欠落時は起動時 exit(2)（親は HELLO 不達＋プロセス終了で決定的に観測）
@@ -42,7 +42,7 @@
   - _Boundary: TestDll_
   - _Depends: 1_
 
-- [ ] 5. SHIORI DLL プロキシ（unsafe FFI の一点集約）
+- [x] 5. SHIORI DLL プロキシ（unsafe FFI の一点集約）
 - [x] 5.1 (P) プロキシ本体の実装
   - DLL 絶対パス（load_dir＼SHIORI 名）の LoadLibraryW→3 エクスポート解決（load/unload/request すべて）→ANSI(CP_ACP) 符号化→GMEM_FIXED バッファで load 同期呼出、成功時のみ「load 済み」プロキシを返す
   - flat-C 署名はタスク 1 の照合結果に従う（cdecl・Rust bool 1 byte・len in/out）
@@ -74,7 +74,7 @@
   - _Boundary: HelperLoadWiring_
   - _Depends: 3.2, 5.1_
 
-- [ ] 7. LOAD E2E 検証（WS-A 検証）
+- [x] 7. LOAD E2E 検証（WS-A 検証）
 - [x] 7.1 実プロセス E2E: 成功・失敗・生存
   - testdll 解決（env HOST32_TESTDLL_DLL 優先→target 探索→明確 panic・silent skip 禁止）→一時 dir へ DLL コピーで load_dir を成立（cwd=load_dir 慣習の同時検証）
   - 成功 ack[1]／env 強制失敗 ack[0]／DLL 不在 ack[0]／各失敗後の helper 生存（poll_exit_kind→None）を観測
@@ -91,7 +91,7 @@
   - _Boundary: LoadE2E_
   - _Depends: 7.1_
 
-- [ ] 8. shiori-abi の新 ABI カットオーバー（WS-B 起点）
+- [x] 8. shiori-abi の新 ABI カットオーバー（WS-B 起点）
 - [x] 8.1 (P) vtable 面の全面書換えと旧面の撤去
   - 3 interface（IShioriFactory 新設=CreateInstance・IShiori=Get/Notify・IShioriHost=Raise/Complete/GetProperty/SetProperty）を型付き引数（Ref／OutRef／&HSTRING／&mut）・pub メソッド・新 IID（3 本再採番）で再定義し、旧 Load/Unload/Request は残置しない
   - Get のみ HRESULT 生返し（成功 2 値 S_OK/PENDING）、他は Result<()>（windows-core 制約の設計どおり）
@@ -122,7 +122,7 @@
   - _Boundary: SafeSurface_
   - _Depends: 8.3_
 
-- [ ] 9. areka consumer の新 ABI 追随（WS-B 波及）
+- [x] 9. areka consumer の新 ABI 追随（WS-B 波及）
   - 注: areka は単一コンパイル単位ゆえ、9.1〜9.3 の途中は crate がコンパイル不能（旧 ABI 参照が混在）。各サブタスクの観測は「当該ファイルの新 ABI 追随差分（テストコード込み）の完成」とし、`cargo test -p areka` の green 判定は 9.4 で束ねて検証する
 - [x] 9.1 正解見本: reference brain 痩身と ReferenceFactory・module entry
   - ReferenceBrain を Get/Notify 実装へ痩身（loaded フラグ・Load/Unload 削除・host/load_dir/shiori_name は construction 時確定の不変フィールド）、Notify は受領ログで片道性を観測可能化
@@ -156,7 +156,7 @@
   - _Boundary: ConsumerFollowup_
   - _Depends: 9.1, 9.2, 9.3_
 
-- [ ] 10. 全体統合検証
+- [x] 10. 全体統合検証
 - [x] 10.1 ワークスペース 1 PR 完結状態の確認
   - x64: `cargo build`＋`cargo test`（全クレート）green
   - i686（PowerShell）: helper／testdll のビルド＋`cargo test --target i686-pc-windows-msvc` green
