@@ -1,0 +1,187 @@
+# Implementation Plan
+
+- [x] 1. 開発前提の整備: vendors/pasta submodule 展開と flat-C 署名のバイト正確照合
+  - `git submodule update --init` で vendors/pasta を展開し、workspace の cargo 解決（`[patch.crates-io] pasta_core` の path）を回復する
+  - pasta_shiori の windows.rs と設計の flat-C 3 署名（cdecl・bool 1 byte・request len in/out・HGLOBAL 所有権・装飾なしシンボル名）をバイト正確に照合し、相違があれば設計へ差し戻す
+  - 観測可能な完了: workspace の cargo 解決（`cargo metadata`）が成功し、署名照合の結果が research.md に追記されている
+  - _Requirements: 4.6, 13.5_
+
+- [x] 2. (P) 親プロセスの helper 起動パラメーター契約を load_dir・SHIORI 名込みへ拡張
+  - spawn を「arg1=parent_hwnd（互換維持）・arg2=load_dir・arg3=SHIORI 名」へ拡張し、同値を env（HOST32_LOAD_DIR／HOST32_SHIORI_NAME）へ二重供給、cwd=load_dir を維持する
+  - LOAD 用 ack 待機の推奨既定 timeout 定数（30 秒）を公開する
+  - 既存の spawn 呼出 2 箇所（echo 往復・エラーパステスト）を新契約へ吸収する
+  - 観測可能な完了: stand-in 単体テストが arg1..3・env 3 種・cwd の同値供給を検証して green、既存テストがコンパイル・通過する
+  - _Requirements: 1.1, 3.1, 3.2, 3.3, 5.2_
+  - _Boundary: SpawnContract_
+  - _Depends: 1_
+
+- [x] 3. helper 受領側の起動パラメーター取得と LOAD トリガ分類
+- [x] 3.1 起動パラメーター取得の一般化と欠落時の決定的失敗
+  - arg-n 優先・env fallback の取得純関数を load_dir（arg2）・SHIORI 名（arg3）へ一般化する（値は cwd から推測しない）
+  - 必須パラメーター欠落時は起動時 exit(2)（親は HELLO 不達＋プロセス終了で決定的に観測）
+  - helper は受領した SHIORI 名をそのまま使用し descript.txt を解釈しない
+  - exit(2) 導入は既存 spawn 呼出の移行（タスク 2）完了後に安全（旧 spawn は parent_hwnd のみ供給ゆえ、タスク 2 未着だと既存 E2E が exit(2) で全滅する）
+  - 観測可能な完了: 取得純関数の単体テスト（arg 優先／env fallback／欠落 None）が green
+  - _Requirements: 1.2, 3.4, 3.5, 3.6_
+  - _Boundary: HelperLoadWiring_
+  - _Depends: 1, 2_
+- [x] 3.2 LOAD フレームのトリガ分類
+  - 分類純関数に「Load 受領→ロード実行トリガ」の分岐を追加し、従来の「既知だが無視」を置換する（ペイロードにパスを期待しない）
+  - 既存分類（未知タグ・宣言長不整合→IgnoreBad）の非回帰
+  - 観測可能な完了: 分類テストが TriggerLoad 分岐を検証して green（既存分類テストも通過）
+  - _Requirements: 4.1_
+  - _Boundary: HelperLoadWiring_
+
+- [x] 4. (P) 最小 SHIORI DLL fixture クレートの新設
+  - i686 cdylib（出力名 shiori.dll・数 KB）として flat-C の load／unload／request 3 エクスポートを実装する
+  - load は受領バッファを callee 解放（ホスト側二重解放の検出器）し、env 指定（HOST32_TESTDLL_LOAD_FAIL）で false を強制できる
+  - unload は env 指定（観測マーカーのファイルパス）時にファイル作成で呼出を観測可能化、request は最小 stub
+  - crates/pilot へ依存しない（葉ノード隔離・workspace ワイルドカードで自動参加）
+  - 観測可能な完了: PowerShell で i686 ビルドが成功し shiori.dll が生成される
+  - _Requirements: 7.1, 7.2, 7.7, 13.4_
+  - _Boundary: TestDll_
+  - _Depends: 1_
+
+- [x] 5. SHIORI DLL プロキシ（unsafe FFI の一点集約）
+- [x] 5.1 (P) プロキシ本体の実装
+  - DLL 絶対パス（load_dir＼SHIORI 名）の LoadLibraryW→3 エクスポート解決（load/unload/request すべて）→ANSI(CP_ACP) 符号化→GMEM_FIXED バッファで load 同期呼出、成功時のみ「load 済み」プロキシを返す
+  - flat-C 署名はタスク 1 の照合結果に従う（cdecl・Rust bool 1 byte・len in/out）
+  - load 入力バッファは callee 解放規約（自ら解放しない・二重解放禁止）
+  - 失敗態様（DLL 不在／エクスポート欠落／load false／符号化・確保失敗）を観測可能なエラー enum で返し、確立途中失敗は内部で解放して状態を残さない
+  - Drop で best-effort courtesy unload→FreeLibrary（結果は無視・明示 teardown メソッドを公開しない）
+  - helper の windows features（LibraryLoader／Memory／Globalization）を追加し、helper の main.rs へは `mod shiori_proxy` 宣言のみ追加する（main.rs の他の変更は 3.x／6 の領分）
+  - 観測可能な完了: helper クレートが i686 でビルド成功し、unsafe が本モジュールへ集約されている（Safety コメント付き）
+  - _Requirements: 1.1, 2.1, 2.3, 4.2, 4.4, 4.5, 4.7, 6.1, 6.2, 6.3, 13.3_
+  - _Boundary: ShioriByteProxy_
+  - _Depends: 1_
+- [x] 5.2 プロキシの i686 単体テスト
+  - パス組立・ANSI 符号化の純関数部の検証
+  - kernel32.dll に対する load 解決失敗で EntryNotFound を決定的に証明（エクスポート欠落態様）
+  - testdll を直接 load→drop し、courtesy unload の実呼出（unload 観測マーカー）と無 panic を確認（E2E では Drop 経路が実行されない補完）
+  - 観測可能な完了: PowerShell の `cargo test --target i686-pc-windows-msvc` が green
+  - _Requirements: 2.2, 6.2, 13.2_
+  - _Boundary: ShioriByteProxy_
+  - _Depends: 4, 5.1_
+
+- [x] 6. WndProc の LOAD 結線と 1 byte ack（WS-A 統合）
+  - 共有状態へ load_dir・SHIORI 名・プロキシ保持スロット（RefCell）・LOAD 観測カウンタを追加する
+  - TriggerLoad 受領→プロキシ未確立なら同期確立＋load→成功で常設保持、ack[1]／あらゆる失敗で ack[0] を既存 Response 再入経路で 1 通返送
+  - RefCell 再入規律: borrow を ack 送出（ブロッキング SMTO）越しに保持しない（確立→borrow 終了→送出の順序固定）
+  - 確立済みの再 LOAD は load 再呼出なしで ack[1] 冪等返送（reload なし）
+  - ロード失敗後も helper プロセスは生存継続（WndProc/メッセージループ継続）
+  - 観測可能な完了: 分類・結線の単体／loopback テストが green、helper の i686 ビルドが green
+  - _Requirements: 2.4, 4.1, 4.3, 5.1, 6.4_
+  - _Boundary: HelperLoadWiring_
+  - _Depends: 3.2, 5.1_
+
+- [x] 7. LOAD E2E 検証（WS-A 検証）
+- [x] 7.1 実プロセス E2E: 成功・失敗・生存
+  - testdll 解決（env HOST32_TESTDLL_DLL 優先→target 探索→明確 panic・silent skip 禁止）→一時 dir へ DLL コピーで load_dir を成立（cwd=load_dir 慣習の同時検証）
+  - 成功 ack[1]／env 強制失敗 ack[0]／DLL 不在 ack[0]／各失敗後の helper 生存（poll_exit_kind→None）を観測
+  - LOAD ack 待機は推奨既定 timeout（親 per-call・凍結 timeout 機構は不変）
+  - 観測可能な完了: E2E テストが 2 段ビルド手順（PowerShell・i686 build→x64 test）で green
+  - _Requirements: 1.1, 5.3, 5.4, 6.1, 6.3, 6.4, 7.3_
+  - _Boundary: LoadE2E_
+  - _Depends: 2, 4, 6_
+- [x] 7.2 pasta gate と既存回帰
+  - HOST32_PASTA_DLL 設定時のみ実 pasta 追験（env 設定済みで DLL 不在なら明示 fail・CI 必須ゲートにしない）
+  - echo 往復・エラーパスの既存 E2E が新 spawn 契約で非回帰（凍結境界の維持確認）
+  - 観測可能な完了: pasta gate の 3 態様（未設定 skip／設定+実行／設定+不在で明示 fail）がテストコードで判別でき、既存 E2E green
+  - _Requirements: 7.4, 7.5, 7.6, 13.1, 13.2_
+  - _Boundary: LoadE2E_
+  - _Depends: 7.1_
+
+- [x] 8. shiori-abi の新 ABI カットオーバー（WS-B 起点）
+- [x] 8.1 (P) vtable 面の全面書換えと旧面の撤去
+  - 3 interface（IShioriFactory 新設=CreateInstance・IShiori=Get/Notify・IShioriHost=Raise/Complete/GetProperty/SetProperty）を型付き引数（Ref／OutRef／&HSTRING／&mut）・pub メソッド・新 IID（3 本再採番）で再定義し、旧 Load/Unload/Request は残置しない
+  - Get のみ HRESULT 生返し（成功 2 値 S_OK/PENDING）、他は Result<()>（windows-core 制約の設計どおり）
+  - 旧 ShioriExt・旧 mock roundtrip テストを撤去し、lib.rs の再エクスポート面から旧項目（ShioriExt／旧 interface メソッド）を除去して shiori-abi クレート単体をコンパイル可能な最小状態に保つ（新安全面は 8.3・新 roundtrip は 8.4）
+  - vtable dispatch テスト＋IID 固定回帰テスト（3 本相互不一致・旧 IID 不一致）＝混在署名（Ref/OutRef/&HSTRING/&mut/Result<()>/HRESULT）のコンパイル実証を兼ねる
+  - WS-A（タスク 2〜7）とは完全独立（前提はタスク 1 の workspace 解決のみ）。以降 crates/areka は一時的に赤（9.x で追随・10.1 で全体 green 回復）
+  - 観測可能な完了: `cargo test -p shiori-abi` が green（vtable dispatch・IID テスト含む）
+  - _Requirements: 1.1, 8.1, 8.3, 9.1, 9.2, 10.1, 11.1, 11.3, 11.4_
+  - _Boundary: InterfaceLayer_
+  - _Depends: 1_
+- [x] 8.2 エラー語彙の刷新と Get 結果表現の改名
+  - SHIORI_E_NOT_LOADED／NotLoaded を削除、LoadFailed→CreateFailed・RequestFailed→GetFailed へ改名、NotifyFailed／PropertyNotFound／UnknownToken と SHIORI_E_PROPERTY_NOT_FOUND(0xA0A1_0004) を新設
+  - RequestOutcome→GetOutcome 改名（変種・token/allocator 不変）
+  - 観測可能な完了: HRESULT 採番固定テスト（0xA0A1_0004・削除定数の不在）が green
+  - _Requirements: 8.6, 9.4, 10.5_
+  - _Boundary: ErrorVocab, GetOutcome_
+- [x] 8.3 snake_case 安全面（インヘレント）の新設
+  - create→Result<IShiori>（OutRef 受け皿隠蔽・失敗は CreateFailed で半構築非露出）／get→Result<GetOutcome>（HRESULT 3 分岐復元）／notify・raise・complete・get_property・set_property の Result 直返しをインヘレント第 2 impl として提供（ShioriExt は復活させない）
+  - HRESULT→enum マッピングは既存ロジック流用（SHIORI_S_PENDING 判別が is_ok() より先）
+  - 観測可能な完了: mock 経由の 4 経路マッピングテスト（即時／遅延／create 失敗／notify 失敗）が green
+  - _Requirements: 8.2, 9.4, 12.5_
+  - _Boundary: SafeSurface_
+  - _Depends: 8.1, 8.2_
+- [x] 8.4 mock roundtrip の新 ABI 書換え
+  - factory 生成→get/notify の HSTRING 無マーシャリング往復・alloc/drop 計測を新 ABI で再確立
+  - 観測可能な完了: `cargo test -p shiori-abi` 全体（roundtrip 含む）が green
+  - _Requirements: 12.1, 12.6_
+  - _Boundary: SafeSurface_
+  - _Depends: 8.3_
+
+- [x] 9. areka consumer の新 ABI 追随（WS-B 波及）
+  - 注: areka は単一コンパイル単位ゆえ、9.1〜9.3 の途中は crate がコンパイル不能（旧 ABI 参照が混在）。各サブタスクの観測は「当該ファイルの新 ABI 追随差分（テストコード込み）の完成」とし、`cargo test -p areka` の green 判定は 9.4 で束ねて検証する
+- [x] 9.1 正解見本: reference brain 痩身と ReferenceFactory・module entry
+  - ReferenceBrain を Get/Notify 実装へ痩身（loaded フラグ・Load/Unload 削除・host/load_dir/shiori_name は construction 時確定の不変フィールド）、Notify は受領ログで片道性を観測可能化
+  - ReferenceFactory（CreateInstance で brain 構築・host clone 保持・load_dir/shiori_name を保持し観測可能に・失敗時 out 未書込）と C 入口 shiori_factory（E_POINTER 防御・refcount 1 move-out・shiori_create 残置しない）
+  - vtable 直呼びを safe メソッドへ置換
+  - 観測可能な完了: reference_brain.rs の新 ABI 追随差分（ReferenceFactory・shiori_factory・Get/Notify・生成入口/roundtrip テストコード込み）が完成（crate 全体の green は 9.4 で検証）
+  - _Requirements: 1.3, 8.3, 8.4, 8.5, 8.6, 9.3, 10.4, 11.2, 12.2_
+  - _Boundary: ReferenceFactory, ReferenceBrain, EntryPoint_
+  - _Depends: 8.1, 8.3_
+- [x] 9.2 (P) sink のプロパティアクセス新設
+  - ShioriHostSink へ内蔵プロパティストア（Mutex<HashMap>）＋GetProperty 同期即答（欠落 key=PropertyNotFound）＋SetProperty 即書き＋areka 側充填 API
+  - 再入規約「areka は Get/Notify 呼出中にストアのロックを保持しない」を doc 契約化
+  - key は SSP プロパティシステムの dotted パス名前空間（M1 最小 key 集合は実装フェーズ確定＝本タスクは契約面のみ）
+  - 観測可能な完了: shiori_host.rs のプロパティアクセス差分（同期応答/欠落 key/set→get 往復/別スレッド set のテストコード込み）が完成（crate 全体の green は 9.4 で検証）
+  - _Requirements: 10.2, 10.3, 10.4, 10.5, 12.4_
+  - _Boundary: ShioriHostSink_
+  - _Depends: 8.3_
+- [x] 9.3 セッション層の factory 移行と Drop teardown
+  - activate を factory 経由生成へ（sink 生成→create(load_dir, shiori_name, host)→load 完了済み brain 受領）
+  - unload() メソッド削除→impl Drop（保留取消→brain 解放の順序固定）、request→get 追随（単一 in-flight・timeout・poll_completions の規律維持）
+  - 「unload 後の拒否」系テストは「drop 後は参照不在」へ書換え
+  - 観測可能な完了: shiori_session.rs の factory 移行・Drop teardown 差分（生成〜get〜drop 系列のテストコード込み）が完成（crate 全体の green は 9.4 で検証）
+  - _Requirements: 2.1, 12.3_
+  - _Boundary: ShioriSession_
+  - _Depends: 8.3, 9.1_
+- [x] 9.4 demo・e2e テスト群の追随と直呼びハック全廃（areka crate green ゲート）
+  - shiori_demo/main を factory 生成・get/notify・Drop teardown の系列へ追随
+  - shiori_e2e/lifecycle_e2e/reference_e2e テスト群を新 ABI へ追随し、vtable 直呼びヘルパ（call_load/call_request/call_raise/call_complete）を全廃
+  - 観測可能な完了: 9.1〜9.3 の全 src 追随が揃い areka がコンパイル可能になった上で `cargo test -p areka`（x64）が green・ワークスペースから旧 ABI 参照（ShioriExt/shiori_create/Load/Unload/Request/RequestOutcome）が消えている（＝本タスクが areka crate の green ゲート）
+  - _Requirements: 12.1, 12.5, 12.6_
+  - _Boundary: ConsumerFollowup_
+  - _Depends: 9.1, 9.2, 9.3_
+
+- [x] 10. 全体統合検証
+- [x] 10.1 ワークスペース 1 PR 完結状態の確認
+  - x64: `cargo build`＋`cargo test`（全クレート）green
+  - i686（PowerShell）: helper／testdll のビルド＋`cargo test --target i686-pc-windows-msvc` green
+  - 凍結境界の最終確認: shiori-host32-ipc に差分がないこと
+  - 観測可能な完了: 上記 3 点がすべて確認され、WS-A E2E（タスク 7）と WS-B テスト（タスク 8〜9）が同一ツリーで同時に green
+  - _Requirements: 12.1, 13.1, 13.2_
+  - _Depends: 7.2, 9.4_
+
+## Implementation Notes
+
+- Task 1: `vendors/pasta` の flat-C 3 署名は正確源とバイト一致（`extern "C"`≡`extern "cdecl"`・`load(HGLOBAL,usize)->bool`・`unload()->bool`・`request(HGLOBAL,*mut usize)->HGLOBAL`・Rust bool 1byte・`#[unsafe(no_mangle)]` 無装飾）。**入力 HGLOBAL は callee(DLL) が `GlobalFree` する規約**（`ShioriString::capture` の `has_free:true`）＝ホスト/testdll は自ら解放しない（testdll は逆に load 入力を GlobalFree して二重解放検出器とする）。load dir は ANSI(CP_ACP)・`GlobalAlloc(GMEM_FIXED=0)`。詳細は research.md §9。
+- Task 2: `spawn` の**関数引数順** `(helper_exe, load_dir, shiori_name, parent_hwnd)` と**子 arg 順**（arg1=parent_hwnd/arg2=load_dir/arg3=shiori_name）は別物。位置引数を stand-in で観測するには `.bat` が必要（`cmd /c "..."` 単一コマンドでは `%1..%3` 非展開）。新 pub const `LOAD_DIR_ENV`/`SHIORI_NAME_ENV`/`LOAD_ACK_TIMEOUT(30s)` は `process_host.rs` に定義済みだが **`lib.rs` の crate-root 再エクスポートは未追加**（SpawnContract boundary 外ゆえ保留）。後続タスク 6/7 でこれらを使う際は `lib.rs` へ再エクスポート追加するか module パス（`process_host::LOAD_ACK_TIMEOUT`）で参照すること。
+- Task 3.1: helper 起動パラメーター取得は純関数 `resolve_param(arg, env) -> Option<String>`（arg 優先・trim・空→env・両空→None）へ一般化。ラッパは `parent_hwnd_arg_env`(arg1/HOST32_PARENT_HWND)・`load_dir_arg_env`(arg2/HOST32_LOAD_DIR)・`shiori_name_arg_env`(arg3/HOST32_SHIORI_NAME)。main() は load_dir/shiori_name 欠落で `exit(2)`。**設計ドリフト（Task 3.2/6 で要調整）**: `HelperShared.load_dir` は設計 §320 では `PathBuf` だが 3.1 は取得生値の `String` で保持中（無条件 `#[allow(dead_code)]` 付き・未読取ゆえ）。Task 6 で `load_dir.join(&shiori_name)`（設計 §321・絶対 DLL パス組立）を行う際に `PathBuf` へ変換するか join 地点で `PathBuf::from` すること。shiori_name も `String` 保持。
+- Task 3.2: `InboundAction::TriggerLoad` 変種を新設し `classify_inbound` が `MsgTag::Load`（ペイロード無視）を TriggerLoad へ分類（IgnoreKnown から分離・R4.1）。`handle_message` の TriggerLoad アームは **no-crash プレースホルダ（eprintln のみ・`Some(LRESULT(0))`）**＝**Task 6 がここを proxy 確立＋load＋ack[1]/[0] 返送へ置換する**。ack/proxy/LOAD カウンタ/`mod shiori_proxy` は未着手（Task 5.1/6 の領分）。
+- Task 4: 新設 `crates/shiori-host32-testdll`（`[lib] name="shiori"` cdylib → `shiori.dll`）。i686 ビルドで `target/i686-pc-windows-msvc/debug/shiori.dll` 生成・dumpbin で `load`/`unload`/`request` **無装飾**エクスポート確認。**重要（Task 5.1 proxy へ）**: windows 0.62.2 では `GlobalFree` は `Win32_System_Memory` ではなく **`windows::Win32::Foundation::GlobalFree`**（`GlobalFree(Option<HGLOBAL>) -> Result<HGLOBAL>`・`let _ =` で無視）。`GlobalAlloc` は `Win32_System_Memory`。`HGLOBAL` も `Win32_Foundation`。testdll の env 契約: `HOST32_TESTDLL_LOAD_FAIL=1`→load false・`HOST32_TESTDLL_UNLOAD_MARKER=<path>`→unload 時ファイル作成（Task 5.2/7 の観測手段）。
+- Task 5.1: `crates/shiori-host32-helper/src/shiori_proxy.rs` 新設（`#![allow(dead_code)]`＝Task 6 が consume 時に外す）。公開 API は `ShioriByteProxy::load(dll_path: &Path, load_dir: &Path) -> Result<Self, ProxyError>`（**dll_path は絶対パス＝Task 6 が `load_dir.join(shiori_name)` を渡す**）。`ProxyError`＝`LoadLibraryFailed/EntryNotFound/EncodingFailed/LoadReturnedFalse`（`#[derive(Debug)]`）。入力 HGLOBAL は callee 解放（proxy は GlobalFree しない）。途中失敗は内部 FreeLibrary。**Drop が唯一の teardown**（courtesy unload→FreeLibrary・結果無視）＝Task 6 は proxy を HelperShared に保持するだけでよく明示 unload 呼出は不要。helper Cargo.toml に windows features `Win32_System_LibraryLoader`/`Win32_System_Memory`/`Win32_Globalization` 追加済み。WideCharToMultiByte フラグ=0（CP_ACP に WC_COMPOSITECHECK は ERROR_INVALID_FLAGS 危険）。main.rs は `mod shiori_proxy;` 宣言のみ（WndProc 結線は Task 6）。
+- Task 5.2: proxy の i686 単体テスト（`shiori_proxy.rs` の test mod・21 件 green）。`kernel32.dll` load→`EntryNotFound("load")` で欠落態様を決定的証明。**testdll 解決の再利用パターン**（Task 7 E2E でも同型）: env `HOST32_TESTDLL_DLL` 優先→`CARGO_MANIFEST_DIR/../../target/i686-pc-windows-msvc/{debug,release}/shiori.dll` 探索→**不在は panic（silent skip 禁止）**。Drop teardown 実証は testdll を一時 dir へコピー→`HOST32_TESTDLL_UNLOAD_MARKER` 設定→load Ok→drop→マーカー `b"unloaded"` 生成を assert。**2 段ビルド必須**（testdll i686 build →helper test）。edition 2024 の `set_var`/`remove_var` は `unsafe`。
+- Task 6: WndProc の LOAD 結線完了（WS-A 統合）。`HelperShared` に `proxy: RefCell<Option<ShioriByteProxy>>`＋`loads_attempted`/`load_acks_ok`/`load_acks_fail: Cell<u64>`・`load_dir` は `PathBuf` へ整合（3.1 の String ドリフト解消）。ack 定数 `LOAD_ACK_OK=1`/`LOAD_ACK_FAIL=0`・純関数 `load_result_to_ack`（Ok→1/Err→0）。**RefCell 再入規律**は文スコープ一時借用で担保（`Ref`/`RefMut` を `let` 束縛せず・`send_copydata` 送出時に borrow 非保持＝BorrowMutError 構造排除）。確立済み再 LOAD は `ShioriByteProxy::load` 再呼出なしで ack[1] 冪等。loopback は既存 1 窓を拡張（成功 ack[1]＋冪等再 LOAD 検証）。**失敗 ack[0]（DLL 不在/env 強制 false）は Task 7.1 E2E の領分**（1 窓制約回避）。helper i686 build 警告 0・全 23 テスト green。
+- Task 7.1: 実プロセス E2E `crates/shiori-host32-host/tests/shiori_load_e2e.rs` 新設。**PRIMARY 単窓逐次構造が成立**（`ParentMessageWindow` はケースごと create→使用→明示 drop で同時 1 窓・wintf 逐次再生成は問題なし＝FALLBACK 不要）。`load_e2e_success_fail_survival`＝成功 ack[1]／env `HOST32_TESTDLL_LOAD_FAIL=1` 強制失敗 ack[0]／DLL 不在 ack[0]＋各後 `poll_exit_kind→None`（生存）。env は spawn 前 set→spawn 後 remove（子は env スナップショット継承）。`LOAD_ACK_TIMEOUT` は `shiori_host32_host::process_host::` module パス参照。**Task 7.2 の pasta gate は本ファイルに前倒し実装済み**（`load_e2e_real_pasta_optional`＝HOST32_PASTA_DLL 未設定 skip／設定+不在 明示 fail／設定+present ack[1]）＝**Task 7.2 は既存 E2E（echo/error_paths）の非回帰確認が主眼**に。
+- Task 7.2: **検証ゲート（新規コード不要）**。親コンテキストで実測: 凍結境界 `shiori-host32-ipc` は仕様着手時（4584d6b）から**無差分**（R13.1）。2 段ビルド後 `cargo test -p shiori-host32-host`（x64）＝lib 21／echo_roundtrip 1／error_paths 2／shiori_load_e2e 2 すべて green（新 spawn 契約で既存 E2E 非回帰）。pasta gate 3 態様は `shiori_load_e2e.rs:296-327` で判別可（未設定 skip=R7.6／設定+不在 明示 fail=R7.4/7.5／設定+実行 ack[1]）。**WS-A（タスク 2〜7）完了**。
+
+### WS-B（ABI 是正）
+- Task 8.1: `interface.rs` 全面書換え完了。**新 IID 3 本**（実装時採番・固定回帰テスト済）: `IShioriFactory=7E072AA3-2288-444E-A42F-779428A9545A` / `IShiori=327998D4-8491-4912-BA85-6B8F52831B14` / `IShioriHost=15E93FE3-7635-496C-9F0F-7B07027EAF98`（旧 IShiori E7887AB4…/旧 IShioriHost 03BB53C6… とは全て不一致）。署名: `IShioriFactory::CreateInstance(&HSTRING, &HSTRING, Ref<IShioriHost>, OutRef<IShiori>)->Result<()>`／`IShiori::Get(&HSTRING,&mut HSTRING,&mut u64)->HRESULT`（成功2値 S_OK/SHIORI_S_PENDING ゆえ生返し）・`Notify(&HSTRING)->Result<()>`／`IShioriHost::{Raise,Complete,GetProperty,SetProperty}->Result<()>`。全メソッド **pub**。**windows-core 作法**: `OutRef::write(Some(iface))?` で move-out・`Ref::as_ref()` で借用・error は `HRESULT.into()`／`err.code()` 判定。旧 `ShioriExt`（ergonomic.rs 空化）・旧 mock roundtrip（tests/ 撤去）削除済。**Task 8.1 以降 crates/areka は赤**（9.x で追随・10.1 で全体 green 回復・中間 commit は squash で消える）＝WS-B 中は `cargo test -p shiori-abi` 単体で判定。GetProperty 欠落 key の error 定数 `SHIORI_E_PROPERTY_NOT_FOUND=0xA0A1_0004` は **Task 8.2 で error.rs へ採番**（8.1 は in-file ローカル定数で先取り実証）。
+- Task 8.2: `error.rs` 語彙刷新＋`outcome.rs` 改名完了。**削除**: `SHIORI_E_NOT_LOADED`/`ShioriError::NotLoaded`（ゼロ参照でコンパイル証明）。**改名**: `LoadFailed→CreateFailed(HRESULT)`・`RequestFailed→GetFailed(HRESULT)`・`RequestOutcome→GetOutcome`（`Immediate(HSTRING)`/`Deferred(CorrelationToken)` 変種・`CorrelationToken`/allocator 不変）。**新設**: `ShioriError::{NotifyFailed(HRESULT), PropertyNotFound, UnknownToken}`・`SHIORI_E_PROPERTY_NOT_FOUND=make_shiori_failure(0x0004)=0xA0A1_0004`。**存置**: `SHIORI_S_PENDING(0x20A1_0001)`/`SHIORI_E_UNKNOWN_TOKEN(0xA0A1_0003)`/`Com` catch-all。`hresult_to_shiori_error`: UNKNOWN_TOKEN→UnknownToken・PROPERTY_NOT_FOUND→PropertyNotFound・他→Com。8.3 の安全面はこの語彙を使う。
+- Task 8.3: `ergonomic.rs` に **snake_case インヘレント第2impl** を再構築（ShioriExt 非復活）。**9.x consumer はこれを使う**（vtable 直呼びハック不要）: `IShioriFactory::create(&HSTRING,&HSTRING,&IShioriHost)->Result<IShiori,ShioriError>`（内部で `host=Ref::from(Some(host))`・`out=(&mut out).into()` OutRef・失敗時 out 未取り出し＝半構築非露出）／`IShiori::{get(&HSTRING)->Result<GetOutcome>, notify->Result<()>}`（**get 分岐順序固定: `hr==SHIORI_S_PENDING`→Deferred → `is_ok()`→Immediate → else→GetFailed**）／`IShioriHost::{raise, complete(CorrelationToken,&HSTRING), get_property(&HSTRING)->Result<HSTRING>, set_property}`。写像: notify→NotifyFailed・complete UNKNOWN_TOKEN→UnknownToken・get_property PROPERTY_NOT_FOUND→PropertyNotFound。
+- Task 8.4: `tests/mock_brain_roundtrip.rs` 新 ABI 再構築（5 テスト green）。**Task 8（WS-B ABI 層）完遂**＝`cargo test -p shiori-abi` 32 lib＋5 roundtrip green・警告0。roundtrip は `#[implement]` mock factory/brain/host＋安全面 `factory.create→brain.get/notify`・HSTRING bit 一致（sentinel 日本語含む）・TrackedResponse で alloc==drop 均衡（N=10_000 で二重解放/リーク検出）・clone 生存。**注**: サブエージェント 1 回目が API 接続断で中途終了→作業ツリー clean 確認→新規実装者で仕切り直し成功。**次は Task 9（areka consumer 追随）で areka を新 ABI へ＝赤を解消**。
+- Task 9（9.1〜9.4 一体移行・areka green ゲート）: `crates/areka` 8 ファイルを新 ABI へ全面追随。`cargo test -p areka` **61 passed 警告0**・workspace `cargo build` green・旧 COM ABI 参照（ShioriExt/shiori_create/RequestOutcome/call_* ヘルパ/COM の .Load/.Unload/.Request 直呼び）消滅（doc 言及のみ残存）。**9.1** reference_brain.rs: ReferenceBrain 痩身（loaded/Load/Unload 削除・host/load_dir/shiori_name は不変フィールドで観測可能=D1 貫通証拠）・ReferenceFactory(`#[implement(IShioriFactory)]`・失敗時 out 未書込)・C 入口 `shiori_factory`(E_POINTER/refcount1/shiori_create 残置なし)・Notify 受領ログ。**9.2** shiori_host.rs: `properties: Mutex<HashMap<String,HSTRING>>`・GetProperty 同期即答/欠落 key→PropertyNotFound・SetProperty 即書き・再入規約 doc+再入テスト（Get 内から get_property 呼び戻し無デッドロック）・`set_property_value` 充填 API。**9.3** shiori_session.rs: activate→factory.create 経由・unload() 削除→impl Drop(保留取消→brain drop)・request→get。**9.4** demo/main/e2e 追随・vtable 直呼びハック全廃。**test 専用 seam**: `ShioriSession::from_parts(brain, host)`（demo/reference-e2e が factory 生成 brain を session と ReferenceBrain ハンドルで共有）＝session は brain accessor を出さない。**注**: activate/activate_with_timeout は from_parts 経由の production ゆえ bin で未使用→`#[allow(dead_code)]`（round1 REJECT の唯一指摘・修正済）。プロパティ store のスレッド安全性テストは IShioriHost 非 Send ゆえ Arc<ShioriHostSink> 越しに検証。
+- Task 10.1（全体統合検証・1 PR 完結ゲート）: 親コンテキストで実測。**x64** `cargo build --workspace` green＋`cargo test --workspace --exclude shiori-host32-helper` green（areka 61・shiori-abi 32+5・host lib 21+echo 1+error_paths 2+load_e2e 2・ipc 16・areka-parsers 144・dola 群・wintf 502+統合群 すべて 0 failed）。**i686(PowerShell)** testdll build＋`cargo test -p shiori-host32-helper --target i686-pc-windows-msvc` 23 passed。**凍結境界** `shiori-host32-ipc` は 4584b6b..HEAD で無差分（R13.1）。helper の proxy/loopback テストは i686 専用（x64 では i686 DLL を load 不可）ゆえ x64 workspace test から除外し i686 で検証＝設計の 2 系ビルド方針どおり。**WS-A E2E（7）と WS-B（8〜9）が同一ツリーで同時 green＝1 PR 完結状態達成。全タスク完了。**

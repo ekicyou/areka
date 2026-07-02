@@ -128,8 +128,9 @@ fn echo_roundtrip_over_real_helper_process() {
     let parent = ParentMessageWindow::create().expect("親 message-only 窓生成に失敗");
     let parent_hwnd = parent.hwnd_u32();
 
-    // --- (2) i686 helper を spawn（親 HWND を u32 で渡す・cross-task 契約）---
-    let handle = spawn(&helper_exe, &ghostdir, parent_hwnd)
+    // --- (2) i686 helper を spawn（起動パラメーター契約: parent_hwnd/load_dir/shiori_name）---
+    // 本 echo 実証は実 LOAD をしないため shiori_name は妥当な既定でよい（契約上は必須引数）。
+    let handle = spawn(&helper_exe, &ghostdir, "shiori.dll", parent_hwnd)
         .expect("i686 helper の spawn に失敗（helper exe を確認）");
     // spawn 直後から Drop guard で確実に片付ける（以降の panic でも terminate される）。
     let mut guard = HelperGuard { handle };

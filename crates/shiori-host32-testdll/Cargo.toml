@@ -1,0 +1,20 @@
+[package]
+name = "shiori-host32-testdll"
+description = "host-32 minimal SHIORI DLL fixture (flat-C load/unload/request) for deterministic LOAD E2E"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[lib]
+name = "shiori"                 # 出力を shiori.dll にする
+crate-type = ["cdylib"]
+
+[dependencies.windows]
+version = "0.62.2"
+features = [
+    "Win32_Foundation",
+    "Win32_System_Memory",
+]
