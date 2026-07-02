@@ -2,7 +2,7 @@
 
 ## Project Description (Input)
 
-emo2 の `surfaces.txt`（SERIKO/2.0）を**シェルサーフェスモデル**へ解析する parser が存在しない。下流の `shell-anim-engine`（SERIKO ループ）と `surface-engine`（統一 surface 合成）が消費するモデルの生成源が要る。本 spec は `areka-parsers` クレートへ `shell` モジュールを追加し、確立済みの `sakura` パターン（`Result` 無しの寛容パース・NewType＋opaque＋read-only accessor・`#[non_exhaustive]` enum・依存は `tracing` のみ・in-source `#[cfg(test)]` テスト）を踏襲する。実装範囲は emo2 が実際に使う機能のみ（過剰・予測実装は禁止）とし、拡張は型の `#[non_exhaustive]` シームのみ残す。emo2 実物 fixture（`crates/pilot/examples/shiori-host-32/fixtures/emo2/shell/master/surfaces.txt`）で pass することを唯一の適合基準とする。
+emo2 の `surfaces.txt`（SERIKO/2.0）を**シェルサーフェスモデル**へ解析する parser が存在しない。下流の `shell-anim-engine`（SERIKO ループ）と `surface-engine`（統一 surface 合成）が消費するモデルの生成源が要る。本 spec は `areka-parsers` クレートへ `shell` モジュールを追加し、確立済みの `sakura` パターン（`Result` 無しの寛容パース・NewType＋opaque＋read-only accessor・`#[non_exhaustive]` enum・依存は `tracing` のみ・in-source `#[cfg(test)]` テスト）を踏襲する。実装範囲は emo2 が実際に使う機能のみ（過剰・予測実装は禁止）とし、拡張は型の `#[non_exhaustive]` シームのみ残す。**書式の正典は ukadoc（SERIKO/surfaces.txt 仕様）** とし、テストは ukadoc 準拠の**自前テスト定義**を主軸に置く。emo2 実物 fixture（`crates/pilot/examples/shiori-host-32/fixtures/emo2/shell/master/surfaces.txt`）は**実装スコープの決定基準（実需）**かつ**実サンプルのスモークテスト**であって、書式の聖典・唯一の適合基準ではない（`doc/emo2-conformance-scope.md` は emo2 スコープの補助資料）。
 
 ## Introduction
 
@@ -19,7 +19,7 @@ emo2 の `surfaces.txt`（SERIKO/2.0）を**シェルサーフェスモデル**�
   - `surface.appendNNN` 追記ブロック（既存 surface へ collision/animation を追加）と、ターゲット指定の複数列挙・範囲指定（例 `surface.append10,2100-2110,2200-2210`）の解決。
   - collision 矩形リスト（`collisionN,left,top,right,bottom,name`・name は `Head`/`Bust` 等の不透明文字列）。
   - `kero.surface.alias` ブロック：alias キー（数値・日本語文字列いずれも）から surface ID リスト（`[id,...]`）への写像。alias キー・値は**不透明に保持**し、`\s[]` 中身の意味解釈は行わない。
-  - emo2 fixture ベースの in-source `#[cfg(test)]` テスト。
+  - **ukadoc 準拠の自前テスト定義**（in-source `#[cfg(test)]`・機能ごとの最小 `surfaces.txt` 断片を自作）を主軸とし、emo2 実物 fixture は実サンプルのスモークテストとして併用。
 - **Out of scope**:
   - レンダリング・surface 合成（`areka-P0-surface-engine` の領分）。
   - アニメ実行・SERIKO ループ・MAYUNA 実行時合成・z-order 実描画（`areka-P0-shell-anim-engine` の領分）。パーサは z-order を animation ID として保持するのみで、順序付けの実行はしない。
@@ -136,15 +136,17 @@ emo2 の `surfaces.txt`（SERIKO/2.0）を**シェルサーフェスモデル**�
 2. If 認識できないブロックまたは行が存在する, then the shell parser shall それを寛容に吸収し、後続の認識可能なブロックのパースを継続する。
 3. The shell parser shall 認識できない入力によってパニックせず、部分的に認識できたモデルを返す。
 
-### Requirement 10: emo2 fixture 適合と過剰実装の禁止
+### Requirement 10: ukadoc 準拠テストと過剰実装の禁止
 
-**Objective:** As a 開発者, I want emo2 実物 fixture で本 parser を検証すること, so that 実需に基づく最小適合を担保し、予測実装を排除できる。
+**Objective:** As a 開発者, I want ukadoc（SERIKO/surfaces.txt 仕様の正典）に準拠した自前テスト定義で本 parser を検証すること, so that 特定ゴースト（emo2）の偶発的内容ではなく仕様そのものへの適合を担保しつつ、実需に基づく最小スコープを保てる。
 
 #### Acceptance Criteria
 
-1. The shell parser shall emo2 fixture（`crates/pilot/examples/shiori-host-32/fixtures/emo2/shell/master/surfaces.txt`）を入力として、surface 定義・element overlay・animation/interval・collision 矩形・surface.append・alias を含むモデルを in-source `#[cfg(test)]` テストで検証できる。
-2. The shell parser shall emo2 が使用しない SERIKO 機能（他 method・他 interval・collisionex・element 座標オフセット・レンダリング/合成/アニメ実行）を実装しない。
-3. Where 2 例目の実物 fixture が新機能を要求するまで, the shell parser shall emo2 使用分を超える抽象・拡張を追加しない（拡張余地は `#[non_exhaustive]` シームのみで残す）。
+1. The shell parser shall ukadoc（SERIKO/surfaces.txt の正典仕様）に基づく**自前のテスト定義**（in-source `#[cfg(test)]`・機能ごとに最小の `surfaces.txt` 断片をテスト内で自作）で、surface 定義・element overlay・animation/interval（bind / random / bind+random）・collision 矩形・surface.append（複数列挙・範囲）・alias（重複キー含む）・負 ID overlay・コメント/空行の各機能の正しい解釈を検証する。
+2. Where 仕様解釈に不確実性がある場合, the shell parser shall ukadoc を正典として参照し（`doc/emo2-conformance-scope.md` は emo2 スコープの補助資料）、emo2 fixture の偶発的内容を正解の根拠としない。
+3. The shell parser shall emo2 実物 fixture（`crates/pilot/examples/shiori-host-32/fixtures/emo2/shell/master/surfaces.txt`）を**実サンプルのスモークテスト**（パニックせず、スコープ内機能を解釈し切ることの確認）として扱えるが、これを唯一の適合基準とはしない。
+4. The shell parser shall emo2 が使用しない SERIKO 機能（他 method・他 interval・collisionex・element 座標オフセット・レンダリング/合成/アニメ実行）を実装しない（実装スコープは emo2 実需で画定する）。
+5. Where 2 例目の実物 fixture が新機能を要求するまで, the shell parser shall emo2 使用分を超える抽象・拡張を追加しない（拡張余地は `#[non_exhaustive]` シームのみで残す）。
 
 ### Requirement 11: クレート統合と依存規律
 

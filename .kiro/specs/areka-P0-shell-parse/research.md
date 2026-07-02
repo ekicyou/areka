@@ -123,7 +123,7 @@ Option B の四層を主軸としつつ、`descript { ... }` ブロック内の 
 2. **surface ブロック内 collision/animation と surface.append の統一表現**: 要件 7.3 は「通常 surface ブロックと同一のモデル表現」を要求。surface 定義と append 定義を同一 struct で表すか、append を「追記デルタ」として別型にするかの型設計。
 3. **重複 alias キーの保持形**: 要件 8.4 は「出現をモデルに保持（衝突解決は下流委譲）」。`Vec<(Key, Vec<Id>)>`（順序保持・重複許容）か multimap か。kv の後勝ち BTreeMap は不可。
 4. **`animationN` 集約の欠番 pattern index**: fixture に `pattern0` 欠落で `pattern1/2/3` のみの animation（L74-76・L432 `pattern3` のみ）あり。pattern index は連番前提でなく**疎（sparse）**。index を明示保持する表現（`Vec<(index, Pattern)>` 等）が必要。
-5. **in-source テストの fixture 供給**: クレート跨ぎ（fixture は `crates/pilot/`・parser は `crates/areka-parsers/`）ゆえ `include_str!` は既存規律で不使用。emo2 の代表抜粋を literal 直書きするか、workspace 相対の別供給かを design で確定（既存 kv/charset validation_tests は literal 直書きで前例あり＝踏襲が素直）。要件 10.1 が「emo2 fixture を入力として」と書くため、抜粋の代表性を design で担保する。
+5. **テスト定義の主軸（正典転換・discussion #2 で確定）**: 正典は **ukadoc**（SERIKO/surfaces.txt 仕様）であり emo2 fixture は聖典ではない。テストは **ukadoc 準拠の自前定義**（機能ごとに最小 `surfaces.txt` 断片を in-source `#[cfg(test)]` で自作）を主軸とする。emo2 実物 fixture は**実サンプルのスモークテスト**（パニックせず・スコープ内機能を解釈し切る確認）として併用するに留め、唯一の適合基準としない。クレート跨ぎの `include_str!` 不可問題は、自前断片を用いる以上そもそも回避される（design では ukadoc の各機能仕様を参照して断片と期待値を起こす。ukadoc MCP `mcp__ukadoc__*` を第一参照）。
 6. **collision の surface 内スコープ vs グローバル**: fixture では collision は surface1000 ブロック内と surface.append の両方に現れる。所属 surface への結び付けを型でどう表すか（surface 定義に collision リストを持たせる形が素直）。
 
 > いずれも**外部依存調査は不要**（新規外部 crate なし・`tracing` のみ）。ukadoc の SERIKO/2.0 仕様参照は範囲端点包含など数点の確認に留まり、正本は fixture＋`doc/emo2-conformance-scope.md`。
@@ -145,6 +145,6 @@ Option B の四層を主軸としつつ、`descript { ... }` ブロック内の 
   3. 重複 alias キーの保持コンテナ（順序保持 `Vec` 系・kv BTreeMap 不可）。
   4. pattern index の疎保持表現（連番前提を置かない）。
   5. モデル最上位型の形（`ShellModel { descript, surfaces, aliases, ... }` のようなルート集約）。
-  6. in-source テストの fixture 供給方式（literal 抜粋直書き＝既存規律踏襲を推奨）。
+  6. テスト定義の起こし方（**ukadoc 準拠の自前 in-source 断片が主軸**・emo2 はスモークサンプル併用／discussion #2 で正典＝ukadoc に確定。ukadoc MCP を第一参照）。
 - **持ち越し研究**: §4 の 6 項目。外部依存調査は不要。ukadoc は範囲端点包含など数点の確認のみ。
 - **過剰実装ガード**（要件 10.2/10.3）: emo2 未使用の method/interval/collisionex/非 0 offset は**実装しない**。拡張余地は `#[non_exhaustive]` シームのみ。2 例目の実物 fixture が要求するまで抽象を足さない。
