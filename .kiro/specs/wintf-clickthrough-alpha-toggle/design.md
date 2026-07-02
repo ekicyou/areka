@@ -312,6 +312,7 @@ impl CursorMonitorBridge {
 
 **Implementation Notes**
 - Integration: `spawn` は `WinApp` 起動時（`runtime/mod.rs` の結線点）に呼ぶ。`cursor_event` は `ClickThroughController` の listen 対象と同一 `Arc`。
+- **順序不変条件**: ワーカは `latest_pos.store(pack(x,y))` → `cursor_event.notify(usize::MAX)` の**順序を厳守**する（store→notify）。逆順だと UI 側が 1 通知分古い座標を読む稀レースが生じる（`VsyncEventBridge` と同一規律）。
 - Validation: ワーカ停止・join が Drop で確実に走ること（`VsyncEventBridge` と同じ RAII 検証）。
 - Risks: ポーリング周期が短すぎると CPU 負荷。移動差分ガードで通知頻度を抑える。
 
@@ -363,6 +364,7 @@ fn resolve_transition(
 
 **Implementation Notes**
 - Integration: `start` を `runtime/mod.rs` の結線点で呼ぶ。async ループは `spawn_local`。
+- **不変条件（`last_applied` 単一所有）**: `last_applied` の真実源は `ClickThroughRegistry`。`resolve_transition` へは値渡しで判定に使うのみで、更新は「`apply_click_through` 成功後にレジストリへ書き戻す」**1 経路に限定**する。適用失敗（`SetWindowPos` エラー）時は更新せず据え置き、次サイクルで再試行（差分ガード R3.2/R3.3 を破らない）。
 - Validation: `resolve_transition` を in-source ユニットテストで検証（差分ガード・ドラッグ抑止・JustEnded 再収束の網羅）。World 非依存の純関数として切り出しテスト隔離。
 - Risks: `SetWindowPos(SWP_FRAMECHANGED)` の副作用（z オーダー・アクティベーション）— `SWP_NOZORDER|SWP_NOACTIVATE|SWP_NOMOVE|SWP_NOSIZE` で限定し、pilot 実測（共存 OK）を本坑本体経路で再確認。
 
