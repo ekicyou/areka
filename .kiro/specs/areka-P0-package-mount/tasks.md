@@ -13,7 +13,7 @@
   - _Requirements: 4.2_
 
 - [ ] 2. Core: マウントモデル型（`model` submodule）
-- [ ] 2.1 解決済みマウント所在と観測可能失敗の型を定義する
+- [x] 2.1 解決済みマウント所在と観測可能失敗の型を定義する
   - ゴースト名前情報（`name`／`sakura.name`／`kero.name` を各 `Option`・未指定は欠落として保持し推測しない）、SHIORI マウント先（ディレクトリ＋ファイル名 `Option`）、shell マウント先（ディレクトリ）を束ねたマウントモデル型を正本として定義する
   - マウント解決の致命的失敗を表す失敗型を定義する（起点不在・起点読取不能・shell ディレクトリ不在の 3 種）
   - 型は `#[non_exhaustive]` ＋最小 derive（`Clone, Debug, PartialEq, Eq`）とし、`serde` は付さない（兄弟型と整合）。パスは `PathBuf`

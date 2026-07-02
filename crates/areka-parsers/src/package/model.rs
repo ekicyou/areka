@@ -1,8 +1,25 @@
 //! model — マウントモデル・失敗型の正本（型の正本）。
 //!
-//! **スタブ**: このタスク（1.1・module 接ぎ木）では公開面を解決させるための
-//! 最小型定義に留める。実体（各フィールド doc・アクセサ・不変条件）は
-//! タスク 2.1 が本実装で埋める。
+//! 解決済みマウント所在（`MountModel` と付随値型 `GhostNames` / `ShioriMount` /
+//! `ShellMount`）と、マウント解決の観測可能な失敗（`MountError`）を定義する。
+//! この型群は下流（`ghost-setup` / `host-32` / `shell-parse`）と共有する
+//! I/O 契約の片側であり、本 spec が生成者・正本を所有する。
+//!
+//! 設計規律（design.md「型定義（model）」）:
+//! - 純粋な型定義に留める（I/O・`Result` は `resolve` サブモジュールが持つ）。
+//! - 派生は `Clone` / `Debug` / `PartialEq` / `Eq`（文字列/パスのみで
+//!   `f32`/`Duration` を含まないため `Eq` 付与可・`sakura::Instruction` との差異）。
+//!   `serde` は付さない（他兄弟型と整合・不要）。
+//! - `#[non_exhaustive]` により後続のフィールド/variant 追加を後方互換に保つ。
+//! - 名前情報・SHIORI ファイル名は `Option`（欠落を型で表現・推測しない・Req 2.3）。
+//!   パス表現は `PathBuf`。
+//!
+//! 不変条件（design.md「Preconditions/Postconditions/Invariants」）:
+//! - `MountModel` は `resolve` 成功時のみ構築される。
+//! - `shiori.dir` は起点 descript.txt の親（物理存在確定）、`shell.dir` は
+//!   物理存在確認済み。
+//! - `shiori.file` / `names.*` は `Option` で欠落を保持し、既定値は推測しない
+//!   （`shell.dir` の `master` フォールバックのみ ukadoc 既定で例外）。
 
 use std::path::PathBuf;
 

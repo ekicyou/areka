@@ -17,6 +17,8 @@
 //! モデル型群を公開面へ `pub use` で集約する。
 
 mod model;
+#[cfg(test)]
+mod model_tests;
 
 mod resolve;
 
