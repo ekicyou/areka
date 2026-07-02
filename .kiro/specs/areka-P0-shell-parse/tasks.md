@@ -9,8 +9,8 @@
   - _Requirements: 11.1, 11.2, 11.3, 11.4_
   - _Boundary: mod_
 
-- [ ] 2. Core: シェルサーフェスモデル型（下流共有 I/O 契約）
-- [ ] 2.1 (P) 下流共有のシェルサーフェスモデル型一式を定義する
+- [x] 2. Core: シェルサーフェスモデル型（下流共有 I/O 契約）
+- [x] 2.1 (P) 下流共有のシェルサーフェスモデル型一式を定義する
   - surface 定義・element overlay・animation/interval・pattern・collision 矩形・surface.append・alias を表す型を、値正規化済み（ID/座標は数値・alias 値は ID リスト）で定義する
   - 意味解釈を下流へ委ねる値（画像パス・alias キー・collision 名）を不透明 NewType＋read-only アクセサで保持する
   - 公開 enum（interval 種別・append ターゲット種別）を後方互換シーム付きで定義し、descript/charset 用フィールドは持たない
