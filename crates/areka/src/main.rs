@@ -17,15 +17,17 @@ use windows::core::Result;
 use wintf::ecs::Point;
 use wintf::ecs::drag::{DragConfig, DragEvent, OnDrag};
 use wintf::ecs::layout::{
-    BoxMargin, BoxPosition, BoxSize, BoxStyle, Dimension, LengthPercentageAuto, Rect,
+    BoxMargin, BoxPosition, BoxSize, BoxStyle, Dimension, HitTest, LengthPercentageAuto, Rect,
 };
 use wintf::ecs::pointer::{DoubleClick, OnPointerPressed, Phase, PointerState};
 use wintf::ecs::widget::bitmap_source::{BitmapSource, CommandSender};
 use wintf::ecs::widget::brushes::Brushes;
 use wintf::ecs::widget::shapes::Rectangle;
 use wintf::ecs::widget::text::{TextDirection, Typewriter, TypewriterTalk, TypewriterToken};
+use wintf::ecs::clickthrough::ClickThroughRegistryHandle;
 use wintf::ecs::{
-    ChildOf, FrameTime, SetWindowPosCommand, Window, WindowHandle, WindowPos, WindowStyle,
+    ChildOf, CompositionMode, FrameFinalize, FrameTime, SetWindowPosCommand, Window, WindowHandle,
+    WindowPos, WindowStyle,
 };
 use wintf::*;
 
@@ -128,6 +130,12 @@ fn main() -> Result<()> {
         run_setup(tx).await;
     });
 
+    // クリック透過機構への窓登録システムを結線（task 4.1）。UISetup の create_windows が
+    // WindowHandle を付与した後の FrameFinalize で走らせ、同一 tick 内で Added を捉える。
+    world
+        .borrow_mut()
+        .add_systems(FrameFinalize, register_click_through_windows);
+
     // 操作ガイド出力
     println!();
     println!("areka モック実装 — ぱすたさん");
@@ -152,6 +160,38 @@ fn main() -> Result<()> {
 // ---------------------------------------------------------------------------
 // Async Setup
 // ---------------------------------------------------------------------------
+
+/// クリック透過機構への窓登録システム（task 4.1）。
+///
+/// WUC 化により ULW の自動 α ヒットテストが失われるため、機構が α を評価できるよう
+/// shell/balloon の 2 窓を明示登録する。`WindowHandle` は `create_windows`（UISetup）が
+/// HWND 生成後に付与するため `Added<WindowHandle>` で「HWND が付いた瞬間」を捉え、各窓を
+/// 厳密に 1 回登録する（`register` は同一 Entity 再登録を dedupe するため冪等でもある）。
+///
+/// `ClickThroughRegistryHandle` は `WinApp::run` の結線で World へ NonSend リソースとして
+/// 挿入される。本システムは `mgr.run()` 前に登録されるが tick は `run()` 開始後に回るため
+/// 通常は存在する。ごく初期の tick で未挿入の可能性に備え `Option<NonSend<..>>` で防御し、
+/// 未挿入なら no-op する（`Added` は次 tick で再度観測されるため取りこぼさない）。
+/// `register` は `&self`（内部可変は `Rc<RefCell<..>>`）ゆえ `NonSend` で足りる。
+/// 窓破棄時の除去は機構内 `prune_dead_targets`（Entity 生存確認）が担うため明示 remove は不要。
+fn register_click_through_windows(
+    new_windows: Query<
+        (Entity, &WindowHandle),
+        (
+            Added<WindowHandle>,
+            Or<(With<ShellWindowMarker>, With<BalloonWindowMarker>)>,
+        ),
+    >,
+    handle: Option<NonSend<ClickThroughRegistryHandle>>,
+) {
+    let Some(handle) = handle else {
+        return;
+    };
+    for (entity, wh) in new_windows.iter() {
+        handle.register(entity, wh.hwnd);
+        tracing::debug!(?entity, "クリック透過機構へ窓を登録しました");
+    }
+}
 
 /// 非同期タスクでシェル＋バルーンウィンドウを生成
 async fn run_setup(tx: CommandSender) {
@@ -179,11 +219,15 @@ fn create_shell_window(world: &mut World) -> Entity {
             ShellWindowMarker,
             Window {
                 title: "areka shell".to_string(),
+                // task 4.1: WUC（DComp）合成経路。ex_style は factory の compute_ex_style が
+                // DComp に応じて WS_EX_LAYERED を外し WS_EX_NOREDIRECTIONBITMAP を付与するため
+                // WindowStyle は据え置きでよい。
+                composition_mode: CompositionMode::DComp,
                 ..Default::default()
             },
             WindowStyle {
                 style: WS_POPUP | WS_VISIBLE,
-                // Phase 3: WS_EX_NOREDIRECTIONBITMAP → WS_EX_LAYERED
+                // ex_style は factory が composition_mode から自動計算する（compute_ex_style）。
                 ex_style: WS_EX_LAYERED | WS_EX_TOOLWINDOW | WS_EX_TOPMOST,
             },
             WindowPos {
@@ -201,6 +245,8 @@ fn create_shell_window(world: &mut World) -> Entity {
                 }),
                 ..Default::default()
             },
+            // 窓自身はヒット対象外（全面ヒットで透過を殺さない）。当たりは子の画像（α判定）が担う。
+            HitTest::none(),
             DragConfig::default(),
             OnDrag(on_shell_drag),
             OnPointerPressed(on_shell_pressed),
@@ -211,6 +257,8 @@ fn create_shell_window(world: &mut World) -> Entity {
     world.spawn((
         Name::new("Shell-Image"),
         BitmapSource::new(SHELL_IMAGE_PATH),
+        // キャラの不透明ピクセルだけ受領・透明部は背面へ透過（αマスク自動生成の必須条件）。
+        HitTest::alpha_mask(),
         BoxStyle {
             size: Some(BoxSize {
                 width: Some(Dimension::Px(320.0)),
@@ -240,11 +288,13 @@ fn create_balloon_window(world: &mut World) -> Entity {
             BalloonWindowMarker,
             Window {
                 title: "areka balloon".to_string(),
+                // task 4.1: WUC（DComp）合成経路。ex_style は factory が自動計算するため据え置き。
+                composition_mode: CompositionMode::DComp,
                 ..Default::default()
             },
             WindowStyle {
                 style: WS_POPUP | WS_VISIBLE,
-                // Phase 3: WS_EX_NOREDIRECTIONBITMAP → WS_EX_LAYERED
+                // ex_style は factory が composition_mode から自動計算する（compute_ex_style）。
                 ex_style: WS_EX_LAYERED | WS_EX_TOOLWINDOW | WS_EX_TOPMOST,
             },
             WindowPos {

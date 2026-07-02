@@ -98,6 +98,27 @@ fn shell_image_asset_exists() {
 // =======================================================================
 
 #[test]
+fn shell_window_uses_wuc_composition_mode() {
+    // task 4.1: shell 窓は WUC（DComp）経路で合成される。
+    // ex_style は factory の compute_ex_style が自動計算するため WindowStyle は据え置き。
+    let mut world = World::new();
+    let shell = create_shell_window(&mut world);
+
+    let window = world.get::<Window>(shell).expect("Window component");
+    assert_eq!(window.composition_mode(), CompositionMode::DComp);
+}
+
+#[test]
+fn balloon_window_uses_wuc_composition_mode() {
+    let mut world = World::new();
+    create_shell_window(&mut world);
+    let balloon = create_balloon_window(&mut world);
+
+    let window = world.get::<Window>(balloon).expect("Window component");
+    assert_eq!(window.composition_mode(), CompositionMode::DComp);
+}
+
+#[test]
 fn shell_window_has_expected_components() {
     let mut world = World::new();
     let shell = create_shell_window(&mut world);

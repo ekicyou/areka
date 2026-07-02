@@ -18,6 +18,9 @@ use windows::Win32::System::Com::*;
 use windows::Win32::UI::HiDpi::*;
 use windows::core::Result;
 
+use crate::ecs::clickthrough::{
+    ClickThroughController, ClickThroughHandle, ClickThroughRegistry, ClickThroughRegistryHandle,
+};
 use crate::ecs::world::{EcsWorld, EcsWorldSelfRef, FrameFinalize};
 use crate::runtime::message_loop::{MessageLoopDriver, ShutdownPolicy};
 use crate::runtime::tick_bridge::{AsyncTickTask, VsyncEventBridge};
@@ -193,6 +196,61 @@ impl WinApp {
         );
     }
 
+    /// クリック透過機構を起動し、登録面（NonSend リソース）を World へ据える（task 3.2）。
+    ///
+    /// `run()` の結線点（既存 tick/vsync 結線に相乗り）から呼ぶ、テスト可能な最小フック。
+    /// `wire_new_path` がフル `run()` ループと分離してテストされるのと同じ方針で、本結線も
+    /// メッセージループ非実行下（headless）で単体検証できるよう **ヘルパーに切り出す**。
+    ///
+    /// 手順:
+    /// 1. 共有レジストリ `Rc<RefCell<ClickThroughRegistry>>` と **専用** wake `Arc<Event>` を生成。
+    /// 2. [`ClickThroughController::start`] を呼び、ワーカ＋判定ループを起動（`self.world` の
+    ///    `Weak` を渡す＝shutdown で `upgrade()` None → ループ終了、ワーカは返り値 handle drop で
+    ///    stop/join）。返る [`ClickThroughHandle`] は `run()` がローカル保持し、`run()` 復帰
+    ///    （＝shutdown）で drop される（`bridge`/`_tick` と同じ寿命規律）。
+    /// 3. 共有レジストリを [`ClickThroughRegistryHandle`]（`pub` NonSend リソース）に包んで World へ
+    ///    挿入する。areka の `run_setup`（task 4.1・`&mut World` を持つ）が
+    ///    `get_non_send_resource::<ClickThroughRegistryHandle>()` で取得し 2 窓を登録する登録面。
+    ///
+    /// # wake event を VSync とは別に専用化する理由（起床契機・post-tick）
+    /// 機構は二重起床する: (a) カーソル移動 notify（ワーカが `start` 内で `wake_event` を叩く）、
+    /// (b) VSync tick 毎の再評価（静止カーソルでも表示更新＝αマスク変化に追随／R2.4、`JustEnded`
+    /// 再収束／R5.2）。ここで wake_event を **VSync event とは別 `Arc`** に保ち、VSync 起床は
+    /// [`Self::run`] の relay タスクが「vblank を待って `wake_event.notify`」する形で中継する
+    /// （下記 relay 参照）。こうすることで既存 tick cadence を一切変えない（カーソル移動 notify が
+    /// `AsyncTickTask` を余計に起こして ECS tick を増やすことがない＝入力と描画 cadence を非結合）。
+    ///
+    /// # post-tick の構造保証
+    /// UI 全体が単一スレッドで、判定コア（`evaluate_targets`）は `&World` を **同期借用**する
+    /// （await を跨がず、tick が `borrow_mut` を保持する間は借用しない）。よって評価は常に
+    /// settled な World（tick 途中の中間状態ではない）を読む。起床順序に関わらず最悪でも
+    /// 1 フレーム遅延に留まり、これが design「post-tick 評価」の構造的裏付けである。
+    ///
+    /// 戻り値: `(handle, wake_event)`。`handle` は `run()` がローカル保持（drop=停止/join）、
+    /// `wake_event` は VSync relay タスクの結線に使う。
+    fn wire_click_through(&self) -> (ClickThroughHandle, std::sync::Arc<event_listener::Event>) {
+        // 1. 共有レジストリ（UI スレッド単独所有・`!Send`）と専用 wake event。
+        let registry = Rc::new(RefCell::new(ClickThroughRegistry::new()));
+        let wake_event = std::sync::Arc::new(event_listener::Event::new());
+
+        // 2. 機構起動（ワーカ生成・event 共有・async ループ spawn_local）。
+        let handle = ClickThroughController::start(
+            Rc::downgrade(&self.world),
+            Rc::clone(&registry),
+            std::sync::Arc::clone(&wake_event),
+        );
+
+        // 3. 登録面（NonSend リソース）を World へ据える（areka task 4.1 が取得・登録）。
+        {
+            let mut ecs = self.world.borrow_mut();
+            ecs.world_mut()
+                .insert_non_send_resource(ClickThroughRegistryHandle::new(Rc::clone(&registry)));
+        }
+
+        debug!("ClickThrough wired (worker + eval loop started, registry handle inserted)");
+        (handle, wake_event)
+    }
+
     /// UI スレッドのメッセージループを開始する（旧 `WinThreadMgr::run` 相当・task 4.3 全結線）。
     ///
     /// 最小フロー `WinApp::new → world → run` でメッセージループ・tick・終了が一体動作する
@@ -220,6 +278,40 @@ impl WinApp {
 
         // 3. 60Hz tick ループを UI スレッドへ投入（World は Weak・shutdown で upgrade None 終了）。
         let _tick = AsyncTickTask::spawn(bridge.event().clone(), Rc::downgrade(&self.world));
+
+        // 3.5. クリック透過機構を起動（ワーカ＋判定ループ）＋登録面を World へ据える（task 3.2）。
+        //      `_click_through` を run の間ローカル保持し、run 復帰（shutdown）で drop
+        //      （ワーカ stop/join・async ループは world Weak upgrade None で自然終了）。
+        let (_click_through, click_wake) = self.wire_click_through();
+
+        // 3.6. VSync tick → クリック透過 wake の relay タスク（既存 tick cadence を変えない）。
+        //      vblank 毎に click_wake を notify し、静止カーソル時も post-tick 再評価を起こす
+        //      （R2.4 表示更新追随／R5.2 JustEnded 再収束）。listen-before-work 規律で notify を
+        //      取りこぼさず、`self.world` の Weak が upgrade 不能（shutdown）になればループ終了。
+        //      wake_event を VSync event とは **別 Arc** に保つことで、カーソル移動 notify が
+        //      `AsyncTickTask` を余計に起こさない（入力と描画 cadence の非結合）。
+        {
+            let vblank = bridge.event().clone();
+            let world_weak = Rc::downgrade(&self.world);
+            let wake = std::sync::Arc::clone(&click_wake);
+            let _relay = wintf_winmsg_executor::spawn_local(async move {
+                loop {
+                    // 先に listen() を arm（処理中に届く vblank を落とさない）。
+                    let listener = vblank.listen();
+                    // strong 所有者が生存しているか（shutdown で None → 終了）。
+                    if world_weak.upgrade().is_none() {
+                        debug!("ClickThrough VSync relay stopping (world dropped — shutdown)");
+                        return;
+                    }
+                    // 次 vblank まで待機し、クリック透過ループを起床（post-tick 再評価）。
+                    listener.await;
+                    wake.notify(usize::MAX);
+                }
+            });
+            // `_relay` はこのスコープ末で JoinHandle が drop されるが、spawn 済みタスクは
+            // executor 上で走り続け、world Weak upgrade None（shutdown）で自ら終了する
+            // （`AsyncTickTask` と同じ「JoinHandle を保持せず self-terminate」規律）。
+        }
 
         // 4. shutdown future が完了するまでメッセージループを駆動（先行 quit せず復帰）。
         MessageLoopDriver::block_on(ShutdownPolicy::shutdown_future(Rc::clone(&self.shutdown)));
@@ -410,6 +502,62 @@ mod tests {
         // 空遷移 hook が WinApp 所有 Event を notify したので arm 済み listener が起床する。
         // ハングしない = run() の shutdown future が完了して block_on が正常復帰できる経路。
         listener.wait();
+    }
+
+    /// task 3.2: `wire_click_through` の結線を headless で検証する。
+    /// 1. クリック透過機構が起動し（ワーカ＋判定ループ）、返る `ClickThroughHandle` を得る。
+    /// 2. 登録面 `ClickThroughRegistryHandle`（NonSend リソース）が World へ挿入される
+    ///    （areka task 4.1 が `get_non_send_resource` で取得し窓登録する登録面）。
+    /// 3. 登録面経由の register/remove が反映される（共有レジストリ）。
+    /// 4. `ClickThroughHandle` を drop するとワーカが stop/join されハングしない（RAII）。
+    ///
+    /// フル `run()` のメッセージループ（実 vblank relay 駆動）は回さず、`wire_new_path` と同様に
+    /// 結線ヘルパーを単体検証する（executor 非駆動でも spawn_local タスクは投入されるだけで安全）。
+    #[test]
+    fn wire_click_through_starts_and_inserts_registry_handle() {
+        use crate::ecs::clickthrough::ClickThroughRegistryHandle;
+
+        let app = WinApp::new().expect("WinApp::new should succeed headless");
+        let (handle, _wake) = app.wire_click_through();
+
+        // ダミー window Entity（登録面の反映確認用・World 生存は問わない）。
+        let e = bevy_ecs::entity::Entity::from_raw_u32(1).expect("valid test entity index");
+
+        // 登録面が NonSend リソースとして World に据えられていること。
+        {
+            let world = app.world();
+            let ecs = world.borrow();
+            let reg_handle = ecs
+                .world()
+                .get_non_send_resource::<ClickThroughRegistryHandle>()
+                .expect("wire_click_through は ClickThroughRegistryHandle を World へ挿入すべき");
+            assert!(reg_handle.is_empty(), "初期の登録面は空");
+
+            // 登録面経由の register が共有レジストリへ反映される（areka 4.1 の登録経路）。
+            reg_handle.register(e, windows::Win32::Foundation::HWND::default());
+            assert_eq!(reg_handle.len(), 1, "登録面 register が反映される");
+            assert!(reg_handle.remove(e), "登録面 remove が反映される");
+            assert!(reg_handle.is_empty());
+        }
+
+        // handle drop でワーカ stop/join。ハングせず復帰すれば RAII 健全。
+        drop(handle);
+    }
+
+    /// task 3.2: `run()` の結線が既存 tick/vsync/shutdown チェーンを壊さないことの回帰確認。
+    /// `wire_click_through` を呼んだ後でも空 World の 1 tick が panic せず回る（schedule 健全）。
+    /// `wire_new_path`（reconcile 登録）と `wire_click_through`（登録面挿入）を併用しても
+    /// World の tick が健全であること＝既存機能の非破壊（R7.2）。
+    #[test]
+    fn wire_click_through_does_not_break_tick() {
+        let app = WinApp::new().expect("WinApp::new should succeed headless");
+        app.wire_new_path();
+        let (handle, _wake) = app.wire_click_through();
+
+        // 併用後も空 World の 1 tick が panic しない（既存 schedule 非破壊）。
+        app.world.borrow_mut().try_tick_world();
+
+        drop(handle);
     }
 
     /// 終了シグナルは `WinApp` が strong 所有する（`shutdown` フィールド存在の確認も兼ねる）。
