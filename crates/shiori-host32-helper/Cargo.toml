@@ -1,0 +1,23 @@
+[package]
+name = "shiori-host32-helper"
+workspace = "../.."
+description = "host-32 i686 helper binary (HelperMessageWindow / respond echo)"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[dependencies]
+shiori-host32-ipc = { path = "../shiori-host32-ipc" }
+wintf-winmsg-executor = { workspace = true }
+thiserror = { workspace = true }
+
+[dependencies.windows]
+workspace = true
+features = [
+    "Win32_System_DataExchange",
+    "Win32_UI_WindowsAndMessaging",
+    "Win32_Foundation",
+]

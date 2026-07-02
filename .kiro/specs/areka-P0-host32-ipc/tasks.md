@@ -1,6 +1,6 @@
 # Implementation Plan
 
-- [ ] 1. 基盤: 3クレート・ワークスペース雛形とビルド構成
+- [x] 1. 基盤: 3クレート・ワークスペース雛形とビルド構成
   - `shiori-host32-ipc`（proto）／`shiori-host32-host`（x64+arm64 lib）／`shiori-host32-helper`（i686 bin）の3クレートを新設し、`crates/*` glob でワークスペースメンバー化する
   - 各 `Cargo.toml` に依存を配線（`windows` 0.62.2 ＋ feature `Win32_System_DataExchange` / `Win32_UI_WindowsAndMessaging` / `Win32_Foundation`、`wintf-winmsg-executor` 0.0.5、`event-listener` 5、`thiserror` 2）。`-host` / `-helper` は `-ipc` を依存する
   - 観測可能な完了: `cargo build`（host・x64）と PowerShell での `cargo build -p shiori-host32-helper --target i686-pc-windows-msvc` が空雛形で成功し、ワークスペースが3メンバーを認識する
