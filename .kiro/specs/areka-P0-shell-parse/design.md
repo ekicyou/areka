@@ -279,7 +279,7 @@ graph TB
 pub struct Shell {
     /// surfaceNNN 定義（出現順保持）。
     pub surfaces: Vec<Surface>,
-    /// surface.append 追記定義（ターゲット展開済み・出現順保持）。
+    /// surface.append 追記定義（ターゲット指定を記述子で保持〔展開しない〕・出現順保持）。
     pub appends: Vec<SurfaceAppend>,
     /// kero.surface.alias 写像（重複キー保持・出現順保持・要件 8.4）。
     pub aliases: Vec<SurfaceAlias>,
