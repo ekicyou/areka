@@ -21,6 +21,8 @@ mod model;
 mod model_tests;
 
 mod resolve;
+#[cfg(test)]
+mod resolve_tests;
 
 pub use model::{GhostNames, MountError, MountModel, ShellMount, ShioriMount};
 pub use resolve::resolve;

@@ -22,7 +22,7 @@
   - _Boundary: package::model_
 
 - [ ] 3. Core: マウント解決（`resolve` submodule）
-- [ ] 3.1 descript.txt 起点の解決（正常系）を実装する
+- [x] 3.1 descript.txt 起点の解決（正常系）を実装する
   - `ghost/master/descript.txt` を `std::fs::read` → `charset::decode(bytes, default_encoding)` → `kv::parse_kv` の合成で読み込む（charset 判定・KV 分割は foundation へ委譲し再実装しない）
   - `default_encoding` は呼び出し側から受け取り `decode` へ素通しする（package はエンコーディング既定を判断しない・SSP 準拠既定は ANSI・非 UTF-8 拒否のエンフォースは下流 SHIORI 層）
   - ゴースト識別は所在ベース（`ghost/master/descript.txt` の所在で受理）とし、`type,ghost` は確認的で `type` 行の欠落を失敗としない（type 分岐を作らない）
