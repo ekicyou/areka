@@ -63,7 +63,7 @@
 
 **接ぎ木点**: `lib.rs` に `pub mod package;` を 1 行追加。`package` は foundation の 2 API を同一クレート内から直接 `use` する。
 
-**逸脱点（設計判断で整理）**: `package` は `areka-parsers` で初めて `std::fs`（I/O）を持つ module となる。純粋関数群という宣言との整合を保つため、I/O は `resolve` サブモジュール内に閉じ込め、`lib.rs` の doc コメントに「（`package` のみ）ローカルツリー走査を許容する」旨を補記する。
+**逸脱点（設計判断で整理）**: `package` は `areka-parsers` で初めて `std::fs`（I/O）を持つ module となり、加えて兄弟パーサ規約（steering `structure.md:226`「`pub fn parse(&str) -> Vec<Model>`・`Result` 無しの寛容パース」）に対し `Result<MountModel, MountError>` 返却でも逸脱する。純粋関数群という宣言との整合を保つため、I/O は `resolve` サブモジュール内に閉じ込め、`lib.rs` の doc コメントに「（`package` のみ）ローカルツリー走査を許容する」旨を補記する。**さらに `package/mod.rs` の module doc に「本 module は parser ファミリ内で唯一 I/O（`std::fs` 読取のみ）と `Result` を持つ。理由＝マウントは物理不在という現実の失敗を持つため（Req 5.1・`sakura` の寛容パースと意図的に非対称）」を明記し、逸脱が局所的・意図的であることをコード近傍に固定する**（後続 `shell-parse`/`balloon-parse` 実装者の規約誤読を防ぐ）。
 
 ### Architecture Pattern & Boundary Map
 
@@ -111,7 +111,7 @@ flowchart TD
 crates/areka-parsers/src/
 ├── lib.rs                       # 変更: `pub mod package;` を 1 行追加 + doc に I/O 許容の補記
 ├── package/                     # 新規: マウント解決 module
-│   ├── mod.rs                   # 公開面集約（pub use model::{MountModel, MountError}; pub use resolve::resolve;）+ 依存方向 doc
+│   ├── mod.rs                   # 公開面集約（pub use model::{MountModel, MountError}; pub use resolve::resolve;）+ 依存方向 doc + 逸脱理由 doc（唯一 I/O・Result を持つ理由＝Req 5.1・sakura と意図的に非対称）
 │   ├── model.rs                 # 型の正本: MountModel / ShioriMount / ShellMount / MountError（#[non_exhaustive] + 最小 derive）
 │   ├── model_tests.rs           # #[cfg(test)] model のアクセサ/構築の単体テスト
 │   ├── resolve.rs               # ツリー解決 + std::fs 存在確認 + descript 読み込み合成 + 既定フォールバック + 公開 fn resolve
@@ -331,6 +331,8 @@ const DEFAULT_SHELL_DIR: &str = "master";        // ukadoc 既定（Req 3.1）
 ### Error Strategy
 `resolve` は致命的欠落を `Result::Err(MountError)` で早期 return する（設計判断①のハイブリッド方針）。`sakura` の `Result` 無し寛容パースとは意図的に非対称（マウントは不在という現実の失敗を持つ・Req 5.1 が明示）。非致命の欠落は `MountModel` 内の `Option` で保持し、下流に判断を委ねる（推測しない・Req 2.3）。
 
+> **`StartPointUnreadable` の要件位置づけ**: 本 variant（descript.txt は所在するが `std::fs::read` が権限/ロック等で失敗）は要件本文に独立の受入基準を持たず、**Req 1.6/5.1 の「観測可能な失敗（黙って空を返さない）」原則から派生した I/O エラー枝**である。要件が列挙する致命は「起点不在」「shell dir 不在」の 2 種だが、読取失敗も同原則に従い黙殺せず `Err` で表出させる（設計先行の派生 variant であることを明示）。`#[non_exhaustive]` により下流の網羅 match は前方互換。
+
 ### Error Categories and Responses
 | カテゴリ | 条件 | 表現 | 根拠 |
 |----------|------|------|------|
@@ -352,6 +354,7 @@ const DEFAULT_SHELL_DIR: &str = "master";        // ukadoc 既定（Req 3.1）
 3. **shell 既定フォールバック**: `seriko.defaultsurfacedirectoryname` 未指定かつ `shell/master` 実在時、`shell.dir` が `.../shell/master` に解決される（Req 3.1）。
 4. **shell 指定 + 不在 → `ShellDirMissing`**: `seriko.defaultsurfacedirectoryname,foo` 指定だが `shell/foo` 不在で `Err(ShellDirMissing)`（Req 3.2/3.3）。
 5. **`type` 欠落でも受理**: `type,ghost` を欠く descript でも所在ベースで受理し `Ok` を返す（Req 1.2/1.3）。
+6. **起点読取失敗 → `StartPointUnreadable`**: `ghost/master/descript.txt` を**ディレクトリとして作成**して `std::fs::read` を失敗させ、`resolve` が `Err(StartPointUnreadable)` を返すことを検証（Req 1.1/5.1）。ディレクトリ read はクロスプラットフォームで確実に `io::Error` になるため、権限操作に依存せず誘発できる。これにより `MountError` の全 3 variant が実行検証される。
 
 ### Integration Tests（validation_tests・emo2 実 fixture）
 1. **emo2 主経路（Req 4.3）**: `crates/pilot/examples/shiori-host-32/fixtures/emo2/` を `ghost_root` に与え、`shiori.file == Some("pasta.dll")`・`shiori.dir` が `.../ghost/master`・`shell.dir` が既定 `.../shell/master`（emo2 は `seriko.defaultsurfacedirectoryname` 不在）に解決されることを検証。
