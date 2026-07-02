@@ -48,7 +48,7 @@ emo2 の `ghost/master/descript.txt`＋ツリーを解決し、マウントモ�
 ## Out of Boundary
 
 - **`install.txt`／NAR 配置解決**: install.txt は NAR インストーラ配置マニフェスト＝**起動時不使用**（ukadoc）。本 spec の入力ではない。
-- **balloon 所在解決**: balloon は **baseware 共有・ユーザ選択**であり、ゴーストパッケージ単独からは所在を確定できない（ukadoc 論拠・記憶 areka-ghost-boot-descript-not-install）。よって起点マウント解決のスコープ外。ゴーストが希望 balloon を descript で示唆し得ても、実使用 balloon は baseware のユーザ設定が決める。
+- **balloon 所在解決**: balloon は **baseware 共有・ユーザ選択**であり、ゴーストパッケージ単独からは所在を確定できない（ukadoc 論拠・記憶 areka-ghost-boot-descript-not-install）。よって起点マウント解決のスコープ外。ukadoc 上ゴースト `descript.txt` の balloon 系キー（`balloon,バルーン名`／`recommended.balloon`／`default.balloon.path`）は**バルーン「名」の希望表明**にすぎず、既定値も「SSP標準 or **ユーザーが設定した標準バルーン**」＝実使用 balloon は baseware のユーザ設定が決める（所在確定ではない）。
 - ファイル**内容**のパース（他 parser）。SHIORI/DLL（host-32）。lifecycle 構築（`ghost-setup`）。
 
 ## Upstream / Downstream
