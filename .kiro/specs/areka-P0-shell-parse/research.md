@@ -148,3 +148,40 @@ Option B の四層を主軸としつつ、`descript { ... }` ブロック内の 
   6. テスト定義の起こし方（**ukadoc 準拠の自前 in-source 断片が主軸**・emo2 はスモークサンプル併用／discussion #2 で正典＝ukadoc に確定。ukadoc MCP を第一参照）。
 - **持ち越し研究**: §4 の 6 項目。外部依存調査は不要。ukadoc は範囲端点包含など数点の確認のみ。
 - **過剰実装ガード**（要件 10.2/10.3）: emo2 未使用の method/interval/collisionex/非 0 offset は**実装しない**。拡張余地は `#[non_exhaustive]` シームのみ。2 例目の実物 fixture が要求するまで抽象を足さない。
+
+## 7. 設計フェーズ成果（design.md 確定・2026-07-02）
+
+> discovery タイプ = **light**（既確立 `areka-parsers` クレートへの `sakura` パターン踏襲拡張。外部依存調査不要）。ukadoc MCP で SERIKO/surfaces.txt 行文法を正典確認済。
+
+### 7.1 採用アーキテクチャ（synthesis 適用後）
+
+- **Option B 確定**: `src/shell/` に `model ← lexer ← decode ← parse` 四層を新設。Option A（`kv` 流用）は重複キー潰し・順序喪失・配列値非対応で構造的却下。Option C（descript の kv 委譲）は**不採用**（descript は寛容スキップで retain せず、KV パース自体が不要ゆえ節約効果ゼロ）。
+- **Generalization**: surface 定義と surface.append は collision/animation を共有する（同一 `Collision`/`Animation` 型）が、append は「複数ターゲット＋デルタ」という別性質ゆえ**別トップレベル型 `SurfaceAppend`**（内部型は共有）。過度な統一はしない。
+- **Build vs Adopt**: 外部 crate なし（純粋 Rust パーサ・確立 sakura 流儀を adopt）。`serde` 不採用（sakura 規律）。
+- **Simplification**: descript/charset をモデルに保持しない（上流 foundation がデコード消費済・要件 3）。`Shell { surfaces, appends, aliases }` の 3 フィールドに絞る。投機的抽象（汎用シーングラフ等）は emo2 に YAGNI（`emo2-conformance-scope.md` §6 準拠）。
+
+### 7.2 主要決定事項の確定（§6 の 6 項目）
+
+1. **surface.append 範囲展開**: **parse 時に inclusive 展開**（`a-b` は端点包含・ukadoc `surface0-2`=0,1,2 準拠）。`SurfaceAppend.targets: Vec<u32>`。要件 7.2「解決」= parse 時展開と解釈。
+2. **surface 定義 vs append 統一/別型**: **別トップレベル型**（`Surface` と `SurfaceAppend`）。内部 collision/animation は同一型を共有（要件 7.3「同一のモデル表現」を型共有で満たす）。
+3. **重複 alias キー保持**: **順序保持 `Vec<SurfaceAlias>`**（`SurfaceAlias{ key: AliasKey(opaque), ids: Vec<u32> }`）。BTreeMap/multimap 不可（要件 8.4・全出現保持）。
+4. **pattern index 疎保持**: `Pattern{ index: u32, ... }` を `Vec<Pattern>` で保持。連番前提を置かず疎許容（fixture の `pattern1/2/3` 欠番例準拠・要件 5.4）。
+5. **ルート型形状**: `Shell { surfaces: Vec<Surface>, appends: Vec<SurfaceAppend>, aliases: Vec<SurfaceAlias> }`。descript/charset フィールドは持たない（将来保持は `#[non_exhaustive]` 拡張シーム・要件 3.4/10.5）。
+6. **テスト定義**: **ukadoc 準拠自前 in-source 断片が主軸**（機能ごと最小 `surfaces.txt` 断片を `#[cfg(test)]` で自作・期待値リテラル直書き）。emo2 fixture は代表抜粋リテラルの**スモークテスト併用**（非パニック＋スコープ内解釈確認）で唯一の適合基準としない（要件 10.1-10.3）。`include_str!` は自前断片ゆえ不要。
+
+### 7.3 ukadoc 正典確認（値正規化の根拠）
+
+- `collision*,始点X,始点Y,終点X,終点Y,ID` → `Collision{left,top,right,bottom,name(opaque)}`。
+- `animation*.pattern*,描画メソッド,サーフェス番号,ウェイト,X,Y`。**負サーフェス番号: `-1`=当該アニメ停止 / `-2`=全アニメ停止**（描画メソッド/XY は無視）→ `Pattern.surface_id: i64` でセンチネル保持し「レイヤクリア」意味付けは下流委譲（要件 5.5）。
+- `animation*.interval` は `+` で組合せ（SSP のみ）→ emo2 は `bind`/`random,N`/`bind+random,N` の 3 種のみ（`Interval` enum・他は吸収）。
+- `overlay` = ベースへ新規レイヤ重ね（着せ替えでは add/bind と同効果）。
+- `surface0-2` 記法 = 0,1,2（範囲 inclusive）→ `expand_targets` 端点包含の根拠。
+
+### 7.4 設計フェーズで生じた解決済み論点（非ブロッキング）
+
+- **surface.append ヘッダ数値の扱い**: `surface.append10,2100-2110,2200-2210`（ヘッダ `10` はカテゴリ番号・実ターゲットは後続列挙）と `surface.append2200 { ... }`（列挙なし・ヘッダ自身がターゲット）の 2 形が fixture に共存。**決定: 後続に列挙/範囲フィールドがあればそれらのみをターゲットとし、列挙が無ければヘッダ数値自身をターゲットとする**（両 fixture 形と整合・要件 7.1/7.2 を満たす）。ukadoc に明示のない実装細目だが fixture で一意に定まるため質問不要。
+
+### 7.5 レビューゲート結果
+
+- 機械チェック合格: 全 47 acceptance criteria ID（1.1–11.4）が design.md の Requirements Traceability に出現（重複なく網羅）。Boundary 4 節・File Structure Plan・コンポーネント↔ファイル整合・orphan なし。
+- 判断レビュー合格: 要件被覆・アーキ準備性・境界明瞭性・実行可能性いずれも充足。修復パス不要（0 回）で通過。**真の要件ギャップなし**。
