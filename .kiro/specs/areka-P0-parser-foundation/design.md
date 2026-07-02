@@ -134,7 +134,7 @@ crates/areka-parsers/
     │   ├── prescan.rs               # 内部（非公開）: 冒頭 ASCII プリスキャンで charset 名抽出（D1/D2）
     │   ├── decode.rs                # 内部（非公開）: prescan 結果＋encoding_rs で全体デコード（公開 facade decode）
     │   ├── model_tests.rs           # #[cfg(test)] DefaultEncoding の派生・構築
-    │   ├── prescan_tests.rs         # #[cfg(test)] プリスキャン（検出/未検出/寛容/上限/非ASCII打ち切り）
+    │   ├── prescan_tests.rs         # #[cfg(test)] プリスキャン（検出/未検出/寛容/上限/非ASCII打ち切り/BOM付きcharset検出）
     │   ├── decode_tests.rs          # #[cfg(test)] decode 単体（宣言あり/なし/未対応/不正並び/BOM）
     │   └── validation_tests.rs      # #[cfg(test)] 公開パス契約: emo2 UTF-8 + SJIS 合成（リテラル期待値）
     └── kv/
@@ -148,7 +148,7 @@ crates/areka-parsers/
 
 ### Modified Files
 - `Cargo.toml`（ルート） — `[workspace.dependencies]` に `encoding_rs = "0.8"` を追加（D5）。
-- `crates/areka-parsers/Cargo.toml` — `[dependencies]` に `encoding_rs = { workspace = true }` を追加。description の "std-only" 文言は `encoding_rs` 追加で厳密には破れるが、承認済み意図的逸脱ゆえ description の "Pure ... host-independent" は維持し、必要なら "std-only" を "minimal-dependency" 相当へ軽微更新（実装タスクで判断）。
+- `crates/areka-parsers/Cargo.toml` — `[dependencies]` に `encoding_rs = { workspace = true }` を追加。description の "std-only" 文言は `encoding_rs` 追加で厳密には破れるため、承認済み意図的逸脱に合わせ **"std-only" を "minimal-dependency" 相当へ更新する**（"Pure ... host-independent" は維持）。この description 更新を**実装タスクの受け入れ条件に一行明記**する（実装者判断への委譲は解消・Minor Issue 2 反映）。
 - `crates/areka-parsers/src/lib.rs` — `pub mod charset;` と `pub mod kv;` を追加（クレート doc の「兄弟モジュールは各 spec が追加する」記述に沿う）。既存 `pub mod sakura;` は無変更。
 
 ## System Flows
@@ -171,7 +171,7 @@ flowchart TD
 ```
 
 補足:
-- BOM（R5.2）は `encoding_rs::decode` が sniff して処理する。プリスキャンは ASCII 判定のみゆえ BOM バイトを charset 名と誤認しない（BOM 直後から行走査を続ける実装で吸収）。
+- **BOM 方針（一意化・Minor Issue 1 反映）**: プリスキャン開始前に**先頭の BOM バイト列（UTF-8 BOM `EF BB BF` 等）を読み飛ばして**から行走査を始める。これにより BOM 付き `charset,UTF-8` ファイルでも宣言を取り逃さない。加えて最終デコードでは `encoding_rs::decode` が BOM を sniff して吸収する（R5.2 を二重に担保）。※BOM を「非 ASCII 相当として単に打ち切る」経路は採らない（Ansi 既定時に宣言を取り逃す穴を塞ぐため）。
 - `kv::parse_kv` は分岐が単純（行ループ＋`split_once`）ゆえ図を割愛する。
 
 ## Requirements Traceability
@@ -246,7 +246,7 @@ pub fn decode(bytes: &[u8], default: DefaultEncoding) -> String;
 
 **Implementation Notes**
 - Integration: 呼び出し側がファイルを読み `bytes` を渡す。KV 対象ファイルは戻り `String` を `kv::parse_kv` へ渡す。
-- Validation: プリスキャンは ASCII バイト（`< 0x80`）のみを走査対象とし、非 ASCII バイト出現で打ち切る（charset 名が ASCII である前提・R1.5）。BOM は encoding_rs のデコードで吸収、プリスキャンは BOM バイトを非 ASCII 相当として扱うか読み飛ばして誤検出を防ぐ（R5.2）。
+- Validation: プリスキャンは ASCII バイト（`< 0x80`）のみを走査対象とし、非 ASCII バイト出現で打ち切る（charset 名が ASCII である前提・R1.5）。ただし**先頭の BOM バイト列は走査開始前に読み飛ばす**（UTF-8 BOM 等が非 ASCII 打ち切りに該当して宣言を取り逃すのを防ぐ・一意方針）。最終デコードでは encoding_rs が BOM を sniff して吸収する（R5.2 二重担保）。
 - Risks: `for_label` のラベル正規化（Encoding Standard 準拠）が ukadoc 表記（`Shift_JIS`）を解決できることは validation_tests で固定する。
 
 ### Foundation / KV
@@ -306,7 +306,7 @@ pub fn parse_kv(text: &str) -> std::collections::BTreeMap<String, String>;
 すべて in-source `#[cfg(test)]` テスト（host 非依存・R7）。期待値はリテラル直書きし、fixture 由来値には採取元の正本ファイル名・行をコメントで明示する（クレート跨ぎ `include_str!` を使わない・R7.3）。fixture 実測は research §1.4・本設計「決定事項 D3」に準拠。
 
 ### Unit Tests（各モジュール内部・公開 API 経由の一部を含む）
-1. **charset プリスキャン検出/未検出/寛容**（R1.1–1.5, D1/D2）: `charset,UTF-8`（emo2 `descript.txt` L1 由来）を検出／大小差 `CHARSET,utf-8`・前後空白・CRLF 末尾を許容／宣言なし（`balloons0s.txt` は先頭 `windowposition.x,266`＝charset 行なし）で「宣言なし」判定／非 ASCII 出現・4096B 上限で打ち切り。
+1. **charset プリスキャン検出/未検出/寛容**（R1.1–1.5, D1/D2, R5.2）: `charset,UTF-8`（emo2 `descript.txt` L1 由来）を検出／大小差 `CHARSET,utf-8`・前後空白・CRLF 末尾を許容／宣言なし（`balloons0s.txt` は先頭 `windowposition.x,266`＝charset 行なし）で「宣言なし」判定／非 ASCII 出現・4096B 上限で打ち切り／**先頭 UTF-8 BOM（`EF BB BF`）付き `charset,UTF-8` を BOM 読み飛ばしで検出**（Minor Issue 1 一意方針の固定）。
 2. **charset デコード分岐**（R2.1–2.7, R5.2）: 宣言 UTF-8 で全体デコード／未対応ラベルは既定へフォールバック／`had_errors` を含む不正並びを U+FFFD 吸収して String を返す／BOM 付き入力を寛容に扱う。
 3. **`DefaultEncoding` 写像**（R2.3/2.4/2.5, D6, R7.5）: charset 宣言なし入力を `Utf8` 指定 → UTF-8 デコード／同入力を `Ansi` 指定 → SHIFT_JIS(CP932) デコード。既定指定ごとに指定どおりのエンコードでデコードされることを固定。
 4. **`kv::parse_kv` 規則**（R4.1–4.8, R5.1, R5.3）: 後勝ち上書き／空行・カンマ無し行スキップ／key・value trim／CRLF と LF 双方で同結果／値中カンマ保持／空入力 → 空マップ。
@@ -314,7 +314,7 @@ pub fn parse_kv(text: &str) -> std::collections::BTreeMap<String, String>;
 ### Integration / 公開パス契約テスト（`validation_tests.rs`）
 1. **emo2 UTF-8 通し**（R7.1, R7.4）: `descript.txt` 冒頭（`charset,UTF-8` ＋ `type,balloon` / `name,kakukaku for emo-gs`）を模したバイト列（リテラル）を `charset::decode(_, Utf8)` → `kv::parse_kv` に通し、`type→balloon`・`name→kakukaku for emo-gs` を固定。採取元 `emo2-kakukaku/descript.txt` L1–L3 をコメント明示。
 2. **charset なしファイル**（R7.4, R1.4）: `balloons0s.txt` 由来（`windowposition.x,266` / `windowposition.y,-129` / `wordwrappoint.x,-49`・charset 行なし）を `Utf8` 既定で通し、`windowposition.x→266`（文字列のまま・R4.7）等を固定。採取元 `emo2-kakukaku/balloons0s.txt` L1/L2/L4 コメント明示。
-3. **Shift_JIS 合成通し**（R7.2, D3）: `encoding_rs::SHIFT_JIS.encode("charset,Shift_JIS\r\nname,かくかく\r\n")` でバイト生成 → `charset::decode(_, Utf8)` が宣言 Shift_JIS を優先し `name→かくかく` を文字化けなく復元することを固定（既定 `Utf8` を渡しても宣言優先で SJIS デコードされる＝R2.2 の生き証人）。期待文字列はリテラル直書き＋「合成・fixture に SJIS 実ファイル無し」コメント。
+3. **Shift_JIS 合成通し**（R7.2, D3, R2.5）: `encoding_rs::SHIFT_JIS.encode("charset,Shift_JIS\r\nname,かくかく\r\n")` でバイト生成 → `charset::decode(_, Utf8)` が宣言 Shift_JIS を優先し `name→かくかく` を文字化けなく復元することを固定（既定 `Utf8` を渡しても宣言優先で SJIS デコードされる＝R2.2 の生き証人）。**コメントに「`encoding_rs::Encoding::for_label(b"Shift_JIS")` 解決の生き証人」と明記**し、ukadoc 表記 `Shift_JIS` のラベル正規化がラベル解決経路を通ることをテスト意図として固定する（Minor Issue 3 反映）。期待文字列はリテラル直書き＋「合成・fixture に SJIS 実ファイル無し」コメント。
 
 > Performance/Load・E2E は本フィーチャに非該当（純粋関数・host 非依存・UI/ネットワークなし）。
 
