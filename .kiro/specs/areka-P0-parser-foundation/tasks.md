@@ -47,8 +47,8 @@
   - _Boundary: kv::parse_kv_
   - _Depends: 1.1_
 
-- [ ] 4. Integration: 公開パス契約テスト
-- [ ] 4.1 公開 API 経由の契約固定テスト（decode→kv 通し・emo2 fixture＋Shift_JIS 合成）
+- [x] 4. Integration: 公開パス契約テスト
+- [x] 4.1 公開 API 経由の契約固定テスト（decode→kv 通し・emo2 fixture＋Shift_JIS 合成）
   - emo2 `descript.txt`（UTF-8）由来のリテラル入力を decode（既定 Utf8）→parse_kv に通し、`type`／`name` の期待値を固定する。採取元の正本ファイル名・行をコメントで明示する
   - charset 行なしファイル（`balloons0s.txt`）由来のリテラル入力を既定 Utf8 で通し、値が文字列のまま保持されること（数値化しない）を固定する。採取元をコメント明示する
   - Shift_JIS 合成入力（`SHIFT_JIS.encode` のラウンドトリップで生成）で宣言優先デコードが文字化けしないことを固定し、`for_label(b"Shift_JIS")` 解決の生き証人であるとコメント明示する（fixture に SJIS 実ファイル無し）
