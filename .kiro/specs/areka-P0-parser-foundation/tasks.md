@@ -18,7 +18,7 @@
   - _Requirements: 2.3, 2.4, 2.5_
   - _Boundary: charset::DefaultEncoding_
   - _Depends: 1.1_
-- [ ] 2.2 (P) 冒頭プリスキャンによる charset 宣言検出
+- [x] 2.2 (P) 冒頭プリスキャンによる charset 宣言検出
   - 先頭の BOM バイト列を読み飛ばしてから、先頭〜最初の非 ASCII バイト／上限 4096 バイトの範囲を行単位で走査する
   - `charset,<名>` をカンマ区切りのみ・キー大小無視・前後 trim・CRLF/LF 寛容で抽出し、未検出は「宣言なし」として返す
   - charset 名が ASCII である前提のもと、実エンコードに依らず宣言走査を成立させる
