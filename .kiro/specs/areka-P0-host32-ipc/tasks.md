@@ -56,7 +56,7 @@
   - 観測可能な完了: PowerShell で（事前ビルドした i686 helper を用いて）`cargo test` の echo 往復が無クラッシュ・無デッドロックで green になる
   - _Requirements: 6.1, 6.2, 6.3, 4.4_
   - _Depends: 3, 4.1, 4.3_
-- [ ] 5.2 エラー経路の統合テスト
+- [x] 5.2 エラー経路の統合テスト
   - ハンドシェイク timeout（HELLO を送らせず pump→`None`）、応答 timeout／wedge（無応答 helper に `send_request`→`Timeout`・親がハングしない）、helper 異常終了検出（強制終了→`poll_exit_kind`→`Abnormal`/`Terminated`）、不正フレーム隔離（実 WM_COPYDATA で未知タグ／`cbData` 不整合を送り観測カウンタ増加・上位へ渡らない）を検証する
   - 観測可能な完了: 4経路それぞれの統合テストが green（各失敗が観測可能な形で報告され、親が無限待機しない）
   - _Requirements: 1.4, 2.5, 3.4, 5.2, 5.3_
@@ -77,4 +77,5 @@
 - 3: wintf-winmsg-executor 0.0.5 の message-only 窓は **同一 i686 プロセス内で2組独立生成すると2組目が `WindowCreationError`** になる実行時制約あり。helper のセルフテストは窓を1組に集約した単一 loopback テストにし、不正フレーム分類は窓なし純関数（`classify_inbound`）へ切り出して独立検証する。
 - 環境: subagent の出力トランスクリプト（tasks/*.output）は0バイトで永続化されない＝消失した未コミット作業は復元不能。**未コミット実装をレビューへ回す前に scratchpad へバックアップ**し、レビュアーには **`git checkout`/`restore`/`stash`/`reset`/`clean` 禁止**（ミューテーション検証は Edit で戻す）を課すこと（task 3 は初回レビュアーの git 復元＋APIクラッシュで実装消失→再実装した）。
 - 4.2: `ParentMessageWindow::create` は `WindowCreationError`（thiserror・parent_window.rs）を返す。design §413 は `HandshakeError` と記すが「窓生成失敗はハンドシェイク意味論以前」ゆえ型分離した（設計逸脱・実装が正・妥当）。heartbeat は別スレッド `PostMessageW(WM_NULL)` 25ms 間隔＋deadline 再評価で `pump_until_hello_or` の pump フェーズ専用。
+- 5.2: **`copydata_payload` の `LengthMismatch`（cbData≠実長）分岐は実 WM_COPYDATA 受信経路では原理的に到達不能**。`read_copydata` が `cbData` バイトちょうどを `from_raw_parts` で slice して `classify_inbound` へ渡すため、呼び出し点では常に `declared_len == data.len()`。長さ詐称を実配送で作ると境界外読み取り（UB）を招く。よって長さ不整合検出は**単体**（proto `framing_rejects_length_mismatch`・host `length_mismatch_is_ignored_as_bad`）で被覆し、統合テストの WndProc 隔離検証は**到達可能な未知タグ**で行う（ハンドシェイク成立前に未知タグ注入→`pump_until_hello_or`→依然 `None` で非盲目に隔離を観測）。初回実装は cbData 詐称注入で REJECTED→是正した。
 - 4.3: `send_request` は `SendError { Handshake(HandshakeError), Ipc(IpcError) }`（両 `#[from]`・lib.rs re-export）を返す。design §417 は `Result<Vec<u8>, IpcError>` と記すが、ゲート拒否（handshake 層・要件3.3）と transport 失敗（要件5.x）の型不整合を層分離で解決したもの（設計逸脱・実装が正）。**design.md §417 の型表記は実装 `SendError` に後追い更新する余地あり**（非ブロッキング）。RESPONSE 再入 store→即 return・heartbeat 不干渉（in-flight は SendMessageTimeout ブロックで WM_NULL 非配送）で `clear→store→take` 不変を保つ。
