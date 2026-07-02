@@ -276,3 +276,33 @@ R10.3「brain が `Get` 処理中に呼んでも**同期**で値応答」の実�
 - **一般化**: (i) helper 起動パラメーター供給は「arg-n 優先・env fallback・`pub const` env キー」の**単一パターン**へ一般化（parent_hwnd/load_dir/shiori_name の 3 適用）。(ii) 安全面レイヤは「vtable=unsafe PascalCase／安全面=snake_case インヘレント」の**単一規約**で 3 interface（Factory/Shiori/Host）へ一様適用。(iii) D1/D7 は WS-A（proxy）と WS-B（session/brain）で同一原則の 2 実現として設計。
 - **Build vs Adopt**: windows-core `#[interface]`/`#[implement]` を継続採用（§2 で制約込み実証済み・自作 vtable は不採用）。FFI は Win32 API 直（LoadLibraryW/GetProcAddress/GlobalAlloc/WideCharToMultiByte）で新規外部依存ゼロ。fixture も `windows` クレートのみ。
 - **単純化**: 新設クレートは testdll の 1 個のみ（proxy は helper 内モジュール・factory/安全面は既存 shiori-abi 内）。helper に trait 抽象を導入しない（前 spec の YAGNI 判断を踏襲）。`ShioriExt` トレイトを廃止し層を 1 枚減らす。`SpawnConfig` struct を導入しない。エクスポート欠落 DLL variant を作らない。reload-in-place を作らない。
+
+## 9. 実装フェーズ Task 1: flat-C 署名バイト正確照合（R13.5）
+
+**実施日**: 2026-07-02（実装フェーズ着手時）。`git submodule update --init vendors/pasta` で `vendors/pasta` を展開（`048d646c` / v0.1.6-1）し、`cargo metadata --format-version 1 --no-deps` が **EXIT=0**（`[patch.crates-io] pasta_core = { path = "vendors/pasta/crates/pasta_core" }` 経路健全）を確認。
+
+### 9.1 正確源
+
+- `vendors/pasta/crates/pasta_shiori/src/windows.rs`（flat-C エクスポート本体）
+- `vendors/pasta/crates/pasta_shiori/src/util/hglobal/mod.rs`（HGLOBAL 所有権規約の実装）
+
+### 9.2 署名照合結果（設計 §ShioriByteProxy との差分）
+
+| 項目 | 正確源 pasta（windows.rs） | 設計提案 | 判定 |
+|---|---|---|---|
+| 呼出規約 | `extern "C"` | `extern "cdecl"` | ✅ 一致（i686-pc-windows-msvc で C ABI＝cdecl。x64 も単一規約） |
+| `load` | `pub extern "C" fn load(hdir: HGLOBAL, len: usize) -> bool` | `fn(hdir: HGLOBAL, len: usize) -> bool` | ✅ 完全一致 |
+| `unload` | `pub extern "C" fn unload() -> bool` | `fn() -> bool` | ✅ 完全一致 |
+| `request` | `pub extern "C" fn request(req: HGLOBAL, len: &mut usize) -> HGLOBAL` | `fn(req: HGLOBAL, len: *mut usize) -> HGLOBAL` | ✅ 一致（`&mut usize`≡`*mut usize` は ABI 上同一のポインタ渡し。本仕様では解決のみ・呼出しない） |
+| 戻り値 bool | Rust `bool`（1 byte・Win32 BOOL ではない） | 同 | ✅ 一致（`load`/`unload` は Rust `bool` を直返し） |
+| シンボル装飾 | `#[unsafe(no_mangle)]`＝無装飾（`load`/`unload`/`request` そのまま） | `GetProcAddress("load")` 等 | ✅ 一致（i686 MSVC でも no_mangle は先頭 `_` を付けない。testdll も `#[unsafe(no_mangle)]` で合わせる） |
+
+### 9.3 HGLOBAL 所有権規約の確認（R4.5）
+
+- `load(hdir, len)` → `RawShiori::load_impl` → `ShioriString::capture(hdir, len)`（`has_free: true`）→ **Drop 時に `GlobalFree(self.h)`**。すなわち **入力 HGLOBAL は callee（DLL 側）が解放**する。**ホスト（helper）は自ら解放してはならない**（二重解放禁止・R4.5）。testdll も同一挙動（load 入力を `GlobalFree`）を再現し、ホスト側二重解放バグの検出器とする（R7.2 系）。
+- `request` 応答 HGLOBAL は `clone_from_str_nofree`（`has_free: false`）＝DLL は解放せず caller（host）が所有・解放する（下流 host32-request の領分）。
+- `load` dir 文字列は `to_ansi_str()`（`Encoding::ANSI`＝JP 環境 SJIS・`MultiByteToWideChar`）で解釈 → helper は `load_dir` を **ANSI(CP_ACP)** で符号化して渡す（R4.4）。`GlobalAlloc(GMEM_FIXED)`（pasta 側 `GMEM_FIXED = 0`）と一致。
+
+### 9.4 結論
+
+**設計への差し戻し不要**。設計 §ShioriByteProxy / §TestDll の flat-C 3 署名・HGLOBAL 所有権規約・ANSI 符号化・GMEM_FIXED はすべて正確源とバイト正確に一致。proxy 側 fn ポインタ型は `extern "cdecl"` 宣言（pasta の `extern "C"` と i686/x64 で ABI 同一）で固定する。

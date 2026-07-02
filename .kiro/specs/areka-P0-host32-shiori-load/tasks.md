@@ -1,6 +1,6 @@
 # Implementation Plan
 
-- [ ] 1. 開発前提の整備: vendors/pasta submodule 展開と flat-C 署名のバイト正確照合
+- [x] 1. 開発前提の整備: vendors/pasta submodule 展開と flat-C 署名のバイト正確照合
   - `git submodule update --init` で vendors/pasta を展開し、workspace の cargo 解決（`[patch.crates-io] pasta_core` の path）を回復する
   - pasta_shiori の windows.rs と設計の flat-C 3 署名（cdecl・bool 1 byte・request len in/out・HGLOBAL 所有権・装飾なしシンボル名）をバイト正確に照合し、相違があれば設計へ差し戻す
   - 観測可能な完了: workspace の cargo 解決（`cargo metadata`）が成功し、署名照合の結果が research.md に追記されている
