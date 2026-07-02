@@ -27,6 +27,10 @@
 //! 本クレートは `shiori-host32-ipc`（proto）を一方向依存し、`shiori-host32-host` へは依存しない
 //! （host↔helper のコード依存は無く、プロセス境界で WM_COPYDATA のみ）。
 
+// ShioriByteProxy（unsafe FFI 一点集約・design §339）。Task 6 が WndProc の LOAD 結線から
+// consume するまで未使用ゆえ、モジュール側で dead_code を抑止している。宣言のみ（Task 5.1 の領分）。
+mod shiori_proxy;
+
 use std::cell::Cell;
 use std::pin::Pin;
 use std::time::Duration;

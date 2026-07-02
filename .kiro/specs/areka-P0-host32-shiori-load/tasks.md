@@ -43,7 +43,7 @@
   - _Depends: 1_
 
 - [ ] 5. SHIORI DLL プロキシ（unsafe FFI の一点集約）
-- [ ] 5.1 (P) プロキシ本体の実装
+- [x] 5.1 (P) プロキシ本体の実装
   - DLL 絶対パス（load_dir＼SHIORI 名）の LoadLibraryW→3 エクスポート解決（load/unload/request すべて）→ANSI(CP_ACP) 符号化→GMEM_FIXED バッファで load 同期呼出、成功時のみ「load 済み」プロキシを返す
   - flat-C 署名はタスク 1 の照合結果に従う（cdecl・Rust bool 1 byte・len in/out）
   - load 入力バッファは callee 解放規約（自ら解放しない・二重解放禁止）
@@ -172,3 +172,4 @@
 - Task 3.1: helper 起動パラメーター取得は純関数 `resolve_param(arg, env) -> Option<String>`（arg 優先・trim・空→env・両空→None）へ一般化。ラッパは `parent_hwnd_arg_env`(arg1/HOST32_PARENT_HWND)・`load_dir_arg_env`(arg2/HOST32_LOAD_DIR)・`shiori_name_arg_env`(arg3/HOST32_SHIORI_NAME)。main() は load_dir/shiori_name 欠落で `exit(2)`。**設計ドリフト（Task 3.2/6 で要調整）**: `HelperShared.load_dir` は設計 §320 では `PathBuf` だが 3.1 は取得生値の `String` で保持中（無条件 `#[allow(dead_code)]` 付き・未読取ゆえ）。Task 6 で `load_dir.join(&shiori_name)`（設計 §321・絶対 DLL パス組立）を行う際に `PathBuf` へ変換するか join 地点で `PathBuf::from` すること。shiori_name も `String` 保持。
 - Task 3.2: `InboundAction::TriggerLoad` 変種を新設し `classify_inbound` が `MsgTag::Load`（ペイロード無視）を TriggerLoad へ分類（IgnoreKnown から分離・R4.1）。`handle_message` の TriggerLoad アームは **no-crash プレースホルダ（eprintln のみ・`Some(LRESULT(0))`）**＝**Task 6 がここを proxy 確立＋load＋ack[1]/[0] 返送へ置換する**。ack/proxy/LOAD カウンタ/`mod shiori_proxy` は未着手（Task 5.1/6 の領分）。
 - Task 4: 新設 `crates/shiori-host32-testdll`（`[lib] name="shiori"` cdylib → `shiori.dll`）。i686 ビルドで `target/i686-pc-windows-msvc/debug/shiori.dll` 生成・dumpbin で `load`/`unload`/`request` **無装飾**エクスポート確認。**重要（Task 5.1 proxy へ）**: windows 0.62.2 では `GlobalFree` は `Win32_System_Memory` ではなく **`windows::Win32::Foundation::GlobalFree`**（`GlobalFree(Option<HGLOBAL>) -> Result<HGLOBAL>`・`let _ =` で無視）。`GlobalAlloc` は `Win32_System_Memory`。`HGLOBAL` も `Win32_Foundation`。testdll の env 契約: `HOST32_TESTDLL_LOAD_FAIL=1`→load false・`HOST32_TESTDLL_UNLOAD_MARKER=<path>`→unload 時ファイル作成（Task 5.2/7 の観測手段）。
+- Task 5.1: `crates/shiori-host32-helper/src/shiori_proxy.rs` 新設（`#![allow(dead_code)]`＝Task 6 が consume 時に外す）。公開 API は `ShioriByteProxy::load(dll_path: &Path, load_dir: &Path) -> Result<Self, ProxyError>`（**dll_path は絶対パス＝Task 6 が `load_dir.join(shiori_name)` を渡す**）。`ProxyError`＝`LoadLibraryFailed/EntryNotFound/EncodingFailed/LoadReturnedFalse`（`#[derive(Debug)]`）。入力 HGLOBAL は callee 解放（proxy は GlobalFree しない）。途中失敗は内部 FreeLibrary。**Drop が唯一の teardown**（courtesy unload→FreeLibrary・結果無視）＝Task 6 は proxy を HelperShared に保持するだけでよく明示 unload 呼出は不要。helper Cargo.toml に windows features `Win32_System_LibraryLoader`/`Win32_System_Memory`/`Win32_Globalization` 追加済み。WideCharToMultiByte フラグ=0（CP_ACP に WC_COMPOSITECHECK は ERROR_INVALID_FLAGS 危険）。main.rs は `mod shiori_proxy;` 宣言のみ（WndProc 結線は Task 6）。
