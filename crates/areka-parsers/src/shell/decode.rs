@@ -34,7 +34,8 @@
 
 use super::lexer::Token;
 use super::model::{
-    Animation, Collision, CollisionName, Element, ElementPath, Interval, Pattern, Shell, Surface,
+    Animation, AppendTarget, Collision, CollisionName, Element, ElementPath, Interval, Pattern,
+    Shell, Surface, SurfaceAppend,
 };
 
 /// 構文トークン列を値正規化済みの `Shell` へ写像する（mod 内・`parse` が結線する）。
@@ -113,8 +114,8 @@ fn dispatch_block(shell: &mut Shell, header: &[String], body: &[Vec<String>]) {
         return;
     }
     if head.starts_with("surface.append") {
-        // append 追記定義はタスク 4.4 の領分。現段階では吸収のみ（何も積まない）。
-        decode_append_block(shell, header);
+        // append 追記定義（要件 7）。ヘッダのターゲット指定と本体 collision/animation を decode する。
+        decode_append_block(shell, header, body);
         return;
     }
     if let Some(rest) = head.strip_prefix("surface") {
@@ -148,7 +149,8 @@ fn dispatch_block(shell: &mut Shell, header: &[String], body: &[Vec<String>]) {
 /// （パニックしない・要件 9.2）。
 fn decode_surface_body(body: &[Vec<String>]) -> (Vec<Element>, Vec<Collision>, Vec<Animation>) {
     let mut elements: Vec<Element> = Vec::new();
-    let mut collisions: Vec<Collision> = Vec::new();
+    // collision は surface・append 双方で同一表現ゆえ共有ヘルパで decode する（要件 6.1/6.2/7.3）。
+    let collisions: Vec<Collision> = decode_collisions(body);
     // animation は本体行全体を走査する `decode_animations` で集約する（要件 5.6）。
     let animations: Vec<Animation> = decode_animations(body);
 
@@ -172,9 +174,32 @@ fn decode_surface_body(body: &[Vec<String>]) -> (Vec<Element>, Vec<Collision>, V
             continue;
         }
 
-        // collision 矩形行（要件 6.1/6.2）。ukadoc 順序 始点X/始点Y/終点X/終点Y。
+        // collision 行は `decode_collisions` が別走査で処理するためここでは扱わない。
+        // animation 行（`animationN.*`）も `decode_animations` が別走査で集約する。
+        // その他 subset 外の行はタスク 4.6 のシームゆえ読み飛ばす（要件 9.2）。
+    }
+
+    // element はレイヤインデックス昇順・安定ソート（同レイヤは出現順維持・要件 4.4）。
+    elements.sort_by_key(|e| e.layer);
+
+    (elements, collisions, animations)
+}
+
+/// 本体行群の `collisionN,始点X,始点Y,終点X,終点Y,ID` を `Collision` へ decode する（要件 6.1/6.2）。
+///
+/// surface 本体・`surface.append` 本体（タスク 4.4）双方から呼べる **再利用可能ヘルパ**。
+/// append の collision も通常 surface と同一のモデル表現で保持する（同一 `Collision` 型・要件 7.3）。
+///
+/// - ukadoc 順序 始点X/始点Y/終点X/終点Y ＝ left/top/right/bottom。
+/// - `collisionex`（要件 6.3 のタスク 4.6 寛容吸収）は扱わない。純 `collisionN`（N が数字のみ）だけ。
+/// - collision は出現順で保持する（要件 6.1）。欠落・非数値は既定 0（要件 3.3・パニックしない）。
+fn decode_collisions(body: &[Vec<String>]) -> Vec<Collision> {
+    let mut collisions: Vec<Collision> = Vec::new();
+
+    for fields in body {
+        let key = fields.first().map(String::as_str).unwrap_or("");
         if let Some(rest) = key.strip_prefix("collision") {
-            // `collisionex`（要件 6 のタスク 4.6 寛容吸収）は扱わない。純 collisionN のみ。
+            // `collisionex` 等は扱わない。N が数字のみの純 collisionN だけ。
             if rest.chars().all(|c| c.is_ascii_digit()) {
                 collisions.push(Collision {
                     index: rest.parse::<u32>().unwrap_or(0),
@@ -186,18 +211,10 @@ fn decode_surface_body(body: &[Vec<String>]) -> (Vec<Element>, Vec<Collision>, V
                     name: CollisionName::new(field_string(fields, 5)),
                 });
             }
-            continue;
         }
-
-        // animation 行（`animationN.*`）は `decode_animations` が別走査で集約するため、
-        // このループでは扱わない。その他 subset 外の行はタスク 4.6 のシームゆえ読み飛ばす
-        // （要件 9.2）。
     }
 
-    // element はレイヤインデックス昇順・安定ソート（同レイヤは出現順維持・要件 4.4）。
-    elements.sort_by_key(|e| e.layer);
-
-    (elements, collisions, animations)
+    collisions
 }
 
 /// 本体行の `idx` フィールドを無加工の `String` として取り出す（欠落は空文字列）。
@@ -337,13 +354,63 @@ fn normalize_interval(fields: &[String]) -> Option<Interval> {
     }
 }
 
-/// `surface.append*` 追記ブロックを `SurfaceAppend` へ decode する枠（タスク 4.4）。
+/// `surface.append*` 追記ブロックを `SurfaceAppend` へ decode し `shell.appends` へ積む（要件 7）。
 ///
-/// タスク 4.1 では何も積まない（吸収のみ）。タスク 4.4 がヘッダのターゲット指定捕捉
-/// （`parse_targets`・展開しない）と、本体の collision/animation 充填を実装し、
-/// `shell.appends` へ push する。
-fn decode_append_block(_shell: &mut Shell, _header: &[String]) {
-    // タスク 4.4 で実装。現段階は寛容吸収（要件 9.2）。
+/// - ターゲット指定はヘッダから `parse_targets` で **記述子リスト**として捕捉する
+///   （展開しない・ヘッダ数値は第1要素として一様に扱う・要件 7.1/7.2）。
+/// - collision/animation は通常 surface と同一表現で保持する。collision は共有ヘルパ
+///   `decode_collisions`、animation は共有ヘルパ `decode_animations`（タスク 4.3）を
+///   再利用する（同一集約規則ゆえ共用・要件 7.3）。
+/// - append は出現順で `shell.appends` に保持する（要件 7.1）。
+/// - 失敗しない（`Result` でない・パニックしない・要件 2.x）。
+fn decode_append_block(shell: &mut Shell, header: &[String], body: &[Vec<String>]) {
+    // ヘッダ先頭 `surface.appendNNN` から接頭辞を剥がしヘッダ数値 NNN を得る。
+    // 剥がせない崩れヘッダでも `parse_target_element` が既定 0 に倒す（パニックしない）。
+    let head = header.first().map(String::as_str).unwrap_or("");
+    let header_number = head.strip_prefix("surface.append").unwrap_or("");
+    // ヘッダ以降のフィールド（列挙・範囲）を rest として渡す。
+    let rest = header.get(1..).unwrap_or(&[]);
+
+    shell.appends.push(SurfaceAppend {
+        targets: parse_targets(header_number, rest),
+        collisions: decode_collisions(body),
+        animations: decode_animations(body),
+    });
+}
+
+/// append ターゲット指定を記述子リスト `Vec<AppendTarget>` へ捕捉する（展開しない・要件 7.2）。
+///
+/// ヘッダ数値 `header` を **第1要素**とし、後続 `rest`（列挙・範囲）を続けた順序付きリストを返す。
+/// ヘッダ数値は列挙された単一 ID と同格・一様に扱い、カテゴリ番号的な特別扱いはしない
+/// （メモリ「キーワード直後の数値は id リスト第1要素・surface0-2 と一様」）。範囲 `a-b` は
+/// `Range` 記述子として保持し、個別 ID へ展開しない（展開・実 surface ツリーへの転記は下流）。
+///
+/// 入力例: `header="10"`, `rest=["2100-2110", "2200-2210"]`
+///   → `[Single(10), Range{2100,2110}, Range{2200,2210}]`。
+/// 入力例: `header="2200"`, `rest=[]` → `[Single(2200)]`。
+fn parse_targets(header: &str, rest: &[String]) -> Vec<AppendTarget> {
+    let mut targets: Vec<AppendTarget> = Vec::with_capacity(1 + rest.len());
+    // ヘッダ数値は列挙要素と同一コードパスで第1要素として積む（一様扱い）。
+    targets.push(parse_target_element(header));
+    for field in rest {
+        targets.push(parse_target_element(field));
+    }
+    targets
+}
+
+/// 単一ターゲットフィールドを `AppendTarget` へ写像する（ヘッダ数値・列挙要素で共用・要件 7.2）。
+///
+/// `-` を含むフィールドは `a-b` 範囲とみなし `Range{start,end}` を返す（展開しない）。それ以外は
+/// `Single`。数値化失敗は `unwrap_or(0)` で既定 0 に倒す（要件 3.3・パニックしない）。
+fn parse_target_element(field: &str) -> AppendTarget {
+    if let Some((start, end)) = field.split_once('-') {
+        AppendTarget::Range {
+            start: start.parse::<u32>().unwrap_or(0),
+            end: end.parse::<u32>().unwrap_or(0),
+        }
+    } else {
+        AppendTarget::Single(field.parse::<u32>().unwrap_or(0))
+    }
 }
 
 /// `kero.surface.alias` ブロックを `SurfaceAlias` 群へ decode する枠（タスク 4.5）。
