@@ -17,6 +17,9 @@ mod model_tests;
 #[cfg(test)]
 mod parse_tests;
 
+#[cfg(test)]
+mod validation_tests;
+
 pub use model::{
     BalloonModel, Font, FontColor, Origin, ValidRect, WindowPosition, WordWrapPoint,
 };

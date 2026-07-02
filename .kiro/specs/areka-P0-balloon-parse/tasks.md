@@ -33,8 +33,8 @@
   - _Depends: 2.1_
   - _Boundary: balloon::parse_
 
-- [ ] 3. Validation: emo2 実物 fixture で適合を観測する
-- [ ] 3.1 emo2-kakukaku fixture 適合テストを追加する
+- [x] 3. Validation: emo2 実物 fixture で適合を観測する
+- [x] 3.1 emo2-kakukaku fixture 適合テストを追加する
   - `validation_tests.rs` を同居させ、`crates/pilot/examples/shiori-host-32/fixtures/emo2/emo2-kakukaku/` の実物値をリテラル期待値として `parse_str` 経由で検証する
   - R5.1: `descript.txt` 単体 → `origin`(0,0)・`wordwrappoint.x`(-34)・`validrect`(0,0,0,0)・`font.name`(Yu Gothic UI)・`font.height`(28)・`font.color`(0,0,0)、加えて `wordwrappoint.y`=`Some(0)`・`windowposition`=全 `None`
   - R5.2: `descript.txt`＋`balloons0s.txt` → `windowposition`(266,-129)・`wordwrappoint.x`(-49・画像別優先)・`validrect`(46,-56,36,-44)、`origin`/`font` は descript 継承
