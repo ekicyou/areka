@@ -61,7 +61,7 @@
   - 観測可能な完了: 4経路それぞれの統合テストが green（各失敗が観測可能な形で報告され、親が無限待機しない）
   - _Requirements: 1.4, 2.5, 3.4, 5.2, 5.3_
   - _Depends: 5.1_
-- [ ] 5.3 責務境界の確認と i686 ビルド規律の固定
+- [x] 5.3 責務境界の確認と i686 ビルド規律の固定
   - `shiori-abi`／pasta／pilot への依存が無いこと、SHIORI3 build/parse・`LoadLibraryW`・常駐 lifecycle を持たないこと、pilot コードの非コピペを確認する
   - i686 target ビルド＋往復 echo テストの PowerShell 手順（helper ビルド → 親テスト）を README／steering に固定する
   - 観測可能な完了: 依存グラフに `shiori-abi`/pasta が無いことを確認でき、文書化した PowerShell 手順どおりに i686 helper がビルド・テストできる（R8 の negative 基準を充足）
