@@ -1,0 +1,22 @@
+[package]
+name = "shiori-host32-ipc"
+workspace = "../.."
+description = "host-32 IPC wire protocol (MsgTag / framing / IpcError), portable across x64/arm64/i686"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[dependencies]
+windows-core = { workspace = true }
+thiserror = { workspace = true }
+
+[dependencies.windows]
+workspace = true
+features = [
+    "Win32_System_DataExchange",
+    "Win32_UI_WindowsAndMessaging",
+    "Win32_Foundation",
+]
