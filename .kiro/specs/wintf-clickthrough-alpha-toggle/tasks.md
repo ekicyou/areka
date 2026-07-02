@@ -71,7 +71,7 @@
   - _Requirements: 9.1, 9.2, 9.3_
   - _Boundary: build config_
   - _Depends: 4.1_
-- [ ] 4.4 (P) `docs/click_through.md` の作成
+- [x] 4.4 (P) `docs/click_through.md` の作成
   - 二層分離（表示層／当たり判定層）の概要、`WS_EX_TRANSPARENT` 動的トグル＋カーソル監視＋シーングラフ・ヒットテスト連動の流れ、不採用理由（ULW／`HTTRANSPARENT`／Layered 描画）、API 使用例、既知の制約（`SWP_FRAMECHANGED` 副作用・ポーリング周期・ドラッグ抑止）を記す
   - ULW 撤去確定時に更新すべき対象（`tech.md`「ULW 一択」相当記述・`roadmap.md`・正本 `doc/COMPAT_ARCHITECTURE.md`）を申し送りとして明示（本坑では実更新しない）
   - 観測可能な完了条件: `docs/click_through.md` が新規に存在し、上記 5 要素と不採用理由（`HTTRANSPARENT` 含む）・更新対象申し送りを含むこと
