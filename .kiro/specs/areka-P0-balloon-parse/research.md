@@ -147,3 +147,39 @@ pub mod sakura;   // areka-P0-sakura-parse（完了・規律テンプレート�
 - **主要判断**: 型形状（D2/D3/D7）とマージ位置（D4）・入力インターフェース（D5）を design で確定。edition 差異（D1）は明示的に注記。
 - **持ち越す Research 項目**: §4 の 1〜5（`wordwrappoint.y`・未指定表現・整数型・RGB 束ね・入力形）。いずれも要件・fixture・ukadoc で境界確定済＝技術的未知なし・型形状の設計選択。
 - **規律の再確認**: `Result` 無し寛容パス・NewType＋opaque＋accessor・`#[non_exhaustive]`・in-source テスト・過剰実装禁止（emo2 subset のみ・2 例目の実物まで抽象を足さない）。
+
+---
+
+## 8. 設計フェーズ記録（kiro-spec-design 成果）
+
+> 種別: design-discovery。`kiro-spec-design` が生成した設計（`design.md`）の discovery 範囲・synthesis 結論・設計判断（D1–D9）の確定を記録する。
+
+### 8.1 Discovery Type と範囲
+
+- **Discovery Type: Light（Extension）**。既存 `areka-parsers` クレートへの `balloon` モジュール追加＝予定済み拡張点への接ぎ木。外部統合・新規依存・並行・I/O なし。新規外部リサーチ不要（正典 ukadoc・`emo2-conformance-scope.md`・fixture は gap-analysis §1.5/§1.4 で採取済・照合済）。サブエージェント dispatch は不要と判断しメインコンテキストで synthesis を実施。
+- **消費した資産**: `sakura`（`mod.rs`/`model.rs`/`parse.rs`/`*_tests.rs`）・`kv/parse.rs`・`charset/model.rs`（規律テンプレート）／emo2-kakukaku fixture 3 ファイル（`descript.txt`/`balloons0s.txt`/`balloonk0s.txt`・実測で R5 期待値と一致確認済）／`lib.rs`（拡張点 doc）。
+
+### 8.2 Synthesis 結論（3 レンズ）
+
+- **Generalization**: R2〜R4 は「フラット KV マップ → `Option` 付き型付きスカラ写像＋符号保持」という単一の一般問題の変種。単一 `parse` facade ＋ `Option<T>` 直持ちモデルで全変種を包含し、キー subset だけを差し替える形（インターフェースを一般化・実装は emo2 subset に限定）。
+- **Build vs. Adopt**: マップ・整数パースは std（`BTreeMap`・`str::parse`）で充足＝**Adopt（std）**。2 層マージは foundation の後勝ち `insert` 流儀を再利用（新規機構を作らない）。新規外部依存は導入しない。
+- **Simplification**: `sakura` の 4 層分割（model/lexer/decode/parse）は本件には過剰。ロジックが軽量ゆえ写像・マージを `parse.rs` に集約し実装ファイルは `model.rs`＋`parse.rs` の 2 本に flatten（D8）。NewType の不透明ラップは座標に読み替え意味が無いため `Option<T>` 直持ちに簡約（D3）。「2 例目の実物まで抽象を足さない」（R5.5）を過剰実装ガードとして明記。
+
+### 8.3 設計判断の確定（D1–D9）
+
+| 項目 | 確定 | 根拠 |
+|---|---|---|
+| D1 edition | 2024 で確定・齟齬なし | `edition.workspace = true` → workspace `edition = "2024"`。指示前提の「2021 報告」は現行 Cargo.toml で未観測 |
+| D2 モデル形状 | 単一 struct `BalloonModel`＋sub-struct 集約・全公開 struct に `#[non_exhaustive]` | 「1 モデル値」ゆえ struct 集約が自然（enum は不適）。下流消費は accessor のみゆえ非網羅による構築制限は無害 |
+| D3 未指定表現 | 各スカラ `Option<T>` 直持ち（成分ごと個別・部分欠落を欠落なく表現） | **要件確定制約（討論 #1）**: None は 0 と区別・既定/0 で代替しない（R2.6/R3.4）。NewType 不透明化は座標に読替意味なく `Option` 自体が「未指定」を表現 |
+| D4 マージ位置 | descript 基層に画像別を後勝ち `insert` した 1 マップから 1 回写像 | foundation 後勝ちマップ流儀と一貫・実装最小。R3.2/3.3/3.5 を単一機構で包含 |
+| D5 入力 IF | 主入口 `parse(&BTreeMap, Option<&BTreeMap>)`＋便宜入口 `parse_str(&str, Option<&str>)` | R1.1「文字列 または KV マップ」・R3.5「descript のみ」を optional 画像別層で満たす |
+| D6 数値型 | 座標 `i32`／`font.height` `u32`／色 `u8`。失敗・範囲外は `None` 降格 | 符号付き・非負・0–255 の素直な写像。R1.4 寛容（`Result` 非漏出） |
+| D7 wordwrappoint.y | `WordWrapPoint { x: Option<i32>, y: Option<i32> }` | R2.3「存在すれば y」。emo2 は画像別に y 無く descript `Some(0)` 継承 |
+| D8 分割粒度 | `model.rs`＋`parse.rs`（写像・マージ内包）＋`*_tests.rs` 3 本 | `kv`（1 本）と `sakura`（多層）の中間規模。過剰分割回避（YAGNI） |
+| D9 tracing | 任意・M1 では未使用可 | 既存依存・純粋関数性優先。寛容無視の観測ログにのみ使用可 |
+
+### 8.4 設計レビューゲート結果
+
+- **1 パスで PASS**（修復パス 0 回）。Mechanical: 全 28 要件 ID がトレーサビリティ表に存在／Boundary 4 節・File Structure Plan とも具体値で populate 済／コンポーネント（`balloon::model`/`::parse`/`::mod`）は全て File Structure Plan にファイルパスを持つ（orphan なし）／Boundary ↔ file 整合。Judgment: 要件被覆・境界明瞭・実装可能（bounded tasks）・過剰抽象なし。
+- **真の要件ギャップ・矛盾は検出されず**。D1–D9 はすべて requirements.md＋research.md＋fixture から確定でき、design.md でのでっち上げ（papering-over）は不要だった。
