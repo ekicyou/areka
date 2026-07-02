@@ -11,8 +11,10 @@
 //! 骨格段階では未消費のため、モジュール限定で dead_code/unused を許可する。
 #![allow(dead_code, unused_imports)]
 
+mod controller;
 mod monitor;
 mod registry;
 
+pub(crate) use controller::resolve_transition;
 pub(crate) use monitor::CursorMonitorBridge;
 pub(crate) use registry::{ClickThroughRegistry, ClickThroughTarget, DesiredState};
