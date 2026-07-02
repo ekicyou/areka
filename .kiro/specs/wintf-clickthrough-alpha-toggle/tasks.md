@@ -9,7 +9,7 @@
   - ユニットテスト: 適用後に現在 ex-style を読み戻し、`WS_EX_TRANSPARENT` のみが変化し `WS_EX_NOREDIRECTIONBITMAP` 等の他ビットが保存されること（観測可能な完了条件）
   - _Requirements: 1.2, 3.3, 6.1, 6.2, 6.3, 6.5_
   - _Boundary: ExStyleToggle_
-- [ ] 1.2 (P) クリック透過モジュール骨格と監視対象レジストリ
+- [x] 1.2 (P) クリック透過モジュール骨格と監視対象レジストリ
   - `ecs/clickthrough/` を新設し `ecs` へ宣言追加。ビルドが通ること
   - 監視対象（window Entity ＋ 対応 HWND ＋ `last_applied` 状態）を保持するレジストリを実装。初期 `last_applied` は不透過（`Opaque`）
   - 観測可能な完了条件: レジストリへ対象窓を登録・除去でき、`last_applied` の既定が `Opaque` になっているユニット確認
