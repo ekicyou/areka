@@ -12,7 +12,7 @@
   - _Requirements: 1.1_
 
 - [ ] 2. Core: バルーンモデル型と解析 facade を実装する
-- [ ] 2.1 バルーンモデル型を定義し単体テストで契約を固定する
+- [x] 2.1 バルーンモデル型を定義し単体テストで契約を固定する
   - `balloon/model.rs` に集約ルート `BalloonModel` と sub-struct（`WindowPosition`/`Origin`/`WordWrapPoint`/`ValidRect`/`Font`/`FontColor`）を定義する
   - 各モデル化スカラを `Option<T>` 直持ちとし、座標成分（x/y・t/b/l/r）と色成分（r/g/b）を個別に `Option` 化して部分欠落を欠落なく表現する（未指定＝`None`）
   - 内部数値型は座標＝`i32`（符号付き）・`font.height`＝`u32`・色成分＝`u8` とし、符号付き座標を保持できる型にする
