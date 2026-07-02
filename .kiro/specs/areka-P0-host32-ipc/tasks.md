@@ -51,7 +51,7 @@
   - _Depends: 4.2, 2.2_
 
 - [ ] 5. 統合・検証
-- [ ] 5.1 往復 echo 統合テスト（M1 ゲート指標）
+- [x] 5.1 往復 echo 統合テスト（M1 ゲート指標）
   - 親窓生成 → i686 helper spawn → HELLO 受領（helper HWND 確定）→ 任意 request bytes を `send_request` → 同一 bytes を response として受領し照合 → 両プロセス生存を確認する
   - 観測可能な完了: PowerShell で（事前ビルドした i686 helper を用いて）`cargo test` の echo 往復が無クラッシュ・無デッドロックで green になる
   - _Requirements: 6.1, 6.2, 6.3, 4.4_
