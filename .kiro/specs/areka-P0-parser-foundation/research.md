@@ -126,6 +126,38 @@
 
 ---
 
+---
+
+## 7. 設計フェーズ結果（Design Synthesis / Decisions — 2026-07-02 追記）
+
+> `/kiro-design` により生成。discovery 種別: **light（Extension）**。既存 `areka-parsers` への 2 モジュール追加であり、コードベース分析＋ ukadoc/encoding_rs 事実は §1 で完了済み。追加の web リサーチ・subagent 分散は不要と判断。design.md へ全決定を反映済み。
+
+### 7.1 §5 持ち越し 6 項目の確定（design.md「決定事項」表と一致）
+
+| ID | 確定 | 一行根拠 |
+|----|------|----------|
+| D1 プリスキャン範囲 | 先頭〜最初の非 ASCII バイト、上限 4096B・行単位走査 | SHIORI3「charset は非 ASCII 行より前」＋ R1.5（charset 名 ASCII）。上限は過大スキャン防止 |
+| D2 書式寛容度 | 区切り `,` のみ・キー大小無視・前後 trim・CRLF/LF 両対応。`charset:` 等異体は不許容 | R1.3＋ ukadoc `charset,` 単一書式。異体許容は過剰実装 |
+| D3 SJIS 合成正本化 | `encoding_rs::SHIFT_JIS.encode(<期待文字列リテラル>)` でラウンドトリップ生成・期待文字列直書き＋合成コメント | R7.2/R7.3。fixture に SJIS 実ファイル無し（§1.4） |
+| D4 KV マップ型 | `std::collections::BTreeMap<String,String>` | R4.8（順序非保持）両立＋決定的テスト比較（HashMap 非決定順回避） |
+| D5 encoding_rs 宣言場所 | ルート `[workspace.dependencies] encoding_rs="0.8"` ＋ crate は `{ workspace = true }` | 既存 workspace 依存はバージョン集約が慣行（`Cargo.toml:15-31`） |
+| D6 既定エンコード API＋ANSI 写像 | `decode(bytes: &[u8], default: DefaultEncoding) -> String`。`DefaultEncoding{Ansi,Utf8}`（`#[non_exhaustive]`）。`Ansi`→CP932(`SHIFT_JIS`) 固定写像・`Utf8`→`UTF_8`。SHIORI/4 は `Utf8` | 要件ディスカッション #1（既定は引数指定・SHIORI/4 は UTF-8 固定）＋ R3 純粋性（OS ロケール非参照）。option(a) 採用＝要件語彙 ANSI/UTF-8 と 1:1。将来の OS ロケール厳密解決は variant 追加で後方互換吸収 |
+
+### 7.2 Synthesis 成果（一般化・build-vs-adopt・簡素化）
+
+- **命名一般化（Option C 採用）**: requirements の「Decode module / KV module」抽象を、物理モジュール名 `charset`／`kv` へ落とす。`sakura::decode`（意味デコーダ）との同名混同を `charset` 命名で解消（§1.3・§6 第一候補）。requirements は module 名を厳密指定しておらず適合。
+- **build-vs-adopt**: charset デコードは `encoding_rs` を **adopt**（薄いラッパ・for_label/decode が Option/タプルで規律に構造合致）。KV は std のみで **build**（外部依存不要・素朴 split_once）。
+- **簡素化（過剰実装回避）**: `kv` は単一責務ゆえ内部 `parse.rs` 1 本（sakura の 4 分割を機械的に真似ない）。`kv` 戻り値は素朴 `BTreeMap` で NewType を導入しない（分類・型付けは各 spec 固有層＝R4.2）。`DefaultEncoding` のみ `#[non_exhaustive]` enum とし、それ以外の型追加はしない。
+- **charset 内部分割**: `prescan`（検出）と `decode`（デコード合成）へ 2 分割（sakura の lexer/decode 分割に対応・単体テスト境界を明確化）。
+
+### 7.3 設計レビューゲート結果
+
+- **合格（修正パス 0 回）**。機械チェック（要件 ID 全数 1.1–7.5 が traceability に出現・境界 4 セクション充足・File Structure Plan 具体パス・境界↔ファイル整合・orphan コンポーネントなし）＋判断チェック（契約は具体 Rust シグネチャ＋pre/post/invariant・build-vs-adopt 明記・投機的抽象なし）をすべて通過。要件ギャップ・矛盾は検出されず。
+
+### 7.4 未解決事項
+
+- なし（§5 の 6 項目すべて design で確定・要件との矛盾なし）。
+
 ## 参照
 - 既存規律実装: `crates/areka-parsers/src/sakura/{mod,model,decode,parse}.rs`・`decode_tests.rs`・`validation_tests.rs`
 - fixture: `crates/pilot/examples/shiori-host-32/fixtures/emo2/`（descript 系＝UTF-8/CRLF、balloon{s,k}0s.txt＝charset 無し ASCII）
