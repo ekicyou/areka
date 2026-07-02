@@ -1,39 +1,49 @@
-//! Task 5.1 結合テスト: in-proc モック脳による即時往復・所有権/非マーシャリング/Drop 実証。
+//! Task 8.4 結合テスト: 新 ABI（factory 生成→get/notify）による即時往復・所有権/非マーシャリング/
+//! Drop 実証。
 //!
-//! shiori-abi の**統合テスト**（公開 API のみ使用・`src` は不変）。`#[implement(IShiori)]` の
-//! モック脳を in-proc で立て、`ShioriExt::request` 経由で即時応答 HSTRING がマーシャリングなしで
-//! 往復することと、HSTRING の確保/解放が 1:1 に均衡し**二重解放・リークが発生しないこと**を
-//! 決定的に実証する（requirements.md 1.2/3.1/3.2/4.1/4.3/5.2/5.4・design.md §Testing Strategy →
-//! Integration Tests / §IShiori Invariants 4.3 / §Open Questions・HSTRING 所有権が唯一の UB 源）。
+//! shiori-abi の**統合テスト**（公開 API のみ使用・`src` は不変）。旧 ABI（`Load`/`Unload`/`Request`
+//! ＋`ShioriExt::request`）版は Task 8.1 で撤去されたため、本ファイルを**新 ABI へ翻案**して再構築する。
 //!
-//! ## Drop 回数観測の決定的アプローチ（核心・4.3）
-//! `HSTRING` 自体に Drop フックは差せないため、以下を**複合**して「確保=解放=1:1・
-//! 二重解放/リークなし」を実時間や ASAN に頼らず決定的に示す:
+//! 新 ABI の主経路は **safe 面（インヘレント）** を用いる（design.md §Testing Strategy → Integration
+//! Tests #3・§SafeSurface）:
+//! - `#[implement(IShioriFactory)]` の mock factory を立て、`create(load_dir, shiori_name, &host)` で
+//!   load 完了済み `IShiori`（mock brain）を move-out する。
+//! - `#[implement(IShiori)]` の mock brain は `get`（即時応答で入力を反映した応答 HSTRING を move-out）
+//!   ＋`notify`（受領記録）を実装する。
+//! - `#[implement(IShioriHost)]` の mock host を create の必須引数として渡す（本モックは観測のみ）。
 //!
-//! - **(probe) 明示的 Drop 計測**: モック脳が応答を生成するたびに、応答 HSTRING を内包する
+//! in-proc 直 vtable のため OOP マーシャリングは非発生であることを、往復 HSTRING の**内容一致**
+//! （＋UTF-16 ビット一致・clone 生存）で観測し、応答 HSTRING の**確保=解放 1:1 均衡**を per-instance
+//! カウンタで決定的に計測する（requirements.md R12.1/12.6・design.md §Testing Strategy）。
+//!
+//! ## Drop 回数観測の決定的アプローチ（旧版手法の翻案・R12.6）
+//! `HSTRING` 自体に Drop フックは差せないため、以下を**複合**して「確保=解放=1:1・二重解放/リーク
+//! なし」を実時間や ASAN に頼らず決定的に示す:
+//!
+//! - **(probe) 明示的 Drop 計測**: mock brain が `Get` で応答を生成するたびに、応答 HSTRING を内包する
 //!   被験ラッパ [`TrackedResponse`] を 1 つ生成し、生成回数（alloc）と Drop 回数（drop）を
-//!   グローバルカウンタで数える。ラッパは move-out 後に caller 側で Drop され、最終的に
-//!   alloc == drop（1:1 均衡）であることを assert する。drop < alloc ならリーク、
+//!   **per-instance** カウンタで数える。ラッパは `Get` 内で move-out 用ハンドルを複製後に Drop され、
+//!   最終的に alloc == drop（1:1 均衡）であることを assert する。drop < alloc ならリーク、
 //!   drop > alloc なら二重解放を示す。
 //! - **(i) 多数回ループ**: 同一往復を 10_000 回繰り返し、毎回 content 一致を assert しつつ
 //!   abort/crash しないことを示す（HSTRING の二重解放は CRT abort を招くため、完走自体が
 //!   二重解放非発生の証左となる）。
-//! - **(ii) clone 生存**: 脳が用意した応答を test 側で clone 保持し、original(`Immediate`) を
-//!   drop しても保持側 content が無傷であることを assert（premature free / 破壊的マーシャリング
-//!   なら壊れる。HSTRING は参照カウント型のためこの不変が成立する）。
-//! - **(iii) ビット一致**: move-out された HSTRING の content が脳の用意値とビット単位
-//!   （UTF-16 コードユニット列）で一致（マーシャリングはコピー/変換を伴うが、in-proc 直 vtable は
-//!   同一論理バッファを渡すため完全一致する）。
+//! - **(ii) clone 生存**: 受領した即時応答を test 側で clone 保持し、original を drop しても
+//!   保持側 content が無傷であることを assert（premature free / 破壊的マーシャリングなら壊れる。
+//!   HSTRING は参照カウント型のためこの不変が成立する）。
+//! - **(iii) ビット一致**: move-out された HSTRING の content が脳の用意値と UTF-16 コードユニット列で
+//!   一致（マーシャリングはコピー/変換を伴うが、in-proc 直 vtable は同一論理バッファを渡すため完全一致）。
 
 #![allow(non_snake_case)]
 
 use std::sync::Arc;
 use std::sync::atomic::{AtomicI64, Ordering};
 
-use shiori_abi::ergonomic::ShioriExt;
-use shiori_abi::interface::{IShiori, IShiori_Impl, IShioriHost};
-use shiori_abi::outcome::RequestOutcome;
-use windows_core::{HRESULT, HSTRING, implement};
+use shiori_abi::interface::{
+    IShiori, IShiori_Impl, IShioriFactory, IShioriFactory_Impl, IShioriHost, IShioriHost_Impl,
+};
+use shiori_abi::outcome::GetOutcome;
+use windows_core::{HRESULT, HSTRING, OutRef, Ref, Result as ComResult, implement};
 
 /// 応答ラッパの確保/解放回数を数える **per-instance** カウンタ（probe）。
 ///
@@ -98,99 +108,165 @@ impl Drop for TrackedResponse {
 /// 脳が用意する既知の応答文字列（content 一致・ビット一致検証の基準値）。
 const KNOWN_RESPONSE: &str = "mock-brain-immediate-response-本文";
 
-/// in-proc 即時応答モック脳（`#[implement(IShiori)]`）。
+// --- in-proc 即時応答モック脳（`#[implement(IShiori)]`・新 ABI） ---
+
+/// in-proc 即時応答モック脳。
 ///
-/// `Request` は呼ばれるたびに [`TrackedResponse`] を 1 つ生成し、その内包 HSTRING の
-/// 所有権ハンドルを `out_response` へ move-out して `S_OK` を返す（即時応答・所有権規約）。
-/// `Load`/`Unload` は最小（`S_OK`）。計測カウンタはインスタンス所有（並列テスト汚染回避）。
+/// `Get` は呼ばれるたびに [`TrackedResponse`] を 1 つ生成し、その内包 HSTRING の所有権ハンドルを
+/// `out_response` へ move-out して `S_OK`（即時応答）を返す（所有権規約）。`Notify` は受領した入力を
+/// 記録する（片道通知）。計測カウンタはインスタンス所有（並列テスト汚染回避）。
 #[implement(IShiori)]
 struct MockBrain {
     counters: Arc<Counters>,
-}
-
-impl MockBrain {
-    fn new() -> (Self, Arc<Counters>) {
-        let counters = Arc::new(Counters::default());
-        (
-            Self {
-                counters: Arc::clone(&counters),
-            },
-            counters,
-        )
-    }
+    notified: std::cell::RefCell<Vec<HSTRING>>,
 }
 
 impl IShiori_Impl for MockBrain_Impl {
-    unsafe fn Load(&self, _host: *mut core::ffi::c_void) -> HRESULT {
-        HRESULT(0) // S_OK
-    }
-
-    unsafe fn Unload(&self) -> HRESULT {
-        HRESULT(0) // S_OK
-    }
-
-    unsafe fn Request(
+    unsafe fn Get(
         &self,
-        _input: *const HSTRING,
-        out_response: *mut HSTRING,
-        _out_token: *mut u64,
+        _input: &HSTRING,
+        out_response: &mut HSTRING,
+        _out_token: &mut u64,
     ) -> HRESULT {
         // 応答生成: probe ラッパを 1 つ確保（alloc++）。
         let tracked = TrackedResponse::new(KNOWN_RESPONSE, Arc::clone(&self.counters));
         // out-param へ content の所有権ハンドルを move-out（callee 確保・caller 解放規約）。
         // `tracked` 自身はこの関数末尾で Drop され drop++（内包 HSTRING も 1 本解放）。
-        unsafe { core::ptr::write(out_response, tracked.hstring_for_moveout()) };
+        *out_response = tracked.hstring_for_moveout();
         HRESULT(0) // S_OK
         // ここで `tracked` が Drop -> drop++（ラッパ 1:1 均衡の片側）。
     }
+
+    unsafe fn Notify(&self, input: &HSTRING) -> ComResult<()> {
+        // `[in]` 借用: 保持する場合は clone する（所有権規約）。
+        self.notified.borrow_mut().push(input.clone());
+        Ok(())
+    }
 }
 
-/// (3.1/3.2/4.1/1.2) 即時応答 HSTRING が `Immediate` で往復し content 一致すること、
-/// かつ (iii) ビット単位（UTF-16 コードユニット列）で脳の用意値と完全一致すること。
+// --- 生成面モック factory（`#[implement(IShioriFactory)]`・新 ABI） ---
+
+/// in-proc モック factory。`CreateInstance` で load 完了済み [`MockBrain`] を `out` へ move-out する。
+///
+/// 生成した brain に per-instance カウンタ [`Counters`] を注入し、テスト側がその均衡を観測する。
+/// `host`（[`Ref`] 借用）は create の必須引数として受けるが、本モックは観測のみ（保持しない）。
+#[implement(IShioriFactory)]
+struct MockFactory {
+    counters: Arc<Counters>,
+}
+
+impl IShioriFactory_Impl for MockFactory_Impl {
+    unsafe fn CreateInstance(
+        &self,
+        _load_dir: &HSTRING,
+        _shiori_name: &HSTRING,
+        host: Ref<'_, IShioriHost>,
+        out: OutRef<'_, IShiori>,
+    ) -> ComResult<()> {
+        // `host` は Ref 借用（本モックは観測のみで保持しない）。
+        let _host_ref: Option<&IShioriHost> = host.as_ref();
+        let brain: IShiori = MockBrain {
+            counters: Arc::clone(&self.counters),
+            notified: std::cell::RefCell::new(Vec::new()),
+        }
+        .into();
+        // load 完了済み brain を out へ move-out（callee 確保・caller Release）。
+        out.write(Some(brain))?;
+        Ok(())
+    }
+}
+
+// --- create の必須引数となる最小 host（`#[implement(IShioriHost)]`） ---
+
+/// `create` へ渡す最小 host（sink）。本テストでは通知を受けないので no-op。
+#[implement(IShioriHost)]
+struct NoopHost;
+
+impl IShioriHost_Impl for NoopHost_Impl {
+    unsafe fn Raise(&self, _script: &HSTRING) -> ComResult<()> {
+        Ok(())
+    }
+    unsafe fn Complete(&self, _token: u64, _response: &HSTRING) -> ComResult<()> {
+        Ok(())
+    }
+    unsafe fn GetProperty(&self, _key: &HSTRING, _out_value: &mut HSTRING) -> ComResult<()> {
+        Ok(())
+    }
+    unsafe fn SetProperty(&self, _key: &HSTRING, _value: &HSTRING) -> ComResult<()> {
+        Ok(())
+    }
+}
+
+/// テスト用のハーネスを組み立てる: mock factory から safe 面 `create` で mock brain を生成する。
+///
+/// 生成した brain と、その応答ライフサイクルを観測する per-instance [`Counters`] を返す。
+/// load_dir/shiori_name は create の必須引数ゆえ妥当な HSTRING を渡す（mock factory は無視する）。
+fn make_brain() -> (IShiori, Arc<Counters>) {
+    let counters = Arc::new(Counters::default());
+    let factory: IShioriFactory = MockFactory {
+        counters: Arc::clone(&counters),
+    }
+    .into();
+    let host: IShioriHost = NoopHost.into();
+
+    // safe 面 `create`: OutRef 受け皿は隠蔽され IShiori を直返し（vtable 直呼びハックを使わない）。
+    let brain = factory
+        .create(
+            &HSTRING::from("C:/ghost/master"),
+            &HSTRING::from("reference"),
+            &host,
+        )
+        .expect("create は Ok で load 完了済み IShiori を直返しすること");
+    (brain, counters)
+}
+
+/// (R12.1/12.6・(iii)) factory 生成→即時 `get` で応答 HSTRING が `Immediate` として往復し content
+/// 一致すること、かつ UTF-16 コードユニット列でビット単位一致すること（非マーシャリング）。
 #[test]
 fn immediate_response_roundtrips_with_bit_identical_content() {
-    let (mock, _counters) = MockBrain::new();
-    let brain: IShiori = mock.into();
+    let (brain, _counters) = make_brain();
 
-    let content = HSTRING::from("ping-request-content");
-    let outcome = brain.request(&content).expect("即時応答は Ok であること");
+    // safe 面 `get`: S_OK → Immediate（応答内容付き）。
+    let outcome = brain
+        .get(&HSTRING::from("GET SHIORI/3.0..."))
+        .expect("即時 get は Ok であること");
 
     let resp = match outcome {
-        RequestOutcome::Immediate(resp) => resp,
+        GetOutcome::Immediate(resp) => resp,
         other => panic!("expected Immediate, got {other:?}"),
     };
 
     let expected = HSTRING::from(KNOWN_RESPONSE);
-    // content 一致（論理等価・要件 3.2）。
+    // content 一致（論理等価・R12.6）。
     assert_eq!(resp, expected, "往復した応答 content が脳の用意値と一致すること");
-    // (iii) ビット一致: UTF-16 コードユニット列が完全一致（in-proc 直 vtable=非マーシャリング 4.3）。
-    // `HSTRING` は `Deref<Target = [u16]>`（windows-strings）。`&*` で UTF-16 スライスを取得して比較する。
+    // (iii) ビット一致: UTF-16 コードユニット列が完全一致（in-proc 直 vtable=非マーシャリング）。
+    // `HSTRING` は `Deref<Target = [u16]>`。`&*` で UTF-16 スライスを取得して比較する。
     assert_eq!(
         &*resp, &*expected,
         "応答が UTF-16 ビット単位で完全一致すること（マーシャリングによるコピー/変換が介在しない）"
     );
 }
 
-/// (probe・4.3) 単一往復で応答ラッパの確保=解放が 1:1 に均衡し、リーク/二重解放が無いこと。
+/// (probe・R12.6) 単一往復で応答ラッパの確保=解放が 1:1 に均衡し、リーク/二重解放が無いこと。
 ///
-/// `Immediate` を drop した後に alloc==drop（=2: 脳の move-out 元 + caller 受領分）であることを
-/// 観測する。drop<alloc ならリーク、drop>alloc なら二重解放を示す。
+/// `Immediate` を drop した後に alloc==drop（=1）であることを観測する。drop<alloc ならリーク、
+/// drop>alloc なら二重解放を示す。
 #[test]
 fn single_roundtrip_alloc_equals_drop() {
-    let (mock, counters) = MockBrain::new();
-    let brain: IShiori = mock.into();
+    let (brain, counters) = make_brain();
 
     {
-        let content = HSTRING::from("ping");
-        let outcome = brain.request(&content).expect("即時応答は Ok であること");
-        let RequestOutcome::Immediate(resp) = outcome else {
+        let outcome = brain
+            .get(&HSTRING::from("GET SHIORI/3.0..."))
+            .expect("即時 get は Ok であること");
+        let GetOutcome::Immediate(resp) = outcome else {
             panic!("expected Immediate");
         };
         assert_eq!(resp, HSTRING::from(KNOWN_RESPONSE));
         // ここで `resp`（caller が所有する move-out された HSTRING）がスコープ末で Drop される。
     }
 
-    // 脳側でラッパ `tracked` は Request 内で 1 回生成・1 回 Drop された（alloc==drop==1）。
+    // 脳側でラッパ `tracked` は Get 内で 1 回生成・1 回 Drop された（alloc==drop==1）。
     // ラッパは応答 HSTRING の所有権ライフサイクルの代理計測であり、生成と解放が均衡する。
     let alloc = counters.alloc();
     let drop = counters.dropped();
@@ -201,22 +277,21 @@ fn single_roundtrip_alloc_equals_drop() {
     );
 }
 
-/// (i・4.3) 多数回（10_000）の往復で毎回 content 一致し、abort/crash せず完走すること。
+/// (i・R12.6) 多数回（10_000）の往復で毎回 content 一致し、abort/crash せず完走すること。
 ///
 /// HSTRING の二重解放は CRT abort を招くため、10_000 回の確保/解放を完走できること自体が
 /// 二重解放非発生の強い証左となる。併せて probe カウンタの 1:1 均衡（alloc==drop==N）を assert。
 #[test]
 fn many_roundtrips_no_double_free_and_balanced() {
-    let (mock, counters) = MockBrain::new();
-    let brain: IShiori = mock.into();
+    let (brain, counters) = make_brain();
 
     const N: i64 = 10_000;
     let expected = HSTRING::from(KNOWN_RESPONSE);
-    let content = HSTRING::from("ping");
+    let input = HSTRING::from("GET SHIORI/3.0...");
 
     for i in 0..N {
-        let outcome = brain.request(&content).expect("即時応答は Ok であること");
-        let RequestOutcome::Immediate(resp) = outcome else {
+        let outcome = brain.get(&input).expect("即時 get は Ok であること");
+        let GetOutcome::Immediate(resp) = outcome else {
             panic!("iteration {i}: expected Immediate");
         };
         assert_eq!(resp, expected, "iteration {i}: content 一致");
@@ -232,16 +307,16 @@ fn many_roundtrips_no_double_free_and_balanced() {
     );
 }
 
-/// (ii・4.3) clone 生存: 受領した `Immediate` を clone 保持し、original を drop しても
+/// (ii・R12.6) clone 生存: 受領した `Immediate` を clone 保持し、original を drop しても
 /// 保持側 content が無傷であること。premature free / 破壊的マーシャリングなら壊れる。
 #[test]
 fn cloned_response_survives_original_drop() {
-    let (mock, _counters) = MockBrain::new();
-    let brain: IShiori = mock.into();
+    let (brain, _counters) = make_brain();
 
-    let content = HSTRING::from("ping");
-    let outcome = brain.request(&content).expect("即時応答は Ok であること");
-    let RequestOutcome::Immediate(resp) = outcome else {
+    let outcome = brain
+        .get(&HSTRING::from("GET SHIORI/3.0..."))
+        .expect("即時 get は Ok であること");
+    let GetOutcome::Immediate(resp) = outcome else {
         panic!("expected Immediate");
     };
 
@@ -263,33 +338,20 @@ fn cloned_response_survives_original_drop() {
     );
 }
 
-/// `ShioriExt::load`/`unload` の最小経路が成立すること（ハーネス健全性・要件 2.1/2.2）。
-///
-/// host を `#[implement(IShioriHost)]` で立てて `load` に渡し、Ok を観測する。本テストの
-/// 主眼は所有権/Drop だが、結合ハーネスとして load→request→unload の最小ライフサイクルが
-/// 通ることも併せて確認する（重複を避け詳細なライフサイクル検証は task 5.3 に委ねる）。
+/// (R9.3/12.6) 新 ABI ハーネス健全性: factory 生成→`get`（即時）→`notify`（片道受領）の最小
+/// ライフサイクルが通ること。`notify` の入力借用が clone 保持され Ok が返ることを観測する。
 #[test]
-fn harness_load_request_unload_minimal() {
-    let (mock, _counters) = MockBrain::new();
-    let brain: IShiori = mock.into();
-    let host: IShioriHost = NoopHost.into();
+fn harness_create_get_notify_minimal() {
+    let (brain, _counters) = make_brain();
 
-    brain.load(&host).expect("load は Ok であること");
-    let content = HSTRING::from("ping");
-    let outcome = brain.request(&content).expect("request は Ok であること");
-    assert!(matches!(outcome, RequestOutcome::Immediate(_)));
-    brain.unload().expect("unload は Ok であること");
-}
+    // get（即時）。
+    let outcome = brain
+        .get(&HSTRING::from("GET SHIORI/3.0..."))
+        .expect("get は Ok であること");
+    assert!(matches!(outcome, GetOutcome::Immediate(_)));
 
-/// `load` へ渡す最小 host（sink）。本テストでは通知を受けないので no-op。
-#[implement(IShioriHost)]
-struct NoopHost;
-
-impl shiori_abi::interface::IShioriHost_Impl for NoopHost_Impl {
-    unsafe fn Raise(&self, _script: *const HSTRING) -> HRESULT {
-        HRESULT(0)
-    }
-    unsafe fn Complete(&self, _token: u64, _response: *const HSTRING) -> HRESULT {
-        HRESULT(0)
-    }
+    // notify（片道・応答なし）。入力は callee 側で clone 保持され Ok を返す。
+    brain
+        .notify(&HSTRING::from("NOTIFY SHIORI/3.0..."))
+        .expect("notify は Ok であること");
 }

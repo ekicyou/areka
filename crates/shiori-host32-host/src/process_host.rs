@@ -6,14 +6,23 @@
 //! これにより ProcessHost は x64/arm64 の別なく純粋な `std::process` 上の
 //! ロジックとして単体テスト可能になる。
 //!
-//! 子への親 HWND 受け渡し規約（cross-task 契約・tasks.md Implementation Notes 3）:
-//! helper は親 HWND を **arg1 優先・fallback env [`PARENT_HWND_ENV`]** の
-//! **10進 u32**（`parse::<u32>()`）で取得する。本モジュールの [`spawn`] は
-//! arg1 と env の両方に同一の 10進表現を載せ、helper の arg1優先/env fallback
-//! どちらの読み取りにも整合させる。
+//! 子への起動パラメーター受け渡し規約（cross-task 契約・design §SpawnContract・R3.1〜3.3）:
+//! helper は起動パラメーターを **arg-n 優先・fallback env** の順で取得する。
+//! [`spawn`] は子引数と env の両方に同一値を二重供給し、helper の
+//! arg優先/env fallback どちらの読み取りにも整合させる。
+//!
+//! 子引数の並び（Rust 関数 [`spawn`] の引数順とは別物）:
+//! - arg1 = parent_hwnd（10進 u32・現行 helper の arg1 読み取り互換を維持）
+//! - arg2 = load_dir（伺かゴーストディレクトリ・cwd も同値）
+//! - arg3 = shiori_name（descript 解決済みの DLL ファイル名・親の領分）
+//!
+//! env は同値を二重供給する: [`PARENT_HWND_ENV`]（parent_hwnd 10進）・
+//! [`LOAD_DIR_ENV`]（load_dir）・[`SHIORI_NAME_ENV`]（shiori_name）。cwd
+//! （`current_dir`）は load_dir に設定する（伺か慣習・R3.3）。
 
 use std::path::Path;
 use std::process::{Child, Command, ExitStatus};
+use std::time::Duration;
 
 use crate::error::SpawnError;
 
@@ -22,6 +31,25 @@ use crate::error::SpawnError;
 /// 値は親 HWND の 10進 u32 表現。arg1 が優先で、arg1 が読めない場合に
 /// helper はこの env を `parse::<u32>()` する。
 pub const PARENT_HWND_ENV: &str = "HOST32_PARENT_HWND";
+
+/// helper が load_dir（ゴーストディレクトリ）を fallback で読む環境変数名（R3.1/3.2）。
+///
+/// 値は arg2 と同一の load_dir パス。arg2 が優先で、arg2 が読めない場合に
+/// helper はこの env を参照する。cwd も同値に設定される（R3.3）。
+pub const LOAD_DIR_ENV: &str = "HOST32_LOAD_DIR";
+
+/// helper が SHIORI 名（DLL ファイル名）を fallback で読む環境変数名（R3.1/3.2）。
+///
+/// 値は arg3 と同一の shiori_name（descript 解決済みの DLL ファイル名・親の領分）。
+/// arg3 が優先で、arg3 が読めない場合に helper はこの env を参照する。
+pub const SHIORI_NAME_ENV: &str = "HOST32_SHIORI_NAME";
+
+/// LOAD の `send_request` に用いる推奨既定 timeout（per-call 引数・R5.2）。
+///
+/// `MsgTag::Load` の ack 待機に使う（`SMTO_ABORTIFHUNG` ＋この上限で有限復帰）。
+/// ipc の timeout 機構自体は変更せず、この定数は per-call 引数として渡すためだけの
+/// 推奨既定値である（echo 系の 5s とは別建て・design §Load timeout 方針）。
+pub const LOAD_ACK_TIMEOUT: Duration = Duration::from_secs(30);
 
 /// helper プロセスの終了種別（要件 1.3 / 1.4）。
 ///
@@ -110,11 +138,21 @@ impl HelperHandle {
     }
 }
 
-/// helper exe を起動し、[`HelperHandle`] を返す（要件 1.1 / 1.5）。
+/// helper exe を起動し、[`HelperHandle`] を返す（要件 1.1 / 3.1 / 3.2 / 3.3 / 5.2）。
 ///
-/// `std::process::Command` で `helper_exe` を起動する。作業ディレクトリを
-/// `ghostdir` に設定し、親 HWND（`parent_hwnd`）を cross-task 契約
-/// （arg1 = 10進 u32 かつ env [`PARENT_HWND_ENV`] = 同 10進）で子へ渡す。
+/// `std::process::Command` で `helper_exe` を起動する。起動パラメーター契約
+/// （design §SpawnContract・R3.1〜3.3）に従い、次を子へ二重供給する:
+///
+/// - **子引数**: arg1 = `parent_hwnd`（10進 u32・helper の arg1 読み取り互換を維持）・
+///   arg2 = `load_dir`・arg3 = `shiori_name`。
+/// - **env（同値 fallback）**: [`PARENT_HWND_ENV`] = parent_hwnd 10進・
+///   [`LOAD_DIR_ENV`] = load_dir・[`SHIORI_NAME_ENV`] = shiori_name。
+/// - **cwd**: `load_dir`（伺か慣習・R3.3）。
+///
+/// Rust 関数の引数順（`helper_exe, load_dir, shiori_name, parent_hwnd`）と
+/// 子引数の並び（arg1=parent_hwnd 先頭）は別物である点に注意。`shiori_name` は
+/// 親側で descript 解決済みの DLL ファイル名であり、helper/factory は descript を
+/// 解釈しない（R3.6）。
 ///
 /// spawn に失敗（exe 不在・実行権限不足など）した場合は
 /// [`SpawnError`] を返し、[`HelperHandle`] を返さない（＝稼働中の helper が
@@ -124,15 +162,23 @@ impl HelperHandle {
 /// `Command::spawn` の I/O 失敗を [`SpawnError`] として返す。
 pub fn spawn(
     helper_exe: &Path,
-    ghostdir: &Path,
+    load_dir: &Path,
+    shiori_name: &str,
     parent_hwnd: u32,
 ) -> Result<HelperHandle, SpawnError> {
     let mut command = Command::new(helper_exe);
     let parent_hwnd_decimal = parent_hwnd.to_string();
     command
+        // 子引数: arg1=parent_hwnd（互換維持）・arg2=load_dir・arg3=shiori_name。
         .arg(&parent_hwnd_decimal)
+        .arg(load_dir)
+        .arg(shiori_name)
+        // env: 同値二重供給（arg 読み取り不能時の fallback・R3.2）。
         .env(PARENT_HWND_ENV, &parent_hwnd_decimal)
-        .current_dir(ghostdir);
+        .env(LOAD_DIR_ENV, load_dir)
+        .env(SHIORI_NAME_ENV, shiori_name)
+        // cwd=load_dir（伺か慣習・R3.3）。
+        .current_dir(load_dir);
     spawn_command(command)
 }
 
@@ -296,46 +342,124 @@ mod tests {
         // 存在しない exe パスで spawn は Err(SpawnError) を返し、HelperHandle を
         // 返さない（＝稼働中 helper が存在しない状態を保つ・要件 1.5）。
         let missing = Path::new("this_helper_exe_does_not_exist_areka_host32.exe");
-        let ghostdir = std::env::temp_dir();
-        let result = spawn(missing, &ghostdir, 0);
+        let load_dir = std::env::temp_dir();
+        let result = spawn(missing, &load_dir, "shiori.dll", 0);
         assert!(
             matches!(result, Err(SpawnError::Spawn(_))),
             "spawn 失敗は SpawnError::Spawn を返す"
         );
     }
 
-    // --- spawn の cross-task 契約（親 HWND 受け渡し・tasks.md IN #3）---
+    // --- spawn の起動パラメーター契約（arg1..3・env 3 種・cwd＝design §SpawnContract）---
 
+    /// env キー名が design §SpawnContract どおりに固定されていること（契約回帰防止）。
     #[test]
-    fn spawn_passes_parent_hwnd_as_decimal_arg_and_env() {
-        // spawn が親 HWND を「arg1 = 10進」かつ「env HOST32_PARENT_HWND = 10進」で
-        // 子へ渡すことを、それらを標準出力へ表示する stand-in で観測する。
-        // cmd.exe で arg1 と env を echo し、両方が期待 10進値になることを確認。
-        let parent_hwnd: u32 = 4_294_967_295; // u32::MAX（10進境界値）
-        let ghostdir = std::env::temp_dir();
-
-        // spawn 相当の Command を、キャプチャ可能な形で自前に組む（spawn と同一規約）。
-        // spawn 本体は current_dir/arg/env をセットして spawn_command を呼ぶため、
-        // ここでは規約整合を「arg1 と env が 10進で一致する」ことで検証する。
-        let mut command = Command::new("cmd.exe");
-        let decimal = parent_hwnd.to_string();
-        command
-            .args(["/c", "echo %1& echo %HOST32_PARENT_HWND%"])
-            .arg(&decimal) // %1 に相当する引数（arg1）
-            .env(PARENT_HWND_ENV, &decimal)
-            .current_dir(&ghostdir);
-        let output = command.output().expect("stand-in を実行できる");
-        let stdout = String::from_utf8_lossy(&output.stdout);
-        assert!(
-            stdout.contains(&decimal),
-            "arg1/env に 10進 u32 の親 HWND が載る: got {stdout:?}"
-        );
-
-        // env キー名が cross-task 契約どおりであることも固定する。
+    fn spawn_env_key_names_match_contract() {
         assert_eq!(PARENT_HWND_ENV, "HOST32_PARENT_HWND");
-        // spawn 自体も失敗しないこと（cmd.exe は実在）。
-        // 注: spawn は helper_exe を実行するため、ここでは spawn の arg/env 組み立てが
-        // panic しないパスの健全性のみ担保する（実 exe の存在は本タスク範囲外）。
-        let _ = &ghostdir;
+        assert_eq!(LOAD_DIR_ENV, "HOST32_LOAD_DIR");
+        assert_eq!(SHIORI_NAME_ENV, "HOST32_SHIORI_NAME");
+    }
+
+    /// LOAD 用 ack 待機の推奨既定 timeout が 30 秒であること（R5.2・design §Load timeout）。
+    #[test]
+    fn load_ack_timeout_default_is_30s() {
+        assert_eq!(LOAD_ACK_TIMEOUT, Duration::from_secs(30));
+    }
+
+    /// spawn が起動パラメーターを子へ供給する契約を、`spawn` の実装が組み立てる
+    /// Command と同一手順の stand-in（バッチファイル）で**実際に観測**して検証する（R3.1〜3.3）。
+    ///
+    /// 観測対象:
+    /// - arg1 = parent_hwnd（10進）・arg2 = load_dir・arg3 = shiori_name（`%1`/`%2`/`%3`）
+    /// - env `HOST32_PARENT_HWND` = parent_hwnd 10進・`HOST32_LOAD_DIR` = load_dir・
+    ///   `HOST32_SHIORI_NAME` = shiori_name
+    /// - cwd = load_dir（`%CD%` 出力で確認）
+    ///
+    /// バッチファイルを stand-in にするのは `%1..%3`（位置引数）の展開がバッチ実行時のみ
+    /// 有効で、`cmd /c "..."` 単一コマンドでは展開されないため。`spawn` 本体と**同一順序**で
+    /// arg/env/cwd を積み、位置引数・env・cwd の三面が同値供給されることを assert する
+    /// （spawn は helper_exe を実行するため直接キャプチャできない＝同一規約の Command で観測）。
+    #[test]
+    fn spawn_supplies_hwnd_load_dir_and_shiori_name_via_arg_env_and_cwd() {
+        let parent_hwnd: u32 = 4_294_967_295; // u32::MAX（10進境界値）
+        let decimal = parent_hwnd.to_string();
+        // cwd 一致を検証できる実在ディレクトリ。canonicalize で表記ゆれを吸収。
+        let load_dir = std::fs::canonicalize(std::env::temp_dir())
+            .expect("temp_dir を canonicalize できる");
+        let shiori_name = "shiori.dll";
+
+        // 位置引数を観測するバッチ stand-in を一時ファイルへ書く（テスト後に削除）。
+        // 各面を "KEY=VALUE" 行で出力: %1..%3=位置引数・%VAR%=env・%CD%=cwd。
+        let unique = std::process::id();
+        let batch_path = std::env::temp_dir()
+            .join(format!("areka_host32_spawn_contract_{unique}.bat"));
+        std::fs::write(
+            &batch_path,
+            "@echo off\r\n\
+             echo arg1=%1\r\n\
+             echo arg2=%2\r\n\
+             echo arg3=%3\r\n\
+             echo phwnd=%HOST32_PARENT_HWND%\r\n\
+             echo ldir=%HOST32_LOAD_DIR%\r\n\
+             echo sname=%HOST32_SHIORI_NAME%\r\n\
+             echo cwd=%CD%\r\n",
+        )
+        .expect("stand-in バッチを書ける");
+
+        // `spawn` と同一手順で Command を組む（arg1=hwnd・arg2=load_dir・arg3=name、
+        // env 3 種、cwd=load_dir）。cmd.exe /c <batch> で位置引数を渡す。
+        let mut command = Command::new("cmd.exe");
+        command
+            .arg("/c")
+            .arg(&batch_path)
+            .arg(&decimal) // arg1
+            .arg(&load_dir) // arg2
+            .arg(shiori_name) // arg3
+            .env(PARENT_HWND_ENV, &decimal)
+            .env(LOAD_DIR_ENV, &load_dir)
+            .env(SHIORI_NAME_ENV, shiori_name)
+            .current_dir(&load_dir);
+        let output = command.output().expect("stand-in を実行できる");
+        let _ = std::fs::remove_file(&batch_path); // 後始末（失敗は無視）。
+        let stdout = String::from_utf8_lossy(&output.stdout);
+
+        let load_dir_str = load_dir.to_string_lossy();
+        // 期待表記の cwd（%CD% は `\\?\` 冗長プレフィクス無し・末尾セパレータ無しの正規表記）。
+        let expected_cwd = load_dir_str
+            .strip_prefix(r"\\?\")
+            .unwrap_or(&load_dir_str)
+            .trim_end_matches(['\\', '/']);
+
+        // arg1..3 同値供給（位置引数を %1..%3 で観測）。
+        assert!(
+            stdout.contains(&format!("arg1={decimal}")),
+            "arg1 に 10進 parent_hwnd が載る: got {stdout:?}"
+        );
+        assert!(
+            stdout.contains(&format!("arg2={load_dir_str}")),
+            "arg2 に load_dir が載る: got {stdout:?}"
+        );
+        assert!(
+            stdout.contains(&format!("arg3={shiori_name}")),
+            "arg3 に shiori_name が載る: got {stdout:?}"
+        );
+        // env 3 種同値供給。
+        assert!(
+            stdout.contains(&format!("phwnd={decimal}")),
+            "env HOST32_PARENT_HWND に 10進 parent_hwnd が載る: got {stdout:?}"
+        );
+        assert!(
+            stdout.contains(&format!("ldir={load_dir_str}")),
+            "env HOST32_LOAD_DIR に load_dir が載る: got {stdout:?}"
+        );
+        assert!(
+            stdout.contains(&format!("sname={shiori_name}")),
+            "env HOST32_SHIORI_NAME に shiori_name が載る: got {stdout:?}"
+        );
+        // cwd = load_dir。
+        assert!(
+            stdout.contains(&format!("cwd={expected_cwd}")),
+            "cwd が load_dir に設定される: expected cwd={expected_cwd:?} in {stdout:?}"
+        );
     }
 }

@@ -84,12 +84,13 @@ kanade（③ conductor・SHIORI イベント循環）
 
 ## 7. 全7トラックと進捗（→ [roadmap-tree.svg](discussion-260702-roadmap-tree.svg)）
 
-**M-boot（emo2 が起動して喋る・16ユニット）の完了 6/16**。②parsers は全完了、①shiori は 2/5（gate の pilot 含めず）。
+**M-boot（emo2 が起動して喋る・16ユニット）の完了 約 7/16**。②parsers は全完了、①shiori は pilot✅/ipc✅/shiori-load✅（request・lifecycle 残）。
+> ⚠️ 07-03 追記: 本記録作成中に `areka-P0-host32-shiori-load`（①）と `wintf-clickthrough-alpha-toggle`（M1外）が並行で完了・main へ着地。以下 §7/§10/§11 はその完了を反映済み。
 
 | # | 固有名 | 役割 | M-boot 状況 | 増分（M-boot 後・並走可） |
 |---|---|---|---|---|
 | ⓪ | ghost | 最上位 owner（lifecycle/窓配置/位置永続化・統括） | ghost-setup／window-placement 未着手 | position-persist |
-| ① | shiori | 32bit pasta.dll 駆動・耐力壁 | pilot ✅go・ipc ✅・**shiori-load＝次フロント**・request・lifecycle | なし（M-boot で完了） |
+| ① | shiori | 32bit pasta.dll 駆動・耐力壁 | pilot ✅go・ipc ✅・shiori-load ✅・**request＝次フロント**・lifecycle | なし（M-boot で完了） |
 | ② | parsers | 定義→model・構築入力 | **全完了 ✅**（foundation/sakura-parse/shell-parse/balloon-parse/package-mount） | なし（M-boot で完了） |
 | ③ | kanade | SHIORI イベント循環 | 未着手 | idle-talk / input-events |
 | ④ | sakura | さくらスクリプト再生 | 未着手 | sakura-dialogue-tags |
@@ -128,16 +129,16 @@ M1（emo2-boot）とは別軸で進む wintf 基盤の改善。M1 ユニット�
 |---|---|---|
 | `wintf-dcomp-to-wuc-migration` | **✅ 完了（07-02）** | 表示合成 DComp→WUC 純粋等価移行。ULW アーム・`CompositionMode` は不触 |
 | `pilot-clickthrough-alpha-toggle` | **✅ go（07-01）** | `WS_EX_TRANSPARENT` 動的トグルで **DComp 描画を捨てず**別プロセスクリック透過成立。必須配合＝`WS_EX_LAYERED` 同伴フラグ＋枠なし `WS_POPUP`。表示層と当たり判定層は独立 |
-| `wintf-clickthrough-alpha-toggle` | brief 済・**着手可** | 本坑。本体αマスク（`AlphaMask::is_hit`）参照でキャラ領域のみクリック可。当面 ULW と並走 |
-| `wintf-ulw-removal` | ゲート下 | clickthrough 本坑完了後に ULW 一式除去＋`CompositionMode` collapse |
+| `wintf-clickthrough-alpha-toggle` | **✅ 完了（07-02）** | 本体αマスク（`AlphaMask::is_hit`）参照でキャラ領域のみクリック可を wintf 本体へ実装。当面 ULW と並走 |
+| `wintf-ulw-removal` | **着手可**（clickthrough 完了でゲート解除） | ULW 一式除去＋`CompositionMode` collapse（GPU 合成単独へ） |
 
 ## 11. 次の一手（2026-07-02 時点のフロント）
 
 即並走可能なフロント（別ワークツリー・1 feature = 1 branch = 1 PR）:
 
-1. **shiori: `areka-P0-host32-shiori-load`**（次フロント・LoadLibrary pasta.dll＋load/unload/request 解決）→ 以降 request → lifecycle と逐次。
-2. **wintf: `wintf-clickthrough-alpha-toggle`**（brief 済・`/kiro-start` 直行可）。
-3. **emo: `areka-P0-emo-surface`**（render 基盤・mock-shell＋dola から増分）／**ghost: `areka-P0-window-placement`**（mock-shell 実コードから）— 同一素材起点ゆえ軽い競合注意・各1本ずつ。
+1. **shiori: `areka-P0-host32-request`**（次フロント・SHIORI/3.0 build＋marshal＋response Value＋charset）→ 以降 lifecycle と逐次。
+2. **emo: `areka-P0-emo-surface`**（render 基盤・mock-shell＋dola から増分）／**ghost: `areka-P0-window-placement`**（mock-shell 実コードから）— 同一素材起点ゆえ軽い競合注意・各1本ずつ。
+3. **wintf: `wintf-ulw-removal`**（clickthrough 完了でゲート解除・ULW 除去＋`CompositionMode` collapse）。
 4. 結合クラスタの **channel 契約の先決**（region/actor・\q/選択・2窓/surface）は該当ユニット着手時に。
 
 brief は着手時に just-in-time で1本ずつ（§3 の規律）。

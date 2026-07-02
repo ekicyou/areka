@@ -17,15 +17,17 @@ use windows::core::Result;
 use wintf::ecs::Point;
 use wintf::ecs::drag::{DragConfig, DragEvent, OnDrag};
 use wintf::ecs::layout::{
-    BoxMargin, BoxPosition, BoxSize, BoxStyle, Dimension, LengthPercentageAuto, Rect,
+    BoxMargin, BoxPosition, BoxSize, BoxStyle, Dimension, HitTest, LengthPercentageAuto, Rect,
 };
 use wintf::ecs::pointer::{DoubleClick, OnPointerPressed, Phase, PointerState};
 use wintf::ecs::widget::bitmap_source::{BitmapSource, CommandSender};
 use wintf::ecs::widget::brushes::Brushes;
 use wintf::ecs::widget::shapes::Rectangle;
 use wintf::ecs::widget::text::{TextDirection, Typewriter, TypewriterTalk, TypewriterToken};
+use wintf::ecs::clickthrough::ClickThroughRegistryHandle;
 use wintf::ecs::{
-    ChildOf, FrameTime, SetWindowPosCommand, Window, WindowHandle, WindowPos, WindowStyle,
+    ChildOf, CompositionMode, FrameFinalize, FrameTime, SetWindowPosCommand, Window, WindowHandle,
+    WindowPos, WindowStyle,
 };
 use wintf::*;
 
@@ -38,31 +40,30 @@ mod shiori_host;
 /// `Unload` 保留取消・設定可能タイムアウトの利用規律を所有する（task 4.2）。
 mod shiori_session;
 
-/// 製品コード（非テスト）のリファレンス脳。`#[implement(IShiori)]` 実装＋純粋C
-/// コンストラクタ `shiori_create` を所有する正解見本（task 2.x/9.x）。
+/// 製品コード（非テスト）のリファレンス脳＋ファクトリ＋C 入口。`#[implement(IShiori)]`/
+/// `#[implement(IShioriFactory)]` 実装＋純粋C コンストラクタ `shiori_factory` を所有する正解見本。
 mod reference_brain;
 
-/// 実走デモドライバ。`shiori_create`→`ShioriSession` で activate→数往復 request→
-/// `poll_completions`→Raise 観測→unload を駆動し tracing で観測する（task 3.x）。
+/// 実走デモドライバ。`shiori_factory`→`ShioriSession` で activate→数往復 get→
+/// `poll_completions`→raise/notify 観測→drop teardown を駆動し tracing で観測する。
 mod shiori_demo;
 
-/// 遅延応答と push 経路の end-to-end 結合テスト（task 5.2）。
-/// モック脳が `SHIORI_S_PENDING`＋token を返し、後で保持 host へ `Complete`/`Raise` を発火する
-/// 一連の流れを `ShioriSession` 越しに 1 シナリオで通す（4.1/4.2 の単体テストと重複させない）。
+/// 遅延応答と push 経路の end-to-end 結合テスト。
+/// モック脳が `SHIORI_S_PENDING`＋token を返し、後で保持 host へ safe `complete`/`raise` を発火する
+/// 一連の流れを `ShioriSession` 越しに 1 シナリオで通す（sink/session の単体テストと重複させない）。
 #[cfg(test)]
 mod shiori_e2e_tests;
 
-/// ライフサイクルと単一 in-flight 規律の end-to-end 結合テスト（task 5.3）。
-/// 状態を保持するモック脳で `Load`→`Request`→`Unload` の遷移、未ロード時 request 拒否（NotLoaded）、
-/// `Deferred` 保留中の `Unload` 取消→再 Load 後の正常動作を通しシナリオで実証する
-/// （4.2 の inline 単体テスト・5.2 の遅延 push e2e と重複させない）。
+/// ライフサイクルと単一 in-flight 規律の end-to-end 結合テスト。
+/// 新 ABI の生成〜利用〜teardown（factory create→get→drop teardown・「未ロード状態」は存在しない）と、
+/// `Deferred` 保留中の drop 取消→再 activate 後の正常動作を通しシナリオで実証する。
 #[cfg(test)]
 mod shiori_lifecycle_e2e_tests;
 
-/// 製品 `ReferenceBrain` × `ShioriSession` の end-to-end 結合テスト（task 5.1）。
-/// `shiori_create` で取得した本物の製品脳を `ShioriSession` 越しに駆動し、即時→遅延+Complete→
-/// Raise→unload の数往復・単一 in-flight 拒否・決定的タイムアウト・stale Complete 拒否・
-/// unload 後始末を実時間 sleep に依存せず検証する（モック e2e と重複させず製品脳の配線を実証）。
+/// 製品 `ReferenceFactory`/`ReferenceBrain` × `ShioriSession` の end-to-end 結合テスト。
+/// `shiori_factory` で取得した本物の製品 factory/brain を `ShioriSession` 越しに駆動し、
+/// load_dir/shiori_name の貫通（D1）・即時→遅延+complete→raise→notify の数往復・単一 in-flight 拒否・
+/// 決定的タイムアウト・stale complete 拒否・drop teardown を実時間 sleep に依存せず検証する。
 #[cfg(test)]
 mod shiori_reference_e2e_tests;
 
@@ -129,6 +130,12 @@ fn main() -> Result<()> {
         run_setup(tx).await;
     });
 
+    // クリック透過機構への窓登録システムを結線（task 4.1）。UISetup の create_windows が
+    // WindowHandle を付与した後の FrameFinalize で走らせ、同一 tick 内で Added を捉える。
+    world
+        .borrow_mut()
+        .add_systems(FrameFinalize, register_click_through_windows);
+
     // 操作ガイド出力
     println!();
     println!("areka モック実装 — ぱすたさん");
@@ -153,6 +160,38 @@ fn main() -> Result<()> {
 // ---------------------------------------------------------------------------
 // Async Setup
 // ---------------------------------------------------------------------------
+
+/// クリック透過機構への窓登録システム（task 4.1）。
+///
+/// WUC 化により ULW の自動 α ヒットテストが失われるため、機構が α を評価できるよう
+/// shell/balloon の 2 窓を明示登録する。`WindowHandle` は `create_windows`（UISetup）が
+/// HWND 生成後に付与するため `Added<WindowHandle>` で「HWND が付いた瞬間」を捉え、各窓を
+/// 厳密に 1 回登録する（`register` は同一 Entity 再登録を dedupe するため冪等でもある）。
+///
+/// `ClickThroughRegistryHandle` は `WinApp::run` の結線で World へ NonSend リソースとして
+/// 挿入される。本システムは `mgr.run()` 前に登録されるが tick は `run()` 開始後に回るため
+/// 通常は存在する。ごく初期の tick で未挿入の可能性に備え `Option<NonSend<..>>` で防御し、
+/// 未挿入なら no-op する（`Added` は次 tick で再度観測されるため取りこぼさない）。
+/// `register` は `&self`（内部可変は `Rc<RefCell<..>>`）ゆえ `NonSend` で足りる。
+/// 窓破棄時の除去は機構内 `prune_dead_targets`（Entity 生存確認）が担うため明示 remove は不要。
+fn register_click_through_windows(
+    new_windows: Query<
+        (Entity, &WindowHandle),
+        (
+            Added<WindowHandle>,
+            Or<(With<ShellWindowMarker>, With<BalloonWindowMarker>)>,
+        ),
+    >,
+    handle: Option<NonSend<ClickThroughRegistryHandle>>,
+) {
+    let Some(handle) = handle else {
+        return;
+    };
+    for (entity, wh) in new_windows.iter() {
+        handle.register(entity, wh.hwnd);
+        tracing::debug!(?entity, "クリック透過機構へ窓を登録しました");
+    }
+}
 
 /// 非同期タスクでシェル＋バルーンウィンドウを生成
 async fn run_setup(tx: CommandSender) {
@@ -180,11 +219,15 @@ fn create_shell_window(world: &mut World) -> Entity {
             ShellWindowMarker,
             Window {
                 title: "areka shell".to_string(),
+                // task 4.1: WUC（DComp）合成経路。ex_style は factory の compute_ex_style が
+                // DComp に応じて WS_EX_LAYERED を外し WS_EX_NOREDIRECTIONBITMAP を付与するため
+                // WindowStyle は据え置きでよい。
+                composition_mode: CompositionMode::DComp,
                 ..Default::default()
             },
             WindowStyle {
                 style: WS_POPUP | WS_VISIBLE,
-                // Phase 3: WS_EX_NOREDIRECTIONBITMAP → WS_EX_LAYERED
+                // ex_style は factory が composition_mode から自動計算する（compute_ex_style）。
                 ex_style: WS_EX_LAYERED | WS_EX_TOOLWINDOW | WS_EX_TOPMOST,
             },
             WindowPos {
@@ -202,6 +245,8 @@ fn create_shell_window(world: &mut World) -> Entity {
                 }),
                 ..Default::default()
             },
+            // 窓自身はヒット対象外（全面ヒットで透過を殺さない）。当たりは子の画像（α判定）が担う。
+            HitTest::none(),
             DragConfig::default(),
             OnDrag(on_shell_drag),
             OnPointerPressed(on_shell_pressed),
@@ -212,6 +257,8 @@ fn create_shell_window(world: &mut World) -> Entity {
     world.spawn((
         Name::new("Shell-Image"),
         BitmapSource::new(SHELL_IMAGE_PATH),
+        // キャラの不透明ピクセルだけ受領・透明部は背面へ透過（αマスク自動生成の必須条件）。
+        HitTest::alpha_mask(),
         BoxStyle {
             size: Some(BoxSize {
                 width: Some(Dimension::Px(320.0)),
@@ -241,11 +288,13 @@ fn create_balloon_window(world: &mut World) -> Entity {
             BalloonWindowMarker,
             Window {
                 title: "areka balloon".to_string(),
+                // task 4.1: WUC（DComp）合成経路。ex_style は factory が自動計算するため据え置き。
+                composition_mode: CompositionMode::DComp,
                 ..Default::default()
             },
             WindowStyle {
                 style: WS_POPUP | WS_VISIBLE,
-                // Phase 3: WS_EX_NOREDIRECTIONBITMAP → WS_EX_LAYERED
+                // ex_style は factory が composition_mode から自動計算する（compute_ex_style）。
                 ex_style: WS_EX_LAYERED | WS_EX_TOOLWINDOW | WS_EX_TOPMOST,
             },
             WindowPos {

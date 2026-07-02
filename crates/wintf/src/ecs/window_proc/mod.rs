@@ -47,6 +47,7 @@ pub(crate) fn dispatch_window_message(
         WM_DISPLAYCHANGE => lifecycle::WM_DISPLAYCHANGE(world, entity, hwnd, wparam, lparam),
         WM_DPICHANGED => window_pos::WM_DPICHANGED(world, entity, hwnd, wparam, lparam),
         // マウスメッセージ
+        WM_SETCURSOR => mouse_move::WM_SETCURSOR(world, entity, hwnd, wparam, lparam),
         WM_NCHITTEST => mouse_move::WM_NCHITTEST(world, entity, hwnd, wparam, lparam),
         WM_MOUSEMOVE => mouse_move::WM_MOUSEMOVE(world, entity, hwnd, wparam, lparam),
         WM_MOUSELEAVE => mouse_move::WM_MOUSELEAVE(world, entity, hwnd, wparam, lparam),

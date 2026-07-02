@@ -49,7 +49,7 @@ areka は「ぱすたさん専用の試作」から、**ukadoc準拠の互換ベ
 
 ### 現在の進め方
 
-- wintfでWindowsネイティブUI基盤を先に固める（透過/ULW・当たり判定は完了済み。**2026-07 方針転換: 表示合成は DirectComposition → Windows.UI.Composition へ✅移行完了（07-02）・別プロセス透過は `WS_EX_TRANSPARENT` 動的トグルへ（本坑 brief 済・着手可）・ULW 除去予定**＝詳細は tech.md／roadmap.md）
+- wintfでWindowsネイティブUI基盤を先に固める（透過/ULW・当たり判定は完了済み。**2026-07 方針転換: 表示合成は DirectComposition → Windows.UI.Composition へ✅移行完了（07-02）・別プロセス透過は `WS_EX_TRANSPARENT` 動的トグルを wintf 本体へ✅実装完了（07-02・`wintf-clickthrough-alpha-toggle`）・ULW 除去は `wintf-ulw-removal` で着手可**＝詳細は tech.md／roadmap.md）
 - **M1 のエンジン固有名（2026-07-02 確定）**: 7トラック ⓪〜⑥＝**`ghost` / `shiori` / `parsers` / `kanade` / `sakura` / `seriko` / `emo`**。コード/spec/会話の参照はこの名で統一（正本は roadmap.md「エンジン固有名」節。`emo` エンジンと適合ゴースト `emo2` は別概念）
 - dolaを「タイミングに特化した下位層」と位置づけ、SERIKO/さくらスクリプトランナーをその上に建てる
 - 互換ベースウェアとして実在ゴースト1体を動かす縦スライスを先に通し、その後ぱすたさんをnative旗艦として実装する

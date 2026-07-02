@@ -95,7 +95,7 @@ emo2 が起動して喋る。下記 5 トラックを結線して達成（⓪ �
 **① shiori＝SHIORI 通信層エンジン host-32（耐力壁・`pilot/shiori-host-32` がトラックを gate）**
 - `pilot/shiori-host-32` — 使い捨て feasibility。**✅ 完了（2026-07-01・spec=`completed/pilot-shiori-host-32`・コードは `crates/pilot/examples/shiori-host-32/` に隔離保全）**: go 基準(1)(2) 実走充足＝32bit pasta.dll 1往復（x64 親が emo2 OnBoot `Value` 受領）＋窓持ちループ N秒生存→clean unload。跨ビットネス再入 WM_COPYDATA・`wintf-winmsg-executor` i686 実行時とも GO（fallback 不要）。→ 下流 `areka-P0-host32-*` の go ゲート充足（着手可・最終 go 判定は開発者）
 - `areka-P0-host32-ipc` — x64↔32bit helper＋handshake。✔ 往復 echo。**✅ 完了（2026-07-02・spec=`completed/areka-P0-host32-ipc`）**: bytes-over-wire transport を3クレート（`shiori-host32-ipc`=proto / `-host`=x64+arm64 / `-helper`=i686）で本坑再掘（pilot 非コピペ）。トランスポートは WM_COPYDATA 一本化＋再入 RESPONSE（named pipe 不要）。実 i686 helper 越しの往復 echo が無デッドロック・無クラッシュで green（M1 ゲート指標充足）。pasta ロード/SHIORI parse/常駐 lifecycle は下流 `areka-P0-host32-*` の領分（本ユニットは seam のみ所有）
-- `areka-P0-host32-shiori-load` — LoadLibrary pasta.dll＋load/unload/request 解決＋load(ghostdir)。✔ load 成功・無crash
+- `areka-P0-host32-shiori-load` — LoadLibrary pasta.dll＋load/unload/request 解決＋load(ghostdir)。✔ load 成功・無crash。**✅ 完了（2026-07-02・spec=`completed/areka-P0-host32-shiori-load`）**: 二層一体で **load_dir per-instance 貫通（D1）＋teardown を Drop(RAII) 全層一貫（D7）** を実現。WS-A=helper が実 i686 SHIORI DLL を `LoadLibraryW`→3 エクスポート解決→`load(load_dir)` 駆動し凍結 wire 上 1 byte ack で成否返送（トラック所有 testdll fixture で成功/失敗/無crash E2E・本物 pasta は env gate）。WS-B=`shiori-abi` を **IShioriFactory 融合 create＋Get/Notify 分離＋GetProperty/SetProperty＋型付き COM 引数＋module entry `shiori_factory`** へ是正（`load_dir` 欠落の根幹欠陥を根絶・reference/mock backend で証明）。凍結境界 `shiori-host32-ipc` 不改変。→ 下流 `areka-P0-host32-request`（request 呼出・SHIORI/3.0 marshal）が次フロント
 - `areka-P0-host32-request` — SHIORI/3.0 build＋marshal＋response Value＋charset。✔ x64 が emo2 OnBoot の Value 受領
 - `areka-P0-host32-lifecycle` — helper msg loop＋OnSecondChange poll＋unload＋crash監視。✔ N秒運転→clean unload
 
@@ -181,9 +181,8 @@ emo2 が起動して喋る。下記 5 トラックを結線して達成（⓪ �
 ## ポートフォリオ（2026-06-28・clean slate）
 
 - `.kiro/specs/` 直下 active = **0**（憶測仕様を全伐採し更地化。実装ファーストで着手時に作る）。
-- **2026-07-01 追記・着手可能フロント（brief 済み・未着手）**: `/kiro-discovery` で「安全並走バッチ」の brief を just-in-time 生成。① wintf 基盤層 `wintf-dcomp-to-wuc-migration`（表示バックエンド WUC 移行）／`wintf-clickthrough-alpha-toggle`（既存 brief）。② M1 parser 並走 `areka-P0-shell-parse`・`areka-P0-balloon-parse`・`areka-P0-package-mount`（`areka-parsers` へ `shell`/`balloon`/`package` モジュール追加・host 不要・単体テスト可）。③ M1 host-32 `areka-P0-host32-ipc`（pilot go 済で解禁・bytes-over-wire transport・別プロセスゆえ非衝突）→ **✅ 2026-07-02 完了・アーカイブ（`completed/areka-P0-host32-ipc`）。下流 `areka-P0-host32-shiori-load` が次フロント**。これら 5〜6 本は相互非衝突で即並走可（`ecs/graphics` 系は wuc-migration に一本化）。`wintf-ulw-removal` は clickthrough 完了待ち（brief 済み・ゲート下）。
-- `completed/` = 104（歴史・M1 が立つ土台の記録。2026-07-01 `pilot-clickthrough-alpha-toggle`・`pilot-shiori-host-32` を go 済みでアーカイブ／2026-07-02 `areka-P0-host32-ipc` を実装完了でアーカイブ）。
-- **2026-07-02 更新（本日終業時点）**: `completed/` = **110**（上記に加え `areka-P0-parser-foundation`・`areka-P0-shell-parse`・`areka-P0-balloon-parse`・`areka-P0-package-mount`・`wintf-dcomp-to-wuc-migration` 等を完了アーカイブ）。**②parsers トラック全完了・M-boot 6/16**。brief-only = 2（`wintf-clickthrough-alpha-toggle`＝着手可／`wintf-ulw-removal`＝ゲート下）。**次フロント**: shiori:`areka-P0-host32-shiori-load`（逐次チェーン先頭）／emo:`areka-P0-emo-surface`／ghost:`areka-P0-window-placement`／wintf:`wintf-clickthrough-alpha-toggle`。
+- **2026-07-01 追記・着手可能フロント（当時 brief 済み）**: `/kiro-discovery` で「安全並走バッチ」の brief を just-in-time 生成。① wintf 基盤層 `wintf-dcomp-to-wuc-migration`（**✅ 完了**）／`wintf-clickthrough-alpha-toggle`（**✅ 2026-07-02 完了・アーカイブ**）。② M1 parser 並走 `shell`/`balloon`/`package`（**✅ 全完了**）。③ M1 host-32 `areka-P0-host32-ipc`（**✅ 完了**）→ `areka-P0-host32-shiori-load`（**✅ 完了**）。これら 5〜6 本は相互非衝突で即並走可（`ecs/graphics` 系は wuc-migration に一本化）。
+- **2026-07-03 現況**: `completed/` = **112**。**active = 0**・**brief-only = 1**（`wintf-ulw-removal`＝clickthrough 完了でゲート解除＝**着手可**）。**②parsers トラック全完了・M-boot 約 7/16**（①shiori: pilot✅/ipc✅/shiori-load✅・**`areka-P0-host32-request` が逐次チェーン次フロント**・lifecycle 残）。**着手可能フロント**: shiori:`areka-P0-host32-request` ／ emo:`areka-P0-emo-surface` ／ ghost:`areka-P0-window-placement`（or `ghost-setup`） ／ wintf:`wintf-ulw-removal`（clickthrough 完了後の ULW 除去＋`CompositionMode` collapse）。
 - 旧 active/brief（M1 憶測・M2 reference・出荷層）・backlog（P1-P3）・`_rejected/`・旧戦略メモは**削除**（git 履歴に保全。必要時に復元可）。
 
 ## M2 以降
@@ -209,12 +208,13 @@ emo2 が起動して喋る。下記 5 トラックを結線して達成（⓪ �
 - **go 基準**（人間判断）: 試験項目 T1〜T8 のうち **T1・T2・T3・T4・T6 が ✅ 必須**、T5・T7・T8 は ✅ または軽微な条件付き合格（理由明記）。レポートは合否問わず作成し依頼者の判断を仰ぐ（AI 単独で go 判定しない）。
 - **✅ go 結果（2026-07-01・開発者承認）**: 核心 Unknown 肯定的決着＝**DComp 描画を捨てず `WS_EX_TRANSPARENT` 動的トグルで別プロセスクリック透過が成立**。必須配合（当初想定に無かった）: ① **`WS_EX_LAYERED` を"同伴フラグ"として立てる**（ULW/SLWA 非呼出＝レイヤード描画には使わない。無いと透過が効かない）／② **枠なし窓 `WS_POPUP`（client==window）**。最重要原理: **表示層（DComp visual・content は surface でも合成 swapchain でも可＝3D/Live2D 拡張可）と当たり判定層（HWND スタイル）は独立**。ドラッグ移動の罠（ドラッグ中は位置に関わらず `WS_EX_TRANSPARENT` を外したまま維持）も知見化。詳細は REPORT.md。**⇒ 当初の「`WS_EX_LAYERED` 不使用」前提は撤回**（本坑へ申し送り）。
 
-### main（本坑）: `wintf-clickthrough-alpha-toggle`
+### main（本坑）: ✅ `wintf-clickthrough-alpha-toggle`（**2026-07-02 完了・アーカイブ** `completed/wintf-clickthrough-alpha-toggle`）
 
 ```
 _Depends(confirmed): pilot-clickthrough-alpha-toggle
 ```
 
+- **✅ 実装完了（2026-07-02・開発者承認）**: GPU 合成（WUC/DComp）を維持したまま別プロセスへのクリック透過を本体 wintf に実装。必須配合＝`WS_EX_LAYERED` 同伴フラグ（`apply_layered_companion`）＋`WS_EX_TRANSPARENT` 動的トグル（`apply_click_through`）＋別スレッドのカーソル監視＋シーングラフ・ヒットテスト連動（`ScreenToClient`→`hit_test_in_window`）。areka を WUC 化し実マスコットで実動確認（窓=`HitTest::none()`・画像=`HitTest::alpha_mask()`）。`docs/click_through.md` 整備・切り分け検証台 `crates/areka/examples/clickthrough_two_rects.rs`。ULW は並走残置（撤去は `wintf-ulw-removal`）。spec: `.kiro/specs/completed/wintf-clickthrough-alpha-toggle/`。
 - ~~pilot の go 判定が出るまで **BLOCKED**~~ → **✅ go 済み（2026-07-01）＝着手可**。pilot 知見はクリーンに掘り直す（コピペ donor 禁止・README/REPORT 検証結果を参照）。**申し送り必須**: ex_style = `WS_EX_NOREDIRECTIONBITMAP|WS_EX_TOPMOST|WS_EX_LAYERED|WS_EX_TRANSPARENT`（LAYERED はフラグのみ・TRANSPARENT のみ動的トグル）／枠なし窓／表示=DComp・当たり判定=HWND スタイルの二層分離／ドラッグ中は透過 OFF 維持。
 - 本体 wintf へ `WS_EX_TRANSPARENT` 動的トグルを導入し、本体αマスク（実描画αバッファ／`AlphaMask::is_hit`）参照でキャラ領域のみクリック可にする。
 - **ULW との共存方針（開発者決定）**: 至上要件は **DComp 描画の維持**。本方式は DComp 経路に透過能力を授けるもの。本仕様が完全に有効と判断されれば **ULW ルートは破棄**。ただし他社実績ある手段とはいえ**十分な検証期間・エンバグ対応**を置き、**当面は ULW と並走**させる。tech.md/product.md/structure.md の「ULW 一択」記述は **2026-07-01 に撤回・新方針へ更新済み**（pilot go を受けた steering 同期）。
