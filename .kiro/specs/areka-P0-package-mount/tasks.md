@@ -47,7 +47,7 @@
   - _Requirements: 1.2, 1.3, 2.3, 3.1, 3.3, 5.1_
   - _Depends: 3.2_
   - _Boundary: package::resolve（resolve_tests）_
-- [ ] 4.2 (P) emo2 実 fixture の統合テストを追加する
+- [x] 4.2 (P) emo2 実 fixture の統合テストを追加する
   - `crates/pilot/examples/shiori-host-32/fixtures/emo2/` を入力に、SHIORI ファイル名＝`pasta.dll`・SHIORI ディレクトリ＝`ghost/master`・shell＝既定 `shell/master`（emo2 は `seriko.defaultsurfacedirectoryname` 不在）に解決されることを検証する
   - 名前情報（`name`／`sakura.name`／`kero.name`）が UTF-8 で正しく取得される（foundation 経由のデコードを含む）ことを検証する
   - emo2 の未使用フィールド（カンマ無し行・`craftman`・`homeurl`・ルート `install.txt`・`emo2-kakukaku/`・`delete.txt`）が結果に一切影響しないことを検証する
