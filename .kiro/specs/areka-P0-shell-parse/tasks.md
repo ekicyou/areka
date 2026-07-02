@@ -88,7 +88,7 @@
   - _Boundary: parse, mod_
 
 - [ ] 6. Validation: ukadoc 準拠自前テスト（主軸）＋emo2 スモーク
-- [ ] 6.1 ukadoc 準拠の自前 in-source 適合テスト（主軸）を作成する
+- [x] 6.1 ukadoc 準拠の自前 in-source 適合テスト（主軸）を作成する
   - surface 定義＋element＋collision＋animation（bind/random/bind+random）＋surface.append（範囲）＋alias（重複キー）＋負 ID＋コメント/空行を含む最小 surfaces.txt 断片を自作し、公開 parse 経由でモデル全構成を end-to-end 検証する
   - 仕様解釈は ukadoc を正典とし（emo2 の偶発的内容を正解根拠にしない）、期待値はリテラル直書きにする
   - 自前断片ベースの end-to-end テストが緑になる
