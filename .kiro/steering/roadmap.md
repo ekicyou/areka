@@ -88,7 +88,7 @@ emo2 が起動して喋る。下記 5 トラックを結線して達成（⓪ �
 - `areka-P0-parser-foundation` — **パーサー共通基盤**: charset デコード（冒頭 `charset` 行→encoding_rs 再デコード・全パーサー共通）＋ KV 読み込み（素朴マップ・surface 以外の全パーサー共通）。✔ charset 付き入力→KV マップ化（旧 `areka-P0-balloon-parse` を 2026-07-02 開発リジェクト→リネーム。知見は同 brief に集約）。**✅ 完了（2026-07-02・spec=`completed/areka-P0-parser-foundation`）**: `charset::decode`（BOM 読飛→冒頭ASCIIプリスキャン→宣言/既定 encoding_rs デコード）＋ `kv::parse_kv`（素朴 BTreeMap・後勝ち・trim）を `areka-parsers` に確立（encoding_rs 0.8 承認済追加・144 テスト緑）。下流 `shell-parse ∥ balloon-parse ∥ package-mount` の foundation 依存を充足
 - `areka-P0-shell-parse` — surfaces.txt/descript→surface モデル（foundation 依存）。✔ emo2 shell parse
 - `areka-P0-balloon-parse` — balloon 3段参照優先度（sXXs/kXXs 起点＞descript＞既定）解決→モデル（foundation 依存・着手時に再切り出し）。✔ emo2-kakukaku parse
-- `areka-P0-package-mount` — `ghost/master/descript.txt`＋dir→mount（foundation 依存・起点は descript.txt。`install.txt`＝NAR 配置マニフェストは起動時不使用ゆえスコープ外）。✔ emo2 layout 解決
+- `areka-P0-package-mount` — `ghost/master/descript.txt`＋dir→mount（foundation 依存・起点は descript.txt。`install.txt`＝NAR 配置マニフェストは起動時不使用ゆえスコープ外）。✔ emo2 layout 解決。**✅ 完了（2026-07-02・spec=`completed/areka-P0-package-mount`）**: descript.txt 起点で SHIORI（dir=`ghost/master`・file は `Option` 推測禁止）＋shell（既定 `master` フォールバック・物理存在確認）の2点マウントを解決する `package` module を `areka-parsers` に確立。所在ベース識別（`type` 分岐なし）・foundation（`charset::decode`/`kv::parse_kv`）委譲・致命失敗3種（起点不在/読取不能/shell 不在）を `MountError` で観測可能化・emo2 実 fixture 統合テスト green（164 テスト・回帰なし・clippy clean）。下流 `ghost-setup`/`host-32`/`shell-parse` へ `MountModel` を供給
 
 **runtime 制御階層（上→下に駆動・両 anim engine は dola 上）**
 - `areka-P0-conductor` — SHIORI イベント循環（OnSecondChange pump・host-32 送受・Value を sakura-engine へ）。✔ OnBoot→Value 受領→再生開始
