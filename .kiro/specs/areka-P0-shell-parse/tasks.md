@@ -38,7 +38,7 @@
   - _Boundary: decode_
   - _Depends: 2.1, 3.1_
 
-- [ ] 4.2 element overlay と collision 矩形の正規化を実装する
+- [x] 4.2 element overlay と collision 矩形の正規化を実装する
   - element overlay 行をレイヤインデックス昇順で、レイヤ/メソッド/画像パス/座標として正規化する
   - element の画像パスを無加工で保持し、画像の読み込み・検証はしない
   - collision 矩形行を始点/終点座標（ukadoc の始点X/始点Y/終点X/終点Y 順）＋不透明領域名として正規化する
