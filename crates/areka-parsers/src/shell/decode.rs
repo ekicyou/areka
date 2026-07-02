@@ -29,7 +29,11 @@
 //!   `decode_animations` を再利用する（同一集約規則ゆえヘルパを共用）。
 //! - `kero.surface.alias` 写像 → タスク 4.5 が `decode_alias_block` を実装し
 //!   `Shell.aliases` を充填する（不透明キー・順序付き ID・重複保持）。
-//! - subset 外・不正の寛容吸収の最終化 → タスク 4.6。
+//! - subset 外・不正の寛容吸収の最終化 → タスク 4.6 が確定。overlay 以外の
+//!   element/pattern メソッド・3 種以外の interval・collisionex・非数/欠損フィールドは
+//!   いずれも本ファイルの既存シーム（`.get()` ＋ `unwrap_or`・method/kind 判定による
+//!   スキップ）で値化せず passthrough 吸収し、既定値へ倒す。新規実装は不要で、4.6 は
+//!   この寛容挙動を確認テストで確定させる（要件 2.3/4.5/5.7/6.3/9.2/10.4）。
 
 use super::lexer::Token;
 use super::model::{
@@ -144,8 +148,8 @@ fn dispatch_block(shell: &mut Shell, header: &[String], body: &[Vec<String>]) {
 ///
 /// animation 行（`animationN.interval` / `animationN.patternM`）は `decode_animations`
 /// が animation ID で集約する（タスク 4.3）。overlay 以外の element メソッド・
-/// collisionex 等の寛容吸収はタスク 4.6 の領分ゆえ、扱わない行は単に読み飛ばす
-/// （パニックしない・要件 9.2）。
+/// collisionex 等は値化せず読み飛ばして passthrough 吸収する（タスク 4.6 が確認・
+/// パニックしない・要件 4.5/9.2）。
 fn decode_surface_body(body: &[Vec<String>]) -> (Vec<Element>, Vec<Collision>, Vec<Animation>) {
     let mut elements: Vec<Element> = Vec::new();
     // collision は surface・append 双方で同一表現ゆえ共有ヘルパで decode する（要件 6.1/6.2/7.3）。
@@ -157,7 +161,8 @@ fn decode_surface_body(body: &[Vec<String>]) -> (Vec<Element>, Vec<Collision>, V
         let key = fields.first().map(String::as_str).unwrap_or("");
 
         // element overlay 行（要件 4.2/4.3/4.4）。field[1] == "overlay" のみ扱う。
-        // overlay 以外のメソッドはタスク 4.6 の寛容吸収に委ね、ここでは読み飛ばす。
+        // overlay 以外のメソッド（base/replace 等）は値化せず読み飛ばし passthrough
+        // 吸収する（タスク 4.6 が確認・要件 4.5/10.4）。
         if let Some(rest) = key.strip_prefix("element") {
             let is_overlay = fields.get(1).map(String::as_str) == Some("overlay");
             if is_overlay {
@@ -175,7 +180,8 @@ fn decode_surface_body(body: &[Vec<String>]) -> (Vec<Element>, Vec<Collision>, V
 
         // collision 行は `decode_collisions` が別走査で処理するためここでは扱わない。
         // animation 行（`animationN.*`）も `decode_animations` が別走査で集約する。
-        // その他 subset 外の行はタスク 4.6 のシームゆえ読み飛ばす（要件 9.2）。
+        // その他 subset 外の行は値化せず読み飛ばして passthrough 吸収する（タスク 4.6
+        // が確認・要件 9.2/10.4）。
     }
 
     // element はレイヤインデックス昇順・安定ソート（同レイヤは出現順維持・要件 4.4）。
@@ -190,7 +196,8 @@ fn decode_surface_body(body: &[Vec<String>]) -> (Vec<Element>, Vec<Collision>, V
 /// append の collision も通常 surface と同一のモデル表現で保持する（同一 `Collision` 型・要件 7.3）。
 ///
 /// - ukadoc 順序 始点X/始点Y/終点X/終点Y ＝ left/top/right/bottom。
-/// - `collisionex`（要件 6.3 のタスク 4.6 寛容吸収）は扱わない。純 `collisionN`（N が数字のみ）だけ。
+/// - `collisionex`（円/楕円/多角形・要件 6.3）は値化せず passthrough 吸収する（タスク 4.6
+///   が確認）。純 `collisionN`（N が数字のみ）だけを materialize する。
 /// - collision は出現順で保持する（要件 6.1）。欠落・非数値は既定 0（要件 3.3・パニックしない）。
 fn decode_collisions(body: &[Vec<String>]) -> Vec<Collision> {
     let mut collisions: Vec<Collision> = Vec::new();
@@ -253,14 +260,16 @@ fn field_u32(fields: &[String], idx: usize) -> u32 {
 ///   pattern が interval 行より先に現れても同一 ID へ束ねる（順序寛容）。
 /// - **既定 interval**: ある ID に pattern はあるが認識可能な interval 行が無い場合、
 ///   pattern を失わせずパニックも起こさぬよう既定 `Interval::Bind` で `Animation` を積む。
-///   3 種以外の interval キーワード（`sometimes`/`periodic` 等・要件 5.7）は、本タスクでは
-///   「認識可能な interval 無し」と同様に扱い既定 `Bind` に倒す。要件 5.7 の正式な寛容吸収は
-///   タスク 4.6 の領分ゆえここでは実装しない。
+///   3 種以外の interval キーワード（`sometimes`/`periodic`/`always` 等・要件 5.7）は
+///   値化せず passthrough 吸収し、「認識可能な interval 無し」と同様に扱う。pattern を
+///   伴う ID は既定 `Bind` に倒れ、interval のみで pattern が無ければ animation を積まない
+///   （phantom を生まない・タスク 4.6 が確認・要件 5.7/10.4）。
 /// - **pattern の疎 index ＋負センチネル**（要件 5.4/5.5）: `patternM,overlay,ID,WAIT,X,Y`
 ///   の M（`pattern` 以降の数字・`unwrap_or(0)`）を**そのまま**保持し、欠番を合成しない
 ///   （疎許容・要件 5.4）。`surface_id` は field[2] を **i64** で保持し、負値（`-1`/`-2`）を
-///   センチネルとして失わない（要件 5.5・意味付けは下流）。overlay 以外の method は
-///   タスク 4.6 の寛容吸収シームゆえ本タスクでは読み飛ばす。pattern は出現順で保持する。
+///   センチネルとして失わない（要件 5.5・意味付けは下流）。overlay 以外の method
+///   （`replace` 等）は値化せず読み飛ばして passthrough 吸収する（タスク 4.6 が確認・
+///   要件 5.7）。pattern は出現順で保持する。
 ///
 /// 失敗しない（`Vec` を返す・パニックしない・空/崩れ入力に寛容・要件 2.x/9.2）。
 fn decode_animations(body: &[Vec<String>]) -> Vec<Animation> {
@@ -286,8 +295,8 @@ fn decode_animations(body: &[Vec<String>]) -> Vec<Animation> {
         let id = id_text.parse::<u32>().unwrap_or(0);
 
         if suffix == "interval" {
-            // interval 3 種のみ正規化する。それ以外（要件 5.7）は束ねずスキップし、
-            // 該当 ID は既定 Bind に倒れる（このタスクのシーム決定）。
+            // interval 3 種のみ正規化する。それ以外（要件 5.7）は passthrough 吸収で
+            // 束ねずスキップし、pattern を持つ ID は既定 Bind に倒れる（タスク 4.6 が確認）。
             if let Some(interval) = normalize_interval(fields) {
                 let anim = animation_slot(&mut animations, id);
                 anim.interval = interval;
@@ -296,7 +305,8 @@ fn decode_animations(body: &[Vec<String>]) -> Vec<Animation> {
         }
 
         if let Some(index_text) = suffix.strip_prefix("pattern") {
-            // overlay メソッドのみ充填する（要件 5.4/5.5）。非 overlay はタスク 4.6 のシーム。
+            // overlay メソッドのみ充填する（要件 5.4/5.5）。非 overlay（replace 等）は
+            // 値化せず passthrough 吸収する（タスク 4.6 が確認・要件 5.7）。
             if fields.get(1).map(String::as_str) == Some("overlay") {
                 let pattern = Pattern {
                     // pattern index は疎許容・そのまま保持（欠番を合成しない・要件 5.4）。
@@ -338,8 +348,9 @@ fn animation_slot(animations: &mut Vec<Animation>, id: u32) -> &mut Animation {
 
 /// `animationN.interval,KIND[,K]` 行を `Interval` へ正規化する（要件 5.1/5.2/5.3）。
 ///
-/// KIND（field[1]）が 3 種のいずれでもない場合は `None` を返す（呼び出し側で既定 Bind へ倒す・
-/// 要件 5.7 の正式吸収はタスク 4.6）。K（field[2]）は u32・欠落既定 0（要件 3.3）。
+/// KIND（field[1]）が 3 種のいずれでもない場合は `None` を返す（3 種以外は passthrough
+/// 吸収＝呼び出し側で pattern を持つ ID を既定 Bind へ倒す・要件 5.7・タスク 4.6 が確認）。
+/// K（field[2]）は u32・欠落既定 0（要件 3.3）。
 fn normalize_interval(fields: &[String]) -> Option<Interval> {
     match fields.get(1).map(String::as_str) {
         Some("bind") => Some(Interval::Bind),

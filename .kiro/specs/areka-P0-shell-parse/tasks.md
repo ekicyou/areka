@@ -71,7 +71,7 @@
   - _Requirements: 8.1, 8.2, 8.3, 8.4_
   - _Boundary: decode_
 
-- [ ] 4.6 subset 外・不正入力の寛容吸収を実装する
+- [x] 4.6 subset 外・不正入力の寛容吸収を実装する
   - overlay 以外の element/pattern メソッド、3 種以外の interval、collisionex を値化せず passthrough で吸収する
   - 非数トークン・欠損フィールドを既定値へ倒し、パニックせず後続の認識可能ブロックを継続する
   - subset 外を含む断片が隣接する認識可能ブロックのパースを壊さない単体テストが緑になる
