@@ -105,6 +105,8 @@ M1 `areka-P0-emo2-boot` の「① SHIORI 通信層エンジン host-32」トラ�
 4. The host-32 ホスト層の出口 API shall 呼び手のスレッドをブロックして同期的に応答を返してよい（専用スレッド前提・親窓 pump スレッドの再入規律と干渉しない）。
 5. The 出口 API の引数と戻り値 shall スレッド跨ぎで受け渡し可能な所有データ（`Send`）とし、codec/wire/HGLOBAL の内部型を呼び手へ露出しない。
 6. The 本仕様 shall `IShiori::Get` の遅延応答（`SHIORI_S_PENDING`＋token＋`Complete`）を実装せず、pasta の SHIORI/3.0 同期応答に対して同期（即時応答）で完結させる（遅延経路は型シームのみ・塞がない）。
+7. The host-32 ホスト層 shall IShiori レベルで別関数として現れる `Get`（応答要求）と `Notify`（通知）を、SHIORI/3.0 wire レベルでは単一の request 経路（同一 codec の request 組立＋同一 `request()` トランスポート）へ**合流**させ、両者の相違を request line（`GET`／`NOTIFY SHIORI/3.0`）と応答 `Value` を呼び手へ返すか否かのみに限定する。
+8. When NOTIFY 経路が駆動される, the host-32 ホスト層 shall 片道 IPC ではなく同期 `request()` 往復で送出し（DLL の `request()` は NOTIFY でも常に response を返すため）、返却 response（例: 204 No Content）を呼び手へ surface せず破棄する。この往復で生じる応答 HGLOBAL の解放は GET と同一の caller-free 規約（R3.4）に従い、片道 IPC 化による解放漏れを起こさない。
 
 ### Requirement 5: request 経路のエラー語彙
 
@@ -131,6 +133,7 @@ M1 `areka-P0-emo2-boot` の「① SHIORI 通信層エンジン host-32」トラ�
 6. If 実 `pasta.dll` を指す環境変数が設定されているのに指定 DLL が見つからない, then the テスト shall 明示的に失敗する（silent skip を認めない）。
 7. The E2E 検証 shall 本物 `pasta.dll` を CI 必須ゲートとして要求せず、決定的検証は fixture で成立させる。
 8. The fixture crate shall `crates/pilot` へ依存しない（葉ノード隔離の維持）。
+9. The fixture shall テスト用 GET request と テスト用 NOTIFY request の双方を受理し、それぞれに対応する固定 SHIORI/3.0 response（GET → 200 OK＋`Value`／NOTIFY → 204 No Content）を返すことで、決定的 E2E が GET・NOTIFY 両 request line コードパスと host32 の合流経路（R4.7／R4.8）を踏むことを保証する。
 
 ### Requirement 7: 凍結境界・隔離規律・32bit ビルド規律の遵守（横断）
 
