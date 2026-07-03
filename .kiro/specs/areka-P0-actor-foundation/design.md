@@ -471,6 +471,7 @@ pub struct UiSendError<M>(pub M); // 未達メッセージを返す（mpsc::Send
 - Integration: `parent_window.rs` の bounded pump（heartbeat＋deadline quit）と「単一テストへの集約」規律を写経する。
 - Validation: toy 2 本が要件 R8 の観測そのもの。
 - Risks: `PostThreadMessageW` は対象スレッドのメッセージキュー生成前に失敗し得る → heartbeat は失敗を無視して送出し続ける（キュー生成後に到達・`pump_until_hello_or` と同様）。万一 thread message（hwnd なし）が executor の `MessageLoop` フィルタへ届かない場合のフォールバックは `parent_window.rs` 同様の message-only 窓＋`PostMessageW`（実装時に一度だけ確認・公開 API 不変の局所差し替え）。
+- Risks（三点組合せ未実証・validation Issue 1）: `spawn_local`＋`MessageLoop::run`＋`PostThreadMessageW` の**同時使用は in-repo 前例がない**（host-32 は async タスクなしで pump を回し・pilot は `block_on` を使用）。特に「`MessageLoop::run` 単独で spawn_local タスクが poll されるか」は実装時最初の確認事項。よって **tasks 生成時に「toy(b) 最小 spike（echo 1 本の組合せ確認）」を実装系タスクの先頭に配置する**。spike 不成立時は実証済み組合せへ公開 API 不変で局所差し替え: (a) `block_on`（完了 future 待ち・pilot 前例）または (b) message-only 窓＋`PostMessageW`（`parent_window.rs` 前例）。
 
 ## Data Models
 
