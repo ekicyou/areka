@@ -28,6 +28,11 @@
 - **クリックスルーのα源（✅ 2026-07-03 検証済み・確定）**: 完了した clickthrough 実装は **per-widget αマスク（`AlphaMask::is_hit`）のみ**を α源に使い、ULW compositor の D2D1 staging αバッファは**一切参照しない**（`ecs/clickthrough/controller.rs`・`ecs/layout/hit_test/mod.rs` 実コード確認）。→ `compositor.rs` 撤去はクリックスルーを壊さない。旧「design で確認」条件は充足済み。
 - **⚠️ `WS_EX_LAYERED` 同伴フラグの帰属（新規・重要）**: pilot REPORT の必須配合どおり、`WS_EX_TRANSPARENT` 動的トグルには **`WS_EX_LAYERED` を同伴フラグとして立てる必要がある**（ULW/SLWA 非呼出・描画には使わない）。現状これは clickthrough の `apply_layered_companion()`（`ecs/clickthrough/controller.rs:171-180`）が実行時に適用しており、`compute_ex_style()` は DComp モードで LAYERED を**付けない**（`window_factory.rs:64-73`）。**ULW 撤去後、DComp/WUC 窓への `WS_EX_LAYERED` の唯一の源は clickthrough 機構になる**——撤去がこの経路を巻き込まないこと・clickthrough 登録窓が LAYERED を受け取ることを受け入れ基準に含める。
 
+## クロスユニット契約（後続を詰ませない事前考慮・2026-07-03）
+
+- **`CompositionMode` collapse は破壊的変更**: areka 側の呼び出し（`crates/areka/src/main.rs` の `CompositionMode::DComp` 指定等）と、着手予定の `areka-P0-emo-present`／`areka-P0-window-placement` が同じ API に触れる。**順序調整が理想**（本ユニット先行→emo/ghost 系が新 API で書く）。並行着手する場合は「collapse 後の追随はどちらが行うか」を着手時に確定（rebase 責務の明確化）。
+- 撤去で `WS_EX_LAYERED` の帰属が clickthrough 機構単独になる点は Current State 記載のとおり受け入れ基準に含める（emo-present のクリック透過観測が依存）。
+
 ## Desired Outcome
 
 ULW 一式が撤去され、表示バックエンドが **GPU 合成単独**（DComp、`wintf-dcomp-to-wuc-migration` 後は WUC）へ collapse。`CompositionMode` は単一化（単一 variant なら enum 撤去、または最小化）。**残す GPU 合成パスの描画結果・挙動は不変**。ビルド通過・起動して同一描画結果。当たり判定・ウィンドウ管理・スレッド構成は不変。

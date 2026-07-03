@@ -28,6 +28,13 @@
 5. **バルーン枠**: `balloons0.png` 等を balloon dir（**fixture 直指定**・ベースウェアのバルーン選択は ghost 層の後続領分）から同一機構で合成・表示。
 6. **更新スレッド規律**: WUC surface 更新・visual 操作は **UI スレッド固定**（DispatcherQueue 親和性）。合成（CPU）を worker で行う場合はバッファを channel/queue で UI スレッドへ渡す（並行モデル正本: render は UI スレッド・他 actor は channel で送る）。
 
+## クロスユニット契約（後続を詰ませない事前考慮・2026-07-03）
+
+- **text-layer スロットの予約（詰み防止）**: 窓の visual 構成に**文字層の口を最初から予約**する（surface visual の上の独立レイヤ）。M1 の emo-text-layer は独立レイヤ描画（typewriter の毎グリフ更新が surface 再合成を強要しない）・M2 のポップアート装飾では合成パス内レイヤ化の再設計余地——この**二者を吸収できる seam**（text 層の差し込み点）を design で確認。予約しないと emo-text-layer 着手時に visual 構成の作り直しになる。
+- **bind 有効集合の初期解決**: emo2 の surface1000 表示には bindgroup default（`bindgroupN.default`・MAYUNA descript）の解決が必要。指令 API は surface id に加え **bind 集合を運べる形**にする（emo-compose の `compose(surface_id, active_binds)` 契約の呼び手側・将来の seriko→emo channel 契約の片側）。M-boot は descript default から静的解決。
+- **window-placement との統合 seam**: 本ユニットの example は仮設窓だが、表示装着 API は「**Window entity（handle）を受け取って surface を載せる**」形に切る——window-placement が生成する窓へ M-boot 統合でそのまま装着できる契約（どちらが先に完了しても結線可能）。
+- **ulw-removal との API 変動調整**: `wintf-ulw-removal` は `CompositionMode` collapse＝areka 側呼び出し（`CompositionMode::DComp` 指定箇所）を壊す破壊的変更。**順序調整**（ulw-removal 先行が理想）または本ユニット側の追随を織り込む（並行時は rebase 責務を明確に）。
+
 ## 設計指示・注意点
 
 - **AlphaMask と表示の原子性**: 表示バッファと AlphaMask は**同じ合成結果**から作り、切替は対で入れ替える（片方だけ古い状態を作らない）。

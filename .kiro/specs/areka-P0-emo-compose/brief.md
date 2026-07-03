@@ -27,6 +27,14 @@ Shell モデル＋アトラスを入力に、**指定 surface id の合成済み
 4. **合成メソッド**: **写像表は全量作成**（D2D 標準ブレンドで可＝overlay=SourceOver・asis=α無視コピー・replace=矩形クリア＋コピー／生ピクセル要＝reduce=α乗算・interpolate・overlayfast 条件付き・blend-* 群）——**実装は emo2 使用分のみ**・他は型シーム。
 5. **バックエンド選定（design 判断）**: CPU ピクセル演算 vs D2D オフスクリーン。判断材料: ①ピクセル忠実性（生ピクセル演算の要否——reduce 等は CPU が素直）②毎フレーム再合成コスト（M-life seriko-loop 前提・O(elements)・転写ベース）③スレッド制約（D2D device context 単一スレッド・WUC upload は UI スレッド）④単体テスト容易性（headless・golden 安定性）。**合成コア API はバックエンド非依存に切る**（差替え可能）。CPU 開始→必要時 D2D 化が有力だが design で確定。
 
+## クロスユニット契約（後続を詰ませない事前考慮・2026-07-03 fixture 実測反映）
+
+- **⚠️ 合成入力＝surface id ＋ bind 有効集合（最重要・詰み防止）**: emo2 の side0 本体 **surface1000 は静的 element ゼロ・全パーツが MAYUNA bind**（約30 本・`animationNNNN.interval,bind`＋`pattern0,overlay,id,0,0,0`）。element-only の合成設計だと**むらさきが空白＝M-boot 統合で詰む**。合成 API は最初から `compose(surface_id, active_binds: &BindSet)` 形とし、**有効 bind の pattern0 overlay を animation ID 昇順（画家のアルゴリズム・surfaces.txt/適合スコープ文書明記）で合成**する。M-boot では呼び手（emo-present/統合層）が bindgroup default 由来の**静的集合**を渡す——bind 状態の動的管理・着せ替え UI・blink 発火は seriko（M-mayuna/M-life）の領分。
+- **正規化ツリーは公開形・collisions/animations を捨てない**: ツリー構築（疎 id・append・alias 展開）の成果物は elements だけでなく **collisions・animations を保持した完全な正規化 Surface 定義**として公開する。下流の **seriko-engine**（アニメ定義の消費）と **collision-geometry**（当たり範囲・append で増え得る）が**同じ正規化結果**を消費する＝各自で再展開させない（不一致バグの根絶）。
+- **出力契約 = `ComposedSurface`**: premultiplied BGRA・size（＝base surface 原寸）・stride を明示した型として emo-present と共有（present 側は無変換で WUC upload と AlphaMask 生成に使える形）。
+- **AtlasEntry は emo-atlas の正本型を消費**（再定義しない）。
+- **emo2 fixture 実測（2026-07-03）**: 合成メソッドは **`overlay` のみ**使用（写像表は全量・実装は overlay＋asis 級の自明分から）。定義済み surface 64 本・collision は surface1000 上に定義（Head/Bust）。
+
 ## 設計指示・注意点
 
 - **premultiplied 一貫性**: 合成演算は premultiplied 前提で組む（SourceOver: `dst = src + dst*(1-src_a)`）。straight α の式を混ぜない。

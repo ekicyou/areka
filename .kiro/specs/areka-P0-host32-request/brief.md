@@ -29,6 +29,12 @@ x64 が SHIORI/3.0 request バイト列を組み立て → WM_COPYDATA wire 越�
 4. **testdll fixture 拡張**: `request` スタブ（現在 null 返却）を「受領 request を検証し固定 SHIORI/3.0 response を返す」fixture へ拡張（決定的観測・所有権契約の実地検証を兼ねる）。
 5. **IShiori への装着**: codec＋transport を `IShiori::Get` 実装として host32-host に載せるか（SHIORI4⇄SHIORI3 変換＝IShiori 下の x64 過去互換アダプタ・記憶 areka-shiori-layer-naming）は **design で判断**。HSTRING⇄バイト列の変換点はプロセスを跨がない（HGLOBAL=32bit ローカル/HSTRING=x64 ローカル）。
 
+## クロスユニット契約（後続を詰ませない事前考慮・2026-07-03）
+
+- **kanade（下流の呼び手）向け出口契約**: 本ユニットの host 側 API は「**イベント（ID＋References）を渡す→Value（あれば）が返る**」の形に切る（GET は応答待ち・NOTIFY は投げきり）。kanade が SHIORI イベント循環を組む際にこの API をそのまま消費できる形＝request 送出の内部（codec/wire/HGLOBAL）を kanade に漏らさない。
+- **IShiori::Get の同期/遅延 seam**: `shiori-abi` は `SHIORI_S_PENDING`＋token＋`IShioriHost::Complete` の遅延応答を定義済みだが、**pasta.dll（SHIORI/3.0 wire）は同期応答**——本ユニットの実装は同期（S_OK 即時）で足る。**PENDING 経路は型シームのみ**（実装しない・塞がない）。host32-lifecycle（常駐 msg loop）で非同期化の必要が出た場合もこの seam が受け皿。
+- **タイムアウト・エラーの語彙**: wire タイムアウト（DEFAULT_LOAD_TIMEOUT 5s 前例）・SHIORI エラー応答（400/500・ErrorLevel）・helper 死活を**呼び手が区別できるエラー型**で返す（kanade のリトライ/縮退判断と host32-lifecycle の crash 監視が同じ語彙に乗る）。
+
 ## ukadoc 正典要点（design の前提事実）
 
 - request line: `GET SHIORI/3.0` ＝応答要求／`NOTIFY SHIORI/3.0` ＝通知のみ。ヘッダ `Charset`・`Sender`・`ID`（イベント名）・`Reference0..N`、行末 CRLF、空行で終端。

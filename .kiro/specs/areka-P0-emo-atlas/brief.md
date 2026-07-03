@@ -27,6 +27,13 @@ emo2 の element 画像群（shell＋balloon）が、**透過正規化済み pre
 4. **packing**: `rectangle-pack` で静的バッチ packing（**新規依存＝開発者承認必要**・encoding_rs 前例に倣い brief で申請→design で確定）。頁サイズ 2048（必要時 4096）・複数頁・**padding 1〜2px は矩形拡張の自前ラップ**（bleed 防止）・同一 path の重複排除（焼付前に path→entry を索引）。
 5. **アトラス表**: `AtlasKey(path)` → `AtlasEntry{page, uv_rect, trim_offset, original_size}`。頁本体は premultiplied BGRA バッファ（CPU 保持が既定・GPU 化は emo-compose のバックエンド選定に従う）。
 
+## クロスユニット契約（後続を詰ませない事前考慮・2026-07-03 fixture 実測反映）
+
+- **マニフェスト導出は本ユニットが所有**: 「Shell/balloon モデル→焼付対象パス一覧」の列挙器を持つ。対象＝**全 surface の element パス**（emo2 は base 画像も `element0,overlay,surface0.png,0,0` と element 自己参照する流儀＝「base は別枠」と設計しない）＋**bind アニメーション pattern が参照する surface の element 画像**（間接参照・surface1000 系）＋balloon 画像。サブディレクトリパス（`CityPop/`・`purple/` 配下）は ElementPath のまま素通し。surfaces.txt 未定義の file-only surface（`surfaceN.png` 直参照）は ukadoc 上有効＝**シームだけ設ける**（emo2 は全 64 surface 定義済みで不要）。
+- **AtlasEntry 契約は emo-compose と共有の正本**: `AtlasKey(path)` → `{page, uv_rect, trim_offset, original_size}`＋頁バッファ（premultiplied BGRA・stride 明示）。この形が emo-compose の転写入力＝**design 冒頭で両ユニット共通の型として確定**（compose 側で再定義しない）。
+- **正規化パラメータは入力で受ける**: `use_self_alpha`／`paint_transparent_region_black` は shell descript（parsers 済）由来の設定として注入（アトラスが descript を読みに行かない＝層分離）。
+- **emo2 fixture 実測（2026-07-03）**: `seriko.use_self_alpha,1`・**`.pna` ファイル無し**→ **主実装腕＝PNG 自身の α チャンネル**（キーカラー腕・pna 腕は型シームのみ）。charset,UTF-8。
+
 ## 設計指示・注意点
 
 - **premultiplied 一貫性**: 正規化→焼付→（下流の）転写の全段 premultiplied。straight α 混入＝にじみ/暗縁の典型バグ源。

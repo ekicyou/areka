@@ -116,9 +116,10 @@ emo2 が起動して喋る。下記 5 トラックを結線して達成（⓪ �
 
 > **合成方式（2026-07-03 開発者決定・記憶 areka-emo-own-compositor-atlas）**: 合成は **emo 自前コンポーネント（wintf Visual 合成非依存）**＝element 画像をアトラスへ正規化貼付→base＋element を layer 順に **1枚物ビットマップへ自前合成**→wintf へは完成品1枚のみ供給。論拠: DComp/WUC の visual ブレンドは実質 SourceOver 系のみで SERIKO 合成メソッド群をピクセル正確に写像不能。
 > **粒度分割（2026-07-03・旧 `areka-P0-emo-surface` を直列3ユニットへ分割）**: 旧ユニットはアトラス基盤・合成コア・表示結線を一身に抱え粗すぎ（単一 pass/fail 不成立）。以下の直列チェーンで完走する（各ユニットが独立観測を持つ・トラック内逐次）。
+> **クロスユニット契約（自律開発継続性・2026-07-03 fixture 実測で確定）**: 直列チェーンの「手前が考えないと後続が詰む」要素は各 brief の**「クロスユニット契約」節が正本**——①`AtlasEntry`/頁バッファ型＋マニフェスト導出＝emo-atlas 所有 ②**合成入力＝surface id＋bind 有効集合**（surface1000 全 bind 対策）＋正規化ツリー公開形（collisions/animations 保持）＋`ComposedSurface` 出力型＝emo-compose ③text-layer スロット予約＋bind 初期解決＋Window entity 受取口＋ulw-removal API 変動調整＝emo-present。設計/実装セッションは着手前に該当 brief の同節を読み、**契約型は上流 brief の正本を消費**（再定義しない）。
 
 - `areka-P0-emo-atlas` — **アトラス基盤**（直列1）: 画像デコード→透過正規化（キーカラー/`.pna`/`use_self_alpha`→premultiplied BGRA・挿入時一度だけ）→**αトリミング**（α=0 領域を除外した有効矩形＋オフセット記録・例 100×100 中有効 10×10 なら 10×10＋offset で焼付）→packing（クレート利用・padding 1〜2px・複数頁・重複排除）→UV/オフセット表。✔ emo2 element 画像群が焼付され、トリム矩形・オフセット・正規化画素が単体テストで一致（表示不要・純粋層）
-- `areka-P0-emo-compose` — **合成コア**（直列2・atlas 依存）: Shell モデル→実サーフェスツリー構築（疎 id・appends・aliases・範囲の展開＝parser 転記層の下流）→合成プラン（layer 順・変換行列・合成メソッド）→**アトラス転写で1枚物ビットマップ合成**。入れ子 surface 参照の再帰＋循環検出。合成メソッドは emo2 使用分のみ（写像表は全量）。✔ emo2 surface0 の合成結果がオフスクリーン pixel テスト（golden/要点サンプリング）で一致（表示不要）
+- `areka-P0-emo-compose` — **合成コア**（直列2・atlas 依存）: Shell モデル→実サーフェスツリー構築（疎 id・appends・aliases・範囲の展開＝parser 転記層の下流。**成果物は collisions/animations を保持した公開正規化形**＝seriko/collision-geometry が同じ結果を消費）→合成プラン（layer 順・変換行列・合成メソッド）→**アトラス転写で1枚物ビットマップ合成**。**合成入力＝surface id＋bind 有効集合**（emo2 side0 本体 surface1000 は静的 element ゼロ・全パーツ bind ゆえ、有効 bind の pattern0 を animation ID 昇順で静的合成——これが無いと M-boot でむらさきが空白）。入れ子 surface 参照の再帰＋循環検出。合成メソッドは emo2 使用分のみ＝実測 overlay（写像表は全量）。✔ emo2 surface0（＋bind 集合を与えた surface1000）の合成結果がオフスクリーン pixel テストで一致（表示不要）
 - `areka-P0-emo-present` — **表示結線**（直列3・compose 依存）: 合成済み1枚→wintf 表示口（窓あたり visual 最小限）＋**AlphaMask を合成結果から生成**（clickthrough 直結）＋surface 指令 API（id 切替）＋合成キャッシュ（無効化規則）。バルーン枠（`balloons*.png`・fixture 直指定）も同一機構で表示。✔ 専用 example で surface0＋バルーン枠が表示・キャラ領域のみクリック可
 - `areka-P0-emo-text-layer` — バルーン文字を **engine 上に被せる層**（token→glyph→surface 領域・emo-present 依存）。**縦書き/横書き両対応**（wintf 縦書き資産を lift・emo2 使用方向を design で確認）・**描画先＝行列変換領域を内部表現**（回転領域書込みの構造・M1 実挙動は恒等/平行移動のみ・文字装飾は型シームのみ→M2）。✔ script がバルーンに描画＋scroll
 
@@ -127,7 +128,7 @@ emo2 が起動して喋る。下記 5 トラックを結線して達成（⓪ �
 > 増分はエンジンへ帰属させる。**別エンジンに属する増分は並列着手可**（spanning する旧 unit はエンジン単位に分割済）。マイルストーン（M-dual 等）はエンジン横断の**統合点**であって作業単位ではない。
 > **トラック全7**（括弧内が固有名・「エンジン固有名」節が正本）: ⓪ゴーストエンジン(owner・`ghost`)・①SHIORI 通信層(host-32・`shiori`)・②parser/loader(`parsers`)・③conductor(`kanade`)・④sakura-engine(`sakura`)・⑤shell-anim-engine(`seriko`)・⑥render-engine(`emo`)。⓪は最上位 owner（lifecycle/窓配置/位置永続化）。**①SHIORI 通信層・②parser/loader・⓪の大半は M-boot で完了**。増分を持つのは ③〜⑥ ＋ ⓪の位置永続化。
 
-- **⑤ seriko（shell-anim-engine）**: `areka-P0-dual-surface`（side0/1＋surface alias）／ `areka-P0-mayuna-compose`（MAYUNA bind 多層）／ `areka-P0-seriko-loop`（SERIKO ループ＝blink random/bind+random）
+- **⑤ seriko（shell-anim-engine）**: `areka-P0-dual-surface`（side0/1＋surface alias）／ `areka-P0-mayuna-compose`（**bind 状態の動的管理**＝bindgroup 切替・着せ替えメニュー連動。**bind の静的合成適用は emo-compose が M-boot で所有済み**＝境界 2026-07-03 明確化）／ `areka-P0-seriko-loop`（SERIKO ループ＝blink random/bind+random）
 - **④ sakura（sakura-engine）**: `areka-P0-sakura-dialogue-tags`（`\q`/`\_l`/`\![move]`）
 - **③ kanade（conductor）**: `areka-P0-idle-talk`（OnSecondChange 自発会話）／ `areka-P0-input-events`（OnMouseMove/OnMouseDoubleClick/OnChoiceSelectEx 配信）
 - **⑥ emo（render-engine）**: `areka-P0-collision-geometry`（collision→region/actor 写像）／ `areka-P0-choice-render`（選択肢表示）／ `areka-P0-dual-window`（kero 2nd 窓）

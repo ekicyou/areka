@@ -29,6 +29,12 @@
 4. **z-order**: 既定は非 topmost（SSP de-facto）。`seriko.zorder`/`sticky-window` はシームのみ（emo2 未使用なら実装しない）。
 5. **kero 窓の扱い**: 生成機構は scope 数ぶん一般化して持つ（構造は最初から）。**二人立ちの surface 連動・本格結線は M-dual（`dual-surface`＋`dual-window`）**＝本ユニットは「窓が生えて置ける・動かせる」まで。
 
+## クロスユニット契約（後続を詰ませない事前考慮・2026-07-03 fixture 実測反映）
+
+- **emo-present への窓引き渡し契約**: 生成した **Window entity（handle）を emo-present が受け取り surface を装着**する——この受け渡し口を機構の公開 API として切る（どちらが先に完了しても M-boot 統合で結線可能・emo-present brief と対の契約）。
+- **emo2 fixture 実測（2026-07-03・shell descript）**: `seriko.alignmenttodesktop,bottom`（既定と一致）・**`sakura.defaultx,0`／`kero.defaultx,0` を使用**（`defaulty` は無し）→ **`defaultx`/`defaulty` キーの解決を design 対象に含める**（alignmenttodesktop カスケードに加えて。x=0 の意味論＝work area 基準の解釈は SSP de-facto を design で確認）。`sakura.balloon.alignment,left`／`kero.balloon.alignment,right` も存在（バルーン配置系の後続ユニット向け・本ユニットは記録のみ）。
+- **ulw-removal との API 変動調整**: `CompositionMode` collapse は本ユニットの窓生成コードにも波及（emo-present brief と同旨・順序調整 or 追随）。
+
 ## ukadoc 正典要点（design の前提事実）
 
 - **`seriko.alignmenttodesktop`**: 既定位置指定。既定値 `bottom`（work area 右下基準・デスクトップ下端整列）。ghost descript／shell descript の両方に書け、**shell 側が ghost 側に優先・スコープ別が全体に優先**。
