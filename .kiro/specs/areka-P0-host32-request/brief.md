@@ -34,6 +34,7 @@ x64 が SHIORI/3.0 request バイト列を組み立て → WM_COPYDATA wire 越�
 - **kanade（下流の呼び手）向け出口契約**: 本ユニットの host 側 API は「**イベント（ID＋References）を渡す→Value（あれば）が返る**」の形に切る（GET は応答待ち・NOTIFY は投げきり）。kanade が SHIORI イベント循環を組む際にこの API をそのまま消費できる形＝request 送出の内部（codec/wire/HGLOBAL）を kanade に漏らさない。
 - **IShiori::Get の同期/遅延 seam**: `shiori-abi` は `SHIORI_S_PENDING`＋token＋`IShioriHost::Complete` の遅延応答を定義済みだが、**pasta.dll（SHIORI/3.0 wire）は同期応答**——本ユニットの実装は同期（S_OK 即時）で足る。**PENDING 経路は型シームのみ**（実装しない・塞がない）。host32-lifecycle（常駐 msg loop）で非同期化の必要が出た場合もこの seam が受け皿。
 - **タイムアウト・エラーの語彙**: wire タイムアウト（DEFAULT_LOAD_TIMEOUT 5s 前例）・SHIORI エラー応答（400/500・ErrorLevel）・helper 死活を**呼び手が区別できるエラー型**で返す（kanade のリトライ/縮退判断と host32-lifecycle の crash 監視が同じ語彙に乗る）。
+- **通信モデル（actor-foundation との関係）**: エンジン間通信は全体でアクターモデル（`areka-P0-actor-foundation`＝機構/kanade＝経路/ghost＝結線の三分・roadmap 並行モデル節）。**本ユニットは actor-foundation 非依存**（先行可）——ただし出口 API は将来 **shiori アクター（親窓 pump スレッド専有）の inbox 処理から呼ばれる**前提で、①ブロッキング呼出可（専用スレッド）②引数/戻り値は `Send` な所有データ③親窓スレッドの pump 統合（winmsg-executor 型）と干渉しない、を満たす形に切る。kanade→shiori の channel 化は kanade 結線時（本ユニットの API を包むだけで済む形が受け入れ基準）。
 
 ## ukadoc 正典要点（design の前提事実）
 

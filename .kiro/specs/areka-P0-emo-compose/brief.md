@@ -34,6 +34,7 @@ Shell モデル＋アトラスを入力に、**指定 surface id の合成済み
 - **出力契約 = `ComposedSurface`**: premultiplied BGRA・size（＝base surface 原寸）・stride を明示した型として emo-present と共有（present 側は無変換で WUC upload と AlphaMask 生成に使える形）。
 - **AtlasEntry は emo-atlas の正本型を消費**（再定義しない）。
 - **emo2 fixture 実測（2026-07-03）**: 合成メソッドは **`overlay` のみ**使用（写像表は全量・実装は overlay＋asis 級の自明分から）。定義済み surface 64 本・collision は surface1000 上に定義（Head/Bust）。
+- **通信モデル**: 本ユニットは**通信非依存の純粋層**（actor-foundation 不要・スレッドも channel も持たない純粋関数群）。`compose()` の入出力（`BindSet`・`ComposedSurface`）は **`Send` な所有データ**にする——将来 seriko アクター（worker）→emo アクター（UI）間のメッセージ/共有バッファに乗るため（借用を跨がせない）。
 
 ## 設計指示・注意点
 

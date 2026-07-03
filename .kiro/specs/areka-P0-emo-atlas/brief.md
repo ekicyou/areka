@@ -33,6 +33,7 @@ emo2 の element 画像群（shell＋balloon）が、**透過正規化済み pre
 - **AtlasEntry 契約は emo-compose と共有の正本**: `AtlasKey(path)` → `{page, uv_rect, trim_offset, original_size}`＋頁バッファ（premultiplied BGRA・stride 明示）。この形が emo-compose の転写入力＝**design 冒頭で両ユニット共通の型として確定**（compose 側で再定義しない）。
 - **正規化パラメータは入力で受ける**: `use_self_alpha`／`paint_transparent_region_black` は shell descript（parsers 済）由来の設定として注入（アトラスが descript を読みに行かない＝層分離）。
 - **emo2 fixture 実測（2026-07-03）**: `seriko.use_self_alpha,1`・**`.pna` ファイル無し**→ **主実装腕＝PNG 自身の α チャンネル**（キーカラー腕・pna 腕は型シームのみ）。charset,UTF-8。
+- **通信モデル**: 本ユニットは**通信非依存の純粋層**（actor-foundation 不要・channel を持たない）。ただし成果物（アトラス表・頁バッファ）は将来 emo アクターのスレッドから参照される＝**`Send`＋共有時は `Arc` で渡せる所有形**にしておく（roadmap 並行モデル節の「大型データは channel に流さず共有バッファ手渡し」規約に整合）。
 
 ## 設計指示・注意点
 

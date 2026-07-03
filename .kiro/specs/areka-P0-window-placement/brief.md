@@ -34,6 +34,7 @@
 - **emo-present への窓引き渡し契約**: 生成した **Window entity（handle）を emo-present が受け取り surface を装着**する——この受け渡し口を機構の公開 API として切る（どちらが先に完了しても M-boot 統合で結線可能・emo-present brief と対の契約）。
 - **emo2 fixture 実測（2026-07-03・shell descript）**: `seriko.alignmenttodesktop,bottom`（既定と一致）・**`sakura.defaultx,0`／`kero.defaultx,0` を使用**（`defaulty` は無し）→ **`defaultx`/`defaulty` キーの解決を design 対象に含める**（alignmenttodesktop カスケードに加えて。x=0 の意味論＝work area 基準の解釈は SSP de-facto を design で確認）。`sakura.balloon.alignment,left`／`kero.balloon.alignment,right` も存在（バルーン配置系の後続ユニット向け・本ユニットは記録のみ）。
 - **ulw-removal との API 変動調整**: `CompositionMode` collapse は本ユニットの窓生成コードにも波及（emo-present brief と同旨・順序調整 or 追随）。
+- **通信モデル**: 窓操作（生成・移動・z-order）は **UI スレッド専有**。本ユニットは actor-foundation 非依存（UI スレッド内で完結）だが、**他アクターからの窓移動指令**（将来の `\![move]`＝sakura 発・二人立ち連動等）は foundation の **UI 配送ブリッジ**経由で届く前提——窓移動の公開 API を「UI スレッド上で呼ばれる関数」として切っておく（ブリッジが後からその関数を呼ぶだけで済む形）。
 
 ## ukadoc 正典要点（design の前提事実）
 
