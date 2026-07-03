@@ -162,7 +162,8 @@ crates/areka-emo-atlas/
 │   │   └── wic_arm.rs          # 既定 WIC 腕（COM 隔離・wintf WIC util 利用）D4
 │   ├── normalize.rs            # 透過正規化（use_self_alpha 解釈・premultiplied 統一）D5/D8
 │   ├── trim.rs                 # α トリミング（bbox 算出・オフセット記録・全透明→空）R4
-│   ├── pack.rs                 # packing（rectangle-pack 結線・padding ラップ・複数頁・決定性）D7
+│   ├── pack.rs                 # packing 座標算出（rectangle-pack 結線・padding ラップ・複数頁・決定性・画素は焼かない）D7
+│   ├── bake.rs                 # Baker: 頁バッファ確保・stride 決定・トリム矩形 blit（blit_trimmed）R4.3/R6.3
 │   ├── table.rs                # AtlasTable/AtlasEntry/AtlasKey/AtlasPage 契約型（正本）D3
 │   └── error.rs                # BakeError/DecodeError（診断可能なエラー・継続方針）R2
 └── tests/                      # 統合テスト入口（束ね役）
@@ -172,7 +173,7 @@ crates/areka-emo-atlas/
 > in-source `#[cfg(test)]` を主軸（structure.md テスト慣行）。正規化以降（normalize/trim/pack/table）はメモリ PBGRA 入力で **COM init 不要**の純粋テスト。WIC 腕テストのみ `CoInitializeEx` を必要とし fixture スモークで確認。
 
 ### Modified Files
-- `crates/wintf/src/com/wic.rs` — **（D2 確定に依存・最小変更）**: 既定デコード WIC 腕から `load_bitmap_source` 相当（`decoder→PBGRA raw バッファ抽出`）を呼べるよう、現在 `bitmap_source/systems.rs` にある `load_bitmap_source` を `com/wic.rs`（ECS 非依存の COM 層）へ移設または公開する。ECS 依存（`Entity`/`Command`/`GraphicsCore`）は移設対象外。移設に伴い `bitmap_source/systems.rs` は移設先を参照する（挙動不変のリファクタ）。
+- `crates/wintf/src/com/wic.rs` — **（D2 確定に依存・最小変更）**: 既定デコード WIC 腕から `load_bitmap_source` 相当（`decoder→PBGRA raw バッファ抽出`）を呼べるよう、現在 `bitmap_source/systems.rs` にある `load_bitmap_source` を `com/wic.rs`（ECS 非依存の COM 層）へ移設または公開する。ECS 依存（`Entity`/`Command`/`GraphicsCore`）は移設対象外。移設に伴い `bitmap_source/systems.rs` は移設先を参照する（挙動不変のリファクタ）。**併せて（Critical Issue 1）**: 移設関数は PBGRA ソースに加え **変換前フレームのピクセルフォーマット由来の α 有無**を返り値へ追加し、WIC 腕が `DecodedImage.has_alpha` を確定できるようにする（既存 `bitmap_source` 呼出は追加返り値を無視すれば挙動不変）。
 - `Cargo.toml`（workspace） — `rectangle-pack` を `[workspace.dependencies]` へ追加（**承認後**）。
 
 > WIC ユーティリティ移設の是非（移設 vs 新クレート切出し vs デコード腕での再実装）は Decision D2 で「wintf 内 COM 層へ移設し、新クレートは wintf の WIC ユーティリティのみを最小 feature で参照」を選択。emo-compose/emo-present も同 WIC 経路を要さない（表示は emo-present が wintf 側で担う）ため、切出し新クレートは過剰と判断。
@@ -204,6 +205,7 @@ graph LR
 - **エラー継続**: デコード失敗エントリは診断可能なエラーとして記録し、他エントリの処理を継続する（要件 2.2）。`bake` は成功エントリの索引表＋失敗エントリ集合を返す（fail-fast にしない）。
 - **全透明スキップ**: トリムで α>0 画素ゼロと判明した画像は空エントリ（`placement: None`）として記録し packing に渡さない（要件 4.4）。
 - **決定性**: 列挙後、packing 入力は**正規化パス昇順**にソートしてから packer へ渡す。同一入力→同一配置を golden テストで固定（要件 5.5・D7）。
+- **packing と焼付の分離（Critical Issue 3）**: `blit trimmed into page buffers` ノードは **Baker** が所有する。Packer は座標（page/uv_rect）のみ算出し画素を持たない。Baker が `page_count` 分の頁を確保し `uv_rect` へ premultiplied のまま blit する。`bake`（`lib.rs`）が Packer→Baker→AtlasTable 構築を統括。
 
 ## Requirements Traceability
 
@@ -226,7 +228,7 @@ graph LR
 | 3.6 | 透過パラメータは入力・自ら読まない | Normalizer | `AlphaParams` 入力 | — |
 | 4.1 | α>0 タイト矩形算出 | Trimmer | `trim` | Bake（trim） |
 | 4.2 | トリムオフセット/トリム寸/原寸記録 | Trimmer / AtlasEntry | `Placement`, `AtlasEntry` | — |
-| 4.3 | トリム後矩形のみ焼付 | Trimmer / Packer | `blit_trimmed` | Bake（bake） |
+| 4.3 | トリム後矩形のみ焼付 | Baker | `blit_trimmed` | Bake（bake） |
 | 4.4 | 全透明→空エントリ・焼付スキップ | Trimmer / AtlasEntry | `placement: None` | Bake（empty） |
 | 4.5 | 配置座標不変保証（配置座標＋トリムオフセット等価） | AtlasEntry（契約） | `trim_offset` 意味論 | — |
 | 5.1 | 頁内非重複配置 | Packer | `pack` | Bake（pack） |
@@ -250,7 +252,8 @@ graph LR
 | WicDecoderArm | デコード adapter | 既定 WIC 腕（COM 隔離） | 2.1, 2.2 | wintf WIC util (P0) | Service |
 | Normalizer | 正規化 | use_self_alpha 解釈・premultiplied BGRA 統一 | 3.1–3.6 | ElementDecoder 出力 (P0) | Service, State |
 | Trimmer | トリム | α>0 タイト矩形算出・オフセット記録・空判定 | 4.1–4.5 | Normalizer 出力 (P0) | Service |
-| Packer | packing | 静的決定的複数頁配置・padding・重複排除 | 5.1–5.6 | rectangle-pack (P0) | Batch |
+| Packer | packing | 静的決定的複数頁**座標算出**・padding・重複排除（画素は焼かない） | 5.1–5.6 | rectangle-pack (P0) | Batch |
+| Baker | 焼付 | 頁バッファ確保（`page_size²×4`）・stride 決定・トリム矩形 blit（`blit_trimmed`） | 4.3, 6.3 | Packer 座標出力・Trimmed 画素 (P0) | Service |
 | AtlasTable / AtlasEntry / AtlasPage | 成果物契約 | 索引表＋頁バッファ（共有契約正本） | 6.1–6.5, 4.2 | Arc (P0) | Service, State |
 
 ### 列挙層
@@ -352,7 +355,7 @@ pub trait ElementDecoder {
 - Invariants: 副作用なし（ファイル読取のみ）。
 
 **Implementation Notes**
-- Integration: 既定腕は `wintf::com::wic` の `load_bitmap_source` 相当＋`copy_pixels`/`get_size` を使用（D2 で `com/wic.rs` へ移設・公開）。`has_alpha` は WIC フレームのピクセルフォーマット（α 有無）から判定。
+- Integration: 既定腕は `wintf::com::wic` の `load_bitmap_source` 相当＋`copy_pixels`/`get_size` を使用（D2 で `com/wic.rs` へ移設・公開）。**注意（Critical Issue 1）**: 流用元 `load_bitmap_source` は `GUID_WICPixelFormat32bppPBGRA` へ**変換後**の `IWICBitmapSource` を返すため α 有無情報が失われる。よって `has_alpha` は **変換前フレームの `GetPixelFormat`**（α 付きフォーマットか）から確定する。移設ユーティリティは PBGRA ソースに加え**変換前ピクセルフォーマット（または α 有無フラグ）を返り値へ追加**して露出する（挙動不変リファクタの範囲に「返り値の追加」を含める）。emo2 経路は常に α 有（`use_self_alpha=On`）ゆえ AlphaChannel 腕に落ち実害はないが、`has_alpha` はシーム腕（`.pna`/keycolor/full）の分岐入力ゆえ静かな誤分岐を防ぐために正確な取得点が要る。
 - Validation: 不在パスで `NotFound`・破損 PNG で `Decode` を返し `bake` が継続することを確認。
 - Risks: COM 初期化漏れ＝WIC 呼失敗。既定腕テストは `CoInitializeEx` 前提を明示。
 
@@ -498,7 +501,7 @@ impl Trimmer {
 ##### Batch / Job Contract
 - Trigger: `bake` パイプライン末尾（全トリム完了後の一括配置）。
 - Input / validation: `Vec<(AtlasKey, Trimmed)>`（空エントリ除外済み）＋`PackConfig{ page_size, padding }`。
-- Output / destination: 頁バッファ群（`Vec<AtlasPage>`）＋各キーの `(page_index, uv_rect)`。
+- Output / destination: **座標のみ**——頁数（`page_count`）＋各キーの `(page_index, uv_rect)`。**頁バッファ（画素）は生成しない**（Critical Issue 3: 焼付は Baker の責務）。
 - Idempotency & recovery: 決定的（同一入力→同一出力）。単頁超過矩形は個別頁へ退避（loss なし）。
 
 ##### Service Interface
@@ -506,11 +509,13 @@ impl Trimmer {
 pub struct PackConfig { pub page_size: u32, pub padding: u32 } // 既定 2048 / 1
 
 pub struct PackedEntry { pub key: AtlasKey, pub page: u32, pub uv_rect: Rect }
-pub struct PackOutput { pub pages: Vec<AtlasPage>, pub entries: Vec<PackedEntry> }
+/// 座標のみ（画素バッファは持たない・焼付は Baker）。
+pub struct PackOutput { pub page_count: u32, pub entries: Vec<PackedEntry> }
 
 pub struct Packer;
 impl Packer {
-    pub fn pack(&self, items: Vec<(AtlasKey, Trimmed)>, cfg: PackConfig) -> PackOutput;
+    /// トリム矩形群を頁へ決定的に配置し、座標（page/uv_rect）のみを返す。
+    pub fn pack(&self, items: &[(AtlasKey, Trimmed)], cfg: PackConfig) -> PackOutput;
 }
 ```
 
@@ -518,6 +523,44 @@ impl Packer {
 - Integration: `rectangle-pack` の `pack_rects` を複数 bin（頁）で呼ぶ。padding は `size + 2*padding` で登録し、配置後 UV から padding を差し引く。
 - Validation: 同一入力二回で同一 `PackOutput`（決定性 golden）・多数矩形で複数頁生成・矩形非重複を確認。
 - Risks: packer 内部の非決定性（ハッシュ順等）。入力ソート＋固定 config で吸収。fallback `rect_packer` 時は複数頁ループを自前実装（要 config 差替）。
+
+### 焼付層
+
+#### Baker（頁確保・blit・Critical Issue 3）
+
+| Field | Detail |
+|-------|--------|
+| Intent | Packer が算出した座標に従い頁バッファを確保し、トリム済み premultiplied BGRA を blit する |
+| Requirements | 4.3, 6.3 |
+
+**Responsibilities & Constraints**
+- `PackOutput.page_count` 分の `AtlasPage` を確保（`page_size` 正方・`stride = page_size*4`・初期値 0＝完全透明 premultiplied）（6.3）。
+- 各 `PackedEntry` について、対応する `Trimmed.pbgra` を `uv_rect` 左上へ stride 込みで blit（`blit_trimmed`・トリム後矩形のみ・4.3）。
+- 画素変換はしない（premultiplied のまま転写＝premultiplied 一貫性維持・D8）。**packing（座標）と焼付（画素）の責務分離**を保つ（Packer は画素を持たない）。
+
+**Contracts**: Service [x]
+
+##### Service Interface
+```rust
+pub struct Baker;
+impl Baker {
+    /// 座標（PackOutput）＋トリム画素から頁バッファ群を確保・blit する。
+    /// 返り値は AtlasPage 群と、各キーの Placement（page/uv_rect/trim_offset）。
+    pub fn bake_pages(
+        &self,
+        items: &[(AtlasKey, Trimmed)],
+        pack: &PackOutput,
+    ) -> (Vec<AtlasPage>, Vec<(AtlasKey, Placement)>);
+}
+```
+- Preconditions: `pack.entries` のキーは `items` に存在。`uv_rect` は `page_size` 内。
+- Postconditions: 各 `AtlasPage.bytes.len() == stride*height`。blit は premultiplied を保存（無変換）。
+- Invariants: Packer 出力の座標を改変しない。padding 画素は 0（透明）のまま（UV 非包含・bleed 防止・5.2/5.3）。
+
+**Implementation Notes**
+- Integration: `bake`（`lib.rs` 入口）が Packer→Baker の順で呼び、Baker 出力の `Placement` 群と `Trimmer` の `original`/空エントリを統合して `AtlasTable` を構築する。
+- Validation: blit 後の頁画素が原トリム矩形と一致（golden 画素）・padding 帯が透明・複数頁で各頁が正しく確保されることを確認。
+- Risks: blit の stride 取り違え＝ずれ/破損。Packer の `uv_rect` と頁 stride の整合をテストで固定。
 
 ### 成果物契約層
 
