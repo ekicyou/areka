@@ -140,6 +140,10 @@
 - **join デッドロック誤用**（Sender を握ったまま Close も送らず join）— `ActorHandle::join` rustdoc に「Close 送信 or 全 Sender drop の後に join」の運用規約を明記。toy(a) が正順序の実例。
 - **`UiSendError<M>` の derive 境界**（`M: Debug` 制約が付く可能性）— 実装時に手書き `Debug` impl で境界を外す（std `SendError<T>` と同じ扱い）。設計影響なし。
 
+## 11.5 設計ディスカッション記録
+
+- **#1（2026-07-04・開発者承認）UI ブリッジのチャンネルを async-channel 化（DD-9 新設）**: 開発者の「UI スレッドの pump 待機は非同期であるべき・非同期チャンネルを使っては」という提起を受け事実確認——(a) 当初設計の pump 待機も listener.await で既に非同期（ブロッキング recv は UI スレッドに存在しない）、(b) host32 の `ResponseSlot` は同期スロット（RefCell）で非同期チャンネルではない、(c) **`async-channel` v2.5.0 が bevy_tasks 0.18 経由で依存ツリー内に既在**（cargo tree 実測）＝直接依存追加でもビルドコスト増ゼロ・内部実装は event-listener＋concurrent-queue（＝当初設計の手組み合成の完成品）。決定: **UI ブリッジ（`ui` モジュール）のみ async-channel (unbounded) 採用**・store→notify／listen-before-work 規律をクレート内実装へ委譲・`recv().await` 一本化。**全面統一（worker 側も）は棄却**——`recv_blocking` に timeout 変種が無く brief の「tick は recv_timeout で賄う」が壊れる＋非 UI スレッドに async の動機なし（開発者確認）。純粋層は std-only のまま・公開 API 形状（`UiSender`/`spawn_ui`）不変。design.md（Allowed Dependencies・DD-9・Technology Stack・System Flows・ui 節・トレーサビリティ 4.2–4.4）反映済み。
+
 ## 11. References（設計フェーズ追加）
 
 - `crates/wintf/src/runtime/mod.rs` — `WinApp::run` の relay タスク（JoinHandle drop=非キャンセルの明示・spawn_local 結線例）

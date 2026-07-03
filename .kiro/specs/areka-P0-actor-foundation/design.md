@@ -40,14 +40,14 @@
 ### Allowed Dependencies
 - `std`（`std::sync::mpsc`＋`std::thread` が唯一のチャンネル／スレッド実装）
 - `tracing`・`thiserror`（全クレート共通規約・既存 workspace 依存）
-- `event-listener` (5)・`wintf-winmsg-executor` (=0.0.5)：**`ui` モジュールのみ**が使用（既存 workspace 依存・i686 ビルド実証済み・非 wintf クレートからの直接依存は `shiori-host32-host` が本番前例）
+- `async-channel` (2)・`wintf-winmsg-executor` (=0.0.5)：**`ui` モジュールのみ**が使用。async-channel は依存ツリー内に既在（`bevy_tasks` 0.18 経由・cargo tree 実測）＝直接依存追加でもビルド対象増ゼロ、内部実装は `event-listener`＋`concurrent-queue`（開発者承認済み・2026-07-04 設計ディスカッション #1）。executor は既存 workspace 依存・非 wintf クレートからの直接依存は `shiori-host32-host` が本番前例
 - dev-dependencies のみ: `windows`（toy 試験(b) の heartbeat 用 `PostThreadMessageW` 等・本体依存にはしない）
 - **禁止**: tokio・crossbeam-channel（凍結・導入時は開発者承認）・bevy_*・wintf 本体・その他新規 crates.io 依存
 
 ### Revalidation Triggers
 - `spawn_actor`/`ActorHandle`/`ReplySender`/`UiSender` の公開シグネチャ変更 → 全下流エンジンユニットの再確認
 - Close 意味論（即時停止・破棄）の変更 → 要件 R3 の再交渉（要件フェーズ差し戻し）
-- `ui` モジュールの起床方式変更（event-listener 以外へ） → emo-present／wintf pump 統合の再検証
+- `ui` モジュールの起床方式変更（async-channel 以外へ） → emo-present／wintf pump 統合の再検証
 - チャンネル実装の差し替え（std mpsc → crossbeam 等） → 開発者承認＋全消費者の再テスト
 
 ## Architecture
@@ -60,7 +60,7 @@
 - **bounded pump 試験**: `ParentMessageWindow::pump_until_hello_or`（`crates/shiori-host32-host/src/parent_window.rs`）が「別スレッド heartbeat（`WM_NULL` 送出）＋deadline 再評価＋`msg_loop.quit()`」で `MessageLoop::run` を決定的に bounded 化する前例＝toy 試験(b) の写経元。
 - **store→notify 順序不変**・**listen-before-work 規律**: monitor.rs／tick_bridge.rs に明文化済み。本基盤の送信（queue→notify）と drain ループはこの規律を継承する。
 
-**discovery による精緻化（gap 分析からの更新）**: gap 分析は「UI ブリッジは wintf 依存が不可避」としたが、コード精査の結果、搬送機構そのものは `wintf_winmsg_executor::spawn_local`＋`event_listener::Event`＋`std::sync::mpsc` で完結し、**wintf 本体（World/ECS）への依存は不要**である（`run_click_through` が World を触るのは clickthrough 固有の消費部分）。executor のクロススレッド waker が notify 時に pump を起こすため、追加の `PostMessage` 経路も不要。非 wintf クレートが `wintf-winmsg-executor`＋`event-listener` に直接依存して pump を回す構成は `shiori-host32-host` が本番実証済み。よって **wintf は不改変のまま**、UI ブリッジを新設クレート内に置ける。areka の `WinApp::run` は同じ executor の `MessageLoopDriver::block_on` で pump を駆動するため、本ブリッジで spawn したタスクはその**同一 pump 上で実行**される（4.4 の整合性保証）。
+**discovery による精緻化（gap 分析からの更新）**: gap 分析は「UI ブリッジは wintf 依存が不可避」としたが、コード精査の結果、搬送機構そのものは `wintf_winmsg_executor::spawn_local`＋queue＋wakeup で完結し、**wintf 本体（World/ECS）への依存は不要**である（`run_click_through` が World を触るのは clickthrough 固有の消費部分）。executor のクロススレッド waker が notify 時に pump を起こすため、追加の `PostMessage` 経路も不要。**設計ディスカッション #1（2026-07-04）による更新**: queue＋wakeup の実体は当初案の「std mpsc＋event-listener 手組み合成」から **`async-channel`（unbounded）採用**へ確定——同クレートの内部実装は event-listener＋concurrent-queue（＝手組み合成の完成品）で、bevy_tasks 経由でツリー内既在ゆえビルドコスト増ゼロ。非 wintf クレートが `wintf-winmsg-executor`＋`event-listener` に直接依存して pump を回す構成は `shiori-host32-host` が本番実証済み。よって **wintf は不改変のまま**、UI ブリッジを新設クレート内に置ける。areka の `WinApp::run` は同じ executor の `MessageLoopDriver::block_on` で pump を駆動するため、本ブリッジで spawn したタスクはその**同一 pump 上で実行**される（4.4 の整合性保証）。
 
 ### Architecture Pattern & Boundary Map
 
@@ -81,7 +81,7 @@ graph TB
     end
     subgraph Deps[既存依存 不改変]
         Std[std mpsc thread]
-        EvListener[event-listener]
+        AsyncCh[async-channel 内部はevent-listener]
         Executor[wintf-winmsg-executor spawn_local MessageLoop]
     end
     Kanade --> Lib
@@ -94,8 +94,7 @@ graph TB
     Lib --> Ui
     Spawn --> Std
     Reply --> Std
-    Ui --> Std
-    Ui --> EvListener
+    Ui --> AsyncCh
     Ui --> Executor
 ```
 
@@ -118,30 +117,31 @@ graph TB
 | DD-6 | 解決済み（要件反映済み）: Close＝即時停止・積み残し破棄・reply drop＝切断観測（3.3/3.6） | 2026-07-03 要件ディスカッション #1 確定（設計は本意味論を実装形に落とすのみ） |
 | DD-7 | spawn 返却は**素のタプル `(mpsc::Sender<M>, ActorHandle)`**。`ActorHandle` は JoinHandle＋アクター名の薄い newtype で**非 RAII**（drop で join しない） | 1.1 の字義（Sender と JoinHandle を返す）を最小表面で満たす。drop-join RAII は Close 送信権限（Sender）を handle が持たないためデッドロック源になり得る＝停止駆動は結線層（ghost-setup）が「Close 送信→join」の順で明示的に行う規約。RAII 束ねが欲しい消費者は上に自作（実需 2 例目まで基盤は作らない） |
 | DD-8 | panic 伝搬＝`ActorHandle::join(self) -> Result<(), ActorError>` が `std::thread::Result` の `Err` を **thiserror 構造化エラー（アクター名＋panic payload 文字列）へ写像** | 1.3「join 時に観測可能な失敗」を最小＋診断可能な形で満たす。生の `Box<dyn Any>` を返すよりログ・上位伝搬（結線層）に扱いやすい。監督・再起動はしない（7.2） |
+| DD-9 | UI ブリッジの queue＋wakeup＝**`async-channel` (2・unbounded) を採用**（当初案の std mpsc＋event-listener 手組み合成を置換・2026-07-04 設計ディスカッション #1 開発者承認） | pump 待機が `recv().await` 一本になり、store→notify／listen-before-work 規律（設計中最も繊細な正しさ）をクレート内実装へ委譲。async-channel は bevy_tasks 経由でツリー内既在＝ビルドコスト増ゼロ・内部は event-listener＋concurrent-queue で既実証の起床経路と同族。worker 側は std mpsc 継続（`recv_blocking` に timeout 変種が無く brief の「tick は recv_timeout」が壊れるため全面統一は棄却＝非 UI スレッドに async の動機なし） |
 
 ### Technology Stack
 
 | Layer | Choice / Version | Role in Feature | Notes |
 |-------|------------------|-----------------|-------|
 | チャンネル / スレッド | `std::sync::mpsc`＋`std::thread`（std） | inbox・reply・UI queue・アクタースレッドの唯一の実装 | unbounded＝5.1 の既定。`WintfTaskPool` の本番前例 |
-| 起床通知 | `event-listener` 5（既存 workspace 依存） | worker→UI pump の wakeup（`ui` モジュールのみ） | `VsyncEventBridge`/clickthrough と同一資産（4.4） |
+| UI queue＋wakeup | `async-channel` 2（ツリー内既在・bevy_tasks 経由・DD-9） | UI inbox の非同期チャンネル（queue＋起床を一体提供・`ui` モジュールのみ） | 内部実装は `event-listener`＋`concurrent-queue`＝`VsyncEventBridge`/clickthrough と同族の起床経路（4.4） |
 | UI スレッド async / pump | `wintf-winmsg-executor` =0.0.5（既存 workspace 依存・完全 pin） | `spawn_local`（drain タスク投入）・`MessageLoop::run`（toy(b) の pump 実走） | wintf `WinApp` が駆動する pump と同一機構。i686 実証済み |
 | ロギング | `tracing`（既存 workspace 依存） | span にアクター名（＝スレッド名）を載せる（6.1）。Subscriber 初期化はしない（6.2） | logging.md 準拠 |
 | エラー | `thiserror` 2（既存 workspace 依存） | `ActorError`/`ReplyError`/`UiSendError` の構造化 enum | tech.md 全クレート共通規約 |
 | テスト補助 | `windows`（dev-dependencies のみ） | toy(b) heartbeat（`PostThreadMessageW(WM_NULL)`・`GetCurrentThreadId`） | 本体依存にしない |
 
-新規 crates.io 依存: **なし**（全て既存 workspace 依存の参照追加のみ）。
+新規 crates.io 依存: **`async-channel` 2 のみ**（2026-07-04 設計ディスカッション #1 で開発者承認済み。依存ツリー内に bevy_tasks 経由で既在＝ビルド対象の追加はゼロ・workspace.dependencies へ追記して使用）。ほかは全て既存 workspace 依存の参照追加のみ。
 
 ## File Structure Plan
 
 ```
 crates/areka-actor/
-├── Cargo.toml               # deps: tracing, thiserror, event-listener, wintf-winmsg-executor / dev-deps: windows
+├── Cargo.toml               # deps: tracing, thiserror, async-channel, wintf-winmsg-executor / dev-deps: windows
 ├── src/
 │   ├── lib.rs               # 規約正本（envelope/XxxMsg/Close/backpressure/大型データ/拡張シーム）を crate rustdoc に明文化＋ re-export のみ。ロジックなし
 │   ├── spawn.rs             # spawn_actor / ActorHandle / ActorError / run_inbox（worker 側受信ループヘルパ）＋ in-source 単体テスト
 │   ├── reply.rs             # reply_channel / ReplySender / ReplyReceiver / ReplyError（oneshot 相当）＋ in-source 単体テスト
-│   └── ui.rs                # UiSender / spawn_ui（queue＋wakeup＋pump 内 drain）/ UiSendError ＋ in-source 単体テスト（pump 非依存の同期部分のみ）
+│   └── ui.rs                # UiSender / spawn_ui（async-channel recv().await＋pump 内 drain）/ UiSendError ＋ in-source 単体テスト（pump 非依存の同期部分のみ）
 └── tests/
     ├── toy_worker_test.rs   # toy(a): worker⇄worker request/reply・Close→join 決定的完走・積み残し破棄→reply Err・全 Sender drop 終了・panic join 観測
     └── toy_ui_pump_test.rs  # toy(b): worker→UI（MessageLoop 実走）echo・bounded pump（heartbeat＋deadline）・独立プロセス（integration test バイナリ）
@@ -159,23 +159,20 @@ crates/areka-actor/
 ```mermaid
 sequenceDiagram
     participant W as worker スレッド
-    participant Q as mpsc queue UiSender 内部
-    participant E as event listener Event
+    participant C as async-channel unbounded UiSender 内部
     participant P as UI message pump
     participant D as drain タスク spawn_local
-    W->>Q: send で EchoMsg を格納 reply Sender 同梱
-    W->>E: notify で起床通知 store の後に notify
-    E-->>P: executor waker が pump を起床
+    W->>C: try_send で EchoMsg を格納 reply Sender 同梱
+    C-->>P: 内部 event-listener notify が executor waker 経由で pump を起床
     P->>D: 投入済み drain タスクを再開
-    D->>D: listener を先に arm listen-before-work
-    D->>Q: try_recv を空になるまで drain
+    D->>C: recv await が Ready で復帰 メッセージ受領
     D->>D: handler で EchoMsg を処理
     D->>W: reply Sender send で worker へ返信
-    D->>E: 次の notify まで await pump は非ブロック
+    D->>C: 次の recv await へ 空なら Pending で pump へ制御返却
     W->>W: ReplyReceiver recv_timeout で echo 受領
 ```
 
-**フロー上の決定**: (1) 送信側は「queue へ格納→notify」の順序固定（store→notify 規律・monitor.rs 継承）。(2) drain 側は「listener arm→drain→await」の listen-before-work 規律（tick_bridge.rs 継承）。両規律の組で notify 取りこぼしが構造的に起きない。(3) drain は `try_recv` ループで**同期実行**され await を跨がない＝pump をブロックせず、1 起床で積滞を全量処理する（4.2/4.3）。
+**フロー上の決定**: (1) 送信は `try_send`（unbounded ゆえ Full なし・失敗は Closed のみ）＝送信側も UI pump もブロックしない（4.2）。store→notify 順序と listen-before-work 規律は **async-channel の内部実装**（event-listener＋concurrent-queue）が担い、本クレートは手組みしない（DD-9・取りこぼしなしは同クレートの配送保証）。(2) drain は `recv().await` ループ: queue に残があるかぎり await は即 Ready で連続処理し、空になった時のみ Pending で pump へ制御を返す（4.3・pump 非ブロック）。(3) handler 実行は await を跨がない（UI スレッド束縛リソースを安全に扱える）。
 
 ### 停止の全経路（worker アクター）
 
@@ -217,9 +214,9 @@ flowchart TB
 | 3.5 | 全 Sender drop で正常終了 | spawn／ui | `run_inbox`/`spawn_ui`（Disconnected で終了） | 停止経路図 |
 | 3.6 | 未処理 reply の drop→要求側 Err 観測 | reply＋spawn/ui | `ReplyReceiver::recv` が `Err(ReplyError::Dropped)` | 停止経路図・toy(a) |
 | 4.1 | UI アクターへの配送ブリッジ提供 | ui | `spawn_ui`/`UiSender` | echo シーケンス |
-| 4.2 | pump 非ブロック・queue 積み＋起床 | ui | `UiSender::send`（unbounded send→notify・ブロックなし） | echo シーケンス |
-| 4.3 | 起床ごと UI 側 drain | ui | drain ループ（listen→try_recv 全量→await） | echo シーケンス |
-| 4.4 | MTA/render 固定/D2D 単一維持・既存起床資産と整合 | ui | `event_listener::Event`＋`wintf_winmsg_executor::spawn_local`（既存資産そのもの・スレッド構成不変） | echo シーケンス |
+| 4.2 | pump 非ブロック・queue 積み＋起床 | ui | `UiSender::send`（async-channel unbounded `try_send`・ブロックなし・起床は内部 waker） | echo シーケンス |
+| 4.3 | 起床ごと UI 側 drain | ui | drain ループ（`recv().await`・残があるかぎり連続処理・空で Pending） | echo シーケンス |
+| 4.4 | MTA/render 固定/D2D 単一維持・既存起床資産と整合 | ui | `async-channel`（内部＝event-listener）＋`wintf_winmsg_executor::spawn_local`（既実証起床経路と同族・スレッド構成不変） | echo シーケンス |
 | 4.5 | emo-present／窓移動指令の将来搬送路 | ui | `UiSender<M>` が任意の `M: Send` を搬送（型は下流定義） | — |
 | 5.1 | 制御経路 unbounded 明文化 | conventions | rustdoc 明文（std mpsc unbounded・低レート前提） | — |
 | 5.2 | 毎フレーム大量データを channel に流さない規約 | conventions | rustdoc 明文（共有バッファ/Arc 手渡し） | — |
@@ -240,7 +237,7 @@ flowchart TB
 | conventions（lib.rs） | 規約層 | envelope/停止/流量規約の正本（rustdoc）＋re-export | 1.5, 2.1, 2.4, 2.5, 3.1, 3.3, 5.1, 5.2, 5.3, 7.1 | なし | State |
 | spawn | 純粋層（std のみ） | 名前付きアクター spawn/join・panic 観測・受信ループヘルパ | 1.1–1.5, 3.2, 3.4, 3.5, 6.1 | std::thread（P0）・tracing（P2） | Service |
 | reply | 純粋層（std のみ） | request/reply（oneshot 相当）・切断観測 | 2.2, 2.3, 3.6 | std::sync::mpsc（P0） | Service |
-| ui | UI ブリッジ層 | worker→UI pump の queue＋wakeup 配送・pump 内 drain | 4.1–4.5, 3.2, 3.3, 3.5 | event-listener（P0）・wintf-winmsg-executor（P0） | Service, Event |
+| ui | UI ブリッジ層 | worker→UI pump の queue＋wakeup 配送・pump 内 drain | 4.1–4.5, 3.2, 3.3, 3.5 | async-channel（P0）・wintf-winmsg-executor（P0） | Service, Event |
 | toy tests | 観測層（tests/） | 基盤原語の単一 pass/fail 検証 | 8.1, 8.2, 8.3 | windows（dev・P1） | Batch |
 
 ### 規約層
@@ -382,7 +379,7 @@ pub enum ReplyError {
 - Validation: in-source 単体テスト（send→recv 往復・Sender drop→Dropped・timeout→Timeout）。
 - Risks: mpsc channel の per-request 生成コストは制御メッセージレート（低頻度）では無視できる。毎フレーム経路には使わない（5.2 で規約側から禁止）。
 
-### UI ブリッジ層（event-listener＋wintf-winmsg-executor 依存・wintf 本体非依存）
+### UI ブリッジ層（async-channel＋wintf-winmsg-executor 依存・wintf 本体非依存）
 
 #### ui
 
@@ -393,14 +390,13 @@ pub enum ReplyError {
 
 **Responsibilities & Constraints**
 - `spawn_ui` は **UI スレッド（pump を回すスレッド）上で**呼び、`wintf_winmsg_executor::spawn_local` で drain タスクを投入する（4.1。実行は pump＝`MessageLoop::run`／wintf `WinApp::run` の `block_on` に委ねる）。
-- `UiSender<M>` は Clone かつ Send。`send` は「`mpsc::Sender::send`（queue 格納）→ `Event::notify(usize::MAX)`」の順序固定（store→notify 規律）。unbounded ゆえ**送信は決してブロックせず、UI pump もブロックさせない**（4.2）。notify は executor のクロススレッド waker を介して pump を起床する（`VsyncEventBridge`→`AsyncTickTask` で実証済みの経路・4.4）。
-- drain タスクは listen-before-work 規律のループ: `listener = event.listen()` を arm → `try_recv` で**空になるまで**同期 drain（各メッセージを handler へ）→ `listener.await`（4.3）。handler 実行は await を跨がない（UI スレッド束縛リソースを安全に扱える）。
-- 終了は 2 経路: handler が `ControlFlow::Break` を返す（消費者定義の Close variant 受領時・3.2）→ 即時 return（残 queue を読まずに抜け、タスク所有 `Receiver` の drop で積み残し破棄＝3.3・同梱 reply Sender drop で要求側は切断を観測＝3.6 の UI 側成立）。または `try_recv` が `Disconnected`（全 `UiSender` drop・3.5）→ return。
+- `UiSender<M>` は Clone かつ Send（`async_channel::Sender<M>` の newtype）。`send` は unbounded `try_send`＝**Full が存在せず送信は決してブロックしない**（失敗は Closed のみ・4.2）。起床は async-channel 内部の waker 機構（登録済みタスク waker への wake）→ executor のクロススレッド waker が pump を起床する（内部実装は event-listener＝`VsyncEventBridge`→`AsyncTickTask` で実証済みの経路と同族・4.4・DD-9）。store→notify／listen-before-work 規律は async-channel 内部が担い、本クレートは手組みしない。
+- drain タスクは `recv().await` ループ: queue に残があるかぎり await は即 Ready で連続処理（各メッセージを handler へ）し、空になった時のみ Pending で pump へ制御を返す（4.3）。handler 実行は await を跨がない（UI スレッド束縛リソースを安全に扱える）。
+- 終了は 2 経路: handler が `ControlFlow::Break` を返す（消費者定義の Close variant 受領時・3.2）→ 即時 return（残 queue を読まずに抜け、タスク所有 `Receiver` の drop で積み残し破棄＝3.3・同梱 reply Sender drop で要求側は切断を観測＝3.6 の UI 側成立）。または `recv()` が `Err(Closed)`（全 `UiSender` drop・3.5）→ return。
 - スレッド構成を一切変えない: 新スレッドを作らず、UI スレッドの MTA・render/window 固定・D2D 単一スレッド前提は不変（4.4）。搬送する `M` は任意の `Send + 'static`＝emo-present の指令メッセージ・窓移動指令の型を下流がそのまま載せられる（4.5・器のみ提供）。
 
 **Dependencies**
-- Outbound: `std::sync::mpsc` — queue 実体（P0）
-- External: `event-listener` — wakeup（P0）／`wintf-winmsg-executor` — `spawn_local`・`JoinHandle`（P0・=0.0.5 pin・i686 実証済み）
+- External: `async-channel` — queue＋wakeup 一体（P0・2・ツリー内既在＝bevy_tasks 経由・DD-9）／`wintf-winmsg-executor` — `spawn_local`・`JoinHandle`（P0・=0.0.5 pin・i686 実証済み）
 
 **Contracts**: Service [x] / Event [x]
 
@@ -417,9 +413,10 @@ where
     M: Send + 'static;
 
 /// UI アクター宛の送信端（Clone・Send・非ブロック）。
-pub struct UiSender<M> { /* tx: mpsc::Sender<M>, wake: Arc<event_listener::Event> */ }
+pub struct UiSender<M> { /* tx: async_channel::Sender<M>（unbounded） */ }
 impl<M: Send> UiSender<M> {
-    /// queue へ積み UI スレッドを起床する（store→notify）。UI アクター停止後は Err。
+    /// queue へ積む（try_send・unbounded ゆえ常に即時）。起床は channel 内部の waker 経由。
+    /// UI アクター停止後（channel closed）は Err。
     pub fn send(&self, msg: M) -> Result<(), UiSendError<M>>;
 }
 
@@ -429,16 +426,16 @@ pub struct UiSendError<M>(pub M); // 未達メッセージを返す（mpsc::Send
 ```
 
 - Preconditions: `spawn_ui` は UI スレッドで呼ぶ。handler は `!Send` 可（UI スレッド束縛リソースを握れる＝emo-present 適合）。
-- Postconditions: `send` 成功メッセージは必ず以降の起床の drain で handler に到達する（store→notify＋listen-before-work により取りこぼしなし）。Break/Disconnected 後の `send` は `Err`。
+- Postconditions: `send` 成功メッセージは必ず以降の drain で handler に到達する（async-channel の配送保証＋waker 起床＝取りこぼしなし）。Break/Closed 後の `send` は `Err`。
 - Invariants: drain は UI スレッド同期実行。`JoinHandle` の drop はタスクを**停止させない**（executor 仕様＝`AsyncTickTask`/relay と同じ self-terminate 規律・rustdoc に明記）。
 
 ##### Event Contract
 - Published events: なし（本ブリッジはイベントバスではない・点対点の inbox 搬送のみ）。
-- Subscribed events: `event_listener::Event`（内部 wakeup 専用・公開 API に露出しない）。
-- Ordering / delivery guarantees: 同一 queue 経由のメッセージは FIFO で handler に到達（mpsc 保証）。複数 sender 間の相対順序は保証しない（mpsc 仕様・rustdoc 明記）。pump 非稼働中もメッセージは queue に安全に滞留し、pump 開始後の最初の poll で drain される。
+- Subscribed events: なし（wakeup は async-channel 内部の waker 機構・公開 API に露出しない）。
+- Ordering / delivery guarantees: 同一 queue 経由のメッセージは FIFO で handler に到達（async-channel 保証）。複数 sender 間の相対順序は保証しない（rustdoc 明記）。pump 非稼働中もメッセージは queue に安全に滞留し、pump 開始後の最初の poll で drain される。
 
 **Implementation Notes**
-- Integration: `run_click_through`（clickthrough/controller.rs）の「Event＋spawn_local＋listen-before-work」構造から World 依存を除いた一般化。M-boot では emo-present は直接呼出で開始し、kanade/seriko 結線時に本ブリッジへ channel 化する（brief のクロスユニット契約の seam 実体）。
+- Integration: `run_click_through`（clickthrough/controller.rs）の「Event＋spawn_local＋listen-before-work」構造から World 依存を除いた一般化——queue＋wakeup の手組み合成は async-channel へ置換（DD-9・設計ディスカッション #1）。M-boot では emo-present は直接呼出で開始し、kanade/seriko 結線時に本ブリッジへ channel 化する（brief のクロスユニット契約の seam 実体）。
 - Validation: 同期部分（queue 格納・Err 変換）は in-source 単体テスト、pump 実走は toy(b)（integration test）。
 - Risks: UI スレッド以外から `spawn_ui` を呼んだ場合の挙動は executor 依存＝rustdoc で禁止し、toy(b) で正用法のみ検証する。
 
