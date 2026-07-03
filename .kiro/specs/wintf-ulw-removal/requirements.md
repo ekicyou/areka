@@ -27,7 +27,7 @@ wintf の表示レイヤーの透過は、これまでウィンドウ生成時�
 - **Adjacent expectations**:
   - **前提依存**: `wintf-clickthrough-alpha-toggle` が完了済みであること（ULW を撤去しても別プロセスクリック透過が GPU 合成のまま成立する安全網が既に存在すること）。
   - **`WS_EX_LAYERED` の帰属移行**: ULW 撤去後、GPU 合成（WUC）窓への `WS_EX_LAYERED` の唯一の源はクリックスルー機構（`win_style.rs` の `apply_layered_companion()`・クリックスルー controller `ecs/clickthrough/controller.rs:171` から実行時呼び出し）となる。クリックスルー登録窓はこの経路で `WS_EX_LAYERED` を実行時に受け取り続ける。撤去はこの経路を巻き込まない。
-  - **クロスユニット契約**: `CompositionMode` collapse は破壊的変更であり、着手予定の `areka-P0-emo-present`／`areka-P0-window-placement` が同じ API に触れる。本仕様の責務は wintf 本体の ULW 撤去と自 crate・areka 側呼び出しの追随までとし、他 spec の追随責務の帰属は着手時調整に委ねる。
+  - **クロスユニット契約（議題1で確定＝本 spec 先行）**: `CompositionMode` collapse は破壊的変更（Option A＝enum 完全撤去）であり、着手予定の `areka-P0-emo-present`／`areka-P0-window-placement` が同じ API に触れる。**本 spec を先行させ**（brief クロスユニット契約「順序調整が理想＝本ユニット先行」に準拠）、後続 emo/ghost 系は collapse 後の新 API（`composition_mode` フィールドなし）で書き起こす。本仕様の責務は wintf 本体の ULW 撤去と自 crate・areka 側呼び出しの追随まで。
 
 ## Requirements
 
@@ -60,10 +60,10 @@ wintf の表示レイヤーの透過は、これまでウィンドウ生成時�
 #### Acceptance Criteria
 
 1. When ULW variant を除去したとき、the `CompositionMode` 型 shall ULW を表す variant を持たない。
-2. Where GPU 合成が唯一のモードになった場合、the wintf crate shall `CompositionMode` を単一値へ最小化するか、単一 variant であれば enum 自体を撤去する。
-3. When ウィンドウを生成するとき、the wintf window 生成経路 shall 生成時のデフォルト合成モードを GPU 合成（WUC）とする（ULW を既定にしない）。
-4. When `CompositionMode` の collapse を行うとき、the wintf crate shall 自 crate 内の全呼び出し箇所（生成経路・`window_proc/lifecycle.rs`・`ecs/clickthrough/controller.rs`・ULW 前提の examples/tests を含む）を新しい API へ追随させ、ビルドが通過する。
-5. When `CompositionMode` の collapse を行うとき、the areka crate shall `CompositionMode::DComp` 指定等の呼び出しを新しい API へ追随させ、ビルドが通過する。
+2. When GPU 合成が唯一のモードになったとき、the wintf crate shall `CompositionMode` enum 型自体を完全撤去する（単一 variant 化ではなく型を消す＝Option A・議題1で確定）。
+3. When `CompositionMode` を撤去したとき、the wintf crate shall `Window.composition_mode` フィールドおよび `composition_mode()` メソッド（生成時にモードを選ぶ経路）を撤去し、生成時の合成モードを GPU 合成（WUC）に無条件固定する。
+4. When `CompositionMode` の collapse を行うとき、the wintf crate shall 自 crate 内の全呼び出し箇所（生成経路・`window_proc/lifecycle.rs` の `WM_PAINT` モード分岐・`ecs/clickthrough/controller.rs` の test ヘルパ・ULW 前提の examples/tests を含む）を新しい API へ追随させ、ビルドが通過する。
+5. When `CompositionMode` の collapse を行うとき、the areka crate shall `CompositionMode::DComp` 指定等の呼び出し（`main.rs` の構造体リテラル・`tests.rs` の assert を含む）を撤去・追随させ、ビルドが通過する。
 
 ### Requirement 4: compute_ex_style の分岐一本化
 
@@ -71,8 +71,8 @@ wintf の表示レイヤーの透過は、これまでウィンドウ生成時�
 
 #### Acceptance Criteria
 
-1. When ex_style を算出するとき、the `compute_ex_style()`（`runtime/window_factory.rs`）shall ULW を前提とした `WS_EX_LAYERED` 付与分岐を持たない。
-2. When GPU 合成窓の ex_style を算出するとき、the `compute_ex_style()` shall GPU 合成の ex_style（既存 DComp 分岐と等価に `WS_EX_LAYERED` を落とし `WS_EX_NOREDIRECTIONBITMAP` を付与）を一本の経路で返す。
+1. When ex_style を算出するとき、the `compute_ex_style()`（`runtime/window_factory.rs`）shall `CompositionMode` を分岐する `match`（ULW アーム含む）を持たず、enum 撤去（Option A）に伴い合成モード引数を取らない。
+2. When GPU 合成窓の ex_style を算出するとき、the `compute_ex_style()` shall GPU 合成の ex_style（既存 DComp 分岐と等価に `WS_EX_LAYERED` を落とし `WS_EX_NOREDIRECTIONBITMAP` を付与）を分岐なしの一本の経路で返す。
 3. The `compute_ex_style()` shall 生成時に `WS_EX_LAYERED` を付与しない（撤去前の GPU 合成モードと同一の挙動を保つ）。
 
 ### Requirement 5: クリックスルー機構の非破壊（WS_EX_LAYERED 帰属移行）
