@@ -120,7 +120,7 @@ emo2 が起動して喋る。下記 5 トラックを結線して達成（⓪ �
 - `areka-P0-emo-atlas` — **アトラス基盤**（直列1）: 画像デコード→透過正規化（キーカラー/`.pna`/`use_self_alpha`→premultiplied BGRA・挿入時一度だけ）→**αトリミング**（α=0 領域を除外した有効矩形＋オフセット記録・例 100×100 中有効 10×10 なら 10×10＋offset で焼付）→packing（クレート利用・padding 1〜2px・複数頁・重複排除）→UV/オフセット表。✔ emo2 element 画像群が焼付され、トリム矩形・オフセット・正規化画素が単体テストで一致（表示不要・純粋層）
 - `areka-P0-emo-compose` — **合成コア**（直列2・atlas 依存）: Shell モデル→実サーフェスツリー構築（疎 id・appends・aliases・範囲の展開＝parser 転記層の下流）→合成プラン（layer 順・変換行列・合成メソッド）→**アトラス転写で1枚物ビットマップ合成**。入れ子 surface 参照の再帰＋循環検出。合成メソッドは emo2 使用分のみ（写像表は全量）。✔ emo2 surface0 の合成結果がオフスクリーン pixel テスト（golden/要点サンプリング）で一致（表示不要）
 - `areka-P0-emo-present` — **表示結線**（直列3・compose 依存）: 合成済み1枚→wintf 表示口（窓あたり visual 最小限）＋**AlphaMask を合成結果から生成**（clickthrough 直結）＋surface 指令 API（id 切替）＋合成キャッシュ（無効化規則）。バルーン枠（`balloons*.png`・fixture 直指定）も同一機構で表示。✔ 専用 example で surface0＋バルーン枠が表示・キャラ領域のみクリック可
-- `areka-P0-emo-text-layer` — バルーン文字を **engine 上に被せる層**（token→glyph→surface 領域・emo-present 依存）。✔ script がバルーンに描画＋scroll
+- `areka-P0-emo-text-layer` — バルーン文字を **engine 上に被せる層**（token→glyph→surface 領域・emo-present 依存）。**縦書き/横書き両対応**（wintf 縦書き資産を lift・emo2 使用方向を design で確認）・**描画先＝行列変換領域を内部表現**（回転領域書込みの構造・M1 実挙動は恒等/平行移動のみ・文字装飾は型シームのみ→M2）。✔ script がバルーンに描画＋scroll
 
 ### 増分（M-boot 後・**エンジン別＝並走可能**）
 
@@ -157,9 +157,12 @@ emo2 が起動して喋る。下記 5 トラックを結線して達成（⓪ �
 
 > **結論**: エンジン所有での並走は原則可。ただし上記**結合クラスタは I/O 契約を先決してから**両側を並列実装する（契約未定で並走すると齟齬）。完全独立ユニットは即着手可。
 
-### マウス制御の所有 ＆ メニュー方針
+### emo の責務範囲（UI 層宣言・2026-07-03 明文化） ＆ メニュー方針
 
-- **総合的なマウス制御＝⑥emo（render-engine）の責務**（独立仕様は作らない）。窓のマウスメッセージ・**alpha hit-test**・ドラッグは**完了済み基盤**（`event-mouse-basic`/`event-drag-system`/`event-hit-test`/`event-hit-test-alpha-mask`）の上に emo が所有。M1 新規は `collision-geometry`（hit→ゴースト collision region/actor 写像＝「範囲」のみ）だけ。emo が入力を解決し kanade:`input-events` が SHIORI へ配信。
+> **⑥ emo＝ゴーストの UI 層全般**を所有する（描画だけの engine ではない）: ① surface 合成（emo-atlas/-compose/-present）② **マウス/さわり反応**（下記）③ **バルーンテキスト表示**（emo-text-layer）④ 選択肢表示（choice-render）。「見える・触れる」はすべて emo が窓口＝kanade へは解決済みイベント（region/actor 等）だけを渡す。
+
+- **総合的なマウス制御・さわり反応＝⑥emo の責務**（独立仕様は作らない）。窓のマウスメッセージ・**alpha hit-test**・ドラッグは**完了済み基盤**（`event-mouse-basic`/`event-drag-system`/`event-hit-test`/`event-hit-test-alpha-mask`）の上に emo が所有。M1 新規は `collision-geometry`（hit→ゴースト collision region/actor 写像＝「範囲」のみ）だけ。emo が入力を解決し kanade:`input-events` が SHIORI へ配信（撫で＝OnMouseMove 連打の解釈は SHIORI 側の領分）。
+- **テキスト表示の進化路線（emo-text-layer 起点・M1→M2 追跡）**: M1＝縦書き/横書き両対応（wintf 縦書き資産 `vertical-text-layout`/Typewriter を lift・emo2 使用方向を design で確認）＋**描画先は「矩形」でなく行列変換領域を内部表現**（surface 合成の行列原則と同型・回転領域への文字書込みを構造として持つ。M1 実挙動は恒等/平行移動のみ）。M2＝回転テキストの実挙動解禁・**ポップアート級の文字装飾**（アウトライン/多色/シャドウ/変形等の text effects）——1枚物合成方式ゆえ文字も合成パスの1レイヤ＝装飾の自由度は自前合成が担保する（この拡張性が自前合成採用の追加論拠）。
 - **M1 のメニュー＝バルーン `\q` 選択肢**（emo2 の double-click メニュー）＝ `choice-render`＋`sakura-dialogue-tags`＋`input-events`。
 - **owner-draw メニュー（SSP 風 右クリック system メニュー・ゴースト管理 chrome）は M2**（OS owner-draw・上記 balloon 選択肢とは別物）。
 
@@ -194,7 +197,9 @@ emo2 が起動して喋る。下記 5 トラックを結線して達成（⓪ �
 
 ## M2 以降
 
-**M1 完成後に、実物を見て組み直す。** 本ロードマップでは扱わない（pasta の native x64・`IShiori` in-proc 化、縦書き・ベクトル描画・AI、**owner-draw 右クリック system メニュー（ゴースト管理 chrome）**、互換面拡大＝Shift_JIS/SAORI/里々・YAYA 網羅/NAR 等はその時に）。
+**M1 完成後に、実物を見て組み直す。** 本ロードマップでは扱わない（pasta の native x64・`IShiori` in-proc 化、ベクトル描画・AI、**owner-draw 右クリック system メニュー（ゴースト管理 chrome）**、互換面拡大＝Shift_JIS/SAORI/里々・YAYA 網羅/NAR 等はその時に）。
+
+**emo テキスト進化の予約（M2 候補・2026-07-03 開発者表明）**: ①**回転テキストの実挙動**（M1 で内部表現＝行列変換領域は構造として持ち込み済み・M2 で回転値を解禁）②**ポップアート級の文字装飾**（アウトライン/多色/シャドウ/変形等の text effects——1枚物自前合成ゆえ文字も合成レイヤの一つ＝装飾は emo 内で完結）。M1 の emo-text-layer が「行列領域＋装飾シーム」を仕込むことで、ここへ滑らかに接続する。
 
 ---
 
