@@ -51,6 +51,7 @@ areka（**x64**）が最小 SSP 互換ベースウェアとして、適合対象
 - 位置づけ: 旧「汎用シーングラフは M2 後ろ倒し」の**部分的前倒し**（データ構造のみ M1・上位演出エンジンは依然 M2）。
 - **アニメーションエンジンは2つ**（記憶 areka-two-animation-engines）: ①**さくらスクリプト再生エンジン**（talk timeline）＋ ②**シェルアニメーションエンジン**（SERIKO ループ）。`conductor`（SHIORI イベント循環）→ ① へ script。**① は下流が2つに分岐**: shell アニメ（`\s` 等）は ② へ／**テキスト（typewriter）は render(text-layer) へ直接**（テキスト描画はシェルアニメではないため ② を経由しない）。② は surface 合成を render に毎フレーム駆動。両 engine は **dola（完了・タイミング層）**上。
 - **並行モデル（設計指針・記憶 areka-concurrency-model）**: 各エンジン層＝**チャンネル通信のアクターモデル**、**エンジンインスタンスごとに独立スレッド**（async 中心でなくスレッド独立＝ゴーストの連続ループ/message pump に馴染む）。**エンジン間 I/O 契約＝チャンネルのメッセージ型**（クロスエンジン I/O 節と一致）。**但し ⑥render/window は UI スレッド固定**（D2D 単一スレッド＋window アフィニティ）＝他 actor は worker スレッドから描画/入力を channel で render へ。①host-32 は別プロセス＝天然のアクター境界（IPC が channel）。④sakura は per-talk transient。
+- **通信基盤の統一設計（2026-07-03 確定・責務三分）**: **機構**（envelope・spawn/join・停止・**UI 配送ブリッジ**）＝横断基盤ユニット **`areka-P0-actor-foundation`**（⓪ ghost 帰属・parser-foundation の並行版・brief 済）／**経路**（実行時の全体調整＝運行表）＝**kanade**（基盤の最大消費者・ただし所有者ではない——kanade 非経由の seriko→emo 等も基盤に載る）／**結線**（スレッド起動・channel 接続・終了）＝**ghost**（ghost-setup）。各エンジン仕様は自前の channel 流儀を発明せず actor-foundation の規約に載ること（brief の通信注記が正本）。
 
 ## 構築（初期化）モデル — 各エンジンのコンストラクタ
 
@@ -77,20 +78,22 @@ areka（**x64**）が最小 SSP 互換ベースウェアとして、適合対象
 | ⑤ | shell-anim-engine（SERIKO アニメ） | **`seriko`** | SERIKO ランタイム |
 | ⑥ | render-engine（シェル/バルーン統一 surface 合成） | **`emo`** | emotion＝感情を描く可視層 |
 
-**未着手ユニット名の固有名整合（2026-07-02 実施）**: `areka-P0-conductor`→`areka-P0-kanade`／`areka-P0-shell-anim-engine`→`areka-P0-seriko-engine`／`areka-P0-shell-anim-loop`→`areka-P0-seriko-loop`／`areka-P0-surface-engine`→`areka-P0-emo-surface`／`areka-P0-text-layer`→`areka-P0-emo-text-layer`。**不変**: `areka-P0-host32-*`（shiori トラック実装進行中＝改名衝突回避・名も既に整合）・`areka-P0-sakura-engine`・`areka-P0-ghost-setup` 等 ghost 系（既に固有名基準）・completed 仕様（歴史）。既知ドリフト: [balloon/model.rs:6](../../crates/areka-parsers/src/balloon/model.rs) doc コメントが旧名 `text-layer`/`surface-engine` を参照（該当ユニット着手時に追随修正）。
+**未着手ユニット名の固有名整合（2026-07-02 実施）**: `areka-P0-conductor`→`areka-P0-kanade`／`areka-P0-shell-anim-engine`→`areka-P0-seriko-engine`／`areka-P0-shell-anim-loop`→`areka-P0-seriko-loop`／`areka-P0-surface-engine`→`areka-P0-emo-surface`（**2026-07-03 さらに直列3分割**: `emo-atlas`→`emo-compose`→`emo-present`）／`areka-P0-text-layer`→`areka-P0-emo-text-layer`。**不変**: `areka-P0-host32-*`（shiori トラック実装進行中＝改名衝突回避・名も既に整合）・`areka-P0-sakura-engine`・`areka-P0-ghost-setup` 等 ghost 系（既に固有名基準）・completed 仕様（歴史）。既知ドリフト: [balloon/model.rs:6](../../crates/areka-parsers/src/balloon/model.rs) doc コメントが旧名 `text-layer`/`surface-engine` を参照（該当ユニット着手時に追随修正）。
 
 ## M1 実装ユニット（実現可能な粒度）
 
 > **粒度基準**: 1ユニット＝「コードを走らせて観測できる**単一 pass/fail** を持ち、それを観測するのに別ユニットを先に作る必要がない」もの。done が複数の独立観測に割れるなら粗すぎ→分割。
+> **観測の独立化（2026-07-03 明文化）**: 制御階層ユニット（kanade/sakura/seriko/emo）の単体観測は**実上流を待たず fixture/mock 入力で切る**（例: sakura＝script 文字列直入力・emo-compose＝parsed Shell モデル直入力・オフスクリーン pixel テストで観測）。実上流との結線は M-boot 統合（emo2-boot）で観測。これが「別ユニットを先に作る必要がない」の含意＝トラック間の並走はこの規約で担保される（トラック内は逐次）。
 > 正規名は**暫定**（着手時に確定）。**spec 工場にしない**＝下記はユニット名の登録であり brief.md 群ではない。着手時に最小 spec/task を just-in-time で切る。
-> **粒度の真実**: 作業は **M-boot に前倒し集中**（約16ユニット＝M1 の山）。「最初の起動」が本体で以降は薄い増分。
+> **粒度の真実**: 作業は **M-boot に前倒し集中**（約19ユニット＝M1 の山・2026-07-03 emo 3分割＋actor-foundation 追加で 16→19）。「最初の起動」が本体で以降は薄い増分。
 
-### M-boot ＝ `areka-P0-emo2-boot`（最初の可視結果・最重量＝約16ユニット）
+### M-boot ＝ `areka-P0-emo2-boot`（最初の可視結果・最重量＝約19ユニット）
 emo2 が起動して喋る。下記 5 トラックを結線して達成（⓪ ゴーストエンジンが全体を統括）。
 
 **⓪ ghost＝ゴーストエンジン（最上位 owner・全エンジンを統括）**
-- `areka-P0-ghost-setup` — ゴースト lifecycle（package-mount で構築→boot 統括→close）。✔ descript.txt 起点のマウントから起動〜終了を統括
-- `areka-P0-window-placement` — サーフェス窓の生成＋既定位置＋ドラッグ（`areka-mock-shell` 実コードから）。✔ むらさき/エモ窓が出てドラッグ移動
+- `areka-P0-actor-foundation` — **エンジン間通信の横断基盤**（parser-foundation の並行版）: envelope（メッセージ enum・返信 Sender 同梱）・spawn/join・停止手順（Close→drain→join）・**UI スレッド配送ブリッジ**（pump 統合）。`std::sync::mpsc` 起点＝依存ゼロ。kanade の先行依存・現行フロントと並走安全（新設モジュール＝非衝突）。✔ toy アクター試験（worker⇄worker＋worker→UI pump echo）（**brief 済 2026-07-03**）
+- `areka-P0-ghost-setup` — ゴースト lifecycle（package-mount で構築→boot 統括→close・**actor-foundation の結線層＝スレッド起動/channel 接続/join を所有**）。✔ descript.txt 起点のマウントから起動〜終了を統括
+- `areka-P0-window-placement` — サーフェス窓の生成＋既定位置＋ドラッグ（`areka-mock-shell` 実コードから。既定位置＝ukadoc `seriko.alignmenttodesktop` カスケード準拠・窓数は構成入力・二人立ちの本格結線は M-dual）。✔ むらさき/エモ窓が既定位置に出てドラッグ移動（**brief 済 2026-07-03**）
 
 **① shiori＝SHIORI 通信層エンジン host-32（耐力壁・`pilot/shiori-host-32` がトラックを gate）**
 - `pilot/shiori-host-32` — 使い捨て feasibility。**✅ 完了（2026-07-01・spec=`completed/pilot-shiori-host-32`・コードは `crates/pilot/examples/shiori-host-32/` に隔離保全）**: go 基準(1)(2) 実走充足＝32bit pasta.dll 1往復（x64 親が emo2 OnBoot `Value` 受領）＋窓持ちループ N秒生存→clean unload。跨ビットネス再入 WM_COPYDATA・`wintf-winmsg-executor` i686 実行時とも GO（fallback 不要）。→ 下流 `areka-P0-host32-*` の go ゲート充足（着手可・最終 go 判定は開発者）
@@ -107,20 +110,27 @@ emo2 が起動して喋る。下記 5 トラックを結線して達成（⓪ �
 - `areka-P0-package-mount` — `ghost/master/descript.txt`＋dir→mount（foundation 依存・起点は descript.txt。`install.txt`＝NAR 配置マニフェストは起動時不使用ゆえスコープ外）。✔ emo2 layout 解決。**✅ 完了（2026-07-02・spec=`completed/areka-P0-package-mount`）**: descript.txt 起点で SHIORI（dir=`ghost/master`・file は `Option` 推測禁止）＋shell（既定 `master` フォールバック・物理存在確認）の2点マウントを解決する `package` module を `areka-parsers` に確立。所在ベース識別（`type` 分岐なし）・foundation（`charset::decode`/`kv::parse_kv`）委譲・致命失敗3種（起点不在/読取不能/shell 不在）を `MountError` で観測可能化・emo2 実 fixture 統合テスト green（164 テスト・回帰なし・clippy clean）。下流 `ghost-setup`/`host-32`/`shell-parse` へ `MountModel` を供給
 
 **runtime 制御階層 kanade／sakura／seriko（上→下に駆動・両 anim engine は dola 上）**
-- `areka-P0-kanade` — **kanade（③conductor）**: SHIORI イベント循環（OnSecondChange pump・host-32 送受・Value を sakura-engine へ）。✔ OnBoot→Value 受領→再生開始
+- `areka-P0-kanade` — **kanade（③conductor）**: SHIORI イベント循環（OnSecondChange pump・host-32 送受・Value を sakura-engine へ）。**actor-foundation 先行依存**（kanade＝基盤の最大消費者・実行時経路＝運行表の所有者）。✔ OnBoot→Value 受領→再生開始
 - `areka-P0-sakura-engine` — **sakura（④）＝さくらスクリプト再生エンジン**（talk timeline: `\w/\_w` wait・`\s` で seriko へ surface 指令・text を emo（text-layer）へ・seq）。✔ boot script を時系列再生
 - `areka-P0-seriko-engine` — **seriko（⑤）＝シェルアニメーションエンジン**（SERIKO ループ＋surface 状態＋MAYUNA bind・render を毎フレーム駆動）。M-boot は静的＋指令適用、ループ(blink)は M-life。✔ 指令された surface を表示
 
 **emo（⑥）＝render engine（統一・`areka-mock-shell`＋dola から増分）**
-- `areka-P0-emo-surface` — **シェルもバルーンも同一の surface 合成**。element＝{画像 | 他サーフェス参照（入れ子）}、配置＝**D2D 変換行列**。✔ surface0 ＋バルーン枠を surface として表示
-- `areka-P0-emo-text-layer` — バルーン文字を **engine 上に被せる層**（token→glyph→surface 領域）。✔ script がバルーンに描画＋scroll
+
+> **合成方式（2026-07-03 開発者決定・記憶 areka-emo-own-compositor-atlas）**: 合成は **emo 自前コンポーネント（wintf Visual 合成非依存）**＝element 画像をアトラスへ正規化貼付→base＋element を layer 順に **1枚物ビットマップへ自前合成**→wintf へは完成品1枚のみ供給。論拠: DComp/WUC の visual ブレンドは実質 SourceOver 系のみで SERIKO 合成メソッド群をピクセル正確に写像不能。
+> **粒度分割（2026-07-03・旧 `areka-P0-emo-surface` を直列3ユニットへ分割）**: 旧ユニットはアトラス基盤・合成コア・表示結線を一身に抱え粗すぎ（単一 pass/fail 不成立）。以下の直列チェーンで完走する（各ユニットが独立観測を持つ・トラック内逐次）。
+> **クロスユニット契約（自律開発継続性・2026-07-03 fixture 実測で確定）**: 直列チェーンの「手前が考えないと後続が詰む」要素は各 brief の**「クロスユニット契約」節が正本**——①`AtlasEntry`/頁バッファ型＋マニフェスト導出＝emo-atlas 所有 ②**合成入力＝surface id＋bind 有効集合**（surface1000 全 bind 対策）＋正規化ツリー公開形（collisions/animations 保持）＋`ComposedSurface` 出力型＝emo-compose ③text-layer スロット予約＋bind 初期解決＋Window entity 受取口＋ulw-removal API 変動調整＝emo-present。設計/実装セッションは着手前に該当 brief の同節を読み、**契約型は上流 brief の正本を消費**（再定義しない）。
+
+- `areka-P0-emo-atlas` — **アトラス基盤**（直列1）: 画像デコード→透過正規化（キーカラー/`.pna`/`use_self_alpha`→premultiplied BGRA・挿入時一度だけ）→**αトリミング**（α=0 領域を除外した有効矩形＋オフセット記録・例 100×100 中有効 10×10 なら 10×10＋offset で焼付）→packing（クレート利用・padding 1〜2px・複数頁・重複排除）→UV/オフセット表。✔ emo2 element 画像群が焼付され、トリム矩形・オフセット・正規化画素が単体テストで一致（表示不要・純粋層）
+- `areka-P0-emo-compose` — **合成コア**（直列2・atlas 依存）: Shell モデル→実サーフェスツリー構築（疎 id・appends・aliases・範囲の展開＝parser 転記層の下流。**成果物は collisions/animations を保持した公開正規化形**＝seriko/collision-geometry が同じ結果を消費）→合成プラン（layer 順・変換行列・合成メソッド）→**アトラス転写で1枚物ビットマップ合成**。**合成入力＝surface id＋bind 有効集合**（emo2 side0 本体 surface1000 は静的 element ゼロ・全パーツ bind ゆえ、有効 bind の pattern0 を animation ID 昇順で静的合成——これが無いと M-boot でむらさきが空白）。入れ子 surface 参照の再帰＋循環検出。合成メソッドは emo2 使用分のみ＝実測 overlay（写像表は全量）。✔ emo2 surface0（＋bind 集合を与えた surface1000）の合成結果がオフスクリーン pixel テストで一致（表示不要）
+- `areka-P0-emo-present` — **表示結線**（直列3・compose 依存）: 合成済み1枚→wintf 表示口（窓あたり visual 最小限）＋**AlphaMask を合成結果から生成**（clickthrough 直結）＋surface 指令 API（id 切替）＋合成キャッシュ（無効化規則）。バルーン枠（`balloons*.png`・fixture 直指定）も同一機構で表示。✔ 専用 example で surface0＋バルーン枠が表示・キャラ領域のみクリック可
+- `areka-P0-emo-text-layer` — バルーン文字を **engine 上に被せる層**（token→glyph→surface 領域・emo-present 依存）。**縦書き/横書き両対応**（wintf 縦書き資産を lift・emo2 使用方向を design で確認）・**描画先＝行列変換領域を内部表現**（回転領域書込みの構造・M1 実挙動は恒等/平行移動のみ・文字装飾は型シームのみ→M2）。✔ script がバルーンに描画＋scroll
 
 ### 増分（M-boot 後・**エンジン別＝並走可能**）
 
 > 増分はエンジンへ帰属させる。**別エンジンに属する増分は並列着手可**（spanning する旧 unit はエンジン単位に分割済）。マイルストーン（M-dual 等）はエンジン横断の**統合点**であって作業単位ではない。
 > **トラック全7**（括弧内が固有名・「エンジン固有名」節が正本）: ⓪ゴーストエンジン(owner・`ghost`)・①SHIORI 通信層(host-32・`shiori`)・②parser/loader(`parsers`)・③conductor(`kanade`)・④sakura-engine(`sakura`)・⑤shell-anim-engine(`seriko`)・⑥render-engine(`emo`)。⓪は最上位 owner（lifecycle/窓配置/位置永続化）。**①SHIORI 通信層・②parser/loader・⓪の大半は M-boot で完了**。増分を持つのは ③〜⑥ ＋ ⓪の位置永続化。
 
-- **⑤ seriko（shell-anim-engine）**: `areka-P0-dual-surface`（side0/1＋surface alias）／ `areka-P0-mayuna-compose`（MAYUNA bind 多層）／ `areka-P0-seriko-loop`（SERIKO ループ＝blink random/bind+random）
+- **⑤ seriko（shell-anim-engine）**: `areka-P0-dual-surface`（side0/1＋surface alias）／ `areka-P0-mayuna-compose`（**bind 状態の動的管理**＝bindgroup 切替・着せ替えメニュー連動。**bind の静的合成適用は emo-compose が M-boot で所有済み**＝境界 2026-07-03 明確化）／ `areka-P0-seriko-loop`（SERIKO ループ＝blink random/bind+random）
 - **④ sakura（sakura-engine）**: `areka-P0-sakura-dialogue-tags`（`\q`/`\_l`/`\![move]`）
 - **③ kanade（conductor）**: `areka-P0-idle-talk`（OnSecondChange 自発会話）／ `areka-P0-input-events`（OnMouseMove/OnMouseDoubleClick/OnChoiceSelectEx 配信）
 - **⑥ emo（render-engine）**: `areka-P0-collision-geometry`（collision→region/actor 写像）／ `areka-P0-choice-render`（選択肢表示）／ `areka-P0-dual-window`（kero 2nd 窓）
@@ -150,9 +160,12 @@ emo2 が起動して喋る。下記 5 トラックを結線して達成（⓪ �
 
 > **結論**: エンジン所有での並走は原則可。ただし上記**結合クラスタは I/O 契約を先決してから**両側を並列実装する（契約未定で並走すると齟齬）。完全独立ユニットは即着手可。
 
-### マウス制御の所有 ＆ メニュー方針
+### emo の責務範囲（UI 層宣言・2026-07-03 明文化） ＆ メニュー方針
 
-- **総合的なマウス制御＝⑥emo（render-engine）の責務**（独立仕様は作らない）。窓のマウスメッセージ・**alpha hit-test**・ドラッグは**完了済み基盤**（`event-mouse-basic`/`event-drag-system`/`event-hit-test`/`event-hit-test-alpha-mask`）の上に emo が所有。M1 新規は `collision-geometry`（hit→ゴースト collision region/actor 写像＝「範囲」のみ）だけ。emo が入力を解決し kanade:`input-events` が SHIORI へ配信。
+> **⑥ emo＝ゴーストの UI 層全般**を所有する（描画だけの engine ではない）: ① surface 合成（emo-atlas/-compose/-present）② **マウス/さわり反応**（下記）③ **バルーンテキスト表示**（emo-text-layer）④ 選択肢表示（choice-render）。「見える・触れる」はすべて emo が窓口＝kanade へは解決済みイベント（region/actor 等）だけを渡す。
+
+- **総合的なマウス制御・さわり反応＝⑥emo の責務**（独立仕様は作らない）。窓のマウスメッセージ・**alpha hit-test**・ドラッグは**完了済み基盤**（`event-mouse-basic`/`event-drag-system`/`event-hit-test`/`event-hit-test-alpha-mask`）の上に emo が所有。M1 新規は `collision-geometry`（hit→ゴースト collision region/actor 写像＝「範囲」のみ）だけ。emo が入力を解決し kanade:`input-events` が SHIORI へ配信（撫で＝OnMouseMove 連打の解釈は SHIORI 側の領分）。
+- **テキスト表示の進化路線（emo-text-layer 起点・M1→M2 追跡）**: M1＝縦書き/横書き両対応（wintf 縦書き資産 `vertical-text-layout`/Typewriter を lift・emo2 使用方向を design で確認）＋**描画先は「矩形」でなく行列変換領域を内部表現**（surface 合成の行列原則と同型・回転領域への文字書込みを構造として持つ。M1 実挙動は恒等/平行移動のみ）。M2＝回転テキストの実挙動解禁・**ポップアート級の文字装飾**（アウトライン/多色/シャドウ/変形等の text effects）——1枚物合成方式ゆえ文字も合成パスの1レイヤ＝装飾の自由度は自前合成が担保する（この拡張性が自前合成採用の追加論拠）。
 - **M1 のメニュー＝バルーン `\q` 選択肢**（emo2 の double-click メニュー）＝ `choice-render`＋`sakura-dialogue-tags`＋`input-events`。
 - **owner-draw メニュー（SSP 風 右クリック system メニュー・ゴースト管理 chrome）は M2**（OS owner-draw・上記 balloon 選択肢とは別物）。
 
@@ -182,12 +195,14 @@ emo2 が起動して喋る。下記 5 トラックを結線して達成（⓪ �
 
 - `.kiro/specs/` 直下 active = **0**（憶測仕様を全伐採し更地化。実装ファーストで着手時に作る）。
 - **2026-07-01 追記・着手可能フロント（当時 brief 済み）**: `/kiro-discovery` で「安全並走バッチ」の brief を just-in-time 生成。① wintf 基盤層 `wintf-dcomp-to-wuc-migration`（**✅ 完了**）／`wintf-clickthrough-alpha-toggle`（**✅ 2026-07-02 完了・アーカイブ**）。② M1 parser 並走 `shell`/`balloon`/`package`（**✅ 全完了**）。③ M1 host-32 `areka-P0-host32-ipc`（**✅ 完了**）→ `areka-P0-host32-shiori-load`（**✅ 完了**）。これら 5〜6 本は相互非衝突で即並走可（`ecs/graphics` 系は wuc-migration に一本化）。
-- **2026-07-03 現況**: `completed/` = **112**。**active = 0**・**brief-only = 1**（`wintf-ulw-removal`＝clickthrough 完了でゲート解除＝**着手可**）。**②parsers トラック全完了・M-boot 約 7/16**（①shiori: pilot✅/ipc✅/shiori-load✅・**`areka-P0-host32-request` が逐次チェーン次フロント**・lifecycle 残）。**着手可能フロント**: shiori:`areka-P0-host32-request` ／ emo:`areka-P0-emo-surface` ／ ghost:`areka-P0-window-placement`（or `ghost-setup`） ／ wintf:`wintf-ulw-removal`（clickthrough 完了後の ULW 除去＋`CompositionMode` collapse）。
+- **2026-07-03 現況**: `completed/` = **112**。**active = 0**・**brief-only = 7**（`/kiro-discovery` 深掘り調査＝コード4系統＋ukadoc 正典＋クレート調査で brief 生成: **`areka-P0-host32-request`**〔凍結 IPC 不改変・helper echo→実呼出＋x64 Shiori3Codec〕／**emo 直列3分割 `areka-P0-emo-atlas`→`-emo-compose`→`-emo-present`**〔旧 emo-surface を粒度分割・自前合成＋αトリミングアトラス（packing クレート本命 `rectangle-pack`＝zero-dep・要開発者承認／対抗 `rect_packer`）〕／**`areka-P0-window-placement`**〔alignmenttodesktop カスケード・窓数構成入力〕／**`areka-P0-actor-foundation`**〔通信横断基盤・機構/経路/結線の三分・UI 配送ブリッジ・std mpsc 起点〕／**`wintf-ulw-removal`**〔鮮度更新済: ゲート充足✅・**`WS_EX_LAYERED` 同伴フラグ保全**を受け入れ基準へ追加〕）。**②parsers トラック全完了・M-boot 約 7/19**（①shiori: pilot✅/ipc✅/shiori-load✅・lifecycle 残）。**着手順の注意**: emo チェーン（present）と window-placement は同じ `crates/areka` 起点＝**並行着手はファイル衝突注意・順次推奨**（emo-atlas/-compose・actor-foundation は純粋層/新設モジュール＝衝突なし）。shiori:`host32-request`／wintf:`ulw-removal` は他と非衝突＝即並走可。
 - 旧 active/brief（M1 憶測・M2 reference・出荷層）・backlog（P1-P3）・`_rejected/`・旧戦略メモは**削除**（git 履歴に保全。必要時に復元可）。
 
 ## M2 以降
 
-**M1 完成後に、実物を見て組み直す。** 本ロードマップでは扱わない（pasta の native x64・`IShiori` in-proc 化、縦書き・ベクトル描画・AI、**owner-draw 右クリック system メニュー（ゴースト管理 chrome）**、互換面拡大＝Shift_JIS/SAORI/里々・YAYA 網羅/NAR 等はその時に）。
+**M1 完成後に、実物を見て組み直す。** 本ロードマップでは扱わない（pasta の native x64・`IShiori` in-proc 化、ベクトル描画・AI、**owner-draw 右クリック system メニュー（ゴースト管理 chrome）**、互換面拡大＝Shift_JIS/SAORI/里々・YAYA 網羅/NAR 等はその時に）。
+
+**emo テキスト進化の予約（M2 候補・2026-07-03 開発者表明）**: ①**回転テキストの実挙動**（M1 で内部表現＝行列変換領域は構造として持ち込み済み・M2 で回転値を解禁）②**ポップアート級の文字装飾**（アウトライン/多色/シャドウ/変形等の text effects——1枚物自前合成ゆえ文字も合成レイヤの一つ＝装飾は emo 内で完結）。M1 の emo-text-layer が「行列領域＋装飾シーム」を仕込むことで、ここへ滑らかに接続する。
 
 ---
 

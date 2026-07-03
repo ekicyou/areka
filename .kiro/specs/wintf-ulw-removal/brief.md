@@ -4,9 +4,9 @@
 > **位置づけ**: M1（emo2-boot）とは別軸の **wintf 基盤層**。表示レイヤーの合成方式を GPU 合成（DComp、後に WUC）単独へ一本化するための **ULW 撤去**。
 > **前提依存（順序ゲート）**:
 > ```
-> _Depends: wintf-clickthrough-alpha-toggle（完了・並走検証期間を経てULW破棄可の判断）
+> _Depends: wintf-clickthrough-alpha-toggle（✅ 2026-07-02 完了＝ゲート解除・着手可）
 > ```
-> **ULW を安全に消せるのは、本坑クリックスルー（`WS_EX_TRANSPARENT` 動的トグル）が完了し「ULW 無しでも別プロセスクリック透過が成立」と確認できてから**。クリックスルー brief の並走方針（「完全有効と判断されれば ULW 破棄／ただし当面は並走・即時撤去しない」）に一致。`wintf-dcomp-to-wuc-migration` とは**触るファイルが別ゆえ独立**（順序任意）。
+> **ULW を安全に消せるのは、本坑クリックスルー（`WS_EX_TRANSPARENT` 動的トグル）が完了し「ULW 無しでも別プロセスクリック透過が成立」と確認できてから** → **✅ 充足**（2026-07-02 完了・areka の窓は既に DComp モード＋clickthrough 登録で運転）。`wintf-dcomp-to-wuc-migration` も **✅ 完了**（GPU 合成パスは WUC 化済み・本 spec の「残す側」）。着手判断（並走検証期間の長さ）は開発者。
 
 ## Problem
 
@@ -24,8 +24,14 @@
 | ULW ユーティリティ | `transfer_to_hbitmap`（D2D→DIB）・`present_layered_window`（ULW） | `com/ulw.rs` |
 | 「ULW 一択」記述 | 別プロセス透過は実質 ULW 一択、と断定 | `tech.md` line 83 / `roadmap.md` line 30 |
 
-- **DComp パス（本 spec で残す・触らない）**: `com/dcomp.rs`, `ecs/graphics/dcomp_resource.rs`, graphics `components.rs`, `systems/{init,surface,visual_sync,render}.rs`。
-- **クリックスルーのα源に関する注意**: クリックスルー brief は接続先候補に ULW compositor の D2D1 staging αバッファ（`compositor.rs`・`CPU_READ`）を挙げるが、GPU 合成パスのクリックスルーは **per-widget αマスク**（`ecs/widget/bitmap_source/alpha_mask.rs` の `AlphaMask::is_hit`/`from_pbgra32`）を α源に使う想定。`compositor.rs` 撤去がクリックスルーのα源を奪わないことを **design で確認**する（前提依存の実質条件）。
+- **GPU 合成パス（本 spec で残す・触らない）**: WUC 移行済みの graphics 系（`wintf-dcomp-to-wuc-migration` ✅ が確立）。※ 本 brief 旧版の `com/dcomp.rs` 等の列挙は WUC 移行前の記述——残す側の正確なファイル群は design 冒頭で再確認。
+- **クリックスルーのα源（✅ 2026-07-03 検証済み・確定）**: 完了した clickthrough 実装は **per-widget αマスク（`AlphaMask::is_hit`）のみ**を α源に使い、ULW compositor の D2D1 staging αバッファは**一切参照しない**（`ecs/clickthrough/controller.rs`・`ecs/layout/hit_test/mod.rs` 実コード確認）。→ `compositor.rs` 撤去はクリックスルーを壊さない。旧「design で確認」条件は充足済み。
+- **⚠️ `WS_EX_LAYERED` 同伴フラグの帰属（新規・重要）**: pilot REPORT の必須配合どおり、`WS_EX_TRANSPARENT` 動的トグルには **`WS_EX_LAYERED` を同伴フラグとして立てる必要がある**（ULW/SLWA 非呼出・描画には使わない）。現状これは clickthrough の `apply_layered_companion()`（`ecs/clickthrough/controller.rs:171-180`）が実行時に適用しており、`compute_ex_style()` は DComp モードで LAYERED を**付けない**（`window_factory.rs:64-73`）。**ULW 撤去後、DComp/WUC 窓への `WS_EX_LAYERED` の唯一の源は clickthrough 機構になる**——撤去がこの経路を巻き込まないこと・clickthrough 登録窓が LAYERED を受け取ることを受け入れ基準に含める。
+
+## クロスユニット契約（後続を詰ませない事前考慮・2026-07-03）
+
+- **`CompositionMode` collapse は破壊的変更**: areka 側の呼び出し（`crates/areka/src/main.rs` の `CompositionMode::DComp` 指定等）と、着手予定の `areka-P0-emo-present`／`areka-P0-window-placement` が同じ API に触れる。**順序調整が理想**（本ユニット先行→emo/ghost 系が新 API で書く）。並行着手する場合は「collapse 後の追随はどちらが行うか」を着手時に確定（rebase 責務の明確化）。
+- 撤去で `WS_EX_LAYERED` の帰属が clickthrough 機構単独になる点は Current State 記載のとおり受け入れ基準に含める（emo-present のクリック透過観測が依存）。
 
 ## Desired Outcome
 
@@ -36,8 +42,8 @@ ULW 一式が撤去され、表示バックエンドが **GPU 合成単独**（D
 1. **ULW 参照の全数洗い出し**: `CompositionMode::ULW`・`WindowD3D11Compositor`・`compositor_systems`・`com/ulw.rs`・`compute_ex_style` の ULW 分岐・ULW を前提にした初期化/スケジュール登録を grep で漏れなく特定。
 2. **専用コード削除**: `ecs/graphics/compositor.rs`・`compositor_systems/`・`com/ulw.rs` を撤去。ECS スケジュールから ULW system 群を除去。
 3. **`CompositionMode` collapse**: ULW variant 除去。GPU 合成単独になった時点で enum を撤去 or 単一値へ最小化（生成時のデフォルトを GPU 合成へ）。`compute_ex_style` の ULW 分岐（`WS_EX_LAYERED`）を除去し、GPU 合成の ex_style（`WS_EX_NOREDIRECTIONBITMAP`）へ一本化。
-4. **ドキュメント正本更新**: `tech.md` line 83 ／ `roadmap.md` line 30 の「別プロセス透過は実質 ULW 一択」記述を、クリックスルー方式確定に合わせて更新。設計判断の変更は `doc/COMPAT_ARCHITECTURE.md` を正本に反映。
-5. **非破壊検証**: 残す GPU 合成パスの描画・再描画が撤去前と等価であること、ビルド/起動を確認。
+4. **ドキュメント正本更新**: steering（tech/product/roadmap）の「ULW 一択」記述は **2026-07-01〜03 に撤回・更新済み**——本 spec では残余（`doc/COMPAT_ARCHITECTURE.md` ほか doc 配下・コード内コメント）の最終整合のみ。
+5. **非破壊検証**: 残す GPU 合成パス（WUC）の描画・再描画が撤去前と等価であること、ビルド/起動、**clickthrough 登録窓が `apply_layered_companion()` 経由で `WS_EX_LAYERED` を受け取り透過が機能し続けること**を確認。
 
 **既存コードに触れる前に、削除対象ファイルと変更内容を依頼者へ提示して確認を取る**（推測で消さない）。
 
@@ -71,7 +77,7 @@ ULW 一式が撤去され、表示バックエンドが **GPU 合成単独**（D
 
 ## Constraints
 
-- Rust 2024・`windows` 0.62.2 系・**tokio 禁止**。32bit 可搬性を崩さない。
+- Rust 2024・`windows` 0.62.2 系・**tokio 禁止**。（32bit 可搬性制約は host-32 系専用＝wintf 本体は x64＋arm64・i686 検証を課さない）
 - **残す GPU 合成パスの描画等価**が受け入れ基準（撤去前後で見た目・再描画が変わらない）。
 - **前提依存を破らない**: 本坑クリックスルー完了前に ULW を撤去しない（撤去すると並走安全網が消える）。
 - 既存リリース最適化（`opt-level='z'`, `lto=true`）と互換。
