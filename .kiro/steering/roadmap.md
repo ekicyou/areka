@@ -113,7 +113,7 @@ emo2 が起動して喋る。下記 5 トラックを結線して達成（⓪ �
 - `areka-P0-seriko-engine` — **seriko（⑤）＝シェルアニメーションエンジン**（SERIKO ループ＋surface 状態＋MAYUNA bind・render を毎フレーム駆動）。M-boot は静的＋指令適用、ループ(blink)は M-life。✔ 指令された surface を表示
 
 **emo（⑥）＝render engine（統一・`areka-mock-shell`＋dola から増分）**
-- `areka-P0-emo-surface` — **シェルもバルーンも同一の surface 合成**。element＝{画像 | 他サーフェス参照（入れ子）}、配置＝**D2D 変換行列**（WUC への適用方式＝TransformMatrix 直結 or Offset/Scale 分解は design 検証）。バルーン枠画像（`balloons*.png`）も surface として読込（balloon dir は fixture 直指定・ベースウェアのバルーン選択機構は対象外）。✔ surface0 ＋バルーン枠を surface として表示（**brief 済 2026-07-03**）
+- `areka-P0-emo-surface` — **シェルもバルーンも同一の surface 合成**。**合成は emo 自前コンポーネント（wintf Visual 合成非依存・2026-07-03 開発者決定）**: element 画像をアトラスへ正規化貼付→base＋element を layer 順に**1枚物ビットマップへ自前合成**→wintf へは完成品1枚のみ供給（論拠: DComp/WUC のブレンドは SERIKO 合成メソッド群をピクセル正確に写像不能）。element＝{画像 | 他サーフェス参照（入れ子・循環検出）}、配置＝**D2D 変換行列**（自前合成パス内で適用）。AlphaMask は合成済み1枚から生成（clickthrough 直結）。バルーン枠画像（`balloons*.png`）も surface として読込（fixture 直指定）。✔ surface0 ＋バルーン枠の合成済みビットマップを pixel 単体テスト＋表示で観測（**brief 済 2026-07-03**）
 - `areka-P0-emo-text-layer` — バルーン文字を **engine 上に被せる層**（token→glyph→surface 領域）。✔ script がバルーンに描画＋scroll
 
 ### 増分（M-boot 後・**エンジン別＝並走可能**）
