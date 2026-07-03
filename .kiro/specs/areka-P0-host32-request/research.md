@@ -119,3 +119,57 @@
 5. **[R6] fixture 応答の固定内容と検証面**: 固定 SHIORI/3.0 response の具体（200＋`Value:` の中身・204 ケースの要否）、request line/ID の assert 方法、caller-free 二重解放検出の仕込み。
 6. **[R7.5] pasta `request` 署名のバイト照合**: `vendors/pasta` submodule を展開し `crates/pasta_shiori/src/windows.rs` の `request` 実署名（`len: &mut usize` ≡ `*mut usize`・cdecl・応答 nofree）を再確認して固定（現ワークツリーは submodule 未展開）。
 7. **[timeout] request 用 per-call timeout の既定値**: `LOAD_ACK_TIMEOUT=30s` と別建てにするか。GET は脳の思考時間を含むため長め・NOTIFY は投げきり。凍結 timeout 機構は不変（per-call 引数のみ）。
+
+---
+
+## 7. Design フェーズ discovery（2026-07-03・§6 の 7 決定事項を確定）
+
+> 本節は design 生成フェーズの追加調査。§6 の 7 項目を確定し、design.md の決定へ写す。
+> discovery 種別: **light（統合重視）**。凍結上流の上へ 4 点を増分する Extension ゆえ、新規外部技術調査は不要。ukadoc 正典（`spec_dll`）・vendors/pasta 実装・既存クレート実コードの突合が主。
+
+### 7.1 ukadoc 正典突合（request 書式・所有権契約の一次確認）
+
+- **`spec_dll`（protocol カテゴリ）＝DLL 共通仕様**を `get_doc` で取得。以下を**一次情報として確定**:
+  - `request` C 署名: `extern "C" __declspec(dllexport) HGLOBAL __cdecl request(HGLOBAL h, long *len);`（**cdecl・`long *len` は in/out**）。
+  - request 書式: **全行 CR+LF 区切り**／1 行目＝コマンド名＋プロトコルバージョン／2 行目以降＝`ヘッダ名: 値`／**ヘッダ部終端＝CR+LF 2 連続（空行）**／エンコーディングは Charset ヘッダ指定（一般に UTF-8）。→ R1.1〜R1.6 を正典で裏付け。
+  - HGLOBAL 所有権: ベースウェアが `GlobalAlloc(GMEM_FIXED)` で確保しデータ書込→モジュールが受領 HGLOBAL を `GlobalFree`（**入力＝callee-free**）。戻り値はモジュールが新規 `GlobalAlloc(GMEM_FIXED)` し `len` に新長を設定→**ベースウェアが使用後 `GlobalFree`（応答＝caller-free）**。→ R3.2〜R3.4・R6.2・R7.6 を正典で裏付け（非対称契約が正典どおり）。
+  - 戻り用メモリは「len より 1 バイト多く確保しゼロ終端」が望ましい（NUL 終端非保証ゆえ len 参照必須）＝**parse は len 厳守・NUL 終端に依存しない**。
+- **`OnBoot`（shiori_event）**: `Reference0`＝起動時のシェル名。「スクリプトが返されなかった（204）」と 204 の意味を明記＝R2.2 の 204＝応答なし成功を裏付け。
+- **status code / SSP 拡張ヘッダ表（200/204/311/312/400/500・`ErrorLevel`/`ErrorDescription`/`SecurityLevel`/`SenderType`/`SecurityOrigin`/`X-SSTP-PassThru`）**は本 MCP スナップショットの protocol カテゴリに単独 doc として無い（`spec_dll`／`spec_plugin` のみ）。ただし **wire framing の正典（`spec_dll`）＋204 意味（OnBoot doc）＋requirements/brief 既収の SSP 拡張知見＋vendors/pasta 実テストの実応答**で 2 表を確定するに十分。status/拡張ヘッダの語彙は requirements R2 で ID 付き確定済みゆえ design はそれを codec 契約へ写すのみ（新規発明なし）。
+
+### 7.2 vendors/pasta バイト照合（R7.5・submodule 展開して実施）
+
+- `git submodule update --init vendors/pasta` で展開（commit `048d646`）。`crates/pasta_shiori/src/windows.rs:76`:
+  - `#[unsafe(no_mangle)] pub extern "C" fn request(req: HGLOBAL, len: &mut usize) -> HGLOBAL`。
+  - `load`＝`extern "C" fn load(hdir: HGLOBAL, len: usize) -> bool`／`unload()->bool`。全て `extern "C"`。
+- **照合結論**: 既存 helper `shiori_proxy.rs::RequestFn = unsafe extern "cdecl" fn(req: HGLOBAL, len: *mut usize) -> HGLOBAL` は pasta とバイト ABI 一致。
+  - `i686-pc-windows-msvc` では **`extern "C"` ≡ `extern "cdecl"`**（C ABI＝cdecl）。`&mut usize` ≡ `*mut usize`（同一表現・in/out）。`long *len`（`spec_dll`）は i686 で `long`=32bit=`usize`=`*mut usize` と一致。
+  - ゆえに **helper 既存 `RequestFn` 型は変更不要でそのまま呼出可**。design は「照合済み・型固定・再宣言しない」を記す（R7.5 充足）。testdll の `request(req: HGLOBAL, len: *mut usize) -> HGLOBAL` も同一署名で整合。
+- pasta 実テスト `tests/shiori_sample_ghost_test.rs`: request＝`GET SHIORI/3.0\r\nCharset: UTF-8\r\nSender: SSP\r\nSecurityLevel: local\r\nID: OnBoot\r\nReference0: マスターシェル\r\n\r\n`／response＝`SHIORI/3.0 200 OK`＋`Value:`。→ fixture 固定応答と送出ヘッダ最小集合の実在裏付け。
+
+### 7.3 既存クレート実コード突合（結線点・エラー部品の棚卸し）
+
+- **host `parent_window.rs`**: `send_request(tag, payload, timeout) -> Result<Vec<u8>, SendError>` が REQUEST 1 往復を提供済み（`SendError{Handshake, Ipc}`）。GET 出口 API はこれへ `MsgTag::Request` で委譲し戻り `Vec<u8>` を codec で parse する。
+- **host `process_host.rs`**: `LOAD_ACK_TIMEOUT=30s` の per-call timeout 先例あり。request 用 timeout 定数を**別建て**で追加する余地を確認（凍結 timeout 機構は不変・per-call 引数のみ）。
+- **host `error.rs`**: 共存ファイル（`SpawnError`/`HandshakeError`）。request エラー語彙はここへ追記可能。ただし SHIORI/codec 由来のエラーは codec モジュール内型が自然（後述の統合方針参照）。
+- **helper `main.rs`**: `respond(req)->Vec<u8>` echo＋`classify_inbound` の `Reply(respond(payload))`＋`HelperShared.proxy: RefCell<Option<ShioriByteProxy>>`。REQUEST 分岐は現状 proxy に触れない。→ ②-A（proxy に `request` メソッド新設＋`Reply` アームで駆動）が既存の unsafe 一点集約方針・LOAD アームの RefCell 再入規律と対称。
+- **helper `shiori_proxy.rs`**: `request: RequestFn` 保持済み・未呼出（`#![allow(dead_code)]`）。`global_alloc_copy(&[u8])->Result<HGLOBAL, ProxyError>` が GMEM_FIXED 確保ヘルパとして再利用可。Drop courtesy unload 確立済み。
+- **testdll `lib.rs`**: `request(req, len)->HGLOBAL` が入力 callee-free 後 null 返却の stub。→ 固定 SHIORI/3.0 応答（GET→200+Value／NOTIFY→204）を `GlobalAlloc(GMEM_FIXED)` で確保し `*len` 書戻し返却へ拡張（caller-free 被検証側を実体化）。
+- **host tests `shiori_load_e2e.rs`**: helper/testdll 解決（env→target 探索・silent skip 禁止 panic）・`HelperGuard`・親窓 1 組制約・env-gated 実 pasta（`HOST32_PASTA_DLL`）の型が確立。→ 新 `shiori_request_e2e.rs` はこの型を踏襲する。
+
+### 7.4 §6 の 7 決定事項の確定（synthesis）
+
+1. **[軸①] codec の IShiori 装着範囲 → ①-C（plain codec＋型シーム）採用**。純 codec（`shiori3` モジュール）＋plain 出口 API（`get`/`notify`）を実体とし、`IShiori::Get`/`Notify` への写像は「変換の型シーム（doc＋署名で示すが実装しない）」に留める。理由: requirements は「出口 API の形を固定・装着方式は design」かつ「PENDING は型シームのみ」（R4.6）＝①-B（COM factory 即装着）はスコープ肥大で要件が要求しない。①-A に「IShiori 写像点の型シーム明示」を足したものが①-C＝最小実装規律に厳密適合し将来①-B へ無改修拡張できる境界を残す。
+2. **[R1/R2] 送出最小集合／受信寛容集合の 2 表 → design §Data Models に明記**（下記 design.md 参照）。送出＝`Charset`/`Sender`/`ID`/`Reference0..N`＋`SecurityLevel: local`（de-facto・pasta 実テスト準拠）。受信寛容＝status 200/204/311/312/400/500 を区別保持・`Value`/`ErrorLevel`/`ErrorDescription`/`Reference*`/`Marker` を tolerate・未知ヘッダは落とさない。
+3. **[R3/軸②] helper request 結線 → ②-A（`ShioriByteProxy::request` メソッド新設＋`Reply` アーム駆動）採用**。unsafe FFI 一点集約（proxy）と LOAD の RefCell 再入規律に対称。「LOAD 前 REQUEST・proxy 未確立時」は requirements Out-of-scope（Load-before-Request が構造的不変＝IShioriFactory 融合 create+load）ゆえ**防御しない**が、helper は proxy レベルでは未確立時に「明示エラー応答（空 or エラー status バイト列）」を返す＝crash させない最小防御のみ（本仕様の実運用では未確立 REQUEST は発生しない）。
+4. **[R5] エラー語彙統合 → codec エラー型（`ShioriError`）を新設し、出口 API は `SendError`（既存 transport／handshake）と `ShioriError`（codec／SHIORI 応答）を包む統合 enum `RequestError` を返す**。timeout＝`SendError::Ipc(IpcError::Timeout)`／SHIORI エラー＝`ShioriError`（400/500・ErrorLevel）／helper 死活＝別系統（`ExitKind`・`SendError` で観測）を単一の不透明失敗へ潰さず区別保持（R5.4）。
+5. **[R6] fixture 固定応答 → GET 用テスト ID（例 `OnTestValue`）に `SHIORI/3.0 200 OK`＋`Value: \0\s[0]host32 request roundtrip ok\e`／NOTIFY 用テスト ID に `SHIORI/3.0 204 No Content`。request line・`ID` を assert 面として検証**（R6.4/R6.9）。
+6. **[R7.5] pasta 署名 → §7.2 で照合済み・`extern "C"`≡`extern "cdecl"` で helper 既存 `RequestFn` 型に一致・変更不要**。
+7. **[timeout] request per-call timeout → `REQUEST_TIMEOUT` を新設**（`LOAD_ACK_TIMEOUT=30s` と別建て）。GET は脳の思考時間を含むため既定を長め（提案 60s）。NOTIFY も同期往復ゆえ同一定数を per-call 引数で渡す。凍結 timeout 機構は不変。
+
+### 7.5 synthesis 要約（build-vs-adopt・一般化・簡素化）
+
+- **adopt**: transport（`send_request`）・GMEM_FIXED ヘルパ・proxy 確立・E2E 骨格・エラー thiserror パターンは既存資産を再利用（新規 transport ゼロ）。
+- **build（最小）**: x64 純 codec（`build_request`/`parse_response`）・`ShioriByteProxy::request` メソッド・出口 API（`get`/`notify`）・統合エラー・fixture 応答・新 E2E。
+- **一般化**: codec の request ビルダは ID＋Reference 群を受ける汎用（イベント個別知識なし・R1.5）＝donor `build_onboot` の OnBoot 決め打ちを一般化。
+- **簡素化（YAGNI）**: IShiori COM factory・SHIORI_S_PENDING・Shift_JIS 実符号化は型シームのみ（実装しない）。charset は UTF-8 固定＋response Charset 省略時 request 継承。
