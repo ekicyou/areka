@@ -82,6 +82,7 @@ areka（**x64**）が最小 SSP 互換ベースウェアとして、適合対象
 ## M1 実装ユニット（実現可能な粒度）
 
 > **粒度基準**: 1ユニット＝「コードを走らせて観測できる**単一 pass/fail** を持ち、それを観測するのに別ユニットを先に作る必要がない」もの。done が複数の独立観測に割れるなら粗すぎ→分割。
+> **観測の独立化（2026-07-03 明文化）**: 制御階層ユニット（kanade/sakura/seriko/emo）の単体観測は**実上流を待たず fixture/mock 入力で切る**（例: sakura＝script 文字列直入力・emo-surface＝parsed Shell モデル直入力・専用 example で観測）。実上流との結線は M-boot 統合（emo2-boot）で観測。これが「別ユニットを先に作る必要がない」の含意＝トラック間の並走はこの規約で担保される（トラック内は逐次）。
 > 正規名は**暫定**（着手時に確定）。**spec 工場にしない**＝下記はユニット名の登録であり brief.md 群ではない。着手時に最小 spec/task を just-in-time で切る。
 > **粒度の真実**: 作業は **M-boot に前倒し集中**（約16ユニット＝M1 の山）。「最初の起動」が本体で以降は薄い増分。
 
@@ -90,7 +91,7 @@ emo2 が起動して喋る。下記 5 トラックを結線して達成（⓪ �
 
 **⓪ ghost＝ゴーストエンジン（最上位 owner・全エンジンを統括）**
 - `areka-P0-ghost-setup` — ゴースト lifecycle（package-mount で構築→boot 統括→close）。✔ descript.txt 起点のマウントから起動〜終了を統括
-- `areka-P0-window-placement` — サーフェス窓の生成＋既定位置＋ドラッグ（`areka-mock-shell` 実コードから）。✔ むらさき/エモ窓が出てドラッグ移動
+- `areka-P0-window-placement` — サーフェス窓の生成＋既定位置＋ドラッグ（`areka-mock-shell` 実コードから。既定位置＝ukadoc `seriko.alignmenttodesktop` カスケード準拠・窓数は構成入力・二人立ちの本格結線は M-dual）。✔ むらさき/エモ窓が既定位置に出てドラッグ移動（**brief 済 2026-07-03**）
 
 **① shiori＝SHIORI 通信層エンジン host-32（耐力壁・`pilot/shiori-host-32` がトラックを gate）**
 - `pilot/shiori-host-32` — 使い捨て feasibility。**✅ 完了（2026-07-01・spec=`completed/pilot-shiori-host-32`・コードは `crates/pilot/examples/shiori-host-32/` に隔離保全）**: go 基準(1)(2) 実走充足＝32bit pasta.dll 1往復（x64 親が emo2 OnBoot `Value` 受領）＋窓持ちループ N秒生存→clean unload。跨ビットネス再入 WM_COPYDATA・`wintf-winmsg-executor` i686 実行時とも GO（fallback 不要）。→ 下流 `areka-P0-host32-*` の go ゲート充足（着手可・最終 go 判定は開発者）
@@ -112,7 +113,7 @@ emo2 が起動して喋る。下記 5 トラックを結線して達成（⓪ �
 - `areka-P0-seriko-engine` — **seriko（⑤）＝シェルアニメーションエンジン**（SERIKO ループ＋surface 状態＋MAYUNA bind・render を毎フレーム駆動）。M-boot は静的＋指令適用、ループ(blink)は M-life。✔ 指令された surface を表示
 
 **emo（⑥）＝render engine（統一・`areka-mock-shell`＋dola から増分）**
-- `areka-P0-emo-surface` — **シェルもバルーンも同一の surface 合成**。element＝{画像 | 他サーフェス参照（入れ子）}、配置＝**D2D 変換行列**。✔ surface0 ＋バルーン枠を surface として表示
+- `areka-P0-emo-surface` — **シェルもバルーンも同一の surface 合成**。element＝{画像 | 他サーフェス参照（入れ子）}、配置＝**D2D 変換行列**（WUC への適用方式＝TransformMatrix 直結 or Offset/Scale 分解は design 検証）。バルーン枠画像（`balloons*.png`）も surface として読込（balloon dir は fixture 直指定・ベースウェアのバルーン選択機構は対象外）。✔ surface0 ＋バルーン枠を surface として表示（**brief 済 2026-07-03**）
 - `areka-P0-emo-text-layer` — バルーン文字を **engine 上に被せる層**（token→glyph→surface 領域）。✔ script がバルーンに描画＋scroll
 
 ### 増分（M-boot 後・**エンジン別＝並走可能**）
@@ -182,7 +183,7 @@ emo2 が起動して喋る。下記 5 トラックを結線して達成（⓪ �
 
 - `.kiro/specs/` 直下 active = **0**（憶測仕様を全伐採し更地化。実装ファーストで着手時に作る）。
 - **2026-07-01 追記・着手可能フロント（当時 brief 済み）**: `/kiro-discovery` で「安全並走バッチ」の brief を just-in-time 生成。① wintf 基盤層 `wintf-dcomp-to-wuc-migration`（**✅ 完了**）／`wintf-clickthrough-alpha-toggle`（**✅ 2026-07-02 完了・アーカイブ**）。② M1 parser 並走 `shell`/`balloon`/`package`（**✅ 全完了**）。③ M1 host-32 `areka-P0-host32-ipc`（**✅ 完了**）→ `areka-P0-host32-shiori-load`（**✅ 完了**）。これら 5〜6 本は相互非衝突で即並走可（`ecs/graphics` 系は wuc-migration に一本化）。
-- **2026-07-03 現況**: `completed/` = **112**。**active = 0**・**brief-only = 1**（`wintf-ulw-removal`＝clickthrough 完了でゲート解除＝**着手可**）。**②parsers トラック全完了・M-boot 約 7/16**（①shiori: pilot✅/ipc✅/shiori-load✅・**`areka-P0-host32-request` が逐次チェーン次フロント**・lifecycle 残）。**着手可能フロント**: shiori:`areka-P0-host32-request` ／ emo:`areka-P0-emo-surface` ／ ghost:`areka-P0-window-placement`（or `ghost-setup`） ／ wintf:`wintf-ulw-removal`（clickthrough 完了後の ULW 除去＋`CompositionMode` collapse）。
+- **2026-07-03 現況**: `completed/` = **112**。**active = 0**・**brief-only = 4**（`/kiro-discovery` 深掘り調査＝コード4系統＋ukadoc 正典で brief 生成: **`areka-P0-host32-request`**〔凍結 IPC 不改変・helper echo→実呼出＋x64 Shiori3Codec〕／**`areka-P0-emo-surface`**〔統一 surface 合成・バルーン枠画像 in scope・行列→WUC 適用は design 検証〕／**`areka-P0-window-placement`**〔alignmenttodesktop カスケード・窓数構成入力〕／**`wintf-ulw-removal`**〔既存 brief を鮮度更新: ゲート充足✅・α源検証済✅・**`WS_EX_LAYERED` 同伴フラグ保全**を受け入れ基準へ追加〕）。**②parsers トラック全完了・M-boot 約 7/16**（①shiori: pilot✅/ipc✅/shiori-load✅・lifecycle 残）。**着手順の注意**: emo-surface と window-placement は同じ `crates/areka/src/main.rs` 起点＝**並行着手はファイル衝突注意・順次推奨**。shiori:`host32-request`／wintf:`ulw-removal` は他と非衝突＝即並走可。
 - 旧 active/brief（M1 憶測・M2 reference・出荷層）・backlog（P1-P3）・`_rejected/`・旧戦略メモは**削除**（git 履歴に保全。必要時に復元可）。
 
 ## M2 以降
