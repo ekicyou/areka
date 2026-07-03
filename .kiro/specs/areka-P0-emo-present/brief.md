@@ -1,0 +1,66 @@
+# Brief: areka-P0-emo-present
+
+> **種別**: 本坑（main）。⑥ emo トラック直列チェーン **3/3**（emo-atlas → emo-compose → **emo-present**。旧 `areka-P0-emo-surface` の 2026-07-03 粒度分割＝本ユニットで旧ゴール完走）。
+> **方針正本**: 合成は emo 自前・アトラス転写・1枚物（記憶 areka-emo-own-compositor-atlas／roadmap emo 節）。
+
+## Problem
+
+合成コア（emo-compose）が生む 1枚物ビットマップは純粋データであり、**画面に出す結線——wintf への供給・クリックスルー用 AlphaMask の生成・surface 切替の指令口・合成キャッシュ——が存在しない**。ここが埋まって初めて旧 emo-surface のゴール（surface0＋バルーン枠の表示）が完走する。
+
+## Current State
+
+- **emo-compose（直列2・前提）**: `compose(surface_id) -> 合成済み premultiplied BGRA 1枚`（純粋）。
+- **wintf 表示基盤 ✅**: `BitmapSource`→`Visual`→WUC `SpriteVisual` の表示経路。per-widget `AlphaMask::is_hit`（**premultiplied BGRA**・`from_pbgra32`）が clickthrough の α源（`WS_EX_TRANSPARENT` 動的トグル・07-02 完了）。
+- mock-shell（`crates/areka/src/main.rs`）に窓生成・クリックスルー登録の実績コードあり（example の donor）。
+
+## Desired Outcome
+
+合成済み1枚を wintf の窓に表示し（**窓あたり visual 最小限**・入れ子 Visual 合成不使用）、**AlphaMask を合成結果から生成してキャラ領域のみクリック可**とし、surface id 切替の指令 API と合成キャッシュを備える。
+
+**✔ 観測（単一 pass/fail）**: **専用 example** が emo2 fixture から surface0＋**バルーン枠（`balloons*.png`）**を表示し、(a) 見た目が emo-compose の golden と一致（b) キャラ不透明領域のみクリック捕捉・透明域は背後へ透過（clickthrough 実挙動）（c) 指令 API で surface id を切り替えると表示が更新される。window-placement 完了は待たない（mock-shell 級の窓を example 内で自前使用）。
+
+## Approach
+
+1. **表示口**: 合成済み BGRA バッファ→WUC surface 更新の最小 widget（既存 `BitmapSource` の「ファイルから」を「メモリから」に置き換えた供給路。既存流用 or 最小新設は design 判断）。**窓＝visual 1〜数枚**（surface 本体＋将来の text-layer 用の口だけ・粗い層構成のみ許容）。
+2. **AlphaMask 生成**: 合成結果（premultiplied）から `from_pbgra32` 相当で AlphaMask を構築し hit-test へ供給——clickthrough 直結。**surface 切替時に AlphaMask も同期更新**（ズレ＝クリック領域の食い違いバグ源）。
+3. **指令 API**: `show_surface(scope, surface_id)` 級の適用口（＝将来の seriko→emo channel 契約の片側。M-boot は直接呼出で可・channel 化は kanade/seriko 結線時）。
+4. **合成キャッシュ**: surface id→合成済みバッファ（LRU or 全保持・emo2 規模では全保持で可）＋無効化規則（アトラス再構築時）。emo-compose は純粋関数のまま・キャッシュは本層が持つ。
+5. **バルーン枠**: `balloons0.png` 等を balloon dir（**fixture 直指定**・ベースウェアのバルーン選択は ghost 層の後続領分）から同一機構で合成・表示。
+6. **更新スレッド規律**: WUC surface 更新・visual 操作は **UI スレッド固定**（DispatcherQueue 親和性）。合成（CPU）を worker で行う場合はバッファを channel/queue で UI スレッドへ渡す（並行モデル正本: render は UI スレッド・他 actor は channel で送る）。
+
+## 設計指示・注意点
+
+- **AlphaMask と表示の原子性**: 表示バッファと AlphaMask は**同じ合成結果**から作り、切替は対で入れ替える（片方だけ古い状態を作らない）。
+- **premultiplied のまま WUC へ**: WUC surface のピクセル形式（BGRA premultiplied）と合成出力を一致させ、途中変換を挟まない。
+- **サイズ変化**: surface ごとに原寸が違い得る——窓/visual サイズの追随規則（原寸表示・DPI 拡縮は wintf 側）を design で明確化。
+- **キャッシュ無効化**: M-boot ではアトラス不変＝実質不要だが、無効化の口だけ設ける（ghost 再読込・将来の動的差替えに備えた**構造**）。
+- **example の位置づけ**: 観測用の専用 example（`crates/areka/examples/` 等）とし、`main.rs` の書換えは最小限に留める——**window-placement と同じ `crates/areka` を触るため、同時着手しない**（順次推奨・roadmap 記載）。
+
+## Scope
+
+- **In**: メモリ供給の表示口（最小 widget/流用）／AlphaMask 生成＋同期更新／指令 API（id 切替）／合成キャッシュ＋無効化口／バルーン枠表示（fixture 直指定）／専用 example／clickthrough 実挙動の確認。
+- **Out**: 合成そのもの（**emo-compose**）／アトラス（**emo-atlas**）／窓の既定位置・ドラッグ機構化（**window-placement**）／テキスト描画（**emo-text-layer**）／SERIKO 再生（seriko）／channel 契約の確定（kanade/seriko 結線時）。
+
+## Boundary Candidates
+
+- 表示口（バッファ→WUC・wintf を知る唯一の層）／キャッシュ＋指令 API（emo のランタイム状態）／AlphaMask 供給（hit-test 接続点）。
+
+## Out of Boundary
+
+- Window entity の生成・配置・ドラッグ（window-placement）。example 内の窓は観測用の仮設。
+
+## Upstream / Downstream
+
+- **Upstream**: `areka-P0-emo-compose`（直列2）→ その先に `emo-atlas`（直列1）／wintf 表示・AlphaMask・clickthrough 基盤 ✅。
+- **Downstream**: `areka-P0-emo-text-layer`（表示済み surface の上の文字層＝本ユニットの表示口を前提）／`areka-P0-seriko-engine`（指令 API の将来の呼び手）／`collision-geometry`・`choice-render`・`dual-window`（増分）。
+
+## Existing Spec Touchpoints
+
+- **Extends**: `completed/areka-mock-shell`（窓・clickthrough 登録の donor）。
+- **Adjacent**: `areka-P0-window-placement`（**同じ `crates/areka` 起点＝並行着手はファイル衝突注意・順次推奨**。境界: Window entity=placement／表示供給＋emo ランタイム=本ユニット）。
+
+## Constraints
+
+- Rust 2024・`windows` 0.62.2・tokio 禁止。**WUC 更新は UI スレッド固定**（MTA＋`DQTAT_COM_NONE`＝記憶 areka-wuc-runs-on-mta-thread）。
+- 最小実装＋薄い拡張シーム（キャッシュ無効化・channel 化の**口**だけ最初から）。
+- 正典は ukadoc・emo2 fixture は最小適合サンプル。

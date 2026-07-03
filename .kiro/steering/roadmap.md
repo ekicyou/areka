@@ -77,16 +77,16 @@ areka（**x64**）が最小 SSP 互換ベースウェアとして、適合対象
 | ⑤ | shell-anim-engine（SERIKO アニメ） | **`seriko`** | SERIKO ランタイム |
 | ⑥ | render-engine（シェル/バルーン統一 surface 合成） | **`emo`** | emotion＝感情を描く可視層 |
 
-**未着手ユニット名の固有名整合（2026-07-02 実施）**: `areka-P0-conductor`→`areka-P0-kanade`／`areka-P0-shell-anim-engine`→`areka-P0-seriko-engine`／`areka-P0-shell-anim-loop`→`areka-P0-seriko-loop`／`areka-P0-surface-engine`→`areka-P0-emo-surface`／`areka-P0-text-layer`→`areka-P0-emo-text-layer`。**不変**: `areka-P0-host32-*`（shiori トラック実装進行中＝改名衝突回避・名も既に整合）・`areka-P0-sakura-engine`・`areka-P0-ghost-setup` 等 ghost 系（既に固有名基準）・completed 仕様（歴史）。既知ドリフト: [balloon/model.rs:6](../../crates/areka-parsers/src/balloon/model.rs) doc コメントが旧名 `text-layer`/`surface-engine` を参照（該当ユニット着手時に追随修正）。
+**未着手ユニット名の固有名整合（2026-07-02 実施）**: `areka-P0-conductor`→`areka-P0-kanade`／`areka-P0-shell-anim-engine`→`areka-P0-seriko-engine`／`areka-P0-shell-anim-loop`→`areka-P0-seriko-loop`／`areka-P0-surface-engine`→`areka-P0-emo-surface`（**2026-07-03 さらに直列3分割**: `emo-atlas`→`emo-compose`→`emo-present`）／`areka-P0-text-layer`→`areka-P0-emo-text-layer`。**不変**: `areka-P0-host32-*`（shiori トラック実装進行中＝改名衝突回避・名も既に整合）・`areka-P0-sakura-engine`・`areka-P0-ghost-setup` 等 ghost 系（既に固有名基準）・completed 仕様（歴史）。既知ドリフト: [balloon/model.rs:6](../../crates/areka-parsers/src/balloon/model.rs) doc コメントが旧名 `text-layer`/`surface-engine` を参照（該当ユニット着手時に追随修正）。
 
 ## M1 実装ユニット（実現可能な粒度）
 
 > **粒度基準**: 1ユニット＝「コードを走らせて観測できる**単一 pass/fail** を持ち、それを観測するのに別ユニットを先に作る必要がない」もの。done が複数の独立観測に割れるなら粗すぎ→分割。
-> **観測の独立化（2026-07-03 明文化）**: 制御階層ユニット（kanade/sakura/seriko/emo）の単体観測は**実上流を待たず fixture/mock 入力で切る**（例: sakura＝script 文字列直入力・emo-surface＝parsed Shell モデル直入力・専用 example で観測）。実上流との結線は M-boot 統合（emo2-boot）で観測。これが「別ユニットを先に作る必要がない」の含意＝トラック間の並走はこの規約で担保される（トラック内は逐次）。
+> **観測の独立化（2026-07-03 明文化）**: 制御階層ユニット（kanade/sakura/seriko/emo）の単体観測は**実上流を待たず fixture/mock 入力で切る**（例: sakura＝script 文字列直入力・emo-compose＝parsed Shell モデル直入力・オフスクリーン pixel テストで観測）。実上流との結線は M-boot 統合（emo2-boot）で観測。これが「別ユニットを先に作る必要がない」の含意＝トラック間の並走はこの規約で担保される（トラック内は逐次）。
 > 正規名は**暫定**（着手時に確定）。**spec 工場にしない**＝下記はユニット名の登録であり brief.md 群ではない。着手時に最小 spec/task を just-in-time で切る。
-> **粒度の真実**: 作業は **M-boot に前倒し集中**（約16ユニット＝M1 の山）。「最初の起動」が本体で以降は薄い増分。
+> **粒度の真実**: 作業は **M-boot に前倒し集中**（約18ユニット＝M1 の山・2026-07-03 emo 3分割で 16→18）。「最初の起動」が本体で以降は薄い増分。
 
-### M-boot ＝ `areka-P0-emo2-boot`（最初の可視結果・最重量＝約16ユニット）
+### M-boot ＝ `areka-P0-emo2-boot`（最初の可視結果・最重量＝約18ユニット）
 emo2 が起動して喋る。下記 5 トラックを結線して達成（⓪ ゴーストエンジンが全体を統括）。
 
 **⓪ ghost＝ゴーストエンジン（最上位 owner・全エンジンを統括）**
@@ -113,8 +113,14 @@ emo2 が起動して喋る。下記 5 トラックを結線して達成（⓪ �
 - `areka-P0-seriko-engine` — **seriko（⑤）＝シェルアニメーションエンジン**（SERIKO ループ＋surface 状態＋MAYUNA bind・render を毎フレーム駆動）。M-boot は静的＋指令適用、ループ(blink)は M-life。✔ 指令された surface を表示
 
 **emo（⑥）＝render engine（統一・`areka-mock-shell`＋dola から増分）**
-- `areka-P0-emo-surface` — **シェルもバルーンも同一の surface 合成**。**合成は emo 自前コンポーネント（wintf Visual 合成非依存・2026-07-03 開発者決定）**: element 画像をアトラスへ正規化貼付→base＋element を layer 順に**1枚物ビットマップへ自前合成**→wintf へは完成品1枚のみ供給（論拠: DComp/WUC のブレンドは SERIKO 合成メソッド群をピクセル正確に写像不能）。element＝{画像 | 他サーフェス参照（入れ子・循環検出）}、配置＝**D2D 変換行列**（自前合成パス内で適用）。AlphaMask は合成済み1枚から生成（clickthrough 直結）。バルーン枠画像（`balloons*.png`）も surface として読込（fixture 直指定）。✔ surface0 ＋バルーン枠の合成済みビットマップを pixel 単体テスト＋表示で観測（**brief 済 2026-07-03**）
-- `areka-P0-emo-text-layer` — バルーン文字を **engine 上に被せる層**（token→glyph→surface 領域）。✔ script がバルーンに描画＋scroll
+
+> **合成方式（2026-07-03 開発者決定・記憶 areka-emo-own-compositor-atlas）**: 合成は **emo 自前コンポーネント（wintf Visual 合成非依存）**＝element 画像をアトラスへ正規化貼付→base＋element を layer 順に **1枚物ビットマップへ自前合成**→wintf へは完成品1枚のみ供給。論拠: DComp/WUC の visual ブレンドは実質 SourceOver 系のみで SERIKO 合成メソッド群をピクセル正確に写像不能。
+> **粒度分割（2026-07-03・旧 `areka-P0-emo-surface` を直列3ユニットへ分割）**: 旧ユニットはアトラス基盤・合成コア・表示結線を一身に抱え粗すぎ（単一 pass/fail 不成立）。以下の直列チェーンで完走する（各ユニットが独立観測を持つ・トラック内逐次）。
+
+- `areka-P0-emo-atlas` — **アトラス基盤**（直列1）: 画像デコード→透過正規化（キーカラー/`.pna`/`use_self_alpha`→premultiplied BGRA・挿入時一度だけ）→**αトリミング**（α=0 領域を除外した有効矩形＋オフセット記録・例 100×100 中有効 10×10 なら 10×10＋offset で焼付）→packing（クレート利用・padding 1〜2px・複数頁・重複排除）→UV/オフセット表。✔ emo2 element 画像群が焼付され、トリム矩形・オフセット・正規化画素が単体テストで一致（表示不要・純粋層）
+- `areka-P0-emo-compose` — **合成コア**（直列2・atlas 依存）: Shell モデル→実サーフェスツリー構築（疎 id・appends・aliases・範囲の展開＝parser 転記層の下流）→合成プラン（layer 順・変換行列・合成メソッド）→**アトラス転写で1枚物ビットマップ合成**。入れ子 surface 参照の再帰＋循環検出。合成メソッドは emo2 使用分のみ（写像表は全量）。✔ emo2 surface0 の合成結果がオフスクリーン pixel テスト（golden/要点サンプリング）で一致（表示不要）
+- `areka-P0-emo-present` — **表示結線**（直列3・compose 依存）: 合成済み1枚→wintf 表示口（窓あたり visual 最小限）＋**AlphaMask を合成結果から生成**（clickthrough 直結）＋surface 指令 API（id 切替）＋合成キャッシュ（無効化規則）。バルーン枠（`balloons*.png`・fixture 直指定）も同一機構で表示。✔ 専用 example で surface0＋バルーン枠が表示・キャラ領域のみクリック可
+- `areka-P0-emo-text-layer` — バルーン文字を **engine 上に被せる層**（token→glyph→surface 領域・emo-present 依存）。✔ script がバルーンに描画＋scroll
 
 ### 増分（M-boot 後・**エンジン別＝並走可能**）
 
@@ -183,7 +189,7 @@ emo2 が起動して喋る。下記 5 トラックを結線して達成（⓪ �
 
 - `.kiro/specs/` 直下 active = **0**（憶測仕様を全伐採し更地化。実装ファーストで着手時に作る）。
 - **2026-07-01 追記・着手可能フロント（当時 brief 済み）**: `/kiro-discovery` で「安全並走バッチ」の brief を just-in-time 生成。① wintf 基盤層 `wintf-dcomp-to-wuc-migration`（**✅ 完了**）／`wintf-clickthrough-alpha-toggle`（**✅ 2026-07-02 完了・アーカイブ**）。② M1 parser 並走 `shell`/`balloon`/`package`（**✅ 全完了**）。③ M1 host-32 `areka-P0-host32-ipc`（**✅ 完了**）→ `areka-P0-host32-shiori-load`（**✅ 完了**）。これら 5〜6 本は相互非衝突で即並走可（`ecs/graphics` 系は wuc-migration に一本化）。
-- **2026-07-03 現況**: `completed/` = **112**。**active = 0**・**brief-only = 4**（`/kiro-discovery` 深掘り調査＝コード4系統＋ukadoc 正典で brief 生成: **`areka-P0-host32-request`**〔凍結 IPC 不改変・helper echo→実呼出＋x64 Shiori3Codec〕／**`areka-P0-emo-surface`**〔統一 surface 合成・バルーン枠画像 in scope・行列→WUC 適用は design 検証〕／**`areka-P0-window-placement`**〔alignmenttodesktop カスケード・窓数構成入力〕／**`wintf-ulw-removal`**〔既存 brief を鮮度更新: ゲート充足✅・α源検証済✅・**`WS_EX_LAYERED` 同伴フラグ保全**を受け入れ基準へ追加〕）。**②parsers トラック全完了・M-boot 約 7/16**（①shiori: pilot✅/ipc✅/shiori-load✅・lifecycle 残）。**着手順の注意**: emo-surface と window-placement は同じ `crates/areka/src/main.rs` 起点＝**並行着手はファイル衝突注意・順次推奨**。shiori:`host32-request`／wintf:`ulw-removal` は他と非衝突＝即並走可。
+- **2026-07-03 現況**: `completed/` = **112**。**active = 0**・**brief-only = 6**（`/kiro-discovery` 深掘り調査＝コード4系統＋ukadoc 正典＋クレート調査で brief 生成: **`areka-P0-host32-request`**〔凍結 IPC 不改変・helper echo→実呼出＋x64 Shiori3Codec〕／**emo 直列3分割 `areka-P0-emo-atlas`→`-emo-compose`→`-emo-present`**〔旧 emo-surface を粒度分割・自前合成＋αトリミングアトラス（packing クレート本命 `rectangle-pack`＝zero-dep・要開発者承認／対抗 `rect_packer`）〕／**`areka-P0-window-placement`**〔alignmenttodesktop カスケード・窓数構成入力〕／**`wintf-ulw-removal`**〔鮮度更新済: ゲート充足✅・**`WS_EX_LAYERED` 同伴フラグ保全**を受け入れ基準へ追加〕）。**②parsers トラック全完了・M-boot 約 7/18**（①shiori: pilot✅/ipc✅/shiori-load✅・lifecycle 残）。**着手順の注意**: emo チェーン（present）と window-placement は同じ `crates/areka` 起点＝**並行着手はファイル衝突注意・順次推奨**（emo-atlas/-compose は純粋層＝衝突なし）。shiori:`host32-request`／wintf:`ulw-removal` は他と非衝突＝即並走可。
 - 旧 active/brief（M1 憶測・M2 reference・出荷層）・backlog（P1-P3）・`_rejected/`・旧戦略メモは**削除**（git 履歴に保全。必要時に復元可）。
 
 ## M2 以降
