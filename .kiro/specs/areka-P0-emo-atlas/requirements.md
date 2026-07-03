@@ -11,7 +11,7 @@ areka-P0-emo-atlas は render エンジン **emo**（⑥）の自前合成の**�
 ## Boundary Context
 
 - **In scope**:
-  - shell／balloon モデルから「焼付対象 element 画像パス一覧」を導出するマニフェスト列挙
+  - surface（shell surface および surface システムで表現される balloon）から「焼付対象 element 画像パス一覧」を導出するマニフェスト列挙（balloon は surface として shell と区別なく扱う）
   - element 画像のデコード（既存 WIC 経路の流用・新規デコード依存ゼロ）
   - 透過正規化（`use_self_alpha` 解釈・premultiplied BGRA へ統一）
   - α トリミング（有効矩形抽出・トリムオフセット／トリム寸／原寸の記録）
@@ -25,6 +25,7 @@ areka-P0-emo-atlas は render エンジン **emo**（⑥）の自前合成の**�
   - emo2 が実際に使用しない透過腕の実装（キーカラー腕・`.pna` 腕は口だけ残す）
 - **Adjacent expectations**:
   - 上流の shell／balloon／package モデル（element パス・shell dir 解決・透過設定）は入力として注入される。本層はこれらの元ファイル（descript 等）を自ら読みに行かない。
+  - balloon は描画上 surface システムで表現される（内部に element を持ち、element 合成で画像化する）。本層は balloon を shell surface と区別せず、同一の surface／element マニフェスト機構で扱う。balloon 画像を surface 表現（element を持つ surface）へ適合させる責務は上流（隣接ユニット）が担い、本層は完成した surface 表現を入力として受け取る。
   - `use_self_alpha` 等の透過パラメータは上流由来の設定として受け取る。
   - アトラス索引表と頁バッファの形（AtlasKey→AtlasEntry ＋ premultiplied BGRA バッファ）は emo-compose と共有する契約であり、本層が正本を定義する。
   - 成果物は将来 emo アクターのスレッドから共有参照される想定であり、スレッド間で安全に手渡せる所有形で提供する。
@@ -39,7 +40,7 @@ areka-P0-emo-atlas は render エンジン **emo**（⑥）の自前合成の**�
 1. When shell モデルと balloon モデルが入力として与えられる, the Atlas Manifest shall 全 surface が参照する element 画像パスを列挙する。
 2. When surface が element 自己参照（base 画像を element として参照する流儀）を用いている, the Atlas Manifest shall base 画像を別枠扱いせず通常の element として列挙する。
 3. When surface が bind アニメーション pattern を介して他 surface の element 画像を間接参照している, the Atlas Manifest shall その間接参照先の element 画像も列挙する。
-4. When balloon モデルが balloon 画像を含む, the Atlas Manifest shall balloon 画像パスを surface の element 画像と同一機構で列挙する。
+4. When balloon が surface システムを介して（内部に element を持つ surface として）表現される, the Atlas Manifest shall balloon の element 画像を shell surface の element と区別なく同一機構（要件 1.1）で列挙する。
 5. Where element パスがサブディレクトリを含む, the Atlas Manifest shall パスを改変せずそのまま列挙対象とする。
 6. When 同一 element 画像パスが複数の参照元から現れる, the Atlas Manifest shall そのパスを重複なく 1 件として扱う。
 
