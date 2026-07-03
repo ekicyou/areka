@@ -34,6 +34,7 @@ M1 `areka-P0-emo2-boot` の「① SHIORI 通信層エンジン host-32」トラ�
   - イベントカタログ・送出イベント名の網羅・送出タイミング・SHIORI イベント循環の駆動（→ 下流 `areka-P0-kanade`）。本仕様は OnBoot 一件を観測に用いるのみで、codec は汎用 ID で任意イベントを送れることを示す。
   - 常駐メッセージループ生存・`OnSecondChange` ポーリング・crash 監視・`unload` の恒常呼出（→ 下流 `areka-P0-host32-lifecycle`）。
   - `IShiori::Get` の遅延応答（`SHIORI_S_PENDING`＋token＋`IShioriHost::Complete`）の実装（pasta の SHIORI/3.0 wire は同期応答ゆえ本仕様は同期で足る・型シームのみ・実装しない）。
+  - Load 前 Request（proxy 未確立）の防御・「未準備」エラー語彙。`IShioriFactory::CreateInstance` が生成＋load を融合するため `IShiori` は load 済みでしか存在せず、Load は Request に**構造的に先立つ**（順序保証ではなく型・生成順による必然）。ゆえに未準備状態は発生し得ず、本仕様はこれを防御せず R5 のエラー語彙にも含めない（起こり得ない状態への過剰防御を避ける・最小実装規律）。
   - Shift_JIS の request/response 実符号化の実装（シームのみ・emo2＝UTF-8 固定ゆえ実装しない）。
   - WM_COPYDATA transport（`shiori-host32-ipc` の wire/framing/`MsgTag`/`ResponseSlot`/timeout）の改変（上流完了・凍結）。
   - ゴースト mount からの `load_dir` 解決・descript 解析（`package-mount`／`parsers` 済）／応答 `Value`（さくらスクリプト）の解釈・再生（`sakura`／`kanade`）／SAORI（emo2 未使用）／native x64 脳の実装本体。
