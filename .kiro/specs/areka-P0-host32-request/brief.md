@@ -42,6 +42,12 @@ x64 が SHIORI/3.0 request バイト列を組み立て → WM_COPYDATA wire 越�
 - `SecurityLevel` ヘッダは SSP 系拡張（design で送出可否を判断・de-facto）。
 - OnBoot: Reference0=起動 shell 名（イベントカタログの網羅は kanade 領分・本ユニットは OnBoot 一件を観測に使うのみ）。
 
+## ukadoc 必読（design 着手時に ukadoc MCP `get_doc`/`search_docs` で正典参照・2026-07-03 総ざらい）
+
+- **必読**: `spec_shiori3` **全文**（ステータスコード／Sender／Reference1〜／ErrorLevel・ErrorDescription〔SSP拡張〕／X-SSTP-PassThru／SenderType〔internal/external/sstp/embed/raise 等〕／SecurityOrigin）＋ `memo_shiorievent`（イベント往復の概念）。SSTP 経由の将来形は `spec_sstp`（request/response）を参照。
+- **brief 未網羅→design で埋める項目**: ① **SecurityLevel** の値域（local/external）② **SenderType/SecurityOrigin/X-SSTP-PassThru** ヘッダの扱い（M1 は送出最小・受信寛容）③ **未知ヘッダ寛容**——SHIORI 応答に未知ヘッダが来ても落とさない（保持 or 読み飛ばし）を codec 契約に明記 ④ 応答側 `Reference*`・`Marker` の存在（tolerate）⑤ リソース照会系 ID（`version`/`name`/`craftman` 等の GET）——kanade 前に codec が汎用 ID で送れることを確認。
+- **具体指示**: design 冒頭で `get_doc('spec_shiori3')` を読み、**送出ヘッダ最小集合（Charset/Sender/ID/Reference*・SecurityLevel）と受信寛容集合**の2表を design.md に載せること。
+
 ## Scope
 
 - **In**: helper `request()` 実呼出（HGLOBAL 契約遵守）／x64 `Shiori3Codec`（build＋parse＋UTF-8）／testdll request fixture 拡張／env-gated 実 pasta E2E／IShiori 装着方針の design 判断。

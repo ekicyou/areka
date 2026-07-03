@@ -45,6 +45,13 @@ Shell モデル＋アトラスを入力に、**指定 surface id の合成済み
 - **キャッシュはここでは持たない**: surface id→合成結果のキャッシュ・無効化は emo-present の領分（本ユニットは純粋関数に徹する）。
 - 既知ドリフト解消: `balloon/model.rs:6` doc コメントの旧名 `text-layer`/`surface-engine` 参照を本チェーン着手時に追随修正（記憶 areka-engine-names）。
 
+## ukadoc 必読（design 着手時に ukadoc MCP `get_doc`/`search_docs` で正典参照・2026-07-03 総ざらい）
+
+- **必読**: `descript_shell_surfaces` の **`element*`**（描画メソッド・ファイル名・X,Y・クリップ）／**`animation*.interval`**・**`animation*.pattern*`**（描画メソッド・surface 番号・ウェイト・X,Y——**surface 番号 -1/-2 のセンチネル意味**含む）／**各描画メソッドの個別ページ**（`overlay`/`overlay-fast`/`interpolate`/`asis`〔透明域を黒描画〕/`base`〔全置換・collision も更新〕/`add`・`bind`〔overlay 等価のレガシー〕）／**`animation-sort`**（ascend/descend）／`collision*`・**`collisionex*`**（rect/ellipse/circle/polygon/region）・`animation*.collision*`（フレーム別上書き）／`name`（\s[] 用 alias）。MAYUNA は `descript_shell` の **`char*.bindgroup*.name`/`.default`・`bindoption*`**。
+- **⚠️ 重要修正（総ざらいで発見）**: 重ね順の既定は animation ID 昇順だが **`animation-sort`（ascend/descend）で上書き可能**——bind 静的合成の順序決定は「animation-sort 考慮済み」の形で実装せよ（emo2 の同キー使用有無を design で確認・未使用なら既定 ascend で可・キーの口は持つ）。
+- **brief 未網羅→design で埋める項目**: ① `surface.append*` の正確な意味論（範囲構文・append が collision/animation に効く範囲）② surfaces.txt 内 alias（`sakura.surface.alias` の書式・複数対応）③ **全描画メソッドの透明度合成式**（ukadoc は式を明文化していない箇所あり＝**SSP 実挙動が de-facto**・写像表には「式未確定」印を付け emo2 使用分のみ実測確定）④ `collisionex` の型多様性（M1 は矩形のみ実装・型は enum で全量）⑤ pattern の新旧フィールド順（フォーマット変換表）。
+- **具体指示**: design 冒頭で `element*`/`animation*.pattern*`/`animation-sort` を `get_doc` し、**合成メソッド写像表に「合成式（確定/de-facto/未確定）」列**を設けること。bind 静的合成の順序仕様は「animation-sort → ID 昇順」の2段で記載。
+
 ## Scope
 
 - **In**: 実サーフェスツリー構築（疎 id・append 範囲展開・alias）／合成プラン（layer・行列・メソッド）／アトラス転写合成（1枚物生成）／入れ子再帰＋循環検出／合成メソッド写像表（全量）＋emo2 使用分実装／バックエンド選定（API 非依存化）／オフスクリーン pixel テスト。

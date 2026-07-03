@@ -43,6 +43,12 @@
 - **キャッシュ無効化**: M-boot ではアトラス不変＝実質不要だが、無効化の口だけ設ける（ghost 再読込・将来の動的差替えに備えた**構造**）。
 - **example の位置づけ**: 観測用の専用 example（`crates/areka/examples/` 等）とし、`main.rs` の書換えは最小限に留める——**window-placement と同じ `crates/areka` を触るため、同時着手しない**（順次推奨・roadmap 記載）。
 
+## ukadoc 必読（design 着手時に ukadoc MCP `get_doc`/`search_docs` で正典参照・2026-07-03 総ざらい）
+
+- **必読**: `descript_balloon` **全文**（バルーン枠描画に効くキーの全容——`use_self_alpha`/`paint_transparent_region_black`〔shell と別定義〕・`overlay_outside_balloon`〔marker/online 表示のクリップ規則〕・有効描画領域/テキスト領域系キー）。配置系は `descript_shell` の **`sakura.balloon.offsetx/offsety`**（バルーンアンカー）・`sakura.balloon.alignment`、`descript_shell_surfaces` の **`balloon.offsetx/offsety`**（surface 別上書き）、`descript_ghost` の **`sakura.balloon.defaultsurface`**（既定バルーン面番号）。
+- **brief 未網羅→design で埋める項目**: ① バルーン枠の**有効描画領域**（validwidth/validrect 系・テキストが載る領域とクリップ——ukadoc の該当キーを design で確定。**emo-text-layer が同じ領域定義を消費**するため公開形に）② `balloons*.png`/`balloonc*.png`/`arrow0/1.png`/`marker.png` の**役割分担表**（M-boot は枠のみ・arrow/marker/onlien は後続と明記）③ balloon `.pna`/α 規則（fixture 実測: kakukaku は png のみ）④ `sakura.balloon.alignment` の値域（fixture: left/right——複合値の有無を確認）⑤ `seriko.zorder`/`seriko.sticky-window`（emo2 未使用ならシームのみ・確認）。
+- **具体指示**: design 冒頭で `get_doc('descript_balloon')` を読み、**「枠描画に効くキー」「テキスト領域に効くキー（→emo-text-layer へ引き継ぐ）」「M1 対象外」の3分類表**を design.md に載せること。バルーンアンカー（offsetx/y）は window-placement のバルーン追従 offset と同じ座標系か照合。
+
 ## Scope
 
 - **In**: メモリ供給の表示口（最小 widget/流用）／AlphaMask 生成＋同期更新／指令 API（id 切替）／合成キャッシュ＋無効化口／バルーン枠表示（fixture 直指定）／専用 example／clickthrough 実挙動の確認。

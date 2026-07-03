@@ -43,6 +43,13 @@
 - **z-order／sticky**: `seriko.zorder`・`seriko.sticky-window`（SSP 2.4+）。既定 topmost ではない（de-facto・design で SSP 実挙動確認フラグ）。
 - **保存位置の復元**は起動時挙動として存在するが、**M1 では position-persist（M-life）へ分離済み**——本ユニットは「保存が無いときの既定位置」のみ。
 
+## ukadoc 必読（design 着手時に ukadoc MCP `get_doc`/`search_docs` で正典参照・2026-07-03 総ざらい）
+
+- **必読**: `descript_ghost` と `descript_shell` の **`seriko.alignmenttodesktop`**（全体）・**`sakura.seriko.alignmenttodesktop`/`kero.seriko.*`/`char*.seriko.*`**（スコープ別・ghost/shell 両所在＝4層カスケードの各定義）＋ **`(sakura|kero|char*).defaulttop`**（**free 時のみ有効**と明記あり——重要）。
+- **⚠️ 重要修正（総ざらいで発見）**: ① **`defaulttop` は alignmenttodesktop=free のときだけ効く**——bottom 整列（emo2）では Y は下端固定＝defaulttop 無視の分岐を design に反映 ② **`defaultx` は ukadoc で確認できず**（`defaulttop`/`defaultleft` 系は確認）——emo2 fixture は `sakura.defaultx,0` を実使用＝**SSP de-facto キー**。design で `defaultx`⇔`defaultleft` の関係（同義/別義・X 座標系の原点）を SSP 実挙動で確定し、**両表記を受ける寛容実装**にすること。
+- **brief 未網羅→design で埋める項目**: ① `alignmenttodesktop` の**値域全量**（bottom 既定は確認済み・top/free の正確な挙動）② 座標系の原点（work area か モニタか・複数モニタ時の既定）③ 起動時可視性・スケール系キーの有無（あればシームのみ）④ ghost↔shell の優先度表を design.md に明文化（ghost 全体＜ghost スコープ＜shell 全体＜shell スコープ）。
+- **具体指示**: design 冒頭で `descript_ghost`/`descript_shell` の placement 系キーを `get_doc` し、**「キー×所在×優先度×有効条件（free 限定か）」の1枚表**を design.md に載せること。emo2 実測値（bottom・defaultx,0）をその表の検証行に使う。
+
 ## Scope
 
 - **In**: 窓生成の機構化（scope 数対応・balloon 窓含む）／`alignmenttodesktop` 既定位置（カスケード解決・emo2 使用値）／work area 計算／全面ドラッグ＋バルーン追従（暫定 offset）／既定 z-order（非 topmost）。

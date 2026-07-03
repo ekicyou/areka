@@ -43,6 +43,12 @@ emo2 の element 画像群（shell＋balloon）が、**透過正規化済み pre
 - **頁あふれ**: 1頁に収まらない場合は複数頁へ自然分割（emo2 規模では起きないが構造は最初から）。
 - **バルーン画像も同一機構**（`balloons*.png`/`balloonk*.png`・α規則は surface と同一）。
 
+## ukadoc 必読（design 着手時に ukadoc MCP `get_doc`/`search_docs` で正典参照・2026-07-03 総ざらい）
+
+- **必読**: `descript_shell` の **`seriko.use_self_alpha`**（0/1/full の値域）・**`seriko.paint_transparent_region_black`**（0/1・既定は pna 系=1/α系=0）。balloon 側の同名キーは `descript_balloon`（`use_self_alpha`/`paint_transparent_region_black`——**shell と balloon で別定義**・両方読むこと）。
+- **brief 未網羅→design で埋める項目**: ① **`.pna` の対応付け規則**（`surfaceN.png`⇔`surfaceN.pna` の命名対・ukadoc 記載が薄い＝SSP de-facto を確認）② **element ファイルのサブディレクトリ配置**の正当性（emo2 は `CityPop/`/`purple/` 配下を実使用＝de-facto 有効・ukadoc 明文なし→寛容に受ける）③ surface ファイル名のゼロ詰め variant（fixture に `surface0010.png` あり——**element path 経由なら opaque で問題なし**・file-only surface 走査時のみ規則が要る）④ `surfacetable.txt` は表示名定義＝アトラス対象外と確認 ⑤ `seriko.dpi` とスケーリング（M1 は等倍・キーの存在だけ記録）。
+- **具体指示**: design 冒頭で `use_self_alpha` × `.pna` 有無の **2×2 動作表**（0/1/full × pna 有/無）を作り、emo2 実測（=1・pna 無）以外の腕はシームであることを表内で明示すること。
+
 ## Scope
 
 - **In**: WIC デコード結線（trait 薄切り）／透過正規化（emo2 使用腕）／αトリミング＋オフセット記録／`rectangle-pack` packing（承認申請）＋padding 自前ラップ＋複数頁＋重複排除／アトラス表 API／単体テスト群。
