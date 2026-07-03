@@ -85,3 +85,65 @@
 
 ---
 *本 gap 分析は情報提供であり実装決定ではない。DD-1〜DD-8 は要件ディスカッション／設計フェーズで解決される設計判断項目である。*
+
+---
+
+# 設計フェーズ Research Log（2026-07-03 design 生成・discovery: Extension/light＋対象コード精読）
+
+## 7. 設計フェーズの調査記録
+
+### 7.1 UI ブリッジの必須依存の精査（RN-1 解決）
+- **Context**: gap 分析は「UI 配送ブリッジは wintf 依存が不可避」と評価。配置決定（DD-1/DD-2）の前提を検証した。
+- **Sources**: `crates/wintf/src/ecs/clickthrough/controller.rs`（`run_click_through`）・`crates/wintf/src/runtime/tick_bridge.rs`（`AsyncTickTask`）・`crates/wintf/src/runtime/mod.rs`（`WinApp::run` の relay タスク）・`crates/shiori-host32-host/Cargo.toml`／`src/parent_window.rs`。
+- **Findings**:
+  - 搬送機構（queue＋wakeup＋pump 内 drain）の実体は `wintf_winmsg_executor::spawn_local`＋`event_listener::Event`＋`std::sync::mpsc` の 3 点で完結する。`run_click_through` が `World` を触るのは clickthrough 固有の消費部分であり、機構そのものは wintf 本体（ECS/World）非依存。
+  - `event_listener` の notify（別スレッド発火）は executor のクロススレッド waker 経由で pump を起こす——`VsyncEventBridge`（別スレッド `DwmFlush`→notify）→`AsyncTickTask`（pump 上 async）で本番実証済み。追加の `PostMessage` 経路は不要。
+  - 非 wintf クレートが `wintf-winmsg-executor`＋`event-listener` に直接依存して pump を回す前例は `shiori-host32-host` が本番採用済み（`MessageLoop::run`・`FilterResult`）。両依存とも i686 ビルド実証済み（記憶 areka-host32-ipc-and-i686-build）。
+  - `wintf_winmsg_executor::JoinHandle` の drop はタスクをキャンセルしない（`WinApp::run` の relay タスクのコメントで明示＝self-terminate 規律）。
+- **Implications**: UI ブリッジは新設クレート内に置け、**wintf 本体は不改変**にできる（DD-2 の決定根拠）。RN-1 の「wintf 外へ露出できるか」は「そもそも wintf を経由しない」で解消。
+
+### 7.2 toy 試験(b) の pump 実走手段（RN-2 解決）
+- **Context**: R8.2「wintf の pump 実走上で echo を機械 pass/fail 検証」の具体手段。
+- **Sources**: `crates/shiori-host32-host/src/parent_window.rs`（`pump_until_hello_or`＋in-source 単一 loopback テスト）。
+- **Findings**: 「別スレッド heartbeat（約 25ms 間隔の `WM_NULL` 送出）＋filter クロージャでの deadline／完了フラグ再評価＋`msg_loop.quit()`」で `MessageLoop::run` を bounded 化する手法が cargo test 内で実証済み（無入力でも `GetMessage` がハングしない）。HWND 不要の変種として `PostThreadMessageW(thread_id, WM_NULL)` を採用（キュー生成前の失敗は無視して送出継続）。thread message が filter に届かない場合のフォールバック＝message-only 窓＋`PostMessageW`（同ファイルの実装通り）。
+- **Implications**: toy(b) は `crates/areka-actor/tests/toy_ui_pump_test.rs`（integration test＝独立プロセス・他テストの thread-local executor と非干渉）として機械 pass/fail 化できる（DD-5 の決定根拠）。「wintf の pump」の解釈は「wintf `WinApp::run` が駆動するのと同一の pump 機構（`wintf-winmsg-executor::MessageLoop`）」とする——R4.4 自身が同 executor を wintf の pump 資産として列挙しており整合。
+
+### 7.3 順序規律の継承確認
+- **Context**: 起床の取りこぼし防止の既存規律を基盤へ移植する。
+- **Sources**: `monitor.rs`（store→notify 順序不変条件）・`tick_bridge.rs`／`controller.rs`（listen-before-work）。
+- **Findings**: 送信側「データ格納→notify」・受信側「listener arm→処理→await」の対規律で取りこぼしが構造的に消える（両ファイルに明文コメントあり）。
+- **Implications**: `UiSender::send`（queue→notify）と `spawn_ui` drain ループ（listen→try_recv 全量→await）に同規律を固定（design §System Flows）。
+
+## 8. Design Decisions（DD-1〜DD-8 の解決記録・正本は design.md「設計判断」節）
+
+| DD | 決定 | 一行根拠 |
+|----|------|---------|
+| DD-1 | 新設独立クレート `areka-actor`（Option B 系） | kanade が直後の先行依存＝2 例目即来（C の抽出コストを近日必ず払う）・parser-foundation（`areka-parsers`）と同型の横断基盤・非 UI エンジンを wintf に引きずらせない |
+| DD-2 | UI ブリッジも同クレート `ui` モジュール・**wintf 不改変** | 必須依存は executor＋event-listener の 2 つで足りる（§7.1）・二層分離はモジュール境界＋依存規律（`ui` は `spawn`/`reply` に依存しない）で担保 |
+| DD-3 | 具体型（`ReplySender`/`ActorHandle`/`UiSender` 等）は基盤所有・`XxxMsg` enum と Close variant は各消費者所有（規約は lib.rs rustdoc） | 共通トレイト／`Envelope<T>` は 1 例根拠＝R7.1/7.2 違反。規約文＋toy 実例で拘束 |
+| DD-4 | per-request `std::sync::mpsc::channel()` を newtype 対（`ReplySender::send(self,T)`＝consume）で包む | std のみ・drop 意味論＝切断シグナル（R3.6）・自作 oneshot は利得なし・newtype が実装差し替えシーム |
+| DD-5 | toy(b)＝integration test（独立プロセス）＋bounded pump（heartbeat＋deadline＋完了フラグ quit・`pump_until_hello_or` 写経） | 機械 pass/fail（R8.2/8.3）を cargo test で充足。example は pass/fail 不可で棄却（§7.2） |
+| DD-6 | （要件フェーズで解決済み）Close＝即時停止・積み残し破棄・reply drop＝切断観測 | 2026-07-03 要件ディスカッション #1。設計は Break→Receiver drop の実装形に写像のみ |
+| DD-7 | `(mpsc::Sender<M>, ActorHandle)` タプル返却・`ActorHandle` は非 RAII（drop=detach） | R1.1 の字義を最小表面で充足。drop-join は Close 送信権限を持たずデッドロック源→停止駆動は結線層が「Close→join」を明示実行 |
+| DD-8 | `ActorHandle::join(self) -> Result<(), ActorError>`＝panic を thiserror 構造化エラー（アクター名＋payload 文字列）へ写像 | R1.3 を診断可能な最小形で充足・監督/再起動なし（R7.2） |
+
+## 9. Synthesis 記録（design-synthesis 3 レンズ）
+
+- **Generalization**: worker 側 `run_inbox` と UI 側 `spawn_ui` の handler を同一シェイプ `FnMut(M) -> ControlFlow<()>` に統一（受信ループ規約の一般化＝界面のみ一般化・実装は thread ループ／async drain で別）。clickthrough の二重起床構造から World 依存を除いた一般化が `ui` モジュール。
+- **Build vs Adopt**: チャンネル＝std mpsc 採用（`WintfTaskPool` 前例）・起床＝event-listener 採用・pump＝wintf-winmsg-executor 採用（すべて既存資産）。oneshot 自作は棄却（mpsc 転用で足りる）。crossbeam-channel は不採用凍結（R5.3 シームのみ）。
+- **Simplification**: 共通 `Actor` トレイト・`Envelope<T>` 型・feature gate（`ui` の条件コンパイル）・監督ツリー・stop_flag（停止はメッセージ原語に一本化）・クレート 2 分割（純粋層/UI 層の別クレート化）をすべて削除。公開面は関数 4＋型 7 に限定。
+
+## 10. Risks & Mitigations（設計フェーズ更新）
+
+- **toy(b) の thread message 配送**（`PostThreadMessageW` が executor の filter へ届かない可能性・低）— フォールバック: message-only 窓＋`PostMessageW`（`parent_window.rs` 実装通り・公開 API 不変の局所差し替え）。実装時に一度だけ確認。
+- **`spawn_ui` の呼び出しスレッド誤用**（UI スレッド以外から呼ばれる）— rustdoc で禁止を明記し toy(b) で正用法のみ検証（executor 前提の履行は呼び出し側責務）。
+- **join デッドロック誤用**（Sender を握ったまま Close も送らず join）— `ActorHandle::join` rustdoc に「Close 送信 or 全 Sender drop の後に join」の運用規約を明記。toy(a) が正順序の実例。
+- **`UiSendError<M>` の derive 境界**（`M: Debug` 制約が付く可能性）— 実装時に手書き `Debug` impl で境界を外す（std `SendError<T>` と同じ扱い）。設計影響なし。
+
+## 11. References（設計フェーズ追加）
+
+- `crates/wintf/src/runtime/mod.rs` — `WinApp::run` の relay タスク（JoinHandle drop=非キャンセルの明示・spawn_local 結線例）
+- `crates/shiori-host32-host/Cargo.toml` — 非 wintf クレートが executor＋event-listener に直接依存する本番前例
+- `.kiro/steering/roadmap.md` L53-54 — 並行モデル・責務三分（機構/経路/結線）の正本
+- `.kiro/steering/logging.md` — tracing 規約（span フィールド・Subscriber はアプリ層）
+- `.kiro/steering/tech.md` — thiserror 全クレート共通・tokio 非採用・wintf-winmsg-executor =0.0.5 pin
