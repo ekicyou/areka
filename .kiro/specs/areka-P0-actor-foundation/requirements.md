@@ -14,7 +14,7 @@ areka の M1 並行モデルは「各エンジン（kanade/sakura/seriko/emo な
   - アクター spawn/join の原語（名前付きスレッド・JoinHandle 引き渡し・panic 検出）
   - inbox 規約（アクターごと単一 Receiver・メッセージ＝enum）
   - request/reply 規約（返信 Sender をメッセージに同梱＝oneshot 相当）
-  - 停止手順（Close メッセージ→drain→join の全経路）
+  - 停止手順（Close メッセージ→即時停止（積み残し破棄）→join の全経路。積み残しの reply Sender は drop され要求側は切断を観測）
   - UI スレッド配送ブリッジ（queue＋wakeup で message pump スレッドへ届ける・pump 内 drain）
   - backpressure 方針と大型データ手渡し規約の明文化
   - toy アクター試験（worker⇄worker・worker→UI pump 実走）
@@ -58,7 +58,7 @@ areka の M1 並行モデルは「各エンジン（kanade/sakura/seriko/emo な
 4. The Actor Foundation shall アクター間を渡るメッセージを Send な所有データとし、借用（参照）を跨がせない規約を定める。
 5. Where メッセージが大型データ（画素バッファ等）を含むとき, the Actor Foundation shall コピーを避けた手渡し規約（`Arc` もしくは共有バッファの受け渡し）を明文化する。
 
-### Requirement 3: 停止手順（Close → drain → join）
+### Requirement 3: 停止手順（Close → 破棄 → join）
 
 **Objective:** As an areka エンジン結線層, I want 各アクターに共通する明確な停止手順, so that 終了時にアクターを確実に落とせ、停止時の曖昧さに起因する統合バグを排除できる
 
@@ -66,9 +66,10 @@ areka の M1 並行モデルは「各エンジン（kanade/sakura/seriko/emo な
 
 1. The Actor Foundation shall 各アクターの inbox enum に横断制御としての停止メッセージ（Close 相当）を含める規約を定める。
 2. When アクターが Close 相当のメッセージを受け取ったとき, the Actor Foundation shall そのアクターの受信ループを終了へ導く。
-3. The Actor Foundation shall Close 到達時点で inbox に残る未処理メッセージの扱い（drain して処理する／破棄する）を、いずれか一方に固定した規約として明文化する。
+3. The Actor Foundation shall Close 到達時点で inbox に残る未処理メッセージを**破棄する**（drain 処理しない）方針に固定し、Close は「即時停止」（受信ループを直ちに抜ける）を意味する規約として明文化する。積み残しを処理し切ってから止めたい送信側は、後続メッセージが無いことを確認したうえで Close を送る運用で対応する（graceful 停止は本原語の上に送信側が構築する）。
 4. When アクターが停止し join されたとき, the Actor Foundation shall その停止・回収が決定的に完了することを保証する（停止が永久にハングしない）。
 5. If アクターの送信端がすべて破棄され inbox が閉じたとき, then the Actor Foundation shall アクターの受信ループを正常終了させる（明示 Close と同様に受信ループを抜ける）。
+6. When アクターが停止する（Close 受信・全 Sender drop・panic のいずれか）時点で inbox に request/reply メッセージが未処理で残っていたとき, the Actor Foundation shall それらのメッセージを drop することで同梱された返信用送信端（reply Sender）も drop され、対応する要求側の応答受信が**切断（`Err`）として観測され永久ブロックしないこと**を保証する（＝要求のキャンセル／アクター終了は reply 側の切断で伝わる規約とし、要求側は応答受信が `Err` を返し得ることを許容する）。
 
 ### Requirement 4: UI スレッド配送ブリッジ
 

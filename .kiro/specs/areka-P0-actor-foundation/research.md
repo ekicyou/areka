@@ -58,7 +58,7 @@
 - **RN-1**: `wintf-winmsg-executor`（=0.0.5）の `spawn_local`／`JoinHandle`／`MessageLoop` の公開 API が、"任意 UI アクター inbox の起床 drain" を wintf 外へ露出できるか（現状は wintf 内でのみ利用）。UI ブリッジを別クレートに切る場合の API 境界。
 - **RN-2**: toy 試験(b) の "wintf の pump 実走上での echo" を機械 pass/fail で回す手段（integration test で bounded な `MessageLoop`＋heartbeat 終了 or example の手動検証）。host-32 `parent_window.rs` の `pump_until_hello_or`（別スレッド WM_NULL heartbeat＋deadline quit の bounded pump）が有力な写経元。
 - **RN-3**: request/reply の reply channel 実体（`std::sync::mpsc::channel()` を per-request 生成 or `oneshot` 専用軽量型を自作）。std に oneshot は無いため mpsc の 1 回受信で代替する規約の是非。
-- **RN-4**: Close→drain の "drain して処理 / 破棄" の**どちらに固定するか**（R3.3・要件が一方固定を要求）。sakura の per-talk transient 破棄（軽量性 R1.4）と整合する側の選定。
+- **RN-4**: ~~Close→drain の "drain して処理 / 破棄" の**どちらに固定するか**（R3.3・要件が一方固定を要求）。~~ → **【解決 2026-07-03 要件ディスカッション #1】「破棄（Close=即時停止）」に固定**。積み残しメッセージの drop により同梱 reply Sender も drop され、要求側は `reply.recv()` を `Err`（切断）で観測＝ハングしない（std mpsc の drop 意味論が自己シグナル化）。graceful 停止は送信側が「後続なしを確認後に Close」で本原語の上に構築。R3.3 更新＋R3.6 追加で反映済み。
 
 ### 設計判断アイテム（要件ディスカッションへ供給・番号付き）
 - **DD-1**: 純粋層を独立クレート `areka-actor` にするか、wintf 内新設モジュールに留めるか（Option A/B/C）。"parser-foundation の並行版" の類推・kanade が即・先行依存である点・host-32(std-only) 再利用性が判断材料。
@@ -66,7 +66,7 @@
 - **DD-3**: envelope 規約型（メッセージ enum の共通シェイプ・reply Sender 同梱の型・Close の載せ方）を "どの層が所有" するか。純粋層が型を持ち UI ブリッジが consume する形が二層分離に自然だが、共通トレイトの過剰抽象（R7.1）を避ける線引きが要る。
 - **DD-4**: request/reply の oneshot 相当実装（per-request `mpsc::channel()` か軽量自作 oneshot か）。std のみ・依存ゼロ制約下での選択。
 - **DD-5**: toy 試験(b) の観測形態（bounded integration test か example か）と、pump 実走の終了規律（deadline＋heartbeat か shutdown Event か）。R8.2 の "機械 pass/fail" 要求を満たす具体手段。
-- **DD-6**: Close 到達時の未処理メッセージ方針（drain 処理 / 破棄）の固定（R3.3）。sakura transient 破棄の軽量性と整合する側。
+- **DD-6**: ~~Close 到達時の未処理メッセージ方針（drain 処理 / 破棄）の固定（R3.3）。~~ → **【解決済み・上記 RN-4 参照】破棄に固定**（reply Sender drop により要求側は `Err` 観測＝ハングなし）。requirements.md R3.3 更新＋R3.6 追加で確定。設計フェーズへの持ち越しなし。
 - **DD-7**: spawn ヘルパの API 形（返却は `(Sender<XxxMsg>, JoinHandle<..>)` か newtype ハンドルか）。R1.1 "Sender と JoinHandle を返す" を最小表面で満たす形。既存 `ClickThroughHandle`/`CursorMonitorBridge` の RAII ハンドル流儀を踏襲するか否か。
 - **DD-8**: panic 伝搬の粒度（R1.3）。`join()` の `Err` をそのまま呼び出し側へ返すだけか、`JoinHandle` を包む薄い型で "panic を失敗として観測可能化" するか（監督ツリーは作らない＝R7.2 との線引き）。
 
