@@ -256,7 +256,7 @@ flowchart TB
   3. **停止規約**（3.1/3.3）: 各 `XxxMsg` に横断制御の Close variant を必ず含める。Close＝**即時停止**（受信ループを直ちに抜け、積み残しは破棄）。graceful 停止は送信側が「後続なし確認→Close 送信」で原語の上に構築する。
   4. **流量規約**（5.1/5.2）: 制御メッセージ経路は unbounded（低レート前提）。毎フレーム大量データは channel に流さない（共有バッファ／`Arc` 手渡し）。
   5. **拡張シーム**（5.3）: select／MPMC／有界キューが実需（2 例目）になったら crossbeam-channel 等を**開発者承認の上で** newtype（`ReplySender` 等）の内部実装差し替えとして導入する。本ユニットでは導入しない。
-- 公開 re-export: `spawn_actor`, `run_inbox`, `ActorHandle`, `ActorError`, `reply_channel`, `ReplySender`, `ReplyReceiver`, `ReplyError`, `spawn_ui`, `UiSender`, `UiSendError`。**これ以外の公開面を持たない**（7.1）。
+- 公開 re-export: `spawn_actor`, `run_inbox`, `ActorHandle`, `ActorError`, `reply_channel`, `ReplySender`, `ReplyReceiver`, `ReplyError`, `spawn_ui`, `UiSender`, `UiSendError`, `UiSpawnError`。**これ以外の公開面を持たない**（7.1）。
 
 **Implementation Notes**
 - Integration: 規約は toy 試験 2 本が「動く実例」として拘束力を補強する（規約文＋リファレンス実装）。
@@ -405,12 +405,20 @@ pub enum ReplyError {
 ```rust
 /// UI スレッド上で UI アクター（pump 内 drain ループ）を起動する。
 /// 必ず pump を回す UI スレッドから呼ぶこと（spawn_local の前提・rustdoc 明記）。
+/// 前提違反を検出した場合は tracing::error!（アクター名入り）を記録して Err を返す（panic しない・
+/// 処置判断は結線層の権限）。
 pub fn spawn_ui<M>(
     name: &str,
     handler: impl FnMut(M) -> std::ops::ControlFlow<()> + 'static,
-) -> (UiSender<M>, wintf_winmsg_executor::JoinHandle<()>)
+) -> Result<(UiSender<M>, wintf_winmsg_executor::JoinHandle<()>), UiSpawnError>
 where
     M: Send + 'static;
+
+#[derive(Debug, thiserror::Error)]
+pub enum UiSpawnError {
+    #[error("spawn_ui('{actor}') called off the UI (pump) thread")]
+    NotUiThread { actor: String },
+}
 
 /// UI アクター宛の送信端（Clone・Send・非ブロック）。
 pub struct UiSender<M> { /* tx: async_channel::Sender<M>（unbounded） */ }
@@ -437,7 +445,7 @@ pub struct UiSendError<M>(pub M); // 未達メッセージを返す（mpsc::Send
 **Implementation Notes**
 - Integration: `run_click_through`（clickthrough/controller.rs）の「Event＋spawn_local＋listen-before-work」構造から World 依存を除いた一般化——queue＋wakeup の手組み合成は async-channel へ置換（DD-9・設計ディスカッション #1）。M-boot では emo-present は直接呼出で開始し、kanade/seriko 結線時に本ブリッジへ channel 化する（brief のクロスユニット契約の seam 実体）。
 - Validation: 同期部分（queue 格納・Err 変換）は in-source 単体テスト、pump 実走は toy(b)（integration test）。
-- Risks: UI スレッド以外から `spawn_ui` を呼んだ場合の挙動は executor 依存＝rustdoc で禁止し、toy(b) で正用法のみ検証する。
+- Risks（誤用時挙動・validation Issue 2 → 設計ディスカッション #2 で解決）: UI スレッド以外から `spawn_ui` を呼んだ場合の素の挙動は executor 依存＝実装時に一度確認し、**log-first 方針**で扱う（安易な panic 禁止・開発者指示 2026-07-04）: (a) 前提違反を**検出できる**場合→ `tracing::error!`（アクター名入り）を記録して `Err(UiSpawnError::NotUiThread)` を返す（処置判断＝落とすか縮退かは結線層の権限。boot 時 `expect` するのも結線層の明示選択）。(b) 検出不能で executor 自身が panic する場合→継続不可能な致命として容認（`spawn_ui` 冒頭の `debug!(actor)` で診断文脈を確保・rustdoc 警告）。(c) 検出不能かつ**静かに失敗**する場合（最悪形）→実装で健全性確認手段を講じて (a) の `Err` へ引き上げる。不可能なら rustdoc＋toy(b) 正用法検証で担保し既知リスクとして research.md に記録。**ログ無しの静かな失敗経路だけは許容しない**。
 
 ### 観測層（tests/）
 
@@ -499,11 +507,14 @@ enum EchoMsg {
 ### Error Strategy
 「失敗は戻り値・切断は drop 意味論・panic は join で観測」の 3 本立て。エラー型は thiserror 構造化 enum（tech.md 全クレート共通規約）。
 
+**失敗経路のログ規律（設計ディスカッション #2・2026-07-04 開発者指示）**: 本クレートの全ての失敗経路は、返す/落ちるの前に必ず tracing 記録（`error!`／`warn!`・アクター名入り）を残す——**ログ無しの静かな失敗経路を作らない**。panic は「継続不可能な致命」（OS リソース枯渇・executor 内部の回復不能条件）に限定し、検出可能な前提違反は `error!`＋`Err` 戻り値で返して処置判断を呼び出し側（結線層）に委ねる。
+
 ### Error Categories and Responses
 - **アクター panic**（1.3）: body の unwind はスレッド終了として封じ込め、`ActorHandle::join` が `ActorError::Panicked { actor, message }` で呼び出し側（結線層）へ伝搬する。基盤は再起動しない（7.2）＝方針決定は結線層の領分。panic 時も inbox drop→reply Sender drop により要求側は `Err(Dropped)` を観測（3.6・連鎖ハングなし）。
 - **切断（送信先消滅）**: `mpsc::Sender::send`／`UiSender::send` の `Err`（未達メッセージ同梱）。送信側は「相手が停止済み」を同期観測できる。
 - **切断（応答消滅）**（3.6）: `ReplyReceiver::recv` の `Err(ReplyError::Dropped)`。要求側は永久ブロックしない。`recv_timeout` で上限時間も併用可能（`Timeout` と区別）。
-- **spawn 失敗**: OS リソース枯渇のみ＝プロセス継続不能級として panic（既存 wintf 資産の `expect` と同一方針・rustdoc 明記）。
+- **spawn 失敗**: OS リソース枯渇のみ＝プロセス継続不能級として panic（既存 wintf 資産の `expect` と同一方針・rustdoc 明記）。ただし panic 直前に `tracing::error!`（アクター名・原因）を記録する（ログ規律）。
+- **`spawn_ui` の前提違反（UI スレッド外呼出）**: 検出可能なら `error!` 記録＋`Err(UiSpawnError::NotUiThread)`（panic しない・結線層が処置判断）。詳細は ui 節 Risks の log-first 方針。
 
 ### Monitoring
 - tracing による観測（6.1）: spawn 時 `debug!`（アクター名）・span `actor`（スレッド名＝アクター名）・Close/Disconnected 終了時 `debug!`・panic join 時 `warn!`。Subscriber は初期化しない（6.2・依存に tracing-subscriber を含めないことで構造的に保証）。logging.md のスコーププレフィックス・構造化フィールド規約に従う。

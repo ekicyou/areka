@@ -144,6 +144,8 @@
 
 - **#1（2026-07-04・開発者承認）UI ブリッジのチャンネルを async-channel 化（DD-9 新設）**: 開発者の「UI スレッドの pump 待機は非同期であるべき・非同期チャンネルを使っては」という提起を受け事実確認——(a) 当初設計の pump 待機も listener.await で既に非同期（ブロッキング recv は UI スレッドに存在しない）、(b) host32 の `ResponseSlot` は同期スロット（RefCell）で非同期チャンネルではない、(c) **`async-channel` v2.5.0 が bevy_tasks 0.18 経由で依存ツリー内に既在**（cargo tree 実測）＝直接依存追加でもビルドコスト増ゼロ・内部実装は event-listener＋concurrent-queue（＝当初設計の手組み合成の完成品）。決定: **UI ブリッジ（`ui` モジュール）のみ async-channel (unbounded) 採用**・store→notify／listen-before-work 規律をクレート内実装へ委譲・`recv().await` 一本化。**全面統一（worker 側も）は棄却**——`recv_blocking` に timeout 変種が無く brief の「tick は recv_timeout で賄う」が壊れる＋非 UI スレッドに async の動機なし（開発者確認）。純粋層は std-only のまま・公開 API 形状（`UiSender`/`spawn_ui`）不変。design.md（Allowed Dependencies・DD-9・Technology Stack・System Flows・ui 節・トレーサビリティ 4.2–4.4）反映済み。
 
+- **#2（2026-07-04・開発者指示）`spawn_ui` 誤用時は log-first（安易な panic 禁止）**: validation Issue 2（誤用時挙動が executor 依存で未定義）に対し、当初推奨の fail-fast panic を開発者が却下——「安易な panic はヤバい。ログを残す方針に。継続不可能な致命は落ちるのも仕方ないが、**ログ無しはまずい**」。決定: (a) 検出可能な前提違反＝`tracing::error!`＋`Err(UiSpawnError::NotUiThread)` 返却（`spawn_ui` は Result 返しへ変更・処置判断は結線層）、(b) 検出不能で executor が panic＝致命として容認（冒頭 `debug!` で文脈確保）、(c) 静かに失敗する型なら実装で検出を講じ (a) へ引き上げ。併せて**クレート全体の失敗経路ログ規律**（返す/落ちる前に必ず tracing 記録・panic は致命限定＋直前 error!）を Error Handling に明文化。§10 の該当リスク項はこの方針で解決。
+
 ## 11. References（設計フェーズ追加）
 
 - `crates/wintf/src/runtime/mod.rs` — `WinApp::run` の relay タスク（JoinHandle drop=非キャンセルの明示・spawn_local 結線例）
