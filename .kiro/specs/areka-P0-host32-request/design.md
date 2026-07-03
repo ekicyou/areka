@@ -433,7 +433,7 @@ pub enum RequestError {
 
 **Responsibilities & Constraints**
 - `ShioriByteProxy::request(&self, req: &[u8]) -> Result<Vec<u8>, ProxyError>`: `global_alloc_copy(req)` で入力を `GlobalAlloc(GMEM_FIXED)` HGLOBAL 化 → `len` を in/out で `request(hreq, &mut len)` へ渡す → **入力 HGLOBAL は自ら解放しない**（callee-free・R3.3）→ 返却 HGLOBAL から `*len` バイトを copy → **`GlobalFree(hres)`**（caller-free・R3.4）→ bytes を返す。
-- `Reply` アーム置換（`main.rs`）: `classify_inbound` の `Request` を「proxy 確立済みなら `proxy.request(payload)` の結果を RESPONSE 返送、未確立なら明示エラーバイト列を返送」へ変更（R3.1）。既存 RESPONSE 経路（`MsgTag::Response`・`send_copydata`）をそのまま使い、新 `MsgTag`・framing 変更なし（R3.5）。
+- `Reply` アーム置換（`main.rs`・WndProc `handle_message` 側）: **`classify_inbound` は純関数を維持**（bytes のみから `InboundAction` を算出し proxy へ到達しない＝単体テスト可能性を保つ）。proxy 駆動は proxy に到達できる `handle_message` の `Reply` アームで行い、「proxy 確立済みなら `proxy.request(payload)` の結果を RESPONSE 返送、未確立なら明示エラーバイト列を返送」へ変更（R3.1・unsafe 一点集約と純粋性を両立）。既存 RESPONSE 経路（`MsgTag::Response`・`send_copydata`）をそのまま使い、新 `MsgTag`・framing 変更なし（R3.5）。
 - **RefCell 再入規律**（LOAD アームと同型）: `s.proxy.borrow()` を FFI `request` 呼出中に保持することは可（FFI は跨プロセス SendMessage を発しない同期呼出）だが、その後の RESPONSE 返送（`send_copydata`・ブロッキング再入可）へ borrow を持ち越さない。bytes を borrow 終了後に確定してから送出する。
 - `request` の flat-C 契約は `vendors/pasta` を正確源とする署名に一致（§7.2 でバイト照合済・R3.6/R7.5）。`unload` の恒常呼出は行わない（Drop courtesy のみ・R3.7）。
 
