@@ -96,6 +96,7 @@ wintf の表示レイヤーの透過は、これまでウィンドウ生成時�
 2. While GPU 合成窓が再描画されるとき、the wintf 描画パス shall 撤去前と等価な再描画結果を生成する。
 3. The wintf crate shall ULW 撤去によって当たり判定・ウィンドウ管理・スレッド構成を変更しない。
 4. When 撤去後にビルドするとき、the wintf ワークスペース shall リリース最適化設定（`opt-level='z'`・`lto=true`）と互換のままビルドを通過させる。
+5. When 非破壊（6.1/6.2）を検証するとき、the 本仕様 shall **手間の少ない回帰非破壊の確認手段**（残す GPU 合成（WUC）側の既存テスト群 `dcomp_integration_test`・`init_window_graphics_test` 等および areka 側テストの緑維持＋ビルド／起動時の目視サニティ）で受入を判定し、**新規スクリーンショット比較資産の追加を必達要件としない**（本仕様は純粋な ULW 機能ドロップであり、既存機能の非破壊保証を目的とするため。スワップチェーン readback 等の pixel-diff は production 無改変で自明に低コストな場合に限り design 任意採用）。
 
 ### Requirement 7: ドキュメント残余の整合更新
 
