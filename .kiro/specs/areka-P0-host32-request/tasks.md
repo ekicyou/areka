@@ -1,7 +1,7 @@
 # Implementation Plan
 
 - [ ] 1. Foundation: 環境検証・timeout基盤・エラー型骨格
-- [ ] 1.1 (P) vendors/pasta submodule 展開確認と pasta request 署名照合の記録参照
+- [x] 1.1 (P) vendors/pasta submodule 展開確認と pasta request 署名照合の記録参照
   - `git submodule status` で `vendors/pasta` が populated であることを確認する（未展開なら `git submodule update --init` で展開する）
   - research.md §7.2 記載のバイト照合結果（commit `048d646`・`RequestFn` 署名一致）を参照し、実装前提として記録する
   - Observable: `vendors/pasta/Cargo.toml` 等のファイルが存在し、submodule のコミットハッシュが記録値と一致することを確認できる
@@ -96,3 +96,7 @@
   - Observable: 上記3点のチェックがすべて pass する（diff 無し・grep 結果0件・i686 ビルド/テスト green）ことを確認できる
   - _Requirements: 7.1, 7.2, 7.3, 7.4_
   - _Depends: 6.2_
+
+## Implementation Notes
+
+- 1.1: `vendors/pasta` submodule 展開済み（commit `048d646c`・research.md §7.2 記録値と一致）。`vendors/pasta/crates/pasta_shiori/src/windows.rs:76` の `request` 実署名 = `pub extern "C" fn request(req: HGLOBAL, len: &mut usize) -> HGLOBAL`。helper 既存 `RequestFn = unsafe extern "cdecl" fn(req: HGLOBAL, len: *mut usize) -> HGLOBAL` と ABI バイト一致（i686 で `extern "C"`≡`cdecl`・`&mut usize`≡`*mut usize`）＝**helper 側 RequestFn 型は変更不要**（R7.5 充足）。
