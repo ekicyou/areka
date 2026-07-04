@@ -2,7 +2,6 @@ use super::init::format_entity_name;
 use crate::ecs::drag::WindowDragging;
 use crate::ecs::graphics::GraphicsCore;
 use crate::ecs::graphics::wuc_resource::WucGraphicsResource;
-use crate::ecs::graphics::compositor::WindowD3D11Compositor;
 use crate::ecs::widget::bitmap_source::BitmapSourceGraphics;
 use crate::ecs::window::{SetWindowPosCommand, Window, WindowHandle, WindowPos};
 use bevy_ecs::name::Name;
@@ -110,8 +109,9 @@ pub fn apply_window_pos_changes(
 }
 
 /// 依存コンポーネント無効化
-/// Phase 2: DComp Query（WindowGraphics, VisualGraphics, SurfaceGraphics）を除去し、
-/// WindowD3D11Compositorを追加。BitmapSourceGraphicsは維持（DComp非依存）。
+/// Phase 2: DComp Query（WindowGraphics, VisualGraphics, SurfaceGraphics）を除去。
+/// 現状は WucGraphicsResource と BitmapSourceGraphics を無効化する
+/// （BitmapSourceGraphics は DComp 非依存）。
 ///
 /// NOTE(W3b-V): Phase 2 の除去により、本システムは DComp 系コンポーネント
 /// （WindowGraphics / VisualGraphics / SurfaceGraphics）を無効化しない。一方で
@@ -124,7 +124,6 @@ pub fn apply_window_pos_changes(
 pub fn invalidate_dependent_components(
     graphics: Option<Res<GraphicsCore>>,
     wuc_resource: Option<ResMut<WucGraphicsResource>>,
-    mut compositor_query: Query<&mut WindowD3D11Compositor>,
     mut bitmap_source_query: Query<&mut BitmapSourceGraphics>,
 ) {
     if let Some(gc) = graphics {
@@ -138,9 +137,6 @@ pub fn invalidate_dependent_components(
                 wgr.invalidate();
             }
 
-            for mut comp in compositor_query.iter_mut() {
-                comp.invalidate();
-            }
             for mut bsg in bitmap_source_query.iter_mut() {
                 bsg.invalidate();
             }

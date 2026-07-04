@@ -8,7 +8,7 @@
   - ベースラインのビルド・テスト結果が記録され、撤去対象一覧の確認が完了していること
   - _Requirements: 1.4, 6.4, 6.5_
 
-- [ ] 2. ULW専用描画経路の削除とスケジュール再配線
+- [x] 2. ULW専用描画経路の削除とスケジュール再配線
 - [x] 2.1 ULW compositor / com::ulw ユーティリティ削除
   - `ecs/graphics/compositor.rs`（WindowD3D11Compositor）を削除する
   - `ecs/graphics/compositor_systems/` ディレクトリ全体（mod.rs・init.rs・render/mod.rs・render/traverse.rs・render/guards.rs）を削除する
@@ -28,7 +28,7 @@
   - _Depends: 2.1_
   - _Boundary: ECS world schedule (ecs/world/mod.rs)_
 
-- [ ] 2.3 systems/window_pos.rs の WindowD3D11Compositor 参照追随（design blast-radius gap 解決）
+- [x] 2.3 systems/window_pos.rs の WindowD3D11Compositor 参照追随（design blast-radius gap 解決）
   - `use crate::ecs::graphics::compositor::WindowD3D11Compositor;`（5行）を除去する
   - `invalidate_dependent_components` の `compositor_query: Query<&mut WindowD3D11Compositor>` 引数（127行）と `for mut comp in compositor_query.iter_mut() { comp.invalidate(); }` ループ（141-143行）を除去する（WucGraphicsResource・BitmapSourceGraphics の無効化は維持）
   - docstring（113-114行）の WindowD3D11Compositor 言及を WUC 現況へ整合する
