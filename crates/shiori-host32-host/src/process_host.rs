@@ -51,6 +51,64 @@ pub const SHIORI_NAME_ENV: &str = "HOST32_SHIORI_NAME";
 /// 推奨既定値である（echo 系の 5s とは別建て・design §Load timeout 方針）。
 pub const LOAD_ACK_TIMEOUT: Duration = Duration::from_secs(30);
 
+/// request 往復（GET／NOTIFY）の `send_request` に用いる既定 timeout（per-call 引数・R4.3/R5.1）。
+///
+/// `MsgTag::Request` の応答待機に使う（`SMTO_ABORTIFHUNG` ＋この上限で有限復帰）。
+/// [`LOAD_ACK_TIMEOUT`]（30s）とは**別建て**の 60s とする（GET は SHIORI 側の
+/// 思考時間を含み得るため長めに取る・design §Shiori3Client Implementation Notes・
+/// 開発者決定 2026-07-04）。ipc の timeout 機構自体は変更せず、この定数は per-call 引数
+/// として渡すためだけの既定値である。env [`REQUEST_TIMEOUT_ENV`] が未設定のときの既定。
+pub const REQUEST_TIMEOUT: Duration = Duration::from_secs(60);
+
+/// request 往復 timeout を上書きする環境変数名（ミリ秒指定・R4.3/R5.1）。
+///
+/// 値はミリ秒の 10 進整数。未設定なら [`REQUEST_TIMEOUT`]（60s）が既定。`"0"` は
+/// **無限待ち**（timeout 無効）を意味し、ブレークポイントデバッグ用の明示 opt-in である
+/// （ブレークポイント停止と真のハングを機械的に区別できないため、開発者の明示指定を
+/// 代替手段とする・design §Shiori3Client Implementation Notes）。
+///
+/// 命名根拠: `AREKA_` 名前空間で OS 共有 env との衝突を回避し、`SHIORI_` で対象概念を
+/// 自己説明する（内部コードネーム `host32` は本番 env 名に用いない・design.md）。
+pub const REQUEST_TIMEOUT_ENV: &str = "AREKA_SHIORI_REQUEST_TIMEOUT_MS";
+
+/// env 値文字列から実効 request timeout を解決する**決定的な純関数**（R4.3/R5.1）。
+///
+/// `std::env` を直接読まず env 値を `Option<String>` として受け取る（単体テスト可能・
+/// helper 側 `resolve_param` と同型の arg/env 分離）。戻り値の `Option<Duration>` は
+/// **`None` = 無限待ち**（timeout 無効）を表す:
+///
+/// - env 不在／空文字／空白のみ／parse 不能 → `Some(REQUEST_TIMEOUT)`（既定 60s）。
+///   parse 不能を既定へ落とすのは**意図的な安全側フォールバック**であり、不正指定で
+///   起動を止めない（無限待ちへ暗黙昇格させない＝有限復帰を守る）。
+/// - env `"0"` → `None`（**無限待ち**・デバッグ opt-in）。
+/// - env `"<n>"`（n > 0・ミリ秒） → `Some(Duration::from_millis(n))`。
+///
+/// この関数は値解決に徹し I/O も副作用も持たない。実 env の読み取りは薄いラッパ
+/// [`request_timeout_from_env`] が担う。
+#[must_use]
+pub fn resolve_request_timeout(env: Option<String>) -> Option<Duration> {
+    // trim 後に空でなければ採用（helper 側 resolve_param と同様の正規化）。
+    let trimmed = env.map(|s| s.trim().to_string()).filter(|s| !s.is_empty());
+    match trimmed.and_then(|s| s.parse::<u64>().ok()) {
+        // "0" は無限待ち（timeout 無効・デバッグ opt-in）。
+        Some(0) => None,
+        // 正のミリ秒指定を採用。
+        Some(n) => Some(Duration::from_millis(n)),
+        // 不在／空／parse 不能は既定 60s へ安全側フォールバック（無限へ昇格させない）。
+        None => Some(REQUEST_TIMEOUT),
+    }
+}
+
+/// 実 env（[`REQUEST_TIMEOUT_ENV`]）を読み [`resolve_request_timeout`] へ委譲する薄いラッパ。
+///
+/// `None` = 無限待ち（`"0"` 指定時）・`Some(Duration)` = 有限 timeout。実 env の読み取りは
+/// ここに閉じ込め、値解決ロジック本体は純関数側で単体テストする（helper 側の
+/// `parent_hwnd_arg_env` → `resolve_param` 分離と同型）。
+#[must_use]
+pub fn request_timeout_from_env() -> Option<Duration> {
+    resolve_request_timeout(std::env::var(REQUEST_TIMEOUT_ENV).ok())
+}
+
 /// helper プロセスの終了種別（要件 1.3 / 1.4）。
 ///
 /// [`std::process::ExitStatus`] からの分類は [`ExitKind::classify`] が担う
@@ -364,6 +422,52 @@ mod tests {
     #[test]
     fn load_ack_timeout_default_is_30s() {
         assert_eq!(LOAD_ACK_TIMEOUT, Duration::from_secs(30));
+    }
+
+    // --- request timeout 定数 + env seam 解決（R4.3 / R5.1・design §Shiori3Client）---
+
+    /// request 往復の既定 timeout が 60 秒で、env キー名が契約どおりであること（回帰防止）。
+    #[test]
+    fn request_timeout_default_is_60s_and_env_key_matches() {
+        assert_eq!(REQUEST_TIMEOUT, Duration::from_secs(60));
+        assert_eq!(REQUEST_TIMEOUT_ENV, "AREKA_SHIORI_REQUEST_TIMEOUT_MS");
+    }
+
+    /// env 不在／空／空白のみ／parse 不能 → 既定 60s へ安全側フォールバック（無限へ昇格させない）。
+    #[test]
+    fn resolve_request_timeout_defaults_to_60s_when_absent_or_garbage() {
+        // 不在。
+        assert_eq!(resolve_request_timeout(None), Some(REQUEST_TIMEOUT));
+        assert_eq!(resolve_request_timeout(None), Some(Duration::from_secs(60)));
+        // 空文字・空白のみ。
+        assert_eq!(resolve_request_timeout(Some(String::new())), Some(Duration::from_secs(60)));
+        assert_eq!(resolve_request_timeout(Some("   ".to_string())), Some(Duration::from_secs(60)));
+        // parse 不能（非数値・負値・小数）はすべて既定へ（無限待ちへ暗黙昇格しない）。
+        assert_eq!(resolve_request_timeout(Some("abc".to_string())), Some(Duration::from_secs(60)));
+        assert_eq!(resolve_request_timeout(Some("-1".to_string())), Some(Duration::from_secs(60)));
+        assert_eq!(resolve_request_timeout(Some("1.5".to_string())), Some(Duration::from_secs(60)));
+    }
+
+    /// env `"0"` → `None`（無限待ち・デバッグ opt-in）。
+    #[test]
+    fn resolve_request_timeout_zero_means_infinite() {
+        assert_eq!(resolve_request_timeout(Some("0".to_string())), None);
+        // 前後空白付き "0" も trim 後に 0 として無限待ちへ。
+        assert_eq!(resolve_request_timeout(Some("  0  ".to_string())), None);
+    }
+
+    /// env `"<n>"`（n > 0・ミリ秒） → `Some(Duration::from_millis(n))`。
+    #[test]
+    fn resolve_request_timeout_positive_millis_are_used() {
+        assert_eq!(
+            resolve_request_timeout(Some("1500".to_string())),
+            Some(Duration::from_millis(1500))
+        );
+        // trim 済みで採用されること。
+        assert_eq!(
+            resolve_request_timeout(Some("  250  ".to_string())),
+            Some(Duration::from_millis(250))
+        );
     }
 
     /// spawn が起動パラメーターを子へ供給する契約を、`spawn` の実装が組み立てる

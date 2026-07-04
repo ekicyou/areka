@@ -7,7 +7,7 @@
   - Observable: `vendors/pasta/Cargo.toml` 等のファイルが存在し、submodule のコミットハッシュが記録値と一致することを確認できる
   - _Requirements: 7.5_
 
-- [ ] 1.2 (P) REQUEST_TIMEOUT 定数 + AREKA_SHIORI_REQUEST_TIMEOUT_MS env seam 追加
+- [x] 1.2 (P) REQUEST_TIMEOUT 定数 + AREKA_SHIORI_REQUEST_TIMEOUT_MS env seam 追加
   - `LOAD_ACK_TIMEOUT=30s` とは別建てで `REQUEST_TIMEOUT` 定数（既定 60 秒）を `process_host.rs` に追加する
   - env `AREKA_SHIORI_REQUEST_TIMEOUT_MS` で上書き可能にし、`"0"` は無限待ちとして扱う
   - Observable: 単体テストで既定 60 秒・env 上書き・`"0"`=無限待ちの3ケースが期待どおりの値を返すことを確認できる
