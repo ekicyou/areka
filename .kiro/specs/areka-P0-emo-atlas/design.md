@@ -143,10 +143,10 @@ graph TB
 |-------|------------------|-----------------|-------|
 | Data / Storage | `areka-parsers` (workspace) | shell/surface モデル入力（読み取り） | 実装完了・opaque `ElementPath` を素通し |
 | Infrastructure / Runtime | `windows` 0.62.2（WIC/COM feature 部分集合） | 既定デコード腕の WIC 経路 | デコード腕にのみ隔離・純粋コアは非依存 |
-| Data / Storage | **`rectangle-pack` 0.5（新規・要承認）** | 静的バッチ packing・複数 bin＝頁 | zero-dep・MIT/Apache・padding は自前ラップ。fallback `rect_packer`（zero-dep・MIT・単頁 API＝複数頁 DIY） |
+| Data / Storage | **`rectangle-pack` 0.5（新規・✅ 承認済 2026-07-04）** | 静的バッチ packing・複数 bin＝頁 | zero-dep・MIT/Apache・padding は自前ラップ。fallback `rect_packer` は不要化（記録のみ保持） |
 | Infrastructure / Runtime | `std` + `Arc` | 成果物の `Send`＋共有参照所有 | roadmap 並行モデル「大型データは Arc 手渡し」 |
 
-> **新規依存申請（承認事項）**: `rectangle-pack` を workspace dependency へ追加する。zero-dep・活発維持・静的バッチ packing・複数 bin（頁）対応。padding は非内蔵ゆえ矩形を +1px 拡張して渡す自前ラップ（自明）。`encoding_rs` の意図的依存追加の前例に倣い、design で正式申請する。**未承認の場合は着手不可**（fallback は `rect_packer`＝単頁 API のため複数頁ループを自前実装）。詳細比較は `research.md`「Build vs Adopt」。
+> **新規依存申請（✅ 承認済・2026-07-04 設計ディスカッション #2）**: `rectangle-pack` の workspace dependency 追加を開発者が正式承認。zero-dep・活発維持・静的バッチ packing・複数 bin（頁）対応。padding は非内蔵ゆえ矩形を +1px 拡張して渡す自前ラップ（自明）。`encoding_rs` の意図的依存追加の前例に倣った申請→承認。着手ゲート解除（fallback `rect_packer` は不要となったが比較記録は `research.md`「Build vs Adopt」に保持）。
 
 ## File Structure Plan
 
@@ -174,7 +174,7 @@ crates/areka-emo-atlas/
 
 ### Modified Files
 - `crates/wintf/src/com/wic.rs` — **（D2 確定に依存・最小変更）**: 既定デコード WIC 腕から `load_bitmap_source` 相当（`decoder→PBGRA raw バッファ抽出`）を呼べるよう、現在 `bitmap_source/systems.rs` にある `load_bitmap_source` を `com/wic.rs`（ECS 非依存の COM 層）へ移設または公開する。ECS 依存（`Entity`/`Command`/`GraphicsCore`）は移設対象外。移設に伴い `bitmap_source/systems.rs` は移設先を参照する（挙動不変のリファクタ）。**併せて（Critical Issue 1）**: 移設関数は PBGRA ソースに加え **変換前フレームのピクセルフォーマット由来の α 有無**を返り値へ追加し、WIC 腕が `DecodedImage.has_alpha` を確定できるようにする（既存 `bitmap_source` 呼出は追加返り値を無視すれば挙動不変）。
-- `Cargo.toml`（workspace） — `rectangle-pack` を `[workspace.dependencies]` へ追加（**承認後**）。
+- `Cargo.toml`（workspace） — `rectangle-pack` を `[workspace.dependencies]` へ追加（**✅ 承認済 2026-07-04**）。
 
 > WIC ユーティリティ移設の是非（移設 vs 新クレート切出し vs デコード腕での再実装）は Decision D2 で「wintf 内 COM 層へ移設し、新クレートは wintf の WIC ユーティリティのみを最小 feature で参照」を選択。emo-compose/emo-present も同 WIC 経路を要さない（表示は emo-present が wintf 側で担う）ため、切出し新クレートは過剰と判断。
 
