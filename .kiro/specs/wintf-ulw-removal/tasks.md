@@ -38,7 +38,7 @@
   - _Depends: 2.1_
   - _Boundary: ecs/graphics/systems/window_pos.rs (ULW compositor 参照除去のみ)_
 
-- [ ] 3. CompositionMode collapse と全 production 参照の追随
+- [x] 3. CompositionMode collapse と全 production 参照の追随
 - [x] 3.1 CompositionMode enum・Window フィールド・再エクスポート撤去
   - `ecs/window/components.rs` から `CompositionMode` enum 定義・`Window.composition_mode` フィールド・`Window::composition_mode()` メソッド・`Window::default` の `composition_mode` 初期化を削除する
   - `ecs/mod.rs` の `pub use window::{...}` から `CompositionMode` 再エクスポート（47行）を除去する
@@ -85,7 +85,7 @@
   - _Depends: 3.1_
   - _Boundary: ecs/graphics/systems/init.rs (mode フィルタのみ)_
 
-- [ ] 3.6 wintf 内 test-only 追随と lib ビルド確認
+- [x] 3.6 wintf 内 test-only 追随と lib ビルド確認
   - `ecs/clickthrough/controller.rs` の in-source test ヘルパ `spawn_live_window`（922-940行付近）の `CompositionMode::DComp` 指定を新API（フィールド指定なし）へ追随する（production コードは変更しない）
   - `runtime/mod.rs` の in-source test `close_to_reconcile_to_shutdown_chain_wakes_listener` の import（425行）・フィールド指定（456行）を追随する
   - 3.1〜3.6 完了時点で `cargo build -p wintf` および lib の in-source テストがコンパイル通過すること
