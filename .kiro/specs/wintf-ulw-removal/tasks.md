@@ -93,7 +93,7 @@
   - _Depends: 3.1, 3.2, 3.3, 3.4, 3.5_
 
 - [ ] 4. areka・examples・外部テストの追随
-- [ ] 4.1 (P) areka crate の追随
+- [x] 4.1 (P) areka crate の追随
   - `crates/areka/src/main.rs` の `composition_mode: CompositionMode::DComp`（225・292行）・`use ... CompositionMode`（29行）を除去し、220-231行の `composition_mode` 前提コメントを WUC 固定の現況へ整合する
   - `crates/areka/src/tests.rs` の `assert_eq!(window.composition_mode(), CompositionMode::DComp)`（108・118行）の2テストを削除または WUC 固定の別観測へ書き換える
   - `crates/areka/examples/clickthrough_two_rects.rs` の `composition_mode: CompositionMode::DComp`（131行）・import（48行）を除去する
