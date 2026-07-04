@@ -14,7 +14,7 @@
   - _Requirements: 4.3, 5.1_
   - _Boundary: process_host.rs (shiori-host32-host)_
 
-- [ ] 1.3 (P) RequestError / ShioriError 型定義
+- [x] 1.3 (P) RequestError / ShioriError 型定義
   - `ShioriError`（`Parse` ／ `Status{status, error_level, error_description}`）を `error.rs` に定義する
   - `RequestError`（`Handshake` ／ `Timeout` ／ `Ipc(IpcError)` ／ `Shiori(ShioriError)`、`thiserror` 使用）を定義する
   - Observable: 各 variant の `Display` 文字列を単体テストで確認できる
