@@ -35,7 +35,7 @@
   - _Requirements: 2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 2.7, 2.8_
   - _Depends: 1.3_
 
-- [ ] 3. Shiori3Client（get/notify 出口API）実装と公開 re-export 統合
+- [x] 3. Shiori3Client（get/notify 出口API）実装と公開 re-export 統合
   - `get(id, refs)`: request 組立 → `send_request(REQUEST_TIMEOUT)` → response 解析 → 200 は `Some(Value)`、204 は `None`、400/500/`ErrorLevel` は `Err(RequestError::Shiori)` を返す
   - `notify(id, refs)`: request 組立 → 同期 `request()` 往復 → 応答を破棄 → `Ok(())` を返す（片道 IPC 化しない）
   - `IShiori::Get` への写像は型シームとして doc コメントのみで示し、実装しない
