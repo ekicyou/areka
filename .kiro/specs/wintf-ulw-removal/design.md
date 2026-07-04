@@ -31,12 +31,13 @@
 - **ECS スケジュール登録の再配線**: `ecs/world/mod.rs` の `GraphicsSetup`／`Composition`／`CommitComposition` から ULW system 登録を除去（GPU 合成側 system の登録・順序は不変）。
 - **`CompositionMode` collapse（Option A）**: `CompositionMode` enum 型・`Window.composition_mode` フィールド・`Window::composition_mode()` メソッドの完全撤去。生成時の合成モードを GPU 合成（WUC）へ無条件固定。
 - **`compute_ex_style()` の分岐一本化**: `runtime/window_factory.rs` の `compute_ex_style()` から合成モード引数と `match` を除去し、`WS_EX_LAYERED` を落とし `WS_EX_NOREDIRECTIONBITMAP` を付与する branchless 単一経路へ。
+- **WUC 経路内 mode ゲートの無条件化（参照追随・research §9）**: `ecs/graphics/visual.rs` の `find_owner_window_composition_mode` を owner Window 存在判定ヘルパーへ縮退し `on_visual_add` の DComp ゲートを無条件化（orphan Visual 除外挙動は不変）、`ecs/graphics/systems/init.rs::init_window_graphics` の DComp フィルタ除去（mode フィルタのみ・レンダリングロジック不変）、`ecs/mod.rs` の `CompositionMode` 再エクスポート除去。
 - **破壊的変更の追随**: wintf 内（`window_proc/lifecycle.rs` の `WM_PAINT` 分岐・`ecs/clickthrough/controller.rs` の test ヘルパ・ULW 前提 examples/tests）と areka 側（`main.rs` の構造体リテラル・`tests.rs` の assert）の全呼び出しを新 API へ追随。
 - **ドキュメント残余整合**: `doc/COMPAT_ARCHITECTURE.md` と残存 wintf コード内コメントの ULW 前提記述の整合更新。
 
 ### Out of Boundary
 
-- WUC 保全集合（`com/wuc.rs`・`ecs/graphics/wuc_resource.rs`・`visual_manager.rs`・`systems/init.rs::init_window_graphics`・`systems/render.rs`・`systems/window_pos.rs`）— 別 spec の完了物、参照追随以外は変更しない。
+- WUC 保全集合（`com/wuc.rs`・`ecs/graphics/wuc_resource.rs`・`visual_manager.rs`・`systems/init.rs::init_window_graphics`・`systems/render.rs`・`systems/window_pos.rs`）— 別 spec の完了物、参照追随以外は変更しない。※`systems/init.rs` と `ecs/graphics/visual.rs` は `CompositionMode` 参照追随（mode フィルタ／ゲートの無条件化）**のみ**本 spec が編集する — レンダリングロジック・WUC リソース管理・遅延初期化構造は不変（research §9）。
 - クリックスルー機構（`win_style.rs::apply_layered_companion()`・`apply_click_through()`・`ecs/clickthrough/` の production コード・`registry.rs`）— 変更・除去しない。
 - 当たり判定・ウィンドウ管理・スレッド構成・tick スケジュール**構成**（13 本の schedule label とその実行順）。
 - steering 文書・ワークスペース `Cargo.toml`（`opt-level='z'`・`lto=true`・`panic='unwind'`）。
@@ -58,7 +59,7 @@
 
 ### Existing Architecture Analysis
 
-現状の二重経路構造を以下に示す。ULW 系と GPU 合成（WUC）系は同一スケジュールに共存し、各 system が実行時に `composition_mode()` を照会して「自モードでない Window を `continue` でスキップ」する。ULW 専用コードは 3 ファイルに凝集し、切り出し境界は明瞭で、DComp/WUC 経路から参照されない。
+現状の二重経路構造を以下に示す。ULW 系と GPU 合成（WUC）系は同一スケジュールに共存し、各 system が実行時に `composition_mode()` を照会して「自モードでない Window を `continue` でスキップ」する。ULW 専用コードは 3 ファイルに凝集し、切り出し境界は明瞭で、DComp/WUC 経路から参照されない。ただし**セレクタ層（`CompositionMode`）への実行時参照は WUC 保全集合側にも及ぶ**: `Visual` の `on_add` フック（`ecs/graphics/visual.rs::find_owner_window_composition_mode`＝production 関数）が graphics コンポーネント挿入を DComp 判定でゲートし、`init_window_graphics`（`systems/init.rs`）も DComp フィルタを持つ（タスク健全性レビューで確定＝research §9。撤去時は mode ゲートの無条件化で追随する）。
 
 ```mermaid
 graph TB
@@ -160,8 +161,7 @@ crates/wintf/tests/
 │   ├── compositor_render_system_test.rs # 削除
 │   └── compositor_transfer_test.rs      # 削除
 └── window/
-    ├── composition_mode_test.rs             # 削除: ULW 既定 hard-assert（composition_mode() 依存）が collapse で意味喪失（D8）
-    └── find_owner_composition_mode_test.rs  # 削除（下記 D8 参照）
+    └── composition_mode_test.rs             # 削除: ULW 既定 hard-assert（composition_mode() 依存）が collapse で意味喪失（D8）
 crates/wintf/examples/
 ├── ulw_twin_demo.rs                     # 削除: ULW 二窓比較が主題
 ├── ulw_debug_demo.rs                    # 削除: UpdateLayeredWindow 検証が主題
@@ -172,26 +172,33 @@ crates/wintf/examples/
 
 - `crates/wintf/src/ecs/graphics/mod.rs` — `pub mod compositor;`・`pub mod compositor_systems;` の mod 宣言（4-5 行）除去。
 - `crates/wintf/src/com/mod.rs` — `pub mod ulw;` の mod 宣言（5 行）除去。
+- `crates/wintf/src/ecs/mod.rs` — `pub use window::{...}` から `CompositionMode` 再エクスポート（47 行）を除去（公開 API 面の追随）。
 - `crates/wintf/src/ecs/world/mod.rs` — スケジュール登録の再配線: `GraphicsSetup`（259-266 行）から `compositor_init_system.after(...)` を外し `init_window_graphics` 単独へ／`Composition`（321-332 行）から末尾 `composite_render_system.after(clip_sync_system)` を外す／`CommitComposition`（337-340 行）を**空登録**にする（schedule label と `Schedule::new(CommitComposition)`・137-141 行は残す＝D3）。付随コメント（256-258・334-336 行）を WUC 現況へ整合。
 - `crates/wintf/src/ecs/window/components.rs` — `CompositionMode` enum 定義（99-108 行）削除／`Window.composition_mode` フィールド（123 行）・`Window::composition_mode()`（128-130 行）・`Window::default` の `composition_mode`（138 行）削除／`WindowStyle::default().ex_style` は `WS_EX_LAYERED` を据え置き（D4）／in-source `#[cfg(test)]` の ULW 既定 assert を追随。ULW 前提コメント（101-107・121-122・168-176 行）整合。
 - `crates/wintf/src/runtime/window_factory.rs` — `compute_ex_style()`（64-73 行）を `fn compute_ex_style(style: &WindowStyle) -> WINDOW_EX_STYLE` へ改め、`(style.ex_style & !WS_EX_LAYERED) | WS_EX_NOREDIRECTIONBITMAP` を branchless に返す。呼び出し側 `EcsWindowFactory::create_window` の `composition_mode` 読み取り・引数渡し除去。docstring（17-19・57-63 行）と in-source test（ULW test 削除・DComp test 残置）整合。`use ... CompositionMode` 除去。
 - `crates/wintf/src/ecs/window_proc/lifecycle.rs` — `WM_PAINT`（36-72 行）を DComp 分岐（`DefWindowProcW` 委譲＝`None` 返却）へ無条件一本化し、ULW フォールバック分岐（`BeginPaint`/`EndPaint`）と `composition_mode()` 照会を除去。`WM_ERASEBKGND` コメント（22-24 行）と `WM_PAINT` docstring（36-39 行）整合。
+- `crates/wintf/src/ecs/graphics/visual.rs` — `find_owner_window_composition_mode`（39-66 行・production 関数）を owner Window 存在判定ヘルパーへ縮退（`DeferredWorld` 版・W3b-V 間接巡回 NOTE は維持）し、`on_visual_add` の `is_dcomp_mode` ゲート（83-90 行）を「owner Window が存在する場合」判定へ無条件化（orphan Visual への graphics コンポーネント非挿入挙動は不変）。`use crate::ecs::window::CompositionMode`（13 行）とフック docstring（71 行「DComp モードの場合のみ…」）を整合。
+- `crates/wintf/src/ecs/graphics/systems/init.rs` — `init_window_graphics` の **mode フィルタのみ**除去: `use ... CompositionMode`（206 行）・`has_dcomp_windows` 判定（212-219 行→ query 空チェックへ縮退）・per-window `continue` フィルタ（255-258 行）・docstring（185・187 行）整合。**レンダリングロジック・`WucGraphicsResource` 遅延初期化・early-return 構造は不変（Preserve 例外＝参照追随の範囲・research §9）**。
+- `crates/wintf/src/runtime/mod.rs` — in-source test `close_to_reconcile_to_shutdown_chain_wakes_listener` の `CompositionMode` import（425 行）・`composition_mode:` フィールド指定（456 行）除去。
 - `crates/wintf/src/ecs/clickthrough/controller.rs` — in-source test ヘルパ `spawn_live_window`（922-940 行付近）の `CompositionMode::DComp` 使用を新 API（フィールド指定なし）へ追随。**production コードは不変**。
 - `crates/wintf/tests/graphics.rs` — 削除する `compositor_*_test` 6 本の `#[path]` mod 宣言（12-23 行）除去。
-- `crates/wintf/tests/window.rs` — `composition_mode_test`（2-3 行）・`find_owner_composition_mode_test`（4-5 行）の `#[path]` mod 宣言を**両方除去**（両テストとも削除確定＝D8）。
+- `crates/wintf/tests/window.rs` — `composition_mode_test`（2-3 行）の `#[path]` mod 宣言除去（削除＝D8）。`find_owner_composition_mode_test`（4-5 行）の宣言は書き換え後のテストへ追随（D8 改訂＝research §9）。
+- `crates/wintf/tests/window/find_owner_composition_mode_test.rs` — 検証対象（`visual.rs` の owner 走査ヘルパー）が mode 非依存の存在判定として存続するため、**削除ではなく owner Window 存在判定の検証へ書き換え**（自身が Window／ChildOf 祖先に Window／orphan＝None の 3 ケース構成を維持・ファイル名と mod 宣言を新ヘルパー名へ追随）。W3b-V（間接巡回）リスクが記録された走査経路の単体カバレッジを保持する（D8 改訂＝research §9）。
 - `crates/wintf/tests/graphics/dcomp_integration_test.rs`・`init_window_graphics_test.rs` — `CompositionMode` 参照の追随（フィールド指定除去）。WUC 側テストの本体ロジックは不変。
 - `crates/wintf/examples/clip_demo.rs` — `create_ulw_clip_window`（87・262・282 行）を除去し clip 検証を DComp 単独へ書き換え（D5）。
 - `crates/wintf/examples/dcomp_demo.rs`・`dcomp_taffy_demo.rs` — `composition_mode: CompositionMode::DComp` フィールド指定と `use ... CompositionMode` 除去（フィールド消滅の追随）。
 - `crates/wintf/examples/postmessage_click_test.rs` — `Window { .. }` の既定生成は不変（新既定=WUC）。ULW present 言及コメントの整合。
 - `crates/areka/src/main.rs` — `composition_mode: CompositionMode::DComp`（225・292 行）除去／`use ... CompositionMode`（29 行）除去。`WindowStyle.ex_style` は据え置き（factory が `WS_EX_LAYERED` を落とすため実害なし）。**220-231 行の `composition_mode` 前提コメント**（例: 230 行「ex_style は factory が `composition_mode` から自動計算」・222-224 行「compute_ex_style が DComp に応じて…」）を、削除済みシンボルを指さぬよう WUC 固定の現況へ整合（フィールド削除追随の一部＝Req3.5 帰属・Req7.2 の ULW 残余除去趣旨にも整合）。
 - `crates/areka/src/tests.rs` — `assert_eq!(window.composition_mode(), CompositionMode::DComp)`（108・118 行）の 2 テストを削除または「WUC 固定」の別観測へ書き換え（メソッド消滅の追随）。
+- `crates/areka/examples/clickthrough_two_rects.rs` — `composition_mode: CompositionMode::DComp`（131 行）・`use wintf::ecs::{... CompositionMode ...}`（48 行）除去（フィールド消滅の追随）。
 - `doc/COMPAT_ARCHITECTURE.md` — ULW を残存機構として前提する記述（44・99・105 行）と「非スコープ（残置）: ULW アーム…除去は別 spec `wintf-ulw-removal`」（108 行）を「除去済み・GPU 合成単独」へ整合。
 
 ### 絶対不変（Preserve・巻き込み禁止）
 
 - `crates/wintf/src/win_style.rs`（`apply_layered_companion`・`apply_click_through`）。
 - `crates/wintf/src/ecs/clickthrough/`（controller production コード・`registry.rs`）。
-- `crates/wintf/src/com/wuc.rs`・`ecs/graphics/wuc_resource.rs`・`ecs/graphics/visual_manager.rs`・`ecs/graphics/systems/init.rs`（`init_window_graphics`）・`systems/render.rs`・`systems/window_pos.rs`。
+- `crates/wintf/src/com/wuc.rs`・`ecs/graphics/wuc_resource.rs`・`ecs/graphics/visual_manager.rs`・`systems/render.rs`・`systems/window_pos.rs`。
+  - ※`ecs/graphics/systems/init.rs`（`init_window_graphics`）と `ecs/graphics/visual.rs` は WUC 保全集合だが、`CompositionMode` 参照追随（mode フィルタ／ゲートの無条件化）のみ上記「編集」リストの範囲で触れる（research §9）。それ以外の変更は禁止。
 - `crates/wintf/src/ecs/world/schedule_labels.rs`（`CommitComposition` label 定義を含む 13 本 schedule label）。
 - steering（`tech.md`・`product.md`・`roadmap.md`）・ワークスペース `Cargo.toml`。
 
@@ -240,7 +247,7 @@ collapse 後は分岐が消え、`compute_ex_style` は生成時に `WS_EX_LAYER
 | 3.1 | `CompositionMode` が ULW variant を持たない | enum 削除（Option A） | ex_style フロー |
 | 3.2 | `CompositionMode` enum 型を完全撤去 | `components.rs` enum 削除 | — |
 | 3.3 | `Window.composition_mode`・`composition_mode()` 撤去、WUC 無条件固定 | `components.rs` フィールド/メソッド削除 | 生成フロー |
-| 3.4 | wintf 内全呼び出しの追随・ビルド通過 | `window_factory`・`lifecycle`・`controller` test・examples/tests | — |
+| 3.4 | wintf 内全呼び出しの追随・ビルド通過 | `window_factory`・`lifecycle`・`controller` test・`visual.rs`／`systems/init.rs` mode ゲート・`ecs/mod.rs` 再エクスポート・`runtime/mod.rs` test・examples/tests | — |
 | 3.5 | areka 側呼び出しの追随・ビルド通過 | `main.rs`・`tests.rs` | — |
 | 4.1 | `compute_ex_style` が mode 引数・match を持たない | `window_factory.rs::compute_ex_style` 改修 | ex_style フロー |
 | 4.2 | GPU 合成 ex_style を branchless 単一経路で返す | 同上（DComp 分岐と等価） | ex_style フロー |
@@ -268,6 +275,7 @@ collapse 後は分岐が消え、`compute_ex_style` は生成時に `WS_EX_LAYER
 | `Window` | ECS / window components | ウィンドウ生成パラメータ（`composition_mode` フィールド撤去） | 3.1, 3.3 | — | State |
 | `CommitComposition` schedule | ECS / world | 空スケジュール維持（tick 構成不変） | 2.1, 2.3 | schedule labels（P0） | State |
 | `WM_PAINT` handler | ECS / window_proc | 再描画委譲の DComp 一本化 | 3.4 | `DefWindowProcW`（P0） | Service |
+| mode ゲート（`on_visual_add`／`init_window_graphics`） | ECS / graphics（WUC 保全集合・参照追随） | 実行時 DComp ゲート／フィルタの無条件化 | 3.4, 6.2 | `Visual` on_add フック・`WucGraphicsResource`（P0） | Service |
 
 ### Runtime / window factory
 
@@ -326,7 +334,7 @@ fn compute_ex_style(style: &WindowStyle) -> WINDOW_EX_STYLE;
 
 **Implementation Notes**
 - Integration: areka `main.rs`・examples・in-source/外部 test の構造体リテラルから `composition_mode:` 行を除去。
-- Validation: `find_owner_composition_mode_test`・`composition_mode_test` はいずれも `composition_mode()` に全依存し collapse で検証対象が消えるため**両方とも削除**（D8）。
+- Validation: `composition_mode_test` は `composition_mode()` に全依存し検証対象が消えるため削除（D8）。`find_owner_composition_mode_test` は検証対象（`visual.rs` の owner 走査ヘルパー）が mode 非依存の存在判定として存続するため、owner 存在判定の検証へ書き換え（D8 改訂＝research §9）。
 - Risks: `Window` の `unsafe impl Send/Sync` 安全性コメントが `composition_mode: CompositionMode` に言及（148-149 行）— コメント整合が必要。
 
 ### ECS / world
@@ -374,6 +382,26 @@ fn compute_ex_style(style: &WindowStyle) -> WINDOW_EX_STYLE;
 - Validation: 起動サニティ（描画が撤去前と同一）。
 - Risks: GPU 合成窓は元々 DComp 分岐（`DefWindowProcW` 委譲）を通っていたため、一本化は撤去前の GPU 合成挙動と等価（Req6.2）。
 
+### ECS / graphics（WUC 保全集合・参照追随）
+
+#### mode ゲート無条件化（visual.rs / systems/init.rs）
+
+| Field | Detail |
+|-------|--------|
+| Intent | WUC 保全集合内の `CompositionMode` 実行時参照を、collapse 後の唯一モードへ追随（無条件化）する |
+| Requirements | 3.4, 6.2 |
+
+**Responsibilities & Constraints**
+- `visual.rs`: `find_owner_window_composition_mode` を owner Window 存在判定ヘルパー（`DeferredWorld` 版・ChildOf 走査・W3b-V NOTE 維持）へ縮退。`on_visual_add` の `is_dcomp_mode` を「owner Window が存在する」判定へ置換。
+- `systems/init.rs`: `has_dcomp_windows` 早期 return を query 空チェックへ縮退・per-window `continue` フィルタを除去。**mode フィルタ以外（描画・リソース管理・遅延初期化）に触れない**。
+- 等価性: collapse 後は全 Window が GPU 合成のため「mode == DComp」ゲートは「Window であること」と等価に縮退する。orphan Visual の除外挙動・`WucGraphicsResource` 遅延初期化タイミングは不変（Req6.2）。
+
+**Contracts**: Service [x]
+
+**Implementation Notes**
+- Risks: 本 spec で唯一 Preserve 集合に触れる編集。diff を mode フィルタ・docstring に限定し、レンダリングロジックの巻き込みを禁止する（Boundary「参照追随以外は変更しない」の範囲内・research §9）。
+- Validation: 書き換え後の owner 存在判定テスト（`find_owner_composition_mode_test` 改稿）＋ WUC 側既存テスト緑維持。
+
 ## Testing Strategy
 
 削除 spec のため、非破壊検証は **Req6.5 の「手間の少ない」方針（Option 2）**に従い、既存テスト群の緑維持＋ビルド／起動サニティで受入を判定する。新規スクリーンショット比較資産・production readback フックは追加しない（GPU 合成窓は `WS_EX_NOREDIRECTIONBITMAP` を持つため素朴な OS 画面キャプチャで読めず、pixel readback には test-only swapchain backbuffer readback が必要だが、production 無改変で自明に低コストでない限り採用しない）。
@@ -382,6 +410,7 @@ fn compute_ex_style(style: &WindowStyle) -> WINDOW_EX_STYLE;
 - `compute_ex_style` DComp ケース（`window_factory.rs` in-source `ex_style_dcomp_*`）— 一本化後の唯一経路が `WS_EX_LAYERED` を落とし `WS_EX_NOREDIRECTIONBITMAP` を付与することを検証（Req4.2/4.3）。ULW ケースは削除。
 - `tick_order_tests`（`world/mod.rs` in-source）— 13 本 schedule の構成・実行順が不変（`CommitComposition` 空化後も 13 本）であることを検証（Req2.3）。**改変せず緑維持が受入基準**。
 - `components.rs` in-source test — ULW 既定 hard-assert を新既定（WUC 固定）へ追随。
+- owner Window 存在判定テスト（`find_owner_composition_mode_test` の書き換え後）— `visual.rs` の縮退ヘルパーが「自身が Window／ChildOf 祖先に Window／orphan」の 3 ケースで正しく判定することを検証（W3b-V リスク経路の単体カバレッジ維持・research §9）。
 
 ### Integration Tests（WUC 側緑維持）
 - `dcomp_integration_test`・`init_window_graphics_test`（`tests/graphics/`）— WUC 合成パスの本体ロジックは不変。`CompositionMode` 参照の追随後、緑維持が Req6.1/6.2 の非破壊受入。
@@ -390,10 +419,10 @@ fn compute_ex_style(style: &WindowStyle) -> WINDOW_EX_STYLE;
 
 ### Build / Launch Sanity（Req6.4/6.5, 5.3, 6.1）
 - **release ビルド検証**: `opt-level='z'`・`lto=true` 有効ビルドが撤去後に通過し、LTO の dead-code 削除でリンクエラーが出ないこと（Req6.4）。
-- **残存シンボル grep**: `WindowD3D11Compositor`・`UpdateLayeredWindow`・`compositor_init_system`・`composite_render_system`・`ulw_present_system`・`transfer_to_hbitmap`・`present_layered_window`・`CompositionMode` が wintf/areka から消えていることを grep で確認（Req1.5）。
+- **残存シンボル grep**: `WindowD3D11Compositor`・`UpdateLayeredWindow`・`compositor_init_system`・`composite_render_system`・`ulw_present_system`・`transfer_to_hbitmap`・`present_layered_window`・`CompositionMode`・`composition_mode`・`find_owner_window_composition_mode` が wintf/areka から消えていることを grep で確認（Req1.5）。
 - **起動目視サニティ**: areka を起動し、shell/balloon 窓が撤去前と同一の描画で表示され、透明ピクセル上のクリックが別プロセスへ透過し続けること（Req5.3・6.1）。
 
 ## Impl Notes（プロセスゲート）
 
-- **Req1.4（推測で消さない）**: 撤去対象ファイルと変更内容を事前に依頼者へ提示し確認を得た上で削除する。本 design の File Structure Plan がその提示内容の確定版（削除 3 ファイル＋6 テスト＋3 example、編集 15 箇所）。
+- **Req1.4（推測で消さない）**: 撤去対象ファイルと変更内容を事前に依頼者へ提示し確認を得た上で削除する。本 design の File Structure Plan がその提示内容の確定版（削除 3 ファイル＋7 テスト＋3 example、編集 22 箇所。research §9 の追随対象 5 件を含む）。
 - **クロスユニット契約（front-run）**: 本 spec は `areka-P0-emo-present`／`areka-P0-window-placement` を front-run する。collapse 後の新 API（`composition_mode` フィールドなし）で後続が書き起こすため、本 spec 内で areka 側追随を完遂する。

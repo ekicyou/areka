@@ -51,7 +51,7 @@
 | `crates/areka/src/main.rs`（225・292 行 `composition_mode: CompositionMode::DComp`／29 行 import） | Follow | areka 側の 2 窓（shell/balloon）指定。collapse 方式次第で書き換え or 削除。 |
 | `crates/areka/src/tests.rs`（101-118 行） | Follow | `assert_eq!(window.composition_mode(), CompositionMode::DComp)` の 2 テスト。 |
 | `crates/wintf/tests/window/composition_mode_test.rs`（7 occ） | Follow/Delete | `default_is_ulw` 等、ULW 既定を hard-assert。collapse で意味喪失。 |
-| `crates/wintf/tests/window/find_owner_composition_mode_test.rs`（7 occ） | Follow | `find_owner_window_composition_mode` は **production symbol ではない**（test が同ロジックを再実装・grep で src 内に定義なし）。ULW 既定前提の assert を更新。 |
+| `crates/wintf/tests/window/find_owner_composition_mode_test.rs`（7 occ） | Follow | `find_owner_window_composition_mode` は **production symbol ではない**（test が同ロジックを再実装・grep で src 内に定義なし）。ULW 既定前提の assert を更新。**（→§9 で訂正: `ecs/graphics/visual.rs:39` に production 関数として実在・`on_visual_add` が使用・test はそれを直接呼ぶ検証だった）** |
 | `graphics` テスト群（`compositor_init_system_test`・`compositor_integration_test`・`compositor_lifecycle_test`・`compositor_opacity_test`・`compositor_render_system_test`・`compositor_transfer_test`・`dcomp_integration_test`・`init_window_graphics_test`） | Delete/Follow | compositor_* 6 本は ULW compositor 専用 → 削除候補。dcomp/init_window_graphics 2 本は WUC 側 → CompositionMode 参照のみ追随。 |
 | `tests/graphics.rs`（12-23 行の `#[path]` 宣言 6 本）／`tests/window.rs`（2-5 行） | Rewire | 削除するテストファイルのモジュール宣言除去。 |
 | examples: `multi_backend_demo.rs`（ULW 窓生成・88/115/136 行）・`clip_demo.rs`（`create_ulw_clip_window`・87/262/282 行）・`dcomp_demo.rs`・`dcomp_taffy_demo.rs`・`postmessage_click_test.rs`（ULW present 言及コメント） | Follow/Delete | ULW を明示指定する example は collapse で壊れる。`multi_backend_demo`（ULW/DComp 二本立てが主題）と `clip_demo` の ULW 窓関数は要判断（削除 or DComp 化）。 |
@@ -237,9 +237,43 @@ Phase 1 で ULW variant と全 ULW 分岐・3 ファイルを撤去し `Composit
 
 - **確定**:
   - `find_owner_composition_mode_test.rs`（`tests/window/`）を**削除**、`tests/window.rs` の mod 宣言（4-5 行）除去。このテストは ChildOf チェーン走査で `composition_mode()` を返すロジックを再実装しており（production に `find_owner_window_composition_mode` 関数は grep で不在）、`composition_mode()` メソッド消滅で検証対象そのものが消える。走査ロジックを mode 非依存で残す価値は本 spec スコープ外。
+    - **訂正（2026-07-04・§9）**: 「production に不在」は誤認。`ecs/graphics/visual.rs:39-66` に production 関数として実在し `on_visual_add` の DComp ゲートに使用されている。走査ロジックは owner 存在判定として collapse 後も存続するため、本テストは削除ではなく **owner Window 存在判定の検証へ書き換え** に改訂（W3b-V リスク経路のカバレッジ維持）。
   - `composition_mode_test.rs`（`default_is_ulw` 等の ULW 既定 hard-assert）を**削除**（`tests/window.rs` の mod 宣言 2-3 行も除去）。collapse で ULW 既定 assert は意味喪失。**設計ディスカッション #1（2026-07-04）で「削除 or 書換」の二択を①削除に確定**＝`composition_mode()` に全依存し検証対象が型ごと消えるため `find_owner_composition_mode_test` の削除確定と対称に扱う（純粋削除リファクタ原則・非破壊検証は D7 の Option 2 で充足）。
 
 ### Review Gate 結果
 
 - **Mechanical checks**: 全 28 要件 ID がトレーサビリティ表に存在（1.1〜7.3）。Boundary 4 節（Owns/Out/Allowed/Revalidation）populated。File Structure Plan に具体パス（削除3ファイル＋6テスト＋3example・編集15箇所・Preserve集合）。orphan component ゼロ（`compute_ex_style`/`Window`/`CommitComposition schedule`/`WM_PAINT handler` 全て File Structure Plan に記載）。
 - **判定**: **PASS（修正パス0回）**。§5 の全 open item（D3〜D8）はコードベース実査＋確定済み decision（Option A・Option 2）から一意に解決でき、要件ギャップ・矛盾は発生しなかった。
+
+---
+
+## 9. タスク健全性レビューによる設計訂正（2026-07-04）
+
+> 発端: `/kiro-spec-tasks` の task-graph sanity review（独立 subagent）が design/gap 分析のブラスト半径見落としを指摘し、コード実査（`CompositionMode|composition_mode` 全域 grep＝22 ファイル 144 箇所）で確定した。design.md（Boundary Commitments・File Structure Plan・Components・Traceability・Testing Strategy）を同日訂正済み。
+
+### 事実誤認の訂正（§2 Req3 表・§5.8・§8 D8）
+
+- 「`find_owner_window_composition_mode` は production symbol ではない（test が再実装）」は**誤り**。実体は `crates/wintf/src/ecs/graphics/visual.rs:39-66` の production 関数で、`Visual` の `on_add` フック `on_visual_add`（83-90 行）が `VisualGraphics`／`SurfaceGraphics`／`SurfaceGraphicsDirty` 挿入の DComp ゲートに実行時使用している。外部テスト `find_owner_composition_mode_test.rs` はこの関数を直接呼ぶ検証だった。
+
+### 未列挙だった追随対象（5 件・File Structure Plan へ追加済み）
+
+1. **`ecs/graphics/visual.rs`** — helper を owner Window 存在判定へ縮退＋`on_visual_add` ゲート無条件化（orphan Visual 除外は不変）。
+2. **`ecs/graphics/systems/init.rs::init_window_graphics`** — 「絶対不変（Preserve）」列挙ファイルだが mode フィルタ（206・212-219・255-258 行）が `composition_mode()` を直接参照しており、フィールド削除でビルド不能になる。mode フィルタ除去のみ本 spec が編集（レンダリングロジック・遅延初期化不変）。Preserve リストと Boundary「参照追随以外は変更しない」の内部矛盾を解消。
+3. **`ecs/mod.rs`** — `CompositionMode` の公開再エクスポート（47 行）。
+4. **`runtime/mod.rs`** — in-source test の import・フィールド指定（425・456 行）。
+5. **areka `examples/clickthrough_two_rects.rs`** — import・フィールド指定（48・131 行）。
+
+### D8 改訂
+
+- `composition_mode_test.rs` **削除は維持**（設計ディスカッション #1 の確定どおり・検証対象が型ごと消滅）。
+- `find_owner_composition_mode_test.rs` は「削除」から「**owner Window 存在判定の検証へ書き換え**」に改訂 — 検証対象の走査ロジックが mode 非依存で存続し、W3b-V（ChildOf 間接巡回で on_add フック内無限ループ・P48 記録）リスク経路の単体カバレッジを維持する価値があるため。
+
+### 等価性論拠（Req6.2 非破壊）
+
+- collapse 後は全 Window が GPU 合成のため、「mode == DComp」ゲートは「owner Window が存在する」判定へ縮退（orphan Visual の除外挙動は byte-for-byte 不変）。
+- `init_window_graphics` の `has_dcomp_windows` 早期 return は「query 空チェック」へ縮退（`WucGraphicsResource` 遅延初期化のタイミング不変）。
+
+### 影響評価
+
+- 追加編集は全て**参照追随の範囲**でありアーキテクチャ変更なし＝design-validation.md の **GO 判定自体は覆らない**（同レポートはこの 2 ファイルを見逃していた点のみ本節で補正）。
+- 残存シンボル grep（Req1.5）へ `composition_mode`・`find_owner_window_composition_mode` を追加し、同種の見落としを受入基準で検知可能にした。
