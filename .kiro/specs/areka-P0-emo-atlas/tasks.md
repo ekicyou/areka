@@ -16,7 +16,7 @@
   - _Requirements: 2.1_
   - _Boundary: WIC utility (wintf)_
 
-- [ ] 1.3 共有契約型（識別子・幾何・アトラスエントリ・頁バッファ・索引表アクセサ）の定義
+- [x] 1.3 共有契約型（識別子・幾何・アトラスエントリ・頁バッファ・索引表アクセサ）の定義
   - ランタイム識別子（密な採番）とソース識別子（出所＋相対パスの組）を型として分離定義する
   - 幾何プリミティブ（座標・寸法・矩形）、配置情報、空エントリを表現できるアトラスエントリ型を定義する
   - 頁バッファ型（premultiplied BGRA・stride 明示・スレッド間共有可能な所有形）を定義する
@@ -115,3 +115,4 @@
 - 1.1: **areka-emo-atlas は `wintf` クレートに依存しない**（wintf は bevy_ecs/bevy_app/dola/taffy を非 optional core 依存に持つ monolith ＝境界不変条件「bevy_ecs を引き込まない」に抵触）。設計 D2 の「wintf の WIC ユーティリティを最小 feature で参照」は wintf に ECS feature-gate が無いため実現不能。**確定方針: WIC 腕（2.2）は `windows` WIC を直接使い wintf の `load_bitmap_source` と同等の手順を再現**（`相当` の解釈）。1.2 は wintf 側 util の ECS 非依存化＋has_alpha 露出という並行リファクタで、emo-atlas は 1.2 の成果を literal に import しない（手順・has_alpha 取得点を共有）。Cargo.toml deps = areka-parsers(path)/windows/rectangle-pack/tracing。
 - 1.1: モジュール配置は `src/decode.rs`（`pub mod wic_arm;` を含む）＋ `src/decode/wic_arm.rs` のディレクトリモジュール形式で compile 確認済み。
 - 1.2: wintf 側 `load_bitmap_source` は `crates/wintf/src/com/wic.rs` へ移設し戻り値を `Result<(IWICBitmapSource, bool)>`（bool=has_alpha）へ拡張。`systems.rs` は `pub use crate::com::wic::load_bitmap_source;` で再エクスポート（既存 import パス互換）。**has_alpha は変換前フレーム `frame.GetPixelFormat()` から判定必須**（PBGRA 変換後は常に α 付き＝誤判定になる・Critical Issue 1）。判定は `const ALPHA_FORMATS: &[GUID]` の `.contains()` 方式（32/64bpp BGRA/PBGRA/RGBA/PRGBA＋1010102XR＋128bpp float α。24bppBGR/8bppIndexed/grayscale/plain RGB は default false）。`matches!` はwindows-rs の非 UPPER_CASE GUID 定数が `non_upper_case_globals` future-incompat 警告を出すため不可。**2.2 の emo-atlas WIC 腕はこの has_alpha ロジックを `windows` WIC 直接で再現する**（wintf を import しない）。
+- 1.3: 契約型は `table.rs` に D3 通り定義済み・`lib.rs` から `pub use` 済み。**`SetId` は table.rs に定義**（AtlasKey が内包するため）→ manifest.rs（2.1）はここから import する。`AtlasTable::new(keys, entries, pages)` が resolve マップを keys→ElementId(index) で構築。`entry`/`key` は非 Option の O(1) index（契約違反時 panic）・`new` は len 不一致 assert。幾何 Point{i32,i32}/Size{u32,u32}/Rect{u32×4}。

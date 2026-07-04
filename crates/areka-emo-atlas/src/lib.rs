@@ -28,3 +28,8 @@ pub mod normalize;
 pub mod pack;
 pub mod table;
 pub mod trim;
+
+// 成果物契約の正本型（D3・R6）。下流 emo-compose はこれらを import する。
+pub use table::{
+    AtlasEntry, AtlasKey, AtlasPage, AtlasTable, ElementId, Placement, Point, Rect, SetId, Size,
+};
