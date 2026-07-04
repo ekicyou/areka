@@ -1,7 +1,7 @@
 # Implementation Plan
 
 - [ ] 1. 基盤整備: 新規クレート雛形・WIC デコード経路の拡張・共有契約型の定義
-- [ ] 1.1 ワークスペースへの依存追加と新規クレートの雛形作成
+- [x] 1.1 ワークスペースへの依存追加と新規クレートの雛形作成
   - 承認済みの静的パッキングライブラリ（rectangle-pack）をワークスペース共通依存へ追加する
   - emo 素材基盤層のための新規純粋クレートを作成し、パイプライン各段（列挙・デコード・正規化・トリム・packing・焼付・契約型）のモジュールを空実装で用意する
   - 新規クレートは wintf 本体（ECS/D2D/GraphicsCore）へ依存しないことを Cargo.toml の依存宣言で担保する
@@ -108,3 +108,9 @@
   - テストが継続的実行環境で安定して再現することを確認する
   - _Requirements: 5.5_
   - _Depends: 3.2_
+
+## Implementation Notes
+
+- 1.1: `rectangle-pack` は crates.io に 0.5 が存在しない（最新 0.4.2）。workspace 依存は `rectangle-pack = "0.4"`（設計の "0.5" は誤記・同一 zero-dep MIT/Apache クレート）。
+- 1.1: **areka-emo-atlas は `wintf` クレートに依存しない**（wintf は bevy_ecs/bevy_app/dola/taffy を非 optional core 依存に持つ monolith ＝境界不変条件「bevy_ecs を引き込まない」に抵触）。設計 D2 の「wintf の WIC ユーティリティを最小 feature で参照」は wintf に ECS feature-gate が無いため実現不能。**確定方針: WIC 腕（2.2）は `windows` WIC を直接使い wintf の `load_bitmap_source` と同等の手順を再現**（`相当` の解釈）。1.2 は wintf 側 util の ECS 非依存化＋has_alpha 露出という並行リファクタで、emo-atlas は 1.2 の成果を literal に import しない（手順・has_alpha 取得点を共有）。Cargo.toml deps = areka-parsers(path)/windows/rectangle-pack/tracing。
+- 1.1: モジュール配置は `src/decode.rs`（`pub mod wic_arm;` を含む）＋ `src/decode/wic_arm.rs` のディレクトリモジュール形式で compile 確認済み。
