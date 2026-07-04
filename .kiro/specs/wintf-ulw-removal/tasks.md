@@ -49,7 +49,7 @@
   - _Depends: 2.2_
   - _Boundary: ECS window components + ecs/mod.rs re-export_
 
-- [ ] 3.2 (P) compute_ex_style の branchless 一本化
+- [x] 3.2 (P) compute_ex_style の branchless 一本化
   - `runtime/window_factory.rs::compute_ex_style()` を合成モード引数なしの `fn compute_ex_style(style: &WindowStyle) -> WINDOW_EX_STYLE` に改め、`(style.ex_style & !WS_EX_LAYERED) | WS_EX_NOREDIRECTIONBITMAP` を無条件に返すようにする
   - 呼び出し側 `EcsWindowFactory::create_window` から `composition_mode` の読み取り・引数渡しを除去する
   - in-source test の ULW ケース（`ex_style_ulw_keeps_layered`）を削除し、DComp ケース（`ex_style_dcomp_*`）を唯一経路の回帰検知として残置する
