@@ -57,7 +57,7 @@
   - _Boundary: toy tests（worker）_
   - _Depends: 2.1, 2.2_
 
-- [ ] 4.2 (P) worker→UI pump実走echo試験（toy試験b）の実装
+- [x] 4.2 (P) worker→UI pump実走echo試験（toy試験b）の実装
   - 2.3で確定した組合せ方式でMessageLoopを bounded 実走させ、workerからUIアクターへのecho往復を検証する試験を実装する
   - 応答不達・期限超過・応答不一致は試験失敗として観測されるようにする
   - 観測可能な完了条件: `cargo test -p areka-actor`実行でtoy試験bが実際のpump上でpassする（無限ブロックしない）
