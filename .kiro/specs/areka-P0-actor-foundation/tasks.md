@@ -50,7 +50,7 @@
   - _Depends: 2.3_
 
 - [ ] 4. Integration: toyアクター試験による基盤原語の結線検証
-- [ ] 4.1 (P) worker⇄worker往復試験（toy試験a）の実装
+- [x] 4.1 (P) worker⇄worker往復試験（toy試験a）の実装
   - request/replyの往復・Close→join決定的完走・Close後続メッセージの破棄と要求側切断観測・全送信端dropでの正常終了・panicのjoin観測・handlerのErr後も受信継続、を単一の試験群として実装する
   - 観測可能な完了条件: `cargo test -p areka-actor`実行でtoy試験aの全ケースがpassする
   - _Requirements: 8.1, 1.3, 2.3, 3.3, 3.4, 3.5, 3.6, 3.7_
