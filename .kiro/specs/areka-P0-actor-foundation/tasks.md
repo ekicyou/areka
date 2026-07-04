@@ -9,7 +9,7 @@
   - _Requirements: 6.2, 7.1, 7.3_
   - _Boundary: クレート基盤_
 
-- [ ] 1.2 lib.rs への規約正本（envelope/停止/流量/拡張シーム）の明文化
+- [x] 1.2 lib.rs への規約正本（envelope/停止/流量/拡張シーム）の明文化
   - inbox規約（単一Receiver・XxxMsg命名）・envelope規約（reply Sender同梱・Send所有データ・Arc大型手渡し）・停止規約（Close=即時停止・積み残し破棄・受信ループはErrで終了しない）・流量規約（unbounded制御・大型データ非流通）・拡張シーム（crossbeam等は承認まで凍結）をcrate rustdocへ規範文で記述する
   - 1.1で用意したモジュールの公開シンボルをlib.rsからre-exportする（規約が定める公開面のみに限定する）
   - 観測可能な完了条件: `cargo doc -p areka-actor` が上記5つの規約セクションを含むrustdocを生成する
