@@ -33,7 +33,7 @@
   - _Requirements: 2.2, 2.3, 3.6_
   - _Boundary: reply_
 
-- [ ] 2.3 (P) pump実走環境でのタスク駆動組合せ検証（スパイク）
+- [x] 2.3 (P) pump実走環境でのタスク駆動組合せ検証（スパイク）
   - spawn_local・MessageLoop::run・スレッドメッセージ起床（heartbeat）を同時使用した最小限のecho往復を試作し、組合せが成立するか確認する（spawn/replyとは独立の検証であり、それらへのコード依存を持たない）
   - 成立しない場合は実証済みの代替手段（block_on方式またはmessage-only窓＋PostMessageW方式）を選定し記録する
   - 観測可能な完了条件: 最小echoスパイクが成功する、または代替方式が選定され後続タスクの実装方針として確定している
@@ -72,3 +72,15 @@
   - _Requirements: 6.2, 7.1, 7.2, 7.3_
   - _Boundary: クレート全体_
   - _Depends: 4.1, 4.2_
+
+## Implementation Notes
+
+- **2.3 スパイク確定（tasks 3 / 4.2 の実装方針）**: `spawn_local` + `MessageLoop::run` + `PostThreadMessageW` heartbeat の三点組合せは **PRIMARY 方式で成立**（フォールバック block_on / message-only窓 は不要）。executor 0.0.5 実測 API:
+  - `spawn_local<T: 'static>(future) -> JoinHandle<T>`（`MessageLoop::run` を回すスレッドから呼ぶ・呼出時点で run 稼働不要＝タスクはキューされ run で駆動）。`JoinHandle` の drop は **detach**（タスク継続・戻り値破棄）。
+  - `MessageLoop::new()` → `MessageLoop::run(filter)` で `filter: FnMut(&MessageLoop, &MSG) -> FilterResult`。run 自体が spawn_local タスクを poll する（async-channel waker が executor のクロススレッド waker 経由で pump 起床）。`FilterResult`/`MessageLoop` はクレート root。
+  - **quit**: `MessageLoop::run` を抜けるには `msg_loop.quit()`（filter 内で `done`/deadline 判定して呼ぶ）。※ `parent_window.rs` の MessageLoop は別物のラッパゆえ混同しない。
+  - **wake メッセージは filter から保護**され drop 不可（filter は Forward 前提でよい）。
+  - **heartbeat（WM_NULL ~25ms）は保持推奨**: echo 自体は waker で起きるが、`GetMessageW` ブロック中に deadline を再評価させるため heartbeat が bounded 保証に必要（load-bearing）。
+  - HWND を一切生成しない（executor 内部の message-only 窓のみ）＝GPU/実窓/管理者権限 不要でヘッドレス CI 安全。
+  - `async-channel` unbounded `try_send` は Closed のみ失敗（Full 無し・設計 4.2 どおり）。
+  - 参照実装: `crates/shiori-host32-host/src/parent_window.rs::pump_until_hello_or`（heartbeat + deadline + quit）。スパイク本体 `crates/areka-actor/tests/spike_ui_pump.rs`。
