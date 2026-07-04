@@ -102,7 +102,7 @@
   - _Depends: 3.6_
   - _Boundary: areka crate_
 
-- [ ] 4.2 (P) wintf examples の追随
+- [x] 4.2 (P) wintf examples の追随
   - `ulw_twin_demo.rs`・`ulw_debug_demo.rs`・`multi_backend_demo.rs` を削除する（ULW 主題の消滅・D5）
   - `clip_demo.rs` の `create_ulw_clip_window`（87・262・282行）を除去し、clip 検証を DComp 単独へ書き換える
   - `dcomp_demo.rs`・`dcomp_taffy_demo.rs` の `composition_mode:` フィールド指定と `use ... CompositionMode` を除去する
