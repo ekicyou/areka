@@ -29,7 +29,7 @@
   - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7_
   - _Boundary: shiori3 codec (shiori-host32-host)_
 
-- [ ] 2.2 response 解析（parse_response）実装
+- [x] 2.2 response 解析（parse_response）実装
   - status（200/204/311/312/400/500）分岐、`Value` 抽出、`ErrorLevel`/`ErrorDescription` 保持、`Charset` 省略時の継承、未知ヘッダ寛容、malformed は `Err` を返す解析を実装する
   - Observable: 各 status 別・malformed 別に単体テストで期待される `ParsedResponse`/`Err` が得られることを確認できる
   - _Requirements: 2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 2.7, 2.8_

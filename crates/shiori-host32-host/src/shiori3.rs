@@ -117,9 +117,244 @@ pub fn build_request(req: &ShioriRequest) -> Vec<u8> {
     out.into_bytes()
 }
 
+// ---- response 解析（タスク 2.2）--------------------------------------------
+
+use crate::error::ShioriError;
+
+/// 解析済み SHIORI/3.0 response（status を潰さず保持・要件 2.x）。
+///
+/// `parse_response` は純粋なワイヤパーサであり、status を verbatim に保持する
+/// （200/204/311/312/400/500/その他）。400/500 を `ShioriError::Status` へ写像したり
+/// ドロップしたりはしない — その意味論的判断（400/500/`ErrorLevel` → エラー）は
+/// 呼び手（`Shiori3Client::get`・タスク 3）が `status` を検分して行う。これにより
+/// codec を純粋に保ち、client 側に timeout と SHIORI エラーの区別所有権を委ねる
+/// （design.md §shiori3 codec / §Error Strategy）。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ParsedResponse {
+    /// ステータスコード（200/204/311/312/400/500/その他・verbatim 保持・要件 2.1〜2.7）。
+    pub status: u16,
+    /// `Value` ヘッダ値（200 時にあり得る・欠落し得る＝`None`・要件 2.1）。
+    pub value: Option<String>,
+    /// `ErrorLevel` ヘッダ（SSP 拡張・存在時のみ `Some`・要件 2.5）。
+    pub error_level: Option<String>,
+    /// `ErrorDescription` ヘッダ（SSP 拡張・存在時のみ `Some`・要件 2.5）。
+    pub error_description: Option<String>,
+}
+
+/// response バイト列を解析する（CRLF/LF 受理・寛容・要件 2.x）。
+///
+/// # 返り値
+/// - well-formed（status 行から数値コードが取れる）→ `Ok(ParsedResponse{..})`。
+///   400/500/311/312 を **含めて** status を verbatim に保持する（要件 2.4/2.7）。
+/// - malformed（status 行が欠落・数値コードが取れない・不正 UTF-8）→ `Err(ShioriError::Parse)`。
+///
+/// 本関数は `ShioriError::Status` を **返さない**。非成功 status の意味論的写像は
+/// 呼び手（client・タスク 3）の責務であり、ここでは wire の忠実な転記に徹する。
+///
+/// # 解析規則（design.md §Data Models 受信寛容集合・要件 2.1〜2.8）
+/// - 行区切りは CR+LF を第一に、bare LF にも頑健（donor `parse_value` と同じ二段 split）。
+/// - status 行（先頭行）: `SHIORI/3.0 <code> <reason>`。`<code>` を `u16` として抽出。
+///   数値コードが取れなければ malformed（要件 malformed・fail fast）。
+/// - ヘッダ行: `名前: 値`。名前・値は前後空白をトリム。ヘッダ名の一致は
+///   大文字小文字を無視（donor 準拠の堅牢性）。
+/// - `Value` → `value`（要件 2.1）。`ErrorLevel`/`ErrorDescription` → 各 `Option`（要件 2.5）。
+/// - 未知ヘッダ（`Reference0`/`Marker`/任意）は無視し parse を失敗させない（要件 2.8）。
+/// - `Charset` ヘッダ省略時は `request_charset` を継承（本仕様は UTF-8 のみ・要件 2.6）。
+///   `request_charset` は charset シームとして受け取るが、本仕様の唯一の実符号化は UTF-8 で
+///   あり、Shift_JIS 復号は実装しない（シームのみ）。
+///
+/// NUL 終端に依存せず、与えられたバイト長で解析する（len 厳守）。
+pub fn parse_response(bytes: &[u8], request_charset: Charset) -> Result<ParsedResponse, ShioriError> {
+    // charset シーム: 本仕様は UTF-8 のみ実符号化。request_charset は継承先の宣言だが、
+    // Utf8 以外の variant は存在しないため（Shift_JIS はシームのみ）、UTF-8 として復号する。
+    match request_charset {
+        Charset::Utf8 => {}
+    }
+
+    // UTF-8 として復号。不正バイトは lossy にせず malformed として fail fast（要件: silent 失敗禁止）。
+    let text = std::str::from_utf8(bytes).map_err(|_| ShioriError::Parse)?;
+
+    // CRLF を第一に、bare LF にも頑健な行分割（donor `parse_value` と同じ二段 split）。
+    let mut lines = text.split("\r\n").flat_map(|l| l.split('\n'));
+
+    // status 行（先頭行）から数値コードを抽出。取れなければ malformed。
+    let status_line = lines.next().ok_or(ShioriError::Parse)?;
+    let status = parse_status_code(status_line).ok_or(ShioriError::Parse)?;
+
+    let mut value = None;
+    let mut error_level = None;
+    let mut error_description = None;
+
+    for line in lines {
+        // ヘッダ以外（空行・終端）は素通し。`名前: 値` のみ処理。
+        let Some((name, val)) = line.split_once(':') else {
+            continue;
+        };
+        let name = name.trim();
+        let val = val.trim();
+        // ヘッダ名一致は大文字小文字無視（堅牢性）。既知ヘッダ以外は無視（要件 2.8）。
+        if name.eq_ignore_ascii_case("Value") {
+            value = Some(val.to_string());
+        } else if name.eq_ignore_ascii_case("ErrorLevel") {
+            error_level = Some(val.to_string());
+        } else if name.eq_ignore_ascii_case("ErrorDescription") {
+            error_description = Some(val.to_string());
+        }
+        // Charset / Reference0 / Marker / 未知ヘッダ等は読み飛ばす（要件 2.6/2.8）。
+    }
+
+    Ok(ParsedResponse {
+        status,
+        value,
+        error_level,
+        error_description,
+    })
+}
+
+/// status 行 `SHIORI/3.0 <code> <reason>` から数値ステータスコードを抽出する。
+///
+/// バージョントークン（`SHIORI/3.0`）の直後の空白区切りトークンを `u16` として解釈する。
+/// 数値コードが見つからなければ `None`（malformed）。前後の空白には頑健。
+fn parse_status_code(status_line: &str) -> Option<u16> {
+    // 空白区切りトークン列から、最初に u16 としてパースできるトークンを status とみなす。
+    // 通常は 2 番目のトークン（`SHIORI/3.0` の次）だが、`SHIORI/3.0` 自体は
+    // `/` `.` を含み u16 化に失敗するため、素朴な first-parseable で安全に拾える。
+    status_line
+        .split_whitespace()
+        .find_map(|tok| tok.parse::<u16>().ok())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::error::ShioriError;
+
+    // ---- parse_response（タスク 2.2）テスト --------------------------------
+
+    /// 200 + Value: さくらスクリプト本体（多バイト UTF-8）が `value: Some(..)` に抽出される（要件 2.1）。
+    #[test]
+    fn parse_200_extracts_value() {
+        let body = r"\w0\h\s[0]こんにちは世界\e";
+        let resp = format!(
+            "SHIORI/3.0 200 OK\r\nCharset: UTF-8\r\nSender: pasta\r\nValue: {body}\r\n\r\n"
+        );
+        let parsed = parse_response(resp.as_bytes(), Charset::Utf8).expect("well-formed 200");
+        assert_eq!(
+            parsed,
+            ParsedResponse {
+                status: 200,
+                value: Some(body.to_string()),
+                error_level: None,
+                error_description: None,
+            }
+        );
+    }
+
+    /// 200 だが Value ヘッダが無い場合は `value: None`（要件 2.1・Value は 200 でも欠落し得る）。
+    #[test]
+    fn parse_200_without_value_is_none() {
+        let resp = "SHIORI/3.0 200 OK\r\nCharset: UTF-8\r\nSender: pasta\r\n\r\n";
+        let parsed = parse_response(resp.as_bytes(), Charset::Utf8).expect("well-formed 200");
+        assert_eq!(parsed.status, 200);
+        assert_eq!(parsed.value, None);
+    }
+
+    /// 204 No Content: status=204・value=None を保持（要件 2.2・成功だがスクリプト無しを区別）。
+    #[test]
+    fn parse_204_no_content() {
+        let resp = "SHIORI/3.0 204 No Content\r\nCharset: UTF-8\r\nSender: pasta\r\n\r\n";
+        let parsed = parse_response(resp.as_bytes(), Charset::Utf8).expect("well-formed 204");
+        assert_eq!(parsed.status, 204);
+        assert_eq!(parsed.value, None);
+    }
+
+    /// 400 Bad Request: parse_response は Err にせず status=400 を Ok で保持（要件 2.4・意味判断は client）。
+    #[test]
+    fn parse_400_is_ok_status_preserved() {
+        let resp = "SHIORI/3.0 400 Bad Request\r\nCharset: UTF-8\r\nSender: pasta\r\n\r\n";
+        let parsed = parse_response(resp.as_bytes(), Charset::Utf8).expect("400 is a parseable response, not a parse error");
+        assert_eq!(parsed.status, 400);
+    }
+
+    /// 500 Internal Server Error: 同様に Ok で status=500 を保持（要件 2.4）。
+    #[test]
+    fn parse_500_is_ok_status_preserved() {
+        let resp = "SHIORI/3.0 500 Internal Server Error\r\nCharset: UTF-8\r\nSender: pasta\r\n\r\n";
+        let parsed = parse_response(resp.as_bytes(), Charset::Utf8).expect("500 is parseable");
+        assert_eq!(parsed.status, 500);
+    }
+
+    /// 311/312（OnTeach 系）: drop せず status で区別可能に Ok 保持（要件 2.7）。
+    #[test]
+    fn parse_311_and_312_not_dropped() {
+        for code in [311u16, 312u16] {
+            let resp = format!("SHIORI/3.0 {code} Teach\r\nCharset: UTF-8\r\nSender: pasta\r\n\r\n");
+            let parsed = parse_response(resp.as_bytes(), Charset::Utf8).expect("3xx parseable");
+            assert_eq!(parsed.status, code);
+        }
+    }
+
+    /// ErrorLevel / ErrorDescription（SSP 拡張）が保持される（要件 2.5）。
+    #[test]
+    fn parse_error_level_and_description_preserved() {
+        let resp = "SHIORI/3.0 500 Internal Server Error\r\nCharset: UTF-8\r\nErrorLevel: critical\r\nErrorDescription: boom happened\r\n\r\n";
+        let parsed = parse_response(resp.as_bytes(), Charset::Utf8).expect("parseable");
+        assert_eq!(parsed.status, 500);
+        assert_eq!(parsed.error_level.as_deref(), Some("critical"));
+        assert_eq!(parsed.error_description.as_deref(), Some("boom happened"));
+    }
+
+    /// 未知ヘッダ（Reference0 / Marker / X-Weird）が混在しても parse は成功し Value を抽出できる（要件 2.8）。
+    #[test]
+    fn parse_unknown_headers_tolerated() {
+        let resp = "SHIORI/3.0 200 OK\r\nCharset: UTF-8\r\nSender: pasta\r\nReference0: x\r\nMarker: y\r\nX-Weird: z\r\nValue: \\s[0]hi\\e\r\n\r\n";
+        let parsed = parse_response(resp.as_bytes(), Charset::Utf8).expect("unknown headers must not fail parse");
+        assert_eq!(parsed.status, 200);
+        assert_eq!(parsed.value.as_deref(), Some(r"\s[0]hi\e"));
+    }
+
+    /// Charset ヘッダ省略時も request_charset（UTF-8）を継承して UTF-8 として解析できる（要件 2.6）。
+    #[test]
+    fn parse_charset_omitted_inherits_request_charset() {
+        // Charset ヘッダなし・多バイト UTF-8 body。
+        let resp = "SHIORI/3.0 200 OK\r\nSender: pasta\r\nValue: 日本語\r\n\r\n";
+        let parsed = parse_response(resp.as_bytes(), Charset::Utf8).expect("UTF-8 inherited");
+        assert_eq!(parsed.status, 200);
+        assert_eq!(parsed.value.as_deref(), Some("日本語"));
+    }
+
+    /// bare-LF（\n のみ）の応答にも頑健（要件 2.3・CRLF/LF 両受理）。
+    #[test]
+    fn parse_bare_lf_robust() {
+        let resp = "SHIORI/3.0 200 OK\nCharset: UTF-8\nValue: hi\n\n";
+        let parsed = parse_response(resp.as_bytes(), Charset::Utf8).expect("bare LF parseable");
+        assert_eq!(parsed.status, 200);
+        assert_eq!(parsed.value.as_deref(), Some("hi"));
+    }
+
+    /// 空バイト列は malformed（status 行が取れない）→ Err(Parse)（malformed・fail fast）。
+    #[test]
+    fn parse_empty_is_parse_error() {
+        let err = parse_response(b"", Charset::Utf8).expect_err("empty must be a parse error");
+        assert!(matches!(err, ShioriError::Parse));
+    }
+
+    /// status コードを含まない先頭行（GARBAGE）は malformed → Err(Parse)（過剰寛容を防ぐ）。
+    #[test]
+    fn parse_garbage_status_line_is_parse_error() {
+        let err = parse_response(b"GARBAGE\r\nValue: x\r\n\r\n", Charset::Utf8)
+            .expect_err("no numeric status must be a parse error");
+        assert!(matches!(err, ShioriError::Parse));
+    }
+
+    /// 不正 UTF-8 バイト列は malformed → Err(Parse)（silent lossy にしない）。
+    #[test]
+    fn parse_invalid_utf8_is_parse_error() {
+        // 0xFF は UTF-8 として不正。
+        let err = parse_response(&[0xFF, 0xFE, 0x00], Charset::Utf8)
+            .expect_err("invalid UTF-8 must be a parse error");
+        assert!(matches!(err, ShioriError::Parse));
+    }
 
     /// GET（Reference 1 件）: request line・必須ヘッダ・Reference0・空行終端を検証（要件 1.1/1.3/1.4/1.6）。
     #[test]
