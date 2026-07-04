@@ -146,6 +146,8 @@
 
 - **#2（2026-07-04・開発者指示）`spawn_ui` 誤用時は log-first（安易な panic 禁止）**: validation Issue 2（誤用時挙動が executor 依存で未定義）に対し、当初推奨の fail-fast panic を開発者が却下——「安易な panic はヤバい。ログを残す方針に。継続不可能な致命は落ちるのも仕方ないが、**ログ無しはまずい**」。決定: (a) 検出可能な前提違反＝`tracing::error!`＋`Err(UiSpawnError::NotUiThread)` 返却（`spawn_ui` は Result 返しへ変更・処置判断は結線層）、(b) 検出不能で executor が panic＝致命として容認（冒頭 `debug!` で文脈確保）、(c) 静かに失敗する型なら実装で検出を講じ (a) へ引き上げ。併せて**クレート全体の失敗経路ログ規律**（返す/落ちる前に必ず tracing 記録・panic は致命限定＋直前 error!）を Error Handling に明文化。§10 の該当リスク項はこの方針で解決。
 
+- **#3（2026-07-04・開発者指示）受信ループの耐障害規約（DD-10・R3.7 新設）**: 開発者が原則を明示——「アクターモデルなら、個別の Err が発生してもエラーログを出したうえでループに戻るべき。ループから出る唯一のルートは終了イベント受信時。継続不可の致命エラーが Rust に実在するかは極めて疑問」。決定: handler shape を `FnMut(M) -> Result<ControlFlow<()>, E>` に固定（`run_inbox`／`spawn_ui` 共通）。`Err(e)`＝基盤が `error!`（アクター名＋%e）を記録して**ループ継続**・終了経路は `Ok(Break)`（Close）と全 Sender drop の 2 経路のみ（型と基盤実装で強制）。panic はエラー処理でなくバグの観測（join 検出・従来通り）。失敗しない handler は `E = Infallible`。requirements.md R3.7 追加・design.md（run_inbox/spawn_ui シグネチャ・停止経路図・conventions 停止規約・Error Handling・toy(a) ケース(vi)・トレーサビリティ 3.7）反映済み。
+
 ## 11. References（設計フェーズ追加）
 
 - `crates/wintf/src/runtime/mod.rs` — `WinApp::run` の relay タスク（JoinHandle drop=非キャンセルの明示・spawn_local 結線例）

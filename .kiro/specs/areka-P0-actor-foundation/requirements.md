@@ -70,6 +70,7 @@ areka の M1 並行モデルは「各エンジン（kanade/sakura/seriko/emo な
 4. When アクターが停止し join されたとき, the Actor Foundation shall その停止・回収が決定的に完了することを保証する（停止が永久にハングしない）。
 5. If アクターの送信端がすべて破棄され inbox が閉じたとき, then the Actor Foundation shall アクターの受信ループを正常終了させる（明示 Close と同様に受信ループを抜ける）。
 6. When アクターが停止する（Close 受信・全 Sender drop・panic のいずれか）時点で inbox に request/reply メッセージが未処理で残っていたとき, the Actor Foundation shall それらのメッセージを drop することで同梱された返信用送信端（reply Sender）も drop され、対応する要求側の応答受信が**切断（`Err`）として観測され永久ブロックしないこと**を保証する（＝要求のキャンセル／アクター終了は reply 側の切断で伝わる規約とし、要求側は応答受信が `Err` を返し得ることを許容する）。
+7. While アクターが稼働中であるとき, the Actor Foundation shall 個別メッセージの処理失敗（handler が返す `Err`）では受信ループを終了させず、エラーを tracing に記録したうえで受信を継続する（受信ループの正常な終了経路は Close 受信と全 Sender drop の 2 経路のみ。panic はエラー処理ではなくバグの観測として join 時検出に委ねる）。
 
 ### Requirement 4: UI スレッド配送ブリッジ
 

@@ -118,6 +118,7 @@ graph TB
 | DD-7 | spawn 返却は**素のタプル `(mpsc::Sender<M>, ActorHandle)`**。`ActorHandle` は JoinHandle＋アクター名の薄い newtype で**非 RAII**（drop で join しない） | 1.1 の字義（Sender と JoinHandle を返す）を最小表面で満たす。drop-join RAII は Close 送信権限（Sender）を handle が持たないためデッドロック源になり得る＝停止駆動は結線層（ghost-setup）が「Close 送信→join」の順で明示的に行う規約。RAII 束ねが欲しい消費者は上に自作（実需 2 例目まで基盤は作らない） |
 | DD-8 | panic 伝搬＝`ActorHandle::join(self) -> Result<(), ActorError>` が `std::thread::Result` の `Err` を **thiserror 構造化エラー（アクター名＋panic payload 文字列）へ写像** | 1.3「join 時に観測可能な失敗」を最小＋診断可能な形で満たす。生の `Box<dyn Any>` を返すよりログ・上位伝搬（結線層）に扱いやすい。監督・再起動はしない（7.2） |
 | DD-9 | UI ブリッジの queue＋wakeup＝**`async-channel` (2・unbounded) を採用**（当初案の std mpsc＋event-listener 手組み合成を置換・2026-07-04 設計ディスカッション #1 開発者承認） | pump 待機が `recv().await` 一本になり、store→notify／listen-before-work 規律（設計中最も繊細な正しさ）をクレート内実装へ委譲。async-channel は bevy_tasks 経由でツリー内既在＝ビルドコスト増ゼロ・内部は event-listener＋concurrent-queue で既実証の起床経路と同族。worker 側は std mpsc 継続（`recv_blocking` に timeout 変種が無く brief の「tick は recv_timeout」が壊れるため全面統一は棄却＝非 UI スレッドに async の動機なし） |
+| DD-10 | 受信ループの耐障害規約＝handler shape を `FnMut(M) -> Result<ControlFlow<()>, E>` に固定し、`Err` は基盤が `error!` 記録して**ループ継続**（2026-07-04 設計ディスカッション #3 開発者指示・R3.7 新設） | アクターモデルの原則: ループの終了経路は終了イベント受信（Close＝`Ok(Break)`）と全 Sender drop のみ——個別メッセージの処理失敗でアクターを殺さない。「Err では抜けられない」を型と基盤実装で強制。panic はエラー処理でなくバグの観測（join 検出・7.2 の監督なし方針と整合）。失敗しない handler は `E = Infallible` |
 
 ### Technology Stack
 
@@ -178,10 +179,12 @@ sequenceDiagram
 
 ```mermaid
 flowchart TB
-    Recv[recv 待機] -->|Close variant 受信| Break[受信ループを即時 break]
+    Recv[recv 待機] -->|Close variant 受信 handler が Ok Break| Break[受信ループを即時 break]
     Recv -->|全 Sender drop で Disconnected| Break
-    Recv -->|通常メッセージ| Handle[handler 実行] --> Recv
-    Handle -->|panic| Unwind[unwind でスレッド異常終了]
+    Recv -->|通常メッセージ| Handle[handler 実行]
+    Handle -->|Ok Continue| Recv
+    Handle -->|Err 個別処理失敗| LogErr[tracing error! 記録] --> Recv
+    Handle -->|panic バグの観測| Unwind[unwind でスレッド異常終了]
     Break --> DropRx[Receiver drop 積み残しメッセージを破棄]
     Unwind --> DropRx
     DropRx --> DropReply[同梱 reply Sender も drop]
@@ -191,7 +194,7 @@ flowchart TB
     Unwind --> JoinErr[ActorHandle join が Err Panicked]
 ```
 
-**フロー上の決定**: Close は「即時停止」＝積み残しを処理しない（3.3）。破棄は `Receiver` の drop に委ね、std mpsc の drop 意味論により「同梱 reply Sender の drop→要求側の `Err` 観測」（3.6）が**追加コードなしで**成立する。graceful 停止（積み残し処理後の停止）は送信側が「後続なしを確認して Close を送る」運用で原語の上に構築する（基盤は関与しない）。UI アクター（`spawn_ui`）も同一の意味論（Break→タスク return→Receiver drop）。
+**フロー上の決定**: Close は「即時停止」＝積み残しを処理しない（3.3）。破棄は `Receiver` の drop に委ね、std mpsc の drop 意味論により「同梱 reply Sender の drop→要求側の `Err` 観測」（3.6）が**追加コードなしで**成立する。graceful 停止（積み残し処理後の停止）は送信側が「後続なしを確認して Close を送る」運用で原語の上に構築する（基盤は関与しない）。UI アクター（`spawn_ui`）も同一の意味論（Break→タスク return→Receiver drop）。**受信ループの耐障害規約（3.7・設計ディスカッション #3）**: handler の `Err`（個別メッセージ処理の失敗）は終了経路ではない——基盤が `error!` を記録してループへ戻る。ループの終了経路は「Close 受信（`Ok(Break)`）」「全 Sender drop（Disconnected/Closed）」の 2 経路のみで、panic はエラー処理ではなくバグの観測（unwind→join 検出）として扱う。
 
 ## Requirements Traceability
 
@@ -213,6 +216,7 @@ flowchart TB
 | 3.4 | 停止・join の決定的完了 | spawn | `ActorHandle::join`（body 終了で必ず復帰） | toy(a) |
 | 3.5 | 全 Sender drop で正常終了 | spawn／ui | `run_inbox`/`spawn_ui`（Disconnected で終了） | 停止経路図 |
 | 3.6 | 未処理 reply の drop→要求側 Err 観測 | reply＋spawn/ui | `ReplyReceiver::recv` が `Err(ReplyError::Dropped)` | 停止経路図・toy(a) |
+| 3.7 | 個別処理失敗（handler Err）で受信ループを終了しない | spawn／ui | `run_inbox`/`spawn_ui`（`Err`→`error!` 記録→継続・終了経路は Close／全 Sender drop のみ） | 停止経路図・toy(a) |
 | 4.1 | UI アクターへの配送ブリッジ提供 | ui | `spawn_ui`/`UiSender` | echo シーケンス |
 | 4.2 | pump 非ブロック・queue 積み＋起床 | ui | `UiSender::send`（async-channel unbounded `try_send`・ブロックなし・起床は内部 waker） | echo シーケンス |
 | 4.3 | 起床ごと UI 側 drain | ui | drain ループ（`recv().await`・残があるかぎり連続処理・空で Pending） | echo シーケンス |
@@ -253,7 +257,7 @@ flowchart TB
 - crate-level rustdoc に以下の規約を**規範文で明文化**する:
   1. **inbox 規約**（1.5/2.1）: アクター 1 個につき受信端は `mpsc::Receiver<XxxMsg>` を 1 本のみ。メッセージはアクターごとの enum 型（命名 `XxxMsg`）。
   2. **envelope 規約**（2.2/2.4/2.5）: request/reply が要る variant は `ReplySender<T>` をフィールドに同梱。メッセージは `Send + 'static` な所有データ（借用を跨がせない・型境界で強制）。大型データ（画素バッファ等）はコピーせず `Arc<T>`／`Arc<[u8]>` フィールドで手渡す。
-  3. **停止規約**（3.1/3.3）: 各 `XxxMsg` に横断制御の Close variant を必ず含める。Close＝**即時停止**（受信ループを直ちに抜け、積み残しは破棄）。graceful 停止は送信側が「後続なし確認→Close 送信」で原語の上に構築する。
+  3. **停止規約**（3.1/3.3/3.7）: 各 `XxxMsg` に横断制御の Close variant を必ず含める。Close＝**即時停止**（受信ループを直ちに抜け、積み残しは破棄）。graceful 停止は送信側が「後続なし確認→Close 送信」で原語の上に構築する。**受信ループは個別メッセージ処理の失敗（handler の `Err`）では終了しない**——基盤が `error!` を記録して受信を継続し、終了経路は Close と全 Sender drop の 2 経路のみ（自前ループを書く場合も同規約に従う）。
   4. **流量規約**（5.1/5.2）: 制御メッセージ経路は unbounded（低レート前提）。毎フレーム大量データは channel に流さない（共有バッファ／`Arc` 手渡し）。
   5. **拡張シーム**（5.3）: select／MPMC／有界キューが実需（2 例目）になったら crossbeam-channel 等を**開発者承認の上で** newtype（`ReplySender` 等）の内部実装差し替えとして導入する。本ユニットでは導入しない。
 - 公開 re-export: `spawn_actor`, `run_inbox`, `ActorHandle`, `ActorError`, `reply_channel`, `ReplySender`, `ReplyReceiver`, `ReplyError`, `spawn_ui`, `UiSender`, `UiSendError`, `UiSpawnError`。**これ以外の公開面を持たない**（7.1）。
@@ -276,7 +280,7 @@ flowchart TB
 - `std::thread::Builder::new().name(name)` による spawn（1.2）。スレッド body は `tracing::info_span!("actor", actor = %name)` に入れて実行し、span にアクター名を載せる（スレッド名＝アクター名・6.1）。
 - inbox は spawn 内部で `mpsc::channel()` を生成し、`Receiver` を body へ move（body が単独所有＝1.5 の構造保証）、`Sender` を呼び出し側へ返す（1.1）。
 - 追加の常駐機構（レジストリ・監督・stop_flag）を持たない素の thread spawn＝per-talk transient の軽量性（1.4）。停止はメッセージ Close／全 Sender drop の 2 経路が原語（3.2/3.5）。
-- `run_inbox` は「Break で即時終了・Disconnected で正常終了」の正準受信ループ形。使用は任意（`recv_timeout` で周期 tick したいアクターは自前ループを書いてよい・rustdoc に明記）。
+- `run_inbox` は「Ok(Break) で即時終了・Disconnected で正常終了・**Err は error! 記録して継続**」の正準受信ループ形（3.7・個別メッセージ処理の失敗でループを終了させない＝終了経路は終了イベントのみ）。使用は任意（`recv_timeout` で周期 tick したいアクターは自前ループを書いてよい・rustdoc に明記。その場合も 3.7 の耐障害規約に従う）。
 
 **Dependencies**
 - Outbound: `std::thread`／`std::sync::mpsc` — スレッドとチャンネルの実体（P0）
@@ -293,12 +297,18 @@ where
     M: Send + 'static,
     F: FnOnce(std::sync::mpsc::Receiver<M>) + Send + 'static;
 
-/// 正準受信ループ: Ok(msg) → handler。Break で即時 return（積み残しは Receiver drop で破棄）。
+/// 正準受信ループ。handler の戻りで挙動を固定する（3.7・受信ループ耐障害規約）:
+/// - Ok(Continue) → 次の recv へ
+/// - Ok(Break)    → 即時 return（Close 受領時・積み残しは Receiver drop で破棄）
+/// - Err(e)       → tracing::error!（アクター名＋%e）を記録して**ループ継続**（個別失敗はループを殺さない）
 /// 全 Sender drop（Disconnected）でも return（正常終了）。
-pub fn run_inbox<M>(
+/// ＝ループの終了経路は Ok(Break) と Disconnected の 2 経路のみ（型と実装で強制）。
+/// 失敗しない handler は E = std::convert::Infallible を使う。
+pub fn run_inbox<M, E>(
     rx: std::sync::mpsc::Receiver<M>,
-    handler: impl FnMut(M) -> std::ops::ControlFlow<()>,
-);
+    handler: impl FnMut(M) -> Result<std::ops::ControlFlow<()>, E>,
+) where
+    E: std::fmt::Display;
 
 /// アクタースレッドの join ハンドル（非 RAII・drop しても join しない＝detach）。
 pub struct ActorHandle { /* name: Box<str>, handle: std::thread::JoinHandle<()> */ }
@@ -391,8 +401,8 @@ pub enum ReplyError {
 **Responsibilities & Constraints**
 - `spawn_ui` は **UI スレッド（pump を回すスレッド）上で**呼び、`wintf_winmsg_executor::spawn_local` で drain タスクを投入する（4.1。実行は pump＝`MessageLoop::run`／wintf `WinApp::run` の `block_on` に委ねる）。
 - `UiSender<M>` は Clone かつ Send（`async_channel::Sender<M>` の newtype）。`send` は unbounded `try_send`＝**Full が存在せず送信は決してブロックしない**（失敗は Closed のみ・4.2）。起床は async-channel 内部の waker 機構（登録済みタスク waker への wake）→ executor のクロススレッド waker が pump を起床する（内部実装は event-listener＝`VsyncEventBridge`→`AsyncTickTask` で実証済みの経路と同族・4.4・DD-9）。store→notify／listen-before-work 規律は async-channel 内部が担い、本クレートは手組みしない。
-- drain タスクは `recv().await` ループ: queue に残があるかぎり await は即 Ready で連続処理（各メッセージを handler へ）し、空になった時のみ Pending で pump へ制御を返す（4.3）。handler 実行は await を跨がない（UI スレッド束縛リソースを安全に扱える）。
-- 終了は 2 経路: handler が `ControlFlow::Break` を返す（消費者定義の Close variant 受領時・3.2）→ 即時 return（残 queue を読まずに抜け、タスク所有 `Receiver` の drop で積み残し破棄＝3.3・同梱 reply Sender drop で要求側は切断を観測＝3.6 の UI 側成立）。または `recv()` が `Err(Closed)`（全 `UiSender` drop・3.5）→ return。
+- drain タスクは `recv().await` ループ: queue に残があるかぎり await は即 Ready で連続処理（各メッセージを handler へ）し、空になった時のみ Pending で pump へ制御を返す（4.3）。handler 実行は await を跨がない（UI スレッド束縛リソースを安全に扱える）。handler が `Err(e)` を返した場合は `tracing::error!`（アクター名＋`%e`）を記録して drain を継続する（3.7・個別失敗はループを殺さない）。
+- 終了は 2 経路のみ: handler が `Ok(ControlFlow::Break)` を返す（消費者定義の Close variant 受領時・3.2）→ 即時 return（残 queue を読まずに抜け、タスク所有 `Receiver` の drop で積み残し破棄＝3.3・同梱 reply Sender drop で要求側は切断を観測＝3.6 の UI 側成立）。または `recv()` が `Err(Closed)`（全 `UiSender` drop・3.5）→ return。**handler の `Err` は終了経路ではない**（3.7）。
 - スレッド構成を一切変えない: 新スレッドを作らず、UI スレッドの MTA・render/window 固定・D2D 単一スレッド前提は不変（4.4）。搬送する `M` は任意の `Send + 'static`＝emo-present の指令メッセージ・窓移動指令の型を下流がそのまま載せられる（4.5・器のみ提供）。
 
 **Dependencies**
@@ -407,12 +417,15 @@ pub enum ReplyError {
 /// 必ず pump を回す UI スレッドから呼ぶこと（spawn_local の前提・rustdoc 明記）。
 /// 前提違反を検出した場合は tracing::error!（アクター名入り）を記録して Err を返す（panic しない・
 /// 処置判断は結線層の権限）。
-pub fn spawn_ui<M>(
+/// handler の戻りは run_inbox と同一規約（3.7）: Ok(Continue)=継続・Ok(Break)=終了（Close）・
+/// Err(e)=error! 記録して drain 継続（個別失敗はループを殺さない）。
+pub fn spawn_ui<M, E>(
     name: &str,
-    handler: impl FnMut(M) -> std::ops::ControlFlow<()> + 'static,
+    handler: impl FnMut(M) -> Result<std::ops::ControlFlow<()>, E> + 'static,
 ) -> Result<(UiSender<M>, wintf_winmsg_executor::JoinHandle<()>), UiSpawnError>
 where
-    M: Send + 'static;
+    M: Send + 'static,
+    E: std::fmt::Display + 'static;
 
 #[derive(Debug, thiserror::Error)]
 pub enum UiSpawnError {
@@ -457,7 +470,7 @@ pub struct UiSendError<M>(pub M); // 未達メッセージを返す（mpsc::Send
 | Requirements | 8.1, 8.2, 8.3 |
 
 **Responsibilities & Constraints**
-- **toy(a)** `tests/toy_worker_test.rs`（8.1）: `EchoMsg { Echo { payload, reply: ReplySender<String> }, Close }` の toy アクターで、(i) request/reply の応答一致（2.3）、(ii) Close→join の決定的完走（3.4）、(iii) **Close の後ろに積んだ Echo が破棄され要求側が `Err(Dropped)` を観測**（3.3/3.6 の実証）、(iv) 全 Sender drop で join Ok（3.5）、(v) panic する body の join が `Err(Panicked)`（1.3）を検証。全ケース `recv_timeout` 使用で無限ブロックなし。
+- **toy(a)** `tests/toy_worker_test.rs`（8.1）: `EchoMsg { Echo { payload, reply: ReplySender<String> }, Close }` の toy アクターで、(i) request/reply の応答一致（2.3）、(ii) Close→join の決定的完走（3.4）、(iii) **Close の後ろに積んだ Echo が破棄され要求側が `Err(Dropped)` を観測**（3.3/3.6 の実証）、(iv) 全 Sender drop で join Ok（3.5）、(v) panic する body の join が `Err(Panicked)`（1.3）、(vi) **handler が `Err` を返すメッセージの後にも後続メッセージが処理され続ける**（3.7・ループ耐障害）を検証。全ケース `recv_timeout` 使用で無限ブロックなし。
 - **toy(b)** `tests/toy_ui_pump_test.rs`（8.2）: テストスレッドを UI スレッド役とし、`spawn_ui`（echo handler: Echo→reply.send・Close→Break）→ worker スレッドが `UiSender` で Echo 送信→`ReplyReceiver::recv_timeout` で echo 受領→done フラグ store→Close 送信、という往復を行う。UI スレッド役は `wintf_winmsg_executor::MessageLoop::run` を **bounded pump** で実走する（`pump_until_hello_or` 写経: 別スレッド heartbeat が `PostThreadMessageW(ui_thread_id, WM_NULL)` を約 25ms 間隔で送出し、filter クロージャが「done フラグ or deadline 超過」で `msg_loop.quit()`）。pump 復帰後 `assert!(done)`＝echo 不達・期限超過は fail（8.3）。
 - **試験規律**: toy(b) は integration test（独立バイナリ＝独立プロセス）とし、thread-local executor／pump の他テストとの干渉を排す。deadline は CI 余裕込み（例 5 秒）・heartbeat により無入力でもハングしない（bounded 保証）。
 
@@ -510,7 +523,8 @@ enum EchoMsg {
 **失敗経路のログ規律（設計ディスカッション #2・2026-07-04 開発者指示）**: 本クレートの全ての失敗経路は、返す/落ちるの前に必ず tracing 記録（`error!`／`warn!`・アクター名入り）を残す——**ログ無しの静かな失敗経路を作らない**。panic は「継続不可能な致命」（OS リソース枯渇・executor 内部の回復不能条件）に限定し、検出可能な前提違反は `error!`＋`Err` 戻り値で返して処置判断を呼び出し側（結線層）に委ねる。
 
 ### Error Categories and Responses
-- **アクター panic**（1.3）: body の unwind はスレッド終了として封じ込め、`ActorHandle::join` が `ActorError::Panicked { actor, message }` で呼び出し側（結線層）へ伝搬する。基盤は再起動しない（7.2）＝方針決定は結線層の領分。panic 時も inbox drop→reply Sender drop により要求側は `Err(Dropped)` を観測（3.6・連鎖ハングなし）。
+- **個別メッセージ処理の失敗（handler の `Err`）**（3.7）: 受信ループは終了しない——基盤が `tracing::error!`（アクター名＋エラー表示）を記録して次の受信へ戻る。アクターの死はエラーでは起きず、終了イベント（Close／全 Sender drop）でのみ起きる。
+- **アクター panic**（1.3）: body の unwind はスレッド終了として封じ込め、`ActorHandle::join` が `ActorError::Panicked { actor, message }` で呼び出し側（結線層）へ伝搬する。panic はエラー処理ではなく**バグの観測**（3.7 の耐障害規約の対象外）。基盤は再起動しない（7.2）＝方針決定は結線層の領分。panic 時も inbox drop→reply Sender drop により要求側は `Err(Dropped)` を観測（3.6・連鎖ハングなし）。
 - **切断（送信先消滅）**: `mpsc::Sender::send`／`UiSender::send` の `Err`（未達メッセージ同梱）。送信側は「相手が停止済み」を同期観測できる。
 - **切断（応答消滅）**（3.6）: `ReplyReceiver::recv` の `Err(ReplyError::Dropped)`。要求側は永久ブロックしない。`recv_timeout` で上限時間も併用可能（`Timeout` と区別）。
 - **spawn 失敗**: OS リソース枯渇のみ＝プロセス継続不能級として panic（既存 wintf 資産の `expect` と同一方針・rustdoc 明記）。ただし panic 直前に `tracing::error!`（アクター名・原因）を記録する（ログ規律）。
@@ -522,12 +536,12 @@ enum EchoMsg {
 ## Testing Strategy
 
 ### Unit Tests（in-source `#[cfg(test)]`）
-1. `spawn.rs`: spawn がスレッド名＝アクター名を付与し `(Sender, ActorHandle)` を返す（1.1/1.2）／panic body の `join` が `Err(Panicked)` かつアクター名を含む（1.3）／`run_inbox` が Break で即時終了・Disconnected で正常終了（3.2/3.5）。
+1. `spawn.rs`: spawn がスレッド名＝アクター名を付与し `(Sender, ActorHandle)` を返す（1.1/1.2）／panic body の `join` が `Err(Panicked)` かつアクター名を含む（1.3）／`run_inbox` が Ok(Break) で即時終了・Disconnected で正常終了（3.2/3.5）／**handler が `Err` を返しても後続メッセージが処理される**（3.7・error! 記録して継続）。
 2. `reply.rs`: send→recv 往復（2.3）／Sender drop→`Err(Dropped)`（3.6）／`recv_timeout` の `Timeout`。
 3. `ui.rs`: `UiSender::send` の queue 格納（同期観測部）／drain タスク停止（Receiver drop）後の send が `Err(UiSendError)`。
 
 ### Integration Tests（`tests/`・toy アクター試験）
-1. `toy_worker_test.rs` = toy(a)（8.1）: request/reply 応答一致＋Close→join 決定的完走＋Close 後続メッセージの破棄→要求側 `Err(Dropped)`（3.3/3.6）＋全 Sender drop 終了（3.5）＋panic join 観測（1.3）。
+1. `toy_worker_test.rs` = toy(a)（8.1）: request/reply 応答一致＋Close→join 決定的完走＋Close 後続メッセージの破棄→要求側 `Err(Dropped)`（3.3/3.6）＋全 Sender drop 終了（3.5）＋panic join 観測（1.3）＋handler `Err` 後の受信継続（3.7）。
 2. `toy_ui_pump_test.rs` = toy(b)（8.2）: `MessageLoop::run` 実走 pump 上での worker→UI echo 往復（bounded: heartbeat＋deadline・独立プロセス）。
 3. 失敗観測（8.3）: 上記全ケースが timeout/deadline を持ち、echo 不達・応答不一致・join ハングは assert 失敗として観測される（無限ブロックする試験を書かない）。
 
