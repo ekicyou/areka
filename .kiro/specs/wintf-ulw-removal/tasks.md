@@ -131,7 +131,7 @@
   - _Requirements: 7.1, 7.2, 7.3_
   - _Depends: 4.1, 4.2, 4.3_
 
-- [ ] 5.2 残存シンボル grep とリリースビルド検証
+- [x] 5.2 残存シンボル grep とリリースビルド検証
   - `WindowD3D11Compositor`・`UpdateLayeredWindow`・`compositor_init_system`・`composite_render_system`・`ulw_present_system`・`transfer_to_hbitmap`・`present_layered_window`・`CompositionMode`・`composition_mode`・`find_owner_window_composition_mode` が wintf/areka crate から一切消えていることを grep で確認する
   - release ビルド（`opt-level='z'`・`lto=true`）が撤去後に通過することを確認する
   - 残存シンボル grep が0件であり release ビルドが成功終了すること
@@ -165,3 +165,4 @@
 - **main.rs:166 の ULW 歴史的言及**は残置可（クリックスルー registry の根拠説明・live 前提でない・4.1 レビュア判断）。5.1 の ULW 残余 grep で誤検知しないよう留意。
 - **owner_window_exists_test.rs**（旧 find_owner_composition_mode_test.rs 改名）: local `query_owner_window_exists`（bool）が production `owner_window_exists` を World で再現・5ケース（self/child/grandchild[W3b-V]/orphan/no-ancestor）。
 - **5.1 の残余コメント sweep で src コメント7件を追加修正**（tasks 2-4 の漏れ・全てコメントのみ・DC変換リセット挙動不変）: `render.rs`（`ulw_present_system は残置`→空スケジュール no-op）・`window_factory.rs`（削除済み `multi_backend_demo ULW 窓` 例示→汎用）・widget 描画5箇所（`shapes/rectangle.rs`・`text/typewriter_draw.rs`×2・`text/draw_labels.rs`・`bitmap_source/systems.rs` の `composite_render_system` 言及→「前フレームの描画処理」）。残る ULW 言及は全て歴史的/根拠（`world/mod.rs:325`「撤去済み」・`win_style.rs:398`「UpdateLayeredWindow を呼ばない」・`areka main.rs:166` クリックスルー根拠・`clip_sync.rs:129` doc引用）で Req7.2 適合。
+- **5.2 検証結果**: 残存シンボル grep は 10 シンボル中 9 が 0 件、唯一 `UpdateLayeredWindow` が `win_style.rs:398`（Preserve 集合の否定コメント「呼ばない」）に 1 件＝正当例外。release build（`opt-level='z'`・`lto=true`）Finished（LTO dead-code 除去で欠落シンボルエラーなし）。release 限定の wintf 警告5件（`draw_labels.rs:9`/`typewriter_draw.rs:18` 未使用 import `debug`・`label.rs:7` 未使用 `tracing::trace`・`label.rs:115` 未使用 `hook`・`typewriter_draw.rs:47` 未使用 `entity`）は **pre-existing・ULW 無関係**（debug ビルド0件・release で tracing マクロ最適化消去による・5.1 の該当2ファイル編集はコメントのみ・label.rs 未編集）＝本 spec スコープ外。
