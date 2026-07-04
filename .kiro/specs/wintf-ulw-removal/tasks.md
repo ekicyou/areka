@@ -76,7 +76,7 @@
   - _Depends: 3.1_
   - _Boundary: ecs/graphics/visual.rs_
 
-- [ ] 3.5 (P) init_window_graphics の mode フィルタ除去（Preserve 例外・参照追随のみ）
+- [x] 3.5 (P) init_window_graphics の mode フィルタ除去（Preserve 例外・参照追随のみ）
   - `use ... CompositionMode`（206行）を除去し、`has_dcomp_windows` 判定（212-219行）を query 空チェックへ縮退する
   - per-window `continue` フィルタ（255-258行）を除去し、docstring（185・187行）を整合する
   - レンダリングロジック・`WucGraphicsResource` 遅延初期化・early-return 構造は変更しない（diff を mode フィルタと docstring に限定する）
@@ -159,3 +159,5 @@
 - **cargo は PowerShell で実行**（Git Bash の GNU coreutils `link.exe` が MSVC link を遮蔽する既知の罠）。
 - **中間タスクはビルド非通過が設計想定**: 2.1（world/mod.rs 未修正でビルド一時失敗）・3.1〜3.5（CompositionMode 撤去の追随途中）。コンパイル通過ゲートは 2.2（schedule 側）・3.6（wintf lib）・4.1〜4.3（areka/examples/tests）。
 - **design blast-radius gap（2.3 で解決・2026-07-04 実装時発見）**: design の Preserve 集合が「絶対不変」に列挙した `systems/window_pos.rs` が、削除済み `WindowD3D11Compositor` を実参照（import・`invalidate_dependent_components` の query・invalidate ループ）。Req1.5「ULW 専用シンボル残存参照ゼロ」＋3.6 ビルド通過ゲートが要件優先ゆえ、ULW compositor 参照除去のみの追随を task 2.3 として追加。File Structure Plan の編集リスト外（composition_mode gap に続く2件目の盲点）。WUC/BitmapSource 無効化ロジックは不変。
+- **visual.rs helper 改名（3.4）**: `find_owner_window_composition_mode`（`Option<CompositionMode>`）→ `owner_window_exists`（`bool`）。4.3 の `find_owner_composition_mode_test` 書き換えはこの新名を参照する。
+- **3.5 で lib ビルド復旧**: `cargo build -p wintf` が Finished（src の CompositionMode 参照が全消滅）。残る in-source `#[cfg(test)]` 参照（runtime/mod.rs・controller.rs）は `cargo build` に含まれず 3.6 で追随。init.rs docstring に軽微な冗長（"WindowGraphics初期化・再初期化" ヘッダ重複）あり＝5.1 のコメント整合で拾う候補。
