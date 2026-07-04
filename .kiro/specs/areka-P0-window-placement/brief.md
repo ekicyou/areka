@@ -82,7 +82,7 @@
 ## Existing Spec Touchpoints
 
 - **Extends**: `completed/areka-mock-shell`（窓生成・ドラッグの donor）。
-- **Adjacent**: `areka-P0-emo-surface`（**同じ `crates/areka/src/main.rs` 起点＝並行着手時はファイル衝突注意・順次推奨**。境界: Window entity=本ユニット／Visual ツリー=emo-surface）／`areka-P0-ghost-setup`（⓪ 同エンジン・同時着手回避）。
+- **Adjacent**（2026-07-05 更新・旧 `emo-surface` 参照を3分割後の実名へ是正）: `areka-P0-app-shell`（main.rs を骨格化＝本ユニットは**骨格の上で**窓機構を実装・main.rs 衝突は構造ごと解消）／`areka-P0-emo-present`（順序ゲートの上流。境界: Window entity=本ユニット／表示供給＋emo ランタイム=emo-present）／`areka-P0-ghost-setup`（⓪ 同エンジン・同時着手回避）。
 
 ## Constraints
 

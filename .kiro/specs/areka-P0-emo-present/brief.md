@@ -43,7 +43,7 @@
 - **premultiplied のまま WUC へ**: WUC surface のピクセル形式（BGRA premultiplied）と合成出力を一致させ、途中変換を挟まない。
 - **サイズ変化**: surface ごとに原寸が違い得る——窓/visual サイズの追随規則（原寸表示・DPI 拡縮は wintf 側）を design で明確化。
 - **キャッシュ無効化**: M-boot ではアトラス不変＝実質不要だが、無効化の口だけ設ける（ghost 再読込・将来の動的差替えに備えた**構造**）。
-- **example の位置づけ**: 観測用の専用 example（`crates/areka/examples/` 等）とし、`main.rs` の書換えは最小限に留める——**window-placement と同じ `crates/areka` を触るため、同時着手しない**（順次推奨・roadmap 記載）。
+- **example の位置づけ（2026-07-05 更新）**: 観測用の専用 example（`crates/areka/examples/`）とし、**`main.rs` は触らない**——`areka-P0-app-shell` が保全する `examples/mock-shell.rs` を窓・clickthrough 登録の donor に使う。**app-shell 完了後は window-placement との `crates/areka` 衝突は構造ごと解消**（それまでに着手する場合のみ旧注意＝同時着手回避が生きる）。
 
 ## ukadoc 必読（design 着手時に ukadoc MCP `get_doc`/`search_docs` で正典参照・2026-07-03 総ざらい）
 
@@ -72,7 +72,7 @@
 ## Existing Spec Touchpoints
 
 - **Extends**: `completed/areka-mock-shell`（窓・clickthrough 登録の donor）。
-- **Adjacent**: `areka-P0-window-placement`（**同じ `crates/areka` 起点＝並行着手はファイル衝突注意・順次推奨**。境界: Window entity=placement／表示供給＋emo ランタイム=本ユニット）。
+- **Adjacent**: `areka-P0-app-shell`（デモを example 保全・main.rs を骨格化＝本ユニットの観測土台と衝突解消を供給）／`areka-P0-window-placement`（境界: Window entity=placement／表示供給＋emo ランタイム=本ユニット。**app-shell 完了後は `crates/areka` 衝突なし**）。
 
 ## Constraints
 

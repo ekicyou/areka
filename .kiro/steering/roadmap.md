@@ -86,14 +86,15 @@ areka（**x64**）が最小 SSP 互換ベースウェアとして、適合対象
 > **観測の独立化（2026-07-03 明文化）**: 制御階層ユニット（kanade/sakura/seriko/emo）の単体観測は**実上流を待たず fixture/mock 入力で切る**（例: sakura＝script 文字列直入力・emo-compose＝parsed Shell モデル直入力・オフスクリーン pixel テストで観測）。実上流との結線は M-boot 統合（emo2-boot）で観測。これが「別ユニットを先に作る必要がない」の含意＝トラック間の並走はこの規約で担保される（トラック内は逐次）。
 > **適用境界＝本番ゴースト先行の原則（2026-07-05 追記・window-placement リジェクトの教訓）**: 上記規約は**純粋層**（parser／codec／合成）にのみ適用。**UI 位置決め・座標系ユニット（window-placement・collision-geometry 等）は逆**——本番ゴースト（emo2 実 surface 表示）＋**実 DPI（≠96）実行**が観測条件であり、単発デモ（ハードコード窓・架空 work_area）への合わせ込みは**無効**（dpi=96 の自己整合が欠陥を隠すことが実証済み。記憶 areka-placement-real-ghost-first／areka-window-placement-dpi-coordinate-defect）。
 > 正規名は**暫定**（着手時に確定）。**spec 工場にしない**＝下記はユニット名の登録であり brief.md 群ではない。着手時に最小 spec/task を just-in-time で切る。
-> **粒度の真実**: 作業は **M-boot に前倒し集中**（約19ユニット＝M1 の山・2026-07-03 emo 3分割＋actor-foundation 追加で 16→19）。「最初の起動」が本体で以降は薄い増分。
+> **粒度の真実**: 作業は **M-boot に前倒し集中**（約20ユニット＝M1 の山・2026-07-03 emo 3分割＋actor-foundation・07-05 app-shell 追加で 16→20）。「最初の起動」が本体で以降は薄い増分。
 
-### M-boot ＝ `areka-P0-emo2-boot`（最初の可視結果・最重量＝約19ユニット）
+### M-boot ＝ `areka-P0-emo2-boot`（最初の可視結果・最重量＝約20ユニット）
 emo2 が起動して喋る。下記 5 トラックを結線して達成（⓪ ゴーストエンジンが全体を統括）。
 
 **⓪ ghost＝ゴーストエンジン（最上位 owner・全エンジンを統括）**
 - `areka-P0-actor-foundation` — **エンジン間通信の横断基盤**（parser-foundation の並行版）: envelope（メッセージ enum・返信 Sender 同梱）・spawn/join・停止手順（Close→drain→join）・**UI スレッド配送ブリッジ**（pump 統合）。`std::sync::mpsc` 起点＝依存ゼロ。kanade の先行依存・現行フロントと並走安全（新設モジュール＝非衝突）。✔ toy アクター試験（worker⇄worker＋worker→UI pump echo）（**brief 済 2026-07-03**）
-- `areka-P0-ghost-setup` — ゴースト lifecycle（package-mount で構築→boot 統括→close・**actor-foundation の結線層＝スレッド起動/channel 接続/join を所有**）。✔ descript.txt 起点のマウントから起動〜終了を統括
+- `areka-P0-app-shell` — **アプリ骨格＋デモ保全**（アプリ組み上げ三段の第一段・早期・小粒）: 現 main.rs のモック UI を `examples/mock-shell.rs` へ**別名保全**（挙動不変・shiori 系モジュールは src 残留）＋本番 main 骨格（tracing/panic/WinApp/構成入力＝ghost・balloon path 解決〔引数 or 既定 fixture・ukadoc 上ハードコード正当〕）＋ghost-setup 差し込み口（空）。**効果: emo-present⇄window-placement の main.rs 衝突が構造ごと解消**。✔ example が従来挙動＋骨格 main が構成解決→正常終了＋shiori e2e green（**brief 済 2026-07-05**）
+- `areka-P0-ghost-setup` — ゴースト lifecycle（**アプリ組み上げ三段の第二段**・app-shell 骨格の差し込み口に実装）: package-mount で構築→**エンジン結線**（actor-foundation の結線層＝スレッド起動/channel 接続/join を所有）→kanade へ boot 指示→close 握手（kanade の OnClose 運行の完了）を待って全エンジンを落とす。✔ descript.txt 起点のマウントから起動〜終了を統括
 - `areka-P0-window-placement` — サーフェス窓の生成＋既定位置＋ドラッグ（既定位置＝ukadoc `seriko.alignmenttodesktop` カスケード準拠・窓数は構成入力・二人立ちの本格結線は M-dual）。**⚠️ 順序ゲート: `areka-P0-emo-present` 完了後**（本番ゴースト実表示に対して実装・検証する。2026-07-05 に demo 前提の着手が実 DPI 座標破綻＝論理/物理混在でワークツリーごとリジェクト→brief 改稿済み・wintf 座標契約の確定を design 必須先行に）。✔ 本番 emo2 表示＋**実 DPI（≠96）**で既定位置・ドラッグ・バルーン追従が正しい（dpi=96 のみの緑は不合格）（**brief 済・07-05 改稿**）
 
 **① shiori＝SHIORI 通信層エンジン host-32（耐力壁・`pilot/shiori-host-32` がトラックを gate）**
@@ -111,7 +112,7 @@ emo2 が起動して喋る。下記 5 トラックを結線して達成（⓪ �
 - `areka-P0-package-mount` — `ghost/master/descript.txt`＋dir→mount（foundation 依存・起点は descript.txt。`install.txt`＝NAR 配置マニフェストは起動時不使用ゆえスコープ外）。✔ emo2 layout 解決。**✅ 完了（2026-07-02・spec=`completed/areka-P0-package-mount`）**: descript.txt 起点で SHIORI（dir=`ghost/master`・file は `Option` 推測禁止）＋shell（既定 `master` フォールバック・物理存在確認）の2点マウントを解決する `package` module を `areka-parsers` に確立。所在ベース識別（`type` 分岐なし）・foundation（`charset::decode`/`kv::parse_kv`）委譲・致命失敗3種（起点不在/読取不能/shell 不在）を `MountError` で観測可能化・emo2 実 fixture 統合テスト green（164 テスト・回帰なし・clippy clean）。下流 `ghost-setup`/`host-32`/`shell-parse` へ `MountModel` を供給
 
 **runtime 制御階層 kanade／sakura／seriko（上→下に駆動・両 anim engine は dola 上）**
-- `areka-P0-kanade` — **kanade（③conductor）**: SHIORI イベント循環（OnSecondChange pump・host-32 送受・Value を sakura-engine へ）。**actor-foundation 先行依存**（kanade＝基盤の最大消費者・実行時経路＝運行表の所有者）。✔ OnBoot→Value 受領→再生開始
+- `areka-P0-kanade` — **kanade（③conductor）**: SHIORI イベント循環（OnSecondChange pump・host-32 送受・Value を sakura-engine へ）。**actor-foundation 先行依存**（kanade＝基盤の最大消費者・実行時経路＝運行表の所有者）。**boot/close の発火順序も kanade の運行表**（ukadoc 正典・2026-07-05 調査済み＝app-shell brief に転記元あり）: boot＝OnInitialize NOTIFY→OnFirstBoot（Ref0=vanish count）/OnGhostChanged/OnGhostCalled/OnVanished の 204 フォールスルー→OnBoot（Ref0=shell 名）→basewareversion NOTIFY／close＝OnClose→応答スクリプト**再生完了待ち**（`\-`）→204 なら OnCloseAll→終了（タイムアウトは de-facto＝design で確定）。M-boot は毎回 OnBoot で開始可（vanish count 永続化は position-persist）。✔ OnBoot→Value 受領→再生開始
 - `areka-P0-sakura-engine` — **sakura（④）＝さくらスクリプト再生エンジン**（talk timeline: `\w/\_w` wait・`\s` で seriko へ surface 指令・text を emo（text-layer）へ・seq）。✔ boot script を時系列再生
 - `areka-P0-seriko-engine` — **seriko（⑤）＝シェルアニメーションエンジン**（SERIKO ループ＋surface 状態＋MAYUNA bind・render を毎フレーム駆動）。M-boot は静的＋指令適用、ループ(blink)は M-life。✔ 指令された surface を表示
 
@@ -143,6 +144,11 @@ emo2 が起動して喋る。下記 5 トラックを結線して達成（⓪ �
 - **M-life** ＝ seriko:`seriko-loop` ＋ kanade:`idle-talk` ＋ kanade:`input-events`(撫で) ＋ emo:`collision-geometry`
 - **M-dialogue** ＝ sakura:`sakura-dialogue-tags` ＋ kanade:`input-events`(dblclick/choice) ＋ emo:`choice-render`
 - **M-e2e** ＝ `areka-P0-emo2-conformance-e2e`（全エンジン統合・OnClose＋boot→talk→touch→menu→close 一周適合・M1 ゴール充足）
+
+**アプリ組み上げの所有マップ（2026-07-05 確定・「誰がアプリとしての areka を組むか」）**:
+- **三段構え**: ① `app-shell`（骨格＝main.rs 所有・構成入力・デモ保全・早期）→ ② `ghost-setup`（骨格の差し込み口にエンジン結線・boot 指示・close 握手待ち・エンジン群完了後）→ ③ `emo2-conformance-e2e`（完成アプリでの一周適合＝M1 ゴール証明）。
+- **boot/close のイベント発火順序＝kanade の運行表**（上記 kanade 行・app は器に徹する）／**永続化（vanish count・窓位置）＝position-persist**（M-life）。
+- **M2 送り（ukadoc 裏付け済み・全て任意）**: SSTP ポート（9801）・FMO・DirectSSTP・Plugin/HEADLINE/SAORI ホスティング・ネットワーク更新（OnBasewareUpdating 系）・ゴースト/バルーン選択 UI。M1 骨格はこれらの口を持たない。
 
 ### クロスエンジン I/O（並走依存チェック）
 
@@ -198,11 +204,14 @@ emo2 が起動して喋る。下記 5 トラックを結線して達成（⓪ �
 - **2026-07-01 追記・着手可能フロント（当時 brief 済み）**: `/kiro-discovery` で「安全並走バッチ」の brief を just-in-time 生成。① wintf 基盤層 `wintf-dcomp-to-wuc-migration`（**✅ 完了**）／`wintf-clickthrough-alpha-toggle`（**✅ 2026-07-02 完了・アーカイブ**）。② M1 parser 並走 `shell`/`balloon`/`package`（**✅ 全完了**）。③ M1 host-32 `areka-P0-host32-ipc`（**✅ 完了**）→ `areka-P0-host32-shiori-load`（**✅ 完了**）。これら 5〜6 本は相互非衝突で即並走可（`ecs/graphics` 系は wuc-migration に一本化）。
 - **2026-07-03 現況**: `completed/` = **112**。**active = 0**・**brief-only = 7**（`/kiro-discovery` 深掘り調査＝コード4系統＋ukadoc 正典＋クレート調査で brief 生成: **`areka-P0-host32-request`**〔凍結 IPC 不改変・helper echo→実呼出＋x64 Shiori3Codec〕／**emo 直列3分割 `areka-P0-emo-atlas`→`-emo-compose`→`-emo-present`**〔旧 emo-surface を粒度分割・自前合成＋αトリミングアトラス（packing クレート本命 `rectangle-pack`＝zero-dep・要開発者承認／対抗 `rect_packer`）〕／**`areka-P0-window-placement`**〔alignmenttodesktop カスケード・窓数構成入力〕／**`areka-P0-actor-foundation`**〔通信横断基盤・機構/経路/結線の三分・UI 配送ブリッジ・std mpsc 起点〕／**`wintf-ulw-removal`**〔鮮度更新済: ゲート充足✅・**`WS_EX_LAYERED` 同伴フラグ保全**を受け入れ基準へ追加〕）。**②parsers トラック全完了・M-boot 約 7/19**（①shiori: pilot✅/ipc✅/shiori-load✅・lifecycle 残）。**着手順の注意**: emo チェーン（present）と window-placement は同じ `crates/areka` 起点＝**並行着手はファイル衝突注意・順次推奨**（emo-atlas/-compose・actor-foundation は純粋層/新設モジュール＝衝突なし）。shiori:`host32-request`／wintf:`ulw-removal` は他と非衝突＝即並走可。
 - **2026-07-05 追記（window-placement リジェクト→依存マップ再検討）**: window-placement の demo 前提着手（07-03 brief）が**実 DPI 座標破綻（論理/物理混在・dpi=96 でのみ自己整合）でワークツリーごとリジェクト**。全 brief を「雑なデモゴースト前提」観点で総点検した結果——**demo 前提は window-placement のみ**（emo-atlas/-compose＝純粋層・emo-present＝実 emo2 fixture 入力・host32-request＝実 pasta fixture・actor-foundation＝機構層・ulw-removal＝描画等価検証。いずれも demo 非依存）。**依存マップ是正**: ① window-placement は **emo-present の順序ゲート下**へ（本番ゴースト先行の原則・brief 改稿済み）② emo-present に**実 DPI 観測**＋座標契約文書化（下流が前提にできる形）を追加 ③ 粒度基準に「観測の独立化の適用境界」を追記。**即並走可能フロントは4本**: `areka-P0-actor-foundation`／`areka-P0-host32-request`／`areka-P0-emo-atlas`／`wintf-ulw-removal` → emo チェーン直列（atlas→compose→present）→ **present 完了後に window-placement**。
+- **2026-07-05 追記②（アプリ組み上げの所有確定・`app-shell` 新設）**: 「エンジンが揃った後、誰がアプリとしての areka を組むか」が無所属と判明→**三段構え**を確定（①`areka-P0-app-shell`＝骨格・main.rs 所有・**モックデモを `examples/mock-shell.rs` へ別名保全**・brief 済／②`ghost-setup`＝結線／③`emo2-conformance-e2e`＝適合証明）。boot/close のイベント発火順序は kanade の運行表へ帰属（ukadoc 調査済み・kanade 行に転記）。アプリ層の任意要素（SSTP/FMO/Plugin/更新/選択 UI）は M2 予約に裏付けつきで記録。**即並走可能フロントは5本へ**: 上記4本＋**`areka-P0-app-shell`**（main.rs を触るのは当面本ユニットのみ＝非衝突。むしろ早期完了が emo-present/window-placement の衝突を構造ごと解消する）。brief-only = **8**。
 - 旧 active/brief（M1 憶測・M2 reference・出荷層）・backlog（P1-P3）・`_rejected/`・旧戦略メモは**削除**（git 履歴に保全。必要時に復元可）。
 
 ## M2 以降
 
 **M1 完成後に、実物を見て組み直す。** 本ロードマップでは扱わない（pasta の native x64・`IShiori` in-proc 化、ベクトル描画・AI、**owner-draw 右クリック system メニュー（ゴースト管理 chrome）**、互換面拡大＝Shift_JIS/SAORI/里々・YAYA 網羅/NAR 等はその時に）。
+
+**アプリ層の M2 予約（2026-07-05 ukadoc 裏付け・全て任意＝emo2 単体起動に不要）**: SSTP ポート（9801）ホスティング・FMO・DirectSSTP・Plugin/HEADLINE/SAORI ホスティング・ネットワーク更新（`\![update,platform]`・OnBasewareUpdating/Updated 系）・ゴースト/バルーン選択 UI（OnGhostChanging 系）・多重ゴースト運用。
 
 **emo テキスト進化の予約（M2 候補・2026-07-03 開発者表明）**: ①**回転テキストの実挙動**（M1 で内部表現＝行列変換領域は構造として持ち込み済み・M2 で回転値を解禁）②**ポップアート級の文字装飾**（アウトライン/多色/シャドウ/変形等の text effects——1枚物自前合成ゆえ文字も合成レイヤの一つ＝装飾は emo 内で完結）。M1 の emo-text-layer が「行列領域＋装飾シーム」を仕込むことで、ここへ滑らかに接続する。
 
