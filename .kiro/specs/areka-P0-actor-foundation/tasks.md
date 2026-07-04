@@ -1,7 +1,7 @@
 # Implementation Plan
 
 - [ ] 1. Foundation: `areka-actor` クレート基盤とconventions正本
-- [ ] 1.1 クレート雛形とモジュール骨格の作成
+- [x] 1.1 クレート雛形とモジュール骨格の作成
   - crates/areka-actor を新設し、Cargo.toml に依存（tracing/thiserror/async-channel/wintf-winmsg-executor、dev-dependencies に windows）を宣言する
   - ルート Cargo.toml の workspace.dependencies に async-channel を追記する
   - src/spawn.rs・src/reply.rs・src/ui.rs・tests/ を空実装（コンパイル可能な骨格）で用意する
