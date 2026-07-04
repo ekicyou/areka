@@ -1,6 +1,6 @@
 # Implementation Plan
 
-- [ ] 1. 撤去前ゲートとベースライン確認
+- [x] 1. 撤去前ゲートとベースライン確認
   - design.md の File Structure Plan（削除3ファイル+7テスト+3example、編集22箇所、Preserve集合）を撤去対象の確定版として確認し、記載外のファイルを削除しないことを明示する
   - ワークツリーで `vendors/pasta` サブモジュールが未展開の場合は `git submodule update --init` を先に実行する（ハーネス worktree の既知の落とし穴）
   - 現行ブランチで release ビルド（opt-level='z'・lto=true）と既存テストスイート（unit+integration）を実行し、全て緑であることを確認・記録する（撤去後比較のベースライン）
@@ -142,3 +142,9 @@
   - 起動サニティの結果（描画同一・クリックスルー機能維持）が確認済みであること
   - _Requirements: 5.1, 5.2, 5.3, 5.4, 6.1, 6.5_
   - _Depends: 5.3_
+
+## Implementation Notes
+
+- **ベースライン（タスク1・2026-07-04）**: `git submodule update --init vendors/pasta` 実行済（worktree 未展開の落とし穴）。debug `cargo build --workspace` 緑。`cargo test -p wintf -p areka` 全緑（wintf lib 542／com 61／drag 19／ecs 102／graphics 146／layout 170／visual 52／widget 16／win_app 2／window 30／clickthrough 9+31ignored、areka bin 63）。**既知の無関係失敗**: `cargo test --workspace` は `shiori-host32-helper` に2件の既存失敗あり（`testdll_drop_invokes_courtesy_unload`・`loopback_hello_request_echo_and_bounded_loop`）＝32bit SHIORI ヘルパーで本 spec スコープ外。最終検証（5.3）では wintf/areka の緑維持で判定し、この2件はベースライン既存として扱う。
+- **cargo は PowerShell で実行**（Git Bash の GNU coreutils `link.exe` が MSVC link を遮蔽する既知の罠）。
+- **中間タスクはビルド非通過が設計想定**: 2.1（world/mod.rs 未修正でビルド一時失敗）・3.1〜3.5（CompositionMode 撤去の追随途中）。コンパイル通過ゲートは 2.2（schedule 側）・3.6（wintf lib）・4.1〜4.3（areka/examples/tests）。
