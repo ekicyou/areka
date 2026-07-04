@@ -67,7 +67,7 @@
   - _Depends: 3.1_
   - _Boundary: window_proc lifecycle (ecs/window_proc/lifecycle.rs)_
 
-- [ ] 3.4 (P) visual.rs の mode ゲート無条件化
+- [x] 3.4 (P) visual.rs の mode ゲート無条件化
   - `find_owner_window_composition_mode`（39-66行）を owner Window 存在判定ヘルパー（DeferredWorld 版・ChildOf 走査・W3b-V 間接巡回 NOTE 維持）へ縮退する
   - `on_visual_add` の `is_dcomp_mode` ゲート（83-90行）を「owner Window が存在する場合」判定へ置換する（orphan Visual への graphics コンポーネント非挿入挙動は不変）
   - `use crate::ecs::window::CompositionMode`（13行）・フック docstring（71行）を整合する
