@@ -48,3 +48,6 @@ pub use normalize::{AlphaParams, UseSelfAlpha};
 
 // 正規化層（use_self_alpha 解釈・premultiplied BGRA 統一・R3・D5/D8）。
 pub use normalize::{AlphaSource, NormalizeError, NormalizedImage, Normalizer};
+
+// トリム層（α>0 タイト bbox・オフセット記録・全透明→空・R4・D8）。
+pub use trim::{TrimResult, Trimmed, Trimmer};

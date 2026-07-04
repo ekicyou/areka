@@ -61,7 +61,7 @@
   - _Boundary: Normalizer_
   - _Depends: 1.4_
 
-- [ ] 2.4 トリミング（αバウンディングボックス・オフセット記録）の実装
+- [x] 2.4 トリミング（αバウンディングボックス・オフセット記録）の実装
   - 正規化済み画像から、透明度を持つ画素のみを過不足なく含む最小の矩形を算出する
   - 元画像内でのオフセット・トリム後寸法・元の寸法を記録し、配置座標とオフセットを組み合わせれば元画像全体を焼き付けた場合と見た目が等価になることを保証する
   - 全画素が透明な画像は空エントリとして扱い、以降の焼付処理をスキップできるようにする
@@ -120,3 +120,4 @@
 - 2.1: **`AlphaParams{use_self_alpha:UseSelfAlpha}` と `enum UseSelfAlpha{On,Full,Off}`（Clone,Copy,Debug）は 2.1 が先行して `normalize.rs` に定義済み**（SurfaceSet が内包するため）→ **2.3（Normalizer）はこれらを再定義せず import して使う**。normalize.rs には現状この2型のみ（normalize()/NormalizedImage/AlphaSource/NormalizeError は 2.3 が追加）。`SurfaceSet<'a>{surfaces:&[Surface], base_dir:&Path, alpha_params:AlphaParams}`・`Manifest{keys:Vec<AtlasKey>}`・`ManifestDeriver::derive(&[SurfaceSet])->Manifest` は manifest.rs。SetId=sets スライスの index。dedup+順序は `BTreeSet<(u32,String)>`。derive は base_dir を join せず alpha_params 値も読まない（read-only 素通し）。間接 bind は transitive＋visited-set 循環検出・負/不在 id skip・重複 id 先出優先。
 - 2.2: `WicDecoderArm{ factory: IWICImagingFactory2 }`（`decode/wic_arm.rs`）は `windows` WIC を直接使い（wintf 非 import）task 1.2 recipe を再現。`new()->windows::core::Result<Self>`（COM 初期化は呼出側責務）。`decode`: `!path.exists()`→`NotFound`／COM 失敗→`.map_err`→`Decode{path,source}`（panic 皆無・全 unwrap/expect は #[cfg(test)] 限定）。`has_alpha` は変換前 `frame.GetPixelFormat()`＋`ALPHA_FORMATS.contains()`（12 GUID・wintf と同一）。`probe_pna=path.with_extension("pna").exists()`。**emo2 fixture パスは `env!("CARGO_MANIFEST_DIR")/../pilot/examples/shiori-host-32/fixtures/emo2/`**（テストは COM init 必須・`online0.png`=48×16 RGBA で has_alpha=true、`descript.txt`=Decode error、不在=NotFound）。unsafe は wic_arm.rs に隔離。
 - 2.3: `Normalizer::normalize(DecodedImage, AlphaParams, has_pna)->Result<NormalizedImage,NormalizeError>`（normalize.rs）。`AlphaSource{AlphaChannel,Pna,KeyColor,Opaque}`（#[non_exhaustive]・PartialEq）・`NormalizedImage{w,h,stride,pbgra:Vec<u8>}`・`NormalizeError::Unsupported(AlphaSource)`。D5 選択: On={α→AlphaChannel/!α&pna→Pna/!α→KeyColor}・Full={α→AlphaChannel/!α→Opaque}・Off={pna→Pna/!pna→KeyColor}（α無視）。**実装腕はタプル `(On, AlphaChannel)` のみ＝恒等 premultiplied 素通し（`pbgra: img.bgra` move・無変換・D8）**。それ以外は全て `Unsupported(選択された source)`（Full+α も seam！）。設定ファイル非読込（params 注入・3.6）。
+- 2.4: `Trimmer::trim(&NormalizedImage)->TrimResult{original:Size, placement:Option<Trimmed>}`（trim.rs）。`Trimmed{trim_offset:Point, size:Size, pbgra:Vec<u8>, stride}`。**α 閾値は厳密 `alpha>0`（+3 バイト・NOT 128）**・stride 込み走査（alpha_mask 先例）。全 α==0→`placement:None`（空エントリ）。トリム後は tightly-packed（`stride=size.w*4`・premultiplied 素通し・無変換）。座標不変（4.5）: trim_offset へ blit で原画像 byte 等価。α read は `.get().unwrap_or(0)`。
