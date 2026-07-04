@@ -65,7 +65,7 @@
   - _Boundary: toy tests（ui）_
   - _Depends: 2.3, 3_
 
-- [ ] 5. Validation: 公開面の最小性とクレート全体検証
+- [x] 5. Validation: 公開面の最小性とクレート全体検証
   - 公開re-exportの数と型が規約正本（lib.rs）の宣言と一致し、過剰な抽象（共通トレイト・監督ツリー・select等）が追加されていないことを確認する
   - tracing-subscriber初期化コードが本クレートに含まれないことを確認する
   - 観測可能な完了条件: `cargo test -p areka-actor`がクレート全体で全green、かつ公開API一覧が設計のComponents節と一致する
