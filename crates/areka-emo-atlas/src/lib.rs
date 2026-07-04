@@ -168,6 +168,10 @@ pub use bake::Baker;
 // 診断可能なエラー型（bake パイプラインの脱落集約・R2.2）。
 pub use error::BakeError;
 
+// emo2 fixture を用いた統合テスト（shell・balloon 横断・task 3.2）。
+#[cfg(test)]
+mod emo2_e2e;
+
 #[cfg(test)]
 mod bake_entry_tests {
     use super::*;
