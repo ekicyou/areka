@@ -88,3 +88,5 @@
 pub mod reply;
 pub mod spawn;
 pub mod ui;
+
+pub use spawn::{ActorError, ActorHandle, run_inbox, spawn_actor};
