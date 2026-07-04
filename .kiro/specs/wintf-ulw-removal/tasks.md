@@ -9,7 +9,7 @@
   - _Requirements: 1.4, 6.4, 6.5_
 
 - [ ] 2. ULW専用描画経路の削除とスケジュール再配線
-- [ ] 2.1 ULW compositor / com::ulw ユーティリティ削除
+- [x] 2.1 ULW compositor / com::ulw ユーティリティ削除
   - `ecs/graphics/compositor.rs`（WindowD3D11Compositor）を削除する
   - `ecs/graphics/compositor_systems/` ディレクトリ全体（mod.rs・init.rs・render/mod.rs・render/traverse.rs・render/guards.rs）を削除する
   - `com/ulw.rs`（transfer_to_hbitmap・present_layered_window）を削除する
@@ -18,7 +18,7 @@
   - _Requirements: 1.1, 1.2, 1.3_
   - _Boundary: ULW composition path (compositor, compositor_systems, com/ulw)_
 
-- [ ] 2.2 ECS スケジュール登録の再配線
+- [x] 2.2 ECS スケジュール登録の再配線
   - `ecs/world/mod.rs` の `GraphicsSetup` から `compositor_init_system.after(...)` チェーンを除去し `init_window_graphics` 単独登録に整理する
   - `Composition` チェーン末尾の `composite_render_system.after(clip_sync_system)` を除去する（先行3system=visual_hierarchy_sync→visual_property_sync→clip_syncは不変のまま維持）
   - `CommitComposition` の `ulw_present_system` 登録を除去し空スケジュールにする（schedule label・`Schedule::new(CommitComposition)`・`try_run_schedule(CommitComposition)` 呼び出しは残す）
@@ -27,6 +27,16 @@
   - _Requirements: 2.1, 2.2, 2.3_
   - _Depends: 2.1_
   - _Boundary: ECS world schedule (ecs/world/mod.rs)_
+
+- [ ] 2.3 systems/window_pos.rs の WindowD3D11Compositor 参照追随（design blast-radius gap 解決）
+  - `use crate::ecs::graphics::compositor::WindowD3D11Compositor;`（5行）を除去する
+  - `invalidate_dependent_components` の `compositor_query: Query<&mut WindowD3D11Compositor>` 引数（127行）と `for mut comp in compositor_query.iter_mut() { comp.invalidate(); }` ループ（141-143行）を除去する（WucGraphicsResource・BitmapSourceGraphics の無効化は維持）
+  - docstring（113-114行）の WindowD3D11Compositor 言及を WUC 現況へ整合する
+  - **design の Preserve 集合は `systems/window_pos.rs` を「絶対不変」に列挙するが、同ファイルは削除済み `WindowD3D11Compositor` を実参照しており、Req1.5「ULW 専用シンボル残存参照ゼロ」と矛盾。要件優先で本追随を実施（File Structure Plan の盲点＝2件目の blast-radius gap・composition_mode gap に続く）。編集は ULW compositor 参照除去のみに限定、WUC/BitmapSource ロジックは不変**
+  - `window_pos.rs` に `WindowD3D11Compositor` 参照が無く、WUC/BitmapSource 無効化挙動が保たれていること
+  - _Requirements: 1.5, 6.2_
+  - _Depends: 2.1_
+  - _Boundary: ecs/graphics/systems/window_pos.rs (ULW compositor 参照除去のみ)_
 
 - [ ] 3. CompositionMode collapse と全 production 参照の追随
 - [ ] 3.1 CompositionMode enum・Window フィールド・再エクスポート撤去
@@ -148,3 +158,4 @@
 - **ベースライン（タスク1・2026-07-04）**: `git submodule update --init vendors/pasta` 実行済（worktree 未展開の落とし穴）。debug `cargo build --workspace` 緑。`cargo test -p wintf -p areka` 全緑（wintf lib 542／com 61／drag 19／ecs 102／graphics 146／layout 170／visual 52／widget 16／win_app 2／window 30／clickthrough 9+31ignored、areka bin 63）。**既知の無関係失敗**: `cargo test --workspace` は `shiori-host32-helper` に2件の既存失敗あり（`testdll_drop_invokes_courtesy_unload`・`loopback_hello_request_echo_and_bounded_loop`）＝32bit SHIORI ヘルパーで本 spec スコープ外。最終検証（5.3）では wintf/areka の緑維持で判定し、この2件はベースライン既存として扱う。
 - **cargo は PowerShell で実行**（Git Bash の GNU coreutils `link.exe` が MSVC link を遮蔽する既知の罠）。
 - **中間タスクはビルド非通過が設計想定**: 2.1（world/mod.rs 未修正でビルド一時失敗）・3.1〜3.5（CompositionMode 撤去の追随途中）。コンパイル通過ゲートは 2.2（schedule 側）・3.6（wintf lib）・4.1〜4.3（areka/examples/tests）。
+- **design blast-radius gap（2.3 で解決・2026-07-04 実装時発見）**: design の Preserve 集合が「絶対不変」に列挙した `systems/window_pos.rs` が、削除済み `WindowD3D11Compositor` を実参照（import・`invalidate_dependent_components` の query・invalidate ループ）。Req1.5「ULW 専用シンボル残存参照ゼロ」＋3.6 ビルド通過ゲートが要件優先ゆえ、ULW compositor 参照除去のみの追随を task 2.3 として追加。File Structure Plan の編集リスト外（composition_mode gap に続く2件目の盲点）。WUC/BitmapSource 無効化ロジックは不変。
