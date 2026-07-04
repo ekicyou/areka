@@ -172,6 +172,10 @@ pub use error::BakeError;
 #[cfg(test)]
 mod emo2_e2e;
 
+// emo2 fixture の bake 出力に対する決定性（golden）テスト（task 4.1・5.5）。
+#[cfg(test)]
+mod emo2_golden;
+
 #[cfg(test)]
 mod bake_entry_tests {
     use super::*;

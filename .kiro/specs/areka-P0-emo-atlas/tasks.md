@@ -102,7 +102,7 @@
   - _Requirements: 1.1, 1.4, 2.2, 5.6, 6.1, 6.2_
 
 - [ ] 4. 検証: 決定性とリグレッション防止
-- [ ] 4.1 決定性（golden）テストの整備
+- [x] 4.1 決定性（golden）テストの整備
   - emo2 相当の同一入力を複数回 bake し、各画像の配置結果（頁番号・矩形・オフセット・元寸法）が常に同一になることを確認する
   - 得られた配置結果を固定値として記録し、以降の変更でリグレッションが生じた場合に検出できるようにする
   - テストが継続的実行環境で安定して再現することを確認する
@@ -126,3 +126,4 @@
 - 3.1: 公開入口 `bake(&[SurfaceSet], &impl ElementDecoder, PackConfig)->BakeResult{table:AtlasTable, errors:Vec<BakeError>}`（lib.rs）。`BakeError{Decode(DecodeError), Normalize{key,source}}`（error.rs・**設計本文の `Vec<DecodeError>` を親裁定で `Vec<BakeError>` に拡張**＝Normalize シームも診断可能）。段順: derive→(per key) `base_dir.join(rel_path)`(実パス化1回)→decode→probe_pna→normalize→trim→分類(placement Some/None)→pack(placed のみ)→bake_pages→AtlasTable::new。**失敗キーは索引表に載せず errors へ集約し継続（2.2）／全透明は placement:None の空エントリ＝エラーでない（4.4）／生存者(Empty+Placed)を manifest 順に最終 ElementId へ密再採番**（emo2 は失敗なし＝manifest 順一致・決定的）。BakeResult は値返却（channel 非依存・6.5）。
 - 3.2: emo2 統合テストは **in-source `#[cfg(test)] mod emo2_e2e`（src/emo2_e2e.rs）**（`tests/` は通常依存 areka-parsers/windows 不可視ゆえ・2.2 WIC 腕テスト前例に一致）。shell は実 `shell/master/surfaces.txt` を `areka_parsers::shell::parse` で解析→`SurfaceSet{On}`→WIC 腕 bake。balloon は D1 通り surface 表現を手構築（`emo2-kakukaku/balloons0.png`・`balloonk0.png`）し `bake([shell,balloon])` 一括で SetId 1 検証。COM init は wic_arm 前例。fixture パス=`CARGO_MANIFEST_DIR/../pilot/.../emo2`。element パスは backslash/slash 混在だが Windows `Path::join` で両対応。
 - **3.2 重要発見（4.1 golden にも影響）**: emo2 実 element `purple/a/null.png` は **α チャンネル無し・`.pna` 無し**の placeholder。`use_self_alpha=On` 下で Normalizer が KeyColor seam（本層未実装）を選び **`BakeError::Normalize{Unsupported(KeyColor)}` を丁度1件**生む＝設計通りの per-entry 分離（不具合でない）。よって emo2 shell の bake は `errors.is_empty()` にならず、`table.len()==manifest.keys.len()-errors.len()`・seam キーは resolve→None・他は全て resolve→Some。設計 docstring「emo2 経路では発生しない」はやや楽観的（設計記録）。**golden（4.1）も null.png seam を除外して固定すること**。
+- 4.1: 決定性 golden は in-source `#[cfg(test)] mod emo2_golden`（src/emo2_golden.rs）＋committed golden `src/testdata/emo2_shell_golden.txt`（54 keys・全 placed・null.png seam 除外）。`snapshot_table(&AtlasTable)`＝全 ElementId を key(id)+entry(id) で列挙し AtlasKey(set,rel_path) 昇順に `page/uv=x,y,w,h/off=x,y/orig=WxH`（placement None は `EMPTY orig=WxH`）。**Test1 `emo2_shell_bake_is_deterministic`＝独立2 bake の snapshot＋error 集合 assert_eq（run-to-run 決定性）**。**Test2 `emo2_shell_matches_golden`＝live vs `include_str!` golden 比較（リグレッション検出）**。`record_golden` は `#[ignore]`（CI で golden を上書きしない・再生成は `--ignored` 明示実行）。安定性: 寸法/αは PNG 内容由来・rectangle-pack 決定的・Packer が入力を ElementId 昇順 sort。
