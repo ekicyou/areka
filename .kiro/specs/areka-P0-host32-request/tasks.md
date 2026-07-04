@@ -47,7 +47,7 @@
   - _Boundary: Shiori3Client, lib.rs (shiori-host32-host)_
 
 - [ ] 4. Core: helper i686 request 実呼出
-- [ ] 4.1 (P) ShioriByteProxy::request メソッド実装（HGLOBAL 非対称契約）
+- [x] 4.1 (P) ShioriByteProxy::request メソッド実装（HGLOBAL 非対称契約）
   - `global_alloc_copy` で入力を `GMEM_FIXED` 化し `request(hreq, &mut len)` を呼び出す。入力 HGLOBAL は自ら解放しない（callee-free）
   - 応答 HGLOBAL から `*len` バイトを copy した後 `GlobalFree` する（caller-free）
   - Observable: testdll 越し loopback テストで固定応答往復・入力 callee-free／応答 caller-free が panic 無く完了することを確認できる
