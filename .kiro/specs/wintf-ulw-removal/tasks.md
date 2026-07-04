@@ -138,7 +138,7 @@
   - _Requirements: 1.5, 6.4_
   - _Depends: 4.1, 4.2, 4.3_
 
-- [ ] 5.3 既存テスト回帰確認
+- [x] 5.3 既存テスト回帰確認
   - `tick_order_tests`（`EXPECTED_ORDER` 13本固定列・件数assert）が無改変で緑であることを確認する（Req2.3の受入）
   - `dcomp_integration_test`・`init_window_graphics_test`・`surface_pixel_equivalence_test` 等 WUC 側既存テストの緑維持を確認する
   - areka `tests.rs`・書き換え後の owner 存在判定テスト・`compute_ex_style` の DComp in-source テストが緑であることを確認する
