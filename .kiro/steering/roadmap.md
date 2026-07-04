@@ -84,6 +84,7 @@ areka（**x64**）が最小 SSP 互換ベースウェアとして、適合対象
 
 > **粒度基準**: 1ユニット＝「コードを走らせて観測できる**単一 pass/fail** を持ち、それを観測するのに別ユニットを先に作る必要がない」もの。done が複数の独立観測に割れるなら粗すぎ→分割。
 > **観測の独立化（2026-07-03 明文化）**: 制御階層ユニット（kanade/sakura/seriko/emo）の単体観測は**実上流を待たず fixture/mock 入力で切る**（例: sakura＝script 文字列直入力・emo-compose＝parsed Shell モデル直入力・オフスクリーン pixel テストで観測）。実上流との結線は M-boot 統合（emo2-boot）で観測。これが「別ユニットを先に作る必要がない」の含意＝トラック間の並走はこの規約で担保される（トラック内は逐次）。
+> **適用境界＝本番ゴースト先行の原則（2026-07-05 追記・window-placement リジェクトの教訓）**: 上記規約は**純粋層**（parser／codec／合成）にのみ適用。**UI 位置決め・座標系ユニット（window-placement・collision-geometry 等）は逆**——本番ゴースト（emo2 実 surface 表示）＋**実 DPI（≠96）実行**が観測条件であり、単発デモ（ハードコード窓・架空 work_area）への合わせ込みは**無効**（dpi=96 の自己整合が欠陥を隠すことが実証済み。記憶 areka-placement-real-ghost-first／areka-window-placement-dpi-coordinate-defect）。
 > 正規名は**暫定**（着手時に確定）。**spec 工場にしない**＝下記はユニット名の登録であり brief.md 群ではない。着手時に最小 spec/task を just-in-time で切る。
 > **粒度の真実**: 作業は **M-boot に前倒し集中**（約19ユニット＝M1 の山・2026-07-03 emo 3分割＋actor-foundation 追加で 16→19）。「最初の起動」が本体で以降は薄い増分。
 
@@ -93,7 +94,7 @@ emo2 が起動して喋る。下記 5 トラックを結線して達成（⓪ �
 **⓪ ghost＝ゴーストエンジン（最上位 owner・全エンジンを統括）**
 - `areka-P0-actor-foundation` — **エンジン間通信の横断基盤**（parser-foundation の並行版）: envelope（メッセージ enum・返信 Sender 同梱）・spawn/join・停止手順（Close→drain→join）・**UI スレッド配送ブリッジ**（pump 統合）。`std::sync::mpsc` 起点＝依存ゼロ。kanade の先行依存・現行フロントと並走安全（新設モジュール＝非衝突）。✔ toy アクター試験（worker⇄worker＋worker→UI pump echo）（**brief 済 2026-07-03**）
 - `areka-P0-ghost-setup` — ゴースト lifecycle（package-mount で構築→boot 統括→close・**actor-foundation の結線層＝スレッド起動/channel 接続/join を所有**）。✔ descript.txt 起点のマウントから起動〜終了を統括
-- `areka-P0-window-placement` — サーフェス窓の生成＋既定位置＋ドラッグ（`areka-mock-shell` 実コードから。既定位置＝ukadoc `seriko.alignmenttodesktop` カスケード準拠・窓数は構成入力・二人立ちの本格結線は M-dual）。✔ むらさき/エモ窓が既定位置に出てドラッグ移動（**brief 済 2026-07-03**）
+- `areka-P0-window-placement` — サーフェス窓の生成＋既定位置＋ドラッグ（既定位置＝ukadoc `seriko.alignmenttodesktop` カスケード準拠・窓数は構成入力・二人立ちの本格結線は M-dual）。**⚠️ 順序ゲート: `areka-P0-emo-present` 完了後**（本番ゴースト実表示に対して実装・検証する。2026-07-05 に demo 前提の着手が実 DPI 座標破綻＝論理/物理混在でワークツリーごとリジェクト→brief 改稿済み・wintf 座標契約の確定を design 必須先行に）。✔ 本番 emo2 表示＋**実 DPI（≠96）**で既定位置・ドラッグ・バルーン追従が正しい（dpi=96 のみの緑は不合格）（**brief 済・07-05 改稿**）
 
 **① shiori＝SHIORI 通信層エンジン host-32（耐力壁・`pilot/shiori-host-32` がトラックを gate）**
 - `pilot/shiori-host-32` — 使い捨て feasibility。**✅ 完了（2026-07-01・spec=`completed/pilot-shiori-host-32`・コードは `crates/pilot/examples/shiori-host-32/` に隔離保全）**: go 基準(1)(2) 実走充足＝32bit pasta.dll 1往復（x64 親が emo2 OnBoot `Value` 受領）＋窓持ちループ N秒生存→clean unload。跨ビットネス再入 WM_COPYDATA・`wintf-winmsg-executor` i686 実行時とも GO（fallback 不要）。→ 下流 `areka-P0-host32-*` の go ゲート充足（着手可・最終 go 判定は開発者）
@@ -196,6 +197,7 @@ emo2 が起動して喋る。下記 5 トラックを結線して達成（⓪ �
 - `.kiro/specs/` 直下 active = **0**（憶測仕様を全伐採し更地化。実装ファーストで着手時に作る）。
 - **2026-07-01 追記・着手可能フロント（当時 brief 済み）**: `/kiro-discovery` で「安全並走バッチ」の brief を just-in-time 生成。① wintf 基盤層 `wintf-dcomp-to-wuc-migration`（**✅ 完了**）／`wintf-clickthrough-alpha-toggle`（**✅ 2026-07-02 完了・アーカイブ**）。② M1 parser 並走 `shell`/`balloon`/`package`（**✅ 全完了**）。③ M1 host-32 `areka-P0-host32-ipc`（**✅ 完了**）→ `areka-P0-host32-shiori-load`（**✅ 完了**）。これら 5〜6 本は相互非衝突で即並走可（`ecs/graphics` 系は wuc-migration に一本化）。
 - **2026-07-03 現況**: `completed/` = **112**。**active = 0**・**brief-only = 7**（`/kiro-discovery` 深掘り調査＝コード4系統＋ukadoc 正典＋クレート調査で brief 生成: **`areka-P0-host32-request`**〔凍結 IPC 不改変・helper echo→実呼出＋x64 Shiori3Codec〕／**emo 直列3分割 `areka-P0-emo-atlas`→`-emo-compose`→`-emo-present`**〔旧 emo-surface を粒度分割・自前合成＋αトリミングアトラス（packing クレート本命 `rectangle-pack`＝zero-dep・要開発者承認／対抗 `rect_packer`）〕／**`areka-P0-window-placement`**〔alignmenttodesktop カスケード・窓数構成入力〕／**`areka-P0-actor-foundation`**〔通信横断基盤・機構/経路/結線の三分・UI 配送ブリッジ・std mpsc 起点〕／**`wintf-ulw-removal`**〔鮮度更新済: ゲート充足✅・**`WS_EX_LAYERED` 同伴フラグ保全**を受け入れ基準へ追加〕）。**②parsers トラック全完了・M-boot 約 7/19**（①shiori: pilot✅/ipc✅/shiori-load✅・lifecycle 残）。**着手順の注意**: emo チェーン（present）と window-placement は同じ `crates/areka` 起点＝**並行着手はファイル衝突注意・順次推奨**（emo-atlas/-compose・actor-foundation は純粋層/新設モジュール＝衝突なし）。shiori:`host32-request`／wintf:`ulw-removal` は他と非衝突＝即並走可。
+- **2026-07-05 追記（window-placement リジェクト→依存マップ再検討）**: window-placement の demo 前提着手（07-03 brief）が**実 DPI 座標破綻（論理/物理混在・dpi=96 でのみ自己整合）でワークツリーごとリジェクト**。全 brief を「雑なデモゴースト前提」観点で総点検した結果——**demo 前提は window-placement のみ**（emo-atlas/-compose＝純粋層・emo-present＝実 emo2 fixture 入力・host32-request＝実 pasta fixture・actor-foundation＝機構層・ulw-removal＝描画等価検証。いずれも demo 非依存）。**依存マップ是正**: ① window-placement は **emo-present の順序ゲート下**へ（本番ゴースト先行の原則・brief 改稿済み）② emo-present に**実 DPI 観測**＋座標契約文書化（下流が前提にできる形）を追加 ③ 粒度基準に「観測の独立化の適用境界」を追記。**即並走可能フロントは4本**: `areka-P0-actor-foundation`／`areka-P0-host32-request`／`areka-P0-emo-atlas`／`wintf-ulw-removal` → emo チェーン直列（atlas→compose→present）→ **present 完了後に window-placement**。
 - 旧 active/brief（M1 憶測・M2 reference・出荷層）・backlog（P1-P3）・`_rejected/`・旧戦略メモは**削除**（git 履歴に保全。必要時に復元可）。
 
 ## M2 以降
