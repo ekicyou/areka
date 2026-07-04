@@ -51,3 +51,6 @@ pub use normalize::{AlphaSource, NormalizeError, NormalizedImage, Normalizer};
 
 // トリム層（α>0 タイト bbox・オフセット記録・全透明→空・R4・D8）。
 pub use trim::{TrimResult, Trimmed, Trimmer};
+
+// packing 層（決定的・複数頁・padding・座標のみ・R5・D7）。
+pub use pack::{PackConfig, PackOutput, PackedEntry, Packer};

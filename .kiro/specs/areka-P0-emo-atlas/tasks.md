@@ -69,7 +69,7 @@
   - _Requirements: 4.1, 4.2, 4.4, 4.5_
   - _Depends: 1.3, 2.3_
 
-- [ ] 2.5 packing（複数頁・padding・決定的配置）の実装
+- [x] 2.5 packing（複数頁・padding・決定的配置）の実装
   - トリム済み矩形群を、承認済みの静的パッキングライブラリを用いて頁内に重ならないよう配置する
   - 各矩形の周囲に余白を確保した状態でライブラリへ渡し、実際に記録する座標情報は余白を含まない実矩形とする
   - 全矩形が単一頁に収まらない場合は複数頁へ自然に分割する
@@ -121,3 +121,4 @@
 - 2.2: `WicDecoderArm{ factory: IWICImagingFactory2 }`（`decode/wic_arm.rs`）は `windows` WIC を直接使い（wintf 非 import）task 1.2 recipe を再現。`new()->windows::core::Result<Self>`（COM 初期化は呼出側責務）。`decode`: `!path.exists()`→`NotFound`／COM 失敗→`.map_err`→`Decode{path,source}`（panic 皆無・全 unwrap/expect は #[cfg(test)] 限定）。`has_alpha` は変換前 `frame.GetPixelFormat()`＋`ALPHA_FORMATS.contains()`（12 GUID・wintf と同一）。`probe_pna=path.with_extension("pna").exists()`。**emo2 fixture パスは `env!("CARGO_MANIFEST_DIR")/../pilot/examples/shiori-host-32/fixtures/emo2/`**（テストは COM init 必須・`online0.png`=48×16 RGBA で has_alpha=true、`descript.txt`=Decode error、不在=NotFound）。unsafe は wic_arm.rs に隔離。
 - 2.3: `Normalizer::normalize(DecodedImage, AlphaParams, has_pna)->Result<NormalizedImage,NormalizeError>`（normalize.rs）。`AlphaSource{AlphaChannel,Pna,KeyColor,Opaque}`（#[non_exhaustive]・PartialEq）・`NormalizedImage{w,h,stride,pbgra:Vec<u8>}`・`NormalizeError::Unsupported(AlphaSource)`。D5 選択: On={α→AlphaChannel/!α&pna→Pna/!α→KeyColor}・Full={α→AlphaChannel/!α→Opaque}・Off={pna→Pna/!pna→KeyColor}（α無視）。**実装腕はタプル `(On, AlphaChannel)` のみ＝恒等 premultiplied 素通し（`pbgra: img.bgra` move・無変換・D8）**。それ以外は全て `Unsupported(選択された source)`（Full+α も seam！）。設定ファイル非読込（params 注入・3.6）。
 - 2.4: `Trimmer::trim(&NormalizedImage)->TrimResult{original:Size, placement:Option<Trimmed>}`（trim.rs）。`Trimmed{trim_offset:Point, size:Size, pbgra:Vec<u8>, stride}`。**α 閾値は厳密 `alpha>0`（+3 バイト・NOT 128）**・stride 込み走査（alpha_mask 先例）。全 α==0→`placement:None`（空エントリ）。トリム後は tightly-packed（`stride=size.w*4`・premultiplied 素通し・無変換）。座標不変（4.5）: trim_offset へ blit で原画像 byte 等価。α read は `.get().unwrap_or(0)`。
+- 2.5: `Packer::pack(&[(ElementId,Trimmed)], PackConfig)->PackOutput{page_count, entries:Vec<PackedEntry>}`（pack.rs・**座標のみ・pbgra 非読込・blit なし**＝Critical Issue 3）。`PackConfig::default()={2048,1}`。rectangle-pack 0.4.2 API: `GroupedRectsToPlace::push_rect`/`RectToInsert::new(w,h,1)`/`TargetBin::new(page,page,1)`/`pack_rects(_,_,&volume_heuristic,&contains_smallest_box)`/`packed_locations()`（RectId=ElementId.0:u32・BinId=usize）。**pack_rects は all-or-nothing** ゆえ multi-page は bin 数を 1..=items.len() で増やす retry loop・使用 bin を dense 0-based page へ remap。padding: 登録=`w+2p`・UV=`placed+p`（実サイズ・padding 非包含）。決定性: 入力を ElementId 昇順に内部 sort・出力も再 sort（HashMap 反復順に非依存）。oversized（padded>page_size）は tracing::error＋除外（emo2 では発生せず）。
