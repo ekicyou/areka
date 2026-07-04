@@ -74,7 +74,7 @@
   - _Boundary: testdll request fixture (shiori-host32-testdll)_
 
 - [ ] 6. Integration: E2E 結線とテスト
-- [ ] 6.1 決定的 request E2E テスト
+- [x] 6.1 決定的 request E2E テスト
   - `shiori_load_e2e.rs` の骨格を踏襲する（`resolve_helper_exe`/`resolve_testdll`、`HelperGuard`、env→target 解決＋silent skip 禁止 panic）
   - helper 越し fixture へテスト GET を送出し `Value` 抽出を assert、テスト NOTIFY を送出し 204 破棄を assert する
   - 所有権規約（callee-free／caller-free）無違反、request line/`ID` の assert 面で正しく組み立てられ届いたことを裏付ける
