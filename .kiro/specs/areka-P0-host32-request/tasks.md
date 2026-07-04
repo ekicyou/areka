@@ -22,7 +22,7 @@
   - _Boundary: error.rs (shiori-host32-host)_
 
 - [ ] 2. Core: host x64 SHIORI/3.0 codec（純関数）
-- [ ] 2.1 request 組立（build_request）実装
+- [x] 2.1 request 組立（build_request）実装
   - `GET`/`NOTIFY SHIORI/3.0` の request line、`Reference0..N` 連番、`Charset`（UTF-8）／`Sender`（areka）／`ID`／`SecurityLevel`（local）ヘッダ、CRLF 区切り、空行終端を組み立てる
   - イベント名は汎用の `ID` 値として受け取り、特定イベントに固有の分岐や既定 Reference を埋め込まない
   - Observable: 単体テストで GET/NOTIFY それぞれのバイト列出力を検証し、末尾が二重 CRLF であることを確認できる

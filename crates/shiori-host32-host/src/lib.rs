@@ -14,6 +14,7 @@
 pub mod error;
 pub mod parent_window;
 pub mod process_host;
+pub mod shiori3;
 
 pub use error::{HandshakeError, SpawnError};
 pub use parent_window::{ParentMessageWindow, SendError, WindowCreationError};
