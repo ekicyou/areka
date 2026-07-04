@@ -54,7 +54,7 @@
   - _Requirements: 3.2, 3.3, 3.4, 3.6, 7.5, 7.6_
   - _Boundary: ShioriByteProxy (shiori-host32-helper)_
 
-- [ ] 4.2 Reply アーム置換（main.rs, handle_message 側）
+- [x] 4.2 Reply アーム置換（main.rs, handle_message 側）
   - `classify_inbound` は純関数を維持する（proxy に到達しない）。proxy 駆動は `handle_message` の Reply アームで実施する
   - proxy 確立済みなら `proxy.request(payload)` の結果を RESPONSE 返送、未確立なら明示エラーバイト列を返送する
   - RefCell 再入規律を守る: `proxy.borrow()` を `send_copydata` 越しに保持しない（LOAD アームと同型）
