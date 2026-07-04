@@ -173,7 +173,7 @@ crates/
 - `crates/shiori-host32-host/src/shiori3.rs` — **新規**。SHIORI/3.0 の build（`Request`→バイト列）と parse（バイト列→`ParsedResponse`）を担う純関数モジュール。transport・FFI を知らない。
 - `crates/shiori-host32-host/src/client.rs` — **新規**。`Shiori3Client`（`ParentMessageWindow` を保持 or 借用）に `get(id, refs)`／`notify(id, refs)` を生やし、codec build → `send_request(Request, bytes, REQUEST_TIMEOUT)` → codec parse → `RequestError` 統合を結線。IShiori 写像点の型シーム（`onto_ishiori_get` 相当）を doc＋署名で示す（実装しない）。
 - `crates/shiori-host32-host/src/error.rs` — **変更**。`ShioriError`（codec 由来: 解析失敗・SHIORI エラー応答 400/500・ErrorLevel）と `RequestError`（`Send`/`Handshake`/`Ipc`/`Shiori` を包む統合 enum）を追記。
-- `crates/shiori-host32-host/src/process_host.rs` — **変更**。`REQUEST_TIMEOUT`（提案 60s）を `LOAD_ACK_TIMEOUT` と別建てで追加（per-call 引数・凍結機構不変）。
+- `crates/shiori-host32-host/src/process_host.rs` — **変更**。`REQUEST_TIMEOUT`（既定 60s）を `LOAD_ACK_TIMEOUT` と別建てで追加（per-call 引数・凍結機構不変）。env `AREKA_SHIORI_REQUEST_TIMEOUT_MS` で上書き可能（未設定=60s／`0`=無限待ち・ブレークポイントデバッグ用の opt-in）。`AREKA_` 名前空間で他アプリ env との衝突を回避し、`SHIORI_` で対象概念を自己説明（`host32` の内部コードネームは env 名に用いない）。
 - `crates/shiori-host32-host/src/lib.rs` — **変更**。`shiori3`/`client` モジュール宣言＋`Shiori3Client`/`RequestError`/`ShioriError`/`ParsedResponse`/`REQUEST_TIMEOUT` の公開 re-export。
 - `crates/shiori-host32-helper/src/shiori_proxy.rs` — **変更**。`request(&self, req: &[u8]) -> Result<Vec<u8>, ProxyError>` を新設（`global_alloc_copy` で入力を GMEM_FIXED・callee-free で `request` へ渡し、返却 HGLOBAL を copy 後 `GlobalFree`・caller-free）。既存 `RequestFn` 型は §7.2 照合済みゆえ変更しない。
 - `crates/shiori-host32-helper/src/main.rs` — **変更**。`classify_inbound` の `Reply` を「proxy 確立済みなら `proxy.request(payload)` の結果、未確立なら明示エラーバイト列」へ変更。RefCell 再入規律（`proxy.borrow()` を `send_copydata` 越しに保持しない）を LOAD アームと同型で守る。`respond` echo は撤去 or 縮退。
@@ -374,7 +374,7 @@ impl<'a> Shiori3Client<'a> {
 - Invariants: 単一 request 経路合流。呼び手スレッドをブロックしてよい（`SMTO_ABORTIFHUNG`＋`REQUEST_TIMEOUT` で有限復帰）。
 
 **Implementation Notes**
-- Integration: `send_request(MsgTag::Request, bytes, REQUEST_TIMEOUT)` を呼び、`SendError`（既存 transport/handshake）を `RequestError` へ写す。`REQUEST_TIMEOUT` は `LOAD_ACK_TIMEOUT=30s` と別建て（提案 60s・GET は脳の思考時間を含む・R5 timeout 決定）。
+- Integration: `send_request(MsgTag::Request, bytes, REQUEST_TIMEOUT)` を呼び、`SendError`（既存 transport/handshake）を `RequestError` へ写す。`REQUEST_TIMEOUT` は `LOAD_ACK_TIMEOUT=30s` と別建て（既定 60s・GET は脳の思考時間を含む・開発者決定 2026-07-04）。env `AREKA_SHIORI_REQUEST_TIMEOUT_MS` で上書き可（`0`=無限待ち・デバッグ opt-in＝ブレークポイント停止と真のハングを区別する検出手段が無いため、開発者の明示 opt-in を代替手段とする）。
 - Validation: E2E（helper 越し fixture）で GET→Value 抽出・NOTIFY→204 破棄を観測。単体では `SendError`→`RequestError` 写像を検証。
 - Risks: NOTIFY を片道 IPC 化すると応答 HGLOBAL 解放漏れ（R4.8 が禁ずる）→ 同期往復で GET と同一契約に統一。
 
