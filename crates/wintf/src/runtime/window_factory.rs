@@ -166,10 +166,9 @@ impl EcsWindowFactory {
 
         // --- 4b. ウィンドウを表示（旧 create_windows の ShowWindow(SW_SHOW) 同等） ---
         // ライブラリは `WINDOW_STYLE(0)`（WS_VISIBLE なし）で生成するため、スタイルに
-        // WS_VISIBLE を持たないウィンドウ（例: WindowStyle 未設定でデフォルトの
-        // multi_backend_demo ULW 窓）はこの ShowWindow がないと不可視のままになる
-        // （5.3 実機回帰: ULW 窓が見えない）。旧 create_windows が呼んでいた表示呼び出しを
-        // 復元する。SAFETY: Win32 境界。生成直後の有効 HWND に対する表示要求のみ。
+        // WS_VISIBLE を持たないウィンドウ（例: WindowStyle 未設定でデフォルト生成される窓）は
+        // この ShowWindow がないと不可視のままになる（実機回帰で確認済み）。旧 create_windows が
+        // 呼んでいた表示呼び出しを復元する。SAFETY: Win32 境界。生成直後の有効 HWND に対する表示要求のみ。
         // 同期発火する WM_WINDOWPOSCHANGED は tick の World 借用中ゆえ wndproc closure の
         // try_borrow 失敗で安全スキップされる（生成時メッセージは ECS 更新不要）。
         unsafe {

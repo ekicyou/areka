@@ -162,7 +162,7 @@ pub fn draw_labels(
 
         // 描画開始
         unsafe {
-            // 共有DCのワールド変換をリセット（前フレームのcomposite_render_systemの残留変換を防止）
+            // 共有DCのワールド変換をリセット（前フレームの描画処理の残留変換を防止）
             dc.SetTransform(&Matrix3x2::identity());
             dc.BeginDraw();
         }

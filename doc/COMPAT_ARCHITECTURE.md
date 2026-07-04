@@ -41,7 +41,7 @@ areka は「ぱすたさん専用の試作」から、**ukadoc準拠の互換ベ
                                   │ 再生制御を要求                       │
 タイミング層 ── dola（タイマ・補間・再生制御・スケジュール／"いつ"に特化した下位層）
                                   │ 駆動
-描画/窓層 ───── wintf（ULW透過・サーフェス合成・当たり判定・balloon・hit-test/pointer）
+描画/窓層 ───── wintf（GPU合成透過(WUC)・サーフェス合成・当たり判定・balloon・hit-test/pointer）
 ```
 
 - **dola は "いつ" だけを司る純粋なタイミング基盤**（下位層）。SERIKO/さくらスクリプトランナーは dola を基盤に実装される上位層。
@@ -96,7 +96,7 @@ areka は「ぱすたさん専用の試作」から、**ukadoc準拠の互換ベ
 
 ## 6. この上に乗る既存の解決済み資産
 
-- ULW透過・クリック透過（別プロセスへ）・当たり判定（hit-test/alpha-mask）→ 伺か土台の最難関は完了済み（`completed/wintf-dcomp-migration-*`, `wintf-P0-click-through`, `event-hit-test-alpha-mask`）。
+- GPU 合成透過（WUC）・クリック透過（別プロセスへ）・当たり判定（hit-test/alpha-mask）→ 伺か土台の最難関は完了済み（`completed/wintf-dcomp-migration-*`, `wintf-P0-click-through`, `event-hit-test-alpha-mask`）。※透過の初期実装は ULW だったが、DComp→WUC 移行と ULW 撤去（`wintf-ulw-removal`）を経て、現在は GPU 合成単独経路。クリック透過は `WS_EX_LAYERED` 同伴フラグ＋α マスク当たり判定で成立する。
 - balloon描画・typewriter・WIC画像・event/drag/pointer・dola runtime・cue/pasta-cue 連携。
 - 非同期基盤（`async-executor`/`bevy_tasks`）・world scheduling（vsync/frame）→ OnSecondChangeクロックとrequest非同期圧送（UIを止めない）の土台。
 
@@ -105,7 +105,7 @@ areka は「ぱすたさん専用の試作」から、**ukadoc準拠の互換ベ
 - **判断**: wintf の表示合成バックエンドを **DirectComposition（DComp）から WinRT の Windows.UI.Composition（WUC）へ純粋等価移行**し、DComp 依存を廃する。device（`Compositor`＋`CompositionGraphicsDevice`）／target（`DesktopWindowTarget`）／visual 木（`ContainerVisual`/`SpriteVisual`）／surface（`CompositionDrawingSurface`＋`CompositionSurfaceBrush`）／frame-apply（明示 `Commit()` 廃止→DispatcherQueue 暗黙反映）を WUC 相当へ写像。描画結果・再描画・入力は不変。
 - **理由**: 合成基盤を WUC 系へ寄せ、将来の合成機能（本 spec では非活用）への地ならしと DComp 依存の廃止。
 - **スレッド前提（実測確定）**: 本番 UI スレッドは MTA（`WinApp::new` の `CoInitializeEx(COINIT_MULTITHREADED)`）。WUC は MTA 上で動作し、DispatcherQueue は **`DQTAT_COM_NONE`**（apartment 不変）で生成する（既存 message pump に相乗り・pump 非差し替え）。設計初稿の「STA 前提／ASTA」は R1 スパイクの実測で否定。
-- **非スコープ（残置）**: ULW アーム・`CompositionMode` enum・クリック透過（当たり判定層）・`compute_ex_style`（`WS_EX_NOREDIRECTIONBITMAP`）は不変。ULW 一式の除去は別 spec `wintf-ulw-removal`。
+- **ULW 除去済み（後日 spec `wintf-ulw-removal` にて実施）**: 本 WUC 移行時点で残置していた ULW アーム・`CompositionMode` enum・ULW 前提の描画分岐は `wintf-ulw-removal` で除去され、GPU 合成（WUC）単独経路へ collapse した。`compute_ex_style` は合成モード引数・分岐を持たない branchless 単一経路（`WS_EX_NOREDIRECTIONBITMAP` 付与）となり、`WS_EX_LAYERED` は生成時に付与しない。クリック透過（当たり判定層・`apply_layered_companion` による `WS_EX_LAYERED` 実行時同伴フラグ）は不変で存続。
 - **既知の制約**: WUC の per-corner 角丸 clip（`RoundedRectangleIndividual`）は `CompositionPath`＝`IGeometrySource2D`（Win2D）を要し windows 0.62.2 単体では厳密構築不可。areka 本体は個別半径未使用のため均一半径近似で写す（要検討: Win2D 依存の是非）。
 
 ---

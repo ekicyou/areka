@@ -123,7 +123,7 @@
   - _Boundary: wintf tests_
 
 - [ ] 5. ドキュメント整合とビルド/回帰検証
-- [ ] 5.1 ドキュメントと残余コメントの最終整合確認
+- [x] 5.1 ドキュメントと残余コメントの最終整合確認
   - `doc/COMPAT_ARCHITECTURE.md`（44・99・105・108行）の ULW 残存前提記述を GPU 合成単独へ整合する（108行「非スコープ(残置):ULWアーム…除去は別spec」を「除去済み」へ）
   - grep で wintf/areka コード内コメントに ULW を残存機構として前提する記述が残っていないことを横断確認する
   - steering（tech.md・product.md・roadmap.md）を変更していないことを確認する
@@ -164,3 +164,4 @@
 - **design blast-radius gap 第3件（4.3 で解決・実装時発見）**: `tests/graphics/window_pos_systems_test.rs`（design のテスト列挙に非記載）が task 2.3 で src から削除済みの `WindowD3D11Compositor` を実参照し full-compile をブロック。ULW-compositor 専用3テストを削除・import 除去、None-Res early-return characterization は device 非依存の `BitmapSourceGraphics` へ再ターゲットで温存（WUC/BitmapSource 無効化カバレッジは不損）。加えて `dcomp_integration_test.rs` の `test_ulw_window_visual_does_not_get_dcomp_components`（collapse 後は Visual が必ず graphics component を得るため偽化）を削除（orphan-Visual 除外の有効 negative ケースは同ファイル `test_orphan_visual_does_not_get_dcomp_components` が温存）。要件優先（Req3.4 full-compile・Req1.5 残存シンボルゼロ）で task 2.3 前例に倣い追随・レビュア検証済み。File Structure Plan tests 列挙の盲点（composition_mode・WindowD3D11Compositor src に続く3件目）。
 - **main.rs:166 の ULW 歴史的言及**は残置可（クリックスルー registry の根拠説明・live 前提でない・4.1 レビュア判断）。5.1 の ULW 残余 grep で誤検知しないよう留意。
 - **owner_window_exists_test.rs**（旧 find_owner_composition_mode_test.rs 改名）: local `query_owner_window_exists`（bool）が production `owner_window_exists` を World で再現・5ケース（self/child/grandchild[W3b-V]/orphan/no-ancestor）。
+- **5.1 の残余コメント sweep で src コメント7件を追加修正**（tasks 2-4 の漏れ・全てコメントのみ・DC変換リセット挙動不変）: `render.rs`（`ulw_present_system は残置`→空スケジュール no-op）・`window_factory.rs`（削除済み `multi_backend_demo ULW 窓` 例示→汎用）・widget 描画5箇所（`shapes/rectangle.rs`・`text/typewriter_draw.rs`×2・`text/draw_labels.rs`・`bitmap_source/systems.rs` の `composite_render_system` 言及→「前フレームの描画処理」）。残る ULW 言及は全て歴史的/根拠（`world/mod.rs:325`「撤去済み」・`win_style.rs:398`「UpdateLayeredWindow を呼ばない」・`areka main.rs:166` クリックスルー根拠・`clip_sync.rs:129` doc引用）で Req7.2 適合。
