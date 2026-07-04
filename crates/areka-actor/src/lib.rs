@@ -91,3 +91,4 @@ pub mod ui;
 
 pub use reply::{ReplyError, ReplyReceiver, ReplySender, reply_channel};
 pub use spawn::{ActorError, ActorHandle, run_inbox, spawn_actor};
+pub use ui::{UiSendError, UiSender, UiSpawnError, spawn_ui};

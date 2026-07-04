@@ -40,7 +40,7 @@
   - _Requirements: 8.2, 8.3_
   - _Boundary: ui（検証専用）_
 
-- [ ] 3. UIアクター配送ブリッジ（queue+wakeup+pump内drain）の実装
+- [x] 3. UIアクター配送ブリッジ（queue+wakeup+pump内drain）の実装
   - UIスレッド上でUIアクターを起動し、他スレッドからのメッセージを非同期チャンネル経由でpumpを塞がずに配送する機能を実装する
   - 受信ループはspawnモジュールへのコード依存を持たず、独立に同一の耐障害規約（handlerのErrは記録して継続・Break/切断でのみ終了）を踏襲する
   - UIスレッド以外からの誤った呼び出しを検出した場合はエラーを記録したうえで戻り値のエラーとして返す（安易なpanicにしない）
@@ -84,3 +84,7 @@
   - HWND を一切生成しない（executor 内部の message-only 窓のみ）＝GPU/実窓/管理者権限 不要でヘッドレス CI 安全。
   - `async-channel` unbounded `try_send` は Closed のみ失敗（Full 無し・設計 4.2 どおり）。
   - 参照実装: `crates/shiori-host32-host/src/parent_window.rs::pump_until_hello_or`（heartbeat + deadline + quit）。スパイク本体 `crates/areka-actor/tests/spike_ui_pump.rs`。
+
+- **3 off-thread 検出 = case (c) 確定（tasks 4.2 / 5 への申し送り）**: executor 0.0.5 公開 API を実読した結果、現スレッドが pump を回すか判定する probe は**存在しない**（`is_pumping`/`try_spawn_local`/thread-local アクセサ いずれも無し。`EXECUTOR_WINDOW` は private thread_local）。加えて `windows` は dev-dependency 専用ゆえプロダクション `ui.rs` から Win32 を直接叩けない。よって design Risks ラダーの **case (c)** を採用: `spawn_ui` は現状**常に `Ok`** を返し、`UiSpawnError::NotUiThread` は**予約 variant**（将来の結線層 probe 接続用）として公開面に保持。log-first は冒頭 `debug!(actor)` ＋ rustdoc 警告で担保（ログ無し静黙失敗なし）。
+  - **task 4.2 前提**: toy(b) は必ずテストスレッド上で `spawn_ui` → `MessageLoop::run` の順に呼ぶ（別スレッドで `spawn_ui` すると drain が静かに走らず deadline で fail）。
+  - **task 5 前提**: `UiSpawnError::NotUiThread` は `spawn_ui` から現状返らないが、design §263 明示 re-export list に含まれる正当な公開面（「予約型」として最小性検証で認識すること）。
