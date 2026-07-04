@@ -36,3 +36,9 @@ pub use table::{
 
 // デコードポート（D4・R2.3）。既定手段（WIC）を露出せず、trait とデータ型のみ公開。
 pub use decode::{DecodeError, DecodedImage, ElementDecoder, MemoryDecoder};
+
+// マニフェスト導出（列挙層・R1.1–1.6/5.6・D6）。
+pub use manifest::{Manifest, ManifestDeriver, SurfaceSet};
+
+// 共有透過パラメータ型（normalize の設計本拠・SurfaceSet が運ぶ・3.6）。
+pub use normalize::{AlphaParams, UseSelfAlpha};

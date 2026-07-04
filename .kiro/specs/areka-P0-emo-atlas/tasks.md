@@ -33,7 +33,7 @@
   - _Boundary: ElementDecoder (port)_
 
 - [ ] 2. コア: アトラス生成パイプライン各段の実装
-- [ ] 2.1 (P) マニフェスト導出（surface 列挙・間接参照解決・重複排除）の実装
+- [x] 2.1 (P) マニフェスト導出（surface 列挙・間接参照解決・重複排除）の実装
   - shell surface 群と、surface として表現された balloon の双方から、焼付対象となる element 画像の相対パス一覧を導出する
   - bind アニメーションを介した間接参照（他 surface の element を参照するケース）を解決し、参照先の画像も列挙対象に含める
   - 負の参照や存在しない参照先など、画像を持たない参照は列挙から除外し、循環参照が生じても処理が停止するようにする
@@ -117,3 +117,4 @@
 - 1.2: wintf 側 `load_bitmap_source` は `crates/wintf/src/com/wic.rs` へ移設し戻り値を `Result<(IWICBitmapSource, bool)>`（bool=has_alpha）へ拡張。`systems.rs` は `pub use crate::com::wic::load_bitmap_source;` で再エクスポート（既存 import パス互換）。**has_alpha は変換前フレーム `frame.GetPixelFormat()` から判定必須**（PBGRA 変換後は常に α 付き＝誤判定になる・Critical Issue 1）。判定は `const ALPHA_FORMATS: &[GUID]` の `.contains()` 方式（32/64bpp BGRA/PBGRA/RGBA/PRGBA＋1010102XR＋128bpp float α。24bppBGR/8bppIndexed/grayscale/plain RGB は default false）。`matches!` はwindows-rs の非 UPPER_CASE GUID 定数が `non_upper_case_globals` future-incompat 警告を出すため不可。**2.2 の emo-atlas WIC 腕はこの has_alpha ロジックを `windows` WIC 直接で再現する**（wintf を import しない）。
 - 1.3: 契約型は `table.rs` に D3 通り定義済み・`lib.rs` から `pub use` 済み。**`SetId` は table.rs に定義**（AtlasKey が内包するため）→ manifest.rs（2.1）はここから import する。`AtlasTable::new(keys, entries, pages)` が resolve マップを keys→ElementId(index) で構築。`entry`/`key` は非 Option の O(1) index（契約違反時 panic）・`new` は len 不一致 assert。幾何 Point{i32,i32}/Size{u32,u32}/Rect{u32×4}。
 - 1.4: `decode.rs` に `ElementDecoder` trait（`decode(&Path)->Result<DecodedImage,DecodeError>`＋`probe_pna` default false）・`DecodedImage{width,height,stride,bgra:Vec<u8>,has_alpha}`（Clone,Debug）・`DecodeError{NotFound{path},Decode{path,source}}`（Debug＋std-only Display/Error・thiserror 非追加）を定義。**`pub struct MemoryDecoder`（COM 非依存の再利用可能 test double・`insert`/`insert_corrupt`/`.pna` 登録）**＝2.3/3.x の純粋テストで使える。ポート面に WIC/COM 型を一切露出しない（2.3）。`decode/wic_arm.rs` は 2.2 まで stub のまま。
+- 2.1: **`AlphaParams{use_self_alpha:UseSelfAlpha}` と `enum UseSelfAlpha{On,Full,Off}`（Clone,Copy,Debug）は 2.1 が先行して `normalize.rs` に定義済み**（SurfaceSet が内包するため）→ **2.3（Normalizer）はこれらを再定義せず import して使う**。normalize.rs には現状この2型のみ（normalize()/NormalizedImage/AlphaSource/NormalizeError は 2.3 が追加）。`SurfaceSet<'a>{surfaces:&[Surface], base_dir:&Path, alpha_params:AlphaParams}`・`Manifest{keys:Vec<AtlasKey>}`・`ManifestDeriver::derive(&[SurfaceSet])->Manifest` は manifest.rs。SetId=sets スライスの index。dedup+順序は `BTreeSet<(u32,String)>`。derive は base_dir を join せず alpha_params 値も読まない（read-only 素通し）。間接 bind は transitive＋visited-set 循環検出・負/不在 id skip・重複 id 先出優先。
