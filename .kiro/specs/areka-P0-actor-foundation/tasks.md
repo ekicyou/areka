@@ -25,7 +25,7 @@
   - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 3.2, 3.4, 3.5, 3.7, 6.1_
   - _Boundary: spawn_
 
-- [ ] 2.2 (P) request/reply（oneshot相当）の実装
+- [x] 2.2 (P) request/reply（oneshot相当）の実装
   - リクエストごとに一度だけ応答可能な返信チャンネル対を生成する機能を実装する
   - 応答未送信のまま返信端がdropされた場合に要求側が切断として観測できるようにする
   - 上限時間付き待機（timeoutとdroppedを区別）を提供する
