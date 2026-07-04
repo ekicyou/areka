@@ -25,7 +25,7 @@
   - _Requirements: 6.1, 6.2, 6.4_
   - _Boundary: AtlasTable_
 
-- [ ] 1.4 差し替え可能なデコードポートの定義
+- [x] 1.4 差し替え可能なデコードポートの定義
   - パス入力から画素バッファを得るための最小インターフェースを定義し、デコード手段の詳細を上位層へ露出しない形にする
   - 復号失敗（不在・破損）を診断可能なエラーとして表現する型を定義する
   - テスト用（メモリ）腕を用意し、インターフェースの契約に従って画素バッファを返せることを確認する（既定 WIC 腕の契約適合は 2.2 で別途確認する）
@@ -116,3 +116,4 @@
 - 1.1: モジュール配置は `src/decode.rs`（`pub mod wic_arm;` を含む）＋ `src/decode/wic_arm.rs` のディレクトリモジュール形式で compile 確認済み。
 - 1.2: wintf 側 `load_bitmap_source` は `crates/wintf/src/com/wic.rs` へ移設し戻り値を `Result<(IWICBitmapSource, bool)>`（bool=has_alpha）へ拡張。`systems.rs` は `pub use crate::com::wic::load_bitmap_source;` で再エクスポート（既存 import パス互換）。**has_alpha は変換前フレーム `frame.GetPixelFormat()` から判定必須**（PBGRA 変換後は常に α 付き＝誤判定になる・Critical Issue 1）。判定は `const ALPHA_FORMATS: &[GUID]` の `.contains()` 方式（32/64bpp BGRA/PBGRA/RGBA/PRGBA＋1010102XR＋128bpp float α。24bppBGR/8bppIndexed/grayscale/plain RGB は default false）。`matches!` はwindows-rs の非 UPPER_CASE GUID 定数が `non_upper_case_globals` future-incompat 警告を出すため不可。**2.2 の emo-atlas WIC 腕はこの has_alpha ロジックを `windows` WIC 直接で再現する**（wintf を import しない）。
 - 1.3: 契約型は `table.rs` に D3 通り定義済み・`lib.rs` から `pub use` 済み。**`SetId` は table.rs に定義**（AtlasKey が内包するため）→ manifest.rs（2.1）はここから import する。`AtlasTable::new(keys, entries, pages)` が resolve マップを keys→ElementId(index) で構築。`entry`/`key` は非 Option の O(1) index（契約違反時 panic）・`new` は len 不一致 assert。幾何 Point{i32,i32}/Size{u32,u32}/Rect{u32×4}。
+- 1.4: `decode.rs` に `ElementDecoder` trait（`decode(&Path)->Result<DecodedImage,DecodeError>`＋`probe_pna` default false）・`DecodedImage{width,height,stride,bgra:Vec<u8>,has_alpha}`（Clone,Debug）・`DecodeError{NotFound{path},Decode{path,source}}`（Debug＋std-only Display/Error・thiserror 非追加）を定義。**`pub struct MemoryDecoder`（COM 非依存の再利用可能 test double・`insert`/`insert_corrupt`/`.pna` 登録）**＝2.3/3.x の純粋テストで使える。ポート面に WIC/COM 型を一切露出しない（2.3）。`decode/wic_arm.rs` は 2.2 まで stub のまま。

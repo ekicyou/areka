@@ -33,3 +33,6 @@ pub mod trim;
 pub use table::{
     AtlasEntry, AtlasKey, AtlasPage, AtlasTable, ElementId, Placement, Point, Rect, SetId, Size,
 };
+
+// デコードポート（D4・R2.3）。既定手段（WIC）を露出せず、trait とデータ型のみ公開。
+pub use decode::{DecodeError, DecodedImage, ElementDecoder, MemoryDecoder};
