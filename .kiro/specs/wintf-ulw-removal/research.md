@@ -237,7 +237,7 @@ Phase 1 で ULW variant と全 ULW 分岐・3 ファイルを撤去し `Composit
 
 - **確定**:
   - `find_owner_composition_mode_test.rs`（`tests/window/`）を**削除**、`tests/window.rs` の mod 宣言（4-5 行）除去。このテストは ChildOf チェーン走査で `composition_mode()` を返すロジックを再実装しており（production に `find_owner_window_composition_mode` 関数は grep で不在）、`composition_mode()` メソッド消滅で検証対象そのものが消える。走査ロジックを mode 非依存で残す価値は本 spec スコープ外。
-  - `composition_mode_test.rs`（`default_is_ulw` 等の ULW 既定 hard-assert）を削除するか、GPU 合成固定の意味へ書き換え（`tests/window.rs` の mod 宣言 2-3 行も追随）。collapse で ULW 既定 assert は意味喪失。
+  - `composition_mode_test.rs`（`default_is_ulw` 等の ULW 既定 hard-assert）を**削除**（`tests/window.rs` の mod 宣言 2-3 行も除去）。collapse で ULW 既定 assert は意味喪失。**設計ディスカッション #1（2026-07-04）で「削除 or 書換」の二択を①削除に確定**＝`composition_mode()` に全依存し検証対象が型ごと消えるため `find_owner_composition_mode_test` の削除確定と対称に扱う（純粋削除リファクタ原則・非破壊検証は D7 の Option 2 で充足）。
 
 ### Review Gate 結果
 

@@ -160,6 +160,7 @@ crates/wintf/tests/
 │   ├── compositor_render_system_test.rs # 削除
 │   └── compositor_transfer_test.rs      # 削除
 └── window/
+    ├── composition_mode_test.rs             # 削除: ULW 既定 hard-assert（composition_mode() 依存）が collapse で意味喪失（D8）
     └── find_owner_composition_mode_test.rs  # 削除（下記 D8 参照）
 crates/wintf/examples/
 ├── ulw_twin_demo.rs                     # 削除: ULW 二窓比較が主題
@@ -177,8 +178,7 @@ crates/wintf/examples/
 - `crates/wintf/src/ecs/window_proc/lifecycle.rs` — `WM_PAINT`（36-72 行）を DComp 分岐（`DefWindowProcW` 委譲＝`None` 返却）へ無条件一本化し、ULW フォールバック分岐（`BeginPaint`/`EndPaint`）と `composition_mode()` 照会を除去。`WM_ERASEBKGND` コメント（22-24 行）と `WM_PAINT` docstring（36-39 行）整合。
 - `crates/wintf/src/ecs/clickthrough/controller.rs` — in-source test ヘルパ `spawn_live_window`（922-940 行付近）の `CompositionMode::DComp` 使用を新 API（フィールド指定なし）へ追随。**production コードは不変**。
 - `crates/wintf/tests/graphics.rs` — 削除する `compositor_*_test` 6 本の `#[path]` mod 宣言（12-23 行）除去。
-- `crates/wintf/tests/window.rs` — `composition_mode_test`（2-3 行）・`find_owner_composition_mode_test`（4-5 行）の `#[path]` mod 宣言除去（後者は削除・前者は D8 で扱う）。
-- `crates/wintf/tests/window/composition_mode_test.rs` — ULW 既定 hard-assert（`default_is_ulw` 等）が collapse で意味喪失。ファイル削除するか、GPU 合成固定の意味へ書き換え（D8）。
+- `crates/wintf/tests/window.rs` — `composition_mode_test`（2-3 行）・`find_owner_composition_mode_test`（4-5 行）の `#[path]` mod 宣言を**両方除去**（両テストとも削除確定＝D8）。
 - `crates/wintf/tests/graphics/dcomp_integration_test.rs`・`init_window_graphics_test.rs` — `CompositionMode` 参照の追随（フィールド指定除去）。WUC 側テストの本体ロジックは不変。
 - `crates/wintf/examples/clip_demo.rs` — `create_ulw_clip_window`（87・262・282 行）を除去し clip 検証を DComp 単独へ書き換え（D5）。
 - `crates/wintf/examples/dcomp_demo.rs`・`dcomp_taffy_demo.rs` — `composition_mode: CompositionMode::DComp` フィールド指定と `use ... CompositionMode` 除去（フィールド消滅の追随）。
@@ -326,7 +326,7 @@ fn compute_ex_style(style: &WindowStyle) -> WINDOW_EX_STYLE;
 
 **Implementation Notes**
 - Integration: areka `main.rs`・examples・in-source/外部 test の構造体リテラルから `composition_mode:` 行を除去。
-- Validation: `find_owner_composition_mode_test`（`composition_mode()` に全依存）は削除（D8）。`composition_mode_test` は削除または WUC 固定の意味へ書き換え（D8）。
+- Validation: `find_owner_composition_mode_test`・`composition_mode_test` はいずれも `composition_mode()` に全依存し collapse で検証対象が消えるため**両方とも削除**（D8）。
 - Risks: `Window` の `unsafe impl Send/Sync` 安全性コメントが `composition_mode: CompositionMode` に言及（148-149 行）— コメント整合が必要。
 
 ### ECS / world
