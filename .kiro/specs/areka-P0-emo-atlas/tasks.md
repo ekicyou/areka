@@ -43,7 +43,7 @@
   - _Boundary: ManifestDeriver_
   - _Depends: 1.3_
 
-- [ ] 2.2 (P) 既定デコード腕（WIC 経由）の実装
+- [x] 2.2 (P) 既定デコード腕（WIC 経由）の実装
   - 拡張済みの WIC ユーティリティを用いて、パス入力から画素バッファとアルファ有無を復号するデコードポートの既定実装を用意する
   - 対象パスに `.pna` が存在するかどうかを判定できるようにする
   - 画像が存在しない場合・復号できない場合を診断可能なエラーとして返し、例外的終了ではなく通常のエラー値として扱う
@@ -118,3 +118,4 @@
 - 1.3: 契約型は `table.rs` に D3 通り定義済み・`lib.rs` から `pub use` 済み。**`SetId` は table.rs に定義**（AtlasKey が内包するため）→ manifest.rs（2.1）はここから import する。`AtlasTable::new(keys, entries, pages)` が resolve マップを keys→ElementId(index) で構築。`entry`/`key` は非 Option の O(1) index（契約違反時 panic）・`new` は len 不一致 assert。幾何 Point{i32,i32}/Size{u32,u32}/Rect{u32×4}。
 - 1.4: `decode.rs` に `ElementDecoder` trait（`decode(&Path)->Result<DecodedImage,DecodeError>`＋`probe_pna` default false）・`DecodedImage{width,height,stride,bgra:Vec<u8>,has_alpha}`（Clone,Debug）・`DecodeError{NotFound{path},Decode{path,source}}`（Debug＋std-only Display/Error・thiserror 非追加）を定義。**`pub struct MemoryDecoder`（COM 非依存の再利用可能 test double・`insert`/`insert_corrupt`/`.pna` 登録）**＝2.3/3.x の純粋テストで使える。ポート面に WIC/COM 型を一切露出しない（2.3）。`decode/wic_arm.rs` は 2.2 まで stub のまま。
 - 2.1: **`AlphaParams{use_self_alpha:UseSelfAlpha}` と `enum UseSelfAlpha{On,Full,Off}`（Clone,Copy,Debug）は 2.1 が先行して `normalize.rs` に定義済み**（SurfaceSet が内包するため）→ **2.3（Normalizer）はこれらを再定義せず import して使う**。normalize.rs には現状この2型のみ（normalize()/NormalizedImage/AlphaSource/NormalizeError は 2.3 が追加）。`SurfaceSet<'a>{surfaces:&[Surface], base_dir:&Path, alpha_params:AlphaParams}`・`Manifest{keys:Vec<AtlasKey>}`・`ManifestDeriver::derive(&[SurfaceSet])->Manifest` は manifest.rs。SetId=sets スライスの index。dedup+順序は `BTreeSet<(u32,String)>`。derive は base_dir を join せず alpha_params 値も読まない（read-only 素通し）。間接 bind は transitive＋visited-set 循環検出・負/不在 id skip・重複 id 先出優先。
+- 2.2: `WicDecoderArm{ factory: IWICImagingFactory2 }`（`decode/wic_arm.rs`）は `windows` WIC を直接使い（wintf 非 import）task 1.2 recipe を再現。`new()->windows::core::Result<Self>`（COM 初期化は呼出側責務）。`decode`: `!path.exists()`→`NotFound`／COM 失敗→`.map_err`→`Decode{path,source}`（panic 皆無・全 unwrap/expect は #[cfg(test)] 限定）。`has_alpha` は変換前 `frame.GetPixelFormat()`＋`ALPHA_FORMATS.contains()`（12 GUID・wintf と同一）。`probe_pna=path.with_extension("pna").exists()`。**emo2 fixture パスは `env!("CARGO_MANIFEST_DIR")/../pilot/examples/shiori-host-32/fixtures/emo2/`**（テストは COM init 必須・`online0.png`=48×16 RGBA で has_alpha=true、`descript.txt`=Decode error、不在=NotFound）。unsafe は wic_arm.rs に隔離。
