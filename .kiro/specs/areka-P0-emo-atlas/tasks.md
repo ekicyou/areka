@@ -77,7 +77,7 @@
   - _Requirements: 5.1, 5.2, 5.3, 5.4, 5.5, 5.6_
   - _Depends: 1.1, 1.3, 2.1, 2.4_
 
-- [ ] 2.6 頁バッファの確保と焼付の実装
+- [x] 2.6 頁バッファの確保と焼付の実装
   - packing で得られた座標情報をもとに必要な頁数分のバッファを確保する
   - 各トリム済み画像を、対応する頁の座標位置へ premultiplied のまま転写する（画素の変換は行わない）
   - 余白部分の画素が透明のまま保たれ、隣接画像との滲みが生じないことを保証する
@@ -122,3 +122,4 @@
 - 2.3: `Normalizer::normalize(DecodedImage, AlphaParams, has_pna)->Result<NormalizedImage,NormalizeError>`（normalize.rs）。`AlphaSource{AlphaChannel,Pna,KeyColor,Opaque}`（#[non_exhaustive]・PartialEq）・`NormalizedImage{w,h,stride,pbgra:Vec<u8>}`・`NormalizeError::Unsupported(AlphaSource)`。D5 選択: On={α→AlphaChannel/!α&pna→Pna/!α→KeyColor}・Full={α→AlphaChannel/!α→Opaque}・Off={pna→Pna/!pna→KeyColor}（α無視）。**実装腕はタプル `(On, AlphaChannel)` のみ＝恒等 premultiplied 素通し（`pbgra: img.bgra` move・無変換・D8）**。それ以外は全て `Unsupported(選択された source)`（Full+α も seam！）。設定ファイル非読込（params 注入・3.6）。
 - 2.4: `Trimmer::trim(&NormalizedImage)->TrimResult{original:Size, placement:Option<Trimmed>}`（trim.rs）。`Trimmed{trim_offset:Point, size:Size, pbgra:Vec<u8>, stride}`。**α 閾値は厳密 `alpha>0`（+3 バイト・NOT 128）**・stride 込み走査（alpha_mask 先例）。全 α==0→`placement:None`（空エントリ）。トリム後は tightly-packed（`stride=size.w*4`・premultiplied 素通し・無変換）。座標不変（4.5）: trim_offset へ blit で原画像 byte 等価。α read は `.get().unwrap_or(0)`。
 - 2.5: `Packer::pack(&[(ElementId,Trimmed)], PackConfig)->PackOutput{page_count, entries:Vec<PackedEntry>}`（pack.rs・**座標のみ・pbgra 非読込・blit なし**＝Critical Issue 3）。`PackConfig::default()={2048,1}`。rectangle-pack 0.4.2 API: `GroupedRectsToPlace::push_rect`/`RectToInsert::new(w,h,1)`/`TargetBin::new(page,page,1)`/`pack_rects(_,_,&volume_heuristic,&contains_smallest_box)`/`packed_locations()`（RectId=ElementId.0:u32・BinId=usize）。**pack_rects は all-or-nothing** ゆえ multi-page は bin 数を 1..=items.len() で増やす retry loop・使用 bin を dense 0-based page へ remap。padding: 登録=`w+2p`・UV=`placed+p`（実サイズ・padding 非包含）。決定性: 入力を ElementId 昇順に内部 sort・出力も再 sort（HashMap 反復順に非依存）。oversized（padded>page_size）は tracing::error＋除外（emo2 では発生せず）。
+- 2.6: `Baker::bake_pages(&[(ElementId,Trimmed)], &PackOutput, page_size:u32)->(Vec<AtlasPage>, Vec<(ElementId,Placement)>)`（bake.rs）。**設計 signature に `page_size` を追加**（正方頁確保に必須・PackOutput は保持せず・bake 入口 3.1 が PackConfig.page_size を渡す・PackOutput 非改変）。頁は `vec![0u8; page_size*4*page_size]` 0 初期化（透明）→ 各 PackedEntry の Trimmed.pbgra を uv_rect へ **row 単位 copy_from_slice で verbatim 転写**（src stride=trimmed.stride=size.w*4・dest stride=page_size*4・無変換 D8）。padding/gap は 0 のまま（bleed-free）。`AtlasPage.bytes=Arc::from(buf)`・stride=page_size*4。Placement は page/uv_rect（PackedEntry 由来）＋trim_offset（Trimmed 由来）。欠損 id/範囲外 page は tracing::error＋continue（panic 無し）。**前提: uv_rect.w==Trimmed.size.w**（Packer が Trimmed.size で登録するため成立）。

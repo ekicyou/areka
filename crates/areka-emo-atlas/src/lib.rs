@@ -54,3 +54,6 @@ pub use trim::{TrimResult, Trimmed, Trimmer};
 
 // packing 層（決定的・複数頁・padding・座標のみ・R5・D7）。
 pub use pack::{PackConfig, PackOutput, PackedEntry, Packer};
+
+// 焼付層（頁確保・premultiplied 素通し blit・座標不変・R4.3/R6.3・D8・Critical Issue 3）。
+pub use bake::Baker;
