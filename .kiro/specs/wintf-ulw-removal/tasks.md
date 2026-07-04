@@ -92,7 +92,7 @@
   - _Requirements: 3.4_
   - _Depends: 3.1, 3.2, 3.3, 3.4, 3.5_
 
-- [ ] 4. areka・examples・外部テストの追随
+- [x] 4. areka・examples・外部テストの追随
 - [x] 4.1 (P) areka crate の追随
   - `crates/areka/src/main.rs` の `composition_mode: CompositionMode::DComp`（225・292行）・`use ... CompositionMode`（29行）を除去し、220-231行の `composition_mode` 前提コメントを WUC 固定の現況へ整合する
   - `crates/areka/src/tests.rs` の `assert_eq!(window.composition_mode(), CompositionMode::DComp)`（108・118行）の2テストを削除または WUC 固定の別観測へ書き換える
@@ -112,7 +112,7 @@
   - _Depends: 3.6_
   - _Boundary: wintf examples_
 
-- [ ] 4.3 (P) wintf 外部テストの削除・書き換え・追随
+- [x] 4.3 (P) wintf 外部テストの削除・書き換え・追随
   - `tests/graphics/compositor_init_system_test.rs`・`compositor_integration_test.rs`・`compositor_lifecycle_test.rs`・`compositor_opacity_test.rs`・`compositor_render_system_test.rs`・`compositor_transfer_test.rs` の6本を削除し、`tests/graphics.rs` の該当 `#[path]` 宣言（12-23行）を除去する（D6）
   - `tests/window/composition_mode_test.rs` を削除し、`tests/window.rs` の該当宣言（2-3行）を除去する（D8）
   - `tests/window/find_owner_composition_mode_test.rs` を owner Window 存在判定（自身が Window／ChildOf 祖先に Window／orphan の3ケース）の検証へ書き換え、ファイル名・`tests/window.rs` の mod 宣言（4-5行）を新ヘルパー名へ追随する（D8改訂・W3b-V 経路カバレッジ維持）
@@ -161,3 +161,6 @@
 - **design blast-radius gap（2.3 で解決・2026-07-04 実装時発見）**: design の Preserve 集合が「絶対不変」に列挙した `systems/window_pos.rs` が、削除済み `WindowD3D11Compositor` を実参照（import・`invalidate_dependent_components` の query・invalidate ループ）。Req1.5「ULW 専用シンボル残存参照ゼロ」＋3.6 ビルド通過ゲートが要件優先ゆえ、ULW compositor 参照除去のみの追随を task 2.3 として追加。File Structure Plan の編集リスト外（composition_mode gap に続く2件目の盲点）。WUC/BitmapSource 無効化ロジックは不変。
 - **visual.rs helper 改名（3.4）**: `find_owner_window_composition_mode`（`Option<CompositionMode>`）→ `owner_window_exists`（`bool`）。4.3 の `find_owner_composition_mode_test` 書き換えはこの新名を参照する。
 - **3.5 で lib ビルド復旧**: `cargo build -p wintf` が Finished（src の CompositionMode 参照が全消滅）。残る in-source `#[cfg(test)]` 参照（runtime/mod.rs・controller.rs）は `cargo build` に含まれず 3.6 で追随。init.rs docstring に軽微な冗長（"WindowGraphics初期化・再初期化" ヘッダ重複）あり＝5.1 のコメント整合で拾う候補。
+- **design blast-radius gap 第3件（4.3 で解決・実装時発見）**: `tests/graphics/window_pos_systems_test.rs`（design のテスト列挙に非記載）が task 2.3 で src から削除済みの `WindowD3D11Compositor` を実参照し full-compile をブロック。ULW-compositor 専用3テストを削除・import 除去、None-Res early-return characterization は device 非依存の `BitmapSourceGraphics` へ再ターゲットで温存（WUC/BitmapSource 無効化カバレッジは不損）。加えて `dcomp_integration_test.rs` の `test_ulw_window_visual_does_not_get_dcomp_components`（collapse 後は Visual が必ず graphics component を得るため偽化）を削除（orphan-Visual 除外の有効 negative ケースは同ファイル `test_orphan_visual_does_not_get_dcomp_components` が温存）。要件優先（Req3.4 full-compile・Req1.5 残存シンボルゼロ）で task 2.3 前例に倣い追随・レビュア検証済み。File Structure Plan tests 列挙の盲点（composition_mode・WindowD3D11Compositor src に続く3件目）。
+- **main.rs:166 の ULW 歴史的言及**は残置可（クリックスルー registry の根拠説明・live 前提でない・4.1 レビュア判断）。5.1 の ULW 残余 grep で誤検知しないよう留意。
+- **owner_window_exists_test.rs**（旧 find_owner_composition_mode_test.rs 改名）: local `query_owner_window_exists`（bool）が production `owner_window_exists` を World で再現・5ケース（self/child/grandchild[W3b-V]/orphan/no-ancestor）。
