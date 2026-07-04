@@ -1,6 +1,6 @@
 # Implementation Plan
 
-- [ ] 1. Foundation: `areka-actor` クレート基盤とconventions正本
+- [x] 1. Foundation: `areka-actor` クレート基盤とconventions正本
 - [x] 1.1 クレート雛形とモジュール骨格の作成
   - crates/areka-actor を新設し、Cargo.toml に依存（tracing/thiserror/async-channel/wintf-winmsg-executor、dev-dependencies に windows）を宣言する
   - ルート Cargo.toml の workspace.dependencies に async-channel を追記する
@@ -16,7 +16,7 @@
   - _Requirements: 1.5, 2.1, 2.4, 2.5, 3.1, 3.3, 3.7, 5.1, 5.2, 5.3, 7.1_
   - _Boundary: conventions（lib.rs）_
 
-- [ ] 2. Core: 純粋層の実装とUIブリッジ実現性の検証
+- [x] 2. Core: 純粋層の実装とUIブリッジ実現性の検証
 - [x] 2.1 (P) 名前付きアクターspawnと受信ループヘルパの実装
   - 名前付きスレッドとしてアクターを起動しinbox送信端とjoinハンドルを返す機能を実装する
   - 受信ループヘルパを実装する: 通常メッセージはhandlerへ渡す・handlerがErrを返した場合はエラーをtracingへ記録したうえで受信を継続する・Close相当（Break）受信で即時終了する・全送信端drop（切断）で正常終了する
@@ -49,7 +49,7 @@
   - _Boundary: ui_
   - _Depends: 2.3_
 
-- [ ] 4. Integration: toyアクター試験による基盤原語の結線検証
+- [x] 4. Integration: toyアクター試験による基盤原語の結線検証
 - [x] 4.1 (P) worker⇄worker往復試験（toy試験a）の実装
   - request/replyの往復・Close→join決定的完走・Close後続メッセージの破棄と要求側切断観測・全送信端dropでの正常終了・panicのjoin観測・handlerのErr後も受信継続、を単一の試験群として実装する
   - 観測可能な完了条件: `cargo test -p areka-actor`実行でtoy試験aの全ケースがpassする
