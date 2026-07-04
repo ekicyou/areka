@@ -515,7 +515,7 @@ impl ShioriByteProxy {
 |--------|------|----------|------|
 | request line | 必須 | `GET SHIORI/3.0` / `NOTIFY SHIORI/3.0` | R1.1/1.2・`spec_dll` |
 | `Charset` | 必須 | `UTF-8` | R1.6・emo2=UTF-8 固定 |
-| `Sender` | 必須 | `areka`（ベースウェア名） | R1.4・pasta test は `SSP` |
+| `Sender` | 必須 | `areka`（ベースウェア名・正直な名乗り） | R1.4・**SSP 詐称せず素性を明示**（開発者決定 2026-07-04）。pasta test は `SSP` だが areka は areka を名乗る。`ShioriRequest.sender` 単一差替点ゆえ M2 の per-ghost 互換調整は codec 非改修で受ける |
 | `ID` | 必須 | イベント名（汎用・OnBoot 等） | R1.4/1.5 |
 | `Reference0..N` | 任意個 | 0 起点連番で References を写す | R1.4 |
 | `SecurityLevel` | 送出（de-facto） | `local` | pasta 実テスト準拠・SSP 系拡張 |
