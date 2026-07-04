@@ -183,7 +183,7 @@ crates/wintf/examples/
 - `crates/wintf/examples/clip_demo.rs` — `create_ulw_clip_window`（87・262・282 行）を除去し clip 検証を DComp 単独へ書き換え（D5）。
 - `crates/wintf/examples/dcomp_demo.rs`・`dcomp_taffy_demo.rs` — `composition_mode: CompositionMode::DComp` フィールド指定と `use ... CompositionMode` 除去（フィールド消滅の追随）。
 - `crates/wintf/examples/postmessage_click_test.rs` — `Window { .. }` の既定生成は不変（新既定=WUC）。ULW present 言及コメントの整合。
-- `crates/areka/src/main.rs` — `composition_mode: CompositionMode::DComp`（225・292 行）除去／`use ... CompositionMode`（29 行）除去。`WindowStyle.ex_style` は据え置き（factory が `WS_EX_LAYERED` を落とすため実害なし）。
+- `crates/areka/src/main.rs` — `composition_mode: CompositionMode::DComp`（225・292 行）除去／`use ... CompositionMode`（29 行）除去。`WindowStyle.ex_style` は据え置き（factory が `WS_EX_LAYERED` を落とすため実害なし）。**220-231 行の `composition_mode` 前提コメント**（例: 230 行「ex_style は factory が `composition_mode` から自動計算」・222-224 行「compute_ex_style が DComp に応じて…」）を、削除済みシンボルを指さぬよう WUC 固定の現況へ整合（フィールド削除追随の一部＝Req3.5 帰属・Req7.2 の ULW 残余除去趣旨にも整合）。
 - `crates/areka/src/tests.rs` — `assert_eq!(window.composition_mode(), CompositionMode::DComp)`（108・118 行）の 2 テストを削除または「WUC 固定」の別観測へ書き換え（メソッド消滅の追随）。
 - `doc/COMPAT_ARCHITECTURE.md` — ULW を残存機構として前提する記述（44・99・105 行）と「非スコープ（残置）: ULW アーム…除去は別 spec `wintf-ulw-removal`」（108 行）を「除去済み・GPU 合成単独」へ整合。
 
@@ -255,7 +255,7 @@ collapse 後は分岐が消え、`compute_ex_style` は生成時に `WS_EX_LAYER
 | 6.4 | リリース最適化設定と互換ビルド | `Cargo.toml`（Preserve）＋release ビルド検証 | Testing |
 | 6.5 | 手間の少ない非破壊確認（新規スクショ資産を必達としない） | 既存 WUC/areka テスト緑＋起動目視 | Testing |
 | 7.1 | `COMPAT_ARCHITECTURE.md` を GPU 合成単独へ整合 | doc 編集 | — |
-| 7.2 | wintf コード内コメントの ULW 残余除去 | `components`・`lifecycle`・`window_factory`・`world/mod` コメント整合 | — |
+| 7.2 | wintf コード内コメントの ULW 残余除去 | `components`・`lifecycle`・`window_factory`・`world/mod` コメント整合（＋追随として areka `main.rs` 220-231 行の `composition_mode` 前提コメント整合＝Req3.5 帰属） | — |
 | 7.3 | steering の再更新を行わない | steering（Preserve） | — |
 
 ## Components and Interfaces
