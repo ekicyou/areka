@@ -45,3 +45,6 @@ pub use manifest::{Manifest, ManifestDeriver, SurfaceSet};
 
 // 共有透過パラメータ型（normalize の設計本拠・SurfaceSet が運ぶ・3.6）。
 pub use normalize::{AlphaParams, UseSelfAlpha};
+
+// 正規化層（use_self_alpha 解釈・premultiplied BGRA 統一・R3・D5/D8）。
+pub use normalize::{AlphaSource, NormalizeError, NormalizedImage, Normalizer};

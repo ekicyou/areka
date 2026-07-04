@@ -52,7 +52,7 @@
   - _Boundary: WicDecoderArm_
   - _Depends: 1.2, 1.4_
 
-- [ ] 2.3 (P) 透過正規化（premultiplied BGRA 統一）の実装
+- [x] 2.3 (P) 透過正規化（premultiplied BGRA 統一）の実装
   - 透過解釈パラメータを入力として受け取り、自ら設定ファイルを読みに行かない形で正規化処理を構成する
   - アルファチャンネルが有効な場合にそれを透明度として採用し、出力を premultiplied BGRA へ統一する主経路を実装する
   - アルファチャンネルが利用できない場合の代替経路（`.pna` 参照・キーカラー透過）は型としてのみ用意し、到達時は未対応であることを明示するエラーを返す
@@ -119,3 +119,4 @@
 - 1.4: `decode.rs` に `ElementDecoder` trait（`decode(&Path)->Result<DecodedImage,DecodeError>`＋`probe_pna` default false）・`DecodedImage{width,height,stride,bgra:Vec<u8>,has_alpha}`（Clone,Debug）・`DecodeError{NotFound{path},Decode{path,source}}`（Debug＋std-only Display/Error・thiserror 非追加）を定義。**`pub struct MemoryDecoder`（COM 非依存の再利用可能 test double・`insert`/`insert_corrupt`/`.pna` 登録）**＝2.3/3.x の純粋テストで使える。ポート面に WIC/COM 型を一切露出しない（2.3）。`decode/wic_arm.rs` は 2.2 まで stub のまま。
 - 2.1: **`AlphaParams{use_self_alpha:UseSelfAlpha}` と `enum UseSelfAlpha{On,Full,Off}`（Clone,Copy,Debug）は 2.1 が先行して `normalize.rs` に定義済み**（SurfaceSet が内包するため）→ **2.3（Normalizer）はこれらを再定義せず import して使う**。normalize.rs には現状この2型のみ（normalize()/NormalizedImage/AlphaSource/NormalizeError は 2.3 が追加）。`SurfaceSet<'a>{surfaces:&[Surface], base_dir:&Path, alpha_params:AlphaParams}`・`Manifest{keys:Vec<AtlasKey>}`・`ManifestDeriver::derive(&[SurfaceSet])->Manifest` は manifest.rs。SetId=sets スライスの index。dedup+順序は `BTreeSet<(u32,String)>`。derive は base_dir を join せず alpha_params 値も読まない（read-only 素通し）。間接 bind は transitive＋visited-set 循環検出・負/不在 id skip・重複 id 先出優先。
 - 2.2: `WicDecoderArm{ factory: IWICImagingFactory2 }`（`decode/wic_arm.rs`）は `windows` WIC を直接使い（wintf 非 import）task 1.2 recipe を再現。`new()->windows::core::Result<Self>`（COM 初期化は呼出側責務）。`decode`: `!path.exists()`→`NotFound`／COM 失敗→`.map_err`→`Decode{path,source}`（panic 皆無・全 unwrap/expect は #[cfg(test)] 限定）。`has_alpha` は変換前 `frame.GetPixelFormat()`＋`ALPHA_FORMATS.contains()`（12 GUID・wintf と同一）。`probe_pna=path.with_extension("pna").exists()`。**emo2 fixture パスは `env!("CARGO_MANIFEST_DIR")/../pilot/examples/shiori-host-32/fixtures/emo2/`**（テストは COM init 必須・`online0.png`=48×16 RGBA で has_alpha=true、`descript.txt`=Decode error、不在=NotFound）。unsafe は wic_arm.rs に隔離。
+- 2.3: `Normalizer::normalize(DecodedImage, AlphaParams, has_pna)->Result<NormalizedImage,NormalizeError>`（normalize.rs）。`AlphaSource{AlphaChannel,Pna,KeyColor,Opaque}`（#[non_exhaustive]・PartialEq）・`NormalizedImage{w,h,stride,pbgra:Vec<u8>}`・`NormalizeError::Unsupported(AlphaSource)`。D5 選択: On={α→AlphaChannel/!α&pna→Pna/!α→KeyColor}・Full={α→AlphaChannel/!α→Opaque}・Off={pna→Pna/!pna→KeyColor}（α無視）。**実装腕はタプル `(On, AlphaChannel)` のみ＝恒等 premultiplied 素通し（`pbgra: img.bgra` move・無変換・D8）**。それ以外は全て `Unsupported(選択された source)`（Full+α も seam！）。設定ファイル非読込（params 注入・3.6）。
