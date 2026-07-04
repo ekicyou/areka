@@ -39,7 +39,7 @@
   - _Boundary: ecs/graphics/systems/window_pos.rs (ULW compositor 参照除去のみ)_
 
 - [ ] 3. CompositionMode collapse と全 production 参照の追随
-- [ ] 3.1 CompositionMode enum・Window フィールド・再エクスポート撤去
+- [x] 3.1 CompositionMode enum・Window フィールド・再エクスポート撤去
   - `ecs/window/components.rs` から `CompositionMode` enum 定義・`Window.composition_mode` フィールド・`Window::composition_mode()` メソッド・`Window::default` の `composition_mode` 初期化を削除する
   - `ecs/mod.rs` の `pub use window::{...}` から `CompositionMode` 再エクスポート（47行）を除去する
   - `WindowStyle::default().ex_style` は `WS_EX_LAYERED` のまま据え置く（D4・変更しない）
