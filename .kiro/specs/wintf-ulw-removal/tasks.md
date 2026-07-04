@@ -59,7 +59,7 @@
   - _Depends: 3.1_
   - _Boundary: Runtime window factory (runtime/window_factory.rs)_
 
-- [ ] 3.3 (P) WM_PAINT ハンドラの DComp 一本化
+- [x] 3.3 (P) WM_PAINT ハンドラの DComp 一本化
   - `ecs/window_proc/lifecycle.rs::WM_PAINT` の `composition_mode()` 照会と ULW フォールバック分岐（BeginPaint/EndPaint）を除去し、常に `DefWindowProcW` へ委譲（None返却）する無条件一本化に改める
   - `WM_ERASEBKGND` コメント（22-24行）・`WM_PAINT` docstring（36-39行）を整合する
   - `WM_PAINT` ハンドラが `composition_mode()` を参照せず、常に `None` を返す単一経路になっていることがコードで確認できること
