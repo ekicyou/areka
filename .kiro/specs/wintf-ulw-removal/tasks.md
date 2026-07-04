@@ -122,7 +122,7 @@
   - _Depends: 3.6_
   - _Boundary: wintf tests_
 
-- [ ] 5. ドキュメント整合とビルド/回帰検証
+- [x] 5. ドキュメント整合とビルド/回帰検証
 - [x] 5.1 ドキュメントと残余コメントの最終整合確認
   - `doc/COMPAT_ARCHITECTURE.md`（44・99・105・108行）の ULW 残存前提記述を GPU 合成単独へ整合する（108行「非スコープ(残置):ULWアーム…除去は別spec」を「除去済み」へ）
   - grep で wintf/areka コード内コメントに ULW を残存機構として前提する記述が残っていないことを横断確認する
@@ -146,7 +146,7 @@
   - _Requirements: 2.3, 6.1, 6.2, 6.3_
   - _Depends: 5.2_
 
-- [ ] 5.4 起動目視サニティとクリックスルー回帰確認
+- [x] 5.4 起動目視サニティとクリックスルー回帰確認
   - areka を起動し、shell/balloon 窓が撤去前ベースライン（タスク1）と同一の描画で表示されることを目視確認する
   - クリックスルー登録窓で透明ピクセル上のクリックが別プロセスへ透過し続けることを確認する（クリックスルー機構のコードが非改変であることも diff で確認する）
   - 起動サニティの結果（描画同一・クリックスルー機能維持）が確認済みであること
@@ -167,4 +167,5 @@
 - **5.1 の残余コメント sweep で src コメント7件を追加修正**（tasks 2-4 の漏れ・全てコメントのみ・DC変換リセット挙動不変）: `render.rs`（`ulw_present_system は残置`→空スケジュール no-op）・`window_factory.rs`（削除済み `multi_backend_demo ULW 窓` 例示→汎用）・widget 描画5箇所（`shapes/rectangle.rs`・`text/typewriter_draw.rs`×2・`text/draw_labels.rs`・`bitmap_source/systems.rs` の `composite_render_system` 言及→「前フレームの描画処理」）。残る ULW 言及は全て歴史的/根拠（`world/mod.rs:325`「撤去済み」・`win_style.rs:398`「UpdateLayeredWindow を呼ばない」・`areka main.rs:166` クリックスルー根拠・`clip_sync.rs:129` doc引用）で Req7.2 適合。
 - **5.3 検証結果（2026-07-05）**: `cargo test --workspace` を PowerShell で実行、wintf/areka 全ターゲット緑（wintf lib 540・com 61・drag 19・ecs 102・graphics 91・layout 170・visual 52・widget 16・win_app 2・window 24 全 0-failed／areka 61 0-failed）。名指し受入テスト全緑: `tick_order_tests`（13 schedule 固定列＋stability 2本）・`dcomp_integration`3・`init_window_graphics`4・`surface_pixel_equivalence`1・`ex_style_dcomp`2・`owner_window_exists`5・areka `tests.rs`61。ワークスペース唯一の非緑はベースライン既知の host32-helper i686 2件（`testdll_drop_invokes_courtesy_unload`・`loopback_hello_request_echo_and_bounded_loop`＝shiori.dll not found）＝本 spec スコープ外・非リグレッション。独立 reviewer が wintf/areka を再実行し APPROVED。
 - **5.4 機械検証半（2026-07-05・自律完了分）**: クリックスルー機構コード非改変を diff で確定＝Req5.2/5.4/6.3 の機械検証可能部分を満たす。`win_style.rs`（`apply_layered_companion()` の源）は main 比 **diff ゼロ**。`ecs/clickthrough/` は `mod.rs`/`monitor.rs`/`registry.rs` diff ゼロ、`controller.rs` の唯一の diff は `#[cfg(test)]` 内テストヘルパ `spawn_live_window` の `CompositionMode` import＋フィールド指定除去のみ（task 3.6 追随・production hit-test 機構は不変）。ULW staging α 資産は 5.2 grep で全消滅済（α 源は `AlphaMask::is_hit` のみ＝Req5.4）。**5.4 の目視サニティ半（①描画がベースライン task1 と同一 Req6.1／②透明ピクセルのクリックが別プロセスへ透過 Req5.3）は開発者の目視＋インタラクティブ操作が必須＝MANUAL_VERIFY_REQUIRED**。GPU 合成窓（WS_EX_NOREDIRECTIONBITMAP）は PrintWindow/BitBlt で黒くなり自動スクショ不可、かつ Req6.5 が「起動時の目視サニティ」で受入判定・新規スクショ資産非必達と明記。checkbox は開発者の目視サインオフまで未完のまま保持。
+- **5.4 目視サニティ半（2026-07-05・開発者サインオフ済）**: `cargo run -p areka` 起動ログで WUC 経路稼働を確認（`[WucGraphicsResource] Initialization completed`・`[init_window_graphics] WucGraphicsResource lazily initialized`）＝残す GPU 合成パス正常。ULW 系ログ（`compositor_init_system`・`ulw_present_system`・`transfer_to_hbitmap`）は一行も出力されず＝撤去確認。panic なし、shell/balloon 窓生成→ドラッグ移動複数回→ダブルクリックで `[App] Last window closed.` exit 0 のクリーン起動〜終了。**①描画同一（Req6.1）＝開発者が起動・ドラッグで描画問題なしを確認**、**②クリックスルー透過（Req5.3）＝開発者が透明ピクセル上クリックの別プロセス透過を確認**。両者サインオフ済みで 5.4 完了・全タスク完了。
 - **5.2 検証結果**: 残存シンボル grep は 10 シンボル中 9 が 0 件、唯一 `UpdateLayeredWindow` が `win_style.rs:398`（Preserve 集合の否定コメント「呼ばない」）に 1 件＝正当例外。release build（`opt-level='z'`・`lto=true`）Finished（LTO dead-code 除去で欠落シンボルエラーなし）。release 限定の wintf 警告5件（`draw_labels.rs:9`/`typewriter_draw.rs:18` 未使用 import `debug`・`label.rs:7` 未使用 `tracing::trace`・`label.rs:115` 未使用 `hook`・`typewriter_draw.rs:47` 未使用 `entity`）は **pre-existing・ULW 無関係**（debug ビルド0件・release で tracing マクロ最適化消去による・5.1 の該当2ファイル編集はコメントのみ・label.rs 未編集）＝本 spec スコープ外。
