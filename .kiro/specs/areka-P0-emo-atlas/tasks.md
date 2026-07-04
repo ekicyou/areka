@@ -8,7 +8,7 @@
   - ワークスペース全体のビルドが新規クレートを含めて成功することを確認する
   - _Boundary: crate scaffolding_
 
-- [ ] 1.2 既存 WIC デコード経路のユーティリティ化と変換前アルファ情報の公開
+- [x] 1.2 既存 WIC デコード経路のユーティリティ化と変換前アルファ情報の公開
   - 既存の PBGRA デコード処理を ECS 非依存の共有ユーティリティとして再配置し、新規クレートのデコード腕から呼び出せる形にする
   - 変換前（PBGRA 変換前）のピクセルフォーマットからアルファチャンネル有無を取得できるよう、ユーティリティの戻り値を拡張する（設計レビューで指摘された欠落の是正）
   - 既存呼び出し元（ECS ウィジェット側）の挙動が変わらないことを確認する
@@ -114,3 +114,4 @@
 - 1.1: `rectangle-pack` は crates.io に 0.5 が存在しない（最新 0.4.2）。workspace 依存は `rectangle-pack = "0.4"`（設計の "0.5" は誤記・同一 zero-dep MIT/Apache クレート）。
 - 1.1: **areka-emo-atlas は `wintf` クレートに依存しない**（wintf は bevy_ecs/bevy_app/dola/taffy を非 optional core 依存に持つ monolith ＝境界不変条件「bevy_ecs を引き込まない」に抵触）。設計 D2 の「wintf の WIC ユーティリティを最小 feature で参照」は wintf に ECS feature-gate が無いため実現不能。**確定方針: WIC 腕（2.2）は `windows` WIC を直接使い wintf の `load_bitmap_source` と同等の手順を再現**（`相当` の解釈）。1.2 は wintf 側 util の ECS 非依存化＋has_alpha 露出という並行リファクタで、emo-atlas は 1.2 の成果を literal に import しない（手順・has_alpha 取得点を共有）。Cargo.toml deps = areka-parsers(path)/windows/rectangle-pack/tracing。
 - 1.1: モジュール配置は `src/decode.rs`（`pub mod wic_arm;` を含む）＋ `src/decode/wic_arm.rs` のディレクトリモジュール形式で compile 確認済み。
+- 1.2: wintf 側 `load_bitmap_source` は `crates/wintf/src/com/wic.rs` へ移設し戻り値を `Result<(IWICBitmapSource, bool)>`（bool=has_alpha）へ拡張。`systems.rs` は `pub use crate::com::wic::load_bitmap_source;` で再エクスポート（既存 import パス互換）。**has_alpha は変換前フレーム `frame.GetPixelFormat()` から判定必須**（PBGRA 変換後は常に α 付き＝誤判定になる・Critical Issue 1）。判定は `const ALPHA_FORMATS: &[GUID]` の `.contains()` 方式（32/64bpp BGRA/PBGRA/RGBA/PRGBA＋1010102XR＋128bpp float α。24bppBGR/8bppIndexed/grayscale/plain RGB は default false）。`matches!` はwindows-rs の非 UPPER_CASE GUID 定数が `non_upper_case_globals` future-incompat 警告を出すため不可。**2.2 の emo-atlas WIC 腕はこの has_alpha ロジックを `windows` WIC 直接で再現する**（wintf を import しない）。
