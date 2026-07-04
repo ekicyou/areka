@@ -89,7 +89,7 @@
   - _Requirements: 6.5, 6.6, 6.7_
   - _Depends: 6.1_
 
-- [ ] 7. Validation: 横断規律の最終検証
+- [x] 7. Validation: 横断規律の最終検証
   - `shiori-host32-ipc`（凍結境界）への差分が無いことを確認する（git diff 等）
   - `crates/pilot` への inbound 依存が本仕様の新規/変更コードに無いことを確認する（grep）
   - i686 成果物（helper/testdll）が PowerShell 経由で `cargo build`/`cargo test --target i686-pc-windows-msvc` に成功することを確認する
@@ -102,3 +102,4 @@
 - 1.1: `vendors/pasta` submodule 展開済み（commit `048d646c`・research.md §7.2 記録値と一致）。`vendors/pasta/crates/pasta_shiori/src/windows.rs:76` の `request` 実署名 = `pub extern "C" fn request(req: HGLOBAL, len: &mut usize) -> HGLOBAL`。helper 既存 `RequestFn = unsafe extern "cdecl" fn(req: HGLOBAL, len: *mut usize) -> HGLOBAL` と ABI バイト一致（i686 で `extern "C"`≡`cdecl`・`&mut usize`≡`*mut usize`）＝**helper 側 RequestFn 型は変更不要**（R7.5 充足）。
 - 順序: Task 5（testdll fixture）を Task 4.1 より**先に**実装した。4.1 の loopback 検証「固定応答往復・応答 caller-free」は testdll が実応答を返すこと（=Task 5）を前提とするため。両者 `(P)`・相互 `_Depends` なしゆえ順序入替は健全。
 - 5（testdll 契約定数・Task 6.1 が使用）: `shiori-host32-testdll` の `request` fixture が返す固定応答は **ID 値**で分岐する。`TEST_GET_ID = "OnTestValue"`（`pub const`）→ `SHIORI/3.0 200 OK` + `Value: \0\s[0]host32 request roundtrip ok\e`／`TEST_NOTIFY_ID = "OnTestNotify"`（`pub const`）→ `SHIORI/3.0 204 No Content`／不明 ID・request line 不一致 → `SHIORI/3.0 400 Bad Request`。Task 6.1 の E2E は `get("OnTestValue", ..)` で Value 抽出を assert、`notify("OnTestNotify", ..)` で 204 破棄を assert すること（testdll と host は別クレートゆえ定数は文字列契約で一致させる）。
+- 7（横断規律 最終検証・2026-07-04 実施）: ① 凍結境界 `crates/shiori-host32-ipc` への差分 = `git diff <merge-base>..HEAD -- crates/shiori-host32-ipc/` が**空**（凍結守られた・R7.1）。② `crates/pilot` inbound 依存 = host/helper/testdll の src・Cargo.toml いずれにも `use pilot`／pilot cargo dep 無し（testdll の1件は「pilot 非依存」明言 doc コメントのみ・R7.4）。③ i686 成果物 = PowerShell で `cargo build`（testdll/helper 各 exit 0）＋`cargo test --target i686-pc-windows-msvc`（testdll 7 passed・helper 21 passed・R7.2/7.3）。本 feature 変更ファイルは 9 個（helper 2・host 6・testdll 1）で凍結境界 ipc を含まない。
