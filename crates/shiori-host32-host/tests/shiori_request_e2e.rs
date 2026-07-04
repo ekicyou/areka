@@ -255,3 +255,105 @@ fn request_e2e_get_value_and_notify_discard() {
     // best-effort cleanup（DLL ハンドルは helper terminate で解放済み）。
     let _ = std::fs::remove_dir_all(&load_dir);
 }
+
+/// env-gated 実 pasta.dll OnBoot 追験（confidence 検証・任意・R6.5/6.6/6.7）。
+///
+/// 上の決定的テスト（testdll・固定 response）とは扱いが異なる:
+/// - env `HOST32_PASTA_DLL`（DLL フルパス）**設定時のみ** 実 pasta へ OnBoot request を送出し、
+///   `Value`（起動あいさつのさくらスクリプト本体）の受領を検証する（R6.5）。
+/// - env 設定済みだが**指定 DLL が不在**なら明示 fail（silent skip を認めない・R6.6）。
+/// - env **未設定**なら silent skip（CI 必須ゲートにしない・R6.7）。この skip は本テスト（任意 env-gate）
+///   に限る例外であり、決定的テストの「無言スキップ禁止」規律とは別物である（testdll/helper 不在は
+///   `resolve_helper_exe` が引き続き panic する）。
+///
+/// 構造は決定的テストと同型（HELLO pump → LOAD 先行 ack[1] → `Shiori3Client::new` → OnBoot GET）。
+/// load_dir=DLL の親 dir・shiori_name=ファイル名（`load_e2e_real_pasta_optional` と同じ流儀）。
+/// OnBoot の Reference0=シェル名（ukadoc）ゆえ emo2 のシェル dir 名 "master" を渡す（妥当な Reference0）。
+///
+/// bounded: pump=HANDSHAKE_TIMEOUT・LOAD ack=LOAD_ACK_TIMEOUT・GET 往復=client の env timeout
+/// ＋SMTO_ABORTIFHUNG で必ず有限復帰する（ハングしない）。
+#[test]
+fn request_e2e_real_pasta_optional() {
+    // --- env `HOST32_PASTA_DLL` 未設定＝任意 gate ゆえ silent skip（R6.7・CI 必須ゲートにしない）---
+    //     testdll/helper 不在（panic）とは扱いが異なる（実 pasta は confidence 目的の任意追験）。
+    let Ok(pasta_dll) = std::env::var("HOST32_PASTA_DLL") else {
+        eprintln!(
+            "HOST32_PASTA_DLL 未設定のため実 pasta 追験を skip（任意 gate・R6.7）。\
+             実 pasta の OnBoot Value 受領を検証するには env に pasta DLL のフルパスを設定してください。"
+        );
+        return;
+    };
+
+    // --- env 設定済みだが DLL が不在なら明示 fail（silent skip を認めない・R6.6）---
+    let dll_path = PathBuf::from(&pasta_dll);
+    assert!(
+        dll_path.is_file(),
+        "HOST32_PASTA_DLL={pasta_dll:?} が指す DLL が存在しません（指定 DLL 不在は明示 fail・R6.6）"
+    );
+
+    // helper 不在は引き続き panic（silent-skip 禁止・helper 成果物は任意ではない）。
+    let helper_exe = resolve_helper_exe();
+
+    // load_dir=DLL の親 dir・shiori_name=ファイル名（load_e2e_real_pasta_optional 同流儀）。
+    let load_dir = dll_path
+        .parent()
+        .expect("HOST32_PASTA_DLL に親 dir がない")
+        .to_path_buf();
+    let shiori_name = dll_path
+        .file_name()
+        .expect("HOST32_PASTA_DLL にファイル名がない")
+        .to_string_lossy()
+        .into_owned();
+
+    // --- ① 親 message-only 窓（同時 1 窓厳守・使用後に明示 drop）---
+    //     決定的テストは実行終了時に自窓を drop 済み・本テストは既定 skip ゆえ、通常 run では
+    //     同時に窓生成経路を走る #[test] は 1 つに留まる（shiori_load_e2e と同じ env-gate 前提）。
+    let parent = ParentMessageWindow::create().expect("親 message-only 窓生成に失敗");
+    let parent_hwnd = parent.hwnd_u32();
+
+    let handle = spawn(&helper_exe, &load_dir, &shiori_name, parent_hwnd)
+        .expect("i686 helper の spawn に失敗（helper exe を確認）");
+    let mut guard = HelperGuard { handle };
+
+    // --- HELLO 受領でハンドシェイク完了（helper 不在は resolve_helper_exe が既に panic 済み）---
+    let helper_hwnd = parent.pump_until_hello_or(HANDSHAKE_TIMEOUT);
+    assert!(
+        helper_hwnd.is_some(),
+        "上限時間内に helper から HELLO を受領できなかった（ハンドシェイク未完・helper 起動を確認）"
+    );
+
+    // --- ② LOAD 先行（実 pasta の proxy を確立＝REQUEST の構造的前提）→ ack[1] を assert ---
+    let load_ack = parent
+        .send_request(MsgTag::Load, &[], LOAD_ACK_TIMEOUT)
+        .expect("LOAD の send_request が失敗（ack 未達・proxy 未確立では REQUEST 不能）");
+    assert_eq!(
+        load_ack,
+        vec![1u8],
+        "実 pasta の LOAD 成功 ack [1]（proxy 確立）を先に得る（REQUEST の前提・R6.5）"
+    );
+
+    // --- ③ OnBoot GET: 起動あいさつの Value 受領を検証（R6.5）---
+    //     OnBoot Reference0=シェル名（ukadoc）ゆえ emo2 のシェル dir 名 "master" を渡す。
+    let client = Shiori3Client::new(&parent);
+    let value = client
+        .get("OnBoot", &["master".to_string()])
+        .expect("OnBoot GET が Err（実 pasta との request 往復が失敗・R6.5）");
+
+    // OnBoot は起動あいさつのさくらスクリプト Value を返す＝Some かつ非空を assert（R6.5）。
+    let value = value.expect("OnBoot は Value（起動あいさつ）を返すべき（Ok(None) ではない・R6.5）");
+    assert!(
+        !value.is_empty(),
+        "OnBoot の Value は非空である（起動あいさつのさくらスクリプト本体・R6.5）"
+    );
+    eprintln!("実 pasta OnBoot Value 受領（R6.5）: {value:?}");
+
+    // --- ④ 往復後も helper は生存継続（no-crash の傍証）---
+    assert!(
+        poll_exit_kind(&mut guard.handle).is_none(),
+        "OnBoot 往復後も helper は稼働中である（クラッシュしていない）"
+    );
+
+    // --- ⑤ 同時生存親窓を高々 1 に保つため明示 drop（guard→parent の順）---
+    drop(guard);
+    drop(parent);
+}

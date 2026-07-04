@@ -82,7 +82,7 @@
   - _Requirements: 6.3, 6.4, 6.9, 7.2, 7.3_
   - _Depends: 3, 4.2, 5_
 
-- [ ] 6.2 env-gated 実 pasta.dll OnBoot 追験テスト
+- [x] 6.2 env-gated 実 pasta.dll OnBoot 追験テスト
   - env `HOST32_PASTA_DLL` 設定時のみ OnBoot request 送出→`Value` 受領を検証する
   - 指定 DLL 不在は明示的に失敗させ、未設定時は silent skip とする（CI 必須ゲートにしない）
   - Observable: env 設定時に OnBoot `Value` が受領されテストが green になり、DLL 不在時は明示的な失敗メッセージで落ちることを確認できる
