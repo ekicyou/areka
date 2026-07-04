@@ -55,7 +55,7 @@
 
 以下の変更は下流 emo-compose／emo-present の再確認を強制する。
 
-- `AtlasKey` / `AtlasEntry` / 頁バッファ表現（フィールド・premultiplied 前提・stride 契約・空エントリ表現）の形状変更。
+- `ElementId` / `AtlasKey` / `AtlasEntry` / 頁バッファ表現（フィールド・premultiplied 前提・stride 契約・空エントリ表現・ID 採番規則）の形状変更。
 - 座標意味論の変更（トリムオフセットと配置座標の合成規約＝「配置座標＋トリムオフセットで転写すれば見た目等価」の破棄）。
 - premultiplied 統一点・α 閾値・padding 既定値・頁サイズ・golden ソート順の変更（決定性の再固定が必要）。
 - デコード trait 署名・エラー継続契約の変更。
@@ -127,7 +127,7 @@ graph TB
 | ID | 決定 | 要旨 |
 |----|------|------|
 | **D2** | クレート境界＝新クレート `crates/areka-emo-atlas/`。WIC 薄ラッパーは wintf に残置し、デコード WIC 腕のみが最小 feature の `windows`＋wintf の WIC ユーティリティを利用。純粋コアは wintf 非依存 | 詳細 Decision D2 |
-| **D3** | `AtlasKey(ElementPath 相当の正規化パス)` → `AtlasEntry`。空エントリは `AtlasEntry` 内の `placement: Option<Placement>`（`None`＝転写スキップ）で表現。頁バッファは `AtlasPage{ bytes: Arc<[u8]>, width, height, stride }` | 詳細 Decision D3 |
+| **D3** | **識別子は二層**（ディスカッション #1）: ランタイムキー＝`ElementId(u32)`（密 index・決定的採番・毎フレーム O(1) 引き）／ソースキー＝`AtlasKey{ set, rel_path }`（無改変相対パス・重複排除／golden／**デバッグ逆引き用にテーブルへ保持**）。空エントリは `AtlasEntry.placement: Option<Placement>`（`None`＝転写スキップ）。頁バッファは `AtlasPage{ bytes: Arc<[u8]>, width, height, stride }` | 詳細 Decision D3 |
 | **D4** | `trait ElementDecoder { fn decode(&self, path:&Path) -> Result<DecodedImage, DecodeError> }`。既定腕＝WIC（COM 必要）／テスト腕＝メモリ PBGRA。正規化以降は COM 非依存 | 詳細 Decision D4 |
 | **D5** | ukadoc 2×2（`use_self_alpha`∈{1/true, full, 0} × `.pna` 有/無）動作表。emo2 実装腕＝`use_self_alpha=1` かつ `.pna` 無し（＝α チャンネル採用）のみ実装。他はシーム | 詳細 Decision D5 |
 | **D6** | 間接参照解決: `Pattern.surface_id` を surface id 索引で辿り参照先 surface の element を列挙。負値・不在 id・`Range`/alias は画像を持たないため除外。訪問済み集合で循環検出 | 詳細 Decision D6 |
@@ -237,7 +237,7 @@ graph LR
 | 5.4 | 単頁超過→複数頁分割 | Packer | `pack`（multi bin） | Bake（pack） |
 | 5.5 | 同一入力→同一配置（決定的） | Packer | `pack`（ソート＋固定） | Bake（決定性） |
 | 5.6 | 同一パス 1 度焼付・単一エントリ索引 | ManifestDeriver / Packer | `dedup`, `AtlasKey` | Bake（dedup） |
-| 6.1 | path→エントリ（頁/UV/オフセット/原寸）取得 | AtlasTable | `AtlasTable::get` | — |
+| 6.1 | path→エントリ（頁/UV/オフセット/原寸）取得 | AtlasTable | `AtlasTable::resolve`（構築時 path→id）＋`entry`（ランタイム O(1)） | — |
 | 6.2 | スキップ path→空エントリ返却 | AtlasTable | `AtlasEntry.placement: None` | — |
 | 6.3 | 各頁 premultiplied BGRA バッファ・stride 明示 | AtlasPage | `AtlasPage{bytes,stride,...}` | — |
 | 6.4 | スレッド間安全所有（共有参照可能） | AtlasTable / AtlasPage | `Arc<[u8]>`, `Send`/`Sync` | — |
@@ -268,9 +268,9 @@ graph LR
 **Responsibilities & Constraints**
 - surface 群を走査し各 `Element.path`（自己参照 base 含む）を列挙（1.1/1.2）。
 - 各 surface の `Animation.patterns[].surface_id` を surface id 索引で辿り、参照先 surface の element パスを列挙（間接解決・1.3・D6）。
-- balloon は surface として shell と**区別せず**同一機構で扱う（1.4）。入力は「element を持つ surface」の集合として注入される（元 balloon 画像→surface 適合は上流責務・D1）。
-- `ElementPath.as_str()` を無改変で保持（サブディレクトリ含む・1.5）。
-- 正規化パスをキーに重複排除（1.6/5.6）。
+- balloon は surface として shell と**区別せず**同一機構で扱う（1.4）。入力は「element を持つ surface」のセット（`SurfaceSet`＝surface 群＋基準 dir＋透過設定の束）として注入される（元 balloon 画像→surface 適合は上流責務・D1）。shell と balloon は基準 dir も descript も別ゆえ**セットを分けて**渡す。
+- `ElementPath.as_str()` を無改変で保持（サブディレクトリ含む・1.5）。実パスへは変換しない（実パス化はデコード段内部の一度きり）。
+- **(set, 相対パス)** をキーに重複排除し（1.6/5.6）、(SetId 昇順, 相対パス昇順) で `ElementId` を決定的に採番（識別子二層・D3/D7）。
 
 **Dependencies**
 - Inbound: `bake` エントリ — マニフェスト要求（P0）
@@ -281,23 +281,34 @@ graph LR
 
 ##### Service Interface
 ```rust
-/// surface 集合（shell surface と surface 表現 balloon の統合ビュー）。
-/// balloon の surface 適合は上流責務ゆえ、本層は id→Surface の索引を受ける。
+/// 出所単位の自己完結な入力束（shell で 1 個・balloon で 1 個…複数可）。
+/// surface 群・基準 dir・透過設定が出所ごとに束で対応する（ディスカッション #1）。
 pub struct SurfaceSet<'a> {
-    pub surfaces: &'a [areka_parsers::shell::Surface],
+    pub surfaces: &'a [areka_parsers::shell::Surface], // element 相対パス＋bind pattern（ソース語彙）
+    pub base_dir: &'a std::path::Path,                 // このセットの基準 dir（shell dir / balloon dir）
+    pub alpha_params: AlphaParams,                     // このセットの descript 由来透過設定（shell/balloon 別定義）
+}
+
+/// SurfaceSet の序数（bake 入力スライス内の index・重複排除キーの一部）。
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
+pub struct SetId(pub u32);
+
+/// マニフェスト＝ElementId 順に整列した AtlasKey 一覧（採番の正本）。
+pub struct Manifest {
+    pub keys: Vec<AtlasKey>,   // index == ElementId.0（密・決定的）
 }
 
 pub struct ManifestDeriver;
 
 impl ManifestDeriver {
-    /// 全 surface の element パス（直接＋間接 bind 参照）を重複なく導出する。
-    /// 返却順は正規化パス昇順（決定性・D7）。
-    pub fn derive(&self, set: &SurfaceSet<'_>) -> Vec<AtlasKey>;
+    /// 全セットの element パス（直接＋間接 bind 参照）を重複なく導出し、
+    /// (SetId 昇順, 相対パス昇順) で ElementId を決定的に採番する（D7・golden 安定）。
+    pub fn derive(&self, sets: &[SurfaceSet<'_>]) -> Manifest;
 }
 ```
-- Preconditions: `surfaces` は id で参照解決可能（重複 id は先出優先・下流未定義動作を避ける）。
-- Postconditions: 返却は正規化パス昇順・重複なし。負 `surface_id`/不在 id/画像を持たない参照は含まない。
-- Invariants: 入力を改変しない（読み取り専用）。
+- Preconditions: 各セットの `surfaces` は id で参照解決可能（重複 id は先出優先・下流未定義動作を避ける）。
+- Postconditions: `keys` は (SetId, 相対パス) 昇順・重複なし（重複排除キー＝**(set, rel_path)**——相対パス単独では shell と balloon の同名ファイルを誤同一視するため）。負 `surface_id`/不在 id/画像を持たない参照は含まない。
+- Invariants: 入力を改変しない（読み取り専用）。実パスは生成しない（実パス化はデコード段の内部・一度きり）。
 
 **Implementation Notes**
 - Integration: `Pattern.surface_id: i64` の負値・不在 id は列挙対象外（D6）。循環（surface→surface の bind ループ）は訪問済み集合で検出し打ち切る（emo2 は 1 段だが構造として保証）。
@@ -350,7 +361,7 @@ pub trait ElementDecoder {
     fn probe_pna(&self, path: &std::path::Path) -> bool { false }
 }
 ```
-- Preconditions: `path` は上流由来（shell dir 基準で解決済みの実パス）。
+- Preconditions: `path` は **bake パイプラインがデコード直前に `SurfaceSet.base_dir.join(rel_path)` で生成した実パス**（純粋な Path 演算・要件 3.6 と両立）。実パスが必要なのは**この読み込みの一度きり**で、テーブル等へは保存しない（診断 `DecodeError` にのみ残す）（ディスカッション #1）。
 - Postconditions: 成功時 `bgra.len() == stride*height`。失敗時 `DecodeError`（パス付き）。
 - Invariants: 副作用なし（ファイル読取のみ）。
 
@@ -394,7 +405,8 @@ pub trait ElementDecoder {
 
 ##### Service Interface
 ```rust
-/// 上流由来の透過パラメータ（surface/balloon 単位・自ら読まない・3.6）。
+/// 上流由来の透過パラメータ（SurfaceSet 単位で束ねて注入・自ら読まない・3.6）。
+/// shell と balloon は descript が別定義ゆえ、各 SurfaceSet が自セットの値を持つ。
 #[derive(Clone, Copy, Debug)]
 pub struct AlphaParams {
     pub use_self_alpha: UseSelfAlpha,   // 1/true | full | 0
@@ -500,7 +512,7 @@ impl Trimmer {
 
 ##### Batch / Job Contract
 - Trigger: `bake` パイプライン末尾（全トリム完了後の一括配置）。
-- Input / validation: `Vec<(AtlasKey, Trimmed)>`（空エントリ除外済み）＋`PackConfig{ page_size, padding }`。
+- Input / validation: `Vec<(ElementId, Trimmed)>`（空エントリ除外済み・ElementId 昇順）＋`PackConfig{ page_size, padding }`。
 - Output / destination: **座標のみ**——頁数（`page_count`）＋各キーの `(page_index, uv_rect)`。**頁バッファ（画素）は生成しない**（Critical Issue 3: 焼付は Baker の責務）。
 - Idempotency & recovery: 決定的（同一入力→同一出力）。単頁超過矩形は個別頁へ退避（loss なし）。
 
@@ -508,14 +520,15 @@ impl Trimmer {
 ```rust
 pub struct PackConfig { pub page_size: u32, pub padding: u32 } // 既定 2048 / 1
 
-pub struct PackedEntry { pub key: AtlasKey, pub page: u32, pub uv_rect: Rect }
+pub struct PackedEntry { pub id: ElementId, pub page: u32, pub uv_rect: Rect }
 /// 座標のみ（画素バッファは持たない・焼付は Baker）。
 pub struct PackOutput { pub page_count: u32, pub entries: Vec<PackedEntry> }
 
 pub struct Packer;
 impl Packer {
     /// トリム矩形群を頁へ決定的に配置し、座標（page/uv_rect）のみを返す。
-    pub fn pack(&self, items: &[(AtlasKey, Trimmed)], cfg: PackConfig) -> PackOutput;
+    /// items は ElementId 昇順（＝マニフェスト採番順）で渡す（決定性・D7）。
+    pub fn pack(&self, items: &[(ElementId, Trimmed)], cfg: PackConfig) -> PackOutput;
 }
 ```
 
@@ -548,9 +561,9 @@ impl Baker {
     /// 返り値は AtlasPage 群と、各キーの Placement（page/uv_rect/trim_offset）。
     pub fn bake_pages(
         &self,
-        items: &[(AtlasKey, Trimmed)],
+        items: &[(ElementId, Trimmed)],
         pack: &PackOutput,
-    ) -> (Vec<AtlasPage>, Vec<(AtlasKey, Placement)>);
+    ) -> (Vec<AtlasPage>, Vec<(ElementId, Placement)>);
 }
 ```
 - Preconditions: `pack.entries` のキーは `items` に存在。`uv_rect` は `page_size` 内。
@@ -572,7 +585,7 @@ impl Baker {
 | Requirements | 6.1, 6.2, 6.3, 6.4, 6.5, 4.2 |
 
 **Responsibilities & Constraints**
-- `AtlasKey` で問い合わせ→`AtlasEntry`（頁番号・UV 矩形・トリムオフセット・原寸）を返す（6.1/4.2）。
+- 問い合わせは二層: 構築時に `resolve(set, rel_path)→ElementId`（一度きり）、ランタイムは `entry(ElementId)`（O(1)）で `AtlasEntry`（頁番号・UV 矩形・トリムオフセット・原寸）を返す（6.1/4.2）。デバッグは `key(id)` 逆引きで画像生成ツリーをダンプ可能。
 - スキップ path→空エントリ（`placement: None`）を返す（6.2/4.4）。
 - 各頁は premultiplied BGRA・stride 明示（6.3）。
 - `Arc` 共有で `Send`＋`Sync`・スレッド間安全手渡し（6.4・roadmap 並行モデル）。
@@ -581,11 +594,21 @@ impl Baker {
 **Contracts**: Service [x], State [x]
 
 ##### State Management / Data Contract
+
+識別子は二層（ディスカッション #1）: **`ElementId`（ランタイムキー・密 u32・毎フレーム O(1) Vec 引き）** と **`AtlasKey`（ソースキー・set＋無改変相対パス・重複排除／golden／デバッグ逆引き）**。実パスはどちらにも含まれない（ロード時一度きりの使い捨て）。相対パスをテーブルへ保持するのは**デバッグで画像生成ツリーを辿るため**（開発者要望）——`key(id)` の逆引きでいつでも「頁の矩形 → 元画像」をダンプできる。
+
 ```rust
-/// アトラスキー＝正規化 element パス（無改変保持・1.5）。
+/// ランタイムキー＝密 index（ECS エンティティ ID と同じ発想）。
+/// (SetId 昇順, 相対パス昇順) で bake 時に決定的採番（D7・golden 安定）。
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
+pub struct ElementId(pub u32);
+
+/// ソースキー＝出所セット＋無改変相対パス（1.5・環境非依存・デバッグ逆引き用に保持）。
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
-pub struct AtlasKey(String);
-impl AtlasKey { pub fn new(path: String) -> Self; pub fn as_str(&self) -> &str; }
+pub struct AtlasKey {
+    pub set: SetId,        // shell / balloon 等の出所（同名ファイル誤同一視を防ぐ）
+    pub rel_path: String,  // ElementPath 無改変（サブディレクトリ含む）
+}
 
 /// 幾何プリミティブ（wintf::types と別定義・純粋層自前・#[repr(C)] は不要）。
 #[derive(Clone, Copy, PartialEq, Eq, Debug)] pub struct Point { pub x: i32, pub y: i32 }
@@ -615,14 +638,22 @@ pub struct AtlasPage {
 }
 
 /// 索引表＋頁群（bake の成果物・channel 非依存・6.5）。
+/// entries/keys は ElementId (= index) で整列した密 Vec（毎フレーム O(1)）。
 #[derive(Clone, Debug)]
 pub struct AtlasTable {
-    entries: std::collections::HashMap<AtlasKey, AtlasEntry>,
+    keys: Arc<[AtlasKey]>,       // index == ElementId.0（デバッグ逆引き・ツリーダンプ用）
+    entries: Arc<[AtlasEntry]>,  // index == ElementId.0（ランタイム正準参照）
+    resolve: std::collections::HashMap<AtlasKey, ElementId>, // 構築時の一度きり用
     pages: Arc<[AtlasPage]>,
 }
 impl AtlasTable {
-    /// element path→エントリ（未知は None・6.1）。
-    pub fn get(&self, key: &AtlasKey) -> Option<&AtlasEntry>;
+    /// 【ランタイム正準・毎フレーム】ElementId→エントリ（O(1) Vec index・6.1）。
+    pub fn entry(&self, id: ElementId) -> &AtlasEntry;
+    /// 【構築時のみ】(set, 相対パス)→ElementId（emo-compose が自ツリー構築時に一度 resolve し、以後 ElementId を保持）。
+    pub fn resolve(&self, set: SetId, rel_path: &str) -> Option<ElementId>;
+    /// 【デバッグ】ElementId→ソースキー逆引き（画像生成ツリーのダンプ・「頁の矩形→元画像」追跡）。
+    pub fn key(&self, id: ElementId) -> &AtlasKey;
+    pub fn len(&self) -> usize;
     /// 頁バッファ（6.3）。
     pub fn page(&self, index: u32) -> Option<&AtlasPage>;
     pub fn pages(&self) -> &[AtlasPage];
@@ -630,11 +661,12 @@ impl AtlasTable {
 ```
 - State model: `bake` が一度構築し以後不変（immutable snapshot）。`AtlasTable: Clone`（`Arc` 共有ゆえ安価）。
 - Persistence & consistency: メモリ内・永続化なし（純粋層）。
-- Concurrency strategy: `Send + Sync`（`Arc<[u8]>`＋`HashMap` の自動導出）。emo アクターのスレッドから共有参照（roadmap）。
+- Concurrency strategy: `Send + Sync`（`Arc` 群＋`HashMap` の自動導出）。emo アクターのスレッドから共有参照（roadmap）。
+- Runtime access pattern: 毎フレームの転写ループは `ElementId` の整数引きのみ（文字列 HashMap を毎フレーム引かない）。`resolve` は emo-compose の構築時（surface ツリー組立）に一度だけ・`key` はデバッグダンプ時のみ。
 
 **Implementation Notes**
-- Integration: `bake(deriver 出力, decoder, params, cfg) -> BakeResult{ table: AtlasTable, errors: Vec<DecodeError> }` が公開入口（`lib.rs`）。emo-compose はこの型のみを import する（契約正本）。
-- Validation: 既知 path→`Some(entry)`・全透明 path→`Some(entry{placement:None})`・未知 path→`None` を区別。頁 stride 明示・`Arc` 共有を型で保証。
+- Integration: `bake(&[SurfaceSet], decoder, cfg) -> BakeResult{ table: AtlasTable, errors: Vec<DecodeError> }` が公開入口（`lib.rs`・透過設定は各 SurfaceSet が内包）。emo-compose はこの型のみを import する（契約正本）。
+- Validation: 既知 path→`resolve`→`Some(id)`＋`entry(id)`・全透明 path→`entry.placement: None`・未知 path→`resolve`→`None` を区別。頁 stride 明示・`Arc` 共有を型で保証。`key(id)` 逆引きでデバッグダンプ（頁の矩形→元画像相対パス）が再構成できることをテスト。
 - Risks: 契約変更が下流 emo-compose を破壊（Revalidation Trigger）。フィールドは必要最小に保つ。
 
 ## Error Handling
