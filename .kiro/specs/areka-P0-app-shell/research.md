@@ -140,3 +140,79 @@
 6. **DD6【最重要】: モック UI ユニットテスト（`tests.rs`）の帰属と実行対象性**: (a) example 同居 `#[cfg(test)]` としてコード保全（Option A/C）か、(b) lib 切り出しで `cargo test` 実行継続（Option B・ただし R1.5 と緊張）か。`cargo test --examples` が example 内 `#[test]` を実行するかを design で実測確認。R6.2「既存の緑テストを緑のまま維持」をテスト**実行**の維持と解するか、テスト**コード資産**の維持と解するかの裁定が要る。
    - **【要件ディスカッション #1 で裁定済み（解釈①採用・2026-07-05）】**: R6.2 の緑判定対象は **SHIORI 契約チェーンの e2e テスト群**とする。モック UI ユニットテストは **テストコード資産として保全すれば足り**、`cargo test` での実行継続は厳格に要求しない（R1.5「mock 資産を本番骨格へ持ち込まない」＋07-05 window-placement リジェクト教訓を優先）。→ **Option B（lib 切り出し）は棄却**。残る設計判断は「テストコードの移設先（example 同居 `#[cfg(test)]` の形）と、`cargo test --examples` 実行対象化の可否の実測確認」に限定＝Option A を土台に C を検討。requirements.md R6.2/R6.3 に明確化済み。
 7. **DD7: 骨格の正常終了経路**: 未結線時、`mgr.run()`（ブロッキングメッセージループ）を呼ぶか、呼ばず構成ログ後に即 return するか。窓を作らないなら `mgr.run()` は即空ループ／即終了になる想定だが、UI ランタイム起動（R2.4）と正常終了（R4.1）の両立を design で確定。
+
+---
+
+# 設計フェーズ discovery（2026-07-05・Extension / Light Discovery）
+
+> 本節は design.md 生成に伴う discovery 記録と DD1–DD7 の裁定を追記する。上の「6. 設計フェーズへの申し送り」の論点に対する**決定**を確定する。
+
+## Summary（設計フェーズ）
+- **Discovery Scope**: Extension（既存 `crates/areka` の main.rs 分割）／Light Discovery。
+- **Key Findings**:
+  1. **【最重要】`WinApp::run()` は窓ゼロではハングする**（DD7 の根拠）。`run()` は `block_on(shutdown_future)` で「最後の窓破棄＝WindowRegistry の空**遷移**」まで待つが、`reconcile_window_registry`（`crates/wintf/src/runtime/window_registry.rs`）は `removed_any && is_empty()` の**遷移ちょうど**でのみ shutdown hook を撃つ。元から空（窓ゼロ）の空振り reconcile では**発火しない**（同ファイルのテスト `reconcile_removes_entries_and_fires_hook_only_on_empty_transition` が「既に空での空振りでは再発火しない」を固定）。→ 骨格が窓を作らず `run()` を無条件に呼ぶと復帰しない。
+  2. SHIORI 契約チェーンとモック UI の分離は実測クリーン（`shiori_*_e2e_tests.rs` は `crate::shiori_host`/`shiori_session`＋`shiori_abi` のみ参照・モック UI シンボル依存ゼロ）。退避はモック側だけで完結。
+  3. logging.md が「examples は手動検証の補助であり、テストの代替ではない」（steering・line 63/124）と明記。DD6 解釈①（モック UI テストは example 内コード資産・非緑ゲート）と整合。
+
+## Research Log（設計フェーズ）
+
+### wintf の UI ランタイム終了規律
+- **Context**: R2.4（UI ランタイム起動）と R4.1（未結線で正常終了）を両立する骨格の制御フローを確定するため（DD7）。
+- **Sources Consulted**: `crates/wintf/src/runtime/mod.rs`（`WinApp::new`/`run`・wire_shutdown_hook）／`crates/wintf/src/runtime/message_loop.rs`（`MessageLoopDriver::block_on`・`ShutdownPolicy::shutdown_future`）／`crates/wintf/src/runtime/window_registry.rs`（`reconcile_window_registry`・空遷移 hook・テスト）。
+- **Findings**: `WinApp::new()` が COM/DPI 初期化・World 生成・shutdown hook 結線を担う（＝UI ランタイム起動の実体）。`run()` は最後の窓破棄まで block する。空遷移 hook は「窓を持ってから最後の 1 枚が消える」ときだけ発火。
+- **Implications**: 骨格の「UI ランタイム起動（R2.4）」は `WinApp::new()` の成功で満たす。窓を結線しない骨格は `run()`（ブロッキングループ）に**入らず** `Ok(())` で返す（R4.1）。`run()` は窓を生成する下流（ghost-setup）が接続点結線後に走らせる。**要件ギャップではなく、design で確定する制御分岐**。
+
+### Cargo example の自動認識とテスト実行（DD4/DD6）
+- **Context**: `cargo run --example mock-shell` が明示登録なしで動くか（DD4）、`cargo test` が example 内 `#[test]` を走らせるか（DD6）。
+- **Sources Consulted**: 既存 `crates/areka/examples/clickthrough_two_rects.rs`（`[[example]]` 明示登録なしで存在・前例）／Cargo 標準挙動／Cargo.toml（現状 example 登録なし）。
+- **Findings**: Cargo は `examples/*.rs` を自動認識し、example 名＝ファイル名 stem（`mock-shell.rs`→`mock-shell`・`-` は有効）。`cargo test` の標準ハーネスは example 内 `#[cfg(test)] #[test]` を実行しない（`--examples` も example のビルド＋doctest のみで通常ユニットテストは載らない）。
+- **Implications**: DD4＝自動認識に委ねる（`[[example]]` 明示登録は不要・前例踏襲）。DD6＝移設テストはコード資産として残るが標準緑ゲート対象外＝R6.3 の許容範囲（解釈①と一致）。
+
+### steering / 依存制約
+- **Context**: 新規依存禁止（R6.1）・subscriber 初期化規約・env 命名。
+- **Sources Consulted**: tech.md（Rust 2024・依存列挙・examples はテスト代替でない）／logging.md（subscriber はアプリ/example が初期化・RUST_LOG）／記憶 `areka-runtime-env-naming`（AREKA_ 冠は domain runtime var 用）。
+- **Findings**: 構成解決は std 自己完結で可能（`areka-parsers` 非依存）。ログレベルは RUST_LOG（AREKA_ 名前空間対象外）。example も独自 subscriber 初期化。
+- **Implications**: Cargo.toml の deps は不変（R6.1 充足）。DD2 は env 経路を採らず位置引数のみ。
+
+## Architecture Pattern Evaluation（設計フェーズ）
+
+| Option | Description | Strengths | Risks / Limitations | Notes |
+|--------|-------------|-----------|---------------------|-------|
+| A: 純機械的移設 | モック UI＋tests を example へ・骨格は引き算 | 挙動不変を直接保証・分離クリーン・最小変更 | モック UI テストが緑ゲート外 | **採用**（土台） |
+| B: 共有 lib 切り出し | mock ロジックを src pub へ・test は lib | テスト緑継続 | R1.5 と衝突・骨格純度低下・window-placement 教訓に逆行 | **棄却**（要件ディスカッション #1） |
+| C: ハイブリッド | A＋テストは example 同居 `#[cfg(test)]` で保全 | 挙動不変＋境界純度＋テストコード保全 | example 内テストは標準ハーネス非実行 | **採用**（A を土台に C の同居テスト形） |
+
+## Design Decisions（DD1–DD7 の裁定）
+
+### DD1: 既定 root path の実体と検証 → **CARGO_MANIFEST_DIR 相対・実在は warn どまり**
+- 既定パスは `CARGO_MANIFEST_DIR` 相対の fixture パス（現 `SHELL_IMAGE_PATH` と同じ `env!` 手法で決定的）。実在検証は骨格が行うが**不在でも `warn!` して正常終了**する（R4.1）。骨格はパスの**決定とログ**に徹し、マウント・存在保証はしない（ghost-setup の領分）。
+
+### DD2: 構成入力の受け口 → **位置引数のみ（env 経路なし）**
+- `argv[1]`=ghost root, `argv[2]`=balloon root。欠落時は既定へフォールバック。要件は env を要求せず、最小形として env 経路（`AREKA_GHOST_ROOT` 等）は導入しない。`resolve_config_inputs(args: &[String])` を純粋関数化し単体テスト可能にする。
+
+### DD3: `windows_subsystem` 属性 → **骨格に付与・example には付与しない**
+- 骨格 main.rs は `#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]` を維持。mock-shell example には付与しない（`clickthrough_two_rects` 前例と同じ）。「挙動不変」は窓・操作の観測挙動を指し、コンソール窓の有無は対象外。
+
+### DD4: example の Cargo.toml 明示登録 → **不要（自動認識）**
+- `examples/mock-shell.rs` の Cargo 自動認識に委ねる。`[[example]]` 明示登録はしない（前例踏襲・R1.6 は自動認識で満たす）。
+
+### DD5: 空の接続点の形 → **空実装の関数 1 個（`wire_engines`）**
+- 骨格 main が構成解決後・正常終了前に `wire_engines()` を呼ぶ（呼び出しシームを確保）。中身は no-op。引数・戻り値の確定契約は ghost-setup が結線時に定める。trait/plugin レジストリ等の投機的抽象は導入しない。
+
+### DD6: モック UI テストの帰属 → **example 同居 `#[cfg(test)] mod tests`（解釈①・確定）**
+- 要件ディスカッション #1 で確定済み。`src/tests.rs` を `examples/mock-shell.rs` 末尾へ移設しコード資産として保全。緑ゲート対象は SHIORI e2e。Option B（lib 切り出し）は棄却。
+
+### DD7: 骨格の正常終了経路 → **`WinApp::new()` で UI ランタイム起動・窓ゼロでは `run()` に入らず正常復帰**
+- **根拠**: 上記「wintf の UI ランタイム終了規律」。窓ゼロで `run()` を呼ぶとハングするため、エンジン未結線の骨格は `run()`（ブロッキングループ）に入らず構成ログ後に `Ok(())` を返す。`run()` の呼び出しは窓を生成する下流（ghost-setup）が接続点結線後に走らせる。これで R2.4（`new()`＝起動）と R4.1（正常終了）を両立する。
+
+## Risks & Mitigations（設計フェーズ）
+- **`run()` 誤呼び出しによるハング** — 骨格は窓ゼロで `run()` に入らない制御分岐を持つ（DD7）。実装レビューで `mgr.run()` の無条件呼び出しがないことを確認する。
+- **退避時のモック UI 挙動退行** — 純機械的移設（現 main.rs の該当塊をそのまま）＋手動検証（窓 2 枚・ドラッグ追従・ダブルクリック終了・縦書き）で観測不変を担保（R1.4/R6.4）。
+- **SHIORI e2e の巻き添え破損** — 分離クリーンが実測済み（相互参照ゼロ）。退避はモック側のみで完結し、e2e は不触。
+
+## References
+- `crates/wintf/src/runtime/mod.rs` — `WinApp::new`/`run` の結線（UI ランタイム起動・shutdown future）。
+- `crates/wintf/src/runtime/window_registry.rs` — `reconcile_window_registry` の空遷移 hook（DD7 の決定的根拠）。
+- `crates/wintf/src/runtime/message_loop.rs` — `MessageLoopDriver::block_on`・`ShutdownPolicy::shutdown_future`。
+- `.kiro/steering/logging.md` — subscriber 初期化規約・「examples はテストの代替でない」（DD6 補強）。
+- `.kiro/steering/tech.md` — 新規依存禁止・依存列挙。
