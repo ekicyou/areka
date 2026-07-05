@@ -14,10 +14,11 @@
   - Shell モデルから実サーフェスツリーを構築（疎 id の解決・`surface.append` の範囲展開と適用・`kero.surface.alias` 解決）し、**collisions/animations を保持した公開正規化 Surface 定義**を生成する。
   - 正規化 Surface 定義から合成プラン（レイヤ順・変換行列・合成メソッド・アトラス参照/入れ子参照）を導出する。
   - アトラス転写で1枚物 premultiplied BGRA ビットマップへ合成する（合成先バッファ再利用・途中アロケーションなし）。
-  - 合成入力＝**surface id ＋ 有効 bind 集合**（`compose(surface_id, active_binds)` 形）。有効 bind の pattern0 overlay を animation ID 昇順（画家のアルゴリズム）で静的合成する。
+  - 合成入力＝**surface id ＋ 有効 bind 集合**（`compose(surface_id, active_binds)` 形）。有効 bind の pattern0 overlay を **`animation-sort` → animation ID 順**の2段規則（`animation-sort` 未指定時は ukadoc 既定 `descend`・画家のアルゴリズム）で静的合成する。
   - 入れ子 surface 参照の再帰合成＋循環検出（非パニック打ち切り）。
   - 合成メソッド写像表を全量定義し、emo2 が実際に使うメソッド（実測 `overlay`）を実装する。
   - トリム契約（配置座標＋trim_offset での等価転写・全透明エントリのスキップ）の遵守。
+  - **上流 `areka-parsers`（shell）の転記ギャップ解消**（本チェーン内・議題1決定）: 現行 parser が passthrough 吸収している ukadoc 正典キー **`animation-sort`（既定 descend）** と **`collision-sort`（既定 none）** を転記層で値化し、`Shell`／正規化 Surface 定義が保持するよう小さく拡張する（転記に徹し順序適用は消費側）。emo-compose は `animation-sort` を合成順序に消費し、`collision-sort` は下流 collision-geometry のため運搬する。
 - **Out of scope（本フィーチャが所有しないもの）**:
   - アトラス焼付・画像デコード・正規化・αトリミング（**`areka-emo-atlas`** が所有）。
   - 表示・wintf/WUC 連携・`AlphaMask` 生成・合成キャッシュ・surface 指令 API（**`areka-emo-present`** が所有）。
@@ -27,7 +28,7 @@
   - DPI 拡縮（表示側 wintf の責務。本フィーチャはピクセル等倍＝surface 原寸）。
 - **Adjacent expectations（隣接フィーチャへの期待・提供）**:
   - **上流 `areka-emo-atlas`**: `AtlasTable`/`AtlasEntry`/`Placement`/`AtlasPage`/`AtlasKey`/`ElementId`/`SetId`（premultiplied BGRA 頁バッファ・trim_offset・placement None＝全透明）を**正本型として消費**し再定義しない。
-  - **上流 `areka-parsers`（shell）**: `Shell`/`Surface`/`Element`/`Animation`/`Pattern`/`Collision`/`SurfaceAppend`/`AppendTarget`/`SurfaceAlias` 等の転記層モデルを消費する。範囲展開・alias 解決・実ツリー構築は本フィーチャの責務。
+  - **上流 `areka-parsers`（shell）**: `Shell`/`Surface`/`Element`/`Animation`/`Pattern`/`Collision`/`SurfaceAppend`/`AppendTarget`/`SurfaceAlias` 等の転記層モデルを消費する。範囲展開・alias 解決・実ツリー構築は本フィーチャの責務。加えて本チェーンでは転記層へ **`animation-sort`／`collision-sort`** の値化を追加する（従来 passthrough 吸収の ukadoc 正典キー・転記層の忠実性補完）。
   - **下流 `seriko`（shell-anim-engine）と `collision-geometry`**: 本フィーチャが公開する正規化 Surface 定義（collisions/animations 保持）を**同じ結果として消費**する（各自で再展開しないことで不一致バグを根絶）。
   - **下流 `emo-present`**: 合成結果 `ComposedSurface`（premultiplied BGRA・size・stride 明示）を無変換で WUC upload と `AlphaMask` 生成に使える形で受け取る。呼び手（emo-present/統合層）が有効 bind の静的集合を渡す。
 
@@ -44,6 +45,7 @@
 3. When 正規化結果を公開するとき, the emo-compose Surface Tree Builder shall 下流（seriko・collision-geometry）が再パース・再展開なしに消費できる公開形として提供する。
 4. If 参照された surface id が Shell モデルに存在しないとき, then the emo-compose Surface Tree Builder shall パニックせず、その旨をログ（`warn` 以上）に記録したうえで欠落を観測可能な形で扱う。
 5. The emo-compose Surface Tree Builder shall 同一入力に対して決定的（バイト等価）な正規化 Surface 定義を生成する。
+6. When 正規化 Surface 定義を生成するとき, the emo-compose Surface Tree Builder shall 転記層が保持する `animation-sort`／`collision-sort`（描画順・判定順キー）を正規化結果へ引き継ぎ、下流（seriko・collision-geometry）が同一の順序規則を再展開なしに消費できるようにする。
 
 ### Requirement 2: `surface.append` 範囲展開と適用
 
@@ -86,9 +88,10 @@
 
 1. The emo-compose Compositor shall 合成入力として surface id と有効 bind 集合（`compose(surface_id, active_binds)` 形）を受け取る。
 2. When 有効 bind 集合が与えられたとき, the emo-compose Compositor shall 各有効 bind の pattern0 overlay を合成対象に含める。
-3. When 複数の有効 bind を重ねるとき, the emo-compose Compositor shall animation ID 昇順（画家のアルゴリズム）で合成する。
+3. When 複数の有効 bind を重ねるとき, the emo-compose Compositor shall **`animation-sort` → animation ID 順**の2段規則で合成する（`animation-sort` 未指定時は ukadoc 既定 `descend`・画家のアルゴリズム。descend/ascend が画素積層へ効く de-facto 方向は design で ukadoc 実測確定）。
 4. Where surface が静的 element を持たず全パーツが bind であるとき, the emo-compose Compositor shall 有効 bind 集合のみから可視ビットマップを生成する（bind 集合が非空なら空白にしない）。
 5. While bind の動的状態管理（bindgroup 切替・blink 発火・着せ替え）が発生するとき, the emo-compose Compositor shall それを自ら管理せず、呼び手が渡す静的集合のみを合成する。
+6. Where 対象シェルが `animation-sort` を指定しないとき（emo2 実測＝未指定）, the emo-compose Compositor shall ukadoc 既定 `descend` を順序規則に適用する。
 
 ### Requirement 6: アトラス転写による1枚物ビットマップ合成
 
@@ -167,3 +170,4 @@
 2. The emo-compose Compositor shall 新規外部依存を追加しない（合成コアは std のみを理想とし、アトラスのクレート依存は `areka-emo-atlas` 側に閉じる）。
 3. The emo-compose Compositor shall emo2 が実際に使う機能のみを実装し、写像表・変換行列・入れ子・循環検出の**構造**は最初から保持しつつ未使用分は型シームに留める。
 4. When 本チェーンに着手するとき, the emo-compose Compositor shall 既知ドリフト（`crates/areka-parsers/src/balloon/model.rs:6` doc コメントの旧名 `text-layer`/`surface-engine` 参照）を現行エンジン固有名へ追随修正する。
+5. When 本チェーンに着手するとき, the emo-compose 実装 shall 上流 `areka-parsers::shell` の転記層へ `animation-sort`／`collision-sort`（従来 passthrough 吸収の ukadoc 正典キー）の値化を追加する（議題1決定）。追加は転記に徹し（順序適用は消費側の責務）、既存の転記契約・parser テストを壊さない。
