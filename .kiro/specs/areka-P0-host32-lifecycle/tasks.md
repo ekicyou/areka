@@ -59,7 +59,7 @@
   - _Requirements: 5.6_
   - _Boundary: helper 受信分類・共有状態（shiori-host32-helper）_
 
-- [ ] 3.2 UNLOAD 応答アーム（courtesy unload → ack → メッセージループ正常終了）を実装
+- [x] 3.2 UNLOAD 応答アーム（courtesy unload → ack → メッセージループ正常終了）を実装
   - UNLOAD 受信時に、SHIORI プロキシを取り出して即座に破棄する（借用を保持しないことで courtesy unload・ライブラリ解放を安全に実行する）
   - 終了要求フラグを立て、厳密1バイトの ack を返送する（既存の LOAD ack と同型の応答経路を使う・新しい応答契約を発明しない）
   - 自プロセスのメッセージループを起こす通知を送り、メインループのフィルタが終了要求フラグを検知したらループを正常終了させ、プロセスが終了コード0で終わるよう結線する
