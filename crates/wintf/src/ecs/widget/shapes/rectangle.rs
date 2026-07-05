@@ -190,7 +190,7 @@ pub fn draw_rectangles(
 
         // 描画命令を記録
         unsafe {
-            // 共有DCのワールド変換をリセット（前フレームのcomposite_render_systemが
+            // 共有DCのワールド変換をリセット（前フレームの描画処理が
             // 設定したエンティティ位置変換が残留するのを防止）
             dc.SetTransform(&Matrix3x2::identity());
             dc.BeginDraw();

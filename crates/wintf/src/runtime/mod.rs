@@ -422,7 +422,7 @@ mod tests {
     /// 回さず reconcile を直接 schedule 実行する。
     #[test]
     fn close_to_reconcile_to_shutdown_chain_wakes_listener() {
-        use crate::ecs::window::{CompositionMode, Window, WindowHandle, WindowStyle};
+        use crate::ecs::window::{Window, WindowHandle, WindowStyle};
         use crate::ecs::world::EcsWorldSelfRef;
         use crate::runtime::window_factory::EcsWindowFactory;
         use bevy_ecs::schedule::Schedule;
@@ -453,7 +453,6 @@ mod tests {
                     Window {
                         title: "ShutdownChain".to_string(),
                         parent: None,
-                        composition_mode: CompositionMode::DComp,
                     },
                     WindowStyle {
                         style: WS_POPUP,

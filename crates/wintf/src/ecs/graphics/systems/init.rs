@@ -182,9 +182,9 @@ pub fn init_graphics_core(
 
 /// WindowGraphics初期化・再初期化
 ///
-/// WindowGraphics初期化・再初期化（DComp モードの Window に対し WUC バックエンドで作成）
+/// WindowGraphics初期化・再初期化（Window エンティティに対し WUC バックエンドで作成）
 ///
-/// CompositionMode::DComp の Window にのみ WindowGraphics を作成する。
+/// Window エンティティに WindowGraphics を作成する（全 Window が WUC 合成）。
 /// WucGraphicsResource が未初期化の場合はここで遅延初期化する。
 pub fn init_window_graphics(
     graphics: Res<GraphicsCore>,
@@ -203,18 +203,12 @@ pub fn init_window_graphics(
     mut commands: Commands,
     frame_count: Res<crate::ecs::world::FrameCount>,
 ) {
-    use crate::ecs::window::CompositionMode;
-
     if !graphics.is_valid() {
         return;
     }
 
-    // DComp モードの Window が存在するか確認
-    let has_dcomp_windows = query
-        .iter()
-        .any(|(_, w, _, _, _, _)| w.composition_mode() == CompositionMode::DComp);
-
-    if !has_dcomp_windows {
+    // Window が存在するか確認（全 Window が WUC 合成）
+    if query.iter().next().is_none() {
         return;
     }
 
@@ -251,12 +245,7 @@ pub fn init_window_graphics(
     // Some かつ is_valid() の場合にのみ true になる（!wuc_valid 分岐は全経路 return 済み）。
     // よってこの unwrap は到達可能な全経路で発火しない。
     let wuc_res = wuc_resource.unwrap();
-    for (entity, window, handle, _res, window_graphics, name) in query.iter_mut() {
-        // DComp モードのみ処理
-        if window.composition_mode() != CompositionMode::DComp {
-            continue;
-        }
-
+    for (entity, _window, handle, _res, window_graphics, name) in query.iter_mut() {
         let entity_name = format_entity_name(entity, name);
         match window_graphics {
             None => {

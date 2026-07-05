@@ -61,7 +61,7 @@ debug!(x = pos.x, y = pos.y, "position");
 ```rust
 info!("[GraphicsCore] Initialization completed");
 debug!(entity = %name, "[init_window_graphics] WindowGraphics created");
-info!("[ClipDemo] Creating ULW + DComp clip windows");
+info!("[ClipDemo] Creating DComp clip windows");
 trace!(frame = frame_count.0, "[commit_composition] DComp device not available");
 ```
 

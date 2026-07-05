@@ -9,8 +9,8 @@ use bevy_ecs::prelude::*;
 use windows::Win32::System::Com::{COINIT_MULTITHREADED, CoInitializeEx};
 use wintf::ecs::world::FrameCount;
 use wintf::ecs::{
-    CompositionMode, GraphicsCore, SurfaceGraphics, SurfaceGraphicsDirty, Visual, VisualGraphics,
-    Window, WucGraphicsResource,
+    GraphicsCore, SurfaceGraphics, SurfaceGraphicsDirty, Visual, VisualGraphics, Window,
+    WucGraphicsResource,
 };
 
 /// テスト用ワールドをセットアップ
@@ -39,15 +39,10 @@ fn setup_world() -> World {
 fn test_dcomp_window_visual_gets_dcomp_components() {
     let mut world = setup_world();
 
-    // DComp Window を生成
-    let window_entity = world
-        .spawn(Window {
-            composition_mode: CompositionMode::DComp,
-            ..Default::default()
-        })
-        .id();
+    // Window を生成
+    let window_entity = world.spawn(Window::default()).id();
 
-    // DComp Window 配下に Visual を生成
+    // Window 配下に Visual を生成
     let visual_entity = world
         .spawn((Visual::default(), ChildOf(window_entity)))
         .id();
@@ -67,36 +62,6 @@ fn test_dcomp_window_visual_gets_dcomp_components() {
     assert!(
         world.get::<SurfaceGraphicsDirty>(visual_entity).is_some(),
         "DComp Visual should have SurfaceGraphicsDirty"
-    );
-}
-
-#[test]
-fn test_ulw_window_visual_does_not_get_dcomp_components() {
-    let mut world = setup_world();
-
-    // ULW Window を生成（デフォルト）
-    let window_entity = world.spawn(Window::default()).id();
-
-    // ULW Window 配下に Visual を生成
-    let visual_entity = world
-        .spawn((Visual::default(), ChildOf(window_entity)))
-        .id();
-
-    // Commands をフラッシュ
-    world.flush();
-
-    // ULW モードの Visual は DComp コンポーネントが挿入されない
-    assert!(
-        world.get::<VisualGraphics>(visual_entity).is_none(),
-        "ULW Visual should NOT have VisualGraphics"
-    );
-    assert!(
-        world.get::<SurfaceGraphics>(visual_entity).is_none(),
-        "ULW Visual should NOT have SurfaceGraphics"
-    );
-    assert!(
-        world.get::<SurfaceGraphicsDirty>(visual_entity).is_none(),
-        "ULW Visual should NOT have SurfaceGraphicsDirty"
     );
 }
 

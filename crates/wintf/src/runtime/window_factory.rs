@@ -14,9 +14,9 @@
 //! 旧 `create_windows` と同一の `WindowPos::to_window_coords_for_creation` で算出し、
 //! 初期表示ドリフトを避ける（設計 Risks）。
 //!
-//! # ex_style 算出（要件 2.2）
-//! `CompositionMode` から旧経路と同一規則で算出する（ULW=`WS_EX_LAYERED`／
-//! DComp=`(ex_style & !WS_EX_LAYERED) | WS_EX_NOREDIRECTIONBITMAP`）。
+//! # ex_style 算出（要件 4.1/4.2/4.3）
+//! 合成モード非依存の branchless 単一経路で算出する
+//! （`(ex_style & !WS_EX_LAYERED) | WS_EX_NOREDIRECTIONBITMAP`＝GPU 合成固定）。
 //!
 //! # CS_DBLCLKS・GWLP_USERDATA（要件 2.5/2.3）
 //! クラスの `CS_DBLCLKS` はライブラリの共有クラスが内蔵するため wintf 側補填は設けない。
@@ -47,29 +47,24 @@ use windows::core::HSTRING;
 use wintf_winmsg_executor::util::{get_instance_handle, Window as LibWindow, WindowType};
 
 use crate::ecs::HasGraphicsResources;
-use crate::ecs::window::{CompositionMode, Window, WindowHandle, WindowPos, WindowStyle};
+use crate::ecs::window::{Window, WindowHandle, WindowPos, WindowStyle};
 use crate::ecs::world::EcsWorld;
 use crate::runtime::window_registry::WindowRegistry;
 use crate::runtime::wndproc_bridge::{make_wndproc, WndState};
 
 use windows::Win32::UI::WindowsAndMessaging::WINDOW_EX_STYLE;
 
-/// `CompositionMode` から拡張スタイルを算出する純関数（要件 2.2）。
+/// 拡張スタイルを合成モード非依存で算出する純関数（要件 4.1/4.2/4.3）。
 ///
-/// 旧 `create_windows`（`ecs/window/window_system.rs`）と byte-for-byte 同一規則:
-/// - `ULW`  → `style.ex_style`（既定 `WS_EX_LAYERED`）。
-/// - `DComp`→ `(style.ex_style & !WS_EX_LAYERED) | WS_EX_NOREDIRECTIONBITMAP`。
+/// GPU 合成（WUC）へ無条件固定されたため分岐はない。撤去前の DComp アームと
+/// byte-for-byte 等価に、`WS_EX_LAYERED` を常に落とし `WS_EX_NOREDIRECTIONBITMAP` を
+/// 常に付与する（生成時に `WS_EX_LAYERED` は付与しない＝Req4.3）。
 ///
 /// 副作用なしで単体テストできるよう独立関数に切り出す。
-fn compute_ex_style(composition_mode: CompositionMode, style: &WindowStyle) -> WINDOW_EX_STYLE {
+fn compute_ex_style(style: &WindowStyle) -> WINDOW_EX_STYLE {
     use windows::Win32::UI::WindowsAndMessaging::WS_EX_NOREDIRECTIONBITMAP;
-    match composition_mode {
-        CompositionMode::ULW => style.ex_style, // WS_EX_LAYERED（デフォルト）
-        CompositionMode::DComp => {
-            // DComp モード: WS_EX_NOREDIRECTIONBITMAP を設定、WS_EX_LAYERED は除去。
-            (style.ex_style & !WS_EX_LAYERED) | WS_EX_NOREDIRECTIONBITMAP
-        }
-    }
+    // WS_EX_NOREDIRECTIONBITMAP を設定、WS_EX_LAYERED は除去（branchless 単一経路）。
+    (style.ex_style & !WS_EX_LAYERED) | WS_EX_NOREDIRECTIONBITMAP
 }
 
 /// 宣言的ウィンドウ生成をライブラリ経由へ橋渡しする移行ファクトリ。
@@ -83,7 +78,7 @@ impl EcsWindowFactory {
     /// `entity` の宣言的ウィンドウデータからライブラリウィンドウを生成し登録する。
     ///
     /// 手順（借用は最小限・`new_checked_ex` 越しに World 借用を保持しない＝再入安全）:
-    /// 1. `entity` の `Window`/`WindowStyle`/`WindowPos`/`title`/`composition_mode` を
+    /// 1. `entity` の `Window`/`WindowStyle`/`WindowPos`/`title` を
     ///    `World` から読み取り（immutable・即解放）。`Window` 不在なら no-op。
     /// 2. `ex_style` を [`compute_ex_style`] で算出。
     /// 3. `WndState{ world: Weak<RefCell<EcsWorld>>, entity }` と [`make_wndproc`] で
@@ -116,13 +111,12 @@ impl EcsWindowFactory {
             return;
         };
         let title = window.title.clone();
-        let composition_mode = window.composition_mode();
         let parent = window.parent;
         let style = entity_ref.get::<WindowStyle>().copied().unwrap_or_default();
         let pos = entity_ref.get::<WindowPos>().copied().unwrap_or_default();
 
-        // --- 2. ex_style 算出（要件 2.2） ---
-        let ex_style = compute_ex_style(composition_mode, &style);
+        // --- 2. ex_style 算出（要件 4.1/4.2/4.3・branchless） ---
+        let ex_style = compute_ex_style(&style);
 
         // --- 3. ライブラリ生成（要件 2.1） ---
         // `new_ex`（`Fn`・RefCell ラップなし＝**wndproc 再入可**）を採用する。
@@ -172,10 +166,9 @@ impl EcsWindowFactory {
 
         // --- 4b. ウィンドウを表示（旧 create_windows の ShowWindow(SW_SHOW) 同等） ---
         // ライブラリは `WINDOW_STYLE(0)`（WS_VISIBLE なし）で生成するため、スタイルに
-        // WS_VISIBLE を持たないウィンドウ（例: WindowStyle 未設定でデフォルトの
-        // multi_backend_demo ULW 窓）はこの ShowWindow がないと不可視のままになる
-        // （5.3 実機回帰: ULW 窓が見えない）。旧 create_windows が呼んでいた表示呼び出しを
-        // 復元する。SAFETY: Win32 境界。生成直後の有効 HWND に対する表示要求のみ。
+        // WS_VISIBLE を持たないウィンドウ（例: WindowStyle 未設定でデフォルト生成される窓）は
+        // この ShowWindow がないと不可視のままになる（実機回帰で確認済み）。旧 create_windows が
+        // 呼んでいた表示呼び出しを復元する。SAFETY: Win32 境界。生成直後の有効 HWND に対する表示要求のみ。
         // 同期発火する WM_WINDOWPOSCHANGED は tick の World 借用中ゆえ wndproc closure の
         // try_borrow 失敗で安全スキップされる（生成時メッセージは ECS 更新不要）。
         unsafe {
@@ -287,28 +280,11 @@ mod tests {
         WS_VISIBLE,
     };
 
-    use crate::ecs::window::CompositionMode;
-
-    /// (1) ex_style 算出: ULW は WS_EX_LAYERED を保つ（既定スタイル）。
-    #[test]
-    fn ex_style_ulw_keeps_layered() {
-        let style = WindowStyle::default(); // ex_style = WS_EX_LAYERED
-        let ex = compute_ex_style(CompositionMode::ULW, &style);
-        assert_eq!(
-            ex, style.ex_style,
-            "ULW は WindowStyle.ex_style（WS_EX_LAYERED）をそのまま使う"
-        );
-        assert!(
-            (ex & WS_EX_LAYERED) == WS_EX_LAYERED,
-            "ULW は WS_EX_LAYERED を含むべき"
-        );
-    }
-
-    /// (1) ex_style 算出: DComp は NOREDIRECTIONBITMAP を立て LAYERED を除去する。
+    /// (1) ex_style 算出: 一本化後の唯一経路は NOREDIRECTIONBITMAP を立て LAYERED を除去する。
     #[test]
     fn ex_style_dcomp_sets_noredirection_clears_layered() {
         let style = WindowStyle::default(); // ex_style = WS_EX_LAYERED
-        let ex = compute_ex_style(CompositionMode::DComp, &style);
+        let ex = compute_ex_style(&style);
         assert!(
             (ex & WS_EX_NOREDIRECTIONBITMAP) == WS_EX_NOREDIRECTIONBITMAP,
             "DComp は WS_EX_NOREDIRECTIONBITMAP を立てるべき"
@@ -327,7 +303,7 @@ mod tests {
             style: WS_POPUP,
             ex_style: WS_EX_LAYERED | WS_EX_TOPMOST,
         };
-        let ex = compute_ex_style(CompositionMode::DComp, &style);
+        let ex = compute_ex_style(&style);
         assert!(
             (ex & WS_EX_TOPMOST) == WS_EX_TOPMOST,
             "LAYERED 以外の既存ビット（TOPMOST）は保持されるべき"
@@ -361,7 +337,6 @@ mod tests {
                 Window {
                     title: "FactoryTest".to_string(),
                     parent: None,
-                    composition_mode: CompositionMode::DComp,
                 },
                 WindowStyle {
                     // 可視化しない（DComp 不可視）。WS_POPUP 主体で枠計算を単純化。
@@ -455,7 +430,6 @@ mod tests {
                 Window {
                     title: "DeclFlow".to_string(),
                     parent: None,
-                    composition_mode: CompositionMode::DComp, // 不可視（headless）
                 },
                 WindowStyle {
                     style: WS_POPUP,
