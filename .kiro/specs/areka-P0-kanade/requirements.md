@@ -18,7 +18,7 @@ areka-P0-kanade: kanade（③conductor）＝実行時経路（運行表）の所
   - SHIORI 呼出契約（GET=200 で Value あり／204 で Value なし・NOTIFY・エラー区別語彙）は shiori 通信層（host32-request 成果）が正本。
   - talk 起動契約（StartTalk/TalkDone）は本 spec が正本であり、sakura-engine が消費する（再定義しない）。
   - kanade への結線・boot 指示・close 完了待ちは ghost-setup が担う（kanade は指示の受け手）。
-- **design 送り事項**（要件では確定しない・design で ukadoc 正典参照の上確定）: boot 系列・OnSecondChange の Reference 実装値の全確認（Reference 表の作成）／close 再生完了待ちの上限値（de-facto タイムアウト）／talk 重複時（再生中の新規 Value 受領）の調停規則／Tick の供給方式。
+- **design 送り事項**（要件では確定しない・design で ukadoc 正典参照の上確定）: boot 系列・OnSecondChange の Reference 実装値の全確認（Reference 表の作成）／close 再生完了待ちの上限値（de-facto タイムアウト）／talk 重複時（再生中の新規 Value 受領）の調停規則／Tick の供給方式／強制終了時の OnClose 発行有無（best-effort）と Ref0 理由値（shutdown 等）の正典確認。
 
 ## Requirements
 
@@ -60,18 +60,19 @@ areka-P0-kanade: kanade（③conductor）＝実行時経路（運行表）の所
 
 ### Requirement 4: close 握手と終了系列（`\-`＝quit が唯一のスクリプト起因終了トリガ）
 
-**Objective:** ゴースト運用者として、`\-` の正典意味論どおりに終了してほしい——OnClose はあくまで「終了要求」であり、実際に終了するか否かは応答スクリプトに `\-` が含まれるかに依存する。ゴーストが唐突に切断されず、終了拒否の自由も保たれるように。
+**Objective:** ゴースト運用者として、`\-` の正典意味論どおりに終了してほしい——OnClose はあくまで「終了要求」であり、通常経路の終了権限は SHIORI 側（応答スクリプトに `\-` が含まれるか）にある。ゴーストが唐突に切断されず、終了拒否の自由も保たれるように。ただし強制経路（OS シャットダウン・デバッグ用強制終了）は SHIORI の意思に依存せず無条件で完遂される。
 
 #### Acceptance Criteria
 
 1. When close 指示を受領した, the kanade engine shall `OnClose`（Ref0=理由）を GET として発行する。
 2. When `OnClose` の応答として Value を受領した, the kanade engine shall talk 起動要求として配送し、対応する `TalkDone` を受領するまで close 握手中として運行を保留する（終了するか否かは TalkDone の quit フラグで決まる）。
 3. When `TalkDone{quit: true}` を受領した（close 握手中か定常運転中か・talk の由来イベントを問わず）, the kanade engine shall 終了系列（SHIORI の unload を含む正規終了経路の起動→アクター停止）へ進む。
-4. If close 握手中の talk が quit=false で完了した（応答スクリプトに `\-` が含まれない）, the kanade engine shall ゴーストを終了させず定常運転へ復帰する。
-5. If `OnClose` の応答が 204（Value なし）である, the kanade engine shall `OnCloseAll` を発行した上で終了系列へ進む。
-6. If close 握手中の再生完了通知が上限時間内に届かない, the kanade engine shall エラーログを記録した上で終了系列を継続する（上限値は design で確定・注入時刻で判定しテスト可能とする）。
-7. When 終了系列が完了した, the kanade engine shall アクターとして停止し、停止の完了が呼び手（結線側）から観測可能である。
-8. When 全ての指示送信元が切断された, the kanade engine shall 正常終了する（宙吊りで残らない）。
+4. When 強制終了指示（OS シャットダウン由来・デバッグ用強制終了等）を受領した, the kanade engine shall close 握手の状態・quit の有無を問わず `\-` 受領と同等の効果として終了系列へ直行する（OS シャットダウンの検出と強制判定は呼び手＝器の責務であり、kanade は強制終了指示の受け手である）。
+5. If close 握手中の talk が quit=false で完了した（応答スクリプトに `\-` が含まれない）, the kanade engine shall ゴーストを終了させず定常運転へ復帰する。
+6. If `OnClose` の応答が 204（Value なし）である, the kanade engine shall `OnCloseAll` を発行した上で終了系列へ進む。
+7. If close 握手中の再生完了通知が上限時間内に届かない, the kanade engine shall エラーログを記録した上で終了系列を継続する（上限値は design で確定・注入時刻で判定しテスト可能とする）。
+8. When 終了系列が完了した, the kanade engine shall アクターとして停止し、停止の完了が呼び手（結線側）から観測可能である。
+9. When 全ての指示送信元が切断された, the kanade engine shall 正常終了する（宙吊りで残らない）。
 
 ### Requirement 5: SHIORI 呼出境界（mock 差し替え可能な相手方）
 
