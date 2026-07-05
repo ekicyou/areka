@@ -649,6 +649,10 @@ mod loopback_tests {
     /// WindowCreationError になる既知制約ゆえ、窓は 1 組（stand-in parent ＋ helper）に集約する。
     /// bounded: 有限メッセージを PostMessage で撒いた後に必ず抜ける（無限ループ禁止）。
     #[test]
+    #[cfg_attr(
+        not(target_arch = "x86"),
+        ignore = "i686 専用: 32bit testdll(shiori.dll) を load するため x64 では BAD_EXE_FORMAT。`cargo test -p shiori-host32-helper --target i686-pc-windows-msvc` で実行"
+    )]
     fn loopback_hello_request_proxy_driven_and_bounded_loop() {
         // --- stand-in parent（HELLO / RESPONSE 受け皿）。受領を Rc<Cell> に記録 ---
         let hello_helper_hwnd: Rc<Cell<Option<u32>>> = Rc::new(Cell::new(None));
