@@ -446,6 +446,10 @@ mod tests {
     /// env `HOST32_TESTDLL_UNLOAD_MARKER` はプロセス global ゆえ、testdll を load する他テストと
     /// `TESTDLL_SERIAL` で直列化して競合を避ける（本テストのみが marker env を set/remove する）。
     #[test]
+    #[cfg_attr(
+        not(target_arch = "x86"),
+        ignore = "i686 専用: 32bit testdll(shiori.dll) を load するため x64 では BAD_EXE_FORMAT。`cargo test -p shiori-host32-helper --target i686-pc-windows-msvc` で実行"
+    )]
     fn testdll_drop_invokes_courtesy_unload() {
         // testdll ロードテスト同士を直列化（marker env レース排除）。汚染ロックは無視して継続。
         let _serial = TESTDLL_SERIAL.lock().unwrap_or_else(|e| e.into_inner());
@@ -515,6 +519,10 @@ mod tests {
     /// 「入力 callee-free／応答 caller-free」（二重解放なし）の観測証拠。`HOST32_TESTDLL_UNLOAD_MARKER`
     /// は設定しない（プロセス global ゆえ `testdll_drop_invokes_courtesy_unload` が唯一の所有者）。
     #[test]
+    #[cfg_attr(
+        not(target_arch = "x86"),
+        ignore = "i686 専用: 32bit testdll(shiori.dll) を load するため x64 では BAD_EXE_FORMAT。`cargo test -p shiori-host32-helper --target i686-pc-windows-msvc` で実行"
+    )]
     fn testdll_request_roundtrip_get_and_notify() {
         // testdll ロードテスト同士を直列化（drop テストの marker env レース排除）。
         let _serial = TESTDLL_SERIAL.lock().unwrap_or_else(|e| e.into_inner());
