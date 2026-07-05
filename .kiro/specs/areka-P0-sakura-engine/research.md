@@ -140,6 +140,10 @@
 
 ## 8. 設計フェーズ・シンセシス（design.md 生成時に確定・2026-07-05）
 
+> **⚠ 履歴注記（2026-07-05・設計ディスカッション #3）**: 本節の DD-2（Duration 貫通）と
+> DD-3（dola `TimedSchedule` 不採用・自前 expand）は **§9 で覆された**（→ f64 秒貫通・
+> dola cue 採用）。本節は初版 design.md の判断記録として保存する（履歴を書き換えない）。
+
 > Discovery 種別: **full**（greenfield クレート）。ただし §1〜§7 のギャップ分析で
 > コードベース側の探索は完了済みゆえ、本フェーズは (1) ukadoc 正典による意味論確認、
 > (2) 実シンボルの再検証（`Instruction` 14 variant / `reply_channel` consume / `TimedSchedule`
@@ -197,3 +201,116 @@
 コンポーネント↔ファイル 1:1（orphan なし）・境界↔ファイル整合。判断レビュー: 要件被覆・
 アーキ準備・境界明確（DD-1 の移譲シーム明示）・実装可能（三層＝境界タスク）を確認。
 軽微修正のみ（dola を Cargo 依存に含めない旨の文言整合）。**未解決の要件ギャップ無し。**
+
+---
+
+## 9. 設計ディスカッション #3: dola 基盤化ピボット（2026-07-05・design.md 改訂 2 の正本）
+
+> 設計バリデーション（`design-validation.md`・NO-GO 軽微）後の設計ディスカッションで、
+> 開発者が **「sakura は dola の上に建てるエンジンとして設計せよ」** と方向を確定した。
+> 初版 design.md の DD-3（dola cue 不採用）は下記の新証拠により**覆される**。
+> 本節は §7/§8 の記録を書き換えず追記する（履歴保存）。
+
+### 9.1 ピボットの証拠（実ソース精査・2026-07-05）
+
+初版 DD-3 の比較は `TimedSchedule<T>` 単体を「汎用配信エンジン」として見ていたが、
+dola cue モジュール**全体**と wintf 側の消費実装を直読すると、cue ドメインは
+**さくらスクリプト再生のために purpose-built された基盤**であることが確認された:
+
+- **`ActorKey`**（`crates/dola/src/cue/command.rs`）: doc に「さくらスクリプトの `\0`(さくら)/`\1`(うにゅう) に相当するが、文字列ベースで任意の名前を許容する」と明記＝話者スコープの受け皿そのもの。
+- **`CueTarget::{Shell, Balloon}`**: 「Shell（キャラクター描画）— Emote, EntityRef を主に消費／Balloon（テキスト表示）— Text, Clear, Choice, WaitForChoice を主に消費」＝本仕様の下流 2 分岐（seriko／emo text-layer）の型がすでに存在する。
+- **`CueCommand`**: `Text(String)`/`Clear`/`Emote{key}`/`Choice{id,text}`/`EntityRef`/`Custom` — sakura の実挙動タグ（Text/Clear/Surface）と R8 シーム（Choice）を直接受ける語彙。
+- **`BarrierKind::{WaitForInput, WaitForChoice, Timeout}`**: `\x`（クリック待ち）・`\q`（選択肢待ち）の将来写像先が **primitive として既に存在**し、wintf `CueQueue` に消費実装（Choice 先積みプロトコル・バリア状態遷移・タイムアウト）まである。
+- **wintf 本番配送パイプライン**（`crates/wintf/src/ecs/cue/`）: `CueSheet → PendingCueSheet → dispatch_pending_cue_sheets → per-entity CueQueue（dola TimedSchedule<CueCommand> 内包）→ pop_ready → 消費者`、`EntityRegistry` が `(ActorKey, CueTarget) → Entity` を解決、`FrameTime(f64)` が駆動＝**再生の「配送側半身」は稼働済み**。sakura が cue ドメインで喋れば ghost-setup の結線は `CueSheet`（serde 可）の手渡しで足りる。
+- **roadmap 正本**（`.kiro/steering/roadmap.md`）: 「runtime 制御階層 kanade／sakura／seriko（…**両 anim engine は dola 上**）」「（sakura-engine の項）**時間軸は dola✅（時刻注入 tick＝決定的）**」。
+
+初版 DD-3 の判断は「自前型で作ると ghost-setup で自前型→cue の翻訳層が必ず要る」という
+統合コストを見落としていた。**最初から cue ドメインで出力する**ことで翻訳層が消える。
+
+### 9.2 覆された判断（DD-2 / DD-3）と新決定
+
+| DD | 初版（§8.4） | **改訂 2（本節が正本）** |
+|---|---|---|
+| DD-2 | `Duration` で貫通・f64 換算しない | **f64 秒（dola ドメイン）で貫通**。`Wait(Duration)` は compile 内 1 箇所で `as_secs_f64()` 累積＝**単位換算であって `\w`×50ms の再導出ではない**（R2.3 不変）。不変条件: 生成 offset は有限非負 `Duration` 由来の累積和＝**構成的に有限・非負**→ dola が文書化する NaN ハザード（schedule.rs NOTE(D3-V)・sheet.rs P25）は本経路で発生し得ない（放電） |
+| DD-3 | 自前純粋 `expand`・dola cue 不採用（Cargo 依存にも加えない） | **dola cue 採用・dola を P0 Cargo 依存へ**。compile は `CueSheet`＋`TalkEndReason` を返し、駆動は `TimedSchedule<TalkCue>`（`TalkCue{at, actor, command}`）。初版の懸念への回答: f64 換算=1 箇所不変条件付き／Barrier・Routing=「不要概念」でなく M-dialogue 写像先として温存する資産／2 分岐振り分け=`cue_target_of` 1 関数に閉じる |
+
+**`compile_sheet` は不採用**（重要な新発見）: `dola::cue::compile_sheet` は最小 `start_time` を
+0 基準へ正規化するため**先頭の `\w`（冒頭待ち）を消す**（例 `\w9テキスト` の 0.45s→0s）。また
+`CompiledCue` は actor/at を payload 外へ置くため headless 駆動の観測（R9.2 の at 観測）に不適合。
+sakura の compile は構成的に 0 起点なので正規化不要＝駆動層の独自アダプタ `to_schedule` で
+`Entry::Payload(start_time, TalkCue)` を直接挿入する（design.md に禁止事項として明記）。
+
+### 9.3 DD-9: `NewLine` の cue 表現（新規決定）
+
+`Instruction::NewLine(NewLineRatio)` に対応する `CueCommand` が dola に無い。選択肢:
+
+- **(a) dola `CueCommand` へ `NewLine { ratio: f32 }` variant を追加（採用）**
+- (b) `CueCommand::Custom{command: "newline", params: {ratio}}`（dola 不改変・stringly-typed）
+
+**決定 = (a)**。根拠: ①改行はさくらスクリプトのテキスト系一級指令（`\n`/`\n[percent]`）で
+M1 主経路（emo text-layer）の消費対象＝`Custom`＋`DynamicValue` では型安全性を失い f32 が
+JSON 動的値になる（Type Safety 原則違反）。②steering 記憶「正規実装・小細工禁止」＝正規経路の
+ための隣接クレート増分はスコープ内。③source-breaking 影響を実測: `CueCommand` は
+`#[non_exhaustive]` でないが、**ワークスペースに exhaustive match は存在しない**——
+wintf `queue/mod.rs` の 2 match は `other =>`/`_ =>` catch-all、tests は `matches!`／個別構築のみ、
+dola 側は `cue_command_six_variants` テストと doc の「6 バリアント」表記の更新（意味整合）のみ。
+serde は variant 追加＝後方互換（現行ワークスペースに cue の永続化経路なし）。
+`Entry<CueCommand>` 128B サイズテストにも影響なし（`NewLine{f32}` < `Text(String)`）。
+
+### 9.4 アクター/駆動モデルの確定（validation Issues 1〜3 の解決・discussion 合意）
+
+- **Issue 1（Close 配送端の欠落）**: `spawn_talk(start, sinks) -> TalkHandle{inbox: Sender<SakuraMsg>, actor: ActorHandle}`。`spawn_talk` が spawn 直後に `SakuraMsg::Start(start)` を inbox へ**自己投函**し、以降 kanade/テストは inbox へ `Tick`/`Close` のみ送る＝**投函経路 inbox 一貫**。単一 inbox の全順序が「Start 先行」「Close と Tick の順序確定」を保証（DD-11）。
+- **Issue 2（注入時刻と Close 即時性の両立）**: 正準ループは `run_inbox` そのもの＝時刻も `SakuraMsg::Tick(f64)` として inbox へ入る（二重待機が消滅）。**`Tick` の意味論を「talk 起点からの経過秒（0 起点・単調非減少・有限）」に固定**（DD-10）。駆動は `TimedSchedule::new(0.0)`＋`tick(elapsed)` の恒等対応。絶対時刻 epoch（QPC）の知識と `Instant` は sakura から完全排除。本番 ticker（kanade/clock アクターが `clock::now()` から elapsed を算出し実 cadence で送る）は**スコープ外シーム**（ghost-setup/kanade 領分）。**新規ガード**: `TimedSchedule::tick` の冪等早期 return は ready バッファを保持するため、同時刻再 tick で ready() を再読すると**二重発火**し得る→駆動層が直前 tick 値を保持し `t <= prev` を no-op 化（設計固定）。非有限 Tick は `error!`＋無視（NaN 全量配信ハザードの遮断）。
+- **Issue 3（高々 1 回機構の一本化）**: `ReplySender::send(self)` の move-consume を**唯一の機構**とし終端済みフラグは持たない（初版是正のまま維持）。body の `Option<TalkState>` は所有権スロット（FnMut 越しの move-consume 表現）でありフラグではない。全終端経路は「take → send → 直後 Break」の対＝Break 後はスレッド消滅ゆえ終端後 Close は構造的に再返信不能（R6.4/R7.5）。
+
+### 9.5 不変の契約（議題 #1/#2・Category-A 是正の維持）
+
+`TalkDone{talk_id, reason: {Ended, Quit, Interrupted}}`／通算高々 1 回／Close 単一 funnel
+（トリガ不可知）／`StartTalk`・`TalkDone` の暫定所在=sakura contract モジュール（DD-1）／
+`TalkId(u64)` newtype／ガード系タグ=R8 無視＋シーム——はすべて**不変**。R8 シームはむしろ
+強化された: `Choice` → `CueCommand::Choice` 先積み＋`Barrier(WaitForChoice)`、`\x` 系 →
+`Barrier(WaitForInput)` という **dola 既存 primitive** を M-dialogue の写像先として明記できる。
+
+### 9.6 依存の反転と handoff 成果物
+
+- **dola = P0 Cargo 依存**（cue モジュール）。`runtime`/`DolaRuntime` は使用しない。
+- **wintf は依存しない**（headless・ECS 非依存は不変）。ECS 統合は ghost-setup の結線シーム:
+  **handoff 成果物 = `CompiledTalk::sheet: CueSheet`（serde 可）**＝wintf パイプライン
+  （`PendingCueSheet` → dispatch）がそのまま消費できる形。
+- 依存方向: `dola::cue`/`areka_parsers`/`areka-actor` → `contract` → `compile` → `sink` → `drive` → tests。
+
+### 9.7 M-boot テスト方針（R9・f64 決定性）
+
+- 決定性は「注入 `Tick(f64)` 列の直入力」で担保（実時間 sleep・`clock::now()`・`Instant` 不使用）。
+- **f64 累積の決定性**: IEEE 754 加算は決定的。テスト期待値は 10 進リテラル直書きでなく
+  **実装と同一の `as_secs_f64()` 累積**で計算し表現誤差を排除（0.05 は 2 進で非正確表現）。
+- mock sink は `Arc<Mutex<Vec<TalkCue>>>` 共有蓄積＝`(actor, command, at)` を観測。
+- compile 純粋テストが主戦場（不変）。追加の固定テスト: 先頭待ち保存（`compile_sheet` 不使用の
+  証明）・冪等/逆行 Tick の二重発火なし・非有限 Tick 無視。
+
+### 9.8 設計レビューゲート結果（改訂 2）
+
+**1 パスで通過**（repair パス 0）。機械チェック: 全要件 ID（R1.1〜R11.4）が traceability と
+コンポーネントブロックに出現・Boundary 4 節実体・File Structure Plan 具体パス
+（`crates/areka-sakura/src/{lib,contract,compile,drive,sink,error}.rs`＋Modified=
+`crates/dola/src/cue/command.rs`/`mod.rs`）・コンポーネント↔ファイル 1:1（orphan なし）・
+境界↔ファイル整合（dola 増分は DD-9 として境界宣言済み）。判断レビュー: validation の
+Critical Issues 1〜3 がそれぞれ DD-11（TalkHandle・inbox 一貫）・DD-10（Tick=経過秒・
+run_inbox 正準・二重発火ガード）・move-consume 一本化（維持）で解消されていることを確認。
+**未解決の要件ギャップ無し。**
+
+### 9.9 DD 索引（改訂 2 時点の有効判断）
+
+| DD | 論点 | 有効な決定（正本） |
+|---|---|---|
+| DD-1 | `StartTalk`/`TalkDone` 暫定所在 | sakura `contract` 暫定所有・kanade 移譲時 re-export 切替（不変） |
+| DD-2 | 時刻貫通型 | **f64 秒（dola ドメイン）**・`as_secs_f64()` 換算 1 箇所・有限非負不変条件（§9.2） |
+| DD-3 | 発火列/配信エンジン | **dola cue 採用**（`CueSheet`＋`TimedSchedule<TalkCue>`・`compile_sheet` 禁止）（§9.2） |
+| DD-4 | per-talk 生成単位 | `spawn_actor` スレッド単位（不変） |
+| DD-5 | 出力契約型 | **cue ドメインで実現**: `TalkCue{at: f64, actor: ActorKey, command: CueCommand}`＋`cue_target_of`（Shell/Balloon 分類）。scope は `ActorKey(n.to_string())` 転写（旧 `SpeakerScope(u32)` newtype は廃止・実体解決は下流 registry） |
+| DD-6 | 既定 scope | 既定 0 → `ActorKey("0")`（ukadoc 確認・不変） |
+| DD-7 | `TalkDone` 返信機構 | `ReplySender` move-consume 唯一機構（不変・フラグ禁止） |
+| DD-8 | M-boot タグ表 | cue 写像込みで design.md に更新（Choice/`\x` の写像先=dola 既存 primitive を明記） |
+| DD-9 | `NewLine` の cue 表現 | **dola `CueCommand::NewLine{ratio: f32}` 追加**（§9.3・touch points 実測済み） |
+| DD-10 | `Tick` の意味論 | **talk 起点経過秒（0 起点・単調・有限）**＋`TimedSchedule::new(0.0)`・二重発火/非有限ガード（§9.4） |
+| DD-11 | 駆動の対外 I/F | `spawn_talk -> TalkHandle{inbox, actor}`・Start 自己投函・投函経路 inbox 一貫（§9.4） |
