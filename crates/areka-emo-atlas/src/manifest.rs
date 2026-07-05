@@ -149,6 +149,7 @@ mod tests {
     fn surface(id: u32, elements: Vec<Element>) -> Surface {
         Surface {
             id,
+            targets: vec![areka_parsers::shell::AppendTarget::Single(id)],
             elements,
             collisions: Vec::new(),
             animations: Vec::new(),

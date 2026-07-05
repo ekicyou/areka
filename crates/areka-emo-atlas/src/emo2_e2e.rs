@@ -19,7 +19,7 @@
 
 use std::path::PathBuf;
 
-use areka_parsers::shell::{Element, ElementPath, Surface};
+use areka_parsers::shell::{AppendTarget, Element, ElementPath, Surface};
 use windows::Win32::System::Com::{CoInitializeEx, CoUninitialize, COINIT_MULTITHREADED};
 
 use crate::{
@@ -65,6 +65,7 @@ fn on_params() -> AlphaParams {
 fn hand_surface(id: u32, rel: &str) -> Surface {
     Surface {
         id,
+        targets: vec![AppendTarget::Single(id)],
         elements: vec![Element {
             layer: 0,
             path: ElementPath::new(rel.to_string()),
@@ -289,6 +290,7 @@ fn emo2_nonexistent_path_isolated_others_continue() {
     // 実在 + bogus を 1 surface に混在（両者とも shell/master 基準）。
     let surfaces = vec![Surface {
         id: 0,
+        targets: vec![AppendTarget::Single(0)],
         elements: vec![
             Element {
                 layer: 0,

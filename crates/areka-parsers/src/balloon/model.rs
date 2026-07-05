@@ -3,7 +3,7 @@
 //! 集約ルート `BalloonModel` と幾何・フォント sub-struct
 //! （`WindowPosition`/`Origin`/`WordWrapPoint`/`ValidRect`/`Font`/`FontColor`）を定義する。
 //! これがクロスエンジン I/O 契約の正本であり、本パーサ（`balloon::parse`）が生成者、
-//! 下流 `areka-P0-text-layer`/`areka-P0-surface-engine`/render が消費者となる。
+//! 下流 `emo-text-layer`（バルーンテキスト）/`emo`（render）が消費者となる。
 //!
 //! 設計規律（design.md「Data Models」）:
 //! - 各モデル化スカラを `Option<T>` 直持ちとし「未指定（`None`）」を型で表す。

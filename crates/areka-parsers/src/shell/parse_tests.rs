@@ -8,8 +8,8 @@
 //! - subset 外/不正断片でもパニックせず部分認識を返す（要件 9.3）。
 
 use super::model::{
-    Animation, AppendTarget, Collision, CollisionName, Element, ElementPath, Interval, Pattern,
-    Shell, Surface, SurfaceAlias, SurfaceAppend,
+    Animation, AppendTarget, Collision, CollisionName, DefRef, Element, ElementPath, Interval,
+    Pattern, Shell, Surface, SurfaceAlias, SurfaceAppend,
 };
 use super::parse;
 
@@ -23,6 +23,9 @@ fn empty_input_yields_empty_shell() {
             surfaces: vec![],
             appends: vec![],
             aliases: vec![],
+            animation_sort: None,
+            collision_sort: None,
+            definitions: vec![],
         }
     );
 }
@@ -91,6 +94,7 @@ smile,[0,1,2]
     let expected = Shell {
         surfaces: vec![Surface {
             id: 0,
+            targets: vec![AppendTarget::Single(0)],
             elements: vec![Element {
                 layer: 0,
                 path: ElementPath::new("body.png".to_string()),
@@ -119,6 +123,7 @@ smile,[0,1,2]
         }],
         appends: vec![SurfaceAppend {
             targets: vec![AppendTarget::Single(0)],
+            elements: vec![],
             collisions: vec![Collision {
                 index: 0,
                 left: 5,
@@ -133,6 +138,10 @@ smile,[0,1,2]
             key: super::model::AliasKey::new("smile".to_string()),
             ids: vec![0, 1, 2],
         }],
+        animation_sort: None,
+        collision_sort: None,
+        // 登場順ストリーム: surface0 → surface.append0 → kero.surface.alias（要件 12.5(d)）。
+        definitions: vec![DefRef::Surface(0), DefRef::Append(0), DefRef::Alias(0)],
     };
 
     assert_eq!(shell, expected);
