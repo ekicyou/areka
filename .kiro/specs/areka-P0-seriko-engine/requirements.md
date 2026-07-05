@@ -19,6 +19,7 @@ sakura（④）が再生出力として `SurfaceSink` へ流す surface 指令�
   - alias／name 文字列および数値 id を surface id へ解決すること（正本は emo-compose の alias 解決表）。
   - per-scope（話者スコープごと）の現 surface 状態の保持（非表示状態を含む）。
   - shell descript の bindgroup default に基づく静的 bind 集合の起動時解決と保持。
+  - 上記 bind 集合の入力源として、descript.txt の bindgroup default KV を保持するための descript パーサ（areka-parsers/package・MountModel）の最小拡張（正攻法＝bindgroup 解決を上流に据える）。
   - 状態変化に応じた emo への表示指令（scope・surface_id・bind 集合）の発行。
   - 発行点の単一化（後続の時間駆動ループが同じ発行点を再利用できる形）。
   - 解決不能・未知入力に対するログ規律に沿った失敗処理（silent failure 禁止）。
@@ -34,6 +35,7 @@ sakura（④）が再生出力として `SurfaceSink` へ流す surface 指令�
   - **emo-compose（上流・正本）**: alias／name→id の解決表と bind 集合表現は emo-compose が正本として提供する。本ユニットは同一の解決表を消費し、二重定義しない。
   - **emo-present（並走・対向）**: 表示指令 API 形の正本は emo-present 側にある。本ユニットは同 API に「非表示」の意味論を発行できることを期待する。emo-present 完了前でも、本ユニット定義の観測用 mock 出力先で単体観測を成立させる。
   - **ghost-setup（並走・結線）**: 本ユニットのアクターは sakura dispatcher の surface 系 sink 差し込み口（`SurfaceSink` 実装）へ挿さる。trait 実装であること自体が結線契約であり、追加の口は設けない。
+  - **areka-parsers（上流・拡張対象）**: 現行の descript パーサ（`MountModel`）は bindgroup default KV を保持しない。本ユニットは R4 の入力源として、同パーサに bindgroup default KV の保持を増設する（最小拡張・既存の name 系フィールド保持と非衝突）。bindgroup 番号→有効 animation id（`BindSet`）の写像規則は設計フェーズで ukadoc＋emo2 実測により確定する。
 
 ## Requirements
 
@@ -79,10 +81,11 @@ sakura（④）が再生出力として `SurfaceSink` へ流す surface 指令�
 
 #### Acceptance Criteria
 
-1. When アクター構築時に shell 定義を受ける, the seriko アクター shall shell descript の bindgroup default に基づく bind 集合を一度だけ解決する。
+1. When アクター構築時に、拡張された descript パーサが保持する bindgroup default を含む shell 定義を受ける, the seriko アクター shall その bindgroup default に基づく bind 集合を一度だけ解決する。
 2. The seriko アクター shall 解決した静的 bind 集合を emo-compose の bind 集合表現（`BindSet`）として保持する。
 3. While 本ユニットの稼働中, the seriko アクター shall bind 集合を静的（不変）に保ち、bind の動的切替を行わない（動的切替は範囲外）。
 4. The seriko アクター shall bind 状態を per-scope surface 状態と同居する置き場として保持し、後続の動的切替ユニットがその置き場のみを差し替えられる形を提供する。
+5. The descript パーサ（areka-parsers/package・`MountModel`）shall descript.txt の bindgroup default KV を解析結果に保持し、既存の name 系フィールド（`name`／`sakura.name`／`kero.name`）の保持を損なわない。
 
 ### Requirement 5: emo への表示指令発行
 

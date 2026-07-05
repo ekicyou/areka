@@ -122,8 +122,9 @@
 - **DD3 — seriko inbox enum の停止 variant。**
   areka-actor に共有 `Close` 型は無い＝seriko が `SerikoMsg`（仮）enum に `Close` variant を自前定義（`SakuraMsg::Close` が先例）。**inbox で受けるのは `TalkCue` そのものか、`SerikoMsg::Cue(TalkCue)` 級でラップするか**（`SurfaceSink::emit` は `&mut self` で cue を渡す＝sink 実装体と actor inbox の関係を design で確定：sink が inbox へ send する薄いブリッジになる想定）。
 
-- **DD4 — bindgroup default の供給経路（§2.1 の核・最重要）。**
-  現状どのパーサも bindgroup KV を持たない。選択肢: (a) seriko が descript.txt の bindgroup KV を自前パース（新パーサ責務が seriko に入る＝層越え懸念）／(b) 別途「解決済み静的 BindSet」を構築時に外から受ける（seriko は器のみ・R4 主語がずれる）／(c) areka-parsers/package に bindgroup KV 保持を増設（上流拡張・スコープ拡大）。**どこが bindgroup を読むかの責務境界**を確定する。研究項目 R-1/R-2 と直結。
+- **DD4 — bindgroup default の供給経路（§2.1 の核・最重要）。** ✅ **決定済み（要件ディスカッション議題1・2026-07-06）＝(c) 上流パーサ拡張**。
+  現状どのパーサも bindgroup KV を持たない。選択肢: (a) seriko が descript.txt の bindgroup KV を自前パース（新パーサ責務が seriko に入る＝層越え懸念）／(b) 別途「解決済み静的 BindSet」を構築時に外から受ける（seriko は器のみ・R4 主語がずれる）／(c) areka-parsers/package に bindgroup KV 保持を増設（上流拡張・スコープ拡大）。
+  **開発者判断: (c) を採用**——正攻法として bindgroup 解決を上流に据える。descript パーサ（`MountModel`）に bindgroup default KV 保持を最小拡張し（既存 name 系と非衝突）、seriko は R4 の入力としてこれを消費する。要件へ反映済み: In-scope に「descript パーサの最小拡張」・Adjacent expectations に「areka-parsers（上流・拡張対象）」・R4.1 を「拡張パーサ供給の bindgroup default を受ける」へ改稿・R4.5「パーサが bindgroup default KV を保持し name 系保持を損なわない」を新設。**設計フェーズの残課題**: bindgroup 番号→有効 animation id（`BindSet`）の写像規則（研究項目 R-2）を ukadoc MAYUNA 仕様＋emo2 実測で確定する（DD4 の供給経路は確定・写像規則は未確定のまま設計へ）。
 
 - **DD5 — emo への表示指令 API 形と `\s[-1]` 非表示の表現（emo-present と突合）。**
   emo-present brief の正本は `show_surface(scope, surface_id, binds)`。**この API に「非表示」意味論があるか**（別メソッド `hide(scope)` か、`surface_id` にセンチネルか、`Option<surface_id>` か）を両 design で突合（emo-present brief 明記の調整点）。R5.2/R5.5 は「非表示遷移を発行できる」ことを要求＝seriko 側の mock 出力先 trait に非表示を表現する必要がある。**単体観測は seriko 定義の mock 出力先 trait で emo-present 完了を待たない**（R5.5）。
