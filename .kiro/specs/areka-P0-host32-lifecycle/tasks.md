@@ -73,7 +73,7 @@
   - _Requirements: 5.1, 7.3, 7.4_
   - _Depends: 3.2_
 
-- [ ] 4. Integration: `lifecycle` モジュールの公開 re-export とワークスペース整合確認
+- [x] 4. Integration: `lifecycle` モジュールの公開 re-export とワークスペース整合確認
   - `shiori-host32-host` の `lib.rs` から、死活監視の器・統一報告語彙・突合純関数・shutdown 失敗語彙を公開 re-export する
   - 凍結境界（`shiori-host32-ipc` の wire／framing／`MsgTag`／`ResponseSlot`／timeout）と `host32-request` の出口 API（`Shiori3Client`／`RequestError`）が一切変更されていないことを確認する
   - Observable: `cargo build` がワークスペース全体で成功し、新しい公開項目に未使用警告や可視性エラーが出ない
