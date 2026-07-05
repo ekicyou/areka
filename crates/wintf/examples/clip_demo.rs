@@ -3,14 +3,13 @@
 //! # Clip Demo
 //!
 //! visual-clip 機能の検証デモ。3 種類の ClipShape バリアントを
-//! ULW モードと DComp モードの両方で表示し、クリッピングの動作を目視確認する。
+//! GPU 合成（WUC / DirectComposition）パイプラインで表示し、クリッピングの動作を目視確認する。
 //!
 //! ## 構成
 //!
-//! - **ULW ウィンドウ** — UpdateLayeredWindow パイプラインでのクリップ
-//! - **DComp ウィンドウ** — DirectComposition パイプラインでのクリップ
+//! - **GPU 合成ウィンドウ** — DirectComposition パイプラインでのクリップ
 //!
-//! 各ウィンドウに3つのクリップ領域を配置:
+//! ウィンドウに3つのクリップ領域を配置:
 //! 1. `ClipShape::Rectangle` — 矩形クリップ
 //! 2. `ClipShape::RoundedRectangle { radius: 20.0 }` — 均一角丸クリップ
 //! 3. `ClipShape::RoundedRectangleIndividual` — 個別角丸クリップ
@@ -36,12 +35,8 @@ use wintf::ecs::widget::brushes::Brushes;
 use wintf::ecs::widget::shapes::Rectangle;
 use wintf::ecs::widget::text::label::Label;
 use wintf::ecs::window::WindowStyle;
-use wintf::ecs::{ClipShape, CompositionMode, Point, Visual, Window, WindowPos};
+use wintf::ecs::{ClipShape, Point, Visual, Window, WindowPos};
 use wintf::*;
-
-/// ULW クリップデモウィンドウマーカー
-#[derive(Debug, Clone, Copy, Component, PartialEq, Hash)]
-pub struct UlwClipWindow;
 
 /// DComp クリップデモウィンドウマーカー
 #[derive(Debug, Clone, Copy, Component, PartialEq, Hash)]
@@ -64,15 +59,14 @@ fn main() -> Result<()> {
     });
 
     println!("\nClip Demo:");
-    println!("  [左] ULW ウィンドウ — UpdateLayeredWindow クリップ（タイトルバーなし）");
     println!(
-        "  [右] DComp ウィンドウ — DirectComposition クリップ（タイトルバー有、リサイズ可能）"
+        "  GPU 合成ウィンドウ — DirectComposition クリップ（タイトルバー有、リサイズ可能）"
     );
-    println!("\n各ウィンドウに3種類のクリップが表示されます:");
+    println!("\nウィンドウに3種類のクリップが表示されます:");
     println!("  上段: Rectangle（矩形クリップ）");
     println!("  中段: RoundedRectangle（均一角丸 radius=20）");
     println!("  下段: RoundedRectangleIndividual（個別角丸）");
-    println!("\nDCompウィンドウをリサイズしてクリップ領域が動的に追従することを確認できます。");
+    println!("\nウィンドウをリサイズしてクリップ領域が動的に追従することを確認できます。");
     println!("60秒後に自動的に閉じます。");
 
     mgr.run()?;
@@ -82,9 +76,8 @@ fn main() -> Result<()> {
 
 /// 非同期デモ実行
 async fn run_demo(tx: wintf::ecs::widget::bitmap_source::CommandSender) {
-    info!("[ClipDemo] Creating ULW + DComp clip windows");
+    info!("[ClipDemo] Creating DComp clip window");
     let _ = tx.send(Box::new(|world: &mut World| {
-        create_ulw_clip_window(world);
         create_dcomp_clip_window(world);
     }));
 
@@ -97,8 +90,7 @@ async fn run_demo(tx: wintf::ecs::widget::bitmap_source::CommandSender) {
 
 /// 全デモウィンドウを閉じる
 fn close_all_windows(world: &mut World) {
-    let mut query =
-        world.query_filtered::<Entity, Or<(With<UlwClipWindow>, With<DCompClipWindow>)>>();
+    let mut query = world.query_filtered::<Entity, With<DCompClipWindow>>();
     let entities: Vec<Entity> = query.iter(world).collect();
     for entity in entities {
         info!("[ClipDemo] Removing entity {:?}", entity);
@@ -256,96 +248,7 @@ fn create_clip_section(
 }
 
 // ============================================================================
-// ULW ウィンドウ
-// ============================================================================
-
-fn create_ulw_clip_window(world: &mut World) {
-    let window_entity = world
-        .spawn((
-            Name::new("ClipDemo-ULW-Window"),
-            UlwClipWindow,
-            BoxStyle {
-                position: Some(BoxPosition::Absolute),
-                flex_direction: Some(taffy::FlexDirection::Column),
-                size: Some(BoxSize {
-                    width: Some(Dimension::Px(400.0)),
-                    height: Some(Dimension::Px(500.0)),
-                }),
-                ..Default::default()
-            },
-            WindowPos {
-                position: Some(Point { x: 50, y: 50 }),
-                ..Default::default()
-            },
-            Window {
-                title: "Clip Demo (ULW)".to_string(),
-                composition_mode: CompositionMode::ULW,
-                ..Default::default()
-            },
-        ))
-        .id();
-
-    // メインコンテナ（白背景）
-    let container = world
-        .spawn((
-            Name::new("ULW-Container"),
-            Rectangle::new(),
-            Brushes::with_foreground(D2D1_COLOR_F {
-                r: 0.95,
-                g: 0.95,
-                b: 0.95,
-                a: 1.0,
-            }),
-            BoxStyle {
-                flex_direction: Some(taffy::FlexDirection::Column),
-                flex_grow: Some(1.0),
-                ..Default::default()
-            },
-            ChildOf(window_entity),
-        ))
-        .id();
-
-    // ヘッダー
-    world.spawn((
-        Name::new("ULW-Header"),
-        Label {
-            text: "ULW Clip Demo (UpdateLayeredWindow)".to_string(),
-            font_family: "Segoe UI".to_string(),
-            font_size: 16.0,
-            ..Default::default()
-        },
-        Brushes::with_foreground(D2D1_COLOR_F {
-            r: 0.1,
-            g: 0.1,
-            b: 0.3,
-            a: 1.0,
-        }),
-        BoxStyle {
-            size: Some(BoxSize {
-                width: None,
-                height: Some(Dimension::Px(30.0)),
-            }),
-            margin: Some(BoxMargin(wintf::ecs::layout::Rect {
-                left: LengthPercentageAuto::Px(10.0),
-                right: LengthPercentageAuto::Px(10.0),
-                top: LengthPercentageAuto::Px(10.0),
-                bottom: LengthPercentageAuto::Px(5.0),
-            })),
-            ..Default::default()
-        },
-        ChildOf(container),
-    ));
-
-    create_clip_demo_children(world, container);
-
-    info!(
-        "[ClipDemo] ULW clip window created (entity={:?})",
-        window_entity
-    );
-}
-
-// ============================================================================
-// DComp ウィンドウ
+// GPU 合成（DComp）ウィンドウ
 // ============================================================================
 
 fn create_dcomp_clip_window(world: &mut World) {
@@ -368,7 +271,6 @@ fn create_dcomp_clip_window(world: &mut World) {
             },
             Window {
                 title: "Clip Demo (DComp)".to_string(),
-                composition_mode: CompositionMode::DComp,
                 ..Default::default()
             },
             WindowStyle {

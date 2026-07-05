@@ -919,7 +919,7 @@ mod tests {
     // prune_dead_targets（窓破棄追随・R7.2 / Lifecycle）
     // ========================================================================
 
-    use crate::ecs::window::{CompositionMode, Window as WinComp, WindowStyle};
+    use crate::ecs::window::{Window as WinComp, WindowStyle};
     use windows::Win32::UI::WindowsAndMessaging::{WS_EX_LAYERED, WS_POPUP};
 
     /// `Window` コンポーネントを持つ生きた窓 Entity を spawn する（prune テスト用最小構成）。
@@ -929,7 +929,6 @@ mod tests {
                 WinComp {
                     title: "PruneTest".to_string(),
                     parent: None,
-                    composition_mode: CompositionMode::DComp,
                 },
                 WindowStyle {
                     style: WS_POPUP,
