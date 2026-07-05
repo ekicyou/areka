@@ -32,7 +32,7 @@ use crate::runtime::wndproc_bridge::WndState;
 /// 既定の保持値 `Window<WndState>`（ライブラリ型・`!Send`＝UI スレッド束縛）で単相化した
 /// NonSend リソース型。`new()`/`get_non_send_resource` の型推論を確定させるために用いる。
 type ProdWindowRegistry =
-    WindowRegistry<wintf_winmsg_executor::util::Window<WndState>>;
+    WindowRegistry<crate::executor::util::Window<WndState>>;
 
 /// メッセージループ層。ライブラリ（`wintf-winmsg-executor`）の `block_on` /
 /// `MessageLoop::run` へ委譲する `MessageLoopDriver` を提供する。
@@ -192,7 +192,7 @@ impl WinApp {
         // 本番単相化 `Window<WndState>` で turbofish して登録する。
         self.world.borrow_mut().add_systems(
             FrameFinalize,
-            reconcile_window_registry::<wintf_winmsg_executor::util::Window<WndState>>,
+            reconcile_window_registry::<crate::executor::util::Window<WndState>>,
         );
     }
 
@@ -294,7 +294,7 @@ impl WinApp {
             let vblank = bridge.event().clone();
             let world_weak = Rc::downgrade(&self.world);
             let wake = std::sync::Arc::clone(&click_wake);
-            let _relay = wintf_winmsg_executor::spawn_local(async move {
+            let _relay = crate::executor::spawn_local(async move {
                 loop {
                     // 先に listen() を arm（処理中に届く vblank を落とさない）。
                     let listener = vblank.listen();
@@ -330,8 +330,8 @@ impl WinApp {
     pub fn spawn_ui_local<T: 'static>(
         &self,
         fut: impl Future<Output = T> + 'static,
-    ) -> wintf_winmsg_executor::JoinHandle<T> {
-        wintf_winmsg_executor::spawn_local(fut)
+    ) -> crate::executor::JoinHandle<T> {
+        crate::executor::spawn_local(fut)
     }
 }
 
@@ -484,7 +484,7 @@ mod tests {
             // registry が空へ遷移し、注入済み hook が WinApp 所有 Event を notify する。
             let mut sched = Schedule::default();
             sched.add_systems(
-                reconcile_window_registry::<wintf_winmsg_executor::util::Window<WndState>>,
+                reconcile_window_registry::<crate::executor::util::Window<WndState>>,
             );
             sched.run(w);
 

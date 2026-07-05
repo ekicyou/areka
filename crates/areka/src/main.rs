@@ -1,34 +1,29 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-//! areka モック実装
+//! areka 本番アプリ骨格
 //!
-//! wintfフレームワークを使用したデスクトップマスコット「ぱすたさん」の最小動作実装。
-//! - シェルウィンドウ: キャラクター画像（320×420px）の透過表示
-//! - バルーンウィンドウ: 縦書きテキスト表示
-//! - ドラッグ移動: シェルをドラッグするとバルーンが追従
-//! - ダブルクリック終了: シェルをダブルクリックで全ウィンドウ終了
+//! wintf フレームワークを使用したデスクトップマスコット「ぱすたさん」の本番アプリ骨格。
+//! この骨格は「アプリ起動の器」に徹する:
+//! - 構造化ロギング初期化（RUST_LOG フォールバック）・パニックハンドラ設定
+//! - 構成入力（ゴースト／バルーンのルートパス）の解決とログ出力（マウントはしない）
+//! - UI ランタイム起動（`WinApp::new()`）・SHIORI 実走デモの env-gate 呼び口
+//! - replace-me シーム（`open_startup_window`・本仕様では検証用ダミー窓を開く）
+//! - `main` 自身が所有するメッセージループ（`app.run()`）とダミー窓 close での正常終了
+//!
+//! 本物のゴースト窓生成・配置・DPI 対応は下流仕様（ghost-setup／window-placement）の領分であり、
+//! 骨格は座標・配置ロジックを一切持たない。旧モック UI は `examples/mock-shell.rs` へ退避済み。
 
-use bevy_ecs::name::Name;
 use bevy_ecs::prelude::*;
 use tracing_subscriber::EnvFilter;
 use windows::Win32::Graphics::Direct2D::Common::D2D1_COLOR_F;
 use windows::Win32::UI::WindowsAndMessaging::*;
 use windows::core::Result;
-use wintf::ecs::Point;
-use wintf::ecs::drag::{DragConfig, DragEvent, OnDrag};
-use wintf::ecs::layout::{
-    BoxMargin, BoxPosition, BoxSize, BoxStyle, Dimension, HitTest, LengthPercentageAuto, Rect,
-};
+use wintf::ecs::layout::{BoxSize, BoxStyle, Dimension};
 use wintf::ecs::pointer::{DoubleClick, OnPointerPressed, Phase, PointerState};
-use wintf::ecs::widget::bitmap_source::{BitmapSource, CommandSender};
+use wintf::ecs::widget::bitmap_source::CommandSender;
 use wintf::ecs::widget::brushes::Brushes;
 use wintf::ecs::widget::shapes::Rectangle;
-use wintf::ecs::widget::text::{TextDirection, Typewriter, TypewriterTalk, TypewriterToken};
-use wintf::ecs::clickthrough::ClickThroughRegistryHandle;
-use wintf::ecs::{
-    ChildOf, FrameFinalize, FrameTime, SetWindowPosCommand, Window, WindowHandle, WindowPos,
-    WindowStyle,
-};
+use wintf::ecs::{ChildOf, Window, WindowStyle};
 use wintf::*;
 
 /// areka 本体側 `IShioriHost` 実装（単一 sink・突合枠・メールボックス投函）。
@@ -68,43 +63,70 @@ mod shiori_lifecycle_e2e_tests;
 mod shiori_reference_e2e_tests;
 
 // ---------------------------------------------------------------------------
-// Constants
+// Config Inputs (task 2.1)
 // ---------------------------------------------------------------------------
 
-/// バルーンのシェルに対するオフセット (x: シェル幅320 + 間隔15)
-const BALLOON_OFFSET_X: i32 = 335;
-const BALLOON_OFFSET_Y: i32 = 0;
+/// 構成入力（解決済みルートパス）。
+///
+/// ゴースト／バルーンのルートパスを保持する。決定のみで実在は保証しない
+/// （マウント・descript.txt 読取・`areka-parsers` 呼び出しは一切行わない・R6.1）。
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct ConfigInputs {
+    ghost_root: std::path::PathBuf,
+    balloon_root: std::path::PathBuf,
+}
 
-/// シェルウィンドウの初期位置
-const SHELL_INITIAL_X: i32 = 400;
-const SHELL_INITIAL_Y: i32 = 200;
+/// ゴーストルートの既定パス（`CARGO_MANIFEST_DIR` 相対・DD1）。
+///
+/// `crates/areka` 配下には現状ゴースト fixture が無いため（emo2 fixture は別クレート
+/// `crates/pilot/...` にありクロスクレート `../` 参照は脆いので採らない）、ukadoc 標準の
+/// ルート配置 `ghost/master` を **プレースホルダ subpath** として採用する。実在は検証せず、
+/// 実マウント対象の確定は下流 ghost-setup の領分（本仕様スコープ外）。
+fn default_ghost_root() -> std::path::PathBuf {
+    std::path::PathBuf::from(concat!(env!("CARGO_MANIFEST_DIR"), "/ghost/master"))
+}
 
-/// シェル画像パス（CARGO_MANIFEST_DIRからの相対）
-const SHELL_IMAGE_PATH: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/shell/base.png");
+/// バルーンルートの既定パス（`CARGO_MANIFEST_DIR` 相対・DD1）。
+///
+/// ゴースト既定と同じく `env!("CARGO_MANIFEST_DIR")` 相対のプレースホルダ subpath
+/// `balloon/master` を採用する（実在検証なし・下流 ghost-setup が実体を確定）。
+fn default_balloon_root() -> std::path::PathBuf {
+    std::path::PathBuf::from(concat!(env!("CARGO_MANIFEST_DIR"), "/balloon/master"))
+}
 
-/// バルーンに表示するテキスト
-const BALLOON_TEXT: &str = "\
-みんながもってる、記憶の糸。\n\
-\n\
-生まれてから、続いている、\n\
-長い長い、一本の道。\n\
-\n\
-そう、きっと、一本道。\n\
-いつか来る、終わりの日まで。\n\
-\n\
-ぱすた";
+/// 起動引数（位置引数）と既定パスから構成入力を決定する。純粋・副作用なし。
+///
+/// - `args[0]` は実行ファイル名。`args[1]` = ghost root、`args[2]` = balloon root。
+/// - 位置引数が与えられていれば採用し（R3.3）、欠落時は `CARGO_MANIFEST_DIR` 相対の
+///   既定へフォールバックする（R3.4・DD1）。
+/// - `args` を入力に取ることで `std::env::args()` を内部で呼ばず、実プロセス引数に触れずに
+///   単体テスト可能な純粋関数に保つ。std（`std::path`・`env!`）のみに依存し、マウントも
+///   descript.txt 読取も行わない（R6.1）。
+fn resolve_config_inputs(args: &[String]) -> ConfigInputs {
+    let ghost_root = args
+        .get(1)
+        .map(std::path::PathBuf::from)
+        .unwrap_or_else(default_ghost_root);
+    let balloon_root = args
+        .get(2)
+        .map(std::path::PathBuf::from)
+        .unwrap_or_else(default_balloon_root);
+    ConfigInputs {
+        ghost_root,
+        balloon_root,
+    }
+}
 
 // ---------------------------------------------------------------------------
 // Marker Components
 // ---------------------------------------------------------------------------
 
-/// シェルウィンドウを識別するマーカーコンポーネント
+/// 検証用ダミー窓を識別するマーカーコンポーネント（task 2.2・replace-me シーム）。
+///
+/// `open_startup_window` が開く最小の liveness プローブ窓に付与し、despawn（手動
+/// ダブルクリック／task 2.3 の env ゲート自動 close）がダミー窓のみを狙えるようにする。
 #[derive(Debug, Clone, Copy, Component, PartialEq, Hash)]
-pub struct ShellWindowMarker;
-
-/// バルーンウィンドウを識別するマーカーコンポーネント
-#[derive(Debug, Clone, Copy, Component, PartialEq, Hash)]
-pub struct BalloonWindowMarker;
+pub struct DummyWindowMarker;
 
 // ---------------------------------------------------------------------------
 // Entry Point
@@ -122,347 +144,132 @@ fn main() -> Result<()> {
         )
         .init();
 
-    let mgr = WinApp::new()?;
-    let world = mgr.world();
+    // 構成入力（ゴースト／バルーンのルートパス）の解決とログ出力（R3.1/3.3/3.4・マウントしない）。
+    let args: Vec<String> = std::env::args().collect();
+    let cfg = resolve_config_inputs(&args);
+    tracing::info!(
+        ghost_root = %cfg.ghost_root.display(),
+        balloon_root = %cfg.balloon_root.display(),
+        "resolved config inputs"
+    );
 
-    // 非同期タスクでUI構築
-    world.borrow().spawn(|tx| async move {
-        run_setup(tx).await;
-    });
+    // 存在検証は warn どまり・強制しない（R3 は「パスの決定とログ」でありマウント/存在保証ではない）。
+    // 回復可能事象は `warn!` で記録して継続する（`areka-log-first-no-silent-failure`）。異常終了経路を作らない。
+    for (label, root) in [
+        ("ghost_root", &cfg.ghost_root),
+        ("balloon_root", &cfg.balloon_root),
+    ] {
+        if !root.exists() {
+            tracing::warn!(
+                path = %root.display(),
+                "{label} が存在しません（決定のみでマウントはしない・継続します）"
+            );
+        }
+    }
 
-    // クリック透過機構への窓登録システムを結線（task 4.1）。UISetup の create_windows が
-    // WindowHandle を付与した後の FrameFinalize で走らせ、同一 tick 内で Added を捉える。
-    world
-        .borrow_mut()
-        .add_systems(FrameFinalize, register_click_through_windows);
+    // UI ランタイム起動（COM/DPI 初期化・World 生成・shutdown hook 結線）（R2.4）。
+    let app = WinApp::new()?;
 
-    // 操作ガイド出力
-    println!();
-    println!("areka モック実装 — ぱすたさん");
-    println!("================================");
-    println!("  ドラッグ移動: シェル画像を左クリック & ドラッグ");
-    println!("  終了:         シェル画像をダブルクリック");
-    println!();
-
-    // リファレンス脳の実走デモ（要件 6.1/6.8）。環境変数 `AREKA_SHIORI_DEMO` が有効な
+    // リファレンス脳の実走デモ（要件 5.3/5.4）。環境変数 `AREKA_SHIORI_DEMO` が有効な
     // ときのみ main スレッドで同期駆動する（既定 OFF）。診断目的のため失敗しても通常
-    // 起動を中断せず、`mgr.run()` の UI 立ち上げを阻害しないよう必ずその前に完走させる。
+    // 起動を中断せず、`app.run()` の UI 立ち上げを阻害しないよう必ずその前に完走させる。
     if let Err(e) = shiori_demo::run_demo_if_enabled() {
         tracing::error!(error = %e, "[main] shiori reference demo failed");
     }
 
-    // ブロッキングメッセージループ
-    mgr.run()?;
+    // replace-me シーム（R4.2）: 本仕様では検証用ダミー窓を 1 枚開き、`main` 所有の
+    // `app.run()` ループに空遷移の heartbeat を与える。下流はここを本物のゴースト窓生成へ置換する。
+    open_startup_window(&app);
+
+    // `main` 所有のブロッキングメッセージループ（R2.4/R4.1）。ダミー窓が閉じられると
+    // `WindowRegistry` が空へ遷移し `run()` が `Ok` を返して正常終了する（DD7 改定）。
+    app.run()?;
 
     Ok(())
 }
 
 // ---------------------------------------------------------------------------
-// Async Setup
+// Startup Window (replace-me seam・task 2.2)
 // ---------------------------------------------------------------------------
 
-/// クリック透過機構への窓登録システム（task 4.1）。
+/// 検証用ダミー窓の Entity を構築する（headless・task 2.2）。
 ///
-/// WUC 化により ULW の自動 α ヒットテストが失われるため、機構が α を評価できるよう
-/// shell/balloon の 2 窓を明示登録する。`WindowHandle` は `create_windows`（UISetup）が
-/// HWND 生成後に付与するため `Added<WindowHandle>` で「HWND が付いた瞬間」を捉え、各窓を
-/// 厳密に 1 回登録する（`register` は同一 Entity 再登録を dedupe するため冪等でもある）。
+/// UI ランタイム起動と正常終了の観測目的に限る最小の窓を spawn する。窓が存在するために
+/// 必要な最小コンポーネント（`Window`・`WindowStyle`・可視/クリック可能な最小 `BoxStyle`
+/// サイズ・ダブルクリック despawn の observer）だけを与え、`DummyWindowMarker` で識別する。
 ///
-/// `ClickThroughRegistryHandle` は `WinApp::run` の結線で World へ NonSend リソースとして
-/// 挿入される。本システムは `mgr.run()` 前に登録されるが tick は `run()` 開始後に回るため
-/// 通常は存在する。ごく初期の tick で未挿入の可能性に備え `Option<NonSend<..>>` で防御し、
-/// 未挿入なら no-op する（`Added` は次 tick で再度観測されるため取りこぼさない）。
-/// `register` は `&self`（内部可変は `Rc<RefCell<..>>`）ゆえ `NonSend` で足りる。
-/// 窓破棄時の除去は機構内 `prune_dead_targets`（Entity 生存確認）が担うため明示 remove は不要。
-fn register_click_through_windows(
-    new_windows: Query<
-        (Entity, &WindowHandle),
-        (
-            Added<WindowHandle>,
-            Or<(With<ShellWindowMarker>, With<BalloonWindowMarker>)>,
-        ),
-    >,
-    handle: Option<NonSend<ClickThroughRegistryHandle>>,
-) {
-    let Some(handle) = handle else {
-        return;
-    };
-    for (entity, wh) in new_windows.iter() {
-        handle.register(entity, wh.hwnd);
-        tracing::debug!(?entity, "クリック透過機構へ窓を登録しました");
-    }
-}
-
-/// 非同期タスクでシェル＋バルーンウィンドウを生成
-async fn run_setup(tx: CommandSender) {
-    let _ = tx.send(Box::new(|world: &mut World| {
-        create_shell_window(world);
-        create_balloon_window(world);
-        tracing::info!("シェルウィンドウとバルーンウィンドウを生成しました");
-    }));
-}
-
-// ---------------------------------------------------------------------------
-// Shell Window
-// ---------------------------------------------------------------------------
-
-/// シェルウィンドウEntity構築
-///
-/// - WS_POPUP透過ウィンドウ（タイトルバーなし）
-/// - BitmapSourceでキャラクター画像表示
-/// - DragConfigでネイティブドラッグ有効化
-/// - OnDrag / OnPointerPressedでインタラクション
-fn create_shell_window(world: &mut World) -> Entity {
-    let shell_entity = world
+/// **配置・座標・DPI を一切主張しない**: `WindowPos` の位置（`position`）を設定せず、座標
+/// ロジックも持たない（既定位置で開く）。placement は window-placement の領分であり、ダミー窓は
+/// そこへ踏み込まない（2026-07-05 placement リジェクト再発防止・R2.5）。`create_shell_window`
+/// と同じく bare `World` だけで構築でき、headless 単体テスト可能。
+fn spawn_dummy_window(world: &mut World) -> Entity {
+    let dummy = world
         .spawn((
-            Name::new("Shell-Window"),
-            ShellWindowMarker,
+            bevy_ecs::name::Name::new("Startup-Dummy-Window"),
+            DummyWindowMarker,
             Window {
-                title: "areka shell".to_string(),
-                // WUC 合成に固定化された。factory の compute_ex_style は合成モード選択を持たず、
-                // 常に WS_EX_LAYERED を外し WS_EX_NOREDIRECTIONBITMAP を付与するため WindowStyle
-                // の ex_style は据え置きでよい（下の WS_EX_LAYERED は factory が剥がす）。
+                title: "areka startup (dummy)".to_string(),
                 ..Default::default()
             },
             WindowStyle {
                 style: WS_POPUP | WS_VISIBLE,
-                // ex_style は factory が固定計算する（compute_ex_style が WS_EX_LAYERED を剥がす）。
-                ex_style: WS_EX_LAYERED | WS_EX_TOOLWINDOW | WS_EX_TOPMOST,
+                ex_style: WS_EX_TOOLWINDOW,
             },
-            WindowPos {
-                position: Some(Point {
-                    x: SHELL_INITIAL_X,
-                    y: SHELL_INITIAL_Y,
-                }),
-                ..Default::default()
-            },
+            // 可視・クリック可能にする最小サイズのみ（位置・座標は主張しない）。
             BoxStyle {
-                position: Some(BoxPosition::Absolute),
-                size: Some(BoxSize {
-                    width: Some(Dimension::Px(320.0)),
-                    height: Some(Dimension::Px(420.0)),
-                }),
-                ..Default::default()
-            },
-            // 窓自身はヒット対象外（全面ヒットで透過を殺さない）。当たりは子の画像（α判定）が担う。
-            HitTest::none(),
-            DragConfig::default(),
-            OnDrag(on_shell_drag),
-            OnPointerPressed(on_shell_pressed),
-        ))
-        .id();
-
-    // キャラクター画像 子Entity
-    world.spawn((
-        Name::new("Shell-Image"),
-        BitmapSource::new(SHELL_IMAGE_PATH),
-        // キャラの不透明ピクセルだけ受領・透明部は背面へ透過（αマスク自動生成の必須条件）。
-        HitTest::alpha_mask(),
-        BoxStyle {
-            size: Some(BoxSize {
-                width: Some(Dimension::Px(320.0)),
-                height: Some(Dimension::Px(420.0)),
-            }),
-            ..Default::default()
-        },
-        ChildOf(shell_entity),
-    ));
-
-    shell_entity
-}
-
-// ---------------------------------------------------------------------------
-// Balloon Window
-// ---------------------------------------------------------------------------
-
-/// バルーンウィンドウEntity構築
-///
-/// - WS_POPUP透過ウィンドウ
-/// - シェル右側に配置（+335px, +0px）
-/// - 半透明クリーム色背景 + 縦書きTypewriterテキスト
-fn create_balloon_window(world: &mut World) -> Entity {
-    let balloon_entity = world
-        .spawn((
-            Name::new("Balloon-Window"),
-            BalloonWindowMarker,
-            Window {
-                title: "areka balloon".to_string(),
-                // WUC 合成に固定化された。factory の compute_ex_style は合成モード選択を持たず、
-                // 常に WS_EX_LAYERED を外し WS_EX_NOREDIRECTIONBITMAP を付与するため据え置きでよい。
-                ..Default::default()
-            },
-            WindowStyle {
-                style: WS_POPUP | WS_VISIBLE,
-                // ex_style は factory が固定計算する（compute_ex_style が WS_EX_LAYERED を剥がす）。
-                ex_style: WS_EX_LAYERED | WS_EX_TOOLWINDOW | WS_EX_TOPMOST,
-            },
-            WindowPos {
-                position: Some(Point {
-                    x: SHELL_INITIAL_X + BALLOON_OFFSET_X,
-                    y: SHELL_INITIAL_Y + BALLOON_OFFSET_Y,
-                }),
-                ..Default::default()
-            },
-            BoxStyle {
-                position: Some(BoxPosition::Absolute),
                 size: Some(BoxSize {
                     width: Some(Dimension::Px(200.0)),
-                    height: Some(Dimension::Px(350.0)),
+                    height: Some(Dimension::Px(150.0)),
                 }),
                 ..Default::default()
             },
+            // ダブルクリックで自身を閉じられるようにする。
+            OnPointerPressed(on_dummy_pressed),
         ))
         .id();
 
-    // バルーン背景矩形（薄いクリーム色、半透明）
-    let background = world
-        .spawn((
-            Name::new("Balloon-Background"),
-            Rectangle::new(),
-            Brushes::with_foreground(D2D1_COLOR_F {
-                r: 1.0,
-                g: 1.0,
-                b: 0.95,
-                a: 0.85,
-            }),
-            BoxStyle {
-                flex_grow: Some(1.0),
-                ..Default::default()
-            },
-            ChildOf(balloon_entity),
-        ))
-        .id();
-
-    // 縦書き Typewriter テキスト
-    let current_time = world
-        .get_resource::<FrameTime>()
-        .map(|ft| ft.0)
-        .unwrap_or(0.0);
-
-    let tokens = build_typewriter_tokens(BALLOON_TEXT);
-
+    // 可視・ヒット可能な診断用サーフェス（子 Rectangle）を 1 枚付ける。
+    //
+    // areka の窓は WUC/DComp GPU 合成（`WS_EX_NOREDIRECTIONBITMAP`）で描画されるため、描画内容が
+    // 無い窓は合成結果が完全透明になり画面に見えず、手動ダブルクリック（task 2.2 の受け入れ）の
+    // 標的にできない。不透明な単色矩形を窓いっぱい（`flex_grow`）に貼ることで、窓が実際に描画され
+    // 観測・操作可能になる。これはマスコット／ゴースト絵ではなく liveness プローブが必要とする
+    // 診断サーフェスに過ぎず、「ゴースト内容なし」の設計意図（DD5）に反しない。
+    //
+    // 既定 `HitTest`（Bounds ＝ ヒット可能）のため、この矩形上のダブルクリックはヒットし、窓 entity
+    // の `OnPointerPressed(on_dummy_pressed)` へ **bubble** して close を発火する（proven mock pattern：
+    // `create_shell_window`／`clickthrough_two_rects` と同型）。矩形は窓内レイアウト（intra-window）
+    // であって画面配置（screen-placement）ではない＝`WindowPos` 位置も座標／DPI ロジックも増やさない
+    // （2026-07-05 placement リジェクト再発防止・R2.5）。
     world.spawn((
-        Name::new("Balloon-Typewriter"),
-        Typewriter {
-            font_family: "メイリオ".to_string(),
-            font_size: 16.0,
-            direction: TextDirection::VerticalRightToLeft,
-            default_char_wait: 0.08,
-            ..Default::default()
-        },
-        Brushes::with_colors(
-            D2D1_COLOR_F {
-                r: 0.1,
-                g: 0.1,
-                b: 0.1,
-                a: 1.0,
-            },
-            D2D1_COLOR_F {
-                r: 0.0,
-                g: 0.0,
-                b: 0.0,
-                a: 0.0,
-            },
-        ),
-        TypewriterTalk::new(tokens, current_time),
+        bevy_ecs::name::Name::new("Startup-Dummy-Surface"),
+        Rectangle::new(),
+        // 不透明な中間グレー（診断用に明確に視認できる liveness サーフェス）。
+        Brushes::with_foreground(D2D1_COLOR_F {
+            r: 0.5,
+            g: 0.5,
+            b: 0.5,
+            a: 1.0,
+        }),
         BoxStyle {
             flex_grow: Some(1.0),
-            margin: Some(BoxMargin(Rect {
-                left: LengthPercentageAuto::Px(8.0),
-                right: LengthPercentageAuto::Px(8.0),
-                top: LengthPercentageAuto::Px(8.0),
-                bottom: LengthPercentageAuto::Px(8.0),
-            })),
             ..Default::default()
         },
-        ChildOf(background),
+        ChildOf(dummy),
     ));
 
-    balloon_entity
+    dummy
 }
 
-/// テキストを TypewriterToken 列に変換
+/// OnPointerPressed ハンドラ: ダブルクリック（左）でダミー窓を despawn する（task 2.2）。
 ///
-/// - 行境界は必ず `\n` トークンを挿入（縦書き時は次カラムへ移動）
-/// - 空行は `\n` + `Wait(0.3)` で段落間ポーズを表現
-fn build_typewriter_tokens(text: &str) -> Vec<TypewriterToken> {
-    let mut tokens = Vec::new();
-
-    for (i, line) in text.split('\n').enumerate() {
-        // 2行目以降は前の行との間に改行を挿入
-        if i > 0 {
-            tokens.push(TypewriterToken::Text("\n".to_string()));
-        }
-        if line.is_empty() {
-            // 空行 → 段落間ポーズ
-            tokens.push(TypewriterToken::Wait(0.3));
-        } else {
-            tokens.push(TypewriterToken::Text(line.to_string()));
-        }
-    }
-
-    tokens
-}
-
-// ---------------------------------------------------------------------------
-// Event Handlers
-// ---------------------------------------------------------------------------
-
-/// OnDrag ハンドラ: シェルドラッグ時にバルーンを追従移動させる
-///
-/// DragConfig { move_window: true } によりシェルウィンドウ自体は
-/// wndprocレベルで自動的に移動される。このハンドラではバルーンの
-/// 位置をシェルに合わせて更新する。
-fn on_shell_drag(
-    world: &mut World,
-    _sender: Entity,
-    entity: Entity,
-    ev: &Phase<DragEvent>,
-) -> bool {
-    match ev {
-        Phase::Tunnel(_) => false,
-        Phase::Bubble(_) => {
-            // シェルの現在位置を取得（wndprocレベルで既に更新済み）
-            let Some(pos) = world.get::<WindowPos>(entity).and_then(|wp| wp.position) else {
-                return false;
-            };
-
-            // バルーンのHWNDを取得してSetWindowPosCommandを発行
-            let mut query = world.query_filtered::<&WindowHandle, With<BalloonWindowMarker>>();
-            if let Some(handle) = query.iter(world).next() {
-                // 不変条件（A1-V）: pos は wndproc が実ウィンドウ位置から更新する
-                // 論理座標であり、Windows の仮想スクリーン座標範囲に収まるため、
-                // オフセット加算が i32 を溢れることはない（溢れは入力源の異常）。
-                debug_assert!(
-                    pos.x.checked_add(BALLOON_OFFSET_X).is_some()
-                        && pos.y.checked_add(BALLOON_OFFSET_Y).is_some(),
-                    "shell window position out of virtual-screen range: {pos:?}"
-                );
-                let new_x = pos.x + BALLOON_OFFSET_X;
-                let new_y = pos.y + BALLOON_OFFSET_Y;
-
-                SetWindowPosCommand::enqueue(SetWindowPosCommand::new(
-                    handle.hwnd,
-                    new_x,
-                    new_y,
-                    0,
-                    0,
-                    SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE,
-                    None,
-                ));
-            }
-
-            false
-        }
-    }
-}
-
-/// OnPointerPressed ハンドラ: ダブルクリックで全ウィンドウを終了する
-///
-/// Phase::Bubble で DoubleClick::Left を検出し、
-/// ShellWindowMarker / BalloonWindowMarker を持つ全エンティティを despawn する。
-/// despawn → on_window_handle_remove → PostMessage(WM_CLOSE) → PostQuitMessage(0)
-fn on_shell_pressed(
+/// `Phase::Bubble` で `DoubleClick::Left` を検出し、`DummyWindowMarker` を持つ全 entity を
+/// despawn して true を返す。それ以外は false。`Phase::Tunnel` は無視する。
+/// despawn → `on_window_handle_remove`（wintf
+/// `crates/wintf/src/ecs/window/window_handle.rs`）→ `PostMessageW(WM_CLOSE)` → `DestroyWindow`
+/// → `WindowRegistry` 空遷移 → `run()` 復帰、という wintf の作法に委ねる（自前 wndproc も
+/// 手書き `PostMessageW(WM_CLOSE)` も書かない）。
+fn on_dummy_pressed(
     world: &mut World,
     _sender: Entity,
     _entity: Entity,
@@ -472,15 +279,15 @@ fn on_shell_pressed(
         Phase::Tunnel(_) => false,
         Phase::Bubble(state) => {
             if state.double_click == DoubleClick::Left {
-                tracing::info!("ダブルクリック検出 — アプリケーションを終了します");
+                tracing::info!("ダミー窓ダブルクリック検出 — ダミー窓を閉じます");
 
-                // 全ウィンドウエンティティを収集して despawn
-                // （on_window_handle_remove → WM_CLOSE → PostQuitMessage）
-                let windows: Vec<Entity> = world
-                    .query_filtered::<Entity, Or<(With<ShellWindowMarker>, With<BalloonWindowMarker>)>>()
+                // ダミー窓 entity を収集して despawn（on_window_handle_remove → WM_CLOSE →
+                // DestroyWindow → WindowRegistry 空遷移 → run() 復帰）。
+                let dummies: Vec<Entity> = world
+                    .query_filtered::<Entity, With<DummyWindowMarker>>()
                     .iter(world)
                     .collect();
-                for e in windows {
+                for e in dummies {
                     world.despawn(e);
                 }
 
@@ -491,9 +298,330 @@ fn on_shell_pressed(
     }
 }
 
+/// replace-me シーム（task 2.2・R4.2）: 後続仕様（ghost-setup／window-placement）がここを
+/// 本物のゴースト窓生成へ置き換える差し込み点。本仕様ではその本体が最小の検証用ダミー窓を
+/// 1 枚開き、`main` 所有の `app.run()` ループに空遷移の heartbeat を与える（boot→loop→exit の実証）。
+///
+/// 署名が `&WinApp`（`&mut` でない）で足りる根拠: 窓生成は `WinApp::world()`（`&self`）→
+/// `EcsWorld::spawn`（`&self`）経由＝現 `create_shell_window` 系の窓生成と同型で ECS 内部
+/// 可変性を用いるため。投機的に `&mut` を先取りしない（下流が本物窓生成でより強い借用を
+/// 要すれば、それはシーム署名変更の Revalidation Trigger）。
+fn open_startup_window(app: &WinApp) {
+    // `EcsWorld::spawn` の async タスク → CommandSender → Input スケジュールで World 適用
+    // という ECS コマンド経路でダミー窓ビルダを走らせる。
+    app.world().borrow().spawn(|tx: CommandSender| async move {
+        let _ = tx.send(Box::new(|world: &mut World| {
+            spawn_dummy_window(world);
+            tracing::info!("検証用ダミー窓を開きました（replace-me シーム）");
+        }));
+    });
+
+    // env ゲート付き自動 close 機構（CI smoke・task 2.3・R4.1）。
+    // `AREKA_APP_SMOKE_EXIT_MS` が有効なミリ秒値のときだけ、VSync relay と同じ
+    // `wintf::executor::spawn_local`＋world `Weak` 作法で **一発の** async タスクを投入する
+    // （ECS システムではない）。env 未設定・不正なら発火せず、ダミー窓は利用者の
+    // ダブルクリック despawn（task 2.2 経路）を待ち続ける。
+    if let Some(ms) = smoke_exit_ms() {
+        // WinApp が strong 所有者を保持するため、この Weak は shutdown まで upgrade 可能。
+        let world_weak = std::rc::Rc::downgrade(&app.world());
+        tracing::info!(
+            env = SMOKE_EXIT_ENV,
+            delay_ms = ms,
+            "smoke 自動 close ゲート有効 — ダミー窓を指定 ms 後に despawn します"
+        );
+        wintf::executor::spawn_local(async move {
+            // 指定 ms を async スリープ（async-io は既存依存・tokio 不要）。
+            async_io::Timer::after(std::time::Duration::from_millis(ms)).await;
+            // shutdown 済みなら strong 所有者は消えており upgrade は None ＝ no-op。
+            let Some(world) = world_weak.upgrade() else {
+                tracing::debug!("smoke 自動 close: world 既に drop 済み（shutdown）— no-op");
+                return;
+            };
+            // await を跨いで borrow を保持しない TIGHT スコープで despawn する。
+            {
+                let mut ecs = world.borrow_mut();
+                let w = ecs.world_mut();
+                let dummies: Vec<Entity> = w
+                    .query_filtered::<Entity, With<DummyWindowMarker>>()
+                    .iter(w)
+                    .collect();
+                let count = dummies.len();
+                for e in dummies {
+                    w.despawn(e);
+                }
+                tracing::info!(count, "smoke 自動 close: ダミー窓を despawn しました");
+            }
+        });
+    }
+}
+
+/// 自動 close ゲートを有効化する環境変数名（`AREKA_` 冠規約・記憶 areka-runtime-env-naming）。
+const SMOKE_EXIT_ENV: &str = "AREKA_APP_SMOKE_EXIT_MS";
+
+/// 与えられた値から自動 close の遅延ミリ秒を解釈する純粋ヘルパ（env アクセスなし・単体テスト可能）。
+///
+/// - `None`／空／空白のみ／非数値／負値／`u64` 溢れ → `None`（ゲート OFF＝タスク不投入）。
+/// - 周辺空白をトリムした非負整数 → `Some(ms)`（`"0"` は 0ms＝即時発火として受理）。
+///
+/// `u64::from_str` は負号・小数点・非数字を弾き、範囲外を `Err` にするため、負値・溢れは
+/// 自然に `None` へ落ちる（不正入力はゲート OFF に倒す）。
+fn smoke_exit_ms_from(value: Option<&str>) -> Option<u64> {
+    let trimmed = value.map(str::trim)?;
+    if trimmed.is_empty() {
+        return None;
+    }
+    trimmed.parse::<u64>().ok()
+}
+
+/// 環境変数 [`SMOKE_EXIT_ENV`] から自動 close の遅延ミリ秒を読む。
+fn smoke_exit_ms() -> Option<u64> {
+    smoke_exit_ms_from(std::env::var(SMOKE_EXIT_ENV).ok().as_deref())
+}
+
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
 
+/// `open_startup_window` シーム（task 2.2）の headless 単体テスト。
+///
+/// ランタイム結線（`open_startup_window`）は生きた `WinApp` を要し headless では駆動できないため、
+/// TDD は headless で駆動可能な 2 部品（ダミー窓ビルダ `spawn_dummy_window` と despawn ハンドラ
+/// `on_dummy_pressed`）で回す。自動 close ゲート `smoke_exit_ms_from` は純粋・env 非依存で検証する。
 #[cfg(test)]
-mod tests;
+mod startup_window_tests {
+    use super::*;
+    use wintf::ecs::WindowPos;
+
+    /// ダミー窓の press イベントを作る。
+    fn pressed_event(double_click: DoubleClick) -> PointerState {
+        PointerState {
+            double_click,
+            ..Default::default()
+        }
+    }
+
+    /// ビルダは最小の窓 entity を生成する: マーカー・Window・WindowStyle・BoxStyle サイズ・
+    /// OnPointerPressed を持ち、**WindowPos の位置主張を一切持たない**（配置・座標・DPI 非主張）。
+    #[test]
+    fn dummy_window_has_minimal_components_and_no_position_claim() {
+        let mut world = World::new();
+        let dummy = spawn_dummy_window(&mut world);
+
+        // マーカー: despawn/auto-close がダミーのみを狙える。
+        assert!(world.get::<DummyWindowMarker>(dummy).is_some());
+
+        // 窓が存在するのに必要な最小コンポーネント。
+        assert!(world.get::<Window>(dummy).is_some());
+        assert!(world.get::<WindowStyle>(dummy).is_some());
+
+        // 可視・クリック可能な最小サイズ（BoxStyle）を持つ。
+        let box_style = world.get::<BoxStyle>(dummy).expect("BoxStyle");
+        assert!(box_style.size.is_some(), "ダミー窓は最小サイズを持つべき");
+
+        // ダブルクリック despawn 用の observer を持つ。
+        assert!(world.get::<OnPointerPressed>(dummy).is_some());
+
+        // 配置・座標・DPI を一切主張しない: ビルダは WindowPos を明示挿入せず、
+        // 具体座標を主張しない。wintf の `on_window_add` フックが CreateWindow 前提として
+        // `WindowPos::default()`（位置＝CW_USEDEFAULT ＝「Windows 既定に委ねる」＝座標非主張）を
+        // 自動挿入するため、存在する WindowPos は必ず既定値と一致するはずである
+        // （＝ビルダ由来の座標ロジックがない証明）。placement は window-placement の領分であり、
+        // ダミー窓はそこへ踏み込まない（2026-07-05 placement リジェクト再発防止・R2.5）。
+        if let Some(wp) = world.get::<WindowPos>(dummy) {
+            assert_eq!(
+                *wp,
+                WindowPos::default(),
+                "ダミー窓は具体座標を主張してはならない（既定 CW_USEDEFAULT のみ許容・liveness プローブに限る）"
+            );
+        }
+        // 念のため: もし位置を持つなら CW_USEDEFAULT（座標非主張の番兵）であること。
+        if let Some(pos) = world.get::<WindowPos>(dummy).and_then(|wp| wp.position) {
+            assert_eq!(
+                (pos.x, pos.y),
+                (CW_USEDEFAULT, CW_USEDEFAULT),
+                "ダミー窓の位置は CW_USEDEFAULT（既定placement・座標非主張）に限る"
+            );
+        }
+    }
+
+    /// ビルダはダミー窓に **可視・ヒット可能な子 Rectangle** を 1 枚付ける。
+    ///
+    /// areka の窓は WUC/DComp GPU 合成（`WS_EX_NOREDIRECTIONBITMAP`）で描画されるため、
+    /// 描画内容が無い窓は完全透明で画面に見えず、手動ダブルクリックの標的にできない。
+    /// 不透明な診断用 Rectangle（`Brushes` 付き）を子（`ChildOf` = ダミー窓）として持つことで
+    /// 窓が実際にレンダリングされる（描画内容を持つ）ことを証明する。既定 `HitTest`（Bounds）で
+    /// 子はヒット可能＝子上のダブルクリックが窓の `OnPointerPressed` へ bubble する（proven mock pattern）。
+    #[test]
+    fn dummy_window_has_visible_rectangle_child() {
+        let mut world = World::new();
+        let dummy = spawn_dummy_window(&mut world);
+
+        // Rectangle + Brushes を持つ子 entity が 1 枚あり、その ChildOf 親がダミー窓であること。
+        let mut query = world.query::<(&Rectangle, &Brushes, &ChildOf)>();
+        let children: Vec<_> = query.iter(&world).collect();
+        assert_eq!(children.len(), 1, "ダミー窓は可視の子 Rectangle を 1 枚持つべき");
+
+        let (_rect, _brushes, child_of) = children[0];
+        assert_eq!(
+            child_of.parent(),
+            dummy,
+            "可視 Rectangle の親はダミー窓であるべき（描画内容 = liveness surface）"
+        );
+    }
+
+    /// ダブルクリック（左）でマーカー付きダミー窓を despawn し true を返す。
+    /// マーカーを持たない entity は残す。
+    #[test]
+    fn double_click_left_despawns_all_dummy_windows() {
+        let mut world = World::new();
+        let dummy = world.spawn(DummyWindowMarker).id();
+        let dummy2 = world.spawn(DummyWindowMarker).id();
+        let other = world.spawn_empty().id();
+
+        let ev = Phase::Bubble(pressed_event(DoubleClick::Left));
+        let handled = on_dummy_pressed(&mut world, dummy, dummy, &ev);
+
+        assert!(handled);
+        assert!(world.get_entity(dummy).is_err());
+        assert!(world.get_entity(dummy2).is_err());
+        assert!(world.get_entity(other).is_ok());
+    }
+
+    /// 左以外のダブルクリックでは despawn しない（false）。
+    #[test]
+    fn non_left_double_click_does_not_despawn_dummy() {
+        let mut world = World::new();
+        let dummy = world.spawn(DummyWindowMarker).id();
+
+        for dc in [DoubleClick::None, DoubleClick::Right, DoubleClick::Middle] {
+            let ev = Phase::Bubble(pressed_event(dc));
+            assert!(!on_dummy_pressed(&mut world, dummy, dummy, &ev));
+        }
+        assert!(world.get_entity(dummy).is_ok());
+    }
+
+    /// Tunnel フェーズのダブルクリックは無視する（false・despawn しない）。
+    #[test]
+    fn tunnel_phase_double_click_is_ignored_for_dummy() {
+        let mut world = World::new();
+        let dummy = world.spawn(DummyWindowMarker).id();
+
+        let ev = Phase::Tunnel(pressed_event(DoubleClick::Left));
+        assert!(!on_dummy_pressed(&mut world, dummy, dummy, &ev));
+        assert!(world.get_entity(dummy).is_ok());
+    }
+
+    // -- 自動 close ゲート `smoke_exit_ms_from`（純粋・env 非依存・task 2.3・R4.1） --
+
+    /// env 未設定（`None`）ではゲート発火なし（`None`）＝タスク不投入。
+    #[test]
+    fn smoke_exit_ms_unset_yields_none() {
+        assert_eq!(smoke_exit_ms_from(None), None);
+    }
+
+    /// 空文字・空白のみは発火なし（`None`）。
+    #[test]
+    fn smoke_exit_ms_empty_or_whitespace_yields_none() {
+        assert_eq!(smoke_exit_ms_from(Some("")), None);
+        assert_eq!(smoke_exit_ms_from(Some("   ")), None);
+        assert_eq!(smoke_exit_ms_from(Some("\t")), None);
+    }
+
+    /// 非数値は発火なし（`None`）。
+    #[test]
+    fn smoke_exit_ms_non_numeric_yields_none() {
+        assert_eq!(smoke_exit_ms_from(Some("abc")), None);
+        assert_eq!(smoke_exit_ms_from(Some("12ms")), None);
+        assert_eq!(smoke_exit_ms_from(Some("1.5")), None);
+    }
+
+    /// `"0"` は即時発火（0ms）として `Some(0)`。周辺空白はトリムして受理する。
+    #[test]
+    fn smoke_exit_ms_zero_yields_some_zero() {
+        assert_eq!(smoke_exit_ms_from(Some("0")), Some(0));
+        assert_eq!(smoke_exit_ms_from(Some("  0  ")), Some(0));
+    }
+
+    /// 正の整数はその値をミリ秒として受理する。
+    #[test]
+    fn smoke_exit_ms_positive_yields_some() {
+        assert_eq!(smoke_exit_ms_from(Some("500")), Some(500));
+        assert_eq!(smoke_exit_ms_from(Some(" 1500 ")), Some(1500));
+    }
+
+    /// 負値・`u64` 溢れは発火なし（`None`）＝不正入力はゲート OFF。
+    #[test]
+    fn smoke_exit_ms_negative_or_overflow_yields_none() {
+        assert_eq!(smoke_exit_ms_from(Some("-1")), None);
+        // u64::MAX + 1（20 桁）は溢れて None。
+        assert_eq!(smoke_exit_ms_from(Some("18446744073709551616")), None);
+    }
+}
+
+#[cfg(test)]
+mod config_input_tests {
+    use super::{ConfigInputs, default_balloon_root, default_ghost_root, resolve_config_inputs};
+    use std::path::PathBuf;
+
+    /// argv[1]/argv[2] が両方あるとき、両ルートを引数値でそのまま採用する（R3.3）。
+    #[test]
+    fn both_args_present_adopts_both() {
+        let args = vec![
+            "areka.exe".to_string(),
+            "C:/custom/ghost".to_string(),
+            "C:/custom/balloon".to_string(),
+        ];
+        let cfg = resolve_config_inputs(&args);
+        assert_eq!(cfg.ghost_root, PathBuf::from("C:/custom/ghost"));
+        assert_eq!(cfg.balloon_root, PathBuf::from("C:/custom/balloon"));
+    }
+
+    /// 引数なし（argv[0] のみ）のとき、両ルートとも既定へフォールバックする（R3.4）。
+    #[test]
+    fn no_args_uses_both_defaults() {
+        let args = vec!["areka.exe".to_string()];
+        let cfg = resolve_config_inputs(&args);
+        assert_eq!(cfg.ghost_root, default_ghost_root());
+        assert_eq!(cfg.balloon_root, default_balloon_root());
+    }
+
+    /// ghost のみ引数ありのとき、ghost は採用・balloon は既定にフォールバックする（R3.3/3.4）。
+    #[test]
+    fn ghost_only_arg_adopts_ghost_defaults_balloon() {
+        let args = vec!["areka.exe".to_string(), "C:/custom/ghost".to_string()];
+        let cfg = resolve_config_inputs(&args);
+        assert_eq!(cfg.ghost_root, PathBuf::from("C:/custom/ghost"));
+        assert_eq!(cfg.balloon_root, default_balloon_root());
+    }
+
+    /// 既定パスが `CARGO_MANIFEST_DIR` 相対で決定的に生成される（R3.4・DD1）。
+    #[test]
+    fn defaults_are_cargo_manifest_dir_relative_and_deterministic() {
+        let manifest = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        // 既定は CARGO_MANIFEST_DIR 配下にある（相対アンカー）。
+        assert!(
+            default_ghost_root().starts_with(&manifest),
+            "ghost default must be under CARGO_MANIFEST_DIR: {:?}",
+            default_ghost_root()
+        );
+        assert!(
+            default_balloon_root().starts_with(&manifest),
+            "balloon default must be under CARGO_MANIFEST_DIR: {:?}",
+            default_balloon_root()
+        );
+        // 決定的: 呼び出しごとに同一値を返す。
+        assert_eq!(default_ghost_root(), default_ghost_root());
+        assert_eq!(default_balloon_root(), default_balloon_root());
+    }
+
+    /// `ConfigInputs` は解決済みルートパスを保持する（型の存在確認）。
+    #[test]
+    fn config_inputs_holds_resolved_roots() {
+        let cfg = ConfigInputs {
+            ghost_root: PathBuf::from("g"),
+            balloon_root: PathBuf::from("b"),
+        };
+        assert_eq!(cfg.ghost_root, PathBuf::from("g"));
+        assert_eq!(cfg.balloon_root, PathBuf::from("b"));
+    }
+}

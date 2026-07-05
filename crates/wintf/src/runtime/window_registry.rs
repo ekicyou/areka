@@ -28,7 +28,7 @@ use std::collections::HashMap;
 
 use bevy_ecs::prelude::{Entity, RemovedComponents};
 use bevy_ecs::system::NonSendMut;
-use wintf_winmsg_executor::util::Window as LibWindow;
+use crate::executor::util::Window as LibWindow;
 
 use crate::ecs::window::Window;
 use crate::runtime::wndproc_bridge::WndState;

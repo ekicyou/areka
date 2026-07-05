@@ -528,6 +528,14 @@ mod window_tests {
     /// bounded: いずれの pump / send_request も timeout / 受領 / quit で必ず抜ける（無限ループ禁止）。
     #[test]
     fn pump_none_then_some_and_bad_frame_recorded() {
+        // 窓生成テストの直列化（wintf-winmsg-executor 0.0.5 の「同一プロセスで 2 組の
+        // message-only 窓を同時生成すると 2 組目が WindowCreationError」既知制約への対処）。
+        // lifecycle.rs の窓生成テストと同一ロックを取り、並列窓生成の衝突を防ぐ。
+        // poison は無視する（ロックは相互排他のみが目的）。
+        let _guard = crate::lifecycle::tests::WINDOW_TEST_SERIAL
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
+
         let parent = ParentMessageWindow::create().expect("親 message-only 窓生成に失敗");
 
         // --- (a) HELLO 未受領 → 短い timeout で None（要件 3.4）---

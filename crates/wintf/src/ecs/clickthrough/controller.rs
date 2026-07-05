@@ -286,7 +286,7 @@ impl ClickThroughController {
         let monitor = Rc::new(CursorMonitorBridge::spawn(Arc::clone(&wake_event)));
 
         // async 判定・適用ループを UI スレッドへ投入（実行はメッセージループに委ねる）。
-        let join = wintf_winmsg_executor::spawn_local(run_click_through(
+        let join = crate::executor::spawn_local(run_click_through(
             Arc::clone(&wake_event),
             Weak::clone(&world),
             Rc::clone(&registry),
@@ -318,7 +318,7 @@ pub(crate) struct ClickThroughHandle {
     monitor: Rc<CursorMonitorBridge>,
     registry: Rc<RefCell<ClickThroughRegistry>>,
     wake_event: Arc<Event>,
-    _join: wintf_winmsg_executor::JoinHandle<()>,
+    _join: crate::executor::JoinHandle<()>,
 }
 
 impl ClickThroughHandle {
