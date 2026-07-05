@@ -67,7 +67,7 @@
   - _Requirements: 5.1, 5.6_
   - _Depends: 3.1_
 
-- [ ] 3.3 helper 側 UNLOAD 経路の loopback 統合テストを追加
+- [x] 3.3 helper 側 UNLOAD 経路の loopback 統合テストを追加
   - 既存の loopback テスト群に UNLOAD ケースを追加する: UNLOAD 送出後に SHIORI プロキシが未確立状態に戻ること、終了要求フラグが立つこと、親スタンドインが厳密1バイトの ack を受領することを確認する
   - Observable: `cargo test -p shiori-host32-helper --target i686-pc-windows-msvc`（PowerShell 実行）で新しい UNLOAD ケースを含む loopback テスト一式が通る
   - _Requirements: 5.1, 7.3, 7.4_

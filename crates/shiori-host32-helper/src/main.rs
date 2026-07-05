@@ -1015,6 +1015,34 @@ mod loopback_tests {
             "UNLOAD ack は既存 LOAD ack と同型の厳密 1 byte [1]（新契約を発明しない・R5.1）"
         );
 
+        // --- R5.1: quit_requested が立った状態で、main と同型のフィルタ（quit_requested 検知→quit）を
+        //     持つ MessageLoop を回すと、posted メッセージ契機でフィルタが flag を見てループを正常終了する
+        //     （＝正規の正常終了経路のループ機構。プロセス exit 0 の観測は x64 e2e=Task 5.1）。この demo は
+        //     UNLOAD セクションで既に quit_requested==true になった後に実行し、独自の MessageLoop を生成・
+        //     消費する（前段の bounded 生存ループ・後段とは各 MessageLoop::run が返ってから次が始まるため
+        //     干渉しない）。quit_seen==true は quit 配線が正しいことに依存する実回帰ガードであり（配線を
+        //     外すとループが flag で抜けず、上の RED 実測で確認済み）、shell ではない。---
+        // SAFETY: helper.hwnd() は有効。WM_NULL(0) は無害な起こし用メッセージ。
+        unsafe { let _ = PostMessageW(Some(helper.hwnd()), 0, WPARAM(0), LPARAM(0)); }
+        {
+            let quit_seen = Rc::new(Cell::new(false));
+            let helper_ref = &helper;
+            MessageLoop::run({
+                let quit_seen = quit_seen.clone();
+                move |msg_loop, _msg| {
+                    if helper_ref.shared().quit_requested.get() {
+                        quit_seen.set(true);
+                        msg_loop.quit();
+                    }
+                    FilterResult::Forward
+                }
+            });
+            assert!(
+                quit_seen.get(),
+                "quit_requested 検知でメッセージループが正常終了する（R5.1・正規正常終了経路のループ機構）"
+            );
+        }
+
         // --- 不正フレーム: 未知タグを helper へ送っても crash せず記録のみ（要件 2.5）---
         // 未知タグ生値 0xFF を dwData に載せて自窓へ送る（copydata_payload が UnknownTag で弾く）。
         {
