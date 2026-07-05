@@ -30,6 +30,9 @@
 //! wintf には依存しない（headless）。`std::time::Instant` は本クレートに一切現れない。
 
 pub mod contract;
+pub mod error;
+
+pub use error::SakuraError;
 
 // 下流の import パス安定化（DD-1: 下流は `areka_sakura::contract::*` 経由で参照）。
 pub use contract::*;
