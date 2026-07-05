@@ -30,7 +30,7 @@
   - _Boundary: open_startup_window_
 
 - [ ] 2.3 検証用ダミー窓に env ゲート付き自動 close 機構を追加する
-  - 指定環境変数（`AREKA_` 冠規約）が設定されている場合のみ、`wintf_winmsg_executor::spawn_local` で一発の非同期タスクを投入する
+  - 指定環境変数（`AREKA_` 冠規約）が設定されている場合のみ、`wintf::executor::spawn_local`（`wintf` が再公開する `executor` エイリアス経由・`wintf_winmsg_executor` を直接 import しない）で一発の非同期タスクを投入する
   - タスクは `async_io::Timer::after` で指定ミリ秒スリープした後、world の弱参照を経由してダミー窓エンティティを despawn する
   - 環境変数が未設定のときはこの機構が一切発火せず、ダミー窓は利用者の close を待ち続けることを確認する
   - _Requirements: 4.1_
