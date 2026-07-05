@@ -101,5 +101,5 @@ areka-P0-kanade: kanade（③conductor）＝実行時経路（運行表）の所
 
 1. The 観測ハーネス shall mock shiori（OnBoot→固定 Value・OnSecondChange→204 基調＋散発 Value の fixture 応答）と mock sakura sink を kanade に結線し、boot 指示から close 完了までの運行全体を駆動する。
 2. When 運行全体を駆動した, the 観測ハーネス shall (a) boot 系列が正典順序で発火したこと（NOTIFY／GET の別・Reference 構成込み）、(b) Value 受領→talk 起動要求が sink に到達したこと、(c) close 指示→sink の再生完了通知を待って終了系列が完走したこと、を単一の pass/fail として検証する。
-3. The 観測 shall 実時間 sleep に依存せず（時刻／Tick 注入）、反復実行で同一結果となる。
+3. The 観測ハーネス shall 実時間 sleep に依存せず（時刻／Tick 注入）、反復実行で同一結果となる。
 4. Where 実 helper 追験の環境変数ゲートが有効, the 観測ハーネス shall 実 32bit helper 越しの追験を実行できる（既定では skip され、mock 観測のみで pass/fail が完結する）。
