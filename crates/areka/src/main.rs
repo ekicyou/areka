@@ -658,6 +658,70 @@ fn open_startup_window(app: &WinApp) {
             tracing::info!("検証用ダミー窓を開きました（replace-me シーム）");
         }));
     });
+
+    // env ゲート付き自動 close 機構（CI smoke・task 2.3・R4.1）。
+    // `AREKA_APP_SMOKE_EXIT_MS` が有効なミリ秒値のときだけ、VSync relay と同じ
+    // `wintf::executor::spawn_local`＋world `Weak` 作法で **一発の** async タスクを投入する
+    // （ECS システムではない）。env 未設定・不正なら発火せず、ダミー窓は利用者の
+    // ダブルクリック despawn（task 2.2 経路）を待ち続ける。
+    if let Some(ms) = smoke_exit_ms() {
+        // WinApp が strong 所有者を保持するため、この Weak は shutdown まで upgrade 可能。
+        let world_weak = std::rc::Rc::downgrade(&app.world());
+        tracing::info!(
+            env = SMOKE_EXIT_ENV,
+            delay_ms = ms,
+            "smoke 自動 close ゲート有効 — ダミー窓を指定 ms 後に despawn します"
+        );
+        wintf::executor::spawn_local(async move {
+            // 指定 ms を async スリープ（async-io は既存依存・tokio 不要）。
+            async_io::Timer::after(std::time::Duration::from_millis(ms)).await;
+            // shutdown 済みなら strong 所有者は消えており upgrade は None ＝ no-op。
+            let Some(world) = world_weak.upgrade() else {
+                tracing::debug!("smoke 自動 close: world 既に drop 済み（shutdown）— no-op");
+                return;
+            };
+            // await を跨いで borrow を保持しない TIGHT スコープで despawn する。
+            {
+                let mut ecs = world.borrow_mut();
+                let w = ecs.world_mut();
+                let dummies: Vec<Entity> = w
+                    .query_filtered::<Entity, With<DummyWindowMarker>>()
+                    .iter(w)
+                    .collect();
+                let count = dummies.len();
+                for e in dummies {
+                    w.despawn(e);
+                }
+                tracing::info!(count, "smoke 自動 close: ダミー窓を despawn しました");
+            }
+        });
+    }
+}
+
+/// 自動 close ゲートを有効化する環境変数名（`AREKA_` 冠規約・記憶 areka-runtime-env-naming）。
+const SMOKE_EXIT_ENV: &str = "AREKA_APP_SMOKE_EXIT_MS";
+
+/// 与えられた値から自動 close の遅延ミリ秒を解釈する純粋ヘルパ（env アクセスなし・単体テスト可能）。
+///
+/// - `None`／空／空白のみ／非数値／負値／`u64` 溢れ → `None`（ゲート OFF＝タスク不投入）。
+/// - 周辺空白をトリムした非負整数 → `Some(ms)`（`"0"` は 0ms＝即時発火として受理）。
+///
+/// `u64::from_str` は負号・小数点・非数字を弾き、範囲外を `Err` にするため、負値・溢れは
+/// 自然に `None` へ落ちる（不正入力はゲート OFF に倒す）。
+fn smoke_exit_ms_from(value: Option<&str>) -> Option<u64> {
+    let trimmed = value.map(str::trim)?;
+    if trimmed.is_empty() {
+        return None;
+    }
+    trimmed.parse::<u64>().ok()
+}
+
+/// 環境変数 [`SMOKE_EXIT_ENV`] から自動 close の遅延ミリ秒を読む。
+///
+/// task 3.1 で `open_startup_window` が `main()` から結線されるまで、呼び出しは
+/// `open_startup_window` 内に閉じる。
+fn smoke_exit_ms() -> Option<u64> {
+    smoke_exit_ms_from(std::env::var(SMOKE_EXIT_ENV).ok().as_deref())
 }
 
 // ---------------------------------------------------------------------------
@@ -774,6 +838,52 @@ mod startup_window_tests {
         let ev = Phase::Tunnel(pressed_event(DoubleClick::Left));
         assert!(!on_dummy_pressed(&mut world, dummy, dummy, &ev));
         assert!(world.get_entity(dummy).is_ok());
+    }
+
+    // -- 自動 close ゲート `smoke_exit_ms_from`（純粋・env 非依存・task 2.3・R4.1） --
+
+    /// env 未設定（`None`）ではゲート発火なし（`None`）＝タスク不投入。
+    #[test]
+    fn smoke_exit_ms_unset_yields_none() {
+        assert_eq!(smoke_exit_ms_from(None), None);
+    }
+
+    /// 空文字・空白のみは発火なし（`None`）。
+    #[test]
+    fn smoke_exit_ms_empty_or_whitespace_yields_none() {
+        assert_eq!(smoke_exit_ms_from(Some("")), None);
+        assert_eq!(smoke_exit_ms_from(Some("   ")), None);
+        assert_eq!(smoke_exit_ms_from(Some("\t")), None);
+    }
+
+    /// 非数値は発火なし（`None`）。
+    #[test]
+    fn smoke_exit_ms_non_numeric_yields_none() {
+        assert_eq!(smoke_exit_ms_from(Some("abc")), None);
+        assert_eq!(smoke_exit_ms_from(Some("12ms")), None);
+        assert_eq!(smoke_exit_ms_from(Some("1.5")), None);
+    }
+
+    /// `"0"` は即時発火（0ms）として `Some(0)`。周辺空白はトリムして受理する。
+    #[test]
+    fn smoke_exit_ms_zero_yields_some_zero() {
+        assert_eq!(smoke_exit_ms_from(Some("0")), Some(0));
+        assert_eq!(smoke_exit_ms_from(Some("  0  ")), Some(0));
+    }
+
+    /// 正の整数はその値をミリ秒として受理する。
+    #[test]
+    fn smoke_exit_ms_positive_yields_some() {
+        assert_eq!(smoke_exit_ms_from(Some("500")), Some(500));
+        assert_eq!(smoke_exit_ms_from(Some(" 1500 ")), Some(1500));
+    }
+
+    /// 負値・`u64` 溢れは発火なし（`None`）＝不正入力はゲート OFF。
+    #[test]
+    fn smoke_exit_ms_negative_or_overflow_yields_none() {
+        assert_eq!(smoke_exit_ms_from(Some("-1")), None);
+        // u64::MAX + 1（20 桁）は溢れて None。
+        assert_eq!(smoke_exit_ms_from(Some("18446744073709551616")), None);
     }
 }
 
