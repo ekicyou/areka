@@ -61,6 +61,33 @@ impl ComposedSurface {
     pub fn into_bytes(self) -> Vec<u8> {
         self.bytes
     }
+
+    /// バッファを `w×h`（`stride = w*4`）へ再確保し、全画素を 0（全透明）へクリアする。
+    ///
+    /// 既存の `Vec<u8>` 容量を**再利用**する（要件 10.3・毎フレーム経路のゼロアロケーション）:
+    /// 必要バイト数が現容量以下なら再割り当てせず `truncate`＋`resize`／不足時のみ伸長する。
+    /// クリアは全 0 上書き（前フレームの残像が混ざらない）。blit 実行器（[`crate::blit`]）が
+    /// 転写前に呼び、以後 [`bytes_mut`] へ premultiplied BGRA を書き込む。
+    ///
+    /// [`bytes_mut`]: ComposedSurface::bytes_mut
+    pub(crate) fn resize_and_clear(&mut self, width: u32, height: u32) {
+        let stride = width * 4;
+        let len = stride as usize * height as usize;
+        self.width = width;
+        self.height = height;
+        self.stride = stride;
+        // 容量再利用: 既存要素を 0 で埋め直し、長さを len へ合わせる（>len は捨て・<len は 0 追加）。
+        // Vec::resize は容量が足りれば再割り当てしない（10.3）。
+        self.bytes.clear();
+        self.bytes.resize(len, 0u8);
+    }
+
+    /// premultiplied BGRA バイト列の可変参照（`len == stride * height`）。
+    ///
+    /// blit 実行器が転写先として書き込む（本クレート内専用）。
+    pub(crate) fn bytes_mut(&mut self) -> &mut [u8] {
+        &mut self.bytes
+    }
 }
 
 #[cfg(test)]
