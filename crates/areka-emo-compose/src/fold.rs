@@ -139,23 +139,39 @@ fn merge_animations(
     }
 }
 
-/// ターゲット記述子を記述順に展開した id 列を返す（両端含む・要件 2.1）。
+/// ターゲット記述子を記述順に展開し、除外指定（`!N`／`!a-b`）を減算した id 列を返す（要件 2.5）。
 ///
-/// 本 task では除外（[`AppendTarget::Exclude`]／[`AppendTarget::ExcludeRange`]）の減算は行わず、
-/// 包含ターゲット（`Single`／`Range`）のみを記述順に列挙する（除外減算は task 3.4 の領分・その
-/// シームとして除外 variant は無視して素通りする）。
+/// 二相構成: (1) 包含記述子（[`AppendTarget::Single`]／[`AppendTarget::Range`]・両端含む）を
+/// **記述順**に列挙し、(2) 除外記述子（[`AppendTarget::Exclude`]／[`AppendTarget::ExcludeRange`]・
+/// 両端含む）を集合として集め、包含列から除外集合に属する id を取り除く。除外は記述子の登場位置に
+/// 依らず展開結果全体へ効く（ukadoc: `!` は集合から除去）。生存 id の記述順・重複は保つ（design
+/// 「展開結果の適用順は記述順」）。
+///
+/// emo2 は除外を使用しないため実処理は型シームだが、記述子の口は保持し減算まで実装する（要件 2.5/12.3）。
 fn expand_targets(targets: &[AppendTarget]) -> Vec<u32> {
-    let mut ids = Vec::new();
+    use std::collections::BTreeSet;
+
+    // (1) 包含 id を記述順に列挙（重複はそのまま保つ）。
+    let mut included: Vec<u32> = Vec::new();
+    // (2) 除外 id を集合へ集める（記述位置に依らず全体へ効かせるため先に全走査）。
+    let mut excluded: BTreeSet<u32> = BTreeSet::new();
+
     for target in targets {
         match *target {
-            AppendTarget::Single(id) => ids.push(id),
+            AppendTarget::Single(id) => included.push(id),
             AppendTarget::Range { start, end } => {
                 // 記述子の向きに関わらず両端含みで昇順展開する（`a-b` は a..=b）。
                 let (lo, hi) = if start <= end { (start, end) } else { (end, start) };
-                ids.extend(lo..=hi);
+                included.extend(lo..=hi);
             }
-            // 除外の減算適用は task 3.4。ここでは包含集合に影響させない（seam）。
-            AppendTarget::Exclude(_) | AppendTarget::ExcludeRange { .. } => {}
+            AppendTarget::Exclude(id) => {
+                excluded.insert(id);
+            }
+            AppendTarget::ExcludeRange { start, end } => {
+                // 除外範囲も両端含み（記述子の向き不問）。
+                let (lo, hi) = if start <= end { (start, end) } else { (end, start) };
+                excluded.extend(lo..=hi);
+            }
             // `AppendTarget` は `#[non_exhaustive]`。未知の記述子はパニックせず観測可能化する（要件 1.4）。
             ref other => {
                 tracing::warn!(
@@ -166,7 +182,10 @@ fn expand_targets(targets: &[AppendTarget]) -> Vec<u32> {
             }
         }
     }
-    ids
+
+    // 減算: 除外集合に属さない id のみを記述順・重複保持で残す。
+    included.retain(|id| !excluded.contains(id));
+    included
 }
 
 /// 共有ボディから id 固有の正規化 [`SurfaceMaster`] を生成する（要件 4.2/4.4）。
@@ -227,7 +246,7 @@ mod tests {
     };
     use bevy_ecs::world::World;
 
-    use crate::fold::fold_shell;
+    use crate::fold::{expand_targets, fold_shell};
     use crate::method::ComposeMethod;
     use crate::world::{SurfaceId, SurfaceIndex};
     use crate::normalized::SurfaceMaster;
@@ -632,5 +651,71 @@ mod tests {
         assert_eq!(m2.elements.len(), 1);
         assert!(!m2.elements.iter().any(|e| e.path.as_str() == "x.png"));
         assert_eq!(m2.elements[0].path.as_str(), "b.png");
+    }
+
+    // ── task 3.4: 除外指定（`!N`/`!a-b`）の展開時減算 ─────────────────────────
+
+    /// (3.4-1) 単一除外: `Single(0),Single(5),Exclude(5)` は 0 を残し 5 を減算する（要件 2.5）。
+    #[test]
+    fn expand_targets_subtracts_single_exclude() {
+        let ids = expand_targets(&[
+            AppendTarget::Single(0),
+            AppendTarget::Single(5),
+            AppendTarget::Exclude(5),
+        ]);
+        assert!(ids.contains(&0), "id=0 は残る");
+        assert!(!ids.contains(&5), "id=5 は除外される");
+        assert_eq!(ids, vec![0]);
+    }
+
+    /// (3.4-2) 範囲除外: `Range{1,5}, ExcludeRange{2,4}` は両端含みで 2,3,4 を減算し {1,5}（要件 2.5）。
+    #[test]
+    fn expand_targets_subtracts_exclude_range_inclusive() {
+        let ids = expand_targets(&[
+            AppendTarget::Range { start: 1, end: 5 },
+            AppendTarget::ExcludeRange { start: 2, end: 4 },
+        ]);
+        assert_eq!(ids, vec![1, 5], "2,3,4 が両端含みで減算される");
+    }
+
+    /// (3.4-3) 除外なし回帰: `Range{1,3}` は減算ロジック導入後も {1,2,3} のまま変わらない。
+    #[test]
+    fn expand_targets_without_exclude_is_unchanged() {
+        let ids = expand_targets(&[AppendTarget::Range { start: 1, end: 3 }]);
+        assert_eq!(ids, vec![1, 2, 3]);
+    }
+
+    /// (3.4-4) 除外は記述位置に依らず集合全体へ効く（`!` 記述子が範囲の前でも減算される・design）。
+    #[test]
+    fn expand_targets_exclude_applies_regardless_of_position() {
+        let ids = expand_targets(&[
+            AppendTarget::Exclude(2),
+            AppendTarget::Range { start: 1, end: 3 },
+        ]);
+        assert_eq!(ids, vec![1, 3], "前置の除外でも展開結果から減算される");
+    }
+
+    /// (3.4-5) fold 経由の統合: 除外を含む plain surface を fold すると除外 id が entity 化されない。
+    /// `expand_targets` とその fold 呼び手の双方が除外を honor することを EmoWorld/SurfaceIndex で検証。
+    #[test]
+    fn fold_plain_surface_honors_exclusion_through_build() {
+        // `surface1-4 !3` 相当（1,2,4 を新設・3 を除外）。
+        let surf = surface_def(
+            1,
+            vec![
+                AppendTarget::Range { start: 1, end: 4 },
+                AppendTarget::Exclude(3),
+            ],
+            vec![elem(0, "s.png", 0, 0)],
+        );
+        let mut world = fresh_world();
+        fold_shell(&mut world, &shell_of(vec![surf]));
+
+        for id in [1u32, 2, 4] {
+            assert!(master_of(&world, id).is_some(), "id={id} は新設される");
+        }
+        // 除外 id は entity 化されない。
+        assert!(master_of(&world, 3).is_none(), "除外 id=3 は新設されない");
+        assert_eq!(world.resource::<SurfaceIndex>().0.len(), 3);
     }
 }
