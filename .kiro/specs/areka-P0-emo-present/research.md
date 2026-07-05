@@ -134,7 +134,7 @@ emo-present クレート内に、`ComposedSurface` を受けて **WUC surface �
 
 **留意点**: (1) flip model backbuffer は直接 Map 不可＝自前アップロード元テクスチャを読むか staging へ `CopyResource`。(2) リサイズは `ResizeBuffers`（R1.5）。(3) swap chain は面ごとだが emo は**窓あたり1枚物**ゆえ窓あたり1本（element 単位でない）＝軽微。(4) swap chain の alpha mode を premultiplied で一致。
 
-**位置づけ**: Option C（ハイブリッド）と両立し、B2（メモリアップロード経路）の**第一候補に格上げ検討**。design 冒頭で小 spike（swap chain 供給＋readback 往復）で実証してから確定。記憶 [[gpu-draw-verification-offscreen-d2d-target]]（議論#1）とも整合——議論#1 のオフスクリーン D2D 検証はこのルートでは「自前所有面の読み戻し」に自然統合される。
+**位置づけ**: **ディスカッション #3 で要件化（R8・必達）**——emo-present はコンポジター供給面を書き込み専用の `CompositionDrawingSurface` ではなく**自前所有・読み戻し可能なオフスクリーン面（swap chain 相当）**とし、その CPU 読み戻し経路を確保する。将来のオフスクリーン面直読みヒットテスト経路の基盤（当たり判定の実導出は後続・M-boot は R2 の CPU バイト経由）。Option C（ハイブリッド）と両立。design 冒頭で小 spike（swap chain 供給＋readback 往復）で実装可能性を実証してから本実装へ。記憶 [[gpu-draw-verification-offscreen-d2d-target]]（議論#1）とも整合——議論#1 のオフスクリーン D2D 検証（R6.7）はこのルートでは「自前所有面の読み戻し」に自然統合される。
 
 ---
 

@@ -18,6 +18,7 @@ areka の ⑥ emo トラック直列チェーンの最終段（3/3・emo-atlas �
   - 切替時に表示バッファと当たり判定マスクを対で入れ替える（原子性）。
   - surface id → 合成結果のキャッシュと、その無効化の口。
   - balloons*.png 等のバルーン枠を fixture 直指定で同一機構により表示する。
+  - 合成済みサーフェスを本レイヤが所有する読み戻し可能なオフスクリーン面（自前 swap chain 相当）としてコンポジターへ供給し、その面の CPU 読み戻し経路を確保する。
   - 上記を実 DPI（dpi≠96）でも観測可能にする専用 example。
 - **Out of scope（本ユニットが所有しない）**:
   - surface 合成の実体（`areka-P0-emo-compose`）／アトラス構築（`areka-P0-emo-atlas`）。
@@ -26,6 +27,7 @@ areka の ⑥ emo トラック直列チェーンの最終段（3/3・emo-atlas �
   - SERIKO ループ／interval／blink・surface 状態の所有（`areka-P0-seriko-engine` ほか）。
   - 指令の channel/actor 契約の確定・呼び手の結線（kanade/seriko 結線時）。
   - arrow/marker/online などバルーン付随マーカーの表示（後続）。
+  - オフスクリーン面を直読みしてヒットテスト当たり判定を実導出すること（本ユニットは R8 で読み戻し経路の確保に留め、直読みヒットテストの実導出は後続。M-boot の当たり判定は R2 の `ComposedSurface` CPU バイト経由）。
 - **Adjacent expectations（隣接ユニットへの期待・依存）**:
   - `areka-P0-emo-compose` の実シンボル（`ComposedSurface`・`Composer::compose_into`/`compose`・`EmoWorld`・`BindSet`・`AtlasTable`）を再定義せず消費する。合成出力は premultiplied BGRA であることに依存する。
   - wintf の表示・当たり判定・クリックスルー基盤（メモリ供給可能な表示経路・α マスク当たり判定・`WS_EX_TRANSPARENT` 動的トグル）を消費する。WUC 系の更新は UI スレッド固定である前提に従う。
@@ -116,3 +118,15 @@ areka の ⑥ emo トラック直列チェーンの最終段（3/3・emo-atlas �
 
 1. The emo-present レイヤ shall 窓の表示内容更新・当たり判定マスク更新を UI スレッド上で実施する。
 2. Where 合成（CPU 処理）を UI スレッド外のワーカーで行う, the emo-present レイヤ shall 完成した合成バッファをチャネル/キュー経由で UI スレッドへ引き渡してから表示更新を行う。
+
+### Requirement 8: コンポジター供給面の自前所有と直読みヒットテスト経路の確保
+
+**Objective:** As a emo ランタイム, I want 合成済みサーフェスを本レイヤが所有する読み戻し可能なオフスクリーン面としてコンポジターへ供給すること, so that 将来オフスクリーン面を直読みしてヒットテストを導出する経路を確保できる
+
+#### Acceptance Criteria
+
+1. The emo-present レイヤ shall 合成済みサーフェスをコンポジターへ供給する際、書き込み専用の合成面（WUC 内部アトラスへ書く `CompositionDrawingSurface` 等）ではなく、本レイヤが所有し CPU へ読み戻し可能なオフスクリーン面（自前 swap chain 相当のコンポジター供給面）を用いる。
+2. When 表示中の合成結果が更新される, the emo-present レイヤ shall その自前所有面の内容を更新後の合成結果と一致させる。
+3. The emo-present レイヤ shall 自前所有面の表示中画素を CPU へ読み戻せる経路（readback）を提供する。
+4. The emo-present レイヤ shall 上記読み戻し経路を、将来オフスクリーン面を直読みしてヒットテスト用の当たり判定を導出する経路の基盤として利用可能な形で提供する（当たり判定の実導出そのものは後続ユニットの責務）。
+5. Where 供給面の原寸が変化する, the emo-present レイヤ shall 自前所有面のバッファを新しい原寸へ追随させる（R1.5 と整合）。
