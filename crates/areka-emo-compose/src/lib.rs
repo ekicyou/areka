@@ -32,6 +32,9 @@ pub use method::{BlendKind, BlendMode, ComposeMethod};
 pub mod bind;
 pub mod composed;
 pub mod normalized;
+pub use bind::BindSet;
+pub use composed::ComposedSurface;
+pub use normalized::{NormalizedElement, SurfaceMaster, Transform};
 pub mod world;
 pub mod fold;
 pub mod atlas_bind;
@@ -40,3 +43,21 @@ pub mod blit;
 
 #[cfg(test)]
 mod golden_tests;
+
+#[cfg(test)]
+mod contract_tests {
+    use super::{BindSet, ComposedSurface};
+
+    /// 型 `T` が `Send` であることをコンパイル時に要求するヘルパ。
+    fn _assert_send<T: Send>() {}
+
+    /// Req 9.2: `BindSet` / `ComposedSurface` が `Send` 所有であることをコンパイル時に固定する。
+    ///
+    /// いずれかが `Send` でなくなるとこのテストのコンパイルが失敗し、公開データ契約の
+    /// スレッド越え受け渡し不変条件の逸脱を静的に検出する。
+    #[test]
+    fn public_contracts_are_send() {
+        _assert_send::<BindSet>();
+        _assert_send::<ComposedSurface>();
+    }
+}

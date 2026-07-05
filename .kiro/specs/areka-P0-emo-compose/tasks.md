@@ -47,7 +47,7 @@
   - _Requirements: 8.1, 8.2, 8.3, 12.3_
   - _Boundary: Method Registry (method.rs)_
 
-- [ ] 2.2 公開データ契約（BindSet/ComposedSurface/Transform/SurfaceMaster/NormalizedElement）を実装する
+- [x] 2.2 公開データ契約（BindSet/ComposedSurface/Transform/SurfaceMaster/NormalizedElement）を実装する
   - 有効bind集合を整列済み重複なしの `BindSet` として、合成結果を premultiplied BGRA・size・stride 明示の `ComposedSurface` として定義する
   - X,Yのみの平行移動を単位行列の特例として表現する `Transform` を定義する
   - collisions/animationsを保持する公開正規化定義 `SurfaceMaster`/`NormalizedElement`（2.1のComposeMethodを参照）を定義する
