@@ -27,7 +27,7 @@ areka（**x64**）が最小 SSP 互換ベースウェアとして、適合対象
 
 ## 立つ土台（completed・実コードあり）
 
-- 透過 ULW/DComp 切替（別プロセス自動透過）、event/hit-test/alpha-mask、dola 演出ランタイム（コア〜ループ/nested）。
+- 透過（別プロセス自動透過）＝GPU 合成（WUC）＋クリックスルー機構（`WS_EX_TRANSPARENT` 動的トグル・**ULW は 2026-07-05 `wintf-ulw-removal` で撤去済み**）、event/hit-test/alpha-mask、dola 演出ランタイム（コア〜ループ/nested）。
 - **SHIORI 契約チェーン**: `areka-P0-shiori-com`（内部唯一 ABI `IShiori`）→ `-shiori-protocol` → `-shiori-protocol-split` → `-shiori-reference`（reference DLL・native 脳デモ・`shiori_create` 入口）。
 - **mock-shell**（`areka-mock-shell`）: 窓表示＋縦書き Typewriter バルーン＋ドラッグ追従＝**動くレンダリング素材**。
 - pasta エンジン source: vendored `vendors/pasta`（M2 の native x64 化の素・**M1 では使わない**）。
@@ -188,14 +188,14 @@ emo2 が起動して喋る。下記 5 トラックを結線して達成（⓪ �
 
 - Rust 2024・マルチクレート（wintf/dola/areka ＋ `areka-parsers` ＋最小依存 `shiori-abi` ＋ host-32 3クレート `shiori-host32-ipc`/`-host`/`-helper`）。
 - **32bit 可搬性の適用範囲＝host-32 系（`shiori-host32-*`／`shiori-abi`）のみ**。wintf/areka 本体は x64＋arm64 ネイティブ（i686 検証を本体 spec に課さない）。
-- 透過は ULW/DComp 切替式（実装済み・ULW 既定）。SHIORI 内部唯一 ABI=`IShiori`(COM, HSTRING/UTF-16)。過去互換は 32bit Rust ホスト（flat-C/HGLOBAL/charset/自前 IPC）。
+- 透過は WUC/DComp GPU 合成上のクリックスルー機構（`WS_EX_TRANSPARENT` 動的トグル＋`WS_EX_LAYERED` 同伴フラグ＋αマスク `AlphaMask::is_hit`）で成立（**ULW は 2026-07-05 `wintf-ulw-removal` で撤去済み**・旧「ULW/DComp 切替式」記述は失効）。SHIORI 内部唯一 ABI=`IShiori`(COM, HSTRING/UTF-16)。過去互換は 32bit Rust ホスト（flat-C/HGLOBAL/charset/自前 IPC）。
 - 設計判断の変更は [doc/COMPAT_ARCHITECTURE.md](../../doc/COMPAT_ARCHITECTURE.md) を正本として更新。
 
 ## ポートフォリオ（2026-06-28・clean slate）
 
 - `.kiro/specs/` 直下 active = **0**（憶測仕様を全伐採し更地化。実装ファーストで着手時に作る）。
 - **2026-07-01 追記・着手可能フロント（当時 brief 済み）**: `/kiro-discovery` で「安全並走バッチ」の brief を just-in-time 生成。① wintf 基盤層 `wintf-dcomp-to-wuc-migration`（**✅ 完了**）／`wintf-clickthrough-alpha-toggle`（**✅ 2026-07-02 完了・アーカイブ**）。② M1 parser 並走 `shell`/`balloon`/`package`（**✅ 全完了**）。③ M1 host-32 `areka-P0-host32-ipc`（**✅ 完了**）→ `areka-P0-host32-shiori-load`（**✅ 完了**）。これら 5〜6 本は相互非衝突で即並走可（`ecs/graphics` 系は wuc-migration に一本化）。
-- **2026-07-03 現況**: `completed/` = **112**。**active = 0**・**brief-only = 7**（`/kiro-discovery` 深掘り調査＝コード4系統＋ukadoc 正典＋クレート調査で brief 生成: **`areka-P0-host32-request`**〔凍結 IPC 不改変・helper echo→実呼出＋x64 Shiori3Codec〕／**emo 直列3分割 `areka-P0-emo-atlas`→`-emo-compose`→`-emo-present`**〔旧 emo-surface を粒度分割・自前合成＋αトリミングアトラス（packing クレート本命 `rectangle-pack`＝zero-dep・要開発者承認／対抗 `rect_packer`）〕／**`areka-P0-window-placement`**〔alignmenttodesktop カスケード・窓数構成入力〕／**`areka-P0-actor-foundation`**〔通信横断基盤・機構/経路/結線の三分・UI 配送ブリッジ・std mpsc 起点〕／**`wintf-ulw-removal`**〔鮮度更新済: ゲート充足✅・**`WS_EX_LAYERED` 同伴フラグ保全**を受け入れ基準へ追加〕）。**②parsers トラック全完了・M-boot 約 7/19**（①shiori: pilot✅/ipc✅/shiori-load✅・lifecycle 残）。**着手順の注意**: emo チェーン（present）と window-placement は同じ `crates/areka` 起点＝**並行着手はファイル衝突注意・順次推奨**（emo-atlas/-compose・actor-foundation は純粋層/新設モジュール＝衝突なし）。shiori:`host32-request`／wintf:`ulw-removal` は他と非衝突＝即並走可。
+- **2026-07-03 現況（2026-07-05 更新）**: `completed/` = **113**（`wintf-ulw-removal` を 2026-07-05 完了・アーカイブ）。**active = 0**・**brief-only = 6**（`/kiro-discovery` 深掘り調査＝コード4系統＋ukadoc 正典＋クレート調査で brief 生成: **`areka-P0-host32-request`**〔凍結 IPC 不改変・helper echo→実呼出＋x64 Shiori3Codec〕／**emo 直列3分割 `areka-P0-emo-atlas`→`-emo-compose`→`-emo-present`**〔旧 emo-surface を粒度分割・自前合成＋αトリミングアトラス（packing クレート本命 `rectangle-pack`＝zero-dep・要開発者承認／対抗 `rect_packer`）〕／**`areka-P0-window-placement`**〔alignmenttodesktop カスケード・窓数構成入力〕／**`areka-P0-actor-foundation`**〔通信横断基盤・機構/経路/結線の三分・UI 配送ブリッジ・std mpsc 起点〕）。**wintf:`ulw-removal` は 2026-07-05 完了**（ULW 一式除去＋`CompositionMode` collapse・WUC 単独へ）。**②parsers トラック全完了・M-boot 約 7/19**（①shiori: pilot✅/ipc✅/shiori-load✅・lifecycle 残）。**着手順の注意**: emo チェーン（present）と window-placement は同じ `crates/areka` 起点＝**並行着手はファイル衝突注意・順次推奨**（emo-atlas/-compose・actor-foundation は純粋層/新設モジュール＝衝突なし）。shiori:`host32-request` は他と非衝突＝即並走可。
 - 旧 active/brief（M1 憶測・M2 reference・出荷層）・backlog（P1-P3）・`_rejected/`・旧戦略メモは**削除**（git 履歴に保全。必要時に復元可）。
 
 ## M2 以降
@@ -256,11 +256,11 @@ _Depends(confirmed): pilot-clickthrough-alpha-toggle
 ### spec 分割（2 本・ULW 除去は独立）
 
 - **✅ 完了 `wintf-dcomp-to-wuc-migration`（本坑・2026-07-02 完了）**: **①DComp→WUC 差し替えのみ**。当たり判定・ULW とは独立。ULW アーム（`compositor.rs`/`ulw.rs`/`compositor_systems`）と `CompositionMode` enum には手を入れず完了。実装後: WUC を触る graphics schedule は UI スレッド固定（DispatcherQueue 親和性）・`CompositionMode` 既定は ULW のまま。spec: `.kiro/specs/completed/wintf-dcomp-to-wuc-migration/`。
-- **`wintf-ulw-removal`（本坑・brief 済み）**: ULW 一式除去＋`CompositionMode` collapse（GPU 合成単独へ）。brief: `.kiro/specs/wintf-ulw-removal/brief.md`。
+- **✅ 完了 `wintf-ulw-removal`（本坑・2026-07-05 完了・開発者承認）**: ULW 一式除去＋`CompositionMode` collapse（GPU 合成単独へ）完遂。`compositor.rs`/`compositor_systems/`/`com/ulw.rs` 削除・`CompositionMode` enum/フィールド/再エクスポート撤去・全 production 参照追随・examples3本削除。残す WUC 経路とクリックスルー機構（`apply_layered_companion`＋`ecs/clickthrough/`）は非改変（main 比 diff ゼロ）＝純粋機能ドロップ。α源は per-widget `AlphaMask::is_hit` のみ（staging α撤去）。実マスコット起動で WUC 単独描画・クリックスルー透過を目視サインオフ済み。spec: `.kiro/specs/completed/wintf-ulw-removal/`。
   ```
-  _Depends: wintf-clickthrough-alpha-toggle（完了）
+  _Depends: wintf-clickthrough-alpha-toggle（完了）✓
   ```
-  **ULW を安全に消せるのは、本坑クリックスルーが完了して「ULW 無しでも別プロセス透過が成立」と確認できてから**（クリックスルー brief の並走方針＝「完全有効なら ULW 破棄／当面は並走・即時撤去しない」に一致）。`wintf-dcomp-to-wuc-migration` とは触るファイルが別ゆえ**独立**（順序任意・両完了後に `CompositionMode` は WUC 単独へ最終 collapse）。クリックスルーのα源は ULW compositor の staging αバッファではなく per-widget `AlphaMask` を使う想定（design で確認）。
+  **ULW を安全に消せるのは、本坑クリックスルーが完了して「ULW 無しでも別プロセス透過が成立」と確認できてから**（クリックスルー brief の並走方針＝「完全有効なら ULW 破棄／当面は並走・即時撤去しない」に一致）＝前提充足済み。`wintf-dcomp-to-wuc-migration` とは触るファイルが別ゆえ**独立**（両完了で `CompositionMode` は WUC 単独へ最終 collapse 完了）。クリックスルーのα源は ULW compositor の staging αバッファではなく per-widget `AlphaMask` を使用（実装で確認済み）。
 
 ### 依存マップ検証（two-tunnel 手動チェックリスト）
 
