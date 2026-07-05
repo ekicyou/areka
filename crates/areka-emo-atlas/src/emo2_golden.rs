@@ -199,13 +199,18 @@ fn emo2_shell_bake_is_deterministic() {
 #[test]
 fn emo2_shell_matches_golden() {
     let expected = include_str!("testdata/emo2_shell_golden.txt");
+    // golden は git の autocrlf でチェックアウト時に CRLF 化されうる（この repo は
+    // Cargo.lock を含め text を CRLF 正規化する）。snapshot_table は常に LF ゆえ、
+    // 行内改行を LF へ正規化＋末尾改行除去してから比較し、配置値の等価性のみを見る。
+    // これがないと autocrlf 有効な新規クローン（Windows）で改行差だけで誤検出する。
+    let expected = expected.replace("\r\n", "\n");
+    let expected = expected.trim_end_matches('\n');
     with_com_initialized(|| {
         let result = bake_emo2_shell();
         let actual = snapshot_table(&result.table);
         assert_eq!(
             actual,
-            // include_str! は末尾改行を含みうるため trim_end で正規化して比較。
-            expected.trim_end_matches('\n'),
+            expected,
             "emo2 shell placement snapshot regressed against committed golden \
              (src/testdata/emo2_shell_golden.txt); regenerate intentionally via the \
              #[ignore] record_golden test if the change is expected"
