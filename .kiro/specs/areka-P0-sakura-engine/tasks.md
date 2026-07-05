@@ -1,7 +1,7 @@
 # Implementation Plan
 
 - [ ] 1. Foundation: dola cue 拡張と areka-sakura クレート雛形
-- [ ] 1.1 dola の cue コマンド集合へ改行コマンドを追加する
+- [x] 1.1 dola の cue コマンド集合へ改行コマンドを追加する
   - 改行比率を保持する新しい演出コマンド種別を dola の cue コマンド集合へ追加し、既存の derive（Clone/Debug/PartialEq/Serialize/Deserialize）が壊れないことを確認する
   - バリアント数を記述しているモジュールドキュメントと既存の網羅テストを新種別込みへ更新する
   - 新種別のシリアライズ往復テストを追加し、dola のテストスイートが全て成功することを確認する（observable: 新規テストと既存テストが green）
