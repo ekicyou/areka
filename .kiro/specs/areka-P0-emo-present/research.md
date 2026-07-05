@@ -133,7 +133,8 @@ emo-present クレート内に、`ComposedSurface` を受けて **WUC surface �
 
 ### バルーン枠（R5）
 
-- `balloons*.png` を fixture 直指定で同一表示機構へ。**入力経路の選択肢**: (a) balloon も emo-atlas/emo-compose を通して `ComposedSurface` 化してから同経路 / (b) 枠は単一 PNG ゆえ直 WIC ロードで簡略化。emo2 実測（brief）では balloon は `.pna` 無し・PNG α のみ・overlay のみ——**(a) がシェルと機構統一**だが (b) の方が M-boot 最小。design 判断。
+- `balloons*.png` を fixture 直指定で同一表示機構へ。**入力経路の選択肢**: (a) balloon も emo-atlas/emo-compose を通して `ComposedSurface` 化してから同経路 / (b) 枠は単一 PNG ゆえ直 WIC ロードで簡略化。emo2 実測（brief）では balloon は `.pna` 無し・PNG α のみ・overlay のみ。
+  - **ディスカッション決定（#2）**: **(a) を採用**（統一グラフィック原則を M-boot でも貫く・記憶 areka-unified-shell-balloon-graphics）。R5.1 に「枠も `ComposedSurface` 化して同一経路・直 WIC バイパスは用いない」を明記。残る「atlas 登録の具体（balloon をどう atlas/EmoWorld へ載せるか）」は design（Research 5・descript_balloon 3 分類と併せて）で確定。
 - 配置は `sakura.balloon.offsetx/offsety`（R5.4）——window-placement のバルーン追従 offset と同座標系か照合（brief）。
 
 ---

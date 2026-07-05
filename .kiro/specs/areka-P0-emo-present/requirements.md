@@ -89,7 +89,7 @@ areka の ⑥ emo トラック直列チェーンの最終段（3/3・emo-atlas �
 
 #### Acceptance Criteria
 
-1. When fixture 直指定のバルーン枠画像（balloons*.png）が供給される, the emo-present レイヤ shall シェルサーフェスと同一の表示・合成機構でバルーン枠を表示する。
+1. When fixture 直指定のバルーン枠画像（balloons*.png）が供給される, the emo-present レイヤ shall シェルサーフェスと同一の表示・合成機構でバルーン枠を表示する（＝バルーン枠も `ComposedSurface` 化して同一経路を通す。枠専用の直 WIC バイパスは用いない）。
 2. The emo-present レイヤ shall バルーン枠画像のアルファ（PNG 自身のアルファ）を尊重して枠の透明部を透過表示する。
 3. The emo-present レイヤ shall バルーン枠の表示範囲を M-boot では枠そのもの（背景枠）に限定し、テキスト・arrow・marker・online マーカーの描画を含めない。
 4. Where バルーンのアンカーオフセット（`sakura.balloon.offsetx`/`offsety` 相当）が与えられる, the emo-present レイヤ shall バルーン枠をシェルサーフェスに対して指定オフセットで配置する。
