@@ -297,7 +297,7 @@ mod tests {
     }
 
     /// 指定 id をキーに登録済み entity の `SurfaceMaster` を引く。
-    fn master_of<'w>(world: &'w World, id: u32) -> Option<&'w SurfaceMaster> {
+    fn master_of(world: &World, id: u32) -> Option<&SurfaceMaster> {
         let entity = *world.resource::<SurfaceIndex>().0.get(&id)?;
         world.get::<SurfaceMaster>(entity)
     }

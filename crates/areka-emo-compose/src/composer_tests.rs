@@ -89,10 +89,13 @@ fn transparent_wxh(w: u32, h: u32) -> (u32, u32, u32, Vec<u8>, bool) {
     (w, h, stride, vec![0u8; (stride * h) as usize], true)
 }
 
-/// (rel_path, (w,h), 単色 (b,g,r) or 全透明) 群から `AtlasTable` を bake する。
+/// bake 仕様の1エントリ: (相対パス, (w,h), 単色 (b,g,r) or 全透明 None)。
+type AtlasSpec<'a> = (&'a str, (u32, u32), Option<(u8, u8, u8)>);
+
+/// [`AtlasSpec`] 群から `AtlasTable` を bake する。
 ///
 /// `color` が `Some((b,g,r))` なら不透明単色、`None` なら全透明（placement None）。
-fn bake_atlas_spec(base: &Path, specs: &[(&str, (u32, u32), Option<(u8, u8, u8)>)]) -> AtlasTable {
+fn bake_atlas_spec(base: &Path, specs: &[AtlasSpec]) -> AtlasTable {
     let elements: Vec<Element> = specs.iter().map(|(r, _, _)| elem(0, r, 0, 0)).collect();
     let surfaces = vec![surface(0, elements)];
     let mut dec = MemoryDecoder::new();

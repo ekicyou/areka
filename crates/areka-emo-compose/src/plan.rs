@@ -240,6 +240,10 @@ pub(crate) fn derive_ops(
 ///
 /// visited は祖先スタック: 入口で `surface_id` を push、出口で pop。既訪問（＝現在の祖先経路に
 /// 存在）なら循環ゆえ `warn!` して即 return（枝打ち切り・非パニック・要件 7.2/7.3）。
+///
+/// 引数は out_ops/visited のスクラッチ2本＋world/atlas の入力2本＋surface_id＋binds＋累積
+/// offset(x,y) の計8本。全て再帰の各段で必要ゆえ削れない（スクラッチ構造体化は将来の整理余地）。
+#[allow(clippy::too_many_arguments)]
 fn flatten_surface(
     out_ops: &mut Vec<BlitOp>,
     visited: &mut Vec<u32>,
@@ -469,6 +473,10 @@ pub(crate) fn build_plan(
 /// 各静的 element については `AtlasBinding` が `Some(ElementId)` のもののみ、`atlas.entry(id).original`
 /// を「累積オフセット＋原寸」として外形へ寄与させる（未束縛 None は原寸不明ゆえ寄与しない）。
 /// `placement` が None でも `original` は既知ゆえ寄与する（ops ではスキップされる層も外形は数える）。
+///
+/// 引数は max_x/max_y/visited のスクラッチ3本＋world/atlas＋surface_id＋累積 offset(x,y) の計8本。
+/// [`flatten_surface`] と同型の再帰 walker ゆえ全引数が各段で必要（スクラッチ構造体化は将来余地）。
+#[allow(clippy::too_many_arguments)]
 fn flatten_extent(
     max_x: &mut i64,
     max_y: &mut i64,
