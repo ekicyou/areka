@@ -1,6 +1,6 @@
 # Implementation Plan
 
-- [ ] 1. Foundation: 新設クレート雛形と上流パーサー転記ギャップの解消
+- [x] 1. Foundation: 新設クレート雛形と上流パーサー転記ギャップの解消
 - [x] 1.1 crates/areka-emo-compose の雛形を作成する
   - Cargo.toml に areka-parsers（path）・areka-emo-atlas（path）・bevy_ecs・tracing・thiserror（すべてワークスペース既存依存）のみを追加し、Rust 2024 edition・tokio 不使用を明示する
   - lib.rs にクレートdocsと公開モジュール構成（method/bind/composed/normalized/world/fold/atlas_bind/plan/blit）の骨組みを用意する
@@ -38,7 +38,7 @@
   - _Requirements: 12.4_
   - _Boundary: balloon parser (model.rs ドキュメントのみ)_
 
-- [ ] 2. Core: 合成メソッド写像表と公開データ契約
+- [x] 2. Core: 合成メソッド写像表と公開データ契約
 - [x] 2.1 合成メソッド写像表（Method Registry）を実装する
   - ukadoc 由来の合成メソッド群（overlay/overlayfast/replace/base/reduce/asis/interpolate/add/bind/blend-* 群など）を `ComposeMethod`/`BlendMode` として全量列挙する
   - emo2 使用分（overlay。add/bindはoverlayと同義として写像）のみ実装し、他は明示的な未実装シームとして保持する
@@ -57,7 +57,7 @@
   - _Boundary: 公開データ契約 (bind.rs/composed.rs/normalized.rs)_
   - _Depends: 2.1_
 
-- [ ] 3. Core: EmoWorld（emo専用 per-ghost bevy_ecs World）とサーフェス合成ツリーの single-pass fold
+- [x] 3. Core: EmoWorld（emo専用 per-ghost bevy_ecs World）とサーフェス合成ツリーの single-pass fold
 - [x] 3.1 EmoWorld のコンポーネント/リソース定義と公開クエリ API を実装する
   - wintf本体Worldとは分離した専用 bevy_ecs World として、surface 1件＝entity 1件で `SurfaceId`/`SurfaceMaster`/`AtlasBinding` コンポーネントと `SurfaceIndex`/`AliasMap`/`ShellSettings` リソースを定義する
   - `surface(id)`/`surface_ids()`/`resolve_alias(key)`/`animation_sort()`/`collision_sort()` の公開クエリと空Worldからの `build()` 骨組みを用意する
@@ -120,7 +120,7 @@
   - _Requirements: 4.3_
   - _Depends: 3.1, 3.7_
 
-- [ ] 5. Core: PlanBuilder による合成プラン導出
+- [x] 5. Core: PlanBuilder による合成プラン導出
 - [x] 5.1 element レイヤ順と変換行列による命令列の基礎を実装する
   - `SurfaceMaster.elements`をlayer昇順（同layerは登場順）で列挙し、アトラス参照（ElementId・Placement）を含む転写命令を導出する
   - X,Yのみの平行移動を単位行列の特例として`Transform`で表現する
@@ -159,7 +159,7 @@
   - _Requirements: 1.4, 6.6, 10.5_
   - _Depends: 5.4_
 
-- [ ] 6. Core: BlitExecutor によるCPU転写実行
+- [x] 6. Core: BlitExecutor によるCPU転写実行
 - [x] 6.1 premultiplied SourceOver整数転写を実装する
   - アトラス頁の`uv_rect`から合成先バッファへ、転写先座標（配置オフセット＋trim_offset）でpremultiplied SourceOverの整数式（`dst_c' = src_c + div255(dst_c*(255-src_a))`）により転写する
   - 座標演算はi64で行い合成先境界へクリップしてから適用する
@@ -183,7 +183,7 @@
   - _Requirements: 5.1, 5.5, 6.6, 9.1, 9.3, 9.4, 10.3, 10.4, 10.5_
   - _Depends: 3, 4, 5, 6_
 
-- [ ] 8. Validation: emo2 fixtureによるオフスクリーンpixel観測と決定性検証
+- [x] 8. Validation: emo2 fixtureによるオフスクリーンpixel観測と決定性検証
 - [x] 8.1 surface0のgoldenテストを実装する
   - emo2 fixtureのsurfaces.txtをparseし、MemoryDecoder+bake経路でCOM非依存にAtlasTableを構築して合成する
   - element0単層の合成結果が挿入した画像とバイト等価であることを検証する
