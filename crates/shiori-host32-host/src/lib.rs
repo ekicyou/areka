@@ -13,9 +13,12 @@
 //! - [`client`] — `Shiori3Client`（`get`/`notify` の出口 API）。codec build → `send_request` →
 //!   parse → `RequestError` 統合を結線する。
 //! - [`error`] — 構造化エラー型（`thiserror`）。
+//! - [`lifecycle`] — helper のライフサイクル管理（正常終了要求 / 終了分類 /
+//!   ライフサイクルレポート）。**skeleton**（型・関数は後続タスクで実装）。
 
 pub mod client;
 pub mod error;
+pub mod lifecycle;
 pub mod parent_window;
 pub mod process_host;
 pub mod shiori3;

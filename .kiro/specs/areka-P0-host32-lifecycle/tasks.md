@@ -1,7 +1,7 @@
 # Implementation Plan
 
 - [ ] 1. Foundation: ログ依存追加・常設監視モジュールの型骨格
-- [ ] 1.1 `tracing` 依存追加と `lifecycle` モジュールの新設
+- [x] 1.1 `tracing` 依存追加と `lifecycle` モジュールの新設
   - `shiori-host32-host/Cargo.toml` に `tracing = { workspace = true }` を追加する（steering `logging.md` 準拠・新規承認不要）
   - `src/lifecycle.rs` を新設し、`lib.rs` に `pub mod lifecycle;` を登録する
   - Observable: `cargo build -p shiori-host32-host` が新規（空）モジュールを含めて成功する
