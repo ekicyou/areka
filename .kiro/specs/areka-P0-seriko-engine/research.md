@@ -168,3 +168,55 @@
 - **推奨アプローチ**: **案C（ハイブリッド）を軸に検討** — alias は `resolve_alias` 委譲で二重定義を避け、bindgroup default は「構築時に解決済み `BindSet` or bindgroup KV を受領する契約点」として明示化し、供給責務（DD4）を ghost-setup／上流拡張と分担する。これにより §2.1 の欠落を seriko の内部欠陥にせず、契約の受領点へ昇格できる。
 - **設計冒頭で確定すべき鍵**: DD4（bindgroup 供給経路）→ DD2（alias 消費形）→ DD5（emo-present API・非表示表現）の順。R-2（bindgroup→BindSet 写像）は ukadoc `get_doc` ＋ emo2 実測を検証行に落とす。
 - **決定論観測の骨格**: sakura `MockSink` 流儀を踏襲し、seriko 定義の mock 出力先へ「(scope, surface_id, binds, 非表示遷移)」の発行列を貯めて照合。fixture は emo2 の `kero.surface.alias` 実データ（`通常→[2100]`・`静観→[2106,2206]`・`-1` 非表示）で alias/複数id/非表示/Close 停止を全て実行テスト化（R7.4）。
+
+---
+
+# Design Phase Investigation（2026-07-06）
+
+## Summary
+- **Feature**: `areka-P0-seriko-engine`
+- **Discovery Scope**: New Feature（greenfield・full discovery）
+- **Key Findings**:
+  1. **`EmoWorld` は not-Send/not-Sync**（bevy `World` 内包・`world.rs:64` に `unsafe impl` 無し）＝別スレッド actor へ borrow/move 不可 → alias は**所有スナップショット**方式へ強制（案A 借用は不成立・案B 採用）。
+  2. **bindgroup 番号 ＝ animation id の恒等写像**（ukadoc MAYUNA 仕様＋emo2 実測で確定）。間接なし。default,1 の bindgroup 番号集合をそのまま `BindSet::from_ids` へ。emo2 の有効集合＝`{1100,1207,1302,1500,1800}`。
+  3. **surface `name` は alias と同一扱い**（ukadoc 明記・2.8.24〜）だが emo2 に per-surface `name` 行は無く `kero.surface.alias` ブロックが数値/日本語両キーを吸収 → seriko に name 専用経路は不要（R-3 決着・上流拡張は name 用途では不要）。
+
+## Design 決定と根拠（正本は design.md）
+
+### DD2: alias 解決は所有スナップショット方式（not-Send 強制）
+- **Context**: 別スレッド actor が非 Send な `EmoWorld` を保持できない（`world.rs:64`）。
+- **Alternatives**: A 借用 `Arc<EmoWorld>`（**not-Send で不成立**）／B 構築時スナップショット／C ハイブリッド（A 部分が不成立）。
+- **Selected**: B。構築スレッドで `EmoWorld::alias_snapshot()`（増設）→`SurfaceResolver::new(BTreeMap<String,Vec<u32>>)`。actor は所有データのみで解決。
+- **Rationale**: not-Send を実行時依存から排除・二重定義回避（正本は emo-compose 由来の同一データ）・R7 決定論観測を所有テーブル直入力で自明化。
+- **Follow-up（R-6）**: emo-compose に `EmoWorld::alias_snapshot(&self) -> BTreeMap<String, Vec<u32>>`（クローン返し・追加のみ・`resolve_alias` と非衝突）を最小増設。
+
+### DD4=(c): bindgroup default は上流 MountModel が保持（要件確定済）
+- **Selected**: `MountModel` に `BindGroupDefaults { sakura_default_on: Vec<u32>, kero_default_on: Vec<u32> }` を増設し、package parse 経路が `sakura.bindgroupNNNN.default,1`（`kero.` 側も）を転記。seriko は `build_static_bindset` で消費。
+- **Rationale**: bindgroup 解決を上流に据える正攻法（R4.5）。既存 name 系（`GhostNames`）と非衝突・`#[non_exhaustive]` で後方互換・転記のみ（展開しない＝parsers 転写層原則）。
+- **Follow-up**: emo2 descript.txt から `sakura_default_on=={1100,1207,1302,1500,1800}`（順不同）＋name 系保持回帰をテスト。
+
+### R-2: bindgroup 番号 ＝ animation id 恒等写像
+- ukadoc `dev_bind`「`bindgroup*` の `*` は surfaces.txt `animation*.interval,bind` の animation id と対応」＝1:1 恒等（別集合への間接なし）。`sakura.bindgroup*.default,数値` は 1 表示/0（省略含む）非表示。
+- `build_static_bindset(default_on)` は default,1 集合をそのまま `BindSet::from_ids` へ渡す恒等写像で足る（design 決定3）。
+
+### R-3: surface `name` の取り込み（クローズ・上流拡張不要）
+- ukadoc `descript_shell_surfaces:name,定義名`: per-surface `name` は「surface.alias と同様に扱われ `\s[]` で ID の代わりに使用できる」（2.8.24〜）。emo2 に per-surface `name` 行は無く `AliasMap` が alias ブロックの両キーを吸収。seriko は同一 `resolve` 経路で引くのみ。将来ゴーストが per-surface `name` を用いる場合の取り込みは emo-compose／shell-parse の責務（seriko に name 専用経路を発明しない・design 境界注記）。
+
+### DD6: 複数 id alias は先頭固定選択（SSP からの意図的逸脱）
+- ukadoc `*,[*]`: 複数 id alias は SSP で**ランダム選択**（`\s[1]`→1,11,21 からランダム）。
+- **決定論観測（R7）優先で先頭固定（`ids[0]`）を採用**。emo2 `静観→[2106,2206]` は 2106。SSP 互換が要れば `SurfaceTarget` 単一 id インターフェイスを保ったまま乱数シード注入形へ拡張可。design Open Questions に明記。
+
+### DD1/DD3/DD8: 解決分岐・自前 Close・発行タイミング
+- **DD1**: `Emote{key}` を数値 parse（`== -1`→`Hide`／それ以外→`Show(id)`）・非数値→alias 引き・不成立→`Unresolved`。`EntityRef(u64)` は防御的に `warn!`＋skip（M-boot 非到来だが `cue_target_of` が Shell 分類ゆえ明示 skip を残す）。
+- **DD3**: `SerikoMsg { Cue(TalkCue), Close }`（`SakuraMsg::Close` 先例・areka-actor に共有 Close 型無し）。`SurfaceSink::emit` は inbox へ send する薄いブリッジ。
+- **DD8**: 到着順適用（`at` は sakura 正本）・状態変化時のみ単一発行点 `emit_display` から発行（冪等ガード）。per-scope マップは `HashMap`（`ActorKey` に `Ord` 無し）だが発行は適用スコープ単位ゆえイテレーション順は観測列に非影響。
+
+## Risks & Mitigations（設計フェーズ追補）
+- **emo-present API 未確定（DD5）** — 非表示表現の写像は本番結線時に突合。単体は `SurfaceOutput` mock で閉じ本 spec 完了は非ブロック（Revalidation Trigger 記載）。
+- **複数 id alias の SSP 逸脱** — 決定論優先の意図的逸脱・将来拡張可。
+- **kero 側 bindgroup default 空** — emo2 は本体側のみ。欠落を空 `Vec` で型表現。
+
+## References（設計フェーズ）
+- ukadoc `list_sakura_script:\s[ID番号]`／`descript_shell_surfaces:*,[*]`／`:name,定義名`／`descript_shell:sakura.bindgroup*.default,数値`／dev_guide `dev_bind`。
+- emo2 `crates/pilot/examples/shiori-host-32/fixtures/emo2/shell/master/descript.txt`（default,1 集合 `{1100,1207,1302,1500,1800}`・:22/34/44/57/71）。
+- 上流実コード（file:line 突合済）: `areka-sakura/src/{sink.rs:15,contract.rs:75/92/106}`・`areka-actor/src/spawn.rs:39/82`・`areka-emo-compose/src/{world.rs:64/74/121,bind.rs:16/22}`・`areka-parsers/src/package/model.rs:29`・`dola/src/cue/command.rs:19/124/128`。
