@@ -406,6 +406,181 @@ fn call_id(call: &ShioriCall) -> &'static str {
 }
 
 // ============================================================================
+// ブロッキング mock shiori（6.3 専用・呼出ブロック中の Tick catch-up を観測する）
+// ============================================================================
+
+/// ブロック対象の記述子（どの呼出を握り続けるか・COPYABLE）。
+///
+/// 実経路の SHIORI 呼出は本質的にブロックし得る（別プロセス往復）。mock は既定で即応するため
+/// その窓が存在しない。本記述子で「特定の 1 呼出」を選び、その往復を明示的な解放まで握って
+/// kanade を drive ループの `ReplyReceiver::recv` で止め、以降の Tick が inbox に溜まる catch-up
+/// 窓を決定的に作る。ブロックするのは各種別で**最初の**一致呼出のみ（以降は即応へ戻す）。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BlockOn {
+    /// 指定 id の最初の GET 呼出をブロックする（例: `"OnSecondChange"`）。
+    Get(&'static str),
+    /// 指定 id の最初の NOTIFY 呼出をブロックする。
+    Notify(&'static str),
+}
+
+impl BlockOn {
+    /// この呼出が本記述子の対象か（method＋id 一致）を判定する。
+    fn matches(&self, call: &ShioriCall) -> bool {
+        match (self, call) {
+            (BlockOn::Get(id), ShioriCall::Get { id: cid, .. }) => cid == id,
+            (BlockOn::Notify(id), ShioriCall::Notify { id: cid, .. }) => cid == id,
+            _ => false,
+        }
+    }
+}
+
+/// ブロック解放を mock shiori の受信ループへ伝えるゲートの共有部（Mutex＋Condvar）。
+struct ShioriGateShared {
+    inner: Mutex<ShioriGateInner>,
+    cvar: std::sync::Condvar,
+}
+
+/// [`ShioriGateShared`] の Mutex 保護部（受領フラグ・解放フラグ）。
+struct ShioriGateInner {
+    /// 対象呼出を受領し、往復を握った（＝kanade が round-trip でブロック中）なら true。
+    /// `wait_until_blocked` はこの成立を待つ（決定的バリア）。
+    blocked_arrived: bool,
+    /// テストが `release()` を呼んだら true（対象呼出の応答を送ってよい合図）。
+    /// flag は Mutex 下で立ててから `notify_all`（lost wakeup 対策・SakuraGate と同一規律）。
+    released: bool,
+}
+
+/// ブロッキング mock shiori のゲート（6.3 専用）。
+///
+/// [`wait_until_blocked`](ShioriGate::wait_until_blocked) で「kanade が対象呼出の往復で
+/// ブロック中」であることを有界に確認し、[`release`](ShioriGate::release) でその往復に
+/// fixture 既定の応答を送らせる。sleep も wall-clock も用いない（Mutex＋Condvar のみ）。
+pub struct ShioriGate {
+    shared: Arc<ShioriGateShared>,
+}
+
+impl ShioriGate {
+    /// 対象呼出が mock へ到達し握られる（＝kanade が round-trip でブロック済み）まで有界に待つ。
+    ///
+    /// 期限内に成立しなければ `false`（テストは assert で失敗にする）。成立すれば `true`。
+    /// flag は受信ループが Mutex 下で立ててから notify するため、本メソッドが wait に入る前に
+    /// 到達しても取りこぼさない（lost wakeup なし）。
+    pub fn wait_until_blocked(&self, timeout: Duration) -> bool {
+        let deadline = std::time::Instant::now() + timeout;
+        let mut inner = self.shared.inner.lock().expect("shiori gate mutex");
+        while !inner.blocked_arrived {
+            let now = std::time::Instant::now();
+            if now >= deadline {
+                return false;
+            }
+            let (guard, res) = self
+                .shared
+                .cvar
+                .wait_timeout(inner, deadline - now)
+                .expect("shiori gate condvar wait_timeout");
+            inner = guard;
+            if res.timed_out() && !inner.blocked_arrived {
+                return false;
+            }
+        }
+        true
+    }
+
+    /// 握られている対象呼出に fixture 既定の応答を送らせる（catch-up を解禁する）。
+    ///
+    /// flag を Mutex 下で立ててから `notify_all` するため、受信ループがまだ wait に入る前に
+    /// 呼ばれても取りこぼさない。以降の（非対象）呼出は即応へ戻る。
+    pub fn release(&self) {
+        let mut inner = self.shared.inner.lock().expect("shiori gate mutex");
+        inner.released = true;
+        self.shared.cvar.notify_all();
+    }
+}
+
+/// ブロッキング mock shiori アクターを起動する（[`spawn_mock_shiori`] の派生・6.3 専用）。
+///
+/// `block_on` が指す**最初の**呼出を受領したとき、記録した上で応答を送らず、受信ループ内で
+/// [`ShioriGate::release`] まで Condvar で待つ（＝kanade の drive ループが `ReplyReceiver::recv`
+/// で同期ブロックする窓を作る）。ブロック中に kanade inbox へ溜まった Tick は、解放後に順次
+/// 処理される（catch-up・in-flight ≤ 1）。解放後の応答は当該呼出に対する fixture 既定
+/// （[`FixtureState::respond`]）を用いる——非ブロック呼出（boot 各種・後続 OnSecondChange・
+/// OnClose・Unload）は従来どおり即応する。
+///
+/// # デッドロック安全
+/// 受信ループ内の Condvar 待ちは `release()` で解ける。テストが `release()` を呼ばずに終えても、
+/// StartTalk 送信端 drop 等で kanade 側 round-trip が畳まれるだけでは本スレッドは解けないが、
+/// テストは必ず `release()` を呼ぶ契約であり、全 join はテストの [`DEFAULT_TIMEOUT`] で有界。
+pub fn spawn_mock_shiori_blocking(fixture: Fixture, block_on: BlockOn) -> (MockShiori, ShioriGate) {
+    let calls: Arc<Mutex<Vec<RecordedCall>>> = Arc::new(Mutex::new(Vec::new()));
+    let calls_body = Arc::clone(&calls);
+
+    let shared = Arc::new(ShioriGateShared {
+        inner: Mutex::new(ShioriGateInner {
+            blocked_arrived: false,
+            released: false,
+        }),
+        cvar: std::sync::Condvar::new(),
+    });
+    let shared_body = Arc::clone(&shared);
+
+    let (sender, handle) = spawn_actor::<ShioriMsg, _>("mock-shiori-blocking", move |rx| {
+        let mut state = FixtureState::new(fixture);
+        let mut blocked_once = false;
+        while let Ok(msg) = rx.recv() {
+            match msg {
+                ShioriMsg::Request { call, reply } => {
+                    calls_body
+                        .lock()
+                        .expect("mock shiori calls mutex")
+                        .push(RecordedCall::from_call(&call));
+                    // 対象の最初の呼出のみ握る（応答は release まで送らない）。
+                    if !blocked_once && block_on.matches(&call) {
+                        blocked_once = true;
+                        // fixture 既定の応答を今のうちに決めておく（respond の出現カウンタは
+                        // 呼出順に前進させたいので、ここで消費する＝実経路の 1 呼出＝1 応答）。
+                        let outcome = state.respond(&call);
+                        // 受領を通知（wait_until_blocked を起こす）→ release まで待つ。
+                        {
+                            let mut inner =
+                                shared_body.inner.lock().expect("shiori gate mutex");
+                            inner.blocked_arrived = true;
+                            shared_body.cvar.notify_all();
+                            while !inner.released {
+                                inner = shared_body
+                                    .cvar
+                                    .wait(inner)
+                                    .expect("shiori gate condvar wait");
+                            }
+                        }
+                        let _ = reply.send(outcome);
+                    } else {
+                        let outcome = state.respond(&call);
+                        let _ = reply.send(outcome);
+                    }
+                }
+                ShioriMsg::Unload { reply } => {
+                    calls_body
+                        .lock()
+                        .expect("mock shiori calls mutex")
+                        .push(expected_unload());
+                    let _ = reply.send(ShioriOutcome::Unloaded);
+                }
+                ShioriMsg::Close => break,
+            }
+        }
+    });
+
+    (
+        MockShiori {
+            sender,
+            handle,
+            calls,
+        },
+        ShioriGate { shared },
+    )
+}
+
+// ============================================================================
 // mock sakura sink
 // ============================================================================
 
@@ -812,6 +987,42 @@ pub fn spawn_harness_failing(
         shiori,
         sakura,
     }
+}
+
+/// ブロッキング mock shiori 付き駆動ハーネスを組み立てる（6.3 専用・[`spawn_harness`] の派生）。
+///
+/// [`spawn_harness`] と同一の結線だが、mock shiori を [`spawn_mock_shiori_blocking`] で起動し、
+/// `block_on` が指す最初の呼出を明示解放まで握る。返す [`ShioriGate`] の
+/// [`wait_until_blocked`](ShioriGate::wait_until_blocked) で「kanade が round-trip でブロック中」を
+/// 確認し、[`release`](ShioriGate::release) で catch-up を解禁できる。これにより「呼出ブロック中に
+/// 溜まった Tick が解除後に順次処理される（catch-up・in-flight ≤ 1）」を統合層で観測できる
+/// （Req 3.1/3.2・DD-2）。
+pub fn spawn_harness_blocking(
+    config: KanadeConfig,
+    fixture: Fixture,
+    quit_policy: QuitPolicy,
+    block_on: BlockOn,
+) -> (Harness, ShioriGate) {
+    let (shiori, gate) = spawn_mock_shiori_blocking(fixture, block_on);
+
+    // kanade→sakura の StartTalk チャンネルを 1 本張る。
+    let (talk_tx, talk_rx) = std::sync::mpsc::channel::<StartTalk>();
+
+    // kanade を起動（inbox 送信端を得る）。
+    let (kanade_tx, kanade_handle) = spawn_kanade(config, shiori.sender.clone(), talk_tx);
+
+    // sink には TalkDone 返送用に kanade inbox 送信端のクローンを渡す。
+    let sakura = spawn_mock_sakura(talk_rx, kanade_tx.clone(), quit_policy);
+
+    (
+        Harness {
+            sender: kanade_tx,
+            kanade: kanade_handle,
+            shiori,
+            sakura,
+        },
+        gate,
+    )
 }
 
 /// sakura sink を持たない駆動ハーネス（4.6 case 4 専用・全 Sender drop 経路の観測用）。

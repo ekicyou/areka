@@ -169,7 +169,7 @@
   - _Requirements: 6.1, 6.2_
   - _Boundary: actor.rs（in-source #[cfg(test)]）_
   - _Depends: 3.1, 6.1_
-- [ ] 6.3 ブロッキング呼出中の Tick catch-up の統合検証（DD-2・in-flight ≤ 1）
+- [x] 6.3 ブロッキング呼出中の Tick catch-up の統合検証（DD-2・in-flight ≤ 1）
   - 実経路では SHIORI 呼出がブロックし得るため、その間に溜まった Tick が解除後に順次処理される（catch-up）。mock は即応ゆえ通常この窓は生じない。指定呼出の reply を保留し「要求受領」をテストへ通知してから解放する **blocking mock shiori** を common に純粋追加し、(a) 最初の OnSecondChange GET でブロック→その間に複数 Tick を投入（inbox に滞留）→解放、で滞留 Tick が順に処理され欠落・重複が生じないこと、(b) 1 つの論理 Tick に対し高々 1 つの in-flight 呼出であること（重複 OnSecondChange が起きない）を決定的に検証する
   - 同期は「要求受領通知＋解放ゲート」で行い sleep を用いない（4.4 の gated ハーネスと同じ race-free 規律）
   - 観測可能な完了条件: ブロック中に投入した Tick 群が解除後に順序どおり処理され、記録列が期待どおり（欠落・重複なし）になることを検証する統合テストが green になる

@@ -50,8 +50,9 @@ use areka_kanade::{
 };
 
 use super::common::{
-    CallMethod, DEFAULT_TIMEOUT, FIXED_BOOT_SCRIPT, FIXED_STEADY_SCRIPT, Fixture, Harness,
-    QuitPolicy, RecordedCall, join_bounded, spawn_harness, spawn_harness_gated,
+    BlockOn, CallMethod, DEFAULT_TIMEOUT, FIXED_BOOT_SCRIPT, FIXED_STEADY_SCRIPT, Fixture, Harness,
+    QuitPolicy, RecordedCall, join_bounded, spawn_harness, spawn_harness_blocking,
+    spawn_harness_gated,
 };
 
 /// 駆動結果: 確定した shiori 記録列と、宛先へ到達した StartTalk 列。
@@ -417,6 +418,174 @@ fn active_talk_tick_emits_notify_ref3_zero() {
     assert_eq!(
         get_count, 1,
         "OnSecondChange GET は Value を起こした Tick 1 の 1 回のみ（NOTIFY tick は GET を出さない）: {:?}",
+        recorded
+    );
+}
+
+/// ブロッキング呼出中の Tick catch-up（DD-2・in-flight ≤ 1・Req 3.1/3.2）。
+///
+/// mock は既定で即応するため実経路の「呼出ブロック中」窓は生じない。本テストは
+/// `spawn_harness_blocking` で最初の `OnSecondChange` GET を明示解放まで握り、その窓を決定的に
+/// 作る。手順:
+///
+/// 1. Boot → boot 系列（各呼出は即応）→ boot talk 起動 → `Steady{None}`。
+/// 2. Tick 1（now=1h）: `Steady{None}` → OnSecondChange GET（Ref3=1）を発行 → mock がこの GET を
+///    握る → kanade は drive ループの `ReplyReceiver::recv` で**ブロック**する。
+///    `gate.wait_until_blocked(DEFAULT_TIMEOUT)` で「kanade がブロック済み」を有界に確認する
+///    （決定的バリア・sleep なし）。
+/// 3. Tick 2（now=2h）・Tick 3（now=3h）を送る → kanade はブロック中で inbox を消費しないため、
+///    この 2 件は inbox に**溜まる**（catch-up の対象）。
+/// 4. `gate.release()` → 握られた Tick 1 の GET に 204 が返り、kanade は Tick 1 を畳んで
+///    `Steady{None}` へ戻る → 溜まっていた Tick 2 → OnSecondChange GET（即 204）→ Tick 3 →
+///    OnSecondChange GET（即 204）を順次処理する（catch-up・in-flight ≤ 1）。
+/// 5. CloseRequest{User} → OnClose GET → 別れの Value → close talk（quit:true）→ 終了系列完走。
+///
+/// # 非空虚性（core assertion）
+/// - OnSecondChange GET がちょうど **3 件**（注入 Tick 1 本につき 1 件・欠落なし・重複なし）。
+///   1 件でも失われれば < 3、二重発火すれば > 3 になる（in-flight ≤ 1 ＋ catch-up の直接検証）。
+/// - 3 件は inbox/処理順（now 昇順）で現れ、各々 Ref3="1" の GET（NOTIFY でない）。Ref0 は
+///   `now/3_600_000`（時）で Tick ごとに 1→2→3 と異なる＝順序を構造的に証明する（events 表導出・
+///   ハードコードしない）。
+/// - OnSecondChange NOTIFY は 1 件も現れない（active talk なし＝全 3 件 GET・二重処理なし）。
+#[test]
+fn blocking_call_ticks_catch_up_in_order_without_loss_or_duplication() {
+    // OnSecondChange GET は常に 204（steady_value_indices 空）＝catch-up 観測を汚さない。
+    // quit シナリオ（OnClose→別れの Value→close talk）で終了系列を駆動する。
+    // block_on: 最初の OnSecondChange GET を握る（boot 各呼出は即応で通過）。
+    let (harness, gate) = spawn_harness_blocking(
+        KanadeConfig::new("master", "1.0.0"),
+        Fixture::quitting(),
+        // quit_flags: [boot=false, close=true]。steady talk は 204 基調ゆえ生じない
+        // （PerTalk 範囲外 index は false＝万一 steady talk が生じても quit しない＝assert が検出）。
+        QuitPolicy::PerTalk(vec![false, true]),
+        BlockOn::Get("OnSecondChange"),
+    );
+
+    // 各 Tick の now は時（hour）境界に置き、Ref0（now/3_600_000）を 1→2→3 と異ならせる
+    // （順序を構造的に検証するため）。
+    let now1 = MonotonicMs(3_600_000); // 1h → Ref0="1"
+    let now2 = MonotonicMs(2 * 3_600_000); // 2h → Ref0="2"
+    let now3 = MonotonicMs(3 * 3_600_000); // 3h → Ref0="3"
+
+    // 起動指示（boot 系列は即応で `Steady{None}` まで完走・boot talk は fire-and-forget）。
+    harness.sender.send(KanadeMsg::Boot).expect("send Boot");
+
+    // Tick 1: Steady{None} → OnSecondChange GET → mock が握る → kanade は round-trip でブロック。
+    harness
+        .sender
+        .send(KanadeMsg::Tick { now: now1 })
+        .expect("send Tick 1");
+
+    // kanade が Tick 1 の GET round-trip でブロック済みであることを有界に確認（決定的バリア）。
+    assert!(
+        gate.wait_until_blocked(DEFAULT_TIMEOUT),
+        "kanade は Tick 1 の OnSecondChange GET 往復でブロックするはず（wait_until_blocked が成立）"
+    );
+
+    // Tick 2・Tick 3 を送る（kanade はブロック中＝inbox に溜まる＝catch-up の対象）。
+    harness
+        .sender
+        .send(KanadeMsg::Tick { now: now2 })
+        .expect("send Tick 2");
+    harness
+        .sender
+        .send(KanadeMsg::Tick { now: now3 })
+        .expect("send Tick 3");
+
+    // 解放 → Tick 1 の GET に 204 が返り、溜まっていた Tick 2・Tick 3 を順次処理する（catch-up）。
+    gate.release();
+
+    // close 指示（active talk なし＝即握手 OnClose GET→別れの Value→close talk→quit:true→終了）。
+    harness
+        .sender
+        .send(KanadeMsg::CloseRequest {
+            reason: CloseReason::User,
+        })
+        .expect("send CloseRequest");
+
+    let Harness {
+        sender,
+        kanade,
+        shiori,
+        sakura,
+    } = harness;
+
+    // 終了系列完走（StopSelf 到達）まで期限付き join。成功時点で全記録・全配送が確定する。
+    join_bounded("kanade blocking catch-up join", DEFAULT_TIMEOUT, kanade)
+        .expect("kanade terminates after close→quit sequence (Unload→StopSelf)");
+
+    // kanade 停止後に送信端 drop → sakura sink スレッドも自然終了（期限付き join）。
+    drop(sender);
+    sakura.join_bounded("mock-sakura blocking join", DEFAULT_TIMEOUT);
+    let recorded = shiori.recorded();
+
+    // 記録列から OnSecondChange GET のみを処理順に抽出する。
+    let second_change_gets: Vec<&RecordedCall> = recorded
+        .iter()
+        .filter(|c| c.method == CallMethod::Get && c.id == "OnSecondChange")
+        .collect();
+
+    // (core) 注入 Tick 3 本につき OnSecondChange GET はちょうど 3 件——欠落なし・重複なし。
+    //   < 3 なら tick 欠落（catch-up 破綻）、> 3 なら二重発火（in-flight ≤ 1 破綻）。
+    assert_eq!(
+        second_change_gets.len(),
+        3,
+        "注入 Tick 3 本に対し OnSecondChange GET はちょうど 3 件（catch-up・in-flight ≤ 1）: {:?}",
+        recorded
+    );
+
+    // (order) 3 件は now 昇順（inbox/処理順）で現れ、各々 events 表導出の GET（Ref3=1）と一致する。
+    //   Ref0 が 1→2→3 と異なる＝処理順が now 昇順であることを構造的に証明する（ハードコードしない）。
+    for (tick_now, expected_ref0) in [(now1, "1"), (now2, "2"), (now3, "3")] {
+        let expected_get = RecordedCall {
+            method: CallMethod::Get,
+            id: "OnSecondChange".to_string(),
+            references: match events::on_second_change(tick_now, true) {
+                areka_kanade::ShioriCall::Get { references, .. } => references,
+                _ => panic!("on_second_change(_, true) は GET を返すはず"),
+            },
+        };
+        // events 導出の Ref0 が期待どおり時境界の hour（1/2/3）であることを明示確認。
+        assert_eq!(
+            expected_get.references[0], expected_ref0,
+            "OnSecondChange GET の Ref0（時）は now/3_600_000＝{}",
+            expected_ref0
+        );
+        assert_eq!(
+            expected_get.references[3], "1",
+            "GET pump の Ref3 は \"1\"（talk 再生可能・問い合わせ）"
+        );
+    }
+
+    // 3 件が処理順（now 昇順・Ref0=1,2,3）で並ぶことを構造照合する。
+    let expected_sequence: Vec<RecordedCall> = [now1, now2, now3]
+        .into_iter()
+        .map(|n| RecordedCall {
+            method: CallMethod::Get,
+            id: "OnSecondChange".to_string(),
+            references: match events::on_second_change(n, true) {
+                areka_kanade::ShioriCall::Get { references, .. } => references,
+                _ => panic!("on_second_change(_, true) は GET を返すはず"),
+            },
+        })
+        .collect();
+    let actual_sequence: Vec<RecordedCall> =
+        second_change_gets.iter().map(|c| (*c).clone()).collect();
+    assert_eq!(
+        actual_sequence, expected_sequence,
+        "OnSecondChange GET 3 件は now 昇順（Ref0=1,2,3）で現れるはず（catch-up の順序保存）: {:?}",
+        recorded
+    );
+
+    // (no spurious NOTIFY) active talk が無い以上、OnSecondChange は全 3 件 GET＝NOTIFY は 0 件。
+    //   NOTIFY が現れれば二重処理か Steady{Some} 誤遷移＝catch-up の不変量違反。
+    let notify_count = recorded
+        .iter()
+        .filter(|c| c.method == CallMethod::Notify && c.id == "OnSecondChange")
+        .count();
+    assert_eq!(
+        notify_count, 0,
+        "active talk が無い catch-up では OnSecondChange NOTIFY は 1 件も現れないはず: {:?}",
         recorded
     );
 }
