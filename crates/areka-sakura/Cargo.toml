@@ -1,0 +1,17 @@
+[package]
+name = "areka-sakura"
+workspace = "../.."
+description = "さくらスクリプト再生エンジン (per-talk transient) — Instruction→cue ドメイン写像の正本"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[dependencies]
+dola = { path = "../dola" }
+areka-actor = { path = "../areka-actor" }
+areka-parsers = { path = "../areka-parsers" }
+tracing = { workspace = true }
+thiserror = { workspace = true }
