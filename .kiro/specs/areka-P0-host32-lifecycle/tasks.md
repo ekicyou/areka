@@ -1,6 +1,6 @@
 # Implementation Plan
 
-- [ ] 1. Foundation: ログ依存追加・常設監視モジュールの型骨格
+- [x] 1. Foundation: ログ依存追加・常設監視モジュールの型骨格
 - [x] 1.1 `tracing` 依存追加と `lifecycle` モジュールの新設
   - `shiori-host32-host/Cargo.toml` に `tracing = { workspace = true }` を追加する（steering `logging.md` 準拠・新規承認不要）
   - `src/lifecycle.rs` を新設し、`lib.rs` に `pub mod lifecycle;` を登録する
@@ -15,7 +15,7 @@
   - _Requirements: 2.4, 2.6, 2.7, 5.4, 5.5, 7.7_
   - _Depends: 1.1_
 
-- [ ] 2. Core: 死活監視の常設化と統一報告語彙（host 側・`lifecycle.rs`）
+- [x] 2. Core: 死活監視の常設化と統一報告語彙（host 側・`lifecycle.rs`）
 - [x] 2.1 死活・request 失敗の突合分類ロジックを実装
   - 「終了検出済みなら常に死活起因（種別を保持）」「生存中の応答なしはタイムアウト」「生存中の送出失敗は transport 異常」「SHIORI エラー応答は区別保持」「未ハンドシェイクは別区分」という5パターンの突合ロジックを、既存の request 失敗語彙と死活種別を入力に決定的に判定する純関数として実装する
   - 突合表の5パターンすべてを網羅する単体テストを追加する
@@ -50,7 +50,7 @@
   - _Requirements: 5.1, 5.3, 5.4, 5.5_
   - _Depends: 2.2_
 
-- [ ] 3. Core: 実 helper への正規正常終了経路の増設（helper 側・別クレート）
+- [x] 3. Core: 実 helper への正規正常終了経路の増設（helper 側・別クレート）
 - [x] 3.1 (P) UNLOAD 受信の分類と終了要求フラグを追加
   - 受信メッセージ分類ロジックに、UNLOAD 種別（ペイロード有無を問わない）を専用アクションとして区別する分岐を追加する（現状の「既知だが無視」対象から UNLOAD を除く）
   - helper の共有状態に、終了要求フラグ（および観測用カウンタ）を追加する
@@ -80,7 +80,7 @@
   - _Requirements: 1.6, 2.4, 7.1, 7.2_
   - _Depends: 2.3, 2.4, 3.3_
 
-- [ ] 5. Validation: 常駐健全性の決定的end-to-end実証
+- [x] 5. Validation: 常駐健全性の決定的end-to-end実証
 - [x] 5.1 周期運転（連打）と正規clean shutdownのend-to-endテストを実装
   - 実 i686 helper と fixture を起動し、ハンドシェイク後、イベント意味論を持たないダミーIDで固定応答の往復を200回連続（実時間 sleep なしの back-to-back）で行い、各往復の成功とfixture固定応答を確認する
   - 反復後もhelperが生存継続していることを確認したうえで、正常終了要求を発行し、正規の正常終了経路を通じて正常終了種別が観測されることを確認する
