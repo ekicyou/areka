@@ -101,11 +101,12 @@ areka の ⑥ emo トラック直列チェーンの最終段（3/3・emo-atlas �
 #### Acceptance Criteria
 
 1. The emo-present example shall emo2 fixture から surface0 とバルーン枠（balloons*.png）を表示する。
-2. When example が起動する, the emo-present example shall 表示結果が emo-compose の golden と一致する内容を表示する。
+2. When example が起動する, the emo-present example shall メモリ供給された合成バッファの描画結果が emo-compose の golden と pixel 単位でバイト一致することを決定論的に検証する。
 3. When ユーザがキャラ不透明領域をクリックする, the emo-present example shall そのクリックを捕捉し、透明域のクリックは背後へ透過することを観測可能にする。
 4. When 指令 API で surface id を切り替える, the emo-present example shall 表示が新しい surface へ更新されることを観測可能にする。
 5. The emo-present example shall 上記の表示と当たり判定を DPI が 96 以外の環境でも実施できる（実 DPI 観測）。
 6. The emo-present example shall 保全済みの mock-shell を窓生成・クリックスルー登録の donor として用い、本番 `main.rs` を変更しない。
+7. The emo-present example shall 上記 golden 検証（6.2）のため、描画のレンダリング先を GPU コンポジター surface ではなく通常の D2D オフスクリーン描画先へ向けて readback できる検証シームを備える。コンポジターによる提示そのものの pixel 検証は行わない（提示経路は wintf 既存資産の責務とみなす）。
 
 ### Requirement 7: 更新スレッド規律
 

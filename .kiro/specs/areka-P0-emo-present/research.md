@@ -141,6 +141,7 @@ emo-present クレート内に、`ComposedSurface` を受けて **WUC surface �
 ## 6. Research Needed（design へ持ち越す未確定事項）
 
 1. **WUC surface へのメモリアップロード API**: `CompositionDrawingSurface` interop（`ICompositionDrawingSurfaceInterop::BeginDraw`→`ID2D1DeviceContext`→`ID2D1Bitmap1::CopyFromMemory` or `DrawBitmap`）の具体手順と、wintf 既存 graphics 資産（`surface.rs`/`wuc_resource.rs`）のどこまでを再利用/露出するか。in-memory `IWICBitmap`（`CreateBitmapFromMemory`）経由か bitmap 直コピーか。
+   - **ディスカッション決定（#1）**: golden 検証は **描画のレンダリング先をコンポジター surface と分離**し、通常の D2D オフスクリーン描画先（自前 `ID2D1Bitmap1` ターゲット）へ描いて `Map` readback → emo-compose golden とバイト一致を**決定論 assert**する（要件 R6.2/R6.7）。GPU 合成窓の backbuffer readback（記憶 areka-gpu-window-screenshot-readback）は不要。emo-present の新規責務＝「メモリバッファ→D2D 描画可能形」の正しさはこのオフスクリーン検証で担保され、コンポジター提示の pixel 検証は wintf 既存経路（`BitmapSource` の `CommandList→WUC`）の責務として emo-present では行わない。design はこの分離を検証シームとして設ける。
 2. **実 DPI での等倍表示契約**: 合成＝物理 px 等倍として、表示側の論理/物理変換の帰属（`WindowPos`/`BoxStyle`/`GlobalArrangement` のどれが物理でどれが論理か）を wintf 座標契約に整合させる。dpi≠96 実行での AlphaMask クリック座標一致（R2.5）。記憶 areka-window-placement-dpi-coordinate-defect の教訓に従い**実 DPI 実行で証明**。
 3. **`\s[-1]` 非表示の意味論**: 指令 API に非表示を別 variant で持つか surface_id 番兵で持つか。seriko-engine（並走）brief の発行側表現と突合。ukadoc `sakurascript` の `\s[ID番号]` 正典参照。
 4. **AlphaMask を hit-test へ届ける型**: 既存 hit-test は `BitmapSourceResource` からのみ α マスクを読む。emo-present の合成結果マスクを供給するため (a) `BitmapSourceResource` を再利用（Option A）か (b) hit-test に emo 専用の α 供給読み口を足すか。
@@ -155,7 +156,7 @@ emo-present クレート内に、`ComposedSurface` を受けて **WUC surface �
 - **リスク**: **Medium**。
   - 低下要因: 上流契約（emo-compose/atlas）完成・premultiplied 形式一致・クリックスルー/AlphaMask/donor が実在・pilot で別プロセス透過が実証済み。
   - 上昇要因: WUC surface へのメモリ直アップロードが未踏経路（Research 1）・実 DPI 座標契約の確定（Research 2・過去に window-placement がこの取り違えでリジェクト）・seriko との `\s[-1]` 契約突合（Research 3）。
-  - GPU 合成窓はスクショ不可（記憶 areka-gpu-window-screenshot-readback）——golden 一致観測は pixel readback（backbuffer CopyResource→Map）が必要になり得る点に留意（R6.2）。
+  - GPU 合成窓はスクショ不可（記憶 areka-gpu-window-screenshot-readback）だが、**ディスカッション #1 で解消**——golden 検証は**コンポジター surface を検証対象にせず**、通常の D2D オフスクリーン描画先へ描いて readback する検証シーム（R6.7）で決定論的に行う。よって backbuffer readback リスクは要件範囲から外れた。
 
 ---
 
