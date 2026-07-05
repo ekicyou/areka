@@ -27,6 +27,8 @@
 
 pub mod error;
 pub mod method;
+
+pub use method::{BlendKind, BlendMode, ComposeMethod};
 pub mod bind;
 pub mod composed;
 pub mod normalized;

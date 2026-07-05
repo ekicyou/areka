@@ -39,7 +39,7 @@
   - _Boundary: balloon parser (model.rs ドキュメントのみ)_
 
 - [ ] 2. Core: 合成メソッド写像表と公開データ契約
-- [ ] 2.1 合成メソッド写像表（Method Registry）を実装する
+- [x] 2.1 合成メソッド写像表（Method Registry）を実装する
   - ukadoc 由来の合成メソッド群（overlay/overlayfast/replace/base/reduce/asis/interpolate/add/bind/blend-* 群など）を `ComposeMethod`/`BlendMode` として全量列挙する
   - emo2 使用分（overlay。add/bindはoverlayと同義として写像）のみ実装し、他は明示的な未実装シームとして保持する
   - `is_implemented()` で実装状況を問い合わせ可能にする
@@ -210,3 +210,7 @@
   - 観測可能な完了状態: 決定性テストとゼロアロケーションテストの両方がgreenになる
   - _Requirements: 10.1, 10.3_
   - _Depends: 7_
+
+## Implementation Notes
+
+- 2.1 (method.rs): `BlendMode` は設計スケッチの単一 enum ではなく `BlendMode { kind: BlendKind, fast: bool }`（struct）＋ `#[non_exhaustive] enum BlendKind`（19 modes）へ分割実装。`fast` 軸と `kind` 軸が直交するため enum 倍化を回避。`#[non_exhaustive]` 拡張シームは `BlendKind`（variant 軸）に載る。下流（plan/blit の 5.x/6.x）が `ComposeMethod::Blend(BlendMode)` を match する際はこの形を前提とする。`from_name`（名前→ComposeMethod 写像・add/bind→Overlay・旧別名 overlaymultiply→blend-multiply-fast 等）も同梱済み。
