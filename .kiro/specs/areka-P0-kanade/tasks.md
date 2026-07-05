@@ -154,6 +154,29 @@
   - _Boundary: tests/real_helper_test_
   - _Depends: 4.1, 3.2_
 
+- [ ] 6. 決定論的網羅の補完（開発者指示・2026-07-05: 決定論的にテスト可能な領域は全てカバーする）
+- [x] 6.1 純粋 step 層の失敗・防御アームのログ発火検証（Req 6.1・6.3）
+  - 純粋状態機械 `step()` はテストスレッド上で同期実行されるため、`tracing::subscriber::with_default`（または custom Layer）で発火イベントを捕捉できる。全ての失敗アーム（`shiori_down`／`shiori_failed`／`unknown_talk_done`／`unload_failed`／`close_deadline_exceeded`）と防御 warn! アーム（`boot_ignored`／`unexpected_reply`／`steady_value_during_talk`／各 `*_unexpected`／`*_input_ignored` 等）が、`target="kanade"`・期待 `event` フィールド・期待レベル（error/warn）で必ずログを発火することを検証し、「ログ無しの失敗経路が存在しない」（Req 6.3）を実行可能テストで担保する
+  - ログ捕捉は in-source（schedule/ の `#[cfg(test)]`）に置く。`tracing-subscriber` を dev-dep として追加してよい（workspace 依存・areka/wintf に前例・テスト専用）か、`tracing` のみで最小 Subscriber を自作する
+  - 観測可能な完了条件: 各失敗・防御アームについて、対応する `step()` 呼出が期待 event/level のログを 1 件以上発火することを assert するテストが green になる
+  - _Requirements: 6.1, 6.3_
+  - _Boundary: schedule（in-source #[cfg(test)]）・Cargo.toml dev-dep_
+  - _Depends: 2.1_
+- [ ] 6.2 アクターシェルの失敗ログと応答 oneshot 切断（Dropped）経路の検証（Req 6.1・6.2）
+  - アクターシェルの往復ヘルパ（`round_trip`／`send_shiori`）はテストスレッドから直呼びでき、そのログはテストスレッド上で発火するため捕捉可能。(a) shiori 送出失敗（`send_shiori` が Err）で `shiori_send_failed` error! が発火し `Failed(Ipc)` へ写像されること、(b) 応答 oneshot が Dropped（受領後に reply を送らず drop）で `shiori_reply_dropped` error! が発火し `Failed(Ipc)` へ写像されること（gap: 送出成功後の reply-only drop 経路の専用検証）を in-source actor.rs テストで検証する
+  - `start_talk_send_failed`（アクタースレッド上・drive ループ内）は既存 `sakura_disconnected_start_talk_failure_continues_run` が挙動（継続）を被覆済み。ログ発火の実 assert がアクタースレッド跨ぎで困難な場合は、その旨を記録し挙動テスト＋レビュー担保に委ねてよい
+  - 観測可能な完了条件: shiori 送出失敗・reply Dropped の 2 経路が、`Failed(Ipc)` への写像と対応 error! ログ発火を伴うことを検証するテストが green になる
+  - _Requirements: 6.1, 6.2_
+  - _Boundary: actor.rs（in-source #[cfg(test)]）_
+  - _Depends: 3.1, 6.1_
+- [ ] 6.3 ブロッキング呼出中の Tick catch-up の統合検証（DD-2・in-flight ≤ 1）
+  - 実経路では SHIORI 呼出がブロックし得るため、その間に溜まった Tick が解除後に順次処理される（catch-up）。mock は即応ゆえ通常この窓は生じない。指定呼出の reply を保留し「要求受領」をテストへ通知してから解放する **blocking mock shiori** を common に純粋追加し、(a) 最初の OnSecondChange GET でブロック→その間に複数 Tick を投入（inbox に滞留）→解放、で滞留 Tick が順に処理され欠落・重複が生じないこと、(b) 1 つの論理 Tick に対し高々 1 つの in-flight 呼出であること（重複 OnSecondChange が起きない）を決定的に検証する
+  - 同期は「要求受領通知＋解放ゲート」で行い sleep を用いない（4.4 の gated ハーネスと同じ race-free 規律）
+  - 観測可能な完了条件: ブロック中に投入した Tick 群が解除後に順序どおり処理され、記録列が期待どおり（欠落・重複なし）になることを検証する統合テストが green になる
+  - _Requirements: 3.1, 3.2_
+  - _Boundary: tests/steady_test（または新規 tests/catchup_test）・common/mod.rs（blocking mock 追加）・tests/kanade.rs（新規モジュール宣言時のみ）_
+  - _Depends: 4.1, 3.1_
+
 ## Implementation Notes
 
 - 2.2 完了時: `schedule/mod.rs` の `force_quit` は OnClose を **NOTIFY** としてインライン構築している（DD-10 best-effort・events.rs は GET の `on_close` のみ提供）。GET/NOTIFY で別物ゆえ events への移譲は必須ではないが、close 系列を触るタスク（2.5）が OnClose-NOTIFY 構成子を events に足して一本化するのは任意で可。

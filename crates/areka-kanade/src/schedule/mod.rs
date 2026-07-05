@@ -23,6 +23,9 @@ use crate::talk::{StartTalk, TalkDone, TalkId};
 
 pub(crate) mod boot;
 pub(crate) mod close;
+/// タスク 6.1: 純粋 step 層の失敗・防御アームのログ発火検証（テスト専用）。
+#[cfg(test)]
+pub(crate) mod log_capture;
 /// ukadoc Reference 表の実装正本（純粋関数群）。DD-9 の例外として `pub`。
 /// クレート公開面への露出は [`crate::events`] ファサード経由（[`crate::lib`] 参照）。
 pub mod events;
@@ -497,5 +500,345 @@ mod tests {
         assert_eq!(s.last_now, None);
         assert_eq!(s.next_talk_id, 1);
         assert!(s.pending_close.is_none());
+    }
+}
+
+/// タスク 6.1: 純粋 step 層の失敗・防御アームがログを発火することの実行可能検証。
+///
+/// Req 6.3（ログ無しの失敗経路を持たない）・Req 6.1（区別語彙ごとにログ）を、コードレビュー
+/// でなく**テスト**で担保する。各 `error!` / `warn!` アームを `step()`（または各サブモジュール
+/// `step`）で駆動し、`log_capture` で捕捉したイベントに `target="kanade"`・所定の `event`・所定
+/// レベル（ERROR/WARN）が存在することを表明する。ログが除去・語彙変更・レベル変更されると当該
+/// テストが失敗する。
+///
+/// ルーティング上 `step()` からは到達不能な防御アーム（構造上発生しない系）は、当該サブモジュール
+/// の `step` を直接駆動して検証する（各テストのコメントで明示）。これらは「あり得ない Phase/入力の
+/// 組」に対する防御であり、直接駆動が唯一かつ正当な網羅手段である。
+#[cfg(test)]
+mod log_firing_tests {
+    use super::log_capture::{assert_logged, capture, CapturedEvent};
+    use super::*;
+    use crate::msg::{CloseReason, ShioriFailure};
+    use crate::talk::TalkDone;
+    use tracing::Level;
+
+    fn config() -> KanadeConfig {
+        KanadeConfig::new("master", "1.0.0")
+    }
+
+    fn state_in(phase: Phase) -> State {
+        State {
+            phase,
+            last_now: Some(MonotonicMs(1_000)),
+            next_talk_id: 5,
+            pending_close: None,
+        }
+    }
+
+    fn steady_with_talk(talk_id: TalkId) -> Phase {
+        Phase::Steady {
+            talk: Some(ActiveTalk {
+                talk_id,
+                origin: "steady",
+            }),
+        }
+    }
+
+    /// `step()` を捕捉付きで駆動し、発行イベント列を返す（state は move）。
+    fn run_step(phase: Phase, input: Input) -> Vec<CapturedEvent> {
+        let cfg = config();
+        capture(|| {
+            let _ = step(state_in(phase), input, &cfg);
+        })
+    }
+
+    // ============================================================
+    // 失敗アーム（level = ERROR）
+    // ============================================================
+
+    #[test]
+    fn error_shiori_down_logs() {
+        let ev = run_step(
+            steady_with_talk(TalkId(5)),
+            Input::ShioriDown {
+                reason: "helper crashed".to_string(),
+            },
+        );
+        assert_logged(&ev, Level::ERROR, "shiori_down");
+    }
+
+    #[test]
+    fn error_shiori_failed_logs() {
+        // 応答待ちフェーズ（BootType）+ Failed → 横断アーム shiori_failed。
+        let ev = run_step(
+            Phase::BootType,
+            Input::ShioriReply {
+                outcome: ShioriOutcome::Failed(ShioriFailure::Timeout("30s".to_string())),
+            },
+        );
+        assert_logged(&ev, Level::ERROR, "shiori_failed");
+    }
+
+    #[test]
+    fn error_unknown_talk_done_logs() {
+        // 突合対象 talk (5) と異なる talk_id (999) の TalkDone → unknown_talk_done。
+        let ev = run_step(
+            steady_with_talk(TalkId(5)),
+            Input::TalkDone(TalkDone {
+                talk_id: TalkId(999),
+                quit: false,
+            }),
+        );
+        assert_logged(&ev, Level::ERROR, "unknown_talk_done");
+    }
+
+    #[test]
+    fn error_unload_failed_logs() {
+        // Unloading 中の Failed 応答 → unload_failed（終了系列は継続）。
+        let ev = run_step(
+            Phase::Unloading {
+                cause: TermCause::Quit,
+            },
+            Input::ShioriReply {
+                outcome: ShioriOutcome::Failed(ShioriFailure::Ipc("pipe closed".to_string())),
+            },
+        );
+        assert_logged(&ev, Level::ERROR, "unload_failed");
+    }
+
+    #[test]
+    fn error_close_deadline_exceeded_logs() {
+        // CloseTalkWait で deadline 超過 Tick → close_deadline_exceeded。
+        let cfg = config();
+        let s = State {
+            phase: Phase::CloseTalkWait {
+                talk_id: TalkId(7),
+                deadline: Some(MonotonicMs(1_000)),
+            },
+            last_now: Some(MonotonicMs(900)),
+            next_talk_id: 8,
+            pending_close: None,
+        };
+        let ev = capture(|| {
+            let _ = step(s, Input::Tick { now: MonotonicMs(2_000) }, &cfg);
+        });
+        assert_logged(&ev, Level::ERROR, "close_deadline_exceeded");
+    }
+
+    // ============================================================
+    // 防御 / 無視アーム（level = WARN）— mod.rs
+    // ============================================================
+
+    #[test]
+    fn warn_force_quit_logs() {
+        let ev = run_step(
+            Phase::BootMain,
+            Input::ForceQuit {
+                reason: CloseReason::System,
+            },
+        );
+        assert_logged(&ev, Level::WARN, "force_quit");
+    }
+
+    #[test]
+    fn warn_boot_ignored_logs() {
+        // 非 Idle での Boot → mod.rs boot_ignored。
+        let ev = run_step(Phase::BootMain, Input::Boot);
+        assert_logged(&ev, Level::WARN, "boot_ignored");
+    }
+
+    #[test]
+    fn warn_unexpected_reply_logs() {
+        // 応答待ちでない Phase（Idle）への ShioriReply → mod.rs unexpected_reply。
+        let ev = run_step(
+            Phase::Idle,
+            Input::ShioriReply {
+                outcome: ShioriOutcome::Notified,
+            },
+        );
+        assert_logged(&ev, Level::WARN, "unexpected_reply");
+    }
+
+    #[test]
+    fn warn_input_after_terminate_logs() {
+        // 終了系列（Stopped）で受領した非横断入力（Tick）→ dispatch_phase input_after_terminate。
+        let ev = run_step(Phase::Stopped, Input::Tick { now: MonotonicMs(1_000) });
+        assert_logged(&ev, Level::WARN, "input_after_terminate");
+    }
+
+    // ============================================================
+    // 防御 / 無視アーム（level = WARN）— boot.rs
+    // ============================================================
+
+    #[test]
+    fn warn_boot_input_ignored_logs() {
+        // boot フェーズ（BootInit）+ boot 無関係入力（Tick）→ dispatch_phase→boot::step _ アーム。
+        let ev = run_step(Phase::BootInit, Input::Tick { now: MonotonicMs(1_000) });
+        assert_logged(&ev, Level::WARN, "boot_input_ignored");
+    }
+
+    #[test]
+    fn warn_boot_unexpected_reply_logs() {
+        // BootInit（Notified 待ち）に Value → boot::on_reply unexpected_reply。
+        let ev = run_step(
+            Phase::BootInit,
+            Input::ShioriReply {
+                outcome: ShioriOutcome::Value("unexpected".to_string()),
+            },
+        );
+        assert_logged(&ev, Level::WARN, "boot_unexpected_reply");
+    }
+
+    #[test]
+    fn warn_boot_reply_ignored_logs() {
+        // boot::on_reply の防御 `_` アーム（応答待ちでない boot Phase）。step() 経由では
+        // Idle が awaits_reply=false ゆえ mod.rs 側で握り潰され到達しない。構造上発生しない
+        // 防御アームゆえ boot::step を直接駆動して検証する（唯一の網羅手段）。
+        let cfg = config();
+        let ev = capture(|| {
+            let _ = boot::step(
+                state_in(Phase::Idle),
+                Input::ShioriReply {
+                    outcome: ShioriOutcome::Notified,
+                },
+                &cfg,
+            );
+        });
+        assert_logged(&ev, Level::WARN, "boot_reply_ignored");
+    }
+
+    // ============================================================
+    // 防御 / 無視アーム（level = WARN）— steady.rs
+    // ============================================================
+
+    #[test]
+    fn warn_steady_value_during_talk_logs() {
+        // Steady{Some} + Value（DD-6 防御）→ steady_value_during_talk。
+        let ev = run_step(
+            steady_with_talk(TalkId(5)),
+            Input::ShioriReply {
+                outcome: ShioriOutcome::Value("late".to_string()),
+            },
+        );
+        assert_logged(&ev, Level::WARN, "steady_value_during_talk");
+    }
+
+    #[test]
+    fn warn_steady_unexpected_reply_logs() {
+        // Steady{None} + Unloaded（想定外の応答）→ steady_reply_unexpected。
+        let ev = run_step(
+            Phase::Steady { talk: None },
+            Input::ShioriReply {
+                outcome: ShioriOutcome::Unloaded,
+            },
+        );
+        assert_logged(&ev, Level::WARN, "steady_unexpected_reply");
+    }
+
+    #[test]
+    fn warn_steady_input_ignored_logs() {
+        // steady::step の `_` アーム（Steady に無関係な入力）。step() 経由では Boot は mod.rs、
+        // ForceQuit/ShioriDown は横断アームで捌かれ steady へ届かない。構造上発生しない防御
+        // アームゆえ steady::step を直接駆動して検証する。
+        let cfg = config();
+        let ev = capture(|| {
+            let _ = steady::step(
+                state_in(Phase::Steady { talk: None }),
+                Input::Boot,
+                &cfg,
+            );
+        });
+        assert_logged(&ev, Level::WARN, "steady_input_ignored");
+    }
+
+    #[test]
+    fn warn_steady_phase_unexpected_logs() {
+        // steady::step に非 Steady Phase（BootMain）が届いた場合の防御。ルーティング上
+        // 到達不能ゆえ steady::step を直接駆動して検証する。
+        let cfg = config();
+        let ev = capture(|| {
+            let _ = steady::step(
+                state_in(Phase::BootMain),
+                Input::Tick { now: MonotonicMs(1_000) },
+                &cfg,
+            );
+        });
+        assert_logged(&ev, Level::WARN, "steady_phase_unexpected");
+    }
+
+    // ============================================================
+    // 防御 / 無視アーム（level = WARN）— close.rs
+    // ============================================================
+
+    #[test]
+    fn warn_close_notified_unexpected_logs() {
+        // ClosePending + Notified（OnClose は GET ゆえ構造上あり得ない）→ close_notified_unexpected。
+        let ev = run_step(
+            Phase::ClosePending {
+                reason: CloseReason::User,
+            },
+            Input::ShioriReply {
+                outcome: ShioriOutcome::Notified,
+            },
+        );
+        assert_logged(&ev, Level::WARN, "close_notified_unexpected");
+    }
+
+    #[test]
+    fn warn_close_reply_unexpected_logs() {
+        // ClosePending + Unloaded（Value/NoContent/Notified 以外）→ close_reply_unexpected。
+        let ev = run_step(
+            Phase::ClosePending {
+                reason: CloseReason::User,
+            },
+            Input::ShioriReply {
+                outcome: ShioriOutcome::Unloaded,
+            },
+        );
+        assert_logged(&ev, Level::WARN, "close_reply_unexpected");
+    }
+
+    #[test]
+    fn warn_close_pending_input_ignored_logs() {
+        // ClosePending + 無関係入力（CloseRequest）→ close_pending_input_ignored。
+        let ev = run_step(
+            Phase::ClosePending {
+                reason: CloseReason::User,
+            },
+            Input::CloseRequest {
+                reason: CloseReason::User,
+            },
+        );
+        assert_logged(&ev, Level::WARN, "close_pending_input_ignored");
+    }
+
+    #[test]
+    fn warn_close_talk_wait_input_ignored_logs() {
+        // CloseTalkWait + 無関係入力（CloseRequest）→ close_talk_wait_input_ignored。
+        let ev = run_step(
+            Phase::CloseTalkWait {
+                talk_id: TalkId(2),
+                deadline: None,
+            },
+            Input::CloseRequest {
+                reason: CloseReason::User,
+            },
+        );
+        assert_logged(&ev, Level::WARN, "close_talk_wait_input_ignored");
+    }
+
+    #[test]
+    fn warn_close_phase_unexpected_logs() {
+        // close::step に非 close Phase（Steady）が届いた場合の防御アーム（上位 match `_`）。
+        // ルーティング上到達不能ゆえ close::step を直接駆動して検証する。
+        let cfg = config();
+        let ev = capture(|| {
+            let _ = close::step(
+                state_in(Phase::Steady { talk: None }),
+                Input::Tick { now: MonotonicMs(1_000) },
+                &cfg,
+            );
+        });
+        assert_logged(&ev, Level::WARN, "close_phase_unexpected");
     }
 }
