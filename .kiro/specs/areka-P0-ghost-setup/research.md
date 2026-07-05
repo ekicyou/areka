@@ -241,3 +241,103 @@
 - **推奨の初期方向（要確認）**: WS-A は 3.A 軸1=A2（共有型を `areka-actor` へ昇格）× 軸2=B1（inbox 転送・sakura reply 除去）が単一正本・自然な依存方向・kanade 既存受領経路温存を最も満たす。dispatcher は構築時 sink 注入＋Tick 中継兼務。ticker は C-inject-B（テストは inbox 直接注入）。ghost 層は E1/E2 ハイブリッド（結線ロジック新クレート＋areka main.rs の薄いシーム消費）。shiori は 3.D Option A（`spawn_shiori_actor` 拡張・Unload 正規化）。
 - **持越し研究項目**: 上記 §4 の 1〜9。特に (3) 現 Unload スタブの正規化と (7) spine e2e の i686 プロセスモデルはリスク源として design で先に潰す。
 - **凍結遵守**: `TalkCue`/`SurfaceSink`/`TextSink`/`cue_target_of`/dola cue／`Shiori3Client`/`RequestError`/`LifecycleReport` 語彙は不改変。触るのは talk 授受面（`StartTalk`/`TalkDone`/`SakuraMsg::Start`）と shiori 結線面（`ShioriConnection`/`spawn_shiori_actor`/`ShioriMsg::Unload`）と ghost 新規結線。
+
+---
+
+## 7. 設計フェーズ: ディスカバリ追補と設計決定（2026-07-06・design 生成時）
+
+> §4 の持越し研究項目 1〜9 を本節で決着した。設計の正本は design.md（本節は決定の背景・比較記録）。
+
+### 7.1 ディスカバリ追補（実コード検証・light discovery）
+
+- **kanade `talk.rs` は切り出し前提で設計済み**（rustdoc 実測）: 「本ファイルは std のみに依存…契約クレートへ切り出す作業は、このファイルの機械的な移動だけで完結する」（DD-1）。本仕様が想定されていた「2 例目の契約消費者」であり、切り出しの執行が kanade 自身の設計意図に一致する。
+- **`ShioriMsg::Unload` スタブの差し替え点も設計済み**（`real.rs` 実測）: 「境界契約（ShioriMsg::Unload／Unloaded）は不変ゆえ、正規経路確立時にこの 1 アームのみ差し替えればよい」。差し替え先 `HelperLifecycle::request_clean_shutdown(&ParentMessageWindow) -> Result<ExitKind, ShutdownError>` は `&mut self` を要する（trait 側 `&mut` 化が必要）。
+- **`real.rs` には private の `ShioriBackend` trait が既在**: `get`/`notify` を持ち、fake backend が同一 runner（`run_shiori_loop`）で検証済み。公開化＋`unload`/`status` 追加が最小増分。
+- **`ShioriConnection` の構築は実 helper 子プロセスを要する**: `HelperHandle` は `Child` を所有し、公開コンストラクタは `spawn()`（プロセス起動）のみ。**「偽 ShioriConnection」を literal に作るには子プロセスが要る＝純 x64 決定論と両立しない**（§7.2 DD-D の根拠）。
+- **接続手順の実証資産**: `areka-kanade/tests/kanade/real_helper_test.rs` の `connect_real_helper`（`ParentMessageWindow::create` → `spawn` → `pump_until_hello_or` → LOAD ack）が実 pasta で GO 済み。env gate 慣行（`HOST32_PASTA_DLL` silent skip／DLL 不在 fail／`HOST32_HELPER_EXE`→target 探索）も同ファイルが正本。
+- **shell descript 読解の道具は揃っている**: `charset::decode(&[u8], DefaultEncoding) -> String`＋`kv::parse_kv(&str) -> BTreeMap`（areka-parsers foundation・公開済み）。
+- **ukadoc 確認**: OnBoot Reference0＝「起動時のシェル名」（`ukadoc:list_shiori_event:OnBoot:1`）。`GhostNames`（ゴースト側 descript の name 系）はシェル名ではない → shell/master/descript.txt の `name` が値源（§7.2 DD-H）。
+- **`spawn_actor` は inbox channel を内部生成**する（外部 Receiver 注入不可・`ActorHandle` は外部構築不可）——相互 Sender 要求の循環（kanade⇄dispatcher・kanade⇄shiori）は spawn 原語の外で中継チャンネルを作って解くしかない（§7.2 DD-C の根拠）。
+- **`MockSink` は Clone 非実装**（凍結面 sink.rs）——dispatcher の per-talk sink 注入（Clone 要求）には e2e 側で Clone な RecordingSink を別定義する（sink.rs 不改変）。
+
+### 7.2 設計決定（§4 持越し 1〜9 の決着）
+
+#### DD-A（§4-1）: 統一型の所有位置＝新規契約クレート `areka-talk`（A2 の実現形）
+
+- 代替案: A1（sakura→kanade 依存）／A2-actor（areka-actor へ昇格）／A2-new（新規契約クレート）／A3（変換アダプタ・要件 1.7 で除外済み）。
+- 選択: **A2-new**。根拠: (i) A1 は再生系→運行系の逆向き依存辺と host32 ビルド引き込みを生む、(ii) A2-actor は actor-foundation 仕様が凍結した公開面（「これ以外の公開面を持たない」）に違反する、(iii) kanade DD-1 が「契約クレートへの機械的移動」を明示的に予定しており、A2-new はその執行である。「kanade 正本」（R1.1）は意味論（kanade の形状＋reason 3 値）の正本性として実現し、物理所在は areka-talk とする。
+- トレードオフ: workspace クレート +1（`crates/*` glob ゆえ追加容易）。
+
+#### DD-B（§4-2）: TalkDone 配送＝B1（inbox 転送・reply 撤去）＋ done ポートは汎用 Sender
+
+- `StartTalk` から `reply` を撤去（kanade 形状に統一）。sakura の完了通知は `spawn_talk<D: From<TalkDone>>(start, done: Sender<D>, …)` の**汎用 Sender ポート**へ移す。dispatcher は `D = DispatcherMsg` で自身の inbox へ巻き取り、`KanadeMsg::TalkDone` へ転送する（R4.3）。sakura テストは `D = TalkDone`（std の恒等 `From`）で追随。
+- 高々 1 回保証は `ReplySender` の move-consume から `Option<TalkState>::take()`（既存機構）へ等価移行。
+- 却下: B2（oneshot 温存）——dispatcher が単一 inbox で `ReplyReceiver` を同時待ちできず、per-talk 監視スレッドが要る（スレッド浪費・停止複雑化）。
+
+#### DD-C（§4-6 併合）: 結線循環の解消＝中継チャンネル＋汎用 relay／kanade 停止観測＝join
+
+- `spawn_kanade`（`sakura: Sender<StartTalk>`）と `spawn_shiori_actor`（`on_down: Sender<KanadeMsg>`）のシグネチャを**不変**に保ったまま、ghost が素の mpsc を 2 本張り `spawn_relay<A, B: From<A>>` で変換転送する（start-relay／down-relay）。relay は上流全 Sender drop で自然終了（明示 Close 不要）。
+- **kanade 停止完了の観測（§4-6）は `ActorHandle::join`**。新たな外向き通知経路は作らない——shutdown は ghost が能動的に駆動する系列であり、join が停止規約の正準観測である。kanade 自発停止（quit talk）済みの場合、shutdown の ForceQuit 送出は Err になるが kanade は自身の終了系列で Unload 済み＝冪等に join 工程へ進む。
+- dispatcher の per-talk done ポート用 self-sender は `reply_channel` で spawn 時に body へ受け渡す（enum を汚さない）。
+
+#### DD-D（§4-3・§4-7）: 偽装シーム＝`ShioriBackend` 公開化＋`Box<dyn ShioriBackend>` connect／Unload 正規化・死活監視は同一 runner 内
+
+- `spawn_shiori_actor` の connect を `FnOnce() -> Result<Box<dyn ShioriBackend>, String>` へ一般化する。**R7.1 の「偽 ShioriConnection」の実現形**: 実 `ShioriConnection` は `Child` 所有ゆえプロセスなしで構築不能——注入点（connect closure）と呼出形は要件どおり保ち、**注入される型を backend 抽象へ持ち上げる**ことで純 x64・プロセス spawn ゼロの台本 fake（ScriptedShioriBackend）を成立させる（R7.6）。本番は `impl ShioriBackend for ShioriConnection`（`helper: HelperLifecycle` 化・`ConnectionBackend` 中間構造は廃止）。
+- `ShioriBackend` に `unload(&mut self) -> Result<ExitKind, ShutdownError>`・`status(&mut self) -> HelperStatus` を追加。Unload アームは `request_clean_shutdown` の正規経路へ差し替え（`Ok(Clean)`→info＋`Unloaded`／`Ok(他)`→warn＋`Unloaded`／`Err`→error＋`Failed(Ipc)`）。
+- 死活監視（§4-3）: 受信ループを `recv_timeout(500ms)` 化し、**毎周回冒頭（受信時・タイムアウト時とも）に `status()` を確認**。`Exited` 初回観測で `ShioriDown` を一度だけ送る（sticky・unload 成功後は発火しない）。決定論テストは「メッセージ到達時にも必ず確認」の経路で wall-clock 非依存に検証できる。`on_down` は接続成功後もループ中保持へ変更（旧 Req 4.9 の懸念は down-relay の仲介で解消・kanade rustdoc を更新）。
+- 却下: 監視の別アクター化——`HelperLifecycle` の所有が actor と ghost に割れ、`!Send` 窓との teardown 責務が二重化する。
+
+#### DD-E（§4-4）: ticker＝単一スレッド・2 cadence・C-inject-B（テストは ticker 不起動）
+
+- 単一 ticker スレッドが `base_interval`（既定 **50ms**＝`\w` の 50ms 単位に一致）で `DispatcherMsg::Tick{now}` を、`kanade_interval`（既定 **1000ms**＝OnSecondChange 周期）で `KanadeMsg::Tick{now}` を送る。clock は注入可能（既定 GetTickCount64＝`MonotonicMs` rustdoc の正準）。
+- **per-talk 経過秒の供給経路は dispatcher が中継**: active talk の inbox を知るのは dispatcher のみ。dispatcher が `Tick{now}` 受領時に base（初回 Tick で確定・elapsed=0.0 起点）からの経過秒を `SakuraMsg::Tick(f64)` へ換算して送る。
+- 決定論（C-inject-B）: spine e2e は `TickerMode::Disabled` で ticker を起動せず、`KanadeMsg::Tick`／`DispatcherMsg::Tick` を inbox へ直接注入する（既存 kanade/sakura テスト作法と同型・sleep 不使用が構造的に成立）。
+- 却下: C2（talk 用高解像度 ticker の分離）——スレッド 2 本と active 切替時の再結線が複雑で、50ms 単一 cadence で M1 要求（記録 sink）に足りる。
+
+#### DD-F（§4-5）: ghost 層の所有先＝新規クレート `areka-ghost`＋areka main の薄い結線（ハイブリッド E1）
+
+- 結線ロジック（boot/shutdown/dispatcher/ticker/relay/config/wiring/sink）と spine e2e は `crates/areka-ghost/` に置く（integration test を kanade/sakura と同型の `tests/` に組める）。areka main は `boot`（**非致命**: 失敗は warn/error＋骨格継続）と `app.run()` 復帰後の `shutdown(System)` のみ。
+- **`open_startup_window` シームは不改変**（pub 化しない・ダミー窓と smoke ゲート維持＝R8.2/8.3）。ghost 結線はシームの外（main 本体）に置く——「シームの周りの結線を所有」という brief の境界に一致。
+
+#### DD-G（§4-7 続き）: spine e2e のプロセスモデル＝プロセスレス（確定執行）
+
+- 要件ディスカッション #2 の決着（偽 SHIORI 境界・純 x64）を DD-D のシームで執行。シナリオは S1 boot 成功／S2 接続失敗／S3 helper 死活／S4 close 握手（`ExitKind::Clean` 相当）／S5 close deadline／S6 全断線（`GhostRuntime::into_parts` で senders drop→有界 join）。i686 成果物は `cargo test --workspace` の前提から外れる（実 helper は R8.1 の env gate のみ）。
+
+#### DD-H（§4-8）: `KanadeConfig.shell_name`＝shell descript の `name`（フォールバック＝shell ディレクトリ名）
+
+- ukadoc: OnBoot Reference0＝「起動時のシェル名」。値源は `MountModel.shell.dir` 直下 `descript.txt` の `name` キー（`charset::decode`＋`parse_kv`）。読取不能・欠落は warn＋shell ディレクトリ名（通常 "master"）へフォールバック（boot を落とさない）。`GhostNames`（ゴースト name 系）は誤りゆえ使わない。
+- baseware 情報: `baseware_name = "areka"`（`KanadeConfig::new` 既定）・`baseware_version = env!("CARGO_PKG_VERSION")`（workspace 統一 version）。
+
+#### DD-I（§4-9）: `DefaultEncoding` の供給＝`GhostBootOptions` の呼び出し側指定・既定 `Ansi`
+
+- SSP 準拠の既定は ANSI（記憶 areka-descript-encoding-ishiori-utf8: 既定ハードコード禁止→resolve 引数は呼び出し側供給）。ghost は options の既定値として `Ansi` を置き、テスト・将来の設定 UI が上書きできる。emo2（UTF-8・charset 宣言あり）は prescan 宣言優先で正しく読める（宣言なしレガシー＝ANSI とみなす既定に一致）。
+
+#### DD-J（追加決定）: kanade の 3 値写像＝`Quit`→quit 経路／`Ended`・`Interrupted`→非 quit 経路
+
+- 意味論保存の最小写像。`Interrupted` はM1 ではユーザー中断結線が存在せず、dispatcher の slot 差し替え由来分は stale として棄却されるため kanade へ実質届かない——防御的に非 quit＋`info!` 観測とし、中断意味論の精緻化は input-events/idle-talk へ委ねる。既存テストは `quit:true→Quit`/`quit:false→Ended` の機械的置換。
+
+#### DD-K（追加決定）: sink 注入＝構築時注入＋`Clone` 制約／本番既定は `LogSink`
+
+- dispatcher は `S: SurfaceSink + Clone + Send + 'static`（text 同様）を構築時注入し talk ごとに clone する（setter なし——途中差し替えの実需なし）。後続 M-boot 統合の実 sink（channel Sender ベース）は Clone を自然に満たす。本番既定は ghost 提供の `LogSink`（tracing 出力・無蓄積）——`MockSink`（無限蓄積）を本番に置かない。e2e は Clone な RecordingSink をテスト側で定義（凍結 sink.rs 不改変）。
+
+### 7.3 シンセシス記録
+
+- **一般化**: 転送問題 2 箇所（StartTalk→dispatcher・ShioriDown→kanade）を単一の `spawn_relay<A, B: From<A>>` へ一般化（実装 1 つ・実需 2 例）。`From` ベースの投函変換は spawn_talk done ポートとも同型で、契約を汚さない受け渡しの統一原語になる。
+- **build vs adopt**: 新規外部依存ゼロ。全て workspace 既存資産（areka-actor 原語・parsers foundation・host32 API・real_helper_test の connect 手順）の組み合わせで成立。
+- **単純化**: (i) `ConnectionBackend` 中間構造を廃止し `ShioriConnection` に直接 impl、(ii) ticker を trait 化せず「起動しない」ことで決定論を成立（C-inject-B・追加抽象ゼロ）、(iii) kanade/sakura/actor の公開シグネチャ変更を relay で回避、(iv) dispatcher の graceful drain は「Close funnel＋join」のみ（監督ツリー等は導入しない）。
+
+### 7.4 リスクと緩和（設計後更新）
+
+- **shiori actor 改稿の広さ**（High→Medium）: 変更は real.rs 1 ファイルに閉じ、既存 fake-backend テスト機構が同一 runner 検証を継承する。Unload 正規化・死活監視は scripted backend 単体テスト＋spine e2e S3/S4 で檻に入れる。
+- **shutdown のハング**: 全 join は有界待機のテスト（spine e2e・独立レビューの複数回実行）で検出。設計上、各アクターの停止経路（Close／全 Sender drop）を系列に明記済み。
+- **`Interrupted` の意味論保留**: DD-J の防御写像＋`info!` 観測で M1 を閉じ、Revalidation Trigger（areka-talk 形状・reason 消費）として記録。
+- **app 起動時の ghost boot 失敗ログ**: 既定プレースホルダ ghost_root は不在＝毎回 warn が出る。骨格モード（ghost なし）を明示する 1 行ログで意図を可視化（silent skip にしない）。
+
+### 7.5 参照
+
+- ukadoc `list_shiori_event` OnBoot（Reference0＝起動時のシェル名）／OnSecondChange（1 秒周期）
+- `crates/areka-kanade/src/talk.rs`（DD-1 切り出し前提）・`src/shiori/real.rs`（Unload スタブ差し替え点・ShioriBackend）・`tests/kanade/real_helper_test.rs`（connect 手順・env gate 慣行）
+- `crates/areka-sakura/src/contract.rs`／`drive.rs`（授受面・高々 1 回機構）・`src/sink.rs`（凍結面・MockSink）
+- `crates/shiori-host32-host/src/lifecycle.rs`（`HelperLifecycle`／`request_clean_shutdown`／`ExitKind`）
+- `crates/areka-parsers/src/package/`（`resolve`／`MountModel`）・`charset`／`kv` foundation
+- `.kiro/steering/`（tech/structure/product）・記憶: areka-interrupt-single-close-funnel／canonical-not-minimal-lifecycle／deterministic-test-coverage-mandate／areka-log-first-no-silent-failure／areka-runtime-env-naming
