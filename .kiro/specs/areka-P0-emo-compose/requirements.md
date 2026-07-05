@@ -4,7 +4,7 @@
 
 `areka-P0-emo-compose` は emo（⑥ render engine）三段直列チェーンの **2/3**（`emo-atlas` → **`emo-compose`** → `emo-present`）を担う**合成コア**である。型付き Shell モデル（`areka_parsers::shell::Shell`）と焼付済みアトラス（`areka-emo-atlas` の `AtlasTable`）はすでに存在するが、**surface を合成する頭脳——実サーフェスツリーの構築と、アトラス転写による1枚物ビットマップ合成——が存在しない**。DComp/WUC の visual ブレンドは SERIKO 合成メソッドをピクセル正確に写像できないため、この合成コアは emo 自前で持つ（開発者決定・記憶 areka-emo-own-compositor-atlas）。
 
-本フィーチャは、Shell モデル＋アトラス＋「surface id ＋ 有効 bind 集合」を入力に、**合成済み1枚ビットマップ（premultiplied BGRA）を決定的に生成**できることを到達点とする。合成ロジックは wintf の visual/window/WUC/描画 API を知らない決定的処理であるが、**データ管理は wintf/areka 共通採用の `bevy_ecs` 基盤の上に構築**し、emo は UI スレッド常駐でこの ECS World にサーフェス合成ツリーを保持する（大規模サーフェスデータを高速に回す基盤・議題2決定）。観測は表示不要のオフスクリーン pixel 単体テスト（golden または要点サンプリング）で行う。
+本フィーチャは、Shell モデル＋アトラス＋「surface id ＋ 有効 bind 集合」を入力に、**合成済み1枚ビットマップ（premultiplied BGRA）を決定的に生成**できることを到達点とする。合成ロジックは wintf の visual/window/WUC/描画 API を知らない決定的処理であるが、**データ管理は wintf/areka 共通採用の `bevy_ecs` 基盤の上に構築**し、emo は UI スレッド常駐で、**wintf 本体 World とは分離した emo 専用 World（ゴーストごと）**にサーフェス合成ツリーを保持する（大規模サーフェスデータを高速に回す基盤・アーキタイプ汚染回避・per-ghost lifecycle・headless テスト容易・議題2決定）。観測は表示不要のオフスクリーン pixel 単体テスト（golden または要点サンプリング）で行う。
 
 本要件は WHAT（利用者・下流から観測可能な振る舞い）のみを定義し、バックエンド選定（CPU ピクセル演算 vs D2D オフスクリーン）・合成式の de-facto 確定・ECS データ構造の内部設計（component スキーマ・system 構成・per-ghost World の所有と共有範囲・seriko との相互作用）・クレート配置は design フェーズへ委ねる。
 
@@ -18,7 +18,7 @@
   - 入れ子 surface 参照の再帰合成＋循環検出（非パニック打ち切り）。
   - 合成メソッド写像表を全量定義し、emo2 が実際に使うメソッド（実測 `overlay`）を実装する。
   - トリム契約（配置座標＋trim_offset での等価転写・全透明エントリのスキップ）の遵守。
-  - **内部サーフェス合成ツリーを `bevy_ecs` 基盤で管理**（議題2決定）: wintf/areka 共通採用の ECS 上に entity/component として合成ツリーを保持し、大規模サーフェスデータを高速に扱う。スケール規律＝定義・構造を component 保持し、合成済みビットマップは World に永続保持しない（オンデマンド materialize・キャッシュは emo-present）。
+  - **内部サーフェス合成ツリーを emo 専用 `bevy_ecs` World で管理**（議題2決定）: wintf/areka 共通採用の ECS を基盤に、**wintf 本体 World とは分離した emo 専用 World（ゴーストごと）**へ entity/component として合成ツリーを保持し、大規模サーフェスデータを高速に扱う（wintf のアーキタイプ汚染回避・per-ghost lifecycle・headless テスト容易）。emo→表示経路は `ComposedSurface` の値ハンドオフ（共有 entity 参照に依らない）。スケール規律＝定義・構造を component 保持し、合成済みビットマップは World に永続保持しない（オンデマンド materialize・キャッシュは emo-present）。
   - **上流 `areka-parsers`（shell）の転記ギャップ解消**（本チェーン内・議題1/2決定）: 現行 parser が取りこぼす ukadoc 正典書式を**記述のまま・意味論非解釈・登場順を保って**転記するよう小さく拡張する——(a) `animation-sort`（既定 descend）／`collision-sort`（既定 none）の値化〔議題1〕、(b) 素の `surface` ヘッダの多 id 形（`N,M` 列挙・`N-M` 範囲。現行は単一 `parse::<u32>` で破損）を append と対称な記述子で捕捉、(c) `surface.append` ブロック内 `element` の転記（現行 `SurfaceAppend` は elements 欠落）、(d) surface/append/alias の**登場順を保つ単一定義ストリーム**（現行の種別分離3 Vec は interleaving を喪失）。展開・存在判定・create/append 適用は emo の single-pass fold の責務。
 - **Out of scope（本フィーチャが所有しないもの）**:
   - アトラス焼付・画像デコード・正規化・αトリミング（**`areka-emo-atlas`** が所有）。
@@ -48,7 +48,7 @@
 5. The emo-compose Surface Tree Builder shall 同一入力に対して決定的（バイト等価）な正規化 Surface 定義を生成する。
 6. When 正規化 Surface 定義を生成するとき, the emo-compose Surface Tree Builder shall 転記層が保持する `animation-sort`／`collision-sort`（描画順・判定順キー）を正規化結果へ引き継ぎ、下流（seriko・collision-geometry）が同一の順序規則を再展開なしに消費できるようにする。
 7. While 定義ストリームを single-pass で畳み込むとき, the emo-compose Surface Tree Builder shall 各定義を登場順に内部合成ツリーへ積み、後続定義の効果（append の存在判定・同一 id への追記の重なり）を「その時点までに積まれた状態」に対して決定する（前方参照なし・多パス不要）。
-8. The emo-compose Surface Tree Builder shall 内部サーフェス合成ツリーを `bevy_ecs` 基盤（entity/component）で管理し、大規模サーフェスデータ（多数 surface・bind・animation）を高速に扱える構造とする（single-pass 構築は system として実装し得る。component スキーマ・World 所有は design 判断）。
+8. The emo-compose Surface Tree Builder shall 内部サーフェス合成ツリーを **wintf 本体 World とは分離した emo 専用 `bevy_ecs` World（ゴーストごと）**（entity/component）で管理し、大規模サーフェスデータ（多数 surface・bind・animation）を高速に扱える構造とする（single-pass 構築は system として実装し得る。component スキーマ・World の tick 協調は design 判断）。
 
 ### Requirement 2: surface/append の展開と create/append 意味論（single-pass fold）
 
@@ -150,7 +150,7 @@
 1. The emo-compose Compositor shall 同一入力（Shell モデル・アトラス・surface id・有効 bind 集合）に対してバイト等価な合成結果を生成する。
 2. Where 合成演算が浮動小数の丸め差を生じ得るとき, the emo-compose Compositor shall 整数または固定小数で演算して決定性を確保する。
 3. When 合成を実行するとき, the emo-compose Compositor shall 合成先バッファを再利用し、アトラス転写を O(elements) で行い、途中アロケーションを発生させない。
-4. The emo-compose Compositor shall wintf の visual/window/WUC/描画 API に依存せず、決定的な合成処理として振る舞う（自らスレッド生成・async・channel を持たず、UI スレッド上の共有 `bevy_ecs` World に常駐する）。
+4. The emo-compose Compositor shall wintf の visual/window/WUC/描画 API に依存せず、決定的な合成処理として振る舞う（自らスレッド生成・async・channel を持たず、UI スレッド上の **emo 専用 `bevy_ecs` World（wintf 本体 World とは分離・per-ghost）** に常駐する）。
 5. If 合成経路で失敗が生じたとき, then the emo-compose Compositor shall 安易にパニックせず、`error` ログ＋戻り値で失敗を表現する（パニックは致命かつ直前ログ付きに限定する）。
 6. When サーフェス合成ツリーを ECS World で管理するとき, the emo-compose Compositor shall スケールを前提に**定義・構造のみを component として保持**し、**合成済みビットマップ（大容量）は World に永続保持しない**（materialize はオンデマンド・キャッシュ／無効化は `emo-present`）。
 
