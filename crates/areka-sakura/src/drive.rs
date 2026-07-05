@@ -231,12 +231,38 @@ impl<S: SurfaceSink, T: TextSink> TalkDriver<S, T> {
         ControlFlow::Continue(())
     }
 
-    /// `Close` 受領（本 task ではスケルトンのみ・完全な中断 ACK は task 5.3）。
+    /// `Close` 受領: 進行中の再生を即時停止し、中断 ACK を返す（R7.1/7.2/7.3/7.4）。
     ///
-    /// 停止規約に従い即時 `Break` する（積み残しは rx drop で破棄）。`TalkDone{Interrupted}`
-    /// の送出は task 5.3 で実装する。
+    /// 高々 1 回機構（validation Issue 3）に従い、保持状態を `take()` して `reply` を
+    /// move-consume し `TalkDone{Interrupted}` を送出、直後に `Break` する。`take()` した
+    /// `schedule` は本メソッド終了時に drop され、未発火の残り cue は sink へ届かない
+    /// （drain せず破棄＝R7.2）。`Break` は `run_inbox` の即時 return＝積み残し（inbox の
+    /// 未処理メッセージ）は rx drop で破棄される（R7.3・停止規約整合）。
+    ///
+    /// 状態が既に `None`（自然終端は先に `take()`＋`Break` 済みのため通常は非到達＝
+    /// `Start` 前の防御枝）なら、二度目の `TalkDone` を送らずログして `Break` する
+    /// （通算高々 1 回・R6.4/R7.5）。自然終端後はスレッドが既に消えており Close 自体が
+    /// inbox へ届かないため、この分岐は主に `Start` 受領前の防御的経路である。
     fn on_close(&mut self) -> ControlFlow<()> {
-        // task 5.3 で state.take() → reply.send(TalkDone{Interrupted}) → Break を実装する。
+        // 高々 1 回機構: state.take() → reply.send(TalkDone{Interrupted}) → Break。
+        // take() された schedule の未発火 cue はここで drop＝sink へ届かない（R7.2）。
+        if let Some(state) = self.state.take() {
+            let done = TalkDone {
+                talk_id: state.talk_id,
+                reason: TalkEndReason::Interrupted,
+            };
+            // reply 受領側（kanade）が既に drop されていれば error ログ（黙殺しない・R11.1/11.4）。
+            if state.reply.send(done).is_err() {
+                tracing::error!(
+                    talk_id = state.talk_id.0,
+                    "TalkDone reply receiver dropped on Close"
+                );
+            }
+        } else {
+            // 状態未確定での Close（Start 前の防御枝・投函経路上は通常非到達）。
+            // 二度目の TalkDone を送らずログのみ（通算高々 1 回・R6.4/R7.5）。
+            tracing::debug!("Close received without active playback state; no ACK sent");
+        }
         ControlFlow::Break(())
     }
 }
@@ -498,6 +524,114 @@ mod tests {
             text_records.lock().unwrap().len(),
             2,
             "非有限 Tick で text が早期全量配信されていないこと"
+        );
+    }
+
+    /// 再生途中の中断（Close）で `TalkDone{Interrupted}` がちょうど 1 回返り、
+    /// 未発火分が sink に届かないこと（R7.1/7.2/7.3/7.4・R6.4）。
+    ///
+    /// `\s[10]hello\w[10]world\e`（world は `\w[10]`＝500ms 後）を先頭群（at=0.0）だけ
+    /// 発火させたところで Close を送る。Close 時点で world（at=0.5）は未発火＝以降 sink へ
+    /// 届いてはならない。TalkDone{Interrupted} が talk_id エコー付きでちょうど 1 回返る。
+    /// 「ちょうど 1 回」は `ReplyReceiver`（oneshot・recv で consume）＋ `ReplySender::send`
+    /// の move-consume が型で保証する（2 度目の送信は構造的に不能）＋ body が Break で
+    /// スレッド終了することを join で確認して観測する（R6.4/R7.5）。
+    #[test]
+    fn mid_playback_close_returns_interrupted_once_and_drops_unfired_cues() {
+        let (reply_tx, reply_rx) = reply_channel::<TalkDone>();
+        let talk_id = TalkId(101);
+        let start = StartTalk {
+            script: r"\s[10]hello\w[10]world\e".to_string(),
+            talk_id,
+            reply: reply_tx,
+        };
+
+        let surface = MockSink::new();
+        let text = MockSink::new();
+        let surface_records = surface.records();
+        let text_records = text.records();
+
+        let handle = spawn_talk(start, surface, text);
+
+        // 先頭群（at=0.0）だけ発火させる（world は at=0.5・未達）。
+        handle.inbox.send(SakuraMsg::Tick(0.0)).expect("Tick(0.0) 投函");
+
+        // 中断（Close）を送る。進行中の再生を即時停止し Interrupted ACK を返すべき。
+        handle.inbox.send(SakuraMsg::Close).expect("Close 投函");
+
+        // TalkDone{Interrupted} がちょうど 1 回返ること（talk_id エコー・R7.4/R6.4）。
+        // recv は self を consume するため二度目の受領は型で不能＝「ちょうど 1 回」を保証。
+        let done = reply_rx
+            .recv_timeout(Duration::from_secs(5))
+            .expect("中断で TalkDone{Interrupted} が返るべき");
+        assert_eq!(done.talk_id, talk_id, "talk_id がエコーされること（R6.6）");
+        assert_eq!(
+            done.reason,
+            TalkEndReason::Interrupted,
+            "中断の終端理由は Interrupted（R7.4）"
+        );
+
+        // body の正常終了（Break）を join で確認する。以降 Close を送っても再返信は不能。
+        handle.actor.join().expect("body は Break 後に正常終了する");
+
+        // 先頭群のみ届き、未発火分（world）は sink に届いていないこと（R7.2）。
+        let surface = surface_records.lock().unwrap();
+        assert_eq!(surface.len(), 1, "surface は先頭 Emote のみ（中断前）");
+        assert_eq!(
+            surface[0].command,
+            CueCommand::Emote { key: "10".into() },
+            "surface 発火は Emote{{key:10}}"
+        );
+        let text = text_records.lock().unwrap();
+        assert_eq!(text.len(), 1, "text は hello のみ（world は未発火＝破棄）");
+        assert_eq!(
+            text[0].command,
+            CueCommand::Text("hello".into()),
+            "中断前に届いた text は hello のみ"
+        );
+    }
+
+    /// 自然終端後に中断（Close）を受けても追加の `TalkDone` が発生しないこと（R6.4/R7.5）。
+    ///
+    /// `\s[10]hello\w[2]world\e` を自然終端まで駆動し `TalkDone{Ended}` を受領・body を
+    /// join（アクタースレッド終了）した後に inbox へ Close を送る。アクターは既に消えて
+    /// いるため `inbox.send(Close)` は `Err`（送出先消滅）になる＝それが「二重終端しない」
+    /// 構造的保証（Break でスレッドが消え、reply も既に move-consume 済み）の証。
+    #[test]
+    fn close_after_natural_end_produces_no_extra_talkdone() {
+        let (reply_tx, reply_rx) = reply_channel::<TalkDone>();
+        let talk_id = TalkId(102);
+        let start = StartTalk {
+            script: r"\s[10]hello\w[2]world\e".to_string(),
+            talk_id,
+            reply: reply_tx,
+        };
+
+        let surface = MockSink::new();
+        let text = MockSink::new();
+
+        let handle = spawn_talk(start, surface, text);
+
+        // 自然終端まで駆動する（0.0 → 待ち跨ぎ 0.2）。
+        handle.inbox.send(SakuraMsg::Tick(0.0)).expect("Tick(0.0) 投函");
+        handle.inbox.send(SakuraMsg::Tick(0.2)).expect("Tick(0.2) 投函");
+
+        // 自然終端で TalkDone{Ended} が返ること（recv が reply_rx を consume）。
+        let done = reply_rx
+            .recv_timeout(Duration::from_secs(5))
+            .expect("自然終端で TalkDone{Ended} が返るべき");
+        assert_eq!(done.talk_id, talk_id, "talk_id エコー");
+        assert_eq!(done.reason, TalkEndReason::Ended, "`\\e` は Ended");
+
+        // body の終了を同期する（Break でアクタースレッドが消える）。
+        handle.actor.join().expect("body は自然終端後に正常終了する");
+
+        // 自然終端後の Close: アクターは既に消えているため inbox.send は Err になる。
+        // これが「二重終端しない」構造的保証の証＝Close は処理されず追加 TalkDone は不能。
+        let send_result = handle.inbox.send(SakuraMsg::Close);
+        assert!(
+            send_result.is_err(),
+            "自然終端後はアクターが消えており Close 送出は失敗する（二重終端不能の証）"
         );
     }
 }
