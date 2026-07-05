@@ -347,7 +347,7 @@ fn resolve_config_inputs(args: &[String]) -> ConfigInputs;
 
 **Responsibilities & Constraints**
 - 本仕様ではその本体が**最小の検証用ダミー窓**（ゴースト内容なし・配置／座標／DPI 主張なし・既定位置の閉じられる窓）を 1 枚開く。これが `main` 所有の `run()` ループに空遷移の heartbeat を与え、boot→loop→exit を実証する。
-- ダミー窓の lifecycle: 閉じられるまで生存し、close で `WindowRegistry` を空へ遷移させる。手動検証では利用者が close、自動検証では smoke テストがプログラム的に close する。
+- ダミー窓の close 機構＝**窓 entity の despawn**（wintf の作法）: `world.despawn(dummy)` → `on_window_handle_remove`（[window_handle.rs](../../../crates/wintf/src/ecs/window/window_handle.rs)）→ `PostMessageW(hwnd, WM_CLOSE)` → `DestroyWindow` → `WindowRegistry` 空遷移 → `run()` 復帰。**自前 wndproc は書かない**（wintf が汎用ブリッジ wndproc `make_wndproc` を所有し全メッセージを ECS `dispatch_window_message` へ配送する＝アプリは ECS で捌く）。**手動検証**は現デモ `on_shell_pressed`（ダブルクリック→despawn）の observer を拝借。**自動検証（CI smoke）**は同じ despawn を env ゲート下で無人トリガする（下記 Implementation Notes）。
 - **配置・座標・DPI を一切主張しない**（既定位置・座標ロジックなし）。placement は window-placement の領分であり、ダミー窓はそこへ踏み込まない（2026-07-05 placement リジェクト再発防止）。
 - 後続（ghost-setup／window-placement）はこのシーム**本体を削除**し、本物のエンジン結線＋ゴースト窓生成へ置き換える。`main` の構造（シーム呼び出し→`app.run()`）は不変で、変わるのはシーム本体だけ。
 
@@ -366,8 +366,9 @@ fn open_startup_window(app: &WinApp);
 
 **Implementation Notes**
 - Integration: 骨格 `main` が構成解決・demo 呼び口の後、`app.run()` の前にこの関数を `&app` で呼ぶ。本体はダミー窓を spawn する。署名が `&WinApp`（`&mut` でない）で足りる根拠: 窓生成は `WinApp::world()`（`&self`）→ `EcsWorld::spawn`（`&self`）経由＝現 `main.rs` の窓生成と同型で ECS 内部可変性を用いるため。下流が本物窓生成＋エンジン結線でより強い借用を要すれば、それは Revalidation Trigger（シーム署名変更）として扱う（投機的に `&mut` を先取りしない）。
-- Validation: `cargo run -p areka` でダミー窓が表示され、close で `run()` が返り exit 0 になることを確認する。smoke テストがダミー窓をプログラム的に閉じ clean exit を assert する。
-- Risks: ダミー窓が閉じられないと `run()` が返らない → 必ず閉じ可能にする。過度な抽象（trait・plugin レジストリ）は speculative ゆえ導入しない。DD5 改定でシームは「ダミー検証窓を開く関数 1 個（`open_startup_window(&WinApp)`）」に決定（旧「no-op 関数 `wire_engines`」を改定）。
+- 自動 despawn 機構（CI smoke・env ゲート）: `AREKA_APP_SMOKE_EXIT_MS`（仮称・`AREKA_` 冠規約・記憶 areka-runtime-env-naming）が設定されると、`wintf_winmsg_executor::spawn_local` で**一発の async タスク**を投入し、`async_io::Timer::after(Duration::from_millis(N)).await` で非同期スリープ後に world の `Weak` を upgrade→`borrow_mut`→ダミー窓 entity を `despawn` する（ECS システムでなく一発タスク＝VSync relay と同じ `spawn_local`＋world `Weak` 作法・[runtime/mod.rs](../../../crates/wintf/src/runtime/mod.rs)）。env 無しの `cargo run` はダミー窓を残し、利用者のダブルクリック despawn を待つ。**主/副の sleep primitive**: 主＝`async_io::Timer`（async-io は既存依存・tokio 不要）、副（Timer の executor 起床がなじまねば）＝`event_listener`＋短命ワーカ sleep（VSync/tick で実証済み・[tick_bridge.rs](../../../crates/wintf/src/runtime/tick_bridge.rs)）。いずれも新規依存なし。実装時に Timer 起床を軽くスパイクして確定する。
+- Validation: `cargo run -p areka` でダミー窓が表示され、ダブルクリック（`on_shell_pressed` 拝借の despawn）で `run()` が返り exit 0 になることを確認する。CI smoke は `AREKA_APP_SMOKE_EXIT_MS` を立てた子プロセスが境界時間内に exit 0 で終わることを assert する（テスト側にもタイムアウト番犬）。
+- Risks: ダミー窓が閉じられないと `run()` が返らない → 必ず閉じ可能（利用者ダブルクリック＋env ゲート自動 despawn）にする。close 機構は **despawn** で統一（`WM_CLOSE` の手書き PostMessage や自前 wndproc は用いない＝wintf 作法）。過度な抽象（trait・plugin レジストリ）は speculative ゆえ導入しない。DD5 改定でシームは「ダミー検証窓を開く関数 1 個（`open_startup_window(&WinApp)`）」に決定（旧「no-op 関数 `wire_engines`」を改定）。
 
 ### Residual Assets Layer
 
@@ -421,10 +422,10 @@ fn open_startup_window(app: &WinApp);
 ### Integration Tests
 - SHIORI 契約チェーン e2e（`shiori_e2e_tests`/`shiori_lifecycle_e2e_tests`/`shiori_reference_e2e_tests`）が退避後も緑を維持する（R5.2/R6.2）。これが本仕様の緑判定対象。
 - `shiori_demo` の env-gate 単体テスト（`gate_disabled_does_not_drive`/`gate_enabled_drives` 等）が緑を維持する（R5.3/5.4・残置により不変）。
-- **骨格 smoke（boot→loop→exit の証明）**: `cargo run -p areka` がダミー検証窓を開き、smoke テストがその窓をプログラム的に close（または境界付きで）して、プロセスが境界時間内に **exit 0** で終了することを assert する（起動→`main` 所有 loop→ダミー窓 close→正常終了の踏破を証明・R2.4/R4.1）。これは以前の Issue 2 回帰（windowless-return／ハング懸念）に対するガードでもある。ダミー窓は配置を assert しない（liveness プローブに限る）。
+- **骨格 smoke（boot→loop→exit の証明）**: `AREKA_APP_SMOKE_EXIT_MS` を立てた `cargo run -p areka` 子プロセスが、ダミー検証窓を開き→`main` 所有 loop 駆動→`spawn_local` の遅延タスクが N ms 後にダミー窓 entity を despawn（→ WM_CLOSE → DestroyWindow → 空遷移）→ プロセスが境界時間内に **exit 0** で終了することを assert する（テスト側タイムアウトを番犬に置く）。起動→loop→close→正常終了の踏破を証明（R2.4/R4.1）。以前の Issue 2 回帰（windowless-return／ハング懸念）に対するガードでもある。ダミー窓は配置を assert しない（liveness プローブに限る）。close は despawn 一本（WM_CLOSE 手書き／自前 wndproc は用いない）。
 
 ### E2E / Manual Verification
-- 骨格起動: `cargo run -p areka`（引数なし・`AREKA_SHIORI_DEMO` 未設定）が起動→構成入力ログ（ghost/balloon root）→検証用ダミー窓表示→`main` 所有 loop 駆動→利用者がダミー窓を閉じると exit 0 で正常終了する（R2.1–2.4・R3.2・R4.1）。ダミー窓は配置・座標・DPI を主張しない。
+- 骨格起動: `cargo run -p areka`（引数なし・`AREKA_SHIORI_DEMO` 未設定）が起動→構成入力ログ（ghost/balloon root）→検証用ダミー窓表示→`main` 所有 loop 駆動→利用者が**ダミー窓をダブルクリック**（`on_shell_pressed` 拝借の despawn）すると exit 0 で正常終了する（R2.1–2.4・R3.2・R4.1）。ダミー窓は配置・座標・DPI を主張しない。
 - 骨格＋引数: `cargo run -p areka -- <ghost> <balloon>` が引数値をログに反映し、ダミー窓 close で正常終了する（R3.3）。
 - モック退避: `cargo run -p areka --example mock-shell` が窓 2 枚表示・ドラッグでバルーン追従・ダブルクリックで全窓終了・縦書きテキスト表示を従来同一で行う（R1.1–1.4・R6.4）。
 - demo gate: `AREKA_SHIORI_DEMO=1 cargo run -p areka` が demo を駆動しつつ通常起動を中断しない（R5.4）。
