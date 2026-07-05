@@ -152,4 +152,5 @@ pub fn render_surface(
 
 // Note: DComp の `commit_composition` システムは WUC 移行で削除された（要件 7.1）。
 // WUC は DispatcherQueue 経由で変更が暗黙反映されるため明示的な commit は不要。
-// `CommitComposition` schedule 自体と `ulw_present_system` は残置される。
+// `CommitComposition` schedule 自体は空スケジュール（no-op）として残置される
+// （ULW present system は wintf-ulw-removal で撤去済み）。

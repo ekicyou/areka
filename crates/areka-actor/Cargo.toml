@@ -1,0 +1,19 @@
+[package]
+name = "areka-actor"
+workspace = "../.."
+description = "Engine-independent actor conventions and thin helpers for areka (spawn/reply pure layer + UI bridge); minimal-dependency, no subscriber init"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[dependencies]
+tracing = { workspace = true }
+thiserror = { workspace = true }
+async-channel = { workspace = true }
+wintf-winmsg-executor = { workspace = true }
+
+[dev-dependencies]
+windows = { workspace = true }

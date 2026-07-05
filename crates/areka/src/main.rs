@@ -26,8 +26,8 @@ use wintf::ecs::widget::shapes::Rectangle;
 use wintf::ecs::widget::text::{TextDirection, Typewriter, TypewriterTalk, TypewriterToken};
 use wintf::ecs::clickthrough::ClickThroughRegistryHandle;
 use wintf::ecs::{
-    ChildOf, CompositionMode, FrameFinalize, FrameTime, SetWindowPosCommand, Window, WindowHandle,
-    WindowPos, WindowStyle,
+    ChildOf, FrameFinalize, FrameTime, SetWindowPosCommand, Window, WindowHandle, WindowPos,
+    WindowStyle,
 };
 use wintf::*;
 
@@ -219,15 +219,14 @@ fn create_shell_window(world: &mut World) -> Entity {
             ShellWindowMarker,
             Window {
                 title: "areka shell".to_string(),
-                // task 4.1: WUC（DComp）合成経路。ex_style は factory の compute_ex_style が
-                // DComp に応じて WS_EX_LAYERED を外し WS_EX_NOREDIRECTIONBITMAP を付与するため
-                // WindowStyle は据え置きでよい。
-                composition_mode: CompositionMode::DComp,
+                // WUC 合成に固定化された。factory の compute_ex_style は合成モード選択を持たず、
+                // 常に WS_EX_LAYERED を外し WS_EX_NOREDIRECTIONBITMAP を付与するため WindowStyle
+                // の ex_style は据え置きでよい（下の WS_EX_LAYERED は factory が剥がす）。
                 ..Default::default()
             },
             WindowStyle {
                 style: WS_POPUP | WS_VISIBLE,
-                // ex_style は factory が composition_mode から自動計算する（compute_ex_style）。
+                // ex_style は factory が固定計算する（compute_ex_style が WS_EX_LAYERED を剥がす）。
                 ex_style: WS_EX_LAYERED | WS_EX_TOOLWINDOW | WS_EX_TOPMOST,
             },
             WindowPos {
@@ -288,13 +287,13 @@ fn create_balloon_window(world: &mut World) -> Entity {
             BalloonWindowMarker,
             Window {
                 title: "areka balloon".to_string(),
-                // task 4.1: WUC（DComp）合成経路。ex_style は factory が自動計算するため据え置き。
-                composition_mode: CompositionMode::DComp,
+                // WUC 合成に固定化された。factory の compute_ex_style は合成モード選択を持たず、
+                // 常に WS_EX_LAYERED を外し WS_EX_NOREDIRECTIONBITMAP を付与するため据え置きでよい。
                 ..Default::default()
             },
             WindowStyle {
                 style: WS_POPUP | WS_VISIBLE,
-                // ex_style は factory が composition_mode から自動計算する（compute_ex_style）。
+                // ex_style は factory が固定計算する（compute_ex_style が WS_EX_LAYERED を剥がす）。
                 ex_style: WS_EX_LAYERED | WS_EX_TOOLWINDOW | WS_EX_TOPMOST,
             },
             WindowPos {

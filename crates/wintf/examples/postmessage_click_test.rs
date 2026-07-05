@@ -3,16 +3,15 @@
 //! # PostMessage Click Debug Test
 //!
 //! PostMessageW で WM_LBUTTONDOWN / WM_LBUTTONUP をプログラム的に投入し、
-//! クリック後の描画パイプライン（Brushes → draw_rectangles → composite_render →
-//! ulw_present）が正しく動作するかを検証する。
+//! クリック後の描画パイプライン（Brushes → draw_rectangles → GPU 合成（WUC）present）
+//! が正しく動作するかを検証する。
 //!
 //! ## 検証ポイント
 //! 1. 初回表示が正常（赤い矩形が見える）
 //! 2. PostMessage によるクリック後に Brushes が変更される
 //! 3. draw_rectangles が Changed<Brushes> を検出して GraphicsCommandList を再作成する
-//! 4. composite_render_system が再描画する
-//! 5. ulw_present_system で UpdateLayeredWindow が成功する
-//! 6. 色が赤→黄にトグルされる
+//! 4. GPU 合成（WUC）パスが再描画・present する
+//! 5. 色が赤→黄にトグルされる
 //!
 //! ## 使い方
 //! ```

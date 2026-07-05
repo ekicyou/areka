@@ -9,18 +9,6 @@ mod command_list_test;
 mod core_accessor_test;
 #[path = "graphics/components_test.rs"]
 mod components_test;
-#[path = "graphics/compositor_init_system_test.rs"]
-mod compositor_init_system_test;
-#[path = "graphics/compositor_integration_test.rs"]
-mod compositor_integration_test;
-#[path = "graphics/compositor_lifecycle_test.rs"]
-mod compositor_lifecycle_test;
-#[path = "graphics/compositor_opacity_test.rs"]
-mod compositor_opacity_test;
-#[path = "graphics/compositor_render_system_test.rs"]
-mod compositor_render_system_test;
-#[path = "graphics/compositor_transfer_test.rs"]
-mod compositor_transfer_test;
 #[path = "graphics/core_ecs_test.rs"]
 mod core_ecs_test;
 #[path = "graphics/core_test.rs"]

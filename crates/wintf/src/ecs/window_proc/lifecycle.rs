@@ -21,7 +21,7 @@ type HandlerResult = Option<LRESULT>;
 
 /// WM_ERASEBKGND: 背景消去要求
 ///
-/// ULW が全画面を管理するため、背景消去をスキップする
+/// GPU 合成（WUC）が描画面を管理するため、背景消去をスキップする
 #[inline]
 pub(super) fn WM_ERASEBKGND(
     _world: &Rc<RefCell<EcsWorld>>,
@@ -35,40 +35,17 @@ pub(super) fn WM_ERASEBKGND(
 
 /// WM_PAINT: 再描画要求
 ///
-/// - `CompositionMode::DComp` → `DefWindowProcW` に委譲（DComp は OS 管理）
-/// - `CompositionMode::ULW` またはフォールバック → `BeginPaint`/`EndPaint` 最小ペア
+/// GPU 合成（WUC）は OS 管理のため、常に `DefWindowProcW` へ委譲する（`None` 返却）
 #[inline]
 pub(super) fn WM_PAINT(
-    world: &Rc<RefCell<EcsWorld>>,
-    entity: Entity,
-    hwnd: HWND,
+    _world: &Rc<RefCell<EcsWorld>>,
+    _entity: Entity,
+    _hwnd: HWND,
     _wparam: WPARAM,
     _lparam: LPARAM,
 ) -> HandlerResult {
-    // Entity から CompositionMode を判定
-    let is_dcomp = if let Ok(world_borrow) = world.try_borrow() {
-        world_borrow
-            .world()
-            .get::<crate::ecs::window::Window>(entity)
-            .map(|w| w.composition_mode() == crate::ecs::window::CompositionMode::DComp)
-            .unwrap_or(false)
-    } else {
-        false
-    };
-
-    if is_dcomp {
-        // DComp モード: DefWindowProcW に委譲
-        None
-    } else {
-        // ULW モード: BeginPaint/EndPaint 最小ペア
-        use windows::Win32::Graphics::Gdi::{BeginPaint, EndPaint, PAINTSTRUCT};
-        let mut ps = PAINTSTRUCT::default();
-        unsafe {
-            let _ = BeginPaint(hwnd, &mut ps);
-            let _ = EndPaint(hwnd, &ps);
-        }
-        Some(LRESULT(0))
-    }
+    // GPU 合成（WUC）は OS 管理: DefWindowProcW に委譲
+    None
 }
 
 /// WM_CLOSE: ウィンドウクローズ要求

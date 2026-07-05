@@ -1,8 +1,8 @@
 //! window_pos.rs 系システムのギャップテスト (W3b-T)
 //!
 //! - invalidate_dependent_components: WucGraphicsResource 連動は既存テスト
-//!   （dcomp_integration_test）で固定済みだが、WindowD3D11Compositor /
-//!   BitmapSourceGraphics の無効化ループと no-op 経路は未検証だったため追加する。
+//!   （dcomp_integration_test）で固定済みだが、BitmapSourceGraphics の無効化ループと
+//!   no-op 経路は未検証だったため追加する。
 //! - apply_window_pos_changes: SetWindowPosCommand キュー（TLS）は覗き見 API が
 //!   ないため、分岐の完走 characterization に留める（所見・提案はセル断片に記録）。
 //!
@@ -14,7 +14,6 @@ use windows::Win32::Graphics::Direct2D::Common::*;
 use windows::Win32::Graphics::Direct2D::*;
 use windows::Win32::Graphics::Dxgi::Common::DXGI_FORMAT_B8G8R8A8_UNORM;
 use windows::Win32::UI::WindowsAndMessaging::CW_USEDEFAULT;
-use wintf::ecs::compositor::WindowD3D11Compositor;
 use wintf::ecs::{
     BitmapSourceGraphics, GraphicsCore, Point, SizeI, Window, WindowHandle, WindowPos,
     apply_window_pos_changes, invalidate_dependent_components,
@@ -56,29 +55,6 @@ fn create_test_bitmap(graphics: &GraphicsCore) -> ID2D1Bitmap1 {
 // invalidate_dependent_components
 // ========================================================================
 
-/// GraphicsCore 無効時に WindowD3D11Compositor が無効化される
-#[test]
-fn invalidate_invalidates_compositor_when_graphics_invalid() {
-    let mut graphics = GraphicsCore::new().expect("GraphicsCore creation");
-    let dc = graphics.device_context().expect("device context").clone();
-    let compositor = WindowD3D11Compositor::new(&dc, 4, 4).expect("compositor");
-    assert!(compositor.is_valid());
-
-    graphics.invalidate();
-
-    let mut world = World::new();
-    world.insert_resource(graphics);
-    let entity = world.spawn(compositor).id();
-
-    run_invalidate(&mut world);
-
-    let comp = world.get::<WindowD3D11Compositor>(entity).unwrap();
-    assert!(
-        !comp.is_valid(),
-        "compositor should be invalidated when GraphicsCore is invalid"
-    );
-}
-
 /// GraphicsCore 無効時に BitmapSourceGraphics が無効化される
 #[test]
 fn invalidate_invalidates_bitmap_source_when_graphics_invalid() {
@@ -102,23 +78,6 @@ fn invalidate_invalidates_bitmap_source_when_graphics_invalid() {
         !bsg.is_valid(),
         "bitmap source should be invalidated when GraphicsCore is invalid"
     );
-}
-
-/// GraphicsCore 有効時は何も無効化されない（no-op 経路）
-#[test]
-fn invalidate_noop_when_graphics_valid() {
-    let graphics = GraphicsCore::new().expect("GraphicsCore creation");
-    let dc = graphics.device_context().expect("device context").clone();
-    let compositor = WindowD3D11Compositor::new(&dc, 4, 4).expect("compositor");
-
-    let mut world = World::new();
-    world.insert_resource(graphics);
-    let entity = world.spawn(compositor).id();
-
-    run_invalidate(&mut world);
-
-    let comp = world.get::<WindowD3D11Compositor>(entity).unwrap();
-    assert!(comp.is_valid(), "valid GraphicsCore must not invalidate");
 }
 
 /// GraphicsCore 無効時でも WUC 系コンポーネント（VisualGraphics / SurfaceGraphics）は
@@ -203,18 +162,20 @@ fn invalidate_leaves_wuc_graphics_components_stale() {
 #[test]
 fn invalidate_noop_without_graphics_resource() {
     let graphics = GraphicsCore::new().expect("GraphicsCore creation");
-    let dc = graphics.device_context().expect("device context").clone();
-    let compositor = WindowD3D11Compositor::new(&dc, 4, 4).expect("compositor");
+    let bitmap = create_test_bitmap(&graphics);
+    let mut bsg = BitmapSourceGraphics::new();
+    bsg.set_bitmap(bitmap);
+    assert!(bsg.is_valid());
     drop(graphics); // リソースとして挿入しない
 
     let mut world = World::new();
-    let entity = world.spawn(compositor).id();
+    let entity = world.spawn(bsg).id();
 
     run_invalidate(&mut world);
 
-    let comp = world.get::<WindowD3D11Compositor>(entity).unwrap();
+    let bsg = world.get::<BitmapSourceGraphics>(entity).unwrap();
     assert!(
-        comp.is_valid(),
+        bsg.is_valid(),
         "missing GraphicsCore resource must be a no-op"
     );
 }
