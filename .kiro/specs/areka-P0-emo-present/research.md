@@ -115,6 +115,27 @@ emo-present クレート内に、`ComposedSurface` を受けて **WUC surface �
 
 > いずれの案でも共通の設計確定事項: ① WUC surface のリサイズ規則（原寸追随・R1.5）② AlphaMask を hit-test へ届ける型（`BitmapSourceResource` 再利用か emo 専用 α 供給コンポーネントか）③ text-layer 予約スロットの visual 構成上の位置。
 
+### Option D: コンポジター供給面を自前 swap chain にする（読み戻し可能ルート・調査 2026-07-05）
+
+現行 wintf は `CompositionDrawingSurface`（`CreateGraphicsDevice`→`CreateDrawingSurface`→`ICompositionDrawingSurfaceInterop::begin_draw`）でコンポジターへ供給する。これは **WUC 内部アトラステクスチャへ書く書き込み専用経路**で、`begin_draw` が返す `updateoffset` がアトラス内配置＝**最終合成面を直接読み戻せない**（`tests/graphics/surface_pixel_equivalence_test.rs` が明言：「atlas から直接読み戻すことはできない」「検証していない: compositor の atlas 上の最終合成結果」）。
+
+**代替**: `ICompositorInterop`（wintf が既に `wuc.rs` で cast・使用）は自前コンテンツ供給の入口を2つ持つ:
+- `CreateCompositionSurfaceForSwapChain(swapchain) -> ICompositionSurface`（同一プロセス・本命）
+- `CreateCompositionSurfaceForHandle(handle) -> ICompositionSurface`（クロスプロセス・不要）
+
+`IDXGIFactory2::CreateSwapChainForComposition`（HWND 無し・flip model・`DXGI_ALPHA_MODE_PREMULTIPLIED`）で合成用 swap chain を作り、backbuffer に `ComposedSurface` を載せ、`CreateSurfaceBrushWithSurface` で SpriteVisual へ貼る。材料は `GraphicsCore::d3d()`（`ID3D11Device`）/`dxgi()`（`IDXGIDevice4`）で完備。
+
+**利点**:
+- **表示面を自前所有＝読み戻し可能**（`CopyResource`→CPU_READ staging→`Map`）。表示とヒットテストが**単一の真実源**になり得る。
+- **将来の「画像を GPU へ直読み（CPU バイトを経ない）」ヒットテストルートを確保**——`CompositionDrawingSurface`（書き込み専用）だとその場合ヒットテスト用の別 CPU コピーが要る（2度手間）が、swap chain 所有なら読み戻し1本で済む。開発者の主目的。
+- WUC 内部アトラスを迂回（読み戻し阻害要因の除去）。
+
+**アトラスの切り分け（重要）**: 読み戻しを阻むのは **WUC 内部アトラス**であって **emo-atlas（`AtlasTable`）ではない**。emo-atlas は合成の上流・CPU 側素材アトラスで、合成出力 `ComposedSurface` は既に平坦化済みの1枚物（アトラス解決済み・offset 問題なし）。よって emo-atlas はこのルートを妨げない。
+
+**留意点**: (1) flip model backbuffer は直接 Map 不可＝自前アップロード元テクスチャを読むか staging へ `CopyResource`。(2) リサイズは `ResizeBuffers`（R1.5）。(3) swap chain は面ごとだが emo は**窓あたり1枚物**ゆえ窓あたり1本（element 単位でない）＝軽微。(4) swap chain の alpha mode を premultiplied で一致。
+
+**位置づけ**: Option C（ハイブリッド）と両立し、B2（メモリアップロード経路）の**第一候補に格上げ検討**。design 冒頭で小 spike（swap chain 供給＋readback 往復）で実証してから確定。記憶 [[gpu-draw-verification-offscreen-d2d-target]]（議論#1）とも整合——議論#1 のオフスクリーン D2D 検証はこのルートでは「自前所有面の読み戻し」に自然統合される。
+
 ---
 
 ## 5. 指令 API・キャッシュ・バルーン（wintf 非依存部の選択肢）
