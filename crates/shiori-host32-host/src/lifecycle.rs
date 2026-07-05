@@ -60,6 +60,36 @@ pub const EXIT_OBSERVE_TIMEOUT: Duration = Duration::from_secs(10);
 /// bounded poll の刻み（実時間 sleep はこれのみ・R7.5）。
 pub const EXIT_POLL_INTERVAL: Duration = Duration::from_millis(5);
 
+/// 突合の正本純関数（R2.1〜2.4・決定的・窓/プロセス非依存で単体テスト可）。
+///
+/// | observed_exit          | error                  | 結果                    |
+/// |------------------------|------------------------|-------------------------|
+/// | Some(kind)（終了検出） | （何であれ）           | HelperDown(kind)        |
+/// | None（生存）           | RequestError::Timeout  | Unresponsive            |
+/// | None                   | RequestError::Ipc      | Transport               |
+/// | None                   | RequestError::Shiori   | ShioriFailure           |
+/// | None                   | RequestError::Handshake| Handshake               |
+///
+/// 不変条件: 終了検出は他のすべてに優先する。helper 死亡が観測されていれば
+/// 表面の `error` が `Timeout` / `Ipc` であっても `HelperDown(kind)` を返す。
+/// `observed_exit == Some(ExitKind::Clean)` でも `HelperDown(Clean)` を返す
+/// （死は死・種別は呼び出し側が読む）。実装は `observed_exit` を先に突合し、
+/// `None`（生存）の場合にのみ `error` を突合する。
+pub fn classify_failure(error: &RequestError, observed_exit: Option<ExitKind>) -> FailureClass {
+    // 終了検出は他のすべてに優先する（R2.1）: 死亡が観測されていれば
+    // 表面の error が何であれ HelperDown(kind) を返す。
+    if let Some(kind) = observed_exit {
+        return FailureClass::HelperDown(kind);
+    }
+    // 生存中（None）の場合のみ error を突合する（R2.2〜2.4）。
+    match error {
+        RequestError::Timeout => FailureClass::Unresponsive,
+        RequestError::Ipc(_) => FailureClass::Transport,
+        RequestError::Shiori(_) => FailureClass::ShioriFailure,
+        RequestError::Handshake(_) => FailureClass::Handshake,
+    }
+}
+
 /// shutdown 経路の失敗語彙（R5.5・error! と対で surface）。
 #[derive(thiserror::Error, Debug)]
 pub enum ShutdownError {
@@ -89,5 +119,69 @@ mod tests {
         assert_send::<FailureClass>();
         assert_send::<LifecycleReport>();
         assert_send::<ShutdownError>();
+    }
+
+    use crate::error::{HandshakeError, ShioriError};
+    use shiori_host32_ipc::IpcError;
+
+    // --- 突合表 5 パターン（R2.1〜2.4）---
+
+    /// 行1（死優先）: `Some(Clean)` × `Timeout` → `HelperDown(Clean)`。
+    /// 表面の error が Timeout でも終了検出が優先することを証明する。
+    #[test]
+    fn classify_death_precedes_timeout() {
+        let got = classify_failure(&RequestError::Timeout, Some(ExitKind::Clean));
+        assert_eq!(got, FailureClass::HelperDown(ExitKind::Clean));
+    }
+
+    /// 行1（死優先・種別保持）: `Some(Abnormal(5))` × `Ipc` → `HelperDown(Abnormal(5))`。
+    #[test]
+    fn classify_death_precedes_ipc_kind_preserved() {
+        let got = classify_failure(
+            &RequestError::Ipc(IpcError::SendFailed),
+            Some(ExitKind::Abnormal(5)),
+        );
+        assert_eq!(got, FailureClass::HelperDown(ExitKind::Abnormal(5)));
+    }
+
+    /// 行1（死優先・種別保持）: `Some(Terminated)` × `Shiori` → `HelperDown(Terminated)`。
+    #[test]
+    fn classify_death_precedes_shiori_kind_preserved() {
+        let got = classify_failure(
+            &RequestError::Shiori(ShioriError::Parse),
+            Some(ExitKind::Terminated),
+        );
+        assert_eq!(got, FailureClass::HelperDown(ExitKind::Terminated));
+    }
+
+    /// 行2（生存）: `None` × `Timeout` → `Unresponsive`。
+    #[test]
+    fn classify_alive_timeout_is_unresponsive() {
+        let got = classify_failure(&RequestError::Timeout, None);
+        assert_eq!(got, FailureClass::Unresponsive);
+    }
+
+    /// 行3（生存）: `None` × `Ipc` → `Transport`。
+    #[test]
+    fn classify_alive_ipc_is_transport() {
+        let got = classify_failure(&RequestError::Ipc(IpcError::SendFailed), None);
+        assert_eq!(got, FailureClass::Transport);
+    }
+
+    /// 行4（生存）: `None` × `Shiori` → `ShioriFailure`。
+    #[test]
+    fn classify_alive_shiori_is_shiori_failure() {
+        let got = classify_failure(&RequestError::Shiori(ShioriError::Parse), None);
+        assert_eq!(got, FailureClass::ShioriFailure);
+    }
+
+    /// 行5（生存）: `None` × `Handshake` → `Handshake`。
+    #[test]
+    fn classify_alive_handshake_is_handshake() {
+        let got = classify_failure(
+            &RequestError::Handshake(HandshakeError::Incomplete),
+            None,
+        );
+        assert_eq!(got, FailureClass::Handshake);
     }
 }
