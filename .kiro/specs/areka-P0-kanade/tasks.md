@@ -162,7 +162,7 @@
   - _Requirements: 6.1, 6.3_
   - _Boundary: schedule（in-source #[cfg(test)]）・Cargo.toml dev-dep_
   - _Depends: 2.1_
-- [ ] 6.2 アクターシェルの失敗ログと応答 oneshot 切断（Dropped）経路の検証（Req 6.1・6.2）
+- [x] 6.2 アクターシェルの失敗ログと応答 oneshot 切断（Dropped）経路の検証（Req 6.1・6.2）
   - アクターシェルの往復ヘルパ（`round_trip`／`send_shiori`）はテストスレッドから直呼びでき、そのログはテストスレッド上で発火するため捕捉可能。(a) shiori 送出失敗（`send_shiori` が Err）で `shiori_send_failed` error! が発火し `Failed(Ipc)` へ写像されること、(b) 応答 oneshot が Dropped（受領後に reply を送らず drop）で `shiori_reply_dropped` error! が発火し `Failed(Ipc)` へ写像されること（gap: 送出成功後の reply-only drop 経路の専用検証）を in-source actor.rs テストで検証する
   - `start_talk_send_failed`（アクタースレッド上・drive ループ内）は既存 `sakura_disconnected_start_talk_failure_continues_run` が挙動（継続）を被覆済み。ログ発火の実 assert がアクタースレッド跨ぎで困難な場合は、その旨を記録し挙動テスト＋レビュー担保に委ねてよい
   - 観測可能な完了条件: shiori 送出失敗・reply Dropped の 2 経路が、`Failed(Ipc)` への写像と対応 error! ログ発火を伴うことを検証するテストが green になる
@@ -183,3 +183,4 @@
 - 3.1 完了時: actor.rs の駆動モデルは「バッチ全実行→最後の往復応答のみ再投入」（ForceQuit の `[OnClose NOTIFY, ShioriUnload]` を順に送出するため・DD-10）。StartTalk 送出失敗（sakura 切断）は error!＋継続で、schedule State の active talk クリアは行わない（境界外＝shell は Phase を変更不能）。滞留した stale TalkDone は schedule の未知 talk_id 防御アームが安全に吸収する。4.x 統合テストはこの前提で観測すること。
 - 4.4 完了時: `tests/kanade/common/mod.rs` に **gated ハーネス**を純粋追加した（`spawn_harness_gated(config, fixture, quit_policy, hold_indices) -> (Harness, SakuraGate)`／`SakuraGate::release_all()`／`spawn_mock_sakura_gated`）。指定した受領 index の talk の TalkDone を保留し、`release_all()` で解放する＝**active talk 窓を決定的に作る唯一の手段**（sleep 不使用・race-free: released フラグを mutex 下で立ててから notify、releaser は「解放済み かつ 全 park 到着(expected_holds)」まで drain しない）。active talk 中の遷移を観測するタスク（4.5 の close 握手中 CloseRequest 等）はこの gated ハーネスを再利用してよい。既存 `spawn_harness`/`spawn_mock_sakura` は不変（追加のみ）。
 - 4.6 完了時: `common/mod.rs` に **失敗注入 mock shiori**（`spawn_mock_shiori_failing`／`spawn_harness_failing`／`FailKind{Handshake,Timeout,Ipc,Shiori}`＝指定イベントで `ShioriOutcome::Failed(vocab)` を返す）と **sinkless ハーネス**（`spawn_harness_no_sink`／`SinklessHarness`＝mock sakura を張らず、返す `sender` を唯一の inbox 送信端にする＝全送信元切断の Req 4.9 経路を実行可能にする）を純粋追加した（`-1` は `use` 行分割で `ShioriFailure` 追加のみ・挙動不変）。`ShioriFailure` は非 Clone ゆえ `Fixture` に入れず copyable な `FailKind` 記述子から respond 内で生成する。既存 mock shiori／`Fixture` は不変。
+- 6.1／6.2 完了時: `schedule/log_capture.rs`（`#[cfg(test)] pub(crate)`）が `capture(f) -> Vec<CapturedEvent>`＋`assert_logged(events, level, event)` を提供＝失敗/防御アームのログ発火を実テストで担保する共通基盤。**capture は参照数に依存しないロック下 take で捕捉列を確定する**（当初 `Arc::try_unwrap` だったが tracing の Dispatch 一時 clone で並列テスト下 flaky panic ~1/10 したため 6.2 レビューで発覚→除去）。`capture` は `step()` 等をテストスレッド上で同期実行する用途専用（spawn したアクタースレッドのログは捕えない＝thread-local）。actor.rs シェルの失敗ログは往復ヘルパをテストスレッド直呼びで捕捉する（6.2）。ログ回帰を伴うタスクはこの基盤を再利用可。

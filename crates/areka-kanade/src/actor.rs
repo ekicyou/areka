@@ -438,4 +438,84 @@ mod tests {
         });
         drop(shiori_handle);
     }
+
+    // --- 5. アクターシェルの失敗ログ＋応答写像（タスク 6.2・Req 6.1／6.2） ---
+    //
+    // シェルの往復ヘルパ（round_trip 系）をテストスレッド上で**直接**呼び、二つの失敗
+    // サブ経路が (i) いずれも `ShioriOutcome::Failed(ShioriFailure::Ipc)` へ写像され、
+    // (ii) それぞれ規約の `error!`（event=shiori_send_failed／shiori_reply_dropped）を
+    // 発火することを検証する。ヘルパは同期関数ゆえログはテストスレッドで発行され、
+    // `log_capture::capture`（thread-local subscriber）で確実に捕捉される（PITFALL:
+    // spawn したアクタースレッドのログは捕えられない——ここでは往復ヘルパを直接呼ぶ）。
+    // 6.1 が追加した `crate::schedule::log_capture` を再利用する（capturer 重複なし）。
+    use crate::schedule::log_capture::{assert_logged, capture};
+    use tracing::Level;
+
+    /// テスト用 GET 呼出（round_trip_request の入力・内容は本テストで load-bearing でない）。
+    fn probe_get_call() -> ShioriCall {
+        ShioriCall::Get {
+            id: "OnBoot",
+            references: vec!["master".to_string()],
+        }
+    }
+
+    // (a) shiori 送出失敗: Receiver を drop した Sender へ往復 → send_shiori が Err →
+    //     `shiori_send_failed` を error! し `Failed(Ipc)` を返す。別スレッド不要。
+    #[test]
+    fn shiori_send_failure_maps_to_ipc_and_logs() {
+        let (shiori_tx, shiori_rx) = mpsc::channel::<ShioriMsg>();
+        drop(shiori_rx); // 送出は必ず Err。
+
+        let mut outcome: Option<ShioriOutcome> = None;
+        let events = capture(|| {
+            outcome = Some(round_trip_request(&shiori_tx, probe_get_call()));
+        });
+
+        // (i) Failed(Ipc) 写像（ShioriOutcome は Debug 非実装ゆえ variant を match）。
+        assert!(
+            matches!(outcome, Some(ShioriOutcome::Failed(ShioriFailure::Ipc(_)))),
+            "shiori 送出失敗は Failed(Ipc) へ写像されるべき"
+        );
+        // (ii) 規約の error! 発火（削除・語彙変更・レベル変更で失敗する回帰檻）。
+        assert_logged(&events, Level::ERROR, "shiori_send_failed");
+    }
+
+    // (b) 応答 oneshot 切断 (ReplyError::Dropped): shiori 側が Request を**受領**したうえで
+    //     reply を send せず drop → 往復ヘルパは reply_rx.recv() で Dropped を観測 →
+    //     `shiori_reply_dropped` を error! し `Failed(Ipc)` を返す。ログはテストスレッドで
+    //     発火するため捕捉される。受領ヘルパスレッドは有界 join する（ハングしない）。
+    #[test]
+    fn shiori_reply_dropped_maps_to_ipc_and_logs() {
+        let (shiori_tx, shiori_rx) = mpsc::channel::<ShioriMsg>();
+
+        // 受領ヘルパ: 1 件の Request を受け、その reply を send せず drop する。
+        // 受領完了を done_tx で通知し、親は有界待機する（recv_timeout・sleep なし）。
+        let (done_tx, done_rx) = mpsc::sync_channel::<()>(0);
+        let helper = thread::spawn(move || {
+            if let Ok(ShioriMsg::Request { call: _, reply }) = shiori_rx.recv() {
+                drop(reply); // 応答を送らず切断（ReplyError::Dropped を誘発）。
+            }
+            let _ = done_tx.send(());
+        });
+
+        let mut outcome: Option<ShioriOutcome> = None;
+        let events = capture(|| {
+            outcome = Some(round_trip_request(&shiori_tx, probe_get_call()));
+        });
+
+        // (i) 応答切断は Failed(Ipc) へ写像される。
+        assert!(
+            matches!(outcome, Some(ShioriOutcome::Failed(ShioriFailure::Ipc(_)))),
+            "応答 oneshot 切断は Failed(Ipc) へ写像されるべき"
+        );
+        // (ii) 規約の error! 発火（削除・語彙変更・レベル変更で失敗する回帰檻）。
+        assert_logged(&events, Level::ERROR, "shiori_reply_dropped");
+
+        // 受領ヘルパの有界 join（ハング防止）。
+        assert!(
+            done_rx.recv_timeout(Duration::from_secs(5)).is_ok(),
+            "reply-drop helper が期限内に受領を完了すべき（possible hang）"
+        );
+        helper.join().expect("reply-drop helper joins cleanly");
+    }
 }
