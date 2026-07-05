@@ -191,4 +191,93 @@ emo-present クレート内に、`ComposedSurface` を受けて **WUC surface �
 
 ---
 
-_本ドキュメントは情報提供であり最終決定を含まない。設計判断は要件ディスカッション／design フェーズへ委ねる。_
+_本ドキュメント（§1〜§8）はギャップ分析であり、ディスカッション決定 #1/#2/#3 を含む。以降は design フェーズの Discovery ログと設計決定。_
+
+---
+
+# 設計フェーズ Discovery & Synthesis（2026-07-06・design.md 生成時）
+
+## Summary
+
+- **Feature**: `areka-P0-emo-present`
+- **Discovery Scope**: Extension（既存 wintf/emo 資産への統合・integration-focused）＋ ukadoc 正典参照
+- **Key Findings**:
+  - wintf に swap chain 使用は皆無（`CreateSwapChainForComposition`/`IDXGISwapChain` 全文検索ゼロ）＝ R8 は純増設。材料（`GraphicsCore::d3d()/dxgi()`・`ICompositorInterop` cast 済み・`CompositorInteropExt` trait）は公開 API で完備
+  - `hit_test_entity` の AlphaMask 読みは `BitmapSourceResource` ハードコード（フォールバック＝矩形）→ 汎用 `AlphaMaskResource` コンポーネント追加＋優先読みが最小増分（既存挙動完全後方互換）
+  - バルーン枠は emo-atlas の新 API なしで載る: `bake` は手組み `SurfaceSet`（`Surface`/`Element` 手構築）を受理（emo2_e2e.rs で実証済みパターン）。synthetic surfaces.txt→`shell::parse` なら公開 parse API のみで完結
+  - `\s[-1]`＝非表示サーフェスの正典確認（`list_sakura_script` \s[ID番号]）。alias/name 文字列も \s に指定可＝解決は surface 状態所有者（seriko）側
+  - `GlobalArrangement.bounds`＝物理 px（実装コメント明記）・`WindowPos`＝物理・`BoxStyle`＝論理 → 表示経路から BoxStyle を排除し「窓クライアント寸=surface 原寸（物理）」で恒等写像化するのが DPI 事故（placement 欠陥の教訓）の構造的排除
+
+## Research Log（ギャップ分析 §6 の解消）
+
+### Research 1: WUC surface へのメモリアップロード経路
+- **Findings**: R8（ディスカッション #3）により `CompositionDrawingSurface` interop 経路は不採用が確定済み。採用経路は `IDXGIFactory2::CreateSwapChainForComposition`（flip・`DXGI_ALPHA_MODE_PREMULTIPLIED`・B8G8R8A8・BufferCount 2）→ `ICompositorInterop::CreateCompositionSurfaceForSwapChain` → `CreateSurfaceBrushWithSurface` → SpriteVisual。アップロードは `UpdateSubresource(source_tex)`→`CopyResource(backbuffer)`→`Present(0)`、readback は `CopyResource(staging)`→`Map(READ)`（flip backbuffer は直接 Map 不可のため source_tex を単一真実源とする）。**D2D はピクセル経路に一切介在しない**＝純バイト転送で golden 決定論が最強化。wintf の `surface_pixel_equivalence_test` が CPU_READ staging＋Map の readback パターンを既に確立
+- **Implications**: 議論 #1 のオフスクリーン D2D 検証（R6.7）は「自前所有面の readback」に統合（ギャップ分析 §4 Option D の予告どおり）。in-memory WIC/`CopyFromMemory` 案は全て不要になり廃案
+
+### Research 2: 実 DPI 等倍表示の座標帰属
+- **Findings**: `GlobalArrangement.bounds`＝物理 px（スクリーン座標・実装コメント明記）・`Monitor.work_area`/`WindowPos`＝物理・`BoxStyle`＝論理（taffy）。hit-test のマスク座標変換は bounds 相対比例
+- **Decision**: emo-present は **BoxStyle（論理）を表示経路に使わない**。WindowPos サイズ＝surface 原寸（物理）を直接設定し、SetSize も物理。bounds 寸＝マスク原寸＝surface 原寸 → rel→mask 変換が恒等＝任意 DPI でクリック一致（R2.5）。契約文は design.md「DPI 表示契約」が正本（window-placement 引継ぎ・Revalidation Trigger）
+
+### Research 3: `\s[-1]` 非表示の API 表現（seriko 突合）
+- **Findings**: 正典（ukadoc `list_sakura_script`）: 「\s[ID番号]…現スコープ側のサーフェスを ID 番号のサーフェスに変更する。\s[-1]で非表示サーフェス。surfaces.txt の surface.alias または name で定義された文字列を ID の代わりに使用できる」。短縮形 `\sID` は 0〜9 のみ
+- **Decision**: **`Hide` 専用 variant**（番兵不採用）。理由: emo-compose 契約の surface_id は `u32`（-1 を型が表せない）・番兵はスクリプト層の語彙でありスクリプト解釈者（seriko）が `\s[-1]`→`Hide`、alias→u32 解決を担うのが層として正しい。突合結果として「発行側が解決済み u32＋Hide を送る」を Data Contracts に固定（seriko design の Revalidation Trigger）
+
+### Research 4: AlphaMask を hit-test へ届ける型
+- **Findings**: `hit_test_entity` は `HitTestMode::AlphaMask` 時 `BitmapSourceResource.alpha_mask()` のみ読む。他の供給コンポーネントは存在しない
+- **Decision**: wintf hit_test モジュールへ汎用 `AlphaMaskResource`（CPU リソース命名規約準拠・Component）を新設し**最優先読み**＋既存フォールバック維持。(a) `BitmapSourceResource` 再利用案は WIC source 必須フィールドが空になる歪みで棄却。emo 専用型を wintf に置く案は層汚染で棄却（汎用＝メモリ供給ウィジェット一般が使える）
+
+### Research 5: バルーンの atlas/EmoWorld 載せ方（`descript_balloon` 3 分類）
+- **Findings**: `bake(sets: &[SurfaceSet])` は `Shell` パース結果に限らず手組み `Surface` 配列を受理（emo2_e2e.rs の hand_surface パターン実証済み）。ただし `EmoWorld::build(&Shell)` は `Shell` を要求
+- **Decision**: **synthetic surfaces.txt 生成→`shell::parse`→`Shell`** の一本道（公開 API のみ・emo-atlas 新 API 不要・Shell 内部構造への依存も回避）。3 分類表は design.md に掲載（(a) use_self_alpha/paint_transparent_region_black/dpi、(b) origin/validrect/wordwrappoint/font→text-layer、(c) marker/arrow/online/balloonc/cursor/anchor/windowposition）。emo2 kakukaku は PNG α のみ・pna 無し → `AlphaParams`＝self-alpha 相当。低確度 1 点: `sakura.balloon.alignment` 値域脚注（none/left/right）は MCP スナップショット外＝実装時に実ページ確認
+- **バルーンファイル役割**（`manual_balloon` 全文確認）: balloons\*=本体側（偶数左/奇数右の 2 枚組）・balloonk\*=相方（省略時本体代用）・balloonc0-4=入力ボックス・arrow0/1=スクロール矢印・online\*=受信アニメ・sstp/marker/clickwait=各マーカー・balloons\*s.txt=ID 別上書き設定
+
+### Research 6: text-layer 予約スロットの visual 構成
+- **Decision**: surface entity の**兄弟・上位 z** に空 entity（`Name("emo-text-layer-slot")`＋`Visual` のみ）を予約。M1 独立レイヤ描画＝この entity に描く／M2 合成パス内レイヤ化＝この entity を畳んで合成へ移す、の二者を「slot entity の差し替え」で吸収。入れ子 Visual 合成は導入しない（R1.4）
+
+### 追加確認: 上流実シンボル・donor・actor
+- emo-compose: `compose_into(&mut ComposedSurface, &EmoWorld, &AtlasTable, u32, &BindSet) -> Result<(), ComposeError>`・`compose` 値返し・`ComposeError { SurfaceNotFound(u32), EmptyComposition(u32) }`（全透明は Err にしない）・`ComposedSurface`（width/height/stride=w*4/bytes/into_bytes・Send/Clone/Default）・rustdoc が「キャッシュは emo-present の責務」明記
+- emo-atlas: `bake(&[SurfaceSet], &impl ElementDecoder, PackConfig) -> BakeResult`・`AtlasPage { width, height, stride, bytes: Arc<[u8]> }`（premultiplied BGRA）
+- golden: emo-compose はバイト等値（`assert_eq!(out.bytes(), expected)`）。surface1000 の全 bind＝`BindSet::from_ids([1100, 1200, 1302])`（descript default の動的解決ヘルパは無し＝呼び手構築）
+- donor: mock-shell（WS_POPUP＋`WS_EX_LAYERED|TOOLWINDOW|TOPMOST`・`register_click_through_windows`＝`Added<WindowHandle>` で `ClickThroughRegistryHandle::register(entity, hwnd)`・`FrameFinalize` 登録）
+- areka-actor: `spawn_ui<M, E>(name, handler) -> (UiSender<M>, JoinHandle)`・`UiSender::send`（unbounded・Closed のみエラー）・`ReplySender`/`reply_channel`。envelope 規約（Send 所有・大型データは Arc 手渡し・Close 必須 variant）→ `PresentCommand` は転写可能形で設計
+
+## Architecture Pattern Evaluation（最終）
+
+| Option | 判定 | 根拠 |
+|--------|------|------|
+| A: BitmapSource 拡張 | 棄却 | レイヤ侵食・WIC→D2D 二度写し・R8（書込専用面不可）と両立しない |
+| B: emo 専用 widget（CompositionDrawingSurface interop） | 棄却 | R8 で CompositionDrawingSurface（WUC 内部アトラス・読み戻し不能）自体が不採用 |
+| **C＋D: COM ヘルパのみ wintf・表示層は emo-present・供給面は自前 swap chain** | **採用** | R8 必達・層分離（表示口＝emo の唯一の wintf 接触層）・readback＝検証と将来ヒットテストの単一真実源 |
+
+## Design Decisions（design.md へ反映済みの要約）
+
+1. **供給面＝自前 swap chain＋source_tex 単一真実源**（R8）。D2D 非経由の純バイト転送。readback は source_tex→staging→Map
+2. **検証シーム統合**: R6.7 のオフスクリーン検証＝R8.3 readback（議論 #1 の意図を Option D 経路で充足・コンポジター提示の pixel 検証はしない）
+3. **`Hide` 専用 variant**（番兵不採用）・alias/`\s[-1]` 解釈は seriko 側
+4. **`AlphaMaskResource`（wintf 汎用増分）**＋hit_test 優先読み・後方互換
+5. **バルーン＝synthetic surfaces.txt→parse→bake→EmoWorld**（公開 API のみ・統一経路・R5.1）
+6. **DPI＝全物理 px 経路**（BoxStyle 不使用・窓クライアント寸=surface 原寸・恒等写像で R2.5）
+7. **キャッシュ＝target ごと全保持 HashMap・CacheEntry{composed, mask} 対**（原子入替の構造的担保）・invalidate は全破棄の口のみ
+8. **text-layer slot＝surface visual の兄弟・上位 z の空 entity 予約**
+9. **UI スレッド強制＝EmoPresenter を NonSend**（型で担保）・M-boot 直接呼出→将来 spawn_ui handler へ無改変移行
+10. **0x0 退化合成は Hide 相当へ縮退**（warn・swap chain は 0 寸不可）
+
+## Synthesis 記録
+
+- **Generalization**: シェルとバルーンは「PresentTarget」1 機構の 2 インスタンス（統一グラフィック原則の構造化）。AlphaMask 供給は emo 専用でなく wintf 汎用コンポーネント化
+- **Build vs Adopt**: wintf 既存資産（SpriteVisual 装着型・clickthrough・hit-test・readback パターン）と emo 実シンボルを全面採用。新造は swap chain 供給・AlphaMaskResource・synthetic balloon 適合の 3 点のみ。emo-atlas への新 API 追加は回避（公開 parse で代替）
+- **Simplification**: D2D/WIC をピクセル経路から排除（変換段ゼロ）・LRU 不採用（全保持）・部分キャッシュ無効化なし（全破棄のみ）・デバイスロストは invalidate＋次回再作成の最小規律・番兵値なし
+
+## Risks & Mitigations
+
+- **swap chain×WUC brush の未踏結線** → 実装フェーズ先頭で spike（供給＋readback 往復＋リサイズ）を統合テストとして先行・GO 確認後に本実装（WARP 可＝CI 決定論）
+- **wintf `Visual` on_add の自動挿入（SurfaceGraphics 等）と emo brush 装着の干渉** → spike で確認・干渉時は最小構成挿入へ切替（BitmapSource 系不侵の境界は不変）
+- **実 DPI 未実行のまま GO 判定**（placement リジェクトの教訓） → example rustdoc に dpi≠96 手順明記・検証記録に実 DPI 実行を必須化
+- **`ResizeBuffers` の未解放参照エラー** → backbuffer は転送中のみ取得しスコープ解放の規約
+- **`sakura.balloon.alignment` 値域の低確度** → 実装時に ukadoc 実ページ確認（M-boot は offsetx/y 直読みのため影響軽微）
+
+## References
+
+- ukadoc: `list_sakura_script`（\s[ID番号]・\sID）・`descript_balloon` 各キー・`descript_shell`/`descript_shell_surfaces`（sakura.balloon.offsetx/y・alignment）・`descript_ghost`（balloon.defaultsurface）・`manual_balloon`（ファイル構成全文）
+- 実装正本: `crates/areka-emo-compose/src/{lib,composed,bind,world,error}.rs`・`crates/areka-emo-atlas/src/{lib,table,manifest,decode}.rs`・`crates/wintf/src/{com/{wuc,d3d11},ecs/graphics/{core,visual,visual_manager,systems/surface,wuc_resource},ecs/layout/{arrangement,hit_test/mod},ecs/widget/bitmap_source/{alpha_mask,resource},ecs/clickthrough/controller}.rs`・`crates/wintf/tests/graphics/surface_pixel_equivalence_test.rs`・`crates/areka/examples/mock-shell.rs`・`crates/areka-actor/src/{lib,ui,reply}.rs`
+- 記憶正本: areka-emo-own-compositor-atlas・areka-wuc-runs-on-mta-thread・areka-clickthrough-hittest-config・areka-window-placement-dpi-coordinate-defect・areka-log-first-no-silent-failure・areka-concurrency-model
