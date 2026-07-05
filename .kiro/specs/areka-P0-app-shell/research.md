@@ -196,14 +196,14 @@
 ### DD4: example の Cargo.toml 明示登録 → **不要（自動認識）**
 - `examples/mock-shell.rs` の Cargo 自動認識に委ねる。`[[example]]` 明示登録はしない（前例踏襲・R1.6 は自動認識で満たす）。
 
-### DD5: 空の接続点の形 → **空実装の関数 1 個（`wire_engines`）**
-- 骨格 main が構成解決後・正常終了前に `wire_engines()` を呼ぶ（呼び出しシームを確保）。中身は no-op。引数・戻り値の確定契約は ghost-setup が結線時に定める。trait/plugin レジストリ等の投機的抽象は導入しない。
+### DD5: replace-me シームの形 → **検証用ダミー窓を開く関数 1 個（`open_startup_window(app: &mut WinApp)`）**
+- **設計ディスカッションで改定（開発者の絶対決定・2026-07-05）**: 旧「no-op 単一関数 `wire_engines`」を破棄。骨格 main が構成解決・demo 呼び口の後、`app.run()` の前に `open_startup_window(&mut app)` を呼ぶ。本仕様ではその本体が最小の検証用ダミー窓（配置主張なし・閉じられる窓）を開く replace-me シームとする（「後続仕様がここを本物のゴースト窓生成へ置き換える差し込み点」）。app ハンドルを取るのはダミー窓を spawn するため。下流（ghost-setup／window-placement）はシーム本体を削除し本物ゴースト窓生成へ置換するが `main` の構造は不変。trait/plugin レジストリ等の投機的抽象は導入しない。
 
 ### DD6: モック UI テストの帰属 → **example 同居 `#[cfg(test)] mod tests`（解釈①・確定）**
 - 要件ディスカッション #1 で確定済み。`src/tests.rs` を `examples/mock-shell.rs` 末尾へ移設しコード資産として保全。緑ゲート対象は SHIORI e2e。Option B（lib 切り出し）は棄却。
 
-### DD7: 骨格の正常終了経路 → **`WinApp::new()` で UI ランタイム起動・窓ゼロでは `run()` に入らず正常復帰**
-- **根拠**: 上記「wintf の UI ランタイム終了規律」。窓ゼロで `run()` を呼ぶとハングするため、エンジン未結線の骨格は `run()`（ブロッキングループ）に入らず構成ログ後に `Ok(())` を返す。`run()` の呼び出しは窓を生成する下流（ghost-setup）が接続点結線後に走らせる。これで R2.4（`new()`＝起動）と R4.1（正常終了）を両立する。
+### DD7: 骨格の正常終了経路 → **`main` が `run()` を所有・検証用ダミー窓が loop に heartbeat を与えて close で正常終了（ハングなし）**
+- **設計ディスカッションで改定（開発者の絶対決定・2026-07-05）**: 旧「窓ゼロで `run()` に入らず windowless-return」を破棄。**根拠**: 上記「wintf の UI ランタイム終了規律」。`run()` が正常に返るには窓が少なくとも 1 枚必要（空遷移ちょうどでのみ shutdown 発火）。そこで骨格は replace-me シーム `open_startup_window` で検証用ダミー窓を 1 枚開き、`main` が `app.run()` を**自ら所有・呼び出す**（下流に隠さない）。ダミー窓が（利用者操作または smoke テストで）閉じられると `WindowRegistry` が空へ遷移し `run()` が `Ok` を返して正常終了する。窓が存在するためハングは消滅し、boot→loop→exit を実際に踏破して証明できる（旧 windowless-return より強い検証）。これで R2.4（`new()`＝起動＋`main` が loop 駆動）と R4.1（ダミー窓 close で正常終了）を両立する。下流はシーム本体を本物ゴースト窓生成へ置換するが `main` 構造は不変。ダミー窓は配置・座標・DPI を一切主張しない（要件・設計ディスカッションで改定）。
 
 ## Risks & Mitigations（設計フェーズ）
 - **`run()` 誤呼び出しによるハング** — 骨格は窓ゼロで `run()` に入らない制御分岐を持つ（DD7）。実装レビューで `mgr.run()` の無条件呼び出しがないことを確認する。
