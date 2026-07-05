@@ -262,6 +262,14 @@ fn dispatch_phase(state: State, input: Input, config: &KanadeConfig) -> (State, 
 }
 
 /// 現フェーズが応答待ち（直前に GET/NOTIFY/unload を発行済み）かを判定する。
+///
+/// `Steady` も応答待ちに含める: Steady の Tick は `OnSecondChange`（GET/NOTIFY）を発行し、
+/// その応答をなお `Steady` のまま受ける（in-flight ≤ 1・シェルが直後に `ShioriReply` を
+/// 再投入する）。ここに Steady が無いと Steady の `ShioriReply` が防御アーム
+/// （unexpected_reply）で握り潰され、OnSecondChange の Value/NoContent 処理が壊れる。
+/// これにより Steady の Failed は `on_shiori_reply` 経由で `Unloading{Fault}` へ（Req 6.1・
+/// pump 含む任意の SHIORI 失敗で M1 は放棄）、Value/NoContent/Notified は `dispatch_phase`
+/// → `steady::step` へ正しく委譲される。
 fn awaits_reply(phase: &Phase) -> bool {
     matches!(
         phase,
@@ -269,6 +277,7 @@ fn awaits_reply(phase: &Phase) -> bool {
             | Phase::BootType
             | Phase::BootMain
             | Phase::BootVersion
+            | Phase::Steady { .. }
             | Phase::ClosePending { .. }
     )
 }
