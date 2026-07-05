@@ -42,7 +42,7 @@
 - `Shiori3Client`／`RequestError`／`ShioriError`／SHIORI/3.0 codec の意味論（`host32-request` 完了資産・消費のみ）
 - `spawn`／`poll_exit`／`poll_exit_kind`／`ExitKind`／`HelperHandle::terminate` の意味論（既存 seam・その上に増分するのみで `process_host.rs` は不改変）
 - 再起動・縮退の判断ロジック（報告語彙に処分判断を含めない・R2.7）
-- helper 側ログ機構の刷新（既存 `eprintln!` 流儀を踏襲する。helper を tracing-subscriber アプリ化する作業は本仕様の増分対象外）
+- helper 側ログ機構の刷新（既存 `eprintln!` 流儀を踏襲する。helper を tracing-subscriber アプリ化する作業は本仕様の増分対象外。UNLOAD ack 送出失敗の `eprintln!` 観測は R7.6／steering からの**意図的逸脱として明文記録**——親の ack timeout 検出で silent failure にならないことが担保・validation Issue 2 決着）
 
 ### Allowed Dependencies
 
@@ -472,7 +472,7 @@ subscriber 初期化はライブラリでは行わない（steering `logging.md`
   1. `let taken = s.proxy.borrow_mut().take();` — borrow は文末で終了。
   2. `drop(taken);` — **borrow 非保持**で `ShioriByteProxy` の Drop（courtesy `unload()` → `FreeLibrary`・`host32-shiori-load` 確立契約の唯一の teardown 経路）を実行。未確立（None）なら no-op＝自明成功。
   3. `s.quit_requested.set(true);`
-  4. ack `[1]` を `send_copydata(parent, self, MsgTag::Response, &[1], REPLY_TIMEOUT)` で 1 通返送（LOAD ack と同型・borrow 非保持・送出失敗は `eprintln!` 観測のみ＝親は timeout で検出）。
+  4. ack `[1]` を `send_copydata(parent, self, MsgTag::Response, &[1], REPLY_TIMEOUT)` で 1 通返送（LOAD ack と同型・borrow 非保持・送出失敗は `eprintln!` 観測のみ＝親は timeout で検出）。**意図的逸脱（記録）**: この helper 側 ack 送出失敗の `eprintln!` は R7.6（`error!`＋`Err`）および steering `logging.md` の helper=tracing-subscriber アプリ規約からの**意図的な逸脱**である——親が ack timeout → `ShutdownError::Unload`＋ホスト側 `error!` で必ず検出するため silent failure にはならず、helper の tracing 化（subscriber 初期化含む）は本仕様の増分対象外＝将来ユニットへ送る（design discussion 2026-07-05 決着・validation Issue 2）。
   5. 自窓へ `PostMessageW(WM_NULL)` — posted メッセージで `MessageLoop` を起こす（sent-message はフィルタに現れないため必須）。
 - **main の結線**: `MessageLoop::run(|msg_loop, _msg| { if win.quit_requested() { msg_loop.quit(); } FilterResult::Forward })`。quit 後 main が正常 return し**プロセスは終了コード 0** で終わる（stand-in `exit(0)` ではなく、実運転コードの正規経路・R5.6）。`HelperMessageWindow` に `quit_requested() -> bool` アクセサを追加（非 test 公開）。
 - ログは既存 main.rs の `eprintln!` 流儀を踏襲（helper のログ機構刷新は Out of Boundary）。
@@ -519,6 +519,13 @@ cargo build -p shiori-host32-testdll --target i686-pc-windows-msvc
 cargo build -p shiori-host32-helper  --target i686-pc-windows-msvc
 cargo test  -p shiori-host32-helper  --target i686-pc-windows-msvc   # i686 unit/loopback
 cargo test  -p shiori-host32-host                                    # x64 unit + e2e
+
+# env-gate 実 pasta 追験（任意・R6）: lifecycle_cyclic_e2e には windowed テストが 2 本
+# （cyclic＋pasta 追験）あるため、env 設定時は必ず --test-threads=1 で直列実行する
+# （1 窓制約: 親 message-only 窓は同一プロセスで同時 2 組生成不可）。
+# CI（env 未設定）では pasta 側が早期 return するため通常実行で衝突しない。
+$env:HOST32_PASTA_DLL="C:\path\to\pasta.dll"
+cargo test -p shiori-host32-host --test lifecycle_cyclic_e2e -- --test-threads=1
 ```
 
 ### Unit Tests（`lifecycle.rs` 内・i686 helper 不要）
@@ -540,7 +547,7 @@ cargo test  -p shiori-host32-host                                    # x64 unit 
    - **R3.5 の観測基準（決定）**: 「全 200×2 往復の成功（各往復が `ResponseSlot` の clear→store→take 1 巡の完結証明）＋ 反復後 `status()==Running` ＋ clean shutdown が `Clean` で完結」を最小十分の assert 集合とする。OS ハンドル計数は**課さない**（ハンドル数は OS 内部要因で非決定的に揺れ、決定的テストの偽陽性源になる。持続成功＋生存＋正常終了完遂が観測可能な契約であり、枯渇・slot 巻き込みがあれば反復中の失敗として顕在化する）。
    - **反復回数の根拠（決定）**: 200 回は単発実証（1 回）の 2 桁上で slot 再利用・HGLOBAL 確保/解放の churn を十分に行使し、かつ全体実行時間が SMTO 上限に対して短く CI 適合。「OnSecondChange 相当の頻度」は実時間ペーシングではなく**連続連打（頻度の上界）**として解釈する（実時間 sleep を持ち込まない・R7.5）。
 9. **`tests/lifecycle_kill_e2e.rs::kill_injection_detection_and_reporting`**（R4.1〜4.3, R2.1/2.5, R5.2）— 別バイナリ＝別プロセス（1 窓制約対処）: 親窓 → spawn → HELLO → LOAD → baseline GET 成功 → `status()==Running` → `terminate()`（kill 注入）→ bounded poll で `Exited(Abnormal|Terminated)`（R4.1）→ `client.get` が **BOUNDED_LIMIT 内**に `Err(Ipc|Timeout)`（R4.2・ハングなし）→ `report_failure(err)` → `class==HelperDown(非 Clean)`（R2.1/2.5）→ 二重 `terminate()` が `Ok`（R5.2）→ `request_clean_shutdown` が既終了短絡で `Ok(非 Clean kind)`（異常後後始末の決定性・R5.3）。
-10. **`tests/lifecycle_cyclic_e2e.rs::cyclic_real_pasta_optional`**（R6.1〜6.3）: env `HOST32_PASTA_DLL` 未設定 → skip（eprintln 明示・R6.3）／設定済み DLL 不在 → 明示 fail（R6.2）／設定済み → `N_PASTA = 300` 回の `notify("OnSecondChange", ..)` 連打（**応答 status 非依存**＝notify は破棄契約ゆえ実 DLL の応答内容に依らず transport 健全性を観測。イベント運行の意味論検証はしない＝kanade 領分）＋ `status()==Running` → `request_clean_shutdown` → `Ok(Clean)`（confidence・R6.1）。
+10. **`tests/lifecycle_cyclic_e2e.rs::cyclic_real_pasta_optional`**（R6.1〜6.3）: env `HOST32_PASTA_DLL` 未設定 → skip（eprintln 明示・R6.3）／設定済み DLL 不在 → 明示 fail（R6.2）／設定済み → `N_PASTA = 300` 回の `notify("OnSecondChange", ..)` 連打（**応答 status 非依存**＝notify は破棄契約ゆえ実 DLL の応答内容に依らず transport 健全性を観測。イベント運行の意味論検証はしない＝kanade 領分）＋ `status()==Running` → `request_clean_shutdown` → `Ok(Clean)`（confidence・R6.1）。**実行規律**: 本テストは cyclic（項目 8）と同一バイナリの windowed テスト 2 本目にあたるため、env 設定時の実行は必ず `--test-threads=1` で直列化する（上記 PowerShell 手順に明記・1 窓制約対処。CI＝env 未設定では早期 return し窓を作らないため通常実行と衝突しない）。
 
 **共通インフラ**: `resolve_helper_exe`／`resolve_testdll`（不在は明示 panic・R7.4）、fixture 契約値ハードコード（`OnTestValue`／固定 Value／`OnTestNotify`＝イベント意味論を持たないダミー ID・R3.3）、guard は `HelperLifecycle` の Drop terminate が兼ねる。
 
