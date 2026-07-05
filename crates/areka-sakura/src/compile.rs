@@ -124,6 +124,29 @@ mod tests {
         }
     }
 
+    /// `Cue` 単位のフィールド等価（`Cue` は PartialEq 非導出のためフィールド比較）。
+    /// `start_time` は決定性の観測ゆえビット同一（`==`）を要求する。
+    /// `actor`（PartialEq）と `payload`（CuePayload/CueCommand は PartialEq）は等価比較。
+    fn cue_eq(a: &Cue, b: &Cue) -> bool {
+        a.actor == b.actor && a.start_time == b.start_time && a.payload == b.payload
+    }
+
+    /// 多様な variant を織り交ぜた代表的な命令列（決定性・不変条件の両テストで共用）。
+    /// 終端命令は含めず全命令を走査させる（末尾到達で end=Ended）。
+    fn representative_instructions() -> Vec<Instruction> {
+        vec![
+            Instruction::SpeakerScope { n: 1 },
+            Instruction::Text("a".into()),
+            Instruction::Wait(Duration::from_millis(50)),
+            Instruction::Surface(SurfaceArg::new("10".into())),
+            Instruction::Wait(Duration::from_millis(100)),
+            Instruction::NewLine(NewLineRatio::new(1.5)),
+            Instruction::Clear,
+            Instruction::SpeakerScope { n: 0 },
+            Instruction::Text("b".into()),
+        ]
+    }
+
     /// サーフェス切替命令の引数を解釈・変換せず値のまま転写する（R3.1/3.2）。
     /// `"0,1,foo"` はカンマ区切りを一切パースせず `Emote{key}` へバイト完全転写される。
     #[test]
@@ -330,5 +353,67 @@ mod tests {
         }
         // 終端命令を含まないため末尾到達で Ended。
         assert_eq!(compiled.end, TalkEndReason::Ended);
+    }
+
+    /// 決定的コンパイル: 同一命令列を複数回コンパイルすると常に同一の発火列・終端理由を得る
+    /// （R2.5・R9.4）。cue 数・各 index の actor/start_time（ビット同一）/payload・end が一致する。
+    #[test]
+    fn compile_is_deterministic_for_identical_input() {
+        let instructions = representative_instructions();
+
+        let first = compile(&instructions);
+        let second = compile(&instructions);
+
+        let a = first.sheet.cues();
+        let b = second.sheet.cues();
+        assert_eq!(a.len(), b.len(), "cue 数が回によって異なる");
+        for (i, (ca, cb)) in a.iter().zip(b.iter()).enumerate() {
+            assert!(
+                cue_eq(ca, cb),
+                "index {i} の cue が回によって異なる: {ca:?} != {cb:?}"
+            );
+        }
+        assert_eq!(first.end, second.end, "終端理由が回によって異なる");
+    }
+
+    /// 不変条件（純粋コンパイル層 Postconditions/Invariants・NaN 放電）:
+    /// 生成される全 `start_time` は有限・非負であり、`sheet.cues()` 順に非減少
+    /// （`Duration` 由来の構成的保証）。待ちの無い連続 cue は同一時刻を共有し（非減少・非狭義増加）、
+    /// 待ちを挟む cue で時刻が増加することで `<=` の固定が意味を持つ。
+    #[test]
+    fn compiled_start_times_are_finite_non_negative_non_decreasing() {
+        // 先頭 2 cue は待ち無し＝同一時刻を共有（非減少）、以降は待ちで増加する。
+        let compiled = compile(&[
+            Instruction::Text("a".into()),
+            Instruction::Surface(SurfaceArg::new("1".into())),
+            Instruction::Wait(Duration::from_millis(50)),
+            Instruction::Text("b".into()),
+            Instruction::Wait(Duration::from_millis(100)),
+            Instruction::Text("c".into()),
+        ]);
+        let cues = compiled.sheet.cues();
+        assert_eq!(cues.len(), 4);
+
+        // 有限・非負（NaN/∞/負の放電）。
+        for (i, cue) in cues.iter().enumerate() {
+            assert!(cue.start_time.is_finite(), "index {i} の start_time が非有限");
+            assert!(cue.start_time >= 0.0, "index {i} の start_time が負");
+        }
+
+        // 非減少（構成的保証の固定）。
+        for pair in cues.windows(2) {
+            assert!(
+                pair[0].start_time <= pair[1].start_time,
+                "start_time が減少した: {} > {}",
+                pair[0].start_time,
+                pair[1].start_time
+            );
+        }
+
+        // 待ち無しの先頭 2 cue は同一時刻（非狭義増加＝非減少の `<=` が真に効くことの固定）。
+        assert_eq!(cues[0].start_time, cues[1].start_time);
+        // 待ちを挟んだ cue は狭義増加。
+        assert!(cues[1].start_time < cues[2].start_time);
+        assert!(cues[2].start_time < cues[3].start_time);
     }
 }
