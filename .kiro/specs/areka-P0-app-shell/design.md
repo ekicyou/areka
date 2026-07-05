@@ -334,8 +334,9 @@ fn resolve_config_inputs(args: &[String]) -> ConfigInputs;
 ##### Service Interface
 ```rust
 /// ghost-setup が中身を差し込む接続点（本仕様では no-op）。
-/// 引数・戻り値の確定契約は ghost-setup が結線時に定める（本仕様はシームの存在のみを保証）。
-fn wire_engines(/* ghost-setup が確定 */);
+/// 本仕様は確定シグネチャ `fn wire_engines()`（引数なし・戻り値なし・no-op）を提供する。
+/// ghost-setup が結線時に中身（および必要なら引数）を後付けで拡張する（形の確定＝本仕様／内容＝下流）。
+fn wire_engines();
 ```
 - Postconditions: 本仕様では観測可能な副作用を持たない。
 - Invariants: 骨格の制御フローに割り込まず、呼んでも正常終了を妨げない。
