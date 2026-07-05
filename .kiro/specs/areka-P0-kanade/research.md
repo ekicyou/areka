@@ -161,3 +161,93 @@ M1 では単一クレートで進め、契約型はモジュール（例 `areka_
 1. design 冒頭で **Research 1（Reference 表）を ukadoc MCP により確定**し、mock shiori fixture・状態機械の期待列・ハーネスの assert を全てその表から導出する（単一の正本から三点を生成）。
 2. 実装アプローチは **Option A/C 系（単一クレート `crates/areka-kanade`・内部三層・talk モジュール host32 非依存）** を軸に、DD-1〜DD-9 を design 議題として明示的に確定する。
 3. 統合テストは「mock 結線・単一 pass/fail・時刻注入」（Req 7.2/7.3）を主観測、env-gate 実 helper 追験（Req 7.4・`HOST32_PASTA_DLL` 型 silent skip）を従とする既存 2 型パターンの踏襲で設計する。
+
+---
+
+# design フェーズ調査・決定記録（2026-07-05・kiro-spec-design）
+
+## 9. Research Log（ukadoc 正典確認＝Research 1〜4 の消化）
+
+### 9.1 boot/close/OnSecondChange の Reference 表（Research 1 ✅確定）
+
+ukadoc MCP で全イベントを確認し、design.md「ukadoc Reference 表」に M-boot 送出最小集合として転記した（mock fixture・状態機械期待列・ハーネス assert は `schedule/events.rs` を単一実装点として同表から導出）。出典 doc id:
+
+| イベント | ukadoc doc id | 要点 |
+|---|---|---|
+| OnInitialize | `ukadoc:list_shiori_event:OnInitialize:1` | NOTIFY。Ref0=リロード時 `reload`・通常起動は無し |
+| OnFirstBoot | `ukadoc:list_shiori_event:OnFirstBoot:1` | GET。Ref0=vanish 回数。**204 なら続けて OnBoot**（フォールスルーの正典根拠） |
+| OnBoot | `ukadoc:list_shiori_event:OnBoot:1` | GET。Ref0=起動時シェル名・Ref6=`halt`/Ref7=落ちたゴースト名（MATERIA/SSP・M1 省略） |
+| OnGhostChanged | `ukadoc:list_shiori_event:OnGhostChanged:1` | フォールスルー元（204→OnBoot）。M1 非該当（常に OnFirstBoot・Req 1.6） |
+| basewareversion | `ukadoc:list_shiori_event:basewareversion:1` | NOTIFY。Ref0=version・Ref1=本体識別・Ref2=SSP のみ詳細（M1 省略） |
+| OnSecondChange | `ukadoc:list_shiori_event:OnSecondChange:1` | Ref0=OS 連続起動時間(h)・Ref1=見切れ・Ref2=重なり・Ref3=talk 可否・Ref4=SSP のみ放置秒。**「トーク再生不能な時は Reference3=0 の上 NOTIFY で通知・返されたスクリプトは無視」** |
+| OnClose | `ukadoc:list_shiori_event:OnClose:1` | GET。Ref0=`user`/`system`（SSP）・Ref1/2=スコープ番号（SSP・M1 省略）。「OnGhostChanging・OnCloseAll に 204 の場合続けて発生」 |
+| OnCloseAll | `ukadoc:list_shiori_event:OnCloseAll:1` | GET。SSP 自体の終了・**唯一起動中のゴーストへの終了指示**・OS シャットダウンで発生。Ref 構成は OnClose と同一 |
+
+### 9.2 OnCloseAll の発火条件と順序（Research 2 ✅・正典差分として記録）
+
+- **Findings**: ukadoc 上、SSP の全終了（単一ゴースト終了含む）は **OnCloseAll→(204)→OnClose** の順（OnClose の説明文「OnGhostChanging、OnCloseAll に対してスクリプトが返されなかった（204）場合、続けてこのイベントが発生する」）。
+- **Implications**: 確定済み要件（Req 4.1/4.6＝OnClose 先行・204 で OnCloseAll→終了）とは**順序が逆**。要件は要件ディスカッションで確定済み（OnClose 握手が終了拒否権を担う M1 構成）のため設計はこれに従い、差分を **DD-11** として明示・`events.rs`＋`schedule/close.rs` に順序を局所化し、**M-e2e（emo2-conformance-e2e）を Revalidation Trigger** とした。OnCloseAll の GET 応答 Value は M1 非再生（info ログ＋破棄）。
+
+### 9.3 talk 重複時の de-facto 調停（Research 3 ✅＝DD-6 の根拠）
+
+- **Findings**: OnSecondChange の正典意味論そのものが調停規則——「トーク再生不能な時は Reference3 が 0 になった上で **NOTIFY** でイベント通知される。返されたスクリプトは無視される」。
+- **Implications**: talk 再生中の pump は NOTIFY(Ref3=0) 化することで、重複 Value を**発生源から断てる**（破棄/キュー/中断の選択問題が消滅）。防御として想定外の Value 到来は warn!＋破棄。
+
+### 9.4 close 再生完了待ち上限（Research 4・de-facto）
+
+- **Findings**: ukadoc に正典タイムアウト値は存在しない（de-facto 領域）。
+- **Implications**: `KanadeConfig.close_talk_deadline_ms`（既定 30_000ms・結線側構成可能）とし、判定は注入 Tick 時刻のみで行う（Req 4.7 のテスト可能性を充足）。
+
+### 9.5 強制終了時の OnClose 発行有無・Ref0 理由値（design 送り ✅＝DD-10）
+
+- **Findings**: ukadoc OnClose/OnCloseAll の Ref0 は ユーザー終了=`user`・シャットダウン=`system`。OS シャットダウン時も SSP はイベントを発火する（OnCloseAll の発生条件に明記）。
+- **Implications**: ForceQuit は **best-effort NOTIFY OnClose（Ref0=理由）を 1 発**→終了系列直行（GET 握手は Req 4.4 の「直行」を毀損するため行わない・送出失敗はログのみ）。
+
+### 9.6 実装資産の追確認（unload seam）
+
+- **Findings**: `MsgTag::Unload` はワイヤ定義済みだが、現行 helper は Unload を「記録のみ・無応答」（`shiori-host32-helper/src/main.rs` L314）・host 側にも unload API なし。正規 unload→exit(0) 経路は host32-lifecycle が増設中（記憶 canonical-not-minimal-lifecycle）。
+- **Implications**: kanade は境界契約 `ShioriMsg::Unload`／`ShioriOutcome::Unloaded` のみ所有。real 側は M1 暫定（接続資材 Drop の既存 RAII teardown）・lifecycle 完了時に正規経路へ差し替え（Revalidation Trigger）。mock 経路が Req 4.3 の運行形を観測する。
+
+## 10. Architecture Pattern Evaluation（設計レビューゲートでの反転を含む）
+
+| Option | 内容 | 評価 |
+|---|---|---|
+| (a-2) 応答メッセージ回送 | shiori アクターが `Sender<KanadeMsg>` を保持し `ShioriReply` を inbox へ回送 | **却下（レビューゲートで欠陥発見）**: kanade は `Sender<ShioriMsg>` を、shiori は `Sender<KanadeMsg>` を常時保持するため **Sender 循環**が成立し、結線側が全 Sender を drop しても両者の inbox が切断されない＝**Req 4.9（全指示送信元切断→正常終了・宙吊りなし）が構造的に満たせない**。std mpsc に weak sender は無く、転送スレッド等の迂回も循環を移すだけで解消しない |
+| (a-1) handler 内同期往復（**採用**） | `ShioriMsg` に `ReplySender<ShioriOutcome>`（oneshot）同梱・シェルが `recv` で受け切り `Input::ShioriReply` として状態機械へ即時再投入 | 循環なし（oneshot は往復ごとに消費）＝Req 4.9 構造保証。envelope 規約の正本流儀。純粋状態機械は「全入力メッセージ」の形を維持（Phase の待ち点はそのまま・相関 id は不要化）。トレード＝ForceQuit が in-flight 呼出完了（実効 timeout 有界・mock 即応）まで遅延——best-effort として許容 |
+
+（クレート構成は §4 Option C を採用: 単一 `crates/areka-kanade`・`talk.rs`/`msg.rs`/`schedule/` は host32 非依存規律・切り出しは sakura-engine 着手時判断）
+
+## 11. Design Decisions（DD-1〜DD-11 確定・design.md「設計判断」表が正本）
+
+- **DD-1 ✅**: talk 契約は `areka-kanade::talk` モジュール（host32 型・areka-actor 型に非依存＝std のみ）。契約クレート分離は 2 例目（sakura-engine 実着手）駆動。
+- **DD-2 ✅**: handler 内同期往復（a-1）。根拠と反転経緯は §10。
+- **DD-3 ✅**: `Tick{now: MonotonicMs}` 同梱（b-1）・Clock 抽象なし。`now_ms` の本番意味論は「OS 起動からの経過 ms（GetTickCount64 相当）」＝OnSecondChange Ref0（hour）が正典一致。
+- **DD-4 ✅**: `KanadeMsg::ShioriDown{reason: String}` の variant 1 個。lifecycle 正本確定時の差し替え面＝variant＋状態機械 1 アーム＋real.rs 報告箇所。
+- **DD-5 ✅**（要件確定済み・再掲）: 毎回 OnFirstBoot(Ref0="0")→204→OnBoot。
+- **DD-6 ✅**: talk 再生中の pump は NOTIFY(Ref3=0)（§9.3）。キュー・中断は導入しない。close は現行 talk の完了後に握手開始（同時 active talk ≤ 1 不変条件・`pending_close` 保留）。
+- **DD-7 ✅**（要件確定済み・再掲）: quit=true 唯一トリガ・強制経路は迂回。
+- **DD-8 ✅**: env-gate 追験は単一 `#[test]`（親窓 1 枚制約）・`HOST32_PASTA_DLL` silent skip・spawn→HELLO→LOAD（`send_request(MsgTag::Load, ..)` 既存慣行）を connect クロージャとしてテストが自前結線。
+- **DD-9 ✅**: 公開面＝`spawn_kanade`・`KanadeMsg`・talk 契約型・`ShioriMsg` 系・`KanadeConfig`・`spawn_shiori_actor`。`schedule/` は `pub(crate)`。
+- **DD-10 ✅**（新規・design 送り消化）: ForceQuit＝best-effort NOTIFY OnClose(Ref0=理由)→終了系列直行（§9.5）。
+- **DD-11 ✅**（新規）: OnClose→OnCloseAll 順序の正典差分を意図的差分として記録・局所化・M-e2e Revalidation Trigger（§9.2）。
+
+## 12. Synthesis 記録
+
+- **一般化**: boot・pump・close・強制終了・Fault の 5 経路を単一の純粋状態機械 `step(State, Input) -> (State, Vec<Action>)` に統合（経路別の機構を作らない）。イベント構成は `events.rs` の関数群に一点化し、実装・fixture・assert の三点を同一正本から導出。
+- **Build vs Adopt**: アクター機構＝areka-actor 採用（再発明ゼロ）・SHIORI 契約解釈＝`Shiori3Client` 戻り値型の消費のみ（status 判定を再実装しない）・新規外部依存ゼロ（tokio 禁止・std mpsc 起点の凍結規約に整合）。
+- **単純化**: 相関 id（corr）を DD-2 の同期往復化で全廃・Clock trait 不採用・mock は「同一 enum を受ける別 body」で trait/framework 化を回避・Phase は待ち点 9 状態に限定。
+
+## 13. Risks & Mitigations（design 時点）
+
+- **close 順序の正典差分（DD-11）** — `events.rs`＋`close.rs` に局所化・M-e2e で SSP 実挙動と突合し必要なら順序入替（波及は 2 ファイル）。
+- **実経路での Tick 滞留（同期往復ブロック中）** — 解除後 catch-up 処理（burst は滞留秒数分で有界・mock 経路は非発生）。SSP も同型の catch-up 挙動。
+- **ForceQuit 遅延（in-flight 呼出中）** — `AREKA_SHIORI_REQUEST_TIMEOUT_MS`（既定 60s）で有界・OS シャットダウンの最終強制力は OS 側。
+- **join デッドロック（Sender 保持のまま join）** — 結線規律を rustdoc 明記・ハーネスは drop→join 順＋`run_bounded` 期限付き。
+- **lifecycle 並走との差し替え面** — ShioriDown seam／Unload 暫定実装ともに変更面を 1 箇所に限定（Revalidation Triggers に登録済み）。
+
+## 14. References（design フェーズ追加分）
+
+- ukadoc doc id 群（§9.1 の表）— Reference 表・DD-6/DD-10/DD-11 の正典根拠
+- `crates/areka-actor/src/spawn.rs`／`reply.rs` — 停止規約・oneshot・`FnOnce(Receiver<M>)` 境界（DD-2 の実装前提）
+- `crates/shiori-host32-host/src/client.rs`／`error.rs` — `Shiori3Client`・`RequestError` 写像元
+- `crates/shiori-host32-helper/src/main.rs`（Unload 無応答の現状）・`crates/shiori-host32-ipc/src/lib.rs`（`MsgTag::Unload` ワイヤ定義）— §9.6 の根拠
