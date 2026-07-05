@@ -351,6 +351,125 @@ mod tests {
         handle.actor.join().expect("body は正常終了する");
     }
 
+    /// M-boot 外タグのみで構成され**発火列が空になる** script は、リテラル空 script では
+    /// ないにもかかわらず空 sheet へコンパイルされ、時間軸駆動（Tick）を一切要さずに
+    /// 末尾到達の終端理由 `Ended`（R1.4）を伴う `TalkDone` を即座に返す。
+    ///
+    /// これは既存の「リテラル空 script」テスト（`empty_script_talk_returns_talkdone_immediately_without_tick`）
+    /// とは別経路の固定である: script には内容（Choice `\q`・SystemVar `%username`・Raw `\0`）が
+    /// あるが、これらは全て M-boot 外タグとして compile が無視し cue を生成しないため sheet が
+    /// 空になる。終端命令を含まないため末尾到達で `end=Ended`（Quit ではない）。Tick を送らず
+    /// とも空 sheet 経路で即終端し、両 sink は空であること・talk_id エコー（R1.3）を確認する。
+    #[test]
+    fn ignored_tags_only_script_ends_immediately_with_ended_and_no_firing() {
+        let (reply_tx, reply_rx) = reply_channel::<TalkDone>();
+        let talk_id = TalkId(55);
+        // Choice `\q[..]`・SystemVar `%username`・bare `\0`(→Raw) の 3 種はいずれも
+        // M-boot 外タグ＝compile が無視し cue を生成しない。Text/Surface/終端命令は無い。
+        // ⇒ 空 sheet かつ終端命令なし＝末尾到達で end=Ended。リテラル空 script ではない。
+        let start = StartTalk {
+            script: r"\q[はい,OnYes]%username\0".to_string(),
+            talk_id,
+            reply: reply_tx,
+        };
+
+        let surface = MockSink::new();
+        let text = MockSink::new();
+        let surface_records = surface.records();
+        let text_records = text.records();
+
+        // Tick を一切送らずに spawn_talk を呼ぶ（時間軸駆動を要求しない・R1.4）。
+        let handle = spawn_talk(start, surface, text);
+
+        // 空 sheet 経路で TalkDone が即座に到達すること（Tick 不要）。
+        let done = reply_rx
+            .recv_timeout(Duration::from_secs(5))
+            .expect("無視タグのみの script も空 sheet 経路で即座に TalkDone を返すべき");
+
+        // talk_id エコー（R1.3）と終端理由（末尾到達＝Ended・R1.4／Quit ではない）。
+        assert_eq!(done.talk_id, talk_id, "talk_id がエコーされること（R1.3）");
+        assert_eq!(
+            done.reason,
+            TalkEndReason::Ended,
+            "終端命令のない無視タグのみ script は末尾到達で Ended（R1.4）"
+        );
+
+        // 発火は 1 件も無いこと（無視タグは cue を生成しない＝両 sink 空）。
+        assert!(
+            surface_records.lock().unwrap().is_empty(),
+            "無視タグのみでは surface 発火が無いこと"
+        );
+        assert!(
+            text_records.lock().unwrap().is_empty(),
+            "無視タグのみでは text 発火が無いこと"
+        );
+
+        // join でスレッド終了を同期（Break 後にスレッドが正常終了していること）。
+        handle.actor.join().expect("body は正常終了する");
+    }
+
+    /// 発火を伴わない quit 相当のみ（先行 cue のない `\-`）の script は空 sheet かつ
+    /// `end=Quit` へコンパイルされ、時間軸駆動（Tick）を要さずに **`Quit`（`Ended` ではない）**
+    /// を伴う `TalkDone` を即座に返す（R6.2）。
+    ///
+    /// これは空 sheet 経路の**弁別テスト**である: 駆動器が空 sheet で `Ended` を固定送出して
+    /// いれば FAIL する（compile.rs の `bare_quit_yields_empty_sheet_with_quit_end` が示すとおり
+    /// `\-` は空 sheet＋`end=Quit`）。無視タグ `\q[..]` を前置しても Choice は cue を生成せず、
+    /// `\-` が Quit を確定するため sheet は空・end=Quit のまま。駆動器が `compiled.end` を
+    /// 伝播していることを、`reason == Quit` の観測で固定する。
+    #[test]
+    fn quit_only_script_ends_immediately_with_quit_not_ended() {
+        let (reply_tx, reply_rx) = reply_channel::<TalkDone>();
+        let talk_id = TalkId(56);
+        // 先行 cue のない `\-`（無視タグ `\q[..]` を前置しても発火は 0 件）。
+        // ⇒ 空 sheet かつ end=Quit。空 sheet 経路で Quit がそのまま伝播すること（Ended 固定でない）。
+        let start = StartTalk {
+            script: r"\q[やめる,OnCancel]\-".to_string(),
+            talk_id,
+            reply: reply_tx,
+        };
+
+        let surface = MockSink::new();
+        let text = MockSink::new();
+        let surface_records = surface.records();
+        let text_records = text.records();
+
+        // Tick を一切送らずに spawn_talk を呼ぶ（空 sheet ゆえ時間軸駆動不要）。
+        let handle = spawn_talk(start, surface, text);
+
+        // 空 sheet 経路で TalkDone が即座に到達すること（Tick 不要）。
+        let done = reply_rx
+            .recv_timeout(Duration::from_secs(5))
+            .expect("quit 相当のみの script も空 sheet 経路で即座に TalkDone を返すべき");
+
+        // talk_id エコー（R1.3）。弁別の核心: 終端理由は Quit であり Ended ではない（R6.2）。
+        // 駆動器が空 sheet 経路で Ended を固定送出していれば、この assert が FAIL する。
+        assert_eq!(done.talk_id, talk_id, "talk_id がエコーされること（R1.3）");
+        assert_eq!(
+            done.reason,
+            TalkEndReason::Quit,
+            "先行 cue のない `\\-` は空 sheet＋Quit＝Ended を固定送出してはならない（R6.2）"
+        );
+        assert_ne!(
+            done.reason,
+            TalkEndReason::Ended,
+            "空 sheet 経路で Ended を固定送出していないことの明示（R6.2 の弁別）"
+        );
+
+        // 発火は 1 件も無いこと（両 sink 空）。
+        assert!(
+            surface_records.lock().unwrap().is_empty(),
+            "quit 相当のみでは surface 発火が無いこと"
+        );
+        assert!(
+            text_records.lock().unwrap().is_empty(),
+            "quit 相当のみでは text 発火が無いこと"
+        );
+
+        // join でスレッド終了を同期（Break 後にスレッドが正常終了していること）。
+        handle.actor.join().expect("body は正常終了する");
+    }
+
     /// fixture 駆動の統合テスト（task 5.2 の主 observable・R9.3）。
     ///
     /// `\s[10]hello\w[2]world\e`（サーフェス切替＋テキスト＋待ち＋テキスト＋終端）を
