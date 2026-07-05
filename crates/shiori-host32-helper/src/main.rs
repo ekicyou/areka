@@ -87,8 +87,14 @@ enum InboundAction {
     /// 受領フレームのペイロード有無を問わずこの動作へ写像される。実際のロード結線（proxy 確立・
     /// `load` 呼出・ack 返送）は下流タスク（Task 6・WndProc の LOAD 結線）が担う。
     TriggerLoad,
-    /// framing 上は正当だが本 helper が応答しないタグ（`Hello`/`Response`/`Unload`）。
-    /// crash させず無視する（記録のみ）。`Load` は `TriggerLoad` へ分離済みゆえ含まない。
+    /// `Unload` を受領＝正規の正常終了経路のトリガ（R5.6）。従来の「既知だが無視」を置換する。
+    /// **ペイロードを持たない**（wire で理由やパスを運ばない）ため、受領フレームのペイロード有無を
+    /// 問わずこの動作へ写像される。実際の終了結線（proxy drop → `quit_requested` セット → ack `[1]`
+    /// 返送 → `PostMessageW` 起こし → main ループ正常終了 → exit 0）は下流タスク（Task 3.2・WndProc の
+    /// UNLOAD 結線）が担う。本タスク（3.1）は分類と共有状態の追加までに留める。
+    TriggerUnload,
+    /// framing 上は正当だが本 helper が応答しないタグ（`Hello`/`Response`）。crash させず無視する
+    /// （記録のみ）。`Load` は `TriggerLoad`、`Unload` は `TriggerUnload` へ分離済みゆえ含まない。
     IgnoreKnown(MsgTag),
     /// 未知タグ・長さ不整合など不正フレーム。crash させず記録のみ・上位へ渡さない（要件 2.5）。
     IgnoreBad(FramingError),
@@ -106,6 +112,9 @@ fn classify_inbound(dw_data: usize, declared_len: usize, data: &[u8]) -> Inbound
         // Load はロード実行トリガ（要件 4.1）。ペイロードは無視（有無を問わず TriggerLoad）。
         // IgnoreKnown の一般アームより先に分離して受ける。
         Ok((MsgTag::Load, _)) => InboundAction::TriggerLoad,
+        // Unload は正規正常終了経路のトリガ（R5.6）。ペイロードは無視（有無を問わず TriggerUnload）。
+        // IgnoreKnown の一般アームより先に分離して受ける（`Load` と同型・同位置）。
+        Ok((MsgTag::Unload, _)) => InboundAction::TriggerUnload,
         Ok((tag, _)) => InboundAction::IgnoreKnown(tag),
         Err(err) => InboundAction::IgnoreBad(err),
     }
@@ -158,6 +167,15 @@ struct HelperShared {
     load_acks_ok: Cell<u64>,
     /// LOAD 観測カウンタ: ack `[0]`（あらゆる `ProxyError` 失敗）送出数。
     load_acks_fail: Cell<u64>,
+    /// **終了要求フラグ**（R5.6・正規正常終了経路）。UNLOAD 受領時に task 3.2 の UNLOAD アームが
+    /// `true` にセットし、main のフィルタ閉包が検知して `msg_loop.quit()` する（→ ループ正常終了 →
+    /// exit 0）。本タスク（3.1）ではフィールドを追加するのみで set/read は task 3.2 が結線する。
+    /// single UI thread ゆえ [`Cell`] で足りる。既定 `false`。
+    // set/read by task 3.2's UNLOAD arm + main loop
+    #[cfg_attr(not(test), allow(dead_code))]
+    quit_requested: Cell<bool>,
+    /// UNLOAD 観測カウンタ: `TriggerUnload` 受領数（R5.6）。
+    unloads_handled: Cell<u64>,
 }
 
 impl HelperShared {
@@ -174,6 +192,8 @@ impl HelperShared {
             loads_attempted: Cell::new(0),
             load_acks_ok: Cell::new(0),
             load_acks_fail: Cell::new(0),
+            quit_requested: Cell::new(false),
+            unloads_handled: Cell::new(0),
         }
     }
 }
@@ -310,9 +330,15 @@ fn handle_message(s: &HelperShared, self_hwnd: HWND, msg: &WindowMessage) -> Opt
                 eprintln!("[helper] load-ack 送出失敗（観測）: {e:?}");
             }
         }
+        InboundAction::TriggerUnload => {
+            // UNLOAD 受領を観測（分類のみ・R5.6）。実際の正常終了経路（proxy drop → quit_requested セット →
+            // ack[1] 返送 → PostMessageW 起こし → main ループ正常終了）は task 3.2 が結線する。
+            s.unloads_handled.set(s.unloads_handled.get() + 1);
+            eprintln!("[helper] UNLOAD 受領（分類のみ・終了経路は未結線=task 3.2）");
+        }
         InboundAction::IgnoreKnown(tag) => {
-            // Hello/Response/Unload は helper が能動応答しない。記録のみ（無応答）。
-            // Load は TriggerLoad へ分離済みゆえここには来ない。
+            // Hello/Response は helper が能動応答しない。記録のみ（無応答）。
+            // Load は TriggerLoad へ、Unload は TriggerUnload へ分離済みゆえここには来ない。
             eprintln!("[helper] 応答対象外タグ受領（無視）: {tag:?}");
         }
         InboundAction::IgnoreBad(err) => {
@@ -534,14 +560,40 @@ mod classify_tests {
     }
 
     // 要件 4.2: 応答対象外の既知タグは IgnoreKnown（無応答・crash なし）。
-    // 注: Load は本タスク（3.2）で TriggerLoad へ分離したため、ここから除外する（R4.1）。
+    // 注: Load は TriggerLoad へ、Unload は TriggerUnload（R5.6）へ分離済みゆえ、ここから除外する。
     #[test]
     fn known_nonrequest_tags_are_ignored() {
-        for tag in [MsgTag::Hello, MsgTag::Response, MsgTag::Unload] {
+        for tag in [MsgTag::Hello, MsgTag::Response] {
             let raw = tag.as_u32() as usize;
             let action = classify_inbound(raw, 0, b"");
             assert_eq!(action, InboundAction::IgnoreKnown(tag));
         }
+    }
+
+    // R5.6: Unload 受領は正規正常終了経路のトリガ（TriggerUnload）へ分類される。従来の
+    // 「既知だが無視（IgnoreKnown）」を置換する。ペイロードにパスや理由を期待しない
+    // ゆえ、ペイロード有無を問わず TriggerUnload であること（`TriggerLoad` と同型）。
+    #[test]
+    fn unload_classifies_to_trigger_unload() {
+        let raw = MsgTag::Unload.as_u32() as usize;
+
+        // ペイロード無し。
+        let action = classify_inbound(raw, 0, b"");
+        assert_eq!(action, InboundAction::TriggerUnload);
+
+        // ペイロード有り（wire で内容を運ばないため、無視され同じく TriggerUnload）。
+        let payload = b"ignored-unload-payload";
+        let action = classify_inbound(raw, payload.len(), payload);
+        assert_eq!(action, InboundAction::TriggerUnload);
+    }
+
+    // R5.6: 終了要求フラグ `quit_requested` は新規 HelperShared で既定 false（分類のみの本タスクで
+    // は set しない＝task 3.2 が結線する）。フィールド追加とその既定値を単体で確認する。
+    #[test]
+    fn new_helper_shared_defaults_quit_requested_false() {
+        let s = HelperShared::new(0, PathBuf::new(), String::new());
+        assert!(!s.quit_requested.get());
+        assert_eq!(s.unloads_handled.get(), 0);
     }
 
     // 要件 4.1: Load 受領はロード実行トリガ（TriggerLoad）へ分類される。従来の
