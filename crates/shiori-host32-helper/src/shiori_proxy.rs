@@ -45,7 +45,7 @@
 
 use std::path::Path;
 
-use windows::Win32::Foundation::{FreeLibrary, HGLOBAL, HMODULE};
+use windows::Win32::Foundation::{FreeLibrary, GlobalFree, HGLOBAL, HMODULE};
 use windows::Win32::Globalization::{CP_ACP, WideCharToMultiByte};
 use windows::Win32::System::LibraryLoader::{GetProcAddress, LoadLibraryW};
 use windows::Win32::System::Memory::{GLOBAL_ALLOC_FLAGS, GlobalAlloc};
@@ -77,6 +77,9 @@ pub enum ProxyError {
     EncodingFailed,
     /// `load` が `false` を返した（クラッシュはせず失敗を返した・R6.3）。
     LoadReturnedFalse,
+    /// `request` が null／無効 HGLOBAL を返した（応答確保失敗等・クラッシュせず失敗を返した）。
+    /// silent failure を避けるため他 variant と区別可能な形で返す（R3.2〜3.4 request 失敗面）。
+    RequestFailed,
 }
 
 /// SHIORI DLL の常設プロキシ（design §339-388）。
@@ -192,6 +195,56 @@ impl ShioriByteProxy {
             Err(ProxyError::LoadReturnedFalse)
         }
     }
+
+    /// 保持済み `request` エクスポートを HGLOBAL 非対称契約で実呼出する（design §435・§HGLOBAL 所有権契約）。
+    ///
+    /// 手順（design §435）:
+    /// 1. `global_alloc_copy(req)` で入力を `GlobalAlloc(GMEM_FIXED)` HGLOBAL 化（`hreq`）。確保失敗は
+    ///    [`ProxyError::EncodingFailed`] を伝播（`global_alloc_copy` が返す）。
+    /// 2. `len` を in/out で用意（入力長を渡し、応答長で上書きされる）。
+    /// 3. `request(hreq, &mut len)` を呼出。**入力 HGLOBAL は callee(DLL) が `GlobalFree` する**規約ゆえ
+    ///    ホストは `hreq` に以後触れず・自ら解放もしない（二重解放禁止・R3.3）。所有権は callee へ move。
+    /// 4. 応答 HGLOBAL が null／無効なら [`ProxyError::RequestFailed`]（silent failure を避け区別可能に返す）。
+    /// 5. 応答 HGLOBAL から `*len` バイトを自前 `Vec<u8>` へコピー → `GlobalFree(hres)`（caller-free・R3.4）
+    ///    → bytes を返す。
+    ///
+    /// `len` は in/out で 32bit `usize` として自然に閉じる（R7.6・i686 で ABI 一致）。`unload` は呼ばない
+    /// （Drop courtesy のみ・R3.7）。unsafe FFI は本モジュールへ一点集約する。
+    ///
+    /// Preconditions: proxy 確立済み（`load`→true）。呼出は helper UI スレッド（WndProc）上。
+    /// Postconditions: 応答 HGLOBAL は `GlobalFree` 済み（リーク・二重解放なし）。入力 HGLOBAL は callee 解放。
+    pub fn request(&self, req: &[u8]) -> Result<Vec<u8>, ProxyError> {
+        // 手順 1: 入力を GMEM_FIXED HGLOBAL 化。確保失敗→EncodingFailed を伝播。
+        let hreq = global_alloc_copy(req)?;
+        // 手順 2: len は in/out。入力長を渡し、応答長で上書きされる。
+        let mut len: usize = req.len();
+
+        // 手順 3: request(hreq, &mut len) 同期呼出。
+        // SAFETY: `hreq` は `req.len()` バイトの有効 HGLOBAL（GMEM_FIXED ゆえハンドル＝先頭ポインタ）。
+        // `&mut len` は有効な in/out ポインタ。DLL(callee) は受領した入力ハンドルを `GlobalFree` する規約
+        // （research §9.3・testdll の request が実演）ゆえ、ホストは以後 `hreq` に触れず・解放もしない
+        // （所有権は callee へ move・二重解放禁止・R3.3）。`self.request` は確立時に research §9 で
+        // バイト照合済みの flat-C cdecl 署名（RequestFn）へ解決済み。呼出は同期で応答 HGLOBAL を返す。
+        let hres = unsafe { (self.request)(hreq, &mut len as *mut usize) };
+
+        // 手順 4: null／無効応答は RequestFailed（入力は既に callee へ move 済み・hreq には触れない）。
+        if hres.is_invalid() {
+            return Err(ProxyError::RequestFailed);
+        }
+
+        // 手順 5: 応答 HGLOBAL から len バイトをコピー → GlobalFree（caller-free・R3.4）。
+        // SAFETY: `hres` は DLL が `GlobalAlloc(GMEM_FIXED)` で確保した `len` バイトの有効領域
+        // （GMEM_FIXED ゆえ `hres.0` が先頭ポインタ）。上で is_invalid() を確認済み。ローカル Vec への
+        // コピーは非重複（別確保）。
+        let bytes = unsafe { std::slice::from_raw_parts(hres.0 as *const u8, len).to_vec() };
+        // 応答 HGLOBAL は caller(host) が解放する規約（R3.4）。best-effort で解放する。
+        // SAFETY: `hres` は callee(DLL) が alloc し所有権は caller へ移転済みの有効ハンドル。コピー後ゆえ
+        // 以後参照しない。GlobalFree の Result は best-effort で無視（解放漏れ・二重解放を起こさない）。
+        unsafe {
+            let _ = GlobalFree(Some(hres));
+        }
+        Ok(bytes)
+    }
 }
 
 impl Drop for ShioriByteProxy {
@@ -277,6 +330,16 @@ mod tests {
 
     use super::*;
     use std::path::{Path, PathBuf};
+    use std::sync::Mutex;
+
+    /// testdll を実 `load`／`drop` するテスト同士の直列化ガード。
+    ///
+    /// `unload` は fixture で `HOST32_TESTDLL_UNLOAD_MARKER`（プロセス global env）を読み観測マーカーを
+    /// 書く。`testdll_drop_invokes_courtesy_unload` はこの env を set したうえで「Drop 前は marker 未作成」を
+    /// assert するため、別の testdll ロードテスト（`testdll_request_roundtrip_get_and_notify`）が並行して
+    /// Drop→unload を走らせると env を読んで marker を先行作成し assert を破る。testdll をロードする全テスト
+    /// を本 mutex で直列化し、この env レースを排除する（Mutex 汚染は無視して継続）。
+    static TESTDLL_SERIAL: Mutex<()> = Mutex::new(());
 
     // ---------------------------------------------------------------------
     // 1. 純関数部の検証: ANSI(CP_ACP) 符号化
@@ -380,10 +443,12 @@ mod tests {
     /// （unload 観測マーカーのファイル作成）と、Drop 全体が無 panic で完了することを確認する
     /// （R2.2 の受入証拠・E2E は helper をプロセスごと落とすため Drop が走らない、その補完）。
     ///
-    /// env `HOST32_TESTDLL_UNLOAD_MARKER` はプロセス global ゆえ、本テストは testdll を load する
-    /// 唯一のテストにして競合を避ける（他テストは testdll 非依存）。
+    /// env `HOST32_TESTDLL_UNLOAD_MARKER` はプロセス global ゆえ、testdll を load する他テストと
+    /// `TESTDLL_SERIAL` で直列化して競合を避ける（本テストのみが marker env を set/remove する）。
     #[test]
     fn testdll_drop_invokes_courtesy_unload() {
+        // testdll ロードテスト同士を直列化（marker env レース排除）。汚染ロックは無視して継続。
+        let _serial = TESTDLL_SERIAL.lock().unwrap_or_else(|e| e.into_inner());
         let src_dll = resolve_testdll();
 
         // 一時 dir を load_dir とし、そこへ shiori.dll をコピー（絶対 dll_path＝load_dir\shiori.dll・
@@ -433,6 +498,79 @@ mod tests {
         unsafe {
             std::env::remove_var("HOST32_TESTDLL_UNLOAD_MARKER");
         }
+        let _ = std::fs::remove_dir_all(&load_dir);
+    }
+
+    // ---------------------------------------------------------------------
+    // 4. testdll 越し request loopback（R3.2/3.3/3.4/3.6・Task 4.1）
+    // ---------------------------------------------------------------------
+
+    /// testdll を直接 `load` した proxy に対し `request` を実呼出し、固定 SHIORI/3.0 応答が
+    /// 往復することを確認する（design §435 の HGLOBAL 非対称契約）。
+    ///
+    /// - GET(`OnTestValue`) → 200 OK＋固定 `Value`。
+    /// - NOTIFY(`OnTestNotify`) → 204 No Content。
+    ///
+    /// helper クレートには codec が無いため request バイト列は手書きする。無 panic 完了が
+    /// 「入力 callee-free／応答 caller-free」（二重解放なし）の観測証拠。`HOST32_TESTDLL_UNLOAD_MARKER`
+    /// は設定しない（プロセス global ゆえ `testdll_drop_invokes_courtesy_unload` が唯一の所有者）。
+    #[test]
+    fn testdll_request_roundtrip_get_and_notify() {
+        // testdll ロードテスト同士を直列化（drop テストの marker env レース排除）。
+        let _serial = TESTDLL_SERIAL.lock().unwrap_or_else(|e| e.into_inner());
+        let src_dll = resolve_testdll();
+
+        // 一意な一時 load_dir へ shiori.dll をコピー（絶対 dll_path＝load_dir\shiori.dll）。
+        let unique = format!(
+            "host32_proxy_request_test_{}_{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_nanos())
+                .unwrap_or(0)
+        );
+        let load_dir = std::env::temp_dir().join(&unique);
+        std::fs::create_dir_all(&load_dir).expect("create temp load_dir");
+        let dll_path = load_dir.join("shiori.dll");
+        std::fs::copy(&src_dll, &dll_path).expect("copy shiori.dll into load_dir");
+
+        // load 成功（testdll の load は入力 HGLOBAL を callee-free し true 返し）。
+        let proxy =
+            ShioriByteProxy::load(&dll_path, &load_dir).expect("testdll load must succeed");
+
+        // GET(OnTestValue) → 200 OK＋固定 Value。
+        let get_req =
+            b"GET SHIORI/3.0\r\nCharset: UTF-8\r\nSender: areka\r\nID: OnTestValue\r\n\r\n";
+        let get_resp = proxy
+            .request(get_req)
+            .expect("GET request must succeed via testdll");
+        let get_text = String::from_utf8(get_resp).expect("GET response must be valid UTF-8");
+        assert!(
+            get_text.contains("SHIORI/3.0 200 OK"),
+            "expected 200 OK, got: {get_text:?}"
+        );
+        assert!(
+            get_text.contains("Value: \\0\\s[0]host32 request roundtrip ok\\e"),
+            "expected fixed Value line, got: {get_text:?}"
+        );
+
+        // NOTIFY(OnTestNotify) → 204 No Content。
+        let notify_req =
+            b"NOTIFY SHIORI/3.0\r\nCharset: UTF-8\r\nSender: areka\r\nID: OnTestNotify\r\n\r\n";
+        let notify_resp = proxy
+            .request(notify_req)
+            .expect("NOTIFY request must succeed via testdll");
+        let notify_text =
+            String::from_utf8(notify_resp).expect("NOTIFY response must be valid UTF-8");
+        assert!(
+            notify_text.contains("SHIORI/3.0 204 No Content"),
+            "expected 204 No Content, got: {notify_text:?}"
+        );
+
+        // Drop で courtesy unload→FreeLibrary。往復も Drop も無 panic＝二重解放なし（R3.3/3.4）。
+        drop(proxy);
+
+        // 後始末（best-effort）: 一時 dir を掃除。
         let _ = std::fs::remove_dir_all(&load_dir);
     }
 }
