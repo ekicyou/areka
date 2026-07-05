@@ -168,6 +168,13 @@ pub struct ShellWindowMarker;
 #[derive(Debug, Clone, Copy, Component, PartialEq, Hash)]
 pub struct BalloonWindowMarker;
 
+/// 検証用ダミー窓を識別するマーカーコンポーネント（task 2.2・replace-me シーム）。
+///
+/// `open_startup_window` が開く最小の liveness プローブ窓に付与し、despawn（手動
+/// ダブルクリック／task 2.3 の env ゲート自動 close）がダミー窓のみを狙えるようにする。
+#[derive(Debug, Clone, Copy, Component, PartialEq, Hash)]
+pub struct DummyWindowMarker;
+
 // ---------------------------------------------------------------------------
 // Entry Point
 // ---------------------------------------------------------------------------
@@ -554,6 +561,106 @@ fn on_shell_pressed(
 }
 
 // ---------------------------------------------------------------------------
+// Startup Window (replace-me seam・task 2.2)
+// ---------------------------------------------------------------------------
+
+/// 検証用ダミー窓の Entity を構築する（headless・task 2.2）。
+///
+/// UI ランタイム起動と正常終了の観測目的に限る最小の窓を spawn する。窓が存在するために
+/// 必要な最小コンポーネント（`Window`・`WindowStyle`・可視/クリック可能な最小 `BoxStyle`
+/// サイズ・ダブルクリック despawn の observer）だけを与え、`DummyWindowMarker` で識別する。
+///
+/// **配置・座標・DPI を一切主張しない**: `WindowPos` の位置（`position`）を設定せず、座標
+/// ロジックも持たない（既定位置で開く）。placement は window-placement の領分であり、ダミー窓は
+/// そこへ踏み込まない（2026-07-05 placement リジェクト再発防止・R2.5）。`create_shell_window`
+/// と同じく bare `World` だけで構築でき、headless 単体テスト可能。
+fn spawn_dummy_window(world: &mut World) -> Entity {
+    world
+        .spawn((
+            Name::new("Startup-Dummy-Window"),
+            DummyWindowMarker,
+            Window {
+                title: "areka startup (dummy)".to_string(),
+                ..Default::default()
+            },
+            WindowStyle {
+                style: WS_POPUP | WS_VISIBLE,
+                ex_style: WS_EX_TOOLWINDOW,
+            },
+            // 可視・クリック可能にする最小サイズのみ（位置・座標は主張しない）。
+            BoxStyle {
+                size: Some(BoxSize {
+                    width: Some(Dimension::Px(200.0)),
+                    height: Some(Dimension::Px(150.0)),
+                }),
+                ..Default::default()
+            },
+            // ダブルクリックで自身を閉じられるようにする（`on_shell_pressed` の despawn を拝借）。
+            OnPointerPressed(on_dummy_pressed),
+        ))
+        .id()
+}
+
+/// OnPointerPressed ハンドラ: ダブルクリック（左）でダミー窓を despawn する（task 2.2）。
+///
+/// `on_shell_pressed` を拝借した despawn 経路。`Phase::Bubble` で `DoubleClick::Left` を検出し、
+/// `DummyWindowMarker` を持つ全 entity を despawn して true を返す。それ以外は false。
+/// `Phase::Tunnel` は無視する。despawn → `on_window_handle_remove`（wintf
+/// `crates/wintf/src/ecs/window/window_handle.rs`）→ `PostMessageW(WM_CLOSE)` → `DestroyWindow`
+/// → `WindowRegistry` 空遷移 → `run()` 復帰、という wintf の作法に委ねる（自前 wndproc も
+/// 手書き `PostMessageW(WM_CLOSE)` も書かない）。
+fn on_dummy_pressed(
+    world: &mut World,
+    _sender: Entity,
+    _entity: Entity,
+    ev: &Phase<PointerState>,
+) -> bool {
+    match ev {
+        Phase::Tunnel(_) => false,
+        Phase::Bubble(state) => {
+            if state.double_click == DoubleClick::Left {
+                tracing::info!("ダミー窓ダブルクリック検出 — ダミー窓を閉じます");
+
+                // ダミー窓 entity を収集して despawn（on_window_handle_remove → WM_CLOSE →
+                // DestroyWindow → WindowRegistry 空遷移 → run() 復帰）。
+                let dummies: Vec<Entity> = world
+                    .query_filtered::<Entity, With<DummyWindowMarker>>()
+                    .iter(world)
+                    .collect();
+                for e in dummies {
+                    world.despawn(e);
+                }
+
+                return true;
+            }
+            false
+        }
+    }
+}
+
+/// replace-me シーム（task 2.2・R4.2）: 後続仕様（ghost-setup／window-placement）がここを
+/// 本物のゴースト窓生成へ置き換える差し込み点。本仕様ではその本体が最小の検証用ダミー窓を
+/// 1 枚開き、`main` 所有の `app.run()` ループに空遷移の heartbeat を与える（boot→loop→exit の実証）。
+///
+/// 署名が `&WinApp`（`&mut` でない）で足りる根拠: 窓生成は `WinApp::world()`（`&self`）→
+/// `EcsWorld::spawn`（`&self`）経由＝現 `create_shell_window` 系の窓生成と同型で ECS 内部
+/// 可変性を用いるため。投機的に `&mut` を先取りしない（下流が本物窓生成でより強い借用を
+/// 要すれば、それはシーム署名変更の Revalidation Trigger）。
+///
+/// task 3.1 で `main()` から呼ばれるまで未使用のため `dead_code` を許容する。
+#[allow(dead_code)] // wired in task 3.1
+fn open_startup_window(app: &WinApp) {
+    // `run_setup` と同じ ECS コマンド経路（`EcsWorld::spawn` の async タスク → CommandSender →
+    // Input スケジュールで World 適用）でダミー窓ビルダを走らせる。
+    app.world().borrow().spawn(|tx: CommandSender| async move {
+        let _ = tx.send(Box::new(|world: &mut World| {
+            spawn_dummy_window(world);
+            tracing::info!("検証用ダミー窓を開きました（replace-me シーム）");
+        }));
+    });
+}
+
+// ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
 
@@ -565,6 +672,111 @@ mod tests;
 /// main.rs は既に `mod tests`（ファイルモジュール）を持つため、名前衝突を避けて
 /// 別名のインラインモジュールに置く。純粋関数のため World/wintf を触らず、`&[String]`
 /// を直接与えて 3 分岐＋既定決定性を検証する。
+/// `open_startup_window` シーム（task 2.2）の headless 単体テスト。
+///
+/// main.rs は既に `mod tests`（ファイルモジュール）と `mod config_input_tests`（task 2.1）を
+/// 持つため、3 つめの独立名 `startup_window_tests` を用いる。ランタイム結線（`open_startup_window`）
+/// は生きた `WinApp` を要し headless では駆動できないため、TDD は headless で駆動可能な 2 部品
+/// （ダミー窓ビルダ `spawn_dummy_window` と despawn ハンドラ `on_dummy_pressed`）で回す。
+#[cfg(test)]
+mod startup_window_tests {
+    use super::*;
+
+    /// ダミー窓の press イベントを作る（`on_shell_pressed` テストの `pressed_event` に倣う）。
+    fn pressed_event(double_click: DoubleClick) -> PointerState {
+        PointerState {
+            double_click,
+            ..Default::default()
+        }
+    }
+
+    /// ビルダは最小の窓 entity を生成する: マーカー・Window・WindowStyle・BoxStyle サイズ・
+    /// OnPointerPressed を持ち、**WindowPos の位置主張を一切持たない**（配置・座標・DPI 非主張）。
+    #[test]
+    fn dummy_window_has_minimal_components_and_no_position_claim() {
+        let mut world = World::new();
+        let dummy = spawn_dummy_window(&mut world);
+
+        // マーカー: despawn/auto-close がダミーのみを狙える。
+        assert!(world.get::<DummyWindowMarker>(dummy).is_some());
+
+        // 窓が存在するのに必要な最小コンポーネント。
+        assert!(world.get::<Window>(dummy).is_some());
+        assert!(world.get::<WindowStyle>(dummy).is_some());
+
+        // 可視・クリック可能な最小サイズ（BoxStyle）を持つ。
+        let box_style = world.get::<BoxStyle>(dummy).expect("BoxStyle");
+        assert!(box_style.size.is_some(), "ダミー窓は最小サイズを持つべき");
+
+        // ダブルクリック despawn 用の observer を持つ。
+        assert!(world.get::<OnPointerPressed>(dummy).is_some());
+
+        // 配置・座標・DPI を一切主張しない: ビルダは WindowPos を明示挿入せず、
+        // 具体座標を主張しない。wintf の `on_window_add` フックが CreateWindow 前提として
+        // `WindowPos::default()`（位置＝CW_USEDEFAULT ＝「Windows 既定に委ねる」＝座標非主張）を
+        // 自動挿入するため、存在する WindowPos は必ず既定値と一致するはずである
+        // （＝ビルダ由来の座標ロジックがない証明）。placement は window-placement の領分であり、
+        // ダミー窓はそこへ踏み込まない（2026-07-05 placement リジェクト再発防止・R2.5）。
+        if let Some(wp) = world.get::<WindowPos>(dummy) {
+            assert_eq!(
+                *wp,
+                WindowPos::default(),
+                "ダミー窓は具体座標を主張してはならない（既定 CW_USEDEFAULT のみ許容・liveness プローブに限る）"
+            );
+        }
+        // 念のため: もし位置を持つなら CW_USEDEFAULT（座標非主張の番兵）であること。
+        if let Some(pos) = world.get::<WindowPos>(dummy).and_then(|wp| wp.position) {
+            assert_eq!(
+                (pos.x, pos.y),
+                (CW_USEDEFAULT, CW_USEDEFAULT),
+                "ダミー窓の位置は CW_USEDEFAULT（既定placement・座標非主張）に限る"
+            );
+        }
+    }
+
+    /// ダブルクリック（左）でマーカー付きダミー窓を despawn し true を返す。
+    /// マーカーを持たない entity は残す（`on_shell_pressed` の despawn テストに倣う）。
+    #[test]
+    fn double_click_left_despawns_all_dummy_windows() {
+        let mut world = World::new();
+        let dummy = world.spawn(DummyWindowMarker).id();
+        let dummy2 = world.spawn(DummyWindowMarker).id();
+        let other = world.spawn_empty().id();
+
+        let ev = Phase::Bubble(pressed_event(DoubleClick::Left));
+        let handled = on_dummy_pressed(&mut world, dummy, dummy, &ev);
+
+        assert!(handled);
+        assert!(world.get_entity(dummy).is_err());
+        assert!(world.get_entity(dummy2).is_err());
+        assert!(world.get_entity(other).is_ok());
+    }
+
+    /// 左以外のダブルクリックでは despawn しない（false）。
+    #[test]
+    fn non_left_double_click_does_not_despawn_dummy() {
+        let mut world = World::new();
+        let dummy = world.spawn(DummyWindowMarker).id();
+
+        for dc in [DoubleClick::None, DoubleClick::Right, DoubleClick::Middle] {
+            let ev = Phase::Bubble(pressed_event(dc));
+            assert!(!on_dummy_pressed(&mut world, dummy, dummy, &ev));
+        }
+        assert!(world.get_entity(dummy).is_ok());
+    }
+
+    /// Tunnel フェーズのダブルクリックは無視する（false・despawn しない）。
+    #[test]
+    fn tunnel_phase_double_click_is_ignored_for_dummy() {
+        let mut world = World::new();
+        let dummy = world.spawn(DummyWindowMarker).id();
+
+        let ev = Phase::Tunnel(pressed_event(DoubleClick::Left));
+        assert!(!on_dummy_pressed(&mut world, dummy, dummy, &ev));
+        assert!(world.get_entity(dummy).is_ok());
+    }
+}
+
 #[cfg(test)]
 mod config_input_tests {
     use super::{ConfigInputs, resolve_config_inputs, default_ghost_root, default_balloon_root};

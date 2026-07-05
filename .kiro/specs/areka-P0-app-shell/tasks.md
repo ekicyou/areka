@@ -22,7 +22,7 @@
   - _Requirements: 3.1, 3.3, 3.4, 6.1_
   - _Boundary: resolve_config_inputs_
 
-- [ ] 2.2 (P) 検証用ダミー窓を開く replace-me シームを実装する
+- [x] 2.2 (P) 検証用ダミー窓を開く replace-me シームを実装する
   - `WinApp` の共有参照を受け取り、ゴースト内容・配置・座標・DPI ロジックを持たない最小の窓エンティティを ECS 経由で spawn する
   - ダブルクリック時にダミー窓エンティティを despawn するハンドラを、現デモの `on_shell_pressed` の despawn 経路に倣って実装する
   - 手動起動後にダミー窓をダブルクリックすると despawn され、`WindowRegistry` が空へ遷移することを確認する
@@ -64,3 +64,9 @@
   - _Requirements: 4.1, 2.4_
   - _Depends: 2.3, 3.1_
   - _Boundary: 骨格 main, open_startup_window_
+
+## Implementation Notes
+
+- **wintf の `Window` on-add フックが `WindowPos::default()`（CW_USEDEFAULT）を自動挿入する**（`crates/wintf/src/ecs/window/components.rs` の `on_window_add`・位置未指定時のみ）。ゆえにダミー窓 builder が `WindowPos` を一切セットしなくても entity には `WindowPos::default()` が付く＝これが「座標/DPI を主張しない既定配置」の正しい姿。テストは「存在する `WindowPos` が `WindowPos::default()` と等しい」ことを assert して非主張を証明する（task 2.2）。
+- **example 内 `#[test]` は標準ハーネス（`cargo test -p areka`）では走らない**。example のテスト実行/コンパイル検証は `cargo test -p areka --example mock-shell` を使う（task 1.2）。標準スイートの緑判定対象は bin/lib のユニット＋SHIORI e2e（task 1.2 時点で 61、以降タスクごとに増加）。
+- **main.rs のインライン test モジュール名は衝突回避で使い分ける**: `mod tests;`（file・モック用・3.1 で削除）／`mod config_input_tests`（2.1）／`mod startup_window_tests`（2.2）。3.1 でモック除去後に整理する。
