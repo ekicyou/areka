@@ -88,7 +88,7 @@
   - _Requirements: 3.1, 3.2, 3.3, 3.4, 3.5, 3.6, 5.1, 5.3, 7.3, 7.4, 7.5_
   - _Depends: 4, 3.3_
 
-- [ ]* 5.2 env-gate 実 SHIORI DLL への周期連打confidenceテストを追加
+- [x]* 5.2 env-gate 実 SHIORI DLL への周期連打confidenceテストを追加
   - 実DLLを指すenvが未設定なら明示的にskipし、設定済みだがDLLが見つからない場合は明示的に失敗させ、設定済みで存在する場合は300回の通知連打（応答内容非依存・transport健全性のみ観測）を行った上で正規clean shutdownを確認する
   - 同一バイナリ内に窓を使うテストが2本（周期連打・本テスト）存在するため、env設定時は直列実行（`--test-threads=1`）が必要であることをテスト実行手順として明記・確認する
   - Observable: env未設定時は明示的なskipメッセージが観測でき、env設定＋`--test-threads=1`実行時は2窓制約の衝突なく完走する

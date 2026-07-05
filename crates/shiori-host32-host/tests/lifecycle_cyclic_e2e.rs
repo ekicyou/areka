@@ -29,11 +29,25 @@
 //! env override 最優先 → `CARGO_MANIFEST_DIR` から `target/i686-pc-windows-msvc/{debug,release}/`
 //! を探索 → 不在は**明確な panic**（i686 未ビルドの指摘）。silent-skip（緑の偽装）を禁ずる。
 //!
+//! ## 二窓 discipline（R6.3・design Testing Strategy #10）
+//! 本ファイルには **windowed テストが 2 本**存在する:
+//! - `cyclic_run_and_clean_shutdown`（task 5.1・決定的・常に窓を作る）
+//! - `cyclic_real_pasta_optional`（task 5.2・env-gate・`HOST32_PASTA_DLL` **設定時のみ**窓を作る）
+//!
+//! 親 message-only 窓は同一プロセスで同時 2 組生成不可（既知の 1 窓＝2 組制約）。ゆえに
+//! **`HOST32_PASTA_DLL` を設定して実行する場合は必ず `--test-threads=1` で直列化**すること
+//! （下記 PowerShell 手順に明記）。CI（env 未設定）では `cyclic_real_pasta_optional` が
+//! **窓生成前に早期 return** するため、通常の並行 `cargo test` でも 2 窓が同時生存せず衝突しない。
+//!
 //! ## 実行前提（PowerShell・Git Bash 不可・2 段ビルド→x64 test）
 //! ```powershell
 //! cargo build -p shiori-host32-testdll --target i686-pc-windows-msvc
 //! cargo build -p shiori-host32-helper  --target i686-pc-windows-msvc
 //! cargo test  -p shiori-host32-host    --test lifecycle_cyclic_e2e
+//!
+//! # env-gate 実 pasta 追験（任意・R6）を含める場合は必ず --test-threads=1 で直列化（2 窓制約）:
+//! $env:HOST32_PASTA_DLL="C:\path\to\pasta.dll"
+//! cargo test -p shiori-host32-host --test lifecycle_cyclic_e2e -- --test-threads=1
 //! ```
 
 use std::path::{Path, PathBuf};
@@ -50,6 +64,9 @@ const HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(5);
 
 /// 周期運転の反復回数（連打・back-to-back・sleep なし・R3.1/R7.5）。
 const REPETITIONS: usize = 200;
+
+/// 実 pasta 追験（`cyclic_real_pasta_optional`）の NOTIFY 連打回数（応答内容非依存・R6.1/design #10）。
+const N_PASTA: usize = 300;
 
 // NOTE: GET／NOTIFY 往復の timeout は `Shiori3Client` が env シーム（`AREKA_SHIORI_REQUEST_TIMEOUT_MS`・
 // 既定 60s）から内部解決するため、本テストで per-call timeout 定数を持たない（client の効果 timeout に委ねる）。
@@ -263,4 +280,135 @@ fn cyclic_run_and_clean_shutdown() {
     // --- 親窓を明示 drop（同時生存親窓を高々 1 に保つ）→ best-effort cleanup ---
     drop(parent);
     let _ = std::fs::remove_dir_all(&load_dir);
+}
+
+/// 実 pasta.dll への周期連打 confidence テスト（env-gate・任意・R6.1〜6.3・design Testing Strategy #10）。
+///
+/// 上の決定的テスト（testdll・固定 response）とは扱いが異なる:
+/// - env `HOST32_PASTA_DLL`（DLL フルパス）**未設定**なら明示 skip（eprintln・CI 必須ゲートにしない・R6.3）。
+///   この skip は本テスト（任意 env-gate）に限る例外であり、決定的テストの「無言スキップ禁止」規律とは
+///   別物である（helper 不在は `resolve_helper_exe` が引き続き panic する）。
+/// - env 設定済みだが**指定 DLL が不在**なら明示 fail（silent skip を認めない・R6.2）。
+/// - env 設定済みで**存在**する場合は `N_PASTA = 300` 回の `notify("OnSecondChange", ..)` 連打を行い
+///   （応答内容非依存＝notify は破棄契約ゆえ実 DLL の応答内容に依らず **transport 健全性のみ**を観測。
+///   イベント運行の意味論検証はしない＝kanade 領分・R6.1）、helper 生存を確認したうえで
+///   **正規の clean shutdown**（UNLOAD → 正常終了 → exit0）で `ExitKind::Clean` を観測する（confidence・R6.1）。
+///
+/// 構造は決定的テストと同型（HELLO pump → LOAD 先行 ack[1] → `Shiori3Client::new` → 連打 → clean shutdown）。
+/// load_dir=DLL の親 dir・shiori_name=ファイル名（実 pasta は自身の dir に住むため。request 系
+/// `request_e2e_real_pasta_optional` と同じ流儀）＝load_dir は削除しない（本テストが作った temp ではない）。
+///
+/// **2 窓 discipline**: 本テストは cyclic（`cyclic_run_and_clean_shutdown`）と同一バイナリの windowed
+/// テスト 2 本目にあたる。env `HOST32_PASTA_DLL` 設定時の実行は必ず `--test-threads=1` で直列化すること
+/// （1 窓＝2 組制約対処・ファイル冒頭 doc の PowerShell 手順に明記）。env 未設定（CI）では下記の早期
+/// return が窓生成の**前**に発火するため、通常の並行 `cargo test` でも 2 窓が同時生存せず衝突しない。
+///
+/// bounded: pump=HANDSHAKE_TIMEOUT・LOAD ack=LOAD_ACK_TIMEOUT・notify 往復=client の env timeout
+/// ＋SMTO_ABORTIFHUNG・終了観測=`request_clean_shutdown` 内 timeout で必ず有限復帰する（ハングしない）。
+#[test]
+fn cyclic_real_pasta_optional() {
+    // --- env `HOST32_PASTA_DLL` 未設定＝任意 gate ゆえ明示 skip（R6.3・CI 必須ゲートにしない）---
+    //     この早期 return は「窓生成の前」に起きる。ゆえに CI（env 未設定）では本テストは窓を作らず、
+    //     並行実行中の `cyclic_run_and_clean_shutdown` と 2 窓が同時生存することはない（衝突しない）。
+    let Ok(pasta_dll) = std::env::var("HOST32_PASTA_DLL") else {
+        eprintln!(
+            "HOST32_PASTA_DLL 未設定のため実 pasta 追験を skip（任意 gate・R6.3）。\
+             実 pasta への周期連打＋正規 clean shutdown を検証するには env に pasta DLL の\
+             フルパスを設定し、`--test-threads=1` で直列実行してください（2 窓制約）。"
+        );
+        return;
+    };
+
+    // --- env 設定済みだが DLL が不在なら明示 fail（silent skip を認めない・R6.2）---
+    let dll_path = PathBuf::from(&pasta_dll);
+    assert!(
+        dll_path.is_file(),
+        "HOST32_PASTA_DLL={pasta_dll:?} が指す DLL が存在しません（明示 fail・R6.2）"
+    );
+
+    // helper 不在は引き続き panic（silent-skip 禁止・helper 成果物は任意ではない）。
+    let helper_exe = resolve_helper_exe();
+
+    // load_dir=DLL の親 dir・shiori_name=ファイル名（実 pasta は自身の dir に住む・削除しない）。
+    let load_dir = dll_path
+        .parent()
+        .expect("HOST32_PASTA_DLL に親 dir がない")
+        .to_path_buf();
+    let shiori_name = dll_path
+        .file_name()
+        .expect("HOST32_PASTA_DLL にファイル名がない")
+        .to_string_lossy()
+        .into_owned();
+
+    // --- ① 親 message-only 窓（同時 1 窓厳守・使用後に明示 drop）---
+    let parent = ParentMessageWindow::create().expect("親 message-only 窓生成に失敗");
+    let parent_hwnd = parent.hwnd_u32();
+
+    let handle = spawn(&helper_exe, &load_dir, &shiori_name, parent_hwnd)
+        .expect("i686 helper の spawn に失敗（helper exe を確認）");
+    // HelperLifecycle は handle を単独所有（by value）。Drop で冪等 terminate するため
+    // 別途 HelperGuard 不要（panic 経路でもプロセスリークしない）。
+    let mut lifecycle = HelperLifecycle::new(handle);
+
+    // --- HELLO 受領でハンドシェイク完了（helper 不在は resolve_helper_exe が既に panic 済み）---
+    let helper_hwnd = parent.pump_until_hello_or(HANDSHAKE_TIMEOUT);
+    assert!(
+        helper_hwnd.is_some(),
+        "上限時間内に helper から HELLO を受領できなかった（ハンドシェイク未完・helper 起動を確認）"
+    );
+
+    // --- ② LOAD 先行（実 pasta の proxy を確立＝REQUEST の構造的前提）→ ack[1] を assert ---
+    let load_ack = parent
+        .send_request(MsgTag::Load, &[], LOAD_ACK_TIMEOUT)
+        .expect("LOAD の send_request が失敗（ack 未達・proxy 未確立では REQUEST 不能）");
+    assert_eq!(
+        load_ack,
+        vec![1u8],
+        "実 pasta の LOAD 成功 ack [1]（proxy 確立）を先に得る（REQUEST の前提・R6.1）"
+    );
+
+    // --- request 出口 API を構築（ハンドシェイク＋LOAD 済みの親窓を借用）---
+    let client = Shiori3Client::new(&parent);
+
+    // --- ③ 周期運転: N_PASTA 回の NOTIFY 連打（応答内容非依存＝transport 健全性のみ観測・R6.1）---
+    //     NOTIFY は応答を破棄する契約ゆえ実 pasta の応答内容に依らない。イベント運行の意味論検証は
+    //     しない（kanade 領分）。連打が Err なく通ることと helper 生存継続を観測する。
+    for i in 0..N_PASTA {
+        // notify transport が成功すること（応答 status は破棄・内容に assert しない・R6.1）。
+        client
+            .notify("OnSecondChange", &[])
+            .unwrap_or_else(|e| panic!("反復 {i}: notify(OnSecondChange) の transport が Err（{e:?}）"));
+
+        // helper 生存継続（sticky・非ブロッキング status()）。
+        assert!(
+            matches!(lifecycle.status(), HelperStatus::Running),
+            "反復 {i}: 連打中も実 pasta helper は稼働継続している（R6.1）"
+        );
+    }
+
+    // --- ④ N_PASTA 連打を生き延びた ---
+    assert!(
+        matches!(lifecycle.status(), HelperStatus::Running),
+        "全 {N_PASTA} 連打後も実 pasta helper は稼働継続している（R6.1）"
+    );
+
+    // --- client（`&parent` 借用）を解放してから shutdown へ進む（clean・借用終端の明示）---
+    drop(client);
+
+    // --- ⑤ 正規の clean shutdown: UNLOAD → 正常終了 → exit0 → ExitKind::Clean を観測（confidence・R6.1）---
+    let kind = lifecycle
+        .request_clean_shutdown(&parent)
+        .expect("real pasta clean shutdown");
+    assert_eq!(
+        kind,
+        ExitKind::Clean,
+        "実 pasta も正規正常終了経路で Clean（confidence・R6.1）"
+    );
+    eprintln!(
+        "実 pasta 周期連打（{N_PASTA} 回 NOTIFY）＋正規 clean shutdown 完走（Clean・R6.1）: {pasta_dll:?}"
+    );
+
+    // --- 親窓を明示 drop（同時生存親窓を高々 1 に保つ）---
+    //     load_dir は実 pasta 自身の dir ゆえ削除しない（本テストが作った temp ではない）。
+    drop(parent);
 }
