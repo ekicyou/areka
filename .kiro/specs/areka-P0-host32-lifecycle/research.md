@@ -174,7 +174,7 @@ pub enum RequestError {
 
 1. **統一報告型の形**（R2）: A=`RequestError` 拡張／B=両者を包む新型／C=突合純関数＋小 enum。凍結 `RequestError` の意味論不変（R7.2）を最も素直に守るのは B/C。**本仕様が報告型の正本**（kanade 消費・非再定義）ゆえ形と `Send` 境界を本仕様で確定する必要。
 2. **死活監視の駆動タイミング／スレッド要否**（R1・Boundary で design 送り明言）: A=request 前後 poll（スレッド追加なし・brief 忠実）／B=pump ループ内周期チェック／C=専用監視スレッド（requirements が牽制）。A で足りるかの論証が要る。
-3. **`error!` の実体とログ依存追加**（R4.4/R5.5/R7.6 × steering `tracing` 規約）: host クレートは現状ログ機構ゼロ（`tracing` 依存なし・本体に `error!`/`eprintln!` 皆無）。`tracing` 導入（意図的依存追加＝承認事項）か helper 流 `eprintln!` 許容か。silent-failure 禁止（MEMORY）を満たす最小形の確定。
+3. **`error!` の実体とログ依存追加**（R4.4/R5.5/R7.6 × steering `tracing` 規約）: host クレートは現状ログ機構ゼロ（`tracing` 依存なし・本体に `error!`/`eprintln!` 皆無）。**【discussion 決着 2026-07-05】** steering `logging.md`（行 15-18）が `shiori-host32-*` を `tracing = { workspace = true }` 消費ライブラリクレートとして明示列挙済み。ゆえに host クレートへの `tracing` 追加は**新規の意図的依存承認事項ではなく steering 準拠**であり、design は再議論不要——`shiori-host32-host/Cargo.toml` に `tracing = { workspace = true }` を足し、`error!`＋`Err` で失敗経路を surface する（subscriber 初期化はテスト/アプリ層の責務・ライブラリはマクロ発行のみ）。`eprintln!` 許容案は棄却。残る design 判断は「どの失敗経路に `error!` を置くか」の配置のみ（機構選定ではない）。
 4. **通常 shutdown→`ExitKind::Clean`(0) の観測経路**（R5.1）: 現 helper は正常終了経路を持たず（`MessageLoop::run` 無停止・main.rs「終了条件は下流が結線」）、`terminate` は Clean にならない。Clean 観測に (a) helper へ終了トリガ増分／(b) stand-in `exit(0)` 経路で代替、のいずれを採るか。helper 側増分の要否は本仕様スコープ判断。
 5. **周期運転の「leak/handle 枯渇/ResponseSlot 巻き込みなし」の決定的観測基準**（R3.5）: 最小 assert（全往復成功＋`poll_exit_kind`→None＋pid 生存）で足るか、追加のハンドル/リソース計数を課すか。過剰計測を避けつつ決定性を担保する基準の確定。
 6. **周期連打の反復回数と決定性担保**（R3.5/7.5）: 「OnSecondChange 相当の頻度」を実時間依存なしにどう定数化するか（回数固定＋bounded poll・実 sleep 排除）。CI 再現性の担保方法。
