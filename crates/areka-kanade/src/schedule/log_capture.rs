@@ -76,10 +76,12 @@ pub(crate) fn capture<F: FnOnce()>(f: F) -> Vec<CapturedEvent> {
     let layer = CaptureLayer { sink: sink.clone() };
     let subscriber = tracing_subscriber::registry().with(layer);
     tracing::subscriber::with_default(subscriber, f);
-    Arc::try_unwrap(sink)
-        .expect("capture sink は with_default 終了後に唯一参照へ戻る")
-        .into_inner()
-        .expect("capture sink mutex は毒化しない")
+    // NOTE: `with_default` 終了後も tracing は Dispatch（subscriber＝sink を内包する Layer を
+    // 保持）を一時的に clone し得るため、sink の strong_count が 1 に戻る保証はない。
+    // よって `Arc::try_unwrap` は並列テスト下で稀に失敗し panic する（タスク 6.2 レビューで
+    // 発覚した flaky race・~1/10〜1/20）。参照数に依存せず、ロック下で捕捉列を取り出して返す。
+    // f 完了後に本スレッドで新規イベントは発行されないため take で安全に確定できる。
+    std::mem::take(&mut *sink.lock().expect("capture sink mutex は毒化しない"))
 }
 
 /// 捕捉列に `target="kanade"`・`event=event_name`・`level` のイベントが存在することを表明する。
