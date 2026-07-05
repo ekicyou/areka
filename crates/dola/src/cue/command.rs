@@ -110,7 +110,7 @@ pub enum RoutingCommand {
 // 演出コマンド
 // ============================================================================
 
-/// 演出コマンド（6 バリアント、データ系のみ）。
+/// 演出コマンド（7 バリアント、データ系のみ）。
 ///
 /// バリアは `BarrierKind` として、ルーティングは `RoutingCommand` として、
 /// それぞれ `Entry` レベルで分離済み。
@@ -131,6 +131,8 @@ pub enum CueCommand {
         command: String,
         params: DynamicValue,
     },
+    /// 改行（比率 1.0=全角 1 行）。意味解釈は消費者の責務。
+    NewLine { ratio: f32 },
 }
 
 // ============================================================================
@@ -222,7 +224,7 @@ mod tests {
     }
 
     #[test]
-    fn cue_command_six_variants() {
+    fn cue_command_seven_variants() {
         let cmds = vec![
             CueCommand::Text("hello".into()),
             CueCommand::Clear,
@@ -238,8 +240,9 @@ mod tests {
                 command: "fade".into(),
                 params: DynamicValue::Null,
             },
+            CueCommand::NewLine { ratio: 1.0 },
         ];
-        assert_eq!(cmds.len(), 6);
+        assert_eq!(cmds.len(), 7);
 
         // Clone + Debug + PartialEq
         for cmd in &cmds {
@@ -287,6 +290,14 @@ mod tests {
         let json = serde_json::to_string(&barrier).unwrap();
         let parsed: BarrierKind = serde_json::from_str(&json).unwrap();
         assert_eq!(barrier, parsed);
+    }
+
+    #[test]
+    fn cue_command_newline_serde_roundtrip() {
+        let cmd = CueCommand::NewLine { ratio: 1.5 };
+        let json = serde_json::to_string(&cmd).unwrap();
+        let parsed: CueCommand = serde_json::from_str(&json).unwrap();
+        assert_eq!(cmd, parsed);
     }
 
     #[test]
