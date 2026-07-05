@@ -417,7 +417,7 @@ pub fn spawn_talk(
 ) -> areka_actor::ActorHandle;
 ```
 - **Preconditions**: `start.reply` は生存する `ReplyReceiver` と対（kanade or テスト）。
-- **Postconditions**: 終端・中断のいずれでも `TalkDone` を高々 1 回返し body 復帰（スレッド終了）。
+- **Postconditions**: 終端・中断のいずれでも `TalkDone` を高々 1 回返し body 復帰（スレッド終了）。高々 1 回は `ReplySender` の move-consume で型強制し、`TalkDone` 送出後は body が `reply` を保持しないため再返信は構造的に不可能（R6.4/R7.5）。
 - **Invariants**: 1 talk の再生状態は当該アクター body に閉じ、他 talk と共有しない（R10.3）。
 
 ##### Event Contract
@@ -433,7 +433,7 @@ pub fn spawn_talk(
 **Implementation Notes**
 - Integration: 時刻注入は「駆動ループが `tick(current_time)` を消費する」形。テストは注入時刻列を与え sleep しない（R9.1）。本番の実時刻結線（clock/`recv_timeout` 刻み）は本層内部に閉じ、注入インターフェースを変えない。
 - Validation: mock sink 2 本＋fixture＋期待値表で単一 pass/fail（R9.3）。
-- Risks: 二重 `TalkDone`（自然終端後の Close）は R7.5 で禁止＝終端済みフラグ or `ReplySender` consume 済みで型的に防ぐ。sink 送出失敗は `tracing::error!`＋可能な範囲で継続/観測可能終端（R11.1）。
+- Risks: 二重 `TalkDone`（自然終端後の Close）は R7.5 で禁止。**唯一の高々 1 回機構は `ReplySender::send(self)` の move-consume**（`areka-actor` `reply.rs`）とし、終端済みフラグは持たない（フラグと consume の二重管理は R7.5 の唯一結果性を却って曖昧化するため排除）。不変条件: 自然終端で `TalkDone` を送った時点で body は `reply` を move 済み＝以降 `reply` を保持せず即 body 復帰するため、後続の Close は構造的に再返信し得ない。sink 送出失敗は `tracing::error!`＋可能な範囲で継続/観測可能終端（R11.1）。
 
 ### 出力結線（sink）
 
