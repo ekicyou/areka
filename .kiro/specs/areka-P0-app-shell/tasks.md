@@ -1,7 +1,7 @@
 # Implementation Plan
 
 - [ ] 1. モックデモを example へ移設し保全する
-- [ ] 1.1 モック UI 本体（定数・マーカー・生成関数・登録システム・ハンドラ・main 結線・操作ガイド）を `examples/mock-shell.rs` へコピーして構築する
+- [x] 1.1 モック UI 本体（定数・マーカー・生成関数・登録システム・ハンドラ・main 結線・操作ガイド）を `examples/mock-shell.rs` へコピーして構築する
   - シェル／バルーン窓の生成関数・ドラッグ／ダブルクリックハンドラ・クリック透過登録システムを新規 example ファイルへ移す
   - example 独自の tracing subscriber 初期化を追加し、`windows_subsystem` 属性は付与しない
   - `cargo run -p areka --example mock-shell` が起動し、シェル＋バルーン 2 窓が表示され、ドラッグでバルーンが追従し、ダブルクリックで全窓が終了する（従来デモと同一挙動）
