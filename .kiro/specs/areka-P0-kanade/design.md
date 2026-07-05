@@ -157,7 +157,7 @@ talk.rs（型・std のみ）
 | DD-6 | talk 重複時の調停 | **発生源から断つ**: active talk 中の Tick は `OnSecondChange` を **NOTIFY（Ref3=0）** で発行（正典どおり・応答は構造的に破棄）。防御として active talk 中に Value が届く想定外経路は warn!＋破棄。キュー・中断は導入しない | ukadoc OnSecondChange の正典意味論（talk 不能時 Ref3=0＋NOTIFY・返却スクリプト無視）がそのまま調停規則になる |
 | DD-7 | quit=true の扱い | ✅ 要件確定済み: 由来・状態を問わず終了系列へ直行（Req 4.3）／OnClose は要求のみ（Req 4.5） | 要件ディスカッション #2 |
 | DD-8 | 実 helper 追験の結線範囲 | env-gate テストが **spawn→HELLO→LOAD→kanade 運行→teardown を自前結線**（単一 `#[test]`・`HOST32_PASTA_DLL` silent skip）。LOAD は kanade の責務外＝テスト側 connect 手順として発行 | 親窓 1 枚制約・既存 E2E 慣行（`send_request(MsgTag::Load, ..)`）の踏襲 |
-| DD-9 | 公開面の最小化 | 公開＝`spawn_kanade`・`KanadeMsg`・talk 契約型・`ShioriMsg` 系メッセージ型・`KanadeConfig`・`spawn_shiori_actor`。`schedule/` は `pub(crate)`・`shiori/real.rs` の内部型は非公開 | 将来の呼び手 ghost-setup が消費する面だけを公開 |
+| DD-9 | 公開面の最小化 | 公開＝`spawn_kanade`・`KanadeMsg`・talk 契約型・`ShioriMsg` 系メッセージ型・`KanadeConfig`・`spawn_shiori_actor`。`schedule/` は `pub(crate)`——**ただし `schedule/events.rs` の Reference 表構成関数（純粋・副作用なし）のみ例外的に `pub` とする**（tests/ 配下の統合テストクレートは `pub(crate)` を参照できないため。Req 7.1 の「fixture・検証・実装が単一の正本を共有」を成立させる唯一の経路）。`schedule/` の他の内部（Phase/State/Action/Input/step 本体・boot/steady/close の遷移ロジック）は `pub(crate)` のまま。`shiori/real.rs` の内部型は非公開 | 将来の呼び手 ghost-setup が消費する面だけを公開しつつ、tests/ から Reference 表を re-derive できるようにする（タスクグラフ健全性レビューで発覚した可視性欠陥の是正・2026-07-05） |
 | DD-10 | 強制終了時の OnClose 発行 | **best-effort NOTIFY `OnClose`（Ref0=理由）を 1 発**→即 終了系列（応答待ちなし・送出失敗はログのみ）。GET 握手は行わない（Req 4.4 の「直行」を毀損するため） | ukadoc: シャットダウン時の終了理由は `system`。NOTIFY は SHIORI プロトコル上応答を破棄する呼び方＝「一報だけ入れて待たない」の正準形 |
 | DD-11 | close 運行と正典の差分 | ✅ 設計ディスカッション #1（2026-07-05）で確定: **OnClose 単独運行・204＝応答なし（≠拒否）→無言で終了系列直行・OnCloseAll は M1 非発行**。全終了フロー（正典: OnCloseAll→204→OnClose）の導入は M-e2e で再訪（`events.rs`＋`schedule/close.rs` への局所化は維持＝導入時の波及最小） | 正典の OnCloseAll は全終了フロー先頭のイベント。単一ゴースト M1 では縮退し、終了拒否権は Value 経路（`\-` 無しスクリプト）で保たれる |
 | — | close 再生完了待ち上限 | **`KanadeConfig.close_talk_deadline_ms`＝既定 30_000ms**（注入時刻で判定・Req 4.7） | ukadoc に正典値なし（de-facto 領域）。無限待ちの禁止と終了拒否 talk の尊重の折衷として 30s。結線側で構成可能・テストは小さい値を注入 |
@@ -174,7 +174,7 @@ crates/areka-kanade/
 │   │                        #   CloseReason / MonotonicMs / KanadeConfig（host32 非依存）
 │   ├── schedule/            # 【純粋運行状態機械】I/O・スレッド・channel 非依存
 │   │   ├── mod.rs           # Phase / Action / step() 入口・共通遷移（TalkDone/ForceQuit/ShioriDown）
-│   │   ├── events.rs        # ukadoc Reference 表の実装正本（イベント名・Method・References 構成関数）
+│   │   ├── events.rs        # ukadoc Reference 表の実装正本（イベント名・Method・References 構成関数・`pub`＝DD-9 例外）
 │   │   ├── boot.rs          # boot 系列遷移（Req 1）
 │   │   ├── steady.rs        # pump ゲート・talk 調停・保留 close（Req 2・3）
 │   │   └── close.rs         # close 握手・期限判定・終了系列（Req 4）
