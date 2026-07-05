@@ -137,6 +137,20 @@ graph TB
 
 relay の停止は自然停止（上流の全 Sender drop → recv Err → 終了）であり、明示 Close を持たない（kanade 停止＝start_tx drop、shiori 停止＝down_tx drop に連動する）。
 
+#### アクター別の停止経路（正本）
+
+actor-foundation の停止 2 経路（Close／全 Sender drop）は、結線後のトポロジでは**アクターごとに成立範囲が異なる**。下表を停止設計の正本とし、shutdown 系列と spine e2e S6 はこの表の伝播順序を検証する。
+
+| アクター | Close 経路 | 切断（全 Sender drop）経路 | 備考 |
+|---|---|---|---|
+| dispatcher | `DispatcherMsg::Close`（**唯一の停止経路**） | **構造的に不能**——per-talk done ポート用 self-sender を body が恒久保持するため inbox は切断に到達しない | Close-only は self-sending actor の固有性質（std mpsc に weak sender は無い）。done 専用 channel＋relay 化しても dispatcher⇄relay で同型の環が再生するだけで解消しない（却下） |
+| kanade | `KanadeMsg::Close`／`ForceQuit`（終了系列→StopSelf） | 成立——ただし dispatcher・down-relay・runtime の全 kanade_tx 解放後に限る | 通常 shutdown は ForceQuit 経路。切断経路は S6 で（解体後に）検証 |
+| shiori actor | `ShioriMsg::Close`（kanade 終了系列が送出） | 成立——kanade 停止（shiori_tx drop）で inbox 切断（**runtime は shiori_tx を保持しない**） | kanade panic 時のフォールバックが切断経路＝runtime 非保持がその前提 |
+| ticker | `TickerMsg::Close` | 成立（制御端 drop） | 送出先切断は sticky 停止（対象ごと・一度だけ info!） |
+| relay（start／down） | なし（明示 Close を持たない） | 成立（上流全 Sender drop で自然終了・下流切断は warn 終了） | 上流の停止に連動する設計 |
+
+**Sender 環の存在（設計事実）**: on_down 保持（死活監視・要件 3.4）により kanade —(shiori_tx)→ shiori —(down_tx)→ down-relay —(kanade_tx)→ kanade の Sender 環が生じ、dispatcher は self-sender で自環を持つ。したがって**純粋な「全 Sender drop」だけでは全体は停止しない**。全体の停止は必ず Close 起点（`ForceQuit` または `Close`）で環を切ってから切断を伝播させる——これが shutdown 系列と S6 の設計原理である。
+
 ### Technology Stack
 
 | Layer | Choice / Version | Role in Feature | Notes |
@@ -254,6 +268,7 @@ sequenceDiagram
 - shutdown の起動は `ForceQuit` 一本（DD-10 の OnClose NOTIFY→Unload→StopSelf 系列＝quit ゲート迂回・決定論的に完走）。kanade が既に自発停止済み（quit talk 等）の場合、送信は `Err` になるが kanade は自身の終了系列で Unload を既に実行済みであり、shutdown は debug ログの上で join 工程へ進む（冪等）。
 - 要件 6.2 の「kanade の停止を観測したとき SHIORI へ Unload」は、**kanade の終了系列そのもの**（`Action::ShioriUnload` → 正規化された Unload アーム）として実現する。ghost が Unload を二重発行することはない（kanade の全終了経路——Quit／CloseRequest 完了／Fault／ForceQuit——が Unload を経由することは kanade 仕様で保証済み）。
 - join の順序は「上流から」: kanade → dispatcher → ticker → shiori → relay。各 join の失敗（panic 観測）は `error!` の上で継続収集し、最後に `GhostShutdownError` へまとめる（silent failure なし・要件 6.5）。
+- shiori actor の停止は kanade 終了系列の `ShioriMsg::Close` が正経路。kanade が panic した場合は kanade スレッド unwind による shiori_tx drop → inbox 切断がフォールバックとして機能する（**GhostRuntime は shiori_tx を保持しない**——保持すると join 時に切断フォールバックを自ら塞ぐ）。停止経路の成立範囲は「アクター別の停止経路」マトリクスを正本とする。
 
 ## Requirements Traceability
 
@@ -446,7 +461,7 @@ where
 - `ShioriConnection` は `helper: HelperLifecycle` を所有する形へ変更（生 `HelperHandle` を `HelperLifecycle::new` で包む）。`impl ShioriBackend for ShioriConnection` を与え、既存の中間構造 `ConnectionBackend` は廃止する。
 - `ShioriMsg::Unload` アーム: スタブ（`Unloaded` 即返し）を撤去し、`backend.unload()`＝`HelperLifecycle::request_clean_shutdown(&window)` を呼ぶ。`Ok(ExitKind::Clean)` → `info!`＋`Unloaded`。`Ok(その他)` → `warn!`（unload は完了・終了種別が Clean でない）＋`Unloaded`。`Err(ShutdownError)` → `error!`＋`Failed(ShioriFailure::Ipc(display))`。
 - 死活監視: 受信ループを `recv_timeout(LIVENESS_POLL_INTERVAL)`（定数 500ms）へ変え、**毎ループ周回の冒頭**（メッセージ受信時・タイムアウト時の両方）で `backend.status()` を確認する。`Exited(kind)` を初回観測したら `error!`＋`on_down.send(ShioriDown{reason})` を**一度だけ**送る（sticky フラグ）。unload 成功後は死活報告を発火しない（正規終了は死ではない）。
-- `on_down` の寿命変更: 接続成功後も drop せず受信ループ中保持する（死活報告経路・要件 3.4）。kanade の「全 Sender drop で正常終了」は ghost トポロジでは down-relay が仲介するため影響しない（rustdoc の Req 4.9 注記を更新し、Revalidation Trigger として記録）。
+- `on_down` の寿命変更: 接続成功後も drop せず受信ループ中保持する（死活報告経路・要件 3.4）。**この保持は kanade→shiori→down-relay→kanade の Sender 環を作り、kanade の「全 Sender drop で正常終了」（旧 Req 4.9 の前提）は環の解体（kanade 自身の Close／StopSelf）後にのみ成立する**——「アクター別の停止経路」マトリクス参照。kanade rustdoc の Req 4.9 注記は「on_down 保持構成では、切断停止は Close 起点の解体後に伝播する」旨へ更新する（Revalidation Trigger として記録）。
 
 **Contracts**: Service [x] / Event [x]
 
@@ -532,7 +547,7 @@ where
     T: TextSink + Clone + Send + 'static;
 ```
 
-- Delivery guarantees: 単一 inbox の FIFO 全順序。per-talk done ポート用の self-sender（`Sender<DispatcherMsg>` の clone）は、`spawn_dispatcher` が内部の受け渡しチャンネル（`areka_actor::reply_channel::<Sender<DispatcherMsg>>`）経由で body へ渡す——`spawn_actor` が返した送信端の clone を Sender を外部へ返す**前**に送り、body は受信ループ突入前に一度だけ受領する（`DispatcherMsg` enum を内部機構で汚さない・外部観測不能）。
+- Delivery guarantees: 単一 inbox の FIFO 全順序。per-talk done ポート用の self-sender（`Sender<DispatcherMsg>` の clone）は、`spawn_dispatcher` が内部の受け渡しチャンネル（`areka_actor::reply_channel::<Sender<DispatcherMsg>>`）経由で body へ渡す——`spawn_actor` が返した送信端の clone を Sender を外部へ返す**前**に送り、body は受信ループ突入前に一度だけ受領する（`DispatcherMsg` enum を内部機構で汚さない・外部観測不能）。この self-sender 保持により dispatcher の inbox は決して切断に到達しない＝**dispatcher の停止経路は Close のみ**（「アクター別の停止経路」マトリクス参照・shutdown と S6 は Close 経路で停止させる）。
 - kanade への転送失敗（kanade 既停止）は `debug!` で無視（shutdown 進行中の正常事象）。
 
 #### ghost::ticker（時刻供給）
@@ -740,7 +755,7 @@ impl GhostRuntime {
   - **S3 helper 死活**: scripted `status` が `Exited(Abnormal)` へ遷移→次のループ周回（次の request 到達時）で ShioriDown→Fault 系列→全 join。
   - **S4 close 握手**: CloseRequest→OnClose GET が close talk（`\-` 終端）→TalkDone{Quit}→Unload が呼ばれ scripted `Ok(ExitKind::Clean)`→`Unloaded` 観測→StopSelf→shutdown で全スレッド join（要件 7.3）。
   - **S5 close deadline**: close talk を意図的に完了させず、`KanadeMsg::Tick` の now を deadline 超過まで注入→Unloading{DeadlineExceeded}→Unload→全 join。
-  - **S6 全断線**: `into_parts` で senders を drop→kanade／dispatcher／shiori／relay が全て有界時間内に正常終了（切断 2 経路目の停止規約）。
+  - **S6 全断線（段階的解体）**: `into_parts` で分解し、①`DispatcherMsg::Close` 送出→dispatcher join（Close-only アクターの正規停止）②`KanadeMsg::Close` 送出→kanade join（運行意味論を経ない素の停止）③残る senders を全 drop→shiori actor（kanade の shiori_tx drop による inbox 切断）・down-relay（shiori 停止による down_tx drop）・start-relay（kanade 停止による start_tx drop）が**切断伝播だけで**有界時間内に正常終了することを join で確認する。純粋な「全 Sender drop 一斉解放」は Sender 環（停止経路マトリクス参照）ゆえ構造的に成立しない——本シナリオはマトリクスの全行（Close 経路×2・切断経路×3）を 1 シナリオで検証する再定義である。
 - いずれのシナリオも `cargo test --workspace`（x64）で常時実行される（i686 成果物前提なし・要件 7.6）。
 
 #### real pasta 追験（env ゲート）

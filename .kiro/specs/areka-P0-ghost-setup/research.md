@@ -284,7 +284,7 @@
 
 - `spawn_shiori_actor` の connect を `FnOnce() -> Result<Box<dyn ShioriBackend>, String>` へ一般化する。**R7.1 の「偽 ShioriConnection」の実現形**: 実 `ShioriConnection` は `Child` 所有ゆえプロセスなしで構築不能——注入点（connect closure）と呼出形は要件どおり保ち、**注入される型を backend 抽象へ持ち上げる**ことで純 x64・プロセス spawn ゼロの台本 fake（ScriptedShioriBackend）を成立させる（R7.6）。本番は `impl ShioriBackend for ShioriConnection`（`helper: HelperLifecycle` 化・`ConnectionBackend` 中間構造は廃止）。
 - `ShioriBackend` に `unload(&mut self) -> Result<ExitKind, ShutdownError>`・`status(&mut self) -> HelperStatus` を追加。Unload アームは `request_clean_shutdown` の正規経路へ差し替え（`Ok(Clean)`→info＋`Unloaded`／`Ok(他)`→warn＋`Unloaded`／`Err`→error＋`Failed(Ipc)`）。
-- 死活監視（§4-3）: 受信ループを `recv_timeout(500ms)` 化し、**毎周回冒頭（受信時・タイムアウト時とも）に `status()` を確認**。`Exited` 初回観測で `ShioriDown` を一度だけ送る（sticky・unload 成功後は発火しない）。決定論テストは「メッセージ到達時にも必ず確認」の経路で wall-clock 非依存に検証できる。`on_down` は接続成功後もループ中保持へ変更（旧 Req 4.9 の懸念は down-relay の仲介で解消・kanade rustdoc を更新）。
+- 死活監視（§4-3）: 受信ループを `recv_timeout(500ms)` 化し、**毎周回冒頭（受信時・タイムアウト時とも）に `status()` を確認**。`Exited` 初回観測で `ShioriDown` を一度だけ送る（sticky・unload 成功後は発火しない）。決定論テストは「メッセージ到達時にも必ず確認」の経路で wall-clock 非依存に検証できる。`on_down` は接続成功後もループ中保持へ変更（**是正・設計ディスカッション #1**: 保持は kanade→shiori→down-relay→kanade の Sender 環を作り「全 Sender drop 停止」は環の解体後にのみ成立——「down-relay 仲介で解消」は誤りだった。kanade rustdoc は解体後伝播の旨へ更新・design「アクター別の停止経路」マトリクスが正本）。
 - 却下: 監視の別アクター化——`HelperLifecycle` の所有が actor と ghost に割れ、`!Send` 窓との teardown 責務が二重化する。
 
 #### DD-E（§4-4）: ticker＝単一スレッド・2 cadence・C-inject-B（テストは ticker 不起動）
@@ -301,7 +301,7 @@
 
 #### DD-G（§4-7 続き）: spine e2e のプロセスモデル＝プロセスレス（確定執行）
 
-- 要件ディスカッション #2 の決着（偽 SHIORI 境界・純 x64）を DD-D のシームで執行。シナリオは S1 boot 成功／S2 接続失敗／S3 helper 死活／S4 close 握手（`ExitKind::Clean` 相当）／S5 close deadline／S6 全断線（`GhostRuntime::into_parts` で senders drop→有界 join）。i686 成果物は `cargo test --workspace` の前提から外れる（実 helper は R8.1 の env gate のみ）。
+- 要件ディスカッション #2 の決着（偽 SHIORI 境界・純 x64）を DD-D のシームで執行。シナリオは S1 boot 成功／S2 接続失敗／S3 helper 死活／S4 close 握手（`ExitKind::Clean` 相当）／S5 close deadline／S6 全断線＝**段階的解体**（設計ディスカッション #1 で再定義: dispatcher Close→kanade Close→残 senders drop→切断伝播の有界 join。純粋な全 drop 一斉解放は Sender 環ゆえ構造的に不成立）。i686 成果物は `cargo test --workspace` の前提から外れる（実 helper は R8.1 の env gate のみ）。
 
 #### DD-H（§4-8）: `KanadeConfig.shell_name`＝shell descript の `name`（フォールバック＝shell ディレクトリ名）
 
