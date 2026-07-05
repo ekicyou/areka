@@ -12,21 +12,25 @@
 //!   animation ID 順の 2 段規則（[`derive_ops`]）。静的層の後（上）へ、descend（既定）なら ID 昇順・
 //!   ascend なら ID 降順で bind pattern0 を積む（design 決定5・画家のアルゴリズム）。全パーツが
 //!   bind な surface でも非空 bind 集合から可視層を生成する。
-//! - **task 5.3（本 task）**: 入れ子 surface 参照の**多段再帰 flatten＋循環検出**
+//! - **task 5.3**: 入れ子 surface 参照の**多段再帰 flatten＋循環検出**
 //!   （[`flatten_surface`]）。pattern0 の入れ子参照を pattern の (x,y) をオフセット累積して
 //!   再帰的に inline 展開し、visited 祖先スタックで自己参照・相互参照の循環を検出して非パニックで
 //!   枝を打ち切る（部分結果＋warn・要件 7.1/7.2/7.3）。
+//! - **task 5.4（本 task）**: **placement None スキップ**（[`derive_ops`] へ `AtlasTable` を注入し
+//!   `AtlasEntry.placement` が None の element は命令化せずスキップ・要件 6.3）＋**静的キャンバス外形
+//!   算出**（[`compute_extent`]・[`Extent`]）。外形は**有効 bind 集合に依存せず**、全定義層（全 element
+//!   ＋全 bind animation の pattern0＝有効 bind 非依存）の「配置オフセット＋原寸」の和集合を、原点 (0,0)
+//!   固定・負オフセット分は原点でクリップして算出する（要件 6.5・議題2裁定 (A)）。
 //!
 //! 以下は明示的なシーム（後続 task が本 module を拡張して埋める）:
 //!
-//! - **placement None スキップ＋静的キャンバス外形算出（`Extent`）** → task 5.4
 //! - **描画可能命令ゼロの分類（`SurfaceNotFound`/`EmptyComposition`）** → task 5.5
 //!
 //! 本 module は stub で偽装せず、生成する命令列はすべて実挙動・決定的・テスト済みである。
 //! design 署名 `build_plan`（out_ops/visited/binds/Extent/`Result<_, ComposeError>`）は後続
-//! task（5.4/5.5）が [`derive_ops`] を wrap する形で導入する。
+//! task（5.5）が [`derive_ops`] ＋ [`compute_extent`] を wrap する形で導入する。
 
-use areka_emo_atlas::ElementId;
+use areka_emo_atlas::{AtlasTable, ElementId};
 use areka_parsers::shell::{Interval, SortOrder};
 use bevy_ecs::entity::Entity;
 
@@ -51,13 +55,30 @@ pub struct BlitOp {
     pub method: ComposeMethod,
 }
 
+/// キャンバス外形（合成先1枚物ビットマップの寸法・原点 (0,0) 固定）。
+///
+/// 全定義層（全 element ＋全 bind animation の pattern0）の「配置オフセット＋原寸」の和集合
+/// として [`compute_extent`] が算出する。**有効 bind 集合に依存しない静的量**（要件 6.5・議題2
+/// 裁定 (A)）ゆえ、bind のオン/オフでサイズが変わらず、下流 emo-present のバッファ再利用・
+/// キャッシュ・窓サイズ安定に用いる。負オフセット層は原点でクリップされ、外形は常に (0,0) を
+/// 左上とする。`build_plan`（task 5.5）が `Result<Extent, ComposeError>` として wrap して返す。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Extent {
+    /// 幅（px・原点 (0,0) からの右端）。
+    pub w: u32,
+    /// 高さ（px・原点 (0,0) からの下端）。
+    pub h: u32,
+}
+
 /// 静的 element 層の転写命令を `out_ops` へ layer 昇順（同 layer は登場順）で積む（要件 4.1/4.5）。
 ///
 /// 指定 surface の [`SurfaceMaster`] と平行な [`AtlasBinding`] を World から読み、element を
 /// **layer 昇順・同 layer は登場順**（安定ソート）で列挙する。束縛が `Some(ElementId)` の
 /// element のみ [`BlitOp`] を積み、`None`（未解決・bind 時に warn 済み）の element はスキップ
-/// する（要件 4.3・6.3 の element 側前段）。element の [`Transform`]（転記 x,y の行列表現・
-/// 要件 4.2）と [`ComposeMethod`] をそのまま命令へ伝播する。
+/// する（要件 4.3）。さらに束縛済み element でも [`AtlasTable::entry`] の `placement` が None
+/// （全透明＝空エントリ）なら命令化せずスキップする（要件 6.3・通常系ゆえ warn しない）。
+/// element の [`Transform`]（転記 x,y の行列表現・要件 4.2）と [`ComposeMethod`] をそのまま
+/// 命令へ伝播する。
 ///
 /// `out_ops` は呼び手のスクラッチ Vec を再利用する意図（要件 10.3・完全な再利用形は
 /// task 7 で実現）ゆえ、本関数は **追記のみ**（clear しない）を行う。element 数ぶんの命令を
@@ -81,6 +102,7 @@ pub struct BlitOp {
 pub(crate) fn push_static_element_ops(
     out_ops: &mut Vec<BlitOp>,
     world: &EmoWorld,
+    atlas: &AtlasTable,
     surface_id: u32,
     offset_x: i64,
     offset_y: i64,
@@ -109,6 +131,18 @@ pub(crate) fn push_static_element_ops(
             );
             continue;
         };
+        // placement None（全透明＝空エントリ）の element は命令化せずスキップ（要件 6.3）。原寸は
+        // 既知ゆえ外形（compute_extent）へは寄与するが、転写命令には現れない（通常系・warn しない）。
+        if atlas.entry(element_id).placement.is_none() {
+            tracing::trace!(
+                target: "areka_emo_compose",
+                surface_id,
+                layer = element.layer,
+                path = element.path.as_str(),
+                "placement None（全透明）element を命令からスキップ（外形へは寄与）"
+            );
+            continue;
+        }
         // 入れ子参照の (x,y) オフセットを element 配置へ足し込む（1 段 inline 展開・要件 5.2 の
         // pattern0 入れ子参照。M1 は平行移動のみゆえ加算で足りる）。offset=(0,0) の合成対象自身の
         // 静的層では element の transform そのままになる。
@@ -155,28 +189,35 @@ pub(crate) fn push_static_element_ops(
 /// 整列し、入れ子 flatten も同一走査順で決定的ゆえ、同一入力（World／surface_id／binds）に対し
 /// 毎回同一命令列を append する（循環入力でも有界かつバイト等価）。
 ///
+/// # placement None スキップ（task 5.4・要件 6.3）
+///
+/// `atlas` を [`push_static_element_ops`] へ渡し、束縛済みでも `AtlasEntry.placement` が None
+/// （全透明）の element は命令化せずスキップする。**有効 bind pattern0 の入れ子参照先も本経路の
+/// element として展開される**ため、そこにある placement None element も同様にスキップされる。
+///
 /// # シーム（後続 task が本関数を拡張して埋める）
 ///
-/// - **placement None スキップ＋静的キャンバス外形（`Extent`）算出** → task 5.4。
 /// - **描画可能命令ゼロの Err 分類（`SurfaceNotFound`/`EmptyComposition`）** → task 5.5。本関数は
 ///   分類を返さず、不在 surface に対しては何も積まない（非パニック）。公開ファサード `build_plan`
-///   （`Result<Extent, ComposeError>`・visited をスクラッチ引数へ）は 5.4/5.5 が本関数を wrap して導入する。
+///   （`Result<Extent, ComposeError>`・visited をスクラッチ引数へ）は 5.5 が本関数＋[`compute_extent`]
+///   を wrap して導入する。
 ///
-/// 本 task（5.3）では非テストの lib 経路からの呼び出し口（`build_plan` ファサード）が未導入ゆえ
-/// `dead_code` になる。消費は task 5.4/5.5 の `build_plan` が本関数を wrap して行う（それまで
+/// 本 task（5.4）では非テストの lib 経路からの呼び出し口（`build_plan` ファサード）が未導入ゆえ
+/// `dead_code` になる。消費は task 5.5 の `build_plan` が本関数を wrap して行う（それまで
 /// 意図的な未使用シーム・本 module 内の呼び出し鎖 `push_static_element_ops`/`flatten_surface`/
 /// `surface_and_binding`/`is_bind_interval` もこの一点から辿られるため、`allow` はここへ集約する）。
 #[allow(dead_code)]
 pub(crate) fn derive_ops(
     out_ops: &mut Vec<BlitOp>,
     world: &EmoWorld,
+    atlas: &AtlasTable,
     surface_id: u32,
     binds: &BindSet,
 ) {
     // visited 祖先スタック（design: Composer スクラッチの Vec<u32>）。build_plan ファサード導入時
-    // （5.4/5.5）は呼び手のスクラッチを引数で受け取り再利用する。本 task はエントリで確保する。
+    // （5.5）は呼び手のスクラッチを引数で受け取り再利用する。本 task はエントリで確保する。
     let mut visited: Vec<u32> = Vec::new();
-    flatten_surface(out_ops, &mut visited, world, surface_id, binds, 0, 0);
+    flatten_surface(out_ops, &mut visited, world, atlas, surface_id, binds, 0, 0);
 }
 
 /// 合成対象 surface（top-level）／入れ子参照先 surface（再帰）を平坦化して `out_ops` へ積む。
@@ -198,6 +239,7 @@ fn flatten_surface(
     out_ops: &mut Vec<BlitOp>,
     visited: &mut Vec<u32>,
     world: &EmoWorld,
+    atlas: &AtlasTable,
     surface_id: u32,
     binds: &BindSet,
     offset_x: i64,
@@ -214,8 +256,8 @@ fn flatten_surface(
     }
     visited.push(surface_id);
 
-    // 層（i）: 当 surface 自身の静的 element を累積オフセットで積む。
-    push_static_element_ops(out_ops, world, surface_id, offset_x, offset_y);
+    // 層（i）: 当 surface 自身の静的 element を累積オフセットで積む（placement None はスキップ）。
+    push_static_element_ops(out_ops, world, atlas, surface_id, offset_x, offset_y);
 
     // 当 surface 不在なら bind 層もない（後続 task が SurfaceNotFound 分類を担う）。存在する場合のみ
     // bind 層を積む。いずれにせよ枝離脱で visited を pop する。
@@ -283,6 +325,7 @@ fn flatten_surface(
                 out_ops,
                 visited,
                 world,
+                atlas,
                 nested_id,
                 binds,
                 offset_x + pattern0.x,
@@ -294,6 +337,121 @@ fn flatten_surface(
     // 枝離脱: 祖先スタックから pop（非循環の重複参照は別経路で再展開可能に保つ・要件 7.1）。
     let popped = visited.pop();
     debug_assert_eq!(popped, Some(surface_id), "visited は祖先スタック（LIFO）");
+}
+
+/// キャンバス外形（[`Extent`]）を**有効 bind 集合に依存せず静的に**算出する（要件 6.5・議題2裁定 (A)）。
+///
+/// 母集合は **surface の全定義層**＝全 element ＋**全 bind animation の pattern0**（`binds` に
+/// 含まれるか否かに関係なく全部）。各層 element の「累積配置オフセット＋原寸（[`AtlasEntry::original`]）」
+/// の和集合を、原点 (0,0) 固定・負オフセット分は原点でクリップして取る。`extent = (max_x, max_y)`、
+/// 各層で `max_x = max(max_x, max(0, offset_x + original.w))`・同様に `max_y`。**`placement: None`
+/// （全透明）の element も原寸は既知ゆえ外形へ寄与する**（design 明記）。
+///
+/// これにより **bind のオン/オフでサイズが変わらない**（同一 surface へ異なる `BindSet` を渡しても
+/// [`Extent`] が不変・emo-present のバッファ再利用/窓サイズ安定に必須）。入れ子 surface 参照は
+/// [`flatten_surface`] と同一の pattern の (x,y) オフセット累積＋visited 祖先スタックによる循環検出で
+/// 走査する（ops 経路との違いは「全 bind pattern0 を母集合とする」点のみ）。
+///
+/// element ゼロ・bind ゼロの surface（外形へ寄与する層が皆無）や不在 surface では `Extent { w:0, h:0 }`
+/// を返す（0×0 退化の Err 分類は task 5.5 の責務・本関数は分類しない）。
+#[allow(dead_code)]
+pub(crate) fn compute_extent(world: &EmoWorld, atlas: &AtlasTable, surface_id: u32) -> Extent {
+    let mut max_x: i64 = 0;
+    let mut max_y: i64 = 0;
+    // ops 経路と同じ祖先スタック規律で循環検出する（別走査・別集約器だが構造は共有）。
+    let mut visited: Vec<u32> = Vec::new();
+    flatten_extent(&mut max_x, &mut max_y, &mut visited, world, atlas, surface_id, 0, 0);
+    Extent {
+        // max_x/max_y は原点クリップ済みゆえ常に >= 0。u32 化は飽和で安全側（負にはならない）。
+        w: max_x.max(0) as u32,
+        h: max_y.max(0) as u32,
+    }
+}
+
+/// [`compute_extent`] の再帰ワーカ: 当 surface の全定義層を走査し `max_x`/`max_y` を更新する。
+///
+/// [`flatten_surface`]（ops 経路）と同一の入れ子 flatten 構造（オフセット累積＋visited 祖先スタック
+/// による循環検出）を持つが、**bind の母集合が異なる**: ops は有効 bind（`binds` ∩ bind animation）
+/// のみ、本関数は**全 bind animation の pattern0**（`binds` 非依存・有効/非有効を問わない）を辿る。
+/// これが「外形は有効 bind 集合に依存しない静的量」（要件 6.5）の実装核心である。
+///
+/// 各静的 element については `AtlasBinding` が `Some(ElementId)` のもののみ、`atlas.entry(id).original`
+/// を「累積オフセット＋原寸」として外形へ寄与させる（未束縛 None は原寸不明ゆえ寄与しない）。
+/// `placement` が None でも `original` は既知ゆえ寄与する（ops ではスキップされる層も外形は数える）。
+#[allow(dead_code)]
+fn flatten_extent(
+    max_x: &mut i64,
+    max_y: &mut i64,
+    visited: &mut Vec<u32>,
+    world: &EmoWorld,
+    atlas: &AtlasTable,
+    surface_id: u32,
+    offset_x: i64,
+    offset_y: i64,
+) {
+    // 循環検出（ops 経路と同一規律・要件 7.2/7.3）: 現在の祖先経路に既出なら打ち切り。
+    if visited.contains(&surface_id) {
+        tracing::warn!(
+            target: "areka_emo_compose",
+            surface_id,
+            "外形算出: 入れ子参照の循環を検出・枝を打ち切り"
+        );
+        return;
+    }
+    visited.push(surface_id);
+
+    if let Some((master, binding)) = surface_and_binding(world, surface_id) {
+        // 当 surface の静的 element を外形へ寄与させる（束縛済み・placement 有無を問わず原寸で数える）。
+        for (i, _element) in master.elements.iter().enumerate() {
+            let Some(element_id) = binding.0.get(i).copied().flatten() else {
+                // 未束縛（原寸不明）は外形に寄与できない。ops 側でも skip 済み。
+                continue;
+            };
+            let original = atlas.entry(element_id).original;
+            // 負オフセットは原点でクリップ（外形は (0,0) を左上に固定・負方向はみ出しは転写時クリップ）。
+            *max_x = (*max_x).max((offset_x + original.w as i64).max(0));
+            *max_y = (*max_y).max((offset_y + original.h as i64).max(0));
+        }
+
+        // **全** bind animation の pattern0 を母集合として辿る（有効/非有効を問わない・6.5 の核心）。
+        // 描画順は外形に無関係（max の和集合ゆえ順序不変）だが、決定性のため id 昇順で走査する。
+        let mut bind_ids: Vec<u32> = master
+            .animations
+            .iter()
+            .filter(|a| is_bind_interval(&a.interval))
+            .map(|a| a.id)
+            .collect();
+        bind_ids.sort_unstable();
+        bind_ids.dedup();
+
+        for id in bind_ids {
+            let Some(anim) = master.animations.iter().find(|a| a.id == id) else {
+                continue;
+            };
+            let Some(pattern0) = anim.patterns.iter().min_by_key(|p| p.index) else {
+                continue;
+            };
+            if pattern0.surface_id < 0 {
+                // センチネル（非描画）は外形に寄与しない（ops 経路と一致）。
+                continue;
+            }
+            let nested_id = pattern0.surface_id as u32;
+            flatten_extent(
+                max_x,
+                max_y,
+                visited,
+                world,
+                atlas,
+                nested_id,
+                offset_x + pattern0.x,
+                offset_y + pattern0.y,
+            );
+        }
+    }
+
+    // 枝離脱: 祖先スタックから pop（非循環の重複参照は別経路で再走査可能・要件 7.1）。
+    let popped = visited.pop();
+    debug_assert_eq!(popped, Some(surface_id), "外形算出: visited は祖先スタック（LIFO）");
 }
 
 /// interval が bind 種（`Interval::Bind`/`Interval::BindRandom`）か（要件 5.2・design 層列挙）。
@@ -487,7 +645,7 @@ mod tests {
         world.bind_atlas(&atlas, SetId(0));
 
         let mut ops = Vec::new();
-        push_static_element_ops(&mut ops, &world, 1000, 0, 0);
+        push_static_element_ops(&mut ops, &world, &atlas, 1000, 0, 0);
 
         let paths: Vec<&str> = ops
             .iter()
@@ -519,7 +677,7 @@ mod tests {
         world.bind_atlas(&atlas, SetId(0));
 
         let mut ops = Vec::new();
-        push_static_element_ops(&mut ops, &world, 1, 0, 0);
+        push_static_element_ops(&mut ops, &world, &atlas, 1, 0, 0);
 
         let paths: Vec<&str> = ops
             .iter()
@@ -547,9 +705,9 @@ mod tests {
         world.bind_atlas(&atlas, SetId(0));
 
         let mut ops1 = Vec::new();
-        push_static_element_ops(&mut ops1, &world, 1000, 0, 0);
+        push_static_element_ops(&mut ops1, &world, &atlas, 1000, 0, 0);
         let mut ops2 = Vec::new();
-        push_static_element_ops(&mut ops2, &world, 1000, 0, 0);
+        push_static_element_ops(&mut ops2, &world, &atlas, 1000, 0, 0);
 
         assert_eq!(ops1, ops2, "同一入力→同一 ops（バイト等価）");
         assert_eq!(ops1.len(), 3);
@@ -571,7 +729,7 @@ mod tests {
         world.bind_atlas(&atlas, SetId(0));
 
         let mut ops = Vec::new();
-        push_static_element_ops(&mut ops, &world, 1000, 0, 0);
+        push_static_element_ops(&mut ops, &world, &atlas, 1000, 0, 0);
 
         // bogus.png は None ゆえスキップ＝命令は known.png の1本のみ。
         assert_eq!(ops.len(), 1);
@@ -589,7 +747,7 @@ mod tests {
         world.bind_atlas(&atlas, SetId(0));
 
         let mut ops = Vec::new();
-        push_static_element_ops(&mut ops, &world, 7, 0, 0);
+        push_static_element_ops(&mut ops, &world, &atlas, 7, 0, 0);
 
         assert_eq!(ops.len(), 1);
         assert_eq!(ops[0].transform, Transform::translate(12, -8));
@@ -616,7 +774,7 @@ mod tests {
             method: ComposeMethod::Overlay,
         };
         let mut ops = vec![sentinel.clone()];
-        push_static_element_ops(&mut ops, &world, 1, 0, 0);
+        push_static_element_ops(&mut ops, &world, &atlas, 1, 0, 0);
 
         // 先頭 sentinel が残り、末尾へ element 命令が追記される。
         assert_eq!(ops.len(), 2);
@@ -627,8 +785,10 @@ mod tests {
     #[test]
     fn missing_surface_pushes_nothing() {
         let world = EmoWorld::build(&shell_of(Vec::new()));
+        // surface 不在ゆえ atlas は引かれない（空 atlas で足りる）。
+        let atlas = bake_atlas(Path::new("shell/master"), &["dummy.png"]);
         let mut ops = Vec::new();
-        push_static_element_ops(&mut ops, &world, 9999, 0, 0);
+        push_static_element_ops(&mut ops, &world, &atlas, 9999, 0, 0);
         assert!(ops.is_empty());
     }
 
@@ -707,7 +867,7 @@ mod tests {
 
         let binds = BindSet::from_ids([1, 2, 3]);
         let mut ops = Vec::new();
-        derive_ops(&mut ops, &world, 1000, &binds);
+        derive_ops(&mut ops, &world, &atlas, 1000, &binds);
 
         // descend（既定）→ ID 昇順描画: part1(1) → part2(2) → part3(3)。
         assert_eq!(ops_to_paths(&ops, &map), vec!["part1.png", "part2.png", "part3.png"]);
@@ -727,7 +887,7 @@ mod tests {
 
         let binds = BindSet::from_ids([1, 2, 3]);
         let mut ops = Vec::new();
-        derive_ops(&mut ops, &world, 1000, &binds);
+        derive_ops(&mut ops, &world, &atlas, 1000, &binds);
 
         // ascend → ID 降順描画: part3(3) → part2(2) → part1(1)。
         assert_eq!(ops_to_paths(&ops, &map), vec!["part3.png", "part2.png", "part1.png"]);
@@ -748,7 +908,7 @@ mod tests {
         // id=2 のみ有効（1,3 は非活性）。
         let binds = BindSet::from_ids([2]);
         let mut ops = Vec::new();
-        derive_ops(&mut ops, &world, 1000, &binds);
+        derive_ops(&mut ops, &world, &atlas, 1000, &binds);
 
         // part2 のみ命令化される。
         assert_eq!(ops_to_paths(&ops, &map), vec!["part2.png"]);
@@ -770,14 +930,14 @@ mod tests {
         // 非空 bind 集合 → 可視層が生成される（空白にしない）。
         let binds = BindSet::from_ids([1, 2]);
         let mut ops = Vec::new();
-        derive_ops(&mut ops, &world, 1000, &binds);
+        derive_ops(&mut ops, &world, &atlas, 1000, &binds);
         assert!(!ops.is_empty(), "全 bind surface でも非空 bind 集合から可視層を生む");
         assert_eq!(ops_to_paths(&ops, &map), vec!["part1.png", "part2.png"]);
 
         // 空 bind 集合 → bind 命令なし（静的 element も無いので空・非パニック）。
         let empty = BindSet::default();
         let mut ops_empty = Vec::new();
-        derive_ops(&mut ops_empty, &world, 1000, &empty);
+        derive_ops(&mut ops_empty, &world, &atlas, 1000, &empty);
         assert!(ops_empty.is_empty(), "空 bind 集合では bind 命令ゼロ（非パニック）");
     }
 
@@ -795,7 +955,7 @@ mod tests {
 
         let binds = BindSet::from_ids([1]);
         let mut ops = Vec::new();
-        derive_ops(&mut ops, &world, 1000, &binds);
+        derive_ops(&mut ops, &world, &atlas, 1000, &binds);
 
         // 静的 base（下）→ bind part1（上）。
         assert_eq!(ops_to_paths(&ops, &map), vec!["base.png", "part1.png"]);
@@ -824,7 +984,7 @@ mod tests {
 
         let binds = BindSet::from_ids([1, 2]);
         let mut ops = Vec::new();
-        derive_ops(&mut ops, &world, 1000, &binds);
+        derive_ops(&mut ops, &world, &atlas, 1000, &binds);
 
         // センチネル bind id=2 は積まれず、part1 のみ（非パニック）。
         assert_eq!(ops_to_paths(&ops, &map), vec!["part1.png"]);
@@ -844,9 +1004,9 @@ mod tests {
 
         let binds = BindSet::from_ids([1, 2, 3]);
         let mut ops1 = Vec::new();
-        derive_ops(&mut ops1, &world, 1000, &binds);
+        derive_ops(&mut ops1, &world, &atlas, 1000, &binds);
         let mut ops2 = Vec::new();
-        derive_ops(&mut ops2, &world, 1000, &binds);
+        derive_ops(&mut ops2, &world, &atlas, 1000, &binds);
 
         assert_eq!(ops1, ops2, "同一入力→同一 ops（バイト等価）");
         // base(静的1) ＋ bind 3 本＝4 命令。
@@ -869,7 +1029,7 @@ mod tests {
 
         let binds = BindSet::from_ids([1]);
         let mut ops = Vec::new();
-        derive_ops(&mut ops, &world, 1000, &binds);
+        derive_ops(&mut ops, &world, &atlas, 1000, &binds);
 
         assert_eq!(ops.len(), 1);
         assert_eq!(ops[0].element, part_id);
@@ -909,7 +1069,7 @@ mod tests {
         let binds = BindSet::from_ids([1]);
         let mut ops = Vec::new();
         // これが無限再帰すると本テストは完走できない（スタックオーバーフローで abort）。
-        derive_ops(&mut ops, &world, 1000, &binds);
+        derive_ops(&mut ops, &world, &atlas, 1000, &binds);
 
         // 静的層 self.png は積まれる（部分結果）。
         assert!(!ops.is_empty(), "自己参照でも静的層の部分結果が得られる");
@@ -950,7 +1110,7 @@ mod tests {
 
         let binds = BindSet::from_ids([1]);
         let mut ops = Vec::new();
-        derive_ops(&mut ops, &world, 1000, &binds);
+        derive_ops(&mut ops, &world, &atlas, 1000, &binds);
 
         // A 静的 → B 静的まで到達し、B→A の再入は打ち切り。a.png と b.png の各1本。
         let map = [(a_id, "a.png"), (b_id, "b.png")];
@@ -980,7 +1140,7 @@ mod tests {
 
         let binds = BindSet::from_ids([1]);
         let mut ops = Vec::new();
-        derive_ops(&mut ops, &world, 1000, &binds);
+        derive_ops(&mut ops, &world, &atlas, 1000, &binds);
 
         assert_eq!(ops.len(), 1, "C の element 1 本のみ（A/B は静的 element なし）");
         assert_eq!(ops[0].element, c_id);
@@ -1016,7 +1176,7 @@ mod tests {
 
         let binds = BindSet::from_ids([1, 2]);
         let mut ops = Vec::new();
-        derive_ops(&mut ops, &world, 1000, &binds);
+        derive_ops(&mut ops, &world, &atlas, 1000, &binds);
 
         // S は2経路で展開＝s.png が 2 命令。祖先スタック（pop-on-exit）ゆえ非循環重複は刈られない。
         assert_eq!(ops.len(), 2, "非循環の共有子は各経路で展開（祖先スタック規律）");
@@ -1048,10 +1208,283 @@ mod tests {
 
         let binds = BindSet::from_ids([1]);
         let mut ops1 = Vec::new();
-        derive_ops(&mut ops1, &world, 1000, &binds);
+        derive_ops(&mut ops1, &world, &atlas, 1000, &binds);
         let mut ops2 = Vec::new();
-        derive_ops(&mut ops2, &world, 1000, &binds);
+        derive_ops(&mut ops2, &world, &atlas, 1000, &binds);
 
         assert_eq!(ops1, ops2, "循環入力でも同一入力→同一 ops（バイト等価・有界）");
+    }
+
+    // ── task 5.4: placement None スキップ＋静的キャンバス外形算出（有効 bind 非依存） ─────────
+    //
+    // 外形は `compute_extent` が全定義層（全 element ＋全 bind animation の pattern0＝有効 bind
+    // 非依存）の「配置オフセット＋原寸」の和集合として算出する（要件 6.5・原点 (0,0) 固定・負方向
+    // クリップ）。`original` は bake が「登録画像の原寸」をそのまま記録する（trim.rs）ため、各 element
+    // の寄与サイズは register 時の (w,h) で制御できる。以下の土台ヘルパはサイズ可変・全透明を扱う。
+
+    /// tightly-packed w×h の premultiplied BGRA・不透明（α=255）画像スペックを組む。
+    ///
+    /// bake は原寸（w,h）を `AtlasEntry.original` にそのまま記録するため、外形寄与サイズを
+    /// 登録側で制御できる（trim は α>0 の bbox＝ここでは全面ゆえ placement は Some）。
+    fn opaque_wxh(w: u32, h: u32) -> (u32, u32, u32, Vec<u8>, bool) {
+        let stride = w * 4;
+        // 全画素不透明（BGR は識別不要ゆえ定数・α=255）。
+        let bgra = vec![64u8; (stride * h) as usize];
+        (w, h, stride, bgra, true)
+    }
+
+    /// tightly-packed w×h の premultiplied BGRA・**全透明**（α=0）画像スペックを組む。
+    ///
+    /// 全 α==0 ゆえ trim は bbox を得られず `placement: None`（空エントリ）にするが、`original`
+    /// は (w,h) を記録する（trim.rs「原寸は全透明でも記録」）。命令からはスキップされ（要件 6.3）、
+    /// 外形へは (w,h) で寄与する（要件 6.5）ことを突く。
+    fn transparent_wxh(w: u32, h: u32) -> (u32, u32, u32, Vec<u8>, bool) {
+        let stride = w * 4;
+        // premultiplied ゆえ α=0 なら BGR も 0（完全透明）。
+        let bgra = vec![0u8; (stride * h) as usize];
+        (w, h, stride, bgra, true)
+    }
+
+    /// (rel_path, (w,h), opaque?) 群から `AtlasTable` を bake する（サイズ・透過を個別指定）。
+    ///
+    /// `bake_atlas` は全 element 2×2・不透明固定だが、本ヘルパは外形テスト用に原寸と透過を制御する。
+    fn bake_atlas_sized(base: &Path, specs: &[(&str, (u32, u32), bool)]) -> AtlasTable {
+        let elements: Vec<Element> = specs.iter().map(|(r, _, _)| elem(0, r, 0, 0)).collect();
+        let surfaces = vec![surface(0, elements)];
+        let mut dec = MemoryDecoder::new();
+        for (rel, (w, h), opaque) in specs {
+            let (iw, ih, stride, bgra, has_alpha) = if *opaque {
+                opaque_wxh(*w, *h)
+            } else {
+                transparent_wxh(*w, *h)
+            };
+            dec.insert(base.join(rel), iw, ih, stride, bgra, has_alpha);
+        }
+        let set = SurfaceSet {
+            surfaces: &surfaces,
+            base_dir: base,
+            alpha_params: AlphaParams {
+                use_self_alpha: UseSelfAlpha::On,
+            },
+        };
+        let result = bake(&[set], &dec, PackConfig::default());
+        assert!(result.errors.is_empty(), "bake セットアップは失敗しない");
+        result.table
+    }
+
+    /// テスト5.4-①（**受入基準**・要件 6.5）: 同一 surface へ空／部分／全 BindSet を渡しても
+    /// `compute_extent` が返す [`Extent`] は不変（有効 bind 集合に依存しない静的量）。
+    ///
+    /// host=1000 は静的 element base(40×30) を持ち、bind id=1→part1(200×10)、id=2→part2(10×150)、
+    /// id=3→part3(60×60) を各 pattern0 で参照。外形は全 element＋**全 bind pattern0**の和集合ゆえ
+    /// max(base.w, part1.w)=200・max(base.h, part2.h)=150＝Extent{200,150}。BindSet を空/部分/全に
+    /// 変えても同一でなければ「有効 bind 依存」バグ（6.5 違反）。これが本 task の核心。
+    #[test]
+    fn extent_is_independent_of_bindset() {
+        let base = Path::new("shell/master");
+        let atlas = bake_atlas_sized(
+            base,
+            &[
+                ("base.png", (40, 30), true),
+                ("part1.png", (200, 10), true),
+                ("part2.png", (10, 150), true),
+                ("part3.png", (60, 60), true),
+            ],
+        );
+
+        // host=1000: 静的 base ＋ bind id=1/2/3 が part1/part2/part3 を (0,0) 参照。
+        let host = surface_with_anims(
+            1000,
+            vec![elem(0, "base.png", 0, 0)],
+            vec![
+                bind_anim(1, 1100, 0, 0),
+                bind_anim(2, 1200, 0, 0),
+                bind_anim(3, 1300, 0, 0),
+            ],
+        );
+        let part1 = surface(1100, vec![elem(0, "part1.png", 0, 0)]);
+        let part2 = surface(1200, vec![elem(0, "part2.png", 0, 0)]);
+        let part3 = surface(1300, vec![elem(0, "part3.png", 0, 0)]);
+        let shell = shell_of(vec![host, part1, part2, part3]);
+        let mut world = EmoWorld::build(&shell);
+        world.bind_atlas(&atlas, SetId(0));
+
+        // 全 element＋全 bind pattern0 の和集合: w=max(40,200,10,60)=200・h=max(30,10,150,60)=150。
+        let expected = Extent { w: 200, h: 150 };
+
+        let empty = compute_extent(&world, &atlas, 1000);
+        let partial = {
+            let _b = BindSet::from_ids([2]);
+            compute_extent(&world, &atlas, 1000)
+        };
+        let full = {
+            let _b = BindSet::from_ids([1, 2, 3]);
+            compute_extent(&world, &atlas, 1000)
+        };
+
+        // compute_extent は BindSet を引数に取らない（＝構造的に有効 bind 非依存）。三者一致＋期待値一致。
+        assert_eq!(empty, expected, "空 BindSet 相当でも全 bind pattern0 を母集合に外形算出");
+        assert_eq!(partial, expected, "部分 BindSet でも外形不変");
+        assert_eq!(full, expected, "全 BindSet でも外形不変");
+        assert_eq!(empty, partial);
+        assert_eq!(partial, full);
+    }
+
+    /// テスト5.4-②（要件 6.5・全 bind 母集合）: 非活性 bind（どの BindSet にも入れない）の
+    /// pattern0 が参照する巨大入れ子 surface が、それでも外形を支配する。
+    ///
+    /// host=2000 の静的 element は小さい tiny(4×4) のみ。bind id=9 は**一度も activate されない**が、
+    /// その pattern0 が huge(500×400) を参照する。もし外形が「有効 bind のみ」を数えるバグなら tiny
+    /// の 4×4 になるはずだが、正しくは全 bind pattern0 母集合ゆえ 500×400。空 BindSet でも huge が支配。
+    #[test]
+    fn extent_unions_inactive_bind_contribution() {
+        let base = Path::new("shell/master");
+        let atlas = bake_atlas_sized(
+            base,
+            &[("tiny.png", (4, 4), true), ("huge.png", (500, 400), true)],
+        );
+
+        let host = surface_with_anims(
+            2000,
+            vec![elem(0, "tiny.png", 0, 0)],
+            vec![bind_anim(9, 2900, 0, 0)], // id=9 は以降どの BindSet にも入れない。
+        );
+        let huge = surface(2900, vec![elem(0, "huge.png", 0, 0)]);
+        let shell = shell_of(vec![host, huge]);
+        let mut world = EmoWorld::build(&shell);
+        world.bind_atlas(&atlas, SetId(0));
+
+        // 有効 bind 非依存ゆえ、activate されない id=9 の huge も外形へ寄与＝500×400 が支配。
+        let extent = compute_extent(&world, &atlas, 2000);
+        assert_eq!(
+            extent,
+            Extent { w: 500, h: 400 },
+            "非活性 bind の入れ子巨大 surface も外形を支配（全 bind 母集合・6.5）"
+        );
+    }
+
+    /// テスト5.4-③（要件 6.3＋6.5）: placement None（全透明）element は命令からスキップされるが、
+    /// 外形には原寸で寄与する。
+    ///
+    /// surface=3000 は静的 element を 2 本持つ: solid(20×20・不透明) と ghost(300×300・**全透明**＝
+    /// placement None)。`derive_ops` は ghost をスキップし solid の 1 命令のみ（要件 6.3）。一方
+    /// `compute_extent` は ghost の原寸 300×300 を数えて 300×300（要件 6.5・全透明でも原寸寄与）。
+    #[test]
+    fn placement_none_skipped_from_ops_but_counted_in_extent() {
+        let base = Path::new("shell/master");
+        let atlas = bake_atlas_sized(
+            base,
+            &[
+                ("solid.png", (20, 20), true),
+                ("ghost.png", (300, 300), false), // 全透明→ placement None・original は 300×300。
+            ],
+        );
+        let solid_id = atlas.resolve(SetId(0), "solid.png").expect("solid 解決");
+        let ghost_id = atlas.resolve(SetId(0), "ghost.png").expect("ghost 解決");
+
+        // 全透明 ghost は bake で placement None・原寸は保持（前提の実証）。
+        assert!(
+            atlas.entry(ghost_id).placement.is_none(),
+            "全透明 element は bake で placement None（前提）"
+        );
+        assert_eq!(atlas.entry(ghost_id).original, areka_emo_atlas::Size { w: 300, h: 300 });
+        assert!(atlas.entry(solid_id).placement.is_some(), "不透明 element は placement Some");
+
+        let surf = surface(3000, vec![elem(0, "solid.png", 0, 0), elem(1, "ghost.png", 0, 0)]);
+        let shell = shell_of(vec![surf]);
+        let mut world = EmoWorld::build(&shell);
+        world.bind_atlas(&atlas, SetId(0));
+
+        // 命令: ghost はスキップされ solid の 1 本のみ（要件 6.3）。
+        let binds = BindSet::default();
+        let mut ops = Vec::new();
+        derive_ops(&mut ops, &world, &atlas, 3000, &binds);
+        assert_eq!(ops.len(), 1, "placement None（ghost）は命令からスキップ（要件 6.3）");
+        assert_eq!(ops[0].element, solid_id, "残る命令は不透明 solid のみ");
+
+        // 外形: ghost の原寸 300×300 を数える（要件 6.5・全透明でも寄与）。
+        let extent = compute_extent(&world, &atlas, 3000);
+        assert_eq!(
+            extent,
+            Extent { w: 300, h: 300 },
+            "placement None element も原寸で外形へ寄与（要件 6.5）"
+        );
+    }
+
+    /// テスト5.4-④（要件 6.5・原点固定／負方向クリップ）: 負オフセットの入れ子層は原点 (0,0) を
+    /// 上へ動かさず、外形を基底より縮めない。
+    ///
+    /// host=4000 の静的 base(50×40)。bind id=1 の pattern0 が small(10×10) を **(-100,-100)** で参照。
+    /// 負オフセット層の寄与は max(0, -100+10)=0 ゆえ外形へ効かず、原点は (0,0) のまま・外形は base の
+    /// 50×40 を下回らない（負方向はみ出しは転写時クリップ・議題2裁定 (A)）。
+    #[test]
+    fn negative_offset_is_clipped_and_origin_stays_fixed() {
+        let base = Path::new("shell/master");
+        let atlas = bake_atlas_sized(
+            base,
+            &[("base.png", (50, 40), true), ("small.png", (10, 10), true)],
+        );
+
+        let host = surface_with_anims(
+            4000,
+            vec![elem(0, "base.png", 0, 0)],
+            vec![bind_anim(1, 4100, -100, -100)], // 負オフセット参照。
+        );
+        let small = surface(4100, vec![elem(0, "small.png", 0, 0)]);
+        let shell = shell_of(vec![host, small]);
+        let mut world = EmoWorld::build(&shell);
+        world.bind_atlas(&atlas, SetId(0));
+
+        // small は (-100+10, -100+10)=(-90,-90) ゆえ max(0,·)=0 で寄与せず、base の 50×40 が残る。
+        let extent = compute_extent(&world, &atlas, 4000);
+        assert_eq!(
+            extent,
+            Extent { w: 50, h: 40 },
+            "負オフセット層は原点クリップ＝外形を縮めない（要件 6.5・原点 (0,0) 固定）"
+        );
+    }
+
+    /// テスト5.4-⑤（要件 6.5・基底一致）: (0,0) 原寸 (W,H) の単一 element・より大きい層なし→
+    /// 外形は原寸ちょうど。
+    #[test]
+    fn extent_equals_base_original_when_no_larger_layers() {
+        let base = Path::new("shell/master");
+        let atlas = bake_atlas_sized(base, &[("only.png", (123, 45), true)]);
+
+        let surf = surface(5000, vec![elem(0, "only.png", 0, 0)]);
+        let shell = shell_of(vec![surf]);
+        let mut world = EmoWorld::build(&shell);
+        world.bind_atlas(&atlas, SetId(0));
+
+        let extent = compute_extent(&world, &atlas, 5000);
+        assert_eq!(extent, Extent { w: 123, h: 45 }, "単一 element・(0,0)→外形＝原寸");
+    }
+
+    /// テスト5.4-⑥（要件 10.1・決定性）: 同一入力で 2 回算出→ [`Extent`] が同値。
+    #[test]
+    fn extent_is_deterministic() {
+        let base = Path::new("shell/master");
+        let atlas = bake_atlas_sized(
+            base,
+            &[
+                ("base.png", (40, 30), true),
+                ("part.png", (200, 150), true),
+            ],
+        );
+        let host = surface_with_anims(
+            6000,
+            vec![elem(0, "base.png", 0, 0)],
+            vec![bind_anim(1, 6100, 5, 7)],
+        );
+        let part = surface(6100, vec![elem(0, "part.png", 0, 0)]);
+        let shell = shell_of(vec![host, part]);
+        let mut world = EmoWorld::build(&shell);
+        world.bind_atlas(&atlas, SetId(0));
+
+        let e1 = compute_extent(&world, &atlas, 6000);
+        let e2 = compute_extent(&world, &atlas, 6000);
+        assert_eq!(e1, e2, "同一入力→同一 Extent（決定的）");
+        // 参考: part は (5,7) 参照ゆえ w=max(40, 5+200)=205・h=max(30, 7+150)=157。
+        assert_eq!(e1, Extent { w: 205, h: 157 });
     }
 }
