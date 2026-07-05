@@ -31,10 +31,12 @@
 
 pub mod compile;
 pub mod contract;
+pub mod drive;
 pub mod error;
 pub mod sink;
 
 pub use compile::{compile, CompiledTalk};
+pub use drive::spawn_talk;
 pub use error::SakuraError;
 pub use sink::{MockSink, SurfaceSink, TextSink};
 
