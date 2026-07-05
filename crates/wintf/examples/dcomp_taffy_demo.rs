@@ -2,12 +2,12 @@
 
 //! # DComp Taffy Flexbox Demo
 //!
-//! `CompositionMode::DComp` を使用した DirectComposition ベースの描画デモ。
+//! GPU 合成（WUC）による DirectComposition ベースの描画デモ。
 //! 既存の `taffy_flex_demo` と同等の Flexbox レイアウトを DComp パイプラインで描画する。
 //!
 //! ## 検証ポイント
 //!
-//! - `Window { composition_mode: CompositionMode::DComp }` 指定で DComp パイプラインが起動
+//! - `Window { .. }`（既定 GPU 合成 WUC）で DComp パイプラインが起動
 //! - `WindowGraphics` → `VisualGraphics` → `SurfaceGraphics` の描画チェーン
 //! - Rectangle / Label / BitmapSource ウィジェットの DComp Surface 上への描画
 //! - Flexbox レイアウト（taffy）が DComp モードでも正常動作
@@ -31,7 +31,7 @@ use wintf::ecs::widget::bitmap_source::{BitmapSource, CommandSender};
 use wintf::ecs::widget::brushes::Brushes;
 use wintf::ecs::widget::shapes::Rectangle;
 use wintf::ecs::widget::text::label::Label;
-use wintf::ecs::{CompositionMode, Point, Window, WindowPos};
+use wintf::ecs::{Point, Window, WindowPos};
 use wintf::*;
 
 /// DComp デモウィンドウを識別するマーカー
@@ -55,7 +55,7 @@ fn main() -> Result<()> {
     });
 
     println!("\nDComp Taffy Flexbox Demo:");
-    println!("  CompositionMode::DComp を使用した DirectComposition 描画");
+    println!("  GPU 合成（WUC）による DirectComposition 描画");
     println!("  - 赤い矩形 (固定200x100)");
     println!("  - 緑の矩形 (grow=1) + ラベル子要素");
     println!("  - 青い矩形 (grow=2) + 画像子要素");
@@ -91,7 +91,7 @@ fn close_window(world: &mut World) {
 
 /// DComp モードの Flexbox デモウィンドウを作成
 fn create_dcomp_demo_window(world: &mut World) {
-    // Window Entity (ルート) — CompositionMode::DComp を指定
+    // Window Entity (ルート) — GPU 合成（WUC）で描画
     let window_entity = world
         .spawn((
             Name::new("DCompDemo-Window"),
@@ -111,7 +111,6 @@ fn create_dcomp_demo_window(world: &mut World) {
             },
             Window {
                 title: "wintf - DComp Taffy Demo".to_string(),
-                composition_mode: CompositionMode::DComp,
                 ..Default::default()
             },
         ))

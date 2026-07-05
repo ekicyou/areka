@@ -10,7 +10,6 @@ use tracing::warn;
 
 use super::clip::ClipShape;
 use super::components::{SurfaceGraphics, SurfaceGraphicsDirty, VisualGraphics};
-use crate::ecs::window::CompositionMode;
 
 /// 論理的なVisualコンポーネント
 /// サイズ情報はArrangementから取得する（Single Source of Truth）
@@ -31,18 +30,15 @@ pub struct Visual {
     pub clip: Option<ClipShape>,
 }
 
-/// ChildOf チェーンを辿ってオーナー Window の CompositionMode を取得するヘルパー
+/// ChildOf チェーンを辿ってオーナー Window が存在するかを判定するヘルパー
 ///
-/// - エンティティ自身が `Window` の場合は即座に返す
-/// - `ChildOf` を辿って祖先の `Window` を探す
-/// - 見つからない場合（orphan Visual）は `None`
-pub fn find_owner_window_composition_mode(
-    world: &DeferredWorld,
-    entity: Entity,
-) -> Option<CompositionMode> {
+/// - エンティティ自身が `Window` の場合は即座に `true`
+/// - `ChildOf` を辿って祖先に `Window` があれば `true`
+/// - 見つからない場合（orphan Visual）は `false`
+pub fn owner_window_exists(world: &DeferredWorld, entity: Entity) -> bool {
     // 自身が Window の場合
-    if let Some(w) = world.get::<crate::ecs::window::Window>(entity) {
-        return Some(w.composition_mode());
+    if world.get::<crate::ecs::window::Window>(entity).is_some() {
+        return true;
     }
 
     // ChildOf チェーンを辿る
@@ -55,12 +51,12 @@ pub fn find_owner_window_composition_mode(
         let parent = world.get::<ChildOf>(current).map(|c| c.parent());
         match parent {
             Some(p) => {
-                if let Some(w) = world.get::<crate::ecs::window::Window>(p) {
-                    return Some(w.composition_mode());
+                if world.get::<crate::ecs::window::Window>(p).is_some() {
+                    return true;
                 }
                 current = p;
             }
-            None => return None,
+            None => return false,
         }
     }
 }
@@ -68,7 +64,7 @@ pub fn find_owner_window_composition_mode(
 /// Visualコンポーネントが追加されたときに呼ばれるフック
 /// - Arrangementを自動挿入（既に存在する場合はスキップ）
 /// - BrushInheritマーカーを自動挿入（継承解決用）
-/// - DComp モードの場合のみ VisualGraphics, SurfaceGraphics, SurfaceGraphicsDirty を挿入
+/// - owner Window が存在する場合のみ VisualGraphics, SurfaceGraphics, SurfaceGraphicsDirty を挿入
 fn on_visual_add(mut world: DeferredWorld, context: HookContext) {
     let entity = context.entity;
 
@@ -80,14 +76,13 @@ fn on_visual_add(mut world: DeferredWorld, context: HookContext) {
         .get::<crate::ecs::widget::BrushInherit>(entity)
         .is_none();
 
-    // DComp モード判定: 祖先 Window の CompositionMode を確認
-    let is_dcomp_mode =
-        find_owner_window_composition_mode(&world, entity) == Some(CompositionMode::DComp);
+    // owner Window 存在判定: 祖先に Window があるかを確認
+    let has_owner_window = owner_window_exists(&world, entity);
 
-    // DComp モードの場合のみ DComp コンポーネントを挿入対象にする
-    let needs_visual_graphics = is_dcomp_mode && world.get::<VisualGraphics>(entity).is_none();
-    let needs_surface_graphics = is_dcomp_mode && world.get::<SurfaceGraphics>(entity).is_none();
-    let needs_surface_dirty = is_dcomp_mode && world.get::<SurfaceGraphicsDirty>(entity).is_none();
+    // owner Window が存在する場合のみ graphics コンポーネントを挿入対象にする
+    let needs_visual_graphics = has_owner_window && world.get::<VisualGraphics>(entity).is_none();
+    let needs_surface_graphics = has_owner_window && world.get::<SurfaceGraphics>(entity).is_none();
+    let needs_surface_dirty = has_owner_window && world.get::<SurfaceGraphicsDirty>(entity).is_none();
 
     // コマンドを発行（チェック完了後に一度だけ commands を借用する）
     let mut cmds = world.commands();

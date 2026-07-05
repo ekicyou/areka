@@ -51,7 +51,7 @@ fn test_load_png_with_alpha() {
             result.err()
         );
 
-        let source = result.unwrap();
+        let (source, _has_alpha) = result.unwrap();
 
         // 画像サイズの確認（8x8）
         let (width, height) = get_bitmap_size(&source);
@@ -74,7 +74,7 @@ fn test_load_png_16x16() {
             result.err()
         );
 
-        let source = result.unwrap();
+        let (source, _has_alpha) = result.unwrap();
 
         // 画像サイズの確認（16x16）
         let (width, height) = get_bitmap_size(&source);
@@ -101,7 +101,7 @@ fn test_load_bmp_without_alpha() {
             result.err()
         );
 
-        let source = result.unwrap();
+        let (source, _has_alpha) = result.unwrap();
 
         // 画像サイズの確認（8x8）
         let (width, height) = get_bitmap_size(&source);
@@ -114,6 +114,42 @@ fn test_load_bmp_without_alpha() {
         let expected_format =
             windows::core::GUID::from_u128(0x6fddc324_4e03_4bfe_b185_3d77768dc910);
         assert_eq!(format, expected_format, "pixel format should be PBGRA32");
+    });
+}
+
+// ============================================================
+// has_alpha 判定テスト（Task 1.2: 変換前フレームの α 有無取得）
+// ============================================================
+
+#[test]
+fn test_has_alpha_true_for_rgba_png() {
+    with_com_initialized(|| {
+        let wic_core = WicCore::new().expect("WicCore creation failed");
+        let path = test_asset_path("test_16x16_rgba.png");
+
+        let (_source, has_alpha) =
+            load_bitmap_source(wic_core.factory(), &path).expect("RGBA PNG loading should succeed");
+
+        assert!(
+            has_alpha,
+            "RGBA PNG should be detected as having an alpha channel"
+        );
+    });
+}
+
+#[test]
+fn test_has_alpha_false_for_rgb_bmp() {
+    with_com_initialized(|| {
+        let wic_core = WicCore::new().expect("WicCore creation failed");
+        let path = test_asset_path("test_8x8_rgb.bmp");
+
+        let (_source, has_alpha) =
+            load_bitmap_source(wic_core.factory(), &path).expect("RGB BMP loading should succeed");
+
+        assert!(
+            !has_alpha,
+            "RGB BMP (no alpha) should be detected as NOT having an alpha channel"
+        );
     });
 }
 

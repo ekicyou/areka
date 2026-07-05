@@ -2,7 +2,7 @@
 
 //! # DComp Demo
 //!
-//! `CompositionMode::DComp` を使用した DirectComposition ベースの宣言的描画デモ。
+//! GPU 合成（WUC）による DirectComposition ベースの宣言的描画デモ。
 //!
 //! ## 移行に関する注記（task 4.4）
 //!
@@ -35,7 +35,7 @@ use wintf::ecs::layout::{BoxMargin, BoxPosition, BoxSize, BoxStyle, Dimension};
 use wintf::ecs::widget::brushes::Brushes;
 use wintf::ecs::widget::shapes::Rectangle;
 use wintf::ecs::widget::text::label::Label;
-use wintf::ecs::{ChildOf, CompositionMode, Point, Window, WindowPos};
+use wintf::ecs::{ChildOf, Point, Window, WindowPos};
 use wintf::*;
 
 const CARD_ROWS: usize = 3;
@@ -78,7 +78,7 @@ fn main() -> Result<()> {
     });
 
     println!("\nDComp Demo:");
-    println!("  CompositionMode::DComp を使用した DirectComposition 描画");
+    println!("  GPU 合成（WUC）による DirectComposition 描画");
     println!("  {CARD_ROWS}x{CARD_COLUMNS} のカードグリッドを宣言的に描画します。");
     println!("\n60秒後に自動的にWindowを閉じてアプリ終了します。");
 
@@ -96,7 +96,7 @@ fn close_window(world: &mut World) {
 
 /// DComp モードのカードグリッドウィンドウを宣言的に生成する。
 fn create_dcomp_demo_window(world: &mut World) {
-    // Window Entity (ルート) — CompositionMode::DComp を指定
+    // Window Entity (ルート) — GPU 合成（WUC）で描画
     let window_entity = world
         .spawn((
             Name::new("DCompDemo-Window"),
@@ -116,7 +116,6 @@ fn create_dcomp_demo_window(world: &mut World) {
             },
             Window {
                 title: "wintf - DComp Demo".to_string(),
-                composition_mode: CompositionMode::DComp,
                 ..Default::default()
             },
         ))

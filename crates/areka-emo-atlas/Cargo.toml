@@ -1,0 +1,16 @@
+[package]
+name = "areka-emo-atlas"
+workspace = "../.."
+description = "emo render engine atlas material-foundation layer (pure): manifest→decode→normalize→trim→pack→bake"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[dependencies]
+areka-parsers = { path = "../areka-parsers" }
+rectangle-pack = { workspace = true }
+tracing = { workspace = true }
+windows = { workspace = true }

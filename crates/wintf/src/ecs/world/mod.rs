@@ -253,17 +253,9 @@ impl EcsWorld {
                     .chain(),
             );
 
-            // GraphicsSetupスケジュール: D2D1合成スタック + DComp初期化
-            // init_window_graphics: DComp モードの Window に WindowGraphics を作成
-            // compositor_init_system: ULW モードの Window に WindowD3D11Compositor を作成
-            schedules.add_systems(
-                GraphicsSetup,
-                (
-                    crate::ecs::graphics::init_window_graphics,
-                    crate::ecs::graphics::compositor_systems::compositor_init_system
-                        .after(crate::ecs::graphics::init_window_graphics),
-                ),
-            );
+            // GraphicsSetupスケジュール: WUC（Windows.UI.Composition）合成スタック初期化
+            // init_window_graphics: Window に WindowGraphics を作成（単独登録、chain不要）
+            schedules.add_systems(GraphicsSetup, crate::ecs::graphics::init_window_graphics);
 
             // Drawスケジュール: ウィジェット描画システム
             // Phase 2: DCompシステム（deferred_surface_creation_system, cleanup_surface_on_commandlist_removed）を除去
@@ -316,8 +308,8 @@ impl EcsWorld {
             // RenderSurface: DComp パイプライン用 Surface 描画
             schedules.add_systems(RenderSurface, crate::ecs::graphics::render_surface);
 
-            // Compositionスケジュール: DComp Visual階層同期 + D2D1合成描画
-            // visual_hierarchy_sync → visual_property_sync → clip_sync → composite_render
+            // Compositionスケジュール: WUC Visual階層同期（合成 commit は WUC 側で暗黙反映）
+            // visual_hierarchy_sync → visual_property_sync → clip_sync
             schedules.add_systems(
                 Composition,
                 (
@@ -326,18 +318,13 @@ impl EcsWorld {
                         .after(crate::ecs::graphics::visual_hierarchy_sync_system),
                     crate::ecs::graphics::clip_sync_system
                         .after(crate::ecs::graphics::visual_property_sync_system),
-                    crate::ecs::graphics::compositor_systems::composite_render_system
-                        .after(crate::ecs::graphics::clip_sync_system),
                 ),
             );
 
-            // CommitComposition: ULW 画面転送
-            // Note: DComp の commit_composition は WUC 移行で削除（要件 7.1・暗黙反映へ）。
-            // schedule 自体と ulw_present_system は残置する。
-            schedules.add_systems(
-                CommitComposition,
-                crate::ecs::graphics::compositor_systems::ulw_present_system,
-            );
+            // CommitComposition: 現状システム無し（空スケジュール）
+            // Note: WUC への合成 commit は暗黙反映のため専用システム不要（要件 7.1）。旧 ULW 画面転送
+            // システムは撤去済み。schedule ラベルと try_run_schedule 呼び出しは tick 構成不変
+            // （要件 4.5 / 13 本固定順）を保つため残置し、zero-system の no-op として回す。
 
             // FrameFinalizeスケジュール: 一時的ポインター状態クリア
             schedules.add_systems(

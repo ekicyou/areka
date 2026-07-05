@@ -9,12 +9,23 @@
 //!   終了分類）。**std-only**（`windows` 非依存）。
 //! - [`parent_window`] — `ParentMessageWindow`（HELLO ハンドシェイク観測 /
 //!   `pump_until_hello_or`）。`wintf-winmsg-executor` の message-only 窓。
+//! - [`shiori3`] — SHIORI/3.0 ワイヤコーデック（`build_request` / `parse_response`）。純粋・決定的。
+//! - [`client`] — `Shiori3Client`（`get`/`notify` の出口 API）。codec build → `send_request` →
+//!   parse → `RequestError` 統合を結線する。
 //! - [`error`] — 構造化エラー型（`thiserror`）。
 
+pub mod client;
 pub mod error;
 pub mod parent_window;
 pub mod process_host;
+pub mod shiori3;
 
-pub use error::{HandshakeError, SpawnError};
+pub use client::Shiori3Client;
+pub use error::{HandshakeError, RequestError, ShioriError, SpawnError};
 pub use parent_window::{ParentMessageWindow, SendError, WindowCreationError};
-pub use process_host::{ExitKind, HelperHandle, PARENT_HWND_ENV, poll_exit, poll_exit_kind, spawn};
+pub use process_host::{
+    ExitKind, HelperHandle, PARENT_HWND_ENV, REQUEST_TIMEOUT, poll_exit, poll_exit_kind, spawn,
+};
+pub use shiori3::{
+    Charset, Method, ParsedResponse, ShioriRequest, build_request, parse_response,
+};

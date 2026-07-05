@@ -2,8 +2,8 @@
 //!
 //! WindowGraphics 本体の作成は DesktopWindowTarget（実 HWND 必須）のため
 //! ヘッドレスでは検証不能だが、前段の分岐はデバイス非依存に検証できる:
-//! - DComp ウィンドウ存在時の WucGraphicsResource 遅延初期化
-//! - DComp ウィンドウ不在時の早期リターン（リソース未作成）
+//! - ウィンドウ存在時の WucGraphicsResource 遅延初期化
+//! - ウィンドウ不在時の早期リターン（リソース未作成）
 //! - 無効 HWND での CreateDesktopWindowTarget 失敗時のエラー経路（パニックなし）
 //!
 //! WUC 移行: init_window_graphics は WucGraphicsResource を遅延初期化する（init.rs）。
@@ -11,7 +11,7 @@
 use bevy_ecs::prelude::*;
 use bevy_ecs::schedule::ExecutorKind;
 use windows::Win32::System::Com::{COINIT_MULTITHREADED, CoInitializeEx};
-use wintf::ecs::window::{CompositionMode, Window, WindowHandle};
+use wintf::ecs::window::{Window, WindowHandle};
 use wintf::ecs::world::FrameCount;
 use wintf::ecs::{
     GraphicsCore, HasGraphicsResources, WindowGraphics, WucGraphicsResource, init_window_graphics,
@@ -35,13 +35,10 @@ fn setup() -> (World, Schedule) {
     (world, schedule)
 }
 
-fn spawn_window(world: &mut World, mode: CompositionMode) -> Entity {
+fn spawn_window(world: &mut World) -> Entity {
     let entity = world
         .spawn((
-            Window {
-                composition_mode: mode,
-                ..Default::default()
-            },
+            Window::default(),
             WindowHandle {
                 hwnd: HWND(std::ptr::null_mut()),
                 instance: HINSTANCE(std::ptr::null_mut()),
@@ -54,36 +51,35 @@ fn spawn_window(world: &mut World, mode: CompositionMode) -> Entity {
 }
 
 #[test]
-fn lazily_initializes_wuc_resource_when_dcomp_window_exists() {
+fn lazily_initializes_wuc_resource_when_window_exists() {
     let (mut world, mut schedule) = setup();
-    spawn_window(&mut world, CompositionMode::DComp);
+    spawn_window(&mut world);
 
     assert!(world.get_resource::<WucGraphicsResource>().is_none());
     schedule.run(&mut world);
 
     let resource = world
         .get_resource::<WucGraphicsResource>()
-        .expect("DComp ウィンドウ検出時に WucGraphicsResource が遅延初期化される");
+        .expect("ウィンドウ検出時に WucGraphicsResource が遅延初期化される");
     assert!(resource.is_valid());
 }
 
 #[test]
-fn does_not_initialize_wuc_resource_without_dcomp_windows() {
+fn does_not_initialize_wuc_resource_without_windows() {
     let (mut world, mut schedule) = setup();
-    spawn_window(&mut world, CompositionMode::ULW);
 
     schedule.run(&mut world);
 
     assert!(
         world.get_resource::<WucGraphicsResource>().is_none(),
-        "ULW ウィンドウのみなら WucGraphicsResource は作成されない"
+        "ウィンドウが無ければ WucGraphicsResource は作成されない"
     );
 }
 
 #[test]
 fn invalid_hwnd_fails_gracefully_without_window_graphics() {
     let (mut world, mut schedule) = setup();
-    let entity = spawn_window(&mut world, CompositionMode::DComp);
+    let entity = spawn_window(&mut world);
 
     // 1回目: WucGraphicsResource 遅延初期化（このフレームは return）
     schedule.run(&mut world);
@@ -100,7 +96,7 @@ fn invalid_hwnd_fails_gracefully_without_window_graphics() {
 fn invalid_graphics_core_defers_initialization() {
     let (mut world, mut schedule) = setup();
     world.resource_mut::<GraphicsCore>().invalidate();
-    spawn_window(&mut world, CompositionMode::DComp);
+    spawn_window(&mut world);
 
     schedule.run(&mut world);
 

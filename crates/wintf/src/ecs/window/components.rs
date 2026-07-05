@@ -1,7 +1,6 @@
 //! ウィンドウコンポーネント定義・ライフサイクルフック
 //!
 //! - `DpiChangeContext`: WM_DPICHANGED → WM_WINDOWPOSCHANGED 間の DPI 同期伝達
-//! - `CompositionMode`: 描画パイプライン選択
 //! - `Window`: ウィンドウ作成パラメータ
 //! - `WindowHandle`: 作成済みウィンドウのハンドル情報
 //! - `WindowStyle`: スタイル・拡張スタイル
@@ -90,24 +89,6 @@ impl DpiChangeContext {
 }
 
 // ============================================================================
-// CompositionMode
-// ============================================================================
-
-/// 描画パイプライン選択 enum。Window フィールドとして保持。
-///
-/// ウィンドウ生成時に指定し、以降は不変。
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub enum CompositionMode {
-    /// ULW パイプライン: D2D1 合成 → DIBSection → UpdateLayeredWindow
-    /// 透過クリックスルー対応。デフォルト。
-    #[default]
-    ULW,
-    /// DComp パイプライン: IDCompositionTarget → Visual → Surface
-    /// 通常ウィンドウUI向け。
-    DComp,
-}
-
-// ============================================================================
 // Window
 // ============================================================================
 
@@ -118,16 +99,6 @@ pub enum CompositionMode {
 pub struct Window {
     pub title: String,
     pub parent: Option<HWND>,
-    /// 描画パイプライン選択。生成後は変更しないこと。
-    /// ULW: 透過クリックスルー対応、DComp: 通常ウィンドウUI向け。
-    pub composition_mode: CompositionMode,
-}
-
-impl Window {
-    /// 描画パイプラインを返す。生成後は変更不可。
-    pub fn composition_mode(&self) -> CompositionMode {
-        self.composition_mode
-    }
 }
 
 impl Default for Window {
@@ -135,7 +106,6 @@ impl Default for Window {
         Self {
             title: "Window".to_string(),
             parent: None,
-            composition_mode: CompositionMode::default(), // ULW
         }
     }
 }
@@ -145,8 +115,8 @@ impl Default for Window {
 // ため、自動導出されない。よってこの手動 impl は冗長ではなく必須である。
 // 健全性: 親 HWND は不透明なウィンドウ識別子（値渡しで所有権・解放責務を伴わない）
 // であり、`Window` は ECS コンポーネントとしてメインスレッドのシステム・フックから
-// のみ参照される。`title: String` / `composition_mode: CompositionMode` は
-// プレーンデータで自動的に Send+Sync。`drag/context.rs` の `WindowDragContext` と
+// のみ参照される。`title: String` はプレーンデータで自動的に Send+Sync。
+// `drag/context.rs` の `WindowDragContext` と
 // 同じ crate 標準の HWND 取り扱い方針。
 unsafe impl Send for Window {}
 unsafe impl Sync for Window {}
@@ -165,13 +135,15 @@ pub struct WindowStyle {
 impl Default for WindowStyle {
     fn default() -> Self {
         Self {
-            // ULW（UpdateLayeredWindow）透過ウィンドウはフレームを持たないため
-            // WS_POPUP を使用する。WS_OVERLAPPEDWINDOW だと AdjustWindowRectExForDpi が
+            // 透過ウィンドウはフレームを持たないため WS_POPUP を使用する。
+            // WS_OVERLAPPEDWINDOW だと AdjustWindowRectExForDpi が
             // タイトルバー・ボーダー分（約17px）を client↔window 変換時に加減算し、
             // ドラッグのたびにサイズが縮小するバグを引き起こす。
             style: WS_POPUP | WS_VISIBLE,
-            // Phase 3: WS_EX_NOREDIRECTIONBITMAP → WS_EX_LAYERED
-            // ULW 方式による alpha 透過描画に必要
+            // 既定 ex_style は WS_EX_LAYERED 据え置き（レガシー・無害）。
+            // WUC 単一パイプラインでは compute_ex_style が生成時に WS_EX_LAYERED を
+            // 無条件で落とし WS_EX_NOREDIRECTIONBITMAP を付与するため、この既定値は
+            // ウィンドウ生成後には残らない。
             ex_style: WS_EX_LAYERED,
         }
     }
@@ -259,15 +231,14 @@ mod tests {
         let w = Window::default();
         assert_eq!(w.title, "Window");
         assert!(w.parent.is_none());
-        // composition_mode は ULW（CompositionMode::default）
-        assert_eq!(w.composition_mode(), CompositionMode::ULW);
     }
 
     // ===== WindowStyle::default =====
 
     #[test]
     fn test_window_style_default_is_popup_visible_layered() {
-        // ULW 透過ウィンドウは WS_POPUP | WS_VISIBLE / WS_EX_LAYERED を使用する
+        // 既定 style は WS_POPUP | WS_VISIBLE。
+        // 既定 ex_style は WS_EX_LAYERED 据え置き（factory が生成時に落とす）。
         let style = WindowStyle::default();
         assert_eq!(style.style, WS_POPUP | WS_VISIBLE);
         assert_eq!(style.ex_style, WS_EX_LAYERED);
@@ -296,15 +267,6 @@ mod tests {
             ex_style: WS_EX_LAYERED,
         };
         assert_ne!(a, c);
-    }
-
-    // ===== CompositionMode =====
-
-    #[test]
-    fn test_composition_mode_eq_distinguishes_variants() {
-        // 既定値・Debug は composition_mode_test.rs で固定済み。
-        // ここでは 2 バリアントの非等価性のみ補完する。
-        assert_ne!(CompositionMode::ULW, CompositionMode::DComp);
     }
 
     // ===== DpiChangeContext (thread_local set/take) =====

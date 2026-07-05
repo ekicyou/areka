@@ -45,7 +45,7 @@ use wintf::ecs::widget::bitmap_source::{BitmapSource, CommandSender};
 use wintf::ecs::widget::brushes::Brushes;
 use wintf::ecs::widget::shapes::Rectangle;
 use wintf::ecs::{
-    ChildOf, CompositionMode, FrameFinalize, Point, Window, WindowHandle, WindowPos, WindowStyle,
+    ChildOf, FrameFinalize, Point, Window, WindowHandle, WindowPos, WindowStyle,
 };
 use wintf::*;
 
@@ -128,7 +128,6 @@ fn create_test_window(world: &mut World) -> Entity {
             TwoRectsWindowMarker,
             Window {
                 title: "clickthrough two-rects".to_string(),
-                composition_mode: CompositionMode::DComp,
                 ..Default::default()
             },
             WindowStyle {

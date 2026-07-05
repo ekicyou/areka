@@ -108,7 +108,7 @@ fn on_bitmap_source_add(mut world: DeferredWorld, hook: HookContext) {
 
             // 画像読み込み
             match super::systems::load_bitmap_source(wic_core.factory(), &resolved) {
-                Ok(source) => {
+                Ok((source, _has_alpha)) => {
                     use super::resource::BitmapSourceResource;
                     // BitmapSourceResourceにラップしてからクロージャに渡す
                     // (BitmapSourceResourceはSend実装済み、IWICBitmapSourceは未実装)

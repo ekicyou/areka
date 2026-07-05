@@ -4,20 +4,21 @@
 //! transport の helper 側。責務は 3 点に限定される（design.md §446-452・要件 3.1 / 4.2 / 6.1 / 7.1）:
 //!
 //! 1. **起動時 HELLO**（要件 3.1）: 窓生成後、親へ自 HWND を u32 LE で 1st WM_COPYDATA 送出。
-//! 2. **REQUEST → echo → 即 return**（要件 4.2 / 6.1）: WndProc で inbound WM_COPYDATA を
-//!    framing 検証し、`Request` なら [`respond`]（echo）した bytes を `Response` として親へ
+//! 2. **REQUEST → proxy 駆動 → 即 return**（要件 3.1 / 4.7 / 4.8）: WndProc で inbound WM_COPYDATA を
+//!    framing 検証し、`Request` なら受領した **request バイト列**を確立済み proxy の
+//!    [`ShioriByteProxy::request`] へ流し、その結果（SHIORI/3.0 応答）を `Response` として親へ
 //!    **1 通だけ** 返送して即 return する（それ以上の跨プロセス `SendMessage` を発行しない）。
+//!    proxy 未確立なら明示エラーバイト列（`SHIORI/3.0 500`）を返送し crash させない（R3.1）。
 //!    不正フレーム／未知タグは crash させず観測カウンタに記録するのみ（要件 2.5・上位へ渡さない）。
 //! 3. **`main`**（要件 7.1）: 親 HWND を arg/env の u32 ワイヤ値で取得 → 窓生成 → HELLO 送出 →
-//!    `MessageLoop::run`。lifecycle は echo 実証に必要な最小に留める（常駐 lifecycle は
+//!    `MessageLoop::run`。lifecycle は request 往復実証に必要な最小に留める（常駐 lifecycle は
 //!    Out of Boundary・下流 `host32-lifecycle`）。
 //!
-//! ## 下流の差し替え点（design.md §451 / §465-466）
-//! [`respond`] は **plain fn の echo**（`fn respond(req: &[u8]) -> Vec<u8> { req.to_vec() }`）で、
-//! pasta 非依存。これが Requirement 6 の「意味を持たない生バイト往復」を成立させる。下流
-//! `shiori-host32-shiori-load` はこの 1 関数を pasta 駆動へ置換する。**trait 抽象は設けない**
-//! （YAGNI・凍結する seam は WM_COPYDATA の REQUEST/RESPONSE ワイヤ形式であって respond 実装
-//! ではない・design.md §482）。
+//! ## proxy 駆動の差し替え点（design.md §436 / §465-466）
+//! REQUEST は `classify_inbound`（純関数・proxy 非依存）で **request バイト列**として `Reply` に
+//! 載せられ、`handle_message` の `Reply` アーム（proxy へ到達できる唯一の点）が確立済み proxy の
+//! [`ShioriByteProxy::request`] を実呼出して SHIORI/3.0 応答を得る。凍結する seam は WM_COPYDATA の
+//! REQUEST/RESPONSE ワイヤ形式であって proxy 実装ではない（**trait 抽象は設けない**・YAGNI・design.md §482）。
 //!
 //! ## デッドロック回避（design.md §200 / §473）
 //! WndProc は REQUEST に対し RESPONSE を 1 通返すだけで即 return する。往復は single-in-flight
@@ -49,7 +50,7 @@ use windows::Win32::UI::WindowsAndMessaging::WM_COPYDATA;
 
 /// 応答送出 `SendMessageTimeoutW` の上限時間。
 ///
-/// 無限待機の構造的排除（要件 5.3）。echo 応答は同期送出で即完了するため短めで足りるが、
+/// 無限待機の構造的排除（要件 5.3）。RESPONSE 返送は同期送出で即完了するため短めで足りるが、
 /// ハング peer でも上限時間で復帰することを保証する。
 const REPLY_TIMEOUT: Duration = Duration::from_secs(5);
 
@@ -62,14 +63,12 @@ const LOAD_ACK_OK: u8 = 1;
 /// `[0x00]`=あらゆる `ProxyError`（DLL 不在・エクスポート欠落・`load`→false 等）。helper は生存継続（R6.4）。
 const LOAD_ACK_FAIL: u8 = 0;
 
-/// **下流の差し替え点**（design.md §465-466・要件 6.1）: request bytes をそのまま返す echo。
+/// REQUEST 駆動失敗時に RESPONSE 返送する**識別可能なエラーバイト列**（design.md §436・R3.1）。
 ///
-/// pasta 非依存の単純 echo で、これが Requirement 6 の「意味を持たない生バイト往復」を
-/// 成立させる。下流 `shiori-host32-shiori-load` がこの中身を pasta 駆動へ置換する。
-/// **trait 抽象は設けない**（plain fn・YAGNI）。
-fn respond(req: &[u8]) -> Vec<u8> {
-    req.to_vec()
-}
+/// proxy 未確立（構造上起きないが crash 回避の最小防御）／`proxy.request` の `Err` 時に、echo でも
+/// 空でもなく **error status の SHIORI/3.0 応答**を返す。host 側 codec がこれを識別可能な SHIORI
+/// エラーへ解釈できる（research §7.4「空 or エラー status バイト列」許容）。新 `MsgTag` は導入しない。
+const REQUEST_ERROR_RESPONSE: &[u8] = b"SHIORI/3.0 500 Internal Server Error\r\n\r\n";
 
 /// inbound WM_COPYDATA の framing 検証結果に応じた WndProc の取るべき動作（窓なしで単体検証可）。
 ///
@@ -78,7 +77,10 @@ fn respond(req: &[u8]) -> Vec<u8> {
 /// 実窓なしで決定的に単体検証できる。
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum InboundAction {
-    /// `Request` を受領。同梱の echo bytes を `Response` として親へ返送すべき。
+    /// `Request` を受領。同梱の **request バイト列**（echo ではない）を `handle_message` の `Reply`
+    /// アームが確立済み proxy の [`ShioriByteProxy::request`] へ流し、その SHIORI/3.0 応答を `Response`
+    /// として親へ返送すべき。純関数 [`classify_inbound`] は proxy へ到達しないため、ここでは駆動対象の
+    /// request バイトを運ぶだけに留める（proxy 駆動は proxy へ到達できる `Reply` アームの領分）。
     Reply(Vec<u8>),
     /// `Load` を受領＝SHIORI ロード実行のトリガ（要件 4.1）。従来の「既知だが無視」を置換する。
     /// **ペイロードを持たない**（wire でパスを運ばない・パスは arg/env の `load_dir` から得る）ため、
@@ -94,12 +96,13 @@ enum InboundAction {
 
 /// inbound WM_COPYDATA の生値（tag 生値・宣言長・実データ）を [`InboundAction`] へ写像する純関数。
 ///
-/// framing 検証は `shiori-host32-ipc::copydata_payload` に委譲（重複実装しない）。`Request` のみ
-/// [`respond`] で echo bytes を作り `Reply` とし、その他の既知タグは `IgnoreKnown`、不正フレームは
-/// `IgnoreBad` とする。副作用（送出・カウンタ）は持たず、WndProc 側が結果を見て実行する。
+/// framing 検証は `shiori-host32-ipc::copydata_payload` に委譲（重複実装しない）。`Request` は受領した
+/// **request バイト列**をそのまま `Reply` に載せる（echo でなく proxy 駆動対象・実駆動は `handle_message`
+/// の `Reply` アーム）。その他の既知タグは `IgnoreKnown`、不正フレームは `IgnoreBad` とする。副作用
+/// （送出・カウンタ・proxy 到達）は持たず、WndProc 側が結果を見て実行する（純粋・単体テスト可能性を保つ）。
 fn classify_inbound(dw_data: usize, declared_len: usize, data: &[u8]) -> InboundAction {
     match copydata_payload(dw_data, declared_len, data) {
-        Ok((MsgTag::Request, payload)) => InboundAction::Reply(respond(payload)),
+        Ok((MsgTag::Request, payload)) => InboundAction::Reply(payload.to_vec()),
         // Load はロード実行トリガ（要件 4.1）。ペイロードは無視（有無を問わず TriggerLoad）。
         // IgnoreKnown の一般アームより先に分離して受ける。
         Ok((MsgTag::Load, _)) => InboundAction::TriggerLoad,
@@ -124,7 +127,7 @@ fn load_result_to_ack<T>(result: &Result<T, shiori_proxy::ProxyError>) -> u8 {
 ///
 /// `wintf-winmsg-executor` の `Window<S>` は `state: S` を窓と同居させ、WndProc へ `Pin<&S>` で
 /// 渡す（`Rc` 不要・GWLP_USERDATA 手詰め不要）。single-in-flight・単一 UI スレッドゆえ内部可変は
-/// [`Cell`] で足りる。lifecycle 状態機械は echo 実証に必要な最小（観測カウンタのみ）に留める。
+/// [`Cell`] で足りる。lifecycle 状態機械は request 往復実証に必要な最小（観測カウンタのみ）に留める。
 struct HelperShared {
     /// 親のメッセージ窓 HWND（u32 ワイヤ値）。HELLO 送出先＆RESPONSE 返送先。
     parent_hwnd: u32,
@@ -198,8 +201,9 @@ unsafe fn read_copydata(lparam: LPARAM) -> Option<(usize, usize, Vec<u8>)> {
     Some((dw_data, len, payload))
 }
 
-/// WndProc 本体: WM_COPYDATA を [`classify_inbound`] で分類し、`Reply` なら echo RESPONSE を
-/// 親へ 1 通返送して即 return する（design.md §450・要件 4.2 / 6.1）。
+/// WndProc 本体: WM_COPYDATA を [`classify_inbound`] で分類し、`Reply` なら request バイト列を
+/// 確立済み proxy の [`ShioriByteProxy::request`] へ流し、その SHIORI/3.0 応答を RESPONSE として
+/// 親へ 1 通返送して即 return する（design.md §436・要件 3.1 / 4.7 / 4.8）。
 ///
 /// `self_hwnd` は自窓 HWND（RESPONSE の送信元として載せる）。RESPONSE の宛先は起動時に確定した
 /// `parent_hwnd`。それ以上の跨プロセス `SendMessage` は発行しない（要件 4.2・循環待ちなし）。
@@ -214,11 +218,45 @@ fn handle_message(s: &HelperShared, self_hwnd: HWND, msg: &WindowMessage) -> Opt
     };
 
     match classify_inbound(dw_data, declared_len, &payload) {
-        InboundAction::Reply(bytes) => {
+        InboundAction::Reply(request_bytes) => {
+            // REQUEST 駆動（design.md §436・要件 3.1/4.7/4.8）。`classify_inbound` は純関数ゆえ proxy へ
+            // 到達しない。proxy に到達できるのはこの `Reply` アームのみ＝ここで確立済み proxy を実駆動する。
+            //
+            // **RefCell 再入規律（validation issue #1・LOAD アームと同型）**: `s.proxy` の borrow を
+            // FFI `proxy.request` 呼出中に保持することは可（FFI は同期・跨プロセス SendMessage を発しない）
+            // だが、その後の RESPONSE 返送（`send_copydata`・ブロッキング SMTO・WndProc 再入を許す）へ
+            // borrow を持ち越さない。応答バイトを scoped borrow 内で確定し borrow を drop してから送出する。
+            // 再入 REQUEST が borrow を掴んでも `BorrowError` panic を起こさない（R6.4）。
             s.requests_handled.set(s.requests_handled.get() + 1);
-            // RESPONSE を親へ 1 通だけ返す（それ以上の跨プロセス SendMessage 不可・§200）→ 即 return。
+
+            // 1) scoped borrow で proxy を実駆動し response_bytes を確定（borrow は本ブロックで即終了）。
+            //    proxy 未確立（構造上起きないが crash 回避の最小防御・R3.1）／`request` の Err は
+            //    識別可能なエラーバイト列（500）へ写像し、観測ログを残す（log-first・silent swallow 禁止）。
+            let response_bytes: Vec<u8> = {
+                let guard = s.proxy.borrow();
+                match guard.as_ref() {
+                    Some(proxy) => match proxy.request(&request_bytes) {
+                        Ok(bytes) => bytes,
+                        Err(e) => {
+                            eprintln!("[helper] REQUEST 駆動失敗（観測・500 返送）: {e:?}");
+                            REQUEST_ERROR_RESPONSE.to_vec()
+                        }
+                    },
+                    None => {
+                        // Load-before-Request は構造的不変（設計上ここへは来ない）。来ても crash させず
+                        // 識別可能なエラーバイト列を返し helper は生存継続（R3.1/R6.4）。
+                        eprintln!(
+                            "[helper] proxy 未確立で REQUEST 受領（観測・500 返送）: Load-before-Request 不変違反"
+                        );
+                        REQUEST_ERROR_RESPONSE.to_vec()
+                    }
+                }
+            }; // ← ここで borrow が drop され、以後 RESPONSE 送出は borrow 非保持で行う。
+
+            // 2) borrow を一切保持しない状態で RESPONSE を親へ 1 通だけ返す（ブロッキング SMTO・再入可・§200）→
+            //    即 return（それ以上の跨プロセス SendMessage 不可）。
             let target = hwnd_from_u32(s.parent_hwnd);
-            match send_copydata(target, self_hwnd, MsgTag::Response, &bytes, REPLY_TIMEOUT) {
+            match send_copydata(target, self_hwnd, MsgTag::Response, &response_bytes, REPLY_TIMEOUT) {
                 Ok(()) => s.responses_sent.set(s.responses_sent.get() + 1),
                 Err(e) => eprintln!("[helper] RESPONSE 送出失敗（観測）: {e:?}"),
             }
@@ -412,9 +450,9 @@ fn main() {
         }
     };
 
-    // REQUEST を受領して echo RESPONSE を返すため、メッセージループを回す（要件 4.2 / 6.1）。
+    // REQUEST を受領して proxy 駆動 RESPONSE を返すため、メッセージループを回す（要件 3.1 / 4.7 / 4.8）。
     // 常駐 lifecycle（UNLOAD 停止等）は Out of Boundary（下流 host32-lifecycle）ゆえ、
-    // 本ユニットは echo 実証に必要な最小ループとし、終了条件は下流が結線する。
+    // 本ユニットは request 往復実証に必要な最小ループとし、終了条件は下流が結線する。
     // `win` は本スコープで生存し続け、Drop（窓破棄）は main 終了時。
     let _keep_alive = &win;
     MessageLoop::run(|_msg_loop, _msg| FilterResult::Forward);
@@ -474,34 +512,14 @@ mod resolve_param_tests {
 }
 
 #[cfg(test)]
-mod respond_tests {
-    use super::*;
-
-    // 要件 6.1: request bytes → 同一 response bytes（echo 等価性）。
-    #[test]
-    fn respond_echoes_nonempty_payload() {
-        assert_eq!(respond(b"hello-echo"), b"hello-echo".to_vec());
-    }
-
-    #[test]
-    fn respond_echoes_empty_payload() {
-        assert_eq!(respond(b""), Vec::<u8>::new());
-    }
-
-    #[test]
-    fn respond_echoes_binary_payload() {
-        let bytes = [0u8, 1, 2, 255, 128, 0, 42];
-        assert_eq!(respond(&bytes), bytes.to_vec());
-    }
-}
-
-#[cfg(test)]
 mod classify_tests {
     use super::*;
 
-    // 要件 6.1 / 4.2: REQUEST は echo bytes を伴う Reply へ分類される。
+    // 要件 3.1 / 4.7: REQUEST は受領 request バイト列（echo ではなく proxy 駆動対象）を伴う Reply
+    // へ分類される（純関数ゆえ proxy へ到達しない・実駆動は handle_message の Reply アーム）。
+    // バイト内容は受領 payload と同一だが、意味は「駆動すべき request」であって「応答（echo）」ではない。
     #[test]
-    fn request_classifies_to_reply_with_echo() {
+    fn request_classifies_to_reply_with_request_bytes() {
         let payload = b"round-trip";
         let raw = MsgTag::Request.as_u32() as usize;
         let action = classify_inbound(raw, payload.len(), payload);
@@ -509,7 +527,7 @@ mod classify_tests {
     }
 
     #[test]
-    fn request_with_empty_payload_replies_empty() {
+    fn request_with_empty_payload_carries_empty_request_bytes() {
         let raw = MsgTag::Request.as_u32() as usize;
         let action = classify_inbound(raw, 0, b"");
         assert_eq!(action, InboundAction::Reply(Vec::new()));
@@ -624,13 +642,14 @@ mod loopback_tests {
         );
     }
 
-    /// 単一 loopback テスト（HELLO 送出・REQUEST echo・不正フレーム記録・bounded 生存を同一窓で網羅）。
+    /// 単一 loopback テスト（HELLO 送出・未確立 REQUEST→500・LOAD・proxy 駆動 REQUEST(GET/NOTIFY)・
+    /// 不正フレーム記録・bounded 生存を同一窓で網羅）。
     ///
     /// wintf の message-only 窓を i686 テストプロセスで 2 組独立生成すると 2 組目が
     /// WindowCreationError になる既知制約ゆえ、窓は 1 組（stand-in parent ＋ helper）に集約する。
     /// bounded: 有限メッセージを PostMessage で撒いた後に必ず抜ける（無限ループ禁止）。
     #[test]
-    fn loopback_hello_request_echo_and_bounded_loop() {
+    fn loopback_hello_request_proxy_driven_and_bounded_loop() {
         // --- stand-in parent（HELLO / RESPONSE 受け皿）。受領を Rc<Cell> に記録 ---
         let hello_helper_hwnd: Rc<Cell<Option<u32>>> = Rc::new(Cell::new(None));
         let responses: Rc<Cell<u64>> = Rc::new(Cell::new(0));
@@ -703,34 +722,44 @@ mod loopback_tests {
         );
         assert_eq!(helper.shared().hellos_sent.get(), 1);
 
-        // --- REQUEST → helper WndProc → echo RESPONSE を親が受領（要件 4.2 / 6.1）---
-        // helper 自窓へ REQUEST を送り、WndProc が respond→RESPONSE を親へ返すのを観測する。
-        let req = b"echo-me-42";
+        // --- 未確立 REQUEST: proxy 未確立（LOAD 前）で REQUEST を送っても crash せず、識別可能な
+        //     500 エラー RESPONSE を親が受領する（echo ではない・R3.1）---
+        // Load-before-Request は構造的不変だが、helper は不変違反でも crash しない最小防御を持つ。
+        let pre_load_req =
+            b"GET SHIORI/3.0\r\nCharset: UTF-8\r\nSender: areka\r\nID: OnTestValue\r\n\r\n";
         send_copydata(
             helper.hwnd(),
             parent.hwnd(),
             MsgTag::Request,
-            req,
+            pre_load_req,
             REPLY_TIMEOUT,
         )
-        .expect("REQUEST 送出に失敗");
+        .expect("未確立 REQUEST 送出に失敗");
 
         assert_eq!(
             helper.shared().requests_handled.get(),
             1,
-            "WndProc が REQUEST を処理する（要件 4.2）"
+            "WndProc が未確立 REQUEST も処理する（crash しない・R3.1）"
         );
         assert_eq!(
             helper.shared().responses_sent.get(),
             1,
-            "WndProc が RESPONSE を 1 通返送する（要件 4.2）"
+            "未確立 REQUEST にも RESPONSE を 1 通返す（無応答でない・R3.1）"
         );
-        assert_eq!(responses.get(), 1, "親が echo RESPONSE を受領する（要件 6.1）");
-        assert_eq!(
-            &*last_response.borrow(),
-            &req.to_vec(),
-            "受領 response bytes が request bytes と一致（echo・要件 6.1）"
-        );
+        assert_eq!(responses.get(), 1, "親が未確立 REQUEST の RESPONSE を受領する");
+        {
+            let text = String::from_utf8(last_response.borrow().clone())
+                .expect("500 RESPONSE は UTF-8");
+            assert!(
+                text.contains("SHIORI/3.0 500 Internal Server Error"),
+                "未確立 proxy では識別可能な 500 を返す（echo ではない・R3.1）: {text:?}"
+            );
+            assert_ne!(
+                last_response.borrow().as_slice(),
+                &pre_load_req[..],
+                "RESPONSE は request の echo ではない（proxy 駆動結果／エラー）"
+            );
+        }
 
         // --- LOAD 経路: MsgTag::Load（空ペイロード）→ 未確立ゆえ proxy 確立 → ack[1]（要件 4.1/5.1）---
         // 親が受領した最新 RESPONSE を LOAD ack として観測する（load_dir\shiori.dll=testdll を確立）。
@@ -762,12 +791,77 @@ mod loopback_tests {
             helper.shared().proxy.borrow().is_some(),
             "確立成功した proxy が常設保持される（要件 4.3）"
         );
-        assert_eq!(responses.get(), 2, "親が LOAD ack を 1 通受領する（REQUEST echo と合わせ 2）");
+        assert_eq!(responses.get(), 2, "親が LOAD ack を 1 通受領する（未確立 REQUEST 500 と合わせ 2）");
         assert_eq!(
             &*last_response.borrow(),
             &[LOAD_ACK_OK],
             "LOAD ack は厳密 1 byte [1]（成功・要件 5.1）"
         );
+
+        // --- proxy 駆動 REQUEST(GET): 確立済み proxy で REQUEST を送ると testdll が固定 200 応答を返し、
+        //     それが echo でなく proxy 駆動結果として親へ RESPONSE 返送される（R4.7・Observable）---
+        let get_req =
+            b"GET SHIORI/3.0\r\nCharset: UTF-8\r\nSender: areka\r\nID: OnTestValue\r\n\r\n";
+        send_copydata(
+            helper.hwnd(),
+            parent.hwnd(),
+            MsgTag::Request,
+            get_req,
+            REPLY_TIMEOUT,
+        )
+        .expect("proxy 駆動 GET REQUEST 送出に失敗");
+
+        assert_eq!(
+            helper.shared().requests_handled.get(),
+            2,
+            "WndProc が proxy 駆動 GET REQUEST を処理する（要件 4.7）"
+        );
+        assert_eq!(responses.get(), 3, "親が proxy 駆動 GET の RESPONSE を受領する（計 3）");
+        {
+            let text = String::from_utf8(last_response.borrow().clone())
+                .expect("GET RESPONSE は UTF-8");
+            assert!(
+                text.contains("SHIORI/3.0 200 OK"),
+                "proxy 駆動 GET は testdll の固定 200 応答を返す（R4.7・Observable）: {text:?}"
+            );
+            assert!(
+                text.contains("Value: \\0\\s[0]host32 request roundtrip ok\\e"),
+                "proxy 駆動 GET の固定 Value 行（echo ではない・R4.7）: {text:?}"
+            );
+            assert_ne!(
+                last_response.borrow().as_slice(),
+                &get_req[..],
+                "RESPONSE は request の echo ではない（proxy 駆動 SHIORI/3.0 応答）"
+            );
+        }
+
+        // --- proxy 駆動 REQUEST(NOTIFY): 同経路で helper は proxy.request を駆動し DLL 戻り（204）を
+        //     そのまま RESPONSE 返送する（GET と同一経路・host 側で破棄・R4.8 の helper 側）---
+        let notify_req =
+            b"NOTIFY SHIORI/3.0\r\nCharset: UTF-8\r\nSender: areka\r\nID: OnTestNotify\r\n\r\n";
+        send_copydata(
+            helper.hwnd(),
+            parent.hwnd(),
+            MsgTag::Request,
+            notify_req,
+            REPLY_TIMEOUT,
+        )
+        .expect("proxy 駆動 NOTIFY REQUEST 送出に失敗");
+
+        assert_eq!(
+            helper.shared().requests_handled.get(),
+            3,
+            "WndProc が proxy 駆動 NOTIFY REQUEST も同経路で処理する（R4.8）"
+        );
+        assert_eq!(responses.get(), 4, "親が proxy 駆動 NOTIFY の RESPONSE を受領する（計 4）");
+        {
+            let text = String::from_utf8(last_response.borrow().clone())
+                .expect("NOTIFY RESPONSE は UTF-8");
+            assert!(
+                text.contains("SHIORI/3.0 204 No Content"),
+                "proxy 駆動 NOTIFY は testdll の固定 204 応答を返す（helper は GET と同一駆動・R4.8）: {text:?}"
+            );
+        }
 
         // --- 冪等再 LOAD: もう一度 Load → load 再呼出なしで ack[1] 冪等返送（R2.4・無 panic）---
         send_copydata(
@@ -794,7 +888,7 @@ mod loopback_tests {
             0,
             "冪等 LOAD でも ack[0] は送出しない"
         );
-        assert_eq!(responses.get(), 3, "親が冪等 LOAD ack を追加 1 通受領する（計 3）");
+        assert_eq!(responses.get(), 5, "親が冪等 LOAD ack を追加 1 通受領する（計 5）");
         assert_eq!(
             &*last_response.borrow(),
             &[LOAD_ACK_OK],
@@ -825,8 +919,9 @@ mod loopback_tests {
             1,
             "不正フレームは crash させず記録のみ（要件 2.5）"
         );
-        // 不正フレームでは RESPONSE を送らない（無応答）。REQUEST echo(1)＋LOAD ack(2) の計 3 のまま。
-        assert_eq!(responses.get(), 3, "不正フレームに応答しない（無応答・計 3 のまま）");
+        // 不正フレームでは RESPONSE を送らない（無応答）。
+        // 未確立 REQUEST 500(1)＋LOAD ack(2)＋GET(3)＋NOTIFY(4)＋冪等 LOAD ack(5) の計 5 のまま。
+        assert_eq!(responses.get(), 5, "不正フレームに応答しない（無応答・計 5 のまま）");
 
         // --- bounded ループ生存: 有限個の WM_NULL を撒いてから quit し、必ず抜ける（無クラッシュ）---
         let pumped = Rc::new(Cell::new(0u32));
