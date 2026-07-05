@@ -21,6 +21,11 @@
 //! 依存しない（DD-1）。将来の契約クレート切り出しは [`talk`] の機械的移動だけで
 //! 完結する。
 
+pub mod msg;
 pub mod talk;
 
+pub use msg::{
+    CloseReason, KanadeConfig, KanadeMsg, MonotonicMs, ShioriCall, ShioriFailure, ShioriMsg,
+    ShioriOutcome,
+};
 pub use talk::{StartTalk, TalkDone, TalkId};

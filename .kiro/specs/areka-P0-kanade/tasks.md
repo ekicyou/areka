@@ -9,7 +9,7 @@
   - _Requirements: 2.1, 2.2, 2.4_
   - _Boundary: クレート雛形・lib.rs・talk.rs_
 
-- [ ] 1.2 kanade/shiori 境界のメッセージ型と運行構成の実装
+- [x] 1.2 kanade/shiori 境界のメッセージ型と運行構成の実装
   - kanade アクター inbox（起動・Tick・再生完了通知・close 指示・強制終了指示・死活報告・停止）と、shiori 呼出境界（GET/NOTIFY 呼出・unload・停止）のメッセージ型を定義する
   - GET と NOTIFY の別を型で区別し、NOTIFY の結果が Value を運べない構造にする（応答から talk を生成できないことを型で保証する）
   - SHIORI 呼出失敗を区別語彙（タイムアウト／SHIORI エラー／helper 死活／接続確立失敗）として保持するエラー型と、単調ミリ秒による時刻表現・close 待ち上限を含む運行構成の型を定義する
