@@ -211,6 +211,7 @@ crates/areka/examples/
 - `crates/wintf/src/com/wuc.rs` — **追加**: `CompositorInteropExt::create_composition_surface_for_swap_chain(&self, swapchain) -> Result<ICompositionSurface>`（既存 Ext trait へメソッド増分）
 - `crates/wintf/src/ecs/layout/hit_test/mod.rs` — **変更**: AlphaMask 読み出しを共有ヘルパへ抽出し、`hit_test_entity` と **`hit_test_entity_ex`**（clickthrough `evaluate_targets`→`hit_test_in_window` およびマウス系 window_proc が通る実経路）の**両 AlphaMask 分岐**で `AlphaMaskResource` を最優先（無ければ既存どおり `BitmapSourceResource` → フォールバック）。`AlphaMaskResource` 定義（`pub struct AlphaMaskResource`・`AlphaMask` を内包・set/get）を同モジュールに新設
 - `crates/wintf/tests/…` — **追加**: `AlphaMaskResource` 優先読みの単体テスト（既存 hit_test テストドメインに追随）
+- `crates/areka-emo-atlas/src/…` — **追加**: bake の element 取り込みで全透明（α=0 トリム後 0 寸）または元画像 0 寸を検出したら `warn!`（ゴースト制作者ミスの可能性が高いための早期警告。**動作は不変・ログのみの増分**。設計ディスカッション #1 決定）
 - `crates/Cargo.toml`（workspace） — メンバ追加 `areka-emo-present`
 - `crates/areka/Cargo.toml` — dev-dependency に `areka-emo-present`（example 用）
 
@@ -376,8 +377,6 @@ pub enum PresentError {
     TargetNotAttached(TargetId),
     #[error("graphics device error: {hresult:#x} {context}")]
     Device { hresult: i32, context: &'static str },
-    #[error("zero-extent surface cannot be presented")]
-    ZeroExtent,
 }
 ```
 
@@ -416,7 +415,7 @@ pub enum PresentError {
 - **NonSend**（`Rc`/COM を内包）として wintf World に登録 or example が所有。UI スレッド専有を**型で**強制（R7.1）
 - target ごとに `PresentTarget { world: EmoWorld, atlas: AtlasTable, composer: Composer, cache: ComposeCache, mount: VisualMount, chain: Option<SwapChainPresenter> }` を所有。シェルとバルーンは**同一機構の別 target**（R5.1 の統一原則）
 - 失敗経路のログ規律: `ComposeError::SurfaceNotFound` → `tracing::error!`＋表示不変＋reply へ `Err`（silent failure 禁止・panic しない）
-- 全透明退化（0x0 の `ComposedSurface`）は `ZeroExtent` として **Hide 相当**に落とす（swap chain は 0 寸を作れないため。warn ログ＋visual 非表示）
+- 全透明退化（外形 0×0）: emo-compose は `Err(ComposeError::EmptyComposition)` を返す（`Ok` で 0×0 の `ComposedSurface` は返らない）。これを**許容される正常退化**として扱い、warn! ＋ **Hide 相当**（visual 非表示＋`HitTest::none()`）へ縮退し、reply は **`Ok`**（指令は適用された・swap chain は 0 寸を作れないため Present はしない・表示破壊なし）。サイズ 0 はゴースト制作者ミスの可能性が高いため、一次警告は atlas 変換時の warn（Modified Files 参照）が担い、本経路の warn は実行時の観測補助（設計ディスカッション #1 決定）
 
 **Dependencies**
 - Inbound: example／将来は seriko→（UiSender 経由）— 指令の発行（P0）
@@ -636,7 +635,7 @@ struct PresentTarget {
 ### Error Categories and Responses
 
 - **指令エラー（呼び手起因）**: `Compose(SurfaceNotFound)`・`TargetNotAttached` → error! ＋ 当該指令 skip ＋ reply へ `Err`（表示不変・R3.4）
-- **退化入力**: `ZeroExtent`（0x0 合成結果） → warn! ＋ Hide 相当へ縮退（エラーで殺さない）
+- **退化入力（許容）**: `Compose(EmptyComposition)`（全透明・外形 0×0） → warn! ＋ **Hide 相当へ縮退・reply `Ok`**（エラーで殺さない・skip 解釈は採らない＝二解釈の一意化・設計ディスカッション #1）。制作者ミスの一次警告は atlas 変換時（emo-atlas bake の全透明/0 寸 element warn）が担う
 - **システムエラー**: `Device{hresult}`（swap chain/D3D 失敗） → error!（HRESULT・context 付き）＋ `Err`。デバイスロスト時は chain を破棄し次回 apply で再作成（graceful degradation）
 - **example の検証失敗**: golden 不一致は `assert_eq!` で即 fail（観測装置としての単一 pass/fail・R6.2）
 
@@ -653,11 +652,12 @@ struct PresentTarget {
 3. **PresentCommand 契約**: `Send + 'static` 静的 assert・`Hide`/`InvalidateCache` variant の存在（3.3/3.5・回帰檻）
 4. **BalloonFrameSource**: synthetic surfaces.txt → `shell::parse` 往復で element path/surface id が転記一致（5.1/5.3）
 5. **wintf hit-test 読み口**: `AlphaMaskResource` あり→優先・なし→`BitmapSourceResource` 既存経路。`hit_test_entity` 直接呼びと `hit_test_in_window` 経由（`hit_test_entity_ex`）の両方を檻に含める（2.2/2.3・wintf 側テストドメイン）
+6. **emo-atlas 全透明 warn**: 全透明/0 寸 element を含む bake で warn ログが発火する（tracing capture で決定論 assert・bake 結果自体は既存挙動不変。emo-atlas 側テストドメイン）
 
 ### Integration Tests（GPU 経路・WARP 可＝CI 決定論）
 
 1. **spike 昇格テスト（実装フェーズ先頭）**: composition swap chain 生成→`upload`→`read_back` バイト一致→`ResizeBuffers`→再 upload→一致（8.1/8.2/8.3/8.5・R6.7 シームの檻）
-2. **apply 経路**: `attach_target`→`ShowSurface`→`read_back` == golden bytes・不正 id →表示 bytes 不変＋`Err`（1.1/1.2/3.2/3.4）
+2. **apply 経路**: `attach_target`→`ShowSurface`→`read_back` == golden bytes・不正 id →表示 bytes 不変＋`Err`・全透明 surface（`EmptyComposition`）→ warn＋Hide 縮退＋reply `Ok`（1.1/1.2/3.2/3.4・ディスカッション #1）
 3. **Hide→再表示**: `Hide` 後 visual 非表示＋`HitTest::none`、再 `ShowSurface` で復帰（3.3）
 
 ### E2E / 観測（example・単一 pass/fail）
