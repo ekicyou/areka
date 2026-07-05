@@ -172,9 +172,36 @@ pub enum RequestError {
 
 ## 決定判断項目（requirements discussion へ供給）
 
-1. **統一報告型の形**（R2）: A=`RequestError` 拡張／B=両者を包む新型／C=突合純関数＋小 enum。凍結 `RequestError` の意味論不変（R7.2）を最も素直に守るのは B/C。**本仕様が報告型の正本**（kanade 消費・非再定義）ゆえ形と `Send` 境界を本仕様で確定する必要。
-2. **死活監視の駆動タイミング／スレッド要否**（R1・Boundary で design 送り明言）: A=request 前後 poll（スレッド追加なし・brief 忠実）／B=pump ループ内周期チェック／C=専用監視スレッド（requirements が牽制）。A で足りるかの論証が要る。
+1. **統一報告型の形**（R2）: A=`RequestError` 拡張／B=両者を包む新型／C=突合純関数＋小 enum。凍結 `RequestError` の意味論不変（R7.2）を最も素直に守るのは B/C。**本仕様が報告型の正本**（kanade 消費・非再定義）ゆえ形と `Send` 境界を本仕様で確定する必要。 **【design 決着 2026-07-05】B＋C の折衷を採択**: 突合判定は純関数 `classify_failure(&RequestError, Option<ExitKind>) -> FailureClass`（C・決定的・単体テスト可）、報告の運搬は `LifecycleReport { class: FailureClass, error: RequestError }`（B・凍結型を**所有内包**・二軸保持で R2.4 の区別を潰さない）。`FailureClass = HelperDown(ExitKind) / Unresponsive / ShioriFailure / Transport / Handshake`（処分判断バリアント無し・R2.7）。突合表は「終了検出が他のすべてに優先」（`Some(kind)`×任意 error → `HelperDown(kind)`・`Some(Clean)` でも HelperDown）。A（拡張）は R7.2 の消費規律に反するため棄却。`Send` は静的 assert（unit test）で担保——`ExitKind`(Copy)・`RequestError`（IpcError/HandshakeError/ShioriError すべて所有データ）を実地確認済み＝全報告型 `Send`（決定項目 2 も同時決着）。設計正本: design.md §統一報告語彙。
+2. **死活監視の駆動タイミング／スレッド要否**（R1・Boundary で design 送り明言）: A=request 前後 poll（スレッド追加なし・brief 忠実）／B=pump ループ内周期チェック／C=専用監視スレッド（requirements が牽制）。A で足りるかの論証が要る。 **【design 決着 2026-07-05】Option A を採択**（request 前後 poll・スレッド追加なし）。器は `HelperLifecycle`（`HelperHandle` を単独所有・sticky 終了キャッシュ・`Send`）。A で足りる論証: (i) 呼び手は毎秒 pump 前提ゆえ「request していない間の死活変化」は高々 1 周期遅れの次の観測点で必ず検出される、(ii) 死んだ helper への request は凍結 SMTO が即時 `SendFailed` または上限 `Timeout` で有限復帰する（取りこぼしがハングに転化しない）、(iii) B は常駐運行の器を本仕様が持つことになり kanade 領分を侵食、C は `HelperHandle` 所有権共有問題＋actor 化の先取り（過剰設計）。設計正本: design.md §Architecture Integration・§HelperLifecycle。
 3. **`error!` の実体とログ依存追加**（R4.4/R5.5/R7.6 × steering `tracing` 規約）: host クレートは現状ログ機構ゼロ（`tracing` 依存なし・本体に `error!`/`eprintln!` 皆無）。**【discussion 決着 2026-07-05】** steering `logging.md`（行 15-18）が `shiori-host32-*` を `tracing = { workspace = true }` 消費ライブラリクレートとして明示列挙済み。ゆえに host クレートへの `tracing` 追加は**新規の意図的依存承認事項ではなく steering 準拠**であり、design は再議論不要——`shiori-host32-host/Cargo.toml` に `tracing = { workspace = true }` を足し、`error!`＋`Err` で失敗経路を surface する（subscriber 初期化はテスト/アプリ層の責務・ライブラリはマクロ発行のみ）。`eprintln!` 許容案は棄却。残る design 判断は「どの失敗経路に `error!` を置くか」の配置のみ（機構選定ではない）。
-4. **通常 shutdown→`ExitKind::Clean`(0) の観測経路**（R5.1）: 現 helper は正常終了経路を持たず（`MessageLoop::run` 無停止・main.rs「終了条件は下流が結線」）、`terminate` は Clean にならない。Clean 観測に (a) helper へ終了トリガ増分／(b) stand-in `exit(0)` 経路で代替、のいずれを採るか。helper 側増分の要否は本仕様スコープ判断。 **【discussion 決着 2026-07-05・開発者判断】案 A を採択・かつ「最小の小細工ではなく正規のもの」を要求。** 実 helper（`shiori-host32-helper`）へ**正規の正常終了経路**を増設する（ホストの正常終了要求 → SHIORI `unload`（`host32-shiori-load` の courtesy unload 契約踏襲）→ メッセージループ正常終了 → 終了コード 0 → `ExitKind::Clean` 観測）。stand-in／テスト専用 `exit(0)` での代替は棄却。helper クレートへの増分は本仕様スコープに正式に含む（requirements R5.1・R5.6・Boundary In-scope へ反映済み）。残る design 判断は正常終了要求メッセージの種別と結線詳細のみ（正規経路・スコープ帰属は確定）。
-5. **周期運転の「leak/handle 枯渇/ResponseSlot 巻き込みなし」の決定的観測基準**（R3.5）: 最小 assert（全往復成功＋`poll_exit_kind`→None＋pid 生存）で足るか、追加のハンドル/リソース計数を課すか。過剰計測を避けつつ決定性を担保する基準の確定。
-6. **周期連打の反復回数と決定性担保**（R3.5/7.5）: 「OnSecondChange 相当の頻度」を実時間依存なしにどう定数化するか（回数固定＋bounded poll・実 sleep 排除）。CI 再現性の担保方法。
+4. **通常 shutdown→`ExitKind::Clean`(0) の観測経路**（R5.1）: 現 helper は正常終了経路を持たず（`MessageLoop::run` 無停止・main.rs「終了条件は下流が結線」）、`terminate` は Clean にならない。Clean 観測に (a) helper へ終了トリガ増分／(b) stand-in `exit(0)` 経路で代替、のいずれを採るか。helper 側増分の要否は本仕様スコープ判断。 **【discussion 決着 2026-07-05・開発者判断】案 A を採択・かつ「最小の小細工ではなく正規のもの」を要求。** 実 helper（`shiori-host32-helper`）へ**正規の正常終了経路**を増設する（ホストの正常終了要求 → SHIORI `unload`（`host32-shiori-load` の courtesy unload 契約踏襲）→ メッセージループ正常終了 → 終了コード 0 → `ExitKind::Clean` 観測）。stand-in／テスト専用 `exit(0)` での代替は棄却。helper クレートへの増分は本仕様スコープに正式に含む（requirements R5.1・R5.6・Boundary In-scope へ反映済み）。残る design 判断は正常終了要求メッセージの種別と結線詳細のみ（正規経路・スコープ帰属は確定）。 **【design 決着 2026-07-05・機構詳細】正常終了要求メッセージ＝凍結 ipc に定義済みの `MsgTag::Unload`(=5) を消費**（「下流が結線する」と明記済みの正当な拡張点・新 MsgTag 発明なし・wire 不改変）。結線詳細: helper `classify_inbound` に `TriggerUnload` を追加（ペイロード無視・`TriggerLoad` 同型）→ UNLOAD アームで ①`proxy.borrow_mut().take()`（scoped borrow）→②borrow 非保持で drop（courtesy unload→FreeLibrary）→③`quit_requested`（`Cell<bool>` 新設）set→④ack **厳密 1 byte `[1]`** を `MsgTag::Response` で返送（LOAD ack 同型・unload 完了後/quit 前）→⑤自窓へ `PostMessageW(WM_NULL)`（sent-message は `MessageLoop` フィルタに現れないため posted で起こす・`pump_until_hello_or` 実証済みパターン）。main は filter で `quit_requested` を見て `msg_loop.quit()` → 正常 return → exit 0。ホスト側は `HelperLifecycle::request_clean_shutdown(window)`＝UNLOAD `send_request`（`UNLOAD_ACK_TIMEOUT` 30s）→ ack `[1]` 検証 → bounded poll（10s 上限・5ms 刻み）で `ExitKind` 観測。未 LOAD・二重 UNLOAD も ack `[1]`＋終了系列（冪等）。設計正本: design.md §System Flows 正規の正常終了経路・§helper UNLOAD 結線。
+5. **周期運転の「leak/handle 枯渇/ResponseSlot 巻き込みなし」の決定的観測基準**（R3.5）: 最小 assert（全往復成功＋`poll_exit_kind`→None＋pid 生存）で足るか、追加のハンドル/リソース計数を課すか。過剰計測を避けつつ決定性を担保する基準の確定。 **【design 決着 2026-07-05】最小 assert 集合を採択**: 「全 200×2 往復の成功（各往復＝`ResponseSlot` の clear→store→take 1 巡の完結証明）＋反復後 `status()==Running` ＋ clean shutdown が `Clean` で完結」。OS ハンドル計数は**課さない**——ハンドル数は OS 内部要因で非決定的に揺れ偽陽性源になる（過剰計測）。枯渇・slot 巻き込みがあれば反復中の失敗として顕在化するため、持続成功＋生存＋正常終了完遂が観測可能な契約である。設計正本: design.md §Testing Strategy 項目 8。
+6. **周期連打の反復回数と決定性担保**（R3.5/7.5）: 「OnSecondChange 相当の頻度」を実時間依存なしにどう定数化するか（回数固定＋bounded poll・実 sleep 排除）。CI 再現性の担保方法。 **【design 決着 2026-07-05】`REPETITIONS = 200` 定数・back-to-back 連打（反復間 sleep 無し）を採択**。「OnSecondChange 相当の頻度」は実時間ペーシングではなく**連続連打＝頻度の上界**として解釈（実時間 sleep を持ち込まない・R7.5）。200 回は単発実証の 2 桁上で slot 再利用・HGLOBAL churn を十分行使しつつ全体数秒オーダーで CI 適合。有限復帰は凍結 SMTO timeout に乗る（唯一の実時間 sleep は shutdown 終了観測の bounded poll 刻み 5ms）。実 pasta 追験（env-gate）は `N_PASTA = 300` の `notify` 連打（応答 status 非依存＝破棄契約で transport 健全性のみ観測）。設計正本: design.md §Testing Strategy 項目 8/10。
+
+---
+
+## 設計フェーズ追記（2026-07-05・kiro-spec-design）
+
+### Discovery（light・Extension 型）
+
+ギャップ分析（本書 §2〜§4）の全実シンボルを design 生成時に実コードで再検証した。追加確認事項:
+
+- **`MsgTag::Unload`(=5) は凍結 ipc に定義済み・未結線**（`shiori-host32-ipc/src/lib.rs`: 「本ユニット未処理・下流で結線」と doc 明記）。決定項目 4 の「正常終了要求メッセージの種別」は**新規発明不要**——凍結語彙の消費で閉じる（wire/framing/slot/timeout 不改変が構造的に保たれる）。helper 側は現状 `IgnoreKnown(Unload)`、親側 `send_request` はタグ汎用ゆえホスト側改変も `lifecycle.rs` 内に閉じる。
+- **`MessageLoop` の quit 経路**: 跨プロセス SendMessage 配送の WM_COPYDATA は `MessageLoop::run` のフィルタ閉包に現れない（GetMessage 内部で WndProc 直行）。よって WndProc からの終了伝搬は「共有フラグ＋自窓 `PostMessageW(WM_NULL)` 起こし＋フィルタで quit」——`pump_until_hello_or`（parent_window.rs）で実証済みの同型パターンを採る。
+- **courtesy unload 契約の実体**: `ShioriByteProxy` は Drop が唯一の teardown 経路（明示メソッド非公開・best-effort unload→FreeLibrary）。UNLOAD アームは `RefCell::take()`→borrow 非保持 drop で LOAD/REQUEST アームと同じ再入規律に載る。
+- **`Send` 実測**（決定項目 2）: `ExitKind`=Copy、`RequestError` の全バリアント（`HandshakeError`/`IpcError`/`ShioriError`＝unit・`FramingError`(Copy)・`u16`/`Option<String>`）は所有データのみ＝`Send`。`HelperHandle`（`Child`＋`Option<u32>`）も `Send`。静的 assert をユニットテストで固定する。
+- **tracing**: workspace `Cargo.toml` に `tracing = "0.1"` 定義済み。host クレートへの追加は steering `logging.md` 準拠（決定項目 3 の discussion 決着どおり・新規承認不要）。
+- **1 窓制約と試験配置**: 窓を要する e2e は 1 テストバイナリ 1 windowed-test（`error_paths.rs` 方式）。周期運転＋clean shutdown と kill 注入は**別テストファイル（別バイナリ＝別プロセス）**に分離する。
+
+### Synthesis 記録
+
+- **Generalization**: 「helper が死んだ／応答しない／SHIORI がエラー」の区別要求（R2）と kill 注入時の報告（R4）・shutdown 後の観測（R5）は同一の突合問題——`classify_failure` 純関数 1 本に一般化し、器（`HelperLifecycle`）とテストの全経路が同じ正本を消費する。
+- **Build vs Adopt**: 新規外部依存ゼロ（tracing は steering 既定）。wire は既定義 `MsgTag::Unload` を採用（新タグ・新フレーム形式を build しない）。ack は LOAD ack の厳密 1 byte 契約を再利用。
+- **Simplification**: 専用監視スレッド・常駐 pump ループ・client ラッパ・trait 抽象・OS ハンドル計数をすべて不採用。新規機構は「監視の器」「突合純関数＋報告型」「helper 正常終了経路」の 3 点に絞る（要件を満たす最小・インターフェース水準で拡張可能）。
+
+### 設計レビュー（design-review-gate）
+
+- 機械チェック: 全 39 要件 ID（1.1〜7.7）が traceability 表に存在・全コンポーネントが File Structure Plan の実パスに対応・Boundary 4 節充足——合格。
+- 修復 1 回: R4.4 と既存 seam（`poll_exit_kind` が `try_wait` I/O `Err` を「稼働中扱い」に握る確定意味論）の境界を明示——R4.4 の `error!`＋`Err` 規律は本仕様が新設する失敗経路（terminate／report_failure の HelperDown／shutdown 3 失敗）に適用し、seam の `Option`→`Result` 化（消費規律違反）は行わない旨を design に明記。
+- 2 回目レビューで指摘なし——**合格**（2026-07-05）。
