@@ -49,8 +49,10 @@ fn source_over_channel(src_c: u8, dst_c: u8, inv_src_a: u32) -> u8 {
 ///      算出し、`[0, extent.w) × [0, extent.h)` へクリップ（負座標・はみ出しは skip・要件 6.2）。
 ///    - premultiplied SourceOver 整数式（決定6・[`source_over_channel`]）で BGRA 4 バイトを合成する。
 ///
-/// M1 の命令 `method` は常に [`crate::method::ComposeMethod::Overlay`]（＝SourceOver）ゆえ、本 task
-/// では全命令へ SourceOver を適用する。未実装メソッドの dispatch/skip は後続 task の責務。
+/// 各命令は合成前に [`crate::method::ComposeMethod::is_implemented`] で dispatch する。M1 の実装対象は
+/// [`crate::method::ComposeMethod::Overlay`]（＝SourceOver）のみゆえ、`is_implemented() == false` の
+/// 未実装メソッド命令はパニックせず `warn!`（メソッド名・element id 付き）を発してその命令のみ
+/// skip し、処理を継続する（要件 8.4・design「Method Registry」Postcondition／Error Handling 表）。
 ///
 /// # 整数専用（要件 10.2）
 ///
@@ -82,6 +84,20 @@ pub(crate) fn execute(
 
     // (2) 命令を順に転写（画家のアルゴリズム・下層から上層）。
     for op in ops {
+        // 未実装メソッド命令はパニックせず warn＋skip して処理を継続する（要件 8.4・design
+        // 「Method Registry」Postcondition／Error Handling 表 `warn!(method)`）。M1 の実装対象は
+        // `Overlay`（SourceOver）のみ。`BlitOp` は surface id を保持しない（design Contracts）ため、
+        // 命令化されている行動可能フィールド＝method（＋element id）をログに載せる。
+        if !op.method.is_implemented() {
+            tracing::warn!(
+                target: "areka_emo_compose",
+                method = ?op.method,
+                element = op.element.0,
+                "未実装の合成メソッド命令をスキップ"
+            );
+            continue;
+        }
+
         let entry = atlas.entry(op.element);
         // placement None（全透明・plan で除外済み）は防御的に skip（要件 6.3・非パニック）。
         let Some(placement) = entry.placement.as_ref() else {
@@ -154,7 +170,7 @@ mod tests {
     use areka_emo_atlas::{
         AtlasEntry, AtlasKey, AtlasPage, AtlasTable, ElementId, Placement, Point, Rect, SetId, Size,
     };
-    use crate::method::ComposeMethod;
+    use crate::method::{BlendKind, BlendMode, ComposeMethod};
     use crate::normalized::Transform;
     use std::sync::Arc;
 
@@ -446,6 +462,83 @@ mod tests {
         execute(&mut out, Extent { w: 2, h: 2 }, &ops, &atlas);
         // 何も転写されず全透明のまま（パニックしない）。
         assert!(out.bytes().iter().all(|&b| b == 0), "placement None は転写されない");
+    }
+
+    /// 非実装メソッド用の BlitOp を組む（`ElementId(0)` を (x,y) へ・任意 method）。
+    fn op_with_method(x: i64, y: i64, method: ComposeMethod) -> BlitOp {
+        BlitOp {
+            element: ElementId(0),
+            transform: Transform::translate(x, y),
+            method,
+        }
+    }
+
+    /// テスト（受入基準・要件 8.4）: 非実装メソッド命令はスキップされ、実装済み overlay 命令のみ合成される。
+    ///
+    /// overlay 命令 1 本＋非実装 `Replace` 命令 1 本を混在させて execute し、
+    /// 「overlay 命令のみを含む ops」の結果とバイト等価になることで skip を証明する（非パニック）。
+    #[test]
+    fn non_implemented_method_op_is_skipped() {
+        let page = page_1px(100, 110, 120, 255);
+        let atlas = single_entry_table(page, Rect { x: 0, y: 0, w: 1, h: 1 }, Point { x: 0, y: 0 });
+
+        // overlay 命令（実装済み・着弾 (0,0)）＋ Replace 命令（未実装・別画素 (1,0) を狙う）を混在。
+        // 着弾位置を分けることで「Replace が合成に寄与しない」を画素で直接検出できる（同一画素だと
+        // 不透明 src の SourceOver が冪等で skip の有無を判別できない）。
+        let mixed = vec![
+            op_at(0, 0),                                  // Overlay（実装済み）→ (0,0) に着弾。
+            op_with_method(1, 0, ComposeMethod::Replace), // 未実装 → skip・(1,0) に現れない。
+        ];
+        let mut out_mixed = ComposedSurface::new(0, 0);
+        execute(&mut out_mixed, Extent { w: 2, h: 1 }, &mixed, &atlas);
+
+        // overlay のみの ops を別に execute し、バイト等価であることで「Replace が合成に寄与しない」を証明。
+        let only_overlay = vec![op_at(0, 0)];
+        let mut out_only = ComposedSurface::new(0, 0);
+        execute(&mut out_only, Extent { w: 2, h: 1 }, &only_overlay, &atlas);
+
+        assert_eq!(
+            out_mixed.bytes(),
+            out_only.bytes(),
+            "未実装 Replace は合成に寄与せず overlay のみと同一結果（skip・8.4）"
+        );
+        // 実装済み overlay の画素は確かに合成されている（skip が overlay まで巻き込まないことの確認）。
+        assert_eq!(px(&out_mixed, 0, 0), [100, 110, 120, 255], "overlay 命令は合成される");
+        // 未実装 Replace の狙った (1,0) は全透明のまま（skip の直接証拠）。
+        assert_eq!(px(&out_mixed, 1, 0), [0, 0, 0, 0], "未実装 Replace は着弾しない（skip・8.4）");
+    }
+
+    /// テスト（要件 8.4）: 全命令が非実装メソッドなら全 skip → クリア済み（全 0）バッファ・非パニック。
+    #[test]
+    fn all_non_implemented_ops_produce_cleared_buffer() {
+        let page = page_1px(200, 150, 100, 255);
+        let atlas = single_entry_table(page, Rect { x: 0, y: 0, w: 1, h: 1 }, Point { x: 0, y: 0 });
+
+        // 非実装メソッドのみ（Replace / Blend / Base）。どれも is_implemented()==false。
+        let ops = vec![
+            op_with_method(0, 0, ComposeMethod::Replace),
+            op_with_method(0, 0, ComposeMethod::Blend(BlendMode::new(BlendKind::Multiply))),
+            op_with_method(0, 0, ComposeMethod::Base),
+        ];
+        let mut out = ComposedSurface::new(0, 0);
+        execute(&mut out, Extent { w: 2, h: 2 }, &ops, &atlas);
+
+        assert!(
+            out.bytes().iter().all(|&b| b == 0),
+            "全命令が非実装 → 何も合成されずクリア済み全透明（非パニック・8.4）"
+        );
+    }
+
+    /// テスト（回帰・要件 6.4）: 純 overlay 命令列は 6.1 と同一挙動（ガード追加で挙動不変）。
+    #[test]
+    fn pure_overlay_ops_still_composite() {
+        let page = page_1px(11, 22, 33, 255);
+        let atlas = single_entry_table(page, Rect { x: 0, y: 0, w: 1, h: 1 }, Point { x: 0, y: 0 });
+        let ops = vec![op_at(0, 0)];
+
+        let mut out = ComposedSurface::new(0, 0);
+        execute(&mut out, Extent { w: 1, h: 1 }, &ops, &atlas);
+        assert_eq!(px(&out, 0, 0), [11, 22, 33, 255], "overlay 命令は従来どおり合成される");
     }
 
     /// 頁欠落（placement.page が範囲外）でも warn＋skip・非パニック。
