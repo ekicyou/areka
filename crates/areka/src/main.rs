@@ -15,12 +15,15 @@
 
 use bevy_ecs::prelude::*;
 use tracing_subscriber::EnvFilter;
+use windows::Win32::Graphics::Direct2D::Common::D2D1_COLOR_F;
 use windows::Win32::UI::WindowsAndMessaging::*;
 use windows::core::Result;
 use wintf::ecs::layout::{BoxSize, BoxStyle, Dimension};
 use wintf::ecs::pointer::{DoubleClick, OnPointerPressed, Phase, PointerState};
 use wintf::ecs::widget::bitmap_source::CommandSender;
-use wintf::ecs::{Window, WindowStyle};
+use wintf::ecs::widget::brushes::Brushes;
+use wintf::ecs::widget::shapes::Rectangle;
+use wintf::ecs::{ChildOf, Window, WindowStyle};
 use wintf::*;
 
 /// areka 本体側 `IShioriHost` 実装（単一 sink・突合枠・メールボックス投函）。
@@ -200,7 +203,7 @@ fn main() -> Result<()> {
 /// そこへ踏み込まない（2026-07-05 placement リジェクト再発防止・R2.5）。`create_shell_window`
 /// と同じく bare `World` だけで構築でき、headless 単体テスト可能。
 fn spawn_dummy_window(world: &mut World) -> Entity {
-    world
+    let dummy = world
         .spawn((
             bevy_ecs::name::Name::new("Startup-Dummy-Window"),
             DummyWindowMarker,
@@ -223,7 +226,39 @@ fn spawn_dummy_window(world: &mut World) -> Entity {
             // ダブルクリックで自身を閉じられるようにする。
             OnPointerPressed(on_dummy_pressed),
         ))
-        .id()
+        .id();
+
+    // 可視・ヒット可能な診断用サーフェス（子 Rectangle）を 1 枚付ける。
+    //
+    // areka の窓は WUC/DComp GPU 合成（`WS_EX_NOREDIRECTIONBITMAP`）で描画されるため、描画内容が
+    // 無い窓は合成結果が完全透明になり画面に見えず、手動ダブルクリック（task 2.2 の受け入れ）の
+    // 標的にできない。不透明な単色矩形を窓いっぱい（`flex_grow`）に貼ることで、窓が実際に描画され
+    // 観測・操作可能になる。これはマスコット／ゴースト絵ではなく liveness プローブが必要とする
+    // 診断サーフェスに過ぎず、「ゴースト内容なし」の設計意図（DD5）に反しない。
+    //
+    // 既定 `HitTest`（Bounds ＝ ヒット可能）のため、この矩形上のダブルクリックはヒットし、窓 entity
+    // の `OnPointerPressed(on_dummy_pressed)` へ **bubble** して close を発火する（proven mock pattern：
+    // `create_shell_window`／`clickthrough_two_rects` と同型）。矩形は窓内レイアウト（intra-window）
+    // であって画面配置（screen-placement）ではない＝`WindowPos` 位置も座標／DPI ロジックも増やさない
+    // （2026-07-05 placement リジェクト再発防止・R2.5）。
+    world.spawn((
+        bevy_ecs::name::Name::new("Startup-Dummy-Surface"),
+        Rectangle::new(),
+        // 不透明な中間グレー（診断用に明確に視認できる liveness サーフェス）。
+        Brushes::with_foreground(D2D1_COLOR_F {
+            r: 0.5,
+            g: 0.5,
+            b: 0.5,
+            a: 1.0,
+        }),
+        BoxStyle {
+            flex_grow: Some(1.0),
+            ..Default::default()
+        },
+        ChildOf(dummy),
+    ));
+
+    dummy
 }
 
 /// OnPointerPressed ハンドラ: ダブルクリック（左）でダミー窓を despawn する（task 2.2）。
@@ -407,6 +442,31 @@ mod startup_window_tests {
                 "ダミー窓の位置は CW_USEDEFAULT（既定placement・座標非主張）に限る"
             );
         }
+    }
+
+    /// ビルダはダミー窓に **可視・ヒット可能な子 Rectangle** を 1 枚付ける。
+    ///
+    /// areka の窓は WUC/DComp GPU 合成（`WS_EX_NOREDIRECTIONBITMAP`）で描画されるため、
+    /// 描画内容が無い窓は完全透明で画面に見えず、手動ダブルクリックの標的にできない。
+    /// 不透明な診断用 Rectangle（`Brushes` 付き）を子（`ChildOf` = ダミー窓）として持つことで
+    /// 窓が実際にレンダリングされる（描画内容を持つ）ことを証明する。既定 `HitTest`（Bounds）で
+    /// 子はヒット可能＝子上のダブルクリックが窓の `OnPointerPressed` へ bubble する（proven mock pattern）。
+    #[test]
+    fn dummy_window_has_visible_rectangle_child() {
+        let mut world = World::new();
+        let dummy = spawn_dummy_window(&mut world);
+
+        // Rectangle + Brushes を持つ子 entity が 1 枚あり、その ChildOf 親がダミー窓であること。
+        let mut query = world.query::<(&Rectangle, &Brushes, &ChildOf)>();
+        let children: Vec<_> = query.iter(&world).collect();
+        assert_eq!(children.len(), 1, "ダミー窓は可視の子 Rectangle を 1 枚持つべき");
+
+        let (_rect, _brushes, child_of) = children[0];
+        assert_eq!(
+            child_of.parent(),
+            dummy,
+            "可視 Rectangle の親はダミー窓であるべき（描画内容 = liveness surface）"
+        );
     }
 
     /// ダブルクリック（左）でマーカー付きダミー窓を despawn し true を返す。
