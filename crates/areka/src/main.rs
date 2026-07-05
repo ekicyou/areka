@@ -95,6 +95,68 @@ const BALLOON_TEXT: &str = "\
 ぱすた";
 
 // ---------------------------------------------------------------------------
+// Config Inputs (task 2.1)
+// ---------------------------------------------------------------------------
+
+/// 構成入力（解決済みルートパス）。
+///
+/// ゴースト／バルーンのルートパスを保持する。決定のみで実在は保証しない
+/// （マウント・descript.txt 読取・`areka-parsers` 呼び出しは一切行わない・R6.1）。
+///
+/// task 3.1 で `main()` から結線・ログ出力されるまで未使用のため `dead_code` を許容する。
+#[allow(dead_code)] // wired in task 3.1
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct ConfigInputs {
+    ghost_root: std::path::PathBuf,
+    balloon_root: std::path::PathBuf,
+}
+
+/// ゴーストルートの既定パス（`CARGO_MANIFEST_DIR` 相対・DD1）。
+///
+/// 既存の `SHELL_IMAGE_PATH` と同じ `env!("CARGO_MANIFEST_DIR")` 手法で決定的に生成する。
+/// `crates/areka` 配下には現状ゴースト fixture が無いため（emo2 fixture は別クレート
+/// `crates/pilot/...` にありクロスクレート `../` 参照は脆いので採らない）、ukadoc 標準の
+/// ルート配置 `ghost/master` を **プレースホルダ subpath** として採用する。実在は検証せず、
+/// 実マウント対象の確定は下流 ghost-setup の領分（本仕様スコープ外）。
+fn default_ghost_root() -> std::path::PathBuf {
+    std::path::PathBuf::from(concat!(env!("CARGO_MANIFEST_DIR"), "/ghost/master"))
+}
+
+/// バルーンルートの既定パス（`CARGO_MANIFEST_DIR` 相対・DD1）。
+///
+/// ゴースト既定と同じく `env!("CARGO_MANIFEST_DIR")` 相対のプレースホルダ subpath
+/// `balloon/master` を採用する（実在検証なし・下流 ghost-setup が実体を確定）。
+fn default_balloon_root() -> std::path::PathBuf {
+    std::path::PathBuf::from(concat!(env!("CARGO_MANIFEST_DIR"), "/balloon/master"))
+}
+
+/// 起動引数（位置引数）と既定パスから構成入力を決定する。純粋・副作用なし。
+///
+/// - `args[0]` は実行ファイル名。`args[1]` = ghost root、`args[2]` = balloon root。
+/// - 位置引数が与えられていれば採用し（R3.3）、欠落時は `CARGO_MANIFEST_DIR` 相対の
+///   既定へフォールバックする（R3.4・DD1）。
+/// - `args` を入力に取ることで `std::env::args()` を内部で呼ばず、実プロセス引数に触れずに
+///   単体テスト可能な純粋関数に保つ。std（`std::path`・`env!`）のみに依存し、マウントも
+///   descript.txt 読取も行わない（R6.1）。
+///
+/// task 3.1 で `main()` から呼ばれるまで未使用のため `dead_code` を許容する。
+#[allow(dead_code)] // wired in task 3.1
+fn resolve_config_inputs(args: &[String]) -> ConfigInputs {
+    let ghost_root = args
+        .get(1)
+        .map(std::path::PathBuf::from)
+        .unwrap_or_else(default_ghost_root);
+    let balloon_root = args
+        .get(2)
+        .map(std::path::PathBuf::from)
+        .unwrap_or_else(default_balloon_root);
+    ConfigInputs {
+        ghost_root,
+        balloon_root,
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Marker Components
 // ---------------------------------------------------------------------------
 
@@ -497,3 +559,79 @@ fn on_shell_pressed(
 
 #[cfg(test)]
 mod tests;
+
+/// `resolve_config_inputs` の単体テスト（task 2.1）。
+///
+/// main.rs は既に `mod tests`（ファイルモジュール）を持つため、名前衝突を避けて
+/// 別名のインラインモジュールに置く。純粋関数のため World/wintf を触らず、`&[String]`
+/// を直接与えて 3 分岐＋既定決定性を検証する。
+#[cfg(test)]
+mod config_input_tests {
+    use super::{ConfigInputs, resolve_config_inputs, default_ghost_root, default_balloon_root};
+    use std::path::PathBuf;
+
+    /// argv[1]/argv[2] が両方あるとき、両ルートを引数値でそのまま採用する（R3.3）。
+    #[test]
+    fn both_args_present_adopts_both() {
+        let args = vec![
+            "areka.exe".to_string(),
+            "C:/custom/ghost".to_string(),
+            "C:/custom/balloon".to_string(),
+        ];
+        let cfg = resolve_config_inputs(&args);
+        assert_eq!(cfg.ghost_root, PathBuf::from("C:/custom/ghost"));
+        assert_eq!(cfg.balloon_root, PathBuf::from("C:/custom/balloon"));
+    }
+
+    /// 引数なし（argv[0] のみ）のとき、両ルートとも既定へフォールバックする（R3.4）。
+    #[test]
+    fn no_args_uses_both_defaults() {
+        let args = vec!["areka.exe".to_string()];
+        let cfg = resolve_config_inputs(&args);
+        assert_eq!(cfg.ghost_root, default_ghost_root());
+        assert_eq!(cfg.balloon_root, default_balloon_root());
+    }
+
+    /// ghost のみ引数ありのとき、ghost は採用・balloon は既定にフォールバックする（R3.3/3.4）。
+    #[test]
+    fn ghost_only_arg_adopts_ghost_defaults_balloon() {
+        let args = vec![
+            "areka.exe".to_string(),
+            "C:/custom/ghost".to_string(),
+        ];
+        let cfg = resolve_config_inputs(&args);
+        assert_eq!(cfg.ghost_root, PathBuf::from("C:/custom/ghost"));
+        assert_eq!(cfg.balloon_root, default_balloon_root());
+    }
+
+    /// 既定パスが `CARGO_MANIFEST_DIR` 相対で決定的に生成される（R3.4・DD1）。
+    #[test]
+    fn defaults_are_cargo_manifest_dir_relative_and_deterministic() {
+        let manifest = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        // 既定は CARGO_MANIFEST_DIR 配下にある（相対アンカー）。
+        assert!(
+            default_ghost_root().starts_with(&manifest),
+            "ghost default must be under CARGO_MANIFEST_DIR: {:?}",
+            default_ghost_root()
+        );
+        assert!(
+            default_balloon_root().starts_with(&manifest),
+            "balloon default must be under CARGO_MANIFEST_DIR: {:?}",
+            default_balloon_root()
+        );
+        // 決定的: 呼び出しごとに同一値を返す。
+        assert_eq!(default_ghost_root(), default_ghost_root());
+        assert_eq!(default_balloon_root(), default_balloon_root());
+    }
+
+    /// `ConfigInputs` は解決済みルートパスを保持する（型の存在確認）。
+    #[test]
+    fn config_inputs_holds_resolved_roots() {
+        let cfg = ConfigInputs {
+            ghost_root: PathBuf::from("g"),
+            balloon_root: PathBuf::from("b"),
+        };
+        assert_eq!(cfg.ghost_root, PathBuf::from("g"));
+        assert_eq!(cfg.balloon_root, PathBuf::from("b"));
+    }
+}
