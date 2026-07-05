@@ -31,7 +31,8 @@ sakura インスタンスは script 文字列を受け、上流 `areka_parsers::
   - talk の選定・スケジューリング・boot/close 運行表（**kanade**）。
 - **Adjacent expectations**:
   - `StartTalk{script, talk_id}` の受領契約と `TalkDone{talk_id, reason}` の返信契約は **kanade brief が正本**である。本仕様はこの型を消費し、再定義しない。ただし終端理由 `reason` は通常終了（`Ended`）・quit（`Quit`）・中断（`Interrupted`）の 3 値を判別可能でなければならず（従来の `quit: bool` 前提を更新）、具体的な型形状と物理的所在は設計判断（DD-1）として kanade 契約へ供給する。
-  - kanade は自らが発した中断（Close）と自然終端を単一の終端信号で追跡する（close 握手）。talk は逐次実行（同時に高々 1 本）であり、kanade 側の状態管理構造（単一 current スロットか多重管理か）は **kanade（`areka-P0-kanade`）の領分**であって本仕様は規定しない。本仕様は `talk_id` のエコーと reason 付き単一終端信号のみを保証する。
+  - kanade は自らが発した中断（Close）と自然終端を単一の終端信号で追跡する（close 握手）。talk は逐次実行（同時に有効なトークは高々 1 本）であり、kanade 側の状態管理構造（単一 current スロットか多重管理か）は **kanade（`areka-P0-kanade`）の領分**であって本仕様は規定しない。本仕様は `talk_id` のエコーと reason 付き単一終端信号のみを保証する。
+  - トークの上書き規律（SSP 準拠・ukadoc 確認済み）: 既定は後出し優先（last-writer-wins）＝再生中の talk に新 talk が来ると現行を中断・上書きする。どの talk が現行を中断・上書きするか（あるいは拒否して現行を継続させるか）の選定は **kanade（運行表）の scheduling 判断**であり、sakura は kanade が発した中断（Close・R7）に従うのみ。上書きを拒否して現行を継続させるガード（SSP の `\![enter,nouserbreakmode]` 等の `\![...]` 群）は **M-boot 外タグ＝R8 の無視＋シーム**扱いで、M-boot ではガードを honor せず全 talk が上書きされる。ガード状態を sakura から kanade へ露出する結線は後続 M の拡張点とする。
   - 入力の `Instruction` モデル（フラット enum・値正規化済み）は **`areka_parsers::sakura`（sakura-parse）が正本**である。本仕様は再パースを行わない。
   - タイミング層は **`dola`**（時刻注入式 `tick(current_time)`）が正本方針である。時間軸展開を dola 経由とするか自前 sequencer とするかは design 判断であり、本仕様は user/operator 観測可能な時間軸挙動のみを規定する。
   - アクター通信規約（inbox・envelope・停止＝Close 即時停止／積み残し破棄・handler Err はログして継続）は **`areka-actor`** が正本である。
