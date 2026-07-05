@@ -171,7 +171,8 @@ crates/areka-emo-compose/
 
 - `crates/areka-parsers/src/shell/model.rs` — 転記ギャップ4点のモデル追加: `SortOrder` enum・`Shell.animation_sort`/`collision_sort`・`Shell.definitions`（登場順ストリーム）・`Surface.targets`（多 id ヘッダ記述子）・`SurfaceAppend.elements`・`AppendTarget` に除外 variant 追加（`#[non_exhaustive]` ゆえ非破壊）
 - `crates/areka-parsers/src/shell/decode.rs` — plain ヘッダの多 id 記述子パース（append と共通のターゲットパーサへ一本化）・`animation-sort`/`collision-sort` TopLevel 値化・append ブロック内 element の転記・definitions ストリームへの登場順 push
-- `crates/areka-parsers/src/shell/decode_tests.rs`／`validation_tests.rs` — 4ギャップの転記テスト追加（既存テストは不変）
+- `crates/areka-parsers/src/shell/decode_tests.rs`／`validation_tests.rs` — 4ギャップの転記テスト追加。既存テストは**アサーション意味不変のままリテラル機械追随**（議題1裁定・転記層拡張の節参照）
+- `crates/areka-emo-atlas/tests/emo2_e2e.rs`（L66/290）・`src/manifest.rs`（L150）・`src/lib.rs`（L203） — テストヘルパの `shell::Surface` リテラルへ新フィールド初期値を機械追随（検証意味不変・議題1裁定）
 - `crates/areka-parsers/src/balloon/model.rs` — L6 doc コメントの旧名 `areka-P0-text-layer`/`areka-P0-surface-engine` を現行エンジン固有名（emo-text-layer／emo）へ修正（12.4）
 
 > ワークスペースは `members = ["crates/*"]` のため root Cargo.toml の変更は不要。
@@ -302,7 +303,8 @@ sequenceDiagram
 
 **Responsibilities & Constraints**
 - 展開・存在判定・create/append 適用・alias 解決は**行わない**（emo 側の責務）。
-- 既存の公開フィールド・挙動・テストを壊さない（emo-atlas の `&[shell::Surface]` 消費を含む）。
+- **「非破壊」の定義（設計ディスカッション議題1裁定）**: 公開**読取**契約・既存テストの**アサーション意味**・**実行時挙動**の不変を指す。公開フィールド追加はソースレベルでは構造体リテラル構築箇所の追随を要する（Rust の言語特性上不可避）が、これは**機械的追随として許容**する——既存リテラル約20箇所（parsers 自身の validation_tests.rs L85-86/186・decode_tests.rs L25/40/57/100・parse_tests.rs L22/91-92/120・model_tests.rs L98/123-124/152 ＋ **完了済み `areka-emo-atlas` の4箇所**: emo2_e2e.rs L66/290・manifest.rs L150・lib.rs L203＝テストヘルパ）へ `targets: vec![AppendTarget::Single(id)]`／`elements: Vec::new()`／`definitions`・sort キー等の初期値を追記する。**テストの検証意味は一切変更しない**（アサーションの弱体化・削除は禁止）。隣接完了クレートへの追随は先例（host32-lifecycle「隣接クレート増分もスコープ可」）とワークツリー squash-merge 運用により正当。
+- **`Default` 実装は導入しない**（却下理由: `Surface::default()` の `id=0` は実在 surface0 と衝突する意味のある値であり誤構築を型で防げない。spread 追記でも編集箇所は同数で手間も減らない）。コンストラクタ関数への全面移行も本チェーンでは行わない（YAGNI）。
 - 非 overlay element/pattern の吸収という**現行転記契約は維持**する（メソッド転記の追加は本チェーン外）。
 
 ##### State（モデル追加・Rust シグネチャ）
