@@ -25,7 +25,7 @@ M1 `areka-P0-emo2-boot` の「① SHIORI 通信層エンジン host-32」トラ�
   - **[異常語彙の統一報告]** helper 死亡に起因する request 失敗（`RequestError::Ipc`／`Timeout`）と、`ExitKind` の異常終了（`Abnormal`／`Terminated`）を突合し、呼び手が「helper 死亡」「応答不能／タイムアウト」「SHIORI エラー応答」を区別できる報告として surface する。単一の不透明失敗へ潰さない。
   - **[周期運転試験]** 実 i686 helper（testdll fixture）に対し、OnSecondChange 相当の頻度で request を連打する決定的ハーネスを走らせ、反復往復が全て成功し、リーク・ハンドル枯渇・`ResponseSlot` 巻き込みなく、往復後に helper が生存継続（`poll_exit_kind` → `None`）することを観測する。
   - **[強制 kill 注入試験]** 稼働中 helper を強制終了（`terminate` 相当）した後、監視が終了種別（`Abnormal`／`Terminated`）を検出し、以降の request が観測可能なエラーとして返る（ハング・無限待ちを起こさない）ことを観測する。
-  - **[shutdown 全経路]** 通常終了（helper プロセス終了 → `ExitKind::Clean` 確認）と、異常後の後始末（`Abnormal`／`Terminated` 検出 → ハンドル後始末・二重 kill 安全＝冪等）の双方が決定的に通る。
+  - **[shutdown 全経路（正規の正常終了経路を含む）]** 通常終了は**正規の正常終了経路**（ホストが正常終了を要求 → helper が SHIORI `unload`（`host32-shiori-load` 確立の courtesy unload 契約）を実施 → メッセージループを正常終了 → 終了コード 0 → `ExitKind::Clean` 観測）で閉じる。実 helper（`shiori-host32-helper`）への正常終了経路の増設を**本仕様のスコープに含む**——stand-in／テスト専用の `exit(0)` で代替しない。異常後の後始末（`Abnormal`／`Terminated` 検出 → ハンドル後始末・二重 kill 安全＝冪等）も決定的に通る。
   - **[env-gate 実 pasta 追験]** env 指定時に実 pasta.dll に対する長時間相当の周期運転を confidence 検証として実行する（CI 必須ゲートにはしない）。
 - **Out of scope（本仕様が所有しないもの）**:
   - イベントカタログ・OnSecondChange の意味論・発火順序・Value 配送・boot/close 運行（→ 下流 `areka-P0-kanade`）。本仕様の周期 request はイベント意味論を持たない負荷であり、ID はダミーで可。
@@ -40,7 +40,7 @@ M1 `areka-P0-emo2-boot` の「① SHIORI 通信層エンジン host-32」トラ�
   - **下流 `areka-P0-kanade`（後続）**: 本仕様の死活報告 API と統一失敗語彙を、毎秒 pump（OnSecondChange 循環）の request 送出の健全性判断としてそのまま消費する。**報告型は本仕様が正本**であり、`kanade` は消費・再定義しない。報告データは `Send` な所有データで、将来の shiori アクター inbox 処理から非ブロッキングに呼べる形に切る。
   - **下流 `ghost-setup`（後続）**: shutdown 全経路（通常終了・異常後後始末）を終了系列の受け皿として共有する。
   - **ukadoc 正典**: 本ユニットはイベント意味論非依存ゆえ ukadoc 参照は最小。OnSecondChange の Reference 詳細・発火規律は `kanade` の領分。unload の作法は `host32-shiori-load` 完了時の確立済み契約（courtesy unload）を踏襲する。
-  - **未確定で design が埋める項目**: 監視の駆動タイミング（request 前後 or 周期チェック・専用スレッド要否）／統一報告型の具体形（`RequestError` の拡張か包む型か）／周期運転試験の反復回数と決定性の担保方法。これらは design フェーズで確定する。
+  - **未確定で design が埋める項目**: 監視の駆動タイミング（request 前後 or 周期チェック・専用スレッド要否）／統一報告型の具体形（`RequestError` の拡張か包む型か）／周期運転試験の反復回数と決定性の担保方法／正規正常終了経路の具体機構（正常終了要求メッセージの種別・`unload`→メッセージループ正常終了→`exit(0)` の結線詳細——**正規経路であること・実 helper への増設が本仕様スコープであることは確定**、機構詳細のみ design）。これらは design フェーズで確定する。
 
 ## Requirements
 
@@ -97,15 +97,16 @@ M1 `areka-P0-emo2-boot` の「① SHIORI 通信層エンジン host-32」トラ�
 
 ### Requirement 5: shutdown 全経路の決定性
 
-**Objective:** As a host-32 ホスト層, I want 通常終了と異常後後始末の双方の shutdown 経路が決定的に通る, so that 常駐運転の終了系列が下流 `ghost-setup` に安全に引き渡せる
+**Objective:** As a host-32 ホスト層, I want **正規の正常終了経路**と異常後後始末の双方の shutdown 経路が決定的に通る, so that 常駐運転の終了系列が下流 `ghost-setup` に安全に引き渡せる
 
 #### Acceptance Criteria
 
-1. When 通常の shutdown が要求される, the host-32 ホスト層 shall helper プロセスを終了させ、終了種別が `ExitKind::Clean`（正常終了）であることを観測できる。
+1. When 通常の shutdown が要求される, the host-32 ホスト層 shall **正規の正常終了経路**（ホストが正常終了を要求し、helper が SHIORI `unload`（`host32-shiori-load` 確立の courtesy unload 契約）を実施してメッセージループを正常終了し、プロセスが終了コード 0 で終わる）を通じて helper を終了させ、終了種別が `ExitKind::Clean`（正常終了）であることを観測できる。
 2. When helper が異常終了（`Abnormal`／`Terminated`）した後の後始末が行われる, the host-32 ホスト層 shall 稼働中 helper への参照（ハンドル）を安全に後始末し、既に終了しているプロセスへの終了要求でも失敗させない（冪等・二重 kill 安全）。
 3. The host-32 ホスト層 shall 通常終了と異常後後始末の双方の shutdown 経路を決定的に検証する。
 4. The 本仕様 shall shutdown 経路に自動再起動を含めず、終了と後始末までに留める（再起動判断は下流の領分）。
 5. When shutdown 経路が失敗する, the host-32 ホスト層 shall その失敗を握り潰さず、エラーログ（`error!`）＋戻り値の `Err` として surface する。
+6. The `shiori-host32-helper`（i686 実 helper） shall **正規の正常終了経路**を備える——ホストからの正常終了要求を契機にメッセージループを正常終了し、SHIORI `unload` を実施した後に終了コード 0 で終了する。この正常終了経路は本仕様が実 helper へ増設するものであり、stand-in／テスト専用の代替 `exit(0)` で満たさない。
 
 ### Requirement 6: env-gate 実 pasta 長時間追験
 
