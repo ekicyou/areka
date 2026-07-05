@@ -8,7 +8,7 @@
   - _Requirements: 4.2_
   - _Boundary: dola cue コマンド_
 
-- [ ] 1.2 (P) areka-sakura クレートの雛形を作成する
+- [x] 1.2 (P) areka-sakura クレートの雛形を作成する
   - 新規クレートを作成し、dola・areka-actor・areka-parsers・tracing・thiserror を依存として宣言する
   - クレート冒頭のドキュメントに責務（さくらスクリプト再生）・三層構成（compile/drive/sink）・cue ドメイン写像の正本であることを記述する
   - 空実装状態でビルドが成功することを確認する（observable: 新規クレートの `cargo build` が成功）
