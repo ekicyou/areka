@@ -532,11 +532,13 @@ areka のログ規律（log-first・silent failure 禁止）に全面準拠。�
 
 ### Unit Tests（解決層・状態層・構築層）
 - `resolve_numeric`: `"2100"`→`Show(2100)`、`"-1"`→`Hide`、`"0"`→`Show(0)`（2.1/3.3）。
+- `resolve_numeric_boundary`: `parse::<i64>()`→`u32` 境界防御を檻に入れる——負の非 `-1` 値（例 `"-2"`）→`Unresolved`、`u32` 範囲外（例 `"4294967296"`＝`u32::MAX+1`・`i64` では parse 成功）→`Unresolved`（error ログ＋skip・状態不変）。決定論・全枝を実行テスト化（2.1/2.4/7.4）。
 - `resolve_alias_single_and_multi`: emo2 実データ `通常→Show(2100)`、`静観→Show(2106)`（先頭固定・複数 id・2.2/2.5/7.3）。
 - `resolve_unresolved`: 未知キー→`Unresolved`（呼び手 skip 前提・2.4）。
 - `scope_isolation_and_hide`: scope "0" を更新しても "1" 不変、`Hide`→`Hidden` 保持で再 `Show` まで発行なし（3.1/3.2/3.4/3.5）。
 - `build_static_bindset_identity`: `[1100,1207,1302,1500,1800]`→`BindSet.ids()` 一致（4.1・恒等）。
 - `mountmodel_bindgroup_parse`: emo2 descript.txt→`sakura_default_on` 集合一致＋name 系フィールド保持回帰（4.5）。
+- `alias_snapshot_matches_resolve_alias`（**emo-compose 側・跨クレート回帰**）: 増設した `EmoWorld::alias_snapshot()` の返す `BTreeMap` が、同一 `EmoWorld` の全キーに対し `resolve_alias(key)` と一致することを実データ（emo2）で表明する。スナップショットが `AliasMap` から静かにドリフトしないための檻（2.2/2.3/7.3）。accessor 増設と同一コミット圏で回帰化する。
 
 ### Integration Tests（アクター・発行列観測）
 - `cue_sequence_emits_expected`: fixture の `TalkCue` 列（数値・alias・`-1`）を `SerikoSink::emit` で直入力し、`MockSurfaceOutput.records()` の `DisplayCommand` 列（scope・surface_id・binds・Hide）を期待照合（7.1/7.2）。sleep 不使用。
@@ -544,6 +546,7 @@ areka のログ規律（log-first・silent failure 禁止）に全面準拠。�
 - `unresolved_logs_and_skips_continue`: 未解決 alias を挟んでも後続 cue が適用され発行される＝ループ継続（6.1/6.3/7.4）。
 - `close_stops_normally` / `disconnect_stops_normally`: `SerikoMsg::Close` 送信、または全 `SerikoSink` drop で `ActorHandle::join()==Ok`（1.4/7.4）。
 - `entityref_is_skipped_with_warn`: `EntityRef(u64)` 到来時に状態不変・発行なし（6.2 防御枝）。
+- `emit_after_receiver_gone_logs_no_panic`: アクター停止後（`ActorHandle::join()` 完了で inbox 受信端消失）に `SerikoSink::emit` を呼ぶと、`error!` ログを出しつつ panic せず戻る（infallible 契約を保つ・send 失敗を黙殺しない）ことを決定論的に確認（6.3/6.4）。他の失敗経路と同様に log-first の檻へ入れる。
 
 ### 決定論保証
 全テストは所有解決テーブル直入力・`MockSurfaceOutput` 照合・`ActorHandle` 終了同期で表示なし・sleep なし。低頻度 race は独立 reviewer が full-suite 反復で捕捉（記憶 deterministic-test-coverage-mandate）。
