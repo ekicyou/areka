@@ -229,7 +229,7 @@ ukadoc MCP で全イベントを確認し、design.md「ukadoc Reference 表」�
 - **DD-8 ✅**: env-gate 追験は単一 `#[test]`（親窓 1 枚制約）・`HOST32_PASTA_DLL` silent skip・spawn→HELLO→LOAD（`send_request(MsgTag::Load, ..)` 既存慣行）を connect クロージャとしてテストが自前結線。
 - **DD-9 ✅**: 公開面＝`spawn_kanade`・`KanadeMsg`・talk 契約型・`ShioriMsg` 系・`KanadeConfig`・`spawn_shiori_actor`。`schedule/` は `pub(crate)`。
 - **DD-10 ✅**（新規・design 送り消化）: ForceQuit＝best-effort NOTIFY OnClose(Ref0=理由)→終了系列直行（§9.5）。
-- **DD-11 ✅**（新規）: OnClose→OnCloseAll 順序の正典差分を意図的差分として記録・局所化・M-e2e Revalidation Trigger（§9.2）。
+- **DD-11 ✅**（新規・設計ディスカッション #1〔2026-07-05〕で更新）: close 運行は **OnClose 単独**・204＝「応答なし」（≠拒否）→無言で終了系列直行・**OnCloseAll は M1 非発行**（Req 4.6 改稿済み）。全終了フロー（正典: OnCloseAll→204→OnClose・§9.2）の導入は M-e2e で再訪。終了拒否権は Value 経路（`\-` 無しスクリプト＝quit=false）で保たれる。
 
 ## 12. Synthesis 記録
 
@@ -239,7 +239,7 @@ ukadoc MCP で全イベントを確認し、design.md「ukadoc Reference 表」�
 
 ## 13. Risks & Mitigations（design 時点）
 
-- **close 順序の正典差分（DD-11）** — `events.rs`＋`close.rs` に局所化・M-e2e で SSP 実挙動と突合し必要なら順序入替（波及は 2 ファイル）。
+- **close 運行の M1 縮退（DD-11）** — OnCloseAll 非発行・204 無言終了。`events.rs`＋`close.rs` に局所化・M-e2e で SSP 実挙動と突合し全終了フロー導入を判断（波及は 2 ファイル）。
 - **実経路での Tick 滞留（同期往復ブロック中）** — 解除後 catch-up 処理（burst は滞留秒数分で有界・mock 経路は非発生）。SSP も同型の catch-up 挙動。
 - **ForceQuit 遅延（in-flight 呼出中）** — `AREKA_SHIORI_REQUEST_TIMEOUT_MS`（既定 60s）で有界・OS シャットダウンの最終強制力は OS 側。
 - **join デッドロック（Sender 保持のまま join）** — 結線規律を rustdoc 明記・ハーネスは drop→join 順＋`run_bounded` 期限付き。

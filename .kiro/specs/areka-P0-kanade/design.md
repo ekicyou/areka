@@ -55,7 +55,7 @@
 - `KanadeMsg`・`spawn_kanade` 公開面の変更 → ghost-setup（結線・boot 指示・close 完了待ち）の再検証
 - host32-lifecycle の死活報告型正本 確定 → `KanadeMsg::ShioriDown` seam の実型差し替え（variant 1 個＋状態機械 1 アーム）
 - host32-lifecycle の正規 unload 経路（helper 側）実装 → `shiori/real.rs` の Unload 暫定実装を正規経路へ差し替え
-- close イベント順序（OnClose→OnCloseAll）の正典整合の再訪 → M-e2e（emo2-conformance-e2e）で SSP 実挙動と突合（本書「設計判断 DD-11」参照）
+- close 全終了フロー（正典: OnCloseAll→204→OnClose）の導入再訪 → M-e2e（emo2-conformance-e2e）で SSP 実挙動と突合（本書「設計判断 DD-11」参照）
 
 ## Architecture
 
@@ -138,13 +138,12 @@ talk.rs（型・std のみ）
 | `basewareversion` | NOTIFY | Ref0: バージョン番号／Ref1: 本体の識別／Ref2: 詳細数値（SSP のみ） | Ref0=`config.baseware_version`・Ref1=`config.baseware_name`（既定 `"areka"`）・Ref2 省略 |
 | `OnSecondChange` | GET（talk 再生可能時）／**NOTIFY（talk 再生不能時・Ref3=0・返却スクリプトは無視）** | Ref0: OS 連続起動時間(hour)／Ref1: 見切れ 1/0／Ref2: 重なり 1/0／Ref3: talk 再生可否 1/0／Ref4: 放置秒（SSP のみ） | Ref0=`now_ms / 3_600_000` の 10 進文字列／Ref1=`"0"`・Ref2=`"0"`（見切れ・重なり判定は emo 領分＝M1 固定）／Ref3=`"1"`（GET 時）`"0"`（NOTIFY 時）／Ref4 以降省略（idle 検出は M-life input-events） |
 | `OnClose` | GET | Ref0: 終了理由 `user`／`system`（SSP）／Ref1・Ref2: スコープ番号（SSP） | Ref0=`CloseReason` の写像（`user`/`system`）・Ref1/2 省略（M1 単一スコープ） |
-| `OnCloseAll` | GET | Ref0/1/2: OnClose と同構成 | Ref0=同上・Ref1/2 省略 |
+| `OnCloseAll` | GET | Ref0/1/2: OnClose と同構成（全終了フロー先頭のイベント・唯一起動中ゴーストの終了でも正典は OnCloseAll→204→OnClose） | **M1 送出しない**（設計ディスカッション #1・Req 4.6） |
 
 **正典との既知差分（意図的・要件確定済み）**:
 
-1. **close 順序**: ukadoc（SSP）は全終了時 OnCloseAll→(204)→OnClose の順で発火するが、本 spec は Req 4.1/4.6 の確定どおり **OnClose→(204)→OnCloseAll** で運行する（M1 単一ゴースト・終了拒否権を OnClose 握手が担う構成）。差分は Revalidation Trigger として M-e2e で再訪する（DD-11）。
-2. **OnCloseAll の応答**: Req 4.6 は OnCloseAll 発行後に終了系列へ進むと定めるため、OnCloseAll の GET 応答に Value が来ても**再生しない**（info ログ＋破棄・M1 縮退）。
-3. **`now_ms` の意味論**: 本番結線では OS 起動からの経過ミリ秒（`GetTickCount64` 相当）を注入する想定とし、これにより OnSecondChange Ref0 が正典（OS 連続起動時間 hour）と一致する。テストでは任意の単調値を注入する（意味論は「単調ミリ秒」のみ・Req 3.2）。
+1. **close 運行の M1 縮退**: 正典（SSP）の終了フローは OnCloseAll→(204)→OnClose の順だが、本 spec は Req 4.1/4.6 の確定どおり **OnClose 単独**で運行し、204（応答なし≠拒否・設計ディスカッション #1）は追加イベントなしで終了系列へ直行する（OnCloseAll は M1 非発行）。全終了フロー導入は Revalidation Trigger として M-e2e で再訪する（DD-11）。終了拒否権は Value 経路（`\-` 無しスクリプト＝quit=false）で完全に保たれる。
+2. **`now_ms` の意味論**: 本番結線では OS 起動からの経過ミリ秒（`GetTickCount64` 相当）を注入する想定とし、これにより OnSecondChange Ref0 が正典（OS 連続起動時間 hour）と一致する。テストでは任意の単調値を注入する（意味論は「単調ミリ秒」のみ・Req 3.2）。
 
 ## 設計判断（DD-1〜DD-11・確定）
 
@@ -160,7 +159,7 @@ talk.rs（型・std のみ）
 | DD-8 | 実 helper 追験の結線範囲 | env-gate テストが **spawn→HELLO→LOAD→kanade 運行→teardown を自前結線**（単一 `#[test]`・`HOST32_PASTA_DLL` silent skip）。LOAD は kanade の責務外＝テスト側 connect 手順として発行 | 親窓 1 枚制約・既存 E2E 慣行（`send_request(MsgTag::Load, ..)`）の踏襲 |
 | DD-9 | 公開面の最小化 | 公開＝`spawn_kanade`・`KanadeMsg`・talk 契約型・`ShioriMsg` 系メッセージ型・`KanadeConfig`・`spawn_shiori_actor`。`schedule/` は `pub(crate)`・`shiori/real.rs` の内部型は非公開 | 将来の呼び手 ghost-setup が消費する面だけを公開 |
 | DD-10 | 強制終了時の OnClose 発行 | **best-effort NOTIFY `OnClose`（Ref0=理由）を 1 発**→即 終了系列（応答待ちなし・送出失敗はログのみ）。GET 握手は行わない（Req 4.4 の「直行」を毀損するため） | ukadoc: シャットダウン時の終了理由は `system`。NOTIFY は SHIORI プロトコル上応答を破棄する呼び方＝「一報だけ入れて待たない」の正準形 |
-| DD-11 | close 順序の正典差分 | Req 4.1/4.6 どおり OnClose 先行で実装し、**差分を Revalidation Trigger として明示**（M-e2e で SSP 実挙動と突合・運行表は `events.rs`＋`schedule/close.rs` に局所化され順序変更が波及しない構造にする） | 要件は確定済み（設計で覆さない）。局所化により将来コスト最小 |
+| DD-11 | close 運行と正典の差分 | ✅ 設計ディスカッション #1（2026-07-05）で確定: **OnClose 単独運行・204＝応答なし（≠拒否）→無言で終了系列直行・OnCloseAll は M1 非発行**。全終了フロー（正典: OnCloseAll→204→OnClose）の導入は M-e2e で再訪（`events.rs`＋`schedule/close.rs` への局所化は維持＝導入時の波及最小） | 正典の OnCloseAll は全終了フロー先頭のイベント。単一ゴースト M1 では縮退し、終了拒否権は Value 経路（`\-` 無しスクリプト）で保たれる |
 | — | close 再生完了待ち上限 | **`KanadeConfig.close_talk_deadline_ms`＝既定 30_000ms**（注入時刻で判定・Req 4.7） | ukadoc に正典値なし（de-facto 領域）。無限待ちの禁止と終了拒否 talk の尊重の折衷として 30s。結線側で構成可能・テストは小さい値を注入 |
 
 ## File Structure Plan
@@ -213,11 +212,10 @@ stateDiagram-v2
     Steady --> Steady : Tick pump 発行 or 抑止
     Steady --> ClosePending : CloseRequest OnClose GET 発行
     ClosePending --> CloseTalkWait : Value 受領 StartTalk 起動 期限セット
-    ClosePending --> CloseAllPending : NoContent 204 OnCloseAll GET 発行
+    ClosePending --> Unloading : NoContent 204 無言終了
     CloseTalkWait --> Unloading : TalkDone quit true
     CloseTalkWait --> Steady : TalkDone quit false 定常復帰
     CloseTalkWait --> Unloading : Tick で期限超過 error 記録
-    CloseAllPending --> Unloading : 応答受領 Value は破棄
     Steady --> Unloading : TalkDone quit true
     Unloading --> Stopped : Unloaded ack または Failed error 記録
     Stopped --> [*]
@@ -290,7 +288,7 @@ sequenceDiagram
 | 4.3 | quit=true→終了系列（unload→停止） | schedule | `ShioriMsg::Unload` | →Unloading |
 | 4.4 | 強制終了→終了系列直行 | schedule・actor | `KanadeMsg::ForceQuit`（DD-10） | 横断遷移 |
 | 4.5 | quit=false→定常復帰 | schedule/close | CloseTalkWait→Steady | close_test |
-| 4.6 | OnClose 204→OnCloseAll→終了系列 | schedule/close | CloseAllPending | close_test |
+| 4.6 | OnClose 204→無言終了（OnCloseAll 非発行） | schedule/close | ClosePending→Unloading{CloseSilent} | close_test |
 | 4.7 | 期限超過→ログ＋終了系列継続 | schedule/close | `close_talk_deadline_ms`＋Tick 判定 | close_test |
 | 4.8 | 停止の観測可能性 | actor | `ActorHandle::join`/`is_finished` | 全統合テスト |
 | 4.9 | 全 Sender drop→正常終了 | actor（基盤規約） | `run_inbox` 切断経路 | failure_test |
@@ -478,7 +476,6 @@ pub(crate) enum Phase {
     },
     ClosePending    { reason: CloseReason },              // OnClose GET の応答待ち
     CloseTalkWait   { talk_id: TalkId, deadline: Option<MonotonicMs> },
-    CloseAllPending,                                      // OnCloseAll GET の応答待ち
     Unloading       { cause: TermCause },                 // Unload の完了待ち
     Stopped,
 }
@@ -497,7 +494,7 @@ pub(crate) struct State {
 }
 
 /// 終了系列の起因（ログ語彙・遷移は共通）。
-pub(crate) enum TermCause { Quit, Forced, CloseAll204, DeadlineExceeded, Fault }
+pub(crate) enum TermCause { Quit, Forced, CloseSilent, DeadlineExceeded, Fault }
 
 /// 状態機械が返す副作用指示（シェルが実行する）。
 pub(crate) enum Action {
@@ -616,7 +613,7 @@ pub fn spawn_shiori_actor(
 **Contracts**: Batch [x]
 
 - **mock shiori アクター**（`common/mod.rs`）: `spawn_actor("mock-shiori", ..)` で `Receiver<ShioriMsg>` を受け、fixture 表（イベント id → 応答列）に従い同梱 `reply` へ**即時**に応答を返す別 body。**real と同一の `ShioriMsg` 型**（trait 不要＝Req 5.1 の型レベル差し替え）。受理した `(method, id, references)` を記録列（`Vec<RecordedCall>`）へ蓄積し、テスト終了後に assert する
-- **fixture（Req 7.1）**: `OnInitialize`→Notified／`OnFirstBoot`→204／`OnBoot`→固定 Value／`basewareversion`→Notified／`OnSecondChange`→204 基調＋指定 Tick 目に Value／`OnClose`→Value（`quit:true` シナリオ）または 204（OnCloseAll シナリオ）／`Unload`→Unloaded。期待 References は `schedule::events` の同一関数から導出（fixture・assert・実装の三点一正本）
+- **fixture（Req 7.1）**: `OnInitialize`→Notified／`OnFirstBoot`→204／`OnBoot`→固定 Value／`basewareversion`→Notified／`OnSecondChange`→204 基調＋指定 Tick 目に Value／`OnClose`→Value（`quit:true` シナリオ）または 204（無言終了シナリオ）／`Unload`→Unloaded。期待 References は `schedule::events` の同一関数から導出（fixture・assert・実装の三点一正本）
 - **mock sakura sink**: `Receiver<StartTalk>` を受け、受領を記録し、シナリオ指示（quit true/false・応答遅延なし）どおり `KanadeMsg::TalkDone` を返す
 - **主観測 full_run_test（Req 7.2）**: boot 指示→（記録列 a: boot 系列の順序・Method・References 一致）→Tick 数回→（記録列 b: Value→StartTalk 到達・talk_id 一意）→CloseRequest→close talk→TalkDone{quit:true}→（記録列 c: Unload→停止 join 成功）を**単一 `#[test]` の単一 assert 群**で検証
 - **決定性（Req 7.3）**: sleep なし・時刻は `Tick{now}` 注入のみ・mock 即応・全 join は `run_bounded` 相当（既存慣行）の期限付き
@@ -644,7 +641,6 @@ pub fn spawn_shiori_actor(
 | StartTalk 送出失敗（sink 切断） | error! | active talk 即クリア・継続（close 握手中なら終了系列へ） | 6.2, 6.3 |
 | ShioriMsg 送出失敗（shiori 切断） | error! | Unloading 相当→StopSelf（unload 不能のため直接停止） | 6.3 |
 | Unload 失敗（`Failed` 応答） | error! | Unloading→Stopped（終了系列は継続・Req 4.7 と同旨） | 4.3 |
-| OnCloseAll 応答に Value | info!（M1 非再生の明示） | 破棄して Unloading{CloseAll204} | 4.6 |
 
 ### Monitoring
 
@@ -657,7 +653,7 @@ logging.md 規約に従う: スコーププレフィックス（`[kanade]`／`[s
 1. boot 系列全遷移: Idle→…→Steady の各待ち点で正しい `Action::ShioriRequest`（id・Method・References＝events 関数との一致）を返す（Req 1.1–1.6）
 2. OnFirstBoot Value 分岐: StartTalk 起動＋OnBoot スキップ＋basewareversion 進行（正典フォールスルー打ち切り）
 3. pump ゲート表駆動: {boot 中, Steady talk なし, Steady talk あり, in-flight 中, ClosePending 以降}×Tick → {なし, GET Ref3=1, NOTIFY Ref3=0, なし, なし}（Req 3.1, 3.4, DD-6）
-4. close 分岐網羅: Value→CloseTalkWait→{quit:true→Unloading, quit:false→Steady 復帰, 期限超過→Unloading}／204→CloseAllPending→Unloading（Req 4.2, 4.5, 4.6, 4.7）
+4. close 分岐網羅: Value→CloseTalkWait→{quit:true→Unloading, quit:false→Steady 復帰, 期限超過→Unloading}／204→Unloading{CloseSilent} 直行（OnCloseAll 非発行の確認込み）（Req 4.2, 4.5, 4.6, 4.7）
 5. 横断遷移: 全 Phase×{TalkDone quit:true, ForceQuit, ShioriDown, Failed} → Unloading（＋ForceQuit の best-effort NOTIFY Action 先頭・Req 4.3, 4.4, 5.4）
 6. 突合規律: 未知 talk_id 継続・Idle 外 Boot 無視・応答待ちでない Phase への ShioriReply 防御アーム（Req 2.5, 6.2）
 
@@ -666,7 +662,7 @@ logging.md 規約に従う: スコーププレフィックス（`[kanade]`／`[s
 1. **full_run_test（主観測・Req 7.2）**: boot→pump→close→終了の一周を記録列 (a)(b)(c) の単一 assert 群で検証・反復実行同一（Req 7.3）
 2. boot_test: 記録列の順序・NOTIFY/GET の別・References 完全一致（Req 1.5）
 3. steady_test: 204→talk なし／散発 Value→StartTalk（talk_id 一意）／talk 中 Tick の NOTIFY Ref3=0（Req 2.1, 2.3, 3.3）
-4. close_test: quit=false 終了拒否→pump 再開／OnCloseAll 経路／期限超過（注入 Tick のみで再現）／ForceQuit 直行（Req 3.4, 4.4–4.7）
+4. close_test: quit=false 終了拒否→pump 再開／204 無言終了経路（OnCloseAll 非発行）／期限超過（注入 Tick のみで再現）／ForceQuit 直行（Req 3.4, 4.4–4.7）
 5. failure_test: Failed 語彙ごとの停止遷移・ShioriDown・未知 talk_id・全 Sender drop 正常終了・join 観測（Req 4.8, 4.9, 5.4, 6.1, 6.2）
 
 ### E2E（env-gate・従観測）
