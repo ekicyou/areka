@@ -29,7 +29,7 @@ use std::rc::Weak;
 
 use bevy_ecs::prelude::Entity;
 use windows::Win32::Foundation::LRESULT;
-use wintf_winmsg_executor::util::WindowMessage;
+use crate::executor::util::WindowMessage;
 
 use crate::ecs::dispatch_window_message;
 use crate::ecs::world::EcsWorld;

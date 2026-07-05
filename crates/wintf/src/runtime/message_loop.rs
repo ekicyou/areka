@@ -21,7 +21,7 @@ use std::future::Future;
 use std::rc::Rc;
 
 use event_listener::Event;
-use wintf_winmsg_executor::{FilterResult, MessageLoop, block_on};
+use crate::executor::{FilterResult, MessageLoop, block_on};
 use windows::Win32::UI::WindowsAndMessaging::MSG;
 
 /// ライブラリのメッセージループへ委譲する driver。
