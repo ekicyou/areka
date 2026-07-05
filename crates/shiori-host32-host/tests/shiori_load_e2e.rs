@@ -4,7 +4,7 @@
 //! `LoadLibraryW` させて **LOAD の成否 ack を跨プロセスで観測**する。3 ケースを 1 つの
 //! `#[test]` 関数に集約し、各ケースで親 message-only 窓を新規 `create()`→使用→明示 `drop`
 //! することで、**同時生存する親窓を高々 1 つ**に保つ（wintf の message-only 窓は同一プロセスで
-//! 2 組独立生成すると 2 組目が失敗する既知制約・echo_roundtrip/parent_window 参照）。
+//! 2 組独立生成すると 2 組目が失敗する既知制約・shiori_request_e2e/parent_window 参照）。
 //!
 //! 検証系列（design.md「検証系列」①〜④）:
 //! - ① 成功 ack `[1]`（testdll を `load_dir\shiori.dll` へコピー・cwd=load_dir 慣習）→ R5.3/7.3
@@ -55,7 +55,7 @@ impl Drop for HelperGuard {
     }
 }
 
-/// helper exe（事前ビルドした i686 バイナリ）のパスを堅牢に解決する（echo_roundtrip 同型）。
+/// helper exe（事前ビルドした i686 バイナリ）のパスを堅牢に解決する（shiori_request_e2e 同型）。
 ///
 /// 優先順位:
 /// 1. env `HOST32_HELPER_EXE`（明示指定）。
