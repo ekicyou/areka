@@ -22,6 +22,11 @@
 //! 完結する。
 
 pub mod msg;
+// schedule の消費者（actor.rs シェル・後続タスク）が未登場のため、この時点では
+// 状態機械 API と後続タスクが埋めるフェーズ分岐スタブが lib ビルドから未使用となる。
+// テストビルド（`#[cfg(test)]`）では全アームを網羅する。actor.rs 実装で解消される。
+#[allow(dead_code)]
+pub(crate) mod schedule;
 pub mod talk;
 
 pub use msg::{
