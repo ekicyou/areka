@@ -33,7 +33,7 @@ areka-P0-kanade: kanade（③conductor）＝実行時経路（運行表）の所
 3. If 起動種別イベントの応答が 204（Value なし）である, the kanade engine shall 正典のフォールスルー順に従って `OnBoot`（Ref0=シェル名）の GET 発行へ進む。
 4. When `OnBoot` の応答を受領した, the kanade engine shall `basewareversion` を NOTIFY として発行し boot 系列を完了する。
 5. The kanade engine shall boot 系列の全イベントについて NOTIFY／GET の別と Reference 構成を正典（ukadoc・roadmap kanade 行の転記）どおりに構成する。
-6. Where vanish count 等の永続値が利用できない（M1・永続化はスコープ外）, the kanade engine shall 毎回の起動を同一の運行として扱い、固定値により boot 系列を完走する。
+6. Where vanish count 等の永続値が利用できない（M1・永続化は position-persist の領分）, the kanade engine shall 起動種別イベントとして毎回 `OnFirstBoot`（Ref0=固定 0）を発行し、204 フォールスルー経由で `OnBoot` へ進む運行として boot 系列を完走する（position-persist 完了後は固定値が永続値の読み出しに差し替わる・運行の形は不変）。
 
 ### Requirement 2: Value 配送と talk 起動契約（本 spec が正本）
 
@@ -99,7 +99,7 @@ areka-P0-kanade: kanade（③conductor）＝実行時経路（運行表）の所
 
 #### Acceptance Criteria
 
-1. The 観測ハーネス shall mock shiori（OnBoot→固定 Value・OnSecondChange→204 基調＋散発 Value の fixture 応答）と mock sakura sink を kanade に結線し、boot 指示から close 完了までの運行全体を駆動する。
+1. The 観測ハーネス shall mock shiori（OnFirstBoot→204・OnBoot→固定 Value・OnSecondChange→204 基調＋散発 Value の fixture 応答）と mock sakura sink を kanade に結線し、boot 指示から close 完了までの運行全体を駆動する。
 2. When 運行全体を駆動した, the 観測ハーネス shall (a) boot 系列が正典順序で発火したこと（NOTIFY／GET の別・Reference 構成込み）、(b) Value 受領→talk 起動要求が sink に到達したこと、(c) close 指示→sink の再生完了通知を待って終了系列が完走したこと、を単一の pass/fail として検証する。
 3. The 観測ハーネス shall 実時間 sleep に依存せず（時刻／Tick 注入）、反復実行で同一結果となる。
 4. Where 実 helper 追験の環境変数ゲートが有効, the 観測ハーネス shall 実 32bit helper 越しの追験を実行できる（既定では skip され、mock 観測のみで pass/fail が完結する）。
