@@ -1,0 +1,54 @@
+//! # areka-kanade — kanade（奏でる）エンジン
+//!
+//! kanade は areka の**運行表（scheduling state machine）の正本**であり、
+//! ghost の boot / steady / close 各フェーズの運行判断を担うエンジンである。
+//! アーキテクチャは **純粋状態機械＋アクターシェル＋メッセージ境界差し替え**の
+//! 三層構造をとる（純粋な運行判断・副作用実行のアクターシェル・差し替え可能な
+//! SHIORI 境界）。
+//!
+//! ## 本クレートが持つ正本（canonical source）
+//!
+//! - **運行表の正本**: 運行状態機械（`schedule/`・後続タスクで実装）が ukadoc
+//!   Reference 表に基づく遷移判断を一手に担う。mock fixture・状態機械の期待列・
+//!   ハーネスの assert はすべてこの正本から導出される。
+//! - **talk 契約の正本**: [`talk`] モジュールが talk 起動契約型
+//!   （[`TalkId`] / [`StartTalk`] / [`TalkDone`]）を唯一定義する。消費側
+//!   （sakura-engine）はこれを再定義してはならない。
+//!
+//! ## 依存規律
+//!
+//! [`talk`] モジュールは `std` のみに依存し、host32 型・areka-actor 型に一切
+//! 依存しない（DD-1）。将来の契約クレート切り出しは [`talk`] の機械的移動だけで
+//! 完結する。
+
+pub mod actor;
+pub mod msg;
+// schedule の消費者はランタイム層の actor.rs シェル（[`crate::actor::spawn_kanade`]）。
+// schedule 内には後続タスクが埋めるフェーズ分岐スタブが残り lib ビルドから未使用となるため、
+// クレート全体は `#[allow(dead_code)]` を付さず schedule 側の該当箇所に限局する（下記）。
+#[allow(dead_code)]
+pub(crate) mod schedule;
+pub mod shiori;
+pub mod talk;
+
+pub use actor::spawn_kanade;
+pub use msg::{
+    CloseReason, KanadeConfig, KanadeMsg, MonotonicMs, ShioriCall, ShioriFailure, ShioriMsg,
+    ShioriOutcome,
+};
+pub use shiori::{ShioriConnection, spawn_shiori_actor};
+pub use talk::{StartTalk, TalkDone, TalkId};
+
+/// ukadoc Reference 表の実装正本（純粋関数群）を露出する公開ファサード（DD-9 例外）。
+///
+/// `schedule/` は `pub(crate)` に閉じるが、`tests/` 配下の統合テストクレートは
+/// `pub(crate)` を参照できない。Req 7.1（fixture・検証・実装が単一の正本を共有）を
+/// 成立させる唯一の経路として、Reference 表構成関数のみを本ファサード経由で
+/// クレート公開面に露出する（`areka_kanade::events::on_boot(&config)` 等で到達可能）。
+/// 運行状態機械の内部（Phase／State／Action／Input／step 本体・遷移ロジック）は
+/// `pub(crate)` のまま非公開に保つ。
+pub mod events {
+    pub use crate::schedule::events::{
+        baseware_version, on_boot, on_close, on_first_boot, on_initialize, on_second_change,
+    };
+}

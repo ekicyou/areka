@@ -14,7 +14,7 @@ use bevy_ecs::prelude::*;
 use windows::Win32::Foundation::*;
 use windows::Win32::UI::Controls::WM_MOUSELEAVE;
 use windows::Win32::UI::WindowsAndMessaging::*;
-use wintf_winmsg_executor::util::WindowMessage;
+use crate::executor::util::WindowMessage;
 
 use std::cell::RefCell;
 use std::rc::Rc;

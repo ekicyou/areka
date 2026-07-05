@@ -162,8 +162,8 @@ impl AsyncTickTask {
     pub(crate) fn spawn(
         event: Arc<Event>,
         world: Weak<RefCell<EcsWorld>>,
-    ) -> wintf_winmsg_executor::JoinHandle<()> {
-        wintf_winmsg_executor::spawn_local(run_async_tick(event, world))
+    ) -> crate::executor::JoinHandle<()> {
+        crate::executor::spawn_local(run_async_tick(event, world))
     }
 }
 
