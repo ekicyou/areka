@@ -116,7 +116,7 @@
 - **RN-5**: **出力契約メッセージ型**の確定（本仕様が正本）。`SurfaceCommand{scope, surface: SurfaceArg, at}` 級／`TextCommand{scope, kind: Text|NewLine(ratio)|Clear, at}` 級の具体フィールド・scope 表現（既定値含む）・`SurfaceArg` の不透明再輸出方法（`areka_parsers` からの re-export か own newtype か）。
 - **RN-6**: **既定話者スコープ**の値（R5.3）。`\0`/`\p[0]` 相当の `n=0` を既定とするか。ukadoc の scope 正準（`\0`/`\1`/`\p`）を design 冒頭で確認（brief「ukadoc 必読」指示）。
 - **RN-7**: **M-boot 再生対象タグ表**の作成（brief 具体指示）。`Instruction` 全 variant について「実挙動 / 無視ログ / シーム」を design 冒頭で表化し、fixture 期待値へ反映。`\w` の 50ms は上流換算済みだが ukadoc で終端規律（`\e`/`\-`）と scope 正準を再確認。
-- **RN-8**: **`TalkDone` 返信機構**の選択。`reply_channel`（request/reply oneshot・R6.4 の高々 1 回を型強制）か、kanade inbox への片方向通知メッセージか。Close 中断時の `TalkDone` 送出有無（中断は TalkDone を返すのか無音破棄か）を R7 と突き合わせて確定。
+- **RN-8**: **`TalkDone` 返信機構**の選択。`reply_channel`（request/reply oneshot・R6.4 の高々 1 回を型強制）か、kanade inbox への片方向通知メッセージか。**中断時の送出有無は要件ディスカッション #1 で解決済み**＝中断も終端理由 `Interrupted` を伴う終端信号を返す（無音破棄しない）。残るは返信機構の型選択と reason 3 値（`Ended`/`Quit`/`Interrupted`）を運ぶ `TalkDone` の具体型（DD-1 と統合）。
 
 ---
 
@@ -128,5 +128,6 @@
 4. **per-talk transient の生成単位**（RN-4）: `spawn_actor` スレッド単位か呼出側 sequencer か。
 5. **出力契約メッセージ型の確定**（RN-5）: `SurfaceCommand`/`TextCommand` の具体形・scope 表現・`SurfaceArg` 再輸出方法（本仕様が正本）。
 6. **既定話者スコープ値**（RN-6）: 未指定時の既定 scope（`n=0` 等）と ukadoc 正準の整合。
-7. **`TalkDone` 返信機構と中断時挙動**（RN-8）: `reply_channel` 往復か片方向通知か。Close 中断時に `TalkDone` を返すか無音破棄か（R6 と R7 の境界）。
+7. **`TalkDone` 返信機構**（RN-8・要件ディスカッション #1 で中断時挙動は解決済み）: 中断（Close）時も終端理由 `Interrupted` を伴う `TalkDone` を**返す**（無音破棄しない）ことで確定＝終端信号は end/quit/interrupt を通算 1 回・reason 3 値化（`quit: bool`→`{Ended, Quit, Interrupted}`）。**残る設計論点**は (a) 返信機構＝`reply_channel` 往復か kanade inbox への片方向通知か、(b) reason を運ぶ `TalkDone` の具体型形状・所在（DD-1 と統合）。
+   - **kanade 側の状態管理構造（付記・kanade の領分）**: talk は SSP 流の逐次実行（同時に高々 1 balloon・新 talk は現 talk を中断）ゆえ、kanade は `HashMap` での多重管理を要さず、**単一の current スロット＋単調増加 talk_id（stale 終端信号の棄却用）**で足りる見込み。talk_id は map 索引ではなく「打った talk と返ってきた終端信号の相関・競合時の stale 判定」に使う。最終決定は `areka-P0-kanade` の領分であり本仕様は規定しない。sakura 側の契約（talk_id エコー＋reason 付き単一終端信号）はこのいずれの構造でも過不足なし。
 8. **M-boot 再生対象タグ表の粒度**（RN-7）: `Instruction` 全 variant の「実挙動/無視ログ/シーム」表を design 冒頭で確定し fixture 期待値へ反映。

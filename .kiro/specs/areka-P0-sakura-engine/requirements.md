@@ -30,7 +30,8 @@ sakura インスタンスは script 文字列を受け、上流 `areka_parsers::
   - `Choice`/`Move`/`Cursor`/`SystemVar`/`GenericCommand`/`Raw` の**実挙動**（**sakura-dialogue-tags**・M-dialogue。本仕様では受けて無視＋シームのみ）。
   - talk の選定・スケジューリング・boot/close 運行表（**kanade**）。
 - **Adjacent expectations**:
-  - `StartTalk{script, talk_id}` の受領契約と `TalkDone{talk_id, quit}` の返信契約は **kanade brief が正本**である。本仕様はこの型を消費し、再定義しない。
+  - `StartTalk{script, talk_id}` の受領契約と `TalkDone{talk_id, reason}` の返信契約は **kanade brief が正本**である。本仕様はこの型を消費し、再定義しない。ただし終端理由 `reason` は通常終了（`Ended`）・quit（`Quit`）・中断（`Interrupted`）の 3 値を判別可能でなければならず（従来の `quit: bool` 前提を更新）、具体的な型形状と物理的所在は設計判断（DD-1）として kanade 契約へ供給する。
+  - kanade は自らが発した中断（Close）と自然終端を単一の終端信号で追跡する（close 握手）。talk は逐次実行（同時に高々 1 本）であり、kanade 側の状態管理構造（単一 current スロットか多重管理か）は **kanade（`areka-P0-kanade`）の領分**であって本仕様は規定しない。本仕様は `talk_id` のエコーと reason 付き単一終端信号のみを保証する。
   - 入力の `Instruction` モデル（フラット enum・値正規化済み）は **`areka_parsers::sakura`（sakura-parse）が正本**である。本仕様は再パースを行わない。
   - タイミング層は **`dola`**（時刻注入式 `tick(current_time)`）が正本方針である。時間軸展開を dola 経由とするか自前 sequencer とするかは design 判断であり、本仕様は user/operator 観測可能な時間軸挙動のみを規定する。
   - アクター通信規約（inbox・envelope・停止＝Close 即時停止／積み残し破棄・handler Err はログして継続）は **`areka-actor`** が正本である。
@@ -47,7 +48,7 @@ sakura インスタンスは script 文字列を受け、上流 `areka_parsers::
 1. When sakura が `StartTalk{script, talk_id}` 相当の talk 起動要求を受領したとき、the sakura engine shall その `script` を上流 `Instruction` モデルへ変換して当該 talk の再生対象とする。
 2. When 再生対象の `Instruction` 列を確定するとき、the sakura engine shall 上流パーサ `areka_parsers::sakura::parse` を用い、独自の字句解析や再パースを行わない。
 3. The sakura engine shall 受領した `talk_id` を、当該 talk が発火・終端で送出する全出力（surface 指令・テキスト系指令・`TalkDone`）に対応付ける。
-4. If `script` が空、または `Instruction` 列が空になったとき、the sakura engine shall 時間軸再生を行わずに当該 talk を正常終端として扱い、`TalkDone{quit:false}` 相当の終端信号を返す。
+4. If `script` が空、または `Instruction` 列が空になったとき、the sakura engine shall 時間軸再生を行わずに当該 talk を正常終端として扱い、終端理由 `Ended`（`quit:false` 相当）を伴う `TalkDone` 終端信号を返す。
 
 ### Requirement 2: タイムライン展開（Instruction → 時刻付き発火列）
 
@@ -92,27 +93,30 @@ sakura インスタンスは script 文字列を受け、上流 `areka_parsers::
 2. The sakura engine shall surface 指令系・テキスト系のいずれの発火にも、その発火時点で有効な話者スコープを付与する。
 3. While 話者スコープが未指定のまま talk が開始したとき、the sakura engine shall 既定の話者スコープを有効なスコープとして各発火に付与する。
 
-### Requirement 6: 終端の検出と TalkDone 返信
+### Requirement 6: 終端の検出と終端信号（TalkDone）の返信
 
-**Objective:** conductor（kanade）として、talk が終端に達したこと、および通常終了か quit かの区別を確実に受け取りたい。これにより close 握手や次の運行判断を行える。
+**Objective:** conductor（kanade）として、talk が終端に達したこと、および終端理由（通常終了 / quit / 中断）の区別を、**あらゆる終端経路で漏れなく 1 回だけ**受け取りたい。これにより close 握手と次の運行判断（共有 sink への次 talk 逐次化）を確実に行える。
 
 #### Acceptance Criteria
 
-1. When `Instruction::End` を処理するとき、the sakura engine shall 当該 talk の再生を終端し、`TalkDone{talk_id, quit:false}` 相当の終端信号を返す。
-2. When `Instruction::Quit` を処理するとき、the sakura engine shall 当該 talk の再生を終端し、`TalkDone{talk_id, quit:true}` 相当の終端信号を返す。
-3. When `Instruction` 列を終端命令なしに末尾まで再生し終えたとき、the sakura engine shall 当該 talk を通常終了として終端し、`TalkDone{talk_id, quit:false}` 相当の終端信号を返す。
-4. The sakura engine shall 1 回の talk につき `TalkDone` を高々 1 回だけ返す。
+1. When `Instruction::End` を処理するとき、the sakura engine shall 当該 talk の再生を終端し、終端理由 `Ended`（従来の `quit:false` 相当）を伴う `TalkDone{talk_id, reason}` を返す。
+2. When `Instruction::Quit` を処理するとき、the sakura engine shall 当該 talk の再生を終端し、終端理由 `Quit`（従来の `quit:true` 相当）を伴う `TalkDone{talk_id, reason}` を返す。
+3. When `Instruction` 列を終端命令なしに末尾まで再生し終えたとき、the sakura engine shall 当該 talk を通常終了として終端し、終端理由 `Ended` を伴う `TalkDone{talk_id, reason}` を返す。
+4. The sakura engine shall 1 回の talk につき `TalkDone` を、**中断を含むすべての終端経路を通算して高々 1 回だけ**返す。
 5. When 終端命令（`End` または `Quit`）以降に後続 `Instruction` が存在するとき、the sakura engine shall 終端以降の命令を発火せず破棄する。
+6. The sakura engine shall `TalkDone` を、kanade が talk 状態を追跡するための単一の完了信号として `talk_id` を対応付けて返し、kanade がこの `talk_id` で当該 talk の相関および stale（陳腐化）終端信号の棄却を行えるようにする。
 
 ### Requirement 7: kanade からの中断（Close）
 
-**Objective:** conductor（kanade）として、再生途中の talk を即座に打ち切りたい。これにより close 時やゴースト切替時に積み残しを残さず停止できる。
+**Objective:** conductor（kanade）として、再生途中の talk を即座に打ち切り、**かつ打ち切りが完了したことを確実に知りたい**。これにより close 時やゴースト切替時に積み残しを残さず停止し、共有 sink 上で次 talk を安全に逐次化できる。
 
 #### Acceptance Criteria
 
 1. When sakura が中断（Close 相当）を受領したとき、the sakura engine shall 進行中の再生を即時停止する。
 2. When 中断により再生を停止するとき、the sakura engine shall 未発火の残余 `Instruction` を drain せず破棄する。
 3. The sakura engine shall 中断による停止を、areka-actor の停止規約（Close 即時停止・積み残し破棄）に整合させる。
+4. When 中断により再生を停止したとき、the sakura engine shall 停止後に終端理由 `Interrupted` を伴う `TalkDone{talk_id, reason}`（close 握手の ACK）を kanade へ返し、R6.4（通算高々 1 回）に従い既に自然終端（`End`/`Quit`/末尾到達）済みの talk に対しては二重に返さない。
+5. If 中断の受領時点で当該 talk が既に終端済みであるとき、the sakura engine shall 追加の `TalkDone` を返さず、先に成立した終端理由を唯一の終端結果とする。
 
 ### Requirement 8: M-boot 外タグの寛容な無視とシーム
 
