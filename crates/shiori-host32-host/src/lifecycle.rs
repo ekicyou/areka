@@ -14,10 +14,12 @@
 //! - [`ShutdownError`] — shutdown 経路専用の失敗語彙。
 //! - [`UNLOAD_ACK_TIMEOUT`] / [`EXIT_OBSERVE_TIMEOUT`] / [`EXIT_POLL_INTERVAL`] — 関連定数。
 
-use std::time::Duration;
+use std::time::{Duration, Instant};
+
+use shiori_host32_ipc::MsgTag;
 
 use crate::error::RequestError;
-use crate::parent_window::SendError;
+use crate::parent_window::{ParentMessageWindow, SendError};
 use crate::process_host::{ExitKind, HelperHandle, poll_exit_kind};
 
 /// 死活監視の観測結果（Send・Copy な所有データ・R2.6）。
@@ -186,6 +188,55 @@ impl HelperLifecycle {
         LifecycleReport { class, error }
     }
 
+    /// 正規の正常終了経路（R5.1）: UNLOAD 送出 → ack[1] 観測 → 終了種別を bounded 観測。
+    /// 既終了なら送出せず Ok(観測済み kind) を返す（短絡・冪等）。再起動は一切試みない（R5.4）。
+    ///
+    /// 3 失敗経路（送出失敗／ack 契約違反／終了未観測）はそれぞれ専用の [`ShutdownError`] 変種で
+    /// 表し、いずれも `error!` 発行と戻り値の `Err` の**双方**で surface する（R5.5/R7.6・
+    /// silent failure を許さない）。`Ok(_)` はプロセス終了の観測完了を意味し、正常系列では
+    /// `Ok(ExitKind::Clean)`（R5.1 の成立証拠）を返す。
+    ///
+    /// # Errors
+    /// - [`ShutdownError::Unload`]: UNLOAD 送出／ack 往復の失敗（`SendError` を内包）。
+    /// - [`ShutdownError::UnexpectedAck`]: ack が厳密 `[1]` でない（契約違反）。
+    /// - [`ShutdownError::ExitTimeout`]: ack 受領後、上限時間内に終了を観測できない。
+    pub fn request_clean_shutdown(
+        &mut self,
+        window: &ParentMessageWindow,
+    ) -> Result<ExitKind, ShutdownError> {
+        // 手順1: 既終了なら送出せず短絡成功（既終了への終了要求を失敗させない）。
+        if let HelperStatus::Exited(kind) = self.status() {
+            return Ok(kind);
+        }
+        // 手順2: UNLOAD 送出（凍結 wire 語彙）。Err は error! + Err(ShutdownError::Unload)。
+        let ack = match window.send_request(MsgTag::Unload, &[], UNLOAD_ACK_TIMEOUT) {
+            Ok(a) => a,
+            Err(e) => {
+                tracing::error!(error = ?e, "[request_clean_shutdown] unload send failed");
+                return Err(ShutdownError::Unload(e));
+            }
+        };
+        // 手順3: ack が厳密 [1] でなければ契約違反。error! + Err(UnexpectedAck)。
+        if ack.as_slice() != [1u8] {
+            tracing::error!(ack = ?ack, "[request_clean_shutdown] unexpected unload ack");
+            return Err(ShutdownError::UnexpectedAck(ack));
+        }
+        // 手順4: EXIT_OBSERVE_TIMEOUT を deadline に bounded poll で終了観測（刻み EXIT_POLL_INTERVAL）。
+        let deadline = Instant::now() + EXIT_OBSERVE_TIMEOUT;
+        loop {
+            if let HelperStatus::Exited(kind) = self.status() {
+                return Ok(kind); // 正常系列なら Clean。
+            }
+            if Instant::now() >= deadline {
+                tracing::error!(
+                    "[request_clean_shutdown] helper did not exit within bound after unload ack"
+                );
+                return Err(ShutdownError::ExitTimeout);
+            }
+            std::thread::sleep(EXIT_POLL_INTERVAL);
+        }
+    }
+
     /// 観測用: OS プロセス ID。
     #[must_use]
     pub fn pid(&self) -> u32 {
@@ -219,7 +270,7 @@ pub enum ShutdownError {
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
 
     /// `T: Send` を静的に固定する（R2.6/7.7・報告データは Send な所有データ）。
@@ -450,5 +501,48 @@ mod tests {
             matches!(report.error, RequestError::Ipc(_)),
             "report は原本 RequestError::Ipc を保持する"
         );
+    }
+
+    // --- request_clean_shutdown: 短絡経路（既終了への正常終了要求・R5.1/R5.3/R5.4/R5.5）---
+    // ParentMessageWindow は super::* で導入済み（本モジュール先頭 use）。
+
+    /// 窓を生成するテストを直列化する共有ロック（wintf-winmsg-executor 0.0.5 の
+    /// 「同一プロセスで 2 組の message-only 窓を同時生成すると 2 組目が WindowCreationError」
+    /// 既知制約への対処）。窓生成テスト同士が並列に走ると衝突するため、
+    /// 本テストと `parent_window.rs::window_tests::pump_none_then_some_and_bad_frame_recorded`
+    /// が同一ロックを取って直列化する。poison は無視する（ロックは相互排他のみが目的）。
+    pub(crate) static WINDOW_TEST_SERIAL: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+    /// 性質（短絡成功・R5.1/R5.3/R5.4）: 既終了 stand-in への `request_clean_shutdown` は
+    /// UNLOAD を送出せず、観測済み `ExitKind::Clean` を短絡で `Ok` 返しする（既終了への
+    /// 終了要求を失敗させない・冪等）。
+    ///
+    /// 実 helper なしで検証可能な短絡経路（手順1）を行使する。stand-in は既に死んでいるため、
+    /// もし UNLOAD 送出へ進めば送出は失敗するはず。それが `Ok(Clean)` で返ることが
+    /// 「送出前に短絡した」ことの証明である。再起動は一切試みない（R5.4）。
+    #[test]
+    fn request_clean_shutdown_short_circuits_when_already_exited() {
+        // 窓生成テストの直列化（並列窓生成の WindowCreationError 回避）。
+        let _guard = WINDOW_TEST_SERIAL
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
+
+        // 既終了 stand-in（`cmd /c exit 0` → Clean）を組み、終了を bounded 観測する。
+        let handle = spawn_command(cmd_exit(0)).expect("stand-in を spawn できる");
+        let mut lc = HelperLifecycle::new(handle);
+        assert_eq!(wait_exited(&mut lc), ExitKind::Clean, "stand-in は Clean 終了");
+
+        // 窓を立てる（送出面の借用先）。短絡経路では send_request は呼ばれない。
+        let window = ParentMessageWindow::create().expect("親 message-only 窓生成に失敗");
+
+        // 手順1 の短絡: 既終了なら送出せず Ok(観測済み kind)。
+        let got = lc.request_clean_shutdown(&window);
+        assert_eq!(
+            got.expect("既終了への正常終了要求は短絡で Ok（R5.3）"),
+            ExitKind::Clean,
+            "既終了 stand-in への request_clean_shutdown は観測済み Clean を短絡で返す（R5.1/R5.3）"
+        );
+
+        drop(window);
     }
 }
