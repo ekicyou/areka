@@ -480,6 +480,201 @@ mod tests {
         handle.actor.join().expect("body は正常終了する");
     }
 
+    /// **同一 `at`・同一 sink 内の発火順が記述順（FIFO）で保たれる**ことを検証する
+    /// （`to_schedule` の per-cue `insert`＝`extend` 禁止の load-bearing 性質を統合レベルで固定）。
+    ///
+    /// script `\s[10]hello\nworld\e`（`\w` 無し）→ 全 cue が `at=0.0`:
+    ///   Emote{10}(surface) / Text("hello") / NewLine / Text("world")（text）。
+    /// 単一 `Tick(0.0)` で全 due・自然終端。text sink は **hello → NewLine → world** の
+    /// 記述順で受信する（`extend` なら同一 at 群が逆順化し hello/world が入れ替わる＝R4.1/4.2 違反）。
+    #[test]
+    fn same_at_cues_preserve_script_order_fifo_within_a_sink() {
+        let (reply_tx, reply_rx) = reply_channel::<TalkDone>();
+        let talk_id = TalkId(41);
+        let start = StartTalk {
+            script: r"\s[10]hello\nworld\e".to_string(),
+            talk_id,
+            reply: reply_tx,
+        };
+        let surface = MockSink::new();
+        let text = MockSink::new();
+        let surface_records = surface.records();
+        let text_records = text.records();
+
+        let handle = spawn_talk(start, surface, text);
+        // 全 cue が at=0.0 ゆえ単一 Tick(0.0) で全 due→自然終端。
+        handle
+            .inbox
+            .send(SakuraMsg::Tick(0.0))
+            .expect("Tick(0.0) 投函");
+        let done = reply_rx
+            .recv_timeout(Duration::from_secs(5))
+            .expect("単一 Tick で自然終端");
+        assert_eq!(done.reason, TalkEndReason::Ended);
+        handle.actor.join().expect("body は正常終了する");
+
+        // surface: Emote{10}@0.0 の 1 件のみ。
+        let surface = surface_records.lock().unwrap();
+        assert_eq!(surface.len(), 1);
+        assert_eq!(surface[0].command, CueCommand::Emote { key: "10".into() });
+
+        // text: hello → NewLine → world の**記述順（FIFO）**で 3 件（全て at=0.0）。
+        let text = text_records.lock().unwrap();
+        assert_eq!(text.len(), 3, "text 発火は hello/NewLine/world の 3 件");
+        assert!(text.iter().all(|c| c.at == 0.0), "同一 at=0.0 群であること");
+        assert_eq!(
+            text[0].command,
+            CueCommand::Text("hello".into()),
+            "先頭は記述順どおり hello（extend なら逆順化する）"
+        );
+        assert!(
+            matches!(text[1].command, CueCommand::NewLine { .. }),
+            "中央は NewLine"
+        );
+        assert_eq!(
+            text[2].command,
+            CueCommand::Text("world".into()),
+            "末尾は記述順どおり world（extend なら hello と入れ替わる）"
+        );
+    }
+
+    /// **`Start` の二重受領が無視される**ことを検証する（プロトコルガード・drive.rs `on_start`）。
+    ///
+    /// 1 本目（script A）で spawn 後、`inbox` へ別 script・別 reply の 2 本目 `Start`(B) を送る。
+    /// B は `state.is_some()` ゆえ無視され（B の `StartTalk` は drop＝B の reply 端も drop）、
+    /// talk は A の内容のみを再生する。**B の cue（Emote{77}/DIFFERENT）は一切現れず、
+    /// B の reply は TalkDone を受け取らない**ことを決定的に確認する（timeout 待ちに依らず、
+    /// 無視で drop された B の reply 端は disconnect ＝ `recv` が即 `Err`）。
+    #[test]
+    fn duplicate_start_is_ignored_and_first_talk_plays_unchanged() {
+        let (reply_a_tx, reply_a_rx) = reply_channel::<TalkDone>();
+        let id_a = TalkId(11);
+        let start_a = StartTalk {
+            script: r"\s[10]hello\w[2]world\e".to_string(),
+            talk_id: id_a,
+            reply: reply_a_tx,
+        };
+        let surface = MockSink::new();
+        let text = MockSink::new();
+        let surface_records = surface.records();
+        let text_records = text.records();
+        let handle = spawn_talk(start_a, surface, text);
+
+        // 2 本目 Start(B)（別 script・別 reply）を inbox へ。自己投函の Start(A) の後に処理される。
+        let (reply_b_tx, reply_b_rx) = reply_channel::<TalkDone>();
+        let id_b = TalkId(99);
+        let start_b = StartTalk {
+            script: r"\s[77]DIFFERENT\e".to_string(),
+            talk_id: id_b,
+            reply: reply_b_tx,
+        };
+        handle
+            .inbox
+            .send(SakuraMsg::Start(start_b))
+            .expect("2 本目 Start(B) 投函");
+
+        // A を駆動して自然終端。
+        handle.inbox.send(SakuraMsg::Tick(0.0)).unwrap();
+        handle.inbox.send(SakuraMsg::Tick(0.2)).unwrap();
+        let done = reply_a_rx
+            .recv_timeout(Duration::from_secs(5))
+            .expect("A の TalkDone");
+        assert_eq!(done.talk_id, id_a, "終端は A の talk_id（B に乗っ取られない）");
+        assert_eq!(done.reason, TalkEndReason::Ended);
+        handle.actor.join().expect("body は正常終了する");
+
+        // A の内容のみが再生されること（B の Emote{77}/DIFFERENT は現れない）。
+        let surface = surface_records.lock().unwrap();
+        assert_eq!(surface.len(), 1);
+        assert_eq!(
+            surface[0].command,
+            CueCommand::Emote { key: "10".into() },
+            "surface は A の \\s[10]（B の 77 でない）"
+        );
+        let text = text_records.lock().unwrap();
+        assert_eq!(text.len(), 2, "text は A の hello/world の 2 件");
+        assert_eq!(text[0].command, CueCommand::Text("hello".into()));
+        assert_eq!(text[1].command, CueCommand::Text("world".into()));
+
+        // 無視された B は TalkDone を受け取らない（reply 端 drop で disconnect＝recv 即 Err）。
+        assert!(
+            reply_b_rx.recv_timeout(Duration::from_secs(5)).is_err(),
+            "無視された Start(B) は TalkDone を返さない"
+        );
+    }
+
+    /// **`to_schedule` が非 `Command` payload（Barrier/Routing）を skip する**防御枝を、
+    /// module-private `to_schedule` を直接呼んで検証する（M-boot compile は生成しないが防御固定）。
+    ///
+    /// `CuePayload::Command` と `CuePayload::Barrier` を同一 `at=0.0` で混在させた `CueSheet` を
+    /// 渡し、生成された `TimedSchedule` を `tick(0.0)`→`ready()` で観測すると、**Command 由来の
+    /// `TalkCue` 1 件のみ**が出て Barrier は skip されている（非 panic）ことを確認する。
+    #[test]
+    fn to_schedule_skips_non_command_payload_without_panic() {
+        use crate::contract::{ActorKey, BarrierKind, Cue, CuePayload, CueSheet};
+
+        let sheet = CueSheet::new(vec![
+            Cue {
+                actor: ActorKey::from("0"),
+                start_time: 0.0,
+                payload: CuePayload::Command(CueCommand::Text("keep".into())),
+            },
+            Cue {
+                actor: ActorKey::from("0"),
+                start_time: 0.0,
+                // M-boot compile は生成しない payload（防御枝を叩くため直接投入）。
+                payload: CuePayload::Barrier(BarrierKind::WaitForInput { timeout: None }),
+            },
+        ]);
+
+        let mut schedule = to_schedule(&sheet);
+        schedule.tick(0.0);
+        let ready = schedule.ready();
+
+        // Barrier は skip され、Command 由来の TalkCue 1 件のみが due（非 panic）。
+        assert_eq!(ready.len(), 1, "非 Command(Barrier) は skip され Command のみ残る");
+        assert_eq!(ready[0].command, CueCommand::Text("keep".into()));
+        assert_eq!(ready[0].at, 0.0);
+    }
+
+    /// **終端時に reply 受信端が drop 済みでも body が panic せず clean exit する**ことを検証する
+    /// （R11.1/11.4・全終端経路が `reply.send(..).is_err()` を error ログで受けるガードの固定）。
+    ///
+    /// 駆動前に `reply_rx` を drop → 自然終端で `reply.send(TalkDone)` が `Err` になるが、
+    /// `error!` を記録して `Break`＝スレッドは正常終了（`join` が Ok）。発火自体は正常に行われる
+    /// （reply drop は終端信号にのみ影響し、sink 配送には影響しない）。
+    #[test]
+    fn dropped_reply_receiver_at_terminal_exits_cleanly_without_panic() {
+        let (reply_tx, reply_rx) = reply_channel::<TalkDone>();
+        let start = StartTalk {
+            script: r"\s[10]hello\w[2]world\e".to_string(),
+            talk_id: TalkId(4),
+            reply: reply_tx,
+        };
+        let surface = MockSink::new();
+        let text = MockSink::new();
+        let text_records = text.records();
+        let handle = spawn_talk(start, surface, text);
+
+        // 終端の TalkDone 送出前に受信端を drop（送出は Err になる）。
+        drop(reply_rx);
+        handle.inbox.send(SakuraMsg::Tick(0.0)).unwrap();
+        handle.inbox.send(SakuraMsg::Tick(0.2)).unwrap();
+
+        // reply 受信端 drop でも panic せず正常終了すること（join が Ok・ハングしない）。
+        handle
+            .actor
+            .join()
+            .expect("reply 受信端 drop でも body は panic せず正常終了する");
+
+        // 発火は正常に行われた（reply drop は終端信号にのみ影響）。
+        assert_eq!(
+            text_records.lock().unwrap().len(),
+            2,
+            "reply drop は発火に影響しない（hello/world は配送済み）"
+        );
+    }
+
     /// M-boot 外タグのみで構成され**発火列が空になる** script は、リテラル空 script では
     /// ないにもかかわらず空 sheet へコンパイルされ、時間軸駆動（Tick）を一切要さずに
     /// 末尾到達の終端理由 `Ended`（R1.4）を伴う `TalkDone` を即座に返す。
