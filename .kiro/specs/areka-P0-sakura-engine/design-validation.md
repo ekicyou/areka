@@ -1,61 +1,68 @@
-# 設計検証レポート: areka-P0-sakura-engine
+# 設計検証レポート: areka-P0-sakura-engine（検証 2 回目・改訂 2 対象）
 
-> 対象: 確定済み `requirements.md`（R1〜R11）＋ `design.md`（DD-1..8）。
-> 検証種別: 実装前 設計品質レビュー（非対話・GO/NO-GO 判定）。
+> 対象: 確定済み `requirements.md`（R1〜R11）＋ **design.md 改訂 2（dola cue ドメイン基盤への全面再設計・DD-1..11）**。
+> 検証種別: 実装前 設計品質レビュー（非対話・GO/NO-GO 判定）。前回レポート（初版 design 対象・NO-GO）は本レポートで**全面置換**。
 > 検証日: 2026-07-05 ／ 検証者: kiro-validate-design（subagent・非対話）
-> 実シンボル照合: `areka_parsers::sakura::model`（`Instruction` 14 variant）・`areka-actor`（`spawn.rs` / `reply.rs`）を直読して散文主張を裏取り。
+> 実シンボル照合: `dola/src/cue/{schedule.rs, command.rs, sheet.rs}`・`wintf/src/ecs/cue/queue/mod.rs`（＋tests 6 ファイル）・`areka-actor/src/{spawn.rs, reply.rs}`・`areka-parsers/src/sakura/model.rs` を直読し、散文主張を全件裏取りした。
 
 ---
 
 ## 設計レビュー要約
 
-三層構造（純粋展開 `expand` ／ 駆動 `playback` ／ 出力結線 `sink`）は brief の Boundary Candidates と要件（R2 決定性・R9 時刻注入・R7 単一 Close funnel・R6 reason 3 値）に忠実で、DD-1..8 の判断も研究材料に整合している。要件被覆は R1.1〜R11.4 全 ID が traceability とコンポーネントブロックに出現し、境界（暫定所在 DD-1・SurfaceArg 不透明・Duration 貫通）も明確。ただし **駆動層の対外インターフェース（`spawn_talk` の返り値と Close 配送経路）が実シンボル `spawn_actor` の返す `(Sender<M>, ActorHandle)` と齟齬**しており、R7（Close 即時中断）を成立させる結線が型として欠落している。これが唯一の実装前修正必須点である。
+改訂 2 は「compile（純粋）／drive（per-talk アクター）／sink（trait＋mock）」の三層を dola cue ドメイン上に再構築し、前回 NO-GO の Critical Issues 1〜3 を **DD-11（`TalkHandle{inbox, actor}`＋Start 自己投函）・DD-10（`Tick` を inbox メッセージ化＋二重発火ガード）・move-consume 一本化**で全て解消している（下記「前回イシューの解消確認」）。dola 採用の根拠（`ActorKey` doc の `\0`/`\1` 言及・`CueTarget::{Shell,Balloon}`・wintf 配送半身の稼働）、`compile_sheet` 不採用の理由（min 正規化が先頭 `\w` を潰す）、DD-9 touch point（wintf の match は `other =>`/`_ =>` catch-all のみ・exhaustive match 不在）は**すべて実ソースと一致**した。残る指摘は 3 件とも局所的な文言確定レベルで、アーキテクチャの妥当性を損なわない。
+
+### 前回イシューの解消確認（旧 design-validation 対象・実シンボル照合済み）
+
+| 旧 Issue | 判定 | 根拠 |
+|---|---|---|
+| 1. `spawn_talk` が Close 配送端を捨てる | **解消** | `TalkHandle{inbox: Sender<SakuraMsg>, actor: ActorHandle}` は `spawn_actor -> (Sender<M>, ActorHandle)`（`spawn.rs` L39）と型整合。`Start` は spawn 直後に自己投函＝単一 inbox の全順序で「Start 先行・Close/Tick 順序確定」が成立 |
+| 2. 注入時刻と Close 即時性の両立が未規定 | **解消** | 時刻自体を `SakuraMsg::Tick(f64)` として inbox に載せ、正準ループを `run_inbox`（`rx.recv()` 単一待機）に一本化＝二重待機が消滅。`TimedSchedule::tick` の冪等早期 return（`schedule.rs` L144: `offset <= current_offset && !ready_buffer.is_empty()` で **ready_buffer を保持したまま return**）が同時刻再 tick 後の `ready()` 再読で二重送出を招く点まで正しく特定し、駆動層の単調ガードで遮断している（ただし下記 Issue 2 の初期値未規定に注意） |
+| 3. 高々 1 回機構の曖昧さ（フラグ併記） | **解消** | `ReplySender::send(self)`（`reply.rs` L38・consume）を唯一機構とし「終端済みフラグは持たない」と一本化。`Option<TalkState>` の take は所有権移動でフラグでない旨も明記。Break 後はスレッド消滅ゆえ構造的に再返信不能 |
 
 ---
 
-## Critical Issues（最大 3）
+## Critical Issues（最大 3・いずれも文言確定レベル）
 
-### 🔴 Critical Issue 1: `spawn_talk` の返り値が inbox `Sender` を捨てており、Close（R7）を届ける経路が型として存在しない
+### 🔴 Critical Issue 1: EmptyEnd 経路が `TalkDone{Ended}` 固定で、`\-` 単独 script（sheet 空＋`end=Quit`）が R6.2 に違反する
 
-- **Concern**: `design.md` の駆動層 Service Interface は `pub fn spawn_talk(start, surface_sink, text_sink) -> areka_actor::ActorHandle;`（design.md「Service Interface（駆動）」）と定義するが、実シンボル `areka_actor::spawn_actor<M,F>(name, body) -> (Sender<M>, ActorHandle)`（`crates/areka-actor/src/spawn.rs`）は inbox 送信端 `Sender<M>` を必ず併せて返す。`SakuraMsg::Close` はこの `Sender<SakuraMsg>` へ送って初めてアクター body の受信ループへ届く。`spawn_talk` が `ActorHandle` のみを返すと、kanade は Close を投函する送信端を得られず、R7.1（即時停止）・R7.4（`Interrupted` ACK）を駆動する結線が存在しなくなる。
-- **Impact**: 単一 Close funnel（R7・議題#1/#2 の確定契約）の中核が実装段階で破綻する。`ActorHandle` は非 RAII の join ハンドルにすぎず（`spawn.rs`・`is_finished`/`join` のみ）、中断入力の搬送能力を持たない。
-- **Suggestion**: `spawn_talk` の返り値を `(areka_actor::Sender<SakuraMsg>, areka_actor::ActorHandle)` 相当（もしくは両者を包む `TalkHandle{ inbox: Sender<SakuraMsg>, actor: ActorHandle }`）へ改める。`StartTalk` を inbox 経由 `SakuraMsg::Start` として送る設計と、`spawn_talk(start, ...)` が `start` を引数で直接消費する設計が混在しているため、どちらか一方（推奨: spawn 時に `Sender` を返し `Start`/`Close` を共に inbox で送る一貫形）へ統一すること。
-- **Traceability**: R7.1, R7.3, R7.4 ／ Adjacent「単一 Close funnel」。
-- **Evidence**: design.md「再生駆動層（playback）> Service Interface（駆動）」の `spawn_talk` シグネチャ、および `SakuraMsg::{Start, Close}`（contract）と `spawn_actor` 実シグネチャの不一致。
+- **Concern**: System Flows は「compile 結果の `sheet` が空なら時間軸駆動せず即 `TalkDone{Ended}`→`Break`」、状態遷移図も「EmptyEnd --> Done: TalkDone Ended」と **reason を Ended に固定**している。しかし compile の Postconditions は「`end` は `Ended` か `Quit` のみ」であり、script が `\-` 単独（または `\w` 系のみ＋`\-`）の場合 **sheet 空＋`end=Quit`** が生成される。この経路で Ended を返すと R6.2（`Quit`→`TalkDone{Quit}`）に違反する。
+- **Impact**: kanade の close 握手が quit 意図を取りこぼす（quit はゴースト終了系の運行判断に直結）。設計文書内の自己矛盾のまま実装へ渡すと、状態遷移図に忠実な実装が AC 違反を作り込む。
+- **Suggestion**: EmptyEnd の送出を `TalkDone{reason: compiled.end}` に改める（R1.4 の「空 script/空列→Ended」は compile が空入力に `end=Ended` を返すことで自然に満たされる）。状態遷移図の注記も「TalkDone(end)」へ修正。
+- **Traceability**: R6.2 ／ R1.4。
+- **Evidence**: design.md「System Flows > 再生駆動と終端・中断のライフサイクル」（EmptyEnd 注記・状態遷移図）と「compile > Postconditions（`end` は `Ended` か `Quit` のみ）」の突合。
 
-### 🔴 Critical Issue 2: 注入時刻（R9.1）と Close 即時割込み（R7.1）を単一 body スレッドでどう両立させるかが未規定
+### 🔴 Critical Issue 2: 単調 Tick ガードの「直前値」の初期値が未規定——初期値 0.0 だと最初の `Tick(0.0)` が no-op になり at=0 発火が飲まれる
 
-- **Concern**: 駆動は「注入式 tick で `elapsed` を進める」（R9.1）一方、body は inbox `Receiver<SakuraMsg>` を単独所有し Close を `run_inbox` の `Break` へ写像する（design.md「State Management」「Implementation Notes」）。しかし `run_inbox` は `rx.recv()` でブロックする受信ループ（`spawn.rs`）であり、「時刻注入（tick）で発火を進めながら、同時に Close を待つ」二重待機の具体機構（テスト時は注入列・本番は `recv_timeout` 刻み）が設計に明示されていない。テストが `run_inbox` を使うのか、`recv_timeout` ベースの自前ループ（`spawn.rs` docstring が言及する「周期 tick 等で自前ループ」）を使うのかで、Close の即時性と決定的観測の両立可否が変わる。
-- **Impact**: R7.1（即時停止）と R9.1/9.4（sleep 非依存・決定的再現）の交点が実装者裁量に委ねられ、Close がタイムライン発火の合間でしか効かない／注入時刻が recv ブロックと干渉する等の非決定性を招く恐れがある。単体テスト主戦場は純粋 `expand` に閉じるため守られるが、playback 統合テスト（Close 中断）の決定性が担保されない。
-- **Suggestion**: 駆動ループの正準形を 1 つ明記する。推奨は「テストは `run_inbox` を用いず、注入時刻列と inbox を交互に消費する自前ループ（`recv_timeout(0)` 相当で Close を非ブロック確認 → 未発火 `TimedFire` を `elapsed` まで flush）」を design で固定し、R7 の Close 検査点（各 tick 境界で必ず Close を先に見る）を Postcondition 化すること。
-- **Traceability**: R7.1, R9.1, R9.4 ／ R10（body ローカル状態）。
-- **Evidence**: design.md「State Management > Concurrency」「Implementation Notes（時刻注入は駆動ループが tick を消費する形）」と `areka-actor/src/spawn.rs` の `run_inbox`（`rx.recv()` ブロック）の突合。
+- **Concern**: 駆動層ガードは「直前 tick 値を保持し `t <= 直前値` の Tick は no-op」と定義されるが、`TalkState.last_tick` の**初期値（型）が未規定**。素朴に `f64 = 0.0` で初期化すると、契約上正当な最初の `Tick(0.0)`（テスト注入列は「0.0→…」と明記）が `0.0 <= 0.0` で no-op となり、`start_time=0.0` の cue（`\w` を先行しない全 cue＝fixture の冒頭 Text/Surface）が発火しない。待ちを含まない script を `Tick(0.0)` 単発で駆動する場合は **`TalkDone` が永遠に返らず統合テストがハング**する。
+- **Impact**: R9.3（fixture の期待発火列）・R9.1 の主検証経路が実装の初期値選択ひとつで壊れる、発見コストの高い罠。ガード自体は正しい（`schedule.rs` L143-145 の早期 return が ready_buffer を保持する以上必須）ため、初期値だけが穴。
+- **Suggestion**: `last_tick: Option<f64>`（初期 `None`＝最初の有限 `Tick` は必ず有効）と design に一文固定する。統合テストに「`Tick(0.0)` 単発で at=0 cue が発火し完了する」ケースを追加。
+- **Traceability**: R9.1, R9.3 ／ R2.1（at=0 の意味論）。
+- **Evidence**: design.md「`Tick` の意味論（固定）」の冪等・逆行ガード段落＋「drive > 高々 1 回の唯一機構」の `TalkState{.., last_tick}`（型無記載）、および `dola/src/cue/schedule.rs` L143-145。
 
-### 🔴 Critical Issue 3: `StartTalk.reply` の consume による「高々 1 回」保証と、R7.5「既終端なら返さない」の型的成立条件が曖昧
+### 🔴 Critical Issue 3: 同時刻 cue の順序保存が `to_schedule` で未規定——`extend` を使うと同一 `at` の Text/NewLine 列が逆順配信される
 
-- **Concern**: `TalkDone` の通算高々 1 回は `ReplySender::send(self)` の consume（`reply.rs`）で型強制される、と design は述べる（DD-7）。これは正しいが、design の Risks は「終端済みフラグ or `ReplySender` consume 済みで型的に防ぐ」と両論併記しており、`ReplySender` が `StartTalk` の一フィールドで body ローカルに move される以上、**consume 済みか否かを実行時に再判定する術は無い**（move 後は変数が使えない＝コンパイル時保証）。「終端済みフラグ」を併用すると、フラグと consume の二重管理が R7.5 の唯一結果性を却って曖昧化する。
-- **Impact**: R6.4/R7.4/R7.5 の「自然終端後の Close は追加返信しない」を、型保証（consume）で閉じるのか実行時フラグで閉じるのかが未確定なまま実装へ渡ると、二重返信防止のロジックが冗長化・自己矛盾するリスクがある（軽微だが契約中核）。
-- **Suggestion**: 「`ReplySender` の move-consume を唯一の高々1回機構とし、終端済みフラグは持たない」と design で一本化する。Close 受領時に `reply` が既に consume 済み（自然終端後）なら、body はそもそも `reply` を保持していない＝返信しようがない、という不変条件を Postcondition に明記すること。
-- **Traceability**: R6.4, R7.4, R7.5。
-- **Evidence**: design.md「再生駆動層 > Implementation Notes > Risks（終端済みフラグ or ReplySender consume 済み）」と `areka-actor/src/reply.rs`（`send(self)` consume）。
+- **Concern**: `\w` を挟まない連続命令（例: `Text→NewLine→Text→Surface`）は**全て同一 `start_time`** を持つ（さくらスクリプトの常態）。`TimedSchedule` は降順ソート＋末尾 pop であり、`insert()` は `partition_point` により同値オフセットの**既存要素より前**へ挿入するため 1 件ずつの挿入なら FIFO が保存されるが、`extend()` は push 後の安定降順ソートゆえ**同値グループが LIFO（逆順）で配信される**（`schedule.rs` L87-118 実測）。design の `to_schedule` は「`Entry::Payload(start_time, TalkCue)` を直接挿入する」とだけ述べ、**insert/extend の別も同時刻順序の不変条件も規定していない**。Invariants の「発火順は `at` 昇順」は同値時の順序を語らない。
+- **Impact**: 実装が `extend` を選ぶと同時刻のテキスト断片・改行が逆順で emo text-layer へ届き、表示文字列が壊れる（R4.1/R4.2 の実質破綻）。同一 tick 内の `ready()` 順序は下流の唯一の順序情報であるため、決定性テスト（R9.3/R9.4）の期待値定義にも直結する。
+- **Suggestion**: 「`to_schedule` は `CueSheet::cues()` の並び順（compile の script 出現順）に **1 件ずつ `insert()`** し、同一 `at` の cue は script 出現順（FIFO）で配信される」を Invariant として明文化。単体/統合テストに「同時刻の Text/NewLine/Text が出現順で届く」ケースを追加。
+- **Traceability**: R4.1, R4.2, R2.5, R9.3, R9.4。
+- **Evidence**: design.md「drive > Service Interface > `to_schedule`」「Invariants（発火順は at 昇順）」と `dola/src/cue/schedule.rs`（`insert` L87-99 / `extend` L106-118: 安定ソート＋末尾 pop の同値逆順）の突合。
 
 ---
 
 ## 設計の強み（1〜2）
 
-- **純粋展開層の切り出しが決定性を型で守る**: `expand(&[Instruction]) -> Timeline` を clock/sink/talk_id/アクター非依存の純粋関数に閉じ込め、R9.4（同一入力→同一観測）を単体テスト主戦場として確保した設計は、実シンボル（`Instruction` は `Clone/Debug/PartialEq` のみ・`Eq/Hash` 無し）とも整合し、`NewLineRatio(f32)` ゆえ `PartialEq` に留める判断まで正確（design.md line 364）。DD-2（Duration 貫通・f64 換算回避）と併せ、上流 `Wait(Duration)`（50ms 換算済み）を再計算しない R2.3 を素直に満たす。
-- **DD-1 の暫定所在＋移譲シームが下流 import を守る**: `StartTalk`/`TalkDone` を `areka_sakura::contract` が暫定所有し、kanade 完成時に re-export へ差し替えて import パスを不変に保つ設計は、kanade 未実装という研究の最大未決事項（research §3.5）へ現実的なコンパイル可能解を与え、Revalidation Triggers にも移譲トリガを明記している。
+- **「配送側半身の再利用」というピボットの核が実ソースで完全に裏付けられている**: `ActorKey` doc の `\0`/`\1` 言及、`CueTarget::{Shell, Balloon}` の消費区分、wintf `CueQueue`（`TimedSchedule<CueCommand>` 内包・Choice 先積み・バリア消費実装）まで、research §9 と design の引用が全て実物と一致。特に **`compile_sheet` の min 正規化が先頭 `\w` を潰す**という不採用理由（`sheet.rs` L104-115 で確認: `\w9テキスト` の 0.45s が 0s へ潰れる）と `CompiledCue` が actor/at を payload 外へ置く不適合の指摘は、安易な既存 API 流用を先回りで封じた高品質な実装前調査である。DD-9 の touch point 実測（wintf の match は全て catch-all・dola の 6 バリアントテスト/doc のみ要更新）も検証と一致した。
+- **終端の高々 1 回が「型＋構造」の二重で閉じている**: `ReplySender::send(self)` の move-consume（型）に加え、全終端経路を「take → send → 直後 Break」の対とし Break＝スレッド消滅で終端後 Close の再返信を構造的に不能化。テスト計画（自然終端後 Close の send 失敗観測・冪等/逆行 Tick・非有限 Tick・先頭待ち保存・as_secs_f64 累積での期待値計算）が設計上の各ガードと 1:1 に対応しており、R6.4/R7.5 の検証可能性が高い。
 
 ---
 
 ## 最終判定
 
-### 判定: NO-GO（軽微・1 箇所の結線修正で GO へ転じ得る）
+### 判定: GO（条件付き——上記 3 件を設計ディスカッション／design 微修正で確定してからタスク生成へ）
 
 ### 根拠
-要件被覆・アーキテクチャ健全性・境界・決定性はいずれも高水準だが、**Critical Issue 1（`spawn_talk` が Close 配送用 `Sender` を型として捨てている）は R7 単一 Close funnel の実装可能性を直接損なう対外インターフェース欠落**であり、実装前に必ず是正すべき。Issue 2/3 は駆動ループ正準形と二重返信防止機構の一本化で、いずれも設計文言レベルの明確化で解消できる。
+前回 NO-GO の 3 イシューは DD-10/DD-11/move-consume 一本化で**全て実シンボル整合の形で解消**され、dola 基盤化の中核主張（cue ドメイン写像・`compile_sheet` 禁止・DD-9 非破壊性・二重発火ハザード）は実ソース照合で全件裏付けられた。残る 3 件は EmptyEnd の reason 固定・ガード初期値・同時刻順序という**いずれも 1〜2 文の設計文言確定で閉じる局所欠陥**であり、アーキテクチャ・境界・要件被覆（R1.1〜R11.4 全 ID がトレーサビリティに出現・写像表で R3.2/R4.2/R5 の実現形まで具体）に構造的欠陥はない。
 
 ### Next Steps
-1. `kiro-design-discussion` で Issue 1〜3 を論点として解決する（特に Issue 1: `spawn_talk` 返り値へ inbox `Sender<SakuraMsg>` を含める／`Start` と `Close` の投函経路を一貫させる）。
-2. 解決を design.md へ反映後、`/kiro-spec-tasks areka-P0-sakura-engine` でタスク生成へ進む。
-3. 純粋 `expand` 層は現状のまま実装着手可（決定性・型契約とも問題なし）。
+1. `kiro-design-discussion` で Issue 1〜3 を確定する（①EmptyEnd→`TalkDone{compiled.end}`、②`last_tick: Option<f64>`＝初期 `None`、③`to_schedule` は cues 順の逐次 `insert()`＋同時刻 FIFO を Invariant 化）。
+2. 反映後 `/kiro-spec-tasks areka-P0-sakura-engine` へ進む。compile 純粋層・contract 層は現状のまま実装着手可能。
