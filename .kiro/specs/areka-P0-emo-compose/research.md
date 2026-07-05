@@ -99,12 +99,18 @@ AtlasTable の**構築経路**（emo-compose がアトラスをどう得るか�
 3. **バックエンド選定（CPU vs D2D）**: 判断材料＝(1)ピクセル忠実性（reduce 等の生ピクセル演算要否・emo2 は overlay のみゆえ CPU 素直）(2)毎フレーム再合成コスト（M-life seriko-loop・O(elements)）(3)スレッド制約（D2D device context 単一スレッド・WUC upload は UI スレッド）(4)golden 安定性（headless・整数演算）。合成コア API はバックエンド非依存に切る。
 4. **座標型の整合**: Element.x/y: i64・Pattern.x/y: i64 vs atlas Point.x/y: i32・trim_offset: i32・Rect: u32。転写先座標算出（配置座標＋trim_offset）と合成先バッファ境界クリップでの型変換・オーバーフロー/負座標クリップ方針を design で確定。
 5. **アトラスをどう受け取るか（API 境界）**: compose() の入力に AtlasTable を借用で渡すか、SurfaceSet→bake を emo-compose 内で行うか。R6.1 は「転写命令列とアトラス（AtlasTable）が与えられたとき」＝**AtlasTable を借用入力とするのが素直**（bake は呼び手/統合層の責務）。pixel test では test 内で MemoryDecoder+bake して渡す。
-6. **surface.append の正確な意味論**: 範囲構文の両端包含（型で確定済）／append が element にも効くか（現行 SurfaceAppend は collisions/animations のみ保持・**elements フィールドが無い**＝append は collision/animation 限定と読める。ukadoc で確認し要件 2.4 の「element・collision・animation のどれに効くか」を実挙動に合わせる）。
+6. **surface.append の正確な意味論** — **【議題2で解決済み】**: ukadoc/satori 実例で確定——(a) `surface.append` は **plain `surfaceN` と異なり「既存 surface のみに追記・非存在 id を新設しない」存在条件付き**（plain `surface1-3` は 1/2/3 を全新設）。(b) ターゲットは単一・カンマ列挙・範囲・**除外 `!`**。(c) append ブロックは **element も持てる**（現行 `SurfaceAppend` は elements 欠落＝転記ギャップ）。(d) 素の `surface1,3`／`surface1-3` も正典書式だが**現行 parser は単一 `parse::<u32>` で破損**（`surface1-3`→id=0 化・`surface1,3`→surface3 黙殺）。**決定: parser は記述のまま忠実転記（多 id ヘッダ・append-element・除外記述子・登場順の単一ストリーム）、意味論（create/append・存在条件・展開）は emo の single-pass fold が担う（要件 2・12.5・Boundary）。**
 7. **入れ子 surface 参照 vs bind 参照の区別**: R7 の「入れ子 surface 参照」と R5 の「bind の pattern0 参照」の合成上の関係整理。atlas の resolve_indirect（Pattern.surface_id を辿る）が参考。循環検出の訪問集合実装は atlas manifest.rs L97-126 が既存参考例。
+
+## 5b. アーキテクチャ決定（議題2追加・要 design 詳細化）
+
+8. **データ管理＝`bevy_ecs` 基盤** — **【議題2で決定】**: `bevy_ecs` は `[workspace.dependencies]` 正式メンバーで **wintf（`src/ecs/` 全域＝window/widget/graphics/clickthrough）と areka 本体が既採用**＝新規依存ではない。emo は wintf UI スレッド常駐ゆえ ECS World の住人。**旧「純粋 std-only 層」前提は失効**し、内部サーフェス合成ツリーを entity/component で管理して大規模サーフェスデータを高速処理する（要件 1.8・10.4/10.6・12.2）。**design 詳細**: (a) component スキーマ（surface/element/bind/animation/collision と layer/transform/method/sort/atlas-ref）、(b) single-pass 構築を system 化するか、(c) **per-ghost World を emo 専有か wintf/ghost と共有か**、(d) seriko（毎フレーム変異）との相互作用（World 共有 mutation か message か）。
+9. **スケール規律（破綻回避の要）**: World は**定義・構造 component のみ保持**、**合成済みビットマップ（1 surface 数百KB〜数MB×多数）は永続保持しない**（要件 10.6）。materialize はオンデマンド、キャッシュ/無効化は emo-present（要件 9.4）。持たせると N surface×MB×ゴーストでメモリ破綻。
+10. **並行モデルへの影響（memory 追随要）**: memory `areka-concurrency-model` は「actor＋channel・大型データ Arc 手渡し」を基調とするが、emo のサーフェス状態は **UI スレッド共有 ECS World** に載る方向＝emo/seriko 間は「World 共有」寄り。design で actor 境界と ECS World の役割分担を確定し、確定後に memory を更新すること。
 
 ## 6. 制約・既知ドリフト
 
-- **Rust 2024・tokio 禁止・新規外部依存なし**（要件 12.1/12.2・workspace 確認）。合成コアは std のみ、tracing（workspace 既存）でログ。
+- **Rust 2024・tokio 禁止**（要件 12.1）。**依存は workspace 既存基盤（`bevy_ecs`・tracing・areka-parsers・areka-emo-atlas）のみ**——旧「std-only」は bevy_ecs 既採用により失効（要件 12.2・議題2）。
 - **失敗経路のログ規律**（記憶 areka-log-first-no-silent-failure）: 欠落 id/未解決 alias/未実装メソッド/循環は warn 以上、合成失敗は error＋Err 戻り値、panic は致命限定＋直前ログ（要件 1.4/3.3/7.3/8.4/10.5）。
 - **premultiplied 一貫性**: SourceOver `dst = src + dst*(1-src_a)`・straight α 混在禁止（要件 6.4）。atlas 頁は既に premultiplied BGRA。
 - **DPI 非持込**: 合成はピクセル等倍＝surface 原寸（要件 6.5）。拡縮は wintf 側。
