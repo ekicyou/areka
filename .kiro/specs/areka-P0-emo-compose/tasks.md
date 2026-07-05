@@ -8,7 +8,7 @@
   - 観測可能な完了状態: `cargo build -p areka-emo-compose` が空実装のまま成功する
   - _Requirements: 12.1, 12.2, 10.4_
 
-- [ ] 1.2 areka-parsers::shell の転記層へ4つの転記ギャップを追加する
+- [x] 1.2 areka-parsers::shell の転記層へ4つの転記ギャップを追加する
   - `SortOrder` enum・`Shell.animation_sort`/`collision_sort`・`Shell.definitions`（登場順の単一定義ストリーム）・`Surface.targets`（多id記述子）・`SurfaceAppend.elements`・`AppendTarget` への除外 variant を追加する
   - 素の `surface` ヘッダの多id形（`N,M` 列挙・`N-M` 範囲）を、既存の append 用ターゲットパーサと共通化して解析する（現行の単一 `parse::<u32>` による破損を是正）
   - `animation-sort`/`collision-sort` の TopLevel 値を破棄せず `Shell` へ値化する
@@ -17,7 +17,7 @@
   - 観測可能な完了状態: `surface1-3` を含む surfaces.txt を parse すると `Surface.targets` に `Range{1,3}` が保持され、以前のように `id=0` へ破損しない
   - _Requirements: 12.5_
 
-- [ ] 1.3 既存構造体リテラルを新フィールドへ機械的に追随させる
+- [x] 1.3 既存構造体リテラルを新フィールドへ機械的に追随させる
   - parsers 自身の既存テスト（validation_tests.rs・decode_tests.rs・parse_tests.rs・model_tests.rs）内の `Surface`/`SurfaceAppend`/`Shell` リテラル構築箇所に新フィールドの初期値を追記する
   - 完了済み `areka-emo-atlas` のテストヘルパ（emo2_e2e.rs・manifest.rs・lib.rs 内のリテラル箇所）にも同様に追随する
   - 追随はテストのアサーション意味を一切変更しない（初期値追加のみ）

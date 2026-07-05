@@ -25,13 +25,46 @@ pub struct Shell {
     pub appends: Vec<SurfaceAppend>,
     /// kero.surface.alias 写像（重複キー保持・出現順保持・要件 8.4）。
     pub aliases: Vec<SurfaceAlias>,
+    /// `animation-sort` の値（記述のまま。未指定は None・既定解釈は下流・要件 12.5(a)/1.6）。
+    pub animation_sort: Option<SortOrder>,
+    /// `collision-sort` の値（同上・未指定は None・none 既定の解釈も下流・要件 12.5(a)/1.6）。
+    pub collision_sort: Option<SortOrder>,
+    /// 登場順の単一定義ストリーム（3 Vec への index 参照・種別間 interleaving を保持・
+    /// データ重複なし・要件 12.5(d)/1.7）。
+    pub definitions: Vec<DefRef>,
+}
+
+/// ソート順の値（`animation-sort`／`collision-sort` の記述のまま。既定の適用は下流・要件 12.5(a)）。
+#[non_exhaustive]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SortOrder {
+    /// 昇順（`ascend`）。
+    Ascend,
+    /// 降順（`descend`）。
+    Descend,
+}
+
+/// 種別間 interleaving を保持する登場順参照ストリームの要素（3 Vec への index・要件 12.5(d)）。
+/// 各 variant の `usize` は対応する Vec 内の位置（データを複製しない index 参照）。
+#[non_exhaustive]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DefRef {
+    /// `Shell.surfaces` の index を指す。
+    Surface(usize),
+    /// `Shell.appends` の index を指す。
+    Append(usize),
+    /// `Shell.aliases` の index を指す。
+    Alias(usize),
 }
 
 /// 1 個の surfaceNNN 定義（要件 4.1）。
 #[derive(Clone, Debug, PartialEq)]
 pub struct Surface {
-    /// surface ID（数値 NNN）。
+    /// surface ID（記述子先頭の代表 id・単一形は従来どおり・多 id 形は先頭ターゲットの値）。
     pub id: u32,
+    /// ヘッダ記述子の忠実転記（単一形は `[Single(id)]`・多 id 形は列挙/範囲を保持・要件 12.5(b)）。
+    /// 範囲展開・実 surface ツリーへの転記は下流の責務。
+    pub targets: Vec<AppendTarget>,
     /// element overlay 群（レイヤインデックス昇順・要件 4.4）。
     pub elements: Vec<Element>,
     /// collision 矩形群（出現順）。
@@ -154,6 +187,8 @@ pub struct SurfaceAppend {
     /// ターゲット指定（ヘッダ数値を第1要素とする単一/範囲の順序付きリスト）。
     /// 範囲の個別 ID 展開・実 surface ツリーへの転記は下流の責務（要件 7.2）。
     pub targets: Vec<AppendTarget>,
+    /// 追記 element 群（append 内 element の転記・従来黙殺していた分・レイヤ昇順・要件 12.5(c)/2.4）。
+    pub elements: Vec<Element>,
     /// 追記 collision 群（通常 surface と同一表現・要件 7.3）。
     pub collisions: Vec<Collision>,
     /// 追記 animation 群（通常 surface と同一表現・要件 7.3）。
@@ -173,6 +208,15 @@ pub enum AppendTarget {
         /// 範囲始点（含む）。
         start: u32,
         /// 範囲終点（含む）。
+        end: u32,
+    },
+    /// 除外指定 `!N`（記述子のまま保持・減算適用は下流の展開時・要件 2.5）。
+    Exclude(u32),
+    /// 除外範囲指定 `!a-b`（両端含む・記述子のまま保持・減算適用は下流・要件 2.5）。
+    ExcludeRange {
+        /// 除外範囲始点（含む）。
+        start: u32,
+        /// 除外範囲終点（含む）。
         end: u32,
     },
 }

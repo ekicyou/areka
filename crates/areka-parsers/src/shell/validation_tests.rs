@@ -18,8 +18,8 @@
 //! - alias:     `KEY,[id,...]` → `SurfaceAlias { key(opaque), ids }`・重複キーは全保持。
 
 use super::model::{
-    AliasKey, Animation, AppendTarget, Collision, CollisionName, Element, ElementPath, Interval,
-    Pattern, Shell, Surface, SurfaceAlias, SurfaceAppend,
+    AliasKey, Animation, AppendTarget, Collision, CollisionName, DefRef, Element, ElementPath,
+    Interval, Pattern, Shell, Surface, SurfaceAlias, SurfaceAppend,
 };
 use super::parse;
 
@@ -85,6 +85,8 @@ kero.surface.alias
     let expected = Shell {
         surfaces: vec![Surface {
             id: 10,
+            // 単一形ヘッダ `surface10` の代表 id 10・記述子は [Single(10)]（要件 12.5(b)）。
+            targets: vec![AppendTarget::Single(10)],
             // element は入力順（2,0,1）に依らずレイヤ昇順（0,1,2）で保持される（要件 4.4）。
             elements: vec![
                 Element {
@@ -193,6 +195,8 @@ kero.surface.alias
                 },
                 AppendTarget::Single(2200),
             ],
+            // append 内 element は本断片に無いため空（従来黙殺→転記対象・要件 12.5(c)）。
+            elements: vec![],
             collisions: vec![Collision {
                 index: 0,
                 left: 52,
@@ -227,6 +231,17 @@ kero.surface.alias
                 key: AliasKey::new("6".to_string()),
                 ids: vec![3106, 3206],
             },
+        ],
+        // sort キーは本断片に無いため未指定（要件 12.5(a)）。
+        animation_sort: None,
+        collision_sort: None,
+        // 登場順ストリーム: surface10 → surface.append10 → alias 3 エントリ（要件 12.5(d)）。
+        definitions: vec![
+            DefRef::Surface(0),
+            DefRef::Append(0),
+            DefRef::Alias(0),
+            DefRef::Alias(1),
+            DefRef::Alias(2),
         ],
     };
 
@@ -274,6 +289,9 @@ fn comment_and_blank_only_input_yields_empty_shell() {
             surfaces: vec![],
             appends: vec![],
             aliases: vec![],
+            animation_sort: None,
+            collision_sort: None,
+            definitions: vec![],
         }
     );
 }

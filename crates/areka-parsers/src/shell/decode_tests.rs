@@ -26,6 +26,9 @@ fn empty_input_yields_empty_shell() {
             surfaces: vec![],
             appends: vec![],
             aliases: vec![],
+            animation_sort: None,
+            collision_sort: None,
+            definitions: vec![],
         }
     );
 }
@@ -41,6 +44,9 @@ fn header_only_is_not_retained() {
             surfaces: vec![],
             appends: vec![],
             aliases: vec![],
+            animation_sort: None,
+            collision_sort: None,
+            definitions: vec![],
         }
     );
 }
@@ -56,6 +62,7 @@ fn surface_zero_block_extracts_id_zero() {
         shell.surfaces[0],
         Surface {
             id: 0,
+            targets: vec![AppendTarget::Single(0)],
             elements: vec![Element {
                 layer: 0,
                 path: ElementPath::new("surface0.png".to_string()),
@@ -101,6 +108,9 @@ fn missing_header_does_not_fail() {
             surfaces: vec![],
             appends: vec![],
             aliases: vec![],
+            animation_sort: None,
+            collision_sort: None,
+            definitions: vec![],
         }
     );
 }

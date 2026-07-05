@@ -74,14 +74,14 @@ fn append_target_single_and_range() {
     let range = AppendTarget::Range { start: 2100, end: 2110 };
     match single {
         AppendTarget::Single(id) => assert_eq!(id, 10),
-        AppendTarget::Range { .. } => panic!("expected Single"),
+        _ => panic!("expected Single"),
     }
     match range {
         AppendTarget::Range { start, end } => {
             assert_eq!(start, 2100);
             assert_eq!(end, 2110);
         }
-        AppendTarget::Single(_) => panic!("expected Range"),
+        _ => panic!("expected Range"),
     }
     // 記述子どうしは値等価。
     assert_eq!(AppendTarget::Single(10), AppendTarget::Single(10));
@@ -97,6 +97,7 @@ fn append_target_single_and_range() {
 fn derives_clone_debug_partial_eq() {
     let s = Surface {
         id: 0,
+        targets: vec![AppendTarget::Single(0)],
         elements: vec![Element {
             layer: 0,
             path: ElementPath::new("a/b.png".to_string()),
@@ -123,6 +124,7 @@ fn assembled_shell_preserves_structure_and_duplicate_alias_keys() {
     let shell = Shell {
         surfaces: vec![Surface {
             id: 0,
+            targets: vec![AppendTarget::Single(0)],
             elements: vec![Element {
                 layer: 0,
                 path: ElementPath::new("surface0.png".to_string()),
@@ -154,6 +156,7 @@ fn assembled_shell_preserves_structure_and_duplicate_alias_keys() {
                 AppendTarget::Single(10),
                 AppendTarget::Range { start: 2100, end: 2110 },
             ],
+            elements: vec![],
             collisions: vec![],
             animations: vec![],
         }],
@@ -168,6 +171,9 @@ fn assembled_shell_preserves_structure_and_duplicate_alias_keys() {
                 ids: vec![10, 11],
             },
         ],
+        animation_sort: None,
+        collision_sort: None,
+        definitions: vec![],
     };
 
     // surface 構造。

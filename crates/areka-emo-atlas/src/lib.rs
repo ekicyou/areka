@@ -184,7 +184,7 @@ mod bake_entry_tests {
     use crate::normalize::{AlphaParams, UseSelfAlpha};
     use crate::pack::PackConfig;
     use crate::table::SetId;
-    use areka_parsers::shell::{Element, ElementPath, Surface};
+    use areka_parsers::shell::{AppendTarget, Element, ElementPath, Surface};
     use std::path::Path;
 
     // ---- 合成モデルビルダ（emo2 相当構造・実 fixture パースは統合 task 3.2 送り）----
@@ -202,6 +202,7 @@ mod bake_entry_tests {
     fn surface(id: u32, elements: Vec<Element>) -> Surface {
         Surface {
             id,
+            targets: vec![AppendTarget::Single(id)],
             elements,
             collisions: Vec::new(),
             animations: Vec::new(),
