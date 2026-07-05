@@ -94,6 +94,16 @@ impl EmoWorld {
         crate::fold::fold_shell(&mut self.world, shell);
     }
 
+    /// アトラス束縛（`resolve` は本呼び出しの一度きり・要件 4.3）。
+    ///
+    /// `build` 後・compose 前に一度呼ぶ（design Preconditions）。全 surface entity の
+    /// `SurfaceMaster.elements` を `AtlasTable::resolve` で `ElementId` へ解決し、平行な
+    /// [`AtlasBinding`] を各 entity へ挿入する。未解決 element はパニックせず `warn`＋`None`。
+    /// 束縛後の compose 経路に `resolve` は現れない（毎フレーム O(1) の `entry` 引き）。
+    pub fn bind_atlas(&mut self, atlas: &areka_emo_atlas::AtlasTable, set: areka_emo_atlas::SetId) {
+        crate::atlas_bind::bind_atlas(&mut self.world, atlas, set);
+    }
+
     /// 正規化 Surface 定義の公開クエリ（要件 1.3・存在しない id は `None`）。
     pub fn surface(&self, id: u32) -> Option<&SurfaceMaster> {
         let entity = *self.world.resource::<SurfaceIndex>().0.get(&id)?;

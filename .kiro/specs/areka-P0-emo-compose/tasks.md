@@ -113,7 +113,7 @@
   - _Requirements: 1.5, 1.7, 2.3, 10.1_
   - _Depends: 3.2, 3.3, 3.4, 3.5, 3.6_
 
-- [ ] 4. Core: AtlasBinder によるアトラス束縛を実装する
+- [x] 4. Core: AtlasBinder によるアトラス束縛を実装する
   - 正規化elementの`ElementPath`を`AtlasTable::resolve`で一度きり`ElementId`へ束縛し`AtlasBinding`コンポーネントへ挿入する
   - 未解決要素はパニックせずwarnログに記録する
   - 観測可能な完了状態: MemoryDecoder+bakeで構築したAtlasTableに対し束縛を実行すると、既知パスの要素がElementIdを持ち未知パスがNoneでwarnログを出す
@@ -217,3 +217,4 @@
 - 3.1 (world.rs): design 指定パス `areka_parsers::shell::SortOrder` を解決するため parser の `shell/mod.rs` に `SortOrder` の `pub use` を additive 追加（task 1.2 が定義したが未 re-export だった）。fold タスク（3.2〜3.7）が `DefRef` を使う場合は同様に `shell/mod.rs` へ `DefRef` の re-export が必要（現状未 re-export）。`SurfaceMaster` は normalized.rs で `#[derive(Component)]` 済み（本型自体が component）。`EmoWorld::build` はリソース挿入後 `populate_from_shell(&mut self, shell)` を一度呼ぶ骨組みで、fold はこの1関数へ差し込む。
 - 3.2 (fold.rs): `expand_targets(&[AppendTarget]) -> Vec<u32>`（design スケッチの `impl Iterator` から Vec へ・決定性/デバッグ容易性。呼び出しは `for` 反復のみで挙動同一）が plain(3.2)/append(3.3)/exclusion(3.4) 全経路の共通展開口。`fold_shell(&mut World, &Shell)` が `shell.definitions`（DefRef 登場順ストリーム）を single-pass 走査し `DefRef::{Surface,Append,Alias}` を dispatch。`#[non_exhaustive]` な `DefRef`/`AppendTarget` には防御的 wildcard arm（warn・非パニック）必須。
 - 3.6 (world.rs): **新規実装不要——task 3.1 の `EmoWorld::build` 骨組みで既に充足**。`build` が `shell.animation_sort`/`collision_sort` を `ShellSettings` リソースへ引き継ぎ、`animation_sort()` が `unwrap_or(SortOrder::Descend)`・`collision_sort()` が Option 素通しで ukadoc 既定（descend/none）を返す。受け入れ条件（未指定 Shell を build→`animation_sort()==Descend`）は既存テスト `world::tests::default_sort_orders`／`explicit_sort_orders_are_preserved` が直接検証済み（1.6/5.6）。fold 段は sort に触れない（build が担う）ため 3.6 に diff は生じない。
+- 4 (atlas_bind.rs): 実 atlas API 正本シグネチャ（plan/blit タスク 5.x/6.x で必須）— `AtlasTable::resolve(&self, set: SetId, rel_path: &str) -> Option<ElementId>`（table.rs・**構築時一度きり**）／`AtlasTable::entry(...)`（ホットパス O(1)・resolve 禁止）。`ElementId(pub u32)`／`SetId(pub u32)`（table.rs、crate root re-export）。bake キー＝`element.path.as_str().to_string()`（manifest.rs:88）＝bind キー`ElementPath.as_str()` と同一規約ゆえ既知パス Some・未知 None。headless AtlasTable 構築は `MemoryDecoder`+`bake(SurfaceSet, decoder, PackConfig)`＋`AlphaParams{use_self_alpha:UseSelfAlpha::On}`（全て crate root 露出・emo-atlas の bake テストヘルパをミラー）。`AtlasBinding(Vec<Option<ElementId>>)` は `SurfaceMaster.elements` と index 平行。World 借用は「不変クエリで (entity, AtlasBinding) 収集→`entity_mut().insert()`」の2段で衝突回避。
