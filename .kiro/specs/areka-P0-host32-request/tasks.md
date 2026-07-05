@@ -1,6 +1,6 @@
 # Implementation Plan
 
-- [ ] 1. Foundation: 環境検証・timeout基盤・エラー型骨格
+- [x] 1. Foundation: 環境検証・timeout基盤・エラー型骨格
 - [x] 1.1 (P) vendors/pasta submodule 展開確認と pasta request 署名照合の記録参照
   - `git submodule status` で `vendors/pasta` が populated であることを確認する（未展開なら `git submodule update --init` で展開する）
   - research.md §7.2 記載のバイト照合結果（commit `048d646`・`RequestFn` 署名一致）を参照し、実装前提として記録する
@@ -21,7 +21,7 @@
   - _Requirements: 5.1, 5.2, 5.3, 5.4_
   - _Boundary: error.rs (shiori-host32-host)_
 
-- [ ] 2. Core: host x64 SHIORI/3.0 codec（純関数）
+- [x] 2. Core: host x64 SHIORI/3.0 codec（純関数）
 - [x] 2.1 request 組立（build_request）実装
   - `GET`/`NOTIFY SHIORI/3.0` の request line、`Reference0..N` 連番、`Charset`（UTF-8）／`Sender`（areka）／`ID`／`SecurityLevel`（local）ヘッダ、CRLF 区切り、空行終端を組み立てる
   - イベント名は汎用の `ID` 値として受け取り、特定イベントに固有の分岐や既定 Reference を埋め込まない
@@ -46,7 +46,7 @@
   - _Depends: 1.2, 1.3, 2.1, 2.2_
   - _Boundary: Shiori3Client, lib.rs (shiori-host32-host)_
 
-- [ ] 4. Core: helper i686 request 実呼出
+- [x] 4. Core: helper i686 request 実呼出
 - [x] 4.1 (P) ShioriByteProxy::request メソッド実装（HGLOBAL 非対称契約）
   - `global_alloc_copy` で入力を `GMEM_FIXED` 化し `request(hreq, &mut len)` を呼び出す。入力 HGLOBAL は自ら解放しない（callee-free）
   - 応答 HGLOBAL から `*len` バイトを copy した後 `GlobalFree` する（caller-free）
@@ -73,7 +73,7 @@
   - _Requirements: 6.1, 6.2, 6.4, 6.8, 6.9_
   - _Boundary: testdll request fixture (shiori-host32-testdll)_
 
-- [ ] 6. Integration: E2E 結線とテスト
+- [x] 6. Integration: E2E 結線とテスト
 - [x] 6.1 決定的 request E2E テスト
   - `shiori_load_e2e.rs` の骨格を踏襲する（`resolve_helper_exe`/`resolve_testdll`、`HelperGuard`、env→target 解決＋silent skip 禁止 panic）
   - helper 越し fixture へテスト GET を送出し `Value` 抽出を assert、テスト NOTIFY を送出し 204 破棄を assert する
