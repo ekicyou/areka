@@ -44,7 +44,7 @@ use windows::Win32::UI::WindowsAndMessaging::{
     WS_EX_LAYERED,
 };
 use windows::core::HSTRING;
-use wintf_winmsg_executor::util::{get_instance_handle, Window as LibWindow, WindowType};
+use crate::executor::util::{get_instance_handle, Window as LibWindow, WindowType};
 
 use crate::ecs::HasGraphicsResources;
 use crate::ecs::window::{Window, WindowHandle, WindowPos, WindowStyle};

@@ -1,0 +1,186 @@
+# Implementation Plan
+
+- [ ] 1. Foundation: 契約層（talk 契約型・メッセージ型）
+- [x] 1.1 クレート雛形と talk 契約型（TalkId/StartTalk/TalkDone）の実装
+  - `crates/areka-kanade` を新設し、Cargo.toml に依存（areka-actor・shiori-host32-host・tracing・thiserror）を宣言する（workspace は `crates/*` glob で自動収載のため手動登録不要）。クレート rustdoc（運行表正本・talk 契約正本の宣言）を記す lib.rs の雛形も併せて用意する
+  - talk 起動契約の正本型（talk の一意識別子・起動要求・再生完了通知）を、host32 型にも areka-actor 型にも依存しない形で定義する（将来の契約クレート切り出しを機械的移動で完結させるため）
+  - script 文字列は不透明のまま保持し、内容を解釈するロジックを一切持たないことを型設計で保証する
+  - 観測可能な完了条件: `cargo check -p areka-kanade` が新設クレート単体で成功し、talk 契約型に対する基本的な生成・比較の単体テストが green になる
+  - _Requirements: 2.1, 2.2, 2.4_
+  - _Boundary: クレート雛形・lib.rs・talk.rs_
+
+- [x] 1.2 kanade/shiori 境界のメッセージ型と運行構成の実装
+  - kanade アクター inbox（起動・Tick・再生完了通知・close 指示・強制終了指示・死活報告・停止）と、shiori 呼出境界（GET/NOTIFY 呼出・unload・停止）のメッセージ型を定義する
+  - GET と NOTIFY の別を型で区別し、NOTIFY の結果が Value を運べない構造にする（応答から talk を生成できないことを型で保証する）
+  - SHIORI 呼出失敗を区別語彙（タイムアウト／SHIORI エラー／helper 死活／接続確立失敗）として保持するエラー型と、単調ミリ秒による時刻表現・close 待ち上限を含む運行構成の型を定義する
+  - 観測可能な完了条件: `cargo check -p areka-kanade` が成功し、メッセージ型が `Send + 'static` な所有データのみで構成されることを単体テストまたは型検査で確認できる
+  - _Requirements: 3.2, 4.1, 4.4, 5.1, 5.2, 6.1_
+  - _Boundary: msg.rs_
+  - _Depends: 1.1_
+
+- [ ] 2. Core: schedule 純粋運行状態機械
+- [x] 2.1 (P) 運行状態の型定義・横断遷移・step 入口の実装
+  - 運行フェーズ（boot 各待ち点・定常運転・close 各待ち点・終了・停止）と、フェーズ外の帳簿（直近 Tick 時刻・talk 識別子の採番カウンタ・保留中の close 指示）を保持する運行状態を定義する
+  - 唯一の遷移入口（現在の状態と入力から次の状態と副作用指示の列を返す純粋な関数）を用意し、各運行フェーズへの分岐は個別モジュール呼び出しのスタブとして骨格化する（後続タスクが分岐先の中身のみを実装できるようにする）
+  - 由来・状態を問わない横断遷移（再生完了通知の quit フラグが真の場合／強制終了指示／死活報告・呼出失敗）を、どのフェーズからでも終了系列へ進む共通ロジックとして実装する
+  - 未知の talk 識別子に対する再生完了通知・不整合な指示受領はエラーログ記録の上で現在のフェーズを維持して継続する
+  - 観測可能な完了条件: 横断遷移（quit 真・強制終了・死活報告→終了系列）と未知 talk 識別子継続の単体テストが green になる
+  - _Requirements: 2.4, 2.5, 3.2, 4.3, 4.4, 5.4, 6.1, 6.2, 6.4_
+  - _Boundary: schedule（mod.rs）_
+  - _Depends: 1.1, 1.2_
+
+- [x] 2.2 (P) ukadoc Reference 表の実装（イベント発火順序の単一正本）
+  - boot 系列（初期化通知・起動種別・起動・基盤バージョン通知）・定常運転（毎秒変化）・close（終了要求）の各イベントについて、NOTIFY／GET の別と Reference 構成を設計書の Reference 表どおりに組み立てる関数群を実装する
+  - 起動種別イベントは固定値（vanish count 未使用・毎回同一の運行）で構成し、204 フォールスルーで起動イベントへ進む値を返す
+  - 定常運転の毎秒イベントは、talk 再生可能時と再生不能時とで異なる Reference 構成（可否フラグ）を返す
+  - これらのイベント構成関数は、観測ハーネス（4.1）が同一の値を fixture の期待値として再利用できるよう、クレートの公開面として提供する（運行状態機械の内部実装自体は非公開のまま・DD-9 の例外）
+  - 観測可能な完了条件: 各イベント構成関数の単体テストが、設計書の Reference 表と一致する Method・Reference 値を返すことを検証して green になる
+  - _Requirements: 1.5_
+  - _Boundary: schedule/events_
+  - _Depends: 1.2_
+
+- [x] 2.3 (P) boot 系列遷移の実装
+  - 起動指示受領から、初期化通知→起動種別問い合わせ→（応答なしなら）起動イベント→基盤バージョン通知、という運行の正典順序を状態機械として実装する
+  - 起動種別問い合わせにスクリプトが返った場合は、`OnBoot` 相当の起動イベントを飛ばして再生要求へ進む（正典のフォールスルー打ち切り）
+  - 各段階でスクリプトが返った場合は、一意な識別子を付与した再生起動要求を発行する
+  - 観測可能な完了条件: 単体テストで、起動指示から基盤バージョン通知完了までの全遷移と、フォールスルー打ち切り分岐が期待どおりの副作用列を生成することを確認して green になる
+  - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.6, 2.1, 2.3_
+  - _Boundary: schedule/boot_
+  - _Depends: 2.1, 2.2_
+
+- [x] 2.4 (P) 定常運転・pump ゲートの実装
+  - 起動系列完了後の定常運転状態で、外部から注入された Tick を受けて毎秒イベントを発行するゲートを実装する
+  - 再生中でない場合は問い合わせとして、再生中の場合は正典の意味論に従い応答を無視する形で発行し分ける（重複調停を発生源で断つ）
+  - 起動系列未完了または close 握手中・終了系列中は毎秒イベントを発行しないゲートとし、close が拒否された場合は定常運転へ復帰して発行を再開する
+  - 毎秒イベントにスクリプトが返った場合は、一意な識別子を付与した再生起動要求を発行する
+  - 観測可能な完了条件: {起動中, 定常運転(再生中でない), 定常運転(再生中), close 握手中以降} × Tick の組み合わせを表駆動で検証する単体テストが期待どおりの発行有無・発行種別で green になる
+  - _Requirements: 2.1, 2.3, 3.1, 3.3, 3.4_
+  - _Boundary: schedule/steady_
+  - _Depends: 2.1, 2.2_
+
+- [x] 2.5 (P) close 握手・終了系列の実装
+  - close 指示受領から終了要求イベントを発行し、応答スクリプトを再生起動要求として配送した上で、対応する再生完了通知を受け取るまで運行を保留する
+  - 再生完了通知の quit フラグが偽であれば終了させず定常運転へ復帰し（終了拒否）、真であれば終了系列へ進む
+  - 終了要求イベントへの応答が「応答なし」の場合は、追加のイベントを発行せず無言のまま終了系列へ直行する
+  - 再生完了待ちに時刻を基準とした上限を設け、Tick 受領時に上限超過を判定してエラーログの上で終了系列を継続する（Tick 未受領のまま握手に入った場合は、最初の Tick 受領時点を起点として上限を設定する）
+  - 観測可能な完了条件: 単体テストで、応答スクリプトあり（quit 真／偽の両方）・応答なし（無言終了）・待ち時間超過の 4 分岐すべてが期待どおりの遷移になることを確認して green になる
+  - _Requirements: 2.1, 2.4, 4.1, 4.2, 4.5, 4.6, 4.7_
+  - _Boundary: schedule/close_
+  - _Depends: 2.1, 2.2_
+
+- [ ] 3. Integration: ランタイム層と SHIORI 統合層
+- [x] 3.1 (P) kanade アクターシェルの実装
+  - 運行状態機械を起動する独立スレッドアクターを実装し、受領したメッセージを入力へ変換して状態機械へ渡す
+  - 状態機械が返した SHIORI 呼出・unload 指示は、応答を受け切ってから即座に次の入力として状態機械へ再投入する（同時に進行する呼出は常に高々 1 つ）
+  - 再生起動要求は配送先へ送出し、終了系列完了の指示ではアクターを停止する
+  - 送出先が切断された場合（再生起動要求の宛先切断・SHIORI 呼出境界の切断）はエラーログを記録した上で相応の運行継続または終了系列へ倒す
+  - 全ての指示送信元が切断された場合に宙吊りにならず正常終了し、停止の完了が呼び手から観測できることを保証する
+  - 観測可能な完了条件: 停止観測（起動→join 成功）・送出失敗時のエラーログ記録・全送信元切断での正常終了、を検証する単体テストが green になる
+  - _Requirements: 2.1, 4.8, 4.9, 6.2, 6.3_
+  - _Boundary: actor.rs_
+  - _Depends: 2.1, 2.2, 2.3, 2.4, 2.5_
+
+- [x] 3.2 (P) shiori real アクターの実装
+  - 既存の SHIORI 出口 API を専有スレッドで包み、GET／NOTIFY／unload の呼出をメッセージ境界越しに受け付けるアクターを実装する（接続手順自体は呼び手が用意する接続クロージャに委ねる）
+  - 呼出結果（スクリプトあり／なし・通知完了）と、区別語彙を保った呼出失敗（タイムアウト／SHIORI エラー／helper 死活／接続確立失敗）とを、既存 API の戻り値をそのまま機械的に写像して返す
+  - unload 呼出は暫定実装（接続資材の解放）で応答を返し、正規の unload 経路が別ユニットで確立された際に差し替え可能な境界を保つ
+  - 接続確立に失敗した場合は死活報告として通知し、受信ループには入らず終了する。shiori アクター境界の受理規約を rustdoc（shiori/mod.rs）として記す
+  - 観測可能な完了条件: 偽の接続クロージャ（成功・各失敗語彙・unload 応答を差し替え可能にしたテスト用スタブ）を用いた単体テストのみで、GET/NOTIFY/unload の往復・各失敗語彙への機械的写像・接続失敗時の死活報告を、実 helper（5）に頼らず自己完結して確認できる
+  - _Requirements: 5.1, 5.2, 5.3, 6.1_
+  - _Boundary: shiori/real・shiori/mod.rs_
+  - _Depends: 1.2_
+
+- [ ] 4. Validation: mock 結線による決定的統合観測
+- [x] 4.1 mock 観測ハーネス基盤とテストエントリポイントの実装
+  - SHIORI 呼出境界と同一の型を受け取り、fixture 表（初期化通知→受理・起動種別→応答なし・起動→固定スクリプト・基盤バージョン通知→受理・毎秒イベント→応答なし基調で指定タイミングにスクリプト・終了要求→シナリオに応じてスクリプトまたは応答なし・unload→完了）に従って即時応答する mock SHIORI アクターを実装する
+  - 再生起動要求を受け取り、受領を記録した上でシナリオ指示（quit 真偽）に応じて再生完了通知を返す mock 再生系宛先を実装する
+  - 受理した呼出（種別・イベント名・Reference 構成）を記録列として蓄積する仕組みと、期限付き待機によるハング検出ヘルパを用意する
+  - fixture の期待 Reference 値は、公開された Reference 表構成関数（2.2）から導出し、fixture・検証・実装が単一の正本を共有するようにする
+  - 後続の統合テスト（4.2〜4.6・5）が個別のテストファイルを追加するだけで済むよう、テストエントリポイントに全テストモジュールの宣言を先出しで用意する（この時点では各モジュール本体は空のプレースホルダでよい）
+  - 観測可能な完了条件: mock SHIORI アクターと mock 再生系宛先を単独で駆動する最小の疎通テストが green になり、テストエントリポイント経由で空のプレースホルダモジュールがすべてコンパイルされる
+  - _Requirements: 7.1_
+  - _Boundary: tests/common・tests エントリポイント_
+  - _Depends: 1.1, 1.2, 2.2_
+
+- [x] 4.2 (P) 主観測（起動から終了完走までの単一 pass/fail）の実装
+  - 自身のテストファイルにのみ実装を追加する（テストエントリポイントのモジュール宣言は 4.1 で用意済みのため変更しない）
+  - mock 結線の上で、起動指示から毎秒 Tick 数回、close 指示、終了完了までの運行全体を単一のテストとして駆動する
+  - (a) 起動系列が正典順序で発火したこと（NOTIFY／GET の別・Reference 構成込み）、(b) スクリプト受領から再生起動要求が宛先に到達したこと、(c) close 指示から再生完了通知を待って終了系列が完走したこと、を単一の合否として検証する
+  - 実時間の待機を用いず、時刻はすべて注入した Tick のみで進行させ、繰り返し実行しても同一の結果になることを確認する
+  - 観測可能な完了条件: 上記単一テストが複数回連続実行しても同一結果で green になる
+  - _Requirements: 7.1, 7.2, 7.3_
+  - _Boundary: tests/full_run_test_
+  - _Depends: 4.1, 3.1_
+
+- [x] 4.3 (P) 起動系列の統合検証の実装
+  - 自身のテストファイルにのみ実装を追加する（テストエントリポイントのモジュール宣言は 4.1 で用意済みのため変更しない）
+  - mock 結線を用いて、起動指示から起動系列完了までの記録列が、順序・NOTIFY／GET の別・Reference 構成のすべてにおいて正典と完全一致することを検証する
+  - 観測可能な完了条件: 起動系列の記録列と期待列の完全一致を検証するテストが green になる
+  - _Requirements: 1.5_
+  - _Boundary: tests/boot_test_
+  - _Depends: 4.1, 3.1_
+
+- [x] 4.4 (P) 定常運転の統合検証の実装
+  - 自身のテストファイルにのみ実装を追加する（テストエントリポイントのモジュール宣言は 4.1 で用意済みのため変更しない）
+  - mock 結線を用いて、応答なし時に再生起動要求が発生しないこと、散発的なスクリプト応答から一意な識別子付きの再生起動要求が発生すること、再生中の Tick では毎秒イベントが応答を無視する形で発行されることを検証する
+  - 観測可能な完了条件: 上記 3 パターンを検証する統合テストが green になる
+  - _Requirements: 2.1, 2.3, 3.3_
+  - _Boundary: tests/steady_test_
+  - _Depends: 4.1, 3.1_
+
+- [x] 4.5 (P) close 握手の統合検証の実装
+  - 自身のテストファイルにのみ実装を追加する（テストエントリポイントのモジュール宣言は 4.1 で用意済みのため変更しない）
+  - mock 結線を用いて、終了拒否（quit 偽→定常運転復帰後に毎秒イベント発行が再開すること）・無言終了（応答なし→追加イベントなしで終了系列へ直行すること）・再生完了待ちの時間超過・強制終了指示による直行、の各シナリオを検証する
+  - 観測可能な完了条件: 上記 4 シナリオそれぞれの終了系列到達または定常復帰を検証する統合テストが green になる
+  - _Requirements: 3.4, 4.2, 4.4, 4.5, 4.6, 4.7_
+  - _Boundary: tests/close_test_
+  - _Depends: 4.1, 3.1_
+
+- [x] 4.6 (P) 失敗経路の統合検証の実装
+  - 自身のテストファイルにのみ実装を追加する（テストエントリポイントのモジュール宣言は 4.1 で用意済みのため変更しない）
+  - mock 結線を用いて、区別語彙ごとの呼出失敗が観測可能な終了状態へ遷移すること、死活報告受領で観測可能な停止へ遷移すること、未知の talk 識別子に対する再生完了通知が運行を継続すること、全ての指示送信元切断で宙吊りにならず正常終了し停止が観測できることを検証する
+  - 観測可能な完了条件: 上記のケースすべてを網羅した統合テストが green になる
+  - _Requirements: 2.5, 4.8, 4.9, 5.4, 6.1, 6.2_
+  - _Boundary: tests/failure_test_
+  - _Depends: 4.1, 3.1_
+
+- [x] 5. env-gate 実 helper 追験の実装
+  - 自身のテストファイルにのみ実装を追加する（テストエントリポイントのモジュール宣言は 4.1 で用意済みのため変更しない）
+  - 環境変数ゲートが未設定の場合は既存の慣行どおり無言で skip し、設定時のみ実行する単一のテストとして、実 32bit helper への接続（接続・応答待ち・読み込み手順）から起動運行・毎秒 Tick 数回・close 運行までの完走を、shiori real アクター（3.2）越しに追験する
+  - 応答内容は実際の会話エンジンに依存するため、スクリプトの内容自体ではなく「スクリプトまたは応答なしのいずれかで運行が完走する」ことを検証対象とする
+  - 親メッセージ専用窓が同一プロセス内で高々 1 つという既知制約を踏まえ、単一のテストに集約して実行する
+  - 観測可能な完了条件: 環境変数未設定時は skip され、設定時は実行されて起動から close までの完走が確認できる（既存の env-gate 慣行と同じ振る舞い）
+  - _Requirements: 5.3, 7.4_
+  - _Boundary: tests/real_helper_test_
+  - _Depends: 4.1, 3.2_
+
+- [ ] 6. 決定論的網羅の補完（開発者指示・2026-07-05: 決定論的にテスト可能な領域は全てカバーする）
+- [x] 6.1 純粋 step 層の失敗・防御アームのログ発火検証（Req 6.1・6.3）
+  - 純粋状態機械 `step()` はテストスレッド上で同期実行されるため、`tracing::subscriber::with_default`（または custom Layer）で発火イベントを捕捉できる。全ての失敗アーム（`shiori_down`／`shiori_failed`／`unknown_talk_done`／`unload_failed`／`close_deadline_exceeded`）と防御 warn! アーム（`boot_ignored`／`unexpected_reply`／`steady_value_during_talk`／各 `*_unexpected`／`*_input_ignored` 等）が、`target="kanade"`・期待 `event` フィールド・期待レベル（error/warn）で必ずログを発火することを検証し、「ログ無しの失敗経路が存在しない」（Req 6.3）を実行可能テストで担保する
+  - ログ捕捉は in-source（schedule/ の `#[cfg(test)]`）に置く。`tracing-subscriber` を dev-dep として追加してよい（workspace 依存・areka/wintf に前例・テスト専用）か、`tracing` のみで最小 Subscriber を自作する
+  - 観測可能な完了条件: 各失敗・防御アームについて、対応する `step()` 呼出が期待 event/level のログを 1 件以上発火することを assert するテストが green になる
+  - _Requirements: 6.1, 6.3_
+  - _Boundary: schedule（in-source #[cfg(test)]）・Cargo.toml dev-dep_
+  - _Depends: 2.1_
+- [x] 6.2 アクターシェルの失敗ログと応答 oneshot 切断（Dropped）経路の検証（Req 6.1・6.2）
+  - アクターシェルの往復ヘルパ（`round_trip`／`send_shiori`）はテストスレッドから直呼びでき、そのログはテストスレッド上で発火するため捕捉可能。(a) shiori 送出失敗（`send_shiori` が Err）で `shiori_send_failed` error! が発火し `Failed(Ipc)` へ写像されること、(b) 応答 oneshot が Dropped（受領後に reply を送らず drop）で `shiori_reply_dropped` error! が発火し `Failed(Ipc)` へ写像されること（gap: 送出成功後の reply-only drop 経路の専用検証）を in-source actor.rs テストで検証する
+  - `start_talk_send_failed`（アクタースレッド上・drive ループ内）は既存 `sakura_disconnected_start_talk_failure_continues_run` が挙動（継続）を被覆済み。ログ発火の実 assert がアクタースレッド跨ぎで困難な場合は、その旨を記録し挙動テスト＋レビュー担保に委ねてよい
+  - 観測可能な完了条件: shiori 送出失敗・reply Dropped の 2 経路が、`Failed(Ipc)` への写像と対応 error! ログ発火を伴うことを検証するテストが green になる
+  - _Requirements: 6.1, 6.2_
+  - _Boundary: actor.rs（in-source #[cfg(test)]）_
+  - _Depends: 3.1, 6.1_
+- [x] 6.3 ブロッキング呼出中の Tick catch-up の統合検証（DD-2・in-flight ≤ 1）
+  - 実経路では SHIORI 呼出がブロックし得るため、その間に溜まった Tick が解除後に順次処理される（catch-up）。mock は即応ゆえ通常この窓は生じない。指定呼出の reply を保留し「要求受領」をテストへ通知してから解放する **blocking mock shiori** を common に純粋追加し、(a) 最初の OnSecondChange GET でブロック→その間に複数 Tick を投入（inbox に滞留）→解放、で滞留 Tick が順に処理され欠落・重複が生じないこと、(b) 1 つの論理 Tick に対し高々 1 つの in-flight 呼出であること（重複 OnSecondChange が起きない）を決定的に検証する
+  - 同期は「要求受領通知＋解放ゲート」で行い sleep を用いない（4.4 の gated ハーネスと同じ race-free 規律）
+  - 観測可能な完了条件: ブロック中に投入した Tick 群が解除後に順序どおり処理され、記録列が期待どおり（欠落・重複なし）になることを検証する統合テストが green になる
+  - _Requirements: 3.1, 3.2_
+  - _Boundary: tests/steady_test（または新規 tests/catchup_test）・common/mod.rs（blocking mock 追加）・tests/kanade.rs（新規モジュール宣言時のみ）_
+  - _Depends: 4.1, 3.1_
+
+## Implementation Notes
+
+- 2.2 完了時: `schedule/mod.rs` の `force_quit` は OnClose を **NOTIFY** としてインライン構築している（DD-10 best-effort・events.rs は GET の `on_close` のみ提供）。GET/NOTIFY で別物ゆえ events への移譲は必須ではないが、close 系列を触るタスク（2.5）が OnClose-NOTIFY 構成子を events に足して一本化するのは任意で可。
+- 3.1 完了時: actor.rs の駆動モデルは「バッチ全実行→最後の往復応答のみ再投入」（ForceQuit の `[OnClose NOTIFY, ShioriUnload]` を順に送出するため・DD-10）。StartTalk 送出失敗（sakura 切断）は error!＋継続で、schedule State の active talk クリアは行わない（境界外＝shell は Phase を変更不能）。滞留した stale TalkDone は schedule の未知 talk_id 防御アームが安全に吸収する。4.x 統合テストはこの前提で観測すること。
+- 4.4 完了時: `tests/kanade/common/mod.rs` に **gated ハーネス**を純粋追加した（`spawn_harness_gated(config, fixture, quit_policy, hold_indices) -> (Harness, SakuraGate)`／`SakuraGate::release_all()`／`spawn_mock_sakura_gated`）。指定した受領 index の talk の TalkDone を保留し、`release_all()` で解放する＝**active talk 窓を決定的に作る唯一の手段**（sleep 不使用・race-free: released フラグを mutex 下で立ててから notify、releaser は「解放済み かつ 全 park 到着(expected_holds)」まで drain しない）。active talk 中の遷移を観測するタスク（4.5 の close 握手中 CloseRequest 等）はこの gated ハーネスを再利用してよい。既存 `spawn_harness`/`spawn_mock_sakura` は不変（追加のみ）。
+- 4.6 完了時: `common/mod.rs` に **失敗注入 mock shiori**（`spawn_mock_shiori_failing`／`spawn_harness_failing`／`FailKind{Handshake,Timeout,Ipc,Shiori}`＝指定イベントで `ShioriOutcome::Failed(vocab)` を返す）と **sinkless ハーネス**（`spawn_harness_no_sink`／`SinklessHarness`＝mock sakura を張らず、返す `sender` を唯一の inbox 送信端にする＝全送信元切断の Req 4.9 経路を実行可能にする）を純粋追加した（`-1` は `use` 行分割で `ShioriFailure` 追加のみ・挙動不変）。`ShioriFailure` は非 Clone ゆえ `Fixture` に入れず copyable な `FailKind` 記述子から respond 内で生成する。既存 mock shiori／`Fixture` は不変。
+- 6.1／6.2 完了時: `schedule/log_capture.rs`（`#[cfg(test)] pub(crate)`）が `capture(f) -> Vec<CapturedEvent>`＋`assert_logged(events, level, event)` を提供＝失敗/防御アームのログ発火を実テストで担保する共通基盤。**capture は参照数に依存しないロック下 take で捕捉列を確定する**（当初 `Arc::try_unwrap` だったが tracing の Dispatch 一時 clone で並列テスト下 flaky panic ~1/10 したため 6.2 レビューで発覚→除去）。`capture` は `step()` 等をテストスレッド上で同期実行する用途専用（spawn したアクタースレッドのログは捕えない＝thread-local）。actor.rs シェルの失敗ログは往復ヘルパをテストスレッド直呼びで捕捉する（6.2）。ログ回帰を伴うタスクはこの基盤を再利用可。
