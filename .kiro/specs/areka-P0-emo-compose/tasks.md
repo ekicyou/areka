@@ -191,7 +191,7 @@
   - _Requirements: 11.1, 11.4_
   - _Depends: 7_
 
-- [ ] 8.2 surface1000＋bind集合のgoldenテストを実装する
+- [x] 8.2 surface1000＋bind集合のgoldenテストを実装する
   - 全パーツがMAYUNA bindのsurfaceに有効bind集合を与えて合成し、非空（α>0の画素がある）かつbind数に応じた重なりを要点サンプリングで検証する
   - 観測可能な完了状態: 空のbind集合では全透明、非空のbind集合では非空の合成結果になることをテストで示す
   - _Requirements: 11.2, 5.4_
