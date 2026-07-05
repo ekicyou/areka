@@ -98,7 +98,7 @@
   - _Requirements: 3.1, 3.2, 3.3_
   - _Depends: 3.2_
 
-- [ ] 3.6 Fold: animation-sort/collision-sort の引き継ぎを実装する
+- [x] 3.6 Fold: animation-sort/collision-sort の引き継ぎを実装する
   - 転記層が保持するsortキーの値を `ShellSettings` リソースへ引き継ぐ
   - 未指定時はukadoc既定（animation-sortはdescend・collision-sortはnone）を`animation_sort()`/`collision_sort()`が返すようにする
   - 観測可能な完了状態: sortキー未指定のShellをfoldした`EmoWorld`の`animation_sort()`がdescendを返す
@@ -215,3 +215,5 @@
 
 - 2.1 (method.rs): `BlendMode` は設計スケッチの単一 enum ではなく `BlendMode { kind: BlendKind, fast: bool }`（struct）＋ `#[non_exhaustive] enum BlendKind`（19 modes）へ分割実装。`fast` 軸と `kind` 軸が直交するため enum 倍化を回避。`#[non_exhaustive]` 拡張シームは `BlendKind`（variant 軸）に載る。下流（plan/blit の 5.x/6.x）が `ComposeMethod::Blend(BlendMode)` を match する際はこの形を前提とする。`from_name`（名前→ComposeMethod 写像・add/bind→Overlay・旧別名 overlaymultiply→blend-multiply-fast 等）も同梱済み。
 - 3.1 (world.rs): design 指定パス `areka_parsers::shell::SortOrder` を解決するため parser の `shell/mod.rs` に `SortOrder` の `pub use` を additive 追加（task 1.2 が定義したが未 re-export だった）。fold タスク（3.2〜3.7）が `DefRef` を使う場合は同様に `shell/mod.rs` へ `DefRef` の re-export が必要（現状未 re-export）。`SurfaceMaster` は normalized.rs で `#[derive(Component)]` 済み（本型自体が component）。`EmoWorld::build` はリソース挿入後 `populate_from_shell(&mut self, shell)` を一度呼ぶ骨組みで、fold はこの1関数へ差し込む。
+- 3.2 (fold.rs): `expand_targets(&[AppendTarget]) -> Vec<u32>`（design スケッチの `impl Iterator` から Vec へ・決定性/デバッグ容易性。呼び出しは `for` 反復のみで挙動同一）が plain(3.2)/append(3.3)/exclusion(3.4) 全経路の共通展開口。`fold_shell(&mut World, &Shell)` が `shell.definitions`（DefRef 登場順ストリーム）を single-pass 走査し `DefRef::{Surface,Append,Alias}` を dispatch。`#[non_exhaustive]` な `DefRef`/`AppendTarget` には防御的 wildcard arm（warn・非パニック）必須。
+- 3.6 (world.rs): **新規実装不要——task 3.1 の `EmoWorld::build` 骨組みで既に充足**。`build` が `shell.animation_sort`/`collision_sort` を `ShellSettings` リソースへ引き継ぎ、`animation_sort()` が `unwrap_or(SortOrder::Descend)`・`collision_sort()` が Option 素通しで ukadoc 既定（descend/none）を返す。受け入れ条件（未指定 Shell を build→`animation_sort()==Descend`）は既存テスト `world::tests::default_sort_orders`／`explicit_sort_orders_are_preserved` が直接検証済み（1.6/5.6）。fold 段は sort に触れない（build が担う）ため 3.6 に diff は生じない。
