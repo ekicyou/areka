@@ -22,19 +22,22 @@
 //!   ＋全 bind animation の pattern0＝有効 bind 非依存）の「配置オフセット＋原寸」の和集合を、原点 (0,0)
 //!   固定・負オフセット分は原点でクリップして算出する（要件 6.5・議題2裁定 (A)）。
 //!
-//! 以下は明示的なシーム（後続 task が本 module を拡張して埋める）:
-//!
-//! - **描画可能命令ゼロの分類（`SurfaceNotFound`/`EmptyComposition`）** → task 5.5
+//! - **task 5.5（本 task）**: **命令ゼロ時の 3 分類**（[`build_plan`]）。[`derive_ops`]（有効 bind
+//!   依存の命令列）＋[`compute_extent`]（有効 bind 非依存の静的外形）を wrap し、対象 surface 不在→
+//!   [`ComposeError::SurfaceNotFound`]・定義層皆無で外形 0×0→[`ComposeError::EmptyComposition`]・
+//!   surface 存在＋外形非ゼロ（描画可能命令ゼロでも可）→`Ok(Extent)` の 3 状態を厳密に区別する
+//!   （要件 6.6/10.5・議題2裁定）。非パニック・`error` ログ＋`Err`。
 //!
 //! 本 module は stub で偽装せず、生成する命令列はすべて実挙動・決定的・テスト済みである。
-//! design 署名 `build_plan`（out_ops/visited/binds/Extent/`Result<_, ComposeError>`）は後続
-//! task（5.5）が [`derive_ops`] ＋ [`compute_extent`] を wrap する形で導入する。
+//! design 署名の `visited` スクラッチ引数化（Composer での buffer 再利用）は task 7 の責務ゆえ、
+//! [`derive_ops`]/[`compute_extent`] は本 task では各自 visited を内部確保する。
 
 use areka_emo_atlas::{AtlasTable, ElementId};
 use areka_parsers::shell::{Interval, SortOrder};
 use bevy_ecs::entity::Entity;
 
 use crate::bind::BindSet;
+use crate::error::ComposeError;
 use crate::method::ComposeMethod;
 use crate::normalized::{SurfaceMaster, Transform};
 use crate::world::{AtlasBinding, EmoWorld, SurfaceIndex};
@@ -202,11 +205,9 @@ pub(crate) fn push_static_element_ops(
 ///   （`Result<Extent, ComposeError>`・visited をスクラッチ引数へ）は 5.5 が本関数＋[`compute_extent`]
 ///   を wrap して導入する。
 ///
-/// 本 task（5.4）では非テストの lib 経路からの呼び出し口（`build_plan` ファサード）が未導入ゆえ
-/// `dead_code` になる。消費は task 5.5 の `build_plan` が本関数を wrap して行う（それまで
-/// 意図的な未使用シーム・本 module 内の呼び出し鎖 `push_static_element_ops`/`flatten_surface`/
-/// `surface_and_binding`/`is_bind_interval` もこの一点から辿られるため、`allow` はここへ集約する）。
-#[allow(dead_code)]
+/// 消費は task 5.5 の [`build_plan`] が本関数を wrap して行う（本 module 内の呼び出し鎖
+/// `push_static_element_ops`/`flatten_surface`/`surface_and_binding`/`is_bind_interval` は
+/// [`build_plan`] → [`derive_ops`]/[`compute_extent`] の一点から辿られる）。
 pub(crate) fn derive_ops(
     out_ops: &mut Vec<BlitOp>,
     world: &EmoWorld,
@@ -234,7 +235,6 @@ pub(crate) fn derive_ops(
 ///
 /// visited は祖先スタック: 入口で `surface_id` を push、出口で pop。既訪問（＝現在の祖先経路に
 /// 存在）なら循環ゆえ `warn!` して即 return（枝打ち切り・非パニック・要件 7.2/7.3）。
-#[allow(dead_code)]
 fn flatten_surface(
     out_ops: &mut Vec<BlitOp>,
     visited: &mut Vec<u32>,
@@ -353,8 +353,7 @@ fn flatten_surface(
 /// 走査する（ops 経路との違いは「全 bind pattern0 を母集合とする」点のみ）。
 ///
 /// element ゼロ・bind ゼロの surface（外形へ寄与する層が皆無）や不在 surface では `Extent { w:0, h:0 }`
-/// を返す（0×0 退化の Err 分類は task 5.5 の責務・本関数は分類しない）。
-#[allow(dead_code)]
+/// を返す（0×0 退化の Err 分類は [`build_plan`] の責務・本関数は分類しない）。
 pub(crate) fn compute_extent(world: &EmoWorld, atlas: &AtlasTable, surface_id: u32) -> Extent {
     let mut max_x: i64 = 0;
     let mut max_y: i64 = 0;
@@ -368,6 +367,85 @@ pub(crate) fn compute_extent(world: &EmoWorld, atlas: &AtlasTable, surface_id: u
     }
 }
 
+/// plan 段の公開ファサード: 命令列を導出し、命令ゼロ時の 3 分類を確定して外形を返す（要件 1.4/6.6/10.5）。
+///
+/// [`derive_ops`]（有効 bind 依存の命令列）と [`compute_extent`]（有効 bind 非依存の静的外形）を
+/// wrap し、design「Error Handling」表・議題2裁定の**3 状態**を厳密に区別する:
+///
+/// 1. **対象 surface 不在**（[`EmoWorld::surface`] が `None`）→ `error` ログ＋
+///    [`ComposeError::SurfaceNotFound`]（要件 10.5）。命令/外形の算出**前**に返す。
+/// 2. **surface 存在 & 外形非ゼロ**（描画可能命令ゼロでも可）→ `Ok(extent)`。全 element 全透明・
+///    空の有効 bind 集合などで `out_ops` が空でも、これは**正常系**であり `Err` にしない
+///    （要件 6.6・議題2裁定）。非ゼロの静的外形と（空かもしれない）命令列を返す。
+/// 3. **定義層が皆無で外形 0×0**（surface は存在するが `compute_extent` が `Extent{0,0}`）→
+///    `error` ログ＋[`ComposeError::EmptyComposition`]（要件 10.5・議題2裁定: これが唯一の真の
+///    失敗となる退化ケース）。
+///
+/// `out_ops` は呼び手のスクラッチ Vec を再利用する意図（要件 10.3）ゆえ、**エントリで `clear`**
+/// してから命令を積む（前回内容のゴミが混ざらない）。不在/退化の `Err` 時も `out_ops` は空である
+/// （不在は算出前 return・退化は derive 済みでも 0×0 定義層皆無ゆえ命令は元々ゼロ）。
+///
+/// # 決定性（要件 10.1）
+///
+/// [`derive_ops`]/[`compute_extent`] がともに決定的ゆえ、同一入力（World／atlas／surface_id／
+/// binds）に対し毎回同一の `(out_ops, Extent)` または同一 `Err` を返す。
+///
+/// # 非パニック（要件 1.4）
+///
+/// 全経路で `panic!` せず、失敗は `error` ログ＋`Err` で表現する（[`crate::error`] 規律）。
+///
+/// # visited スクラッチ（task 7 シーム）
+///
+/// 本 task では [`derive_ops`]/[`compute_extent`] が各自 visited を内部確保する。共有スクラッチの
+/// スレッド（Composer ファサードでの buffer 再利用）は task 7 の責務ゆえ、ここでは分類挙動を優先し
+/// 内部確保のままとする。
+///
+/// 本 task（5.5）時点では非テストの lib 経路からの呼び出し口（task 7 の Composer ファサード）が
+/// 未導入ゆえ `dead_code` になる。本関数は plan module の呼び出し鎖の頂点（`build_plan` →
+/// `derive_ops`/`compute_extent` → …）ゆえ、`allow` はここへ集約する（それまで意図的な未使用シーム）。
+#[allow(dead_code)]
+pub(crate) fn build_plan(
+    out_ops: &mut Vec<BlitOp>,
+    world: &EmoWorld,
+    atlas: &AtlasTable,
+    surface_id: u32,
+    binds: &BindSet,
+) -> Result<Extent, ComposeError> {
+    // スクラッチ再利用: 前回内容を捨ててから積む（要件 10.3）。以降の Err 経路でも空を保つ。
+    out_ops.clear();
+
+    // 分類1: 対象 surface 不在 → SurfaceNotFound（算出前に返す・要件 10.5）。
+    if world.surface(surface_id).is_none() {
+        tracing::error!(
+            target: "areka_emo_compose",
+            surface_id,
+            "合成対象 surface が存在しない: SurfaceNotFound"
+        );
+        return Err(ComposeError::SurfaceNotFound(surface_id));
+    }
+
+    // 静的外形（有効 bind 非依存）を先に算出する。0×0 なら定義層皆無の退化データ。
+    let extent = compute_extent(world, atlas, surface_id);
+
+    // 分類3: 定義層皆無で外形 0×0 の退化データのみ真の失敗（議題2裁定・要件 10.5）。
+    // 命令列は元々ゼロ（外形へ寄与する層＝命令の母集合が皆無）ゆえ out_ops は空のまま返す。
+    if extent.w == 0 && extent.h == 0 {
+        tracing::error!(
+            target: "areka_emo_compose",
+            surface_id,
+            "定義層が皆無で外形 0×0 の退化データ: EmptyComposition"
+        );
+        return Err(ComposeError::EmptyComposition(surface_id));
+    }
+
+    // 有効 bind 依存の命令列を積む（描画可能命令ゼロ＝空 ops でもよい）。
+    derive_ops(out_ops, world, atlas, surface_id, binds);
+
+    // 分類2: surface 存在＋外形非ゼロ → 正常系。out_ops が空でも（全透明・空 bind 集合）Err に
+    // しない（要件 6.6・議題2裁定: 静的外形どおりの空命令列＝全透明返却）。
+    Ok(extent)
+}
+
 /// [`compute_extent`] の再帰ワーカ: 当 surface の全定義層を走査し `max_x`/`max_y` を更新する。
 ///
 /// [`flatten_surface`]（ops 経路）と同一の入れ子 flatten 構造（オフセット累積＋visited 祖先スタック
@@ -378,7 +456,6 @@ pub(crate) fn compute_extent(world: &EmoWorld, atlas: &AtlasTable, surface_id: u
 /// 各静的 element については `AtlasBinding` が `Some(ElementId)` のもののみ、`atlas.entry(id).original`
 /// を「累積オフセット＋原寸」として外形へ寄与させる（未束縛 None は原寸不明ゆえ寄与しない）。
 /// `placement` が None でも `original` は既知ゆえ寄与する（ops ではスキップされる層も外形は数える）。
-#[allow(dead_code)]
 fn flatten_extent(
     max_x: &mut i64,
     max_y: &mut i64,
@@ -1486,5 +1563,191 @@ mod tests {
         assert_eq!(e1, e2, "同一入力→同一 Extent（決定的）");
         // 参考: part は (5,7) 参照ゆえ w=max(40, 5+200)=205・h=max(30, 7+150)=157。
         assert_eq!(e1, Extent { w: 205, h: 157 });
+    }
+
+    // ── task 5.5: 命令ゼロ時の 3 分類（正常空合成／対象不在／退化データ）─────────────────
+    //
+    // build_plan は derive_ops（有効 bind 依存の命令列）＋ compute_extent（有効 bind 非依存の
+    // 静的外形）を wrap し、design「Error Handling」表の 3 状態を厳密に区別する:
+    //   - 対象 surface 不在        → Err(SurfaceNotFound)（error ログ・要件 10.5）。
+    //   - surface 存在・命令ゼロでも → Ok(非ゼロ Extent)＋空 ops（正常全透明・要件 6.6・議題2裁定）。
+    //   - 定義層皆無で外形 0×0      → Err(EmptyComposition)（error ログ・要件 10.5・唯一の真の失敗退化）。
+    // 非パニック（要件 1.4）。out_ops はエントリで clear する再利用スクラッチ（要件 10.3）。
+
+    use crate::error::ComposeError;
+
+    /// テスト5.5-①（要件 10.5）: 対象 surface 不在 → `Err(SurfaceNotFound)`・ops 空・非パニック。
+    #[test]
+    fn build_plan_absent_surface_is_surface_not_found() {
+        // surface を一切持たない World（9999 は不在）。
+        let world = EmoWorld::build(&shell_of(Vec::new()));
+        let atlas = bake_atlas(Path::new("shell/master"), &["dummy.png"]);
+
+        let binds = BindSet::default();
+        let mut ops = Vec::new();
+        let result = build_plan(&mut ops, &world, &atlas, 9999, &binds);
+
+        assert_eq!(
+            result,
+            Err(ComposeError::SurfaceNotFound(9999)),
+            "不在 surface は SurfaceNotFound（要件 10.5）"
+        );
+        assert!(ops.is_empty(), "不在 surface では命令を積まない");
+    }
+
+    /// テスト5.5-②（**受入基準**・要件 6.6）: 全 element が全透明の surface → `Ok(非ゼロ Extent)`＋空 ops。
+    ///
+    /// surface=3000 は element を 2 本持つがいずれも全透明（α=0 → placement None）。描画可能命令は
+    /// ゼロだが、外形は原寸（300×300 が支配）で非ゼロ。これはエラーでなく **正常系**（議題2裁定）。
+    #[test]
+    fn build_plan_all_transparent_is_ok_empty_ops_nonzero_extent() {
+        let base = Path::new("shell/master");
+        let atlas = bake_atlas_sized(
+            base,
+            &[
+                ("ghost1.png", (300, 300), false), // 全透明→ placement None。
+                ("ghost2.png", (20, 20), false),   // 全透明→ placement None。
+            ],
+        );
+
+        let surf = surface(3000, vec![elem(0, "ghost1.png", 0, 0), elem(1, "ghost2.png", 0, 0)]);
+        let shell = shell_of(vec![surf]);
+        let mut world = EmoWorld::build(&shell);
+        world.bind_atlas(&atlas, SetId(0));
+
+        let binds = BindSet::default();
+        let mut ops = Vec::new();
+        let result = build_plan(&mut ops, &world, &atlas, 3000, &binds);
+
+        // 描画可能命令ゼロでも Err にしない（要件 6.6・議題2裁定）。
+        let extent = result.expect("全透明でもエラーにせず Ok（要件 6.6）");
+        assert!(ops.is_empty(), "全 element 全透明 → 空 ops（描画可能命令ゼロ）");
+        // 外形は原寸で非ゼロ（全透明でも original で寄与＝300×300 が支配）。
+        assert_eq!(extent, Extent { w: 300, h: 300 }, "非ゼロの静的外形を返す（要件 6.6）");
+        assert_ne!(extent.w, 0);
+        assert_ne!(extent.h, 0);
+    }
+
+    /// テスト5.5-③（要件 6.6）: bind のみ surface＋空 BindSet → `Ok(非ゼロ Extent)`＋空 ops。
+    ///
+    /// host=1000 は静的 element なし・全パーツ bind。空 BindSet ゆえ有効 bind ゼロ＝命令ゼロだが、
+    /// 外形は全 bind pattern0 母集合（有効 bind 非依存）ゆえ非ゼロ。エラーでなく正常空合成。
+    #[test]
+    fn build_plan_empty_bindset_bind_only_is_ok_empty_ops_nonzero_extent() {
+        let base = Path::new("shell/master");
+        let atlas = bake_atlas_sized(
+            base,
+            &[("part1.png", (200, 10), true), ("part2.png", (10, 150), true)],
+        );
+
+        // 静的 element なし・bind id=1/2 が part1/part2 を参照。
+        let host = surface_with_anims(
+            1000,
+            Vec::new(),
+            vec![bind_anim(1, 1100, 0, 0), bind_anim(2, 1200, 0, 0)],
+        );
+        let part1 = surface(1100, vec![elem(0, "part1.png", 0, 0)]);
+        let part2 = surface(1200, vec![elem(0, "part2.png", 0, 0)]);
+        let shell = shell_of(vec![host, part1, part2]);
+        let mut world = EmoWorld::build(&shell);
+        world.bind_atlas(&atlas, SetId(0));
+
+        // 空 BindSet → 有効 bind ゼロ＝描画可能命令ゼロ。
+        let binds = BindSet::default();
+        let mut ops = Vec::new();
+        let result = build_plan(&mut ops, &world, &atlas, 1000, &binds);
+
+        let extent = result.expect("空 BindSet でも正常（描画可能命令ゼロは失敗でない・要件 6.6）");
+        assert!(ops.is_empty(), "空 BindSet → bind 命令ゼロ・静的 element も無し → 空 ops");
+        // 外形は全 bind pattern0 の和集合（有効 bind 非依存）: w=max(200,10)=200・h=max(10,150)=150。
+        assert_eq!(extent, Extent { w: 200, h: 150 }, "有効 bind 非依存の非ゼロ外形");
+    }
+
+    /// テスト5.5-④（要件 10.5・議題2裁定）: 定義層皆無で外形 0×0 → `Err(EmptyComposition)`。
+    ///
+    /// surface=7000 は EXISTS するが element ゼロ・bind ゼロ（外形へ寄与する層が皆無）。
+    /// compute_extent が {0,0} を返す唯一の真の失敗退化ケース。
+    #[test]
+    fn build_plan_no_layers_degenerate_is_empty_composition() {
+        // element ゼロ・animation ゼロの surface（存在はするが定義層が皆無）。
+        let surf = surface(7000, Vec::new());
+        let shell = shell_of(vec![surf]);
+        let mut world = EmoWorld::build(&shell);
+        // atlas は引かれない（element がない）が bind_atlas は呼ぶ（binding 挿入）。
+        let atlas = bake_atlas(Path::new("shell/master"), &["dummy.png"]);
+        world.bind_atlas(&atlas, SetId(0));
+
+        // 前提の実証: 外形が 0×0（定義層皆無）。
+        assert_eq!(
+            compute_extent(&world, &atlas, 7000),
+            Extent { w: 0, h: 0 },
+            "定義層皆無 → 外形 0×0（前提）"
+        );
+
+        let binds = BindSet::default();
+        let mut ops = Vec::new();
+        let result = build_plan(&mut ops, &world, &atlas, 7000, &binds);
+
+        assert_eq!(
+            result,
+            Err(ComposeError::EmptyComposition(7000)),
+            "定義層皆無で 0×0 の退化のみ EmptyComposition（要件 10.5・議題2裁定）"
+        );
+        assert!(ops.is_empty());
+    }
+
+    /// テスト5.5-⑤（sanity・要件 6.6 対比）: 可視 element を持つ通常 surface → `Ok`＋非空 ops。
+    #[test]
+    fn build_plan_populated_surface_is_ok_with_nonempty_ops() {
+        let base = Path::new("shell/master");
+        let atlas = bake_atlas_sized(base, &[("visible.png", (80, 60), true)]);
+        let visible_id = atlas.resolve(SetId(0), "visible.png").expect("visible 解決");
+
+        let surf = surface(5000, vec![elem(0, "visible.png", 0, 0)]);
+        let shell = shell_of(vec![surf]);
+        let mut world = EmoWorld::build(&shell);
+        world.bind_atlas(&atlas, SetId(0));
+
+        let binds = BindSet::default();
+        let mut ops = Vec::new();
+        let result = build_plan(&mut ops, &world, &atlas, 5000, &binds);
+
+        let extent = result.expect("通常 surface は Ok");
+        assert_eq!(ops.len(), 1, "可視 element 1 本 → 命令 1 本");
+        assert_eq!(ops[0].element, visible_id);
+        assert_eq!(extent, Extent { w: 80, h: 60 }, "外形＝element 原寸");
+    }
+
+    /// テスト5.5-⑥（要件 10.3・10.1）: out_ops はエントリで clear される（スクラッチ再利用）・決定的。
+    #[test]
+    fn build_plan_clears_scratch_and_is_deterministic() {
+        let base = Path::new("shell/master");
+        let atlas = bake_atlas_sized(base, &[("visible.png", (80, 60), true)]);
+        let visible_id = atlas.resolve(SetId(0), "visible.png").expect("visible 解決");
+
+        let surf = surface(5000, vec![elem(0, "visible.png", 0, 0)]);
+        let shell = shell_of(vec![surf]);
+        let mut world = EmoWorld::build(&shell);
+        world.bind_atlas(&atlas, SetId(0));
+
+        let binds = BindSet::default();
+
+        // 事前にゴミを詰めた out_ops → build_plan がエントリで clear する（ゴミは消える）。
+        let junk = BlitOp {
+            element: ElementId(u32::MAX),
+            transform: Transform::identity(),
+            method: ComposeMethod::Overlay,
+        };
+        let mut ops = vec![junk.clone(), junk.clone(), junk];
+        let e1 = build_plan(&mut ops, &world, &atlas, 5000, &binds).expect("Ok");
+
+        assert_eq!(ops.len(), 1, "エントリで clear ＝ この surface の命令のみが残る");
+        assert_eq!(ops[0].element, visible_id, "ゴミは残らない");
+
+        // 2 回目（別スクラッチ）→ バイト等価・同一 Extent（決定性）。
+        let mut ops2 = Vec::new();
+        let e2 = build_plan(&mut ops2, &world, &atlas, 5000, &binds).expect("Ok");
+        assert_eq!(ops, ops2, "同一入力→同一 ops（バイト等価）");
+        assert_eq!(e1, e2, "同一入力→同一 Extent");
     }
 }

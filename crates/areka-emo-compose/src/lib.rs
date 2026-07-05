@@ -26,6 +26,7 @@
 //! 自らスレッド生成・async・channel を持たず、UI スレッド上の emo 専用 World に常駐する。
 
 pub mod error;
+pub use error::ComposeError;
 pub mod method;
 
 pub use method::{BlendKind, BlendMode, ComposeMethod};
