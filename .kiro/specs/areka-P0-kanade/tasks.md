@@ -1,7 +1,7 @@
 # Implementation Plan
 
 - [ ] 1. Foundation: 契約層（talk 契約型・メッセージ型）
-- [ ] 1.1 クレート雛形と talk 契約型（TalkId/StartTalk/TalkDone）の実装
+- [x] 1.1 クレート雛形と talk 契約型（TalkId/StartTalk/TalkDone）の実装
   - `crates/areka-kanade` を新設し、Cargo.toml に依存（areka-actor・shiori-host32-host・tracing・thiserror）を宣言する（workspace は `crates/*` glob で自動収載のため手動登録不要）。クレート rustdoc（運行表正本・talk 契約正本の宣言）を記す lib.rs の雛形も併せて用意する
   - talk 起動契約の正本型（talk の一意識別子・起動要求・再生完了通知）を、host32 型にも areka-actor 型にも依存しない形で定義する（将来の契約クレート切り出しを機械的移動で完結させるため）
   - script 文字列は不透明のまま保持し、内容を解釈するロジックを一切持たないことを型設計で保証する

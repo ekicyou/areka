@@ -1,0 +1,16 @@
+[package]
+name = "areka-kanade"
+workspace = "../.."
+description = "kanade (conductor) engine for areka: canonical 運行表 (scheduling state machine) and talk startup contract; pure state machine + actor shell + swappable message boundary"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[dependencies]
+areka-actor = { path = "../areka-actor" }
+shiori-host32-host = { path = "../shiori-host32-host" }
+tracing = { workspace = true }
+thiserror = { workspace = true }
