@@ -634,4 +634,187 @@ mod tests {
             "自然終端後はアクターが消えており Close 送出は失敗する（二重終端不能の証）"
         );
     }
+
+    /// 複数 talk を異なる相関 ID・独立 sink で同時駆動し、各 talk の `TalkDone` に**起動時と
+    /// 同一**の `talk_id` が対応付けられ、出力が talk 間で混線しないことを確認する（R1.3/R6.6）。
+    ///
+    /// 2 本の talk（`TalkId(7)`＝Ended 経路の `\s[10]hello\w[2]world\e`、`TalkId(42)`＝
+    /// Quit 経路の `\s[20]bye\w[2]done\-`）を**別々の reply channel と別々の mock sink 対**で
+    /// 起動し、それぞれ独立の注入 Tick 列で終端まで駆動する。契約上 `TalkCue` は talk_id を
+    /// 帯びない（各 talk が自前 sink を持つ per-actor 構成ゆえ）ので、相関の観測は
+    /// **出力側 = `TalkDone.talk_id` が `StartTalk.talk_id` に一致**と**各 talk の cue が自分の
+    /// sink にのみ届く**の 2 点で行う。id・script・終端理由・cue 内容を talk 間で相違させ、
+    /// 万一の取り違えが検出可能な形にする。
+    #[test]
+    fn multiple_talks_echo_own_talk_id_without_cross_talk_mixing() {
+        // talk A: TalkId(7)・Ended 経路。
+        let (reply_a_tx, reply_a_rx) = reply_channel::<TalkDone>();
+        let id_a = TalkId(7);
+        let start_a = StartTalk {
+            script: r"\s[10]hello\w[2]world\e".to_string(),
+            talk_id: id_a,
+            reply: reply_a_tx,
+        };
+        let surface_a = MockSink::new();
+        let text_a = MockSink::new();
+        let surface_a_records = surface_a.records();
+        let text_a_records = text_a.records();
+
+        // talk B: TalkId(42)・Quit 経路（末尾 `\-`）・異なる surface/text 内容。
+        let (reply_b_tx, reply_b_rx) = reply_channel::<TalkDone>();
+        let id_b = TalkId(42);
+        let start_b = StartTalk {
+            script: r"\s[20]bye\w[2]done\-".to_string(),
+            talk_id: id_b,
+            reply: reply_b_tx,
+        };
+        let surface_b = MockSink::new();
+        let text_b = MockSink::new();
+        let surface_b_records = surface_b.records();
+        let text_b_records = text_b.records();
+
+        // 2 talk を並行起動（それぞれ独立スレッド・独立 sink 対）。
+        let handle_a = spawn_talk(start_a, surface_a, text_a);
+        let handle_b = spawn_talk(start_b, surface_b, text_b);
+
+        // 各 talk を自分の注入 Tick 列で終端まで駆動する。
+        handle_a.inbox.send(SakuraMsg::Tick(0.0)).expect("A Tick(0.0)");
+        handle_a.inbox.send(SakuraMsg::Tick(0.2)).expect("A Tick(0.2)");
+        handle_b.inbox.send(SakuraMsg::Tick(0.0)).expect("B Tick(0.0)");
+        handle_b.inbox.send(SakuraMsg::Tick(0.2)).expect("B Tick(0.2)");
+
+        // 各 reply channel には自分の talk_id を帯びた TalkDone がちょうど返る。
+        let done_a = reply_a_rx
+            .recv_timeout(Duration::from_secs(5))
+            .expect("talk A は TalkDone を返すべき");
+        let done_b = reply_b_rx
+            .recv_timeout(Duration::from_secs(5))
+            .expect("talk B は TalkDone を返すべき");
+
+        // talk_id エコーの相関（R1.3/R6.6）: 各 TalkDone は自分の起動 id を帯びる（取り違えなし）。
+        assert_eq!(done_a.talk_id, id_a, "talk A の TalkDone は id_a をエコー");
+        assert_eq!(done_b.talk_id, id_b, "talk B の TalkDone は id_b をエコー");
+        assert_ne!(
+            done_a.talk_id, done_b.talk_id,
+            "2 talk の TalkDone は相異なる id（混線していない）"
+        );
+        // 終端理由も talk 固有（A=Ended・B=Quit）＝script 相違が正しく各 talk に反映される。
+        assert_eq!(done_a.reason, TalkEndReason::Ended, "A の `\\e` は Ended");
+        assert_eq!(done_b.reason, TalkEndReason::Quit, "B の `\\-` は Quit");
+
+        handle_a.actor.join().expect("A body 正常終了");
+        handle_b.actor.join().expect("B body 正常終了");
+
+        // 出力側の相関: 各 talk の cue は自分の sink にのみ届く（talk 間で内容が混ざらない）。
+        let surface_a = surface_a_records.lock().unwrap();
+        let text_a = text_a_records.lock().unwrap();
+        let surface_b = surface_b_records.lock().unwrap();
+        let text_b = text_b_records.lock().unwrap();
+
+        // talk A の sink: Emote{key:"10"} 1 件＋Text("hello")/Text("world")。
+        assert_eq!(surface_a.len(), 1, "A surface は 1 件");
+        assert_eq!(
+            surface_a[0].command,
+            CueCommand::Emote { key: "10".into() },
+            "A surface は Emote{{key:10}}"
+        );
+        assert_eq!(
+            text_a.iter().map(|c| c.command.clone()).collect::<Vec<_>>(),
+            vec![
+                CueCommand::Text("hello".into()),
+                CueCommand::Text("world".into()),
+            ],
+            "A text は hello/world"
+        );
+
+        // talk B の sink: Emote{key:"20"} 1 件＋Text("bye")/Text("done")。
+        assert_eq!(surface_b.len(), 1, "B surface は 1 件");
+        assert_eq!(
+            surface_b[0].command,
+            CueCommand::Emote { key: "20".into() },
+            "B surface は Emote{{key:20}}"
+        );
+        assert_eq!(
+            text_b.iter().map(|c| c.command.clone()).collect::<Vec<_>>(),
+            vec![
+                CueCommand::Text("bye".into()),
+                CueCommand::Text("done".into()),
+            ],
+            "B text は bye/done"
+        );
+
+        // 相互排他の明示: A の内容が B の sink に、B の内容が A の sink に混入していないこと。
+        assert!(
+            !text_a.iter().any(|c| matches!(&c.command, CueCommand::Text(s) if s.as_str() == "bye" || s.as_str() == "done")),
+            "A text sink に B の cue が混入していないこと"
+        );
+        assert!(
+            !text_b.iter().any(|c| matches!(&c.command, CueCommand::Text(s) if s.as_str() == "hello" || s.as_str() == "world")),
+            "B text sink に A の cue が混入していないこと"
+        );
+    }
+
+    /// 同一 fixture script＋同一注入 Tick 列を N 回実行し、毎回**同一の観測結果**（surface cue 列・
+    /// text cue 列・発火時刻・actor key・順序・終端理由）が得られることを確認する（R9.4・決定的再現）。
+    ///
+    /// 各 run で `spawn_talk`＋mock を作り直し（新スレッド・新 sink）、同一 script
+    /// `\s[10]hello\w[2]world\e` を同一 Tick 列（0.0 → 0.2）で駆動する。run ごとに
+    /// (surface cue 列, text cue 列, TalkDone.reason) を取り出し、run 0 を基準に全 run が
+    /// **完全一致**することを assert する。`at` は f64 完全一致で比較する（compile は決定的な
+    /// IEEE-754 累算ゆえ run 間で bit 単位に一致するべき）。時刻注入は Tick のみ（sleep/Instant なし）。
+    #[test]
+    fn same_fixture_and_tick_sequence_produces_identical_observation_each_run() {
+        // 1 run 分の観測を (surface, text, reason) のタプルで取り出すヘルパ。
+        // TalkCue は PartialEq 導出前提でないため、比較キーを (at, actor, command) の Vec に射影する。
+        type CueKey = (f64, String, CueCommand);
+        fn project(records: &std::sync::Arc<std::sync::Mutex<Vec<TalkCue>>>) -> Vec<CueKey> {
+            records
+                .lock()
+                .unwrap()
+                .iter()
+                .map(|c| (c.at, c.actor.as_str().to_string(), c.command.clone()))
+                .collect()
+        }
+
+        fn run_once() -> (Vec<CueKey>, Vec<CueKey>, TalkEndReason) {
+            let (reply_tx, reply_rx) = reply_channel::<TalkDone>();
+            let start = StartTalk {
+                script: r"\s[10]hello\w[2]world\e".to_string(),
+                talk_id: TalkId(7),
+                reply: reply_tx,
+            };
+            let surface = MockSink::new();
+            let text = MockSink::new();
+            let surface_records = surface.records();
+            let text_records = text.records();
+
+            let handle = spawn_talk(start, surface, text);
+            // 同一注入 Tick 列（sleep なし・決定的）。
+            handle.inbox.send(SakuraMsg::Tick(0.0)).expect("Tick(0.0)");
+            handle.inbox.send(SakuraMsg::Tick(0.2)).expect("Tick(0.2)");
+
+            let done = reply_rx
+                .recv_timeout(Duration::from_secs(5))
+                .expect("自然終端で TalkDone");
+            handle.actor.join().expect("body 正常終了");
+
+            (project(&surface_records), project(&text_records), done.reason)
+        }
+
+        // N 回実行し、run 0 を基準に全 run が完全一致することを確認する。
+        const RUNS: usize = 3;
+        let baseline = run_once();
+        // baseline 自体が期待形（surface=Emote 1 件・text=hello/world・Ended）であることを固定する。
+        assert_eq!(baseline.0.len(), 1, "baseline surface は 1 件");
+        assert_eq!(baseline.1.len(), 2, "baseline text は 2 件");
+        assert_eq!(baseline.2, TalkEndReason::Ended, "baseline は Ended");
+
+        for run in 1..RUNS {
+            let observed = run_once();
+            assert_eq!(
+                observed, baseline,
+                "run {run} の観測が baseline と完全一致すること（surface/text cue 列・at・actor・順序・終端理由が全て同一・R9.4）"
+            );
+        }
+    }
 }
