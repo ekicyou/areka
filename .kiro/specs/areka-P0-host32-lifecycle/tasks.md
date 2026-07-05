@@ -81,7 +81,7 @@
   - _Depends: 2.3, 2.4, 3.3_
 
 - [ ] 5. Validation: 常駐健全性の決定的end-to-end実証
-- [ ] 5.1 周期運転（連打）と正規clean shutdownのend-to-endテストを実装
+- [x] 5.1 周期運転（連打）と正規clean shutdownのend-to-endテストを実装
   - 実 i686 helper と fixture を起動し、ハンドシェイク後、イベント意味論を持たないダミーIDで固定応答の往復を200回連続（実時間 sleep なしの back-to-back）で行い、各往復の成功とfixture固定応答を確認する
   - 反復後もhelperが生存継続していることを確認したうえで、正常終了要求を発行し、正規の正常終了経路を通じて正常終了種別が観測されることを確認する
   - Observable: `cargo test -p shiori-host32-host --test lifecycle_cyclic_e2e`（PowerShell実行）が実 i686 helper 越しに通り、200回の連打成功と正規clean shutdownの両方を一つのテストで実証する
