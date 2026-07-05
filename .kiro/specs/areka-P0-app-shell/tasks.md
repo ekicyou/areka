@@ -38,7 +38,7 @@
   - _Boundary: open_startup_window_
 
 - [ ] 3. 骨格 main.rs を組み上げる
-- [ ] 3.1 main.rs をモック UI 除去後の骨格へ書き換え、新規要素を結線する
+- [x] 3.1 main.rs をモック UI 除去後の骨格へ書き換え、新規要素を結線する
   - モック UI 塊（定数・マーカー・生成関数・登録システム・ハンドラ・窓生成結線・操作ガイド）と `#[cfg(test)] mod tests;` 宣言を main.rs から除去する
   - 既存の tracing subscriber 初期化・`human_panic::setup_panic!()`・SHIORI モジュール宣言 5 本・e2e テスト宣言 3 本・`shiori_demo::run_demo_if_enabled()` 呼び口・`windows_subsystem` 属性を維持する
   - `resolve_config_inputs` の呼び出しと解決結果のログ出力、`open_startup_window` シームの呼び出し、`main` 自身による `app.run()` 呼び出しをこの順で結線する
@@ -69,4 +69,5 @@
 
 - **wintf の `Window` on-add フックが `WindowPos::default()`（CW_USEDEFAULT）を自動挿入する**（`crates/wintf/src/ecs/window/components.rs` の `on_window_add`・位置未指定時のみ）。ゆえにダミー窓 builder が `WindowPos` を一切セットしなくても entity には `WindowPos::default()` が付く＝これが「座標/DPI を主張しない既定配置」の正しい姿。テストは「存在する `WindowPos` が `WindowPos::default()` と等しい」ことを assert して非主張を証明する（task 2.2）。
 - **example 内 `#[test]` は標準ハーネス（`cargo test -p areka`）では走らない**。example のテスト実行/コンパイル検証は `cargo test -p areka --example mock-shell` を使う（task 1.2）。標準スイートの緑判定対象は bin/lib のユニット＋SHIORI e2e（task 1.2 時点で 61、以降タスクごとに増加）。
-- **main.rs のインライン test モジュール名は衝突回避で使い分ける**: `mod tests;`（file・モック用・3.1 で削除）／`mod config_input_tests`（2.1）／`mod startup_window_tests`（2.2）。3.1 でモック除去後に整理する。
+- **main.rs のインライン test モジュール名は衝突回避で使い分ける**: `mod tests;`（file・モック用・3.1 で削除済）／`mod config_input_tests`（2.1）／`mod startup_window_tests`（2.2/2.3）。3.1 で `mod tests;` と `src/tests.rs` を除去、モック UI 全撤去。標準スイートは 76→**54**（モック 22 件が example へ退去）。
+- **骨格 smoke の合否は「exit 0」で判定する（warn の有無ではない）**。env ゲート（`AREKA_APP_SMOKE_EXIT_MS`）自動 close 経路では終了時に良性の `WARN bevy_ecs::world: Could not despawn entity ... generation 1`（smoke timer の despawn と window-registry close の二重 despawn 競合）が出るが warn レベルで exit 0 に影響しない・wintf/bevy 側の挙動＝骨格の欠陥ではない（task 3.1 実測・4.2 の smoke assert は exit 0 のみを見る）。
