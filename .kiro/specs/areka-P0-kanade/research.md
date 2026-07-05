@@ -150,7 +150,7 @@ M1 では単一クレートで進め、契約型はモジュール（例 `areka_
 - **DD-4: 死活報告の暫定 seam の形** — lifecycle 正本確定前の mock 死活語彙をどこに置くか（`KanadeMsg` の variant／shiori アクターからの通知メッセージ／`RequestError::Ipc` 経由の縮退判断のみで M1 を済ますか）。差し替え時の変更面を最小にする形。
 - **DD-5: M1 boot 系列の固定値** — ✅**解決済み（要件ディスカッション #1・2026-07-05）**: 毎回 `OnFirstBoot`（Ref0=固定 0）を GET 発行し、204 フォールスルー経由で `OnBoot` へ進む（Req 1.6 に反映済み）。`OnGhostChanged` 系は M1 で常に非該当。position-persist 完了後は固定値が永続値読み出しに差し替わるのみで運行の形は不変。
 - **DD-6: talk 重複時の調停規則**（requirements の design 送り事項の確定）: 破棄／キュー／中断のいずれか＋Research 3 の裏取り結果を反映。
-- **DD-7: `TalkDone{quit:true}` の運行上の扱い** — close 握手中以外（通常 talk・OnSecondChange 由来）で quit を受けた場合に close 系列へ入るか M1 ではログのみか。
+- **DD-7: `TalkDone{quit:true}` の運行上の扱い** — ✅**解決済み（要件ディスカッション #2・2026-07-05）**: `\-`（quit=true）が**唯一のスクリプト起因終了トリガ**——由来イベント・close 握手中か否かを問わず、受領時点で終了系列（unload を含む正規終了経路→アクター停止）へ直行。OnClose は「終了要求」にすぎず、応答スクリプトに `\-` が無ければ（quit=false）ゴーストは終了せず定常運転へ復帰する（終了拒否）。Req 4 を全面改稿・Req 3.4 に復帰規則を追記済み。ukadoc 裏取り済み（`\-`=本体終了・`\e`=スクリプト終了）。
 - **DD-8: 実 helper 追験ハーネスの結線範囲** — env-gate テストが spawn→HELLO→**LOAD**→boot 運行を自前結線する（LOAD は kanade の責務外・ghost-setup 先取りの最小限）ことの確認と、親窓 1 枚制約下での単一 `#[test]` 集約。
 - **DD-9: kanade 公開面の最小化** — 将来の呼び手 ghost-setup が消費する面（inbox Sender・ActorHandle・契約型）だけを公開し、状態機械・shiori アクター内部を非公開に保つ線引き。
 

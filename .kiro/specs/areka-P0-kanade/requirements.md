@@ -44,7 +44,7 @@ areka-P0-kanade: kanade（③conductor）＝実行時経路（運行表）の所
 1. When GET 応答として Value（スクリプト文字列）を受領した, the kanade engine shall 一意な talk 識別子を付与した talk 起動要求（`StartTalk{script, talk_id}` 相当）を sakura 配送先へ送出する。
 2. The kanade engine shall talk 起動契約のメッセージ型（`StartTalk{script, talk_id}`／`TalkDone{talk_id, quit}` 相当）の正本を所有し、script 文字列を解釈せず不透明なまま渡す。
 3. When GET 応答が 204（Value なし）である, the kanade engine shall talk 起動要求を送出しない。
-4. When `TalkDone{talk_id, quit}` 通知を受領した, the kanade engine shall talk_id により対応する talk と突合し、運行状態を更新する（`\-` 由来の quit 検出は sakura 側の責務であり kanade は通知の quit フラグを消費する）。
+4. When `TalkDone{talk_id, quit}` 通知を受領した, the kanade engine shall talk_id により対応する talk と突合し、運行状態を更新する（`\-` 由来の quit 検出は sakura 側の責務であり kanade は通知の quit フラグを消費する・quit=true の運行帰結は Requirement 4.3）。
 5. If 突合できない talk_id の TalkDone 通知を受領した, the kanade engine shall エラーログを記録した上で運行を継続する。
 
 ### Requirement 3: 定常運転（OnSecondChange pump・Tick 注入）
@@ -56,20 +56,22 @@ areka-P0-kanade: kanade（③conductor）＝実行時経路（運行表）の所
 1. While boot 系列完了後の定常運転状態, when 1 秒相当の Tick が到来した, the kanade engine shall `OnSecondChange` を GET として発行する。
 2. The kanade engine shall Tick／時刻を外部から注入可能とし、実時間の sleep・実時計に依存せずに運行表の進行を決定的に再現できる。
 3. When `OnSecondChange` の応答として Value を受領した, the kanade engine shall Requirement 2 と同一の talk 起動経路で配送する。
-4. While boot 系列が完了していない、または close 握手が開始された後, the kanade engine shall Tick を受領しても `OnSecondChange` を発行しない。
+4. While boot 系列が完了していない、または close 握手中もしくは終了系列中, the kanade engine shall Tick を受領しても `OnSecondChange` を発行しない（close 握手が quit=false で終わった場合は定常運転へ復帰し発行を再開する）。
 
-### Requirement 4: close 握手
+### Requirement 4: close 握手と終了系列（`\-`＝quit が唯一のスクリプト起因終了トリガ）
 
-**Objective:** ゴースト運用者として、終了指示に対して OnClose の別れ口上が再生完了まで待たれてから終了してほしい。ゴーストが唐突に切断されないように。
+**Objective:** ゴースト運用者として、`\-` の正典意味論どおりに終了してほしい——OnClose はあくまで「終了要求」であり、実際に終了するか否かは応答スクリプトに `\-` が含まれるかに依存する。ゴーストが唐突に切断されず、終了拒否の自由も保たれるように。
 
 #### Acceptance Criteria
 
 1. When close 指示を受領した, the kanade engine shall `OnClose`（Ref0=理由）を GET として発行する。
-2. When `OnClose` の応答として Value を受領した, the kanade engine shall talk 起動要求として配送し、対応する再生完了通知（TalkDone）を受領するまで終了系列を進めない。
-3. If `OnClose` の応答が 204（Value なし）である, the kanade engine shall `OnCloseAll` を発行した上で終了系列へ進む。
-4. If 再生完了通知が上限時間内に届かない, the kanade engine shall エラーログを記録した上で終了系列を継続する（上限値は design で確定・注入時刻で判定しテスト可能とする）。
-5. When 終了系列が完了した, the kanade engine shall アクターとして停止し、停止の完了が呼び手（結線側）から観測可能である。
-6. When 全ての指示送信元が切断された, the kanade engine shall 正常終了する（宙吊りで残らない）。
+2. When `OnClose` の応答として Value を受領した, the kanade engine shall talk 起動要求として配送し、対応する `TalkDone` を受領するまで close 握手中として運行を保留する（終了するか否かは TalkDone の quit フラグで決まる）。
+3. When `TalkDone{quit: true}` を受領した（close 握手中か定常運転中か・talk の由来イベントを問わず）, the kanade engine shall 終了系列（SHIORI の unload を含む正規終了経路の起動→アクター停止）へ進む。
+4. If close 握手中の talk が quit=false で完了した（応答スクリプトに `\-` が含まれない）, the kanade engine shall ゴーストを終了させず定常運転へ復帰する。
+5. If `OnClose` の応答が 204（Value なし）である, the kanade engine shall `OnCloseAll` を発行した上で終了系列へ進む。
+6. If close 握手中の再生完了通知が上限時間内に届かない, the kanade engine shall エラーログを記録した上で終了系列を継続する（上限値は design で確定・注入時刻で判定しテスト可能とする）。
+7. When 終了系列が完了した, the kanade engine shall アクターとして停止し、停止の完了が呼び手（結線側）から観測可能である。
+8. When 全ての指示送信元が切断された, the kanade engine shall 正常終了する（宙吊りで残らない）。
 
 ### Requirement 5: SHIORI 呼出境界（mock 差し替え可能な相手方）
 
