@@ -216,6 +216,7 @@
 5. **ghost 層の所有先**（3.E: 新クレート E1／areka 内モジュール E2／ハイブリッド）と **private シーム `open_startup_window` の扱い**（内部呼び出し vs pub 化）。
 6. **kanade 停止完了の外向き通知経路**（3.F）——ghost が「kanade が終端に達した」ことを観測する手段。
 7. **spine e2e の testdll プロセスモデルと i686 成果物前提**（3.G・記憶 `workspace-test-needs-i686-host32-artifacts`）。
+   → **要件ディスカッション #2 で決着（2026-07-06）**: 決定論 spine e2e は **偽 SHIORI アクター境界**（`spawn_shiori_actor` の connect closure に台本化した偽 `ShioriConnection` を注入）で駆動し、**純 x64・i686 非依存**で全経路を網羅する（R7.1/R7.6）。実 32bit helper・実 testdll・実 pasta は **env ゲート下の opt-in 追験**に限定（R8.4）。設計に残るのは「偽 SHIORI アクターの具体形（台本化 API・死活/断線の演出）」のみ。
 8. **KanadeConfig の shell 名の出所**（R2.3）——`MountModel.names`（name/sakura.name）のどれを shell_name（OnBoot Ref0）に写すか。brief は「shell descript の name 系」と示すが、`resolve` が返す `GhostNames` の具体対応を design で確定。
 9. **`resolve` の `default_encoding` 供給**（R2.1）——ghost が `DefaultEncoding`（SSP 準拠 ANSI 既定）をどう決めるか。
 

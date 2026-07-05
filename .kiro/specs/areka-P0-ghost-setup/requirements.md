@@ -33,6 +33,7 @@ areka の M1 は「アプリ組み上げ三段」の第二段にあたる。第�
   - boot／close の SHIORI イベント発火順序は kanade が正本として実装済みであり、本仕様は再定義しない。
   - OnSecondChange は 1 秒周期（ukadoc）。ticker は 1 秒周期の Tick を kanade へ供給するのみで、周期の意味論は kanade が所有する。
   - 並走する seriko／emo-present とは非衝突。特に sakura の出力契約（`TalkCue`／`SurfaceSink`／`TextSink`／`cue_target_of`）は seriko が消費中のため凍結面として保護する。
+  - 決定論 spine e2e は SHIORI を偽装したアクター境界で駆動し、純 x64 の `cargo test --workspace` で全経路を網羅する（x86／i686 成果物に常時依存しない）。実 32bit helper・実 testdll・実 pasta を通す検証は env ゲート下の opt-in 追験に限定する。
 
 ## Requirements
 
@@ -116,11 +117,12 @@ areka の M1 は「アプリ組み上げ三段」の第二段にあたる。第�
 
 #### Acceptance Criteria
 
-1. The ghost 結線層 shall testdll fixture と記録 sink（サーフェス／テキスト sink の録音実装）を用いて boot から close までを検証する e2e を提供する。
+1. The ghost 結線層 shall 台本化した偽 SHIORI アクター境界（`spawn_shiori_actor` の connect closure に注入する決定論的な偽 `ShioriConnection`）と記録 sink（サーフェス／テキスト sink の録音実装）を用いて boot から close までを検証する e2e を提供する。
 2. When boot を検証するとき, the spine e2e shall OnBoot 起点のトーク受領 → sakura 再生 → sink への発火列を観測する。
 3. When close を検証するとき, the spine e2e shall 正規の clean shutdown が `ExitKind::Clean` 相当で成立し、全スレッドが join されることを観測する。
 4. When spine e2e を実行するとき, the spine e2e shall Tick を注入し、sleep を用いずに合否を確定する。
 5. The spine e2e shall boot 成功・SHIORI 死活・close 握手・close deadline・全断線を含む主要経路を実行テストで網羅する。
+6. The spine e2e shall SHIORI を偽装したアクター境界で駆動することにより、実 32bit helper・実 testdll の in-process load に依存せず、純 x64 の `cargo test --workspace` で全経路を緑にする（x86／i686 成果物を常時前提としない）。
 
 ### Requirement 8: env ゲート実 pasta 追験と app smoke 維持
 
@@ -131,3 +133,4 @@ areka の M1 は「アプリ組み上げ三段」の第二段にあたる。第�
 1. Where 環境変数によるゲートが有効なとき, the ghost 結線層 shall 実 pasta（実 emo2）の OnBoot 一周を追験として実行する。
 2. When 起動形が `open_startup_window` シームを経由するとき, the ghost 結線層 shall app smoke（`AREKA_APP_SMOKE_EXIT_MS` ゲート）が緑のまま維持されるようにする。
 3. While app smoke を維持するとき, the ghost 結線層 shall 本物ゴースト窓を生成せずダミー窓を維持する（本物窓生成は window-placement の領分）。
+4. The env ゲート実 pasta 追験 shall 環境変数ゲート下の opt-in としてのみ実行され、常時の `cargo test --workspace`（x64）緑化の前提とせず、x86／i686 成果物への常時依存を課さない。
