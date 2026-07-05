@@ -1,0 +1,25 @@
+[package]
+name = "areka-kanade"
+workspace = "../.."
+description = "kanade (conductor) engine for areka: canonical 運行表 (scheduling state machine) and talk startup contract; pure state machine + actor shell + swappable message boundary"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[dependencies]
+areka-actor = { path = "../areka-actor" }
+shiori-host32-host = { path = "../shiori-host32-host" }
+tracing = { workspace = true }
+thiserror = { workspace = true }
+
+[dev-dependencies]
+# shiori/real.rs のテストが RequestError::Ipc の内側 IpcError を構築するためだけの
+# workspace path dep（本体 import は shiori-host32-host 経由・host32 境界は real.rs に閉じる）。
+shiori-host32-ipc = { path = "../shiori-host32-ipc" }
+# タスク 6.1 のログ発火検証専用（純粋 step が発する tracing イベントを捕捉）。
+# workspace で既出（areka／wintf が使用済み）・テスト限定であり、設計「新規外部依存なし」
+# （＝runtime 依存の制約）には抵触しない。
+tracing-subscriber = { workspace = true }
