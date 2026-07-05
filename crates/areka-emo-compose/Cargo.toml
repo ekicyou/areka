@@ -1,0 +1,17 @@
+[package]
+name = "areka-emo-compose"
+workspace = "../.."
+description = "emo render engine 合成コア（三段直列チェーン 2/3）: fold→plan→execute で Shell 転記モデルと AtlasTable から ComposedSurface を生成する純粋層"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[dependencies]
+areka-parsers = { path = "../areka-parsers" }
+areka-emo-atlas = { path = "../areka-emo-atlas" }
+bevy_ecs = { workspace = true }
+tracing = { workspace = true }
+thiserror = { workspace = true }

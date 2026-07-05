@@ -1,7 +1,7 @@
 # Implementation Plan
 
 - [ ] 1. Foundation: 新設クレート雛形と上流パーサー転記ギャップの解消
-- [ ] 1.1 crates/areka-emo-compose の雛形を作成する
+- [x] 1.1 crates/areka-emo-compose の雛形を作成する
   - Cargo.toml に areka-parsers（path）・areka-emo-atlas（path）・bevy_ecs・tracing・thiserror（すべてワークスペース既存依存）のみを追加し、Rust 2024 edition・tokio 不使用を明示する
   - lib.rs にクレートdocsと公開モジュール構成（method/bind/composed/normalized/world/fold/atlas_bind/plan/blit）の骨組みを用意する
   - ワークスペース `members = ["crates/*"]` のため root Cargo.toml は変更不要であることを確認する
