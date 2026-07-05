@@ -54,7 +54,7 @@ main.rs が**本番アプリの骨格**になり、モックデモは**別名の
 ## Existing Spec Touchpoints
 
 - **Extends**: `completed/areka-mock-shell`（デモ実体の保全）・completed shiori 系（モジュール帰属の現状維持）。
-- **Adjacent**: `areka-P0-emo-present`／`areka-P0-window-placement`（両 brief の `crates/areka` 衝突注記は**本ユニット完了で解消**——申し開き整合済み）／`wintf-ulw-removal`（`CompositionMode` collapse の追随対象に example も含まれる）。
+- **Adjacent**: `areka-P0-emo-present`／`areka-P0-window-placement`（両 brief の `crates/areka` 衝突注記は**本ユニット完了で解消**——申し開き整合済み）／`wintf-ulw-removal` **✅ 完了（2026-07-05）**＝`CompositionMode` は既に撤去済み・現 main.rs も追随済み（実地確認 07-05: `CompositionMode` 参照ゼロ）→ **デモ退避は現行コードの機械的移設で済む**（追随作業は発生しない）。
 
 ## Constraints
 

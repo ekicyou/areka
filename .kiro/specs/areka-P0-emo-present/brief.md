@@ -33,8 +33,8 @@
 - **text-layer スロットの予約（詰み防止）**: 窓の visual 構成に**文字層の口を最初から予約**する（surface visual の上の独立レイヤ）。M1 の emo-text-layer は独立レイヤ描画（typewriter の毎グリフ更新が surface 再合成を強要しない）・M2 のポップアート装飾では合成パス内レイヤ化の再設計余地——この**二者を吸収できる seam**（text 層の差し込み点）を design で確認。予約しないと emo-text-layer 着手時に visual 構成の作り直しになる。
 - **bind 有効集合の初期解決**: emo2 の surface1000 表示には bindgroup default（`bindgroupN.default`・MAYUNA descript）の解決が必要。指令 API は surface id に加え **bind 集合を運べる形**にする（emo-compose の `compose(surface_id, active_binds)` 契約の呼び手側・将来の seriko→emo channel 契約の片側）。M-boot は descript default から静的解決。
 - **window-placement との統合 seam**: 本ユニットの example は仮設窓だが、表示装着 API は「**Window entity（handle）を受け取って surface を載せる**」形に切る——window-placement が生成する窓へ M-boot 統合でそのまま装着できる契約（どちらが先に完了しても結線可能）。
-- **ulw-removal との API 変動調整**: `wintf-ulw-removal` は `CompositionMode` collapse＝areka 側呼び出し（`CompositionMode::DComp` 指定箇所）を壊す破壊的変更。**順序調整**（ulw-removal 先行が理想）または本ユニット側の追随を織り込む（並行時は rebase 責務を明確に）。
-- **通信モデル（actor-foundation との契約）**: 指令 API（`show_surface` 級）は将来 `areka-P0-actor-foundation` の envelope 規約に載り、**UI 配送ブリッジ**（worker→UI pump への queue＋wakeup・foundation が提供）経由で届く——M-boot は直接呼出で開始するが、**指令 API のシグネチャは「メッセージ enum の1バリアントに転写できる形」**（`Send` な所有データ・借用なし・応答不要 or 返信 Sender 同梱）に最初から切ること。channel 化時に API 再設計が要らないことが受け入れ基準。actor-foundation とは**並走可**（本ユニットは直接呼出で完結・結線は kanade/seriko 時）。
+- **ulw-removal ✅ 完了（2026-07-05）＝新 API 前提で書く**: `CompositionMode` は**撤去済み**（GPU 合成単独・factory は常時 `WS_EX_NOREDIRECTIONBITMAP`）。旧「順序調整 or 追随」の懸念は解消——本ユニットは**現行 API（collapse 後）を最初から前提**にする（旧 enum 参照をコード例・донorから持ち込まない）。
+- **通信モデル（areka-actor ✅ との契約・実シンボル）**: 指令 API（`show_surface` 級）は将来 `areka-actor` の envelope 規約に載り、**UI 配送ブリッジ＝実装済みの `spawn_ui`/`UiSender`**（worker→UI pump・実クレート提供）経由で届く——M-boot は直接呼出で開始するが、**指令 API のシグネチャは「メッセージ enum の1バリアントに転写できる形」**（`Send` な所有データ・借用なし・応答不要 or `reply_channel` の `ReplySender` 同梱）に最初から切ること。channel 化時に API 再設計が要らないことが受け入れ基準（結線は kanade/seriko 時）。
 
 ## 設計指示・注意点
 

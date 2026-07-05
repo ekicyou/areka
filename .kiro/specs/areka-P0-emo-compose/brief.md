@@ -9,7 +9,7 @@
 
 ## Current State
 
-- **emo-atlas（直列1・前提）**: element path → (頁, UV, trim_offset, original_size) と premultiplied BGRA 頁バッファを供給。
+- **emo-atlas（直列1・✅ 2026-07-05 完了・実クレート `crates/areka-emo-atlas`）**: **実 API を正本として消費**（再定義しない）——`bake(sets: &[SurfaceSet], decoder: &impl ElementDecoder, cfg: PackConfig) -> BakeResult{table: AtlasTable, errors}`／`AtlasTable{entries: Vec<AtlasEntry>, pages: Vec<AtlasPage>}`／`AtlasEntry{original: Size, placement: Option<Placement{page,x,y}>}`（**None＝全透明＝転写スキップ**）／頁＝premultiplied BGRA バッファ。**`MemoryDecoder`（テスト用インメモリ）が既にある**＝本ユニットの pixel golden テストは WIC/COM 不要で組める。packing＝`rectangle-pack` 採用済み。
 - **parser は転記層**: `areka_parsers::shell::Shell` は疎 id・`surface.append` ターゲット記述子（範囲非展開 `Vec<AppendTarget>`）・alias を**転記のまま**保持（記憶 areka-parser-transcribes-tree-downstream）。**展開・実ツリー構築は本ユニットの責務**。
 - 合成メソッドの正典: ukadoc（overlay／overlayfast／replace／base／reduce=α乗算／asis／interpolate／blend-* 群）。emo2 は overlay 系 subset のみ使用（M1 スコープ表）。
 
@@ -34,7 +34,7 @@ Shell モデル＋アトラスを入力に、**指定 surface id の合成済み
 - **出力契約 = `ComposedSurface`**: premultiplied BGRA・size（＝base surface 原寸）・stride を明示した型として emo-present と共有（present 側は無変換で WUC upload と AlphaMask 生成に使える形）。
 - **AtlasEntry は emo-atlas の正本型を消費**（再定義しない）。
 - **emo2 fixture 実測（2026-07-03）**: 合成メソッドは **`overlay` のみ**使用（写像表は全量・実装は overlay＋asis 級の自明分から）。定義済み surface 64 本・collision は surface1000 上に定義（Head/Bust）。
-- **通信モデル**: 本ユニットは**通信非依存の純粋層**（actor-foundation 不要・スレッドも channel も持たない純粋関数群）。`compose()` の入出力（`BindSet`・`ComposedSurface`）は **`Send` な所有データ**にする——将来 seriko アクター（worker）→emo アクター（UI）間のメッセージ/共有バッファに乗るため（借用を跨がせない）。
+- **通信モデル**: 本ユニットは**通信非依存の純粋層**（`areka-actor` 不要・スレッドも channel も持たない純粋関数群）。`compose()` の入出力（`BindSet`・`ComposedSurface`）は **`Send` な所有データ**にする——将来 seriko アクター（worker）→emo アクター（UI）間のメッセージ/共有バッファに乗るため（借用を跨がせない）。
 
 ## 設計指示・注意点
 
