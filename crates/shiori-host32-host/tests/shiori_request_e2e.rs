@@ -6,7 +6,7 @@
 //! GET と NOTIFY を **1 つの `#[test]` 関数**に集約し、単一の親窓＋helper を再利用する
 //! （R6.9「両 request line を 1 回の決定的 run で行使」）。親 message-only 窓は同一プロセスで
 //! 2 組独立生成すると 2 組目が失敗する既知制約ゆえ、**同時生存する親窓を高々 1 つ**に保つ
-//! （使用後に明示 `drop`・shiori_load_e2e.rs / echo_roundtrip / parent_window 参照）。
+//! （使用後に明示 `drop`・shiori_load_e2e.rs / parent_window 参照）。
 //!
 //! 検証フロー（design.md GET 往復・Load-before-Request 構造不変条件）:
 //! - ① 親窓 `create()` → helper spawn → HELLO pump でハンドシェイク完了を観測。

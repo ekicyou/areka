@@ -73,7 +73,7 @@ use windows::Win32::UI::WindowsAndMessaging::{SendMessageW, WM_COPYDATA};
 const BOUNDED_LIMIT: Duration = Duration::from_secs(5);
 
 // ---------------------------------------------------------------------------
-// helper exe の所在解決（経路 3 用・echo_roundtrip.rs と同一規約）
+// helper exe の所在解決（経路 3 用・shiori_load_e2e.rs / shiori_request_e2e.rs と同一規約）
 // ---------------------------------------------------------------------------
 
 /// 事前ビルドした i686 helper exe のパスを堅牢に解決する（無言スキップで緑を偽装しない）。

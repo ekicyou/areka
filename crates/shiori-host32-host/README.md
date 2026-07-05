@@ -47,19 +47,22 @@ i686 は x86 の MSVC ツールセットで足りる。
 
 ### 手順（コピペ可）
 
-往復 echo 統合テストは **実 i686 helper exe を spawn** するため、helper を先にビルドしてから
+統合 E2E テスト（`shiori_load_e2e` / `shiori_request_e2e`）は **実 i686 helper exe を spawn** し
+**実 i686 testdll（`shiori.dll`）を load** するため、helper と testdll を先にビルドしてから
 親テストを走らせる 2 段階になる。
 
 ```powershell
-# ① i686 helper を先にビルド（往復 echo 統合テストが spawn する exe を用意）
-cargo build -p shiori-host32-helper --target i686-pc-windows-msvc
+# ① i686 helper と testdll を先にビルド（統合テストが spawn/load する成果物を用意）
+cargo build -p shiori-host32-helper  --target i686-pc-windows-msvc
+cargo build -p shiori-host32-testdll --target i686-pc-windows-msvc
 
-# ② host 側テスト（単体 ＋ 統合）。統合テストは ① の helper exe を要する
+# ② host 側テスト（単体 ＋ 統合）。統合テストは ① の成果物を要する
 cargo test -p shiori-host32-host
 
 #    個別に走らせる場合:
-cargo test -p shiori-host32-host --test echo_roundtrip   # 往復 echo（要件 6.x のゲート指標）
-cargo test -p shiori-host32-host --test error_paths      # エラー経路（要件 1.4/2.5/3.4/5.x）
+cargo test -p shiori-host32-host --test shiori_load_e2e     # LOAD 往復（proxy 確立 ack）
+cargo test -p shiori-host32-host --test shiori_request_e2e  # request 往復（GET Value / NOTIFY 204）
+cargo test -p shiori-host32-host --test error_paths         # エラー経路（要件 1.4/2.5/3.4/5.x）
 
 # ③ proto の 32bit 可搬性テスト（i686 でも単体テストが通ることの確認・要件 7.2/7.3）
 cargo test -p shiori-host32-ipc --target i686-pc-windows-msvc
