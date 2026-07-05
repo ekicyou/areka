@@ -35,7 +35,7 @@
 - **`main` 所有の `run()` ループ**: `main` が `app.run()` を自ら呼ぶ（下流シームに隠さない）。ダミー窓 close の空遷移で `run()` が返り、正常終了する。
 - **構成入力の解決規約**: 起動時位置引数（`argv[1]`=ghost root, `argv[2]`=balloon root）と既定パスのフォールバック規約。パスの**決定**まで（存在検証は warn どまり・強制しない）。
 - **SHIORI 実走デモの呼び口**: `shiori_demo::run_demo_if_enabled()` の env-gate 呼び出しを骨格 main に据える（挙動不変）。
-- **replace-me シーム**: ghost-setup／window-placement が本物のゴースト窓生成へ置き換える差し込み点（`open_startup_window(app: &mut WinApp)`）。本仕様ではその本体が検証用ダミー窓を開く。
+- **replace-me シーム**: ghost-setup／window-placement が本物のゴースト窓生成へ置き換える差し込み点（`open_startup_window(app: &WinApp)`）。本仕様ではその本体が検証用ダミー窓を開く。
 - **Cargo example の実行可能化**: `examples/mock-shell.rs` の配置（Cargo 自動認識で `--example mock-shell` 実行可）。
 
 ### Out of Boundary
@@ -55,7 +55,7 @@
 
 以下の変更は下流仕様（ghost-setup／window-placement／emo-present）に再点検を要求する:
 
-- replace-me シーム（`open_startup_window(app: &mut WinApp)`）のシグネチャ・呼び出し位置の変更。下流はこのシーム本体（ダミー窓）を削除し、本物のエンジン結線＋ゴースト窓生成へ置き換える。`main` の構造（シーム呼び出し→`app.run()`）は不変で、変わるのはシーム本体だけである。
+- replace-me シーム（`open_startup_window(app: &WinApp)`）のシグネチャ・呼び出し位置の変更。下流はこのシーム本体（ダミー窓）を削除し、本物のエンジン結線＋ゴースト窓生成へ置き換える。`main` の構造（シーム呼び出し→`app.run()`）は不変で、変わるのはシーム本体だけである。
 - 構成入力の解決契約（引数フォーマット・既定パス・ログ出力フィールド）の変更。
 - 骨格の起動→終了の制御フロー（UI ランタイム起動の形・`main` 所有の `run()` ループ・正常終了経路）の変更。
 - `examples/mock-shell.rs` の観測挙動（窓 2 枚・ドラッグ追従・ダブルクリック終了・縦書き）の変更（emo-present が観測土台の donor に使う）。
@@ -170,14 +170,14 @@ crates/areka/
 
 ### Modified Files
 
-- `crates/areka/src/main.rs` — モック UI 塊（定数・マーカー・生成関数・登録システム・ハンドラ・窓生成結線・操作ガイド）を除去。骨格要素（`windows_subsystem` 属性・subscriber 初期化・panic・SHIORI モジュール宣言・demo 呼び口）を維持。**新規追加**: 構成入力解決（`resolve_config_inputs`）とその呼び出し＋ログ、replace-me シーム（`open_startup_window(app: &mut WinApp)`・本仕様では検証用ダミー窓を開く）、その後の `main` 所有の `app.run()?` 呼び出し（ダミー窓 close で空遷移→正常復帰・DD7 改定）。`#[cfg(test)] mod tests;` 宣言を除去。
+- `crates/areka/src/main.rs` — モック UI 塊（定数・マーカー・生成関数・登録システム・ハンドラ・窓生成結線・操作ガイド）を除去。骨格要素（`windows_subsystem` 属性・subscriber 初期化・panic・SHIORI モジュール宣言・demo 呼び口）を維持。**新規追加**: 構成入力解決（`resolve_config_inputs`）とその呼び出し＋ログ、replace-me シーム（`open_startup_window(app: &WinApp)`・本仕様では検証用ダミー窓を開く）、その後の `main` 所有の `app.run()?` 呼び出し（ダミー窓 close で空遷移→正常復帰・DD7 改定）。`#[cfg(test)] mod tests;` 宣言を除去。
 - `crates/areka/src/tests.rs` — **削除**（内容は `examples/mock-shell.rs` の `#[cfg(test)] mod tests` へ移設）。
 
 ### Created Files
 
 - `crates/areka/examples/mock-shell.rs` — 現 `main.rs` のモック UI 全体を機械移設した退避 example。`main()`＝subscriber 初期化＋`WinApp::new()`＋`run_setup` spawn＋`register_click_through_windows` 結線＋操作ガイド＋`mgr.run()`（窓を生成するので `run()` は正常に空遷移で復帰する）。末尾に `#[cfg(test)] mod tests`（現 `src/tests.rs` の内容）を同居させる。`windows_subsystem` 属性は付与しない（DD3・`clickthrough_two_rects` 前例と同じ）。
 
-> 骨格の依存方向: `main`（Entry）→ `resolve_config_inputs`（std のみ）／`open_startup_window(&mut WinApp)`（本仕様ではダミー窓を開く）／`shiori_demo`（残置）／`wintf::WinApp`（`new()` と `main` 所有の `run()`）。上向き依存なし。example は骨格 `src/` の一切に依存しない（モック私物を持ち込まない・R1.5）。
+> 骨格の依存方向: `main`（Entry）→ `resolve_config_inputs`（std のみ）／`open_startup_window(&WinApp)`（本仕様ではダミー窓を開く）／`shiori_demo`（残置）／`wintf::WinApp`（`new()` と `main` 所有の `run()`）。上向き依存なし。example は骨格 `src/` の一切に依存しない（モック私物を持ち込まない・R1.5）。
 
 ## System Flows
 
@@ -205,7 +205,7 @@ flowchart TB
 **フロー上の設計判断**:
 - **構成解決の失敗許容**: root path が存在しなくても `warn!` を出して継続し正常終了する（R4.1／R3 は「パスの決定とログ」であってマウントや存在保証ではない）。異常終了経路を作らない。
 - **demo 呼び口**: env-gate（`AREKA_SHIORI_DEMO`）無効時は no-op、有効時は駆動し、成否にかかわらず通常起動を中断しない（現挙動不変・R5.3/5.4）。現 main の配置（`WinApp::new()` の後・シーム／`run()` の前）を踏襲する。
-- **replace-me シーム＋ダミー窓（DD7 改定）**: `open_startup_window(&mut app)` が検証用ダミー窓を 1 枚開く。これが `run()` ループに空遷移の heartbeat を与える。下流はこのシーム本体を削除し本物のゴースト窓生成へ置き換えるが、`main` の構造（シーム→`app.run()`）は不変。
+- **replace-me シーム＋ダミー窓（DD7 改定）**: `open_startup_window(&app)` が検証用ダミー窓を 1 枚開く。これが `run()` ループに空遷移の heartbeat を与える。下流はこのシーム本体を削除し本物のゴースト窓生成へ置き換えるが、`main` の構造（シーム→`app.run()`）は不変。
 - **`main` 所有の `run()`（DD7 改定）**: `main` が `app.run()?` を自ら呼ぶ（下流に隠さない）。ダミー窓が閉じられると `WindowRegistry` が空へ遷移し `run()` が `Ok` を返し、正常終了（exit 0）する。窓が 1 枚存在するため旧 DD7 のハング問題は消滅する。
 
 ## Requirements Traceability
@@ -268,7 +268,7 @@ flowchart TB
 
 **Dependencies**
 - Outbound: `resolve_config_inputs` — 構成入力の決定（P0）。
-- Outbound: `open_startup_window(&mut WinApp)` — replace-me シーム呼び出し（本仕様ではダミー窓を開く・P0）。
+- Outbound: `open_startup_window(&WinApp)` — replace-me シーム呼び出し（本仕様ではダミー窓を開く・P0）。
 - Outbound: `shiori_demo::run_demo_if_enabled` — env-gate デモ呼び口（P1）。
 - External: `wintf::WinApp::new` — COM/DPI 初期化・World 生成（P0）／`wintf::WinApp::run` — `main` 所有のブロッキングループ（P0）。
 - External: `human_panic::setup_panic!` — パニックハンドラ（P1）。
@@ -284,9 +284,9 @@ fn main() -> windows::core::Result<()> {
     // human_panic::setup_panic!()
     // tracing subscriber init（RUST_LOG フォールバック）
     let cfg = resolve_config_inputs(&args); info!(...cfg...);   // R3
-    let mut app = WinApp::new()?;                                // R2.4 起動
+    let app = WinApp::new()?;                                    // R2.4 起動
     shiori_demo::run_demo_if_enabled();                          // R5
-    open_startup_window(&mut app);   // ★replace-me シーム：本仕様はダミー検証窓を開く
+    open_startup_window(&app);   // ★replace-me シーム：本仕様はダミー検証窓を開く
     app.run()?;                       // ★main が loop 所有・ダミー窓 close で空遷移→正常復帰
     Ok(())
 }
@@ -358,16 +358,16 @@ fn resolve_config_inputs(args: &[String]) -> ConfigInputs;
 /// replace-me シーム：後続仕様がここを本物のゴースト窓生成へ置き換える差し込み点。
 /// 本仕様ではその本体が最小の検証用ダミー窓（配置主張なし・閉じられる窓）を開く。
 /// app ハンドルを取るのはダミー窓を spawn するため。
-fn open_startup_window(app: &mut WinApp);
+fn open_startup_window(app: &WinApp);
 ```
 - Preconditions: `WinApp::new()` 成功済みの `app` を受け取る。
 - Postconditions: 検証用ダミー窓が 1 枚開かれ、`WindowRegistry` に登録される（`main` 後続の `app.run()` に heartbeat を与える）。
 - Invariants: 配置・座標・DPI・ゴースト内容を持たない。ダミー窓は必ず閉じ可能（利用者 close＋smoke のプログラム close）。
 
 **Implementation Notes**
-- Integration: 骨格 `main` が構成解決・demo 呼び口の後、`app.run()` の前にこの関数を `&mut app` で呼ぶ。本体はダミー窓を spawn する。
+- Integration: 骨格 `main` が構成解決・demo 呼び口の後、`app.run()` の前にこの関数を `&app` で呼ぶ。本体はダミー窓を spawn する。署名が `&WinApp`（`&mut` でない）で足りる根拠: 窓生成は `WinApp::world()`（`&self`）→ `EcsWorld::spawn`（`&self`）経由＝現 `main.rs` の窓生成と同型で ECS 内部可変性を用いるため。下流が本物窓生成＋エンジン結線でより強い借用を要すれば、それは Revalidation Trigger（シーム署名変更）として扱う（投機的に `&mut` を先取りしない）。
 - Validation: `cargo run -p areka` でダミー窓が表示され、close で `run()` が返り exit 0 になることを確認する。smoke テストがダミー窓をプログラム的に閉じ clean exit を assert する。
-- Risks: ダミー窓が閉じられないと `run()` が返らない → 必ず閉じ可能にする。過度な抽象（trait・plugin レジストリ）は speculative ゆえ導入しない。DD5 改定でシームは「ダミー検証窓を開く関数 1 個（`open_startup_window(&mut WinApp)`）」に決定（旧「no-op 関数 `wire_engines`」を改定）。
+- Risks: ダミー窓が閉じられないと `run()` が返らない → 必ず閉じ可能にする。過度な抽象（trait・plugin レジストリ）は speculative ゆえ導入しない。DD5 改定でシームは「ダミー検証窓を開く関数 1 個（`open_startup_window(&WinApp)`）」に決定（旧「no-op 関数 `wire_engines`」を改定）。
 
 ### Residual Assets Layer
 
@@ -436,5 +436,5 @@ fn open_startup_window(app: &mut WinApp);
 
 ### Open Questions / Risks
 - なし（DD1–DD7 は本設計内で決着。DD6 は要件ディスカッション #1 で解釈①採用済み）。
-- **DD5／DD7 は設計ディスカッションで改定（開発者の絶対決定）**: 旧 DD5「no-op 単一関数 `wire_engines`」と旧 DD7「窓ゼロで `run()` に入らず windowless-return」を破棄し、**replace-me シーム `open_startup_window(&mut WinApp)` が検証用ダミー窓を開き、`main` が `app.run()` を所有・ダミー窓 close で正常終了**するモデルへ改定した。ダミー窓が `run()` ループに heartbeat を与えるためハングは消滅し、boot→loop→exit を実際に踏破して証明できる（旧 windowless-return より強い検証）。ダミー窓は配置・座標・DPI を一切主張しない（2026-07-05 window-placement リジェクト再発防止）。下流はシーム本体を本物ゴースト窓生成へ置換するが `main` 構造は不変。
+- **DD5／DD7 は設計ディスカッションで改定（開発者の絶対決定）**: 旧 DD5「no-op 単一関数 `wire_engines`」と旧 DD7「窓ゼロで `run()` に入らず windowless-return」を破棄し、**replace-me シーム `open_startup_window(&WinApp)` が検証用ダミー窓を開き、`main` が `app.run()` を所有・ダミー窓 close で正常終了**するモデルへ改定した。ダミー窓が `run()` ループに heartbeat を与えるためハングは消滅し、boot→loop→exit を実際に踏破して証明できる（旧 windowless-return より強い検証）。ダミー窓は配置・座標・DPI を一切主張しない（2026-07-05 window-placement リジェクト再発防止）。下流はシーム本体を本物ゴースト窓生成へ置換するが `main` 構造は不変。
 - 既定 fixture パスの実体（どのゴースト／バルーンを指すか）は ghost-setup が実マウント対象を確定する際に定まる。骨格はパス決定とログに徹し、実在は warn どまりで正常終了を壊さない（本仕様スコープ内で自己完結）。
