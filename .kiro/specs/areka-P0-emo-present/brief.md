@@ -66,7 +66,7 @@
 
 ## Upstream / Downstream
 
-- **Upstream**: `areka-P0-emo-compose`（直列2）→ その先に `emo-atlas`（直列1）／wintf 表示・AlphaMask・clickthrough 基盤 ✅。
+- **Upstream**: `completed/areka-P0-emo-compose`（直列2）**✅完了（2026-07-05）**→ その先に `emo-atlas`（直列1）／wintf 表示・AlphaMask・clickthrough 基盤 ✅。
 - **Downstream**: `areka-P0-emo-text-layer`（表示済み surface の上の文字層＝本ユニットの表示口を前提）／`areka-P0-seriko-engine`（指令 API の将来の呼び手）／`collision-geometry`・`choice-render`・`dual-window`（増分）。
 
 ## Existing Spec Touchpoints
