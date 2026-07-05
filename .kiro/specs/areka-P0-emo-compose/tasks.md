@@ -184,7 +184,7 @@
   - _Depends: 3, 4, 5, 6_
 
 - [ ] 8. Validation: emo2 fixtureによるオフスクリーンpixel観測と決定性検証
-- [ ] 8.1 surface0のgoldenテストを実装する
+- [x] 8.1 surface0のgoldenテストを実装する
   - emo2 fixtureのsurfaces.txtをparseし、MemoryDecoder+bake経路でCOM非依存にAtlasTableを構築して合成する
   - element0単層の合成結果が挿入した画像とバイト等価であることを検証する
   - 観測可能な完了状態: surface0のgoldenテストがCOM/表示なしで実行されgreenになる
