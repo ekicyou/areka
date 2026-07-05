@@ -29,6 +29,8 @@ pub fn compile(instructions: &[Instruction]) -> CompiledTalk {
     let mut offset: f64 = 0.0;
     let mut scope: u32 = 0;
     let mut cues: Vec<Cue> = Vec::new();
+    // 終端命令なしで末尾到達なら通常終了（R6.3）。End/Quit 検出で確定・走査打切り。
+    let mut end = TalkEndReason::Ended;
 
     for instruction in instructions {
         match instruction {
@@ -62,15 +64,29 @@ pub fn compile(instructions: &[Instruction]) -> CompiledTalk {
             Instruction::Clear => {
                 cues.push(emit(scope, offset, CueCommand::Clear));
             }
-            // End/Quit の終端切詰め・M-boot 外タグの無視ログは task 3.2 で処理する。
-            // `Instruction` は #[non_exhaustive] ゆえ catch-all が必須。
-            _ => {}
+            // 終端 `\e`（R6.1/6.5）: 終端理由 Ended を確定し以降を切り詰める。
+            // ukadoc `\e` = この後に書かれたスクリプトは実行・表示されない。
+            Instruction::End => {
+                end = TalkEndReason::Ended;
+                break;
+            }
+            // 終了 `\-`（R6.2/6.5）: 終端理由 Quit を確定し以降を切り詰める。
+            Instruction::Quit => {
+                end = TalkEndReason::Quit;
+                break;
+            }
+            // M-boot 外タグ（Choice/Cursor/Move/SystemVar/GenericCommand/Raw）および
+            // `#[non_exhaustive]` の未知 variant は無視ログを記録し cue を生成せず継続する
+            // （寛容・非 panic・型シーム・R8.1/8.2/8.3/R11.2）。写像先は後続 M-dialogue。
+            other => {
+                tracing::debug!(instruction = ?other, "M-boot 外タグを無視");
+            }
         }
     }
 
     CompiledTalk {
         sheet: CueSheet::new(cues),
-        end: TalkEndReason::Ended,
+        end,
     }
 }
 
@@ -210,7 +226,7 @@ mod tests {
         assert!(compiled.sheet.is_empty());
     }
 
-    /// 本 task で未対応の非基本 variant は cue を生成しない（catch-all no-op・非 panic）。
+    /// 本 task で未対応の非基本 variant は cue を生成しない（無視ログ・非 panic）。
     #[test]
     fn non_basic_variants_produce_no_cue() {
         let compiled = compile(&[
@@ -220,5 +236,99 @@ mod tests {
         ]);
         // Text のみが cue になる。
         assert_eq!(compiled.sheet.cues().len(), 1);
+    }
+
+    /// `End` 検出で終端理由 `Ended` を確定し、以降の命令を発火列へ含めず破棄する
+    /// （終端切詰め・R6.1/6.5）。ukadoc `\e` = この後のスクリプトは実行・表示されない。
+    #[test]
+    fn end_truncates_following_instructions() {
+        let compiled = compile(&[
+            Instruction::Text("a".into()),
+            Instruction::End,
+            Instruction::Text("b".into()),
+        ]);
+        let cues = compiled.sheet.cues();
+        // "a" のみが cue になり "b" は切り詰められる。
+        assert_eq!(cues.len(), 1);
+        match command_of(&cues[0]) {
+            CueCommand::Text(s) => assert_eq!(s, "a"),
+            other => panic!("expected Text(\"a\"), got {other:?}"),
+        }
+        assert_eq!(compiled.end, TalkEndReason::Ended);
+    }
+
+    /// `Quit` 検出で終端理由 `Quit` を確定し、以降の命令を破棄する（終端切詰め・R6.2/6.5）。
+    #[test]
+    fn quit_truncates_following_instructions_and_sets_quit() {
+        let compiled = compile(&[
+            Instruction::Text("a".into()),
+            Instruction::Quit,
+            Instruction::Text("b".into()),
+        ]);
+        let cues = compiled.sheet.cues();
+        assert_eq!(cues.len(), 1);
+        match command_of(&cues[0]) {
+            CueCommand::Text(s) => assert_eq!(s, "a"),
+            other => panic!("expected Text(\"a\"), got {other:?}"),
+        }
+        assert_eq!(compiled.end, TalkEndReason::Quit);
+    }
+
+    /// 終端命令なしで末尾まで到達した列は全命令が発火し end=Ended（末尾到達・R6.3）。
+    #[test]
+    fn no_terminal_keeps_all_instructions_and_ends() {
+        let compiled = compile(&[Instruction::Text("a".into()), Instruction::Text("b".into())]);
+        assert_eq!(compiled.sheet.cues().len(), 2);
+        assert_eq!(compiled.end, TalkEndReason::Ended);
+        assert_ne!(compiled.end, TalkEndReason::Quit);
+    }
+
+    /// 先行 cue のない `[Quit]` でも Quit が検出され、空 sheet＋end=Quit となる
+    /// （空 sheet でも Ended と判別可能なことの固定・下流 R6.2 の区別根拠）。
+    #[test]
+    fn bare_quit_yields_empty_sheet_with_quit_end() {
+        let compiled = compile(&[Instruction::Quit]);
+        assert!(compiled.sheet.is_empty());
+        assert_eq!(compiled.end, TalkEndReason::Quit);
+    }
+
+    /// M-boot 外タグ（Choice/Cursor/Move/SystemVar/GenericCommand/Raw）は
+    /// 無視ログのみで cue を生成せず非 panic。間に挟んだ Text だけが cue になる
+    /// （R8.1/8.3/11.2）。無視のログ記録（R8.2・`tracing::debug!`）は実装済みだが
+    /// 本テストは no-cue＋非 panic を主観測とし、ログ出力自体はコード検査で担保する。
+    #[test]
+    fn m_boot_outside_tags_are_ignored_without_cue_or_panic() {
+        use areka_parsers::sakura::{Choice, MoveArgs};
+
+        let compiled = compile(&[
+            Instruction::Choice(Choice {
+                disp: "はい".into(),
+                target: "OnYes".into(),
+                references: vec!["ref".into()],
+            }),
+            Instruction::Cursor {
+                x: "10".into(),
+                y: "20".into(),
+            },
+            Instruction::Move(MoveArgs {
+                args: vec!["100".into(), "200".into()],
+            }),
+            Instruction::SystemVar("username".into()),
+            Instruction::GenericCommand {
+                name: "raise".into(),
+                raw_args: vec!["OnBoot".into()],
+            },
+            Instruction::Raw("\\?".into()),
+            Instruction::Text("only-me".into()),
+        ]);
+        let cues = compiled.sheet.cues();
+        // 無視タグ群は 0 cue、Text のみが 1 cue。
+        assert_eq!(cues.len(), 1);
+        match command_of(&cues[0]) {
+            CueCommand::Text(s) => assert_eq!(s, "only-me"),
+            other => panic!("expected Text(\"only-me\"), got {other:?}"),
+        }
+        // 終端命令を含まないため末尾到達で Ended。
+        assert_eq!(compiled.end, TalkEndReason::Ended);
     }
 }
