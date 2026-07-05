@@ -209,7 +209,7 @@ crates/areka/examples/
 
 - `crates/wintf/src/com/dxgi.rs` — **追加**: `create_composition_swap_chain(d3d: &ID3D11Device, dxgi: &IDXGIDevice4, width, height) -> Result<IDXGISwapChain1>`（汎用・emo 非依存・unsafe 隔離）
 - `crates/wintf/src/com/wuc.rs` — **追加**: `CompositorInteropExt::create_composition_surface_for_swap_chain(&self, swapchain) -> Result<ICompositionSurface>`（既存 Ext trait へメソッド増分）
-- `crates/wintf/src/ecs/layout/hit_test/mod.rs` — **変更**: `hit_test_entity` の AlphaMask 読みで `AlphaMaskResource` を最優先（無ければ既存どおり `BitmapSourceResource` → フォールバック）。`AlphaMaskResource` 定義（`pub struct AlphaMaskResource`・`AlphaMask` を内包・set/get）を同モジュールに新設
+- `crates/wintf/src/ecs/layout/hit_test/mod.rs` — **変更**: AlphaMask 読み出しを共有ヘルパへ抽出し、`hit_test_entity` と **`hit_test_entity_ex`**（clickthrough `evaluate_targets`→`hit_test_in_window` およびマウス系 window_proc が通る実経路）の**両 AlphaMask 分岐**で `AlphaMaskResource` を最優先（無ければ既存どおり `BitmapSourceResource` → フォールバック）。`AlphaMaskResource` 定義（`pub struct AlphaMaskResource`・`AlphaMask` を内包・set/get）を同モジュールに新設
 - `crates/wintf/tests/…` — **追加**: `AlphaMaskResource` 優先読みの単体テスト（既存 hit_test テストドメインに追随）
 - `crates/Cargo.toml`（workspace） — メンバ追加 `areka-emo-present`
 - `crates/areka/Cargo.toml` — dev-dependency に `areka-emo-present`（example 用）
@@ -506,6 +506,7 @@ impl SwapChainPresenter {
   2. **text-layer slot**: surface entity の**兄弟・上位 z**として空 entity（`Name("emo-text-layer-slot")`＋`Visual` のみ・内容なし）を予約。M1 の独立レイヤ描画／M2 の合成パス内レイヤ化の両者を「この entity の差し替え」で吸収する seam（emo-text-layer が消費）
 - 非表示（R3.3）: `Visual::set_visible(false)`＋`HitTest::none()` へ切替（swap chain・キャッシュは保持＝再表示は Present 不要で復帰）。窓自体の show/hide は所有しない（placement/ghost 領分）
 - DPI（R1.6）: SetSize・WindowPos サイズとも**物理 px**（Data Models「DPI 表示契約」参照）。taffy の論理レイアウト（`BoxStyle`）を surface 表示経路に**使わない**
+- bounds 確立: surface entity の `Arrangement`（→`GlobalArrangement.bounds`＝AlphaMask 座標変換の基準）は **VisualMount が装着時・原寸変更時に物理 px で直接設定**する（原点=窓クライアント 0,0・寸=surface 原寸。`BoxStyle`/taffy 非経由・伝播は既存 `propagate_global_arrangements` に委ねる）
 
 **Implementation Notes**
 - Integration: 既存 `deferred_surface_creation_system` は `GraphicsCommandList` 駆動のため emo の surface entity には発火しない（`GraphicsCommandList` を挿入しない）＝既存経路と競合しない。
@@ -553,7 +554,7 @@ pub fn build_balloon_target(
 
 **Responsibilities & Constraints**
 - `pub struct AlphaMaskResource`（CPU リソース命名規約準拠・`AlphaMask` を内包・`set`/`mask()` アクセサ・`Component`）
-- `hit_test_entity` の `HitTestMode::AlphaMask` 分岐で **`AlphaMaskResource` を最優先**で読み、無ければ従来どおり `BitmapSourceResource` → 矩形フォールバック。既存挙動は完全後方互換（既存テスト不変）
+- `hit_test_entity` **および `hit_test_entity_ex`** の `HitTestMode::AlphaMask` 分岐で **`AlphaMaskResource` を最優先**で読み（読み出しは両者共有のヘルパへ抽出）、無ければ従来どおり `BitmapSourceResource` → 矩形フォールバック。既存挙動は完全後方互換（既存テスト不変）。clickthrough（`evaluate_targets`→`hit_test_in_window`→`hit_test_entity_ex`）とマウス系 window_proc はこの経路で恩恵を受ける
 - 座標変換は既存ロジック（bounds 相対比例→マスク座標）を共有。emo-present では bounds（物理）＝マスク原寸ゆえ恒等写像（R2.5 の成立根拠）
 
 ##### State Management
@@ -561,8 +562,8 @@ pub fn build_balloon_target(
 - Concurrency: hit-test・clickthrough 評価と同一 UI スレッド＝競合なし
 
 **Implementation Notes**
-- Integration: `ClickThroughRegistry` / `evaluate_targets` は `hit_test_in_window` 経由で無改変のまま恩恵を受ける。
-- Validation: 「`AlphaMaskResource` あり→優先」「なし→既存経路」の単体テスト追加。
+- Integration: `ClickThroughRegistry` / `evaluate_targets` は `hit_test_in_window`→`hit_test_entity_ex` 経由で（上記両分岐改修により）無改変のまま恩恵を受ける。
+- Validation: 「`AlphaMaskResource` あり→優先」「なし→既存経路」の単体テスト追加。**`hit_test_in_window` 経由（`hit_test_entity_ex` 側）の優先読みを檻に含める**。
 - Risks: なし（追加読み口のみ・既存経路不変）。
 
 #### com/dxgi・com/wuc ヘルパ（wintf COM 層）
@@ -651,7 +652,7 @@ struct PresentTarget {
 2. **CacheEntry 対生成**: mask が `composed.bytes()` から生成され原寸一致（2.1・任意ピクセルの is_hit と α≥128 の一致）
 3. **PresentCommand 契約**: `Send + 'static` 静的 assert・`Hide`/`InvalidateCache` variant の存在（3.3/3.5・回帰檻）
 4. **BalloonFrameSource**: synthetic surfaces.txt → `shell::parse` 往復で element path/surface id が転記一致（5.1/5.3）
-5. **wintf hit-test 読み口**: `AlphaMaskResource` あり→優先・なし→`BitmapSourceResource` 既存経路（2.2・wintf 側テストドメイン）
+5. **wintf hit-test 読み口**: `AlphaMaskResource` あり→優先・なし→`BitmapSourceResource` 既存経路。`hit_test_entity` 直接呼びと `hit_test_in_window` 経由（`hit_test_entity_ex`）の両方を檻に含める（2.2/2.3・wintf 側テストドメイン）
 
 ### Integration Tests（GPU 経路・WARP 可＝CI 決定論）
 
