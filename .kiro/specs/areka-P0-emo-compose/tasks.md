@@ -75,7 +75,7 @@
   - _Requirements: 1.1, 1.4, 2.1_
   - _Boundary: Fold_
 
-- [ ] 3.3 Fold: surface.append の展開＝既存id限定の追記を実装する
+- [x] 3.3 Fold: surface.append の展開＝既存id限定の追記を実装する
   - `surface.append` のターゲット記述子（単一・列挙・両端含む範囲）を展開し、その時点でツリーに存在するidのみへ追記する（非存在idは新設しない）
   - append内のelement/collision/animationを対象surfaceへマージし、同一animation idは後勝ち置換としてwarnログに記録する
   - 複数の定義（surfaceとappend）が同一surfaceに効く場合、パーサー出力の登場順で決定的に適用する

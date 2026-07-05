@@ -6,7 +6,7 @@
 //! 順序で決定的に適用し、append ブロックが持つ element・collision・animation を対象 surface へ
 //! 反映しつつ alias を収集する。参照 id が存在しない場合はパニックせず `warn` 以上で観測可能に扱う。
 
-use areka_parsers::shell::{AppendTarget, DefRef, Element, Shell, Surface};
+use areka_parsers::shell::{AppendTarget, DefRef, Element, Shell, Surface, SurfaceAppend};
 use bevy_ecs::world::World;
 
 use crate::method::ComposeMethod;
@@ -15,9 +15,11 @@ use crate::world::{SurfaceId, SurfaceIndex};
 
 /// `Shell.definitions` を登場順に single-pass で走査し `World` へ畳み込む（要件 1.7）。
 ///
-/// 本 task（3.2）が担うのは plain `surface` ヘッダ（[`DefRef::Surface`]）の展開＝全 id 新設のみ。
-/// append（[`DefRef::Append`]）・alias（[`DefRef::Alias`]）は後続 task の領分であり、本段では
-/// 素通り（無処理）にしてストリーム走査の骨格（前方参照なし・多パス不要）だけを確立する。
+/// plain `surface` ヘッダ（[`DefRef::Surface`]）は全 id 新設、`surface.append`
+/// （[`DefRef::Append`]）は展開後その時点でツリーに存在する id のみへ追記する（存在条件付き・
+/// 要件 2.2）。登場順で走査するため、append は「その時点までに積まれた状態」に対して効き、後続で
+/// 定義される surface へは遡及しない（要件 2.3・前方参照なし）。alias（[`DefRef::Alias`]）は後続
+/// task（3.5）の領分であり本段では素通りする。
 ///
 /// 欠落・不整合はパニックせず `warn` で観測可能化する（要件 1.4）。
 pub(crate) fn fold_shell(world: &mut World, shell: &Shell) {
@@ -34,8 +36,19 @@ pub(crate) fn fold_shell(world: &mut World, shell: &Shell) {
                     );
                 }
             },
-            // append／alias は後続 task（3.3〜3.5）の領分。本 task では素通りする。
-            DefRef::Append(_) | DefRef::Alias(_) => {}
+            DefRef::Append(index) => match shell.appends.get(index) {
+                Some(append) => fold_append(world, append),
+                None => {
+                    // 転記層と定義ストリームの不整合（本来生じない）。パニックせず観測可能化する。
+                    tracing::warn!(
+                        target: "areka_emo_compose",
+                        index,
+                        "DefRef::Append が appends 範囲外を指す: スキップ"
+                    );
+                }
+            },
+            // alias は後続 task（3.5）の領分。本 task では素通りする。
+            DefRef::Alias(_) => {}
             // `DefRef` は `#[non_exhaustive]`。未知の定義種別はパニックせず観測可能化する（要件 1.4）。
             other => {
                 tracing::warn!(
@@ -56,6 +69,73 @@ fn fold_plain_surface(world: &mut World, surface: &Surface) {
     for id in expand_targets(&surface.targets) {
         let master = normalize_surface(id, surface);
         upsert_surface(world, id, master);
+    }
+}
+
+/// `surface.append` 定義 1 件を展開し、**その時点で既存の id のみ**へ追記する（要件 2.2/2.4）。
+///
+/// ターゲット記述子を plain と同一規則で展開し（単一・列挙・両端含む範囲・[`expand_targets`]）、
+/// 各 id が [`SurfaceIndex`] に存在する場合のみ対象 [`SurfaceMaster`] を in-place マージする
+/// （despawn/respawn しない）。非存在 id は新設せず `warn` でスキップする（要件 1.4/2.2）。
+/// 登場順の走査（[`fold_shell`]）ゆえ、後続で定義される surface へは遡及しない（要件 2.3）。
+fn fold_append(world: &mut World, append: &SurfaceAppend) {
+    // 追記 element は plain と同一の正規化（x,y→Transform・method=Overlay）で用意する。
+    let append_elements: Vec<NormalizedElement> =
+        append.elements.iter().map(normalize_element).collect();
+
+    for id in expand_targets(&append.targets) {
+        // 存在条件: その時点でツリーに存在する id のみ対象（非存在は新設しない・要件 2.2）。
+        let Some(entity) = world.resource::<SurfaceIndex>().0.get(&id).copied() else {
+            tracing::warn!(
+                target: "areka_emo_compose",
+                id,
+                "surface.append 対象 id が未存在: 新設せずスキップ（存在条件付き）"
+            );
+            continue;
+        };
+        let Some(mut master) = world.get_mut::<SurfaceMaster>(entity) else {
+            // SurfaceIndex に載るが component 欠落（本来生じない不整合）。観測可能化してスキップ。
+            tracing::warn!(
+                target: "areka_emo_compose",
+                id,
+                "SurfaceIndex は指すが SurfaceMaster component が欠落: スキップ"
+            );
+            continue;
+        };
+
+        // element: 末尾連結してから layer 昇順で安定ソート（不変条件を保つ・要件 2.4）。
+        master.elements.extend(append_elements.iter().cloned());
+        master.elements.sort_by_key(|e| e.layer);
+
+        // collision: 末尾連結（転記のまま・要件 2.4）。
+        master.collisions.extend(append.collisions.iter().cloned());
+
+        // animation: 同一 id は後勝ち置換（+warn）・新 id は追加（要件 2.4）。
+        merge_animations(id, &mut master.animations, &append.animations);
+    }
+}
+
+/// append の animation を対象 surface の animation 群へマージする（要件 2.4）。
+///
+/// 同一 animation id が既存にあれば後勝ち置換（既存を append 版で差し替え・単一に保つ）、
+/// 新 id なら末尾へ追加する。置換は ukadoc 明文規則が無い de-facto 挙動ゆえ `warn` で記録する。
+fn merge_animations(
+    surface_id: u32,
+    existing: &mut Vec<areka_parsers::shell::Animation>,
+    additions: &[areka_parsers::shell::Animation],
+) {
+    for add in additions {
+        if let Some(slot) = existing.iter_mut().find(|a| a.id == add.id) {
+            tracing::warn!(
+                target: "areka_emo_compose",
+                surface_id,
+                animation_id = add.id,
+                "append が既存 animation id を再定義: 後勝ちで置換する（de-facto）"
+            );
+            *slot = add.clone();
+        } else {
+            existing.push(add.clone());
+        }
     }
 }
 
@@ -142,7 +222,8 @@ fn upsert_surface(world: &mut World, id: u32, master: SurfaceMaster) {
 #[cfg(test)]
 mod tests {
     use areka_parsers::shell::{
-        AppendTarget, DefRef, Element, ElementPath, Shell, Surface,
+        Animation, AppendTarget, Collision, CollisionName, DefRef, Element, ElementPath,
+        Interval, Shell, Surface, SurfaceAppend,
     };
     use bevy_ecs::world::World;
 
@@ -195,6 +276,78 @@ mod tests {
             animation_sort: None,
             collision_sort: None,
             definitions,
+        }
+    }
+
+    /// collision 1 本（矩形＋領域名）。
+    fn coll(index: u32, name: &str) -> Collision {
+        Collision {
+            index,
+            left: 0,
+            top: 0,
+            right: 10,
+            bottom: 10,
+            name: CollisionName::new(name.to_string()),
+        }
+    }
+
+    /// animation 1 本（interval=bind・pattern 群空・id と識別のみに用いる）。
+    fn anim(id: u32) -> Animation {
+        Animation {
+            id,
+            interval: Interval::Bind,
+            patterns: Vec::new(),
+        }
+    }
+
+    /// element/collision/animation を任意に持つ append 定義を組み立てる。
+    fn append_def(
+        targets: Vec<AppendTarget>,
+        elements: Vec<Element>,
+        collisions: Vec<Collision>,
+        animations: Vec<Animation>,
+    ) -> SurfaceAppend {
+        SurfaceAppend {
+            targets,
+            elements,
+            collisions,
+            animations,
+        }
+    }
+
+    /// surface 定義（element/collision/animation を任意に持つ）を組み立てる。
+    fn surface_full(
+        id: u32,
+        targets: Vec<AppendTarget>,
+        elements: Vec<Element>,
+        collisions: Vec<Collision>,
+        animations: Vec<Animation>,
+    ) -> Surface {
+        Surface {
+            id,
+            targets,
+            elements,
+            collisions,
+            animations,
+        }
+    }
+
+    /// `Shell` を surface/append を混在させた登場順 `definitions` で組む。
+    ///
+    /// `defs` は登場順に `DefRef` を並べたもの（呼び手が `DefRef::Surface(i)`／`DefRef::Append(i)`
+    /// を直接指定する）。surfaces/appends の各 Vec には index が既に対応している前提。
+    fn shell_mixed(
+        surfaces: Vec<Surface>,
+        appends: Vec<SurfaceAppend>,
+        defs: Vec<DefRef>,
+    ) -> Shell {
+        Shell {
+            surfaces,
+            appends,
+            aliases: Vec::new(),
+            animation_sort: None,
+            collision_sort: None,
+            definitions: defs,
         }
     }
 
@@ -298,5 +451,186 @@ mod tests {
         assert!(master_of(&world, 2).is_some());
         assert!(master_of(&world, 1).is_some());
         assert_eq!(world.resource::<SurfaceIndex>().0.len(), 2);
+    }
+
+    // ── task 3.3: surface.append の展開＝既存 id 限定の追記 ──────────────────
+
+    /// (3.3-1) 受入基準: `surface.append10,2100-2110,2200-2210` 相当。
+    /// 事前に存在する id のみへ追記し、範囲内でも未存在 id は新設しない（要件 2.2）。
+    #[test]
+    fn append_reaches_existing_ids_only_not_creating_absent() {
+        // 事前 plain surface: id=10, id=2100, id=2101（2102-2110 と 2200-2210 は未存在）。
+        let s10 = surface_def(10, vec![AppendTarget::Single(10)], vec![elem(0, "base10.png", 0, 0)]);
+        let s2100 =
+            surface_def(2100, vec![AppendTarget::Single(2100)], vec![elem(0, "b2100.png", 0, 0)]);
+        let s2101 =
+            surface_def(2101, vec![AppendTarget::Single(2101)], vec![elem(0, "b2101.png", 0, 0)]);
+        // append: 10, 2100-2110, 2200-2210（layer=1 の追記 element を持つ）。
+        let ap = append_def(
+            vec![
+                AppendTarget::Single(10),
+                AppendTarget::Range { start: 2100, end: 2110 },
+                AppendTarget::Range { start: 2200, end: 2210 },
+            ],
+            vec![elem(1, "added.png", 3, 4)],
+            Vec::new(),
+            Vec::new(),
+        );
+        let mut world = fresh_world();
+        // 登場順: Surface(10), Surface(2100), Surface(2101), Append(ap)。
+        fold_shell(
+            &mut world,
+            &shell_mixed(
+                vec![s10, s2100, s2101],
+                vec![ap],
+                vec![
+                    DefRef::Surface(0),
+                    DefRef::Surface(1),
+                    DefRef::Surface(2),
+                    DefRef::Append(0),
+                ],
+            ),
+        );
+
+        // 既存 id には追記 element が届く（base + added の 2 本）。
+        for id in [10u32, 2100, 2101] {
+            let m = master_of(&world, id).unwrap_or_else(|| panic!("id={id} が常駐する"));
+            assert_eq!(m.elements.len(), 2, "id={id} に追記 element が届く");
+            // 追記 element が含まれる。
+            assert!(
+                m.elements.iter().any(|e| e.path.as_str() == "added.png"),
+                "id={id} に added.png が追記される"
+            );
+        }
+        // 範囲内でも未存在だった id は新設されない。
+        for id in [2102u32, 2110, 2200, 2205, 2210] {
+            assert!(master_of(&world, id).is_none(), "id={id} は新設されない");
+        }
+        // entity 数は事前 3 件のまま（append は新設しない）。
+        assert_eq!(world.resource::<SurfaceIndex>().0.len(), 3);
+    }
+
+    /// (3.3-2) element/collision マージ（要件 2.4）。
+    /// append 追記後、element は layer 昇順を保ち、collision は末尾連結される。
+    #[test]
+    fn append_merges_element_and_collision_layer_sorted() {
+        // 事前 surface: layer=2 の element ＋ collision 1 本。
+        let base = surface_full(
+            5,
+            vec![AppendTarget::Single(5)],
+            vec![elem(2, "hi.png", 0, 0)],
+            vec![coll(0, "Head")],
+            Vec::new(),
+        );
+        // append: layer=0 の element（base より低い layer）＋ collision 1 本。
+        let ap = append_def(
+            vec![AppendTarget::Single(5)],
+            vec![elem(0, "lo.png", 1, 1)],
+            vec![coll(1, "Bust")],
+            Vec::new(),
+        );
+        let mut world = fresh_world();
+        fold_shell(
+            &mut world,
+            &shell_mixed(
+                vec![base],
+                vec![ap],
+                vec![DefRef::Surface(0), DefRef::Append(0)],
+            ),
+        );
+
+        let m = master_of(&world, 5).expect("id=5 が常駐する");
+        // element は 2 本＝マージされている。
+        assert_eq!(m.elements.len(), 2);
+        // layer 昇順（追記後も不変条件を保つ）: lo(layer=0) → hi(layer=2)。
+        assert_eq!(m.elements[0].layer, 0);
+        assert_eq!(m.elements[0].path.as_str(), "lo.png");
+        assert_eq!(m.elements[1].layer, 2);
+        assert_eq!(m.elements[1].path.as_str(), "hi.png");
+        // collision は末尾連結（Head → Bust）。
+        assert_eq!(m.collisions.len(), 2);
+        assert_eq!(m.collisions[0].name.as_str(), "Head");
+        assert_eq!(m.collisions[1].name.as_str(), "Bust");
+    }
+
+    /// (3.3-3) animation 後勝ち置換＋新 id 追加（要件 2.4）。
+    /// 対象に既存 animation id=N があり append が同 id=N を持つ → append 版に置換（単一）。
+    /// 新 id=M は追加される。
+    #[test]
+    fn append_animation_last_wins_and_new_id_added() {
+        // 事前 surface: animation id=1（interval=bind, pattern 空）。
+        let base = surface_full(
+            8,
+            vec![AppendTarget::Single(8)],
+            Vec::new(),
+            Vec::new(),
+            vec![anim(1)],
+        );
+        // append: 同 id=1 を別内容（interval=random,k=5）で持ち、新 id=2 を追加。
+        let replacement = Animation {
+            id: 1,
+            interval: Interval::Random { k: 5 },
+            patterns: Vec::new(),
+        };
+        let ap = append_def(
+            vec![AppendTarget::Single(8)],
+            Vec::new(),
+            Vec::new(),
+            vec![replacement.clone(), anim(2)],
+        );
+        let mut world = fresh_world();
+        fold_shell(
+            &mut world,
+            &shell_mixed(
+                vec![base],
+                vec![ap],
+                vec![DefRef::Surface(0), DefRef::Append(0)],
+            ),
+        );
+
+        let m = master_of(&world, 8).expect("id=8 が常駐する");
+        // id=1 は 1 本のみ（重複しない）＝後勝ち置換。
+        let id1: Vec<&Animation> = m.animations.iter().filter(|a| a.id == 1).collect();
+        assert_eq!(id1.len(), 1, "id=1 は置換されて 1 本");
+        assert_eq!(id1[0].interval, Interval::Random { k: 5 }, "append 版の interval に置換");
+        // id=2 が追加されている。
+        assert!(m.animations.iter().any(|a| a.id == 2), "新 id=2 が追加される");
+        // 合計 2 本（id=1 置換 ＋ id=2 追加）。
+        assert_eq!(m.animations.len(), 2);
+    }
+
+    /// (3.3-4) 登場順（要件 2.3）。
+    /// append の後に定義された surface は遡って追記されない（append 実行時に存在する id のみ）。
+    #[test]
+    fn append_only_sees_earlier_defined_surfaces() {
+        // 登場順: Surface(a)→id=1, Append(x)→{1,2}, Surface(b)→id=2。
+        let sa = surface_def(1, vec![AppendTarget::Single(1)], vec![elem(0, "a.png", 0, 0)]);
+        let sb = surface_def(2, vec![AppendTarget::Single(2)], vec![elem(0, "b.png", 0, 0)]);
+        let ap = append_def(
+            vec![AppendTarget::Single(1), AppendTarget::Single(2)],
+            vec![elem(1, "x.png", 9, 9)],
+            Vec::new(),
+            Vec::new(),
+        );
+        let mut world = fresh_world();
+        fold_shell(
+            &mut world,
+            &shell_mixed(
+                vec![sa, sb],
+                vec![ap],
+                // Surface(0)=id1, Append(0)=x, Surface(1)=id2。
+                vec![DefRef::Surface(0), DefRef::Append(0), DefRef::Surface(1)],
+            ),
+        );
+
+        // id=1 は append 実行時に存在 → x.png が届く（base + added の 2 本）。
+        let m1 = master_of(&world, 1).expect("id=1 が常駐する");
+        assert_eq!(m1.elements.len(), 2);
+        assert!(m1.elements.iter().any(|e| e.path.as_str() == "x.png"));
+        // id=2 は append の後に定義 → 遡及されない（base のみ 1 本）。
+        let m2 = master_of(&world, 2).expect("id=2 が常駐する");
+        assert_eq!(m2.elements.len(), 1);
+        assert!(!m2.elements.iter().any(|e| e.path.as_str() == "x.png"));
+        assert_eq!(m2.elements[0].path.as_str(), "b.png");
     }
 }
