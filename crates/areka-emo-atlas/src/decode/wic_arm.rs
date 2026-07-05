@@ -221,18 +221,24 @@ mod tests {
     }
 
     /// D5/emo2: emo2 の PNG には `.pna` 兄弟が無いため probe_pna は false。
+    ///
+    /// 注意: 他の WIC テストと同じく `with_com_initialized` で包む。以前の実装は
+    /// 「未初期化のまま `new()` → 失敗したら空 `with_com_initialized(||{})` で
+    /// init+uninit（差引ゼロ）してから再 `new()`」という壊れたフォールバックを持ち、
+    /// 暗黙 MTA（他テストが同時に MTA を保持）に依存していた。単一スレッド実行や
+    /// ワークスペース一括実行では暗黙 MTA が無く CoCreateInstance が
+    /// CO_E_NOTINITIALIZED で失敗し、フレーキーだった。COM を張った状態で
+    /// factory 生成・使用まで完結させることで実行順・スレッド数に非依存にする。
     #[test]
     fn probe_pna_false_for_emo2() {
-        let arm = WicDecoderArm::new().unwrap_or_else(|_| {
-            // ファクトリ生成に COM が要る環境向けフォールバック。
-            with_com_initialized(|| {});
-            WicDecoderArm::new().expect("WIC factory after COM init")
+        with_com_initialized(|| {
+            let arm = WicDecoderArm::new().expect("WIC factory");
+            let png = emo2_path("emo2-kakukaku/online0.png");
+            assert!(png.exists());
+            // `online0.pna` は存在しない。
+            assert!(!emo2_path("emo2-kakukaku/online0.pna").exists());
+            assert!(!arm.probe_pna(&png), "emo2 has no sibling .pna");
         });
-        let png = emo2_path("emo2-kakukaku/online0.png");
-        assert!(png.exists());
-        // `online0.pna` は存在しない。
-        assert!(!emo2_path("emo2-kakukaku/online0.pna").exists());
-        assert!(!arm.probe_pna(&png), "emo2 has no sibling .pna");
     }
 
     /// 2.1（抽象境界）: `&dyn ElementDecoder` 経由でポート契約を満たすことを確認する。
