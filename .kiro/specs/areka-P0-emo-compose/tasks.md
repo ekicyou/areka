@@ -32,7 +32,7 @@
   - _Requirements: 12.5_
   - _Depends: 1.2_
 
-- [ ] 1.5 (P) balloon パーサーのドキュメントコメントドリフトを修正する
+- [x] 1.5 (P) balloon パーサーのドキュメントコメントドリフトを修正する
   - `balloon/model.rs` 冒頭のドキュメントコメントにある旧名 `areka-P0-text-layer`/`areka-P0-surface-engine` を現行エンジン固有名へ修正する
   - 観測可能な完了状態: ドキュメントコメントに旧名参照が残っていない
   - _Requirements: 12.4_
