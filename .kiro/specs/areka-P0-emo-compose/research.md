@@ -122,3 +122,68 @@ AtlasTable の**構築経路**（emo-compose がアトラスをどう得るか�
 - **優先**: Option B（新設 areka-emo-compose）の器で Option C の段階戦略（CPU バックエンド先行＋バックエンド抽象シーム＋写像表/行列/入れ子/循環検出の構造を最初から）。
 - **上流契約は §2 の実シグネチャを正本として消費**（再定義しない）。特に `Placement{page, uv_rect, trim_offset}` は brief の簡略表記 `page,x,y` と異なる点を design で明示追随。
 - **持ち越し研究**: §5 の 7 項目（特に 1・2・6 は ukadoc MCP get_doc/search_docs を design 冒頭で実行）。
+
+---
+
+## 8. Design フェーズ discovery（2026-07-05 追記・design.md 生成時）
+
+### 8.1 ukadoc 実測（MCP get_doc/search_docs・持ち越し §5-1/2/6 の解決）
+
+- **animation-sort の画素積層方向＝解決**: ukadoc 明文「手前から奥にどの順で表示するか。ascend で昇順(1,2,3...)、descend で降順(10,9,8...)。既定 descend」。よって **descend（既定）＝大 ID が手前＝画家のアルゴリズムでは animation ID 昇順に描画**、ascend＝小 ID が手前＝ID 降順に描画。brief の「ID 昇順合成」は既定 descend と一致（design.md 決定5）。
+- **collision-sort**: 既定 **none**＝「ID によらず先に書かれている方が手前」。ascend/descend で ID 順ソート可。compose の画素経路には不使用・正規化結果へ引き継ぎ（R1.6）。
+- **animation*.pattern***: サーフェス番号 **-1＝そのアニメ停止・-2＝全アニメ停止**のセンチネル（描画なし・メソッド/XY 無視）。パターンは番号の小さい方から積み重なる。alias 名指定可（SSP 2.8.25+）。旧書式 `*pattern*,ID,ウェイト,メソッド,X,Y` あり（現行転記層は吸収）。オプション `alpha,値`（2.8.37+）。
+- **element***: element0 は surface*.png を破棄して置換・element1 以降は上に順次合成。オプション clipping（2.8.15+）/alpha（2.8.37+）/source＋auto（2.8.41+）。
+- **各描画メソッド**（写像表は design.md に全量・式ステータス列付きで確定）: overlay=単純重ね（式未明文→premultiplied SourceOver を de-facto 式に採用）／add・bind=**overlay と同義が明文**（確定）→ Overlay へ写像／overlay-fast=ベース不透明度変調・interpolate=その対（ベース透明度変調＝DestOver 相当）／replace=src 範囲内αごと上書き・**範囲外は無操作**（透明扱いでない）／asis=src 透過無視（不透明扱い・透過域は黒挙動）／base=全置換＋collision 更新・XY 無視・先頭以外 overlay 読替／reduce=不透明度乗算（切り抜き）・RGB 無視・**src 範囲外は透明相当＝消去**／blend-* 群=Photoshop 相当（add/multiply/screen/overlay/darken/lighten/darker-color/lighter-color/color-burn/color-dodge/hard-light/hard-mix/difference/exclusion/divide/hue/color 等＋各 -fast 変種・旧称 overlaymultiply=blend-multiply-fast・overlayscreen=blend-screen-fast）。
+- **collisionex タイプ**: rect/ellipse/circle/polygon/region（M1 転記層は矩形 collision のみ＝現行契約・型多様化は将来）。
+
+### 8.2 コードベース実測（design 時の追加確認）
+
+- **転記層は非 overlay の element/pattern 行を吸収する**（validation_tests.rs 要件 4.5/5.7 で固定済みの既存契約）。`Element`/`Pattern` に描画メソッドのフィールドは**存在しない**。→ 写像表・未実装 warn 経路（R8.4）は **compose 側の型シーム＋plan 直接構築テスト**で担保し、M1 の plan 命令は常に Overlay。parser へのメソッド転記追加は将来の転記層拡張＝revalidation trigger として design.md に記録（12.5 の4ギャップに含めない＝スコープ遵守）。
+- plain ヘッダ破損箇所の実体: decode.rs **L127** `rest.parse::<u32>().unwrap_or(0)`。TopLevel 破棄: decode.rs **L87**。append 内 element: append 経路が element 行を処理しない（黙殺）。3 Vec は各々出現順保持だが種別間 interleaving なし——4ギャップの実在を確認。
+- **emo2 fixture 実測**: surface 定義 59 本・charset UTF-8・`animation-sort`/`collision-sort` **未指定**（既定適用の実証系）・surface.append 5 ブロック（`surface.append10,2100-2110,2200-2210` の多ターゲット範囲あり）・alias 重複キーあり（`100,[2100]` が2回）・surface1000 は collision 2件（Head/Bust）＋bind 系 animation（1100〜1801）のみで静的 element ゼロ。
+- **bevy_ecs**: workspace 0.18.0（features: std/multi_threaded/serialize 等）。wintf は単一 World を `Rc<RefCell<EcsWorld>>` で UI スレッド所有。第2 World の前例はないが障害なし。
+- **atlas キー整合**: bake は `ElementPath.as_str()` を無加工で `AtlasKey.rel_path` に用いる（正規化なし）→ emo-compose の resolve キーも `ElementPath` 無加工でよい（不一致の余地なし）。
+
+### 8.3 Design Decisions（design.md 本文の決定の記録）
+
+#### Decision: バックエンド＝CPU 整数演算・Backend trait は設けない
+- **Alternatives**: (A) D2D オフスクリーン (B) CPU＋Backend trait 抽象 (C) CPU＋plan/execute データ分離。
+- **Selected**: (C)。plan（`Vec<BlitOp>`）が既にバックエンド非依存データであり、trait は「実装1つの投機的抽象」（synthesis 簡素化レンズ）。D2D は golden の決定性（ドライバ丸め差）と headless 性で不利、emo2=overlay のみで CPU が素直。
+- **Trade-offs**: 将来 D2D 化時は別 executor を追加（plan は不変）。
+
+#### Decision: 入れ子参照は plan 時 flatten（中間バッファなし）
+- **Rationale**: SourceOver は結合的なので overlay のみの M1 では「入れ子を合成してから転写」＝「入れ子の各層をオフセット累積して直接転写」が画素等価。中間バッファ・再帰実行を排し R10.3（途中アロケーションなし）を構造的に満たす。
+- **Trade-offs**: 非 overlay の入れ子参照メソッドが実装される際は中間バッファ方式の再導入が必要（シームとして記録・revalidation trigger）。循環検出は flatten 再帰の visited 集合（atlas manifest.rs の前例踏襲）。
+
+#### Decision: EmoWorld は受動データストア（Schedule/System 非所有）
+- **Rationale**: R1.8 の「system として実装し得る」は component スキーマの担保で満たし、fold/compose は `&mut World`/`&World` を取る決定的な同期関数とする。wintf schedule との tick 協調は本 spec では発生しない（emo-present が UI スレッド上で同期呼び出し）。seriko 統合時の system 化・協調設計は seriko 側 spec の領分（§5b-8(c)(d) の残課題をそちらへ送る）。
+- **ECS 粒度**: entity＝surface 1件（`SurfaceId`＋`SurfaceMaster`＋`AtlasBinding`）。animation/element の entity 分解はアーキタイプ増だけでスケールに寄与しないため不採用。将来の per-animation 動的状態は同 entity への component 追加または子 entity で拡張可能。
+
+#### Decision: de-facto 規則の確定（ukadoc 無明文箇所）
+- **plain surface 重複定義**: 後の定義が**全置換**（後勝ち）＋warn。ukadoc 明文なし＝de-facto。
+- **append の同一 animation id**: 後勝ち置換＋warn。element/collision は末尾連結。
+- **alias 重複キー**: 後勝ち（workspace KV 規約と整合）。
+- **キャンバス外形**: 原点(0,0)固定・全描画層の `offset+original` の和集合・負オフセットはクリップ。element0 が(0,0)原寸の通常形では base 原寸と厳密一致・全 bind surface では bind 群の外形。SSP のはみ出し挙動（切るか広げるか）は未実測＝emo2 では差が生じないため de-facto 採用。
+- **除外 `!` の適用**: R2.5 の shall に従い fold の展開時に減算を**実装**する（記述子保持は parser・「型シームに留めてよい」の許容より shall の直接充足を選択。実装コストは数行）。
+
+#### Decision: 転記ギャップ(d)＝`Shell.definitions: Vec<DefRef>`（index 参照ストリーム）
+- **Alternatives**: (A) Shell を単一 `Vec<Definition>` へ再構成 (B) 3 Vec 維持＋登場順 index ストリーム追加。
+- **Selected**: (B)。(A) は emo-atlas の `&[shell::Surface]` スライス消費を壊す。(B) はデータ重複ゼロ・非破壊・登場順を完全保持。
+- **合わせて**: `Surface.targets: Vec<AppendTarget>` 追加（`id` は記述子先頭の代表 id＝単一形は完全互換）、`SurfaceAppend.elements` 追加、`AppendTarget` に `Exclude`/`ExcludeRange` variant 追加（`#[non_exhaustive]` ゆえ非破壊）、`Shell.animation_sort`/`collision_sort: Option<SortOrder>`（未指定 None・既定解釈は下流）。
+
+#### Decision: 合成先バッファの所有形＝`compose_into`（再利用）＋`compose`（便宜）
+- **Rationale**: R9（Send 所有の値ハンドオフ）と R10.3（バッファ再利用）の両立。毎フレーム経路は emo-present が `ComposedSurface` を回して `compose_into`、定常状態ゼロアロケーション（初回/拡大時のみ確保＝運用解釈として記録）。
+
+### 8.4 Risks & Mitigations（design 時点）
+
+- **SSP 実挙動との de-facto 乖離**（重複定義規則・キャンバス外形）— warn ログで観測可能化＋研究記録済み。emo2 では差が生じない構成のため M1 リスク低。実ゴースト多様化時に実測で更新。
+- **`Surface.id`＝代表 id への意味拡張** — 単一形は完全互換・多 id 形は現行が破損（id=0）ゆえ改善のみ。parser テストで固定。
+- **メソッド転記の将来追加**（転記層拡張）— `ComposeMethod::Unknown` と registry の全量列挙で受け口確保済み。plan/blit の dispatch は追加 variant に match 網羅で追随。
+- **並行モデル memory の追随**（§5b-10）— 本 design で「emo World＝UI スレッド共有データストア・emo→present は値ハンドオフ」と確定。**実装完了後に memory `areka-concurrency-model` を更新すること**（follow-up）。
+
+### 8.5 References（design 追記分）
+
+- ukadoc `descript_shell_surfaces`: animation-sort／collision-sort／element*／animation*.pattern*／overlay／overlay-fast／overlayfast／interpolate／replace／asis／base／add／bind／reduce／blend-* 各アンカー（MCP get_doc 実測・2026-07-05）
+- satori wiki「簡単なシェルの揚げ方」（surface.append の実例・plain 多 id の実例）
+- `crates/areka-parsers/src/shell/{model,decode}.rs`・`validation_tests.rs`（転記契約の実測）
+- `crates/areka-emo-atlas/src/{table,manifest,decode}.rs`（正本契約・visited 前例・MemoryDecoder）
