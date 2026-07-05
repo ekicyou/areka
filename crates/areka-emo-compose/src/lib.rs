@@ -152,11 +152,19 @@ impl Composer {
     }
 }
 
+/// テスト専用の `tracing` ログ捕捉ハーネス（本番影響ゼロ・要件 1.4/3.3/7.3/8.4/10.5 の
+/// ログ発火経路を檻に入れるための共有土台）。`#[cfg(test)]` 限定ゆえ出荷クロージャに現れない。
+#[cfg(test)]
+mod log_capture;
+
 #[cfg(test)]
 mod golden_tests;
 
 #[cfg(test)]
 mod composer_tests;
+
+#[cfg(test)]
+mod log_firing_tests;
 
 #[cfg(test)]
 mod contract_tests {
