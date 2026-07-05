@@ -7,7 +7,7 @@
   - `cargo run -p areka --example mock-shell` が起動し、シェル＋バルーン 2 窓が表示され、ドラッグでバルーンが追従し、ダブルクリックで全窓が終了する（従来デモと同一挙動）
   - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.6_
 
-- [ ] 1.2 モック UI ユニットテストを移設先へ同居させる
+- [x] 1.2 モック UI ユニットテストを移設先へ同居させる
   - 現 `src/tests.rs` の内容を `examples/mock-shell.rs` 末尾の `#[cfg(test)] mod tests` として移設する
   - モック固有アセット参照（`shell/base.png`）・座標定数・表示テキストが example 側にのみ存在し、`src/` 配下から参照されないことを確認する
   - `cargo build -p areka --example mock-shell` が移設テストモジュールを含めてビルド成功する（`cargo test` の標準ハーネスでの実行は要求しない）
