@@ -90,7 +90,7 @@
   - _Requirements: 2.5, 12.3_
   - _Depends: 3.3_
 
-- [ ] 3.5 Fold: kero.surface.alias の解決を実装する
+- [x] 3.5 Fold: kero.surface.alias の解決を実装する
   - alias キー→順序付き数値idリストを `AliasMap` へ収集する
   - 同一キーの重複定義は後勝ちとして決定的に扱う
   - 未解決キーの参照はパニックせずwarnログを記録しNoneを返す

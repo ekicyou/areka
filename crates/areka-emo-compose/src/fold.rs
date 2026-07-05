@@ -6,20 +6,22 @@
 //! 順序で決定的に適用し、append ブロックが持つ element・collision・animation を対象 surface へ
 //! 反映しつつ alias を収集する。参照 id が存在しない場合はパニックせず `warn` 以上で観測可能に扱う。
 
-use areka_parsers::shell::{AppendTarget, DefRef, Element, Shell, Surface, SurfaceAppend};
+use areka_parsers::shell::{
+    AppendTarget, DefRef, Element, Shell, Surface, SurfaceAlias, SurfaceAppend,
+};
 use bevy_ecs::world::World;
 
 use crate::method::ComposeMethod;
 use crate::normalized::{NormalizedElement, SurfaceMaster, Transform};
-use crate::world::{SurfaceId, SurfaceIndex};
+use crate::world::{AliasMap, SurfaceId, SurfaceIndex};
 
 /// `Shell.definitions` を登場順に single-pass で走査し `World` へ畳み込む（要件 1.7）。
 ///
 /// plain `surface` ヘッダ（[`DefRef::Surface`]）は全 id 新設、`surface.append`
 /// （[`DefRef::Append`]）は展開後その時点でツリーに存在する id のみへ追記する（存在条件付き・
 /// 要件 2.2）。登場順で走査するため、append は「その時点までに積まれた状態」に対して効き、後続で
-/// 定義される surface へは遡及しない（要件 2.3・前方参照なし）。alias（[`DefRef::Alias`]）は後続
-/// task（3.5）の領分であり本段では素通りする。
+/// 定義される surface へは遡及しない（要件 2.3・前方参照なし）。alias（[`DefRef::Alias`]）は
+/// `AliasMap` へ収集し、同一キーは登場順で後勝ちとする（要件 3.1/3.2）。
 ///
 /// 欠落・不整合はパニックせず `warn` で観測可能化する（要件 1.4）。
 pub(crate) fn fold_shell(world: &mut World, shell: &Shell) {
@@ -47,8 +49,17 @@ pub(crate) fn fold_shell(world: &mut World, shell: &Shell) {
                     );
                 }
             },
-            // alias は後続 task（3.5）の領分。本 task では素通りする。
-            DefRef::Alias(_) => {}
+            DefRef::Alias(index) => match shell.aliases.get(index) {
+                Some(alias) => fold_alias(world, alias),
+                None => {
+                    // 転記層と定義ストリームの不整合（本来生じない）。パニックせず観測可能化する。
+                    tracing::warn!(
+                        target: "areka_emo_compose",
+                        index,
+                        "DefRef::Alias が aliases 範囲外を指す: スキップ"
+                    );
+                }
+            },
             // `DefRef` は `#[non_exhaustive]`。未知の定義種別はパニックせず観測可能化する（要件 1.4）。
             other => {
                 tracing::warn!(
@@ -113,6 +124,19 @@ fn fold_append(world: &mut World, append: &SurfaceAppend) {
         // animation: 同一 id は後勝ち置換（+warn）・新 id は追加（要件 2.4）。
         merge_animations(id, &mut master.animations, &append.animations);
     }
+}
+
+/// `kero.surface.alias` の 1 エントリを `AliasMap` へ収集する（要件 3.1/3.2）。
+///
+/// alias キー → 順序付き数値 id リストを `BTreeMap` へ挿入する。`BTreeMap::insert` は同一キーで
+/// 上書きするため、登場順 single-pass 走査（[`fold_shell`]）と併せて重複キーは後勝ちで決定的に
+/// なる（要件 3.2）。id リストはソート・重複除去せず記述順のまま複製する（alias の順序付き
+/// ターゲット列＝要件 3.1・BindSet の正規化とは別物）。
+fn fold_alias(world: &mut World, alias: &SurfaceAlias) {
+    world
+        .resource_mut::<AliasMap>()
+        .0
+        .insert(alias.key.as_str().to_string(), alias.ids.clone());
 }
 
 /// append の animation を対象 surface の animation 群へマージする（要件 2.4）。
@@ -241,21 +265,35 @@ fn upsert_surface(world: &mut World, id: u32, master: SurfaceMaster) {
 #[cfg(test)]
 mod tests {
     use areka_parsers::shell::{
-        Animation, AppendTarget, Collision, CollisionName, DefRef, Element, ElementPath,
-        Interval, Shell, Surface, SurfaceAppend,
+        AliasKey, Animation, AppendTarget, Collision, CollisionName, DefRef, Element, ElementPath,
+        Interval, Shell, Surface, SurfaceAlias, SurfaceAppend,
     };
     use bevy_ecs::world::World;
 
     use crate::fold::{expand_targets, fold_shell};
     use crate::method::ComposeMethod;
-    use crate::world::{SurfaceId, SurfaceIndex};
+    use crate::world::{AliasMap, SurfaceId, SurfaceIndex};
     use crate::normalized::SurfaceMaster;
 
     /// 既定リソースを備えた空 World を用意する（`EmoWorld::build` と同じ初期化）。
     fn fresh_world() -> World {
         let mut world = World::new();
         world.insert_resource(SurfaceIndex::default());
+        world.insert_resource(AliasMap::default());
         world
+    }
+
+    /// alias キーの解決（`EmoWorld::resolve_alias` と同じ AliasMap 参照経路）。
+    fn resolve_alias<'w>(world: &'w World, key: &str) -> Option<&'w [u32]> {
+        world.resource::<AliasMap>().0.get(key).map(Vec::as_slice)
+    }
+
+    /// alias 1 エントリ（KEY,[id,...]）を組み立てる。
+    fn alias_def(key: &str, ids: Vec<u32>) -> SurfaceAlias {
+        SurfaceAlias {
+            key: AliasKey::new(key.to_string()),
+            ids,
+        }
     }
 
     /// 指定 id をキーに登録済み entity の `SurfaceMaster` を引く。
@@ -717,5 +755,141 @@ mod tests {
         // 除外 id は entity 化されない。
         assert!(master_of(&world, 3).is_none(), "除外 id=3 は新設されない");
         assert_eq!(world.resource::<SurfaceIndex>().0.len(), 3);
+    }
+
+    // ── task 3.5: kero.surface.alias の解決（AliasMap 収集・後勝ち・非パニック） ──
+
+    /// `Shell` を surface/alias 混在の登場順 `definitions` で組む（呼び手が DefRef を直接並べる）。
+    fn shell_with_aliases(
+        surfaces: Vec<Surface>,
+        aliases: Vec<SurfaceAlias>,
+        defs: Vec<DefRef>,
+    ) -> Shell {
+        Shell {
+            surfaces,
+            appends: Vec::new(),
+            aliases,
+            animation_sort: None,
+            collision_sort: None,
+            definitions: defs,
+        }
+    }
+
+    /// (3.5-1) 受入基準: 同一 alias キーが重複定義される（emo2 の `100,[2100]` が 2 回）とき、
+    /// fold 結果は後勝ちの一意な値を返す（要件 3.2）。
+    #[test]
+    fn duplicate_alias_key_is_last_wins() {
+        // key="100" を 2 回定義: 前 [2100]、後 [2100,9999]（後勝ちを識別できるよう別内容）。
+        let aliases = vec![
+            alias_def("100", vec![2100]),
+            alias_def("100", vec![2100, 9999]),
+        ];
+        let mut world = fresh_world();
+        fold_shell(
+            &mut world,
+            &shell_with_aliases(
+                Vec::new(),
+                aliases,
+                vec![DefRef::Alias(0), DefRef::Alias(1)],
+            ),
+        );
+
+        // 後の定義が勝つ（両者連結でなく一意な値）。
+        assert_eq!(resolve_alias(&world, "100"), Some(&[2100, 9999][..]));
+        // キーは 1 本のみ（重複しない）。
+        assert_eq!(world.resource::<AliasMap>().0.len(), 1);
+    }
+
+    /// (3.5-1b) emo2 実相当: `100,[2100]` が 2 回同一値で定義されても後勝ちで一意（要件 3.2）。
+    #[test]
+    fn duplicate_alias_identical_value_collapses_to_one() {
+        let aliases = vec![alias_def("100", vec![2100]), alias_def("100", vec![2100])];
+        let mut world = fresh_world();
+        fold_shell(
+            &mut world,
+            &shell_with_aliases(
+                Vec::new(),
+                aliases,
+                vec![DefRef::Alias(0), DefRef::Alias(1)],
+            ),
+        );
+
+        assert_eq!(resolve_alias(&world, "100"), Some(&[2100][..]));
+        assert_eq!(world.resource::<AliasMap>().0.len(), 1);
+    }
+
+    /// (3.5-2) 順序付き id リスト保持（要件 3.1）: `[30,10,20]` はソートも重複除去もせず順序のまま。
+    #[test]
+    fn alias_id_list_order_is_preserved() {
+        let aliases = vec![alias_def("k", vec![30, 10, 20])];
+        let mut world = fresh_world();
+        fold_shell(
+            &mut world,
+            &shell_with_aliases(Vec::new(), aliases, vec![DefRef::Alias(0)]),
+        );
+
+        assert_eq!(resolve_alias(&world, "k"), Some(&[30, 10, 20][..]));
+    }
+
+    /// (3.5-3) 未解決キーは None（パニックしない・要件 3.3）。
+    /// AliasMap が他キーで populate 済みでも、不在キーは None を返す。
+    #[test]
+    fn absent_alias_key_returns_none_non_panic() {
+        let aliases = vec![alias_def("present", vec![1, 2])];
+        let mut world = fresh_world();
+        fold_shell(
+            &mut world,
+            &shell_with_aliases(Vec::new(), aliases, vec![DefRef::Alias(0)]),
+        );
+
+        assert_eq!(resolve_alias(&world, "present"), Some(&[1, 2][..]));
+        // 不在キーは None（populate 済みでも詰まらない）。
+        assert_eq!(resolve_alias(&world, "nope"), None);
+    }
+
+    /// (3.5-4) single-pass 登場順収集: surface と alias が交互に並んでも両 alias が収集される（要件 1.7）。
+    #[test]
+    fn aliases_collected_when_interleaved_with_surfaces() {
+        let s0 = surface_def(0, vec![AppendTarget::Single(0)], vec![elem(0, "s0.png", 0, 0)]);
+        let s1 = surface_def(1, vec![AppendTarget::Single(1)], vec![elem(0, "s1.png", 0, 0)]);
+        let a0 = alias_def("alpha", vec![100, 101]);
+        let a1 = alias_def("beta", vec![200]);
+        let mut world = fresh_world();
+        // 登場順: Surface, Alias, Surface, Alias。
+        fold_shell(
+            &mut world,
+            &shell_with_aliases(
+                vec![s0, s1],
+                vec![a0, a1],
+                vec![
+                    DefRef::Surface(0),
+                    DefRef::Alias(0),
+                    DefRef::Surface(1),
+                    DefRef::Alias(1),
+                ],
+            ),
+        );
+
+        // 両 alias が収集されている。
+        assert_eq!(resolve_alias(&world, "alpha"), Some(&[100, 101][..]));
+        assert_eq!(resolve_alias(&world, "beta"), Some(&[200][..]));
+        // surface も並行して常駐する（alias 収集が surface fold を壊さない）。
+        assert!(master_of(&world, 0).is_some());
+        assert!(master_of(&world, 1).is_some());
+        assert_eq!(world.resource::<AliasMap>().0.len(), 2);
+    }
+
+    /// (3.5-5) 範囲外 index は非パニックでスキップ（要件 1.4・Surface/Append と同じ寛容パターン）。
+    #[test]
+    fn alias_out_of_range_index_is_skipped() {
+        let mut world = fresh_world();
+        // aliases 空だが DefRef::Alias(0) を指す（範囲外）。
+        fold_shell(
+            &mut world,
+            &shell_with_aliases(Vec::new(), Vec::new(), vec![DefRef::Alias(0)]),
+        );
+
+        // パニックせず AliasMap は空のまま。
+        assert_eq!(world.resource::<AliasMap>().0.len(), 0);
     }
 }
