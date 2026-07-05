@@ -123,7 +123,7 @@ graph TB
 - 駆動層は `TimedSchedule::new(0.0)` で構築し、`tick(elapsed)` を直接渡す（offset＝elapsed の恒等対応。wintf `CueQueue` が start_time 0.0 を維持する運用と同型）。
 - 根拠: 絶対時刻の epoch（QPC 起点）の知識を sakura から完全に排除でき、テストは注入列（`0.0, 0.05, 0.15, …`）の直入力で決定的（R9.1/9.4）。`Instant` は sakura に現れない。
 - **本番 ticker はスコープ外のシーム**: kanade（または clock アクター）が talk 起動時に `clock::now()` を採取し、以降 `elapsed = clock::now() - t_start` を実 cadence で `Tick` として送る。この結線は ghost-setup/kanade の領分。
-- 冪等・逆行ガード: 駆動層は直前 tick 値を保持し、`t <= 直前値` の `Tick` は no-op（debug ログ）とする。`TimedSchedule::tick` の冪等早期 return は `ready()` バッファを保持するため、ガード無しでは同時刻再 tick で**同一発火を二重送出**し得る——このガードが二重発火を防ぐ（設計固定）。非有限（NaN/inf）の `Tick` は `tracing::error!` を記録して無視する（ログ無し失敗経路の禁止・dola の NaN 全量配信ハザードを遮断）。
+- 冪等・逆行ガード: 駆動層は直前 tick 値を **`last_tick: Option<f64>`（初期値 `None`）** で保持し、`Some(prev)` に対し `t <= prev` の `Tick` は no-op（debug ログ）とする。**初回 `Tick` は値を問わず必ず通す**（`None` は比較対象なし）——初期値を `0.0` にすると契約上正当な先頭 `Tick(0.0)`（テスト注入列の起点）が飲み込まれ、`at=0` の発火が永久に出ず待ち無し script が `TalkDone` を返せなくなるため禁止（設計固定）。`TimedSchedule::tick` の冪等早期 return は `ready()` バッファを保持するため、ガード無しでは同時刻再 tick で**同一発火を二重送出**し得る——このガードが二重発火を防ぐ（設計固定）。非有限（NaN/inf）の `Tick` は `tracing::error!` を記録して無視する（ログ無し失敗経路の禁止・dola の NaN 全量配信ハザードを遮断）。
 
 ### Build vs Adopt: 配信エンジン（DD-3 改訂の決着）
 
@@ -209,13 +209,13 @@ stateDiagram-v2
     Driving --> Driving: Tick advance route ready cues
     Driving --> NaturalEnd: schedule completed
     Driving --> Interrupted: Close received
-    EmptyEnd --> Done: TalkDone Ended
+    EmptyEnd --> Done: TalkDone compiled.end
     NaturalEnd --> Done: TalkDone Ended or Quit
     Interrupted --> Done: TalkDone Interrupted ACK
     Done --> [*]: Break then thread exit
 ```
 
-- **空 script/空列**（R1.4）: compile 結果の `sheet` が空なら時間軸駆動せず即 `TalkDone{Ended}`→`Break`。
+- **空 sheet**（R1.4/R6.2）: compile 結果の `sheet` が空なら時間軸駆動せず即 `TalkDone{compiled.end}`→`Break`。空 script・空 `Instruction` 列では `end=Ended`（R1.4）だが、**発火を伴わない終端のみの script（例: 裸の `\-`）は空 sheet＋`end=Quit`** となるため、`Ended` を固定送出してはならない（R6.2）。
 - **終端切詰め**（R6.5）: `End`/`Quit` 以降の `Instruction` は compile 時に破棄（`CueSheet` へ載せない）。ukadoc `\e`「この後に書かれたスクリプトは実行・表示されない」に整合。
 - **通算高々 1 回**（R6.4/R7.4/R7.5）: 全終端経路は「`TalkDone` 送出（`ReplySender::send(self)` の move-consume）→ 直後に `Break`」の対で実装される。`Break` によりアクタースレッドは終了するため、終端後の `Close` は届く先が無く（send 失敗を kanade 側が観測）、二重返信は**構造的に不可能**。
 
@@ -489,13 +489,18 @@ pub fn spawn_talk(
 
 /// 内部: CueSheet → TimedSchedule<TalkCue>（0 起点・TimedSchedule::new(0.0)）。
 /// dola::cue::compile_sheet は使わない（min 正規化が先頭待ちを消すため・禁止）。
+/// 挿入は CueSheet::cues() の記述順に 1 件ずつ insert() で行う（extend() 禁止）:
+/// insert は同一オフセット群の前方へ挿入し末尾 pop が挿入順を保つため、同一 at の
+/// cue は CueSheet 記述順（FIFO）で配信される。extend は安定降順ソート＋末尾 pop
+/// ゆえ同一 at 群が逆順配信となり、\w 無しで連続する Text/NewLine の順序を壊す
+/// （R4.1/4.2 違反）——設計固定。
 /// CuePayload::Command 以外（Barrier/Routing・M-boot compile は非生成）は
 /// tracing::error! を記録してスキップ（防御・非 panic）。
 fn to_schedule(sheet: &CueSheet) -> TimedSchedule<TalkCue>;
 ```
 - **Preconditions**: `start.reply` は生存する `ReplyReceiver` と対（kanade or テスト）。`Tick` は経過秒・単調非減少・有限（違反は無視＋ログで自衛）。
 - **Postconditions**: 終端・中断のいずれでも `TalkDone` を高々 1 回返し body 復帰（スレッド終了）。返信後の body は `reply` を保持しない（move 済み）。
-- **Invariants**: 1 talk の再生状態は当該アクター body に閉じ、他 talk と共有しない（R10.3）。発火順は `at` 昇順（`TimedSchedule` 降順ソート＋末尾 pop）。同一注入時刻列で同一観測（R9.4）。
+- **Invariants**: 1 talk の再生状態は当該アクター body に閉じ、他 talk と共有しない（R10.3）。発火順は `at` 昇順（`TimedSchedule` 降順ソート＋末尾 pop）・**同一 `at` は `CueSheet` 記述順（FIFO・to_schedule の per-cue insert が保証）**。同一注入時刻列で同一観測（R9.4）。
 
 ##### Event Contract
 - Published: Shell 系 `TalkCue`（→`SurfaceSink`）・Balloon 系 `TalkCue`（→`TextSink`）・`TalkDone`（→kanade reply）。
