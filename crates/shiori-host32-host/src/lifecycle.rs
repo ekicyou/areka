@@ -99,8 +99,8 @@ pub fn classify_failure(error: &RequestError, observed_exit: Option<ExitKind>) -
 /// `Child` は `Send` ゆえ本型も `Send`（将来の shiori アクター inbox から移送可能・R7.7）。
 /// 窓（`!Send`）は保持しない。
 ///
-/// `report_failure`（R2.1〜2.5・突合）と `request_clean_shutdown`（R5.1・正常終了経路）は
-/// 後続タスク（2.3 / 2.4）で追加する。
+/// `report_failure`（R2.1〜2.5・突合）は本タスク（2.3）で追加済み。
+/// `request_clean_shutdown`（R5.1・正常終了経路）は後続タスク（2.4）で追加する。
 pub struct HelperLifecycle {
     handle: HelperHandle,
     /// sticky 終了キャッシュ（一度 `Some` になったら以後 poll しない・R1.2）。
@@ -152,6 +152,38 @@ impl HelperLifecycle {
                 Err(e)
             }
         }
+    }
+
+    /// request 失敗と死活を突合し統一報告を作る（R2.1〜2.5）。
+    ///
+    /// 内部で [`Self::status`]（非ブロッキング・sticky・task 2.2）を採り、その観測結果を
+    /// [`classify_failure`] へ渡す。終了検出は他のすべてに優先するため、表面の `error` が
+    /// `Timeout` / `Ipc` であっても helper 死亡が観測されていれば `HelperDown(kind)` を返す。
+    ///
+    /// 死活起因（[`FailureClass::HelperDown`]）と判定された時のみ `error!` を発行する
+    /// （log-first・R4.4/R7.6）。他の分類（`Unresponsive` / `ShioriFailure` / `Transport`
+    /// / `Handshake`）はここではログしない（処分判断は呼び手・R2.7）。
+    ///
+    /// `RequestError` は `Clone` を持たないため、報告は原因を**移動**で内包する（R2.4）。
+    /// `error!` はこの move の**前**に参照でログするので、`class` と原本 `error` の双方が
+    /// 潰されずに [`LifecycleReport`] として返る。
+    pub fn report_failure(&mut self, error: RequestError) -> LifecycleReport {
+        // status() は sticky・非ブロッキング（task 2.2）。Exited(kind)→Some(kind) / Running→None。
+        let observed_exit = match self.status() {
+            HelperStatus::Exited(kind) => Some(kind),
+            HelperStatus::Running => None,
+        };
+        let class = classify_failure(&error, observed_exit);
+        // 死活起因（HelperDown）検出時は log-first で surface（R4.4/R7.6）。
+        // error は下で LifecycleReport へ move するため、ここで参照して先にログする。
+        if let FailureClass::HelperDown(kind) = class {
+            tracing::error!(
+                exit = ?kind,
+                error = ?error,
+                "[HelperLifecycle::report_failure] request failed due to helper death"
+            );
+        }
+        LifecycleReport { class, error }
     }
 
     /// 観測用: OS プロセス ID。
@@ -342,5 +374,81 @@ mod tests {
         let _ = wait_exited(&mut lc);
         assert!(lc.terminate().is_ok(), "1 回目の terminate は Ok");
         assert!(lc.terminate().is_ok(), "2 回目の terminate も Ok（冪等・R5.2）");
+    }
+
+    // --- report_failure: request 失敗と死活の突合・統一報告（R2.1〜2.5, 4.4, 7.6）---
+
+    /// 生存中の stand-in を組む（`ping -n 3 127.0.0.1 >NUL` で ~2s 生存）。
+    ///
+    /// ALIVE 経路（`status() == Running` / `observed_exit == None`）を決定的に行使するため、
+    /// `cmd /c exit 0`（spawn 直後に既に死んでいる可能性がある）ではなく十分に長命な
+    /// stand-in を使う。`ping` は 1 秒間隔で 3 回試行し、その間プロセスは生存する。
+    fn cmd_alive() -> Command {
+        let mut command = Command::new("cmd.exe");
+        command.args(["/c", "ping", "-n", "3", "127.0.0.1", ">NUL"]);
+        command
+    }
+
+    /// 性質（生存 → 非死活報告・R2.2/R2.4）: 生存中に `report_failure(Timeout)` を突合すると
+    /// `class == Unresponsive`（死活起因でない）となり、原本 `error` が報告に保持される。
+    ///
+    /// ALIVE 経路の決定性: 長命 stand-in を spawn 直後に突合し、`status()` が `Running`
+    /// （`observed_exit == None`）である間に `report_failure` を呼ぶ。生存確認を assert で固定する。
+    #[test]
+    fn report_failure_alive_timeout_is_unresponsive_and_retains_error() {
+        let handle = spawn_command(cmd_alive()).expect("stand-in を spawn できる");
+        let mut lc = HelperLifecycle::new(handle);
+        // 生存確認: spawn 直後の長命 stand-in はまだ稼働中である（決定的）。
+        assert_eq!(lc.status(), HelperStatus::Running, "長命 stand-in は突合時点で生存");
+
+        let report = lc.report_failure(RequestError::Timeout);
+        // 生存中の timeout は死活起因でなく Unresponsive（R2.2）。
+        assert_eq!(report.class, FailureClass::Unresponsive);
+        // 原本 error は単一不透明へ潰さず報告に保持される（R2.4）。
+        assert!(
+            matches!(report.error, RequestError::Timeout),
+            "report は原本 RequestError::Timeout を保持する"
+        );
+
+        // 後始末: 長命 stand-in を kill（Drop でも走るが明示）。
+        let _ = lc.terminate();
+    }
+
+    /// 性質（死優先 → HelperDown・ログ発行経路・R2.1/R2.5/R4.4/R7.6）:
+    /// 終了済み stand-in `cmd /c exit 5` に対し `report_failure(Timeout)` を突合すると、
+    /// 表面が `Timeout` でも終了検出が優先して `class == HelperDown(Abnormal(5))` となる。
+    /// これは `error!` を発行する唯一の分岐であり（death precedence）、原本 error も保持される。
+    #[test]
+    fn report_failure_dead_abnormal_is_helper_down_precedes_timeout() {
+        let handle = spawn_command(cmd_exit(5)).expect("stand-in を spawn できる");
+        let mut lc = HelperLifecycle::new(handle);
+        // 終了を bounded-poll で観測してから突合（sticky・R1.2）。
+        assert_eq!(wait_exited(&mut lc), ExitKind::Abnormal(5));
+
+        let report = lc.report_failure(RequestError::Timeout);
+        // 死は死: 表面 Timeout でも HelperDown(Abnormal(5))（R2.1・death precedence）。
+        // この分岐が error! を発行する（R4.4/R7.6・戻り値検証で構造的に担保）。
+        assert_eq!(report.class, FailureClass::HelperDown(ExitKind::Abnormal(5)));
+        // 原本 error は保持（R2.4/R2.5）。
+        assert!(
+            matches!(report.error, RequestError::Timeout),
+            "report は原本 RequestError::Timeout を保持する（死活検出でも潰さない）"
+        );
+    }
+
+    /// 性質（正常終了死も HelperDown・R2.1）: `cmd /c exit 0`（Clean 終了）に対し
+    /// `report_failure(Ipc(..))` を突合すると `HelperDown(Clean)` となる（死は種別を問わず死）。
+    #[test]
+    fn report_failure_dead_clean_is_helper_down() {
+        let handle = spawn_command(cmd_exit(0)).expect("stand-in を spawn できる");
+        let mut lc = HelperLifecycle::new(handle);
+        assert_eq!(wait_exited(&mut lc), ExitKind::Clean);
+
+        let report = lc.report_failure(RequestError::Ipc(IpcError::SendFailed));
+        assert_eq!(report.class, FailureClass::HelperDown(ExitKind::Clean));
+        assert!(
+            matches!(report.error, RequestError::Ipc(_)),
+            "report は原本 RequestError::Ipc を保持する"
+        );
     }
 }
