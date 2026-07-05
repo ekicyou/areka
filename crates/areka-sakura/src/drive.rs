@@ -21,9 +21,10 @@ use std::ops::ControlFlow;
 
 use crate::compile::compile;
 use crate::contract::{
-    CuePayload, CueSheet, SakuraMsg, StartTalk, TalkCue, TalkDone, TalkEndReason, TalkHandle,
-    TalkId,
+    cue_target_of, CuePayload, CueSheet, CueTarget, SakuraMsg, StartTalk, TalkCue, TalkDone,
+    TalkEndReason, TalkHandle, TalkId,
 };
+use crate::error::SakuraError;
 use crate::sink::{SurfaceSink, TextSink};
 use areka_actor::{run_inbox, spawn_actor, ReplySender};
 use dola::cue::schedule::{Entry, TimedSchedule};
@@ -162,14 +163,71 @@ impl<S: SurfaceSink, T: TextSink> TalkDriver<S, T> {
         ControlFlow::Continue(())
     }
 
-    /// `Tick` 受領（本 task ではスケルトンのみ・完全な駆動ループは task 5.2）。
+    /// `Tick(t)` 受領: 単調・有限ガード → `schedule.tick(t)` → `ready()` の各 `TalkCue` を
+    /// `cue_target_of` で 2 sink へ振り分け emit → `schedule.is_completed()` なら
+    /// `TalkDone{end}` を送出し `Break`（自然終端・R6.1/6.2/6.3/9.1/9.2）。
     ///
-    /// body が panic しないことのみ保証する（状態未確定なら no-op）。実際の
-    /// `schedule.tick` → `ready` 振り分け → 完了判定は task 5.2 で実装する。
-    fn on_tick(&mut self, _t: f64) -> ControlFlow<()> {
-        // task 5.2 でここに単調・有限ガード＋schedule 駆動＋2 sink 振り分けを実装する。
-        // 現状は sink フィールドの未使用警告を避けつつ非 panic を保証する no-op。
-        let _ = (&mut self.surface_sink, &mut self.text_sink);
+    /// # ガード（R11.1/11.2/11.3・受信ループは殺さない）
+    ///
+    /// - **非有限**（`NaN`/`±inf`）: dola の NaN 全量配信ハザードを遮断するため
+    ///   [`SakuraError::NonFiniteTick`] を構築して `tracing::error!` を記録し、`schedule` を
+    ///   一切進めずに `Continue`（talk は終端させない）。
+    /// - **逆行/同値**（`last_tick` の `Some(prev)` に対し `t <= prev`）: `tracing::debug!` の
+    ///   no-op で `Continue`（`TimedSchedule::tick` の冪等 early-return と併せ二重発火を防ぐ）。
+    ///   初回 `Tick` は `last_tick == None` ゆえ比較対象が無く必ず通過する（先頭 `at=0` 発火を
+    ///   殺さないため `last_tick` を 0.0 で初期化しない・設計 Issue 2）。
+    ///
+    /// 状態未確定（`Start` 未受領・投函経路上は非到達の防御枝）なら no-op で `Continue`。
+    fn on_tick(&mut self, t: f64) -> ControlFlow<()> {
+        // 非有限ガード（R11.1/11.2）: schedule を進めず記録＋error ログ、ループは継続。
+        if !t.is_finite() {
+            let err = SakuraError::NonFiniteTick(t);
+            tracing::error!(error = %err, "non-finite Tick ignored; schedule not advanced");
+            return ControlFlow::Continue(());
+        }
+
+        // 状態未確定は防御枝（投函経路上 Start 先行が保証される・非到達）。
+        let Some(state) = self.state.as_mut() else {
+            tracing::error!("Tick received before Start; ignoring");
+            return ControlFlow::Continue(());
+        };
+
+        // 単調ガード（逆行/同値は no-op・冪等）。初回は last_tick==None ゆえ必ず通過する。
+        if let Some(prev) = state.last_tick
+            && t <= prev
+        {
+            tracing::debug!(prev, t, "non-monotonic Tick ignored (backward or equal)");
+            return ControlFlow::Continue(());
+        }
+        state.last_tick = Some(t);
+
+        // Phase 1: 時刻前進。Phase 2: 到達済み発火を配送先分類で 2 sink へ振り分ける。
+        state.schedule.tick(t);
+        for cue in state.schedule.ready() {
+            match cue_target_of(&cue.command) {
+                Some(CueTarget::Shell) => self.surface_sink.emit(cue.clone()),
+                Some(CueTarget::Balloon) => self.text_sink.emit(cue.clone()),
+                None => {
+                    // M-boot compile は分類不能 command を生成しない（防御・非 panic）。
+                    tracing::error!(command = ?cue.command, "unclassifiable cue command; skipping");
+                }
+            }
+        }
+
+        // 自然終端検出: 全エントリ消費済みかつバリア中でない（R6.1/6.2/6.3）。
+        // 高々 1 回機構: state.take() → reply.send(TalkDone) → Break。
+        if state.schedule.is_completed() {
+            let state = self.state.take().expect("state was Some above");
+            let done = TalkDone {
+                talk_id: state.talk_id,
+                reason: state.end,
+            };
+            if state.reply.send(done).is_err() {
+                tracing::error!(talk_id = state.talk_id.0, "TalkDone reply receiver dropped");
+            }
+            return ControlFlow::Break(());
+        }
+
         ControlFlow::Continue(())
     }
 
@@ -217,7 +275,7 @@ fn to_schedule(sheet: &CueSheet) -> TimedSchedule<TalkCue> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::contract::TalkId;
+    use crate::contract::{CueCommand, TalkId};
     use crate::sink::MockSink;
     use areka_actor::reply_channel;
     use std::time::Duration;
@@ -265,5 +323,181 @@ mod tests {
 
         // join でスレッド終了を同期（Break 後にスレッドが正常終了していること）。
         handle.actor.join().expect("body は正常終了する");
+    }
+
+    /// fixture 駆動の統合テスト（task 5.2 の主 observable・R9.3）。
+    ///
+    /// `\s[10]hello\w[2]world\e`（サーフェス切替＋テキスト＋待ち＋テキスト＋終端）を
+    /// script 直入力し、注入 `Tick` 列（0.0 → 待ち跨ぎの 0.2）で駆動する。surface mock には
+    /// `Emote{key:"10"}`（at=0.0）が、text mock には `Text("hello")`（at=0.0）と
+    /// `Text("world")`（at=0.1・`\w[2]`＝100ms 反映）が **at 昇順・FIFO** で届き、
+    /// 最後に `TalkDone{Ended}`（talk_id エコー・R6.6）が返ること、を単一 pass で確認する。
+    #[test]
+    fn fixture_script_drives_two_sinks_and_returns_ended() {
+        let (reply_tx, reply_rx) = reply_channel::<TalkDone>();
+        let talk_id = TalkId(42);
+        let start = StartTalk {
+            script: r"\s[10]hello\w[2]world\e".to_string(),
+            talk_id,
+            reply: reply_tx,
+        };
+
+        let surface = MockSink::new();
+        let text = MockSink::new();
+        let surface_records = surface.records();
+        let text_records = text.records();
+
+        let handle = spawn_talk(start, surface, text);
+
+        // 期待発火時刻（`\w[2]`＝100ms＝Duration::from_millis(100).as_secs_f64()）。
+        // リテラル直書きの表現誤差を避けるため同一計算で導出する。
+        let at_hello = 0.0_f64;
+        let at_world = Duration::from_millis(100).as_secs_f64();
+
+        // 注入 Tick 列: 0.0（先頭群 hello/surface を発火）→ 待ち跨ぎ 0.2（world を発火＋末尾到達）。
+        handle
+            .inbox
+            .send(SakuraMsg::Tick(0.0))
+            .expect("Tick(0.0) 投函");
+        handle
+            .inbox
+            .send(SakuraMsg::Tick(0.2))
+            .expect("Tick(0.2) 投函");
+
+        // 自然終端で TalkDone{Ended} が返ること（talk_id エコー・R6.6）。
+        let done = reply_rx
+            .recv_timeout(Duration::from_secs(5))
+            .expect("自然終端で TalkDone が返るべき");
+        assert_eq!(done.talk_id, talk_id, "talk_id がエコーされること（R6.6）");
+        assert_eq!(done.reason, TalkEndReason::Ended, "`\\e` は Ended");
+
+        // body の正常終了を同期してから観測（全発火が確定済みになる）。
+        handle.actor.join().expect("body は正常終了する");
+
+        // surface 系: Emote{key:"10"}（at=0.0・actor="0"）1 件のみ。
+        let surface = surface_records.lock().unwrap();
+        assert_eq!(surface.len(), 1, "surface 発火は 1 件（サーフェス切替）");
+        assert_eq!(surface[0].at, at_hello, "surface 発火時刻は 0.0");
+        assert_eq!(surface[0].actor.as_str(), "0", "既定 scope=0 の転写");
+        assert_eq!(
+            surface[0].command,
+            CueCommand::Emote { key: "10".into() },
+            "surface 発火は Emote{{key:10}}"
+        );
+
+        // text 系: Text("hello")（at=0.0）→ Text("world")（at=0.1）の 2 件が at 昇順・FIFO。
+        let text = text_records.lock().unwrap();
+        assert_eq!(text.len(), 2, "text 発火は 2 件（hello/world）");
+        assert_eq!(text[0].at, at_hello, "hello の発火時刻は 0.0");
+        assert_eq!(
+            text[0].command,
+            CueCommand::Text("hello".into()),
+            "先頭 text は hello"
+        );
+        assert_eq!(text[1].at, at_world, "world の発火時刻は \\w[2]＝100ms");
+        assert_eq!(
+            text[1].command,
+            CueCommand::Text("world".into()),
+            "後続 text は world"
+        );
+        // at 昇順（FIFO・R4.1/R9.2）。
+        assert!(text[0].at <= text[1].at, "text 発火は at 昇順");
+    }
+
+    /// 冪等/逆行 `Tick` で二重発火しない（設計クリティカルな二重発火ガードの固定・R11.x）。
+    ///
+    /// 先頭 cue を発火させた後、同値・逆行 `Tick` を送っても surface/text の発火数が
+    /// 増えないこと（`TimedSchedule::tick` の冪等 early-return ＋単調ガードの合わせ技）を確認する。
+    #[test]
+    fn duplicate_and_backward_tick_do_not_double_fire() {
+        let (reply_tx, reply_rx) = reply_channel::<TalkDone>();
+        let talk_id = TalkId(1);
+        // 末尾に長めの待ちを残し、0.0/0.1 の Tick 群だけでは終端しない script にする。
+        let start = StartTalk {
+            script: r"\s[10]hello\w[10]world\e".to_string(),
+            talk_id,
+            reply: reply_tx,
+        };
+
+        let surface = MockSink::new();
+        let text = MockSink::new();
+        let surface_records = surface.records();
+        let text_records = text.records();
+
+        let handle = spawn_talk(start, surface, text);
+
+        // 同値・逆行 Tick を織り交ぜて先頭群（at=0.0）を発火させる。
+        handle.inbox.send(SakuraMsg::Tick(0.0)).unwrap();
+        handle.inbox.send(SakuraMsg::Tick(0.0)).unwrap(); // 同値 → no-op
+        handle.inbox.send(SakuraMsg::Tick(-1.0)).unwrap(); // 逆行 → no-op
+        handle.inbox.send(SakuraMsg::Tick(0.1)).unwrap(); // 前進だが world(at=0.5) 未達
+
+        // 終端まで進めて body を閉じる（\w[10]=500ms を跨ぐ）。
+        handle.inbox.send(SakuraMsg::Tick(1.0)).unwrap();
+        let done = reply_rx
+            .recv_timeout(Duration::from_secs(5))
+            .expect("終端で TalkDone");
+        assert_eq!(done.reason, TalkEndReason::Ended);
+        handle.actor.join().expect("body は正常終了する");
+
+        // 二重発火していないこと: surface=1（Emote 1 回）・text=2（hello/world 各 1 回）。
+        assert_eq!(
+            surface_records.lock().unwrap().len(),
+            1,
+            "surface が二重発火していないこと"
+        );
+        assert_eq!(
+            text_records.lock().unwrap().len(),
+            2,
+            "text が二重発火していないこと（hello/world 各 1 回）"
+        );
+    }
+
+    /// 非有限 `Tick`（`NaN`/`inf`）は無視され再生が破綻しない（R11.1/11.2）。
+    ///
+    /// dola の NaN 全量配信ハザードを遮断するガードの固定。非有限 Tick を送っても
+    /// 発火は起きず（早期全量配信されない）、その後の正常 Tick で通常どおり終端する。
+    #[test]
+    fn non_finite_tick_is_ignored_and_playback_survives() {
+        let (reply_tx, reply_rx) = reply_channel::<TalkDone>();
+        let talk_id = TalkId(9);
+        let start = StartTalk {
+            script: r"\s[10]hello\w[2]world\e".to_string(),
+            talk_id,
+            reply: reply_tx,
+        };
+
+        let surface = MockSink::new();
+        let text = MockSink::new();
+        let surface_records = surface.records();
+        let text_records = text.records();
+
+        let handle = spawn_talk(start, surface, text);
+
+        // 非有限 Tick を先に送る: 無視され（error ログ＋SakuraError 記録）発火 0 件のはず。
+        handle.inbox.send(SakuraMsg::Tick(f64::NAN)).unwrap();
+        handle.inbox.send(SakuraMsg::Tick(f64::INFINITY)).unwrap();
+
+        // 正常 Tick 列で通常どおり駆動・終端する（ガードがループを殺していないことの証）。
+        handle.inbox.send(SakuraMsg::Tick(0.0)).unwrap();
+        handle.inbox.send(SakuraMsg::Tick(0.2)).unwrap();
+
+        let done = reply_rx
+            .recv_timeout(Duration::from_secs(5))
+            .expect("非有限 Tick 後も正常 Tick で終端するべき");
+        assert_eq!(done.reason, TalkEndReason::Ended, "再生は破綻せず Ended");
+        handle.actor.join().expect("body は正常終了する");
+
+        // 全発火が非有限 Tick で早期全量配信されず、正常 Tick 分だけ届いていること。
+        assert_eq!(
+            surface_records.lock().unwrap().len(),
+            1,
+            "非有限 Tick で surface が早期全量配信されていないこと"
+        );
+        assert_eq!(
+            text_records.lock().unwrap().len(),
+            2,
+            "非有限 Tick で text が早期全量配信されていないこと"
+        );
     }
 }
