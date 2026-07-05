@@ -351,6 +351,135 @@ mod tests {
         handle.actor.join().expect("body は正常終了する");
     }
 
+    /// 送出のたびに mpsc へ流すテスト用 sink（発火の**到着を barrier として同期受信**する）。
+    ///
+    /// `MockSink`（蓄積のみ）と異なり、各発火を 1 件ずつ受信できるため、「due 前の cue が
+    /// 保留され、`at` 到達の Tick で初めて発火する」タイミングゲートを**中間観測で決定的に**
+    /// アサートできる（sleep や短い timeout による不在判定を用いない）。
+    struct ChannelSink {
+        tx: std::sync::mpsc::Sender<TalkCue>,
+    }
+    impl SurfaceSink for ChannelSink {
+        fn emit(&mut self, cue: TalkCue) {
+            let _ = self.tx.send(cue);
+        }
+    }
+    impl TextSink for ChannelSink {
+        fn emit(&mut self, cue: TalkCue) {
+            let _ = self.tx.send(cue);
+        }
+    }
+
+    /// 未 due の発火は Tick を受けても**保留**され、`at` 到達（境界含む・`at <= tick`）の Tick で
+    /// 初めて配送されることを、**中間観測で決定的に**検証する（実時計・sleep 非依存）。
+    ///
+    /// script `\s[10]hello\w[2]probeA\w[2]probeB\w[2]world\e` の発火予定:
+    ///   Emote{10}@0.0(surface) / hello@0.0 / probeA@0.1 / probeB@0.2 / world@0.3 (text) / `\e`。
+    ///
+    /// **barrier 技法**: probe を受信できた時点で当該 Tick の ready 群は出し切られており、
+    /// 次の Tick を送るまで後続（未 due）の発火は到着し得ない。ゆえに `try_recv()==Empty` が
+    /// **timeout に依らない決定的な「保留」証明**になる（早すぎ発火があれば Empty にならない）。
+    ///
+    /// これにより、既存の集計ベーステスト（最終カウントのみ）では捕捉できない「1 tick 早い発火」
+    /// を封鎖する（発火時刻ゲートの固定・dola `TimedSchedule` の `at <= tick` 境界包含も確認）。
+    #[test]
+    fn undue_cues_are_withheld_until_their_at_is_reached() {
+        use std::sync::mpsc::{self, TryRecvError};
+
+        let (reply_tx, reply_rx) = reply_channel::<TalkDone>();
+        let talk_id = TalkId(314);
+        let start = StartTalk {
+            script: r"\s[10]hello\w[2]probeA\w[2]probeB\w[2]world\e".to_string(),
+            talk_id,
+            reply: reply_tx,
+        };
+
+        let (surface_tx, surface_rx) = mpsc::channel::<TalkCue>();
+        let (text_tx, text_rx) = mpsc::channel::<TalkCue>();
+        let handle = spawn_talk(
+            start,
+            ChannelSink { tx: surface_tx },
+            ChannelSink { tx: text_tx },
+        );
+
+        // 期待発火時刻。**compile と同一の `as_secs_f64()` 累積**で導出する（設計 Testing Strategy
+        // の戒め: 10 進リテラル直書き `from_millis(300)`=0.3 は累積 0.1+0.1+0.1=0.30000000000000004
+        // と異なる f64 となり、`Tick(0.3)` が world 未達＝境界包含判定を誤る）。
+        let w = Duration::from_millis(100).as_secs_f64(); // `\w[2]`＝2×50ms
+        let at0 = 0.0_f64;
+        let at_a = w; // probeA: 1×`\w[2]`
+        let at_b = at_a + w; // probeB: 2×`\w[2]`（累積）
+        let at_w = at_b + w; // world:  3×`\w[2]`（累積）
+        let recv = |rx: &mpsc::Receiver<TalkCue>| {
+            rx.recv_timeout(Duration::from_secs(5))
+                .expect("due な発火は届くこと")
+        };
+
+        // ── Tick(0.1): hello@0.0 と probeA@0.1 のみ due。probeB(0.2)/world(0.3) は未 due。 ──
+        handle
+            .inbox
+            .send(SakuraMsg::Tick(at_a))
+            .expect("Tick(0.1) 投函");
+        // surface: Emote@0.0（1 件のみ・以降 surface 発火なし）。
+        let s0 = recv(&surface_rx);
+        assert_eq!(s0.at, at0, "surface Emote の発火時刻は 0.0");
+        assert_eq!(s0.command, CueCommand::Emote { key: "10".into() });
+        // text: hello@0.0 → probeA@0.1（at 昇順）。probeA 受信＝Tick(0.1) の ready 出し切り barrier。
+        let hello = recv(&text_rx);
+        assert_eq!(hello.command, CueCommand::Text("hello".into()));
+        assert_eq!(hello.at, at0);
+        let probe_a = recv(&text_rx);
+        assert_eq!(probe_a.command, CueCommand::Text("probeA".into()));
+        assert_eq!(probe_a.at, at_a);
+        // ★保留の決定的証明: probeA barrier 到達時点で probeB(0.2)/world(0.3) は届いていない。
+        assert_eq!(
+            text_rx.try_recv().unwrap_err(),
+            TryRecvError::Empty,
+            "at=0.1 の Tick では未 due の probeB(0.2)/world(0.3) が保留されること"
+        );
+        assert_eq!(
+            surface_rx.try_recv().unwrap_err(),
+            TryRecvError::Empty,
+            "surface 側も追加発火が無いこと"
+        );
+
+        // ── Tick(0.2): probeB@0.2 のみ新規 due。world(0.3) は依然 未 due。 ──
+        handle
+            .inbox
+            .send(SakuraMsg::Tick(at_b))
+            .expect("Tick(0.2) 投函");
+        let probe_b = recv(&text_rx);
+        assert_eq!(probe_b.command, CueCommand::Text("probeB".into()));
+        assert_eq!(probe_b.at, at_b);
+        // ★保留の決定的証明: probeB barrier 到達時点でも world(0.3) は未着。
+        assert_eq!(
+            text_rx.try_recv().unwrap_err(),
+            TryRecvError::Empty,
+            "at=0.2 の Tick でも未 due の world(0.3) が保留されること"
+        );
+
+        // ── Tick(0.3): world@0.3 が due（境界含む `at <= tick`）→ ここで初めて発火。 ──
+        handle
+            .inbox
+            .send(SakuraMsg::Tick(at_w))
+            .expect("Tick(0.3) 投函");
+        let world = recv(&text_rx);
+        assert_eq!(
+            world.command,
+            CueCommand::Text("world".into()),
+            "world は at=0.3 到達で初めて発火する"
+        );
+        assert_eq!(world.at, at_w, "world の発火時刻は 0.3（境界包含 at<=tick で発火）");
+
+        // 自然終端（`\e`＝Ended）・talk_id エコー。
+        let done = reply_rx
+            .recv_timeout(Duration::from_secs(5))
+            .expect("末尾到達で TalkDone");
+        assert_eq!(done.talk_id, talk_id, "talk_id エコー");
+        assert_eq!(done.reason, TalkEndReason::Ended, "`\\e` は Ended");
+        handle.actor.join().expect("body は正常終了する");
+    }
+
     /// M-boot 外タグのみで構成され**発火列が空になる** script は、リテラル空 script では
     /// ないにもかかわらず空 sheet へコンパイルされ、時間軸駆動（Tick）を一切要さずに
     /// 末尾到達の終端理由 `Ended`（R1.4）を伴う `TalkDone` を即座に返す。
