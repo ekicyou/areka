@@ -28,3 +28,8 @@
 //! **cue の型自体の正本は dola** が所有し、本クレートは消費する。
 //!
 //! wintf には依存しない（headless）。`std::time::Instant` は本クレートに一切現れない。
+
+pub mod contract;
+
+// 下流の import パス安定化（DD-1: 下流は `areka_sakura::contract::*` 経由で参照）。
+pub use contract::*;
