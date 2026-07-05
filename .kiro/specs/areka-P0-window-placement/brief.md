@@ -11,11 +11,11 @@
 
 ## Problem
 
-ゴーストのキャラ窓・バルーン窓は現状 `crates/areka/src/main.rs` に**ハードコード**（位置 (400,200) 固定・2窓決め打ち・ドラッグ offset 定数）であり、**ゴースト定義から窓を生成し既定位置に置く「窓配置」の機構が存在しない**。⓪ ghost が窓のライフサイクルを所有するというロードマップ構造（lifecycle／窓配置／位置永続化）の「窓配置」を実装で埋める。
+ゴーストのキャラ窓・バルーン窓のハードコード実装（位置 (400,200) 固定・2窓決め打ち・ドラッグ offset 定数）は **app-shell ✅（2026-07-05）で `crates/areka/examples/mock-shell.rs` へ example 保全**され、main.rs は骨格（構成解決＋検証用ダミー窓＋replace-me シーム `open_startup_window`）へ純化済み。しかし**ゴースト定義から本物の窓を生成し既定位置に置く「窓配置」の機構は依然存在しない**（シームの中身が空）。⓪ ghost が窓のライフサイクルを所有するというロードマップ構造（lifecycle／窓配置／位置永続化）の「窓配置」を実装で埋める。
 
 ## Current State
 
-- **mock-shell の位置づけ（2026-07-05 格下げ）**: `crates/areka/src/main.rs` は shell 窓＋balloon 窓＋ドラッグの動作実績を持つが、**lift は「窓生成 API の呼び方」の donor に限る**。初期位置 (400,200)・追従 offset (335,0) 等の**座標値・配置ロジックは持ち込み禁止**（デモ合わせ込み＝実 DPI 破綻の実証済み経路）。demo は DPI 処理ゼロ・work_area 非参照。
+- **mock-shell の位置づけ（2026-07-05 格下げ・app-shell ✅ で所在確定）**: `crates/areka/examples/mock-shell.rs`（app-shell が挙動不変保全）は shell 窓＋balloon 窓＋ドラッグの動作実績を持つが、**lift は「窓生成 API の呼び方」の donor に限る**。初期位置 (400,200)・追従 offset (335,0) 等の**座標値・配置ロジックは持ち込み禁止**（デモ合わせ込み＝実 DPI 破綻の実証済み経路）。demo は DPI 処理ゼロ・work_area 非参照。**差し込み先は main.rs の `open_startup_window(&WinApp)` シーム**（ダミー窓を本物ゴースト窓生成へ差し替える・app-shell が用意した唯一の置換点——ghost-setup と分担: 結線=あちら・窓=こちら）。
 - **wintf 座標系の論理/物理混在（実装前の必須確定事項）**: `Monitor.work_area`＝物理 px・`WindowPos`＝物理 px・`BoxStyle` Px＝論理 px・`GlobalArrangement` scale＝DPI 係数——**この契約を design 冒頭で型レベルに確定してから実装**（07-05 リジェクトの直接原因。混在演算を型で排除する newtype 等は design 判断）。
 - **wintf 窓生成 API**: `EcsWindowFactory::create_window`（`Window`+`WindowStyle`+`WindowPos` entity → Win32 窓・ex_style 自動計算・clickthrough 統合済み）。多窓は WUC compositor 1 個共有＋窓ごと Visual ツリーで対応済み。
 - **既定位置ロジックは無**: ukadoc の `seriko.alignmenttodesktop` 系を読む・work area を参照する・スコープ別配置を決めるコードは存在しない。
@@ -82,7 +82,7 @@
 ## Existing Spec Touchpoints
 
 - **Extends**: `completed/areka-mock-shell`（窓生成・ドラッグの donor）。
-- **Adjacent**（2026-07-05 更新・旧 `emo-surface` 参照を3分割後の実名へ是正）: `areka-P0-app-shell`（main.rs を骨格化＝本ユニットは**骨格の上で**窓機構を実装・main.rs 衝突は構造ごと解消）／`areka-P0-emo-present`（順序ゲートの上流。境界: Window entity=本ユニット／表示供給＋emo ランタイム=emo-present）／`areka-P0-ghost-setup`（⓪ 同エンジン・同時着手回避）。
+- **Adjacent**（2026-07-05 更新②）: `completed/areka-P0-app-shell` **✅**（main.rs 骨格化済み＝本ユニットは**骨格の上で**窓機構を実装・main.rs 衝突は構造ごと解消済み）／`areka-P0-emo-present`（順序ゲートの上流。境界: Window entity=本ユニット／表示供給＋emo ランタイム=emo-present）／`areka-P0-ghost-setup`（⓪ 同エンジン・**並走中**——境界: エンジン結線・終了統括=あちら／窓生成・配置=こちら。本ユニットは emo-present ゲート下ゆえ時間的重複は薄いが、`open_startup_window` シームの中身を両者が触る点だけ結線時に調停）。
 
 ## Constraints
 

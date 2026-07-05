@@ -9,9 +9,9 @@
 
 ## Current State
 
-- **emo-compose（直列2・前提）**: `compose(surface_id) -> 合成済み premultiplied BGRA 1枚`（純粋）。
+- **emo-compose ✅ 完了（2026-07-05・直列2・実シンボル正本＝再定義禁止）**: `Composer::compose_into(&mut ComposedSurface, &EmoWorld, &AtlasTable, surface_id: u32, active_binds: &BindSet) -> Result<(), ComposeError>`（**out 再利用＝外形不変経路でゼロアロケーション**——本ユニットのキャッシュ層が out バッファを所有する形に好適）＋値返し版 `compose`。出力 `ComposedSurface { width, height, stride=width*4, bytes }`＝**premultiplied BGRA・Send 所有**。`EmoWorld::build(&Shell)`＋`bind_atlas(&AtlasTable)`（resolve は構築時一度きり・hot path は O(1) 引きのみ）。`BindSet::from_ids`（animation ID 整列済み・Send）。同期・値返し・結果保持なし＝**キャッシュは本層所有**で正しい（brief 想定どおり実装が着地）。
 - **wintf 表示基盤 ✅**: `BitmapSource`→`Visual`→WUC `SpriteVisual` の表示経路。per-widget `AlphaMask::is_hit`（**premultiplied BGRA**・`from_pbgra32`）が clickthrough の α源（`WS_EX_TRANSPARENT` 動的トグル・07-02 完了）。
-- mock-shell（`crates/areka/src/main.rs`）に窓生成・クリックスルー登録の実績コードあり（example の donor）。
+- **mock-shell は `crates/areka/examples/mock-shell.rs` へ保全済み（app-shell ✅ 2026-07-05）**——窓生成・クリックスルー登録・ドラッグの donor。main.rs は骨格化済み＝「触らない」前提が構造で確立。
 
 ## Desired Outcome
 
@@ -23,7 +23,7 @@
 
 1. **表示口**: 合成済み BGRA バッファ→WUC surface 更新の最小 widget（既存 `BitmapSource` の「ファイルから」を「メモリから」に置き換えた供給路。既存流用 or 最小新設は design 判断）。**窓＝visual 1〜数枚**（surface 本体＋将来の text-layer 用の口だけ・粗い層構成のみ許容）。
 2. **AlphaMask 生成**: 合成結果（premultiplied）から `from_pbgra32` 相当で AlphaMask を構築し hit-test へ供給——clickthrough 直結。**surface 切替時に AlphaMask も同期更新**（ズレ＝クリック領域の食い違いバグ源）。
-3. **指令 API**: `show_surface(scope, surface_id)` 級の適用口（＝将来の seriko→emo channel 契約の片側。M-boot は直接呼出で可・channel 化は kanade/seriko 結線時）。
+3. **指令 API**: `show_surface(scope, surface_id, binds)` 級の適用口（＝seriko→emo 契約の片側・**本 brief が API 形の正本**。M-boot は直接呼出で可・channel 化は結線時）。**`areka-P0-seriko-engine` が並走中＝呼び手の brief と突合すること**——特に **`\s[-1]`（非表示サーフェス・ukadoc 明記）の意味論**を API に持つか design で確定（seriko は非表示遷移を発行できる必要がある）。
 4. **合成キャッシュ**: surface id→合成済みバッファ（LRU or 全保持・emo2 規模では全保持で可）＋無効化規則（アトラス再構築時）。emo-compose は純粋関数のまま・キャッシュは本層が持つ。
 5. **バルーン枠**: `balloons0.png` 等を balloon dir（**fixture 直指定**・ベースウェアのバルーン選択は ghost 層の後続領分）から同一機構で合成・表示。
 6. **更新スレッド規律**: WUC surface 更新・visual 操作は **UI スレッド固定**（DispatcherQueue 親和性）。合成（CPU）を worker で行う場合はバッファを channel/queue で UI スレッドへ渡す（並行モデル正本: render は UI スレッド・他 actor は channel で送る）。
@@ -31,7 +31,7 @@
 ## クロスユニット契約（後続を詰ませない事前考慮・2026-07-03）
 
 - **text-layer スロットの予約（詰み防止）**: 窓の visual 構成に**文字層の口を最初から予約**する（surface visual の上の独立レイヤ）。M1 の emo-text-layer は独立レイヤ描画（typewriter の毎グリフ更新が surface 再合成を強要しない）・M2 のポップアート装飾では合成パス内レイヤ化の再設計余地——この**二者を吸収できる seam**（text 層の差し込み点）を design で確認。予約しないと emo-text-layer 着手時に visual 構成の作り直しになる。
-- **bind 有効集合の初期解決**: emo2 の surface1000 表示には bindgroup default（`bindgroupN.default`・MAYUNA descript）の解決が必要。指令 API は surface id に加え **bind 集合を運べる形**にする（emo-compose の `compose(surface_id, active_binds)` 契約の呼び手側・将来の seriko→emo channel 契約の片側）。M-boot は descript default から静的解決。
+- **bind 有効集合の初期解決**: emo2 の surface1000 表示には bindgroup default（`bindgroupN.default`・MAYUNA descript）の解決が必要。指令 API は surface id に加え **bind 集合を運べる形**にする——実形は確定済み: `compose_into(..., active_binds: &BindSet)`・`BindSet::from_ids`（emo-compose ✅ 正本の消費）。M-boot の example は descript default から静的解決（**runtime の bind 状態所有者は seriko**＝並走 brief に記載・本ユニットは受けて合成するだけ）。
 - **window-placement との統合 seam**: 本ユニットの example は仮設窓だが、表示装着 API は「**Window entity（handle）を受け取って surface を載せる**」形に切る——window-placement が生成する窓へ M-boot 統合でそのまま装着できる契約（どちらが先に完了しても結線可能）。
 - **ulw-removal ✅ 完了（2026-07-05）＝新 API 前提で書く**: `CompositionMode` は**撤去済み**（GPU 合成単独・factory は常時 `WS_EX_NOREDIRECTIONBITMAP`）。旧「順序調整 or 追随」の懸念は解消——本ユニットは**現行 API（collapse 後）を最初から前提**にする（旧 enum 参照をコード例・донorから持ち込まない）。
 - **通信モデル（areka-actor ✅ との契約・実シンボル）**: 指令 API（`show_surface` 級）は将来 `areka-actor` の envelope 規約に載り、**UI 配送ブリッジ＝実装済みの `spawn_ui`/`UiSender`**（worker→UI pump・実クレート提供）経由で届く——M-boot は直接呼出で開始するが、**指令 API のシグネチャは「メッセージ enum の1バリアントに転写できる形」**（`Send` な所有データ・借用なし・応答不要 or `reply_channel` の `ReplySender` 同梱）に最初から切ること。channel 化時に API 再設計が要らないことが受け入れ基準（結線は kanade/seriko 時）。
@@ -43,7 +43,7 @@
 - **premultiplied のまま WUC へ**: WUC surface のピクセル形式（BGRA premultiplied）と合成出力を一致させ、途中変換を挟まない。
 - **サイズ変化**: surface ごとに原寸が違い得る——窓/visual サイズの追随規則（原寸表示・DPI 拡縮は wintf 側）を design で明確化。
 - **キャッシュ無効化**: M-boot ではアトラス不変＝実質不要だが、無効化の口だけ設ける（ghost 再読込・将来の動的差替えに備えた**構造**）。
-- **example の位置づけ（2026-07-05 更新）**: 観測用の専用 example（`crates/areka/examples/`）とし、**`main.rs` は触らない**——`areka-P0-app-shell` が保全する `examples/mock-shell.rs` を窓・clickthrough 登録の donor に使う。**app-shell 完了後は window-placement との `crates/areka` 衝突は構造ごと解消**（それまでに着手する場合のみ旧注意＝同時着手回避が生きる）。
+- **example の位置づけ（2026-07-05 更新②）**: 観測用の専用 example（`crates/areka/examples/`）とし、**`main.rs` は触らない**——**app-shell ✅ 完了済み**＝保全された `examples/mock-shell.rs` を窓・clickthrough 登録の donor に使う。window-placement との `crates/areka` 衝突は**構造ごと解消済み**（旧の同時着手回避注意は失効）。
 
 ## ukadoc 必読（design 着手時に ukadoc MCP `get_doc`/`search_docs` で正典参照・2026-07-03 総ざらい）
 
@@ -72,7 +72,7 @@
 ## Existing Spec Touchpoints
 
 - **Extends**: `completed/areka-mock-shell`（窓・clickthrough 登録の donor）。
-- **Adjacent**: `areka-P0-app-shell`（デモを example 保全・main.rs を骨格化＝本ユニットの観測土台と衝突解消を供給）／`areka-P0-window-placement`（境界: Window entity=placement／表示供給＋emo ランタイム=本ユニット。**app-shell 完了後は `crates/areka` 衝突なし**）。
+- **Adjacent**: `completed/areka-P0-app-shell` **✅**（デモ example 保全・main.rs 骨格化＝観測土台と衝突解消を供給済み）／`areka-P0-seriko-engine`（**並走**・指令 API の呼び手＝契約の対向。`\s[-1]` 非表示の意味論を両 design で突合）／`areka-P0-ghost-setup`（**並走**・非衝突: あちらは main.rs＋結線層・こちらは example＋emo 新層）／`areka-P0-window-placement`（境界: Window entity=placement／表示供給＋emo ランタイム=本ユニット・`crates/areka` 衝突は解消済み）。
 
 ## Constraints
 
