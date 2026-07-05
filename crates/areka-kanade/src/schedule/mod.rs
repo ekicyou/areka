@@ -23,6 +23,9 @@ use crate::talk::{StartTalk, TalkDone, TalkId};
 
 pub(crate) mod boot;
 pub(crate) mod close;
+/// ukadoc Reference 表の実装正本（純粋関数群）。DD-9 の例外として `pub`。
+/// クレート公開面への露出は [`crate::events`] ファサード経由（[`crate::lib`] 参照）。
+pub mod events;
 pub(crate) mod steady;
 
 /// 状態機械への入力。`KanadeMsg`（外部入力）＋シェルが同期往復で得た SHIORI 応答。

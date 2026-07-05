@@ -34,3 +34,17 @@ pub use msg::{
     ShioriOutcome,
 };
 pub use talk::{StartTalk, TalkDone, TalkId};
+
+/// ukadoc Reference 表の実装正本（純粋関数群）を露出する公開ファサード（DD-9 例外）。
+///
+/// `schedule/` は `pub(crate)` に閉じるが、`tests/` 配下の統合テストクレートは
+/// `pub(crate)` を参照できない。Req 7.1（fixture・検証・実装が単一の正本を共有）を
+/// 成立させる唯一の経路として、Reference 表構成関数のみを本ファサード経由で
+/// クレート公開面に露出する（`areka_kanade::events::on_boot(&config)` 等で到達可能）。
+/// 運行状態機械の内部（Phase／State／Action／Input／step 本体・遷移ロジック）は
+/// `pub(crate)` のまま非公開に保つ。
+pub mod events {
+    pub use crate::schedule::events::{
+        baseware_version, on_boot, on_close, on_first_boot, on_initialize, on_second_change,
+    };
+}

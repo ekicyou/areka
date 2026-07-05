@@ -29,7 +29,7 @@
   - _Boundary: schedule（mod.rs）_
   - _Depends: 1.1, 1.2_
 
-- [ ] 2.2 (P) ukadoc Reference 表の実装（イベント発火順序の単一正本）
+- [x] 2.2 (P) ukadoc Reference 表の実装（イベント発火順序の単一正本）
   - boot 系列（初期化通知・起動種別・起動・基盤バージョン通知）・定常運転（毎秒変化）・close（終了要求）の各イベントについて、NOTIFY／GET の別と Reference 構成を設計書の Reference 表どおりに組み立てる関数群を実装する
   - 起動種別イベントは固定値（vanish count 未使用・毎回同一の運行）で構成し、204 フォールスルーで起動イベントへ進む値を返す
   - 定常運転の毎秒イベントは、talk 再生可能時と再生不能時とで異なる Reference 構成（可否フラグ）を返す
@@ -153,3 +153,7 @@
   - _Requirements: 5.3, 7.4_
   - _Boundary: tests/real_helper_test_
   - _Depends: 4.1, 3.2_
+
+## Implementation Notes
+
+- 2.2 完了時: `schedule/mod.rs` の `force_quit` は OnClose を **NOTIFY** としてインライン構築している（DD-10 best-effort・events.rs は GET の `on_close` のみ提供）。GET/NOTIFY で別物ゆえ events への移譲は必須ではないが、close 系列を触るタスク（2.5）が OnClose-NOTIFY 構成子を events に足して一本化するのは任意で可。
