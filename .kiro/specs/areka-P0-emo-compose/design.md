@@ -215,7 +215,7 @@ sequenceDiagram
     BL-->>EP: Ok(())（out に premultiplied BGRA 完成品）
 ```
 
-フロー上の決定: 循環検出は plan 導出時（visited 集合＝`Composer` スクラッチの再利用 Vec）。検出時は warn ログの上その参照枝のみ打ち切り、部分結果を返す（7.2/7.3・非パニック）。plan 導出が命令 0 件（対象 surface 不在・全欠落）の場合は `error!`＋`Err`（10.5）。
+フロー上の決定: 循環検出は plan 導出時（visited 集合＝`Composer` スクラッチの再利用 Vec）。検出時は warn ログの上その参照枝のみ打ち切り、部分結果を返す（7.2/7.3・非パニック）。対象 surface 不在は `error!`＋`Err(SurfaceNotFound)`。**surface が存在し描画可能命令ゼロ（全透明・空 bind 集合）は正常＝静的外形どおりの全透明を返す**（議題2裁定・6.6）。キャンバス外形は有効 bind に依存しない静的算出（bind 切替でサイズ不変）。
 
 ## Requirements Traceability
 
@@ -252,7 +252,8 @@ sequenceDiagram
 | 6.2 | 転写先＝配置座標＋trim_offset・見た目不変 | BlitExecutor | オフセット合算・trim golden |
 | 6.3 | placement None＝転写スキップ | PlanBuilder/BlitExecutor | None ガード |
 | 6.4 | premultiplied SourceOver・straight α 禁止 | BlitExecutor | 決定6の整数式 |
-| 6.5 | サイズ＝base surface 原寸・ピクセル等倍 | PlanBuilder | キャンバス外形規則（下記 de-facto） |
+| 6.5 | サイズ＝surface 外形（全定義層和集合・静的）・ピクセル等倍 | PlanBuilder | キャンバス外形規則（議題2裁定・bind 非依存） |
+| 6.6 | 描画可能命令ゼロ＝全透明を正常返却 | PlanBuilder, Composer | 空 ops＋静的外形・Err は退化データ限定 |
 | 7.1 | 入れ子参照の再帰合成 | PlanBuilder | flatten 再帰 |
 | 7.2 | 循環＝訪問集合検出・非パニック打ち切り | PlanBuilder | visited（Composer スクラッチ） |
 | 7.3 | 循環検出の warn 記録 | PlanBuilder | `warn!(surface_id, ...)` |
@@ -604,8 +605,8 @@ fn bind_atlas(world: &mut World, atlas: &AtlasTable, set: SetId);
 - pattern0 の `surface_id >= 0` は**入れ子 surface 参照**として flatten（参照先 `SurfaceMaster` の **elements のみ**を、pattern の (x,y) をオフセット累積して inline 展開）。**`active_binds` の適用範囲は compose 対象 surface のみ**であり、参照先 surface 自身の bind animation は展開しない（emo2 の bind パーツ surface＝1100 系は element のみで構成され差は生じない。入れ子側 bind の活性化が必要になった場合は BindSet のスコープ設計ごと再検討＝シーム記録）。`surface_id < 0` はセンチネル＝非描画 skip（debug ログ）。element 自体は常にアトラス参照命令（4.3）。
 - 循環検出: flatten 再帰の訪問集合（`Composer` スクラッチの `Vec<u32>`）。再訪検出で `warn!` の上その枝を打ち切り（7.2/7.3）。
 - `AtlasBinding` が None または `AtlasEntry.placement` が None の element は命令化せずスキップ（6.3。前者は warn、後者は全透明の正常系）。
-- **キャンバス外形（6.5 の解釈・de-facto 決定）**: 原点 (0,0) 固定・`extent = max(offset + AtlasEntry.original)` の和集合（負オフセット分は転写時クリップ）。element0 が (0,0) に原寸で置かれる通常形では「base surface 原寸」と厳密一致し、element ゼロの全 bind surface（emo2 surface1000）では bind パーツ群の外形＝事実上のベース原寸となる。SSP がベース外はみ出しを切るか広げるかは未実測＝ de-facto（research.md 記録・emo2 では差が生じない）。
-- 命令 0 件（surface 不在・全欠落）→ `Err(ComposeError)`（10.5）。
+- **キャンバス外形（6.5 改訂・議題2裁定 (A)）**: 原点 (0,0) 固定・`extent = max(offset + AtlasEntry.original)` の和集合（負オフセット分は転写時クリップ）。**算出母集合は「surface の全定義層」＝全 element ＋ 全 bind animation の pattern0（有効 bind 集合に依存しない静的算出）**。`placement: None`（全透明）でも `AtlasEntry.original` は既知ゆえ外形へ寄与する。これにより **bind のオン/オフでキャンバスサイズが変わらない**（emo-present のバッファ再利用・キャッシュ・窓サイズの安定に必須）。element0 が (0,0) に原寸で置かれる通常形では「base surface 原寸」と厳密一致し、element ゼロの全 bind surface（emo2 surface1000）では全 bind パーツ群の外形＝事実上のベース原寸となる。SSP がベース外はみ出しを切るか広げるかは未実測＝ de-facto（research.md 記録・emo2 では差が生じない）。
+- 対象 surface 不在 → `Err(SurfaceNotFound)`＋`error!`（10.5）。**surface が存在し描画可能命令ゼロ**（全 element が placement None・空の有効 bind 集合等）→ **正常系**: 空 ops＋静的外形を返し、blit はクリアのみ＝**外形どおりの全透明 `ComposedSurface` を正常返却**（6.3/6.6・議題2裁定）。定義層が皆無で外形 0×0 となる退化データのみ `Err(EmptyComposition)`＋`error!`（10.5）。
 
 **Contracts**: Service [x]
 
@@ -677,7 +678,9 @@ impl Composer {
 pub enum ComposeError {
     #[error("surface {0} not found")]
     SurfaceNotFound(u32),
-    #[error("surface {0} has no drawable layers")]
+    /// 定義層が皆無で外形 0×0 の退化データのみ（議題2裁定）。
+    /// 「描画可能命令ゼロだが定義層あり」は正常系＝全透明返却であり本 variant を使わない。
+    #[error("surface {0} has no layers at all (extent 0x0)")]
     EmptyComposition(u32),
 }
 ```
@@ -726,8 +729,9 @@ pub enum ComposeError {
 | 循環参照検出 | データ不整合 | 枝打ち切り・部分結果 | `warn!(cycle path)` | 7.2/7.3 |
 | 未実装メソッド命令 | シーム到達 | 命令 skip・継続 | `warn!(method)` | 8.4 |
 | atlas 未束縛 element／resolve 失敗 | 統合順序/データ欠落 | 命令化せず skip | `warn!(path)` | 4.3 |
-| placement None（全透明） | 正常系 | skip（ログ不要） | — | 6.3 |
-| 描画可能層ゼロ | 合成失敗 | `Err(EmptyComposition)` | `error!` | 10.5 |
+| placement None（全透明） | 正常系 | skip（ログ不要・外形には寄与） | — | 6.3 |
+| surface 存在・描画可能命令ゼロ（全透明・空 bind 集合） | 正常系 | 静的外形どおりの全透明 `ComposedSurface` を正常返却 | — | 6.3/6.6 |
+| 定義層皆無（外形 0×0 の退化データ） | 合成失敗 | `Err(EmptyComposition)` | `error!` | 10.5 |
 | BindSet 中の未知 animation id | 呼び手データずれ | 無視・継続 | `warn!(animation_id)` | 5.5 |
 
 ### Monitoring
@@ -746,6 +750,7 @@ pub enum ComposeError {
 4. **循環検出**: 自己参照・相互参照の合成が非パニックで warn＋打ち切り部分結果（7.1–7.3）
 5. **method registry**: 未実装メソッド命令の warn＋skip（plan 直接構築・8.4）／`ComposeMethod` 全量列挙の網羅 match（8.1/8.3）
 6. **SourceOver 整数式**: 既知画素値ペアの合成結果を式から手計算した期待値と一致（6.4/10.2）・境界クリップ（負座標・はみ出し）
+7. **外形の静的安定と全透明正常返却（議題2裁定）**: 同一 surface で bind 集合を変えても `ComposedSurface` の size が不変（6.5）／全 element が placement None の surface・空 BindSet の bind-only surface が `Err` でなく外形どおりの全透明を正常返却（6.6）／定義層皆無のみ `Err(EmptyComposition)`（10.5）
 
 ### Integration Tests（golden_tests.rs・emo2 fixture）
 

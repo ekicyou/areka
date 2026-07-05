@@ -107,7 +107,8 @@
 2. When element を転写するとき, the emo-compose Compositor shall 転写先座標を「element 配置座標＋trim_offset」として算出し、トリムが見た目を変えないことを保証する。
 3. If アトラスエントリが空（`placement` が None＝全透明）であるとき, then the emo-compose Compositor shall そのエントリの転写をスキップする。
 4. The emo-compose Compositor shall 合成演算を premultiplied 前提で行い（SourceOver: `dst = src + dst*(1-src_a)`）、straight α の式を混在させない。
-5. The emo-compose Compositor shall 合成結果のサイズを base surface 原寸とし、ピクセル等倍（DPI 拡縮を持ち込まない）で生成する。
+5. The emo-compose Compositor shall 合成結果のサイズを surface 外形——全定義層（全 element＋全 bind animation の pattern0）の「配置オフセット＋原寸」の和集合・原点 (0,0) 固定・負方向はみ出しはクリップ・**有効 bind 集合に依存しない静的算出**（element0 が原点に原寸で置かれる通常形では base surface 原寸と一致）——とし、ピクセル等倍（DPI 拡縮を持ち込まない）で生成する（設計ディスカッション議題2裁定）。
+6. Where 対象 surface が存在するが描画可能な転写命令がゼロであるとき（全 element が全透明・空の有効 bind 集合等）, the emo-compose Compositor shall 失敗とせず、surface 外形どおりの全透明 `ComposedSurface` を正常返却する（`Err` は surface 不在・定義層皆無の退化データに限定・設計ディスカッション議題2裁定）。
 
 ### Requirement 7: 入れ子 surface 参照の再帰合成と循環検出
 
