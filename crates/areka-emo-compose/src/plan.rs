@@ -29,8 +29,11 @@
 //!   （要件 6.6/10.5・議題2裁定）。非パニック・`error` ログ＋`Err`。
 //!
 //! 本 module は stub で偽装せず、生成する命令列はすべて実挙動・決定的・テスト済みである。
-//! design 署名の `visited` スクラッチ引数化（Composer での buffer 再利用）は task 7 の責務ゆえ、
-//! [`derive_ops`]/[`compute_extent`] は本 task では各自 visited を内部確保する。
+//!
+//! - **task 7（本 task）**: design 署名どおり `visited` 祖先スタックのスクラッチを引数化する
+//!   （[`build_plan`]/[`derive_ops`]/[`compute_extent`] が呼び手＝Composer の `Vec<u32>` を借用・
+//!   各走査入口で `clear`）。これにより毎フレーム経路（`compose_into`）で visited の再割り当てが
+//!   起きず、O(elements) の定常状態アロケーションなしを満たす（要件 10.3）。
 
 use areka_emo_atlas::{AtlasTable, ElementId};
 use areka_parsers::shell::{Interval, SortOrder};
@@ -210,15 +213,17 @@ pub(crate) fn push_static_element_ops(
 /// [`build_plan`] → [`derive_ops`]/[`compute_extent`] の一点から辿られる）。
 pub(crate) fn derive_ops(
     out_ops: &mut Vec<BlitOp>,
+    visited: &mut Vec<u32>,
     world: &EmoWorld,
     atlas: &AtlasTable,
     surface_id: u32,
     binds: &BindSet,
 ) {
-    // visited 祖先スタック（design: Composer スクラッチの Vec<u32>）。build_plan ファサード導入時
-    // （5.5）は呼び手のスクラッチを引数で受け取り再利用する。本 task はエントリで確保する。
-    let mut visited: Vec<u32> = Vec::new();
-    flatten_surface(out_ops, &mut visited, world, atlas, surface_id, binds, 0, 0);
+    // visited 祖先スタック（design: Composer スクラッチの Vec<u32>）は呼び手（[`build_plan`]／
+    // Composer ファサード）から借用して再利用する（要件 10.3・定常状態アロケーションなし）。
+    // 走査開始前に空へ戻し、祖先スタック規律（push-on-enter／pop-on-exit）で走査後も空に戻す。
+    visited.clear();
+    flatten_surface(out_ops, visited, world, atlas, surface_id, binds, 0, 0);
 }
 
 /// 合成対象 surface（top-level）／入れ子参照先 surface（再帰）を平坦化して `out_ops` へ積む。
@@ -354,12 +359,18 @@ fn flatten_surface(
 ///
 /// element ゼロ・bind ゼロの surface（外形へ寄与する層が皆無）や不在 surface では `Extent { w:0, h:0 }`
 /// を返す（0×0 退化の Err 分類は [`build_plan`] の責務・本関数は分類しない）。
-pub(crate) fn compute_extent(world: &EmoWorld, atlas: &AtlasTable, surface_id: u32) -> Extent {
+pub(crate) fn compute_extent(
+    visited: &mut Vec<u32>,
+    world: &EmoWorld,
+    atlas: &AtlasTable,
+    surface_id: u32,
+) -> Extent {
     let mut max_x: i64 = 0;
     let mut max_y: i64 = 0;
-    // ops 経路と同じ祖先スタック規律で循環検出する（別走査・別集約器だが構造は共有）。
-    let mut visited: Vec<u32> = Vec::new();
-    flatten_extent(&mut max_x, &mut max_y, &mut visited, world, atlas, surface_id, 0, 0);
+    // ops 経路と同じ祖先スタック規律で循環検出する（別走査・別集約器だが構造は共有）。visited は
+    // 呼び手のスクラッチを借用して再利用する（要件 10.3）。走査開始前に空へ戻す。
+    visited.clear();
+    flatten_extent(&mut max_x, &mut max_y, visited, world, atlas, surface_id, 0, 0);
     Extent {
         // max_x/max_y は原点クリップ済みゆえ常に >= 0。u32 化は飽和で安全側（負にはならない）。
         w: max_x.max(0) as u32,
@@ -394,18 +405,18 @@ pub(crate) fn compute_extent(world: &EmoWorld, atlas: &AtlasTable, surface_id: u
 ///
 /// 全経路で `panic!` せず、失敗は `error` ログ＋`Err` で表現する（[`crate::error`] 規律）。
 ///
-/// # visited スクラッチ（task 7 シーム）
+/// # visited スクラッチ（要件 10.3・buffer 再利用形）
 ///
-/// 本 task では [`derive_ops`]/[`compute_extent`] が各自 visited を内部確保する。共有スクラッチの
-/// スレッド（Composer ファサードでの buffer 再利用）は task 7 の責務ゆえ、ここでは分類挙動を優先し
-/// 内部確保のままとする。
+/// `visited` は呼び手（Composer ファサード）が保持する祖先スタックのスクラッチ Vec を借用する。
+/// 外形走査（[`compute_extent`]）と命令走査（[`derive_ops`]）は逐次に走るため、両者が同一
+/// スクラッチを共有し**各走査の入口で `clear`**（走査後も祖先スタック規律で空へ戻る）する。これに
+/// より定常状態（毎フレーム経路）で visited の再割り当てが起きない（要件 10.3・O(elements)）。
 ///
-/// 本 task（5.5）時点では非テストの lib 経路からの呼び出し口（task 7 の Composer ファサード）が
-/// 未導入ゆえ `dead_code` になる。本関数は plan module の呼び出し鎖の頂点（`build_plan` →
-/// `derive_ops`/`compute_extent` → …）ゆえ、`allow` はここへ集約する（それまで意図的な未使用シーム）。
-#[allow(dead_code)]
+/// 本関数は plan module の呼び出し鎖の頂点（`build_plan` → `derive_ops`/`compute_extent` → …）で、
+/// task 7 の Composer ファサード（`compose_into`/`compose`）から結線して消費される。
 pub(crate) fn build_plan(
     out_ops: &mut Vec<BlitOp>,
+    visited: &mut Vec<u32>,
     world: &EmoWorld,
     atlas: &AtlasTable,
     surface_id: u32,
@@ -424,8 +435,9 @@ pub(crate) fn build_plan(
         return Err(ComposeError::SurfaceNotFound(surface_id));
     }
 
-    // 静的外形（有効 bind 非依存）を先に算出する。0×0 なら定義層皆無の退化データ。
-    let extent = compute_extent(world, atlas, surface_id);
+    // 静的外形（有効 bind 非依存）を先に算出する。0×0 なら定義層皆無の退化データ。visited は
+    // compute_extent 入口で clear される（要件 10.3・共有スクラッチ）。
+    let extent = compute_extent(visited, world, atlas, surface_id);
 
     // 分類3: 定義層皆無で外形 0×0 の退化データのみ真の失敗（議題2裁定・要件 10.5）。
     // 命令列は元々ゼロ（外形へ寄与する層＝命令の母集合が皆無）ゆえ out_ops は空のまま返す。
@@ -438,8 +450,9 @@ pub(crate) fn build_plan(
         return Err(ComposeError::EmptyComposition(surface_id));
     }
 
-    // 有効 bind 依存の命令列を積む（描画可能命令ゼロ＝空 ops でもよい）。
-    derive_ops(out_ops, world, atlas, surface_id, binds);
+    // 有効 bind 依存の命令列を積む（描画可能命令ゼロ＝空 ops でもよい）。visited は derive_ops
+    // 入口で clear され、外形走査と共有される（要件 10.3）。
+    derive_ops(out_ops, visited, world, atlas, surface_id, binds);
 
     // 分類2: surface 存在＋外形非ゼロ → 正常系。out_ops が空でも（全透明・空 bind 集合）Err に
     // しない（要件 6.6・議題2裁定: 静的外形どおりの空命令列＝全透明返却）。
@@ -944,7 +957,7 @@ mod tests {
 
         let binds = BindSet::from_ids([1, 2, 3]);
         let mut ops = Vec::new();
-        derive_ops(&mut ops, &world, &atlas, 1000, &binds);
+        derive_ops(&mut ops, &mut Vec::new(), &world, &atlas, 1000, &binds);
 
         // descend（既定）→ ID 昇順描画: part1(1) → part2(2) → part3(3)。
         assert_eq!(ops_to_paths(&ops, &map), vec!["part1.png", "part2.png", "part3.png"]);
@@ -964,7 +977,7 @@ mod tests {
 
         let binds = BindSet::from_ids([1, 2, 3]);
         let mut ops = Vec::new();
-        derive_ops(&mut ops, &world, &atlas, 1000, &binds);
+        derive_ops(&mut ops, &mut Vec::new(), &world, &atlas, 1000, &binds);
 
         // ascend → ID 降順描画: part3(3) → part2(2) → part1(1)。
         assert_eq!(ops_to_paths(&ops, &map), vec!["part3.png", "part2.png", "part1.png"]);
@@ -985,7 +998,7 @@ mod tests {
         // id=2 のみ有効（1,3 は非活性）。
         let binds = BindSet::from_ids([2]);
         let mut ops = Vec::new();
-        derive_ops(&mut ops, &world, &atlas, 1000, &binds);
+        derive_ops(&mut ops, &mut Vec::new(), &world, &atlas, 1000, &binds);
 
         // part2 のみ命令化される。
         assert_eq!(ops_to_paths(&ops, &map), vec!["part2.png"]);
@@ -1007,14 +1020,14 @@ mod tests {
         // 非空 bind 集合 → 可視層が生成される（空白にしない）。
         let binds = BindSet::from_ids([1, 2]);
         let mut ops = Vec::new();
-        derive_ops(&mut ops, &world, &atlas, 1000, &binds);
+        derive_ops(&mut ops, &mut Vec::new(), &world, &atlas, 1000, &binds);
         assert!(!ops.is_empty(), "全 bind surface でも非空 bind 集合から可視層を生む");
         assert_eq!(ops_to_paths(&ops, &map), vec!["part1.png", "part2.png"]);
 
         // 空 bind 集合 → bind 命令なし（静的 element も無いので空・非パニック）。
         let empty = BindSet::default();
         let mut ops_empty = Vec::new();
-        derive_ops(&mut ops_empty, &world, &atlas, 1000, &empty);
+        derive_ops(&mut ops_empty, &mut Vec::new(), &world, &atlas, 1000, &empty);
         assert!(ops_empty.is_empty(), "空 bind 集合では bind 命令ゼロ（非パニック）");
     }
 
@@ -1032,7 +1045,7 @@ mod tests {
 
         let binds = BindSet::from_ids([1]);
         let mut ops = Vec::new();
-        derive_ops(&mut ops, &world, &atlas, 1000, &binds);
+        derive_ops(&mut ops, &mut Vec::new(), &world, &atlas, 1000, &binds);
 
         // 静的 base（下）→ bind part1（上）。
         assert_eq!(ops_to_paths(&ops, &map), vec!["base.png", "part1.png"]);
@@ -1061,7 +1074,7 @@ mod tests {
 
         let binds = BindSet::from_ids([1, 2]);
         let mut ops = Vec::new();
-        derive_ops(&mut ops, &world, &atlas, 1000, &binds);
+        derive_ops(&mut ops, &mut Vec::new(), &world, &atlas, 1000, &binds);
 
         // センチネル bind id=2 は積まれず、part1 のみ（非パニック）。
         assert_eq!(ops_to_paths(&ops, &map), vec!["part1.png"]);
@@ -1081,9 +1094,9 @@ mod tests {
 
         let binds = BindSet::from_ids([1, 2, 3]);
         let mut ops1 = Vec::new();
-        derive_ops(&mut ops1, &world, &atlas, 1000, &binds);
+        derive_ops(&mut ops1, &mut Vec::new(), &world, &atlas, 1000, &binds);
         let mut ops2 = Vec::new();
-        derive_ops(&mut ops2, &world, &atlas, 1000, &binds);
+        derive_ops(&mut ops2, &mut Vec::new(), &world, &atlas, 1000, &binds);
 
         assert_eq!(ops1, ops2, "同一入力→同一 ops（バイト等価）");
         // base(静的1) ＋ bind 3 本＝4 命令。
@@ -1106,7 +1119,7 @@ mod tests {
 
         let binds = BindSet::from_ids([1]);
         let mut ops = Vec::new();
-        derive_ops(&mut ops, &world, &atlas, 1000, &binds);
+        derive_ops(&mut ops, &mut Vec::new(), &world, &atlas, 1000, &binds);
 
         assert_eq!(ops.len(), 1);
         assert_eq!(ops[0].element, part_id);
@@ -1146,7 +1159,7 @@ mod tests {
         let binds = BindSet::from_ids([1]);
         let mut ops = Vec::new();
         // これが無限再帰すると本テストは完走できない（スタックオーバーフローで abort）。
-        derive_ops(&mut ops, &world, &atlas, 1000, &binds);
+        derive_ops(&mut ops, &mut Vec::new(), &world, &atlas, 1000, &binds);
 
         // 静的層 self.png は積まれる（部分結果）。
         assert!(!ops.is_empty(), "自己参照でも静的層の部分結果が得られる");
@@ -1187,7 +1200,7 @@ mod tests {
 
         let binds = BindSet::from_ids([1]);
         let mut ops = Vec::new();
-        derive_ops(&mut ops, &world, &atlas, 1000, &binds);
+        derive_ops(&mut ops, &mut Vec::new(), &world, &atlas, 1000, &binds);
 
         // A 静的 → B 静的まで到達し、B→A の再入は打ち切り。a.png と b.png の各1本。
         let map = [(a_id, "a.png"), (b_id, "b.png")];
@@ -1217,7 +1230,7 @@ mod tests {
 
         let binds = BindSet::from_ids([1]);
         let mut ops = Vec::new();
-        derive_ops(&mut ops, &world, &atlas, 1000, &binds);
+        derive_ops(&mut ops, &mut Vec::new(), &world, &atlas, 1000, &binds);
 
         assert_eq!(ops.len(), 1, "C の element 1 本のみ（A/B は静的 element なし）");
         assert_eq!(ops[0].element, c_id);
@@ -1253,7 +1266,7 @@ mod tests {
 
         let binds = BindSet::from_ids([1, 2]);
         let mut ops = Vec::new();
-        derive_ops(&mut ops, &world, &atlas, 1000, &binds);
+        derive_ops(&mut ops, &mut Vec::new(), &world, &atlas, 1000, &binds);
 
         // S は2経路で展開＝s.png が 2 命令。祖先スタック（pop-on-exit）ゆえ非循環重複は刈られない。
         assert_eq!(ops.len(), 2, "非循環の共有子は各経路で展開（祖先スタック規律）");
@@ -1285,9 +1298,9 @@ mod tests {
 
         let binds = BindSet::from_ids([1]);
         let mut ops1 = Vec::new();
-        derive_ops(&mut ops1, &world, &atlas, 1000, &binds);
+        derive_ops(&mut ops1, &mut Vec::new(), &world, &atlas, 1000, &binds);
         let mut ops2 = Vec::new();
-        derive_ops(&mut ops2, &world, &atlas, 1000, &binds);
+        derive_ops(&mut ops2, &mut Vec::new(), &world, &atlas, 1000, &binds);
 
         assert_eq!(ops1, ops2, "循環入力でも同一入力→同一 ops（バイト等価・有界）");
     }
@@ -1389,14 +1402,14 @@ mod tests {
         // 全 element＋全 bind pattern0 の和集合: w=max(40,200,10,60)=200・h=max(30,10,150,60)=150。
         let expected = Extent { w: 200, h: 150 };
 
-        let empty = compute_extent(&world, &atlas, 1000);
+        let empty = compute_extent(&mut Vec::new(), &world, &atlas, 1000);
         let partial = {
             let _b = BindSet::from_ids([2]);
-            compute_extent(&world, &atlas, 1000)
+            compute_extent(&mut Vec::new(), &world, &atlas, 1000)
         };
         let full = {
             let _b = BindSet::from_ids([1, 2, 3]);
-            compute_extent(&world, &atlas, 1000)
+            compute_extent(&mut Vec::new(), &world, &atlas, 1000)
         };
 
         // compute_extent は BindSet を引数に取らない（＝構造的に有効 bind 非依存）。三者一致＋期待値一致。
@@ -1432,7 +1445,7 @@ mod tests {
         world.bind_atlas(&atlas, SetId(0));
 
         // 有効 bind 非依存ゆえ、activate されない id=9 の huge も外形へ寄与＝500×400 が支配。
-        let extent = compute_extent(&world, &atlas, 2000);
+        let extent = compute_extent(&mut Vec::new(), &world, &atlas, 2000);
         assert_eq!(
             extent,
             Extent { w: 500, h: 400 },
@@ -1475,12 +1488,12 @@ mod tests {
         // 命令: ghost はスキップされ solid の 1 本のみ（要件 6.3）。
         let binds = BindSet::default();
         let mut ops = Vec::new();
-        derive_ops(&mut ops, &world, &atlas, 3000, &binds);
+        derive_ops(&mut ops, &mut Vec::new(), &world, &atlas, 3000, &binds);
         assert_eq!(ops.len(), 1, "placement None（ghost）は命令からスキップ（要件 6.3）");
         assert_eq!(ops[0].element, solid_id, "残る命令は不透明 solid のみ");
 
         // 外形: ghost の原寸 300×300 を数える（要件 6.5・全透明でも寄与）。
-        let extent = compute_extent(&world, &atlas, 3000);
+        let extent = compute_extent(&mut Vec::new(), &world, &atlas, 3000);
         assert_eq!(
             extent,
             Extent { w: 300, h: 300 },
@@ -1513,7 +1526,7 @@ mod tests {
         world.bind_atlas(&atlas, SetId(0));
 
         // small は (-100+10, -100+10)=(-90,-90) ゆえ max(0,·)=0 で寄与せず、base の 50×40 が残る。
-        let extent = compute_extent(&world, &atlas, 4000);
+        let extent = compute_extent(&mut Vec::new(), &world, &atlas, 4000);
         assert_eq!(
             extent,
             Extent { w: 50, h: 40 },
@@ -1533,7 +1546,7 @@ mod tests {
         let mut world = EmoWorld::build(&shell);
         world.bind_atlas(&atlas, SetId(0));
 
-        let extent = compute_extent(&world, &atlas, 5000);
+        let extent = compute_extent(&mut Vec::new(), &world, &atlas, 5000);
         assert_eq!(extent, Extent { w: 123, h: 45 }, "単一 element・(0,0)→外形＝原寸");
     }
 
@@ -1558,8 +1571,8 @@ mod tests {
         let mut world = EmoWorld::build(&shell);
         world.bind_atlas(&atlas, SetId(0));
 
-        let e1 = compute_extent(&world, &atlas, 6000);
-        let e2 = compute_extent(&world, &atlas, 6000);
+        let e1 = compute_extent(&mut Vec::new(), &world, &atlas, 6000);
+        let e2 = compute_extent(&mut Vec::new(), &world, &atlas, 6000);
         assert_eq!(e1, e2, "同一入力→同一 Extent（決定的）");
         // 参考: part は (5,7) 参照ゆえ w=max(40, 5+200)=205・h=max(30, 7+150)=157。
         assert_eq!(e1, Extent { w: 205, h: 157 });
@@ -1585,7 +1598,7 @@ mod tests {
 
         let binds = BindSet::default();
         let mut ops = Vec::new();
-        let result = build_plan(&mut ops, &world, &atlas, 9999, &binds);
+        let result = build_plan(&mut ops, &mut Vec::new(), &world, &atlas, 9999, &binds);
 
         assert_eq!(
             result,
@@ -1617,7 +1630,7 @@ mod tests {
 
         let binds = BindSet::default();
         let mut ops = Vec::new();
-        let result = build_plan(&mut ops, &world, &atlas, 3000, &binds);
+        let result = build_plan(&mut ops, &mut Vec::new(), &world, &atlas, 3000, &binds);
 
         // 描画可能命令ゼロでも Err にしない（要件 6.6・議題2裁定）。
         let extent = result.expect("全透明でもエラーにせず Ok（要件 6.6）");
@@ -1655,7 +1668,7 @@ mod tests {
         // 空 BindSet → 有効 bind ゼロ＝描画可能命令ゼロ。
         let binds = BindSet::default();
         let mut ops = Vec::new();
-        let result = build_plan(&mut ops, &world, &atlas, 1000, &binds);
+        let result = build_plan(&mut ops, &mut Vec::new(), &world, &atlas, 1000, &binds);
 
         let extent = result.expect("空 BindSet でも正常（描画可能命令ゼロは失敗でない・要件 6.6）");
         assert!(ops.is_empty(), "空 BindSet → bind 命令ゼロ・静的 element も無し → 空 ops");
@@ -1679,14 +1692,14 @@ mod tests {
 
         // 前提の実証: 外形が 0×0（定義層皆無）。
         assert_eq!(
-            compute_extent(&world, &atlas, 7000),
+            compute_extent(&mut Vec::new(), &world, &atlas, 7000),
             Extent { w: 0, h: 0 },
             "定義層皆無 → 外形 0×0（前提）"
         );
 
         let binds = BindSet::default();
         let mut ops = Vec::new();
-        let result = build_plan(&mut ops, &world, &atlas, 7000, &binds);
+        let result = build_plan(&mut ops, &mut Vec::new(), &world, &atlas, 7000, &binds);
 
         assert_eq!(
             result,
@@ -1710,7 +1723,7 @@ mod tests {
 
         let binds = BindSet::default();
         let mut ops = Vec::new();
-        let result = build_plan(&mut ops, &world, &atlas, 5000, &binds);
+        let result = build_plan(&mut ops, &mut Vec::new(), &world, &atlas, 5000, &binds);
 
         let extent = result.expect("通常 surface は Ok");
         assert_eq!(ops.len(), 1, "可視 element 1 本 → 命令 1 本");
@@ -1739,14 +1752,14 @@ mod tests {
             method: ComposeMethod::Overlay,
         };
         let mut ops = vec![junk.clone(), junk.clone(), junk];
-        let e1 = build_plan(&mut ops, &world, &atlas, 5000, &binds).expect("Ok");
+        let e1 = build_plan(&mut ops, &mut Vec::new(), &world, &atlas, 5000, &binds).expect("Ok");
 
         assert_eq!(ops.len(), 1, "エントリで clear ＝ この surface の命令のみが残る");
         assert_eq!(ops[0].element, visible_id, "ゴミは残らない");
 
         // 2 回目（別スクラッチ）→ バイト等価・同一 Extent（決定性）。
         let mut ops2 = Vec::new();
-        let e2 = build_plan(&mut ops2, &world, &atlas, 5000, &binds).expect("Ok");
+        let e2 = build_plan(&mut ops2, &mut Vec::new(), &world, &atlas, 5000, &binds).expect("Ok");
         assert_eq!(ops, ops2, "同一入力→同一 ops（バイト等価）");
         assert_eq!(e1, e2, "同一入力→同一 Extent");
     }

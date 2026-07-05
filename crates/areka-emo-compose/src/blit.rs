@@ -62,12 +62,10 @@ fn source_over_channel(src_c: u8, dst_c: u8, inv_src_a: u32) -> u8 {
 ///
 /// placement None・頁欠落・境界外座標はすべて skip／クリップで吸収し、`panic!` しない。
 ///
-/// # シーム（task 7）
+/// # 結線（task 7）
 ///
-/// 非テストの lib 経路からの呼び出し口（task 7 の Composer ファサード `compose_into`/`compose`）は
-/// 未導入ゆえ本 task では `dead_code` になる。task 7 が本関数を結線して消費する（意図的な未使用シーム・
-/// plan の [`crate::plan::build_plan`] と同じ扱い）。
-#[allow(dead_code)]
+/// 本関数は task 7 の Composer ファサード（[`crate::Composer::compose_into`]）から
+/// [`crate::plan::build_plan`] が返す `(Extent, ops)` を受けて結線・消費される。
 pub(crate) fn execute(
     out: &mut ComposedSurface,
     extent: Extent,
