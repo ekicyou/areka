@@ -47,7 +47,7 @@
 - `areka-actor`（spawn/reply/停止規約——kanade は消費者であり独自 channel 流儀を発明しない）
 - `shiori-host32-host`（`Shiori3Client`・`RequestError` 等——**`shiori/real.rs` モジュールのみ**が import してよい）
 - `tracing`（logging.md 規約）・`std` のみ。**tokio 禁止・新規外部依存なし**
-- **モジュール内制約**: `talk.rs`・`msg.rs`・`schedule/` は host32 型に依存しない（std＋talk/msg 内型のみ）。将来の契約クレート切り出し（DD-1）を機械的移動で済ませるための規律
+- **モジュール内制約**: `talk.rs`・`msg.rs`・`schedule/` は host32 型に依存しない。`talk.rs` は std のみ（areka-actor にも非依存）。`msg.rs` は envelope 返信端として areka-actor の `ReplySender` のみ追加依存可。将来の契約クレート切り出し（DD-1）の対象は `talk.rs` であり機械的移動で済む規律
 
 ### Revalidation Triggers
 
@@ -108,10 +108,11 @@ graph TB
 **依存方向（レイヤ・左からのみ import 可）**:
 
 ```
-talk.rs / msg.rs（型・std のみ）
-  → schedule/（純粋状態機械）
-    → actor.rs（areka-actor 消費）／shiori/real.rs（host32 消費）
-      → tests/（mock・ハーネス）
+talk.rs（型・std のみ）
+  → msg.rs（型・std＋talk＋areka-actor の ReplySender のみ）
+    → schedule/（純粋状態機械・talk/msg の非 channel 型のみ消費）
+      → actor.rs（areka-actor 消費）／shiori/real.rs（host32 消費）
+        → tests/（mock・ハーネス）
 ```
 
 ### Technology Stack
@@ -474,16 +475,26 @@ pub(crate) enum Phase {
     BootVersion,  // basewareversion NOTIFY の完了待ち
     Steady {
         talk: Option<ActiveTalk>,          // 同時 active talk ≤ 1
-        pending_close: Option<CloseReason>,
     },
     ClosePending    { reason: CloseReason },              // OnClose GET の応答待ち
-    CloseTalkWait   { talk_id: TalkId, deadline: MonotonicMs },
+    CloseTalkWait   { talk_id: TalkId, deadline: Option<MonotonicMs> },
     CloseAllPending,                                      // OnCloseAll GET の応答待ち
     Unloading       { cause: TermCause },                 // Unload の完了待ち
     Stopped,
 }
 
 pub(crate) struct ActiveTalk { pub talk_id: TalkId, pub origin: &'static str }
+
+/// 運行状態の全体（step の唯一の被写体）。Phase 外の帳簿はここに置く。
+pub(crate) struct State {
+    pub phase: Phase,
+    /// 直近 Tick の注入時刻（Tick 受領ごとに更新・close 期限計算の基準）。
+    pub last_now: Option<MonotonicMs>,
+    /// talk_id 採番カウンタ（単調増番・再利用しない・StartTalk 生成時にインクリメント）。
+    pub next_talk_id: u64,
+    /// boot 中・active talk 中に受領した close 指示の保留（System Flows 補足遷移）。
+    pub pending_close: Option<CloseReason>,
+}
 
 /// 終了系列の起因（ログ語彙・遷移は共通）。
 pub(crate) enum TermCause { Quit, Forced, CloseAll204, DeadlineExceeded, Fault }
@@ -513,7 +524,7 @@ pub(crate) fn step(state: State, input: Input, config: &KanadeConfig) -> (State,
   - boot 未完・ClosePending 以降 → 発行しない
   - 多重発行は同期往復（in-flight ≤ 1）により構造的に生じない。実経路で呼出ブロック中に溜まった Tick は解除後に順次処理される（catch-up・mock 経路は即応ゆえ非発生）
 - talk 調停（DD-6）: active talk 中に Value が届く経路は構造上 NOTIFY 化で塞がれている。想定外に届いた場合は warn!＋破棄（キュー・中断なし）
-- close 握手（`close.rs`）: 状態機械図＋Req 4 のとおり。`deadline = now + config.close_talk_deadline_ms` は CloseTalkWait 進入時の直近 Tick 時刻から計算し、以後の Tick 受領時に判定（Req 4.7・注入時刻のみ使用）
+- close 握手（`close.rs`）: 状態機械図＋Req 4 のとおり。期限は CloseTalkWait 進入時に `State.last_now + config.close_talk_deadline_ms` で設定し、以後の Tick 受領時に判定する（Req 4.7・注入時刻のみ使用）。Tick 未受領（`last_now = None`）のまま進入した場合は `deadline = None` とし、**最初の Tick 受領時に `now + close_talk_deadline_ms` を設定**する（期限判定は常に注入時刻のみで駆動＝決定的）
 - 横断遷移: TalkDone{quit:true}（全 Phase）／ForceQuit（全 Phase・DD-10 の best-effort NOTIFY を Action 先頭に積む）／ShioriDown・Failed（全 Phase→Unloading{Fault}）
 - 突合規律: 未知 talk_id の TalkDone → error!＋継続（Req 2.5）。Idle 以外の Boot → warn!＋無視。応答待ちでない Phase への ShioriReply は構造上発生しない（シェルが Action 直後にのみ再投入するため）——防御アームは warn!＋無視
 
@@ -664,6 +675,7 @@ logging.md 規約に従う: スコーププレフィックス（`[kanade]`／`[s
 
 ## Supporting References
 
+- ForceQuit 遅延の申し送り（app-shell / ghost-setup への・本 spec 非実装）: 実経路では in-flight SHIORI 呼出中の ForceQuit 処理が `AREKA_SHIORI_REQUEST_TIMEOUT_MS`（既定 60s）まで遅延し得る。OS シャットダウンの実猶予（数秒〜20s 程度）を超え得るため、shutdown 経路では同 env の短縮構成またはプロセス kill 容認を結線側で選択すること（kanade は best-effort 一報＋終了系列直行の契約のみ所有・DD-2 トレード参照）
 - 本番 Tick 供給の方向付け（ghost-setup への申し送り・本 spec 非実装）: ghost-setup 所有のティッカースレッドが 1 秒周期で `Tick{now: GetTickCount64 相当}` を送出し、kanade の Sender drop（または送出 Err 観測）で自然停止する形を推奨。kanade 側は供給方式に依存しない（Tick は純粋な入力）
 - 死活報告の実型差し替え手順（lifecycle 完了時）: `KanadeMsg::ShioriDown{reason: String}` → lifecycle 正本型を包む variant へ置換・schedule の 1 アームと real.rs の報告箇所のみが変更面
 - 調査ログ・出典（ukadoc doc id）・代替案比較は `research.md` を参照

@@ -53,7 +53,7 @@ areka-P0-kanade: kanade（③conductor）＝実行時経路（運行表）の所
 
 #### Acceptance Criteria
 
-1. While boot 系列完了後の定常運転状態, when 1 秒相当の Tick が到来した, the kanade engine shall `OnSecondChange` を GET として発行する。
+1. While boot 系列完了後の定常運転状態, when 1 秒相当の Tick が到来した, the kanade engine shall `OnSecondChange` を GET として発行する（定常運転状態＝talk 非再生中を指す。talk 再生中の Tick では正典 Ref3 意味論に従い NOTIFY〔Ref3=0・応答破棄〕として発行する——調停規則は design DD-6 で確定）。
 2. The kanade engine shall Tick／時刻を外部から注入可能とし、実時間の sleep・実時計に依存せずに運行表の進行を決定的に再現できる。
 3. When `OnSecondChange` の応答として Value を受領した, the kanade engine shall Requirement 2 と同一の talk 起動経路で配送する。
 4. While boot 系列が完了していない、または close 握手中もしくは終了系列中, the kanade engine shall Tick を受領しても `OnSecondChange` を発行しない（close 握手が quit=false で終わった場合は定常運転へ復帰し発行を再開する）。
