@@ -18,7 +18,7 @@ use std::time::Duration;
 
 use crate::error::RequestError;
 use crate::parent_window::SendError;
-use crate::process_host::ExitKind;
+use crate::process_host::{ExitKind, HelperHandle, poll_exit_kind};
 
 /// 死活監視の観測結果（Send・Copy な所有データ・R2.6）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -90,6 +90,88 @@ pub fn classify_failure(error: &RequestError, observed_exit: Option<ExitKind>) -
     }
 }
 
+/// 死活監視の常設の器（R1.1〜1.6, 4.1, 5.2, 7.7）。
+///
+/// spawn 済み [`HelperHandle`] を**単独所有**し、非ブロッキング・sticky な死活問い合わせと
+/// 冪等な後始末を提供する。request 経路（`Shiori3Client`＝窓借用）とは別オブジェクトであり、
+/// 包まない・仲介しない（design §HelperLifecycle Responsibilities）。
+///
+/// `Child` は `Send` ゆえ本型も `Send`（将来の shiori アクター inbox から移送可能・R7.7）。
+/// 窓（`!Send`）は保持しない。
+///
+/// `report_failure`（R2.1〜2.5・突合）と `request_clean_shutdown`（R5.1・正常終了経路）は
+/// 後続タスク（2.3 / 2.4）で追加する。
+pub struct HelperLifecycle {
+    handle: HelperHandle,
+    /// sticky 終了キャッシュ（一度 `Some` になったら以後 poll しない・R1.2）。
+    /// 不変条件: `None → Some` の一方向のみ（終了は終端状態）。
+    last_exit: Option<ExitKind>,
+}
+
+impl HelperLifecycle {
+    /// spawn 済み handle を監視の器に載せる（所有移転・R1.6）。
+    #[must_use]
+    pub fn new(handle: HelperHandle) -> Self {
+        Self {
+            handle,
+            last_exit: None,
+        }
+    }
+
+    /// 非ブロッキング死活問い合わせ（R1.1/1.2）。`try_wait` ベースで呼び手を止めない。
+    ///
+    /// 終了検出後は **sticky**: 一度 [`HelperStatus::Exited`] を観測したら以後は再 poll せず
+    /// 同じ [`ExitKind`] を返し続ける（終了は終端状態・観測の決定性）。
+    pub fn status(&mut self) -> HelperStatus {
+        // sticky: 一度 Exited を観測したら再 poll しない（`std` の try_wait の
+        // reap 後挙動に依存せず観測を型内で決定化する）。
+        if let Some(kind) = self.last_exit {
+            return HelperStatus::Exited(kind);
+        }
+        match poll_exit_kind(&mut self.handle) {
+            Some(kind) => {
+                self.last_exit = Some(kind);
+                HelperStatus::Exited(kind)
+            }
+            None => HelperStatus::Running,
+        }
+    }
+
+    /// 強制終了（冪等・二重 kill 安全・R5.2）。既存 [`HelperHandle::terminate`] へ委譲する。
+    ///
+    /// `HelperHandle::terminate` は既終了プロセスへの kill（`InvalidInput`）を `Ok` へ畳むため、
+    /// 二重呼び出しでも成功扱いになる。`Err` は握り潰さず `error!` ＋そのまま返す（R4.4/R7.6）。
+    ///
+    /// # Errors
+    /// `TerminateProcess` 相当の I/O 失敗時に [`std::io::Error`] を返す。
+    pub fn terminate(&mut self) -> std::io::Result<()> {
+        match self.handle.terminate() {
+            Ok(()) => Ok(()),
+            Err(e) => {
+                tracing::error!(error = ?e, "[HelperLifecycle::terminate] helper terminate failed");
+                Err(e)
+            }
+        }
+    }
+
+    /// 観測用: OS プロセス ID。
+    #[must_use]
+    pub fn pid(&self) -> u32 {
+        self.handle.pid()
+    }
+}
+
+impl Drop for HelperLifecycle {
+    /// 冪等 `terminate`（panic 経路のプロセスリーク防止・HelperGuard パターンの昇格）。
+    ///
+    /// `Err` は `error!` のみ（Drop で panic しない・R7.6）。
+    fn drop(&mut self) {
+        if let Err(e) = self.handle.terminate() {
+            tracing::error!(error = ?e, "[HelperLifecycle::drop] helper terminate on drop failed");
+        }
+    }
+}
+
 /// shutdown 経路の失敗語彙（R5.5・error! と対で surface）。
 #[derive(thiserror::Error, Debug)]
 pub enum ShutdownError {
@@ -119,6 +201,8 @@ mod tests {
         assert_send::<FailureClass>();
         assert_send::<LifecycleReport>();
         assert_send::<ShutdownError>();
+        // HelperLifecycle も Send（Child は Send・R7.7・design §395）。
+        assert_send::<HelperLifecycle>();
     }
 
     use crate::error::{HandshakeError, ShioriError};
@@ -183,5 +267,80 @@ mod tests {
             None,
         );
         assert_eq!(got, FailureClass::Handshake);
+    }
+
+    // --- HelperLifecycle: 非ブロッキング・分類・sticky・冪等後始末（R1.1〜1.6, 5.2）---
+
+    use crate::process_host::spawn_command;
+    use std::process::Command;
+    use std::time::Instant;
+
+    /// stand-in（`cmd.exe /c exit N`）を組んだ Command を返す（process_host tests と同意匠）。
+    fn cmd_exit(code: i32) -> Command {
+        let mut command = Command::new("cmd.exe");
+        command.args(["/c", "exit", &code.to_string()]);
+        command
+    }
+
+    /// stand-in が終了するまで非ブロッキング `status()` を bounded に回して `Exited` を得る。
+    ///
+    /// 各 `status()` はブロックしない（R1.1/1.2）。全体は上限 10s・刻み 5ms で待つ。
+    fn wait_exited(lc: &mut HelperLifecycle) -> ExitKind {
+        let deadline = Instant::now() + Duration::from_secs(10);
+        loop {
+            if let HelperStatus::Exited(kind) = lc.status() {
+                return kind;
+            }
+            assert!(Instant::now() < deadline, "stand-in が上限時間内に終了しなかった");
+            std::thread::sleep(Duration::from_millis(5));
+        }
+    }
+
+    /// 性質①（非ブロッキング・R1.1/1.2）: 単一 `status()` 呼び出しが 1 秒未満で返る。
+    #[test]
+    fn status_is_nonblocking_returns_under_one_second() {
+        // まだ終了していないかもしれない stand-in でも、status() は try_wait ベースで
+        // 即座に返る（稼働中なら Running・終了済みなら Exited のどちらでも可）。
+        let handle = spawn_command(cmd_exit(0)).expect("stand-in を spawn できる");
+        let mut lc = HelperLifecycle::new(handle);
+        let start = Instant::now();
+        let _status = lc.status();
+        assert!(
+            start.elapsed() < Duration::from_secs(1),
+            "status() は非ブロッキングで即座に返る（{:?}）",
+            start.elapsed()
+        );
+    }
+
+    /// 分類（Clean・R1.3）: stand-in `cmd /c exit 0` → `Exited(ExitKind::Clean)`。
+    #[test]
+    fn status_classifies_clean_exit() {
+        let handle = spawn_command(cmd_exit(0)).expect("stand-in を spawn できる");
+        let mut lc = HelperLifecycle::new(handle);
+        assert_eq!(wait_exited(&mut lc), ExitKind::Clean);
+    }
+
+    /// 性質②（分類 Abnormal ＋ sticky・R1.4/1.2）: stand-in `cmd /c exit 5` →
+    /// `Exited(Abnormal(5))`、以後の再問い合わせも**同値**（再 poll しない sticky）。
+    #[test]
+    fn status_classifies_abnormal_and_is_sticky() {
+        let handle = spawn_command(cmd_exit(5)).expect("stand-in を spawn できる");
+        let mut lc = HelperLifecycle::new(handle);
+        // 初回検出。
+        assert_eq!(wait_exited(&mut lc), ExitKind::Abnormal(5));
+        // sticky: 終了検出後の再問い合わせは同じ ExitKind を返し続ける。
+        assert_eq!(lc.status(), HelperStatus::Exited(ExitKind::Abnormal(5)));
+        assert_eq!(lc.status(), HelperStatus::Exited(ExitKind::Abnormal(5)));
+    }
+
+    /// 性質③（冪等後始末・R5.2）: 終了済み stand-in への二重 `terminate()` が両方 `Ok`。
+    #[test]
+    fn terminate_is_idempotent_after_exit() {
+        let handle = spawn_command(cmd_exit(0)).expect("stand-in を spawn できる");
+        let mut lc = HelperLifecycle::new(handle);
+        // 先に終了を観測してから二重 terminate（既存 HelperHandle::terminate が冪等）。
+        let _ = wait_exited(&mut lc);
+        assert!(lc.terminate().is_ok(), "1 回目の terminate は Ok");
+        assert!(lc.terminate().is_ok(), "2 回目の terminate も Ok（冪等・R5.2）");
     }
 }
