@@ -21,14 +21,16 @@
 //! 依存しない（DD-1）。将来の契約クレート切り出しは [`talk`] の機械的移動だけで
 //! 完結する。
 
+pub mod actor;
 pub mod msg;
-// schedule の消費者（actor.rs シェル・後続タスク）が未登場のため、この時点では
-// 状態機械 API と後続タスクが埋めるフェーズ分岐スタブが lib ビルドから未使用となる。
-// テストビルド（`#[cfg(test)]`）では全アームを網羅する。actor.rs 実装で解消される。
+// schedule の消費者はランタイム層の actor.rs シェル（[`crate::actor::spawn_kanade`]）。
+// schedule 内には後続タスクが埋めるフェーズ分岐スタブが残り lib ビルドから未使用となるため、
+// クレート全体は `#[allow(dead_code)]` を付さず schedule 側の該当箇所に限局する（下記）。
 #[allow(dead_code)]
 pub(crate) mod schedule;
 pub mod talk;
 
+pub use actor::spawn_kanade;
 pub use msg::{
     CloseReason, KanadeConfig, KanadeMsg, MonotonicMs, ShioriCall, ShioriFailure, ShioriMsg,
     ShioriOutcome,

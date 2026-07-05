@@ -69,7 +69,7 @@
   - _Depends: 2.1, 2.2_
 
 - [ ] 3. Integration: ランタイム層と SHIORI 統合層
-- [ ] 3.1 (P) kanade アクターシェルの実装
+- [x] 3.1 (P) kanade アクターシェルの実装
   - 運行状態機械を起動する独立スレッドアクターを実装し、受領したメッセージを入力へ変換して状態機械へ渡す
   - 状態機械が返した SHIORI 呼出・unload 指示は、応答を受け切ってから即座に次の入力として状態機械へ再投入する（同時に進行する呼出は常に高々 1 つ）
   - 再生起動要求は配送先へ送出し、終了系列完了の指示ではアクターを停止する
@@ -157,3 +157,4 @@
 ## Implementation Notes
 
 - 2.2 完了時: `schedule/mod.rs` の `force_quit` は OnClose を **NOTIFY** としてインライン構築している（DD-10 best-effort・events.rs は GET の `on_close` のみ提供）。GET/NOTIFY で別物ゆえ events への移譲は必須ではないが、close 系列を触るタスク（2.5）が OnClose-NOTIFY 構成子を events に足して一本化するのは任意で可。
+- 3.1 完了時: actor.rs の駆動モデルは「バッチ全実行→最後の往復応答のみ再投入」（ForceQuit の `[OnClose NOTIFY, ShioriUnload]` を順に送出するため・DD-10）。StartTalk 送出失敗（sakura 切断）は error!＋継続で、schedule State の active talk クリアは行わない（境界外＝shell は Phase を変更不能）。滞留した stale TalkDone は schedule の未知 talk_id 防御アームが安全に吸収する。4.x 統合テストはこの前提で観測すること。
