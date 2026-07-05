@@ -31,7 +31,8 @@ use std::time::Duration;
 
 use areka_actor::{ActorError, ActorHandle, spawn_actor};
 use areka_kanade::{
-    KanadeConfig, KanadeMsg, ShioriCall, ShioriMsg, ShioriOutcome, StartTalk, TalkDone, spawn_kanade,
+    KanadeConfig, KanadeMsg, ShioriCall, ShioriFailure, ShioriMsg, ShioriOutcome, StartTalk,
+    TalkDone, spawn_kanade,
 };
 
 /// 期限付き待機の既定上限（mock は即応ゆえ十分に余裕を持たせた保険値）。
@@ -284,6 +285,123 @@ pub fn spawn_mock_shiori(fixture: Fixture) -> MockShiori {
         sender,
         handle,
         calls,
+    }
+}
+
+// ============================================================================
+// 失敗注入付き mock shiori（4.6 専用・区別語彙ごとの呼出失敗を観測する）
+// ============================================================================
+
+/// 失敗注入の区別語彙（[`ShioriFailure`] の 4 種に 1:1 対応する COPYABLE 記述子）。
+///
+/// [`ShioriFailure`] 自体は `Clone` を実装しないため（かつ `Fixture` は `Clone` 派生ゆえ
+/// 中に持てない）、fixture 側にはこの Copy な種別のみを持たせ、実 `ShioriFailure` は mock の
+/// `respond` 内でその都度 fresh に構築する（設計「Error Categories」の 4 語彙）。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FailKind {
+    /// [`ShioriFailure::Handshake`]（接続確立失敗）。
+    Handshake,
+    /// [`ShioriFailure::Timeout`]（タイムアウト）。
+    Timeout,
+    /// [`ShioriFailure::Ipc`]（helper 死活の一態様）。
+    Ipc,
+    /// [`ShioriFailure::Shiori`]（SHIORI エラー応答）。
+    Shiori,
+}
+
+impl FailKind {
+    /// この種別に対応する fresh な [`ShioriFailure`] を構築する（`Clone` 不要ゆえ都度生成）。
+    fn make(self) -> ShioriFailure {
+        match self {
+            FailKind::Handshake => ShioriFailure::Handshake("injected handshake failure".into()),
+            FailKind::Timeout => ShioriFailure::Timeout("injected timeout".into()),
+            FailKind::Ipc => ShioriFailure::Ipc("injected ipc failure".into()),
+            FailKind::Shiori => ShioriFailure::Shiori("injected shiori error".into()),
+        }
+    }
+}
+
+/// 失敗注入 mock shiori の記述子（どのイベント id の呼出をどの語彙で落とすか）。
+///
+/// `fail_on_id` に一致する **最初の** GET／NOTIFY 呼出で [`ShioriOutcome::Failed`] を返し、
+/// それ以外の呼出は良性応答（[`FixtureState::respond`] と同一の既定表）を返す。全て Copy／
+/// `&'static str` で構成され `ShioriFailure`（非 Clone）を保持しないため、`Fixture` 同様に
+/// 気軽に複製できる。
+#[derive(Debug, Clone, Copy)]
+pub struct FailOn {
+    /// 落とす対象のイベント id（例: `"OnInitialize"`）。
+    pub id: &'static str,
+    /// 返す失敗の区別語彙。
+    pub kind: FailKind,
+}
+
+impl FailOn {
+    /// `OnInitialize`（boot 最初の NOTIFY）を指定語彙で落とす記述子を返す。
+    ///
+    /// boot 系列の最初の呼出（`OnInitialize` NOTIFY・Req 1.1）を対象にすることで、Boot 駆動が
+    /// 確実にこの呼出へ到達し、失敗が boot 応答待ち（`awaits_reply`）で受領され Unloading{Fault}
+    /// へ倒れる経路を確実に踏む（設計「Error Categories」ShioriFailure 行）。
+    pub fn on_initialize(kind: FailKind) -> Self {
+        FailOn {
+            id: "OnInitialize",
+            kind,
+        }
+    }
+}
+
+/// 失敗注入付き mock shiori アクターを起動する（[`spawn_mock_shiori`] の派生・4.6 専用）。
+///
+/// `fixture` の良性応答表に加え、`fail_on.id` に一致する最初の呼出で
+/// [`ShioriOutcome::Failed`]（`fail_on.kind` に対応する fresh な [`ShioriFailure`]）を返す。
+/// 呼出の記録・[`ShioriMsg::Unload`]／[`ShioriMsg::Close`] の扱いは [`spawn_mock_shiori`] と同一
+/// （Unload は best-effort で `Unloaded` を返し記録する）。これにより「区別語彙ごとの呼出失敗
+/// → 観測可能な終了（Unloading{Fault}→Unload→Stopped）」を統合層で観測できる（Req 6.1）。
+pub fn spawn_mock_shiori_failing(fixture: Fixture, fail_on: FailOn) -> MockShiori {
+    let calls: Arc<Mutex<Vec<RecordedCall>>> = Arc::new(Mutex::new(Vec::new()));
+    let calls_body = Arc::clone(&calls);
+
+    let (sender, handle) = spawn_actor::<ShioriMsg, _>("mock-shiori-failing", move |rx| {
+        let mut state = FixtureState::new(fixture);
+        let mut failed_once = false;
+        while let Ok(msg) = rx.recv() {
+            match msg {
+                ShioriMsg::Request { call, reply } => {
+                    calls_body
+                        .lock()
+                        .expect("mock shiori calls mutex")
+                        .push(RecordedCall::from_call(&call));
+                    // 対象イベントの最初の呼出のみ失敗させる（以降は良性表へ戻す）。
+                    let outcome = if !failed_once && call_id(&call) == fail_on.id {
+                        failed_once = true;
+                        ShioriOutcome::Failed(fail_on.kind.make())
+                    } else {
+                        state.respond(&call)
+                    };
+                    let _ = reply.send(outcome);
+                }
+                ShioriMsg::Unload { reply } => {
+                    calls_body
+                        .lock()
+                        .expect("mock shiori calls mutex")
+                        .push(expected_unload());
+                    let _ = reply.send(ShioriOutcome::Unloaded);
+                }
+                ShioriMsg::Close => break,
+            }
+        }
+    });
+
+    MockShiori {
+        sender,
+        handle,
+        calls,
+    }
+}
+
+/// [`ShioriCall`] のイベント id を取り出す（GET／NOTIFY 共通・失敗注入の突合用）。
+fn call_id(call: &ShioriCall) -> &'static str {
+    match call {
+        ShioriCall::Get { id, .. } | ShioriCall::Notify { id, .. } => id,
     }
 }
 
@@ -664,6 +782,83 @@ pub fn spawn_harness_gated(
         },
         gate,
     )
+}
+
+/// 失敗注入付き駆動ハーネスを組み立てる（4.6 case 1 専用・[`spawn_harness`] の派生）。
+///
+/// [`spawn_harness`] と同一の結線だが、mock shiori を [`spawn_mock_shiori_failing`] で起動し、
+/// `fail_on` が指す最初の呼出を指定語彙で失敗させる。これにより「区別語彙ごとの呼出失敗 →
+/// Unloading{Fault}→Unload→Stopped（観測可能な終了）」を統合層で駆動できる（Req 6.1）。
+pub fn spawn_harness_failing(
+    config: KanadeConfig,
+    fixture: Fixture,
+    quit_policy: QuitPolicy,
+    fail_on: FailOn,
+) -> Harness {
+    let shiori = spawn_mock_shiori_failing(fixture, fail_on);
+
+    // kanade→sakura の StartTalk チャンネルを 1 本張る。
+    let (talk_tx, talk_rx) = std::sync::mpsc::channel::<StartTalk>();
+
+    // kanade を起動（inbox 送信端を得る）。
+    let (kanade_tx, kanade_handle) = spawn_kanade(config, shiori.sender.clone(), talk_tx);
+
+    // sink には TalkDone 返送用に kanade inbox 送信端のクローンを渡す。
+    let sakura = spawn_mock_sakura(talk_rx, kanade_tx.clone(), quit_policy);
+
+    Harness {
+        sender: kanade_tx,
+        kanade: kanade_handle,
+        shiori,
+        sakura,
+    }
+}
+
+/// sakura sink を持たない駆動ハーネス（4.6 case 4 専用・全 Sender drop 経路の観測用）。
+///
+/// [`spawn_harness`] の sink は TalkDone 返送のため kanade inbox 送信端のクローンを**恒久的に
+/// 保持する**。その結果、通常ハーネスでは `Harness.sender` を drop しても kanade inbox は
+/// sink のクローン越しに生き続け、kanade は受信待ちのまま止まらない（sink は kanade の
+/// StartTalk 送信端 drop＝kanade 停止でしか閉じないため相互待ちになる）。Req 4.9（全 Sender
+/// drop → 正常終了）を統合層で観測するには、**kanade inbox のクローンを誰も保持しない**結線が
+/// 要る。本ビルダは mock sakura を起動せず、StartTalk 受信端を保持する（drop はしない——drop
+/// すると StartTalk 送出が失敗して error! 経路になるだけで停止観測には無関係だが、受信端を
+/// 生かしておけば kanade は StartTalk 送出に成功しつつ待機できる）。返す [`sender`](Self::sender)
+/// が kanade inbox の**唯一の**送信端であり、これを drop すれば inbox が完全に切断され
+/// `run_inbox` が正常終了する（Req 4.9 の構造保証）。
+pub struct SinklessHarness {
+    /// kanade inbox の**唯一の**送信端（drop すれば inbox が完全切断される）。
+    pub sender: Sender<KanadeMsg>,
+    /// kanade アクタースレッドの join ハンドル。
+    pub kanade: ActorHandle,
+    /// mock shiori（停止用送信端・記録アクセサ）。
+    pub shiori: MockShiori,
+    /// kanade→sakura の StartTalk 受信端（保持のみ・sink スレッドは起動しない）。
+    /// kanade inbox のクローンを一切生まないため、`sender` drop で inbox を切断できる。
+    pub talk_rx: Receiver<StartTalk>,
+}
+
+/// sakura sink を持たない駆動ハーネスを組み立てる（4.6 case 4 専用）。
+///
+/// mock sakura を起動しないため kanade inbox 送信端のクローンは生じない。返す
+/// [`SinklessHarness::sender`] が唯一の inbox 送信端であり、これを drop すれば inbox が完全に
+/// 切断され kanade は正常終了する（Req 4.9）。StartTalk 受信端は [`SinklessHarness::talk_rx`]
+/// として保持して返す（kanade の StartTalk 送出を失敗させないため）。
+pub fn spawn_harness_no_sink(config: KanadeConfig, fixture: Fixture) -> SinklessHarness {
+    let shiori = spawn_mock_shiori(fixture);
+
+    // kanade→sakura の StartTalk チャンネルを 1 本張る（受信端は sink を起動せず保持する）。
+    let (talk_tx, talk_rx) = std::sync::mpsc::channel::<StartTalk>();
+
+    // kanade を起動（inbox 送信端を得る・クローンは作らない）。
+    let (kanade_tx, kanade_handle) = spawn_kanade(config, shiori.sender.clone(), talk_tx);
+
+    SinklessHarness {
+        sender: kanade_tx,
+        kanade: kanade_handle,
+        shiori,
+        talk_rx,
+    }
 }
 
 // ============================================================================

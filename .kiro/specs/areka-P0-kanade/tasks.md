@@ -136,7 +136,7 @@
   - _Boundary: tests/close_test_
   - _Depends: 4.1, 3.1_
 
-- [ ] 4.6 (P) 失敗経路の統合検証の実装
+- [x] 4.6 (P) 失敗経路の統合検証の実装
   - 自身のテストファイルにのみ実装を追加する（テストエントリポイントのモジュール宣言は 4.1 で用意済みのため変更しない）
   - mock 結線を用いて、区別語彙ごとの呼出失敗が観測可能な終了状態へ遷移すること、死活報告受領で観測可能な停止へ遷移すること、未知の talk 識別子に対する再生完了通知が運行を継続すること、全ての指示送信元切断で宙吊りにならず正常終了し停止が観測できることを検証する
   - 観測可能な完了条件: 上記のケースすべてを網羅した統合テストが green になる
@@ -159,3 +159,4 @@
 - 2.2 完了時: `schedule/mod.rs` の `force_quit` は OnClose を **NOTIFY** としてインライン構築している（DD-10 best-effort・events.rs は GET の `on_close` のみ提供）。GET/NOTIFY で別物ゆえ events への移譲は必須ではないが、close 系列を触るタスク（2.5）が OnClose-NOTIFY 構成子を events に足して一本化するのは任意で可。
 - 3.1 完了時: actor.rs の駆動モデルは「バッチ全実行→最後の往復応答のみ再投入」（ForceQuit の `[OnClose NOTIFY, ShioriUnload]` を順に送出するため・DD-10）。StartTalk 送出失敗（sakura 切断）は error!＋継続で、schedule State の active talk クリアは行わない（境界外＝shell は Phase を変更不能）。滞留した stale TalkDone は schedule の未知 talk_id 防御アームが安全に吸収する。4.x 統合テストはこの前提で観測すること。
 - 4.4 完了時: `tests/kanade/common/mod.rs` に **gated ハーネス**を純粋追加した（`spawn_harness_gated(config, fixture, quit_policy, hold_indices) -> (Harness, SakuraGate)`／`SakuraGate::release_all()`／`spawn_mock_sakura_gated`）。指定した受領 index の talk の TalkDone を保留し、`release_all()` で解放する＝**active talk 窓を決定的に作る唯一の手段**（sleep 不使用・race-free: released フラグを mutex 下で立ててから notify、releaser は「解放済み かつ 全 park 到着(expected_holds)」まで drain しない）。active talk 中の遷移を観測するタスク（4.5 の close 握手中 CloseRequest 等）はこの gated ハーネスを再利用してよい。既存 `spawn_harness`/`spawn_mock_sakura` は不変（追加のみ）。
+- 4.6 完了時: `common/mod.rs` に **失敗注入 mock shiori**（`spawn_mock_shiori_failing`／`spawn_harness_failing`／`FailKind{Handshake,Timeout,Ipc,Shiori}`＝指定イベントで `ShioriOutcome::Failed(vocab)` を返す）と **sinkless ハーネス**（`spawn_harness_no_sink`／`SinklessHarness`＝mock sakura を張らず、返す `sender` を唯一の inbox 送信端にする＝全送信元切断の Req 4.9 経路を実行可能にする）を純粋追加した（`-1` は `use` 行分割で `ShioriFailure` 追加のみ・挙動不変）。`ShioriFailure` は非 Clone ゆえ `Fixture` に入れず copyable な `FailKind` 記述子から respond 内で生成する。既存 mock shiori／`Fixture` は不変。
