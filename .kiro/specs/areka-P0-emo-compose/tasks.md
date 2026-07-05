@@ -67,7 +67,7 @@
   - _Boundary: EmoWorld_
   - _Depends: 2.2_
 
-- [ ] 3.2 Fold: 素の surface 定義の展開＝全id新設を実装する
+- [x] 3.2 Fold: 素の surface 定義の展開＝全id新設を実装する
   - `surface` ヘッダのターゲット記述子（単一・列挙・範囲）を展開し、各idを新規surfaceとして生成し共有ボディ（element/collision/animation）を適用する
   - 既存idとの重複は全置換（後勝ち）としてwarnログに記録する
   - 参照先が見つからない場合もパニックせずwarnログで欠落を観測可能にする

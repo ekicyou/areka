@@ -85,13 +85,13 @@ impl EmoWorld {
         emo
     }
 
-    /// fold による entity 常駐段（本 task では空・task 3.2 が実装を差し込むシーム）。
+    /// fold による entity 常駐段（single-pass fold への唯一の呼び出し口）。
     ///
     /// 空 `Shell`（surface/append/alias 皆無）に対しては何も積まず、World を空のまま保つ。
-    /// fold の意味論（ターゲット展開・create/append・alias 収集）は task 3.2 の領分であり、
-    /// 本段はその唯一の呼び出し口として構造だけ確保する。
-    fn populate_from_shell(&mut self, _shell: &Shell) {
-        // fold 未実装段（task 3.2）: 空 Shell では何も常駐させない。
+    /// plain `surface` ヘッダの展開＝全 id 新設（task 3.2）は [`crate::fold::fold_shell`] が担う。
+    /// append/alias の意味論は後続 task が同 fold 経路へ差し込む。
+    fn populate_from_shell(&mut self, shell: &Shell) {
+        crate::fold::fold_shell(&mut self.world, shell);
     }
 
     /// 正規化 Surface 定義の公開クエリ（要件 1.3・存在しない id は `None`）。
