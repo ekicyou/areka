@@ -135,3 +135,65 @@
      - **多トリガ→単一 Close funnel**: 中断トリガは複数——(1) 新 talk scheduling、(2) ユーザーのバルーン中断（skip・emo(UI) 由来）、(3) ゴースト切替、(4) 将来の外部 SSTP——だが全て **kanade（運行表）へ集約**され、sakura の中断入力は **`Close` 単一**（R7）。sakura はトリガ種別を不可知。honor/拒否の調停（上書きガード・`nouserbreakmode` による user-break 無効化・source 特権）は kanade scheduling＋後続 M の拡張点で、対応 `\![...]` は M-boot 外＝R8 の無視＋シーム。
      - **M-boot での帰結**: talk 出所はゴースト自身の SHIORI（kanade 経由）ただ 1 つ＝単一 owned source ゆえ source 特権も user-break 調停も moot。全 talk が Close で上書き＝「同時に有効なトークは 1 本」＝単一 current スロットで整合。ガード状態の sakura→kanade 露出は後続 M の拡張点。
 8. **M-boot 再生対象タグ表の粒度**（RN-7）: `Instruction` 全 variant の「実挙動/無視ログ/シーム」表を design 冒頭で確定し fixture 期待値へ反映。
+
+---
+
+## 8. 設計フェーズ・シンセシス（design.md 生成時に確定・2026-07-05）
+
+> Discovery 種別: **full**（greenfield クレート）。ただし §1〜§7 のギャップ分析で
+> コードベース側の探索は完了済みゆえ、本フェーズは (1) ukadoc 正典による意味論確認、
+> (2) 実シンボルの再検証（`Instruction` 14 variant / `reply_channel` consume / `TimedSchedule`
+> の f64・Barrier/Routing）、(3) DD-1..8 の決着に集中した。subagent 分派は不要と判断（研究は
+> 既に main context に揃っていた）。
+
+### 8.1 ukadoc 正典確認（design 冒頭・DD-6/DD-8 の根拠）
+
+- **`\p[ID]` / `\0`**: 「デフォルトのスコープは本体側になっている」「`\0` もしくは `\h` 本体側の
+  スコープに移る」→ **既定話者スコープ = `n=0`（本体側）で確定**（DD-6・R5.3）。
+- **`\e`**: 「この後に書かれたスクリプトは実行・表示されない」→ 終端切詰め（R6.5）の正典裏付け。
+- **`\w時間`**: 「時間×50ms 分の時間ウェイト」→ 上流 `Wait(Duration)` の 50ms 換算済みを再確認
+  （R2.3・sakura は再換算しない）。fixture 期待時刻は 50ms×n で既知。
+
+### 8.2 Build vs Adopt / Simplification（展開エンジン）
+
+- **DD-3（展開エンジン）= 自前 `expand` 採用・dola `TimedSchedule<T>` 不採用**。実ソース検証で
+  `TimedSchedule` は (a) 時刻が `f64` 秒（`Wait(Duration)` から換算負債）、(b) `Barrier`/`Routing`/
+  timeout を内包（sakura 未使用の不要概念）、(c) `Payload(f64, T)` の `T` に surface/text 混載→
+  sink 振り分けが実行時 match、(d) NaN 時に配信順が黙って崩れる注意点あり、と判明。sakura は
+  離散発火列・`Duration` 唯一真実・2 分岐静的分離・全域決定性を要するため自前純粋関数が要件と
+  摩擦最小。dola の「タイミング層正本方針」は**駆動層の注入式 tick 観念への整合**として尊重し、
+  dola を Cargo 依存には加えない（Simplification）。
+
+### 8.3 Generalization（型の一般化）
+
+- 出力発火は surface/text の 2 系統だが、駆動層の振り分けを型で閉じるため
+  `TimedFire{at, output: FireOutput::{Surface|Text}}` の tagged 表現で一般化。sink は
+  `SurfaceSink`/`TextSink` の 2 trait に分離（実行時 match を駆動層 1 箇所に閉じ、消費者は
+  型で分離される）。scope は `SpeakerScope(u32)`（`Default=0`）newtype に一般化し両 sink 共通付与。
+
+### 8.4 DD-1..8 の決着（design.md が正本・ここは索引）
+
+| DD | 論点 | 決定 |
+|---|---|---|
+| DD-1 | `StartTalk`/`TalkDone` の暫定所在 | **sakura `contract` モジュールが暫定所有**。kanade 完成時に kanade へ移譲し `contract` は re-export へ差替（下流 import パス `areka_sakura::contract::*` を不変に保つ）。 |
+| DD-2 | 時刻貫通型 | **`Duration` で貫通**（`at: Duration`）。`f64` 秒換算しない（R2.3）。 |
+| DD-3 | 展開エンジン | **自前純粋 `expand`**（§8.2）。 |
+| DD-4 | per-talk 生成単位 | **`spawn_actor` スレッド単位**。Close 割り込みが `run_inbox` の `Break` へ自然に載り、終端で body 復帰＝状態破棄（R10）。 |
+| DD-5 | 出力契約型 | `SurfaceCommand{scope, surface: SurfaceArg, at}` / `TextCommand{scope, kind: TextKind, at}`（`TextKind::{Text, NewLine(NewLineRatio), Clear}`）。`SurfaceArg`/`NewLineRatio` は `areka_parsers::sakura` から re-export（二重定義しない）。 |
+| DD-6 | 既定 scope | **`SpeakerScope(0)`（本体側・ukadoc 確認）**（§8.1）。 |
+| DD-7（RN-8） | `TalkDone` 返信機構 | **`reply_channel` 往復**（`StartTalk.reply: ReplySender<TalkDone>`）。`ReplySender::send` の `self` consume が「通算高々 1 回」を型強制（R6.4/R7.4/R7.5）。 |
+| DD-8 | M-boot タグ表 | `Instruction` 全 14 variant＋未知 variant の「実挙動/無視ログ/シーム」表を design.md に確定（Choice/Cursor/Move/SystemVar/GenericCommand/Raw ＝無視ログ＋シーム）。 |
+
+### 8.5 依存方向（design.md「Allowed Dependencies」正本・索引）
+
+`areka_parsers` / `areka-actor`（外部） → `contract`（メッセージ型・暫定） → `expand`（純粋展開）
+→ `playback`（駆動・アクター結線） → テストハーネス。`expand` は clock/sink/talk_id/アクターを
+知らない純粋層（依存方向の中核・R9.4 の決定性を型で守る）。
+
+### 8.6 設計レビューゲート結果
+
+**1 パスで通過**（repair パス 0）。機械チェック: 全要件 ID（R1.1〜R11.4）が traceability と
+コンポーネントブロックに出現・Boundary 4 節が実体・File Structure Plan に具体パス・
+コンポーネント↔ファイル 1:1（orphan なし）・境界↔ファイル整合。判断レビュー: 要件被覆・
+アーキ準備・境界明確（DD-1 の移譲シーム明示）・実装可能（三層＝境界タスク）を確認。
+軽微修正のみ（dola を Cargo 依存に含めない旨の文言整合）。**未解決の要件ギャップ無し。**
