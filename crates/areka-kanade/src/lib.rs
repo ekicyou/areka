@@ -28,6 +28,7 @@ pub mod msg;
 // クレート全体は `#[allow(dead_code)]` を付さず schedule 側の該当箇所に限局する（下記）。
 #[allow(dead_code)]
 pub(crate) mod schedule;
+pub mod shiori;
 pub mod talk;
 
 pub use actor::spawn_kanade;
@@ -35,6 +36,7 @@ pub use msg::{
     CloseReason, KanadeConfig, KanadeMsg, MonotonicMs, ShioriCall, ShioriFailure, ShioriMsg,
     ShioriOutcome,
 };
+pub use shiori::{ShioriConnection, spawn_shiori_actor};
 pub use talk::{StartTalk, TalkDone, TalkId};
 
 /// ukadoc Reference 表の実装正本（純粋関数群）を露出する公開ファサード（DD-9 例外）。

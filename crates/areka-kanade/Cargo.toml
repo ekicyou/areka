@@ -14,3 +14,8 @@ areka-actor = { path = "../areka-actor" }
 shiori-host32-host = { path = "../shiori-host32-host" }
 tracing = { workspace = true }
 thiserror = { workspace = true }
+
+[dev-dependencies]
+# shiori/real.rs のテストが RequestError::Ipc の内側 IpcError を構築するためだけの
+# workspace path dep（本体 import は shiori-host32-host 経由・host32 境界は real.rs に閉じる）。
+shiori-host32-ipc = { path = "../shiori-host32-ipc" }
