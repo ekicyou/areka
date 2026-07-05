@@ -57,7 +57,7 @@
   - _Depends: 3.1_
   - _Boundary: 残置 SHIORI 群_
 
-- [ ] 4.2 (P) 骨格の boot→loop→exit を自動 smoke テストで証明する
+- [x] 4.2 (P) 骨格の boot→loop→exit を自動 smoke テストで証明する
   - env ゲート（2.3）を有効にした `cargo run -p areka` の子プロセスを起動する統合テストを実装する
   - テストは境界時間（タイムアウト番犬）内にプロセスが exit 0 で終了することを assert する
   - smoke テストを実行し、実際に境界時間内で exit 0 が観測されることを確認する
