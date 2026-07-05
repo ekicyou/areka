@@ -48,6 +48,7 @@ areka の M1 は「アプリ組み上げ三段」の第二段にあたる。第�
 4. When 下流が `areka_sakura::contract::*` から talk 授受型を参照するとき, the talk 契約 shall 従来と同一の import パスで参照可能であり続ける。
 5. When 契約を一本化するとき, the ghost-setup 仕様 shall `TalkCue`／`SurfaceSink`／`TextSink`／`cue_target_of` および dola cue 型を変更しない。
 6. When 契約統一を反映するとき, the ghost-setup 仕様 shall kanade・sakura 両クレートの既存テストを新契約に追随させ、緑を維持する。
+7. The talk 契約 shall 結線層内の変換アダプタによる二重定義の温存を許容せず、物理的に単一の型定義（正本＋再エクスポート）として実現する。
 
 ### Requirement 2: descript.txt 起点の起動統括（WS-B）
 
