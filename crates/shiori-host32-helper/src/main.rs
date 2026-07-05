@@ -44,9 +44,9 @@ use shiori_host32_ipc::{
 };
 use wintf_winmsg_executor::util::{Window, WindowMessage, WindowType};
 use wintf_winmsg_executor::{FilterResult, MessageLoop};
-use windows::Win32::Foundation::{HWND, LPARAM, LRESULT};
+use windows::Win32::Foundation::{HWND, LPARAM, LRESULT, WPARAM};
 use windows::Win32::System::DataExchange::COPYDATASTRUCT;
-use windows::Win32::UI::WindowsAndMessaging::WM_COPYDATA;
+use windows::Win32::UI::WindowsAndMessaging::{PostMessageW, WM_COPYDATA};
 
 /// 応答送出 `SendMessageTimeoutW` の上限時間。
 ///
@@ -87,8 +87,14 @@ enum InboundAction {
     /// 受領フレームのペイロード有無を問わずこの動作へ写像される。実際のロード結線（proxy 確立・
     /// `load` 呼出・ack 返送）は下流タスク（Task 6・WndProc の LOAD 結線）が担う。
     TriggerLoad,
-    /// framing 上は正当だが本 helper が応答しないタグ（`Hello`/`Response`/`Unload`）。
-    /// crash させず無視する（記録のみ）。`Load` は `TriggerLoad` へ分離済みゆえ含まない。
+    /// `Unload` を受領＝正規の正常終了経路のトリガ（R5.6）。従来の「既知だが無視」を置換する。
+    /// **ペイロードを持たない**（wire で理由やパスを運ばない）ため、受領フレームのペイロード有無を
+    /// 問わずこの動作へ写像される。実際の終了結線（proxy drop → `quit_requested` セット → ack `[1]`
+    /// 返送 → `PostMessageW` 起こし → main ループ正常終了 → exit 0）は下流タスク（Task 3.2・WndProc の
+    /// UNLOAD 結線）が担う。本タスク（3.1）は分類と共有状態の追加までに留める。
+    TriggerUnload,
+    /// framing 上は正当だが本 helper が応答しないタグ（`Hello`/`Response`）。crash させず無視する
+    /// （記録のみ）。`Load` は `TriggerLoad`、`Unload` は `TriggerUnload` へ分離済みゆえ含まない。
     IgnoreKnown(MsgTag),
     /// 未知タグ・長さ不整合など不正フレーム。crash させず記録のみ・上位へ渡さない（要件 2.5）。
     IgnoreBad(FramingError),
@@ -106,6 +112,9 @@ fn classify_inbound(dw_data: usize, declared_len: usize, data: &[u8]) -> Inbound
         // Load はロード実行トリガ（要件 4.1）。ペイロードは無視（有無を問わず TriggerLoad）。
         // IgnoreKnown の一般アームより先に分離して受ける。
         Ok((MsgTag::Load, _)) => InboundAction::TriggerLoad,
+        // Unload は正規正常終了経路のトリガ（R5.6）。ペイロードは無視（有無を問わず TriggerUnload）。
+        // IgnoreKnown の一般アームより先に分離して受ける（`Load` と同型・同位置）。
+        Ok((MsgTag::Unload, _)) => InboundAction::TriggerUnload,
         Ok((tag, _)) => InboundAction::IgnoreKnown(tag),
         Err(err) => InboundAction::IgnoreBad(err),
     }
@@ -158,6 +167,12 @@ struct HelperShared {
     load_acks_ok: Cell<u64>,
     /// LOAD 観測カウンタ: ack `[0]`（あらゆる `ProxyError` 失敗）送出数。
     load_acks_fail: Cell<u64>,
+    /// **終了要求フラグ**（R5.6・正規正常終了経路）。UNLOAD 受領時に UNLOAD アームが `true` にセットし、
+    /// main のフィルタ閉包が `HelperMessageWindow::quit_requested` 経由で検知して `msg_loop.quit()` する
+    /// （→ ループ正常終了 → main return → exit 0）。single UI thread ゆえ [`Cell`] で足りる。既定 `false`。
+    quit_requested: Cell<bool>,
+    /// UNLOAD 観測カウンタ: `TriggerUnload` 受領数（R5.6）。
+    unloads_handled: Cell<u64>,
 }
 
 impl HelperShared {
@@ -174,6 +189,8 @@ impl HelperShared {
             loads_attempted: Cell::new(0),
             load_acks_ok: Cell::new(0),
             load_acks_fail: Cell::new(0),
+            quit_requested: Cell::new(false),
+            unloads_handled: Cell::new(0),
         }
     }
 }
@@ -310,9 +327,37 @@ fn handle_message(s: &HelperShared, self_hwnd: HWND, msg: &WindowMessage) -> Opt
                 eprintln!("[helper] load-ack 送出失敗（観測）: {e:?}");
             }
         }
+        InboundAction::TriggerUnload => {
+            // 正規の正常終了経路（design §UNLOAD アーム・R5.1/R5.6）。RefCell 再入規律を LOAD/REQUEST と
+            // 同格に厳守: borrow を send_copydata（ブロッキング SMTO・再入可）越しに保持しない。
+            s.unloads_handled.set(s.unloads_handled.get() + 1);
+            // 1) proxy を take（borrow は文末で終了）。
+            let taken = s.proxy.borrow_mut().take();
+            // 2) borrow 非保持で drop = ShioriByteProxy の Drop（courtesy unload → FreeLibrary）。
+            //    未確立(None)なら no-op（未 LOAD UNLOAD も crash させず終了系列に入る・design §182）。
+            drop(taken);
+            // 3) 終了要求フラグを立てる。
+            s.quit_requested.set(true);
+            // 4) borrow 非保持で ack[1] を返送（LOAD ack と同型・MsgTag::Response 再入経路・新契約を発明
+            //    しない・ack[1]=「unload 完了・終了系列に入った」）。送出失敗は eprintln! 観測のみ
+            //    （親は ack timeout で検出＝意図的逸脱・design §475/validation Issue 2）。
+            let target = hwnd_from_u32(s.parent_hwnd);
+            if let Err(e) =
+                send_copydata(target, self_hwnd, MsgTag::Response, &[LOAD_ACK_OK], REPLY_TIMEOUT)
+            {
+                eprintln!("[helper] unload-ack 送出失敗（観測）: {e:?}");
+            }
+            // 5) 自窓へ PostMessageW(WM_NULL) — posted メッセージで MessageLoop を起こす
+            //    （sent-message はフィルタに現れない）。main のフィルタが quit_requested を検知して
+            //    msg_loop.quit() → ループ正常終了 → exit 0（R5.6 正規正常終了経路）。
+            // SAFETY: self_hwnd は自窓（生存中）。WM_NULL(0) は無害な起こし用メッセージ。
+            unsafe {
+                let _ = PostMessageW(Some(self_hwnd), 0, WPARAM(0), LPARAM(0));
+            }
+        }
         InboundAction::IgnoreKnown(tag) => {
-            // Hello/Response/Unload は helper が能動応答しない。記録のみ（無応答）。
-            // Load は TriggerLoad へ分離済みゆえここには来ない。
+            // Hello/Response は helper が能動応答しない。記録のみ（無応答）。
+            // Load は TriggerLoad へ、Unload は TriggerUnload へ分離済みゆえここには来ない。
             eprintln!("[helper] 応答対象外タグ受領（無視）: {tag:?}");
         }
         InboundAction::IgnoreBad(err) => {
@@ -360,6 +405,12 @@ impl HelperMessageWindow {
         window.state().hellos_sent.set(window.state().hellos_sent.get() + 1);
 
         Ok(Self { window })
+    }
+
+    /// 終了要求フラグ（UNLOAD 受領で立つ）。main ループのフィルタが読む（design §main の結線・R5.6）。
+    /// 非 test 公開: main が read するため dead ではない。
+    fn quit_requested(&self) -> bool {
+        self.window.state().quit_requested.get()
     }
 
     /// 自窓 HWND（loopback セルフテストからの観測用）。
@@ -451,11 +502,16 @@ fn main() {
     };
 
     // REQUEST を受領して proxy 駆動 RESPONSE を返すため、メッセージループを回す（要件 3.1 / 4.7 / 4.8）。
-    // 常駐 lifecycle（UNLOAD 停止等）は Out of Boundary（下流 host32-lifecycle）ゆえ、
-    // 本ユニットは request 往復実証に必要な最小ループとし、終了条件は下流が結線する。
-    // `win` は本スコープで生存し続け、Drop（窓破棄）は main 終了時。
-    let _keep_alive = &win;
-    MessageLoop::run(|_msg_loop, _msg| FilterResult::Forward);
+    // 終了は正規の正常終了経路（R5.6）: UNLOAD アームが quit_requested を立て自窓を起こす → 本フィルタが
+    // それを検知して msg_loop.quit() → ループが正常終了 → main が return → プロセス exit 0
+    // （stand-in exit(0) ではなく canonical な正常終了・memory「終了経路は正規実装」）。
+    // `win` は本フィルタが borrow して生存し続け、Drop（窓破棄・proxy の courtesy unload）は main 終了時。
+    MessageLoop::run(|msg_loop, _msg| {
+        if win.quit_requested() {
+            msg_loop.quit();
+        }
+        FilterResult::Forward
+    });
 }
 
 #[cfg(test)]
@@ -534,14 +590,40 @@ mod classify_tests {
     }
 
     // 要件 4.2: 応答対象外の既知タグは IgnoreKnown（無応答・crash なし）。
-    // 注: Load は本タスク（3.2）で TriggerLoad へ分離したため、ここから除外する（R4.1）。
+    // 注: Load は TriggerLoad へ、Unload は TriggerUnload（R5.6）へ分離済みゆえ、ここから除外する。
     #[test]
     fn known_nonrequest_tags_are_ignored() {
-        for tag in [MsgTag::Hello, MsgTag::Response, MsgTag::Unload] {
+        for tag in [MsgTag::Hello, MsgTag::Response] {
             let raw = tag.as_u32() as usize;
             let action = classify_inbound(raw, 0, b"");
             assert_eq!(action, InboundAction::IgnoreKnown(tag));
         }
+    }
+
+    // R5.6: Unload 受領は正規正常終了経路のトリガ（TriggerUnload）へ分類される。従来の
+    // 「既知だが無視（IgnoreKnown）」を置換する。ペイロードにパスや理由を期待しない
+    // ゆえ、ペイロード有無を問わず TriggerUnload であること（`TriggerLoad` と同型）。
+    #[test]
+    fn unload_classifies_to_trigger_unload() {
+        let raw = MsgTag::Unload.as_u32() as usize;
+
+        // ペイロード無し。
+        let action = classify_inbound(raw, 0, b"");
+        assert_eq!(action, InboundAction::TriggerUnload);
+
+        // ペイロード有り（wire で内容を運ばないため、無視され同じく TriggerUnload）。
+        let payload = b"ignored-unload-payload";
+        let action = classify_inbound(raw, payload.len(), payload);
+        assert_eq!(action, InboundAction::TriggerUnload);
+    }
+
+    // R5.6: 終了要求フラグ `quit_requested` は新規 HelperShared で既定 false（分類のみの本タスクで
+    // は set しない＝task 3.2 が結線する）。フィールド追加とその既定値を単体で確認する。
+    #[test]
+    fn new_helper_shared_defaults_quit_requested_false() {
+        let s = HelperShared::new(0, PathBuf::new(), String::new());
+        assert!(!s.quit_requested.get());
+        assert_eq!(s.unloads_handled.get(), 0);
     }
 
     // 要件 4.1: Load 受領はロード実行トリガ（TriggerLoad）へ分類される。従来の
@@ -611,7 +693,6 @@ mod loopback_tests {
     use super::*;
     use std::path::PathBuf;
     use std::rc::Rc;
-    use windows::Win32::UI::WindowsAndMessaging::PostMessageW;
 
     /// testdll の `shiori.dll` を解決する（proxy 単体テストと同型・Task 5.2）。
     /// 優先順: env `HOST32_TESTDLL_DLL` → `CARGO_MANIFEST_DIR` から target 探索。
@@ -895,6 +976,73 @@ mod loopback_tests {
             "冪等 LOAD ack も厳密 1 byte [1]（R2.4）"
         );
 
+        // --- UNLOAD（正規正常終了経路のアーム機構・R5.1/R5.6・Task 3.2）---
+        // MsgTag::Unload（空ペイロード）を helper へ送ると、helper は proxy を take して即 drop
+        // （courtesy unload → FreeLibrary）→ quit_requested セット → 既存 LOAD ack と同型の ack[1] を
+        // proxy drop 完了後・ループ終了前の順序で返送する。proxy は未確立へ戻る。
+        // （proxy を drop するため、以降 proxy 確立を前提とする REQUEST 検証は置かない・R5.1）。
+        // exit 0 の観測は x64 e2e（Task 5.1）の領分ゆえここでは扱わない。
+        send_copydata(
+            helper.hwnd(),
+            parent.hwnd(),
+            MsgTag::Unload,
+            &[],
+            REPLY_TIMEOUT,
+        )
+        .expect("UNLOAD 送出に失敗");
+
+        assert_eq!(
+            helper.shared().unloads_handled.get(),
+            1,
+            "WndProc が UNLOAD トリガを受領する（R5.6）"
+        );
+        assert!(
+            helper.shared().quit_requested.get(),
+            "UNLOAD 受領で終了要求フラグが立つ（R5.6・正規正常終了経路）"
+        );
+        assert!(
+            helper.shared().proxy.borrow().is_none(),
+            "UNLOAD で proxy を take→drop し未確立へ戻す（courtesy unload 実行・R5.1）"
+        );
+        assert_eq!(
+            responses.get(),
+            6,
+            "親が UNLOAD ack を追加 1 通受領する（proxy drop 後・ループ終了前・計 6）"
+        );
+        assert_eq!(
+            &*last_response.borrow(),
+            &[LOAD_ACK_OK],
+            "UNLOAD ack は既存 LOAD ack と同型の厳密 1 byte [1]（新契約を発明しない・R5.1）"
+        );
+
+        // --- R5.1: quit_requested が立った状態で、main と同型のフィルタ（quit_requested 検知→quit）を
+        //     持つ MessageLoop を回すと、posted メッセージ契機でフィルタが flag を見てループを正常終了する
+        //     （＝正規の正常終了経路のループ機構。プロセス exit 0 の観測は x64 e2e=Task 5.1）。この demo は
+        //     UNLOAD セクションで既に quit_requested==true になった後に実行し、独自の MessageLoop を生成・
+        //     消費する（前段の bounded 生存ループ・後段とは各 MessageLoop::run が返ってから次が始まるため
+        //     干渉しない）。quit_seen==true は quit 配線が正しいことに依存する実回帰ガードであり（配線を
+        //     外すとループが flag で抜けず、上の RED 実測で確認済み）、shell ではない。---
+        // SAFETY: helper.hwnd() は有効。WM_NULL(0) は無害な起こし用メッセージ。
+        unsafe { let _ = PostMessageW(Some(helper.hwnd()), 0, WPARAM(0), LPARAM(0)); }
+        {
+            let quit_seen = Rc::new(Cell::new(false));
+            let helper_ref = &helper;
+            MessageLoop::run({
+                let quit_seen = quit_seen.clone();
+                move |msg_loop, _msg| {
+                    if helper_ref.shared().quit_requested.get() {
+                        quit_seen.set(true);
+                        msg_loop.quit();
+                    }
+                    FilterResult::Forward
+                }
+            });
+            assert!(
+                quit_seen.get(),
+                "quit_requested 検知でメッセージループが正常終了する（R5.1・正規正常終了経路のループ機構）"
+            );
+        }
+
         // --- 不正フレーム: 未知タグを helper へ送っても crash せず記録のみ（要件 2.5）---
         // 未知タグ生値 0xFF を dwData に載せて自窓へ送る（copydata_payload が UnknownTag で弾く）。
         {
@@ -920,8 +1068,8 @@ mod loopback_tests {
             "不正フレームは crash させず記録のみ（要件 2.5）"
         );
         // 不正フレームでは RESPONSE を送らない（無応答）。
-        // 未確立 REQUEST 500(1)＋LOAD ack(2)＋GET(3)＋NOTIFY(4)＋冪等 LOAD ack(5) の計 5 のまま。
-        assert_eq!(responses.get(), 5, "不正フレームに応答しない（無応答・計 5 のまま）");
+        // 未確立 REQUEST 500(1)＋LOAD ack(2)＋GET(3)＋NOTIFY(4)＋冪等 LOAD ack(5)＋UNLOAD ack(6) の計 6 のまま。
+        assert_eq!(responses.get(), 6, "不正フレームに応答しない（無応答・計 6 のまま）");
 
         // --- bounded ループ生存: 有限個の WM_NULL を撒いてから quit し、必ず抜ける（無クラッシュ）---
         let pumped = Rc::new(Cell::new(0u32));
