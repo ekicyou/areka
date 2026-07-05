@@ -49,7 +49,7 @@
   - _Boundary: 骨格 main_
 
 - [ ] 4. 回帰・実証検証を行う
-- [ ] 4.1 (P) SHIORI 契約チェーンの e2e 回帰テストを実行し green を確認する
+- [x] 4.1 (P) SHIORI 契約チェーンの e2e 回帰テストを実行し green を確認する
   - `cargo test -p areka` を実行し、`shiori_e2e_tests`／`shiori_lifecycle_e2e_tests`／`shiori_reference_e2e_tests` が全て成功することを確認する
   - `shiori_demo` の env-gate 単体テスト（ゲート無効／有効の両分岐）が成功することを確認する
   - テスト結果が全て green であることをコマンド出力で確認する
