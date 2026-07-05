@@ -40,6 +40,7 @@ pub use world::{AliasMap, AtlasBinding, EmoWorld, ShellSettings, SurfaceId, Surf
 pub mod fold;
 pub mod atlas_bind;
 pub mod plan;
+pub use plan::BlitOp;
 pub mod blit;
 
 #[cfg(test)]
