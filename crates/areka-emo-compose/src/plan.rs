@@ -5,18 +5,20 @@
 //! 参照はオフセット累積で再帰的に inline 展開（flatten）し、visited 集合で循環を検出する。
 //! キャンバス外形を算出し、同一入力に対して決定的な命令列を生成する。
 //!
-//! # 本 module の到達点（task 5.1／5.2）とシーム
+//! # 本 module の到達点（task 5.1／5.2／5.3）とシーム
 //!
 //! - **task 5.1**: 静的 element 層の列挙（[`push_static_element_ops`]・layer 昇順）。
-//! - **task 5.2（本 task）**: 有効 bind（`BindSet`）pattern0 層の合成対象化＋`animation-sort`→
+//! - **task 5.2**: 有効 bind（`BindSet`）pattern0 層の合成対象化＋`animation-sort`→
 //!   animation ID 順の 2 段規則（[`derive_ops`]）。静的層の後（上）へ、descend（既定）なら ID 昇順・
 //!   ascend なら ID 降順で bind pattern0 を積む（design 決定5・画家のアルゴリズム）。全パーツが
-//!   bind な surface でも非空 bind 集合から可視層を生成する。入れ子参照は **1 段** inline 展開する。
+//!   bind な surface でも非空 bind 集合から可視層を生成する。
+//! - **task 5.3（本 task）**: 入れ子 surface 参照の**多段再帰 flatten＋循環検出**
+//!   （[`flatten_surface`]）。pattern0 の入れ子参照を pattern の (x,y) をオフセット累積して
+//!   再帰的に inline 展開し、visited 祖先スタックで自己参照・相互参照の循環を検出して非パニックで
+//!   枝を打ち切る（部分結果＋warn・要件 7.1/7.2/7.3）。
 //!
 //! 以下は明示的なシーム（後続 task が本 module を拡張して埋める）:
 //!
-//! - **入れ子 surface 参照の多段再帰 flatten＋循環検出（`visited`）** → task 5.3
-//!   （本 task の [`derive_ops`] は入れ子を 1 段だけ inline 展開する）。
 //! - **placement None スキップ＋静的キャンバス外形算出（`Extent`）** → task 5.4
 //! - **描画可能命令ゼロの分類（`SurfaceNotFound`/`EmptyComposition`）** → task 5.5
 //!
@@ -134,29 +136,36 @@ pub(crate) fn push_static_element_ops(
 ///      → id **降順**に描画（小 id が上）。これが画家のアルゴリズムの画素積層写像。
 ///    - **段2**: 上記方向の中で animation id をキーに整列する。
 ///
-/// pattern0 の `surface_id >= 0` は**入れ子 surface 参照**として、参照先の静的 element 層のみを
-/// pattern の (x,y) をオフセットして inline 展開する（本 task は **1 段**のみ・要件 5.2）。
-/// `surface_id < 0` はレイヤクリア/停止センチネル＝**非描画 skip**（trace ログ・非パニック・要件 5.5 前段）。
+/// pattern0 の `surface_id >= 0` は**入れ子 surface 参照**として、参照先 [`SurfaceMaster`] の
+/// **elements のみ**を pattern の (x,y) をオフセット**累積**して再帰的に inline 展開する
+/// （多段 flatten・design 決定2）。参照先 surface 自身の bind animation は展開しない（design
+/// 「`active_binds` の適用範囲は compose 対象 surface のみ」）。`surface_id < 0` はレイヤクリア/停止
+/// センチネル＝**非描画 skip**（trace ログ・非パニック・要件 5.5 前段）。
+///
+/// # 循環検出（要件 7.1/7.2/7.3・design 決定2）
+///
+/// 入れ子参照の再帰は visited 祖先スタック（`Vec<u32>`）で保護する。既に**現在の祖先経路**に
+/// 存在する surface を再訪すると（自己参照・相互参照の循環）、`warn!` の上その枝のみを打ち切って
+/// 部分結果を残す（パニックしない・スタック深度に依存しない構造的停止保証）。visited は枝離脱時
+/// に pop する祖先スタック規律ゆえ、非循環の重複参照（DAG の共有子）は各経路で正しく展開される。
 ///
 /// # 決定性（要件 4.5/10.1）
 ///
 /// 静的層は [`push_static_element_ops`] の安定順、bind 層は (animation id → 昇/降順) の全順序で
-/// 整列するため、同一入力（World／surface_id／binds）に対し毎回同一命令列を append する。
+/// 整列し、入れ子 flatten も同一走査順で決定的ゆえ、同一入力（World／surface_id／binds）に対し
+/// 毎回同一命令列を append する（循環入力でも有界かつバイト等価）。
 ///
 /// # シーム（後続 task が本関数を拡張して埋める）
 ///
-/// - **多段の再帰 flatten＋循環検出（visited 集合）** → task 5.3。本 task は入れ子参照を **1 段**だけ
-///   inline 展開する（参照先が更に bind／入れ子を持つ場合は展開しない・emo2 の bind パーツ
-///   surface＝1100 系は element のみで差が生じない）。5.3 が offset 累積つき多段再帰へ一般化する。
 /// - **placement None スキップ＋静的キャンバス外形（`Extent`）算出** → task 5.4。
 /// - **描画可能命令ゼロの Err 分類（`SurfaceNotFound`/`EmptyComposition`）** → task 5.5。本関数は
 ///   分類を返さず、不在 surface に対しては何も積まない（非パニック）。公開ファサード `build_plan`
-///   （`Result<Extent, ComposeError>`）は 5.4/5.5 が本関数を wrap して導入する。
+///   （`Result<Extent, ComposeError>`・visited をスクラッチ引数へ）は 5.4/5.5 が本関数を wrap して導入する。
 ///
-/// 本 task（5.2）では非テストの lib 経路からの呼び出し口（`build_plan` ファサード）が未導入ゆえ
+/// 本 task（5.3）では非テストの lib 経路からの呼び出し口（`build_plan` ファサード）が未導入ゆえ
 /// `dead_code` になる。消費は task 5.4/5.5 の `build_plan` が本関数を wrap して行う（それまで
-/// 意図的な未使用シーム・本 module 内の呼び出し鎖 `push_static_element_ops`/`surface_and_binding`/
-/// `is_bind_interval` もこの一点から辿られるため、`allow` はここへ集約する）。
+/// 意図的な未使用シーム・本 module 内の呼び出し鎖 `push_static_element_ops`/`flatten_surface`/
+/// `surface_and_binding`/`is_bind_interval` もこの一点から辿られるため、`allow` はここへ集約する）。
 #[allow(dead_code)]
 pub(crate) fn derive_ops(
     out_ops: &mut Vec<BlitOp>,
@@ -164,76 +173,127 @@ pub(crate) fn derive_ops(
     surface_id: u32,
     binds: &BindSet,
 ) {
-    // 層（i）: 合成対象 surface 自身の静的 element を基底層として先頭へ積む（offset=(0,0)）。
-    push_static_element_ops(out_ops, world, surface_id, 0, 0);
+    // visited 祖先スタック（design: Composer スクラッチの Vec<u32>）。build_plan ファサード導入時
+    // （5.4/5.5）は呼び手のスクラッチを引数で受け取り再利用する。本 task はエントリで確保する。
+    let mut visited: Vec<u32> = Vec::new();
+    flatten_surface(out_ops, &mut visited, world, surface_id, binds, 0, 0);
+}
 
-    // 合成対象 surface 不在なら bind 層も積まない（後続 task が SurfaceNotFound 分類を担う）。
-    let Some((master, _binding)) = surface_and_binding(world, surface_id) else {
+/// 合成対象 surface（top-level）／入れ子参照先 surface（再帰）を平坦化して `out_ops` へ積む。
+///
+/// - 層（i）: 当 surface の静的 element を (offset_x, offset_y) 累積で積む（[`push_static_element_ops`]）。
+/// - 層（ii）: 有効 bind（interval が bind 種 ∧ id ∈ `binds`）の pattern0 を animation-sort→ID 順の
+///   2 段規則で積む。pattern0 が入れ子 surface を参照（`surface_id >= 0`）するなら、pattern の (x,y)
+///   を累積オフセットへ足して**再帰**する。
+///
+/// **`binds` の適用範囲は top-level のみ**ではなく全再帰段で同一 `binds` を参照するが、参照先の
+/// bind animation は「その surface の `animations` に定義され `binds` に含まれる」もののみが有効で、
+/// emo2 の bind パーツ surface（1100 系）は element のみで bind を持たないため差は生じない（design
+/// 記録）。将来 BindSet のスコープ設計を入れ子ごとに分ける必要が生じた場合はシーム再検討。
+///
+/// visited は祖先スタック: 入口で `surface_id` を push、出口で pop。既訪問（＝現在の祖先経路に
+/// 存在）なら循環ゆえ `warn!` して即 return（枝打ち切り・非パニック・要件 7.2/7.3）。
+#[allow(dead_code)]
+fn flatten_surface(
+    out_ops: &mut Vec<BlitOp>,
+    visited: &mut Vec<u32>,
+    world: &EmoWorld,
+    surface_id: u32,
+    binds: &BindSet,
+    offset_x: i64,
+    offset_y: i64,
+) {
+    // 循環検出（要件 7.2/7.3）: 現在の祖先経路に既出なら打ち切り（warn・非パニック）。
+    if visited.contains(&surface_id) {
+        tracing::warn!(
+            target: "areka_emo_compose",
+            surface_id,
+            "入れ子参照の循環を検出・枝を打ち切り"
+        );
         return;
-    };
+    }
+    visited.push(surface_id);
 
-    // 層（ii）: 有効 bind（interval が bind 種 ∧ id ∈ binds）の animation を集める。
-    // 走査順（登場順）に依らず全順序で並べ替えるため、まず有効 id を収集する。
-    let mut active_ids: Vec<u32> = master
-        .animations
-        .iter()
-        .filter(|a| is_bind_interval(&a.interval) && binds.contains(a.id))
-        .map(|a| a.id)
-        .collect();
+    // 層（i）: 当 surface 自身の静的 element を累積オフセットで積む。
+    push_static_element_ops(out_ops, world, surface_id, offset_x, offset_y);
 
-    // 段1: animation-sort に応じて描画順を決める（design 決定5・画家のアルゴリズム写像）。
-    //   Descend（既定）→ id 昇順に描画（大 id が上）。Ascend → id 降順に描画（小 id が上）。
-    // 段2: その方向の中で id をキーに整列する。
-    match world.animation_sort() {
-        SortOrder::Descend => active_ids.sort_unstable(),
-        SortOrder::Ascend => active_ids.sort_unstable_by(|a, b| b.cmp(a)),
-        // `SortOrder` は `#[non_exhaustive]`。未知値は既定 Descend（id 昇順描画）へ倒す（非パニック）。
-        other => {
-            tracing::warn!(
-                target: "areka_emo_compose",
-                surface_id,
-                sort = ?other,
-                "未知の animation-sort: 既定 Descend（id 昇順描画）として扱う"
+    // 当 surface 不在なら bind 層もない（後続 task が SurfaceNotFound 分類を担う）。存在する場合のみ
+    // bind 層を積む。いずれにせよ枝離脱で visited を pop する。
+    if let Some((master, _binding)) = surface_and_binding(world, surface_id) {
+        // 層（ii）: 有効 bind（interval が bind 種 ∧ id ∈ binds）の animation id を収集する。
+        let mut active_ids: Vec<u32> = master
+            .animations
+            .iter()
+            .filter(|a| is_bind_interval(&a.interval) && binds.contains(a.id))
+            .map(|a| a.id)
+            .collect();
+
+        // 段1: animation-sort に応じて描画順を決める（design 決定5・画家のアルゴリズム写像）。
+        //   Descend（既定）→ id 昇順に描画（大 id が上）。Ascend → id 降順に描画（小 id が上）。
+        // 段2: その方向の中で id をキーに整列する。
+        match world.animation_sort() {
+            SortOrder::Descend => active_ids.sort_unstable(),
+            SortOrder::Ascend => active_ids.sort_unstable_by(|a, b| b.cmp(a)),
+            // `SortOrder` は `#[non_exhaustive]`。未知値は既定 Descend（id 昇順描画）へ倒す（非パニック）。
+            other => {
+                tracing::warn!(
+                    target: "areka_emo_compose",
+                    surface_id,
+                    sort = ?other,
+                    "未知の animation-sort: 既定 Descend（id 昇順描画）として扱う"
+                );
+                active_ids.sort_unstable();
+            }
+        }
+
+        // 描画順に各有効 bind の pattern0 を静的層の後（＝上）へ積む。
+        for id in active_ids {
+            // 同 id の animation は fold 段で単一化済み（後勝ち）ゆえ find で足りる。
+            let Some(anim) = master.animations.iter().find(|a| a.id == id) else {
+                continue;
+            };
+            // pattern0＝index 昇順の先頭 pattern（疎 index 許容ゆえ最小 index を pattern0 とする）。
+            let Some(pattern0) = anim.patterns.iter().min_by_key(|p| p.index) else {
+                // pattern を持たない bind animation は積むべき層がない（非パニック・skip）。
+                tracing::trace!(
+                    target: "areka_emo_compose",
+                    surface_id,
+                    animation_id = id,
+                    "有効 bind に pattern が無い: skip"
+                );
+                continue;
+            };
+
+            if pattern0.surface_id < 0 {
+                // 負値＝レイヤクリア/停止センチネル。非描画ゆえ命令を積まない（要件 5.5 前段）。
+                tracing::trace!(
+                    target: "areka_emo_compose",
+                    surface_id,
+                    animation_id = id,
+                    sentinel = pattern0.surface_id,
+                    "bind pattern0 がセンチネル（surface_id<0）: 非描画 skip"
+                );
+                continue;
+            }
+
+            // 入れ子 surface 参照: pattern0 の (x,y) を累積オフセットへ足して再帰的に flatten する
+            // （多段・オフセット累積・要件 7.1）。循環は再帰入口の visited 判定で打ち切る（7.2/7.3）。
+            let nested_id = pattern0.surface_id as u32;
+            flatten_surface(
+                out_ops,
+                visited,
+                world,
+                nested_id,
+                binds,
+                offset_x + pattern0.x,
+                offset_y + pattern0.y,
             );
-            active_ids.sort_unstable();
         }
     }
 
-    // 描画順に各有効 bind の pattern0 を静的層の後（＝上）へ積む。
-    for id in active_ids {
-        // 同 id の animation は fold 段で単一化済み（後勝ち）ゆえ find で足りる。
-        let Some(anim) = master.animations.iter().find(|a| a.id == id) else {
-            continue;
-        };
-        // pattern0＝index 昇順の先頭 pattern（疎 index 許容ゆえ最小 index を pattern0 とする）。
-        let Some(pattern0) = anim.patterns.iter().min_by_key(|p| p.index) else {
-            // pattern を持たない bind animation は積むべき層がない（非パニック・skip）。
-            tracing::trace!(
-                target: "areka_emo_compose",
-                surface_id,
-                animation_id = id,
-                "有効 bind に pattern が無い: skip"
-            );
-            continue;
-        };
-
-        if pattern0.surface_id < 0 {
-            // 負値＝レイヤクリア/停止センチネル。非描画ゆえ命令を積まない（要件 5.5 前段）。
-            tracing::trace!(
-                target: "areka_emo_compose",
-                surface_id,
-                animation_id = id,
-                sentinel = pattern0.surface_id,
-                "bind pattern0 がセンチネル（surface_id<0）: 非描画 skip"
-            );
-            continue;
-        }
-
-        // 入れ子 surface 参照: 参照先の静的 element 層のみを pattern0 の (x,y) をオフセットして
-        // 1 段 inline 展開する（多段再帰＋循環検出は task 5.3）。
-        let nested_id = pattern0.surface_id as u32;
-        push_static_element_ops(out_ops, world, nested_id, pattern0.x, pattern0.y);
-    }
+    // 枝離脱: 祖先スタックから pop（非循環の重複参照は別経路で再展開可能に保つ・要件 7.1）。
+    let popped = visited.pop();
+    debug_assert_eq!(popped, Some(surface_id), "visited は祖先スタック（LIFO）");
 }
 
 /// interval が bind 種（`Interval::Bind`/`Interval::BindRandom`）か（要件 5.2・design 層列挙）。
@@ -815,5 +875,183 @@ mod tests {
         assert_eq!(ops[0].element, part_id);
         // element 自 (5,6) ＋ pattern0 offset (30,-20) ＝ (35, -14)。
         assert_eq!(ops[0].transform.offset(), (35, -14));
+    }
+
+    // ── task 5.3: 入れ子 surface 参照の多段 flatten と循環検出（visited 集合） ─────────────
+
+    /// bind animation を任意 (x,y) つきで組む（bind_anim の x,y=0 固定を拡張・pattern0 のみ有意）。
+    fn bind_anim_xy(id: u32, ref_surface_id: i64, x: i64, y: i64) -> Animation {
+        bind_anim(id, ref_surface_id, x, y)
+    }
+
+    /// テスト5.3-①（受入基準・要件 7.1/7.2/7.3）: 自己参照 bind はスタックオーバーフローせず、
+    /// 部分結果（自 surface の静的 element）が得られ、循環枝は打ち切られる（warn・非パニック）。
+    ///
+    /// surface 1000 は静的 element `self.png` を持ち、かつ自身の bind pattern0 が **surface 1000
+    /// 自身**を参照する（自己参照 = 循環）。derive_ops は無限再帰せず（テストが完走すれば O.K.）、
+    /// 静的層 self.png は積まれ、自己参照枝は visited で打ち切られる。
+    #[test]
+    fn self_reference_does_not_overflow_and_yields_partial_result() {
+        let base = Path::new("shell/master");
+        let atlas = bake_atlas(base, &["self.png"]);
+        let self_id = atlas.resolve(SetId(0), "self.png").expect("self 解決");
+
+        // surface 1000: 静的 element self.png ＋ bind id=1 が surface 1000 自身を参照。
+        let host = surface_with_anims(
+            1000,
+            vec![elem(0, "self.png", 0, 0)],
+            vec![bind_anim(1, 1000, 0, 0)], // 自己参照。
+        );
+        let shell = shell_of(vec![host]);
+        let mut world = EmoWorld::build(&shell);
+        world.bind_atlas(&atlas, SetId(0));
+
+        let binds = BindSet::from_ids([1]);
+        let mut ops = Vec::new();
+        // これが無限再帰すると本テストは完走できない（スタックオーバーフローで abort）。
+        derive_ops(&mut ops, &world, 1000, &binds);
+
+        // 静的層 self.png は積まれる（部分結果）。
+        assert!(!ops.is_empty(), "自己参照でも静的層の部分結果が得られる");
+        // ops は有界（自己参照枝は打ち切られる）。静的 self.png（1本）＋ bind pattern0 が
+        // surface 1000 を参照→ visited で 1000 は既訪問ゆえ枝打ち切り＝追加 element なし。
+        // よって self.png 1本のみ。
+        let paths = ops_to_paths(&ops, &[(self_id, "self.png")]);
+        assert_eq!(paths, vec!["self.png"], "自己参照枝は打ち切り＝静的層のみ");
+    }
+
+    /// テスト5.3-②（要件 7.2）: 相互参照（A→B→A）はスタックオーバーフローせず、A 再入で
+    /// 打ち切られ部分結果が得られる（非パニック）。
+    ///
+    /// surface A=1000 の bind→B=1100、B の bind→A=1000。A から derive すると
+    /// A 静的 → B 静的（B の bind 経由で A 再入は visited で打ち切り）。無限再帰しない。
+    #[test]
+    fn mutual_reference_cycle_is_pruned_without_overflow() {
+        let base = Path::new("shell/master");
+        let atlas = bake_atlas(base, &["a.png", "b.png"]);
+        let a_id = atlas.resolve(SetId(0), "a.png").expect("a 解決");
+        let b_id = atlas.resolve(SetId(0), "b.png").expect("b 解決");
+
+        // A=1000: 静的 a.png ＋ bind id=1 → B=1100。
+        let a = surface_with_anims(
+            1000,
+            vec![elem(0, "a.png", 0, 0)],
+            vec![bind_anim(1, 1100, 0, 0)],
+        );
+        // B=1100: 静的 b.png ＋ bind id=1 → A=1000（相互参照）。
+        let b = surface_with_anims(
+            1100,
+            vec![elem(0, "b.png", 0, 0)],
+            vec![bind_anim(1, 1000, 0, 0)],
+        );
+        let shell = shell_of(vec![a, b]);
+        let mut world = EmoWorld::build(&shell);
+        world.bind_atlas(&atlas, SetId(0));
+
+        let binds = BindSet::from_ids([1]);
+        let mut ops = Vec::new();
+        derive_ops(&mut ops, &world, 1000, &binds);
+
+        // A 静的 → B 静的まで到達し、B→A の再入は打ち切り。a.png と b.png の各1本。
+        let map = [(a_id, "a.png"), (b_id, "b.png")];
+        let paths = ops_to_paths(&ops, &map);
+        assert_eq!(paths, vec!["a.png", "b.png"], "相互参照は A 再入で打ち切り＝有界");
+    }
+
+    /// テスト5.3-③（要件 7.1・オフセット累積）: 非循環の多段入れ子 A→B→C でオフセットが累積する。
+    ///
+    /// A=1000 の bind→B=1100 を (10,5)、B=1100 の bind→C=1200 を (100,50)、C=1200 の element は
+    /// 自 (2,3)。C の element の最終オフセット＝(10+100+2, 5+50+3)＝(112, 58)。多段累積を検証。
+    #[test]
+    fn offset_accumulates_across_multilevel_nesting() {
+        let base = Path::new("shell/master");
+        let atlas = bake_atlas(base, &["c.png"]);
+        let c_id = atlas.resolve(SetId(0), "c.png").expect("c 解決");
+
+        // A=1000: 静的 element なし・bind id=1 → B=1100 at (10,5)。
+        let a = surface_with_anims(1000, Vec::new(), vec![bind_anim_xy(1, 1100, 10, 5)]);
+        // B=1100: 静的 element なし・bind id=1 → C=1200 at (100,50)。
+        let b = surface_with_anims(1100, Vec::new(), vec![bind_anim_xy(1, 1200, 100, 50)]);
+        // C=1200: 静的 element c.png at (2,3)。
+        let c = surface(1200, vec![elem(0, "c.png", 2, 3)]);
+        let shell = shell_of(vec![a, b, c]);
+        let mut world = EmoWorld::build(&shell);
+        world.bind_atlas(&atlas, SetId(0));
+
+        let binds = BindSet::from_ids([1]);
+        let mut ops = Vec::new();
+        derive_ops(&mut ops, &world, 1000, &binds);
+
+        assert_eq!(ops.len(), 1, "C の element 1 本のみ（A/B は静的 element なし）");
+        assert_eq!(ops[0].element, c_id);
+        // 累積: A→B (10,5) ＋ B→C (100,50) ＋ C element 自 (2,3) ＝ (112, 58)。
+        assert_eq!(ops[0].transform.offset(), (112, 58), "多段オフセット累積");
+    }
+
+    /// テスト5.3-④（要件 7.1・ancestor-stack 規律）: 非循環で同一 surface を2回参照すると、
+    /// 双方とも展開される（visited は祖先スタックゆえ枝離脱で pop・偽陽性打ち切りをしない）。
+    ///
+    /// A=1000 の bind id=1 → 共有子 S=1300 at (10,0)、bind id=2 → 中間 B=1100（B の bind→S=1300 at
+    /// (0,20)）。S は祖先でない2経路（A 直下・A→B 経由）から参照される。S の element は各経路で
+    /// 展開され、offset は (10,0) と (0,20) で異なる2命令になる（誤って一度きりに刈られない）。
+    #[test]
+    fn noncyclic_shared_child_expands_on_each_path() {
+        let base = Path::new("shell/master");
+        let atlas = bake_atlas(base, &["s.png"]);
+        let s_id = atlas.resolve(SetId(0), "s.png").expect("s 解決");
+
+        // A=1000: bind id=1 → S=1300 at (10,0)、bind id=2 → B=1100 at (0,0)。
+        let a = surface_with_anims(
+            1000,
+            Vec::new(),
+            vec![bind_anim_xy(1, 1300, 10, 0), bind_anim_xy(2, 1100, 0, 0)],
+        );
+        // B=1100: bind id=1 → S=1300 at (0,20)。
+        let b = surface_with_anims(1100, Vec::new(), vec![bind_anim_xy(1, 1300, 0, 20)]);
+        // S=1300: 共有子 element s.png at (0,0)。
+        let s = surface(1300, vec![elem(0, "s.png", 0, 0)]);
+        let shell = shell_of(vec![a, b, s]);
+        let mut world = EmoWorld::build(&shell);
+        world.bind_atlas(&atlas, SetId(0));
+
+        let binds = BindSet::from_ids([1, 2]);
+        let mut ops = Vec::new();
+        derive_ops(&mut ops, &world, 1000, &binds);
+
+        // S は2経路で展開＝s.png が 2 命令。祖先スタック（pop-on-exit）ゆえ非循環重複は刈られない。
+        assert_eq!(ops.len(), 2, "非循環の共有子は各経路で展開（祖先スタック規律）");
+        assert!(ops.iter().all(|op| op.element == s_id));
+        let offsets: Vec<(i64, i64)> = ops.iter().map(|op| op.transform.offset()).collect();
+        // id 昇順描画（既定 descend）: id=1（S 直下 at (10,0)）→ id=2（B→S at (0,20)）。
+        assert_eq!(offsets, vec![(10, 0), (0, 20)], "各経路で別オフセット＝重複展開");
+    }
+
+    /// テスト5.3-⑤（要件 4.5/10.1）: 循環を含む入力でも 2 回導出→バイト等価（決定性・有界）。
+    #[test]
+    fn cyclic_derivation_is_deterministic() {
+        let base = Path::new("shell/master");
+        let atlas = bake_atlas(base, &["a.png", "b.png"]);
+
+        let a = surface_with_anims(
+            1000,
+            vec![elem(0, "a.png", 0, 0)],
+            vec![bind_anim(1, 1100, 0, 0)],
+        );
+        let b = surface_with_anims(
+            1100,
+            vec![elem(0, "b.png", 0, 0)],
+            vec![bind_anim(1, 1000, 0, 0)], // B→A 相互参照。
+        );
+        let shell = shell_of(vec![a, b]);
+        let mut world = EmoWorld::build(&shell);
+        world.bind_atlas(&atlas, SetId(0));
+
+        let binds = BindSet::from_ids([1]);
+        let mut ops1 = Vec::new();
+        derive_ops(&mut ops1, &world, 1000, &binds);
+        let mut ops2 = Vec::new();
+        derive_ops(&mut ops2, &world, 1000, &binds);
+
+        assert_eq!(ops1, ops2, "循環入力でも同一入力→同一 ops（バイト等価・有界）");
     }
 }
