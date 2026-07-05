@@ -32,9 +32,11 @@
 pub mod compile;
 pub mod contract;
 pub mod error;
+pub mod sink;
 
 pub use compile::{compile, CompiledTalk};
 pub use error::SakuraError;
+pub use sink::{MockSink, SurfaceSink, TextSink};
 
 // 下流の import パス安定化（DD-1: 下流は `areka_sakura::contract::*` 経由で参照）。
 pub use contract::*;

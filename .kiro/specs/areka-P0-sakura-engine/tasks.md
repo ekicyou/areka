@@ -54,7 +54,7 @@
   - _Depends: 3.2_
   - _Boundary: compile_
 
-- [ ] 4. (P) Core: 出力 sink とテスト用 mock を実装する
+- [x] 4. (P) Core: 出力 sink とテスト用 mock を実装する
   - surface 系・テキスト系を型で分離した 2 つの出力先抽象を定義する
   - 発火を蓄積し、生成元スレッドとは別のスレッドから発火列と発火時刻を照合できるテスト用 mock を実装する（observable: 複数の発火を mock へ送った後、別スレッドから発火順どおりに全件取得できるテストが green）
   - _Requirements: 3.3, 4.1, 9.2_
