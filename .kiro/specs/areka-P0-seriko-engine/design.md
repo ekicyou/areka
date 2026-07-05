@@ -43,6 +43,7 @@
 - alias 解決表そのものの生成（`emo-compose` が正本・本ユニットは所有スナップショットを消費）。
 - talk 運行・中断調停・さくらスクリプト解析（kanade／sakura）。
 - **emo への表示指令 API の正本定義**: 正本は `emo-present`。本ユニットは自前の観測用 sink trait を通じて発行し、本番結線時に emo-present の API へ橋渡しする（結線は `ghost-setup`）。
+- **ランダムなサーフェス選択／サーフェスの"ゆらぎ"**: ukadoc 上 alias／name は単一 surface への置換（`\s[]` で ID の代わりに使える文字列）であり、ランダム変動を baseware に課さない。ゆらぎは **SHIORI／script 層**が具体的な `\s` を出して実現する領分（emo2 のランダムも SHIORI の自前実装＝emo2 は挙動の典拠にしない・正典は ukadoc）。seriko は受けた指令を決定論的に解決するのみ。
 
 ### Allowed Dependencies
 
@@ -309,7 +310,7 @@ impl SurfaceResolver {
 **Implementation Notes**
 - Integration: `key.parse::<i64>()` で数値枝を判定（`-1` は `i64` で受けて `== -1` 判定・それ以外の非負を `u32` へ）。負の非 `-1` 値は `Unresolved` 扱い（防御）。
 - Validation: emo2 の `通常→[2100]`・`静観→[2106,2206]`（先頭 2106 選択）・未知キー→`Unresolved` を単体テスト。
-- Risks: 複数 id 選択規則は SSP de-facto（ランダムサーフェス）と異なり得るが、決定論観測（R7）優先で先頭固定を採用（DD6・research に記録）。
+- 正典整合（DD6・開発者裁定 2026-07-06）: alias／name は ukadoc 上「`\s[]` で ID の代わりに使える文字列」＝**単一 surface への置換**であり、baseware（seriko）側のランダム選択は ukadoc の課す責務ではない。emo2 の `静観→[2106,2206]` 等が示す"ゆらぎ"は **SHIORI 層が自前でランダムに `\s` を出している**結果であって alias 機構の挙動ではない（emo2 は最小参考実装＝挙動の典拠にしない・正典は ukadoc）。よって seriko は多 id データ（emo-compose の `AliasMap` が構文上 `Vec<u32>` を持つため生じる）を**先頭 id で決定論的に解決**する——これは「SSP ランダムからの逸脱」ではなく、ランダムなサーフェス変動が seriko の境界外（SHIORI／script 層）である帰結。R7 決定論と正典が両立する。
 
 ### 状態層
 
@@ -554,4 +555,4 @@ areka のログ規律（log-first・silent failure 禁止）に全面準拠。�
 ## Open Questions / Risks
 
 - **emo-present API 突合（Revalidation Trigger）**: 本番結線時、emo-present の非表示表現（別メソッド／`Option<id>`／センチネル）と `DisplayCommand::Hide` の写像を emo-present design と突合する。単体観測は `SurfaceOutput` mock で閉じるため本 spec 完了はブロックされない（5.5）。
-- **複数 id alias 選択規則（DD6）**: SSP de-facto はランダムサーフェスだが、決定論観測優先で先頭固定を採用。将来 SSP 互換が要れば `seriko-loop`/別 spec で乱数シード注入形へ拡張（インターフェイスは `SurfaceTarget` 単一 id を保つ）。
+- **複数 id alias 選択規則（DD6・開発者裁定 2026-07-06 で決着）**: 正典 ukadoc では alias／name は単一 surface への置換であり、ランダムなサーフェス選択は **baseware（seriko）の責務ではなく SHIORI／script 層の領分**（emo2 のランダムも SHIORI 自前実装＝emo2 は挙動の典拠にしない）。seriko は多 id データを先頭 id で決定論的に解決する。ゆらぎが要るゴーストは SHIORI が具体 id を出す。したがって本項は seriko の未解決リスクではなく**境界の確定事項**（`SurfaceTarget` 単一 id インターフェイスは維持）。

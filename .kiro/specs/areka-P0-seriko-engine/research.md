@@ -129,8 +129,8 @@
 - **DD5 — emo への表示指令 API 形と `\s[-1]` 非表示の表現（emo-present と突合）。**
   emo-present brief の正本は `show_surface(scope, surface_id, binds)`。**この API に「非表示」意味論があるか**（別メソッド `hide(scope)` か、`surface_id` にセンチネルか、`Option<surface_id>` か）を両 design で突合（emo-present brief 明記の調整点）。R5.2/R5.5 は「非表示遷移を発行できる」ことを要求＝seriko 側の mock 出力先 trait に非表示を表現する必要がある。**単体観測は seriko 定義の mock 出力先 trait で emo-present 完了を待たない**（R5.5）。
 
-- **DD6 — 複数 id alias の決定的選択規則（R2.5）。**
-  実データに `静観→[2106,2206]` 等が実在（`surfaces.txt:478`）。ukadoc/SSP de-facto の確認要（先頭固定？ランダム？）。**決定論観測（R7）を壊さない＝先頭固定など決定的規則**が有力だが、SSP 実挙動との差を design で確認。
+- **DD6 — 複数 id alias の決定的選択規則（R2.5）。** ✅ **決着（設計ディスカッション議題1・2026-07-06 開発者裁定）。**
+  実データに `静観→[2106,2206]` 等が実在（`surfaces.txt:478`）。~~ukadoc/SSP de-facto の確認要（先頭固定？ランダム？）~~ → **開発者裁定: 正典は ukadoc、emo2 は最小参考実装で挙動の典拠にしない**。ukadoc `\s[ID番号]` は「surface.alias または name で定義された文字列を ID の代わりに使用できる」＝**単一 surface への置換**であり、ランダム選択を baseware に課さない。**emo2 の"ゆらぎ"は SHIORI 層が自前でランダムに `\s` を出している結果**であって alias 機構の挙動ではない。**帰結: ランダムなサーフェス選択は seriko の境界外（SHIORI／script 層の領分）。seriko は多 id データを先頭 id で決定論的に解決**（`AliasMap` が構文上 `Vec<u32>` を持つため生じる多 id を well-defined に畳む）。これは「SSP ランダムからの逸脱」ではなく境界確定であり、R7 決定論と正典が両立。design.md「Out of Boundary／SurfaceResolver 正典整合／Open Questions DD6」に反映済み。
 
 - **DD7 — surface `name` 定義の取り込み（R2.3）。**
   surfaces.txt の `surface.alias` は `AliasMap` に入るが、surface 内 `name,定義名` 行が現 `Shell`/`AliasMap` に取り込まれているか未確認。取り込まれていなければ R2.3 を満たすため上流拡張 or seriko 側補完が要る（研究項目 R-3）。
