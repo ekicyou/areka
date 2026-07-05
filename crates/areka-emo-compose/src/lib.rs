@@ -36,6 +36,7 @@ pub use bind::BindSet;
 pub use composed::ComposedSurface;
 pub use normalized::{NormalizedElement, SurfaceMaster, Transform};
 pub mod world;
+pub use world::{AliasMap, AtlasBinding, EmoWorld, ShellSettings, SurfaceId, SurfaceIndex};
 pub mod fold;
 pub mod atlas_bind;
 pub mod plan;

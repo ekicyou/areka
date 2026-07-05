@@ -41,6 +41,6 @@ mod validation_tests;
 // 直接依存しない。依存方向 `model ← lexer ← decode ← parse` は不変。
 pub use model::{
     Animation, AliasKey, AppendTarget, Collision, CollisionName, Element, ElementPath, Interval,
-    Pattern, Shell, Surface, SurfaceAlias, SurfaceAppend,
+    Pattern, Shell, SortOrder, Surface, SurfaceAlias, SurfaceAppend,
 };
 pub use parse::parse;

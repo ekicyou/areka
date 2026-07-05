@@ -58,7 +58,7 @@
   - _Depends: 2.1_
 
 - [ ] 3. Core: EmoWorld（emo専用 per-ghost bevy_ecs World）とサーフェス合成ツリーの single-pass fold
-- [ ] 3.1 EmoWorld のコンポーネント/リソース定義と公開クエリ API を実装する
+- [x] 3.1 EmoWorld のコンポーネント/リソース定義と公開クエリ API を実装する
   - wintf本体Worldとは分離した専用 bevy_ecs World として、surface 1件＝entity 1件で `SurfaceId`/`SurfaceMaster`/`AtlasBinding` コンポーネントと `SurfaceIndex`/`AliasMap`/`ShellSettings` リソースを定義する
   - `surface(id)`/`surface_ids()`/`resolve_alias(key)`/`animation_sort()`/`collision_sort()` の公開クエリと空Worldからの `build()` 骨組みを用意する
   - 画素バッファを保持するコンポーネント/リソースを一切追加しない
@@ -214,3 +214,4 @@
 ## Implementation Notes
 
 - 2.1 (method.rs): `BlendMode` は設計スケッチの単一 enum ではなく `BlendMode { kind: BlendKind, fast: bool }`（struct）＋ `#[non_exhaustive] enum BlendKind`（19 modes）へ分割実装。`fast` 軸と `kind` 軸が直交するため enum 倍化を回避。`#[non_exhaustive]` 拡張シームは `BlendKind`（variant 軸）に載る。下流（plan/blit の 5.x/6.x）が `ComposeMethod::Blend(BlendMode)` を match する際はこの形を前提とする。`from_name`（名前→ComposeMethod 写像・add/bind→Overlay・旧別名 overlaymultiply→blend-multiply-fast 等）も同梱済み。
+- 3.1 (world.rs): design 指定パス `areka_parsers::shell::SortOrder` を解決するため parser の `shell/mod.rs` に `SortOrder` の `pub use` を additive 追加（task 1.2 が定義したが未 re-export だった）。fold タスク（3.2〜3.7）が `DefRef` を使う場合は同様に `shell/mod.rs` へ `DefRef` の re-export が必要（現状未 re-export）。`SurfaceMaster` は normalized.rs で `#[derive(Component)]` 済み（本型自体が component）。`EmoWorld::build` はリソース挿入後 `populate_from_shell(&mut self, shell)` を一度呼ぶ骨組みで、fold はこの1関数へ差し込む。

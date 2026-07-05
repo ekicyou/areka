@@ -6,6 +6,7 @@
 //! X,Y のみの平行移動を単位行列の特例として扱う（回転・拡縮は行列表現に予約）。
 
 use crate::method::ComposeMethod;
+use bevy_ecs::component::Component;
 
 /// 2D 変換（M1 実挙動は恒等＋平行移動のみ。回転・拡縮は M2 予約の口）。
 ///
@@ -63,7 +64,10 @@ impl Default for Transform {
 /// [`Animation`] を interval/pattern ごとそのまま保持し、seriko が再利用する（1.2/1.3）。
 ///
 /// [`Animation`]: areka_parsers::shell::Animation
-#[derive(Debug, Clone, PartialEq)]
+///
+/// `EmoWorld` の per-ghost `bevy_ecs` World では surface 1件＝entity 1件の component として
+/// 常駐する（design「Domain Model」）。`surface(id)` は本型を `&SurfaceMaster` として直接返す。
+#[derive(Debug, Clone, PartialEq, Component)]
 pub struct SurfaceMaster {
     /// surface id。
     pub id: u32,
