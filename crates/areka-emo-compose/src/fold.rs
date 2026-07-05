@@ -892,4 +892,241 @@ mod tests {
         // パニックせず AliasMap は空のまま。
         assert_eq!(world.resource::<AliasMap>().0.len(), 0);
     }
+
+    // ── task 3.7: 決定性（バイト等価）・登場順 single-pass の固定（要件 1.5/1.7/2.3/10.1）──
+
+    /// fold 結果の観測可能内容スナップショット（`EmoWorld` は derive Eq を持たないため手組み）。
+    ///
+    /// (1) surface id 昇順（`SurfaceIndex` のキーを整列＝`EmoWorld::surface_ids` と同じ決定的順）に
+    /// `(id, SurfaceMaster)` を集める。`SurfaceMaster` は `PartialEq`（element/collision/animation の
+    /// 深い等価）。(2) alias は `AliasMap`（`BTreeMap`＝キー順が決定的）を丸ごと複製する。
+    /// この2値が等しければ、公開クエリ（`surface(id)`／`resolve_alias(key)`／`surface_ids()`）越しに
+    /// 観測できる内容がバイト等価であることを意味する（要件 1.5/10.1）。
+    type FoldSnapshot = (Vec<(u32, SurfaceMaster)>, std::collections::BTreeMap<String, Vec<u32>>);
+
+    /// 素の `World`（`fold_shell` 直呼び）から決定性比較用スナップショットを抽出する。
+    fn snapshot_world(world: &World) -> FoldSnapshot {
+        // surface id を昇順に整列（`SurfaceIndex` の HashMap 反復順に依らず決定的）。
+        let mut ids: Vec<u32> = world.resource::<SurfaceIndex>().0.keys().copied().collect();
+        ids.sort_unstable();
+        let surfaces: Vec<(u32, SurfaceMaster)> = ids
+            .into_iter()
+            .map(|id| (id, master_of(world, id).expect("id が常駐する").clone()))
+            .collect();
+        // alias は BTreeMap ゆえ複製すればキー順まで決定的。
+        let aliases = world.resource::<AliasMap>().0.clone();
+        (surfaces, aliases)
+    }
+
+    /// 同一 `Shell` を素の `World` へ2回 fold し、スナップショットが一致することを確かめるヘルパ。
+    fn assert_fold_twice_byte_equal(shell: &Shell) -> FoldSnapshot {
+        let mut w1 = fresh_world();
+        fold_shell(&mut w1, shell);
+        let mut w2 = fresh_world();
+        fold_shell(&mut w2, shell);
+        let s1 = snapshot_world(&w1);
+        let s2 = snapshot_world(&w2);
+        assert_eq!(s1, s2, "同一 Shell の2回 fold はバイト等価な内容を生む（要件 1.5/10.1）");
+        s1
+    }
+
+    /// emo2 fixture（実上流シェル）の `surfaces.txt` を UTF-8 で読み parse して `Shell` を得る。
+    ///
+    /// `emo2_e2e.rs`（emo-atlas）の読込経路と同一（`read_to_string`＋`areka_parsers::shell::parse`）を
+    /// 本 crate から辿る。COM／WIC／atlas bake は経由しない純粋な parse+fold ゆえ headless で走る。
+    fn emo2_shell() -> Shell {
+        let path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../pilot/examples/shiori-host-32/fixtures/emo2/shell/master/surfaces.txt");
+        let content = std::fs::read_to_string(&path)
+            .unwrap_or_else(|e| panic!("emo2 surfaces.txt を読めること: {}: {e}", path.display()));
+        areka_parsers::shell::parse(&content)
+    }
+
+    /// (3.7-1) 受入基準（要件 1.5/10.1）: 複数定義が重なる**手組み** Shell を2回 fold すると
+    /// 得られる EmoWorld 内容がバイト等価。emo2 の重なり構造（plain 群→多 id append→重複 alias）を
+    /// ミラーした入力で決定性を固定する（実 fixture とは別に、パーサ非依存で保証）。
+    #[test]
+    fn hand_built_overlap_shell_folds_byte_equal_twice() {
+        // plain: 10, 2100, 2101（append の対象になり得る既存 id）。
+        let s10 = surface_def(10, vec![AppendTarget::Single(10)], vec![elem(0, "b10.png", 0, 0)]);
+        let s2100 = surface_full(
+            2100,
+            vec![AppendTarget::Single(2100)],
+            vec![elem(0, "b2100.png", 0, 0)],
+            vec![coll(0, "Head")],
+            vec![anim(1)],
+        );
+        let s2101 =
+            surface_def(2101, vec![AppendTarget::Single(2101)], vec![elem(0, "b2101.png", 0, 0)]);
+        // 多 id 範囲 append（emo2 の `surface.append10,2100-2110,2200-2210` 相当）＝既存のみへ追記。
+        let ap = append_def(
+            vec![
+                AppendTarget::Single(10),
+                AppendTarget::Range { start: 2100, end: 2110 },
+                AppendTarget::Range { start: 2200, end: 2210 },
+            ],
+            vec![elem(1, "added.png", 3, 4)],
+            vec![coll(1, "Bust")],
+            vec![anim(2)],
+        );
+        // 重複 alias（emo2 の `100,[2100]` が2回）＝後勝ちで一意。
+        let mut shell = shell_mixed(
+            vec![s10, s2100, s2101],
+            vec![ap],
+            vec![
+                DefRef::Surface(0),
+                DefRef::Surface(1),
+                DefRef::Surface(2),
+                DefRef::Append(0),
+            ],
+        );
+        shell.aliases = vec![
+            alias_def("100", vec![2100]),
+            alias_def("通常", vec![2100]),
+            alias_def("100", vec![2100]),
+        ];
+        // 登場順: plain×3 → append → alias×3。
+        shell.definitions.extend([
+            DefRef::Alias(0),
+            DefRef::Alias(1),
+            DefRef::Alias(2),
+        ]);
+
+        let snap = assert_fold_twice_byte_equal(&shell);
+        // fold が非自明（重なりが実際に効いている）ことを確かめる。
+        let (surfaces, aliases) = &snap;
+        // 常駐 id は昇順 [10, 2100, 2101]（append は新設しない）。
+        let ids: Vec<u32> = surfaces.iter().map(|(id, _)| *id).collect();
+        assert_eq!(ids, vec![10, 2100, 2101], "append は既存3件のみに効き新設しない");
+        // append 対象の 2100 には base + added の element が届く。
+        let m2100 = &surfaces.iter().find(|(id, _)| *id == 2100).unwrap().1;
+        assert!(
+            m2100.elements.iter().any(|e| e.path.as_str() == "added.png"),
+            "append element が 2100 へ届く"
+        );
+        // 重複 alias は後勝ちで一意（キー数＝distinct キー数）。
+        assert_eq!(aliases.get("100"), Some(&vec![2100]));
+        assert_eq!(aliases.len(), 2, "重複キー 100 は畳まれ distinct 2 本（100/通常）");
+    }
+
+    /// (3.7-2) 実 emo2 fixture の fold 決定性（要件 1.7/2.3/10.1）。
+    ///
+    /// 実 `surfaces.txt` を parse → `EmoWorld::build` を2回。公開クエリ越しのスナップショット
+    /// （surface 群・alias 群・両 sort 順）がバイト等価であることを固定する。これは実登場順ストリーム
+    /// （plain 群 → 多 id range append → 重複キー alias）に対する single-pass fold が決定的である証左。
+    #[test]
+    fn emo2_fixture_folds_byte_equal_twice() {
+        use crate::world::EmoWorld;
+
+        let shell = emo2_shell();
+        // fold は非自明: 実 fixture は多数の surface と alias を含む。
+        assert!(!shell.surfaces.is_empty(), "emo2 は surface を含む");
+        assert!(!shell.definitions.is_empty(), "emo2 は登場順ストリームを持つ");
+
+        let a = EmoWorld::build(&shell);
+        let b = EmoWorld::build(&shell);
+
+        // 公開クエリ越しのスナップショット（surface_ids は昇順＝決定的）。
+        let snap = |w: &EmoWorld| -> FoldSnapshot {
+            let surfaces: Vec<(u32, SurfaceMaster)> = w
+                .surface_ids()
+                .map(|id| (id, w.surface(id).expect("列挙 id は常駐する").clone()))
+                .collect();
+            // alias は既知キーのうち代表を安定順で引く（BTreeMap 実体の全複製は非公開のため
+            // 公開 resolve_alias 経路で決定性を観測する）。
+            let mut aliases = std::collections::BTreeMap::new();
+            for key in ["0", "通常", "100", "200", "10"] {
+                if let Some(ids) = w.resolve_alias(key) {
+                    aliases.insert(key.to_string(), ids.to_vec());
+                }
+            }
+            (surfaces, aliases)
+        };
+        assert_eq!(snap(&a), snap(&b), "実 emo2 の2回 fold はバイト等価（要件 10.1）");
+
+        // sort 順も決定的（emo2 は sort 未指定＝既定）。
+        assert_eq!(a.animation_sort(), b.animation_sort());
+        assert_eq!(a.collision_sort(), b.collision_sort());
+
+        // 非自明性: 既知 id が常駐し、重複 alias `100` が後勝ちで一意解決する。
+        let ids: Vec<u32> = a.surface_ids().collect();
+        assert!(ids.contains(&0), "surface0 が常駐する");
+        assert!(ids.contains(&1000), "surface1000（全 bind）が常駐する");
+        assert!(ids.contains(&2100), "surface2100 が常駐する");
+        // `100,[2100]` は2回定義されるが後勝ちで単一値に解決する（要件 3.2・重複ケース）。
+        assert_eq!(a.resolve_alias("100"), Some(&[2100][..]), "重複 alias 100 は後勝ち一意");
+        // 多 id range append は既存 2100-2110 へ collision を届けるが、範囲外の未存在は新設しない。
+        assert!(!ids.contains(&2211), "append 範囲外の未存在 id は新設されない");
+        // append 対象 2100 に collision（Head/Bust）が届く（append の重なりが観測できる）。
+        let m2100 = a.surface(2100).expect("surface2100 常駐");
+        assert!(
+            m2100.collisions.iter().any(|c| c.name.as_str() == "Head"),
+            "surface.append の collision が 2100 へ届く（登場順の重なり適用）"
+        );
+    }
+
+    /// (3.7-3) 登場順の決定的適用（要件 2.3）: 同一 surface id を surface→append→surface の順で
+    /// 交互に定義したとき、fold は登場順どおりに畳み込まれ、2回 fold して同一結果になる。
+    #[test]
+    fn interleaved_redefinition_is_appearance_order_deterministic() {
+        // 登場順: Surface(id=5, old) → Append(id=5, +mid) → Surface(id=5, new・全置換)。
+        let s_old = surface_def(5, vec![AppendTarget::Single(5)], vec![elem(0, "old.png", 0, 0)]);
+        let ap = append_def(
+            vec![AppendTarget::Single(5)],
+            vec![elem(1, "mid.png", 1, 1)],
+            Vec::new(),
+            Vec::new(),
+        );
+        let s_new = surface_def(5, vec![AppendTarget::Single(5)], vec![elem(0, "new.png", 9, 9)]);
+        let shell = shell_mixed(
+            vec![s_old, s_new],
+            vec![ap],
+            // Surface(0)=old, Append(0)=+mid, Surface(1)=new。
+            vec![DefRef::Surface(0), DefRef::Append(0), DefRef::Surface(1)],
+        );
+
+        let (surfaces, _) = assert_fold_twice_byte_equal(&shell);
+        // 登場順の帰結: 最後の plain surface(new) が全置換 → old も途中 append の mid も消える。
+        assert_eq!(surfaces.len(), 1);
+        let (id, m) = &surfaces[0];
+        assert_eq!(*id, 5);
+        assert_eq!(m.elements.len(), 1, "最後の全置換で element は1本のみ");
+        assert_eq!(m.elements[0].path.as_str(), "new.png");
+        assert!(
+            !m.elements.iter().any(|e| e.path.as_str() == "mid.png"),
+            "全置換前の append(mid) は残らない（登場順の帰結）"
+        );
+    }
+
+    /// (3.7-4) 前方参照なし・single-pass（要件 1.7）: 後で定義される id を狙う append は遡及せず、
+    /// かつ 2回 fold して結果が安定する。
+    #[test]
+    fn forward_reference_append_does_not_apply_and_is_stable() {
+        // 登場順: Append(狙い id=3) → Surface(id=3)。append 時点で 3 は未存在ゆえ届かない。
+        let ap = append_def(
+            vec![AppendTarget::Single(3)],
+            vec![elem(1, "ghost.png", 0, 0)],
+            Vec::new(),
+            Vec::new(),
+        );
+        let s3 = surface_def(3, vec![AppendTarget::Single(3)], vec![elem(0, "base3.png", 0, 0)]);
+        let shell = shell_mixed(
+            vec![s3],
+            vec![ap],
+            // Append(0) が Surface(0) より先＝前方参照。
+            vec![DefRef::Append(0), DefRef::Surface(0)],
+        );
+
+        let (surfaces, _) = assert_fold_twice_byte_equal(&shell);
+        // id=3 は base のみ（前方参照 append は適用されない）。
+        assert_eq!(surfaces.len(), 1);
+        let (id, m) = &surfaces[0];
+        assert_eq!(*id, 3);
+        assert_eq!(m.elements.len(), 1, "前方参照 append は適用されない（single-pass）");
+        assert_eq!(m.elements[0].path.as_str(), "base3.png");
+        assert!(
+            !m.elements.iter().any(|e| e.path.as_str() == "ghost.png"),
+            "後定義 id を狙う前方参照 append は遡及しない"
+        );
+    }
 }
