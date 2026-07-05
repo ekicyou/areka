@@ -1,7 +1,13 @@
 # Brief: areka-P0-window-placement
 
 > **種別**: 本坑（main）。⓪ ghost（ゴーストエンジン）トラックのユニット（M-boot）。
-> **調査日**: 2026-07-03（mock-shell/wintf コード深掘り＋ukadoc 正典）。
+> **調査日**: 2026-07-03（mock-shell/wintf コード深掘り＋ukadoc 正典）／**2026-07-05 改稿**（リジェクト教訓の織り込み）。
+> **⚠️ 2026-07-05 開発順序リジェクト（教訓の正本）**: 本ユニットは旧 brief の「mock-shell lift＋fixture 観測」前提で一度着手され、**実 DPI で座標が破綻**——`Monitor.work_area`/`WindowPos`＝物理 px と `BoxStyle` Px＝論理 px の**混在**により resolve が窓を沈め・drag が DPI 再スケールで二重変換→画面外消失。**dpi=96 では自己整合するためテスト緑が欠陥を隠した**。ワークツリーごとリジェクト（記憶 areka-placement-real-ghost-first／areka-window-placement-dpi-coordinate-defect）。
+> **前提依存（順序ゲート・2026-07-05 確定）**:
+> ```
+> _Depends: areka-P0-emo-present（本番ゴースト＝emo2 の実 surface 表示。これに対して実装・検証する）
+> ```
+> **本番ゴースト先行の原則**: 窓配置/UI 位置決めは**本番ゴーストを表示した上でそれに対して**実装・検証する。単発デモ（ハードコード窓・架空 work_area）への合わせ込みは無意味＝実 DPI で即破綻することが実証済み。
 
 ## Problem
 
@@ -9,7 +15,8 @@
 
 ## Current State
 
-- **mock-shell 実績（lift 素材）**: `crates/areka/src/main.rs` — shell 窓（`WS_POPUP`・`CompositionMode::DComp`・`BoxPosition::Absolute`・320×420）＋ balloon 窓（200×350・縦書き Typewriter）生成、`DragConfig`＋`on_shell_drag`（`SetWindowPosCommand`・balloon 追従 offset (335,0)）、クリックスルー登録、double-click 終了。**2窓生成＋ドラッグ＋追従は動作実績あり**。
+- **mock-shell の位置づけ（2026-07-05 格下げ）**: `crates/areka/src/main.rs` は shell 窓＋balloon 窓＋ドラッグの動作実績を持つが、**lift は「窓生成 API の呼び方」の donor に限る**。初期位置 (400,200)・追従 offset (335,0) 等の**座標値・配置ロジックは持ち込み禁止**（デモ合わせ込み＝実 DPI 破綻の実証済み経路）。demo は DPI 処理ゼロ・work_area 非参照。
+- **wintf 座標系の論理/物理混在（実装前の必須確定事項）**: `Monitor.work_area`＝物理 px・`WindowPos`＝物理 px・`BoxStyle` Px＝論理 px・`GlobalArrangement` scale＝DPI 係数——**この契約を design 冒頭で型レベルに確定してから実装**（07-05 リジェクトの直接原因。混在演算を型で排除する newtype 等は design 判断）。
 - **wintf 窓生成 API**: `EcsWindowFactory::create_window`（`Window`+`WindowStyle`+`WindowPos` entity → Win32 窓・ex_style 自動計算・clickthrough 統合済み）。多窓は WUC compositor 1 個共有＋窓ごと Visual ツリーで対応済み。
 - **既定位置ロジックは無**: ukadoc の `seriko.alignmenttodesktop` 系を読む・work area を参照する・スコープ別配置を決めるコードは存在しない。
 - **位置永続化は無**（`ghost.dat` 不存在確認済み）— M-life の `position-persist` 領分で正しい。
@@ -19,11 +26,12 @@
 
 ゴースト定義（descript）とスコープ数に基づき、**キャラ窓（scope0 主体＋scope1 相方）とバルーン窓を生成し、ukadoc 準拠の既定位置に配置し、全面ドラッグ（バルーン追従含む）できる**機構。窓数はハードコードでなく構成入力。
 
-**✔ 観測（単一 pass/fail）**: emo2 fixture 起点でキャラ窓が work area 基準の既定位置（`alignmenttodesktop` 既定＝bottom）に出現し、ドラッグ移動＋バルーン追従が動く（ロードマップ表記「むらさき/エモ窓が出てドラッグ移動」）。
+**✔ 観測（単一 pass/fail・2026-07-05 是正）**: **本番ゴースト（emo2 の実 surface 表示＝emo-present 経由）に対し、実 DPI（per-monitor v2・dpi≠96 の実行が必須）**で、キャラ窓が work area 基準の既定位置（`alignmenttodesktop` 既定＝bottom）に出現し、ドラッグ移動＋バルーン追従が画面内で正しく動く。**dpi=96 のみのテスト緑は不合格**（自己整合で欠陥を隠すことが実証済み——07-05 リジェクトの教訓）。純粋 resolver の単体テストは **DPI をパラメタ化**（96/120/144/192）して物理/論理変換を固定する。
 
 ## Approach
 
-1. **窓生成の機構化**: mock-shell の窓生成コードを「N 窓を構成から生やす」形へ持ち上げ（`EcsWindowFactory` はそのまま・entity 構成の組立を ghost 側が所有）。
+0. **（必須先行）wintf 座標契約の確定**: 論理/物理の単位契約（物理 px＝`WindowPos`/`Monitor.work_area`・論理 px＝`BoxStyle`・scale＝`GlobalArrangement`）を design 文書で確定し、resolver・drag の入出力単位を固定（07-05 リジェクトの再発防止・実装より先）。
+1. **窓生成の機構化**: mock-shell の窓生成 API の呼び方のみ donor に、「N 窓を構成から生やす」形を新造（`EcsWindowFactory` はそのまま・entity 構成の組立を ghost 側が所有。**demo の座標値・offset 定数は持ち込まない**）。
 2. **既定位置（ukadoc カスケード）**: `seriko.alignmenttodesktop`（既定 `bottom`＝work area 下端・タスクバー除外）を実装。優先順位カスケード **ghost 全体 < ghost スコープ別（`sakura.seriko.*`/`kero.seriko.*`）< shell 全体 < shell スコープ別（`char*.seriko.*`）** の解決器を最小実装（emo2 が使う値のみ実挙動・他はシーム）。scope0/scope1 の相対配置（並び）は SSP de-facto を design で確定。
 3. **ドラッグ**: mock-shell の `on_shell_drag` を lift（全面ドラッグ・修飾キー規則なし＝ukadoc de-facto）。バルーン追従は暫定 offset を維持し、正式なバルーン位置規則は balloon 表示系の後続へ委ねる。
 4. **z-order**: 既定は非 topmost（SSP de-facto）。`seriko.zorder`/`sticky-window` はシームのみ（emo2 未使用なら実装しない）。
@@ -68,16 +76,17 @@
 
 ## Upstream / Downstream
 
-- **Upstream**: `areka-P0-package-mount` ✅（shell dir・descript 供給）／`areka-P0-parser-foundation` ✅（KV）／wintf 窓・ドラッグ・clickthrough 基盤 ✅。
+- **Upstream**: **`areka-P0-emo-present`（順序ゲート・本番ゴースト実表示＝検証対象そのもの）**／`areka-P0-package-mount` ✅（shell dir・descript 供給）／`areka-P0-parser-foundation` ✅（KV）／wintf 窓・ドラッグ・clickthrough 基盤 ✅（ただし座標契約の確定＝Approach 0 が先）。
 - **Downstream**: `areka-P0-ghost-setup`（lifecycle 統括が本機構を呼ぶ）／`position-persist`（既定位置の上書き）／`dual-window`・`\![move]`（結合クラスタ）。
 
 ## Existing Spec Touchpoints
 
 - **Extends**: `completed/areka-mock-shell`（窓生成・ドラッグの donor）。
-- **Adjacent**: `areka-P0-emo-surface`（**同じ `crates/areka/src/main.rs` 起点＝並行着手時はファイル衝突注意・順次推奨**。境界: Window entity=本ユニット／Visual ツリー=emo-surface）／`areka-P0-ghost-setup`（⓪ 同エンジン・同時着手回避）。
+- **Adjacent**（2026-07-05 更新・旧 `emo-surface` 参照を3分割後の実名へ是正）: `areka-P0-app-shell`（main.rs を骨格化＝本ユニットは**骨格の上で**窓機構を実装・main.rs 衝突は構造ごと解消）／`areka-P0-emo-present`（順序ゲートの上流。境界: Window entity=本ユニット／表示供給＋emo ランタイム=emo-present）／`areka-P0-ghost-setup`（⓪ 同エンジン・同時着手回避）。
 
 ## Constraints
 
 - Rust 2024・`windows` 0.62.2・tokio 禁止。window/render は UI スレッド固定（既存アフィニティ不変）。
+- **本番ゴースト先行・実 DPI 検証必須**: デモ（ハードコード窓・架空 work_area）への合わせ込み禁止。受け入れは実 DPI（≠96）実行を経ること。
 - 最小実装＋薄い拡張シーム（emo2 が使う配置値のみ実挙動・カスケードの**構造**は最初から）。
 - 正典は ukadoc・de-facto 挙動（z-order・ドラッグ規則・scope 相対配置）は design で SSP 実挙動を確認して確定。
