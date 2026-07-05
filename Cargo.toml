@@ -16,6 +16,7 @@ publish = false
 encoding_rs = "0.8"
 human-panic = "2.0.6"
 rand = "0.10.0"
+rectangle-pack = "=0.4.2"
 windows-numerics = "0.3.1"
 windows-core = "0.62.2"
 async-task = "4.7.1"

@@ -5,25 +5,19 @@
 use super::resource::{BitmapSourceGraphics, BitmapSourceResource};
 use super::task_pool::WintfTaskPool;
 use crate::com::d2d::{D2D1CommandListExt, D2D1DeviceContextExt};
-use crate::com::wic::{WICBitmapDecoderExt, WICFormatConverterExt, WICImagingFactoryExt};
 use crate::ecs::graphics::{GraphicsCommandList, GraphicsCore, format_entity_name};
 use crate::ecs::layout::Arrangement;
 use bevy_ecs::name::Name;
 use bevy_ecs::prelude::*;
 use std::path::{Path, PathBuf};
 use tracing::{trace, warn};
-use windows::Win32::Foundation::GENERIC_READ;
 use windows::Win32::Graphics::Direct2D::Common::D2D1_PIXEL_FORMAT;
 use windows::Win32::Graphics::Direct2D::{
     D2D1_BITMAP_OPTIONS_NONE, D2D1_BITMAP_PROPERTIES1, ID2D1DeviceContext,
 };
 use windows::Win32::Graphics::Dxgi::Common::DXGI_FORMAT_B8G8R8A8_UNORM;
-use windows::Win32::Graphics::Imaging::D2D::IWICImagingFactory2;
-use windows::Win32::Graphics::Imaging::{
-    GUID_WICPixelFormat32bppPBGRA, IWICBitmapSource, WICBitmapDitherTypeNone,
-    WICBitmapPaletteTypeMedianCut, WICDecodeMetadataCacheOnDemand,
-};
-use windows::core::{Interface, Result};
+use windows::Win32::Graphics::Imaging::IWICBitmapSource;
+use windows::core::Result;
 use windows_numerics::Matrix3x2;
 
 // ============================================================
@@ -64,45 +58,10 @@ pub fn test_asset_path(name: &str) -> PathBuf {
 // WIC画像読み込み
 // ============================================================
 
-/// WICで画像を読み込み、PBGRA32形式のBitmapSourceを返す
-///
-/// # Arguments
-/// * `factory` - WICファクトリ
-/// * `path` - 画像ファイルパス
-///
-/// # Returns
-/// PBGRA32形式に変換されたIWICBitmapSource
-pub fn load_bitmap_source(factory: &IWICImagingFactory2, path: &Path) -> Result<IWICBitmapSource> {
-    use windows::core::HSTRING;
-
-    // パスをHSTRINGに変換
-    let path_str = path.to_string_lossy();
-    let path_hstring = HSTRING::from(path_str.as_ref());
-
-    // デコーダー作成
-    let decoder = factory.create_decoder_from_filename(
-        &path_hstring,
-        None,
-        GENERIC_READ,
-        WICDecodeMetadataCacheOnDemand,
-    )?;
-
-    // 最初のフレームを取得
-    let frame = decoder.frame(0)?;
-
-    // PBGRA32に変換（αチャネルがなくても100%不透明として変換）
-    let converter = factory.create_format_converter()?;
-    converter.init(
-        &frame.cast::<IWICBitmapSource>()?,
-        &GUID_WICPixelFormat32bppPBGRA,
-        WICBitmapDitherTypeNone,
-        None,
-        0.0,
-        WICBitmapPaletteTypeMedianCut,
-    )?;
-
-    converter.cast()
-}
+// `load_bitmap_source` は ECS 非依存の COM 層（`crate::com::wic`）へ移設した
+// （design Decision D2 / Critical Issue 1）。パス互換のため re-export する。
+// 戻り値は `(IWICBitmapSource, has_alpha)` の tuple に拡張されている。
+pub use crate::com::wic::load_bitmap_source;
 
 // ============================================================
 // ECSコマンド
