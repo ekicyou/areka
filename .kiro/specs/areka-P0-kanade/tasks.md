@@ -120,7 +120,7 @@
   - _Boundary: tests/boot_test_
   - _Depends: 4.1, 3.1_
 
-- [ ] 4.4 (P) 定常運転の統合検証の実装
+- [x] 4.4 (P) 定常運転の統合検証の実装
   - 自身のテストファイルにのみ実装を追加する（テストエントリポイントのモジュール宣言は 4.1 で用意済みのため変更しない）
   - mock 結線を用いて、応答なし時に再生起動要求が発生しないこと、散発的なスクリプト応答から一意な識別子付きの再生起動要求が発生すること、再生中の Tick では毎秒イベントが応答を無視する形で発行されることを検証する
   - 観測可能な完了条件: 上記 3 パターンを検証する統合テストが green になる
@@ -158,3 +158,4 @@
 
 - 2.2 完了時: `schedule/mod.rs` の `force_quit` は OnClose を **NOTIFY** としてインライン構築している（DD-10 best-effort・events.rs は GET の `on_close` のみ提供）。GET/NOTIFY で別物ゆえ events への移譲は必須ではないが、close 系列を触るタスク（2.5）が OnClose-NOTIFY 構成子を events に足して一本化するのは任意で可。
 - 3.1 完了時: actor.rs の駆動モデルは「バッチ全実行→最後の往復応答のみ再投入」（ForceQuit の `[OnClose NOTIFY, ShioriUnload]` を順に送出するため・DD-10）。StartTalk 送出失敗（sakura 切断）は error!＋継続で、schedule State の active talk クリアは行わない（境界外＝shell は Phase を変更不能）。滞留した stale TalkDone は schedule の未知 talk_id 防御アームが安全に吸収する。4.x 統合テストはこの前提で観測すること。
+- 4.4 完了時: `tests/kanade/common/mod.rs` に **gated ハーネス**を純粋追加した（`spawn_harness_gated(config, fixture, quit_policy, hold_indices) -> (Harness, SakuraGate)`／`SakuraGate::release_all()`／`spawn_mock_sakura_gated`）。指定した受領 index の talk の TalkDone を保留し、`release_all()` で解放する＝**active talk 窓を決定的に作る唯一の手段**（sleep 不使用・race-free: released フラグを mutex 下で立ててから notify、releaser は「解放済み かつ 全 park 到着(expected_holds)」まで drain しない）。active talk 中の遷移を観測するタスク（4.5 の close 握手中 CloseRequest 等）はこの gated ハーネスを再利用してよい。既存 `spawn_harness`/`spawn_mock_sakura` は不変（追加のみ）。
