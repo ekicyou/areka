@@ -33,6 +33,24 @@ pub struct MountModel {
     pub shiori: ShioriMount,
     /// shell マウント先（Req 3.1/3.2）。
     pub shell: ShellMount,
+    /// shell descript の bindgroup default 転記（Req 4.5・既存 3 フィールドと非衝突）。
+    pub bindgroups: BindGroupDefaults,
+}
+
+/// shell descript.txt の bindgroup default（`default,1`＝起動時オン）の転記保持。
+///
+/// `sakura.bindgroup*.default,数値`／`kero.bindgroup*.default,数値`（ukadoc カテゴリ
+/// `descript_shell`）のうち値が `1` のものについて、bindgroup 番号（`*`）を本体
+/// （sakura）・相方（kero）スコープ別に保持する。**転記のみ・展開しない**（範囲展開や
+/// surface 解決は行わない・parsers 転写層原則）。保持は転記順（昇順不問）で、下流
+/// （seriko の `build_static_bindset`）が集合として扱う。欠落スコープは空 `Vec`。
+#[non_exhaustive]
+#[derive(Clone, Debug, PartialEq, Eq, Default)]
+pub struct BindGroupDefaults {
+    /// `default,1` の bindgroup 番号（sakura スコープ・昇順不問・保持は転記順）。
+    pub sakura_default_on: Vec<u32>,
+    /// `default,1` の bindgroup 番号（kero スコープ・昇順不問・保持は転記順）。
+    pub kero_default_on: Vec<u32>,
 }
 
 /// 名前情報（各値は未指定なら None・推測しない）。
