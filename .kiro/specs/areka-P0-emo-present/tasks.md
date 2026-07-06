@@ -16,7 +16,7 @@
   - 観測完了: 両ヘルパの単体テストが swap chain / `ICompositionSurface` を実際に生成できることを確認する
   - _Boundary: wintf com layer (dxgi.rs, wuc.rs)_
 
-- [ ] 1.3 実証: swap chain 供給面の生成→アップロード→リサイズ→readback 往復（GO ゲート）
+- [x] 1.3 実証: swap chain 供給面の生成→アップロード→リサイズ→readback 往復（GO ゲート）
   - 統合テストとして先行実装する（WARP デバイス可・CI 決定論）
   - 供給面生成→ソーステクスチャへ既知バイト列アップロード→Present→readback で全画素バイト一致を assert する
   - `ResizeBuffers` 実行後の再アップロード→readback 一致も確認する

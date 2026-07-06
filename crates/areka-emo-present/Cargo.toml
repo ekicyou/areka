@@ -19,3 +19,9 @@ bevy_ecs = { workspace = true }
 windows = { workspace = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }
+
+[dev-dependencies]
+# Task 1.3 spike 統合テスト（tests/swapchain_spike.rs）用。wintf の windows feature 集合を継承し
+# （workspace.dependencies.windows）、D3D11/DXGI/WUC の直呼び API（UpdateSubresource/CopyResource/
+# Map/Present/ResizeBuffers・IDXGISwapChain1 等）を明示的に有効化する。
+windows = { workspace = true, features = ["Win32_Graphics_Dxgi"] }
