@@ -336,6 +336,240 @@ mod tests {
         );
     }
 
+    // ─────────────────────────────────────────────────────────────────────
+    // Task 4.1: 停止経路・異常系の網羅テスト（1.4/2.1/2.4/6.2/6.3/6.4/7.4）。
+    //
+    // 設計要点（cross-thread log の決定論化）:
+    // - handler スレッドで発火する log（Unresolved の error!／非 Shell・EntityRef の warn!）は
+    //   `spawn_seriko` の別スレッドで出るため、テストスレッドに張った thread-local
+    //   `capture_logs` では捕捉できない。よってその種の log 表明は `handle_message` を
+    //   **テストスレッド上で同期呼び出し**して `capture_logs` 直下で発火させる。
+    // - Close／disconnect／emit-after-stop の lifecycle は `spawn_seriko`＋`join()` を
+    //   唯一の同期点として決定論化する（sleep/polling 不使用）。emit-after-stop の error! は
+    //   `join()` 後にテストスレッドで `emit` を呼ぶため thread-local `capture_logs` で捕捉できる。
+    // ─────────────────────────────────────────────────────────────────────
+
+    use crate::resolve::SurfaceResolver;
+    use crate::state::ScopeStates;
+    use areka_emo_compose::BindSet;
+    use std::collections::BTreeMap;
+
+    /// 同期 `handle_message` 用の小さな解決層（"通常"→2100 の 1 件のみ）。
+    fn tiny_resolver() -> SurfaceResolver {
+        let mut aliases: BTreeMap<String, Vec<u32>> = BTreeMap::new();
+        aliases.insert("通常".to_string(), vec![2100]);
+        SurfaceResolver::new(aliases)
+    }
+
+    /// 非空の静的 bind 集合を持つ空スコープ状態。
+    fn fresh_states() -> ScopeStates {
+        ScopeStates::new(BindSet::from_ids([1100, 1207]))
+    }
+
+    /// EntityRef 系の TalkCue（Shell 分類だが M-boot 未対応の防御枝・6.2）を組む。
+    fn entityref_cue(at: f64, scope: &str, entity: u64) -> TalkCue {
+        TalkCue {
+            at,
+            actor: ActorKey::from(scope),
+            command: CueCommand::EntityRef(entity),
+        }
+    }
+
+    /// ケース1（1.4/7.4）: 停止指令 Close による正常終了を独立実行テストで確認する。
+    ///
+    /// `spawn_seriko`→`close()`→`join()` で `Break` 経由の正常終了（`Ok`）を決定論的に固定する。
+    /// 同期は `join()` の一点のみ・sleep/polling なし。3.2 の複合シナリオとは別に、
+    /// 「Close による正常終了」だけを主張する専用テスト。
+    #[test]
+    fn close_stops_normally() {
+        let out = MockSurfaceOutput::new();
+        let (sink, handle) = spawn_seriko(tiny_resolver(), BindSet::from_ids([1100, 1207]), out);
+
+        sink.close().expect("Close を送れること");
+        // Break→スレッド正常終了。panic なし＝Ok。
+        assert!(
+            handle.join().is_ok(),
+            "Close 受領でアクターが正常終了する（Break 経路・1.4）"
+        );
+    }
+
+    /// ケース2（1.4）: 送信端が全て失われた場合（disconnect）の正常終了を独立実行テストで確認する。
+    ///
+    /// `spawn_seriko`→**全 Sender drop**（`SerikoSink` を drop・他に clone を残さない）→`join()`。
+    /// inbox の `RecvError` で `run_inbox` ループが正常終了することを固定する。Close を送らない
+    /// ことがこのテストの肝（disconnect 経路のみを主張）。sleep/polling なし。
+    #[test]
+    fn disconnect_stops_normally() {
+        let out = MockSurfaceOutput::new();
+        let (sink, handle) = spawn_seriko(tiny_resolver(), BindSet::from_ids([1100, 1207]), out);
+
+        // 全送信端（唯一の SerikoSink＝唯一の Sender）を drop。Close は送らない。
+        drop(sink);
+
+        // 受信端の RecvError→ループ正常終了（Ok）。
+        assert!(
+            handle.join().is_ok(),
+            "全 Sender drop（disconnect）でアクターが正常終了する（1.4）"
+        );
+    }
+
+    /// ケース3（6.2/6.3/7.4）: 分類不能／防御枝の入力が記録を残して読み飛ばされ、処理が継続する。
+    ///
+    /// (a) 同期 `handle_message`＋`capture_logs`（テストスレッド発火）で EntityRef 防御枝が
+    ///     `warn!` を残し・状態不変・`Continue`（skip して継続）を決定論的に固定する。
+    /// (b) spawn 経由の observable: EntityRef cue を先に、有効 cue を後に emit→close→join し、
+    ///     mock 記録が有効 Show 1 件のみ＝bad cue は skip され、その後もアクターが処理継続したこと
+    ///     を発行列で示す（cross-thread log には依存しない observable 檻）。
+    #[test]
+    fn unclassifiable_input_is_logged_and_skipped_then_continues() {
+        // (a) 同期 handler: warn! 発火＋状態不変＋Continue をテストスレッドで捕捉。
+        let resolver = tiny_resolver();
+        let mut states = fresh_states();
+        let mut out = MockSurfaceOutput::new();
+        let records = out.records();
+
+        let flow = capture_logs_flow(|| {
+            handle_message(
+                &resolver,
+                &mut states,
+                &mut out,
+                SerikoMsg::Cue(entityref_cue(0.0, "0", 42)),
+            )
+        });
+
+        assert_eq!(
+            flow.1,
+            ControlFlow::Continue(()),
+            "分類不能／防御枝は Continue で処理継続する（6.2）"
+        );
+        assert!(
+            flow.0.contains("level=WARN"),
+            "EntityRef 防御枝が warn! を残すこと（silent failure 禁止・6.3）: {}",
+            flow.0
+        );
+        assert!(
+            flow.0.contains("target=areka_seriko"),
+            "本クレート target で発火すること: {}",
+            flow.0
+        );
+        assert!(
+            records.lock().expect("records mutex poisoned").is_empty(),
+            "分類不能入力では発行しない（状態不変・skip）"
+        );
+
+        // (b) spawn 経由 observable: 悪 cue→有効 cue→close→join、記録は有効 Show のみ。
+        let out2 = MockSurfaceOutput::new();
+        let records2 = out2.records();
+        let (mut sink, handle) =
+            spawn_seriko(tiny_resolver(), BindSet::from_ids([1100, 1207]), out2);
+        SurfaceSink::emit(&mut sink, entityref_cue(0.0, "0", 7)); // 防御枝＝skip
+        SurfaceSink::emit(&mut sink, emote_cue(1.0, "0", "2100")); // 有効
+        sink.close().expect("Close を送れること");
+        handle.join().expect("Close で正常終了する");
+
+        let recorded = records2.lock().expect("records mutex poisoned");
+        assert_eq!(
+            &*recorded,
+            &[DisplayCommand::Show {
+                scope: ActorKey::from("0"),
+                surface_id: 2100,
+                binds: BindSet::from_ids([1100, 1207]),
+            }],
+            "悪 cue は skip され、後続有効 cue のみ発行＝ループ継続の observable（6.2）"
+        );
+    }
+
+    /// ケース4（2.1/2.4/7.4）: 数値解釈の境界値が解決不能として扱われる（handler 経路＋解決失敗ログ）。
+    ///
+    /// 非表示指定以外の負値（`"-2"`）と許容範囲超（`"4294967296"`＝`u32::MAX+1`）を
+    /// 同期 `handle_message`＋`capture_logs`（テストスレッド発火）で流し、`Unresolved` の
+    /// `error!` が残り・状態不変・発行なし・`Continue` を決定論的に固定する。解決層単体は
+    /// resolve.rs の 2.1 で檻済み。ここは **アクター handler 経路の解決失敗ログ**（7.4）を実行檻化。
+    #[test]
+    fn numeric_boundary_is_unresolved() {
+        for bad in ["-2", "4294967296"] {
+            let resolver = tiny_resolver();
+            let mut states = fresh_states();
+            let mut out = MockSurfaceOutput::new();
+            let records = out.records();
+
+            let flow = capture_logs_flow(|| {
+                handle_message(
+                    &resolver,
+                    &mut states,
+                    &mut out,
+                    SerikoMsg::Cue(emote_cue(0.0, "0", bad)),
+                )
+            });
+
+            assert_eq!(
+                flow.1,
+                ControlFlow::Continue(()),
+                "境界値 {bad:?} は解決不能として skip し処理継続（2.4/6.1）"
+            );
+            assert!(
+                flow.0.contains("level=ERROR"),
+                "境界値 {bad:?} の解決失敗が error! を残すこと（7.4）: {}",
+                flow.0
+            );
+            assert!(
+                flow.0.contains("target=areka_seriko"),
+                "本クレート target で発火すること: {}",
+                flow.0
+            );
+            assert!(
+                records.lock().expect("records mutex poisoned").is_empty(),
+                "境界値 {bad:?} では発行しない（状態不変）"
+            );
+        }
+    }
+
+    /// ケース5（6.3/6.4）: アクター停止後の emit がログのみ残し panic せず全体を異常終了させない。
+    ///
+    /// design の emit-after-stop シナリオ（`emit_after_receiver_gone` を **実アクター停止**の
+    /// setup で行う）: `spawn_seriko`→`close()`→`join()`（アクター完全停止＝inbox 受信端消失）→
+    /// その後テストスレッドで `emit` を `capture_logs` 直下で呼ぶ。send 失敗が `error!` として
+    /// 観測でき、かつ `emit` が panic せず戻る（＝処理系全体が異常終了しない）ことを固定する。
+    /// emit-after-stop の error! はテストスレッドで発火するため thread-local `capture_logs` で捕捉可。
+    #[test]
+    fn emit_after_actor_stopped_logs_no_panic() {
+        let out = MockSurfaceOutput::new();
+        let (mut sink, handle) =
+            spawn_seriko(tiny_resolver(), BindSet::from_ids([1100, 1207]), out);
+
+        // アクターを完全停止させる（Break→スレッド終了→inbox 受信端消失）。
+        sink.close().expect("Close を送れること");
+        handle.join().expect("Close で正常終了する");
+
+        // 停止後の emit: send は Err だが panic せず error! を残して戻る（infallible 契約・6.3/6.4）。
+        let logs = capture_logs(|| {
+            SurfaceSink::emit(&mut sink, emote_cue(0.0, "0", "2100"));
+        });
+
+        assert!(
+            logs.contains("level=ERROR"),
+            "停止後の emit が send 失敗を error! として残すこと（silent failure 禁止・6.3）: {logs}"
+        );
+        assert!(
+            logs.contains("target=areka_seriko"),
+            "本クレート target で発火すること: {logs}"
+        );
+        // panic せず本行へ到達したこと自体が「処理系全体が異常終了しない」証跡（6.4）。
+    }
+
+    /// `capture_logs` の変種: `f` の戻り値も併せて返す（同期 handler の `ControlFlow` 表明用）。
+    ///
+    /// スレッドローカル `with_default` 直下で `f` を実行し、`f` が発火した log 文字列と `f` の
+    /// 戻り値を組で返す。既存 `capture_logs` と同一の捕捉層を用いる（重複ハーネスを作らない）。
+    fn capture_logs_flow<T, F: FnOnce() -> T>(f: F) -> (String, T) {
+        use std::cell::RefCell;
+        let ret: RefCell<Option<T>> = RefCell::new(None);
+        let logs = capture_logs(|| {
+            *ret.borrow_mut() = Some(f());
+        });
+        (logs, ret.into_inner().expect("f は必ず値を返す"))
+    }
+
     /// テスト専用 tracing 捕捉ハーネス（emo-compose/kanade の log_capture 流儀・
     /// スレッドローカル `with_default` ゆえ並行テスト安全）。
     fn capture_logs<F: FnOnce()>(f: F) -> String {
