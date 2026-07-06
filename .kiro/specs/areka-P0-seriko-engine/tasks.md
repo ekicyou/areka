@@ -58,7 +58,7 @@
 
 ## 3. 結合: SerikoActor（sink・inbox・単一発行点）の実装
 
-- [ ] 3.1 出力先の受領口（SurfaceSink 実装）と停止経路を実装する
+- [x] 3.1 出力先の受領口（SurfaceSink 実装）と停止経路を実装する
   - sakura が定義する surface 系出力先の受け口を実装し、届いた発火を専用の受信キューへ橋渡しする
   - 受け口自体が結線契約となる形にし、追加の差し込み口を設けない
   - 停止指令、または送信側が全て失われた場合に、キュー側が正常終了できる形を用意する
@@ -105,3 +105,4 @@
 ## Implementation Notes
 
 - 1.2: bindgroup default KV（`sakura.bindgroupNNNN.default,1`）は **shell の descript.txt**（`shell/<dir>/descript.txt`・category `descript_shell`）に存在し、ghost/master/descript.txt には無い。`MountModel` の parse 経路（`package/resolve.rs`）は shell descript を best-effort（不在は非致命→空）で追加読みして `bindgroups` へ転記する。emo2 実測 `sakura_default_on == {1100,1207,1302,1500,1800}`・`kero_default_on` は空。2.4（build_static_bindset）・ghost-setup 結線がこの入力源を消費する。
+- 3.1: seriko の tracing ログ検証は `actor.rs` 内 in-module `capture_logs` ハーネス（`tracing-subscriber` を `[dev-dependencies]`・workspace 版・`with_default`+Layer で level/target 捕捉、emo-compose `log_capture` 流儀）で決定論化する。4.1/4.2 のログ発火テストはこの流儀を再利用可。SerikoSink::emit の送信失敗ログ経路の `unreachable!` は emit が Cue のみ送るため真に到達不能（6.4 非違反・軽微 nit）。
