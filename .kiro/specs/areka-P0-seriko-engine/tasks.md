@@ -76,7 +76,7 @@
   - _Boundary: SerikoActor（spawn・単一発行点）, lib.rs 公開 API_
   - _Depends: 2.1, 2.2, 2.3, 3.1_
 
-- [ ] 3.3 主要な決定論シナリオ（fixture 系列）の統合テストを実装する
+- [x] 3.3 主要な決定論シナリオ（fixture 系列）の統合テストを実装する
   - fixture の発火列（数値・alias・非表示指定を含む）を入力し、観測用出力先への発行列が期待どおりであることを確認する
   - 表示を伴わず、待機（sleep）を用いずに pass/fail が決定論的に判定できることを確認する（observable: fixture 系列テストが表示・sleep なしで green）
   - _Requirements: 7.1, 7.2, 7.3, 7.4_
