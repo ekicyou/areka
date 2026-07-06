@@ -117,6 +117,16 @@ impl EmoWorld {
         ids.into_iter()
     }
 
+    /// alias 解決表を所有権ごと取り出す（`resolve_alias` と同一の `AliasMap` を複製・要件 2.2/2.3/7.3）。
+    ///
+    /// 別スレッドで動く seriko アクターが所有する Send スナップショット（[`EmoWorld`] 自身は
+    /// `World`（bevy_ecs）を内包し `Send`／`Sync` を実装しないため move 不可）。追加のみで
+    /// 既存の借用ベース [`EmoWorld::resolve_alias`] は不変。二重定義せず [`AliasMap`] を直接
+    /// クローンするため、借用解決結果からドリフトしない（design 決定1）。
+    pub fn alias_snapshot(&self) -> BTreeMap<String, Vec<u32>> {
+        self.world.resource::<AliasMap>().0.clone()
+    }
+
     /// alias 解決（要件 3.1/3.3・未解決は warn ログ＋`None`）。
     pub fn resolve_alias(&self, key: &str) -> Option<&[u32]> {
         match self.world.resource::<AliasMap>().0.get(key) {
@@ -201,5 +211,41 @@ mod tests {
     fn resolve_missing_alias_returns_none() {
         let world = EmoWorld::build(&empty_shell());
         assert_eq!(world.resolve_alias("nope"), None);
+    }
+
+    /// emo2 fixture（実上流シェル）の `surfaces.txt` を UTF-8 で読み parse して `Shell` を得る。
+    ///
+    /// `fold.rs` の `emo2_shell()` と同一の読込経路（`read_to_string`＋`areka_parsers::shell::parse`）。
+    /// COM／WIC／atlas bake は経由しない純粋な parse ゆえ headless で走る。
+    fn emo2_shell() -> Shell {
+        let path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../pilot/examples/shiori-host-32/fixtures/emo2/shell/master/surfaces.txt");
+        let content = std::fs::read_to_string(&path)
+            .unwrap_or_else(|e| panic!("emo2 surfaces.txt を読めること: {}: {e}", path.display()));
+        areka_parsers::shell::parse(&content)
+    }
+
+    /// `alias_snapshot()` が返す所有 `BTreeMap` は、同一 `EmoWorld` の全キーに対し
+    /// 借用ベース `resolve_alias(key)` と完全一致する（スナップショットが `AliasMap` から
+    /// 静かにドリフトしないための檻・要件 2.2/2.3/7.3）。
+    #[test]
+    fn alias_snapshot_matches_resolve_alias() {
+        let world = EmoWorld::build(&emo2_shell());
+        let snap = world.alias_snapshot();
+
+        // 非自明性: emo2 は alias を含む（空マップの vacuous pass を防ぐ）。
+        assert!(!snap.is_empty(), "emo2 fixture は alias を含む");
+
+        // 全キーを走査（spot-check しない）: 各キーで借用解決結果と所有スナップショットが一致。
+        for (key, ids) in &snap {
+            let borrowed = world
+                .resolve_alias(key)
+                .unwrap_or_else(|| panic!("スナップショットのキー `{key}` は resolve_alias でも解決する"));
+            assert_eq!(
+                borrowed,
+                ids.as_slice(),
+                "キー `{key}` の借用解決結果と所有スナップショットが要素等価",
+            );
+        }
     }
 }
