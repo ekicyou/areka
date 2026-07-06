@@ -1,0 +1,29 @@
+//! # areka-emo-present — emo ⑥ render engine 提示段（三段直列チェーン 3/3）
+//!
+//! `areka-emo-atlas`（1/3・アトラス正本）→ `areka-emo-compose`（2/3・純粋合成）→
+//! 本クレート `areka-emo-present`（3/3・提示段）と連なる emo track の最終段である。
+//! 上流が生成した静的合成済みビットマップ `ComposedSurface` を、wintf の WUC
+//! （Windows.UI.Composition）表示面へアップロード・提示し、当たり判定用 AlphaMask を
+//! ヒットテストへ供給する。合成そのものは上流の責務であり、本段は「表示・キャッシュ・
+//! 指令適用・マスク同期」を UI スレッド上で統括する。
+//!
+//! ## 指令 API 契約正本（command-API contract source of truth）
+//!
+//! 本クレートは **指令 API（`PresentCommand`）の契約正本**である。surface 切替・
+//! 非表示（`\s[-1]` 相当）・キャッシュ無効化を運ぶ指令の形（scope・surface id・
+//! BindSet・非表示・reply 口）は本 spec が定義し、下流の seriko-engine が消費する。
+//! 指令はメッセージ enum の variant へそのまま転写できる `Send + 'static` 所有形
+//! （`areka-actor` の envelope 規約準拠）を採る。`\s[-1]` → 非表示・alias → u32 解決は
+//! 発行側（seriko）の責務であり、本段は解決済みの指令を受け取って適用する。
+//!
+//! ## 依存方向（強制）
+//!
+//! `areka-parsers → areka-emo-atlas → areka-emo-compose → areka-emo-present`
+//! （＋ `wintf`・`areka-actor`）。逆方向（`wintf → emo-present` 等）の import は
+//! 実装・レビューでエラーとして扱う。
+//!
+//! ## 構成予定
+//!
+//! 指令 API（`command`）・合成キャッシュ（`cache`）・提示統括（`presenter`）・
+//! swap chain 供給面（`chain`）・窓装着（`mount`）・バルーン枠生成（`balloon`）の
+//! 各モジュールは、後続タスクで順次このクレートへ実装される。

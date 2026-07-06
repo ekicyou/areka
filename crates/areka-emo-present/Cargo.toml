@@ -1,0 +1,21 @@
+[package]
+name = "areka-emo-present"
+workspace = "../.."
+description = "emo render engine 提示段（三段直列チェーン 3/3）: ComposedSurface を WUC 表示面へアップロード・提示し、指令 API（PresentCommand）契約正本を定義する最終段"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[dependencies]
+areka-parsers = { path = "../areka-parsers" }
+areka-emo-atlas = { path = "../areka-emo-atlas" }
+areka-emo-compose = { path = "../areka-emo-compose" }
+areka-actor = { path = "../areka-actor" }
+wintf = { version = "0.0.1", path = "../wintf" }
+bevy_ecs = { workspace = true }
+windows = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }

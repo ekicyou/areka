@@ -26,3 +26,6 @@ tracing-subscriber = { workspace = true }
 async-io = { version = "2.6", default-features = false }
 bevy_ecs = { workspace = true }
 windows = { workspace = true }
+
+[dev-dependencies]
+areka-emo-present = { path = "../areka-emo-present" }

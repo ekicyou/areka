@@ -2,7 +2,7 @@
 
 ## 1. 基盤: クレート雛形と swap chain 供給面の実証
 
-- [ ] 1.1 (P) areka-emo-present クレート雛形の作成とワークスペース結線
+- [x] 1.1 (P) areka-emo-present クレート雛形の作成とワークスペース結線
   - Cargo.toml 作成（依存: areka-emo-compose, areka-emo-atlas, areka-parsers, areka-actor, wintf, bevy_ecs, windows, thiserror, tracing）
   - lib.rs に公開面 re-export と規約 rustdoc（指令 API 契約正本の宣言）
   - crates/Cargo.toml（workspace）にメンバー追加、crates/areka/Cargo.toml に dev-dependency 追加
