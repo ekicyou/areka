@@ -1,0 +1,17 @@
+[package]
+name = "areka-seriko"
+workspace = "../.."
+description = "SERIKO アニメーションエンジン (⑤) — サーフェス解決・状態・発行・構築を担うアクター層"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[dependencies]
+areka-sakura = { path = "../areka-sakura" }
+areka-emo-compose = { path = "../areka-emo-compose" }
+areka-parsers = { path = "../areka-parsers" }
+areka-actor = { path = "../areka-actor" }
+tracing = { workspace = true }
