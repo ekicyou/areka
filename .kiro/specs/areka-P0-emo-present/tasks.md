@@ -9,7 +9,7 @@
   - 観測完了: `cargo check -p areka-emo-present` が成功する
   - _Boundary: crate scaffold_
 
-- [ ] 1.2 (P) wintf COM層: composition swap chain ヘルパの増分
+- [x] 1.2 (P) wintf COM層: composition swap chain ヘルパの増分
   - `crates/wintf/src/com/dxgi.rs` に `create_composition_swap_chain(d3d, dxgi, width, height) -> Result<IDXGISwapChain1>` を追加（`IDXGIDevice4`→`GetParent`→`IDXGIFactory2`→`CreateSwapChainForComposition`。flip model・premultiplied alpha・B8G8R8A8・BufferCount=2 固定値）
   - `crates/wintf/src/com/wuc.rs` の `CompositorInteropExt` に `create_composition_surface_for_swap_chain` メソッドを追加（`ICompositorInterop::CreateCompositionSurfaceForSwapChain` の安全ラッパ）
   - unsafe をこの2ヘルパ（wintf COM層）に隔離する
@@ -142,3 +142,7 @@
   - _Requirements: 3.3, 3.4_
   - _Depends: 4.1_
   - _Boundary: EmoPresenter (presenter.rs)_
+
+## Implementation Notes
+
+- 1.2: 設計/タスク本文の「`IDXGIDevice4::GetParent::<IDXGIFactory2>()` でファクトリ取得」は誤り（デバイスの `GetParent` はアダプタを返し `E_NOINTERFACE`）。正準経路は `dxgi.GetAdapter()` → `adapter.GetParent::<IDXGIFactory2>()`。3.1 の SwapChainPresenter はこのヘルパ経由で生成するため同経路。wintf テストは WARP でなく実 HW `GraphicsCore` デバイスを使う既存 fixture 流儀（`begin_draw_roundtrip`）に追随。
