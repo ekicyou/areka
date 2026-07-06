@@ -144,6 +144,7 @@ fn emo2_unused_fields_and_files_do_not_leak() {
         names: _,
         shiori: _,
         shell: _,
+        bindgroups: _,
     } = &model;
 }
 
@@ -164,4 +165,72 @@ fn emo2_result_invariant_to_default_encoding() {
 
     // charset 宣言が既定を上書きするため、両者は完全一致する。
     assert_eq!(via_utf8, via_ansi);
+}
+
+// ───────────────────────────────────────────────────────────────────
+// bindgroup default 保持（要件 4.5）
+//
+// bindgroup default（`sakura.bindgroup*.default,数値`／`kero.*`）は ukadoc の
+// カテゴリ `descript_shell` に属し、**shell の descript.txt**（= <root>/shell/master/
+// descript.txt）に定義される（ghost/master/descript.txt には無い）。resolve は
+// shell dir を解決した後、その descript.txt からも bindgroup default KV を拾って
+// `MountModel.bindgroups` へ転記する（転記のみ・展開しない・parsers 転写層原則）。
+//
+// 採取元: crates/pilot/examples/shiori-host-32/fixtures/emo2/shell/master/descript.txt
+//   L22: sakura.bindgroup1100.default,1
+//   L34: sakura.bindgroup1207.default,1
+//   L44: sakura.bindgroup1302.default,1
+//   L57: sakura.bindgroup1500.default,1
+//   L71: sakura.bindgroup1800.default,1
+// → sakura_default_on == {1100,1207,1302,1500,1800}（順不同集合として）。
+// kero.bindgroup*.default,1 は emo2 に存在しない（本体のみ）ため kero 側は空集合。
+// ───────────────────────────────────────────────────────────────────
+
+/// emo2 shell descript.txt から `default,1` の bindgroup 番号集合が読み取れる。
+/// 本体（sakura）スコープは {1100,1207,1302,1500,1800}、相方（kero）スコープは空。
+#[test]
+fn emo2_bindgroup_defaults_are_transcribed() {
+    let model = resolve_emo2();
+
+    // 本体スコープ: default,1 の bindgroup 番号集合が emo2 実測と一致する。
+    // 保持は転記順ゆえ、順不同の集合として照合する（design「昇順不問・保持は転記順」）。
+    let sakura: std::collections::BTreeSet<u32> =
+        model.bindgroups.sakura_default_on.iter().copied().collect();
+    let expected: std::collections::BTreeSet<u32> =
+        [1100, 1207, 1302, 1500, 1800].into_iter().collect();
+    assert_eq!(
+        sakura, expected,
+        "sakura_default_on は emo2 実測の default,1 集合と一致する: {:?}",
+        model.bindgroups.sakura_default_on
+    );
+
+    // 相方スコープ: emo2 は kero.bindgroup*.default,1 を持たない → 空集合。
+    assert!(
+        model.bindgroups.kero_default_on.is_empty(),
+        "kero_default_on は空であるべき（emo2 に kero.bindgroup*.default,1 は無い）: {:?}",
+        model.bindgroups.kero_default_on
+    );
+
+    // 転記のみ・展開しない: 番号はそのまま保持され、範囲展開や surface 解決を伴わない
+    // （要素数は default,1 の行数ちょうど 5）。
+    assert_eq!(
+        model.bindgroups.sakura_default_on.len(),
+        5,
+        "default,1 の行数ちょうど（範囲展開しない）"
+    );
+}
+
+/// 回帰: bindgroup default の増設後も既存の name 系フィールド保持が壊れない（要件 4.5）。
+/// name / sakura.name / kero.name が ghost/master descript.txt どおりに保持される。
+#[test]
+fn emo2_name_fields_retained_after_bindgroup_extension() {
+    let model = resolve_emo2();
+
+    // name 系（GhostNames）は従来どおり ghost/master descript.txt から保持される。
+    assert_eq!(model.names.name, Some("えも？？".to_string()));
+    assert_eq!(model.names.sakura_name, Some("むらさき".to_string()));
+    assert_eq!(model.names.kero_name, Some("エモ".to_string()));
+
+    // shiori / shell マウントも従来どおり（bindgroup 増設が既存経路を壊さない）。
+    assert_eq!(model.shiori.file, Some("pasta.dll".to_string()));
 }

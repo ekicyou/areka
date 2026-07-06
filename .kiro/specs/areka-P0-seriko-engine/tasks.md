@@ -8,7 +8,7 @@
   - 空のクレートとして `cargo check` が通ることを確認する（observable: ビルドが緑になる）
   - Boundary: areka-seriko クレート基盤（要件引用なし・純粋な基盤整備）
 
-- [ ] 1.2 (P) shell の着せ替え初期状態（bindgroup default）を読み取れるようにする
+- [x] 1.2 (P) shell の着せ替え初期状態（bindgroup default）を読み取れるようにする
   - descript の解析結果が、着せ替えグループごとの既定オン/オフ情報を保持できるようにする（本体・パートナー双方の系統を区別し、転記のみで展開しない）
   - 既存の名前情報（ゴースト名・本体名・パートナー名）の保持が壊れないことを回帰確認する
   - 実データ（サンプルゴーストの記述）から期待どおりの既定オン集合が読み取れることを単体テストで確認する（observable: 期待の番号集合と一致するテストが green）
@@ -101,3 +101,7 @@
   - 上記 3 ケースすべてが独立した実行テストとして green であることを確認する（observable）
   - _Requirements: 3.4, 5.3, 6.1, 7.1, 7.2, 7.3, 7.4_
   - _Depends: 3.2_
+
+## Implementation Notes
+
+- 1.2: bindgroup default KV（`sakura.bindgroupNNNN.default,1`）は **shell の descript.txt**（`shell/<dir>/descript.txt`・category `descript_shell`）に存在し、ghost/master/descript.txt には無い。`MountModel` の parse 経路（`package/resolve.rs`）は shell descript を best-effort（不在は非致命→空）で追加読みして `bindgroups` へ転記する。emo2 実測 `sakura_default_on == {1100,1207,1302,1500,1800}`・`kero_default_on` は空。2.4（build_static_bindset）・ghost-setup 結線がこの入力源を消費する。
