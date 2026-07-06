@@ -284,7 +284,7 @@
 
 - `spawn_shiori_actor` の connect を `FnOnce() -> Result<Box<dyn ShioriBackend>, String>` へ一般化する。**R7.1 の「偽 ShioriConnection」の実現形**: 実 `ShioriConnection` は `Child` 所有ゆえプロセスなしで構築不能——注入点（connect closure）と呼出形は要件どおり保ち、**注入される型を backend 抽象へ持ち上げる**ことで純 x64・プロセス spawn ゼロの台本 fake（ScriptedShioriBackend）を成立させる（R7.6）。本番は `impl ShioriBackend for ShioriConnection`（`helper: HelperLifecycle` 化・`ConnectionBackend` 中間構造は廃止）。
 - `ShioriBackend` に `unload(&mut self) -> Result<ExitKind, ShutdownError>`・`status(&mut self) -> HelperStatus` を追加。Unload アームは `request_clean_shutdown` の正規経路へ差し替え（`Ok(Clean)`→info＋`Unloaded`／`Ok(他)`→warn＋`Unloaded`／`Err`→error＋`Failed(Ipc)`）。
-- 死活監視（§4-3）: 受信ループを `recv_timeout(500ms)` 化し、**毎周回冒頭（受信時・タイムアウト時とも）に `status()` を確認**。`Exited` 初回観測で `ShioriDown` を一度だけ送る（sticky・unload 成功後は発火しない）。決定論テストは「メッセージ到達時にも必ず確認」の経路で wall-clock 非依存に検証できる。`on_down` は接続成功後もループ中保持へ変更（**是正・設計ディスカッション #1**: 保持は kanade→shiori→down-relay→kanade の Sender 環を作り「全 Sender drop 停止」は環の解体後にのみ成立——「down-relay 仲介で解消」は誤りだった。kanade rustdoc は解体後伝播の旨へ更新・design「アクター別の停止経路」マトリクスが正本）。
+- 死活監視（§4-3・**設計ディスカッション #2 で簡素化**）: タイマー poll（recv_timeout 500ms 案）を廃し、受信ループは blocking recv のまま**メッセージ到達時のみ `status()` を確認**。到達間隔は kanade Steady/Closing の Tick pump（OnSecondChange 毎秒・steady.rs/close.rs 実測）が ≤1s を構造保証し、request 失敗（`classify_failure`）が第二の網。`Exited` 初回観測で `ShioriDown` を一度だけ送る（sticky・unload 成功後は発火しない）。検出機構が 1 本＝テスト経路と本番経路が完全一致。`on_down` は接続成功後もループ中保持へ変更（**是正・設計ディスカッション #1**: 保持は kanade→shiori→down-relay→kanade の Sender 環を作り「全 Sender drop 停止」は環の解体後にのみ成立——「down-relay 仲介で解消」は誤りだった。kanade rustdoc は解体後伝播の旨へ更新・design「アクター別の停止経路」マトリクスが正本）。
 - 却下: 監視の別アクター化——`HelperLifecycle` の所有が actor と ghost に割れ、`!Send` 窓との teardown 責務が二重化する。
 
 #### DD-E（§4-4）: ticker＝単一スレッド・2 cadence・C-inject-B（テストは ticker 不起動）
@@ -293,6 +293,7 @@
 - **per-talk 経過秒の供給経路は dispatcher が中継**: active talk の inbox を知るのは dispatcher のみ。dispatcher が `Tick{now}` 受領時に base（初回 Tick で確定・elapsed=0.0 起点）からの経過秒を `SakuraMsg::Tick(f64)` へ換算して送る。
 - 決定論（C-inject-B）: spine e2e は `TickerMode::Disabled` で ticker を起動せず、`KanadeMsg::Tick`／`DispatcherMsg::Tick` を inbox へ直接注入する（既存 kanade/sakura テスト作法と同型・sleep 不使用が構造的に成立）。
 - 却下: C2（talk 用高解像度 ticker の分離）——スレッド 2 本と active 切替時の再結線が複雑で、50ms 単一 cadence で M1 要求（記録 sink）に足りる。
+- **絶対境界スケジューリング（設計ディスカッション #2）**: 発火は OS 時計の絶対グリッド（50ms／1000ms 境界）へ整列——相対経過でなく境界計算＝累積ドリフトなし（OS 時計に正確・開発者要求）。catch-up は境界スキップで各系統 1 発（burst なし）。副次効果: グリッド整列により複数ゴーストの ticker は共有コンポーネント無しで自然同期＝**上位コンダクター不要・kanade の役割にもしない**（kanade は注入時刻の消費者・OnSecondChange の意味論的発行者は kanade の Tick pump のまま）。
 
 #### DD-F（§4-5）: ghost 層の所有先＝新規クレート `areka-ghost`＋areka main の薄い結線（ハイブリッド E1）
 
@@ -301,7 +302,8 @@
 
 #### DD-G（§4-7 続き）: spine e2e のプロセスモデル＝プロセスレス（確定執行）
 
-- 要件ディスカッション #2 の決着（偽 SHIORI 境界・純 x64）を DD-D のシームで執行。シナリオは S1 boot 成功／S2 接続失敗／S3 helper 死活／S4 close 握手（`ExitKind::Clean` 相当）／S5 close deadline／S6 全断線＝**段階的解体**（設計ディスカッション #1 で再定義: dispatcher Close→kanade Close→残 senders drop→切断伝播の有界 join。純粋な全 drop 一斉解放は Sender 環ゆえ構造的に不成立）。i686 成果物は `cargo test --workspace` の前提から外れる（実 helper は R8.1 の env gate のみ）。
+- 要件ディスカッション #2 の決着（偽 SHIORI 境界・純 x64）を DD-D のシームで執行。シナリオは S1 boot 成功／S2 接続失敗／S3 helper 死活／S4 close 握手（`ExitKind::Clean` 相当）／S5 close deadline／S6 全断線＝**段階的解体**（設計ディスカッション #1 で再定義: dispatcher Close→kanade Close→残 senders drop→切断伝播の有界 join。純粋な全 drop 一斉解放は Sender 環ゆえ構造的に不成立）。
+- **駆動口の確定（設計ディスカッション #2）**: S3 駆動＝kanade へ Tick 注入→Steady pump の OnSecondChange 到達時チェックで検出（本番同一経路・実時間ゼロ）。S5＝注入 now で既定 deadline 30_000ms を数値的に跨ぐ（短縮構成不要・config への override 注入点は設けない）。`GhostParts`＝`{kanade, dispatcher, ticker(Option), 全 handles}`・shiori 投函端なし（runtime 非保持の正本どおり）。i686 成果物は `cargo test --workspace` の前提から外れる（実 helper は R8.1 の env gate のみ）。
 
 #### DD-H（§4-8）: `KanadeConfig.shell_name`＝shell descript の `name`（フォールバック＝shell ディレクトリ名）
 

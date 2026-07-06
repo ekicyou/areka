@@ -194,7 +194,7 @@ crates/areka-ghost/                 # 新規: ⓪ghost 結線層（WS-B）
 - `crates/areka-kanade/src/talk.rs` — 物理定義を `pub use areka_talk::*` の再エクスポートへ差し替え（`areka_kanade::talk::*` パス不変・rustdoc は契約正本の所在を更新）
 - `crates/areka-kanade/src/schedule/mod.rs` — 横断アームの `done.quit` 判定を `TalkEndReason` 写像（`Quit`→終了系列／`Ended`・`Interrupted`→非 quit 委譲）へ改稿・テスト追随
 - `crates/areka-kanade/src/schedule/steady.rs`／`close.rs` — `TalkDone{quit:false}` 前提の遷移・テストを `reason` 前提へ追随（意味論は不変）
-- `crates/areka-kanade/src/shiori/mod.rs`／`real.rs` — `ShioriBackend` trait を公開化＋`unload`／`status` を追加、`ShioriConnection.helper` を `HelperLifecycle` へ、`ShioriMsg::Unload` アームを `request_clean_shutdown` 正規経路へ差し替え、受信ループを `recv_timeout`＋毎周回死活チェックへ、`on_down` をループ中保持（死活報告経路）へ変更・テスト追随
+- `crates/areka-kanade/src/shiori/mod.rs`／`real.rs` — `ShioriBackend` trait を公開化＋`unload`／`status` を追加、`ShioriConnection.helper` を `HelperLifecycle` へ、`ShioriMsg::Unload` アームを `request_clean_shutdown` 正規経路へ差し替え、受信ループは blocking recv のまま**メッセージ到達時の死活チェック**を追加、`on_down` をループ中保持（死活報告経路）へ変更・テスト追随
 - `crates/areka-sakura/Cargo.toml` — `areka-talk` 依存を追加
 - `crates/areka-sakura/src/contract.rs` — `StartTalk`／`TalkDone`／`TalkEndReason`／`TalkId` を `pub use areka_talk::…` へ差し替え（`SakuraMsg`／`TalkHandle` は残置・`areka_sakura::contract::*` パス不変）
 - `crates/areka-sakura/src/drive.rs` — `spawn_talk` に完了通知ポート `done: Sender<D>`（`D: From<TalkDone>`）を追加（`StartTalk` から reply 撤去に伴う）・高々 1 回機構は `Option<TalkState>::take()` で維持・テスト追随
@@ -287,7 +287,7 @@ sequenceDiagram
 | 2.4 | boot 手順が動作する状態 | GhostRuntime boot | `KanadeMsg::Boot` 送信 | boot |
 | 2.5 | マウント失敗の観測 | GhostRuntime boot | `GhostBootError::Mount` ＋ `error!` | boot |
 | 3.1 | 接続をアクタースレッドで一度だけ | shiori actor（既存構造維持） | `spawn_shiori_actor(connect, …)` | boot |
-| 3.2 | helper 死活監視 | shiori actor 受信ループ | `ShioriBackend::status` ＋ recv_timeout 周期 | — |
+| 3.2 | helper 死活監視 | shiori actor 受信ループ | `ShioriBackend::status`（メッセージ到達時・毎回）＋ ticker 駆動 pump が到達を保証 | — |
 | 3.3 | 接続失敗の死活報告 | shiori actor ＋ down-relay | `KanadeMsg::ShioriDown` | boot |
 | 3.4 | 異常終了検出の通知 | shiori actor 受信ループ | `ShioriDown`（sticky・1 回） | — |
 | 3.5 | SHIORI 層は消費のみ | shiori_wiring.rs / real.rs | `HelperLifecycle`／`Shiori3Client` 不改変 | — |
@@ -460,7 +460,7 @@ where
 - `real.rs` の private trait `ShioriBackend` を **pub** へ昇格し、`unload`／`status` を追加する。host32 の語彙（`RequestError`／`ShutdownError`／`ExitKind`／`HelperStatus`）を signature にそのまま用いる（再定義しない・要件 3.5）。
 - `ShioriConnection` は `helper: HelperLifecycle` を所有する形へ変更（生 `HelperHandle` を `HelperLifecycle::new` で包む）。`impl ShioriBackend for ShioriConnection` を与え、既存の中間構造 `ConnectionBackend` は廃止する。
 - `ShioriMsg::Unload` アーム: スタブ（`Unloaded` 即返し）を撤去し、`backend.unload()`＝`HelperLifecycle::request_clean_shutdown(&window)` を呼ぶ。`Ok(ExitKind::Clean)` → `info!`＋`Unloaded`。`Ok(その他)` → `warn!`（unload は完了・終了種別が Clean でない）＋`Unloaded`。`Err(ShutdownError)` → `error!`＋`Failed(ShioriFailure::Ipc(display))`。
-- 死活監視: 受信ループを `recv_timeout(LIVENESS_POLL_INTERVAL)`（定数 500ms）へ変え、**毎ループ周回の冒頭**（メッセージ受信時・タイムアウト時の両方）で `backend.status()` を確認する。`Exited(kind)` を初回観測したら `error!`＋`on_down.send(ShioriDown{reason})` を**一度だけ**送る（sticky フラグ）。unload 成功後は死活報告を発火しない（正規終了は死ではない）。
+- 死活監視（**設計ディスカッション #2 で簡素化**）: 受信ループは現行の blocking `recv` を維持し（タイマー poll は持たない）、**メッセージ到達のたびに冒頭で** `backend.status()` を確認する。`Exited(kind)` を初回観測したら `error!`＋`on_down.send(ShioriDown{reason})` を**一度だけ**送る（sticky フラグ）。unload 成功後は死活報告を発火しない（正規終了は死ではない）。**到達間隔の保証は結線トポロジが与える**: kanade の Steady／Closing 相は Tick ごとに OnSecondChange GET/NOTIFY を発行する（steady.rs／close.rs 実測）ため、本番（ticker 毎秒）では shiori actor へのメッセージ到達が ≤1s で構造的に保証される。加えて helper 死後の request は `RequestError` で失敗し kanade の Failed 処理（`classify_failure`）が第二の検出網になる。検出遅延の劣化は poll 案比で最悪 +0.5s＝無意味な差であり、検出機構が 1 本になることで**テスト経路＝本番経路が完全一致**する。
 - `on_down` の寿命変更: 接続成功後も drop せず受信ループ中保持する（死活報告経路・要件 3.4）。**この保持は kanade→shiori→down-relay→kanade の Sender 環を作り、kanade の「全 Sender drop で正常終了」（旧 Req 4.9 の前提）は環の解体（kanade 自身の Close／StopSelf）後にのみ成立する**——「アクター別の停止経路」マトリクス参照。kanade rustdoc の Req 4.9 注記は「on_down 保持構成では、切断停止は Close 起点の解体後に伝播する」旨へ更新する（Revalidation Trigger として記録）。
 
 **Contracts**: Service [x] / Event [x]
@@ -499,7 +499,7 @@ pub fn spawn_shiori_actor(
 
 - Integration: 要件 7.1 の「偽 ShioriConnection」は、実 `ShioriConnection` の構築が実 helper 子プロセスを要する（`HelperHandle`＝`Child` 所有）ため、**そのシームの型を `Box<dyn ShioriBackend>` へ一般化して実現する**。connect closure という注入点・`spawn_shiori_actor(connect, on_down)` という呼出形は要件どおり不変であり、純 x64 で全経路を偽装できる（要件 7.6）。
 - Validation: 既存 real.rs のテスト（fake backend 往復・接続失敗・全断線）は新 trait 形へ追随。Unload 正規化・死活監視は scripted backend の単体テスト＋spine e2e の両輪で固定する。
-- Risks: `recv_timeout` 化により、アイドル時の死活検出遅延は最大 `LIVENESS_POLL_INTERVAL`。決定論テストは周期に依存せず「メッセージ受信時にも必ず status 確認」の経路で検証する（wall-clock 非依存）。
+- Risks: 死活検出はメッセージ到達に依存する（本番は ticker 駆動 pump が ≤1s 到達を保証・ticker 停止構成では次の到達まで遅延）。検出経路が到達時チェック 1 本ゆえ、決定論テストは本番と同一経路を検証する（wall-clock 非依存が構造的に成立）。
 
 ### 結線層（areka-ghost 新規）
 
@@ -559,11 +559,13 @@ where
 
 **Responsibilities & Constraints**
 
-- 単一スレッド・自前ループ: `stop_rx.recv_timeout(base_interval)` が `Timeout` のたびに `now = clock()` を取り、(a) `DispatcherMsg::Tick{now}` を毎回、(b) `KanadeMsg::Tick{now}` を前回送出から `kanade_interval` 以上経過時に送る。`Ok(TickerMsg::Close)`／`Disconnected` で終了（areka-actor 停止規約準拠の recv_timeout ループ）。
+- 単一スレッド・**絶対境界スケジューリング**（設計ディスカッション #2）: 発火目標を OS 時計（`clock()`）の**絶対グリッド**——`base_interval`＝50ms 境界（dispatcher）・`kanade_interval`＝1000ms 境界（kanade）——の時刻列とし、ループは「次に来る境界までの残時間」を計算して `stop_rx.recv_timeout(残時間)` で待つ。`Timeout` のたびに `now = clock()` から到来した境界の Tick を送る。「前回送出からの相対経過」でなく**グリッドへの整列**なので処理遅延が累積ドリフトにならない（OS 時計に対して正確）。`Ok(TickerMsg::Close)`／`Disconnected` で終了（areka-actor 停止規約準拠）。
+- catch-up 政策: 大幅遅延（サスペンド復帰等）で複数境界を跨いだ場合は**各系統 1 発のみ**送り、次境界を未来へスナップする（burst 再送しない・`info!` で観測）。OnSecondChange Ref0（稼働時間 hour）は now 由来ゆえ跳びは意味論的に正しい。
+- 副次効果（将来の複数ゴースト）: 発火が OS 時計の絶対グリッドに整列するため、**ticker インスタンス同士は共有コンポーネント無しで自然に同期**する（全ゴースト共通の秒鼓動）。将来 app 層で 1 本の ticker に複数 kanade を fan-out する昇格も、ticker が kanade の外（ghost 層）に居る現構造のまま結線差し替えで足りる——上位コンダクターの新設は不要で、kanade の役割にもしない（kanade は時刻を所有しない注入時刻の消費者）。
 - 既定値: `base_interval = 50ms`（さくらスクリプト `\w`＝50ms 単位の再生解像度に一致）・`kanade_interval = 1000ms`（OnSecondChange は 1 秒周期・ukadoc）。周期の意味論は kanade が所有し、ticker は供給のみ。
-- clock 注入: `clock: Box<dyn Fn() -> MonotonicMs + Send>`。既定は `GetTickCount64`（OS 稼働ミリ秒＝kanade `MonotonicMs` rustdoc の正準）。単体テストは決定的 clock を注入する。
+- clock 注入: `clock: Box<dyn Fn() -> MonotonicMs + Send>`。既定は `GetTickCount64`（OS 稼働ミリ秒＝kanade `MonotonicMs` rustdoc の正準・分解能 10〜16ms は秒周期用途に十分）。単体テストは決定的 clock を注入する。
 - 送出先切断（送出 `Err`）は対象ごとに sticky に停止し `info!` を一度だけ発火（shutdown 進行中のログ洪水防止・silent ではない）。
-- 発火判定（「kanade Tick を打つべきか」）は純関数へ分離し決定論単体テストの対象にする。**spine e2e は ticker を起動しない**（`TickerMode::Disabled`）——決定論はこの不使用によって成立する（C-inject-B・要件 5.4）。
+- 発火判定（「now と前回状態から、どの境界 Tick を打ち・次デッドラインはいつか」）は純関数へ分離し決定論単体テストの対象にする（境界整列・複数境界スキップ・catch-up を網羅）。**spine e2e は ticker を起動しない**（`TickerMode::Disabled`）——決定論はこの不使用によって成立する（C-inject-B・要件 5.4）。
 
 **Contracts**: Event [x]
 
@@ -613,7 +615,7 @@ where
 
 - **shell_name（OnBoot Reference0＝「起動時のシェル名」・ukadoc）**: `MountModel.shell.dir` 直下の `descript.txt` を `charset::decode(bytes, default_encoding)` → `kv::parse_kv` で読み、`name` キーの値を採用する。読取不能・`name` 欠落時は `warn!` の上で shell ディレクトリ名（通常 `"master"`）へフォールバックする（shell descript は補助情報であり boot を落とさない。`GhostNames`＝ゴースト側 descript の name 系は**シェル名ではない**ため使わない）。
 - **baseware 情報（areka 定数）**: `baseware_name = "areka"`（`KanadeConfig::new` の既定）・`baseware_version = env!("CARGO_PKG_VERSION")`（workspace 統一 version）。
-- `close_talk_deadline_ms` は `KanadeConfig::new` の既定 30_000 を用いる（spine e2e はテスト側で短縮構成を組む）。
+- `close_talk_deadline_ms` は `KanadeConfig::new` の既定 30_000 を用いる（override 注入点は設けない——S5 は注入 `Tick{now}` で deadline を数値的に跨ぐため短縮構成は不要）。
 
 ##### Service Interface
 
@@ -706,6 +708,15 @@ impl GhostRuntime {
     /// 全断線シナリオ等の分解結線用（テスト／上級用途・通常は shutdown を使う）。
     pub fn into_parts(self) -> GhostParts;
 }
+
+/// into_parts の分解結果（S6 段階的解体の駆動口）。
+/// shiori への投函端は**存在しない**（runtime 非保持＝停止経路マトリクスの正本どおり）。
+pub struct GhostParts {
+    pub kanade: Sender<KanadeMsg>,          // S6②の Close 送出・S3/S5 の Tick 注入
+    pub dispatcher: Sender<DispatcherMsg>,  // S6①の Close 送出・Tick 注入
+    pub ticker: Option<Sender<TickerMsg>>,  // TickerMode::Real 時のみ Some
+    pub handles: GhostHandles,              // kanade／dispatcher／shiori／start-relay／down-relay／ticker(Option) の全 ActorHandle
+}
 ```
 
 - Preconditions: `boot` は UI スレッドを要求しない（headless・spine e2e はプレーンなテストスレッドで駆動）。
@@ -752,9 +763,9 @@ impl GhostRuntime {
 - シナリオ網羅（要件 7.5）:
   - **S1 boot 成功**: Boot→OnBoot GET が Value→StartTalk→sakura 再生→RecordingSink の発火列（at 昇順・内容一致）→TalkDone{Ended} が kanade へ転送される。
   - **S2 接続失敗**: connect が `Err`→ShioriDown→Unloading{Fault}→全 join（有界）。
-  - **S3 helper 死活**: scripted `status` が `Exited(Abnormal)` へ遷移→次のループ周回（次の request 到達時）で ShioriDown→Fault 系列→全 join。
+  - **S3 helper 死活**: scripted `status` を `Exited(Abnormal)` へ遷移させ、`runtime.kanade()` へ `Tick{now}` を注入→Steady pump の OnSecondChange が shiori actor へ到達→**到達時 status 確認**で検出→ShioriDown→Fault 系列→全 join（駆動は本番と同一経路・実時間ゼロ）。
   - **S4 close 握手**: CloseRequest→OnClose GET が close talk（`\-` 終端）→TalkDone{Quit}→Unload が呼ばれ scripted `Ok(ExitKind::Clean)`→`Unloaded` 観測→StopSelf→shutdown で全スレッド join（要件 7.3）。
-  - **S5 close deadline**: close talk を意図的に完了させず、`KanadeMsg::Tick` の now を deadline 超過まで注入→Unloading{DeadlineExceeded}→Unload→全 join。
+  - **S5 close deadline**: close talk を意図的に完了させず、`KanadeMsg::Tick` の now を deadline 超過まで注入（既定 30_000ms を数値的に跨ぐ now を投函するだけ・実時間ゼロ・短縮構成不要）→Unloading{DeadlineExceeded}→Unload→全 join。
   - **S6 全断線（段階的解体）**: `into_parts` で分解し、①`DispatcherMsg::Close` 送出→dispatcher join（Close-only アクターの正規停止）②`KanadeMsg::Close` 送出→kanade join（運行意味論を経ない素の停止）③残る senders を全 drop→shiori actor（kanade の shiori_tx drop による inbox 切断）・down-relay（shiori 停止による down_tx drop）・start-relay（kanade 停止による start_tx drop）が**切断伝播だけで**有界時間内に正常終了することを join で確認する。純粋な「全 Sender drop 一斉解放」は Sender 環（停止経路マトリクス参照）ゆえ構造的に成立しない——本シナリオはマトリクスの全行（Close 経路×2・切断経路×3）を 1 シナリオで検証する再定義である。
 - いずれのシナリオも `cargo test --workspace`（x64）で常時実行される（i686 成果物前提なし・要件 7.6）。
 
@@ -799,11 +810,11 @@ log-first（`error!`＋`Err` 戻り値・安易な panic 禁止・silent failure
 
 1. **areka-talk**: 型の導出（Copy／Hash／Clone）・3 値網羅・script 不透明性（kanade 既存テストの移設＋拡充）。
 2. **dispatcher**（inbox 直接投函・スレッド実駆動・有界待機）: 単一 slot（Start 二連投で先行 talk へ Close→join→差し替え）／stale Done 棄却（差し替え後の旧 talk_id）／Done 転送（kanade 受領口で観測）／Tick 中継（base 確定・経過秒の単調性）／Close funnel（active あり停止）。
-3. **ticker**: 発火判定純関数（kanade_interval 境界）・注入 clock での送出列・Close／切断停止（有界 join）。
+3. **ticker**: 発火判定純関数（グリッド境界整列・複数境界スキップ／catch-up・次デッドライン計算）・注入 clock での送出列・Close／切断停止（有界 join）。
 4. **config**: shell descript の name 採用／欠落フォールバック／読取不能フォールバック（tempdir 合成）。
 5. **kanade schedule 追随**: `reason:Quit`→Unloading{Quit}・`Ended`→Steady 復帰／close 終了拒否・`Interrupted`→非 quit 扱い＋info 発火（既存テストの機械的追随＋Interrupted アーム新規）。
 6. **sakura drive 追随**: done ポート経由の TalkDone 受領（`Sender<TalkDone>` 恒等 From）・高々 1 回（Close 競合）・既存終端経路の緑維持。
-7. **shiori actor 増強**: scripted backend で Unload 正規経路（Clean→Unloaded／ShutdownError→Failed＋error!）・死活検出→ShioriDown 一度だけ（sticky）・unload 後は死活報告なし。
+7. **shiori actor 増強**: scripted backend で Unload 正規経路（Clean→Unloaded／ShutdownError→Failed＋error!）・死活検出（メッセージ到達時チェック）→ShioriDown 一度だけ（sticky）・unload 後は死活報告なし。
 
 ### Integration Tests
 
