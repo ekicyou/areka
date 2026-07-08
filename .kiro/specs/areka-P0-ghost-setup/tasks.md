@@ -186,9 +186,14 @@
   - _Boundary: real pasta 追験_
   - _Depends: 2.6, 3.2_
 
-- [ ] 4.9 契約変更に追随した既存回帰とワークスペース全体の緑化を確認する
+- [x] 4.9 契約変更に追随した既存回帰とワークスペース全体の緑化を確認する
   - kanade・sakura の既存テスト一式とアプリスモークテストが、契約統一と結線追加後も全て成功することを確認する
   - 観測可能な完了条件: ワークスペース全体のテストが純x64で緑（i686成果物を前提としない）
   - _Requirements: 1.6, 7.6, 8.2, 8.3, 8.4_
   - _Boundary: 回帰確認_
   - _Depends: 1.2, 1.3, 3.3, 4.2, 4.3, 4.4, 4.5, 4.6, 4.7_
+
+## Implementation Notes
+
+- `cargo test --workspace` は本仕様の新規追加分（areka-talk／areka-ghost の全ユニット・統合テスト・spine e2e S1〜S6・env ゲート real pasta 追験）に限れば i686 成果物を一切要さず純 x64 で完走する（各タスクのレビューで個別に確認済み）。ただし `shiori-host32-host` の既存テスト `error_paths::helper_abnormal_exit_is_detected_nonblocking`（本仕様より前の完了済み spec 由来・pre-existing）は無条件で i686 helper 実行ファイルを要求し、未ビルドだと明示 panic する。`cargo build -p shiori-host32-helper -p shiori-host32-testdll --target i686-pc-windows-msvc`（**PowerShell 必須**・Git Bash は MSVC link を遮蔽）を先に実行すればワークスペース全体が緑になる（記憶 `workspace-test-needs-i686-host32-artifacts` と整合）。
+
