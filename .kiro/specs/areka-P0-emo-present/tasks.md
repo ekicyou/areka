@@ -127,6 +127,7 @@
   - _Requirements: 2.2, 2.3, 6.3_
   - _Depends: 4.3_
   - _Boundary: example (emo-present.rs)_
+  - _Manual: 前提物 landing 済み（`on_shell_pressed` の毎押下 info! 捕捉ログ・commit 参照）。実観測＝`cargo run -p areka --example emo-present` で不透明域クリック→捕捉ログ発火／透明域クリック→ログ無し（背後プロセス反応）を開発者が確認するまで未チェック。headless 検証不能。_
 
 - [ ] 5.3 実 DPI（dpi≠96）実行での確認と記録
   - dpi≠96 のモニタ/スケーリング設定で 5.1/5.2/4.3 の巡回・クリックを再実施する
@@ -135,6 +136,7 @@
   - _Requirements: 1.6, 2.5, 6.5_
   - _Depends: 5.1, 5.2_
   - _Boundary: example (emo-present.rs)_
+  - _Manual: 前提物 landing 済み（module rustdoc「実 DPI（dpi≠96）実行手順」・commit 参照）。実観測＝dpi≠96（scale 150%/200%）での実機実行で (a)表示等倍 (b)5.1 golden 非 panic (c)クリック座標一致 を開発者が記録するまで未チェック。dpi=96 のみでは完了不可・headless 検証不能。_
 
 - [x] 5.4 (P) EmoPresenter のエッジケース回帰テスト
   - 不正 `surface_id` 指定時の skip+表示不変、`EmptyComposition`→Hide 縮退+reply `Ok`、`Hide`→再 `ShowSurface` での復帰、をそれぞれ統合テストとして実装する

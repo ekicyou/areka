@@ -27,7 +27,9 @@
 //!   直接合成した golden `ComposedSurface::bytes()` と **完全一致**することを `assert`（不一致は loud に
 //!   panic）する。供給面が正当に未生成なら warn してスキップする。詳細は `assert_startup_golden` を参照。
 //!
-//! クリック観測＝task 5.2・実 DPI 記録＝task 5.3 は本 example のスコープ外（別タスク）。
+//! task 5.2（不透明域クリック捕捉の観測）は `on_shell_pressed` の毎押下 `info!` ログを、task 5.3
+//! （実 DPI 実行）は下記「実 DPI（dpi≠96）実行手順」を、本 example がそれぞれ観測シーム／手順として
+//! 提供する。ただし実クリック操作と実 DPI 実走の記録自体は開発者の手動観測である（別タスク）。
 //!
 //! # 使い方
 //! ```text
@@ -41,6 +43,29 @@
 //! 拡縮は行わない（等倍）。ゆえに窓サイズは `BoxStyle`/taffy 論理レイアウトを経由せず、合成結果の
 //! 物理 px を `WindowPos.size` へ直接与える。**dpi≠96 のモニタ／スケーリング設定での実行確認**は
 //! task 5.3 の領分（本 example の rustdoc に手順を蓄積していく）。dpi=96 のみの確認は不十分である。
+//!
+//! ## 実 DPI（dpi≠96）実行手順（task 5.3・R1.6/R2.5/R6.5）
+//!
+//! 本手順は開発者が手動で行う実 DPI 検証（headless では代替不能）。**dpi=96 のみの実行では task 5.3
+//! は完了しない** — 実際に dpi≠96 で走らせて結果を記録することが完了条件である。
+//!
+//! 1. **非 96 DPI を用意する**: Windows「設定 → システム → ディスプレイ → 拡大縮小」で対象モニタの
+//!    スケールを 150% または 200%（dpi=144/192）に設定する。あるいは既にそのスケールで動いている
+//!    モニタへ窓を移動する。
+//! 2. **起動する**: `cargo run -p areka --example emo-present` を実行する。
+//! 3. **観測する**（3 点を確認する）:
+//!    - (a) **表示等倍（R1.6）**: シェル surface とバルーン枠が **surface 原寸の物理 px** で描かれる
+//!      （ぼやけ／アップスケール無し）。窓のクライアント領域寸は合成結果の物理 px（`WindowPos.size` へ
+//!      直接与えた値・DPI 表示契約）に一致し、スケール倍率で膨れない。
+//!    - (b) **起動時 golden 不 panic（task 5.1・R6.2/R8.2）**: 非 96 DPI でも `assert_startup_golden`
+//!      が両 target で通る（panic せず「起動時 golden バイト一致を確認」ログが出る）。swap chain
+//!      readback は表示面の物理 px をそのまま読み戻すため、DPI に依らずバイト一致するはずである。
+//!    - (c) **クリック座標一致（R2.5）**: キャラクタの不透明域をクリックすると task 5.2 の
+//!      「不透明域クリックを捕捉」ログが発火し、透明域のクリックは背後へ透過する（ログ不発）。
+//!      当たり判定境界が実 DPI で見た目の絵柄と一致する（R2.5 の恒等変換: bounds==αマスク==surface
+//!      原寸で、DPI スケールによる座標ずれが生じない）。
+//! 4. **記録する**: 上記 (a)(b)(c) の結果と使用した実 DPI 値（例 dpi=144/192）を記録する。
+//!    **再掲**: dpi=96 のみは不十分 — dpi≠96 の実走記録をもって task 5.3 完了とする。
 //!
 //! # UI スレッド適用（R7.2・design「M-boot は example が直接 apply を呼ぶ」）
 //!
@@ -756,7 +781,13 @@ fn cycle_present_system(world: &mut World) {
 // Event Handlers
 // ---------------------------------------------------------------------------
 
-/// OnPointerPressed ハンドラ: ダブルクリック（左）で全窓を despawn し終了する（mock-shell と同型）。
+/// OnPointerPressed ハンドラ: 不透明域クリックの捕捉ログ（task 5.2）＋ダブルクリック（左）終了。
+///
+/// **不透明域クリック捕捉の観測シーム（task 5.2・R2.2/R2.3/R6.3）**: クリック透過機構は αマスク
+/// （`AlphaMask::is_hit`）に従って `WS_EX_TRANSPARENT` を動的トグルするため、pointer-pressed
+/// イベントが本窓へ到達したこと自体が「クリックが不透明（αマスク有効）域へ着地した」証拠である
+/// （透明域のクリックは背後プロセスへ透過し本ハンドラには**到達しない**）。ゆえに毎押下（単クリック
+/// 含む）で 1 行だけ `info!` を出し捕捉を記録する（不在＝透明域透過の観測）。
 ///
 /// despawn → `on_window_handle_remove` → `PostMessage(WM_CLOSE)` → `WindowRegistry` 空遷移 →
 /// `run()` 復帰、という wintf の作法に委ねる。
@@ -769,6 +800,14 @@ fn on_shell_pressed(
     match ev {
         Phase::Tunnel(_) => false,
         Phase::Bubble(state) => {
+            // 不透明域クリック捕捉ログ（task 5.2 の観測シーム・毎押下 1 行）。到達＝不透明域着地の証拠。
+            tracing::info!(
+                client_x = state.client_point.x,
+                client_y = state.client_point.y,
+                local_x = state.local_point.x,
+                local_y = state.local_point.y,
+                "emo-present: 不透明域クリックを捕捉（target=shell・αマスク有効域に着地＝透明域は背後へ透過し不到達）"
+            );
             if state.double_click == DoubleClick::Left {
                 tracing::info!("emo-present: ダブルクリック検出 — 全窓を閉じて終了します");
                 let windows: Vec<Entity> = world
