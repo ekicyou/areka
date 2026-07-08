@@ -104,7 +104,7 @@
   - _Depends: 4.1, 3.3_
   - _Boundary: example (emo-present.rs)_
 
-- [ ] 4.3 指令切替とアンカーオフセット配置の実装
+- [x] 4.3 指令切替とアンカーオフセット配置の実装
   - タイマー駆動で surface0 ⇄ surface1000（`BindSet::from_ids([1100,1200,1302])`）⇄ `Hide` を巡回する切替ロジックを実装する
   - shell descript の `sakura.balloon.offsetx/offsety` を `areka_parsers::kv` で読み、バルーン窓位置に反映する（無指定時は既定整列）
   - 観測完了: example 実行で数秒周期の surface 切替と非表示化が視認でき、バルーンが指定オフセット位置に配置される

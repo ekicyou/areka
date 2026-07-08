@@ -1,4 +1,4 @@
-//! areka emo-present 観測 example（task 4.2）
+//! areka emo-present 観測 example（task 4.2 ＋ 4.3）
 //!
 //! `areka_emo_present::EmoPresenter` を使い、**メモリ供給のスワップチェーン**（swap chain）を
 //! WUC（Windows.UI.Composition）表示面へ載せて 2 窓を表示する観測用 example。mock-shell donor
@@ -10,9 +10,18 @@
 //! - **シェル窓**（target 0）: emo2 `surface0`（`surface0.png` 単一 element）。
 //! - **バルーン窓**（target 1）: `balloons0.png`（`areka_emo_present::build_balloon_target` 経由）。
 //!
-//! `main.rs`（本番アプリ骨格）は一切変更しない（R6.6）。本 example は task 4.2 のスコープに絞り、
-//! **surface0 ＋バルーン枠の常時表示**のみを行う（surface 切替タイマー＝task 4.3・起動時 golden
-//! assert＝task 5.1 は含めない）。
+//! `main.rs`（本番アプリ骨格）は一切変更しない（R6.6）。task 4.3 で以下を追加する:
+//!
+//! - **surface 切替の周期観測（R3.2・R6.4）**: wintf フレームクロック（`FrameTime`）駆動のタイマーで
+//!   シェル target（`TargetId(0)`）を `surface0` → `surface1000`（bind `[1100,1200,1302]`）→ `Hide` →
+//!   （反復）と数秒周期で巡回する。切替は必ず `EmoPresenter::apply`（指令 API）経由で行う。
+//! - **バルーンのアンカーオフセット配置（R5.4）**: shell descript の `sakura.balloon.offsetx/offsety`
+//!   を `areka_parsers::kv::parse_kv` で読み、あればそれを既定基準からの調整として適用する。emo2
+//!   fixture は `sakura.balloon.alignment,left` を持つが offsetx/offsety は**無い**ため、実際に走るのは
+//!   **既定整列**（バルーン右端＝シェル左端・上端揃え）の算出配置である（マジックギャップではなく計算）。
+//!
+//! 起動時 golden assert＝task 5.1・クリック観測＝task 5.2・実 DPI 記録＝task 5.3 は本 example の
+//! スコープ外（別タスク）。
 //!
 //! # 使い方
 //! ```text
@@ -49,8 +58,8 @@ use wintf::ecs::layout::HitTest;
 use wintf::ecs::pointer::{DoubleClick, OnPointerPressed, Phase, PointerState};
 use wintf::ecs::widget::bitmap_source::CommandSender;
 use wintf::ecs::{
-    FrameFinalize, GraphicsCore, Point, SizeI, Window, WindowHandle, WindowPos, WindowStyle,
-    WucGraphicsResource,
+    FrameFinalize, FrameTime, GraphicsCore, Point, SizeI, Window, WindowHandle, WindowPos,
+    WindowStyle, WucGraphicsResource,
 };
 use wintf::*;
 
@@ -68,8 +77,8 @@ use areka_emo_present::{EmoPresenter, PresentCommand, TargetId, build_balloon_ta
 const SHELL_INITIAL_X: i32 = 400;
 const SHELL_INITIAL_Y: i32 = 200;
 
-/// バルーン窓のシェル右端からの間隔（task 4.2 は固定オフセット。descript 駆動配置は task 4.3）。
-const BALLOON_GAP_X: i32 = 15;
+/// surface 切替の周期（秒）。数秒周期で `surface0` ⇄ `surface1000` ⇄ `Hide` を巡回する（R6.4）。
+const CYCLE_INTERVAL_SECS: f64 = 2.5;
 
 /// fixture ルート（emo2）を `CARGO_MANIFEST_DIR`（`crates/areka`）相対で解決する。
 /// fixtures は別クレート `crates/pilot` 配下ゆえワークスペース相対 `../pilot/...` を辿る
@@ -93,6 +102,60 @@ pub struct ShellWindowMarker;
 pub struct BalloonWindowMarker;
 
 // ---------------------------------------------------------------------------
+// Surface cycle（R6.4 の切替観測: surface0 ⇄ surface1000[binds] ⇄ Hide）
+// ---------------------------------------------------------------------------
+
+/// シェル target の巡回状態（数秒周期で遷移し、各遷移で `apply` を 1 回発行する）。
+///
+/// 初回表示は [`CycleState::Surface0`]（`boot_present_system` が装着直後に表示する状態）。以後
+/// `cycle_present_system` が `next()` で `Surface1000`→`Hidden`→`Surface0`… と巡回させる。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum CycleState {
+    /// emo2 `surface0`（bind 無し）。
+    Surface0,
+    /// emo2 `surface1000`（着せ替え bind `[1100,1200,1302]`＝腕/口/目の bindgroup default）。
+    Surface1000,
+    /// `\s[-1]` 相当の非表示。
+    Hidden,
+}
+
+impl CycleState {
+    /// 次の巡回状態へ進める。
+    fn next(self) -> Self {
+        match self {
+            CycleState::Surface0 => CycleState::Surface1000,
+            CycleState::Surface1000 => CycleState::Hidden,
+            CycleState::Hidden => CycleState::Surface0,
+        }
+    }
+
+    /// この状態へ遷移する際にシェル target（`TargetId(0)`）へ発行する指令を組む。
+    ///
+    /// 切替は必ず `EmoPresenter::apply`（指令 API）経由で行うため、状態ごとの `PresentCommand` を
+    /// ここで一元的に定義する（bypass しない）。
+    fn command(self) -> PresentCommand {
+        match self {
+            CycleState::Surface0 => PresentCommand::ShowSurface {
+                target: TargetId(0),
+                surface_id: 0,
+                binds: BindSet::default(),
+                reply: None,
+            },
+            CycleState::Surface1000 => PresentCommand::ShowSurface {
+                target: TargetId(0),
+                surface_id: 1000,
+                binds: BindSet::from_ids([1100, 1200, 1302]),
+                reply: None,
+            },
+            CycleState::Hidden => PresentCommand::Hide {
+                target: TargetId(0),
+                reply: None,
+            },
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Boot resource（NonSend・EmoPresenter を内包）
 // ---------------------------------------------------------------------------
 
@@ -111,6 +174,12 @@ struct EmoBoot {
     balloon_assets: Option<(EmoWorld, AtlasTable)>,
     /// 装着＋初回表示を済ませたか（毎フレームの remove/insert churn を避けるゲート）。
     attached: bool,
+    /// シェル target が装着され巡回対象となったか（未装着シェルでは巡回しない）。
+    shell_cycling: bool,
+    /// シェル target の現在の巡回状態（装着直後は `Surface0`＝初回表示に一致）。
+    cycle_state: CycleState,
+    /// 次の切替を行う `FrameTime` 絶対時刻（秒）。装着完了時に `now + CYCLE_INTERVAL_SECS` で確定する。
+    next_switch_at: f64,
 }
 
 // ---------------------------------------------------------------------------
@@ -143,12 +212,17 @@ fn main() -> Result<()> {
         .borrow_mut()
         .add_systems(FrameFinalize, boot_present_system);
 
+    // フレームクロック駆動でシェル surface を数秒周期で巡回させる system（&mut World・UI スレッド）。
+    world
+        .borrow_mut()
+        .add_systems(FrameFinalize, cycle_present_system);
+
     // 操作ガイド出力。
     println!();
     println!("areka emo-present 観測 example");
     println!("================================");
-    println!("  シェル窓（target 0）: emo2 surface0");
-    println!("  バルーン窓（target 1）: balloons0.png");
+    println!("  シェル窓（target 0）: emo2 surface0 ⇄ surface1000[binds] ⇄ 非表示 を数秒周期で巡回");
+    println!("  バルーン窓（target 1）: balloons0.png（既定整列＝シェル左・上端揃え）");
     println!("  終了: シェルをダブルクリック");
     println!();
 
@@ -204,17 +278,21 @@ fn build_and_spawn(world: &mut World) {
         shell_assets: None,
         balloon_assets: None,
         attached: false,
+        shell_cycling: false,
+        cycle_state: CycleState::Surface0,
+        next_switch_at: 0.0,
     };
 
     // シェル窓（surface 原寸で採寸・物理 px）。
     if let Some((emo_world, atlas, w, h)) = shell {
         boot.shell_window = create_shell_window(world, SHELL_INITIAL_X, SHELL_INITIAL_Y, w, h);
         boot.shell_assets = Some((emo_world, atlas));
-        // バルーンはシェル右端＋間隔に置く（task 4.2 の固定整列。descript 駆動は task 4.3）。
-        let balloon_x = SHELL_INITIAL_X + w as i32 + BALLOON_GAP_X;
+        // バルーンはアンカーオフセット（R5.4）で配置する。descript に offsetx/offsety があれば
+        // それを既定基準からの調整として適用し、無指定なら既定整列（バルーン右端＝シェル左端・
+        // 上端揃え）を算出する（emo2 fixture は無指定ゆえ後者が実際に走る）。
         if let Some((b_world, b_atlas, bw, bh)) = balloon {
-            boot.balloon_window =
-                create_balloon_window(world, balloon_x, SHELL_INITIAL_Y, bw, bh);
+            let (balloon_x, balloon_y) = compute_balloon_pos(SHELL_INITIAL_X, SHELL_INITIAL_Y, bw);
+            boot.balloon_window = create_balloon_window(world, balloon_x, balloon_y, bw, bh);
             boot.balloon_assets = Some((b_world, b_atlas));
         }
     } else if let Some((b_world, b_atlas, bw, bh)) = balloon {
@@ -308,6 +386,77 @@ fn build_balloon_assets(decoder: &WicDecoderArm) -> Option<(EmoWorld, AtlasTable
         return None;
     }
     Some((emo_world, atlas, w, h))
+}
+
+// ---------------------------------------------------------------------------
+// Balloon anchor offset（R5.4・design「バルーン正典整理」）
+// ---------------------------------------------------------------------------
+
+/// バルーン窓の左上（物理 px・スクリーン座標）を算出する（R5.4）。
+///
+/// 基準は shell descript の正典整列: X「バルーンの右端がサーフェス左端に揃う位置」＋ Y「バルーン
+/// 上端＝サーフェス上端」。`sakura.balloon.offsetx/offsety` があればこの基準からの調整として加算し、
+/// 無指定なら基準そのもの（既定整列＝バルーン右端＝シェル左端・上端揃え）を返す。マジックギャップは
+/// 用いず、シェル位置とバルーン幅から計算する。
+///
+/// - `shell_x`/`shell_y`: シェル窓左上（物理 px）。
+/// - `balloon_w`: バルーン surface 原寸幅（物理 px）。
+fn compute_balloon_pos(shell_x: i32, shell_y: i32, balloon_w: u32) -> (i32, i32) {
+    // 既定基準: バルーン右端 = シェル左端 → 左上 x = シェル左端 − バルーン幅。上端揃え → y = シェル上端。
+    let base_x = shell_x - balloon_w as i32;
+    let base_y = shell_y;
+
+    match read_balloon_offset() {
+        Some((ox, oy)) => {
+            tracing::info!(
+                offsetx = ox,
+                offsety = oy,
+                "emo-present: descript の sakura.balloon.offsetx/offsety を既定基準へ適用"
+            );
+            (base_x + ox, base_y + oy)
+        }
+        None => {
+            tracing::info!(
+                base_x,
+                base_y,
+                "emo-present: balloon offset 無指定 — 既定整列（右端＝シェル左端・上端揃え）で配置"
+            );
+            (base_x, base_y)
+        }
+    }
+}
+
+/// shell descript（`shell/master/descript.txt`）から `sakura.balloon.offsetx/offsety` を読む。
+///
+/// 読取失敗・両キー欠如・整数化不能はいずれも `None`（既定整列へフォールバック）で返す（log-first・
+/// panic しない）。emo2 fixture は両キーとも持たないため通常は `None` が返る（既定整列が走る）。
+/// 部分指定（片方のみ）は仕様外ゆえ安全側で `None` とする。
+fn read_balloon_offset() -> Option<(i32, i32)> {
+    let path = emo2("shell/master/descript.txt");
+    let text = match std::fs::read_to_string(&path) {
+        Ok(t) => t,
+        Err(e) => {
+            tracing::warn!(
+                path = %path.display(),
+                error = %e,
+                "emo-present: descript.txt の読取に失敗 — 既定整列へフォールバック"
+            );
+            return None;
+        }
+    };
+
+    let kv = areka_parsers::kv::parse_kv(&text);
+    let ox = kv
+        .get("sakura.balloon.offsetx")
+        .and_then(|s| s.parse::<i32>().ok());
+    let oy = kv
+        .get("sakura.balloon.offsety")
+        .and_then(|s| s.parse::<i32>().ok());
+
+    match (ox, oy) {
+        (Some(x), Some(y)) => Some((x, y)),
+        _ => None,
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -440,15 +589,14 @@ fn boot_present_system(world: &mut World) {
             .presenter
             .attach_target(world, TargetId(0), boot.shell_window, emo_world, atlas)
         {
-            Ok(()) => boot.presenter.apply(
-                world,
-                PresentCommand::ShowSurface {
-                    target: TargetId(0),
-                    surface_id: 0,
-                    binds: BindSet::default(),
-                    reply: None,
-                },
-            ),
+            Ok(()) => {
+                // 初回表示は Surface0（cycle_state の初期値と一致）。
+                boot.presenter.apply(world, boot.cycle_state.command());
+                // シェルが装着できた場合のみ巡回を有効化し、最初の切替時刻を確定する。
+                let now = world.get_resource::<FrameTime>().map(|ft| ft.0).unwrap_or(0.0);
+                boot.shell_cycling = true;
+                boot.next_switch_at = now + CYCLE_INTERVAL_SECS;
+            }
             Err(e) => tracing::error!(error = %e, "emo-present: シェル target の attach に失敗"),
         }
     }
@@ -474,6 +622,39 @@ fn boot_present_system(world: &mut World) {
     boot.attached = true;
     world.insert_non_send_resource(boot);
     tracing::info!("emo-present: 2 窓へ surface0/バルーン枠を装着・表示しました");
+}
+
+/// フレームクロック駆動でシェル target を数秒周期で巡回させる system（R3.2/R6.4）。
+///
+/// wintf の `FrameTime`（f64 秒・毎フレーム更新）を基準に経過を測り、[`CYCLE_INTERVAL_SECS`] を跨いだ
+/// フレームで [`CycleState::next`] へ進めて対応する [`PresentCommand`] を `EmoPresenter::apply`（指令 API）で
+/// 発行する（bypass しない）。装着（`boot_present_system`）が済み、かつシェルが巡回対象（`shell_cycling`）の
+/// ときのみ動く。`apply`/presenter は `&mut World` と NonSend を要するため排他 system とし、切替が起きる
+/// フレームだけ `EmoBoot` を remove→駆動→insert する（未到達フレームは peek のみで churn を避ける）。
+fn cycle_present_system(world: &mut World) {
+    // 現在時刻（フレームクロック）。未挿入時は 0.0（切替は起きない）。
+    let now = world.get_resource::<FrameTime>().map(|ft| ft.0).unwrap_or(0.0);
+
+    // 装着済み・巡回対象・切替時刻到達を peek で確認（未到達なら remove/insert しない）。
+    let due = match world.get_non_send_resource::<EmoBoot>() {
+        Some(b) if b.attached && b.shell_cycling => now >= b.next_switch_at,
+        _ => return,
+    };
+    if !due {
+        return;
+    }
+
+    let mut boot = world
+        .remove_non_send_resource::<EmoBoot>()
+        .expect("直上で存在確認済み");
+
+    boot.cycle_state = boot.cycle_state.next();
+    boot.next_switch_at = now + CYCLE_INTERVAL_SECS;
+    let cmd = boot.cycle_state.command();
+    boot.presenter.apply(world, cmd);
+    tracing::info!(state = ?boot.cycle_state, "emo-present: シェル surface を切替");
+
+    world.insert_non_send_resource(boot);
 }
 
 // ---------------------------------------------------------------------------
