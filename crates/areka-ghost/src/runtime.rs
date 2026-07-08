@@ -1,9 +1,10 @@
 //! ghost 結線層の起動・終了統括（`GhostRuntime`／`boot`／`shutdown`）。
 //!
 //! task 3.1 で `boot` 手順と `GhostRuntime`（`kanade()`／`dispatcher()` の
-//! 投函端アクセサのみ）を実装した。`shutdown`／`into_parts`（`GhostParts`
-//! を含む終了統括一式）は task 3.2 が同じ `GhostRuntime` へ追加実装する
-//! （`GhostShutdownError` もそちらで定義する）。
+//! 投函端アクセサのみ）を実装した。task 3.2 は同じ `GhostRuntime` へ
+//! `shutdown`／`into_parts`（`GhostParts`・`GhostHandles`・`GhostShutdownError`
+//! を含む終了統括一式）を追加実装した（design.md「終了（shutdown）シーケンス」
+//! 「アクター別の停止経路（正本）」）。
 
 use std::path::PathBuf;
 use std::sync::mpsc::{self, Sender};
@@ -79,13 +80,11 @@ pub struct GhostBootOptions<S, T> {
 
 /// ghost 結線層が起動した全コンポーネントの所有者。
 ///
-/// 本タスク（3.1）では [`GhostRuntime::kanade`]／[`GhostRuntime::dispatcher`]
-/// のみを公開する。`shutdown`／`into_parts`（`GhostParts` を含む）は task 3.2
-/// が同じ構造体へ追加実装する。保持しているフィールドのうち `kanade_tx`／
-/// `dispatcher_tx` 以外は現時点では未使用（task 3.2 の終了統括が消費する）
-/// ため `dead_code` を明示的に許容する（design.md「保持物」節・机上で
-/// 削らない——task 3.2 が必要とする形をここで先に確定させる）。
-#[allow(dead_code)]
+/// [`GhostRuntime::kanade`]／[`GhostRuntime::dispatcher`]（テスト駆動・Tick 注入点）に
+/// 加え、終了統括の [`GhostRuntime::shutdown`] と分解結線用の [`GhostRuntime::into_parts`]
+/// を提供する（task 3.2・design.md「ghost::runtime」）。`mount` はログ／後続用の保持物
+/// （design.md「保持物」節）で、現時点では読み出さないため `#[allow(dead_code)]` を
+/// フィールド単位で残す。
 pub struct GhostRuntime {
     kanade_tx: Sender<KanadeMsg>,
     dispatcher_tx: Sender<DispatcherMsg>,
@@ -96,7 +95,51 @@ pub struct GhostRuntime {
     start_relay_handle: ActorHandle,
     down_relay_handle: ActorHandle,
     ticker_handle: Option<ActorHandle>,
+    #[allow(dead_code)]
     mount: MountModel,
+}
+
+/// `into_parts` が返す全 `ActorHandle`（design.md「アクター別の停止経路（正本）」・
+/// 「ghost::runtime」Service Interface）。S6 全断線シナリオ等、`shutdown` を経ずに
+/// 手動でハンドルを join したい上級用途・テスト向け。
+pub struct GhostHandles {
+    pub kanade: ActorHandle,
+    pub dispatcher: ActorHandle,
+    pub shiori: ActorHandle,
+    pub start_relay: ActorHandle,
+    pub down_relay: ActorHandle,
+    /// `TickerMode::Real` 時のみ `Some`。
+    pub ticker: Option<ActorHandle>,
+}
+
+/// `into_parts` の分解結果（S6 段階的解体の駆動口・design.md「ghost::runtime」）。
+///
+/// shiori への投函端は**存在しない**（`GhostRuntime` は `shiori_tx` を保持しない——
+/// 「アクター別の停止経路（正本）」表の前提。shiori の停止は kanade 終了系列の
+/// `ShioriMsg::Close` が正経路、kanade panic 時は shiori_tx drop による切断が
+/// フォールバックとして機能する）。
+pub struct GhostParts {
+    /// S6②の Close 送出・S3/S5 の Tick 注入。
+    pub kanade: Sender<KanadeMsg>,
+    /// S6①の Close 送出・Tick 注入。
+    pub dispatcher: Sender<DispatcherMsg>,
+    /// `TickerMode::Real` 時のみ `Some`。
+    pub ticker: Option<Sender<TickerMsg>>,
+    /// kanade／dispatcher／shiori／start-relay／down-relay／ticker(Option) の全 `ActorHandle`。
+    pub handles: GhostHandles,
+}
+
+/// 終了統括の失敗（design.md「Error Categories and Responses」・要件 6.5）。
+///
+/// 各段の join で観測された panic（[`areka_actor::ActorError`]）を段名つきで収集する。
+/// best-effort 完走の結果、失敗集合が非空だった場合にのみ構築される（全段成功なら
+/// `shutdown` は `Ok(())` を返す）。単一の不透明文字列へ潰さず、どの段が・なぜ失敗
+/// したかを個別に保持する（silent failure なしの精神）。
+#[derive(Debug, thiserror::Error)]
+#[error("ghost shutdown failed in stage(s): {failures:?}")]
+pub struct GhostShutdownError {
+    /// `(段名, 観測された ActorError)` の一覧（発生順）。
+    pub failures: Vec<(&'static str, areka_actor::ActorError)>,
 }
 
 impl GhostRuntime {
@@ -108,6 +151,140 @@ impl GhostRuntime {
     /// dispatcher inbox への投函端（テストの Tick 注入点）。
     pub fn dispatcher(&self) -> &Sender<DispatcherMsg> {
         &self.dispatcher_tx
+    }
+
+    /// 終了統括（design.md「終了（shutdown）シーケンス」・要件 6.1/6.4/6.5）。
+    ///
+    /// 手順: `KanadeMsg::ForceQuit(reason)` 送出 → kanade join → `DispatcherMsg::Close`
+    /// 送出 → dispatcher join →（ticker 起動時のみ）`TickerMsg::Close` 送出 → ticker
+    /// join → shiori join（明示送出なし。kanade 終了系列が既に `ShioriMsg::Close` を
+    /// 送出済み） → start-relay join → down-relay join（両 relay は明示 Close を持たず
+    /// 上流停止に連動する自然終了・「アクター別の停止経路」表参照）。
+    ///
+    /// 冪等: 各段の送出失敗（対象が既に自発停止済み——例えば quit talk 経由の kanade
+    /// 自己終了）は `debug!` の上で次段へ進む（正常系）。join の `Err`（panic 観測）は
+    /// `error!` の上で失敗集合へ収集し、**処理を継続する**（abort-on-first-failure では
+    /// ない・best-effort 完走）。全段完了後、失敗集合が空なら `Ok(())`、非空なら
+    /// [`GhostShutdownError`] を返す。
+    pub fn shutdown(self, reason: areka_kanade::CloseReason) -> Result<(), GhostShutdownError> {
+        let GhostRuntime {
+            kanade_tx,
+            dispatcher_tx,
+            ticker_tx,
+            kanade_handle,
+            dispatcher_handle,
+            shiori_handle,
+            start_relay_handle,
+            down_relay_handle,
+            ticker_handle,
+            mount: _,
+        } = self;
+
+        let mut failures: Vec<(&'static str, areka_actor::ActorError)> = Vec::new();
+
+        // 1. kanade へ ForceQuit（既に自発停止済みなら送出失敗＝冪等・debug!）。
+        if kanade_tx.send(KanadeMsg::ForceQuit { reason }).is_err() {
+            tracing::debug!(
+                target: "ghost-shutdown",
+                "kanade already stopped before ForceQuit send; treating as idempotent \
+                 (its own termination sequence already ran Unload etc.)"
+            );
+        }
+
+        // 2. kanade join（上流から・design.md「join の順序は『上流から』」）。
+        if let Err(err) = kanade_handle.join() {
+            tracing::error!(target: "ghost-shutdown", stage = "kanade", error = %err, "kanade actor join failed");
+            failures.push(("kanade", err));
+        }
+
+        // 3. dispatcher へ Close。
+        if dispatcher_tx.send(DispatcherMsg::Close).is_err() {
+            tracing::debug!(
+                target: "ghost-shutdown",
+                "dispatcher already stopped before Close send; treating as idempotent"
+            );
+        }
+
+        // 4. dispatcher join。
+        if let Err(err) = dispatcher_handle.join() {
+            tracing::error!(target: "ghost-shutdown", stage = "dispatcher", error = %err, "dispatcher actor join failed");
+            failures.push(("dispatcher", err));
+        }
+
+        // 5・6. ticker（`TickerMode::Real` 時のみ起動されている・両方 no-op で完全スキップ）。
+        if let Some(ticker_tx) = ticker_tx {
+            if ticker_tx.send(TickerMsg::Close).is_err() {
+                tracing::debug!(
+                    target: "ghost-shutdown",
+                    "ticker already stopped before Close send; treating as idempotent"
+                );
+            }
+        }
+        if let Some(ticker_handle) = ticker_handle {
+            if let Err(err) = ticker_handle.join() {
+                tracing::error!(target: "ghost-shutdown", stage = "ticker", error = %err, "ticker actor join failed");
+                failures.push(("ticker", err));
+            }
+        }
+
+        // 7. shiori join（送出なし。kanade 終了系列が ShioriMsg::Close を既に送出済み・
+        //    「アクター別の停止経路」表参照。GhostRuntime は shiori_tx を保持しない）。
+        if let Err(err) = shiori_handle.join() {
+            tracing::error!(target: "ghost-shutdown", stage = "shiori", error = %err, "shiori actor join failed");
+            failures.push(("shiori", err));
+        }
+
+        // 8. start-relay join（自然終了: kanade 停止による start_tx drop で上流切断）。
+        if let Err(err) = start_relay_handle.join() {
+            tracing::error!(target: "ghost-shutdown", stage = "start-relay", error = %err, "start-relay actor join failed");
+            failures.push(("start-relay", err));
+        }
+
+        // 9. down-relay join（自然終了: shiori 停止による down_tx drop で上流切断）。
+        if let Err(err) = down_relay_handle.join() {
+            tracing::error!(target: "ghost-shutdown", stage = "down-relay", error = %err, "down-relay actor join failed");
+            failures.push(("down-relay", err));
+        }
+
+        if failures.is_empty() {
+            tracing::info!(target: "ghost-shutdown", "ghost shutdown sequence completed");
+            Ok(())
+        } else {
+            Err(GhostShutdownError { failures })
+        }
+    }
+
+    /// 全断線シナリオ等の分解結線用（design.md「ghost::runtime」・S6 段階的解体の
+    /// 駆動口）。通常は [`GhostRuntime::shutdown`] を使う。メッセージ送出・join は
+    /// 一切行わず、保持している全 `Sender`／`ActorHandle` を呼び出し側へ構造的に
+    /// 移譲するのみ（`mount` は後続用途がないため破棄する）。
+    pub fn into_parts(self) -> GhostParts {
+        let GhostRuntime {
+            kanade_tx,
+            dispatcher_tx,
+            ticker_tx,
+            kanade_handle,
+            dispatcher_handle,
+            shiori_handle,
+            start_relay_handle,
+            down_relay_handle,
+            ticker_handle,
+            mount: _,
+        } = self;
+
+        GhostParts {
+            kanade: kanade_tx,
+            dispatcher: dispatcher_tx,
+            ticker: ticker_tx,
+            handles: GhostHandles {
+                kanade: kanade_handle,
+                dispatcher: dispatcher_handle,
+                shiori: shiori_handle,
+                start_relay: start_relay_handle,
+                down_relay: down_relay_handle,
+                ticker: ticker_handle,
+            },
+        }
     }
 }
 
@@ -325,10 +502,11 @@ mod tests {
     /// `kanade()`／`dispatcher()` の両方の投函端が生きている（＝実際にアクタースレッドが
     /// 起動し受信ループへ入っている）ことを send の成功で確認する（要件 2.1/2.2/2.4）。
     ///
-    /// `shutdown()` はまだ存在しない（task 3.2）ため、明示的な join は行わない——
-    /// `ActorHandle` は非 RAII（detached）であり、テストプロセス終了時にスレッドが
-    /// ブロックしたまま回収されるのは想定どおり（design.md「保持物」節・task の
-    /// 制約どおり）。
+    /// 本テストは boot 単体の結線成立のみを見るため、意図的に `shutdown()` を呼ばず
+    /// `runtime` を drop する——`ActorHandle` は非 RAII（detached）であり、テストプロセス
+    /// 終了時にスレッドがブロックしたまま回収されるのは想定どおり（design.md「保持物」
+    /// 節）。boot→shutdown の一連の流れは下記の
+    /// `boot_then_shutdown_joins_everything_and_returns_ok`（task 3.2）で確認する。
     #[test]
     fn boot_happy_path_wires_all_components_and_kicks_off_boot_sequence() {
         let root =
@@ -403,6 +581,169 @@ mod tests {
                  ghost/master/descript.txt"
             ),
         }
+
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    // ---- boot→shutdown 統合テスト（task 3.2） ----
+
+    /// テスト用の有界待機ヘルパ: 別スレッドで `f` を走らせ、期限内に完了しなければ
+    /// テストを失敗させる（`dispatcher.rs`／`ticker.rs` テストモジュールと同じ流儀の
+    /// ローカルコピー・仮に `shutdown` の join が宙吊りするバグがあってもテスト
+    /// スイート全体をハングさせない）。
+    fn run_bounded<F: FnOnce() + Send + 'static>(what: &str, timeout: std::time::Duration, f: F) {
+        let (done_tx, done_rx) = std::sync::mpsc::sync_channel::<()>(0);
+        std::thread::spawn(move || {
+            f();
+            let _ = done_tx.send(());
+        });
+        assert!(
+            done_rx.recv_timeout(timeout).is_ok(),
+            "'{what}' did not complete within {timeout:?} (possible hang)"
+        );
+    }
+
+    /// シナリオ3（happy path・task 3.2）: 解決可能な `ghost_root` で `boot` した
+    /// `GhostRuntime` に対し `shutdown(CloseReason::System)` を呼ぶと、`ForceQuit` →
+    /// kanade join → `DispatcherMsg::Close` → dispatcher join → shiori join → relay
+    /// 2 本の join という全段が完走し `Ok(())` を返す（要件 6.1/6.4）。`TickerMode::Disabled`
+    /// で組むため ticker 段は完全にスキップされる。`shutdown` 呼出自体を別スレッドへ
+    /// 逃がし有界 `recv_timeout` で観測する（本テストの完了条件そのものが「正常な
+    /// 起動〜終了の一連の流れ」の直接証跡になる）。
+    #[test]
+    fn boot_then_shutdown_joins_everything_and_returns_ok() {
+        let root = unique_temp_dir("boot_then_shutdown_joins_everything_and_returns_ok");
+        let _ = std::fs::remove_dir_all(&root);
+        write_minimal_resolvable_ghost_fixture(&root);
+
+        let options = GhostBootOptions {
+            ghost_root: root.clone(),
+            default_encoding: DefaultEncoding::Utf8,
+            shiori: ShioriWiring::Custom(Box::new(|| {
+                Ok(Box::new(FakeShioriBackend) as Box<dyn ShioriBackend>)
+            })),
+            surface_sink: NoopSink,
+            text_sink: NoopSink,
+            ticker: TickerMode::Disabled,
+        };
+
+        let runtime = boot(options).expect("boot should succeed for a resolvable ghost_root");
+
+        run_bounded(
+            "shutdown after boot",
+            std::time::Duration::from_secs(10),
+            move || {
+                let result = runtime.shutdown(areka_kanade::CloseReason::System);
+                assert!(
+                    result.is_ok(),
+                    "shutdown should return Ok(()) when every stage joins cleanly, got {result:?}"
+                );
+            },
+        );
+
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    /// シナリオ4（`into_parts` 構造分解・task 3.2）: `boot` した `GhostRuntime` から
+    /// `into_parts()` で `GhostParts` を取り出すと、`kanade`／`dispatcher` の投函端が
+    /// 生きており（send 成功で確認）、`TickerMode::Disabled` に対応して `ticker` は
+    /// `None`、`handles` に全 `ActorHandle` が揃っている。取り出した部品だけを使って
+    /// `shutdown()` と同等の手順（ForceQuit→kanade join→Close→dispatcher join→
+    /// shiori join→relay 2 本 join）を手作業で駆動できることを示す——`into_parts` が
+    /// S6 全断線シナリオ等の分解結線に必要な全てを過不足なく提供している直接証跡。
+    #[test]
+    fn into_parts_exposes_live_senders_and_all_handles_for_manual_teardown() {
+        let root =
+            unique_temp_dir("into_parts_exposes_live_senders_and_all_handles_for_manual_teardown");
+        let _ = std::fs::remove_dir_all(&root);
+        write_minimal_resolvable_ghost_fixture(&root);
+
+        let options = GhostBootOptions {
+            ghost_root: root.clone(),
+            default_encoding: DefaultEncoding::Utf8,
+            shiori: ShioriWiring::Custom(Box::new(|| {
+                Ok(Box::new(FakeShioriBackend) as Box<dyn ShioriBackend>)
+            })),
+            surface_sink: NoopSink,
+            text_sink: NoopSink,
+            ticker: TickerMode::Disabled,
+        };
+
+        let runtime = boot(options).expect("boot should succeed for a resolvable ghost_root");
+        let parts = runtime.into_parts();
+
+        // ticker は TickerMode::Disabled に対応して None（送出端・handle 両方）。
+        assert!(
+            parts.ticker.is_none(),
+            "ticker sender must be None when TickerMode::Disabled was used"
+        );
+        assert!(
+            parts.handles.ticker.is_none(),
+            "ticker handle must be None when TickerMode::Disabled was used"
+        );
+
+        // kanade/dispatcher の投函端が生きていることの直接証跡（send 成功）。
+        parts
+            .kanade
+            .send(KanadeMsg::Tick {
+                now: MonotonicMs(1),
+            })
+            .expect("kanade sender from into_parts should still be alive");
+        parts
+            .dispatcher
+            .send(DispatcherMsg::Tick {
+                now: MonotonicMs(1),
+            })
+            .expect("dispatcher sender from into_parts should still be alive");
+
+        let GhostParts {
+            kanade,
+            dispatcher,
+            ticker: _,
+            handles,
+        } = parts;
+        let GhostHandles {
+            kanade: kanade_handle,
+            dispatcher: dispatcher_handle,
+            shiori: shiori_handle,
+            start_relay: start_relay_handle,
+            down_relay: down_relay_handle,
+            ticker: _,
+        } = handles;
+
+        // shutdown() と同等の手順を手作業で駆動する（ForceQuit→join→Close→join→
+        // shiori/relay join・design.md「終了（shutdown）シーケンス」）。
+        run_bounded(
+            "manual teardown driven from into_parts",
+            std::time::Duration::from_secs(10),
+            move || {
+                kanade
+                    .send(KanadeMsg::ForceQuit {
+                        reason: areka_kanade::CloseReason::System,
+                    })
+                    .expect("kanade should still accept ForceQuit");
+                kanade_handle
+                    .join()
+                    .expect("kanade should terminate normally after ForceQuit");
+
+                dispatcher
+                    .send(DispatcherMsg::Close)
+                    .expect("dispatcher should still accept Close");
+                dispatcher_handle
+                    .join()
+                    .expect("dispatcher should terminate normally after Close");
+
+                shiori_handle
+                    .join()
+                    .expect("shiori should terminate normally (shiori_tx dropped with kanade)");
+                start_relay_handle
+                    .join()
+                    .expect("start-relay should terminate normally (natural disconnect)");
+                down_relay_handle
+                    .join()
+                    .expect("down-relay should terminate normally (natural disconnect)");
+            },
+        );
 
         let _ = std::fs::remove_dir_all(&root);
     }

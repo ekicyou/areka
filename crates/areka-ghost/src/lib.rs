@@ -9,8 +9,8 @@
 //!
 //! - [`runtime`] — boot 手順・`GhostRuntime`・終了統括・起動失敗の器（`GhostBootError`）。
 //!   `boot`／`GhostRuntime`（`kanade()`／`dispatcher()`）は task 3.1 が実装済み。
-//!   `shutdown`／`into_parts`（`GhostParts`・`GhostShutdownError` を含む終了統括一式）は
-//!   task 3.2 が実装する。
+//!   `shutdown`／`into_parts`（`GhostParts`・`GhostHandles`・`GhostShutdownError` を含む
+//!   終了統括一式）は task 3.2 が実装済み。
 //! - [`config`] — 運行設定の値源解決（`KanadeConfig` 値源・shell descript 読解）。task 2.3。
 //! - [`dispatcher`] — 永続的な要求元と一時的な再生アクターの非対称吸収。task 2.5。
 //! - [`ticker`] — 差し替え可能な時刻供給コンポーネント。task 2.2。
@@ -20,8 +20,7 @@
 //!
 //! 公開 facade（design.md「File Structure Plan」の `src/lib.rs` 記載どおり）:
 //! `boot`／`GhostRuntime`／`GhostBootOptions`／`ShioriWiring`／`TickerMode`／
-//! `GhostBootError` を re-export する。終了統括のエラー型（`GhostShutdownError`）は
-//! task 3.2 が同じ re-export 行へ追加する。
+//! `GhostBootError`／`GhostParts`／`GhostHandles`／`GhostShutdownError` を re-export する。
 
 pub mod config;
 pub mod dispatcher;
@@ -31,4 +30,7 @@ pub mod shiori_wiring;
 pub mod sink;
 pub mod ticker;
 
-pub use runtime::{GhostBootError, GhostBootOptions, GhostRuntime, ShioriWiring, TickerMode, boot};
+pub use runtime::{
+    GhostBootError, GhostBootOptions, GhostHandles, GhostParts, GhostRuntime, GhostShutdownError,
+    ShioriWiring, TickerMode, boot,
+};
