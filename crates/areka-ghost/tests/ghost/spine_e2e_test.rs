@@ -395,3 +395,250 @@ mod tests {
         assert_eq!(&*recorded, &vec![surface_cue, text_cue]);
     }
 }
+
+// ===================== S1: boot 成功シナリオ（task 4.2） =====================
+//
+// design.md「spine e2e（決定論・純 x64）」の「シナリオ網羅（要件 7.5）」節・S1:
+// 「Boot→OnBoot GET が Value→StartTalk→sakura 再生→RecordingSink の発火列（at 昇順・
+// 内容一致）→TalkDone{Ended} が kanade へ転送される」を、起動から実 ghost スタック
+// （kanade→start-relay→dispatcher→sakura の実アクター一式）を通して駆動し、時刻注入
+// （Tick）のみで確認する（sleep 不使用・要件 7.2/7.4/7.6・純 x64）。
+#[cfg(test)]
+mod s1_boot_success {
+    use super::*;
+
+    use areka_ghost::dispatcher::DispatcherMsg;
+    use areka_ghost::{GhostBootOptions, ShioriWiring, TickerMode, boot};
+    use areka_kanade::{KanadeConfig, MonotonicMs, ShioriCall, events};
+    use areka_parsers::charset::DefaultEncoding;
+
+    /// このテスト専用の一意な一時ディレクトリ（`runtime.rs`/`config.rs` テストの流儀を踏襲）。
+    fn unique_temp_dir(tag: &str) -> std::path::PathBuf {
+        let mut dir = std::env::temp_dir();
+        dir.push(format!("areka_ghost_spine_e2e_s1_tests_{tag}"));
+        dir
+    }
+
+    /// `root` 直下に最小限の解決可能なゴーストツリー（`ghost/master/descript.txt`＋
+    /// `shell/master/descript.txt`）を構築する。shell descript の `name` は `shell_name`
+    /// （`OnBoot` Ref0・`KanadeConfig::shell_name` の値源と一致させるための既知値・task
+    /// 4.2 参照材料 4/5）。
+    fn write_ghost_fixture(root: &std::path::Path, shell_name: &str) {
+        let ghost_master = root.join("ghost").join("master");
+        std::fs::create_dir_all(&ghost_master).expect("create ghost/master");
+        std::fs::write(
+            ghost_master.join("descript.txt"),
+            b"charset,UTF-8\nname,S1TestGhost\nshiori,dummy.dll\nseriko.defaultsurfacedirectoryname,master\n",
+        )
+        .expect("write ghost descript.txt");
+
+        let shell_dir = root.join("shell").join("master");
+        std::fs::create_dir_all(&shell_dir).expect("create shell/master");
+        std::fs::write(
+            shell_dir.join("descript.txt"),
+            format!("charset,UTF-8\nname,{shell_name}\n").as_bytes(),
+        )
+        .expect("write shell descript.txt");
+    }
+
+    /// events 表由来の [`ShioriCall`] を、このファイル固有の [`RecordedCall`]（task 4.1 の
+    /// [`ScriptedShioriBackend`] 記録型）へ変換する（fixture・assert・実装が単一の正本＝
+    /// events 表を共有する・Req 7.1）。kanade 自身の統合テストが使う `expected_call`/
+    /// `CallMethod` は kanade クレート専用の private 型であり本ファイルからは参照できない
+    /// ため、ここで同旨の変換を用意する（task 4.2 参照材料 6 の指示どおり）。
+    fn expected_from_shiori_call(call: ShioriCall) -> RecordedCall {
+        match call {
+            ShioriCall::Get { id, references } => RecordedCall::Get {
+                id: id.to_string(),
+                references,
+            },
+            ShioriCall::Notify { id, references } => RecordedCall::Notify {
+                id: id.to_string(),
+                references,
+            },
+        }
+    }
+
+    /// 有界待機ヘルパ（`runtime.rs`/`dispatcher.rs` テストモジュールと同旨のローカルコピー）。
+    fn run_bounded<F: FnOnce() + Send + 'static>(what: &str, timeout: std::time::Duration, f: F) {
+        let (done_tx, done_rx) = std::sync::mpsc::sync_channel::<()>(0);
+        std::thread::spawn(move || {
+            f();
+            let _ = done_tx.send(());
+        });
+        assert!(
+            done_rx.recv_timeout(timeout).is_ok(),
+            "'{what}' did not complete within {timeout:?} (possible hang)"
+        );
+    }
+
+    /// S1: boot 成功——boot→OnBoot(Value)→StartTalk→sakura 再生→RecordingSink の発火列
+    /// （at 昇順・内容一致）→TalkDone を、Tick 注入のみで決定論的に確認する
+    /// （要件 7.2/7.4/7.6）。
+    #[test]
+    fn s1_boot_success_plays_greeting_and_records_expected_cue_sequence() {
+        const SHELL_NAME: &str = "S1BootShell";
+
+        let root =
+            unique_temp_dir("s1_boot_success_plays_greeting_and_records_expected_cue_sequence");
+        let _ = std::fs::remove_dir_all(&root);
+        write_ghost_fixture(&root, SHELL_NAME);
+
+        // events 表と同一パラメタで期待値導出用 config を構築する（`resolve_kanade_config` が
+        // 実際に組み立てる値と shell_name/baseware_version が一致する・task 4.2 参照材料 4）。
+        let config = KanadeConfig::new(SHELL_NAME, env!("CARGO_PKG_VERSION"));
+
+        // boot 系列一式のみを台本化する（OnSecondChange は kanade へ Tick を一切送らないため
+        // 不要・OnClose/Unload は本テスト末尾の shutdown() が消費する）。
+        let (backend, handle) = ScriptedShioriBackend::builder()
+            .notify("OnInitialize", Ok(()))
+            .get("OnFirstBoot", Ok(None))
+            .get("OnBoot", Ok(Some(r"\s[0]hello\e".to_string())))
+            .notify("basewareversion", Ok(()))
+            .notify("OnClose", Ok(()))
+            .unload(Ok(ExitKind::Clean))
+            .build();
+
+        let surface_sink = RecordingSink::new();
+        let text_sink = RecordingSink::new();
+        let surface_records = surface_sink.records();
+        let text_records = text_sink.records();
+
+        let options = GhostBootOptions {
+            ghost_root: root.clone(),
+            default_encoding: DefaultEncoding::Utf8,
+            shiori: ShioriWiring::Custom(Box::new(move || {
+                Ok(Box::new(backend) as Box<dyn ShioriBackend>)
+            })),
+            surface_sink,
+            text_sink,
+            ticker: TickerMode::Disabled,
+        };
+
+        let runtime = boot(options).expect("boot should succeed for a resolvable ghost_root");
+
+        // boot() は内部で KanadeMsg::Boot を既に送出済み——boot 系列は kanade アクタースレッド
+        // 上で同期往復（oneshot round trip）のみで完走するため、この時点で OnInitialize〜
+        // basewareversion の 4 呼出はスケジューリング次第で既に発火し終えている。しかし
+        // StartTalk は start_tx→start-relay→dispatcher_tx の 2 hop（別スレッド）を経るため、
+        // dispatcher の active slot に talk が実際に載るタイミングはスレッドスケジューリング
+        // 依存であり、単一の Tick 送出が必ず間に合う保証はない。sleep は使わず、Tick を送る
+        // たびに RecordingSink を確認する再送ループ（実時間待機なし・単調増加する `now` の
+        // 注入のみ・`yield_now` で他スレッドに実行機会を譲るだけ）でこの橋渡しをする——
+        // script に `\w`（待ち）を含めていないため、dispatcher の active slot に talk が
+        // 載った直後の最初の Tick で全発火（Emote＋Text）と自然終端（TalkDone{Ended}）が
+        // 単一 Tick 内で完了する。
+        let mut now: u64 = 1;
+        let mut fired = false;
+        for _ in 0..10_000u32 {
+            runtime
+                .dispatcher()
+                .send(DispatcherMsg::Tick {
+                    now: MonotonicMs(now),
+                })
+                .expect("dispatcher actor should still be alive while probing for the boot talk");
+            now += 1;
+            if !surface_records
+                .lock()
+                .expect("records mutex poisoned")
+                .is_empty()
+            {
+                fired = true;
+                break;
+            }
+            std::thread::yield_now();
+        }
+        assert!(
+            fired,
+            "S1: surface cue never fired after repeated Tick — boot talk did not reach \
+             dispatcher's active slot within bound"
+        );
+
+        // ---- (a) 起動系列が正典順序で発火（NOTIFY／GET の別・Reference 構成込み） ----
+        // real shiori アクター（run_shiori_loop）はメッセージ到達のたびに冒頭で
+        // backend.status() を確認する（死活監視・親モジュール rustdoc 参照）ため、
+        // calls() には Get/Notify の間に RecordedCall::Status が挟まる。起動系列の
+        // 順序判定はこの死活監視ノイズと無関係なので除外して比較する。
+        let expected_boot_prefix = vec![
+            expected_from_shiori_call(events::on_initialize()),
+            expected_from_shiori_call(events::on_first_boot()),
+            expected_from_shiori_call(events::on_boot(&config)),
+            expected_from_shiori_call(events::baseware_version(&config)),
+        ];
+        let calls = handle.calls();
+        let calls_without_status: Vec<RecordedCall> = calls
+            .lock()
+            .expect("calls mutex poisoned")
+            .iter()
+            .filter(|c| !matches!(c, RecordedCall::Status))
+            .cloned()
+            .collect();
+        assert_eq!(
+            calls_without_status, expected_boot_prefix,
+            "起動系列（OnInitialize→OnFirstBoot→OnBoot→basewareversion）が正典順序で発火していない"
+        );
+
+        // ---- (b)(c) RecordingSink の発火列（at 昇順・内容一致）----
+        let surface = surface_records
+            .lock()
+            .expect("records mutex poisoned")
+            .clone();
+        assert_eq!(
+            surface.len(),
+            1,
+            "surface 発火は \\s[0] 由来の Emote 1 件のみのはず: {surface:?}"
+        );
+        assert_eq!(surface[0].at, 0.0);
+        assert_eq!(surface[0].actor, ActorKey::from("0"));
+        assert_eq!(
+            surface[0].command,
+            CueCommand::Emote {
+                key: "0".to_string()
+            }
+        );
+
+        let text = text_records.lock().expect("records mutex poisoned").clone();
+        assert_eq!(
+            text.len(),
+            1,
+            "text 発火は \"hello\" 由来の Text 1 件のみのはず: {text:?}"
+        );
+        assert_eq!(text[0].at, 0.0);
+        assert_eq!(text[0].actor, ActorKey::from("0"));
+        assert_eq!(text[0].command, CueCommand::Text("hello".to_string()));
+
+        // at 昇順（両 sink とも単調非減少であること・design「発火列」節）。
+        for pair in surface.windows(2) {
+            assert!(
+                pair[0].at <= pair[1].at,
+                "surface 発火列は at 昇順であるべき"
+            );
+        }
+        for pair in text.windows(2) {
+            assert!(pair[0].at <= pair[1].at, "text 発火列は at 昇順であるべき");
+        }
+
+        // ---- 後片付け兼 (c) の間接証跡 ----
+        // TalkDone{Ended} が dispatcher→kanade へ転送済みであること（dispatcher の slot が
+        // 解放され kanade が Steady{None} へ戻っていること）は、kanade inbox を直接覗く
+        // 経路が公開面に無いため、後続の shutdown（ForceQuit→OnClose NOTIFY→Unload の順）
+        // が台本どおり完走し Ok(()) を返すことをもって間接的に確認する——もし TalkDone が
+        // 届かず kanade が Steady{Some} に取り残されていても ForceQuit は横断遷移で全 Phase
+        // から Unloading{Forced} へ直行するため shutdown 自体は成立してしまうが、これは
+        // 「正規終了握手」シナリオ（task 4.5）の担当範囲であり、本タスクの主眼は (a)(b) の
+        // 発火列検証に置く（CONCERNS 参照）。
+        run_bounded(
+            "shutdown after S1 boot talk completion",
+            std::time::Duration::from_secs(10),
+            move || {
+                let result = runtime.shutdown(areka_kanade::CloseReason::System);
+                assert!(
+                    result.is_ok(),
+                    "shutdown should return Ok(()) after S1 boot talk completes, got {result:?}"
+                );
+            },
+        );
+
+        let _ = std::fs::remove_dir_all(&root);
+    }
+}
