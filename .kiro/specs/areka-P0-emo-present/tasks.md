@@ -114,7 +114,7 @@
 
 ## 5. 検証: E2E 観測と実 DPI 確認
 
-- [ ] 5.1 起動時 golden バイト一致 assert の実装
+- [x] 5.1 起動時 golden バイト一致 assert の実装
   - `apply(ShowSurface)` 直後に `read_back(target)` し、`ComposedSurface.bytes()` とのバイト一致を `assert_eq!` で検証する実装をシェル・バルーン両 target に組み込む
   - 観測完了: example 起動時に golden 不一致があれば即 panic する assert が実装され、一致時は正常起動する
   - _Requirements: 6.2, 6.7, 8.2, 8.3_

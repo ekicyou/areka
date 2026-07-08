@@ -20,8 +20,14 @@
 //!   fixture は `sakura.balloon.alignment,left` を持つが offsetx/offsety は**無い**ため、実際に走るのは
 //!   **既定整列**（バルーン右端＝シェル左端・上端揃え）の算出配置である（マジックギャップではなく計算）。
 //!
-//! 起動時 golden assert＝task 5.1・クリック観測＝task 5.2・実 DPI 記録＝task 5.3 は本 example の
-//! スコープ外（別タスク）。
+//! task 5.1 で以下を追加する:
+//!
+//! - **起動時 golden バイト一致 assert（R6.2/R6.7/R8.2/R8.3）**: 各 target の初回 `apply(ShowSurface)`
+//!   直後に `EmoPresenter::read_back` で swap chain backbuffer を CPU 読み戻しし、その surface を
+//!   直接合成した golden `ComposedSurface::bytes()` と **完全一致**することを `assert`（不一致は loud に
+//!   panic）する。供給面が正当に未生成なら warn してスキップする。詳細は `assert_startup_golden` を参照。
+//!
+//! クリック観測＝task 5.2・実 DPI 記録＝task 5.3 は本 example のスコープ外（別タスク）。
 //!
 //! # 使い方
 //! ```text
@@ -66,7 +72,7 @@ use wintf::*;
 use areka_emo_atlas::{
     AlphaParams, AtlasTable, PackConfig, SetId, SurfaceSet, UseSelfAlpha, WicDecoderArm, bake,
 };
-use areka_emo_compose::{BindSet, Composer, EmoWorld};
+use areka_emo_compose::{BindSet, ComposeError, ComposedSurface, Composer, EmoWorld};
 use areka_emo_present::{EmoPresenter, PresentCommand, TargetId, build_balloon_target};
 
 // ---------------------------------------------------------------------------
@@ -585,6 +591,10 @@ fn boot_present_system(world: &mut World) {
         .expect("直上で存在確認済み");
 
     if let Some((emo_world, atlas)) = boot.shell_assets.take() {
+        // 起動時 golden（task 5.1・R6.2/R8.2）: 初回表示は Surface0（surface_id=0・bind 無し）ゆえ、
+        // その surface を **直接合成**した ComposedSurface を golden として先に採取する。attach_target が
+        // アセットを move 消費するため、合成は move の前に行う（read_back との突き合わせは表示直後）。
+        let shell_golden = Composer::new().compose(&emo_world, &atlas, 0, &BindSet::default());
         match boot
             .presenter
             .attach_target(world, TargetId(0), boot.shell_window, emo_world, atlas)
@@ -592,6 +602,9 @@ fn boot_present_system(world: &mut World) {
             Ok(()) => {
                 // 初回表示は Surface0（cycle_state の初期値と一致）。
                 boot.presenter.apply(world, boot.cycle_state.command());
+                // 起動時 golden バイト一致 assert（R6.2/R6.7/R8.2/R8.3）: swap chain readback ==
+                // 直接合成の golden を full byte equality で検証する（不一致は loud に panic）。
+                assert_startup_golden(&boot.presenter, TargetId(0), shell_golden, "shell surface0");
                 // シェルが装着できた場合のみ巡回を有効化し、最初の切替時刻を確定する。
                 let now = world.get_resource::<FrameTime>().map(|ft| ft.0).unwrap_or(0.0);
                 boot.shell_cycling = true;
@@ -602,19 +615,26 @@ fn boot_present_system(world: &mut World) {
     }
 
     if let Some((emo_world, atlas)) = boot.balloon_assets.take() {
+        // 起動時 golden（task 5.1・R6.2/R8.2）: バルーンの初回表示は surface_id=0・bind 無し。
+        // attach_target が move 消費する前に golden を採取する。
+        let balloon_golden = Composer::new().compose(&emo_world, &atlas, 0, &BindSet::default());
         match boot
             .presenter
             .attach_target(world, TargetId(1), boot.balloon_window, emo_world, atlas)
         {
-            Ok(()) => boot.presenter.apply(
-                world,
-                PresentCommand::ShowSurface {
-                    target: TargetId(1),
-                    surface_id: 0,
-                    binds: BindSet::default(),
-                    reply: None,
-                },
-            ),
+            Ok(()) => {
+                boot.presenter.apply(
+                    world,
+                    PresentCommand::ShowSurface {
+                        target: TargetId(1),
+                        surface_id: 0,
+                        binds: BindSet::default(),
+                        reply: None,
+                    },
+                );
+                // 起動時 golden バイト一致 assert（R6.2/R6.7/R8.2/R8.3）。
+                assert_startup_golden(&boot.presenter, TargetId(1), balloon_golden, "balloon surface0");
+            }
             Err(e) => tracing::error!(error = %e, "emo-present: バルーン target の attach に失敗"),
         }
     }
@@ -622,6 +642,81 @@ fn boot_present_system(world: &mut World) {
     boot.attached = true;
     world.insert_non_send_resource(boot);
     tracing::info!("emo-present: 2 窓へ surface0/バルーン枠を装着・表示しました");
+}
+
+/// 起動時 golden バイト一致 assert（task 5.1・R6.2/R6.7/R8.2/R8.3）。
+///
+/// 初回表示直後に target の表示画素を `EmoPresenter::read_back`（swap chain backbuffer の CPU 読み戻し・
+/// R8.3）で取得し、その surface を **直接合成**した golden [`ComposedSurface`] のバイト列（[`ComposedSurface::bytes`]）
+/// と **完全一致**（full byte equality）することを検証する。これが「供給面（swap chain readback）と合成結果の
+/// 一致」（R8.2）を決定論的に確かめる検証シーム（R6.7）である。
+///
+/// # 失敗を silent にしない（R6.2）
+///
+/// バイト長・内容のいずれかが食い違えば即 `panic!`／`assert_eq!` で loud に落とす（target id・期待/実測長・
+/// 先頭相違 index を添える）。観測失敗を warn ログで握り潰さない。
+///
+/// # 正当な非表示のスキップ
+///
+/// golden 合成に失敗した場合、または供給面が未生成（`read_back` が [`areka_emo_present::PresentError`] を返す・
+/// EmptyComposition degradation 等で chain 不在）の場合は、`panic` せず warn ログを出してスキップする（表示すべき
+/// ものが正当に無いだけで観測失敗ではない）。通常の emo2 fixture は両 target とも表示するため assert が走る。
+fn assert_startup_golden(
+    presenter: &EmoPresenter,
+    target: TargetId,
+    golden: std::result::Result<ComposedSurface, ComposeError>,
+    label: &str,
+) {
+    let golden = match golden {
+        Ok(cs) => cs,
+        Err(e) => {
+            tracing::warn!(
+                ?target,
+                error = %e,
+                "emo-present: golden 合成に失敗 — {label} の起動時 golden assert をスキップ"
+            );
+            return;
+        }
+    };
+
+    let actual = match presenter.read_back(target) {
+        Ok(bytes) => bytes,
+        Err(e) => {
+            tracing::warn!(
+                ?target,
+                error = %e,
+                "emo-present: 供給面が未生成（read_back 不可）— {label} の起動時 golden assert をスキップ（正当な非表示）"
+            );
+            return;
+        }
+    };
+
+    let expected = golden.bytes();
+
+    // まず長さで loud に落とす（相違の一次要因を明示）。
+    assert_eq!(
+        actual.len(),
+        expected.len(),
+        "起動時 golden 不一致 [{label} / {target:?}]: read_back バイト長 {} が golden バイト長 {} と不一致 — swap chain readback が合成結果と食い違う（R6.2/R8.2 観測失敗）",
+        actual.len(),
+        expected.len(),
+    );
+
+    // full byte equality: 先頭相違 index を添えて loud に panic する。
+    if let Some(idx) = actual.iter().zip(expected.iter()).position(|(a, b)| a != b) {
+        panic!(
+            "起動時 golden 不一致 [{label} / {target:?}]: 先頭相違 index={idx} (read_back=0x{:02X}, golden=0x{:02X}, len={}) — swap chain readback が合成結果とバイト不一致（R6.2/R8.2/R8.3 観測失敗）",
+            actual[idx],
+            expected[idx],
+            actual.len(),
+        );
+    }
+
+    tracing::info!(
+        ?target,
+        len = actual.len(),
+        "emo-present: 起動時 golden バイト一致を確認（{label}）"
+    );
 }
 
 /// フレームクロック駆動でシェル target を数秒周期で巡回させる system（R3.2/R6.4）。
