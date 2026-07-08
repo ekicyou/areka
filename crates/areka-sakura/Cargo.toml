@@ -13,5 +13,6 @@ publish = false
 dola = { path = "../dola" }
 areka-actor = { path = "../areka-actor" }
 areka-parsers = { path = "../areka-parsers" }
+areka-talk = { path = "../areka-talk" }
 tracing = { workspace = true }
 thiserror = { workspace = true }
