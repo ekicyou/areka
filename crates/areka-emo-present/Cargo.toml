@@ -16,7 +16,10 @@ areka-emo-compose = { path = "../areka-emo-compose" }
 areka-actor = { path = "../areka-actor" }
 wintf = { version = "0.0.1", path = "../wintf" }
 bevy_ecs = { workspace = true }
-windows = { workspace = true }
+# chain.rs（SwapChainPresenter・製品コード）は D3D11/DXGI 直呼び（UpdateSubresource/CopyResource/
+# Map/Present/ResizeBuffers・IDXGISwapChain1 等）を要する。workspace 既定へ `Win32_Graphics_Dxgi`
+# を上乗せする（`Win32_Graphics_Dxgi_Common` は workspace 側で有効・swap chain 本体型はこちら）。
+windows = { workspace = true, features = ["Win32_Graphics_Dxgi"] }
 thiserror = { workspace = true }
 tracing = { workspace = true }
 

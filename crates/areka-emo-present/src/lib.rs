@@ -29,6 +29,9 @@
 //! 各モジュールは、後続タスクで順次このクレートへ実装される。
 
 pub mod cache;
+/// swap chain 供給面（`SwapChainPresenter`）。`pub(crate)` 内部モジュール（公開 API ではない）。
+/// 後続の `presenter`（`EmoPresenter`）が `crate::chain::SwapChainPresenter` を消費する。
+pub(crate) mod chain;
 pub mod command;
 
 pub use cache::{CacheEntry, ComposeCache};

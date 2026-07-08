@@ -57,7 +57,7 @@
 
 ## 3. コア: 表示層コンポーネント
 
-- [ ] 3.1 (P) SwapChainPresenter の本実装
+- [x] 3.1 (P) SwapChainPresenter の本実装
   - swap chain 生成（`CreateSwapChainForComposition`・flip model・premultiplied・B8G8R8A8・BufferCount=2）を実装する
   - `source_tex`（単一の真実源）経由のアップロード（`UpdateSubresource`→`CopyResource`→`Present`）と readback（`CopyResource`→staging→`Map`）を実装する（D2D 非経由の純バイト転送）
   - `ResizeBuffers` によるリサイズ規則（backbuffer 参照解放後に実行）を実装する
@@ -146,3 +146,5 @@
 ## Implementation Notes
 
 - 1.2: 設計/タスク本文の「`IDXGIDevice4::GetParent::<IDXGIFactory2>()` でファクトリ取得」は誤り（デバイスの `GetParent` はアダプタを返し `E_NOINTERFACE`）。正準経路は `dxgi.GetAdapter()` → `adapter.GetParent::<IDXGIFactory2>()`。3.1 の SwapChainPresenter はこのヘルパ経由で生成するため同経路。wintf テストは WARP でなく実 HW `GraphicsCore` デバイスを使う既存 fixture 流儀（`begin_draw_roundtrip`）に追随。
+
+- 3.x（3.1/3.2/3.3）: 表示層コンポーネントは `pub(crate)`。非 test 消費者（`EmoPresenter`＝4.1）着地まで `cargo check` に dead_code 警告が出る（各タスク緑判定では既知・許容）。4.1 完了で解消。
