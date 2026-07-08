@@ -36,7 +36,7 @@ pub use msg::{
     CloseReason, KanadeConfig, KanadeMsg, MonotonicMs, ShioriCall, ShioriFailure, ShioriMsg,
     ShioriOutcome,
 };
-pub use shiori::{ShioriConnection, spawn_shiori_actor};
+pub use shiori::{ShioriBackend, ShioriConnection, spawn_shiori_actor};
 pub use talk::{StartTalk, TalkDone, TalkEndReason, TalkId};
 
 /// ukadoc Reference 表の実装正本（純粋関数群）を露出する公開ファサード（DD-9 例外）。
