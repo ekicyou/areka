@@ -27,7 +27,7 @@
 
 ## 2. コア: 純粋層と wintf 汎用増分
 
-- [ ] 2.1 (P) PresentCommand 契約と PresentError の実装
+- [x] 2.1 (P) PresentCommand 契約と PresentError の実装
   - `TargetId`・`PresentCommand`（`ShowSurface`/`Hide`/`InvalidateCache`・`#[non_exhaustive]`）・`PresentOutcome`・`PresentError`（thiserror）を `command.rs` に実装する
   - 非表示は `Hide` 専用 variant とし、`surface_id` の番兵値（`-1`）は導入しない
   - `PresentCommand: Send + 'static` の静的アサートテストを追加する

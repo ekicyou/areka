@@ -22,8 +22,12 @@
 //! （＋ `wintf`・`areka-actor`）。逆方向（`wintf → emo-present` 等）の import は
 //! 実装・レビューでエラーとして扱う。
 //!
-//! ## 構成予定
+//! ## 構成
 //!
-//! 指令 API（`command`）・合成キャッシュ（`cache`）・提示統括（`presenter`）・
+//! 指令 API（[`command`]）は実装済み。合成キャッシュ（`cache`）・提示統括（`presenter`）・
 //! swap chain 供給面（`chain`）・窓装着（`mount`）・バルーン枠生成（`balloon`）の
 //! 各モジュールは、後続タスクで順次このクレートへ実装される。
+
+pub mod command;
+
+pub use command::{PresentCommand, PresentError, PresentOutcome, TargetId};
