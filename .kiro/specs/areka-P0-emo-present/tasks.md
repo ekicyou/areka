@@ -136,7 +136,7 @@
   - _Depends: 5.1, 5.2_
   - _Boundary: example (emo-present.rs)_
 
-- [ ] 5.4 (P) EmoPresenter のエッジケース回帰テスト
+- [x] 5.4 (P) EmoPresenter のエッジケース回帰テスト
   - 不正 `surface_id` 指定時の skip+表示不変、`EmptyComposition`→Hide 縮退+reply `Ok`、`Hide`→再 `ShowSurface` での復帰、をそれぞれ統合テストとして実装する
   - 観測完了: 3ケースすべてが期待どおりの表示/reply/当たり判定状態になることを統合テストで確認する
   - _Requirements: 3.3, 3.4_
