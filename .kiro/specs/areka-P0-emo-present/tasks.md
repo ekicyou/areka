@@ -75,7 +75,7 @@
   - _Depends: 2.3_
   - _Boundary: VisualMount (mount.rs)_
 
-- [ ] 3.3 (P) BalloonFrameSource の実装
+- [x] 3.3 (P) BalloonFrameSource の実装
   - `balloons{N}.png` から synthetic surfaces.txt テキストを生成する
   - `areka_parsers::shell::parse` → `SurfaceSet`（`use_self_alpha,1` 相当の `AlphaParams`）→ `areka_emo_atlas::bake` → `EmoWorld::build`+`bind_atlas` の経路を実装する（シェルと同一機構・直 WIC バイパスなし）
   - M-boot の入力を枠画像のみに限定する（`balloonc*`/`arrow*`/`marker`/`online*` は列挙対象外）
@@ -149,3 +149,4 @@
 
 - 3.x（3.1/3.2/3.3）: 表示層コンポーネントは `pub(crate)`。非 test 消費者（`EmoPresenter`＝4.1）着地まで `cargo check` に dead_code 警告が出る（各タスク緑判定では既知・許容）。4.1 完了で解消。
 - 3.2: wintf の z 順に矛盾あり（レンダリング `visual_sync.rs`＝Children 先頭が最前 / hit-test `tree_iter.rs` DepthFirstReversePostOrder＝Children 末尾が最前）。VisualMount は「text 層は surface の上に描画」の設計意図＝**レンダリング権威**に従い text-slot を先頭子（＝描画上位）に置く。slot は `HitTest` 非搭載ゆえ hit-test 巡回順の差異は現状無害。emo-text-layer が slot に実 HitTest を載せる際はこの矛盾を要再確認（wintf 側の課題・本 spec 境界外）。brush 衝突は `GraphicsCommandList` 不挿入で `deferred_surface_creation_system` が発火せず・有効 `VisualGraphics` 同梱で on_add 上書きなし＝生存確認済み。
+- 3.3: `build_balloon_target` の失敗経路（read_dir I/O 失敗・枠なし・`baked.errors` 非空）は全て `tracing::error!`＋`Err(PresentError::Compose(EmptyComposition(0)))` へ写像（`PresentError` に専用 I/O/decode variant がないため）。握り潰しなし・誤成功なし・真因はログ。build-time 呼びゆえ 4.2 の呼び手は Err を受けたら error ログを確認すること。`baked.errors` 非空は hard-fail（emo-atlas の寛容 survivor 方針より厳格・M-boot の固定小枠集合前提）。

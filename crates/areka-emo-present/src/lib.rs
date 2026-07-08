@@ -24,10 +24,13 @@
 //!
 //! ## 構成
 //!
-//! 指令 API（[`command`]）は実装済み。合成キャッシュ（`cache`）・提示統括（`presenter`）・
-//! swap chain 供給面（`chain`）・窓装着（`mount`）・バルーン枠生成（`balloon`）の
-//! 各モジュールは、後続タスクで順次このクレートへ実装される。
+//! 指令 API（[`command`]）・バルーン枠生成（[`balloon`]）は実装済み。合成キャッシュ（`cache`）・
+//! 提示統括（`presenter`）・swap chain 供給面（`chain`）・窓装着（`mount`）の各モジュールは、
+//! 後続タスクで順次このクレートへ実装される。
 
+/// バルーン枠画像を **シェルと同一の** compose/present 経路へ載せる入力適合層（`BalloonFrameSource`）。
+/// `build_balloon_target` を公開し、`attach_target` へ渡す `(EmoWorld, AtlasTable)` を組み上げる。
+pub mod balloon;
 pub mod cache;
 /// swap chain 供給面（`SwapChainPresenter`）。`pub(crate)` 内部モジュール（公開 API ではない）。
 /// 後続の `presenter`（`EmoPresenter`）が `crate::chain::SwapChainPresenter` を消費する。
@@ -37,5 +40,6 @@ pub mod command;
 /// （公開 API ではない）。後続の `presenter`（`EmoPresenter`）が `crate::mount::VisualMount` を消費する。
 pub(crate) mod mount;
 
+pub use balloon::build_balloon_target;
 pub use cache::{CacheEntry, ComposeCache};
 pub use command::{PresentCommand, PresentError, PresentOutcome, TargetId};
