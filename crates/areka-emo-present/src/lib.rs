@@ -24,9 +24,9 @@
 //!
 //! ## 構成
 //!
-//! 指令 API（[`command`]）・バルーン枠生成（[`balloon`]）は実装済み。合成キャッシュ（`cache`）・
-//! 提示統括（`presenter`）・swap chain 供給面（`chain`）・窓装着（`mount`）の各モジュールは、
-//! 後続タスクで順次このクレートへ実装される。
+//! 指令 API（[`command`]）・バルーン枠生成（[`balloon`]）・合成キャッシュ（[`cache`]）・swap chain
+//! 供給面（`chain`・`pub(crate)`）・窓装着（`mount`・`pub(crate)`）・提示統括（[`presenter`]）を備える。
+//! [`presenter::EmoPresenter`] が上流部品を束ね、[`command::PresentCommand`] を UI スレッド上で適用する。
 
 /// バルーン枠画像を **シェルと同一の** compose/present 経路へ載せる入力適合層（`BalloonFrameSource`）。
 /// `build_balloon_target` を公開し、`attach_target` へ渡す `(EmoWorld, AtlasTable)` を組み上げる。
@@ -39,7 +39,11 @@ pub mod command;
 /// 窓装着・text 層スロット予約・非表示切替（`VisualMount`）。`pub(crate)` 内部モジュール
 /// （公開 API ではない）。後続の `presenter`（`EmoPresenter`）が `crate::mount::VisualMount` を消費する。
 pub(crate) mod mount;
+/// 提示統括（`EmoPresenter`）。合成・キャッシュ・供給面・窓装着・マスク同期を UI スレッド上で結線する
+/// 統括ハブ。`command`/`cache`/`chain`/`mount` を消費する提示段の一点集約層。
+pub mod presenter;
 
 pub use balloon::build_balloon_target;
 pub use cache::{CacheEntry, ComposeCache};
 pub use command::{PresentCommand, PresentError, PresentOutcome, TargetId};
+pub use presenter::EmoPresenter;

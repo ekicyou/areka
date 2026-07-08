@@ -85,7 +85,7 @@
 
 ## 4. 統合: 指令適用の統括と example 結線
 
-- [ ] 4.1 EmoPresenter の実装（統括・EmptyComposition 処理）
+- [x] 4.1 EmoPresenter の実装（統括・EmptyComposition 処理）
   - `PresentTarget`（world/atlas/composer/cache/mount/chain/visible）の管理と `attach_target`/`apply`/`read_back` を実装する
   - `ComposeError::EmptyComposition`（全透明退化）を `warn!` + Hide 相当への縮退 + reply `Ok` として一意に処理する（skip 解釈は採らない）
   - 解決不能な `surface_id` は `error!` + 当該指令 skip + 表示不変 + reply `Err` とする
