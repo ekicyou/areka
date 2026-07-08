@@ -1080,3 +1080,262 @@ mod s3_helper_liveness_detected {
         let _ = std::fs::remove_dir_all(&root);
     }
 }
+
+// ===================== S4: close 握手シナリオ（task 4.5） =====================
+//
+// design.md「spine e2e（決定論・純 x64）」の「シナリオ網羅（要件 7.5）」節・S4:
+// 「close 握手: `CloseRequest`→`OnClose` GET が close talk（`\-` 終端）→
+// `TalkDone{Quit}`→`Unload` が呼ばれ scripted `Ok(ExitKind::Clean)`→`Unloaded` 観測
+// →`StopSelf`→shutdown で全スレッド join（要件 7.3）。」を、S1（boot→Steady 到達確認の
+// retry ループ技法）を踏まえたうえで、初めて「正規（canonical）の終了要求」（S2/S3 の
+// Fault 駆動終了とは異なる、成功する close talk 駆動の Quit 経路）を駆動する。
+//
+// close talk の script は `\-`（先行 cue のない bare quit タグ）にする——
+// `areka_sakura::drive` の `quit_only_script_ends_immediately_with_quit_not_ended` が
+// 示すとおり、これは空 CueSheet＋`TalkEndReason::Quit` へ即時（Tick 不要）コンパイルされる
+// （空 sheet 高速経路）。ゆえに close talk 自体の完了確認に Tick 注入は要らない——ただし
+// OnClose GET（kanade↔shiori の同期往復）・StartTalk（start_tx→start-relay→dispatcher_tx
+// の 2 hop）・TalkDone（dispatcher 自身の inbox 経由で kanade へ転送）は依然として実スレッド
+// 境界を跨ぐため、有界のスピン待機（Tick 送出なし・sleep なし・`yield_now` のみ）で
+// `handle.calls()` に `Unload` が現れるのを確認する。
+//
+// `handle.calls()` に `Unload` が現れた時点で、kanade 自身の thread は
+// `round_trip_unload`（`areka-kanade/src/actor.rs`）内の `reply_rx.recv()` にまだ
+// ブロック中か、既にその応答を消化して `Stopped`＋`StopSelf`（shiori へ `Close` を送り
+// break）へ進んでいる——いずれの場合も kanade は「次のメッセージを inbox から取り出す」
+// 前に完結するため、この時点より後で送る `runtime.shutdown()` の `ForceQuit` は
+// （a) まだ処理されず thread 終了と共に破棄されるか、(b) 送出自体が失敗する
+// （既に停止済み＝冪等）のいずれかであり、`unload()` が二度目に呼ばれることはない
+// （`ScriptedShioriBackend::unload` は `Option::take()` で一度きり消費するため、二重呼出は
+// 即座に panic するはずだが、上記の理由からこの経路には到達しない）。
+#[cfg(test)]
+mod s4_close_handshake {
+    use super::*;
+
+    use areka_ghost::dispatcher::DispatcherMsg;
+    use areka_ghost::{GhostBootOptions, ShioriWiring, TickerMode, boot};
+    use areka_kanade::{CloseReason, KanadeConfig, KanadeMsg, MonotonicMs, ShioriCall, events};
+    use areka_parsers::charset::DefaultEncoding;
+
+    /// このテスト専用の一意な一時ディレクトリ（S1〜S3 の流儀を踏襲）。
+    fn unique_temp_dir(tag: &str) -> std::path::PathBuf {
+        let mut dir = std::env::temp_dir();
+        dir.push(format!("areka_ghost_spine_e2e_s4_tests_{tag}"));
+        dir
+    }
+
+    /// `root` 直下に最小限の解決可能なゴーストツリーを構築する（S1/S3 の
+    /// `write_ghost_fixture` と同旨だが、sibling module から private item は参照できない
+    /// ためローカルに複製する）。
+    fn write_ghost_fixture(root: &std::path::Path, shell_name: &str) {
+        let ghost_master = root.join("ghost").join("master");
+        std::fs::create_dir_all(&ghost_master).expect("create ghost/master");
+        std::fs::write(
+            ghost_master.join("descript.txt"),
+            b"charset,UTF-8\nname,S4TestGhost\nshiori,dummy.dll\nseriko.defaultsurfacedirectoryname,master\n",
+        )
+        .expect("write ghost descript.txt");
+
+        let shell_dir = root.join("shell").join("master");
+        std::fs::create_dir_all(&shell_dir).expect("create shell/master");
+        std::fs::write(
+            shell_dir.join("descript.txt"),
+            format!("charset,UTF-8\nname,{shell_name}\n").as_bytes(),
+        )
+        .expect("write shell descript.txt");
+    }
+
+    /// events 表由来の [`ShioriCall`] をこのファイル固有の [`RecordedCall`] へ変換する
+    /// （S1 の `expected_from_shiori_call` と同旨のローカル複製・Req 7.1）。
+    fn expected_from_shiori_call(call: ShioriCall) -> RecordedCall {
+        match call {
+            ShioriCall::Get { id, references } => RecordedCall::Get {
+                id: id.to_string(),
+                references,
+            },
+            ShioriCall::Notify { id, references } => RecordedCall::Notify {
+                id: id.to_string(),
+                references,
+            },
+        }
+    }
+
+    /// 有界待機ヘルパ（S1/S2/S3 と同旨のローカルコピー）。
+    fn run_bounded<F: FnOnce() + Send + 'static>(what: &str, timeout: std::time::Duration, f: F) {
+        let (done_tx, done_rx) = std::sync::mpsc::sync_channel::<()>(0);
+        std::thread::spawn(move || {
+            f();
+            let _ = done_tx.send(());
+        });
+        assert!(
+            done_rx.recv_timeout(timeout).is_ok(),
+            "'{what}' did not complete within {timeout:?} (possible hang)"
+        );
+    }
+
+    /// S4: close 握手——`CloseRequest` が `OnClose` GET を発行させ、応答スクリプト
+    /// （bare quit `\-`）が close talk として再生起動され、空 sheet 高速経路で即座に
+    /// `TalkDone{Quit}` へ終端し、kanade が横断アームで `Unloading{Quit}`→
+    /// scripted `Ok(ExitKind::Clean)` の `Unload`→`Unloaded` 観測→`StopSelf` へ完走する
+    /// ことを、`runtime.shutdown()` の全スレッド join 成功をもって確認する（design「S4
+    /// close 握手」・要件 7.3/7.4/7.5/7.6）。
+    #[test]
+    fn s4_close_handshake_completes_regular_shutdown_via_quit_ending_close_talk() {
+        const SHELL_NAME: &str = "S4CloseShell";
+
+        let root = unique_temp_dir(
+            "s4_close_handshake_completes_regular_shutdown_via_quit_ending_close_talk",
+        );
+        let _ = std::fs::remove_dir_all(&root);
+        write_ghost_fixture(&root, SHELL_NAME);
+
+        let config = KanadeConfig::new(SHELL_NAME, env!("CARGO_PKG_VERSION"));
+
+        // boot 系列一式（S1 と同旨）＋ OnClose（bare quit `\-` を返す・close talk の trigger）
+        // ＋ unload（Quit 経路の ShioriUnload が消費する唯一のスクリプト・Ok(Clean)）を
+        // 台本化する。OnSecondChange は台本化しない——本シナリオは kanade へ Tick を一切
+        // 送らないため steady pump は起こらない。
+        let (backend, handle) = ScriptedShioriBackend::builder()
+            .notify("OnInitialize", Ok(()))
+            .get("OnFirstBoot", Ok(None))
+            .get("OnBoot", Ok(Some(r"\s[0]hello\e".to_string())))
+            .notify("basewareversion", Ok(()))
+            .get("OnClose", Ok(Some(r"\-".to_string())))
+            .unload(Ok(ExitKind::Clean))
+            .build();
+
+        let surface_sink = RecordingSink::new();
+        let text_sink = RecordingSink::new();
+        let surface_records = surface_sink.records();
+
+        let options = GhostBootOptions {
+            ghost_root: root.clone(),
+            default_encoding: DefaultEncoding::Utf8,
+            shiori: ShioriWiring::Custom(Box::new(move || {
+                Ok(Box::new(backend) as Box<dyn ShioriBackend>)
+            })),
+            surface_sink,
+            text_sink,
+            ticker: TickerMode::Disabled,
+        };
+
+        let runtime = boot(options).expect("boot should succeed for a resolvable ghost_root");
+
+        // ---- boot talk を Steady 到達まで駆動する（S1/S3 と同一技法・sleep 不使用) ----
+        // 起動直後に CloseRequest を送ると kanade がまだ boot 系列途中（Idle〜BootVersion）
+        // の可能性があり（boot 中の CloseRequest は pending_close 記録のみで即握手しない）、
+        // Steady 到達を待たずに送るのは不要な不確実性を招く。boot talk が dispatcher の
+        // active slot に載って発火したことを surface cue の到達で確認すれば、kanade は
+        // 既に（boot talk の再生完了を待たず）Steady へ到達済みである
+        // （boot.rs「boot は常に Steady{talk: None} へ完了する」・S3 と同じ論拠）。
+        let mut now: u64 = 1;
+        let mut boot_talk_fired = false;
+        for _ in 0..10_000u32 {
+            runtime
+                .dispatcher()
+                .send(DispatcherMsg::Tick {
+                    now: MonotonicMs(now),
+                })
+                .expect("dispatcher actor should still be alive while probing for the boot talk");
+            now += 1;
+            if !surface_records
+                .lock()
+                .expect("records mutex poisoned")
+                .is_empty()
+            {
+                boot_talk_fired = true;
+                break;
+            }
+            std::thread::yield_now();
+        }
+        assert!(
+            boot_talk_fired,
+            "S4: surface cue never fired after repeated Tick — boot talk did not reach \
+             dispatcher's active slot within bound"
+        );
+
+        // ---- 終了要求（正規/canonical）: CloseRequest を kanade へ送る ----
+        // S1〜S3 のいずれも一度も送っていない、この e2e ファイル初の「正規の終了要求」
+        // （Fault 駆動ではない・successful close-talk 駆動の Quit 経路）。
+        runtime
+            .kanade()
+            .send(KanadeMsg::CloseRequest {
+                reason: CloseReason::User,
+            })
+            .expect("kanade actor should still be alive to receive the close request");
+
+        // ---- close 握手の完走を有界スピン待機で確認する（Tick 注入なし・sleep なし) ----
+        // OnClose GET→close talk（bare quit `\-`・空 sheet 高速経路で Tick 不要に
+        // `TalkDone{Quit}` 発行）→横断アーム Unloading{Quit}→ShioriUnload という cascade は
+        // 複数の実スレッド境界（kanade↔shiori 同期往復・start-relay・dispatcher・
+        // per-talk spawn_talk スレッド・dispatcher 自身の inbox 経由の kanade 転送）を
+        // 跨ぐため、`handle.calls()` に `RecordedCall::Unload` が現れるまで
+        // `yield_now` のみで有界にスピン待機する（実時間待機・Tick 送出のいずれも伴わない）。
+        let mut close_settled = false;
+        for _ in 0..1_000_000u32 {
+            let has_unload = handle
+                .calls()
+                .lock()
+                .expect("calls mutex poisoned")
+                .iter()
+                .any(|c| matches!(c, RecordedCall::Unload));
+            if has_unload {
+                close_settled = true;
+                break;
+            }
+            std::thread::yield_now();
+        }
+        assert!(
+            close_settled,
+            "S4: Unload was never observed after CloseRequest — regular close handshake \
+             (OnClose GET → close talk → TalkDone{{Quit}} → Unload) did not complete within bound"
+        );
+
+        // ---- (a) 起動系列＋close 握手系列が正典順序で発火 ----
+        // 死活監視ノイズ（RecordedCall::Status）を除外して比較する（S1/S3 と同旨）。
+        // 本シナリオは kanade へ Tick を一切送らないため OnSecondChange は発火しない。
+        let expected_sequence = vec![
+            expected_from_shiori_call(events::on_initialize()),
+            expected_from_shiori_call(events::on_first_boot()),
+            expected_from_shiori_call(events::on_boot(&config)),
+            expected_from_shiori_call(events::baseware_version(&config)),
+            expected_from_shiori_call(events::on_close(CloseReason::User)),
+            RecordedCall::Unload,
+        ];
+        let calls_without_status: Vec<RecordedCall> = handle
+            .calls()
+            .lock()
+            .expect("calls mutex poisoned")
+            .iter()
+            .filter(|c| !matches!(c, RecordedCall::Status))
+            .cloned()
+            .collect();
+        assert_eq!(
+            calls_without_status, expected_sequence,
+            "起動系列＋close 握手系列（OnInitialize→OnFirstBoot→OnBoot→basewareversion→\
+             OnClose→Unload）が正典順序で発火していない"
+        );
+
+        // ---- 主観測: shutdown() が全スレッド join を有界時間内に完走する（要件 7.3) ----
+        // close 握手が既に Unload まで完走済み（上の有界待機で確認済み）であるため、
+        // ここでの `ForceQuit` 送出は kanade が既に自発停止済み（もしくは自発停止処理の
+        // 最終盤）であることの冪等パスを実地で運動させる——`shutdown()` 自身の
+        // 「kanade already stopped before ForceQuit send」分岐（design.md「終了
+        // （shutdown）シーケンス」・runtime.rs 3.2 の status report で code-reading のみで
+        // 検証済みだった経路）を、本 e2e が初めて実地の回帰檻として固定する。
+        run_bounded(
+            "shutdown after S4 regular close handshake completion",
+            std::time::Duration::from_secs(10),
+            move || {
+                let result = runtime.shutdown(CloseReason::System);
+                assert!(
+                    result.is_ok(),
+                    "shutdown should return Ok(()) after the regular close handshake \
+                     completes, got {result:?}"
+                );
+            },
+        );
+
+        let _ = std::fs::remove_dir_all(&root);
+    }
+}
