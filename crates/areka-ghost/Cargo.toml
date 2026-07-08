@@ -16,6 +16,7 @@ areka-kanade = { path = "../areka-kanade" }
 areka-sakura = { path = "../areka-sakura" }
 areka-parsers = { path = "../areka-parsers" }
 shiori-host32-host = { path = "../shiori-host32-host" }
+shiori-host32-ipc = { path = "../shiori-host32-ipc" }
 windows = { workspace = true }
 tracing = { workspace = true }
 thiserror = { workspace = true }
