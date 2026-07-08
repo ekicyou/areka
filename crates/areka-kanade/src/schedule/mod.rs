@@ -7,8 +7,8 @@
 //! 影響しない・DD-3）。DD-9 により本モジュールは `pub(crate)` に閉じる。
 //!
 //! # 責務分割（本タスク 2.1 の担当範囲）
-//! 本 `mod.rs` は**由来・状態を問わない横断遷移**（[`Input::TalkDone`] の quit フラグが
-//! 真の場合／[`Input::ForceQuit`]／[`Input::ShioriDown`]／[`Input::ShioriReply`] の
+//! 本 `mod.rs` は**由来・状態を問わない横断遷移**（[`Input::TalkDone`] の理由が
+//! [`TalkEndReason::Quit`] の場合／[`Input::ForceQuit`]／[`Input::ShioriDown`]／[`Input::ShioriReply`] の
 //! 失敗）と、Unload 完了・防御アーム（未知 talk_id・Idle 以外の Boot・応答待ちでない
 //! ShioriReply）を実装する。フェーズ固有の遷移は [`boot`]／[`steady`]／[`close`] の
 //! 各サブモジュールへ委譲する（後続タスク 2.3／2.4／2.5 が本体を実装する）。
@@ -19,7 +19,7 @@
 //! `Unloading{Fault}`→`Stopped` の正規遷移で表現する・Req 6.4）。
 
 use crate::msg::{CloseReason, KanadeConfig, MonotonicMs, ShioriCall, ShioriOutcome};
-use crate::talk::{StartTalk, TalkDone, TalkId};
+use crate::talk::{StartTalk, TalkDone, TalkEndReason, TalkId};
 
 pub(crate) mod boot;
 pub(crate) mod close;
@@ -131,7 +131,7 @@ pub(crate) fn step(state: State, input: Input, config: &KanadeConfig) -> (State,
             to_unloading_fault(state)
         }
 
-        // TalkDone: quit フラグ・talk_id 突合を横断的に判定する（Req 2.5・4.3・6.2）。
+        // TalkDone: reason（3 値）・talk_id 突合を横断的に判定する（Req 2.5・4.3・6.2）。
         Input::TalkDone(done) => on_talk_done(state, done, config),
 
         // ShioriReply: Unload 完了・呼出失敗（Failed）の横断判定を先に行い、
@@ -182,23 +182,35 @@ fn to_unloading_fault(mut state: State) -> (State, Vec<Action>) {
     (state, vec![Action::ShioriUnload])
 }
 
-/// quit ゲート・talk_id 突合。既知 talk の quit:true は横断的に終了系列（Quit）へ。
+/// reason（3 値）・talk_id 突合。既知 talk の `TalkEndReason::Quit` は横断的に終了系列（Quit）へ。
+///
+/// `Ended` と `Interrupted` はいずれも非 quit としてフェーズ固有遷移（定常復帰・close 終了拒否）
+/// へ委譲する（設計「kanade schedule の 3 値写像」）。M1 には user-interrupt 配線が無く、かつ
+/// dispatcher の slot 差替に伴う `Interrupted` は dispatcher が stale として破棄するため、
+/// `Interrupted` が kanade まで到達することは想定されない。到達した場合も専用状態は起こさず
+/// `Ended` と同一経路（非 quit）へ防御的に委譲し、`info!` でどの reason だったかを観測する。
 fn on_talk_done(state: State, done: TalkDone, config: &KanadeConfig) -> (State, Vec<Action>) {
     match current_talk_id(&state.phase) {
-        Some(active) if active == done.talk_id => {
-            if done.quit {
-                // 既知 talk の quit:true → 終了系列（Quit）へ直行（Req 4.3）。
+        Some(active) if active == done.talk_id => match done.reason {
+            TalkEndReason::Quit => {
+                // 既知 talk の Quit → 終了系列（Quit）へ直行（Req 4.3）。
                 let mut state = state;
-                tracing::info!(target: "kanade", event = "talk_done_quit", talk_id = done.talk_id.0, "quit フラグ真——終了系列（Quit）へ");
+                tracing::info!(target: "kanade", event = "talk_done_quit", talk_id = done.talk_id.0, "reason=Quit——終了系列（Quit）へ");
                 state.phase = Phase::Unloading {
                     cause: TermCause::Quit,
                 };
                 (state, vec![Action::ShioriUnload])
-            } else {
-                // quit:false（定常復帰・close talk 完了）はフェーズ固有遷移へ委譲。
+            }
+            TalkEndReason::Interrupted => {
+                // 防御的に非 quit 扱い（M1 では到達しない想定・観測用ログ）。
+                tracing::info!(target: "kanade", event = "talk_done_interrupted_as_non_quit", talk_id = done.talk_id.0, "reason=Interrupted——防御的に非 quit 扱い・フェーズ固有遷移へ委譲");
                 dispatch_phase(state, Input::TalkDone(done), config)
             }
-        }
+            TalkEndReason::Ended => {
+                // Ended（定常復帰・close talk 完了）はフェーズ固有遷移へ委譲。
+                dispatch_phase(state, Input::TalkDone(done), config)
+            }
+        },
         Some(_) | None => {
             // 未知 talk_id の TalkDone → error!＋現 Phase 維持（Req 2.5・6.2）。
             tracing::error!(target: "kanade", event = "unknown_talk_done", talk_id = done.talk_id.0, "未知 talk_id の再生完了通知——現 Phase 維持で継続");
@@ -323,16 +335,16 @@ mod tests {
         }
     }
 
-    // --- 1. TalkDone{quit:true} for a KNOWN talk → Unloading{Quit} + [ShioriUnload] ---
+    // --- 1. TalkDone{reason:Quit} for a KNOWN talk → Unloading{Quit} + [ShioriUnload] ---
 
     #[test]
-    fn known_quit_true_from_steady_goes_to_unloading_quit() {
+    fn known_quit_from_steady_goes_to_unloading_quit() {
         let phase = steady_with_talk(TalkId(5));
         let (next, actions) = step(
             state_in(phase),
             Input::TalkDone(TalkDone {
                 talk_id: TalkId(5),
-                quit: true,
+                reason: TalkEndReason::Quit,
             }),
             &config(),
         );
@@ -342,7 +354,7 @@ mod tests {
     }
 
     #[test]
-    fn known_quit_true_from_close_talk_wait_goes_to_unloading_quit() {
+    fn known_quit_from_close_talk_wait_goes_to_unloading_quit() {
         let phase = Phase::CloseTalkWait {
             talk_id: TalkId(9),
             deadline: None,
@@ -351,12 +363,34 @@ mod tests {
             state_in(phase),
             Input::TalkDone(TalkDone {
                 talk_id: TalkId(9),
-                quit: true,
+                reason: TalkEndReason::Quit,
             }),
             &config(),
         );
         assert!(matches!(next.phase, Phase::Unloading { cause: TermCause::Quit }));
         assert!(matches!(actions.as_slice(), [Action::ShioriUnload]));
+    }
+
+    // --- 1b. TalkDone{reason:Interrupted} for a KNOWN talk → 非 quit 扱い（Ended と同一経路） ---
+
+    #[test]
+    fn known_interrupted_from_steady_is_routed_as_non_quit() {
+        // Interrupted は防御的に非 quit 扱い（Ended と同一経路）へ委譲される。
+        // steady::on_talk_done は pending_close が無ければ Steady{None} へ復帰する。
+        let phase = steady_with_talk(TalkId(5));
+        let (next, actions) = step(
+            state_in(phase),
+            Input::TalkDone(TalkDone {
+                talk_id: TalkId(5),
+                reason: TalkEndReason::Interrupted,
+            }),
+            &config(),
+        );
+        assert!(
+            matches!(next.phase, Phase::Steady { talk: None }),
+            "Interrupted は Quit 系列へ進まず、Ended と同じ定常復帰へ"
+        );
+        assert!(actions.is_empty());
     }
 
     // --- 2. ForceQuit from any phase → [Notify OnClose, ShioriUnload] + Unloading{Forced} ---
@@ -421,11 +455,11 @@ mod tests {
             state_in(phase),
             Input::TalkDone(TalkDone {
                 talk_id: TalkId(999),
-                quit: true,
+                reason: TalkEndReason::Quit,
             }),
             &config(),
         );
-        // 未知 talk_id は quit:true でも横断遷移させず、現 Phase を維持する。
+        // 未知 talk_id は reason=Quit でも横断遷移させず、現 Phase を維持する。
         match next.phase {
             Phase::Steady {
                 talk: Some(ActiveTalk { talk_id, .. }),
@@ -586,7 +620,7 @@ mod log_firing_tests {
             steady_with_talk(TalkId(5)),
             Input::TalkDone(TalkDone {
                 talk_id: TalkId(999),
-                quit: false,
+                reason: TalkEndReason::Ended,
             }),
         );
         assert_logged(&ev, Level::ERROR, "unknown_talk_done");
@@ -840,5 +874,23 @@ mod log_firing_tests {
             );
         });
         assert_logged(&ev, Level::WARN, "close_phase_unexpected");
+    }
+
+    // ============================================================
+    // 観測用ログ（level = INFO）— TalkEndReason::Interrupted の防御的非 quit 扱い
+    // ============================================================
+
+    #[test]
+    fn info_talk_done_interrupted_as_non_quit_logs() {
+        // 既知 talk の reason=Interrupted → 防御的に非 quit 扱い（Ended と同一経路）へ委譲。
+        // M1 では到達しない想定だが、到達した場合にどの reason だったか観測できることを検証する。
+        let ev = run_step(
+            steady_with_talk(TalkId(5)),
+            Input::TalkDone(TalkDone {
+                talk_id: TalkId(5),
+                reason: TalkEndReason::Interrupted,
+            }),
+        );
+        assert_logged(&ev, Level::INFO, "talk_done_interrupted_as_non_quit");
     }
 }
