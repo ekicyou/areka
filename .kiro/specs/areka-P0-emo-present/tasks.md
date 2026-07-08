@@ -95,7 +95,7 @@
   - _Depends: 2.1, 2.2, 3.1, 3.2_
   - _Boundary: EmoPresenter (presenter.rs)_
 
-- [ ] 4.2 example クレート結線と mock-shell donor からの窓生成移植
+- [x] 4.2 example クレート結線と mock-shell donor からの窓生成移植
   - `crates/areka/examples/emo-present.rs` を新設し、mock-shell の窓生成（WS_POPUP・透過 ex-style）・`register_click_through_windows`（`Added<WindowHandle>`）を移植する
   - シェル窓（target 0・emo2 surface0）とバルーン窓（target 1・balloons0.png、`BalloonFrameSource` 経由）の2窓構成を実装する
   - `main.rs` は変更しない
@@ -150,3 +150,4 @@
 - 3.x（3.1/3.2/3.3）: 表示層コンポーネントは `pub(crate)`。非 test 消費者（`EmoPresenter`＝4.1）着地まで `cargo check` に dead_code 警告が出る（各タスク緑判定では既知・許容）。4.1 完了で解消。
 - 3.2: wintf の z 順に矛盾あり（レンダリング `visual_sync.rs`＝Children 先頭が最前 / hit-test `tree_iter.rs` DepthFirstReversePostOrder＝Children 末尾が最前）。VisualMount は「text 層は surface の上に描画」の設計意図＝**レンダリング権威**に従い text-slot を先頭子（＝描画上位）に置く。slot は `HitTest` 非搭載ゆえ hit-test 巡回順の差異は現状無害。emo-text-layer が slot に実 HitTest を載せる際はこの矛盾を要再確認（wintf 側の課題・本 spec 境界外）。brush 衝突は `GraphicsCommandList` 不挿入で `deferred_surface_creation_system` が発火せず・有効 `VisualGraphics` 同梱で on_add 上書きなし＝生存確認済み。
 - 3.3: `build_balloon_target` の失敗経路（read_dir I/O 失敗・枠なし・`baked.errors` 非空）は全て `tracing::error!`＋`Err(PresentError::Compose(EmptyComposition(0)))` へ写像（`PresentError` に専用 I/O/decode variant がないため）。握り潰しなし・誤成功なし・真因はログ。build-time 呼びゆえ 4.2 の呼び手は Err を受けたら error ログを確認すること。`baked.errors` 非空は hard-fail（emo-atlas の寛容 survivor 方針より厳格・M-boot の固定小枠集合前提）。
+- 4.2: example の UI スレッド駆動シーム＝`EmoBoot`（NonSend 資源・UI スレッドの `CommandSender` closure 内で presenter/assets 生成）＋`boot_present_system`（`FrameFinalize` の exclusive `&mut World` system）。`GraphicsCore` 存在＋`WucGraphicsResource::is_valid()` を待って一度だけ attach_target＋apply（`attached` フラグで one-shot）。GPU 資源は複数フレーム遅延で着地するため即時 apply は不可＝この待機が必須。4.3/5.1 はこの system を拡張する。fixture は `env!("CARGO_MANIFEST_DIR")`＋`../pilot/examples/shiori-host-32/fixtures/emo2/`。emo2 shell の `purple/a/null.png`（α無 PNG）は normalize seam で warn 継続（surface0 未使用）。**「2窓表示」は開発者の `cargo run -p areka --example emo-present` 実機確認が必要（headless 検証外・5.x で実 DPI 込み確認）**。
