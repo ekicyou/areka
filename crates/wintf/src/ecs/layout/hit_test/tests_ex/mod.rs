@@ -3,6 +3,7 @@ use crate::ecs::types::Rect;
 use windows_numerics::Matrix3x2;
 
 mod alpha_mask;
+mod alpha_mask_resource;
 mod entity_ex;
 mod opacity;
 mod tree_ex;

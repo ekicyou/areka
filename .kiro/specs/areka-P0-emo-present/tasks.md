@@ -43,7 +43,7 @@
   - _Requirements: 2.1, 2.4, 4.1, 4.2, 4.4_
   - _Boundary: ComposeCache (cache.rs)_
 
-- [ ] 2.3 (P) wintf hit-test への AlphaMaskResource 優先読み込み増分
+- [x] 2.3 (P) wintf hit-test への AlphaMaskResource 優先読み込み増分
   - `AlphaMaskResource`（`Component`・`AlphaMask` 内包・`set`/`mask()` アクセサ）を `hit_test/mod.rs` に新設する
   - `hit_test_entity` と `hit_test_entity_ex` の両 `HitTestMode::AlphaMask` 分岐で、共有ヘルパへ抽出した読み出しを介し `AlphaMaskResource` を最優先し、なければ `BitmapSourceResource` へフォールバックする（既存挙動は完全後方互換）
   - 観測完了: 「`AlphaMaskResource` あり→優先・なし→既存経路」を `hit_test_entity` 直接呼びと `hit_test_in_window` 経由（`hit_test_entity_ex`）の両方で確認する単体テストが通る
