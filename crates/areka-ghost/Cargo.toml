@@ -1,0 +1,21 @@
+[package]
+name = "areka-ghost"
+workspace = "../.."
+description = "areka ⓪ghost 結線層: descript.txt 起点のマウント解決から shiori 通信層・kanade・sakura・ticker を起動〜終了統括まで結線する"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[dependencies]
+areka-talk = { path = "../areka-talk" }
+areka-actor = { path = "../areka-actor" }
+areka-kanade = { path = "../areka-kanade" }
+areka-sakura = { path = "../areka-sakura" }
+areka-parsers = { path = "../areka-parsers" }
+shiori-host32-host = { path = "../shiori-host32-host" }
+windows = { workspace = true }
+tracing = { workspace = true }
+thiserror = { workspace = true }
