@@ -35,7 +35,7 @@
   - _Requirements: 3.1, 3.3, 3.5, 3.6, 4.3, 7.2_
   - _Boundary: PresentCommand (command.rs)_
 
-- [ ] 2.2 (P) ComposeCache の実装
+- [x] 2.2 (P) ComposeCache の実装
   - `CacheEntry { composed: ComposedSurface, mask: AlphaMask }` と `HashMap<u32, CacheEntry>` による全保持キャッシュを実装する
   - エントリ挿入時に `AlphaMask::from_pbgra32` でマスクを1回だけ生成する（表示のたび再生成しない）
   - `invalidate_all()` を実装する

@@ -28,6 +28,8 @@
 //! swap chain 供給面（`chain`）・窓装着（`mount`）・バルーン枠生成（`balloon`）の
 //! 各モジュールは、後続タスクで順次このクレートへ実装される。
 
+pub mod cache;
 pub mod command;
 
+pub use cache::{CacheEntry, ComposeCache};
 pub use command::{PresentCommand, PresentError, PresentOutcome, TargetId};
