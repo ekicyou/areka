@@ -14,3 +14,8 @@ areka-parsers = { path = "../areka-parsers" }
 rectangle-pack = { workspace = true }
 tracing = { workspace = true }
 windows = { workspace = true }
+
+[dev-dependencies]
+# テスト専用のログ捕捉ハーネス（log_capture）用。0 寸/全透明 element 検出時の
+# warn! 発火を決定論的に assert する（bake 結果自体は不変）。ワークスペース既存基盤。
+tracing-subscriber = { workspace = true }

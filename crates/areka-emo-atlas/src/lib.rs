@@ -102,6 +102,33 @@ pub fn bake(
 
         // トリム（全透明→空エントリ／それ以外→配置エントリ）。生存確定＝密採番へ加える。
         let trim = Trimmer.trim(&normalized);
+
+        // 0 寸/全透明 element の早期警告（ゴースト制作者ミスの可能性が高いため・設計ディスカッション #1）。
+        // **ログのみの増分**: bake の生成結果（索引表・placement・trim 矩形）は一切変更しない。
+        // (a) 元画像 0 寸（0×0）／(b) α=0 トリム後 0 寸（全透明→placement None）を判別してログ。
+        // 0 寸/全透明 element の早期警告（ゴースト制作者ミスの可能性が高いため・設計ディスカッション #1）。
+        // **ログのみの増分**: bake の生成結果（索引表・placement・trim 矩形）は一切変更しない。
+        // (a) 元画像 0 寸（0×0）／(b) α=0 トリム後 0 寸（全透明→placement None）を判別してログ。
+        if trim.original.w == 0 || trim.original.h == 0 {
+            tracing::warn!(
+                target: "areka_emo_atlas",
+                set = key.set.0,
+                rel_path = key.rel_path.as_str(),
+                original_w = trim.original.w,
+                original_h = trim.original.h,
+                "bake: element の元画像が 0 寸です（ゴースト制作者ミスの可能性）"
+            );
+        } else if trim.placement.is_none() {
+            tracing::warn!(
+                target: "areka_emo_atlas",
+                set = key.set.0,
+                rel_path = key.rel_path.as_str(),
+                original_w = trim.original.w,
+                original_h = trim.original.h,
+                "bake: element が全透明（α=0）でトリム後 0 寸です（ゴースト制作者ミスの可能性）"
+            );
+        }
+
         let final_id = ElementId(survivor_keys.len() as u32);
         survivor_keys.push(key.clone());
         survivor_originals.push(trim.original);
@@ -176,6 +203,11 @@ mod emo2_e2e;
 #[cfg(test)]
 mod emo2_golden;
 
+// テスト専用の tracing ログ捕捉ハーネス（0 寸/全透明 warn の決定論 assert 用・task 2.4）。
+// `#[cfg(test)]` 限定ゆえ本番 bake 経路に現れない。
+#[cfg(test)]
+mod log_capture;
+
 #[cfg(test)]
 mod bake_entry_tests {
     use super::*;
@@ -243,6 +275,11 @@ mod bake_entry_tests {
         let stride = w * 4;
         let bgra = vec![0u8; (stride * h) as usize];
         (w, h, stride, bgra, true)
+    }
+
+    /// 0×0（元画像 0 寸）の画像スペック（has_alpha=true で normalize 通過・trim は空エントリ）。
+    fn zero_sized() -> (u32, u32, u32, Vec<u8>, bool) {
+        (0, 0, 0, Vec::new(), true)
     }
 
     /// MemoryDecoder へ base_dir.join(rel_path) の実パスで画像を登録する。
@@ -415,6 +452,92 @@ mod bake_entry_tests {
         }
         // 失敗 key は不在。
         assert_eq!(result.table.resolve(SetId(0), "b.png"), None);
+    }
+
+    /// テスト⑥（task 2.4・設計ディスカッション #1 増分）: 全透明（α=0 トリム後 0 寸）element を
+    /// 含む bake で `warn!` が発火する（tracing capture で決定論 assert・当該 element を名指し）。
+    /// **bake 結果自体は既存挙動不変**（全透明はエラーでなく空エントリ・placement None）。
+    #[test]
+    fn warn_fires_on_all_transparent_element() {
+        let base = Path::new("shell/master");
+        let shell = vec![surface(0, vec![elem(0, "solid.png"), elem(1, "clear.png")])];
+        let mut dec = MemoryDecoder::new();
+        register(&mut dec, base, "solid.png", opaque_2x2());
+        register(&mut dec, base, "clear.png", transparent_2x2());
+        let sets = [set(&shell, base)];
+
+        let mut captured: Option<BakeResult> = None;
+        let out = crate::log_capture::capture_logs(|| {
+            captured = Some(bake(&sets, &dec, PackConfig::default()));
+        });
+
+        // warn が発火し、target・当該 element（rel_path）を名指ししている。
+        assert!(out.contains("level=WARN"), "全透明 element で warn 発火: {out}");
+        assert!(out.contains("target=areka_emo_atlas"), "target 正しい: {out}");
+        assert!(out.contains("clear.png"), "問題の element を名指し: {out}");
+
+        // bake 結果は既存挙動不変: 全透明はエラーでなく空エントリ（placement None・原寸記録）。
+        let result = captured.unwrap();
+        assert!(result.errors.is_empty(), "全透明は error ではない（不変）");
+        let clear_id = result.table.resolve(SetId(0), "clear.png").expect("空エントリも resolve");
+        assert!(
+            result.table.entry(clear_id).placement.is_none(),
+            "全透明 → 空エントリ（placement None・不変）"
+        );
+        assert_eq!(
+            result.table.entry(clear_id).original,
+            crate::table::Size { w: 2, h: 2 },
+            "原寸は記録される（不変）"
+        );
+        // 対照: solid.png は placement あり（焼付対象・不変）。
+        let solid_id = result.table.resolve(SetId(0), "solid.png").unwrap();
+        assert!(result.table.entry(solid_id).placement.is_some());
+    }
+
+    /// テスト⑦（task 2.4）: 元画像 0 寸（0×0）element を含む bake でも `warn!` が発火する。
+    #[test]
+    fn warn_fires_on_zero_sized_source_element() {
+        let base = Path::new("shell/master");
+        let shell = vec![surface(0, vec![elem(0, "zero.png")])];
+        let mut dec = MemoryDecoder::new();
+        register(&mut dec, base, "zero.png", zero_sized());
+        let sets = [set(&shell, base)];
+
+        let out = crate::log_capture::capture_logs(|| {
+            let _ = bake(&sets, &dec, PackConfig::default());
+        });
+        assert!(out.contains("level=WARN"), "0 寸 element で warn 発火: {out}");
+        assert!(out.contains("target=areka_emo_atlas"), "target 正しい: {out}");
+        assert!(out.contains("zero.png"), "問題の element を名指し: {out}");
+    }
+
+    /// テスト⑧（task 2.4・不変性の陰性確認）: 正常（不透明・非零）element の bake では warn は
+    /// 発火せず、既知の bake 出力（placement 有り・非零 uv・原寸）が変わらない。
+    #[test]
+    fn no_warn_and_output_unchanged_for_normal_bake() {
+        let base = Path::new("shell/master");
+        let shell = vec![surface(0, vec![elem(0, "solid.png")])];
+        let mut dec = MemoryDecoder::new();
+        register(&mut dec, base, "solid.png", opaque_2x2());
+        let sets = [set(&shell, base)];
+
+        let mut captured: Option<BakeResult> = None;
+        let out = crate::log_capture::capture_logs(|| {
+            captured = Some(bake(&sets, &dec, PackConfig::default()));
+        });
+
+        // 正常 element では warn 経路に入らない。
+        assert!(!out.contains("level=WARN"), "正常 element では warn 皆無: {out}");
+
+        // 既存の bake 出力は不変（placement 有り・非零 uv・原寸 2×2）。
+        let result = captured.unwrap();
+        assert!(result.errors.is_empty());
+        let id = result.table.resolve(SetId(0), "solid.png").unwrap();
+        let entry = result.table.entry(id);
+        assert_eq!(entry.original, crate::table::Size { w: 2, h: 2 }, "原寸不変");
+        let placement = entry.placement.as_ref().expect("非零 → placement 有り（不変）");
+        assert_eq!(placement.uv_rect.w, 2, "trim 幅不変");
+        assert_eq!(placement.uv_rect.h, 2, "trim 高不変");
     }
 
     /// テスト⑤（構造的）: channel 非依存（R6.5）。BakeResult は素の値であり、通信機構/async を

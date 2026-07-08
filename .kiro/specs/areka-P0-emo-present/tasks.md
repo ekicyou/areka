@@ -50,7 +50,7 @@
   - _Requirements: 2.2, 2.3, 2.5_
   - _Boundary: wintf hit_test module (AlphaMaskResource)_
 
-- [ ] 2.4 (P) emo-atlas の 0 寸/全透明 element 検出時の警告ログ増分
+- [x] 2.4 (P) emo-atlas の 0 寸/全透明 element 検出時の警告ログ増分
   - bake 時に、トリム後 0 寸または元画像 0 寸の element を検出したら `warn!` を発火する（動作・bake 結果は不変・ログのみの増分）
   - 観測完了: tracing capture で、全透明/0 寸 element を含む bake 実行時に warn ログが1回以上発火することを確認する単体テスト
   - _Boundary: emo-atlas bake（設計ディスカッション#1 由来の増分。対応する数値要件なし）_
