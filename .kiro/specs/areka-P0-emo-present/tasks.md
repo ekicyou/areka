@@ -66,7 +66,7 @@
   - _Depends: 1.2, 1.3_
   - _Boundary: SwapChainPresenter (chain.rs)_
 
-- [ ] 3.2 (P) VisualMount の実装
+- [x] 3.2 (P) VisualMount の実装
   - 窓 Entity への最小 visual 構成（surface entity + SpriteVisual + `HitTest::alpha_mask()` + `AlphaMaskResource`）と text-layer 予約スロット（兄弟・上位 z の空 entity）の装着を実装する
   - surface entity の `Arrangement`/`GlobalArrangement.bounds` を物理 px で直接確立する（`BoxStyle`/taffy 非経由）
   - 非表示切替（`Visual::set_visible(false)` + `HitTest::none()`）を実装する
@@ -148,3 +148,4 @@
 - 1.2: 設計/タスク本文の「`IDXGIDevice4::GetParent::<IDXGIFactory2>()` でファクトリ取得」は誤り（デバイスの `GetParent` はアダプタを返し `E_NOINTERFACE`）。正準経路は `dxgi.GetAdapter()` → `adapter.GetParent::<IDXGIFactory2>()`。3.1 の SwapChainPresenter はこのヘルパ経由で生成するため同経路。wintf テストは WARP でなく実 HW `GraphicsCore` デバイスを使う既存 fixture 流儀（`begin_draw_roundtrip`）に追随。
 
 - 3.x（3.1/3.2/3.3）: 表示層コンポーネントは `pub(crate)`。非 test 消費者（`EmoPresenter`＝4.1）着地まで `cargo check` に dead_code 警告が出る（各タスク緑判定では既知・許容）。4.1 完了で解消。
+- 3.2: wintf の z 順に矛盾あり（レンダリング `visual_sync.rs`＝Children 先頭が最前 / hit-test `tree_iter.rs` DepthFirstReversePostOrder＝Children 末尾が最前）。VisualMount は「text 層は surface の上に描画」の設計意図＝**レンダリング権威**に従い text-slot を先頭子（＝描画上位）に置く。slot は `HitTest` 非搭載ゆえ hit-test 巡回順の差異は現状無害。emo-text-layer が slot に実 HitTest を載せる際はこの矛盾を要再確認（wintf 側の課題・本 spec 境界外）。brush 衝突は `GraphicsCommandList` 不挿入で `deferred_surface_creation_system` が発火せず・有効 `VisualGraphics` 同梱で on_add 上書きなし＝生存確認済み。

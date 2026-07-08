@@ -20,6 +20,9 @@ bevy_ecs = { workspace = true }
 # Map/Present/ResizeBuffers・IDXGISwapChain1 等）を要する。workspace 既定へ `Win32_Graphics_Dxgi`
 # を上乗せする（`Win32_Graphics_Dxgi_Common` は workspace 側で有効・swap chain 本体型はこちら）。
 windows = { workspace = true, features = ["Win32_Graphics_Dxgi"] }
+# mount.rs（VisualMount）は SpriteVisual::SetSize に Vector2（windows-numerics）を要する。
+# wintf と同一の workspace ピン（0.3.1）を用いる。
+windows-numerics = { workspace = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }
 

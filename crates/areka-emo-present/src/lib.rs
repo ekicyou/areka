@@ -33,6 +33,9 @@ pub mod cache;
 /// 後続の `presenter`（`EmoPresenter`）が `crate::chain::SwapChainPresenter` を消費する。
 pub(crate) mod chain;
 pub mod command;
+/// 窓装着・text 層スロット予約・非表示切替（`VisualMount`）。`pub(crate)` 内部モジュール
+/// （公開 API ではない）。後続の `presenter`（`EmoPresenter`）が `crate::mount::VisualMount` を消費する。
+pub(crate) mod mount;
 
 pub use cache::{CacheEntry, ComposeCache};
 pub use command::{PresentCommand, PresentError, PresentOutcome, TargetId};
