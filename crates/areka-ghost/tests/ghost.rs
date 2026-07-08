@@ -5,8 +5,9 @@
 //
 // `spine_e2e_test.rs`（task 4.1 が `ScriptedShioriBackend`/`RecordingSink` を定義し、
 // 後続タスク 4.2〜4.7 が同ファイルへ boot〜close の各シナリオ（S1〜S6）の `#[test]` を
-// 追加していく）。`real_pasta_test.rs`（task 4.8・env ゲート実 pasta 追験）はまだ存在
-// しないため、ここでは宣言しない（存在しないファイルへの `#[path]` はコンパイルエラー
-// になるため）。task 4.8 はこのファイルへ 1 行追記するだけで済む。
+// 追加していく）。`real_pasta_test.rs`（task 4.8・env ゲート実 pasta 追験）は
+// `spine_e2e_test` の `RecordingSink` を再利用する（`crate::spine_e2e_test::RecordingSink`）。
 #[path = "ghost/spine_e2e_test.rs"]
 mod spine_e2e_test;
+#[path = "ghost/real_pasta_test.rs"]
+mod real_pasta_test;
