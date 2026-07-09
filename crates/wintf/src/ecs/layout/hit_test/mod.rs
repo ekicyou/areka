@@ -34,10 +34,11 @@ use bevy_ecs::prelude::*;
 use tracing::warn;
 
 use super::hit_region::HitRegionMap;
-use super::{Arrangement, D2DRectExt, GlobalArrangement};
+use super::{Arrangement, D2DRect, D2DRectExt, GlobalArrangement};
 use crate::ecs::WindowPos;
 use crate::ecs::common::DepthFirstReversePostOrder;
 use crate::ecs::types::PointF;
+use crate::ecs::widget::bitmap_source::AlphaMask;
 
 // ============================================================================
 // PhysicalPoint — PointF への後方互換エイリアス
@@ -135,6 +136,106 @@ impl HitTest {
 }
 
 // ============================================================================
+// AlphaMaskResource - 汎用 αマスク CPU リソース
+// ============================================================================
+
+/// hit-test 用 αマスク CPU リソース（汎用供給口）
+///
+/// `BitmapSourceResource` 以外の供給者（例: emo-present の合成表示）が
+/// `HitTestMode::AlphaMask` のヒットテストへ [`AlphaMask`] を渡すための
+/// `Component`。`hit_test_entity` / `hit_test_entity_ex` の `AlphaMask` 分岐で
+/// **最優先**に読まれ、不在時は従来どおり `BitmapSourceResource` → 矩形
+/// フォールバックへ委ねる（既存挙動は完全後方互換）。
+///
+/// # 座標契約
+/// マスク原寸は表示 surface の原寸（物理 px）＝ `GlobalArrangement.bounds` 寸に
+/// 一致する運用を想定する。この場合 bounds 相対→マスク座標変換は恒等となり、
+/// 任意 DPI でクリック座標が一致する（design DPI 表示契約・R2.5）。
+///
+/// # 命名
+/// wintf の CPU リソース命名規約（`XxxResource`・`BitmapSourceResource` 等）に準拠。
+#[derive(Component, Debug, Clone, Default)]
+pub struct AlphaMaskResource {
+    mask: Option<AlphaMask>,
+}
+
+impl AlphaMaskResource {
+    /// 空（マスク未設定）の `AlphaMaskResource` を作成
+    pub fn new() -> Self {
+        Self { mask: None }
+    }
+
+    /// αマスクを設定（表示所有者が合成結果から更新）
+    pub fn set(&mut self, mask: AlphaMask) {
+        self.mask = Some(mask);
+    }
+
+    /// αマスクへの参照を取得（未設定なら `None`）
+    pub fn mask(&self) -> Option<&AlphaMask> {
+        self.mask.as_ref()
+    }
+}
+
+// ============================================================================
+// alpha_mask_hit - AlphaMask 読み取り + 座標変換 + 判定の共有ヘルパ
+// ============================================================================
+
+/// `HitTestMode::AlphaMask` 分岐の αマスク読み取り・座標変換・判定を
+/// `hit_test_entity` と `hit_test_entity_ex` で共有する純粋ヘルパ。
+///
+/// # 読み取り優先順位
+/// 1. [`AlphaMaskResource`]（最優先・汎用供給口）
+/// 2. `BitmapSourceResource::alpha_mask()`（既存経路・後方互換）
+/// 3. どちらも供給しない／マスク未生成 → 矩形フォールバック（bounds 内は常にヒット）
+///
+/// # 前提
+/// 呼び出し側で bounds 内判定（早期リターン）済みであること。本ヘルパは bounds 相対
+/// 比例→マスク座標変換のみを行い、変換ロジックは従来と同一（emo-present では
+/// bounds==マスク原寸で恒等写像＝R2.5 の成立根拠）。
+///
+/// # Returns
+/// - `true`: 当該座標のマスクピクセルがヒット（α ≧ 128）／フォールバック（供給者不在）
+/// - `false`: 当該座標のマスクピクセルが透明（α < 128）
+fn alpha_mask_hit(world: &World, entity: Entity, bounds: &D2DRect, point: PhysicalPoint) -> bool {
+    use crate::ecs::widget::bitmap_source::BitmapSourceResource;
+
+    // AlphaMaskResource を最優先で読み、無ければ BitmapSourceResource の αマスクへ委ねる。
+    // どちらも供給しない場合は矩形フォールバック（従来挙動）。
+    let mask = world
+        .get::<AlphaMaskResource>(entity)
+        .and_then(|r| r.mask())
+        .or_else(|| {
+            world
+                .get::<BitmapSourceResource>(entity)
+                .and_then(|r| r.alpha_mask())
+        });
+
+    let Some(alpha_mask) = mask else {
+        // 供給者不在／マスク未生成 → 矩形判定にフォールバック
+        return true;
+    };
+
+    // スクリーン座標 → マスク座標への変換（従来ロジックと同一）
+    let bounds_width = bounds.right - bounds.left;
+    let bounds_height = bounds.bottom - bounds.top;
+
+    if bounds_width <= 0.0 || bounds_height <= 0.0 {
+        return true; // サイズが0以下の場合はフォールバック
+    }
+
+    // 相対座標を計算（0.0〜1.0）
+    let rel_x = (point.x - bounds.left) / bounds_width;
+    let rel_y = (point.y - bounds.top) / bounds_height;
+
+    // マスク座標に変換（切り捨て、範囲チェックは is_hit 内で行う）
+    let mask_x = (rel_x * alpha_mask.width() as f32) as u32;
+    let mask_y = (rel_y * alpha_mask.height() as f32) as u32;
+
+    // αマスクで判定
+    alpha_mask.is_hit(mask_x, mask_y)
+}
+
+// ============================================================================
 // hit_test_entity - 単一エンティティヒットテスト
 // ============================================================================
 
@@ -162,8 +263,6 @@ impl HitTest {
 /// 4. AlphaMask.is_hit() 呼び出し
 /// 5. αマスク未生成時は矩形判定にフォールバック
 pub fn hit_test_entity(world: &World, entity: Entity, point: PhysicalPoint) -> bool {
-    use crate::ecs::widget::bitmap_source::BitmapSourceResource;
-
     // HitTest コンポーネントを取得（なければデフォルト = Bounds）
     let mode = world
         .get::<HitTest>(entity)
@@ -216,37 +315,8 @@ pub fn hit_test_entity(world: &World, entity: Entity, point: PhysicalPoint) -> b
     }
 
     // HitTestMode::AlphaMask の場合
-    // BitmapSourceResource を取得
-    let Some(resource) = world.get::<BitmapSourceResource>(entity) else {
-        // BitmapSourceResource がない場合は矩形判定にフォールバック
-        return true;
-    };
-
-    // αマスクを取得
-    let Some(alpha_mask) = resource.alpha_mask() else {
-        // αマスク未生成の場合は矩形判定にフォールバック
-        return true;
-    };
-
-    // スクリーン座標 → マスク座標への変換
-    let bounds = &global.bounds;
-    let bounds_width = bounds.right - bounds.left;
-    let bounds_height = bounds.bottom - bounds.top;
-
-    if bounds_width <= 0.0 || bounds_height <= 0.0 {
-        return true; // サイズが0以下の場合はフォールバック
-    }
-
-    // 相対座標を計算（0.0〜1.0）
-    let rel_x = (point.x - bounds.left) / bounds_width;
-    let rel_y = (point.y - bounds.top) / bounds_height;
-
-    // マスク座標に変換（切り捨て、範囲チェックはis_hit内で行う）
-    let mask_x = (rel_x * alpha_mask.width() as f32) as u32;
-    let mask_y = (rel_y * alpha_mask.height() as f32) as u32;
-
-    // αマスクで判定
-    alpha_mask.is_hit(mask_x, mask_y)
+    // 共有ヘルパで αマスクを読み取り（AlphaMaskResource 最優先 → BitmapSourceResource → 矩形）
+    alpha_mask_hit(world, entity, &global.bounds, point)
 }
 
 // ============================================================================
@@ -294,8 +364,6 @@ pub(crate) enum RegionHit {
 /// - `RegionHit::Hit(None)`: エンティティにヒット（無名）
 /// - `RegionHit::Miss`: ヒットしない
 pub(crate) fn hit_test_entity_ex(world: &World, entity: Entity, point: PhysicalPoint) -> RegionHit {
-    use crate::ecs::widget::bitmap_source::BitmapSourceResource;
-
     // HitTest コンポーネントを取得（なければデフォルト = Bounds）
     let mode = world
         .get::<HitTest>(entity)
@@ -348,28 +416,9 @@ pub(crate) fn hit_test_entity_ex(world: &World, entity: Entity, point: PhysicalP
             }
         }
         HitTestMode::AlphaMask => {
-            // BitmapSourceResource を取得
-            let Some(resource) = world.get::<BitmapSourceResource>(entity) else {
-                return RegionHit::Hit(None); // フォールバック
-            };
-            let Some(alpha_mask) = resource.alpha_mask() else {
-                return RegionHit::Hit(None); // フォールバック
-            };
-
-            let bounds = &global.bounds;
-            let bounds_width = bounds.right - bounds.left;
-            let bounds_height = bounds.bottom - bounds.top;
-
-            if bounds_width <= 0.0 || bounds_height <= 0.0 {
-                return RegionHit::Hit(None);
-            }
-
-            let rel_x = (point.x - bounds.left) / bounds_width;
-            let rel_y = (point.y - bounds.top) / bounds_height;
-            let mask_x = (rel_x * alpha_mask.width() as f32) as u32;
-            let mask_y = (rel_y * alpha_mask.height() as f32) as u32;
-
-            if alpha_mask.is_hit(mask_x, mask_y) {
+            // 共有ヘルパで αマスクを読み取り（AlphaMaskResource 最優先 → BitmapSourceResource → 矩形）。
+            // hit_test_entity と同一挙動を保証（両エントリポイントの一致）。
+            if alpha_mask_hit(world, entity, &global.bounds, point) {
                 RegionHit::Hit(None)
             } else {
                 RegionHit::Miss

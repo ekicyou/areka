@@ -65,7 +65,7 @@ per-scope の surface 状態（`\s` 指令適用・`\s[-1]` 非表示・alias/na
 ## Existing Spec Touchpoints
 
 - **Extends**: なし（新設クレート）。
-- **Adjacent**: `areka-P0-emo-present`（**並走**・表示指令 API の対向＝契約は emo-present 正本・`\s[-1]` 突合）／`areka-P0-ghost-setup`（**並走**・sink trait 結線のみ＝非衝突）。
+- **Adjacent**: `completed/areka-P0-emo-present` **✅**（2026-07-09 完了・表示指令 API の対向＝契約は emo-present 正本・`\s[-1]` 突合。`PresentCommand`（`ShowSurface`/`Hide`/`InvalidateCache`）が確定契約）／`areka-P0-ghost-setup`（**並走**・sink trait 結線のみ＝非衝突）。
 
 ## Constraints
 

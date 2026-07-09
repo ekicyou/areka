@@ -12,7 +12,9 @@
 
 use windows::UI::Composition::CompositionGraphicsDevice;
 use windows::UI::Composition::Desktop::DesktopWindowTarget;
+use windows::UI::Composition::ICompositionSurface;
 use windows::Win32::Foundation::{HWND, POINT, RECT};
+use windows::Win32::Graphics::Dxgi::IDXGISwapChain1;
 use windows::Win32::Graphics::Direct2D::{ID2D1Device, ID2D1DeviceContext, ID2D1DeviceContext3};
 use windows::Win32::System::WinRT::{
     CreateDispatcherQueueController, DISPATCHERQUEUE_THREAD_APARTMENTTYPE, DQTYPE_THREAD_CURRENT,
@@ -32,6 +34,16 @@ pub trait CompositorInteropExt {
     /// CreateGraphicsDevice — 既存 D2D デバイスから合成グラフィックスデバイスを生成。
     fn create_graphics_device(&self, d2d_device: &ID2D1Device)
     -> Result<CompositionGraphicsDevice>;
+
+    /// CreateCompositionSurfaceForSwapChain — 自前所有 swap chain から合成面を生成（要件 8.1）。
+    ///
+    /// `com/dxgi::create_composition_swap_chain` が生成した読み戻し可能な供給面を
+    /// WUC の `ICompositionSurface`（SpriteVisual＋SurfaceBrush への装着材料）へ包む
+    /// 安全 wrapper。`unsafe` は本メソッドへ隔離する（汎用・emo 非依存）。
+    fn create_composition_surface_for_swap_chain(
+        &self,
+        swapchain: &IDXGISwapChain1,
+    ) -> Result<ICompositionSurface>;
 }
 
 impl CompositorInteropExt for ICompositorInterop {
@@ -41,6 +53,14 @@ impl CompositorInteropExt for ICompositorInterop {
         d2d_device: &ID2D1Device,
     ) -> Result<CompositionGraphicsDevice> {
         unsafe { self.CreateGraphicsDevice(d2d_device) }
+    }
+
+    #[inline(always)]
+    fn create_composition_surface_for_swap_chain(
+        &self,
+        swapchain: &IDXGISwapChain1,
+    ) -> Result<ICompositionSurface> {
+        unsafe { self.CreateCompositionSurfaceForSwapChain(swapchain) }
     }
 }
 
@@ -208,5 +228,47 @@ mod tests {
         );
 
         surface_interop.end_draw().expect("end_draw 失敗");
+    }
+
+    /// create_composition_surface_for_swap_chain wrapper の単体テスト。
+    ///
+    /// 実グラフィックスデバイス（D3D11 HARDWARE）と WUC ランタイムを要する統合的テスト。
+    /// `create_composition_swap_chain`（com/dxgi・要件 8.1）で自前所有面を生成し、
+    /// `ICompositorInterop::CreateCompositionSurfaceForSwapChain` の安全 wrapper 経由で
+    /// `ICompositionSurface` が取得できることを検証する（要件 6.1 の合成面装着の材料）。
+    #[test]
+    fn create_composition_surface_for_swap_chain_roundtrip() {
+        use crate::com::dxgi::create_composition_swap_chain;
+
+        // (1) Compositor 用の DispatcherQueue（begin_draw_roundtrip と同一方針）。
+        let dq = create_dispatcher_queue_controller(DQTAT_COM_ASTA)
+            .or_else(|e_asta| {
+                create_dispatcher_queue_controller(DQTAT_COM_NONE).map_err(|_| e_asta)
+            })
+            .expect("DispatcherQueueController 生成失敗（ASTA/NONE いずれも不可）");
+        let _dq = dq;
+
+        // (2) Compositor 生成 → ICompositorInterop へ cast。
+        let compositor = Compositor::new().expect("Compositor::new 失敗");
+        let interop = compositor
+            .cast::<ICompositorInterop>()
+            .expect("ICompositorInterop へ cast 失敗");
+
+        // (3) GraphicsCore から d3d/dxgi を得て自前所有の合成 swap chain を生成。
+        let core = GraphicsCore::new().expect("GraphicsCore::new 失敗（HARDWARE デバイス生成）");
+        let d3d = core.d3d().expect("d3d が None");
+        let dxgi = core.dxgi().expect("dxgi が None");
+        let swapchain =
+            create_composition_swap_chain(d3d, dxgi, 64, 48).expect("create_composition_swap_chain 失敗");
+
+        // (4) 安全 wrapper 経由で ICompositionSurface を取得（本タスクの検証対象）。
+        let surface = interop
+            .create_composition_surface_for_swap_chain(&swapchain)
+            .expect("create_composition_surface_for_swap_chain 失敗");
+
+        // 取得した ICompositionSurface が有効な COM オブジェクトであることを確認。
+        // SpriteVisual への装着（本番 render 経路）へ渡せる ICompositorInterop 由来の面。
+        use windows::UI::Composition::ICompositionSurface;
+        let _typed: &ICompositionSurface = &surface;
     }
 }
