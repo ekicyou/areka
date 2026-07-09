@@ -121,22 +121,22 @@
   - _Depends: 4.2_
   - _Boundary: example (emo-present.rs)_
 
-- [ ] 5.2 クリック透過の実挙動確認
+- [x] 5.2 クリック透過の実挙動確認
   - 不透明域クリックのログ/視覚反応、透明域クリックの背後プロセスへの透過を example 上で確認する
   - 観測完了: 不透明域クリックはログに捕捉が記録され、透明域クリックは背後アプリのウィンドウが反応することを手動観測で確認する
   - _Requirements: 2.2, 2.3, 6.3_
   - _Depends: 4.3_
   - _Boundary: example (emo-present.rs)_
-  - _Manual: 前提物 landing 済み（`on_shell_pressed` の毎押下 info! 捕捉ログ・commit 参照）。実観測＝`cargo run -p areka --example emo-present` で不透明域クリック→捕捉ログ発火／透明域クリック→ログ無し（背後プロセス反応）を開発者が確認するまで未チェック。headless 検証不能。_
+  - _Verified (2026-07-09・開発者手動観測@125% DPI): 不透明域クリック→捕捉ログ2回発火（`client(226,278)`・`(220,425)`・αマスク有効域着地）／透明域クリック→当アプリはログ無し・背後ウィンドウが反応（クリックスルー成立）を確認。カーソル形状の region 別変化は仕様外（本 spec は機能透過を保証）。_
 
-- [ ] 5.3 実 DPI（dpi≠96）実行での確認と記録
+- [x] 5.3 実 DPI（dpi≠96）実行での確認と記録
   - dpi≠96 のモニタ/スケーリング設定で 5.1/5.2/4.3 の巡回・クリックを再実施する
   - 実 DPI 実行手順を example の rustdoc に明記する
   - 観測完了: 実 DPI 環境での表示等倍・クリック座標一致を実機確認記録として残す（dpi=96 のみでは完了と見なさない）
   - _Requirements: 1.6, 2.5, 6.5_
   - _Depends: 5.1, 5.2_
   - _Boundary: example (emo-present.rs)_
-  - _Manual: 前提物 landing 済み（module rustdoc「実 DPI（dpi≠96）実行手順」・commit 参照）。実観測＝dpi≠96（scale 150%/200%）での実機実行で (a)表示等倍 (b)5.1 golden 非 panic (c)クリック座標一致 を開発者が記録するまで未チェック。dpi=96 のみでは完了不可・headless 検証不能。_
+  - _Verified (2026-07-09・開発者手動観測@**125% DPI＝dpi≠96**): (a)表示等倍＝surface0 焼き込みテキスト「アヒルやアヒル！…」がボケ/にじみ無くくっきり描画（DPI 仮想化なし）・実行ログの窓 bounds が surface 物理 px と厳密一致（surface0=434×687→(400,200)-(834,887)・surface1000=382×547→(400,200)-(782,747)）。(b)起動時 golden assert が両 target で 125% でも非 panic 通過。(c)クリック捕捉/透過が見た目の絵と座標一致（R2.5 恒等写像）。dpi=96 のみでない実 DPI 記録として成立。_
 
 - [x] 5.4 (P) EmoPresenter のエッジケース回帰テスト
   - 不正 `surface_id` 指定時の skip+表示不変、`EmptyComposition`→Hide 縮退+reply `Ok`、`Hide`→再 `ShowSurface` での復帰、をそれぞれ統合テストとして実装する
@@ -155,3 +155,4 @@
 - 4.2: example の UI スレッド駆動シーム＝`EmoBoot`（NonSend 資源・UI スレッドの `CommandSender` closure 内で presenter/assets 生成）＋`boot_present_system`（`FrameFinalize` の exclusive `&mut World` system）。`GraphicsCore` 存在＋`WucGraphicsResource::is_valid()` を待って一度だけ attach_target＋apply（`attached` フラグで one-shot）。GPU 資源は複数フレーム遅延で着地するため即時 apply は不可＝この待機が必須。4.3/5.1 はこの system を拡張する。fixture は `env!("CARGO_MANIFEST_DIR")`＋`../pilot/examples/shiori-host-32/fixtures/emo2/`。emo2 shell の `purple/a/null.png`（α無 PNG）は normalize seam で warn 継続（surface0 未使用）。**「2窓表示」は開発者の `cargo run -p areka --example emo-present` 実機確認が必要（headless 検証外・5.x で実 DPI 込み確認）**。
 - 3.2/validate: emo-present 依存に `windows-numerics`（workspace pin）を追加（`SpriteVisual::SetSize(Vector2)` 用・wintf と同用途）。design「Allowed Dependencies」明示リスト外だが境界違反でない良性追加＝横断監査で GO 確認済み。design 追補候補（非ブロッキング）。
 - validate-impl（2026-07-09）: フィーチャレベル GO（自動検証範囲）。機械: emo-present 21 lib+1 spike / emo-atlas 全 / wintf 550 lib 緑（exit 0）・example build 緑・marker grep clean。横断監査 CRITICAL NONE（依存方向 OK・File Structure MATCH・境界 OK・unsafe 隔離 OK・要件 8/8 群網羅）。**残: 5.2/5.3 の実機ランタイム観測（手動・dpi≠96 込み）のみ＝MANUAL_VERIFY_REQUIRED**。dead_code 3件は予約シーム（`SwapChainPresenter::size`・`VisualMount::text_slot`）で許容。
+- 手動観測完了（2026-07-09・開発者@125% DPI）: 5.2/5.3 とも実機確認済み→`[x]`。**feature 全 17 サブタスク完了**。fixture 知見: emo2 shell の `surface0.png`（434×687）は**バルーン焼き込みのサンプル立ち絵**（キャラ＋セリフ入り吹き出し「アヒルやアヒル！…」が1枚に一体化）＝伺かの挨拶用デフォルト立ち絵の慣習。emo-present は当画像を忠実表示するのみ（テキスト描画機能ではない・emo-text-layer 別 spec は不変）。cycle が surface1000（bind 合成・焼き込みバルーン無し）へ移ると当該バルーンは消える。この「焼き込みバルーン」と emo-present の別 balloon 窓（`balloons0.png`＝空枠・内側 A=255 不透明白）は別物。
