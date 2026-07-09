@@ -25,7 +25,7 @@ M-boot の 5 トラックは全て完了 or 残 2（window-placement／emo-text-
 - **surface 側の部品（seriko ✅）**: `spawn_seriko(resolver: SurfaceResolver, static_binds: BindSet, out: O) -> (SerikoSink, ActorHandle)` where `O: SurfaceOutput`——`SerikoSink` は `SurfaceSink` 実装済み＝そのまま `surface_sink` に挿せる。**空白は `O`（`SurfaceOutput` の本番実装）**: `DisplayCommand::Show { scope, surface_id, binds } / Hide { scope }` → emo-present `PresentCommand::ShowSurface { target, surface_id, binds, reply } / Hide` への**アダプタ**（scope=`ActorKey`→`TargetId` 写像を含む）。
 - **text 側の部品（emo-text-layer・依存待ち）**: TextSink 実装 sink → `text_sink` に挿す。
 - **表示側の部品（emo-present ✅）**: `EmoPresenter`（**`!Send`＝UI スレッド常駐**）・`attach_target(world, target, window: Entity, emo_world, atlas)`・`apply(world, PresentCommand)`・`build_balloon_target(balloon_dir, decoder)`。UI スレッドへの指令配送は `spawn_ui`/`UiSender` ✅（actor-foundation）。
-- **窓側の部品（window-placement・依存待ち）**: スコープ→Window entity の写像を公開 API から取得（あちらの brief に契約記載済み）。`open_startup_window` シームの中身（ダミー窓→本物窓）もあちらが差し替え済みの想定。
+- **窓側の部品（window-placement・依存待ち）**: **キャラ窓（スコープ別）＋バルーン窓**の Window entity 写像を公開 API から取得（あちらの brief に契約記載済み・07-09 最終精査でバルーン窓を写像に含むことを両 brief で対に確定）。`open_startup_window` シームの中身（**ダミー窓→本物窓の差し替え＝あちらの領分**）も完了済みの想定＝本ユニットはダミー窓に関与しない（残渣が見つかった場合の後始末のみ）。
 - **shell 側の構築入力（全て ✅）**: `MountModel`（package-mount）→ `parse`（shell-parse）→ `EmoWorld::build`＋`bake`（emo-atlas/compose）→ `SurfaceResolver`／`build_static_bindset`（seriko・bindgroup default 由来）——example `emo-present.rs` に組立の実績コードあり（donor）。
 
 ## Desired Outcome
@@ -40,14 +40,14 @@ M-boot の 5 トラックは全て完了 or 残 2（window-placement／emo-text-
 
 1. **SurfaceOutput→PresentCommand アダプタ（本ユニットの新規実装の本体）**: `DisplayCommand` → `UiSender` 経由で UI スレッドの `EmoPresenter::apply` へ。scope（`ActorKey`）→`TargetId` の写像・バルーン target の割当（shell=scope 別 target・balloon=独立 target）をここで確定。**アダプタは薄く**（変換と配送のみ・状態を持たない）。
 2. **main.rs の結線差し替え**: `LogSink`×2 → `SerikoSink`＋text-layer sink。構築順序＝mount→shell parse→bake/EmoWorld→resolver/bindset→spawn_seriko→boot(GhostBootOptions)（`WinApp::new` との順序・UI スレッド初期化との整合は design で確定——現行は boot が WinApp 前）。
-3. **窓とプレゼンタの装着**: window-placement の窓写像から `attach_target`（UI スレッド上）。balloon は `build_balloon_target`。
-4. **終了経路の総仕上げ**: 窓 close→`shutdown(CloseReason)`→OnClose 応答の**再生完了待ち**（kanade ✅ の close 握手＝sakura TalkDone 突合）→全 join。ダミー窓・smoke ゲートの後始末（`AREKA_APP_SMOKE_EXIT_MS` は本物経路でも生かす＝CI smoke 継続）。
+3. **窓とプレゼンタの装着**: window-placement の窓写像（**キャラ窓＋バルーン窓**）から `attach_target`（UI スレッド上）。balloon target は `build_balloon_target`＋**バルーン窓 entity**へ装着し、**text-layer の装着 API（あちらが emo-present へ増設する公開経路）でバルーン窓の text_slot へ文字層を接続**——TextSink の actor spawn・UiSender 結線も本ユニットが main で行う（text-layer は sink 型と装着 API を提供するまで＝あちらの brief と対）。
+4. **終了経路の総仕上げ**: 窓 close→`shutdown(CloseReason)`→OnClose 応答の**再生完了待ち**（kanade ✅ の close 握手＝sakura TalkDone 突合）→全 join。smoke ゲートは本物経路で存続（`AREKA_APP_SMOKE_EXIT_MS`＝CI smoke 継続。ダミー窓の退役は **window-placement の領分・完了済み想定**——残渣の後始末のみ本ユニット）。
 5. **新規機構は作らない**: 全部品は完成済み——本ユニットは**アダプタ1個＋結線＋観測**に徹する（フレームワーク化禁止・記憶 areka-concurrency-model）。
 
 ## クロスユニット契約（2026-07-09）
 
 - **消費する正本（再定義しない）**: talk 契約=`areka-talk` ✅／再生出力契約 `TalkCue`/`cue_target_of`=sakura ✅／表示指令 `DisplayCommand`=seriko ✅／`PresentCommand`/`TargetId`=emo-present ✅／死活語彙 `LifecycleReport`=host32-lifecycle ✅／sink 注入契約 `GhostBootOptions`=ghost-setup ✅。**本ユニットが新たに正本を立てるのは「scope→TargetId 写像」のみ**（アダプタ内・二人立ち M-dual が将来消費）。
-- **上流2本への申し送り（依存が先に完了する前提の確認点）**: window-placement は「スコープ→Window entity 写像の公開 API」（あちらの brief 記載済み）・emo-text-layer は「`TextSink + Clone + Send + 'static` を満たす sink 型」（あちらの brief 記載済み）——両者ともこの形なら本ユニットは結線のみで済む。
+- **上流2本への申し送り（依存が先に完了する前提の確認点・07-09 最終精査で補完）**: window-placement は「**キャラ窓（スコープ別）＋バルーン窓**の Window entity 写像の公開 API」（あちらの brief 記載済み・バルーン窓の同梱が必達——無いと balloon target が装着不能で統合が詰む）・emo-text-layer は「`TextSink + Clone + Send + 'static` を満たす sink 型」＋「**text_slot への装着 API**（emo-present へ増設する公開経路）」（あちらの brief 記載済み）——この形なら本ユニットは結線のみで済む。
 - **M-e2e（emo2-conformance-e2e）との境界**: 本ユニット＝**boot→talk→close の一本道**（M-boot 完成）。touch/メニュー/選択肢を含む一周適合は M-e2e（M-life/M-dialogue 後）——アプリ組み上げ三段の第三段はあちらのまま。
 
 ## ukadoc 必読（design 着手時）
@@ -57,7 +57,7 @@ M-boot の 5 トラックは全て完了 or 残 2（window-placement／emo-text-
 
 ## Scope
 
-- **In**: SurfaceOutput→PresentCommand アダプタ（scope→TargetId 写像含む）／main.rs の実 sink 結線・構築順序確定／窓写像→attach_target 装着／balloon target 結線／実 pasta helper での boot→talk→close 実走（env-gate）／決定論 spine の統合テスト／ダミー窓経路の退役。
+- **In**: SurfaceOutput→PresentCommand アダプタ（scope→TargetId 写像含む）／main.rs の実 sink 結線・構築順序確定／窓写像（キャラ＋バルーン）→attach_target 装着／balloon target＋text-layer 装着 API の結線（TextSink actor spawn・UiSender 含む）／実 pasta helper での boot→talk→close 実走（env-gate）／決定論 spine の統合テスト／退役残渣の後始末（ダミー窓本体の差し替えは placement 済み想定）。
 - **Out**: 窓の生成・配置・ドラッグ（**window-placement**）／文字描画（**emo-text-layer**）／touch・メニュー・選択肢（**M-life/M-dialogue**）／一周適合証明（**emo2-conformance-e2e**）／二人立ち target 割当の本格化（**M-dual**・写像シームまで）。
 
 ## Boundary Candidates

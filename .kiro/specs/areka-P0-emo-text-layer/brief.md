@@ -47,7 +47,7 @@ sakura の Balloon 向け cue を受けて、**バルーン surface の上（予
 - **Choice 表示（M-dialogue）への継承**: `\q` 選択肢は choice-render の領分だが、**行レイアウト・領域定義・スロット装着の公開形は choice-render が再利用できる形**に切る（テキスト行の「クリック可能範囲」を返せる構造シームだけ用意・実装しない）。
 - **文字装飾タグ（`\f` 系）**: emo2 使用分を design で fixture 実測し、未使用なら**型シームのみ**（`disable.font.*` 等の SSP 拡張も同様）。
 - **バルーン推奨 DPI**: `descript_balloon` の **`dpi,推奨DPI`**（SSP 2.7.21+・省略時 96 固定）——文字サイズのスケール解釈に効き得る。M1 は 96 前提素通しで可かを design で1判断（window-placement brief にも同キー注記あり・整合させる）。
-- **並走保護規約（window-placement と同時着手・07-09 拡張キー追加で更新）**: 本ユニットは **`crates/areka`（main.rs・placement 系）を触らない**。`crates/areka-emo-present` への変更は **text_slot 公開増分（additive）のみ**・`crates/areka-parsers` への変更は **balloon model の `areka.writing-mode` 転記フィールド増分（additive）のみ**。あちら（placement）は emo-present／areka-parsers のどちらも改変しない。衝突面ゼロで並走可。
+- **並走保護規約（window-placement と同時着手・07-09 最終精査で精密化）**: 本ユニットは **`crates/areka` の既存ファイル（main.rs・placement 系モジュール）を触らない**——**専用 example の新規追加は可**（`crates/areka/examples/` への新規ファイル＝あちらと非衝突。emo-present crate 側 examples に置く選択も design 裁量）。`crates/areka-emo-present` への変更は **text_slot 公開増分（additive）のみ**・`crates/areka-parsers` への変更は **balloon model の `writing_mode` 転記フィールド増分（additive）のみ**。あちら（placement）は emo-present／areka-parsers のどちらも改変しない。衝突面ゼロで並走可。
 - **ghost-setup への sink 結線は emo2-boot の領分**: 本ユニットは `TextSink + Clone + Send + 'static` を満たす sink 型を作るまで（`GhostBootOptions.text_sink` への注入・実 talk 経路の結線は M-boot 統合）。
 
 ## ukadoc 必読（design 着手時に ukadoc MCP `get_doc`/`search_docs` で正典参照・2026-07-09 確認）
@@ -78,7 +78,7 @@ sakura の Balloon 向け cue を受けて、**バルーン surface の上（予
 ## Existing Spec Touchpoints
 
 - **Extends**: `completed/areka-P0-emo-present`（text_slot の公開増分・additive のみ）／`completed/wintf-P0-typewriter`・wintf text 資産（lift or 参照）。
-- **Adjacent**: `areka-P0-window-placement`（**並走中の想定**——保護規約: こちらは areka-emo-present 増分・あちらは crates/areka＝非交差）／`areka-P0-choice-render`（M-dialogue・シーム継承先）。
+- **Adjacent**: `areka-P0-window-placement`（**並走中の想定**——保護規約: こちらは emo-present/parsers の additive 増分・あちらは crates/areka 既存ファイル・examples 新規追加は双方可＝非交差）／`areka-P0-choice-render`（M-dialogue・シーム継承先）。
 
 ## Constraints
 
