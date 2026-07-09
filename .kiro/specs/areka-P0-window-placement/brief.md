@@ -1,7 +1,7 @@
 # Brief: areka-P0-window-placement
 
 > **種別**: 本坑（main）。⓪ ghost（ゴーストエンジン）トラックのユニット（M-boot）。
-> **調査日**: 2026-07-03（mock-shell/wintf コード深掘り＋ukadoc 正典）／**2026-07-05 改稿**（リジェクト教訓の織り込み）。
+> **調査日**: 2026-07-03（mock-shell/wintf コード深掘り＋ukadoc 正典）／**2026-07-05 改稿**（リジェクト教訓の織り込み）／**2026-07-09 再調整**（ghost-setup✅・emo-present✅ の実シンボル突合）。
 > **⚠️ 2026-07-05 開発順序リジェクト（教訓の正本）**: 本ユニットは旧 brief の「mock-shell lift＋fixture 観測」前提で一度着手され、**実 DPI で座標が破綻**——`Monitor.work_area`/`WindowPos`＝物理 px と `BoxStyle` Px＝論理 px の**混在**により resolve が窓を沈め・drag が DPI 再スケールで二重変換→画面外消失。**dpi=96 では自己整合するためテスト緑が欠陥を隠した**。ワークツリーごとリジェクト（記憶 areka-placement-real-ghost-first／areka-window-placement-dpi-coordinate-defect）。
 > **前提依存（順序ゲート・2026-07-05 確定・2026-07-09 解消）**:
 > ```
@@ -16,8 +16,10 @@
 
 ## Current State
 
-- **mock-shell の位置づけ（2026-07-05 格下げ・app-shell ✅ で所在確定）**: `crates/areka/examples/mock-shell.rs`（app-shell が挙動不変保全）は shell 窓＋balloon 窓＋ドラッグの動作実績を持つが、**lift は「窓生成 API の呼び方」の donor に限る**。初期位置 (400,200)・追従 offset (335,0) 等の**座標値・配置ロジックは持ち込み禁止**（デモ合わせ込み＝実 DPI 破綻の実証済み経路）。demo は DPI 処理ゼロ・work_area 非参照。**差し込み先は main.rs の `open_startup_window(&WinApp)` シーム**（ダミー窓を本物ゴースト窓生成へ差し替える・app-shell が用意した唯一の置換点——ghost-setup と分担: 結線=あちら・窓=こちら）。
-- **wintf 座標系の論理/物理混在（実装前の必須確定事項）**: `Monitor.work_area`＝物理 px・`WindowPos`＝物理 px・`BoxStyle` Px＝論理 px・`GlobalArrangement` scale＝DPI 係数——**この契約を design 冒頭で型レベルに確定してから実装**（07-05 リジェクトの直接原因。混在演算を型で排除する newtype 等は design 判断）。
+- **mock-shell の位置づけ（2026-07-05 格下げ・app-shell ✅ で所在確定）**: `crates/areka/examples/mock-shell.rs`（app-shell が挙動不変保全）は shell 窓＋balloon 窓＋ドラッグの動作実績を持つが、**lift は「窓生成 API の呼び方」の donor に限る**。初期位置 (400,200)・追従 offset (335,0) 等の**座標値・配置ロジックは持ち込み禁止**（デモ合わせ込み＝実 DPI 破綻の実証済み経路）。demo は DPI 処理ゼロ・work_area 非参照。**差し込み先は main.rs の `open_startup_window(&WinApp)` シーム**（ダミー窓を本物ゴースト窓生成へ差し替える・app-shell が用意した唯一の置換点）。
+- **第一級 donor＝`crates/areka/examples/emo-present.rs`（2026-07-09 追加・本番ゴースト実表示の実績コード）**: emo-present ✅ が実 DPI 125% で emo2 実 surface を表示した example。窓生成の実形＝`Window`＋`WindowStyle { style: WS_POPUP|WS_VISIBLE, ex_style: WS_EX_LAYERED|WS_EX_TOOLWINDOW|WS_EX_TOPMOST }`＋`WindowPos { position, size: surface 原寸物理px }`＋`HitTest::none()` を spawn（`create_shell_window`/`create_balloon_window`）。**DPI 事故回避のため taffy（`BoxStyle`）非経由で `WindowPos` に物理 px 直渡し**——本ユニットの座標契約の先行実例。ただし example の座標決め打ち・`WS_EX_TOPMOST` は donor 対象外（z-order 既定は本ユニットが所有＝非 topmost が SSP de-facto）。
+- **ghost-setup ✅（2026-07-09 完了）＝シーム所有権は本ユニット単独へ**: ghost-setup は `areka_ghost::boot`（`WinApp::new` の前）→ `app.run()` 後 `shutdown(CloseReason::System)` を main.rs に結線済みだが、**ダミー窓（`spawn_dummy_window`）には不関与のまま完了**（旧 brief の「シーム調停」懸念は解消——`open_startup_window` の中身を触るのは本ユニットのみ）。sink は両方 `LogSink`＝表示未結線（実 sink 差し替えは **emo2-boot（M-boot 統合）**の領分・本ユニットではない）。
+- **wintf 座標系の論理/物理混在（実装前の必須確定事項・2026-07-09 実シンボル確認済み）**: `Monitor.work_area`/`bounds`＝物理 px（docstring 明記）・`WindowPos`＝物理 px（SetWindowPos 直渡し）・`BoxStyle` Px＝論理 DIP（taffy）・ドラッグ系（`DraggingState`/`DragConstraint`/accumulator）＝**全て物理 px（各 doc 明記）**。**変換ヘルパは実在**: `wintf` の `DPI` Component（`window/dpi.rs`）が `to_logical_x/y/size/point`・`to_physical_*`（half-away-from-zero 丸め）・`scale_x/y` を提供——**この契約を design 冒頭で型レベルに確定してから実装**（07-05 リジェクトの直接原因。混在演算を型で排除する newtype 等は design 判断）。
 - **wintf 窓生成 API**: `EcsWindowFactory::create_window`（`Window`+`WindowStyle`+`WindowPos` entity → Win32 窓・ex_style 自動計算・clickthrough 統合済み）。多窓は WUC compositor 1 個共有＋窓ごと Visual ツリーで対応済み。
 - **既定位置ロジックは無**: ukadoc の `seriko.alignmenttodesktop` 系を読む・work area を参照する・スコープ別配置を決めるコードは存在しない。
 - **位置永続化は無**（`ghost.dat` 不存在確認済み）— M-life の `position-persist` 領分で正しい。
@@ -40,7 +42,8 @@
 
 ## クロスユニット契約（後続を詰ませない事前考慮・2026-07-03 fixture 実測反映）
 
-- **emo-present への窓引き渡し契約**: 生成した **Window entity（handle）を emo-present が受け取り surface を装着**する——この受け渡し口を機構の公開 API として切る（どちらが先に完了しても M-boot 統合で結線可能・emo-present brief と対の契約）。
+- **emo-present への窓引き渡し契約（2026-07-09 実形確定）**: 受け取り側 API は実装済み——`EmoPresenter::attach_target(&mut self, world: &mut World, target: TargetId, window: Entity, emo_world: EmoWorld, atlas: AtlasTable)`。**本ユニットは Window entity を生成して返すだけでよい**（装着呼出しは emo2-boot＝M-boot 統合が行う）。生成した窓の entity を「スコープ→Window entity」の写像として公開 API から取得できる形に切ること（`TargetId` との対応付けは統合側の裁量に残す）。
+- **並走保護規約（emo-text-layer と同時着手・2026-07-09）**: 本ユニットは **`crates/areka-emo-present` を改変しない**（テキスト層の公開面増分はあちらの領分）。あちらは `crates/areka`（main.rs・placement 系）を触らない。衝突面ゼロで並走可。
 - **emo2 fixture 実測（2026-07-03・shell descript）**: `seriko.alignmenttodesktop,bottom`（既定と一致）・**`sakura.defaultx,0`／`kero.defaultx,0` を使用**（`defaulty` は無し）→ **`defaultx`/`defaulty` キーの解決を design 対象に含める**（alignmenttodesktop カスケードに加えて。x=0 の意味論＝work area 基準の解釈は SSP de-facto を design で確認）。`sakura.balloon.alignment,left`／`kero.balloon.alignment,right` も存在（バルーン配置系の後続ユニット向け・本ユニットは記録のみ）。
 - **ulw-removal ✅ 完了（2026-07-05）＝新 API 前提で書く**: `CompositionMode` は撤去済み（factory は常時 `WS_EX_NOREDIRECTIONBITMAP`）。窓生成は**現行 API（collapse 後）を最初から前提**にする。
 - **通信モデル**: 窓操作（生成・移動・z-order）は **UI スレッド専有**。本ユニットは `areka-actor` 非依存（UI スレッド内で完結）だが、**他アクターからの窓移動指令**（将来の `\![move]`＝sakura 発・二人立ち連動等）は実装済みの **UI 配送ブリッジ（`spawn_ui`/`UiSender`）**経由で届く前提——窓移動の公開 API を「UI スレッド上で呼ばれる関数」として切っておく（ブリッジが後からその関数を呼ぶだけで済む形）。
@@ -59,6 +62,7 @@
 - **⚠️ 重要修正（総ざらいで発見）**: ① **`defaulttop` は alignmenttodesktop=free のときだけ効く**——bottom 整列（emo2）では Y は下端固定＝defaulttop 無視の分岐を design に反映 ② **`defaultx` は ukadoc で確認できず**（`defaulttop`/`defaultleft` 系は確認）——emo2 fixture は `sakura.defaultx,0` を実使用＝**SSP de-facto キー**。design で `defaultx`⇔`defaultleft` の関係（同義/別義・X 座標系の原点）を SSP 実挙動で確定し、**両表記を受ける寛容実装**にすること。
 - **brief 未網羅→design で埋める項目**: ① `alignmenttodesktop` の**値域全量**（bottom 既定は確認済み・top/free の正確な挙動）② 座標系の原点（work area か モニタか・複数モニタ時の既定）③ 起動時可視性・スケール系キーの有無（あればシームのみ）④ ghost↔shell の優先度表を design.md に明文化（ghost 全体＜ghost スコープ＜shell 全体＜shell スコープ）。
 - **具体指示**: design 冒頭で `descript_ghost`/`descript_shell` の placement 系キーを `get_doc` し、**「キー×所在×優先度×有効条件（free 限定か）」の1枚表**を design.md に載せること。emo2 実測値（bottom・defaultx,0）をその表の検証行に使う。
+- **追記（2026-07-09 発見）**: `descript_balloon` に **`dpi,推奨DPI`**（SSP 2.7.21+・省略時 96 固定）が存在——バルーン窓のサイズ/スケール決定に効き得る。design で「バルーン推奨 DPI×モニタ実 DPI」の取り扱い（M1 は 96 前提の素通しで可か）を1判断として明記（表示スケール本体は emo 側・本ユニットは窓サイズへの影響のみ）。
 
 ## Scope
 
@@ -77,13 +81,13 @@
 
 ## Upstream / Downstream
 
-- **Upstream**: **`completed/areka-P0-emo-present` ✅（順序ゲート解消・本番ゴースト実表示＝検証対象そのもの）**／`areka-P0-package-mount` ✅（shell dir・descript 供給）／`areka-P0-parser-foundation` ✅（KV）／wintf 窓・ドラッグ・clickthrough 基盤 ✅（ただし座標契約の確定＝Approach 0 が先）。
-- **Downstream**: `areka-P0-ghost-setup`（lifecycle 統括が本機構を呼ぶ）／`position-persist`（既定位置の上書き）／`dual-window`・`\![move]`（結合クラスタ）。
+- **Upstream**: **`completed/areka-P0-emo-present` ✅（順序ゲート解消・本番ゴースト実表示＝検証対象そのもの）**／`completed/areka-P0-ghost-setup` ✅（main.rs の boot/shutdown 結線済み・窓には不関与）／`areka-P0-package-mount` ✅（shell dir・descript 供給）／`areka-P0-parser-foundation` ✅（KV）／wintf 窓・ドラッグ・clickthrough 基盤 ✅（ただし座標契約の確定＝Approach 0 が先）。
+- **Downstream**: **`areka-P0-emo2-boot`（M-boot 統合・本機構の窓へ EmoPresenter を装着し実 sink を結線＝M-boot 完成の最終ユニット）**／`position-persist`（既定位置の上書き）／`dual-window`・`\![move]`（結合クラスタ）。
 
 ## Existing Spec Touchpoints
 
 - **Extends**: `completed/areka-mock-shell`（窓生成・ドラッグの donor）。
-- **Adjacent**（2026-07-09 更新③）: `completed/areka-P0-app-shell` **✅**（main.rs 骨格化済み＝本ユニットは**骨格の上で**窓機構を実装・main.rs 衝突は構造ごと解消済み）／`completed/areka-P0-emo-present` **✅**（順序ゲート解消済み。境界: Window entity=本ユニット／表示供給＋emo ランタイム=emo-present）／`areka-P0-ghost-setup`（⓪ 同エンジン・**並走中**——境界: エンジン結線・終了統括=あちら／窓生成・配置=こちら。`open_startup_window` シームの中身を両者が触る点は結線時に調停）。
+- **Adjacent**（2026-07-09 更新④）: `completed/areka-P0-app-shell` **✅**（main.rs 骨格化済み＝本ユニットは**骨格の上で**窓機構を実装・main.rs 衝突は構造ごと解消済み）／`completed/areka-P0-emo-present` **✅**（順序ゲート解消済み。境界: Window entity=本ユニット／表示供給＋emo ランタイム=emo-present）／`completed/areka-P0-ghost-setup` **✅**（完了・ダミー窓不関与＝`open_startup_window` シームの調停は不要に。境界: エンジン結線・終了統括=あちら〔済〕／窓生成・配置=こちら）／`areka-P0-emo-text-layer`（**並走中の想定**——保護規約: あちらは areka-emo-present の増分・こちらは crates/areka＝非交差）。
 
 ## Constraints
 
