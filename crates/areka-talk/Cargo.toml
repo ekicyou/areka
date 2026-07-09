@@ -1,0 +1,12 @@
+[package]
+name = "areka-talk"
+workspace = "../.."
+description = "Sole physical definition of the talk hand-off contract (StartTalk/TalkDone/TalkEndReason/TalkId) shared by kanade and sakura; std-only, zero dependencies"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[dependencies]

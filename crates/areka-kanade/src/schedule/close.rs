@@ -12,9 +12,9 @@
 //! - `ClosePending{reason}` + `ShioriReply{NoContent}`（204）→ **応答なし＝無言終了**
 //!   （DD-11: 204 は拒否ではない・OnCloseAll は発行しない）。追加イベントを発行せず
 //!   `Unloading{CloseSilent}` へ直行する（Req 4.6）。
-//! - `CloseTalkWait{talk_id}` + `TalkDone{talk_id, quit:false}` → **終了拒否**（Req 4.5）。
-//!   終了させず `Steady{None}` へ復帰し、次 Tick で pump が再開する。
-//!   （quit:true は横断アームが `Unloading{Quit}` へ送るため本層には届かない。）
+//! - `CloseTalkWait{talk_id}` + `TalkDone{talk_id, reason: Ended | Interrupted}` →
+//!   **終了拒否**（Req 4.5）。終了させず `Steady{None}` へ復帰し、次 Tick で pump が再開する。
+//!   （`Quit` は横断アームが `Unloading{Quit}` へ送るため本層には届かない。）
 //! - `CloseTalkWait` + `Tick` → 再生完了待ちに時刻基準の上限（deadline）を設け、上限超過を
 //!   判定して超過なら `error!` の上で `Unloading{DeadlineExceeded}` へ進む（Req 4.7）。
 //!   握手入口で `last_now` が None（Tick 未受領）だった場合は deadline を None のまま入り、
@@ -31,10 +31,10 @@ use crate::talk::{StartTalk, TalkId};
 ///
 /// mod.rs のルーティング契約:
 /// - `ClosePending` の ShioriReply（非 Failed）→ 本 step。
-/// - 既知 talk の `CloseTalkWait` + `TalkDone{quit:false}` → 本 step。
+/// - 既知 talk の `CloseTalkWait` + `TalkDone{reason: Ended | Interrupted}` → 本 step。
 /// - `ClosePending` / `CloseTalkWait` の Tick → 本 step。
 ///
-/// quit:true・ForceQuit・ShioriDown・Failed は横断アームで捌かれ本層には届かない。
+/// `TalkEndReason::Quit`・ForceQuit・ShioriDown・Failed は横断アームで捌かれ本層には届かない。
 pub(crate) fn step(state: State, input: Input, config: &KanadeConfig) -> (State, Vec<Action>) {
     match state.phase {
         Phase::ClosePending { .. } => on_close_pending(state, input, config),
@@ -103,7 +103,8 @@ fn on_close_pending(mut state: State, input: Input, config: &KanadeConfig) -> (S
 
 /// `CloseTalkWait`（close talk 再生完了待ち／期限判定）の遷移。
 ///
-/// - `TalkDone{quit:false}` → **終了拒否**・`Steady{None}` へ復帰（Req 4.5・次 Tick で pump 再開）。
+/// - `TalkDone{reason: Ended | Interrupted}` → **終了拒否**・`Steady{None}` へ復帰
+///   （Req 4.5・次 Tick で pump 再開）。
 /// - `Tick{now}` → 期限判定（Req 4.7・注入時刻のみで決定的）:
 ///   - deadline 未設定（None）→ 本 Tick を起点に設定・維持。
 ///   - `now >= deadline` → error!＋`Unloading{DeadlineExceeded}`（終了系列継続）。
@@ -125,10 +126,10 @@ fn on_close_talk_wait(
 
     match input {
         Input::TalkDone(done) => {
-            // mod.rs は既知 talk の quit:false のみを委譲する（quit:true は横断アームで
-            // Unloading{Quit}）。ゆえに本アームは close talk 完了＝終了拒否のみを受ける。
+            // mod.rs は既知 talk の Ended／Interrupted（非 quit）のみを委譲する（Quit は
+            // 横断アームで Unloading{Quit}）。ゆえに本アームは close talk 完了＝終了拒否のみを受ける。
             let _ = done; // talk_id 突合は mod.rs 済み。
-            tracing::info!(target: "kanade", event = "close_refused", talk_id = talk_id.0, "close talk 完了・quit 偽——終了拒否・定常運転へ復帰");
+            tracing::info!(target: "kanade", event = "close_refused", talk_id = talk_id.0, "close talk 完了・非 quit——終了拒否・定常運転へ復帰");
             state.phase = Phase::Steady { talk: None };
             (state, Vec::new())
         }
@@ -181,7 +182,7 @@ mod tests {
     use super::*;
     use crate::msg::{CloseReason, ShioriCall};
     use crate::schedule::step;
-    use crate::talk::TalkDone;
+    use crate::talk::{TalkDone, TalkEndReason};
 
     fn config() -> KanadeConfig {
         KanadeConfig::new("master", "1.0.0")
@@ -219,12 +220,12 @@ mod tests {
         }
     }
 
-    // === 分岐1: 応答スクリプトあり（quit 真） ===
+    // === 分岐1: 応答スクリプトあり（reason=Quit） ===
     // ClosePending + Value → StartTalk + CloseTalkWait（deadline = last_now + D）。
-    // 続く TalkDone{quit:true} は横断アームで Unloading{Quit} + ShioriUnload。
+    // 続く TalkDone{reason:Quit} は横断アームで Unloading{Quit} + ShioriUnload。
 
     #[test]
-    fn value_starts_close_talk_then_quit_true_unloads() {
+    fn value_starts_close_talk_then_quit_unloads() {
         let d = 30_000; // 既定。
         let (s1, actions1) = step(
             close_pending(CloseReason::User, Some(MonotonicMs(1_000)), 5),
@@ -251,12 +252,12 @@ mod tests {
             _ => panic!("expected StartTalk"),
         }
 
-        // quit:true TalkDone（既知 talk）→ 横断アームで Unloading{Quit} + ShioriUnload。
+        // reason=Quit TalkDone（既知 talk）→ 横断アームで Unloading{Quit} + ShioriUnload。
         let (s2, actions2) = step(
             s1,
             Input::TalkDone(TalkDone {
                 talk_id: TalkId(5),
-                quit: true,
+                reason: TalkEndReason::Quit,
             }),
             &config(),
         );
@@ -264,10 +265,10 @@ mod tests {
         assert!(matches!(actions2.as_slice(), [Action::ShioriUnload]));
     }
 
-    // === 分岐2: 応答スクリプトあり（quit 偽）→ 終了拒否→定常復帰→pump 再開 ===
+    // === 分岐2: 応答スクリプトあり（reason=Ended）→ 終了拒否→定常復帰→pump 再開 ===
 
     #[test]
-    fn value_then_quit_false_refuses_close_and_resumes_pump() {
+    fn value_then_ended_refuses_close_and_resumes_pump() {
         let (s1, _a1) = step(
             close_pending(CloseReason::System, Some(MonotonicMs(1_000)), 5),
             Input::ShioriReply {
@@ -280,12 +281,12 @@ mod tests {
             _ => panic!("expected CloseTalkWait"),
         };
 
-        // TalkDone{quit:false}（既知 talk）→ 終了拒否・Steady{None} へ復帰。
+        // TalkDone{reason:Ended}（既知 talk）→ 終了拒否・Steady{None} へ復帰。
         let (s2, actions2) = step(
             s1,
             Input::TalkDone(TalkDone {
                 talk_id,
-                quit: false,
+                reason: TalkEndReason::Ended,
             }),
             &config(),
         );
@@ -303,6 +304,39 @@ mod tests {
             }
             _ => panic!("expected OnSecondChange GET after resume"),
         }
+    }
+
+    // === 分岐2b: 応答スクリプトあり（reason=Interrupted）→ Ended と同一経路で終了拒否 ===
+    // kanade の 3 値ルーティング網羅（本タスクの担当）: Interrupted は防御的に非 quit 扱いへ
+    // 振られ、close talk 完了としては Ended と同じ「終了拒否・定常復帰」を辿る。
+
+    #[test]
+    fn value_then_interrupted_refuses_close_same_as_ended() {
+        let (s1, _a1) = step(
+            close_pending(CloseReason::System, Some(MonotonicMs(1_000)), 5),
+            Input::ShioriReply {
+                outcome: ShioriOutcome::Value("stay".to_string()),
+            },
+            &config(),
+        );
+        let talk_id = match s1.phase {
+            Phase::CloseTalkWait { talk_id, .. } => talk_id,
+            _ => panic!("expected CloseTalkWait"),
+        };
+
+        let (s2, actions2) = step(
+            s1,
+            Input::TalkDone(TalkDone {
+                talk_id,
+                reason: TalkEndReason::Interrupted,
+            }),
+            &config(),
+        );
+        assert!(
+            matches!(s2.phase, Phase::Steady { talk: None }),
+            "Interrupted も Ended と同じく終了拒否・定常復帰"
+        );
+        assert!(actions2.is_empty(), "TalkDone 自体は副作用なし");
     }
 
     // === 分岐3: 応答なし（204）→ 無言終了 ===

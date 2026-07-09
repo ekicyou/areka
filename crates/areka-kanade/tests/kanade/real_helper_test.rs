@@ -15,7 +15,8 @@
 //! spawn→HELLO pump→LOAD（`send_request(MsgTag::Load, ..)`）の接続確立手順は kanade の責務外で、
 //! テスト側の connect クロージャが自前結線する。これも上記既存 E2E の手順
 //! （`ParentMessageWindow::create` → `spawn` → `pump_until_hello_or` → `send_request(Load)`）を
-//! 忠実に写している。connect が成功すれば `ShioriConnection { window, helper }` を返し、失敗は
+//! 忠実に写している。connect が成功すれば `Box<dyn ShioriBackend>`（実体は
+//! `ShioriConnection { window, helper: HelperLifecycle::new(handle) }`）を返し、失敗は
 //! `Err(String)`（→ `ShioriDown`）で返す。
 //!
 //! # 親窓 1 枚制約
@@ -26,11 +27,11 @@ use std::path::PathBuf;
 use std::time::Duration;
 
 use areka_kanade::{
-    CloseReason, KanadeConfig, KanadeMsg, MonotonicMs, ShioriConnection, spawn_kanade,
-    spawn_shiori_actor,
+    CloseReason, KanadeConfig, KanadeMsg, MonotonicMs, ShioriBackend, ShioriConnection,
+    spawn_kanade, spawn_shiori_actor,
 };
 use shiori_host32_host::process_host::LOAD_ACK_TIMEOUT;
-use shiori_host32_host::{ParentMessageWindow, spawn};
+use shiori_host32_host::{HelperLifecycle, ParentMessageWindow, spawn};
 use shiori_host32_ipc::MsgTag;
 
 use super::common::{DEFAULT_TIMEOUT, QuitPolicy, join_bounded, spawn_mock_sakura};
@@ -89,8 +90,8 @@ fn resolve_helper_exe() -> Result<PathBuf, String> {
 /// 4. `send_request(MsgTag::Load, &[], LOAD_ACK_TIMEOUT)` で LOAD を先行発行し ack `[1]` を確認。
 ///
 /// いずれかの段で失敗すれば `Err(String)`（connect 失敗＝ShioriDown へ写る）。成功時は
-/// `ShioriConnection { window, helper }` を返す（`helper` の drop で子プロセス資材が RAII teardown
-/// される）。
+/// `Box<dyn ShioriBackend>`（実体は `ShioriConnection`）を返す（`helper`＝`HelperLifecycle` の
+/// drop で子プロセス資材が RAII teardown される）。
 ///
 /// # 引数
 /// - `helper_exe`: i686 helper 実行ファイル。
@@ -100,7 +101,7 @@ fn connect_real_helper(
     helper_exe: PathBuf,
     load_dir: PathBuf,
     shiori_name: String,
-) -> Result<ShioriConnection, String> {
+) -> Result<Box<dyn ShioriBackend>, String> {
     // 1. 親 message-only 窓（!Send・アクタースレッド上で生成される）。
     let window = ParentMessageWindow::create()
         .map_err(|e| format!("親 message-only 窓生成に失敗: {e}"))?;
@@ -129,7 +130,11 @@ fn connect_real_helper(
         ));
     }
 
-    Ok(ShioriConnection { window, helper })
+    // 生 HelperHandle を HelperLifecycle へ包む（正規 clean shutdown／死活監視の器・要件 3.2/6.2）。
+    Ok(Box::new(ShioriConnection {
+        window,
+        helper: HelperLifecycle::new(helper),
+    }))
 }
 
 /// env-gate 実 helper 追験（Req 7.4・DD-8）。
@@ -182,10 +187,11 @@ fn real_helper_boot_pump_close_completes() {
         .into_owned();
 
     // --- real shiori アクターを起動（connect はアクタースレッド上で一度だけ実行される）---
-    //     connect クロージャが spawn→HELLO→LOAD を自前結線し ShioriConnection を返す（DD-8）。
-    //     on_down は接続確立に失敗した場合のみ ShioriDown を運ぶ死活報告先（成功時は real 側で
-    //     直ちに drop される・Req 4.9）。ここでは接続失敗を可視化する観測チャンネルとして張り、
-    //     接続成功なら Disconnected（送信端 drop）として観測される。
+    //     connect クロージャが spawn→HELLO→LOAD を自前結線し Box<dyn ShioriBackend>
+    //     （実体 ShioriConnection）を返す（DD-8）。on_down は接続確立失敗時の ShioriDown に加え、
+    //     接続成功後も受信ループの生存期間中保持され死活監視の届け先を兼ねる（Req 3.4）。
+    //     ここでは接続失敗・死活検出のいずれも可視化する観測チャンネルとして張り、shiori アクター
+    //     終了（Close 経路）まで生存する。
     let (down_tx, down_rx) = std::sync::mpsc::channel::<KanadeMsg>();
     let (shiori_tx, shiori_handle) = spawn_shiori_actor(
         move || connect_real_helper(helper_exe, load_dir, shiori_name),
@@ -233,9 +239,10 @@ fn real_helper_boot_pump_close_completes() {
     join_bounded("real-helper shiori join", DEFAULT_TIMEOUT, shiori_handle)
         .expect("real shiori アクターが Close 後に接続資材を teardown して終了する");
 
-    // 接続失敗の可視化: connect が成功していれば on_down は real 側で drop 済み（Disconnected）。
-    // 万一 ShioriDown が届いていた場合は接続確立に失敗しており、上の kanade join が既に終了系列
-    // （Unloading{Fault}）を通っているはずだが、原因を明示するため down_rx を最後に確認する。
+    // 接続失敗／死活検出の可視化: shiori アクターは上で join 済み（Close 経路で終了）ゆえ on_down
+    // は自然に drop されている（Disconnected）。万一 ShioriDown が届いていた場合は接続確立失敗
+    // または実行中の死活検出であり、上の kanade join が既に終了系列（Unloading{Fault}）を
+    // 通っているはずだが、原因を明示するため down_rx を最後に確認する。
     if let Ok(KanadeMsg::ShioriDown { reason }) = down_rx.try_recv() {
         panic!("実 helper への接続確立に失敗した（ShioriDown）: {reason}");
     }

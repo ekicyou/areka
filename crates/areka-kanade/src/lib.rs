@@ -11,15 +11,15 @@
 //! - **運行表の正本**: 運行状態機械（`schedule/`・後続タスクで実装）が ukadoc
 //!   Reference 表に基づく遷移判断を一手に担う。mock fixture・状態機械の期待列・
 //!   ハーネスの assert はすべてこの正本から導出される。
-//! - **talk 契約の正本**: [`talk`] モジュールが talk 起動契約型
-//!   （[`TalkId`] / [`StartTalk`] / [`TalkDone`]）を唯一定義する。消費側
-//!   （sakura-engine）はこれを再定義してはならない。
+//! - **talk 契約**: talk 起動契約型（[`TalkId`] / [`StartTalk`] / [`TalkDone`] /
+//!   [`TalkEndReason`]）の物理正本は `areka-talk` クレートである。[`talk`] モジュールは
+//!   `areka_kanade::talk::*` という既存の参照パスを保つための再エクスポートに徹し、
+//!   二重定義は行わない。消費側（sakura-engine）も同じく `areka-talk` を直接参照する。
 //!
 //! ## 依存規律
 //!
-//! [`talk`] モジュールは `std` のみに依存し、host32 型・areka-actor 型に一切
-//! 依存しない（DD-1）。将来の契約クレート切り出しは [`talk`] の機械的移動だけで
-//! 完結する。
+//! talk 契約の物理正本（`areka-talk`）は `std` のみに依存し、host32 型・areka-actor 型に
+//! 一切依存しない（DD-1）。
 
 pub mod actor;
 pub mod msg;
@@ -36,8 +36,8 @@ pub use msg::{
     CloseReason, KanadeConfig, KanadeMsg, MonotonicMs, ShioriCall, ShioriFailure, ShioriMsg,
     ShioriOutcome,
 };
-pub use shiori::{ShioriConnection, spawn_shiori_actor};
-pub use talk::{StartTalk, TalkDone, TalkId};
+pub use shiori::{ShioriBackend, ShioriConnection, spawn_shiori_actor};
+pub use talk::{StartTalk, TalkDone, TalkEndReason, TalkId};
 
 /// ukadoc Reference 表の実装正本（純粋関数群）を露出する公開ファサード（DD-9 例外）。
 ///

@@ -3,14 +3,15 @@
 //! kanade（③）・seriko（⑤）・emo（⑥）・ghost-setup が消費するメッセージ／出力／
 //! 終端型と、cue ドメインへの**写像**（[`TalkCue`]・[`cue_target_of`]）を所有する。
 //!
-//! - 出力の意味論は cue ドメイン（dola 正本の型）で表現し、本層は写像と kanade 授受型
-//!   （暫定）を所有する。
-//! - [`StartTalk`]/[`TalkDone`] は kanade が正本だが未実装ゆえ本層が**暫定所有**する
-//!   （DD-1・不変）。kanade 完成時は re-export へ差し替え、下流の import パス
-//!   （`areka_sakura::contract::*`）を不変に保つ。
+//! - 出力の意味論は cue ドメイン（dola 正本の型）で表現し、本層は写像を所有する。
+//! - [`TalkId`]/[`StartTalk`]/[`TalkDone`]/[`TalkEndReason`] は正本 `areka-talk` からの
+//!   re-export（DD-1 解消・kanade↔sakura 授受契約の唯一の物理定義は `areka-talk`）。
+//!   下流の import パス（`areka_sakura::contract::*`）は不変に保つ。
+//! - `SakuraMsg`/`TalkHandle` は sakura 固有（kanade↔sakura 契約の外）ゆえ本層に物理定義
+//!   のまま残す。
 //! - dola cue 型・parsers 値型は re-export し二重定義しない。
 
-// ── kanade との授受（暫定所在・DD-1／kanade 完成時に移譲） ──
+// ── sakura 固有（kanade↔sakura 契約の外・本層に物理定義） ──
 
 /// sakura アクターの inbox メッセージ（areka-actor inbox 規約・投函経路は inbox 一貫）。
 #[non_exhaustive]
@@ -26,40 +27,6 @@ pub enum SakuraMsg {
     Close,
 }
 
-/// talk 起動契約（正本=kanade・暫定所在）。
-pub struct StartTalk {
-    /// 再生対象のさくらスクリプト本文。
-    pub script: String,
-    /// talk 相関 ID。
-    pub talk_id: TalkId,
-    /// TalkDone の返信端（oneshot 相当・move-consume が唯一の高々 1 回機構）。
-    pub reply: areka_actor::ReplySender<TalkDone>,
-}
-
-/// talk 相関 ID（kanade が stale 終端信号の棄却に用いる・R6.6）。不透明 newtype。
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub struct TalkId(pub u64);
-
-/// 終端信号（正本=kanade・暫定所在）。通算高々 1 回・reason 3 値（R6/R7）。
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct TalkDone {
-    /// 対応する talk の相関 ID。
-    pub talk_id: TalkId,
-    /// 終端理由（3 値）。
-    pub reason: TalkEndReason,
-}
-
-/// 終端理由（従来の quit:bool を 3 値化・議題#1 確定）。
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum TalkEndReason {
-    /// `\e` / 末尾到達 / 空列（R6.1/6.3/1.4）。
-    Ended,
-    /// `\-`（R6.2）。
-    Quit,
-    /// Close による中断（R7.4・close 握手 ACK）。
-    Interrupted,
-}
-
 /// spawn_talk の返り値: 中断/時刻注入の投函端＋join ハンドル（validation Issue 1 の解決）。
 pub struct TalkHandle {
     /// Tick / Close の投函端（Start は spawn_talk が投函済み）。
@@ -67,6 +34,10 @@ pub struct TalkHandle {
     /// 非 RAII join ハンドル（テストの終了同期・本番は kanade 裁量）。
     pub actor: areka_actor::ActorHandle,
 }
+
+// ── kanade との授受（正本=areka-talk・re-export） ──
+
+pub use areka_talk::{StartTalk, TalkDone, TalkEndReason, TalkId};
 
 // ── 出力契約（cue ドメイン・写像の正本は本仕様） ──
 

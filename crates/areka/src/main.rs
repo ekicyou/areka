@@ -12,6 +12,11 @@
 //!
 //! 本物のゴースト窓生成・配置・DPI 対応は下流仕様（ghost-setup／window-placement）の領分であり、
 //! 骨格は座標・配置ロジックを一切持たない。旧モック UI は `examples/mock-shell.rs` へ退避済み。
+//!
+//! `main` は `open_startup_window`／ダミー窓／smoke ゲートを不変に保ったまま、その周囲に
+//! ghost 結線層（`areka_ghost::boot`／`GhostRuntime::shutdown`）を結線する（task 3.3・
+//! design.md「main の ghost boot／shutdown 結線」）。boot 失敗は非致命として扱い骨格起動を
+//! 止めない（要件 8.2）。
 
 use bevy_ecs::prelude::*;
 use tracing_subscriber::EnvFilter;
@@ -118,6 +123,63 @@ fn resolve_config_inputs(args: &[String]) -> ConfigInputs {
 }
 
 // ---------------------------------------------------------------------------
+// Ghost Wiring (task 3.3)
+// ---------------------------------------------------------------------------
+
+/// 実行ファイル隣接の 32bit SHIORI helper 実行ファイルパスを解決する（純粋・DD 準拠）。
+///
+/// `std::env::current_exe()` の親ディレクトリへ `shiori-host32-helper.exe` を結合する。
+/// `current_exe()` が失敗した場合（環境依存の稀な事象）は、この骨格の既存の寛容な
+/// （panic しない）流儀に倣い `"."` を親ディレクトリ扱いにフォールバックする——`boot` 呼び出し
+/// 自体はどのみち非致命として扱われるため、ここで panic/Err 伝播する必要はない。
+fn default_helper_exe_path() -> std::path::PathBuf {
+    let dir = std::env::current_exe()
+        .ok()
+        .and_then(|exe| exe.parent().map(std::path::Path::to_path_buf))
+        .unwrap_or_else(|| std::path::PathBuf::from("."));
+    dir.join("shiori-host32-helper.exe")
+}
+
+/// `ghost_root`／helper パスから `GhostBootOptions` を組み立てる純粋ヘルパ
+/// （design.md「main の ghost boot／shutdown 結線」）。
+///
+/// - `shiori`: `ShioriWiring::Helper { helper_exe }`（実行ファイル隣接の 32bit helper・本番結線）。
+/// - `default_encoding`: `DefaultEncoding::Ansi`（charset 未宣言時の SSP 既定・記憶
+///   areka-descript-encoding-ishiori-utf8）。
+/// - `surface_sink`／`text_sink`: 両方とも本番既定の `LogSink`（task 2.4・無蓄積）。
+/// - `ticker`: `TickerMode::Real` を既定 `TickerConfig`（`base_interval=50ms`／
+///   `kanade_interval=1000ms`／実クロック `GetTickCount64`）で駆動する。
+fn ghost_boot_options(
+    ghost_root: std::path::PathBuf,
+    helper_exe: std::path::PathBuf,
+) -> areka_ghost::GhostBootOptions<areka_ghost::sink::LogSink, areka_ghost::sink::LogSink> {
+    areka_ghost::GhostBootOptions {
+        ghost_root,
+        default_encoding: areka_parsers::charset::DefaultEncoding::Ansi,
+        shiori: areka_ghost::ShioriWiring::Helper { helper_exe },
+        surface_sink: areka_ghost::sink::LogSink::new(),
+        text_sink: areka_ghost::sink::LogSink::new(),
+        ticker: areka_ghost::TickerMode::Real(Default::default()),
+    }
+}
+
+/// `GhostBootError` を「起点不在（良性・`warn!` どまり）」と「それ以外（予期しない・`error!`）」
+/// へ分類する純粋関数（design.md「main の ghost boot／shutdown 結線」・要件 8.2）。
+///
+/// `default_ghost_root()` はプレースホルダ subpath であり、この開発サンドボックスでは
+/// 実在しないのが常態（＝`MountError::StartPointMissing` は想定内の事象）。読取不能
+/// （`StartPointUnreadable`）・shell 不在（`ShellDirMissing`）・将来追加される
+/// `#[non_exhaustive]` variant は、真に予期しない I/O 問題として区別する。
+fn is_benign_boot_error(err: &areka_ghost::GhostBootError) -> bool {
+    match err {
+        areka_ghost::GhostBootError::Mount(
+            areka_parsers::package::MountError::StartPointMissing { .. },
+        ) => true,
+        _ => false,
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Marker Components
 // ---------------------------------------------------------------------------
 
@@ -167,6 +229,33 @@ fn main() -> Result<()> {
         }
     }
 
+    // ghost 結線層の起動を試みる（task 3.3・design.md「main の ghost boot／shutdown 結線」）。
+    // 失敗は非致命——`default_ghost_root()` はこのサンドボックスでは常態的に不在
+    // （`MountError::StartPointMissing`）であり、`warn!` の上で `None` として骨格起動を
+    // 継続する（要件 8.2）。それ以外の予期しない失敗（読取不能・shell 不在等）は `error!`。
+    let helper_exe = default_helper_exe_path();
+    let ghost_options = ghost_boot_options(cfg.ghost_root.clone(), helper_exe);
+    let ghost_runtime = match areka_ghost::boot(ghost_options) {
+        Ok(runtime) => {
+            tracing::info!("ghost 結線層の起動に成功しました");
+            Some(runtime)
+        }
+        Err(err) => {
+            if is_benign_boot_error(&err) {
+                tracing::warn!(
+                    error = %err,
+                    "ghost 結線層の起動起点が見つかりません（決定のみで継続・骨格起動は阻害しません）"
+                );
+            } else {
+                tracing::error!(
+                    error = %err,
+                    "ghost 結線層の起動に失敗しました（継続・骨格起動は阻害しません）"
+                );
+            }
+            None
+        }
+    };
+
     // UI ランタイム起動（COM/DPI 初期化・World 生成・shutdown hook 結線）（R2.4）。
     let app = WinApp::new()?;
 
@@ -184,6 +273,19 @@ fn main() -> Result<()> {
     // `main` 所有のブロッキングメッセージループ（R2.4/R4.1）。ダミー窓が閉じられると
     // `WindowRegistry` が空へ遷移し `run()` が `Ok` を返して正常終了する（DD7 改定）。
     app.run()?;
+
+    // ghost 結線層の終了統括（task 3.3・design.md「main の ghost boot／shutdown 結線」）。
+    // boot 済み（`Some`）のときのみ実行し、失敗は `error!` の上で main 自身の `Result` へ
+    // 伝播する（正常時 exit 0・要件 6.4——裏を返せば genuine な shutdown 失敗は黙って
+    // exit 0 にしない）。
+    if let Some(runtime) = ghost_runtime {
+        if let Err(err) = runtime.shutdown(areka_kanade::CloseReason::System) {
+            tracing::error!(error = %err, "ghost 結線層の終了統括に失敗しました");
+            return Err(windows::core::Error::from_hresult(
+                windows::Win32::Foundation::E_FAIL,
+            ));
+        }
+    }
 
     Ok(())
 }
@@ -623,5 +725,85 @@ mod config_input_tests {
         };
         assert_eq!(cfg.ghost_root, PathBuf::from("g"));
         assert_eq!(cfg.balloon_root, PathBuf::from("b"));
+    }
+}
+
+/// ghost 結線ヘルパ（task 3.3）の headless 単体テスト。
+///
+/// `areka_ghost::boot`／`GhostRuntime::shutdown` 自体は実 I/O・実スレッドを伴うため、
+/// ここでは純粋な組み立て・分類ロジック（`default_helper_exe_path`／`ghost_boot_options`／
+/// `is_benign_boot_error`）だけを headless に検証する。実際の boot→shutdown 一巡は
+/// 既存の実プロセス smoke テスト（`tests/smoke_boot_loop_exit.rs`）が証明する。
+#[cfg(test)]
+mod ghost_wiring_tests {
+    use super::*;
+    use areka_ghost::{GhostBootError, ShioriWiring, TickerMode};
+    use areka_parsers::charset::DefaultEncoding;
+    use areka_parsers::package::MountError;
+    use std::path::PathBuf;
+
+    /// `default_helper_exe_path` はファイル名 `shiori-host32-helper.exe` で終わるパスを返す
+    /// （実際の親ディレクトリは実行環境依存のため、構造のみを確認する）。
+    #[test]
+    fn default_helper_exe_path_ends_with_expected_filename() {
+        let path = default_helper_exe_path();
+        assert_eq!(
+            path.file_name().and_then(|n| n.to_str()),
+            Some("shiori-host32-helper.exe"),
+            "helper exe path should end with the expected filename: {path:?}"
+        );
+    }
+
+    /// `ghost_boot_options` は渡された `ghost_root`／`helper_exe` をそのまま
+    /// `GhostBootOptions` へ写し、`ShioriWiring::Helper`・`DefaultEncoding::Ansi`・
+    /// `TickerMode::Real` を選ぶ（design.md「main の ghost boot／shutdown 結線」）。
+    #[test]
+    fn ghost_boot_options_wires_expected_fields() {
+        let ghost_root = PathBuf::from("C:/custom/ghost");
+        let helper_exe = PathBuf::from("C:/custom/exe-dir/shiori-host32-helper.exe");
+
+        let options = ghost_boot_options(ghost_root.clone(), helper_exe.clone());
+
+        assert_eq!(options.ghost_root, ghost_root);
+        assert_eq!(options.default_encoding, DefaultEncoding::Ansi);
+        match options.shiori {
+            ShioriWiring::Helper {
+                helper_exe: actual, ..
+            } => assert_eq!(actual, helper_exe),
+            ShioriWiring::Custom(_) => panic!("expected ShioriWiring::Helper, got Custom"),
+        }
+        match options.ticker {
+            TickerMode::Real(cfg) => {
+                assert_eq!(cfg.base_interval, std::time::Duration::from_millis(50));
+                assert_eq!(cfg.kanade_interval, std::time::Duration::from_millis(1000));
+            }
+            TickerMode::Disabled => panic!("expected TickerMode::Real, got Disabled"),
+        }
+    }
+
+    /// `MountError::StartPointMissing`（プレースホルダ ghost_root の不在という想定内の
+    /// 事象）は良性と分類される（要件 8.2）。
+    #[test]
+    fn start_point_missing_is_classified_as_benign() {
+        let err = GhostBootError::Mount(MountError::StartPointMissing {
+            expected: PathBuf::from("ghost/master/descript.txt"),
+        });
+        assert!(is_benign_boot_error(&err));
+    }
+
+    /// `MountError::StartPointUnreadable`／`ShellDirMissing`（真に予期しない I/O 問題）は
+    /// 良性ではないと分類される（要件 8.2）。
+    #[test]
+    fn other_mount_errors_are_not_classified_as_benign() {
+        let unreadable = GhostBootError::Mount(MountError::StartPointUnreadable {
+            path: PathBuf::from("ghost/master/descript.txt"),
+            kind: std::io::ErrorKind::PermissionDenied,
+        });
+        assert!(!is_benign_boot_error(&unreadable));
+
+        let shell_missing = GhostBootError::Mount(MountError::ShellDirMissing {
+            expected: PathBuf::from("ghost/master/shell/master"),
+        });
+        assert!(!is_benign_boot_error(&shell_missing));
     }
 }
