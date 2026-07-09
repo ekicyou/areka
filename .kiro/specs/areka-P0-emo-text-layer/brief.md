@@ -34,7 +34,8 @@ sakura の Balloon 向け cue を受けて、**バルーン surface の上（予
 3. **レイアウト＝DirectWrite**: `Font`（balloon descript 由来・欠落は SSP 既定＝ＭＳ ゴシック）→ `IDWriteTextLayout`。縦書きは wintf 実証済みの ReadingDirection/FlowDirection 組合せを lift。
 4. **縦書き opt-in＝areka 拡張キー `writing_mode`（2026-07-09 開発者要望・07-09 命名裁定）**: バルーン定義で縦書きを宣言するマーカーを導入する。**キー・値とも snake_case**（SSP の balloon/shell descript 流儀＝`use_self_alpha`/`paint_transparent_region_black` と同型・開発者裁定）——`writing_mode,horizontal_tb`（既定・SSP 互換）／`writing_mode,vertical_rl`（日本語縦書き）／`writing_mode,vertical_lr`。**語彙は CSS `writing-mode` 借用**・wintf `TextDirection` と 1:1 写像（`horizontal_tb`→`HorizontalLeftToRight`・`vertical_rl`→`VerticalRightToLeft`・`vertical_lr`→`VerticalLeftToRight`）。**名前空間 prefix は付けない**（縦書き指定は areka 独自機能＝SSP 側に対応物が生まれる見込みが薄く衝突リスク実質なし・開発者裁定。SSP は未知キーを無視するためバルーンの SSP 互換は壊れない）。**置き場は balloon-parse ✅ の実装済み2層マージに乗せる**: `descript.txt`（バルーン全体既定）＜ **`balloons*s.txt`/`balloonk*s.txt`（画像別上書き・後勝ち）**——emo2-kakukaku fixture に両ファイル実在・マージ機構は流用のみ。未知値は warn＋`horizontal_tb` フォールバック（寛容・log-first）。CSS の text-orientation（欧文の向き）・text-combine-upright（縦中横）は **M2 予約キーとして型シームのみ**（`text_orientation`/`text_combine_upright` を予約名として記録・実装しない）。
    - **縦書き時の折返し軸＝`wordwrappoint.y`**: 縦書きでは行内が上→下・行送りが右→左に回転するため、**折返し点は x でなく y**（`wordwrappoint.y` は balloon-parse ✅ が**転記済み**＝`parse.rs` L75・model `y()` アクセサあり——増分不要・消費のみ）。`validrect`/`origin` の軸解釈の回転規則（横書きの top/bottom/left/right が縦書きでどう読み替わるか）は design の1枚表で確定（ukadoc に定義なし＝areka 独自解釈を明文化）。
-   - **スクロール＝writing_mode で方向が回る**: 横書き＝縦スクロール（上へ流れる）・縦書き＝**横スクロール**（vertical_rl なら行が左へ流れる）。実現方式は design で二択判定——(a) **伺か流・全域ビットマップ再描画**（validrect サイズの自前描画面に可視窓を毎回描き直す・最小実装・SSP バルーン規模なら十分）／(b) **viewbox 合成**（wintf 実装済み primitive: `Visual.clip = ClipShape::Rectangle`〔`completed/visual-clip`・`clip_sync_system` が Arrangement 由来サイズ・DPI スケール込みで WUC `InsetClip` へ写像〕＋子 visual の translate offset＝スクロール——「viewbox ウィジェット」は未実装だが**クリップ＋オフセットの合成で今日組める**）。M1 は (a) で開始し (b) への移行シームを残す、が有力（滑らかスクロール演出は M2）。
+   - **スクロール＝writing_mode で方向が回る**: 横書き＝縦スクロール（上へ流れる）・縦書き＝**横スクロール**（vertical_rl なら行が左へ流れる）。**実現方式は (a) 伺か流・全域ビットマップ再描画で確定**（2026-07-09 開発者裁定＝二択の設計荷重を本ユニットから除去）: validrect サイズの自前描画面に可視窓を毎回描き直す・最小実装・SSP バルーン規模なら十分。**(b) viewbox 合成（クリップ視窓＋内容オフセット）は増分ユニット `areka-P0-emo-text-viewbox` へ切り出し済み**（brief 有り）——本ユニットは**移行シームだけ残す**: スクロール描画を「可視窓の決定（純粋・スクロール位置→表示行）」と「描画実行」に分離しておき、viewbox 化が描画実行の差し替えだけで済む形にする。
+   - **実装順の裁量（2026-07-09 開発者裁定）**: **縦書きは本ユニットの完了条件（最初のゴール）に含める**が、実装順は**横書き先行でよい**——`writing_mode` 抽象（TextDirection 写像・折返し軸・スクロール軸の切替点）を**最初から構造に持ち**、縦書きは後続タスクとして同一 spec 内で完遂する（タスク分割の指針・spec 分割はしない）。
 5. **行列変換領域の内部表現**: 描画先を「矩形」でなく**変換行列付き領域**として持つ（surface 合成の行列原則と同型）。M1 の実挙動は恒等/平行移動のみ・回転値と装飾（アウトライン/多色/シャドウ）は**型シームのみ**（M2 予約への接続点）。
 6. **スロットへの描画供給**: 予約スロット（`emo-text-layer-slot` Visual）へ描画内容を装着する公開経路を emo-present に**additive で増設**（`text_slot` 到達手段の公開 or 装着 API——最小の公開面は design 判断）。surface 本体の再合成を**強要しない**（毎グリフ更新が emo-compose を再駆動しない＝独立レイヤの本旨）。
 7. **typewriter 進行の時刻規律**: per-glyph 進行は本層が所有（wintf `default_char_wait` 相当）・**cue の `at` は chunk 開始時刻**。時刻は sakura と同じ**注入時刻駆動**（実時間 sleep 不使用）で決定論テスト可能に。
@@ -56,8 +57,8 @@ sakura の Balloon 向け cue を受けて、**バルーン surface の上（予
 
 ## Scope
 
-- **In**: TextSink 実装アクター＋UI 配送／テキスト状態機械（純粋層）／DirectWrite レイアウト（縦書き/横書き・折返し・スクロール）／**`writing_mode` 拡張キー**（snake_case・CSS 語彙値・descript＋画像別2層マージ・parser 転記フィールドの additive 増分含む）／**縦書き折返し `wordwrappoint.y` 消費＋スクロール軸回転**（実現方式=全域再描画 or clip 合成 viewbox は design 二択）／typewriter 逐次表示（注入時刻駆動）／行列変換領域の内部表現（恒等/平行移動）／balloon descript 由来の Font/領域解決／text_slot への装着経路（emo-present additive 増分）／専用 example。
-- **Out**: 選択肢表示（**choice-render**・M-dialogue）／`\f` 装飾の実挙動・回転テキスト・ポップアート（**M2**・型シームのみ）／`text_orientation`・`text_combine_upright`（縦中横）の実挙動（**M2**・予約名の記録のみ）／滑らかスクロール演出・viewbox ウィジェット化（**M2**・M1 はシームまで）／sink の main 結線（**emo2-boot**）／sakura の cue 時刻改変（増分申し送りまで）／バルーン枠の描画（**emo-present** 済み）／communicatebox 系（M2）。
+- **In**: TextSink 実装アクター＋UI 配送／テキスト状態機械（純粋層）／DirectWrite レイアウト（縦書き/横書き・折返し・スクロール）／**`writing_mode` 拡張キー**（snake_case・CSS 語彙値・descript＋画像別2層マージ・parser 転記フィールドの additive 増分含む）／**縦書き折返し `wordwrappoint.y` 消費＋スクロール軸回転**（実現＝全域再描画で確定・可視窓決定/描画実行の分離シームのみ）／typewriter 逐次表示（注入時刻駆動）／行列変換領域の内部表現（恒等/平行移動）／balloon descript 由来の Font/領域解決／text_slot への装着経路（emo-present additive 増分）／専用 example。
+- **Out**: 選択肢表示（**choice-render**・M-dialogue）／`\f` 装飾の実挙動・回転テキスト・ポップアート（**M2**・型シームのみ）／`text_orientation`・`text_combine_upright`（縦中横）の実挙動（**M2**・予約名の記録のみ）／viewbox 合成スクロール（**`areka-P0-emo-text-viewbox`**・増分ユニットへ切り出し済み・M1 は可視窓/描画分離シームまで）／sink の main 結線（**emo2-boot**）／sakura の cue 時刻改変（増分申し送りまで）／バルーン枠の描画（**emo-present** 済み）／communicatebox 系（M2）。
 
 ## Boundary Candidates
 
@@ -71,7 +72,7 @@ sakura の Balloon 向け cue を受けて、**バルーン surface の上（予
 ## Upstream / Downstream
 
 - **Upstream**: `completed/areka-P0-emo-present` ✅（予約スロット・枠表示・`build_balloon_target`）／`completed/areka-P0-sakura-engine` ✅（TextSink/TalkCue 契約正本）／`completed/areka-P0-balloon-parse` ✅（領域・Font モデル正本）／`completed/areka-P0-actor-foundation` ✅（`spawn_ui`/`UiSender`）／wintf text 資産 ✅（Typewriter/TextDirection/DirectWrite 縦書き）。
-- **Downstream**: **`areka-P0-emo2-boot`（M-boot 統合・本 sink を `GhostBootOptions.text_sink` へ注入）**／`choice-render`（M-dialogue・行レイアウト/クリック範囲シームの再利用）／M2 text effects（行列領域＋装飾シームへ接続）。
+- **Downstream**: **`areka-P0-emo2-boot`（M-boot 統合・本 sink を `GhostBootOptions.text_sink` へ注入）**／**`areka-P0-emo-text-viewbox`（増分・スクロール描画実行を viewbox 合成へ差し替え＝可視窓/描画分離シームの消費者）**／`choice-render`（M-dialogue・行レイアウト/クリック範囲シームの再利用）／M2 text effects（行列領域＋装飾シームへ接続）。
 
 ## Existing Spec Touchpoints
 
