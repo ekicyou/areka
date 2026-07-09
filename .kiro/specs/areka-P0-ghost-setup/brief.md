@@ -80,7 +80,7 @@ mount（package-mount）→ shiori actor（`spawn_shiori_actor` の connect clos
 ## Existing Spec Touchpoints
 
 - **Extends**: `completed/areka-P0-kanade`・`completed/areka-P0-sakura-engine`（WS-A の隣接増分・talk 授受面のみ）・`completed/areka-P0-app-shell`（シーム消費）。
-- **Adjacent**: `areka-P0-seriko-engine`（**並走**・sink trait 消費者＝WS-A 凍結面で保護）／`areka-P0-emo-present`（**並走**・非衝突: example＋emo 新層 vs main.rs＋結線層）／`areka-P0-window-placement`（境界: 窓=あちら・結線=こちら）。
+- **Adjacent**: `areka-P0-seriko-engine`（**並走**・sink trait 消費者＝WS-A 凍結面で保護）／`completed/areka-P0-emo-present` **✅**（2026-07-09 完了・非衝突: example＋emo 新層 vs main.rs＋結線層）／`areka-P0-window-placement`（境界: 窓=あちら・結線=こちら）。
 
 ## Constraints
 
