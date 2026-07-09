@@ -12,6 +12,8 @@ areka の ⑥ emo トラックのうち、バルーン枠までを表示する e
 
 sink の main 経路への結線（`GhostBootOptions.text_sink` への注入）は emo2-boot、viewbox 合成によるスクロール実現は emo-text-viewbox、選択肢表示は choice-render（M-dialogue）、バルーン枠の描画は emo-present（済み）の責務であり、いずれも本ユニットの責務外である。本ユニットは sakura/balloon-parse/emo-present の既存契約を再定義せず消費し、balloon model への `writing_mode` 転記フィールド増分と emo-present の text_slot 到達手段の公開増分のみを additive に加える。
 
+本ユニットは emo トラック第4の独立 crate **`areka-emo-text`**（spec/feature 名は `areka-P0-emo-text-layer`・crate 名は atlas/compose/present の単一トークン命名に倣い `areka-emo-text`・両者のマッピングは本書で確定）として実装する。**描画（DirectWrite レイアウト・typewriter 進行・縦書き）は emo が所有**し、wintf は窓/surface 手渡し（ComposedSurface/swapchain）と縦書きレシピの donor（lift 元）に留める（wintf のテキスト widget を実行時依存にしない）。この方針は emo の自前合成哲学（surface 合成は wintf 非依存の emo 自前コンポーネント）と、シェルとバルーンを同一描画エンジンへ将来融合する M1 基盤原則（記憶 areka-unified-shell-balloon-graphics・areka-emo-own-compositor-atlas）に基づく（2026-07-09 要件ディスカッション #1 裁定）。
+
 ## Boundary Context
 
 - **In scope（本ユニットが観測可能に実現する振る舞い）**:
@@ -23,7 +25,7 @@ sink の main 経路への結線（`GhostBootOptions.text_sink` への注入）�
   - 縦書き時は折返し軸を `wordwrappoint.y` とし、スクロール軸を横方向へ回転させる。
   - 領域（validrect）あふれ時にスクロールする（横書き＝縦スクロール・縦書き＝横スクロール）。実現は全域キャンバス再描画とし、「可視窓の決定（純粋）」と「描画実行」を分離する移行シームを残す。
   - 描画先を行列変換付き領域として保持する（M1 実挙動は恒等/平行移動のみ）。
-  - 描画面を「バルーン内容キャンバス」として設計する（テキストが最初の住人・画像等の後続住人を同列に扱える抽象の型シーム）。
+  - 描画面を **emo 共有描画基盤**（統一 resident/行列モデル）として設計する。住人（キャンバスに置かれる変換行列付き矩形コンテンツ）としてグリフ（文字）・画像（`\_b`）・将来の SERIKO サーフェスを同格に扱える抽象を持ち、M1 の実装住人はテキストのみとする。抽象は emo-compose の surface 合成（行列原則）と収束可能な統一形として設計するに留め、M1 では emo-compose を改変しない（共有 canvas の抽出・シェル/バルーン compositor 融合・背景 SERIKO の住人化は後続 roadmap ユニットへ予約）。
   - emo-present の予約スロット（`emo-text-layer-slot` Visual）へ描画内容を装着する公開経路を emo-present へ additive に増設する。装着時に surface 本体の再合成を強要しない。
   - 上記を単一 pass/fail で観測できる専用 example（emo2 fixture のバルーン枠上に fixture スクリプト由来の cue 列を注入時刻駆動で流す）。
 
@@ -43,6 +45,7 @@ sink の main 経路への結線（`GhostBootOptions.text_sink` への注入）�
   - actor-foundation ✅ の UI スレッド配送（`spawn_ui`/`UiSender`）を消費する。描画は UI スレッド固定（WUC/D2D・MTA＋`DQTAT_COM_NONE`）。
   - `areka-P0-window-placement` と並走する。本ユニットは `crates/areka` の既存ファイル（main.rs・placement 系）を触らず、emo-present と areka-parsers への変更は additive 増分のみ・example 新規追加のみ行う（衝突面ゼロ）。
   - emo2-boot／emo-text-viewbox／choice-render／M2 text effects が本ユニットの成果（sink 型・可視窓/描画分離シーム・行レイアウト/クリック範囲シーム・行列領域/装飾シーム）を下流で消費する。
+  - **シェル/バルーン compositor 融合（後続 roadmap ユニット）**が本ユニットの共有描画基盤（統一 resident/行列モデル）を消費し、emo-compose の surface 合成との収束・背景 SERIKO サーフェスの住人化を実現する。本ユニットは収束可能な統一形の設計に留め、emo-compose の改変・共有 canvas の抽出は行わない。
 
 ## Requirements
 
@@ -131,17 +134,18 @@ sink の main 経路への結線（`GhostBootOptions.text_sink` への注入）�
 4. The emo テキスト層 shall スクロール描画を「可視窓の決定（スクロール位置→表示行の純粋な計算）」と「描画実行」に分離し、後続の viewbox 合成化が描画実行の差し替えだけで済む移行シームを残す。
 5. The emo テキスト層 shall スクロール発火（あふれ判定）を DirectWrite metrics に依存しない構造テストで決定論的に検証できる形にする。
 
-### Requirement 8: 行列変換領域と内容キャンバス抽象
+### Requirement 8: 行列変換領域と emo 共有描画基盤
 
-**Objective:** As a emo テキスト層, I want 描画先を変換行列付きの内容キャンバスとして持つこと, so that M2 の回転・文字装飾・画像同居を破壊的変更なしに解禁できる
+**Objective:** As a emo テキスト層, I want 描画先を変換行列付きの emo 共有描画基盤（内容キャンバス）として持つこと, so that M2 の回転・文字装飾・画像同居、および将来のシェル/バルーン描画融合（背景 SERIKO 上のテキスト演出）を破壊的変更なしに解禁できる
 
 #### Acceptance Criteria
 
 1. The emo テキスト層 shall 描画先を単純な矩形ではなく変換行列付き領域として保持する。
 2. While M1 である, the emo テキスト層 shall 変換行列の実挙動を恒等/平行移動のみに限る。
 3. The emo テキスト層 shall 回転値および文字装飾（アウトライン/多色/シャドウ）を M2 予約の型シームとして保持するに留め、その実挙動を実装しない。
-4. The emo テキスト層 shall 描画面を「バルーン内容キャンバス」として設計し、文字を最初の住人としつつ、後続の住人（`\_b` 画像等）を同列の「キャンバスに置かれる矩形コンテンツ」として扱える抽象の型シームを持つ。
+4. The emo テキスト層 shall 描画面を emo 共有描画基盤（統一 resident/行列モデル）として設計し、住人（キャンバスに置かれる変換行列付き矩形コンテンツ）としてグリフ（文字）・画像（`\_b`）・将来の SERIKO サーフェスを同格に扱える抽象を持つ。文字を M1 の唯一の実装住人とする。
 5. The emo テキスト層 shall M1 の実挙動をテキスト描画に限り、`\_b` 画像等の実挙動を実装しない（fixture 実測で未使用であることを前提とし、使用が判明した場合はシームとして扱う）。
+6. The emo テキスト層 shall 共有描画基盤の抽象を emo-compose の surface 合成（行列原則）と収束可能な統一形として設計するに留め、M1 では emo-compose を改変しない（共有 canvas の抽出・シェル/バルーン compositor 融合・背景 SERIKO の住人化は後続 roadmap ユニットへ予約する）。
 
 ### Requirement 9: 予約スロットへの描画装着
 

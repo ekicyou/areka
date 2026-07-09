@@ -133,9 +133,9 @@
 
 > 要件は確定済み。以下は「確定要件の実現手段」に関する未決事項であり、design/要件ディスカッションでの明示裁定を要する。
 
-1. **新 crate か既存拡張か**: `areka-emo-text-layer` 新設（Option B/C）が層境界上妥当だが、emo-present 内モジュール化も理論上可。crate 分割方針の確認。
-2. **wintf 資産の lift/参照粒度**（§6-4）: `TextDirection` 借用＋DirectWrite レシピ lift（Option C）を既定線とするか、wintf typewriter system 群への依存を増やすか（Option A 寄り）。
-3. **内容キャンバス/行列領域の抽象形**: 「バルーン内容キャンバス（テキスト＝最初の住人・`\_b`＝後続住人）」と「変換行列付き領域」を M1 でどこまで型に出すか（過剰設計回避と M2 破壊的変更回避の均衡）。
+1. **新 crate か既存拡張か**: ~~`areka-emo-text-layer` 新設（Option B/C）が層境界上妥当だが、emo-present 内モジュール化も理論上可。~~ → **【裁定 2026-07-09 discussion #1】** 4つ目の emo crate **`areka-emo-text`**（atlas/compose/present と同格・単一トークン命名）で確定。spec/feature 名は `areka-P0-emo-text-layer` 維持（crate↔spec 名マッピングを requirements 明記）。emo-present 内モジュール化は sakura 依存の逆流＋並走保護規約違反ゆえ棄却。
+2. **wintf 資産の lift/参照粒度**（§6-4）: ~~`TextDirection` 借用＋DirectWrite レシピ lift（Option C）を既定線とするか、wintf typewriter system 群への依存を増やすか（Option A 寄り）。~~ → **【裁定 2026-07-09 discussion #1】** 描画は emo 所有。縦書き `Set*Direction` レシピは emo へ **lift（複製）**・wintf のテキスト widget を実行時依存にしない。wintf は窓/surface 手渡し（ComposedSurface/swapchain）と donor に留める。Option A/B/C の「wintf 寄せ（W1/W2）」は棄却。
+3. **内容キャンバス/行列領域の抽象形**: ~~「バルーン内容キャンバス（テキスト＝最初の住人・`\_b`＝後続住人）」と「変換行列付き領域」を M1 でどこまで型に出すか。~~ → **【裁定 2026-07-09 discussion #1】** R8 を **emo 共有描画基盤**（統一 resident/行列モデル・住人＝グリフ/画像/将来 SERIKO サーフェス同格）へ格上げ。M1 実装住人はテキストのみ。スコープ (X)＝収束を設計するが実体は `areka-emo-text` 内・emo-compose は改変しない（共有 canvas 抽出・シェル/バルーン融合・背景 SERIKO 住人化は後続 roadmap 予約）。
 4. **縦書き軸読み替え規則**（§6-3）: areka 独自の1枚表を design 正本として確定（典拠不在ゆえ本 spec が正典を作る）。
 5. **描画物投入先の物理**: `text_slot`（窓 World Entity・UI スレッド）へ「emo 自前オフスクリーン D2D 合成→brush 手渡し」か「窓 World の描画 system に委ねる」か。emo 自前合成哲学・独立レイヤ更新（再合成不要・R9.3）との整合で確認。
 6. **emo-present 公開増分の最小形**: `text_slot: Entity` の getter 公開 か、装着専用 API（描画物を受け取り slot へ装着）か——最小公開面を design 判断（R9.2）。
