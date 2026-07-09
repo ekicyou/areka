@@ -108,7 +108,7 @@ use areka_emo_present::{EmoPresenter, PresentCommand, TargetId, build_balloon_ta
 const SHELL_INITIAL_X: i32 = 400;
 const SHELL_INITIAL_Y: i32 = 200;
 
-/// surface 切替の周期（秒）。数秒周期で `surface0` ⇄ `surface1000` ⇄ `Hide` を巡回する（R6.4）。
+/// まばたき開閉の周期（秒）。この周期で目開き ⇄ 目閉じ を surface1000 上でトグルする（R6.4 の切替観測）。
 const CYCLE_INTERVAL_SECS: f64 = 2.5;
 
 /// fixture ルート（emo2）を `CARGO_MANIFEST_DIR`（`crates/areka`）相対で解決する。
@@ -136,52 +136,45 @@ pub struct BalloonWindowMarker;
 // Surface cycle（R6.4 の切替観測: surface0 ⇄ surface1000[binds] ⇄ Hide）
 // ---------------------------------------------------------------------------
 
-/// シェル target の巡回状態（数秒周期で遷移し、各遷移で `apply` を 1 回発行する）。
+/// シェル target のまばたき巡回状態（[`CYCLE_INTERVAL_SECS`] 周期で開閉し、各遷移で `apply` を 1 回発行）。
 ///
-/// 初回表示は [`CycleState::Surface0`]（`boot_present_system` が装着直後に表示する状態）。以後
-/// `cycle_present_system` が `next()` で `Surface1000`→`Hidden`→`Surface0`… と巡回させる。
+/// さくらスクリプト `\s[1000]\![bind,腕,組み,1]\![bind,紅,差し,0]\![bind,口,‥‥,1]\![bind,眉,悲しみ,1]`
+/// `\![bind,目,通常,1]\![bind,まばたき,通常,1]` 相当を seriko 代役でハンドコンパイルした表情を、
+/// **まばたきアニメーションを指令切替で手動再現**する形で表示する（アニメ＝SERIKO ループは seriko 別 spec・未実装）。
+/// 共通表情（腕組み=1101・口‥‥=1206・目通常=1302・眉悲しみ=1502・髪飾りリボン=1800／紅なし）は据え置き、
+/// まばたき通常（1400）の有無だけをトグルする（1400 は静止合成で閉じまぶた(1412)を乗せる＝目を閉じる）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum CycleState {
-    /// emo2 `surface0`（bind 無し）。
-    Surface0,
-    /// emo2 `surface1000`（着せ替え bind `[1100,1200,1302]`＝腕/口/目の bindgroup default）。
-    Surface1000,
-    /// `\s[-1]` 相当の非表示。
-    Hidden,
+    /// 目開き: まばたき bind 無し（目通常 1302 の開き目）。
+    EyesOpen,
+    /// 目閉じ: まばたき通常 1400 を加える（閉じまぶた 1412 が乗る）。
+    EyesClosed,
 }
 
 impl CycleState {
-    /// 次の巡回状態へ進める。
+    /// 次の巡回状態へ進める（開き⇔閉じのトグル）。
     fn next(self) -> Self {
         match self {
-            CycleState::Surface0 => CycleState::Surface1000,
-            CycleState::Surface1000 => CycleState::Hidden,
-            CycleState::Hidden => CycleState::Surface0,
+            CycleState::EyesOpen => CycleState::EyesClosed,
+            CycleState::EyesClosed => CycleState::EyesOpen,
         }
     }
 
-    /// この状態へ遷移する際にシェル target（`TargetId(0)`）へ発行する指令を組む。
+    /// この状態でシェル target（`TargetId(0)`）へ発行する指令を組む。
     ///
     /// 切替は必ず `EmoPresenter::apply`（指令 API）経由で行うため、状態ごとの `PresentCommand` を
-    /// ここで一元的に定義する（bypass しない）。
+    /// ここで一元的に定義する（bypass しない）。共通表情に対しまばたき（1400）のみ差分する。
     fn command(self) -> PresentCommand {
-        match self {
-            CycleState::Surface0 => PresentCommand::ShowSurface {
-                target: TargetId(0),
-                surface_id: 0,
-                binds: BindSet::default(),
-                reply: None,
-            },
-            CycleState::Surface1000 => PresentCommand::ShowSurface {
-                target: TargetId(0),
-                surface_id: 1000,
-                binds: BindSet::from_ids([1100, 1200, 1302]),
-                reply: None,
-            },
-            CycleState::Hidden => PresentCommand::Hide {
-                target: TargetId(0),
-                reply: None,
-            },
+        // 共通表情: 腕組み・口‥‥・目通常・眉悲しみ・髪飾りリボン（紅なし）。
+        let binds = match self {
+            CycleState::EyesOpen => BindSet::from_ids([1101, 1206, 1302, 1502, 1800]),
+            CycleState::EyesClosed => BindSet::from_ids([1101, 1206, 1302, 1400, 1502, 1800]),
+        };
+        PresentCommand::ShowSurface {
+            target: TargetId(0),
+            surface_id: 1000,
+            binds,
+            reply: None,
         }
     }
 }
@@ -207,7 +200,7 @@ struct EmoBoot {
     attached: bool,
     /// シェル target が装着され巡回対象となったか（未装着シェルでは巡回しない）。
     shell_cycling: bool,
-    /// シェル target の現在の巡回状態（装着直後は `Surface0`＝初回表示に一致）。
+    /// シェル target の現在のまばたき状態（装着直後は `EyesOpen`＝surface1000 初回表示に一致）。
     cycle_state: CycleState,
     /// 次の切替を行う `FrameTime` 絶対時刻（秒）。装着完了時に `now + CYCLE_INTERVAL_SECS` で確定する。
     next_switch_at: f64,
@@ -252,7 +245,8 @@ fn main() -> Result<()> {
     println!();
     println!("areka emo-present 観測 example");
     println!("================================");
-    println!("  シェル窓（target 0）: emo2 surface0 ⇄ surface1000[binds] ⇄ 非表示 を数秒周期で巡回");
+    println!("  シェル窓（target 0）: emo2 surface1000 の着せ替え表情（腕組み・悲しみ眉・‥‥口）");
+    println!("    ＋ まばたきを {CYCLE_INTERVAL_SECS} 秒周期で開閉再現（bind 1400 の指令切替）");
     println!("  バルーン窓（target 1）: balloons0.png（既定整列＝シェル左・上端揃え）");
     println!("  終了: シェルをダブルクリック");
     println!();
@@ -310,7 +304,7 @@ fn build_and_spawn(world: &mut World) {
         balloon_assets: None,
         attached: false,
         shell_cycling: false,
-        cycle_state: CycleState::Surface0,
+        cycle_state: CycleState::EyesOpen,
         next_switch_at: 0.0,
     };
 
@@ -625,12 +619,27 @@ fn boot_present_system(world: &mut World) {
             .attach_target(world, TargetId(0), boot.shell_window, emo_world, atlas)
         {
             Ok(()) => {
-                // 初回表示は Surface0（cycle_state の初期値と一致）。
-                boot.presenter.apply(world, boot.cycle_state.command());
+                // 起動時 golden 検証用に surface0（bind 無し）を先に表示する（本編の巡回は surface1000 の
+                // まばたきゆえ、golden の基準となる surface0 はここで一度だけ明示表示する）。
+                boot.presenter.apply(
+                    world,
+                    PresentCommand::ShowSurface {
+                        target: TargetId(0),
+                        surface_id: 0,
+                        binds: BindSet::default(),
+                        reply: None,
+                    },
+                );
                 // 起動時 golden バイト一致 assert（R6.2/R6.7/R8.2/R8.3）: swap chain readback ==
                 // 直接合成の golden を full byte equality で検証する（不一致は loud に panic）。
                 assert_startup_golden(&boot.presenter, TargetId(0), shell_golden, "shell surface0");
-                // シェルが装着できた場合のみ巡回を有効化し、最初の切替時刻を確定する。
+                // --- 手動デモ: さくらスクリプト相当の表情＋まばたきを指令切替で再現 ---
+                // \s[1000]\![bind,腕,組み,1]\![bind,紅,差し,0]\![bind,口,‥‥,1]\![bind,眉,悲しみ,1]
+                //         \![bind,目,通常,1]\![bind,まばたき,通常,1] を seriko 代役でハンドコンパイル。
+                // 共通表情（腕組み=1101・口‥‥=1206・目通常=1302・眉悲しみ=1502・髪飾りリボン=1800／紅なし）を
+                // surface1000 に合成表示し、まばたき（1400）を CYCLE_INTERVAL_SECS 周期で出し入れして目の開閉を
+                // 手動再現する（EyesOpen⇔EyesClosed）。まばたきの時間駆動アニメ本体は seriko エンジン領分（別 spec・未実装）。
+                boot.presenter.apply(world, boot.cycle_state.command()); // 初回＝EyesOpen（surface1000）
                 let now = world.get_resource::<FrameTime>().map(|ft| ft.0).unwrap_or(0.0);
                 boot.shell_cycling = true;
                 boot.next_switch_at = now + CYCLE_INTERVAL_SECS;
