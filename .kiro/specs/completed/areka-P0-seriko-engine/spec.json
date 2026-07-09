@@ -1,0 +1,26 @@
+{
+  "feature_name": "areka-P0-seriko-engine",
+  "created_at": "2026-07-05T13:36:05Z",
+  "updated_at": "2026-07-06T04:22:18Z",
+  "language": "ja",
+  "phase": "completed",
+  "approvals": {
+    "requirements": {
+      "generated": true,
+      "approved": true
+    },
+    "design": {
+      "generated": true,
+      "approved": true
+    },
+    "tasks": {
+      "generated": true,
+      "approved": true
+    },
+    "implementation": {
+      "completed": true,
+      "completed_at": "2026-07-06T04:22:18Z"
+    }
+  },
+  "ready_for_implementation": true
+}

@@ -14,10 +14,11 @@
 //! # 高々 1 回の唯一機構
 //!
 //! body は `Option<TalkState>` を所有権スロットとして保持し、全終端経路は
-//! 「`state.take()` → `reply.send(TalkDone)` → 直後に `Break`」の対で実装する
-//! （`ReplySender::send(self)` の move-consume が唯一の高々 1 回機構・終端フラグを持たない）。
+//! 「`state.take()` → `done.send(D::from(TalkDone))` → 直後に `Break`」の対で実装する
+//! （`Option::take()` が唯一の高々 1 回機構・終端フラグを持たない）。
 
 use std::ops::ControlFlow;
+use std::sync::mpsc::Sender;
 
 use crate::compile::compile;
 use crate::contract::{
@@ -26,7 +27,7 @@ use crate::contract::{
 };
 use crate::error::SakuraError;
 use crate::sink::{SurfaceSink, TextSink};
-use areka_actor::{run_inbox, spawn_actor, ReplySender};
+use areka_actor::{run_inbox, spawn_actor};
 use dola::cue::schedule::{Entry, TimedSchedule};
 
 /// per-talk transient を起動し、`Tick`/`Close` の投函端と join ハンドルを返す。
@@ -41,23 +42,31 @@ use dola::cue::schedule::{Entry, TimedSchedule};
 /// [`to_schedule`] を行い発火列を時刻駆動可能形へ変換する。空 sheet なら時間軸駆動せず
 /// 即 [`TalkDone`]`{compiled.end}` を送出して `Break`（R1.4/R6.2）。
 ///
+/// `done` は `TalkDone` の届け先（呼び出し側 inbox への変換投函・`D: From<TalkDone>`）。
+///
 /// # Preconditions
 ///
-/// `start.reply` は生存する `ReplyReceiver` と対（kanade or テスト）。
+/// `done` の受信端が生存している（kanade or テスト）。
 ///
 /// # Postconditions
 ///
-/// 終端・中断のいずれでも `TalkDone` を高々 1 回返し body 復帰（スレッド終了）。
-pub fn spawn_talk(
+/// 終端・中断のいずれでも `TalkDone`（`D` へ変換して）を高々 1 回 `done` へ送り
+/// body 復帰（スレッド終了）。受信端が既に drop 済みなら送信は `Err` になるが、
+/// `error!` を記録して黙殺せず talk を終える（受信端不在は致命ではない）。
+pub fn spawn_talk<D>(
     start: StartTalk,
+    done: Sender<D>,
     surface_sink: impl SurfaceSink + Send + 'static,
     text_sink: impl TextSink + Send + 'static,
-) -> TalkHandle {
+) -> TalkHandle
+where
+    D: From<TalkDone> + Send + 'static,
+{
     let talk_id = start.talk_id;
     let name = format!("sakura-talk-{}", talk_id.0);
 
     let (inbox, actor) = spawn_actor::<SakuraMsg, _>(&name, move |rx| {
-        let mut driver = TalkDriver::new(surface_sink, text_sink);
+        let mut driver = TalkDriver::new(surface_sink, text_sink, done);
         run_inbox::<SakuraMsg, std::convert::Infallible>(rx, move |msg| {
             Ok(driver.handle(msg))
         });
@@ -75,16 +84,15 @@ pub fn spawn_talk(
 /// 1 talk の再生状態（body ローカル・他 talk と共有しない・R10.3）。
 ///
 /// `Option<TalkState>` の所有権スロットとして body が保持し、終端時に `take()` して
-/// `reply` を move-consume する（高々 1 回の唯一機構）。`schedule`/`last_tick` は
-/// 後続 task 5.2（Tick 駆動ループ）が消費する駆動状態。
+/// 「高々 1 回」を保証する（`done` の届け先自体は driver 側で保持する `Sender<D>` を使い
+/// 回すため move-consume ではなく、`Option::take()` が唯一の高々 1 回機構）。
+/// `schedule`/`last_tick` は後続 task 5.2（Tick 駆動ループ）が消費する駆動状態。
 // 非空 sheet 経路で確定した駆動状態は、Tick 駆動（task 5.2）と Close 中断 ACK（task 5.3）が
 // 消費する。本 task では格納までを行うため全フィールドを dead_code 許容とする。
 #[allow(dead_code)]
 struct TalkState {
     /// talk 相関 ID（全出力へ対応付け・R1.3/R6.6）。
     talk_id: TalkId,
-    /// `TalkDone` の返信端（move-consume が唯一の高々 1 回機構）。
-    reply: ReplySender<TalkDone>,
     /// 時刻駆動可能形（0 起点・`TimedSchedule::new(0.0)`）。task 5.2 が駆動する。
     schedule: TimedSchedule<TalkCue>,
     /// コンパイル時点で確定した終端理由（自然終端で返す reason）。
@@ -95,18 +103,24 @@ struct TalkState {
 
 /// per-talk 駆動アクター本体。`Option<TalkState>` スロットを保持し、`Start` で状態を確定、
 /// 空 sheet なら即終端する。非空 sheet の Tick 駆動と Close 中断は後続 task（5.2/5.3）。
-struct TalkDriver<S: SurfaceSink, T: TextSink> {
+struct TalkDriver<S: SurfaceSink, T: TextSink, D> {
     state: Option<TalkState>,
     surface_sink: S,
     text_sink: T,
+    /// `TalkDone` の届け先（呼び出し側 inbox への変換投函）。
+    done: Sender<D>,
 }
 
-impl<S: SurfaceSink, T: TextSink> TalkDriver<S, T> {
-    fn new(surface_sink: S, text_sink: T) -> Self {
+impl<S: SurfaceSink, T: TextSink, D> TalkDriver<S, T, D>
+where
+    D: From<TalkDone> + Send + 'static,
+{
+    fn new(surface_sink: S, text_sink: T, done: Sender<D>) -> Self {
         Self {
             state: None,
             surface_sink,
             text_sink,
+            done,
         }
     }
 
@@ -128,11 +142,7 @@ impl<S: SurfaceSink, T: TextSink> TalkDriver<S, T> {
             return ControlFlow::Continue(());
         }
 
-        let StartTalk {
-            script,
-            talk_id,
-            reply,
-        } = start;
+        let StartTalk { script, talk_id } = start;
 
         // 上流パーサで Instruction 列へ変換（再パースしない・R1.2）→ 純粋コンパイル。
         let instructions = areka_parsers::sakura::parse(&script);
@@ -145,8 +155,8 @@ impl<S: SurfaceSink, T: TextSink> TalkDriver<S, T> {
                 talk_id,
                 reason: compiled.end,
             };
-            if reply.send(done).is_err() {
-                tracing::error!(talk_id = talk_id.0, "TalkDone reply receiver dropped");
+            if self.done.send(D::from(done)).is_err() {
+                tracing::error!(talk_id = talk_id.0, "TalkDone done receiver dropped");
             }
             return ControlFlow::Break(());
         }
@@ -155,7 +165,6 @@ impl<S: SurfaceSink, T: TextSink> TalkDriver<S, T> {
         let schedule = to_schedule(&compiled.sheet);
         self.state = Some(TalkState {
             talk_id,
-            reply,
             schedule,
             end: compiled.end,
             last_tick: None,
@@ -215,15 +224,15 @@ impl<S: SurfaceSink, T: TextSink> TalkDriver<S, T> {
         }
 
         // 自然終端検出: 全エントリ消費済みかつバリア中でない（R6.1/6.2/6.3）。
-        // 高々 1 回機構: state.take() → reply.send(TalkDone) → Break。
+        // 高々 1 回機構: state.take() → done.send(D::from(TalkDone)) → Break。
         if state.schedule.is_completed() {
             let state = self.state.take().expect("state was Some above");
             let done = TalkDone {
                 talk_id: state.talk_id,
                 reason: state.end,
             };
-            if state.reply.send(done).is_err() {
-                tracing::error!(talk_id = state.talk_id.0, "TalkDone reply receiver dropped");
+            if self.done.send(D::from(done)).is_err() {
+                tracing::error!(talk_id = state.talk_id.0, "TalkDone done receiver dropped");
             }
             return ControlFlow::Break(());
         }
@@ -233,8 +242,8 @@ impl<S: SurfaceSink, T: TextSink> TalkDriver<S, T> {
 
     /// `Close` 受領: 進行中の再生を即時停止し、中断 ACK を返す（R7.1/7.2/7.3/7.4）。
     ///
-    /// 高々 1 回機構（validation Issue 3）に従い、保持状態を `take()` して `reply` を
-    /// move-consume し `TalkDone{Interrupted}` を送出、直後に `Break` する。`take()` した
+    /// 高々 1 回機構（validation Issue 3）に従い、保持状態を `take()` してから
+    /// `done.send(D::from(TalkDone{Interrupted}))` を送出、直後に `Break` する。`take()` した
     /// `schedule` は本メソッド終了時に drop され、未発火の残り cue は sink へ届かない
     /// （drain せず破棄＝R7.2）。`Break` は `run_inbox` の即時 return＝積み残し（inbox の
     /// 未処理メッセージ）は rx drop で破棄される（R7.3・停止規約整合）。
@@ -244,18 +253,18 @@ impl<S: SurfaceSink, T: TextSink> TalkDriver<S, T> {
     /// （通算高々 1 回・R6.4/R7.5）。自然終端後はスレッドが既に消えており Close 自体が
     /// inbox へ届かないため、この分岐は主に `Start` 受領前の防御的経路である。
     fn on_close(&mut self) -> ControlFlow<()> {
-        // 高々 1 回機構: state.take() → reply.send(TalkDone{Interrupted}) → Break。
+        // 高々 1 回機構: state.take() → done.send(D::from(TalkDone{Interrupted})) → Break。
         // take() された schedule の未発火 cue はここで drop＝sink へ届かない（R7.2）。
         if let Some(state) = self.state.take() {
             let done = TalkDone {
                 talk_id: state.talk_id,
                 reason: TalkEndReason::Interrupted,
             };
-            // reply 受領側（kanade）が既に drop されていれば error ログ（黙殺しない・R11.1/11.4）。
-            if state.reply.send(done).is_err() {
+            // done 受領側（kanade）が既に drop されていれば error ログ（黙殺しない・R11.1/11.4）。
+            if self.done.send(D::from(done)).is_err() {
                 tracing::error!(
                     talk_id = state.talk_id.0,
-                    "TalkDone reply receiver dropped on Close"
+                    "TalkDone done receiver dropped on Close"
                 );
             }
         } else {
@@ -303,7 +312,6 @@ mod tests {
     use super::*;
     use crate::contract::{CueCommand, TalkId};
     use crate::sink::MockSink;
-    use areka_actor::reply_channel;
     use std::time::Duration;
 
     /// 空発火列（空 script）の talk は時間軸駆動せず、Tick を一切送らなくても
@@ -311,12 +319,11 @@ mod tests {
     /// （observable・R1.4）。`talk_id` は起動要求のものがエコーされる（R1.3）。
     #[test]
     fn empty_script_talk_returns_talkdone_immediately_without_tick() {
-        let (reply_tx, reply_rx) = reply_channel::<TalkDone>();
+        let (done_tx, done_rx) = std::sync::mpsc::channel::<TalkDone>();
         let talk_id = TalkId(7);
         let start = StartTalk {
             script: String::new(), // 空 script → 空 Instruction 列 → 空 sheet。
             talk_id,
-            reply: reply_tx,
         };
 
         // 2 本の mock sink（surface 用・text 用）。空 sheet ゆえ発火は 1 件も無い。
@@ -326,10 +333,10 @@ mod tests {
         let text_records = text.records();
 
         // Tick を一切送らずに spawn_talk を呼ぶ（時間軸駆動を要求しない）。
-        let handle = spawn_talk(start, surface, text);
+        let handle = spawn_talk(start, done_tx, surface, text);
 
         // TalkDone が即座に到達すること（Tick 不要・時間軸駆動なし）。
-        let done = reply_rx
+        let done = done_rx
             .recv_timeout(Duration::from_secs(5))
             .expect("空 script の talk は即座に TalkDone を返すべき");
 
@@ -386,18 +393,18 @@ mod tests {
     fn undue_cues_are_withheld_until_their_at_is_reached() {
         use std::sync::mpsc::{self, TryRecvError};
 
-        let (reply_tx, reply_rx) = reply_channel::<TalkDone>();
+        let (done_tx, done_rx) = std::sync::mpsc::channel::<TalkDone>();
         let talk_id = TalkId(314);
         let start = StartTalk {
             script: r"\s[10]hello\w[2]probeA\w[2]probeB\w[2]world\e".to_string(),
             talk_id,
-            reply: reply_tx,
         };
 
         let (surface_tx, surface_rx) = mpsc::channel::<TalkCue>();
         let (text_tx, text_rx) = mpsc::channel::<TalkCue>();
         let handle = spawn_talk(
             start,
+            done_tx,
             ChannelSink { tx: surface_tx },
             ChannelSink { tx: text_tx },
         );
@@ -472,7 +479,7 @@ mod tests {
         assert_eq!(world.at, at_w, "world の発火時刻は 0.3（境界包含 at<=tick で発火）");
 
         // 自然終端（`\e`＝Ended）・talk_id エコー。
-        let done = reply_rx
+        let done = done_rx
             .recv_timeout(Duration::from_secs(5))
             .expect("末尾到達で TalkDone");
         assert_eq!(done.talk_id, talk_id, "talk_id エコー");
@@ -489,25 +496,24 @@ mod tests {
     /// 記述順で受信する（`extend` なら同一 at 群が逆順化し hello/world が入れ替わる＝R4.1/4.2 違反）。
     #[test]
     fn same_at_cues_preserve_script_order_fifo_within_a_sink() {
-        let (reply_tx, reply_rx) = reply_channel::<TalkDone>();
+        let (done_tx, done_rx) = std::sync::mpsc::channel::<TalkDone>();
         let talk_id = TalkId(41);
         let start = StartTalk {
             script: r"\s[10]hello\nworld\e".to_string(),
             talk_id,
-            reply: reply_tx,
         };
         let surface = MockSink::new();
         let text = MockSink::new();
         let surface_records = surface.records();
         let text_records = text.records();
 
-        let handle = spawn_talk(start, surface, text);
+        let handle = spawn_talk(start, done_tx, surface, text);
         // 全 cue が at=0.0 ゆえ単一 Tick(0.0) で全 due→自然終端。
         handle
             .inbox
             .send(SakuraMsg::Tick(0.0))
             .expect("Tick(0.0) 投函");
-        let done = reply_rx
+        let done = done_rx
             .recv_timeout(Duration::from_secs(5))
             .expect("単一 Tick で自然終端");
         assert_eq!(done.reason, TalkEndReason::Ended);
@@ -540,33 +546,36 @@ mod tests {
 
     /// **`Start` の二重受領が無視される**ことを検証する（プロトコルガード・drive.rs `on_start`）。
     ///
-    /// 1 本目（script A）で spawn 後、`inbox` へ別 script・別 reply の 2 本目 `Start`(B) を送る。
-    /// B は `state.is_some()` ゆえ無視され（B の `StartTalk` は drop＝B の reply 端も drop）、
-    /// talk は A の内容のみを再生する。**B の cue（Emote{77}/DIFFERENT）は一切現れず、
-    /// B の reply は TalkDone を受け取らない**ことを決定的に確認する（timeout 待ちに依らず、
-    /// 無視で drop された B の reply 端は disconnect ＝ `recv` が即 `Err`）。
+    /// 1 本目（script A）で spawn 後、`inbox` へ別 script の 2 本目 `Start`(B) を送る。
+    /// B は `state.is_some()` ゆえ無視され、talk は A の内容のみを再生する。**B の cue
+    /// （Emote{77}/DIFFERENT）は一切現れず、B 用の done チャンネルは TalkDone を受け取らない**
+    /// ことを決定的に確認する（timeout 待ちに依らず、テスト側で明示 drop した B の受信端は
+    /// disconnect ＝ `recv` が即 `Err`）。
     #[test]
     fn duplicate_start_is_ignored_and_first_talk_plays_unchanged() {
-        let (reply_a_tx, reply_a_rx) = reply_channel::<TalkDone>();
+        let (done_a_tx, done_a_rx) = std::sync::mpsc::channel::<TalkDone>();
         let id_a = TalkId(11);
         let start_a = StartTalk {
             script: r"\s[10]hello\w[2]world\e".to_string(),
             talk_id: id_a,
-            reply: reply_a_tx,
         };
         let surface = MockSink::new();
         let text = MockSink::new();
         let surface_records = surface.records();
         let text_records = text.records();
-        let handle = spawn_talk(start_a, surface, text);
+        let handle = spawn_talk(start_a, done_a_tx, surface, text);
 
-        // 2 本目 Start(B)（別 script・別 reply）を inbox へ。自己投函の Start(A) の後に処理される。
-        let (reply_b_tx, reply_b_rx) = reply_channel::<TalkDone>();
+        // 2 本目 Start(B)（別 script）を inbox へ。自己投函の Start(A) の後に処理される。
+        // B は state.is_some() ゆえ無視される（driver の done は A 起動時に束縛済みの単一
+        // Sender のため、B 用に別途 done チャンネルを用意しても driver からは到達不能）。
+        // done_b_tx はここで即 drop し、「無視された B には TalkDone が届かない」ことを
+        // recv の即時 disconnect Err で決定的に示す（timeout 待ちに依らない）。
+        let (done_b_tx, done_b_rx) = std::sync::mpsc::channel::<TalkDone>();
+        drop(done_b_tx);
         let id_b = TalkId(99);
         let start_b = StartTalk {
             script: r"\s[77]DIFFERENT\e".to_string(),
             talk_id: id_b,
-            reply: reply_b_tx,
         };
         handle
             .inbox
@@ -576,7 +585,7 @@ mod tests {
         // A を駆動して自然終端。
         handle.inbox.send(SakuraMsg::Tick(0.0)).unwrap();
         handle.inbox.send(SakuraMsg::Tick(0.2)).unwrap();
-        let done = reply_a_rx
+        let done = done_a_rx
             .recv_timeout(Duration::from_secs(5))
             .expect("A の TalkDone");
         assert_eq!(done.talk_id, id_a, "終端は A の talk_id（B に乗っ取られない）");
@@ -596,9 +605,9 @@ mod tests {
         assert_eq!(text[0].command, CueCommand::Text("hello".into()));
         assert_eq!(text[1].command, CueCommand::Text("world".into()));
 
-        // 無視された B は TalkDone を受け取らない（reply 端 drop で disconnect＝recv 即 Err）。
+        // 無視された B は TalkDone を受け取らない（受信端 drop で disconnect＝recv 即 Err）。
         assert!(
-            reply_b_rx.recv_timeout(Duration::from_secs(5)).is_err(),
+            done_b_rx.recv_timeout(Duration::from_secs(5)).is_err(),
             "無視された Start(B) は TalkDone を返さない"
         );
     }
@@ -637,41 +646,40 @@ mod tests {
         assert_eq!(ready[0].at, 0.0);
     }
 
-    /// **終端時に reply 受信端が drop 済みでも body が panic せず clean exit する**ことを検証する
-    /// （R11.1/11.4・全終端経路が `reply.send(..).is_err()` を error ログで受けるガードの固定）。
+    /// **終端時に done 受信端が drop 済みでも body が panic せず clean exit する**ことを検証する
+    /// （R11.1/11.4・全終端経路が `done.send(..).is_err()` を error ログで受けるガードの固定）。
     ///
-    /// 駆動前に `reply_rx` を drop → 自然終端で `reply.send(TalkDone)` が `Err` になるが、
+    /// 駆動前に `done_rx` を drop → 自然終端で `done.send(D::from(TalkDone))` が `Err` になるが、
     /// `error!` を記録して `Break`＝スレッドは正常終了（`join` が Ok）。発火自体は正常に行われる
-    /// （reply drop は終端信号にのみ影響し、sink 配送には影響しない）。
+    /// （done drop は終端信号にのみ影響し、sink 配送には影響しない）。
     #[test]
-    fn dropped_reply_receiver_at_terminal_exits_cleanly_without_panic() {
-        let (reply_tx, reply_rx) = reply_channel::<TalkDone>();
+    fn dropped_done_receiver_at_terminal_exits_cleanly_without_panic() {
+        let (done_tx, done_rx) = std::sync::mpsc::channel::<TalkDone>();
         let start = StartTalk {
             script: r"\s[10]hello\w[2]world\e".to_string(),
             talk_id: TalkId(4),
-            reply: reply_tx,
         };
         let surface = MockSink::new();
         let text = MockSink::new();
         let text_records = text.records();
-        let handle = spawn_talk(start, surface, text);
+        let handle = spawn_talk(start, done_tx, surface, text);
 
         // 終端の TalkDone 送出前に受信端を drop（送出は Err になる）。
-        drop(reply_rx);
+        drop(done_rx);
         handle.inbox.send(SakuraMsg::Tick(0.0)).unwrap();
         handle.inbox.send(SakuraMsg::Tick(0.2)).unwrap();
 
-        // reply 受信端 drop でも panic せず正常終了すること（join が Ok・ハングしない）。
+        // done 受信端 drop でも panic せず正常終了すること（join が Ok・ハングしない）。
         handle
             .actor
             .join()
-            .expect("reply 受信端 drop でも body は panic せず正常終了する");
+            .expect("done 受信端 drop でも body は panic せず正常終了する");
 
-        // 発火は正常に行われた（reply drop は終端信号にのみ影響）。
+        // 発火は正常に行われた（done drop は終端信号にのみ影響）。
         assert_eq!(
             text_records.lock().unwrap().len(),
             2,
-            "reply drop は発火に影響しない（hello/world は配送済み）"
+            "done drop は発火に影響しない（hello/world は配送済み）"
         );
     }
 
@@ -686,7 +694,7 @@ mod tests {
     /// とも空 sheet 経路で即終端し、両 sink は空であること・talk_id エコー（R1.3）を確認する。
     #[test]
     fn ignored_tags_only_script_ends_immediately_with_ended_and_no_firing() {
-        let (reply_tx, reply_rx) = reply_channel::<TalkDone>();
+        let (done_tx, done_rx) = std::sync::mpsc::channel::<TalkDone>();
         let talk_id = TalkId(55);
         // Choice `\q[..]`・SystemVar `%username`・bare `\0`(→Raw) の 3 種はいずれも
         // M-boot 外タグ＝compile が無視し cue を生成しない。Text/Surface/終端命令は無い。
@@ -694,7 +702,6 @@ mod tests {
         let start = StartTalk {
             script: r"\q[はい,OnYes]%username\0".to_string(),
             talk_id,
-            reply: reply_tx,
         };
 
         let surface = MockSink::new();
@@ -703,10 +710,10 @@ mod tests {
         let text_records = text.records();
 
         // Tick を一切送らずに spawn_talk を呼ぶ（時間軸駆動を要求しない・R1.4）。
-        let handle = spawn_talk(start, surface, text);
+        let handle = spawn_talk(start, done_tx, surface, text);
 
         // 空 sheet 経路で TalkDone が即座に到達すること（Tick 不要）。
-        let done = reply_rx
+        let done = done_rx
             .recv_timeout(Duration::from_secs(5))
             .expect("無視タグのみの script も空 sheet 経路で即座に TalkDone を返すべき");
 
@@ -743,14 +750,13 @@ mod tests {
     /// 伝播していることを、`reason == Quit` の観測で固定する。
     #[test]
     fn quit_only_script_ends_immediately_with_quit_not_ended() {
-        let (reply_tx, reply_rx) = reply_channel::<TalkDone>();
+        let (done_tx, done_rx) = std::sync::mpsc::channel::<TalkDone>();
         let talk_id = TalkId(56);
         // 先行 cue のない `\-`（無視タグ `\q[..]` を前置しても発火は 0 件）。
         // ⇒ 空 sheet かつ end=Quit。空 sheet 経路で Quit がそのまま伝播すること（Ended 固定でない）。
         let start = StartTalk {
             script: r"\q[やめる,OnCancel]\-".to_string(),
             talk_id,
-            reply: reply_tx,
         };
 
         let surface = MockSink::new();
@@ -759,10 +765,10 @@ mod tests {
         let text_records = text.records();
 
         // Tick を一切送らずに spawn_talk を呼ぶ（空 sheet ゆえ時間軸駆動不要）。
-        let handle = spawn_talk(start, surface, text);
+        let handle = spawn_talk(start, done_tx, surface, text);
 
         // 空 sheet 経路で TalkDone が即座に到達すること（Tick 不要）。
-        let done = reply_rx
+        let done = done_rx
             .recv_timeout(Duration::from_secs(5))
             .expect("quit 相当のみの script も空 sheet 経路で即座に TalkDone を返すべき");
 
@@ -803,12 +809,11 @@ mod tests {
     /// 最後に `TalkDone{Ended}`（talk_id エコー・R6.6）が返ること、を単一 pass で確認する。
     #[test]
     fn fixture_script_drives_two_sinks_and_returns_ended() {
-        let (reply_tx, reply_rx) = reply_channel::<TalkDone>();
+        let (done_tx, done_rx) = std::sync::mpsc::channel::<TalkDone>();
         let talk_id = TalkId(42);
         let start = StartTalk {
             script: r"\s[10]hello\w[2]world\e".to_string(),
             talk_id,
-            reply: reply_tx,
         };
 
         let surface = MockSink::new();
@@ -816,7 +821,7 @@ mod tests {
         let surface_records = surface.records();
         let text_records = text.records();
 
-        let handle = spawn_talk(start, surface, text);
+        let handle = spawn_talk(start, done_tx, surface, text);
 
         // 期待発火時刻（`\w[2]`＝100ms＝Duration::from_millis(100).as_secs_f64()）。
         // リテラル直書きの表現誤差を避けるため同一計算で導出する。
@@ -834,7 +839,7 @@ mod tests {
             .expect("Tick(0.2) 投函");
 
         // 自然終端で TalkDone{Ended} が返ること（talk_id エコー・R6.6）。
-        let done = reply_rx
+        let done = done_rx
             .recv_timeout(Duration::from_secs(5))
             .expect("自然終端で TalkDone が返るべき");
         assert_eq!(done.talk_id, talk_id, "talk_id がエコーされること（R6.6）");
@@ -879,13 +884,12 @@ mod tests {
     /// 増えないこと（`TimedSchedule::tick` の冪等 early-return ＋単調ガードの合わせ技）を確認する。
     #[test]
     fn duplicate_and_backward_tick_do_not_double_fire() {
-        let (reply_tx, reply_rx) = reply_channel::<TalkDone>();
+        let (done_tx, done_rx) = std::sync::mpsc::channel::<TalkDone>();
         let talk_id = TalkId(1);
         // 末尾に長めの待ちを残し、0.0/0.1 の Tick 群だけでは終端しない script にする。
         let start = StartTalk {
             script: r"\s[10]hello\w[10]world\e".to_string(),
             talk_id,
-            reply: reply_tx,
         };
 
         let surface = MockSink::new();
@@ -893,7 +897,7 @@ mod tests {
         let surface_records = surface.records();
         let text_records = text.records();
 
-        let handle = spawn_talk(start, surface, text);
+        let handle = spawn_talk(start, done_tx, surface, text);
 
         // 同値・逆行 Tick を織り交ぜて先頭群（at=0.0）を発火させる。
         handle.inbox.send(SakuraMsg::Tick(0.0)).unwrap();
@@ -903,7 +907,7 @@ mod tests {
 
         // 終端まで進めて body を閉じる（\w[10]=500ms を跨ぐ）。
         handle.inbox.send(SakuraMsg::Tick(1.0)).unwrap();
-        let done = reply_rx
+        let done = done_rx
             .recv_timeout(Duration::from_secs(5))
             .expect("終端で TalkDone");
         assert_eq!(done.reason, TalkEndReason::Ended);
@@ -928,12 +932,11 @@ mod tests {
     /// 発火は起きず（早期全量配信されない）、その後の正常 Tick で通常どおり終端する。
     #[test]
     fn non_finite_tick_is_ignored_and_playback_survives() {
-        let (reply_tx, reply_rx) = reply_channel::<TalkDone>();
+        let (done_tx, done_rx) = std::sync::mpsc::channel::<TalkDone>();
         let talk_id = TalkId(9);
         let start = StartTalk {
             script: r"\s[10]hello\w[2]world\e".to_string(),
             talk_id,
-            reply: reply_tx,
         };
 
         let surface = MockSink::new();
@@ -941,7 +944,7 @@ mod tests {
         let surface_records = surface.records();
         let text_records = text.records();
 
-        let handle = spawn_talk(start, surface, text);
+        let handle = spawn_talk(start, done_tx, surface, text);
 
         // 非有限 Tick を先に送る: 無視され（error ログ＋SakuraError 記録）発火 0 件のはず。
         handle.inbox.send(SakuraMsg::Tick(f64::NAN)).unwrap();
@@ -951,7 +954,7 @@ mod tests {
         handle.inbox.send(SakuraMsg::Tick(0.0)).unwrap();
         handle.inbox.send(SakuraMsg::Tick(0.2)).unwrap();
 
-        let done = reply_rx
+        let done = done_rx
             .recv_timeout(Duration::from_secs(5))
             .expect("非有限 Tick 後も正常 Tick で終端するべき");
         assert_eq!(done.reason, TalkEndReason::Ended, "再生は破綻せず Ended");
@@ -976,17 +979,16 @@ mod tests {
     /// `\s[10]hello\w[10]world\e`（world は `\w[10]`＝500ms 後）を先頭群（at=0.0）だけ
     /// 発火させたところで Close を送る。Close 時点で world（at=0.5）は未発火＝以降 sink へ
     /// 届いてはならない。TalkDone{Interrupted} が talk_id エコー付きでちょうど 1 回返る。
-    /// 「ちょうど 1 回」は `ReplyReceiver`（oneshot・recv で consume）＋ `ReplySender::send`
-    /// の move-consume が型で保証する（2 度目の送信は構造的に不能）＋ body が Break で
-    /// スレッド終了することを join で確認して観測する（R6.4/R7.5）。
+    /// 「ちょうど 1 回」は driver 側の `Option<TalkState>::take()`（高々 1 回の唯一機構）が
+    /// 保証する（2 度目の `on_close`/`on_tick` 到達時は `state` が既に `None`）＋ body が
+    /// Break でスレッド終了することを join で確認して観測する（R6.4/R7.5）。
     #[test]
     fn mid_playback_close_returns_interrupted_once_and_drops_unfired_cues() {
-        let (reply_tx, reply_rx) = reply_channel::<TalkDone>();
+        let (done_tx, done_rx) = std::sync::mpsc::channel::<TalkDone>();
         let talk_id = TalkId(101);
         let start = StartTalk {
             script: r"\s[10]hello\w[10]world\e".to_string(),
             talk_id,
-            reply: reply_tx,
         };
 
         let surface = MockSink::new();
@@ -994,7 +996,7 @@ mod tests {
         let surface_records = surface.records();
         let text_records = text.records();
 
-        let handle = spawn_talk(start, surface, text);
+        let handle = spawn_talk(start, done_tx, surface, text);
 
         // 先頭群（at=0.0）だけ発火させる（world は at=0.5・未達）。
         handle.inbox.send(SakuraMsg::Tick(0.0)).expect("Tick(0.0) 投函");
@@ -1004,7 +1006,7 @@ mod tests {
 
         // TalkDone{Interrupted} がちょうど 1 回返ること（talk_id エコー・R7.4/R6.4）。
         // recv は self を consume するため二度目の受領は型で不能＝「ちょうど 1 回」を保証。
-        let done = reply_rx
+        let done = done_rx
             .recv_timeout(Duration::from_secs(5))
             .expect("中断で TalkDone{Interrupted} が返るべき");
         assert_eq!(done.talk_id, talk_id, "talk_id がエコーされること（R6.6）");
@@ -1039,28 +1041,27 @@ mod tests {
     /// `\s[10]hello\w[2]world\e` を自然終端まで駆動し `TalkDone{Ended}` を受領・body を
     /// join（アクタースレッド終了）した後に inbox へ Close を送る。アクターは既に消えて
     /// いるため `inbox.send(Close)` は `Err`（送出先消滅）になる＝それが「二重終端しない」
-    /// 構造的保証（Break でスレッドが消え、reply も既に move-consume 済み）の証。
+    /// 構造的保証（Break でスレッドが消え、`state` も既に `take()` 済み）の証。
     #[test]
     fn close_after_natural_end_produces_no_extra_talkdone() {
-        let (reply_tx, reply_rx) = reply_channel::<TalkDone>();
+        let (done_tx, done_rx) = std::sync::mpsc::channel::<TalkDone>();
         let talk_id = TalkId(102);
         let start = StartTalk {
             script: r"\s[10]hello\w[2]world\e".to_string(),
             talk_id,
-            reply: reply_tx,
         };
 
         let surface = MockSink::new();
         let text = MockSink::new();
 
-        let handle = spawn_talk(start, surface, text);
+        let handle = spawn_talk(start, done_tx, surface, text);
 
         // 自然終端まで駆動する（0.0 → 待ち跨ぎ 0.2）。
         handle.inbox.send(SakuraMsg::Tick(0.0)).expect("Tick(0.0) 投函");
         handle.inbox.send(SakuraMsg::Tick(0.2)).expect("Tick(0.2) 投函");
 
-        // 自然終端で TalkDone{Ended} が返ること（recv が reply_rx を consume）。
-        let done = reply_rx
+        // 自然終端で TalkDone{Ended} が返ること（recv が done_rx を consume）。
+        let done = done_rx
             .recv_timeout(Duration::from_secs(5))
             .expect("自然終端で TalkDone{Ended} が返るべき");
         assert_eq!(done.talk_id, talk_id, "talk_id エコー");
@@ -1082,7 +1083,7 @@ mod tests {
     /// 同一**の `talk_id` が対応付けられ、出力が talk 間で混線しないことを確認する（R1.3/R6.6）。
     ///
     /// 2 本の talk（`TalkId(7)`＝Ended 経路の `\s[10]hello\w[2]world\e`、`TalkId(42)`＝
-    /// Quit 経路の `\s[20]bye\w[2]done\-`）を**別々の reply channel と別々の mock sink 対**で
+    /// Quit 経路の `\s[20]bye\w[2]done\-`）を**別々の done channel と別々の mock sink 対**で
     /// 起動し、それぞれ独立の注入 Tick 列で終端まで駆動する。契約上 `TalkCue` は talk_id を
     /// 帯びない（各 talk が自前 sink を持つ per-actor 構成ゆえ）ので、相関の観測は
     /// **出力側 = `TalkDone.talk_id` が `StartTalk.talk_id` に一致**と**各 talk の cue が自分の
@@ -1091,12 +1092,11 @@ mod tests {
     #[test]
     fn multiple_talks_echo_own_talk_id_without_cross_talk_mixing() {
         // talk A: TalkId(7)・Ended 経路。
-        let (reply_a_tx, reply_a_rx) = reply_channel::<TalkDone>();
+        let (done_a_tx, done_a_rx) = std::sync::mpsc::channel::<TalkDone>();
         let id_a = TalkId(7);
         let start_a = StartTalk {
             script: r"\s[10]hello\w[2]world\e".to_string(),
             talk_id: id_a,
-            reply: reply_a_tx,
         };
         let surface_a = MockSink::new();
         let text_a = MockSink::new();
@@ -1104,12 +1104,11 @@ mod tests {
         let text_a_records = text_a.records();
 
         // talk B: TalkId(42)・Quit 経路（末尾 `\-`）・異なる surface/text 内容。
-        let (reply_b_tx, reply_b_rx) = reply_channel::<TalkDone>();
+        let (done_b_tx, done_b_rx) = std::sync::mpsc::channel::<TalkDone>();
         let id_b = TalkId(42);
         let start_b = StartTalk {
             script: r"\s[20]bye\w[2]done\-".to_string(),
             talk_id: id_b,
-            reply: reply_b_tx,
         };
         let surface_b = MockSink::new();
         let text_b = MockSink::new();
@@ -1117,8 +1116,8 @@ mod tests {
         let text_b_records = text_b.records();
 
         // 2 talk を並行起動（それぞれ独立スレッド・独立 sink 対）。
-        let handle_a = spawn_talk(start_a, surface_a, text_a);
-        let handle_b = spawn_talk(start_b, surface_b, text_b);
+        let handle_a = spawn_talk(start_a, done_a_tx, surface_a, text_a);
+        let handle_b = spawn_talk(start_b, done_b_tx, surface_b, text_b);
 
         // 各 talk を自分の注入 Tick 列で終端まで駆動する。
         handle_a.inbox.send(SakuraMsg::Tick(0.0)).expect("A Tick(0.0)");
@@ -1126,11 +1125,11 @@ mod tests {
         handle_b.inbox.send(SakuraMsg::Tick(0.0)).expect("B Tick(0.0)");
         handle_b.inbox.send(SakuraMsg::Tick(0.2)).expect("B Tick(0.2)");
 
-        // 各 reply channel には自分の talk_id を帯びた TalkDone がちょうど返る。
-        let done_a = reply_a_rx
+        // 各 done channel には自分の talk_id を帯びた TalkDone がちょうど返る。
+        let done_a = done_a_rx
             .recv_timeout(Duration::from_secs(5))
             .expect("talk A は TalkDone を返すべき");
-        let done_b = reply_b_rx
+        let done_b = done_b_rx
             .recv_timeout(Duration::from_secs(5))
             .expect("talk B は TalkDone を返すべき");
 
@@ -1220,23 +1219,22 @@ mod tests {
         }
 
         fn run_once() -> (Vec<CueKey>, Vec<CueKey>, TalkEndReason) {
-            let (reply_tx, reply_rx) = reply_channel::<TalkDone>();
+            let (done_tx, done_rx) = std::sync::mpsc::channel::<TalkDone>();
             let start = StartTalk {
                 script: r"\s[10]hello\w[2]world\e".to_string(),
                 talk_id: TalkId(7),
-                reply: reply_tx,
             };
             let surface = MockSink::new();
             let text = MockSink::new();
             let surface_records = surface.records();
             let text_records = text.records();
 
-            let handle = spawn_talk(start, surface, text);
+            let handle = spawn_talk(start, done_tx, surface, text);
             // 同一注入 Tick 列（sleep なし・決定的）。
             handle.inbox.send(SakuraMsg::Tick(0.0)).expect("Tick(0.0)");
             handle.inbox.send(SakuraMsg::Tick(0.2)).expect("Tick(0.2)");
 
-            let done = reply_rx
+            let done = done_rx
                 .recv_timeout(Duration::from_secs(5))
                 .expect("自然終端で TalkDone");
             handle.actor.join().expect("body 正常終了");

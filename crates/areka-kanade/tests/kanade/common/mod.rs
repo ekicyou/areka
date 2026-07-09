@@ -32,7 +32,7 @@ use std::time::Duration;
 use areka_actor::{ActorError, ActorHandle, spawn_actor};
 use areka_kanade::{
     KanadeConfig, KanadeMsg, ShioriCall, ShioriFailure, ShioriMsg, ShioriOutcome, StartTalk,
-    TalkDone, spawn_kanade,
+    TalkDone, TalkEndReason, spawn_kanade,
 };
 
 /// 期限付き待機の既定上限（mock は即応ゆえ十分に余裕を持たせた保険値）。
@@ -626,6 +626,17 @@ impl QuitPolicy {
             QuitPolicy::PerTalk(flags) => flags.get(index).copied().unwrap_or(false),
         }
     }
+
+    /// n 番目（0 始まり）の talk に対する [`TalkEndReason`] を返す（機械的置換:
+    /// quit:true → `Quit`・quit:false → `Ended`）。ハーネスのシナリオ指示は quit 真偽の
+    /// ままとし、契約型への変換のみを本メソッドに閉じる。
+    fn reason_for(&self, index: usize) -> TalkEndReason {
+        if self.quit_for(index) {
+            TalkEndReason::Quit
+        } else {
+            TalkEndReason::Ended
+        }
+    }
 }
 
 /// mock sakura sink を起動する。
@@ -652,10 +663,10 @@ pub fn spawn_mock_sakura(
                     .lock()
                     .expect("mock sakura mutex")
                     .push(start);
-                let quit = quit_policy.quit_for(index);
+                let reason = quit_policy.reason_for(index);
                 index += 1;
                 // TalkDone 返送。kanade 停止済みで送れなくても無害（続行）。
-                let _ = kanade_tx.send(KanadeMsg::TalkDone(TalkDone { talk_id, quit }));
+                let _ = kanade_tx.send(KanadeMsg::TalkDone(TalkDone { talk_id, reason }));
             }
         })
         .expect("spawn mock-sakura thread");
@@ -804,10 +815,10 @@ pub fn spawn_mock_sakura_gated(
                     .lock()
                     .expect("mock sakura mutex")
                     .push(start);
-                let quit = quit_policy.quit_for(index);
+                let reason = quit_policy.reason_for(index);
                 let this_index = index;
                 index += 1;
-                let done = TalkDone { talk_id, quit };
+                let done = TalkDone { talk_id, reason };
                 if hold_indices.contains(&this_index) {
                     // 保留: TalkDone を park し、解放シグナルまで送らない（active talk 窓を作る）。
                     // park のたびに releaser を起こす（「解放済み かつ 全 park 到着」を再評価させる・
@@ -1149,7 +1160,11 @@ mod smoke {
         match msg {
             KanadeMsg::TalkDone(done) => {
                 assert_eq!(done.talk_id, TalkId(1));
-                assert!(done.quit, "QuitPolicy::Fixed(true) should set quit");
+                assert_eq!(
+                    done.reason,
+                    TalkEndReason::Quit,
+                    "QuitPolicy::Fixed(true) should set reason=Quit"
+                );
             }
             _ => panic!("expected TalkDone from mock sakura"),
         }

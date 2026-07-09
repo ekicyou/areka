@@ -11,6 +11,7 @@ publish = false
 
 [dependencies]
 areka-actor = { path = "../areka-actor" }
+areka-talk = { path = "../areka-talk" }
 shiori-host32-host = { path = "../shiori-host32-host" }
 tracing = { workspace = true }
 thiserror = { workspace = true }

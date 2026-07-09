@@ -17,7 +17,8 @@
 //!    成功する（受信待ちのままハングしない・4.9 の構造保証）。
 
 use areka_kanade::{
-    CloseReason, KanadeConfig, KanadeMsg, MonotonicMs, ShioriFailure, TalkDone, TalkId,
+    CloseReason, KanadeConfig, KanadeMsg, MonotonicMs, ShioriFailure, TalkDone, TalkEndReason,
+    TalkId,
 };
 
 use super::common::{
@@ -212,12 +213,12 @@ fn unknown_talk_done_keeps_running_until_driven_close() {
         })
         .expect("send settle Tick");
 
-    // 未知 talk_id の再生完了通知を注入（採番されていない 9999・quit:false）。現 Phase 維持で無害。
+    // 未知 talk_id の再生完了通知を注入（採番されていない 9999・reason=Ended）。現 Phase 維持で無害。
     harness
         .sender
         .send(KanadeMsg::TalkDone(TalkDone {
             talk_id: TalkId(9_999),
-            quit: false,
+            reason: TalkEndReason::Ended,
         }))
         .expect("send unknown TalkDone");
 

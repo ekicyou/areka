@@ -13,7 +13,9 @@ use std::path::Path;
 use crate::charset::{decode, DefaultEncoding};
 use crate::kv::parse_kv;
 
-use super::model::{GhostNames, MountError, MountModel, ShellMount, ShioriMount};
+use super::model::{
+    BindGroupDefaults, GhostNames, MountError, MountModel, ShellMount, ShioriMount,
+};
 
 /// SHIORI マウント先（= 起点 descript.txt の親・Req 2.1）。
 const GHOST_MASTER: &str = "ghost/master";
@@ -84,11 +86,68 @@ pub fn resolve(
     if !shell_dir.is_dir() {
         return Err(MountError::ShellDirMissing { expected: shell_dir });
     }
+    // shell descript.txt から bindgroup default を転記（Req 4.5）。bindgroup default
+    // （`sakura.bindgroup*.default,数値`／`kero.*`）は ukadoc カテゴリ `descript_shell`
+    // に属し、起点 ghost/master/descript.txt ではなく **shell の descript.txt** に定義
+    // される。shell descript は存在確定していない（shell dir の存在のみ Req 3.3 で確定）
+    // ため、読取不能・不在は致命ではなく空の bindgroup として扱う（既存 name 系経路や
+    // マウント成立を壊さない・転記のみ・展開しない）。
+    let bindgroups = read_bindgroup_defaults(&shell_dir, default_encoding);
+
     let shell = ShellMount { dir: shell_dir };
 
     Ok(MountModel {
         names,
         shiori,
         shell,
+        bindgroups,
     })
+}
+
+/// bindgroup 番号を含むキーが `default,1` のときに番号を取り出す接頭辞集合。
+const SAKURA_BINDGROUP_PREFIX: &str = "sakura.bindgroup";
+const KERO_BINDGROUP_PREFIX: &str = "kero.bindgroup";
+/// bindgroup 番号キーの接尾辞（`sakura.bindgroupNNNN.default` の末尾）。
+const BINDGROUP_DEFAULT_SUFFIX: &str = ".default";
+/// shell 定義ファイル名（ghost/master と同名だが所在が異なる）。
+const SHELL_DESCRIPT_FILE: &str = "descript.txt";
+
+/// 解決済み shell ディレクトリの descript.txt から bindgroup default を転記する。
+///
+/// `sakura.bindgroupNNNN.default` / `kero.bindgroupNNNN.default` のうち **値が `1`**
+/// （= 起動時オン）のものについて、`NNNN` を u32 として本体／相方スコープ別に収集する。
+/// **転記のみ・展開しない**（範囲展開・surface 解決はしない・parsers 転写層原則）。
+/// 保持順は `parse_kv` の `BTreeMap` 反復順（キー昇順）で決定的だが、下流は集合として
+/// 扱うため順序に依存しない。shell descript が不在・読取不能なら空を返す（致命でない）。
+fn read_bindgroup_defaults(shell_dir: &Path, default_encoding: DefaultEncoding) -> BindGroupDefaults {
+    let descript = shell_dir.join(SHELL_DESCRIPT_FILE);
+    // shell descript は存在確定していない。読めなければ空（bindgroup 定義なしと同義）。
+    let Ok(bytes) = std::fs::read(&descript) else {
+        return BindGroupDefaults::default();
+    };
+
+    let text = decode(&bytes, default_encoding);
+    let map = parse_kv(&text);
+
+    let mut defaults = BindGroupDefaults::default();
+    for (key, value) in &map {
+        // 値が "1"（起動時オン）のもののみ転記。"0" や欠落は非オン。
+        if value != "1" {
+            continue;
+        }
+        if let Some(id) = parse_bindgroup_id(key, SAKURA_BINDGROUP_PREFIX) {
+            defaults.sakura_default_on.push(id);
+        } else if let Some(id) = parse_bindgroup_id(key, KERO_BINDGROUP_PREFIX) {
+            defaults.kero_default_on.push(id);
+        }
+    }
+    defaults
+}
+
+/// `<prefix>NNNN.default` 形のキーから bindgroup 番号 `NNNN`（u32）を取り出す。
+/// 形が一致しない／番号が u32 でパースできないキーは `None`（転記対象外）。
+fn parse_bindgroup_id(key: &str, prefix: &str) -> Option<u32> {
+    let rest = key.strip_prefix(prefix)?;
+    let number = rest.strip_suffix(BINDGROUP_DEFAULT_SUFFIX)?;
+    number.parse::<u32>().ok()
 }

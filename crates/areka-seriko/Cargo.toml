@@ -1,0 +1,23 @@
+[package]
+name = "areka-seriko"
+workspace = "../.."
+description = "SERIKO アニメーションエンジン (⑤) — サーフェス解決・状態・発行・構築を担うアクター層"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[dependencies]
+areka-sakura = { path = "../areka-sakura" }
+areka-emo-compose = { path = "../areka-emo-compose" }
+areka-parsers = { path = "../areka-parsers" }
+areka-actor = { path = "../areka-actor" }
+tracing = { workspace = true }
+
+[dev-dependencies]
+# タスク 3.1 の sink send 失敗（inbox 受信端消失）時の error! 発火を捕捉する専用。
+# workspace で既出（areka／wintf／emo-compose／kanade が dev で使用済み）・テスト限定であり、
+# 出荷クロージャに新規外部依存を持ち込まない（要件 6.3 のログ檻を決定論化する土台）。
+tracing-subscriber = { workspace = true }

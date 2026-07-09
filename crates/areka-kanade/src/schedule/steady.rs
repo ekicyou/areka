@@ -15,7 +15,7 @@
 //! boot 中・active talk 中に受領した close は `pending_close` に記録され（本層では作らない・
 //! boot.rs／CloseRequest アームが記録する）、次の消化点で握手を開始する:
 //! - `Steady{talk: None}` の次 Tick（Steady 遷移直後の握手開始）
-//! - active talk の `TalkDone{quit: false}` 受領時
+//! - active talk の `TalkDone{reason: Ended | Interrupted}` 受領時
 //!
 //! 握手開始＝`OnClose` GET 発行＋`ClosePending` への遷移（ClosePending 以降は close.rs＝
 //! タスク 2.5 の責務）。
@@ -26,9 +26,10 @@ use crate::talk::{StartTalk, TalkDone, TalkId};
 
 /// 定常運転（Steady）のフェーズ分岐。
 ///
-/// [`Phase::Steady`] にルーティングされた入力（Tick／ShioriReply／TalkDone{quit:false}／
-/// CloseRequest）を処理する。Tick は pump ゲート（GET/NOTIFY 使い分け）・ShioriReply は
-/// talk 調停（Value→StartTalk）・TalkDone/CloseRequest は保留 close の記録／消化を担う。
+/// [`Phase::Steady`] にルーティングされた入力（Tick／ShioriReply／
+/// TalkDone{reason: Ended | Interrupted}／CloseRequest）を処理する。Tick は pump ゲート
+/// （GET/NOTIFY 使い分け）・ShioriReply は talk 調停（Value→StartTalk）・TalkDone/CloseRequest
+/// は保留 close の記録／消化を担う。
 pub(crate) fn step(state: State, input: Input, _config: &KanadeConfig) -> (State, Vec<Action>) {
     match input {
         Input::Tick { now } => on_tick(state, now),
@@ -123,17 +124,17 @@ fn on_reply(mut state: State, outcome: ShioriOutcome) -> (State, Vec<Action>) {
     }
 }
 
-/// Steady での TalkDone{quit:false}（Req 3.4 復帰／補足遷移）。
+/// Steady での TalkDone{reason: Ended | Interrupted}（Req 3.4 復帰／補足遷移）。
 ///
-/// mod.rs は既知 talk の quit:false のみを Steady へ委譲する（quit:true は横断アームで
-/// Unloading{Quit}・未知 talk_id は error!＋維持）。ゆえに本アームは現 Steady talk の
+/// mod.rs は既知 talk の Ended／Interrupted（非 quit）のみを Steady へ委譲する（Quit は
+/// 横断アームで Unloading{Quit}・未知 talk_id は error!＋維持）。ゆえに本アームは現 Steady talk の
 /// 完了のみを受ける:
 /// - `pending_close` あり → close 握手開始（OnClose GET・ClosePending へ・補足遷移）。
 /// - `pending_close` なし → `Steady{None}` へ復帰（次 Tick で pump 再開・Req 3.4）。
 fn on_talk_done(mut state: State, done: TalkDone) -> (State, Vec<Action>) {
     match state.phase {
         Phase::Steady { talk: Some(_) } => {
-            let _ = done; // talk_id 突合は mod.rs 済み（既知 talk の quit:false のみ到達）。
+            let _ = done; // talk_id 突合は mod.rs 済み（既知 talk の非 quit のみ到達）。
             if let Some(reason) = state.pending_close.take() {
                 tracing::info!(target: "kanade", event = "steady_talk_done_close", reason = reason.as_ref_str(), "talk 完了——保留 close を消化し握手開始");
                 begin_close(state, reason)
@@ -198,6 +199,7 @@ mod tests {
     use super::*;
     use crate::msg::ShioriCall;
     use crate::schedule::step;
+    use crate::talk::TalkEndReason;
 
     fn config() -> KanadeConfig {
         KanadeConfig::new("master", "1.0.0")
@@ -478,17 +480,17 @@ mod tests {
         assert!(actions.is_empty(), "キュー・中断も発行しない");
     }
 
-    // === TalkDone{quit:false} ===
+    // === TalkDone{reason: Ended | Interrupted}（非 quit の 2 値ルーティング網羅） ===
 
-    // --- Steady{Some(id)} + TalkDone{id, false}, pending None → Steady{None}・次 Tick で pump 再開 ---
+    // --- Steady{Some(id)} + TalkDone{id, Ended}, pending None → Steady{None}・次 Tick で pump 再開 ---
 
     #[test]
-    fn steady_talk_done_resumes_steady_and_pump_restarts() {
+    fn steady_talk_done_ended_resumes_steady_and_pump_restarts() {
         let (next, actions) = step(
             steady_some(TalkId(3), 6),
             Input::TalkDone(TalkDone {
                 talk_id: TalkId(3),
-                quit: false,
+                reason: TalkEndReason::Ended,
             }),
             &config(),
         );
@@ -503,7 +505,28 @@ mod tests {
         assert_shiori(&tick_actions[0], &events::on_second_change(now, true));
     }
 
-    // --- Steady{Some(id)} + TalkDone{id, false}, pending Some → OnClose GET + ClosePending ---
+    // --- Steady{Some(id)} + TalkDone{id, Interrupted}, pending None → 同じく Steady{None} 復帰 ---
+    // kanade の 3 値ルーティング（本タスクの担当）: Interrupted は Ended と同一経路（非 quit）
+    // として steady::on_talk_done に到達する（mod.rs が防御的に非 quit 扱いへ振る）。
+
+    #[test]
+    fn steady_talk_done_interrupted_resumes_steady_same_as_ended() {
+        let (next, actions) = step(
+            steady_some(TalkId(3), 6),
+            Input::TalkDone(TalkDone {
+                talk_id: TalkId(3),
+                reason: TalkEndReason::Interrupted,
+            }),
+            &config(),
+        );
+        assert!(
+            matches!(next.phase, Phase::Steady { talk: None }),
+            "Interrupted も Ended と同じく定常復帰へ"
+        );
+        assert!(actions.is_empty(), "TalkDone 自体は副作用なし");
+    }
+
+    // --- Steady{Some(id)} + TalkDone{id, Ended}, pending Some → OnClose GET + ClosePending ---
 
     #[test]
     fn steady_talk_done_with_pending_close_begins_handshake() {
@@ -513,7 +536,7 @@ mod tests {
             s,
             Input::TalkDone(TalkDone {
                 talk_id: TalkId(3),
-                quit: false,
+                reason: TalkEndReason::Ended,
             }),
             &config(),
         );

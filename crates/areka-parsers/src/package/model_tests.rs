@@ -9,7 +9,9 @@
 
 #![cfg(test)]
 
-use crate::package::{GhostNames, MountError, MountModel, ShellMount, ShioriMount};
+use crate::package::{
+    BindGroupDefaults, GhostNames, MountError, MountModel, ShellMount, ShioriMount,
+};
 use std::io::ErrorKind;
 use std::path::PathBuf;
 
@@ -29,6 +31,7 @@ fn construct_mount_model_and_access_fields() {
         shell: ShellMount {
             dir: PathBuf::from("shell/master"),
         },
+        bindgroups: BindGroupDefaults::default(),
     };
 
     // フィールドアクセス（正本の I/O 契約）。
@@ -164,6 +167,7 @@ fn mount_model_derives_clone_and_eq() {
         shell: ShellMount {
             dir: PathBuf::from("shell/master"),
         },
+        bindgroups: BindGroupDefaults::default(),
     };
     let cloned = model.clone();
     assert_eq!(model, cloned);

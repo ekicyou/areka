@@ -18,6 +18,9 @@ path = "src/main.rs"
 [dependencies]
 wintf = { version = "0.0.1", path = "../wintf" }
 shiori-abi = { path = "../shiori-abi" }
+areka-ghost = { path = "../areka-ghost" }
+areka-kanade = { path = "../areka-kanade" }
+areka-parsers = { path = "../areka-parsers" }
 windows-core = { workspace = true }
 human-panic = { workspace = true }
 thiserror = { workspace = true }
