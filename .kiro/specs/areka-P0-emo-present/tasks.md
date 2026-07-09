@@ -36,10 +36,10 @@
   - _Boundary: PresentCommand (command.rs)_
 
 - [x] 2.2 (P) ComposeCache の実装
-  - `CacheEntry { composed: ComposedSurface, mask: AlphaMask }` と `HashMap<u32, CacheEntry>` による全保持キャッシュを実装する
+  - `CacheEntry { composed: ComposedSurface, mask: AlphaMask }` と、合成入力（`surface_id`＋`BindSet`）完全一致キーの容量1メモ化スロット `slot: Option<(ComposeKey, CacheEntry)>` を実装する（2026-07-09 改訂: 旧 `HashMap<u32, CacheEntry>` 全保持は bind 差分で古い合成に衝突する仕様バグ。詳細は Implementation Notes）
   - エントリ挿入時に `AlphaMask::from_pbgra32` でマスクを1回だけ生成する（表示のたび再生成しない）
   - `invalidate_all()` を実装する
-  - 観測完了: キャッシュ hit 時に `Composer` が呼ばれないこと（呼出カウンタで確認）・`invalidate_all` 後は再合成されることを単体テストで確認する
+  - 観測完了: 完全一致 hit 時に `Composer` が呼ばれないこと・同一 surface id でも bind 集合が異なれば必ず再合成されること（呼出カウンタと bind 差分ミスの回帰檻）・`invalidate_all` 後は再合成されることを単体テストで確認する
   - _Requirements: 2.1, 2.4, 4.1, 4.2, 4.4_
   - _Boundary: ComposeCache (cache.rs)_
 
@@ -157,3 +157,4 @@
 - validate-impl（2026-07-09）: フィーチャレベル GO（自動検証範囲）。機械: emo-present 21 lib+1 spike / emo-atlas 全 / wintf 550 lib 緑（exit 0）・example build 緑・marker grep clean。横断監査 CRITICAL NONE（依存方向 OK・File Structure MATCH・境界 OK・unsafe 隔離 OK・要件 8/8 群網羅）。**残: 5.2/5.3 の実機ランタイム観測（手動・dpi≠96 込み）のみ＝MANUAL_VERIFY_REQUIRED**。dead_code 3件は予約シーム（`SwapChainPresenter::size`・`VisualMount::text_slot`）で許容。
 - 手動観測完了（2026-07-09・開発者@125% DPI）: 5.2/5.3 とも実機確認済み→`[x]`。**feature 全 17 サブタスク完了**。fixture 知見: emo2 shell の `surface0.png`（434×687）は**バルーン焼き込みのサンプル立ち絵**（キャラ＋セリフ入り吹き出し「アヒルやアヒル！…」が1枚に一体化）＝伺かの挨拶用デフォルト立ち絵の慣習。emo-present は当画像を忠実表示するのみ（テキスト描画機能ではない・emo-text-layer 別 spec は不変）。cycle が surface1000（bind 合成・焼き込みバルーン無し）へ移ると当該バルーンは消える。この「焼き込みバルーン」と emo-present の別 balloon 窓（`balloons0.png`＝空枠・内側 A=255 不透明白）は別物。
 - キャッシュ仕様バグ是正（2026-07-09・開発者指摘）: R4.1 初版「surface id をキーに」は**要求仕様そのものの欠陥**だった。合成結果は合成入力（surface id＋BindSet）の純粋関数なのに surface id 単独キーでは bind 差分（着せ替え・まばたき）が古い合成にヒットし表示が更新されない（まばたきデモ「開きっぱなし」で顕在化。example に `InvalidateCache` を挟む応急処置を一時導入したが恒久策として棄却・撤去）。是正: `ComposeCache` を **合成入力（surface_id＋BindSet）完全一致キーの容量 1 メモ化スロット**へ再設計（`slot: Option<(ComposeKey, CacheEntry)>`）。多エントリ全保持は「将来 seriko がアニメ pattern 状態を合成入力へ加えると状態空間が膨張＝原寸ビットマップのメモリ堆積×低ヒット率」ゆえ不採用（開発者方針「状態が変わらないなら前回画像を継続・変わったら必ず再合成」）。将来 pattern 状態を合成入力へ加える際は `ComposeKey` へ追加する（キー＝合成入力の全体、の不変条件維持）。回帰檻: cache 単体 `different_binds_on_same_surface_must_miss`／実表示 `bind_change_on_same_surface_updates_display`（往復 golden 一致）。requirements R4・design（境界/フロー/トレサビ/コンポーネント/Domain Model/テスト戦略）改訂済み。emo-present 24 lib＋1 spike 緑。
+- validate-impl 再検証（2026-07-09・キャッシュ改訂後）: **GO**。機械: emo-present 24 lib＋1 spike／emo-atlas 75(1 ignored)／emo-compose 135／wintf 550 lib すべて緑（exit 0）・example build 緑・TODO/FIXME/todo! 残渣 CLEAN・秘密 grep CLEAN。独立監査（横断）: 要件カバレッジ MATCH（R1〜R8 全群充足・改訂 R4.1/4.2 がコードで実現）・設計整合 MATCH・依存方向/境界 OK（禁止依存 tokio/dola/kanade/sakura 皆無・windows-numerics は既知の良性宣言外）・クロスタスク結線 OK（cache 新 API `get(id,&binds)`/`insert(id,binds,..)` 全呼び出し整合・example の InvalidateCache 応急処置は完全撤去）。CRITICAL NONE。task 2.2 本文の旧設計記述残存（唯一の指摘・documentation-only）は本再検証で是正済み。フィーチャレベル統合に阻害要因なし。
