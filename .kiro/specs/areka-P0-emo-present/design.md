@@ -34,7 +34,7 @@
 - **表示供給口**: `ComposedSurface` → 自前所有 swap chain → WUC SpriteVisual への装着（emo が wintf を知る唯一の層）
 - **AlphaMask の生成と同期**: 合成結果からのマスク生成・表示との対入替・`AlphaMaskResource` への書込み
 - **指令 API の契約正本**: `PresentCommand`（scope・surface id・BindSet・非表示・reply 口）の形は本 spec が定義し、seriko が消費する
-- **合成キャッシュ**: surface id → (ComposedSurface, AlphaMask) の保持・無効化。emo-compose は純粋関数のまま
+- **合成キャッシュ**: 合成入力（surface id＋bind 集合）→ (ComposedSurface, AlphaMask) の直前 1 件メモ化・無効化。emo-compose は純粋関数のまま
 - **wintf 増分 2 点**: `com/dxgi.rs` の composition swap chain ヘルパ（汎用）・`AlphaMaskResource`＋hit-test 読み口（汎用）
 - **DPI 表示契約の文書化**: 「合成＝物理 px・窓サイズ＝物理 px＝surface 原寸」の契約（window-placement が前提にする）
 
@@ -84,7 +84,7 @@ graph TB
     subgraph emo_present [areka-emo-present 新設]
         Cmd[PresentCommand 指令API]
         Presenter[EmoPresenter 適用と統括]
-        Cache[ComposeCache surface_id to entry]
+        Cache[ComposeCache 合成入力 to entry メモ]
         Chain[SwapChainPresenter 自前供給面]
         Mount[VisualMount 窓装着と text層slot]
         Balloon[BalloonFrameSource 枠のComposedSurface化]
@@ -195,7 +195,7 @@ crates/areka-emo-present/
 └── src/
     ├── lib.rs                 # 公開面 re-export＋クレート規約 rustdoc（指令 API 契約正本の宣言）
     ├── command.rs             # PresentCommand / TargetId / PresentError / PresentOutcome（wintf 非依存・純粋）
-    ├── cache.rs               # ComposeCache: HashMap<u32, CacheEntry>・CacheEntry{ComposedSurface, AlphaMask}・invalidate
+    ├── cache.rs               # ComposeCache: 合成入力（surface id＋BindSet）キーの容量1メモ・CacheEntry{ComposedSurface, AlphaMask}・invalidate
     ├── presenter.rs           # EmoPresenter: target 管理・apply(cmd)・compose/cache/表示/マスクの統括（UI スレッド）
     ├── chain.rs               # SwapChainPresenter: swap chain 生成/ResizeBuffers/アップロード/Present/readback（R8）
     ├── mount.rs               # VisualMount: 窓 Entity への SpriteVisual 装着・text-layer スロット予約・非表示切替
@@ -231,8 +231,8 @@ sequenceDiagram
     participant M as AlphaMaskResource wintf
 
     Caller->>P: apply ShowSurface target surface_id binds reply
-    P->>C: get surface_id
-    alt cache hit
+    P->>C: get surface_id binds
+    alt cache hit 合成入力が完全一致
         C-->>P: CacheEntry composed mask
     else miss
         P->>K: compose_into out world atlas id binds
@@ -253,7 +253,7 @@ sequenceDiagram
     P-->>Caller: reply Ok
 ```
 
-**フロー決定**: (1) キャッシュ miss 時のみ合成（R4.2）。(2) 失敗はログ＋スキップで表示を破壊しない（R3.4）。(3) バッファとマスクの更新は同一 UI スレッド呼出内で完結し、hit-test も同スレッドで走るため中間状態は観測不能＝構造で原子性を担保（R2.4）。(4) `Hide` は S への Present を伴わず `VisualMount` の非表示＋`HitTest::none()` 切替（R3.3）。
+**フロー決定**: (1) 合成入力（surface id＋binds）の完全一致ヒット時のみ合成を省略し、1 要素でも異なれば必ず再合成（R4.2 改訂・着せ替え/まばたきの正しさの担保）。(2) 失敗はログ＋スキップで表示を破壊しない（R3.4）。(3) バッファとマスクの更新は同一 UI スレッド呼出内で完結し、hit-test も同スレッドで走るため中間状態は観測不能＝構造で原子性を担保（R2.4）。(4) `Hide` は S への Present を伴わず `VisualMount` の非表示＋`HitTest::none()` 切替（R3.3）。
 
 ### golden 検証（R6.2/R6.7/R8.3 統合シーム）
 
@@ -288,8 +288,8 @@ flowchart LR
 | 3.4 | 解決不能 id はログ＋スキップ | EmoPresenter, PresentError | `SurfaceNotFound` 写像 | 指令適用 |
 | 3.5 | Send 所有データ・enum 転写可 | PresentCommand | `PresentCommand: Send + 'static`（静的 assert） | — |
 | 3.6 | reply 口の同梱 | PresentCommand | `Option<ReplySender<PresentOutcome>>` | 指令適用 |
-| 4.1 | surface id キーのキャッシュ | ComposeCache | `get`/`insert` | 指令適用 |
-| 4.2 | ヒット時は再合成しない | ComposeCache, EmoPresenter | miss 時のみ `compose_into` | 指令適用 |
+| 4.1 | 合成入力（surface id＋binds）キーの容量 1 メモ | ComposeCache | `get(id, &binds)`/`insert(id, binds, ..)` | 指令適用 |
+| 4.2 | 完全一致ヒットのみ再合成しない・入力差分は必ず再合成 | ComposeCache, EmoPresenter | miss 時のみ `compose` | 指令適用 |
 | 4.3 | 無効化の口 | ComposeCache, PresentCommand | `InvalidateCache` variant／`invalidate_all()` | — |
 | 4.4 | キャッシュは本層所有・上流純粋 | ComposeCache | Composer は状態非保持のまま | — |
 | 5.1 | 枠も ComposedSurface 化・同一経路 | BalloonFrameSource | synthetic surfaces.txt→parse→bake→compose | — |
@@ -388,12 +388,13 @@ pub enum PresentError {
 
 | Field | Detail |
 |-------|--------|
-| Intent | surface id → (ComposedSurface, AlphaMask) 対の全保持キャッシュ |
+| Intent | 合成入力（surface id＋BindSet）→ (ComposedSurface, AlphaMask) 対の容量 1 メモ化スロット |
 | Requirements | 4.1, 4.2, 4.3, 4.4, 2.1, 2.4 |
 
 **Responsibilities & Constraints**
 - `CacheEntry { composed: ComposedSurface, mask: AlphaMask }` — 表示バッファと当たり判定マスクを**同一エントリに束ね**、対入替を構造で担保（R2.4）
-- 全保持 `HashMap<u32, CacheEntry>`（emo2 規模で妥当・LRU 不採用＝簡素化）。`invalidate_all()` のみ提供（部分無効化は実需まで凍結）
+- **キー＝合成入力の全体**（`surface_id: u32` ＋ `binds: BindSet`。`BindSet` は昇順＋dedup の正規形で `Eq` 完備）。完全一致のみヒット・1 要素でも異なれば必ずミス＝再合成（R4.1/4.2 改訂）。**初版の surface id 単独キーは同一 surface の bind 差分（着せ替え・まばたき）で古い合成に衝突する仕様バグだった（2026-07-09 顕在化・是正）**
+- **直前 1 件のみ保持**（`slot: Option<(ComposeKey, CacheEntry)>`）。多エントリ全保持は不採用: 将来 seriko がアニメ pattern 状態を合成入力へ加えると状態空間が膨張し、全保持は原寸ビットマップのメモリ堆積と低ヒット率の二重苦になる。「合成入力が変わらない間だけ前回画像を継続」が正しい戦略。`invalidate_all()` のみ提供（部分無効化は実需まで凍結）
 - mask はエントリ挿入時に `AlphaMask::from_pbgra32(composed.bytes(), w, h, stride)` で 1 回だけ生成（表示のたびに再生成しない）
 - Composer の out 再利用（`compose_into`）とは独立に、エントリは `compose` 値返しで所有（キャッシュが結果を保持する以上、out 共有の複雑さに対して利得がないため。将来ホットパス最適化の余地としてのみ記録）
 
@@ -596,7 +597,7 @@ struct PresentTarget {
     emo_world: EmoWorld,        // 合成入力（構築時 bind_atlas 済み）
     atlas: AtlasTable,          // 不変・無効化トリガ源
     composer: Composer,
-    cache: ComposeCache,        // HashMap<u32, CacheEntry>
+    cache: ComposeCache,        // slot: Option<(ComposeKey{surface_id, binds}, CacheEntry)>（容量1メモ）
     window: Entity,             // 装着先窓（R1.3）
     surface_entity: Entity,     // SpriteVisual＋HitTest＋AlphaMaskResource
     text_slot: Entity,          // 予約スロット（R1.4）
@@ -647,7 +648,7 @@ struct PresentTarget {
 
 ### Unit Tests（emo-present crate 内・決定論）
 
-1. **ComposeCache**: miss→合成 1 回・hit→Composer 不呼出（呼出カウンタ）・`invalidate_all` 後は再合成（4.1/4.2/4.3）
+1. **ComposeCache**: miss→合成 1 回・完全一致 hit→Composer 不呼出（呼出カウンタ）・**同一 surface id で bind 集合が異なれば必ず miss（着せ替えバグの回帰檻）**・容量 1（置換で旧入力 miss）・`invalidate_all` 後は再合成（4.1/4.2/4.3）
 2. **CacheEntry 対生成**: mask が `composed.bytes()` から生成され原寸一致（2.1・任意ピクセルの is_hit と α≥128 の一致）
 3. **PresentCommand 契約**: `Send + 'static` 静的 assert・`Hide`/`InvalidateCache` variant の存在（3.3/3.5・回帰檻）
 4. **BalloonFrameSource**: synthetic surfaces.txt → `shell::parse` 往復で element path/surface id が転記一致（5.1/5.3）
@@ -659,6 +660,7 @@ struct PresentTarget {
 1. **spike 昇格テスト（実装フェーズ先頭）**: composition swap chain 生成→`upload`→`read_back` バイト一致→`ResizeBuffers`→再 upload→一致（8.1/8.2/8.3/8.5・R6.7 シームの檻）
 2. **apply 経路**: `attach_target`→`ShowSurface`→`read_back` == golden bytes・不正 id →表示 bytes 不変＋`Err`・全透明 surface（`EmptyComposition`）→ warn＋Hide 縮退＋reply `Ok`（1.1/1.2/3.2/3.4・ディスカッション #1）
 3. **Hide→再表示**: `Hide` 後 visual 非表示＋`HitTest::none`、再 `ShowSurface` で復帰（3.3）
+4. **bind 差分の表示反映**: 同一 surface id で bind 集合だけ変えた `ShowSurface` 往復が各 bind 状態の直接合成 golden とバイト一致（4.1/4.2 改訂の実表示レベル回帰檻）
 
 ### E2E / 観測（example・単一 pass/fail）
 

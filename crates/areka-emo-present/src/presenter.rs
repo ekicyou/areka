@@ -56,7 +56,7 @@ struct PresentTarget {
     atlas: AtlasTable,
     /// 合成器（状態非保持・スクラッチのみ再利用）。
     composer: Composer,
-    /// surface id → (composed, mask) 対の全保持キャッシュ。
+    /// 合成入力（surface id＋bind 集合）→ (composed, mask) 対の容量 1 メモ化スロット。
     cache: ComposeCache,
     /// 装着先の窓 Entity（R1.3・遅延装着の対象）。
     window: Entity,
@@ -142,8 +142,10 @@ impl EmoPresenter {
 
     /// `ShowSurface` の適用（キャッシュ引き当て or 合成 → 供給面アップロード → マスク同期 → 可視化）。
     ///
-    /// 手順（design §System Flows）: (1) 未装着なら error! ＋ `Err(TargetNotAttached)`。(2) キャッシュ
-    /// ヒットなら再合成しない（R4.2）。(3) ミスなら合成し、`SurfaceNotFound` は error! ＋表示不変＋
+    /// 手順（design §System Flows）: (1) 未装着なら error! ＋ `Err(TargetNotAttached)`。(2) 合成入力
+    /// （surface id＋bind 集合）が直前と完全一致するヒットなら再合成しない（R4.2）——bind 集合が
+    /// 1 要素でも異なれば必ずミス＝再合成する（着せ替え・まばたきの正しさの担保）。(3) ミスなら合成し、
+    /// `SurfaceNotFound` は error! ＋表示不変＋
     /// `Err`（R3.4）、`EmptyComposition` は warn! ＋ Hide 縮退＋`Ok`（設計ディスカッション #1）、`Ok` なら
     /// `cache.insert`（マスクを 1 回だけ生成）。(4) 使えるエントリで、`chain`/`mount` 未生成なら原寸確定
     /// 後に遅延生成し、`chain.upload` ＋ `AlphaMaskResource::set` ＋ 可視化を同一呼び出し内で行う（R2.4）。
@@ -161,8 +163,8 @@ impl EmoPresenter {
             return;
         };
 
-        // (1) 引き当て: キャッシュヒットは再合成しない（R4.2）。ミスのみ合成する。
-        let cache_hit = target.cache.get(surface_id).is_some();
+        // (1) 引き当て: 合成入力（id＋binds）の完全一致のみヒット＝再合成しない（R4.2）。ミスのみ合成する。
+        let cache_hit = target.cache.get(surface_id, &binds).is_some();
         if !cache_hit {
             match target
                 .composer
@@ -170,7 +172,7 @@ impl EmoPresenter {
             {
                 Ok(composed) => {
                     // 挿入時にマスクを 1 回だけ生成し、表示バッファと対で束ねる（R2.1/R2.4）。
-                    target.cache.insert(surface_id, composed);
+                    target.cache.insert(surface_id, binds.clone(), composed);
                 }
                 Err(ComposeError::EmptyComposition(id)) => {
                     // 全透明退化（外形 0×0）: 許容される正常退化として Hide 縮退＋reply Ok（skip ではない）。
@@ -204,7 +206,10 @@ impl EmoPresenter {
         // (2) 供給面・装着の遅延生成（初回表示・原寸確定後）。
         if target.chain.is_none() {
             let (w, h) = {
-                let entry = target.cache.get(surface_id).expect("直前に引き当て済み");
+                let entry = target
+                    .cache
+                    .get(surface_id, &binds)
+                    .expect("直前に引き当て済み");
                 (entry.composed.width(), entry.composed.height())
             };
 
@@ -269,7 +274,10 @@ impl EmoPresenter {
         }
 
         // (3) 供給面アップロード ＋ マスク同期 ＋ 可視化（同一呼び出し内＝原子入替・R2.4）。
-        let entry = target.cache.get(surface_id).expect("直前に引き当て済み");
+        let entry = target
+            .cache
+            .get(surface_id, &binds)
+            .expect("直前に引き当て済み");
         let size = (entry.composed.width(), entry.composed.height());
 
         let chain = target.chain.as_mut().expect("直上で生成済み");
@@ -384,7 +392,9 @@ mod tests {
         AlphaParams, MemoryDecoder, PackConfig, SetId, SurfaceSet, UseSelfAlpha, bake,
     };
     use areka_emo_compose::BindSet;
-    use areka_parsers::shell::{AppendTarget, DefRef, Element, ElementPath, Shell, Surface};
+    use areka_parsers::shell::{
+        Animation, AppendTarget, DefRef, Element, ElementPath, Interval, Pattern, Shell, Surface,
+    };
 
     use wintf::ecs::{GraphicsCore, HitTest, HitTestMode, Visual, WucGraphicsResource};
     use windows::Win32::System::Com::{COINIT_MULTITHREADED, CoInitializeEx};
@@ -865,7 +875,7 @@ mod tests {
                 .get(&TargetId(0))
                 .unwrap()
                 .cache
-                .get(7000)
+                .get(7000, &BindSet::default())
                 .is_none(),
             "EmptyComposition は cache へ 0×0 を挿入しない"
         );
@@ -940,7 +950,7 @@ mod tests {
             let target = presenter.targets.get(&TargetId(0)).unwrap();
             assert!(target.chain.is_some(), "Hide は swap chain を保持する（R3.3）");
             assert!(
-                target.cache.get(1000).is_some(),
+                target.cache.get(1000, &BindSet::default()).is_some(),
                 "Hide は合成キャッシュを保持する（R3.3）"
             );
             assert!(!target.visible, "Hide 後は target.visible=false");
@@ -982,6 +992,152 @@ mod tests {
         assert_eq!(
             bytes_shown, bytes_reshown,
             "再表示のバイトが初回表示と一致しない（キャッシュからの表示復帰が壊れている）"
+        );
+    }
+
+    /// surface 1000（`w×h` 全不透明 element ＋ bind animation 2000 が surface 5000 を (0,0) に重ねる）
+    /// の `(EmoWorld, AtlasTable)` と、bind 無し／bind 有りそれぞれの直接合成 golden を返す。
+    ///
+    /// 5000 の part（1×1 不透明・base と異色）は base 内に収まるため、bind 有無で**外形は不変・
+    /// バイトのみ変わる**（供給面リサイズ経路を踏まずに bind 差分の表示反映だけを固定できる）。
+    fn build_target_assets_with_bind(
+        w: u32,
+        h: u32,
+        salt: u8,
+    ) -> (EmoWorld, AtlasTable, Vec<u8>, Vec<u8>) {
+        let base = Path::new("shell/master");
+        let bind_part = Surface {
+            id: 5000,
+            targets: vec![AppendTarget::Single(5000)],
+            elements: vec![elem("q.png", 0, 0)],
+            collisions: Vec::new(),
+            animations: Vec::new(),
+        };
+        let base_surface = Surface {
+            id: 1000,
+            targets: vec![AppendTarget::Single(1000)],
+            elements: vec![elem("p.png", 0, 0)],
+            collisions: Vec::new(),
+            animations: vec![Animation {
+                id: 2000,
+                interval: Interval::Bind,
+                patterns: vec![Pattern {
+                    index: 0,
+                    surface_id: 5000,
+                    wait: 0,
+                    x: 0,
+                    y: 0,
+                }],
+            }],
+        };
+        let surfaces = vec![base_surface, bind_part];
+
+        let mut dec = MemoryDecoder::new();
+        let stride = w * 4;
+        let mut img: Vec<u8> = Vec::with_capacity((stride * h) as usize);
+        for y in 0..h {
+            for x in 0..w {
+                let b = (x as u8).wrapping_mul(3).wrapping_add(salt);
+                let g = (y as u8).wrapping_mul(5).wrapping_add(salt);
+                let r = ((x + y) as u8).wrapping_mul(7).wrapping_add(salt);
+                img.extend_from_slice(&[b, g, r, 0xFF]);
+            }
+        }
+        dec.insert(base.join("p.png"), w, h, stride, img, true);
+        // 1×1 の不透明 part（base 左上と必ず異なる色 → bind 有無でバイトが必ず変わる）。
+        dec.insert(base.join("q.png"), 1, 1, 4, vec![0xFF, 0xFF, 0xFF, 0xFF], true);
+
+        let set = SurfaceSet {
+            surfaces: &surfaces,
+            base_dir: base,
+            alpha_params: AlphaParams {
+                use_self_alpha: UseSelfAlpha::On,
+            },
+        };
+        let baked = bake(&[set], &dec, PackConfig::default());
+        assert!(baked.errors.is_empty(), "atlas bake セットアップは失敗しない");
+
+        let mut world = EmoWorld::build(&shell_of(surfaces));
+        world.bind_atlas(&baked.table, SetId(0));
+        let atlas = baked.table;
+
+        let mut composer = Composer::new();
+        let golden_plain = composer
+            .compose(&world, &atlas, 1000, &BindSet::default())
+            .expect("bind 無し合成は Ok")
+            .bytes()
+            .to_vec();
+        let golden_bound = composer
+            .compose(&world, &atlas, 1000, &BindSet::from_ids([2000]))
+            .expect("bind 有り合成は Ok")
+            .bytes()
+            .to_vec();
+        assert_ne!(
+            golden_plain, golden_bound,
+            "fixture 前提: bind 有無で合成バイトが異ならなければ回帰檻にならない"
+        );
+
+        (world, atlas, golden_plain, golden_bound)
+    }
+
+    /// 回帰檻（キャッシュ仕様バグ・実表示レベル）: **同一 surface id で bind 集合だけ変えた**
+    /// `ShowSurface` が必ず再合成され、`read_back` が各 bind 状態の直接合成 golden とバイト一致する。
+    ///
+    /// 旧設計（surface id のみキー）では 2 回目以降が古い合成にヒットし、着せ替え・まばたきの
+    /// bind 差分が表示に反映されなかった（2026-07-09 まばたきデモで顕在化）。往復（無し→有り→無し）
+    /// で両方向の再合成を固定する。
+    #[test]
+    fn bind_change_on_same_surface_updates_display() {
+        let mut world = make_world_with_gpu();
+        let window = world.spawn_empty().id();
+
+        let (emo_world, atlas, golden_plain, golden_bound) =
+            build_target_assets_with_bind(4, 3, 0x2B);
+
+        let mut presenter = EmoPresenter::new();
+        presenter
+            .attach_target(&mut world, TargetId(0), window, emo_world, atlas)
+            .expect("attach_target 失敗");
+
+        let show = |presenter: &mut EmoPresenter, world: &mut World, binds: BindSet| {
+            let (tx, rx) = reply_channel::<PresentOutcome>();
+            presenter.apply(
+                world,
+                PresentCommand::ShowSurface {
+                    target: TargetId(0),
+                    surface_id: 1000,
+                    binds,
+                    reply: Some(tx),
+                },
+            );
+            assert!(
+                matches!(rx.recv_timeout(Duration::from_secs(10)), Ok(Ok(()))),
+                "ShowSurface が Ok でない"
+            );
+        };
+
+        // bind 無し → golden_plain。
+        show(&mut presenter, &mut world, BindSet::default());
+        assert_eq!(
+            presenter.read_back(TargetId(0)).expect("read_back 失敗"),
+            golden_plain,
+            "bind 無し表示が直接合成 golden と一致しない"
+        );
+
+        // 同一 surface・bind 有り → 再合成されて golden_bound（旧設計はここで古い絵を返した）。
+        show(&mut presenter, &mut world, BindSet::from_ids([2000]));
+        assert_eq!(
+            presenter.read_back(TargetId(0)).expect("read_back 失敗"),
+            golden_bound,
+            "bind 追加が表示へ反映されない（合成入力キーの回帰＝着せ替えバグ再発）"
+        );
+
+        // bind 無しへ戻す → 再合成されて golden_plain（往復の両方向を固定）。
+        show(&mut presenter, &mut world, BindSet::default());
+        assert_eq!(
+            presenter.read_back(TargetId(0)).expect("read_back 失敗"),
+            golden_plain,
+            "bind 除去が表示へ反映されない（合成入力キーの回帰＝着せ替えバグ再発）"
         );
     }
 }

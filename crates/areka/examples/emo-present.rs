@@ -779,6 +779,8 @@ fn cycle_present_system(world: &mut World) {
 
     boot.cycle_state = boot.cycle_state.next();
     boot.next_switch_at = now + CYCLE_INTERVAL_SECS;
+    // ComposeCache は合成入力（surface id＋bind 集合）をキーにするため、同一 surface1000 でも
+    // binds が異なる目開き/目閉じは自然にミス＝再合成される（InvalidateCache の手動発行は不要）。
     let cmd = boot.cycle_state.command();
     boot.presenter.apply(world, cmd);
     tracing::info!(state = ?boot.cycle_state, "emo-present: シェル surface を切替");
