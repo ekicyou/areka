@@ -25,7 +25,8 @@ M1 の emo-text-layer はスクロールを**全域ビットマップ再描画**
 
 ## Approach
 
-1. **viewbox 合成**: viewport visual（validrect サイズ・`ClipShape::Rectangle`）＋ content visual（テキスト全長の描画面・translate offset）。クリップは wintf 実装済み primitive をそのまま使う（wintf 改変なし・組み合わせのみ）。
+1. **viewbox 合成**: viewport visual（validrect サイズ・`ClipShape::Rectangle`）＋ content visual（**バルーン内容キャンバス**＝テキスト全長の描画面・translate offset）。クリップは wintf 実装済み primitive をそのまま使う（wintf 改変なし・組み合わせのみ）。
+   - **固定層のシーム（SSP 正典裏付け・2026-07-09）**: `\_b` の **`--option=fixed`＝「スクロールした時に画像を動かさない」**が SSP に存在＝バルーン内部は**スクロール内容層＋固定層の二層**が de-facto。viewbox 構成は自然に対応可能（固定層＝offset を受けない viewport 直下の別 visual）——**M1 相当では実装しない**が、visual 構成に固定層の差し込み点を最初から予約（`\_b` 対応増分が visual 再構成なしで済む形）。
 2. **描画実行の差し替え**: emo-text-layer の分離シーム（可視窓決定/描画実行）のうち**描画実行側だけ**を「全域再描画」→「content 追記描画＋offset 更新」へ置換。可視窓決定（純粋層）とスクロール発火規則は**不変**＝状態機械のテスト資産がそのまま生きる。
 3. **content 描画面の成長規則**: talk が進むほど content が伸びる——描画面の初期サイズ・伸長（再確保）規則・上限（`Clear` でリセット）を design で確定（無限成長させない）。
 4. **滑らか補間のシーム**: M1 相当機能はステップスクロール等価（golden 一致が受け入れ基準）。オフセット補間（滑らか演出・慣性）は**シームのみ**（WUC アニメーション活用は M2 の新能力解禁と歩調を合わせる）。
