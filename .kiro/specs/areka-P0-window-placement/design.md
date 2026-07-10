@@ -439,8 +439,17 @@ pub struct DescriptSource {
     pub ghost_kv: BTreeMap<String, String>,
     pub shell_kv: BTreeMap<String, String>,
     pub shell_dir: PathBuf,
+    pub titles: GhostTitles,
 }
 pub fn load_descript_source(ghost_root: &Path) -> Result<DescriptSource, PlacementError>;
+
+/// 窓タイトルの正本（`MountModel.names` 由来・Win32 識別／デバッグ観測用）。
+/// scope0 = `sakura.name`・scope1 = `kero.name`・scope n≥2 = `char{n}.name`（あれば）。
+/// 欠落スコープは既定 `"areka"`（パニックしない・常に文字列を返す）
+pub struct GhostTitles { /* BTreeMap<usize, String>（非公開・アクセサ経由） */ }
+impl GhostTitles {
+    pub fn title(&self, scope: usize) -> &str;  // 欠落時 "areka"
+}
 ```
 
 - 実装: `areka_parsers::package::resolve(ghost_root, DefaultEncoding::Ansi)` → `MountModel.shell.dir`／`shiori.dir` から各 `descript.txt` を bytes 読み → `charset::decode(bytes, Ansi)` → `kv::parse_kv`（DD4。SSP 既定 Ansi＝記憶 areka-descript-encoding。emo-present の `read_to_string` 直読より正しい入口）
