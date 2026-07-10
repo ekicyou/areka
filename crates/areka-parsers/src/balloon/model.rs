@@ -17,6 +17,8 @@
 //!   `Font` は `Option<String>` を含むため `Copy` 不可（`Clone, Debug, PartialEq, Eq` のみ）。
 //! - モデル化 subset は emo2 が使う幾何＋フォントに限定する。choice/link/scroll 系キーは
 //!   モデル化しない（要件 2.7・過剰実装抑止 要件 5.5）。
+//! - 例外として `writing_mode`（areka 拡張キー）を additive な生文字列転記フィールドとして
+//!   持つ（値の解釈は下流 emo テキスト層・emo-text-layer 要件 5.6）。
 //!
 //! 構築は同クレートの `balloon::parse`（写像）とテストが公開/クレートパスで行う。
 //! `new` コンストラクタ＋read-only accessor という不変値オブジェクト流儀（`sakura::SurfaceArg` 流儀）。
@@ -33,6 +35,7 @@ pub struct BalloonModel {
     wordwrappoint: WordWrapPoint,
     validrect: ValidRect,
     font: Font,
+    writing_mode: Option<String>,
 }
 
 impl BalloonModel {
@@ -43,6 +46,7 @@ impl BalloonModel {
         wordwrappoint: WordWrapPoint,
         validrect: ValidRect,
         font: Font,
+        writing_mode: Option<String>,
     ) -> Self {
         BalloonModel {
             windowposition,
@@ -50,6 +54,7 @@ impl BalloonModel {
             wordwrappoint,
             validrect,
             font,
+            writing_mode,
         }
     }
 
@@ -76,6 +81,14 @@ impl BalloonModel {
     /// フォント設定 `font`（name/height/color）を参照で読み取る（`String` を含むため参照返し・要件 2.5）。
     pub fn font(&self) -> &Font {
         &self.font
+    }
+
+    /// 縦書き/横書き宣言 `writing_mode` の生文字列を読み取る（emo-text-layer 要件 5.6）。
+    ///
+    /// 2 層マージ済みの生値をそのまま転記したもの（値の解釈・語彙判定・fallback は
+    /// 下流 emo テキスト層の責務・parser は転記に徹する）。未指定は `None`。
+    pub fn writing_mode(&self) -> Option<&str> {
+        self.writing_mode.as_deref()
     }
 }
 
