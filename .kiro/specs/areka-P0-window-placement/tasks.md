@@ -87,7 +87,7 @@
   - _Depends: 5.1_
   - _Boundary: placement::spawn_
 
-- [ ] 5.3 バルーン追従の幾何と窓移動 API の統合を検証する
+- [x] 5.3 バルーン追従の幾何と窓移動 API の統合を検証する
   - `spawn_ghost_windows` の出力する `BalloonFollow.offset` が `resolve_placement` の `balloon_offset` と一致することを確認する
   - `move_window_to` 呼び出し後、対象が `BalloonFollow` を持つ場合にバルーンが offset を保った状態で追従することを確認する
   - 統合テスト T-I4 を追加する
@@ -138,6 +138,7 @@
 - 1: `areka_parsers::package::MountError` は Display/std::error::Error 未実装（Clone/Debug/PartialEq/Eq のみ・#[non_exhaustive]）。`PlacementError::Mount` は `{0:?}` Debug 整形・`#[from]` 不可 → 後続タスクは `PlacementError::Mount(e)` を明示構築すること（areka-parsers は改変禁止）。
 - 2.1: `Alignment::Seam` の `warn!` 発火は config でなく resolver（task 3.1）へ委譲済み（config.rs:22 に明記）→ 3.1 で解消（resolver.rs:124-130 で発火・T-R5 経路で実行）。スコープ検出は DD6 厳密読み（`char1.*` 単独では scope1 を作らない・kero シグナルのみ）。同層クロス競合は正典プレフィックス外側優先。
 - 4.1: emo2 fixture 実測原寸 = scope0 surface0: 434×687 / scope1 surface10: 336×400 / balloon surface0: 400×224（テストで檻化済み・example/受入検証の期待値に使える）。balloon エラーは `Measure { scope: 0, reason: "balloon: ..." }` 規約。
+- 5.3: 5.2 由来の `t_i4_register_*` テスト名は design の T-I4（follow 幾何）と衝突（実害なし・一意名で全実行）→ 余裕があれば `t_reg_*` 等へ改名候補。
 - 5.2: clickthrough 登録 system の schedule 結線は 6.2（donor の slot は `FrameFinalize`）。レジストリ NonSend 未挿入 tick の Added 消費に注意（donor 同挙動・WinApp::run が先に handle 挿入する結線順で緩和）。
 - 4.2: `enqueue_window_move` は SetWindowPosCommand enqueue＋`bypass_change_detection()` で WindowPos ミラー（wintf echo 規約と一致・apply_window_pos_changes 二重発行防止・headless 観測シーム）。`on_char_drag` は pub(crate)（5.1 の OnDrag 結線用）。WindowPos はクライアント座標だが WS_POPUP 枠なし窓では窓座標と同一。headless テストは偽 WindowHandle（wintf tests の確立パターン）。
 - 3.1: P2 連鎖は post-clamp 前スコープ実位置基準（design 未規定領域の確定・t_r6_chain_uses_clamped_previous_position で檻化）。balloon_pos=char_pos/offset=0 は 3.2 P5 までの正直な暫定。極値 `defaultx=i32::MIN` で debug オーバーフローの理論穴 → 3.2 で saturating 演算検討（非ブロッキング）。`cargo clippy` は wintf 既存エラーで全体 fail（本 spec 非起因・不改変境界）。
