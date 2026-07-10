@@ -130,3 +130,85 @@ resolver（純粋・テスト密）＋公開引き渡し型は独立モジュー
 - ukadoc `descript_ghost`/`descript_shell` の placement 系キー正典（値域・所在・優先度・有効条件）を `get_doc`/`search_docs` で総ざらい（mcp__ukadoc）。
 - SSP de-facto: scope 相対配置・z-order 実挙動・`defaultx`⇔`defaultleft`・X 原点・複数モニタ時の既定モニタ。**【要件討議#3 で確定】** 初期（既定）表示はプライマリモニタ（`is_primary`）の work area 基準（R2.12）。**ドラッグ移動は全モニタ（仮想デスクトップ全体）が対象**で、`DragConstraint` を単一モニタへ閉じ込めない・全モニタ和に対し物理 px 一貫で算出しモニタ境界跨ぎで画面外消失させない（R4.5/R4.6）。どのモニタに居たかの復元は position-persist（M-life）。設計課題は「全モニタ和の bounding rect 算出（`enumerate_monitors()`）と DragConstraint への供給」。
 - `WindowPos` 生成時座標算出（`to_window_coords_for_creation`）が物理 px をどう扱うか（CW_USEDEFAULT スキップ含む）を design で 1 度精読。
+
+---
+
+# 設計フェーズ調査ログ（2026-07-10・kiro-spec-design）
+
+> 上記ギャップ分析（2026-07-09）を入力に、ukadoc 正典の総ざらい＋実シンボル精読＋設計統合を実施。
+> 成果物は design.md（座標単位契約・正典表・DD1〜DD14）。本節はその調査根拠と正典/デファクトの差異記録。
+
+## ukadoc 正典調査（mcp__ukadoc・brief 必読指示の実施）
+
+### カスケード優先度（確定・requirements R2.3 と一致）
+
+`descript_ghost`／`descript_shell` の全 `alignmenttodesktop` 系エントリが同一の優先度注記を持つ:
+**ゴースト側全体 ＜ ゴースト側スコープ個別 ＜ シェル側全体 ＜ シェル側スコープ個別**（shell スコープ別が最強）。
+
+### スコープ別キーの命名（ドリフト所見 #1 の解消）
+
+ghost/shell descript とも **`sakura.`（本体）／`kero.`（相方）／`char*.`（2 人目以降）** が正典プレフィックス。
+brief の「shell スコープ別＝`char*.seriko.*`」は不正確で、shell 側にも `sakura.seriko.alignmenttodesktop`／
+`kero.seriko.alignmenttodesktop` が正典として存在する（emo2 の `sakura.defaultx`／`kero.defaultx` は正典命名に合致）。
+`char0`/`char1` を scope0/1 の別名として受けるのは de-facto 寛容実装（design DD6）。
+
+### `alignmenttodesktop` の値域（brief 未網羅項目①の解消）
+
+descript エントリ自体は値域を列挙しないが、`\![set,alignmenttodesktop,方向]`（sakurascript）が
+**`top`／`bottom`／`left`／`right`／`free`**（＋タグ限定の `default`）を列挙。既定は ghost 全体キーの既定値 `bottom`。
+別綴 `alignmentondesktop` も有効（タグ注記）。M1 実挙動は `bottom`／`free` のみ・他はシーム（design DD9）。
+
+### `defaulttop` の free 限定（brief 重要修正①の裏取り）
+
+ghost/shell の全 `(sakura|kero|char*).defaulttop` エントリに
+「**seriko.alignmenttodesktop が free である場合のみ有効**」と明記。bottom 整列時の Y は下端固定＝defaulttop 無視（R2.4 と一致）。
+
+### `defaultx` は ukadoc に実在する（brief 重要修正②の訂正・正典/デファクト差異）
+
+brief は「`defaultx` は ukadoc で確認できず」としたが、**`(sakura|kero|char*).defaultx` は descript_ghost／descript_shell
+双方に正典エントリが実在**する。ただし正典の意味は「**画像ベース X 座標**」（既定＝画像中央 X）＝サーフェス**基準点のアンカー指定**であり、
+`defaultleft`（「ディスプレイ上でのデフォルト X 座標」＝窓位置）とは**別キー**。propertysystem `currentghost.scope(ID).x` も
+「サーフェスの基準点（通常サーフェス中央下）のスクリーン X。GHOST/SHELL descript の sakura(kero、char*).defaultx で設定可能」と記載。
+
+**採用判断（design DD2）**: 要件討議（2026-07-10・開発者確定・R2.10）は `alignmenttodesktop,bottom` 下の `defaultx` を
+「work area 右端（基準位置）からの左方向オフセット・0＝密着」の de-facto 解釈で確定済みのため、design はこれを実装する
+（要件は再オープンしない）。正典のアンカー意味論は**転記のみの将来シーム**として本記録に残す（position-persist／balloon 正式配置の
+段で基準点モデルが必要になったら再訪）。`defaultx`⇔`defaultleft` は R2.7 に従い同一 X スロットへ寛容統合
+（同層内は defaultx 優先＝emo2 実使用側・層間は shell＞ghost）。
+
+**scope≥1 の defaultx 基準（design DD3）**: R2.9（相方＝本体の surface 幅ぶん左）と R2.10（defaultx=0＝右端密着）を同時に満たすには、
+defaultx を「**自スコープの基準位置からの左方向オフセット**」（scope0 基準＝右端、scope n 基準＝前スコープの左隣）と定式化するのが
+唯一の自己整合解（kero.defaultx,0 を「右端密着」と読むと sakura と重なり R2.9 と矛盾）。
+
+### z-order／sticky-window／推奨 DPI（シーム裏取り）
+
+- `seriko.zorder,スコープID,...`／`seriko.sticky-window,スコープID,...`（descript_shell・SSP 2.4+）＝`\![set,zorder]`/`\![set,sticky-window]` の descript 版。emo2 未使用→転記シームのみ（R5.2）。
+- `dpi,推奨DPI`（descript_balloon・SSP 2.7.21+・省略時 96）に加え **`seriko.dpi,推奨DPI`（descript_shell・同版・省略時 96）も存在**（brief 追記の balloon 側のみならず shell 側にもある）。M1 は両方 96 素通しの転記シーム（design DD11）——窓寸は surface/balloon surface 原寸（物理 px）で決まり、表示スケールは emo 側の将来領分。
+- マルチモニタ座標系: propertysystem に「プライマリモニタ左上を原点とする**仮想デスクトップ全体**での位置」と明記——R4.5/R4.6（ドラッグは仮想デスクトップ全域・物理 px 一貫）の正典裏付け。
+
+### バルーンのスコープ対応（R1.2 の正典根拠）
+
+`sakura.balloon.alignment`（本体側の吹き出し）／`kero.balloon.alignment`（相方側の吹き出し）が descript_shell/descript_ghost に
+スコープ別で存在＝バルーンはスコープごとに 1 枚。emo2 実測は sakura=left／kero=right（暫定 offset の向きにのみ使用）。
+
+## 実シンボル精読（設計フェーズ追加分）
+
+- `WindowPos::to_window_coords_for_creation`（`wintf/src/ecs/window/window_pos/mod.rs:362`）: `position=None`→`CW_USEDEFAULT` 素通し。位置指定時は**実 DPI で `AdjustWindowRectExForDpi`** によりクライアント領域→窓矩形変換。**WS_POPUP 枠なし窓では枠加算ゼロ＝与えた物理 px がそのまま窓矩形**（配置側の追加変換不要を確認）。
+- `DragConfig::default()`（threshold=5 物理 px・move_window=true・左ボタン）／`DragConstraint.apply` はクランプのみでスケール変換なし——U4（drag 非介入）の裏付け。
+- `areka_parsers` 公開面: `charset::decode(&[u8], DefaultEncoding) -> String`／`kv::parse_kv(&str) -> BTreeMap`／`package::resolve(&Path, DefaultEncoding) -> Result<MountModel, MountError>`——placement::source の実装部品が全て公開済み（areka-parsers 不改変で成立）。
+- `crates/areka/Cargo.toml`: areka-emo-atlas／-compose／-present は現状 **dev-dependencies（example 専用）**。main.rs シームでの採寸には atlas/compose の通常依存昇格が必要（design DD5）。
+- `GhostRuntime.mount` は private＋`#[allow(dead_code)]`（読み出し口なし）を再確認→ placement は `package::resolve` を自前で呼ぶ（design DD4・areka-ghost 不改変）。
+
+## 設計統合（synthesis）の記録
+
+- **一般化**: 「scope0/scope1 の 2 窓」を「検出スコープ集合×（キャラ窓＋バルーン窓）」へ一般化（インターフェイスは N スコープ・実装スコープは emo2 の 2）。resolver の基準位置を連鎖形（`base_x(n) = char_x(n−1) − w(n−1)`）にすることで char*（n≥2）へ構造のまま伸びる。
+- **build vs adopt**: ドラッグは wintf `DragConfig{move_window:true}` を採用（自前ドラッグ座標処理を**書かない**ことが 07-05 再発防止の本体）。descript 読込は areka-parsers 3 部品を採用。採寸は emo-atlas/compose を採用（PNG ヘッダ直読の自前実装は合成外形と乖離し得るため棄却）。窓生成は entity-spawn→`create_windows` 既存経路を採用（`EcsWindowFactory` は `pub(crate)`＝直接呼ばない）。
+- **単純化**: (1) M1 は `DragConstraint` を**付与しない**（無制約＝仮想デスクトップ全域）——制約算出ロジックそのものを消すことで 07-05 の欠陥面を除去し、R4.6 は純粋ヘルパ `virtual_desktop_union`＋規則の文書化で担保（design DD8）。(2) バルーン追従 offset は配置時確定の静的値（動的再計算なし・R4.4 の暫定規則）。(3) resolver は wintf 型非依存の自前値型（`RectPx` 等）で閉じ、newtype による物理/論理の型分離は**モジュール境界の単一通貨規約（U1〜U5）で代替**（M1 パイプラインに論理値が存在しないため型追加は過剰と判断）。
+- **受容トレードオフ**: measure が採寸のために emo アセットを合成→破棄し、emo2-boot が装着のため再ロードする**二重ロード**を受容（アセット所有＝emo2-boot の境界を崩さない）。emo2-boot 側で「placement が採寸済みアセットを引き渡す」最適化を検討する場合は `GhostWindows` 契約の Revalidation Trigger。
+- **リスク低減**: 07-05 の再発防止は ①design 冒頭の座標単位契約（U1〜U5・レビューでエラー扱い）②DPI パラメタ化 resolver テスト（96/120/144/192・T-R 群）③実 DPI（≠96）実行証跡の受け入れ必達（R3.5）の 3 層。
+
+## 残課題（design で確定済み・実装時の注意のみ）
+
+- `free` の座標原点はプライマリ work area 左上（design DD10）——SSP 実挙動での裏取りは emo2 非使用のため未実施（決定論テストで自団の意味論を固定・将来 SSP 差異が観測されたら DD10 のみ差し替え）。
+- scope n≥2 の初期 surface id（正典既定なし）: 暫定 10＋warn（design measure 節）。
+- main.rs シーム窓は emo2-boot 装着まで不可視（WUC 合成・内容なし）＝対話 close 不能が正しい状態。終了は smoke ゲート／Ctrl+C（rustdoc 明記・emo2-boot で解消）。
