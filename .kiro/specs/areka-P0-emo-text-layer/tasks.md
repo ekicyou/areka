@@ -21,7 +21,7 @@
   - _Boundary: TextSlotView（emo-present 増分）_
 
 - [ ] 2. Core（純粋層）: cue 駆動の状態機械と縦横/領域解決
-- [ ] 2.1 (P) actor 別の cue 適用状態機械を実装する
+- [x] 2.1 (P) actor 別の cue 適用状態機械を実装する
   - Balloon 向け cue（Text／NewLine／Clear）を actor（\0／\1…）ごとに独立した表示テキスト状態へ振り分けて適用する
   - Text は追記・NewLine は改行・Clear は未リビール分も含めて全消去する後出し優先の即時適用にする
   - トーク上書きを抑止するガードは実装せず、届いた cue 列を忠実に適用するだけの単純な遷移に留める

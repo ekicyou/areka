@@ -14,3 +14,5 @@ publish = false
 thiserror = { workspace = true }
 # log-first 規律（失敗は error!＋Err 戻り値・安易な panic 禁止）の記録手段。
 tracing = { workspace = true }
+# cue 契約の正本（TextSink/TalkCue/ActorKey/CueCommand——design.md Dependencies・再定義しない）。
+areka-sakura = { path = "../areka-sakura" }

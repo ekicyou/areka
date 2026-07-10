@@ -15,7 +15,10 @@ use crate::value::DynamicValue;
 ///
 /// さくらスクリプトの `\0` (さくら) / `\1` (うにゅう) に相当するが、
 /// 文字列ベースで任意の名前を許容する。
-#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+///
+/// `Ord` は内部文字列の辞書順（`BTreeMap<ActorKey, _>` 等の決定論的順序付けを
+/// 下流——emo テキスト層の actor 別状態 map など——が要求する）。
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub struct ActorKey(String);
 
 impl ActorKey {
