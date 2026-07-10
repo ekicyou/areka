@@ -70,7 +70,7 @@
   - _Boundary: placement::follow_
 
 - [ ] 5. Integration: 窓 entity 組立と後続への引き渡し
-- [ ] 5.1 キャラ窓・バルーン窓の entity 組立と公開データ構造を実装する
+- [x] 5.1 キャラ窓・バルーン窓の entity 組立と公開データ構造を実装する
   - `CharWindowMarker{scope}`／`BalloonWindowMarker{scope}`／`GhostWindowMarker` コンポーネントと `GhostWindows` Resource（`char_window(scope)`／`balloon_window(scope)`／`scopes()`）を定義する
   - `spawn_ghost_windows(world, placements, titles)` を実装し、`ScopePlacement` 由来の位置・寸法のみを使って `WindowPos`／`WindowStyle`（`WS_EX_TOPMOST` を含めない）／`HitTest::none()`／`DragConfig::default()`／`OnDrag(on_char_drag)`（キャラ窓のみ）／`BalloonFollow`（キャラ窓のみ）／`OnPointerPressed`（ダブルクリックで全 `GhostWindowMarker` despawn）を持つ窓 entity を組み立てる。`BoxStyle` と `DragConstraint` は一切付けない
   - 座標・offset のリテラル定数（`(400,200)`／`(335,0)` 等）がこのモジュールに一切存在しないことを確認する

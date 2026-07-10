@@ -57,6 +57,21 @@ impl GhostTitles {
     }
 }
 
+#[cfg(test)]
+impl GhostTitles {
+    /// テスト専用コンストラクタ（`titles` は非公開フィールドのため、spawn（task 5.1）
+    /// 等の headless テストが fixture I/O（`load_descript_source`）なしで
+    /// `GhostTitles` を構築する唯一の経路。`#[cfg(test)]` 限定で本番公開面は不変）。
+    pub(crate) fn from_scope_titles<I>(titles: I) -> Self
+    where
+        I: IntoIterator<Item = (usize, String)>,
+    {
+        Self {
+            titles: titles.into_iter().collect(),
+        }
+    }
+}
+
 /// descript 供給源（ghost/shell の生 KV＋shell dir＋窓タイトル）。
 ///
 /// `ghost_kv`/`shell_kv` は `kv::parse_kv` の出力形（`BTreeMap<String, String>`）
