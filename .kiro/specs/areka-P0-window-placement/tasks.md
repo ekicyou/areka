@@ -50,7 +50,7 @@
   - _Boundary: placement::resolver_
 
 - [ ] 4. Core: 採寸とドラッグ連動
-- [ ] 4.1 (P) surface／バルーンの原寸採寸を実装する
+- [x] 4.1 (P) surface／バルーンの原寸採寸を実装する
   - `measure_scope_sizes(shell_dir, balloon_root, scope_ids)` を実装し、各スコープの初期 surface（scope0=id0・scope1=id10・scope n≥2=id10 暫定＋warn）と balloon surface0 を areka-emo-atlas／areka-emo-compose で bind なし合成して原寸（物理 px）を得て `Vec<ScopeInput>` を返す
   - 合成失敗したスコープは scope0 の寸法で代替し `warn!` を出す（窓自体は生やす）
   - 採寸に使ったアセット（`EmoWorld`/`AtlasTable`）は採寸後に破棄する
@@ -137,4 +137,5 @@
 
 - 1: `areka_parsers::package::MountError` は Display/std::error::Error 未実装（Clone/Debug/PartialEq/Eq のみ・#[non_exhaustive]）。`PlacementError::Mount` は `{0:?}` Debug 整形・`#[from]` 不可 → 後続タスクは `PlacementError::Mount(e)` を明示構築すること（areka-parsers は改変禁止）。
 - 2.1: `Alignment::Seam` の `warn!` 発火は config でなく resolver（task 3.1）へ委譲済み（config.rs:22 に明記）→ 3.1 で解消（resolver.rs:124-130 で発火・T-R5 経路で実行）。スコープ検出は DD6 厳密読み（`char1.*` 単独では scope1 を作らない・kero シグナルのみ）。同層クロス競合は正典プレフィックス外側優先。
+- 4.1: emo2 fixture 実測原寸 = scope0 surface0: 434×687 / scope1 surface10: 336×400 / balloon surface0: 400×224（テストで檻化済み・example/受入検証の期待値に使える）。balloon エラーは `Measure { scope: 0, reason: "balloon: ..." }` 規約。
 - 3.1: P2 連鎖は post-clamp 前スコープ実位置基準（design 未規定領域の確定・t_r6_chain_uses_clamped_previous_position で檻化）。balloon_pos=char_pos/offset=0 は 3.2 P5 までの正直な暫定。極値 `defaultx=i32::MIN` で debug オーバーフローの理論穴 → 3.2 で saturating 演算検討（非ブロッキング）。`cargo clippy` は wintf 既存エラーで全体 fail（本 spec 非起因・不改変境界）。
