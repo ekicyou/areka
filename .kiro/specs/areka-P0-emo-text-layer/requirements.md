@@ -17,7 +17,7 @@ sink の main 経路への結線（`GhostBootOptions.text_sink` への注入）�
 ## Boundary Context
 
 - **In scope（本ユニットが観測可能に実現する振る舞い）**:
-  - sakura の `TextSink` を実装し、Balloon 向け cue（Text/NewLine/Clear）を受信して、描画を担う UI スレッドへ配送する（受信端はワーカー、描画は UI スレッド固定）。
+  - sakura の `TextSink` を実装し、Balloon 向け cue（Text/NewLine/Clear）を受信して、描画を担う UI スレッドへ配送する（受信端はワーカー、描画は UI スレッド固定）。cue の `actor`（`ActorKey`・\0=sakura／\1=kero…）を鍵に、状態と装着をアクター別へ振り分ける（構造は最初から多アクター・M1 実挙動は fixture script 次第）。
   - 受け取った cue 列を「表示中テキストの行/グリフ状態」へ変換する純粋な状態遷移（追記・改行・全消去・スクロール発火判定）。
   - 文字を typewriter 進行（1文字ずつ）で表示する。進行は注入時刻駆動（実時間 sleep 不使用）で決定論的に検証できる。
   - balloon descript ✅ 由来のフォント（欠落は SSP 既定＝ＭＳ ゴシック）とテキスト領域（origin/wordwrappoint/validrect）を消費して文字レイアウトを解決する。
@@ -60,6 +60,7 @@ sink の main 経路への結線（`GhostBootOptions.text_sink` への注入）�
 3. The emo テキスト層 shall 受信端をワーカー側、描画を UI スレッド側とし、受信から描画までを UI スレッド固定の配送口（`spawn_ui`/`UiSender` 相当）経由で行う。
 4. When 受信端の全送信元が切断される、または終了指示（Close 相当）を受け取る, the emo テキスト層 shall 受信ループをクリーンに終了する（error ログを伴わず正常終了する）。
 5. If cue 配送・状態更新の途中で失敗が生じる, then the emo テキスト層 shall その失敗を error ログとして記録し、後続 cue の受理を破壊しない。
+6. When Balloon 向け cue を受け取る, the emo テキスト層 shall その cue の `actor`（`ActorKey`・"0"=sakura／"1"=kero…）を鍵として対応するアクター別のテキスト状態へ振り分ける。描画状態は `ActorKey → テキスト状態` のマップとして保持し、実装住人（描画される actor）は fixture スクリプトが発話させる actor に従う（構造は最初から多アクター・M1 実挙動は script 次第）。
 
 ### Requirement 2: テキスト状態機械（純粋・決定論）
 
@@ -157,6 +158,7 @@ sink の main 経路への結線（`GhostBootOptions.text_sink` への注入）�
 2. When 予約スロット到達手段が emo-present に非公開である, the emo テキスト層 shall emo-present へ additive な公開増分（text_slot への到達手段または装着 API）を加える。
 3. When 文字（グリフ）更新のみが生じる, the emo テキスト層 shall surface 本体の再合成（emo-compose 再駆動）を強要せず、テキスト層を独立に更新する。
 4. The emo テキスト層 shall 予約スロットの装着経路を、choice-render（M-dialogue）が行レイアウト・クリック可能範囲の返却に再利用できる構造シームとして提供する（クリック範囲の実導出は実装しない）。
+5. When 複数の actor（\0／\1…）が発話する, the emo テキスト層 shall 各 actor のテキストを、その actor に対応する target の予約スロット（`emo-text-layer-slot`）へ振り分けて装着する（単一 actor のみの場合は当該 actor の target へ装着する）。
 
 ### Requirement 10: クロスユニット契約シーム
 
@@ -182,3 +184,4 @@ sink の main 経路への結線（`GhostBootOptions.text_sink` への注入）�
 5. When Clear cue を注入する, the emo テキスト層 example shall 表示が全消去されることを観測可能にする。
 6. The emo テキスト層 example shall 上記のうちレイアウト決定論部分（折返し位置・行送り・スクロール発火・`writing_mode` 2層マージ解決）を、DirectWrite metrics に依存しない構造テストと既定フォントでの単体テストで決定論的に検証する。
 7. The emo テキスト層 example shall `crates/areka` の既存ファイル（main.rs・placement 系）を変更せず、新規 example ファイルの追加のみで観測を成立させる。
+8. When fixture スクリプトが複数の actor（\0／\1）を発話させる, the emo テキスト層 example shall 各 actor のテキストが対応するバルーンへ振り分けられることを観測可能にする（単一 actor のみの場合は当該 actor のバルーンで観測する）。
