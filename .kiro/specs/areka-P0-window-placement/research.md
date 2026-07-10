@@ -128,5 +128,5 @@ resolver（純粋・テスト密）＋公開引き渡し型は独立モジュー
 ## 設計フェーズへ持ち越す調査項目（Research Needed）
 
 - ukadoc `descript_ghost`/`descript_shell` の placement 系キー正典（値域・所在・優先度・有効条件）を `get_doc`/`search_docs` で総ざらい（mcp__ukadoc）。
-- SSP de-facto: scope 相対配置・z-order 実挙動・`defaultx`⇔`defaultleft`・X 原点・複数モニタ時の既定モニタ。
+- SSP de-facto: scope 相対配置・z-order 実挙動・`defaultx`⇔`defaultleft`・X 原点・複数モニタ時の既定モニタ。**【要件討議#3 で確定】** 初期（既定）表示はプライマリモニタ（`is_primary`）の work area 基準（R2.12）。**ドラッグ移動は全モニタ（仮想デスクトップ全体）が対象**で、`DragConstraint` を単一モニタへ閉じ込めない・全モニタ和に対し物理 px 一貫で算出しモニタ境界跨ぎで画面外消失させない（R4.5/R4.6）。どのモニタに居たかの復元は position-persist（M-life）。設計課題は「全モニタ和の bounding rect 算出（`enumerate_monitors()`）と DragConstraint への供給」。
 - `WindowPos` 生成時座標算出（`to_window_coords_for_creation`）が物理 px をどう扱うか（CW_USEDEFAULT スキップ含む）を design で 1 度精読。
