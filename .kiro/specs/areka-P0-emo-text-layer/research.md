@@ -141,3 +141,75 @@
 6. **emo-present 公開増分の最小形**: `text_slot: Entity` の getter 公開 か、装着専用 API（描画物を受け取り slot へ装着）か——最小公開面を design 判断（R9.2）。
 7. **example の配置と fixture 増補**（§6-6）: emo-present crate examples か `crates/areka/examples` 新規か。縦書き観測のための fixture マーカー/`wordwrappoint.y` 付与の具体値。
 8. **`LogSink` の扱い**: 本ユニットは sink 型を提供するのみ（`LogSink` を置換しない・結線は emo2-boot）を明確化（責務境界の再確認）。
+
+---
+
+## 8. 設計フェーズ調査ログ（kiro-spec-design・2026-07-10）
+
+> **Discovery Scope**: Extension（integration-focused light discovery ＋ ukadoc 正典調査）。§6 の申し送り 8 件を全消化し design.md を確定した。以下は design.md に載せた結論の背景証跡。
+
+### 8.1 ukadoc 正典調査（§6-1/§6-2 の完遂）
+
+- **descript_balloon 3分類表**: design.md「Supporting References」で完遂（テキスト領域・フォント／枠描画／M1対象外）。要点: `font.height` は「**単位はピクセル：ポイントではない**」（既定 12）・`font.name` 既定は全角「ＭＳ ゴシック」・`origin/validrect/wordwrappoint` の既定は正典「不明」（実質必須キー）。
+- **座標脚注 *1（負値規約）の正典文言**: 「マイナス座標を指定するとベースとなる画像の**右下からの相対座標**となる。どうしてもマイナス座標にしたい場合は `--数値`」——balloon-parse の符号保持転記と整合。本層 `resolve(v, extent) = v >= 0 ? v : extent + v` の典拠。
+- **`wordwrappoint.y` は ukadoc に存在しない**（記載は `.x` のみ）。fixture には `.y` キーが実在し balloon-parse は転記済み——縦書き折返し軸としての意味論は areka 独自＝design.md 軸読み替え正準表が正典。
+- **`dpi` キー正典**: 「このバルーンで推奨する画面のDPI値。何も指定しなければWindows標準の96固定」（SSP 2.7.21+・対照表 100%-96〜200%-192）。**何をスケールするかは正典無言**（実装依存）→ k の算出を上流（emo-present/placement）責務、本層は消費のみ、と areka 正準を design.md で確定。
+- **`\_b` 全 variant**: inline 形（テキスト行内 1 文字扱い）／x,y 形（文字の下）。`--option=fixed`＝「**スクロールした時に画像を動かさない。**」（原文）——スクロール内容層＋固定層の二層＝内容キャンバス概念の直接証拠（R8 の典拠）。他オプション: opaque / use_self_alpha / clipping / background（未指定時標準・文字の下）/ foreground（SSP 2.6.54+）/ source（2.8.41+）。
+- **`\c` 系**: `\c`＝現スコープ全消去＋初期位置復帰（sakura の `Clear` cue に対応）。`\c[char,...]`/`\c[line,...]`（部分消去・SSP）は sakura 契約に存在しない＝M1 対象外。「行」の定義に `\_l` が含まれる点は将来ユニットへの注意事項。
+- **`\n` 系**: `\n`／`\n[half]`（半行）／`\n[パーセント]`（負値で戻る・SSP 2.3.97+）——sakura `NewLine { ratio }` の ratio 転写で吸収（行送り量 = line_pitch × ratio）。`\_n`（自動改行禁止トグル）は cue 契約に無し＝対象外。
+- **スクロール粒度の SSP de-facto**: **ukadoc は無規定**（`\![set,autoscroll,disable]`＝自動スクロール停止タグと arrow0/1 スクロールマーカーの存在のみ）→「行単位・即時（アニメなし）」を areka 正準として design.md で確定（§6-2 の「横書きスクロールの正確な挙動」への回答）。
+- **`\b` バルーン切替時のテキスト状態**: 正典無言（`\x[noclear]` に「保持」概念はある）。M-boot 対象外を確認・実装しない（brief の確認項目③消化）。
+- **`\f` ファミリ全量**（型シーム用インベントリ）: name/height（相対指定可）/color/shadowcolor/shadowstyle/outline/bold/italic/strike/underline/sub/sup/align（2.5.31）/valign（2.6.19・\n でリセットされない非対称）/default/disable（2.5.51）＋cursor*/anchor* 装飾系。fixture 未使用＝全て型シーム（R10.3）。
+
+### 8.2 コードベース精査（設計判断の物理的裏取り）
+
+- **emo-present の DPI/スケール**: 処理は皆無・物理 px 1:1 直接（`physical_arrangement`・`SetSize` とも物理・taffy 非経由）。wintf にも Visual 段スケール（RasterizationScale 等）は存在しない（grep 0 件）。→ 合成スケール k=1.0 恒常が現行契約＝`TextSlotView.scale` の初期供給値。
+- **text_slot の実体**: `Name("emo-text-layer-slot")`＋`Visual::default()`＋`ChildOf(window)` のみ・VisualGraphics なし・Children 先頭＝上位 z（`mount.rs:129-135`）。presenter は `HashMap<TargetId, PresentTarget>`・mount/chain は初回 ShowSurface で遅延生成 → `text_slot_view` が mount 生成前 `None` を返す設計の根拠。
+- **描画注入の 2 経路**: (A) wintf 標準 `GraphicsCommandList` 経路（`deferred_surface_creation_system`/`render_surface` に委ねる）・(B) emo 自前 brush donor 経路（mount.rs の surface entity と同型）。→ §8.3 D2 で B を採択。
+- **spawn_ui 実シグネチャ**: `spawn_ui<M: Send+'static, E: Display>(name, FnMut(M) -> Result<ControlFlow<()>, E>) -> Result<(UiSender<M>, JoinHandle<()>), UiSpawnError>`。handler は `!Send` 可・同期実行。終了経路はちょうど 2 つ（Ok(Break)／全 Sender drop）・個別 Err は error!＋継続——R1.4/R1.5 がそのまま基盤規約に乗る。
+- **DirectWrite lift 対象の実体**: `typewriter_layout.rs:116-147`（Set*Direction 4 方向＋Alignment LEADING/NEAR）・`com/dwrite.rs` `DWriteFactoryExt::create_text_format/create_text_layout`（この拡張 trait は wintf の COM ラッパ層＝widget 非依存なので**参照消費**、レシピ（呼び順・定数の組）だけを**複製**）。`Typewriter::default_char_wait = 0.05s` を本層 `char_wait` 既定に借用。
+- **fixture 実測（script）**: boot.pasta 等の実使用タグ＝`\w1-9`/`\w[ms]`/`\_w[ms]`/`\n`/`\s[...]`/`\_l[5em,2lh]`/`\q`/`\1`。**`\c`・`\f`・`\_b` は未使用**——M1 実挙動 subset（Text/NewLine/Clear のみ）の確定（§6-2 消化。Clear は sakura 契約由来で必要）。
+- **fixture 実測（balloon）**: descript は `font.name,Yu Gothic UI`/`font.height,28`/`origin 0,0`/`wordwrappoint.x,-34`・`.y,0`/`validrect 全 0`、balloons0s.txt が `wordwrappoint.x,-49`/`validrect 46/-56/36/-44` を上書き。**`dpi` キーは無い**（→ author_dpi 既定 96）。
+- **workspace**: `members = ["crates/*"]` glob＝新 crate はディレクトリ作成のみで登録。`model.rs:6` doc は既に固有名化済み（二重修正しない・§2 訂正の再確認）。
+
+### 8.3 Architecture Pattern Evaluation（描画注入経路）
+
+| Option | 概要 | 強み | 弱み/リスク | 判定 |
+|---|---|---|---|---|
+| A: wintf CommandList 経路 | slot へ `Arrangement`+`GraphicsCommandList` を insert し wintf の surface 生成/描画 system に委ねる | 新規 COM コード最小 | 描画所有が wintf 側へ滲む（裁定「描画は emo 所有」と緊張）・`CompositionDrawingSurface` は**読み戻し不可**（記憶 areka-gpu-window-screenshot-readback）＝readback 検証不能・widget system 依存が増える | 棄却 |
+| B: 自前 swapchain donor 経路（採択） | オフスクリーン D2D（D3D テクスチャ）へ描画→自前 swapchain→SurfaceBrush→slot へ VisualGraphics 装着（mount.rs donor パターンの写し） | 描画完全所有・readback 可（決定論検証点＝記憶 gpu-draw-verification-offscreen-d2d-target）・emo-present 実証済み非競合パターン・R9.3（再合成不要）が構造で成立 | swapchain 供給面コードの複製（chain.rs は pub(crate)） | **採択** |
+
+### 8.4 Design Decisions（design.md へ反映済み・番号付き）
+
+- **D1 sink 直結（中間 worker アクター省略）**: `TextSink::emit` は sakura worker 上で走るため `UiSender` が配送口そのもの。seriko donor の中間 inbox は「worker 側での解決処理」があるための構造であり、本層には無い→ simplification lens で 1 ホップ削減。R1.3 の文言（受信端ワーカー・spawn_ui/UiSender 相当の配送口）は最小構成で充足。
+- **D2 描画注入は Option B**（§8.3）。
+- **D3 二段消費（UI ドレイン＝状態更新／フレーム提示ステップ＝時刻注入・レイアウト・描画・装着）**: World 変異と COM 描画を wintf の UI スレッド graphics 系列に揃え、cue 適用は純粋に保つ。Tick メッセージは不要（フレーム側が talk_time を注入）。時刻軸は talk 起点相対秒で統一（sakura `at` と同軸・供給は結線側責務）。
+- **D4 emo-present 公開増分は getter 形 `TextSlotView`**: 装着 API 形は emo-text の描画型が emo-present へ逆流し依存方向違反→棄却。view は slot/window/surface_size/**scale**（DPI 契約の共有点）を返す。actor→target 対応は結線側所有（emo-present は actor を知らない）。
+- **D5 DPI/スケール契約**: レイアウト＝画像座標空間（descript 座標と font.height の native 単位・ukadoc「px でありポイントでない」）・raster＝`SetTransform(scale(k))` の一点適用・k＝`TextSlotView.scale`（現行 1.0 恒常・将来 M/D の算出は上流責務）・論理 px を API に存在させない。§6-7 裁定（96 素通し棄却・最初から正しく）の実装形。
+- **D6 縦書き軸読み替え正準表**: design.md Data Models 節が areka 正典（§6-3 完遂）。負値解決→絶対座標化してから軸役割だけ回す・開始点＝origin の validrect クランプ（fixture origin 0,0 → (36,46) で SSP 表示実態と整合）・行送りピッチ＝`ceil(font.height×1.25)`（SSP 行間は正典値なし＝areka 裁量・LayoutParams で調整可）。
+- **D7 リビール時刻式**: `r_i = max(r_{i-1} + char_wait, at(chunk(i)))`・`visible(t) = |{i : r_i <= t}|`・Clear で schedule ごと初期化。`at`＝下限・カーソルは末尾追走（無損失）——R3.4 の文言を式に固定。
+- **D8 metrics 分離線**: `GlyphMetrics` trait（advance／line_pitch のみ）が唯一の注入口。折返し・行送り・スクロール発火・可視窓決定のアルゴリズムは注入値に対し純粋（構造テスト＝FixedMetrics・実行時＝DWriteMetrics・アルゴリズム分岐なし）。§6-5 完遂。
+- **D9 example 配置と fixture 増補**: example は `crates/areka-emo-text/examples/emo-text-layer.rs`（`crates/areka` 完全不変＝並走保護最強形）。縦書き観測は **example ローカル fixture 変種**（`examples/fixtures/emo2-vertical/` の descript.txt＋balloons0s.txt 2 層・枠画像は共有 fixture を参照）——共有 fixture を改変しない（§6-6 完遂）。
+- **D10 グリフ単位は `char`**（M1 正準・fixture に結合文字なし・書記素クラスタは M2 検討事項として記録）。
+- **D11 スクロール＝行単位・即時**（ukadoc 無規定領域の areka 正準・§6-2 完遂）。
+
+### 8.5 Risks & Mitigations（設計時点）
+
+- **デバイスロスト**: M1 は「error!＋当該フレーム skip＋次フレーム再試行」まで（wintf generation 機構への追随は将来増分として design.md Error Handling に明記）。
+- **spawn_ui の UI スレッド誤用**: 基盤既知リスク（呼出時検出不能・debug! 診断）。example が正用法の実走証明を兼ねる。
+- **行送りピッチ 1.25 係数**: SSP 実測との視覚差が出る可能性——LayoutParams で調整可能な形にして係数変更を 1 点に限定。
+- **フォント名カンマ区切り複数指定**（SSP 拡張）: M1 は先頭のみ。連鎖フォールバックは型シーム（fixture は単一名で影響なし）。
+- **k=1.0 恒常下での R11.9**: 実行時に k≠1 を観測できない（emo-present の物理 1:1 契約）。緩和: k≠1 の純粋写像テスト＋実 DPI での枠/テキスト整合の実機手順（example doc）——「テスト緑」単独を証明としない。
+
+### 8.6 §6 申し送りの消化状況
+
+| # | 項目 | 状態 |
+|---|---|---|
+| 1 | descript_balloon キー全量＋3分類表 | ✅ design.md Supporting References |
+| 2 | さくらスクリプトテキスト系タグ＋fixture 実測 subset | ✅ §8.1/§8.2・M1 subset＝Text/NewLine/Clear |
+| 3 | 縦書き軸読み替え 1 枚表 | ✅ design.md Data Models（正典）＝D6 |
+| 4 | lift vs 参照の粒度 | ✅ D2/§8.2（レシピ複製・com ラッパ拡張 trait は参照・widget system 非依存） |
+| 5 | metrics 依存/非依存の分離線 | ✅ D8 |
+| 6 | example 用 fixture 増補 | ✅ D9 |
+| 7 | DPI | ✅ D5（裁定反映済み） |
+| 8 | per-glyph pacing 申し送り | ✅ 前提成立を確認済み（sakura 改変なし・厳密 SSP 互換 pacing 必要時は sakura 増分 issue とする——変更なし） |
