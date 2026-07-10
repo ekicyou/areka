@@ -24,20 +24,27 @@
 //! - バルーン窓: 同型（marker は `BalloonWindowMarker{scope}`・`DragConfig::default()`
 //!   は付与＝バルーン単独ドラッグ可・4.5。`OnDrag` 追従ハンドラなし・`BalloonFollow` なし）
 //!
-//! clickthrough 登録 system（`register_ghost_windows_click_through`）は task 5.2 の領分。
+//! # clickthrough 登録（task 5.2）
+//!
+//! [`register_ghost_windows_click_through`] が `Added<WindowHandle>` で
+//! [`GhostWindowMarker`] 窓を αマスク clickthrough 機構
+//! （wintf `ClickThroughRegistryHandle`・消費のみ）へ登録する
+//! （emo-present donor `register_click_through_windows` の一般化・6.1）。
 
 use std::collections::BTreeMap;
 
 use bevy_ecs::name::Name;
 use bevy_ecs::prelude::*;
-use tracing::info;
+use tracing::{debug, info};
+use windows::Win32::Foundation::HWND;
 use windows::Win32::UI::WindowsAndMessaging::{
     WS_EX_LAYERED, WS_EX_TOOLWINDOW, WS_POPUP, WS_VISIBLE,
 };
+use wintf::ecs::clickthrough::ClickThroughRegistryHandle;
 use wintf::ecs::drag::{DragConfig, OnDrag};
 use wintf::ecs::layout::HitTest;
 use wintf::ecs::pointer::{DoubleClick, OnPointerPressed, Phase, PointerState};
-use wintf::ecs::{Point, SizeI, Window, WindowPos, WindowStyle};
+use wintf::ecs::{Point, SizeI, Window, WindowHandle, WindowPos, WindowStyle};
 
 use super::follow::{on_char_drag, BalloonFollow};
 use super::resolver::ScopePlacement;
@@ -64,7 +71,7 @@ pub struct BalloonWindowMarker {
 }
 
 /// placement 生成窓の共通標識（smoke close・一括 despawn・clickthrough 登録の標的）。
-#[allow(dead_code)] // 結線（main.rs シーム／task 5.2 clickthrough 登録）は後続タスク
+#[allow(dead_code)] // 結線（main.rs シーム）は task 6.2
 #[derive(Component, Debug, Clone, Copy, PartialEq, Eq)]
 pub struct GhostWindowMarker;
 
@@ -210,6 +217,67 @@ fn window_pos(x: i32, y: i32, w: i32, h: i32) -> WindowPos {
         position: Some(Point { x, y }),
         size: Some(SizeI::new(w, h)),
         ..Default::default()
+    }
+}
+
+// ---------------------------------------------------------------------------
+// clickthrough 登録 system（task 5.2・6.1）
+// ---------------------------------------------------------------------------
+
+/// clickthrough 登録面の偽装境界（fake boundary）シーム。
+///
+/// 実体は wintf の [`ClickThroughRegistryHandle`]（NonSend・`WinApp::run` の
+/// 結線で挿入）だが、その constructor は wintf 内部（pub(crate)）で headless
+/// テストから構築できない。登録呼び出しの決定論的観測のため、登録面をこの
+/// trait で抽象し、テストは偽 registrar（呼び出し記録）を NonSend として
+/// 挿し込む（本 repo の偽装境界パターン）。
+trait ClickThroughRegistrar: 'static {
+    /// 監視対象窓（window Entity ＋ HWND）を登録する。
+    fn register_window(&self, window: Entity, hwnd: HWND);
+}
+
+impl ClickThroughRegistrar for ClickThroughRegistryHandle {
+    fn register_window(&self, window: Entity, hwnd: HWND) {
+        self.register(window, hwnd);
+    }
+}
+
+/// `Added<WindowHandle>` で [`GhostWindowMarker`] 窓を αマスク clickthrough
+/// 機構へ登録する system（design「placement::spawn」正本 signature・6.1。
+/// emo-present donor `register_click_through_windows` の一般化）。
+///
+/// WUC 化により ULW の自動 α ヒットテストが失われるため、機構が α を評価
+/// できるよう placement 生成窓（キャラ窓・バルーン窓）を明示登録する。
+/// `WindowHandle` は wintf の窓生成が HWND 生成後に付与するため
+/// `Added<WindowHandle>` で「HWND が付いた瞬間」を捉え、各窓を厳密に 1 回
+/// 登録する（`register` は同一 Entity 再登録を dedupe するため冪等でもある）。
+/// `ClickThroughRegistryHandle` は `WinApp::run` の結線で NonSend リソース
+/// として挿入される。ごく初期の tick で未挿入の可能性へ `Option` で防御する
+/// （headless でも no-op で安全）。schedule への結線は task 6.2（main.rs シーム）。
+#[allow(dead_code)] // 結線（main.rs シーム）は task 6.2
+pub fn register_ghost_windows_click_through(
+    new_windows: Query<(Entity, &WindowHandle), (With<GhostWindowMarker>, Added<WindowHandle>)>,
+    handle: Option<NonSend<ClickThroughRegistryHandle>>,
+) {
+    register_ghost_windows_via(new_windows, handle);
+}
+
+/// [`register_ghost_windows_click_through`] の汎用実装（偽装境界）。
+///
+/// query filter（`GhostWindowMarker` × `Added<WindowHandle>`）ごとこの system
+/// が production 経路の正体であり、公開 system は実 registrar 型
+/// （[`ClickThroughRegistryHandle`]）を束縛した thin wrapper。型が一致しない
+/// と wrapper が compile できないため、filter の乖離は型システムが防ぐ。
+fn register_ghost_windows_via<R: ClickThroughRegistrar>(
+    new_windows: Query<(Entity, &WindowHandle), (With<GhostWindowMarker>, Added<WindowHandle>)>,
+    handle: Option<NonSend<R>>,
+) {
+    let Some(handle) = handle else {
+        return;
+    };
+    for (entity, wh) in new_windows.iter() {
+        handle.register_window(entity, wh.hwnd);
+        debug!(?entity, "placement: クリック透過機構へゴースト窓を登録");
     }
 }
 
@@ -574,6 +642,130 @@ mod tests {
         let ev = Phase::Tunnel(pressed_event(DoubleClick::Left));
         assert!(!handler(&mut world, balloon1, balloon1, &ev));
 
+        assert_eq!(ghost_window_entities(&mut world).len(), 4);
+    }
+
+    // -------------------------------------------------------------------------
+    // T-I4: clickthrough 登録 system（6.1・task 5.2）
+    //
+    // 実 `ClickThroughRegistryHandle` は wintf 内部（`new` は pub(crate)）でしか
+    // 構築できないため、headless の「登録呼び出しが発生する」観測は偽装境界
+    // （`ClickThroughRegistrar` を `FakeRegistrar` へ差し替え）で行う。汎用実装
+    // `register_ghost_windows_via` が本体の query filter（GhostWindowMarker ×
+    // Added<WindowHandle>）ごと system として走る＝production 経路そのもの。
+    // -------------------------------------------------------------------------
+
+    use std::cell::RefCell;
+    use windows::Win32::Foundation::{HINSTANCE, HWND};
+    use wintf::ecs::WindowHandle;
+
+    use super::{
+        ClickThroughRegistrar, register_ghost_windows_click_through, register_ghost_windows_via,
+    };
+
+    /// 登録呼び出しを記録する偽 registrar（NonSend リソースとして挿入）。
+    #[derive(Default)]
+    struct FakeRegistrar {
+        calls: RefCell<Vec<(Entity, isize)>>,
+    }
+
+    impl ClickThroughRegistrar for FakeRegistrar {
+        fn register_window(&self, window: Entity, hwnd: HWND) {
+            self.calls.borrow_mut().push((window, hwnd.0 as isize));
+        }
+    }
+
+    /// 偽 HWND を持つ `WindowHandle`（4.2 と同じ fake WindowHandle パターン）。
+    fn fake_window_handle(raw: isize) -> WindowHandle {
+        WindowHandle {
+            hwnd: HWND(raw as *mut core::ffi::c_void),
+            instance: HINSTANCE::default(),
+        }
+    }
+
+    fn registrar_calls(world: &World) -> Vec<(Entity, isize)> {
+        world
+            .non_send_resource::<FakeRegistrar>()
+            .calls
+            .borrow()
+            .clone()
+    }
+
+    fn register_schedule() -> Schedule {
+        let mut schedule = Schedule::default();
+        schedule.add_systems(register_ghost_windows_via::<FakeRegistrar>);
+        schedule
+    }
+
+    /// T-I4: `GhostWindowMarker` 窓に `WindowHandle` が付いた瞬間（Added）だけ
+    /// 登録呼び出しが発生し、(Entity, HWND) が正値・再実行で重複登録しない・
+    /// 後から HWND が付いた窓も追加で 1 回だけ登録される。
+    #[test]
+    fn t_i4_register_system_registers_ghost_windows_on_added_window_handle_once() {
+        let mut world = World::new();
+        let placements = two_scope_placements();
+        let gw = spawn_ghost_windows(&mut world, &placements, &titles());
+        world.insert_non_send_resource(FakeRegistrar::default());
+        let mut schedule = register_schedule();
+
+        // spawn 直後は WindowHandle 不在 → 登録は起きない
+        schedule.run(&mut world);
+        assert!(registrar_calls(&world).is_empty());
+
+        // scope0 の 2 窓へ HWND 付与（wintf create_windows が付ける状況の模擬）
+        let char0 = gw.char_window(0).unwrap();
+        let balloon0 = gw.balloon_window(0).unwrap();
+        world.entity_mut(char0).insert(fake_window_handle(0x10));
+        world.entity_mut(balloon0).insert(fake_window_handle(0x20));
+
+        schedule.run(&mut world);
+        let mut calls = registrar_calls(&world);
+        calls.sort_by_key(|(_, hwnd)| *hwnd);
+        assert_eq!(calls, vec![(char0, 0x10), (balloon0, 0x20)]);
+
+        // 再実行しても重複登録しない（Added は厳密 1 回）
+        schedule.run(&mut world);
+        assert_eq!(registrar_calls(&world).len(), 2);
+
+        // 後から HWND が付いた scope1 キャラ窓も追加で 1 回だけ登録される
+        let char1 = gw.char_window(1).unwrap();
+        world.entity_mut(char1).insert(fake_window_handle(0x30));
+        schedule.run(&mut world);
+        let calls = registrar_calls(&world);
+        assert_eq!(calls.len(), 3);
+        assert!(calls.contains(&(char1, 0x30)));
+    }
+
+    /// T-I4 補: `GhostWindowMarker` を持たない窓は `WindowHandle` が付いても
+    /// 登録されない（標的は placement 生成窓のみ・6.1）。
+    #[test]
+    fn t_i4_register_system_ignores_non_ghost_windows() {
+        let mut world = World::new();
+        world.insert_non_send_resource(FakeRegistrar::default());
+        let mut schedule = register_schedule();
+
+        world.spawn((Window::default(), fake_window_handle(0x40)));
+
+        schedule.run(&mut world);
+        assert!(registrar_calls(&world).is_empty());
+    }
+
+    /// T-I4 補: 実 system（design 正本 signature）は
+    /// `ClickThroughRegistryHandle` 未挿入の headless World で no-op（panic
+    /// しない・ごく初期 tick の未挿入への Option 防御＝donor と同じ作法）。
+    #[test]
+    fn t_i4_real_register_system_is_noop_without_registry_resource() {
+        let mut world = World::new();
+        let placements = two_scope_placements();
+        let gw = spawn_ghost_windows(&mut world, &placements, &titles());
+        let char0 = gw.char_window(0).unwrap();
+        world.entity_mut(char0).insert(fake_window_handle(0x50));
+
+        let mut schedule = Schedule::default();
+        schedule.add_systems(register_ghost_windows_click_through);
+        schedule.run(&mut world);
+
+        // no-op で完走（窓はそのまま）
         assert_eq!(ghost_window_entities(&mut world).len(), 4);
     }
 }

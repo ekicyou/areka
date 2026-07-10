@@ -80,7 +80,7 @@
   - _Depends: 2.1, 2.2, 3.1, 3.2, 4.2_
   - _Boundary: placement::spawn_
 
-- [ ] 5.2 placement 窓を αマスク clickthrough 機構へ登録する
+- [x] 5.2 placement 窓を αマスク clickthrough 機構へ登録する
   - `register_ghost_windows_click_through`（`Added<WindowHandle>` で `GhostWindowMarker` 窓を `ClickThroughRegistryHandle` へ登録。emo-present donor `register_click_through_windows` の一般化）を実装する
   - 観測可能な完了状態: headless `World` に `GhostWindowMarker` 窓を追加後、システム実行で clickthrough レジストリへの登録呼び出しが発生することをテストで確認する
   - _Requirements: 6.1_
@@ -138,5 +138,6 @@
 - 1: `areka_parsers::package::MountError` は Display/std::error::Error 未実装（Clone/Debug/PartialEq/Eq のみ・#[non_exhaustive]）。`PlacementError::Mount` は `{0:?}` Debug 整形・`#[from]` 不可 → 後続タスクは `PlacementError::Mount(e)` を明示構築すること（areka-parsers は改変禁止）。
 - 2.1: `Alignment::Seam` の `warn!` 発火は config でなく resolver（task 3.1）へ委譲済み（config.rs:22 に明記）→ 3.1 で解消（resolver.rs:124-130 で発火・T-R5 経路で実行）。スコープ検出は DD6 厳密読み（`char1.*` 単独では scope1 を作らない・kero シグナルのみ）。同層クロス競合は正典プレフィックス外側優先。
 - 4.1: emo2 fixture 実測原寸 = scope0 surface0: 434×687 / scope1 surface10: 336×400 / balloon surface0: 400×224（テストで檻化済み・example/受入検証の期待値に使える）。balloon エラーは `Measure { scope: 0, reason: "balloon: ..." }` 規約。
+- 5.2: clickthrough 登録 system の schedule 結線は 6.2（donor の slot は `FrameFinalize`）。レジストリ NonSend 未挿入 tick の Added 消費に注意（donor 同挙動・WinApp::run が先に handle 挿入する結線順で緩和）。
 - 4.2: `enqueue_window_move` は SetWindowPosCommand enqueue＋`bypass_change_detection()` で WindowPos ミラー（wintf echo 規約と一致・apply_window_pos_changes 二重発行防止・headless 観測シーム）。`on_char_drag` は pub(crate)（5.1 の OnDrag 結線用）。WindowPos はクライアント座標だが WS_POPUP 枠なし窓では窓座標と同一。headless テストは偽 WindowHandle（wintf tests の確立パターン）。
 - 3.1: P2 連鎖は post-clamp 前スコープ実位置基準（design 未規定領域の確定・t_r6_chain_uses_clamped_previous_position で檻化）。balloon_pos=char_pos/offset=0 は 3.2 P5 までの正直な暫定。極値 `defaultx=i32::MIN` で debug オーバーフローの理論穴 → 3.2 で saturating 演算検討（非ブロッキング）。`cargo clippy` は wintf 既存エラーで全体 fail（本 spec 非起因・不改変境界）。
