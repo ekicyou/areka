@@ -11,7 +11,7 @@
   - _Boundary: placement (scaffold)_
 
 - [ ] 2. Core: descript 取り込み層（カスケード解決とソース読込）
-- [ ] 2.1 (P) 4 層カスケード解決とスコープ検出を実装する
+- [x] 2.1 (P) 4 層カスケード解決とスコープ検出を実装する
   - `Alignment`（`Bottom`／`Free`／`Seam(String)`）・`ScopeConfig`・`BalloonSide`・`PlacementConfig` を定義し、ghost 全体＜ghost スコープ別＜shell 全体＜shell スコープ別の順で後勝ち解決する `build_placement_config` を実装する
   - `defaultx`⇔`defaultleft`／`defaulty`⇔`defaulttop` の両表記を同スロットへ寛容受理し、同層競合時は `defaultx`/`defaulty` を優先する
   - スコープ検出（scope0 常設・`kero.name` または shell `kero.*` キーで scope1・`char{n}.*` で scope n≥2）と `zorder`／`sticky-window`／shell `dpi` の転記フィールドを実装する
@@ -132,3 +132,8 @@
   - _Requirements: 3.1, 3.5, 4.3_
   - _Depends: 7.1_
   - _Boundary: examples/window-placement_
+
+## Implementation Notes
+
+- 1: `areka_parsers::package::MountError` は Display/std::error::Error 未実装（Clone/Debug/PartialEq/Eq のみ・#[non_exhaustive]）。`PlacementError::Mount` は `{0:?}` Debug 整形・`#[from]` 不可 → 後続タスクは `PlacementError::Mount(e)` を明示構築すること（areka-parsers は改変禁止）。
+- 2.1: `Alignment::Seam` の `warn!` 発火は config でなく resolver（task 3.1）へ委譲済み（config.rs:22 に明記）→ 3.1 実装・レビューで warn 発火を必ず確認。スコープ検出は DD6 厳密読み（`char1.*` 単独では scope1 を作らない・kero シグナルのみ）。同層クロス競合は正典プレフィックス外側優先。
