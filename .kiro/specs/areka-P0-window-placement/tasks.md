@@ -20,7 +20,7 @@
   - _Requirements: 1.1, 1.3, 1.5, 2.2, 2.3, 2.5, 2.7, 2.8, 5.2_
   - _Boundary: placement::config_
 
-- [ ] 2.2 (P) descript ソース読込とゴーストタイトルを実装する
+- [x] 2.2 (P) descript ソース読込とゴーストタイトルを実装する
   - `areka_parsers::package::resolve` で shell dir を解決し、ghost/shell の `descript.txt` を `charset::decode`（既定 Ansi）→ `kv::parse_kv` で読み込む `load_descript_source` を実装する（`ghost_kv`／`shell_kv`／`shell_dir`／`GhostTitles` を返す）
   - `GhostTitles`（`sakura.name`/`kero.name`/`char{n}.name` 由来・欠落スコープは既定 `"areka"`）とアクセサ `title(scope)` を実装する
   - ghost descript 読取失敗は警告＋空 KV で継続し、shell descript 読取失敗・resolve 失敗は `Err` を返す
