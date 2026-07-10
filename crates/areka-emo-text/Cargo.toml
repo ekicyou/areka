@@ -16,3 +16,6 @@ thiserror = { workspace = true }
 tracing = { workspace = true }
 # cue 契約の正本（TextSink/TalkCue/ActorKey/CueCommand——design.md Dependencies・再定義しない）。
 areka-sakura = { path = "../areka-sakura" }
+# balloon model の正本（BalloonModel＋writing_mode 転記フィールド——design.md「依存方向（強制）」
+# areka-parsers → areka-emo-text・parser は転記に徹し解釈は本 crate writing.rs）。
+areka-parsers = { path = "../areka-parsers" }
