@@ -99,6 +99,7 @@ sink の main 経路への結線（`GhostBootOptions.text_sink` への注入）�
 3. The emo テキスト層 shall balloon-parse ✅ のテキスト領域定義（origin＝描画原点・wordwrappoint＝折返し点・validrect＝有効矩形）を消費して文字の配置・折返し・有効範囲を決定する。
 4. When テキスト領域定義の座標が反対辺基準（負値）で与えられる, the emo テキスト層 shall balloon-parse ✅ のモデル規約に従って反対辺基準として解釈する。
 5. The emo テキスト層 shall 文字レイアウトのうち DirectWrite metrics に依存しない決定部（折返し位置・行送り・スクロール発火）を、metrics に依存しない構造テストで検証できる形で分離する。
+6. The emo テキスト層 shall テキストレイアウト座標（font.height／origin／wordwrappoint／validrect）をバルーン surface の画像座標空間（`descript_balloon.dpi`＝作者基準・省略時 96 が定義する空間）で解決し、描画ターゲットには実際の合成スケール（バルーン surface と同一のスケール）を適用して、任意のモニタ DPI で文字がバルーン画像と整合（ずれない・validrect からあふれない）するようにする。**DPI/スケールは M1 の対象外にせず最初から正しく扱う**（論理/物理の混在を設計時に排する・記憶 areka-window-placement-dpi-coordinate-defect の教訓）。
 
 ### Requirement 5: writing_mode 宣言の解決（2層マージ）
 
@@ -171,7 +172,7 @@ sink の main 経路への結線（`GhostBootOptions.text_sink` への注入）�
 1. The emo テキスト層 shall sakura の `TextSink + Clone + Send + 'static` を満たす sink 型を提供し、`GhostBootOptions.text_sink` へ注入可能な形にする（注入・main 結線そのものは emo2-boot の責務）。
 2. The emo テキスト層 shall テキスト層の per-glyph pacing が sakura の cue 時刻（`at`）に影響しない前提で動作し、厳密な SSP 互換 pacing が必要と判明した場合は sakura への増分申し送りとして扱う（本ユニットで sakura を改変しない）。
 3. The emo テキスト層 shall `\f` 系文字装飾および `disable.font.*` 拡張を、emo2 fixture で未使用の範囲では型シームとして保持するに留め、実挙動を実装しない。
-4. The emo テキスト層 shall バルーン推奨 DPI（`descript_balloon` の `dpi`・省略時 96）について M1 では 96 前提の素通し解釈とし、DPI スケール解釈の詳細は後続へ委ねる。
+4. The emo テキスト層 shall バルーン推奨 DPI（`descript_balloon` の `dpi`・省略時 96）を**最初から正しく扱う**（R4.6 の座標/スケール契約に従う・96 素通しの先送りはしない）。window-placement と DPI/スケール契約を共有し、論理/物理の混在（記憶 areka-window-placement-dpi-coordinate-defect）を設計時に排する。
 5. The emo テキスト層 shall トーク上書きを抑止するガード（さくらスクリプト `\t` タイムクリティカル／`\![enter,nouserbreakmode]` 等）を実装せず、中断可否の判定を上流（kanade の中断ファンネル）の責務とする。emo は届いた cue 列を後出し優先で忠実に適用する。
 
 ### Requirement 11: 観測用専用 example（注入時刻駆動 pass/fail）
@@ -188,3 +189,4 @@ sink の main 経路への結線（`GhostBootOptions.text_sink` への注入）�
 6. The emo テキスト層 example shall 上記のうちレイアウト決定論部分（折返し位置・行送り・スクロール発火・`writing_mode` 2層マージ解決）を、DirectWrite metrics に依存しない構造テストと既定フォントでの単体テストで決定論的に検証する。
 7. The emo テキスト層 example shall `crates/areka` の既存ファイル（main.rs・placement 系）を変更せず、新規 example ファイルの追加のみで観測を成立させる。
 8. When fixture スクリプトが複数の actor（\0／\1）を発話させる, the emo テキスト層 example shall 各 actor のテキストが対応するバルーンへ振り分けられることを観測可能にする（単一 actor のみの場合は当該 actor のバルーンで観測する）。
+9. The emo テキスト層 example/テスト shall DPI/スケールの正しさを検証する——レイアウト決定部（折返し・行送り・スクロール発火・validrect 整合）はスケール非依存の構造テストで、実描画は非 96 DPI を含む実 DPI で観測可能にする（実 DPI 実行を経ない「テスト緑」を正しさの証明としない・記憶 areka-placement-real-ghost-first）。

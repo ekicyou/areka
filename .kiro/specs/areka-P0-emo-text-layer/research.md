@@ -126,7 +126,7 @@
 4. **lift vs 参照の粒度**: wintf `TextDirection`・DirectWrite 縦書きレシピ・`IDWriteTextLayout` 生成のどこを借り、どこを emo へ複製するか（Option B/C の分岐点）。
 5. **DirectWrite metrics 依存/非依存の分離線**: 折返し位置・行送り・スクロール発火・`writing_mode` 2層マージ解決を metrics 非依存の構造テストへ隔離する境界を確定（R2.4/R4.5/R7.5/R11.6）。
 6. **example 用 fixture 増補**: `writing_mode` マーカー（descript／画像別）と有意な `wordwrappoint.y` の付与方針（現 fixture は y=0 で縦書き折返しが退化）。マーカー無し既定 `horizontal_tb` の裏取りも兼ねる。
-7. **DPI**: `descript_balloon.dpi`（省略時 96）を M1 は 96 前提素通しで可か（window-placement brief の同キー注記と整合）。
+7. **DPI**: ~~`descript_balloon.dpi`（省略時 96）を M1 は 96 前提素通しで可か。~~ → **【裁定 2026-07-09 discussion #4】** 96 素通しの先送りは**棄却**。DPI/スケールは M1 対象外にせず**最初から正しく扱う**（R4.6/R10.4/R11.9）。テキストはバルーン surface 画像座標空間で解決し、描画ターゲットへ surface と同一の合成スケールを適用（任意 DPI で画像と整合・validrect あふれなし）。window-placement と DPI/スケール契約を共有し論理/物理混在を設計時に排する（記憶 areka-window-placement-dpi-coordinate-defect／areka-placement-real-ghost-first）。design で「font.height の単位・ターゲット DPI 契約・surface スケール共有点」を明文化。
 8. **per-glyph pacing の申し送り確認**: sakura `at` は text 長非考慮（`drive.rs:294/530` で確認済み）。厳密 SSP 互換 pacing が必要と判明時のみ sakura 増分 issue（本ユニットで sakura 改変せず・R10.2）。
 
 ## 7. 設計判断アイテム（要件ディスカッションへ供給・番号付き）
