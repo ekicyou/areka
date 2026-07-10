@@ -38,13 +38,16 @@
 6. When `alignmenttodesktop` が `free` のとき, the 窓配置機構 shall `defaulttop`／`defaultleft` を有効な X/Y 初期座標として適用する。
 7. The 窓配置機構 shall 配置キーの両表記（`defaultx`⇔`defaultleft`、`defaulty`⇔`defaulttop`）を寛容に受理する。
 8. Where emo2 が使用しない配置値・キー（例 未使用の `alignmenttodesktop` 値域）が指定されたとき, the 窓配置機構 shall 実挙動を持たずシームとして受理する（最小実装＋拡張シーム）。
+9. When 複数スコープのキャラ窓を配置するとき, the 窓配置機構 shall 既定として scope0（本体）を work area の右下基準へ置き、scope1（相方）を scope0 のサーフェス画像幅ぶん左へずらした位置へ置く（SSP de-facto。二体は左右に並び重ならない。重なり回避等の複雑なロジックは持たず、この単純な基準配置のみとする）。
+10. Where `alignmenttodesktop` が `bottom`（右下基準）のとき, the 窓配置機構 shall `defaultx` を work area 右端からの左方向オフセットとして解釈する（de-facto。`defaultx=0`＝右端に密着）。
+11. The 窓配置機構 shall 最終表示位置の記憶・復元を所有せず、既定（基準）位置のみを提供する（最終位置の永続化・ユーザー調整の保持は position-persist（M-life）の領分）。
 
 ### Requirement 3: 座標単位契約と実 DPI 検証
 
 **Objective:** As a 受け入れ検証者, I want 実 DPI（≠96）で窓が既定位置に正しく出現しドラッグが破綻しないことを確認できること, so that 物理 px と論理 DIP の単位混在（2026-07-05 リジェクトの直接原因）の再発を防げる
 
 #### Acceptance Criteria
-1. While per-monitor v2 DPI が 96 以外（例 125%）で動作しているとき, the 窓配置機構 shall キャラ窓を work area 基準の既定位置（既定 `bottom`）へ画面内に正しく出現させる。
+1. While per-monitor v2 DPI が 96 以外（例 125%）で動作しているとき, the 窓配置機構 shall キャラ窓（scope0 本体・scope1 相方の双方）を work area 基準の既定位置（既定 `bottom`＝右下基準・相方は本体のサーフェス幅ぶん左）へ画面内に正しく出現させる。ただし M1 の受入 pass/fail は scope0 の配置・ドラッグ・バルーン追従を主対象とし、二体の相対配置の正しさ（重なり回避の厳密性）は R2.9 の単純規則で足り、本格的な二人立ち連動は M-dual の受入へ委ねる。
 2. The 窓配置機構 shall 物理ピクセルと論理 DIP を混在させた座標演算を行わない。
 3. When 既定位置を計算するとき, the 窓配置機構 shall 入出力の座標単位を一貫して扱い、二重スケールを生じさせない。
 4. The 既定位置解決器 shall DPI をパラメタ化（96／120／144／192）した単体テストで物理/論理変換を固定でき、純粋関数として検証可能である。

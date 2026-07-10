@@ -117,9 +117,9 @@ resolver（純粋・テスト密）＋公開引き渡し型は独立モジュー
 2. **構成入力の seam 到達（plumbing）**: `open_startup_window` に shell dir/descript を渡すか、seam 内で `ConfigInputs`/`MountModel` から再解決するか。`GhostRuntime.mount` を公開するか、placement が独自に descript.txt を再読込するか（emo-present 前例）。
 3. **配置カスケードのキー命名**: shell スコープ別キーは `char0/char1.seriko.*` か `sakura/kero.*` か（emo2 は `sakura.defaultx`）。ghost スコープ別は `sakura.seriko.*`/`kero.seriko.*`。ukadoc `descript_ghost`/`descript_shell` を `get_doc` して「キー×所在×優先度×有効条件」の 1 枚表を design.md に載せる（brief 具体指示）。
 4. **`alignmenttodesktop` 値域と有効条件**: `bottom`（Y 下端固定・`defaulttop` 無視）／`free`（`defaulttop`/`defaultleft` 有効）／`top` 等の正確な挙動。`defaulttop` は free 限定（ukadoc 明記）を分岐に反映。
-5. **`defaultx`⇔`defaultleft` の同義/別義・X 原点**: emo2 は `defaultx`（ukadoc 未確認の de-facto キー）。`x=0` の意味論（work area 基準か・下端整列時も X 調整として有効）を SSP 実挙動で確定し両表記を寛容受理。
+5. **`defaultx`⇔`defaultleft` の同義/別義・X 原点**: emo2 は `defaultx`（ukadoc 未確認の de-facto キー）。`x=0` の意味論（work area 基準か・下端整列時も X 調整として有効）を SSP 実挙動で確定し両表記を寛容受理。**【要件討議#2 で確定】** `alignmenttodesktop,bottom`（右下基準）では `defaultx` は **work area 右端からの左方向オフセット**（`defaultx=0`＝右端密着）。要件 R2.10 に反映済み。両表記の寛容受理は設計で実装。
 6. **座標単位を型で固定する手段**: newtype（物理 px / 論理 DIP）で混在を型エラー化するか、resolver の入出力を物理 px 一本に統一するか。`DPI`/`Monitor.dpi` のどちらを resolver の DPI 源にするか（Window entity DPI か Monitor DPI か）。
-7. **scope0/scope1 の相対配置**: 二体の並び（左右・重なり）は SSP de-facto。M1 でどこまで実挙動を持つか（brief は「窓が生えて置ける・動かせる」まで／連動は M-dual）。
+7. **scope0/scope1 の相対配置**: 二体の並び（左右・重なり）は SSP de-facto。M1 でどこまで実挙動を持つか（brief は「窓が生えて置ける・動かせる」まで／連動は M-dual）。**【要件討議#2 で確定】** 既定は scope0（本体）を右下基準・右端へ、scope1（相方）を **scope0 のサーフェス画像幅ぶん左**へずらす単純規則（重なり回避等の複雑ロジック無し）。最終位置は position-persist（M-life）が記憶しユーザーが調整。要件 R2.9・R2.11・R3.1 に反映済み。設計課題は「scope0 のサーフェス幅の入手経路（`WindowPos.size`＝サーフェス原寸物理 px）と DPI 一貫性」。
 8. **R6 公開データ構造の形**: scope 番号列挙＋balloon 識別キー（スコープ番号のみだと balloon が取り出せず emo2-boot が詰む＝最終精査検出）。`TargetId` との対応付けは統合側裁量に残す。
 9. **z-order 非 topmost の実現**: donor の `WS_EX_TOPMOST` を外す（WindowStyle ex_style から除去）方法・`zorder`/`sticky-window` のシーム化（emo2 未使用ゆえ実挙動なし）。
 10. **R7 窓移動 API の署名**: 何を指定して動かすか（entity・scope・balloon 識別）。UI スレッド専有前提で `spawn_ui`/`UiSender` が後から呼べる純関数形へ。
