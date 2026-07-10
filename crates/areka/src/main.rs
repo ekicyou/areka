@@ -48,6 +48,10 @@ mod reference_brain;
 /// `poll_completions`→raise/notify 観測→drop teardown を駆動し tracing で観測する。
 mod shiori_demo;
 
+/// 窓配置機構（areka-P0-window-placement）。ゴースト定義からキャラ窓・バルーン窓の
+/// 初期配置を解決し窓 entity を組み立てる配置パイプライン（task 1 時点は scaffold）。
+mod placement;
+
 /// 遅延応答と push 経路の end-to-end 結合テスト。
 /// モック脳が `SHIORI_S_PENDING`＋token を返し、後で保持 host へ safe `complete`/`raise` を発火する
 /// 一連の流れを `ShioriSession` 越しに 1 シナリオで通す（sink/session の単体テストと重複させない）。

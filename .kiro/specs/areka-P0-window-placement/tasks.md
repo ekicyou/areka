@@ -2,7 +2,7 @@
 
 ## Task List
 
-- [ ] 1. Foundation: placement モジュールの土台と依存関係を整備する
+- [x] 1. Foundation: placement モジュールの土台と依存関係を整備する
   - `crates/areka/Cargo.toml` で `areka-emo-atlas`／`areka-emo-compose` を dev-dependencies から通常の dependencies へ昇格する
   - `crates/areka/src/placement/` 配下に `mod.rs`（`resolver`／`config`／`source`／`measure`／`spawn`／`follow` の空サブモジュール宣言）を新設する
   - `PlacementError`（thiserror 構造化 enum。`Mount`／`DescriptRead`／`Measure` バリアント）を定義する
