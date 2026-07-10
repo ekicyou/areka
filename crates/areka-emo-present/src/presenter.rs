@@ -68,6 +68,55 @@ struct PresentTarget {
     visible: bool,
 }
 
+/// 予約 text 層スロットへの読み取り専用の到達手段（emo-text-layer が消費する additive 公開増分・R9.1/9.2）。
+///
+/// [`EmoPresenter::text_slot_view`] が返すスナップショット値。フィールドは非公開（`#[non_exhaustive]`
+/// 相当）で accessor のみを公開し、スロット状態の変更手段を一切持たない（読み取り専用 view）。
+/// 装着 API 形（emo-present が描画物を受け取る）は emo-text の描画型が本 crate へ逆流し依存方向
+/// （emo-present → emo-text 禁止）と衝突するため採らない（design §TextSlotView）。
+///
+/// mount は初回 `ShowSurface` で遅延生成されるため、それ以前は取得できない（`text_slot_view` が
+/// `None`）。呼び手は表示確立後に取得するか再取得を試みる（runtime 前提条件）。
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct TextSlotView {
+    /// 予約済み text 層スロット entity（`Name("emo-text-layer-slot")`・内容なしの seam）。
+    slot: Entity,
+    /// スロットが属する装着先の窓 Entity。
+    window: Entity,
+    /// バルーン/シェル surface の物理 px 原寸（取得時点のスナップショット）。
+    surface_size: (u32, u32),
+    /// バルーン surface と同一の合成スケール k（現行の物理 1:1 表示契約では恒常 1.0）。
+    scale: f32,
+}
+
+impl TextSlotView {
+    /// 予約済み text 層スロット entity（emo-text-layer が描画を装着する先）。
+    pub fn slot(&self) -> Entity {
+        self.slot
+    }
+
+    /// スロットが属する装着先の窓 Entity。
+    pub fn window(&self) -> Entity {
+        self.window
+    }
+
+    /// バルーン surface の物理 px 原寸。
+    pub fn surface_size(&self) -> (u32, u32) {
+        self.surface_size
+    }
+
+    /// バルーン surface と同一の合成スケール k（現行 1.0 恒常・DPI 契約の共有点）。
+    ///
+    /// 将来 emo-present が DPI スケーリング（k=モニタ DPI ÷ author_dpi）を導入したら、供給値の
+    /// 変更点はここ 1 点である（design §TextSlotView Revalidation Trigger）。
+    pub fn scale(&self) -> f32 {
+        self.scale
+    }
+}
+
+/// 現行の物理 1:1 表示契約における合成スケール k の恒常値（design §DPI/スケール契約）。
+const CURRENT_COMPOSE_SCALE: f32 = 1.0;
+
 /// 指令適用の統括ハブ（合成・キャッシュ・表示・マスクの一点結線・UI スレッド専有）。
 ///
 /// target を [`Self::attach_target`] で登録し、[`Self::apply`] で [`PresentCommand`] を適用する。
@@ -345,6 +394,23 @@ impl EmoPresenter {
         target.cache.invalidate_all();
         tracing::debug!(?target_id, "apply(InvalidateCache): キャッシュ全破棄（表示は継続）");
         Self::reply(reply, Ok(()));
+    }
+
+    /// target の予約 text 層スロットへの読み取り専用の到達手段（mount 未生成なら `None`・R9.1/9.2）。
+    ///
+    /// mount（と供給面）は初回 `ShowSurface` で原寸確定後に遅延生成されるため、未登録 target・
+    /// 初回表示確立前は取得不可（`None`）である。呼び手（結線側）は表示確立後に取得するか再取得を
+    /// 試みる。返る値はスナップショット（読み取り専用 view）で、スロット状態は変更できない。
+    pub fn text_slot_view(&self, target: TargetId) -> Option<TextSlotView> {
+        let t = self.targets.get(&target)?;
+        let mount = t.mount.as_ref()?;
+        let chain = t.chain.as_ref()?;
+        Some(TextSlotView {
+            slot: mount.text_slot(),
+            window: t.window,
+            surface_size: chain.size(),
+            scale: CURRENT_COMPOSE_SCALE,
+        })
     }
 
     /// target の表示中画素を CPU へ読み戻す（R6.2/R8.3・検証・将来の直読みヒットテスト基盤）。
@@ -993,6 +1059,92 @@ mod tests {
             bytes_shown, bytes_reshown,
             "再表示のバイトが初回表示と一致しない（キャッシュからの表示復帰が壊れている）"
         );
+    }
+
+    /// R9.1/9.2 観測完了（mount 未生成＝取得不可）: 未登録 target・登録済みだが初回 `ShowSurface` 前
+    /// （mount 遅延生成前）のいずれも `text_slot_view` が `None` を返す（取得結果が空）。
+    ///
+    /// mount 未生成経路は World に GPU 資源を要しない（`attach_target` は skeleton 登録のみ）ため、
+    /// 素の `World` で決定論的に固定する。
+    #[test]
+    fn text_slot_view_is_none_before_display_established() {
+        let mut world = World::new();
+        let window = world.spawn_empty().id();
+        let (emo_world, atlas, _golden) = build_target_assets(3, 2, 0x66);
+
+        let mut presenter = EmoPresenter::new();
+        // 未登録 target: 取得結果は空。
+        assert!(
+            presenter.text_slot_view(TargetId(0)).is_none(),
+            "未登録 target の text_slot_view は None"
+        );
+
+        presenter
+            .attach_target(&mut world, TargetId(0), window, emo_world, atlas)
+            .expect("attach_target 失敗");
+        // 登録済みでも初回 ShowSurface 前（mount 未生成）は空（design: mount は遅延生成・R9.2）。
+        assert!(
+            presenter.text_slot_view(TargetId(0)).is_none(),
+            "初回 ShowSurface 前（mount 未生成）の text_slot_view は None"
+        );
+    }
+
+    /// R9.1/9.2 観測完了（表示確立後の正値）: 有効 `ShowSurface` で表示確立後、`text_slot_view` が
+    /// `Some` を返し、(a) `slot()` ＝ mount の予約スロット（`Name("emo-text-layer-slot")` を持つ）、
+    /// (b) `window()` ＝ 装着先窓 Entity、(c) `surface_size()` ＝ バルーン/シェル surface の物理 px 原寸、
+    /// (d) `scale()` ＝ 現行の物理 1:1 表示契約の恒常値 1.0、をすべて満たす。
+    #[test]
+    fn text_slot_view_returns_slot_window_size_scale_after_display() {
+        let mut world = make_world_with_gpu();
+        let window = world.spawn_empty().id();
+
+        let (emo_world, atlas, _golden) = build_target_assets(3, 2, 0x77);
+
+        let mut presenter = EmoPresenter::new();
+        presenter
+            .attach_target(&mut world, TargetId(0), window, emo_world, atlas)
+            .expect("attach_target 失敗");
+
+        let (tx, rx) = reply_channel::<PresentOutcome>();
+        presenter.apply(
+            &mut world,
+            PresentCommand::ShowSurface {
+                target: TargetId(0),
+                surface_id: 1000,
+                binds: BindSet::default(),
+                reply: Some(tx),
+            },
+        );
+        assert!(
+            matches!(rx.recv_timeout(Duration::from_secs(10)), Ok(Ok(()))),
+            "前提の有効 ShowSurface が Ok でない"
+        );
+
+        let view = presenter
+            .text_slot_view(TargetId(0))
+            .expect("表示確立後の text_slot_view は Some");
+
+        // (a) slot ＝ mount の予約スロット（Name で二重に裏取り）。
+        let expected_slot = presenter
+            .targets
+            .get(&TargetId(0))
+            .and_then(|t| t.mount.as_ref())
+            .expect("表示確立後は mount が生成済み")
+            .text_slot();
+        assert_eq!(view.slot(), expected_slot, "slot() が予約スロット entity と一致しない");
+        let name = world
+            .get::<bevy_ecs::name::Name>(view.slot())
+            .expect("予約スロットに Name が無い");
+        assert_eq!(name.as_str(), "emo-text-layer-slot");
+
+        // (b) window ＝ attach_target で渡した装着先窓。
+        assert_eq!(view.window(), window, "window() が装着先窓 entity と一致しない");
+
+        // (c) surface_size ＝ 合成原寸（物理 px・本 fixture は 3×2）。
+        assert_eq!(view.surface_size(), (3, 2), "surface_size() が物理原寸と一致しない");
+
+        // (d) scale ＝ 現行契約の恒常値 1.0（物理 1:1・DPI 契約の共有点）。
+        assert_eq!(view.scale(), 1.0, "scale() は現行契約で恒常 1.0");
     }
 
     /// surface 1000（`w×h` 全不透明 element ＋ bind animation 2000 が surface 5000 を (0,0) に重ねる）
