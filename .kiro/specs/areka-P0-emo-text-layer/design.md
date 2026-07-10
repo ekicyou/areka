@@ -497,7 +497,8 @@ impl TextRegion {
 | Requirements | 4.5, 6.1, 6.2, 6.3, 7.1, 7.2, 7.4, 7.5, 9.4 |
 
 **Responsibilities & Constraints**
-- **metrics 依存/非依存の分離線（R4.5 の正準）**: 「グリフ送り幅・行高さ」だけを `GlyphMetrics` trait として注入し、**折返し位置・行送り・スクロール発火・可視窓決定のアルゴリズム自体は純粋**にする。構造テストは `FixedMetrics`（全角＝`font.height`・半角＝`font.height/2` の決定論値）を注入、実行時は `DWriteMetrics`（`IDWriteTextLayout` cluster metrics 由来・draw.rs 所有）を注入する。
+- **metrics 依存/非依存の分離線（R4.5 の正準）**: 「グリフ送り幅・行高さ」だけを `GlyphMetrics` trait として注入し、**折返し位置・行送り・スクロール発火・可視窓決定のアルゴリズム自体は純粋**にする。構造テストは `FixedMetrics`（全角＝`font.height`・半角＝`font.height/2` の決定論値）を注入、実行時は `DWriteMetrics`（**測定専用 probe TextLayout** の cluster metrics 由来・draw.rs 所有・下記 probe 規約）を注入する。
+- **probe 規約（測定順序の正準・design discussion #1 裁定 2026-07-10）**: `DWriteMetrics` の典拠は**未折返しの測定専用 TextLayout（probe layout）**とする——折返し決定の**前**に、描画と同一の TextFormat（フォント・サイズ・writing_mode 写像設定込み）で対象テキストを折返し無効寸（行内軸方向に十分大きい maxWidth/maxHeight）の probe layout として生成し、その cluster metrics から advance を得る（鶏卵の構造的切断）。**一致 invariant**: 同一 format・同一テキスト内容なら probe の advance と描画行 TextLayout の advance は同値——この invariant をプロポーショナル/カーニングフォントを含むテストで檻化する（乖離検出＝invariant 違反として原因を修正する・クリップで隠さない）。probe は確定行単位でキャッシュ可（追記単調ゆえ確定行の metrics は不変）。
 - 可視窓決定（純粋）と描画実行の分離（R7.4）: `visible_window(lines, region) -> VisibleWindow`（先頭可視行 index＋行内オフセット）が唯一のスクロール決定点。emo-text-viewbox はこの出力を「クリップ視窓＋内容オフセット」に写像して描画実行だけを差し替える。
 - スクロールは**行単位・即時**（アニメなし）を M1 正準とする（ukadoc はスクロール粒度を規定せず＝areka 裁量。`\![set,autoscroll,disable]`／arrow マーカーの存在から「あふれ時自動スクロール」自体は正典裏付け済み）。
 - 出力 `PositionedLine`（行の画像空間矩形＋グリフ列＋グリフ別 advance 位置）は choice-render がクリック可能範囲導出に再利用できる形（R9.4・導出は実装しない）。
@@ -593,7 +594,7 @@ pub struct TextEffects { /* M2 予約: outline/multicolor/shadow/rotation。M1 �
 - **DirectWrite レシピ（lift・複製）**: `GraphicsCore::dwrite_factory()`（`IDWriteFactory2`）＋wintf `DWriteFactoryExt::create_text_format/create_text_layout` を用い、WritingMode 写像表どおり `SetReadingDirection`/`SetFlowDirection`/`SetTextAlignment(LEADING)`/`SetParagraphAlignment(NEAR)` を設定する。wintf のテキスト widget system（`Typewriter`/`draw_typewriters` 等）へは依存しない。
 - **描画は行単位の TextLayout**: `PositionedLine` ごとに 1 つの `IDWriteTextLayout` を生成しキャッシュ（行内容が不変なら再利用・リビール中の行のみ都度更新）。可視化は「可視グリフ数までの部分文字列」で行う（typewriter 進行＝R3.1）。
 - **全域再描画（R7.3）**: 毎更新、オフスクリーン D2D ターゲット（D3D テクスチャ）を透明 clear→可視窓の行を描画→TextSurface へ転送。スクロールも同経路（差分描画なし・SSP 忠実の確定裁定）。
-- `DWriteMetrics`: 生成した TextLayout の cluster metrics から `GlyphMetrics` を実装し LayoutEngine へ注入する（メトリクスの真実源は DirectWrite・アルゴリズムは純粋層）。
+- `DWriteMetrics`: **測定専用 probe TextLayout**（layout.rs の probe 規約——未折返し・描画と同一 TextFormat）の cluster metrics から `GlyphMetrics` を実装し LayoutEngine へ注入する（メトリクスの真実源は DirectWrite・アルゴリズムは純粋層・折返し決定より前に測定＝鶏卵なし）。描画行 TextLayout との advance 一致 invariant は統合テストで担保（Testing Strategy 参照）。
 - **スケール適用の一点**: D2D ターゲットへ `SetTransform(scale(k))` を一度だけ適用（k＝ScaleContract.scale）。フォントサイズは `font.height`（image px＝96DPI 名目 DIP と同一視）をそのまま渡す。
 
 **Contracts**: Service [x]
@@ -796,6 +797,7 @@ pub enum TextLayerError {
 2. **UI ドレイン終了規律**: Close→クリーン終了／全 sink drop→クリーン終了／handler Err→継続（actor-foundation toy(b) パターン・実 pump）。
 3. **emo-present 増分**: `text_slot_view` が mount 生成前 None／生成後に slot・寸・scale=1.0 を返す（emo-present 側テストへ additive）。
 4. **描画実行**（COM・UI スレッドテスト）: DrawExecutor→TextSurface read_back で「可視グリフ数増加に伴う非透明ピクセル単調増加」「Clear 後全透明」「validrect 外に非透明ピクセルなし」を構造 assert（AA 依存の golden バイト一致は要求しない——ピクセル述語で決定論化）。
+5. **probe/描画 metrics 一致 invariant**（COM・UI スレッドテスト・probe 規約の成立条件）: 同一 TextFormat・同一テキストで probe layout と描画行 TextLayout の cluster advance が同値であることを、等幅（ＭＳ ゴシック）＋プロポーショナル欧文混在文字列の両方で檻化（R4.5・design discussion #1）。
 
 ### E2E（example・手動＋pass/fail 自動判定）
 
