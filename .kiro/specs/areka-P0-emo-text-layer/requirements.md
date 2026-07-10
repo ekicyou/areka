@@ -36,6 +36,7 @@ sink の main 経路への結線（`GhostBootOptions.text_sink` への注入）�
   - viewbox 合成（クリップ視窓＋内容オフセット）によるスクロール実現（`areka-P0-emo-text-viewbox`・本ユニットは可視窓/描画分離シームまで）。
   - sink の main 結線（`GhostBootOptions.text_sink` への注入・実 talk 経路の結線は emo2-boot）。
   - sakura の cue 時刻（pacing）の改変（必要と判明した場合の増分申し送りまで）。
+  - トーク上書き/中断の可否判定とガード（さくらスクリプト `\t`・`\![enter,nouserbreakmode]` 等）の尊重（上流 kanade の中断ファンネルの責務・emo は届いた cue 列を後出し優先で即時適用するのみ）。
   - バルーン枠の描画・配置・キャッシュ（emo-present 済み）／バルーン窓の生成・配置（window-placement）／surface 合成（emo-compose）。
 
 - **Adjacent expectations（隣接ユニットへの期待・依存）**:
@@ -70,7 +71,7 @@ sink の main 経路への結線（`GhostBootOptions.text_sink` への注入）�
 
 1. When Text cue を受け取る, the emo テキスト層 shall 表示テキストへ当該文字列を追記する。
 2. When NewLine cue を受け取る, the emo テキスト層 shall 表示テキストの行を改める。
-3. When Clear cue を受け取る, the emo テキスト層 shall 表示テキストを全消去し、行/グリフ状態を初期状態へ戻す。
+3. When Clear cue を受け取る, the emo テキスト層 shall 表示テキストを全消去し、行/グリフ状態を初期状態へ戻す（typewriter 進行中の場合、未リビールの文字も含めて破棄する＝後出し優先）。
 4. The emo テキスト層 shall cue 列から行/グリフ状態への遷移を、実描画（DirectWrite）を伴わずに実行できる純粋な形で提供する。
 5. The emo テキスト層 shall 同一の cue 列と同一の入力条件に対し、行/グリフ状態の遷移結果が決定論的に一致するようにする。
 
@@ -83,8 +84,9 @@ sink の main 経路への結線（`GhostBootOptions.text_sink` への注入）�
 1. While テキストが表示途中である, the emo テキスト層 shall 文字を1文字ずつ順に可視化する（typewriter 進行）。
 2. The emo テキスト層 shall per-glyph の進行間隔を本層で所有する（balloon descript の文字送り待ち相当を含む）。
 3. The emo テキスト層 shall typewriter 進行を注入された時刻（talk 起点相対秒）に基づいて進め、実時間 sleep に依存しない。
-4. When 受信した cue の `at`（chunk 開始時刻）に達する, the emo テキスト層 shall 当該 chunk の逐次表示を開始する。
+4. When 受信した cue の `at`（chunk 開始時刻）に達する, the emo テキスト層 shall 当該 chunk を即時にテキスト状態へ適用し、その逐次表示（リビール）を開始する。`at` はリビール開始の下限（それより早く可視化しない）であり、直前 chunk が未リビールでもリビールカーソルは現バッファ末尾を本層ペースで追う（長文時はリビールが遅延しうる・無損失）。
 5. The emo テキスト層 shall 同一の cue 列と同一の注入時刻列に対し、各時刻での可視文字数が決定論的に一致するようにする。
+6. When typewriter 進行中に後続 cue が到着する, the emo テキスト層 shall 後出し優先で即時適用する（Text/NewLine は追記・Clear は未リビール分を含め全消去）。トーク上書きを抑止するガードは本層の責務でなく、中断可否は上流（kanade）で決着済みの前提とする。
 
 ### Requirement 4: フォント・テキスト領域の解決と文字レイアウト
 
@@ -170,6 +172,7 @@ sink の main 経路への結線（`GhostBootOptions.text_sink` への注入）�
 2. The emo テキスト層 shall テキスト層の per-glyph pacing が sakura の cue 時刻（`at`）に影響しない前提で動作し、厳密な SSP 互換 pacing が必要と判明した場合は sakura への増分申し送りとして扱う（本ユニットで sakura を改変しない）。
 3. The emo テキスト層 shall `\f` 系文字装飾および `disable.font.*` 拡張を、emo2 fixture で未使用の範囲では型シームとして保持するに留め、実挙動を実装しない。
 4. The emo テキスト層 shall バルーン推奨 DPI（`descript_balloon` の `dpi`・省略時 96）について M1 では 96 前提の素通し解釈とし、DPI スケール解釈の詳細は後続へ委ねる。
+5. The emo テキスト層 shall トーク上書きを抑止するガード（さくらスクリプト `\t` タイムクリティカル／`\![enter,nouserbreakmode]` 等）を実装せず、中断可否の判定を上流（kanade の中断ファンネル）の責務とする。emo は届いた cue 列を後出し優先で忠実に適用する。
 
 ### Requirement 11: 観測用専用 example（注入時刻駆動 pass/fail）
 
