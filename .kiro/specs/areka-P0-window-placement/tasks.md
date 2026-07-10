@@ -30,7 +30,7 @@
   - _Boundary: placement::source_
 
 - [ ] 3. Core: 純粋 resolver — 既定位置解決
-- [ ] 3.1 物理 px 値型と bottom 基準・スコープ連鎖・クランプの配置規則を実装する
+- [x] 3.1 物理 px 値型と bottom 基準・スコープ連鎖・クランプの配置規則を実装する
   - `RectPx`／`PointPx`／`SizePx`／`ScopeInput`／`ScopePlacement` の物理 px 値型（wintf 非依存）を定義する
   - P1（bottom 時 `y = work_area.bottom − h`・`defaulttop` 無視）／P2（`base_x(0) = work_area.right − w(0)`、`base_x(n≥1) = char_x(n−1) − w(n−1)`、`char_x(n) = base_x(n) − defaultx(n).unwrap_or(0)`）／P4（キャラ窓のみ work area 内へクランプ）を実装する `resolve_placement` を実装する（`PlacementConfig` を読むが wintf 型は import しない）
   - `Alignment::Seam` は bottom と同一出力とする
@@ -136,4 +136,5 @@
 ## Implementation Notes
 
 - 1: `areka_parsers::package::MountError` は Display/std::error::Error 未実装（Clone/Debug/PartialEq/Eq のみ・#[non_exhaustive]）。`PlacementError::Mount` は `{0:?}` Debug 整形・`#[from]` 不可 → 後続タスクは `PlacementError::Mount(e)` を明示構築すること（areka-parsers は改変禁止）。
-- 2.1: `Alignment::Seam` の `warn!` 発火は config でなく resolver（task 3.1）へ委譲済み（config.rs:22 に明記）→ 3.1 実装・レビューで warn 発火を必ず確認。スコープ検出は DD6 厳密読み（`char1.*` 単独では scope1 を作らない・kero シグナルのみ）。同層クロス競合は正典プレフィックス外側優先。
+- 2.1: `Alignment::Seam` の `warn!` 発火は config でなく resolver（task 3.1）へ委譲済み（config.rs:22 に明記）→ 3.1 で解消（resolver.rs:124-130 で発火・T-R5 経路で実行）。スコープ検出は DD6 厳密読み（`char1.*` 単独では scope1 を作らない・kero シグナルのみ）。同層クロス競合は正典プレフィックス外側優先。
+- 3.1: P2 連鎖は post-clamp 前スコープ実位置基準（design 未規定領域の確定・t_r6_chain_uses_clamped_previous_position で檻化）。balloon_pos=char_pos/offset=0 は 3.2 P5 までの正直な暫定。極値 `defaultx=i32::MIN` で debug オーバーフローの理論穴 → 3.2 で saturating 演算検討（非ブロッキング）。`cargo clippy` は wintf 既存エラーで全体 fail（本 spec 非起因・不改変境界）。
