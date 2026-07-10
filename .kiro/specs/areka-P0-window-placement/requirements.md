@@ -2,7 +2,7 @@
 
 ## Introduction
 
-本ユニットは、⓪ ghost（ゴーストエンジン）が所有する窓ライフサイクル（lifecycle／窓配置／位置永続化）のうち「窓配置」を実装で埋める。ゴースト定義（descript）とスコープ数から**キャラ窓（scope0 主体＋scope1 相方）とバルーン窓**を生成し、ukadoc 準拠の既定位置（`seriko.alignmenttodesktop` カスケード）へ配置し、**全面ドラッグ（バルーン追従含む）**できる機構を提供する。窓数はハードコードでなく構成入力から決定する。
+本ユニットは、⓪ ghost（ゴーストエンジン）が所有する窓ライフサイクル（lifecycle／窓配置／位置永続化）のうち「窓配置」を実装で埋める。ゴースト定義（descript）とスコープ数から**キャラ窓（scope0 主体＋scope1 相方）と各スコープ対応のバルーン窓**を生成し、ukadoc 準拠の既定位置（`seriko.alignmenttodesktop` カスケード）へ配置し、**全面ドラッグ（バルーン追従含む）**できる機構を提供する。窓数はハードコードでなく構成入力から決定する。
 
 検証は**本番ゴースト（emo2 の実 surface 表示＝emo-present 経由）を実 DPI（per-monitor v2・dpi≠96、例 125%）で表示した上で、それに対して**行う。2026-07-05 のリジェクト（物理 px＝`Monitor.work_area`/`WindowPos` と論理 DIP＝`BoxStyle` の単位混在で既定位置解決が窓を沈め、ドラッグが二重スケールで画面外へ消失、しかも dpi=96 のテスト緑が欠陥を隠した）を教訓に、**実 DPI（≠96）実行を受け入れの必達条件**とする。単発デモ（ハードコード窓・架空 work area）への合わせ込みは禁止する。
 
@@ -20,7 +20,7 @@
 
 #### Acceptance Criteria
 1. When ゴースト定義（shell dir と shell/ghost descript の KV）が供給されたとき, the 窓配置機構 shall スコープ数に対応する数のキャラ窓を生成する。
-2. When ゴースト定義が供給されたとき, the 窓配置機構 shall 少なくとも 1 つのバルーン窓を生成する。
+2. When ゴースト定義が供給されたとき, the 窓配置機構 shall 各キャラ窓（スコープ）に対応するバルーン窓を 1 つずつ生成する（ukadoc 正典: `sakura.balloon.alignment`＝本体側の吹き出し／`kero.balloon.alignment`＝相方側の吹き出しに準拠し、バルーンはスコープごとに 1 枚存在する。正式な左右配置規則は balloon 表示系の後続へ委ね、本ユニットは暫定 offset 追従まで）。
 3. The 窓配置機構 shall 生成する窓数をハードコードせず構成入力から決定する。
 4. When 本番ゴースト（emo2 の実 surface）が供給されたとき, the 窓配置機構 shall 起動窓シーム（`open_startup_window`）でダミー窓を本物のゴースト窓へ置き換える。
 5. When キャラ窓を生成するとき, the 窓配置機構 shall 初期位置・追従 offset をデモ由来の固定座標値（例 (400,200) や (335,0)）から持ち込まず、既定位置解決の結果を用いる。
@@ -73,8 +73,8 @@
 **Objective:** As a M-boot 統合（emo2-boot）, I want 生成された Window entity をスコープ別キャラ窓・バルーン窓の双方について識別可能な形で受け取れること, so that 各窓へ `EmoPresenter` を装着できる
 
 #### Acceptance Criteria
-1. When 窓を生成したとき, the 窓配置機構 shall キャラ窓（スコープ別）とバルーン窓の Window entity を後続が取得可能な形で公開する。
-2. The 窓配置機構 shall バルーン窓を識別できるキーで公開し、スコープ番号のみでは balloon 窓を取り出せない事態を避ける。
+1. When 窓を生成したとき, the 窓配置機構 shall スコープ別のキャラ窓とスコープ別のバルーン窓の Window entity を後続が取得可能な形で公開する。
+2. The 窓配置機構 shall 各窓を「スコープ×種別（キャラ窓／バルーン窓）」で識別できるキーで公開し、スコープ番号のみでは各スコープのバルーン窓を取り出せない事態を避ける。
 3. The 窓配置機構 shall `EmoPresenter` の装着呼出しを自ら行わず、装着は emo2-boot の領分とする。
 
 ### Requirement 7: 窓移動の公開 API（UI スレッド）
