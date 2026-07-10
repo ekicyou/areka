@@ -40,7 +40,7 @@
   - _Depends: 2.1_
   - _Boundary: placement::resolver_
 
-- [ ] 3.2 free 配置規則・バルーン暫定 offset・全モニタ和ヘルパを実装する
+- [x] 3.2 free 配置規則・バルーン暫定 offset・全モニタ和ヘルパを実装する
   - P3（free 時 `char_x = work_area.left + defaultleft`／`char_y = work_area.top + defaulttop`、未指定成分は bottom 相当へフォールバック）を実装する
   - P5（バルーン暫定 offset: `balloon.alignment=left` → `balloon_x = char_x − balloon_w`、`right` → `balloon_x = char_x + w`、`balloon_y = char_y`、`balloon.offsetx/offsety` があれば加算、クランプなし）を実装する
   - `virtual_desktop_union(monitor_bounds: &[RectPx]) -> Option<RectPx>`（全モニタ矩形の和・空入力は `None`）を実装する

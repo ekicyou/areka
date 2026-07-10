@@ -5,13 +5,14 @@
 //! （論理 DIP・DPI は署名に登場しない）。std＋tracing のみに依存し wintf 型を
 //! import しない（DPI パラメタ化単体テストの前提・U5）。
 //!
-//! task 3.1 の範囲は P1／P2／P4（＋Seam=Bottom 同一出力・DD9）。
-//! P3（free の defaultleft/defaulttop 適用・DD10）・P5（バルーン暫定 offset・DD7）・
-//! `virtual_desktop_union`（4.6・DD8）は task 3.2 で実装する。
+//! 配置規則 P1〜P5（design「placement::resolver」正本）と
+//! `virtual_desktop_union`（4.6・DD8）を持つ。座標演算は `saturating_add`/
+//! `saturating_sub` で行う（極端値でも debug オーバーフロー panic しない＝
+//! 「パニックしない」契約の防波堤。通常入力では通常の加減算と同値）。
 
 use tracing::warn;
 
-use super::config::{Alignment, PlacementConfig, ScopeConfig};
+use super::config::{Alignment, BalloonSide, PlacementConfig, ScopeConfig};
 
 /// 物理 px の矩形（スクリーン座標系・wintf 非依存）。
 #[allow(dead_code)] // scaffold（task 3.1）: main.rs シーム（task 6）が結線するまで非テストビルドでは未使用
@@ -69,17 +70,14 @@ pub struct ScopePlacement {
     pub char_pos: PointPx,
     /// キャラ窓寸（入力の転記）。
     pub char_size: SizePx,
-    /// バルーン窓の左上位置（物理 px）。
-    ///
-    /// P5（`balloon.alignment` 由来の暫定 offset・DD7）は task 3.2 で実装する。
-    /// それまでは `char_pos` と同値（offset ゼロの暫定・意味論の先取りはしない）。
+    /// バルーン窓の左上位置（物理 px・P5 の暫定 offset 適用済み・クランプなし）。
     pub balloon_pos: PointPx,
     /// バルーン窓寸（入力の転記）。
     pub balloon_size: SizePx,
     /// `balloon_pos − char_pos`（追従用に配置時確定・物理 px）。
     ///
     /// 恒等式 `balloon_offset ≡ balloon_pos − char_pos` は恒久の事後条件
-    /// （design Postconditions）。task 3.1 時点の値は暫定ゼロ。
+    /// （design Postconditions）。
     pub balloon_offset: PointPx,
 }
 
@@ -93,10 +91,17 @@ pub struct ScopePlacement {
 ///   `char_x(n) = base_x(n) − default_x(n).unwrap_or(0)`（左方向オフセット・
 ///   0＝基準密着・2.10・DD3）。連鎖の `char_x(n−1)` は **P4 クランプ後**の実配置
 ///   （後続スコープは前スコープの実際の位置の左隣に置く）。
+/// - **P3（free・DD10）**: `alignment=Free` のとき原点は **work area 左上**。
+///   `char_x = work_area.left + default_x`／`char_y = work_area.top + default_y`。
+///   未指定成分は bottom 相当値（X→P2 連鎖値・Y→P1 値）へフォールバック（2.6）。
 /// - **P4（クランプ）**: キャラ窓のみ `x ∈ [left, right−w]`・`y ∈ [top, bottom−h]`
-///   （DD12）。窓が work area より大きく区間が逆転する場合は left／top 側を優先。
-/// - **P3（free・DD10）は task 3.2**: それまで `Alignment::Free` は未指定成分
-///   フォールバック（2.6）と同じ bottom 相当で配置する（emo2 は free 未使用）。
+///   （DD12・free 含む全 alignment）。窓が work area より大きく区間が逆転する場合は
+///   left／top 側を優先。P2 連鎖の基準はクランプ後の実配置（alignment 不問）。
+/// - **P5（バルーン暫定 offset・DD7）**: `balloon.alignment=Left`（既定）→
+///   `balloon_x = char_x − balloon_w`、`Right` → `balloon_x = char_x + char_w`。
+///   `balloon_y = char_y`（上端揃え）。`balloon.offsetx/offsety` があれば加算。
+///   **クランプなし**（バルーンは work area 外へ素直にはみ出す）。offset は
+///   配置時に確定し以後静的（4.4: 正式規則は balloon 表示系の後続へ委ねる）。
 /// - **Seam の warn**: `Alignment::Seam` の警告ログは config 側から本関数
 ///   （シーム値を実際に消費する層）へ委ねられている（config.rs の Alignment doc・
 ///   DD9）。tracing への `warn!` は I/O を持たない決定論的な副チャネルであり、
@@ -128,38 +133,65 @@ pub fn resolve_placement(
                 "alignmenttodesktop の未使用値（bottom として配置・2.8/DD9）"
             );
         }
-        // Alignment::Free の P3（DD10）は task 3.2。それまでは Bottom|Seam と
-        // 同じ bottom 相当（未指定成分フォールバック・2.6）で配置する。
-
         let SizePx { w, h } = input.char_size;
 
-        // P1: Y は work area 下端固定・default_y（defaulttop/defaulty）は無視（2.4）
-        let y = work_area.bottom - h;
+        // P1: bottom 相当の Y＝work area 下端固定・default_y は無視（2.4）。
+        //     free の Y 未指定成分のフォールバック先でもある（2.6）
+        let bottom_y = work_area.bottom.saturating_sub(h);
 
         // P2: base_x(0)=right−w0・base_x(n≥1)=char_x(n−1)−w(n−1)（2.9）・
-        //     char_x(n)=base_x(n)−defaultx(n).unwrap_or(0)（左方向オフセット・2.10/DD3）
+        //     char_x(n)=base_x(n)−defaultx(n).unwrap_or(0)（左方向オフセット・2.10/DD3）。
+        //     free の X 未指定成分のフォールバック先でもある（2.6・その場合
+        //     default_x は None ゆえオフセット項は 0）
         let base_x = match prev {
-            None => work_area.right - w,
-            Some((prev_x, prev_w)) => prev_x - prev_w,
+            None => work_area.right.saturating_sub(w),
+            Some((prev_x, prev_w)) => prev_x.saturating_sub(prev_w),
         };
-        let x = base_x - sc.default_x.unwrap_or(0);
+        let bottom_x = base_x.saturating_sub(sc.default_x.unwrap_or(0));
 
-        // P4: キャラ窓のみ work area 内へクランプ（DD12）
-        let x = clamp_axis(x, work_area.left, work_area.right - w);
-        let y = clamp_axis(y, work_area.top, work_area.bottom - h);
+        // P3: free は work area **左上**原点＋defaultleft/defaulttop（DD10）。
+        //     指定成分のみ適用し、未指定成分は bottom 相当値へ（2.6）
+        let (x, y) = if sc.alignment == Alignment::Free {
+            (
+                sc.default_x
+                    .map_or(bottom_x, |dx| work_area.left.saturating_add(dx)),
+                sc.default_y
+                    .map_or(bottom_y, |dy| work_area.top.saturating_add(dy)),
+            )
+        } else {
+            (bottom_x, bottom_y)
+        };
+
+        // P4: キャラ窓のみ work area 内へクランプ（DD12・free 含む全 alignment）
+        let x = clamp_axis(x, work_area.left, work_area.right.saturating_sub(w));
+        let y = clamp_axis(y, work_area.top, work_area.bottom.saturating_sub(h));
 
         prev = Some((x, w));
+
+        // P5: バルーン暫定 offset（DD7・クランプなし）。left（既定）＝キャラ左隣・
+        //     right＝キャラ右隣・上端揃え・balloon.offsetx/offsety があれば加算
+        let balloon_base_x = match sc.balloon_alignment {
+            BalloonSide::Left => x.saturating_sub(input.balloon_size.w),
+            BalloonSide::Right => x.saturating_add(w),
+        };
+        let (ox, oy) = sc.balloon_offset.unwrap_or((0, 0));
+        let balloon_pos = PointPx {
+            x: balloon_base_x.saturating_add(ox),
+            y: y.saturating_add(oy),
+        };
 
         let char_pos = PointPx { x, y };
         out.push(ScopePlacement {
             scope: input.scope,
             char_pos,
             char_size: input.char_size,
-            // P5（balloon.alignment 由来の暫定 offset・DD7）は task 3.2。
-            // それまでは offset ゼロの暫定（恒等式 balloon_offset≡balloon_pos−char_pos 維持）。
-            balloon_pos: char_pos,
+            balloon_pos,
             balloon_size: input.balloon_size,
-            balloon_offset: PointPx { x: 0, y: 0 },
+            // 事後条件: balloon_offset ≡ balloon_pos − char_pos（design Postconditions）
+            balloon_offset: PointPx {
+                x: balloon_pos.x.saturating_sub(char_pos.x),
+                y: balloon_pos.y.saturating_sub(char_pos.y),
+            },
         });
     }
 
@@ -171,6 +203,22 @@ pub fn resolve_placement(
 /// `i32::clamp` は逆転区間で panic するため使わない（resolver は panic しない契約）。
 fn clamp_axis(v: i32, lo: i32, hi: i32) -> i32 {
     v.min(hi).max(lo)
+}
+
+/// 全モニタ bounds の和（仮想デスクトップ・物理 px・4.6/DD8）。空入力は `None`
+/// （モニタ 0 面に架空の既定矩形を発明しない）。
+///
+/// M1 では `DragConstraint` を付与しない（DD8: 無制約＝仮想デスクトップ全域
+/// ドラッグ可）ため未結線だが、制約を適用する将来の消費側の正規算出規則として
+/// ここで提供・テストする（07-05 の単一モニタ誤釘付けの欠陥面を消す規則）。
+#[allow(dead_code)] // DD8: M1 は DragConstraint 非付与＝将来の消費側向け正規規則（テストのみが消費）
+pub fn virtual_desktop_union(monitor_bounds: &[RectPx]) -> Option<RectPx> {
+    monitor_bounds.iter().copied().reduce(|a, b| RectPx {
+        left: a.left.min(b.left),
+        top: a.top.min(b.top),
+        right: a.right.max(b.right),
+        bottom: a.bottom.max(b.bottom),
+    })
 }
 
 #[cfg(test)]
@@ -552,7 +600,362 @@ mod tests {
     }
 
     // ------------------------------------------------------------------
-    // 事後条件（design Postconditions・恒久不変条件のみ。P5 の意味論は task 3.2）
+    // T-R4: free 配置（P3・2.6・DD10）
+    // ------------------------------------------------------------------
+
+    /// T-R4: free で `defaultleft`/`defaulttop` 両指定 → work area **左上**原点で
+    /// `char_x = left + dx`・`char_y = top + dy`（DD10）。原点非 (0,0) の work area
+    /// で left/top 依存を固定する（bottom の right 基準と混同しない檻）。
+    #[test]
+    fn t_r4_free_applies_default_left_top_from_work_area_origin() {
+        for dpi in DPIS {
+            let wa = offset_work_area(dpi);
+            let (w, h) = (px(400, dpi), px(600, dpi));
+            let (dx, dy) = (px(120, dpi), px(80, dpi));
+            let cfg = cfg_of(vec![(0, scope_cfg(Alignment::Free, Some(dx), Some(dy)))]);
+
+            let out = resolve_placement(&cfg, wa, &[input(0, w, h)]);
+
+            assert_eq!(
+                out[0].char_pos,
+                PointPx {
+                    x: wa.left + dx,
+                    y: wa.top + dy
+                },
+                "dpi={dpi}: free は work area 左上原点＋オフセット"
+            );
+        }
+    }
+
+    /// T-R4: free で Y 未指定 → Y のみ bottom 相当（`bottom − h`）へフォールバック
+    /// （2.6）。X は左上原点適用のまま。
+    #[test]
+    fn t_r4_free_unspecified_y_falls_back_to_bottom() {
+        for dpi in DPIS {
+            let wa = offset_work_area(dpi);
+            let (w, h) = (px(400, dpi), px(600, dpi));
+            let dx = px(120, dpi);
+            let cfg = cfg_of(vec![(0, scope_cfg(Alignment::Free, Some(dx), None))]);
+
+            let out = resolve_placement(&cfg, wa, &[input(0, w, h)]);
+
+            assert_eq!(
+                out[0].char_pos,
+                PointPx {
+                    x: wa.left + dx,
+                    y: wa.bottom - h
+                },
+                "dpi={dpi}: Y 未指定は bottom 相当"
+            );
+        }
+    }
+
+    /// T-R4: free で X 未指定 → X のみ bottom 相当（P2 連鎖値＝scope0 は右端密着）へ
+    /// フォールバック（2.6）。Y は左上原点適用のまま。
+    #[test]
+    fn t_r4_free_unspecified_x_falls_back_to_bottom_chain() {
+        for dpi in DPIS {
+            let wa = offset_work_area(dpi);
+            let (w, h) = (px(400, dpi), px(600, dpi));
+            let dy = px(80, dpi);
+            let cfg = cfg_of(vec![(0, scope_cfg(Alignment::Free, None, Some(dy)))]);
+
+            let out = resolve_placement(&cfg, wa, &[input(0, w, h)]);
+
+            assert_eq!(
+                out[0].char_pos,
+                PointPx {
+                    x: wa.right - w,
+                    y: wa.top + dy
+                },
+                "dpi={dpi}: X 未指定は P2 の bottom 相当値（scope0＝右端密着）"
+            );
+        }
+    }
+
+    /// T-R4 補: free で両成分未指定 → Bottom と完全同一の出力（2.6 の極限）。
+    #[test]
+    fn t_r4_free_both_unspecified_equals_bottom() {
+        for dpi in DPIS {
+            let wa = offset_work_area(dpi);
+            let inputs = [
+                input(0, px(400, dpi), px(600, dpi)),
+                input(1, px(320, dpi), px(480, dpi)),
+            ];
+            let free = cfg_of(vec![
+                (0, scope_cfg(Alignment::Free, None, None)),
+                (1, scope_cfg(Alignment::Free, None, None)),
+            ]);
+            let bottom = cfg_of(vec![
+                (0, scope_cfg(Alignment::Bottom, None, None)),
+                (1, scope_cfg(Alignment::Bottom, None, None)),
+            ]);
+
+            let out_free = resolve_placement(&free, wa, &inputs);
+            let out_bottom = resolve_placement(&bottom, wa, &inputs);
+            assert_eq!(out_free.len(), 2, "dpi={dpi}: 空虚一致封じ");
+            assert_eq!(out_free, out_bottom, "dpi={dpi}: 全未指定 free ≡ bottom");
+        }
+    }
+
+    /// T-R4 補: free もキャラ窓クランプ（P4・DD12）の対象（過大 offset は
+    /// work area 右下で停止＝画面内出現の安全弁は alignment を選ばない）。
+    #[test]
+    fn t_r4_free_is_clamped_into_work_area() {
+        for dpi in DPIS {
+            let wa = offset_work_area(dpi);
+            let (w, h) = (px(400, dpi), px(600, dpi));
+            let huge = px(40000, dpi);
+            let cfg = cfg_of(vec![(0, scope_cfg(Alignment::Free, Some(huge), Some(huge)))]);
+
+            let out = resolve_placement(&cfg, wa, &[input(0, w, h)]);
+
+            assert_eq!(
+                out[0].char_pos,
+                PointPx {
+                    x: wa.right - w,
+                    y: wa.bottom - h
+                },
+                "dpi={dpi}: free も P4 クランプで画面内"
+            );
+        }
+    }
+
+    /// T-R4 補: free で配置した scope0 の実位置が後続の P2 連鎖基準になる
+    /// （連鎖は alignment を選ばず「前スコープの実配置の左隣」）。
+    #[test]
+    fn t_r4_free_position_feeds_scope_chain() {
+        for dpi in DPIS {
+            let wa = offset_work_area(dpi);
+            let (w0, h0) = (px(400, dpi), px(600, dpi));
+            let (w1, h1) = (px(320, dpi), px(480, dpi));
+            let (dx, dy) = (px(800, dpi), px(80, dpi));
+            let cfg = cfg_of(vec![
+                (0, scope_cfg(Alignment::Free, Some(dx), Some(dy))),
+                (1, scope_cfg(Alignment::Bottom, Some(0), None)),
+            ]);
+
+            let out = resolve_placement(&cfg, wa, &[input(0, w0, h0), input(1, w1, h1)]);
+
+            let x0 = wa.left + dx;
+            assert_eq!(out[0].char_pos.x, x0, "dpi={dpi}");
+            assert_eq!(
+                out[1].char_pos,
+                PointPx {
+                    x: x0 - w0,
+                    y: wa.bottom - h1
+                },
+                "dpi={dpi}: base_x(1)=char_x(0)−w0（free 実位置基準）"
+            );
+        }
+    }
+
+    // ------------------------------------------------------------------
+    // T-R8: バルーン暫定 offset（P5・4.4・DD7）
+    // ------------------------------------------------------------------
+
+    /// バルーン構成つき ScopeConfig（T-R8 用）。
+    fn scope_cfg_balloon(
+        default_x: Option<i32>,
+        balloon_alignment: BalloonSide,
+        balloon_offset: Option<(i32, i32)>,
+    ) -> ScopeConfig {
+        ScopeConfig {
+            alignment: Alignment::Bottom,
+            default_x,
+            default_y: None,
+            balloon_alignment,
+            balloon_offset,
+        }
+    }
+
+    /// T-R8: `balloon.alignment=left`（既定） → `balloon_x = char_x − balloon_w`・
+    /// `balloon_y = char_y`（上端揃え・DD7）。恒等式も確認。
+    #[test]
+    fn t_r8_balloon_left_places_left_of_char() {
+        for dpi in DPIS {
+            let wa = work_area(dpi);
+            let (w, h) = (px(400, dpi), px(600, dpi));
+            let inp = input(0, w, h);
+            let bw = inp.balloon_size.w;
+            let cfg = cfg_of(vec![(
+                0,
+                scope_cfg_balloon(Some(px(40, dpi)), BalloonSide::Left, None),
+            )]);
+
+            let out = resolve_placement(&cfg, wa, &[inp]);
+
+            let cp = out[0].char_pos;
+            assert_eq!(
+                out[0].balloon_pos,
+                PointPx {
+                    x: cp.x - bw,
+                    y: cp.y
+                },
+                "dpi={dpi}: left はキャラ左隣・上端揃え"
+            );
+            assert_eq!(
+                out[0].balloon_offset,
+                PointPx { x: -bw, y: 0 },
+                "dpi={dpi}: balloon_offset ≡ balloon_pos − char_pos"
+            );
+        }
+    }
+
+    /// T-R8: `balloon.alignment=right` → `balloon_x = char_x + w`（キャラ右隣・DD7）。
+    /// scope0 右端密着では `balloon_x = work_area.right`＝work area 外だが、
+    /// バルーンはクランプなし（P5）＝そのままの幾何値を返す。
+    #[test]
+    fn t_r8_balloon_right_places_right_of_char_without_clamp() {
+        for dpi in DPIS {
+            let wa = work_area(dpi);
+            let (w, h) = (px(400, dpi), px(600, dpi));
+            let cfg = cfg_of(vec![(0, scope_cfg_balloon(Some(0), BalloonSide::Right, None))]);
+
+            let out = resolve_placement(&cfg, wa, &[input(0, w, h)]);
+
+            let cp = out[0].char_pos;
+            assert_eq!(cp.x, wa.right - w, "dpi={dpi}: 前提＝右端密着");
+            assert_eq!(
+                out[0].balloon_pos,
+                PointPx {
+                    x: wa.right,
+                    y: cp.y
+                },
+                "dpi={dpi}: right はキャラ右隣・クランプなしで work area 外可"
+            );
+            assert_eq!(
+                out[0].balloon_offset,
+                PointPx { x: w, y: 0 },
+                "dpi={dpi}: balloon_offset ≡ balloon_pos − char_pos"
+            );
+        }
+    }
+
+    /// T-R8: `balloon.offsetx/offsety` は alignment 由来の幾何値へ加算（DD7）。
+    #[test]
+    fn t_r8_balloon_offsetx_offsety_added() {
+        for dpi in DPIS {
+            let wa = work_area(dpi);
+            let (w, h) = (px(400, dpi), px(600, dpi));
+            let inp = input(0, w, h);
+            let bw = inp.balloon_size.w;
+            let (ox, oy) = (px(24, dpi), -px(32, dpi));
+            let cfg = cfg_of(vec![(
+                0,
+                scope_cfg_balloon(Some(px(40, dpi)), BalloonSide::Left, Some((ox, oy))),
+            )]);
+
+            let out = resolve_placement(&cfg, wa, &[inp]);
+
+            let cp = out[0].char_pos;
+            assert_eq!(
+                out[0].balloon_pos,
+                PointPx {
+                    x: cp.x - bw + ox,
+                    y: cp.y + oy
+                },
+                "dpi={dpi}: offsetx/y 加算"
+            );
+            assert_eq!(
+                out[0].balloon_offset,
+                PointPx {
+                    x: -bw + ox,
+                    y: oy
+                },
+                "dpi={dpi}: balloon_offset ≡ balloon_pos − char_pos"
+            );
+        }
+    }
+
+    /// T-R8 補: バルーンにクランプなし（P5）＝キャラが左端クランプされた状態の
+    /// left バルーンは work area 左外（負方向）へ素直にはみ出す。
+    #[test]
+    fn t_r8_balloon_never_clamped_even_outside_work_area() {
+        for dpi in DPIS {
+            let wa = offset_work_area(dpi);
+            let (w, h) = (px(400, dpi), px(600, dpi));
+            let inp = input(0, w, h);
+            let bw = inp.balloon_size.w;
+            // キャラを左端クランプへ追い込む（T-R6 と同型）
+            let cfg = cfg_of(vec![(
+                0,
+                scope_cfg_balloon(Some(px(40000, dpi)), BalloonSide::Left, None),
+            )]);
+
+            let out = resolve_placement(&cfg, wa, &[inp]);
+
+            assert_eq!(out[0].char_pos.x, wa.left, "dpi={dpi}: 前提＝左端クランプ");
+            assert_eq!(
+                out[0].balloon_pos.x,
+                wa.left - bw,
+                "dpi={dpi}: バルーンは work area 左外でもクランプしない"
+            );
+        }
+    }
+
+    // ------------------------------------------------------------------
+    // T-R7: virtual_desktop_union（4.6・DD8）
+    // ------------------------------------------------------------------
+
+    /// T-R7: 複数モニタ矩形の和＝各辺の min/max。プライマリ左に負座標モニタ・
+    /// 上に高さ違いモニタを置いた 3 面構成で固定する。
+    #[test]
+    fn t_r7_union_spans_monitors_including_negative_coords() {
+        for dpi in DPIS {
+            let primary = RectPx {
+                left: 0,
+                top: 0,
+                right: px(1920, dpi),
+                bottom: px(1080, dpi),
+            };
+            // プライマリの左（負座標・少し上へずれた縦位置）
+            let left_monitor = RectPx {
+                left: -px(1920, dpi),
+                top: -px(40, dpi),
+                right: 0,
+                bottom: px(1040, dpi),
+            };
+            // プライマリの上（小型・右へ寄せ）
+            let top_monitor = RectPx {
+                left: px(480, dpi),
+                top: -px(720, dpi),
+                right: px(480 + 1280, dpi),
+                bottom: 0,
+            };
+
+            let union = virtual_desktop_union(&[primary, left_monitor, top_monitor]);
+
+            assert_eq!(
+                union,
+                Some(RectPx {
+                    left: -px(1920, dpi),
+                    top: -px(720, dpi),
+                    right: px(1920, dpi),
+                    bottom: px(1080, dpi),
+                }),
+                "dpi={dpi}: 和＝min(left,top)/max(right,bottom)"
+            );
+        }
+    }
+
+    /// T-R7 補: 単一モニタの和はその矩形そのもの。
+    #[test]
+    fn t_r7_union_single_monitor_is_identity() {
+        for dpi in DPIS {
+            let m = work_area(dpi);
+            assert_eq!(virtual_desktop_union(&[m]), Some(m), "dpi={dpi}");
+        }
+    }
+
+    /// T-R7 補: 空入力は `None`（モニタ 0 面に架空の既定矩形を発明しない）。
+    #[test]
+    fn t_r7_union_empty_input_is_none() {
+        assert_eq!(virtual_desktop_union(&[]), None);
+    }
+
+    // ------------------------------------------------------------------
+    // 事後条件（design Postconditions・恒久不変条件）
     // ------------------------------------------------------------------
 
     /// 事後条件: 出力長＝入力長・入力順保存・寸法転記・
