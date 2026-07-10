@@ -347,7 +347,12 @@ pub struct TextSlotBinding {
     pub slot: Entity,            // 予約スロット（emo-text-layer-slot）
     pub window: Entity,          // 装着先の窓
     pub scale: f32,              // 合成スケール k（TextSlotView.scale 由来）
-    pub surface_size: (u32, u32),// バルーン surface 物理原寸（validrect の物理化に使用）
+    pub surface_size: (u32, u32),// バルーン surface 物理原寸（TextSurface/swapchain の物理化に使用）
+    /// 画像座標空間の原寸（負値=反対辺解決・TextRegion::resolve の入力）。
+    /// **構築時に一点導出**: `image_size = round(surface_size / k)`（k=1.0 恒常の現行契約では
+    /// surface_size と同値）。TextRegion::resolve へ物理 px を渡すのはレビューエラー
+    /// （2 空間モデルの綻び目をここで構造閉塞——validation Issue 2 対応）。
+    pub image_size: (u32, u32),
 }
 
 /// 結線 API（UI スレッドから呼ぶ）
@@ -504,7 +509,7 @@ impl TextRegion {
 pub trait GlyphMetrics {
     /// グリフの行内送り幅（image px）。writing_mode の行内軸方向の寸
     fn advance(&self, ch: char, font_height: f32) -> f32;
-    /// 行送りピッチ（image px）。M1 正準: font.height * 1.25 を切上げ（LayoutParams で調整可）
+    /// 行送りピッチ（image px）。M1 正準: font.height * 1.25 を切上げ（TextLayerConfig の line_pitch 係数で調整可）
     fn line_pitch(&self, font_height: f32) -> f32;
 }
 
@@ -694,7 +699,7 @@ impl EmoPresenter {
 - Integration: `WinApp` 起動→窓生成→`build_balloon_target`（共有 fixture `crates/pilot/examples/shiori-host-32/fixtures/emo2/emo2-kakukaku/`・emo-present example と同じ相対パス解決）→`EmoPresenter::attach_target`＋`apply(ShowSurface)` でバルーン枠表示→`text_slot_view` 取得→`spawn_emo_text`＋routing 登録→fixture スクリプト（boot.pasta の挨拶文）由来のハードコード cue 列（`TalkCue { at, actor, command }`）を注入時刻で feed→毎フレーム `present_frame(runtime, world, talk_time)`（talk_time＝フレーム時刻−talk 開始・実時間 sleep 不使用）。
 - 観測シナリオ（単一実行内で順に・各段で readback による構造 assert→最後に PASS/FAIL 出力）: (a) typewriter 進行（可視ピクセル数の単調増加・R11.2）→ (b) `NewLine`＋長文で validrect あふれ→スクロール（先頭行の消失を readback で確認・R11.3）→ (c) `Clear`（テキスト領域が全透明へ・R11.5）。複数 actor は fixture script の \0/\1 に従い 2 target（sakura/kero バルーン）へ振り分け（R11.8・単一 actor 構成でも成立）。
 - **縦横切替（R11.4）**: 起動引数 `--vertical` で balloon descript の読み込み元を example ローカル fixture 変種（`examples/fixtures/emo2-vertical/`——`descript.txt` 基層に `writing_mode,vertical_rl`＋有意な `wordwrappoint.y`、`balloons0s.txt` 上書き層）へ切替（枠画像は共有 fixture を継続使用・balloon descript の parse 入力だけ差し替え）。共有 fixture は改変しない。マーカー無し既定 `horizontal_tb` は通常起動が裏取りする。
-- **DPI 観測（R11.9）**: example 起動時に実モニタ DPI をログし、バルーン枠とテキストの整合（validrect 内に収まる・枠画像とズレない）を非 96 DPI 環境含む実 DPI で目視確認する手順を example ヘッダ doc に記載（emo-present example の手動検証手順と同型）。スケール写像の構造検証は k≠1（1.25/2.0）の純粋テストで檻化（実行時 k は現行契約で 1.0 恒常＝物理 1:1・「テスト緑」だけを証明とせず実 DPI 実行を DoD 手順に含める）。
+- **DPI 観測（R11.9）**: example 起動時に実モニタ DPI をログし、バルーン枠とテキストの整合（validrect 内に収まる・枠画像とズレない）を非 96 DPI 環境含む実 DPI で目視確認する手順を example ヘッダ doc に記載（emo-present example の手動検証手順と同型）。スケール写像の構造検証は k≠1（1.25/2.0）の純粋テストで檻化——`image_size = round(surface_size / k)` の一点導出込み（実行時 k は現行契約で 1.0 恒常＝物理 1:1・「テスト緑」だけを証明とせず実 DPI 実行を DoD 手順に含める）。**DoD 申し送り**: 実行時 k≠1 経路は上流（emo-present/placement）が k≠1 を供給し次第、本 example を再実行して検証する（Revalidation Trigger と対）。
 
 ## Data Models
 
@@ -716,7 +721,7 @@ impl EmoPresenter {
 | NewLine{ratio} | 行送り量 = line_pitch × ratio | 同（列送り） | 同 |
 
 補足正準（本表と一体）:
-- **行送りピッチ**: `line_pitch = ceil(font.height × 1.25)`（image px・`LayoutParams` で調整可能。SSP の行間はユーザ設定＝正典値なしのため areka 裁量値）。
+- **行送りピッチ**: `line_pitch = ceil(font.height × 1.25)`（image px・`TextLayerConfig` の line_pitch 係数で調整可能。SSP の行間はユーザ設定＝正典値なしのため areka 裁量値）。
 - **wordwrappoint.y の典拠**: ukadoc は `wordwrappoint.x` のみ記載（縦書き自体が areka 独自機能）。`.y` は balloon-parse が転記済み（`parse.rs` L74-75）の areka 拡張読みであり、本表が意味論の正典。
 - fixture 実測: 現 fixture は `wordwrappoint.y,0`＝縦書き折返しが退化するため、縦書き観測は example ローカル fixture 変種で有意値を与える（File Structure Plan 参照）。
 
@@ -730,6 +735,7 @@ impl EmoPresenter {
 | フォントサイズの写像 | DirectWrite fontsize ＝ `font.height` の値そのまま（96 DPI 名目下で image px ≡ DIP） |
 | k の共有点 | `TextSlotView.scale`（バルーン surface と同一の合成スケール・現行契約 1.0 恒常） |
 | k の算出責務 | emo-present/placement（将来 k=モニタ DPI ÷ author_dpi）。本層は消費のみ |
+| image px 原寸の供給 | `TextSlotBinding.image_size = round(surface_size / k)`（**binding 構築時の一点導出**・k=1.0 恒常の現行契約では surface_size と同値）。`TextRegion::resolve` の入力は必ず image_size |
 | 物理寸 | `ceil(validrect 寸 × k)`＝TextSurface/swapchain/Arrangement の単位（物理 px 直接・論理 px 不在） |
 | ukadoc `dpi` キー | 「推奨 DPI＝制作環境の宣言」のみで拡縮挙動は正典無言→上記を areka 正準として本書が確定 |
 
@@ -781,7 +787,7 @@ pub enum TextLayerError {
 3. **領域解決**（region.rs）: 負値=反対辺（fixture 実値 top46/bottom-56/left36/right-44 で非退化矩形）・origin クランプ正準（(0,0)→(36,46)）・2層マージ後のみ非退化になる fixture 再現（R4.3, R4.4）。
 4. **writing_mode 解決**（writing.rs）: 3 語彙受理・マーカー無し既定・未知値 warn+fallback（ログは tracing 購読で檻化）・方向写像 1:1（R5.1-5.5）。
 5. **レイアウト＋スクロール**（layout.rs・FixedMetrics 注入）: 折返し位置・行送り・あふれ発火・可視窓決定を横/縦（vertical_rl）両モードで（R4.5, R6.1-6.3, R7.5, R11.6）。
-6. **スケール写像**（region.rs）: k=1.0/1.25/2.0 で物理寸・オフセットの写像検証＋レイアウト決定の k 不変性（R11.9 構造側）。
+6. **スケール写像**（region.rs）: k=1.0/1.25/2.0 で物理寸・オフセット・`image_size = round(surface_size / k)` 導出の写像検証＋レイアウト決定の k 不変性（R11.9 構造側）。
 7. **parsers 増分**（areka-parsers 側）: writing_mode 転記 4 ケース（単層/上書き/未指定/未知値素通し）（R5.6）。
 
 ### Integration Tests
