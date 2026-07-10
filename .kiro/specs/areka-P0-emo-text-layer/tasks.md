@@ -3,7 +3,7 @@
 > crate↔spec 名マッピング: 本 spec `areka-P0-emo-text-layer` の実装 crate 名は `areka-emo-text`（design.md 冒頭確定）。
 
 - [ ] 1. 基盤: crate 雛形と隣接 crate への additive 増分
-- [ ] 1.1 emo テキスト層 crate を雛形化し、層規律（純粋層/COM層/結線層の分離）と共通エラー型を用意する
+- [x] 1.1 emo テキスト層 crate を雛形化し、層規律（純粋層/COM層/結線層の分離）と共通エラー型を用意する
   - 純粋な計算モジュール群が windows 依存を一切持たない構造で crate をビルド可能にする
   - 失敗は panic でなく log-first（error!＋Err 戻り値）で扱う共通エラー型を用意し、デバイス失敗・スロット未接続などの区分を持たせる
   - 観測可能な完了状態: crate が空実装のまま `cargo build` を通過し、純粋層モジュールに `windows` の import が一つも無いことを確認できる

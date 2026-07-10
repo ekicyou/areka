@@ -1,0 +1,16 @@
+[package]
+name = "areka-emo-text"
+workspace = "../.."
+description = "emo render engine テキスト層（emo track 第4 crate・spec: areka-P0-emo-text-layer）: sakura の Balloon 向け TalkCue を受け、emo-present が予約したバルーン上スロット（emo-text-layer-slot）へ文字を描く層"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[dependencies]
+# 共通エラー型（TextLayerError）の derive。
+thiserror = { workspace = true }
+# log-first 規律（失敗は error!＋Err 戻り値・安易な panic 禁止）の記録手段。
+tracing = { workspace = true }
