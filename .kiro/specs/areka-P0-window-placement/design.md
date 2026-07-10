@@ -580,6 +580,7 @@ pub fn prepare_ghost_windows(ghost_root: &Path, balloon_root: &Path)
 
 - 構成: `prepare_ghost_windows`（fixture パス）→ `spawn_ghost_windows` → **emo-present donor の装着経路**（`EmoPresenter::attach_target`）で scope0 キャラ窓に surface0・scope1 キャラ窓に surface10・両バルーン窓に balloon target を装着（example は dev-dependency の areka-emo-present を使用可。**本体 placement モジュールは emo-present を import しない**＝6.3 維持）
 - rustdoc に手動観測プロトコルを記載（emo-present の実 DPI 手順の先行例に倣う）: ①per-monitor v2・dpi≠96（例 125%＝120）で実行 ②scope0 が work area 右下・scope1 がその左（surface 幅ぶん）に**画面内**出現 ③キャラ窓全面ドラッグでバルーンが追従 ④モニタ境界を跨ぐドラッグで消失しない ⑤結果と実 DPI 値を記録。**dpi=96 のみの確認は不合格**（3.5）
+- **観測注記（設計討議 #1 確定・pass/fail から明示除外）**: emo2 実測値（`kero.balloon.alignment,right`・両スコープ `defaultx,0`）では P5 幾何により **scope1 のバルーンが scope0 キャラ窓に重なって出現する（`balloon_x(1) = char_x(0) − w0 + w1`）。これは暫定規則（2.9 重なり回避なし・4.4 暫定 offset）の正常挙動であり配置破綻ではない**。重畳域ではバルーン不透明部（surface0 内側 A=255）が αマスクで先にヒットし scope0 でなくバルーンが掴まれるのも正常。正式なバルーン配置規則は balloon 表示系の後続が所有する。rustdoc に期待図とこの注記を必ず記載し、受け入れ判定の対象外とする
 
 ## Data Models
 
