@@ -48,6 +48,10 @@ pub enum ApplyOutcome {
 pub struct ScopeStates {
     /// 話者スコープごとの現 surface 状態（`ActorKey` は `Ord` 非対応ゆえ HashMap・design）。
     scopes: HashMap<ActorKey, ScopeState>,
+    /// バルーン面のスコープごとの現 surface 状態（シェル面 `scopes` とは**別 map** で同居・
+    /// 要件 4.3/4.6）。同型 [`ScopeState`] だが独立し、`apply_balloon` のみが変更する。
+    /// シェル面と相互に不変（`apply()` は触らない・`static_binds` はバルーンでは使わない）。
+    balloon: HashMap<ActorKey, ScopeState>,
     /// 静的 bind 集合（起動時に一度だけ解決・以後不変・要件 4.2/4.3/4.4）。
     static_binds: BindSet,
 }
@@ -60,6 +64,7 @@ impl ScopeStates {
     pub fn new(static_binds: BindSet) -> Self {
         Self {
             scopes: HashMap::new(),
+            balloon: HashMap::new(),
             static_binds,
         }
     }
@@ -114,6 +119,59 @@ impl ScopeStates {
                 })
             }
             // 呼び手が先に skip する（正規経路）。防御的に無変更・無発行（要件 6.1）。
+            SurfaceTarget::Unresolved => ApplyOutcome::Unchanged,
+        }
+    }
+
+    /// 1 つの解決済みバルーン面指令を対象スコープへ適用する（[`apply`] の鏡映・要件 4.3/4.6）。
+    ///
+    /// シェル面 `scopes` とは独立した `balloon` map のみを触り、`scopes`・`static_binds` には
+    /// 一切干渉しない（相互独立・要件 4.6）。1 cue = 1 scope をトランザクション境界とし、状態が
+    /// 実際に変化したときだけ発行すべき [`DisplayCommand`] を [`ApplyOutcome::Changed`] で返す。
+    ///
+    /// 発行する指令は [`DisplayCommand::ShowBalloon`]／[`DisplayCommand::HideBalloon`] で、シェル面
+    /// [`DisplayCommand::Show`] と異なり **bind を同梱しない**（M-boot にバルーン着せ替えは存在
+    /// しない・要件 4.1）。
+    ///
+    /// 分岐（design「seriko バルーン面契約」Postconditions・[`apply`] の balloon map への鏡映）:
+    /// - [`SurfaceTarget::Show(id)`]:
+    ///   - 現状が既に `Shown(id)`（同一 id）→ [`ApplyOutcome::Unchanged`]（冪等・再発行しない・
+    ///     要件 4.3/DD8）。
+    ///   - それ以外（未知 scope・`Hidden`・別 id を表示中）→ 状態を `Shown(id)` に設定し
+    ///     [`ApplyOutcome::Changed`]`(DisplayCommand::ShowBalloon { scope, surface_id: id })` を返す
+    ///     （**binds なし**・要件 4.1）。
+    /// - [`SurfaceTarget::Hide`]:
+    ///   - 現状が既に `Hidden` → [`ApplyOutcome::Unchanged`]（非表示保持・要件 4.3）。
+    ///   - それ以外（表示中、または未知 scope）→ 状態を `Hidden` に設定し
+    ///     [`ApplyOutcome::Changed`]`(DisplayCommand::HideBalloon { scope })` を返す（要件 4.2）。
+    /// - [`SurfaceTarget::Unresolved`]: 呼び手（actor）が `NameForm`／`Invalid` を手前で log＋skip
+    ///   するのが正規経路。防御的に、状態を変更せず [`ApplyOutcome::Unchanged`] を返す。
+    pub fn apply_balloon(&mut self, scope: &ActorKey, target: SurfaceTarget) -> ApplyOutcome {
+        match target {
+            SurfaceTarget::Show(id) => {
+                // 冪等: 既に同一バルーン面を表示中なら再発行しない（要件 4.3/DD8）。
+                if self.balloon.get(scope) == Some(&ScopeState::Shown(id)) {
+                    return ApplyOutcome::Unchanged;
+                }
+                // 未知 scope は新規挿入・Hidden/別 id は上書き（要件 4.1）。
+                self.balloon.insert(scope.clone(), ScopeState::Shown(id));
+                ApplyOutcome::Changed(DisplayCommand::ShowBalloon {
+                    scope: scope.clone(),
+                    surface_id: id,
+                })
+            }
+            SurfaceTarget::Hide => {
+                // 非表示保持: 既に Hidden なら再発行しない（要件 4.3）。
+                if self.balloon.get(scope) == Some(&ScopeState::Hidden) {
+                    return ApplyOutcome::Unchanged;
+                }
+                // 表示中→非表示、または未知 scope→非表示（要件 4.2）。
+                self.balloon.insert(scope.clone(), ScopeState::Hidden);
+                ApplyOutcome::Changed(DisplayCommand::HideBalloon {
+                    scope: scope.clone(),
+                })
+            }
+            // 呼び手が先に skip する（正規経路）。防御的に無変更・無発行（要件 4.5）。
             SurfaceTarget::Unresolved => ApplyOutcome::Unchanged,
         }
     }
@@ -354,5 +412,227 @@ mod tests {
             states.apply(&scope, SurfaceTarget::Hide),
             ApplyOutcome::Unchanged
         );
+    }
+
+    // ---- apply_balloon（バルーン面・別 map 同居・apply() の鏡映・要件 4.3/4.6） ----
+
+    /// 新規表示（要件 4.1/4.3）: 未知バルーン scope への Show(id) は Shown(id) へ更新し
+    /// `ShowBalloon { scope, surface_id }` を発行する（binds を**同梱しない**）。
+    #[test]
+    fn apply_balloon_new_show_emits_showballoon_without_binds() {
+        let mut states = empty_states();
+        let scope = ActorKey::from("0");
+
+        let outcome = states.apply_balloon(&scope, SurfaceTarget::Show(2));
+        // ShowBalloon は scope と surface_id のみ（binds フィールドを持たない）。
+        assert_eq!(
+            outcome,
+            ApplyOutcome::Changed(DisplayCommand::ShowBalloon {
+                scope: scope.clone(),
+                surface_id: 2,
+            })
+        );
+        assert_eq!(states.balloon.get(&scope), Some(&ScopeState::Shown(2)));
+    }
+
+    /// 冪等な再表示（要件 4.3/DD8）: 同一面 id の 2 回目は Unchanged（再発行しない）。
+    #[test]
+    fn apply_balloon_show_same_surface_twice_second_is_unchanged() {
+        let mut states = empty_states();
+        let scope = ActorKey::from("0");
+
+        // 1 回目: Changed。
+        assert_eq!(
+            states.apply_balloon(&scope, SurfaceTarget::Show(2)),
+            ApplyOutcome::Changed(DisplayCommand::ShowBalloon {
+                scope: scope.clone(),
+                surface_id: 2,
+            })
+        );
+        // 2 回目: 同一 id ゆえ Unchanged。
+        assert_eq!(
+            states.apply_balloon(&scope, SurfaceTarget::Show(2)),
+            ApplyOutcome::Unchanged
+        );
+        assert_eq!(states.balloon.get(&scope), Some(&ScopeState::Shown(2)));
+    }
+
+    /// 別面への切替は Changed（冪等ガードが同一 id 限定であることの反証）。
+    #[test]
+    fn apply_balloon_show_different_surface_is_changed() {
+        let mut states = empty_states();
+        let scope = ActorKey::from("0");
+
+        states.apply_balloon(&scope, SurfaceTarget::Show(2));
+        let outcome = states.apply_balloon(&scope, SurfaceTarget::Show(6));
+        assert_eq!(
+            outcome,
+            ApplyOutcome::Changed(DisplayCommand::ShowBalloon {
+                scope: scope.clone(),
+                surface_id: 6,
+            })
+        );
+        assert_eq!(states.balloon.get(&scope), Some(&ScopeState::Shown(6)));
+    }
+
+    /// 非表示（要件 4.2）: 表示中から Hide で Hidden へ遷移し `HideBalloon` を発行する。
+    #[test]
+    fn apply_balloon_hide_transition_from_shown() {
+        let mut states = empty_states();
+        let scope = ActorKey::from("0");
+
+        assert!(matches!(
+            states.apply_balloon(&scope, SurfaceTarget::Show(2)),
+            ApplyOutcome::Changed(_)
+        ));
+
+        let outcome = states.apply_balloon(&scope, SurfaceTarget::Hide);
+        assert_eq!(
+            outcome,
+            ApplyOutcome::Changed(DisplayCommand::HideBalloon {
+                scope: scope.clone(),
+            })
+        );
+        assert_eq!(states.balloon.get(&scope), Some(&ScopeState::Hidden));
+    }
+
+    /// 冪等な再非表示（要件 4.3/DD8）: 既に Hidden な状態への Hide は Unchanged（再発行しない）。
+    #[test]
+    fn apply_balloon_hide_when_already_hidden_is_unchanged() {
+        let mut states = empty_states();
+        let scope = ActorKey::from("0");
+
+        states.apply_balloon(&scope, SurfaceTarget::Show(2));
+        assert!(matches!(
+            states.apply_balloon(&scope, SurfaceTarget::Hide),
+            ApplyOutcome::Changed(_)
+        ));
+
+        // もう一度 Hide → Unchanged（状態不変ゆえ再発行不要）。
+        assert_eq!(
+            states.apply_balloon(&scope, SurfaceTarget::Hide),
+            ApplyOutcome::Unchanged
+        );
+        assert_eq!(states.balloon.get(&scope), Some(&ScopeState::Hidden));
+    }
+
+    /// 非表示→表示の復帰（要件 4.1/4.3）: Hidden から Show(id) で Shown(id) へ遷移し ShowBalloon。
+    #[test]
+    fn apply_balloon_recovery_from_hidden_to_shown() {
+        let mut states = empty_states();
+        let scope = ActorKey::from("0");
+
+        states.apply_balloon(&scope, SurfaceTarget::Show(2));
+        states.apply_balloon(&scope, SurfaceTarget::Hide);
+        assert_eq!(states.balloon.get(&scope), Some(&ScopeState::Hidden));
+
+        let outcome = states.apply_balloon(&scope, SurfaceTarget::Show(6));
+        assert_eq!(
+            outcome,
+            ApplyOutcome::Changed(DisplayCommand::ShowBalloon {
+                scope: scope.clone(),
+                surface_id: 6,
+            })
+        );
+        assert_eq!(states.balloon.get(&scope), Some(&ScopeState::Shown(6)));
+    }
+
+    /// 未知 scope への Hide は「変化」とみなし HideBalloon を 1 度発行、以後は保持（要件 4.2/4.3）。
+    #[test]
+    fn apply_balloon_hide_on_unknown_scope_emits_once_then_holds() {
+        let mut states = empty_states();
+        let scope = ActorKey::from("3");
+
+        let first = states.apply_balloon(&scope, SurfaceTarget::Hide);
+        assert_eq!(
+            first,
+            ApplyOutcome::Changed(DisplayCommand::HideBalloon {
+                scope: scope.clone(),
+            })
+        );
+        assert_eq!(states.balloon.get(&scope), Some(&ScopeState::Hidden));
+
+        // 2 回目は保持ゆえ Unchanged。
+        assert_eq!(
+            states.apply_balloon(&scope, SurfaceTarget::Hide),
+            ApplyOutcome::Unchanged
+        );
+    }
+
+    /// Unresolved は no-op（防御・正規経路は actor が手前で skip）: 状態不変・発行なし。
+    #[test]
+    fn apply_balloon_unresolved_is_noop() {
+        let mut states = empty_states();
+        let scope = ActorKey::from("0");
+
+        let outcome = states.apply_balloon(&scope, SurfaceTarget::Unresolved);
+        assert_eq!(outcome, ApplyOutcome::Unchanged);
+        assert_eq!(states.balloon.get(&scope), None, "状態は生成されない");
+
+        // 既存状態を持つスコープでも Unresolved は状態を変えない。
+        states.apply_balloon(&scope, SurfaceTarget::Show(2));
+        let outcome2 = states.apply_balloon(&scope, SurfaceTarget::Unresolved);
+        assert_eq!(outcome2, ApplyOutcome::Unchanged);
+        assert_eq!(
+            states.balloon.get(&scope),
+            Some(&ScopeState::Shown(2)),
+            "既存状態は保たれる"
+        );
+    }
+
+    /// 相互独立（要件 4.6）: `apply_balloon` はシェル map（`scopes`）を一切触らない。
+    #[test]
+    fn apply_balloon_does_not_touch_shell_scopes() {
+        let mut states = empty_states();
+        let scope = ActorKey::from("0");
+
+        // 同一 scope へシェル面 Show を確定させておく。
+        states.apply(&scope, SurfaceTarget::Show(2100));
+        assert_eq!(states.scopes.get(&scope), Some(&ScopeState::Shown(2100)));
+
+        // 同一 scope へバルーン面を Show / Hide しても scopes（シェル面）は不変。
+        states.apply_balloon(&scope, SurfaceTarget::Show(2));
+        assert_eq!(
+            states.scopes.get(&scope),
+            Some(&ScopeState::Shown(2100)),
+            "apply_balloon 後もシェル面状態は不変（R4.6）"
+        );
+        assert_eq!(states.balloon.get(&scope), Some(&ScopeState::Shown(2)));
+
+        states.apply_balloon(&scope, SurfaceTarget::Hide);
+        assert_eq!(
+            states.scopes.get(&scope),
+            Some(&ScopeState::Shown(2100)),
+            "apply_balloon(Hide) 後もシェル面状態は不変（R4.6）"
+        );
+        assert_eq!(states.balloon.get(&scope), Some(&ScopeState::Hidden));
+    }
+
+    /// 相互独立（要件 4.6）: `apply()`（シェル面）はバルーン map（`balloon`）を一切触らない。
+    #[test]
+    fn apply_shell_does_not_touch_balloon() {
+        let mut states = empty_states();
+        let scope = ActorKey::from("0");
+
+        // 同一 scope へバルーン面 Show を確定させておく。
+        states.apply_balloon(&scope, SurfaceTarget::Show(2));
+        assert_eq!(states.balloon.get(&scope), Some(&ScopeState::Shown(2)));
+
+        // 同一 scope へシェル面を Show / Hide しても balloon（バルーン面）は不変。
+        states.apply(&scope, SurfaceTarget::Show(2100));
+        assert_eq!(
+            states.balloon.get(&scope),
+            Some(&ScopeState::Shown(2)),
+            "apply(Show) 後もバルーン面状態は不変（R4.6）"
+        );
+        assert_eq!(states.scopes.get(&scope), Some(&ScopeState::Shown(2100)));
+
+        states.apply(&scope, SurfaceTarget::Hide);
+        assert_eq!(
+            states.balloon.get(&scope),
+            Some(&ScopeState::Shown(2)),
+            "apply(Hide) 後もバルーン面状態は不変（R4.6）"
+        );
+        assert_eq!(states.scopes.get(&scope), Some(&ScopeState::Hidden));
     }
 }
