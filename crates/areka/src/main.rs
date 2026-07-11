@@ -7,11 +7,12 @@
 //! - 構造化ロギング初期化（RUST_LOG フォールバック）・パニックハンドラ設定
 //! - 構成入力（ゴースト／バルーンのルートパス）の解決とログ出力（マウントはしない）
 //! - UI ランタイム起動（`WinApp::new()`）・SHIORI 実走デモの env-gate 呼び口
-//! - replace-me シーム（`open_startup_window`・本仕様では検証用ダミー窓を開く）
-//! - `main` 自身が所有するメッセージループ（`app.run()`）とダミー窓 close での正常終了
+//! - 起動窓シーム（`open_startup_window`・window-placement task 6.2 で本物のゴースト窓生成へ
+//!   差し替え済み。準備失敗時は検証用ダミー窓へフォールバック）
+//! - `main` 自身が所有するメッセージループ（`app.run()`）と起動窓 close での正常終了
 //!
-//! 本物のゴースト窓生成・配置・DPI 対応は下流仕様（ghost-setup／window-placement）の領分であり、
-//! 骨格は座標・配置ロジックを一切持たない。旧モック UI は `examples/mock-shell.rs` へ退避済み。
+//! 座標・配置ロジックは `placement` モジュール（areka-P0-window-placement）が所有し、
+//! 骨格自身は座標を一切持たない。旧モック UI は `examples/mock-shell.rs` へ退避済み。
 //!
 //! `main` は `open_startup_window`／ダミー窓／smoke ゲートを不変に保ったまま、その周囲に
 //! ghost 結線層（`areka_ghost::boot`／`GhostRuntime::shutdown`）を結線する（task 3.3・
@@ -28,7 +29,7 @@ use wintf::ecs::pointer::{DoubleClick, OnPointerPressed, Phase, PointerState};
 use wintf::ecs::widget::bitmap_source::CommandSender;
 use wintf::ecs::widget::brushes::Brushes;
 use wintf::ecs::widget::shapes::Rectangle;
-use wintf::ecs::{ChildOf, Window, WindowStyle};
+use wintf::ecs::{ChildOf, FrameFinalize, Window, WindowStyle};
 use wintf::*;
 
 /// areka 本体側 `IShioriHost` 実装（単一 sink・突合枠・メールボックス投函）。
@@ -49,7 +50,8 @@ mod reference_brain;
 mod shiori_demo;
 
 /// 窓配置機構（areka-P0-window-placement）。ゴースト定義からキャラ窓・バルーン窓の
-/// 初期配置を解決し窓 entity を組み立てる配置パイプライン（task 1 時点は scaffold）。
+/// 初期配置を解決し窓 entity を組み立てる配置パイプライン。`open_startup_window`
+/// シーム（task 6.2）が `prepare_ghost_windows`→`spawn_ghost_windows` を結線する。
 mod placement;
 
 /// 遅延応答と push 経路の end-to-end 結合テスト。
@@ -270,9 +272,11 @@ fn main() -> Result<()> {
         tracing::error!(error = %e, "[main] shiori reference demo failed");
     }
 
-    // replace-me シーム（R4.2）: 本仕様では検証用ダミー窓を 1 枚開き、`main` 所有の
-    // `app.run()` ループに空遷移の heartbeat を与える。下流はここを本物のゴースト窓生成へ置換する。
-    open_startup_window(&app);
+    // 起動窓シーム（window-placement 1.4）: ゴースト定義から本物のゴースト窓
+    // （キャラ窓＋バルーン窓）を配置・生成する。準備失敗時（fixture 不在等）は
+    // 検証用ダミー窓へフォールバックし、`main` 所有の `app.run()` ループに
+    // heartbeat を与える骨格保証（boot→loop→exit）を維持する（DD14）。
+    open_startup_window(&app, &cfg);
 
     // `main` 所有のブロッキングメッセージループ（R2.4/R4.1）。ダミー窓が閉じられると
     // `WindowRegistry` が空へ遷移し `run()` が `Ok` を返して正常終了する（DD7 改定）。
@@ -404,23 +408,76 @@ fn on_dummy_pressed(
     }
 }
 
-/// replace-me シーム（task 2.2・R4.2）: 後続仕様（ghost-setup／window-placement）がここを
-/// 本物のゴースト窓生成へ置き換える差し込み点。本仕様ではその本体が最小の検証用ダミー窓を
-/// 1 枚開き、`main` 所有の `app.run()` ループに空遷移の heartbeat を与える（boot→loop→exit の実証）。
+/// 起動窓シーム（task 6.2・要件 1.4・design「main.rs seam」）: `prepare_ghost_windows`
+/// 成功時は本物のゴースト窓（キャラ窓＋バルーン窓）を生成し、準備失敗時は検証用
+/// ダミー窓へフォールバックする（旧 replace-me シームの差し替え本体）。
 ///
-/// 署名が `&WinApp`（`&mut` でない）で足りる根拠: 窓生成は `WinApp::world()`（`&self`）→
-/// `EcsWorld::spawn`（`&self`）経由＝現 `create_shell_window` 系の窓生成と同型で ECS 内部
-/// 可変性を用いるため。投機的に `&mut` を先取りしない（下流が本物窓生成でより強い借用を
-/// 要すれば、それはシーム署名変更の Revalidation Trigger）。
-fn open_startup_window(app: &WinApp) {
-    // `EcsWorld::spawn` の async タスク → CommandSender → Input スケジュールで World 適用
-    // という ECS コマンド経路でダミー窓ビルダを走らせる。
-    app.world().borrow().spawn(|tx: CommandSender| async move {
-        let _ = tx.send(Box::new(|world: &mut World| {
-            spawn_dummy_window(world);
-            tracing::info!("検証用ダミー窓を開きました（replace-me シーム）");
-        }));
-    });
+/// - 成功時: `spawn_ghost_windows` を既存 ECS コマンド経路（`EcsWorld::spawn` の async
+///   タスク → `CommandSender` → Input スケジュールで World 適用＝ダミー窓と同経路）で
+///   実行し、`register_ghost_windows_click_through` を `FrameFinalize` schedule へ結線する
+///   （emo-present donor と同じ結線位置・task 5.2）。
+/// - 失敗時（fixture 不在等）: `MountError::StartPointMissing` 系は `warn!`・他は `error!`
+///   の上で `spawn_dummy_window` へフォールバックする（DD14・骨格の boot→loop→exit と
+///   smoke 完走を維持。`spawn_dummy_window`／`DummyWindowMarker` は退役せず残置）。
+/// - **暫定の終了手段**（design「main.rs seam」note）: emo2-boot 装着前の本物ゴースト窓は
+///   描画内容なし＝WUC/DComp GPU 合成で不可視・ヒットなしのため、対話的 close 不能が
+///   正しい状態。終了は smoke ゲート（`AREKA_APP_SMOKE_EXIT_MS`）または Ctrl+C。
+///
+/// 準備（`prepare_ghost_windows`）は同期実行し、I/O はここで完結・Send な値のみを ECS
+/// コマンドへ運ぶ。呼び出しスレッドは `WinApp::new()` 済みの MTA UI スレッド＝COM
+/// 初期化済み（measure の WIC 前提を満たす）。署名は `(&WinApp, &ConfigInputs)`
+/// （design の Revalidation Trigger として本タスクで変更）。
+fn open_startup_window(app: &WinApp, cfg: &ConfigInputs) {
+    match placement::prepare_ghost_windows(&cfg.ghost_root, &cfg.balloon_root) {
+        Ok(prepared) => {
+            // clickthrough 登録 system を FrameFinalize へ結線（task 5.2 の donor slot・
+            // emo-present と同位置）。`Added<WindowHandle>` 駆動のため窓 spawn より先に
+            // 結線しても取りこぼさない（registry NonSend は WinApp::run が挿入・5.2 learnings）。
+            app.world().borrow_mut().add_systems(
+                FrameFinalize,
+                placement::spawn::register_ghost_windows_click_through,
+            );
+
+            // `EcsWorld::spawn` の async タスク → CommandSender → Input スケジュールで
+            // World 適用という既存 ECS コマンド経路（ダミー窓と同型）で本物窓を組み立てる。
+            app.world().borrow().spawn(|tx: CommandSender| async move {
+                let _ = tx.send(Box::new(move |world: &mut World| {
+                    let windows = placement::spawn::spawn_ghost_windows(
+                        world,
+                        &prepared.placements,
+                        &prepared.titles,
+                    );
+                    let scopes: Vec<usize> = windows.scopes().collect();
+                    tracing::info!(
+                        ?scopes,
+                        "本物のゴースト窓を開きました（placement シーム・スコープごとにキャラ窓＋バルーン窓）"
+                    );
+                }));
+            });
+        }
+        Err(err) => {
+            // フォールバック分類（DD14・log-first）: 起点不在（fixture 不在等の想定内）は
+            // warn!・それ以外（読取不能・採寸失敗・モニタ 0 台等）は error!。どちらも
+            // ダミー窓へフォールバックし骨格の boot→loop→exit を維持する。
+            if is_benign_placement_error(&err) {
+                tracing::warn!(
+                    error = %err,
+                    "窓配置の準備起点が見つかりません（fixture 不在等の想定内事象）——検証用ダミー窓へフォールバックします"
+                );
+            } else {
+                tracing::error!(
+                    error = %err,
+                    "窓配置の準備に失敗しました——検証用ダミー窓へフォールバックします"
+                );
+            }
+            app.world().borrow().spawn(|tx: CommandSender| async move {
+                let _ = tx.send(Box::new(|world: &mut World| {
+                    spawn_dummy_window(world);
+                    tracing::info!("検証用ダミー窓を開きました（placement フォールバック）");
+                }));
+            });
+        }
+    }
 
     // env ゲート付き自動 close 機構（CI smoke・task 2.3・R4.1）。
     // `AREKA_APP_SMOKE_EXIT_MS` が有効なミリ秒値のときだけ、VSync relay と同じ
@@ -433,7 +490,7 @@ fn open_startup_window(app: &WinApp) {
         tracing::info!(
             env = SMOKE_EXIT_ENV,
             delay_ms = ms,
-            "smoke 自動 close ゲート有効 — ダミー窓を指定 ms 後に despawn します"
+            "smoke 自動 close ゲート有効 — 起動窓（ダミー窓／ゴースト窓）を指定 ms 後に despawn します"
         );
         wintf::executor::spawn_local(async move {
             // 指定 ms を async スリープ（async-io は既存依存・tokio 不要）。
@@ -447,18 +504,50 @@ fn open_startup_window(app: &WinApp) {
             {
                 let mut ecs = world.borrow_mut();
                 let w = ecs.world_mut();
-                let dummies: Vec<Entity> = w
-                    .query_filtered::<Entity, With<DummyWindowMarker>>()
-                    .iter(w)
-                    .collect();
-                let count = dummies.len();
-                for e in dummies {
-                    w.despawn(e);
-                }
-                tracing::info!(count, "smoke 自動 close: ダミー窓を despawn しました");
+                let count = despawn_smoke_targets(w);
+                tracing::info!(
+                    count,
+                    "smoke 自動 close: 起動窓（ダミー窓／ゴースト窓）を despawn しました"
+                );
             }
         });
     }
+}
+
+/// smoke 自動 close の despawn 標的を despawn する（task 6.2 で
+/// `Or<(With<DummyWindowMarker>, With<GhostWindowMarker>)>` へ拡張・design「main.rs seam」）。
+///
+/// ダミー窓（フォールバック経路）と本物のゴースト窓（placement 経路）のどちらの構成でも
+/// CI smoke（`AREKA_APP_SMOKE_EXIT_MS`）が完走できるよう、両 marker を単一 query で狙う。
+/// despawn 件数を返す（標的なしは 0・no-op 安全）。bare `World` だけで動き headless
+/// 単体テスト可能（`seam_tests`）。
+fn despawn_smoke_targets(world: &mut World) -> usize {
+    let targets: Vec<Entity> = world
+        .query_filtered::<Entity, Or<(With<DummyWindowMarker>, With<placement::spawn::GhostWindowMarker>)>>()
+        .iter(world)
+        .collect();
+    let count = targets.len();
+    for e in targets {
+        world.despawn(e);
+    }
+    count
+}
+
+/// `PlacementError` を「起点不在（良性・`warn!` どまり）」と「それ以外（予期しない・`error!`）」
+/// へ分類する純粋関数（task 6.2・design「main.rs seam」・DD14）。
+///
+/// `default_ghost_root()` はプレースホルダ subpath であり、この開発サンドボックスでは
+/// 実在しないのが常態（＝`MountError::StartPointMissing` は想定内の事象）。それ以外
+/// （読取不能・shell 不在・descript I/O・採寸失敗・モニタ 0 台・将来追加の
+/// `#[non_exhaustive]` variant）は真に予期しない失敗として区別する
+/// （`is_benign_boot_error` と同じ分類方針）。
+fn is_benign_placement_error(err: &placement::PlacementError) -> bool {
+    matches!(
+        err,
+        placement::PlacementError::Mount(
+            areka_parsers::package::MountError::StartPointMissing { .. }
+        )
+    )
 }
 
 /// 自動 close ゲートを有効化する環境変数名（`AREKA_` 冠規約・記憶 areka-runtime-env-naming）。
@@ -661,6 +750,92 @@ mod startup_window_tests {
         assert_eq!(smoke_exit_ms_from(Some("-1")), None);
         // u64::MAX + 1（20 桁）は溢れて None。
         assert_eq!(smoke_exit_ms_from(Some("18446744073709551616")), None);
+    }
+}
+
+/// main.rs シーム（task 6.2）の headless 単体テスト。
+///
+/// シーム結線そのもの（`open_startup_window`）は生きた `WinApp` を要するため、
+/// TDD は headless で駆動可能な決定論部品——フォールバック分類
+/// `is_benign_placement_error` と smoke 自動 close の despawn 標的
+/// `despawn_smoke_targets`——で回す。結線の実証は実プロセス smoke
+/// （`tests/smoke_boot_loop_exit.rs`・両方向）が担う。
+#[cfg(test)]
+mod seam_tests {
+    use super::*;
+    use crate::placement::PlacementError;
+    use crate::placement::spawn::GhostWindowMarker;
+    use areka_parsers::package::MountError;
+    use std::path::PathBuf;
+
+    /// `PlacementError::Mount(StartPointMissing)`（fixture 不在という想定内の事象）は
+    /// 良性（`warn!` どまり）と分類される（design「main.rs seam」・DD14）。
+    #[test]
+    fn placement_start_point_missing_is_benign() {
+        let err = PlacementError::Mount(MountError::StartPointMissing {
+            expected: PathBuf::from("ghost/master/descript.txt"),
+        });
+        assert!(is_benign_placement_error(&err));
+    }
+
+    /// それ以外の `PlacementError`（読取不能・shell 不在・descript I/O・採寸・モニタ 0 台）は
+    /// 真に予期しない失敗として良性ではない（`error!`）と分類される。
+    #[test]
+    fn placement_other_errors_are_not_benign() {
+        let unreadable = PlacementError::Mount(MountError::StartPointUnreadable {
+            path: PathBuf::from("ghost/master/descript.txt"),
+            kind: std::io::ErrorKind::PermissionDenied,
+        });
+        assert!(!is_benign_placement_error(&unreadable));
+
+        let shell_missing = PlacementError::Mount(MountError::ShellDirMissing {
+            expected: PathBuf::from("ghost/master/shell/master"),
+        });
+        assert!(!is_benign_placement_error(&shell_missing));
+
+        let descript = PlacementError::DescriptRead {
+            path: PathBuf::from("shell/master/descript.txt"),
+            source: std::io::Error::new(std::io::ErrorKind::PermissionDenied, "boom"),
+        };
+        assert!(!is_benign_placement_error(&descript));
+
+        let measure = PlacementError::Measure {
+            scope: 0,
+            reason: "合成失敗".to_string(),
+        };
+        assert!(!is_benign_placement_error(&measure));
+
+        let monitor = PlacementError::Monitor {
+            reason: "0 台".to_string(),
+        };
+        assert!(!is_benign_placement_error(&monitor));
+    }
+
+    /// smoke 自動 close の despawn 標的は `Or<(With<DummyWindowMarker>,
+    /// With<GhostWindowMarker>)>`（task 6.2 拡張）: ダミー窓・ゴースト窓の両方を
+    /// despawn し、無関係 entity は残す。
+    #[test]
+    fn despawn_smoke_targets_hits_dummy_and_ghost_only() {
+        let mut world = World::new();
+        let dummy = world.spawn(DummyWindowMarker).id();
+        let ghost = world.spawn(GhostWindowMarker).id();
+        let other = world.spawn_empty().id();
+
+        let count = despawn_smoke_targets(&mut world);
+
+        assert_eq!(count, 2, "ダミー窓＋ゴースト窓の 2 entity を despawn すべき");
+        assert!(world.get_entity(dummy).is_err());
+        assert!(world.get_entity(ghost).is_err());
+        assert!(world.get_entity(other).is_ok());
+    }
+
+    /// 標的なしの World では 0 を返し何も壊さない（冪等・no-op 安全）。
+    #[test]
+    fn despawn_smoke_targets_empty_world_is_noop() {
+        let mut world = World::new();
+        let other = world.spawn_empty().id();
+        assert_eq!(despawn_smoke_targets(&mut world), 0);
+        assert!(world.get_entity(other).is_ok());
     }
 }
 

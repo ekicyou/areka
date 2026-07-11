@@ -82,7 +82,6 @@ pub enum PlacementError {
 /// I/O は [`prepare_ghost_windows`] までで完結し、**Send な素の値のみ**を運ぶ
 /// （`Vec<ScopePlacement>`＝Copy 値の列・`GhostTitles`＝`BTreeMap<usize, String>`。
 /// COM/WIC 等のスレッド親和リソースは持たない。Send 契約はテストで固定）。
-#[allow(dead_code)] // scaffold（task 6.1）: main.rs シーム（task 6.2）が結線するまで非テストビルドでは未使用
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PreparedPlacement {
     /// スコープごとの解決済み配置（`resolve_placement` の出力そのまま・scope 昇順）。
@@ -143,7 +142,6 @@ fn prepare_stages(ghost_root: &Path, balloon_root: &Path) -> Result<PreparedStag
 /// - 位置の記憶・復元（`ghost.dat` 読み書き）は一切行わない（2.11）
 /// - 呼び出しスレッドは COM 初期化済みであること（measure の `WicDecoderArm`
 ///   前提・本番は MTA UI スレッド）
-#[allow(dead_code)] // scaffold（task 6.1）: main.rs シーム（task 6.2）が結線するまで非テストビルドでは未使用
 pub fn prepare_ghost_windows(
     ghost_root: &Path,
     balloon_root: &Path,

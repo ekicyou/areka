@@ -106,7 +106,7 @@
   - _Depends: 2.1, 2.2, 3.1, 3.2, 4.1_
   - _Boundary: main.rs seam_
 
-- [ ] 6.2 `open_startup_window` シームを本物のゴースト窓生成へ差し替える
+- [x] 6.2 `open_startup_window` シームを本物のゴースト窓生成へ差し替える
   - `open_startup_window(app: &WinApp, cfg: &ConfigInputs)` へ署名変更し、`prepare_ghost_windows` 成功時は `spawn_ghost_windows`＋`register_ghost_windows_click_through` の schedule 結線を既存 ECS コマンド経路で実行する
   - 準備失敗時（fixture 不在等）は `MountError::StartPointMissing` 系を `warn!`、他は `error!` の上で既存 `spawn_dummy_window` へフォールバックする（`spawn_dummy_window`／`DummyWindowMarker` は退役せず残置）
   - `AREKA_APP_SMOKE_EXIT_MS` smoke 自動 close の despawn 対象を `Or<(With<DummyWindowMarker>, With<GhostWindowMarker>)>` へ拡張する
@@ -138,6 +138,7 @@
 - 1: `areka_parsers::package::MountError` は Display/std::error::Error 未実装（Clone/Debug/PartialEq/Eq のみ・#[non_exhaustive]）。`PlacementError::Mount` は `{0:?}` Debug 整形・`#[from]` 不可 → 後続タスクは `PlacementError::Mount(e)` を明示構築すること（areka-parsers は改変禁止）。
 - 2.1: `Alignment::Seam` の `warn!` 発火は config でなく resolver（task 3.1）へ委譲済み（config.rs:22 に明記）→ 3.1 で解消（resolver.rs:124-130 で発火・T-R5 経路で実行）。スコープ検出は DD6 厳密読み（`char1.*` 単独では scope1 を作らない・kero シグナルのみ）。同層クロス競合は正典プレフィックス外側優先。
 - 4.1: emo2 fixture 実測原寸 = scope0 surface0: 434×687 / scope1 surface10: 336×400 / balloon surface0: 400×224（テストで檻化済み・example/受入検証の期待値に使える）。balloon エラーは `Measure { scope: 0, reason: "balloon: ..." }` 規約。
+- 6.2: smoke テスト `run_smoke` は親の RUST_LOG を継承（`RUST_LOG=error` 環境で info マーカー assert が偽陽性 fail の可能性→ `.env("RUST_LOG","info")` ピン候補）。resolver.rs:18 等に文言陳腐化した allow(dead_code) コメント残（棚卸し候補）。
 - 5.3: 5.2 由来の `t_i4_register_*` テスト名は design の T-I4（follow 幾何）と衝突（実害なし・一意名で全実行）→ 余裕があれば `t_reg_*` 等へ改名候補。
 - 5.2: clickthrough 登録 system の schedule 結線は 6.2（donor の slot は `FrameFinalize`）。レジストリ NonSend 未挿入 tick の Added 消費に注意（donor 同挙動・WinApp::run が先に handle 挿入する結線順で緩和）。
 - 4.2: `enqueue_window_move` は SetWindowPosCommand enqueue＋`bypass_change_detection()` で WindowPos ミラー（wintf echo 規約と一致・apply_window_pos_changes 二重発行防止・headless 観測シーム）。`on_char_drag` は pub(crate)（5.1 の OnDrag 結線用）。WindowPos はクライアント座標だが WS_POPUP 枠なし窓では窓座標と同一。headless テストは偽 WindowHandle（wintf tests の確立パターン）。

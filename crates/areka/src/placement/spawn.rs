@@ -71,7 +71,6 @@ pub struct BalloonWindowMarker {
 }
 
 /// placement 生成窓の共通標識（smoke close・一括 despawn・clickthrough 登録の標的）。
-#[allow(dead_code)] // 結線（main.rs シーム）は task 6.2
 #[derive(Component, Debug, Clone, Copy, PartialEq, Eq)]
 pub struct GhostWindowMarker;
 
@@ -132,7 +131,6 @@ impl GhostWindows {
 ///
 /// 完了時に [`GhostWindows`] を Resource として挿入し、同じ内容を戻り値でも
 /// 返す（6.1・Resource 挿入＋戻り値の両方で公開）。
-#[allow(dead_code)] // 結線（main.rs シーム）は task 6.2
 pub fn spawn_ghost_windows(
     world: &mut World,
     placements: &[ScopePlacement],
@@ -253,8 +251,8 @@ impl ClickThroughRegistrar for ClickThroughRegistryHandle {
 /// 登録する（`register` は同一 Entity 再登録を dedupe するため冪等でもある）。
 /// `ClickThroughRegistryHandle` は `WinApp::run` の結線で NonSend リソース
 /// として挿入される。ごく初期の tick で未挿入の可能性へ `Option` で防御する
-/// （headless でも no-op で安全）。schedule への結線は task 6.2（main.rs シーム）。
-#[allow(dead_code)] // 結線（main.rs シーム）は task 6.2
+/// （headless でも no-op で安全）。schedule への結線は main.rs シーム
+/// `open_startup_window`（task 6.2）が `FrameFinalize` へ行う。
 pub fn register_ghost_windows_click_through(
     new_windows: Query<(Entity, &WindowHandle), (With<GhostWindowMarker>, Added<WindowHandle>)>,
     handle: Option<NonSend<ClickThroughRegistryHandle>>,
