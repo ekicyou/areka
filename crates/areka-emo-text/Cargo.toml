@@ -37,3 +37,14 @@ windows-numerics = { workspace = true }
 # 結線層テストの実走 pump（MessageLoop——spawn_ui の drain タスクを実際に駆動して
 # 終了規律 3 ケースを実 channel で再現する。actor-foundation toy(b) の系譜）。
 wintf-winmsg-executor = { workspace = true }
+# 統合配線（actor.rs）: 予約スロット到達手段 `TextSlotView` の読み取り消費のみ
+# （design.md Allowed Dependencies・依存方向 `areka-emo-present → areka-emo-text` の順方向。
+# 逆方向 import（emo-present → emo-text）は禁止・emo-present 本体は改変しない）。
+areka-emo-present = { path = "../areka-emo-present" }
+
+[dev-dependencies]
+# 統合テスト（tests/attach_wiring_test.rs）: 2 target 結線シナリオで EmoPresenter へ渡す
+# 合成入力（EmoWorld/AtlasTable）を上流公開 API（bake→EmoWorld）で組む
+# （emo-present presenter.rs テストと同技法・テスト専用）。
+areka-emo-atlas = { path = "../areka-emo-atlas" }
+areka-emo-compose = { path = "../areka-emo-compose" }

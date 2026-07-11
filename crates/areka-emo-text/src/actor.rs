@@ -13,6 +13,7 @@ use std::collections::{BTreeSet, HashMap};
 use std::rc::Rc;
 
 use areka_actor::UiSpawnError;
+use areka_emo_present::TextSlotView;
 use areka_parsers::balloon::BalloonModel;
 use areka_sakura::contract::{ActorKey, CueCommand, TalkCue};
 use bevy_ecs::entity::Entity;
@@ -70,6 +71,15 @@ impl TextSlotBinding {
             surface_size,
             image_size: contract.image_size(surface_size),
         }
+    }
+
+    /// emo-present の読み取り専用増分 `TextSlotView` からの一点変換（結線の正準口・R9.1/R9.2）。
+    ///
+    /// view の読み値（slot/window/scale/surface_size）を [`Self::new`] へ透過するだけで、
+    /// `image_size = round(surface_size / k)` の一点導出は `new` に集約されたまま変わらない
+    /// （k の多重適用・混在の構造排除——design.md「DPI/スケール契約」）。
+    pub fn from_view(view: &TextSlotView) -> Self {
+        TextSlotBinding::new(view.slot(), view.window(), view.scale(), view.surface_size())
     }
 }
 
@@ -166,6 +176,31 @@ impl TextLayerRuntime {
         debug!(actor = %actor, slot = ?binding.slot, "actor の装着先（予約スロット）を登録した");
         self.routing.insert(actor.clone(), binding);
         self.layout_input.insert(actor, resolved);
+    }
+
+    /// 統合配線の一点口（R9.5・task 8）: `ActorKey → TargetId` 対応の解決結果
+    /// （`EmoPresenter::text_slot_view(target)` の view——対応関係の所有は結線側・
+    /// example/emo2-boot）と 2 層マージ済み balloon model から、binding
+    /// （[`TextSlotBinding::from_view`]）と layout 入力（[`ResolvedBalloonText::resolve`]・
+    /// 入力は必ず binding の `image_size`＝**image px**）を導出して
+    /// [`register_actor`](Self::register_actor) へ登録する。
+    ///
+    /// 物理 px を領域解決へ渡す誤配線をこの口で構造閉塞する（2 空間モデル——design.md
+    /// 「DPI/スケール契約」）。行レイアウト（`PositionedLine`）・クリック可能範囲の
+    /// choice-render 再利用シーム（R9.4）には手を触れない——本口は入力の供給のみで、
+    /// レイアウト出力の形を変えない。
+    ///
+    /// `text_slot_view` は初回 `ShowSurface` 前は `None` を返すため、呼び手は表示確立後に
+    /// 本口で登録する（未登録の間に届いた cue は蓄積され、登録後の次フレームで装着・描画される）。
+    pub fn register_actor_view(
+        &mut self,
+        actor: ActorKey,
+        view: &TextSlotView,
+        model: &BalloonModel,
+    ) {
+        let binding = TextSlotBinding::from_view(view);
+        let resolved = ResolvedBalloonText::resolve(model, binding.image_size);
+        self.register_actor(actor, binding, resolved);
     }
 
     /// cue を actor 別の純粋状態機械へ適用する（UI ドレインの適用点・World に触れない）。
