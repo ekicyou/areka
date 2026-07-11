@@ -180,6 +180,7 @@
 - 1: `areka_parsers::package::MountError` は Display/std::error::Error 未実装（Clone/Debug/PartialEq/Eq のみ・#[non_exhaustive]）。`PlacementError::Mount` は `{0:?}` Debug 整形・`#[from]` 不可 → 後続タスクは `PlacementError::Mount(e)` を明示構築すること（areka-parsers は改変禁止）。
 - 2.1: `Alignment::Seam` の `warn!` 発火は config でなく resolver（task 3.1）へ委譲済み（config.rs:22 に明記）→ 3.1 で解消（resolver.rs:124-130 で発火・T-R5 経路で実行）。スコープ検出は DD6 厳密読み（`char1.*` 単独では scope1 を作らない・kero シグナルのみ）。同層クロス競合は正典プレフィックス外側優先。
 - 4.1: emo2 fixture 実測原寸 = scope0 surface0: 434×687 / scope1 surface10: 336×400 / balloon surface0: 400×224（テストで檻化済み・example/受入検証の期待値に使える）。balloon エラーは `Measure { scope: 0, reason: "balloon: ..." }` 規約。
+- 8.3-fix: `enqueue_window_move` の bypass 移動は wintf の Arrangement 同期を素通しし GA（αマスクヒット矩形）が spawn 位置で凍結→移動後バルーンがクリック死（実機発見・状態依存）。修正= wintf DragEnd donor と同型の Arrangement.offset 直接 sync を enqueue_window_move へ内蔵（全移動経路で一貫・エコーループは zero-size GA ガードで安全）。**教訓: bypass で WindowPos を書く経路は Arrangement も自前で同期する義務がある**。
 - 8.1: main.rs フォールバック（Err 分岐）は MonitorSnapshot 非挿入 → 8.2 の on_char_drag 拡張は Resource を optional 読取（get_resource）必須。`work_area_for_window` の allow(dead_code) は 8.2 消費時に除去。
 - 6.2: smoke テスト `run_smoke` は親の RUST_LOG を継承（`RUST_LOG=error` 環境で info マーカー assert が偽陽性 fail の可能性→ `.env("RUST_LOG","info")` ピン候補）。resolver.rs:18 等に文言陳腐化した allow(dead_code) コメント残（棚卸し候補）。
 - 5.3: 5.2 由来の `t_i4_register_*` テスト名は design の T-I4（follow 幾何）と衝突（実害なし・一意名で全実行）→ 余裕があれば `t_reg_*` 等へ改名候補。
