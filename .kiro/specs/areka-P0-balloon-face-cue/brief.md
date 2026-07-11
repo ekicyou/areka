@@ -35,18 +35,19 @@
 **A1: 統一 display 経路（`\s` と完全対称・採用）**
 
 - **parser**: `Instruction::BalloonSurface(SurfaceArg)`（不透明転写・`\s` の `Surface(SurfaceArg)` と同流儀）＋ decode arm（ブラケット `\b[ID]`・裸形 `\bN` の両形）。`#[non_exhaustive]` ゆえ後方互換。
-- **dola**: `CueCommand::BalloonSurface { .. }` 増分（sakura-engine が `NewLine` を増分した前例と同型・強制コンパイル点3箇所を同時更新）。
+- **dola**: `CueCommand::BalloonSurface { .. }` 増分（sakura-engine が `NewLine` を増分した前例と同型・強制コンパイル点3箇所を同時更新）。**形は `Emote { key }` と完全対称の不透明 key 転写を本命**とする——`\s` 自体が専用 variant を持たず `Emote{key}` 不透明転写である実形（compile.rs:50-57）に合わせる。`Custom{command,params}` への逃がしは不採用（`cue_target_of`→None の配送不能袋小路・stringly-typed）。dola は stateless 転送語彙＝面の現在状態は seriko が所有（`ScopeStates` 流儀・シェルと同じ）。
 - **sakura**: compile 写像（`Instruction::BalloonSurface`→`CueCommand::BalloonSurface`・不透明転写）＋`cue_target_of` 分類。**分類先は design 冒頭確定**（本命: 表示系として `SurfaceSink`（=seriko）へ——シェル/バルーン統一原則・seriko 構築モデル正典と整合。`CueTarget` の意味論整理を含む）。
 - **seriko**: per-scope バルーン面状態（既存 `ScopeStates` 流儀・冪等ガード）＋`DisplayCommand` のバルーン対象拡張＋`\b[-1]`→非表示。数値解決は素直な id（alias はシェル固有・バルーンに alias 正典は無い＝design で ukadoc 確認）。
 - **emo-present**: additive 回帰テストのみ（バルーン target 異 id 再 Show・同寸 `TextSlotView` 安定性・crate 本体改変なし想定）。
-- **正典確認**: ukadoc で `\b` の引数意味論（`-1` 非表示・旧形式・既定面 `balloon.defaultsurface`）を design 冒頭に確定（MCP 検索でタグ項目が引けなかったため get_doc/カテゴリ経由で精査）。
+- **正典確認**: ukadoc で `\b` の引数意味論（`-1` 非表示・旧形式・既定面 `balloon.defaultsurface`）を design 冒頭に確定（MCP 検索でタグ項目が引けなかった〔通算7クエリ空振り〕ため get_doc/カテゴリ列挙経由で精査・必要なら SSP 実機挙動確認）。
+- **文字内容の保持裁定（design 冒頭確定・2026-07-11 議論反映）**: 層分離アーキテクチャ（バルーン枠=emo-present surface／文字=別 visual の text_slot）ゆえ、**同寸面切替では文字層は無傷＝保持がデフォルト**（クリアは Clear 明示発行の追加ポリシーであって切替の帰結ではない）。裁定候補: (a) 無条件クリア＝最単純だが SSP 正典乖離リスク／(b) 完全保持＋再レイアウト＝emo-text は cue 履歴保持＋全域再描画方式ゆえ構造的に自然・異寸は ActorRender 再構築要／**(c) M1 裁定=同寸保持（作業ゼロ）・異寸クリア＋warn＋増分申し送り（本命）**。SSP 実挙動（切替時の文字保持有無）の確認とセットで design 冒頭に確定する。
 
 **棄却案**: A2=Balloon 分類のまま emo-text が presenter へ転送（✗ 文字状態機械が表示層を知る層違反）／A3=第3 sink（BalloonSink）新設（✗ `GhostBootOptions` 注入契約2本の改変＋ghost-setup 結線増＋seriko が持つ per-scope 状態・冪等ガードの再発明）。
 
 ## Scope
 
 - **In**: parser `\b` 両形 decode（本文漏れ根絶含む）／dola `CueCommand` variant 増分（強制3箇所更新）／sakura compile 写像＋分類確定／seriko バルーン面状態＋`DisplayCommand` 拡張＋`-1` 非表示／emo-present additive 回帰（異 id 再 Show・TextSlotView 安定）／test fixture（多面バルーン）／ukadoc 正典意味論確定／決定論テスト網羅（全増分点）。
-- **Out**: presenter への実配送結線（scope→TargetId 写像・UI 配送）＝**emo2-boot の adapter 責務**／異寸バルーン面切替時の文字層再装着ライフサイクル（design で境界裁定: M1=同寸前提＋異寸は warn ログ＋増分申し送り、を本命とする）／SERIKO バルーンアニメ／`\_b`（画像埋め込み・別タグ）／communicate 枠（`balloonc*`）・入力枠。
+- **Out**: presenter への実配送結線（scope→TargetId 写像・UI 配送）＝**emo2-boot の adapter 責務**／異寸バルーン面切替時の文字層再装着ライフサイクル（design で境界裁定: M1=同寸は文字保持〔層分離ゆえ自然＝作業ゼロ〕＋異寸はクリア＋warn＋増分申し送り、を本命とする＝Approach「文字内容の保持裁定」参照）／SERIKO バルーンアニメ／`\_b`（画像埋め込み・別タグ）／communicate 枠（`balloonc*`）・入力枠。
 
 ## Boundary Candidates
 
