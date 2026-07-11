@@ -149,7 +149,7 @@
   - _Requirements: 4.7_
   - _Depends: 8.1_
   - _Boundary: placement::follow_
-- [ ] 8.3 バルーン単独ドラッグの相対位置記憶を実装する
+- [x] 8.3 バルーン単独ドラッグの相対位置記憶を実装する
   - `on_balloon_drag` を実装しバルーン窓へ `OnDrag` 付与: ドラッグ中、`BalloonFollow.balloon == sender` のキャラ窓を query 走査で逆引きし `BalloonFollow.offset = balloon_pos − char_pos` を更新する（キャラ窓は不動・物理 px）
   - 旧挙動（次のキャラ窓ドラッグで初期 offset へスナップバック）を検証していた `t_i4_char_move_restores_initial_offset_after_balloon_solo_move` は要件 4.8 による仕様退役として記憶挙動の檻へ書き換える
   - headless テスト: (a) バルーン単独ドラッグで offset が更新される (b) 以後の `move_window_to`／`on_char_drag` が調整後 offset で追従 (c) キャラ窓はバルーンドラッグで不動 (d) 複数スコープで他スコープの offset 不干渉

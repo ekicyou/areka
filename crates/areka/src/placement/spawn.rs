@@ -22,7 +22,8 @@
 //!   ＋`OnPointerPressed(on_ghost_pressed)`（ダブルクリックで全 `GhostWindowMarker`
 //!   despawn→`run()` 正常復帰）
 //! - バルーン窓: 同型（marker は `BalloonWindowMarker{scope}`・`DragConfig::default()`
-//!   は付与＝バルーン単独ドラッグ可・4.5。`OnDrag` 追従ハンドラなし・`BalloonFollow` なし）
+//!   は付与＝バルーン単独ドラッグ可・4.5。`OnDrag(on_balloon_drag)` で単独ドラッグの
+//!   相対位置記憶（4.8・DD16・task 8.3）・`BalloonFollow` なし）
 //!
 //! # clickthrough 登録（task 5.2）
 //!
@@ -46,7 +47,7 @@ use wintf::ecs::layout::HitTest;
 use wintf::ecs::pointer::{DoubleClick, OnPointerPressed, Phase, PointerState};
 use wintf::ecs::{Point, SizeI, Window, WindowHandle, WindowPos, WindowStyle};
 
-use super::follow::{on_char_drag, BalloonFollow};
+use super::follow::{on_balloon_drag, on_char_drag, BalloonFollow};
 use super::resolver::ScopePlacement;
 use super::source::GhostTitles;
 
@@ -151,7 +152,8 @@ pub fn spawn_ghost_windows(
 
         // バルーン窓（design「窓 entity 構成（バルーン窓）」: キャラ窓と同型・
         // marker は BalloonWindowMarker・DragConfig::default() 付与＝単独ドラッグ可
-        // （4.5）・OnDrag 追従ハンドラなし・BalloonFollow なし）
+        // （4.5）・OnDrag(on_balloon_drag) で単独ドラッグの相対位置記憶
+        // （4.8・DD16・task 8.3）・BalloonFollow なし）
         let balloon_window = world
             .spawn((
                 Name::new(format!("Ghost-Balloon-Window-{}", p.scope)),
@@ -165,6 +167,7 @@ pub fn spawn_ghost_windows(
                 window_pos(p.balloon_pos.x, p.balloon_pos.y, p.balloon_size.w, p.balloon_size.h),
                 HitTest::none(),
                 DragConfig::default(),
+                OnDrag(on_balloon_drag),
                 OnPointerPressed(on_ghost_pressed),
             ))
             .id();
@@ -511,9 +514,12 @@ mod tests {
     }
 
     /// T-I1 補: キャラ窓は `BalloonFollow`（balloon 引き当て＋offset 転写）と
-    /// `OnDrag` を持ち、バルーン窓はどちらも持たない（4.2 結線・design 同型 bullet）。
+    /// `OnDrag`（追従）を持ち、バルーン窓は `OnDrag`（相対位置記憶・4.8/DD16）を
+    /// 持つが `BalloonFollow` は持たない（4.2 結線・design 同型 bullet。
+    /// バルーン側ハンドラの実挙動は
+    /// `t_i4_char_move_follows_adjusted_offset_after_balloon_solo_drag` が檻）。
     #[test]
-    fn t_i1_char_window_has_follow_and_on_drag_balloon_has_neither() {
+    fn t_i1_char_window_has_follow_and_on_drag_balloon_has_on_drag_only() {
         let mut world = World::new();
         let placements = two_scope_placements();
 
@@ -531,9 +537,9 @@ mod tests {
             assert_eq!(follow.offset, p.balloon_offset);
             assert!(world.get::<OnDrag>(char_e).is_some());
 
-            // バルーン窓には追従ハンドラも BalloonFollow も付けない
+            // バルーン窓: 相対位置記憶ハンドラあり（4.8）・BalloonFollow なし
             assert!(world.get::<BalloonFollow>(balloon_e).is_none());
-            assert!(world.get::<OnDrag>(balloon_e).is_none());
+            assert!(world.get::<OnDrag>(balloon_e).is_some());
         }
     }
 
@@ -832,10 +838,24 @@ mod tests {
     // -------------------------------------------------------------------------
 
     use std::collections::BTreeMap;
+    use std::time::Instant;
+
+    use wintf::ecs::drag::DragEvent;
 
     use crate::placement::config::build_placement_config;
     use crate::placement::follow::move_window_to;
     use crate::placement::resolver::{resolve_placement, RectPx, ScopeInput};
+
+    /// ドラッグイベント（wndproc 移動済み後の Bubble 配送を模す・follow.rs と同型）。
+    fn drag_event(target: Entity) -> DragEvent {
+        DragEvent {
+            target,
+            start_position: Point::new(0, 0),
+            position: Point::new(10, 10),
+            is_primary: true,
+            timestamp: Instant::now(),
+        }
+    }
 
     /// `(key, value)` ペア列 → `parse_kv` 出力相当の `BTreeMap`（config テストと同じ流儀）。
     fn kv_map(pairs: &[(&str, &str)]) -> BTreeMap<String, String> {
@@ -1024,37 +1044,76 @@ mod tests {
         }
     }
 
-    /// T-I4 補: バルーン単独移動（バルーンは `BalloonFollow` を持たない＝キャラ不動）
-    /// のあと、次のキャラ窓移動で初期 offset に戻る（4.4 暫定規則の受容挙動）。
+    /// T-I4 補: バルーン単独ドラッグの相対位置記憶（4.8・DD16・task 8.3）。
+    ///
+    /// 仕様退役: 2026-07-11 要件 4.8 —— 本テストの旧版
+    /// `t_i4_char_move_restores_initial_offset_after_balloon_solo_move` が檻に
+    /// していた「次のキャラ窓移動で初期 offset へスナップバック」は仕様として
+    /// 退役し、調整後 offset の記憶・追従が正となった（記憶挙動の檻へ書き換え）。
+    ///
+    /// 実パイプライン（KV → config → resolver → spawn）で組んだ World 上で、
+    /// spawn が付けた**実際の** `OnDrag` ハンドラ（バルーン窓の
+    /// `on_balloon_drag`）を呼んで検証する＝結線の檻を兼ねる。
     #[test]
-    fn t_i4_char_move_restores_initial_offset_after_balloon_solo_move() {
+    fn t_i4_char_move_follows_adjusted_offset_after_balloon_solo_drag() {
         let (mut world, gw, placements) = real_pipeline_world();
         attach_fake_handles(&mut world, &gw);
         let p = &placements[0];
         let char_e = gw.char_window(0).unwrap();
         let balloon_e = gw.balloon_window(0).unwrap();
 
-        // バルーン単独移動: バルーンだけ動き、キャラ窓は不動
-        assert!(move_window_to(&mut world, balloon_e, 613, 407));
-        assert_eq!(window_position(&world, balloon_e), Point { x: 613, y: 407 });
+        // バルーン単独ドラッグ: wndproc がバルーンを (613, 407) へ移動済みの状態を
+        // 模し、spawn が付けた実 OnDrag ハンドラを Bubble で呼ぶ
+        world
+            .get_mut::<WindowPos>(balloon_e)
+            .unwrap()
+            .position = Some(Point { x: 613, y: 407 });
+        let handler = world.get::<OnDrag>(balloon_e).expect("balloon OnDrag").0;
+        let ev = Phase::Bubble(drag_event(balloon_e));
+        assert!(!handler(&mut world, balloon_e, balloon_e, &ev));
+
+        // キャラ窓は不動（4.8: バルーンのみ移動）
         assert_eq!(
             window_position(&world, char_e),
             Point {
                 x: p.char_pos.x,
                 y: p.char_pos.y
             },
-            "バルーンは BalloonFollow を持たない＝キャラ窓は動かない"
+            "バルーンドラッグでキャラ窓は動かない"
         );
 
-        // 次のキャラ窓移動で resolver 由来の初期 offset へ戻る
+        // 調整後 offset = balloon_pos − char_pos が記憶される
+        let adjusted = PointPx {
+            x: 613 - p.char_pos.x,
+            y: 407 - p.char_pos.y,
+        };
+        assert_ne!(
+            adjusted, p.balloon_offset,
+            "檻の前提: 調整後 offset は resolver 由来の初期 offset と異なる"
+        );
+        assert_eq!(
+            world.get::<BalloonFollow>(char_e).unwrap().offset,
+            adjusted,
+            "バルーン単独ドラッグで offset が記憶更新される（4.8）"
+        );
+
+        // 次のキャラ窓移動は**調整後** offset で追従（初期 offset へ戻らない）
         assert!(move_window_to(&mut world, char_e, 1751, 893));
         assert_eq!(
             window_position(&world, balloon_e),
             Point {
-                x: 1751 + p.balloon_offset.x,
-                y: 893 + p.balloon_offset.y
+                x: 1751 + adjusted.x,
+                y: 893 + adjusted.y
             },
-            "キャラ窓移動でバルーンは初期 offset 位置へ復帰する"
+            "キャラ窓移動でバルーンは調整後 offset 位置へ追従する"
+        );
+
+        // 他スコープ（scope1）の offset は不干渉
+        let char1 = gw.char_window(1).unwrap();
+        assert_eq!(
+            world.get::<BalloonFollow>(char1).unwrap().offset,
+            placements[1].balloon_offset,
+            "scope0 バルーンのドラッグは scope1 の offset を変えない"
         );
     }
 }
