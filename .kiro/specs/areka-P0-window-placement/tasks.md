@@ -10,7 +10,7 @@
   - _Requirements: 1.1_
   - _Boundary: placement (scaffold)_
 
-- [ ] 2. Core: descript 取り込み層（カスケード解決とソース読込）
+- [x] 2. Core: descript 取り込み層（カスケード解決とソース読込）
 - [x] 2.1 (P) 4 層カスケード解決とスコープ検出を実装する
   - `Alignment`（`Bottom`／`Free`／`Seam(String)`）・`ScopeConfig`・`BalloonSide`・`PlacementConfig` を定義し、ghost 全体＜ghost スコープ別＜shell 全体＜shell スコープ別の順で後勝ち解決する `build_placement_config` を実装する
   - `defaultx`⇔`defaultleft`／`defaulty`⇔`defaulttop` の両表記を同スロットへ寛容受理し、同層競合時は `defaultx`/`defaulty` を優先する
@@ -29,7 +29,7 @@
   - _Requirements: 1.1, 2.3_
   - _Boundary: placement::source_
 
-- [ ] 3. Core: 純粋 resolver — 既定位置解決
+- [x] 3. Core: 純粋 resolver — 既定位置解決
 - [x] 3.1 物理 px 値型と bottom 基準・スコープ連鎖・クランプの配置規則を実装する
   - `RectPx`／`PointPx`／`SizePx`／`ScopeInput`／`ScopePlacement` の物理 px 値型（wintf 非依存）を定義する
   - P1（bottom 時 `y = work_area.bottom − h`・`defaulttop` 無視）／P2（`base_x(0) = work_area.right − w(0)`、`base_x(n≥1) = char_x(n−1) − w(n−1)`、`char_x(n) = base_x(n) − defaultx(n).unwrap_or(0)`）／P4（キャラ窓のみ work area 内へクランプ）を実装する `resolve_placement` を実装する（`PlacementConfig` を読むが wintf 型は import しない）
@@ -49,7 +49,7 @@
   - _Requirements: 2.6, 4.4, 4.6_
   - _Boundary: placement::resolver_
 
-- [ ] 4. Core: 採寸とドラッグ連動
+- [x] 4. Core: 採寸とドラッグ連動
 - [x] 4.1 (P) surface／バルーンの原寸採寸を実装する
   - `measure_scope_sizes(shell_dir, balloon_root, scope_ids)` を実装し、各スコープの初期 surface（scope0=id0・scope1=id10・scope n≥2=id10 暫定＋warn）と balloon surface0 を areka-emo-atlas／areka-emo-compose で bind なし合成して原寸（物理 px）を得て `Vec<ScopeInput>` を返す
   - 合成失敗したスコープは scope0 の寸法で代替し `warn!` を出す（窓自体は生やす）
@@ -69,7 +69,7 @@
   - _Depends: 3.1_
   - _Boundary: placement::follow_
 
-- [ ] 5. Integration: 窓 entity 組立と後続への引き渡し
+- [x] 5. Integration: 窓 entity 組立と後続への引き渡し
 - [x] 5.1 キャラ窓・バルーン窓の entity 組立と公開データ構造を実装する
   - `CharWindowMarker{scope}`／`BalloonWindowMarker{scope}`／`GhostWindowMarker` コンポーネントと `GhostWindows` Resource（`char_window(scope)`／`balloon_window(scope)`／`scopes()`）を定義する
   - `spawn_ghost_windows(world, placements, titles)` を実装し、`ScopePlacement` 由来の位置・寸法のみを使って `WindowPos`／`WindowStyle`（`WS_EX_TOPMOST` を含めない）／`HitTest::none()`／`DragConfig::default()`／`OnDrag(on_char_drag)`（キャラ窓のみ）／`BalloonFollow`（キャラ窓のみ）／`OnPointerPressed`（ダブルクリックで全 `GhostWindowMarker` despawn）を持つ窓 entity を組み立てる。`BoxStyle` と `DragConstraint` は一切付けない
@@ -96,7 +96,7 @@
   - _Depends: 4.2, 5.1_
   - _Boundary: placement::spawn, placement::follow_
 
-- [ ] 6. Integration: main.rs 起動窓シームの差し替え
+- [x] 6. Integration: main.rs 起動窓シームの差し替え
 - [x] 6.1 窓配置の準備処理（`prepare_ghost_windows`）を実装する
   - `prepare_ghost_windows(ghost_root, balloon_root)` を実装し、`load_descript_source` → `build_placement_config` → `measure_scope_sizes` → `enumerate_monitors()` の `is_primary` モニタ work area 取得 → `resolve_placement` の順に同期実行し、`PreparedPlacement { placements, titles }`（Send な結果のみ）を返す
   - 準備段階の失敗は `PlacementError` として呼び出し側（シーム）が捕捉できる形で返す（この関数自体はフォールバックしない）
@@ -115,7 +115,7 @@
   - _Depends: 5.1, 5.2, 6.1_
   - _Boundary: main.rs seam_
 
-- [ ] 7. Validation: 実 DPI 受け入れ example と手動検証
+- [x] 7. Validation: 実 DPI 受け入れ example と手動検証
 - [x] 7.1 実 DPI 受け入れ example を実装する
   - `crates/areka/examples/window-placement.rs` を新設し、`prepare_ghost_windows`（emo2 fixture パス）→ `spawn_ghost_windows` → emo-present donor と同型の装着経路（`EmoPresenter::attach_target`、dev-dependency の areka-emo-present を使用）で scope0 キャラ窓に surface0・scope1 キャラ窓に surface10・両バルーン窓に balloon target を装着する（`crates/areka/src/placement/` 本体は `EmoPresenter` を import しない）
   - rustdoc に手動観測プロトコル（①per-monitor v2・dpi≠96 で実行 ②scope0 が work area 右下・scope1 がその左に画面内出現 ③キャラ窓ドラッグでバルーン追従 ④モニタ境界を跨ぐドラッグで消失しない ⑤結果と実 DPI 値を記録）と、scope1 バルーンが scope0 キャラ窓に重畳するのは暫定規則の正常挙動であり受け入れ判定の対象外である旨を明記する
@@ -133,7 +133,7 @@
   - _Depends: 7.1_
   - _Boundary: examples/window-placement_
 
-- [ ] 8. Extension: 目視受け入れ由来の正典整合（2026-07-11 開発者承認・要件 4.7/4.8 追加）
+- [x] 8. Extension: 目視受け入れ由来の正典整合（2026-07-11 開発者承認・要件 4.7/4.8 追加）
 - [x] 8.1 bottom 吸着の情報伝搬と MonitorSnapshot 基盤を実装する
   - `ScopePlacement` に `bottom_snap: bool`（`Bottom`/`Seam` = true・`Free` = false）を追加し、resolver が設定・spawn がキャラ窓 entity へ `BottomSnap` 相当の情報として付与する
   - `MonitorSnapshot` Resource（全モニタの work area 集合・物理 px `RectPx`）と、窓矩形の中心が属するモニタの work area を引く純粋ヘルパ `work_area_for_window(snapshot, window_rect) -> Option<RectPx>`（中心がどのモニタにも属さない場合は最近傍）を実装する。seam（main.rs）と example が起動時に実モニタから snapshot を挿入する
