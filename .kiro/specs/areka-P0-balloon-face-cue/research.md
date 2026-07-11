@@ -107,3 +107,102 @@ brief 採用案 **A1「統一 display 経路（`\s` と完全対称）」** を�
   3. seriko 出力契約（`DisplayCommand` 拡張形）＝emo2-boot adapter 入力契約の整合。
 - **非スコープの再確認**: presenter 実配送結線（scope→TargetId）＝emo2-boot／異寸文字層再装着（B5）＝増分申し送り／SERIKO バルーンアニメ・`\_b`・communicate 枠。
 - **次アクション**: `/kiro-requirements-discussion areka-P0-balloon-face-cue` で本ギャップの設計判断（特に D1/D2/D3/D5）を収集・分類し、design フェーズへ確定を持ち越す。
+
+---
+
+# 6. 設計フェーズ Discovery & 決定記録（2026-07-11・kiro-spec-design）
+
+> Discovery 種別: **Extension（light discovery）** — 上流 5 エンジン完成済みの additive 増分。§0–5 のギャップ分析（実シンボル検証済み）を土台に、設計フェーズで D1–D8 を確定した。design.md が正本、本節は根拠ログ。
+
+## 6.1 Research Log
+
+### D1: ukadoc `\b` 正典意味論（解決・ブロッカー解消）
+
+- **Context**: MCP キーワード検索が通算 10+ クエリ空振り（`\b[ID]`／`\b0`／`バルーン切り替え` 等全滅）。`list_categories` → sakurascript カテゴリは存在し、`\w時間`（id `ukadoc:list_sakura_script:_5cw_6642_9593:1`）等は引けるが `\b` エントリの id は特定不能だった。
+- **Sources**: 最終的に **ukadoc 原典ページを直接取得**して確定 — https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html （併せて `balloon.defaultsurface` は MCP `ukadoc:descript_ghost:balloon.defaultsurface_2c_6570_5024:1` で取得）。
+- **Findings**（原文転記に基づく確定事項）:
+  1. **`\b[ID]`**: 「現スコープ側のバルーンをID番号のバルーンに変更する。**奇数はキャラクターの右側に表示するためのバルーンのために予約**されているため、使えるIDは0または偶数のみ。**`\b[-1]`でバルーンを非表示**。」→ `-1`＝非表示センチネル確定・**per-scope**（現スコープ側）確定。
+  2. **裸形 `\bID`**: 「この場合**0～9のみ使用可能**。」→ **単桁 shorthand の開発者裁定が正典と一致**（`\sID` 裸形も同文言で 0–9 限定＝`\w` と同じ 1 桁機構）。
+  3. **fallback 拡張**（SSP 2.6.34～）: `\b[ID1,--fallback=ID2,--fallback=ID3]` が存在する。M-boot スコープ外（後述 6.2 決定 2 の第 1 引数転写で ID1 として graceful に動く）。
+  4. **`balloon.defaultsurface`（ghost descript）**: 既定面は数値・既定 0（`sakura.balloon.defaultsurface`／`kero.balloon.defaultsurface` の per-scope 版あり）。既定面の初期表示は**表示系起動側（emo2-boot adapter）の責務**であり seriko の状態初期値ではない。
+  5. **バルーン名前/alias**: `\s[ID]` には「surfaces.txt の surface.alias または name で定義された文字列を ID の代わりに使用できる」と明記があるが、**`\b` にはその記述が無い**。→ M-boot「数値解決のみ・非数値は warn+skip」（R4.5）は正典安全側。名前解決は将来 additive の余地として不透明 key で温存。
+- **Implications**: 奇数予約は**作法であって engine gate ではない**（seriko はパリティ検査しない。存在しない面は emo-present の EmptyComposition→Hide 縮退＋warn の既存挙動が受ける）。テスト fixture は正典に倣い偶数 id（0/2）を用いる。
+
+### 強制コンパイル点の実測再確認（設計フェーズ時点）
+
+- `areka-sakura/src/contract.rs` `cue_target_of`（catch-all 無し・`Custom→None` のみ）／`areka-ghost/src/sink.rs` `command_kind`（7 arm 網羅）／`areka-emo-text/src/state.rs` `apply_cue`（`Emote|EntityRef|Custom` 非消費 arm）— **3 箇所とも実読で確認**。
+- `dola/src/cue/command.rs` の `cue_command_seven_variants` テスト（7 個数え上げ）と serde roundtrip テストは variant 追加で更新要（機械的）。
+- **wintf 不関与を再確認**: `CueTarget` は wintf では tuple キー／registry 名前空間としてのみ使用（`tracker.rs`/`registry.rs`）で exhaustive match 無し。`CueCommand` も match しない。
+- seriko `actor.rs` の外側分類（`Some(other)` catch-all）と内側 command match（`other` catch-all）は **variant 追加でコンパイル強制されない** → 消費経路はテスト檻で担保（design Testing Strategy）。
+
+### E2E 同期機構の発見（決定論・sleep 不使用）
+
+- `spawn_talk`（`areka-sakura/src/drive.rs`）は `StartTalk{talk_id, script}` を受け内部で parse→compile する（script 直入力の起点）。Tick は `TalkHandle.inbox` へ `SakuraMsg::Tick(f64)` 注入。
+- **同期チェーン**: `done.recv()`（TalkDone 受領）→ talk スレッド終了で move 済み `SerikoSink`（唯一の Sender）が drop → seriko inbox **disconnect** → `run_inbox` 正常終了 → `seriko ActorHandle.join()`。**既存の 2 停止経路（Close/disconnect）だけで新 API 不要**・sleep/polling ゼロ。
+- areka-seriko は areka-sakura／areka-parsers に既に regular 依存 → E2E は areka-seriko 側 `tests/` に新規依存ゼロで置ける。
+
+## 6.2 Design Decisions（D1–D8 確定）
+
+### 決定 1（D3・中心判断）: 分類先は Option A ＝ `cue_target_of(BalloonSurface) → CueTarget::Shell`
+
+- **あるべき姿**: `CueTarget` の 2 分類の実態は「Shell＝サーフェス消費系（seriko）／Balloon＝文字状態機械（emo-text）」であり、理想形は `Surface`/`Text` へのリネーム（意味論正化）。
+- **理想形を今採らない理由（solve/not-solve 対比）**:
+  - **リネーム（理想形）**: ✅意味論完全 ❌ serde ワイヤ互換破壊（`CueTarget` は Serialize/Deserialize）・wintf の tuple キー／EntityKey 名前空間／既存テスト群への横断破壊＝ **R2.3「既存配送対象を変更しない」違反**。
+  - **第 3 variant 追加（B'案）**: ✅名前は正しい ❌同一 sink（SurfaceSink）へ流れる**擬似スロット**が生まれ wintf の per-actor スロットモデル（`EntityKey::Actor(ActorKey, CueTarget)`）を無消費者のまま拡張・drive/seriko 両方の追随も結局必要＝改変量最大で得るのは名前だけ。
+  - **Option A（採用）**: ✅ dola `CueTarget`／`drive.rs`／wintf 完全無改変・seriko は既に Shell 分類を全量受領済み・「seriko＝表示状態の唯一の所有者」（シェル/バルーン統一エンジン正典）と意味的に整合 ❌ `Shell` の名が広義化（名前負債）。
+- **名前負債の処置**: dola `CueTarget::Shell` の doc comment を「表示系（サーフェス消費・seriko が消費: シェル面＋バルーン面）」へ更新（doc-only・挙動不変）。**リネーム本体は将来の cue-routing 再編 spec へ明示申し送り**（未解決のまま登記）。
+
+### 決定 2（D4）: `CueCommand::BalloonSurface { key: String }`（`Emote` 完全対称）
+
+- 8 番目の variant・不透明 key 転写・stateless（面の現在状態は seriko 所有）。serde は externally-tagged で additive。`Custom` 逃がしは配送不能袋小路ゆえ不採用（brief 既決）。
+- **ブラケット引数の転写幅**: `\s` の実装（`args` の**第 1 引数のみ** `SurfaceArg` へ）と完全対称に、`\b[...]` も第 1 引数のみを key とする。ukadoc fallback 形 `\b[2,--fallback=4]` は ID1=`"2"` として graceful 動作（fallback 意味論は将来 additive・既知の制限として登記）。
+
+### 決定 3（D2）: 裸形 `\bN` は lexer shorthand 機構の一般化で取り込む
+
+- `SHORTHAND_WORDS = &['w', 'b']` へ拡張し、内部トークン `Token::WaitShorthand(u8)` を `Token::Shorthand { word: char, n: u8 }` へ一般化（`pub(crate)` 内部型＝公開 API 不変）。decode 側で `'w'`→`Wait`／`'b'`→`BalloonSurface` へ分岐。
+- 本文数字漏れ根絶（R1.3）は lexer 層で構造的に解決: `\b1`→面`"1"`（Text 出力なし）・`\b12`→面`"1"`＋本文`"2"`・`\b2[x]` は既存 `\w2[x]` と同じく非 shorthand（`Tag{word:"b2"}`→Raw passthrough）・数字無し裸 `\b` は従来どおり `Bare('b')`→`Raw("\b")`。
+- decode-level fold 案（`\q` 旧 fold 先例）は棄却: `\w` が lexer 層で解決済みの先例と層責務が割れる。
+
+### 決定 4（D5）: seriko 状態＝`ScopeStates` 同居 map・指令＝`DisplayCommand` 新 variant
+
+- **状態**: `ScopeStates` に `balloon: HashMap<ActorKey, ScopeState>` を**シェル map と別 map で同居**追加し `apply_balloon()` を新設（`ScopeState{Shown,Hidden}`・冪等ガード・未知 scope への Hide 一度発行、を既存 `apply()` と同一規律で鏡映）。シェル map・`apply()` は無改変（R4.6 の構造的担保）。別構造体案は所有者分裂（No Hidden Shared Ownership 違反気味）ゆえ棄却。
+- **指令**: `DisplayCommand::ShowBalloon { scope, surface_id }`／`HideBalloon { scope }` の**新 variant**（案 i）。既存 `Show`/`Hide` へ target フィールド追加（案 ii）は既存契約の形状変更＝下流（emo2-boot adapter・既存テスト）破壊ゆえ棄却。
+- **`binds` は載せない**: バルーンに着せ替え bind は M-boot 不存在。adapter が `PresentCommand::ShowSurface{binds: BindSet::default()}` を組む。SERIKO バルーンアニメ導入時の Revalidation Trigger として登記。
+- **`#[non_exhaustive]` は付けない**: workspace 内部契約はコンパイラ強制（catch-all 禁止文化）を優先。variant 追加時は下流 match が明示追随する（本 spec 自身がその実演）。
+- **数値解決**: `resolve.rs` に純関数 `resolve_balloon_key(&str) -> SurfaceTarget` を新設（i64 parse: `-1`→Hide・0..=u32::MAX→Show・他→Unresolved。**alias 表を引かない**＝R4.4）。非数値（名前形）の Unresolved は actor 側で **warn!**＋skip（`EntityRef` の「M-boot 未対応」warn! 先例に整合。破損系の error! と区別）。
+
+### 決定 5（D1 派生）: 既定面・奇数予約は本 spec の非責務
+
+- `balloon.defaultsurface`（既定 0）の初期表示は emo2-boot adapter の起動時責務（seriko 状態は未設定から始まり、初回 `\b[N]` は必ず Changed）。奇数 id はパリティ検査しない（正典は「予約」＝作法であり、実在しない面の縮退は emo-present 既存挙動が受ける）。
+
+### 決定 6（D7）: 文字層は同寸保持（作業ゼロ）・異寸はスコープ外（B5 申し送り）
+
+- 層分離（バルーン枠=emo-present surface／文字=text_slot 別 visual）ゆえ、seriko がバルーン面切替で `Clear` を発行しない限り**文字層は構造的に無傷＝保持がデフォルト**。M1 裁定＝同寸保持（追加実装なし）。異寸切替の文字層再装着（`ActorRender` 再構築）は B5 増分へ申し送り（R6 は同寸限定で檻を張る）。
+
+### 決定 7（D8・R6/R5.5）: emo-present 回帰は presenter.rs `#[cfg(test)]` 内 additive・fixture は test-local 合成
+
+- 既存 `hide_then_reshow_recovers_display_from_cache`（presenter.rs:954）の流儀を複製し、**2 面同寸 assets ヘルパ**（id 1000/3000 等・同 w×h・別バイト）＋「異 id 再 Show」テストを追加。`text_slot_view()` スナップショットの前後一致（slot/window/surface_size/scale）で TextSlotView 安定性を固定。crate 本体（非 test コード）は無改変。
+- R5.5 の多面バルーン fixture は **test-local 合成**（balloon.rs の TempDir＋MemoryDecoder 流儀で `balloons0.png`＋`balloons2.png`＝正典の偶数 id）。emo2 実 fixture へは手を入れない。
+
+### 決定 8（E2E 配置・R5）: areka-seriko `tests/balloon_face_e2e.rs`
+
+- script 直入力（`StartTalk{script}`）→ `spawn_talk`（surface_sink=`SerikoSink`・text_sink=test-local Null）→ Tick 注入 → `done.recv()` → SerikoSink drop（disconnect）→ `seriko join()` → `MockSurfaceOutput` 照合。新規依存ゼロ・sleep ゼロ。cross-thread ログ檻は既存流儀どおり `handle_message` 同期呼び出し＋`capture_logs` の単体側で張る。
+
+## 6.3 Synthesis 記録
+
+- **一般化**: 単桁 shorthand 機構を `Token::Shorthand{word,n}` へ一般化（interface の一般化・実装は `w`/`b` の 2 語に限定）。
+- **Build vs Adopt**: 新規外部依存なし（R7.2）。全て既存機構（shorthand・ScopeStates 規律・MockSurfaceOutput・TempDir/MemoryDecoder・spawn/join 同期）の再利用。
+- **簡素化**: 第 3 sink なし／`CueTarget` 拡張なし／`DisplayCommand` の binds なし／`#[non_exhaustive]` なし／既定面状態なし——いずれも「今の要件が要求しない just-in-case」を排除。拡張余地は不透明 key と variant 追加の 2 シームで担保。
+
+## 6.4 Risks & Mitigations（設計フェーズ更新）
+
+- **seriko 追随漏れ（コンパイラ非強制）** — actor 内側 match の catch-all により variant 追加が黙殺され得る → E2E＋handle_message 単体檻で「ShowBalloon/HideBalloon が実際に出る」ことを直接固定。
+- **裸形 lexer 介入の回帰** — 1 パススキャナの shorthand 分岐変更 → 既存 `\w` 全テスト緑維持＋`\b` 境界ケース（`\b`単独・`\b12`・`\b2[x]`・`\b1[`）の檻を追加。
+- **`\s` 対称性の暗黙破壊** — `\b` arm 追加時に既存 arm へ触らない（R1.6）→ parsers 既存テスト全緑で担保。
+- **名前負債の固定化** — `CueTarget::Shell` 広義化を doc に明記＋将来 spec 申し送りを design.md Out of Boundary に登記（黙って風化させない）。
+
+## 6.5 References
+
+- [UKADOC さくらスクリプト一覧](https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html) — `\b[ID]`／裸形 `\bID`（0–9）／`\b[-1]` 非表示／奇数予約／fallback 形の正典。
+- [UKADOC ゴースト descript.txt](https://ssp.shillest.net/ukadoc/manual/descript_ghost.html) — `balloon.defaultsurface,数値`（既定 0）。
+- [UKADOC バルーン構成](https://ssp.shillest.net/ukadoc/manual/manual_balloon.html) — `balloons*.png` ファイル族。
