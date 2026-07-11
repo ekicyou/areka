@@ -120,6 +120,19 @@ fn create_staging(
     tex.ok_or_else(|| none_err("CreateTexture2D(staging) returned None"))
 }
 
+/// `\_b --option=fixed` 固定層（スクロールに追従しない画像層）の差し込み点の**型シーム**
+/// （R7・実挙動なし）。
+///
+/// 固定層はスクロール描画面（`sources`）に**描かない**——面内 blit の影響を受けない
+/// **別合成層**として、[`TextSurface::present`] の合成点（front→backbuffer コピーの直後・
+/// `Present` の直前）に将来重ねる（R7.1/7.3）。`read_back` は `sources`（front）を読むため、
+/// 本予約は pixel golden に影響しない（R7.4）。`#[non_exhaustive]`＋フィールドなし＝crate 外
+/// から意味を持たせられない構造保証で、M1 は型と合成点 doc のみ・実挙動（画像読込・固定層の
+/// 実描画）は後続の `\_b` 対応増分の領分（R7.2）。
+#[non_exhaustive]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct FixedOverlaySeam {}
+
 /// 自前 swapchain 供給面＋text_slot への brush 装着＋readback（R9.1/R9.3）。
 ///
 /// [`Self::attach`] が actor ごと**初回のみ**予約スロットへ brush として装着し、以降の
@@ -148,6 +161,11 @@ pub struct TextSurface {
     sprite: SpriteVisual,
     /// 現在の供給面サイズ（物理 px＝`ceil(validrect 寸 × k)`・論理 px 不在）。
     size: (u32, u32),
+    /// `\_b --option=fixed` 固定層差し込み点の型シーム（R7・M1 は実挙動なし）。
+    /// [`present`](Self::present) の合成点を型で予約する（scroll 面 `sources` とは分離した
+    /// 別合成層——増設時に blit 構成を再構築せずに済む・R7.3）。
+    #[allow(dead_code)]
+    fixed_overlay: FixedOverlaySeam,
 }
 
 impl TextSurface {
@@ -253,6 +271,7 @@ impl TextSurface {
             context,
             sprite,
             size: physical_size,
+            fixed_overlay: FixedOverlaySeam::default(),
         })
     }
 
@@ -275,6 +294,12 @@ impl TextSurface {
                 .cast()
                 .map_err(device_err("backbuffer->Resource cast"))?;
             unsafe { self.context.CopyResource(&back_res, &src_res) };
+
+            // ── 固定層（`\_b --option=fixed`）の合成点（[`FixedOverlaySeam`]・R7.1/7.3） ──
+            // scroll 面（`sources`）の複製直後・`Present` の直前が、スクロール blit の影響を
+            // 受けない別合成層＝固定層を backbuffer へ重ねる位置。M1 は予約のみ（実描画なし）。
+            // read_back は front（`sources`）を読むため、この合成点は pixel golden の外（R7.4）。
+            let _fixed_overlay_seam = self.fixed_overlay;
         }
 
         unsafe { self.swapchain.Present(0, DXGI_PRESENT(0)) }
@@ -709,5 +734,52 @@ mod tests {
                 "blit ({dx},{dy}) の往復: 元内容が期待位置に byte 一致・露出域は透明"
             );
         }
+    }
+
+    /// 固定層差し込み点は型シームのみ＝データを一切持たない（zero-sized・M1 で描画へ
+    /// 影響し得ない構造保証・R7.2）。他 crate 内シーム（`FontDisableSeam`/`TextEffects`）と
+    /// 同じ zero-sized 規律。
+    #[test]
+    fn fixed_overlay_seam_is_type_only() {
+        assert_eq!(std::mem::size_of::<FixedOverlaySeam>(), 0);
+        assert_eq!(FixedOverlaySeam::default(), FixedOverlaySeam::default());
+    }
+
+    /// 固定層予約は読み戻し対象（front `sources`）に含まれない（R7.4）: 型シームを持つ
+    /// surface に既知パターンを front へ直書き→`present`（固定層合成点を通る）→`read_back` が
+    /// パターンを一切変えずに返す＝予約が pixel golden に影響しないことを確認する。
+    #[test]
+    fn fixed_overlay_seam_does_not_alter_readback() {
+        let (_dq, compositor) = make_dispatcher_and_compositor();
+        let core = GraphicsCore::new().expect("GraphicsCore::new 失敗");
+
+        let mut world = World::new();
+        let (window, slot) = spawn_reserved_slot(&mut world);
+        let binding = TextSlotBinding::new(slot, window, 1.0, (10, 8));
+        let (w, h) = (4u32, 3u32);
+        let mut surface =
+            TextSurface::attach(&mut world, &binding, &compositor, &core, (w, h), (0.0, 0.0))
+                .expect("TextSurface::attach 失敗");
+
+        let pattern = premul_pattern(w, h);
+        let src_res: ID3D11Resource = surface.source_tex().cast().expect("front->Resource cast");
+        unsafe {
+            surface.context.UpdateSubresource(
+                &src_res,
+                0,
+                None,
+                pattern.as_ptr() as *const _,
+                w * 4,
+                0,
+            );
+        }
+
+        // present は固定層合成点（front→backbuffer コピー直後）を通るが、M1 は実描画なし。
+        surface.present().expect("present 失敗");
+        let bytes = surface.read_back().expect("read_back 失敗");
+        assert_eq!(
+            bytes, pattern,
+            "固定層予約は read_back（front）を変えない——pixel golden の外（R7.4）"
+        );
     }
 }
