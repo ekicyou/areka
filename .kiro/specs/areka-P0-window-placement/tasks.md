@@ -133,6 +133,37 @@
   - _Depends: 7.1_
   - _Boundary: examples/window-placement_
 
+- [ ] 8. Extension: 目視受け入れ由来の正典整合（2026-07-11 開発者承認・要件 4.7/4.8 追加）
+- [ ] 8.1 bottom 吸着の情報伝搬と MonitorSnapshot 基盤を実装する
+  - `ScopePlacement` に `bottom_snap: bool`（`Bottom`/`Seam` = true・`Free` = false）を追加し、resolver が設定・spawn がキャラ窓 entity へ `BottomSnap` 相当の情報として付与する
+  - `MonitorSnapshot` Resource（全モニタの work area 集合・物理 px `RectPx`）と、窓矩形の中心が属するモニタの work area を引く純粋ヘルパ `work_area_for_window(snapshot, window_rect) -> Option<RectPx>`（中心がどのモニタにも属さない場合は最近傍）を実装する。seam（main.rs）と example が起動時に実モニタから snapshot を挿入する
+  - 単体テスト: bottom_snap の伝搬（Bottom/Seam→true・Free→false）・`work_area_for_window` の複数モニタ／負座標／境界中心／どこにも属さない窓の各ケース
+  - 観測可能な完了状態: `cargo test -p areka` で新テストが緑・既存テスト無退行
+  - _Requirements: 4.7_
+  - _Boundary: placement::resolver, placement::spawn, placement::follow (snapshot), main.rs seam_
+- [ ] 8.2 bottom 吸着ドラッグ（Y 釘付け・モニタ跨ぎ再吸着）を実装する
+  - `on_char_drag` を拡張し、`BottomSnap` のキャラ窓は wndproc 移動後に `MonitorSnapshot`＋`work_area_for_window` で現在モニタの `work_area.bottom − h` を求め、Y がずれていれば自窓へ `SetWindowPosCommand` で再釘付けする（X は不変・物理 px・再スケールなし）。バルーン追従はキャラ窓の釘付け後座標基準で offset 加算する
+  - `Free` スコープと吸着なし窓は従来どおり全方向移動（挙動不変）
+  - headless テスト: 合成 `MonitorSnapshot` を注入し、(a) bottom 窓のドラッグで Y が下端へ矯正される (b) X は素通し (c) モニタ跨ぎで跨いだ先の下端へ再吸着 (d) Free 窓は矯正されない (e) バルーンが釘付け後座標＋offset へ追従する
+  - 観測可能な完了状態: `cargo test -p areka follow::` で新テスト緑・既存 T-I4 無退行
+  - _Requirements: 4.7_
+  - _Depends: 8.1_
+  - _Boundary: placement::follow_
+- [ ] 8.3 バルーン単独ドラッグの相対位置記憶を実装する
+  - `on_balloon_drag` を実装しバルーン窓へ `OnDrag` 付与: ドラッグ中、`BalloonFollow.balloon == sender` のキャラ窓を query 走査で逆引きし `BalloonFollow.offset = balloon_pos − char_pos` を更新する（キャラ窓は不動・物理 px）
+  - 旧挙動（次のキャラ窓ドラッグで初期 offset へスナップバック）を検証していた `t_i4_char_move_restores_initial_offset_after_balloon_solo_move` は要件 4.8 による仕様退役として記憶挙動の檻へ書き換える
+  - headless テスト: (a) バルーン単独ドラッグで offset が更新される (b) 以後の `move_window_to`／`on_char_drag` が調整後 offset で追従 (c) キャラ窓はバルーンドラッグで不動 (d) 複数スコープで他スコープの offset 不干渉
+  - 観測可能な完了状態: `cargo test -p areka` で新テスト緑・書き換え後の旧テスト緑
+  - _Requirements: 4.8_
+  - _Depends: 8.1_
+  - _Boundary: placement::follow, placement::spawn_
+- [ ] 8.4 実 DPI 目視受け入れの再検証（4.7/4.8 追補）
+  - example を実 DPI（≠96）で実行し、①bottom 吸着（上下ドラッグ不可・左右スライド） ②モニタ跨ぎ再吸着（跨いだ先の下端へ） ③バルーン単独ドラッグ→offset 記憶→キャラ窓ドラッグで調整後 offset 追従、を観測・記録する（acceptance-record.md へ追補）
+  - 観測可能な完了状態: 実 DPI 値と各項目の pass/fail が acceptance-record.md に追記され全項目 pass
+  - _Requirements: 4.7, 4.8, 3.5_
+  - _Depends: 8.2, 8.3_
+  - _Boundary: examples/window-placement_
+
 ## Implementation Notes
 
 - 1: `areka_parsers::package::MountError` は Display/std::error::Error 未実装（Clone/Debug/PartialEq/Eq のみ・#[non_exhaustive]）。`PlacementError::Mount` は `{0:?}` Debug 整形・`#[from]` 不可 → 後続タスクは `PlacementError::Mount(e)` を明示構築すること（areka-parsers は改変禁止）。

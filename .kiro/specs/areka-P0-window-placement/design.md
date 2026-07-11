@@ -163,7 +163,7 @@ graph TB
 | DD4 | placement は `package::resolve` を自前で呼び shell dir を解決、descript KV は `charset::decode`＋`kv::parse_kv` で再読込（`GhostRuntime.mount` は private のまま触らない） | emo-present の `read_balloon_offset` と同型の前例。areka-ghost 不改変で層境界を保つ。resolve は決定的・軽量 |
 | DD5 | areka-emo-atlas／-compose を areka の**通常依存へ昇格**し、`measure` が surface（scope0=id 0・scope1=id 10）と balloon surface0 を bind なし合成して原寸を得る | 窓寸＝surface 原寸（物理 px）の唯一の正確な供給源。emo2-boot が後で同依存を bin へ持ち込むことが確定しており前倒しに過ぎない。PNG 直読は合成外形と乖離し得るため棄却 |
 | DD6 | スコープ数は descript から導出: scope1 は「ghost `kero.name` あり **or** shell に `kero.*` キーあり」で存在、`char{n}.*`（n≥2）キーは scope n を追加（構造は N 対応・emo2 は 2） | 1.3（ハードコード禁止）を構成入力で満たす最小規則。emo2 で決定論的に 2 になる |
-| DD7 | バルーン暫定 offset は初期配置の幾何から算出（`balloon.alignment` left→右端＝キャラ左端／right→左端＝キャラ右端・上端揃え・`balloon.offsetx/y` 加算）。**固定定数 (335,0) 等は持ち込まない**。offset は配置時に確定し以後静的 | 1.5／4.4。emo-present `compute_balloon_pos` donor の一般化 |
+| DD7 | バルーン暫定 offset は初期配置の幾何から算出（`balloon.alignment` left→右端＝キャラ左端／right→左端＝キャラ右端・上端揃え・`balloon.offsetx/y` 加算）。**固定定数 (335,0) 等は持ち込まない**。offset は配置時に初期確定（以後の更新は DD16 のユーザー調整記憶のみ） | 1.5／4.4。emo-present `compute_balloon_pos` donor の一般化 |
 | DD8 | **M1 は `DragConstraint` を付与しない**（無制約＝仮想デスクトップ全域ドラッグ可）。制約を付ける場合の算出規則（全モニタ和・物理 px）は純粋ヘルパ `virtual_desktop_union` として提供・テストする | 4.5 を直接満たし、07-05 の単一モニタ誤釘付けの欠陥面そのものを消す。4.6 は条件付き要件（If 適用するとき）＝規則とヘルパで担保 |
 | DD9 | `alignmenttodesktop` の `top`/`left`/`right`/未知値は enum シーム（`Alignment::Seam(String)`）として受理し、実挙動は既定 `bottom` と同じ＋`warn!` ログ | 2.8（最小実装＋拡張シーム）。emo2 は bottom のみ使用 |
 | DD10 | `free` の座標原点は**プライマリモニタ work area 左上**（`x = work_area.left + defaultleft`・`y = work_area.top + defaulttop`）。未指定成分は bottom 相当値へフォールバック | 2.6／2.12 と整合。emo2 は free 未使用のため受け入れに影響せず、決定論テストで意味論を固定 |
@@ -171,6 +171,8 @@ graph TB
 | DD12 | 解決済みキャラ窓位置は work area 内へクランプ（`left ≤ x ≤ right−w`・`top ≤ y ≤ bottom−h`）。バルーンはクランプせずログのみ | 3.1「画面内に正しく出現」の安全弁。バルーンは暫定規則ゆえ介入最小 |
 | DD13 | 既定 z-order: ex_style は `WS_EX_LAYERED\|WS_EX_TOOLWINDOW` のみ（donor の `WS_EX_TOPMOST` を外す）。`zorder`/`sticky-window` は `PlacementConfig` へ転記のみ | 5.1／5.2。SSP de-facto（既定 topmost でない） |
 | DD14 | placement 準備（resolve→KV→採寸→解決）が失敗したら `spawn_dummy_window` へフォールバックして骨格起動を維持（log-first・error!／benign は warn!） | ghost-setup の benign 継続方針と整合。sandbox（fixture 不在）で main が壊れない |
+| DD15 | **bottom 吸着ドラッグ（4.7・2026-07-11 追加承認）**: `Bottom`/`Seam` スコープのキャラ窓は、ドラッグ中の `OnDrag` ハンドラで wndproc 移動後に「窓中心が属するモニタの `work_area.bottom − h`」へ Y を再釘付けする（`SetWindowPosCommand` 経由・物理 px）。`DragConstraint` は引き続き不採用（per-monitor 下端の違いを静的クランプで表現不能・DD8 維持）。モニタ work area 集合は起動時に取得する `MonitorSnapshot` Resource（headless テストは合成値を注入する偽装境界）から引き、窓中心→モニタ解決は純粋ヘルパで行う（決定論テスト可）。snapshot はセッション内固定＝M1 受容（`WM_DISPLAYCHANGE` 追随は後続）。吸着対象はキャラ窓のみ（バルーンは 4.8 で単独移動） | ukadoc 正典 `\![set,alignmenttodesktop,方向]`「上または下に吸着した場合、上下方向へのドラッグ移動ができなくなる」。目視受け入れ（2026-07-11）で開発者指摘・承認 |
+| DD16 | **バルーン相対位置の記憶（4.8・2026-07-11 追加承認）**: バルーン窓に `OnDrag` ハンドラ `on_balloon_drag` を付与し、単独ドラッグ中に「そのバルーンを参照する `BalloonFollow` を持つキャラ窓」を query 走査（窓数は少数）で逆引きして `BalloonFollow.offset = balloon_pos − char_pos` を更新する。以後の `on_char_drag`／`move_window_to` は更新後 offset で追従（既存консumer は無改変で新 offset を読む）。記憶はセッション内のみ・`ghost.dat` 永続化は M-life。初期 offset の幾何規則（P5）は暫定のまま＝4.4 不変 | SSP de-facto（バルーン位置調整の記憶）。目視受け入れ（2026-07-11）で開発者指摘・「正しく実装」指示 |
 
 ### Technology Stack
 
@@ -545,7 +547,7 @@ pub fn move_window_to(world: &mut World, window: Entity, x: i32, y: i32) -> bool
 ```
 
 - Preconditions: UI スレッド（`&mut World` は wintf tick 内でのみ到達可能＝7.2 を型で担保）。Postconditions: 移動は `SetWindowPosCommand`（`SWP_NOSIZE|SWP_NOZORDER|SWP_NOACTIVATE`）経由＝物理 px 素通し。Invariants: DPI 再スケールなし（U4）・channel/actor 型が署名に現れない（7.3）
-- offset は静的（バルーン単独ドラッグでユーザーがずらした場合、次のキャラ窓ドラッグで初期 offset に戻る——暫定規則の受容挙動として明記。正式規則は balloon 表示系・4.4）
+- offset の初期値は P5 幾何（暫定・4.4）。バルーン単独ドラッグでユーザーがずらした場合は `on_balloon_drag`（DD16・4.8）が `BalloonFollow.offset` を更新し、以後のキャラ窓ドラッグ・`move_window_to` は調整後 offset で追従する（セッション内記憶・永続化は M-life）。~~次のキャラ窓ドラッグで初期 offset に戻る~~（2026-07-11 開発者指摘により記憶方式へ改訂）
 
 ### 統合層
 
