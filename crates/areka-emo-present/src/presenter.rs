@@ -1292,4 +1292,179 @@ mod tests {
             "bind 除去が表示へ反映されない（合成入力キーの回帰＝着せ替えバグ再発）"
         );
     }
+
+    /// surface 1000／3000 = 同 `w×h`・全不透明・**別バイト**（別 element・別 salt）を持つ単一
+    /// world の `(EmoWorld, AtlasTable)` と、各面の直接合成 golden 2 本を返す（build_target_assets の
+    /// 複面版）。
+    ///
+    /// 両面とも α=255（全不透明）ゆえ α=0 除外トリムは全域を残し、合成外形は両面とも正確に `w×h`
+    /// （＝同寸）。ゆえに供給面（chain）リサイズ経路を踏まずに「同寸・異 id 再 Show」だけを固定できる。
+    /// golden は presenter が内部で辿るのと同一 world/atlas から作るため readback とのバイト一致が
+    /// 二重に決定論的。2 面の golden が別物であることを fixture 自身が assert する（R6.1 の回帰檻前提）。
+    fn build_two_face_assets(w: u32, h: u32) -> (EmoWorld, AtlasTable, Vec<u8>, Vec<u8>) {
+        let base = Path::new("shell/master");
+        let surfaces = vec![
+            surface(1000, vec![elem("p.png", 0, 0)]),
+            surface(3000, vec![elem("q.png", 0, 0)]),
+        ];
+
+        let stride = w * 4;
+        let gradient = |salt: u8| -> Vec<u8> {
+            let mut img: Vec<u8> = Vec::with_capacity((stride * h) as usize);
+            for y in 0..h {
+                for x in 0..w {
+                    let b = (x as u8).wrapping_mul(3).wrapping_add(salt);
+                    let g = (y as u8).wrapping_mul(5).wrapping_add(salt);
+                    let r = ((x + y) as u8).wrapping_mul(7).wrapping_add(salt);
+                    img.extend_from_slice(&[b, g, r, 0xFF]);
+                }
+            }
+            img
+        };
+
+        let mut dec = MemoryDecoder::new();
+        dec.insert(base.join("p.png"), w, h, stride, gradient(0x11), true);
+        dec.insert(base.join("q.png"), w, h, stride, gradient(0x77), true);
+
+        let set = SurfaceSet {
+            surfaces: &surfaces,
+            base_dir: base,
+            alpha_params: AlphaParams {
+                use_self_alpha: UseSelfAlpha::On,
+            },
+        };
+        let baked = bake(&[set], &dec, PackConfig::default());
+        assert!(baked.errors.is_empty(), "atlas bake セットアップは失敗しない");
+
+        let mut world = EmoWorld::build(&shell_of(surfaces));
+        world.bind_atlas(&baked.table, SetId(0));
+        let atlas = baked.table;
+
+        let mut composer = Composer::new();
+        let golden_1000 = composer
+            .compose(&world, &atlas, 1000, &BindSet::default())
+            .expect("面 1000 の合成は Ok")
+            .bytes()
+            .to_vec();
+        let golden_3000 = composer
+            .compose(&world, &atlas, 3000, &BindSet::default())
+            .expect("面 3000 の合成は Ok")
+            .bytes()
+            .to_vec();
+        assert_ne!(
+            golden_1000, golden_3000,
+            "fixture 前提: 同寸でも 2 面のバイトが異ならなければ再表示の回帰檻にならない"
+        );
+
+        (world, atlas, golden_1000, golden_3000)
+    }
+
+    /// R6.1 観測完了（同寸・異 id 再 Show ＝ 新面提示 ＋ 文字スロット安定）: バルーン target が既に
+    /// ある面（1000）を表示中に、**同寸の異なる面 id（3000）**を `ShowSurface` すると——(a) reply Ok・
+    /// (b) 可視維持・(c) `HitTest::AlphaMask` 維持・(d) `read_back` が **新面 3000 の golden** と一致
+    /// （新面が実際に提示された証跡）・(e) `text_slot_view()`（slot/window/surface_size/scale）が切替の
+    /// 前後で**完全一致**（文字スロットが安定＝TextSlotView が不変）——をすべて満たす。
+    ///
+    /// 同寸ゆえ供給面（chain）と装着（mount）は再生成されず（apply_show の `chain.is_none()` 分岐を
+    /// 踏まない）、予約 text スロット entity は据え置かれる＝emo-text の描画資源を破壊しない
+    /// （design §emo-present 回帰・文字層＝同寸保持）。本 crate 本体は無改変（test-only・R6.3）。
+    #[test]
+    fn reshow_same_size_different_face_keeps_text_slot_stable() {
+        let mut world = make_world_with_gpu();
+        let window = world.spawn_empty().id();
+
+        let (emo_world, atlas, golden_1000, golden_3000) = build_two_face_assets(6, 5);
+
+        let mut presenter = EmoPresenter::new();
+        presenter
+            .attach_target(&mut world, TargetId(0), window, emo_world, atlas)
+            .expect("attach_target 失敗");
+
+        // 面 1000 を表示確立（可視・αマスク判定・供給面/装着を遅延生成）。
+        let (tx0, rx0) = reply_channel::<PresentOutcome>();
+        presenter.apply(
+            &mut world,
+            PresentCommand::ShowSurface {
+                target: TargetId(0),
+                surface_id: 1000,
+                binds: BindSet::default(),
+                reply: Some(tx0),
+            },
+        );
+        assert!(
+            matches!(rx0.recv_timeout(Duration::from_secs(10)), Ok(Ok(()))),
+            "面 1000 の初回 ShowSurface が Ok でない"
+        );
+        // 前提: 初回表示は面 1000 の golden（切替前の基準）。
+        assert_eq!(
+            presenter.read_back(TargetId(0)).expect("read_back（面 1000）失敗"),
+            golden_1000,
+            "初回表示が面 1000 の golden と一致しない（前提が崩れている）"
+        );
+
+        let surface_entity = presenter
+            .targets
+            .get(&TargetId(0))
+            .and_then(|t| t.mount.as_ref())
+            .expect("初回表示後は mount が生成済み")
+            .surface_entity();
+
+        // 切替前の文字スロット表示スナップショット（TextSlotView は Copy＝値で退避）。
+        let slot_before = presenter
+            .text_slot_view(TargetId(0))
+            .expect("表示確立後の text_slot_view は Some");
+
+        // 同寸・異 id 再 Show（面 3000）。
+        let (tx1, rx1) = reply_channel::<PresentOutcome>();
+        presenter.apply(
+            &mut world,
+            PresentCommand::ShowSurface {
+                target: TargetId(0),
+                surface_id: 3000,
+                binds: BindSet::default(),
+                reply: Some(tx1),
+            },
+        );
+        // (a) reply Ok。
+        assert!(
+            matches!(rx1.recv_timeout(Duration::from_secs(10)), Ok(Ok(()))),
+            "同寸・異 id（面 3000）の再 ShowSurface が Ok でない"
+        );
+
+        // (b) 可視維持。
+        assert!(
+            world.get::<Visual>(surface_entity).unwrap().is_visible,
+            "同寸・異 id 再表示後も可視のまま"
+        );
+        assert!(
+            presenter.targets.get(&TargetId(0)).unwrap().visible,
+            "同寸・異 id 再表示後も target.visible=true"
+        );
+        // (c) HitTest::AlphaMask 維持。
+        assert_eq!(
+            world.get::<HitTest>(surface_entity).unwrap().mode,
+            HitTestMode::AlphaMask,
+            "同寸・異 id 再表示後も αマスク判定を維持"
+        );
+
+        // (d) read_back が新面 3000 の golden と一致（新面が実際に提示された証跡・R6.1）。
+        let rb = presenter.read_back(TargetId(0)).expect("read_back（面 3000）失敗");
+        assert_eq!(
+            rb, golden_3000,
+            "再表示のバイトが新面 3000 の golden と一致しない（新面が提示されていない）"
+        );
+        assert_ne!(
+            rb, golden_1000,
+            "再表示のバイトが旧面 1000 のまま（面切替が表示へ反映されていない）"
+        );
+
+        // (e) 文字スロット表示が切替の前後で完全一致（slot/window/surface_size/scale が不変・R6.1）。
+        let slot_after = presenter
+            .text_slot_view(TargetId(0))
+            .expect("再表示後の text_slot_view は Some");
+        assert_eq!(
+            slot_before, slot_after,
+            "同寸・異 id 再表示で文字スロット表示（slot/window/surface_size/scale）が変化した（TextSlotView が不安定）"
+        );
+    }
 }
