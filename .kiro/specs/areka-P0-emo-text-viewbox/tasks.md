@@ -144,7 +144,7 @@
   - _Boundary: 既存回帰資産（読み取り専用実行・回帰時のみ描画実行側を修正）_
   - _Depends: 9_
 
-- [ ] 13. (P) 観測exampleのviewbox経路差し替えとチェックポイント追加を行う
+- [x] 13. (P) 観測exampleのviewbox経路差し替えとチェックポイント追加を行う
   - 既存の観測exampleが通るスクロール経路が新しい実行部を通るようにする（cue列・注入時刻駆動のシナリオ自体は変更しない）
   - 既存のtypewriter／改行／あふれ→スクロール／Clear／複数actor独立（横書き・縦書き）の各チェックポイントが単一pass/failのまま維持されることを確認する
   - あふれ→スクロール区間の前後で描画統計を読み出し、「可視窓のみ移動するフレームでの行描画実行回数増分が露出帯交差行数以下」「内容・可視窓とも不変のフレームでの増分0」をチェックポイントとして追加する
@@ -158,6 +158,8 @@
 - **Task 1 (spike) = GO**（2026-07-12・`tests/viewbox_blit_spike.rs`）: k=1.0・premultiplied 透明背景で「位置 A に描画→whole-pixel 整数 blit（`CopySubresourceRegion`・別テクスチャ）で位置 B へ」と「最初から位置 B へ描画」の保持域が **byte 完全一致**（横書き＝縦 blit・下端露出／縦書き（vertical_rl）＝横 blit・右端露出の両方で不一致 0・3 回再現）。ClearType/AA 位相不変仮定は成立＝設計前提は実証済み。ViewboxExecutor/ScrollPlanner 本実装へ進んでよい。
 - **`DIRTY_GUARD_IMG_PX` 実測 = 0**（既定 ＭＳ ゴシック 12px・公称セル `inline_advance × line_pitch(15)` 外への AA こぼれ 0）。ただし font/size 依存ゆえ design の保守既定 **1 image px** を採用するのが安全（live-diff 檻が破れを検出し、破れた場合はガード定数一点の増加で吸収）。
 - spike 由来の再利用元: テクスチャ生成＝`surface.rs::create_transparent_source_tex`／D2D ターゲット化＝`draw.rs::create_target_bitmap`／描画列＝`draw.rs::DrawExecutor::render` Phase2／readback＝`surface.rs::read_back`（RowPitch≥stride パディング）。行 TextLayout は本番と同一 `create_text_format` 経路（byte 等価の構造前提 RN5）。
+
+- **`draw_text_layout_calls` の count 上の綾（task 13 で判明・非欠陥）**: `ViewboxExecutor::render` はダーティ矩形ごとに `draw_lines` 全体を描く（クリップで pixels は正しく限定・live-diff task 10 で byte 等価実証済み）ため、`draw_text_layout_calls 増分 = dirty_len × draws.len()`。多ダーティ矩形フレーム（typewriter 進行＋スクロール＝露出帯∪変化行∪空行で dirty_len>1）では素朴な「増分 < 可視行数」が小 fixture（可視3行）で成立しない（例で draw_delta=3=vlc=3）。**これは全域再描画への退行ではなく count 上の綾**——確定 content は面内 blit で保持され再描画されない（blit=1・全域再描画なら blit=0）・生成増分は流入1行のみ（create≤1）・描画増分はスクロール深さに依らず一定（draw1==draw2＝確定行を蓄積再描画しない）。再描画レスは task 13 C8 で**深さ不変＋blit＋NoChange＝0** の頑健な不変で実証（fixture 脆弱な「draw<可視行数」に依存しない）。design の「可視窓のみ移動フレームで draw ≤ 露出帯交差行数」不変は純粋 window-only-move（dirty_len=1・自然には typewriter で発生しない）で成立。**将来の最適化余地**: ダーティ矩形ごとに交差住人のみ描画（design System Flows「dirty 交差住人」寄り）で冗長クリップ描画を削減し count を ≤露出帯交差行数へ締める（byte 等価は live-diff で担保・M1 では非必達）。
 
 ## 意図的な繰り延べ事項
 

@@ -87,6 +87,7 @@ use areka_emo_text::draw::DWriteMetrics;
 use areka_emo_text::layout::{GlyphMetrics, LayoutEngine};
 use areka_emo_text::sink::EmoTextSink;
 use areka_emo_text::state::TextLayerConfig;
+use areka_emo_text::viewbox_draw::DrawStats;
 use areka_emo_text::writing::WritingMode;
 use areka_parsers::balloon::{parse_str, BalloonModel};
 use areka_parsers::charset::{decode, DefaultEncoding};
@@ -165,6 +166,14 @@ const OVERFLOW_LINES: usize = 9;
 
 /// 各ステージのチェックポイント注入時刻（talk 起点相対秒・リビール時刻＋丸め余裕）。
 const T_CHECK: [f64; 7] = [0.12, 0.35, 1.1, 1.8, 3.0, 3.2, 3.4];
+
+/// R10.3 DrawStats 檻: 1 行/列スクロールフレームの `DrawTextLayout` 増分の tight bound。
+/// この共有 fixture（validrect 320×122・28px フォント＝可視 3 行）では、1 行スクロールの
+/// ダーティ＝露出帯 ∪ 完成した流入行 ∪ 末尾の空行の 3 枚に、実描画対象は流入行 1 本のみ
+/// （空行は skip）＝`draw_text_layout_calls` 増分は 3（`dirty_len 3 × draws 1`）に収まる。
+/// talk 全体の行数（あふれで 12 行超）に伸びない小定数であることが要点（reference:
+/// tests/viewbox_scroll_test.rs は可視 8 行の別 fixture で `増分 < 可視行数` を厳密に檻化）。
+const EXPOSURE_BAND_DRAW_BOUND: u64 = 3;
 
 /// ステージ gate（cue が UI ドレインを経て状態機械へ適用済みであることの決定論条件）。
 #[derive(Clone, Copy, Debug)]
@@ -1101,4 +1110,227 @@ fn run_checkpoint(demo: &mut Demo, world: &mut World, stage: usize, t_check: f64
 
     drop(rt);
     *world.resource_mut::<Verdict>() = verdict;
+
+    // ── R10.3: あふれ→スクロール区間の DrawStats 檻（stage 4=C5 のみ・単一 pass/fail へ追加） ──
+    // 既存の readback 述語（C5）で「あふれ→スクロールが発火した」ことを確認した直後に、
+    // 描画統計（DrawStats）のフレーム間増分で「可視窓のみ移動フレームは確定行を再描画しない
+    // （露出帯限定）」「内容・可視窓とも不変フレームは全増分 0」を決定論に檻化する。
+    if stage == 4 {
+        observe_redraw_less_stats(demo, world);
+    }
+}
+
+/// R10.3: あふれ→スクロール区間の再描画レス（可視窓のみ移動＝ダーティ限定描画）と
+/// 内容・可視窓とも不変フレームの全増分 0 を、`draw_stats` のフレーム間増分で単一 pass/fail
+/// へ檻化する（reference: tests/viewbox_scroll_test.rs の実 pump 檻を観測 example へ写像）。
+///
+/// 決定論の要: `present_frame` へ渡す注入時刻を本関数が固定制御し（実フレーム時刻に依存しない）、
+/// 可視窓は純粋 layout（[`window_probe`]）から導出するため、フレームレートに依らず同一結果になる。
+/// cue 列・注入時刻シナリオ自体は一切変えず、観測用の追加提示のみを行う（既存 C1–C7 は不変）。
+fn observe_redraw_less_stats(demo: &mut Demo, world: &mut World) {
+    let actor = actor0();
+
+    // ── 「可視窓のみ移動（＋1 完成行の流入）」フレームの端点となる注入時刻対を決定論に選ぶ ──
+    // draw_text_layout_calls は「ダーティ矩形数 × 描画対象行数」の積で計上される。末尾行が
+    // typewriter 途中（部分リビール）だとその変化行がダーティを 1 枚増やして積を膨らませるため、
+    // 端点は**リビールのプラトー**（可視グリフ数が一定＝行が完成し次行が未リビールの区間）の
+    // 中心に採る。こうすると変化行は「新規に流入した完成行」だけ・ダーティは（露出帯 ∪ その行）に
+    // 限られ、確定行は面内 blit で保持されて再描画されない（横書き/縦書き共通・軸非依存・決定論）。
+    let plateaus = enumerate_reveal_plateaus(demo, &actor);
+    // 完成プラトー＝**可視窓が直前プラトーから +1 したプラトー**（流入した行が完成した瞬間・
+    // 末尾実行行はちょうど完成しており部分リビール行がない＝ダーティが露出帯＋その 1 行に限られる）。
+    let complete: Vec<&RevealPlateau> = (0..plateaus.len())
+        .filter(|&i| i > 0 && plateaus[i].fvl >= 1 && plateaus[i].fvl == plateaus[i - 1].fvl + 1)
+        .map(|i| &plateaus[i])
+        .collect();
+    // 完成プラトーは可視窓 fvl=1,2,3,… と単調に 1 ずつ進む。深い側で **2 段連続の 1 行スクロール**
+    // （P → P+1 → P+2）を観測して「スクロールフレームの描画統計が可視窓の深さに依らず一定」
+    // ＝確定行がスクロール量に比例して蓄積再描画されないことを檻化する（再描画レスの核）。
+    if complete.len() < 3 {
+        world.resource_mut::<Verdict>().failures.push(
+            "C8: あふれ短行リビール区間で 1 行スクロールの完成プラトーが 3 つ未満（観測不能）".into(),
+        );
+        return;
+    }
+    let i2 = complete.len() - 1; // 最深スクロール先（可視窓 P+2）
+    let i1 = i2 - 1; // 中間（可視窓 P+1）
+    let i0 = i1 - 1; // ステップ始点（可視窓 P・基準フレーム）
+    let visible_line_count = complete[i0].vlc;
+
+    // ── 前方リプレイ: 完成プラトーを昇順に提示し、committed／prev_lines／行キャッシュを
+    // 「1 完成行ずつ流入する自然な前方スクロール」状態へ確定する（直前の stage-4 チェックポイント
+    // ＝末尾状態への後方ジャンプ汚染を吸収する）。到達点 complete[i0] が測定の基準フレーム。 ──
+    for pl in &complete[..=i0] {
+        present_at(demo, world, pl.t_mid);
+    }
+    let s_base = stats_of(demo, &actor);
+
+    // ── 条件 1（NoChange gating・R10.3/R3.5）: 同一注入時刻の再提示で全統計増分 0 ──
+    // 全域再描画方式ならここでも描き直すため増分が出る＝これが再描画レスの一次判別。
+    present_at(demo, world, complete[i0].t_mid);
+    let s_idle = stats_of(demo, &actor);
+    {
+        let mut v = std::mem::take(&mut *world.resource_mut::<Verdict>());
+        v.check(
+            s_idle.draw_text_layout_calls == s_base.draw_text_layout_calls,
+            "C8: 内容・可視窓とも不変のフレームは DrawTextLayout 増分 0（NoChange gating）",
+        );
+        v.check(
+            s_idle.line_layout_creations == s_base.line_layout_creations,
+            "C8: 不変フレームは行レイアウト生成 増分 0",
+        );
+        v.check(s_idle.blits == s_base.blits, "C8: 不変フレームは面内 blit 増分 0");
+        v.check(
+            s_idle.full_clears == s_base.full_clears,
+            "C8: 不変フレームは FullClear 増分 0",
+        );
+        *world.resource_mut::<Verdict>() = v;
+    }
+
+    // ── 条件 2: 連続する 2 段の 1 行スクロールフレーム（P→P+1, P+1→P+2）の描画統計を測る ──
+    present_at(demo, world, complete[i1].t_mid);
+    let s1 = stats_of(demo, &actor);
+    present_at(demo, world, complete[i2].t_mid);
+    let s2 = stats_of(demo, &actor);
+    let (fvl1, _) = window_probe(demo, &actor, complete[i1].t_mid);
+    let (fvl2, _) = window_probe(demo, &actor, complete[i2].t_mid);
+
+    let draw1 = s1.draw_text_layout_calls - s_idle.draw_text_layout_calls;
+    let draw2 = s2.draw_text_layout_calls - s1.draw_text_layout_calls;
+    let create1 = s1.line_layout_creations - s_idle.line_layout_creations;
+    let create2 = s2.line_layout_creations - s1.line_layout_creations;
+    let blit1 = s1.blits - s_idle.blits;
+    let blit2 = s2.blits - s1.blits;
+    info!(
+        p = complete[i0].fvl,
+        fvl1, fvl2, visible_line_count,
+        draw1, draw2, create1, create2, blit1, blit2,
+        "C8: スクロールフレームの DrawStats 増分（R10.3 観測・可視窓のみ移動・2 段）"
+    );
+
+    let mut v = std::mem::take(&mut *world.resource_mut::<Verdict>());
+    // 各段で可視窓がちょうど 1 行/列だけ進む（あふれ→行単位スクロールの発火）。
+    v.check(
+        fvl1 == complete[i0].fvl + 1 && fvl2 == fvl1 + 1,
+        "C8: 連続 2 段で可視窓が 1 行/列ずつ進む（あふれ→行単位スクロール）",
+    );
+    // 可視窓が動いた決定論的証拠＝各段で面内 blit がちょうど 1 回（確定ピクセルを複製して保持）。
+    // 全域再描画方式は保持せず描き直す＝blit 0——ここが本 fixture での再描画レスの決定的判別。
+    v.check(
+        blit1 == 1 && blit2 == 1,
+        "C8: 各スクロール段で面内 blit がちょうど 1 回（保持ピクセルを複製＝全域再描画は blit 0）",
+    );
+    // 再描画レスの核: スクロールフレームの DrawTextLayout 増分は可視窓の深さに依らず一定
+    // （確定行は面内 blit で保持され、描画は露出帯＋境界の変化行に限られる）。全域再描画／確定行を
+    // 蓄積再描画する退行では深い段ほど増分が増える＝この不変が破れる。
+    v.check(
+        draw1 == draw2,
+        "C8: スクロール描画増分がスクロール深さに依らず一定（確定行を蓄積再描画しない）",
+    );
+    // 描画は露出帯＋境界の変化行のダーティ矩形に限定され、talk 全体の行数（あふれで 12 行超）まで
+    // 伸びない小定数に収まる（tight bound・reference: tests/viewbox_scroll_test.rs）。
+    v.check(
+        draw1 <= EXPOSURE_BAND_DRAW_BOUND && draw2 <= EXPOSURE_BAND_DRAW_BOUND,
+        "C8: スクロール描画増分が露出帯＋境界行の tight bound 以下（ダーティ限定描画）",
+    );
+    // 確定行は行 TextLayout を再生成しない（面ピクセル＋blit＋行キャッシュが保持機構）＝
+    // 各段の生成増分は流入した高々 1 行分に収まる（可視行数 vlc より小さい）。
+    v.check(
+        create1 <= 1 && create2 <= 1 && (create1 as usize) < visible_line_count,
+        "C8: 確定行は行レイアウトを再生成しない（生成増分は流入 1 行分以下）",
+    );
+    *world.resource_mut::<Verdict>() = v;
+}
+
+/// リビールのプラトー（可視グリフ数が一定＝typewriter 非進行の区間）の代表点。
+struct RevealPlateau {
+    /// プラトー中心の注入時刻（端点で行が完成している安全点）。
+    t_mid: f64,
+    /// このプラトーでの先頭可視行 index。
+    fvl: usize,
+    /// このプラトーでの可視行数（`lines.len() - first_visible_line`）。
+    vlc: usize,
+}
+
+/// あふれ短行リビール区間 `[1.95, 2.95]` を細かく走査し、可視グリフ数が一定の各プラトー
+/// （typewriter 非進行区間）の中心時刻と可視窓を列挙する（純粋 layout・GPU present 不使用・決定論）。
+fn enumerate_reveal_plateaus(demo: &Demo, actor: &ActorKey) -> Vec<RevealPlateau> {
+    const STEP: f64 = 0.005;
+    const START: f64 = 1.95;
+    const END: f64 = 2.95;
+    let mut out = Vec::new();
+    let mut t = START;
+    let (mut cur_vc, mut cur_fvl, mut cur_vlc) = reveal_probe(demo, actor, t);
+    let mut plateau_start = t;
+    let mut prev = t;
+    while t < END {
+        t += STEP;
+        let (vc, fvl, vlc) = reveal_probe(demo, actor, t);
+        if vc != cur_vc {
+            out.push(RevealPlateau {
+                t_mid: (plateau_start + prev) / 2.0,
+                fvl: cur_fvl,
+                vlc: cur_vlc,
+            });
+            plateau_start = t;
+            cur_vc = vc;
+            cur_fvl = fvl;
+            cur_vlc = vlc;
+        }
+        prev = t;
+    }
+    out.push(RevealPlateau {
+        t_mid: (plateau_start + prev) / 2.0,
+        fvl: cur_fvl,
+        vlc: cur_vlc,
+    });
+    out
+}
+
+/// 純粋 layout から `(visible_glyphs, first_visible_line, visible_line_count)` を導出する
+/// （プラトー検出用・GPU present 不使用・決定論）。
+fn reveal_probe(demo: &Demo, actor: &ActorKey, t: f64) -> (usize, usize, usize) {
+    let rt = demo.runtime.borrow();
+    let resolved = demo.resolved.as_ref().expect("attach 完了後は Some");
+    let Some(state) = rt.state().actor_state(actor) else {
+        return (0, 0, 0);
+    };
+    let visible = rt.state().visible_glyphs(actor, t);
+    let lines = LayoutEngine::layout(
+        state.items(),
+        visible,
+        &resolved.region,
+        resolved.mode,
+        resolved.font.height,
+        demo.metrics.as_ref().expect("attach 完了後は Some"),
+    );
+    let window = LayoutEngine::visible_window(&lines, &resolved.region, resolved.mode);
+    (visible, window.first_visible_line, lines.len() - window.first_visible_line)
+}
+
+/// 純粋 layout から `(first_visible_line, visible_line_count)` を導出する
+/// （GPU present 不使用・描画と同一 metrics ゆえ供給面の可視窓と一致・決定論）。
+fn window_probe(demo: &Demo, actor: &ActorKey, t: f64) -> (usize, usize) {
+    let (_, fvl, vlc) = reveal_probe(demo, actor, t);
+    (fvl, vlc)
+}
+
+/// 指定注入時刻で `present_frame` を回す（失敗は log-first で Verdict へ記録して継続）。
+fn present_at(demo: &mut Demo, world: &mut World, t: f64) {
+    let mut rt = demo.runtime.borrow_mut();
+    if let Err(e) = present_frame(&mut rt, world, t) {
+        drop(rt);
+        world
+            .resource_mut::<Verdict>()
+            .failures
+            .push(format!("C8: present_frame({t}) が失敗: {e}"));
+    }
+}
+
+/// 装着済み actor の `DrawStats`（`Copy`・借用を残さず値で返す）。
+fn stats_of(demo: &Demo, actor: &ActorKey) -> DrawStats {
+    demo.runtime
+        .borrow()
+        .draw_stats(actor)
+        .expect("装着済み actor の draw_stats は Some")
 }
