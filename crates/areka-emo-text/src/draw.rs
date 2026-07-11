@@ -19,6 +19,25 @@
 //!   （生成失敗は warn→既定フォント再試行→なお失敗は `Device` エラー・R4.2）。
 //! - 文字装飾（[`TextEffects`]）と `disable.font.*`（[`FontDisableSeam`]）は
 //!   **型シームのみ・実挙動なし**（R10.3・M2 予約）。
+//!
+//! ## 計測専用 probe layout（task 6.2・R4.5・probe 規約）
+//!
+//! [`DWriteMetrics`]: **未折返しの測定専用 probe TextLayout** の cluster metrics から
+//! [`GlyphMetrics`] を実装し、純粋層 `LayoutEngine` へ実測送り幅を注入する
+//! （design discussion #1 裁定の probe 規約）:
+//!
+//! - probe は**折返し決定より前**に生成する（計測→折返しの一方向＝鶏卵の構造的切断）。
+//! - probe の format は描画と**同一の [`create_text_format`] 経路**
+//!   （フォント・サイズ・writing_mode 写像設定込み）で生成する。
+//! - probe layout は折返し無効寸（[`PROBE_MAX_EXTENT`]）で組む＝未折返し。
+//! - 計測結果はキャッシュ可（追記単調ゆえ確定内容の metrics は不変）——本実装は
+//!   文字単位キャッシュ（format 固定につき 同一文字→同一送り幅の決定論）。
+//!
+//! probe と描画行 TextLayout の advance 一致 invariant の檻化は task 6.4、
+//! 全域再描画（描画実行）は task 6.3 の領分。
+
+use std::cell::RefCell;
+use std::collections::HashMap;
 
 use areka_parsers::balloon::BalloonModel;
 use tracing::warn;
@@ -32,10 +51,12 @@ use windows::Win32::Graphics::DirectWrite::{
     IDWriteTextFormat,
 };
 use windows::core::HSTRING;
-use wintf::com::dwrite::DWriteFactoryExt;
+use wintf::com::dwrite::{DWriteFactoryExt, DWriteTextLayoutExt};
 
 use crate::TextLayerError;
 use crate::canvas::TextEffects;
+use crate::layout::GlyphMetrics;
+use crate::state::TextLayerConfig;
 use crate::writing::WritingMode;
 
 /// SSP 既定フォント名（**全角表記** ＭＳ ゴシック・ukadoc 既定・R4.2）。
@@ -46,6 +67,11 @@ pub const DEFAULT_FONT_HEIGHT: f32 = 12.0;
 
 /// TextFormat のロケール（wintf typewriter レシピからの lift・日本語正準）。
 const LOCALE_JA_JP: &str = "ja-JP";
+
+/// probe layout の折返し無効寸（image px）。行内軸・行送り軸の双方へ与え、
+/// probe を**未折返し**にする（probe 規約——バルーン寸は image px で高々数百・
+/// font.height も高々数十のため 1e6 は実用上無限）。
+pub const PROBE_MAX_EXTENT: f32 = 1.0e6;
 
 /// M2 予約キー接頭辞: `disable.font.*`（`\f[disable]` 用・SSP 2.5.51+）——
 /// 予約名の記録のみ・実挙動なし（R10.3・fixture 未使用）。
@@ -263,6 +289,117 @@ fn try_create_format(
     )
 }
 
+/// 計測専用 probe TextLayout 由来の実測 [`GlyphMetrics`]（task 6.2・R4.5・probe 規約）。
+///
+/// 純粋層 `LayoutEngine` の外部注入点（`&dyn GlyphMetrics`）へ、DirectWrite の実測
+/// 送り幅を提供する。probe 規約（モジュール doc）:
+///
+/// - format は描画と同一の [`create_text_format`] 経路（解決済みフォント＋
+///   writing_mode 方向レシピ込み）で**生成時に一度だけ**焼く。
+/// - `advance` は対象文字の**未折返し probe layout**（[`PROBE_MAX_EXTENT`] 寸）を
+///   生成し cluster metrics の width 合計を返す（折返し決定より前の計測＝鶏卵なし）。
+/// - 計測値は文字単位でキャッシュする（format 固定＝同一文字は同一送り幅の決定論・
+///   probe 規約「確定内容の metrics は不変ゆえキャッシュ可」）。
+///
+/// UI スレッド専有（COM 層規律）。`line_pitch` は M1 正準式
+/// `ceil(font_height × line_pitch_factor)`（正本 [`TextLayerConfig::line_pitch_factor`]・
+/// `FixedMetrics` と同一式）に従う。
+pub struct DWriteMetrics {
+    /// probe layout 生成用 factory（描画と同じ `IDWriteFactory2`）。
+    factory: IDWriteFactory2,
+    /// 描画と同一経路で生成済みの計測用 format（フォント・サイズ・方向レシピ込み）。
+    format: IDWriteTextFormat,
+    /// 束縛フォント高さ（`ResolvedFont::height`・format へ焼き込み済みの正本）。
+    font_height: f32,
+    /// 行送りピッチ係数（正本 [`TextLayerConfig::line_pitch_factor`]）。
+    line_pitch_factor: f32,
+    /// 文字単位の計測キャッシュ（probe 成功値のみ・失敗は縮退値を返しキャッシュしない）。
+    cache: RefCell<HashMap<char, f32>>,
+}
+
+impl DWriteMetrics {
+    /// 解決済みフォント＋writing_mode から計測用 metrics を生成する。
+    ///
+    /// format は描画と同一の [`create_text_format`] 経路（既定フォント再試行込み・
+    /// R4.2）——probe 規約「描画に使うのと同一のフォント設定・writing_mode 設定」の
+    /// 構造的保証。生成失敗は当該経路の log-first（`warn!`/`error!`＋`Err`）に従う。
+    pub fn new(
+        factory: &IDWriteFactory2,
+        font: &ResolvedFont,
+        mode: WritingMode,
+        config: &TextLayerConfig,
+    ) -> Result<DWriteMetrics, TextLayerError> {
+        let format = create_text_format(factory, font, mode)?;
+        Ok(DWriteMetrics {
+            factory: factory.clone(),
+            format,
+            font_height: font.height,
+            line_pitch_factor: config.line_pitch_factor,
+            cache: RefCell::new(HashMap::new()),
+        })
+    }
+
+    /// 1 文字の未折返し probe layout を生成し、cluster metrics の width 合計を返す。
+    fn probe_advance(&self, ch: char) -> Result<f32, TextLayerError> {
+        let text = HSTRING::from(ch.to_string());
+        let layout = self
+            .factory
+            .create_text_layout(&text, &self.format, PROBE_MAX_EXTENT, PROBE_MAX_EXTENT)
+            .map_err(device_err("CreateTextLayout(probe)"))?;
+        let clusters = layout
+            .get_cluster_metrics()
+            .map_err(device_err("GetClusterMetrics(probe)"))?;
+        Ok(clusters.iter().map(|c| c.width).sum())
+    }
+
+    /// キャッシュ済み計測数（テスト観測用: 同一文字の再計測が probe を増やさない檻）。
+    #[cfg(test)]
+    fn cached_probe_count(&self) -> usize {
+        self.cache.borrow().len()
+    }
+}
+
+impl GlyphMetrics for DWriteMetrics {
+    /// 実測送り幅（image px＝format の DIP そのまま・writing_mode の行内軸方向の寸）。
+    ///
+    /// `font_height` は束縛フォント（format へ焼き込み済み）と一致していることが契約。
+    /// 不一致は `warn!`＋縮退継続（値は束縛 format の実測のまま——probe は描画と同一
+    /// format が正準のため引数側へ寄せない）。probe 失敗は `error!`（[`device_err`]）
+    /// 済みで、決定論の縮退値（`FixedMetrics` と同式: 全角＝height・半角＝height/2）
+    /// を返して継続する（trait は失敗経路を持たない・log-first でログ無し失敗にしない）。
+    fn advance(&self, ch: char, font_height: f32) -> f32 {
+        if font_height != self.font_height {
+            warn!(
+                requested = font_height,
+                bound = self.font_height,
+                "advance へ束縛フォントと異なる font_height が渡された——束縛 format の実測を返す"
+            );
+        }
+        if let Some(&cached) = self.cache.borrow().get(&ch) {
+            return cached;
+        }
+        match self.probe_advance(ch) {
+            Ok(advance) => {
+                self.cache.borrow_mut().insert(ch, advance);
+                advance
+            }
+            // 失敗は probe_advance 内で error! 済み。縮退値はキャッシュしない（次回再試行）。
+            Err(_) => {
+                if ch.is_ascii() {
+                    self.font_height / 2.0
+                } else {
+                    self.font_height
+                }
+            }
+        }
+    }
+
+    /// 行送りピッチ＝M1 正準式 `ceil(font_height × line_pitch_factor)`。
+    fn line_pitch(&self, font_height: f32) -> f32 {
+        (font_height * self.line_pitch_factor).ceil()
+    }
+}
+
 /// `windows_core::Error` を [`TextLayerError::Device`] へ写像する（surface.rs と同型の
 /// log-first ヘルパ: `error!`＋`Err` 戻り値・panic 禁止）。
 fn device_err(context: &'static str) -> impl FnOnce(windows::core::Error) -> TextLayerError {
@@ -290,11 +427,14 @@ mod tests {
     use wintf::com::dwrite::dwrite_create_factory;
 
     use super::{
-        DEFAULT_FONT_HEIGHT, DEFAULT_FONT_NAME, DirectionRecipe, FontDisableSeam,
-        RESERVED_KEY_DISABLE_FONT_PREFIX, ResolvedFont, create_text_format,
+        DEFAULT_FONT_HEIGHT, DEFAULT_FONT_NAME, DWriteMetrics, DirectionRecipe, FontDisableSeam,
+        PROBE_MAX_EXTENT, RESERVED_KEY_DISABLE_FONT_PREFIX, ResolvedFont, create_text_format,
     };
     use crate::TextLayerError;
     use crate::canvas::TextEffects;
+    use crate::layout::{GlyphMetrics, LayoutEngine};
+    use crate::region::TextRegion;
+    use crate::state::{TextItem, TextLayerConfig};
     use crate::writing::WritingMode;
 
     /// テスト用 BalloonModel 生成ヘルパ（font 以外は全成分未指定）。
@@ -582,5 +722,222 @@ mod tests {
         }
         assert_eq!(warns, 1, "初回失敗→既定フォント再試行の warn がちょうど 1 回");
         assert_eq!(errors, 1, "再試行失敗→error! がちょうど 1 回");
+    }
+
+    // ── task 6.2 R4.5: DWriteMetrics——計測専用 probe TextLayout（probe 規約） ──
+    //
+    // probe 規約（design discussion #1 裁定）: 未折返し（折返し無効寸）の測定専用
+    // TextLayout を、描画と同一の create_text_format 経路（フォント・サイズ・
+    // writing_mode 写像設定込み）で折返し決定の前に生成し、cluster metrics から
+    // advance を得る（鶏卵の構造的切断）。probe はキャッシュ可（確定内容の metrics 不変）。
+
+    use wintf::com::dwrite::DWriteTextLayoutExt;
+
+    /// テスト側の手組み probe（実装と独立に同一規約で測る参照値）。
+    fn manual_probe_advance(
+        factory: &windows::Win32::Graphics::DirectWrite::IDWriteFactory2,
+        font: &ResolvedFont,
+        mode: WritingMode,
+        ch: char,
+    ) -> f32 {
+        let format = create_text_format(factory, font, mode).expect("参照 format");
+        let layout = wintf::com::dwrite::DWriteFactoryExt::create_text_layout(
+            factory,
+            &windows::core::HSTRING::from(ch.to_string()),
+            &format,
+            PROBE_MAX_EXTENT,
+            PROBE_MAX_EXTENT,
+        )
+        .expect("参照 probe layout");
+        layout
+            .get_cluster_metrics()
+            .expect("参照 cluster metrics")
+            .iter()
+            .map(|c| c.width)
+            .sum()
+    }
+
+    /// 既定フォント（ＭＳ ゴシック 12）の DWriteMetrics を組む。
+    fn default_metrics(
+        factory: &windows::Win32::Graphics::DirectWrite::IDWriteFactory2,
+        mode: WritingMode,
+    ) -> DWriteMetrics {
+        let resolved = ResolvedFont::resolve(&model_with_font(empty_font()));
+        DWriteMetrics::new(factory, &resolved, mode, &TextLayerConfig::default())
+            .expect("既定フォントで DWriteMetrics 生成が成立する")
+    }
+
+    /// 観測可能な完了状態（task 6.2）: 実測送り幅は、描画と同一の format 経路で
+    /// 生成した未折返し probe layout の cluster metrics と一致する。
+    #[test]
+    fn dwrite_metrics_advance_matches_manual_probe_layout() {
+        let factory = dwrite_create_factory(DWRITE_FACTORY_TYPE_SHARED).expect("factory");
+        let resolved = ResolvedFont::resolve(&model_with_font(empty_font()));
+        let metrics = default_metrics(&factory, WritingMode::HorizontalTb);
+        for ch in ['あ', 'a', '漢', 'W', '。'] {
+            let expected = manual_probe_advance(&factory, &resolved, WritingMode::HorizontalTb, ch);
+            assert_eq!(
+                metrics.advance(ch, DEFAULT_FONT_HEIGHT),
+                expected,
+                "{ch:?} の実測 advance が probe 参照値と一致する"
+            );
+            assert!(expected > 0.0, "{ch:?} の advance は正値");
+        }
+    }
+
+    /// probe は writing_mode 写像設定込みの同一 format で生成される——縦書き
+    /// （vertical_rl）の実測は縦書き format の probe 参照値と一致する（横書き format
+    /// の値ではない）。
+    #[test]
+    fn dwrite_metrics_probe_carries_writing_mode_recipe() {
+        let factory = dwrite_create_factory(DWRITE_FACTORY_TYPE_SHARED).expect("factory");
+        let resolved = ResolvedFont::resolve(&model_with_font(empty_font()));
+        for mode in [
+            WritingMode::HorizontalTb,
+            WritingMode::VerticalRl,
+            WritingMode::VerticalLr,
+        ] {
+            let metrics = default_metrics(&factory, mode);
+            for ch in ['あ', 'a', '、'] {
+                assert_eq!(
+                    metrics.advance(ch, DEFAULT_FONT_HEIGHT),
+                    manual_probe_advance(&factory, &resolved, mode, ch),
+                    "{mode:?} {ch:?}: probe は当該 writing_mode の format で測られる"
+                );
+            }
+        }
+    }
+
+    /// 等幅（ＭＳ ゴシック）: 全角＝半角×2 の実測。プロポーショナル
+    /// （ＭＳ Ｐゴシック）: 'i' と 'W' の送り幅が異なる実測——FixedMetrics の
+    /// 仮想値では出ない差が実測で得られることの檻。
+    #[test]
+    fn dwrite_metrics_measures_fixed_pitch_and_proportional_distinctly() {
+        let factory = dwrite_create_factory(DWRITE_FACTORY_TYPE_SHARED).expect("factory");
+        // 等幅: 既定 ＭＳ ゴシック——全角は半角のちょうど 2 倍。
+        let gothic = default_metrics(&factory, WritingMode::HorizontalTb);
+        let full = gothic.advance('あ', DEFAULT_FONT_HEIGHT);
+        let half = gothic.advance('a', DEFAULT_FONT_HEIGHT);
+        assert!(full > 0.0 && half > 0.0);
+        assert_eq!(full, half * 2.0, "等幅フォントの全角＝半角×2");
+        // プロポーショナル: ＭＳ Ｐゴシック——'i' は 'W' より狭い。
+        let p_font = Font::new(
+            Some("ＭＳ Ｐゴシック".to_owned()),
+            Some(12),
+            FontColor::new(None, None, None),
+        );
+        let p_resolved = ResolvedFont::resolve(&model_with_font(p_font));
+        let p_metrics = DWriteMetrics::new(
+            &factory,
+            &p_resolved,
+            WritingMode::HorizontalTb,
+            &TextLayerConfig::default(),
+        )
+        .expect("プロポーショナルで DWriteMetrics 生成が成立する");
+        let narrow = p_metrics.advance('i', 12.0);
+        let wide = p_metrics.advance('W', 12.0);
+        assert!(
+            narrow < wide,
+            "プロポーショナルの実測: 'i'({narrow}) < 'W'({wide})"
+        );
+    }
+
+    /// 決定論: 同一フォント・同一文字→同一送り幅（同一インスタンスの再計測も
+    /// 別インスタンスも完全一致・R2.5 系/R11.6 の COM 側檻）。
+    #[test]
+    fn dwrite_metrics_is_deterministic_across_calls_and_instances() {
+        let factory = dwrite_create_factory(DWRITE_FACTORY_TYPE_SHARED).expect("factory");
+        let first = default_metrics(&factory, WritingMode::VerticalRl);
+        let second = default_metrics(&factory, WritingMode::VerticalRl);
+        for ch in ['あ', 'x', '！'] {
+            let a = first.advance(ch, DEFAULT_FONT_HEIGHT);
+            let b = first.advance(ch, DEFAULT_FONT_HEIGHT);
+            let c = second.advance(ch, DEFAULT_FONT_HEIGHT);
+            assert_eq!(a, b, "{ch:?}: 再計測（キャッシュ経路）も同値");
+            assert_eq!(a, c, "{ch:?}: 別インスタンスも同値");
+        }
+    }
+
+    /// キャッシュ規約: 同一文字の probe は 1 回だけ生成され、以後はキャッシュから
+    /// 返る（値は同一・probe 規約「確定内容の metrics は不変ゆえキャッシュ可」）。
+    #[test]
+    fn dwrite_metrics_caches_probed_advances() {
+        let factory = dwrite_create_factory(DWRITE_FACTORY_TYPE_SHARED).expect("factory");
+        let metrics = default_metrics(&factory, WritingMode::HorizontalTb);
+        assert_eq!(metrics.cached_probe_count(), 0);
+        let first = metrics.advance('あ', DEFAULT_FONT_HEIGHT);
+        assert_eq!(metrics.cached_probe_count(), 1);
+        let again = metrics.advance('あ', DEFAULT_FONT_HEIGHT);
+        assert_eq!(metrics.cached_probe_count(), 1, "同一文字の再計測は probe を増やさない");
+        assert_eq!(first, again);
+        metrics.advance('a', DEFAULT_FONT_HEIGHT);
+        assert_eq!(metrics.cached_probe_count(), 2);
+    }
+
+    /// line_pitch は M1 正準式 ceil(font_height × TextLayerConfig::line_pitch_factor)
+    /// ——FixedMetrics と同じ正本（trait doc）に従う。
+    #[test]
+    fn dwrite_metrics_line_pitch_follows_config_canon() {
+        let factory = dwrite_create_factory(DWRITE_FACTORY_TYPE_SHARED).expect("factory");
+        let metrics = default_metrics(&factory, WritingMode::HorizontalTb);
+        assert_eq!(metrics.line_pitch(12.0), 15.0);
+        assert_eq!(metrics.line_pitch(10.0), 13.0, "12.5 → ceil 13");
+        // 係数は config が正本——非既定係数も反映される。
+        let resolved = ResolvedFont::resolve(&model_with_font(empty_font()));
+        let config = TextLayerConfig {
+            line_pitch_factor: 2.0,
+            ..TextLayerConfig::default()
+        };
+        let doubled =
+            DWriteMetrics::new(&factory, &resolved, WritingMode::HorizontalTb, &config)
+                .expect("非既定係数でも生成が成立する");
+        assert_eq!(doubled.line_pitch(10.0), 20.0);
+    }
+
+    /// 契約檻: advance へ束縛フォントと異なる font_height が渡されたら warn（縮退継続・
+    /// 値は束縛 format の実測のまま——probe は描画と同一 format が正準ゆえ）。
+    #[test]
+    fn dwrite_metrics_warns_on_font_height_mismatch() {
+        let factory = dwrite_create_factory(DWRITE_FACTORY_TYPE_SHARED).expect("factory");
+        let metrics = default_metrics(&factory, WritingMode::HorizontalTb);
+        let bound = metrics.advance('あ', DEFAULT_FONT_HEIGHT);
+        let (mismatched, warns, errors) = with_log_cage(|| metrics.advance('あ', 99.0));
+        assert_eq!(warns, 1, "束縛高さと異なる font_height はちょうど 1 回 warn");
+        assert_eq!(errors, 0);
+        assert_eq!(mismatched, bound, "値は束縛 format の実測のまま（縮退継続）");
+    }
+
+    /// 観測可能な完了状態（task 6.2）: LayoutEngine の外部注入点（&dyn GlyphMetrics）へ
+    /// 実測値ベースの送り幅を提供でき、折返しが実測 advance で決まる——probe（計測）が
+    /// 折返し決定より前＝鶏卵にならない順序で機能する単体確認。
+    #[test]
+    fn layout_engine_wraps_using_measured_advances() {
+        let factory = dwrite_create_factory(DWRITE_FACTORY_TYPE_SHARED).expect("factory");
+        let metrics = default_metrics(&factory, WritingMode::HorizontalTb);
+        let full = metrics.advance('あ', DEFAULT_FONT_HEIGHT);
+        // 折返し閾値＝実測全角 1.5 個分: 2 文字目で「行内位置＋次グリフ幅 > 閾値」が成立。
+        let threshold = (full * 1.5).round() as i32;
+        let model = BalloonModel::new(
+            WindowPosition::new(None, None),
+            Origin::new(Some(0), Some(0)),
+            WordWrapPoint::new(Some(threshold), None),
+            ValidRect::new(None, None, None, None),
+            empty_font(),
+            None,
+        );
+        let region = TextRegion::resolve(&model, (400, 224), WritingMode::HorizontalTb);
+        let items = [TextItem::Glyph { ch: 'あ' }, TextItem::Glyph { ch: 'あ' }];
+        let lines = LayoutEngine::layout(
+            &items,
+            2,
+            &region,
+            WritingMode::HorizontalTb,
+            DEFAULT_FONT_HEIGHT,
+            &metrics,
+        );
+        assert_eq!(lines.len(), 2, "実測 advance が折返し判定を駆動する");
+        assert_eq!(lines[0].glyphs.len(), 1);
+        assert_eq!(lines[0].glyphs[0].advance, full, "配置グリフの advance は実測値");
+        assert_eq!(lines[1].glyphs[0].inline_pos, 0.0, "折返し行は行内開始へ戻る");
     }
 }
