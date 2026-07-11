@@ -1,16 +1,16 @@
 {
   "feature_name": "areka-P0-emo-text-viewbox",
   "created_at": "2026-07-11T13:13:29Z",
-  "updated_at": "2026-07-11T13:13:29Z",
+  "updated_at": "2026-07-11T15:05:00Z",
   "language": "ja",
-  "phase": "requirements-generated",
+  "phase": "design-generated",
   "approvals": {
     "requirements": {
       "generated": true,
-      "approved": false
+      "approved": true
     },
     "design": {
-      "generated": false,
+      "generated": true,
       "approved": false
     },
     "tasks": {

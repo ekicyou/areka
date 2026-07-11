@@ -172,4 +172,54 @@
 
 ---
 
-_本ドキュメントは情報提供（分析と選択肢）であり実装決定ではない。§8 は要件ディスカッションの決定記録。最終の設計確定は design フェーズで行う。_
+## 9. 設計フェーズ Discovery & Synthesis（2026-07-11・design 生成時）
+
+> Discovery 種別: **light（Extension）**——既存 emo-text-layer の分離シーム消費ゆえ integration-focused。外部調査（WebSearch）は不要（新規依存ゼロ・使用 API は D3D11 `CopyResource`/`CopySubresourceRegion`・D2D `PushAxisAlignedClip` の既知 primitive のみ）。
+
+### 9.1 実シンボル再確認（コード突合・全て一致）
+
+- `LayoutEngine::visible_window`（layout.rs:255）→ `VisibleWindow { first_visible_line: usize, block_offset: f32 }`（layout.rs:127–138）。**符号規約を実測確認**: 横書き＝負（内容が上へ）・vertical_rl＝正・vertical_lr＝負（doc 明記・layout.rs:130–137）——viewbox の blit 符号はこれを素通しする（独自軸規則を発明しない）。
+- `ContentCanvas::from_layout`（canvas.rs:217）: 住人 transform＝validrect-local 平行移動（端数素通し）・住人 index＝行 index 1:1・`GlyphRunContent.size`＝行矩形寸——行指紋（内容＋位置＋寸）の材料が既に揃っている。
+- `DrawExecutor::render`（draw.rs:523）: 透明 clear→`SetTransform(scale(k))` 一点→origin＝`transform.offset()`＋`block_offset` 軸加算→`DrawTextLayout`。**行 TextLayout キャッシュ `line_layout`（draw.rs:653）は行 index キー・内容不変再利用・`clear_cache` のみ全破棄**——そのまま `LineLayoutStore` として抽出可能（両方式の TextLayout 経路共有＝RN5 の解）。
+- `TextSurface`（surface.rs:129）: 単一 `source_tex`（DEFAULT・RENDER_TARGET・premultiplied 透明初期化）・`present`＝`CopyResource`→`Present(0)`・`read_back`＝staging。**ダブルバッファ化は `sources: [tex; 2]`＋front index の内部拡張で外部契約（attach/present/read_back シグネチャ）不変**。
+- Clear 適用点＝`TextLayerRuntime::apply_cue`（actor.rs:210–217）の `executor.clear_cache()`——viewbox では `request_clear()`（planner 初期化＋行キャッシュ破棄＋次フレーム FullClear）へ写像。
+- `DrawExecutor` の外部消費者ゼロ（tests/・examples/・他 crate に direct 参照なし・grep 確認）——`#[cfg(test)]` オラクル化は破壊なしで可能。
+- wintf `D2D1DeviceContextExt` に `PushAxisAlignedClip` の安全 wrapper は**ない**（command_types.rs は widget 描画経路用）→ viewbox_draw は windows-rs 直呼び（COM 層規律の範囲内・wintf 改変不要）。
+
+### 9.2 RN1–RN5 の処置（§7 の読み替え結果）
+
+- **RN1（growable swapchain の内容保全）**: 案C 採用で**不要化**（描画面は固定寸・成長しない）。
+- **RN2（clip_sync 両立）**: **不要化**——visual クリップ非依存（封じ込め＝面寸・ダーティ限定＝D2D `PushAxisAlignedClip`）。donor 装着経路は不変。
+- **RN3（visual offset の持ち方）**: **不要化**——スクロールは面内 blit（visual offset を使わない）。
+- **RN4（メモリ上限・`\_b` 規模）**: 上限管理は**構造消滅**（固定寸 2 枚＋staging 1 枚）。`\_b --option=fixed` は「スクロールした時に画像を動かさない」＝scroll 面に描かない別合成層として `present` の合成点（front→backbuffer コピー直後）へ予約——ukadoc 裏取りは実装増分側の宿題として残る（M1 は型シームのみ）。
+- **RN5（両方式の TextLayout/format 経路共有）**: **解決**——`create_text_format`（既存共有）＋`LineLayoutStore` 抽出（行 TextLayout 経路の一本化）＋専用 D2D DC の同一生成経路＋origin 同式＋`SetTransform(scale(k))` 一点則。live-diff は **in-source `#[cfg(test)]`**（`#[cfg(test)]` の DrawExecutor は統合テスト（tests/）から不可視のため——surface.rs 既存テストの headless World＋Compositor＋GraphicsCore パターンで実行可能なことを確認済み）。
+
+### 9.3 DD の最終確定（design.md へ反映済み）
+
+- **DD1（写像正準式）確定**: 真位置 `pos = block_offset × k`（軸: 横=y・縦=x・符号素通し）。量子化 `target = round(pos)`（真位置直接丸め＝増分丸めの累積なし・構造的ドリフトゼロ）・blit＝`target − committed`・不変条件 `|committed − pos| ≤ 0.5`。k=1.0 は行 pitch が `ceil` 由来の整数ゆえ `pos` 整数＝byte 一致の構造前提。
+- **DD4（ダーティ判定）確定**: dirty＝露出帯 ∪ 変化行（前回 commit の行指紋 `(text, block_pos_bits, extent_bits)` と新 canvas の差分——リビール中の現在行・catch-up 複数行・新規行を一様検出）∪ 全域（Clear 後/format 組替後/初回）。ガード余白 `DIRTY_GUARD_IMG_PX`＝1 image px（AA こぼれ吸収・live-diff で検証・不足時は定数一点で増加）。描画対象＝dirty 交差の全住人（クリップで dirty 限定＝隣接行 AA こぼれの再現）。
+- **DD5 確定**: visual クリップ不使用。ダーティ限定は「恒等変換下で物理整数矩形を `PushAxisAlignedClip`（**ALIASED**・格子厳密）→ `Clear`（クリップ内のみ）→ `SetTransform(scale(k))` → 描画 → Pop」。
+- **DD6 確定**: `DrawStats`（常時コンパイル u64: line_layout_creations／draw_text_layout_calls／blits／full_clears）を正典とする（example からも読めるため。ログ捕捉 `with_log_cage` は補助）。
+- **DD7 確定**: 既存 example を**本番経路差し替えで viewbox 化**（新 example は作らない）。再描画方式の観測は in-source live-diff 檻へ一本化（オラクル保全）。
+- **DD8 確定**: (a) 同一プロセス live-diff が主檻（in-source `#[cfg(test)]`・k=1.0 byte 比較・横/縦 × あふれ前後/連続/Clear 前後）。golden bytes ファイル固定は不採用（DirectWrite の環境差に脆い）。既存 readback 述語（tests/）は無改変 green の従檻。
+- **DD9 確定**: 縦書き＝横 blit（vertical_rl＝露出帯 左端・内容が右へ／vertical_lr＝逆）。面の成長概念は消滅ゆえ「成長方向」問題も消滅。
+- **DD10 確定**: `FixedOverlaySeam`（zero-sized `#[non_exhaustive]`・surface.rs）＋ `present` の合成点命名（front→backbuffer コピー直後・Present 直前）。scroll 面（sources）には描かない＝blit 非対象・read_back（front）に影響しない＝R7.4 成立。
+- **DD11 確定**: ダブルバッファ運用＝「front→back を blit ずらしコピー（blit=0 は全面 CopyResource）→ back へダーティ描画 → flip → present（front）」。back 全被覆不変条件（blit 写域 ∪ dirty＝面全域）で 2 フレーム前残像を構造排除。**plan/commit 二相**（COM 成功時のみ commit）で失敗フレーム再試行を決定論化。
+- **DD12 確定**: 後方スクロールは M1 非論点（auto-follow 前方のみ）。露出帯描画は常に `ContentCanvas`（バッキングストア）由来のため、将来の後方スクロールも同経路で成立（構造は既に対応）。
+
+### 9.4 Synthesis（設計統合の 3 レンズ）
+
+- **Generalization**: blit 量・ダーティ導出を writing_mode 非依存の単一式（軸単位ベクトル×block_offset 素通し）へ畳む——layout.rs/visible_window と同じ「正規化ブロック座標」規律の踏襲。f32 真位置／whole-pixel 量子化の分離が M1 ステップと M2 補間の両方を同一 `plan/commit` インターフェイスで受ける（実装は M1 分のみ）。
+- **Build vs Adopt**: 新規依存ゼロ。古典 `ScrollDC`/`WM_PAINT` 規律を D3D11 copy＋D2D clip で写す（プラットフォーム native 能力の採用）。wintf `ClipShape` は M1 不採用（要件 9.4 の確定・visual クリップは blit 方式に不要）。`ID2D1CommandList`／グリフ bitmap キャッシュは要件 3.4 で明示的に不採用。
+- **Simplification**: growable 面・visual 2 層・上限管理・成長規則（旧 Option A/B/C の複雑さ）はすべて消滅。新規型は 4 つ（ScrollPlanner/FramePlan/ViewboxExecutor/LineLayoutStore 抽出）＋型シーム 2 つ（ScrollState/FixedOverlaySeam）に限局。オラクルは改変ゼロで `#[cfg(test)]` へ移すのみ。
+
+### 9.5 リスク登録（design 反映済み）
+
+- **ClearType 位相不変仮定**（整数平行移動＝ラスタ結果の平行移動）: live-diff byte 檻が第一防衛。破れた場合も全ダーティ縮退（＝レガシー等価の全域再描画）で正しさは保持（性能のみ劣化）。
+- **AA こぼれのガード不足**: `DIRTY_GUARD_IMG_PX` 一点で調整可能・live-diff が検出器。
+- **blit box の off-by-one**: 既知パターン直書き→blit→read_back の往復檻で殺す。
+- **実 DPI（k≠1.0）**: 自動檻は述語（`|committed−pos|≤0.5` 恒真＋scale_invariance 資産）まで。非 96 DPI 実機の手動確認を実装フェーズ DoD 申し送り（R10.6・記憶 areka-placement-real-ghost-first）。
+
+---
+
+_本ドキュメントは情報提供（分析と選択肢）であり実装決定ではない。§8 は要件ディスカッションの決定記録・§9 は design フェーズの調査/統合記録（確定内容の正本は design.md）。_
