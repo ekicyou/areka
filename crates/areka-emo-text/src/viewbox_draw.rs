@@ -512,13 +512,15 @@ mod tests {
     use wintf::com::wuc::create_dispatcher_queue_controller;
     use wintf::ecs::{GraphicsCore, Visual};
 
+    use areka_sakura::contract::{ActorKey, CueCommand, TalkCue};
+
     use super::{DrawStats, ViewboxExecutor};
     use crate::actor::TextSlotBinding;
     use crate::canvas::ContentCanvas;
-    use crate::draw::ResolvedFont;
+    use crate::draw::{DrawExecutor, ResolvedFont};
     use crate::layout::{FixedMetrics, LayoutEngine, VisibleWindow};
     use crate::region::{ScaleContract, TextRegion};
-    use crate::state::TextItem;
+    use crate::state::{TextItem, TextLayerConfig, TextLayerState};
     use crate::surface::TextSurface;
     use crate::viewbox::{FramePlan, ScrollPlanner};
     use crate::writing::WritingMode;
@@ -591,6 +593,21 @@ mod tests {
         BalloonModel::new(
             WindowPosition::new(None, None),
             Origin::new(Some(0), Some(0)),
+            WordWrapPoint::new(None, None),
+            ValidRect::new(None, None, None, None),
+            Font::new(None, font_height, FontColor::new(None, None, None)),
+            None,
+        )
+    }
+
+    /// live-diff 用 BalloonModel（**origin 未指定**＝mode ごとの書字開始角へ寄せる・font 高さ
+    /// 指定可・validrect 全域）。origin (0,0) を明示すると vertical_rl では validrect 内の
+    /// 左上に留まり列が面外（負の x）へ描かれてしまうため、origin は None にして
+    /// クランプ正準（horizontal/vertical_lr＝左上・vertical_rl＝右上）へ委ねる。
+    fn live_diff_model(font_height: Option<u32>) -> BalloonModel {
+        BalloonModel::new(
+            WindowPosition::new(None, None),
+            Origin::new(None, None),
             WordWrapPoint::new(None, None),
             ValidRect::new(None, None, None, None),
             Font::new(None, font_height, FontColor::new(None, None, None)),
@@ -1003,6 +1020,310 @@ mod tests {
             plan_inconsistency(&[PhysicalRect { x: 0, y: 40, w: 100, h: 20 }], &[], 2, size)
                 .is_some(),
             "面高を超える dirty を検知する"
+        );
+    }
+
+    // ════ live-diff pixel 等価主檻（task 10・R4.5/R6.1/R6.2/R6.3/R6.5/R8.1・design Testing
+    //      Strategy「Integration Tests #1」） ════
+    //
+    // 同一プロセス・同一ターゲット型（headless World＋Compositor＋GraphicsCore）で、同一 cue 列・
+    // 同一注入時刻列を比較専用オラクル（DrawExecutor 全域再描画・#[cfg(test)]）と新実行部
+    // （ViewboxExecutor ダーティ矩形スクロール）の双方へ流し、read_back を k=1.0 で byte 比較する。
+    // オラクルは front へ全域再描画し、viewbox は back へダーティ描画→flip する——どちらも read_back
+    // は front を読むため直接比較できる（surface.rs の front 一本化契約）。Clear は actor.rs::apply_cue
+    // と同じ写像で両方式の Clear 適用点（oracle=行キャッシュ破棄／viewbox=planner 初期化＋FullClear
+    // 予約）を経由させる。
+
+    /// live-diff 検証リグ: 2 つの独立 TextSurface（同一物理寸・k=1.0・同一 core/compositor）へ
+    /// オラクルと viewbox を装着し、1 本の TextLayerState を両方式へ同一入力で流す。
+    struct LiveDiffRig {
+        /// オラクル（全域再描画）の供給面。
+        oracle_surface: TextSurface,
+        /// viewbox（ダーティスクロール）の供給面。
+        viewbox_surface: TextSurface,
+        /// 比較専用オラクル（全域再描画・front へ焼く）。
+        oracle: DrawExecutor,
+        /// 新実行部（保持ピクセル面内 blit ＋ ダーティ描画・back へ焼き flip）。
+        viewbox: ViewboxExecutor,
+        /// 解決済みテキスト領域（両方式共通・image px）。
+        region: TextRegion,
+        /// 解決済みフォント（既定 ＭＳ ゴシック 10px）。
+        font: ResolvedFont,
+        /// DPI/スケール契約（k=1.0＝byte 一致の受け入れ基準）。
+        contract: ScaleContract,
+        /// 書字方向（横書き／vertical_rl）。
+        mode: WritingMode,
+        /// フォント高さ（純粋レイアウトへ渡す・FixedMetrics と対）。
+        font_height: f32,
+        /// typewriter 調整値（char_wait／line_pitch 係数）。
+        config: TextLayerConfig,
+        /// 対象 actor（単一 actor で十分——byte 等価は actor 非依存）。
+        actor: ActorKey,
+        /// cue 駆動の純粋状態機械（両方式へ同一入力を供給する単一の正本）。
+        state: TextLayerState,
+        /// World／Compositor／Core／DispatcherQueue の寿命を束ねる（供給面より後に drop）。
+        #[allow(dead_code)]
+        rig: Rig,
+    }
+
+    impl LiveDiffRig {
+        /// image px 原寸と mode から 2 面（オラクル／viewbox）を装着し、両実行部を生成する。
+        fn new(mode: WritingMode, image: (u32, u32)) -> LiveDiffRig {
+            let mut rig = Rig::new();
+            let oracle_surface = rig.attach(image, 1.0);
+            let viewbox_surface = rig.attach(image, 1.0);
+            let font = ResolvedFont::resolve(&live_diff_model(Some(10)));
+            let region = TextRegion::resolve(&live_diff_model(Some(10)), image, mode);
+            let contract = ScaleContract::new(1.0, None);
+            let oracle = DrawExecutor::new(&rig.core).expect("DrawExecutor::new 失敗");
+            let viewbox = ViewboxExecutor::new(&rig.core).expect("ViewboxExecutor::new 失敗");
+            LiveDiffRig {
+                oracle_surface,
+                viewbox_surface,
+                oracle,
+                viewbox,
+                region,
+                font,
+                contract,
+                mode,
+                font_height: 10.0,
+                config: TextLayerConfig::default(),
+                actor: ActorKey::from("0"),
+                state: TextLayerState::default(),
+                rig,
+            }
+        }
+
+        /// cue を純粋状態へ適用し、Clear は両方式の Clear 適用点も呼ぶ（actor.rs::apply_cue と同一写像）。
+        fn apply(&mut self, cue: &TalkCue) {
+            if matches!(cue.command, CueCommand::Clear) {
+                self.oracle.clear_cache();
+                self.viewbox.request_clear();
+            }
+            self.state.apply_cue(cue, &self.config);
+        }
+
+        /// Text cue（追記）を適用する。
+        fn apply_text(&mut self, at: f64, s: &str) {
+            let cue = TalkCue {
+                at,
+                actor: self.actor.clone(),
+                command: CueCommand::Text(s.to_owned()),
+            };
+            self.apply(&cue);
+        }
+
+        /// NewLine cue（改行マーカー・ratio 1.0）を適用する。
+        fn apply_newline(&mut self, at: f64) {
+            let cue = TalkCue {
+                at,
+                actor: self.actor.clone(),
+                command: CueCommand::NewLine { ratio: 1.0 },
+            };
+            self.apply(&cue);
+        }
+
+        /// Clear cue（全消去）を適用する。
+        fn apply_clear(&mut self, at: f64) {
+            let cue = TalkCue {
+                at,
+                actor: self.actor.clone(),
+                command: CueCommand::Clear,
+            };
+            self.apply(&cue);
+        }
+
+        /// 注入時刻 `t` で state から可視 prefix→純粋レイアウト→canvas/window を導き、オラクルと
+        /// viewbox を**同一入力**で描いて read_back を byte 比較する。`expect_opaque` で content
+        /// フレーム（非透明 > 0）／Clear フレーム（全域透明）を区別し、空面同士の vacuous な一致を排除する。
+        fn checkpoint(&mut self, label: &str, t: f64, expect_opaque: bool) -> VisibleWindow {
+            // state → 可視 prefix → 純粋レイアウト（FixedMetrics で決定論・両方式は同一 canvas を受ける）。
+            let items: Vec<TextItem> = self
+                .state
+                .actor_state(&self.actor)
+                .map(|s| s.items().to_vec())
+                .unwrap_or_default();
+            let visible = self.state.visible_glyphs(&self.actor, t);
+            let lines = LayoutEngine::layout(
+                &items,
+                visible,
+                &self.region,
+                self.mode,
+                self.font_height,
+                &FixedMetrics,
+            );
+            let window = LayoutEngine::visible_window(&lines, &self.region, self.mode);
+            let canvas = ContentCanvas::from_layout(&lines, &self.region, self.mode);
+
+            // オラクル（全域再描画・front）と viewbox（ダーティ描画・back→flip）を同一入力で描く。
+            self.oracle
+                .render(
+                    &canvas,
+                    &window,
+                    &self.font,
+                    self.mode,
+                    &self.contract,
+                    &mut self.oracle_surface,
+                )
+                .unwrap_or_else(|e| panic!("{label}: オラクル render 失敗: {e:?}"));
+            self.viewbox
+                .render(
+                    &canvas,
+                    &window,
+                    &self.font,
+                    self.mode,
+                    &self.contract,
+                    &mut self.viewbox_surface,
+                )
+                .unwrap_or_else(|e| panic!("{label}: viewbox render 失敗: {e:?}"));
+
+            let ob = self
+                .oracle_surface
+                .read_back()
+                .unwrap_or_else(|e| panic!("{label}: オラクル read_back 失敗: {e:?}"));
+            let vb = self
+                .viewbox_surface
+                .read_back()
+                .unwrap_or_else(|e| panic!("{label}: viewbox read_back 失敗: {e:?}"));
+
+            // 非退化担保: content フレームはオラクル面に非透明ピクセルがある（空面比較=vacuous を排除）。
+            if expect_opaque {
+                assert!(
+                    opaque_count(&ob) > 0,
+                    "{label}: content フレームはオラクル面に非透明ピクセルを持つ（vacuous な空面一致を排除）"
+                );
+            } else {
+                assert_eq!(
+                    opaque_count(&ob),
+                    0,
+                    "{label}: Clear 直後はオラクル面が全域透明（全 α=0）"
+                );
+            }
+
+            // 主檻: k=1.0 で byte 完全一致（受け入れ基準——甘くしない）。
+            assert_eq!(
+                ob, vb,
+                "{label}: k=1.0 で オラクル（全域再描画）と viewbox（ダーティスクロール）の read_back が byte 完全一致する"
+            );
+            window
+        }
+    }
+
+    /// live-diff シナリオ（mode パラメタライズ）: あふれ前→スクロール発火直後→連続スクロール→
+    /// Clear 直後→Clear 後再追記 の 5 チェックポイントで、オラクルと viewbox の read_back が
+    /// 常に byte 完全一致することを檻化する（NewLine 区切りの単一グリフ行であふれを決定論制御）。
+    fn run_live_diff_scenario(mode: WritingMode, image: (u32, u32)) {
+        let mut ld = LiveDiffRig::new(mode, image);
+
+        // ① あふれ前（3 行・可視窓は不動）。
+        ld.apply_text(0.0, "あ");
+        ld.apply_newline(0.0);
+        ld.apply_text(0.0, "い");
+        ld.apply_newline(0.0);
+        ld.apply_text(0.0, "う");
+        let w = ld.checkpoint("あふれ前", 10.0, true);
+        assert_eq!(
+            (w.first_visible_line, w.block_offset),
+            (0, 0.0),
+            "あふれ前は可視窓が動かない（先頭可視行 0・オフセット 0）: {w:?}"
+        );
+
+        // ② スクロール発火直後（4 行目であふれ・可視窓が初めて移動）。
+        ld.apply_newline(0.0);
+        ld.apply_text(0.0, "え");
+        let w = ld.checkpoint("スクロール発火直後", 20.0, true);
+        assert!(
+            w.first_visible_line >= 1,
+            "あふれ発火で可視窓が移動する（先頭可視行 ≥ 1）: {w:?}"
+        );
+        assert_ne!(w.block_offset, 0.0, "発火後はブロックオフセットが非零: {w:?}");
+
+        // ③ 連続スクロール（さらに 2 行追記・複数回スクロール）。
+        ld.apply_newline(0.0);
+        ld.apply_text(0.0, "お");
+        ld.apply_newline(0.0);
+        ld.apply_text(0.0, "か");
+        let w = ld.checkpoint("連続スクロール", 30.0, true);
+        assert!(
+            w.first_visible_line >= 2,
+            "連続スクロールで可視窓が複数行進む（先頭可視行 ≥ 2）: {w:?}"
+        );
+
+        // ④ Clear 直後（両方式の Clear 適用点を経由・全域透明）。
+        ld.apply_clear(0.0);
+        let w = ld.checkpoint("Clear 直後", 40.0, false);
+        assert_eq!(w.first_visible_line, 0, "Clear 後は既定窓（先頭可視行 0）: {w:?}");
+
+        // ⑤ Clear 後再追記（新規 content が全域ダーティで復帰）。
+        ld.apply_text(0.0, "ら");
+        ld.apply_newline(0.0);
+        ld.apply_text(0.0, "り");
+        let w = ld.checkpoint("Clear 後再追記", 50.0, true);
+        assert_eq!(
+            w.first_visible_line, 0,
+            "短い再追記はあふれない（先頭可視行 0）: {w:?}"
+        );
+    }
+
+    /// 観測可能な完了状態（前半・横書き）: 横書きの全シナリオでオラクルと viewbox の read_back が
+    /// k=1.0 で byte 完全一致する（R6.1/R6.2/R6.5/R4.5/R8.1）。
+    #[test]
+    fn live_diff_horizontal_matches_oracle_byte_for_byte() {
+        run_live_diff_scenario(WritingMode::HorizontalTb, (80, 40));
+    }
+
+    /// 観測可能な完了状態（前半・縦書き vertical_rl）: 縦書きの全シナリオでも byte 完全一致する
+    /// （R6.3——横/縦 両 mode パラメタライズ）。
+    #[test]
+    fn live_diff_vertical_rl_matches_oracle_byte_for_byte() {
+        run_live_diff_scenario(WritingMode::VerticalRl, (40, 80));
+    }
+
+    /// 観測可能な完了状態（後半・負のコントロール）: 意図的に不一致を起こす細工（viewbox 側だけ
+    /// 1 グリフ多い content を描く）を入れると read_back の byte 比較が差を検出する——比較器は
+    /// ゼロでない差を捕捉できる（＝live-diff はトートロジーでない）。本物のバグ注入ではなく、
+    /// 比較器の識別能力を示す最小の細工。
+    #[test]
+    fn live_diff_detects_injected_divergence() {
+        let mut ld = LiveDiffRig::new(WritingMode::HorizontalTb, (60, 40));
+
+        // オラクルは 1 グリフ・viewbox は 2 グリフ（1 グリフぶん確実に異なる pixel）を同一窓で描く。
+        let items_oracle = glyph_items("■");
+        let (canvas_oracle, window) = build(&items_oracle, &ld.region, ld.mode, ld.font_height);
+        let items_viewbox = glyph_items("■■");
+        let (canvas_viewbox, _) = build(&items_viewbox, &ld.region, ld.mode, ld.font_height);
+
+        ld.oracle
+            .render(
+                &canvas_oracle,
+                &window,
+                &ld.font,
+                ld.mode,
+                &ld.contract,
+                &mut ld.oracle_surface,
+            )
+            .expect("オラクル render 失敗");
+        ld.viewbox
+            .render(
+                &canvas_viewbox,
+                &window,
+                &ld.font,
+                ld.mode,
+                &ld.contract,
+                &mut ld.viewbox_surface,
+            )
+            .expect("viewbox render 失敗");
+
+        let ob = ld.oracle_surface.read_back().expect("オラクル read_back 失敗");
+        let vb = ld.viewbox_surface.read_back().expect("viewbox read_back 失敗");
+
+        // 双方とも非退化（空面同士の vacuous な不一致でない）。
+        assert!(opaque_count(&ob) > 0, "オラクル面は非透明（content が描かれている）");
+        assert!(opaque_count(&vb) > 0, "viewbox 面は非透明（content が描かれている）");
+        // 比較器は差を検出する（＝live-diff の有効性・トートロジーでない）。
+        assert_ne!(
+            ob, vb,
+            "異なる content（1 グリフ差）は byte 比較で差として検出される——live-diff は有効"
         );
     }
 }
