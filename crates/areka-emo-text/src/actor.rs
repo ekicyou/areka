@@ -22,12 +22,13 @@ use tracing::{debug, error, info, warn};
 use wintf::ecs::{GraphicsCore, WucGraphicsResource};
 
 use crate::canvas::ContentCanvas;
-use crate::draw::{DWriteMetrics, DrawExecutor, ResolvedFont};
+use crate::draw::{DWriteMetrics, ResolvedFont};
 use crate::layout::LayoutEngine;
 use crate::region::{ImagePx, ScaleContract, TextRegion};
 use crate::sink::{handle_text_msg, EmoTextSink, TextMsg};
 use crate::state::{TextLayerConfig, TextLayerState};
 use crate::surface::TextSurface;
+use crate::viewbox_draw::ViewboxExecutor;
 use crate::writing::WritingMode;
 use crate::TextLayerError;
 
@@ -117,8 +118,9 @@ impl ResolvedBalloonText {
 struct ActorRender {
     /// 自前 swapchain 供給面（初回のみ予約スロットへ brush 装着・以降 Present のみ）。
     surface: TextSurface,
-    /// 全域再描画の実行部（行 TextLayout キャッシュは actor の行 index に束縛）。
-    executor: DrawExecutor,
+    /// viewbox ダーティ矩形スクロールの実行部（保持ピクセルの面内 blit ＋ ダーティ矩形限定描画・
+    /// 行 TextLayout キャッシュは actor の行 index に束縛）。
+    executor: ViewboxExecutor,
     /// 計測専用 probe 由来の実測 metrics（actor の font/mode に束縛）。
     metrics: DWriteMetrics,
 }
@@ -205,12 +207,12 @@ impl TextLayerRuntime {
 
     /// cue を actor 別の純粋状態機械へ適用する（UI ドレインの適用点・World に触れない）。
     ///
-    /// `Clear` は確定行 TextLayout キャッシュの全破棄点でもある（design「Clear で全破棄」——
-    /// 破棄はこの口だけ）。
+    /// `Clear` は全域リセット要求点でもある（planner 初期化＋確定行 TextLayout キャッシュの全破棄——
+    /// design「Clear で全破棄」・破棄はこの口だけ・次フレームは `FramePlan::FullClear`＝全域透明・R4.3）。
     pub fn apply_cue(&mut self, cue: &TalkCue) {
         if matches!(cue.command, CueCommand::Clear) {
             if let Some(render) = self.surfaces.get_mut(&cue.actor) {
-                render.executor.clear_cache();
+                render.executor.request_clear();
             }
         }
         self.state.apply_cue(cue, &self.config);
@@ -274,15 +276,15 @@ pub fn spawn_emo_text(
 /// フレーム提示ステップ（毎フレーム UI スレッドで呼ぶ・example/emo2-boot が駆動）:
 /// `talk_time` は注入時刻（talk 起点相対秒・実時間 sleep 不使用・R3.3）。
 ///
-/// actor ごとに「リビール進行の解決（純粋）→ レイアウト決定（純粋）→ 全域再描画（COM）→
-/// 供給面の提示（Present のみ）」を駆動する:
+/// actor ごとに「リビール進行の解決（純粋）→ レイアウト決定（純粋）→ viewbox ダーティ矩形
+/// スクロール描画（COM）→ 変化ありのフレームだけ供給面を提示（Present のみ）」を駆動する:
 ///
 /// - **未解決 actor**（binding 未登録）: 状態は蓄積のみ・描画スキップ・次フレーム再試行
 ///   （actor ごと初回 `warn!`＋以降 `debug!`——frame の `Err` にはしない）。
 /// - **初回解決フレーム**: World 資源（[`GraphicsCore`]／[`WucGraphicsResource`]）から
 ///   供給面/描画実行部を構築し予約スロットへ装着する（actor ごと初回のみ・`info!`）。
-/// - **装着済み actor のグリフ更新**: 全域再描画→ swapchain Present のみで完結し、
-///   バルーン surface 本体の再合成（emo-compose 再駆動）を要求しない（R9.3）。
+/// - **装着済み actor のグリフ更新**: viewbox ダーティ矩形スクロール描画→（変化ありのフレームだけ）
+///   swapchain Present で完結し、バルーン surface 本体の再合成（emo-compose 再駆動）を要求しない（R9.3）。
 /// - **デバイス失敗**: 失敗源で `error!` 済み（log-first）。当該 actor の当該フレーム提示を
 ///   skip して他 actor の処理は継続し、最初の失敗を `Err` として返す（次フレーム再試行）。
 pub fn present_frame(
@@ -398,7 +400,7 @@ fn present_actor(
                     physical_size,
                     physical_offset,
                 )?;
-                let executor = DrawExecutor::new(&core)?;
+                let executor = ViewboxExecutor::new(&core)?;
                 let Some(factory) = core.dwrite_factory() else {
                     error!(actor = %actor, "present_frame: dwrite_factory 不在（metrics を構築できない）");
                     return Err(TextLayerError::Device {
@@ -423,7 +425,7 @@ fn present_actor(
         );
     }
 
-    // ── リビール進行（純粋）→ レイアウト決定（純粋）→ 全域再描画 → 提示（Present のみ） ──
+    // ── リビール進行（純粋）→ レイアウト決定（純粋）→ viewbox ダーティ矩形描画 → 提示（Present のみ） ──
     let Some(render) = runtime.surfaces.get_mut(actor) else {
         // 直前の insert 直後に到達するため構造上起こらない——防御（panic 禁止・log-first）。
         error!(actor = %actor, "present_frame: 装着済み描画資源の引き当てに失敗（構造不変の破れ）");
@@ -447,7 +449,7 @@ fn present_actor(
     );
     let window = LayoutEngine::visible_window(&lines, &resolved.region, resolved.mode);
     let canvas = ContentCanvas::from_layout(&lines, &resolved.region, resolved.mode);
-    render.executor.render(
+    let changed = render.executor.render(
         &canvas,
         &window,
         &resolved.font,
@@ -456,7 +458,12 @@ fn present_actor(
         &mut render.surface,
     )?;
     // 装着済み actor のグリフ更新は供給面の提示のみで完結（emo-compose 再駆動なし・R9.3）。
-    render.surface.present()
+    // 変化ありのフレームだけ提示する（`FramePlan::NoChange` は blit も描画も present も省く——
+    // readback は front を読むため観測述語に影響しない・R1.1/R3.1）。
+    if changed {
+        render.surface.present()?;
+    }
+    Ok(())
 }
 
 #[cfg(test)]
