@@ -153,3 +153,11 @@
 7. アダプタ・結線の置き場（areka 内 module／新 lib crate／ハイブリッド）。
 8. 依存追加の解釈（外部 crate 禁止＝ワークスペース path 依存昇格は in-scope の確認）。
 9. 構築順序再編の具体形（WinApp→UI 部品→shell 組立→spawn_seriko→boot）と非致命 boot 意味論の維持方法。
+
+## 8. ⛔ ブロッカー（2026-07-11 要件ディスカッション議題1・開発者裁定）
+
+**本 spec は `areka-P0-balloon-face-cue` の完了ゲート下で中断保留（requirements-generated）**。
+
+- **検出**: R5（`\b` cue の M-boot 裁定）は前提破綻——`\b[ID]` は parser（タグ表なし→`Raw` 落ち）→sakura compile（catch-all debug! 破棄）の二段で cue 化されず、`CueCommand` にバルーン面 variant も不在＝統合層に一切届かない。R5.1/5.2「受信→no-op＋warn」は検証不能な空手形。追加検出: 旧形式 `\bN` の本文数字漏れ（可視破損）／Balloon 分類 cue の TextSink 誤配線（表示指令の配管不在）。
+- **裁定**: no-op 絆創膏でなく cue ドメイン第一級化（`\s` 完全対称）を新設 spec `areka-P0-balloon-face-cue` で先行完遂（ブロッカー登記 B1〜B8 は同 brief に収録）。上記 §7 設計判断のうち **#6 は同 spec へ吸収**・他8件は本 spec design 持ちで不変。
+- **再開時の義務**: ① R5 を「実 cue が届く」前提へ改稿（既定面のみ→実切替の受入基準化・warn 空手形の撤回） ② 要件ディスカッション残議題の続行（議題2: R10.5 依存解釈＝workspace path 依存昇格の in-scope 確認／議題3: R8 決定論 spine の観測境界＝GPU 依存の許容範囲） ③ scope→TargetId 写像（R3 正本）にバルーン target への `DisplayCommand` 拡張形の配送を含める。
