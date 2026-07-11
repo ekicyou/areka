@@ -172,4 +172,4 @@
 - 4: ContentCanvas の座標系は validrect-local（size=validrect寸・住人はローカル座標＋平行移動配置）とレビュアー裁定確定。image-absolute だと Arrangement offset=validrect原点×k と二重適用になる。task 6 DrawExecutor はこの前提で消費すること。
 - 7.1: レビュアーが誤って `git checkout -- <file>` を実行し未コミット実装を一時消失（文脈から byte-identical 復元・検証済み）。subagent プロンプトに「破壊的 git コマンド禁止（checkout --/reset --hard）」を明記すること。mutation 検証の復元は必ず backup ファイル経由で行う。
 - 10.3: スケール非依存檻には反対辺基準（負値）座標が必須——絶対座標のみだと image_size がレイアウトに効かず k 混入変異が素通りする（実装者が檻穴を自己検出して閉鎖）。
-- 最終検証: `cargo test --workspace` が間欠 101（清浄環境で 4/10）。犯人は areka-ghost spine_e2e_test（S1/S5・yield_now 有界スピンで 2 hop スレッド中継を待つ設計 race・本 spec 非接触の upstream 資産＝areka-P0-ghost-setup 由来）。本 spec の変更（derive/additive API）に dispatcher タイミングへの影響経路なし。baseline 73eae3c1 での再現計測を実施。ゾンビ cargo プロセスにも注意（計測前に Get-Process 確認）。
+- 最終検証: `cargo test --workspace` の間欠 101 の真因は**ゾンビ cargo プロセス等の CPU 負荷汚染**（並行 cargo test --workspace 残存下で areka-ghost spine_e2e S1/S5 が 4-5/10 失敗・アイドル時は baseline 73eae3c1／現ツリーとも 0/20 で完全安定）。spine e2e は yield_now 有界スピンで 2 hop スレッド中継を待つ負荷感受性テスト（upstream=ghost-setup 資産・本 spec 非接触・負荷耐性強化は別タスク chip 発行済み）。教訓: 回帰計測の前に `Get-Process cargo,rustc` で残存プロセスを確認・大量ファイル checkout 直後は AV スキャン残留負荷にも注意。
