@@ -22,4 +22,9 @@ features = [
     "Win32_System_DataExchange",
     "Win32_UI_WindowsAndMessaging",
     "Win32_Foundation",
+    # helper 孤児化防止（Job Object・KILL_ON_JOB_CLOSE）: 親プロセス終了で helper を
+    # OS 機構により確実に道連れにする（src/job.rs）。CreateJobObjectW は引数に
+    # SECURITY_ATTRIBUTES を持つため Win32_Security も要る。
+    "Win32_System_JobObjects",
+    "Win32_Security",
 ]

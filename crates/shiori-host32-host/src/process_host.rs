@@ -1,10 +1,13 @@
 //! `ProcessHost`（要件 1.1〜1.5）: helper プロセスの起動と、IPC と直交する
 //! 非ブロッキング生存監視。
 //!
-//! 本モジュールは **std-only**（`windows` 非依存）で完結する。親ウィンドウ
-//! ハンドルは `windows` の `HWND` 型を引きずらず、u32 ワイヤ値として子へ渡す。
-//! これにより ProcessHost は x64/arm64 の別なく純粋な `std::process` 上の
-//! ロジックとして単体テスト可能になる。
+//! 本モジュールの純ロジック（`ExitKind::classify`・`resolve_param`・
+//! `resolve_request_timeout` 等）は **std-only**（`windows` 非依存）で完結し、親ウィンドウ
+//! ハンドルは `windows` の `HWND` 型を引きずらず u32 ワイヤ値として子へ渡す。これにより
+//! ProcessHost の判定ロジックは x64/arm64 の別なく純粋な `std::process` 上のロジックとして
+//! 単体テスト可能である。唯一 [`spawn_command`] のみ、helper の**孤児化防止**として
+//! KILL_ON_JOB_CLOSE 付き Job Object を割り当てる（windows 依存は [`crate::job`] に隔離し、
+//! 割り当て失敗時は縮退＝現行挙動）。
 //!
 //! 子への起動パラメーター受け渡し規約（cross-task 契約・design §SpawnContract・R3.1〜3.3）:
 //! helper は起動パラメーターを **arg-n 優先・fallback env** の順で取得する。
@@ -150,11 +153,20 @@ impl ExitKind {
 /// [`poll_exit_kind`] による非ブロッキング生存監視の対象となる。
 /// `helper_hwnd` は HELLO ハンドシェイク受領後に確定する（本ユニット内で
 /// 結線・本タスクでは未使用）。
+///
+/// **孤児化防止**: spawn 時に helper を `KILL_ON_JOB_CLOSE` 付き Job Object へ割り当て、
+/// その job ハンドルを `_job` として保持する（[`crate::job`]）。本ハンドルを保持する
+/// 親プロセスが終了（正常・異常・UNLOAD 未送出のいずれも）すると OS が job を閉じ、
+/// helper を確実に道連れにする。helper 側の親死亡検知（下流 host32-lifecycle 領分・未実装）に
+/// 依存しない安全網。job 割り当てに失敗した場合は `None`（縮退・現行挙動）。
 #[derive(Debug)]
 pub struct HelperHandle {
     child: Child,
     /// HELLO 受領後に確定する helper のウィンドウハンドル（u32 ワイヤ値）。
     helper_hwnd: Option<u32>,
+    /// KILL_ON_JOB_CLOSE 付き Job Object の RAII ハンドル（孤児化防止）。`Drop` で
+    /// `CloseHandle`→job クローズ→helper kill。割り当て失敗時は `None`（縮退）。
+    _job: Option<std::os::windows::io::OwnedHandle>,
 }
 
 impl HelperHandle {
@@ -250,9 +262,13 @@ pub fn spawn(
 /// `Command::spawn` の I/O 失敗を [`SpawnError`] として返す。
 pub fn spawn_command(mut command: Command) -> Result<HelperHandle, SpawnError> {
     let child = command.spawn()?;
+    // 孤児化防止: spawn 直後に KILL_ON_JOB_CLOSE 付き job へ割り当てる（失敗は縮退＝None）。
+    // これにより、親プロセスが UNLOAD を送らずに終了しても helper が OS 機構で kill される。
+    let job = crate::job::attach_kill_on_close_job(&child);
     Ok(HelperHandle {
         child,
         helper_hwnd: None,
+        _job: job,
     })
 }
 
