@@ -1,9 +1,9 @@
 {
   "feature_name": "areka-P0-emo-text-layer",
   "created_at": "2026-07-09T13:13:45Z",
-  "updated_at": "2026-07-10T13:40:00Z",
+  "updated_at": "2026-07-11T10:50:21Z",
   "language": "ja",
-  "phase": "tasks-approved",
+  "phase": "completed",
   "approvals": {
     "requirements": {
       "generated": true,
@@ -16,6 +16,10 @@
     "tasks": {
       "generated": true,
       "approved": true
+    },
+    "implementation": {
+      "completed": true,
+      "completed_at": "2026-07-11T10:50:21Z"
     }
   },
   "ready_for_implementation": true
