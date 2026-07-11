@@ -168,7 +168,7 @@
   - _Requirements: 4.8_
   - _Depends: 8.1_
   - _Boundary: placement::follow, placement::spawn_
-- [ ] 8.4 実 DPI 目視受け入れの再検証（4.7/4.8 追補）
+- [x] 8.4 実 DPI 目視受け入れの再検証（4.7/4.8 追補）——acceptance-record.md 追補・全項目 PASS（dpi 120/192・実マウス入力・厳密座標一致）
   - example を実 DPI（≠96）で実行し、①bottom 吸着（上下ドラッグ不可・左右スライド） ②モニタ跨ぎ再吸着（跨いだ先の下端へ） ③バルーン単独ドラッグ→offset 記憶→キャラ窓ドラッグで調整後 offset 追従、を観測・記録する（acceptance-record.md へ追補）
   - 観測可能な完了状態: 実 DPI 値と各項目の pass/fail が acceptance-record.md に追記され全項目 pass
   - _Requirements: 4.7, 4.8, 3.5_
