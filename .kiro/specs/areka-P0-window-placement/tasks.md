@@ -116,7 +116,7 @@
   - _Boundary: main.rs seam_
 
 - [ ] 7. Validation: 実 DPI 受け入れ example と手動検証
-- [ ] 7.1 実 DPI 受け入れ example を実装する
+- [x] 7.1 実 DPI 受け入れ example を実装する
   - `crates/areka/examples/window-placement.rs` を新設し、`prepare_ghost_windows`（emo2 fixture パス）→ `spawn_ghost_windows` → emo-present donor と同型の装着経路（`EmoPresenter::attach_target`、dev-dependency の areka-emo-present を使用）で scope0 キャラ窓に surface0・scope1 キャラ窓に surface10・両バルーン窓に balloon target を装着する（`crates/areka/src/placement/` 本体は `EmoPresenter` を import しない）
   - rustdoc に手動観測プロトコル（①per-monitor v2・dpi≠96 で実行 ②scope0 が work area 右下・scope1 がその左に画面内出現 ③キャラ窓ドラッグでバルーン追従 ④モニタ境界を跨ぐドラッグで消失しない ⑤結果と実 DPI 値を記録）と、scope1 バルーンが scope0 キャラ窓に重畳するのは暫定規則の正常挙動であり受け入れ判定の対象外である旨を明記する
   - 観測可能な完了状態: `cargo build --example window-placement -p areka` が成功し、rustdoc に手動観測プロトコル①〜⑤と重畳注記が記載されている
