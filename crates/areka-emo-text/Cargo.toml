@@ -33,8 +33,7 @@ bevy_ecs = { workspace = true }
 windows = { workspace = true, features = ["Win32_Graphics_Dxgi"] }
 # SpriteVisual::SetSize の Vector2（wintf と同一の workspace ピン）。
 windows-numerics = { workspace = true }
-
-[dev-dependencies]
+# 結線 API `spawn_emo_text` の戻り値型（JoinHandle——design.md「TextLayerActor」契約）と、
 # 結線層テストの実走 pump（MessageLoop——spawn_ui の drain タスクを実際に駆動して
 # 終了規律 3 ケースを実 channel で再現する。actor-foundation toy(b) の系譜）。
 wintf-winmsg-executor = { workspace = true }
