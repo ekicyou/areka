@@ -404,6 +404,7 @@ CueCommand::BalloonSurface { key } => {
 
 **Implementation Notes**
 - Integration: 外側分類は `Some(CueTarget::Shell)` の既存 arm で通過する（無改変）。既存 `Emote` 経路（resolver→apply）とは分岐後に完全分離。
+- **arm 挿入位置（validation Issue 1 の裁定）**: 既存の内側 match は「key 抽出 match」（`let key = match &cue.command {...}`）であり値を返す形。`BalloonSurface` arm は解決→適用→発行を arm 内で完結し値を返さないため、**key 抽出 match の前段分岐**（`if let CueCommand::BalloonSurface{key} = &cue.command { ...; return ControlFlow::Continue(()); }` 等の早期 return 形）として挿入し、**既存 Emote 経路のコード形状には触れない**（R4.6）。catch-all は新設しない。
 - Validation: seriko の外側/内側 catch-all はコンパイル強制が働かないため、消費経路は E2E＋`handle_message` 同期単体（capture_logs）で檻を張る（Testing Strategy）。
 - Risks: シェル経路への意図せぬ干渉 → 別 map・別 arm・既存テスト全緑＋「シェル/バルーン独立性」専用テストで封じる。
 
