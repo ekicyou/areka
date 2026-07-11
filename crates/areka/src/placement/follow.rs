@@ -6,8 +6,8 @@
 //!   マーカー全走査ではなく `BalloonFollow.balloon` の `WindowHandle` を直接引く）
 //! - [`move_window_to`]: R7 公開 API（UI スレッド関数・物理 px スクリーン座標直渡し）
 //! - [`MonitorSnapshot`]／[`work_area_for_window`]: bottom 吸着ドラッグ（4.7・DD15）の
-//!   基盤——全モニタ work area 集合の Resource と窓中心→モニタ解決の純粋ヘルパ
-//!   （消費側の Y 釘付けは task 8.2。snapshot は吸着の消費地たる本モジュールに置く）
+//!   基盤——全モニタ work area 集合の Resource と窓中心→モニタ解決の純粋ヘルパ。
+//!   消費側の Y 釘付けは [`on_char_drag`] 内（`BottomSnap` キャラ窓のみ・task 8.2）
 //!
 //! # 座標単位契約（design U1/U4）
 //!
@@ -28,9 +28,10 @@ use windows::Win32::UI::WindowsAndMessaging::{SWP_NOACTIVATE, SWP_NOSIZE, SWP_NO
 use wintf::ecs::drag::DragEvent;
 use wintf::ecs::pointer::Phase;
 use wintf::ecs::window::monitor::Monitor;
-use wintf::ecs::{Point, SetWindowPosCommand, WindowHandle, WindowPos};
+use wintf::ecs::{Point, SetWindowPosCommand, SizeI, WindowHandle, WindowPos};
 
 use super::resolver::{PointPx, RectPx};
+use super::spawn::BottomSnap;
 
 /// キャラ窓に付与するバルーン追従 Component（4.2/4.4）。
 ///
@@ -54,8 +55,16 @@ pub struct BalloonFollow {
 /// `BalloonFollow.offset` を加算し、バルーン窓へ `SetWindowPosCommand` を
 /// enqueue するだけ（再スケールなし・U4）。
 ///
+/// # bottom 吸着の Y 釘付け（4.7・DD15・task 8.2）
+///
+/// `BottomSnap` marker を持つキャラ窓は、wndproc 移動後に [`MonitorSnapshot`]＋
+/// [`work_area_for_window`] で「窓中心が属するモニタの `work_area.bottom − h`」を
+/// 求め、Y がずれていれば自窓へ `SetWindowPosCommand` で再釘付けする
+/// （X は不変・物理 px 素通し・再スケールなし）。モニタを跨いだら跨いだ先の
+/// 下端へ再吸着し、`Free`（marker なし）は従来どおり全方向移動。バルーン追従は
+/// **釘付け後**のキャラ窓座標基準で offset 加算する。
+///
 /// イベントは消費しない（常に `false`＝伝播続行。donor on_shell_drag と同じ規約）。
-#[allow(dead_code)] // OnDrag(on_char_drag) の結線（spawn）は task 5.1
 pub(crate) fn on_char_drag(
     world: &mut World,
     _sender: Entity,
@@ -65,10 +74,25 @@ pub(crate) fn on_char_drag(
     match ev {
         Phase::Tunnel(_) => false,
         Phase::Bubble(_) => {
-            // キャラ窓の現在位置（wndproc が実窓位置から更新済み・物理 px）
-            let Some(pos) = world.get::<WindowPos>(entity).and_then(|wp| wp.position) else {
+            // キャラ窓の現在位置・寸法（wndproc が実窓位置から更新済み・物理 px）
+            let Some(wp) = world.get::<WindowPos>(entity) else {
                 return false;
             };
+            let Some(mut pos) = wp.position else {
+                return false;
+            };
+            let size = wp.size;
+
+            // bottom 吸着の Y 釘付け（BottomSnap キャラ窓のみ・4.7）
+            if world.get::<BottomSnap>(entity).is_some()
+                && let Some(target_y) = bottom_snap_target_y(world, pos, size)
+                && pos.y != target_y
+            {
+                enqueue_window_move(world, entity, pos.x, target_y);
+                // 以降のバルーン追従は釘付け後座標を基準にする
+                pos.y = target_y;
+            }
+
             let Some(follow) = world.get::<BalloonFollow>(entity).copied() else {
                 return false;
             };
@@ -90,6 +114,39 @@ pub(crate) fn on_char_drag(
             false
         }
     }
+}
+
+/// `BottomSnap` キャラ窓の釘付け先 Y（`work_area.bottom − h`・物理 px）を求める（4.7・DD15）。
+///
+/// 釘付け不能（設計上の graceful degradation）は `None`:
+/// - `WindowPos.size` 不在・非正寸法: `bottom − h` の h が得られない。
+///   `WindowPos::default()` の size は `CW_USEDEFAULT`（負のセンチネル）であり、
+///   これで釘付けると `saturating_sub` が `i32::MAX` へ飛ぶため **w/h > 0 のみ**
+///   釘付け対象とする（spawn 経由の窓は必ず実寸持ちのため実運用では起きない）
+/// - [`MonitorSnapshot`] Resource 不在: main.rs のフォールバック経路（dummy 窓）は
+///   snapshot を挿入しない設計のため、不在＝失敗ではなく「吸着なしで従来動作」。
+///   ドラッグ移動イベントごとに発火する経路ゆえ `warn!` は spam になる——設計上の
+///   縮退として `debug!` に留める（log-first 規律の対象は*失敗*経路・ここは仕様内縮退）
+/// - 空 snapshot: [`work_area_for_window`] が `None`（架空の既定矩形を発明しない）
+fn bottom_snap_target_y(world: &World, pos: Point, size: Option<SizeI>) -> Option<i32> {
+    let Some(size) = size.filter(|s| s.width > 0 && s.height > 0) else {
+        debug!(?size, "BottomSnap 窓の WindowPos.size が不在か非正寸法のため Y 釘付けをスキップ");
+        return None;
+    };
+    let Some(snapshot) = world.get_resource::<MonitorSnapshot>() else {
+        debug!("MonitorSnapshot 未挿入（フォールバック経路）のため Y 釘付けをスキップ");
+        return None;
+    };
+    let window = RectPx {
+        left: pos.x,
+        top: pos.y,
+        right: pos.x.saturating_add(size.width),
+        bottom: pos.y.saturating_add(size.height),
+    };
+    let wa = work_area_for_window(snapshot, window)?;
+    // 実 work area／窓寸で溢れない範囲だが、極端入力でも panic しない契約
+    // （resolver の saturating 演算と同じ防波堤）
+    Some(wa.bottom.saturating_sub(size.height))
 }
 
 /// R7 公開 API: UI スレッド上で呼ばれる窓移動関数（物理 px・スクリーン座標直渡し・7.1）。
@@ -219,7 +276,6 @@ impl MonitorSnapshot {
 ///
 /// 距離は i128 で自乗和を取り、極端な仮想スクリーン座標でも溢れない
 /// （panic しない契約・resolver の saturating 演算と同じ防波堤）。
-#[allow(dead_code)] // 消費側（bottom 吸着ドラッグの Y 釘付け）は task 8.2
 pub fn work_area_for_window(snapshot: &MonitorSnapshot, window: RectPx) -> Option<RectPx> {
     let cx = (window.left as i64 + window.right as i64) / 2;
     let cy = (window.top as i64 + window.bottom as i64) / 2;
@@ -624,5 +680,227 @@ mod tests {
         let ev = Phase::Bubble(drag_event(window));
         assert!(!on_char_drag(&mut world, window, window, &ev));
         assert_eq!(position_of(&world, window), Point { x: 50, y: 60 });
+    }
+
+    // -------------------------------------------------------------------------
+    // bottom 吸着ドラッグ（task 8.2・4.7・DD15）
+    // 合成 MonitorSnapshot を Resource 注入した headless World で、BottomSnap
+    // キャラ窓の Y 釘付け・X 素通し・モニタ跨ぎ再吸着・Free 非矯正・
+    // バルーンの釘付け後座標基準追従を決定論検証する（偽装境界）。
+    // -------------------------------------------------------------------------
+
+    use wintf::ecs::SizeI;
+
+    use crate::placement::spawn::BottomSnap;
+
+    /// position＋size 付きの WindowPos（spawn の `window_pos` と同型）。
+    fn window_pos_sized(x: i32, y: i32, w: i32, h: i32) -> WindowPos {
+        WindowPos {
+            position: Some(Point { x, y }),
+            size: Some(SizeI::new(w, h)),
+            ..Default::default()
+        }
+    }
+
+    /// 単一モニタの合成 snapshot（物理 px・96 の倍数を避けた下端で再スケール檻）。
+    fn single_monitor_snapshot() -> MonitorSnapshot {
+        MonitorSnapshot {
+            work_areas: vec![rect(0, 0, 1920, 1043)],
+        }
+    }
+
+    /// (a)(b) BottomSnap 窓のドラッグ: Y は現在モニタの `work_area.bottom − h` へ
+    /// 矯正され、X はドラッグ位置のまま素通し（物理 px・再スケールなし・4.7）。
+    #[test]
+    fn on_char_drag_bottom_snap_pins_y_to_work_area_bottom() {
+        let mut world = World::new();
+        world.insert_resource(single_monitor_snapshot());
+        // wndproc がドラッグ中に更新した「下端から浮いた」位置を模す（中心は面内）
+        let window = world
+            .spawn((
+                fake_handle(0x1000),
+                window_pos_sized(1207, 217, 434, 687),
+                BottomSnap,
+            ))
+            .id();
+
+        let ev = Phase::Bubble(drag_event(window));
+        assert!(!on_char_drag(&mut world, window, window, &ev));
+
+        // Y=1043−687=356 へ釘付け・X=1207 は不変
+        assert_eq!(position_of(&world, window), Point { x: 1207, y: 356 });
+    }
+
+    /// 釘付け済み（Y が既に下端一致）の BottomSnap 窓は位置不変（余計な移動なし）。
+    #[test]
+    fn on_char_drag_bottom_snap_already_pinned_is_stable() {
+        let mut world = World::new();
+        world.insert_resource(single_monitor_snapshot());
+        let window = world
+            .spawn((
+                fake_handle(0x1000),
+                window_pos_sized(731, 356, 434, 687), // 1043−687=356（既に下端）
+                BottomSnap,
+            ))
+            .id();
+
+        let ev = Phase::Bubble(drag_event(window));
+        assert!(!on_char_drag(&mut world, window, window, &ev));
+        assert_eq!(position_of(&world, window), Point { x: 731, y: 356 });
+    }
+
+    /// (c) モニタ跨ぎ: 窓中心が下端の異なる隣モニタへ移ったら、跨いだ先の
+    /// work area 下端へ再吸着する（4.7「跨いだ先のモニタの下端へ再吸着」）。
+    #[test]
+    fn on_char_drag_bottom_snap_resnaps_to_crossed_monitor_bottom() {
+        let mut world = World::new();
+        world.insert_resource(MonitorSnapshot {
+            work_areas: vec![
+                rect(0, 0, 1920, 1040),       // primary
+                rect(1920, -213, 4480, 1227), // 右の高解像度モニタ（下端が異なる）
+            ],
+        });
+        // 中心 x = 2531+434/2 = 2748 → 右モニタ帰属
+        let window = world
+            .spawn((
+                fake_handle(0x1000),
+                window_pos_sized(2531, 353, 434, 687), // 353 は旧モニタの下端由来
+                BottomSnap,
+            ))
+            .id();
+
+        let ev = Phase::Bubble(drag_event(window));
+        assert!(!on_char_drag(&mut world, window, window, &ev));
+
+        // 右モニタの下端 1227−687=540 へ再吸着・X 素通し
+        assert_eq!(position_of(&world, window), Point { x: 2531, y: 540 });
+    }
+
+    /// (d) BottomSnap の無い窓（free スコープ・吸着なし）は snapshot があっても
+    /// 矯正されない（全方向移動・挙動不変・4.7）。
+    #[test]
+    fn on_char_drag_free_window_is_not_pinned() {
+        let mut world = World::new();
+        world.insert_resource(single_monitor_snapshot());
+        let balloon = world
+            .spawn((fake_handle(0x2000), window_pos_at(0, 0)))
+            .id();
+        let offset = PointPx { x: 498, y: -37 };
+        let window = world
+            .spawn((
+                fake_handle(0x1000),
+                window_pos_sized(1207, 217, 434, 687),
+                BalloonFollow { balloon, offset },
+            ))
+            .id();
+
+        let ev = Phase::Bubble(drag_event(window));
+        assert!(!on_char_drag(&mut world, window, window, &ev));
+
+        // Y 矯正なし（ドラッグ位置のまま）・バルーンは素の位置基準で追従
+        assert_eq!(position_of(&world, window), Point { x: 1207, y: 217 });
+        assert_eq!(
+            position_of(&world, balloon),
+            Point {
+                x: 1207 + offset.x,
+                y: 217 + offset.y
+            }
+        );
+    }
+
+    /// (e) バルーン追従は**釘付け後**のキャラ窓座標基準（pinned + offset）。
+    /// 釘付け前の素のドラッグ位置基準だと Y がずれる檻。
+    #[test]
+    fn on_char_drag_balloon_follows_pinned_position() {
+        let mut world = World::new();
+        world.insert_resource(single_monitor_snapshot());
+        let balloon = world
+            .spawn((fake_handle(0x2000), window_pos_at(0, 0)))
+            .id();
+        let offset = PointPx { x: -400, y: 25 };
+        let window = world
+            .spawn((
+                fake_handle(0x1000),
+                window_pos_sized(1207, 217, 434, 687),
+                BottomSnap,
+                BalloonFollow { balloon, offset },
+            ))
+            .id();
+
+        let ev = Phase::Bubble(drag_event(window));
+        assert!(!on_char_drag(&mut world, window, window, &ev));
+
+        let char_pos = position_of(&world, window);
+        assert_eq!(char_pos, Point { x: 1207, y: 356 }); // 1043−687=356
+        assert_eq!(
+            position_of(&world, balloon),
+            Point {
+                x: char_pos.x + offset.x,
+                y: char_pos.y + offset.y
+            }
+        );
+    }
+
+    /// (+) MonitorSnapshot Resource 不在（main.rs フォールバック経路）: 釘付けは
+    /// 行わず panic もしない（設計上の graceful degradation・バルーン追従は生きる）。
+    #[test]
+    fn on_char_drag_bottom_snap_without_snapshot_is_graceful() {
+        let mut world = World::new(); // Resource 未挿入
+        let balloon = world
+            .spawn((fake_handle(0x2000), window_pos_at(0, 0)))
+            .id();
+        let offset = PointPx { x: 11, y: 22 };
+        let window = world
+            .spawn((
+                fake_handle(0x1000),
+                window_pos_sized(1207, 217, 434, 687),
+                BottomSnap,
+                BalloonFollow { balloon, offset },
+            ))
+            .id();
+
+        let ev = Phase::Bubble(drag_event(window));
+        assert!(!on_char_drag(&mut world, window, window, &ev));
+
+        // 釘付けなし・素の位置基準で追従（no-pin degradation）
+        assert_eq!(position_of(&world, window), Point { x: 1207, y: 217 });
+        assert_eq!(
+            position_of(&world, balloon),
+            Point {
+                x: 1207 + offset.x,
+                y: 217 + offset.y
+            }
+        );
+    }
+
+    /// (+) WindowPos.size 不在の BottomSnap 窓: `bottom − h` を計算できないため
+    /// 釘付けせず panic もしない（graceful degradation）。
+    #[test]
+    fn on_char_drag_bottom_snap_without_size_is_graceful() {
+        let mut world = World::new();
+        world.insert_resource(single_monitor_snapshot());
+        let mut wp = window_pos_at(1207, 217);
+        wp.size = None;
+        let window = world.spawn((fake_handle(0x1000), wp, BottomSnap)).id();
+
+        let ev = Phase::Bubble(drag_event(window));
+        assert!(!on_char_drag(&mut world, window, window, &ev));
+        assert_eq!(position_of(&world, window), Point { x: 1207, y: 217 });
+    }
+
+    /// (+) `WindowPos::default()` の size は `CW_USEDEFAULT`（負のセンチネル）。
+    /// 非正寸法では釘付けしない（saturating_sub が i32::MAX へ飛ぶ暴走の檻）。
+    #[test]
+    fn on_char_drag_bottom_snap_sentinel_size_is_graceful() {
+        let mut world = World::new();
+        world.insert_resource(single_monitor_snapshot());
+        // window_pos_at は ..Default::default() ゆえ size=Some(CW_USEDEFAULT×2)
+        let window = world
+            .spawn((fake_handle(0x1000), window_pos_at(1207, 217), BottomSnap))
+            .id();
+
+        let ev = Phase::Bubble(drag_event(window));
+        assert!(!on_char_drag(&mut world, window, window, &ev));
+        assert_eq!(position_of(&world, window), Point { x: 1207, y: 217 });
     }
 }

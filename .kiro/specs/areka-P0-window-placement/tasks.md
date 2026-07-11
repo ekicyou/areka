@@ -141,7 +141,7 @@
   - 観測可能な完了状態: `cargo test -p areka` で新テストが緑・既存テスト無退行
   - _Requirements: 4.7_
   - _Boundary: placement::resolver, placement::spawn, placement::follow (snapshot), main.rs seam_
-- [ ] 8.2 bottom 吸着ドラッグ（Y 釘付け・モニタ跨ぎ再吸着）を実装する
+- [x] 8.2 bottom 吸着ドラッグ（Y 釘付け・モニタ跨ぎ再吸着）を実装する
   - `on_char_drag` を拡張し、`BottomSnap` のキャラ窓は wndproc 移動後に `MonitorSnapshot`＋`work_area_for_window` で現在モニタの `work_area.bottom − h` を求め、Y がずれていれば自窓へ `SetWindowPosCommand` で再釘付けする（X は不変・物理 px・再スケールなし）。バルーン追従はキャラ窓の釘付け後座標基準で offset 加算する
   - `Free` スコープと吸着なし窓は従来どおり全方向移動（挙動不変）
   - headless テスト: 合成 `MonitorSnapshot` を注入し、(a) bottom 窓のドラッグで Y が下端へ矯正される (b) X は素通し (c) モニタ跨ぎで跨いだ先の下端へ再吸着 (d) Free 窓は矯正されない (e) バルーンが釘付け後座標＋offset へ追従する
