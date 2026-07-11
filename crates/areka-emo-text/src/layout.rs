@@ -1,9 +1,11 @@
-//! # layout — 折返し・行送りの決定（純粋層）
+//! # layout — 折返し・行送り・スクロール可視窓の決定（純粋層）
 //!
 //! `GlyphMetrics` trait（グリフ送り幅・行送りピッチの唯一の注入口・R4.5）を通じて
-//! metrics 依存を外部化し、折返し位置・行送りの決定アルゴリズム自体は描画方式に
-//! 依存しない純粋な形に保つ `LayoutEngine`／`FixedMetrics`／`PositionedLine` を担う。
-//! あふれ判定・スクロール可視窓の決定は後続ユニット（同モジュールへ追加）の領分。
+//! metrics 依存を外部化し、折返し位置・行送り・あふれ判定・可視窓決定の
+//! アルゴリズム自体は描画方式に依存しない純粋な形に保つ `LayoutEngine`／
+//! `FixedMetrics`／`PositionedLine`／`VisibleWindow` を担う。
+//! [`LayoutEngine::visible_window`] は「可視窓の決定（純粋）」だけを返し、
+//! 描画実行（全域再描画・R7.3）は COM 層（draw）の領分——R7.4 の分離シーム。
 //!
 //! **層規律**: 純粋層——`windows` 系 crate への依存を一切持たない（決定論檻）。
 //! 実測 metrics（DWriteMetrics・probe TextLayout 由来）は COM 層（draw）が
@@ -116,6 +118,25 @@ pub struct PositionedLine {
     pub glyphs: Vec<PositionedGlyph>,
 }
 
+/// スクロール可視窓（先頭可視行＋ブロック軸オフセット・R7.4 分離シームの上半分）。
+///
+/// 「可視窓の決定（純粋な計算）」だけを表す値——描画実行は持たない（R7.4）。
+/// emo-text-viewbox はこの出力を「クリップ視窓＋内容オフセット」へ写像して
+/// 描画実行だけを差し替える。非スクロール時は `first_visible_line = 0`・
+/// `block_offset = 0.0`。
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct VisibleWindow {
+    /// 先頭可視行の index（[`LayoutEngine::layout`] 出力の行列に対する添字）。
+    pub first_visible_line: usize,
+    /// ブロック軸（行送り軸）の内容オフセット（image px・符号付き）。
+    ///
+    /// 描画時に各行のブロック軸位置へ**加算**する平行移動量
+    /// （horizontal_tb＝y・縦書き＝x——軸読み替え正準表のスクロール方向:
+    /// 横書き＝内容が上（負）・vertical_rl＝内容が右（正）・vertical_lr＝内容が左（負））。
+    /// 行単位スクロールゆえ値は「スキップした行のブロック軸位置差」そのもの。
+    pub block_offset: f32,
+}
+
 /// 折返し・行送りの決定エンジン（純粋・R4.5/R6.1–6.3）。
 pub struct LayoutEngine;
 
@@ -215,6 +236,71 @@ impl LayoutEngine {
         }
         lines
     }
+
+    /// スクロール可視窓の決定（純粋・R7.1/7.2/7.4/7.5——分離シームの上半分）。
+    ///
+    /// あふれ判定は軸読み替え正準表の行をそのまま実装する:
+    ///
+    /// | mode | あふれ判定 | スクロール方向 |
+    /// |---|---|---|
+    /// | horizontal_tb | 最新行の下端 > validrect.bottom | 縦（内容が上へ） |
+    /// | vertical_rl | 最新列の左端 < validrect.left | 横（内容が右へ） |
+    /// | vertical_lr | 最新列の右端 > validrect.right | 横（内容が左へ） |
+    ///
+    /// 3 方向は「行送り方向を正とする正規化ブロック座標」への読み替えで単一式に
+    /// 畳む（アルゴリズム分岐なし——layout と同じ規律）。**行単位・即時**（M1 正準・
+    /// アニメなし）: 最新行が境界内へ収まる**最小の**先頭可視行を選び、オフセットは
+    /// スキップした行のブロック軸位置差そのもの。全行超過でも最新行へ飽和する
+    /// （最新行は常に可視・行を失わない）。失敗経路なし（全入力で値を返す純関数）。
+    pub fn visible_window(
+        lines: &[PositionedLine],
+        region: &TextRegion,
+        mode: WritingMode,
+    ) -> VisibleWindow {
+        let Some(last) = lines.last() else {
+            return VisibleWindow {
+                first_visible_line: 0,
+                block_offset: 0.0,
+            };
+        };
+        // 正規化ブロック座標（行送り方向が正）: near＝行の開始側・far＝行の遠端・
+        // boundary＝validrect の行送り側境界。正準表のあふれ判定行と 1:1。
+        type Edge = fn(&PositionedLine) -> f32;
+        let (near, far, boundary, block_dir): (Edge, Edge, f32, f32) = match mode {
+            WritingMode::HorizontalTb => {
+                (|l| l.rect.top, |l| l.rect.bottom, region.bottom(), 1.0)
+            }
+            WritingMode::VerticalRl => (|l| -l.rect.right, |l| -l.rect.left, -region.left(), -1.0),
+            WritingMode::VerticalLr => (|l| l.rect.left, |l| l.rect.right, region.right(), 1.0),
+        };
+        let last_far = far(last);
+        if last_far <= boundary {
+            // あふれ非発火（境界ちょうどは「超えていない」——正準表は > 判定）。
+            return VisibleWindow {
+                first_visible_line: 0,
+                block_offset: 0.0,
+            };
+        }
+        // 行単位スクロール: 最新行が収まる最小スキップ数を探す（全行超過は最新行へ飽和）。
+        let origin = near(&lines[0]);
+        let first_visible_line = lines
+            .iter()
+            .position(|line| last_far - (near(line) - origin) <= boundary)
+            .unwrap_or(lines.len() - 1);
+        // 実軸の平行移動量: 正規化座標のスキップ距離を行送り方向の符号で戻す。
+        let block_offset = -block_dir * (near(&lines[first_visible_line]) - origin);
+        tracing::debug!(
+            ?mode,
+            first_visible_line,
+            block_offset,
+            total_lines = lines.len(),
+            "あふれ発火——スクロール可視窓を決定した（行単位・即時）"
+        );
+        VisibleWindow {
+            first_visible_line,
+            block_offset,
+        }
+    }
 }
 
 /// 行の確定: 行内範囲（開始〜送り終端）と行送り軸位置から行矩形を組む
@@ -256,7 +342,9 @@ mod tests {
         BalloonModel, Font, FontColor, Origin, ValidRect, WindowPosition, WordWrapPoint,
     };
 
-    use super::{FixedMetrics, GlyphMetrics, LayoutEngine, LineRect, PositionedLine};
+    use super::{
+        FixedMetrics, GlyphMetrics, LayoutEngine, LineRect, PositionedLine, VisibleWindow,
+    };
     use crate::region::TextRegion;
     use crate::state::TextItem;
     use crate::writing::WritingMode;
@@ -703,6 +791,270 @@ mod tests {
     }
 
     // ── R2.5 系/R11.6: 決定論（同一入力→同一出力・DirectWrite 非依存の構造テスト） ──
+
+    // ── 3.2 R7.1/7.2/7.4/7.5（+R6.4）: あふれ判定とスクロール可視窓（visible_window） ──
+    //
+    // 幾何の共通前提: FixedMetrics・font 10 → pitch 13（ceil(12.5)）・全角 1 グリフ/行。
+    // あふれ判定は軸読み替え正準表の行（横書き=最新行の下端 > validrect.bottom・
+    // vertical_rl=最新列の左端 < validrect.left・vertical_lr=最新列の右端 > validrect.right）。
+
+    /// テスト用 BalloonModel 生成ヘルパ（validrect 込み・順序は top,bottom,left,right）。
+    fn model_rect(
+        origin: (Option<i32>, Option<i32>),
+        validrect: (Option<i32>, Option<i32>, Option<i32>, Option<i32>),
+    ) -> BalloonModel {
+        BalloonModel::new(
+            WindowPosition::new(None, None),
+            Origin::new(origin.0, origin.1),
+            WordWrapPoint::new(None, None),
+            ValidRect::new(validrect.0, validrect.1, validrect.2, validrect.3),
+            Font::new(None, None, FontColor::new(None, None, None)),
+            None,
+        )
+    }
+
+    /// n 行（各行 全角 1 グリフ・明示改行 ratio 1.0 区切り）の item 列。
+    fn broken_lines(n: usize) -> Vec<TextItem> {
+        let mut items = Vec::new();
+        for i in 0..n {
+            if i > 0 {
+                items.push(TextItem::LineBreak { ratio: 1.0 });
+            }
+            items.push(TextItem::Glyph { ch: 'あ' });
+        }
+        items
+    }
+
+    /// layout→visible_window の通し（テスト用最短経路・visible は全量）。
+    fn window_for(
+        items: &[TextItem],
+        region: &TextRegion,
+        mode: WritingMode,
+        font_height: f32,
+    ) -> VisibleWindow {
+        let visible = items
+            .iter()
+            .filter(|i| matches!(i, TextItem::Glyph { .. }))
+            .count();
+        let lines = LayoutEngine::layout(items, visible, region, mode, font_height, &FixedMetrics);
+        LayoutEngine::visible_window(&lines, region, mode)
+    }
+
+    /// 領域内に収まる間はあふれ非発火（先頭可視行 0・オフセット 0）。
+    /// 最新行の下端が validrect.bottom とちょうど一致する境界は「超えていない」
+    /// （判定は `>`・境界檻）。
+    #[test]
+    fn horizontal_within_region_does_not_scroll() {
+        // validrect top0/bottom36: 3 行の下端 10/23/36——3 行目はちょうど 36。
+        let region = TextRegion::resolve(
+            &model_rect((Some(0), Some(0)), (Some(0), Some(36), Some(0), Some(400))),
+            IMAGE,
+            WritingMode::HorizontalTb,
+        );
+        let window = window_for(&broken_lines(3), &region, WritingMode::HorizontalTb, 10.0);
+        assert_eq!(
+            window,
+            VisibleWindow {
+                first_visible_line: 0,
+                block_offset: 0.0
+            }
+        );
+    }
+
+    /// 横書きのあふれは縦スクロール（R7.2）: 1 行超過で先頭可視行が 1 行進み、
+    /// 内容は上（−y）へ pitch 分オフセットする。行単位＝オフセットは行位置差そのもの。
+    #[test]
+    fn horizontal_overflow_scrolls_vertically_by_whole_lines() {
+        let region = TextRegion::resolve(
+            &model_rect((Some(0), Some(0)), (Some(0), Some(36), Some(0), Some(400))),
+            IMAGE,
+            WritingMode::HorizontalTb,
+        );
+        // 4 行目の下端 49 > 36 → 1 行スキップで 49-13=36 ≤ 36（最小スキップ檻）。
+        let one_over = window_for(&broken_lines(4), &region, WritingMode::HorizontalTb, 10.0);
+        assert_eq!(
+            one_over,
+            VisibleWindow {
+                first_visible_line: 1,
+                block_offset: -13.0
+            }
+        );
+        // 6 行（最新行下端 75）→ 3 行スキップ（75-39=36）・オフセット −39。
+        let three_over = window_for(&broken_lines(6), &region, WritingMode::HorizontalTb, 10.0);
+        assert_eq!(
+            three_over,
+            VisibleWindow {
+                first_visible_line: 3,
+                block_offset: -39.0
+            }
+        );
+    }
+
+    /// vertical_rl のあふれは横スクロール（R7.2）: 最新列の左端 < validrect.left で発火し、
+    /// 内容は右（+x）へオフセットする（古い列が右端から消える——正準表）。
+    #[test]
+    fn vertical_rl_overflow_scrolls_content_rightward() {
+        // validrect left360/right400。列の左端 390/377/364/351——4 列目 351 < 360。
+        let region = TextRegion::resolve(
+            &model_rect((None, None), (Some(0), Some(224), Some(360), Some(400))),
+            IMAGE,
+            WritingMode::VerticalRl,
+        );
+        assert_eq!(region.start(), (400.0, 0.0));
+        let fits = window_for(&broken_lines(3), &region, WritingMode::VerticalRl, 10.0);
+        assert_eq!(fits.first_visible_line, 0);
+        assert_eq!(fits.block_offset, 0.0);
+        let over = window_for(&broken_lines(4), &region, WritingMode::VerticalRl, 10.0);
+        assert_eq!(
+            over,
+            VisibleWindow {
+                first_visible_line: 1,
+                block_offset: 13.0
+            }
+        );
+    }
+
+    /// vertical_lr のあふれは横スクロール: 最新列の右端 > validrect.right で発火し、
+    /// 内容は左（−x）へオフセットする（正準表）。
+    #[test]
+    fn vertical_lr_overflow_scrolls_content_leftward() {
+        // validrect left0/right40。列の右端 10/23/36/49——4 列目 49 > 40。
+        let region = TextRegion::resolve(
+            &model_rect((None, None), (Some(0), Some(224), Some(0), Some(40))),
+            IMAGE,
+            WritingMode::VerticalLr,
+        );
+        let fits = window_for(&broken_lines(3), &region, WritingMode::VerticalLr, 10.0);
+        assert_eq!(fits.first_visible_line, 0);
+        assert_eq!(fits.block_offset, 0.0);
+        let over = window_for(&broken_lines(4), &region, WritingMode::VerticalLr, 10.0);
+        assert_eq!(
+            over,
+            VisibleWindow {
+                first_visible_line: 1,
+                block_offset: -13.0
+            }
+        );
+    }
+
+    /// 空の行列は既定窓（先頭 0・オフセット 0）——失敗経路なしの純関数。
+    #[test]
+    fn empty_lines_yield_default_window() {
+        let region = TextRegion::resolve(
+            &model_rect((Some(0), Some(0)), (Some(0), Some(36), Some(0), Some(400))),
+            IMAGE,
+            WritingMode::HorizontalTb,
+        );
+        let window = LayoutEngine::visible_window(&[], &region, WritingMode::HorizontalTb);
+        assert_eq!(
+            window,
+            VisibleWindow {
+                first_visible_line: 0,
+                block_offset: 0.0
+            }
+        );
+    }
+
+    /// 全行超過（どこまでスキップしても最新行が収まらない）は最新行へ飽和する
+    /// （最新行は常に可視・行を失わない縮退規則）。
+    #[test]
+    fn all_lines_overflowing_saturates_to_newest_line() {
+        // font 50 → pitch 63・行下端 50/113/176 は全て validrect.bottom 40 超過。
+        let region = TextRegion::resolve(
+            &model_rect((Some(0), Some(0)), (Some(0), Some(40), Some(0), Some(400))),
+            IMAGE,
+            WritingMode::HorizontalTb,
+        );
+        let window = window_for(&broken_lines(3), &region, WritingMode::HorizontalTb, 50.0);
+        assert_eq!(
+            window,
+            VisibleWindow {
+                first_visible_line: 2,
+                block_offset: -126.0
+            }
+        );
+        // 1 行だけで領域より厚い場合も先頭 0・オフセット 0（それ以上戻せない）。
+        let single = window_for(&broken_lines(1), &region, WritingMode::HorizontalTb, 50.0);
+        assert_eq!(
+            single,
+            VisibleWindow {
+                first_visible_line: 0,
+                block_offset: 0.0
+            }
+        );
+    }
+
+    /// ratio 付き改行の端数行送り（pitch 15 × 0.5 = 7.5）でもオフセットは
+    /// 実際の行位置差＝端数そのもの（整数量子化しない・端数檻）。
+    #[test]
+    fn fractional_ratio_feed_scrolls_by_fractional_line_distance() {
+        let region = TextRegion::resolve(
+            &model_rect((Some(0), Some(0)), (Some(0), Some(30), Some(0), Some(400))),
+            IMAGE,
+            WritingMode::HorizontalTb,
+        );
+        // font 12 → pitch 15。ratio 0.5 区切り 4 行: 上端 0/7.5/15/22.5・下端 …/34.5 > 30。
+        let items = [
+            TextItem::Glyph { ch: 'あ' },
+            TextItem::LineBreak { ratio: 0.5 },
+            TextItem::Glyph { ch: 'あ' },
+            TextItem::LineBreak { ratio: 0.5 },
+            TextItem::Glyph { ch: 'あ' },
+            TextItem::LineBreak { ratio: 0.5 },
+            TextItem::Glyph { ch: 'あ' },
+        ];
+        let window = window_for(&items, &region, WritingMode::HorizontalTb, 12.0);
+        assert_eq!(
+            window,
+            VisibleWindow {
+                first_visible_line: 1,
+                block_offset: -7.5
+            }
+        );
+    }
+
+    /// 末尾の空行（trailing 改行）も「最新行」としてあふれ判定に参加する
+    /// （追記された改行が領域を超えれば発火——3.1 の空行出力との接続）。
+    #[test]
+    fn trailing_empty_line_participates_in_overflow() {
+        let region = TextRegion::resolve(
+            &model_rect((Some(0), Some(0)), (Some(0), Some(36), Some(0), Some(400))),
+            IMAGE,
+            WritingMode::HorizontalTb,
+        );
+        // 3 行（ちょうど収まる）＋末尾改行 → 空の 4 行目（下端 49 > 36）で発火。
+        let mut items = broken_lines(3);
+        items.push(TextItem::LineBreak { ratio: 1.0 });
+        let window = window_for(&items, &region, WritingMode::HorizontalTb, 10.0);
+        assert_eq!(
+            window,
+            VisibleWindow {
+                first_visible_line: 1,
+                block_offset: -13.0
+            }
+        );
+    }
+
+    /// 同一入力に対する visible_window 出力は完全一致する（純関数・決定論檻・R7.5）。
+    #[test]
+    fn visible_window_same_input_yields_identical_output() {
+        let region = TextRegion::resolve(
+            &model_rect((Some(0), Some(0)), (Some(0), Some(36), Some(0), Some(400))),
+            IMAGE,
+            WritingMode::HorizontalTb,
+        );
+        let lines = LayoutEngine::layout(
+            &broken_lines(5),
+            5,
+            &region,
+            WritingMode::HorizontalTb,
+            10.0,
+            &FixedMetrics,
+        );
+        let first = LayoutEngine::visible_window(&lines, &region, WritingMode::HorizontalTb);
+        let second = LayoutEngine::visible_window(&lines, &region, WritingMode::HorizontalTb);
+        assert_eq!(first, second);
+    }
 
     /// 同一入力に対する layout 出力は完全一致する（純関数・決定論檻）。
     #[test]
