@@ -49,7 +49,12 @@
 //!   ＝DIP と同一視）のままで、DPI API との二重適用は構造的に存在しない。
 //! - Image/Surface 住人（M1 型シーム）は `warn!`（executor ごと初回のみ）＋skip（R8.5）。
 //!
-//! probe と描画行 TextLayout の advance 一致 invariant の檻化は task 6.4 の領分。
+//! ## probe/描画 一致 invariant（task 6.4・R4.5/R6.1–6.3/R7.5）
+//!
+//! probe（per-char 計測）と描画行 TextLayout の cluster advance の**同値** invariant は
+//! 本モジュールの統合テスト（`probe_advances_match_drawn_line_cluster_advances`／
+//! `advance_divergence_would_surface_as_wrap_position_drift`）が檻化する——乖離は
+//! クリップに隠れず折返し位置のズレとして赤くなる（design Testing Strategy #5）。
 
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -1688,5 +1693,192 @@ mod tests {
         assert_eq!(lines[0].glyphs.len(), 1);
         assert_eq!(lines[0].glyphs[0].advance, full, "配置グリフの advance は実測値");
         assert_eq!(lines[1].glyphs[0].inline_pos, 0.0, "折返し行は行内開始へ戻る");
+    }
+
+    // ── task 6.4 R4.5/R6.1–6.3/R7.5: probe/描画行 TextLayout の送り幅一致 invariant ──
+    //
+    // design Testing Strategy Integration #5（正典）: 同一 TextFormat・同一テキストで
+    // probe layout（DWriteMetrics＝per-char 計測）と描画行 TextLayout
+    // （DrawExecutor::line_layout＝render が DrawTextLayout へ渡す実物）の cluster
+    // advance が**同値**であることを、等幅（ＭＳ ゴシック）＋プロポーショナル欧文混在
+    // （ＭＳ Ｐゴシック）の両方で檻化する。
+    //
+    // 許容誤差: なし（f32 完全一致）。同一 factory・同一 create_text_format 経路・
+    // 同一テキストに対する DirectWrite 計測は決定論であり、design の「同値」が正準
+    // ——epsilon を挟むと per-char probe と行文脈（カーニング等）の乖離
+    // （6.2 申し送りの検出責務）を握りつぶすため導入しない。
+
+    /// テキストごとの invariant 検証ケース（フォント名 None＝既定 ＭＳ ゴシック）。
+    const INVARIANT_CASES: [(Option<&str>, &str); 2] = [
+        // 等幅: 既定 ＭＳ ゴシック・全角/半角混在。
+        (None, "あiWa。漢！x"),
+        // プロポーショナル欧文混在: ＭＳ Ｐゴシック・'i'/'W' 等の可変幅＋全角同居。
+        (Some("ＭＳ Ｐゴシック"), "iWMjlあ。W"),
+    ];
+
+    /// ケースの ResolvedFont（height 12 固定・color 既定）。
+    fn invariant_font(name: Option<&str>) -> ResolvedFont {
+        let font = Font::new(
+            name.map(str::to_owned),
+            Some(12),
+            FontColor::new(None, None, None),
+        );
+        ResolvedFont::resolve(&model_with_font(font))
+    }
+
+    /// DrawExecutor の実描画経路（ensure_format→line_layout）で行 TextLayout を組み、
+    /// cluster metrics の幅列を返す——render が DrawTextLayout へ渡すのと同一の layout
+    /// （検証用の別組みではない）から実描画送り幅を読む。
+    fn drawn_line_cluster_widths(
+        executor: &mut DrawExecutor,
+        text: &str,
+        font: &ResolvedFont,
+        mode: WritingMode,
+    ) -> Vec<f32> {
+        let format = executor
+            .ensure_format(font, mode)
+            .expect("ensure_format 失敗");
+        let layout = executor
+            .line_layout(0, text, &format, font.height, mode)
+            .expect("line_layout 失敗");
+        layout
+            .get_cluster_metrics()
+            .expect("GetClusterMetrics(描画行) 失敗")
+            .iter()
+            .map(|c| c.width)
+            .collect()
+    }
+
+    /// 観測可能な完了状態（task 6.4）: 同一フォント設定・同一テキストで、計測専用
+    /// probe の per-char advance と描画行 TextLayout の per-cluster advance が完全一致
+    /// する（等幅＋プロポーショナル欧文混在 × 3 方向）。プロポーショナルの行文脈調整
+    /// （カーニング等）で per-char probe と行計測が乖離するなら、本檻がその文字で
+    /// 赤くなる（6.2 申し送りの検出責務・クリップでは隠れない metrics 述語）。
+    #[test]
+    fn probe_advances_match_drawn_line_cluster_advances() {
+        let rig = DrawRig::new();
+        let factory = rig.core.dwrite_factory().expect("dwrite_factory").clone();
+        let mut executor = DrawExecutor::new(&rig.core).expect("DrawExecutor::new 失敗");
+        for (name, text) in INVARIANT_CASES {
+            let font = invariant_font(name);
+            for mode in [
+                WritingMode::HorizontalTb,
+                WritingMode::VerticalRl,
+                WritingMode::VerticalLr,
+            ] {
+                let metrics =
+                    DWriteMetrics::new(&factory, &font, mode, &TextLayerConfig::default())
+                        .expect("DWriteMetrics 生成失敗");
+                let widths = drawn_line_cluster_widths(&mut executor, text, &font, mode);
+                assert_eq!(
+                    widths.len(),
+                    text.chars().count(),
+                    "{} {mode:?}: 検証テキストは 1 文字=1 cluster の前提",
+                    font.name
+                );
+                for (ch, width) in text.chars().zip(&widths) {
+                    let probe = metrics.advance(ch, font.height);
+                    assert!(probe > 0.0, "{} {mode:?} {ch:?}: probe は正値", font.name);
+                    assert_eq!(
+                        probe, *width,
+                        "{} {mode:?} {ch:?}: probe advance（計測専用）と描画行 cluster \
+                         advance（実描画）の同値 invariant",
+                        font.name
+                    );
+                }
+            }
+        }
+    }
+
+    /// 乖離の検出形式（task 6.4「クリップで隠さない」）: probe 駆動で折返した各行に
+    /// ついて、描画行 TextLayout の送り終端（行内開始＋cluster advance の同順逐次加算
+    /// ——LayoutEngine の inline_pos 累積と同じ f32 結合順）が行矩形の行内終端と完全
+    /// 一致し、かつ折返し閾値を超えない。probe と実描画の送り幅が乖離すれば、行終端の
+    /// 不一致＝**折返し位置のズレ**としてここで赤くなる（供給面クリップに依存しない
+    /// metrics 述語——ピクセル述語は 9.2/10.2 の領分）。
+    #[test]
+    fn advance_divergence_would_surface_as_wrap_position_drift() {
+        let rig = DrawRig::new();
+        let factory = rig.core.dwrite_factory().expect("dwrite_factory").clone();
+        let mut executor = DrawExecutor::new(&rig.core).expect("DrawExecutor::new 失敗");
+        for (name, text) in INVARIANT_CASES {
+            let font = invariant_font(name);
+            for mode in [
+                WritingMode::HorizontalTb,
+                WritingMode::VerticalRl,
+                WritingMode::VerticalLr,
+            ] {
+                let metrics =
+                    DWriteMetrics::new(&factory, &font, mode, &TextLayerConfig::default())
+                        .expect("DWriteMetrics 生成失敗");
+                // 折返し閾値＝先頭 4 文字の probe 送り終端の floor——実測値が閾値と
+                // 折返し位置の両方を駆動する形（metrics が違えば折返しもズレる）。
+                let cum4: f32 = text
+                    .chars()
+                    .take(4)
+                    .map(|ch| metrics.advance(ch, font.height))
+                    .sum();
+                let threshold = cum4.floor() as i32;
+                assert!(threshold >= 1, "{} {mode:?}: 閾値は正値", font.name);
+                // 幾何モデル: 横書き＝origin(0,0)＋wordwrappoint.x・縦書き＝origin 既定
+                // （書字開始角）＋wordwrappoint.y（軸読み替え正準表）。
+                let (origin, wordwrap) = match mode {
+                    WritingMode::HorizontalTb => (
+                        Origin::new(Some(0), Some(0)),
+                        WordWrapPoint::new(Some(threshold), None),
+                    ),
+                    WritingMode::VerticalRl | WritingMode::VerticalLr => (
+                        Origin::new(None, None),
+                        WordWrapPoint::new(None, Some(threshold)),
+                    ),
+                };
+                let model = BalloonModel::new(
+                    WindowPosition::new(None, None),
+                    origin,
+                    wordwrap,
+                    ValidRect::new(None, None, None, None),
+                    empty_font(),
+                    None,
+                );
+                let region = TextRegion::resolve(&model, (400, 224), mode);
+                let items = glyph_items(text);
+                let lines =
+                    LayoutEngine::layout(&items, items.len(), &region, mode, font.height, &metrics);
+                assert!(
+                    lines.len() >= 2,
+                    "{} {mode:?}: 実測駆動の折返しが実際に発生する構成",
+                    font.name
+                );
+                let placed: usize = lines.iter().map(|l| l.glyphs.len()).sum();
+                assert_eq!(placed, text.chars().count(), "折返しでグリフを失わない");
+                for (i, line) in lines.iter().enumerate() {
+                    let line_text: String = line.glyphs.iter().map(|g| g.ch).collect();
+                    let widths = drawn_line_cluster_widths(&mut executor, &line_text, &font, mode);
+                    let (inline_start, inline_end) = match mode {
+                        WritingMode::HorizontalTb => (line.rect.left, line.rect.right),
+                        WritingMode::VerticalRl | WritingMode::VerticalLr => {
+                            (line.rect.top, line.rect.bottom)
+                        }
+                    };
+                    // LayoutEngine の inline_pos 累積と同じ逐次加算（f32 結合順まで一致）。
+                    let mut drawn_end = inline_start;
+                    for w in &widths {
+                        drawn_end += *w;
+                    }
+                    assert_eq!(
+                        drawn_end, inline_end,
+                        "{} {mode:?} 行 {i} ({line_text:?}): 実描画の送り終端＝計測 \
+                         レイアウトの行内終端（不一致＝折返し位置のズレとして検出）",
+                        font.name
+                    );
+                    assert!(
+                        inline_end <= threshold as f32 || line.glyphs.len() == 1,
+                        "{} {mode:?} 行 {i}: 行終端 {inline_end} は折返し閾値 {threshold} 内 \
+                         （行頭 1 グリフ縮退を除く）",
+                        font.name
+                    );
+                }
+            }
+        }
     }
 }
