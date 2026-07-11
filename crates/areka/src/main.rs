@@ -430,6 +430,14 @@ fn on_dummy_pressed(
 fn open_startup_window(app: &WinApp, cfg: &ConfigInputs) {
     match placement::prepare_ghost_windows(&cfg.ghost_root, &cfg.balloon_root) {
         Ok(prepared) => {
+            // MonitorSnapshot（task 8.1・DD15 基盤）: 起動時の実モニタ work area 集合を
+            // 忠実転写した Resource（物理 px・Send な純粋データ）。bottom 吸着ドラッグ
+            // （4.7・task 8.2）が消費する。セッション内固定＝M1 受容
+            // （WM_DISPLAYCHANGE 追随は後続・DD15）。
+            let snapshot = placement::follow::MonitorSnapshot::from_monitors(
+                &wintf::ecs::window::monitor::enumerate_monitors(),
+            );
+
             // clickthrough 登録 system を FrameFinalize へ結線（task 5.2 の donor slot・
             // emo-present と同位置）。`Added<WindowHandle>` 駆動のため窓 spawn より先に
             // 結線しても取りこぼさない（registry NonSend は WinApp::run が挿入・5.2 learnings）。
@@ -442,6 +450,7 @@ fn open_startup_window(app: &WinApp, cfg: &ConfigInputs) {
             // World 適用という既存 ECS コマンド経路（ダミー窓と同型）で本物窓を組み立てる。
             app.world().borrow().spawn(|tx: CommandSender| async move {
                 let _ = tx.send(Box::new(move |world: &mut World| {
+                    world.insert_resource(snapshot);
                     let windows = placement::spawn::spawn_ghost_windows(
                         world,
                         &prepared.placements,

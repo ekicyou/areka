@@ -74,6 +74,14 @@ pub struct BalloonWindowMarker {
 #[derive(Component, Debug, Clone, Copy, PartialEq, Eq)]
 pub struct GhostWindowMarker;
 
+/// bottom 吸着スコープのキャラ窓 marker（4.7・DD15 基盤・task 8.1）。
+///
+/// `ScopePlacement.bottom_snap`（`alignment=Bottom|Seam(_)` 由来）の転写。
+/// ドラッグ中の Y 釘付け（task 8.2）が標的にする。吸着対象はキャラ窓のみ＝
+/// バルーン窓には bottom_snap 値によらず付けない（DD15・バルーンは 4.8 で単独移動）。
+#[derive(Component, Debug, Clone, Copy, PartialEq, Eq)]
+pub struct BottomSnap;
+
 // ---------------------------------------------------------------------------
 // GhostWindows（後続 emo2-boot への引き渡し正本・6.1/6.2）
 // ---------------------------------------------------------------------------
@@ -185,6 +193,12 @@ pub fn spawn_ghost_windows(
                 OnPointerPressed(on_ghost_pressed),
             ))
             .id();
+
+        // bottom 吸着の情報伝搬（4.7・task 8.1）: Bottom/Seam スコープのキャラ窓のみ。
+        // Y 釘付けの実挙動（ドラッグ中の再吸着）は task 8.2 の領分。
+        if p.bottom_snap {
+            world.entity_mut(char_window).insert(BottomSnap);
+        }
 
         windows.insert(
             p.scope,
@@ -323,7 +337,7 @@ mod tests {
     use wintf::ecs::{Point, SizeI, Window, WindowPos, WindowStyle};
 
     use super::{
-        BalloonWindowMarker, CharWindowMarker, GhostWindowMarker, GhostWindows,
+        BalloonWindowMarker, BottomSnap, CharWindowMarker, GhostWindowMarker, GhostWindows,
         spawn_ghost_windows,
     };
     use crate::placement::follow::BalloonFollow;
@@ -346,6 +360,7 @@ mod tests {
                 balloon_pos: PointPx { x: 1071, y: 708 },
                 balloon_size: SizePx { w: 223, h: 158 },
                 balloon_offset: PointPx { x: -412, y: -25 },
+                bottom_snap: true, // emo2＝alignmenttodesktop,bottom
             },
             ScopePlacement {
                 scope: 1,
@@ -354,6 +369,7 @@ mod tests {
                 balloon_pos: PointPx { x: 1334, y: 1044 },
                 balloon_size: SizePx { w: 223, h: 158 },
                 balloon_offset: PointPx { x: 285, y: -19 },
+                bottom_snap: true, // emo2＝alignmenttodesktop,bottom
             },
         ]
     }
@@ -533,6 +549,41 @@ mod tests {
         for e in ghost_window_entities(&mut world) {
             assert_eq!(world.get::<HitTest>(e).copied(), Some(HitTest::none()));
             assert!(world.get::<OnPointerPressed>(e).is_some());
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    // bottom_snap 伝搬（4.7・DD15 基盤・task 8.1）
+    // -------------------------------------------------------------------------
+
+    /// 8.1: `placement.bottom_snap=true` のスコープの**キャラ窓にのみ** `BottomSnap`
+    /// marker が付き、false のキャラ窓・バルーン窓（値不問）には付かない
+    /// （吸着対象はキャラ窓のみ・DD15）。
+    #[test]
+    fn bottom_snap_marker_attached_to_snapping_char_windows_only() {
+        let mut world = World::new();
+        let mut placements = two_scope_placements(); // 両方 bottom_snap=true（emo2＝bottom）
+        placements[1].bottom_snap = false; // scope1 を free 相当へ
+
+        let gw = spawn_ghost_windows(&mut world, &placements, &titles());
+
+        let char0 = gw.char_window(0).unwrap();
+        let char1 = gw.char_window(1).unwrap();
+        assert!(
+            world.get::<BottomSnap>(char0).is_some(),
+            "bottom_snap=true のキャラ窓には BottomSnap が付く"
+        );
+        assert!(
+            world.get::<BottomSnap>(char1).is_none(),
+            "bottom_snap=false のキャラ窓には付かない"
+        );
+        for scope in [0usize, 1] {
+            assert!(
+                world
+                    .get::<BottomSnap>(gw.balloon_window(scope).unwrap())
+                    .is_none(),
+                "scope{scope}: バルーン窓には bottom_snap 値によらず付かない"
+            );
         }
     }
 

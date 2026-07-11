@@ -134,7 +134,7 @@
   - _Boundary: examples/window-placement_
 
 - [ ] 8. Extension: 目視受け入れ由来の正典整合（2026-07-11 開発者承認・要件 4.7/4.8 追加）
-- [ ] 8.1 bottom 吸着の情報伝搬と MonitorSnapshot 基盤を実装する
+- [x] 8.1 bottom 吸着の情報伝搬と MonitorSnapshot 基盤を実装する
   - `ScopePlacement` に `bottom_snap: bool`（`Bottom`/`Seam` = true・`Free` = false）を追加し、resolver が設定・spawn がキャラ窓 entity へ `BottomSnap` 相当の情報として付与する
   - `MonitorSnapshot` Resource（全モニタの work area 集合・物理 px `RectPx`）と、窓矩形の中心が属するモニタの work area を引く純粋ヘルパ `work_area_for_window(snapshot, window_rect) -> Option<RectPx>`（中心がどのモニタにも属さない場合は最近傍）を実装する。seam（main.rs）と example が起動時に実モニタから snapshot を挿入する
   - 単体テスト: bottom_snap の伝搬（Bottom/Seam→true・Free→false）・`work_area_for_window` の複数モニタ／負座標／境界中心／どこにも属さない窓の各ケース
@@ -169,6 +169,7 @@
 - 1: `areka_parsers::package::MountError` は Display/std::error::Error 未実装（Clone/Debug/PartialEq/Eq のみ・#[non_exhaustive]）。`PlacementError::Mount` は `{0:?}` Debug 整形・`#[from]` 不可 → 後続タスクは `PlacementError::Mount(e)` を明示構築すること（areka-parsers は改変禁止）。
 - 2.1: `Alignment::Seam` の `warn!` 発火は config でなく resolver（task 3.1）へ委譲済み（config.rs:22 に明記）→ 3.1 で解消（resolver.rs:124-130 で発火・T-R5 経路で実行）。スコープ検出は DD6 厳密読み（`char1.*` 単独では scope1 を作らない・kero シグナルのみ）。同層クロス競合は正典プレフィックス外側優先。
 - 4.1: emo2 fixture 実測原寸 = scope0 surface0: 434×687 / scope1 surface10: 336×400 / balloon surface0: 400×224（テストで檻化済み・example/受入検証の期待値に使える）。balloon エラーは `Measure { scope: 0, reason: "balloon: ..." }` 規約。
+- 8.1: main.rs フォールバック（Err 分岐）は MonitorSnapshot 非挿入 → 8.2 の on_char_drag 拡張は Resource を optional 読取（get_resource）必須。`work_area_for_window` の allow(dead_code) は 8.2 消費時に除去。
 - 6.2: smoke テスト `run_smoke` は親の RUST_LOG を継承（`RUST_LOG=error` 環境で info マーカー assert が偽陽性 fail の可能性→ `.env("RUST_LOG","info")` ピン候補）。resolver.rs:18 等に文言陳腐化した allow(dead_code) コメント残（棚卸し候補）。
 - 5.3: 5.2 由来の `t_i4_register_*` テスト名は design の T-I4（follow 幾何）と衝突（実害なし・一意名で全実行）→ 余裕があれば `t_reg_*` 等へ改名候補。
 - 5.2: clickthrough 登録 system の schedule 結線は 6.2（donor の slot は `FrameFinalize`）。レジストリ NonSend 未挿入 tick の Added 消費に注意（donor 同挙動・WinApp::run が先に handle 挿入する結線順で緩和）。

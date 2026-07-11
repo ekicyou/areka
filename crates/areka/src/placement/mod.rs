@@ -429,6 +429,48 @@ mod tests {
     }
 
     // ------------------------------------------------------------------
+    // MonitorSnapshot::from_monitors（task 8.1・DD15・実モニタ→snapshot 忠実転写）
+    // ------------------------------------------------------------------
+
+    /// `MonitorSnapshot::from_monitors` は全モニタの work area（物理 px）を列挙順の
+    /// まま**単位変換なしで忠実転写**する（`primary_work_area` と同じ U 契約）。
+    #[test]
+    fn monitor_snapshot_from_monitors_transcribes_all_work_areas_in_order() {
+        let monitors = [
+            make_monitor(1, (-1920, -40, 0, 1000), false),
+            make_monitor(2, (0, 0, 2560, 1400), true),
+        ];
+        let snapshot = follow::MonitorSnapshot::from_monitors(&monitors);
+        assert_eq!(
+            snapshot.work_areas,
+            vec![
+                RectPx {
+                    left: -1920,
+                    top: -40,
+                    right: 0,
+                    bottom: 1000
+                },
+                RectPx {
+                    left: 0,
+                    top: 0,
+                    right: 2560,
+                    bottom: 1400
+                },
+            ]
+        );
+    }
+
+    /// 0 台では空 snapshot（panic しない・消費側 `work_area_for_window` が None 防御）。
+    #[test]
+    fn monitor_snapshot_from_monitors_empty_is_empty() {
+        assert!(
+            follow::MonitorSnapshot::from_monitors(&[])
+                .work_areas
+                .is_empty()
+        );
+    }
+
+    // ------------------------------------------------------------------
     // Send 契約・失敗経路・永続化なし（2.11）
     // ------------------------------------------------------------------
 

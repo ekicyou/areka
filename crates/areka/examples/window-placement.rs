@@ -254,6 +254,12 @@ fn build_and_spawn(world: &mut World) {
         );
     }
 
+    // MonitorSnapshot（task 8.1・DD15 基盤）: 実モニタ work area 集合を忠実転写した
+    // Resource を挿入（bottom 吸着ドラッグ（4.7・task 8.2）の消費用・セッション内固定）。
+    world.insert_resource(placement::follow::MonitorSnapshot::from_monitors(
+        &wintf::ecs::window::monitor::enumerate_monitors(),
+    ));
+
     // placement 本体の窓組立（markers・WindowPos・DragConfig・BalloonFollow・double-click close）。
     let windows = spawn_ghost_windows(world, &prepared.placements, &prepared.titles);
 

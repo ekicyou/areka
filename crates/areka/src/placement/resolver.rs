@@ -79,6 +79,10 @@ pub struct ScopePlacement {
     /// 恒等式 `balloon_offset ≡ balloon_pos − char_pos` は恒久の事後条件
     /// （design Postconditions）。
     pub balloon_offset: PointPx,
+    /// bottom 吸着スコープか（`alignment=Bottom|Seam(_)`＝true・`Free`＝false・
+    /// 4.7／DD15）。spawn がキャラ窓 entity の `BottomSnap` marker として転写し、
+    /// ドラッグ中の Y 釘付け（task 8.2）が消費する。
+    pub bottom_snap: bool,
 }
 
 /// 既定位置解決（純粋関数・パニックしない・入力順のまま返す・出力長＝入力長）。
@@ -192,6 +196,8 @@ pub fn resolve_placement(
                 x: balloon_pos.x.saturating_sub(char_pos.x),
                 y: balloon_pos.y.saturating_sub(char_pos.y),
             },
+            // 4.7/DD15: Bottom/Seam＝下端吸着スコープ・Free のみ非吸着
+            bottom_snap: matches!(sc.alignment, Alignment::Bottom | Alignment::Seam(_)),
         });
     }
 
@@ -673,7 +679,10 @@ mod tests {
         }
     }
 
-    /// T-R4 補: free で両成分未指定 → Bottom と完全同一の出力（2.6 の極限）。
+    /// T-R4 補: free で両成分未指定 → **幾何**（位置・寸法・バルーン）は Bottom と
+    /// 完全同一（2.6 の極限）。ただし `bottom_snap` だけは alignment 由来で相違する
+    /// （free は幾何が bottom へフォールバックしても全方向移動可＝非吸着・4.7。
+    /// task 8.1 で構造体全体一致から幾何一致＋snap 相違へ更新）。
     #[test]
     fn t_r4_free_both_unspecified_equals_bottom() {
         for dpi in DPIS {
@@ -694,7 +703,17 @@ mod tests {
             let out_free = resolve_placement(&free, wa, &inputs);
             let out_bottom = resolve_placement(&bottom, wa, &inputs);
             assert_eq!(out_free.len(), 2, "dpi={dpi}: 空虚一致封じ");
-            assert_eq!(out_free, out_bottom, "dpi={dpi}: 全未指定 free ≡ bottom");
+            for (f, b) in out_free.iter().zip(&out_bottom) {
+                assert_eq!(f.scope, b.scope, "dpi={dpi}");
+                assert_eq!(f.char_pos, b.char_pos, "dpi={dpi}: 全未指定 free ≡ bottom（幾何）");
+                assert_eq!(f.char_size, b.char_size, "dpi={dpi}");
+                assert_eq!(f.balloon_pos, b.balloon_pos, "dpi={dpi}");
+                assert_eq!(f.balloon_size, b.balloon_size, "dpi={dpi}");
+                assert_eq!(f.balloon_offset, b.balloon_offset, "dpi={dpi}");
+                // 吸着情報だけは alignment 由来で相違（free＝非吸着・4.7）
+                assert!(!f.bottom_snap, "dpi={dpi}: free は幾何フォールバックでも非吸着");
+                assert!(b.bottom_snap, "dpi={dpi}: bottom は吸着");
+            }
         }
     }
 
@@ -952,6 +971,62 @@ mod tests {
     #[test]
     fn t_r7_union_empty_input_is_none() {
         assert_eq!(virtual_desktop_union(&[]), None);
+    }
+
+    // ------------------------------------------------------------------
+    // bottom_snap 伝搬（4.7・DD15 基盤・task 8.1）
+    // ------------------------------------------------------------------
+
+    /// 4.7: `alignment=Bottom`／`Seam(_)`（値不問）は `bottom_snap=true`・
+    /// `Free` は false（吸着ドラッグ（task 8.2）が消費する情報伝搬の檻）。
+    #[test]
+    fn bottom_snap_true_for_bottom_and_seam_false_for_free() {
+        for dpi in DPIS {
+            let wa = work_area(dpi);
+            let (w, h) = (px(400, dpi), px(600, dpi));
+            let cases = [
+                (Alignment::Bottom, true),
+                (Alignment::Seam("top".to_owned()), true),
+                (Alignment::Seam("unknown-value".to_owned()), true),
+                (Alignment::Free, false),
+            ];
+            for (alignment, expected) in cases {
+                let cfg = cfg_of(vec![(0, scope_cfg(alignment.clone(), Some(0), None))]);
+                let out = resolve_placement(&cfg, wa, &[input(0, w, h)]);
+                assert_eq!(
+                    out[0].bottom_snap, expected,
+                    "dpi={dpi} alignment={alignment:?}: bottom_snap の伝搬"
+                );
+            }
+        }
+    }
+
+    /// 4.7 補: 混在スコープでスコープごとに独立に伝搬し、`cfg.scopes` 未収載
+    /// スコープは既定 `ScopeConfig`（＝Bottom）ゆえ true。
+    #[test]
+    fn bottom_snap_mixed_scopes_and_missing_config_defaults_true() {
+        for dpi in DPIS {
+            let wa = work_area(dpi);
+            let cfg = cfg_of(vec![
+                (0, scope_cfg(Alignment::Bottom, Some(0), None)),
+                (
+                    1,
+                    scope_cfg(Alignment::Free, Some(px(100, dpi)), Some(px(80, dpi))),
+                ),
+            ]);
+            let out = resolve_placement(
+                &cfg,
+                wa,
+                &[
+                    input(0, px(400, dpi), px(600, dpi)),
+                    input(1, px(320, dpi), px(480, dpi)),
+                    input(2, px(200, dpi), px(400, dpi)), // 未収載 → 既定 Bottom
+                ],
+            );
+            assert!(out[0].bottom_snap, "dpi={dpi}: Bottom → true");
+            assert!(!out[1].bottom_snap, "dpi={dpi}: Free → false");
+            assert!(out[2].bottom_snap, "dpi={dpi}: 未収載＝既定 Bottom → true");
+        }
     }
 
     // ------------------------------------------------------------------

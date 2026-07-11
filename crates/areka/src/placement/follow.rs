@@ -5,6 +5,9 @@
 //! - [`on_char_drag`]: `OnDrag` ハンドラ（mock-shell donor `on_shell_drag` の一般化。
 //!   マーカー全走査ではなく `BalloonFollow.balloon` の `WindowHandle` を直接引く）
 //! - [`move_window_to`]: R7 公開 API（UI スレッド関数・物理 px スクリーン座標直渡し）
+//! - [`MonitorSnapshot`]／[`work_area_for_window`]: bottom 吸着ドラッグ（4.7・DD15）の
+//!   基盤——全モニタ work area 集合の Resource と窓中心→モニタ解決の純粋ヘルパ
+//!   （消費側の Y 釘付けは task 8.2。snapshot は吸着の消費地たる本モジュールに置く）
 //!
 //! # 座標単位契約（design U1/U4）
 //!
@@ -24,9 +27,10 @@ use tracing::{debug, warn};
 use windows::Win32::UI::WindowsAndMessaging::{SWP_NOACTIVATE, SWP_NOSIZE, SWP_NOZORDER};
 use wintf::ecs::drag::DragEvent;
 use wintf::ecs::pointer::Phase;
+use wintf::ecs::window::monitor::Monitor;
 use wintf::ecs::{Point, SetWindowPosCommand, WindowHandle, WindowPos};
 
-use super::resolver::PointPx;
+use super::resolver::{PointPx, RectPx};
 
 /// キャラ窓に付与するバルーン追従 Component（4.2/4.4）。
 ///
@@ -163,6 +167,87 @@ fn enqueue_window_move(world: &mut World, window: Entity, x: i32, y: i32) -> boo
     }
 
     true
+}
+
+// =============================================================================
+// MonitorSnapshot（task 8.1・DD15 基盤・4.7）
+// =============================================================================
+
+/// 全モニタの work area 集合（物理 px・起動時取得のセッション内固定 snapshot・DD15）。
+///
+/// 起動時に seam（main.rs）／example が [`MonitorSnapshot::from_monitors`] で実モニタ
+/// から忠実転写して Resource 挿入し、bottom 吸着ドラッグ（task 8.2）が
+/// [`work_area_for_window`] で「窓が現在属するモニタの work area」を引くのに使う。
+/// snapshot はセッション内固定＝M1 受容（`WM_DISPLAYCHANGE` 追随は後続・DD15）。
+/// 中身は `RectPx` のみの純粋データで、headless テストは合成値を直接構築して
+/// 注入する（偽装境界・wintf に触れるのは挿入サイトだけ）。
+#[derive(Resource, Debug, Clone, PartialEq, Eq)]
+pub struct MonitorSnapshot {
+    /// モニタ列挙順の work area（物理 px）。
+    pub work_areas: Vec<RectPx>,
+}
+
+impl MonitorSnapshot {
+    /// 実モニタ列挙結果から全 work area（`RECT`・物理 px）を列挙順のまま
+    /// **単位変換なしで忠実転写**する（mod.rs `primary_work_area` と同じ U 契約:
+    /// どちらも物理 px 通貨）。0 台は空 snapshot（panic しない・消費側が
+    /// [`work_area_for_window`] の `None` で防御）。
+    pub fn from_monitors(monitors: &[Monitor]) -> Self {
+        Self {
+            work_areas: monitors
+                .iter()
+                .map(|m| RectPx {
+                    left: m.work_area.left,
+                    top: m.work_area.top,
+                    right: m.work_area.right,
+                    bottom: m.work_area.bottom,
+                })
+                .collect(),
+        }
+    }
+}
+
+/// 窓矩形の中心が属するモニタの work area を引く純粋ヘルパ（4.7・DD15）。
+///
+/// 決定論規則（テストで固定）:
+/// - 中心は `((left+right)/2, (top+bottom)/2)`（i64 演算・ゼロ方向切り捨て）
+/// - 帰属判定は half-open（`left ≤ cx < right`・`top ≤ cy < bottom`）＝共有辺上の
+///   中心は右／下側のモニタへ属する。複数矩形が含む（重複）場合は昇順 index 先勝ち
+/// - どのモニタにも属さない場合は最近傍（中心→矩形 clamp 点の自乗距離最小・
+///   等距離は昇順 index 先勝ち＝`min_by_key` の先頭優先）
+/// - 空 snapshot は `None`（架空の既定矩形を発明しない・resolver と同方針）
+///
+/// 距離は i128 で自乗和を取り、極端な仮想スクリーン座標でも溢れない
+/// （panic しない契約・resolver の saturating 演算と同じ防波堤）。
+#[allow(dead_code)] // 消費側（bottom 吸着ドラッグの Y 釘付け）は task 8.2
+pub fn work_area_for_window(snapshot: &MonitorSnapshot, window: RectPx) -> Option<RectPx> {
+    let cx = (window.left as i64 + window.right as i64) / 2;
+    let cy = (window.top as i64 + window.bottom as i64) / 2;
+
+    // 帰属（half-open）・昇順 index 先勝ち
+    if let Some(wa) = snapshot.work_areas.iter().find(|wa| {
+        (wa.left as i64) <= cx
+            && cx < (wa.right as i64)
+            && (wa.top as i64) <= cy
+            && cy < (wa.bottom as i64)
+    }) {
+        return Some(*wa);
+    }
+
+    // どこにも属さない → 最近傍（clamp 点との自乗距離最小・等距離は先勝ち）
+    snapshot
+        .work_areas
+        .iter()
+        .min_by_key(|wa| {
+            // `i64::clamp` は逆転区間（万一の退化矩形）で panic するため min/max で書く
+            // （resolver `clamp_axis` と同じ非 panic 流儀）
+            let px = cx.min(wa.right as i64).max(wa.left as i64);
+            let py = cy.min(wa.bottom as i64).max(wa.top as i64);
+            let dx = (cx - px) as i128;
+            let dy = (cy - py) as i128;
+            dx * dx + dy * dy
+        })
+        .copied()
 }
 
 // =============================================================================
@@ -341,6 +426,108 @@ mod tests {
         assert!(move_window_to(&mut world, window, 907, 1201));
         assert_eq!(position_of(&world, window), Point { x: 907, y: 1201 });
         assert_eq!(position_of(&world, balloon), Point { x: 70, y: 80 });
+    }
+
+    // -------------------------------------------------------------------------
+    // MonitorSnapshot / work_area_for_window（task 8.1・DD15 基盤・4.7）
+    // -------------------------------------------------------------------------
+
+    use super::{MonitorSnapshot, work_area_for_window};
+    use crate::placement::resolver::RectPx;
+
+    fn rect(left: i32, top: i32, right: i32, bottom: i32) -> RectPx {
+        RectPx {
+            left,
+            top,
+            right,
+            bottom,
+        }
+    }
+
+    /// 複数モニタ: 窓中心が属するモニタの work area が返る（縦位置・寸法の異なる
+    /// 2 面で中心帰属を固定する）。
+    #[test]
+    fn work_area_for_window_picks_monitor_containing_center() {
+        let snapshot = MonitorSnapshot {
+            work_areas: vec![
+                rect(0, 0, 1920, 1040),       // primary
+                rect(1920, -213, 4480, 1227), // 右の高解像度モニタ（負 top）
+            ],
+        };
+        // 中心 (2500, 500) → 右モニタ
+        let window = rect(2100, 100, 2900, 900);
+        assert_eq!(
+            work_area_for_window(&snapshot, window),
+            Some(rect(1920, -213, 4480, 1227))
+        );
+        // 中心 (960, 520) → primary
+        let window = rect(660, 220, 1260, 820);
+        assert_eq!(
+            work_area_for_window(&snapshot, window),
+            Some(rect(0, 0, 1920, 1040))
+        );
+    }
+
+    /// 負座標モニタ（プライマリの左）でも中心帰属が成立する。
+    #[test]
+    fn work_area_for_window_handles_negative_coords() {
+        let snapshot = MonitorSnapshot {
+            work_areas: vec![rect(0, 0, 1920, 1040), rect(-1920, -40, 0, 1000)],
+        };
+        let window = rect(-1500, 100, -700, 700); // 中心 (-1100, 400)
+        assert_eq!(
+            work_area_for_window(&snapshot, window),
+            Some(rect(-1920, -40, 0, 1000))
+        );
+    }
+
+    /// 境界中心の決定論: 帰属判定は half-open（right/bottom 排他）＝共有辺上の中心は
+    /// 右隣モニタへ属する。複数矩形が同一中心を含む（重複）場合は昇順 index 先勝ち。
+    #[test]
+    fn work_area_for_window_boundary_center_is_half_open_and_first_match_wins() {
+        let a = rect(0, 0, 1920, 1040);
+        let b = rect(1920, 0, 3840, 1040);
+        let snapshot = MonitorSnapshot {
+            work_areas: vec![a, b],
+        };
+        // 中心 x=1920 ちょうど（共有辺）→ a の right は排他ゆえ b
+        let window = rect(1520, 220, 2320, 820); // 中心 (1920, 520)
+        assert_eq!(work_area_for_window(&snapshot, window), Some(b));
+
+        // 重複 2 面が同一中心を含む → 先勝ち（昇順 index）
+        let overlap = MonitorSnapshot {
+            work_areas: vec![a, rect(-10, -10, 2000, 1100)],
+        };
+        let window = rect(700, 300, 1300, 700); // 中心 (1000, 500) は両方に属す
+        assert_eq!(work_area_for_window(&overlap, window), Some(a));
+    }
+
+    /// どのモニタにも属さない中心 → 最近傍（中心→矩形 clamp 点の自乗距離最小・
+    /// 等距離は昇順 index 先勝ち）。
+    #[test]
+    fn work_area_for_window_off_all_monitors_returns_nearest() {
+        let a = rect(0, 0, 1920, 1040);
+        let b = rect(1920, 0, 3840, 1040);
+        let snapshot = MonitorSnapshot {
+            work_areas: vec![a, b],
+        };
+        // 中心 (4340, 500): b の右外 500px・a の右外 2420px → b
+        let window = rect(4040, 200, 4640, 800);
+        assert_eq!(work_area_for_window(&snapshot, window), Some(b));
+        // 中心 (-1000, 2000): a の clamp 点 (0,1040) が b の (1920,1040) より近い → a
+        let window = rect(-1300, 1700, -700, 2300);
+        assert_eq!(work_area_for_window(&snapshot, window), Some(a));
+        // 等距離: 中心 (1920, 2000) は a clamp (1920,1040)・b clamp (1920,1040) と
+        // 同距離 → 先勝ちで a
+        let window = rect(1620, 1700, 2220, 2300);
+        assert_eq!(work_area_for_window(&snapshot, window), Some(a));
+    }
+
+    /// 空 snapshot → `None`（架空の既定矩形を発明しない）。
+    #[test]
+    fn work_area_for_window_empty_snapshot_is_none() {
+        let snapshot = MonitorSnapshot { work_areas: vec![] };
+        assert_eq!(work_area_for_window(&snapshot, rect(0, 0, 100, 100)), None);
     }
 
     // -------------------------------------------------------------------------
