@@ -97,7 +97,7 @@
   - _Boundary: placement::spawn, placement::follow_
 
 - [ ] 6. Integration: main.rs 起動窓シームの差し替え
-- [ ] 6.1 窓配置の準備処理（`prepare_ghost_windows`）を実装する
+- [x] 6.1 窓配置の準備処理（`prepare_ghost_windows`）を実装する
   - `prepare_ghost_windows(ghost_root, balloon_root)` を実装し、`load_descript_source` → `build_placement_config` → `measure_scope_sizes` → `enumerate_monitors()` の `is_primary` モニタ work area 取得 → `resolve_placement` の順に同期実行し、`PreparedPlacement { placements, titles }`（Send な結果のみ）を返す
   - 準備段階の失敗は `PlacementError` として呼び出し側（シーム）が捕捉できる形で返す（この関数自体はフォールバックしない）
   - 位置の記憶・復元（`ghost.dat` 読み書き）を一切行わないことを確認する
