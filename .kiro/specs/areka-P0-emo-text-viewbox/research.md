@@ -139,4 +139,37 @@
 
 ---
 
-_本ドキュメントは情報提供（分析と選択肢）であり実装決定ではない。最終決定は要件ディスカッション／design フェーズで行う。_
+## 8. 要件ディスカッション決定（議題1・2026-07-11）
+
+要件ディスカッションで機構方式を確定した。**§4 の Option A/B/C（いずれも growable content 面＋visual offset 前提）ではなく、新たに導出した「ダーティ矩形スクロール（案C・`ScrollDC`／`InvalidateRect`／`WM_PAINT` 型）」を採用**する。
+
+### 決定内容
+- **固定 validrect 物理寸の単一描画面（ダブルバッファ）**。描画面は成長させない（Option A/B/C の growable 面を棄却）。
+- **スクロール＝面内 whole-pixel blit**（確定済みピクセルの平行移動）。**ダーティ矩形（現在行 ∪ 露出帯）だけを D2D `DrawTextLayout` で（再）描画**し、確定 content は再描画しない。
+- **D2D 描画コマンドを維持**：確定 content 用の別途グリフビットマップ／`ID2D1CommandList` キャッシュは設けず、**描画面＋blit を保持機構**とする（`ContentCanvas` がバッキングストア）。
+- **サブピクセル維持**：ダーティ帯は真位置 D2D 描画・確定ピクセルは whole-pixel blit（再サンプリングなし＝ClearType 位相不変）。スクロール位置は f32 内部・写像は物理 px 整数（M2 補間シーム）。
+- **pixel 等価**：k=1.0 で byte 一致（再描画方式 `DrawExecutor` を `#[cfg(test)]` 独立オラクル保持・同一プロセス live-diff が主檻）。k≠1.0 は小数アキュムレータで累積ドリフト回避＋≤0.5px・手動確認（R10.6）。
+
+### 選定理由（負荷・前提の突合）
+- 前提1「DPI サブピクセル維持」＋前提2「不可視領域を描かない」を最も literal に満たす。Option A（growable＋visual offset）は端数 translate でビットマップ再サンプル＝ClearType 滲みが生じ前提1に反する。案B（clip＋全再描画）は前提を満たすが確定 content を毎フレーム再コンポジット。
+- 案C は per-frame 描画＝1 行・描画面メモリ＝固定・結線波及最小・最悪でも案B と同等（全ダーティ＝全再描画に縮退）。GPU 負荷でなく D2D CPU 発行が律速で、ダーティ限定でそれを抑える。
+
+### DD への影響（design へ持ち越す項目の更新）
+- **DD2/DD3（growable 面の実体・初期寸/成長単位/上限）→ 消滅**。描画面は validrect 固定・ダブルバッファ。上限値管理は不要（固定）。
+- **DD5（viewport clip の実現手段）→ 変更**。visual レベルの `ClipShape`/`clip_sync_system` は M1 必須依存でない。封じ込め＝描画面寸、ダーティ限定＝D2D `PushAxisAlignedClip`。
+- **DD1（offset 写像）→ 継続・具体化**。`{first_visible_line, block_offset}` を「面内 blit 量（whole-pixel）＋露出帯位置」へ写す式を design で確定。
+- **DD4（増分追記・`line_cache` 再解釈）→ 継続**。「ダーティ矩形＝現在行 ∪ 露出帯」の判定と、多行同時 reveal／Clear 直後の全ダーティ縮退の扱い。
+- **DD6（再描画レスの決定論観測）→ 継続**。`DrawTextLayout` 実行回数がダーティ矩形分に限られる檻。
+- **DD7/DD8（example 差し替え・pixel 等価比較）→ 継続**。live-diff 主檻（k=1.0 byte）を確定。
+- **DD9（縦書き成長方向）→ 変更**。growable 成長でなく「縦書き＝横 blit の向き・露出帯の辺」を確定。
+- **DD10（固定層構造）→ 変更**。viewport 直下 child でなく「scroll 面に重ねる別合成層（blit 対象外）」。
+- **新規 DD11**：重なり安全 blit のダブルバッファ運用（front→ずらし blit→back へ露出帯描画→present／swap）と、k≠1.0 の小数アキュムレータ（Bresenham 式で blit 距離を振る）による真位置格子吸着。
+- **新規 DD12**：後方スクロール（もし将来）時の露出帯を `ContentCanvas` から再描画する経路（auto-follow talk では前方＝1 行帯ゆえ M1 非論点）。
+
+### 副次的帰結
+- brief.md の Approach「viewport visual＋content visual の 2 層」記述は**案C（単一 validrect 面＋面内 blit）に更新**（brief は次回同期時に追随・要件が正本）。
+- RN1（growable swapchain の `ResizeBuffers`／内容保全）は**不要化**。RN2〜RN5 は案C向けに読み替え（clip_sync 依存は縮小・blit ダブルバッファの present 経路が新論点）。
+
+---
+
+_本ドキュメントは情報提供（分析と選択肢）であり実装決定ではない。§8 は要件ディスカッションの決定記録。最終の設計確定は design フェーズで行う。_
