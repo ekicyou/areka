@@ -141,7 +141,18 @@
   - 観測可能な完了状態: `cargo test -p areka` で新テストが緑・既存テスト無退行
   - _Requirements: 4.7_
   - _Boundary: placement::resolver, placement::spawn, placement::follow (snapshot), main.rs seam_
-- [x] 8.2 bottom 吸着ドラッグ（Y 釘付け・モニタ跨ぎ再吸着）を実装する
+- [x] 8.2 bottom 吸着ドラッグ（Y 釘付け・モニタ跨ぎ再吸着）を実装する — **実機受け入れ不合格→8.2R で差し替え**（事後再釘付けは wndproc と競合し振動・最終位置非釘付け。debug 調査 2026-07-11・DD15 v2 参照）
+- [ ] 8.2R bottom 吸着ドラッグを DD15 v2（トレイト分離・単一ライター）へ再実装する
+  - `DragPositionPolicy` トレイト（生ドラッグ座標→実窓位置の純粋写像）と `BottomSnapPolicy`（X 素通し・Y=現在モニタ `bottom−h` live 算出）を定義する
+  - `Bottom`/`Seam` スコープのキャラ窓は `DragConfig { move_window: false }` とし、`on_char_drag` が DragEvent の座標（カーソル−`initial_inset`）へポリシーを適用した座標を単一ライターとして書く（8.2 の事後再釘付け分岐は撤去）。バルーン追従は適用後座標基準
+  - DragEnd ハンドラで最終カーソル位置へ同写像を適用する（最終 DragEvent 欠落の穴埋め）
+  - drag ハンドラ冒頭に target==自 entity ガードを追加する（on_char_drag/on_balloon_drag 両方）
+  - T-I3 の `move_window=true` 断言を「BottomSnap キャラ窓は false・Free キャラ窓とバルーンは true」へ改訂する
+  - headless テスト: DraggingState/DragEvent 注入下で (a) ポリシー適用済み Y でのみ窓が書かれる（振動なし＝中間の非釘付け座標が WindowPos に一度も現れない） (b) X 素通し (c) モニタ跨ぎ再吸着 (d) Free 窓は wndproc 委譲のまま (e) バルーンが適用後座標＋offset へ追従 (f) DragEnd 最終適用 (g) target 不一致で no-op
+  - 観測可能な完了状態: `cargo test -p areka` 全緑＋実機ドラッグ（SendInput 再現スクリプト）で「ドラッグ中も終了後も char Y=1413 固定・X 追従・振動 echo なし・バルーン恒等・他スコープ不動」
+  - _Requirements: 4.7_
+  - _Depends: 8.1_
+  - _Boundary: placement::follow, placement::spawn_
   - `on_char_drag` を拡張し、`BottomSnap` のキャラ窓は wndproc 移動後に `MonitorSnapshot`＋`work_area_for_window` で現在モニタの `work_area.bottom − h` を求め、Y がずれていれば自窓へ `SetWindowPosCommand` で再釘付けする（X は不変・物理 px・再スケールなし）。バルーン追従はキャラ窓の釘付け後座標基準で offset 加算する
   - `Free` スコープと吸着なし窓は従来どおり全方向移動（挙動不変）
   - headless テスト: 合成 `MonitorSnapshot` を注入し、(a) bottom 窓のドラッグで Y が下端へ矯正される (b) X は素通し (c) モニタ跨ぎで跨いだ先の下端へ再吸着 (d) Free 窓は矯正されない (e) バルーンが釘付け後座標＋offset へ追従する
