@@ -124,7 +124,7 @@
   - _Depends: 6.2_
   - _Boundary: examples/window-placement_
 
-- [ ] 7.2 実 DPI（≠96）での手動受け入れ検証を実施する
+- [x] 7.2 実 DPI（≠96）での手動受け入れ検証を実施する（記録: acceptance-record.md・dpi=120/192・①〜⑤全 PASS）
   - per-monitor v2・dpi≠96（例 125%）環境で `examples/window-placement.rs` を実行し、rustdoc プロトコル①〜⑤（既定位置出現・全面ドラッグ・バルーン追従・モニタ境界跨ぎドラッグでの非消失）を確認する
   - マルチモニタ環境がある場合はモニタ境界跨ぎドラッグ（4.5/4.6）を必ず含める
   - 観測結果（実 DPI 値・各プロトコル項目の pass/fail）を記録する。dpi=96 のみの確認は不合格として扱う
