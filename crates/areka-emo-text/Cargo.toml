@@ -48,3 +48,6 @@ areka-emo-present = { path = "../areka-emo-present" }
 # （emo-present presenter.rs テストと同技法・テスト専用）。
 areka-emo-atlas = { path = "../areka-emo-atlas" }
 areka-emo-compose = { path = "../areka-emo-compose" }
+# 観測 example（examples/emo-text-layer.rs・task 9.2）のログ初期化
+# （RUST_LOG 対応・emo-present example と同型。example 専用＝dev-deps）。
+tracing-subscriber = { workspace = true }
