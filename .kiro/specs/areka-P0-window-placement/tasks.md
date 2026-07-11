@@ -142,7 +142,7 @@
   - _Requirements: 4.7_
   - _Boundary: placement::resolver, placement::spawn, placement::follow (snapshot), main.rs seam_
 - [x] 8.2 bottom 吸着ドラッグ（Y 釘付け・モニタ跨ぎ再吸着）を実装する — **実機受け入れ不合格→8.2R で差し替え**（事後再釘付けは wndproc と競合し振動・最終位置非釘付け。debug 調査 2026-07-11・DD15 v2 参照）
-- [ ] 8.2R bottom 吸着ドラッグを DD15 v2（トレイト分離・単一ライター）へ再実装する
+- [x] 8.2R bottom 吸着ドラッグを DD15 v2（トレイト分離・単一ライター）へ再実装する（headless 緑・実機証跡は 8.4）
   - `DragPositionPolicy` トレイト（生ドラッグ座標→実窓位置の純粋写像）と `BottomSnapPolicy`（X 素通し・Y=現在モニタ `bottom−h` live 算出）を定義する
   - `Bottom`/`Seam` スコープのキャラ窓は `DragConfig { move_window: false }` とし、`on_char_drag` が DragEvent の座標（カーソル−`initial_inset`）へポリシーを適用した座標を単一ライターとして書く（8.2 の事後再釘付け分岐は撤去）。バルーン追従は適用後座標基準
   - DragEnd ハンドラで最終カーソル位置へ同写像を適用する（最終 DragEvent 欠落の穴埋め）

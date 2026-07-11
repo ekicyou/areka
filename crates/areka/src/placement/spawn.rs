@@ -17,10 +17,12 @@
 //! - キャラ窓: `Name`＋`CharWindowMarker{scope}`＋`GhostWindowMarker`＋`Window{title}`
 //!   ＋`WindowStyle { style: WS_POPUP|WS_VISIBLE, ex_style: WS_EX_LAYERED|WS_EX_TOOLWINDOW }`
 //!   （**`WS_EX_TOPMOST` なし**・5.1／DD13）＋`WindowPos { position, size }`（物理 px）
-//!   ＋`HitTest::none()`（全面ヒットで透過を殺さない）＋`DragConfig::default()`
-//!   （move_window=true・全面ドラッグ・4.1）＋`OnDrag(on_char_drag)`＋`BalloonFollow`
+//!   ＋`HitTest::none()`（全面ヒットで透過を殺さない）＋`DragConfig`（全面ドラッグ・
+//!   4.1。`move_window` は BottomSnap キャラ窓のみ false＝on_char_drag 単一ライター・
+//!   DD15 v2／4.7、Free は true＝wndproc 委譲）＋`OnDrag(on_char_drag)`＋`BalloonFollow`
 //!   ＋`OnPointerPressed(on_ghost_pressed)`（ダブルクリックで全 `GhostWindowMarker`
-//!   despawn→`run()` 正常復帰）
+//!   despawn→`run()` 正常復帰）。BottomSnap キャラ窓はさらに `BottomSnap` marker＋
+//!   `OnDragEnd(on_char_drag_end)`（最終カーソル位置への同写像適用・DD15 v2 (3)）
 //! - バルーン窓: 同型（marker は `BalloonWindowMarker{scope}`・`DragConfig::default()`
 //!   は付与＝バルーン単独ドラッグ可・4.5。`OnDrag(on_balloon_drag)` で単独ドラッグの
 //!   相対位置記憶（4.8・DD16・task 8.3）・`BalloonFollow` なし）
@@ -42,12 +44,12 @@ use windows::Win32::UI::WindowsAndMessaging::{
     WS_EX_LAYERED, WS_EX_TOOLWINDOW, WS_POPUP, WS_VISIBLE,
 };
 use wintf::ecs::clickthrough::ClickThroughRegistryHandle;
-use wintf::ecs::drag::{DragConfig, OnDrag};
+use wintf::ecs::drag::{DragConfig, OnDrag, OnDragEnd};
 use wintf::ecs::layout::HitTest;
 use wintf::ecs::pointer::{DoubleClick, OnPointerPressed, Phase, PointerState};
 use wintf::ecs::{Point, SizeI, Window, WindowHandle, WindowPos, WindowStyle};
 
-use super::follow::{on_balloon_drag, on_char_drag, BalloonFollow};
+use super::follow::{on_balloon_drag, on_char_drag, on_char_drag_end, BalloonFollow};
 use super::resolver::ScopePlacement;
 use super::source::GhostTitles;
 
@@ -75,11 +77,15 @@ pub struct BalloonWindowMarker {
 #[derive(Component, Debug, Clone, Copy, PartialEq, Eq)]
 pub struct GhostWindowMarker;
 
-/// bottom 吸着スコープのキャラ窓 marker（4.7・DD15 基盤・task 8.1）。
+/// bottom 吸着スコープのキャラ窓 marker（4.7・DD15 v2 基盤・task 8.1/8.2R）。
 ///
 /// `ScopePlacement.bottom_snap`（`alignment=Bottom|Seam(_)` 由来）の転写。
-/// ドラッグ中の Y 釘付け（task 8.2）が標的にする。吸着対象はキャラ窓のみ＝
-/// バルーン窓には bottom_snap 値によらず付けない（DD15・バルーンは 4.8 で単独移動）。
+/// この marker が bottom 吸着の単一の真実源: spawn は `DragConfig.move_window=false`
+/// と `OnDragEnd` の付与を連動させ、`on_char_drag`／`on_char_drag_end` は marker の
+/// 有無で `BottomSnapPolicy`（トレイト実装）を静的に引く（policy を trait object と
+/// して entity に持たせる案は marker との二重管理・非 Clone boxed Component の扱い
+/// 難と引き換えのため見送り——実装が増えたら component 化を再検討）。吸着対象は
+/// キャラ窓のみ＝バルーン窓には bottom_snap 値によらず付けない（DD15・4.8）。
 #[derive(Component, Debug, Clone, Copy, PartialEq, Eq)]
 pub struct BottomSnap;
 
@@ -187,7 +193,13 @@ pub fn spawn_ghost_windows(
                 window_style(),
                 window_pos(p.char_pos.x, p.char_pos.y, p.char_size.w, p.char_size.h),
                 HitTest::none(),
-                DragConfig::default(),
+                // BottomSnap（Bottom/Seam）キャラ窓は move_window=false＝wndproc は
+                // 窓を動かさず on_char_drag が単一ライター（DD15 v2・4.7・task 8.2R）。
+                // Free は従来どおり wndproc 直接移動（4.1）。threshold 等は既定を保つ。
+                DragConfig {
+                    move_window: !p.bottom_snap,
+                    ..Default::default()
+                },
                 OnDrag(on_char_drag),
                 BalloonFollow {
                     balloon: balloon_window,
@@ -197,10 +209,13 @@ pub fn spawn_ghost_windows(
             ))
             .id();
 
-        // bottom 吸着の情報伝搬（4.7・task 8.1）: Bottom/Seam スコープのキャラ窓のみ。
-        // Y 釘付けの実挙動（ドラッグ中の再吸着）は task 8.2 の領分。
+        // bottom 吸着の情報伝搬（4.7・task 8.1/8.2R）: Bottom/Seam スコープの
+        // キャラ窓のみ BottomSnap marker（on_char_drag の単一ライター経路の標的）と
+        // OnDragEnd（最終 DragEvent 欠落の穴埋め・DD15 v2 (3)）を付ける。
         if p.bottom_snap {
-            world.entity_mut(char_window).insert(BottomSnap);
+            world
+                .entity_mut(char_window)
+                .insert((BottomSnap, OnDragEnd(on_char_drag_end)));
         }
 
         windows.insert(
@@ -334,7 +349,7 @@ mod tests {
     use windows::Win32::UI::WindowsAndMessaging::{
         WS_EX_LAYERED, WS_EX_TOOLWINDOW, WS_EX_TOPMOST, WS_POPUP, WS_VISIBLE,
     };
-    use wintf::ecs::drag::{DragConfig, DragConstraint, OnDrag};
+    use wintf::ecs::drag::{DragConfig, DragConstraint, OnDrag, OnDragEnd};
     use wintf::ecs::layout::{BoxStyle, HitTest};
     use wintf::ecs::pointer::{DoubleClick, OnPointerPressed, Phase, PointerState};
     use wintf::ecs::{Point, SizeI, Window, WindowPos, WindowStyle};
@@ -624,15 +639,18 @@ mod tests {
     // T-I3: 単位契約（U2・DD8・4.1/4.5）
     // -------------------------------------------------------------------------
 
-    /// T-I3: 窓 entity に `BoxStyle` 不在（U2・論理 DIP を持ち込まない）・
-    /// `DragConstraint` 不在（DD8・全モニタドラッグ可・4.5）・
-    /// `DragConfig.move_window=true`（全面ドラッグ・4.1）。
+    /// T-I3（8.2R 改訂）: 窓 entity に `BoxStyle` 不在（U2・論理 DIP を持ち込まない）・
+    /// `DragConstraint` 不在（DD8・全モニタドラッグ可・4.5）。`DragConfig.move_window`
+    /// は「BottomSnap キャラ窓のみ false（単一ライター・DD15 v2・4.7）、Free キャラ窓
+    /// とバルーン窓は true（wndproc 委譲・4.1/4.5）」。DragEnd 最終適用ハンドラ
+    /// （`OnDragEnd`）は BottomSnap キャラ窓にのみ付く。
     #[test]
-    fn t_i3_no_box_style_no_drag_constraint_and_move_window_true() {
+    fn t_i3_no_box_style_no_drag_constraint_and_move_window_contract() {
         let mut world = World::new();
-        let placements = two_scope_placements();
+        let mut placements = two_scope_placements();
+        placements[1].bottom_snap = false; // scope1 を Free 相当へ（両変種を 1 テストで檻化）
 
-        spawn_ghost_windows(&mut world, &placements, &titles());
+        let gw = spawn_ghost_windows(&mut world, &placements, &titles());
 
         let entities = ghost_window_entities(&mut world);
         assert_eq!(entities.len(), 4);
@@ -646,7 +664,38 @@ mod tests {
                 "窓 entity に DragConstraint を付けてはならない（DD8・4.5）"
             );
             let drag = world.get::<DragConfig>(e).expect("DragConfig");
-            assert!(drag.move_window, "DragConfig.move_window=true（4.1/4.5）");
+            assert_eq!(drag.threshold, 5, "threshold は既定値を保つ");
+            assert!(drag.enabled, "ドラッグは有効");
+        }
+
+        let snap_char = gw.char_window(0).unwrap();
+        let free_char = gw.char_window(1).unwrap();
+        assert!(
+            !world.get::<DragConfig>(snap_char).unwrap().move_window,
+            "BottomSnap キャラ窓は move_window=false（単一ライター・DD15 v2・4.7）"
+        );
+        assert!(
+            world.get::<OnDragEnd>(snap_char).is_some(),
+            "BottomSnap キャラ窓に DragEnd 最終適用ハンドラが付く（DD15 v2 (3)）"
+        );
+        assert!(
+            world.get::<DragConfig>(free_char).unwrap().move_window,
+            "Free キャラ窓は move_window=true（wndproc 委譲・4.1）"
+        );
+        assert!(
+            world.get::<OnDragEnd>(free_char).is_none(),
+            "Free キャラ窓に OnDragEnd は付けない"
+        );
+        for scope in [0usize, 1] {
+            let balloon = gw.balloon_window(scope).unwrap();
+            assert!(
+                world.get::<DragConfig>(balloon).unwrap().move_window,
+                "scope{scope}: バルーン窓は move_window=true（単独ドラッグ・4.5）"
+            );
+            assert!(
+                world.get::<OnDragEnd>(balloon).is_none(),
+                "scope{scope}: バルーン窓に OnDragEnd は付けない"
+            );
         }
     }
 
