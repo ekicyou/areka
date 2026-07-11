@@ -18,7 +18,7 @@
   - _Requirements: 6.1_
   - _Boundary: LineLayoutStore ＋ 共有 format 経路_
 
-- [ ] 3. Core: スクロール位置の純粋な計画（ScrollPlanner）
+- [x] 3. Core: スクロール位置の純粋な計画（ScrollPlanner）
 - [x] 3.1 (P) スクロール位置の内部表現と軸写像・量子化を実装する
   - 真位置（f32連続量・物理px）と確定位置（whole-pixel整数）を分離して保持する表現を作る
   - 可視窓の`block_offset`から真位置への写像を、writing_modeに応じた軸（横書き=縦方向・縦書き=横方向）で行い、符号は可視窓決定側の規約をそのまま素通しする（独自の軸規則を作らない）
@@ -46,7 +46,7 @@
   - _Boundary: ScrollPlanner_
   - _Depends: 3.1, 3.2_
 
-- [ ] 3.4 ScrollPlanner純粋層のユニットテスト一式を揃える
+- [x] 3.4 ScrollPlanner純粋層のユニットテスト一式を揃える
   - 以下をユニットテストとして檻化する: (a)横書き/vertical_rl/vertical_lrの軸写像3方向が正しい (b)非整数スケールの長スクロール列で確定位置と真位置の差が常に0.5px以内に収まる（k=1.0では両者が一致する） (c)可視窓のみ移動／typewriter1グリフ進行／複数行catch-up／Clear／変化なしのそれぞれでダーティ領域が期待通りになる (d)任意の計画結果でblitの写域とダーティ領域の和が描画面全域を被覆する (e)確定しない計画の反復が同一の結果を返す
   - 観測可能な完了状態: 上記5種のユニットテストが全てgreenになる
   - _Requirements: 6.4_
