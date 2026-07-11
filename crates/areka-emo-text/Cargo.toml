@@ -1,0 +1,53 @@
+[package]
+name = "areka-emo-text"
+workspace = "../.."
+description = "emo render engine テキスト層（emo track 第4 crate・spec: areka-P0-emo-text-layer）: sakura の Balloon 向け TalkCue を受け、emo-present が予約したバルーン上スロット（emo-text-layer-slot）へ文字を描く層"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[dependencies]
+# 共通エラー型（TextLayerError）の derive。
+thiserror = { workspace = true }
+# log-first 規律（失敗は error!＋Err 戻り値・安易な panic 禁止）の記録手段。
+tracing = { workspace = true }
+# cue 契約の正本（TextSink/TalkCue/ActorKey/CueCommand——design.md Dependencies・再定義しない）。
+areka-sakura = { path = "../areka-sakura" }
+# 結線層（sink.rs/actor.rs）の UI スレッド配送ブリッジ（spawn_ui/UiSender——design.md
+# Key Dependencies「areka-actor spawn_ui (P0)」。EmoTextSink の配送口そのもの）。
+areka-actor = { path = "../areka-actor" }
+# balloon model の正本（BalloonModel＋writing_mode 転記フィールド——design.md「依存方向（強制）」
+# areka-parsers → areka-emo-text・parser は転記に徹し解釈は本 crate writing.rs）。
+areka-parsers = { path = "../areka-parsers" }
+# COM 層（surface.rs）の供給面ヘルパ（com/dxgi::create_composition_swap_chain・
+# com/wuc::CompositorInteropExt）と ECS コンポーネント（VisualGraphics/Arrangement）・
+# GraphicsCore（design.md Allowed Dependencies。テキスト widget 系 system は実行時依存にしない）。
+wintf = { version = "0.0.1", path = "../wintf" }
+# slot entity への装着（&mut World insert）・TextSlotBinding の Entity（design.md Allowed Dependencies）。
+bevy_ecs = { workspace = true }
+# COM 層（surface.rs）は D3D11/DXGI 直呼び（CopyResource/Map/Present・IDXGISwapChain1 等）を要する。
+# workspace 既定へ `Win32_Graphics_Dxgi` を上乗せする（emo-present chain.rs と同型・swap chain 本体型）。
+windows = { workspace = true, features = ["Win32_Graphics_Dxgi"] }
+# SpriteVisual::SetSize の Vector2（wintf と同一の workspace ピン）。
+windows-numerics = { workspace = true }
+# 結線 API `spawn_emo_text` の戻り値型（JoinHandle——design.md「TextLayerActor」契約）と、
+# 結線層テストの実走 pump（MessageLoop——spawn_ui の drain タスクを実際に駆動して
+# 終了規律 3 ケースを実 channel で再現する。actor-foundation toy(b) の系譜）。
+wintf-winmsg-executor = { workspace = true }
+# 統合配線（actor.rs）: 予約スロット到達手段 `TextSlotView` の読み取り消費のみ
+# （design.md Allowed Dependencies・依存方向 `areka-emo-present → areka-emo-text` の順方向。
+# 逆方向 import（emo-present → emo-text）は禁止・emo-present 本体は改変しない）。
+areka-emo-present = { path = "../areka-emo-present" }
+
+[dev-dependencies]
+# 統合テスト（tests/attach_wiring_test.rs）: 2 target 結線シナリオで EmoPresenter へ渡す
+# 合成入力（EmoWorld/AtlasTable）を上流公開 API（bake→EmoWorld）で組む
+# （emo-present presenter.rs テストと同技法・テスト専用）。
+areka-emo-atlas = { path = "../areka-emo-atlas" }
+areka-emo-compose = { path = "../areka-emo-compose" }
+# 観測 example（examples/emo-text-layer.rs・task 9.2）のログ初期化
+# （RUST_LOG 対応・emo-present example と同型。example 専用＝dev-deps）。
+tracing-subscriber = { workspace = true }

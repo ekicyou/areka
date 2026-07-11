@@ -46,4 +46,4 @@ pub mod presenter;
 pub use balloon::build_balloon_target;
 pub use cache::{CacheEntry, ComposeCache};
 pub use command::{PresentCommand, PresentError, PresentOutcome, TargetId};
-pub use presenter::EmoPresenter;
+pub use presenter::{EmoPresenter, TextSlotView};

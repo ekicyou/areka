@@ -19,6 +19,8 @@
 
 pub mod client;
 pub mod error;
+/// helper 孤児化防止（Job Object・KILL_ON_JOB_CLOSE）。windows 依存をここへ隔離する。
+mod job;
 pub mod lifecycle;
 pub mod parent_window;
 pub mod process_host;

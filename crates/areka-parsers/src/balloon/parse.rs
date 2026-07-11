@@ -91,8 +91,18 @@ fn map_merged(merged: &BTreeMap<String, String>) -> BalloonModel {
         get_scalar::<u32>(merged, "font.height"),
         color,
     );
+    // writing_mode は生文字列の転記のみ（trim は kv 層済み・値の検証・語彙判定・fallback は
+    // 下流 emo テキスト層の責務・emo-text-layer 要件 5.6）。
+    let writing_mode = merged.get("writing_mode").map(|v| v.to_owned());
 
-    BalloonModel::new(windowposition, origin, wordwrappoint, validrect, font)
+    BalloonModel::new(
+        windowposition,
+        origin,
+        wordwrappoint,
+        validrect,
+        font,
+        writing_mode,
+    )
 }
 
 /// マージ済みマップから `key` を完全一致で引き、値を `T` へ整数パースする寛容ヘルパ（R1.4/R2.6）。

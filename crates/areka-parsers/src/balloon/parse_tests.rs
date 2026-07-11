@@ -7,6 +7,8 @@
 //! - 寛容（未知キー無視・R1.3／非数値 → `None`・R1.4／空入力 → 全 `None`・R1.5）。
 //! - 非モデル化 distractor キー（`anchor.font.color.r` 等）が正規キーへ漏れないこと（R2.7）。
 //! - RGB 部分欠落が個別 `None`（`font.color.r` のみ存在・R2.6）。
+//! - `writing_mode` の生文字列転記 4 パターン（単層／画像別上書き後勝ち／未指定＝`None`／
+//!   未知値素通し・解釈しない・emo-text-layer 要件 5.6）。
 
 use super::parse::{parse, parse_str};
 use std::collections::BTreeMap;
@@ -208,4 +210,47 @@ fn parse_str_descript_only() {
 
     assert_eq!(got.validrect().bottom(), Some(-56));
     assert_eq!(got.windowposition().x(), None);
+}
+
+/// `writing_mode` 単層指定（descript のみ）→ 生文字列がそのまま転記される（要件 5.6）。
+#[test]
+fn writing_mode_descript_single_layer_transcribed() {
+    let descript = map(&[("writing_mode", "vertical_rl")]);
+
+    let got = parse(&descript, None);
+
+    assert_eq!(got.writing_mode(), Some("vertical_rl"));
+}
+
+/// `writing_mode` 画像別上書き（後勝ち）→ 画像別層の値が descript 基層を上書きする（要件 5.6）。
+#[test]
+fn writing_mode_image_layer_overrides_descript() {
+    let descript = map(&[("writing_mode", "horizontal_tb")]);
+    let image = map(&[("writing_mode", "vertical_rl")]);
+
+    let got = parse(&descript, Some(&image));
+
+    assert_eq!(got.writing_mode(), Some("vertical_rl"));
+}
+
+/// `writing_mode` 未指定 → `None`（転記フィールドの不在表現・要件 5.6）。
+#[test]
+fn writing_mode_unspecified_is_none() {
+    let descript = map(&[("origin.x", "12")]);
+
+    let got = parse(&descript, None);
+
+    assert_eq!(got.writing_mode(), None);
+}
+
+/// `writing_mode` 未知値も素通しで転記される（値の検証・語彙判定・fallback は下流責務・
+/// parser は転記に徹する・要件 5.6）。
+#[test]
+fn writing_mode_unknown_value_passes_through_raw() {
+    let descript = map(&[("writing_mode", "diagonal_bt")]);
+
+    let got = parse(&descript, None);
+
+    // 未知語彙でも解釈せず生文字列のまま転記する。
+    assert_eq!(got.writing_mode(), Some("diagonal_bt"));
 }

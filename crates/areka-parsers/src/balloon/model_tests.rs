@@ -131,6 +131,7 @@ fn balloon_model_aggregates_sub_structs_via_accessors() {
             Some(12),
             FontColor::new(Some(255), Some(255), Some(255)),
         ),
+        Some("vertical_rl".to_string()),
     );
     assert_eq!(model.windowposition().x(), Some(-34));
     assert_eq!(model.origin().y(), Some(34));
@@ -140,6 +141,8 @@ fn balloon_model_aggregates_sub_structs_via_accessors() {
     // font は参照返し（String を含むため）。
     assert_eq!(model.font().name(), Some("さざなみゴシック"));
     assert_eq!(model.font().color().r(), Some(255));
+    // writing_mode は借用で生文字列を読む（emo-text-layer 要件 5.6）。
+    assert_eq!(model.writing_mode(), Some("vertical_rl"));
 }
 
 #[test]
@@ -151,11 +154,14 @@ fn balloon_model_all_unspecified_is_none_distinct_from_zero() {
         WordWrapPoint::new(None, None),
         ValidRect::new(None, None, None, None),
         Font::new(None, None, FontColor::new(None, None, None)),
+        None,
     );
     assert_eq!(unspecified.windowposition().x(), None);
     assert_eq!(unspecified.origin().x(), None);
     assert_eq!(unspecified.validrect().top(), None);
     assert_eq!(unspecified.font().height(), None);
+    // writing_mode 未指定は None（emo-text-layer 要件 5.6）。
+    assert_eq!(unspecified.writing_mode(), None);
 
     let zeros = BalloonModel::new(
         WindowPosition::new(Some(0), Some(0)),
@@ -163,6 +169,7 @@ fn balloon_model_all_unspecified_is_none_distinct_from_zero() {
         WordWrapPoint::new(Some(0), Some(0)),
         ValidRect::new(Some(0), Some(0), Some(0), Some(0)),
         Font::new(None, Some(0), FontColor::new(Some(0), Some(0), Some(0))),
+        None,
     );
     // 未指定モデルとゼロ埋めモデルは全体としても判別される。
     assert_ne!(unspecified, zeros);
