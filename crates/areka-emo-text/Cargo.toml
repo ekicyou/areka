@@ -16,6 +16,9 @@ thiserror = { workspace = true }
 tracing = { workspace = true }
 # cue 契約の正本（TextSink/TalkCue/ActorKey/CueCommand——design.md Dependencies・再定義しない）。
 areka-sakura = { path = "../areka-sakura" }
+# 結線層（sink.rs/actor.rs）の UI スレッド配送ブリッジ（spawn_ui/UiSender——design.md
+# Key Dependencies「areka-actor spawn_ui (P0)」。EmoTextSink の配送口そのもの）。
+areka-actor = { path = "../areka-actor" }
 # balloon model の正本（BalloonModel＋writing_mode 転記フィールド——design.md「依存方向（強制）」
 # areka-parsers → areka-emo-text・parser は転記に徹し解釈は本 crate writing.rs）。
 areka-parsers = { path = "../areka-parsers" }
@@ -30,3 +33,8 @@ bevy_ecs = { workspace = true }
 windows = { workspace = true, features = ["Win32_Graphics_Dxgi"] }
 # SpriteVisual::SetSize の Vector2（wintf と同一の workspace ピン）。
 windows-numerics = { workspace = true }
+
+[dev-dependencies]
+# 結線層テストの実走 pump（MessageLoop——spawn_ui の drain タスクを実際に駆動して
+# 終了規律 3 ケースを実 channel で再現する。actor-foundation toy(b) の系譜）。
+wintf-winmsg-executor = { workspace = true }

@@ -112,7 +112,7 @@
   - _Boundary: 描画実行（invariant 検証）_
 
 - [ ] 7. Core（結線層）: cue 受信アクターと UI 配送
-- [ ] 7.1 sakura の cue 受信口を実装し、クリーンな終了規律を持たせる
+- [x] 7.1 sakura の cue 受信口を実装し、クリーンな終了規律を持たせる
   - Balloon 向け cue を受け取り、描画を担う側へ配送する受信口を実装する
   - 全ての送信元が切断される、または終了指示を受け取った場合は error ログを伴わずクリーンに終了する
   - 配送に失敗しても panic せず、失敗を記録した上で後続 cue の受理を継続する
@@ -170,3 +170,4 @@
 - 2.4: design 正準の数式（round/ceil 等）は割り切れる値だけでなく端数ケースで檻化する（floor/ceil 変異を殺す値を選ぶ）。レビュアーの変異検証で檻穴が実際に検出された（round→floor で全緑だった）。10.3 の複数スケール検証でも同様に。
 - 3.2: design.md L502 の可視窓「行内オフセット」は typo（正典は L534 の「ブロック軸オフセット」・軸読み替え正準表のスクロール方向行と R7.2 が根拠・レビュアー裁定確定）。spec 完了処理時に design.md L502 の修正を検討。
 - 4: ContentCanvas の座標系は validrect-local（size=validrect寸・住人はローカル座標＋平行移動配置）とレビュアー裁定確定。image-absolute だと Arrangement offset=validrect原点×k と二重適用になる。task 6 DrawExecutor はこの前提で消費すること。
+- 7.1: レビュアーが誤って `git checkout -- <file>` を実行し未コミット実装を一時消失（文脈から byte-identical 復元・検証済み）。subagent プロンプトに「破壊的 git コマンド禁止（checkout --/reset --hard）」を明記すること。mutation 検証の復元は必ず backup ファイル経由で行う。
