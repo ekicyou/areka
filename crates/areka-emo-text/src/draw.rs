@@ -78,6 +78,7 @@ use windows::Win32::Graphics::DirectWrite::{
     DWRITE_TEXT_ALIGNMENT, DWRITE_TEXT_ALIGNMENT_LEADING, IDWriteFactory2, IDWriteFontCollection,
     IDWriteTextFormat, IDWriteTextLayout,
 };
+use windows::Win32::Graphics::Direct3D11::ID3D11Texture2D;
 use windows::Win32::Graphics::Dxgi::Common::DXGI_FORMAT_B8G8R8A8_UNORM;
 use windows::Win32::Graphics::Dxgi::IDXGISurface;
 use windows::core::{HSTRING, Interface};
@@ -458,7 +459,11 @@ struct CachedLineLayout {
 /// （canvas 行 index）・内容不変再利用・破棄規律（[`clear`](Self::clear) のみ全破棄）は
 /// 抽出前の `DrawExecutor` 内実装と同一——TextLayout 生成経路の完全共有により両描画実行の
 /// **byte 等価**を構造化する（RN5）。UI スレッド専有（COM 層規律）。
-struct LineLayoutStore {
+///
+/// `pub(crate)`: [`DrawExecutor`]（front へ全域再描画）と `ViewboxExecutor`
+/// （back へダーティ描画・viewbox_draw.rs）が**同一経路**で行レイアウトを得るため
+/// crate 内へ公開する（生成規則・キー・破棄規律は不変）。
+pub(crate) struct LineLayoutStore {
     /// 行 TextLayout 生成用 factory（probe/描画と同一の `IDWriteFactory2`）。
     factory: IDWriteFactory2,
     /// 行 TextLayout キャッシュ（key＝canvas 行 index。追記単調ゆえ確定行の index/内容は
@@ -471,7 +476,7 @@ struct LineLayoutStore {
 
 impl LineLayoutStore {
     /// factory を束ねて空ストアを生成する（factory は clone 保持）。
-    fn new(factory: &IDWriteFactory2) -> LineLayoutStore {
+    pub(crate) fn new(factory: &IDWriteFactory2) -> LineLayoutStore {
         LineLayoutStore {
             factory: factory.clone(),
             cache: HashMap::new(),
@@ -484,7 +489,7 @@ impl LineLayoutStore {
     /// 行の箱寸は「行内軸＝折返し無効寸（[`PROBE_MAX_EXTENT`]・折返しは純粋層で決定済み
     /// ＝再折返しさせない）・行送り軸＝`font_height`」。方向レシピ（LEADING/NEAR）により
     /// 行は箱の書字開始角に付くため、描画原点＝行矩形原点で位置が定まる。
-    fn line_layout(
+    pub(crate) fn line_layout(
         &mut self,
         index: usize,
         text: &str,
@@ -517,15 +522,14 @@ impl LineLayoutStore {
     }
 
     /// キャッシュを全破棄する（Clear cue の適用点・破棄はこの口だけ）。
-    fn clear(&mut self) {
+    pub(crate) fn clear(&mut self) {
         self.cache.clear();
     }
 
     /// 行 TextLayout の累計生成回数（常時コンパイル・`DrawStats` 集計とテスト観測の共通読み口）。
-    /// 集計する `DrawStats` 消費者（後続 task の viewbox 描画実行）は未着手のため、
-    /// 非テストビルドでは未使用——常時コンパイルの読み口を保つべく dead_code を許容する。
-    #[allow(dead_code)]
-    fn creations(&self) -> u64 {
+    /// `ViewboxExecutor::render`（viewbox_draw.rs）が本フレームの生成増分を `DrawStats`
+    /// （`line_layout_creations`）へ集計するために非テストビルドでも読む。
+    pub(crate) fn creations(&self) -> u64 {
         self.creations
     }
 }
@@ -747,17 +751,19 @@ impl DrawExecutor {
     }
 }
 
-/// TextSurface の `source_tex` を D2D ターゲット bitmap として巻く
-/// （B8G8R8A8 premultiplied・96 DPI 名目——スケールは `SetTransform` の一点のみ。
-/// `source_tex` は SHADER_RESOURCE bind を持たないため CANNOT_DRAW を併記する）。
-fn create_target_bitmap(
+/// 描画面テクスチャ（front/back のいずれか）を D2D ターゲット bitmap として巻く共有ヘルパ
+/// （B8G8R8A8 premultiplied・96 DPI 名目——スケールは `SetTransform` の一点のみ。描画面
+/// テクスチャは SHADER_RESOURCE bind を持たないため CANNOT_DRAW を併記する）。
+///
+/// [`DrawExecutor`]（front を巻く）と `ViewboxExecutor`（back を巻く・viewbox_draw.rs）が
+/// **同一 props** でターゲット bitmap を得ることで byte 等価の構造前提を共有する（RN5）。
+pub(crate) fn create_d2d_target_bitmap(
     dc: &ID2D1DeviceContext,
-    surface: &TextSurface,
+    tex: &ID3D11Texture2D,
 ) -> Result<ID2D1Bitmap1, TextLayerError> {
-    let dxgi_surface: IDXGISurface = surface
-        .source_tex()
+    let dxgi_surface: IDXGISurface = tex
         .cast()
-        .map_err(device_err("source_tex->IDXGISurface cast"))?;
+        .map_err(device_err("target tex->IDXGISurface cast"))?;
     let props = D2D1_BITMAP_PROPERTIES1 {
         pixelFormat: D2D1_PIXEL_FORMAT {
             format: DXGI_FORMAT_B8G8R8A8_UNORM,
@@ -772,6 +778,15 @@ fn create_target_bitmap(
         dc.CreateBitmapFromDxgiSurface(&dxgi_surface, Some(&props as *const _))
     }
     .map_err(device_err("CreateBitmapFromDxgiSurface"))
+}
+
+/// TextSurface の front（`source_tex`）を D2D ターゲット bitmap として巻く（DrawExecutor 用・
+/// 共有ヘルパ [`create_d2d_target_bitmap`] へ委譲——props・挙動は不変）。
+fn create_target_bitmap(
+    dc: &ID2D1DeviceContext,
+    surface: &TextSurface,
+) -> Result<ID2D1Bitmap1, TextLayerError> {
+    create_d2d_target_bitmap(dc, surface.source_tex())
 }
 
 /// `Option` が `None`（デバイス未初期化など本来到達しない欠落）を

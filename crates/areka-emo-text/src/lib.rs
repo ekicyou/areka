@@ -14,8 +14,8 @@
 //! 1. **純粋層**（[`state`]／[`writing`]／[`region`]／[`layout`]／[`canvas`]／[`viewbox`]）——
 //!    `windows` 系 crate 非依存の決定論檻。純粋層モジュールに `windows` の import が
 //!    現れたらレビューエラー（本 crate のテストでも構造検証する）。
-//! 2. **COM 層**（[`draw`]／[`surface`]）——DirectWrite/D2D/DXGI/WUC を触る唯一の場所。
-//!    UI スレッド専有。
+//! 2. **COM 層**（[`draw`]／[`surface`]／[`viewbox_draw`]）——DirectWrite/D2D/DXGI/WUC を
+//!    触る唯一の場所。UI スレッド専有。
 //! 3. **結線層**（[`sink`]／[`actor`]）——sakura からの cue 受信と UI 配送・フレーム提示。
 //!
 //! ## 依存方向（強制）
@@ -38,6 +38,7 @@ pub mod sink;
 pub mod state;
 pub mod surface;
 pub mod viewbox;
+pub mod viewbox_draw;
 pub mod writing;
 
 /// 本 crate の共通エラー型（design.md「Error Handling」正本）。
