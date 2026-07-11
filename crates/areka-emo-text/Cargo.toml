@@ -19,3 +19,14 @@ areka-sakura = { path = "../areka-sakura" }
 # balloon model の正本（BalloonModel＋writing_mode 転記フィールド——design.md「依存方向（強制）」
 # areka-parsers → areka-emo-text・parser は転記に徹し解釈は本 crate writing.rs）。
 areka-parsers = { path = "../areka-parsers" }
+# COM 層（surface.rs）の供給面ヘルパ（com/dxgi::create_composition_swap_chain・
+# com/wuc::CompositorInteropExt）と ECS コンポーネント（VisualGraphics/Arrangement）・
+# GraphicsCore（design.md Allowed Dependencies。テキスト widget 系 system は実行時依存にしない）。
+wintf = { version = "0.0.1", path = "../wintf" }
+# slot entity への装着（&mut World insert）・TextSlotBinding の Entity（design.md Allowed Dependencies）。
+bevy_ecs = { workspace = true }
+# COM 層（surface.rs）は D3D11/DXGI 直呼び（CopyResource/Map/Present・IDXGISwapChain1 等）を要する。
+# workspace 既定へ `Win32_Graphics_Dxgi` を上乗せする（emo-present chain.rs と同型・swap chain 本体型）。
+windows = { workspace = true, features = ["Win32_Graphics_Dxgi"] }
+# SpriteVisual::SetSize の Vector2（wintf と同一の workspace ピン）。
+windows-numerics = { workspace = true }
