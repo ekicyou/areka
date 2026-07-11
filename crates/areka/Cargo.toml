@@ -29,12 +29,13 @@ tracing-subscriber = { workspace = true }
 async-io = { version = "2.6", default-features = false }
 bevy_ecs = { workspace = true }
 windows = { workspace = true }
+# placement の採寸（measure）で surface 原寸を合成取得するため通常依存へ昇格
+# （areka-P0-window-placement design DD5・旧 dev-dependencies から移動）。
+areka-emo-atlas = { path = "../areka-emo-atlas" }
+areka-emo-compose = { path = "../areka-emo-compose" }
 
 [dev-dependencies]
 # emo-present observation example（examples/emo-present.rs・task 4.2）用。EmoPresenter へ渡す
-# `(EmoWorld, AtlasTable)` をシェルと同一経路（parse→bake→build）で組むため、上流3クレートも
-# example 専用依存として引き込む（本体 `main.rs`/lib は不変・R6.6）。
+# `(EmoWorld, AtlasTable)` をシェルと同一経路（parse→bake→build）で組むため引き込む
+# （emo-atlas／emo-compose／areka-parsers は通常依存側で供給済み）。
 areka-emo-present = { path = "../areka-emo-present" }
-areka-emo-atlas = { path = "../areka-emo-atlas" }
-areka-emo-compose = { path = "../areka-emo-compose" }
-areka-parsers = { path = "../areka-parsers" }
