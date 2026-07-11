@@ -61,9 +61,11 @@ brief 採用案 **A1「統一 display 経路（`\s` と完全対称）」** を�
 
 ## 3. 設計判断アイテム（要件ディスカッションへ供給）
 
-1. **[D1・研究必須] `\b` の正典意味論（ukadoc）**: `-1`=非表示センチネル／既定面 `balloon.defaultsurface`（既定 0）／裸形 `\bN` の許容／**バルーンに alias 正典が無いこと**を確定。**本調査で ukadoc MCP 検索は再度全滅**（`tag_b` get_doc not_found・キーワード検索 total 0）。→ `list_categories`＋sakurascript カテゴリ列挙で正 id を割り出す or SSP 実機挙動で確定。**設計フェーズ冒頭のブロッカー研究**。
+> **開発者裁定（2026-07-11 要件ディスカッション#1・議題1）**: バルーン面引数は **cue シーム全域（parser／dola／sakura）を不透明文字列で運ぶ**（`\s` の `SurfaceArg`・dola `Emote{key:String}` と完全対称）。`\b[10]` の数値形も `\b[バルーン１]` の名前形も同一の忠実転写で扱い、**整数化・alias 解決は seriko（消費側）の下流責務**へ寄せる。M-boot の seriko は**数値解決のみ**（`-1`→非表示）＝非数値 key はログして skip し、**名前／alias 解決は将来の下流仕様が不透明 key の上に additive 追加する余地として残す**（実装しないが語彙で潰さない）。裸形 `\bN` は**単桁の数値 shorthand のみ**（`\w` 前例・classic `\sN` と正典整合）＝多桁・名前は必ずブラケット形。→ requirements.md R1（全面）・R4（数値解決＋非数値 skip の R4.5 新設）へ反映済み。D1/D2/D4/D5 は本裁定を前提に確定すること。
 
-2. **[D2] 裸形 `\bN` の多桁取り込み方式**: 既存 shorthand（`SHORTHAND_WORDS=&['w']`）は**1 桁のみ**・`\bN` は連続数字（R1.2）。選択肢: (a) lexer に多桁対応の新機構（例 `Token::BalloonShorthand(String)` or bare の後続数字取り込み）／(b) decode-level fold（`Bare('b')`＋直後 `Text` の先頭数字列を剥がす——`\q` 旧 2 連 fold の先例あり `decode.rs:82,118`）／(c) M-boot は `\b[ID]` ブラケット形のみ厳密対応し裸形は最小限。**本文数字漏れ根絶（R1.3）が必達**ゆえ (c) でも漏れ防止処理は要る。lexer 層 vs decode 層のどちらで畳むかが層責務判断。
+1. **[D1・研究必須] `\b` の正典意味論（ukadoc）**: `-1`=非表示センチネル／既定面 `balloon.defaultsurface`（既定 0）／裸形 `\bN` の**桁境界（単桁 shorthand 確定）**／**バルーン名前／alias の正典有無**（M-boot は非実装だが語彙は開けておく）を確定。**本調査で ukadoc MCP 検索は再度全滅**（`tag_b` get_doc not_found・キーワード検索 total 0）。→ `list_categories`＋sakurascript カテゴリ列挙で正 id を割り出す or SSP 実機挙動で確定。**設計フェーズ冒頭のブロッカー研究**。
+
+2. **[D2] 裸形 `\bN` の単桁取り込み方式**: 裁定により裸形は**単桁の数値 shorthand のみ**（R1.2・`SHORTHAND_WORDS=&['w']` の 1 桁前例と対称）＝多桁・名前はブラケット形。よって既存 `WaitShorthand` と同型の**単桁 bare 分岐を `\b` に追加**するのが素直（lexer 層で `b` を shorthand 対象へ）。選択肢: (a) `SHORTHAND_WORDS` に `b` を加え単桁数字を面 shorthand として読む（`\w` 機構の一般化・**本命**）／(b) decode-level で `Bare('b')`＋直後 `Text` 先頭 1 桁を剥がす fold（`\q` 旧 fold 先例 `decode.rs:82,118`）。**本文数字漏れ根絶（R1.3）が必達**——`\b1`→面`1`（漏れなし）・`\b12`→面`1`＋本文`2`（`2` は正当本文）。lexer 層 vs decode 層のどちらで畳むかが層責務判断（`\w` が lexer 層ゆえ (a) が一貫）。
 
 3. **[D3・中心判断] バルーン面切替 cue の分類先（`CueTarget`／sink）**: 現行 `CueTarget::Balloon`→`TextSink`（emo-text）は誤配線ゆえ流用不可。Option A（`Shell` 再利用・名前負債）vs Option B（`CueTarget` 意味論再整理＋`drive.rs` 振分拡張）。**`cue_target_of`（強制点1）の戻り値設計がここで確定**。配送不能（`None`）時の error ログ（R3.3）は既存 `drive.rs:219-222`／seriko `actor.rs:181-188` の流儀を踏襲。
 
