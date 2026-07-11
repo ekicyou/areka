@@ -62,6 +62,7 @@ fn command_kind(command: &CueCommand) -> &'static str {
         CueCommand::EntityRef(_) => "EntityRef",
         CueCommand::Custom { .. } => "Custom",
         CueCommand::NewLine { .. } => "NewLine",
+        CueCommand::BalloonSurface { .. } => "BalloonSurface",
     }
 }
 
@@ -242,6 +243,10 @@ mod tests {
         assert_eq!(
             command_kind(&CueCommand::NewLine { ratio: 1.0 }),
             "NewLine"
+        );
+        assert_eq!(
+            command_kind(&CueCommand::BalloonSurface { key: "2".into() }),
+            "BalloonSurface"
         );
     }
 
