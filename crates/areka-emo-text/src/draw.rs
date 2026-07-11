@@ -451,6 +451,85 @@ struct CachedLineLayout {
     layout: IDWriteTextLayout,
 }
 
+/// 行 TextLayout の生成・キャッシュを担う共有ストア（複数の描画実行が**同一経路**で
+/// 行レイアウトを得るための抽出型・design.md「draw.rs の再編（LineLayoutStore 抽出）」）。
+///
+/// 生成規則（行内軸＝[`PROBE_MAX_EXTENT`]・行送り軸＝`font_height`・同一 format）・キー
+/// （canvas 行 index）・内容不変再利用・破棄規律（[`clear`](Self::clear) のみ全破棄）は
+/// 抽出前の `DrawExecutor` 内実装と同一——TextLayout 生成経路の完全共有により両描画実行の
+/// **byte 等価**を構造化する（RN5）。UI スレッド専有（COM 層規律）。
+struct LineLayoutStore {
+    /// 行 TextLayout 生成用 factory（probe/描画と同一の `IDWriteFactory2`）。
+    factory: IDWriteFactory2,
+    /// 行 TextLayout キャッシュ（key＝canvas 行 index。追記単調ゆえ確定行の index/内容は
+    /// 不変——リビール中＝最終行のみ内容が変わり都度更新される）。
+    cache: HashMap<usize, CachedLineLayout>,
+    /// 行 TextLayout の累計生成回数（**常時コンパイル**・後続 task の `DrawStats` へ集計する
+    /// ため `#[cfg(test)]` にしない・design「Modified Files」）。
+    creations: u64,
+}
+
+impl LineLayoutStore {
+    /// factory を束ねて空ストアを生成する（factory は clone 保持）。
+    fn new(factory: &IDWriteFactory2) -> LineLayoutStore {
+        LineLayoutStore {
+            factory: factory.clone(),
+            cache: HashMap::new(),
+            creations: 0,
+        }
+    }
+
+    /// 行 TextLayout の取得（内容不変なら再利用・変化時のみ生成して置換）。
+    ///
+    /// 行の箱寸は「行内軸＝折返し無効寸（[`PROBE_MAX_EXTENT`]・折返しは純粋層で決定済み
+    /// ＝再折返しさせない）・行送り軸＝`font_height`」。方向レシピ（LEADING/NEAR）により
+    /// 行は箱の書字開始角に付くため、描画原点＝行矩形原点で位置が定まる。
+    fn line_layout(
+        &mut self,
+        index: usize,
+        text: &str,
+        format: &IDWriteTextFormat,
+        font_height: f32,
+        mode: WritingMode,
+    ) -> Result<IDWriteTextLayout, TextLayerError> {
+        if let Some(cached) = self.cache.get(&index) {
+            if cached.text == text {
+                return Ok(cached.layout.clone());
+            }
+        }
+        let (max_width, max_height) = match mode {
+            WritingMode::HorizontalTb => (PROBE_MAX_EXTENT, font_height),
+            WritingMode::VerticalRl | WritingMode::VerticalLr => (font_height, PROBE_MAX_EXTENT),
+        };
+        let layout = self
+            .factory
+            .create_text_layout(&HSTRING::from(text), format, max_width, max_height)
+            .map_err(device_err("CreateTextLayout(line)"))?;
+        self.creations += 1;
+        self.cache.insert(
+            index,
+            CachedLineLayout {
+                text: text.to_owned(),
+                layout: layout.clone(),
+            },
+        );
+        Ok(layout)
+    }
+
+    /// キャッシュを全破棄する（Clear cue の適用点・破棄はこの口だけ）。
+    fn clear(&mut self) {
+        self.cache.clear();
+    }
+
+    /// 行 TextLayout の累計生成回数（常時コンパイル・`DrawStats` 集計とテスト観測の共通読み口）。
+    /// 集計する `DrawStats` 消費者（後続 task の viewbox 描画実行）は未着手のため、
+    /// 非テストビルドでは未使用——常時コンパイルの読み口を保つべく dead_code を許容する。
+    #[allow(dead_code)]
+    fn creations(&self) -> u64 {
+        self.creations
+    }
+}
+
 /// ContentCanvas の可視窓を DirectWrite/D2D で全域再描画する実行部
 /// （task 6.3・R3.1/R7.3・design.md「DrawExecutor（draw.rs）」）。
 ///
@@ -472,14 +551,11 @@ pub struct DrawExecutor {
     dc: ID2D1DeviceContext,
     /// 描画/計測共用 format（[`create_text_format`] 経路・FormatKey 不変なら再利用）。
     format: Option<(FormatKey, IDWriteTextFormat)>,
-    /// 行 TextLayout キャッシュ（key＝canvas 行 index。追記単調ゆえ確定行の index/内容は
-    /// 不変——リビール中＝最終行のみ内容が変わり都度更新される）。
-    line_cache: HashMap<usize, CachedLineLayout>,
+    /// 行 TextLayout の生成・キャッシュストア（[`LineLayoutStore`]・両描画実行が同一経路で
+    /// 行レイアウトを得るための共有資産＝抽出前の内蔵キャッシュと byte 等価・RN5）。
+    line_store: LineLayoutStore,
     /// Image/Surface 住人シームの warn 抑制フラグ（executor ごと初回のみ・R8.5）。
     seam_warned: bool,
-    /// テスト観測用: 行 TextLayout の生成回数（確定行キャッシュの檻）。
-    #[cfg(test)]
-    line_layout_creations: usize,
 }
 
 impl DrawExecutor {
@@ -497,21 +573,23 @@ impl DrawExecutor {
         let dc = d2d
             .create_device_context(D2D1_DEVICE_CONTEXT_OPTIONS_NONE)
             .map_err(device_err("CreateDeviceContext(DrawExecutor)"))?;
+        // 行キャッシュは共有ストアへ抽出済み。store の factory は `dwrite` の別 clone
+        // （`ensure_format` が `dwrite` を使い続けるため本体にも保持する・最小変更）。
+        let line_store = LineLayoutStore::new(&dwrite);
         Ok(DrawExecutor {
             dwrite,
             dc,
             format: None,
-            line_cache: HashMap::new(),
+            line_store,
             seam_warned: false,
-            #[cfg(test)]
-            line_layout_creations: 0,
         })
     }
 
     /// Clear cue の適用点: 行 TextLayout キャッシュを全破棄する
-    /// （design「確定行は再生成しない・**Clear で全破棄**」——破棄はこの口だけ）。
+    /// （design「確定行は再生成しない・**Clear で全破棄**」——破棄はこの口だけ・
+    /// 共有ストア [`LineLayoutStore::clear`] へ委譲）。
     pub fn clear_cache(&mut self) {
-        self.line_cache.clear();
+        self.line_store.clear();
     }
 
     /// 可視窓を全域再描画して TextSurface の source（`source_tex`）へ焼く
@@ -638,18 +716,17 @@ impl DrawExecutor {
                 ?key,
                 "フォント/方向が変わったため format と行レイアウトキャッシュを組み直す"
             );
-            self.line_cache.clear();
+            self.line_store.clear();
         }
         let format = create_text_format(&self.dwrite, font, mode)?;
         self.format = Some((key, format.clone()));
         Ok(format)
     }
 
-    /// 行 TextLayout の取得（内容不変なら再利用・変化時のみ生成して置換）。
+    /// 行 TextLayout の取得（共有ストア [`LineLayoutStore::line_layout`] へ委譲）。
     ///
-    /// 行の箱寸は「行内軸＝折返し無効寸（[`PROBE_MAX_EXTENT`]・折返しは純粋層で決定済み
-    /// ＝再折返しさせない）・行送り軸＝`font_height`」。方向レシピ（LEADING/NEAR）により
-    /// 行は箱の書字開始角に付くため、描画原点＝行矩形原点で位置が定まる。
+    /// 内容不変なら再利用・変化時のみ生成して置換——生成規則・キー・再利用規律は
+    /// すべて共有ストア側に一元化されている（両描画実行の byte 等価前提・RN5）。
     fn line_layout(
         &mut self,
         index: usize,
@@ -658,37 +735,15 @@ impl DrawExecutor {
         font_height: f32,
         mode: WritingMode,
     ) -> Result<IDWriteTextLayout, TextLayerError> {
-        if let Some(cached) = self.line_cache.get(&index) {
-            if cached.text == text {
-                return Ok(cached.layout.clone());
-            }
-        }
-        let (max_width, max_height) = match mode {
-            WritingMode::HorizontalTb => (PROBE_MAX_EXTENT, font_height),
-            WritingMode::VerticalRl | WritingMode::VerticalLr => (font_height, PROBE_MAX_EXTENT),
-        };
-        let layout = self
-            .dwrite
-            .create_text_layout(&HSTRING::from(text), format, max_width, max_height)
-            .map_err(device_err("CreateTextLayout(line)"))?;
-        #[cfg(test)]
-        {
-            self.line_layout_creations += 1;
-        }
-        self.line_cache.insert(
-            index,
-            CachedLineLayout {
-                text: text.to_owned(),
-                layout: layout.clone(),
-            },
-        );
-        Ok(layout)
+        self.line_store
+            .line_layout(index, text, format, font_height, mode)
     }
 
-    /// テスト観測用: 行 TextLayout の累計生成回数（確定行キャッシュの檻）。
+    /// テスト観測用: 行 TextLayout の累計生成回数（確定行キャッシュの檻・共有ストアの
+    /// 常時コンパイルカウンタを既存テストの usize 比較へ写す）。
     #[cfg(test)]
     fn line_layout_creations(&self) -> usize {
-        self.line_layout_creations
+        self.line_store.creations() as usize
     }
 }
 
