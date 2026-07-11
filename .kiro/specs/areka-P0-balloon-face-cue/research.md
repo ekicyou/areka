@@ -169,7 +169,7 @@ brief 採用案 **A1「統一 display 経路（`\s` と完全対称）」** を�
 - **指令**: `DisplayCommand::ShowBalloon { scope, surface_id }`／`HideBalloon { scope }` の**新 variant**（案 i）。既存 `Show`/`Hide` へ target フィールド追加（案 ii）は既存契約の形状変更＝下流（emo2-boot adapter・既存テスト）破壊ゆえ棄却。
 - **`binds` は載せない**: バルーンに着せ替え bind は M-boot 不存在。adapter が `PresentCommand::ShowSurface{binds: BindSet::default()}` を組む。SERIKO バルーンアニメ導入時の Revalidation Trigger として登記。
 - **`#[non_exhaustive]` は付けない**: workspace 内部契約はコンパイラ強制（catch-all 禁止文化）を優先。variant 追加時は下流 match が明示追随する（本 spec 自身がその実演）。
-- **数値解決**: `resolve.rs` に純関数 `resolve_balloon_key(&str) -> SurfaceTarget` を新設（i64 parse: `-1`→Hide・0..=u32::MAX→Show・他→Unresolved。**alias 表を引かない**＝R4.4）。非数値（名前形）の Unresolved は actor 側で **warn!**＋skip（`EntityRef` の「M-boot 未対応」warn! 先例に整合。破損系の error! と区別）。
+- **数値解決**: `resolve.rs` に純関数 `resolve_balloon_key(&str) -> BalloonResolve` を新設（バルーン専用の解決結果型＝シェルの `SurfaceTarget` 非干渉・R4.6）。`-1`→`Hide`・`0..=u32::MAX`→`Show`・**非数値（名前形）→`NameForm`**・**数値だが不正（`-2`・範囲外・u32 超過）→`Invalid`**（**alias 表を引かない**＝R4.4）。ログ水準を類別（設計ディスカッション#1 裁定・2026-07-12）: `NameForm`＝M-boot 未対応の正当構文→**warn!**（`EntityRef` 先例・将来の名前解決 additive 余地）／`Invalid`＝破損入力→**error!**（シェル経路 `actor.rs:216-222` と同水準）。actor は `Show`/`Hide` のみ `SurfaceTarget` へ写して `apply_balloon` へ渡す。
 
 ### 決定 5（D1 派生）: 既定面・奇数予約は本 spec の非責務
 

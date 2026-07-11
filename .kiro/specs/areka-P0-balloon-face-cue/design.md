@@ -341,9 +341,17 @@ CueCommand::BalloonSurface { .. } => Some(CueTarget::Shell),  // 表示系＝Sur
 
 ```rust
 // resolve.rs — 純関数（表を持たない・所有 self 不要・決定論）
-/// バルーン面 key の数値解決（M-boot: alias／名前解決なし・R4.4）。
-/// "-1"→Hide／0..=u32::MAX→Show(id)／それ以外（非数値・負の非-1・範囲外）→Unresolved。
-pub fn resolve_balloon_key(key: &str) -> SurfaceTarget;
+/// バルーン面 key 解決結果（seriko バルーン専用・シェルの SurfaceTarget とは別型ゆえ
+/// 既存シェル経路に非干渉・R4.6）。名前形と破損数値をログ水準のために類別する。
+pub enum BalloonResolve {
+    Show(u32),  // 0..=u32::MAX の数値 id（→ SurfaceTarget::Show で apply_balloon）
+    Hide,       // "-1"（→ SurfaceTarget::Hide で apply_balloon）
+    NameForm,   // 非数値（名前形 \b[バルーン１]）＝M-boot 未対応・正当構文 → actor で warn!＋skip
+    Invalid,    // 数値だが不正（"-2"・負の非-1・u32 超過）＝破損入力 → actor で error!＋skip
+}
+/// バルーン面 key の数値解決（M-boot: alias／名前解決なし・R4.4/R4.5）。
+/// "-1"→Hide／"0".."4294967295"→Show(id)／非数値→NameForm／数値だが範囲外・不正→Invalid。
+pub fn resolve_balloon_key(key: &str) -> BalloonResolve;
 
 // state.rs — ScopeStates 増分
 pub struct ScopeStates {
@@ -354,11 +362,11 @@ pub struct ScopeStates {
 /// バルーン面への適用（apply() と同一規律の鏡映・1 cue = 1 scope）。
 /// Show(id): 同一 id 表示中→Unchanged／それ以外→Shown(id) 更新＋Changed(ShowBalloon)。
 /// Hide: 既に Hidden→Unchanged／それ以外（未知 scope 含む）→Hidden 更新＋Changed(HideBalloon)。
-/// Unresolved: 防御的 no-op（呼び手が先に skip する）。
+/// （actor は BalloonResolve::Show/Hide のみを SurfaceTarget へ写して渡す＝NameForm/Invalid は手前で log＋skip）。
 pub fn apply_balloon(&mut self, scope: &ActorKey, target: SurfaceTarget) -> ApplyOutcome;
 ```
 
-- Preconditions: `apply_balloon` へ `Unresolved` を渡さない（actor が先に warn!＋skip）。
+- Preconditions: `apply_balloon` へは `SurfaceTarget::{Show,Hide}` のみ渡す（actor が `NameForm`→warn!／`Invalid`→error! を手前で log＋skip）。
 - Postconditions: シェル map（`scopes`）はバルーン適用で不変・その逆も不変（4.6）。冪等ガードは同一 variant 同一 id 限定（4.3）。
 - Invariants: 発行すべき指令は `ApplyOutcome::Changed` 同梱でのみ生まれ、`emit_display` 単一点から出る。
 
@@ -384,20 +392,27 @@ pub enum DisplayCommand {
 ##### actor 消費経路（handle_message 増分）
 
 ```rust
-// actor.rs — 内側 command match へ明示 arm を追加（catch-all を新設しない）
+// actor.rs — 内側 command match へ明示 arm を追加（catch-all を新設しない・早期 return 形）
 CueCommand::BalloonSurface { key } => {
-    match resolve_balloon_key(key) {
-        SurfaceTarget::Unresolved => {
-            // 名前形（\b[バルーン１]）等: M-boot 未対応＝warn!＋skip・発行しない（4.5・
-            // EntityRef の「M-boot 未対応」warn! 先例に整合。将来の名前解決 additive 余地）。
+    let target = match resolve_balloon_key(key) {
+        BalloonResolve::Show(id) => SurfaceTarget::Show(id),
+        BalloonResolve::Hide => SurfaceTarget::Hide,
+        BalloonResolve::NameForm => {
+            // 名前形（\b[バルーン１]）: M-boot 未対応の正当構文＝warn!＋skip・発行なし（4.5）。
+            // EntityRef の「M-boot 未対応」warn! 先例に整合。将来の名前解決 additive の余地。
             tracing::warn!(key = %key, scope = %cue.actor,
-                "seriko: バルーン面 key を数値解決できず読み飛ばす（M-boot は数値のみ・R4.5）");
+                "seriko: バルーン面 key を名前解決できず読み飛ばす（M-boot は数値のみ・名前解決は将来 additive・R4.5）");
+            return ControlFlow::Continue(());
         }
-        target => {
-            if let ApplyOutcome::Changed(command) = states.apply_balloon(&cue.actor, target) {
-                emit_display(out, command);   // 単一発行点共用（4.1/4.2/4.3）
-            }
+        BalloonResolve::Invalid => {
+            // 破損数値（-2・範囲外・u32 超過）: 作者入力の破損＝error!＋skip・発行なし（シェル経路と同水準・4.5）。
+            tracing::error!(key = %key, scope = %cue.actor,
+                "seriko: バルーン面 key が不正な数値で読み飛ばす（破損入力・R4.5）");
+            return ControlFlow::Continue(());
         }
+    };
+    if let ApplyOutcome::Changed(command) = states.apply_balloon(&cue.actor, target) {
+        emit_display(out, command);   // 単一発行点共用（4.1/4.2/4.3）
     }
 }
 ```
@@ -465,8 +480,8 @@ CueCommand::BalloonSurface { key } => {
 | 経路 | 分類 | 応答 | ログ | 檻 |
 |------|------|------|------|-----|
 | `\b1[`（未閉じ）等の不正構文 | 作者入力 | `Raw` 吸収・解析継続（既存規則） | なし（転記層は無音） | lexer_tests |
-| 非数値 key（`\b[バルーン１]`） | M-boot 未対応入力 | 発行なし・skip・状態不変 | **warn!**（key・scope 付き） | actor 同期単体＋capture_logs |
-| 数値だが不正（`-2`・u32 超過） | 破損入力 | 発行なし・skip・状態不変 | warn!（同上・Unresolved 一括） | resolve 単体＋actor 単体 |
+| 非数値 key（`\b[バルーン１]`＝名前形） | M-boot 未対応入力（正当構文） | 発行なし・skip・状態不変 | **warn!**（`NameForm`・key/scope 付き） | resolve 単体＋actor 同期単体＋capture_logs |
+| 数値だが不正（`-2`・範囲外・u32 超過） | 破損入力 | 発行なし・skip・状態不変 | **error!**（`Invalid`・シェル経路と同水準） | resolve 単体＋actor 同期単体＋capture_logs |
 | 分類不能 cue（`Custom`） | 防御（M-boot 非生成） | skip | error!（drive.rs 既存） | 既存檻（R3.3） |
 | seriko inbox 消失後の emit | 運用終端 | 破棄・非 panic | error!（既存） | 既存檻 |
 | 実在しない面 id の表示 | 下流縮退 | emo-present EmptyComposition→Hide 縮退（既存） | warn!（既存） | 既存檻（スコープ外） |
@@ -486,9 +501,9 @@ CueCommand::BalloonSurface { key } => {
 3. **dola**: 8 variant 数え上げ・`BalloonSurface` serde roundtrip（2.1/2.3）。
 4. **sakura/compile**: `BalloonSurface("バルーン１")` の不透明写像（バイト完全一致）・既存 variant 写像不変（3.1）。
 5. **sakura/contract**: `cue_target_of` 全 variant 分類テストへ `BalloonSurface→Some(Shell)` を追加（2.2/2.4/3.2）。
-6. **seriko/resolve**: `resolve_balloon_key` — `"2"`→Show(2)／`"0"`→Show(0)／`"-1"`→Hide／`"バルーン１"`・`"-2"`・`"4294967296"`→Unresolved（4.1/4.2/4.4）。
+6. **seriko/resolve**: `resolve_balloon_key` — `"2"`→`Show(2)`／`"0"`→`Show(0)`／`"-1"`→`Hide`／`"バルーン１"`（非数値）→`NameForm`／`"-2"`・`"4294967296"`（範囲外）→`Invalid`（分類を純関数層で固定・4.1/4.2/4.4/4.5）。
 7. **seriko/state**: `apply_balloon` 遷移全分岐（新規 Show／冪等 Show／Hide／冪等 Hide／Hidden→Show 復帰／未知 scope Hide 一度発行）＋**シェル map 不変の相互独立テスト**（4.1–4.3/4.6）。
-8. **seriko/actor**: `handle_message` 同期呼び出し＋capture_logs — 非数値 key の warn! 発火・発行なし・Continue（4.5/5.4）。
+8. **seriko/actor**: `handle_message` 同期呼び出し＋capture_logs — 名前形 key→**warn!** 発火／破損数値 key→**error!** 発火（水準を檻に固定）・両者とも発行なし・Continue（4.5/5.4）。
 9. **ghost/sink**: `command_kind` 網羅テストへ `"BalloonSurface"` 追加（2.4）。
 10. **emo-text/state**: `BalloonSurface` cue 適用で `TextLayerState` 完全不変（visible_glyphs/items 不変）（3.2）。
 
