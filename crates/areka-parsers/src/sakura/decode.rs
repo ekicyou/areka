@@ -133,7 +133,12 @@ fn decode_token(token: Token) -> Instruction {
     match token {
         Token::Text(s) => Instruction::Text(s),
         Token::SysVar(keyword) => Instruction::SystemVar(keyword),
-        Token::WaitShorthand(n) => Instruction::Wait(wait_units(n as u64)),
+        // 短縮形 `\<word>N` の意味写像は語で分岐する。待ち `\wN` = n × 50ms（既存等価）。
+        Token::Shorthand { word: 'w', n } => Instruction::Wait(wait_units(n as u64)),
+        // バルーン面短縮 `\bN` の意味 decode（`BalloonSurface`）は **タスク 1.2** の領分
+        // （model に variant 未追加）。ここでは `\w` 非退行を保つ最小追随として、生情報を
+        // 失わない防御的 `Raw` に留める（`\b` の decode テストは 1.2 で追加）。
+        Token::Shorthand { word, n } => Instruction::Raw(format!("\\{word}{n}")),
         Token::Bare(c) => decode_bare(c),
         Token::Tag { word, args } => decode_tag(word, args),
         // タスク 4.2 のシーム: 構文上区切れたが正準でない／不正な生保持。

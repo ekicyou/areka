@@ -32,7 +32,7 @@ fn task_3_1_observable_done_example() {
                 args: vec!["0".to_string()],
             },
             Token::SysVar("username".to_string()),
-            Token::WaitShorthand(2),
+            Token::Shorthand { word: 'w', n: 2 },
             Token::Tag {
                 word: "!".to_string(),
                 args: vec!["a".to_string(), "b".to_string(), "c".to_string()],
@@ -113,8 +113,8 @@ fn newline_tag_with_percent_bracket() {
 
 #[test]
 fn wait_shorthand_single_digit() {
-    assert_eq!(lex(r"\w2"), vec![Token::WaitShorthand(2)]);
-    assert_eq!(lex(r"\w9"), vec![Token::WaitShorthand(9)]);
+    assert_eq!(lex(r"\w2"), vec![Token::Shorthand { word: 'w', n: 2 }]);
+    assert_eq!(lex(r"\w9"), vec![Token::Shorthand { word: 'w', n: 9 }]);
 }
 
 #[test]
@@ -354,6 +354,101 @@ fn unknown_tag_split_as_tag_preserving_neighbors() {
                 word: "foo".to_string(),
                 args: vec!["a".to_string(), "b".to_string()],
             },
+            Token::Text("い".to_string()),
+        ],
+    );
+}
+
+// ───────────────────────────────────────────────────────────────────
+// タスク 1.1（areka-P0-balloon-face-cue）: 裸形 `\bN` 短縮の構文檻。
+//
+// 一桁の面数字 `N` を短縮形として取り込み本文へ漏らさない（要件 1.3）。
+// `\w` と同一の shorthand 規律を語（`'b'`）に依らず共通適用する（要件 1.2）。
+// 既存タグ（とりわけ `\w` 系）のパース結果は不変（要件 1.6）。
+// ───────────────────────────────────────────────────────────────────
+
+/// 要件 1.3: 裸形 `\b1` の一桁面数字は本文テキストとして漏れてはならない
+/// （本文数字漏れの根絶）。分割語彙に依らず「`Text` トークンが 1 つも出ない」
+/// ことで構造的に固定する。
+#[test]
+fn balloon_bare_single_digit_not_leaked_as_text() {
+    let tokens = lex(r"\b1");
+    assert!(
+        !tokens.iter().any(|t| matches!(t, Token::Text(_))),
+        r"\b1 must not leak the face digit as body Text, got {tokens:?}",
+    );
+}
+
+/// 要件 1.2/1.3: 裸形 `\b1` は 1 桁面数字を取り込み、単一の shorthand トークンへ。
+/// `\w1` と同型（`word` のみ `'b'`）＝語に依らず共通規律。
+#[test]
+fn balloon_bare_shorthand_single_digit() {
+    assert_eq!(lex(r"\b1"), vec![Token::Shorthand { word: 'b', n: 1 }]);
+}
+
+/// 要件 1.3: `\b12` は先頭 1 桁のみ面数字として取り込み、続く `2` は正当な
+/// 本文テキストとして分離される（多桁は shorthand でなくブラケット形の領分）。
+#[test]
+fn balloon_bare_shorthand_consumes_one_digit_rest_is_text() {
+    assert_eq!(
+        lex(r"\b12"),
+        vec![
+            Token::Shorthand { word: 'b', n: 1 },
+            Token::Text("2".to_string()),
+        ],
+    );
+}
+
+/// 要件 1.2（境界）: `\b2[x]`（数字＋直後 `[`）は shorthand でなく正準タグ扱い
+/// （word=`b2`）。既存 `\w2[x]` と同型＝直後が数字+`[` は正準タグ優先という
+/// 共通規則が語に依らず働く。
+#[test]
+fn balloon_digit_then_bracket_is_tag_not_shorthand() {
+    assert_eq!(
+        lex(r"\b2[x]"),
+        vec![Token::Tag {
+            word: "b2".to_string(),
+            args: vec!["x".to_string()],
+        }],
+    );
+}
+
+/// 既存 `\w` 系との対称確認: `\w2[x]` も同型（word=`w2` の正準タグ）。
+/// `\b` 一般化が `\w` の同じ境界挙動を保つこと（要件 1.6）を固定する。
+#[test]
+fn wait_digit_then_bracket_is_tag_not_shorthand() {
+    assert_eq!(
+        lex(r"\w2[x]"),
+        vec![Token::Tag {
+            word: "w2".to_string(),
+            args: vec!["x".to_string()],
+        }],
+    );
+}
+
+/// 要件 1.6: 数字を伴わない裸形 `\b`（単独）は既存の非短縮規則のまま
+/// bare タグとして処理される（passthrough 維持）。
+#[test]
+fn balloon_bare_without_digit_is_bare_tag() {
+    assert_eq!(lex(r"\b"), vec![Token::Bare('b')]);
+}
+
+/// 要件 1.6（境界）: 未閉じ `\b1[` は shorthand 判定を経ず（数字直後が `[`）、
+/// 未閉じブラケットとして `\` から入力末尾までを `Raw` へ吸収する既存規則どおり。
+#[test]
+fn balloon_unclosed_bracket_absorbed_as_raw() {
+    assert_eq!(lex(r"\b1["), vec![Token::Raw(r"\b1[".to_string())]);
+}
+
+/// 要件 1.6: `\b` 短縮の追加が前後の正常トークンを壊さない（本文・bare タグと共存）。
+#[test]
+fn balloon_bare_shorthand_preserves_neighbors() {
+    assert_eq!(
+        lex(r"あ\b3\eい"),
+        vec![
+            Token::Text("あ".to_string()),
+            Token::Shorthand { word: 'b', n: 3 },
+            Token::Bare('e'),
             Token::Text("い".to_string()),
         ],
     );
