@@ -158,7 +158,7 @@
   - 可視グリフ数増加に伴う非透明ピクセルの単調増加、Clear 後の全域透明化、有効領域外に非透明ピクセルが無いことを構造的な述語として検証する
   - 観測可能な完了状態: 上記3述語がいずれも green であることを確認できる
   - _Requirements: 7.3, 8.5, 9.1, 9.3_
-- [ ] 10.3 DPI/スケールの構造検証を行う
+- [x] 10.3 DPI/スケールの構造検証を行う
   - 合成スケールが1以外（1.25・2.0 等）の場合の物理寸・オフセット・画像原寸換算の写像を検証し、レイアウト決定結果がスケールに依存しないことを確認する
   - 観測可能な完了状態: 複数スケール値でのテストが green であり、レイアウト決定の出力がスケール非依存であることを確認できる
   - _Requirements: 4.6, 10.4, 11.9_
@@ -171,3 +171,5 @@
 - 3.2: design.md L502 の可視窓「行内オフセット」は typo（正典は L534 の「ブロック軸オフセット」・軸読み替え正準表のスクロール方向行と R7.2 が根拠・レビュアー裁定確定）。spec 完了処理時に design.md L502 の修正を検討。
 - 4: ContentCanvas の座標系は validrect-local（size=validrect寸・住人はローカル座標＋平行移動配置）とレビュアー裁定確定。image-absolute だと Arrangement offset=validrect原点×k と二重適用になる。task 6 DrawExecutor はこの前提で消費すること。
 - 7.1: レビュアーが誤って `git checkout -- <file>` を実行し未コミット実装を一時消失（文脈から byte-identical 復元・検証済み）。subagent プロンプトに「破壊的 git コマンド禁止（checkout --/reset --hard）」を明記すること。mutation 検証の復元は必ず backup ファイル経由で行う。
+- 10.3: スケール非依存檻には反対辺基準（負値）座標が必須——絶対座標のみだと image_size がレイアウトに効かず k 混入変異が素通りする（実装者が檻穴を自己検出して閉鎖）。
+- 最終検証: `cargo test --workspace` が間欠 101（清浄環境で 4/10）。犯人は areka-ghost spine_e2e_test（S1/S5・yield_now 有界スピンで 2 hop スレッド中継を待つ設計 race・本 spec 非接触の upstream 資産＝areka-P0-ghost-setup 由来）。本 spec の変更（derive/additive API）に dispatcher タイミングへの影響経路なし。baseline 73eae3c1 での再現計測を実施。ゾンビ cargo プロセスにも注意（計測前に Get-Process 確認）。
