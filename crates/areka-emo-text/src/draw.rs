@@ -33,10 +33,11 @@
 //! - 計測結果はキャッシュ可（追記単調ゆえ確定内容の metrics は不変）——本実装は
 //!   文字単位キャッシュ（format 固定につき 同一文字→同一送り幅の決定論）。
 //!
-//! ## 全域再描画（task 6.3・R3.1/R7.3）
+//! ## 全域再描画オラクル（旧 task 6.3・R3.1/R7.3・task 5 で `#[cfg(test)]` 化）
 //!
-//! [`DrawExecutor`]: 可視窓の行を毎更新オフスクリーン D2D ターゲット（TextSurface の
-//! `source_tex`）へ透明 clear→全域再描画する（差分描画なし・SSP 忠実の確定裁定）:
+//! [`DrawExecutor`]: **比較専用の独立オラクル**（本番経路は `ViewboxExecutor` へ移行済み）。
+//! 可視窓の行を毎更新オフスクリーン D2D ターゲット（TextSurface の front＝`front_tex`）へ
+//! 透明 clear→全域再描画する（差分描画なし・SSP 忠実の確定裁定）:
 //!
 //! - **可視窓決定（純粋・layout.rs）と描画実行（本型）の分離**（R7.4 のシーム下半分）。
 //!   [`VisibleWindow`] の `first_visible_line`＋`block_offset` を消費するだけで、
@@ -62,12 +63,19 @@ use std::collections::HashMap;
 use areka_parsers::balloon::BalloonModel;
 use tracing::warn;
 use windows::Win32::Graphics::Direct2D::Common::{
-    D2D1_ALPHA_MODE_PREMULTIPLIED, D2D1_COLOR_F, D2D1_PIXEL_FORMAT,
+    D2D1_ALPHA_MODE_PREMULTIPLIED, D2D1_PIXEL_FORMAT,
 };
 use windows::Win32::Graphics::Direct2D::{
     D2D1_BITMAP_OPTIONS_CANNOT_DRAW, D2D1_BITMAP_OPTIONS_TARGET, D2D1_BITMAP_PROPERTIES1,
-    D2D1_DEVICE_CONTEXT_OPTIONS_NONE, D2D1_DRAW_TEXT_OPTIONS_NONE, ID2D1Bitmap1,
-    ID2D1DeviceContext, ID2D1Image,
+    ID2D1Bitmap1, ID2D1DeviceContext,
+};
+// 比較専用オラクル [`DrawExecutor`]（`#[cfg(test)]`）専用の描画 API——本番 create_d2d_target_bitmap
+// が使う定義（上）と分けて cfg(test) に隔離する（非テストビルドの dead import を避ける）。
+#[cfg(test)]
+use windows::Win32::Graphics::Direct2D::Common::D2D1_COLOR_F;
+#[cfg(test)]
+use windows::Win32::Graphics::Direct2D::{
+    D2D1_DEVICE_CONTEXT_OPTIONS_NONE, D2D1_DRAW_TEXT_OPTIONS_NONE, ID2D1Image,
 };
 use windows::Win32::Graphics::DirectWrite::{
     DWRITE_FLOW_DIRECTION, DWRITE_FLOW_DIRECTION_LEFT_TO_RIGHT,
@@ -82,18 +90,31 @@ use windows::Win32::Graphics::Direct3D11::ID3D11Texture2D;
 use windows::Win32::Graphics::Dxgi::Common::DXGI_FORMAT_B8G8R8A8_UNORM;
 use windows::Win32::Graphics::Dxgi::IDXGISurface;
 use windows::core::{HSTRING, Interface};
-use windows_numerics::{Matrix3x2, Vector2};
-use wintf::com::d2d::{D2D1DeviceContextExt, D2D1DeviceExt};
 use wintf::com::dwrite::{DWriteFactoryExt, DWriteTextLayoutExt};
-use wintf::ecs::GraphicsCore;
 
 use crate::TextLayerError;
-use crate::canvas::{ContentCanvas, ResidentContent, TextEffects};
-use crate::layout::{GlyphMetrics, VisibleWindow};
-use crate::region::ScaleContract;
+use crate::canvas::TextEffects;
+use crate::layout::GlyphMetrics;
 use crate::state::TextLayerConfig;
-use crate::surface::TextSurface;
 use crate::writing::WritingMode;
+
+// 以下は比較専用オラクル [`DrawExecutor`]（`#[cfg(test)]`）だけが使う依存——本番経路
+// （ViewboxExecutor）は viewbox_draw.rs 側で自前に持つため、非テストビルドの dead import を
+// 避けるべく cfg(test) へ隔離する（オラクル隔離の一部・task 5）。
+#[cfg(test)]
+use windows_numerics::{Matrix3x2, Vector2};
+#[cfg(test)]
+use wintf::com::d2d::{D2D1DeviceContextExt, D2D1DeviceExt};
+#[cfg(test)]
+use wintf::ecs::GraphicsCore;
+#[cfg(test)]
+use crate::canvas::{ContentCanvas, ResidentContent};
+#[cfg(test)]
+use crate::layout::VisibleWindow;
+#[cfg(test)]
+use crate::region::ScaleContract;
+#[cfg(test)]
+use crate::surface::TextSurface;
 
 /// SSP 既定フォント名（**全角表記** ＭＳ ゴシック・ukadoc 既定・R4.2）。
 pub const DEFAULT_FONT_NAME: &str = "ＭＳ ゴシック";
@@ -438,6 +459,10 @@ impl GlyphMetrics for DWriteMetrics {
 
 /// 行 TextLayout の format 前提（フォント名・高さ・writing_mode）——変わると
 /// キャッシュ済み行レイアウトの前提が崩れるため format と行キャッシュを組み直す。
+///
+/// 比較専用オラクル [`DrawExecutor`] 専用（本番 `ViewboxExecutor` は自前のインライン
+/// `FormatKey` を持つ・viewbox_draw.rs）——ゆえにオラクルと同じ `#[cfg(test)]` で保全する。
+#[cfg(test)]
 #[derive(Clone, Debug, PartialEq)]
 struct FormatKey {
     font_name: String,
@@ -534,10 +559,16 @@ impl LineLayoutStore {
     }
 }
 
-/// ContentCanvas の可視窓を DirectWrite/D2D で全域再描画する実行部
-/// （task 6.3・R3.1/R7.3・design.md「DrawExecutor（draw.rs）」）。
+/// **比較専用の独立オラクル**（本番経路は `ViewboxExecutor` へ移行済み・除去は本ユニットの
+/// 範囲外——別決断）。live-diff で viewbox とバイト比較するために全域再描画方式を
+/// `#[cfg(test)]` で保全する（task 5・design.md「draw.rs の再編（LineLayoutStore 抽出＋
+/// オラクル化）」）。render のロジック・origin 式は viewbox 都合で一切変えない——変えれば
+/// 比較の意味を失う（オラクルの独立性）。
 ///
-/// 毎更新、TextSurface の `source_tex`（オフスクリーン D2D ターゲット）を透明 clear→
+/// ContentCanvas の可視窓を DirectWrite/D2D で全域再描画する実行部
+/// （旧 task 6.3・R3.1/R7.3・design.md「DrawExecutor（draw.rs）」）。
+///
+/// 毎更新、TextSurface の front（`front_tex`・オフスクリーン D2D ターゲット）を透明 clear→
 /// 可視窓の行を描画する（差分描画なし）。スクロールも同経路（可視窓決定は純粋層の
 /// [`VisibleWindow`] が済ませている——R7.4 分離シームの描画実行側）。
 ///
@@ -548,6 +579,7 @@ impl LineLayoutStore {
 /// - 失敗は log-first（`error!`＋`Err`・当該フレーム skip・次フレーム再試行）・panic 禁止。
 ///
 /// UI スレッド専有（COM 層規律）。
+#[cfg(test)]
 pub struct DrawExecutor {
     /// 行 TextLayout 生成用 factory（probe/描画と同一の `IDWriteFactory2`）。
     dwrite: IDWriteFactory2,
@@ -562,6 +594,7 @@ pub struct DrawExecutor {
     seam_warned: bool,
 }
 
+#[cfg(test)]
 impl DrawExecutor {
     /// `GraphicsCore` から描画実行部を生成する（DWrite factory＋専用 D2D DC）。
     ///
@@ -596,7 +629,7 @@ impl DrawExecutor {
         self.line_store.clear();
     }
 
-    /// 可視窓を全域再描画して TextSurface の source（`source_tex`）へ焼く
+    /// 可視窓を全域再描画して TextSurface の front（`front_tex`）へ焼く
     /// （失敗は `error!`＋`Err`・panic 禁止。提示（swapchain Present）は
     /// [`TextSurface::present`] の領分——呼び手が本 render の後に呼ぶ）。
     ///
@@ -780,17 +813,23 @@ pub(crate) fn create_d2d_target_bitmap(
     .map_err(device_err("CreateBitmapFromDxgiSurface"))
 }
 
-/// TextSurface の front（`source_tex`）を D2D ターゲット bitmap として巻く（DrawExecutor 用・
-/// 共有ヘルパ [`create_d2d_target_bitmap`] へ委譲——props・挙動は不変）。
+/// TextSurface の front（`front_tex`）を D2D ターゲット bitmap として巻く（比較専用オラクル
+/// [`DrawExecutor`] 専用・共有ヘルパ [`create_d2d_target_bitmap`] へ委譲——props・挙動は不変）。
+/// オラクルと同じ `#[cfg(test)]` で保全する（本番 `ViewboxExecutor` は back を巻く）。
+#[cfg(test)]
 fn create_target_bitmap(
     dc: &ID2D1DeviceContext,
     surface: &TextSurface,
 ) -> Result<ID2D1Bitmap1, TextLayerError> {
-    create_d2d_target_bitmap(dc, surface.source_tex())
+    create_d2d_target_bitmap(dc, surface.front_tex())
 }
 
 /// `Option` が `None`（デバイス未初期化など本来到達しない欠落）を
 /// [`TextLayerError::Device`] にする（surface.rs と同型の log-first ヘルパ）。
+///
+/// 比較専用オラクル [`DrawExecutor::new`]（`#[cfg(test)]`）専用ゆえ同じく cfg(test)
+/// で保全する（本番の欠落写像は各所の [`device_err`] が担う）。
+#[cfg(test)]
 fn none_err(context: &'static str) -> TextLayerError {
     tracing::error!(context, "必須リソースが欠落（デバイス未初期化 または 前提不成立）");
     TextLayerError::Device { hresult: 0, context }

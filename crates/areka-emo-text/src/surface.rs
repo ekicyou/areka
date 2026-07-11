@@ -138,7 +138,7 @@ pub struct FixedOverlaySeam {}
 /// [`Self::attach`] が actor ごと**初回のみ**予約スロットへ brush として装着し、以降の
 /// グリフ更新は [`Self::present`]（供給面の提示のみ・World 不要）で完結する＝バルーン
 /// surface 本体の再合成（emo-compose 再駆動）を強要しない。決定論検証は
-/// [`Self::read_back`]（`source_tex`→staging→bytes）。
+/// [`Self::read_back`]（front→staging→bytes）。
 ///
 /// slot の可視性・寿命は emo-present（`VisualMount`）の領分——本層は brush の中身だけを
 /// 所有する。UI スレッド専有。
@@ -153,7 +153,7 @@ pub struct TextSurface {
     front: usize,
     /// readback 用 staging（CPU_READ・`size` と同寸・1 枚のまま——常に front を copy する）。
     staging: ID3D11Texture2D,
-    /// immediate context（転送 API の発行先・`source_tex` と同一デバイス）。
+    /// immediate context（転送 API の発行先・front 面と同一デバイス）。
     context: ID3D11DeviceContext,
     /// slot へ装着した SpriteVisual（brush 保持者・外形追随（将来の resize 点）の操作口）。
     /// COM 参照の生存は ECS 側 `VisualGraphics` と共有だが、装着物の所有を本型で明示する。
@@ -364,16 +364,6 @@ impl TextSurface {
         self.size
     }
 
-    /// front 面（レガシー本番描画の描き先・task 5 でオラクルが `front_tex` へ移行するまでの
-    /// 移行アクセサ）への crate 内アクセス。
-    ///
-    /// draw.rs 本番 DrawExecutor が `CreateBitmapFromDxgiSurface` で D2D ターゲット bitmap を
-    /// 巻いて全域再描画の描き先にする（draw.rs は本アクセサを無改変で使い続ける）。生成寸
-    /// （物理 px）・premultiplied 透明初期化・RENDER_TARGET bind の契約は本型が所有する。
-    pub(crate) fn source_tex(&self) -> &ID3D11Texture2D {
-        &self.sources[self.front]
-    }
-
     /// back 面（`1 - front`）への crate 内アクセス——後続 ViewboxExecutor（task 6）が
     /// D2D ターゲット bitmap を巻く本番描画の書き込み先。front（確定面）を読み口に残したまま
     /// back へ描き、`flip` で交換する（面内 blit ＋ ダーティ描画の描き先・R1.2）。
@@ -383,12 +373,12 @@ impl TextSurface {
         &self.sources[1 - self.front]
     }
 
-    /// front 面への読み出し口（比較専用オラクル用・task 5）。`source_tex`（本番描画の描き先）
-    /// と実体は同じ front だが、オラクルが読む「テスト限定の読み出し口」として命名を分ける。
-    /// task 5 のオラクル配線までは未使用のため dead_code を許容する（前方シーム）。
+    /// front 面への読み出し口（比較専用オラクル `DrawExecutor`（draw.rs）が読む・task 5）。
+    /// 旧 `source_tex`（レガシー本番描画の描き先）と実体は同じ front だが、本番経路が
+    /// `ViewboxExecutor`（back へ描き `flip` で交換）へ移行したため、front はオラクルが読む
+    /// 「テスト限定の読み出し口」へ一本化した（`#[cfg(test)]`・除去は本ユニットの範囲外）。
     #[cfg(test)]
-    #[allow(dead_code)]
-    fn front_tex(&self) -> &ID3D11Texture2D {
+    pub(crate) fn front_tex(&self) -> &ID3D11Texture2D {
         &self.sources[self.front]
     }
 
@@ -710,7 +700,7 @@ mod tests {
             // front（sources[front]・attach 直後は 0）へ既知パターンを直書きする。
             let pattern = premul_pattern(w, h);
             let src_res: ID3D11Resource =
-                surface.source_tex().cast().expect("front->Resource cast");
+                surface.front_tex().cast().expect("front->Resource cast");
             unsafe {
                 surface.context.UpdateSubresource(
                     &src_res,
@@ -762,7 +752,7 @@ mod tests {
                 .expect("TextSurface::attach 失敗");
 
         let pattern = premul_pattern(w, h);
-        let src_res: ID3D11Resource = surface.source_tex().cast().expect("front->Resource cast");
+        let src_res: ID3D11Resource = surface.front_tex().cast().expect("front->Resource cast");
         unsafe {
             surface.context.UpdateSubresource(
                 &src_res,
