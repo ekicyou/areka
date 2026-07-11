@@ -66,7 +66,7 @@
   - _Requirements: 6.4, 7.1, 7.2, 7.4, 7.5_
   - _Boundary: レイアウト決定エンジン（スクロール）_
 
-- [ ] 4. Core（純粋層）: emo 共有描画基盤の内容キャンバスを実装する _Depends: 3.1, 3.2_
+- [x] 4. Core（純粋層）: emo 共有描画基盤の内容キャンバスを実装する _Depends: 3.1, 3.2_
   - 描画面を「キャンバスに置かれる変換行列付き矩形コンテンツ」の集合として表現し、グリフ・画像・将来の SERIKO サーフェスを同格に扱える形にする
   - 現時点で実装する住人はグリフ（レイアウト結果由来）のみとし、画像・サーフェス住人は型のみ用意して実挙動を持たせない
   - 変換行列は恒等・平行移動のみを生成可能にし、回転・文字装飾は将来拡張のための型シームとして保持するに留める
@@ -169,3 +169,4 @@
 - 2.1: dola `ActorKey` に PartialOrd/Ord derive 追加済み（BTreeMap 用・辞書順）。cue 契約型は `areka_sakura::contract`（dola 正本の re-export）から消費するのが design 正規経路。
 - 2.4: design 正準の数式（round/ceil 等）は割り切れる値だけでなく端数ケースで檻化する（floor/ceil 変異を殺す値を選ぶ）。レビュアーの変異検証で檻穴が実際に検出された（round→floor で全緑だった）。10.3 の複数スケール検証でも同様に。
 - 3.2: design.md L502 の可視窓「行内オフセット」は typo（正典は L534 の「ブロック軸オフセット」・軸読み替え正準表のスクロール方向行と R7.2 が根拠・レビュアー裁定確定）。spec 完了処理時に design.md L502 の修正を検討。
+- 4: ContentCanvas の座標系は validrect-local（size=validrect寸・住人はローカル座標＋平行移動配置）とレビュアー裁定確定。image-absolute だと Arrangement offset=validrect原点×k と二重適用になる。task 6 DrawExecutor はこの前提で消費すること。
