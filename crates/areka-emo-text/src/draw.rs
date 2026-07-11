@@ -33,14 +33,37 @@
 //! - 計測結果はキャッシュ可（追記単調ゆえ確定内容の metrics は不変）——本実装は
 //!   文字単位キャッシュ（format 固定につき 同一文字→同一送り幅の決定論）。
 //!
-//! probe と描画行 TextLayout の advance 一致 invariant の檻化は task 6.4、
-//! 全域再描画（描画実行）は task 6.3 の領分。
+//! ## 全域再描画（task 6.3・R3.1/R7.3）
+//!
+//! [`DrawExecutor`]: 可視窓の行を毎更新オフスクリーン D2D ターゲット（TextSurface の
+//! `source_tex`）へ透明 clear→全域再描画する（差分描画なし・SSP 忠実の確定裁定）:
+//!
+//! - **可視窓決定（純粋・layout.rs）と描画実行（本型）の分離**（R7.4 のシーム下半分）。
+//!   [`VisibleWindow`] の `first_visible_line`＋`block_offset` を消費するだけで、
+//!   スクロール判定は持たない。
+//! - **行 TextLayout キャッシュ**: 行内容が不変（確定行＝リビール完了行）なら再利用し、
+//!   リビール中の行のみ都度更新する。[`DrawExecutor::clear_cache`]（Clear cue の適用点）
+//!   のみが全破棄する。
+//! - **スケール一点適用**: 描画ターゲットへの `SetTransform(scale(k))` 一点のみ
+//!   （k＝`ScaleContract::scale`）。レイアウト・行 TextLayout は image px（96 DPI 名目
+//!   ＝DIP と同一視）のままで、DPI API との二重適用は構造的に存在しない。
+//! - Image/Surface 住人（M1 型シーム）は `warn!`（executor ごと初回のみ）＋skip（R8.5）。
+//!
+//! probe と描画行 TextLayout の advance 一致 invariant の檻化は task 6.4 の領分。
 
 use std::cell::RefCell;
 use std::collections::HashMap;
 
 use areka_parsers::balloon::BalloonModel;
 use tracing::warn;
+use windows::Win32::Graphics::Direct2D::Common::{
+    D2D1_ALPHA_MODE_PREMULTIPLIED, D2D1_COLOR_F, D2D1_PIXEL_FORMAT,
+};
+use windows::Win32::Graphics::Direct2D::{
+    D2D1_BITMAP_OPTIONS_CANNOT_DRAW, D2D1_BITMAP_OPTIONS_TARGET, D2D1_BITMAP_PROPERTIES1,
+    D2D1_DEVICE_CONTEXT_OPTIONS_NONE, D2D1_DRAW_TEXT_OPTIONS_NONE, ID2D1Bitmap1,
+    ID2D1DeviceContext, ID2D1Image,
+};
 use windows::Win32::Graphics::DirectWrite::{
     DWRITE_FLOW_DIRECTION, DWRITE_FLOW_DIRECTION_LEFT_TO_RIGHT,
     DWRITE_FLOW_DIRECTION_RIGHT_TO_LEFT, DWRITE_FLOW_DIRECTION_TOP_TO_BOTTOM,
@@ -48,15 +71,22 @@ use windows::Win32::Graphics::DirectWrite::{
     DWRITE_PARAGRAPH_ALIGNMENT, DWRITE_PARAGRAPH_ALIGNMENT_NEAR, DWRITE_READING_DIRECTION,
     DWRITE_READING_DIRECTION_LEFT_TO_RIGHT, DWRITE_READING_DIRECTION_TOP_TO_BOTTOM,
     DWRITE_TEXT_ALIGNMENT, DWRITE_TEXT_ALIGNMENT_LEADING, IDWriteFactory2, IDWriteFontCollection,
-    IDWriteTextFormat,
+    IDWriteTextFormat, IDWriteTextLayout,
 };
-use windows::core::HSTRING;
+use windows::Win32::Graphics::Dxgi::Common::DXGI_FORMAT_B8G8R8A8_UNORM;
+use windows::Win32::Graphics::Dxgi::IDXGISurface;
+use windows::core::{HSTRING, Interface};
+use windows_numerics::{Matrix3x2, Vector2};
+use wintf::com::d2d::{D2D1DeviceContextExt, D2D1DeviceExt};
 use wintf::com::dwrite::{DWriteFactoryExt, DWriteTextLayoutExt};
+use wintf::ecs::GraphicsCore;
 
 use crate::TextLayerError;
-use crate::canvas::TextEffects;
-use crate::layout::GlyphMetrics;
+use crate::canvas::{ContentCanvas, ResidentContent, TextEffects};
+use crate::layout::{GlyphMetrics, VisibleWindow};
+use crate::region::ScaleContract;
 use crate::state::TextLayerConfig;
+use crate::surface::TextSurface;
 use crate::writing::WritingMode;
 
 /// SSP 既定フォント名（**全角表記** ＭＳ ゴシック・ukadoc 既定・R4.2）。
@@ -400,12 +430,303 @@ impl GlyphMetrics for DWriteMetrics {
     }
 }
 
+/// 行 TextLayout の format 前提（フォント名・高さ・writing_mode）——変わると
+/// キャッシュ済み行レイアウトの前提が崩れるため format と行キャッシュを組み直す。
+#[derive(Clone, Debug, PartialEq)]
+struct FormatKey {
+    font_name: String,
+    /// f32 のビット表現（PartialEq の全順序比較を避ける・同値判定のみ）。
+    font_height_bits: u32,
+    mode: WritingMode,
+}
+
+/// キャッシュ済みの行 TextLayout（行内容の正本文字列と対で保持・内容不変なら再利用）。
+struct CachedLineLayout {
+    text: String,
+    layout: IDWriteTextLayout,
+}
+
+/// ContentCanvas の可視窓を DirectWrite/D2D で全域再描画する実行部
+/// （task 6.3・R3.1/R7.3・design.md「DrawExecutor（draw.rs）」）。
+///
+/// 毎更新、TextSurface の `source_tex`（オフスクリーン D2D ターゲット）を透明 clear→
+/// 可視窓の行を描画する（差分描画なし）。スクロールも同経路（可視窓決定は純粋層の
+/// [`VisibleWindow`] が済ませている——R7.4 分離シームの描画実行側）。
+///
+/// - **行 TextLayout キャッシュ**: 確定行（内容不変）は再生成しない・リビール中の行のみ
+///   都度更新・[`clear_cache`](Self::clear_cache)（Clear cue 適用点）のみ全破棄。
+/// - **スケール一点適用**: `SetTransform(scale(k))` を描画ターゲットへ一度だけ適用
+///   （k＝[`ScaleContract::scale`]・フォントサイズ/レイアウトは image px のまま）。
+/// - 失敗は log-first（`error!`＋`Err`・当該フレーム skip・次フレーム再試行）・panic 禁止。
+///
+/// UI スレッド専有（COM 層規律）。
+pub struct DrawExecutor {
+    /// 行 TextLayout 生成用 factory（probe/描画と同一の `IDWriteFactory2`）。
+    dwrite: IDWriteFactory2,
+    /// 専用 D2D DC（wintf の共有 DC の描画状態を汚さない・ターゲットは render 中のみ設定）。
+    dc: ID2D1DeviceContext,
+    /// 描画/計測共用 format（[`create_text_format`] 経路・FormatKey 不変なら再利用）。
+    format: Option<(FormatKey, IDWriteTextFormat)>,
+    /// 行 TextLayout キャッシュ（key＝canvas 行 index。追記単調ゆえ確定行の index/内容は
+    /// 不変——リビール中＝最終行のみ内容が変わり都度更新される）。
+    line_cache: HashMap<usize, CachedLineLayout>,
+    /// Image/Surface 住人シームの warn 抑制フラグ（executor ごと初回のみ・R8.5）。
+    seam_warned: bool,
+    /// テスト観測用: 行 TextLayout の生成回数（確定行キャッシュの檻）。
+    #[cfg(test)]
+    line_layout_creations: usize,
+}
+
+impl DrawExecutor {
+    /// `GraphicsCore` から描画実行部を生成する（DWrite factory＋専用 D2D DC）。
+    ///
+    /// デバイス未初期化（`GraphicsCore` 無効化後）は log-first で `Device` エラー。
+    pub fn new(core: &GraphicsCore) -> Result<DrawExecutor, TextLayerError> {
+        let dwrite = core
+            .dwrite_factory()
+            .ok_or_else(|| none_err("GraphicsCore::dwrite_factory"))?
+            .clone();
+        let d2d = core
+            .d2d_device()
+            .ok_or_else(|| none_err("GraphicsCore::d2d_device"))?;
+        let dc = d2d
+            .create_device_context(D2D1_DEVICE_CONTEXT_OPTIONS_NONE)
+            .map_err(device_err("CreateDeviceContext(DrawExecutor)"))?;
+        Ok(DrawExecutor {
+            dwrite,
+            dc,
+            format: None,
+            line_cache: HashMap::new(),
+            seam_warned: false,
+            #[cfg(test)]
+            line_layout_creations: 0,
+        })
+    }
+
+    /// Clear cue の適用点: 行 TextLayout キャッシュを全破棄する
+    /// （design「確定行は再生成しない・**Clear で全破棄**」——破棄はこの口だけ）。
+    pub fn clear_cache(&mut self) {
+        self.line_cache.clear();
+    }
+
+    /// 可視窓を全域再描画して TextSurface の source（`source_tex`）へ焼く
+    /// （失敗は `error!`＋`Err`・panic 禁止。提示（swapchain Present）は
+    /// [`TextSurface::present`] の領分——呼び手が本 render の後に呼ぶ）。
+    ///
+    /// 全域再描画の構造: 資源確定（可謬・BeginDraw 前）→ 透明 clear →
+    /// `SetTransform(scale(k))` 一点 → 可視窓の行を `DrawTextLayout` → EndDraw。
+    pub fn render(
+        &mut self,
+        canvas: &ContentCanvas,
+        window: &VisibleWindow,
+        font: &ResolvedFont,
+        mode: WritingMode,
+        contract: &ScaleContract,
+        surface: &mut TextSurface,
+    ) -> Result<(), TextLayerError> {
+        let format = self.ensure_format(font, mode)?;
+
+        // ── Phase 1（可謬）: 描画資源を BeginDraw の前に確定する ──
+        // 可視窓の行（first_visible_line 以降）の TextLayout と描画原点を組む。
+        // 原点＝住人の平行移動（validrect-local・image px）＋ブロック軸の可視窓オフセット
+        // （横書き＝y・縦書き＝x——軸読み替え正準表のスクロール方向）。
+        let mut draws: Vec<(Vector2, IDWriteTextLayout)> = Vec::new();
+        for (index, resident) in canvas
+            .residents
+            .iter()
+            .enumerate()
+            .skip(window.first_visible_line)
+        {
+            let run = match &resident.content {
+                ResidentContent::GlyphRun(run) => run,
+                seam => {
+                    // M1 型シーム（Image/Surface）: warn（executor ごと初回のみ）＋skip（R8.5）。
+                    if !self.seam_warned {
+                        self.seam_warned = true;
+                        warn!(
+                            resident = ?seam,
+                            "Image/Surface 住人は M1 型シームのため描画を skip する（実挙動なし）"
+                        );
+                    }
+                    continue;
+                }
+            };
+            if run.glyphs.is_empty() {
+                continue;
+            }
+            let text: String = run.glyphs.iter().map(|g| g.ch).collect();
+            let layout = self.line_layout(index, &text, &format, font.height, mode)?;
+            let (dx, dy) = resident.transform.offset();
+            let origin = match mode {
+                WritingMode::HorizontalTb => Vector2 {
+                    X: dx,
+                    Y: dy + window.block_offset,
+                },
+                WritingMode::VerticalRl | WritingMode::VerticalLr => Vector2 {
+                    X: dx + window.block_offset,
+                    Y: dy,
+                },
+            };
+            draws.push((origin, layout));
+        }
+
+        let (r, g, b) = font.color;
+        let brush = self
+            .dc
+            .create_solid_color_brush(
+                &D2D1_COLOR_F {
+                    r: r as f32 / 255.0,
+                    g: g as f32 / 255.0,
+                    b: b as f32 / 255.0,
+                    a: 1.0,
+                },
+                None,
+            )
+            .map_err(device_err("CreateSolidColorBrush"))?;
+        let target = create_target_bitmap(&self.dc, surface)?;
+
+        // ── Phase 2（描画・全域再描画）: この区間の D2D 呼び出しは不可謬（戻り値なし）で、
+        // 失敗は EndDraw に集約される。SetTarget は成否によらず必ず解除する。 ──
+        unsafe { self.dc.SetTarget(&target) };
+        unsafe { self.dc.BeginDraw() };
+        // 透明 clear（premultiplied 全 0）＝差分描画なしの構造（R7.3）。
+        self.dc.clear(None);
+        // スケール一点適用: k はここ（描画ターゲットの変換）だけ。レイアウト座標は image px。
+        self.dc.set_transform(&Matrix3x2 {
+            M11: contract.scale,
+            M12: 0.0,
+            M21: 0.0,
+            M22: contract.scale,
+            M31: 0.0,
+            M32: 0.0,
+        });
+        for (origin, layout) in &draws {
+            self.dc
+                .draw_text_layout(*origin, layout, &brush, D2D1_DRAW_TEXT_OPTIONS_NONE);
+        }
+        let end = unsafe { self.dc.EndDraw(None, None) };
+        unsafe { self.dc.SetTarget(None::<&ID2D1Image>) };
+        end.map_err(device_err("EndDraw"))?;
+        Ok(())
+    }
+
+    /// 描画/計測共用 format の確保（[`create_text_format`] 経路・FormatKey 不変なら再利用）。
+    ///
+    /// フォント/方向の変更は行キャッシュの前提（同一 format で組んだ TextLayout）を崩す
+    /// ため組み直す——Clear とは別口の**正当性上の必然**（実運用は actor ごと固定のため
+    /// 通常経路では発火しない・`debug!` 記録）。
+    fn ensure_format(
+        &mut self,
+        font: &ResolvedFont,
+        mode: WritingMode,
+    ) -> Result<IDWriteTextFormat, TextLayerError> {
+        let key = FormatKey {
+            font_name: font.name.clone(),
+            font_height_bits: font.height.to_bits(),
+            mode,
+        };
+        if let Some((cached_key, format)) = &self.format {
+            if *cached_key == key {
+                return Ok(format.clone());
+            }
+            tracing::debug!(
+                ?key,
+                "フォント/方向が変わったため format と行レイアウトキャッシュを組み直す"
+            );
+            self.line_cache.clear();
+        }
+        let format = create_text_format(&self.dwrite, font, mode)?;
+        self.format = Some((key, format.clone()));
+        Ok(format)
+    }
+
+    /// 行 TextLayout の取得（内容不変なら再利用・変化時のみ生成して置換）。
+    ///
+    /// 行の箱寸は「行内軸＝折返し無効寸（[`PROBE_MAX_EXTENT`]・折返しは純粋層で決定済み
+    /// ＝再折返しさせない）・行送り軸＝`font_height`」。方向レシピ（LEADING/NEAR）により
+    /// 行は箱の書字開始角に付くため、描画原点＝行矩形原点で位置が定まる。
+    fn line_layout(
+        &mut self,
+        index: usize,
+        text: &str,
+        format: &IDWriteTextFormat,
+        font_height: f32,
+        mode: WritingMode,
+    ) -> Result<IDWriteTextLayout, TextLayerError> {
+        if let Some(cached) = self.line_cache.get(&index) {
+            if cached.text == text {
+                return Ok(cached.layout.clone());
+            }
+        }
+        let (max_width, max_height) = match mode {
+            WritingMode::HorizontalTb => (PROBE_MAX_EXTENT, font_height),
+            WritingMode::VerticalRl | WritingMode::VerticalLr => (font_height, PROBE_MAX_EXTENT),
+        };
+        let layout = self
+            .dwrite
+            .create_text_layout(&HSTRING::from(text), format, max_width, max_height)
+            .map_err(device_err("CreateTextLayout(line)"))?;
+        #[cfg(test)]
+        {
+            self.line_layout_creations += 1;
+        }
+        self.line_cache.insert(
+            index,
+            CachedLineLayout {
+                text: text.to_owned(),
+                layout: layout.clone(),
+            },
+        );
+        Ok(layout)
+    }
+
+    /// テスト観測用: 行 TextLayout の累計生成回数（確定行キャッシュの檻）。
+    #[cfg(test)]
+    fn line_layout_creations(&self) -> usize {
+        self.line_layout_creations
+    }
+}
+
+/// TextSurface の `source_tex` を D2D ターゲット bitmap として巻く
+/// （B8G8R8A8 premultiplied・96 DPI 名目——スケールは `SetTransform` の一点のみ。
+/// `source_tex` は SHADER_RESOURCE bind を持たないため CANNOT_DRAW を併記する）。
+fn create_target_bitmap(
+    dc: &ID2D1DeviceContext,
+    surface: &TextSurface,
+) -> Result<ID2D1Bitmap1, TextLayerError> {
+    let dxgi_surface: IDXGISurface = surface
+        .source_tex()
+        .cast()
+        .map_err(device_err("source_tex->IDXGISurface cast"))?;
+    let props = D2D1_BITMAP_PROPERTIES1 {
+        pixelFormat: D2D1_PIXEL_FORMAT {
+            format: DXGI_FORMAT_B8G8R8A8_UNORM,
+            alphaMode: D2D1_ALPHA_MODE_PREMULTIPLIED,
+        },
+        dpiX: 96.0,
+        dpiY: 96.0,
+        bitmapOptions: D2D1_BITMAP_OPTIONS_TARGET | D2D1_BITMAP_OPTIONS_CANNOT_DRAW,
+        colorContext: core::mem::ManuallyDrop::new(None),
+    };
+    unsafe {
+        dc.CreateBitmapFromDxgiSurface(&dxgi_surface, Some(&props as *const _))
+    }
+    .map_err(device_err("CreateBitmapFromDxgiSurface"))
+}
+
+/// `Option` が `None`（デバイス未初期化など本来到達しない欠落）を
+/// [`TextLayerError::Device`] にする（surface.rs と同型の log-first ヘルパ）。
+fn none_err(context: &'static str) -> TextLayerError {
+    tracing::error!(context, "必須リソースが欠落（デバイス未初期化 または 前提不成立）");
+    TextLayerError::Device { hresult: 0, context }
+}
+
 /// `windows_core::Error` を [`TextLayerError::Device`] へ写像する（surface.rs と同型の
 /// log-first ヘルパ: `error!`＋`Err` 戻り値・panic 禁止）。
 fn device_err(context: &'static str) -> impl FnOnce(windows::core::Error) -> TextLayerError {
     move |e| {
         let hresult = e.code().0;
-        tracing::error!(hresult, context, "DirectWrite 呼び出しが失敗");
+        tracing::error!(hresult, context, "DirectWrite/D2D 呼び出しが失敗");
         TextLayerError::Device { hresult, context }
     }
 }
@@ -905,6 +1226,434 @@ mod tests {
         assert_eq!(warns, 1, "束縛高さと異なる font_height はちょうど 1 回 warn");
         assert_eq!(errors, 0);
         assert_eq!(mismatched, bound, "値は束縛 format の実測のまま（縮退継続）");
+    }
+
+    // ── task 6.3 R3.1/R7.3: DrawExecutor——可視窓の全域再描画を自前供給面へ焼き込む ──
+    //
+    // 観測可能な完了状態: 可視グリフ数が増えるほど自前供給面の読み戻し結果で非透明
+    // ピクセルが単調に増加し、Clear 後は全域が透明に戻る。併せて構造契約を檻化する:
+    // 差分描画でなく全域再描画（残渣なし）・確定行 TextLayout キャッシュは Clear のみ
+    // 全破棄・合成スケールは描画ターゲットへの一点適用（二重適用/未適用の排除）。
+
+    use bevy_ecs::hierarchy::ChildOf;
+    use bevy_ecs::name::Name;
+    use bevy_ecs::prelude::World;
+    use windows::UI::Composition::Compositor;
+    use windows::Win32::System::WinRT::{DQTAT_COM_ASTA, DQTAT_COM_NONE};
+    use wintf::com::wuc::create_dispatcher_queue_controller;
+    use wintf::ecs::{GraphicsCore, Visual};
+
+    use super::DrawExecutor;
+    use crate::actor::TextSlotBinding;
+    use crate::canvas::{
+        ContentCanvas, ImageSeam, RegionTransform, Resident, ResidentContent, SurfaceSeam,
+    };
+    use crate::layout::VisibleWindow;
+    use crate::region::ScaleContract;
+    use crate::surface::TextSurface;
+
+    /// テスト用 WUC apartment / dispatcher（surface.rs テストと同一方針:
+    /// COM 未初期化のテストスレッドでは ASTA 第一候補・NONE 保険）。
+    fn make_dispatcher_and_compositor()
+    -> (windows::System::DispatcherQueueController, Compositor) {
+        let dq = create_dispatcher_queue_controller(DQTAT_COM_ASTA)
+            .or_else(|e_asta| {
+                create_dispatcher_queue_controller(DQTAT_COM_NONE).map_err(|_| e_asta)
+            })
+            .expect("DispatcherQueueController 生成失敗（ASTA/NONE いずれも不可）");
+        let compositor = Compositor::new().expect("Compositor::new 失敗");
+        (dq, compositor)
+    }
+
+    /// 描画テスト一式（dispatcher/compositor/core/World の寿命を束ねる・headless）。
+    struct DrawRig {
+        _dq: windows::System::DispatcherQueueController,
+        compositor: Compositor,
+        core: GraphicsCore,
+        world: World,
+    }
+
+    impl DrawRig {
+        fn new() -> DrawRig {
+            let (_dq, compositor) = make_dispatcher_and_compositor();
+            let core = GraphicsCore::new().expect("GraphicsCore::new 失敗");
+            DrawRig {
+                _dq,
+                compositor,
+                core,
+                world: World::new(),
+            }
+        }
+
+        /// 予約スロット（emo-present VisualMount 同型）を組み、image px 原寸と k から
+        /// TextSurface を装着する（物理寸＝ceil(image × k)・offset (0,0)）。
+        fn attach(&mut self, image_size: (u32, u32), k: f32) -> TextSurface {
+            let window = self.world.spawn_empty().id();
+            let slot = self
+                .world
+                .spawn((
+                    Name::new("emo-text-layer-slot"),
+                    Visual::default(),
+                    ChildOf(window),
+                ))
+                .id();
+            self.world.flush();
+            let physical = (
+                (image_size.0 as f32 * k).ceil() as u32,
+                (image_size.1 as f32 * k).ceil() as u32,
+            );
+            let binding = TextSlotBinding::new(slot, window, k, physical);
+            TextSurface::attach(
+                &mut self.world,
+                &binding,
+                &self.compositor,
+                &self.core,
+                physical,
+                (0.0, 0.0),
+            )
+            .expect("TextSurface::attach 失敗")
+        }
+    }
+
+    /// テスト用 BalloonModel（幾何のみ・font 未指定＝既定 ＭＳ ゴシック）。
+    fn geo_model(
+        origin: (Option<i32>, Option<i32>),
+        font_height: Option<u32>,
+    ) -> BalloonModel {
+        BalloonModel::new(
+            WindowPosition::new(None, None),
+            Origin::new(origin.0, origin.1),
+            WordWrapPoint::new(None, None),
+            ValidRect::new(None, None, None, None),
+            Font::new(None, font_height, FontColor::new(None, None, None)),
+            None,
+        )
+    }
+
+    /// 文字列→グリフ item 列。
+    fn glyph_items(s: &str) -> Vec<TextItem> {
+        s.chars().map(|ch| TextItem::Glyph { ch }).collect()
+    }
+
+    /// layout→canvas→visible_window→render→read_back の通し（テスト用最短経路）。
+    #[allow(clippy::too_many_arguments)]
+    fn render_items(
+        executor: &mut DrawExecutor,
+        surface: &mut TextSurface,
+        items: &[TextItem],
+        visible: usize,
+        region: &TextRegion,
+        mode: WritingMode,
+        font: &ResolvedFont,
+        metrics: &DWriteMetrics,
+        contract: &ScaleContract,
+    ) -> Vec<u8> {
+        let lines = LayoutEngine::layout(items, visible, region, mode, font.height, metrics);
+        let canvas = crate::canvas::ContentCanvas::from_layout(&lines, region, mode);
+        let window = LayoutEngine::visible_window(&lines, region, mode);
+        executor
+            .render(&canvas, &window, font, mode, contract, surface)
+            .expect("DrawExecutor::render 失敗");
+        surface.read_back().expect("read_back 失敗")
+    }
+
+    /// 非透明ピクセル数（BGRA 密配列の α ≠ 0）。
+    fn opaque_count(bytes: &[u8]) -> usize {
+        bytes.chunks_exact(4).filter(|px| px[3] != 0).count()
+    }
+
+    /// 非透明ピクセルの外接範囲 (min_x, min_y)（インクなしは None）。
+    fn ink_min(bytes: &[u8], width: u32) -> Option<(u32, u32)> {
+        let mut min: Option<(u32, u32)> = None;
+        for (i, px) in bytes.chunks_exact(4).enumerate() {
+            if px[3] != 0 {
+                let (x, y) = (i as u32 % width, i as u32 / width);
+                min = Some(match min {
+                    None => (x, y),
+                    Some((mx, my)) => (mx.min(x), my.min(y)),
+                });
+            }
+        }
+        min
+    }
+
+    /// 観測可能な完了状態（task 6.3）: 可視グリフ数が増えるほど自前供給面の読み戻しで
+    /// 非透明ピクセルが単調に増加し（R3.1 typewriter 進行の描画側）、Clear（状態全消去＋
+    /// 確定行キャッシュ全破棄）後は全域が透明に戻る。
+    #[test]
+    fn render_grows_opaque_pixels_monotonically_and_clear_restores_transparency() {
+        let mut rig = DrawRig::new();
+        let image = (120u32, 60u32);
+        let mut surface = rig.attach(image, 1.0);
+        let factory = rig.core.dwrite_factory().expect("dwrite_factory").clone();
+        let font = ResolvedFont::resolve(&geo_model((Some(0), Some(0)), None));
+        let mode = WritingMode::HorizontalTb;
+        let metrics = DWriteMetrics::new(&factory, &font, mode, &TextLayerConfig::default())
+            .expect("DWriteMetrics 生成失敗");
+        let region = TextRegion::resolve(&geo_model((Some(0), Some(0)), None), image, mode);
+        let contract = ScaleContract::new(1.0, None);
+        let mut executor = DrawExecutor::new(&rig.core).expect("DrawExecutor::new 失敗");
+
+        let items = glyph_items("あいうえお");
+        let mut counts = Vec::new();
+        for visible in 0..=items.len() {
+            let bytes = render_items(
+                &mut executor, &mut surface, &items, visible, &region, mode, &font, &metrics,
+                &contract,
+            );
+            counts.push(opaque_count(&bytes));
+        }
+        assert_eq!(counts[0], 0, "可視 0 グリフ＝全透明");
+        for i in 1..counts.len() {
+            assert!(
+                counts[i] > counts[i - 1],
+                "非透明ピクセルは可視グリフ数とともに単調増加する: {counts:?}"
+            );
+        }
+
+        // Clear: 未リビール分含む全消去（空 canvas）＋確定行キャッシュの全破棄。
+        executor.clear_cache();
+        let bytes = render_items(
+            &mut executor, &mut surface, &[], 0, &region, mode, &font, &metrics, &contract,
+        );
+        assert!(
+            bytes.iter().all(|&b| b == 0),
+            "Clear 後は全域が透明（premultiplied 全 0）へ戻る"
+        );
+    }
+
+    /// 全域再描画の構造檻（R7.3）: 可視内容を減らした再描画で以前のインクが残らない
+    /// （差分描画なら 5 グリフ分の残渣が出る）。同一入力の再描画はバイト一致（決定論）。
+    #[test]
+    fn render_is_full_redraw_without_residue() {
+        let mut rig = DrawRig::new();
+        let image = (120u32, 60u32);
+        let mut surface = rig.attach(image, 1.0);
+        let factory = rig.core.dwrite_factory().expect("dwrite_factory").clone();
+        let font = ResolvedFont::resolve(&geo_model((Some(0), Some(0)), None));
+        let mode = WritingMode::HorizontalTb;
+        let metrics = DWriteMetrics::new(&factory, &font, mode, &TextLayerConfig::default())
+            .expect("DWriteMetrics 生成失敗");
+        let region = TextRegion::resolve(&geo_model((Some(0), Some(0)), None), image, mode);
+        let contract = ScaleContract::new(1.0, None);
+        let mut executor = DrawExecutor::new(&rig.core).expect("DrawExecutor::new 失敗");
+
+        let items = glyph_items("あいうえお");
+        let two_first = render_items(
+            &mut executor, &mut surface, &items, 2, &region, mode, &font, &metrics, &contract,
+        );
+        let five = render_items(
+            &mut executor, &mut surface, &items, 5, &region, mode, &font, &metrics, &contract,
+        );
+        let two_again = render_items(
+            &mut executor, &mut surface, &items, 2, &region, mode, &font, &metrics, &contract,
+        );
+        assert!(opaque_count(&five) > opaque_count(&two_first));
+        assert_eq!(
+            two_first, two_again,
+            "全域再描画: 5 グリフ描画後に 2 グリフへ戻すと以前の描画とバイト一致（残渣なし）"
+        );
+    }
+
+    /// 確定行キャッシュの檻（task 6.3・design「確定行は再生成しない・Clear で全破棄」）:
+    /// 内容不変の行（確定行）は TextLayout を再生成せず、リビール中の行のみ都度更新。
+    /// clear_cache（Clear 適用点）だけが全破棄する。
+    #[test]
+    fn confirmed_line_layouts_regenerate_only_on_clear() {
+        let mut rig = DrawRig::new();
+        let image = (120u32, 60u32);
+        let mut surface = rig.attach(image, 1.0);
+        let factory = rig.core.dwrite_factory().expect("dwrite_factory").clone();
+        let font = ResolvedFont::resolve(&geo_model((Some(0), Some(0)), None));
+        let mode = WritingMode::HorizontalTb;
+        let metrics = DWriteMetrics::new(&factory, &font, mode, &TextLayerConfig::default())
+            .expect("DWriteMetrics 生成失敗");
+        let region = TextRegion::resolve(&geo_model((Some(0), Some(0)), None), image, mode);
+        let contract = ScaleContract::new(1.0, None);
+        let mut executor = DrawExecutor::new(&rig.core).expect("DrawExecutor::new 失敗");
+
+        // 行 0 確定（"あい"）＋行 1 リビール中（"う"）。
+        let mut items = glyph_items("あい");
+        items.push(TextItem::LineBreak { ratio: 1.0 });
+        items.push(TextItem::Glyph { ch: 'う' });
+
+        render_items(
+            &mut executor, &mut surface, &items, 3, &region, mode, &font, &metrics, &contract,
+        );
+        assert_eq!(executor.line_layout_creations(), 2, "初回は 2 行分を生成");
+
+        render_items(
+            &mut executor, &mut surface, &items, 3, &region, mode, &font, &metrics, &contract,
+        );
+        assert_eq!(
+            executor.line_layout_creations(),
+            2,
+            "内容不変の再描画は確定行・現行行とも再生成しない（キャッシュ再利用）"
+        );
+
+        // リビール進行: 行 1 が "う"→"うえ" へ——行 1 のみ都度更新（行 0 は確定キャッシュ）。
+        items.push(TextItem::Glyph { ch: 'え' });
+        render_items(
+            &mut executor, &mut surface, &items, 4, &region, mode, &font, &metrics, &contract,
+        );
+        assert_eq!(
+            executor.line_layout_creations(),
+            3,
+            "リビール中の行のみ再生成（確定行 0 はキャッシュ維持）"
+        );
+
+        // Clear 適用点: 全破棄→次描画は全行を再生成する。
+        executor.clear_cache();
+        render_items(
+            &mut executor, &mut surface, &items, 4, &region, mode, &font, &metrics, &contract,
+        );
+        assert_eq!(
+            executor.line_layout_creations(),
+            5,
+            "Clear のみが確定行キャッシュを全破棄する（再描画で 2 行分を再生成）"
+        );
+    }
+
+    /// スケール一点適用の構造檻（task 6.3・DPI/スケール契約）: k=2 のインク開始位置は
+    /// 画像座標 ×2 の近傍に現れる。二重適用（×4）でも未適用（×1）でもないことを
+    /// 範囲判定で排除する（origin (20,20)・正解 ≈40〜・二重 80〜・未適用 ≈20）。
+    #[test]
+    fn scale_applies_exactly_once_at_draw_target() {
+        let mut rig = DrawRig::new();
+        let image = (120u32, 60u32);
+        let k = 2.0f32;
+        let mut surface = rig.attach(image, k);
+        assert_eq!(surface.size(), (240, 120), "物理寸 = ceil(image × k)");
+        let factory = rig.core.dwrite_factory().expect("dwrite_factory").clone();
+        let model = geo_model((Some(20), Some(20)), None);
+        let font = ResolvedFont::resolve(&model);
+        let mode = WritingMode::HorizontalTb;
+        let metrics = DWriteMetrics::new(&factory, &font, mode, &TextLayerConfig::default())
+            .expect("DWriteMetrics 生成失敗");
+        let region = TextRegion::resolve(&model, image, mode);
+        let contract = ScaleContract::new(k, None);
+        let mut executor = DrawExecutor::new(&rig.core).expect("DrawExecutor::new 失敗");
+
+        // '■'（全角・インクがほぼ em ボックスを満たす）1 グリフを (20,20) へ。
+        let items = glyph_items("■");
+        let bytes = render_items(
+            &mut executor, &mut surface, &items, 1, &region, mode, &font, &metrics, &contract,
+        );
+        let (min_x, min_y) = ink_min(&bytes, 240).expect("インクが描かれる");
+        // 正解: 画像座標 (20 + ベアリング数 px) × 2 ≈ [40, 40+2×font]。
+        // 二重適用なら x ≥ 80・未適用なら x ≈ 20——いずれも範囲外。
+        assert!(
+            (38..=70).contains(&min_x),
+            "インク開始 x={min_x} は一点適用の範囲 [38,70]（未適用≈20・二重適用≥80 を排除）"
+        );
+        assert!(
+            (38..=70).contains(&min_y),
+            "インク開始 y={min_y} は一点適用の範囲 [38,70]（未適用≈20・二重適用≥80 を排除）"
+        );
+    }
+
+    /// スクロール可視窓の描画: あふれ発火後は先頭行が供給面から消え（全域再描画）、
+    /// 可視窓の行が領域先頭へ詰めて描かれる（同一入力の再描画はバイト一致・決定論）。
+    #[test]
+    fn scroll_overflow_drops_oldest_line_via_full_redraw() {
+        let mut rig = DrawRig::new();
+        let image = (60u32, 40u32);
+        let mut surface = rig.attach(image, 1.0);
+        let factory = rig.core.dwrite_factory().expect("dwrite_factory").clone();
+        // font 10 → pitch 13・行下端 10/23/36/49——validrect.bottom 40 で 4 行目があふれる。
+        let model = geo_model((Some(0), Some(0)), Some(10));
+        let font = ResolvedFont::resolve(&model);
+        let mode = WritingMode::HorizontalTb;
+        let metrics = DWriteMetrics::new(&factory, &font, mode, &TextLayerConfig::default())
+            .expect("DWriteMetrics 生成失敗");
+        let region = TextRegion::resolve(&model, image, mode);
+        let contract = ScaleContract::new(1.0, None);
+        let mut executor = DrawExecutor::new(&rig.core).expect("DrawExecutor::new 失敗");
+
+        // 行 0 = ■■■（3 グリフ）・行 1〜3 = ■ 各 1 グリフ。
+        let mut items3 = glyph_items("■■■");
+        for _ in 0..2 {
+            items3.push(TextItem::LineBreak { ratio: 1.0 });
+            items3.push(TextItem::Glyph { ch: '■' });
+        }
+        let mut items4 = items3.clone();
+        items4.push(TextItem::LineBreak { ratio: 1.0 });
+        items4.push(TextItem::Glyph { ch: '■' });
+
+        // 3 行（収まる・可視 ■×5）→ 4 行（あふれ・可視窓は行 1〜3 ＝ ■×3）。
+        let before = render_items(
+            &mut executor, &mut surface, &items3, 5, &region, mode, &font, &metrics, &contract,
+        );
+        let after = render_items(
+            &mut executor, &mut surface, &items4, 6, &region, mode, &font, &metrics, &contract,
+        );
+        assert!(
+            opaque_count(&after) < opaque_count(&before),
+            "スクロール後は行 0（■×3）が全域再描画で消える: before={} after={}",
+            opaque_count(&before),
+            opaque_count(&after)
+        );
+        let (_, min_y) = ink_min(&after, 60).expect("スクロール後もインクが描かれる");
+        assert!(
+            min_y < 10,
+            "可視窓先頭行（行 1）は block_offset で領域先頭へ詰めて描かれる（min_y={min_y}）"
+        );
+        // 決定論: 同一入力の再描画はバイト一致（差分累積なし）。
+        let again = render_items(
+            &mut executor, &mut surface, &items4, 6, &region, mode, &font, &metrics, &contract,
+        );
+        assert_eq!(after, again, "同一入力→同一ピクセル（全域再描画の決定論）");
+    }
+
+    /// R8.5: Image/Surface 住人は M1 型シーム——描画は warn!＋skip（インクなし・panic なし）。
+    /// warn は executor ごと初回のみ（ログスパム抑制）。
+    #[test]
+    fn image_and_surface_seam_residents_warn_and_skip() {
+        let mut rig = DrawRig::new();
+        let image = (120u32, 60u32);
+        let mut surface = rig.attach(image, 1.0);
+        let font = ResolvedFont::resolve(&geo_model((Some(0), Some(0)), None));
+        let mode = WritingMode::HorizontalTb;
+        let contract = ScaleContract::new(1.0, None);
+        let mut executor = DrawExecutor::new(&rig.core).expect("DrawExecutor::new 失敗");
+
+        let canvas = ContentCanvas {
+            residents: vec![
+                Resident {
+                    content: ResidentContent::Image(ImageSeam::default()),
+                    transform: RegionTransform::translation(5.0, 5.0),
+                    effects: TextEffects::default(),
+                },
+                Resident {
+                    content: ResidentContent::Surface(SurfaceSeam::default()),
+                    transform: RegionTransform::identity(),
+                    effects: TextEffects::default(),
+                },
+            ],
+            size: (120.0, 60.0),
+        };
+        let window = VisibleWindow {
+            first_visible_line: 0,
+            block_offset: 0.0,
+        };
+
+        let (result, warns, errors) = with_log_cage(|| {
+            executor.render(&canvas, &window, &font, mode, &contract, &mut surface)
+        });
+        result.expect("シーム住人があっても render は成功する（skip 継続）");
+        assert!(warns >= 1, "シーム住人の描画要求は warn を記録する");
+        assert_eq!(errors, 0);
+        let bytes = surface.read_back().expect("read_back 失敗");
+        assert!(
+            bytes.iter().all(|&b| b == 0),
+            "シーム住人は実挙動なし＝インクを一切描かない（R8.5）"
+        );
+
+        let (result, warns2, _) = with_log_cage(|| {
+            executor.render(&canvas, &window, &font, mode, &contract, &mut surface)
+        });
+        result.expect("2 回目の render も成功する");
+        assert_eq!(warns2, 0, "シーム warn は executor ごと初回のみ（スパム抑制）");
     }
 
     /// 観測可能な完了状態（task 6.2）: LayoutEngine の外部注入点（&dyn GlyphMetrics）へ

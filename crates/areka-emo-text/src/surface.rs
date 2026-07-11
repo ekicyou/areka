@@ -328,6 +328,15 @@ impl TextSurface {
     pub fn size(&self) -> (u32, u32) {
         self.size
     }
+
+    /// task-6 シーム: D2D 描画ターゲット兼用の単一真実源 `source_tex` への crate 内アクセス。
+    ///
+    /// DrawExecutor（draw.rs）が `CreateBitmapFromDxgiSurface` で D2D ターゲット bitmap を
+    /// 巻いて全域再描画の描き先にする。生成寸（物理 px）・premultiplied 透明初期化・
+    /// RENDER_TARGET bind の契約は本型が所有する（task 5 レビュー確認済みの前提シーム）。
+    pub(crate) fn source_tex(&self) -> &ID3D11Texture2D {
+        &self.source_tex
+    }
 }
 
 #[cfg(test)]
