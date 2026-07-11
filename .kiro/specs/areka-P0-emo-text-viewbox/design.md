@@ -236,7 +236,7 @@ sequenceDiagram
 | 9.5 | additive・既存契約の非再定義 | Boundary | 変更ファイル一覧（COM 層＋結線点のみ） |
 | 10.1 | example のスクロール経路差し替え・注入時刻駆動 | example | 本番経路差し替え＋既存注入時刻シナリオ維持 |
 | 10.2 | golden と pixel 等価の観測（横/縦・readback） | example, live-diff | 既存 readback 述語維持＋live-diff 檻 |
-| 10.3 | 再描画レスの決定論観測 | DrawStats, example | scroll 区間の counts 檻・新 checkpoint |
+| 10.3 | 再描画レスの決定論観測 | DrawStats, actor（`draw_stats` 読み口）, example | scroll 区間の counts 檻・新 checkpoint |
 | 10.4 | 縦書き＝横 blit の観測 | example（vertical variant） | 既存縦書き variant＋stats 檻 |
 | 10.5 | Clear リセットの観測 | example | 既存 Clear checkpoint（全域透明述語） |
 | 10.6 | 実 DPI/スケール検証（k≠1.0 は述語＋手動） | example, Testing Strategy | 非 96 DPI 手動確認を DoD 申し送り（areka-placement-real-ghost-first） |
@@ -250,7 +250,7 @@ sequenceDiagram
 | TextSurface（ダブルバッファ化） | COM 層（surface.rs） | 固定寸 2 枚の描画面・面内 blit・提示・読戻 | 1.1–1.3, 4.1, 4.4, 5.4, 7.1–7.4 | GraphicsCore, Compositor（P0・既存） | Service / State |
 | LineLayoutStore ＋ 共有 format 経路 | COM 層（draw.rs） | 行 TextLayout の生成・キャッシュ（両 executor 共有） | 3.4, 6.1 | IDWriteFactory2（P0） | Service |
 | DrawExecutor（#[cfg(test)] オラクル） | COM 層（draw.rs） | 再描画方式の独立オラクル（live-diff 比較専用） | 6.1–6.5, 4.5 | LineLayoutStore（P0） | Service（test 限定） |
-| actor 結線 | 結線層（actor.rs） | 呼び順不変のまま executor 差し替え・Clear 写像 | 2.1, 2.2, 2.4, 4.3, 9.1, 9.2 | ViewboxExecutor（P0） | State |
+| actor 結線 | 結線層（actor.rs） | 呼び順不変のまま executor 差し替え・Clear 写像・`draw_stats` 読み口 | 2.1, 2.2, 2.4, 4.3, 9.1, 9.2, 10.3 | ViewboxExecutor（P0） | State |
 | FixedOverlaySeam | 型シーム（surface.rs） | 固定層差し込み点の構造予約（実挙動なし） | 7.1–7.4 | — | State（型のみ） |
 | 観測 example | examples/ | 単一 pass/fail の viewbox スクロール観測 | 10.1–10.6 | DrawStats（P1） | — |
 
@@ -468,6 +468,7 @@ pub struct FixedOverlaySeam {}
 - `ActorRender { surface, executor: ViewboxExecutor, metrics }`。初回装着（attach＋executor/metrics 構築）の流れ・`resource_scope` 規律・log-first は不変。
 - `present_actor`: `visible_window` → `ContentCanvas::from_layout` → `executor.render(...)` → **戻り値 true のときのみ** `surface.present()`（変化なしフレームは提示も省く——readback は front を読むため観測述語に影響しない）。
 - `apply_cue` の Clear 適用点: `executor.clear_cache()` → `executor.request_clear()` へ写像（破棄・リセットの口は 1 つのまま）。
+- **決定論観測の読み口（R10.3）**: `TextLayerRuntime::draw_stats(actor: &ActorKey) -> Option<DrawStats>` を追加する（既存 `surface(actor)` と同型・additive・R9.2 非抵触——emo2-boot 消費経路の再定義ではない）。example／テストはこの口から actor 別の `DrawStats` を読む（`ViewboxExecutor::stats()` は runtime 内部の `ActorRender` に抱えられており、この読み口がないと R10.3 checkpoint が example から成立しない）。
 - `EmoTextSink`／`spawn_emo_text`／`register_actor_view`／`present_frame` のシグネチャ・終了規律は不変（R9.2）。
 
 **Contracts**: State [x]
@@ -477,7 +478,7 @@ pub struct FixedOverlaySeam {}
 #### examples/emo-text-layer.rs（スクロール経路の viewbox 差し替え）
 
 - 本番経路の差し替えにより、既存の注入時刻駆動シナリオ（Text／NewLine／Clear・実時間 sleep 不使用）と 7 checkpoint（typewriter／改行／あふれ→スクロール／Clear／複数 actor 独立・横/縦 variant）はそのまま viewbox 方式を検証する（R10.1/10.2/10.4/10.5）。
-- 追加 checkpoint（R10.3）: あふれ→スクロール区間の前後で `DrawStats` を読み、「可視窓のみ移動のフレームで `draw_text_layout_calls` 増分 ≤ 露出帯交差行数」「内容・可視窓とも不変のフレームで増分 0」を assert する（決定論・目視非依存）。
+- 追加 checkpoint（R10.3）: あふれ→スクロール区間の前後で `DrawStats` を **`TextLayerRuntime::draw_stats(actor)`**（actor 結線の追補アクセサ）から読み、「可視窓のみ移動のフレームで `draw_text_layout_calls` 増分 ≤ 露出帯交差行数」「内容・可視窓とも不変のフレームで増分 0」を assert する（決定論・目視非依存）。
 - 実 DPI 検証（R10.6）: readback 述語は物理 px 直読みのため DPI 非依存で green になるが、**それを k≠1.0 の正しさの証明とはしない**——非 96 DPI モニタでの手動確認（文字の滲みなし・スクロール整合）を実装フェーズの DoD 申し送り事項として明記する（記憶 areka-placement-real-ghost-first）。
 
 ## Data Models
@@ -517,6 +518,13 @@ emo-text-layer の log-first 規律（`error!`＋`TextLayerError` の `Err`・pa
 ## Testing Strategy
 
 （記憶 deterministic-test-coverage-mandate: 決定論化できる領域は全て実行テストで檻化・目視/構造担保では不十分）
+
+### 実装順序制約（spike 先頭・タスク生成への指示）
+
+本設計の byte 等価（R6.1）と再描画レス（R3.1）の両立は、**「整数平行移動の blit 結果 ≡ 新位置で `DrawTextLayout` し直した結果」という ClearType/AA 位相不変仮定ただ一点**に載っている（透明背景への premultiplied 描画ゆえ宛先依存ブレンドは効かず、k=1.0 では origin 差が整数のため成立見込みだが、実測未検証）。仮定が破れた場合の全ダーティ縮退 fallback は**性能劣化ではなく R3 の受け入れ基準そのものを満たせない＝前提崩壊**であるため、tasks 生成時は次を厳守する:
+
+- **タスク 1（spike）**: 同一 format／同一 TextLayout で「位置 A に描いて blit で B へ」vs「最初から B に描く」の readback byte 比較（横書き/縦書き・数行・k=1.0）。`DIRTY_GUARD_IMG_PX` の実効値（AA こぼれ幅）もここで確定する。
+- **GO 確認後**に ScrollPlanner／ViewboxExecutor の本実装へ進む。spike が NG の場合は実装を進めず設計再考（本設計の前提崩壊）として差し戻す。
 
 ### Unit Tests（純粋・viewbox.rs in-source）
 
