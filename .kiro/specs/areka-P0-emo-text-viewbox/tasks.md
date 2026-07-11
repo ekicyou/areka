@@ -2,7 +2,7 @@
 
 ## Foundation
 
-- [ ] 1. blit≡再描画位相不変仮定のreadback byte比較spike（実装ゲート）
+- [x] 1. blit≡再描画位相不変仮定のreadback byte比較spike（実装ゲート）
   - 同一の`create_text_format`経路で生成したTextLayoutを使い、(a)位置Aへ描画した後にwhole-pixel blitで位置Bへ移した結果と(b)最初から位置Bへ描画した結果を、横書き・縦書き（vertical_rl）それぞれ数行パターンでオフスクリーンreadbackしてbyte比較する使い捨て検証コードを書く（既存のTextSurface/D2D DeviceContextヘルパをそのまま流用し新規コンポーネントは作らない）
   - AAこぼれの実測からダーティ矩形のガード余白の候補値を記録する
   - 比較が不一致だった場合は本タスクの結果をもって設計の前提崩壊として報告し、以降のタスクへ進まない
@@ -152,6 +152,12 @@
   - _Requirements: 10.1, 10.2, 10.3, 10.4, 10.5_
   - _Boundary: 観測 example（examples/emo-text-layer.rs）_
   - _Depends: 9_
+
+## Implementation Notes
+
+- **Task 1 (spike) = GO**（2026-07-12・`tests/viewbox_blit_spike.rs`）: k=1.0・premultiplied 透明背景で「位置 A に描画→whole-pixel 整数 blit（`CopySubresourceRegion`・別テクスチャ）で位置 B へ」と「最初から位置 B へ描画」の保持域が **byte 完全一致**（横書き＝縦 blit・下端露出／縦書き（vertical_rl）＝横 blit・右端露出の両方で不一致 0・3 回再現）。ClearType/AA 位相不変仮定は成立＝設計前提は実証済み。ViewboxExecutor/ScrollPlanner 本実装へ進んでよい。
+- **`DIRTY_GUARD_IMG_PX` 実測 = 0**（既定 ＭＳ ゴシック 12px・公称セル `inline_advance × line_pitch(15)` 外への AA こぼれ 0）。ただし font/size 依存ゆえ design の保守既定 **1 image px** を採用するのが安全（live-diff 檻が破れを検出し、破れた場合はガード定数一点の増加で吸収）。
+- spike 由来の再利用元: テクスチャ生成＝`surface.rs::create_transparent_source_tex`／D2D ターゲット化＝`draw.rs::create_target_bitmap`／描画列＝`draw.rs::DrawExecutor::render` Phase2／readback＝`surface.rs::read_back`（RowPitch≥stride パディング）。行 TextLayout は本番と同一 `create_text_format` 経路（byte 等価の構造前提 RN5）。
 
 ## 意図的な繰り延べ事項
 
