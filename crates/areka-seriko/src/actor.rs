@@ -39,7 +39,7 @@ use std::ops::ControlFlow;
 use areka_sakura::{cue_target_of, CueCommand, CueTarget, SurfaceSink, TalkCue};
 
 use crate::output::{DisplayCommand, SurfaceOutput};
-use crate::resolve::{SurfaceResolver, SurfaceTarget};
+use crate::resolve::{resolve_balloon_key, BalloonResolve, SurfaceResolver, SurfaceTarget};
 use crate::state::{ApplyOutcome, ScopeStates};
 
 /// seriko アクターの inbox メッセージ（areka-actor inbox 規約・投函経路は inbox 一貫）。
@@ -186,6 +186,39 @@ fn handle_message<O: SurfaceOutput>(
             );
             return ControlFlow::Continue(());
         }
+    }
+
+    // バルーン面切替は早期分岐で処理する（key 抽出 match の前段・既存 Emote 経路の形に触れない・R4.6）。
+    // 解決→適用→発行を arm 内で完結し値を返さないため、値を返す key 抽出 match には混ぜず早期 return する。
+    if let CueCommand::BalloonSurface { key } = &cue.command {
+        let target = match resolve_balloon_key(key) {
+            BalloonResolve::Show(id) => SurfaceTarget::Show(id),
+            BalloonResolve::Hide => SurfaceTarget::Hide,
+            BalloonResolve::NameForm => {
+                // 名前形（\b[バルーン１]）: M-boot 未対応の正当構文＝warn!＋skip・発行なし（R4.5）。
+                // EntityRef の「M-boot 未対応」warn! 先例に整合。将来の名前解決 additive の余地を残す。
+                tracing::warn!(
+                    key = %key,
+                    scope = %cue.actor,
+                    "seriko: バルーン面 key を名前解決できず読み飛ばす（M-boot は数値のみ・名前解決は将来 additive・R4.5）"
+                );
+                return ControlFlow::Continue(());
+            }
+            BalloonResolve::Invalid => {
+                // 破損数値（-2・範囲外・u32 超過）: 作者入力の破損＝error!＋skip・発行なし（シェル経路と同水準・R4.5）。
+                tracing::error!(
+                    key = %key,
+                    scope = %cue.actor,
+                    "seriko: バルーン面 key が不正な数値で読み飛ばす（破損入力・R4.5）"
+                );
+                return ControlFlow::Continue(());
+            }
+        };
+        // 状態更新（2.2 の鏡映）＋発行: 状態が実際に変化したときだけ単一発行点から発行する（冪等・R4.3）。
+        if let ApplyOutcome::Changed(command) = states.apply_balloon(&cue.actor, target) {
+            emit_display(out, command); // 単一発行点共用（R4.1/4.2/4.3）
+        }
+        return ControlFlow::Continue(());
     }
 
     // Shell 系の command 内訳。実到来は Emote{key} のみ、EntityRef は防御枝（DD5/Risks）。
@@ -375,6 +408,15 @@ mod tests {
         }
     }
 
+    /// バルーン面切替の TalkCue（`\b[key]` 相当・Shell 分類だが早期分岐で消費・4.1–4.5）を組む。
+    fn balloon_cue(at: f64, scope: &str, key: &str) -> TalkCue {
+        TalkCue {
+            at,
+            actor: ActorKey::from(scope),
+            command: CueCommand::BalloonSurface { key: key.into() },
+        }
+    }
+
     /// ケース1（1.4/7.4）: 停止指令 Close による正常終了を独立実行テストで確認する。
     ///
     /// `spawn_seriko`→`close()`→`join()` で `Break` 経由の正常終了（`Ok`）を決定論的に固定する。
@@ -555,6 +597,266 @@ mod tests {
             "本クレート target で発火すること: {logs}"
         );
         // panic せず本行へ到達したこと自体が「処理系全体が異常終了しない」証跡（6.4）。
+    }
+
+    // ─────────────────────────────────────────────────────────────────────
+    // Task 4.4: バルーン面切替コマンドの消費経路（早期分岐）の網羅テスト（4.1/4.2/4.3/4.5/4.6）。
+    //
+    // 早期分岐（key 抽出 match の前段）は解決→適用→発行を arm 内で完結し値を返さないため、
+    // 同期 `handle_message`＋`MockSurfaceOutput` の records 照合で発行を、`capture_logs_flow` で
+    // NameForm=warn!／Invalid=error! の severity split を、いずれもテストスレッド上で決定論的に
+    // 檻化する（cross-thread log 問題を回避）。既存 `emote_cue` 経路（シェル面）は無改変。
+    // ─────────────────────────────────────────────────────────────────────
+
+    /// ケース6（4.1）: 数値 key はバルーン面表示指令を単一発行点から発行する。
+    ///
+    /// `BalloonSurface{key:"2"}` を同期 `handle_message` へ流すと、`ShowBalloon{scope, surface_id:2}`
+    /// がちょうど 1 件記録される（binds なし＝M-boot にバルーン着せ替え無し）。RED では BalloonSurface
+    /// が key 抽出 match の catch-all（warn!＋skip）へ落ち発行されないため本 assert が落ちる。
+    #[test]
+    fn balloon_numeric_key_emits_showballoon() {
+        let resolver = tiny_resolver();
+        let mut states = fresh_states();
+        let mut out = MockSurfaceOutput::new();
+        let records = out.records();
+
+        let flow = handle_message(
+            &resolver,
+            &mut states,
+            &mut out,
+            SerikoMsg::Cue(balloon_cue(0.0, "0", "2")),
+        );
+
+        assert_eq!(flow, ControlFlow::Continue(()), "消費後も処理継続（4.1）");
+        let recorded = records.lock().expect("records mutex poisoned");
+        assert_eq!(
+            &*recorded,
+            &[DisplayCommand::ShowBalloon {
+                scope: ActorKey::from("0"),
+                surface_id: 2,
+            }],
+            "数値 key は ShowBalloon をちょうど 1 件発行する（単一発行点共用・4.1）"
+        );
+    }
+
+    /// ケース7（4.2）: `-1` はバルーン非表示指令を発行する。
+    #[test]
+    fn balloon_minus_one_emits_hideballoon() {
+        let resolver = tiny_resolver();
+        let mut states = fresh_states();
+        let mut out = MockSurfaceOutput::new();
+        let records = out.records();
+
+        let flow = handle_message(
+            &resolver,
+            &mut states,
+            &mut out,
+            SerikoMsg::Cue(balloon_cue(0.0, "0", "-1")),
+        );
+
+        assert_eq!(flow, ControlFlow::Continue(()), "消費後も処理継続（4.2）");
+        let recorded = records.lock().expect("records mutex poisoned");
+        assert_eq!(
+            &*recorded,
+            &[DisplayCommand::HideBalloon {
+                scope: ActorKey::from("0"),
+            }],
+            "-1 は HideBalloon をちょうど 1 件発行する（非表示センチネル・4.2）"
+        );
+    }
+
+    /// ケース8（4.5・severity split）: 名前形 key は warn! を 1 回だけ残し発行しない。
+    ///
+    /// `\b[バルーン１]` 相当の非数値 key は M-boot 未対応の**正当構文**＝`NameForm`。同期
+    /// `handle_message`＋`capture_logs_flow` で warn! が**1 回だけ**・error! は**0 回**・発行なし・
+    /// `Continue` を固定する。RED では catch-all の別文言 warn! に落ちるため文言 assert が落ちる。
+    #[test]
+    fn balloon_name_form_warns_once_no_emit() {
+        let resolver = tiny_resolver();
+        let mut states = fresh_states();
+        let mut out = MockSurfaceOutput::new();
+        let records = out.records();
+
+        let flow = capture_logs_flow(|| {
+            handle_message(
+                &resolver,
+                &mut states,
+                &mut out,
+                SerikoMsg::Cue(balloon_cue(0.0, "0", "バルーン１")),
+            )
+        });
+
+        assert_eq!(
+            flow.1,
+            ControlFlow::Continue(()),
+            "名前形は skip して処理継続（正当構文・4.5）"
+        );
+        assert_eq!(
+            flow.0.matches("level=WARN").count(),
+            1,
+            "名前形は warn! を 1 回だけ残す（4.5）: {}",
+            flow.0
+        );
+        assert_eq!(
+            flow.0.matches("level=ERROR").count(),
+            0,
+            "名前形は error! を残さない（NameForm=warn の severity split・4.5）: {}",
+            flow.0
+        );
+        assert!(
+            flow.0.contains("名前解決できず"),
+            "バルーン面 key 固有の名前形メッセージであること（catch-all 汎用文言でない）: {}",
+            flow.0
+        );
+        assert!(
+            flow.0.contains("target=areka_seriko"),
+            "本クレート target で発火すること: {}",
+            flow.0
+        );
+        assert!(
+            records.lock().expect("records mutex poisoned").is_empty(),
+            "名前形では発行しない（発行なし・4.5）"
+        );
+    }
+
+    /// ケース9（4.5・severity split）: 不正な数値 key は error! を 1 回だけ残し発行しない。
+    ///
+    /// 負の非 `-1`（`-2`）と `u32` 超過（`4294967296`）は破損入力＝`Invalid`。シェル経路の
+    /// `Unresolved`→error! と同水準で、error! が**1 回だけ**・warn! は**0 回**・発行なし・`Continue`。
+    /// RED では catch-all の warn!（error! でない）に落ちるため error! カウント assert が落ちる。
+    #[test]
+    fn balloon_invalid_numeric_errors_once_no_emit() {
+        for bad in ["-2", "4294967296"] {
+            let resolver = tiny_resolver();
+            let mut states = fresh_states();
+            let mut out = MockSurfaceOutput::new();
+            let records = out.records();
+
+            let flow = capture_logs_flow(|| {
+                handle_message(
+                    &resolver,
+                    &mut states,
+                    &mut out,
+                    SerikoMsg::Cue(balloon_cue(0.0, "0", bad)),
+                )
+            });
+
+            assert_eq!(
+                flow.1,
+                ControlFlow::Continue(()),
+                "不正数値 {bad:?} は skip して処理継続（破損入力・4.5）"
+            );
+            assert_eq!(
+                flow.0.matches("level=ERROR").count(),
+                1,
+                "不正数値 {bad:?} は error! を 1 回だけ残す（シェル経路と同水準・4.5）: {}",
+                flow.0
+            );
+            assert_eq!(
+                flow.0.matches("level=WARN").count(),
+                0,
+                "不正数値 {bad:?} は warn! を残さない（Invalid=error の severity split・4.5）: {}",
+                flow.0
+            );
+            assert!(
+                flow.0.contains("不正な数値"),
+                "破損数値固有のメッセージであること: {}",
+                flow.0
+            );
+            assert!(
+                flow.0.contains("target=areka_seriko"),
+                "本クレート target で発火すること: {}",
+                flow.0
+            );
+            assert!(
+                records.lock().expect("records mutex poisoned").is_empty(),
+                "不正数値 {bad:?} では発行しない（発行なし・4.5）"
+            );
+        }
+    }
+
+    /// ケース10（4.3・冪等）: 同一バルーン面への再指定は指令を再発行しない。
+    ///
+    /// `\b[2]` を 2 回流すと、2 回目は状態不変ゆえ `ShowBalloon` が 1 件のみ記録される
+    /// （既存 per-scope 冪等ガードと同一挙動・単一発行点の冪等抑止）。
+    #[test]
+    fn balloon_same_surface_twice_emits_once() {
+        let resolver = tiny_resolver();
+        let mut states = fresh_states();
+        let mut out = MockSurfaceOutput::new();
+        let records = out.records();
+
+        let f1 = handle_message(
+            &resolver,
+            &mut states,
+            &mut out,
+            SerikoMsg::Cue(balloon_cue(0.0, "0", "2")),
+        );
+        let f2 = handle_message(
+            &resolver,
+            &mut states,
+            &mut out,
+            SerikoMsg::Cue(balloon_cue(1.0, "0", "2")),
+        );
+
+        assert_eq!(f1, ControlFlow::Continue(()));
+        assert_eq!(f2, ControlFlow::Continue(()));
+        let recorded = records.lock().expect("records mutex poisoned");
+        assert_eq!(
+            &*recorded,
+            &[DisplayCommand::ShowBalloon {
+                scope: ActorKey::from("0"),
+                surface_id: 2,
+            }],
+            "同一面の再指定は再発行しない（冪等・4.3）"
+        );
+    }
+
+    /// ケース11（4.6・独立性）: シェル面切替とバルーン面切替の混在で双方が独立に記録される。
+    ///
+    /// `Emote{key:"2100"}`（シェル）と `BalloonSurface{key:"2"}`（バルーン）を同一 scope・同一
+    /// states へ順に流すと、`Show{..,binds}`（シェル・binds 同梱）と `ShowBalloon{2}`（バルーン・
+    /// binds なし）が互いに干渉せず送信順どおりに記録される（別 map・別発行・4.6）。RED では
+    /// バルーン cue が catch-all へ落ち ShowBalloon が欠落するため列照合が落ちる。
+    #[test]
+    fn shell_and_balloon_recorded_independently() {
+        let resolver = tiny_resolver();
+        let mut states = fresh_states();
+        let mut out = MockSurfaceOutput::new();
+        let records = out.records();
+
+        // シェル面（Emote）→バルーン面（BalloonSurface）を同一 scope へ順に流す。
+        let shell = handle_message(
+            &resolver,
+            &mut states,
+            &mut out,
+            SerikoMsg::Cue(emote_cue(0.0, "0", "2100")),
+        );
+        let balloon = handle_message(
+            &resolver,
+            &mut states,
+            &mut out,
+            SerikoMsg::Cue(balloon_cue(1.0, "0", "2")),
+        );
+
+        assert_eq!(shell, ControlFlow::Continue(()));
+        assert_eq!(balloon, ControlFlow::Continue(()));
+        let recorded = records.lock().expect("records mutex poisoned");
+        assert_eq!(
+            &*recorded,
+            &[
+                DisplayCommand::Show {
+                    scope: ActorKey::from("0"),
+                    surface_id: 2100,
+                    binds: BindSet::from_ids([1100, 1207]),
+                },
+                DisplayCommand::ShowBalloon {
+                    scope: ActorKey::from("0"),
+                    surface_id: 2,
+                },
+            ],
+            "シェル面（Show+binds）とバルーン面（ShowBalloon）が独立に記録される（4.6）"
+        );
     }
 
     /// `capture_logs` の変種: `f` の戻り値も併せて返す（同期 handler の `ControlFlow` 表明用）。
