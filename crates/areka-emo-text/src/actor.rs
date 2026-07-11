@@ -28,7 +28,7 @@ use crate::region::{ImagePx, ScaleContract, TextRegion};
 use crate::sink::{handle_text_msg, EmoTextSink, TextMsg};
 use crate::state::{TextLayerConfig, TextLayerState};
 use crate::surface::TextSurface;
-use crate::viewbox_draw::ViewboxExecutor;
+use crate::viewbox_draw::{DrawStats, ViewboxExecutor};
 use crate::writing::WritingMode;
 use crate::TextLayerError;
 
@@ -236,6 +236,18 @@ impl TextLayerRuntime {
     /// 装着済み actor の供給面（readback 等の観測口・未装着は `None`）。
     pub fn surface(&self, actor: &ActorKey) -> Option<&TextSurface> {
         self.surfaces.get(actor).map(|render| &render.surface)
+    }
+
+    /// 装着済み actor の決定論観測統計（[`ViewboxExecutor::stats`]・未装着は `None`）。
+    ///
+    /// [`surface`](Self::surface) と同型の additive アクセサ（R9.2 非抵触——emo2-boot 消費経路の
+    /// 再定義ではない）。example／統合テストがこの口から actor 別の [`DrawStats`]
+    /// （blit・`DrawTextLayout` 実行回数・行 TextLayout 生成回数・FullClear 回数）を読み、
+    /// 「可視窓のみ移動フレームで確定 content の再描画が起きない」等を決定論的に観測する
+    /// （R3.5/R10.3・目視非依存）。`ViewboxExecutor::stats()` は runtime 内部の `ActorRender` に
+    /// 抱えられており、この読み口がないと example から R10.3 checkpoint が成立しない。
+    pub fn draw_stats(&self, actor: &ActorKey) -> Option<DrawStats> {
+        self.surfaces.get(actor).map(|render| render.executor.stats())
     }
 }
 
@@ -917,5 +929,65 @@ mod runtime_tests {
         rt.apply_cue(&cue("0", 0.15, CueCommand::Clear));
         present_frame(&mut rt, &mut world, 0.2).expect("Clear 後フレーム");
         assert_eq!(read(&rt), 0, "Clear 後の供給面は全域透明へ戻る");
+    }
+
+    /// 観測可能な完了状態（task 9・R3.5/R10.3）: 登録済み actor に対して present_frame 後の
+    /// 決定論観測統計を `TextLayerRuntime::draw_stats(actor)`（`surface(actor)` と同型の
+    /// additive アクセサ）から外部が読み出せる。未装着 actor は `None`。
+    #[test]
+    fn draw_stats_readable_after_present_frame() {
+        unsafe {
+            let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
+        }
+        let core = GraphicsCore::new().expect("GraphicsCore::new 失敗");
+        let wuc = WucGraphicsResource::new(core.d2d_device().expect("d2d_device"))
+            .expect("WucGraphicsResource::new 失敗");
+
+        let mut world = World::new();
+        let (window, slot) = spawn_reserved_slot(&mut world);
+        world.insert_resource(core);
+        world.insert_resource(wuc);
+
+        let actor = ActorKey::from("0");
+        let mut rt = TextLayerRuntime::new(TextLayerConfig::default());
+
+        // 未装着 actor は None（読み口の存在自体は装着に依存しない）。
+        assert!(
+            rt.draw_stats(&actor).is_none(),
+            "未装着 actor の draw_stats は None"
+        );
+
+        rt.apply_cue(&cue("0", 0.0, CueCommand::Text("アヒル".into())));
+        let image = (120u32, 60u32);
+        let binding = TextSlotBinding::new(slot, window, 1.0, image);
+        rt.register_actor(
+            actor.clone(),
+            binding,
+            ResolvedBalloonText::resolve(&geo_model(), image),
+        );
+
+        // 装着＋初回描画フレーム（全域ダーティ）→ 統計が読み出せて描画が計上されている。
+        present_frame(&mut rt, &mut world, 0.0).expect("装着フレーム");
+        let stats = rt
+            .draw_stats(&actor)
+            .expect("装着済み actor の draw_stats は Some");
+        assert!(
+            stats.draw_text_layout_calls >= 1,
+            "初回フレームで DrawTextLayout が計上される: {stats:?}"
+        );
+        assert!(
+            stats.line_layout_creations >= 1,
+            "初回フレームで行 TextLayout 生成が計上される: {stats:?}"
+        );
+
+        // 後続フレームで観測値が単調増加する（リビール進行＝現在行の再描画）。
+        present_frame(&mut rt, &mut world, 0.06).expect("フレーム t=0.06");
+        let stats2 = rt.draw_stats(&actor).expect("draw_stats（t=0.06）");
+        assert!(
+            stats2.draw_text_layout_calls >= stats.draw_text_layout_calls,
+            "描画呼び出し回数は単調非減少: {} -> {}",
+            stats.draw_text_layout_calls,
+            stats2.draw_text_layout_calls
+        );
     }
 }
