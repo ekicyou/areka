@@ -136,7 +136,7 @@
   - _Boundary: 統合配線（装着）_
 
 - [ ] 9. Observation: 観測用 fixture と専用 example
-- [ ] 9.1 縦書き観測用の fixture 変種を用意する
+- [x] 9.1 縦書き観測用の fixture 変種を用意する
   - 共有 fixture のバルーン枠画像はそのままに、descript 基層へ writing_mode の縦書き宣言と有意な折返し閾値を、画像別上書き層へも対応する上書き値を用意する
   - 観測可能な完了状態: 変種 fixture を読み込むと writing_mode が縦書きに解決され、折返し閾値が退化しない値になることを確認できる
   - _Requirements: 11.4_
