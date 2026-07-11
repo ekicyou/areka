@@ -1,6 +1,6 @@
 ---
 inclusion: always
-updated_at: 2026-07-09
+updated_at: 2026-07-11
 ---
 
 # Focus - ロードマップ管理
@@ -57,6 +57,7 @@ arekaアルファリリースロードマップと`.kiro/specs/`配下の仕様�
 - 棚卸しの基準実数（2026-07-09 更新⑧・`emo-present` 完了後＝⑥emo トラック全完了・並走ブランチ統合の反映）: 完了 **124**（`areka-P0-emo-present` 新規完了アーカイブ＝emo 直列3/3・表示結線。実装完了後の実機まばたきデモ検証で `ComposeCache` のキャッシュ仕様バグ〔surface id 単独キーが bind 差分に衝突〕を発見・是正＝合成入力（surface_id＋BindSet）完全一致キーの容量1メモ化スロットへ再設計） / **active = 0** / **brief-only = 1**（`areka-P0-window-placement`〔**emo-present 完了でゲート解除＝新フロント**〕）。**M-boot 19/21（残2: emo-text-layer・window-placement）**。**即並走可能フロント2本**: window-placement／emo-text-layer（`emo-present`・`seriko-engine`・`ghost-setup` は消化）。正本 roadmap.md 追記⑫
 - 棚卸しの基準実数（2026-07-09 更新⑨・再入精査③＝「M-boot 統合」の無所属解消）: 完了 **124**（不変） / **active = 0** / **brief-only = 3**（`areka-P0-window-placement`〔07-09 実シンボル再調整済み＝ghost-setup✅ でシーム単独所有・`attach_target(window: Entity)` 実形・donor に `examples/emo-present.rs`〕・**`areka-P0-emo-text-layer`**〔新規 brief・TextSink 実装＋純粋状態機械＋DirectWrite 縦書き lift＋行列領域内部表現〕・**`areka-P0-emo2-boot`**〔新規 brief・**M-boot 統合＝マイルストーン完成ユニット**（実 sink 差し替え・`SurfaceOutput`→`PresentCommand` アダプタ・窓装着）・**window-placement＋emo-text-layer の完了ゲート下＝並走フロントではない**〕）。**M-boot 19/22（統合ユニット明示計上・残3）**。**即並走可能フロント2本**: window-placement／emo-text-layer（保護規約: placement=crates/areka・emo-present crate 不改変／text-layer=areka-emo-present additive 増分・crates/areka 不触＝衝突面ゼロ）。正本 roadmap.md 追記⑬
 - 棚卸しの基準実数（2026-07-09 更新⑩・emo-text-layer 重量査定＋viewbox 切り出し）: 完了 **124**（不変） / **active = 0** / **brief-only = 4**（window-placement・emo-text-layer〔縦書き＝完了条件・横書き先行可・スクロール＝全域再描画確定〕・emo2-boot〔ゲート下〕・**`areka-P0-emo-text-viewbox`**〔新規 brief・⑥emo 増分＝M-boot 外・viewbox 合成スクロール・依存=emo-text-layer のみ＝並走安全〕）。**即並走可能フロント2本のまま**: window-placement／emo-text-layer。正本 roadmap.md 追記⑭
+- 棚卸しの基準実数（2026-07-11 更新⑪・window-placement✅＋emo-text-layer✅ マージ後の再入精査④）: 完了 **126**（追記⑮ `areka-P0-window-placement`＝窓生成/既定位置/全面ドラッグ/バルーン追従/bottom吸着・追記⑯ `areka-P0-emo-text-layer`＝新設 crates/areka-emo-text・cue駆動 typewriter・縦横両対応を新規完了アーカイブ） / **active = 0** / **brief-only = 2**（**`areka-P0-emo2-boot`**〔**両ゲート解消＝解禁**・M-boot 最終統合・07-11 実シンボル再調整済み: `GhostWindows` 窓写像✅・`EmoTextSink`/`register_actor_view`✅・`text_slot_view`＝初回 ShowSurface まで None の装着順序制約・`present_frame` 毎フレーム駆動義務・`\b` cue 裁定〕・**`areka-P0-emo-text-viewbox`**〔ゲート解消＝解禁・分離シーム実シンボル `visible_window`→`VisibleWindow`→`DrawExecutor::render` 確認済み〕）。**M-boot 21/22（残1: emo2-boot）**。**即並走可能フロント2本**: emo2-boot／emo-text-viewbox（**交差面ゼロ**: 前者は areka-emo-text 消費のみ・後者は描画実行側のみ改変＋pixel 等価 golden）。新規 spec 不要判定・増分ユニット名 `areka-P0-sakura-glyph-pacing` を④sakura へ登録（pacing 申し送りの宛先解消・brief は着手時）。正本 roadmap.md 追記⑰
 
 ## 運用上の注意
 

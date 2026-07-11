@@ -1,11 +1,12 @@
 # Brief: areka-P0-emo-text-viewbox
 
-> **種別**: 本坑（main）。⑥ emo トラックの**増分ユニット**（M-boot 後・並走安全）。
-> **調査日**: 2026-07-09（emo-text-layer からのスクロール実現方式切り出し・開発者裁定「viewbox はあとでよいが brief 含めてロードマップ登録」）。
+> **種別**: 本坑（main）。⑥ emo トラックの**増分ユニット**（並走安全・依存は emo-text-layer のみ＝M-boot 完成を待たない）。
+> **調査日**: 2026-07-09（emo-text-layer からのスクロール実現方式切り出し・開発者裁定「viewbox はあとでよいが brief 含めてロードマップ登録」）／**2026-07-11 再調整**（emo-text-layer ✅ 完了を受けた実シーム突合）。
 > **前提依存（順序ゲート）**:
 > ```
-> _Depends: areka-P0-emo-text-layer（可視窓決定/描画実行の分離シーム・スクロール状態機械）
+> _Depends: areka-P0-emo-text-layer ✅（2026-07-11 完了・分離シーム納品済み）
 > ```
+> **✅ ゲート解消済み＝即着手可**（emo2-boot と並走可能——あちらは areka-emo-text を**消費のみ**〔sink／装着 API／present_frame〕・本ユニットは**描画実行側のみ改変**＝交差面ゼロ・pixel 等価 golden が挙動不変を担保）。
 
 ## Problem
 
@@ -14,8 +15,12 @@ M1 の emo-text-layer はスクロールを**全域ビットマップ再描画**
 ## Current State
 
 - **wintf のクリップ primitive ✅（`completed/visual-clip`）**: `Visual.clip = ClipShape::Rectangle`（角丸2種も有り）を `clip_sync_system` が Arrangement 由来サイズ・**DPI スケール込み**で WUC `InsetClip` へ写像済み——「viewbox ウィジェット」は存在しないが、**クリップ visual（＝viewport）＋子 visual の translate offset（＝スクロール位置）の合成で viewbox は今日組める**（2026-07-09 実地確認）。
-- **emo-text-layer（依存・完了待ち）の分離シーム**: スクロール描画は「**可視窓の決定**（純粋・スクロール位置→表示行）」と「**描画実行**（全域再描画）」に分離される設計（brief 明記済み）——本ユニットは**描画実行だけを viewbox 合成へ差し替える**（状態機械・レイアウト・writing_mode 解決は不変）。
-- **スクロール軸は writing_mode で回る**: 横書き＝縦オフセット・縦書き（`vertical_rl`）＝横オフセット（行が左へ流れる）——軸切替点は emo-text-layer が構造化済み。
+- **emo-text-layer ✅ の分離シーム（2026-07-11 実シンボル納品確認）**:
+  - **可視窓決定（純粋・不変で流用）**: `LayoutEngine::visible_window(lines: &[PositionedLine], region: &TextRegion, mode: WritingMode) -> VisibleWindow`（layout.rs:255）＝**唯一のスクロール決定点**。出力 `VisibleWindow { first_visible_line: usize, block_offset: f32 }`（layout.rs:127）——doc コメント（layout.rs:124）が「emo-text-viewbox はこの出力を『クリップ視窓＋内容オフセット』へ写像して描画実行だけを差し替える」と本ユニットを名指しで明記。
+  - **内容キャンバス（不変で流用）**: `ContentCanvas`（canvas.rs:200）は全行を `residents: Vec<Resident>` として保持し**可視窓を適用しない**（canvas.rs:194「可視窓の適用は COM 層 draw の領分」）。住人 index＝layout 行 index 1:1。将来住人 `ResidentContent::{GlyphRun, Image(ImageSeam), Surface(SurfaceSeam)}` が**固定層（`\_b --option=fixed`）の型シーム**として既設。
+  - **描画実行（本ユニットが差し替える側）**: `DrawExecutor::render(&self, canvas, window: &VisibleWindow, font, mode, contract, surface)`（draw.rs:526 付近）が `first_visible_line`（skip）と `block_offset`（dx/dy 加算）を消費する**全域再描画**——viewbox はこの render 側だけを「content 追記描画＋offset 更新」へ置換。呼び順の結線点は actor.rs:448-457（`visible_window`→`ContentCanvas::from_layout`→`render`）。
+  - **golden 資産 ✅**: `draw_readback_test.rs`（readback 3述語）・`scale_invariance_test.rs`（複数スケール）が既設＝pixel 等価の比較基準に流用可。
+- **スクロール軸は writing_mode で回る**: 横書き＝縦オフセット・縦書き（`vertical_rl`）＝横オフセット（行が左へ流れる）——軸切替の正準表は emo-text-layer が構造化済み（`WritingMode::resolve`＝writing.rs:63・純粋層）。
 
 ## Desired Outcome
 
@@ -46,13 +51,13 @@ M1 の emo-text-layer はスクロールを**全域ビットマップ再描画**
 
 ## Upstream / Downstream
 
-- **Upstream**: **`areka-P0-emo-text-layer`（未・ゲート＝分離シームの供給元）**／wintf `visual-clip` ✅（`ClipShape::Rectangle`＋`clip_sync_system`）。
-- **Downstream**: M2 スクロール演出（補間・慣性）／`choice-render`（viewport 座標系でのクリック範囲・間接）。
+- **Upstream**: `areka-P0-emo-text-layer` ✅（2026-07-11 完了＝分離シーム納品済み）／wintf `visual-clip` ✅（`ClipShape::Rectangle`＋`clip_sync_system`）。
+- **Downstream**: M2 スクロール演出（補間・慣性）／`choice-render`（viewport 座標系でのクリック範囲・間接）／`\_b --option=fixed` 固定層の実装増分（固定層差し込み点の消費者）。
 
 ## Existing Spec Touchpoints
 
-- **Extends**: `areka-P0-emo-text-layer`（描画実行シームの差し替え）。
-- **Adjacent**: `completed/visual-clip`（primitive 提供・不改変）／`areka-P0-choice-render`（M-dialogue・viewport 座標系の消費者候補）。
+- **Extends**: `completed/areka-P0-emo-text-layer`✅（描画実行シームの差し替え・`DrawExecutor::render` 側のみ・決定/状態機械/レイアウトのテスト資産は不変で生きる）。
+- **Adjacent**: `completed/visual-clip`（primitive 提供・不改変）／`areka-P0-choice-render`（M-dialogue・viewport 座標系の消費者候補）／`areka-P0-emo2-boot`（並走候補・areka-emo-text の消費者——本ユニットの改変面〔draw/render〕と非交差・pixel 等価 golden で挙動不変を保証）。
 
 ## Constraints
 
