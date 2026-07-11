@@ -60,7 +60,7 @@ use crate::draw::{LineLayoutStore, ResolvedFont, create_d2d_target_bitmap, creat
 use crate::layout::VisibleWindow;
 use crate::region::ScaleContract;
 use crate::surface::TextSurface;
-use crate::viewbox::{FramePlan, ScrollPlanner};
+use crate::viewbox::{FramePlan, PhysicalRect, ScrollPlanner};
 use crate::writing::WritingMode;
 
 /// 行 TextLayout format の前提（フォント名・高さビット・writing_mode）——変わると
@@ -145,6 +145,19 @@ impl ViewboxExecutor {
         self.stats
     }
 
+    /// Clear cue の適用点（planner 初期化＋行 TextLayout キャッシュ全破棄——破棄はこの口だけ・
+    /// R4.3）。
+    ///
+    /// [`ScrollPlanner::request_clear`]（`clear_requested`＋committed/pos/prev_lines 初期化）と
+    /// [`LineLayoutStore::clear`] を呼ぶ。次フレームの [`Self::render`] は `plan` が
+    /// [`FramePlan::FullClear`] を返し、back を全域透明 Clear（`full_clears` +1）→ flip → commit
+    /// する（その後 prev_lines 空ゆえ次 content フレームは全域ダーティで再描画＝透明フラッシュは
+    /// FullClear の 1 フレームのみ）。actor 結線（task 8）がこの口を Clear cue へ写像する。
+    pub fn request_clear(&mut self) {
+        self.planner.request_clear();
+        self.line_store.clear();
+    }
+
     /// 1 フレームの実行。戻り値＝変化有無（`true` なら呼び手が present する・R1.1/R3.1）。
     ///
     /// - format 確保（`ensure_format`——フォント/方向不変なら再利用）。
@@ -154,6 +167,14 @@ impl ViewboxExecutor {
     /// - [`FramePlan::FullClear`]: back を全域透明 Clear（描画 0 件）→ flip → commit → `Ok(true)`。
     /// - [`FramePlan::Update`]: 保持ピクセルの面内 blit → ダーティ矩形ごとの正準列（①〜⑥）で
     ///   限定描画 → flip → commit → `Ok(true)`。
+    ///
+    /// **エラー縮退規律**（Error Handling）: フォント/方向変更（`ensure_format` が format/行キャッシュを
+    /// 組み直したフレーム）または `plan` の想定外不整合（[`plan_inconsistency`]）を検知した場合、当該
+    /// フレームを**全域ダーティ Update**（`blit=(0,0)`・dirty=面全域・draw_lines=全 GlyphRun 住人）へ
+    /// 差し替えて描画する（正しさ優先・1 フレームでレガシー全域再描画と等価・透明フラッシュを起こす
+    /// FullClear ではない）。フォント/方向変更は `debug!`・想定外不整合は `warn!` を残す（記憶
+    /// areka-log-first-no-silent-failure）。縮退後の commit が prev_lines を張り直すため次フレームは
+    /// 正常導出へ復帰する。
     ///
     /// 失敗は log-first（`error!`＋`Err`・当該フレーム skip＝**plan 未 commit**・front 不変ゆえ
     /// 表示は前フレームを保持・次フレーム再計画）。
@@ -166,8 +187,11 @@ impl ViewboxExecutor {
         contract: &ScaleContract,
         surface: &mut TextSurface,
     ) -> Result<bool, TextLayerError> {
-        let format = self.ensure_format(font, mode)?;
-        let plan = self.planner.plan(canvas, window, mode, contract, surface.size());
+        let size = surface.size();
+        let (format, rebuilt) = self.ensure_format(font, mode)?;
+        let plan = self.planner.plan(canvas, window, mode, contract, size);
+        // 縮退判定（正しさ優先）: フォント/方向変更 or 想定外不整合なら全域ダーティ Update へ差し替え。
+        let plan = degrade_if_needed(plan, rebuilt, canvas, window, mode, contract, size);
 
         match &plan {
             // 変化なし——blit・描画・present とも 0・commit 不要（no-op）。
@@ -321,29 +345,141 @@ impl ViewboxExecutor {
 
     /// 描画/計測共用 format の確保（[`create_text_format`] 経路・`FormatKey` 不変なら再利用）。
     ///
-    /// フォント/方向の変更は行キャッシュの前提（同一 format で組んだ TextLayout）を崩すため
-    /// format と [`LineLayoutStore`] を組み直す（`DrawExecutor::ensure_format` と同規律・実運用は
-    /// actor ごと固定のため通常発火しない・`debug!` 記録）。
+    /// 戻り値の `bool` は**format と [`LineLayoutStore`] を組み直したか**（`true`＝組み直し）。
+    /// フォント/方向の変更は行キャッシュの前提（同一 format で組んだ TextLayout）と committed
+    /// ピクセル（旧 format で描いた面）を崩すため、`render` はこのフラグを見て当該フレームを
+    /// 全域ダーティへ縮退する（`DrawExecutor::ensure_format` と同規律・実運用は actor ごと固定の
+    /// ため通常発火しない・`debug!` 記録）。**初回生成**（`self.format` が `None`・組み直す前提が
+    /// 無い＝committed ピクセルも無い）は `false`（初回フレームは prev_lines 空ゆえ元より全域ダーティ）。
     fn ensure_format(
         &mut self,
         font: &ResolvedFont,
         mode: WritingMode,
-    ) -> Result<IDWriteTextFormat, TextLayerError> {
+    ) -> Result<(IDWriteTextFormat, bool), TextLayerError> {
         let key: FormatKey = (font.name.clone(), font.height.to_bits(), mode);
         if let Some((cached_key, format)) = &self.format {
             if *cached_key == key {
-                return Ok(format.clone());
+                return Ok((format.clone(), false));
             }
             tracing::debug!(
                 ?key,
                 "フォント/方向が変わったため format と行レイアウトキャッシュを組み直す"
             );
             self.line_store.clear();
+            let format = create_text_format(&self.dwrite, font, mode)?;
+            self.format = Some((key, format.clone()));
+            return Ok((format, true));
         }
+        // 初回生成（committed ピクセルが無いため縮退トリガにしない）。
         let format = create_text_format(&self.dwrite, font, mode)?;
         self.format = Some((key, format.clone()));
-        Ok(format)
+        Ok((format, false))
     }
+}
+
+/// エラー縮退規律の適用（Error Handling）——`plan` を必要なら**全域ダーティ Update** へ縮退する。
+///
+/// 2 トリガ（正しさ優先・いずれも透明フラッシュを起こす FullClear ではなく全域ダーティ Update）:
+/// - **フォント/方向変更**（`rebuilt`＝`ensure_format` が format/行キャッシュを組み直した）: committed
+///   ピクセルは旧 format で描かれ前提が崩れるため `debug!`＋全域ダーティへ縮退。
+/// - **想定外不整合**（[`plan_inconsistency`] が理由を返す）: `plan` の `Update` が canvas/面寸と矛盾
+///   （draw_lines 範囲外・dirty 面寸超過）する場合 `warn!`＋全域ダーティへ縮退（ログ無し失敗経路を
+///   作らない・記憶 areka-log-first-no-silent-failure）。
+///
+/// [`FramePlan::FullClear`] は縮退対象外（Clear は既に全域リセット）。[`FramePlan::NoChange`] は
+/// `rebuilt` のときのみ縮退（format 組み直し後の committed ピクセル前提消失を全域再描画で回復）。
+fn degrade_if_needed(
+    plan: FramePlan,
+    rebuilt: bool,
+    canvas: &ContentCanvas,
+    window: &VisibleWindow,
+    mode: WritingMode,
+    contract: &ScaleContract,
+    surface_size: (u32, u32),
+) -> FramePlan {
+    match plan {
+        FramePlan::FullClear => FramePlan::FullClear,
+        FramePlan::NoChange => {
+            if rebuilt {
+                tracing::debug!(
+                    "フォント/方向変更を検知——committed ピクセル前提消失のため全域ダーティへ縮退"
+                );
+                full_domain_update(canvas, window, mode, contract, surface_size)
+            } else {
+                FramePlan::NoChange
+            }
+        }
+        FramePlan::Update {
+            blit,
+            dirty,
+            draw_lines,
+        } => {
+            if rebuilt {
+                tracing::debug!(
+                    "フォント/方向変更を検知——format/行キャッシュ組み直し・全域ダーティへ縮退（committed ピクセル前提消失）"
+                );
+                full_domain_update(canvas, window, mode, contract, surface_size)
+            } else if let Some(reason) =
+                plan_inconsistency(&dirty, &draw_lines, canvas.residents.len(), surface_size)
+            {
+                tracing::warn!(
+                    reason,
+                    "plan と canvas/面寸の想定外不整合——全域ダーティ再描画へ縮退（正しさ優先・最悪でもレガシー全域再描画と等価）"
+                );
+                full_domain_update(canvas, window, mode, contract, surface_size)
+            } else {
+                FramePlan::Update {
+                    blit,
+                    dirty,
+                    draw_lines,
+                }
+            }
+        }
+    }
+}
+
+/// 全域ダーティ Update（`blit=(0,0)`・dirty=面全域 1 枚・draw_lines=全 GlyphRun 住人）を組む。
+///
+/// [`ScrollPlanner::derive_dirty`] を**空 prev**（`&[]`）で呼び、面全域 1 枚のダーティと全 GlyphRun
+/// 住人の描画対象を得る（初回フレームと同一経路＝レガシー全域再描画と等価）。縮退の唯一の生成口。
+fn full_domain_update(
+    canvas: &ContentCanvas,
+    window: &VisibleWindow,
+    mode: WritingMode,
+    contract: &ScaleContract,
+    surface_size: (u32, u32),
+) -> FramePlan {
+    let (dirty, draw_lines) =
+        ScrollPlanner::derive_dirty(canvas, window, mode, contract, (0, 0), surface_size, &[]);
+    FramePlan::Update {
+        blit: (0, 0),
+        dirty,
+        draw_lines,
+    }
+}
+
+/// `plan` の `Update` が canvas/面寸と矛盾していないか検査する（防御的・render の縮退経路が呼ぶ）。
+///
+/// 返り値 `Some(reason)` は縮退のログ理由・`None` は整合。通常経路（[`ScrollPlanner::derive_dirty`]）は
+/// 面寸クランプ済み・住人範囲内の index のみを返すため不発だが、行指紋と内容キャンバスの想定外不整合
+/// （範囲外 index・面寸超過矩形）を検知したら全域ダーティへ縮退させる（ログ無し失敗経路を作らない）。
+fn plan_inconsistency(
+    dirty: &[PhysicalRect],
+    draw_lines: &[usize],
+    residents_len: usize,
+    surface_size: (u32, u32),
+) -> Option<&'static str> {
+    if draw_lines.iter().any(|&i| i >= residents_len) {
+        return Some("draw_lines に canvas 住人範囲外の index が含まれる");
+    }
+    let (w, h) = (surface_size.0 as u64, surface_size.1 as u64);
+    if dirty
+        .iter()
+        .any(|r| r.x as u64 + r.w as u64 > w || r.y as u64 + r.h as u64 > h)
+    {
+        return Some("dirty 矩形が面寸を超える");
+    }
+    None
 }
 
 /// `Option` が `None`（デバイス未初期化など本来到達しない欠落）を [`TextLayerError::Device`] に
@@ -699,6 +835,174 @@ mod tests {
         assert_eq!(
             stats_b.blits, stats_a.blits,
             "typewriter 進行は blit を発生させない（blit=0）"
+        );
+    }
+
+    /// 複数行（各行相異なるグリフ）の item 列を組む（縮退檻で「全住人再描画」を数える台）。
+    fn multiline_items(chars: &[char]) -> Vec<TextItem> {
+        let mut items = Vec::new();
+        for (i, &ch) in chars.iter().enumerate() {
+            if i > 0 {
+                items.push(TextItem::LineBreak { ratio: 1.0 });
+            }
+            items.push(TextItem::Glyph { ch });
+        }
+        items
+    }
+
+    /// 観測可能な完了状態（R4.3）: content 描画済み → `request_clear()` → 次フレームが
+    /// FullClear（`full_clears` +1・read_back 全域透明）→ さらに次フレームで content が
+    /// 全域ダーティ再描画で復帰する（透明フラッシュは 1 フレームのみ）。
+    #[test]
+    fn request_clear_triggers_full_clear_then_content_returns() {
+        let mut rig = Rig::new();
+        let image = (80u32, 40u32);
+        let mut surface = rig.attach(image, 1.0);
+        let mode = WritingMode::HorizontalTb;
+        let font = ResolvedFont::resolve(&geo_model(Some(10)));
+        let region = TextRegion::resolve(&geo_model(Some(10)), image, mode);
+        let contract = ScaleContract::new(1.0, None);
+        let mut exec = ViewboxExecutor::new(&rig.core).expect("ViewboxExecutor::new 失敗");
+
+        let items = glyph_items("■■");
+        let (canvas, window) = build(&items, &region, mode, 10.0);
+
+        // frame 1: content 描画（初回＝全域ダーティ）。
+        exec.render(&canvas, &window, &font, mode, &contract, &mut surface)
+            .expect("content render 失敗");
+        let painted = surface.read_back().expect("read_back(content) 失敗");
+        assert!(opaque_count(&painted) > 0, "content の非透明ピクセルが現れる");
+        let full_before = exec.stats().full_clears;
+
+        // Clear cue 適用点（planner 初期化＋行キャッシュ破棄はこの口だけ）。
+        exec.request_clear();
+
+        // frame 2: FullClear（描画 0 件・back 全域透明 Clear → flip）。
+        let changed = exec
+            .render(&canvas, &window, &font, mode, &contract, &mut surface)
+            .expect("FullClear render 失敗");
+        assert!(changed, "FullClear は present 要（変化あり）");
+        assert_eq!(
+            exec.stats().full_clears,
+            full_before + 1,
+            "FullClear は full_clears をちょうど 1 増やす"
+        );
+        let cleared = surface.read_back().expect("read_back(cleared) 失敗");
+        assert_eq!(opaque_count(&cleared), 0, "Clear 後は全域透明（全 α=0）");
+
+        // frame 3: 同一 content の再フレーム → prev_lines 空ゆえ全域ダーティで content 復帰
+        //（透明フラッシュは frame 2 の 1 回のみ・FullClear は増えない）。
+        let changed3 = exec
+            .render(&canvas, &window, &font, mode, &contract, &mut surface)
+            .expect("Clear 後 content render 失敗");
+        assert!(changed3, "Clear 後の再描画は全域ダーティで変化あり");
+        assert_eq!(
+            exec.stats().full_clears,
+            full_before + 1,
+            "content 復帰は FullClear を増やさない（全域ダーティ Update）"
+        );
+        let restored = surface.read_back().expect("read_back(restored) 失敗");
+        assert!(opaque_count(&restored) > 0, "content が全域ダーティで復帰する");
+    }
+
+    /// 観測可能な完了状態（縮退の主檻・R3.5/Error Handling）: フォント（高さ）変更を注入すると
+    /// format と行キャッシュが組み直され、当該フレームが全域ダーティへ縮退して全住人が再描画される
+    ///（`draw_text_layout_calls` 増分＝全 GlyphRun 住人数・`line_layout_creations` 増分＝全住人数
+    /// ＝キャッシュ破棄で全再生成・`full_clears` 不変＝透明フラッシュを起こす FullClear と区別・
+    /// read_back は font B の content で非透明）。
+    #[test]
+    fn font_change_degrades_to_full_domain_redraw() {
+        let mut rig = Rig::new();
+        let image = (120u32, 120u32);
+        let mut surface = rig.attach(image, 1.0);
+        let mode = WritingMode::HorizontalTb;
+        let contract = ScaleContract::new(1.0, None);
+        let mut exec = ViewboxExecutor::new(&rig.core).expect("ViewboxExecutor::new 失敗");
+
+        // 3 行（相異なるグリフ・全行が 120px に収まる＝block_offset 0）。
+        let chars = ['あ', 'い', 'う'];
+        let items = multiline_items(&chars);
+
+        // font A（高さ 10）で描画（初回＝全域ダーティ）。
+        let font_a = ResolvedFont::resolve(&geo_model(Some(10)));
+        let region_a = TextRegion::resolve(&geo_model(Some(10)), image, mode);
+        let (canvas_a, window_a) = build(&items, &region_a, mode, 10.0);
+        let total = canvas_a.residents.len();
+        assert_eq!(total, 3, "3 行の GlyphRun 住人（全住人再描画を数える台）");
+        exec.render(&canvas_a, &window_a, &font_a, mode, &contract, &mut surface)
+            .expect("font A render 失敗");
+        let stats_a = exec.stats();
+        let full_before = stats_a.full_clears;
+
+        // font B（高さ 14）へ変更（FormatKey の高さビットが変わり format/行キャッシュ組み直し）。
+        let font_b = ResolvedFont::resolve(&geo_model(Some(14)));
+        let region_b = TextRegion::resolve(&geo_model(Some(14)), image, mode);
+        let (canvas_b, window_b) = build(&items, &region_b, mode, 14.0);
+        let total_b = canvas_b.residents.len();
+        assert_eq!(total_b, 3, "font B でも 3 行（全住人が縮退で再描画される）");
+
+        let changed = exec
+            .render(&canvas_b, &window_b, &font_b, mode, &contract, &mut surface)
+            .expect("font B render 失敗");
+        assert!(changed, "font 変更フレームは変化あり（全域ダーティ縮退）");
+        let stats_b = exec.stats();
+
+        let draw_delta = stats_b.draw_text_layout_calls - stats_a.draw_text_layout_calls;
+        assert_eq!(
+            draw_delta, total_b as u64,
+            "縮退フレームは全 GlyphRun 住人を再描画する（全域ダーティ 1 枚 × 全住人）"
+        );
+        let create_delta = stats_b.line_layout_creations - stats_a.line_layout_creations;
+        assert_eq!(
+            create_delta, total_b as u64,
+            "行キャッシュ破棄ゆえ全住人ぶん行レイアウトを再生成する"
+        );
+        assert_eq!(
+            stats_b.full_clears, full_before,
+            "縮退は全域ダーティ Update（透明フラッシュを起こす FullClear ではない）"
+        );
+        let bytes = surface.read_back().expect("read_back(font B) 失敗");
+        assert!(
+            opaque_count(&bytes) > 0,
+            "font B の content が全域ダーティで正しく描かれる（透明のままでない）"
+        );
+    }
+
+    /// 想定外不整合の検査関数（render の縮退経路が呼ぶ述語）が矛盾入力で理由を返し、整合入力で
+    /// `None` を返す（範囲外 draw_lines・面寸超過 dirty の両トリガ・R Error Handling）。
+    /// render からの結線は `font_change_degrades_to_full_domain_redraw`（縮退の実発火）が担保する。
+    #[test]
+    fn plan_inconsistency_detects_out_of_range_and_oversize() {
+        use super::plan_inconsistency;
+        use crate::viewbox::PhysicalRect;
+
+        let size = (100u32, 50u32);
+        let full = PhysicalRect { x: 0, y: 0, w: 100, h: 50 };
+
+        // 整合: 範囲内 index・面寸ちょうどの dirty → None。
+        assert!(
+            plan_inconsistency(&[full], &[0, 1], 2, size).is_none(),
+            "範囲内・面寸内は整合（縮退しない）"
+        );
+
+        // 範囲外 draw_lines（住人数 2 に対し index 5）→ Some。
+        assert!(
+            plan_inconsistency(&[], &[5], 2, size).is_some(),
+            "draw_lines の範囲外 index を検知する"
+        );
+
+        // dirty が面幅を超える（x+w=101 > 100）→ Some。
+        assert!(
+            plan_inconsistency(&[PhysicalRect { x: 0, y: 0, w: 101, h: 50 }], &[], 2, size)
+                .is_some(),
+            "面幅を超える dirty を検知する"
+        );
+
+        // dirty が面高を超える（y+h=60 > 50）→ Some。
+        assert!(
+            plan_inconsistency(&[PhysicalRect { x: 0, y: 40, w: 100, h: 20 }], &[], 2, size)
+                .is_some(),
+            "面高を超える dirty を検知する"
         );
     }
 }
