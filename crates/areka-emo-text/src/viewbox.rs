@@ -3,8 +3,9 @@
 //! 可視窓（[`crate::layout::VisibleWindow`]）の `block_offset` を「真位置（f32 連続量・
 //! 物理 px）」と「確定位置（whole-pixel 整数）」へ分離して保持し（M2 補間シームの土台・
 //! R8.2）、ブロック軸のスカラを writing_mode 追随の 2D ベクトルへ写す [`ScrollState`]／
-//! [`ScrollPlanner`]／[`block_axis_vector`] を担う。状態遷移（plan/commit）・ダーティ導出・
-//! `FramePlan` は後続タスクが本モジュールへ追加する（本タスクは表現と軸写像・量子化のみ）。
+//! [`ScrollPlanner`]／[`block_axis_vector`] を担い、ダーティ導出（[`ScrollPlanner::derive_dirty`]）
+//! と状態遷移（[`ScrollPlanner::plan`]／[`ScrollPlanner::commit`]・[`FramePlan`]）を提供する
+//! （plan は状態不変・純粋／commit は COM 実行成功後にのみ確定を反映＝失敗フレーム再試行安全）。
 //!
 //! **層規律**: 純粋層——`windows` 系 crate への依存を一切持たない（決定論檻）。失敗経路の
 //! ない純関数中心ゆえログ/panic を用いない。
@@ -60,6 +61,28 @@ pub struct ScrollState {
     pub committed: i32,
 }
 
+/// 1 フレームの描画計画（純粋・決定論の値オブジェクト・DD1/DD4）。
+///
+/// [`ScrollPlanner::plan`] が状態を変えずに返す 3 種の計画結果。COM 層はこの enum を受けて
+/// blit 指示・ダーティ D2D 描画・FullClear を実行し、成功時にだけ [`ScrollPlanner::commit`] で
+/// 確定を反映する（失敗フレームは未 commit のまま次フレームで再計画＝再試行安全）。
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum FramePlan {
+    /// 変化なし——blit も描画も present も行わない（描画呼び出し 0 の檻の対象・R3.2/3.6）。
+    NoChange,
+    /// Clear cue 適用——back を全域透明 Clear（描画 0 件）して flip（R4.3）。
+    FullClear,
+    /// blit ＋ ダーティ描画（露出帯 ∪ 変化行・R2.3/3.2/3.3）。
+    Update {
+        /// 面内 blit ベクトル（物理 px 整数・軸は writing_mode 追随・スクロールなしは 0）。
+        blit: (i32, i32),
+        /// ダーティ矩形（物理 px 整数・面寸クランプ済み・露出帯 ∪ 変化行）。
+        dirty: Vec<PhysicalRect>,
+        /// dirty と交差する canvas 住人 index（描画対象・クリップで dirty 限定）。
+        draw_lines: Vec<usize>,
+    },
+}
+
 /// ブロック軸（行送り軸）スカラ `v` を writing_mode 追随の 2D ベクトル `(x, y)` へ写す
 /// （R5.1–5.3）。
 ///
@@ -76,18 +99,24 @@ pub fn block_axis_vector(mode: WritingMode, v: i32) -> (i32, i32) {
 
 /// スクロール位置の計画者（純粋・決定論）。
 ///
-/// 本タスク（3.1）は真位置／確定位置の**表現**・軸写像・量子化のみを担う。状態遷移
-/// （`plan`/`commit`）・ダーティ導出・`FramePlan` は後続タスク（3.2/3.3）が本型へ追加する
-/// ——それらを受け入れられるよう確定位置 `committed` と直近真位置 `pos` を内部状態として
-/// 保持する（初期 0）。
+/// 真位置／確定位置の**表現**・軸写像・量子化（3.1）、ダーティ導出（3.2）、`plan`/`commit`
+/// 二相と `FramePlan`（3.3）を担う。確定位置 `committed`・直近真位置 `pos`・前回確定時の
+/// 行指紋 `prev_lines`・Clear 要求フラグ `clear_requested` を内部状態として保持する
+/// （初期: committed=0・pos=0・prev_lines 空・clear_requested=false）。`plan` は状態不変
+/// （`&self`）で、確定は `commit`（`&mut self`）でのみ反映する（失敗フレーム再試行安全）。
 ///
 /// 純粋層規律: `windows` 非依存（lib.rs 構造檻へ追加）。同一入力→同一出力。
 #[derive(Clone, Debug, Default)]
 pub struct ScrollPlanner {
-    /// 面に反映済みの whole-pixel 位置（`commit` で更新——後続 3.2 の領分・初期 0）。
+    /// 面に反映済みの whole-pixel 位置（`commit` で更新・初期 0）。
     committed: i32,
     /// 直近の真位置（f32 連続量・M2 で補間過程が更新元になる・初期 0）。
     pos: f32,
+    /// 前回 `commit` 時の canvas 行指紋（変化行検出の唯一の根拠・初期空＝全域ダーティ）。
+    prev_lines: Vec<CommittedLine>,
+    /// Clear cue 受領フラグ——true の間 `plan` は `FramePlan::FullClear` を返す。
+    /// `commit(FullClear)` で false へ戻す（未 commit の失敗フレームは保持＝再試行安全）。
+    clear_requested: bool,
 }
 
 impl ScrollPlanner {
@@ -130,6 +159,95 @@ impl ScrollPlanner {
     /// （初期状態では `committed = 0` ゆえ blit ＝ `target.committed` の軸写像）。
     pub fn blit_vector(&self, target: &ScrollState, mode: WritingMode) -> (i32, i32) {
         block_axis_vector(mode, target.committed - self.committed)
+    }
+
+    /// 1 フレームの描画計画を返す（**状態不変・純粋**・`&self`・R2.3/4.3）。
+    ///
+    /// - `clear_requested` が立っていれば [`FramePlan::FullClear`]（描画 0 件・back 全域 Clear）。
+    /// - それ以外は現状 `committed` から目標（`window.block_offset` の量子化）への blit と、
+    ///   前回確定 `prev_lines` に対する [`Self::derive_dirty`] の結果（露出帯 ∪ 変化行）を組む。
+    ///   blit が 0 かつ dirty が空なら [`FramePlan::NoChange`]（blit・描画・present とも 0）、
+    ///   さもなくば [`FramePlan::Update`]。
+    ///
+    /// `self` を一切変えないため、同一入力の反復 `plan` は同一計画を返す（デバイス失敗フレームは
+    /// 未 commit のまま次フレームで再計画＝再試行安全）。確定は [`Self::commit`] の役目。
+    pub fn plan(
+        &self,
+        canvas: &ContentCanvas,
+        window: &VisibleWindow,
+        mode: WritingMode,
+        contract: &ScaleContract,
+        surface_size: (u32, u32),
+    ) -> FramePlan {
+        if self.clear_requested {
+            return FramePlan::FullClear;
+        }
+        let target = self.resolve_position(window.block_offset, contract);
+        let blit = self.blit_vector(&target, mode);
+        let (dirty, draw_lines) = Self::derive_dirty(
+            canvas,
+            window,
+            mode,
+            contract,
+            blit,
+            surface_size,
+            &self.prev_lines,
+        );
+        if blit == (0, 0) && dirty.is_empty() {
+            FramePlan::NoChange
+        } else {
+            FramePlan::Update {
+                blit,
+                dirty,
+                draw_lines,
+            }
+        }
+    }
+
+    /// COM 実行が成功した後にだけ確定を反映する（`&mut self`・R2.3/4.3）。
+    ///
+    /// `plan` と**同一の window/canvas/contract**で呼ばれる前提（呼び手が plan→COM→commit を
+    /// 同一入力で回す・design System Flows）:
+    /// - [`FramePlan::NoChange`]: no-op（状態を変えない）。
+    /// - [`FramePlan::FullClear`]: 全域リセットの確定（committed=0・pos=0・prev_lines 空・
+    ///   `clear_requested` を落とす）。
+    /// - [`FramePlan::Update`]: 目標位置を確定し（`committed`/`pos`）、新 canvas から行指紋
+    ///   `prev_lines` を張り直す（次フレームの変化行検出の根拠）。
+    pub fn commit(
+        &mut self,
+        canvas: &ContentCanvas,
+        window: &VisibleWindow,
+        mode: WritingMode,
+        contract: &ScaleContract,
+        plan: &FramePlan,
+    ) {
+        match plan {
+            FramePlan::NoChange => {}
+            FramePlan::FullClear => {
+                self.committed = 0;
+                self.pos = 0.0;
+                self.prev_lines.clear();
+                self.clear_requested = false;
+            }
+            FramePlan::Update { .. } => {
+                let target = self.resolve_position(window.block_offset, contract);
+                self.committed = target.committed;
+                self.pos = target.pos;
+                self.prev_lines = Self::committed_lines(canvas, mode);
+            }
+        }
+    }
+
+    /// Clear cue の適用点（破棄・リセットの唯一の口・`&mut self`・R4.3）。
+    ///
+    /// `clear_requested` を立て、確定位置／行指紋をその場で初期化する（committed=0・pos=0・
+    /// prev_lines 空）。次 `plan` が [`FramePlan::FullClear`] を返し、COM 成功後の
+    /// `commit(FullClear)` がフラグを落とす（未 commit の失敗フレームはフラグ保持＝再試行安全）。
+    pub fn request_clear(&mut self) {
+        self.clear_requested = true;
+        self.committed = 0;
+        self.pos = 0.0;
+        self.prev_lines.clear();
     }
 }
 
@@ -431,7 +549,9 @@ mod tests {
         BalloonModel, Font, FontColor, Origin, ValidRect, WindowPosition, WordWrapPoint,
     };
 
-    use super::{DIRTY_GUARD_IMG_PX, PhysicalRect, ScrollPlanner, ScrollState, block_axis_vector};
+    use super::{
+        DIRTY_GUARD_IMG_PX, FramePlan, PhysicalRect, ScrollPlanner, ScrollState, block_axis_vector,
+    };
     use crate::canvas::ContentCanvas;
     use crate::layout::{FixedMetrics, LayoutEngine, VisibleWindow};
     use crate::region::{ScaleContract, TextRegion};
@@ -994,5 +1114,171 @@ mod tests {
         let a = ScrollPlanner::committed_lines(&canvas, WritingMode::HorizontalTb);
         let b = ScrollPlanner::committed_lines(&canvas, WritingMode::HorizontalTb);
         assert_eq!(a, b, "同一 canvas の指紋は決定論的に一致");
+    }
+
+    // ── 3.3 R2.3/4.3: plan/commit 二相（純粋計画・確定・Clear・失敗フレーム再試行） ──
+    //
+    // 幾何は 3.2 と同一前提（font 10 → pitch 13・全角 1 グリフ/行）。面寸 (400,100)。
+
+    /// 3 行 canvas（横書き・validrect 100×400）——plan/commit 二相の共通母体。
+    fn plan_canvas() -> ContentCanvas {
+        canvas_for(
+            &broken_lines(3),
+            WritingMode::HorizontalTb,
+            (Some(0), Some(100), Some(0), Some(400)),
+            10.0,
+        )
+    }
+
+    /// plan は状態不変・純粋——未 commit の反復 plan は同一計画を返し `scroll_state` も動かない
+    /// （デバイス失敗フレームの再試行安全＝現行の「skip して次フレーム再計画」規律）。
+    #[test]
+    fn plan_is_pure_and_repeatable_without_commit() {
+        let contract = ScaleContract::new(1.0, None);
+        let canvas = plan_canvas();
+        let mut planner = ScrollPlanner::new();
+        // 初回フレームを確定して prev_lines を張る（以後のスクロールは Update）。
+        let w0 = window(0, 0.0);
+        let first = planner.plan(&canvas, &w0, WritingMode::HorizontalTb, &contract, (400, 100));
+        planner.commit(&canvas, &w0, WritingMode::HorizontalTb, &contract, &first);
+
+        // スクロールを未 commit で 2 回 plan → 同一計画・scroll_state 不変。
+        let w1 = window(1, -13.0);
+        let before = planner.scroll_state();
+        let a = planner.plan(&canvas, &w1, WritingMode::HorizontalTb, &contract, (400, 100));
+        let b = planner.plan(&canvas, &w1, WritingMode::HorizontalTb, &contract, (400, 100));
+        assert_eq!(a, b, "未 commit の反復 plan は同一計画（再試行安全）");
+        assert_eq!(
+            planner.scroll_state(),
+            before,
+            "plan は self を一切変えない（純粋）"
+        );
+        assert!(matches!(a, FramePlan::Update { .. }), "スクロールは Update");
+    }
+
+    /// commit を挟むと確定が次回計画へ反映される——同一 window の初回全域 Update を commit
+    /// すると、指紋一致・blit 0 で次の同一 plan は NoChange になる。
+    #[test]
+    fn commit_makes_next_identical_plan_no_change() {
+        let contract = ScaleContract::new(1.0, None);
+        let canvas = plan_canvas();
+        let mut planner = ScrollPlanner::new();
+        let w = window(0, 0.0);
+        // 初回 plan は全域 Update（prev 空）。
+        let first = planner.plan(&canvas, &w, WritingMode::HorizontalTb, &contract, (400, 100));
+        assert!(matches!(first, FramePlan::Update { .. }), "初回は全域 Update");
+        planner.commit(&canvas, &w, WritingMode::HorizontalTb, &contract, &first);
+        // 同一 window の次 plan は NoChange（指紋一致・blit 0）。
+        assert_eq!(
+            planner.plan(&canvas, &w, WritingMode::HorizontalTb, &contract, (400, 100)),
+            FramePlan::NoChange,
+            "commit 後の同一 window は変化なし"
+        );
+    }
+
+    /// スクロール（block_offset 変化）→ plan が露出帯付き Update → commit で
+    /// `scroll_state().committed` が目標へ追従する（M1 ステップスクロールの即時追従）。
+    #[test]
+    fn commit_of_scroll_update_advances_committed() {
+        let contract = ScaleContract::new(1.0, None);
+        let canvas = plan_canvas();
+        let mut planner = ScrollPlanner::new();
+        let w0 = window(0, 0.0);
+        let first = planner.plan(&canvas, &w0, WritingMode::HorizontalTb, &contract, (400, 100));
+        planner.commit(&canvas, &w0, WritingMode::HorizontalTb, &contract, &first);
+        assert_eq!(planner.scroll_state().committed, 0);
+
+        // スクロール（内容不変・block_offset=-13＝内容が上へ）→ 下端露出帯付き Update。
+        let w1 = window(1, -13.0);
+        let scroll = planner.plan(&canvas, &w1, WritingMode::HorizontalTb, &contract, (400, 100));
+        match &scroll {
+            FramePlan::Update { blit, dirty, .. } => {
+                assert_eq!(*blit, (0, -13), "横書きスクロールの blit は y 軸・符号素通し");
+                assert!(!dirty.is_empty(), "露出帯がダーティ");
+            }
+            other => panic!("スクロールは Update のはず: {other:?}"),
+        }
+        planner.commit(&canvas, &w1, WritingMode::HorizontalTb, &contract, &scroll);
+        assert_eq!(
+            planner.scroll_state().committed,
+            -13,
+            "commit で committed が目標へ追従"
+        );
+    }
+
+    /// plan は 3 種の計画結果を返し分ける——変化なし＝NoChange・request_clear 後＝FullClear・
+    /// スクロール/伸長＝Update。
+    #[test]
+    fn plan_returns_three_variants() {
+        let contract = ScaleContract::new(1.0, None);
+        let canvas = plan_canvas();
+        let mut planner = ScrollPlanner::new();
+        let w = window(0, 0.0);
+
+        // (Update) 初回＝全域。
+        let first = planner.plan(&canvas, &w, WritingMode::HorizontalTb, &contract, (400, 100));
+        assert!(matches!(first, FramePlan::Update { .. }), "初回は Update");
+        planner.commit(&canvas, &w, WritingMode::HorizontalTb, &contract, &first);
+
+        // (NoChange) 変化なし。
+        assert_eq!(
+            planner.plan(&canvas, &w, WritingMode::HorizontalTb, &contract, (400, 100)),
+            FramePlan::NoChange,
+            "変化なしは NoChange"
+        );
+
+        // (FullClear) request_clear 後。
+        planner.request_clear();
+        assert_eq!(
+            planner.plan(&canvas, &w, WritingMode::HorizontalTb, &contract, (400, 100)),
+            FramePlan::FullClear,
+            "Clear 要求後は FullClear"
+        );
+    }
+
+    /// FullClear の確定サイクル——request_clear で位置/指紋が 0 化し次 plan が FullClear、
+    /// commit(FullClear) で clear_requested が落ちて次 plan は通常導出（全域 Update）へ戻る。
+    /// 未 commit の失敗フレームはフラグ保持＝再試行安全。
+    #[test]
+    fn request_clear_then_commit_full_clear_returns_to_normal() {
+        let contract = ScaleContract::new(1.0, None);
+        let canvas = plan_canvas();
+        let mut planner = ScrollPlanner::new();
+        // 全域を確定 → スクロールで committed を -13 まで進める。
+        let w0 = window(0, 0.0);
+        let f0 = planner.plan(&canvas, &w0, WritingMode::HorizontalTb, &contract, (400, 100));
+        planner.commit(&canvas, &w0, WritingMode::HorizontalTb, &contract, &f0);
+        let w1 = window(1, -13.0);
+        let f1 = planner.plan(&canvas, &w1, WritingMode::HorizontalTb, &contract, (400, 100));
+        planner.commit(&canvas, &w1, WritingMode::HorizontalTb, &contract, &f1);
+        assert_eq!(planner.scroll_state().committed, -13);
+
+        // request_clear: scroll_state 0 化・次 plan は FullClear。
+        planner.request_clear();
+        assert_eq!(
+            planner.scroll_state(),
+            ScrollState {
+                pos: 0.0,
+                committed: 0
+            },
+            "位置/指紋が初期化される"
+        );
+        let clear_plan = planner.plan(&canvas, &w0, WritingMode::HorizontalTb, &contract, (400, 100));
+        assert_eq!(clear_plan, FramePlan::FullClear);
+
+        // 未 commit の反復は FullClear のまま（失敗フレーム再試行安全）。
+        assert_eq!(
+            planner.plan(&canvas, &w0, WritingMode::HorizontalTb, &contract, (400, 100)),
+            FramePlan::FullClear,
+            "commit するまで FullClear を保持"
+        );
+
+        // commit(FullClear) → フラグが落ち・prev 空ゆえ次 plan は通常導出（全域 Update）へ戻る。
+        planner.commit(&canvas, &w0, WritingMode::HorizontalTb, &contract, &clear_plan);
+        let after = planner.plan(&canvas, &w0, WritingMode::HorizontalTb, &contract, (400, 100));
+        assert!(
+            matches!(after, FramePlan::Update { .. }),
+            "FullClear 確定後は通常導出へ戻る"
+        );
     }
 }
