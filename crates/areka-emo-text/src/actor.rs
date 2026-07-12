@@ -22,12 +22,13 @@ use tracing::{debug, error, info, warn};
 use wintf::ecs::{GraphicsCore, WucGraphicsResource};
 
 use crate::canvas::ContentCanvas;
-use crate::draw::{DWriteMetrics, DrawExecutor, ResolvedFont};
+use crate::draw::{DWriteMetrics, ResolvedFont};
 use crate::layout::LayoutEngine;
 use crate::region::{ImagePx, ScaleContract, TextRegion};
 use crate::sink::{handle_text_msg, EmoTextSink, TextMsg};
 use crate::state::{TextLayerConfig, TextLayerState};
 use crate::surface::TextSurface;
+use crate::viewbox_draw::{DrawStats, ViewboxExecutor};
 use crate::writing::WritingMode;
 use crate::TextLayerError;
 
@@ -117,8 +118,9 @@ impl ResolvedBalloonText {
 struct ActorRender {
     /// 自前 swapchain 供給面（初回のみ予約スロットへ brush 装着・以降 Present のみ）。
     surface: TextSurface,
-    /// 全域再描画の実行部（行 TextLayout キャッシュは actor の行 index に束縛）。
-    executor: DrawExecutor,
+    /// viewbox ダーティ矩形スクロールの実行部（保持ピクセルの面内 blit ＋ ダーティ矩形限定描画・
+    /// 行 TextLayout キャッシュは actor の行 index に束縛）。
+    executor: ViewboxExecutor,
     /// 計測専用 probe 由来の実測 metrics（actor の font/mode に束縛）。
     metrics: DWriteMetrics,
 }
@@ -205,12 +207,12 @@ impl TextLayerRuntime {
 
     /// cue を actor 別の純粋状態機械へ適用する（UI ドレインの適用点・World に触れない）。
     ///
-    /// `Clear` は確定行 TextLayout キャッシュの全破棄点でもある（design「Clear で全破棄」——
-    /// 破棄はこの口だけ）。
+    /// `Clear` は全域リセット要求点でもある（planner 初期化＋確定行 TextLayout キャッシュの全破棄——
+    /// design「Clear で全破棄」・破棄はこの口だけ・次フレームは `FramePlan::FullClear`＝全域透明・R4.3）。
     pub fn apply_cue(&mut self, cue: &TalkCue) {
         if matches!(cue.command, CueCommand::Clear) {
             if let Some(render) = self.surfaces.get_mut(&cue.actor) {
-                render.executor.clear_cache();
+                render.executor.request_clear();
             }
         }
         self.state.apply_cue(cue, &self.config);
@@ -234,6 +236,18 @@ impl TextLayerRuntime {
     /// 装着済み actor の供給面（readback 等の観測口・未装着は `None`）。
     pub fn surface(&self, actor: &ActorKey) -> Option<&TextSurface> {
         self.surfaces.get(actor).map(|render| &render.surface)
+    }
+
+    /// 装着済み actor の決定論観測統計（[`ViewboxExecutor::stats`]・未装着は `None`）。
+    ///
+    /// [`surface`](Self::surface) と同型の additive アクセサ（R9.2 非抵触——emo2-boot 消費経路の
+    /// 再定義ではない）。example／統合テストがこの口から actor 別の [`DrawStats`]
+    /// （blit・`DrawTextLayout` 実行回数・行 TextLayout 生成回数・FullClear 回数）を読み、
+    /// 「可視窓のみ移動フレームで確定 content の再描画が起きない」等を決定論的に観測する
+    /// （R3.5/R10.3・目視非依存）。`ViewboxExecutor::stats()` は runtime 内部の `ActorRender` に
+    /// 抱えられており、この読み口がないと example から R10.3 checkpoint が成立しない。
+    pub fn draw_stats(&self, actor: &ActorKey) -> Option<DrawStats> {
+        self.surfaces.get(actor).map(|render| render.executor.stats())
     }
 }
 
@@ -274,15 +288,15 @@ pub fn spawn_emo_text(
 /// フレーム提示ステップ（毎フレーム UI スレッドで呼ぶ・example/emo2-boot が駆動）:
 /// `talk_time` は注入時刻（talk 起点相対秒・実時間 sleep 不使用・R3.3）。
 ///
-/// actor ごとに「リビール進行の解決（純粋）→ レイアウト決定（純粋）→ 全域再描画（COM）→
-/// 供給面の提示（Present のみ）」を駆動する:
+/// actor ごとに「リビール進行の解決（純粋）→ レイアウト決定（純粋）→ viewbox ダーティ矩形
+/// スクロール描画（COM）→ 変化ありのフレームだけ供給面を提示（Present のみ）」を駆動する:
 ///
 /// - **未解決 actor**（binding 未登録）: 状態は蓄積のみ・描画スキップ・次フレーム再試行
 ///   （actor ごと初回 `warn!`＋以降 `debug!`——frame の `Err` にはしない）。
 /// - **初回解決フレーム**: World 資源（[`GraphicsCore`]／[`WucGraphicsResource`]）から
 ///   供給面/描画実行部を構築し予約スロットへ装着する（actor ごと初回のみ・`info!`）。
-/// - **装着済み actor のグリフ更新**: 全域再描画→ swapchain Present のみで完結し、
-///   バルーン surface 本体の再合成（emo-compose 再駆動）を要求しない（R9.3）。
+/// - **装着済み actor のグリフ更新**: viewbox ダーティ矩形スクロール描画→（変化ありのフレームだけ）
+///   swapchain Present で完結し、バルーン surface 本体の再合成（emo-compose 再駆動）を要求しない（R9.3）。
 /// - **デバイス失敗**: 失敗源で `error!` 済み（log-first）。当該 actor の当該フレーム提示を
 ///   skip して他 actor の処理は継続し、最初の失敗を `Err` として返す（次フレーム再試行）。
 pub fn present_frame(
@@ -398,7 +412,7 @@ fn present_actor(
                     physical_size,
                     physical_offset,
                 )?;
-                let executor = DrawExecutor::new(&core)?;
+                let executor = ViewboxExecutor::new(&core)?;
                 let Some(factory) = core.dwrite_factory() else {
                     error!(actor = %actor, "present_frame: dwrite_factory 不在（metrics を構築できない）");
                     return Err(TextLayerError::Device {
@@ -423,7 +437,7 @@ fn present_actor(
         );
     }
 
-    // ── リビール進行（純粋）→ レイアウト決定（純粋）→ 全域再描画 → 提示（Present のみ） ──
+    // ── リビール進行（純粋）→ レイアウト決定（純粋）→ viewbox ダーティ矩形描画 → 提示（Present のみ） ──
     let Some(render) = runtime.surfaces.get_mut(actor) else {
         // 直前の insert 直後に到達するため構造上起こらない——防御（panic 禁止・log-first）。
         error!(actor = %actor, "present_frame: 装着済み描画資源の引き当てに失敗（構造不変の破れ）");
@@ -447,7 +461,7 @@ fn present_actor(
     );
     let window = LayoutEngine::visible_window(&lines, &resolved.region, resolved.mode);
     let canvas = ContentCanvas::from_layout(&lines, &resolved.region, resolved.mode);
-    render.executor.render(
+    let changed = render.executor.render(
         &canvas,
         &window,
         &resolved.font,
@@ -456,7 +470,12 @@ fn present_actor(
         &mut render.surface,
     )?;
     // 装着済み actor のグリフ更新は供給面の提示のみで完結（emo-compose 再駆動なし・R9.3）。
-    render.surface.present()
+    // 変化ありのフレームだけ提示する（`FramePlan::NoChange` は blit も描画も present も省く——
+    // readback は front を読むため観測述語に影響しない・R1.1/R3.1）。
+    if changed {
+        render.surface.present()?;
+    }
+    Ok(())
 }
 
 #[cfg(test)]
@@ -910,5 +929,65 @@ mod runtime_tests {
         rt.apply_cue(&cue("0", 0.15, CueCommand::Clear));
         present_frame(&mut rt, &mut world, 0.2).expect("Clear 後フレーム");
         assert_eq!(read(&rt), 0, "Clear 後の供給面は全域透明へ戻る");
+    }
+
+    /// 観測可能な完了状態（task 9・R3.5/R10.3）: 登録済み actor に対して present_frame 後の
+    /// 決定論観測統計を `TextLayerRuntime::draw_stats(actor)`（`surface(actor)` と同型の
+    /// additive アクセサ）から外部が読み出せる。未装着 actor は `None`。
+    #[test]
+    fn draw_stats_readable_after_present_frame() {
+        unsafe {
+            let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
+        }
+        let core = GraphicsCore::new().expect("GraphicsCore::new 失敗");
+        let wuc = WucGraphicsResource::new(core.d2d_device().expect("d2d_device"))
+            .expect("WucGraphicsResource::new 失敗");
+
+        let mut world = World::new();
+        let (window, slot) = spawn_reserved_slot(&mut world);
+        world.insert_resource(core);
+        world.insert_resource(wuc);
+
+        let actor = ActorKey::from("0");
+        let mut rt = TextLayerRuntime::new(TextLayerConfig::default());
+
+        // 未装着 actor は None（読み口の存在自体は装着に依存しない）。
+        assert!(
+            rt.draw_stats(&actor).is_none(),
+            "未装着 actor の draw_stats は None"
+        );
+
+        rt.apply_cue(&cue("0", 0.0, CueCommand::Text("アヒル".into())));
+        let image = (120u32, 60u32);
+        let binding = TextSlotBinding::new(slot, window, 1.0, image);
+        rt.register_actor(
+            actor.clone(),
+            binding,
+            ResolvedBalloonText::resolve(&geo_model(), image),
+        );
+
+        // 装着＋初回描画フレーム（全域ダーティ）→ 統計が読み出せて描画が計上されている。
+        present_frame(&mut rt, &mut world, 0.0).expect("装着フレーム");
+        let stats = rt
+            .draw_stats(&actor)
+            .expect("装着済み actor の draw_stats は Some");
+        assert!(
+            stats.draw_text_layout_calls >= 1,
+            "初回フレームで DrawTextLayout が計上される: {stats:?}"
+        );
+        assert!(
+            stats.line_layout_creations >= 1,
+            "初回フレームで行 TextLayout 生成が計上される: {stats:?}"
+        );
+
+        // 後続フレームで観測値が単調増加する（リビール進行＝現在行の再描画）。
+        present_frame(&mut rt, &mut world, 0.06).expect("フレーム t=0.06");
+        let stats2 = rt.draw_stats(&actor).expect("draw_stats（t=0.06）");
+        assert!(
+            stats2.draw_text_layout_calls >= stats.draw_text_layout_calls,
+            "描画呼び出し回数は単調非減少: {} -> {}",
+            stats.draw_text_layout_calls,
+            stats2.draw_text_layout_calls
+        );
     }
 }

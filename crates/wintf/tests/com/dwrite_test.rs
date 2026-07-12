@@ -157,3 +157,30 @@ fn hit_test_text_position_clamps_out_of_range_position() {
     let result = layout.hit_test_text_position(999, false);
     assert!(result.is_ok(), "out-of-range position should clamp, not fail");
 }
+
+// ============================================================
+// get_overhang_metrics（レイアウトボックス基準のインクはみ出し）
+// ============================================================
+
+/// get_overhang_metrics はレイアウトボックス各辺からのインクはみ出し（正＝外側・負＝内側）を返す。
+/// **ボックス基準**ゆえ、巨大ボックス（`make_layout` 既定 1000×1000）では対応辺のはみ出しが大きな
+/// 負値になる（インクは遥か内側）——タイトなインク境界を得るにはボックス寸の確定が要る、という
+/// 落とし穴（doc）を特性化する。呼び出し自体はエラーにならず有限値を返すことも固定する。
+#[test]
+fn get_overhang_metrics_is_box_relative_and_finite() {
+    let layout = make_layout(w!("日本語"));
+    let o = layout.get_overhang_metrics().expect("get_overhang_metrics");
+    assert!(
+        o.right < 0.0,
+        "巨大 max_width では右辺はみ出しは負（ink はボックス内側）: right={}",
+        o.right
+    );
+    assert!(
+        o.bottom < 0.0,
+        "巨大 max_height では下辺はみ出しは負: bottom={}",
+        o.bottom
+    );
+    for v in [o.left, o.top, o.right, o.bottom] {
+        assert!(v.is_finite(), "overhang 各成分は有限: {v}");
+    }
+}
