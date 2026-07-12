@@ -18,8 +18,11 @@
 //! ```text
 //! cargo run -p areka-emo-text --example emo-text-layer               # 横書き（共有 fixture・既定 horizontal_tb）
 //! cargo run -p areka-emo-text --example emo-text-layer -- --vertical # 縦書き（fixture 変種 emo2-vertical）
+//! cargo run -p areka-emo-text --example emo-text-layer -- --hold     # 目視確認（自動クローズせず talk をループ・balloon 上ダブルクリックで終了）
 //! ```
-//! シナリオは自動進行し（約 4 秒）、完了すると窓を閉じて `PASS`／`FAIL` を出力して終了する。
+//! 既定ではシナリオが自動進行し（約 4 秒）、完了すると窓を閉じて `PASS`／`FAIL` を出力して終了する。
+//! `--hold` を付けると自動クローズせず talk をループ再生し、balloon 窓上での左ダブルクリックで終了する
+//! （実機での目視確認用・`--vertical` と併用可）。
 //!
 //! # fixture（R11.4/R11.7）
 //!
@@ -63,8 +66,10 @@ use bevy_ecs::name::Name;
 use bevy_ecs::prelude::*;
 use tracing::{error, info, warn};
 use tracing_subscriber::EnvFilter;
+use windows::Win32::Foundation::POINT;
+use windows::Win32::UI::Input::KeyboardAndMouse::{GetAsyncKeyState, VK_LBUTTON};
 use windows::Win32::UI::WindowsAndMessaging::{
-    WS_EX_LAYERED, WS_EX_TOOLWINDOW, WS_EX_TOPMOST, WS_POPUP, WS_VISIBLE,
+    GetCursorPos, WS_EX_LAYERED, WS_EX_TOOLWINDOW, WS_EX_TOPMOST, WS_POPUP, WS_VISIBLE,
 };
 
 use wintf::ecs::layout::HitTest;
@@ -439,6 +444,13 @@ struct Demo {
     fed: bool,
     obs: Observations,
     finished: bool,
+    /// `--hold`: シナリオ完了後も窓を閉じず talk をループ再生し、balloon 上でのダブルクリックで終了する
+    /// （自動クローズしない目視確認モード・PASS/FAIL 自動判定は行わない）。
+    hold: bool,
+    /// ダブルクリック検出用: 直前フレームの左ボタン押下状態（rising edge 抽出）。
+    prev_lbutton: bool,
+    /// ダブルクリック検出用: 直近クリック（rising edge）のフレーム時刻（連続 2 クリックの間隔判定）。
+    last_click_time: f64,
 }
 
 /// sakura/kero の ActorKey（結線側が所有する actor→target 対応の鍵・R9.5）。
@@ -461,6 +473,7 @@ fn main() -> windows::core::Result<()> {
         .init();
 
     let vertical = std::env::args().any(|a| a == "--vertical");
+    let hold = std::env::args().any(|a| a == "--hold");
 
     let mgr = WinApp::new()?;
     let world = mgr.world();
@@ -473,7 +486,7 @@ fn main() -> windows::core::Result<()> {
     // UI スレッドで「アセット構築＋窓生成＋Demo 挿入」を行う（WIC は COM 初期化済みスレッド）。
     world.borrow().spawn(move |tx| async move {
         let _ = tx.send(Box::new(move |world: &mut World| {
-            build_and_spawn(world, vertical);
+            build_and_spawn(world, vertical, hold);
         }));
     });
 
@@ -488,7 +501,11 @@ fn main() -> windows::core::Result<()> {
         if vertical { "縦書き vertical_rl" } else { "横書き horizontal_tb（既定）" }
     );
     println!("  シナリオ: typewriter 進行 → 改行 → あふれスクロール → Clear（自動・約 4 秒）");
-    println!("  判定: readback 述語で自動判定し、最後に PASS/FAIL を 1 行出力（exit code 連動）");
+    if hold {
+        println!("  モード: --hold（目視確認）— talk をループ再生し、balloon 上でダブルクリックすると終了");
+    } else {
+        println!("  判定: readback 述語で自動判定し、最後に PASS/FAIL を 1 行出力（exit code 連動）");
+    }
     println!();
 
     mgr.run()?;
@@ -537,7 +554,7 @@ fn setup_abort(msg: &str) -> ! {
 }
 
 /// アセット構築・窓生成・`Demo` 挿入を一括で行う（UI スレッド・emo-present example と同型）。
-fn build_and_spawn(world: &mut World, vertical: bool) {
+fn build_and_spawn(world: &mut World, vertical: bool, hold: bool) {
     let Ok(decoder) = WicDecoderArm::new() else {
         setup_abort("WicDecoderArm 生成に失敗（COM 未初期化？）");
     };
@@ -596,8 +613,11 @@ fn build_and_spawn(world: &mut World, vertical: bool) {
         fed: false,
         obs: Observations::default(),
         finished: false,
+        hold,
+        prev_lbutton: false,
+        last_click_time: -10.0,
     });
-    info!(w, h, vertical, "emo-text-layer: 窓生成とアセット構築を完了（GPU 資源到達で装着）");
+    info!(w, h, vertical, hold, "emo-text-layer: 窓生成とアセット構築を完了（GPU 資源到達で装着）");
 }
 
 /// バルーン窓 Entity を構築する（emo-present example の balloon 窓と同型・物理 px 採寸）。
@@ -637,6 +657,56 @@ fn create_balloon_window(
 // 駆動 system（装着 → シナリオ・排他 &mut World・UI スレッド）
 // ---------------------------------------------------------------------------
 
+/// `--hold`: balloon 窓上での左ダブルクリック（連続 2 クリック ≤0.4s）を検出したら終了要求（true）。
+///
+/// `GetAsyncKeyState` の自前ポーリングでフレーム差分から rising edge を拾う——ECS ポインタの
+/// transient クリアや system 実行順序に依存せず、click-through 窓（`HitTest::none()`＋
+/// `WS_EX_TRANSPARENT`）でも物理ボタン押下を検出できる。カーソルが balloon 窓の矩形内にある
+/// ときのみ有効化し、別アプリ上のダブルクリックで閉じないようにする。
+fn poll_double_click_quit(demo: &mut Demo, world: &World) -> bool {
+    let now = world
+        .get_resource::<FrameTime>()
+        .map(|ft| ft.0)
+        .unwrap_or(0.0);
+    // SAFETY: GetAsyncKeyState は現在のボタン状態（high bit＝押下中）を読むだけ（副作用なし）。
+    let down = ((unsafe { GetAsyncKeyState(VK_LBUTTON.0 as i32) }) as u16 & 0x8000) != 0;
+    let rising = down && !demo.prev_lbutton;
+    demo.prev_lbutton = down;
+    if !rising {
+        return false;
+    }
+    if !cursor_over_demo_window(demo, world) {
+        demo.last_click_time = -10.0; // 窓外クリックは double 判定の起点にしない。
+        return false;
+    }
+    let is_double = (now - demo.last_click_time) <= 0.4;
+    demo.last_click_time = now;
+    is_double
+}
+
+/// カーソル（スクリーン座標）が \0/\1 いずれかの balloon 窓の矩形内にあるか。
+fn cursor_over_demo_window(demo: &Demo, world: &World) -> bool {
+    let mut p = POINT::default();
+    // SAFETY: GetCursorPos は現在のカーソル位置を `p` へ書き込むだけ。
+    if unsafe { GetCursorPos(&mut p) }.is_err() {
+        return false;
+    }
+    for win in [demo.win0, demo.win1] {
+        if let Some(wp) = world.get::<WindowPos>(win) {
+            if let (Some(pos), Some(size)) = (wp.position, wp.size) {
+                if p.x >= pos.x
+                    && p.x < pos.x + size.width
+                    && p.y >= pos.y
+                    && p.y < pos.y + size.height
+                {
+                    return true;
+                }
+            }
+        }
+    }
+    false
+}
+
 fn drive_demo_system(world: &mut World) {
     // 未挿入 or 完了済みなら何もしない。
     match world.get_non_send_resource::<Demo>() {
@@ -649,6 +719,10 @@ fn drive_demo_system(world: &mut World) {
 
     if !demo.attached {
         try_attach(&mut demo, world);
+    } else if demo.hold && poll_double_click_quit(&mut demo, world) {
+        // hold モード: balloon 上ダブルクリックで終了（窓を despawn → run() 復帰）。
+        info!("emo-text-layer: balloon 上でダブルクリックを検出 — hold デモを終了する");
+        finish(&mut demo, world);
     } else {
         drive_scenario(&mut demo, world);
     }
@@ -883,8 +957,21 @@ fn drive_scenario(demo: &mut Demo, world: &mut World) {
     demo.fed = false;
     if demo.stage == T_CHECK.len() {
         world.resource_mut::<Verdict>().done = true;
-        info!("emo-text-layer: 全チェックポイント通過 — PASS で終了する");
-        finish(demo, world);
+        if demo.hold {
+            // ループ再生: Clear 済み（状態は空）ゆえ stage 0 から talk を再度流す。窓は閉じない。
+            // 注入時刻起点 talk_start を現在フレーム時刻へ戻し、typewriter を最初から見せる。
+            let now = world
+                .get_resource::<FrameTime>()
+                .map(|ft| ft.0)
+                .unwrap_or(demo.talk_start);
+            demo.stage = 0;
+            demo.fed = false;
+            demo.talk_start = now;
+            info!("emo-text-layer: hold — talk をループ再生（balloon 上ダブルクリックで終了）");
+        } else {
+            info!("emo-text-layer: 全チェックポイント通過 — PASS で終了する");
+            finish(demo, world);
+        }
     }
 }
 

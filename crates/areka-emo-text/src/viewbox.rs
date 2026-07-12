@@ -273,6 +273,27 @@ impl ScrollPlanner {
 /// `ceil(DIRTY_GUARD_IMG_PX × k)`（[`ScaleContract::scale`] 適用）。
 pub const DIRTY_GUARD_IMG_PX: f32 = 1.0;
 
+/// 行のダーティ矩形をブロック軸（行送り軸）の **flow 方向**へ広げる「行スロット」余白の比率
+/// （image px の追加＝`round(font_height × BLOCK_INK_BLEED_FRACTION)`）。
+///
+/// **なぜ必要か**: レイアウトの行矩形は em ボックス（高さ＝`font_height`）だが、DirectWrite の
+/// 実描画は行ボックス（ascent＋descent）で行い、フォントによっては em ボックス下端より数 px
+/// 下（descent 側）へインクがはみ出す（例: Yu Gothic UI 28px は実測 2〜3px 下へこぼれる）。
+/// ダーティ矩形が em ボックス丈だと、この**はみ出しインクがクリップで切り落とされて行の下端が
+/// 欠ける**（全域再描画のオラクルはクリップしないため byte 等価が破れる＝実機の「文字列の下が
+/// 描画されない」不具合の真因）。そこで各行のダーティを行送り方向へ「行スロット」相当
+/// （＝行 pitch のギャップ `pitch − font_height`）だけ広げ、はみ出しインクを取りこぼさない。
+///
+/// 実 bleed（image px）＝`round(font_height × BLOCK_INK_BLEED_FRACTION)`。値 `0.12` と round は、
+/// descent 側インクはみ出し実測（Yu Gothic UI 28px で 3px＝≈0.107×em）を丁度覆い（28px→bleed 3）、
+/// かつ行 pitch のギャップ（`line_pitch_factor − 1.0` ≈ 0.25×font_height）**未満**に留めて
+/// **隣接行の em ボックス／AA 領域へ届かない**（`bleed + guard ≤ gap`＝10/12px でも bleed 1・確定行の
+/// 余計な再描画＝描画数増を起こさない）ことを両立させる最大値。より大きくすると小サイズ（テスト用
+/// 12px・gap 3）で隣接行を巻き込み再描画レスの tight bound（`viewbox_scroll_test`）が崩れる。flow
+/// 方向: horizontal=+Y／vertical_rl=−X／vertical_lr=+X（行が流れる向き）。実 fixture の被覆は
+/// Yu Gothic UI byte 等価回帰檻（`yugothic_real_fixture_matches_oracle_byte_for_byte`）が担保する。
+pub const BLOCK_INK_BLEED_FRACTION: f32 = 0.12;
+
 /// 物理 px 整数矩形（DD1——ダーティ矩形・露出帯・クリップの共通型）。
 ///
 /// 原点＝左上・単位＝物理 px。全成分 `u32`（負や面外はクランプ済みが前提）。ブロック軸
@@ -482,19 +503,33 @@ fn resident_rect(
     let (dx, dy) = resident.transform.offset();
     let (w, h) = run.size;
     let k = contract.scale;
-    // 新スクロール位置: ブロック軸へ block_offset を加算してから × k（行内軸は × k のみ）。
-    let (min_x, min_y) = match mode {
-        WritingMode::HorizontalTb => (dx * k, (dy + block_offset) * k),
-        WritingMode::VerticalRl | WritingMode::VerticalLr => ((dx + block_offset) * k, dy * k),
+    // ブロック軸のインクは em ボックス（行内軸長 × font_height）を flow 方向へ超えて描画されうる
+    // （DirectWrite の行ボックス＝ascent＋descent が em を超えるフォント＝Yu Gothic UI 等）。行送り
+    // 方向へ「行スロット」余白 bleed を足し、はみ出しインクをダーティに含める（[`BLOCK_INK_BLEED_FRACTION`]
+    // ・byte 等価の前提）。bleed は image px で計上し、他座標と同様 × k で物理へ写す。ブロック軸の
+    // em 寸は horizontal＝h・vertical＝w（縦書き列: 幅＝font 高）。
+    let block_em = match mode {
+        WritingMode::HorizontalTb => h,
+        WritingMode::VerticalRl | WritingMode::VerticalLr => w,
     };
-    expand_guard_clamp(
-        min_x,
-        min_y,
-        min_x + w * k,
-        min_y + h * k,
-        contract,
-        surface_size,
-    )
+    let bleed = (block_em * BLOCK_INK_BLEED_FRACTION).round();
+    // 新スクロール位置（image px・validrect-local + block_offset）をブロック軸 flow 方向へ bleed 拡張:
+    // horizontal＝+Y（下へ・descent 側）／vertical_rl＝−X（左へ・列が右→左）／vertical_lr＝+X（右へ）。
+    let (ix0, iy0, ix1, iy1) = match mode {
+        WritingMode::HorizontalTb => {
+            let (x0, y0) = (dx, dy + block_offset);
+            (x0, y0, x0 + w, y0 + h + bleed)
+        }
+        WritingMode::VerticalRl => {
+            let (x0, y0) = (dx + block_offset, dy);
+            (x0 - bleed, y0, x0 + w, y0 + h)
+        }
+        WritingMode::VerticalLr => {
+            let (x0, y0) = (dx + block_offset, dy);
+            (x0, y0, x0 + w + bleed, y0 + h)
+        }
+    };
+    expand_guard_clamp(ix0 * k, iy0 * k, ix1 * k, iy1 * k, contract, surface_size)
 }
 
 /// スクロール blit の逆側に生じる露出帯（未保持領域・物理 px 整数・ガード前）を返す。
@@ -887,8 +922,9 @@ mod tests {
             (400, 224),
             &prev,
         );
-        // 現在行 {0,0,20,10} をガード拡張＋クランプ → {0,0,21,11}。露出帯なし（blit=0）。
-        assert_eq!(dirty, vec![phys(0, 0, 21, 11)], "現在行のみ");
+        // 現在行 {0,0,20,10} を bleed（round(10×0.13)=1・下へ）で {0,0,20,11}・ガード拡張＋クランプ
+        // → {0,0,21,12}。露出帯なし（blit=0）。bleed は em ボックス下端はみ出しインク（Yu Gothic UI 等）を含める。
+        assert_eq!(dirty, vec![phys(0, 0, 21, 12)], "現在行のみ（下へ bleed 1）");
         assert_eq!(draw, vec![0], "描画対象は現在行のみ");
     }
 
@@ -931,9 +967,10 @@ mod tests {
             (400, 100),
             &prev,
         );
-        // 行1「いろ」{0,13,20,10} をガード拡張 → {0,12,21,12}。行0 は現れない。
-        assert_eq!(dirty, vec![phys(0, 12, 21, 12)], "変化行（末尾）のみ");
-        assert_eq!(draw, vec![1], "確定行 0 は draw から除外される");
+        // 行1「いろ」{0,13,20,10} を bleed（1・下へ）で {0,13,20,24}・ガード拡張 → {0,12,21,13}。
+        // bleed=1 は行間ギャップ内に留まり確定行 0 の em ボックスへ届かない（draw に現れない）。
+        assert_eq!(dirty, vec![phys(0, 12, 21, 13)], "変化行（末尾）のみ・下へ bleed 1");
+        assert_eq!(draw, vec![1], "確定行 0 は draw から除外される（bleed はギャップ内で隣接行に届かない）");
     }
 
     // ── R3.3/4.2: catch-up 複数行・新規行追加 → 変化行の和 ──
@@ -955,9 +992,9 @@ mod tests {
             (400, 100),
             &prev,
         );
-        // 行2 {0,26,10,10}→{0,25,11,12}・行3 {0,39,10,10}→{0,38,11,12}。行0/1 は不変。
-        assert_eq!(dirty, vec![phys(0, 25, 11, 12), phys(0, 38, 11, 12)]);
-        assert_eq!(draw, vec![2, 3], "新規 2 行のみ描画対象");
+        // 行2 {0,26,10,10}→bleed1→{0,26,10,11}→ガード {0,25,11,13}・行3 同様 {0,38,11,13}。行0/1 は不変。
+        assert_eq!(dirty, vec![phys(0, 25, 11, 13), phys(0, 38, 11, 13)]);
+        assert_eq!(draw, vec![2, 3], "新規 2 行のみ描画対象（bleed はギャップ内で確定行に届かない）");
     }
 
     // ── R4.2/3.3: 初回（前回指紋なし）→ 全域ダーティ・全 GlyphRun 住人 ──
@@ -1037,8 +1074,9 @@ mod tests {
             surface,
             &prev,
         );
-        // 行0 {0,0,20,10}×1.25 → floor/ceil {0,0,25,13}・ガード 2 → {-2,-2,27,15}・クランプ → {0,0,27,15}。
-        assert_eq!(dirty, vec![phys(0, 0, 27, 15)], "y 負側はガード後 0 へクランプ");
+        // 行0 {0,0,20,10}→bleed1（下）→{0,0,20,11}→×1.25 {0,0,25,13.75}・ガード 2 → {-2,-2,27,15.75}
+        // ・クランプ → {0,0,27,16}（y1=ceil(13.75)+2=16）。
+        assert_eq!(dirty, vec![phys(0, 0, 27, 16)], "y 負側はガード後 0 へクランプ・下へ bleed");
         assert!(
             dirty.iter().all(|r| r.x + r.w <= surface.0 && r.y + r.h <= surface.1),
             "全ダーティ矩形は面寸を越えない"
