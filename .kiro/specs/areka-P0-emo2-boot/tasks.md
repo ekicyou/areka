@@ -21,7 +21,7 @@
   - _Requirements: 2.2, 2.3_
   - _Boundary: talk_clock_
 
-- [ ] 2.3 (P) default_bind_ids（shell descript KV からの static bindset 抽出）を実装
+- [x] 2.3 (P) default_bind_ids（shell descript KV からの static bindset 抽出）を実装
   - `sakura.bindgroup{N}.default`==1 の N を抽出する純関数を実装（DD-8・ukadoc 正典）
   - 単体テスト: emo2 相当 KV サンプルから `[1100,1207,1302,1500,1800]` を抽出・`default` が 1 以外や無関係キーは非抽出
   - 観測可能な完了条件: 上記単体テストが期待どおりの抽出結果を assert して green で通る
