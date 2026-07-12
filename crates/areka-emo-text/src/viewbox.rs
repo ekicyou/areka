@@ -161,16 +161,10 @@ impl ScrollPlanner {
         block_axis_vector(mode, target.committed - self.committed)
     }
 
-    /// 1 フレームの描画計画を返す（**状態不変・純粋**・`&self`・R2.3/4.3）。
-    ///
-    /// - `clear_requested` が立っていれば [`FramePlan::FullClear`]（描画 0 件・back 全域 Clear）。
-    /// - それ以外は現状 `committed` から目標（`window.block_offset` の量子化）への blit と、
-    ///   前回確定 `prev_lines` に対する [`Self::derive_dirty`] の結果（露出帯 ∪ 変化行）を組む。
-    ///   blit が 0 かつ dirty が空なら [`FramePlan::NoChange`]（blit・描画・present とも 0）、
-    ///   さもなくば [`FramePlan::Update`]。
-    ///
-    /// `self` を一切変えないため、同一入力の反復 `plan` は同一計画を返す（デバイス失敗フレームは
-    /// 未 commit のまま次フレームで再計画＝再試行安全）。確定は [`Self::commit`] の役目。
+    /// 1 フレームの描画計画を返す（**状態不変・純粋**・`&self`・R2.3/4.3）——実測はみ出し無し
+    /// （em ボックス丈）の従来経路。測定値（[`LineOverhang`]）を持たない呼び手（pure 層 unit・
+    /// mirror planner 等）向けの薄いラッパで、[`Self::plan_with_overhangs`] に空スライスを渡す。
+    /// COM 層 `ViewboxExecutor::render` は実測はみ出しを渡す [`Self::plan_with_overhangs`] を使う。
     pub fn plan(
         &self,
         canvas: &ContentCanvas,
@@ -178,6 +172,30 @@ impl ScrollPlanner {
         mode: WritingMode,
         contract: &ScaleContract,
         surface_size: (u32, u32),
+    ) -> FramePlan {
+        self.plan_with_overhangs(canvas, window, mode, contract, surface_size, &[])
+    }
+
+    /// 実測インクはみ出し（[`LineOverhang`]・住人 index と 1:1）付きで 1 フレームの描画計画を返す
+    /// （**状態不変・純粋**・`&self`・R2.3/4.3）。
+    ///
+    /// - `clear_requested` が立っていれば [`FramePlan::FullClear`]（描画 0 件・back 全域 Clear）。
+    /// - それ以外は現状 `committed` から目標（`window.block_offset` の量子化）への blit と、
+    ///   前回確定 `prev_lines` に対する [`Self::derive_dirty`] の結果（露出帯 ∪ 変化行）を組む。
+    ///   変化行のダーティは `overhangs` の実測分だけ em ボックスを外側へ広げてはみ出しインクを含める
+    ///   （byte 等価の前提・D2）。blit が 0 かつ dirty が空なら [`FramePlan::NoChange`]、さもなくば
+    ///   [`FramePlan::Update`]。
+    ///
+    /// `self` を一切変えないため、同一入力の反復は同一計画を返す（デバイス失敗フレームは未 commit の
+    /// まま次フレームで再計画＝再試行安全）。確定は [`Self::commit`] の役目。
+    pub fn plan_with_overhangs(
+        &self,
+        canvas: &ContentCanvas,
+        window: &VisibleWindow,
+        mode: WritingMode,
+        contract: &ScaleContract,
+        surface_size: (u32, u32),
+        overhangs: &[LineOverhang],
     ) -> FramePlan {
         if self.clear_requested {
             return FramePlan::FullClear;
@@ -189,8 +207,16 @@ impl ScrollPlanner {
         // 1 フレーム」）。前方 typewriter では住人は単調増加ゆえ通常不発——注入時刻の後方ジャンプ
         // 等の異常アクセスに対する防御（確定 content を再露出する任意アクセスパターンで byte 等価を保つ）。
         if canvas.residents.len() < self.prev_lines.len() {
-            let (dirty, draw_lines) =
-                Self::derive_dirty(canvas, window, mode, contract, (0, 0), surface_size, &[]);
+            let (dirty, draw_lines) = Self::derive_dirty_with_overhangs(
+                canvas,
+                window,
+                mode,
+                contract,
+                (0, 0),
+                surface_size,
+                &[],
+                overhangs,
+            );
             return FramePlan::Update {
                 blit: (0, 0),
                 dirty,
@@ -199,7 +225,7 @@ impl ScrollPlanner {
         }
         let target = self.resolve_position(window.block_offset, contract);
         let blit = self.blit_vector(&target, mode);
-        let (dirty, draw_lines) = Self::derive_dirty(
+        let (dirty, draw_lines) = Self::derive_dirty_with_overhangs(
             canvas,
             window,
             mode,
@@ -207,6 +233,7 @@ impl ScrollPlanner {
             blit,
             surface_size,
             &self.prev_lines,
+            overhangs,
         );
         if blit == (0, 0) && dirty.is_empty() {
             FramePlan::NoChange
@@ -273,26 +300,35 @@ impl ScrollPlanner {
 /// `ceil(DIRTY_GUARD_IMG_PX × k)`（[`ScaleContract::scale`] 適用）。
 pub const DIRTY_GUARD_IMG_PX: f32 = 1.0;
 
-/// 行のダーティ矩形をブロック軸（行送り軸）の **flow 方向**へ広げる「行スロット」余白の比率
-/// （image px の追加＝`round(font_height × BLOCK_INK_BLEED_FRACTION)`）。
+/// 行の **インクはみ出し量**（em ボックス各辺から外側へ何 image px はみ出すか・全成分 ≥ 0）。
 ///
-/// **なぜ必要か**: レイアウトの行矩形は em ボックス（高さ＝`font_height`）だが、DirectWrite の
-/// 実描画は行ボックス（ascent＋descent）で行い、フォントによっては em ボックス下端より数 px
-/// 下（descent 側）へインクがはみ出す（例: Yu Gothic UI 28px は実測 2〜3px 下へこぼれる）。
-/// ダーティ矩形が em ボックス丈だと、この**はみ出しインクがクリップで切り落とされて行の下端が
-/// 欠ける**（全域再描画のオラクルはクリップしないため byte 等価が破れる＝実機の「文字列の下が
-/// 描画されない」不具合の真因）。そこで各行のダーティを行送り方向へ「行スロット」相当
-/// （＝行 pitch のギャップ `pitch − font_height`）だけ広げ、はみ出しインクを取りこぼさない。
+/// **なぜ必要か**: レイアウトの行矩形は em ボックス（横書き＝行内長×`font_height`）だが、
+/// DirectWrite の実描画は行ボックス（ascent＋descent）で行い、フォントによっては em ボックス
+/// 各辺よりインクが外へはみ出す（Yu Gothic UI 28px は descent 側へ実測 3px・アクセント/合字/
+/// イタリック右張り出し/装飾スワッシュも同様）。ダーティ矩形が em ボックス丈だと、この
+/// **はみ出しインクがクリップで切り落とされて行の下端等が欠ける**（全域再描画のオラクルは
+/// クリップしないため byte 等価が破れる＝実機「文字列の下が描画されない」不具合 D2 の真因）。
 ///
-/// 実 bleed（image px）＝`round(font_height × BLOCK_INK_BLEED_FRACTION)`。値 `0.12` と round は、
-/// descent 側インクはみ出し実測（Yu Gothic UI 28px で 3px＝≈0.107×em）を丁度覆い（28px→bleed 3）、
-/// かつ行 pitch のギャップ（`line_pitch_factor − 1.0` ≈ 0.25×font_height）**未満**に留めて
-/// **隣接行の em ボックス／AA 領域へ届かない**（`bleed + guard ≤ gap`＝10/12px でも bleed 1・確定行の
-/// 余計な再描画＝描画数増を起こさない）ことを両立させる最大値。より大きくすると小サイズ（テスト用
-/// 12px・gap 3）で隣接行を巻き込み再描画レスの tight bound（`viewbox_scroll_test`）が崩れる。flow
-/// 方向: horizontal=+Y／vertical_rl=−X／vertical_lr=+X（行が流れる向き）。実 fixture の被覆は
-/// Yu Gothic UI byte 等価回帰檻（`yugothic_real_fixture_matches_oracle_byte_for_byte`）が担保する。
-pub const BLOCK_INK_BLEED_FRACTION: f32 = 0.12;
+/// 値は各行の `IDWriteTextLayout` を [`GetOverhangMetrics`] で**実測**したもの（COM 層
+/// `LineLayoutStore` が測定・キャッシュし、pure 層へ数値として手渡す＝pure 層は windows 非依存の
+/// まま）。行ボックスのブロック軸寸が `font_height`（`max_height`／縦は `max_width`）に設定済み
+/// ゆえ、その軸の overhang（横書き＝`top`/`bottom`・縦書き＝`left`/`right`）が em ボックスからの
+/// はみ出しを直接与える（行内軸は巨大 `PROBE_MAX_EXTENT` 箱ゆえ overhang 無意味＝0 に丸める）。
+/// **経験則の推定でなく実測**ゆえ「はみ出し < 行 pitch のギャップ」がフォント設計上必ず成立し、
+/// 隣接行の em ボックスへ届かない（＝確定行の余計な再描画を構造的に起こさない）。
+///
+/// [`GetOverhangMetrics`]: https://learn.microsoft.com/windows/win32/api/dwrite/nf-dwrite-idwritetextlayout-getoverhangmetrics
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct LineOverhang {
+    /// 上辺より上（image px・横書きの ascent 側はみ出し・アクセント等）。
+    pub top: f32,
+    /// 下辺より下（image px・横書きの descent 側はみ出し＝D2 の主因）。
+    pub bottom: f32,
+    /// 左辺より左（image px・縦書き列のブロック軸はみ出し・横書きの行頭側）。
+    pub left: f32,
+    /// 右辺より右（image px・縦書き列のブロック軸はみ出し・イタリック右張り出し等）。
+    pub right: f32,
+}
 
 /// 物理 px 整数矩形（DD1——ダーティ矩形・露出帯・クリップの共通型）。
 ///
@@ -382,6 +418,9 @@ impl ScrollPlanner {
     ///
     /// 状態遷移（plan/commit・`FramePlan` の enum 化）は後続タスクの領分——本メソッドは
     /// 「変化なし＝空 dirty・空 draw_lines」「全域＝面全域」の導出結果を返すに留める。
+    ///
+    /// 実測はみ出し無し（em ボックス丈）の従来経路——測定値を持たない pure 層 unit 向けの薄い
+    /// ラッパで、[`Self::derive_dirty_with_overhangs`] に空スライスを渡す。
     pub(crate) fn derive_dirty(
         canvas: &ContentCanvas,
         window: &VisibleWindow,
@@ -391,6 +430,33 @@ impl ScrollPlanner {
         surface_size: (u32, u32),
         prev_lines: &[CommittedLine],
     ) -> (Vec<PhysicalRect>, Vec<usize>) {
+        Self::derive_dirty_with_overhangs(
+            canvas,
+            window,
+            mode,
+            contract,
+            blit,
+            surface_size,
+            prev_lines,
+            &[],
+        )
+    }
+
+    /// 実測インクはみ出し（[`LineOverhang`]・住人 index と 1:1）付きでダーティ矩形と描画対象行を
+    /// 導出する（純粋・状態不変・DD4／D2）。変化行の em ボックスを `overhangs` の実測分だけ外側へ
+    /// 広げてはみ出しインクを含める（`overhangs` が index を欠く／空なら既定 0＝em ボックス丈）。
+    pub(crate) fn derive_dirty_with_overhangs(
+        canvas: &ContentCanvas,
+        window: &VisibleWindow,
+        mode: WritingMode,
+        contract: &ScaleContract,
+        blit: (i32, i32),
+        surface_size: (u32, u32),
+        prev_lines: &[CommittedLine],
+        overhangs: &[LineOverhang],
+    ) -> (Vec<PhysicalRect>, Vec<usize>) {
+        // 住人 index の実測はみ出し（無ければ既定 0＝em ボックス丈・テスト等の非測定経路）。
+        let overhang_of = |i: usize| overhangs.get(i).copied().unwrap_or_default();
         // ── 全域ダーティ（初回・Clear 後・format 再構築）: 面全域 1 枚・全 GlyphRun 住人 ──
         if prev_lines.is_empty() {
             let (w, h) = surface_size;
@@ -429,9 +495,14 @@ impl ScrollPlanner {
                 None => true, // 新規行（prev.len() を超える index）。
             };
             if changed {
-                if let Some(rect) =
-                    resident_rect(resident, block_offset, mode, contract, surface_size)
-                {
+                if let Some(rect) = resident_rect(
+                    resident,
+                    block_offset,
+                    mode,
+                    contract,
+                    surface_size,
+                    overhang_of(i),
+                ) {
                     dirty.push(rect);
                 }
             }
@@ -440,9 +511,14 @@ impl ScrollPlanner {
         // 描画対象行: dirty とブロック軸で交差する全 GlyphRun 住人（first_visible_line で切らない）。
         let mut draw_lines = Vec::new();
         for i in glyph_run_indices(canvas) {
-            if let Some(rect) =
-                resident_rect(&canvas.residents[i], block_offset, mode, contract, surface_size)
-            {
+            if let Some(rect) = resident_rect(
+                &canvas.residents[i],
+                block_offset,
+                mode,
+                contract,
+                surface_size,
+                overhang_of(i),
+            ) {
                 if dirty.iter().any(|d| d.intersects_block_axis(&rect, mode)) {
                     draw_lines.push(i);
                 }
@@ -496,6 +572,7 @@ fn resident_rect(
     mode: WritingMode,
     contract: &ScaleContract,
     surface_size: (u32, u32),
+    overhang: LineOverhang,
 ) -> Option<PhysicalRect> {
     let ResidentContent::GlyphRun(run) = &resident.content else {
         return None;
@@ -503,30 +580,19 @@ fn resident_rect(
     let (dx, dy) = resident.transform.offset();
     let (w, h) = run.size;
     let k = contract.scale;
-    // ブロック軸のインクは em ボックス（行内軸長 × font_height）を flow 方向へ超えて描画されうる
-    // （DirectWrite の行ボックス＝ascent＋descent が em を超えるフォント＝Yu Gothic UI 等）。行送り
-    // 方向へ「行スロット」余白 bleed を足し、はみ出しインクをダーティに含める（[`BLOCK_INK_BLEED_FRACTION`]
-    // ・byte 等価の前提）。bleed は image px で計上し、他座標と同様 × k で物理へ写す。ブロック軸の
-    // em 寸は horizontal＝h・vertical＝w（縦書き列: 幅＝font 高）。
-    let block_em = match mode {
-        WritingMode::HorizontalTb => h,
-        WritingMode::VerticalRl | WritingMode::VerticalLr => w,
-    };
-    let bleed = (block_em * BLOCK_INK_BLEED_FRACTION).round();
-    // 新スクロール位置（image px・validrect-local + block_offset）をブロック軸 flow 方向へ bleed 拡張:
-    // horizontal＝+Y（下へ・descent 側）／vertical_rl＝−X（左へ・列が右→左）／vertical_lr＝+X（右へ）。
+    // em ボックス（image px・validrect-local + block_offset）をブロック軸の**実測はみ出し**
+    // （[`LineOverhang`]・`GetOverhangMetrics` 由来）だけ外側へ広げ、はみ出しインクをダーティに
+    // 含める（byte 等価の前提・D2）。行内軸は em 寸（run.size）のまま——行内はみ出し（イタリック
+    // 右張り出し等）は tight box が要るため後続（現状 overhang.left/right は縦書きのブロック軸用）。
+    // ブロック軸: horizontal＝Y（上へ top・下へ bottom）／vertical＝X（左へ left・右へ right）。
     let (ix0, iy0, ix1, iy1) = match mode {
         WritingMode::HorizontalTb => {
             let (x0, y0) = (dx, dy + block_offset);
-            (x0, y0, x0 + w, y0 + h + bleed)
+            (x0, y0 - overhang.top, x0 + w, y0 + h + overhang.bottom)
         }
-        WritingMode::VerticalRl => {
+        WritingMode::VerticalRl | WritingMode::VerticalLr => {
             let (x0, y0) = (dx + block_offset, dy);
-            (x0 - bleed, y0, x0 + w, y0 + h)
-        }
-        WritingMode::VerticalLr => {
-            let (x0, y0) = (dx + block_offset, dy);
-            (x0, y0, x0 + w + bleed, y0 + h)
+            (x0 - overhang.left, y0, x0 + w + overhang.right, y0 + h)
         }
     };
     expand_guard_clamp(ix0 * k, iy0 * k, ix1 * k, iy1 * k, contract, surface_size)
@@ -600,7 +666,8 @@ mod tests {
     };
 
     use super::{
-        DIRTY_GUARD_IMG_PX, FramePlan, PhysicalRect, ScrollPlanner, ScrollState, block_axis_vector,
+        DIRTY_GUARD_IMG_PX, FramePlan, LineOverhang, PhysicalRect, ScrollPlanner, ScrollState,
+        block_axis_vector,
     };
     use crate::canvas::ContentCanvas;
     use crate::layout::{FixedMetrics, LayoutEngine, VisibleWindow};
@@ -922,10 +989,125 @@ mod tests {
             (400, 224),
             &prev,
         );
-        // 現在行 {0,0,20,10} を bleed（round(10×0.13)=1・下へ）で {0,0,20,11}・ガード拡張＋クランプ
-        // → {0,0,21,12}。露出帯なし（blit=0）。bleed は em ボックス下端はみ出しインク（Yu Gothic UI 等）を含める。
-        assert_eq!(dirty, vec![phys(0, 0, 21, 12)], "現在行のみ（下へ bleed 1）");
+        // 現在行 {0,0,20,10} をガード拡張＋クランプ → {0,0,21,11}（overhang 無し＝em ボックス丈・
+        // 実測はみ出しは COM 層 render が付与。本 pure 層檻は既定 0 の幾何を檻化）。露出帯なし（blit=0）。
+        assert_eq!(dirty, vec![phys(0, 0, 21, 11)], "現在行のみ");
         assert_eq!(draw, vec![0], "描画対象は現在行のみ");
+    }
+
+    /// D2 の核: 実測インクはみ出し（[`LineOverhang`]）を渡すと変化行のダーティが em ボックスから
+    /// はみ出し分だけ外側へ広がる（横書き＝top/bottom で Y・縦書き＝left/right で X）。overhang 無し
+    /// （既定 0）は em ボックス丈——`GetOverhangMetrics` 実測を渡す COM 層経路（`ViewboxExecutor`）が
+    /// em 下端はみ出しインクを取りこぼさない機構を pure 層で檻化する（実 fixture 被覆は viewbox_draw の
+    /// `yugothic_real_fixture_matches_oracle_byte_for_byte`）。
+    #[test]
+    fn overhang_extends_changed_line_dirty_beyond_em_box() {
+        let contract = ScaleContract::new(1.0, None);
+        let vr = (Some(0), Some(224), Some(0), Some(400));
+        // 現在行が 1→2 グリフへ伸長（横書き・1 行）。
+        let prev_canvas = canvas_for(
+            &[TextItem::Glyph { ch: 'あ' }],
+            WritingMode::HorizontalTb,
+            vr,
+            10.0,
+        );
+        let prev = ScrollPlanner::committed_lines(&prev_canvas, WritingMode::HorizontalTb);
+        let canvas = canvas_for(
+            &[TextItem::Glyph { ch: 'あ' }, TextItem::Glyph { ch: 'あ' }],
+            WritingMode::HorizontalTb,
+            vr,
+            10.0,
+        );
+
+        // overhang 無し → em ボックス丈 {0,0,21,11}（typewriter_single_glyph と同一の基準）。
+        let (dirty_em, _) = ScrollPlanner::derive_dirty(
+            &canvas,
+            &window(0, 0.0),
+            WritingMode::HorizontalTb,
+            &contract,
+            (0, 0),
+            (400, 224),
+            &prev,
+        );
+        assert_eq!(dirty_em, vec![phys(0, 0, 21, 11)], "overhang 無し＝em ボックス丈");
+
+        // 実測 overhang top=1・bottom=3（横書き＝Y 方向）。em 行 {0,0,20,10} を上へ 1・下へ 3 →
+        // {0,-1,20,13}・ガード 1 → {-1,-2,21,14}・クランプ → {0,0,21,14}。
+        let over = vec![LineOverhang {
+            top: 1.0,
+            bottom: 3.0,
+            left: 0.0,
+            right: 0.0,
+        }];
+        let (dirty_over, draw_over) = ScrollPlanner::derive_dirty_with_overhangs(
+            &canvas,
+            &window(0, 0.0),
+            WritingMode::HorizontalTb,
+            &contract,
+            (0, 0),
+            (400, 224),
+            &prev,
+            &over,
+        );
+        assert_eq!(
+            dirty_over,
+            vec![phys(0, 0, 21, 14)],
+            "実測はみ出し分だけ Y 方向へ拡張（下 3・上 1）——em 丈 11 より高い"
+        );
+        assert_eq!(draw_over, vec![0], "描画対象は現在行のみ（overhang は幾何を変えるだけ）");
+
+        // 縦書き（vertical_rl）: overhang は right（X 正方向）へ効く——横書きの top/bottom（Y）は
+        // 無視され、left/right（X）で列のブロック軸が広がる（軸読み替えの檻）。
+        let vprev = canvas_for(
+            &[TextItem::Glyph { ch: 'あ' }],
+            WritingMode::VerticalRl,
+            vr,
+            10.0,
+        );
+        let vprev_lines = ScrollPlanner::committed_lines(&vprev, WritingMode::VerticalRl);
+        let vcanvas = canvas_for(
+            &[TextItem::Glyph { ch: 'あ' }, TextItem::Glyph { ch: 'あ' }],
+            WritingMode::VerticalRl,
+            vr,
+            10.0,
+        );
+        let (v_em, _) = ScrollPlanner::derive_dirty(
+            &vcanvas,
+            &window(0, 0.0),
+            WritingMode::VerticalRl,
+            &contract,
+            (0, 0),
+            (400, 224),
+            &vprev_lines,
+        );
+        // 縦書きで X 方向へ right=4 拡張すると em 丈より横幅が広がる（top/bottom は Y ゆえ無視される）。
+        let vover = vec![LineOverhang {
+            top: 9.0, // Y 方向（縦書きの行内軸）は無視される検証用のダミー大値。
+            bottom: 9.0,
+            left: 0.0,
+            right: 4.0,
+        }];
+        let (v_over, _) = ScrollPlanner::derive_dirty_with_overhangs(
+            &vcanvas,
+            &window(0, 0.0),
+            WritingMode::VerticalRl,
+            &contract,
+            (0, 0),
+            (400, 224),
+            &vprev_lines,
+            &vover,
+        );
+        assert_eq!(v_em.len(), 1);
+        assert_eq!(v_over.len(), 1);
+        assert_eq!(
+            v_over[0].h, v_em[0].h,
+            "縦書きは top/bottom（Y）を無視——高さ（行内軸）は overhang で変わらない"
+        );
+        assert_eq!(
+            v_over[0].w,
+            v_em[0].w + 4,
+            "縦書きは right（X）でブロック軸（列幅）が実測はみ出し分だけ広がる"
+        );
     }
 
     /// 確定行は変化行に含まれない: 2 行で末尾行だけ伸長 → dirty/draw に確定行 0 が現れない。
@@ -967,10 +1149,9 @@ mod tests {
             (400, 100),
             &prev,
         );
-        // 行1「いろ」{0,13,20,10} を bleed（1・下へ）で {0,13,20,24}・ガード拡張 → {0,12,21,13}。
-        // bleed=1 は行間ギャップ内に留まり確定行 0 の em ボックスへ届かない（draw に現れない）。
-        assert_eq!(dirty, vec![phys(0, 12, 21, 13)], "変化行（末尾）のみ・下へ bleed 1");
-        assert_eq!(draw, vec![1], "確定行 0 は draw から除外される（bleed はギャップ内で隣接行に届かない）");
+        // 行1「いろ」{0,13,20,10} をガード拡張 → {0,12,21,12}（overhang 無し＝em 箱丈）。行0 は現れない。
+        assert_eq!(dirty, vec![phys(0, 12, 21, 12)], "変化行（末尾）のみ");
+        assert_eq!(draw, vec![1], "確定行 0 は draw から除外される");
     }
 
     // ── R3.3/4.2: catch-up 複数行・新規行追加 → 変化行の和 ──
@@ -992,9 +1173,9 @@ mod tests {
             (400, 100),
             &prev,
         );
-        // 行2 {0,26,10,10}→bleed1→{0,26,10,11}→ガード {0,25,11,13}・行3 同様 {0,38,11,13}。行0/1 は不変。
-        assert_eq!(dirty, vec![phys(0, 25, 11, 13), phys(0, 38, 11, 13)]);
-        assert_eq!(draw, vec![2, 3], "新規 2 行のみ描画対象（bleed はギャップ内で確定行に届かない）");
+        // 行2 {0,26,10,10}→{0,25,11,12}・行3 {0,39,10,10}→{0,38,11,12}（overhang 無し）。行0/1 は不変。
+        assert_eq!(dirty, vec![phys(0, 25, 11, 12), phys(0, 38, 11, 12)]);
+        assert_eq!(draw, vec![2, 3], "新規 2 行のみ描画対象");
     }
 
     // ── R4.2/3.3: 初回（前回指紋なし）→ 全域ダーティ・全 GlyphRun 住人 ──
@@ -1074,9 +1255,8 @@ mod tests {
             surface,
             &prev,
         );
-        // 行0 {0,0,20,10}→bleed1（下）→{0,0,20,11}→×1.25 {0,0,25,13.75}・ガード 2 → {-2,-2,27,15.75}
-        // ・クランプ → {0,0,27,16}（y1=ceil(13.75)+2=16）。
-        assert_eq!(dirty, vec![phys(0, 0, 27, 16)], "y 負側はガード後 0 へクランプ・下へ bleed");
+        // 行0 {0,0,20,10}×1.25 → floor/ceil {0,0,25,13}・ガード 2 → {-2,-2,27,15}・クランプ → {0,0,27,15}。
+        assert_eq!(dirty, vec![phys(0, 0, 27, 15)], "y 負側はガード後 0 へクランプ");
         assert!(
             dirty.iter().all(|r| r.x + r.w <= surface.0 && r.y + r.h <= surface.1),
             "全ダーティ矩形は面寸を越えない"

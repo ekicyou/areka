@@ -137,6 +137,16 @@ pub trait DWriteTextLayoutExt {
         text_position: u32,
         is_trailing_hit: bool,
     ) -> Result<HitTestResult>;
+
+    /// レイアウトボックス各辺からのインクはみ出し量（[`DWRITE_OVERHANG_METRICS`]）を返す。
+    ///
+    /// 正の値＝レイアウトボックスの外側へインクがはみ出している量（DIP）、負の値＝内側に
+    /// 余りがある。descent 側のはみ出し・イタリック右張り出し・アクセント・合字・装飾スワッシュ
+    /// 等、em/レイアウトボックスからはみ出す実インク境界を得るのに用いる。**注意**: 値は
+    /// レイアウトボックス基準ゆえ、`SetMaxWidth`/`SetMaxHeight` が巨大値（f32::MAX 等）のままだと
+    /// 対応する辺のはみ出しが巨大な負値になる——タイトなインク境界が要る場合は先に `GetMetrics`
+    /// の width/height を Max に設定すること（ブロック軸だけ欲しい場合は当該軸の箱寸のみ確定で足りる）。
+    fn get_overhang_metrics(&self) -> Result<DWRITE_OVERHANG_METRICS>;
 }
 
 impl DWriteTextLayoutExt for IDWriteTextLayout {
@@ -192,5 +202,10 @@ impl DWriteTextLayoutExt for IDWriteTextLayout {
                 metrics,
             })
         }
+    }
+
+    fn get_overhang_metrics(&self) -> Result<DWRITE_OVERHANG_METRICS> {
+        // SAFETY: GetOverhangMetrics は out 構造体を書き込むだけ（レイアウトは内部で確定される）。
+        unsafe { self.GetOverhangMetrics() }
     }
 }

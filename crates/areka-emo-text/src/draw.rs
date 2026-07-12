@@ -96,6 +96,7 @@ use crate::TextLayerError;
 use crate::canvas::TextEffects;
 use crate::layout::GlyphMetrics;
 use crate::state::TextLayerConfig;
+use crate::viewbox::LineOverhang;
 use crate::writing::WritingMode;
 
 // 以下は比較専用オラクル [`DrawExecutor`]（`#[cfg(test)]`）だけが使う依存——本番経路
@@ -471,10 +472,14 @@ struct FormatKey {
     mode: WritingMode,
 }
 
-/// キャッシュ済みの行 TextLayout（行内容の正本文字列と対で保持・内容不変なら再利用）。
+/// キャッシュ済みの行 TextLayout（行内容の正本文字列＋実測インクはみ出しと対で保持・
+/// 内容不変なら再利用）。`overhang` は生成時に一度だけ [`DWriteTextLayoutExt::get_overhang_metrics`]
+/// で実測（確定行は再計測しない）——ViewboxExecutor のダーティ矩形が em ボックス下端はみ出しを
+/// 取りこぼさないための実測値（D2）。
 struct CachedLineLayout {
     text: String,
     layout: IDWriteTextLayout,
+    overhang: LineOverhang,
 }
 
 /// 行 TextLayout の生成・キャッシュを担う共有ストア（複数の描画実行が**同一経路**で
@@ -536,14 +541,26 @@ impl LineLayoutStore {
             .create_text_layout(&HSTRING::from(text), format, max_width, max_height)
             .map_err(device_err("CreateTextLayout(line)"))?;
         self.creations += 1;
+        // 実測インクはみ出し（生成時 1 回・確定行は再計測しない）。行ボックスのブロック軸寸は
+        // font_height（横＝max_height／縦＝max_width）ゆえ、その軸の overhang が em ボックスからの
+        // はみ出しを直接与える。行内軸は巨大 PROBE_MAX_EXTENT 箱ゆえ overhang は巨大負値＝`max(0.0)`
+        // で 0 に丸まる（resident_rect はブロック軸の overhang のみ使う）。
+        let overhang = measure_line_overhang(&layout)?;
         self.cache.insert(
             index,
             CachedLineLayout {
                 text: text.to_owned(),
                 layout: layout.clone(),
+                overhang,
             },
         );
         Ok(layout)
+    }
+
+    /// キャッシュ済み行の実測インクはみ出し（[`LineOverhang`]）——`ViewboxExecutor` が plan へ渡す。
+    /// 未生成 index は `None`（呼び手は既定 0＝em ボックス丈として扱う）。
+    pub(crate) fn overhang(&self, index: usize) -> Option<LineOverhang> {
+        self.cache.get(&index).map(|c| c.overhang)
     }
 
     /// キャッシュを全破棄する（Clear cue の適用点・破棄はこの口だけ）。
@@ -557,6 +574,25 @@ impl LineLayoutStore {
     pub(crate) fn creations(&self) -> u64 {
         self.creations
     }
+}
+
+/// 行 TextLayout の実測インクはみ出し（[`LineOverhang`]・image px・全成分 ≥ 0）を返す。
+///
+/// [`DWriteTextLayoutExt::get_overhang_metrics`]（`GetOverhangMetrics`）はレイアウトボックス各辺
+/// からのはみ出し（正＝外側・DIP）を返す。行ボックスのブロック軸寸が `font_height`（横＝`max_height`
+/// ／縦＝`max_width`）に設定済みゆえ、その軸の値が em ボックス下端/上端（縦は左右）からのはみ出しを
+/// 直接与える。行内軸は巨大 `PROBE_MAX_EXTENT` 箱ゆえ値は巨大負値＝`max(0.0)` で 0 に丸まる
+/// （`resident_rect` はブロック軸の overhang のみ使うため、これで正しくブロック軸だけが効く）。
+fn measure_line_overhang(layout: &IDWriteTextLayout) -> Result<LineOverhang, TextLayerError> {
+    let o = layout
+        .get_overhang_metrics()
+        .map_err(device_err("GetOverhangMetrics(line)"))?;
+    Ok(LineOverhang {
+        top: o.top.max(0.0),
+        bottom: o.bottom.max(0.0),
+        left: o.left.max(0.0),
+        right: o.right.max(0.0),
+    })
 }
 
 /// **比較専用の独立オラクル**（本番経路は `ViewboxExecutor` へ移行済み・除去は本ユニットの

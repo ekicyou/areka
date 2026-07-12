@@ -60,7 +60,7 @@ use crate::draw::{LineLayoutStore, ResolvedFont, create_d2d_target_bitmap, creat
 use crate::layout::VisibleWindow;
 use crate::region::ScaleContract;
 use crate::surface::TextSurface;
-use crate::viewbox::{FramePlan, PhysicalRect, ScrollPlanner};
+use crate::viewbox::{FramePlan, LineOverhang, PhysicalRect, ScrollPlanner};
 use crate::writing::WritingMode;
 
 /// 行 TextLayout format の前提（フォント名・高さビット・writing_mode）——変わると
@@ -203,8 +203,34 @@ impl ViewboxExecutor {
     ) -> Result<bool, TextLayerError> {
         let size = surface.size();
         let (format, rebuilt) = self.ensure_format(font, mode)?;
-        let plan = self.planner.plan(canvas, window, mode, contract, size);
+
+        // ── plan 前に全住人の行レイアウトを確保し**実測インクはみ出し**を集める ──
+        // 確定行はキャッシュヒット（安価）・変化行のみ生成（=行レイアウト生成はここで一括発生し、
+        // 以降の Update 描画ループは再利用＝キャッシュヒット）。実測はみ出し（[`LineOverhang`]）は
+        // ダーティ矩形が em ボックス下端はみ出しを取りこぼさないための入力（D2）——`GetOverhangMetrics`
+        // で生成時に測定済みの値を index 整列で集める。
+        let creations_before = self.line_store.creations();
+        let mut overhangs: Vec<LineOverhang> = Vec::with_capacity(canvas.residents.len());
+        for (index, resident) in canvas.residents.iter().enumerate() {
+            let overhang = match &resident.content {
+                ResidentContent::GlyphRun(run) if !run.glyphs.is_empty() => {
+                    let text: String = run.glyphs.iter().map(|g| g.ch).collect();
+                    self.line_store
+                        .line_layout(index, &text, &format, font.height, mode)?;
+                    self.line_store.overhang(index).unwrap_or_default()
+                }
+                // 空行/シーム住人は実インクを持たない＝はみ出し 0（em ボックス丈）。
+                _ => LineOverhang::default(),
+            };
+            overhangs.push(overhang);
+        }
+        self.stats.line_layout_creations += self.line_store.creations() - creations_before;
+
+        let plan = self
+            .planner
+            .plan_with_overhangs(canvas, window, mode, contract, size, &overhangs);
         // 縮退判定（正しさ優先）: フォント/方向変更 or 想定外不整合なら全域ダーティ Update へ差し替え。
+        // 全域ダーティは面全域＝resident_rect を通らないため overhangs 不要（em ボックス経路と同一）。
         let plan = degrade_if_needed(plan, rebuilt, canvas, window, mode, contract, size);
 
         match &plan {
@@ -240,9 +266,9 @@ impl ViewboxExecutor {
                 }
 
                 // ── Phase 1（可謬）: 描画資源を BeginDraw の前に確定する ──
-                // 描画対象住人（draw_lines）の TextLayout と origin を組む。origin 式は
-                // DrawExecutor と同一（validrect-local 平行移動＋ブロック軸の可視窓オフセット）。
-                let creations_before = self.line_store.creations();
+                // 描画対象住人（draw_lines）の TextLayout と origin を組む。行レイアウトは plan 前の
+                // はみ出し収集ループで確保済み（ここは全てキャッシュヒット）。origin 式は DrawExecutor と
+                // 同一（validrect-local 平行移動＋ブロック軸の可視窓オフセット）。
                 let mut draws: Vec<(Vector2, IDWriteTextLayout)> = Vec::new();
                 for &index in draw_lines {
                     let resident = &canvas.residents[index];
@@ -358,9 +384,9 @@ impl ViewboxExecutor {
                 }
 
                 // 面の役割交換 → 計画の確定（成功時のみ・失敗フレームは未 commit で再試行安全）。
+                // 行レイアウト生成の集計は plan 前のはみ出し収集ループで済み（ここでは再計上しない）。
                 surface.flip();
                 self.planner.commit(canvas, window, mode, contract, &plan);
-                self.stats.line_layout_creations += self.line_store.creations() - creations_before;
                 Ok(true)
             }
         }
