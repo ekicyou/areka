@@ -4,19 +4,19 @@
 
 M-boot（「emo2 が起動して喋る」最初の可視結果）を構成する 5 トラックのエンジンは全て単体完成しているが、**それらを束ねて「動くアプリ」にする最後の一結線が誰の所有でもない**。現状の `areka` main は起動時に表示なしの記録専用 sink を 2 本挿しており、本物のゴースト窓は生成されるものの surface 未装着で不可視、シェルアニメーション側の表示終端は mock 止まり、バルーン文字層の毎フレーム駆動を回す者もいない。
 
-本仕様（areka-P0-emo2-boot）は M-boot マイルストーンと同名の**統合ユニット**であり、`areka.exe <emo2 path>` の一発起動で「実サーフェスが既定位置に表示され、OnBoot 応答スクリプトがバルーンに typewriter 進行で流れ、close で OnClose 握手を経て全エンジンが正常終了する」ことを実現する。新規機構は作らず、**シェルアニメーション側の表示指令を表示層の指令へ変換するアダプタ 1 個＋各エンジンの結線＋二段の観測**に徹する。全上流依存（window-placement / emo-text-layer を含む）は完了済みで、順序ゲートは解消されている。
+本仕様（areka-P0-emo2-boot）は M-boot マイルストーンと同名の**統合ユニット**であり、`areka.exe <emo2 path>` の一発起動で「実サーフェスが既定位置に表示され、OnBoot 応答スクリプトがバルーンに typewriter 進行で流れ、close で OnClose 握手を経て全エンジンが正常終了する」ことを実現する。新規機構は作らず、**シェルアニメーション側の表示指令を表示層の指令へ変換するアダプタ 1 個＋各エンジンの結線＋二段の観測**に徹する。全上流依存（window-placement / emo-text-layer / balloon-face-cue を含む）は完了済みで、順序ゲートは解消されている。とりわけ balloon-face-cue の完了により、バルーン面切替 cue（`\b`）は parser（`Instruction::BalloonSurface`）→ dola（`CueCommand::BalloonSurface`）→ sakura → seriko を貫いて第一級の表示指令（`DisplayCommand::ShowBalloon`／`HideBalloon`）として統合層へ到達するようになった。本仕様のアダプタはこれをバルーン表示対象へのサーフェス表示指令（`binds` 既定）／非表示へ配送する責務を負う（cue 語彙自体は再定義せず消費する）。
 
 ## Introduction
 
 本仕様は areka M1 の M-boot マイルストーンを充足する最終統合ユニットである。対象は「起動〜発話〜終了」の一本道（boot → talk → close）を実物のエンジン群で成立させる結線と、その正しさを二段（決定論 spine と env-gate 実走）で観測する仕組みである。各エンジンの内部実装・窓の生成配置・文字描画・撫で/メニュー/選択肢・一周適合証明は本仕様の対象外であり、それぞれ既存の完了仕様および後続マイルストーンが所有する。
 
-本仕様が新たに正本として確立するのは **scope から表示対象（target）への写像**のみであり、それ以外の契約（talk 契約・再生出力契約・表示指令・文字層装着 API・窓写像・死活語彙・sink 注入契約）は上流の完了仕様が定めた正本をそのまま消費する。
+本仕様が新たに正本として確立するのは **scope から表示対象（target）への写像**のみであり、それ以外の契約（talk 契約・再生出力契約・表示指令・バルーン面切替 cue 語彙・文字層装着 API・窓写像・死活語彙・sink 注入契約）は上流の完了仕様が定めた正本をそのまま消費する。この写像はシェル表示対象とバルーン表示対象の双方を含み、balloon-face-cue が第一級化したバルーン面切替指令（`ShowBalloon`／`HideBalloon`）のバルーン表示対象への配送も本仕様が担う。
 
 ## Boundary Context
 
-- **In scope**: 一発起動で実 emo2 サーフェスを既定位置に表示する結線／シェルアニメーション側の表示指令（Show/Hide）を表示層のサーフェス表示指令へ変換し配送するアダプタ（scope→表示対象の写像を含む・薄い変換＋配送のみで状態を持たない）／実 sink（サーフェス sink・テキスト sink）への差し替えと、それを可能にする構築順序の再編（boot を UI 基盤初期化の後へ）／生成済み窓写像（キャラクター窓・バルーン窓）の表示層への装着（初回サーフェス表示 → 文字層スロット取得 → 文字層接続の順序遵守）／バルーン文字層のアクター起動と毎フレーム駆動の結線／バルーン面切替 cue（`\b`）の M-boot 裁定（既定バルーン面のみ・未消費 no-op＋警告ログ）／窓 close から OnClose 応答の再生完了待ちを経た全エンジンの正常終了／決定論 spine 統合テスト（CI 常設）と実 pasta env-gate 実走（人間サインオフ）。
-- **Out of scope**: 窓の生成・配置・ドラッグ（`areka-P0-window-placement` の責務）／バルーン文字の描画そのもの（`areka-P0-emo-text-layer` の責務）／撫で・メニュー・選択肢（M-life / M-dialogue）／boot→talk→touch→menu→close の一周適合証明（`areka-P0-emo2-conformance-e2e`）／二人立ちの表示対象割当の本格化（M-dual・写像シームまで）／各エンジンの内部改変／バルーン面切替の実消費（後続増分ユニット）。
-- **Adjacent expectations**: 上流完了仕様の正本を再定義せず消費する（talk 契約 = ghost-setup / kanade / sakura、再生出力契約 = sakura、表示指令 = seriko、表示層指令・表示対象・文字層スロット = emo-present、文字層装着 API・テキスト sink = emo-text-layer、窓写像 = window-placement、死活語彙 = host32-lifecycle、sink 注入契約 = ghost-setup）。窓生成の準備失敗時に開かれるダミー窓フォールバック（window-placement の良性失敗設計）は意図的残置であり本仕様では触らない。
+- **In scope**: 一発起動で実 emo2 サーフェスを既定位置に表示する結線／シェルアニメーション側の表示指令（Show/Hide）を表示層のサーフェス表示指令へ変換し配送するアダプタ（scope→表示対象の写像を含む・薄い変換＋配送のみで状態を持たない）／実 sink（サーフェス sink・テキスト sink）への差し替えと、それを可能にする構築順序の再編（boot を UI 基盤初期化の後へ）／生成済み窓写像（キャラクター窓・バルーン窓）の表示層への装着（初回サーフェス表示 → 文字層スロット取得 → 文字層接続の順序遵守）／バルーン文字層のアクター起動と毎フレーム駆動の結線／バルーン面切替 cue（`\b`）の配送（balloon-face-cue が第一級化した `DisplayCommand::ShowBalloon`／`HideBalloon` をバルーン表示対象へのサーフェス表示指令〔`binds` 既定〕／非表示へ変換・配送）／窓 close から OnClose 応答の再生完了待ちを経た全エンジンの正常終了／決定論 spine 統合テスト（CI 常設）と実 pasta env-gate 実走（人間サインオフ）。
+- **Out of scope**: 窓の生成・配置・ドラッグ（`areka-P0-window-placement` の責務）／バルーン文字の描画そのもの（`areka-P0-emo-text-layer` の責務）／撫で・メニュー・選択肢（M-life / M-dialogue）／boot→talk→touch→menu→close の一周適合証明（`areka-P0-emo2-conformance-e2e`）／二人立ちの表示対象割当の本格化（M-dual・写像シームまで）／各エンジンの内部改変／バルーン面切替 cue 語彙そのものの定義（`areka-P0-balloon-face-cue` が確立済み＝消費のみ）／バルーン面キーの name 形・alias 解決（将来増分）。
+- **Adjacent expectations**: 上流完了仕様の正本を再定義せず消費する（talk 契約 = ghost-setup / kanade / sakura、再生出力契約 = sakura、表示指令 = seriko、バルーン面切替 cue 語彙〔parser `Instruction::BalloonSurface`・dola `CueCommand::BalloonSurface`・seriko `DisplayCommand::ShowBalloon`／`HideBalloon` の正本〕= balloon-face-cue、表示層指令・表示対象・文字層スロット = emo-present、文字層装着 API・テキスト sink = emo-text-layer、窓写像 = window-placement、死活語彙 = host32-lifecycle、sink 注入契約 = ghost-setup）。窓生成の準備失敗時に開かれるダミー窓フォールバック（window-placement の良性失敗設計）は意図的残置であり本仕様では触らない。
 
 ## Requirements
 
@@ -42,11 +42,13 @@ M-boot（「emo2 が起動して喋る」最初の可視結果）を構成する
 **Objective:** 統合を行う開発者として、シェルアニメーション側の表示指令が正しい表示対象へ届いてほしい。そうすれば各 scope のサーフェスが正しい窓に表示される。
 
 #### Acceptance Criteria
-1. When シェルアニメーション側が表示指令 Show（scope・surface id・bind 集合）を発行する, the 起動統合層 shall 当該 scope を対応する表示対象へ写像し、表示層へサーフェス表示を指示する。
-2. When シェルアニメーション側が表示指令 Hide（scope）を発行する, the 起動統合層 shall 当該 scope の表示対象を非表示にする。
-3. The 起動統合層 shall scope から表示対象への写像を本仕様の正本として確立し、他の正本を再定義しない。
-4. The 変換アダプタ shall 変換と配送のみを行い、状態を保持しない。
-5. The 変換アダプタ shall 発行された指令を UI スレッドの表示層へ UI 配送経路で届ける。
+1. When シェルアニメーション側が表示指令 Show（scope・surface id・bind 集合）を発行する, the 起動統合層 shall 当該 scope を対応するシェル表示対象へ写像し、表示層へサーフェス表示を指示する。
+2. When シェルアニメーション側が表示指令 Hide（scope）を発行する, the 起動統合層 shall 当該 scope のシェル表示対象を非表示にする。
+3. When シェルアニメーション側がバルーン面表示指令 ShowBalloon（scope・surface id・bind なし）を発行する, the 起動統合層 shall 当該 scope をバルーン表示対象へ写像し、既定 bind 集合でサーフェス表示を指示する。
+4. When シェルアニメーション側がバルーン面非表示指令 HideBalloon（scope）を発行する, the 起動統合層 shall 当該 scope のバルーン表示対象を非表示にする。
+5. The 起動統合層 shall scope から表示対象への写像（シェル表示対象・バルーン表示対象の双方）を本仕様の正本として確立し、他の正本を再定義しない。
+6. The 変換アダプタ shall 変換と配送のみを行い、状態を保持しない。
+7. The 変換アダプタ shall 発行された指令を UI スレッドの表示層へ UI 配送経路で届ける。
 
 ### Requirement 4: バルーン文字層の装着順序
 **Objective:** 統合を行う開発者として、バルーン文字層が確実に接続されてほしい。そうすればトークのテキストがバルーンに表示される。
@@ -56,13 +58,15 @@ M-boot（「emo2 が起動して喋る」最初の可視結果）を構成する
 2. If 初回サーフェス表示の完了前に文字層スロットの取得を試みる, then the 起動統合層 shall 文字層をまだ接続せず、スロット未生成の状態を尊重する。
 3. When 文字層の接続が完了する, the 起動統合層 shall 以降のテキスト cue をバルーン文字層へ反映できる状態にする。
 
-### Requirement 5: バルーン面切替 cue（`\b`）の M-boot 裁定
-**Objective:** 統合を行う開発者として、未対応のバルーン面切替 cue が起動を壊さないでほしい。そうすれば M-boot はバルーン面切替なしで完走できる。
+### Requirement 5: バルーン面切替 cue（`\b`）の配送
+**Objective:** 統合を行う開発者として、第一級の表示指令として届くようになったバルーン面切替 cue が正しくバルーン表示対象へ配送されてほしい。そうすれば `\b` を含むスクリプトでバルーン面が切り替わり、`\b` を使わない OnBoot デモも従来どおり完走できる。
 
 #### Acceptance Criteria
-1. When バルーン面切替 cue（`\b[ID]`）を受信する, the 起動統合層 shall 当該 cue を消費せず no-op として扱う。
-2. When バルーン面切替 cue を受信する, the 起動統合層 shall 警告レベルのログを 1 件記録する。
-3. The 起動統合層 shall 既定のバルーン面のみを使用する。
+1. When バルーン面表示指令 `DisplayCommand::ShowBalloon`（scope・surface id）が統合層へ到達する, the 起動統合層 shall 当該 scope をバルーン表示対象へ写像し、既定 bind 集合の `PresentCommand::ShowSurface` として配送する。
+2. When バルーン面非表示指令 `DisplayCommand::HideBalloon`（scope・`\b[-1]` 相当）が統合層へ到達する, the 起動統合層 shall 当該 scope のバルーン表示対象を非表示にする。
+3. The 起動統合層 shall バルーン面キーを seriko が解決した数値 id のまま消費し、alias を再適用しない。
+4. Where 決定論 spine 統合テストが `\b` を含むスクリプトで駆動される, the 起動統合層 shall バルーン面切替の配送経路（到達 → 写像 → 配送）が働くことを headless の記録で観測可能にする。
+5. The OnBoot デモ shall `\b` を使用せず（emo2 fixture は balloons0.png のみ）、バルーン面切替なしで完走する。
 
 ### Requirement 6: 終了握手と全エンジンの正常終了
 **Objective:** ユーザーとして、窓を閉じるとゴーストが OnClose に応答してから静かに終了してほしい。そうすれば会話が途中で切れず、後片付けが行われる。
