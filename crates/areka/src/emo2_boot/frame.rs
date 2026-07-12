@@ -193,6 +193,42 @@ impl Emo2Wiring {
             attached: false,
         }
     }
+
+    // ── spine 観測用 test-support アクセサ（tasks.md task 6.2・spine S1/S3/S4） ──────────
+    //
+    // 本番結線（`wire_emo2_boot`＝task 5.1／`emo2_frame_system`）は `presenter`/`rx` を private に
+    // 閉じ、drain/apply/readback は `run_attach_phase`／`run_drain_phase` 内で完結する。決定論 spine
+    // （兄弟モジュール `super::spine`・`#[cfg(test)]`）は「受信 `PresentCommand` 列の形状記録」
+    // （apply 前に値取り出し）と「apply 後の `read_back` 観測」（R8.2・観測境界をアダプタ記録に
+    // 留めない）を行うため、private フィールドへ最小の read/passthrough を要する。以下 3 つは
+    // getter/passthrough のみ（本番ロジックは一切変えない）で `#[cfg(test)]` ゲートし本番表面を増やさない。
+
+    /// target の表示中画素（BGRA・`stride=width*4`）を読み戻す（`EmoPresenter::read_back` passthrough・S1/S3/S4）。
+    #[cfg(test)]
+    pub(crate) fn read_back_target(
+        &self,
+        target: TargetId,
+    ) -> Result<Vec<u8>, areka_emo_present::PresentError> {
+        self.presenter.read_back(target)
+    }
+
+    /// rx にキュー済みの `PresentCommand` を非ブロックで FIFO 全件取り出す（S3/S4 の受信列記録用）。
+    ///
+    /// `run_drain_phase` と同じ `Receiver::try_iter` だが、spine は形状記録のため apply 前に**値**として
+    /// 取り出す（`PresentCommand` は `reply: Option<ReplySender>` ゆえ非 Clone・move で受ける）。
+    #[cfg(test)]
+    pub(crate) fn drain_received(&mut self) -> Vec<PresentCommand> {
+        self.rx.try_iter().collect()
+    }
+
+    /// 1 件の `PresentCommand` を presenter へ適用する（`EmoPresenter::apply` passthrough・S3）。
+    ///
+    /// `drain_received` で取り出した指令を、形状記録後に実 presenter へ流して実描画→readback まで
+    /// 通す（R8.2）ための最小口。本番は同じ `apply` を `run_drain_phase` が呼ぶ。
+    #[cfg(test)]
+    pub(crate) fn apply_present(&mut self, world: &mut World, cmd: PresentCommand) {
+        self.presenter.apply(world, cmd);
+    }
 }
 
 /// attach フェーズ（高々 1 回・design「フェーズ①（attach）」）をテスト駆動口として実装する。

@@ -33,7 +33,8 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use areka_actor::{ActorError, ActorHandle};
-use areka_emo_present::{EmoPresenter, PresentCommand};
+use areka_emo_compose::BindSet;
+use areka_emo_present::{EmoPresenter, PresentCommand, TargetId};
 use areka_emo_text::actor::{spawn_emo_text, TextLayerRuntime};
 use areka_emo_text::state::TextLayerConfig;
 use areka_ghost::dispatcher::DispatcherMsg;
@@ -58,6 +59,7 @@ use super::adapter::PresentBridge;
 use super::assets::{build_boot_assets, BootAssets};
 use super::frame::{run_attach_phase, Emo2Wiring};
 use super::talk_clock::{ClockedTextSink, TalkClock};
+use super::target_map::{balloon_target, shell_target};
 
 // ===========================================================================
 // ScriptedShioriBackend（DD-11・areka 側 spine ローカルの最小 fake）
@@ -573,5 +575,269 @@ fn spine_harness_boots_scripted_ghost_and_reaches_attach_ready() {
     harness.inject_dispatcher_tick(2);
 
     // ── 後片付け: 正規終了＋全ハンドル有界 join（hang させない・R8.3 の観測点＝有界 join のみ） ──
+    harness.shutdown_bounded();
+}
+
+// ===========================================================================
+// task 6.2 spine 観測ケース（S1 boot→表示／S3 `\b` 配送／S4 `\b` なし完走）
+//
+// 6.1 の `SpineHarness` の上に構築する。実 sink 経路の末端（`EmoPresenter::apply` の実描画→
+// `read_back`）まで観測境界を延ばす（R8.2）。sleep 不使用・注入 Tick と有界 drain のみ（R8.3）・
+// headless GPU（WARP・MTA・R8.4）・x64 完結（R8.6）。
+// ===========================================================================
+
+/// BGRA 密配列（`stride=width*4`）のうち α バイト（各 4 バイト画素の index 3）が非 0 の画素数を数える。
+///
+/// 「非全透明（初期面が実描画された）」の R8.5 述語＝`opaque_count > 0`。`read_back` は
+/// premultiplied B8G8R8A8 を密（RowPitch 除去済み）で返すため、単純な 4 バイト刻みで α を見る。
+fn opaque_count(bgra: &[u8]) -> usize {
+    bgra.chunks_exact(4).filter(|px| px[3] != 0).count()
+}
+
+/// `PresentCommand`（`#[non_exhaustive]`）の表示対象 `TargetId` を取り出す（未知 variant は `None`）。
+fn present_command_target(cmd: &PresentCommand) -> Option<TargetId> {
+    match cmd {
+        PresentCommand::ShowSurface { target, .. } => Some(*target),
+        PresentCommand::Hide { target, .. } => Some(*target),
+        PresentCommand::InvalidateCache { target, .. } => Some(*target),
+        _ => None,
+    }
+}
+
+/// `PresentCommand` の variant 名（`PresentCommand` は `reply` を含み `Debug` 非実装ゆえ診断表示用）。
+fn variant_name(cmd: &PresentCommand) -> &'static str {
+    match cmd {
+        PresentCommand::ShowSurface { .. } => "ShowSurface",
+        PresentCommand::Hide { .. } => "Hide",
+        PresentCommand::InvalidateCache { .. } => "InvalidateCache",
+        _ => "<unknown>",
+    }
+}
+
+/// 注入 Tick を増分しながら rx を有界に drain し、`want` 件の `PresentCommand` を集めて返す。
+///
+/// scripted OnBoot talk（`ghost`→`sakura`→`seriko`→`PresentBridge`→rx）は別スレッド群を跨いで
+/// 非同期に流れるため、Tick 注入（`DispatcherMsg::Tick`）と `try_iter` drain を有界ループで交互に
+/// 回し、必要件数が揃うか反復上限に達するまで進める（sleep 不使用・`yield_now` のみ・R8.3）。全 cue
+/// が `at=0.0`（`\w` なし）ゆえ最初の有効 Tick で発火し切るが、talk 起動・スレッド伝播の遅延を有界
+/// スピンで吸収する。揃わなければ短い Vec を返す（呼び手が件数を assert＝hang しない）。
+fn tick_and_collect(harness: &mut SpineHarness, want: usize) -> Vec<PresentCommand> {
+    let mut received: Vec<PresentCommand> = Vec::new();
+    for now in 1u64..=200_000 {
+        harness.inject_dispatcher_tick(now);
+        received.extend(harness.wiring.drain_received());
+        if received.len() >= want {
+            break;
+        }
+        std::thread::yield_now();
+    }
+    received
+}
+
+/// spine S1（boot→表示・DD-12・R1.1/1.2/1.3/1.4/8.1/8.2/8.5）: `\b` を含まない OnBoot 台本で
+/// boot→Tick 注入→attach フェーズを走らせ、(a) 装着サマリ `info!` が planned==attached==2
+/// （DD-12 の縮退が scope 導出バグを隠さない檻＝期待 scope 数の全 target 完了）・ERROR 0 件、
+/// (b) shell/balloon 両 target（scope0/scope1）の `read_back` が**非全透明**（`opaque_count>0`＝
+/// 初期面の実描画）であることを固定する。観測境界を実描画→readback まで延ばす（R8.2）。
+#[test]
+fn spine_s1_boot_to_display_attaches_all_targets_with_opaque_readback() {
+    let mut harness = SpineHarness::boot(r"\s[0]\e"); // \b-free
+
+    // boot 後 Tick 注入（要件フロー通り。attach 自体は Tick 非依存だが実 sink UI drain も踏む）。
+    harness.inject_dispatcher_tick(1);
+    harness.pump_text();
+
+    // attach フェーズ: DD-12 の planned==attached==2 を装着サマリで観測（縮退がバグを隠さない檻）。
+    let logs = capture_logs(|| run_attach_phase(&mut harness.wiring, &mut harness.world));
+    assert!(
+        logs.iter().any(|l| l.contains("planned=2") && l.contains("attached=2")),
+        "DD-12: 計画件数＝実装着件数（planned=2 attached=2・期待 scope 数の全 target 完了）が観測できない: {logs:?}"
+    );
+    assert_eq!(
+        count_level(&logs, "ERROR"),
+        0,
+        "attach で ERROR が発火（装着失敗・log-first）: {logs:?}"
+    );
+
+    // shell/balloon 両 target（scope0/scope1）の readback が非全透明＝初期面の実描画（R8.1/8.2/8.5）。
+    for (label, target) in [
+        ("shell scope0", shell_target(0)),
+        ("balloon scope0", balloon_target(0)),
+        ("shell scope1", shell_target(1)),
+        ("balloon scope1", balloon_target(1)),
+    ] {
+        let px = harness.wiring.read_back_target(target).unwrap_or_else(|e| {
+            panic!("{label} の read_back 失敗（初回面表示で供給面生成済みのはず）: {e:?}")
+        });
+        assert!(
+            opaque_count(&px) > 0,
+            "{label} の readback が全透明（初期面が表示されていない・R8.1/8.2/8.5）: len={}",
+            px.len()
+        );
+    }
+
+    harness.shutdown_bounded();
+}
+
+/// spine S3（`\b` 配送・R5.4/DD-5・R8.2）: `\b[-1]`→`\b[0]` を含む scripted OnBoot 台本を実 sink 経路
+/// （`ghost`→`sakura`→`seriko`→`PresentBridge`→rx）で流し、受信 `PresentCommand` 列に
+/// `Hide{balloon_target(0)}`→`ShowSurface{balloon_target(0), surface_id:0, binds:default}` が
+/// **順序どおり**現れることをアサートする（受信列順序＝本ケースの観測完了条件）。続けて記録済み指令を
+/// 実 presenter へ apply し、balloon target の `read_back` が非全透明（surface0 の実描画・R8.2）で
+/// attach 初期面と同一バイトを再駆動することを確認する。
+///
+/// # readback 遷移の観測境界（実装事実の申し送り・CONCERNS 相当）
+///
+/// `EmoPresenter::apply_hide` は WUC visual の可視フラグを落とすのみで swap chain の供給面
+/// （`source_tex`）は破棄しない。`read_back` はその供給面を直読みするため **Hide は readback の
+/// バイトを変えない**（emo-present の `empty_composition_degrades_to_hidden_and_replies_ok` が
+/// 同事実を固定＝Hide 縮退後も `read_back` は旧供給面長のまま成立）。加えて balloon fixture は
+/// surface0 のみ・attach 初回表示も surface0 ゆえ、`\b[-1]`→`\b[0]` の前後で readback バイトは不変
+/// （両方 surface0）。よって「Hide→全透明」型のピクセル遷移は本経路では観測不能である。本テストは
+/// (1) 受信列順序（R5.4 の本質・観測完了条件）と (2) apply 後の balloon readback が非全透明かつ attach
+/// 初期面と同一（surface_id/binds が正しく貫通し実描画された証跡・R8.2）で `\b` 配送の貫通を檻に入れる。
+#[test]
+fn spine_s3_balloon_face_cue_delivers_hide_then_show_in_order() {
+    let mut harness = SpineHarness::boot(r"\b[-1]\b[0]\e");
+
+    // 先に attach（balloon target を生成・初期面 surface0 を表示）。
+    let logs = capture_logs(|| run_attach_phase(&mut harness.wiring, &mut harness.world));
+    assert!(
+        logs.iter().any(|l| l.contains("attached=2")),
+        "S3 前提: attach 完了（balloon target 生成）が観測できない: {logs:?}"
+    );
+
+    // attach 初期面（surface0）の balloon readback を基準として捕捉（非全透明）。
+    let baseline = harness
+        .wiring
+        .read_back_target(balloon_target(0))
+        .expect("attach 後の balloon read_back（初期面 surface0）");
+    assert!(
+        opaque_count(&baseline) > 0,
+        "前提: attach 初期面（balloon surface0）は非全透明"
+    );
+
+    // scripted OnBoot talk を Tick 注入で駆動し、受信 PresentCommand を 2 件（Hide→ShowSurface）集める。
+    let received = tick_and_collect(&mut harness, 2);
+    assert_eq!(
+        received.len(),
+        2,
+        "\\b[-1]\\b[0] は Hide→ShowSurface のちょうど 2 件を配送するはず（受信 {} 件・variants={:?}）",
+        received.len(),
+        received.iter().map(variant_name).collect::<Vec<_>>()
+    );
+
+    // 受信列順序（R5.4/DD-5）: 1 件目 Hide{balloon(0)}・2 件目 ShowSurface{balloon(0),0,default}。
+    match &received[0] {
+        PresentCommand::Hide { target, reply } => {
+            assert_eq!(*target, balloon_target(0), "1 件目は balloon 表示対象の Hide（\\b[-1]）");
+            assert!(reply.is_none(), "reply は None（撃ちっぱなし）");
+        }
+        other => panic!("1 件目は Hide{{balloon}} のはず: {}", variant_name(other)),
+    }
+    match &received[1] {
+        PresentCommand::ShowSurface {
+            target,
+            surface_id,
+            binds,
+            reply,
+        } => {
+            assert_eq!(*target, balloon_target(0), "2 件目は balloon 表示対象の ShowSurface（\\b[0]）");
+            assert_eq!(*surface_id, 0, "surface_id は 0（\\b[0]・seriko 解決済み数値の透過）");
+            assert_eq!(
+                *binds,
+                BindSet::default(),
+                "binds は既定（空集合＝バルーン着せ替えなし・DD-5/R5.1）"
+            );
+            assert!(reply.is_none(), "reply は None（撃ちっぱなし）");
+        }
+        other => panic!("2 件目は ShowSurface{{balloon,0,default}} のはず: {}", variant_name(other)),
+    }
+
+    // 実 presenter へ apply（実描画→readback まで観測境界を延ばす・R8.2）。形状記録後に move で流す。
+    let mut cmds = received.into_iter();
+    let hide = cmds.next().expect("Hide");
+    harness.wiring.apply_present(&mut harness.world, hide);
+    // apply_hide は供給面を破棄しない → read_back は基準（surface0）のまま（可視フラグは readback に映らない）。
+    let after_hide = harness
+        .wiring
+        .read_back_target(balloon_target(0))
+        .expect("Hide 後も balloon 供給面は保持され read_back 可能");
+    assert_eq!(
+        after_hide, baseline,
+        "apply_hide は swap chain 供給面を破棄しない（read_back は供給面直読み・可視フラグ非反映）"
+    );
+
+    let show = cmds.next().expect("ShowSurface");
+    harness.wiring.apply_present(&mut harness.world, show);
+    let after_show = harness
+        .wiring
+        .read_back_target(balloon_target(0))
+        .expect("ShowSurface{0} 後の balloon read_back");
+    assert!(
+        opaque_count(&after_show) > 0,
+        "ShowSurface{{0}} 適用後の balloon は非全透明（surface0 の実描画・R8.2）"
+    );
+    assert_eq!(
+        after_show, baseline,
+        "\\b[0]→ShowSurface{{balloon,0,default}} は attach 初期面（surface0）と同一バイトを再駆動する（surface_id/binds の貫通証跡）"
+    );
+
+    harness.shutdown_bounded();
+}
+
+/// spine S4（`\b` なし完走・R5.5・R1 系）: `\b` を含まない OnBoot 台本が S1 経路（boot→表示）を完走し、
+/// かつ受信 `PresentCommand` 列に **balloon 表示対象（奇数 TargetId）宛の指令が一切現れない**
+/// （＝`\b` 由来の面切替が無い）ことを固定する。emo2 fixture は balloons0.png のみで OnBoot デモは
+/// バルーン面切替なしで完走する（R5.5）。`\s[0]` はシェル面指令（偶数 TargetId）を 1 件生むため、
+/// 「talk が実際に流れたが balloon 面切替は無い」を受信列で決定論的に区別できる。
+#[test]
+fn spine_s4_balloon_free_onboot_completes_without_balloon_face_switch() {
+    let mut harness = SpineHarness::boot(r"\s[0]\e"); // \b-free（シェル面 cue のみ）
+
+    // S1 経路: attach 完走（planned==attached==2）＋ shell/balloon readback 非全透明。
+    let logs = capture_logs(|| run_attach_phase(&mut harness.wiring, &mut harness.world));
+    assert!(
+        logs.iter().any(|l| l.contains("planned=2") && l.contains("attached=2")),
+        "S4: boot→表示（attach 完走・planned=2 attached=2）が観測できない: {logs:?}"
+    );
+    assert_eq!(count_level(&logs, "ERROR"), 0, "attach で ERROR なし: {logs:?}");
+    for (label, target) in [
+        ("shell scope0", shell_target(0)),
+        ("balloon scope0", balloon_target(0)),
+    ] {
+        let px = harness
+            .wiring
+            .read_back_target(target)
+            .unwrap_or_else(|e| panic!("{label} の read_back 失敗: {e:?}"));
+        assert!(opaque_count(&px) > 0, "{label} の readback が全透明（表示未確立）");
+    }
+
+    // OnBoot talk（\s[0]）を駆動し、少なくとも 1 件（シェル面指令）を受信＝talk が実際に流れたことを担保。
+    let mut received = tick_and_collect(&mut harness, 1);
+    assert!(
+        !received.is_empty(),
+        "\\b なし OnBoot 台本の talk が有界内に発火しない（boot→talk 経路が通っていない）"
+    );
+    // settle: さらに有界に Tick/drain して残余（万一の balloon 指令）を漏れなく回収する（sleep 不使用）。
+    for now in 1_000_000u64..1_000_000 + 5_000 {
+        harness.inject_dispatcher_tick(now);
+        received.extend(harness.wiring.drain_received());
+        std::thread::yield_now();
+    }
+
+    // R5.5: 受信列に balloon 表示対象（奇数 TargetId）宛は一切現れない（`\b` 由来面切替なしで完走）。
+    for cmd in &received {
+        if let Some(t) = present_command_target(cmd) {
+            assert_eq!(
+                t.0 % 2,
+                0,
+                "\\b なし台本で balloon 表示対象（奇数 TargetId）宛の指令が現れた（面切替 leak・R5.5 違反）: {:?} / variant={}",
+                t,
+                variant_name(cmd)
+            );
+        }
+    }
+
     harness.shutdown_bounded();
 }

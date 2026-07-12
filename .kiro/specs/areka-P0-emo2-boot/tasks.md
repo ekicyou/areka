@@ -101,7 +101,7 @@
   - _Boundary: spine test_
   - _Depends: 5.1_
 
-- [ ] 6.2 spine S1（boot→表示）・S3/S4（`\b` 配送）ケースを実装
+- [x] 6.2 spine S1（boot→表示）・S3/S4（`\b` 配送）ケースを実装
   - **S1**: boot 後 Tick 注入→attach フェーズ実行→shell/balloon target の readback が非全透明であること、かつ**計画件数＝実装着件数**（DD-12 の縮退がバグを隠さない檻）を assert する
   - **S3**: `\b[-1]`→`\b[0]` を含む scripted 台本→受信 `PresentCommand` 列に `Hide{balloon}`→`ShowSurface{balloon,0,binds=default}` が順序どおり現れることをアサートし、apply 後の balloon readback 遷移を確認する
   - **S4**: `\b` を含まない OnBoot 相当台本が S1 経路（boot→表示）を完走することを確認する
