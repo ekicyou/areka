@@ -86,14 +86,16 @@ M-boot（「emo2 が起動して喋る」最初の可視結果）を構成する
 3. If boot が非致命エラーで失敗する, then the 起動統合層 shall エラーをログに記録し、アプリの実行を継続する。
 4. The 起動統合層 shall 既存の非致命 boot の意味論（致命/非致命の区別）を維持する。
 
-### Requirement 8: 決定論 spine（CI 常設観測）
-**Objective:** 開発者および CI として、起動〜発話〜終了の全経路を sleep 不使用で決定論的にテストしたい。そうすれば回帰を実行テストの檻に入れられる。
+### Requirement 8: 決定論 spine（`cargo test --workspace` 常設観測）
+**Objective:** 開発者として、起動〜発話〜終了の全経路を sleep 不使用で決定論的にテストしたい。そうすれば回帰を `cargo test --workspace`（DoD ゲート・ローカル常設。本プロジェクトは外部 CI を持たない）の実行テストの檻に入れられる。可能な限りテスト観測を目指し、実描画（GPU）まで通す。
 
 #### Acceptance Criteria
 1. Where 決定論 spine 統合テストが実行される, the 起動統合層 shall スクリプト化された SHIORI バックエンドと実 sink 経路で boot→talk 配送→close 握手の全経路を実行する。
-2. The 決定論 spine 統合テスト shall sleep を使用せず、注入した Tick のみで時間を進める。
-3. The 決定論 spine 統合テスト shall 表示を headless の記録で観測する（実表示に依存しない）。
-4. The 決定論 spine 統合テスト shall x64 で完結し、i686 成果物へ依存しない。
+2. Where 決定論 spine 統合テストが実行される, the 起動統合層 shall 実 sink 経路の末端（アダプタ → `EmoPresenter::apply` ／ `present_frame` の実描画 → readback）まで通し、観測境界をアダプタ出力記録に留めない。
+3. The 決定論 spine 統合テスト shall sleep を使用せず、注入した Tick（`talk_time`）のみで時間を進める。
+4. The 決定論 spine 統合テスト shall 実描画を headless GPU（`GraphicsCore::new()`・WARP 可・MTA COM 初期化）とオフスクリーン readback で観測し、実画面提示には依存しない（既存 `draw_readback_test`／`attach_wiring_test` と同一方針）。
+5. The 決定論 spine 統合テスト shall readback したピクセル述語（例: 可視グリフ増加に伴う非透明ピクセル単調増加・validrect 外に非透明なし・Clear 後全域透明）で実描画結果を観測する。
+6. The 決定論 spine 統合テスト shall x64 で完結し（WARP は x64）、i686 成果物へ依存しない。
 
 ### Requirement 9: 実 pasta 実走（env-gate＋人間サインオフ）
 **Objective:** 開発者として、実 pasta.dll・実 DPI での起動を任意で追験したい。そうすればマイルストーンの最終サインオフを人間判断で行える。

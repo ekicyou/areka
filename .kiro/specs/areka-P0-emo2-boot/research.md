@@ -131,7 +131,7 @@
 - **工数: L（1–2 週間）**。理由: 新規コードは薄い（アダプタ 1 個＋結線）が、(i) 構築順序の全面組み替え、(ii) 装着順序の罠（初回 ShowSurface→text_slot_view→register の 3 段が GPU 資源到達に依存する非同期タイミング）、(iii) 実 sink 経路の決定論 spine 新設、(iv) present_frame 駆動と talk_time の確定、と結線点が多く、UI スレッド／NonSend／`&mut World` の借用規律に沿った統合が必要。
 - **リスク: 中〜高**。
   - 高: 装着順序×GPU 資源遅延挿入×文字層 None 遅延取得の**タイミング合流**（初回 ShowSurface が済むフレームで text_slot_view を取り register_actor_view する結線を取りこぼすと文字が出ない）。donor に近い前例はあるが text 層の合流は新規。
-  - 中: 決定論 spine の「実 sink 経路」を headless で通す際、emo-present/emo-text は GPU（WucGraphicsResource/GraphicsCore・MTA COM）を要する。アダプタ→`PresentCommand` 記録までは GPU 不要で決定論化できるが、emo-present.apply/present_frame まで通すと GPU 前提（WARP 可・既存テストは MTA 初期化で通している）。**spine の観測境界をどこに引くか**が決定論性を左右（設計判断）。
+  - ~~中: 決定論 spine の観測境界~~ **✅ 決着（2026-07-12 議題2・案 B）**: 本プロジェクトは**外部 CI を持たない**（`.github` 不在）＝「常設」は `cargo test --workspace`（ローカル DoD ゲート）。emo-present/emo-text の GPU 実描画＋readback は**既に素の `#[test]` で走る定石**（`draw_readback_test.rs`＝env-gate/ignore 無し・テスト内 `CoInitializeEx(COINIT_MULTITHREADED)`＋`GraphicsCore::new()`（WARP 可）＋実 `present_frame`＋`read_back`・注入時刻・sleep 不使用）。ゆえに観測境界は**アダプタ出力どまりでなく実描画→readback まで**（R8.2/8.4/8.5）。GPU/WARP/MTA は脆さコストでなく既存パターンの踏襲。残る非決定要因（seriko worker スレッド合流）は ghost spine（`ScriptedShioriBackend`＋join 単一同期点・sleep 不使用）の既存手法で決定論化（設計 §7 #5 と合流）。
   - 中: worker→UI 配送のスレッド安全性（`PresentCommand` は Send、presenter は NonSend・World 経由取得）。ii-1/ii-2 の選択で借用衝突の出方が変わる。
   - 低: バルーン面配送（`ShowBalloon`/`HideBalloon` → balloon target の `PresentCommand::ShowSurface{binds 既定}`／hide）はシェル写像への素直な additive（同一アダプタ）・smoke ゲート・shutdown 呼び出しは既存資産の素直な結線。
 
@@ -150,7 +150,7 @@
 
 1. 配送経路: `CommandSender` クロージャ経路（ii-1）か、`UiSender`＋キュー Resource＋毎フレーム drain system（ii-2）か。
 2. `present_frame` の `talk_time` 時刻源（絶対 FrameTime／talk 起点相対／kanade 同期）とリセット意味論。
-3. 決定論 spine の観測境界（アダプタ出力記録どまり／emo-present・emo-text 実描画まで）と GPU 依存の許容範囲（WARP/MTA を CI 常設に載せるか）。
+3. ~~決定論 spine の観測境界（アダプタ出力記録どまり／emo-present・emo-text 実描画まで）と GPU 依存の許容範囲。~~ **✅ 決着（2026-07-12 議題2・案 B）**: 外部 CI 不在ゆえ「常設」＝`cargo test --workspace`。GPU 実描画＋readback は既存 `draw_readback_test`（素の `#[test]`・WARP・MTA・注入時刻）で定石化済み。**観測境界は実描画→readback まで**（アダプタ出力どまりにしない）。要件へ反映済み（R8 を「CI 常設」→「`cargo test --workspace` 常設」へ改稿・R8.2/8.4/8.5 で実描画→readback・WARP/MTA・ピクセル述語を明記）。GPU headless（WARP・オフスクリーン readback）は「実表示非依存」を満たす。
 4. scope→TargetId 写像の採番規約（本ユニットが立てる唯一の正本・M-dual 拡張シーム）。
 5. 装着合流の schedule 設計（GPU 資源待ち→初回 ShowSurface→text_slot_view→register_actor_view→present_frame 開始の順序保証）。
 6. バルーン面切替指令のバルーン target 配送: `DisplayCommand::ShowBalloon`/`HideBalloon` → `PresentCommand::ShowSurface{binds 既定}`／hide の写像を置く場所（アダプタ）と、バルーン TargetId の採番（#4 の scope→TargetId 写像との関係・shell target と独立にバルーン target を割り当てる規約）。
@@ -167,4 +167,5 @@
 - **再開義務の消化状況**:
   - ✅ **義務①（R5 改稿）DONE**: 本回リフレッシュで R5 を「no-op＋warn 空手形」から「実 cue（`ShowBalloon`/`HideBalloon`）が届く→バルーン target へ配送」へ改稿（受入基準 5.1〜5.5・`\b` 含むスクリプトで決定論 spine 観測・OnBoot デモは `\b` 不使用）。
   - ✅ **義務③（R3 拡張）DONE**: R3 の scope→表示対象 写像を、シェル target（Show/Hide）に加えバルーン target（ShowBalloon/HideBalloon）配送まで拡張（受入基準 3.1〜3.7）。§7 設計判断 #6 は「no-op 適用点」から「バルーン target 配送＋バルーン TargetId 採番」へ差し替え済み。
-  - ⏳ **義務②（要件ディスカッション残議題）PENDING**: これから再開する要件ディスカッションで続行する。**議題2** = R10.5 依存解釈（areka-seriko/-emo-present/-emo-text/-sakura/-actor の workspace path 依存を areka へ昇格するのは本ユニット結線に必須で in-scope、の確認＝§7 #8）。**議題3** = R8 決定論 spine の観測境界（アダプタの `PresentCommand` 出力記録どまり／emo-present・emo-text 実描画まで＝GPU/WARP・MTA 依存の許容範囲＝§7 #3）。
+  - ✅ **義務②（要件ディスカッション残議題）DONE（2026-07-12）**: 再開した要件ディスカッションで2議題とも決着。**議題1（旧 議題2）= R10.5 依存解釈 → 案 A**: 「新規依存」＝外部（crates.io）依存の追加禁止と解し、既存 workspace crate の path 依存昇格は in-scope（R10.5 明確化＋R10.8 新設・§7 #8 決着）。**議題2（旧 議題3）= R8 観測境界 → 案 B**: 外部 CI 不在＝「常設」は `cargo test --workspace`。GPU 実描画＋readback は既存 `draw_readback_test`（素の `#[test]`・WARP・MTA・注入時刻）で定石化済みゆえ、観測境界は**実描画→readback まで**（アダプタ出力どまりにしない）。R8 を6基準へ改稿（実描画→readback・WARP/MTA・ピクセル述語明記）＋§7 #3・§5 リスク決着。
+- **要件フェーズ完了**: 再開義務①②③すべて消化。要件ディスカッションは全議題決着で締結、design フェーズへ引き継ぐ（残る §7 判断項目 #1/#2/#4/#5/#6/#7/#9 は design 持ち＝要件ではなく設計判断）。
