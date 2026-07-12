@@ -161,6 +161,26 @@
 
 - **`draw_text_layout_calls` の count 上の綾（task 13 で判明・非欠陥）**: `ViewboxExecutor::render` はダーティ矩形ごとに `draw_lines` 全体を描く（クリップで pixels は正しく限定・live-diff task 10 で byte 等価実証済み）ため、`draw_text_layout_calls 増分 = dirty_len × draws.len()`。多ダーティ矩形フレーム（typewriter 進行＋スクロール＝露出帯∪変化行∪空行で dirty_len>1）では素朴な「増分 < 可視行数」が小 fixture（可視3行）で成立しない（例で draw_delta=3=vlc=3）。**これは全域再描画への退行ではなく count 上の綾**——確定 content は面内 blit で保持され再描画されない（blit=1・全域再描画なら blit=0）・生成増分は流入1行のみ（create≤1）・描画増分はスクロール深さに依らず一定（draw1==draw2＝確定行を蓄積再描画しない）。再描画レスは task 13 C8 で**深さ不変＋blit＋NoChange＝0** の頑健な不変で実証（fixture 脆弱な「draw<可視行数」に依存しない）。design の「可視窓のみ移動フレームで draw ≤ 露出帯交差行数」不変は純粋 window-only-move（dirty_len=1・自然には typewriter で発生しない）で成立。**将来の最適化余地**: ダーティ矩形ごとに交差住人のみ描画（design System Flows「dirty 交差住人」寄り）で冗長クリップ描画を削減し count を ≤露出帯交差行数へ締める（byte 等価は live-diff で担保・M1 では非必達）。
 
+## 追加検証・強化（初期レビューの gap 対応・2026-07-12）
+
+実装完了後の批判的自己点検で見つけた「自動化できたのに未実施」の穴を追加で塞いだ（G1〜G5）。スコープ外は owning spec へ申し送り（G6）。
+
+- **G1（完了・a25d916b）**: vertical_lr スクロール実描画 byte 等価を live-diff へ追加。従来 live-diff は horizontal_tb+vertical_rl のみで vertical_lr は純粋層軸写像 unit 檻だけだった。**3 書字方向すべての実 GPU 描画 byte 等価カバー完成**。
+- **G2（完了・73bdb5e0）**: k≠1.0（k=1.25）の実描画許容差檻。R6.4「k≠1.0 で ≤0.5px」が実 GPU 描画で一度も走っていなかった穴を塞ぐ。`LiveDiffRig::new_scaled`＋`checkpoint_block_tol`（ブロック軸インク範囲差 ≤tol 物理 px）で小数アキュムレータ→whole-pixel blit→実描画→readback を k=1.25・横/縦rl/縦lr で実走し ≤2px（≈ceil(0.5×1.25)+AA）を確認。**k≠1.0 述語のみだった検証に実描画経路を追加**（残る手動確認は実機 DPI 目視のみ）。
+- **G3（完了・f530bcc9）**: 再描画レスカウント檻を fixture 非依存へ頑健化。脆弱な「draw < 可視行数」（可視8行 fixture 依存）を tight check へ降格し、blit==1（全域再描画なら0＝真の負のコントロール）＋depth-invariance（draw_delta==draw_delta2＝スクロール深さ不変）を主檻へ。
+- **G4（完了・2531dcf2）**: AA ガード=1 の非 default フォント/大サイズ byte 等価。ＭＳ Ｐゴシック（プロポーショナル）・20px（大サイズ）でも横/縦rl byte 完全一致＝**DIRTY_GUARD_IMG_PX(1) が font/サイズ非依存で十分**を実描画で確認。
+- **G5（完了・61d25134）**: 描画中デバイス失敗の再試行安全を実描画で檻化。`#[cfg(test)]` fault-injection（EndDraw 後 flip/commit 前に Err）で「失敗フレーム＝front 不変・planner 未 commit・再試行で正しく反映」を檻化（純粋 ScrollPlanner 3.3 の COM 側 runtime 版・#[cfg(test)] ゲートゆえ本番無影響）。
+
+## スコープ外ギャップの申し送り（G6・owning spec）
+
+本 spec のスコープ外——他 spec/上位層が所有。本 spec では実装しない根拠を記録:
+
+- **実 talk 経路の main 結線**（`GhostBootOptions.text_sink` への注入・実アプリの実 talk 駆動）: design「Out of Boundary」明記のスコープ外。owning＝**emo2-boot**（sink/register/present_frame を消費）／**ghost-setup**（⓪ゴーストエンジンの boot 結線）。viewbox は実 talk では未駆動だが、**本番 present_frame 経路（＝ViewboxExecutor）は既存統合テスト＋live-diff で byte 等価検証済み**ゆえ、結線先の render 経路の正しさは担保済み。
+- **device loss 回復**（`GraphicsCore` invalidate/generation 後の面/executor 再生成）: wintf グラフィクス基盤（`XxxGraphics` invalidate/generation 規約）＋ actor/ghost lifecycle（再 attach 経路）の責務。本 spec の ViewboxExecutor は device loss 後に stale（committed/prev_lines/専用 DC/ダブルバッファ）になるが、**回復＝上位の再 attach の領分**（本 spec は device *failure* の 1 フレーム skip＋再試行のみ所有＝G5 で檻化済み。device *loss* 復旧は別）。
+- **長時間 talk のメモリ**: 固定寸ダブルバッファ 2 枚＋staging 1 枚・**寸変更 API 不在**（task 4.1「面寸 attach 時確定」）で構造的に固定上限＝実測不要（無限成長を構造排除・R4.4）。
+- **`\_b` 固定層の実挙動**（画像読込・固定層描画）: R7.2 仕様通り型シーム（`FixedOverlaySeam`）＋合成点 doc のみ・実挙動なし。owning＝後続の `\_b` 対応増分。
+- **滑らか補間・慣性の実挙動**: R8 仕様通り f32/committed 分離のシームのみ・M1 はステップスクロール。owning＝**M2** スクロール演出。
+
 ## 意図的な繰り延べ事項
 
-- Requirement 6.4・10.6の非96 DPI（k≠1.0）における実機手動確認は、コーディング作業でないためタスク化しない。自動検証側は3.4（確定位置と真位置の差が0.5px以内である恒真検証）と12（既存スケール不変検証の無改変green）で述語レベルまでカバーする。実機での目視確認（文字の滲みなし・スクロール整合）は実装フェーズのDoD申し送り事項として扱う（記憶 areka-placement-real-ghost-first）。
+- Requirement 6.4・10.6の非96 DPI（k≠1.0）における**実機**手動確認（実 DPI モニタでの文字の滲みなし・スクロール整合の目視）は、コーディング作業でないためタスク化しない。自動検証は 3.4（純粋層 drift 恒真）・12（スケール不変資産）に加え **G2（k=1.25 の実 GPU 描画 ≤0.5px 許容差檻）** で述語＋実描画レベルまでカバー済み。残るのは実機 DPI 目視のみで DoD 申し送り事項（記憶 areka-placement-real-ghost-first）。
