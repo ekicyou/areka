@@ -78,7 +78,7 @@ M-boot の 5 トラックは全て完了 or 残 2（window-placement／emo-text-
 ## Existing Spec Touchpoints
 
 - **Extends**: `completed/areka-P0-ghost-setup`（sink 注入契約の実行）・`completed/areka-P0-app-shell`（骨格 main の完成形へ）。
-- **Adjacent**: `completed/areka-P0-window-placement`✅／`completed/areka-P0-emo-text-layer`✅（両ゲート解消済み・実シンボル消費）／`areka-P0-emo-text-viewbox`（並走候補・areka-emo-text の描画実行側のみ改変＝本ユニットの消費面〔sink/装着 API/present_frame〕とは非交差・pixel 等価 golden が並走安全を担保）。
+- **Adjacent**: `completed/areka-P0-window-placement`✅／`completed/areka-P0-emo-text-layer`✅（両ゲート解消済み・実シンボル消費）／`completed/areka-P0-emo-text-viewbox`✅（完了 2026-07-12・areka-emo-text の描画実行側のみ改変＝本ユニットの消費面〔sink/装着 API/present_frame〕とは非交差・k=1.0 byte 等価 golden で挙動不変を担保）。
 
 ## Constraints
 

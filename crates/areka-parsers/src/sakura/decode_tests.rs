@@ -399,3 +399,127 @@ fn lenient_passthrough_never_aborts_keeps_valid_neighbors() {
         ],
     );
 }
+
+// ════════════════════════════════════════════════════════════════════
+// タスク 1.2: バルーン面切替 `\b` の意味 decode（両形・不透明転写）
+//
+// State Management 表（design.md）の全行を檻に入れる。ブラケット形（数値形／
+// 名前形）と裸形短縮の双方が、`\s` の `Surface` と完全対称の `BalloonSurface`
+// へ忠実転写される（数値化・範囲展開・alias 解決を一切行わない・R1.1/1.4/1.5）。
+// ════════════════════════════════════════════════════════════════════
+
+/// ブラケット数値形 `\b[10]` → `[BalloonSurface("10")]`（第 1 引数を不透明保持・R1.1）。
+#[test]
+fn balloon_surface_bracket_numeric() {
+    assert_eq!(
+        dec(r"\b[10]"),
+        vec![Instruction::BalloonSurface(SurfaceArg::new("10".to_string()))],
+    );
+}
+
+/// ブラケット名前形 `\b[バルーン１]` → `[BalloonSurface("バルーン１")]`（無加工・整数へ
+/// 限定変換しない・R1.1/R1.5）。
+#[test]
+fn balloon_surface_bracket_name_form_opaque() {
+    assert_eq!(
+        dec(r"\b[バルーン１]"),
+        vec![Instruction::BalloonSurface(SurfaceArg::new("バルーン１".to_string()))],
+    );
+}
+
+/// ブラケット非表示指定 `\b[-1]` → `[BalloonSurface("-1")]`（センチネルを文字列のまま
+/// 保持し数値化・解決しない・R1.4）。
+#[test]
+fn balloon_surface_hide_sentinel_opaque() {
+    assert_eq!(
+        dec(r"\b[-1]"),
+        vec![Instruction::BalloonSurface(SurfaceArg::new("-1".to_string()))],
+    );
+}
+
+/// 裸形短縮 `\b1` → `[BalloonSurface("1")]`（1 桁の面数字を文字列で保持・本文へ
+/// 漏らさない・R1.2/R1.3 の decode 面）。
+#[test]
+fn balloon_surface_shorthand_single_digit() {
+    assert_eq!(
+        dec(r"\b1"),
+        vec![Instruction::BalloonSurface(SurfaceArg::new("1".to_string()))],
+    );
+}
+
+/// 裸形 `\b12` → `[BalloonSurface("1"), Text("2")]`（面数字は 1 桁のみ消費し、続く
+/// `2` は正当なバルーン本文として残す・R1.3）。
+#[test]
+fn balloon_surface_shorthand_digit_then_body_text() {
+    assert_eq!(
+        dec(r"\b12"),
+        vec![
+            Instruction::BalloonSurface(SurfaceArg::new("1".to_string())),
+            Instruction::Text("2".to_string()),
+        ],
+    );
+}
+
+/// ukadoc fallback 形 `\b[2,--fallback=4]` は第 1 引数 `"2"` に落ちる（`\s` arm と
+/// 完全対称の graceful 動作・Non-Goals 登記）。
+#[test]
+fn balloon_surface_fallback_form_takes_first_arg() {
+    assert_eq!(
+        dec(r"\b[2,--fallback=4]"),
+        vec![Instruction::BalloonSurface(SurfaceArg::new("2".to_string()))],
+    );
+}
+
+/// `BalloonSurface` の不透明中身は `SurfaceArg::as_str()` で読み取れる（read-only
+/// accessor・無加工保持を直接確認）。
+#[test]
+fn balloon_surface_inner_readable_via_as_str() {
+    let out = dec(r"\b[バルーン１]");
+    match &out[..] {
+        [Instruction::BalloonSurface(arg)] => assert_eq!(arg.as_str(), "バルーン１"),
+        other => panic!("expected single BalloonSurface, got {other:?}"),
+    }
+}
+
+/// `\b2[x]`（数字の直後が `[`）は短縮形でなく正準タグ `\b2[x]` 扱い＝subset 外 word
+/// `b2` → `Raw`（既存 `\w2[x]` と同型・"b" arm 追加後も不変・R1.6 整合）。
+#[test]
+fn balloon_bracketed_digit_word_stays_raw() {
+    assert_eq!(dec(r"\b2[x]"), vec![Instruction::Raw(r"\b2[x]".to_string())]);
+}
+
+/// 数字を伴わない裸 `\b` は bare タグ＝既存 passthrough のまま `Raw("\b")`（"b" arm は
+/// ブラケット形／短縮形のみを取り込み、数字なし裸形の挙動は変えない・R1.6）。
+#[test]
+fn balloon_bare_no_digit_stays_raw() {
+    assert_eq!(dec(r"\b"), vec![Instruction::Raw(r"\b".to_string())]);
+}
+
+/// 非退行（R1.6）: `\b` 追加後も `\s[...]` は引き続き `Surface`（別 variant）へ写像され、
+/// バルーン面切替に奪われない。`\b`/`\s` が同一引数で異なる第一級命令になることを固定。
+#[test]
+fn shell_surface_unchanged_and_distinct_from_balloon() {
+    assert_eq!(
+        dec(r"\s[10]"),
+        vec![Instruction::Surface(SurfaceArg::new("10".to_string()))],
+    );
+    assert_ne!(dec(r"\b[10]"), dec(r"\s[10]"));
+}
+
+/// 非退行（R1.6）: 既存 subset タグ（`\w9`/`\s[0]`/`\n`/`\e`）＋バルーン面切替の混在で、
+/// 既存タグの写像が完全不変のまま `\b` だけが `BalloonSurface` として割り込む。
+#[test]
+fn existing_tags_unchanged_with_balloon_interleaved() {
+    let out = dec(r"\s[0]\b[2]\w9\nテキスト\e");
+    assert_eq!(
+        out,
+        vec![
+            Instruction::Surface(SurfaceArg::new("0".to_string())),
+            Instruction::BalloonSurface(SurfaceArg::new("2".to_string())),
+            Instruction::Wait(Duration::from_millis(450)),
+            Instruction::NewLine(NewLineRatio::new(1.0)),
+            Instruction::Text("テキスト".to_string()),
+            Instruction::End,
+        ],
+    );
+}

@@ -1,6 +1,6 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-//! # typewriter_demo — バルーン＋タイプライター表示のインタラクティブデモ
+//! # emo-text-typewriter-demo — バルーン＋タイプライター表示のインタラクティブデモ
 //!
 //! emo2 fixture のバルーン枠を実表示し、挨拶テキストを **実時間タイプライター**
 //! （`char_wait` 秒/グリフ・注入時刻＝フレーム経過時間で駆動）で表示する。
@@ -10,7 +10,7 @@
 //! `PointerState.double_click == Left` を検出→窓を despawn→`run()` 復帰）。
 //!
 //! ```text
-//! cargo run -p areka-emo-text --example typewriter_demo
+//! cargo run -p areka-emo-text --example emo-text-typewriter-demo
 //! ```
 //!
 //! 注: これは対話デモ（自動 pass/fail 判定は行わない）。描画・タイプライター進行・
@@ -141,13 +141,13 @@ fn main() -> windows::core::Result<()> {
     println!();
 
     mgr.run()?;
-    println!("[typewriter_demo] 終了しました。おほほ、ごきげんよう！");
+    println!("[emo-text-typewriter-demo] 終了しました。おほほ、ごきげんよう！");
     Ok(())
 }
 
 fn setup_abort(msg: &str) -> ! {
     error!("{msg}");
-    println!("[typewriter_demo] セットアップ失敗: {msg}");
+    println!("[emo-text-typewriter-demo] セットアップ失敗: {msg}");
     std::process::exit(1);
 }
 
@@ -216,7 +216,7 @@ fn build_and_spawn(world: &mut World) {
         cycle_start: 0.0,
         fed: false,
     });
-    info!(w, h, "typewriter_demo: 窓生成とアセット構築を完了");
+    info!(w, h, "emo-text-typewriter-demo: 窓生成とアセット構築を完了");
 }
 
 /// ダブルクリック終了ハンドラ。バルーン本体（子）が hit → bubble で窓（本ハンドラ）へ。
@@ -228,7 +228,7 @@ fn on_balloon_pressed(
 ) -> bool {
     // 単クリック（double_click==None）は無視し、ダブルクリックのみで終了する。
     if ev.is_bubble() && ev.value().double_click == DoubleClick::Left {
-        info!("typewriter_demo: バルーンのダブルクリックを検出 — 終了します");
+        info!("emo-text-typewriter-demo: バルーンのダブルクリックを検出 — 終了します");
         if let Some(mut q) = world.get_resource_mut::<QuitRequested>() {
             q.0 = true;
         }
@@ -301,12 +301,12 @@ fn try_attach(demo: &mut Demo, world: &mut World) {
 
     // 実モニタ DPI をログ（物理 1:1・k=1.0 恒常）。
     if let Some(handle) = world.get::<WindowHandle>(demo.win) {
-        info!(dpi = handle.get_dpi(), scale_k = view.scale(), "typewriter_demo: 実モニタ DPI");
+        info!(dpi = handle.get_dpi(), scale_k = view.scale(), "emo-text-typewriter-demo: 実モニタ DPI");
     }
 
     demo.cycle_start = world.get_resource::<FrameTime>().map(|ft| ft.0).unwrap_or(0.0);
     demo.attached = true;
-    info!("typewriter_demo: 装着・結線完了 — タイプライター開始（ダブルクリックで終了）");
+    info!("emo-text-typewriter-demo: 装着・結線完了 — タイプライター開始（ダブルクリックで終了）");
 }
 
 /// 実時間タイプライター駆動（毎フレーム）。cue を流し、フレーム経過時間を注入して提示する。

@@ -33,10 +33,11 @@
 //! - 計測結果はキャッシュ可（追記単調ゆえ確定内容の metrics は不変）——本実装は
 //!   文字単位キャッシュ（format 固定につき 同一文字→同一送り幅の決定論）。
 //!
-//! ## 全域再描画（task 6.3・R3.1/R7.3）
+//! ## 全域再描画オラクル（旧 task 6.3・R3.1/R7.3・task 5 で `#[cfg(test)]` 化）
 //!
-//! [`DrawExecutor`]: 可視窓の行を毎更新オフスクリーン D2D ターゲット（TextSurface の
-//! `source_tex`）へ透明 clear→全域再描画する（差分描画なし・SSP 忠実の確定裁定）:
+//! [`DrawExecutor`]: **比較専用の独立オラクル**（本番経路は `ViewboxExecutor` へ移行済み）。
+//! 可視窓の行を毎更新オフスクリーン D2D ターゲット（TextSurface の front＝`front_tex`）へ
+//! 透明 clear→全域再描画する（差分描画なし・SSP 忠実の確定裁定）:
 //!
 //! - **可視窓決定（純粋・layout.rs）と描画実行（本型）の分離**（R7.4 のシーム下半分）。
 //!   [`VisibleWindow`] の `first_visible_line`＋`block_offset` を消費するだけで、
@@ -62,12 +63,19 @@ use std::collections::HashMap;
 use areka_parsers::balloon::BalloonModel;
 use tracing::warn;
 use windows::Win32::Graphics::Direct2D::Common::{
-    D2D1_ALPHA_MODE_PREMULTIPLIED, D2D1_COLOR_F, D2D1_PIXEL_FORMAT,
+    D2D1_ALPHA_MODE_PREMULTIPLIED, D2D1_PIXEL_FORMAT,
 };
 use windows::Win32::Graphics::Direct2D::{
     D2D1_BITMAP_OPTIONS_CANNOT_DRAW, D2D1_BITMAP_OPTIONS_TARGET, D2D1_BITMAP_PROPERTIES1,
-    D2D1_DEVICE_CONTEXT_OPTIONS_NONE, D2D1_DRAW_TEXT_OPTIONS_NONE, ID2D1Bitmap1,
-    ID2D1DeviceContext, ID2D1Image,
+    ID2D1Bitmap1, ID2D1DeviceContext,
+};
+// 比較専用オラクル [`DrawExecutor`]（`#[cfg(test)]`）専用の描画 API——本番 create_d2d_target_bitmap
+// が使う定義（上）と分けて cfg(test) に隔離する（非テストビルドの dead import を避ける）。
+#[cfg(test)]
+use windows::Win32::Graphics::Direct2D::Common::D2D1_COLOR_F;
+#[cfg(test)]
+use windows::Win32::Graphics::Direct2D::{
+    D2D1_DEVICE_CONTEXT_OPTIONS_NONE, D2D1_DRAW_TEXT_OPTIONS_NONE, ID2D1Image,
 };
 use windows::Win32::Graphics::DirectWrite::{
     DWRITE_FLOW_DIRECTION, DWRITE_FLOW_DIRECTION_LEFT_TO_RIGHT,
@@ -78,21 +86,36 @@ use windows::Win32::Graphics::DirectWrite::{
     DWRITE_TEXT_ALIGNMENT, DWRITE_TEXT_ALIGNMENT_LEADING, IDWriteFactory2, IDWriteFontCollection,
     IDWriteTextFormat, IDWriteTextLayout,
 };
+use windows::Win32::Graphics::Direct3D11::ID3D11Texture2D;
 use windows::Win32::Graphics::Dxgi::Common::DXGI_FORMAT_B8G8R8A8_UNORM;
 use windows::Win32::Graphics::Dxgi::IDXGISurface;
 use windows::core::{HSTRING, Interface};
-use windows_numerics::{Matrix3x2, Vector2};
-use wintf::com::d2d::{D2D1DeviceContextExt, D2D1DeviceExt};
 use wintf::com::dwrite::{DWriteFactoryExt, DWriteTextLayoutExt};
-use wintf::ecs::GraphicsCore;
 
 use crate::TextLayerError;
-use crate::canvas::{ContentCanvas, ResidentContent, TextEffects};
-use crate::layout::{GlyphMetrics, VisibleWindow};
-use crate::region::ScaleContract;
+use crate::canvas::TextEffects;
+use crate::layout::GlyphMetrics;
 use crate::state::TextLayerConfig;
-use crate::surface::TextSurface;
+use crate::viewbox::LineOverhang;
 use crate::writing::WritingMode;
+
+// 以下は比較専用オラクル [`DrawExecutor`]（`#[cfg(test)]`）だけが使う依存——本番経路
+// （ViewboxExecutor）は viewbox_draw.rs 側で自前に持つため、非テストビルドの dead import を
+// 避けるべく cfg(test) へ隔離する（オラクル隔離の一部・task 5）。
+#[cfg(test)]
+use windows_numerics::{Matrix3x2, Vector2};
+#[cfg(test)]
+use wintf::com::d2d::{D2D1DeviceContextExt, D2D1DeviceExt};
+#[cfg(test)]
+use wintf::ecs::GraphicsCore;
+#[cfg(test)]
+use crate::canvas::{ContentCanvas, ResidentContent};
+#[cfg(test)]
+use crate::layout::VisibleWindow;
+#[cfg(test)]
+use crate::region::ScaleContract;
+#[cfg(test)]
+use crate::surface::TextSurface;
 
 /// SSP 既定フォント名（**全角表記** ＭＳ ゴシック・ukadoc 既定・R4.2）。
 pub const DEFAULT_FONT_NAME: &str = "ＭＳ ゴシック";
@@ -437,6 +460,10 @@ impl GlyphMetrics for DWriteMetrics {
 
 /// 行 TextLayout の format 前提（フォント名・高さ・writing_mode）——変わると
 /// キャッシュ済み行レイアウトの前提が崩れるため format と行キャッシュを組み直す。
+///
+/// 比較専用オラクル [`DrawExecutor`] 専用（本番 `ViewboxExecutor` は自前のインライン
+/// `FormatKey` を持つ・viewbox_draw.rs）——ゆえにオラクルと同じ `#[cfg(test)]` で保全する。
+#[cfg(test)]
 #[derive(Clone, Debug, PartialEq)]
 struct FormatKey {
     font_name: String,
@@ -445,16 +472,139 @@ struct FormatKey {
     mode: WritingMode,
 }
 
-/// キャッシュ済みの行 TextLayout（行内容の正本文字列と対で保持・内容不変なら再利用）。
+/// キャッシュ済みの行 TextLayout（行内容の正本文字列＋実測インクはみ出しと対で保持・
+/// 内容不変なら再利用）。`overhang` は生成時に一度だけ [`DWriteTextLayoutExt::get_overhang_metrics`]
+/// で実測（確定行は再計測しない）——ViewboxExecutor のダーティ矩形が em ボックス下端はみ出しを
+/// 取りこぼさないための実測値（D2）。
 struct CachedLineLayout {
     text: String,
     layout: IDWriteTextLayout,
+    overhang: LineOverhang,
 }
 
-/// ContentCanvas の可視窓を DirectWrite/D2D で全域再描画する実行部
-/// （task 6.3・R3.1/R7.3・design.md「DrawExecutor（draw.rs）」）。
+/// 行 TextLayout の生成・キャッシュを担う共有ストア（複数の描画実行が**同一経路**で
+/// 行レイアウトを得るための抽出型・design.md「draw.rs の再編（LineLayoutStore 抽出）」）。
 ///
-/// 毎更新、TextSurface の `source_tex`（オフスクリーン D2D ターゲット）を透明 clear→
+/// 生成規則（行内軸＝[`PROBE_MAX_EXTENT`]・行送り軸＝`font_height`・同一 format）・キー
+/// （canvas 行 index）・内容不変再利用・破棄規律（[`clear`](Self::clear) のみ全破棄）は
+/// 抽出前の `DrawExecutor` 内実装と同一——TextLayout 生成経路の完全共有により両描画実行の
+/// **byte 等価**を構造化する（RN5）。UI スレッド専有（COM 層規律）。
+///
+/// `pub(crate)`: [`DrawExecutor`]（front へ全域再描画）と `ViewboxExecutor`
+/// （back へダーティ描画・viewbox_draw.rs）が**同一経路**で行レイアウトを得るため
+/// crate 内へ公開する（生成規則・キー・破棄規律は不変）。
+pub(crate) struct LineLayoutStore {
+    /// 行 TextLayout 生成用 factory（probe/描画と同一の `IDWriteFactory2`）。
+    factory: IDWriteFactory2,
+    /// 行 TextLayout キャッシュ（key＝canvas 行 index。追記単調ゆえ確定行の index/内容は
+    /// 不変——リビール中＝最終行のみ内容が変わり都度更新される）。
+    cache: HashMap<usize, CachedLineLayout>,
+    /// 行 TextLayout の累計生成回数（**常時コンパイル**・後続 task の `DrawStats` へ集計する
+    /// ため `#[cfg(test)]` にしない・design「Modified Files」）。
+    creations: u64,
+}
+
+impl LineLayoutStore {
+    /// factory を束ねて空ストアを生成する（factory は clone 保持）。
+    pub(crate) fn new(factory: &IDWriteFactory2) -> LineLayoutStore {
+        LineLayoutStore {
+            factory: factory.clone(),
+            cache: HashMap::new(),
+            creations: 0,
+        }
+    }
+
+    /// 行 TextLayout の取得（内容不変なら再利用・変化時のみ生成して置換）。
+    ///
+    /// 行の箱寸は「行内軸＝折返し無効寸（[`PROBE_MAX_EXTENT`]・折返しは純粋層で決定済み
+    /// ＝再折返しさせない）・行送り軸＝`font_height`」。方向レシピ（LEADING/NEAR）により
+    /// 行は箱の書字開始角に付くため、描画原点＝行矩形原点で位置が定まる。
+    pub(crate) fn line_layout(
+        &mut self,
+        index: usize,
+        text: &str,
+        format: &IDWriteTextFormat,
+        font_height: f32,
+        mode: WritingMode,
+    ) -> Result<IDWriteTextLayout, TextLayerError> {
+        if let Some(cached) = self.cache.get(&index) {
+            if cached.text == text {
+                return Ok(cached.layout.clone());
+            }
+        }
+        let (max_width, max_height) = match mode {
+            WritingMode::HorizontalTb => (PROBE_MAX_EXTENT, font_height),
+            WritingMode::VerticalRl | WritingMode::VerticalLr => (font_height, PROBE_MAX_EXTENT),
+        };
+        let layout = self
+            .factory
+            .create_text_layout(&HSTRING::from(text), format, max_width, max_height)
+            .map_err(device_err("CreateTextLayout(line)"))?;
+        self.creations += 1;
+        // 実測インクはみ出し（生成時 1 回・確定行は再計測しない）。行ボックスのブロック軸寸は
+        // font_height（横＝max_height／縦＝max_width）ゆえ、その軸の overhang が em ボックスからの
+        // はみ出しを直接与える。行内軸は巨大 PROBE_MAX_EXTENT 箱ゆえ overhang は巨大負値＝`max(0.0)`
+        // で 0 に丸まる（resident_rect はブロック軸の overhang のみ使う）。
+        let overhang = measure_line_overhang(&layout)?;
+        self.cache.insert(
+            index,
+            CachedLineLayout {
+                text: text.to_owned(),
+                layout: layout.clone(),
+                overhang,
+            },
+        );
+        Ok(layout)
+    }
+
+    /// キャッシュ済み行の実測インクはみ出し（[`LineOverhang`]）——`ViewboxExecutor` が plan へ渡す。
+    /// 未生成 index は `None`（呼び手は既定 0＝em ボックス丈として扱う）。
+    pub(crate) fn overhang(&self, index: usize) -> Option<LineOverhang> {
+        self.cache.get(&index).map(|c| c.overhang)
+    }
+
+    /// キャッシュを全破棄する（Clear cue の適用点・破棄はこの口だけ）。
+    pub(crate) fn clear(&mut self) {
+        self.cache.clear();
+    }
+
+    /// 行 TextLayout の累計生成回数（常時コンパイル・`DrawStats` 集計とテスト観測の共通読み口）。
+    /// `ViewboxExecutor::render`（viewbox_draw.rs）が本フレームの生成増分を `DrawStats`
+    /// （`line_layout_creations`）へ集計するために非テストビルドでも読む。
+    pub(crate) fn creations(&self) -> u64 {
+        self.creations
+    }
+}
+
+/// 行 TextLayout の実測インクはみ出し（[`LineOverhang`]・image px・全成分 ≥ 0）を返す。
+///
+/// [`DWriteTextLayoutExt::get_overhang_metrics`]（`GetOverhangMetrics`）はレイアウトボックス各辺
+/// からのはみ出し（正＝外側・DIP）を返す。行ボックスのブロック軸寸が `font_height`（横＝`max_height`
+/// ／縦＝`max_width`）に設定済みゆえ、その軸の値が em ボックス下端/上端（縦は左右）からのはみ出しを
+/// 直接与える。行内軸は巨大 `PROBE_MAX_EXTENT` 箱ゆえ値は巨大負値＝`max(0.0)` で 0 に丸まる
+/// （`resident_rect` はブロック軸の overhang のみ使うため、これで正しくブロック軸だけが効く）。
+fn measure_line_overhang(layout: &IDWriteTextLayout) -> Result<LineOverhang, TextLayerError> {
+    let o = layout
+        .get_overhang_metrics()
+        .map_err(device_err("GetOverhangMetrics(line)"))?;
+    Ok(LineOverhang {
+        top: o.top.max(0.0),
+        bottom: o.bottom.max(0.0),
+        left: o.left.max(0.0),
+        right: o.right.max(0.0),
+    })
+}
+
+/// **比較専用の独立オラクル**（本番経路は `ViewboxExecutor` へ移行済み・除去は本ユニットの
+/// 範囲外——別決断）。live-diff で viewbox とバイト比較するために全域再描画方式を
+/// `#[cfg(test)]` で保全する（task 5・design.md「draw.rs の再編（LineLayoutStore 抽出＋
+/// オラクル化）」）。render のロジック・origin 式は viewbox 都合で一切変えない——変えれば
+/// 比較の意味を失う（オラクルの独立性）。
+///
+/// ContentCanvas の可視窓を DirectWrite/D2D で全域再描画する実行部
+/// （旧 task 6.3・R3.1/R7.3・design.md「DrawExecutor（draw.rs）」）。
+///
+/// 毎更新、TextSurface の front（`front_tex`・オフスクリーン D2D ターゲット）を透明 clear→
 /// 可視窓の行を描画する（差分描画なし）。スクロールも同経路（可視窓決定は純粋層の
 /// [`VisibleWindow`] が済ませている——R7.4 分離シームの描画実行側）。
 ///
@@ -465,6 +615,7 @@ struct CachedLineLayout {
 /// - 失敗は log-first（`error!`＋`Err`・当該フレーム skip・次フレーム再試行）・panic 禁止。
 ///
 /// UI スレッド専有（COM 層規律）。
+#[cfg(test)]
 pub struct DrawExecutor {
     /// 行 TextLayout 生成用 factory（probe/描画と同一の `IDWriteFactory2`）。
     dwrite: IDWriteFactory2,
@@ -472,16 +623,14 @@ pub struct DrawExecutor {
     dc: ID2D1DeviceContext,
     /// 描画/計測共用 format（[`create_text_format`] 経路・FormatKey 不変なら再利用）。
     format: Option<(FormatKey, IDWriteTextFormat)>,
-    /// 行 TextLayout キャッシュ（key＝canvas 行 index。追記単調ゆえ確定行の index/内容は
-    /// 不変——リビール中＝最終行のみ内容が変わり都度更新される）。
-    line_cache: HashMap<usize, CachedLineLayout>,
+    /// 行 TextLayout の生成・キャッシュストア（[`LineLayoutStore`]・両描画実行が同一経路で
+    /// 行レイアウトを得るための共有資産＝抽出前の内蔵キャッシュと byte 等価・RN5）。
+    line_store: LineLayoutStore,
     /// Image/Surface 住人シームの warn 抑制フラグ（executor ごと初回のみ・R8.5）。
     seam_warned: bool,
-    /// テスト観測用: 行 TextLayout の生成回数（確定行キャッシュの檻）。
-    #[cfg(test)]
-    line_layout_creations: usize,
 }
 
+#[cfg(test)]
 impl DrawExecutor {
     /// `GraphicsCore` から描画実行部を生成する（DWrite factory＋専用 D2D DC）。
     ///
@@ -497,24 +646,26 @@ impl DrawExecutor {
         let dc = d2d
             .create_device_context(D2D1_DEVICE_CONTEXT_OPTIONS_NONE)
             .map_err(device_err("CreateDeviceContext(DrawExecutor)"))?;
+        // 行キャッシュは共有ストアへ抽出済み。store の factory は `dwrite` の別 clone
+        // （`ensure_format` が `dwrite` を使い続けるため本体にも保持する・最小変更）。
+        let line_store = LineLayoutStore::new(&dwrite);
         Ok(DrawExecutor {
             dwrite,
             dc,
             format: None,
-            line_cache: HashMap::new(),
+            line_store,
             seam_warned: false,
-            #[cfg(test)]
-            line_layout_creations: 0,
         })
     }
 
     /// Clear cue の適用点: 行 TextLayout キャッシュを全破棄する
-    /// （design「確定行は再生成しない・**Clear で全破棄**」——破棄はこの口だけ）。
+    /// （design「確定行は再生成しない・**Clear で全破棄**」——破棄はこの口だけ・
+    /// 共有ストア [`LineLayoutStore::clear`] へ委譲）。
     pub fn clear_cache(&mut self) {
-        self.line_cache.clear();
+        self.line_store.clear();
     }
 
-    /// 可視窓を全域再描画して TextSurface の source（`source_tex`）へ焼く
+    /// 可視窓を全域再描画して TextSurface の front（`front_tex`）へ焼く
     /// （失敗は `error!`＋`Err`・panic 禁止。提示（swapchain Present）は
     /// [`TextSurface::present`] の領分——呼び手が本 render の後に呼ぶ）。
     ///
@@ -638,18 +789,17 @@ impl DrawExecutor {
                 ?key,
                 "フォント/方向が変わったため format と行レイアウトキャッシュを組み直す"
             );
-            self.line_cache.clear();
+            self.line_store.clear();
         }
         let format = create_text_format(&self.dwrite, font, mode)?;
         self.format = Some((key, format.clone()));
         Ok(format)
     }
 
-    /// 行 TextLayout の取得（内容不変なら再利用・変化時のみ生成して置換）。
+    /// 行 TextLayout の取得（共有ストア [`LineLayoutStore::line_layout`] へ委譲）。
     ///
-    /// 行の箱寸は「行内軸＝折返し無効寸（[`PROBE_MAX_EXTENT`]・折返しは純粋層で決定済み
-    /// ＝再折返しさせない）・行送り軸＝`font_height`」。方向レシピ（LEADING/NEAR）により
-    /// 行は箱の書字開始角に付くため、描画原点＝行矩形原点で位置が定まる。
+    /// 内容不変なら再利用・変化時のみ生成して置換——生成規則・キー・再利用規律は
+    /// すべて共有ストア側に一元化されている（両描画実行の byte 等価前提・RN5）。
     fn line_layout(
         &mut self,
         index: usize,
@@ -658,51 +808,31 @@ impl DrawExecutor {
         font_height: f32,
         mode: WritingMode,
     ) -> Result<IDWriteTextLayout, TextLayerError> {
-        if let Some(cached) = self.line_cache.get(&index) {
-            if cached.text == text {
-                return Ok(cached.layout.clone());
-            }
-        }
-        let (max_width, max_height) = match mode {
-            WritingMode::HorizontalTb => (PROBE_MAX_EXTENT, font_height),
-            WritingMode::VerticalRl | WritingMode::VerticalLr => (font_height, PROBE_MAX_EXTENT),
-        };
-        let layout = self
-            .dwrite
-            .create_text_layout(&HSTRING::from(text), format, max_width, max_height)
-            .map_err(device_err("CreateTextLayout(line)"))?;
-        #[cfg(test)]
-        {
-            self.line_layout_creations += 1;
-        }
-        self.line_cache.insert(
-            index,
-            CachedLineLayout {
-                text: text.to_owned(),
-                layout: layout.clone(),
-            },
-        );
-        Ok(layout)
+        self.line_store
+            .line_layout(index, text, format, font_height, mode)
     }
 
-    /// テスト観測用: 行 TextLayout の累計生成回数（確定行キャッシュの檻）。
+    /// テスト観測用: 行 TextLayout の累計生成回数（確定行キャッシュの檻・共有ストアの
+    /// 常時コンパイルカウンタを既存テストの usize 比較へ写す）。
     #[cfg(test)]
     fn line_layout_creations(&self) -> usize {
-        self.line_layout_creations
+        self.line_store.creations() as usize
     }
 }
 
-/// TextSurface の `source_tex` を D2D ターゲット bitmap として巻く
-/// （B8G8R8A8 premultiplied・96 DPI 名目——スケールは `SetTransform` の一点のみ。
-/// `source_tex` は SHADER_RESOURCE bind を持たないため CANNOT_DRAW を併記する）。
-fn create_target_bitmap(
+/// 描画面テクスチャ（front/back のいずれか）を D2D ターゲット bitmap として巻く共有ヘルパ
+/// （B8G8R8A8 premultiplied・96 DPI 名目——スケールは `SetTransform` の一点のみ。描画面
+/// テクスチャは SHADER_RESOURCE bind を持たないため CANNOT_DRAW を併記する）。
+///
+/// [`DrawExecutor`]（front を巻く）と `ViewboxExecutor`（back を巻く・viewbox_draw.rs）が
+/// **同一 props** でターゲット bitmap を得ることで byte 等価の構造前提を共有する（RN5）。
+pub(crate) fn create_d2d_target_bitmap(
     dc: &ID2D1DeviceContext,
-    surface: &TextSurface,
+    tex: &ID3D11Texture2D,
 ) -> Result<ID2D1Bitmap1, TextLayerError> {
-    let dxgi_surface: IDXGISurface = surface
-        .source_tex()
+    let dxgi_surface: IDXGISurface = tex
         .cast()
-        .map_err(device_err("source_tex->IDXGISurface cast"))?;
+        .map_err(device_err("target tex->IDXGISurface cast"))?;
     let props = D2D1_BITMAP_PROPERTIES1 {
         pixelFormat: D2D1_PIXEL_FORMAT {
             format: DXGI_FORMAT_B8G8R8A8_UNORM,
@@ -719,8 +849,23 @@ fn create_target_bitmap(
     .map_err(device_err("CreateBitmapFromDxgiSurface"))
 }
 
+/// TextSurface の front（`front_tex`）を D2D ターゲット bitmap として巻く（比較専用オラクル
+/// [`DrawExecutor`] 専用・共有ヘルパ [`create_d2d_target_bitmap`] へ委譲——props・挙動は不変）。
+/// オラクルと同じ `#[cfg(test)]` で保全する（本番 `ViewboxExecutor` は back を巻く）。
+#[cfg(test)]
+fn create_target_bitmap(
+    dc: &ID2D1DeviceContext,
+    surface: &TextSurface,
+) -> Result<ID2D1Bitmap1, TextLayerError> {
+    create_d2d_target_bitmap(dc, surface.front_tex())
+}
+
 /// `Option` が `None`（デバイス未初期化など本来到達しない欠落）を
 /// [`TextLayerError::Device`] にする（surface.rs と同型の log-first ヘルパ）。
+///
+/// 比較専用オラクル [`DrawExecutor::new`]（`#[cfg(test)]`）専用ゆえ同じく cfg(test)
+/// で保全する（本番の欠落写像は各所の [`device_err`] が担う）。
+#[cfg(test)]
 fn none_err(context: &'static str) -> TextLayerError {
     tracing::error!(context, "必須リソースが欠落（デバイス未初期化 または 前提不成立）");
     TextLayerError::Device { hresult: 0, context }

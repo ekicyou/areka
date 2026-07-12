@@ -189,11 +189,15 @@ impl TextLayerState {
                     tracing::warn!(actor = %cue.actor, "Choice cue は M1 未対応のため無視する（choice-render シーム）");
                 }
             }
-            // Balloon 向けでない command（cue_target_of が Shell/None に分類）は本状態機械の
-            // 消費対象外——上流 routing の責務。防御的に無視する（catch-all を置かず、dola の
-            // variant 追加時にコンパイラが再検討を強制する）。
-            CueCommand::Emote { .. } | CueCommand::EntityRef(..) | CueCommand::Custom { .. } => {
-                tracing::debug!(actor = %cue.actor, command = ?cue.command, "Balloon 向けでない cue を無視（上流 routing の対象外流入）");
+            // 文字状態機械が消費しない command（cue_target_of が Shell/None に分類）は本状態機械の
+            // 対象外——上流 routing の責務。防御的に無視する（catch-all を置かず、dola の
+            // variant 追加時にコンパイラが再検討を強制する）。`BalloonSurface` は表示系
+            // （SurfaceSink/seriko）の消費対象＝文字状態機械へは配送しない防御面（R3.2）。
+            CueCommand::Emote { .. }
+            | CueCommand::EntityRef(..)
+            | CueCommand::Custom { .. }
+            | CueCommand::BalloonSurface { .. } => {
+                tracing::debug!(actor = %cue.actor, command = ?cue.command, "文字状態機械が消費しない cue を無視（上流 routing の対象外流入）");
             }
         }
     }
@@ -509,6 +513,12 @@ mod tests {
             &config,
         );
         state.apply_cue(&cue("0", 0.2, CueCommand::EntityRef(42)), &config);
+        // BalloonSurface（バルーン面切替）は表示系の消費対象＝文字状態機械へは配送しない（R3.2）。
+        // 適用しても文字状態（items／reveal／visible_glyphs）は完全に不変。
+        state.apply_cue(
+            &cue("0", 0.3, CueCommand::BalloonSurface { key: "2".into() }),
+            &config,
+        );
         assert_eq!(state, before);
     }
 

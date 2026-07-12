@@ -33,8 +33,12 @@ pub(crate) enum Token {
     Tag { word: String, args: Vec<String> },
     /// bare タグ `\e` `\c` `\-` `\n`（角括弧なし 1 文字）。
     Bare(char),
-    /// `\wN`（N は 1 桁の待ち短縮）。
-    WaitShorthand(u8),
+    /// 短縮形 `\<word>N`（`word` は短縮対象語・`N` は 1 桁）。
+    ///
+    /// 待ち短縮 `\wN`（`word='w'`）と、バルーン面短縮 `\bN`（`word='b'`）を
+    /// 語に依らず同一規律で表す一般化トークン。意味写像（`'w'`→待ち／
+    /// `'b'`→バルーン面）は `decode` の責務（→ 対象語は `SHORTHAND_WORDS`）。
+    Shorthand { word: char, n: u8 },
     /// `%keyword`（システム変数・`%` を除いたキーワードを保持）。
     SysVar(String),
     /// タグ間プレーンテキスト。
@@ -43,8 +47,11 @@ pub(crate) enum Token {
     Raw(String),
 }
 
-/// `\wN` 短縮の対象語（角括弧を伴わなければ短縮形として 1 桁を読む）。
-const SHORTHAND_WORDS: &[char] = &['w'];
+/// 短縮形の対象語（角括弧を伴わなければ短縮形として 1 桁を読む）。
+///
+/// 待ち `\wN` に加え、バルーン面 `\bN`（要件 1.2）も同一の shorthand 規律で扱う。
+/// 判定規則（1 桁数字・直後 `[` なら正準タグ優先）は語に依らず共通。
+const SHORTHAND_WORDS: &[char] = &['w', 'b'];
 
 /// さくらスクリプト文字列を構文トークン列へ分割する（mod 内非公開）。
 ///
@@ -111,7 +118,7 @@ pub(crate) fn lex(input: &str) -> Vec<Token> {
 ///
 /// 形態:
 /// - `\word[args]` → `Token::Tag`（`[` がワード終端、`]` まで引数）。
-/// - `\wN`（短縮対象語＋1 桁）→ `Token::WaitShorthand`。
+/// - `\<word>N`（短縮対象語＋1 桁・`\wN`/`\bN`）→ `Token::Shorthand`。
 /// - `\X`（その他 1 文字、角括弧なし）→ `Token::Bare`。
 fn scan_tag(chars: &[(usize, char)], i: usize) -> (Token, usize) {
     // `\` の次の文字が無ければ（入力末尾の裸 `\`）bare 扱いで継続。
@@ -120,22 +127,22 @@ fn scan_tag(chars: &[(usize, char)], i: usize) -> (Token, usize) {
     };
 
     // ワード（コマンド語）を読む: 角括弧／バックスラッシュ／`%`／空白に当たるまで。
-    // ただし短縮対象語（`\w`）は 1 文字読んだ時点で次が数字なら短縮形を優先する。
+    // ただし短縮対象語（`\w`/`\b`）は 1 文字読んだ時点で次が数字なら短縮形を優先する。
     let word_start = i + 1;
     let mut j = word_start;
 
     // 先頭 1 文字を確定（少なくとも word は 1 文字ある）。
     j += 1;
 
-    // 短縮形判定: word が 1 文字（短縮対象語）で、続く文字が 1 桁数字、かつ
-    // その数字の次が `[` でない（`\w[2]` は正準タグ）。
+    // 短縮形判定（語に依らず共通・要件 1.2）: word が 1 文字（短縮対象語）で、
+    // 続く文字が 1 桁数字、かつその数字の次が `[` でない（`\w[2]`/`\b2[x]` は正準タグ）。
     if SHORTHAND_WORDS.contains(&first)
         && let Some(&(_, d)) = chars.get(j)
         && d.is_ascii_digit()
         && chars.get(j + 1).map(|&(_, c)| c) != Some('[')
     {
         let n = (d as u8) - b'0';
-        return (Token::WaitShorthand(n), j + 1);
+        return (Token::Shorthand { word: first, n }, j + 1);
     }
 
     // それ以外: ワードを `[` まで（または非ワード文字まで）読み進める。

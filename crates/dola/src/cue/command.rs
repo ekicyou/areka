@@ -55,7 +55,9 @@ impl std::fmt::Display for ActorKey {
 /// 1 ActorKey に対して複数の CueTarget スロットが存在する。
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum CueTarget {
-    /// シェル（キャラクター描画）— Emote, EntityRef を主に消費
+    /// 表示系（サーフェス消費・seriko が消費: シェル面＋バルーン面）。
+    /// Emote, EntityRef, BalloonSurface を主に消費する。
+    /// 注: 名前は「シェル」だが分類上バルーン面切替もここへ経路付けられる（名前負債）。
     Shell,
     /// バルーン（テキスト表示）— Text, Clear, Choice, WaitForChoice を主に消費
     Balloon,
@@ -113,7 +115,7 @@ pub enum RoutingCommand {
 // 演出コマンド
 // ============================================================================
 
-/// 演出コマンド（7 バリアント、データ系のみ）。
+/// 演出コマンド（8 バリアント、データ系のみ）。
 ///
 /// バリアは `BarrierKind` として、ルーティングは `RoutingCommand` として、
 /// それぞれ `Entry` レベルで分離済み。
@@ -136,6 +138,10 @@ pub enum CueCommand {
     },
     /// 改行（比率 1.0=全角 1 行）。意味解釈は消費者の責務。
     NewLine { ratio: f32 },
+    /// バルーン面切替。key は不透明文字列（数値形・名前形・"-1" 非表示センチネル）。
+    /// 解釈（数値化・alias）は消費者（seriko）の責務。dola は状態を持たない。
+    /// `Emote { key }` と完全対称の不透明 key 転写語彙。
+    BalloonSurface { key: String },
 }
 
 // ============================================================================
@@ -227,7 +233,7 @@ mod tests {
     }
 
     #[test]
-    fn cue_command_seven_variants() {
+    fn cue_command_eight_variants() {
         let cmds = vec![
             CueCommand::Text("hello".into()),
             CueCommand::Clear,
@@ -244,8 +250,9 @@ mod tests {
                 params: DynamicValue::Null,
             },
             CueCommand::NewLine { ratio: 1.0 },
+            CueCommand::BalloonSurface { key: "2".into() },
         ];
-        assert_eq!(cmds.len(), 7);
+        assert_eq!(cmds.len(), 8);
 
         // Clone + Debug + PartialEq
         for cmd in &cmds {
@@ -301,6 +308,24 @@ mod tests {
         let json = serde_json::to_string(&cmd).unwrap();
         let parsed: CueCommand = serde_json::from_str(&json).unwrap();
         assert_eq!(cmd, parsed);
+    }
+
+    #[test]
+    fn cue_command_balloon_surface_serde_roundtrip() {
+        let cmd = CueCommand::BalloonSurface { key: "2".into() };
+        let json = serde_json::to_string(&cmd).unwrap();
+        // externally tagged で additive（既存 variant のワイヤ形は不変）。
+        assert_eq!(json, r#"{"BalloonSurface":{"key":"2"}}"#);
+        let parsed: CueCommand = serde_json::from_str(&json).unwrap();
+        assert_eq!(cmd, parsed);
+
+        // 名前形・非表示センチネルも不透明のまま忠実にラウンドトリップする。
+        for key in ["バルーン１", "-1", "10"] {
+            let cmd = CueCommand::BalloonSurface { key: key.into() };
+            let json = serde_json::to_string(&cmd).unwrap();
+            let parsed: CueCommand = serde_json::from_str(&json).unwrap();
+            assert_eq!(cmd, parsed, "BalloonSurface(key={key:?}) must roundtrip");
+        }
     }
 
     #[test]
