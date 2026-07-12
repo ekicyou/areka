@@ -5,7 +5,7 @@
 
 ## 1. 要約（3–5 行）
 
-- **本ユニットに実装の空白は 1 箇所のみ**: seriko の `SurfaceOutput`（本番実装）＝`DisplayCommand`→emo-present `PresentCommand` への変換＋UI スレッド配送アダプタ。他は全て完成済み部品の結線（main.rs 差し替え）と二段観測（決定論 spine ＋ env-gate 実走）。
+- **本ユニットに実装の空白は「アダプタ 1 個＋結線」に集約**: seriko の `SurfaceOutput`（本番実装）＝`DisplayCommand`（`Show`/`Hide` に加え、balloon-face-cue 完了で第一級化した `ShowBalloon`/`HideBalloon`）→emo-present `PresentCommand` への変換＋UI スレッド配送アダプタ。**旧ブロッカー（`\b` が cue ドメインに写らない）は `areka-P0-balloon-face-cue`（2026-07-12 完了・main マージ済み）で解消**＝`\b` はもはや no-op 裁定でなく、バルーン表示対象への第一級配送プランビング（同一アダプタへの additive）として in-scope。他は全て完成済み部品の結線（main.rs 差し替え）と二段観測（決定論 spine ＋ env-gate 実走）。
 - **最大の本丸は構築順序の再編**: 現 `main.rs` は `boot()` を `WinApp::new()` より前で呼び両 sink `LogSink`。実 sink（`SerikoSink`／`EmoTextSink`）は UI 基盤（`spawn_ui`／`EmoPresenter`／`TextLayerRuntime`）を要するため、順序を「WinApp→UI 部品→実 sink 取得→boot」へ組み替える。
 - **装着順序の罠が構造的制約**: `EmoPresenter::text_slot_view` は初回 `ShowSurface`（バルーン枠表示）まで `None`。文字層結線は `attach_target`→初回 `ShowSurface`→`text_slot_view`→`register_actor_view` の順序を厳守する必要がある。
 - **新義務は `present_frame` 毎フレーム駆動**: emo-text の `present_frame(runtime, world, talk_time)` を UI フレームスケジュールへ載せる責務が本ユニットにあり、`talk_time` の時刻源決定が未解決。
@@ -63,8 +63,12 @@
 ### 2.8 決定論 spine の既存土台（ghost ✅）
 `crates/areka-ghost/tests/ghost/spine_e2e_test.rs`: `ScriptedShioriBackend`（`ShioriBackend` 台本 fake・純 x64・プロセス spawn/i686 不要）＋`RecordingSink`（`Clone`・`SurfaceSink`+`TextSink`）。S1–S6（boot 成功・接続失敗・helper 死活・close 握手 等）を Tick 注入のみ・sleep 不使用で駆動する実績。**ただし観測は `RecordingSink`（TalkCue 記録）で、実 sink 経路（アダプタ／emo-present／emo-text）は通していない**。
 
-### 2.9 cue 契約と `\b`
-`crates/areka-sakura/src/contract.rs`: `TalkCue { at: f64, actor: ActorKey, command: CueCommand }`。`cue_target_of`: `Emote`/`EntityRef`→`Shell`、`Text`/`NewLine`/`Clear`/`Choice`→`Balloon`、`Custom`→`None`。**`CueCommand` にバルーン面切替 variant は無い**（`\b[ID]` は cue ドメインに写らない＝sakura コンパイル段で Custom 化 or 脱落）。M-boot 裁定（brief）: 既定バルーン面のみ・`\b` 未消費 no-op＋warn 1 件。
+### 2.9 cue 契約と `\b`（balloon-face-cue 完了で第一級化・2026-07-12）
+`crates/areka-sakura/src/contract.rs`: `TalkCue { at: f64, actor: ActorKey, command: CueCommand }`。`cue_target_of`（contract.rs:67）: `Emote`/`EntityRef`/**`BalloonSurface`**→`Shell`、`Text`/`NewLine`/`Clear`/`Choice`→`Balloon`、`Custom`→`None`。
+- **`CueCommand::BalloonSurface { key: String }` は実在する**（`crates/dola/src/cue/command.rs:144`）。`\b` は parser `Instruction::BalloonSurface(SurfaceArg)`（`crates/areka-parsers/src/sakura/model.rs:38`・ブラケット `\b[ID]`＋裸形 `\bN`・本文数字漏れ修正済み）→ sakura compile（`crates/areka-sakura/src/compile.rs:61`）で `CueCommand::BalloonSurface { key }` へ写る（catch-all 破棄されない・固定テストあり）。
+- **`cue_target_of(BalloonSurface) → CueTarget::Shell`**（contract.rs:71）＝seriko（SurfaceSink）へ配送。文字状態機械（`CueTarget::Balloon`＝TextSink/emo-text）へは流さない（誤配線でない・`crates/areka-emo-text/src/state.rs:199` でも表示系として明示 skip）。
+- seriko は `resolve_balloon_key`（`crates/areka-seriko/src/resolve.rs:103`・**数値のみ・alias 非適用**・`Show(id)`/`Hide`/`NameForm`/`Invalid`）→ `apply_balloon`（`crates/areka-seriko/src/state.rs:149`・シェル `scopes` と独立した per-scope `balloon` map〔state.rs:54〕）→ **新設表示指令** `DisplayCommand::ShowBalloon { scope: ActorKey, surface_id: u32 }`／`HideBalloon { scope: ActorKey }`（`crates/areka-seriko/src/output.rs:39,41`・early branch は actor.rs:193）を発行する。**`ShowBalloon` は `binds` を持たない**——output.rs:19/38 の doc が「adapter は `PresentCommand::ShowSurface{binds: BindSet::default()}` を組む」と明記＝配送は本ユニット領分。
+- **本ユニットに残る空白は cue 語彙ではなく配送**: `DisplayCommand::ShowBalloon`/`HideBalloon` → バルーン表示対象への `PresentCommand::ShowSurface{binds 既定}`／hide への変換と、scope→バルーン TargetId 採番（§7 #4 の scope→TargetId 写像の一部）。バルーン面キーの name 形・alias 解決は out of scope（将来増分）。
 
 ## 3. 要件→資産マップ（Missing / Unknown / Constraint）
 
@@ -72,9 +76,9 @@
 |---|---|---|
 | R1 一発起動・実サーフェス可視化 | main.rs（窓 spawn 済）＋`attach_target`＋初回 `ShowSurface` | **Missing**（装着結線）|
 | R2 OnBoot トーク→typewriter | boot→kanade→sakura→sink 経路 ✅＋`present_frame` 駆動 | **Missing**（present_frame 結線・talk_time 源=Unknown）|
-| R3 表示指令変換・配送（scope→target 写像 正本）| `DisplayCommand`／`PresentCommand`／`UiSender`or`CommandSender` | **Missing**（アダプタ本体＝本ユニット唯一の新規正本）|
+| R3 表示指令変換・配送（scope→target 写像 正本・シェル＋バルーン両対象）| `DisplayCommand`（`Show`/`Hide`/`ShowBalloon`/`HideBalloon`）／`PresentCommand`／`UiSender`or`CommandSender` | **Missing**（アダプタ本体＝本ユニット唯一の新規正本・シェル target＋バルーン target 両配送）|
 | R4 文字層装着順序 | `text_slot_view`（遅延 None）＋`register_actor_view` | **Constraint**（初回 ShowSurface→text_slot_view→register の順序厳守）|
-| R5 `\b` の M-boot 裁定 | cue に variant 無し・Custom/脱落 | **Unknown→設計 1 判断**（no-op+warn の適用点）|
+| R5 `\b` バルーン面切替 cue の配送 | seriko `ShowBalloon{scope,surface_id}`/`HideBalloon{scope}`（output.rs:39,41）→ balloon target への `PresentCommand::ShowSurface{binds 既定}`／hide | **Missing**（同一アダプタへの additive 配送・数値 key はそのまま消費し alias 非再適用）|
 | R6 終了握手・全エンジン正常終了 | `shutdown(CloseReason)`＋kanade close 握手 ✅／smoke ゲート ✅ | 結線のみ（既存 shutdown 呼び足す）|
 | R7 構築順序再編・非致命 boot | 現 main.rs（boot が WinApp 前）| **Missing**（順序組み替えが本丸）|
 | R8 決定論 spine（実 sink 経路）| `ScriptedShioriBackend`＋アダプタ＋emo-present/text headless | **Missing**（新規統合テスト・GPU 有無=Unknown）|
@@ -129,7 +133,7 @@
   - 高: 装着順序×GPU 資源遅延挿入×文字層 None 遅延取得の**タイミング合流**（初回 ShowSurface が済むフレームで text_slot_view を取り register_actor_view する結線を取りこぼすと文字が出ない）。donor に近い前例はあるが text 層の合流は新規。
   - 中: 決定論 spine の「実 sink 経路」を headless で通す際、emo-present/emo-text は GPU（WucGraphicsResource/GraphicsCore・MTA COM）を要する。アダプタ→`PresentCommand` 記録までは GPU 不要で決定論化できるが、emo-present.apply/present_frame まで通すと GPU 前提（WARP 可・既存テストは MTA 初期化で通している）。**spine の観測境界をどこに引くか**が決定論性を左右（設計判断）。
   - 中: worker→UI 配送のスレッド安全性（`PresentCommand` は Send、presenter は NonSend・World 経由取得）。ii-1/ii-2 の選択で借用衝突の出方が変わる。
-  - 低: `\b` 裁定・smoke ゲート・shutdown 呼び出しは既存資産の素直な結線。
+  - 低: バルーン面配送（`ShowBalloon`/`HideBalloon` → balloon target の `PresentCommand::ShowSurface{binds 既定}`／hide）はシェル写像への素直な additive（同一アダプタ）・smoke ゲート・shutdown 呼び出しは既存資産の素直な結線。
 
 ## 6. 設計フェーズへの申し送り（Research Needed）
 
@@ -138,7 +142,7 @@
 3. **決定論 spine の観測境界**: (a) アダプタの `PresentCommand` 出力＋emo-text 状態記録まで（GPU 不要・純決定論）で足りるか、(b) emo-present.apply/present_frame の実装描画（GPU/WARP・MTA）まで通すか。R8.3「headless の記録で観測」「i686 非依存」を満たす線引き。
 4. **scope→TargetId 写像の正本形**: `ActorKey("0")`→shell TargetId、balloon TargetId の採番規約（shell=scope 別 target・balloon=独立 target）。二人立ち M-dual が将来消費する拡張シーム。
 5. **窓装着タイミングの結線パターン**: donor `boot_present_system`（GPU 資源到達待ち・各 target 高々 1 回）を踏襲しつつ、balloon target で「初回 ShowSurface→text_slot_view→register_actor_view→present_frame 開始」の合流をどの schedule/順序で保証するか。
-6. **`\b[ID]` の実際の落ち先**の実装確認（sakura コンパイル段で Custom 化か脱落か）と no-op+warn の適用点（アダプタ内 or emo-text drain）。
+6. **`\b[ID]` の落ち先は確認済み（KNOWN）**: balloon-face-cue 完了により parser `Instruction::BalloonSurface`→ dola `CueCommand::BalloonSurface`→ sakura compile→ `cue_target_of → Shell`→ seriko `resolve_balloon_key`/`apply_balloon`→ `DisplayCommand::ShowBalloon`/`HideBalloon`（output.rs:39,41）まで第一級化。残る確認は「アダプタが `ShowBalloon`/`HideBalloon` を balloon target の `PresentCommand::ShowSurface{binds 既定}`／hide へ配送する結線」のみ（cue 語彙・no-op 裁定は消滅）。
 7. **依存境界の解釈確定**: R10.5「新規依存を追加せず」は**外部（third-party）crate 追加禁止**（tokio 禁止等）と解し、areka-seriko/-emo-present/-emo-text/-sakura/-actor の**ワークスペース path 依存を areka へ昇格するのは本ユニットの結線に必須で in-scope**、という前提でよいか（brief「全部品は完成済み・結線に徹する」と整合）。
 8. **アダプタ／結線の置き場**（軸 i: main 内 module vs 新 lib crate vs ハイブリッド）。M-dual への正本再利用性と bin crate テスト容易性のトレードオフ。
 
@@ -149,15 +153,18 @@
 3. 決定論 spine の観測境界（アダプタ出力記録どまり／emo-present・emo-text 実描画まで）と GPU 依存の許容範囲（WARP/MTA を CI 常設に載せるか）。
 4. scope→TargetId 写像の採番規約（本ユニットが立てる唯一の正本・M-dual 拡張シーム）。
 5. 装着合流の schedule 設計（GPU 資源待ち→初回 ShowSurface→text_slot_view→register_actor_view→present_frame 開始の順序保証）。
-6. `\b[ID]` no-op+warn の適用点（アダプタ／emo-text drain／seriko）と既定バルーン面のみ使用の徹底。
+6. バルーン面切替指令のバルーン target 配送: `DisplayCommand::ShowBalloon`/`HideBalloon` → `PresentCommand::ShowSurface{binds 既定}`／hide の写像を置く場所（アダプタ）と、バルーン TargetId の採番（#4 の scope→TargetId 写像との関係・shell target と独立にバルーン target を割り当てる規約）。
 7. アダプタ・結線の置き場（areka 内 module／新 lib crate／ハイブリッド）。
 8. 依存追加の解釈（外部 crate 禁止＝ワークスペース path 依存昇格は in-scope の確認）。
 9. 構築順序再編の具体形（WinApp→UI 部品→shell 組立→spawn_seriko→boot）と非致命 boot 意味論の維持方法。
 
-## 8. ⛔ ブロッカー（2026-07-11 要件ディスカッション議題1・開発者裁定）
+## 8. ✅ ブロッカー解消（2026-07-11 議題1 で登記 → 2026-07-12 balloon-face-cue 完了で RESOLVED）
 
-**本 spec は `areka-P0-balloon-face-cue` の完了ゲート下で中断保留（requirements-generated）**。
+**旧ブロッカーは解消済み（RESOLVED）。以下は歴史的記録＋再開義務の消化状況**。
 
-- **検出**: R5（`\b` cue の M-boot 裁定）は前提破綻——`\b[ID]` は parser（タグ表なし→`Raw` 落ち）→sakura compile（catch-all debug! 破棄）の二段で cue 化されず、`CueCommand` にバルーン面 variant も不在＝統合層に一切届かない。R5.1/5.2「受信→no-op＋warn」は検証不能な空手形。追加検出: 旧形式 `\bN` の本文数字漏れ（可視破損）／Balloon 分類 cue の TextSink 誤配線（表示指令の配管不在）。
-- **裁定**: no-op 絆創膏でなく cue ドメイン第一級化（`\s` 完全対称）を新設 spec `areka-P0-balloon-face-cue` で先行完遂（ブロッカー登記 B1〜B8 は同 brief に収録）。上記 §7 設計判断のうち **#6 は同 spec へ吸収**・他8件は本 spec design 持ちで不変。
-- **再開時の義務**: ① R5 を「実 cue が届く」前提へ改稿（既定面のみ→実切替の受入基準化・warn 空手形の撤回） ② 要件ディスカッション残議題の続行（議題2: R10.5 依存解釈＝workspace path 依存昇格の in-scope 確認／議題3: R8 決定論 spine の観測境界＝GPU 依存の許容範囲） ③ scope→TargetId 写像（R3 正本）にバルーン target への `DisplayCommand` 拡張形の配送を含める。
+- **当時の検出（歴史的記録）**: R5（`\b` cue の M-boot 裁定）は前提破綻していた——`\b[ID]` は parser（当時タグ表なし→`Raw` 落ち）→sakura compile（catch-all debug! 破棄）の二段で cue 化されず、`CueCommand` にバルーン面 variant も不在＝統合層に一切届かなかった。R5.1/5.2「受信→no-op＋warn」は検証不能な空手形だった。追加検出: 旧形式 `\bN` の本文数字漏れ（可視破損）／Balloon 分類 cue の TextSink 誤配線。
+- **裁定と結末**: no-op 絆創膏でなく cue ドメイン第一級化（`\s` 完全対称）を新設 spec `areka-P0-balloon-face-cue` で先行完遂。**同 spec は 2026-07-12 に完了・main へマージ済み**（`.kiro/specs/completed/areka-P0-balloon-face-cue`）。確認済み実シンボル: `Instruction::BalloonSurface`（parser・model.rs:38）／`CueCommand::BalloonSurface`（dola・command.rs:144）／`cue_target_of → Shell`（sakura・contract.rs:71）／`resolve_balloon_key`＋`apply_balloon`（seriko・resolve.rs:103／state.rs:149）／`DisplayCommand::ShowBalloon`/`HideBalloon`（seriko・output.rs:39,41）。**配送（DisplayCommand → balloon target の PresentCommand・scope→balloon TargetId 採番）は同 spec が意図的に本 spec（emo2-boot）へ残した**（output.rs:19/38 doc「adapter は `PresentCommand::ShowSurface{binds: BindSet::default()}` を組む」）。
+- **再開義務の消化状況**:
+  - ✅ **義務①（R5 改稿）DONE**: 本回リフレッシュで R5 を「no-op＋warn 空手形」から「実 cue（`ShowBalloon`/`HideBalloon`）が届く→バルーン target へ配送」へ改稿（受入基準 5.1〜5.5・`\b` 含むスクリプトで決定論 spine 観測・OnBoot デモは `\b` 不使用）。
+  - ✅ **義務③（R3 拡張）DONE**: R3 の scope→表示対象 写像を、シェル target（Show/Hide）に加えバルーン target（ShowBalloon/HideBalloon）配送まで拡張（受入基準 3.1〜3.7）。§7 設計判断 #6 は「no-op 適用点」から「バルーン target 配送＋バルーン TargetId 採番」へ差し替え済み。
+  - ⏳ **義務②（要件ディスカッション残議題）PENDING**: これから再開する要件ディスカッションで続行する。**議題2** = R10.5 依存解釈（areka-seriko/-emo-present/-emo-text/-sakura/-actor の workspace path 依存を areka へ昇格するのは本ユニット結線に必須で in-scope、の確認＝§7 #8）。**議題3** = R8 決定論 spine の観測境界（アダプタの `PresentCommand` 出力記録どまり／emo-present・emo-text 実描画まで＝GPU/WARP・MTA 依存の許容範囲＝§7 #3）。
