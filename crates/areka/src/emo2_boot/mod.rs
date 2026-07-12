@@ -19,6 +19,8 @@ pub mod talk_clock;
 pub mod assets;
 pub mod frame;
 
+use std::path::PathBuf;
+
 /// 統合結線の構築時（load-time）失敗を観測可能化する誤り型（log-first・R7.3）。
 ///
 /// 各段（mount／shell 読取＋parse／bake／balloon 組立／UI アクター spawn）の失敗を
@@ -26,8 +28,50 @@ pub mod frame;
 /// `warn!`・他は `error!` に分類して `LogSink`×2 フォールバック boot へ倒す（design.md
 /// 「Error Categories and Responses」）。
 ///
-/// 骨格段階ではバリアントを持たない。design のバリアント計画
-/// （Mount／ShellRead／Bake／Balloon／SpawnUi …・`#[from]` 変換付き）は後続の
-/// assets／frame 実装タスクで充填する。
+/// 本タスク（tasks.md task 2.6・`build_boot_assets`）は構築入力の組立が返す load-time
+/// バリアント（`Mount`／`Decoder`／`ShellRead`／`ShellEmpty`／`Balloon`）を充填する。
+/// UI アクター spawn 失敗（`SpawnUi …`）は frame／wire 実装タスク（task 5.1）の領分ゆえ
+/// 本タスクでは追加しない。分類（`MountError::StartPointMissing` 系＝想定内 `warn!`・他＝
+/// `error!`）は呼び手（`wire_emo2_boot`・task 5.1）が担い、本型はバリアントを観測可能に
+/// するのみ（panic せず `Err` を返す・log-first R7.3）。
+///
+/// `#[from]` は変換元が `std::error::Error` を実装する型のみに用いる。
+/// `areka_parsers::package::MountError` は `std::error::Error` 未実装のため
+/// `#[from]`/`#[source]` にせず値保持し `Debug` 表示する（placement `PlacementError`
+/// と同流儀・working donor 準拠）。
 #[derive(Debug, thiserror::Error)]
-pub enum BootWiringError {}
+pub enum BootWiringError {
+    /// ゴーストのマウント解決（`areka_parsers::package::resolve`）失敗。
+    ///
+    /// `MountError`（`StartPointMissing`／`ShellDirMissing` 等）は `std::error::Error`
+    /// 未実装のため `#[from]` にせず値保持する（呼び手が variant 内容で warn/error 分類）。
+    #[error("ゴーストのマウント解決に失敗: {0:?}")]
+    Mount(areka_parsers::package::MountError),
+
+    /// WIC デコーダ（COM）の生成失敗。呼び出しスレッドの COM 未初期化が主因。
+    #[error("WIC デコーダの生成に失敗（COM 未初期化？）")]
+    Decoder(#[source] windows::core::Error),
+
+    /// shell ファイル（`surfaces.txt`／`descript.txt`）の読み取り失敗（I/O）。
+    #[error("shell ファイルの読み取りに失敗: {path}")]
+    ShellRead {
+        /// 読み取れなかったファイルのパス。
+        path: PathBuf,
+        /// 元の I/O エラー。
+        #[source]
+        source: std::io::Error,
+    },
+
+    /// `surfaces.txt` は読めたが surface を 1 つも産まなかった（bake/表示対象なし）。
+    #[error("surfaces.txt が surface 定義を産まなかった: {path}")]
+    ShellEmpty {
+        /// surface 定義が空だった `surfaces.txt` のパス。
+        path: PathBuf,
+    },
+
+    /// バルーン表示対象（`areka_emo_present::build_balloon_target`）の構築失敗。
+    ///
+    /// `PresentError` は `thiserror` 派生（`std::error::Error` 実装）ゆえ `#[from]` で畳む。
+    #[error("バルーン表示対象の構築に失敗")]
+    Balloon(#[from] areka_emo_present::PresentError),
+}

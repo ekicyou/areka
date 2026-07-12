@@ -6,7 +6,7 @@
   - 観測可能な完了条件: `cargo build --workspace` が新規モジュール群（未実装スタブ含む）を含めて成功する
   - _Requirements: 10.4, 10.5, 10.8_
 
-- [ ] 2. Core: 孤立した純粋部品・アダプタ部品の実装
+- [x] 2. Core: 孤立した純粋部品・アダプタ部品の実装
 - [x] 2.1 (P) target_map（scope→表示対象写像の正本）を実装
   - `shell_target`/`balloon_target`（DD-3 の採番規約 `2*scope`/`2*scope+1`）と `scope_of`（`ActorKey` の数値 parse・非数値は None）を実装
   - 単体テスト: shell/balloon 採番の互いに素性・`scope_of("0")`＝Some(0)・非数値（例 `"側"`）＝None
@@ -44,7 +44,7 @@
   - _Boundary: adapter_
   - _Depends: 2.4_
 
-- [ ] 2.6 BootAssets（構築入力の組立）を実装
+- [x] 2.6 BootAssets（構築入力の組立）を実装
   - `build_boot_assets(ghost_root, balloon_root, scopes)`（shell: `surfaces.txt` 読取→`areka_parsers::shell::parse`→bake→scope ごとに `EmoWorld::build`＋`bind_atlas`〔parse/bake は 1 回・AtlasTable は Clone 共有〕、balloon: `build_balloon_target`＋`BalloonModel`、`SurfaceResolver`＝`alias_snapshot()`、static bindset＝`default_bind_ids`→`build_static_bindset`）と `BootWiringError`（`#[from]` 変換群）を実装
   - emo2 fixture を用いた統合テスト: 既知 scope 集合に対し `BootAssets` が populated な `ScopeAssets`／balloon 資産／`BalloonModel`／`resolver`／`static_binds` を返し、戻り値だけで以後ファイル I/O が不要であることを確認
   - 観測可能な完了条件: emo2 fixture を渡した統合テストが `BootAssets` の各フィールドに期待どおりのデータ（例: static_binds が `[1100,1207,1302,1500,1800]`）を含んで green で通る
