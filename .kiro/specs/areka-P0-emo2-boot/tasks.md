@@ -1,6 +1,6 @@
 # Implementation Plan
 
-- [ ] 1. Foundation: 依存昇格とモジュール骨格の準備
+- [x] 1. Foundation: 依存昇格とモジュール骨格の準備
   - `crates/areka/Cargo.toml` へ `areka-seriko`／`areka-emo-present`（dev→通常昇格）／`areka-emo-text`／`areka-sakura`／`areka-actor`／`dola` を workspace path 依存として追加する（外部 crates.io 依存は追加しない）
   - `crates/areka/src/emo2_boot/` モジュール骨格（`mod.rs`・`target_map.rs`・`adapter.rs`・`talk_clock.rs`・`assets.rs`・`frame.rs` の空ファイル）と `BootWiringError`（thiserror）の空バリアント列挙を作成する
   - 観測可能な完了条件: `cargo build --workspace` が新規モジュール群（未実装スタブ含む）を含めて成功する

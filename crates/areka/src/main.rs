@@ -54,6 +54,12 @@ mod shiori_demo;
 /// シーム（task 6.2）が `prepare_ghost_windows`→`spawn_ghost_windows` を結線する。
 mod placement;
 
+/// emo2 統合結線（areka-P0-emo2-boot）。完成済み 5 トラックのエンジンを束ね、シェル
+/// アニメーション側の表示指令を表示層の指令へ変換するアダプタ＋各エンジン結線＋観測を
+/// 所有する（`target_map`／`adapter`／`talk_clock`／`assets`／`frame`＋`BootWiringError`・
+/// `wire_emo2_boot`）。
+mod emo2_boot;
+
 /// 遅延応答と push 経路の end-to-end 結合テスト。
 /// モック脳が `SHIORI_S_PENDING`＋token を返し、後で保持 host へ safe `complete`/`raise` を発火する
 /// 一連の流れを `ShioriSession` 越しに 1 シナリオで通す（sink/session の単体テストと重複させない）。

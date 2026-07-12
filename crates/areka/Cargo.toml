@@ -33,9 +33,15 @@ windows = { workspace = true }
 # （areka-P0-window-placement design DD5・旧 dev-dependencies から移動）。
 areka-emo-atlas = { path = "../areka-emo-atlas" }
 areka-emo-compose = { path = "../areka-emo-compose" }
-
-[dev-dependencies]
-# emo-present observation example（examples/emo-present.rs・task 4.2）用。EmoPresenter へ渡す
-# `(EmoWorld, AtlasTable)` をシェルと同一経路（parse→bake→build）で組むため引き込む
-# （emo-atlas／emo-compose／areka-parsers は通常依存側で供給済み）。
+# emo2-boot 統合結線（areka-P0-emo2-boot・R10.8）で実 sink・presenter・文字層・契約型・
+# clock を消費するための workspace path 依存昇格。外部（crates.io）依存の追加ではない統合結線
+# （R10.5 の「新規依存」に該当しない）。
+areka-seriko = { path = "../areka-seriko" }
+areka-emo-text = { path = "../areka-emo-text" }
+areka-sakura = { path = "../areka-sakura" }
+areka-actor = { path = "../areka-actor" }
+dola = { path = "../dola" }
+# emo-present は placement 観測 example 用 dev-dependency だったが、emo2-boot の実 sink 結線
+# （EmoPresenter・PresentCommand 契約正本）で通常依存へ昇格（areka-P0-emo2-boot design R10.8）。
+# examples/emo-present.rs は通常依存からも参照可能。
 areka-emo-present = { path = "../areka-emo-present" }
