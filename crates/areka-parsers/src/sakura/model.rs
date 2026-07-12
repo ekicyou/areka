@@ -29,6 +29,13 @@ pub enum Instruction {
     SpeakerScope { n: u32 },
     /// サーフェス `\s[...]`（中身は不透明文字列・無加工。要件 2.2/2.3）。
     Surface(SurfaceArg),
+    /// バルーン面切替 `\b[...]` / 裸形 `\bN`（`\s` と完全対称の第一級命令）。
+    ///
+    /// 面引数は数値形（`\b[10]`）・名前形（`\b[バルーン１]`）・非表示センチネル
+    /// （`\b[-1]`）を区別せず、`Surface` と同じ不透明 `SurfaceArg` で無加工保持する。
+    /// 数値化・範囲展開・alias 解決・`-1` の解釈はいずれも本層で行わず、消費側
+    /// （seriko）の下流責務とする（転記層の規律・balloon-face-cue R1.1/1.4/1.5）。
+    BalloonSurface(SurfaceArg),
     /// 待ち時間 `\w[n]` / `\wN` / `\_w[ms]` を統一（要件 3）。
     Wait(Duration),
     /// 改行 `\n[percent]` / `\n`（比率。要件 4）。

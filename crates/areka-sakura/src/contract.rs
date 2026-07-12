@@ -54,9 +54,13 @@ pub struct TalkCue {
 
 /// CueCommand → 配送先スロットの分類（写像の正本・R3.3 の 2 系統分離）。
 ///
-/// `Emote` / `EntityRef` → [`CueTarget::Shell`]、
+/// `Emote` / `EntityRef` / `BalloonSurface` → [`CueTarget::Shell`]、
 /// `Text` / `NewLine` / `Clear` / `Choice` → [`CueTarget::Balloon`]。
 /// 分類不能（`Custom` 等・M-boot compile は生成しない）は `None`（呼び手が error ログ）。
+///
+/// バルーン面切替（`BalloonSurface`）はサーフェス消費系＝表示系（SurfaceSink/seriko 行き）
+/// ゆえ [`CueTarget::Shell`] へ分類する。文字状態機械（`CueTarget::Balloon`＝TextSink/
+/// emo-text）へ流すのは誤配線（R3.2）。全域写像で `None`（配送不能）には落ちない（R3.3）。
 ///
 /// 明示的な variant ごとの match により、dola が将来 variant を追加した際に
 /// コンパイラが再検討を強制する（catch-all を置かない）。
@@ -64,6 +68,7 @@ pub fn cue_target_of(command: &CueCommand) -> Option<CueTarget> {
     match command {
         CueCommand::Emote { .. } => Some(CueTarget::Shell),
         CueCommand::EntityRef(..) => Some(CueTarget::Shell),
+        CueCommand::BalloonSurface { .. } => Some(CueTarget::Shell), // 表示系＝SurfaceSink/seriko（3.2）
         CueCommand::Text(..) => Some(CueTarget::Balloon),
         CueCommand::NewLine { .. } => Some(CueTarget::Balloon),
         CueCommand::Clear => Some(CueTarget::Balloon),
@@ -94,6 +99,12 @@ mod tests {
         );
         assert_eq!(
             cue_target_of(&CueCommand::EntityRef(42)),
+            Some(CueTarget::Shell)
+        );
+        // バルーン面切替＝サーフェス消費系ゆえ表示系（Shell）へ。文字状態機械
+        // （Balloon）へ流すのは誤配線（R3.2）・配送不能 None には落ちない（R3.3）。
+        assert_eq!(
+            cue_target_of(&CueCommand::BalloonSurface { key: "2".into() }),
             Some(CueTarget::Shell)
         );
 

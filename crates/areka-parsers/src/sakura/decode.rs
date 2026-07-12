@@ -133,7 +133,16 @@ fn decode_token(token: Token) -> Instruction {
     match token {
         Token::Text(s) => Instruction::Text(s),
         Token::SysVar(keyword) => Instruction::SystemVar(keyword),
-        Token::WaitShorthand(n) => Instruction::Wait(wait_units(n as u64)),
+        // 短縮形 `\<word>N` の意味写像は語で分岐する。待ち `\wN` = n × 50ms（既存等価）。
+        Token::Shorthand { word: 'w', n } => Instruction::Wait(wait_units(n as u64)),
+        // バルーン面短縮 `\bN`（要件 1.2/1.3）: 1 桁の面数字を不透明文字列で保持し
+        // `BalloonSurface` へ。`\b[N]` ブラケット形の第 1 引数と対称（数値化しない）。
+        Token::Shorthand { word: 'b', n } => {
+            Instruction::BalloonSurface(SurfaceArg::new(n.to_string()))
+        }
+        // 対象外の短縮語（`SHORTHAND_WORDS` の想定外拡張時）への防御。lexer は現状
+        // `'w'`/`'b'` のみ産むため到達不能だが、panic せず生情報を失わない `Raw` に留める。
+        Token::Shorthand { word, n } => Instruction::Raw(format!("\\{word}{n}")),
         Token::Bare(c) => decode_bare(c),
         Token::Tag { word, args } => decode_tag(word, args),
         // タスク 4.2 のシーム: 構文上区切れたが正準でない／不正な生保持。
@@ -172,6 +181,10 @@ fn decode_tag(word: String, args: Vec<String>) -> Instruction {
         },
         // サーフェス（要件 2.2/2.3）: `\s[...]` 中身は不透明文字列で無加工保持。
         "s" => Instruction::Surface(SurfaceArg::new(args.into_iter().next().unwrap_or_default())),
+        // バルーン面切替（balloon-face-cue 要件 1.1/1.4/1.5）: `\b[...]` は `\s` と完全対称。
+        // **第 1 引数のみ**を不透明保持する（fallback 形 `\b[2,--fallback=4]` は `"2"` に
+        // 落ちる＝graceful）。数値化・範囲展開・alias 解決・`-1` 解釈は一切行わない。
+        "b" => Instruction::BalloonSurface(SurfaceArg::new(args.into_iter().next().unwrap_or_default())),
         // カーソル絶対位置（要件 6.1）: `\_l[x,y]`（x/y は文字列のまま保持）。
         "_l" => decode_cursor(args),
         // 選択肢（要件 5.1/5.2）: `\q[disp,target,refs...]`。
@@ -179,7 +192,7 @@ fn decode_tag(word: String, args: Vec<String>) -> Instruction {
         // `\!` コマンド（要件 7.1）: 第 1 引数が `move` のみ本タスクで Move へ decode。
         // move 以外（要件 7.2/7.3）はタスク 4.2 の GenericCommand 領分。
         "!" => decode_bang(args),
-        // subset 外タグ（`\b` `\i` 等）はタスク 4.2 のパススルー領分。
+        // subset 外タグ（`\i` `\j` 等）はタスク 4.2 のパススルー領分。
         _ => decode_passthrough_tag(word, args),
     }
 }
@@ -266,8 +279,9 @@ fn speaker_scope_n(arg: Option<&String>) -> u32 {
 // シーケンス依存ゆえ `decode` の peekable 走査側で捕捉する（fold_* 群）。
 // ───────────────────────────────────────────────────────────────────
 
-/// 【タスク 4.2】subset 外の正準タグ（`\b` `\i` `\q*[..]` 等）→ 構文区切りのまま `Raw`
+/// 【タスク 4.2】subset 外の正準タグ（`\i` `\q*[..]` 等）→ 構文区切りのまま `Raw`
 /// 保持（要件 11.2/13.8）。生情報を復元して失わない。
+/// なお `\b2[x]`（数字直後が `[` の非短縮ブラケット word `b2`）もここへ落ちる。
 fn decode_passthrough_tag(word: String, args: Vec<String>) -> Instruction {
     Instruction::Raw(reconstruct_tag(&word, &args))
 }

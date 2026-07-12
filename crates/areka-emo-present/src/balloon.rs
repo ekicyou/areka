@@ -314,6 +314,46 @@ mod tests {
         assert!(world.surface(2).is_none(), "存在しない id は None");
     }
 
+    /// R5.5 多面バルーン fixture（偶数 id・正典準拠）: TempDir へ `balloons0.png`＋`balloons2.png`
+    /// の 2 枚（偶数 id 0/2）を置き、`build_balloon_target` が **surface 0 と surface 2 の両面**を
+    /// 列挙・構築した world を返すことを固定する。既存 `..._frames_only`（id 0/1）と対をなし、
+    /// 面 id が飛び番（1 を欠く 0/2）でも各面が id=N でそのまま常駐することを実演する。
+    /// MemoryDecoder ゆえ実 PNG 不要で決定論（既存流儀踏襲）。
+    #[test]
+    fn build_balloon_target_enumerates_multiple_even_id_faces() {
+        let dir = TempDir::new();
+        // 偶数 id の面 2 枚（1 を欠く飛び番）を test-local fixture として自前用意（R5.5）。
+        dir.touch("balloons0.png");
+        dir.touch("balloons2.png");
+
+        // 両面をデコーダへ登録（MemoryDecoder 経路・実 PNG 不要）。
+        let mut dec = MemoryDecoder::new();
+        let (w, h, stride, bytes, has_alpha) = opaque_1x1();
+        dec.insert(dir.path().join("balloons0.png"), w, h, stride, bytes.clone(), has_alpha);
+        dec.insert(dir.path().join("balloons2.png"), w, h, stride, bytes, has_alpha);
+
+        let (world, table) =
+            build_balloon_target(dir.path(), &dec).expect("偶数 id 2 面から Ok が返る");
+
+        // アトラスに 2 面が解決され placement を持つ（PNG α 尊重で焼かれる）。
+        for rel in ["balloons0.png", "balloons2.png"] {
+            let id = table
+                .resolve(SetId(0), rel)
+                .unwrap_or_else(|| panic!("{rel} がアトラスに解決されない"));
+            assert!(
+                table.entry(id).placement.is_some(),
+                "{rel} は不透明ゆえ placement を持つ"
+            );
+        }
+        assert_eq!(table.len(), 2, "生存エントリは偶数 id 面 2 枚のみ");
+
+        // 多面列挙の要（本タスクの主張）: surface 0 と surface 2 の **両面** が world に常駐する。
+        assert!(world.surface(0).is_some(), "surface id 0（balloons0）が World にある");
+        assert!(world.surface(2).is_some(), "surface id 2（balloons2）が World にある");
+        // 飛び番の欠番 id 1 は列挙対象に無いゆえ常駐しない（面 id=N の同一性を固定）。
+        assert!(world.surface(1).is_none(), "欠番 id 1 は World に無い");
+    }
+
     /// 枠が 1 枚も無ければ log-first で `EmptyComposition`（Hide 縮退許容）を返す。
     #[test]
     fn no_frames_returns_empty_composition() {

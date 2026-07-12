@@ -72,6 +72,52 @@ impl SurfaceResolver {
     }
 }
 
+/// バルーン面 key 解決結果（seriko バルーン専用・シェルの [`SurfaceTarget`] とは別型ゆえ
+/// 既存シェル経路に非干渉・要件 4.6）。名前形と破損数値をログ水準のために類別する。
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum BalloonResolve {
+    /// `0..=u32::MAX` の数値 id（→ 後段 [`SurfaceTarget::Show`] で `apply_balloon`・要件 4.1/4.4）。
+    Show(u32),
+    /// 非表示センチネル `-1`（→ 後段 [`SurfaceTarget::Hide`] で `apply_balloon`・要件 4.2）。
+    Hide,
+    /// 非数値（名前形 `\b[バルーン１]`）＝M-boot 未対応の正当構文。
+    /// alias 表は引かず（数値解決のみ・要件 4.4）、呼び手（actor）が warn!＋skip する（要件 4.5）。
+    NameForm,
+    /// 数値だが不正（`-2`・負の非 `-1`・`u32` 超過）＝破損入力。
+    /// 呼び手（actor）が error!＋skip する（シェル経路と同水準・要件 4.5）。
+    Invalid,
+}
+
+/// バルーン面 key の数値解決（M-boot: alias／名前解決なし・要件 4.4/4.5）。
+///
+/// 純関数（`self` 不要・alias 表を一切引かない・決定論）。既存 [`SurfaceResolver::resolve`] は
+/// 非数値を alias 表で引くが、本関数は**引かず** [`BalloonResolve::NameForm`] で止める
+/// （M-boot は数値のみ・名前解決は将来 additive）。
+///
+/// 分岐（design「seriko バルーン面契約」Service Interface・要件 4.4/4.5）:
+/// 1. `key` を `i64` として parse
+///    - 成功かつ `== -1` → [`BalloonResolve::Hide`]（非表示センチネル・要件 4.2）
+///    - 成功かつ非負で `u32` に収まる → [`BalloonResolve::Show`]（要件 4.1）
+///    - 成功だが負の非 `-1`（`-2` 等）・`u32` 範囲外（`4294967296` 等）→ [`BalloonResolve::Invalid`]（破損入力・要件 4.5）
+/// 2. parse 失敗（非数値・名前形）→ [`BalloonResolve::NameForm`]（要件 4.5・alias 非適用）
+pub fn resolve_balloon_key(key: &str) -> BalloonResolve {
+    // 数値枝: `-1` は i64 で受けて判定し、それ以外の非負を u32 へ写す
+    //（SurfaceResolver::resolve の数値枝と同型の判定・ただし帰結の型が異なる）。
+    if let Ok(value) = key.parse::<i64>() {
+        if value == -1 {
+            return BalloonResolve::Hide;
+        }
+        return match u32::try_from(value) {
+            // 非負かつ u32 に収まる（負の非 -1 と範囲外は Err→Invalid）。
+            Ok(id) => BalloonResolve::Show(id),
+            Err(_) => BalloonResolve::Invalid,
+        };
+    }
+
+    // 非数値枝: alias 表は引かない（数値のみ・M-boot）。名前解決は将来 additive。
+    BalloonResolve::NameForm
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -197,5 +243,64 @@ mod tests {
         assert_eq!(resolver.resolve("-1"), SurfaceTarget::Hide);
         // 数値はそのまま id。
         assert_eq!(resolver.resolve("0"), SurfaceTarget::Show(0));
+    }
+
+    // ---- resolve_balloon_key（バルーン面 key・数値のみ・alias 非適用・純関数） ----
+
+    #[test]
+    fn balloon_numeric_positive_is_show() {
+        // 数値 id → Show（→ 後段 SurfaceTarget::Show で apply_balloon・4.4）。
+        assert_eq!(resolve_balloon_key("2"), BalloonResolve::Show(2));
+    }
+
+    #[test]
+    fn balloon_zero_is_show() {
+        // 0 も正当な数値 id（境界）。
+        assert_eq!(resolve_balloon_key("0"), BalloonResolve::Show(0));
+    }
+
+    #[test]
+    fn balloon_minus_one_is_hide() {
+        // 非表示センチネル `-1` → Hide（4.2）。
+        assert_eq!(resolve_balloon_key("-1"), BalloonResolve::Hide);
+    }
+
+    #[test]
+    fn balloon_name_form_is_name_form() {
+        // 名前形（非数値 `\b[バルーン１]`）は alias 表を引かず NameForm で止める
+        //（M-boot は数値のみ・名前解決は将来 additive・4.5）。
+        assert_eq!(resolve_balloon_key("バルーン１"), BalloonResolve::NameForm);
+    }
+
+    #[test]
+    fn balloon_negative_non_minus_one_is_invalid() {
+        // 負の非 `-1`（破損数値）→ Invalid（4.5）。
+        assert_eq!(resolve_balloon_key("-2"), BalloonResolve::Invalid);
+    }
+
+    #[test]
+    fn balloon_out_of_u32_range_is_invalid() {
+        // u32::MAX + 1 は i64 で parse 成功するが u32 に収まらない → Invalid（4.5）。
+        assert_eq!(resolve_balloon_key("4294967296"), BalloonResolve::Invalid);
+    }
+
+    #[test]
+    fn balloon_u32_max_is_show() {
+        // 上端境界 u32::MAX は Show（範囲内）。
+        assert_eq!(resolve_balloon_key("4294967295"), BalloonResolve::Show(u32::MAX));
+    }
+
+    #[test]
+    fn balloon_resolve_does_not_consult_alias_table() {
+        // 純関数・alias 非適用の担保: SurfaceResolver では alias で引ける名前
+        //（"通常"）も、resolve_balloon_key では表を引かず NameForm で止まる。
+        assert_eq!(resolve_balloon_key("通常"), BalloonResolve::NameForm);
+    }
+
+    #[test]
+    fn balloon_resolve_is_deterministic() {
+        // 同一入力に対し常に同一出力（純関数・決定論）。
+        assert_eq!(resolve_balloon_key("2"), resolve_balloon_key("2"));
+        assert_eq!(resolve_balloon_key("バルーン１"), resolve_balloon_key("バルーン１"));
     }
 }
