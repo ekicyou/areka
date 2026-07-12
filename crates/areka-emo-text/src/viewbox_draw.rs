@@ -109,6 +109,11 @@ pub struct ViewboxExecutor {
     /// Image/Surface 住人シームの warn 抑制フラグ（executor ごと初回のみ・planner の
     /// `draw_lines` は GlyphRun のみを返すため通常不発の防御的経路）。
     seam_warned: bool,
+    /// テスト専用 fault-injection: true の間、次の Update フレームの EndDraw 後に
+    /// デバイス失敗を注入する（実 COM 失敗を決定論的に再現できないため・G5）。flip/commit の
+    /// **前**に `Err` を返し、失敗フレームの再試行安全（front 不変・planner 未 commit）を檻化する。
+    #[cfg(test)]
+    fail_next_render: bool,
 }
 
 impl ViewboxExecutor {
@@ -137,7 +142,16 @@ impl ViewboxExecutor {
             format: None,
             stats: DrawStats::default(),
             seam_warned: false,
+            #[cfg(test)]
+            fail_next_render: false,
         })
+    }
+
+    /// テスト専用: 次の Update フレームの EndDraw 後にデバイス失敗を 1 回注入する（G5・
+    /// 失敗フレームの再試行安全を檻化するため）。次フレームで消費され自動解除される。
+    #[cfg(test)]
+    fn inject_render_failure(&mut self) {
+        self.fail_next_render = true;
     }
 
     /// 決定論観測口（テスト・example 双方が読む・R3.5/R10.3）。
@@ -333,6 +347,15 @@ impl ViewboxExecutor {
                 let end = unsafe { self.dc.EndDraw(None, None) };
                 unsafe { self.dc.SetTarget(None::<&ID2D1Image>) };
                 end.map_err(device_err("EndDraw"))?;
+
+                // テスト専用 fault-injection（G5）: EndDraw 後・flip/commit の**前**に失敗を注入し、
+                // 「失敗フレームは front 不変（flip せず）・planner 未 commit（次フレーム同一再計画）」の
+                // 再試行安全を檻化する。実 COM 失敗を決定論的に再現できないための最小フック。
+                #[cfg(test)]
+                if self.fail_next_render {
+                    self.fail_next_render = false;
+                    return Err(none_err("injected render failure (test-only・G5)"));
+                }
 
                 // 面の役割交換 → 計画の確定（成功時のみ・失敗フレームは未 commit で再試行安全）。
                 surface.flip();
@@ -1044,6 +1067,70 @@ mod tests {
             plan_inconsistency(&[PhysicalRect { x: 0, y: 40, w: 100, h: 20 }], &[], 2, size)
                 .is_some(),
             "面高を超える dirty を検知する"
+        );
+    }
+
+    /// G5: 描画中デバイス失敗の再試行安全を実描画で檻化する。EndDraw 後・flip/commit 前に失敗を
+    /// 注入（test-only fault-injection）すると、その Update フレームは `Err` を返し、**front は不変**
+    /// （flip されない＝前フレームの確定面を保持）・**planner は未 commit**（次フレームで同一計画を
+    /// 再試行）になる。失敗解除後の再提示で正しい content が反映されることで「未 commit＝再試行安全」を
+    /// 証明する（もし失敗フレームで誤って commit していたら、再試行が NoChange になり content が
+    /// 反映されず本檻が落ちる）。純粋 ScrollPlanner の再試行檻（task 3.3）の COM 側 runtime 版。
+    #[test]
+    fn device_failure_mid_render_is_retry_safe_front_unchanged_no_commit() {
+        let mut rig = Rig::new();
+        let image = (80u32, 40u32);
+        let mut surface = rig.attach(image, 1.0);
+        let mode = WritingMode::HorizontalTb;
+        let font = ResolvedFont::resolve(&geo_model(Some(10)));
+        let region = TextRegion::resolve(&geo_model(Some(10)), image, mode);
+        let contract = ScaleContract::new(1.0, None);
+        let mut exec = ViewboxExecutor::new(&rig.core).expect("ViewboxExecutor::new 失敗");
+
+        // フレーム 1: content "■" を描き確定（front＝"■"）。
+        let (canvas1, window1) = build(&glyph_items("■"), &region, mode, 10.0);
+        assert!(
+            exec.render(&canvas1, &window1, &font, mode, &contract, &mut surface)
+                .expect("フレーム1 render 失敗"),
+            "初回 content フレームは変化あり"
+        );
+        let r1 = surface.read_back().expect("read_back(frame1)");
+        let ink1 = opaque_count(&r1);
+        assert!(ink1 > 0, "フレーム1で content が描かれる");
+
+        // フレーム 2: content を "■■" へ伸長（Update）。だが EndDraw 後に失敗を注入する。
+        let (canvas2, window2) = build(&glyph_items("■■"), &region, mode, 10.0);
+        exec.inject_render_failure();
+        let err = exec
+            .render(&canvas2, &window2, &font, mode, &contract, &mut surface)
+            .err()
+            .expect("失敗注入フレームは Err を返す（panic しない・log-first）");
+        assert!(
+            matches!(err, crate::TextLayerError::Device { .. }),
+            "注入失敗は Device エラー: {err:?}"
+        );
+        // front 不変: flip していないため read_back は前フレーム "■" のまま（伸長が反映されない）。
+        let r2 = surface.read_back().expect("read_back(frame2 失敗後)");
+        assert_eq!(
+            r2, r1,
+            "失敗フレームは front を変えない（flip せず＝前フレームの確定面を保持）"
+        );
+
+        // フレーム 3: 失敗は解除済み（自動消費）。同一 content "■■" を再提示すると、planner が
+        // 未 commit（prev_lines は依然 "■"）ゆえ Update を再計画し、今度は成功して front が更新される。
+        let changed = exec
+            .render(&canvas2, &window2, &font, mode, &contract, &mut surface)
+            .expect("フレーム3（再試行）render 失敗");
+        assert!(changed, "再試行フレームは変化あり（未 commit ゆえ再計画される）");
+        let r3 = surface.read_back().expect("read_back(frame3 再試行)");
+        assert_ne!(
+            r3, r1,
+            "再試行で content 伸長が反映される（front が更新＝失敗フレームで commit していない証拠）"
+        );
+        assert!(
+            opaque_count(&r3) > ink1,
+            "再試行後は伸長ぶんインクが増える: {} > {ink1}",
+            opaque_count(&r3)
         );
     }
 
