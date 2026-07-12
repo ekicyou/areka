@@ -61,7 +61,7 @@
   - _Depends: 2.1, 2.6_
 
 - [ ] 4. Core: frame 三相結線（Emo2Wiring＋emo2_frame_system）の実装
-- [ ] 4.1 Emo2Wiring と attach フェーズを実装
+- [x] 4.1 Emo2Wiring と attach フェーズを実装
   - NonSend resource `Emo2Wiring`（presenter/rx/runtime/clock/assets/attached を保持）と attach フェーズ（`GhostWindows` Resource＋GPU 資源到達ゲート→`plan_attachments` 呼出→計画項目ごとに shell target `attach_target`→初回 `ShowSurface`、balloon target `attach_target`→初回 `ShowSurface`→`text_slot_view`→`register_actor_view`、`Option::take` で資産を高々 1 回消費、missing/unused は log-first で観測、計画件数と実装着件数を `info!` に列挙）をテスト駆動口 `run_attach_phase(wiring, world)` として実装
   - 単体テスト: GPU 資源なし World では装着しない（ゲート不成立でも panic しない）・`text_slot_view` が None の経路では文字層接続を行わず次フレーム再試行に委ねる（R4.2）
   - 観測可能な完了条件: 上記単体テストが green で通り、GPU 資源が到達しない World で `run_attach_phase` を複数回呼んでも panic せず装着が起きないことを確認できる
