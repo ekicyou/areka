@@ -10,10 +10,10 @@
 //!
 //! `plan_attachments`（`GhostWindows::scopes()` を正とする純関数・DD-12）も本モジュールに属する。
 //!
-//! 本ファイルは task 3 の純関数 `plan_attachments`（＋`AttachPlan`／`PlannedAttach`）に加え、
-//! task 4.1 で NonSend 結線資源 `Emo2Wiring` と attach フェーズ（`run_attach_phase`＋補助
-//! `connect_balloon_text`）を実装する。drain・text フェーズと排他 system `emo2_frame_system` の
-//! 実装は後続 task 4.2 が担い、本ファイルにはまだ存在しない。
+//! 本ファイルは task 3 の純関数 `plan_attachments`（＋`AttachPlan`／`PlannedAttach`）、task 4.1 の
+//! NonSend 結線資源 `Emo2Wiring` と attach フェーズ（`run_attach_phase`＋補助 `connect_balloon_text`）、
+//! そして task 4.2 の drain フェーズ（`run_drain_phase`）・text フェーズ（`run_text_phase`＋純判断
+//! `resolve_talk_time`）・排他 system `emo2_frame_system`（remove→3 フェーズ→insert）を実装する。
 
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -23,10 +23,10 @@ use bevy_ecs::world::World;
 use tracing::{debug, error, info, warn};
 
 use areka_emo_present::{EmoPresenter, PresentCommand, TargetId, TextSlotView};
-use areka_emo_text::actor::TextLayerRuntime;
+use areka_emo_text::actor::{present_frame, TextLayerRuntime};
 use areka_parsers::balloon::BalloonModel;
 use areka_sakura::ActorKey;
-use wintf::ecs::{GraphicsCore, WucGraphicsResource};
+use wintf::ecs::{FrameTime, GraphicsCore, WucGraphicsResource};
 
 use crate::placement::spawn::GhostWindows;
 
@@ -156,9 +156,9 @@ pub fn plan_attachments(window_scopes: &[usize], assets: &BootAssets) -> AttachP
 ///
 /// `EmoPresenter`（`!Send`）・`Receiver`（`!Sync`）・`Rc<RefCell<TextLayerRuntime>>`（`!Send`）を
 /// 内包するため NonSend resource として `wire_emo2_boot`（task 5.1）が挿入する。本 task（4.1）は
-/// 構築（[`Emo2Wiring::new`]）と attach フェーズ（[`run_attach_phase`]）を所有する。drain・text
-/// フェーズ（`rx`／`clock` を消費）と排他 system `emo2_frame_system` は後続 task 4.2 が担うため、
-/// `rx`／`clock` は本 task では保持のみ（未読・dead_code は 4.2 で解消）。
+/// 構築（[`Emo2Wiring::new`]）と attach フェーズ（[`run_attach_phase`]）に加え、drain フェーズ
+/// （[`run_drain_phase`]・`rx` を消費）・text フェーズ（[`run_text_phase`]・`clock` を消費）・排他
+/// system [`emo2_frame_system`]（3 フェーズを remove→insert で駆動）を所有する（task 4.1／4.2）。
 pub struct Emo2Wiring {
     /// 表示層の指令適用ハブ（UI スレッド専有・`!Send`）。
     presenter: EmoPresenter,
@@ -410,15 +410,123 @@ fn connect_balloon_text(
     }
 }
 
+// ---------------------------------------------------------------------------
+// drain・text フェーズ＋排他 system（tasks.md task 4.2・design「UI 毎フレーム結線 / frame」の
+// Responsibilities フェーズ②（drain）／③（text）・Service Interface・DD-1）
+// ---------------------------------------------------------------------------
+
+/// フェーズ②（drain・design「フェーズ②（drain）」・DD-1）: attach 完了後のみ受信済み
+/// `PresentCommand` を FIFO で全件 `presenter.apply` へ適用する。
+///
+/// attach 前はチャネルが保留バッファを兼ねる（取りこぼしなし・FIFO）ため **`attached` が立つまで
+/// drain しない**。装着後は [`Receiver::try_iter`] で**現時点でキュー済みの指令を非ブロックで
+/// FIFO 全件**取り出し、到着順に `presenter.apply(world, cmd)` する。`apply` は `()` を返し、失敗は
+/// `cmd.reply`（本経路は常に `None`＝撃ちっぱなし）経由で、未装着等の異常は presenter 内部で
+/// `error!` 済み（log-first）。本フェーズは panic しない（`SurfaceOutput`→UI の非ブロック配送契約）。
+///
+/// drain は attach 後にのみ走るため `TargetNotAttached` は原理上発生しない（発生＝結線バグとして
+/// presenter が `error!`・design「適用時（UI）」）。`try_iter` はチャネルが空になるか送信端が全て
+/// drop されると尽きる（ブロックしない）。
+pub fn run_drain_phase(wiring: &mut Emo2Wiring, world: &mut World) {
+    // attach 前はチャネルが保留バッファを兼ねる（取りこぼしなし・FIFO）。装着後のみ drain する（DD-1）。
+    if !wiring.attached {
+        return;
+    }
+    // try_iter: 現時点でキュー済みの指令を非ブロックで FIFO 全件取り出す（空・全送信端 drop で尽きる）。
+    // wiring.rx（受信端＝shared 借用）と wiring.presenter（mut 借用）は互いに素なフィールドゆえ両立する。
+    for cmd in wiring.rx.try_iter() {
+        // apply は () を返し、失敗は cmd.reply（本経路は常に None）経由。未装着等の異常は presenter 内部で
+        // error! 済み（log-first）。撃ちっぱなしの非ブロック配送契約ゆえ本フェーズは panic しない。
+        wiring.presenter.apply(world, cmd);
+    }
+}
+
+/// `talk_time` 解決の純判断（override 優先→`clock.talk_time(frame_now)`→`None`）。
+///
+/// [`run_text_phase`] の分岐条件を GPU/時刻 I/O 抜きの決定論檻へ切り出した純関数:
+/// - `override_` が `Some(t)`（テスト注入経路）→ `Some(t)`（`frame_now`／`clock` は無視・最優先）。
+/// - `override_` が `None`（本番経路）→ `frame_now` が `Some(now)` なら `clock.talk_time(now)`、
+///   `frame_now` が `None`（`FrameTime` 資源不在＝headless）なら `None`。
+/// - いずれも `clock` の epoch 未確立（talk 未到達）なら `talk_time` が `None` を返すため `None`。
+///
+/// 戻り値 `None` は「今フレームは描くものがない（`present_frame` を呼ばない）」を意味する。
+fn resolve_talk_time(
+    override_: Option<f64>,
+    frame_now: Option<f64>,
+    clock: &TalkClock,
+) -> Option<f64> {
+    match override_ {
+        // テスト注入経路: override が最優先（frame_now／clock は無視）。
+        Some(t) => Some(t),
+        // 本番経路: FrameTime（frame_now）→ TalkClock。frame_now 不在／epoch 未確立は None。
+        None => frame_now.and_then(|now| clock.talk_time(now)),
+    }
+}
+
+/// フェーズ③（text・design「フェーズ③（text）」・R2.3）: `talk_time` が定まるフレームでのみ
+/// `present_frame` を駆動する（`Err` は `error!`＋継続＝次フレーム再試行）。
+///
+/// `talk_time` の解決は [`resolve_talk_time`] に委ねる（`talk_time_override` が `Some` ならそれを、
+/// なければ `FrameTime` 資源（`wintf::ecs::FrameTime`・`.0: f64`）を読んで
+/// [`TalkClock::talk_time`]）。解決が `Some(t)` のときのみ
+/// `present_frame(&mut runtime.borrow_mut(), world, t)` を呼ぶ。`Err(e)` は `error!`（`present_frame`
+/// 側で失敗源を log 済み・first error 返却）＋継続で、他 actor を巻き込まず次フレーム再試行へ委ねる
+/// （R2.3・emo-text 既存契約）。解決が `None`（epoch 未確立／`FrameTime` 不在かつ override なし）なら
+/// `present_frame` を呼ばず skip する（描くものがない・hang しない）。
+pub fn run_text_phase(wiring: &mut Emo2Wiring, world: &mut World, talk_time_override: Option<f64>) {
+    // 本番の frame 時刻源（headless では不在）。override が Some なら resolve_talk_time が優先採用する。
+    let frame_now = world.get_resource::<FrameTime>().map(|ft| ft.0);
+    let Some(talk_time) = resolve_talk_time(talk_time_override, frame_now, &wiring.clock) else {
+        // epoch 未確立（talk 未到達）または FrameTime 不在かつ override なし → 描くものがない・skip。
+        return;
+    };
+    // present_frame は失敗源で log 済み（first error 返却）。frame は error!＋継続で、他 actor を
+    // 巻き込まず次フレーム再試行へ委ねる（R2.3・emo-text 既存契約）。
+    let mut runtime = wiring.runtime.borrow_mut();
+    if let Err(e) = present_frame(&mut runtime, world, talk_time) {
+        error!(
+            error = %e,
+            talk_time,
+            "emo2 text: present_frame が失敗（他 actor 非破壊・次フレーム再試行・R2.3）"
+        );
+    }
+}
+
+/// `FrameFinalize` 登録の排他 system（donor パターン: remove→3 フェーズ→insert・DD-1/DD-4）。
+///
+/// `Emo2Wiring`（NonSend）を [`World::remove_non_send_resource`] で取り出してから
+/// attach→drain→text の 3 フェーズを順に駆動し、[`World::insert_non_send_resource`] で戻す。
+/// remove→insert は `&mut World` を各フェーズへ排他に渡すための donor 慣行（借用衝突回避・
+/// `examples/emo-present.rs::boot_present_system` と同型）。本番の text フェーズは override 無し
+/// （`FrameTime`＋`TalkClock` で `talk_time` を解決）。
+///
+/// `Emo2Wiring` 未挿入（`wire_emo2_boot`＝task 5.1 前・フォールバック boot 経路）なら早期 return の
+/// no-op（安全・panic しない）。schedule への登録（`add_systems(FrameFinalize, emo2_frame_system)`）は
+/// `wire_emo2_boot`（task 5.1）が行い、本関数はここでは定義のみ（登録しない）。
+pub fn emo2_frame_system(world: &mut World) {
+    // Emo2Wiring 未挿入（wire_emo2_boot=task 5.1 前・LogSink フォールバック boot 経路）なら no-op。
+    let Some(mut wiring) = world.remove_non_send_resource::<Emo2Wiring>() else {
+        return;
+    };
+    // donor 慣行: remove して &mut World を各フェーズへ排他に渡し、3 フェーズ駆動後に必ず戻す。
+    run_attach_phase(&mut wiring, world);
+    run_drain_phase(&mut wiring, world);
+    run_text_phase(&mut wiring, world, None); // 本番: override なし（FrameTime＋clock で解決）。
+    world.insert_non_send_resource(wiring);
+}
+
 #[cfg(test)]
 mod tests {
     use std::collections::BTreeMap;
-    use std::sync::{mpsc, Arc};
+    use std::sync::mpsc::Receiver;
+    use std::sync::{mpsc, Arc, Mutex};
 
     use areka_emo_atlas::AtlasTable;
     use areka_emo_compose::{BindSet, EmoWorld};
     use areka_emo_text::state::TextLayerConfig;
     use areka_seriko::SurfaceResolver;
+    use tracing::field::{Field, Visit};
+    use tracing_subscriber::prelude::*;
 
     use super::*;
     use crate::emo2_boot::assets::{BootAssets, ScopeAssets};
@@ -632,5 +740,258 @@ mod tests {
         run_attach_phase(&mut wiring, &mut world);
         assert!(!wiring.attached, "再試行でもゲート不成立なら未装着");
         assert!(wiring.assets.is_some(), "再試行でも assets を保持");
+    }
+
+    // ── task 4.2: drain／text フェーズ＋emo2_frame_system の檻 ──────────────────────
+    //
+    // ログ発火を目視でなく実行テストで決定論的に檻へ入れるため、adapter.rs（task 2.5）と同じ
+    // スレッドローカル capture subscriber を単一ファイル境界（frame.rs）内へ最小インライン複製する。
+    // `EmoPresenter::apply` は未装着 target への `Hide`（reply: None）で `error!(?target_id, ...)` を
+    // 発火するため（presenter.rs `apply_hide`・reply-less でも log-first）、この ERROR を観測して
+    // drain の apply 到着順（FIFO）を強く檻に入れられる。
+
+    /// イベントの `level`＋各フィールドを 1 行文字列へ整形して共有 Vec へ push する最小 Layer。
+    #[derive(Clone, Default)]
+    struct Capture(Arc<Mutex<Vec<String>>>);
+
+    impl<S: tracing::Subscriber> tracing_subscriber::Layer<S> for Capture {
+        fn on_event(
+            &self,
+            ev: &tracing::Event<'_>,
+            _: tracing_subscriber::layer::Context<'_, S>,
+        ) {
+            let meta = ev.metadata();
+            let mut line = format!("level={} target={}", meta.level(), meta.target());
+            struct V<'a>(&'a mut String);
+            impl Visit for V<'_> {
+                fn record_debug(&mut self, f: &Field, v: &dyn std::fmt::Debug) {
+                    use std::fmt::Write;
+                    let _ = write!(self.0, " {}={:?}", f.name(), v);
+                }
+            }
+            ev.record(&mut V(&mut line));
+            self.0.lock().unwrap().push(line);
+        }
+    }
+
+    /// クロージャ `f` 実行中に**現在のスレッド**で発火した tracing イベントを 1 行 1 件で返す。
+    fn capture_logs<F: FnOnce()>(f: F) -> Vec<String> {
+        let cap = Capture::default();
+        let logs = cap.0.clone();
+        let subscriber = tracing_subscriber::registry().with(cap);
+        tracing::subscriber::with_default(subscriber, f);
+        let guard = logs.lock().unwrap();
+        guard.clone()
+    }
+
+    /// 捕捉行のうち指定 level（例 `"ERROR"`）の件数を数える。
+    fn count_level(logs: &[String], level: &str) -> usize {
+        let needle = format!("level={level}");
+        logs.iter().filter(|l| l.contains(&needle)).count()
+    }
+
+    /// テスト用の可制御クロック: 返り値の `Arc<Mutex<f64>>` に「壁時刻」を書けば、`TalkClock` の
+    /// クロックがその時刻を返す（決定論・talk_clock.rs のテストと同型の注入クロック）。
+    fn controllable_clock() -> (Arc<Mutex<f64>>, TalkClock) {
+        let now = Arc::new(Mutex::new(0.0f64));
+        let now_for_clock = Arc::clone(&now);
+        let clock: Arc<dyn Fn() -> f64 + Send + Sync> =
+            Arc::new(move || *now_for_clock.lock().expect("test clock mutex poisoned"));
+        (now, TalkClock::new(clock))
+    }
+
+    /// 可制御クロックの「壁時刻」を書き換える。
+    fn set_now(now: &Arc<Mutex<f64>>, wall: f64) {
+        *now.lock().expect("test clock mutex poisoned") = wall;
+    }
+
+    /// epoch を確立しない固定クロック（drain 系テストは talk_time を使わない）。
+    fn zero_clock() -> TalkClock {
+        TalkClock::new(Arc::new(|| 0.0))
+    }
+
+    /// headless な `Emo2Wiring`（実 `EmoPresenter`／空 `TextLayerRuntime`／合成 `BootAssets`）を
+    /// 注入 `rx`／`clock` で組む（task 4.1 のゲートテストと同型・COM/GPU 不要）。
+    fn headless_wiring_with(rx: Receiver<PresentCommand>, clock: TalkClock) -> Emo2Wiring {
+        Emo2Wiring::new(
+            EmoPresenter::new(),
+            rx,
+            Rc::new(RefCell::new(TextLayerRuntime::new(TextLayerConfig::default()))),
+            clock,
+            synth_assets(&[(0, 0)]),
+        )
+    }
+
+    /// R2.2/DD-1 drain: attach 前は drain せず（保留＝取りこぼしなし）、attach 後に FIFO 到着順で
+    /// **全件** `presenter.apply` へ適用し切る。
+    ///
+    /// 未装着 target への `Hide`（reply: None）は `EmoPresenter::apply_hide` が
+    /// `error!(?target_id, "apply(Hide): 未装着ターゲット")` を発火する（reply-less でも log-first・
+    /// panic しない）。この ERROR を capture subscriber で観測し、(a) attach 前は 0 件（gate 閉＝
+    /// チャネル未 drain）、(b) attach 後は送信順 `TargetId(0)→(1)→(2)` でちょうど 3 件（drain-all＋
+    /// FIFO 到着順）、(c) 2 度目の drain は 0 件（空チャネル・二重適用なし）を決定論的に反証する。
+    #[test]
+    fn run_drain_phase_gates_on_attach_then_drains_all_in_fifo_order() {
+        let (tx, rx) = mpsc::channel::<PresentCommand>();
+        let mut wiring = headless_wiring_with(rx, zero_clock());
+        // GhostWindows/GPU を持たない素の World（drain は presenter.apply のみ・GPU 不要）。
+        let mut world = World::new();
+
+        // FIFO で 3 件送る（未装着 target ゆえ apply は error!＋return の no-op-with-log・panic しない）。
+        for t in [0u32, 1, 2] {
+            tx.send(PresentCommand::Hide {
+                target: TargetId(t),
+                reply: None,
+            })
+            .expect("送信は成功する（受信端 rx は wiring が保持）");
+        }
+
+        // (a) attach 前（gate 閉）: drain しない → apply 未呼出 → ERROR ログ 0 件。
+        assert!(!wiring.attached, "前提: 未装着（run_attach_phase 未実行）");
+        let logs_gated = capture_logs(|| run_drain_phase(&mut wiring, &mut world));
+        assert_eq!(
+            count_level(&logs_gated, "ERROR"),
+            0,
+            "attach 前は drain せず apply も呼ばない（チャネルが保留バッファ・取りこぼしなし・DD-1）: {logs_gated:?}"
+        );
+
+        // attach 完了フラグを立てる（本番は run_attach_phase が立てる・test では直接）。
+        wiring.attached = true;
+
+        // (b) gate 開: 現時点キュー済みを FIFO で全件 apply → 未装着 target ゆえ ERROR がちょうど 3 件、
+        //     かつ target_id が送信順（0,1,2）で並ぶ（apply が到着順に呼ばれた実証）。
+        let logs_drained = capture_logs(|| run_drain_phase(&mut wiring, &mut world));
+        let errs: Vec<&String> = logs_drained
+            .iter()
+            .filter(|l| l.contains("level=ERROR"))
+            .collect();
+        assert_eq!(
+            errs.len(),
+            3,
+            "gate 開後は 3 件全て apply（drain-all）: {logs_drained:?}"
+        );
+        for (i, expected) in [0u32, 1, 2].iter().enumerate() {
+            assert!(
+                errs[i].contains(&format!("TargetId({expected})")),
+                "apply は FIFO 到着順（{i} 番目は TargetId({expected})）: {}",
+                errs[i]
+            );
+        }
+
+        // (c) 二度目の drain: チャネルは空 → 何も再適用しない（ERROR 0・二重適用なし）。
+        let logs_empty = capture_logs(|| run_drain_phase(&mut wiring, &mut world));
+        assert_eq!(
+            count_level(&logs_empty, "ERROR"),
+            0,
+            "drain 済みチャネルは空・再適用しない: {logs_empty:?}"
+        );
+    }
+
+    /// R2.2/R2.3 text 判断: `resolve_talk_time` は override 優先→`clock.talk_time`→`None` を返す。
+    ///
+    /// GPU/時刻 I/O 抜きの純関数として 4 経路を決定論檻へ入れる: override 勝ち（frame_now 無視）・
+    /// override 無し×epoch 確立×frame_now 有り＝差分・frame_now 不在＝None・epoch 未確立＝None。
+    #[test]
+    fn resolve_talk_time_override_wins_else_clock_else_none() {
+        // epoch 未確立の固定クロック。
+        let clock_unset = zero_clock();
+
+        // override=Some → そのまま（テスト注入経路が最優先・frame_now/clock は無視）。
+        assert_eq!(
+            resolve_talk_time(Some(5.0), Some(999.0), &clock_unset),
+            Some(5.0),
+            "override は最優先で採用（frame_now は無視）"
+        );
+        assert_eq!(
+            resolve_talk_time(Some(5.0), None, &clock_unset),
+            Some(5.0),
+            "override は frame_now 不在でも採用"
+        );
+
+        // override=None, frame_now=Some, epoch 確立 → clock.talk_time(frame_now)。
+        let (now, clock) = controllable_clock();
+        set_now(&now, 100.0);
+        clock.observe_cue(0.0); // epoch = 100.0 - 0.0 = 100.0
+        assert_eq!(
+            resolve_talk_time(None, Some(105.0), &clock),
+            Some(5.0),
+            "override 無しは clock.talk_time(frame_now)（105-100=5）"
+        );
+
+        // override=None, frame_now=None → None（FrameTime 資源不在＝headless）。
+        assert_eq!(
+            resolve_talk_time(None, None, &clock),
+            None,
+            "frame_now 不在は None（present_frame を呼ばない）"
+        );
+
+        // override=None, epoch 未確立 → None（talk 未到達＝描くものがない）。
+        assert_eq!(
+            resolve_talk_time(None, Some(105.0), &clock_unset),
+            None,
+            "epoch 未確立は None（talk 未到達）"
+        );
+    }
+
+    /// R2.3 text smoke（no panic）: `run_text_phase` は override で `present_frame` へ到達し、
+    /// override 無し×`FrameTime` 不在では skip する（いずれも panic しない）。
+    ///
+    /// 登録 actor の無い空 `TextLayerRuntime` に対し `present_frame` は `Ok(())` で即復帰する
+    /// （GPU 不要・upstream 契約）。override=Some(2.0) で present_frame を踏み、override=None かつ
+    /// `FrameTime` 資源なしで skip することを、panic なし＋ runtime 再借用可で担保する。
+    #[test]
+    fn run_text_phase_override_reaches_present_frame_without_panic() {
+        let (_tx, rx) = mpsc::channel::<PresentCommand>();
+        let mut wiring = headless_wiring_with(rx, zero_clock());
+        // FrameTime 資源を持たない素の World（override 経路と skip 経路の双方を踏む）。
+        let mut world = World::new();
+
+        // override=Some(2.0)・空 runtime（登録 actor 無し）→ present_frame は Ok(()) で即復帰・panic しない。
+        run_text_phase(&mut wiring, &mut world, Some(2.0));
+
+        // override=None・FrameTime 資源なし → talk_time 解決不能で present_frame を呼ばず skip・panic しない。
+        run_text_phase(&mut wiring, &mut world, None);
+
+        // present_frame は borrow を残さない（RefCell を再借用できる＝lingering borrow / poison なし）。
+        assert!(
+            wiring.runtime.try_borrow_mut().is_ok(),
+            "present_frame 後に runtime を再借用できる（借用を残さない）"
+        );
+    }
+
+    /// 排他 system の疎通（DD-1/DD-4）: `emo2_frame_system` は NonSend `Emo2Wiring` を remove→3 フェーズ
+    /// →insert で駆動して**必ず戻す**、かつ未挿入 World では安全に no-op（panic しない）。
+    ///
+    /// GPU/GhostWindows を持たない World ではゲート不成立で attach は起きず、drain は attach 前ゆえ
+    /// 走らず、text は FrameTime 不在で skip する（＝実質 no-op）。それでも system が wiring を取り出して
+    /// 戻す配線（remove→insert）が働くことを、実行後に NonSend resource が再取得できることで反証する。
+    #[test]
+    fn emo2_frame_system_removes_runs_and_reinserts_wiring() {
+        let (_tx, rx) = mpsc::channel::<PresentCommand>();
+        let wiring = headless_wiring_with(rx, zero_clock());
+        let mut world = World::new();
+        world.insert_non_send_resource(wiring);
+
+        // remove→attach/drain/text（いずれもゲート不成立の no-op）→ re-insert。panic しない。
+        emo2_frame_system(&mut world);
+        assert!(
+            world.get_non_send_resource::<Emo2Wiring>().is_some(),
+            "emo2_frame_system は wiring を取り出して駆動後に必ず戻す（配線の疎通）"
+        );
+
+        // 冪等: もう一度呼んでも remove→insert で wiring を保つ（panic しない）。
+        emo2_frame_system(&mut world);
+        assert!(
+            world.get_non_send_resource::<Emo2Wiring>().is_some(),
+            "再実行でも wiring を保つ（remove→insert の冪等）"
+        );
+
+        // 資源が無い World でも安全に no-op（wire_emo2_boot 前・LogSink フォールバック boot 経路）。
+        let mut empty_world = World::new();
+        emo2_frame_system(&mut empty_world); // panic しない
+        assert!(
+            empty_world.get_non_send_resource::<Emo2Wiring>().is_none(),
+            "未挿入なら no-op（何も挿入しない）"
+        );
     }
 }

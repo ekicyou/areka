@@ -60,7 +60,7 @@
   - _Boundary: frame_
   - _Depends: 2.1, 2.6_
 
-- [ ] 4. Core: frame 三相結線（Emo2Wiring＋emo2_frame_system）の実装
+- [x] 4. Core: frame 三相結線（Emo2Wiring＋emo2_frame_system）の実装
 - [x] 4.1 Emo2Wiring と attach フェーズを実装
   - NonSend resource `Emo2Wiring`（presenter/rx/runtime/clock/assets/attached を保持）と attach フェーズ（`GhostWindows` Resource＋GPU 資源到達ゲート→`plan_attachments` 呼出→計画項目ごとに shell target `attach_target`→初回 `ShowSurface`、balloon target `attach_target`→初回 `ShowSurface`→`text_slot_view`→`register_actor_view`、`Option::take` で資産を高々 1 回消費、missing/unused は log-first で観測、計画件数と実装着件数を `info!` に列挙）をテスト駆動口 `run_attach_phase(wiring, world)` として実装
   - 単体テスト: GPU 資源なし World では装着しない（ゲート不成立でも panic しない）・`text_slot_view` が None の経路では文字層接続を行わず次フレーム再試行に委ねる（R4.2）
@@ -69,7 +69,7 @@
   - _Boundary: frame_
   - _Depends: 3_
 
-- [ ] 4.2 drain フェーズ・text フェーズと emo2_frame_system 登録ラッパーを実装
+- [x] 4.2 drain フェーズ・text フェーズと emo2_frame_system 登録ラッパーを実装
   - `run_drain_phase(wiring, world)`（attach 完了後のみ `Receiver::try_iter` で `PresentCommand` を全件 `presenter.apply` へ順次適用）と `run_text_phase(wiring, world, talk_time_override)`（`TalkClock::talk_time` が `Some` のとき `present_frame` を呼び、`Err` は `error!`＋継続）、および donor パターン（remove→3 フェーズ→insert）に沿った排他 system `emo2_frame_system(world: &mut World)` を実装
   - 単体テスト: 注入した `PresentCommand` 列を `run_drain_phase` に与えると `presenter.apply` が到着順に呼ばれることを mock で確認し、`run_text_phase` へ固定 `talk_time_override` を与えて `present_frame` 呼出を確認する
   - 観測可能な完了条件: 上記単体テストが green で通り、drain フェーズが FIFO 順で全件を適用し切ることを assert できる
