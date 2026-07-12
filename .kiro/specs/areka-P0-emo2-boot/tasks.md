@@ -28,7 +28,7 @@
   - _Requirements: 1.1_
   - _Boundary: assets_
 
-- [ ] 2.4 map_display_command（DisplayCommand→PresentCommand 純変換）を実装
+- [x] 2.4 map_display_command（DisplayCommand→PresentCommand 純変換）を実装
   - `Show`→shell target へそのまま／`Hide`→shell target 非表示／`ShowBalloon`→balloon target・`BindSet::default()` 付与／`HideBalloon`→balloon target 非表示、の 4 写像を純関数として実装（DD-5・target_map を利用）。非数値 scope は None を返す
   - 単体テスト: 4 写像すべての全値比較（surface id は非改変転写を含む）＋非数値 scope で None
   - 観測可能な完了条件: 上記単体テストが 4 写像すべてについて期待する PresentCommand 値と完全一致することを assert して green で通る
