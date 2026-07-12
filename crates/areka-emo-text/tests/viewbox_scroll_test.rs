@@ -272,12 +272,14 @@ fn real_pump_scroll_redraws_only_dirty_and_unchanged_frames_touch_nothing() {
     let draw_delta = after_scroll.draw_text_layout_calls - before_scroll.draw_text_layout_calls;
     let create_delta = after_scroll.line_layout_creations - before_scroll.line_layout_creations;
 
-    // 主檻（負のコントロール）: 全域再描画へ戻すと draw_text_layout_calls 増分＝可視行数
-    // （全可視行を毎フレーム描き直す）となり本 assert が落ちる。実 viewbox は確定行を面内 blit で
-    // 保持し、露出帯 ∪ 変化行しか描かない＝増分は可視行数より厳密に小さい（再描画レスの決定的証明）。
+    // 可視 8 行 fixture 限定の tight check（fixture 非依存の主檻は下部の blit==1＋depth-invariance）:
+    // 全域再描画へ戻すと draw_text_layout_calls 増分＝可視行数となり本 assert が落ちる。実 viewbox は
+    // 確定行を面内 blit で保持し露出帯 ∪ 変化行しか描かない＝増分は可視行数より厳密に小さい。
+    // ※ この `< visible_line_count` は可視 8 行ゆえ成立する fixture 依存の tight check であって、
+    //   fixture 非依存の再描画レス決定的証明はテスト末尾の blit==1＋depth-invariance（下部参照）。
     assert!(
         draw_delta < visible_line_count,
-        "再描画レス: スクロールフレームの DrawTextLayout 増分 {draw_delta} は可視行数 {visible_line_count} より厳密に小さい（全域再描画なら {visible_line_count}）"
+        "再描画レス(fixture依存 tight check): スクロールフレームの DrawTextLayout 増分 {draw_delta} は可視行数 {visible_line_count} より厳密に小さい（全域再描画なら {visible_line_count}）"
     );
     // tight bound: 露出帯は概ね 1 行 pitch 高＝交差は「あふれで流入した変化行」だけ。
     // 実測 2（露出帯矩形＋変化行矩形の 2 dirty × 変化行 1 の DrawTextLayout）。
@@ -336,6 +338,23 @@ fn real_pump_scroll_redraws_only_dirty_and_unchanged_frames_touch_nothing() {
     assert!(
         create_delta2 < visible_line_count,
         "2 度目も確定行は再生成されない: 生成増分 {create_delta2} < 可視行数 {visible_line_count}"
+    );
+
+    // ── 再描画レスの fixture 非依存な決定的不変（G3・脆弱な `< visible_line_count` に依存しない）──
+    // 上の `< visible_line_count` は可視 8 行 fixture でしか成立しない（可視 2〜3 行の小 fixture では
+    // draw_delta＝dirty_len×draws が可視行数に達し得る）。以下は fixture の可視行数に依らず成立する
+    // 再描画レスの決定的証拠であり、これらが本檻の真の負のコントロールである:
+    //   (a) blit==+1（上で assert 済み）: viewbox は確定ピクセルを面内 blit で保持する。全域再描画は
+    //       保持せず毎フレーム描き直す＝blit 0。全域再描画へ戻すと blits +1 assert が fixture に依らず落ちる。
+    //   (b) depth-invariance: スクロール描画/生成増分は**スクロール深さに依らず一定**。確定行を蓄積
+    //       再描画する退行なら深い段ほど増分が増える（この不変が破れる）。
+    assert_eq!(
+        draw_delta, draw_delta2,
+        "スクロール描画増分は深さに依らず一定＝確定行を蓄積再描画しない（fixture 非依存の再描画レス不変）: 1 度目 {draw_delta} / 2 度目 {draw_delta2}"
+    );
+    assert_eq!(
+        create_delta, create_delta2,
+        "確定行の再生成なしも深さに依らず一定（fixture 非依存）: 1 度目 {create_delta} / 2 度目 {create_delta2}"
     );
 
     sink.close();
