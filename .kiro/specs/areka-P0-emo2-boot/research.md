@@ -155,7 +155,7 @@
 5. 装着合流の schedule 設計（GPU 資源待ち→初回 ShowSurface→text_slot_view→register_actor_view→present_frame 開始の順序保証）。
 6. バルーン面切替指令のバルーン target 配送: `DisplayCommand::ShowBalloon`/`HideBalloon` → `PresentCommand::ShowSurface{binds 既定}`／hide の写像を置く場所（アダプタ）と、バルーン TargetId の採番（#4 の scope→TargetId 写像との関係・shell target と独立にバルーン target を割り当てる規約）。
 7. アダプタ・結線の置き場（areka 内 module／新 lib crate／ハイブリッド）。
-8. 依存追加の解釈（外部 crate 禁止＝ワークスペース path 依存昇格は in-scope の確認）。
+8. ~~依存追加の解釈（外部 crate 禁止＝ワークスペース path 依存昇格は in-scope の確認）。~~ **✅ 決着（2026-07-12 議題1・案 A）**: R10.5「新規依存」＝**外部（crates.io）crate の追加禁止**（tokio 等）と解し、既存 workspace crate（areka-seriko/-emo-present/-emo-text/-sakura/-actor 等）の path 依存を `areka` bin へ昇格するのは統合結線として **in-scope**。要件へ反映済み（R10.5 を「外部依存」へ明確化＋R10.8 新設で昇格許可を明記）。**crate 分割そのもの（案 C＝置き場問題）は §7 #7 の設計判断として別途 design 持ち**（本決着は依存解釈のみ確定）。
 9. 構築順序再編の具体形（WinApp→UI 部品→shell 組立→spawn_seriko→boot）と非致命 boot 意味論の維持方法。
 
 ## 8. ✅ ブロッカー解消（2026-07-11 議題1 で登記 → 2026-07-12 balloon-face-cue 完了で RESOLVED）

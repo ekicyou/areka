@@ -111,6 +111,7 @@ M-boot（「emo2 が起動して喋る」最初の可視結果）を構成する
 2. The 起動統合層 shall バルーン文字の描画そのものを所有せず、それは emo-text-layer の責務として尊重する。
 3. If 既存エンジンの内部改変が必要と判明する, then the 起動統合層 shall 本仕様では改変せず、該当エンジンへ増分 issue として申し送る。
 4. The 起動統合層 shall 新規機構を作らず、変換アダプタ 1 個・結線・観測に範囲を限定する。
-5. The 起動統合層 shall 新規依存を追加せず、tokio を使用せず、Rust 2024 で実装する。
+5. The 起動統合層 shall 新規の外部（crates.io）依存を追加せず、tokio を使用せず、Rust 2024 で実装する。
 6. The 起動統合層 shall 表示層を UI スレッドに固定し、worker 側の sink／アダプタからは UI 配送経路を介して指令を送る。
 7. The 起動統合層 shall 窓生成の準備失敗時に開かれるダミー窓フォールバックを改変せず存置する。
+8. Where 結線に既存 workspace crate（`areka-seriko`／`areka-emo-present`／`areka-emo-text`／`areka-sakura`／`areka-actor` 等）の path 依存が必要となる, the 起動統合層 shall それらを `areka` バイナリ crate の path 依存へ昇格してよく、これは R10.5 の「新規依存」（外部 crates.io crate の追加）に該当しない統合結線として in-scope とする。
