@@ -52,7 +52,7 @@
   - _Boundary: assets_
   - _Depends: 2.3_
 
-- [ ] 3. Core: 窓×資産の scope 整合（plan_attachments・DD-12）を実装
+- [x] 3. Core: 窓×資産の scope 整合（plan_attachments・DD-12）を実装
   - `plan_attachments(window_scopes: &[usize], assets: &BootAssets) -> AttachPlan`（`GhostWindows::scopes()` を正として `BootAssets` と突き合わせ、`usize`→`u32` 変換を吸収、窓あり資産なしは `missing_assets` へ、資産あり窓なしは `unused_assets` へ分類）を純関数として実装
   - 単体テスト（DD-12 の 4 パターン全網羅）: 完全一致（計画件数＝窓数）・窓あり資産なし（missing 検出）・資産あり窓なし（unused 検出）・`usize`→`u32` 変換境界
   - 観測可能な完了条件: 上記 4 パターンの単体テストが全て green で通り、完全一致ケースで `AttachPlan.items` の件数が窓数と一致することを assert できる
