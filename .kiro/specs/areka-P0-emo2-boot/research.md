@@ -206,3 +206,4 @@
 - （高→中）装着×GPU 遅延×文字層 None の合流: DD-4 の「apply 同期＝同一フレーム Some 保証」で構造的に解消。残リスクは GPU 資源が到達しない環境（headless 実行）だが、attach フェーズが毎フレーム再試行するため hang しない（表示なしで動作継続・log-first）。
 - （中）reply None 経路の apply 失敗観測: `PresentError` が reply 無しで沈黙する可能性。実装時に presenter 内部ログを確認し、不足なら drain 側で reply チャネルを添えて即 try_recv→error! する（決定論檻は spine のピクセル述語が担保）。
 - （低）TalkClock ジッタによる可視数の瞬間逆行: 単調 max 方策＋char_wait(50ms)≒tick 間隔で実害なし。spine は注入クロックで決定論化しジッタ経路自体をテスト対象外に固定。
+- （低・既知制約）`Clear` なし連続 talk の可視数逆行: epoch 前方リベースにより talk 跨ぎで既リビール文字が未リビール側へ写り得る（emo-text 契約「Clear が唯一のリセット」の固有性質・実運用は Clear 開始が通常）。design で明記済み＝spine の単調増加述語は単一 talk 内（Clear 起点後）に限定（設計ディスカッション A3・validation Issue 3 決着）。

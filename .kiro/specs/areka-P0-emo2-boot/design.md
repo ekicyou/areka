@@ -382,6 +382,7 @@ impl SurfaceOutput for PresentBridge {
 **Responsibilities & Constraints**
 - **前提（検証済み）**: ghost dispatcher は talk ごとの初回 Tick を base とした相対秒で sakura を駆動し、sakura は due になった cue をその時点で emit する＝「cue 到着壁時刻 − `cue.at` ≒ talk 開始壁時刻」（量子化誤差 ≤ ticker base_interval 50ms）。
 - epoch 更新は**単調 max**（`epoch = max(epoch, clock() − cue.at)`）: 新 talk では到着時刻が前方へ跳ぶため自動リベース、talk 内ジッタの逆行は抑制。
+- **既知制約（talk 跨ぎ逆行）**: `Clear` を伴わずに新 talk が始まると、epoch の前方リベースにより旧 talk 基準の既リビール文字が一時的に未リビール側へ写り得る。これは emo-text 契約（リビール時刻は talk 起点相対・`Clear` が唯一のリセット）の固有性質であり本設計の新造欠陥ではない（実運用スクリプトは通常 `Clear` 開始）。spine の可視数単調増加述語（R8.5）は**単一 talk 内（`Clear` 起点後）に限定**して適用する。
 - クロックは注入可能（既定 `dola::runtime::clock::now`＝`FrameTime` と同一の QPC 秒）。決定論テストは固定クロックを注入するか、frame フェーズを直接注入 `talk_time` で駆動する。
 - `ClockedTextSink<T: TextSink + Clone>` は `TextSink + Clone + Send` を保ち（`GhostBootOptions` の型境界）、観測後は内側 `EmoTextSink` へ透過転送する（cue 内容の非改変）。
 
@@ -590,10 +591,11 @@ log-first（steering: areka-log-first-no-silent-failure）。失敗は `error!`�
 構成: 自前 scripted `ShioriBackend`（OnBoot 応答台本を返す fake・DD-11）＋`ShioriWiring::Custom`＋`TickerMode::Disabled`（`DispatcherMsg::Tick` 注入）＋実 sink 結線（`spawn_seriko(out=PresentBridge)`／`ClockedTextSink<EmoTextSink>`）＋GPU World（MTA COM・`GraphicsCore::new()`・`WucGraphicsResource`）＋frame フェーズ直接駆動（注入 `talk_time`）。同期は Tick 注入＋有界 join＋`recv_timeout` の観測点のみ（sleep なし・R8.3）。x64 完結（helper 不使用・R8.6）。
 
 1. **S1 boot→表示**: boot 後 Tick 注入→attach フェーズ→shell/balloon target の `read_back` が非全透明（初期面表示・R8.1/8.2/8.5、R1 系の檻）。
-2. **S2 talk→typewriter**: `\s[2100]` とテキストを含む台本→`Show` 系 `PresentCommand` 受信列 assert→apply→shell readback 変化。テキスト cue→`pump_until_idle`→注入 `talk_time` 階段で `opaque_count` 単調増加・validrect 外に非透明なし・`Clear` 後全域透明（R8.5、R2 系の檻）。
+2. **S2 talk→typewriter**: `\s[2100]` とテキストを含む台本→`Show` 系 `PresentCommand` 受信列 assert→apply→shell readback 変化。テキスト cue→`pump_until_idle`→注入 `talk_time` 階段で `opaque_count` 単調増加・validrect 外に非透明なし・`Clear` 後全域透明（R8.5、R2 系の檻）。単調増加述語の適用範囲は単一 talk 内（`Clear` 起点後）に限定する（talk_clock の既知制約＝talk 跨ぎ逆行は対象外）。
 3. **S3 `\b` 配送**: `\b[-1]`→`\b[0]` を含む台本→受信列に `Hide{balloon}`→`ShowSurface{balloon, 0, binds=default}` が順序どおり現れる（headless 記録・R5.4）＋apply 後の balloon readback 遷移。
 4. **S4 `\b` なし完走**: `\b` を含まない OnBoot 相当台本が S1/S2 経路を完走する（R5.5）。
 5. **S5 close 握手**: `shutdown(CloseReason::User)`→OnClose 台本消化→全ハンドル有界 join・seriko join（R6.1–6.3 の檻・ghost spine S 系の手法）。
+6. **S6 schedule 結線**: headless の bevy_ecs `World`＋`Schedule` 単体（wintf 実 loop 不要）へ `emo2_frame_system` を登録し数フレーム実行する。GPU 資源なし World では attach ゲート不成立のまま panic なく完走すること（NonSend `Emo2Wiring` の remove→insert 借用規律と system 登録自体を檻に入れる・R8.1）。frame フェーズ直接駆動（S1–S5）が担わない「schedule 経由の起動」の観測漏れを塞ぐ。
 
 ### E2E / Smoke
 
