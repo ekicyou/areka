@@ -642,6 +642,27 @@ mod tests {
         bytes.chunks_exact(4).filter(|px| px[3] != 0).count()
     }
 
+    /// ブロック軸（行送り軸）方向のインク範囲 `(near, far)`（物理 px・両端含む・インクなしは `None`）。
+    /// horizontal_tb＝y（上端〜下端）・vertical_rl/lr＝x（左端〜右端）——スクロールで content が
+    /// 動く軸。k≠1.0 の許容差比較（G2）で oracle と viewbox のインク位置差を測る。
+    fn block_axis_ink_span(bytes: &[u8], w: u32, h: u32, mode: WritingMode) -> Option<(u32, u32)> {
+        let mut lo: Option<u32> = None;
+        let mut hi: u32 = 0;
+        for y in 0..h {
+            for x in 0..w {
+                if bytes[((y * w + x) * 4 + 3) as usize] != 0 {
+                    let b = match mode {
+                        WritingMode::HorizontalTb => y,
+                        WritingMode::VerticalRl | WritingMode::VerticalLr => x,
+                    };
+                    lo = Some(lo.map_or(b, |v| v.min(b)));
+                    hi = hi.max(b);
+                }
+            }
+        }
+        lo.map(|l| (l, hi))
+    }
+
     /// 観測可能な完了状態 1: content ありの初回フレーム → render `Ok(true)`・read_back に
     /// content の非透明ピクセルが現れる（初回は全域ダーティ＝全行描画・blit=(0,0) ゆえ blits 増なし）。
     #[test]
@@ -1067,14 +1088,21 @@ mod tests {
     }
 
     impl LiveDiffRig {
-        /// image px 原寸と mode から 2 面（オラクル／viewbox）を装着し、両実行部を生成する。
+        /// image px 原寸と mode から 2 面（オラクル／viewbox）を装着し、両実行部を生成する
+        /// （k=1.0＝byte 一致の受け入れ基準・既定）。
         fn new(mode: WritingMode, image: (u32, u32)) -> LiveDiffRig {
+            Self::new_scaled(mode, image, 1.0)
+        }
+
+        /// 合成スケール k を明示して装着する（k≠1.0＝byte 完全一致でなく ≤0.5px 許容の受け入れ
+        /// 基準・G2）。両面とも物理寸＝ceil(image × k)。region は image px（k 非依存）。
+        fn new_scaled(mode: WritingMode, image: (u32, u32), k: f32) -> LiveDiffRig {
             let mut rig = Rig::new();
-            let oracle_surface = rig.attach(image, 1.0);
-            let viewbox_surface = rig.attach(image, 1.0);
+            let oracle_surface = rig.attach(image, k);
+            let viewbox_surface = rig.attach(image, k);
             let font = ResolvedFont::resolve(&live_diff_model(Some(10)));
             let region = TextRegion::resolve(&live_diff_model(Some(10)), image, mode);
-            let contract = ScaleContract::new(1.0, None);
+            let contract = ScaleContract::new(k, None);
             let oracle = DrawExecutor::new(&rig.core).expect("DrawExecutor::new 失敗");
             let viewbox = ViewboxExecutor::new(&rig.core).expect("ViewboxExecutor::new 失敗");
             LiveDiffRig {
@@ -1207,6 +1235,57 @@ mod tests {
             );
             window
         }
+
+        /// k≠1.0 用の許容差チェックポイント（G2・R6.4）: byte 完全一致でなく、オラクル（真位置で
+        /// 全域再描画）と viewbox（確定 content は whole-pixel blit で量子化位置・ダーティは真位置で
+        /// 再描画）の read_back の**ブロック軸インク範囲**の差が `tol` 物理 px 以内であることを檻化する
+        /// （小数アキュムレータで |committed − pos| ≤ 0.5 ⇒ 確定 content 位置差 ≤ ceil(0.5×k)）。
+        /// k≠1.0 の実 GPU 描画経路（小数アキュムレータ→whole-pixel blit→実描画→readback）を実際に
+        /// 走らせて検証する（従来 k=1.0 でしか走っていなかった経路）。返り値は VisibleWindow。
+        fn checkpoint_block_tol(&mut self, label: &str, t: f64, tol: u32) -> VisibleWindow {
+            let items: Vec<TextItem> = self
+                .state
+                .actor_state(&self.actor)
+                .map(|s| s.items().to_vec())
+                .unwrap_or_default();
+            let visible = self.state.visible_glyphs(&self.actor, t);
+            let lines = LayoutEngine::layout(
+                &items,
+                visible,
+                &self.region,
+                self.mode,
+                self.font_height,
+                &FixedMetrics,
+            );
+            let window = LayoutEngine::visible_window(&lines, &self.region, self.mode);
+            let canvas = ContentCanvas::from_layout(&lines, &self.region, self.mode);
+
+            self.oracle
+                .render(&canvas, &window, &self.font, self.mode, &self.contract, &mut self.oracle_surface)
+                .unwrap_or_else(|e| panic!("{label}: オラクル render 失敗: {e:?}"));
+            self.viewbox
+                .render(&canvas, &window, &self.font, self.mode, &self.contract, &mut self.viewbox_surface)
+                .unwrap_or_else(|e| panic!("{label}: viewbox render 失敗: {e:?}"));
+
+            let ob = self.oracle_surface.read_back().unwrap_or_else(|e| panic!("{label}: オラクル read_back 失敗: {e:?}"));
+            let vb = self.viewbox_surface.read_back().unwrap_or_else(|e| panic!("{label}: viewbox read_back 失敗: {e:?}"));
+
+            let (w, h) = self.oracle_surface.size();
+            // 非退化担保（空面同士の vacuous な一致を排除）。
+            assert!(opaque_count(&ob) > 0, "{label}: オラクル面に非透明ピクセルがある");
+            assert!(opaque_count(&vb) > 0, "{label}: viewbox 面に非透明ピクセルがある");
+
+            let os = block_axis_ink_span(&ob, w, h, self.mode).expect("オラクル面のインク範囲");
+            let vs = block_axis_ink_span(&vb, w, h, self.mode).expect("viewbox 面のインク範囲");
+            let d0 = os.0.abs_diff(vs.0);
+            let d1 = os.1.abs_diff(vs.1);
+            assert!(
+                d0 <= tol && d1 <= tol,
+                "{label}: k≠1.0 でブロック軸インク範囲の差が ≤{tol}px（確定 content の量子化位置差 ≤0.5px）\
+                 ——oracle {os:?} vs viewbox {vs:?}（差 near={d0} far={d1}）"
+            );
+            window
+        }
     }
 
     /// live-diff シナリオ（mode パラメタライズ）: あふれ前→スクロール発火直後→連続スクロール→
@@ -1286,6 +1365,56 @@ mod tests {
     #[test]
     fn live_diff_vertical_lr_matches_oracle_byte_for_byte() {
         run_live_diff_scenario(WritingMode::VerticalLr, (40, 80));
+    }
+
+    /// k≠1.0（非96DPI）のスクロール実描画を許容差で檻化する（G2・R6.4）。あふれ→スクロールの
+    /// 各段で、オラクル（真位置・全域再描画）と viewbox（確定 content は whole-pixel blit で量子化・
+    /// ダーティは真位置）の read_back のブロック軸インク範囲が `tol` 物理 px 以内に収まることを実 GPU
+    /// 描画で確認する（小数アキュムレータ→whole-pixel blit→実描画→readback の経路を実走）。
+    /// byte 完全一致は k=1.0 に scope（design）ゆえ k≠1.0 は ≤0.5px 相当（ceil(0.5×k)＋AA 余白）の許容差。
+    fn run_live_diff_nonunit_scale(mode: WritingMode, image: (u32, u32), k: f32, tol: u32) {
+        let mut ld = LiveDiffRig::new_scaled(mode, image, k);
+
+        // ① あふれ前（3 行）。
+        ld.apply_text(0.0, "あ");
+        ld.apply_newline(0.0);
+        ld.apply_text(0.0, "い");
+        ld.apply_newline(0.0);
+        ld.apply_text(0.0, "う");
+        ld.checkpoint_block_tol("k≠1 あふれ前", 10.0, tol);
+
+        // ② スクロール発火直後。
+        ld.apply_newline(0.0);
+        ld.apply_text(0.0, "え");
+        let w = ld.checkpoint_block_tol("k≠1 スクロール発火", 20.0, tol);
+        assert!(w.first_visible_line >= 1, "k≠1 あふれ発火で可視窓が移動: {w:?}");
+
+        // ③ 連続スクロール。
+        ld.apply_newline(0.0);
+        ld.apply_text(0.0, "お");
+        ld.apply_newline(0.0);
+        ld.apply_text(0.0, "か");
+        let w = ld.checkpoint_block_tol("k≠1 連続スクロール", 30.0, tol);
+        assert!(w.first_visible_line >= 2, "k≠1 連続スクロールで可視窓が複数行進む: {w:?}");
+    }
+
+    /// 横書き k=1.25: あふれ→スクロール実描画で viewbox が oracle とブロック軸 ≤2px（≈ceil(0.5×1.25)
+    /// ＋AA 余白）に収まる（R6.4——小数アキュムレータの実 GPU 経路検証）。
+    #[test]
+    fn live_diff_nonunit_scale_horizontal_within_tolerance() {
+        run_live_diff_nonunit_scale(WritingMode::HorizontalTb, (80, 40), 1.25, 2);
+    }
+
+    /// 縦書き vertical_rl k=1.25: 同上（スクロール軸＝横 x）。
+    #[test]
+    fn live_diff_nonunit_scale_vertical_rl_within_tolerance() {
+        run_live_diff_nonunit_scale(WritingMode::VerticalRl, (40, 80), 1.25, 2);
+    }
+
+    /// 縦書き vertical_lr k=1.25: 同上（スクロール軸＝横 x・左送り）。
+    #[test]
+    fn live_diff_nonunit_scale_vertical_lr_within_tolerance() {
+        run_live_diff_nonunit_scale(WritingMode::VerticalLr, (40, 80), 1.25, 2);
     }
 
     /// 観測可能な完了状態（後半・負のコントロール）: 意図的に不一致を起こす細工（viewbox 側だけ
