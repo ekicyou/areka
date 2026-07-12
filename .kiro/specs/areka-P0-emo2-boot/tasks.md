@@ -14,7 +14,7 @@
   - _Requirements: 1.4, 3.5_
   - _Boundary: target_map_
 
-- [ ] 2.2 (P) talk_clock（TalkClock＋ClockedTextSink）を実装
+- [x] 2.2 (P) talk_clock（TalkClock＋ClockedTextSink）を実装
   - `TalkClock::new/observe_cue/talk_time`（単調 max epoch 推定・クロック注入可・負値 clamp・epoch 未確立は None）と `ClockedTextSink<T: TextSink + Clone>`（`emit` で `observe_cue` 後に内側へ透過転送）を実装
   - 単体テスト: 固定クロック注入で単調 max リベース（新 talk で前方跳躍）・epoch None→talk_time None・負値 0.0 clamp
   - 観測可能な完了条件: 上記単体テストが全て green で通り、新 talk 到着時に epoch が前方へリベースされることを確認できる
