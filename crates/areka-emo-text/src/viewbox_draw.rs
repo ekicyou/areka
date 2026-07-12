@@ -1279,6 +1279,15 @@ mod tests {
         run_live_diff_scenario(WritingMode::VerticalRl, (40, 80));
     }
 
+    /// 観測可能な完了状態（前半・縦書き vertical_lr）: 縦書き左送り（列が左→右へ流れ、あふれ時は
+    /// content が**左へ** blit・露出帯＝**右端**）でも全シナリオで byte 完全一致する（R5.2/R6.3——
+    /// スクロール軸は横（x）・vertical_rl と同一の x 軸だが符号が逆＝blit 左方向。純粋層の軸写像
+    /// unit 檻（task 3.2）だけでなく、実 GPU 描画 readback で oracle↔viewbox の byte 等価を証明する）。
+    #[test]
+    fn live_diff_vertical_lr_matches_oracle_byte_for_byte() {
+        run_live_diff_scenario(WritingMode::VerticalLr, (40, 80));
+    }
+
     /// 観測可能な完了状態（後半・負のコントロール）: 意図的に不一致を起こす細工（viewbox 側だけ
     /// 1 グリフ多い content を描く）を入れると read_back の byte 比較が差を検出する——比較器は
     /// ゼロでない差を捕捉できる（＝live-diff はトートロジーでない）。本物のバグ注入ではなく、
