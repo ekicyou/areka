@@ -14,10 +14,12 @@
 //! 座標・配置ロジックは `placement` モジュール（areka-P0-window-placement）が所有し、
 //! 骨格自身は座標を一切持たない。旧モック UI は `examples/mock-shell.rs` へ退避済み。
 //!
-//! `main` は `open_startup_window`／ダミー窓／smoke ゲートを不変に保ったまま、その周囲に
-//! ghost 結線層（`areka_ghost::boot`／`GhostRuntime::shutdown`）を結線する（task 3.3・
-//! design.md「main の ghost boot／shutdown 結線」）。boot 失敗は非致命として扱い骨格起動を
-//! 止めない（要件 8.2）。
+//! `main` は `open_startup_window`／ダミー窓／smoke ゲートを不変に保ったまま、`WinApp::new()`
+//! ／`open_startup_window` の後で `emo2_boot::wire_emo2_boot` を呼び、その成否で実 sink boot
+//! （`wired=true`）／既存 `LogSink`×2 フォールバック boot（`wired=false`）を呼び分ける（task 5.2・
+//! design.md「エントリポイント / main.rs＋wire_emo2_boot」・DD-7）。`run()` 復帰後は
+//! `GhostRuntime::shutdown(CloseReason::User)`（DD-10）→ seriko `ActorHandle::join` で終了を
+//! 総仕上げする。boot 失敗は非致命として扱い骨格起動を止めない（要件 7.3・8.2）。
 
 use bevy_ecs::prelude::*;
 use tracing_subscriber::EnvFilter;
@@ -244,34 +246,13 @@ fn main() -> Result<()> {
         }
     }
 
-    // ghost 結線層の起動を試みる（task 3.3・design.md「main の ghost boot／shutdown 結線」）。
-    // 失敗は非致命——`default_ghost_root()` はこのサンドボックスでは常態的に不在
-    // （`MountError::StartPointMissing`）であり、`warn!` の上で `None` として骨格起動を
-    // 継続する（要件 8.2）。それ以外の予期しない失敗（読取不能・shell 不在等）は `error!`。
+    // 実行ファイル隣接の 32bit SHIORI helper パスを一度だけ解決する（実 sink 結線経路と
+    // `LogSink` フォールバック boot 経路の双方が使うため main で保持する・DD-7）。
     let helper_exe = default_helper_exe_path();
-    let ghost_options = ghost_boot_options(cfg.ghost_root.clone(), helper_exe);
-    let ghost_runtime = match areka_ghost::boot(ghost_options) {
-        Ok(runtime) => {
-            tracing::info!("ghost 結線層の起動に成功しました");
-            Some(runtime)
-        }
-        Err(err) => {
-            if is_benign_boot_error(&err) {
-                tracing::warn!(
-                    error = %err,
-                    "ghost 結線層の起動起点が見つかりません（決定のみで継続・骨格起動は阻害しません）"
-                );
-            } else {
-                tracing::error!(
-                    error = %err,
-                    "ghost 結線層の起動に失敗しました（継続・骨格起動は阻害しません）"
-                );
-            }
-            None
-        }
-    };
 
     // UI ランタイム起動（COM/DPI 初期化・World 生成・shutdown hook 結線）（R2.4）。
+    // DD-7/R7.1: 実 sink 結線（`wire_emo2_boot`）は UI 基盤の後に行うため、`WinApp::new()` を
+    // すべての boot より前へ移動した（旧・task 3.3 の boot 先行順序を再編）。
     let app = WinApp::new()?;
 
     // リファレンス脳の実走デモ（要件 5.3/5.4）。環境変数 `AREKA_SHIORI_DEMO` が有効な
@@ -287,17 +268,73 @@ fn main() -> Result<()> {
     // heartbeat を与える骨格保証（boot→loop→exit）を維持する（DD14）。
     open_startup_window(&app, &cfg);
 
-    // `main` 所有のブロッキングメッセージループ（R2.4/R4.1）。ダミー窓が閉じられると
-    // `WindowRegistry` が空へ遷移し `run()` が `Ok` を返して正常終了する（DD7 改定）。
+    // emo2 統合結線（task 5.2・design「エントリポイント / main.rs＋wire_emo2_boot」・DD-7）:
+    // UI 基盤・起動窓の後で完成済み 5 トラック（seriko／sakura／emo-present／emo-text／actor）を
+    // 束ねる実 sink 結線を試みる。`wired=true` なら実 sink boot が成立し、ghost／seriko ハンドルを
+    // 終了処理へ運ぶ。`wired=false`（asset 組立失敗・boot 失敗等）は現行の `LogSink`×2 フォール
+    // バック boot へ倒し、既存 smoke 前提・非致命 boot 意味論を温存する（R7.1/7.3・DD-7）。
+    let outcome = emo2_boot::wire_emo2_boot(&app, &cfg.ghost_root, &cfg.balloon_root, &helper_exe);
+    let (ghost_runtime, seriko_handle) = if outcome.wired {
+        tracing::info!("実 sink 結線で起動しました（emo2-boot wire 成立）");
+        (outcome.ghost, outcome.seriko)
+    } else {
+        // フォールバック（R7.3・DD-7）: 現行の `LogSink`×2 boot を UI 基盤・起動窓の後へ
+        // relocate したもの。失敗は非致命——`default_ghost_root()` はこのサンドボックスでは
+        // 常態的に不在（`MountError::StartPointMissing`）であり、`warn!` の上で `None` として
+        // 骨格起動を継続する（要件 8.2）。それ以外の予期しない失敗（読取不能・shell 不在等）は
+        // `error!`（`is_benign_boot_error` の分類は不変・R7.4）。
+        let ghost_options = ghost_boot_options(cfg.ghost_root.clone(), helper_exe.clone());
+        let ghost = match areka_ghost::boot(ghost_options) {
+            Ok(runtime) => {
+                tracing::info!("LogSink フォールバックで起動しました（emo2-boot wire 不成立）");
+                Some(runtime)
+            }
+            Err(err) => {
+                if is_benign_boot_error(&err) {
+                    tracing::warn!(
+                        error = %err,
+                        "ghost 結線層の起動起点が見つかりません（決定のみで継続・骨格起動は阻害しません）"
+                    );
+                } else {
+                    tracing::error!(
+                        error = %err,
+                        "ghost 結線層の起動に失敗しました（継続・骨格起動は阻害しません）"
+                    );
+                }
+                None
+            }
+        };
+        // フォールバック経路に seriko アクターはない（実 sink 結線が成立していない）。
+        (ghost, None)
+    };
+
+    // `main` 所有のブロッキングメッセージループ（R2.4/R4.1）。ダミー窓／ゴースト窓が
+    // 閉じられると `WindowRegistry` が空へ遷移し `run()` が `Ok` を返して正常終了する（DD7 改定）。
     app.run()?;
 
-    // ghost 結線層の終了統括（task 3.3・design.md「main の ghost boot／shutdown 結線」）。
-    // boot 済み（`Some`）のときのみ実行し、失敗は `error!` の上で main 自身の `Result` へ
-    // 伝播する（正常時 exit 0・要件 6.4——裏を返せば genuine な shutdown 失敗は黙って
-    // exit 0 にしない）。
+    // 終了握手（task 5.2・design「終了握手（R6）」・DD-10）: `run()` 復帰後、boot 済み
+    // （`Some`）のときのみ `shutdown` を呼ぶ。DD-10 により終了理由は `System` から
+    // `CloseReason::User` へ改定（全窓 close funnel はユーザ操作起点）。OnClose 応答の再生
+    // 完了待ちは kanade の `ForceQuit` 終了系列内で処理される（本仕様は `shutdown` を呼ぶだけ・
+    // 不改変・R6.2）。失敗は `error!` の上で main 自身の `Result` へ伝播する（genuine な失敗を
+    // 黙って exit 0 にしない・R6.3）。
     if let Some(runtime) = ghost_runtime {
-        if let Err(err) = runtime.shutdown(areka_kanade::CloseReason::System) {
+        if let Err(err) = runtime.shutdown(areka_kanade::CloseReason::User) {
             tracing::error!(error = %err, "ghost 結線層の終了統括に失敗しました");
+            return Err(windows::core::Error::from_hresult(
+                windows::Win32::Foundation::E_FAIL,
+            ));
+        }
+    }
+
+    // seriko アクターの join（design「終了握手（R6）」・R6.3）。直前の `shutdown` が ghost 側の
+    // `SerikoSink`（seriko inbox への唯一の送信端）を drop することで inbox が切断され、seriko
+    // worker は自然終了する。main は `SerikoSink` クローンを保持しない（sink は `wire_emo2_boot`
+    // が boot へ move 済み）ため、この時点で worker は既に終端しており `join` は速やかに戻る。
+    // join 失敗（worker panic）は握り潰さず `error!`＋`Err` 伝播する（genuine な失敗を隠さない）。
+    if let Some(seriko) = seriko_handle {
+        if let Err(err) = seriko.join() {
+            tracing::error!(error = %err, "seriko アクターの join に失敗しました");
             return Err(windows::core::Error::from_hresult(
                 windows::Win32::Foundation::E_FAIL,
             ));
