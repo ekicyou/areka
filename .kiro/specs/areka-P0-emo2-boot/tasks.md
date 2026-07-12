@@ -78,7 +78,7 @@
   - _Depends: 4.1, 2.5, 2.2_
 
 - [ ] 5. Integration: main.rs 構築順序再編と wire_emo2_boot 結線
-- [ ] 5.1 wire_emo2_boot 統合結線関数を実装
+- [x] 5.1 wire_emo2_boot 統合結線関数を実装
   - `wire_emo2_boot(app, ghost_root, balloon_root, helper_exe) -> Emo2BootOutcome` を実装: `build_boot_assets` 呼出（失敗時は `wired=false` を返し呼び手のフォールバックへ委ねる）→`EmoPresenter::new`／`TextLayerRuntime::new`／`spawn_emo_text`→`TalkClock::new`／`ClockedTextSink::new`→`mpsc::channel`／`PresentBridge::new`→`spawn_seriko(resolver, static_binds, bridge)`→`areka_ghost::boot(GhostBootOptions{surface_sink: SerikoSink, text_sink: ClockedTextSink, ..})`（Err は既存 `is_benign_boot_error` 分類で継続）→`Emo2Wiring` の NonSend 挿入＋`add_systems(FrameFinalize, emo2_frame_system)`
   - emo2 fixture を用いた統合テスト（または example）: `wire_emo2_boot` が有効な emo2 fixture に対し `wired=true` を、存在しない/不正な ghost_root に対し `wired=false` を返すことを確認
   - 観測可能な完了条件: 上記統合テストが green で通り、fixture 経路で `Emo2BootOutcome.wired == true` かつ `ghost`/`seriko` ハンドルが `Some` であることを assert できる

@@ -182,7 +182,10 @@ fn ghost_boot_options(
 /// 実在しないのが常態（＝`MountError::StartPointMissing` は想定内の事象）。読取不能
 /// （`StartPointUnreadable`）・shell 不在（`ShellDirMissing`）・将来追加される
 /// `#[non_exhaustive]` variant は、真に予期しない I/O 問題として区別する。
-fn is_benign_boot_error(err: &areka_ghost::GhostBootError) -> bool {
+///
+/// `pub(crate)`: `emo2_boot::wire_emo2_boot`（task 5.1）が boot 失敗（`GhostBootError`）を
+/// 同一方針（起点不在＝良性 `warn!`・他＝`error!`・R7.4）で分類するため再利用する。
+pub(crate) fn is_benign_boot_error(err: &areka_ghost::GhostBootError) -> bool {
     match err {
         areka_ghost::GhostBootError::Mount(
             areka_parsers::package::MountError::StartPointMissing { .. },
