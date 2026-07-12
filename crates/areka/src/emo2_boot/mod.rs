@@ -19,6 +19,13 @@ pub mod talk_clock;
 pub mod assets;
 pub mod frame;
 
+// 決定論 spine テストハーネス（R8・task 6.1）。`areka` は [[bin]] のみ（[lib] 無し）で外部
+// tests/ から bin 内部項目へ到達できないため、既存 repo 慣行に従い in-crate #[cfg(test)]
+// モジュールとして置く（設計 File Structure の tests/emo2_boot_spine_test.rs との差分は spine.rs
+// 冒頭 doc 参照）。frame フェーズ直接駆動・Tick 注入・GPU readback を in-process で行う。
+#[cfg(test)]
+mod spine;
+
 use std::cell::RefCell;
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};

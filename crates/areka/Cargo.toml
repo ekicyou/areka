@@ -45,3 +45,11 @@ dola = { path = "../dola" }
 # （EmoPresenter・PresentCommand 契約正本）で通常依存へ昇格（areka-P0-emo2-boot design R10.8）。
 # examples/emo-present.rs は通常依存からも参照可能。
 areka-emo-present = { path = "../areka-emo-present" }
+
+[dev-dependencies]
+# 決定論 spine テスト（emo2_boot::spine・areka-P0-emo2-boot task 6.1）専用。scripted
+# ShioriBackend が実装する ShioriBackend トレイトの戻り値型（RequestError/ExitKind/
+# ShutdownError/HelperStatus）を名前で参照するために追加する。areka-kanade はこれら host32 型を
+# re-export しないため直接 dev-dep とする（既に areka-ghost/areka-kanade 経由で推移ビルド済み・
+# x64・新規外部（crates.io）依存ではない）。
+shiori-host32-host = { path = "../shiori-host32-host" }

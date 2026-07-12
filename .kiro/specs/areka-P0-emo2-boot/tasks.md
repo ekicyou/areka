@@ -94,7 +94,7 @@
   - _Depends: 5.1_
 
 - [ ] 6. Validation: 決定論 spine 統合テスト（R8）
-- [ ] 6.1 scripted ShioriBackend と spine テストハーネスの土台を実装
+- [x] 6.1 scripted ShioriBackend と spine テストハーネスの土台を実装
   - areka 側 spine テストローカルの最小 `ScriptedShioriBackend`（DD-11・OnBoot/OnClose 応答台本を返す fake）を実装し、`ShioriWiring::Custom`＋`TickerMode::Disabled`（`DispatcherMsg::Tick` 注入）＋実 sink 結線（`spawn_seriko(out=PresentBridge)`／`ClockedTextSink<EmoTextSink>`）＋headless GPU World（`CoInitializeEx(MULTITHREADED)`＋`GraphicsCore::new()`＝WARP 可＋`WucGraphicsResource`）を組み立てるテストハーネスを構築する
   - 観測可能な完了条件: ハーネスが scripted ghost を boot させ、Tick 注入により attach 準備状態まで panic なく到達することをスモークレベルの assert で確認できる
   - _Requirements: 8.1, 8.3, 8.4, 8.6_
