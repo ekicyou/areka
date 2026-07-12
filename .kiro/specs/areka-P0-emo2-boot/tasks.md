@@ -36,7 +36,7 @@
   - _Boundary: adapter_
   - _Depends: 2.1_
 
-- [ ] 2.5 PresentBridge（SurfaceOutput 本番実装）を実装
+- [x] 2.5 PresentBridge（SurfaceOutput 本番実装）を実装
   - `PresentBridge::new(tx)` と `impl SurfaceOutput for PresentBridge`（`map_display_command` で変換し `mpsc::Sender` へ非ブロック送出・可変状態は Sender のみ）を実装。送出失敗（受信端 drop）は `debug!`、非数値 scope の drop は `warn!` で log-first 観測する
   - 単体テスト: mpsc チャネル越しに `DisplayCommand` を送ると変換済み `PresentCommand` が受信側に届くこと、非数値 scope 送出時に warn ログが出て何も送出されないこと
   - 観測可能な完了条件: 上記単体テストが green で通り、`PresentBridge` が状態を持たない（Sender 以外の可変フィールドがない）ことをコードで示せる
