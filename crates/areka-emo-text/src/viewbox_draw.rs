@@ -604,13 +604,16 @@ mod tests {
     /// 指定可・validrect 全域）。origin (0,0) を明示すると vertical_rl では validrect 内の
     /// 左上に留まり列が面外（負の x）へ描かれてしまうため、origin は None にして
     /// クランプ正準（horizontal/vertical_lr＝左上・vertical_rl＝右上）へ委ねる。
-    fn live_diff_model(font_height: Option<u32>) -> BalloonModel {
+    /// フォント名＋高さを明示した live-diff 用モデル（既定フォントは `name=None`＝ＭＳ ゴシック・
+    /// G4——非 default フォント/大サイズで AA こぼれガード `DIRTY_GUARD_IMG_PX` の実効性を byte
+    /// 等価で検証するため）。
+    fn live_diff_model_font(name: Option<&str>, font_height: Option<u32>) -> BalloonModel {
         BalloonModel::new(
             WindowPosition::new(None, None),
             Origin::new(None, None),
             WordWrapPoint::new(None, None),
             ValidRect::new(None, None, None, None),
-            Font::new(None, font_height, FontColor::new(None, None, None)),
+            Font::new(name.map(str::to_owned), font_height, FontColor::new(None, None, None)),
             None,
         )
     }
@@ -1095,13 +1098,28 @@ mod tests {
         }
 
         /// 合成スケール k を明示して装着する（k≠1.0＝byte 完全一致でなく ≤0.5px 許容の受け入れ
-        /// 基準・G2）。両面とも物理寸＝ceil(image × k)。region は image px（k 非依存）。
+        /// 基準・G2）。フォントは既定 ＭＳ ゴシック 10px。
         fn new_scaled(mode: WritingMode, image: (u32, u32), k: f32) -> LiveDiffRig {
+            Self::new_full(mode, image, k, None, 10)
+        }
+
+        /// フォント名・高さ・k を明示して装着する（G4——非 default フォント/大サイズで AA こぼれ
+        /// ガードの実効性を byte 等価検証）。両面とも物理寸＝ceil(image × k)・region は image px。
+        /// レイアウトは FixedMetrics（font 非依存の決定論位置）ゆえ font 名は AA ラスタライズ
+        /// （描画）にのみ効く——両方式が同一 font ゆえガードが十分なら byte 等価が保たれる。
+        fn new_full(
+            mode: WritingMode,
+            image: (u32, u32),
+            k: f32,
+            font_name: Option<&str>,
+            font_height: u32,
+        ) -> LiveDiffRig {
             let mut rig = Rig::new();
             let oracle_surface = rig.attach(image, k);
             let viewbox_surface = rig.attach(image, k);
-            let font = ResolvedFont::resolve(&live_diff_model(Some(10)));
-            let region = TextRegion::resolve(&live_diff_model(Some(10)), image, mode);
+            let model = live_diff_model_font(font_name, Some(font_height));
+            let font = ResolvedFont::resolve(&model);
+            let region = TextRegion::resolve(&model, image, mode);
             let contract = ScaleContract::new(k, None);
             let oracle = DrawExecutor::new(&rig.core).expect("DrawExecutor::new 失敗");
             let viewbox = ViewboxExecutor::new(&rig.core).expect("ViewboxExecutor::new 失敗");
@@ -1114,7 +1132,7 @@ mod tests {
                 font,
                 contract,
                 mode,
-                font_height: 10.0,
+                font_height: font_height as f32,
                 config: TextLayerConfig::default(),
                 actor: ActorKey::from("0"),
                 state: TextLayerState::default(),
@@ -1293,7 +1311,12 @@ mod tests {
     /// 常に byte 完全一致することを檻化する（NewLine 区切りの単一グリフ行であふれを決定論制御）。
     fn run_live_diff_scenario(mode: WritingMode, image: (u32, u32)) {
         let mut ld = LiveDiffRig::new(mode, image);
+        run_live_diff_scenario_on(&mut ld);
+    }
 
+    /// 構築済みリグに対し 5 チェックポイント（あふれ前→スクロール発火→連続→Clear→再追記）を
+    /// byte 完全一致で檻化する（font/サイズを変えたリグで再利用——G4 の AA ガード実効性検証）。
+    fn run_live_diff_scenario_on(ld: &mut LiveDiffRig) {
         // ① あふれ前（3 行・可視窓は不動）。
         ld.apply_text(0.0, "あ");
         ld.apply_newline(0.0);
@@ -1415,6 +1438,49 @@ mod tests {
     #[test]
     fn live_diff_nonunit_scale_vertical_lr_within_tolerance() {
         run_live_diff_nonunit_scale(WritingMode::VerticalLr, (40, 80), 1.25, 2);
+    }
+
+    /// G4: 大サイズフォント（20px・既定 ＭＳ ゴシック）でも全シナリオで oracle↔viewbox byte
+    /// 完全一致する——AA こぼれが `DIRTY_GUARD_IMG_PX`(=1 image px) を超えず、ダーティ矩形が
+    /// AA を取りこぼさないことを実描画 byte 等価で確認（spike/live-diff は従来 10px のみ）。
+    /// image 寸は `2P+F ≤ block ≤ 3P+F`（P=ceil(20×1.25)=25・F=20）を満たし ①3行収容／②あふれ。
+    #[test]
+    fn live_diff_larger_font_matches_oracle_byte_for_byte() {
+        run_live_diff_scenario_on(&mut LiveDiffRig::new_full(
+            WritingMode::HorizontalTb,
+            (160, 80),
+            1.0,
+            None,
+            20,
+        ));
+        run_live_diff_scenario_on(&mut LiveDiffRig::new_full(
+            WritingMode::VerticalRl,
+            (80, 160),
+            1.0,
+            None,
+            20,
+        ));
+    }
+
+    /// G4: プロポーショナルフォント（ＭＳ Ｐゴシック・可変幅）でも byte 完全一致する——font 種別
+    /// を変えても両方式が同一 format ゆえ AA ラスタライズが一致し、ガードが十分なら byte 等価が
+    /// 保たれることを確認（P=ceil(12×1.25)=15・F=12）。
+    #[test]
+    fn live_diff_proportional_font_matches_oracle_byte_for_byte() {
+        run_live_diff_scenario_on(&mut LiveDiffRig::new_full(
+            WritingMode::HorizontalTb,
+            (80, 50),
+            1.0,
+            Some("ＭＳ Ｐゴシック"),
+            12,
+        ));
+        run_live_diff_scenario_on(&mut LiveDiffRig::new_full(
+            WritingMode::VerticalRl,
+            (50, 80),
+            1.0,
+            Some("ＭＳ Ｐゴシック"),
+            12,
+        ));
     }
 
     /// 観測可能な完了状態（後半・負のコントロール）: 意図的に不一致を起こす細工（viewbox 側だけ
