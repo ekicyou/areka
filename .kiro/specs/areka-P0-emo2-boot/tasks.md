@@ -7,7 +7,7 @@
   - _Requirements: 10.4, 10.5, 10.8_
 
 - [ ] 2. Core: 孤立した純粋部品・アダプタ部品の実装
-- [ ] 2.1 (P) target_map（scope→表示対象写像の正本）を実装
+- [x] 2.1 (P) target_map（scope→表示対象写像の正本）を実装
   - `shell_target`/`balloon_target`（DD-3 の採番規約 `2*scope`/`2*scope+1`）と `scope_of`（`ActorKey` の数値 parse・非数値は None）を実装
   - 単体テスト: shell/balloon 採番の互いに素性・`scope_of("0")`＝Some(0)・非数値（例 `"側"`）＝None
   - 観測可能な完了条件: 上記単体テストが全て green で通る
