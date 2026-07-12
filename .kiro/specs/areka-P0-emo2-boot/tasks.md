@@ -118,7 +118,7 @@
   - _Boundary: spine test_
   - _Depends: 6.2_
 
-- [ ] 7. Validation: smoke 回帰確認と env-gate 実走
+- [x] 7. Validation: smoke 回帰確認と env-gate 実走
 - [x] 7.1 既存 smoke 回帰の確認と wire 成立マーカーの追加
   - 既存 `tests/smoke_boot_loop_exit.rs`（フォールバック経路）が本仕様の変更後も無変更で green のままであることを確認する。実 fixture 経路の smoke（`skeleton_boots_with_real_ghost_windows_and_exits_zero`）が `emo2_frame_system` の schedule 登録（実結線経路）を少なくとも 1 回踏んでいるかを確認し、届いていなければ wire 成立ログマーカーの一行 assert を追加する（S6 撤回に伴う存在チェックの担保・決定論檻ではない）
   - 観測可能な完了条件: 両 smoke テストが green で通り、実 fixture 経路の smoke が wire 成立マーカーを assert していることをテストコードで確認できる
@@ -126,7 +126,7 @@
   - _Boundary: E2E/Smoke_
   - _Depends: 5.2_
 
-- [ ]* 7.2 env-gate 実走テストと人間サインオフ手順を実装
+- [x]* 7.2 env-gate 実走テストと人間サインオフ手順を実装
   - `AREKA_EMO2_REAL_RUN` 環境変数で有効化される実走テストを実装: 未設定時は即 return（R9.2・DoD 非前提）。設定時は `CARGO_BIN_EXE_areka` を emo2 fixture＋実 pasta helper で起動し、`AREKA_APP_SMOKE_EXIT_MS` による自動 close→exit 0 と wire 成立／attach 完了のログマーカーを assert する。実 DPI（≠96）での目視チェックリスト（実サーフェス表示位置／typewriter 進行／ドラッグ追従／close→静かな終了）をテスト doc 内へ明文化する
   - 観測可能な完了条件: env 変数未設定時にテストが即座に skip され、設定時は実プロセスが exit 0 とログマーカーを残して終了することを確認できる
   - _Requirements: 9.1, 9.2, 9.3_
