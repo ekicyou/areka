@@ -200,6 +200,7 @@
 - **DD-9（初期表示面）**: scope0=surface 0・scope≥1=surface 10（placement measure と同じ ukadoc 慣行定数）・バルーン=面 0 固定（emo2 は balloons0 のみ）。`sakura.balloon.defaultsurface` の descript 消費は将来増分（brief の ukadoc 必読事項への裁定）。
 - **DD-10（終了理由）**: run() 復帰＝全窓 close（対話 close／smoke 自動 close の単一 funnel）を **`CloseReason::User`** で shutdown へ渡す（R6.1 の忠実写像・現行 System から変更）。close 起因の細分（SSTP 等）は M-boot 対象外。wintf への close イベント増設はエンジン改変ゆえ行わない（R10.3）。
 - **DD-11（spine テストの scripted backend）**: `ScriptedShioriBackend` は areka-ghost の **テストローカル**実装で lib 公開されていない。areka-ghost への test-support 公開はエンジン改変（R10.3）ゆえ行わず、**areka 側 spine テストに最小 scripted 実装を自前で持つ**（`ShioriWiring::Custom` は pub API・`ShioriBackend` trait は公開面）。
+- **DD-12（設計ディスカッション議題1・2026-07-12 開発者承認）= 窓×資産 scope 整合は「GhostWindows 正＋純関数突き合わせ」**。scope 集合は `wire_emo2_boot` が placement と同じ入力から自前導出（placement 実結果は async move 済みで同期参照不能＝旧事前条件「同一ソースから得る」は検証不能につき差し替え）。装着時は `GhostWindows::scopes()` を正とし、純関数 `plan_attachments(window_scopes, &assets) -> AttachPlan` が突き合わせ（窓あり資産なし=warn+skip 縮退・資産あり窓なし=debug 破棄・usize→u32 吸収）。**判断の檻**: 不一致 4 パターンを GPU 不要の決定論ユニットテストで全網羅＋spine S1 が「計画件数＝実装着件数」を積極 assert（縮退が導出バグを隠さない）。**裁定原則（開発者提示）**: テストのために実装を変えない・檻に入れるのは「入力依存の判断分岐（決定論リスク）」のみ・証明済み内部への配線は再テストしない。棄却: attach 内遅延組立（UI フレーム内 I/O＋DD-7 崩壊）・規約のみ（検証不能前提の残置）。残置: scope 導出の二元性（M1 受容・増分申し送り＝資産二重ロードと同枠）。
 
 ### 9.3 リスク更新
 
@@ -207,3 +208,5 @@
 - （中）reply None 経路の apply 失敗観測: `PresentError` が reply 無しで沈黙する可能性。実装時に presenter 内部ログを確認し、不足なら drain 側で reply チャネルを添えて即 try_recv→error! する（決定論檻は spine のピクセル述語が担保）。
 - （低）TalkClock ジッタによる可視数の瞬間逆行: 単調 max 方策＋char_wait(50ms)≒tick 間隔で実害なし。spine は注入クロックで決定論化しジッタ経路自体をテスト対象外に固定。
 - （低・既知制約）`Clear` なし連続 talk の可視数逆行: epoch 前方リベースにより talk 跨ぎで既リビール文字が未リビール側へ写り得る（emo-text 契約「Clear が唯一のリセット」の固有性質・実運用は Clear 開始が通常）。design で明記済み＝spine の単調増加述語は単一 talk 内（Clear 起点後）に限定（設計ディスカッション A3・validation Issue 3 決着）。
+- （中→低）窓×資産の scope 不一致: DD-12 で決着（GhostWindows 正・plan_attachments 純関数檻・件数積極 assert）。残置は scope 導出の二元性のみ（M1 受容・増分申し送り）。validation Issue 1 決着。
+- （撤回記録）schedule 結線の合成 `Schedule` 決定論テスト（旧 S6・validation Issue 2 対応で一時追加）は設計ディスカッションで**撤回**: 登録・NonSend remove→insert は証明済み内部への配線で入力依存分岐を持たず（常に正しいか常に panic か）、決定論檻の対象外。担保は実 fixture smoke の end-to-end 一度の存在チェックへ置換（届かなければ wire 成立マーカーの一行 assert を smoke へ追加）。裁定原則は DD-12 と同じ「檻に入れるのは入力依存の判断分岐のみ」。

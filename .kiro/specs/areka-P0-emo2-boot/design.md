@@ -120,6 +120,7 @@ graph TB
 | DD-9 | 初期表示面 | scope0=surface 0・scope≥1=surface 10・バルーン=面 0 固定 | — （placement measure と同一慣行） |
 | DD-10 | 終了理由 | `run()` 復帰（全窓 close funnel）→ `shutdown(CloseReason::User)` | close イベント購読の新設: wintf 改変 |
 | DD-11 | spine の scripted 脳 | areka 側テストに最小 scripted `ShioriBackend` を自前実装（`ShioriWiring::Custom` は公開 API） | areka-ghost への test-support 公開: エンジン改変 |
+| DD-12 | 窓×資産の scope 整合（設計ディスカッション議題1） | scope 集合は wire 時に placement と同じ入力から自前導出。装着時は **`GhostWindows::scopes()` を正**とし、純関数 `plan_attachments` で突き合わせ（窓あり資産なし=`warn!`＋skip 縮退・資産あり窓なし=`debug!`＋破棄・`usize`→`u32` 吸収・**計画件数の積極 assert** で縮退が導出バグを隠さない）。不一致パターンは GPU 不要の決定論ユニットテストで檻に入れる | attach 内遅延組立: UI フレーム内 I/O＋DD-7 フォールバック時系列崩壊。規約のみ: 検証不能な事前条件の残置＝沈黙バグ温床 |
 
 ### Technology Stack
 
@@ -456,8 +457,8 @@ pub fn build_boot_assets(
 pub fn default_bind_ids(shell_kv: &BTreeMap<String, String>) -> Vec<u32>;
 ```
 
-- 事前条件: `scopes` は placement 準備結果（`prepare_ghost_windows` が成功した scope 集合）と同一ソースから得る。
-- 事後条件: 返る資産だけで attach フェーズが完結する（以後ファイル I/O なし）。
+- 事前条件: `scopes` は `wire_emo2_boot` が placement と同じ入力（shell descript／surfaces）から**自前導出**する（placement 実結果は `open_startup_window` の async クロージャへ move 済みで同期参照不能・DD-12）。導出の二元性は M1 受容トレードオフとして増分申し送り（資産二重ロードと同枠）。
+- 事後条件: 返る資産だけで attach フェーズが完結する（以後ファイル I/O なし）。装着時の scope 整合の正は `GhostWindows::scopes()` であり、突き合わせは frame の純関数 `plan_attachments` が行う（DD-12）。
 
 ### UI 毎フレーム結線 / frame
 
@@ -470,7 +471,7 @@ pub fn default_bind_ids(shell_kv: &BTreeMap<String, String>) -> Vec<u32>;
 
 **Responsibilities & Constraints**
 - `Emo2Wiring` は NonSend resource（`EmoPresenter` が `!Send`・`Receiver` が `!Sync`・`Rc<RefCell<TextLayerRuntime>>` が `!Send` のため）。system は donor パターンどおり **remove→駆動→insert**（`&mut World` との借用衝突回避）。
-- **フェーズ①（attach・高々 1 回）**: ゲート＝`GhostWindows` Resource 存在＋`GraphicsCore` 存在＋`WucGraphicsResource::is_valid()`。成立フレームで scope ごとに: shell target `attach_target`→`apply(ShowSurface{initial_surface_id, static_binds})`、balloon target `attach_target`→`apply(ShowSurface{0, BindSet::default()})`→`text_slot_view(balloon_target)`→`register_actor_view(ActorKey(scope), &view, &balloon_model)`。資産は `Option::take` で高々 1 回消費。`apply` は同期実行のため **同一フレーム内で `text_slot_view` が `Some` になる**のが正常経路。万一 `None`（上流の遅延化＝Revalidation Trigger）なら接続せず次フレーム再試行（R4.2・warn!）。
+- **フェーズ①（attach・高々 1 回）**: ゲート＝`GhostWindows` Resource 存在＋`GraphicsCore` 存在＋`WucGraphicsResource::is_valid()`。成立フレームでまず純関数 `plan_attachments(GhostWindows::scopes(), &assets)` が装着計画を確定する（DD-12: **窓一覧が正**・`usize`→`u32` 変換をここで吸収・窓あり資産なし＝`warn!`＋skip 縮退・資産あり窓なし＝`debug!`＋破棄）。計画の各項目について: shell target `attach_target`→`apply(ShowSurface{initial_surface_id, static_binds})`、balloon target `attach_target`→`apply(ShowSurface{0, BindSet::default()})`→`text_slot_view(balloon_target)`→`register_actor_view(ActorKey(scope), &view, &balloon_model)`。資産は `Option::take` で高々 1 回消費。装着完了 `info!` は計画件数と実装着件数を列挙し、spine が件数一致を積極 assert する（縮退が導出バグを隠さない檻）。`apply` は同期実行のため **同一フレーム内で `text_slot_view` が `Some` になる**のが正常経路。万一 `None`（上流の遅延化＝Revalidation Trigger）なら接続せず次フレーム再試行（R4.2・warn!）。
 - **フェーズ②（drain）**: attach 完了後のみ `Receiver::try_iter` で `PresentCommand` を全件取り出し順に `presenter.apply(world, cmd)`。attach 前はチャネルに保留（取りこぼしなし・FIFO）。
 - **フェーズ③（text）**: `FrameTime` を読み `TalkClock::talk_time` が `Some(t)` なら `present_frame(&mut runtime.borrow_mut(), world, t)`。`Err` は `error!`（present_frame 側で失敗源 log 済み）→継続（次フレーム再試行・R2.3）。
 - 各フェーズの本体は `(&mut Emo2Wiring, &mut World)` を取る自由関数に分離し、headless 単体・統合テストが system を経ずに直接駆動できる形にする（決定論檻の駆動口）。
@@ -498,6 +499,15 @@ pub fn emo2_frame_system(world: &mut World);
 pub fn run_attach_phase(wiring: &mut Emo2Wiring, world: &mut World);
 pub fn run_drain_phase(wiring: &mut Emo2Wiring, world: &mut World);
 pub fn run_text_phase(wiring: &mut Emo2Wiring, world: &mut World, talk_time_override: Option<f64>);
+
+/// 窓×資産の scope 突き合わせ（DD-12・純関数・GPU 不要の決定論単体テスト対象）。
+/// GhostWindows::scopes()（usize・正）と BootAssets を照合し装着計画を返す。
+pub struct AttachPlan {
+    pub items: Vec<PlannedAttach>,   // (scope: u32, shell/balloon target, 初期面, static binds 参照)
+    pub missing_assets: Vec<usize>,  // 窓あり資産なし → 呼び手が warn!＋skip（表示なし縮退）
+    pub unused_assets: Vec<u32>,     // 資産あり窓なし → 呼び手が debug!＋破棄
+}
+pub fn plan_attachments(window_scopes: &[usize], assets: &BootAssets) -> AttachPlan;
 ```
 
 ##### State Management
@@ -585,21 +595,23 @@ log-first（steering: areka-log-first-no-silent-failure）。失敗は `error!`�
 3. `TalkClock`: 単調 max 更新・新 talk リベース（at リセット＋前方到着）・epoch None→talk_time None・負値 clamp（固定注入クロックで決定論・R2.2 前提）。
 4. `default_bind_ids`: emo2 相当 KV から [1100,1207,1302,1500,1800] 抽出・`default` 非 1／kero 系キーの非抽出（DD-8）。
 5. `run_attach_phase` の順序遵守: GPU 資源なし World では装着しない（ゲート）・`text_slot_view` None 経路で接続しない（R4.2・emo-text テストの軽量リグ流用）。
+6. `plan_attachments`（DD-12）: 完全一致（計画件数＝窓数の積極 assert）・窓あり資産なし（missing 検出＝skip 対象）・資産あり窓なし（unused 検出＝破棄対象）・`usize`→`u32` 変換境界、の 4 パターンを GPU 不要で全網羅（R1.2/1.4/4.2 の判断部の檻）。
 
 ### Integration Tests（`crates/areka/tests/emo2_boot_spine_test.rs`＝R8 決定論 spine）
 
 構成: 自前 scripted `ShioriBackend`（OnBoot 応答台本を返す fake・DD-11）＋`ShioriWiring::Custom`＋`TickerMode::Disabled`（`DispatcherMsg::Tick` 注入）＋実 sink 結線（`spawn_seriko(out=PresentBridge)`／`ClockedTextSink<EmoTextSink>`）＋GPU World（MTA COM・`GraphicsCore::new()`・`WucGraphicsResource`）＋frame フェーズ直接駆動（注入 `talk_time`）。同期は Tick 注入＋有界 join＋`recv_timeout` の観測点のみ（sleep なし・R8.3）。x64 完結（helper 不使用・R8.6）。
 
-1. **S1 boot→表示**: boot 後 Tick 注入→attach フェーズ→shell/balloon target の `read_back` が非全透明（初期面表示・R8.1/8.2/8.5、R1 系の檻）。
+1. **S1 boot→表示**: boot 後 Tick 注入→attach フェーズ→shell/balloon target の `read_back` が非全透明（初期面表示・R8.1/8.2/8.5、R1 系の檻）。装着は**期待 scope 数の全 target 完了を積極 assert**する（計画件数＝実装着件数・warn+skip 縮退が scope 導出バグを隠さない檻＝DD-12）。
 2. **S2 talk→typewriter**: `\s[2100]` とテキストを含む台本→`Show` 系 `PresentCommand` 受信列 assert→apply→shell readback 変化。テキスト cue→`pump_until_idle`→注入 `talk_time` 階段で `opaque_count` 単調増加・validrect 外に非透明なし・`Clear` 後全域透明（R8.5、R2 系の檻）。単調増加述語の適用範囲は単一 talk 内（`Clear` 起点後）に限定する（talk_clock の既知制約＝talk 跨ぎ逆行は対象外）。
 3. **S3 `\b` 配送**: `\b[-1]`→`\b[0]` を含む台本→受信列に `Hide{balloon}`→`ShowSurface{balloon, 0, binds=default}` が順序どおり現れる（headless 記録・R5.4）＋apply 後の balloon readback 遷移。
 4. **S4 `\b` なし完走**: `\b` を含まない OnBoot 相当台本が S1/S2 経路を完走する（R5.5）。
 5. **S5 close 握手**: `shutdown(CloseReason::User)`→OnClose 台本消化→全ハンドル有界 join・seriko join（R6.1–6.3 の檻・ghost spine S 系の手法）。
-6. **S6 schedule 結線**: headless の bevy_ecs `World`＋`Schedule` 単体（wintf 実 loop 不要）へ `emo2_frame_system` を登録し数フレーム実行する。GPU 資源なし World では attach ゲート不成立のまま panic なく完走すること（NonSend `Emo2Wiring` の remove→insert 借用規律と system 登録自体を檻に入れる・R8.1）。frame フェーズ直接駆動（S1–S5）が担わない「schedule 経由の起動」の観測漏れを塞ぐ。
+
+> **schedule 結線の観測境界（設計ディスカッションで確定）**: `add_systems(FrameFinalize, emo2_frame_system)` の登録と NonSend remove→insert は、証明済み内部（bevy_ecs スケジューラ・donor `boot_present_system` 実績パターン）への**配線**であり、入力依存の分岐を持たない（常に正しいか常に panic かの性質）＝決定論檻の対象外。担保は実 fixture smoke の end-to-end 一度の存在チェックに委ねる（下記 E2E）。合成 `Schedule` での決定論テストは設けない。
 
 ### E2E / Smoke
 
-- 既存 `tests/smoke_boot_loop_exit.rs` は**不変で緑を維持**（フォールバック経路＝資産不在時の LogSink boot がこれを保証・R6.4/7.3 の回帰檻）。実 fixture 経路の smoke（`skeleton_boots_with_real_ghost_windows_and_exits_zero`）は実 sink 結線後も exit 0 を維持すること。
+- 既存 `tests/smoke_boot_loop_exit.rs` は**不変で緑を維持**（フォールバック経路＝資産不在時の LogSink boot がこれを保証・R6.4/7.3 の回帰檻）。実 fixture 経路の smoke（`skeleton_boots_with_real_ghost_windows_and_exits_zero`）は実 sink 結線後も exit 0 を維持すること。加えて実 fixture smoke は **`emo2_frame_system` の schedule 登録（実結線経路）を少なくとも 1 回踏む end-to-end 存在チェック**を兼ねる — 実装時に実結線経路（フォールバックでない側）へ届くことを確認し、届いていなければ wire 成立ログマーカーの一行 assert を smoke へ追加する（決定論檻ではなく存在確認・R8.1 の観測境界注記）。
 - `tests/emo2_real_run.rs`（R9・env-gate）: `AREKA_EMO2_REAL_RUN` 未設定なら即 return（DoD 非前提・R9.2）。設定時は `CARGO_BIN_EXE_areka` を emo2 fixture＋実 helper で起動し `AREKA_APP_SMOKE_EXIT_MS` で自動 close・exit 0 とログマーカー（wire 成立・attach 完了）を assert（R9.1 の自動部）。**人間サインオフ（R9.3）**はテスト doc 内チェックリスト（実 DPI≠96 で: 実サーフェス表示位置／typewriter 進行の目視／ドラッグ追従／close→静かな終了）として明文化し、マイルストーン完了宣言はその実施後のみ。
 
 ### Performance
