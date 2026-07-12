@@ -171,6 +171,10 @@
 - **G4（完了・2531dcf2）**: AA ガード=1 の非 default フォント/大サイズ byte 等価。ＭＳ Ｐゴシック（プロポーショナル）・20px（大サイズ）でも横/縦rl byte 完全一致＝**DIRTY_GUARD_IMG_PX(1) が font/サイズ非依存で十分**を実描画で確認。
 - **G5（完了・61d25134）**: 描画中デバイス失敗の再試行安全を実描画で檻化。`#[cfg(test)]` fault-injection（EndDraw 後 flip/commit 前に Err）で「失敗フレーム＝front 不変・planner 未 commit・再試行で正しく反映」を檻化（純粋 ScrollPlanner 3.3 の COM 側 runtime 版・#[cfg(test)] ゲートゆえ本番無影響）。
 
+## 実機観測由来のバグ修正（D1・2026-07-12）
+
+- **後方（un-reveal/un-scroll）スクロールの byte 非等価バグ（実機で行間文字欠けを観測→根本修正）**: 実機 example で行間に文字欠けを目視観測。診断（example 実 fixture＝font28/DWriteMetrics/実文字を oracle vs viewbox で byte 比較）で**前方進行は全フレーム byte 一致だが後方時刻ジャンプで diverge**（back_t で 47 行相違）と判明。**根本原因**: viewbox は前方スクロール前提で、後方（内容が減る un-reveal）ではスクロールアウトした確定行の再露出を面内 blit で保持できず、かつ指紋一致で「変化行でない」と判定され再描画されない→欠落。**トリガ**: task 13 で追加した example C8 検分の `present_at(earlier t_mid)`＝後方ジャンプが実機表示を汚した（私が入れた退行）。**修正**（`viewbox.rs` `ScrollPlanner::plan`）: 内容が前回確定より減った（`canvas.residents.len() < prev_lines.len()`）とき全域ダーティ Update（blit=0・面全域・全住人）へ縮退——既存の format 変更/不整合縮退と同型・正しさ優先。**これで viewbox が任意アクセスパターン（後方ジャンプ含む）に堅牢化**し byte 等価を維持（実 talk は前方のみゆえ通常不発の防御）。檻: `plan_shrunk_content_degrades_to_full_domain`（純粋層 unit）＋`diag_line_boundary_dropout_vs_oracle`（統合・前方全フレーム＋後方ジャンプで oracle と byte 一致）。**教訓**: live-diff（FixedMetrics＋あいうえお・前方のみ）が見逃した「実 fixture の実文字＋後方アクセス」を実機観測が捕捉——記憶 areka-placement-real-ghost-first の通り実画面はテスト緑に勝る。
+
 ## スコープ外ギャップの申し送り（G6・owning spec）
 
 本 spec のスコープ外——他 spec/上位層が所有。本 spec では実装しない根拠を記録:

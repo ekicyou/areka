@@ -182,6 +182,21 @@ impl ScrollPlanner {
         if self.clear_requested {
             return FramePlan::FullClear;
         }
+        // 後方（un-reveal/un-scroll）縮退: 内容が前回確定より減った＝スクロールアウトした行の
+        // 再露出を面内 blit で保持できない（保持していない）ため、露出帯 ∪ 変化行の差分描画では
+        // 取りこぼす。全域ダーティ（blit=0・面全域・全住人）へ縮退して正しさを優先する（既存の
+        // format 変更/不整合縮退と同型・design Error Handling「最悪でもレガシー全域再描画と等価な
+        // 1 フレーム」）。前方 typewriter では住人は単調増加ゆえ通常不発——注入時刻の後方ジャンプ
+        // 等の異常アクセスに対する防御（確定 content を再露出する任意アクセスパターンで byte 等価を保つ）。
+        if canvas.residents.len() < self.prev_lines.len() {
+            let (dirty, draw_lines) =
+                Self::derive_dirty(canvas, window, mode, contract, (0, 0), surface_size, &[]);
+            return FramePlan::Update {
+                blit: (0, 0),
+                dirty,
+                draw_lines,
+            };
+        }
         let target = self.resolve_position(window.block_offset, contract);
         let blit = self.blit_vector(&target, mode);
         let (dirty, draw_lines) = Self::derive_dirty(
@@ -1683,5 +1698,41 @@ mod tests {
             FramePlan::NoChange,
             "commit 後の同一 window は NoChange（確定が効いた差分）"
         );
+    }
+
+    /// 後方（un-reveal/un-scroll）縮退（D1 修正）: 内容が前回確定より減った（住人数が減った）とき、
+    /// plan は差分（露出帯 ∪ 変化行）でなく**全域ダーティ Update**（blit=0・面全域・全住人）を返す。
+    /// スクロールアウトした確定行の再露出は面内 blit で保持できないため（保持していない）、正しさ優先で
+    /// 全域再描画へ縮退する（注入時刻の後方ジャンプ等の異常アクセスに対する堅牢化・byte 等価維持）。
+    /// 前方 typewriter では住人は単調増加ゆえ通常不発。
+    #[test]
+    fn plan_shrunk_content_degrades_to_full_domain() {
+        let contract = ScaleContract::new(1.0, None);
+        let mode = WritingMode::HorizontalTb;
+        let vr = (Some(0), Some(100), Some(0), Some(400));
+        let surface = (400u32, 100u32);
+        let mut planner = ScrollPlanner::new();
+
+        // 前方: 3 行を確定（prev_lines＝3 住人）。
+        let canvas3 = canvas_for(&broken_lines(3), mode, vr, 10.0);
+        let w3 = window(0, 0.0);
+        let plan3 = planner.plan(&canvas3, &w3, mode, &contract, surface);
+        planner.commit(&canvas3, &w3, mode, &contract, &plan3);
+
+        // 後方: 内容が 1 行へ減った（住人 1 < prev 3）→ 全域ダーティ縮退。
+        let canvas1 = canvas_for(&broken_lines(1), mode, vr, 10.0);
+        let w1 = window(0, 0.0);
+        match planner.plan(&canvas1, &w1, mode, &contract, surface) {
+            FramePlan::Update {
+                blit,
+                dirty,
+                draw_lines,
+            } => {
+                assert_eq!(blit, (0, 0), "後方縮退は blit=0（全域再描画・保持しない）");
+                assert_eq!(dirty, vec![phys(0, 0, 400, 100)], "ダーティは面全域 1 枚");
+                assert_eq!(draw_lines, vec![0], "描画対象は全 GlyphRun 住人（1 行）");
+            }
+            other => panic!("後方縮退は全域 Update を期待したが {other:?}"),
+        }
     }
 }

@@ -540,7 +540,7 @@ mod tests {
     use super::{DrawStats, ViewboxExecutor};
     use crate::actor::TextSlotBinding;
     use crate::canvas::ContentCanvas;
-    use crate::draw::{DrawExecutor, ResolvedFont};
+    use crate::draw::{DWriteMetrics, DrawExecutor, ResolvedFont};
     use crate::layout::{FixedMetrics, LayoutEngine, VisibleWindow};
     use crate::region::{ScaleContract, TextRegion};
     use crate::state::{TextItem, TextLayerConfig, TextLayerState};
@@ -1132,6 +1132,123 @@ mod tests {
             "再試行後は伸長ぶんインクが増える: {} > {ink1}",
             opaque_count(&r3)
         );
+    }
+
+    /// D1 診断（実機で行間の文字欠けを観測）: example の共有 fixture（font 28px・pitch 35px・
+    /// validrect 320×122・**実 DWriteMetrics**・行1「おっはよー！」行2「めっちゃええ朝やん！」）を
+    /// oracle（全域再描画）と viewbox（ダーティスクロール）の両方で typewriter 進行させ read_back を
+    /// byte 比較する。diverge すれば **viewbox 固有の描画欠陥**（行間で確定行 ink をクリアして
+    /// 再描画しない等）、byte 一致すれば **layout 由来**（両方式に同じ＝emo-text-layer 責務）と切り分ける。
+    /// live-diff（FixedMetrics＋あいうえお）が見逃した「実 fixture の実文字」条件を実測する。
+    #[test]
+    fn diag_line_boundary_dropout_vs_oracle() {
+        let mut rig = Rig::new();
+        let image = (320u32, 122u32);
+        let mut oracle_surface = rig.attach(image, 1.0);
+        let mut viewbox_surface = rig.attach(image, 1.0);
+        let mode = WritingMode::HorizontalTb;
+        let model = geo_model(Some(28));
+        let font = ResolvedFont::resolve(&model);
+        let region = TextRegion::resolve(&model, image, mode);
+        let contract = ScaleContract::new(1.0, None);
+        let config = TextLayerConfig::default();
+        let factory = rig.core.dwrite_factory().expect("dwrite_factory").clone();
+        let metrics = DWriteMetrics::new(&factory, &font, mode, &config).expect("DWriteMetrics");
+        let mut oracle = DrawExecutor::new(&rig.core).expect("DrawExecutor");
+        let mut viewbox = ViewboxExecutor::new(&rig.core).expect("ViewboxExecutor");
+        let actor = ActorKey::from("0");
+        let mut state = TextLayerState::default();
+
+        let mk = |cmd| TalkCue {
+            at: 0.0,
+            actor: actor.clone(),
+            command: cmd,
+        };
+        // example の共有 fixture フル シナリオ（行1/2/3＋あふれ誘発の短行 9 本でスクロール発火）。
+        state.apply_cue(&mk(CueCommand::Text("おっはよー！".into())), &config);
+        state.apply_cue(&mk(CueCommand::NewLine { ratio: 1.0 }), &config);
+        state.apply_cue(&mk(CueCommand::Text("めっちゃええ朝やん！".into())), &config);
+        state.apply_cue(&mk(CueCommand::NewLine { ratio: 1.0 }), &config);
+        state.apply_cue(&mk(CueCommand::Text("今日もいくでー！".into())), &config);
+        for _ in 0..9 {
+            state.apply_cue(&mk(CueCommand::NewLine { ratio: 1.0 }), &config);
+            state.apply_cue(&mk(CueCommand::Text("ほな".into())), &config);
+        }
+
+        let total_glyphs = 6 + 10 + 8 + 9 * 2;
+        let char_wait = config.char_wait;
+        for step in 0..=(total_glyphs + 2) {
+            let t = step as f64 * char_wait + 0.001;
+            let visible = state.visible_glyphs(&actor, t);
+            let items: Vec<TextItem> = state
+                .actor_state(&actor)
+                .map(|s| s.items().to_vec())
+                .unwrap_or_default();
+            let lines = LayoutEngine::layout(&items, visible, &region, mode, font.height, &metrics);
+            let window = LayoutEngine::visible_window(&lines, &region, mode);
+            let canvas = ContentCanvas::from_layout(&lines, &region, mode);
+            oracle
+                .render(&canvas, &window, &font, mode, &contract, &mut oracle_surface)
+                .expect("oracle render");
+            viewbox
+                .render(&canvas, &window, &font, mode, &contract, &mut viewbox_surface)
+                .expect("viewbox render");
+            let ob = oracle_surface.read_back().expect("oracle read_back");
+            let vb = viewbox_surface.read_back().expect("viewbox read_back");
+            if ob != vb {
+                let (w, h) = oracle_surface.size();
+                let mut diff_rows: Vec<u32> = Vec::new();
+                for y in 0..h {
+                    let row = ((y * w) * 4) as usize..(((y + 1) * w) * 4) as usize;
+                    if ob[row.clone()] != vb[row] {
+                        diff_rows.push(y);
+                    }
+                }
+                panic!(
+                    "viewbox が oracle と diverge（viewbox 固有欠陥）: step={step} t={t:.3} visible={visible} \
+                     相違行 y={diff_rows:?}（行1セル 0..28・行間 28..35・行2セル 35..63）"
+                );
+            }
+        }
+        // 前方進行では全フレーム byte 一致。次に**後方時刻ジャンプ**（example の C8 検分が
+        // present_at(earlier t_mid) で行うパターン）を検証する: 大 t（スクロール済み）から
+        // 小 t（未スクロール）へ戻したとき、viewbox が un-scroll を正しく扱い oracle と一致するか。
+        // viewbox は前方スクロール前提ゆえ、後方でスクロールアウト行の再露出を取りこぼすと diverge。
+        let big_t = (total_glyphs as f64 + 5.0) * char_wait;
+        for &back_t in &[big_t, 0.05, 0.3, 0.1, 0.5] {
+            let visible = state.visible_glyphs(&actor, back_t);
+            let items: Vec<TextItem> = state
+                .actor_state(&actor)
+                .map(|s| s.items().to_vec())
+                .unwrap_or_default();
+            let lines = LayoutEngine::layout(&items, visible, &region, mode, font.height, &metrics);
+            let window = LayoutEngine::visible_window(&lines, &region, mode);
+            let canvas = ContentCanvas::from_layout(&lines, &region, mode);
+            oracle
+                .render(&canvas, &window, &font, mode, &contract, &mut oracle_surface)
+                .expect("oracle render(後方)");
+            viewbox
+                .render(&canvas, &window, &font, mode, &contract, &mut viewbox_surface)
+                .expect("viewbox render(後方)");
+            let ob = oracle_surface.read_back().expect("oracle read_back(後方)");
+            let vb = viewbox_surface.read_back().expect("viewbox read_back(後方)");
+            if ob != vb {
+                let (w, h) = oracle_surface.size();
+                let mut diff_rows: Vec<u32> = Vec::new();
+                for y in 0..h {
+                    let row = ((y * w) * 4) as usize..(((y + 1) * w) * 4) as usize;
+                    if ob[row.clone()] != vb[row] {
+                        diff_rows.push(y);
+                    }
+                }
+                panic!(
+                    "後方時刻ジャンプで viewbox が oracle と diverge（un-scroll 欠陥・C8 probing が誘発）: \
+                     back_t={back_t:.3} visible={visible} 相違行数={} y={:?}...",
+                    diff_rows.len(),
+                    &diff_rows.iter().take(12).collect::<Vec<_>>()
+                );
+            }
+        }
     }
 
     // ════ live-diff pixel 等価主檻（task 10・R4.5/R6.1/R6.2/R6.3/R6.5/R8.1・design Testing
