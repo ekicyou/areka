@@ -93,7 +93,7 @@
   - _Boundary: main.rs_
   - _Depends: 5.1_
 
-- [ ] 6. Validation: 決定論 spine 統合テスト（R8）
+- [x] 6. Validation: 決定論 spine 統合テスト（R8）
 - [x] 6.1 scripted ShioriBackend と spine テストハーネスの土台を実装
   - areka 側 spine テストローカルの最小 `ScriptedShioriBackend`（DD-11・OnBoot/OnClose 応答台本を返す fake）を実装し、`ShioriWiring::Custom`＋`TickerMode::Disabled`（`DispatcherMsg::Tick` 注入）＋実 sink 結線（`spawn_seriko(out=PresentBridge)`／`ClockedTextSink<EmoTextSink>`）＋headless GPU World（`CoInitializeEx(MULTITHREADED)`＋`GraphicsCore::new()`＝WARP 可＋`WucGraphicsResource`）を組み立てるテストハーネスを構築する
   - 観測可能な完了条件: ハーネスが scripted ghost を boot させ、Tick 注入により attach 準備状態まで panic なく到達することをスモークレベルの assert で確認できる
@@ -110,7 +110,7 @@
   - _Boundary: spine test_
   - _Depends: 6.1_
 
-- [ ] 6.3 spine S2（talk→typewriter）・S5（close 握手）ケースを実装
+- [x] 6.3 spine S2（talk→typewriter）・S5（close 握手）ケースを実装
   - **S2**: `\s[2100]` とテキストを含む scripted 台本→`Show` 系 `PresentCommand` 受信列を assert→apply 後の shell readback 変化を確認。テキスト cue は注入 `talk_time` の階段値で駆動し、`opaque_count` の単調増加・validrect 外に非透明なし・`Clear` 後全域透明を**単一 talk 内（Clear 起点後）に限定して**assert する（talk_clock の既知制約に整合）
   - **S5**: `shutdown(CloseReason::User)`→OnClose 台本消化→全ハンドル（seriko 含む）が有界 join で完了することを確認する
   - 観測可能な完了条件: S2/S5 の 2 テストが green で通り、S2 の単調増加述語が単一 talk 区間で成立し、S5 の join が timeout せず完了することがテスト結果として残る
