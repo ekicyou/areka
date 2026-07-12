@@ -56,6 +56,17 @@ pub fn compile(instructions: &[Instruction]) -> CompiledTalk {
                     },
                 ));
             }
+            // バルーン面切替（不透明転写・→Shell・R3.1）。引数を解釈・変換しない（Surface と同型）。
+            // 数値化・範囲展開・alias 解決はしない（バイト完全一致）。数値化は下流 seriko の責務。
+            Instruction::BalloonSurface(arg) => {
+                cues.push(emit(
+                    scope,
+                    offset,
+                    CueCommand::BalloonSurface {
+                        key: arg.as_str().to_string(),
+                    },
+                ));
+            }
             // 改行（比率・DD-9・→Balloon・R4.2）。
             Instruction::NewLine(ratio) => {
                 cues.push(emit(scope, offset, CueCommand::NewLine { ratio: ratio.ratio() }));
@@ -154,6 +165,59 @@ mod tests {
         let compiled = compile(&[Instruction::Surface(SurfaceArg::new("0,1,foo".into()))]);
         let cues = compiled.sheet.cues();
         assert_eq!(cues.len(), 1);
+        match command_of(&cues[0]) {
+            CueCommand::Emote { key } => assert_eq!(key, "0,1,foo"),
+            other => panic!("expected Emote, got {other:?}"),
+        }
+    }
+
+    /// バルーン面切替命令の引数を解釈・変換せず値のまま `BalloonSurface{key}` へ
+    /// バイト完全一致で転写する（不透明写像・R3.1）。名前形（非 ASCII）・数値形・非表示
+    /// センチネル `-1` のいずれも数値化・alias 解決せず、`Surface`→`Emote` と完全対称に扱う。
+    /// `BalloonSurface` が catch-all（M-boot 外タグの無視ログ）へ落ちて破棄されないことの固定。
+    #[test]
+    fn balloon_surface_arg_is_transcribed_opaquely() {
+        // 名前形（非 ASCII）: 整数化せず文字列のまま転写。
+        let compiled = compile(&[Instruction::BalloonSurface(SurfaceArg::new(
+            "バルーン１".into(),
+        ))]);
+        let cues = compiled.sheet.cues();
+        assert_eq!(cues.len(), 1, "BalloonSurface が cue を生成しない（破棄された）");
+        match command_of(&cues[0]) {
+            CueCommand::BalloonSurface { key } => assert_eq!(key, "バルーン１"),
+            other => panic!("expected BalloonSurface, got {other:?}"),
+        }
+
+        // 数値形: 数値化・展開せず文字列のまま転写。
+        let compiled = compile(&[Instruction::BalloonSurface(SurfaceArg::new("10".into()))]);
+        let cues = compiled.sheet.cues();
+        assert_eq!(cues.len(), 1);
+        match command_of(&cues[0]) {
+            CueCommand::BalloonSurface { key } => assert_eq!(key, "10"),
+            other => panic!("expected BalloonSurface, got {other:?}"),
+        }
+
+        // 非表示センチネル `-1`: パース段階同様に数値化せず不透明転写。
+        let compiled = compile(&[Instruction::BalloonSurface(SurfaceArg::new("-1".into()))]);
+        let cues = compiled.sheet.cues();
+        assert_eq!(cues.len(), 1);
+        match command_of(&cues[0]) {
+            CueCommand::BalloonSurface { key } => assert_eq!(key, "-1"),
+            other => panic!("expected BalloonSurface, got {other:?}"),
+        }
+    }
+
+    /// バルーン面切替命令の追加後も、既存のシェル面切替 `Surface`→`Emote` 写像は不変
+    /// （additive・R3.1 既存写像非変更）。scope/start_time 転写も従来通り。
+    #[test]
+    fn surface_to_emote_mapping_is_unchanged_by_balloon_arm() {
+        let compiled = compile(&[
+            Instruction::SpeakerScope { n: 1 },
+            Instruction::Surface(SurfaceArg::new("0,1,foo".into())),
+        ]);
+        let cues = compiled.sheet.cues();
+        assert_eq!(cues.len(), 1);
+        assert_eq!(cues[0].actor.as_str(), "1");
         match command_of(&cues[0]) {
             CueCommand::Emote { key } => assert_eq!(key, "0,1,foo"),
             other => panic!("expected Emote, got {other:?}"),
