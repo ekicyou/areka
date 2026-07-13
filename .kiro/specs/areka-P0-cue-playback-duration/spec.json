@@ -1,16 +1,16 @@
 {
   "feature_name": "areka-P0-cue-playback-duration",
   "created_at": "2026-07-13T11:13:07Z",
-  "updated_at": "2026-07-13T11:15:30Z",
+  "updated_at": "2026-07-13T12:00:00Z",
   "language": "ja",
-  "phase": "requirements-generated",
+  "phase": "design-generated",
   "approvals": {
     "requirements": {
       "generated": true,
-      "approved": false
+      "approved": true
     },
     "design": {
-      "generated": false,
+      "generated": true,
       "approved": false
     },
     "tasks": {

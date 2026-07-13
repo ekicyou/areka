@@ -232,3 +232,50 @@ Topic 1 裁定の系として開発者が dola の表現範囲を明示補足:
 - 一時停止（`\x` クリック待ち）・選択肢（`\q`）は、コンパイル時に再開時刻が未知＝「絶対開始時刻＋累積時間」で表現不能。よって **Barrier シーム＝現台本の静的タイムラインの終端（外部解決待ちの停止点）**。**再開は オーケストレーター（kanade/sakura）が新たな絶対開始時刻を調停し、続きの dola 台本を再配信**する。動的制御フローは dola の**外側**に置く。これが「プロセスを跨いで複数演者がいても正確に同期可能」という dola 設計思想の核。
 - **§3 軸1 案1-C（Barrier 再利用でテキスト占有を表現）棄却の補強**: Barrier は**外部解決待ちの seam 専用**。テキスト再生 D は**既知の累積 duration** ゆえ Barrier で表すのは意味論ミスマッチ。D は cue の第一級データとして絶対 start への累積で台本内側に載る。
 - **本 spec への含意**: 再生時間 D は単一台本内の単調累積（絶対 start＋累積 D）で表現され、この外壁の**内側に完全に収まる**。選択肢・一時停止（M-dialogue）はスコープ外ゆえ、本 spec は dola へ pause/resume 状態を追加しない。
+
+---
+
+## 8. 設計フェーズ discovery / synthesis / 決定（2026-07-13）
+
+> `/kiro-spec-design`（Light discovery・Extension）で確定要件と既存コードを突き合わせ、§6 の設計判断項目（Category B）を裁定し design.md へ落とした。実コードのシグネチャを再確認済み。
+
+### 8.1 Discovery（Light・Extension・実コード再確認）
+
+- **保持＝dola** `crates/dola/src/cue/command.rs`: `Cue { actor, start_time, payload }`（`Clone/Debug/Serialize/Deserialize`・**PartialEq 非導出**）。`CueCommand` 8 variant・externally tagged（`Text` ワイヤ形 `{"Text":"hello"}`）・`BalloonSurface` additive 実績。`sheet.rs::CueSheet::new` は `start_time` 昇順**安定ソート**。`compile_sheet`（min 正規化）は sakura 不使用。
+- **計算＝sakura** `compile.rs`: `Wait(d)→offset += d.as_secs_f64()`／`Text(t)→emit(scope, offset, Text)`（**offset 進めず**）。`emit` が `Cue` 構築。冒頭 Clear なし。`contract.rs::TalkCue { at, actor, command }`（serde 非依存・PartialEq）。`drive.rs::to_schedule` が `Cue→TalkCue` 複写・`on_tick` が `cue_target_of` で 2 sink 振り分け（NaN/単調/冪等ガード実在）。診断ログ・punctuation_wait は grep ゼロ（再確認）。
+- **服従＝emo-text** `state.rs`: `TextLayerConfig.char_wait=0.05`（撤去対象）・`RevealSchedule::extend_chunk(glyph_count, chunk_start, char_wait)` が `r_i = max(r_{i-1}+char_wait, chunk_start)`。`apply_cue(cue, config)` が Text 追記＋reveal 確定・Clear 全消去。`actor.rs::TextLayerRuntime` が `config`（char_wait＋line_pitch）を保持し `apply_cue`／`DWriteMetrics::new` へ渡す。`sink.rs`/tests に `TalkCue { ... }` リテラル多数（duration 追加でコンパイル強制更新）。
+- **ukadoc グラウンディング（本フェーズ追加確認）**: `\_w[時間]` = 精密ウェイト（[時間]ms・単純な追加待ち）。「文字表示にかかった時間も加味」の記述は `\__w`（**基準からの累積ウェイト・二重アンダースコア**）の挙動であり `\_w` ではない。`\__w` は areka parser 未対応（`\C` 同様・M-dialogue 領分）＝本 spec スコープ外。テキスト再生が時間を占有するのは正典挙動（`\__w` が文字表示時間を差し引く事実がその裏付け）で、本 spec の duration モデル化の前提は ukadoc 整合。
+
+### 8.2 Synthesis（3 レンズ）
+
+- **一般化**: duration は「テキスト固有」でなく「任意 cue が時間を占有しうる」汎用データ。`Cue` エンベロープに載せることで mayuna の瞬時 bind cue（D=0）が additive に同形へ載る（隣接 spec の interface を先取り一般化・実装は現要件どまり）。
+- **Build vs Adopt**: 新機構を作らず既存 `Wait` 累積（`offset += d`）を**採用・対称拡張**（`offset += D`）。`TimedSchedule` の点配送・reveal の `max` 追従式・serde additive パターン（`BalloonSurface`）を再利用。新クレート・新依存ゼロ。
+- **簡素化**: 案 2-B（dola 能動占有）・案 1-B（variant 分裂）・案 1-C（Barrier 再利用）を棄却し、単一の `duration: f64` フィールド＋純関数 1 本へ収斂。emo-text の reveal 式構造は不変（interval の供給源のみ config→cue へ差し替え）＝抽象追加なし。
+
+### 8.3 §6 設計判断項目の裁定（Category B）
+
+| 項目 | 裁定 | 根拠 |
+|---|---|---|
+| 2 保持場所 | **案 1-A**: `Cue`/`TalkCue` エンベロープに `duration` | 7.3（Text ワイヤ形不変）・Topic 1 裁定と整合・汎用データ化 |
+| 3 純関数粒度 | **(a)**: `text_playback_duration(text)=char_count×nominal`（暗黙のみ） | Instruction は Text/Wait 分離済み・R3.3/R3.4 が明示ウェイト累積を compile 層に位置づけ（純関数が畳むと二重計上）。R2.4 は「暗黙半分＝純関数／明示半分＝compile 合成」で reconcile |
+| 4 定数所在 | `CHAR_NOMINAL_MS: u64 = 50`（sakura・唯一） | parser `WAIT_UNIT_MS`（`\w` 単位・別概念）・emo-text `char_wait`（撤去）と三者分別 |
+| 5 char_wait | **完全撤去** | 5.2「独自 per-char 定数を保持しない」に忠実。D=0 縮退が即時可視を自然に与えフォールバック定数不要 |
+| 6 reveal 式 | **3-ii**（`r_i = max(r_{i-1}+D/N, at)`・tail 追従温存） | 既存式構造を保存し跨チャンク無損失挙動・回帰リスク最小。研究 §3 の暫定 3-i から、`D=N×50ms` 時に旧挙動ビット等価となる 3-ii へ精緻化（出発点の設計精緻化） |
+| 7 Clear 粒度 | **書込スコープ集合を先頭前置**（走査後 post-pass・`BTreeSet<u32>`） | R4.1「冒頭前置」＋R4.3「書込各スコープ」・ukadoc written-scopes 準拠。安定ソート＋同一 at FIFO で Clear→Text 順を保証 |
+| 8 wintf Typewriter | 対象外（現状維持） | 8.1・実行経路外 |
+| 9 serde 表現 | `duration: f64` ＋ `#[serde(default)]`（0.0=瞬時） | 1.5「未付与＝0 相当」・7.4 後方互換・0 と未指定を区別する意味論的必要なし・算術単純 |
+
+### 8.4 Design Decision: 整列は sakura 焼込み・dola は不透明保持（案 2-A / 案 1-A）
+
+- **Context**: 後続 cue をテキスト再生完了後に発火させるための整列主体（R1/R3・Topic 1 開発者決裁）。
+- **Selected**: sakura compile が `offset += D`（`text_playback_duration` の戻り値）で絶対 `start_time` へ焼き込み、当該 Text cue へ同一 D を第一級データとして付与。dola は焼込み済み絶対時刻と不透明 D を保持・点配送。emo-text は配送 D から reveal（interval=D/N）。
+- **Rationale**: dola の同期配送責務（同一台本を複数表現者へ同一絶対時刻で・プロセス跨ぎ）。時刻を配送時導出すると desync ゆえ絶対時刻は同期の必須要件。既存 `Wait` 累積と対称で `TimedSchedule` 中核不改変。単一真実源は計算層（純関数 1 本）で start_time と D は 2 投影を不変台本へ凍結（実行時ドリフト不能）。
+- **Trade-offs**: `Cue`/`TalkCue` 双方への 1 フィールド追加と全 `TalkCue` リテラル更新（コンパイラ強制・低リスク）。得るのは serde 後方互換・低回帰・汎用性。
+- **Follow-up（実装検証）**: ①`Cue` serde default 後方互換の roundtrip 檻。②Clear 前置の「先頭前置＋安定ソート＋同一 at FIFO」順序保証の統合檻。③`D=N×50ms` 時に reveal がビット等価となることの確認。④`\C` 追記モード対応時は Clear 前置を**条件化**する必要（現状 `\C` 未対応ゆえ無条件前置で妥当・design Revalidation Triggers へ記録）。
+
+### 8.5 Risks & Mitigations（設計フェーズ）
+
+- **順序依存（Clear 前置）**: 「先頭前置＋安定ソート＋同一 at FIFO」に load-bearing 依存 → `same_at_cues_preserve_script_order_fifo` 相当の統合檻で固定。
+- **テスト波及**: `TalkCue`/`Cue` へのフィールド追加で全リテラル更新 → コンパイラ強制検出（obsolete でなく「シグネチャ変更で要更新」＝更新方針）。reveal テストは D 駆動へ差し替え（検証意図は保存）。
+- **R2.4 の字義**: 純関数が明示ウェイトを畳まない選択は R3.3/R3.4 と整合し二重計上を回避する意図的解釈。design.md に reconcile を明記済み（paper-over ではない）。
+- **実機ゲート**: #3/#4/#6/`\s` は決定論外の人間サインオフ（6.5）・絶対パス起動必須（pasta.dll LoadLibrary 失敗回避）。
