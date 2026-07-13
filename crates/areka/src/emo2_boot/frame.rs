@@ -1346,4 +1346,79 @@ mod tests {
         let mut empty = World::new();
         resnap_shell_targets(&presenter, &mut empty);
     }
+
+    // ── task 4.1: 検知→反映の一連のべき等（回帰檻・Req1.5/3.1） ──────────────────────
+    //
+    // 既存の移動専用経路（enqueue_window_set_pos／move_window_to／on_char_drag）は本 task で
+    // 一切改変せず（follow.rs の move 系統合テスト群が無改変で緑＝単一ライター一般化の無影響）、
+    // ここでは「寸法検知（差分判定）→窓反映（resize_window_to のべき等 skip）」の一連の流れが
+    // 多重には効かないことを端から端まで固定する（Req3.1 の冗長回避・design「System Flows」
+    // 同寸同アンカー非発火／「resnap_from_sizes」Postconditions 同寸 no-op）。
+
+    /// 1.5/3.1（一連のべき等）: 寸法検知→窓反映の一連の流れが多重には効かないことを端から端まで
+    /// 固定する。まず現寸と**異なる** shown_size で 1 回駆動して resize 発火（size 新寸・position
+    /// Bottom 再射影）を確立し、続けて**同一**の shown_size を 2・3 回繰り返し駆動しても、1 回目
+    /// 適用後の position・size が**一切変化しない**（冗長な再配置・再書込が起きない）ことを反証する。
+    /// 空虚一致でないよう「1 回目で実際に size/position が変化した」ことも先に assert する。
+    /// 96 非倍数の work area 辺・寸法（bottom=1444／h=700）で dpi/96 再スケール混入の檻とする。
+    #[test]
+    fn resnap_from_sizes_is_idempotent_across_repeats_after_a_size_change() {
+        let (mut world, gw) = resnap_world();
+        let char0 = gw.char_window(0).unwrap();
+
+        // 前提: 初期寸・初期位置（bottom 不変量を満たす・96 非倍数 work area 由来）。
+        let size_initial = size_of(&world, char0);
+        let pos_initial = pos_of(&world, char0);
+        assert_eq!(size_initial, Some(SizeI::new(434, 687)), "前提: 初期寸");
+        assert_eq!(pos_initial, Some(Point { x: 1483, y: 757 }), "前提: 初期位置");
+
+        // (1) 現寸と異なる h=700 を 1 回駆動 → resize 発火（前提の確立）。
+        resnap_from_sizes(&mut world, [(0usize, SizePx { w: 434, h: 700 })].into_iter());
+        let size_after_first = size_of(&world, char0);
+        let pos_after_first = pos_of(&world, char0);
+
+        // 空虚一致でないことの担保: 1 回目で size・position が実際に変化した（新寸＋Bottom 再射影）。
+        assert_eq!(size_after_first, Some(SizeI::new(434, 700)), "1 回目で新寸へ更新");
+        assert_eq!(
+            pos_after_first,
+            Some(Point { x: 1483, y: 744 }),
+            "1 回目で Bottom 再射影（y=1444−700=744・x 保持）"
+        );
+        assert_ne!(size_after_first, size_initial, "1 回目は実際に size が変化した（空虚でない）");
+        assert_ne!(pos_after_first, pos_initial, "1 回目は実際に position が変化した（空虚でない）");
+
+        // (2) 同一 shown_size を 2 回・3 回繰り返し駆動 → 窓の position・size が 1 回目適用後から
+        //     一切変化しない（検知→反映の一連が多重には効かない＝冗長な再配置・再書込なし・Req3.1）。
+        for repeat in 2..=3 {
+            resnap_from_sizes(&mut world, [(0usize, SizePx { w: 434, h: 700 })].into_iter());
+            assert_eq!(
+                size_of(&world, char0),
+                size_after_first,
+                "同寸 {repeat} 回目: size は 1 回目適用後から不変（多重には効かない）"
+            );
+            assert_eq!(
+                pos_of(&world, char0),
+                pos_after_first,
+                "同寸 {repeat} 回目: position は 1 回目適用後から不変（非発火）"
+            );
+        }
+    }
+
+    /// 3.1（純べき等）: 最初から現寸と**同一**の shown_size を反復駆動しても、一度も窓状態が
+    /// 変化しない（検知段の同寸 skip が毎回効く・冗長駆動ゼロ）。size・position の**両方**が不変
+    /// であることを毎回見る。
+    #[test]
+    fn resnap_from_sizes_same_size_repeats_never_change_window_state() {
+        let (mut world, gw) = resnap_world();
+        let char0 = gw.char_window(0).unwrap();
+        let size_before = size_of(&world, char0);
+        let pos_before = pos_of(&world, char0);
+
+        // 現寸（434×687）と同一を 3 回反復 → 毎回 no-op（窓状態不変・冗長駆動なし・Req3.1）。
+        for repeat in 1..=3 {
+            resnap_from_sizes(&mut world, [(0usize, SizePx { w: 434, h: 687 })].into_iter());
+            assert_eq!(size_of(&world, char0), size_before, "同寸反復 {repeat}: size 不変");
+            assert_eq!(pos_of(&world, char0), pos_before, "同寸反復 {repeat}: position 不変");
+        }
+    }
 }
