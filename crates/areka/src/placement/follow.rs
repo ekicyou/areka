@@ -30,6 +30,7 @@
 //! 後続の領分（7.3）。
 
 use bevy_ecs::prelude::*;
+use bevy_ecs::system::SystemState;
 use tracing::{debug, warn};
 use windows::Win32::UI::WindowsAndMessaging::{SWP_NOACTIVATE, SWP_NOSIZE, SWP_NOZORDER};
 use wintf::ecs::drag::{DragEndEvent, DragEvent, DraggingState};
@@ -596,6 +597,65 @@ pub fn resize_window_to(world: &mut World, char_window: Entity, new_size: SizePx
     );
 
     true
+}
+
+/// アンカー変化トリガ（Req1.4・consumer 契約のみ・producer=seriko は非所有）。
+///
+/// `Changed<Anchored>` の char 窓それぞれについて、**現在の表示寸法**
+/// （`WindowPos.size`＝新寸ではなく今まさに表示している寸法）を読み、
+/// [`resize_window_to`] を呼んで**新しいアンカー**（変化後の [`Anchored`]）に対応する
+/// 射影 T を再適用する——新しいアンカー辺を work area の対応辺へ合わせる。
+/// アンカー値の解決（`seriko.alignmenttodesktop` 優先度チェーン）と
+/// `\![set,alignmenttodesktop]` の cue routing は上流（parsers／seriko）の領分＝
+/// 本 spec は非所有。本 system は `Anchored` の変化に反応する **consumer** に徹する
+/// （design「System Flows > アンカー変化トリガ」・Req4.2）。schedule への登録（結線）は
+/// main.rs／runtime 側の領分ゆえ、本 task は system の**定義のみ**を持つ
+/// （`create_windows` が window_system.rs で定義のみ・登録は runtime、という repo 慣行）。
+///
+/// # 変更検知の永続性（毎フレーム全マッチしない・Req1.4 の要）
+///
+/// [`SystemState`] を [`Local`] に保持して `last_run` tick を run を跨いで引き継ぐ。
+/// 毎 run で新規 `QueryState` を作ると `last_run` が過去 0 のまま `Changed` が全窓へ
+/// 誤マッチするため不可。[`SystemState::get`] は fetch 後に `last_run` を進めるので、
+/// 次 run 以降は「前回 run 以後に `Anchored` が変わった窓」だけがマッチする。
+/// 初回 run は `SystemState::new` が `last_run` を過去へ置く仕様で全 char 窓が
+/// マッチし得るが、[`resize_window_to`] が同寸・同位置でべき等 skip して吸収する
+/// （design Implementation Notes）。
+///
+/// # 縮退（panic しない・log-first）
+///
+/// `WindowPos.size` 不在／未生成（窓生成前）の窓は skip する（現寸を導出できない）。
+/// アンカー欠落・非正寸・`WindowHandle` 未付与など残りの縮退は [`resize_window_to`]
+/// 側が warn＋no-op で吸収する（Req3.3/3.4・二重に弾かない）。
+///
+/// # Concurrency
+///
+/// UI スレッド・World 排他（`&mut World`）。他 actor は触れない（design State Management）。
+#[allow(dead_code)] // schedule 登録（結線）は main.rs／runtime 側の領分（本 task は定義のみ）
+pub fn anchor_changed_system(
+    world: &mut World,
+    mut state: Local<Option<SystemState<Query<'static, 'static, Entity, Changed<Anchored>>>>>,
+) {
+    // Changed<Anchored> 検知の永続シーム: SystemState を跨 run で使い回し last_run を保つ。
+    let state = state.get_or_insert_with(|| SystemState::new(world));
+    // 変更窓を collect して borrow を即解放してから &mut World ループへ（先例
+    // create_windows の collect→release→&mut World ループを Changed 対応にしたもの）。
+    let changed: Vec<Entity> = state.get(world).iter().collect();
+    for entity in changed {
+        // 現在の表示寸法（新寸ではない）を読む。size 不在／未生成は skip（panic しない）。
+        let Some(size) = world.get::<WindowPos>(entity).and_then(|wp| wp.size) else {
+            continue;
+        };
+        // 現寸で resize_window_to → 現在アンカー（変化後）で project_anchor を再適用。
+        resize_window_to(
+            world,
+            entity,
+            SizePx {
+                w: size.width,
+                h: size.height,
+            },
+        );
+    }
 }
 
 /// 1 窓ぶんの位置（と任意で寸法）を enqueue する共通経路（物理 px 素通し・
@@ -2779,5 +2839,136 @@ mod tests {
         assert!(!resize_window_to(&mut world, no_handle, SizePx { w: 517, h: 823 }));
         assert_eq!(position_of(&world, no_handle), Point { x: 731, y: 500 });
         assert_eq!(size_of(&world, no_handle), SizeI::new(434, 687));
+    }
+
+    // -------------------------------------------------------------------------
+    // anchor_changed_system（アンカー変化トリガ・task 2.6・Req1.4・
+    // design「Anchored（Component）/ anchor_changed_system」「System Flows >
+    // アンカー変化トリガ」「File Structure Plan > follow.rs」）
+    //
+    // producer（seriko の `\![set,alignmenttodesktop]` routing）は本 spec 非所有＝
+    // 本群は `Changed<Anchored>` に反応する **consumer** のみを固定し、テストは
+    // `Anchored` を直接書き換えて駆動する。change tick を正しく管理するため system は
+    // `Schedule` に登録して run し（同一 Schedule インスタンスを使い回すことで
+    // 永続 `SystemState` の `last_run` を run 跨ぎで効かせる）、初回 run の全マッチは
+    // resize_window_to のべき等 skip で吸収する。全辺 96 非倍数の odd_edge_snapshot
+    // （rect(53,37,1877,1043)）で dpi/96 再スケール混入の檻とする。
+    // -------------------------------------------------------------------------
+
+    use super::anchor_changed_system;
+
+    /// #1 アンカー変化で再射影（Req1.4 の核）: `Anchored(Bottom)` の釘付け済み char 窓を
+    /// spawn し、初回 run はべき等 skip（初回 Changed 付与を resize が同寸・同位置で吸収
+    /// ＝位置不変）。次に `Anchored` を Top へ**直接書換**→再 run で「現在の表示寸法の
+    /// まま」新アンカー辺（y=wa.top）へ再配置され、X 保持・size 不変（新寸を与えない
+    /// ので size は変わらない）。
+    #[test]
+    fn anchor_changed_system_reprojects_to_new_anchor_edge_at_current_size() {
+        let mut world = World::new();
+        world.insert_resource(odd_edge_snapshot()); // rect(53, 37, 1877, 1043)
+        // Bottom 釘付け済み: y = wa.bottom − h = 1043 − 687 = 356・x=731（96 非倍数）
+        let e = world
+            .spawn((
+                fake_handle(0x1000),
+                window_pos_sized(731, 356, 434, 687),
+                Anchored(Anchor::Bottom),
+            ))
+            .id();
+
+        let mut schedule = Schedule::default();
+        schedule.add_systems(anchor_changed_system);
+
+        // 初回 run: 初回 Changed 付与で発火し得るが、Bottom は現寸で y=356 のまま
+        // ＝べき等 skip で吸収（位置・寸法不変）。
+        schedule.run(&mut world);
+        assert_eq!(
+            position_of(&world, e),
+            Point { x: 731, y: 356 },
+            "初回 run はべき等 skip（位置不変）"
+        );
+        assert_eq!(size_of(&world, e), SizeI::new(434, 687), "初回 run: size 不変");
+
+        // Anchored を Top へ直接書換（producer=seriko の代替＝consumer 駆動の檻）。
+        world.get_mut::<Anchored>(e).unwrap().0 = Anchor::Top;
+
+        // 再 run: 現在の表示寸法(434×687)のまま新アンカー辺 y=wa.top=37 へ再射影。
+        schedule.run(&mut world);
+        assert_eq!(
+            position_of(&world, e),
+            Point { x: 731, y: 37 },
+            "新アンカー辺 y=wa.top へ再配置・X=731 保持（Bottom のままなら y=356 で落ちる）"
+        );
+        assert_eq!(
+            size_of(&world, e),
+            SizeI::new(434, 687),
+            "現在の表示寸法のまま（新寸を与えないので size は不変）"
+        );
+    }
+
+    /// #2 Anchored 未変化では発火しない（変更検知の正しさの檻・最重要）: 初回 run で
+    /// 初回 Changed を消費した後、`Anchored` を触らずに `WindowPos.position` を故意に
+    /// アンカー辺から外して再 run しても**再スナップされない**（system は `Anchored`
+    /// 変化にのみ反応し `WindowPos` 変化には反応しない）。毎 run 全マッチ実装
+    /// （fresh QueryState の last_run=0）ならここで y=356 へ戻り落ちる。
+    #[test]
+    fn anchor_changed_system_does_not_fire_when_anchor_unchanged() {
+        let mut world = World::new();
+        world.insert_resource(odd_edge_snapshot()); // 下端 1043
+        let e = world
+            .spawn((
+                fake_handle(0x1000),
+                window_pos_sized(731, 356, 434, 687), // Bottom 釘付け済み（y=1043−687）
+                Anchored(Anchor::Bottom),
+            ))
+            .id();
+
+        let mut schedule = Schedule::default();
+        schedule.add_systems(anchor_changed_system);
+
+        // 初回 run で初回 Changed<Anchored> を消費（べき等 skip・位置不変）。
+        schedule.run(&mut world);
+        assert_eq!(position_of(&world, e), Point { x: 731, y: 356 });
+
+        // Anchored は触らず、WindowPos.position をアンカー辺から外れた位置へ手動移動。
+        world.get_mut::<WindowPos>(e).unwrap().position = Some(Point { x: 731, y: 900 });
+
+        // 再 run: Anchored 未変化ゆえ Changed にマッチせず再スナップしない。
+        schedule.run(&mut world);
+        assert_eq!(
+            position_of(&world, e),
+            Point { x: 731, y: 900 },
+            "Anchored 未変化では再スナップしない（毎 run 全マッチ実装ならここで y=356 へ戻り落ちる）"
+        );
+    }
+
+    /// #3 別遷移（Bottom→Left）: `Anchored` を Left へ直接書換すると、現在の表示寸法の
+    /// まま左端固定（x=wa.left=53）へ再射影され Y 保持（Top 以外の辺でも配線が
+    /// `Anchored.0` を正しく転送していることの補強）。
+    #[test]
+    fn anchor_changed_system_reprojects_bottom_to_left() {
+        let mut world = World::new();
+        world.insert_resource(odd_edge_snapshot()); // 左端 53・下端 1043
+        let e = world
+            .spawn((
+                fake_handle(0x1000),
+                window_pos_sized(731, 356, 434, 687), // Bottom 釘付け済み
+                Anchored(Anchor::Bottom),
+            ))
+            .id();
+
+        let mut schedule = Schedule::default();
+        schedule.add_systems(anchor_changed_system);
+        schedule.run(&mut world); // 初回 Changed 消費（べき等・位置不変）
+        assert_eq!(position_of(&world, e), Point { x: 731, y: 356 });
+
+        world.get_mut::<Anchored>(e).unwrap().0 = Anchor::Left;
+        schedule.run(&mut world);
+        // Left: x=wa.left=53・Y=356 保持・size 不変
+        assert_eq!(
+            position_of(&world, e),
+            Point { x: 53, y: 356 },
+            "x=wa.left=53（左端固定）・Y=356 保持"
+        );
+        assert_eq!(size_of(&world, e), SizeI::new(434, 687));
     }
 }
