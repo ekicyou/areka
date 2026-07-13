@@ -408,7 +408,7 @@ fn resnap_from_sizes(world: &mut World, sizes: impl Iterator<Item = (usize /*sco
 
 - **Anchor（値オブジェクト・不変）**: `Top`/`Bottom`/`Left`/`Right`/`Free`。真実は「シェル座標系のどの辺を work area へ固定するか」。`from_alignment` で `Alignment` から導出。
 - **Anchored（Component・可変）**: char 窓が保持する現アンカー。spawn 由来・runtime は seriko が書換。`Changed` が T 再適用トリガ。
-- **WindowPos.size（既存・可変）**: 「直前に適用された窓寸」の真実＝検知 diff のベースライン（別マップを新設しない・DD-3）。
+- **WindowPos.size（既存・可変）**: 「直前に適用された窓寸」の真実＝検知 diff のベースライン（別マップを新設しない・DD-3）。**前提: char 窓は borderless GPU 合成窓（`WS_EX_NOREDIRECTIONBITMAP`・フレーム無）ゆえ client 領域 ≡ window 矩形**が成立し、`shown_size`（surface 寸＝client 寸）と `WindowPos.size`（window 寸）の diff が等価に働く。非クライアント枠を持つ装飾窓が現れる M-dual 以降はこの等価前提の再確認を要する（現スコープでは正しい）。
 - **不変条件**: 正寸・snapshot 有効時、`project_anchor` 適用後の窓のアンカー辺 ≡ work area 対応辺（T の恒常維持＝本 spec の幹）。
 
 ### 型の跨ぎ（Data Contracts）
