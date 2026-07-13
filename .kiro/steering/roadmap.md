@@ -139,6 +139,7 @@ emo2 が起動して喋る。下記 5 トラックを結線して達成（⓪ �
 - **③ kanade（conductor）**: `areka-P0-idle-talk`（OnSecondChange 自発会話）／ `areka-P0-input-events`（OnMouseMove/OnMouseDoubleClick/OnChoiceSelectEx 配信）
 - **⑥ emo（render-engine）**: `areka-P0-collision-geometry`（collision→region/actor 写像）／ `areka-P0-choice-render`（選択肢表示）／ `areka-P0-dual-window`（kero 2nd 窓）／ `completed/areka-P0-emo-text-viewbox` ✅**完了（2026-07-12）**（**スクロールの viewbox 化**＝ダーティ矩形視窓＋保持ピクセル面内 blit＋露出帯∪変化行の D2D 部分再描画・再描画レス・k=1.0 byte 等価 golden〔oracle=全域再描画 vs viewbox〕が受け入れ基準・emo-text-layer の分離シーム `VisibleWindow` 消費。実機観測で **descent はみ出しの下端欠け D2 を発見→`GetOverhangMetrics` 実インク境界実測で根本修正**）
 - **⓪ ghost（ゴーストエンジン）**: `areka-P0-position-persist`（`ghost.dat` 位置の保存/復元・ghost レベル永続化）／ `areka-P0-surface-resize-resnap`（**実行時サーフェスサイズ変化→窓リサイズ＋下端再吸着**・emo-present→placement のサイズ変化通知シーム・2026-07-13 実機発見#1・brief 済）
+- **横断（dola＋④sakura＋⑥emo）**: `areka-P0-cue-playback-duration`（**テキスト再生 duration の権威台本化**＝dola が duration 保持／sakura が純関数1つで執筆＋台本冒頭 `Clear` 前置／emo-text が服従＝実機 #3/#4/#6 を一括解決。エンジン別バケツに収まらぬ横断ユニット・2026-07-13 追記㉑・brief 済）
 
 ### M-boot 実機サインオフ発見（2026-07-13・R9.3 実機観測の実機欠陥5件と仕分け）
 
