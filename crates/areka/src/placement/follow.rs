@@ -10,9 +10,11 @@
 //! - [`move_window_to`]: R7 公開 API（UI スレッド関数・物理 px スクリーン座標直渡し）
 //! - [`DragPositionPolicy`]／[`BottomSnapPolicy`]: bottom 吸着ドラッグ（4.7・
 //!   DD15 v2・task 8.2R）の核——「生ドラッグ座標→実窓位置」の純粋写像トレイトと
-//!   その bottom 吸着実装。`BottomSnap` キャラ窓は `DragConfig{move_window:false}`
-//!   で wndproc 移動を止め、[`on_char_drag`]／[`on_char_drag_end`] が適用済み座標を
-//!   **単一ライター**として書く（v1 の事後再釘付けは wndproc と競合し振動→撤去）
+//!   その bottom 吸着実装（[`project_anchor`] の `Bottom` 腕が委譲）。非 Free
+//!   アンカーのキャラ窓は `DragConfig{move_window:false}` で wndproc 移動を止め、
+//!   [`on_char_drag`]／[`on_char_drag_end`] が [`Anchored`] を読んで [`project_anchor`]
+//!   適用済み座標を**単一ライター**として書く（v1 の事後再釘付けは wndproc と
+//!   競合し振動→撤去）
 //! - [`MonitorSnapshot`]／[`work_area_for_window`]: 全モニタ work area 集合の
 //!   Resource と窓中心→モニタ解決の純粋ヘルパ（task 8.1・ポリシーの入力）
 //!
@@ -40,7 +42,6 @@ use wintf::ecs::window::monitor::Monitor;
 use wintf::ecs::{Point, SetWindowPosCommand, SizeI, WindowHandle, WindowPos};
 
 use super::resolver::{Anchor, PointPx, RectPx, SizePx};
-use super::spawn::BottomSnap;
 
 // =============================================================================
 // DragPositionPolicy（task 8.2R・DD15 v2・4.7）
@@ -206,7 +207,7 @@ pub fn project_anchor(
 /// ドラッグ（`on_char_drag`）とリサイズ（`resize_window_to`）の**両者がこの値を読んで**
 /// 同一射影 T（`project_anchor`）を呼ぶ——`Free` か否かで wndproc 委譲／単一ライターを
 /// 分岐する。
-#[allow(dead_code)] // consumer（spawn 付与 task 3.1・on_char_drag 改修 task 2.7・anchor_changed_system task 2.6）は後続 task の領分
+#[allow(dead_code)] // spawn 付与（task 3.1）は後続 task の領分——構築が付くまで dead_code 警告を抑える
 #[derive(Component, Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Anchored(pub Anchor);
 
@@ -234,21 +235,24 @@ pub struct BalloonFollow {
 /// （ハードニング・DD15 v2 (6)。wintf のドラッグ対象は `DragConfig` を持つ
 /// 窓 entity 自身なので、実 flow では常に一致する）。
 ///
-/// # BottomSnap キャラ窓（4.7・DD15 v2・task 8.2R——単一ライター）
+/// # 非 Free アンカーのキャラ窓（4.7/1.6・DD15 v2・単一ライター）
 ///
-/// `Bottom`/`Seam` スコープのキャラ窓は `DragConfig { move_window: false }` で
-/// spawn され、wndproc は窓を動かさない。本ハンドラが唯一のライターとして、
-/// [`DraggingState`]＋DragEvent のカーソル座標から生ドラッグ座標を復元し
-/// （[`policy_mapped_position`]）、[`BottomSnapPolicy`] 適用済みの座標を
+/// 分岐は [`Anchored`]（drag／resize が読む単一真実源）で判定する。非 `Free`
+/// （`Bottom` 等）のキャラ窓は `DragConfig { move_window: false }` で spawn され、
+/// wndproc は窓を動かさない。本ハンドラが唯一のライターとして、[`DraggingState`]＋
+/// DragEvent のカーソル座標から生ドラッグ座標を復元し（[`policy_mapped_position`]）、
+/// [`project_anchor`] 適用済み（`Bottom` は [`BottomSnapPolicy`] へ委譲）の座標を
 /// **一度だけ**書く——反映段階で既に正しい座標が確定しているため、v1 の
-/// 「wndproc 移動→事後再釘付け」の毎サイクル振動は原理的に起きない。
-/// モニタ跨ぎ再吸着はポリシーの live 算出が担う。
+/// 「wndproc 移動→事後再釘付け」の毎サイクル振動は原理的に起きない。ドラッグと
+/// リサイズが同一 [`project_anchor`] を通ることで座標系変換を二重化しない（Req1.6）。
+/// モニタ跨ぎ再吸着は射影の live 算出が担う。
 ///
-/// # Free キャラ窓（marker なし・挙動不変）
+/// # Free キャラ窓／`Anchored` 不在（挙動不変・wndproc 委譲）
 ///
-/// `DragConfig { move_window: true }` のまま wndproc レベルで移動済み。
-/// 本ハンドラは wndproc が更新した `WindowPos.position`（物理 px）を読むだけで
-/// 窓を書かない（wndproc の領分）。
+/// `Anchored(Free)`（および安全側フォールバックとして `Anchored` 不在）のキャラ窓は
+/// `DragConfig { move_window: true }` のまま wndproc レベルで移動済み。本ハンドラは
+/// wndproc が更新した `WindowPos.position`（物理 px）を読むだけで窓を書かない
+/// （wndproc の領分）。
 ///
 /// どちらの経路でも、バルーン追従は**確定後のキャラ窓座標**へ
 /// `BalloonFollow.offset` を加算して enqueue する（再スケールなし・U4）。
@@ -266,21 +270,29 @@ pub(crate) fn on_char_drag(
                 return false;
             }
 
-            let pos = if world.get::<BottomSnap>(entity).is_some() {
-                // 単一ライター経路: 生ドラッグ座標→ポリシー適用済み座標を書く
-                let Some(mapped) = policy_mapped_position(world, entity, ev.position) else {
-                    return false;
-                };
-                if !enqueue_window_set_pos(world, entity, mapped.x, mapped.y, None) {
-                    return false;
+            // 分岐は Anchored（drag／resize が読む単一真実源）で判定する（Req1.6）。
+            // 非 Free → project_anchor 単一ライター／Free・Anchored 不在 → wndproc 委譲
+            // （不在も Free と同じく wndproc へ倒す＝旧「marker 無し＝Free」意味論の保存・安全側）。
+            let anchor = world.get::<Anchored>(entity).map(|a| a.0);
+            let pos = match anchor {
+                Some(anchor) if anchor != Anchor::Free => {
+                    // 単一ライター経路: 生ドラッグ座標→アンカー射影 T 適用済み座標を書く
+                    let Some(mapped) = policy_mapped_position(world, entity, anchor, ev.position)
+                    else {
+                        return false;
+                    };
+                    if !enqueue_window_set_pos(world, entity, mapped.x, mapped.y, None) {
+                        return false;
+                    }
+                    mapped
                 }
-                mapped
-            } else {
-                // Free 経路: wndproc（move_window=true）が移動済みの位置を読むだけ
-                let Some(pos) = world.get::<WindowPos>(entity).and_then(|wp| wp.position) else {
-                    return false;
-                };
-                pos
+                _ => {
+                    // Free・Anchored 不在: wndproc（move_window=true）が移動済みの位置を読むだけ
+                    let Some(pos) = world.get::<WindowPos>(entity).and_then(|wp| wp.position) else {
+                        return false;
+                    };
+                    pos
+                }
             };
 
             follow_balloon(world, entity, pos);
@@ -289,8 +301,8 @@ pub(crate) fn on_char_drag(
     }
 }
 
-/// `OnDragEnd` ハンドラ: BottomSnap キャラ窓の最終カーソル位置へ同写像を適用する
-/// （4.7・DD15 v2 (3)・task 8.2R）。
+/// `OnDragEnd` ハンドラ: 非 Free アンカーのキャラ窓の最終カーソル位置へ同写像を
+/// 適用する（4.7/1.6・DD15 v2 (3)）。分岐は [`Anchored`] で判定する。
 ///
 /// wintf の accumulator は LBUTTONUP で `current_dragging_entity` を先にクリア
 /// するため、最終カーソル位置の DragEvent は配送されない（debug 調査 2026-07-11）。
@@ -302,7 +314,7 @@ pub(crate) fn on_char_drag(
 /// 窓は wndproc の巻き戻しが存在せず、吸着不変量（Y=下端）を満たす位置で終える
 /// のが 4.7 の意図に最も忠実（M1 簡素化・開始位置への復元は将来領分）。
 ///
-/// spawn（task 8.2R）が BottomSnap キャラ窓にのみ結線する。Free 窓・バルーン窓は
+/// spawn が非 Free アンカーのキャラ窓にのみ結線する。Free 窓・バルーン窓は
 /// wndproc が最終位置まで動かし切るため不要。
 pub(crate) fn on_char_drag_end(
     world: &mut World,
@@ -316,10 +328,16 @@ pub(crate) fn on_char_drag_end(
             if ev.target != entity {
                 return false;
             }
-            if world.get::<BottomSnap>(entity).is_none() {
+            // 非 Free アンカーのキャラ窓のみ最終位置を確定する（Free・Anchored 不在は
+            // wndproc が最終位置まで動かし切るため skip・Req1.6）。
+            let Some(anchor) = world
+                .get::<Anchored>(entity)
+                .map(|a| a.0)
+                .filter(|a| *a != Anchor::Free)
+            else {
                 return false;
-            }
-            let Some(mapped) = policy_mapped_position(world, entity, ev.position) else {
+            };
+            let Some(mapped) = policy_mapped_position(world, entity, anchor, ev.position) else {
                 return false;
             };
             if !enqueue_window_set_pos(world, entity, mapped.x, mapped.y, None) {
@@ -331,17 +349,25 @@ pub(crate) fn on_char_drag_end(
     }
 }
 
-/// BottomSnap キャラ窓の「カーソル座標→ポリシー適用済み窓位置」（DD15 v2・8.2R）。
+/// 非 Free アンカーのキャラ窓の「カーソル座標→アンカー射影 T 適用済み窓位置」
+/// （DD15 v2・Req1.6）。`anchor` は呼び出し側が [`Anchored`] から読んだ現在アンカー。
 ///
 /// 生ドラッグ座標（＝move_window=true なら wndproc が書いたであろう位置）を
 /// wndproc と同じ式で復元する: `initial_window_pos + (cursor − drag_start)`。
 /// [`DraggingState`] の `initial_inset` は wintf dispatch が「ドラッグ開始時の
-/// 窓位置」を転記したもの（フィールド名は歴史的経緯・dispatch.rs 参照）。
+/// 窓位置」を転記したもの（フィールド名は歴史的経緯・dispatch.rs 参照）。復元した
+/// 生座標へ [`project_anchor`] を適用する——リサイズ（[`resize_window_to`]）と同一の
+/// 射影 T を通し、座標系変換を二重化しない（Req1.6）。
 ///
 /// `None` は「[`DraggingState`] 不在で生座標を復元できない」場合のみ（実 flow では
 /// dispatch が DragEvent より先に挿入するため起きない・`debug!` の上で no-op）。
-/// 寸法不明・snapshot 不在は [`BottomSnapPolicy`] が identity へ縮退する。
-fn policy_mapped_position(world: &World, entity: Entity, cursor: Point) -> Option<Point> {
+/// 寸法不明・snapshot 不在は [`project_anchor`] が identity へ縮退する。
+fn policy_mapped_position(
+    world: &World,
+    entity: Entity,
+    anchor: Anchor,
+    cursor: Point,
+) -> Option<Point> {
     let Some(ds) = world.get::<DraggingState>(entity) else {
         debug!(
             ?entity,
@@ -363,9 +389,11 @@ fn policy_mapped_position(world: &World, entity: Entity, cursor: Point) -> Optio
             w: s.width,
             h: s.height,
         })
-        // 不在は非正寸法（＝寸法不明）としてポリシーの identity 縮退へ委ねる
+        // 不在は非正寸法（＝寸法不明）として project_anchor の identity 縮退へ委ねる
         .unwrap_or(SizePx { w: 0, h: 0 });
-    let mapped = BottomSnapPolicy.resolve(raw, size, world.get_resource::<MonitorSnapshot>());
+    // drag と resize（resize_window_to）が同一 project_anchor を通ることで座標系変換を
+    // 二重化しない（Req1.6）。bottom は project_anchor 内で BottomSnapPolicy へ委譲。
+    let mapped = project_anchor(anchor, raw, size, world.get_resource::<MonitorSnapshot>());
     Some(Point {
         x: mapped.x,
         y: mapped.y,
@@ -1235,7 +1263,6 @@ mod tests {
 
     use super::{BottomSnapPolicy, DragPositionPolicy, on_char_drag_end};
     use crate::placement::resolver::SizePx;
-    use crate::placement::spawn::BottomSnap;
 
     /// emo2 scope0 実寸のキャラ窓寸法（物理 px）。
     const CHAR_SIZE: SizePx = SizePx { w: 434, h: 687 };
@@ -1625,7 +1652,7 @@ mod tests {
             .spawn((
                 fake_handle(0x1000),
                 window_pos_sized(1207, 356, 434, 687), // 釘付け済み初期位置
-                BottomSnap,
+                Anchored(Anchor::Bottom),
                 dragging_state((1207, 356), start),
             ))
             .id();
@@ -1662,7 +1689,7 @@ mod tests {
             .spawn((
                 fake_handle(0x1000),
                 window_pos_sized(1400, 353, 434, 687), // primary の下端に釘付け済み
-                BottomSnap,
+                Anchored(Anchor::Bottom),
                 dragging_state((1400, 353), start),
             ))
             .id();
@@ -1690,9 +1717,9 @@ mod tests {
         );
     }
 
-    /// (d) Free 窓（BottomSnap なし＝move_window=true）は wndproc 委譲のまま:
+    /// (d) Free 窓（`Anchored(Free)`＝move_window=true）は wndproc 委譲のまま:
     /// ハンドラはキャラ窓を書かず、DraggingState があってもポリシー写像を使わない
-    /// （wndproc 更新済み WindowPos 基準でバルーン追従のみ・挙動不変・4.7）。
+    /// （wndproc 更新済み WindowPos 基準でバルーン追従のみ・挙動不変・4.7/Req1.6）。
     #[test]
     fn on_char_drag_free_window_stays_wndproc_delegated() {
         let mut world = World::new();
@@ -1705,6 +1732,7 @@ mod tests {
             .spawn((
                 fake_handle(0x1000),
                 window_pos_sized(1207, 217, 434, 687), // wndproc がドラッグ中に更新した位置
+                Anchored(Anchor::Free),
                 BalloonFollow { balloon, offset },
                 // DraggingState が居ても free 経路は写像を使わない檻（実 flow でも挿入される）
                 dragging_state((999, 888), (0, 0)),
@@ -1715,6 +1743,42 @@ mod tests {
         assert!(!on_char_drag(&mut world, window, window, &ev));
 
         // キャラ窓は不動（wndproc の領分）・バルーンは WindowPos 基準で追従
+        assert_eq!(position_of(&world, window), Point { x: 1207, y: 217 });
+        assert_eq!(
+            position_of(&world, balloon),
+            Point {
+                x: 1207 + offset.x,
+                y: 217 + offset.y
+            }
+        );
+    }
+
+    /// (d') `Anchored` 不在（安全側フォールバック・task 2.7 の新規判断分岐）: marker が
+    /// 一切無い窓は Free と同じく wndproc 委譲へ倒す——DraggingState が居ても単一ライター
+    /// 写像を走らせず、キャラ窓を書かない（旧「marker 無し＝Free」意味論の保存・Req1.6）。
+    #[test]
+    fn on_char_drag_without_anchored_stays_wndproc_delegated() {
+        let mut world = World::new();
+        world.insert_resource(single_monitor_snapshot());
+        let balloon = world
+            .spawn((fake_handle(0x2000), window_pos_at(0, 0)))
+            .id();
+        let offset = PointPx { x: 498, y: -37 };
+        let start = (1400, 600);
+        let window = world
+            .spawn((
+                fake_handle(0x1000),
+                window_pos_sized(1207, 217, 434, 687), // wndproc がドラッグ中に更新した位置
+                // Anchored は付けない（None）——DraggingState は実 flow 同様に挿入される
+                BalloonFollow { balloon, offset },
+                dragging_state((999, 888), start),
+            ))
+            .id();
+
+        let ev = Phase::Bubble(drag_event_at(window, start, (1601, 113)));
+        assert!(!on_char_drag(&mut world, window, window, &ev));
+
+        // 単一ライター写像は走らず、キャラ窓は wndproc 更新位置のまま不動
         assert_eq!(position_of(&world, window), Point { x: 1207, y: 217 });
         assert_eq!(
             position_of(&world, balloon),
@@ -1740,7 +1804,7 @@ mod tests {
             .spawn((
                 fake_handle(0x1000),
                 window_pos_sized(1207, 356, 434, 687),
-                BottomSnap,
+                Anchored(Anchor::Bottom),
                 BalloonFollow { balloon, offset },
                 dragging_state((1207, 356), start),
             ))
@@ -1778,7 +1842,7 @@ mod tests {
                 fake_handle(0x1000),
                 // 「最後に配送された DragEvent 時点」の位置を模す（最終位置とはずれている）
                 window_pos_sized(1250, 356, 434, 687),
-                BottomSnap,
+                Anchored(Anchor::Bottom),
                 BalloonFollow { balloon, offset },
                 // OnDragEnd 配送時点では DraggingState はまだ生きている（dispatch.rs は
                 // ハンドラ配送**後**に remove する）——実 flow 準拠
@@ -1810,7 +1874,7 @@ mod tests {
             .spawn((
                 fake_handle(0x1000),
                 window_pos_sized(1250, 356, 434, 687),
-                BottomSnap,
+                Anchored(Anchor::Bottom),
                 dragging_state((1207, 356), start),
             ))
             .id();
@@ -1836,7 +1900,7 @@ mod tests {
             .spawn((
                 fake_handle(0x1000),
                 window_pos_sized(1207, 356, 434, 687),
-                BottomSnap,
+                Anchored(Anchor::Bottom),
                 BalloonFollow {
                     balloon,
                     offset: initial,
@@ -1877,7 +1941,7 @@ mod tests {
             .spawn((
                 fake_handle(0x1000),
                 window_pos_sized(1207, 356, 434, 687),
-                BottomSnap,
+                Anchored(Anchor::Bottom),
                 BalloonFollow { balloon, offset },
                 dragging_state((1207, 356), start),
             ))
@@ -1912,7 +1976,7 @@ mod tests {
             .spawn((
                 fake_handle(0x1000),
                 wp,
-                BottomSnap,
+                Anchored(Anchor::Bottom),
                 dragging_state((1207, 356), start),
             ))
             .id();
@@ -1925,7 +1989,7 @@ mod tests {
             .spawn((
                 fake_handle(0x2000),
                 window_pos_at(1207, 356),
-                BottomSnap,
+                Anchored(Anchor::Bottom),
                 dragging_state((1207, 356), start),
             ))
             .id();
@@ -1948,7 +2012,7 @@ mod tests {
             .spawn((
                 fake_handle(0x1000),
                 window_pos_sized(1207, 356, 434, 687),
-                BottomSnap,
+                Anchored(Anchor::Bottom),
                 BalloonFollow {
                     balloon,
                     offset: PointPx { x: 11, y: 22 },
@@ -2096,7 +2160,7 @@ mod tests {
             .spawn((
                 fake_handle(0x1000),
                 window_pos_sized(1207, 356, 434, 687),
-                BottomSnap,
+                Anchored(Anchor::Bottom),
                 BalloonFollow {
                     balloon,
                     offset: initial,
@@ -2290,7 +2354,7 @@ mod tests {
                 fake_handle(0x1000),
                 window_pos_sized(1207, 356, 434, 687),
                 arrangement_at(1207.0, 356.0),
-                BottomSnap,
+                Anchored(Anchor::Bottom),
                 BalloonFollow { balloon, offset },
                 dragging_state((1207, 356), start),
             ))
