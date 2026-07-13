@@ -17,12 +17,14 @@
 //! - キャラ窓: `Name`＋`CharWindowMarker{scope}`＋`GhostWindowMarker`＋`Window{title}`
 //!   ＋`WindowStyle { style: WS_POPUP|WS_VISIBLE, ex_style: WS_EX_LAYERED|WS_EX_TOOLWINDOW }`
 //!   （**`WS_EX_TOPMOST` なし**・5.1／DD13）＋`WindowPos { position, size }`（物理 px）
-//!   ＋`HitTest::none()`（全面ヒットで透過を殺さない）＋`DragConfig`（全面ドラッグ・
-//!   4.1。`move_window` は BottomSnap キャラ窓のみ false＝on_char_drag 単一ライター・
-//!   DD15 v2／4.7、Free は true＝wndproc 委譲）＋`OnDrag(on_char_drag)`＋`BalloonFollow`
-//!   ＋`OnPointerPressed(on_ghost_pressed)`（ダブルクリックで全 `GhostWindowMarker`
-//!   despawn→`run()` 正常復帰）。BottomSnap キャラ窓はさらに `BottomSnap` marker＋
-//!   `OnDragEnd(on_char_drag_end)`（最終カーソル位置への同写像適用・DD15 v2 (3)）
+//!   ＋`HitTest::none()`（全面ヒットで透過を殺さない）＋`Anchored(p.anchor)`（解決済み
+//!   アンカーの単一真実源・**全 char 窓へ無条件付与**＝Free 窓も resize の identity 射影で
+//!   読む・4.2）＋`DragConfig`（全面ドラッグ・4.1。`move_window` は非 Free アンカーの
+//!   キャラ窓のみ false＝on_char_drag 単一ライター・DD15 v2／4.7、Free は true＝wndproc
+//!   委譲）＋`OnDrag(on_char_drag)`＋`BalloonFollow`＋`OnPointerPressed(on_ghost_pressed)`
+//!   （ダブルクリックで全 `GhostWindowMarker` despawn→`run()` 正常復帰）。非 Free アンカーの
+//!   キャラ窓はさらに `OnDragEnd(on_char_drag_end)`（最終カーソル位置への同写像適用・
+//!   DD15 v2 (3)）
 //! - バルーン窓: 同型（marker は `BalloonWindowMarker{scope}`・`DragConfig::default()`
 //!   は付与＝バルーン単独ドラッグ可・4.5。`OnDrag(on_balloon_drag)` で単独ドラッグの
 //!   相対位置記憶（4.8・DD16・task 8.3）・`BalloonFollow` なし）
@@ -49,7 +51,7 @@ use wintf::ecs::layout::HitTest;
 use wintf::ecs::pointer::{DoubleClick, OnPointerPressed, Phase, PointerState};
 use wintf::ecs::{Point, SizeI, Window, WindowHandle, WindowPos, WindowStyle};
 
-use super::follow::{on_balloon_drag, on_char_drag, on_char_drag_end, BalloonFollow};
+use super::follow::{on_balloon_drag, on_char_drag, on_char_drag_end, Anchored, BalloonFollow};
 use super::resolver::ScopePlacement;
 use super::source::GhostTitles;
 
@@ -76,18 +78,6 @@ pub struct BalloonWindowMarker {
 /// placement 生成窓の共通標識（smoke close・一括 despawn・clickthrough 登録の標的）。
 #[derive(Component, Debug, Clone, Copy, PartialEq, Eq)]
 pub struct GhostWindowMarker;
-
-/// bottom 吸着スコープのキャラ窓 marker（4.7・DD15 v2 基盤・task 8.1/8.2R）。
-///
-/// `ScopePlacement.anchor` が非 Free（`!anchor.is_free()`）のスコープの転写。
-/// この marker が bottom 吸着の単一の真実源: spawn は `DragConfig.move_window=false`
-/// と `OnDragEnd` の付与を連動させ、`on_char_drag`／`on_char_drag_end` は marker の
-/// 有無で `BottomSnapPolicy`（トレイト実装）を静的に引く（policy を trait object と
-/// して entity に持たせる案は marker との二重管理・非 Clone boxed Component の扱い
-/// 難と引き換えのため見送り——実装が増えたら component 化を再検討）。吸着対象は
-/// キャラ窓のみ＝バルーン窓には anchor 値によらず付けない（DD15・4.8）。
-#[derive(Component, Debug, Clone, Copy, PartialEq, Eq)]
-pub struct BottomSnap;
 
 // ---------------------------------------------------------------------------
 // GhostWindows（後続 emo2-boot への引き渡し正本・6.1/6.2）
@@ -193,6 +183,11 @@ pub fn spawn_ghost_windows(
                 window_style(),
                 window_pos(p.char_pos.x, p.char_pos.y, p.char_size.w, p.char_size.h),
                 HitTest::none(),
+                // 解決済みアンカーの単一真実源を全 char 窓へ**無条件付与**する（4.2/1.6）。
+                // Free 窓も付ける——resize の identity 射影（project_anchor の Free 腕）が
+                // Anchored を読むため。二値吸着フラグ（旧 BottomSnap marker）は廃し、
+                // ドラッグ／リサイズはこの単一値を読んで射影 T を分岐する（Req1.6・DD15 v2）。
+                Anchored(p.anchor),
                 // 非 Free アンカー（Bottom/Top/Left/Right）のキャラ窓は
                 // move_window=false＝wndproc は窓を動かさず on_char_drag が単一ライター
                 // （DD15 v2・4.7・task 8.2R）。Free は従来どおり wndproc 直接移動（4.1）。
@@ -211,14 +206,16 @@ pub fn spawn_ghost_windows(
             ))
             .id();
 
-        // bottom 吸着の情報伝搬（4.7・task 8.1/8.2R）: 非 Free アンカー
-        // （Bottom/Top/Left/Right）スコープのキャラ窓のみ BottomSnap marker
-        // （on_char_drag の単一ライター経路の標的）と OnDragEnd（最終 DragEvent 欠落の
-        // 穴埋め・DD15 v2 (3)）を付ける。判定は anchor 単一値から導出（Req1.6）。
+        // DragEnd 最終適用の結線（4.7/1.6・task 8.2R/3.1）: 非 Free アンカー
+        // （Bottom/Top/Left/Right）スコープのキャラ窓のみ OnDragEnd（最終 DragEvent
+        // 欠落の穴埋め・DD15 v2 (3)）を付ける。move_window=false と連動し、
+        // on_char_drag／on_char_drag_end が Anchored を読んで単一ライターとして書く。
+        // 判定は anchor 単一値から導出（Req1.6）。単一真実源 Anchored 自体は全 char 窓へ
+        // 上で無条件付与済みゆえ、この分岐からは外す（Free 窓も Anchored(Free) を持つ）。
         if !p.anchor.is_free() {
             world
                 .entity_mut(char_window)
-                .insert((BottomSnap, OnDragEnd(on_char_drag_end)));
+                .insert(OnDragEnd(on_char_drag_end));
         }
 
         windows.insert(
@@ -358,10 +355,10 @@ mod tests {
     use wintf::ecs::{Point, SizeI, Window, WindowPos, WindowStyle};
 
     use super::{
-        BalloonWindowMarker, BottomSnap, CharWindowMarker, GhostWindowMarker, GhostWindows,
+        BalloonWindowMarker, CharWindowMarker, GhostWindowMarker, GhostWindows,
         spawn_ghost_windows,
     };
-    use crate::placement::follow::BalloonFollow;
+    use crate::placement::follow::{Anchored, BalloonFollow};
     use crate::placement::resolver::{Anchor, PointPx, ScopePlacement, SizePx};
     use crate::placement::source::GhostTitles;
 
@@ -577,14 +574,19 @@ mod tests {
     }
 
     // -------------------------------------------------------------------------
-    // anchor 伝搬（4.2・DD15 基盤・task 8.1）
+    // anchor 伝搬（4.2・DD15 基盤・task 3.1）
+    //
+    // 旧 `bottom_snap_marker_attached_to_snapping_char_windows_only`（二値吸着 marker
+    // の有無検証）を、解決済み 5 値アンカーの entity 表現（`Anchored`）付与検証へ
+    // 意味を保って差し替え（marker 有無→アンカー種別付与・単一真実源＝`Anchored`・Req1.6）。
     // -------------------------------------------------------------------------
 
-    /// 8.1: `placement.anchor` が非 Free のスコープの**キャラ窓にのみ** `BottomSnap`
-    /// marker が付き、`Anchor::Free` のキャラ窓・バルーン窓（anchor 不問）には付かない
-    /// （吸着対象はキャラ窓のみ・DD15）。
+    /// 3.1（4.2/1.6）: 生成直後の**全 char 窓**が対応する 5 値アンカーの
+    /// `Anchored(anchor)` を保持する（非 Free 窓は非 Free アンカー・Free 窓は
+    /// `Anchored(Anchor::Free)`＝無条件付与）。バルーン窓には `Anchored` を付けない
+    /// （吸着／リサイズ対象はキャラ窓のみ・DD15）。
     #[test]
-    fn bottom_snap_marker_attached_to_snapping_char_windows_only() {
+    fn anchored_attached_to_all_char_windows_with_resolved_anchor() {
         let mut world = World::new();
         let mut placements = two_scope_placements(); // 両方 Anchor::Bottom（emo2＝bottom）
         placements[1].anchor = Anchor::Free; // scope1 を非吸着（Free）へ
@@ -593,20 +595,33 @@ mod tests {
 
         let char0 = gw.char_window(0).unwrap();
         let char1 = gw.char_window(1).unwrap();
-        assert!(
-            world.get::<BottomSnap>(char0).is_some(),
-            "非 Free アンカーのキャラ窓には BottomSnap が付く"
+        // 各 char 窓は自スコープの解決済みアンカーを Anchored として保持する（4.2）
+        assert_eq!(
+            world.get::<Anchored>(char0).copied(),
+            Some(Anchored(Anchor::Bottom)),
+            "非 Free スコープの char 窓は Anchored(Bottom) を保持"
         );
-        assert!(
-            world.get::<BottomSnap>(char1).is_none(),
-            "Anchor::Free のキャラ窓には付かない"
+        assert_eq!(
+            world.get::<Anchored>(char1).copied(),
+            Some(Anchored(Anchor::Free)),
+            "Free スコープの char 窓も無条件で Anchored(Free) を保持（resize identity 射影が読む）"
         );
+        // 転写元の placement と一致すること（値の取り違え封じ）
+        for p in &placements {
+            assert_eq!(
+                world.get::<Anchored>(gw.char_window(p.scope).unwrap()).copied(),
+                Some(Anchored(p.anchor)),
+                "scope{}: Anchored は ScopePlacement.anchor の転写",
+                p.scope
+            );
+        }
+        // バルーン窓には anchor 値によらず Anchored を付けない（char 窓のみ）
         for scope in [0usize, 1] {
             assert!(
                 world
-                    .get::<BottomSnap>(gw.balloon_window(scope).unwrap())
+                    .get::<Anchored>(gw.balloon_window(scope).unwrap())
                     .is_none(),
-                "scope{scope}: バルーン窓には anchor 値によらず付かない"
+                "scope{scope}: バルーン窓には Anchored を付けない"
             );
         }
     }
@@ -642,11 +657,12 @@ mod tests {
     // T-I3: 単位契約（U2・DD8・4.1/4.5）
     // -------------------------------------------------------------------------
 
-    /// T-I3（8.2R 改訂）: 窓 entity に `BoxStyle` 不在（U2・論理 DIP を持ち込まない）・
+    /// T-I3（3.1 改訂）: 窓 entity に `BoxStyle` 不在（U2・論理 DIP を持ち込まない）・
     /// `DragConstraint` 不在（DD8・全モニタドラッグ可・4.5）。`DragConfig.move_window`
-    /// は「BottomSnap キャラ窓のみ false（単一ライター・DD15 v2・4.7）、Free キャラ窓
-    /// とバルーン窓は true（wndproc 委譲・4.1/4.5）」。DragEnd 最終適用ハンドラ
-    /// （`OnDragEnd`）は BottomSnap キャラ窓にのみ付く。
+    /// は「非 Free アンカーのキャラ窓のみ false（単一ライター・DD15 v2・4.7）、Free
+    /// キャラ窓とバルーン窓は true（wndproc 委譲・4.1/4.5）」。DragEnd 最終適用ハンドラ
+    /// （`OnDragEnd`）は非 Free アンカーのキャラ窓にのみ付く。`Anchored` は char 窓のみ
+    /// （Free/非 Free とも無条件付与）・バルーン窓には付かない（4.2/1.6）。
     #[test]
     fn t_i3_no_box_style_no_drag_constraint_and_move_window_contract() {
         let mut world = World::new();
@@ -675,11 +691,11 @@ mod tests {
         let free_char = gw.char_window(1).unwrap();
         assert!(
             !world.get::<DragConfig>(snap_char).unwrap().move_window,
-            "BottomSnap キャラ窓は move_window=false（単一ライター・DD15 v2・4.7）"
+            "非 Free アンカーのキャラ窓は move_window=false（単一ライター・DD15 v2・4.7）"
         );
         assert!(
             world.get::<OnDragEnd>(snap_char).is_some(),
-            "BottomSnap キャラ窓に DragEnd 最終適用ハンドラが付く（DD15 v2 (3)）"
+            "非 Free アンカーのキャラ窓に DragEnd 最終適用ハンドラが付く（DD15 v2 (3)）"
         );
         assert!(
             world.get::<DragConfig>(free_char).unwrap().move_window,
@@ -688,6 +704,17 @@ mod tests {
         assert!(
             world.get::<OnDragEnd>(free_char).is_none(),
             "Free キャラ窓に OnDragEnd は付けない"
+        );
+        // Anchored は char 窓のみ（Free/非 Free とも付与）・バルーン窓には付かない（4.2/1.6）
+        assert_eq!(
+            world.get::<Anchored>(snap_char).copied(),
+            Some(Anchored(Anchor::Bottom)),
+            "非 Free キャラ窓は Anchored(Bottom) を保持"
+        );
+        assert_eq!(
+            world.get::<Anchored>(free_char).copied(),
+            Some(Anchored(Anchor::Free)),
+            "Free キャラ窓も Anchored(Free) を保持"
         );
         for scope in [0usize, 1] {
             let balloon = gw.balloon_window(scope).unwrap();
@@ -698,6 +725,10 @@ mod tests {
             assert!(
                 world.get::<OnDragEnd>(balloon).is_none(),
                 "scope{scope}: バルーン窓に OnDragEnd は付けない"
+            );
+            assert!(
+                world.get::<Anchored>(balloon).is_none(),
+                "scope{scope}: バルーン窓に Anchored は付けない（char 窓のみ）"
             );
         }
     }
