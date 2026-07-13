@@ -126,7 +126,13 @@ brief.md が名指しした挿入点はいずれも**現存**し、周辺コー�
 
 ## 6. 設計ディスカッションへ送る決定事項（番号付き）
 
-> **要件ディスカッション（2026-07-13）での再framing**: requirements.md を「**シェル座標系（下端アンカー）→ ウィンドウ座標系（サーフェス寸法）の変換 T の恒常維持**」を幹に組み替えた。T = 既存 `BottomSnapPolicy`（`window.top_Y = work_area 下端 − surface.height`）。サーフェス切替のたび新 `surface.height` で T を再適用するのが本質。旧 R1（検知エンジン）は Req3 のべき等・冗長回避へ降格、旧 R2（クロスエンジン通知メッセージ契約）は Req4 の「配送実体は設計判断・新規フレームワーク不導入」制約へ降格（検知＝emo-present・反映＝placement は同一 UI スレッド／同一 World ゆえ「通信」でなく同一 World のデータ依存）。ドラッグ（アンカー移動）と resize（T の入力 h 変更）は同一 T・同一単一ライターへ合流。以下 DD の設計判断としての有効性は不変（特に DD-2 が Req4.2 の委任先）。
+> **要件ディスカッション（2026-07-13）での再framing**: requirements.md を「**シェル座標系（下端アンカー）→ ウィンドウ座標系（サーフェス寸法）の変換 T の恒常維持**」を幹に組み替えた。T = 既存 `BottomSnapPolicy`（`window.top_Y = work_area 下端 − surface.height`）。サーフェス切替のたび新 `surface.height` で T を再適用するのが本質。旧 R1（検知エンジン）は Req3 のべき等・冗長回避へ降格、旧 R2（クロスエンジン通知メッセージ契約）は Req4 の「配送実体は設計判断・新規フレームワーク不導入」制約へ降格（検知＝emo-present・反映＝placement は同一 UI スレッド／同一 World ゆえ「通信」でなく同一 World のデータ依存）。ドラッグ（アンカー移動）と resize（T の入力 h 変更）は同一 T・同一単一ライターへ合流。以下 DD の設計判断としての有効性は不変（特に DD-2 が Req4.3 の委任先）。
+>
+> **理想形指示（2026-07-13・議題2）**: 開発者判断で T を `bottom` 特化でなく **`seriko.alignmenttodesktop` 全 5 値（`top`／`bottom`／`left`／`right`／`free`）汎用のアンカー射影**として要件化（ukadoc: 既定 `bottom`・優先度チェーン＝ゴースト全体＜ゴーストスコープ個別＜シェル全体＜シェルスコープ個別・実行時 `\![set,alignmenttodesktop]` で可変）。`left`／`right` では **幅 w** が再射影の駆動軸（`right`: `left_X = wa.right − w`）＝「高さだけ見る」は `bottom` 限定。既存 `BottomSnapPolicy` は T の `bottom` 事例、他アンカーはその一般化。新規 DD を下に追加。旧 R4.4（DPI パラメタ化）議題は「物理 px 単一通貨ゆえアンカー辺算出は DPI 非依存＝檻は寸法・work area 値の網羅＋全アンカー、DPI 依存性は R5.1–5.3 の `bottom` 実機目視」で確定（Req5.4）。
+
+- **DD-9（アンカー射影 T の一般化構造）**: `BottomSnapPolicy`（`DragPositionPolicy` trait）を 5 アンカー射影へどう一般化するか。案: (a) `AnchorProjection` enum＋辺固定の共通式、(b) アンカーごとの policy 実装＋dispatch。既存 `move_window_to`／`enqueue_window_move`（`SWP_NOSIZE` 固定）を X/Y 双方＋size 対応へ一般化する方式（`right` は X 駆動）を含む。
+- **DD-10（解決済みアンカーの表現と provenance）**: 現行は `BottomSnap` marker の有無で `bottom`／`free` の二値のみ。5 値アンカーをキャラ窓へどう表現・保持するか（marker 群 vs `Anchor` component）。優先度チェーン解決（parsers／window-placement）と `\![set,alignmenttodesktop]` routing（seriko）は本 spec 非所有（Req4.2／Req6.3）＝上流が解決済みアンカーを供給する interlock を design で確定。
+- **DD-11（アンカー変化トリガの配送）**: サイズ変化（Req1.3）に加えアンカー変化（Req1.4）も T 再適用トリガ。両トリガを同一反映口へどう合流させるか（DD-2 の配送実体選定と併せて確定）。
 
 - **DD-1（検知の所属 crate）**: サイズ変化検知を emo-present 内（案A-1: notifier 注入）に置くか、areka/frame.rs 側（案A-2: apply 後ポーリング＋emo-present に現寸 accessor 追加）に置くか。R1 の subject「サーフェスサイズ変化検知」の所属 crate を確定する。
 - **DD-2（R2 配送の実体）**: 通知を UI 配送ブリッジ上の**単方向メッセージ型**（`SurfaceResized{ scope/target, size }` を `UiSender` で送り別 drain）とするか、同一 UI スレッド・同一 World ゆえ**同一 frame system 内の直接関数呼び**（チャネルなし・即時）とするか。Req2.1（メッセージ）と Req2.4（新規フレームワーク不導入）の両立線を引く。
