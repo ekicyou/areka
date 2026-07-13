@@ -126,6 +126,8 @@ brief.md が名指しした挿入点はいずれも**現存**し、周辺コー�
 
 ## 6. 設計ディスカッションへ送る決定事項（番号付き）
 
+> **要件ディスカッション（2026-07-13）での再framing**: requirements.md を「**シェル座標系（下端アンカー）→ ウィンドウ座標系（サーフェス寸法）の変換 T の恒常維持**」を幹に組み替えた。T = 既存 `BottomSnapPolicy`（`window.top_Y = work_area 下端 − surface.height`）。サーフェス切替のたび新 `surface.height` で T を再適用するのが本質。旧 R1（検知エンジン）は Req3 のべき等・冗長回避へ降格、旧 R2（クロスエンジン通知メッセージ契約）は Req4 の「配送実体は設計判断・新規フレームワーク不導入」制約へ降格（検知＝emo-present・反映＝placement は同一 UI スレッド／同一 World ゆえ「通信」でなく同一 World のデータ依存）。ドラッグ（アンカー移動）と resize（T の入力 h 変更）は同一 T・同一単一ライターへ合流。以下 DD の設計判断としての有効性は不変（特に DD-2 が Req4.2 の委任先）。
+
 - **DD-1（検知の所属 crate）**: サイズ変化検知を emo-present 内（案A-1: notifier 注入）に置くか、areka/frame.rs 側（案A-2: apply 後ポーリング＋emo-present に現寸 accessor 追加）に置くか。R1 の subject「サーフェスサイズ変化検知」の所属 crate を確定する。
 - **DD-2（R2 配送の実体）**: 通知を UI 配送ブリッジ上の**単方向メッセージ型**（`SurfaceResized{ scope/target, size }` を `UiSender` で送り別 drain）とするか、同一 UI スレッド・同一 World ゆえ**同一 frame system 内の直接関数呼び**（チャネルなし・即時）とするか。Req2.1（メッセージ）と Req2.4（新規フレームワーク不導入）の両立線を引く。
 - **DD-3（ベースライン所有）**: 「直前表示寸」を emo-present の `PresentTarget` が持つか、areka wiring の per-target マップが持つか（R1.2）。
