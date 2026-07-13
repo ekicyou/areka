@@ -123,15 +123,15 @@ graph TB
 
 ### Modified Files
 
-- **`crates/areka/src/placement/resolver.rs`** — 純粋 `Anchor` enum（`Top`/`Bottom`/`Left`/`Right`/`Free`）＋`Anchor::from_alignment(&Alignment) -> Anchor`（`Seam(String)` を解釈: `"top"`/`"left"`/`"right"`→対応値、未知→`Bottom`＋warn は呼び出し側）を追加。`ScopePlacement` に `pub anchor: Anchor` を追加（`bottom_snap: bool` は `anchor` から導出 or 併存）。resolver の解決関数が `config.alignment` を `Anchor::from_alignment` で転記（cascade は改変しない・解釈のみ）。wintf 非依存を維持（U5）。
+- **`crates/areka/src/placement/resolver.rs`** — 純粋 `Anchor` enum（`Top`/`Bottom`/`Left`/`Right`/`Free`）＋`Anchor::from_alignment(&Alignment) -> Anchor`（`Seam(String)` を解釈: `"top"`/`"left"`/`"right"`→対応値、未知→`Bottom`＋warn は呼び出し側）を追加。`ScopePlacement` の `bottom_snap: bool` フィールドを **`pub anchor: Anchor` へ置換**（**単一真実源＝二つ目の格納表現を作らない・Req1.6**）。現行 `bottom_snap: matches!(alignment, Bottom | Seam(_))`（resolver.rs:200・非 Free をすべて true へ畳む＝実体は「anchored か否か」の誤称）は `anchor: Anchor::from_alignment(&sc.alignment)` へ移行し、boolean が要る箇所は使用点で `matches!(anchor, Anchor::Free)` を導出する（可読性のための述語関数 `Anchor::is_free()` は許容＝格納でなく導出）。cascade は改変しない・解釈のみ。wintf 非依存を維持（U5）。既存 `bottom_snap` 伝搬テスト（resolver.rs:977-1028）は `anchor` 検証へ意味を保って差し替え（陳腐化 update・削除ではない）。
 - **`crates/areka/src/placement/follow.rs`** — 本 spec の中核実装:
-  - `Anchored(pub Anchor)` bevy Component（char 窓に付与・drag/resize が読む）。既存 `BottomSnap` marker を generalize 退役。
+  - `Anchored(pub Anchor)` bevy Component（**全 char 窓に付与**・drag/resize が読む単一真実源）。既存 `BottomSnap` marker（`spawn.rs:90`）を格納状態として**退役**（`Anchored` に一本化・二重格納を残さない・Req1.6）。**注意: `BottomSnapPolicy`（follow.rs:76・Y 釘付け純ポリシー）は T の bottom 腕として再利用（R1.2）＝退役するのは marker Component `BottomSnap` のみで policy struct は残す**（別物・混同しない）。既存 `on_char_drag`/`on_char_drag_end`/drag テスト fixture の `BottomSnap` 参照（follow.rs:163/213 と test 群）は `Anchored` 読取り／`Anchored(Bottom)` 付与へ差し替え。
   - `project_anchor(anchor, raw: PointPx, size: SizePx, snapshot: Option<&MonitorSnapshot>) -> PointPx`（純粋 T・5 分岐・`Bottom` は `BottomSnapPolicy.resolve` へ委譲）。
   - `resize_window_to(world, char_window, new_size: SizePx) -> bool`（単一ライター反映口・べき等・非正寸/不在縮退）。
   - `enqueue_window_set_pos(world, window, x, y, size: Option<SizePx>) -> bool`（`enqueue_window_move` を一般化・`size=None` で移動専用後方互換・`Some` で `SWP_NOSIZE` 外し＋`WindowPos.size` bypass ミラー）。`move_window_to`/drag は `size=None` で従来通り。
   - `anchor_changed_system`（`Changed<Anchored>` の char 窓を現 `WindowPos.size` で `resize_window_to` 再適用）。
   - `on_char_drag`/`policy_mapped_position` を `Anchored` 経由 `project_anchor` へ改修（R1.6 統一・`Free` は wndproc 委譲維持）。
-- **`crates/areka/src/placement/spawn.rs`** — `spawn_ghost_windows` が char 窓へ `Anchored(p.anchor)` を付与。`DragConfig{move_window: matches!(p.anchor, Anchor::Free)}`（Free のみ wndproc 移動）。`OnDragEnd(on_char_drag_end)` を全非 Free アンカーへ結線（現行 `BottomSnap` 限定を一般化）。
+- **`crates/areka/src/placement/spawn.rs`** — `spawn_ghost_windows` が **全 char 窓へ `Anchored(p.anchor)` を付与**（Free 窓も resize の identity 射影で読むため無条件付与）。`DragConfig{move_window: matches!(p.anchor, Anchor::Free)}`（Free のみ wndproc 移動）。`OnDragEnd(on_char_drag_end)` を全非 Free アンカーへ結線（現行 `BottomSnap` 限定を一般化）。既存 spawn テスト（spawn.rs:580-606 の `BottomSnap` 存在 assert・644-679 の `move_window`）は `Anchored(Bottom)` 検証／`matches!(anchor, Free)` 検証へ差し替え（陳腐化 update）。`BottomSnap` marker 定義（spawn.rs:90）を削除。
 - **`crates/areka/src/emo2_boot/frame.rs`** — `run_drain_phase` の drain 後に `resnap_shell_targets(world, presenter, ghost_windows)` を呼ぶ検知シーム。shell target のみ `text_slot_view().surface_size()` を読み、char 窓 `WindowPos.size` と diff し `resize_window_to` を直接呼ぶ（同一 World・DD-2）。純粋判定部 `resnap_from_sizes(world, iter<(scope, SizePx)>)` に分離しヘッドレステスト可能にする。
 
 ### 依存方向と配置の根拠
