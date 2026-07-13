@@ -55,9 +55,9 @@
 - 新規 crates.io 依存の追加は**禁止**（Rust 2024・bevy_ecs・serde の既存スタックのみ）。
 
 ### Revalidation Triggers
-- `Cue`/`TalkCue` エンベロープの `duration` の型・意味・serde 属性変更 → dola を消費する全経路（wintf `cue/`・emo-text・seriko）と serde 済み資産の再検証。
+- `Cue`/`TalkCue` エンベロープの `duration` の型・意味・serde 属性変更 → dola を消費する全経路（wintf `cue/`・emo-text・seriko・**areka-ghost（dispatcher/sink/spine_e2e）**）と serde 済み資産の再検証。
 - `CueCommand` variant 追加（Wait 等）→ 全表現者の `apply_cue`／`handle_message` の網羅性（catch-all 無しゆえコンパイラ強制）。
-- broadcast 配送への変更 → 全 sink の relevance フィルタ・honor 契約・ログ規律の再検証。`cue_target_of` を relevance の**単一権威**とし、`CueCommand` variant 追加時は各表現者の action 判定が `cue_target_of` の分類と一致すること（partition）を再確認する。
+- broadcast 配送への変更 → 全 sink の relevance フィルタ・honor 契約・ログ規律の再検証。`cue_target_of` を relevance の**単一権威**とし、`CueCommand` variant 追加時は各表現者の action 判定が `cue_target_of` の分類と一致すること（partition）を再確認する。**areka-ghost の dispatcher/spine_e2e の per-sink partition assertion と診断既定 sink の配線（二重ログ回避）**も同時に再検証。broadcast で face-only talk の Emote cue も text_sink（`ClockedTextSink.observe_cue`）へ観測される点（epoch rebase は `at` 一貫で無害）も確認する。
 - **`CueSheet.absolute_start_time` / `TimedSchedule` horizon / 完了判定（`is_completed`・`TalkDone` 発火条件）の変更** → talk 終端の早期終了・跨プロセス完了同期・kanade 単一 slot 解放タイミングの再検証（drive-level 注入 tick 檻が必須・compile-level extent 檻では捕捉不能）。
 - per-char ノミナル定数値・`text_playback_duration` シグネチャ変更 → 実機再生タイミングと emo-text reveal の再検証。
 - `\C`（追記モード）対応の着手 → **Clear 前置の無条件性を条件化**する必要（現状 `\C` 未対応ゆえ無条件で妥当）。
@@ -128,8 +128,12 @@ crates/
 ├── areka-emo-text/src/
 │   ├── state.rs              # [変更] char_wait 撤去・apply_cue が cue.duration からペース導出・honor 契約
 │   └── actor.rs              # [変更] apply_cue の config 引数除去・honor
-└── areka-seriko/src/
-    └── actor.rs              # [変更] broadcast 許容（非 Shell action 無視・duration honor・warn→良性 debug）
+├── areka-seriko/src/
+│   └── actor.rs              # [変更] broadcast 許容（非 Shell action 無視・duration honor・warn→良性 debug）
+└── areka-ghost/              # [変更] live path 配線ハーネス（kanade→dispatcher→sakura drive→sinks）
+    ├── src/sink.rs           # command_kind に Wait 腕（catch-all 無し流儀）／診断既定 sink を単一 broadcast 配線へ（二重ログ解消）
+    ├── src/dispatcher.rs     # broadcast 配線・surface partition assertion を broadcast-aware へ改訂
+    └── tests/ghost/spine_e2e_test.rs # S1 の per-sink 分割列 assertion を broadcast へ更新
 ```
 
 ### Modified Files
@@ -152,7 +156,9 @@ crates/
 - `crates/areka-emo-text/src/state.rs` — `TextLayerConfig.char_wait` 撤去（`line_pitch_factor` 残置）。`apply_cue` から `config` 引数除去（reveal ペースは `cue.duration` 由来）。`RevealSchedule::extend_chunk` 第 3 引数を `char_wait`→`interval`（=`D/N`）へ意味変更。**honor 契約**: 非担当 cue（Emote/Wait/BalloonSurface 等）は action 無視・duration は honor（talk extent 整合）。reveal 系テストを D 駆動へ更新。
 - `crates/areka-emo-text/src/actor.rs` — `apply_cue` の config 引数除去。`config`（`line_pitch_factor`）は `DWriteMetrics::new` 用に保持。in-source テストヘルパへ `duration` 追加。
 - `crates/areka-seriko/src/actor.rs` — broadcast 許容: 受け取った全 cue のうち Shell 系のみ action、他（Text/Wait/Clear/NewLine/Choice）は **action 無視・duration honor**。非 Shell 受信は「想定外」でなく**正常**ゆえ `warn` → 良性 `debug` へ。in-source テストヘルパへ `duration` 追加。
-- **横断機械変更**: `Cue { ... }` / `TalkCue { ... }` リテラルは全構築点で `duration` 追加が必要（コンパイラ強制）。`CueCommand::Wait` 追加で全 `apply_cue`/`handle_message`/`cue_target_of` の網羅 match がコンパイラ強制更新。
+- `crates/areka-ghost/src/sink.rs` — **live path 配線ハーネス**（design が変更対象に挙げ漏れていた・kanade→dispatcher→sakura drive→sinks）。`command_kind` の網羅 match へ `Wait => "Wait"` を追加（catch-all 無し流儀・`command_kind_covers_every_cue_command_variant` テストへ Wait を追加）。**診断既定 sink**（`LogSink`＝SurfaceSink/TextSink 両実装のスキャフォールド）を broadcast 下で **cue ごと 1 回**ログするよう単一 broadcast 配線へ寄せる（旧: 両スロットへ同一 sink＝二重ログ）。本番差込時は surface=seriko/text=emo-text の別オブジェクトゆえ二重ログは元々発生しない。
+- `crates/areka-ghost/src/dispatcher.rs`／`tests/ghost/spine_e2e_test.rs` — broadcast 化で surface sink が Text cue も受信するため、`surface.len()==2`／`surface[i]==Emote` 系の partition assertion を **broadcast-aware**（surface が全 cue を受け relevance で action を選ぶ）へ改訂。
+- **横断機械変更**: `Cue { ... }` / `TalkCue { ... }` リテラルは全構築点（**wintf・dola/tests・各 crate の `*_test.rs` 含む**・例 `dola/tests/cue/sheet_test.rs`・`wintf/tests/ecs/cue_*_test.rs`）で `duration` 追加が必要（コンパイラ強制）。`CueCommand::Wait` 追加で全 `apply_cue`/`handle_message`/`cue_target_of`/**areka-ghost `command_kind`** の網羅 match がコンパイラ強制更新。broadcast 化で areka-ghost の `dispatcher`/`spine_e2e` の per-sink partition assertion が要改訂。wintf ランタイム match は catch-all（`_ => None`／`other =>`）ゆえ Wait を安全に吸収。
 - **前提条件の再確認**: 着手時に `crates/**` を `punctuation_wait` と drive.rs 生スクリプト診断ログで再 grep（現状ゼロ・撤去作業は発生しない見込み）。
 
 ## System Flows
@@ -390,7 +396,7 @@ pub fn compile(instructions: &[Instruction]) -> CompiledTalk;
 - **emo-text reveal 縮退（1.2/7.3）**: D=0＋N>0 で全グリフ即時（`at`）。N=0 で無追記。interval=D/N の reveal 時刻式（期待値は同一算術で再計算）。
 
 ### Integration Tests（クロス層・実 channel/schedule）
-- **broadcast 配送（2.1/2.2）**: 1 台本を on_tick へ流し、**両 sink（surface_sink/text_sink）が同一 cue 列を受信**する（旧「片方だけ受信」を broadcast へ更新）。emo-text は Emote/Wait を action 無視・seriko は Text/Wait を action 無視、両者とも duration を honor。
+- **broadcast 配送（2.1/2.2）**: 1 台本を on_tick へ流し、**両 sink（surface_sink/text_sink）が同一 cue 列を受信**する（旧「片方だけ受信」を broadcast へ更新）。emo-text は Emote/Wait を action 無視・seriko は Text/Wait を action 無視、両者とも duration を honor。**areka-ghost**: dispatcher/spine_e2e の partition assertion を broadcast-aware（surface も全 cue 受信・relevance で action 選択）へ更新し、診断既定 sink が cue ごと **1 回**ログ（二重でない）ことを固定。
 - **honor 契約（2.2/2.3/2.5/5.4/7.5）**: ①葉の表現者——emo-text が非担当 cue（Emote/Wait）を受けても、後続の担当 Text cue の reveal `r_0 = cue.at` は**当該 duration ぶんの遅延を受けない**（ローカル遅延を生まない・no-op 否定制約）。②**ライフサイクル（drive-level・注入 tick）**——末尾 `\_w[800]`（Text@0 dur D／Wait@D dur 0.8）および裸の末尾 Text（at=0 dur D）を drive へ流し、`TalkDone` が entry 枯渇時刻（前者 D・後者 ≈0）でなく**絶対終了時刻**（前者 D+0.8・後者 D）に達するまで**発火しない**ことを注入 tick で固定する（compile-level の extent 檻だけでは早期終了を捕捉できず drive-level 檻が必須）。加えて `CompiledTalk.end` は `TalkEndReason` であって終了「時刻」でないことを型で固定。③relevance partition——全 `CueCommand` variant について `cue_target_of` の分類と emo-text の action 判定が**一致**し、variant ごとに action する表現者が高々一つ（発散なし・partition 檻）。
 - **2 sink 同期（1.4/8.4）**: `\s[7]` を含む台本で、Emote が該当テキストの D 後の絶対時刻で発火し、両 sink が同一絶対時刻の同一台本を受ける（`\s` 表情同期）。
 - **Clear 前置 FIFO（6.2）**: 前 talk のテキストが新 talk 冒頭 Clear で消え、同一 `at=0.0` で Clear→Text の順に配送（`same_at_cues_preserve_script_order_fifo` 相当）。
@@ -421,7 +427,8 @@ pub fn compile(instructions: &[Instruction]) -> CompiledTalk;
 ### D4: 配送は broadcast・型による中央振り分けを廃す
 - **Context**: 現状 `on_tick` が `cue_target_of` で各 cue を 1 sink へ振り分け＝表現者は同一台本を共有しない。
 - **Selected**: **全 cue を全 sink へ broadcast**。`cue_target_of` は中央 router でなく**演者側 relevance ヘルパ**へ降格（seriko は既にそう使用）。`CueTarget::All` 等の新機構は不要。
-- **Rationale**: dola の本質「同一台本を全表現者へ同一絶対時刻で」を配送経路でも成立させる。現状は中央振り分けと演者側フィルタの**二重フィルタ**で冗長。broadcast へ寄せれば既存の演者側フィルタが本来の役目を果たし、honor 契約（全 cue の duration を全員が honor）も成立する。挙動は保存（各表現者は同じ relevance で同じ action・duration honor を追加）。
+- **Rationale**: dola の本質「同一台本を全表現者へ同一絶対時刻で」を配送経路でも成立させる。現状は中央振り分けと演者側フィルタの**二重フィルタ**で冗長。broadcast へ寄せれば既存の演者側フィルタが本来の役目を果たし、honor 契約（全 cue の duration を全員が honor）も成立する。実 sink（seriko/emo-text＝別オブジェクト）では挙動は保存（各表現者は同じ relevance で同じ action・duration honor を追加）。
+- **挙動保存の唯一の破れ（Topic 2）**: 診断既定 `LogSink` は 1 型で SurfaceSink/TextSink 両 trait を実装し両スロットへ二重配線されるため、broadcast 下では同一 cue を 2 回ログする。既定 sink を単一 broadcast 配線へ寄せて **cue ごと 1 回ログ**へ正す（本番の実 sink 差込では別オブジェクトゆえ元々無関係）。areka-ghost（配線ハーネス）は File Structure/Revalidation/Testing へ明示計上する。
 - **単一権威**: 中央 router が消えるため relevance の権威を `cue_target_of` に一本化し、各表現者の action ゲートをそれに一致させる（emo-text=Balloon／seriko=Shell）。将来 variant が両表現者で別分類され二重 action/暗黙ドロップする発散を、partition 檻（§Testing）と Revalidation Trigger で防ぐ。
 
 ### D5: duration=0 と「フィールド欠落」を峻別（欠落概念を作らない）
