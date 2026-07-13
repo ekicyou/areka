@@ -26,7 +26,7 @@
   - bind/mayuna 合成による表情変化（#2＝`mayuna-compose`）。
   - 実行時サーフェスサイズ変化→窓リサイズ/再吸着（#1＝`surface-resize-resnap`）。
   - テキストの**レイアウト/描画**そのもの（縦書き・折返し・フォントメトリクス）＝emo-text の既存領分。本 spec は**時間の権威のみ**扱い描画に触れない。
-  - 選択肢・対話タグ（M-dialogue）。
+  - 選択肢・一時停止・対話タグ（M-dialogue）。**dola の表現範囲は「絶対開始時刻＋累積時間」の静的タイムラインに限られる**ため、一時停止（`\x`）・選択肢（`\q`）等の Barrier シームからの再開は、オーケストレーター（kanade/sakura）が新たな絶対開始時刻を調停し台本を再配信することで達成する（dola へ pause/resume 状態を持ち込まない）。本 spec の再生時間 D は単一台本内の単調累積で表現され、この境界の内側に収まる。
   - wintf `Typewriter` widget の**完全統合**（第3の独自 char_wait 実装だが areka バルーンは emo-text ゆえ実行経路外）。
   - ユーザーによる文字送り速度設定 UI（M2 送り・本 spec は単一の既定 char_wait 定数で足る）。
   - #7 冒頭 1.5行空行（pasta 生成癖＝上流 `ekicyou/pasta` へ起票済み）。
