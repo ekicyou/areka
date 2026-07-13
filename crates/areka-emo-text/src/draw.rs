@@ -1628,12 +1628,12 @@ mod tests {
         items.push(TextItem::Glyph { ch: 'う' });
 
         render_items(
-            &mut executor, &mut surface, &items, items.len(), &region, mode, &font, &metrics, &contract,
+            &mut executor, &mut surface, &items, 3, &region, mode, &font, &metrics, &contract,
         );
         assert_eq!(executor.line_layout_creations(), 2, "初回は 2 行分を生成");
 
         render_items(
-            &mut executor, &mut surface, &items, items.len(), &region, mode, &font, &metrics, &contract,
+            &mut executor, &mut surface, &items, 3, &region, mode, &font, &metrics, &contract,
         );
         assert_eq!(
             executor.line_layout_creations(),
@@ -1644,7 +1644,7 @@ mod tests {
         // リビール進行: 行 1 が "う"→"うえ" へ——行 1 のみ都度更新（行 0 は確定キャッシュ）。
         items.push(TextItem::Glyph { ch: 'え' });
         render_items(
-            &mut executor, &mut surface, &items, items.len(), &region, mode, &font, &metrics, &contract,
+            &mut executor, &mut surface, &items, 4, &region, mode, &font, &metrics, &contract,
         );
         assert_eq!(
             executor.line_layout_creations(),
@@ -1655,7 +1655,7 @@ mod tests {
         // Clear 適用点: 全破棄→次描画は全行を再生成する。
         executor.clear_cache();
         render_items(
-            &mut executor, &mut surface, &items, items.len(), &region, mode, &font, &metrics, &contract,
+            &mut executor, &mut surface, &items, 4, &region, mode, &font, &metrics, &contract,
         );
         assert_eq!(
             executor.line_layout_creations(),
@@ -1732,10 +1732,10 @@ mod tests {
 
         // 3 行（収まる・可視 ■×5）→ 4 行（あふれ・可視窓は行 1〜3 ＝ ■×3）。
         let before = render_items(
-            &mut executor, &mut surface, &items3, items3.len(), &region, mode, &font, &metrics, &contract,
+            &mut executor, &mut surface, &items3, 5, &region, mode, &font, &metrics, &contract,
         );
         let after = render_items(
-            &mut executor, &mut surface, &items4, items4.len(), &region, mode, &font, &metrics, &contract,
+            &mut executor, &mut surface, &items4, 6, &region, mode, &font, &metrics, &contract,
         );
         assert!(
             opaque_count(&after) < opaque_count(&before),
@@ -1750,7 +1750,7 @@ mod tests {
         );
         // 決定論: 同一入力の再描画はバイト一致（差分累積なし）。
         let again = render_items(
-            &mut executor, &mut surface, &items4, items4.len(), &region, mode, &font, &metrics, &contract,
+            &mut executor, &mut surface, &items4, 6, &region, mode, &font, &metrics, &contract,
         );
         assert_eq!(after, again, "同一入力→同一ピクセル（全域再描画の決定論）");
     }

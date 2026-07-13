@@ -450,9 +450,7 @@ fn present_actor(
         // present_frame は state.actors() 由来の actor だけを渡す——防御的に空フレーム扱い。
         return Ok(());
     };
-    // レイアウトへは可視 **item** prefix 長を渡す（グリフ＋リビール済み改行を通算・item 単位モデル）。
-    // 未リビールの改行は prefix 外に落ちて適用されない——`\n` 直前の `\w` を尊重する（#4）。
-    let visible = runtime.state.visible_items(actor, talk_time);
+    let visible = runtime.state.visible_glyphs(actor, talk_time);
     let lines = LayoutEngine::layout(
         actor_state.items(),
         visible,

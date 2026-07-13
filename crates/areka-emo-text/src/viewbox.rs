@@ -864,8 +864,10 @@ mod tests {
         font_height: f32,
     ) -> ContentCanvas {
         let region = TextRegion::resolve(&model_rect(validrect), IMAGE, mode);
-        // item 単位モデル: 全量リビール＝全 item（グリフ＋改行）を可視にする。
-        let visible = items.len();
+        let visible = items
+            .iter()
+            .filter(|i| matches!(i, TextItem::Glyph { .. }))
+            .count();
         let lines = LayoutEngine::layout(items, visible, &region, mode, font_height, &FixedMetrics);
         ContentCanvas::from_layout(&lines, &region, mode)
     }

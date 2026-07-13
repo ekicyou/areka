@@ -1007,8 +1007,7 @@ fn run_checkpoint(demo: &mut Demo, world: &mut World, stage: usize, t_check: f64
     // 純粋 layout の再導出（可視窓・行構造の構造述語用——描画と同一入力・同一 metrics）。
     let layout_of = |actor: &ActorKey| {
         let state = rt.state().actor_state(actor)?;
-        // present_frame と同じ可視 item prefix 長（item 単位モデル）でレイアウトを再導出する。
-        let visible = rt.state().visible_items(actor, t_check);
+        let visible = rt.state().visible_glyphs(actor, t_check);
         let lines = LayoutEngine::layout(
             state.items(),
             visible,
@@ -1383,12 +1382,10 @@ fn reveal_probe(demo: &Demo, actor: &ActorKey, t: f64) -> (usize, usize, usize) 
     let Some(state) = rt.state().actor_state(actor) else {
         return (0, 0, 0);
     };
-    // 返り値の可視数はグリフ数（プラトー検出用）。レイアウトは present_frame と同じ
-    // 可視 item prefix 長（item 単位モデル）で再導出する。
     let visible = rt.state().visible_glyphs(actor, t);
     let lines = LayoutEngine::layout(
         state.items(),
-        rt.state().visible_items(actor, t),
+        visible,
         &resolved.region,
         resolved.mode,
         resolved.font.height,

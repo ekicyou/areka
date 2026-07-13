@@ -17,12 +17,9 @@
 //!   前提で、届いた cue 列を忠実に適用するのみ（R10.5）。
 //! - `Choice` は M1 では actor ごと初回のみ `warn!`＋無視（choice-render シーム・
 //!   テキスト状態は汚さない）。
-//! - **typewriter リビール（R3 系・item 単位モデル）**: `Text`／`NewLine` 追記時に item
-//!   （グリフ**と改行マーカー**）ごとの リビール時刻を `r_i = max(r_{i-1} + wait_i, at_i)`
-//!   （先頭は `r_0 = at_0`）で確定する。グリフの `wait_i = char_wait`（clause 句読点直後は
-//!   `+ punctuation_wait`・#3）、改行の `wait_i = 0`（＝`max(prev_reveal, cue.at)`・#4——先行
-//!   `\w` を sakura が NewLine の `at` へ畳み込むため改行が `\w` の分だけ遅れる）。可視 item 数は
-//!   `visible_items(actor, t)`＝`r_i <= t` の item prefix 長・可視グリフ数は `visible_glyphs`。
+//! - **typewriter リビール（R3 系）**: `Text` 追記時に per-glyph リビール時刻を
+//!   `r_i = max(r_{i-1} + char_wait, at(chunk(i)))`（先頭は `r_0 = at`）で確定し、
+//!   可視数は `visible_glyphs(actor, t)`＝注入時刻 `t` で `r_i <= t` のグリフ数。
 //!   実時間 sleep／`Instant` 不使用（注入時刻駆動・R3.3）。
 //! - グリフ単位は Rust の `char`（M1 正準。書記素クラスタ結合は M2 検討事項——
 //!   emo2 fixture は結合文字を使用しない）。
@@ -39,13 +36,8 @@ use areka_sakura::contract::{ActorKey, CueCommand, TalkCue};
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct TextLayerConfig {
     /// per-glyph の文字送り間隔（秒）。typewriter リビール時刻式
-    /// `r_i = max(r_{i-1} + wait_i, at(chunk(i)))` の基本 `wait_i`（既定 0.05）。
+    /// `r_i = max(r_{i-1} + char_wait, at(chunk(i)))` の `char_wait`（既定 0.05）。
     pub char_wait: f64,
-    /// 句読点直後の追加ポーズ（秒）。clause 句読点（[`is_clause_punctuation`]・、。！？…等）に
-    /// **続く**グリフの `wait_i` へ `char_wait` に加えて上乗せする（#3 実走欠陥修正）。
-    /// SSP の 、。 自動ポーズ相当——emo2 の pasta script は明示 `\w` を打たない前提。
-    /// 既定は char_wait の数倍で「、。 で目に見えて一拍おく」値（開発者が実走で微調整）。
-    pub punctuation_wait: f64,
     /// 行送りピッチ係数（`line_pitch = ceil(font.height × 係数)`・既定 1.25）。
     pub line_pitch_factor: f32,
 }
@@ -54,23 +46,9 @@ impl Default for TextLayerConfig {
     fn default() -> Self {
         Self {
             char_wait: 0.05,
-            punctuation_wait: 0.3,
             line_pitch_factor: 1.25,
         }
     }
-}
-
-/// clause 句読点か（#3: 直後のグリフに追加ポーズ [`TextLayerConfig::punctuation_wait`] を課す集合）。
-///
-/// SSP の 、。 自動ポーズ相当の de-facto 集合（ukadoc は自動ウェイトを「SSP ユーザー設定で可変」と
-/// するのみで文字集合を列挙しない＝典拠なし）。全角の読点/句点/感嘆/疑問/リーダ/中点/波ダッシュと
-/// その ASCII 等価を含む。第一版の素朴集合——開発者が実走の手触りで調整する前提（config で可変）。
-pub fn is_clause_punctuation(ch: char) -> bool {
-    matches!(
-        ch,
-        '、' | '。' | '，' | '．' | '！' | '？' | '…' | '‥' | '・' | '〜' | '～'
-            | ',' | '.' | '!' | '?'
-    )
 }
 
 /// 追記順の正本を構成する 1 要素（グリフ／改行マーカー）。
@@ -88,30 +66,23 @@ pub enum TextItem {
     },
 }
 
-/// per-item リビール時刻列（注入時刻駆動 typewriter・R3.1–3.5）。
-///
-/// **item 単位モデル**（実走欠陥 #3/#4 修正）: グリフ**と改行マーカー**の双方に reveal 時刻を
-/// 割り、[`ActorTextState::items`] と index 整合させる（`times[k]` は `items[k]` のリビール時刻）。
+/// per-glyph リビール時刻列（注入時刻駆動 typewriter・R3.1–3.5）。
 ///
 /// 時刻式（design.md「typewriter リビール」正本・決定論の正準）:
-/// `r_i = max(r_{i-1} + wait_i, at_i)`（先頭 item は `r_0 = at_0`）。ここで
-/// - グリフの `wait_i = char_wait`（直前 item が clause 句読点グリフなら `+ punctuation_wait`・#3）、
-/// - 改行マーカーの `wait_i = 0`（＝`r_lb = max(prev_reveal, cue.at)`・#4——sakura が先行 `\w` を
-///   NewLine の `at` へ畳み込むため、改行は `\w` の分だけ遅れる）。
-///
-/// 可視 item 数は `visible(t) = |{ i : r_i <= t }|`。`at` は下限（それより早く可視化しない・
+/// `r_i = max(r_{i-1} + char_wait, at(chunk(i)))`（先頭グリフは `r_0 = at(chunk(0))`）。
+/// 可視数は `visible(t) = |{ i : r_i <= t }|`。`at` は下限（それより早く可視化しない・
 /// R3.4）であり、リビールカーソルは本層ペース（`char_wait`）でバッファ末尾を追う
 /// （長文時は遅延しうる・無損失）。時刻は常に注入（talk 起点相対秒）で、実時間
 /// （`Instant`／sleep）には依存しない（R3.3）。`Clear` は schedule ごと初期化
 /// （未リビール分を含む破棄・R2.3/R3.6）。
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct RevealSchedule {
-    /// item i のリビール時刻 `r_i`（talk 起点相対秒・単調非減少・`items` と index 整合）。
+    /// グリフ i のリビール時刻 `r_i`（talk 起点相対秒・単調非減少）。
     times: Vec<f64>,
 }
 
 impl RevealSchedule {
-    /// リビール時刻列（talk 起点相対秒・`items` と index 整合）。
+    /// リビール時刻列（talk 起点相対秒）。
     pub fn times(&self) -> &[f64] {
         &self.times
     }
@@ -121,25 +92,27 @@ impl RevealSchedule {
         self.times.is_empty()
     }
 
-    /// 注入時刻 `t` での可視 item 数 `visible(t) = |{ i : r_i <= t }|`（R3.5）。
+    /// 注入時刻 `t` での可視グリフ数 `visible(t) = |{ i : r_i <= t }|`（R3.5）。
     ///
-    /// 返り値はグリフ＋改行を通した item prefix 長。`times` は単調非減少
-    /// （[`Self::push_item`] の max が保証）なので二分探索で数える。
+    /// `times` は単調非減少（`extend_chunk` の max が保証）なので二分探索で数える。
     pub fn visible(&self, t: f64) -> usize {
         self.times.partition_point(|&r| r <= t)
     }
 
-    /// item 1 件分のリビール時刻を時刻式 `r = max(prev + min_wait, at)` で追記する。
+    /// chunk（Text cue 1 件分のグリフ列）のリビール時刻を時刻式で追記する。
     ///
-    /// 先頭（schedule が空）のみ `r_0 = at`（`min_wait` は先行 item が無いため不使用）。
-    /// `min_wait` は「直前 item から本 item までの最小間隔」——グリフは
-    /// `char_wait`（句読点直後は `+ punctuation_wait`）、改行マーカーは `0`。
-    fn push_item(&mut self, min_wait: f64, at: f64) {
-        let r = match self.times.last() {
-            Some(&prev) => (prev + min_wait).max(at),
-            None => at,
-        };
-        self.times.push(r);
+    /// `r_i = max(r_{i-1} + char_wait, chunk_start)`・先頭（schedule が空）のみ
+    /// `r_0 = chunk_start`。改行マーカーはグリフでないため本 schedule の対象外
+    /// （`char_wait` を消費しない）。
+    fn extend_chunk(&mut self, glyph_count: usize, chunk_start: f64, char_wait: f64) {
+        self.times.reserve(glyph_count);
+        for _ in 0..glyph_count {
+            let r = match self.times.last() {
+                Some(&prev) => (prev + char_wait).max(chunk_start),
+                None => chunk_start,
+            };
+            self.times.push(r);
+        }
     }
 }
 
@@ -185,37 +158,24 @@ impl TextLayerState {
     /// `Clear`＝未リビール分を含む全消去。トーク上書きガードは持たず、届いた
     /// cue 列を到着順に忠実へ適用する（R10.5）。未知 actor は lazily 生成する。
     ///
-    /// `Text`／`NewLine` は追記と同時に item 単位のリビール時刻を `cue.at`（リビール開始の
-    /// 下限・R3.4）と時刻式 `r_i = max(r_{i-1} + wait_i, at_i)` で確定する（R3.1–3.3）。改行も
-    /// 自身の reveal 枠を持ち（`wait=0`＝`max(prev_reveal, cue.at)`・#4）、句読点直後のグリフは
-    /// `punctuation_wait` の追加ポーズを負う（#3）。リビール中の後続 cue も即時適用される（R3.6）
-    /// ——本層は cue の `at` を読むだけで書き換えず、pacing が cue 時刻へ影響しない（R10.2）。
+    /// `Text` は追記と同時に per-glyph リビール時刻を `cue.at`（chunk 開始時刻＝
+    /// リビール開始の下限・R3.4）と `config.char_wait` の時刻式で確定する（R3.1–3.3）。
+    /// リビール中の後続 cue も即時適用される（R3.6）——本層は cue の `at` を読む
+    /// だけで書き換えず、pacing が cue 時刻へ影響することはない（R10.2）。
     pub fn apply_cue(&mut self, cue: &TalkCue, config: &TextLayerConfig) {
         match &cue.command {
             CueCommand::Text(text) => {
                 let glyph_count = text.chars().count();
-                tracing::debug!(actor = %cue.actor, len = glyph_count, at = cue.at, "Text cue 適用（追記＋item リビール時刻確定）");
+                tracing::debug!(actor = %cue.actor, len = glyph_count, at = cue.at, "Text cue 適用（追記＋リビール時刻確定）");
                 let state = self.actors.entry(cue.actor.clone()).or_default();
-                state.items.reserve(glyph_count);
-                for ch in text.chars() {
-                    // #3: 直前 item が clause 句読点グリフなら、本グリフの wait に punctuation_wait を上乗せ
-                    //（SSP の 、。 自動ポーズ相当）。直前が改行/非句読点/先頭なら素の char_wait のみ。
-                    let prev_is_punct = matches!(
-                        state.items.last(),
-                        Some(TextItem::Glyph { ch: prev }) if is_clause_punctuation(*prev)
-                    );
-                    let min_wait = config.char_wait
-                        + if prev_is_punct { config.punctuation_wait } else { 0.0 };
-                    state.reveal.push_item(min_wait, cue.at);
-                    state.items.push(TextItem::Glyph { ch });
-                }
+                state
+                    .items
+                    .extend(text.chars().map(|ch| TextItem::Glyph { ch }));
+                state.reveal.extend_chunk(glyph_count, cue.at, config.char_wait);
             }
             CueCommand::NewLine { ratio } => {
-                tracing::debug!(actor = %cue.actor, ratio, at = cue.at, "NewLine cue 適用（改行マーカー追記＋item リビール時刻確定）");
+                tracing::debug!(actor = %cue.actor, ratio, "NewLine cue 適用（改行マーカー追記）");
                 let state = self.actors.entry(cue.actor.clone()).or_default();
-                // #4: 改行は自身の reveal 枠 `r = max(prev_reveal, cue.at)`（min_wait=0）を持つ。
-                // sakura が先行 `\w` を NewLine の at へ畳み込むため、改行は `\w` の分だけ遅れる。
-                state.reveal.push_item(0.0, cue.at);
                 state.items.push(TextItem::LineBreak { ratio: *ratio });
             }
             CueCommand::Clear => {
@@ -242,30 +202,14 @@ impl TextLayerState {
         }
     }
 
-    /// 注入時刻 `t` での actor 別可視 **item** 数（グリフ＋改行の通し prefix 長・決定論・R3.5）。
+    /// 注入時刻 `t` での actor 別可視グリフ数（決定論・R3.5）。
     ///
-    /// `visible_items(t) = |{ i : r_i <= t }|`。レイアウト（[`crate::layout::LayoutEngine::layout`]）へ
-    /// 渡す**可視 item prefix 長**——グリフだけでなくリビール済み改行も含めて先頭から数える
-    /// （item 単位モデル・#4）。未生成の actor は 0。同一 cue 列＋同一注入時刻列→同一値（決定論檻）。
-    pub fn visible_items(&self, actor: &ActorKey, t: f64) -> usize {
+    /// `visible(t) = |{ i : r_i <= t }|`（改行マーカーは数えない・グリフのみ）。
+    /// 未生成の actor は 0。同一 cue 列＋同一注入時刻列→同一可視数（決定論檻）。
+    pub fn visible_glyphs(&self, actor: &ActorKey, t: f64) -> usize {
         self.actors
             .get(actor)
             .map_or(0, |state| state.reveal.visible(t))
-    }
-
-    /// 注入時刻 `t` での actor 別可視グリフ数（改行を除いたグリフのみ・決定論・R3.5）。
-    ///
-    /// 可視 item prefix（[`Self::visible_items`]）のうち [`TextItem::Glyph`] だけを数える
-    /// （改行マーカーは含めない）。未生成の actor は 0。「実際に何文字表示されたか」の観測口
-    /// （レイアウトへは [`Self::visible_items`] を渡す——本口はグリフ数の檻/診断向け）。
-    pub fn visible_glyphs(&self, actor: &ActorKey, t: f64) -> usize {
-        self.actors.get(actor).map_or(0, |state| {
-            let visible = state.reveal.visible(t);
-            state.items[..visible]
-                .iter()
-                .filter(|item| matches!(item, TextItem::Glyph { .. }))
-                .count()
-        })
     }
 
     /// actor のテキスト状態（未生成の actor は `None`）。
@@ -584,7 +528,6 @@ mod tests {
     fn config_defaults_match_design_canon() {
         let config = TextLayerConfig::default();
         assert_eq!(config.char_wait, 0.05);
-        assert_eq!(config.punctuation_wait, 0.3);
         assert_eq!(config.line_pitch_factor, 1.25);
     }
 
@@ -717,58 +660,19 @@ mod tests {
         assert_eq!(reveal_times_of(&state, "0").len(), 6);
     }
 
-    /// 改行: LineBreak も item 単位で reveal 枠を持つ（#4）——schedule は items と index 整合し、
-    /// 改行の reveal は `max(prev_reveal, cue.at)`（`min_wait=0`）。可視 item には数えるが
-    /// 可視グリフには数えない。
+    /// 改行: LineBreak はリビール枠（時刻）を消費しない——schedule はグリフのみ対象。
     #[test]
-    fn line_break_takes_a_reveal_slot() {
+    fn line_break_takes_no_reveal_slot() {
         let mut state = TextLayerState::default();
         let config = exact_config();
         state.apply_cue(&cue("0", 0.0, CueCommand::Text("ab".into())), &config);
         state.apply_cue(&cue("0", 0.25, CueCommand::NewLine { ratio: 1.0 }), &config);
         state.apply_cue(&cue("0", 0.25, CueCommand::Text("cd".into())), &config);
 
-        // items 5 件（グリフ 4＋改行 1）・reveal も 5 件（item と index 整合）。
+        // items 5 件（グリフ 4＋改行 1）・times はグリフ 4 件分のみ。
         assert_eq!(items_of(&state, "0").len(), 5);
-        // a=0.0, b=0.25, 改行=max(0.25,0.25)=0.25, c=max(0.25+0.25,0.25)=0.5, d=0.75。
-        assert_eq!(reveal_times_of(&state, "0"), vec![0.0, 0.25, 0.25, 0.5, 0.75]);
-        // 改行は item prefix には数えるがグリフには数えない。
-        let actor = ActorKey::from("0");
-        assert_eq!(state.visible_items(&actor, 0.25), 3, "a, b, 改行");
-        assert_eq!(state.visible_glyphs(&actor, 0.25), 2, "a, b（改行はグリフでない）");
-    }
-
-    /// #3 精密檻: 句読点直後のグリフだけが `punctuation_wait` を負い、非句読点直後は素の char_wait。
-    /// config で可変（開発者が実走で手触りを調整する）。
-    #[test]
-    fn punctuation_wait_is_configurable_and_delays_following_glyph() {
-        let mut state = TextLayerState::default();
-        // 2 の冪で正確表現できる値（char_wait 0.25・punctuation_wait 1.0）。
-        let config = TextLayerConfig {
-            char_wait: 0.25,
-            punctuation_wait: 1.0,
-            line_pitch_factor: 1.25,
-        };
-        state.apply_cue(&cue("0", 0.0, CueCommand::Text("あ、い。う".into())), &config);
-        // あ=0.0／、=0.0+0.25=0.25（あは非句読点）／い=0.25+0.25+1.0=1.5（、直後）／
-        // 。=1.5+0.25=1.75（いは非句読点）／う=1.75+0.25+1.0=3.0（。直後）。
-        assert_eq!(reveal_times_of(&state, "0"), vec![0.0, 0.25, 1.5, 1.75, 3.0]);
-    }
-
-    /// 設計判断（#4）: 改行の reveal は `max(prev_reveal, cue.at)` のみで、直前が句読点でも
-    /// `punctuation_wait` を上乗せしない（改行は自身の `at` が唯一の下限）。
-    #[test]
-    fn line_break_after_punctuation_uses_only_cue_at() {
-        let mut state = TextLayerState::default();
-        let config = TextLayerConfig {
-            char_wait: 0.25,
-            punctuation_wait: 1.0,
-            line_pitch_factor: 1.25,
-        };
-        state.apply_cue(&cue("0", 0.0, CueCommand::Text("あ。".into())), &config);
-        state.apply_cue(&cue("0", 0.0, CueCommand::NewLine { ratio: 1.0 }), &config);
-        // あ=0.0／。=0.25／改行=max(0.25, cue.at=0.0)=0.25（句読点 wait なし）。
-        assert_eq!(reveal_times_of(&state, "0"), vec![0.0, 0.25, 0.25]);
+        // 改行マーカーは char_wait を消費しない: c は max(0.25+0.25, 0.25)=0.5。
+        assert_eq!(reveal_times_of(&state, "0"), vec![0.0, 0.25, 0.5, 0.75]);
     }
 
     /// 全消去: リビール中の Clear は未リビール分を含め schedule ごと破棄し、
@@ -789,49 +693,6 @@ mod tests {
         assert_eq!(reveal_times_of(&state, "0"), vec![0.5, 0.75]);
         assert_eq!(state.visible_glyphs(&actor, 0.4), 0);
         assert_eq!(state.visible_glyphs(&actor, 0.5), 1);
-    }
-
-    // ══ 実走欠陥 #3（句読点ウェイト）／#4（改行ウェイト）: item 単位リビール ══
-    //
-    // 真因: 従来 schedule はグリフのみに時刻を割り、改行マーカーは reveal 枠を持たず
-    // （NewLine は cue.at を読まない）レイアウトで即時反映され、`\n` 直前の `\w`（sakura が
-    // NewLine の at へ畳み込む）が無視されて早発した（#4）。同時に per-glyph の wait が
-    // 一様で句読点で追加ポーズが入らなかった（#3）。修正は「item（グリフ＋改行）ごとに
-    // reveal 時刻を割る」item 単位モデル。
-
-    /// #4: 改行マーカーは自身の reveal 枠を `r_lb = max(prev_reveal, cue.at)` で持つ。
-    /// sakura が先行 `\w` を NewLine の `at` へ畳み込むため、改行は `\w` の分だけ遅れる。
-    #[test]
-    fn line_break_reveal_time_honors_preceding_wait() {
-        let mut state = TextLayerState::default();
-        let config = TextLayerConfig::default(); // char_wait = 0.05
-        state.apply_cue(&cue("0", 0.0, CueCommand::Text("あい".into())), &config);
-        // NewLine の at=0.5 は「先行 \w（500ms）を畳み込んだ post-wait offset」の転写。
-        state.apply_cue(&cue("0", 0.5, CueCommand::NewLine { ratio: 1.0 }), &config);
-
-        let times = reveal_times_of(&state, "0");
-        // item ごとに 1 reveal 時刻: グリフ 2＋改行 1 = 3（従来はグリフ 2 のみ）。
-        assert_eq!(times.len(), 3, "改行マーカーも reveal 枠を占める（got {times:?}）");
-        // グリフは 0.0／0.05・改行は自身の at=0.5（畳み込まれた \w）まで待つ。
-        assert_eq!(times[2], 0.5, "改行 reveal = max(prev_reveal, cue.at) が \\w を尊重する");
-    }
-
-    /// #3: 句読点（、）直後のグリフは通常の char_wait より長いポーズで遅れる
-    /// （SSP の 、。 自動ポーズ相当・emo2 は明示 `\w` を打たない）。
-    #[test]
-    fn punctuation_glyph_adds_extra_reveal_pause() {
-        let mut state = TextLayerState::default();
-        let config = TextLayerConfig::default();
-        state.apply_cue(&cue("0", 0.0, CueCommand::Text("あ、い".into())), &config);
-
-        let times = reveal_times_of(&state, "0");
-        assert_eq!(times.len(), 3);
-        let normal_gap = times[1] - times[0]; // あ→、: 素の char_wait 間隔
-        let after_punct_gap = times[2] - times[1]; // 、→い: 句読点ポーズを含む間隔
-        assert!(
-            after_punct_gap > normal_gap + 1e-9,
-            "、直後のグリフは素の間隔より長く待つ（normal={normal_gap}, after={after_punct_gap}）"
-        );
     }
 
     // ── R3.5/10.2: 決定論（同一 cue 列＋同一注入時刻列→各時刻の可視数が常に一致） ──

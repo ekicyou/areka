@@ -118,12 +118,10 @@ fn decide_layout(
     probe_times
         .iter()
         .map(|&t| {
-            // LayoutDecision.visible は可視グリフ数（檻の絶対値）。レイアウトへは可視 item prefix 長
-            // （present_frame と同じ item 単位モデル）を渡す。
             let visible = state.visible_glyphs(actor, t);
             let lines = LayoutEngine::layout(
                 &items,
-                state.visible_items(actor, t),
+                visible,
                 &resolved.region,
                 resolved.mode,
                 font_height,
@@ -427,10 +425,9 @@ fn layout_decision_is_scale_independent_for_vertical_modes() {
                 WritingMode::resolve(&m),
                 "writing_mode 解決はスケールと無関係"
             );
-            // item 単位: 全 7 item（グリフ 4＋改行 3）を可視にして 4 列を配置する。
             let lines = LayoutEngine::layout(
                 &items,
-                items.len(),
+                4,
                 &resolved.region,
                 resolved.mode,
                 10.0,

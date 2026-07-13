@@ -29,13 +29,12 @@
 //! 折返し・改行後の行は、描画開始点（origin クランプ正準）の**行内軸成分**へ戻る
 //! （全行で同一の行内開始＝単一規則。行送り軸成分だけが行ごとに進む）。
 //!
-//! ## 可視 prefix 規則（typewriter との接続・item 単位モデル）
+//! ## 可視 prefix 規則（typewriter との接続）
 //!
-//! `layout` は追記順 items の先頭から `visible_count` 個の **item**（グリフ**と改行**を通算）
-//! までを配置対象とする（`visible_count` は state 層 `visible_items(actor, t)` の出力＝可視 item
-//! prefix 長）。改行マーカーは prefix 内（＝reveal 済み）なら反映し空行も [`PositionedLine`] として
-//! 現れるが、prefix 外の未リビール改行は適用しない——`\n` 直前の `\w` を尊重する（#4）。
-//! リビール時刻の解決は state 層の領分で、本層は可視 item 個数だけを受け取る。
+//! `layout` は追記順 items の先頭から「`visible_count`+1 個目のグリフ」直前までを
+//! 配置対象とする。改行マーカーは prefix 内なら即時反映する（R2.2 の後出し優先・
+//! 空行も [`PositionedLine`] として現れる）。リビール時刻の解決
+//! （`visible_glyphs(actor, t)`）は state 層の領分で、本層は個数だけを受け取る。
 //!
 //! ## 行矩形の規約（R9.4 の再利用シーム）
 //!
@@ -145,9 +144,8 @@ impl LayoutEngine {
     /// 折返し・行送りを解決して行列（[`PositionedLine`] 列）を得る（純粋・決定論）。
     ///
     /// - `items`: 追記順の正本（state 層の `ActorTextState::items`）。
-    /// - `visible_count`: 可視 **item** 数（グリフ＋改行の通し prefix 長・state 層
-    ///   `visible_items` の出力）。可視 prefix 規則（モジュール doc）で配置対象を切る
-    ///   ——未リビールの改行はこの境界の外で適用されない（#4）。
+    /// - `visible_count`: 可視グリフ数（state 層 `visible_glyphs` の出力）。
+    ///   可視 prefix 規則（モジュール doc）で配置対象を切る。
     /// - 折返し判定: `行内位置＋次グリフ幅 > 閾値`（3 方向共通・正準表）。
     ///   行頭の 1 グリフは閾値超過でも配置する（無限折返しの構造排除・無損失）。
     /// - 行送り量: 自動折返し＝`line_pitch`・改行マーカー＝`line_pitch × ratio`。
@@ -180,14 +178,12 @@ impl LayoutEngine {
         let mut opened = false;
 
         for item in items {
-            // 可視 item prefix の終端: visible_count 個の item を置いたら打ち切る（グリフ／改行を
-            // 通算）。未リビールの改行（reveal 時刻 > talk_time）はこの境界の外に落ち、適用されない
-            // ——`\n` 直前の `\w` を尊重する（#4・早発の空行を出さない）。
-            if placed == visible_count {
-                break;
-            }
             match *item {
                 TextItem::Glyph { ch } => {
+                    // 可視 prefix の終端: visible_count+1 個目のグリフ直前で打ち切る。
+                    if placed == visible_count {
+                        break;
+                    }
                     opened = true;
                     let advance = metrics.advance(ch, font_height);
                     // 折返し判定（正準表）: 行内位置＋次グリフ幅 > 閾値。
@@ -210,9 +206,10 @@ impl LayoutEngine {
                         advance,
                     });
                     inline_pos += advance;
+                    placed += 1;
                 }
                 TextItem::LineBreak { ratio } => {
-                    // 改行マーカーは可視 prefix 内（＝reveal 済み）なら反映（行送り量 = pitch × ratio）。
+                    // 改行マーカーは prefix 内なら即時反映（行送り量 = pitch × ratio）。
                     opened = true;
                     lines.push(finish_line(
                         std::mem::take(&mut current),
@@ -226,7 +223,6 @@ impl LayoutEngine {
                     inline_pos = inline_start;
                 }
             }
-            placed += 1;
         }
         if opened {
             lines.push(finish_line(
@@ -590,10 +586,9 @@ mod tests {
             TextItem::LineBreak { ratio: 0.5 },
             TextItem::Glyph { ch: 'あ' },
         ];
-        // item 単位: 全 5 item（グリフ 3＋改行 2）を可視にして全行を配置する。
         let lines = LayoutEngine::layout(
             &items,
-            5,
+            3,
             &region,
             WritingMode::HorizontalTb,
             12.0,
@@ -618,10 +613,9 @@ mod tests {
             TextItem::LineBreak { ratio: 0.5 },
             TextItem::Glyph { ch: 'あ' },
         ];
-        // item 単位: 全 3 item（グリフ 2＋改行 1）を可視にする。
         let lines = LayoutEngine::layout(
             &items,
-            3,
+            2,
             &region,
             WritingMode::VerticalRl,
             12.0,
@@ -631,46 +625,6 @@ mod tests {
         // pitch 15 × 0.5 = 7.5 だけ左へ: 列 1 の右辺 = 400 − 7.5。
         assert_eq!(lines[0].rect.right, 400.0);
         assert_eq!(lines[1].rect.right, 392.5);
-    }
-
-    // ── 実走欠陥 #4（改行ウェイト）: 未リビール改行はレイアウトしない ──
-
-    /// #4 のレイアウト境界: 可視 item prefix が「2 グリフのみ（改行は未リビール）」なら
-    /// 改行を適用しない（早発の空 2 行目を出さない）。改行が prefix に入って初めて
-    /// 空行が現れる。`visible_count` は item prefix 長（グリフ＋改行の通し個数）。
-    #[test]
-    fn unrevealed_line_break_is_not_laid_out() {
-        let region = TextRegion::resolve(
-            &model((Some(0), Some(0)), (None, None)),
-            IMAGE,
-            WritingMode::HorizontalTb,
-        );
-        let items = [
-            TextItem::Glyph { ch: 'a' },
-            TextItem::Glyph { ch: 'b' },
-            TextItem::LineBreak { ratio: 1.0 },
-        ];
-        // item prefix 2 = 2 グリフのみ（改行は未リビール）→ 1 行。
-        let two = LayoutEngine::layout(
-            &items,
-            2,
-            &region,
-            WritingMode::HorizontalTb,
-            12.0,
-            &FixedMetrics,
-        );
-        assert_eq!(two.len(), 1, "未リビールの改行は 2 行目を開かない");
-        // item prefix 3 = グリフ＋リビール済み改行 → 空の 2 行目が現れる。
-        let three = LayoutEngine::layout(
-            &items,
-            3,
-            &region,
-            WritingMode::HorizontalTb,
-            12.0,
-            &FixedMetrics,
-        );
-        assert_eq!(three.len(), 2);
-        assert!(three[1].glyphs.is_empty());
     }
 
     // ── 縮退・境界 ──
@@ -754,8 +708,8 @@ mod tests {
         assert_eq!(saturated[0].glyphs.len(), 5);
     }
 
-    /// 可視 item prefix 内の改行マーカーは反映され（R2.2）、直後のグリフが未リビールでも空行として
-    /// 現れる。ただし改行**自身**が prefix 外（未リビール）なら適用しない（#4・早発の空行を出さない）。
+    /// 可視 prefix 内の改行マーカーは即時反映され（R2.2）、直後のグリフが未リビール
+    /// でも空行として現れる。prefix 外（打ち切り後）の item は反映されない。
     #[test]
     fn line_break_within_visible_prefix_opens_empty_line() {
         let region = TextRegion::resolve(
@@ -768,8 +722,7 @@ mod tests {
             TextItem::LineBreak { ratio: 1.0 },
             TextItem::Glyph { ch: 'b' },
         ];
-        // item prefix 1 = グリフ 'a' のみ（改行は未リビール）→ 1 行・空行なし（#4）。
-        let before_break = LayoutEngine::layout(
+        let lines = LayoutEngine::layout(
             &items,
             1,
             &region,
@@ -777,20 +730,9 @@ mod tests {
             12.0,
             &FixedMetrics,
         );
-        assert_eq!(before_break.len(), 1, "改行が未リビールなら空行を出さない（#4）");
-        assert_eq!(before_break[0].glyphs.len(), 1);
-        // item prefix 2 = 'a'＋リビール済み改行 → 空の 2 行目が現れる（b は未リビール）。
-        let lines = LayoutEngine::layout(
-            &items,
-            2,
-            &region,
-            WritingMode::HorizontalTb,
-            12.0,
-            &FixedMetrics,
-        );
         assert_eq!(lines.len(), 2);
         assert_eq!(lines[0].glyphs.len(), 1);
-        assert!(lines[1].glyphs.is_empty(), "改行反映＝空行が現れる");
+        assert!(lines[1].glyphs.is_empty(), "改行は即時反映＝空行が現れる");
         // 空行の矩形: 行内零幅・行送り軸位置は pitch(15) 分進んでいる。
         assert_eq!(
             lines[1].rect,
@@ -803,7 +745,7 @@ mod tests {
         );
     }
 
-    /// 末尾改行はそれ自身がリビールされて初めて空の新行を開く（#4・後続 3.2 のあふれ判定入力になる形）。
+    /// 末尾改行（全グリフ可視）は空の新行を開く（後続 3.2 のあふれ判定入力になる形）。
     #[test]
     fn trailing_line_break_opens_empty_line() {
         let region = TextRegion::resolve(
@@ -812,20 +754,9 @@ mod tests {
             WritingMode::HorizontalTb,
         );
         let items = [TextItem::Glyph { ch: 'あ' }, TextItem::LineBreak { ratio: 1.0 }];
-        // 改行未リビール（item prefix 1）→ 1 行のみ。
-        let before = LayoutEngine::layout(
-            &items,
-            1,
-            &region,
-            WritingMode::HorizontalTb,
-            12.0,
-            &FixedMetrics,
-        );
-        assert_eq!(before.len(), 1, "改行が未リビールなら空行を出さない（#4）");
-        // 改行リビール済み（item prefix 2）→ 空の 2 行目。
         let lines = LayoutEngine::layout(
             &items,
-            2,
+            1,
             &region,
             WritingMode::HorizontalTb,
             12.0,
@@ -894,15 +825,17 @@ mod tests {
         items
     }
 
-    /// layout→visible_window の通し（テスト用最短経路・visible は全量＝全 item リビール済み）。
-    /// item 単位モデルでは可視 prefix 長はグリフ＋改行の通し個数ゆえ全量は `items.len()`。
+    /// layout→visible_window の通し（テスト用最短経路・visible は全量）。
     fn window_for(
         items: &[TextItem],
         region: &TextRegion,
         mode: WritingMode,
         font_height: f32,
     ) -> VisibleWindow {
-        let visible = items.len();
+        let visible = items
+            .iter()
+            .filter(|i| matches!(i, TextItem::Glyph { .. }))
+            .count();
         let lines = LayoutEngine::layout(items, visible, region, mode, font_height, &FixedMetrics);
         LayoutEngine::visible_window(&lines, region, mode)
     }
