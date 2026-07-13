@@ -57,6 +57,12 @@ pub enum SerikoMsg {
 ///
 /// inbox（std mpsc）の `Sender` を内包し、届いた発火を [`SerikoMsg::Cue`] として橋渡しする。
 /// この trait 実装が唯一の受け口＝差し込み口であり、追加の注入メソッドは設けない。
+///
+/// `Clone` を導出する（内側 `mpsc::Sender<SerikoMsg>` は常に `Clone`）。全 clone は単一の
+/// seriko アクター inbox への送信端であり配送意味は同一（`areka_ghost::boot` が要求する
+/// `S: SurfaceSink + Clone + Send + 'static` を満たし、dispatcher が talk ごとに sink を
+/// clone しても全 cue が同一 inbox へ FIFO 到着する）。
+#[derive(Clone)]
 pub struct SerikoSink {
     tx: std::sync::mpsc::Sender<SerikoMsg>,
 }

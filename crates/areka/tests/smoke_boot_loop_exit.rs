@@ -164,6 +164,28 @@ fn skeleton_boots_with_real_ghost_windows_and_exits_zero() {
     );
 
     let all = format!("{out}\n{err}");
+
+    // wire 成立マーカーの存在 assert（task 7.1・R7.3 観測境界・S6 撤回に伴う存在チェック）:
+    // `main` は起動窓（`open_startup_window`）の後で `emo2_boot::wire_emo2_boot` を **無条件に**
+    // 呼ぶ。実 fixture を供給したこの経路では構築入力の組立→`spawn_seriko`→`areka_ghost::boot` が
+    // 成立して `wired=true` を返し、`add_systems(FrameFinalize, emo2_frame_system)` の直後に
+    // `emo2_boot::mod.rs` がこのマーカーを `info!` で発火する。捕捉出力にこの文言が含まれることを
+    // assert することで、**実結線経路（`emo2_frame_system` の schedule 登録）が end-to-end で
+    // 少なくとも 1 回踏まれた**ことを固定する（決定論檻ではなく存在チェック）。
+    //
+    // 配置とは独立: wire 成立は placement／モニタ可用性に依存しない（`wire_emo2_boot` は monitor を
+    // 列挙せず、`boot` は actor spawn で完了し SHIORI 接続の成否を待たない——実測でも 32bit SHIORI
+    // helper の LOAD 失敗より前に `wired=true` へ到達）。ゆえにモニタ 0 台の headless フォール
+    // バック分岐より **前** で無条件に検証する。フォールバック boot 経路（引数なし smoke）は本
+    // マーカーを一切出さない（代わりに「LogSink フォールバックへ委ねる」を出す）ため、本 assert は
+    // `wired=true` 経路に一意であり非 wired 経路では必ず失敗する（RED 実証済み）。
+    assert!(
+        all.contains("emo2-boot: 実 sink 結線が成立しました（wire 成立）"),
+        "実 fixture 経路は emo2-boot の実 sink 結線（wire 成立）マーカーを出すべき\
+         （`emo2_frame_system` の schedule 登録が end-to-end で踏まれた証跡・task 7.1）。\
+         \n--- child output ---\n{all}"
+    );
+
     if all.contains("窓配置の準備に失敗しました") && all.contains("モニタ") {
         // モニタ 0 台環境（headless CI）: Monitor エラー→ error! フォールバックが契約どおり。
         eprintln!("note: モニタ 0 台環境のため本物方向はフォールバック完走で受理（Monitor エラー）");
