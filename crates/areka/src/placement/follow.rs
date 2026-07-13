@@ -1673,6 +1673,47 @@ mod tests {
         }
     }
 
+    /// (b') 非 Bottom アンカーの drag 配線存在チェック（Req1.6・design Integration
+    /// Tests #8 末尾・[[test-only-decision-branches-not-proven-wiring]] の「一度」）:
+    /// `Anchored(Left)` 窓のドラッグで X=`wa.left` 固定・Y 保持（縦自由）になる。
+    ///
+    /// これは `on_char_drag` の drag 配線が**実 `Anchored.0`（Left）を `project_anchor`
+    /// へ転送している**証拠であり、`Anchor::Bottom` をハードコードしていないことを
+    /// 弁別する檻——もし Bottom 決め打ちなら X=raw.x（≠wa.left）・Y=wa.bottom−h
+    /// （≠raw.y）となって落ちる。期待 `(wa.left, raw.y)` と Bottom 誤配線の
+    /// `(raw.x, wa.bottom−h)` が両軸とも全く異なる座標になるよう値を選ぶ。Top/Right
+    /// の drag は同一配線の再確認ゆえ足さない（proven-wiring 過剰檻の回避）。
+    #[test]
+    fn on_char_drag_left_anchor_pins_left_edge_and_keeps_y() {
+        let mut world = World::new();
+        // 96 非倍数の left=53・bottom=1043・非零原点（dpi/96 再スケール混入の檻）
+        world.insert_resource(odd_edge_snapshot()); // rect(53, 37, 1877, 1043)
+        let start = (1400, 600);
+        // 初期窓位置＋カーソル差分で生ドラッグ座標 raw を復元（policy_mapped_position と同式）:
+        // raw.x = 700 + (1500−1400) = 800／raw.y = 300 + (917−600) = 617
+        let window = world
+            .spawn((
+                fake_handle(0x1000),
+                window_pos_sized(700, 300, 434, 687),
+                Anchored(Anchor::Left),
+                dragging_state((700, 300), start),
+            ))
+            .id();
+
+        let ev = Phase::Bubble(drag_event_at(window, start, (1500, 917)));
+        // donor 同様イベントは消費しない（伝播続行＝false）
+        assert!(!on_char_drag(&mut world, window, window, &ev));
+
+        // Left（左端固定・縦自由）: X=wa.left=53・Y=raw.y=617。もし配線が Bottom を
+        // ハードコードしていたら (raw.x=800, wa.bottom−h=1043−687=356) となり、両軸とも
+        // 全く異なる座標で落ちる（wa.left 53 ≠ raw.x 800／wa.bottom−h 356 ≠ raw.y 617）。
+        assert_eq!(
+            position_of(&world, window),
+            Point { x: 53, y: 617 },
+            "実 Anchored.0=Left を転送: X=wa.left 固定・Y=raw.y 保持（Bottom 決め打ちなら落ちる）"
+        );
+    }
+
     /// (c) モニタ跨ぎ: 生ドラッグ位置の窓中心が隣モニタへ移ったら、跨いだ先の
     /// work area 下端へ再吸着し、戻れば元モニタの下端へ戻る（live 算出・4.7）。
     #[test]
