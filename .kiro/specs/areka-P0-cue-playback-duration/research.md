@@ -260,7 +260,7 @@ Topic 1 裁定の系として開発者が dola の表現範囲を明示補足:
 | 3 純関数粒度 | **(a)**: `text_playback_duration(text)=char_count×nominal`（暗黙のみ） | Instruction は Text/Wait 分離済み・R3.3/R3.4 が明示ウェイト累積を compile 層に位置づけ（純関数が畳むと二重計上）。R2.4 は「暗黙半分＝純関数／明示半分＝compile 合成」で reconcile |
 | 4 定数所在 | `CHAR_NOMINAL_MS: u64 = 50`（sakura・唯一） | parser `WAIT_UNIT_MS`（`\w` 単位・別概念）・emo-text `char_wait`（撤去）と三者分別 |
 | 5 char_wait | **完全撤去** | 5.2「独自 per-char 定数を保持しない」に忠実。D=0 縮退が即時可視を自然に与えフォールバック定数不要 |
-| 6 reveal 式 | **3-ii**（`r_i = max(r_{i-1}+D/N, at)`・tail 追従温存） | 既存式構造を保存し跨チャンク無損失挙動・回帰リスク最小。研究 §3 の暫定 3-i から、`D=N×50ms` 時に旧挙動ビット等価となる 3-ii へ精緻化（出発点の設計精緻化） |
+| 6 reveal 式 | **3-ii**（`r_i = max(r_{i-1}+D/N, at)`・tail 追従温存） | 既存式構造を保存し跨チャンク無損失挙動・回帰リスク最小。研究 §3 の暫定 3-i から、`D=N×50ms` 時に旧挙動と**機能等価**（全 tick で可視グリフ数一致・厳密ビット等価ではない＝設計ディスカッション #1 で FP 緩和）となる 3-ii へ精緻化 |
 | 7 Clear 粒度 | **書込スコープ集合を先頭前置**（走査後 post-pass・`BTreeSet<u32>`） | R4.1「冒頭前置」＋R4.3「書込各スコープ」・ukadoc written-scopes 準拠。安定ソート＋同一 at FIFO で Clear→Text 順を保証 |
 | 8 wintf Typewriter | 対象外（現状維持） | 8.1・実行経路外 |
 | 9 serde 表現 | `duration: f64` ＋ `#[serde(default)]`（0.0=瞬時） | 1.5「未付与＝0 相当」・7.4 後方互換・0 と未指定を区別する意味論的必要なし・算術単純 |

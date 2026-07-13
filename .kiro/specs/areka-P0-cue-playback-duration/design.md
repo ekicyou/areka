@@ -338,8 +338,8 @@ pub fn compile(instructions: &[Instruction]) -> CompiledTalk;
 - **並行**: 注入時刻 `talk_time` 駆動を維持（`Instant`/sleep 不使用・7.1）。
 
 **Implementation Notes**
-- Integration: `cue.duration=N×50ms`（sakura の既定）かつ interval=`D/N=50ms` のとき、reveal 時刻は旧 `char_wait=0.05` と**ビット等価**——reveal 挙動を保存しつつタイムラインのみを是正する（回帰リスク最小）。
-- Validation: 既存 reveal テスト群（`reveal_times_follow_char_wait_formula_from_chunk_start` 等）を D 駆動へ更新（config.char_wait ではなく cue.duration を与え、同一 reveal 時刻を検証）。縮退（D=0 即時／N=0 無追記）を新規檻で網羅。
+- Integration: `cue.duration=N×50ms`（sakura の既定）のとき interval=`D/N` は実効 50ms 相当となり、reveal 時刻は旧 `char_wait=0.05` 挙動と**機能等価**（全注入時刻 tick で可視グリフ数が一致）——reveal 挙動を保存しつつタイムラインのみを是正する（回帰リスク最小）。**厳密なビット等価は主張しない**: `Duration::from_millis(N*CHAR_NOMINAL_MS).as_secs_f64() / (N as f64)` は f64 リテラル `0.05` と一般に一致しない（例 N=3 で ≈0.049999999999999996・約 1 ULP 差）が、`max` 追従の累積でも可視グリフ数は不変。dola 契約上 emo-text が受け取るのは**不透明 f64 秒**ゆえ interval は f64 除算で導出し（整数 ms へ戻さない）、この除算は決定的（同一入力→同一 f64）＝決定論檻と両立する。
+- Validation: 既存 reveal テスト群（`reveal_times_follow_char_wait_formula_from_chunk_start` 等）を D 駆動へ更新（config.char_wait ではなく cue.duration を与える）。**期待 reveal 時刻は実装と同一の `D/N`（f64 除算＋`max` 追従）算術で再計算して比較し、旧 `0.05` リテラル由来の期待値を使わない**（FP 差で flaky 化するため・memory: deterministic-test-coverage-mandate 整合）。縮退（D=0 即時／N=0 無追記）を新規檻で網羅。
 - Risks: `TalkCue` へ `duration` 追加で全テストヘルパ（state/actor/sink）が更新必要（コンパイラ強制）。既存テストは「陳腐化」ではなく「シグネチャ変更で要更新」（obsolete-vs-broken 方針）。
 
 ## Data Models
