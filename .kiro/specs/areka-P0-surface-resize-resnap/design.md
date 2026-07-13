@@ -210,6 +210,7 @@ producer（seriko）は本 spec 非所有。本 spec は `Changed<Anchored>` に
 | 5.2 | dpi=96 のみは不合格 | 受け入れ判定 | 実 DPI 証跡 | — |
 | 5.3 | 本番ゴースト検証 | 統合 | emo2 real run | — |
 | 5.4 | 全アンカー決定論純粋関数テスト | project_anchor tests | headless 純粋檻 | — |
+| 5.5 | 振動なし・バルーンクリック可の退行ゲート | resize_window_to, enqueue_window_set_pos | 実 DPI 目視（独立観測項目） | 寸法変化フロー |
 | 6.1–6.6 | 境界非所有 | Boundary Commitments | — | — |
 
 ## Components and Interfaces
@@ -436,6 +437,7 @@ log-first（安易 panic 禁止・失敗は `warn!`／`debug!`＋戻り値）を
 ### Monitoring
 
 - 縮退・非正寸・不在は `warn!`／`debug!` でトレース。実 DPI 実機受け入れ（Req5）で「切替後の下端維持」を目視証跡として残す（dpi=96 のみは不合格・Req5.2）。
+- **退行面の証跡取得（Req5.5）**: 実 DPI 目視で「切替直後に窓が振動しない」「resize 後もバルーンがクリック可能（透過ヒット生存）」を、アンカー維持とは別枠の合否観測として記録する。`enqueue_window_set_pos(.., Some)` の bypass ミラー＋`is_self_initiated`/`SELF_INITIATED_DEPTH` ガードが size 変化込みでも `WM_WINDOWPOSCHANGED` echo を二重反映しない不変を、実機で退行が無いことをもって裏取りする。
 
 ## Testing Strategy
 
@@ -463,6 +465,7 @@ log-first（安易 panic 禁止・失敗は `warn!`／`debug!`＋戻り値）を
 1. **切替後アンカー維持**（Req5.1）: per-monitor v2 DPI 125% で emo2 本番ゴーストを `bottom` 表示、`surface0`（434×687）→`\s[1000]`（異寸）切替後もキャラ窓下端が画面下端へ維持（宙に浮かない・ずれない）を目視。`surface0→\s[1000]` は任意寸法差の一例＝特定 surface 番号非依存。
 2. **DPI=96 単独は不合格**（Req5.2）: 実 DPI（≠96）実機証跡を必達とし、dpi=96 の自己整合を受け入れ根拠にしない。
 3. **本番ゴースト先行**（Req5.3）: 単発デモ（ハードコード窓寸・架空 work area）でなく emo2 real run に対して検証（window-placement 原則継承）。
+4. **退行ゲート＝振動なし・バルーンクリック可**（Req5.5・アンカー維持 5.1 とは独立した合否軸）: per-monitor v2 DPI≠96 で `surface0`→`\s[1000]` 異寸切替の**直後**に、(a) キャラ窓が振動せず一度書きで確定位置へ収束すること、(b) resize 後もバルーン窓の透過ヒット（αマスクのクリックスルー・`AlphaMask::is_hit`）が生きていることを目視証跡として取得する。決定論檻は偽 HWND ゆえ実 `WM_WINDOWPOSCHANGED` echo を観測できない＝この退行面は構造的に実機目視でしか捉えられないため第一級ゲートに立てる（`enqueue_window_set_pos(.., Some)` が `WindowPos.size` を bypass ミラーしつつ二重 `SetWindowPos` を発行しない echo 抑止不変の実機確認を兼ねる）。
 
 ## Security Considerations
 
