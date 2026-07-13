@@ -458,7 +458,7 @@ log-first（安易 panic 禁止・失敗は `warn!`／`debug!`＋戻り値）を
 5. **enqueue_window_set_pos 後方互換**（Req1.5）: `None` で移動専用（`SWP_NOSIZE` 継続・既存挙動）／`Some` で `WindowPos.size` ミラー。既存 `move_window_to` 6 テストが不変で緑。
 6. **anchor_changed_system**（Req1.4）: `Anchored` を直接 mutate→現 `WindowPos.size` で新アンカー辺へ再射影（seriko 不要）。
 7. **resnap_from_sizes 駆動判定**（Req1.3,3.1,3.2,4.5）: 合成 (scope,size) で「異寸→resize」「同寸→no-op」「非正/変換失敗→skip」「shell scope のみ・balloon 混入無し」。
-8. **drag 統一**（Req1.6）: `on_char_drag` が `Anchored` 経由 `project_anchor` を使い、`Bottom` は従来の Y 釘付け（既存 drag 檻の移植）、`Free` は wndproc 委譲不変。
+8. **drag 統一**（Req1.6・設計ディスカッション#3 で線引き確定）: `on_char_drag` が `Anchored` 経由 `project_anchor` を使い、`Bottom` は従来の Y 釘付け（既存 drag 檻の移植）、`Free` は wndproc 委譲不変。**加えて非 Bottom の存在チェックとして `Left` を一件**: `Anchored(Left)` 窓のドラッグで X=`wa.left` 固定・Y 保持（縦自由）を檻。これは `on_char_drag` の drag 配線が**実 `Anchored.0` を転送している（`Anchor::Bottom` をハードコードしていない）**ことの証拠＝原則「証明済み配線は e2e 一度の存在チェックで足る」（[[test-only-decision-branches-not-proven-wiring]]）の「一度」。**線引きの根拠**: (i) 全アンカー射影の計算は純粋 `project_anchor`（Unit #1）が全 5 網羅済み・(ii) `on_char_drag` の runtime 判断分岐は Free/非 Free の**二値**（`DragConstraint` は M1 非付与＝自由軸は射影の帰結ゆえ per-anchor 分岐なし）・(iii) resize 経路は #2 が Left/Right 済みだが drag は**独立配線**ゆえ独自に一件要る。Top/Right の drag は同一配線の再確認ゆえ**足さない**（proven-wiring 過剰檻の回避）。
 
 ### E2E / 手動受け入れ（Req5.1–5.3・本番ゴースト・実 DPI≠96）
 
