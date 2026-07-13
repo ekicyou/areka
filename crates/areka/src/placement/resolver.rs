@@ -227,6 +227,65 @@ pub fn virtual_desktop_union(monitor_bounds: &[RectPx]) -> Option<RectPx> {
     })
 }
 
+/// 5 値アンカー種別（純粋値・`seriko.alignmenttodesktop` の解決済み解釈結果・4.2）。
+///
+/// 「シェル座標系のどの辺を work area の対応辺へ固定するか」を表す不変値。
+/// wintf/bevy 非依存で `resolver` に在住し（U5・純粋 DPI 檻が wintf 非依存で走る）、
+/// 後続で `ScopePlacement.anchor` として spawn へ運ばれ `Anchored(Anchor)` Component
+/// として char 窓へ焼き込まれる。射影 T（`project_anchor`）は follow 層が所有する。
+#[allow(dead_code)] // scaffold（task 1.1）: ScopePlacement への結線は task 1.2・射影消費は follow（task）
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Anchor {
+    /// 上端固定（`y = wa.top`・X 保持）。
+    Top,
+    /// 下端固定（既定・`y = wa.bottom − h`・X 保持）。既存 `BottomSnapPolicy` の一般化元。
+    Bottom,
+    /// 左端固定（`x = wa.left`・Y 保持）。
+    Left,
+    /// 右端固定（`x = wa.right − w`・Y 保持）。
+    Right,
+    /// アンカー辺なし（position 保持・寸法のみ反映・全方向ドラッグ自由）。
+    Free,
+}
+
+#[allow(dead_code)] // scaffold（task 1.1）: 結線は task 1.2 以降
+impl Anchor {
+    /// cascade 解決済み `Alignment` を 5 値アンカーへ解釈する消費写像（4.2）。
+    ///
+    /// **優先度チェーンの読取り・解決は行わない**（config.rs の領分・Req6.3）。
+    /// 既に解決済みの `Alignment` を解釈消費するのみ:
+    /// - `Bottom`→`Bottom`・`Free`→`Free`
+    /// - `Seam(s)`: `s.trim().to_ascii_lowercase()` で正規化し `"top"`→`Top`・
+    ///   `"left"`→`Left`・`"right"`→`Right`・それ以外（未知値）→`Bottom`（フォールバック・
+    ///   window-placement DD9「未知は bottom 相当」を継承）＋`warn!`。正規化は防御
+    ///   （parsers 側で正規化済み前提だが大小文字・前後空白へ念のため備える）。
+    pub fn from_alignment(alignment: &Alignment) -> Anchor {
+        match alignment {
+            Alignment::Bottom => Anchor::Bottom,
+            Alignment::Free => Anchor::Free,
+            Alignment::Seam(value) => match value.trim().to_ascii_lowercase().as_str() {
+                "top" => Anchor::Top,
+                "left" => Anchor::Left,
+                "right" => Anchor::Right,
+                // 未知アンカー指定は bottom 相当へフォールバック（DD9）＋警告を残す
+                _ => {
+                    warn!(
+                        value = %value,
+                        "alignmenttodesktop の未知アンカー指定（bottom 相当で解釈・4.2/DD9）"
+                    );
+                    Anchor::Bottom
+                }
+            },
+        }
+    }
+
+    /// アンカー辺を持たない（＝`Free`）か（格納でなく導出・可読性用述語）。
+    /// bottom_snap 等の boolean が要る使用点は `!is_free()` で導出できる。
+    pub fn is_free(self) -> bool {
+        matches!(self, Anchor::Free)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1065,5 +1124,62 @@ mod tests {
                 );
             }
         }
+    }
+
+    // ------------------------------------------------------------------
+    // Anchor::from_alignment（4.2・design Testing Strategy Unit #4）
+    // ------------------------------------------------------------------
+
+    /// 4.2: cascade 解決済み `Alignment` の 5 値アンカーへの解釈写像を全分岐固定する。
+    /// `Bottom`→`Bottom`・`Free`→`Free`・`Seam("top"/"left"/"right")`→対応値・
+    /// 未知 `Seam` →`Bottom`（フォールバック・DD9「未知は bottom 相当」を継承）。
+    #[test]
+    fn from_alignment_maps_all_branches() {
+        assert_eq!(
+            Anchor::from_alignment(&Alignment::Bottom),
+            Anchor::Bottom,
+            "Bottom → Bottom"
+        );
+        assert_eq!(
+            Anchor::from_alignment(&Alignment::Free),
+            Anchor::Free,
+            "Free → Free"
+        );
+        assert_eq!(
+            Anchor::from_alignment(&Alignment::Seam("top".to_owned())),
+            Anchor::Top,
+            "Seam(top) → Top"
+        );
+        assert_eq!(
+            Anchor::from_alignment(&Alignment::Seam("left".to_owned())),
+            Anchor::Left,
+            "Seam(left) → Left"
+        );
+        assert_eq!(
+            Anchor::from_alignment(&Alignment::Seam("right".to_owned())),
+            Anchor::Right,
+            "Seam(right) → Right"
+        );
+        assert_eq!(
+            Anchor::from_alignment(&Alignment::Seam("unknown-value".to_owned())),
+            Anchor::Bottom,
+            "Seam(未知) → Bottom（フォールバック）"
+        );
+    }
+
+    /// 4.2 補: `Seam` 値は `trim().to_ascii_lowercase()` で正規化してから解釈する
+    /// （parsers 側で正規化済み前提だが防御・design Implementation Notes Risks）。
+    #[test]
+    fn from_alignment_normalizes_case_and_whitespace() {
+        assert_eq!(
+            Anchor::from_alignment(&Alignment::Seam(" TOP ".to_owned())),
+            Anchor::Top,
+            "前後空白＋大文字も Top へ"
+        );
+        assert_eq!(
+            Anchor::from_alignment(&Alignment::Seam("Right".to_owned())),
+            Anchor::Right,
+            "大文字混じりも Right へ"
+        );
     }
 }
