@@ -271,7 +271,7 @@ Topic 1 裁定の系として開発者が dola の表現範囲を明示補足:
 - **Selected**: sakura compile が `offset += D`（`text_playback_duration` の戻り値）で絶対 `start_time` へ焼き込み、当該 Text cue へ同一 D を第一級データとして付与。dola は焼込み済み絶対時刻と不透明 D を保持・点配送。emo-text は配送 D から reveal（interval=D/N）。
 - **Rationale**: dola の同期配送責務（同一台本を複数表現者へ同一絶対時刻で・プロセス跨ぎ）。時刻を配送時導出すると desync ゆえ絶対時刻は同期の必須要件。既存 `Wait` 累積と対称で `TimedSchedule` 中核不改変。単一真実源は計算層（純関数 1 本）で start_time と D は 2 投影を不変台本へ凍結（実行時ドリフト不能）。
 - **Trade-offs**: `Cue`/`TalkCue` 双方への 1 フィールド追加と全 `TalkCue` リテラル更新（コンパイラ強制・低リスク）。得るのは serde 後方互換・低回帰・汎用性。
-- **Follow-up（実装検証）**: ①`Cue` serde default 後方互換の roundtrip 檻。②Clear 前置の「先頭前置＋安定ソート＋同一 at FIFO」順序保証の統合檻。③`D=N×50ms` 時に reveal がビット等価となることの確認。④`\C` 追記モード対応時は Clear 前置を**条件化**する必要（現状 `\C` 未対応ゆえ無条件前置で妥当・design Revalidation Triggers へ記録）。
+- **Follow-up（実装検証）**: ①`Cue` serde default 後方互換の roundtrip 檻。②Clear 前置の「先頭前置＋安定ソート＋同一 at FIFO」順序保証の統合檻。③`D=N×50ms` 時に reveal が旧挙動と**機能等価**（可視グリフ数一致・厳密ビット等価は主張しない・期待値は同一 `D/N` 算術で再計算）となることの確認。④`\C` 追記モード対応時は Clear 前置を**条件化**する必要（現状 `\C` 未対応ゆえ無条件前置で妥当・design Revalidation Triggers へ記録）。
 
 ### 8.5 Risks & Mitigations（設計フェーズ）
 
@@ -279,3 +279,47 @@ Topic 1 裁定の系として開発者が dola の表現範囲を明示補足:
 - **テスト波及**: `TalkCue`/`Cue` へのフィールド追加で全リテラル更新 → コンパイラ強制検出（obsolete でなく「シグネチャ変更で要更新」＝更新方針）。reveal テストは D 駆動へ差し替え（検証意図は保存）。
 - **R2.4 の字義**: 純関数が明示ウェイトを畳まない選択は R3.3/R3.4 と整合し二重計上を回避する意図的解釈。design.md に reconcile を明記済み（paper-over ではない）。
 - **実機ゲート**: #3/#4/#6/`\s` は決定論外の人間サインオフ（6.5）・絶対パス起動必須（pasta.dll LoadLibrary 失敗回避）。
+
+---
+
+## 9. 設計ディスカッション #1（2026-07-13）— envelope 一律 duration・第一級 Wait・broadcast・honor 契約
+
+> `/kiro-design` の設計ディスカッション（controller inline・chat window）で、design-validation の Critical Issue 2 件を triage し、開発者との対話で設計を「envelope 一律 duration ＋ 純粋 Wait cue の第一級化 ＋ 全 cue broadcast ＋ 全演者 duration honor 契約」へ収束させた。当初の design.md（envelope duration＋Wait 吸収＋型 routing）から**根本的に発展**したため全面改稿。開発者曰く「設計が迷走してただけで最初から要件はここまで含んでいる」——要件を、それが元々意味していた姿へ書き起こした。実コードは workflow（8 エージェント：ground 5＋analyze 3）で突合検証済み。
+
+### 9.1 Category A（自明修正・即コミット）
+- **reveal「ビット等価」→「機能等価」**（Critical Issue 2）: `Duration::from_millis(N*50).as_secs_f64()/N` は f64 リテラル `0.05` と一般に不一致（N=3 で ≈0.049999999999999996・約 1 ULP 差）。機能挙動（可視グリフ数）は不変だが、旧 0.05 由来の期待値へ `assert_eq!` すると flaky 化（deterministic-test-coverage-mandate と衝突）。design.md の「ビット等価」を「機能等価」へ緩め、テスト期待値を同一 `D/N` 算術で再計算する方針を明記。commit e91b12f6。
+
+### 9.2 Category B / 開発者裁定の連鎖（要件を正しい姿へ）
+討議は Critical Issue 1（R2.4 純関数 reconcile）を起点に、開発者の一連の裁定で設計の根本モデルを確定させた：
+
+1. **純関数は暗黙 per-char のみ（案Y）**: R2.4 の「単一純関数が暗黙＋明示を加算」の字義は言い過ぎ。`\_w` は parser が `Instruction::Wait` へ分離済みゆえ、純関数へ畳むと compile 累積と二重計上。純関数＝暗黙のみ／`\_w`＝compile 合成、と要件文を精緻化（R3）。案Z（純関数に Instruction 列を食わせ一括畳み）は二重計上ゆえ棄却。
+
+2. **duration は envelope（payload 埋め込み棄却）**: 開発者「Text にも再生時間フィールドを」→ 一般化「すべての時間を消費するコマンドに時間情報が必要」。これは payload 埋め込みでなく **envelope 一律フィールド**が素直な器（全 cue が一律に時間スロットを持つ）。決定打は後述の honor 契約。
+
+3. **Wait は第一級 cue（吸収でなく発行）**: 開発者「Wait が無いと色々破綻する・時間だけを待機するコマンドは必要」。実コード突合（workflow）で判明した破綻点＝**吸収は末尾・単独の待ちを台本から消す**。dola は同一台本を複数プロセスの表現者へ配る＝**台本は自己完結した楽譜**であるべきで、吸収された末尾待ちは別プロセス表現者に見えず早期終了＝desync。`CueCommand::Wait`（action 空・unit・duration は envelope）を additive 追加し、compile が `\_w`→Wait cue 発行＋`offset += d`。`BarrierKind::Timeout` は全スケジュール停止の外部解決 seam ゆえ不採用（非ブロッキング既知累積待ちと意味論不一致）。
+
+4. **配送は broadcast（型 routing 廃止）**: 開発者「キューコマンドが種類で配信されている？ たとえ自分に関係なくても全員に配信されるべき・演者側で無視すればよい」。実コード突合で、現状 `cue_target_of` は 1 cue→1 sink の中央振り分けで表現者は同一台本を共有していない一方、**seriko/emo-text は既に演者側 relevance フィルタを持つ**（中央振り分けと二重フィルタで冗長）。broadcast（全 cue を全 sink へ）＋演者側フィルタへ寄せる。`CueTarget::All` は不要（振り分け判断自体が消える・cue_target_of は演者側ヘルパへ降格）。
+
+5. **honor 契約（duration を決して落とさない）＋ envelope 決着**: 開発者「自分が処理しないコマンドでも duration だけは絶対に無視してはダメ・これが時刻同期の肝」。これが **duration=envelope を強制**する決定打——表現者が**コマンドを解釈せずに duration を honor** するには、duration が payload に埋まっていてはならない（解釈できない表現者が抽出できない）。envelope なら command-agnostic に一律 honor 可能。Wait は「action 空・duration のみの基礎コマンド」＝この契約の純粋形。
+
+6. **0 と「フィールド欠落」の峻別**: 開発者「duration が結果的に 0 なのは許容、だが duration フィールドそのものが無いコマンドという概念を作ると将来問題が出る」。全 presentation cue が envelope duration を持ち、瞬時は明示的 0（`#[serde(default)]` で 0 はワイヤ省略・型には常在）。「duration を持たない cue command」概念は作らない＝honor 契約に例外（分岐）を作らない。
+
+### 9.3 「duration が本質的に非該当なコマンド」調査（開発者要請）
+`command.rs` 実定義を突合し、duration 保持の要否を列挙：
+- **`CueCommand`（8＋Wait）は全て presentation timeline イベント**＝duration は必ず問える（瞬時は 0）。Text=reveal D／Wait=待ち／Custom=command 依存／Clear・Emote・BalloonSurface・NewLine・Choice・EntityRef=0（将来アニメで >0 化しうる）。**②「フィールド欠落」該当は一つも無い**（全て ①「0 でフィールド在り」）。
+- **duration が本質的に非該当なのは `CuePayload` の別アームのみ**: `Barrier(BarrierKind)`＝動的停止点・静的タイムライン外（時間は timeout であって duration でない・research §7.5）／`Routing(RoutingCommand)`＝制御プレーンで `ready()` に届かず表現者未配送。これらは `CueCommand` でなく最初から別物ゆえ、presentation cue に欠落は生じない。
+- 正直な発見: 現行語彙では**瞬時（duration=0）が多数派**で「無 duration が特殊」は as-is では成り立たない。開発者の直感は**アニメが載る理想形**の視点（Emote 仕草・BalloonSurface フェード等が duration を持つ将来）で、envelope 一律 duration がその future-proof な器。
+
+### 9.4 実コード突合サマリ（workflow ground truth）
+- `Cue { actor, start_time, payload }`（duration なし・PartialEq 非導出）。`CueCommand` 8 variant（時間コマンド無し）。時間占有は `BarrierKind::Timeout{duration}` のみ（別アーム）。
+- `TimedSchedule` は純点配送＝Payload は duration を持たず**時間を占有しない**（Barrier のみ全停止）。→ Wait cue は「時間を待たせる」のでなく「台本を完結させ・duration を honor 対象として運ぶ」もの。整列は焼き込み絶対 start_time が担う（二重待ち禁止）。
+- `cue_target_of` は exhaustive・catch-all 無し（variant 追加でコンパイラ強制）。`on_tick` は 1 sink emit。seriko は実装済みで自前 `cue_target_of` 判定・emo-text は網羅 match で非担当を明示無視＝**両者とも演者側フィルタ済み**（broadcast 化で本来の役目に）。
+- `CueSheet::new` 安定ソート＋`on_tick` 同一 at FIFO で Clear→Text 順を担保。`TimedSchedule` の非負/NaN ガードは debug-only（release で NaN が partition_point を壊す・D3-V/P25）→ duration の有限・非負は計算層 `text_playback_duration` で保証。
+
+### 9.5 要件反映
+- **R1** を「全 cue の再生時間保持と絶対時刻同期配送」へ拡張（envelope 一律・0 とフィールド欠落峻別・Barrier/Routing 非該当を明記）。
+- **R2** 新設「全表現者の duration honor 契約」（broadcast・action 可否に関わらず duration honor・演者側 relevance）。
+- **R3** 純関数を暗黙 per-char のみへ精緻化（`\_w` は compile 合成）。
+- **R5** 新設「純粋 Wait cue の第一級発行と自己完結台本」。
+- **R7** emo-text に honor 契約 AC 追加。**R9** に Wait additive・envelope 一律・欠落概念不採用を追加。**R10** に動的制御は dola 外を追加。
+- 旧 R2〜R8 は R3〜R10 へ繰り下げ（設計ディスカッションでの正当な要件更新）。**本 research の §1〜§8 は旧番号を参照**（対応: 旧 R1→新 R1 拡張／旧 R2→R3／旧 R3→R4／旧 R4→R6／旧 R5→R7／旧 R6→R8（例 旧 R6.4「\s 同期」→R8.4・旧 6.5「人間サインオフ」→R8.5）／旧 R7→R9（旧 R7.3/7.4「serde」→R9.3/9.4）／旧 R8→R10（旧 R8.1「wintf」→R10.1）。R2「honor 契約」は新設）。§9 以降は新番号。
