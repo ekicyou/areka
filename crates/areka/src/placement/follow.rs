@@ -38,7 +38,7 @@ use wintf::ecs::pointer::Phase;
 use wintf::ecs::window::monitor::Monitor;
 use wintf::ecs::{Point, SetWindowPosCommand, WindowHandle, WindowPos};
 
-use super::resolver::{PointPx, RectPx, SizePx};
+use super::resolver::{Anchor, PointPx, RectPx, SizePx};
 use super::spawn::BottomSnap;
 
 // =============================================================================
@@ -101,6 +101,94 @@ impl DragPositionPolicy for BottomSnapPolicy {
             // （resolver の saturating 演算と同じ防波堤）
             y: wa.bottom.saturating_sub(size.h),
         }
+    }
+}
+
+/// 変換 T: 解決済みアンカー＋生位置＋新寸から、アンカー辺を work area 対応辺へ
+/// 固定した窓左上位置を返す純粋射影（5 アンカー・task 2.1・Req1.1/1.2/2.1-2.5/3.4/5.4）。
+///
+/// シェル座標系（アンカー辺基準）→ ウィンドウ座標系（サーフェス寸法基準）の変換 T の
+/// 恒常維持を担う純粋関数（World 不可視・物理 px 単一通貨・`saturating_*` 演算で
+/// panic しない）。ドラッグ（`policy_mapped_position`）とリサイズ（後続 task の
+/// `resize_window_to`）の**両者が同一 T を呼ぶ**ことで座標系変換の二重化を避ける
+/// （R1.6）。
+///
+/// # 射影規則（`wa` 取得成功かつ正寸のとき）
+///
+/// `wa` は「生位置 `raw` に置いた窓矩形の中心が属するモニタの work area」
+/// （[`work_area_for_window`]）。モニタ跨ぎは live 算出＝跨いだ先の対応辺へ再吸着する。
+/// - `Bottom`: 既存 [`BottomSnapPolicy::resolve`] へ**委譲**（X 保持・`y = wa.bottom − h`）。
+///   再定義しない（Req1.2・bottom は T の一事例）。
+/// - `Top`: `x = raw.x`（保持）・`y = wa.top`。
+/// - `Left`: `x = wa.left`・`y = raw.y`（保持）。
+/// - `Right`: `x = wa.right − w`・`y = raw.y`（保持）。
+/// - `Free`: `raw` 素通し（identity・position 再計算なし・Req2.5）。
+///
+/// # graceful degradation（identity＝`raw` 素通し・panic しない・既存 `BottomSnapPolicy` 流儀）
+///
+/// - `Free` は常に identity（`wa` 不要・寸法・snapshot を問わない）。
+/// - 非正寸（w≤0 or h≤0）は identity＋`debug!`。`wa.right − w`／`wa.bottom − h` が
+///   `i32::MAX` 方向へ暴走する前に弾く（Req3.4・`BottomSnapPolicy` の CW_USEDEFAULT
+///   センチネル縮退と整合）。
+/// - `snapshot` 不在（`None`）／空 snapshot（[`work_area_for_window`] が `None`）は
+///   identity＋`debug!`。ドラッグ経路 spam 回避で `warn!` でなく `debug!`（既存流儀）。
+///
+/// # 不変条件（テストで固定）
+///
+/// 正寸・snapshot 有効時、適用後の窓のアンカー辺 ≡ work area 対応辺。既にアンカー辺
+/// 一致の位置に対しては同値を返す（べき等の基礎・R3.1）。
+#[allow(dead_code)] // consumer（resize_window_to／on_char_drag 改修）は後続 task 2.2-2.4 の領分
+pub fn project_anchor(
+    anchor: Anchor,
+    raw: PointPx,
+    size: SizePx,
+    snapshot: Option<&MonitorSnapshot>,
+) -> PointPx {
+    // Free: アンカー辺なし＝常に identity（wa 不要・寸法・snapshot を問わない・Req2.5）
+    if let Anchor::Free = anchor {
+        return raw;
+    }
+
+    // Bottom: 既存 BottomSnapPolicy へ全面委譲（再定義しない・Req1.2）。縮退規約
+    // （snapshot 不在/空・非正寸）も同ポリシーが所有し、T の bottom 事例＝同値になる
+    if let Anchor::Bottom = anchor {
+        return BottomSnapPolicy.resolve(raw, size, snapshot);
+    }
+
+    // 以下 Top/Left/Right（bottom の一般化）。非正寸は wa.right−w／暴走の前に弾く
+    if size.w <= 0 || size.h <= 0 {
+        debug!(?size, ?anchor, "窓寸法が不明（非正）のため identity 縮退");
+        return raw;
+    }
+    let Some(snapshot) = snapshot else {
+        debug!(?anchor, "MonitorSnapshot 未挿入（フォールバック経路）のため identity 縮退");
+        return raw;
+    };
+    // wa＝生位置に置いた窓矩形の中心が属するモニタの work area（live 算出・跨ぎ再吸着）
+    let window = RectPx {
+        left: raw.x,
+        top: raw.y,
+        right: raw.x.saturating_add(size.w),
+        bottom: raw.y.saturating_add(size.h),
+    };
+    let Some(wa) = work_area_for_window(snapshot, window) else {
+        debug!(?anchor, "空 snapshot のため identity 縮退");
+        return raw;
+    };
+
+    match anchor {
+        // 上端固定・X 保持（Req2.2）
+        Anchor::Top => PointPx { x: raw.x, y: wa.top },
+        // 左端固定・Y 保持（Req2.3）
+        Anchor::Left => PointPx { x: wa.left, y: raw.y },
+        // 右端固定（left_X = wa.right − w）・Y 保持（Req2.4）。極端入力でも panic
+        // しない契約で saturating_sub（BottomSnapPolicy の bottom−h と同型の防波堤）
+        Anchor::Right => PointPx {
+            x: wa.right.saturating_sub(size.w),
+            y: raw.y,
+        },
+        // Bottom／Free は冒頭で return 済み（到達不能・網羅性のための恒等既定）
+        Anchor::Bottom | Anchor::Free => raw,
     }
 }
 
@@ -998,6 +1086,228 @@ mod tests {
             },
         ] {
             assert_eq!(BottomSnapPolicy.resolve(raw, size, Some(&snapshot)), raw);
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    // project_anchor（変換 T・task 2.1・4.2/DD15・Req1.1/1.2/2.1-2.5/3.1/3.4/5.4）
+    // 5 アンカー射影の純粋檻: アンカー辺固定・非アンカー軸保持・Bottom 委譲・
+    // Free identity・縮退・モニタ跨ぎ live 算出・べき等の不動点。
+    // 座標・work area 辺は 96 の非倍数を含め、隠れた dpi/96 再スケールの檻とする。
+    // -------------------------------------------------------------------------
+
+    use super::project_anchor;
+    use crate::placement::resolver::Anchor;
+
+    /// 全 4 辺が 96 の非倍数の単一モニタ snapshot（各アンカー辺再計算の再スケール檻）。
+    /// left=53・top=37・right=1877・bottom=1043（いずれも 96 で割り切れない・非零原点）。
+    fn odd_edge_snapshot() -> MonitorSnapshot {
+        MonitorSnapshot {
+            work_areas: vec![rect(53, 37, 1877, 1043)],
+        }
+    }
+
+    /// #1 Bottom: X 保持・Y=wa.bottom−h。既存 `BottomSnapPolicy` へ委譲し再定義しない
+    /// ——同一入力で `BottomSnapPolicy.resolve` と**同値**（再利用の証明・Req1.2/2.1）。
+    #[test]
+    fn project_anchor_bottom_delegates_to_bottom_snap_policy() {
+        let snapshot = odd_edge_snapshot();
+        // 中心 (700+217, 300+343)=(917, 643) は単一モニタ内
+        let raw = PointPx { x: 700, y: 300 };
+        let mapped = project_anchor(Anchor::Bottom, raw, CHAR_SIZE, Some(&snapshot));
+        assert_eq!(mapped, PointPx { x: 700, y: 1043 - 687 }, "X 保持・Y=下端−h");
+        assert_eq!(
+            mapped,
+            BottomSnapPolicy.resolve(raw, CHAR_SIZE, Some(&snapshot)),
+            "Bottom は BottomSnapPolicy と同値（再定義しない）"
+        );
+    }
+
+    /// #1 Top: X 保持・Y=wa.top（96 非倍数の top で再計算を固定・Req2.2）。
+    #[test]
+    fn project_anchor_top_pins_top_edge_and_keeps_x() {
+        let snapshot = odd_edge_snapshot();
+        let raw = PointPx { x: 700, y: 300 };
+        assert_eq!(
+            project_anchor(Anchor::Top, raw, CHAR_SIZE, Some(&snapshot)),
+            PointPx { x: 700, y: 37 }
+        );
+    }
+
+    /// #1 Left: X=wa.left・Y 保持（96 非倍数の left で再計算を固定・Req2.3）。
+    #[test]
+    fn project_anchor_left_pins_left_edge_and_keeps_y() {
+        let snapshot = odd_edge_snapshot();
+        let raw = PointPx { x: 700, y: 300 };
+        assert_eq!(
+            project_anchor(Anchor::Left, raw, CHAR_SIZE, Some(&snapshot)),
+            PointPx { x: 53, y: 300 }
+        );
+    }
+
+    /// #1 Right: X=wa.right−w・Y 保持（96 非倍数の right で再計算を固定・Req2.4）。
+    #[test]
+    fn project_anchor_right_pins_right_edge_and_keeps_y() {
+        let snapshot = odd_edge_snapshot();
+        let raw = PointPx { x: 700, y: 300 };
+        assert_eq!(
+            project_anchor(Anchor::Right, raw, CHAR_SIZE, Some(&snapshot)),
+            PointPx { x: 1877 - 434, y: 300 }
+        );
+    }
+
+    /// #1/#2 Free: raw 素通し（identity・position 再計算なし・Req2.5）。snapshot 有無・
+    /// 寸法（非正含む）を問わず常に identity。
+    #[test]
+    fn project_anchor_free_is_always_identity() {
+        let snapshot = odd_edge_snapshot();
+        let raw = PointPx { x: 700, y: 300 };
+        assert_eq!(
+            project_anchor(Anchor::Free, raw, CHAR_SIZE, Some(&snapshot)),
+            raw,
+            "snapshot 有・正寸でも Free は identity"
+        );
+        assert_eq!(
+            project_anchor(Anchor::Free, raw, CHAR_SIZE, None),
+            raw,
+            "snapshot 不在でも identity"
+        );
+        assert_eq!(
+            project_anchor(Anchor::Free, raw, SizePx { w: 0, h: 0 }, Some(&snapshot)),
+            raw,
+            "非正寸でも Free は identity（寸法を問わない）"
+        );
+        assert_eq!(
+            project_anchor(
+                Anchor::Free,
+                raw,
+                SizePx {
+                    w: i32::MIN,
+                    h: i32::MIN,
+                },
+                None,
+            ),
+            raw,
+        );
+    }
+
+    /// #2 縮退（Req3.4）: Bottom/Top/Left/Right とも snapshot 不在(None)/空・非正寸
+    /// （0・負・i32::MIN）で identity 縮退（`BottomSnapPolicy` の非正寸縮退と整合・
+    /// `wa.right−w`／`wa.bottom−h` の暴走を先に弾く檻・panic しない）。
+    #[test]
+    fn project_anchor_degrades_to_identity_on_missing_snapshot_or_nonpositive_size() {
+        let raw = PointPx { x: 700, y: 300 };
+        let empty = MonitorSnapshot { work_areas: vec![] };
+        let snapshot = odd_edge_snapshot();
+        for anchor in [Anchor::Bottom, Anchor::Top, Anchor::Left, Anchor::Right] {
+            assert_eq!(
+                project_anchor(anchor, raw, CHAR_SIZE, None),
+                raw,
+                "{anchor:?}: snapshot 不在は identity"
+            );
+            assert_eq!(
+                project_anchor(anchor, raw, CHAR_SIZE, Some(&empty)),
+                raw,
+                "{anchor:?}: 空 snapshot は identity"
+            );
+            for size in [
+                SizePx { w: 0, h: 687 },
+                SizePx { w: 434, h: 0 },
+                SizePx { w: -434, h: -687 },
+                SizePx {
+                    w: i32::MIN,
+                    h: i32::MIN,
+                },
+            ] {
+                assert_eq!(
+                    project_anchor(anchor, raw, size, Some(&snapshot)),
+                    raw,
+                    "{anchor:?}: 非正寸 {size:?} は identity"
+                );
+            }
+        }
+    }
+
+    /// #3 モニタ跨ぎ（Req1.1/2.4）: Right/Bottom は raw 位置の窓中心が属するモニタの
+    /// 対応辺へ live 算出する（跨いだ先の右端／下端へ再吸着）。下端・右端が異なる
+    /// 2 面で固定する。
+    #[test]
+    fn project_anchor_resolves_per_crossed_monitor() {
+        let snapshot = MonitorSnapshot {
+            work_areas: vec![
+                rect(0, 0, 1920, 1040),       // primary（右端 1920・下端 1040）
+                rect(1920, -213, 4477, 1227), // 右モニタ（右端 4477・下端 1227・96 非倍数）
+            ],
+        };
+        // 中心 (700+217, 300+343)=(917, 643) → primary
+        let raw_primary = PointPx { x: 700, y: 300 };
+        // 中心 (2700+217, 300+343)=(2917, 643) → 右モニタ
+        let raw_right = PointPx { x: 2700, y: 300 };
+
+        // Right: 属するモニタの右端で live 算出
+        assert_eq!(
+            project_anchor(Anchor::Right, raw_primary, CHAR_SIZE, Some(&snapshot)),
+            PointPx { x: 1920 - 434, y: 300 },
+            "primary 帰属 → primary 右端"
+        );
+        assert_eq!(
+            project_anchor(Anchor::Right, raw_right, CHAR_SIZE, Some(&snapshot)),
+            PointPx { x: 4477 - 434, y: 300 },
+            "右モニタ帰属 → 右モニタ右端（跨ぎ再吸着）"
+        );
+        // Bottom: 属するモニタの下端で live 算出
+        assert_eq!(
+            project_anchor(Anchor::Bottom, raw_right, CHAR_SIZE, Some(&snapshot)),
+            PointPx { x: 2700, y: 1227 - 687 },
+            "右モニタ帰属 → 右モニタ下端"
+        );
+        assert_eq!(
+            project_anchor(Anchor::Bottom, raw_primary, CHAR_SIZE, Some(&snapshot)),
+            PointPx { x: 700, y: 1040 - 687 },
+            "primary 帰属 → primary 下端"
+        );
+    }
+
+    /// #5 べき等の不動点（Req3.1）: 既にアンカー辺一致の位置＋同寸で project_anchor が
+    /// 同値を返す（drag/resize の再適用が振動を生まない基礎）。加えて T∘T = T
+    /// （二重適用同値）を Bottom/Right で固定する。
+    #[test]
+    fn project_anchor_is_idempotent_at_anchor_aligned_positions() {
+        let snapshot = odd_edge_snapshot(); // rect(53, 37, 1877, 1043)
+        // 各アンカー辺に既に一致する位置は不動点（中心はいずれも単一モニタ内）
+        let bottom_fixed = PointPx { x: 700, y: 1043 - 687 };
+        assert_eq!(
+            project_anchor(Anchor::Bottom, bottom_fixed, CHAR_SIZE, Some(&snapshot)),
+            bottom_fixed,
+            "Bottom 不動点"
+        );
+        let top_fixed = PointPx { x: 700, y: 37 };
+        assert_eq!(
+            project_anchor(Anchor::Top, top_fixed, CHAR_SIZE, Some(&snapshot)),
+            top_fixed,
+            "Top 不動点"
+        );
+        let left_fixed = PointPx { x: 53, y: 300 };
+        assert_eq!(
+            project_anchor(Anchor::Left, left_fixed, CHAR_SIZE, Some(&snapshot)),
+            left_fixed,
+            "Left 不動点"
+        );
+        let right_fixed = PointPx { x: 1877 - 434, y: 300 };
+        assert_eq!(
+            project_anchor(Anchor::Right, right_fixed, CHAR_SIZE, Some(&snapshot)),
+            right_fixed,
+            "Right 不動点"
+        );
+
+        // T∘T = T: 任意の生位置を一度射影した結果に再射影しても同値
+        for anchor in [Anchor::Bottom, Anchor::Right] {
+            let once = project_anchor(anchor, PointPx { x: 700, y: 999 }, CHAR_SIZE, Some(&snapshot));
+            assert_eq!(
+                project_anchor(anchor, once, CHAR_SIZE, Some(&snapshot)),
+                once,
+                "{anchor:?}: T∘T = T（べき等）"
+            );
         }
     }
 
