@@ -307,10 +307,8 @@ mod tests {
         mode: WritingMode,
         font_height: f32,
     ) -> (Vec<PositionedLine>, ContentCanvas) {
-        let visible = items
-            .iter()
-            .filter(|i| matches!(i, TextItem::Glyph { .. }))
-            .count();
+        // item 単位モデル: 全量リビール＝全 item（グリフ＋改行）を可視にする。
+        let visible = items.len();
         let lines = LayoutEngine::layout(items, visible, region, mode, font_height, &FixedMetrics);
         let canvas = ContentCanvas::from_layout(&lines, region, mode);
         (lines, canvas)

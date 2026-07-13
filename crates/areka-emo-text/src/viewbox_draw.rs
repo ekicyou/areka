@@ -679,10 +679,8 @@ mod tests {
         mode: WritingMode,
         font_height: f32,
     ) -> (ContentCanvas, VisibleWindow) {
-        let visible = items
-            .iter()
-            .filter(|i| matches!(i, TextItem::Glyph { .. }))
-            .count();
+        // item 単位モデル: 全量リビール＝全 item（グリフ＋改行）を可視にする。
+        let visible = items.len();
         let lines = LayoutEngine::layout(items, visible, &region, mode, font_height, &FixedMetrics);
         let canvas = ContentCanvas::from_layout(&lines, &region, mode);
         let window = LayoutEngine::visible_window(&lines, &region, mode);
@@ -1205,7 +1203,7 @@ mod tests {
         let char_wait = config.char_wait;
         for step in 0..=(total_glyphs + 2) {
             let t = step as f64 * char_wait + 0.001;
-            let visible = state.visible_glyphs(&actor, t);
+            let visible = state.visible_items(&actor, t);
             let items: Vec<TextItem> = state
                 .actor_state(&actor)
                 .map(|s| s.items().to_vec())
@@ -1242,7 +1240,7 @@ mod tests {
         // viewbox は前方スクロール前提ゆえ、後方でスクロールアウト行の再露出を取りこぼすと diverge。
         let big_t = (total_glyphs as f64 + 5.0) * char_wait;
         for &back_t in &[big_t, 0.05, 0.3, 0.1, 0.5] {
-            let visible = state.visible_glyphs(&actor, back_t);
+            let visible = state.visible_items(&actor, back_t);
             let items: Vec<TextItem> = state
                 .actor_state(&actor)
                 .map(|s| s.items().to_vec())
@@ -1419,7 +1417,7 @@ mod tests {
                 .actor_state(&self.actor)
                 .map(|s| s.items().to_vec())
                 .unwrap_or_default();
-            let visible = self.state.visible_glyphs(&self.actor, t);
+            let visible = self.state.visible_items(&self.actor, t);
             let lines = LayoutEngine::layout(
                 &items,
                 visible,
@@ -1496,7 +1494,7 @@ mod tests {
                 .actor_state(&self.actor)
                 .map(|s| s.items().to_vec())
                 .unwrap_or_default();
-            let visible = self.state.visible_glyphs(&self.actor, t);
+            let visible = self.state.visible_items(&self.actor, t);
             let lines = LayoutEngine::layout(
                 &items,
                 visible,
@@ -1825,7 +1823,7 @@ mod tests {
         let mut checked_opaque = false;
         let mut t = 0.0f64;
         while t <= 3.05 {
-            let visible = state.visible_glyphs(&actor, t);
+            let visible = state.visible_items(&actor, t);
             let items: Vec<TextItem> = state
                 .actor_state(&actor)
                 .map(|s| s.items().to_vec())
@@ -2085,7 +2083,7 @@ mod tests {
         );
         let mut t = 0.0f64;
         while t <= 3.05 {
-            let visible = state.visible_glyphs(&actor, t);
+            let visible = state.visible_items(&actor, t);
             let items: Vec<TextItem> = state
                 .actor_state(&actor)
                 .map(|s| s.items().to_vec())

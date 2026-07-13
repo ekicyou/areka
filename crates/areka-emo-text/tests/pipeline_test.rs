@@ -151,9 +151,17 @@ fn observe(
             .map(|s| s.items().to_vec())
             .unwrap_or_default();
         for &t in probe_times {
+            // Observation.visible は可視グリフ数（檻の絶対値）。レイアウトへは可視 item prefix 長
+            // （グリフ＋リビール済み改行の通し・item 単位モデル）を渡す。
             let visible = state.visible_glyphs(actor, t);
-            let lines =
-                LayoutEngine::layout(&items, visible, region, mode, font_height, &FixedMetrics);
+            let lines = LayoutEngine::layout(
+                &items,
+                state.visible_items(actor, t),
+                region,
+                mode,
+                font_height,
+                &FixedMetrics,
+            );
             let window = LayoutEngine::visible_window(&lines, region, mode);
             out.push(Observation {
                 actor: actor.clone(),
@@ -342,9 +350,10 @@ fn typewriter_reveal_drives_layout_and_window_through_the_pipeline() {
             .expect("actor state exists")
             .items()
             .to_vec();
+        // レイアウトへは可視 item prefix 長（グリフ＋リビール済み改行の通し・item 単位モデル）。
         let lines = LayoutEngine::layout(
             &items,
-            got_visible,
+            state.visible_items(&actor, t),
             &region,
             WritingMode::HorizontalTb,
             10.0,
@@ -494,10 +503,14 @@ fn vertical_fixture_pipeline_scrolls_horizontally_and_is_deterministic() {
     assert_eq!(trace_a, trace_b, "縦書き fixture 経路でも観測列が一致する");
 
     let actor = ActorKey::from("0");
-    // リビール途中（t=1.0・可視 5）: 6 列目（改行の空列）まで・左端 281 ≥ 36 → 非発火。
-    assert_eq!(state_a.visible_glyphs(&actor, 1.0), 5);
+    // リビール途中（t=1.0）: item 単位モデルでは各改行も reveal 枠を 1 つ占め、改行直後のグリフは
+    // 「改行 reveal + char_wait」で測られる（`r_i = max(r_{i-1}+wait_i, at_i)`・直前 item から）。
+    // 1 列 1 グリフ＋改行を 0.25 グリッドで打つこの fixture では、改行が char_wait を 1 段消費して
+    // グリフ進行が 1 段遅れる: あ_i reveal = 0.25×(i+1)（i≥1）。t=1.0 では あ_0..あ_3 の可視 4
+    // ＋リビール済み改行 4（末尾は空列）で 5 列——旧グリフのみモデル（可視 5・6 列）から更新（#3/#4 pacing）。
+    assert_eq!(state_a.visible_glyphs(&actor, 1.0), 4);
     let at_1s = trace_a.iter().find(|o| o.t == 1.0).expect("t=1.0 の観測");
-    assert_eq!(at_1s.lines.len(), 6);
+    assert_eq!(at_1s.lines.len(), 5);
     assert_eq!(
         at_1s.window,
         VisibleWindow {
