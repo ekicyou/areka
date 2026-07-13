@@ -37,14 +37,15 @@
 
 ## Requirements
 
-### Requirement 1: テキスト再生時間の第一級モデル化（保持＝dola）
-**Objective:** 演出タイミング基盤 dola として、テキスト cue が「再生に D 秒かかる」ことを第一級のデータとして保持したい。そうすれば後続 cue が再生完了後に整列し、cue タイムラインが単一の権威台本になる。
+### Requirement 1: 絶対時刻台本の保持と同期配送（保持＝dola）
+**Objective:** 演出タイミング基盤 dola として、各 cue の発火時刻を絶対時刻として保持し、テキスト cue の再生時間 D を配送データとして運びたい。そうすれば、同一の台本を複数の独立した最終表現者（プロセス境界を跨ぐ場合を含む）へ手渡しても、表現者同士が協調せずとも全員が同一の絶対時刻でイベントを発火する——これこそ dola が「単一の権威台本」である所以。整列そのものは台本の絶対時刻として上流（sakura）が焼き込み、dola はそれを忠実に保持・配送する。
 
 #### Acceptance Criteria
-1. When テキスト再生 cue がタイムラインに載る, the dola cue タイムライン shall 当該テキスト cue が「再生時間 D 秒を占有する」ことを第一級のデータとして保持する。
-2. When テキスト cue の再生時間 D が与えられる, the dola スケジュール shall 当該 cue に後続する cue の発火時刻を、テキスト cue の発火時刻＋D 以降へ整列させる。
-3. The dola cue タイムライン shall 再生時間 D を不透明な秒数データとして受け取り、SakuraScript 固有の 1文字あたりウェイト値（例: 50ms）をハードコードしない。
-4. Where テキスト cue に再生時間が与えられない, the dola スケジュール shall 従来どおり点時刻として即時に後続 cue へ進む（再生時間 0 相当の後方互換）。
+1. When テキスト再生 cue が台本に載る, the dola cue タイムライン shall 当該 cue の再生時間 D を、配送される cue の第一級データとして保持する。
+2. The dola cue タイムライン shall 各 cue の発火時刻を絶対時刻（`start_time`）として保持し、当該時刻を上流が確定した通りに変えず配送する。
+3. When 同一の台本を複数の独立した最終表現者（プロセス境界を跨ぐ場合を含む）が受け取る, the dola cue タイムライン shall 各表現者へ当該 cue を同一の絶対時刻で配送し、表現者が互いの発火時刻を参照せずとも同期が成立することを保証する。
+4. The dola cue タイムライン shall 再生時間 D を不透明な秒数データとして受け取り、SakuraScript 固有の 1文字あたりウェイト値（例: 50ms）をハードコードしない。
+5. Where テキスト cue に再生時間が与えられない, the dola cue タイムライン shall 当該 cue を絶対時刻の点として即時配送する（再生時間 0 相当の後方互換）。
 
 ### Requirement 2: 文字再生時間を計算する単一の純関数（計算＝sakura）
 **Objective:** さくらスクリプトを cue 台本へコンパイルする層 sakura として、「テキスト→再生時間」を計算する純関数を1つだけ持ちたい。そうすればタイムライン側も reveal 側も同じ真実源から再生時間を導出でき、独自実装の重複が絶滅する。
@@ -56,12 +57,12 @@
 4. Where テキストが明示ウェイトを含む, the 純関数 shall 暗黙 per-char ノミナルウェイトに明示ウェイトを加算した再生時間を返す。
 5. The 純関数 shall GPU・ウィンドウ・COM に依存せず、入力依存の全分岐を単体テストで網羅できる。
 
-### Requirement 3: compile が再生時間を台本へ書き込み後続 cue を整列（計算＝sakura）
-**Objective:** sakura compile として、各テキスト cue へ再生時間を付与しタイムラインを整列させたい。そうすれば後続 cue（次テキスト・`\s` 表情・`\n` 改行）がテキストを喋り終わってから発火する。
+### Requirement 3: compile が再生時間を付与し絶対時刻へ焼き込む（計算＝sakura）
+**Objective:** sakura compile として、各テキスト cue へ再生時間 D を第一級データとして付与し、後続 cue の絶対発火時刻へ D を焼き込んで台本を構成したい。そうすれば後続 cue（次テキスト・`\s` 表情・`\n` 改行）がテキストを喋り終わってから発火し、dola はその絶対時刻を忠実に配送するだけで同期が成立する。
 
 #### Acceptance Criteria
-1. When さくらスクリプトを cue 台本へ compile する, the sakura compile shall 各テキスト cue に対して Requirement 2 の純関数で算出した再生時間を付与する。
-2. When テキスト cue の後に別の cue（次テキスト・`\s` 表情切替・`\n` 改行）が続く, the sakura compile shall 各テキスト cue へ付与した再生時間を通じて、後続 cue がテキスト再生完了後に発火する台本を構成する（発火の遅延そのものは Requirement 1 の dola が担う）。
+1. When さくらスクリプトを cue 台本へ compile する, the sakura compile shall 各テキスト cue に対して Requirement 2 の純関数で算出した再生時間 D を第一級データとして付与する。
+2. When テキスト cue の後に別の cue（次テキスト・`\s` 表情切替・`\n` 改行）が続く, the sakura compile shall 後続 cue の絶対発火時刻（`start_time`）を、テキスト cue の発火時刻に再生時間 D を加算した時刻以降へ確定させ、後続 cue がテキスト再生完了後に発火する台本を構成する。
 3. While テキストが明示ウェイトを含まない, the sakura compile shall 暗黙 per-char ノミナル再生時間のみをタイムラインへ加算する。
 4. The sakura compile shall 明示ウェイト（`\_w`）由来のウェイトを、暗黙 per-char 再生時間に加えて累積し、従来の明示ウェイト累積を退行させない。
 
