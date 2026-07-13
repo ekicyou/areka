@@ -2558,4 +2558,226 @@ mod tests {
         assert_eq!(balloon_pos.x - char_pos.x, offset.x);
         assert_eq!(balloon_pos.y - char_pos.y, offset.y);
     }
+
+    // -------------------------------------------------------------------------
+    // resize_window_to 5 アンカー統合網羅（task 2.5・テスト固定タスク・
+    // Req1.1/2.1-2.6/3.1/3.3/3.4・design Integration Tests #2・#3・#4）
+    //
+    // task 2.4 が Bottom で押さえた「一度書き＋re-snap／べき等／非正寸／不在／
+    // Anchored 欠落／随伴バルーン維持」を、残る Top/Left/Right/Free へ拡張する。
+    // resize_window_to 本体は 2.4 で完成済み＝本群は「既存配線が 5 アンカーで
+    // 正しく `Anchored.0` を転送している（非 Bottom を `Anchor::Bottom` へ
+    // ハードコードしていない）」ことを固定する回帰檻（非 Bottom 配線バグ＝
+    // 2.4 エスケープの捕捉）。
+    //
+    // 全辺 96 非倍数の odd_edge_snapshot（rect(53,37,1877,1043)）で各アンカー辺の
+    // 再計算を dpi/96 再スケール混入の檻とし、各アンカーで「固定辺の座標」と
+    // 「非アンカー軸の保持」を両方 assert する（Top↔Bottom は Y・Left↔Right は X が
+    // 合わず落ちる取り違え耐性）。
+    // -------------------------------------------------------------------------
+
+    /// #2 Top resize（Req2.2）: `Anchored(Top)` を新寸へ resize すると `WindowPos.size`
+    /// 新寸・`position.y = wa.top`（上端固定）・`position.x` 保持で `true`。
+    /// Bottom と取り違えれば Y が `wa.bottom−h'` になって落ちる（辺取り違え耐性）。
+    #[test]
+    fn resize_window_to_top_pins_top_edge_and_keeps_x() {
+        let mut world = World::new();
+        world.insert_resource(odd_edge_snapshot()); // rect(53, 37, 1877, 1043)
+        let window = world
+            .spawn((
+                fake_handle(0x1000),
+                window_pos_sized(731, 500, 434, 687),
+                Anchored(Anchor::Top),
+            ))
+            .id();
+
+        // 新寸 (517×823・いずれも 96 非倍数): Y=wa.top=37・X=731 保持
+        assert!(resize_window_to(&mut world, window, SizePx { w: 517, h: 823 }));
+        assert_eq!(
+            position_of(&world, window),
+            Point { x: 731, y: 37 },
+            "X 保持・Y=wa.top（上端固定・Bottom と取り違えたら 1043−823 で落ちる）"
+        );
+        assert_eq!(size_of(&world, window), SizeI::new(517, 823));
+    }
+
+    /// #2 Left resize（Req2.3）: `Anchored(Left)` を新寸へ resize すると `WindowPos.size`
+    /// 新寸・`position.x = wa.left`（左端固定）・`position.y` 保持で `true`。
+    /// Right と取り違えれば X が `wa.right−w'` になって落ちる（辺取り違え耐性）。
+    #[test]
+    fn resize_window_to_left_pins_left_edge_and_keeps_y() {
+        let mut world = World::new();
+        world.insert_resource(odd_edge_snapshot()); // rect(53, 37, 1877, 1043)
+        let window = world
+            .spawn((
+                fake_handle(0x1000),
+                window_pos_sized(731, 500, 434, 687),
+                Anchored(Anchor::Left),
+            ))
+            .id();
+
+        // 新寸 (517×823): X=wa.left=53・Y=500 保持
+        assert!(resize_window_to(&mut world, window, SizePx { w: 517, h: 823 }));
+        assert_eq!(
+            position_of(&world, window),
+            Point { x: 53, y: 500 },
+            "X=wa.left（左端固定・Right と取り違えたら 1877−517 で落ちる）・Y 保持"
+        );
+        assert_eq!(size_of(&world, window), SizeI::new(517, 823));
+    }
+
+    /// #2 Right resize（Req2.4）: `Anchored(Right)` を新寸へ resize すると `WindowPos.size`
+    /// 新寸・`position.x = wa.right − w'`（右端固定）・`position.y` 保持で `true`。
+    /// Left と取り違えれば X が `wa.left` になって落ちる（辺取り違え耐性）。
+    #[test]
+    fn resize_window_to_right_pins_right_edge_and_keeps_y() {
+        let mut world = World::new();
+        world.insert_resource(odd_edge_snapshot()); // rect(53, 37, 1877, 1043)
+        let window = world
+            .spawn((
+                fake_handle(0x1000),
+                window_pos_sized(731, 500, 434, 687),
+                Anchored(Anchor::Right),
+            ))
+            .id();
+
+        // 新寸 (517×823): X = wa.right − w' = 1877 − 517 = 1360・Y=500 保持
+        assert!(resize_window_to(&mut world, window, SizePx { w: 517, h: 823 }));
+        assert_eq!(
+            position_of(&world, window),
+            Point { x: 1877 - 517, y: 500 },
+            "X=wa.right−w'（右端固定・Left と取り違えたら 53 で落ちる）・Y 保持"
+        );
+        assert_eq!(size_of(&world, window), SizeI::new(517, 823));
+    }
+
+    /// #2 Free resize（Req2.5）: `Anchored(Free)` はアンカー辺を持たず position を
+    /// 保持し、`WindowPos.size` のみ新寸へ反映する。size が変わるので冗長でなく
+    /// `true`（書込あり）。Bottom へ取り違えれば position.y が動いて落ちる
+    /// （射影なし・寸法反映のみの区別）。
+    #[test]
+    fn resize_window_to_free_keeps_position_and_updates_size_only() {
+        let mut world = World::new();
+        world.insert_resource(odd_edge_snapshot());
+        let window = world
+            .spawn((
+                fake_handle(0x1000),
+                window_pos_sized(731, 500, 434, 687),
+                Anchored(Anchor::Free),
+            ))
+            .id();
+
+        // Free: 射影なし＝position 不変・size のみ新寸（size 変化ゆえ冗長でなく true）
+        assert!(resize_window_to(&mut world, window, SizePx { w: 517, h: 823 }));
+        assert_eq!(
+            position_of(&world, window),
+            Point { x: 731, y: 500 },
+            "Free は position 再計算なし（現在位置保持・Bottom 取り違えなら Y が動く）"
+        );
+        assert_eq!(size_of(&world, window), SizeI::new(517, 823));
+    }
+
+    /// #3 随伴バルーン維持（非 Bottom・Req2.6）: `Anchored(Left)`＋`BalloonFollow` の
+    /// char 窓を resize すると、char は左端固定（Y 保持）へ移り、バルーンは
+    /// `new_char_pos + offset` へ随伴し `balloon_pos − char_pos ≡ offset` を維持する
+    /// （task 2.4 の Bottom 版と別アンカーで offset 恒等式を固定）。
+    #[test]
+    fn resize_window_to_left_preserves_balloon_follow_offset() {
+        let mut world = World::new();
+        world.insert_resource(odd_edge_snapshot()); // 左端 53
+        let balloon = world
+            .spawn((fake_handle(0x2000), window_pos_at(0, 0)))
+            .id();
+        let offset = PointPx { x: -412, y: -25 };
+        let window = world
+            .spawn((
+                fake_handle(0x1000),
+                window_pos_sized(731, 500, 434, 687),
+                Anchored(Anchor::Left),
+                BalloonFollow { balloon, offset },
+            ))
+            .id();
+
+        // 新寸 (517×823) → char 左端固定 (53, 500)・balloon (53−412, 500−25)
+        assert!(resize_window_to(&mut world, window, SizePx { w: 517, h: 823 }));
+        let char_pos = position_of(&world, window);
+        let balloon_pos = position_of(&world, balloon);
+        assert_eq!(char_pos, Point { x: 53, y: 500 }, "左端固定・Y 保持");
+        assert_eq!(
+            balloon_pos,
+            Point {
+                x: 53 + offset.x,
+                y: 500 + offset.y
+            }
+        );
+        // offset 恒等式（balloon_pos − char_pos ≡ offset）の維持
+        assert_eq!(balloon_pos.x - char_pos.x, offset.x);
+        assert_eq!(balloon_pos.y - char_pos.y, offset.y);
+    }
+
+    /// #4 べき等（非 Bottom・Req3.1）: 既に左端一致（x=wa.left）の位置＋同寸へ
+    /// `Anchored(Left)` を resize すると、導出 (position, size) が現在値と同一ゆえ
+    /// 書込なし・`false`・状態不変（Bottom 版 idempotent の非 Bottom 対応・
+    /// 同一寸法/同一アンカーの再適用が窓状態を変更しない＝冗長書込をしない）。
+    #[test]
+    fn resize_window_to_left_is_idempotent_on_same_size_and_position() {
+        let mut world = World::new();
+        world.insert_resource(odd_edge_snapshot()); // 左端 53
+        let window = world
+            .spawn((
+                fake_handle(0x1000),
+                window_pos_sized(53, 500, 517, 823), // 既に左端射影済み・同寸
+                Anchored(Anchor::Left),
+            ))
+            .id();
+
+        // 同寸・既に左端一致 → 導出 (53,500)＋(517,823) は現在値と同一 → 書込なし・false
+        assert!(!resize_window_to(&mut world, window, SizePx { w: 517, h: 823 }));
+        assert_eq!(position_of(&world, window), Point { x: 53, y: 500 });
+        assert_eq!(size_of(&world, window), SizeI::new(517, 823));
+    }
+
+    /// #4 非 Bottom 縮退（Req3.3/3.4）: 縮退経路がアンカー非依存（Bottom 特化でない）
+    /// ことを代表として Top で固定する。task 2.4 が Bottom で押さえた縮退を、
+    /// 別アンカーでも配線が同一であることの確認（過剰重複を避け 1 件へ集約）。
+    /// - 非正寸（w≤0 or h≤0）: project_anchor 前に弾かれ `false`・位置/寸不変。
+    /// - `WindowHandle` 未付与: 射影は走るが enqueue が warn no-op＝`false`・位置/寸不変。
+    #[test]
+    fn resize_window_to_non_bottom_degrades_on_nonpositive_and_missing_handle() {
+        let mut world = World::new();
+        world.insert_resource(odd_edge_snapshot());
+
+        // (a) Top＋非正寸: project_anchor 前に弾かれ false・状態不変（Bottom と同一縮退）
+        let with_handle = world
+            .spawn((
+                fake_handle(0x1000),
+                window_pos_sized(731, 500, 434, 687),
+                Anchored(Anchor::Top),
+            ))
+            .id();
+        for bad in [
+            SizePx { w: 0, h: 823 },
+            SizePx { w: 517, h: 0 },
+            SizePx { w: -517, h: -823 },
+        ] {
+            assert!(
+                !resize_window_to(&mut world, with_handle, bad),
+                "{bad:?}: 非正寸は false（Top でも Bottom と同一縮退）"
+            );
+            assert_eq!(position_of(&world, with_handle), Point { x: 731, y: 500 });
+            assert_eq!(size_of(&world, with_handle), SizeI::new(434, 687));
+        }
+
+        // (b) Top＋WindowHandle 未付与: 射影は走るが enqueue が warn no-op＝false・状態不変
+        let no_handle = world
+            .spawn((
+                // WindowHandle なし（窓生成前）
+                window_pos_sized(731, 500, 434, 687),
+                Anchored(Anchor::Top),
+            ))
+            .id();
+        assert!(!resize_window_to(&mut world, no_handle, SizePx { w: 517, h: 823 }));
+        assert_eq!(position_of(&world, no_handle), Point { x: 731, y: 500 });
+        assert_eq!(size_of(&world, no_handle), SizeI::new(434, 687));
+    }
 }
