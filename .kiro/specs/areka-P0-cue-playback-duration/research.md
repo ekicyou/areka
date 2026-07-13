@@ -323,3 +323,37 @@ Topic 1 裁定の系として開発者が dola の表現範囲を明示補足:
 - **R5** 新設「純粋 Wait cue の第一級発行と自己完結台本」。
 - **R7** emo-text に honor 契約 AC 追加。**R9** に Wait additive・envelope 一律・欠落概念不採用を追加。**R10** に動的制御は dola 外を追加。
 - 旧 R2〜R8 は R3〜R10 へ繰り下げ（設計ディスカッションでの正当な要件更新）。**本 research の §1〜§8 は旧番号を参照**（対応: 旧 R1→新 R1 拡張／旧 R2→R3／旧 R3→R4／旧 R4→R6／旧 R5→R7／旧 R6→R8（例 旧 R6.4「\s 同期」→R8.4・旧 6.5「人間サインオフ」→R8.5）／旧 R7→R9（旧 R7.3/7.4「serde」→R9.3/9.4）／旧 R8→R10（旧 R8.1「wintf」→R10.1）。R2「honor 契約」は新設）。§9 以降は新番号。
+
+## 10. 設計最終検証（討議 #2・敵対的再検証）
+
+### 10.1 経緯
+`/kiro-design` 再実行（開発者「最終検証としてデザインプロセスを回せ・議題があるなら新たに引っ張り出せ」）。finalized（GO・討議 #1 解消済）の design.md に対し、6 視点 × 実コード接地の敵対的 workflow を実施（trailing-wait-drive-lifecycle／broadcast-collateral／clear-talk-boundary／requirements-coverage-ears／serde-additivity-partialeq／reveal-degenerate-math ＋ synthesis）。16 raw findings → 新論点 5・obvious fix 5・非問題 5。判定 **GO-with-new-topics**（アーキ破壊 blocker なし）。
+
+### 10.2 Topic 1（blocker×2・コード実証）: drive 層の早期終了
+design.md は R2.2 honor を「talk ライフサイクル（`CompiledTalk.end` → drive）: 全時間範囲 max(start_time+duration)＝CompiledTalk.end… 早期終了しない」に帰していたが、実機構が不在:
+- (a) `CompiledTalk.end`（compile.rs:117-122）は `TalkEndReason` enum（Ended/Quit）で**時間量でない**（名前衝突・時刻のように読める）。
+- (b) 自然終了 drive.rs:226-238 は `is_completed()`＝entry 枯渇（＝最終 cue の**配送時刻**）で `TalkDone`+Break を発火、**duration 盲目**（Entry::Payload は offset のみ）。
+- (c) File Structure（design.md:145-147）は broadcast+duration 複写のみで end_time も終了条件変更も無い。
+- (d) 計画テスト（design.md:388）は compile-level 性質（sheet の max が末尾 Wait を含む）のみ確認＝ランタイム早期終了を構造的に捕捉不能。
+- 帰結: 末尾 `\_w[800]`（Text@0 dur D／Wait@D dur 0.8）で `TalkDone` が t=D＝0.8s 早期・裸末尾 Text（at=0 dur D）で t≈0 に完了＝reveal 中。`TalkDone` は kanade 単一 slot へ流れ早期に slot 解放＝#3/重なり再発。R5.3（台本から extent 復元）は満たすが R2.2（drive が早期終了しない）は未実装＝両者を混同。
+
+### 10.3 開発者決裁（あるべき姿）
+開発者「今のコードは関係ない・**あるべき姿**を実装せよ・今のコードが間違っているからこの spec が立った」（[[analyze-ideal-form-not-minimal]]）。開発者の直感「**duration 期間が終わるまでコマンドは終了扱いにしない**」＝正しい理想。さらに「`start_time` とは別に **CueSheet レベルで絶対開始時刻**を持たせられる」を提起。→ **解: `CueSheet` が `absolute_start_time` を保持する自己完結絶対時刻台本**。cue は点でなく区間 `[start_time, start_time+duration)`。**talk 絶対終了時刻 = `absolute_start_time + max(start_time+duration)`**（台本のみから導出可能）。配送は各 cue の絶対時刻で点配送のまま（二重待ちなし）、**完了のみ duration-aware**（entry 枯渇でなく現在 ≥ 絶対終了時刻・`TimedSchedule` が horizon 保持）。2 段の焼き込み: compile が相対 start_time を焼き、dispatch が絶対アンカーを刻印。
+
+### 10.4 決定の含意
+- (1) **同期**: 絶対アンカーが台本に載る＝broadcast された台本を受けた任意表現者（プロセス跨ぎ）が協調なしに同一絶対発火/完了時刻を独立算出（dola の本質の物理的な形）。
+- (2) **自己完結**: R5.3 を最強形へ（extent でなく絶対的配置が台本で閉じる）。
+- (3) **早期終了解決**: 完了が「台本から導ける絶対終了時刻」＝どの層で判定しても同一値。ゆえに horizon の設置層は些末事化し、決めるべきは**データ配置**（台本に `absolute_start_time`・各 cue に `duration`）だった。
+- 棄却（案乙）: horizon を sakura `CompiledTalk` のみに持たせ dola schedule を点配送の素の道具に留める案は、duration 普遍（D5）下で「cue を零幅点と見なす timeline」＝「duration 欠落 command」のタイムライン版の穴を残すため不採用。
+
+### 10.5 要件・設計反映（Topic 1）
+- requirements.md: **R1.7 新設**（CueSheet 絶対開始時刻・自己完結台本）。**R2 を 2 段 honor へ**（R2.2 葉＝否定的 no-op／**R2.5 新設**ライフサイクル＝絶対終了時刻まで早期終了せず）。R9.3 に `CueSheet.absolute_start_time` additive を追加。In scope に自己完結絶対時刻台本を明記。
+- design.md: honor 契約 2 段書き換え・`CompiledTalk.end`（`TalkEndReason`）と終了「時刻」の峻別・File Structure（sheet.rs/schedule.rs/drive.rs 完了判定）・**D6 新設**・Testing に drive-level 注入 tick 檻（compile-level では捕捉不能）・Data Models（CueSheet 構造・区間・絶対終了時刻）・Boundary/Revalidation Trigger 追随。
+- 記憶 [[areka-dola-absolute-time-sync-broadcast]] を「CueSheet 絶対開始時刻＝自己完結絶対時刻台本／完了は占有 horizon」で更新。
+
+### 10.6 残 Topic（未討議・順次噛み砕いて進行）
+- **Topic 2**: `areka-ghost`（live-path crate）がスコープ欠落。broadcast+Wait で sink.rs 網羅 match・dispatcher partition assert・spine_e2e・LogSink 二重 trait（二重ログ）が破損。File Structure/Revalidation Trigger へ要追加。
+- **Topic 3**: wintf ECS `CueQueue` が envelope duration を構造的に落とす（Entry/pop_ready に duration 枠なし）。ただし areka live 経路は wintf pipeline 未使用ゆえ desync でなく doc/契約矛盾（compile.rs:116・design.md:58）。
+- **Topic 4**: `RevealSchedule.visible()` の partition_point が負/NaN duration 未ガード。跨プロセス自己完結台本モデルで untrusted duration が到達しうる第一級経路。design.md:367 の「monotonic 保持」主張は跨 chunk で偽。
+- **Topic 5**: R6.2（新 talk はテキストのみ表示）vs R6.3/design（書込スコープのみ Clear 前置）。新 talk が書かないスコープの前 talk 文字が永久残存（emo-text に talk 境界リセットなし）。emo2 単キャラで潜伏・M2 多キャラで顕在。
+- **obvious fix（5・順次適用）**: ①File Structure スコープ過少（wintf/dola sheet_test.rs ~30・全 Cue/TalkCue 構築点）②areka-ghost sink.rs Wait arm ③test-helper duration 穴（Cue に PartialEq 無く cue_eq/field assert が duration 比較を強制されない）④Revalidation Trigger に broadcast で talk_clock 観測集合変化 ⑤design.md:367 文言修正（monotonic は第 1 chunk のみ）。

@@ -8,7 +8,7 @@
 
 本 spec は開発者決定の**案A（duration 付き cue の三権分立）**を、次の統合モデルで実現する:
 
-- **保持＝dola**: 再生時間 duration を **`Cue` envelope の一律フィールド**として全 presentation cue へ持たせる（瞬時は明示的 0・「duration フィールドを持たない cue command」概念は作らない）。絶対 `start_time` を導出せず保持し、全表現者へ **broadcast** 配送する。
+- **保持＝dola**: 再生時間 duration を **`Cue` envelope の一律フィールド**として全 presentation cue へ持たせる（瞬時は明示的 0・「duration フィールドを持たない cue command」概念は作らない）。さらに **`CueSheet` が絶対開始時刻 `absolute_start_time` を保持**し（dispatch 時に刻印）、各 cue の相対 `start_time` ＋ duration と併せて**台本 1 枚が「いつ始まり・各 cue がいつ鳴り・いつ終わるか」を絶対時刻で自己完結**する。dola は絶対時刻を導出せず保持し、全表現者へ **broadcast** 配送する。
 - **計算＝sakura**: テキスト→暗黙再生時間 D を算出する**単一の純関数** `text_playback_duration` を所有し、compile が各テキスト cue へ D を焼き込みつつ `offset += D` で絶対時刻を確定。明示 `\_w` は **action を持たず duration のみの第一級 `CueCommand::Wait` cue** として発行し、台本を自己完結した楽譜にする。talk 冒頭に Clear を前置（#6）。
 - **服従＝全表現者（emo-text/seriko/未来の演者）**: **同期契約**——受け取った任意 cue の duration を、その action を処理するか否かに関わらず必ず honor する。無視するのは action だけで duration は決して落とさない。action 対象は演者側 relevance で選別（中央 router に依存しない）。emo-text は reveal を配送 D に従わせ自前 char_wait を撤去する。
 
@@ -33,7 +33,7 @@
 ## Boundary Commitments
 
 ### This Spec Owns
-- **保持（dola）**: `Cue` envelope の `duration: f64` フィールド（additive・`#[serde(default)]`・全 presentation cue が保持）。`CueCommand::Wait`（action 空・duration のみ・additive 追加）。dola は duration を不透明秒数として保持・**broadcast 配送**するのみ。
+- **保持（dola）**: `Cue` envelope の `duration: f64` フィールド（additive・`#[serde(default)]`・全 presentation cue が保持）。`CueCommand::Wait`（action 空・duration のみ・additive 追加）。**`CueSheet.absolute_start_time: f64`**（dispatch 刻印・`#[serde(default)]`）＝自己完結絶対時刻台本。`TimedSchedule` の horizon 保持と `is_completed`（entry 枯渇かつ現在≥horizon）による占有終了判定。dola は duration/絶対時刻を不透明に保持・**broadcast 配送**するのみ。
 - **計算（sakura）**: 純関数 `text_playback_duration(text) -> f64`（暗黙 per-char）と per-char 定数 `CHAR_NOMINAL_MS` の**唯一の定義**。compile による各テキスト cue への D 付与・`offset += D` 焼き込み・**`\_w` の第一級 Wait cue 発行**・talk 冒頭 Clear 前置。
 - **配送（sakura drive）**: 全 cue を全 sink へ **broadcast** する `on_tick`（中央 1→1 振り分けの廃止）。`TalkCue` エンベロープの `duration` フィールド（serde 非依存の搬送体）。
 - **服従（全表現者）**: **duration honor 契約**——任意 cue の duration を action 可否に関わらず honor。emo-text reveal を配送 D から導出・`char_wait` 撤去。seriko が broadcast を許容（非 Shell action 無視・duration honor・良性ログ）。
@@ -58,6 +58,7 @@
 - `Cue`/`TalkCue` エンベロープの `duration` の型・意味・serde 属性変更 → dola を消費する全経路（wintf `cue/`・emo-text・seriko）と serde 済み資産の再検証。
 - `CueCommand` variant 追加（Wait 等）→ 全表現者の `apply_cue`／`handle_message` の網羅性（catch-all 無しゆえコンパイラ強制）。
 - broadcast 配送への変更 → 全 sink の relevance フィルタ・honor 契約・ログ規律の再検証。`cue_target_of` を relevance の**単一権威**とし、`CueCommand` variant 追加時は各表現者の action 判定が `cue_target_of` の分類と一致すること（partition）を再確認する。
+- **`CueSheet.absolute_start_time` / `TimedSchedule` horizon / 完了判定（`is_completed`・`TalkDone` 発火条件）の変更** → talk 終端の早期終了・跨プロセス完了同期・kanade 単一 slot 解放タイミングの再検証（drive-level 注入 tick 檻が必須・compile-level extent 檻では捕捉不能）。
 - per-char ノミナル定数値・`text_playback_duration` シグネチャ変更 → 実機再生タイミングと emo-text reveal の再検証。
 - `\C`（追記モード）対応の着手 → **Clear 前置の無条件性を条件化**する必要（現状 `\C` 未対応ゆえ無条件で妥当）。
 
@@ -95,7 +96,7 @@ graph LR
 - **配送の broadcast（R2）**: `on_tick` は全 cue を全 sink へ broadcast。型による中央振り分けを廃し、無視は演者側 relevance フィルタ（既存）で行う。dola の「同一台本を全表現者へ」を配送経路でも成立させる。
 - **honor 契約（R2）**: 各表現者は受け取った任意 cue の duration を、action 可否に関わらず honor（自身の timeline 整合・末尾の hold）。action は選択的無視可、duration は不可。
 - **Wait の第一級化（R5）**: `\_w` を offset へ吸収せず `CueCommand::Wait`（action 空・duration のみ）として発行し `offset += d`。台本が自己完結（末尾・単独の待ちも cue として残る＝プロセス跨ぎで全時間範囲復元可能）。
-- **整列は焼き込み（案 2-A）**: sakura が `offset += D`／`offset += d` で絶対 `start_time` を焼き込み、dola は導出せず配送。時刻を配送時導出すると表現者ごと独立計算＝desync ゆえ絶対時刻は同期の必須要件（開発者決裁・research §7.4）。
+- **整列は 2 段の焼き込み（案 2-A）**: sakura compile が `offset += D`／`offset += d` で各 cue の**相対** `start_time`（台本内 0 基準）を焼き込み、**絶対アンカー `CueSheet.absolute_start_time` は dispatch 時に刻印**する。dola は配送時に時刻を導出せず（相対＋アンカーの和で各表現者が独立に同一絶対時刻を得る）。時刻を配送時導出すると表現者ごと独立計算＝desync ゆえ絶対時刻は同期の必須要件（開発者決裁・research §7.4）。
 - **保持場所（案 1-A）**: envelope フィールド。`CueCommand::Text` 等のワイヤ形不変（R9.3）。中身埋め込み（payload）は honor 契約と両立不能（知らないコマンドの duration を取り出せない）ゆえ棄却（§Design Decisions）。
 
 ### Technology Stack
@@ -115,7 +116,9 @@ graph LR
 ```
 crates/
 ├── dola/src/cue/
-│   └── command.rs            # [変更] Cue に duration: f64 追加（#[serde(default)]）／CueCommand::Wait 追加（additive）
+│   ├── command.rs            # [変更] Cue に duration: f64 追加（#[serde(default)]）／CueCommand::Wait 追加（additive）
+│   ├── sheet.rs              # [変更] CueSheet に absolute_start_time: f64 追加（dispatch 刻印・#[serde(default)]）＝自己完結絶対時刻台本
+│   └── schedule.rs           # [変更] TimedSchedule に horizon=max(offset+duration) を保持（insert 時に duration から更新）・is_completed は entry 枯渇かつ現在≥horizon で真（占有終了まで完了扱いしない）
 ├── areka-sakura/src/
 │   ├── duration.rs           # [新規] text_playback_duration + CHAR_NOMINAL_MS（純粋・唯一の権威）
 │   ├── lib.rs                # [変更] pub mod duration;
@@ -143,8 +146,9 @@ crates/
   - `emit` は `duration` 引数を取る。既存テスト更新＋新規（D 焼込み・Wait cue・Clear 前置・非退行）。
 - `crates/areka-sakura/src/contract.rs` — `TalkCue` に `pub duration: f64`。`cue_target_of` は**中央 router でなく演者側 relevance ヘルパ**として存置し、`Wait => None`（どの sink の担当でもない＝全員が action 無視・duration のみ honor）を追加（catch-all 無しゆえ variant 追加でコンパイラ強制）。
 - `crates/areka-sakura/src/drive.rs`
-  - `to_schedule` の `TalkCue` 構築に `duration: cue.duration` 追加。
-  - `on_tick`: `ready()` の各 cue を**両 sink（surface_sink と text_sink）へ broadcast** emit（型による 1→1 振り分けを撤去）。`None` の中央エラーログを廃し、無視は演者側に委ねる。in-source テストの `TalkCue { ... }` リテラルへ `duration` 追加。
+  - `to_schedule` の `TalkCue` 構築に `duration: cue.duration` 追加。`CueSheet.absolute_start_time` を `TimedSchedule` の絶対アンカーへ流し、各 Payload の duration を horizon 更新へ供給。
+  - `on_tick`: `ready()` の各 cue を**両 sink（surface_sink と text_sink）へ broadcast** emit（型による 1→1 振り分けを撤去）。`None` の中央エラーログを廃し、無視は演者側に委ねる。
+  - **完了判定**: `TalkDone`（自然終了）は entry 枯渇の瞬間でなく、**`is_completed()`（entry 枯渇かつ現在時刻 ≥ horizon）が真になったとき**に発火する。末尾・単独の Wait／最終 Text の duration が talk 終端で落ちない（早期終了しない）。in-source テストの `TalkCue { ... }` リテラルへ `duration` 追加。
 - `crates/areka-emo-text/src/state.rs` — `TextLayerConfig.char_wait` 撤去（`line_pitch_factor` 残置）。`apply_cue` から `config` 引数除去（reveal ペースは `cue.duration` 由来）。`RevealSchedule::extend_chunk` 第 3 引数を `char_wait`→`interval`（=`D/N`）へ意味変更。**honor 契約**: 非担当 cue（Emote/Wait/BalloonSurface 等）は action 無視・duration は honor（talk extent 整合）。reveal 系テストを D 駆動へ更新。
 - `crates/areka-emo-text/src/actor.rs` — `apply_cue` の config 引数除去。`config`（`line_pitch_factor`）は `DWriteMetrics::new` 用に保持。in-source テストヘルパへ `duration` 追加。
 - `crates/areka-seriko/src/actor.rs` — broadcast 許容: 受け取った全 cue のうち Shell 系のみ action、他（Text/Wait/Clear/NewLine/Choice）は **action 無視・duration honor**。非 Shell 受信は「想定外」でなく**正常**ゆえ `warn` → 良性 `debug` へ。in-source テストヘルパへ `duration` 追加。
@@ -204,13 +208,15 @@ sequenceDiagram
 | 1.1 | duration を envelope 一律フィールドで保持 | dola `Cue.duration`・sakura `TalkCue.duration` | 焼き込み |
 | 1.2 | 瞬時は明示 0・フィールド欠落なし | `duration: f64` default 0・reveal 縮退 | broadcast honor |
 | 1.3 | 絶対 start_time を導出せず保持配送 | `Cue.start_time`・`TimedSchedule` | 焼き込み |
-| 1.4 | 同一台本を全表現者へ同一絶対時刻で配送 | `CueSheet`・broadcast on_tick | broadcast honor |
+| 1.4 | 同一台本を全表現者へ同一絶対時刻で配送（絶対アンカーを台本が保持） | `CueSheet.absolute_start_time`・broadcast on_tick | broadcast honor |
 | 1.5 | duration は不透明秒数・50ms 焼かない | `Cue.duration`・`CHAR_NOMINAL_MS`(sakura) | — |
 | 1.6 | Barrier/Routing は duration 非該当 | `CuePayload` 別アーム | — |
+| 1.7 | CueSheet が絶対開始時刻を保持し台本のみから絶対発火/終了時刻を復元 | `CueSheet.absolute_start_time`・horizon | 焼き込み・完了 |
 | 2.1 | 全 cue を全表現者へ broadcast | drive `on_tick`（両 sink emit） | broadcast honor |
-| 2.2 | 表現者は action 可否に関わらず duration を honor | emo-text/seriko honor | broadcast honor |
+| 2.2 | 葉の表現者はローカル遅延を生じさせない（否定的 no-op） | emo-text/seriko honor（no-op 制約） | broadcast honor |
 | 2.3 | action は無視可・duration は不可 | emo-text/seriko honor arms | broadcast honor |
 | 2.4 | action 対象は演者側 relevance で選別 | `cue_target_of`(演者側)・apply_cue match | broadcast honor |
+| 2.5 | ライフサイクルは絶対終了時刻まで早期終了しない | drive 完了判定(horizon)・`CueSheet.absolute_start_time` | 完了 |
 | 3.1 | 暗黙 per-char の単一純関数 | `text_playback_duration` | 計算 |
 | 3.2 | 実時間/描画非依存で決定的 | `text_playback_duration` | — |
 | 3.3 | per-char 定数を sakura に一元化 | `CHAR_NOMINAL_MS` | — |
@@ -330,9 +336,9 @@ pub fn compile(instructions: &[Instruction]) -> CompiledTalk;
 
 **Responsibilities & Constraints**
 - **broadcast 受信（2.1）**: `on_tick` が全 cue を両 sink へ配送。各表現者は全 cue を受け取る。
-- **honor 契約＝2 段（2.2/2.3/5.4/7.5）**: 「honor」は二段で成立し、いずれも**新たなローカル遅延を生まない**（タイミングは焼き込み絶対 `start_time` が担う・二重待ち禁止）:
+- **honor 契約＝2 段（2.2/2.3/2.5/5.4/7.5）**: 「honor」は二段で成立し、いずれも**新たなローカル遅延を生まない**（タイミングは焼き込み絶対時刻が担う・二重待ち禁止）:
   - **葉の表現者（本 spec 内: emo-text/seriko）**: 自分が action しない cue の duration は**ローカル時計を進めず・後続 action を遅延させない**＝葉の局所挙動としては実質 no-op の**否定的制約**。担当 cue は焼き込み絶対時刻で action する。duration が envelope 一律ゆえ command を解釈せず読める、という**将来 honor の前提**を確保することが本 spec での眼目。
-  - **talk ライフサイクル（compile `CompiledTalk.end` → drive）**: talk の全時間範囲 = `max(start_time + duration)`（＝`CompiledTalk.end`・compile が Wait/Text の duration を `offset` へ累積するため既に含む）が「早期終了しない」を担保。跨プロセスでは台本が自己完結（Wait cue が台本に在る・R5.3）ゆえ台本のみから extent 復元可能。
+  - **talk ライフサイクル（自己完結台本 → drive の完了判定）**: talk の**絶対終了時刻** = `CueSheet.absolute_start_time + max(cue.start_time + cue.duration)`。これは**台本 1 枚から導ける絶対時刻**で、drive／kanade／任意の表現者が同一台本から同一値を独立算出する（協調なしの跨プロセス完了同期）。drive の `TalkDone`（自然終了）は cue を配り終えた瞬間（entry 枯渇）でなく、この**絶対終了時刻に達したとき**に発火する＝末尾 Wait・最終 Text の duration を落とさず早期終了しない。**注意**: `CompiledTalk.end` は終端**理由**（`TalkEndReason` enum: Ended/Quit）であって時間量ではない——終了「時刻」の権威は台本の `absolute_start_time + horizon`（`is_completed` が duration を含めて判定）であり、両者は別概念。
 - **relevance 選別（2.4・単一権威）**: action 対象の判定権威は `cue_target_of` **単一**とする。seriko は `cue_target_of==Shell`、emo-text は `cue_target_of==Balloon` を action ゲートとし（emo-text の網羅 match の担当 arm はこの分類と**一致**させる）、両者が独立に発散しないようにする。中央 router には依存しない。
 - **emo-text reveal（7.1/7.3）**: Text cue 適用時 `interval = if glyph_count>0 { cue.duration / glyph_count as f64 } else { 0.0 }`、`extend_chunk(glyph_count, cue.at, interval)` で `r_i = max(r_{i-1}+interval, cue.at)`（`r_0=cue.at`）を確定。
 - **char_wait 撤去（7.2）**: `TextLayerConfig.char_wait` 削除。`apply_cue` は `config` 引数を持たない。
@@ -349,7 +355,7 @@ pub fn compile(instructions: &[Instruction]) -> CompiledTalk;
 ## Data Models
 
 ### Domain Model
-- **不変台本（CueSheet）**: `Cue { actor, start_time, payload, duration }` の列。`start_time` は talk 起点からの絶対（焼き込み済み）秒、`duration` は当該 cue の presentation 占有秒（Text=reveal D／Wait=待ち／瞬時=0）。両者は `text_playback_duration` の単一計算の 2 投影を不変台本へ凍結（実行時ドリフト不能・再タイミング＝再 compile）。**全 presentation cue が duration を保持**し、フィールド欠落は存在しない。
+- **不変台本（CueSheet）**: `CueSheet { absolute_start_time, cues: Vec<Cue> }`。`Cue { actor, start_time, payload, duration }` の列。`start_time` は talk 起点（台本先頭 0）からの相対（焼き込み済み・compile 確定）秒、`absolute_start_time` は talk が再生開始する壁時計の絶対秒（dispatch 刻印）——**各 cue の絶対発火時刻 = `absolute_start_time + start_time`**。`duration` は当該 cue の presentation 占有秒（Text=reveal D／Wait=待ち／瞬時=0）＝cue は区間 `[start_time, start_time+duration)`。start_time/duration は `text_playback_duration` の単一計算の 2 投影を不変台本へ凍結（実行時ドリフト不能・再タイミング＝再 compile）。**全 presentation cue が duration を保持**し、フィールド欠落は存在しない。**talk 絶対終了時刻 = `absolute_start_time + max(start_time + duration)`**（台本のみから復元可能・完了判定の権威）。
 - **`CueCommand`（9 variant）**: 既存 8（Text/Clear/Emote/Choice/EntityRef/Custom/NewLine/BalloonSurface）＋ **Wait（unit・action 空）**。時間は常に envelope `duration` が担い、コマンドは action の種別のみを表す。
 - **搬送体（TalkCue）**: `{ at, actor, command, duration }`。`Cue` の実行時投影（serde 非依存）。全 sink が broadcast で受け、各自 duration を honor・reveal は `duration` を読む。
 
@@ -385,7 +391,7 @@ pub fn compile(instructions: &[Instruction]) -> CompiledTalk;
 
 ### Integration Tests（クロス層・実 channel/schedule）
 - **broadcast 配送（2.1/2.2）**: 1 台本を on_tick へ流し、**両 sink（surface_sink/text_sink）が同一 cue 列を受信**する（旧「片方だけ受信」を broadcast へ更新）。emo-text は Emote/Wait を action 無視・seriko は Text/Wait を action 無視、両者とも duration を honor。
-- **honor 契約（2.2/2.3/5.4/7.5）**: ①葉の表現者——emo-text が非担当 cue（Emote/Wait）を受けても、後続の担当 Text cue の reveal `r_0 = cue.at` は**当該 duration ぶんの遅延を受けない**（ローカル遅延を生まない・no-op 否定制約）。②ライフサイクル——`compile` の `CompiledTalk.end`（=`max(start_time+duration)`）が**末尾 Wait の duration を含む**（compile-level・自己完結台本）。③relevance partition——全 `CueCommand` variant について `cue_target_of` の分類と emo-text の action 判定が**一致**し、variant ごとに action する表現者が高々一つ（発散なし・partition 檻）。
+- **honor 契約（2.2/2.3/2.5/5.4/7.5）**: ①葉の表現者——emo-text が非担当 cue（Emote/Wait）を受けても、後続の担当 Text cue の reveal `r_0 = cue.at` は**当該 duration ぶんの遅延を受けない**（ローカル遅延を生まない・no-op 否定制約）。②**ライフサイクル（drive-level・注入 tick）**——末尾 `\_w[800]`（Text@0 dur D／Wait@D dur 0.8）および裸の末尾 Text（at=0 dur D）を drive へ流し、`TalkDone` が entry 枯渇時刻（前者 D・後者 ≈0）でなく**絶対終了時刻**（前者 D+0.8・後者 D）に達するまで**発火しない**ことを注入 tick で固定する（compile-level の extent 檻だけでは早期終了を捕捉できず drive-level 檻が必須）。加えて `CompiledTalk.end` は `TalkEndReason` であって終了「時刻」でないことを型で固定。③relevance partition——全 `CueCommand` variant について `cue_target_of` の分類と emo-text の action 判定が**一致**し、variant ごとに action する表現者が高々一つ（発散なし・partition 檻）。
 - **2 sink 同期（1.4/8.4）**: `\s[7]` を含む台本で、Emote が該当テキストの D 後の絶対時刻で発火し、両 sink が同一絶対時刻の同一台本を受ける（`\s` 表情同期）。
 - **Clear 前置 FIFO（6.2）**: 前 talk のテキストが新 talk 冒頭 Clear で消え、同一 `at=0.0` で Clear→Text の順に配送（`same_at_cues_preserve_script_order_fifo` 相当）。
 - **duration 搬送（1.1/7.1）**: compile→to_schedule→sink→apply_cue で `TalkCue.duration` が無変形に届き reveal 時刻が D 由来になる。
@@ -422,6 +428,12 @@ pub fn compile(instructions: &[Instruction]) -> CompiledTalk;
 - **Context**: 瞬時コマンド（Clear/Emote/NewLine/BalloonSurface/Choice/EntityRef）の duration。
 - **Selected**: **全 presentation cue が envelope duration を持ち、瞬時は明示的 0**。「duration フィールドを持たない cue command」概念は導入しない。
 - **Rationale**: honor 契約は「全 cue の duration を一律 honor」を前提とし、フィールド欠落があると表現者側に分岐（このコマンドは duration を持つか？）が生じ契約に穴が空く。`#[serde(default)]` で 0 はワイヤ省略・型には常在。**本質的に duration 非該当なのは Barrier/Routing のみ**（`CueCommand` でなく `CuePayload` 別アーム・静的タイムライン外）ゆえ、presentation cue に欠落は生じない。
+
+### D6: CueSheet が絶対開始時刻を持つ自己完結楽譜・完了は占有 horizon（Topic 1 / 討議 #2）
+- **Context**: R2.2「早期終了しない」の実機構。当初設計は honor を `CompiledTalk.end` に帰していたが、それは `TalkEndReason` enum（終端理由 Ended/Quit）で**時間量でなく**、drive の自然終了は entry 枯渇（＝最終 cue の**配送時刻**）で `TalkDone` を発火し duration を落とす＝末尾 Wait／最終 Text の再生が talk 終端で消える（早期終了・#3 が kanade 単一 slot 境界で再発）。design が「配送し終えた」と「再生し終えた」を混同していた。
+- **Selected**: **`CueSheet` へ `absolute_start_time: f64` を追加**（dispatch 時刻印・`#[serde(default)]`）し、各 cue の相対 `start_time` ＋ envelope duration と併せて台本を**絶対時刻で自己完結**させる。**cue は点でなく区間 `[start_time, start_time+duration)`**。talk の**絶対終了時刻** = `absolute_start_time + max(cue.start_time + cue.duration)`。配送は従来どおり各 cue の絶対時刻で点配送（二重待ちなし）だが、**完了**（`is_completed`／`TalkDone`）は entry 枯渇でなく**現在時刻 ≥ 絶対終了時刻**で判定する（`TimedSchedule` が horizon を保持）。
+- **Rationale**: (1) **同期**——絶対アンカーが台本に載るため、broadcast された台本を受けた任意の表現者（プロセス跨ぎ）が協調なしに同一絶対発火時刻・同一完了時刻を独立算出できる（dola の本質「同一台本を同一絶対時刻で」の物理的な形）。(2) **自己完結**——R5.3 を最強形へ：extent だけでなく絶対的配置が台本で閉じる。(3) **早期終了解決**——完了が「台本から導ける絶対終了時刻」になり、drive／kanade／表現者のどこで判定しても同一値。ゆえに「horizon をどの層に置くか」は些末事化し、決めるべきは**データ配置**（台本に `absolute_start_time`・各 cue に `duration`）だった。`CompiledTalk.end`（終端理由 enum）と終了「時刻」を峻別する。
+- **棄却案**: (乙) horizon を sakura `CompiledTalk` のみに持たせ dola schedule を点配送の素の道具に留める案は、duration 普遍（D5）の下では「cue を零幅点と見なす timeline」＝「duration 欠落 command」のタイムライン版という同種の穴を残すため不採用。占有はタイムラインの本性とする。
 
 ## Supporting References
 - 詳細な選択肢比較・Topic 1 開発者決裁・dola 表現範囲の外壁・設計ディスカッション #1（envelope/Wait/broadcast/honor）の全経緯は `research.md`（§3・§6・§7・§9）に記録。design.md は結論を自足的に保持する。

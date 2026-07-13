@@ -23,6 +23,7 @@
 
 - **In scope**:
   - cue タイムラインへの**テキスト再生 duration の第一級モデル化**（`Cue` envelope の一律フィールド・全 presentation cue が保持・瞬時は 0）。
+  - **`CueSheet` の絶対開始時刻保持**（`absolute_start_time`・dispatch 刻印）による**自己完結した絶対時刻台本**——台本のみから各 cue の絶対発火時刻と talk 絶対終了時刻を復元可能にし、cue を区間 `[start_time, start_time+duration)` として扱い、完了を「配送し終えた」でなく「再生し終えた（絶対終了時刻到達）」で判定する。
   - **単一の純関数**「テキスト→暗黙 per-char 再生時間」（所在は sakura）。明示 `\_w` は parser が分離済みゆえ compile のタイムライン累積が合成を担う。
   - sakura compile が各テキスト cue へ再生時間を付与し、後続 cue の絶対発火時刻を整列。
   - **純粋 Wait cue の第一級発行**（`\_w`→`CueCommand::Wait`・action 空・duration のみ）＝台本の自己完結（末尾・単独の待ちも cue として台本に残る）。
@@ -57,15 +58,17 @@
 4. When 同一の台本を複数の独立した最終表現者（プロセス境界を跨ぐ場合を含む）が受け取る, the dola cue タイムライン shall 各 cue を全表現者へ同一の絶対時刻で配送し、表現者が互いの発火時刻を参照せずとも同期が成立することを保証する。
 5. The dola cue モデル shall 再生時間 duration を不透明な秒数データとして受け取り、SakuraScript 固有の 1文字あたりウェイト値（例: 50ms）をハードコードしない。
 6. Where cue のペイロードが Barrier（動的停止点）または Routing（制御プレーン・表現者未配送）である, the dola shall それらを duration 概念の非該当として扱い、静的 duration タイムラインの外に置く（本 spec の duration モデルは presentation cue のみを対象とする）。
+7. The dola cue モデル shall `CueSheet` に絶対開始時刻 `absolute_start_time` を保持し、各 cue の相対 `start_time` ＋ duration と併せて、台本のみから全 cue の絶対発火時刻（`absolute_start_time + start_time`）と talk 絶対終了時刻（`absolute_start_time + max(start_time + duration)`）を復元可能にする（自己完結した絶対時刻台本・アンカーは dispatch 時に刻印）。
 
 ### Requirement 2: 全表現者の duration honor 契約（配送＝dola／服従＝全表現者）
-**Objective:** areka talk 再生パイプラインとして、全 cue を全表現者へ配り、各表現者が自分に無関係なコマンドの duration すら無視しないようにしたい。そうすれば、どの表現者が何を演じるかに関わらず、全員のタイムラインが協調なしに同期する。
+**Objective:** areka talk 再生パイプラインとして、全 cue を全表現者へ配り、各表現者が自分に無関係なコマンドの duration すら無視しないようにしたい。そうすれば、どの表現者が何を演じるかに関わらず、全員のタイムラインが協調なしに同期する。honor は 2 段で成立する——**葉の表現者**は自分の担当でない cue から新たなローカル遅延を生じさせず（否定的 no-op）、**talk ライフサイクル**は台本の絶対終了時刻まで talk を早期終了させない。
 
 #### Acceptance Criteria
 1. The areka talk 再生パイプライン shall 全 cue を全表現者へ broadcast 配送し、コマンド種別による中央振り分けで特定の表現者から cue を隠さない。
-2. When 表現者が cue を受け取る, the 表現者 shall 当該 cue の action を処理するか否かに関わらず、cue の duration を自身のタイムライン整合のために honor する——すなわち talk の全時間範囲（`max(start_time + duration)`）を尊重して早期終了せず、かつ duration からローカルな遅延を新たに生じさせない（タイミングは焼き込み絶対 `start_time` が担い、二重待ちを生まない）。
-3. While 表現者が自身の担当でないコマンドを受け取る, the 表現者 shall その action を無視してよいが、duration は無視してはならない。
+2. When 葉の表現者（emo-text/seriko 等の最終表現者）が自身の担当でない cue を受け取る, the 表現者 shall その duration から新たなローカルな遅延を生じさせない（タイミングは焼き込み絶対時刻が担い、二重待ちを生まない・葉としては否定的 no-op 制約）。
+3. While 表現者が自身の担当でないコマンドを受け取る, the 表現者 shall その action を無視してよいが、duration は無視してはならない（相対 `start_time` ＋ duration が示す占有区間を自身の整合に用いる）。
 4. Where 表現者が自身の担当 cue を選別する, the 表現者 shall 演者側の relevance 判定（自分宛てか否か）で action 対象を決定する（中央 router による事前振り分けに依存しない）。
+5. The areka talk ライフサイクル（drive の完了判定）shall talk を、台本から導かれる絶対終了時刻（`CueSheet.absolute_start_time + max(cue.start_time + cue.duration)`）に達するまで完了扱いにせず、最終 cue（末尾 Wait・最終 Text 等）の duration を talk 終端で落とさない（早期終了しない・#3 の実機構）。
 
 ### Requirement 3: 文字再生時間を計算する単一の純関数（計算＝sakura）
 **Objective:** さくらスクリプトを cue 台本へコンパイルする層 sakura として、「テキスト→暗黙 per-char 再生時間」を計算する純関数を1つだけ持ちたい。そうすればタイムライン側も reveal 側も同じ真実源から再生時間を導出でき、独自実装の重複が絶滅する。
@@ -129,7 +132,7 @@
 #### Acceptance Criteria
 1. The areka talk 再生パイプライン shall 再生時間の算出・整列を注入時刻（`talk_time`）駆動で行い、実時間 sleep・`Instant` を使用しない。
 2. The dola cue タイムライン shall SakuraScript 固有の意味論（per-char ウェイト値）を内包せず、再生時間をデータとして受け取る汎用基盤に留まる。
-3. When 再生時間・Wait を cue モデルへ追加する, the dola cue モデル shall 既存 cue variant のワイヤ形を変えず additive に拡張する（envelope duration は `#[serde(default)]`＝0 はワイヤ省略・型には常在／Wait は新規 variant の additive 追加）。
+3. When 再生時間・Wait・CueSheet 絶対開始時刻を cue モデルへ追加する, the dola cue モデル shall 既存 cue variant のワイヤ形を変えず additive に拡張する（envelope duration および `CueSheet.absolute_start_time` は `#[serde(default)]`＝0 はワイヤ省略・型には常在／Wait は新規 variant の additive 追加）。
 4. When 再生時間情報を持たない既存のシリアライズ済み cue データを読み込む, the dola cue モデル shall それを duration=0 として従来どおり解釈できる（後方互換）。
 5. The dola cue モデル shall 「duration フィールドを持たない presentation cue command」という概念を導入せず、全 presentation cue が envelope duration を保持する（結果としての 0 と、フィールドの欠落とを峻別し、欠落を作らない）。
 
