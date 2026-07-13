@@ -8,8 +8,11 @@
 
 - **#3 ウェイト不発**: スクリプトの `\_w[450]` 等が typewriter に効いて見えない（「、」「。」で止まらないのは、たまたまそこに `\_w` が置かれているだけ＝句読点は無関係。**開発者が「句読点自動ポーズ」仮説を明確に棄却**——ウェイトの源は `\_w` のみ・文字送りは一律 50ms）。
 - **#4 改行早発**: 1行表示直後に必ず改行される（`\n` 直前の `\_w` が無視される）。#3 と**同一根**。
-- **#D 冒頭改行**: OnBoot でエモ（scope1）のバルーンが空行から始まる（スクリプト冒頭 `\p[1]…\n[150]\p[0]…` の leading `\n[150]` が reveal タイムラインを無視して即時描画）。
+- **#7（旧 #D）冒頭改行＝空行**: OnBoot でエモ（scope1）のバルーンが**空行から始まる**。真因はスクリプト冒頭 `\p[1]…\n[150]\p[0]…` の leading `\n[150]`（エモに先行グリフ無しで改行）＝**先頭 LineBreak が空行を作る**。**timing を直しても空行は消えない**＝⑥emo-text の「先頭 LineBreak（先行グリフ無し）描画抑制」レイアウト規則が別途必要。
+- **#6 新 talk で前の会話が消えない**: 新しい会話が始まっても前 talk のテキストがバルーンに残り累積する。SSP は**新 talk でバルーン自動クリア**が既定だが、areka は **talk 境界で Clear cue を誰も発火していない配線欠落**（Clear 機構自体は emo-text に実在）。**開発者裁定（2026-07-13）: ④sakura が担当＝compile で台本冒頭へ Clear cue を前置**する（「台本を書くのが sakura」の一部＝台本は Clear で始まり durations を載せる）。
 - **副次: `\s` 表情非同期**: 表情切替がテキスト再生と無関係なタイミングで発火（喋りと表情がズレる）。
+
+> **本 spec が束ねる7件中の位置**: 実機指摘 7件のうち #5 は emo2-boot でこの場修正済み・#1 は `surface-resize-resnap`・#2 は `mayuna-compose`。残る **#3・#4・#6・#7 が本 spec**（sakura→cue→emo-text の talk 再生パイプライン正しさ＝三権分立で一括解決）。
 
 **より根本的な病理（開発者の指摘）**: 「文字数→文字単位ウェイト量」を計算する純関数が**あちこちで独自実装**されている。この duplication があるため、タイムライン（cue 発火時刻）と reveal（typewriter 表示）が**協調せず破綻**する。単一の権威が「このテキストの再生には XXX 秒かかる」を保持していない。
 
@@ -40,8 +43,8 @@
 > **dola が単一の権威台本、台本を書くのが sakura、台本に従うのが emo-text。**
 
 - **保持（hold）＝ dola**: cue タイムラインの唯一の真実源。テキスト cue が**「再生に D 秒かかる」を第一級プロパティとして持つ**（`Cue`/`CueCommand::Text` へ duration を付与、または schedule が duration を認識）。dola は汎用の演出基盤ゆえ **50ms をハードコードせず**、duration を**データとして**受け取り、後続 cue を D 秒後に整列させる。
-- **計算（compute・台本を書く）＝ sakura**: 「1文字=50ms」は**さくらスクリプトの意味論**＝sakura の領分。純関数 `text_playback_duration(text) → Duration`（暗黙 per-char ノミナル＋明示 `\_w` 換算）を**一度だけ**実装し、char_wait 定数も sakura に一元化。compile が各テキスト cue へ duration を書き込み、タイムラインを整列させる。
-- **服従（obey・台本に従う）＝ emo-text**: 自前 char_wait を捨て、**渡された D で再生**する（N文字を D秒に割る＝結果は 50ms/字だが源は1つ）。reveal は台本が定めた duration に従うだけ。
+- **計算（compute・台本を書く）＝ sakura**: 「1文字=50ms」は**さくらスクリプトの意味論**＝sakura の領分。純関数 `text_playback_duration(text) → Duration`（暗黙 per-char ノミナル＋明示 `\_w` 換算）を**一度だけ**実装し、char_wait 定数も sakura に一元化。compile が各テキスト cue へ duration を書き込み、タイムラインを整列させる。**加えて台本冒頭へ `Clear` cue を前置**（#6・新 talk＝バルーン自動クリア＝「完全な台本」の一部）。
+- **服従（obey・台本に従う）＝ emo-text**: 自前 char_wait を捨て、**渡された D で再生**する（N文字を D秒に割る＝結果は 50ms/字だが源は1つ）。reveal は台本が定めた duration に従うだけ。**加えて先頭 LineBreak（先行グリフ無し）を描画抑制**（#7・空行を作らない＝台本の忠実描画の一部）。
 
 **なぜ案A（vs 案B レンダラ報告／案C 事前焼込み）**:
 1. さくらスクリプトの文字ウェイトは**レイアウト非依存の固定ノミナル**（折返しや `\n` で変わらない）＝`char_count × 50ms + Σ\_w` で**上流が厳密に計算可能**。案B（レンダラしか真の時間を知らない前提のフィードバックループ）は SakuraScript では**不要な複雑さ**。
@@ -54,8 +57,10 @@
   - dola cue タイムラインへの**テキスト再生 duration の第一級モデル化**（`Cue`/`CueCommand::Text` の duration 表現・schedule の duration 認識・後続 cue の整列）。
   - **単一の純関数** `text_playback_duration`（暗黙 per-char ウェイト＋明示 `\_w` 換算）と char_wait 定数の**一元化**（所在は sakura）。
   - sakura compile が duration を cue へ書き込む（テキスト再生時間をタイムラインへ加算）。
+  - **sakura compile が台本冒頭へ `Clear` cue を前置**（#6・新 talk でバルーン自動クリア）。
   - emo-text reveal が**渡された duration に服従**（自前 char_wait 計算を撤去）。
-  - 実機受け入れ: #3（`\_w` が pause として体感できる）・#4（`\n` が `\_w` 分だけ遅れる）・#D（冒頭 leading `\n` が空行を作らない）・`\s` 表情同期。
+  - **emo-text が先頭 LineBreak（先行グリフ無し）を描画抑制**（#7・冒頭 `\n` が空行を作らない・timing 修正とは別のレイアウト規則）。
+  - 実機受け入れ: #3（`\_w` が pause として体感できる）・#4（`\n` が `\_w` 分だけ遅れる）・#6（新 talk で前会話が消える）・#7（冒頭 `\n` が空行を作らない）・`\s` 表情同期。
   - **emo2-boot ブランチの後始末**を前提条件として明記: `punctuation_wait` ハック撤去＋drive.rs 一時診断ログ撤去。
 - **Out**:
   - bind/mayuna 合成による表情変化（#2＝`mayuna-compose`）。
@@ -70,6 +75,8 @@
 - **保持の権威**: cue タイムラインの duration 表現（dola `Cue`/`CueCommand::Text` の duration フィールド or schedule の duration 認識）。
 - **服従の consumer**: emo-text reveal が duration を受けて表示（自前 pacing 撤去）。
 - **後続 cue 整列**: duration を跨いだ次 cue の発火時刻決定（sakura compile が offset へ加算 or dola schedule が duration 認識）。
+- **台本冒頭 Clear（#6）**: sakura compile が talk 先頭へ `Clear` cue を前置（新 talk＝バルーン自動クリア・scope 別クリアの粒度は要件で確定）。
+- **先頭 LineBreak 抑制（#7）**: emo-text layout の描画規則（先行グリフ無しの LineBreak を空行にしない・timing とは独立）。
 - **wintf typewriter 整理**: 第3の独自実装の統合 or 明示的スコープ外化。
 
 ## Out of Boundary
