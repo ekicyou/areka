@@ -142,3 +142,64 @@ brief.md が名指しした挿入点はいずれも**現存**し、周辺コー�
 - **DD-6（free スコープの扱い）**: `BottomSnap` marker 不在（free）のキャラ窓は寸法のみ反映し Y 保持（R3.3）。marker 有無で分岐する既存 `on_char_drag` と同じ静的引き方に合わせる。
 - **DD-7（R4 決定論檻の DPI パラメタ化の意味）**: 物理 px 単一通貨で下端 Y 算出が DPI 非依存な点を踏まえ、R4.4 の「DPI をパラメタ化（96/120/144/192）」を「多様な寸法値の集合での網羅」と読むか「実 DPI を模した入力生成」と読むかを確定（実 DPI 目視は最終確認に限定する線引き）。
 - **DD-8（多発 resize の視覚安定）**: 同寸非発火（R1.3/R3.6）に加え、talk 中の連続切替での即時性 vs 1 フレーム遅延（DD-2 の帰結）をどう受容するか。
+
+---
+
+## 7. 設計フェーズ discovery（light・2026-07-13）
+
+Extension（既存 window-placement／emo-present／emo2-boot への追加）として light discovery を実施。§1 の実コード偵察を実署名で確認・追認した（差分のみ記す）。
+
+### 7.1 実署名の確認（追認・補正）
+
+- **検知アクセサは既存**: `EmoPresenter::text_slot_view(&self, target: TargetId) -> Option<TextSlotView>`（presenter.rs:404）が `TextSlotView::surface_size() -> (u32, u32)`（presenter.rs:104・`chain.size()` 由来）を公開済み。**emo-present への新規アクセサ追加は不要**（§3 の「小 accessor 追加」案 A-2 は不要と判明）。`None` は未 attach または初回 `ShowSurface` 前（mount/chain 未生成）。
+- **drain は同一 `&mut World`＋presenter 同伴**: `run_drain_phase(wiring: &mut Emo2Wiring, world: &mut World)`（frame.rs:474）が `wiring.presenter.apply(world, cmd)` を呼ぶ排他 World シーム（`emo2_frame_system` の donor パターン・attach→drain→text の順）。適用直後に同じ関数内で `presenter.text_slot_view()` を読み、同じ `world` で placement を叩ける＝**チャネル不要の同一 World 直接呼び**が自然に成立（DD-2 の直接呼び案の裏付け）。
+- **`PresentCommand` は `#[non_exhaustive]`・size を運ばない**: 寸法は `apply_show` が cache entry から導出し `SwapChainPresenter::upload` が `ResizeBuffers` で内部リサイズ済み（chain.rs:178）。**OS 窓（HWND）だけが spawn 寸のまま**（欠陥機序の確定・§1.2 追認）。
+- **窓寸書込の単一レバー**: `WindowPos.size = None` で wintf が `SWP_NOSIZE` を自動付与（window_pos/mod.rs:236）。既存 `enqueue_window_move` は `SetWindowPosCommand::new(hwnd,x,y,0,0,SWP_NOSIZE|...)` で移動専用＋`WindowPos.position` を `bypass_change_detection()` でミラー。**`cx/cy` を渡し `SWP_NOSIZE` を外すだけで resize 可**（新 wintf API 不要）。`SetWindowPosCommand` は `width/height: i32` フィールドを保持済み（command.rs:113）。
+- **アンカーの現行表現は二値**: `Alignment`（config.rs:16）= `Bottom` / `Free` / `Seam(String)`。`top`/`left`/`right`/未知は `Seam(other)` へ畳まれ **実挙動は Bottom＋警告**（window-placement DD9）。resolver は `ScopePlacement.bottom_snap: bool`（resolver.rs:84）へさらに畳む。**5 アンカー T は生文字列を保つ `Seam` を解釈して分岐する必要がある**（cascade 解決自体は既済＝この spec は解釈のみ）。
+- **scope↔target↔窓 の写像**: `shell_target(scope)=TargetId(2*scope)`・`balloon_target=2*scope+1`（target_map.rs）。`GhostWindows::char_window(scope)/balloon_window(scope) -> Option<Entity>`・`scopes()` 昇順（spawn.rs:120-130・Resource）。
+- **型の跨ぎ**: presenter/chain=`(u32,u32)` 物理 px／placement=`SizePx{w,h:i32}`／wintf=`SizeI{width,height:i32}`・`Point{x,y:i32}`。跨ぎは `i32::try_from`（measure.rs `compose_size` に前例）。
+
+### 7.2 依存方向（追認）
+
+`resolver`（純粋 std・wintf 非依存・U5）← `config`（parsers のみ）← `measure` ← `spawn`／`follow`（wintf/bevy）← `frame.rs`（emo2_boot シーム・presenter と placement の両方に依存する統合層）。**検知（emo-present read）→反映（placement write）を結ぶ `frame.rs` は両者の下流**ゆえ直接呼びで依存が汚れない（emo-present は placement を一切知らない・read-only アクセサを晒すのみ）。
+
+## 8. 設計 synthesis（3 レンズ）
+
+### 8.1 Generalization
+- **T = アンカー射影の一般化**: R1〜R2 の 5 アンカーは「アンカー辺を work area の対応辺へ固定し非アンカー軸を保持する」単一射影 `project_anchor` の特殊化。`bottom` は既存 `BottomSnapPolicy`（R1.2 で再利用必須）、`top`/`left`/`right` は駆動軸を変えた同型、`free` は identity。**インターフェースだけ 5 値へ一般化し、実装は現要件が要る分に閉じる**（`BottomSnapPolicy` を bottom 腕として呼ぶ）。
+- **ドラッグ ＝ resize の別断面**: R1.6 は「同一 T・同一単一ライター」を要求。ドラッグの生座標写像（現 `policy_mapped_position`→`BottomSnapPolicy`）と resize の寸法起点写像は同じ `project_anchor` へ合流。非 bottom アンカーのドラッグ自由軸（R2 表）も同射影の帰結として正しくなる。
+- **サイズ変化 ＝ アンカー変化の別トリガ**: 両者とも「現アンカー＋現寸で T を再適用」の同一反映口 `resize_window_to` へ合流（DD-11）。
+
+### 8.2 Build vs. Adopt
+- **Adopt（既存資産の合成が主）**: `BottomSnapPolicy`（bottom 射影）・`MonitorSnapshot`/`work_area_for_window`（モニタ解決）・`enqueue_window_move` の単一ライター規律（bypass＋Arrangement 同期）・`follow_balloon`（随伴）・`SetWindowPosCommand`（width/height 既存）・`text_slot_view`（検知アクセサ既存）・`GhostWindows`/`target_map`（scope 写像）。**新奇技術・新規 crates.io 依存・新規通信フレームワークはゼロ**（Req4.4）。
+- **Build（最小の新規）**: `Anchor` 5 値（純粋 enum・resolver.rs）＋`from_alignment`（`Seam` 解釈）／`project_anchor`（T・follow.rs）／`Anchored` Component（follow.rs）／`resize_window_to`＋`enqueue_window_set_pos`（follow.rs・enqueue の size 対応一般化）／frame シームの diff 駆動（frame.rs）／`Changed<Anchored>` 反応（follow.rs）。
+- **Reject（不採用）**: 案 A-1 notifier 注入（emo-present に callback API 増設＝依存反転リスク・不要）・案 A-3 `apply` 戻り値化（既存契約破壊）・`UiSender` 経由メッセージ配送（同一 World 直接呼びで足り 1 フレーム遅延も避ける）・新 `PresentCommand::Resize` variant（resize は `ShowSurface` の寸法差の帰結＝新 variant 不要）。
+
+### 8.3 Simplification
+- **ベースラインの別マップを持たない（DD-3）**: 「直前表示寸」は char 窓自身の `WindowPos.size` が体現する（spawn で初期寸・resize で新寸をミラー）。検知 diff は `shown_size(shell_target) != WindowPos.size`。per-target `HashMap` を新設しない。
+- **emo-present 無改変**: 既存 `text_slot_view` を読むのみ（DD-1 は areka/frame.rs 側検知に確定）。
+- **配送は関数呼び（DD-2）**: メッセージ型・チャネル・drain を増設しない。同一 UI スレッド・同一 World の `frame.rs` から `placement::follow::resize_window_to(world, ..)` を直接呼ぶ。
+- **二値マーカーを 5 値へ畳み替え**: `BottomSnap` marker（bottom/free 二値）を `Anchored(Anchor)` 単一表現へ generalize（二重表現を作らない・R1.6）。
+
+## 9. 解決済み設計判断（DD-1〜DD-11 → 確定）
+
+| DD | 論点 | 確定 |
+|---|---|---|
+| **DD-1** | 検知の所属 crate | **areka/frame.rs 側**。emo-present は既存 `text_slot_view` を read-only 提供（無改変）。R1 の subject は「機構」で crate を縛らない・再framing で検知は Req3 べき等へ降格。 |
+| **DD-2** | 配送実体 | **同一 World 内の直接関数呼び**（`frame.rs`→`resize_window_to`）。Req4.3 が委任・Req4.4「新規フレームワーク不導入」を最強で満たす・1 フレーム遅延なし。メッセージ型/チャネルなし。 |
+| **DD-3** | ベースライン所有 | **char 窓の `WindowPos.size`**（別マップ不要）。diff は `shown_size != WindowPos.size`。 |
+| **DD-4** | placement 反映口 | **`resize_window_to` additive 新設（案 B-1）**＋`enqueue_window_move`→`enqueue_window_set_pos(.., size: Option<SizePx>)` へ size 対応一般化（`size=None` で現行移動専用と後方互換・既存 6 テスト不変）。`WindowPos.size` を bypass ミラー追加。 |
+| **DD-5** | 対象限定 | **shell target（偶数=`2*scope`）のみ**が char 窓 resize を駆動。balloon target（奇数）は駆動しない。`scope=target/2`→`GhostWindows::char_window(scope)`。 |
+| **DD-6** | free の扱い | `Anchored(Free)`＝射影 identity（position 保持・size のみ）。ドラッグは move_window=true の wndproc 委譲（挙動不変）。 |
+| **DD-7** | R5.4 の DPI 檻の意味 | 物理 px 単一通貨ゆえアンカー辺算出は **DPI 非依存**＝檻は「多様な寸法・work area 値の集合」で全アンカー網羅（96 非倍数を含む）。実 DPI 依存の確認は R5.1–5.3 の `bottom` 実機目視へ限定。 |
+| **DD-8** | 多発 resize | 同寸/同アンカーは非発火（`WindowPos.size` diff＋射影の不動点）＝連続 `\s` でも実寸が変わる時だけ 1 回書き。直接呼びゆえ即時（遅延なし）。 |
+| **DD-9** | T 一般化構造 | **`Anchor` enum＋`project_anchor` 単一純粋関数**（match 分岐）。`bottom` 腕は `BottomSnapPolicy.resolve` へ委譲（R1.2 再利用）。trait object dispatch は不要（5 値・閉形式）。 |
+| **DD-10** | 解決済みアンカーの表現/provenance | **`Anchored(Anchor)` Component**（char 窓・spawn で `config.alignment` を `Anchor::from_alignment` 解釈して付与）。cascade 解決（config.rs）は無改変＝**解釈のみ消費**（Req4.2/6.3）。実行時 `\![set,alignmenttodesktop]`（seriko・非所有）が `Anchored` を書換える interlock を契約として定義し、この spec は `Changed<Anchored>` で反応する（producer は将来 seriko）。`BottomSnap` marker は `Anchored` へ generalize 退役。 |
+| **DD-11** | 両トリガ合流 | サイズ変化（frame poll）とアンカー変化（`Changed<Anchored>` system）は同一反映口 `resize_window_to(world, char_window, new_size)` へ合流。アンカー変化時の `new_size` は現 `WindowPos.size`（presenter 参照不要・World のみ）。 |
+
+## 10. リスクと緩和（追補）
+
+- **move+resize 同時発行の echo 二重反映**（§4-1）: `enqueue_window_set_pos` の bypass ミラーと `is_self_initiated`/`SELF_INITIATED_DEPTH` ガード・GA 零寸ガードを resize でも継承。size 込みで `WM_WINDOWPOSCHANGED` echo が来ても bypass ゆえ `Changed<WindowPos>` を発火させず二重発行しない。**実 DPI 実機で回帰確認必須**（バルーンのクリック死/振動の既発面）。
+- **visual bounds と窓寸の一致**（§4-2）: HWND を新寸へ resize 後、`mount.set_bounds`（surface 寸）と窓クライアント領域が一致するか＝描画クリップ無しを本番ゴースト実表示で確認。
+- **バルーン随伴の画面外**（§4-3）: re-snap で char 窓 Y が動くと `BalloonFollow.offset` 維持で balloon も動く。offset が負（上方）の場合の画面外を確認（R2.6 の非破壊範囲）。
+- **DPI=96 自己整合の隠蔽**（window-placement リジェクト教訓）: 決定論檻だけでは GO 不可・実 DPI（≠96・125%）目視証跡を DoD 前提（Req5.2）。
