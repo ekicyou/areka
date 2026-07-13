@@ -138,7 +138,17 @@ emo2 が起動して喋る。下記 5 トラックを結線して達成（⓪ �
 - **④ sakura（sakura-engine）**: `areka-P0-sakura-dialogue-tags`（`\q`/`\_l`/`\![move]`）／ `areka-P0-sakura-glyph-pacing`（**typewriter 文字送りが下流 cue を押す SSP 互換 pacing**——現行 sakura の `at` は `\w` のみ累積＝文字送り時間が cue 時刻に影響しない。emo-text-layer 完了時の増分申し送り〔research.md 記録・design L252〕を 2026-07-11 再入精査でユニット名登録）
 - **③ kanade（conductor）**: `areka-P0-idle-talk`（OnSecondChange 自発会話）／ `areka-P0-input-events`（OnMouseMove/OnMouseDoubleClick/OnChoiceSelectEx 配信）
 - **⑥ emo（render-engine）**: `areka-P0-collision-geometry`（collision→region/actor 写像）／ `areka-P0-choice-render`（選択肢表示）／ `areka-P0-dual-window`（kero 2nd 窓）／ `completed/areka-P0-emo-text-viewbox` ✅**完了（2026-07-12）**（**スクロールの viewbox 化**＝ダーティ矩形視窓＋保持ピクセル面内 blit＋露出帯∪変化行の D2D 部分再描画・再描画レス・k=1.0 byte 等価 golden〔oracle=全域再描画 vs viewbox〕が受け入れ基準・emo-text-layer の分離シーム `VisibleWindow` 消費。実機観測で **descent はみ出しの下端欠け D2 を発見→`GetOverhangMetrics` 実インク境界実測で根本修正**）
-- **⓪ ghost（ゴーストエンジン）**: `areka-P0-position-persist`（`ghost.dat` 位置の保存/復元・ghost レベル永続化）
+- **⓪ ghost（ゴーストエンジン）**: `areka-P0-position-persist`（`ghost.dat` 位置の保存/復元・ghost レベル永続化）／ `areka-P0-surface-resize-resnap`（**実行時サーフェスサイズ変化→窓リサイズ＋下端再吸着**・emo-present→placement のサイズ変化通知シーム・2026-07-13 実機発見#1・brief 済）
+
+### M-boot 実機サインオフ発見（2026-07-13・R9.3 実機観測の実機欠陥5件と仕分け）
+
+> M-boot（`areka-P0-emo2-boot`）完成後の**実 emo2・実 pasta.dll・実 DPI** 人間サインオフ（R9.3）で、headless 決定論 spine が押さえられぬ**実表示・実発話の綻び5件**を発見。実 pasta スクリプト接地の根本追跡で仕分け済み（**②parsers も LayoutEngine も無罪**＝綻びは compile→cue→seriko/emo-text/placement の下流配線に集中）。emo2 実挙動: 表情＝`\s[1000]`＋`\![bind,category,partname,1]` 名前キー連打／話者交替＝`\n[150]`→`\p[N]`／wait＝`\w[ms]` のみ（**句読点に wait 無し**＝SSP 自動ポーズ依存）／起動時サーフェス指定なし（SSP 既定 -1 非表示）。
+
+- **#5 起動時 surface0/10 一瞬表示（-1 非表示であるべき）** → **emo2-boot この場修正済み**（2026-07-13）: `frame.rs` run_attach_phase の DD-9 初期シェル ShowSurface を撤去し「first `\s` まで非表示」へ。balloon 文字スロット取得（`text_slot_view` は初回 ShowSurface 後に Some＝装着順序の罠）は温存。spine 期待も更新。
+- **#4 1行後に必ず改行** → **emo2-boot/sakura この場修正済み**（2026-07-13）: 話者交替の `\n[150]` が `compile.rs` で交替前=退場話者 scope に載り末尾空行化する挙動を是正（LayoutEngine は無罪）。
+- **#1 サイズ変化時に下吸着せず** → **新規 spec `areka-P0-surface-resize-resnap`**（⓪ghost・上記増分・brief 済）: 窓 pos/size は spawn 時一度きり・bottom-snap はドラッグにしか結線されず、実行時 surface swap→resize/re-snap シームが不在。#5 と interlock（「最初に見える本体サーフェス」がサイズ基準）。
+- **#2 着せ替え（bind）で表情変化せず** → **登録済み増分 `areka-P0-mayuna-compose`（⑤seriko）を②④⑤垂直スライスへ再スコープ**: 名前キー `\![bind,…]` は parse OK だが `compile.rs` の `other=>` で無視ドロップ→dola `CueCommand::Bind` variant 追加＋sakura compile 写像＋seriko 動的 bind（既存 `static_binds` 差替シーム）＋**名前→bindgroup 解決**（`sakura.bindgroupN.name` 消費）が必要。balloon-face-cue と同型の垂直増分（roadmap 上の「⑤のみ」表記を②④⑤へ拡張）。
+- **#3 句読点「、」「。」で wait 挟まらず** → **登録済み増分 `areka-P0-sakura-glyph-pacing`（④sakura）に句読点自動ポーズ facet を包含**: 実装 locus は ⑥emo-text `RevealSchedule`（`state.rs` 一律 char_wait・句読点無認識）。既存の「`at` 累積 pacing」に加え、直前文字キーの char_wait 修飾（句読点ポーズ）を含めて理解する。
 
 **統合点（マイルストーン＝横断結合）**:
 - **M-dual** ＝ seriko:`dual-surface` ＋ emo:`dual-window`
