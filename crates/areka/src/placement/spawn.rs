@@ -79,13 +79,13 @@ pub struct GhostWindowMarker;
 
 /// bottom 吸着スコープのキャラ窓 marker（4.7・DD15 v2 基盤・task 8.1/8.2R）。
 ///
-/// `ScopePlacement.bottom_snap`（`alignment=Bottom|Seam(_)` 由来）の転写。
+/// `ScopePlacement.anchor` が非 Free（`!anchor.is_free()`）のスコープの転写。
 /// この marker が bottom 吸着の単一の真実源: spawn は `DragConfig.move_window=false`
 /// と `OnDragEnd` の付与を連動させ、`on_char_drag`／`on_char_drag_end` は marker の
 /// 有無で `BottomSnapPolicy`（トレイト実装）を静的に引く（policy を trait object と
 /// して entity に持たせる案は marker との二重管理・非 Clone boxed Component の扱い
 /// 難と引き換えのため見送り——実装が増えたら component 化を再検討）。吸着対象は
-/// キャラ窓のみ＝バルーン窓には bottom_snap 値によらず付けない（DD15・4.8）。
+/// キャラ窓のみ＝バルーン窓には anchor 値によらず付けない（DD15・4.8）。
 #[derive(Component, Debug, Clone, Copy, PartialEq, Eq)]
 pub struct BottomSnap;
 
@@ -193,11 +193,13 @@ pub fn spawn_ghost_windows(
                 window_style(),
                 window_pos(p.char_pos.x, p.char_pos.y, p.char_size.w, p.char_size.h),
                 HitTest::none(),
-                // BottomSnap（Bottom/Seam）キャラ窓は move_window=false＝wndproc は
-                // 窓を動かさず on_char_drag が単一ライター（DD15 v2・4.7・task 8.2R）。
-                // Free は従来どおり wndproc 直接移動（4.1）。threshold 等は既定を保つ。
+                // 非 Free アンカー（Bottom/Top/Left/Right）のキャラ窓は
+                // move_window=false＝wndproc は窓を動かさず on_char_drag が単一ライター
+                // （DD15 v2・4.7・task 8.2R）。Free は従来どおり wndproc 直接移動（4.1）。
+                // 二値吸着フラグは持たず anchor 単一値から導出する（Req1.6）。
+                // threshold 等は既定を保つ。
                 DragConfig {
-                    move_window: !p.bottom_snap,
+                    move_window: p.anchor.is_free(),
                     ..Default::default()
                 },
                 OnDrag(on_char_drag),
@@ -209,10 +211,11 @@ pub fn spawn_ghost_windows(
             ))
             .id();
 
-        // bottom 吸着の情報伝搬（4.7・task 8.1/8.2R）: Bottom/Seam スコープの
-        // キャラ窓のみ BottomSnap marker（on_char_drag の単一ライター経路の標的）と
-        // OnDragEnd（最終 DragEvent 欠落の穴埋め・DD15 v2 (3)）を付ける。
-        if p.bottom_snap {
+        // bottom 吸着の情報伝搬（4.7・task 8.1/8.2R）: 非 Free アンカー
+        // （Bottom/Top/Left/Right）スコープのキャラ窓のみ BottomSnap marker
+        // （on_char_drag の単一ライター経路の標的）と OnDragEnd（最終 DragEvent 欠落の
+        // 穴埋め・DD15 v2 (3)）を付ける。判定は anchor 単一値から導出（Req1.6）。
+        if !p.anchor.is_free() {
             world
                 .entity_mut(char_window)
                 .insert((BottomSnap, OnDragEnd(on_char_drag_end)));
@@ -359,7 +362,7 @@ mod tests {
         spawn_ghost_windows,
     };
     use crate::placement::follow::BalloonFollow;
-    use crate::placement::resolver::{PointPx, ScopePlacement, SizePx};
+    use crate::placement::resolver::{Anchor, PointPx, ScopePlacement, SizePx};
     use crate::placement::source::GhostTitles;
 
     // -------------------------------------------------------------------------
@@ -378,7 +381,7 @@ mod tests {
                 balloon_pos: PointPx { x: 1071, y: 708 },
                 balloon_size: SizePx { w: 223, h: 158 },
                 balloon_offset: PointPx { x: -412, y: -25 },
-                bottom_snap: true, // emo2＝alignmenttodesktop,bottom
+                anchor: Anchor::Bottom, // emo2＝alignmenttodesktop,bottom
             },
             ScopePlacement {
                 scope: 1,
@@ -387,7 +390,7 @@ mod tests {
                 balloon_pos: PointPx { x: 1334, y: 1044 },
                 balloon_size: SizePx { w: 223, h: 158 },
                 balloon_offset: PointPx { x: 285, y: -19 },
-                bottom_snap: true, // emo2＝alignmenttodesktop,bottom
+                anchor: Anchor::Bottom, // emo2＝alignmenttodesktop,bottom
             },
         ]
     }
@@ -574,17 +577,17 @@ mod tests {
     }
 
     // -------------------------------------------------------------------------
-    // bottom_snap 伝搬（4.7・DD15 基盤・task 8.1）
+    // anchor 伝搬（4.2・DD15 基盤・task 8.1）
     // -------------------------------------------------------------------------
 
-    /// 8.1: `placement.bottom_snap=true` のスコープの**キャラ窓にのみ** `BottomSnap`
-    /// marker が付き、false のキャラ窓・バルーン窓（値不問）には付かない
+    /// 8.1: `placement.anchor` が非 Free のスコープの**キャラ窓にのみ** `BottomSnap`
+    /// marker が付き、`Anchor::Free` のキャラ窓・バルーン窓（anchor 不問）には付かない
     /// （吸着対象はキャラ窓のみ・DD15）。
     #[test]
     fn bottom_snap_marker_attached_to_snapping_char_windows_only() {
         let mut world = World::new();
-        let mut placements = two_scope_placements(); // 両方 bottom_snap=true（emo2＝bottom）
-        placements[1].bottom_snap = false; // scope1 を free 相当へ
+        let mut placements = two_scope_placements(); // 両方 Anchor::Bottom（emo2＝bottom）
+        placements[1].anchor = Anchor::Free; // scope1 を非吸着（Free）へ
 
         let gw = spawn_ghost_windows(&mut world, &placements, &titles());
 
@@ -592,18 +595,18 @@ mod tests {
         let char1 = gw.char_window(1).unwrap();
         assert!(
             world.get::<BottomSnap>(char0).is_some(),
-            "bottom_snap=true のキャラ窓には BottomSnap が付く"
+            "非 Free アンカーのキャラ窓には BottomSnap が付く"
         );
         assert!(
             world.get::<BottomSnap>(char1).is_none(),
-            "bottom_snap=false のキャラ窓には付かない"
+            "Anchor::Free のキャラ窓には付かない"
         );
         for scope in [0usize, 1] {
             assert!(
                 world
                     .get::<BottomSnap>(gw.balloon_window(scope).unwrap())
                     .is_none(),
-                "scope{scope}: バルーン窓には bottom_snap 値によらず付かない"
+                "scope{scope}: バルーン窓には anchor 値によらず付かない"
             );
         }
     }
@@ -648,7 +651,7 @@ mod tests {
     fn t_i3_no_box_style_no_drag_constraint_and_move_window_contract() {
         let mut world = World::new();
         let mut placements = two_scope_placements();
-        placements[1].bottom_snap = false; // scope1 を Free 相当へ（両変種を 1 テストで檻化）
+        placements[1].anchor = Anchor::Free; // scope1 を Free へ（両変種を 1 テストで檻化）
 
         let gw = spawn_ghost_windows(&mut world, &placements, &titles());
 
