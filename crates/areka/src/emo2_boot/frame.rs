@@ -20,6 +20,7 @@ use std::cell::RefCell;
 use std::rc::Rc;
 use std::sync::mpsc::Receiver;
 
+use bevy_ecs::entity::Entity;
 use bevy_ecs::world::World;
 use tracing::{debug, error, info, warn};
 
@@ -27,8 +28,10 @@ use areka_emo_present::{EmoPresenter, PresentCommand, TargetId, TextSlotView};
 use areka_emo_text::actor::{present_frame, TextLayerRuntime};
 use areka_parsers::balloon::BalloonModel;
 use areka_sakura::ActorKey;
-use wintf::ecs::{FrameTime, GraphicsCore, WucGraphicsResource};
+use wintf::ecs::{FrameTime, GraphicsCore, SizeI, WindowPos, WucGraphicsResource};
 
+use crate::placement::follow::resize_window_to;
+use crate::placement::resolver::SizePx;
 use crate::placement::spawn::GhostWindows;
 
 use super::assets::{BootAssets, ScopeAssets};
@@ -485,6 +488,99 @@ pub fn run_drain_phase(wiring: &mut Emo2Wiring, world: &mut World) {
     }
 }
 
+// ---------------------------------------------------------------------------
+// resnap シーム（tasks.md task 3.2・design「統合シーム（emo2_boot frame.rs）>
+// resnap_shell_targets / resnap_from_sizes」・Req1.3/3.1/3.2/4.1/4.3/4.5・DD-2/DD-5）
+// ---------------------------------------------------------------------------
+
+/// 合成寸法列を受け、shell サーフェス寸が変わった scope の char 窓のみ [`resize_window_to`] を
+/// 駆動する純粋判定部（headless テスト対象・GPU 不要・design「resnap_from_sizes」・
+/// Req1.3/3.1/3.4/4.5）。
+///
+/// [`GhostWindows`] Resource を world から取得（未挿入は no-op＝Preconditions）。各
+/// `(scope, shown_size)` について:
+/// - `char_window(scope)` が `None`（未知 scope）→ skip（再適用対象の char 窓が無い）。
+/// - **非正寸**（`w <= 0 || h <= 0`）→ skip（Req3.4 の防御・[`resize_window_to`] と二重防波堤）。
+/// - char 窓 `WindowPos.size` と `SizeI::new(w, h)` が**異なるときのみ** [`resize_window_to`] を
+///   呼ぶ（同寸は no-op＝冗長駆動回避・Req3.1 べき等）。
+///
+/// **balloon 窓には一切触れない**（scope→`char_window` 写像のみ・Req4.5/DD-5）。判定・反映は
+/// World 操作に閉じ GPU を要しない（GPU 結合は薄い [`resnap_shell_targets`] が担う）。
+fn resnap_from_sizes(world: &mut World, sizes: impl Iterator<Item = (usize, SizePx)>) {
+    // GhostWindows（scope→窓 entity の正本）。未挿入は no-op（Preconditions・Req4.5）。
+    let Some(ghost_windows) = world.get_resource::<GhostWindows>() else {
+        return;
+    };
+    // scope→char_window を先に解決して collect し、world の不変借用を後段の &mut ループへ跨がせない
+    // （借用衝突回避）。未知 scope・非正寸はここで弾く（Req3.4・二重防波堤）。
+    let mut targets: Vec<(Entity, SizePx)> = Vec::new();
+    for (scope, shown_size) in sizes {
+        let Some(char_window) = ghost_windows.char_window(scope) else {
+            // 未知 scope（GhostWindows に無い）→ skip（char 窓が無ければ再適用対象なし）。
+            continue;
+        };
+        if shown_size.w <= 0 || shown_size.h <= 0 {
+            debug!(scope, ?shown_size, "resnap: 非正寸のため skip（Req3.4・二重防波堤）");
+            continue;
+        }
+        targets.push((char_window, shown_size));
+    }
+    // 反映: char 窓 WindowPos.size と異なるときのみ resize_window_to を駆動（同寸は非発火・Req3.1）。
+    for (char_window, shown_size) in targets {
+        let current = world.get::<WindowPos>(char_window).and_then(|wp| wp.size);
+        if current == Some(SizeI::new(shown_size.w, shown_size.h)) {
+            // 同寸＝冗長駆動を避ける（Req3.1 べき等・正常系ゆえ静穏に skip）。
+            continue;
+        }
+        // 異寸のみ: 新寸で T 再適用→一度書き→随伴（resize_window_to が単一ライター・Req1.3）。
+        resize_window_to(world, char_window, shown_size);
+    }
+}
+
+/// drain 後に shell サーフェス寸法の変化を検知し、変化した char 窓のみアンカー再適用を駆動する
+/// 薄いアダプタ（GPU 結合の thin wiring・`presenter` を read-only 消費・design
+/// 「resnap_shell_targets」・Req3.2/4.1/4.5）。
+///
+/// [`GhostWindows`] を取得し `scopes()` を回す。各 scope について
+/// **`presenter.text_slot_view(shell_target(scope))`**（**`balloon_target` は読まない**＝shell
+/// 限定駆動・Req4.5/DD-5）を引き、`None`（初回 `ShowSurface` 前＝未表示）は skip。
+/// `surface_size() -> (u32, u32)`（emo-present 適用点の実寸・Req4.1）を `i32::try_from` で
+/// [`SizePx`] 化し、**変換失敗・0** は skip（Req3.4。`try_from(0)=Ok(0)` ゆえ 0 を明示的に弾く）。
+/// 得た `(scope, SizePx)` 列を [`resnap_from_sizes`] へ渡す——**presenter 借用を解いてから**
+/// （先に `Vec` へ collect してから world を mut 借用・借用衝突回避）。
+///
+/// 未表示 target・未装着 presenter は全 scope skip（no-op・panic しない）。`GhostWindows` 未挿入
+/// でも安全（`resnap_from_sizes` が no-op）。
+fn resnap_shell_targets(presenter: &EmoPresenter, world: &mut World) {
+    // scope 識別は GhostWindows 経由（Req4.5）。未挿入は shell 寸を引く対象が無い＝no-op。
+    let Some(ghost_windows) = world.get_resource::<GhostWindows>() else {
+        return;
+    };
+    // presenter 借用を解いてから resnap_from_sizes（&mut World）を呼ぶため、先に collect する。
+    let mut sizes: Vec<(usize, SizePx)> = Vec::new();
+    for scope in ghost_windows.scopes() {
+        // shell target（偶数=2*scope）のみを読む（balloon_target は読まない＝shell 限定・Req4.5）。
+        let Some(view) = presenter.text_slot_view(shell_target(scope as u32)) else {
+            // 初回 ShowSurface 前＝未表示 → skip（no-op・遅延化への防御）。
+            continue;
+        };
+        let (w, h) = view.surface_size(); // emo-present 適用点の実寸（Req4.1・古い寸で駆動しない）。
+        // (u32,u32)→i32 変換失敗は skip（Req3.4）。
+        let (Ok(w), Ok(h)) = (i32::try_from(w), i32::try_from(h)) else {
+            debug!(scope, w, h, "resnap: 実寸の i32 変換に失敗 → skip（Req3.4）");
+            continue;
+        };
+        // 0 は skip（try_from(0)=Ok(0) ゆえ明示的に弾く・Req3.4）。負値は u32 起点ゆえ生じない。
+        if w == 0 || h == 0 {
+            debug!(scope, "resnap: 実寸が 0 → skip（Req3.4・try_from(0)=Ok を明示的に弾く）");
+            continue;
+        }
+        sizes.push((scope, SizePx { w, h }));
+    }
+    // ここで presenter／ghost_windows 借用は終わり、world を mut 借用して判定・反映へ渡す。
+    resnap_from_sizes(world, sizes.into_iter());
+}
+
 /// `talk_time` 解決の純判断（override 優先→`clock.talk_time(frame_now)`→`None`）。
 ///
 /// [`run_text_phase`] の分岐条件を GPU/時刻 I/O 抜きの決定論檻へ切り出した純関数:
@@ -555,6 +651,10 @@ pub fn emo2_frame_system(world: &mut World) {
     // donor 慣行: remove して &mut World を各フェーズへ排他に渡し、3 フェーズ駆動後に必ず戻す。
     run_attach_phase(&mut wiring, world);
     run_drain_phase(&mut wiring, world);
+    // drain（全 PresentCommand 適用）後に shell サーフェス寸法の変化を検知し、変化した char 窓のみ
+    // アンカー再適用を駆動する（適用後の実寸を読むため drain の**後**・同一 World・同一 tick 内の
+    // 直接呼び・Req4.1/4.3/1.3）。text の前後とは機能的に無関係だが drain の後であることが必須。
+    resnap_shell_targets(&wiring.presenter, world);
     run_text_phase(&mut wiring, world, None); // 本番: override なし（FrameTime＋clock で解決）。
     world.insert_non_send_resource(wiring);
 }
@@ -1037,5 +1137,213 @@ mod tests {
             empty_world.get_non_send_resource::<Emo2Wiring>().is_none(),
             "未挿入なら no-op（何も挿入しない）"
         );
+    }
+
+    // ── task 3.2: resnap シーム（resnap_from_sizes／resnap_shell_targets）の檻 ────────
+    //
+    // drain 後の shell サーフェス寸法変化検知を GPU 不要で headless に固定する。
+    // spawn_ghost_windows で 2 スコープの char/balloon 窓＋GhostWindows を組み（char 窓は
+    // Anchored 付き）、各窓へ偽 WindowHandle を注入し MonitorSnapshot を挿入した World 上で、
+    // 合成 (scope, SizePx) を resnap_from_sizes へ直接注入して観測する（Req1.3/3.1/3.4/4.5）。
+
+    use bevy_ecs::prelude::Entity;
+    use windows::Win32::Foundation::{HINSTANCE, HWND};
+
+    use crate::placement::follow::MonitorSnapshot;
+    use crate::placement::resolver::{Anchor, PointPx, RectPx, ScopePlacement, SizePx};
+    use crate::placement::source::GhostTitles;
+    use crate::placement::spawn::spawn_ghost_windows;
+    use wintf::ecs::{Point, SizeI, WindowHandle, WindowPos};
+
+    /// 偽 HWND の WindowHandle（実窓なし・headless 決定論シーム・follow.rs の fake_handle 相当）。
+    fn fake_handle(raw: usize) -> WindowHandle {
+        WindowHandle {
+            hwnd: HWND(raw as *mut _),
+            instance: HINSTANCE::default(),
+        }
+    }
+
+    /// resnap 檻の 2 スコープ解決済み配置（both Bottom・初期位置は work_area 下端に整合＝
+    /// bottom 不変量を満たす: scope0 y=1444−687=757／scope1 y=1444−357=1087）。
+    fn resnap_placements() -> Vec<ScopePlacement> {
+        vec![
+            ScopePlacement {
+                scope: 0,
+                char_pos: PointPx { x: 1483, y: 757 },
+                char_size: SizePx { w: 434, h: 687 },
+                balloon_pos: PointPx { x: 1071, y: 732 },
+                balloon_size: SizePx { w: 223, h: 158 },
+                balloon_offset: PointPx { x: -412, y: -25 },
+                anchor: Anchor::Bottom,
+            },
+            ScopePlacement {
+                scope: 1,
+                char_pos: PointPx { x: 1049, y: 1087 },
+                char_size: SizePx { w: 278, h: 357 },
+                balloon_pos: PointPx { x: 1334, y: 1068 },
+                balloon_size: SizePx { w: 223, h: 158 },
+                balloon_offset: PointPx { x: 285, y: -19 },
+                anchor: Anchor::Bottom,
+            },
+        ]
+    }
+
+    /// 実 work area（原点非 (0,0)・96 非倍数の合成値・bottom=1444＝配置と整合）。
+    fn resnap_work_area() -> RectPx {
+        RectPx {
+            left: 31,
+            top: 17,
+            right: 2574,
+            bottom: 1444,
+        }
+    }
+
+    /// spawn_ghost_windows で 2 スコープの窓を組み、各窓へ偽 WindowHandle を付与し
+    /// MonitorSnapshot を挿入した World を返す（char 窓は spawn が Anchored/WindowPos を付ける）。
+    fn resnap_world() -> (World, GhostWindows) {
+        let placements = resnap_placements();
+        let mut world = World::new();
+        let gw = spawn_ghost_windows(
+            &mut world,
+            &placements,
+            &GhostTitles::from_scope_titles([(0, "a".to_string()), (1, "b".to_string())]),
+        );
+        // 偽 WindowHandle 付与（enqueue_window_set_pos が WindowPos を書けるように＝
+        // resize_window_to の反映口が成立する条件）。
+        let mut raw = 0x100usize;
+        for scope in gw.scopes().collect::<Vec<_>>() {
+            for e in [
+                gw.char_window(scope).unwrap(),
+                gw.balloon_window(scope).unwrap(),
+            ] {
+                world.entity_mut(e).insert(fake_handle(raw));
+                raw += 0x10;
+            }
+        }
+        // MonitorSnapshot（project_anchor Bottom が下端 live 算出に用いる）。
+        world.insert_resource(MonitorSnapshot {
+            work_areas: vec![resnap_work_area()],
+        });
+        (world, gw)
+    }
+
+    fn size_of(world: &World, e: Entity) -> Option<SizeI> {
+        world.get::<WindowPos>(e).and_then(|wp| wp.size)
+    }
+    fn pos_of(world: &World, e: Entity) -> Option<Point> {
+        world.get::<WindowPos>(e).and_then(|wp| wp.position)
+    }
+
+    /// 1.3/3.1: 異寸→resize＋re-snap。shown_size が現 WindowPos.size と異なると、当該 char 窓の
+    /// size が新寸・position が Anchored(Bottom) に沿って再射影される（y=下端−h'・x 保持）。
+    #[test]
+    fn resnap_from_sizes_drives_resize_and_resnap_on_size_change() {
+        let (mut world, gw) = resnap_world();
+        let char0 = gw.char_window(0).unwrap();
+        assert_eq!(size_of(&world, char0), Some(SizeI::new(434, 687)), "前提: 初期寸");
+        assert_eq!(
+            pos_of(&world, char0),
+            Some(Point { x: 1483, y: 757 }),
+            "前提: 初期位置（bottom 不変量を満たす）"
+        );
+
+        // h 687→700 の異寸を注入。
+        resnap_from_sizes(&mut world, [(0usize, SizePx { w: 434, h: 700 })].into_iter());
+
+        // 新寸へ更新され、Bottom 再射影で下端固定（y=1444−700=744・x 保持）。
+        assert_eq!(size_of(&world, char0), Some(SizeI::new(434, 700)), "新寸へ更新");
+        assert_eq!(
+            pos_of(&world, char0),
+            Some(Point { x: 1483, y: 744 }),
+            "Bottom 再射影: y=work_area.bottom−h'（x 保持）"
+        );
+    }
+
+    /// 3.1: 同寸→no-op。shown_size が現 WindowPos.size と同一なら resize は駆動されず窓状態不変。
+    #[test]
+    fn resnap_from_sizes_is_noop_on_same_size() {
+        let (mut world, gw) = resnap_world();
+        let char0 = gw.char_window(0).unwrap();
+        let size_before = size_of(&world, char0);
+        let pos_before = pos_of(&world, char0);
+
+        // 現寸と同一（434×687）→ 冗長駆動を避ける（非発火）。
+        resnap_from_sizes(&mut world, [(0usize, SizePx { w: 434, h: 687 })].into_iter());
+
+        assert_eq!(size_of(&world, char0), size_before, "同寸は size 不変");
+        assert_eq!(pos_of(&world, char0), pos_before, "同寸は position 不変（非発火）");
+    }
+
+    /// 3.4: 非正/変換失敗→skip。非正寸（0・負）は resnap_from_sizes が弾き窓状態不変（二重防波堤）。
+    #[test]
+    fn resnap_from_sizes_skips_non_positive_sizes() {
+        let (mut world, gw) = resnap_world();
+        let char0 = gw.char_window(0).unwrap();
+        let size_before = size_of(&world, char0);
+        let pos_before = pos_of(&world, char0);
+
+        for bad in [
+            SizePx { w: 0, h: 687 },
+            SizePx { w: 434, h: 0 },
+            SizePx { w: -5, h: 687 },
+            SizePx { w: 434, h: -5 },
+        ] {
+            resnap_from_sizes(&mut world, [(0usize, bad)].into_iter());
+        }
+
+        assert_eq!(size_of(&world, char0), size_before, "非正寸は skip（size 不変）");
+        assert_eq!(pos_of(&world, char0), pos_before, "非正寸は skip（position 不変）");
+    }
+
+    /// 4.5: balloon で駆動しない。char 窓が resize されても同 scope の balloon 窓の
+    /// WindowPos.size は不変（resnap_from_sizes は scope→char_window のみ写像し balloon に触れない）。
+    #[test]
+    fn resnap_from_sizes_never_resizes_balloon_window() {
+        let (mut world, gw) = resnap_world();
+        let char0 = gw.char_window(0).unwrap();
+        let balloon0 = gw.balloon_window(0).unwrap();
+        let balloon_size_before = size_of(&world, balloon0);
+        assert_eq!(
+            balloon_size_before,
+            Some(SizeI::new(223, 158)),
+            "前提: balloon 初期寸"
+        );
+
+        // char0 を異寸で駆動（balloon の寸へ仮に写せば 500×720 になるはずの値）。
+        resnap_from_sizes(&mut world, [(0usize, SizePx { w: 500, h: 720 })].into_iter());
+
+        // char は新寸へ（駆動された証拠）。
+        assert_eq!(
+            size_of(&world, char0),
+            Some(SizeI::new(500, 720)),
+            "char は resize される"
+        );
+        // balloon の寸は不変（balloon を resize 対象にしていない・Req4.5）。
+        assert_eq!(
+            size_of(&world, balloon0),
+            balloon_size_before,
+            "balloon 窓の size は resnap で不変（scope→char_window のみ写像）"
+        );
+    }
+
+    /// アダプタ存在チェック: resnap_shell_targets を target 未装着の EmoPresenter::new()
+    /// （text_slot_view 全 None）で呼ぶと全 scope skip の no-op（panic しない）・GhostWindows
+    /// 未挿入でも安全。shell_target のみ読む配線は本存在チェック＋コードレビューで足りる。
+    #[test]
+    fn resnap_shell_targets_is_noop_with_unattached_presenter() {
+        let (mut world, gw) = resnap_world();
+        let char0 = gw.char_window(0).unwrap();
+        let size_before = size_of(&world, char0);
+        let pos_before = pos_of(&world, char0);
+
+        // 未装着 presenter＝text_slot_view 全 None → 全 scope skip（窓状態不変・panic しない）。
+        let presenter = EmoPresenter::new();
+        resnap_shell_targets(&presenter, &mut world);
+        assert_eq!(size_of(&world, char0), size_before, "未装着は全 scope skip（size 不変）");
+        assert_eq!(pos_of(&world, char0), pos_before, "未装着は全 scope skip（position 不変）");
+
+        // GhostWindows 未挿入の素の World でも安全（no-op・panic しない）。
+        let mut empty = World::new();
+        resnap_shell_targets(&presenter, &mut empty);
     }
 }
