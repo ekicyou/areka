@@ -36,7 +36,7 @@ use wintf::ecs::drag::{DragEndEvent, DragEvent, DraggingState};
 use wintf::ecs::layout::{Arrangement, Offset};
 use wintf::ecs::pointer::Phase;
 use wintf::ecs::window::monitor::Monitor;
-use wintf::ecs::{Point, SetWindowPosCommand, WindowHandle, WindowPos};
+use wintf::ecs::{Point, SetWindowPosCommand, SizeI, WindowHandle, WindowPos};
 
 use super::resolver::{Anchor, PointPx, RectPx, SizePx};
 use super::spawn::BottomSnap;
@@ -51,7 +51,7 @@ use super::spawn::BottomSnap;
 /// 「実ウィンドウ位置の算出」を分離する。実装は純粋関数であること——
 /// `raw`（生ドラッグ座標＝ドラッグ開始時窓位置＋カーソル差分・物理 px）と
 /// 窓寸法・モニタ snapshot だけから実窓位置を返し、World に触れない。
-/// 反映段階（`enqueue_window_move`）には**適用済み座標のみ**が渡る＝
+/// 反映段階（`enqueue_window_set_pos`）には**適用済み座標のみ**が渡る＝
 /// 事後補正が存在しないため、v1 の wndproc 競合振動は原理的に起きない。
 pub trait DragPositionPolicy {
     /// 生ドラッグ座標 `raw` に対する実窓位置を返す（物理 px・純粋）。
@@ -270,7 +270,7 @@ pub(crate) fn on_char_drag(
                 let Some(mapped) = policy_mapped_position(world, entity, ev.position) else {
                     return false;
                 };
-                if !enqueue_window_move(world, entity, mapped.x, mapped.y) {
+                if !enqueue_window_set_pos(world, entity, mapped.x, mapped.y, None) {
                     return false;
                 }
                 mapped
@@ -321,7 +321,7 @@ pub(crate) fn on_char_drag_end(
             let Some(mapped) = policy_mapped_position(world, entity, ev.position) else {
                 return false;
             };
-            if !enqueue_window_move(world, entity, mapped.x, mapped.y) {
+            if !enqueue_window_set_pos(world, entity, mapped.x, mapped.y, None) {
                 return false;
             }
             follow_balloon(world, entity, mapped);
@@ -387,11 +387,12 @@ fn follow_balloon(world: &mut World, entity: Entity, pos: Point) {
         "char window position out of virtual-screen range: {pos:?} + {:?}",
         follow.offset
     );
-    enqueue_window_move(
+    enqueue_window_set_pos(
         world,
         follow.balloon,
         pos.x + follow.offset.x,
         pos.y + follow.offset.y,
+        None,
     );
 }
 
@@ -470,7 +471,7 @@ pub(crate) fn on_balloon_drag(
 pub fn move_window_to(world: &mut World, window: Entity, x: i32, y: i32) -> bool {
     let follow = world.get::<BalloonFollow>(window).copied();
 
-    if !enqueue_window_move(world, window, x, y) {
+    if !enqueue_window_set_pos(world, window, x, y, None) {
         return false;
     }
 
@@ -480,25 +481,38 @@ pub fn move_window_to(world: &mut World, window: Entity, x: i32, y: i32) -> bool
             "move target out of virtual-screen range: ({x},{y}) + {:?}",
             follow.offset
         );
-        // バルーン側の失敗（WindowHandle 未付与等）は enqueue_window_move が
+        // バルーン側の失敗（WindowHandle 未付与等）は enqueue_window_set_pos が
         // warn! 済み。対象自身の移動は成立しているため true のまま返す。
-        enqueue_window_move(world, follow.balloon, x + follow.offset.x, y + follow.offset.y);
+        enqueue_window_set_pos(world, follow.balloon, x + follow.offset.x, y + follow.offset.y, None);
     }
 
     true
 }
 
-/// 1 窓ぶんの移動を enqueue する共通経路（物理 px 素通し）。
+/// 1 窓ぶんの位置（と任意で寸法）を enqueue する共通経路（物理 px 素通し・
+/// 単一ライター・task 2.3 で move 専用から size 対応へ一般化）。
 ///
 /// `WindowHandle` を直接引いて `SetWindowPosCommand` を enqueue し、ECS 側の
 /// `WindowPos.position` を `bypass_change_detection()` で先行反映する。
+///
+/// # size 引数（`None`＝移動専用の後方互換／`Some`＝位置＋寸を一度に反映）
+///
+/// - `None`: 移動専用。flags は `SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE`・
+///   width/height=0 で、`WindowPos.position` のみ bypass ミラーし `WindowPos.size`
+///   は**触らない**（`move_window_to`／drag 経路の従来挙動と完全に同一）。
+/// - `Some(s)`: flags から `SWP_NOSIZE` を外し（＝`SWP_NOZORDER | SWP_NOACTIVATE`）、
+///   `width=s.w`／`height=s.h` を渡す。`WindowPos.position` に加え `WindowPos.size`
+///   を `SizeI::new(s.w, s.h)` で bypass ミラーする（`resize_window_to` の反映口）。
+///
+/// `size.is_some()` で明示分岐して flags/寸法を合成し、`SWP_NOSIZE` の付け外しミスを
+/// 防ぐ（Req1.5：本経路を迂回する第二の bypass 書込経路を新設しない）。
 ///
 /// bypass の理由: 実アプリでは flush 後の `SetWindowPos` が同期発火させる
 /// `WM_WINDOWPOSCHANGED` echo が同値を（同じく bypass で）再書込するため、
 /// ここで `Changed<WindowPos>` を発火させると `apply_window_pos_changes` が
 /// 別フラグの `SetWindowPos` を二重発行してしまう。bypass なら発行は本関数の
 /// 1 コマンドに閉じ、headless World（echo が来ない）でも `WindowPos` が
-/// 期待座標を示す決定論シームになる。
+/// 期待座標・寸法を示す決定論シームになる。
 ///
 /// # Arrangement.offset の直接同期（task 8.3-fix・4.8 実機ブロッカ）
 ///
@@ -513,7 +527,13 @@ pub fn move_window_to(world: &mut World, window: Entity, x: i32, y: i32) -> bool
 /// `GlobalArrangement.bounds` は零寸のため `window_pos_sync_system` の
 /// `width <= 0` ガードが skip し、`SetWindowPos` echo ループにはならない
 /// （donor の DragEnd 同期と同じ性質）。
-fn enqueue_window_move(world: &mut World, window: Entity, x: i32, y: i32) -> bool {
+fn enqueue_window_set_pos(
+    world: &mut World,
+    window: Entity,
+    x: i32,
+    y: i32,
+    size: Option<SizePx>,
+) -> bool {
     let Some(handle) = world.get::<WindowHandle>(window).copied() else {
         warn!(
             entity = ?window,
@@ -523,19 +543,31 @@ fn enqueue_window_move(world: &mut World, window: Entity, x: i32, y: i32) -> boo
         return false;
     };
 
+    // size 有無で flags と width/height を明示分岐（SWP_NOSIZE の付け外しミスを防ぐ）。
+    // None＝移動専用（SWP_NOSIZE 付・後方互換）／Some＝位置＋寸（SWP_NOSIZE 外し）。
+    let (flags, w, h) = match size {
+        Some(s) => (SWP_NOZORDER | SWP_NOACTIVATE, s.w, s.h),
+        None => (SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE, 0, 0),
+    };
+
     SetWindowPosCommand::enqueue(SetWindowPosCommand::new(
         handle.hwnd,
         x,
         y,
-        0,
-        0,
-        SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE,
+        w,
+        h,
+        flags,
         None,
     ));
 
     match world.get_mut::<WindowPos>(window) {
         Some(mut wp) => {
-            wp.bypass_change_detection().position = Some(Point { x, y });
+            let wp = wp.bypass_change_detection();
+            wp.position = Some(Point { x, y });
+            // Some のときのみ寸法もミラー（None は size を触らない＝移動専用の後方互換）
+            if let Some(s) = size {
+                wp.size = Some(SizeI::new(s.w, s.h));
+            }
         }
         None => {
             debug!(
@@ -2040,7 +2072,7 @@ mod tests {
     // -------------------------------------------------------------------------
     // Arrangement.offset 同期（task 8.3-fix・4.8 実機ブロッカ）
     //
-    // enqueue_window_move は WindowPos を bypass_change_detection() で書くため
+    // enqueue_window_set_pos は WindowPos を bypass_change_detection() で書くため
     // Changed<WindowPos> が発火せず、wintf の
     // sync_window_arrangement_from_window_pos は走らない。同期を怠ると
     // GlobalArrangement（αマスクヒットテストの境界）が spawn 位置に取り残され、
@@ -2176,5 +2208,80 @@ mod tests {
             arrangement_offset_of(&world, window),
             Offset { x: 1531.0, y: 883.0 }
         );
+    }
+
+    // -------------------------------------------------------------------------
+    // enqueue_window_set_pos（size 対応一般化・task 2.3・Req1.5/3.3・
+    // design Testing Strategy > Integration Tests #5）
+    //
+    // 既存 move 専用発行口の一般化。`None` は移動専用の後方互換（position のみ
+    // ミラー・size 不変・SWP_NOSIZE 継続）、`Some` は位置＋寸を一度に反映
+    // （WindowPos.size も bypass ミラー）。観測境界は `WindowPos.position`／
+    // `WindowPos.size` のミラー——`SetWindowPosCommand` キューは private TLS で
+    // flush せず flags/width/height を覗けないため（design Validation の指定）。
+    // 座標・寸法は 96 の非倍数を使い、隠れた dpi/96 再スケールの檻とする。
+    // -------------------------------------------------------------------------
+
+    use super::enqueue_window_set_pos;
+
+    /// entity の WindowPos.size を読む（未設定は panic で検出）。
+    fn size_of(world: &World, entity: Entity) -> SizeI {
+        world
+            .get::<WindowPos>(entity)
+            .expect("WindowPos があるはず")
+            .size
+            .expect("size があるはず")
+    }
+
+    /// `None`（後方互換・移動専用）: position のみ更新し size は触らない
+    /// （既存移動専用挙動＝SWP_NOSIZE 継続の観測境界）。
+    #[test]
+    fn enqueue_window_set_pos_none_updates_position_leaves_size() {
+        let mut world = World::new();
+        let window = world
+            .spawn((fake_handle(0x1234), window_pos_sized(10, 20, 434, 687)))
+            .id();
+
+        assert!(enqueue_window_set_pos(&mut world, window, 1531, 883, None));
+        assert_eq!(position_of(&world, window), Point { x: 1531, y: 883 });
+        // size は不変（移動専用＝寸法を書かない）
+        assert_eq!(size_of(&world, window), SizeI::new(434, 687));
+    }
+
+    /// `Some`: 位置と寸法の**双方**が更新される（WindowPos.size = SizeI::new(w,h)）。
+    #[test]
+    fn enqueue_window_set_pos_some_updates_position_and_size() {
+        let mut world = World::new();
+        let window = world
+            .spawn((fake_handle(0x1234), window_pos_sized(10, 20, 434, 687)))
+            .id();
+
+        assert!(enqueue_window_set_pos(
+            &mut world,
+            window,
+            907,
+            1201,
+            Some(SizePx { w: 517, h: 823 }),
+        ));
+        assert_eq!(position_of(&world, window), Point { x: 907, y: 1201 });
+        assert_eq!(size_of(&world, window), SizeI::new(517, 823));
+    }
+
+    /// 不在/未付与（Req3.3）: `WindowHandle` 無し entity は `false`＋位置/寸法不変
+    /// （warn no-op・`Some` 経路でも既存 warn 経路を継承）。
+    #[test]
+    fn enqueue_window_set_pos_without_handle_returns_false_and_leaves_state() {
+        let mut world = World::new();
+        let window = world.spawn(window_pos_sized(10, 20, 434, 687)).id();
+
+        assert!(!enqueue_window_set_pos(
+            &mut world,
+            window,
+            907,
+            1201,
+            Some(SizePx { w: 517, h: 823 }),
+        ));
+        assert_eq!(position_of(&world, window), Point { x: 10, y: 20 });
+        assert_eq!(size_of(&world, window), SizeI::new(434, 687));
     }
 }
