@@ -17,6 +17,11 @@
 ## Approach
 emo-present（⑥emo）が `ShowSurface` 適用でサーフェスの表示サイズが変化したことを検知し、**placement（⓪ghost）へサイズ変化通知シーム**を1本張る。placement 側は通知を受けて窓サイズを新サイズへ反映し、既存 `BottomSnapPolicy` を再適用して下端 Y を再計算する（ドラッグ再吸着と同じ単一ライター経路に合流＝振動回避）。新規機構は最小＝「サイズ変化通知」＋「resize＋re-snap の駆動口」に徹し、既存の採寸・spawn・drag ポリシーは再利用する。
 
+**実装現況で確定した挿入点（2026-07-13 実コード偵察）**:
+- **検知（⑥emo-present）**: `crates/areka-emo-present/src/presenter.rs` の `apply_show`（line 201）。初回 ShowSurface で `SwapChainPresenter::new(w,h)`（line 300）が寸を確定、以後は `chain.upload`（333）＋`mount.set_bounds(size)`（351）するのみ＝**現状サイズ変化を外へ通知するシームは皆無**（要確認どおり不在）。ここが検知点。表示サイズは `chain.size()`（`text_slot_view` 経由でも参照）。
+- **配送点（結線）**: `crates/areka/src/emo2_boot/frame.rs` の `run_drain_phase`（line 474）が seriko 発 `PresentCommand` を `presenter.apply` する適用点＝**サイズ変化通知を placement へ流す第一候補**（`apply_show` で size 差分を検知→通知メッセージを placement へ）。
+- **反映（⓪ghost placement）**: `crates/areka/src/placement/follow.rs` の公開 API **`move_window_to(world,window,x,y) -> bool`（line 365・`pub`・現状 `#[allow(dead_code)]` 呼び手待ち）**が単一ライターの正規口。resize は同経路に窓寸更新を足すか、同型の `resize_window_to` を additive 新設（`enqueue_window_move` は private line 411＝bypass 書込がバルーンのクリック死を招いた前歴あり＝使わない）。`BottomSnapPolicy`（line 76）／`DragPositionPolicy`（line 56 trait）を再適用。
+
 ## Scope
 - **In**: 実行時サーフェスサイズ変化の検知（emo-present）→ placement へのサイズ変化通知 I/O 契約 → 窓 resize ＋ 下端 re-snap（既存 `BottomSnapPolicy` 再適用）。実機（実 DPI≠96）目視で「切替後も下端吸着維持」を受け入れ条件とする（window-placement の本番ゴースト先行原則に従う）。
 - **Out**: バルーン窓の追従位置記憶（既存 follow が所有）／二人立ちの窓割当本格化（M-dual）／初期サーフェスを何にするか＝**表示するか否かの決定（欠陥#5＝emo2-boot 側で is 修正済み前提）**／サーフェス合成・文字層。
@@ -37,7 +42,8 @@ emo-present（⑥emo）が `ShowSurface` 適用でサーフェスの表示サイ
 
 ## Existing Spec Touchpoints
 - **Extends**: なし（新規境界。window-placement は spawn 時のみ・本 spec が実行時サイズ変化を追加所有）。
-- **Adjacent**: `areka-P0-window-placement`（follow/snap を消費・再定義しない）・`areka-P0-emo-present`（表示サイズの source）・`areka-P0-emo2-boot`（#5 と interlock）。
+- **Adjacent**: `areka-P0-window-placement`（follow/snap を消費・再定義しない）・`areka-P0-emo-present`（表示サイズの source）・`areka-P0-emo2-boot`（#5 と interlock・frame.rs drain phase が配送点）。
+- **並走安全（2026-07-13 実コード偵察で確定）**: 本 spec の編集面（`crates/areka/src/placement/*`・`emo-present/presenter.rs`・`emo2_boot/frame.rs`）は **`cue-playback-duration`（dola cue／sakura／emo-text）とも `mayuna-compose`（parsers／seriko／dola cue）とも交差面ゼロ**＝**完全並走可**（cue 語彙は一切触らない）。3本の中で唯一、契約先決なしで即並走できるユニット。
 
 ## Constraints
 - Rust 2024・新規 crates.io 依存なし・tokio 不使用。

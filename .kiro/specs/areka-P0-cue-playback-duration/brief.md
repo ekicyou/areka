@@ -25,7 +25,7 @@
   - `areka-emo-text` `TextLayerConfig.char_wait = 0.05`（`state.rs`）＋独自の `r_i = max(r_{i-1}+char_wait, at)`。
   - `wintf` `Typewriter.default_char_wait = 0.05 // 50ms`（`ecs/widget/text/typewriter/mod.rs:58`）＋独自の `current_time += default_char_wait`（`typewriter_layout.rs:209`）。
   - いずれも cue タイムラインの権威ではなく、互いに協調しない。
-- **誤った対症療法が emo2-boot ブランチに混入**: M-boot 実装中に `punctuation_wait`（句読点で 0.3秒 自動ポーズ）を emo-text へ追加したが、**開発者が明確に棄却**（句読点で変える筋合いはない・ウェイトは `\_w` のみ）。**撤去必須**。同ブランチには生スクリプト捕捉用の drive.rs 一時診断ログも残存（撤去必須）。
+- **誤った対症療法（emo2-boot ブランチ由来・⚠️2026-07-13 実コード再確認で「既に不在」）**: M-boot 実装中に `punctuation_wait`（句読点で 0.3秒 自動ポーズ）を emo-text へ追加したが**開発者が明確に棄却**（句読点で変える筋合いはない・ウェイトは `\_w` のみ）→ emo2-boot 完了時に revert 済み（roadmap 追記㉒ の誤 #3/#4 修正 `84152a40` revert）。**現ブランチのソースには `punctuation_wait` も drive.rs 生スクリプト診断ログも存在しない**（`crates/**` grep でゼロ・.kiro 文書のみヒット＝実コード偵察 2026-07-13 確認）。→ **本 spec の「撤去必須」前提は既充足**（着手時に再 grep で確認するのみ・撤去作業は発生しない見込み）。
 
 ## Desired Outcome
 
@@ -59,7 +59,7 @@
   - **sakura compile が台本冒頭へ `Clear` cue を前置**（#6・新 talk でバルーン自動クリア）。
   - emo-text reveal が**渡された duration に服従**（自前 char_wait 計算を撤去）。
   - 実機受け入れ: #3（`\_w` が pause として体感できる）・#4（`\n` が `\_w` 分だけ遅れる）・#6（新 talk で前会話が消える）・`\s` 表情同期。
-  - **emo2-boot ブランチの後始末**を前提条件として明記: `punctuation_wait` ハック撤去＋drive.rs 一時診断ログ撤去。
+  - **emo2-boot ブランチの後始末**（前提条件・**現ブランチでは既充足**＝上記 Current State 参照＝着手時に再 grep 確認のみ）: `punctuation_wait` ハック・drive.rs 一時診断ログの不在確認。
 - **Out**:
   - bind/mayuna 合成による表情変化（#2＝`mayuna-compose`）。
   - 実行時サーフェスサイズ変化→窓リサイズ/再吸着（#1＝`surface-resize-resnap`）。
@@ -93,7 +93,7 @@
 
 - **Supersedes（吸収・撤回）**: `areka-P0-sakura-glyph-pacing`（roadmap 増分・④sakura）。同増分は #3/#4 の狭い・誤ったフレーミング（「句読点自動ポーズ facet」「emo-text reveal item-level 化」）だった。**正しい実体は本 spec の duration 権威アーキ**＝三権分立で置換。roadmap の #3/#4 記述も本 spec 参照へ更新。
 - **Interlocks**: `areka-P0-emo2-boot`（同ブランチの `punctuation_wait` ハック＋drive.rs 診断ログの撤去が本 spec 実装の前提。emo2-boot 完了の扱い〔#3/#4/#D を本 spec へ委譲〕は着手時に確定）。
-- **Adjacent**: `areka-P0-mayuna-compose`（#2 bind・別 spec）／`wintf` `Typewriter`（第3 duplication・実行経路外）。
+- **Adjacent（相互調整・2026-07-13 実コード偵察で衝突面を精密化）**: **`areka-P0-mayuna-compose`（#2 bind）と dola `CueCommand`＋sakura `compile.rs`／`contract.rs cue_target_of`＋emo-text `state.rs apply_cue` の4ファイルを共有**。ただし第一次 locus は素（disjoint）で、本 spec は既存 `Text` アームの挙動（duration 付与）を変え、mayuna は新 `Bind` アームを足す＝**別アーム＝マージ可能な近接編集**。**契約先決事項**: 本 spec が `Cue`/`CueCommand::Text` へ duration を足す形（＝emit()/Cue 署名の変更）を**先に確定**し、mayuna の `CueCommand::Bind` は**その確定形へ additive に載る**（bind は瞬時＝duration 0）。**推奨: 本 spec 先行 → mayuna が settled cue モデルへ**（`CueCommand` は既に balloon-face-cue が `BalloonSurface` を additive 追加した実績あり＝enum 拡張は安全）。／`wintf` `Typewriter`（第3 duplication・areka バルーンは emo-text ゆえ実行経路外＝統合 or 明示スコープ外を design で判断）。
 
 ## Constraints
 
