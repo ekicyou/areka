@@ -132,3 +132,7 @@
   - _Requirements: 9.1, 9.2, 9.3_
   - _Boundary: E2E/real-run_
   - _Depends: 5.2_
+
+## Implementation Notes
+
+- **2026-07-13 実機#5 訂正（defect #5・シェル初期表示のちらつき）**: `run_attach_phase`（`frame.rs`）が attach 時にシェル target へ発行していた初回 `ShowSurface{initial_surface_id, static_binds}` を撤去した。SSP 互換の既定は「シェル表示なし（-1）」であり、初回シェル表示は最初のさくらスクリプト `\s[N]` cue が drain 経路（`map_display_command`→`ShowSurface`）で駆動する（起動時オンの bindgroup default は seriko 保持の `static_binds` が Show に載る）。shell の `attach_target` と `attached_count`／装着マーカーは維持（planned==attached==2 不変）。バルーンの初回表示（面0）＋文字層スロット取得は不変（装着順序の罠を保持）。spine S1/S2/S4 の「attach 直後にシェル非全透明」を「attach 直後はシェル非表示（`read_back` Err）→初回 `\s` で非表示→実描画へ遷移」へ再指向（S3/S5 は不変）。DD-9 を改訂（シェル初期状態＝非表示・`initial_surface_id` は carry のみ）。

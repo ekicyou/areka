@@ -117,7 +117,7 @@ graph TB
 | DD-6 | 置き場 | areka bin 内モジュール `src/emo2_boot/` | 新 lib crate: M-dual という仮定要件のための分割＝simplification 原則で棄却（純粋部 lift は将来機械的） |
 | DD-7 | 構築順序 | `WinApp::new`→`open_startup_window`→`wire_emo2_boot`→`run`→shutdown。asset 組立失敗時は現行 `LogSink`×2 boot へフォールバック（非致命意味論・既存 smoke 温存） | boot スキップ: headless 診断経路と既存 smoke 前提を壊す |
 | DD-8 | static bindset | shell descript KV `sakura.bindgroup{N}.default`==1 の N を抽出（ukadoc 正典・emo2 実測 [1100,1207,1302,1500,1800]） | ハードコード: fixture 固有値の埋め込みは正典違反 |
-| DD-9 | 初期表示面 | scope0=surface 0・scope≥1=surface 10・バルーン=面 0 固定 | — （placement measure と同一慣行） |
+| DD-9 | 初期表示面 | **シェル初期状態＝非表示（-1）**: 最初のさくらスクリプト `\s[N]` cue まで合成面を持たない（SSP 互換・初回シェル表示は drain 経路の `\s`-driven `ShowSurface` が駆動）。**バルーン**は attach 初回表示（面 0 固定・文字層スロット取得のため）。`ScopeAssets.initial_surface_id`（scope0=0／scope≥1=10）は planner/DD-9 記録として carry するが attach でシェル初回表示に消費しない | 旧案（**棄却・2026-07-13 実機#5 訂正**）: attach で scope0=surface0／scope≥1=surface10 を焼き込む＝ゴースト起動時に規定面が一瞬ちらつく欠陥（実機#5） |
 | DD-10 | 終了理由 | `run()` 復帰（全窓 close funnel）→ `shutdown(CloseReason::User)` | close イベント購読の新設: wintf 改変 |
 | DD-11 | spine の scripted 脳 | areka 側テストに最小 scripted `ShioriBackend` を自前実装（`ShioriWiring::Custom` は公開 API） | areka-ghost への test-support 公開: エンジン改変 |
 | DD-12 | 窓×資産の scope 整合（設計ディスカッション議題1） | scope 集合は wire 時に placement と同じ入力から自前導出。装着時は **`GhostWindows::scopes()` を正**とし、純関数 `plan_attachments` で突き合わせ（窓あり資産なし=`warn!`＋skip 縮退・資産あり窓なし=`debug!`＋破棄・`usize`→`u32` 吸収・**計画件数の積極 assert** で縮退が導出バグを隠さない）。不一致パターンは GPU 不要の決定論ユニットテストで檻に入れる | attach 内遅延組立: UI フレーム内 I/O＋DD-7 フォールバック時系列崩壊。規約のみ: 検証不能な事前条件の残置＝沈黙バグ温床 |
@@ -191,6 +191,7 @@ sequenceDiagram
 ```
 
 - attach 前に届いた `PresentCommand` はチャネル内に保留され、attach 完了フレームから順に適用される（FIFO 保存・取りこぼしなし）。
+- **シェルは attach 時に初回 `ShowSurface` を発行しない**（DD-9・defect #5・2026-07-13 実機#5）: SSP 互換の既定は「シェル表示なし（-1）」であり、初回シェル表示は最初のさくらスクリプト `\s[N]` cue が seriko→`PresentBridge`→drain 経路で運ぶ `ShowSurface` が駆動する（emo2 murasaki=`\s[1000]`／kero=`\s[通常]` ゆえ talk 開始直後にシェルは表示される・起動時オンの bindgroup default は seriko 保持の `static_binds` が Show に載る）。**バルーンのみ** attach 時に面 0 を表示して文字層スロットを取得する。
 - asset 組立が失敗した場合（fixture 不在等）は warn/error 分類の上で `LogSink`×2 の現行 boot 経路へフォールバックし、骨格の boot→loop→exit と既存 smoke テスト前提を維持する（R7.3/7.4）。
 
 ### 表示指令の変換・配送（R3／R5）
@@ -237,9 +238,9 @@ sequenceDiagram
 
 | Requirement | Summary | Components | Interfaces | Flows |
 |-------------|---------|------------|------------|-------|
-| 1.1 | 一発起動で実サーフェス表示 | main 再結線・assets・frame(attach) | `wire_emo2_boot`・`attach_target`・`ShowSurface` | 起動シーケンス |
+| 1.1 | 一発起動で実サーフェス表示 | main 再結線・assets・frame(attach/drain) | `wire_emo2_boot`・`attach_target`・バルーン初回 `ShowSurface`＋シェルは初回 `\s` 駆動 `ShowSurface`（drain・defect #5） | 起動シーケンス |
 | 1.2 | 窓写像の表示層装着 | frame(attach) | `GhostWindows::char_window/balloon_window`→`attach_target` | 起動シーケンス |
-| 1.3 | 装着完了まで不可視 | frame(attach) | 装着前は `ShowSurface` を発行しない（WUC 無内容窓＝不可視の現状維持） | 起動シーケンス |
+| 1.3 | 装着完了まで不可視 | frame(attach) | 装着前は `ShowSurface` を発行しない。**シェルは装着後も初回 `\s` cue まで非表示**（合成面なし＝透過・defect #5）。バルーンのみ装着時に面 0 表示 | 起動シーケンス |
 | 1.4 | キャラ窓・バルーン窓の両結線 | target_map・frame(attach) | `shell_target`/`balloon_target` の両系装着 | 起動シーケンス |
 | 2.1 | OnBoot トークのバルーン配送 | main 再結線（実 sink 注入） | `boot(surface_sink=SerikoSink, text_sink=ClockedTextSink<EmoTextSink>)` | 起動シーケンス |
 | 2.2 | typewriter 表示 | emo-text（消費）＋frame(text) | `apply_cue`（UI drain・既存）＋`present_frame` | — |
@@ -252,7 +253,7 @@ sequenceDiagram
 | 3.5 | 写像正本の確立・他正本の非再定義 | target_map | `shell_target`/`balloon_target`/`scope_of`（唯一の新正本） | — |
 | 3.6 | アダプタは変換と配送のみ・無状態 | adapter | `PresentBridge`＝純関数＋`Sender`（可変状態なし） | — |
 | 3.7 | UI 配送経路で表示層へ | adapter・frame(drain) | mpsc→`FrameFinalize` 排他 system→`EmoPresenter::apply` | 表示指令フロー |
-| 4.1 | 初回表示→slot 取得→文字層接続 | frame(attach) | `apply(ShowSurface)`→`text_slot_view`→`register_actor_view` | 起動シーケンス |
+| 4.1 | 初回表示→slot 取得→文字層接続 | frame(attach) | **バルーン** `apply(ShowSurface{面0})`→`text_slot_view`→`register_actor_view`（シェル初回表示は attach 対象外・defect #5） | 起動シーケンス |
 | 4.2 | slot 未生成の尊重 | frame(attach) | `text_slot_view`==None なら接続せず次フレーム再試行 | — |
 | 4.3 | 接続後の cue 反映 | frame(text)・emo-text | 未装着間の cue 蓄積→登録後の次フレーム装着（emo-text 既存契約） | — |
 | 5.1 | ShowBalloon→既定 bind の ShowSurface | adapter | DD-5 の写像（`BindSet::default()`・reply None） | 表示指令フロー |
@@ -438,7 +439,7 @@ pub struct ScopeAssets {
     pub scope: u32,
     pub emo_world: EmoWorld,       // scope 専用 build（attach_target が消費）
     pub atlas: AtlasTable,          // Clone 共有
-    pub initial_surface_id: u32,    // scope0=0 / scope>=1=10（DD-9）
+    pub initial_surface_id: u32,    // scope0=0 / scope>=1=10（DD-9・carry のみ／attach はシェル初回表示に使わない・defect #5）
 }
 pub struct BootAssets {
     pub shells: Vec<ScopeAssets>,               // GhostWindows の scope 集合に対応
@@ -471,7 +472,7 @@ pub fn default_bind_ids(shell_kv: &BTreeMap<String, String>) -> Vec<u32>;
 
 **Responsibilities & Constraints**
 - `Emo2Wiring` は NonSend resource（`EmoPresenter` が `!Send`・`Receiver` が `!Sync`・`Rc<RefCell<TextLayerRuntime>>` が `!Send` のため）。system は donor パターンどおり **remove→駆動→insert**（`&mut World` との借用衝突回避）。
-- **フェーズ①（attach・高々 1 回）**: ゲート＝`GhostWindows` Resource 存在＋`GraphicsCore` 存在＋`WucGraphicsResource::is_valid()`。成立フレームでまず純関数 `plan_attachments(GhostWindows::scopes(), &assets)` が装着計画を確定する（DD-12: **窓一覧が正**・`usize`→`u32` 変換をここで吸収・窓あり資産なし＝`warn!`＋skip 縮退・資産あり窓なし＝`debug!`＋破棄）。計画の各項目について: shell target `attach_target`→`apply(ShowSurface{initial_surface_id, static_binds})`、balloon target `attach_target`→`apply(ShowSurface{0, BindSet::default()})`→`text_slot_view(balloon_target)`→`register_actor_view(ActorKey(scope), &view, &balloon_model)`。資産は `Option::take` で高々 1 回消費。装着完了 `info!` は計画件数と実装着件数を列挙し、spine が件数一致を積極 assert する（縮退が導出バグを隠さない檻）。`apply` は同期実行のため **同一フレーム内で `text_slot_view` が `Some` になる**のが正常経路。万一 `None`（上流の遅延化＝Revalidation Trigger）なら接続せず次フレーム再試行（R4.2・warn!）。
+- **フェーズ①（attach・高々 1 回）**: ゲート＝`GhostWindows` Resource 存在＋`GraphicsCore` 存在＋`WucGraphicsResource::is_valid()`。成立フレームでまず純関数 `plan_attachments(GhostWindows::scopes(), &assets)` が装着計画を確定する（DD-12: **窓一覧が正**・`usize`→`u32` 変換をここで吸収・窓あり資産なし＝`warn!`＋skip 縮退・資産あり窓なし＝`debug!`＋破棄）。計画の各項目について: shell target は `attach_target` のみ（**初回 `ShowSurface` は発行しない**・DD-9・defect #5・2026-07-13 実機#5: シェルは最初のさくらスクリプト `\s[N]` cue まで非表示＝合成面なし。初回シェル表示は seriko→`PresentBridge`→drain 経路の `\s`-driven `ShowSurface` が駆動し、起動時オンの bindgroup default は seriko 保持の `static_binds` が Show に載る。target 自体は `attach_target` で生成済みゆえ後続 `\s` 指令を適用できる）、balloon target `attach_target`→`apply(ShowSurface{0, BindSet::default()})`→`text_slot_view(balloon_target)`→`register_actor_view(ActorKey(scope), &view, &balloon_model)`。資産は `Option::take` で高々 1 回消費。装着完了 `info!` は計画件数と実装着件数を列挙し、spine が件数一致を積極 assert する（縮退が導出バグを隠さない檻）。`apply` は同期実行のため **同一フレーム内で `text_slot_view` が `Some` になる**のが正常経路。万一 `None`（上流の遅延化＝Revalidation Trigger）なら接続せず次フレーム再試行（R4.2・warn!）。
 - **フェーズ②（drain）**: attach 完了後のみ `Receiver::try_iter` で `PresentCommand` を全件取り出し順に `presenter.apply(world, cmd)`。attach 前はチャネルに保留（取りこぼしなし・FIFO）。
 - **フェーズ③（text）**: `FrameTime` を読み `TalkClock::talk_time` が `Some(t)` なら `present_frame(&mut runtime.borrow_mut(), world, t)`。`Err` は `error!`（present_frame 側で失敗源 log 済み）→継続（次フレーム再試行・R2.3）。
 - 各フェーズの本体は `(&mut Emo2Wiring, &mut World)` を取る自由関数に分離し、headless 単体・統合テストが system を経ずに直接駆動できる形にする（決定論檻の駆動口）。
@@ -601,8 +602,8 @@ log-first（steering: areka-log-first-no-silent-failure）。失敗は `error!`�
 
 構成: 自前 scripted `ShioriBackend`（OnBoot 応答台本を返す fake・DD-11）＋`ShioriWiring::Custom`＋`TickerMode::Disabled`（`DispatcherMsg::Tick` 注入）＋実 sink 結線（`spawn_seriko(out=PresentBridge)`／`ClockedTextSink<EmoTextSink>`）＋GPU World（MTA COM・`GraphicsCore::new()`・`WucGraphicsResource`）＋frame フェーズ直接駆動（注入 `talk_time`）。同期は Tick 注入＋有界 join＋`recv_timeout` の観測点のみ（sleep なし・R8.3）。x64 完結（helper 不使用・R8.6）。
 
-1. **S1 boot→表示**: boot 後 Tick 注入→attach フェーズ→shell/balloon target の `read_back` が非全透明（初期面表示・R8.1/8.2/8.5、R1 系の檻）。装着は**期待 scope 数の全 target 完了を積極 assert**する（計画件数＝実装着件数・warn+skip 縮退が scope 導出バグを隠さない檻＝DD-12）。
-2. **S2 talk→typewriter**: `\s[2100]` とテキストを含む台本→`Show` 系 `PresentCommand` 受信列 assert→apply→shell readback 変化。テキスト cue→`pump_until_idle`→注入 `talk_time` 階段で `opaque_count` 単調増加・validrect 外に非透明なし・`Clear` 後全域透明（R8.5、R2 系の檻）。単調増加述語の適用範囲は単一 talk 内（`Clear` 起点後）に限定する（talk_clock の既知制約＝talk 跨ぎ逆行は対象外）。
+1. **S1 boot→表示**: boot→attach フェーズ→初回 `\s` 駆動。attach 直後は**シェル非表示**（`read_back` Err＝供給面未生成・defect #5）／**バルーン初回表示**（`read_back` 非全透明＝面0 実描画・文字層スロット取得）、最初の `\s[0]` cue が drain 経路で運ぶ `ShowSurface{shell}` を apply でシェルが非表示→surface0 実描画へ遷移（R8.1/8.2/8.5、R1 系の檻）。装着は**期待 scope 数の全 target 完了を積極 assert**する（計画件数＝実装着件数・warn+skip 縮退が scope 導出バグを隠さない檻＝DD-12）。
+2. **S2 talk→typewriter**: `\s[2100]` とテキストを含む台本→`Show` 系 `PresentCommand` 受信列 assert→apply→shell readback が**非表示→surface2100 実描画へ遷移**（defect #5 ゆえ attach 時の初期 surface0 baseline は無い＝hidden→shown が実描画の証跡）。テキスト cue→`pump_until_idle`→注入 `talk_time` 階段で `opaque_count` 単調増加・validrect 外に非透明なし・`Clear` 後全域透明（R8.5、R2 系の檻）。単調増加述語の適用範囲は単一 talk 内（`Clear` 起点後）に限定する（talk_clock の既知制約＝talk 跨ぎ逆行は対象外）。
 3. **S3 `\b` 配送**: `\b[-1]`→`\b[0]` を含む台本→受信列に `Hide{balloon}`→`ShowSurface{balloon, 0, binds=default}` が順序どおり現れる（headless 記録・R5.4）＋apply 後の balloon readback 遷移。
 4. **S4 `\b` なし完走**: `\b` を含まない OnBoot 相当台本が S1/S2 経路を完走する（R5.5）。
 5. **S5 close 握手**: `shutdown(CloseReason::User)`→OnClose 台本消化→全ハンドル有界 join・seriko join（R6.1–6.3 の檻・ghost spine S 系の手法）。

@@ -3,8 +3,9 @@
 //! `Emo2Wiring`（NonSend resource・presenter／rx／runtime／clock／assets／attached を保持）と
 //! 排他 system `emo2_frame_system(world: &mut World)`（donor パターン: remove→3 フェーズ→insert）を
 //! 所有する。三フェーズ:
-//! - attach: GPU 資源＋`GhostWindows` 到達ゲート→`plan_attachments`（DD-12）→初回 `ShowSurface`→
-//!   文字層スロット取得→`register_actor_view`（`Option::take` で高々 1 回消費）。
+//! - attach: GPU 資源＋`GhostWindows` 到達ゲート→`plan_attachments`（DD-12）→バルーン初回 `ShowSurface`
+//!   （面0）→文字層スロット取得→`register_actor_view`（`Option::take` で高々 1 回消費）。**シェルは初回
+//!   `ShowSurface` を発行せず**最初のさくらスクリプト `\s` cue まで非表示を保つ（defect #5・実機#5）。
 //! - drain: attach 完了後のみ `Receiver::try_iter` で `PresentCommand` を FIFO で `presenter.apply` へ適用。
 //! - text: `TalkClock::talk_time` が `Some` のとき `present_frame` を呼ぶ（`Err` は `error!`＋継続）。
 //!
@@ -73,6 +74,9 @@ pub struct PlannedAttach {
     /// バルーン表示対象（`balloon_target(scope)`＝奇数・DD-3）。
     pub balloon_target: TargetId,
     /// 初期表示 surface id（`ScopeAssets.initial_surface_id`・DD-9）。
+    ///
+    /// **注記（defect #5・2026-07-13 実機#5）**: attach フェーズはこの値でシェル初回表示を駆動しなく
+    /// なった（シェルは最初の `\s` cue まで非表示）。planner の突き合わせ・DD-9 の記録として carry する。
     pub initial_surface_id: u32,
     /// `assets.shells` 内の対応添字（attach フェーズの add 消費用）。
     pub shell_index: usize,
@@ -235,7 +239,9 @@ impl Emo2Wiring {
 ///
 /// ゲート（`GhostWindows` Resource ＋ `GraphicsCore` ＋ `WucGraphicsResource::is_valid()`）成立
 /// フレームで純関数 [`plan_attachments`]（DD-12）を確定し、計画項目ごとに shell／balloon target を
-/// 装着して初回表示を駆動する。資産は `Option::take` で高々 1 回消費し、ゲート不成立では消費せず
+/// 装着する。**バルーンのみ**初回表示（面0）を駆動して文字層スロットを取得し、**シェルは初回表示を
+/// 発行せず**最初のさくらスクリプト `\s` cue まで非表示を保つ（defect #5・2026-07-13 実機#5）。
+/// 資産は `Option::take` で高々 1 回消費し、ゲート不成立では消費せず
 /// 次フレーム再試行へ委ねる（表示なし縮退・hang しない）。窓あり資産なしは `warn!`＋skip、資産あり
 /// 窓なしは `debug!`＋破棄で log-first に観測し、計画件数と実装着件数を `info!` に列挙する（spine が
 /// 件数一致を積極 assert・DD-12）。個別の attach 失敗・窓欠落は `error!`／`warn!`＋継続であり
@@ -303,7 +309,10 @@ pub fn run_attach_phase(wiring: &mut Emo2Wiring, world: &mut World) {
         balloon_model,
         // resolver は attach では未使用（seriko へは wire_emo2_boot=task 5.1 が手渡す）。
         resolver: _,
-        static_binds,
+        // static_binds は attach では未使用（defect #5・2026-07-13 実機#5）: シェル初回表示を attach で
+        // 焼き付けなくなったため。起動時オンの bindgroup default は seriko が保持し（spawn_seriko へ
+        // 手渡し済み）、最初の `\s` cue が駆動する Show{shell,id,binds=static_binds} に載って表示層へ届く。
+        static_binds: _,
     } = assets;
     let mut shells: Vec<_> = shells.into_iter().map(Some).collect();
     let mut balloons: Vec<_> = balloons.into_iter().map(Some).collect();
@@ -314,7 +323,8 @@ pub fn run_attach_phase(wiring: &mut Emo2Wiring, world: &mut World) {
     for item in &plan.items {
         let scope = item.scope;
 
-        // --- shell target: char_window → attach_target（EmoWorld を move）→ 初回 ShowSurface ---
+        // --- shell target: char_window → attach_target（EmoWorld を move）。初回 ShowSurface は
+        //     発行しない（defect #5）: シェルは最初の `\s` cue まで非表示・target のみ生成する。 ---
         let Some(shell_window) = ghost_windows.char_window(scope as usize) else {
             error!(scope, "emo2 attach: char_window が無い（GhostWindows 不整合）→ この scope を skip");
             continue;
@@ -343,17 +353,15 @@ pub fn run_attach_phase(wiring: &mut Emo2Wiring, world: &mut World) {
             error!(scope, error = %e, "emo2 attach: シェル target の attach に失敗（log-first・継続）");
             continue;
         }
-        // 初回 ShowSurface（初期面 initial_surface_id・起動時オンの static_binds・DD-8/DD-9）。
-        wiring.presenter.apply(
-            world,
-            PresentCommand::ShowSurface {
-                target: item.shell_target,
-                surface_id: item.initial_surface_id,
-                binds: static_binds.clone(),
-                reply: None,
-            },
-        );
-        // シェル装着＋初回表示が済んだ scope を計上（DD-12 の planned==attached 積極 assert 用）。
+        // シェルは初回 ShowSurface を attach で発行しない（defect #5・2026-07-13 実機#5）。SSP 互換の
+        // 既定は「シェル表示なし（surface -1）」であり、attach 時に surface0/surface10 を焼き付けると
+        // ゴースト起動の一瞬に規定面がちらつく（実機#5 の欠陥）。初回シェル表示は、最初のさくら
+        // スクリプト `\s[N]` cue が seriko→PresentBridge→drain 経路で運ぶ ShowSurface が駆動する
+        // （起動時オンの bindgroup default は seriko 保持の static_binds が Show に載る）。上の
+        // attach_target で target 自体は生成済みゆえ、後続の `\s`-driven ShowSurface はこの
+        // shell_target へ適用できる（emo2 murasaki は `\s[1000]`／kero は `\s[通常]` を OnBoot で
+        // 発行するため、talk 開始直後にシェルは表示される）。
+        // シェル target の装着成功を計上（DD-12 の planned==attached 積極 assert 用・balloon と対で 1 scope）。
         attached_count += 1;
 
         // --- balloon target（同 scope の資産がある場合）: attach → 初回 ShowSurface（面0・default）

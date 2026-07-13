@@ -635,20 +635,28 @@ fn tick_and_collect(harness: &mut SpineHarness, want: usize) -> Vec<PresentComma
     received
 }
 
-/// spine S1（boot→表示・DD-12・R1.1/1.2/1.3/1.4/8.1/8.2/8.5）: `\b` を含まない OnBoot 台本で
-/// boot→Tick 注入→attach フェーズを走らせ、(a) 装着サマリ `info!` が planned==attached==2
-/// （DD-12 の縮退が scope 導出バグを隠さない檻＝期待 scope 数の全 target 完了）・ERROR 0 件、
-/// (b) shell/balloon 両 target（scope0/scope1）の `read_back` が**非全透明**（`opaque_count>0`＝
-/// 初期面の実描画）であることを固定する。観測境界を実描画→readback まで延ばす（R8.2）。
+/// spine S1（boot→表示・DD-12・R1.1/1.2/1.3/1.4/8.1/8.2/8.5）: `\b` を含まない OnBoot 台本
+/// （`\s[0]`）で boot→attach フェーズ→初回 `\s` 駆動を走らせ、(a) 装着サマリ `info!` が
+/// planned==attached==2（DD-12 の縮退が scope 導出バグを隠さない檻＝期待 scope 数の全 target 完了）・
+/// ERROR 0 件、(b) **シェルは attach 直後は非表示**（`read_back` Err＝供給面未生成・defect #5・
+/// 2026-07-13 実機#5）で**バルーンは attach 初回表示済み**（`opaque_count>0`＝面0 の実描画＋文字層
+/// スロット取得）、(c) 最初のさくらスクリプト `\s[0]` cue が seriko→PresentBridge→drain 経路で運ぶ
+/// `ShowSurface{shell_target(0),0}` を apply するとシェルが**非表示→surface0 の実描画**へ遷移する
+/// （`opaque_count>0`）ことを固定する。観測境界を実描画→readback まで延ばす（R8.2）。
+///
+/// # defect #5 の檻（シェルは初回 `\s` まで非表示）
+///
+/// 旧 DD-9 は attach 時にシェル初期面（scope0=surface0／scope>=1=surface10）を焼き込んでいたが、実機#5
+/// で「起動時に規定面が一瞬ちらつく」欠陥が判明した。SSP 互換の既定は「シェル表示なし（-1）」であり、
+/// 初回シェル表示は最初の `\s` cue が駆動する。本ケースは attach 直後の shell `read_back` が Err
+/// （供給面未生成＝合成面なし＝透過）であること、`\s[0]` 適用でのみシェルが非表示→実描画へ遷移する
+/// ことを檻に入れて回帰を防ぐ。バルーンは文字層スロット取得のため attach 初回表示（面0）を保つ。
 #[test]
 fn spine_s1_boot_to_display_attaches_all_targets_with_opaque_readback() {
-    let mut harness = SpineHarness::boot(r"\s[0]\e"); // \b-free
-
-    // boot 後 Tick 注入（要件フロー通り。attach 自体は Tick 非依存だが実 sink UI drain も踏む）。
-    harness.inject_dispatcher_tick(1);
-    harness.pump_text();
+    let mut harness = SpineHarness::boot(r"\s[0]\e"); // \b-free（シェル面 cue \s[0] のみ）
 
     // attach フェーズ: DD-12 の planned==attached==2 を装着サマリで観測（縮退がバグを隠さない檻）。
+    // attach は Tick 非依存（GPU 資源＋GhostWindows ゲートのみ）ゆえ boot 直後に直接駆動する。
     let logs = capture_logs(|| run_attach_phase(&mut harness.wiring, &mut harness.world));
     assert!(
         logs.iter().any(|l| l.contains("planned=2") && l.contains("attached=2")),
@@ -660,22 +668,65 @@ fn spine_s1_boot_to_display_attaches_all_targets_with_opaque_readback() {
         "attach で ERROR が発火（装着失敗・log-first）: {logs:?}"
     );
 
-    // shell/balloon 両 target（scope0/scope1）の readback が非全透明＝初期面の実描画（R8.1/8.2/8.5）。
+    // (b-1) シェルは初回 `\s` cue まで非表示（defect #5）: attach 直後の shell target は供給面未生成
+    //       ＝`read_back` Err（合成面なし＝透過）。attach で surface0/surface10 を焼き付けない。
     for (label, target) in [
         ("shell scope0", shell_target(0)),
-        ("balloon scope0", balloon_target(0)),
         ("shell scope1", shell_target(1)),
+    ] {
+        assert!(
+            harness.wiring.read_back_target(target).is_err(),
+            "{label} は初回 \\s cue 前は非表示であるべき（供給面未生成・read_back Err・defect #5）"
+        );
+    }
+
+    // (b-2) バルーンは attach 初回表示（面0・文字層スロット取得のため保持）＝非全透明（R8.1/8.2/8.5）。
+    for (label, target) in [
+        ("balloon scope0", balloon_target(0)),
         ("balloon scope1", balloon_target(1)),
     ] {
         let px = harness.wiring.read_back_target(target).unwrap_or_else(|e| {
-            panic!("{label} の read_back 失敗（初回面表示で供給面生成済みのはず）: {e:?}")
+            panic!("{label} の read_back 失敗（バルーン初回面表示で供給面生成済みのはず）: {e:?}")
         });
         assert!(
             opaque_count(&px) > 0,
-            "{label} の readback が全透明（初期面が表示されていない・R8.1/8.2/8.5）: len={}",
+            "{label} の readback が全透明（バルーン初期面が表示されていない・R8.1/8.2/8.5）: len={}",
             px.len()
         );
     }
+
+    // (c) 初回 `\s[0]` cue を実 sink 経路（ghost→sakura→seriko→PresentBridge→rx）で駆動し、shell 表示
+    //     対象（偶数 TargetId）へ ShowSurface{shell_target(0),0,static_binds} が届くことを確認する（R8.2）。
+    let mut received = tick_and_collect(&mut harness, 1);
+    let show_idx = received
+        .iter()
+        .position(|c| matches!(c, PresentCommand::ShowSurface { target, .. } if *target == shell_target(0)))
+        .unwrap_or_else(|| {
+            panic!(
+                "S1: 初回 \\s[0] のシェル ShowSurface{{shell_target(0)}} が受信列に無い: variants={:?}",
+                received.iter().map(variant_name).collect::<Vec<_>>()
+            )
+        });
+    let show = received.remove(show_idx);
+    match &show {
+        PresentCommand::ShowSurface { target, surface_id, .. } => {
+            assert_eq!(*target, shell_target(0), "初回 \\s[0] は shell 表示対象（偶数 TargetId・DD-3）");
+            assert_eq!(*surface_id, 0, "surface_id は 0（\\s[0]・seriko 数値解決の透過）");
+        }
+        _ => unreachable!("position で ShowSurface を選別済み"),
+    }
+
+    // 形状記録後に実 presenter へ apply（実描画→readback・R8.2）。初回 `\s` 適用で shell が非表示から
+    // surface0 の実描画へ遷移する（hidden→shown・defect #5 の正しい表示駆動）。
+    harness.wiring.apply_present(&mut harness.world, show);
+    let after_show = harness
+        .wiring
+        .read_back_target(shell_target(0))
+        .expect("初回 \\s[0] 適用後は shell scope0 の供給面が生成され read_back 可能");
+    assert!(
+        opaque_count(&after_show) > 0,
+        "初回 \\s[0] 適用で shell scope0 が surface0 の実描画へ遷移（非表示→非全透明・R8.1/8.2/8.5）"
+    );
 
     harness.shutdown_bounded();
 }
@@ -803,16 +854,21 @@ fn spine_s4_balloon_free_onboot_completes_without_balloon_face_switch() {
         "S4: boot→表示（attach 完走・planned=2 attached=2）が観測できない: {logs:?}"
     );
     assert_eq!(count_level(&logs, "ERROR"), 0, "attach で ERROR なし: {logs:?}");
-    for (label, target) in [
-        ("shell scope0", shell_target(0)),
-        ("balloon scope0", balloon_target(0)),
-    ] {
-        let px = harness
-            .wiring
-            .read_back_target(target)
-            .unwrap_or_else(|e| panic!("{label} の read_back 失敗: {e:?}"));
-        assert!(opaque_count(&px) > 0, "{label} の readback が全透明（表示未確立）");
-    }
+    // シェルは初回 `\s` cue まで非表示（defect #5・2026-07-13 実機#5）: attach 直後は供給面未生成
+    // ＝`read_back` Err（合成面なし＝透過）。attach で surface0 を焼き付けない。
+    assert!(
+        harness.wiring.read_back_target(shell_target(0)).is_err(),
+        "shell scope0 は初回 \\s cue 前は非表示であるべき（供給面未生成・read_back Err・defect #5）"
+    );
+    // バルーンは attach 初回表示（面0・文字層スロット取得のため保持）＝非全透明。
+    let balloon_px = harness
+        .wiring
+        .read_back_target(balloon_target(0))
+        .unwrap_or_else(|e| panic!("balloon scope0 の read_back 失敗: {e:?}"));
+    assert!(
+        opaque_count(&balloon_px) > 0,
+        "balloon scope0 の readback が全透明（バルーン初期面が表示されていない）"
+    );
 
     // OnBoot talk（\s[0]）を駆動し、少なくとも 1 件（シェル面指令）を受信＝talk が実際に流れたことを担保。
     let mut received = tick_and_collect(&mut harness, 1);
@@ -871,7 +927,8 @@ fn text_surface_opaque(harness: &SpineHarness, actor: &ActorKey) -> usize {
 /// spine S2（talk→typewriter・R2.1/2.2/2.3/2.4・R3.1・R8.2/R8.5）: `\s[2100]`（シェル面切替）＋
 /// テキスト＋`\c`（Clear）を含む scripted OnBoot 台本を実 sink 経路で流し、
 /// (1) 受信 `PresentCommand` 列に `ShowSurface{shell_target(0), surface_id:2100}` が現れ、apply 後の
-/// shell readback が初期面 surface0 baseline から**実際に変化**すること（面切替の実描画・R2.4/R3.1）、
+/// shell readback が**非表示から surface2100 の実描画へ遷移**すること（初回面表示の実描画・R2.4/R3.1・
+/// defect #5 ゆえ attach 時の初期 surface0 baseline は無い＝シェルは初回 `\s` まで非表示）、
 /// (2) テキスト cue の typewriter リビールを注入 `talk_time` の階段値で駆動し、text 供給面の
 /// `opaque_count` が**単一 talk 内で単調非減少**・pre-reveal（t=0.0）全透明・`Clear`（at=0.95）後の
 /// 全域透明（R8.5・R2 系の檻）を檻に入れる。
@@ -912,12 +969,12 @@ fn spine_s2_talk_drives_surface_switch_and_typewriter_reveal() {
     );
     assert_eq!(count_level(&logs, "ERROR"), 0, "attach で ERROR なし: {logs:?}");
 
-    // ── shell scope0 の初期面（surface0）readback を基準に捕捉（\s[2100] 適用前・非全透明） ──
-    let baseline = harness
-        .wiring
-        .read_back_target(shell_target(0))
-        .expect("attach 後の shell scope0 readback（初期面 surface0）");
-    assert!(opaque_count(&baseline) > 0, "前提: shell 初期面 surface0 は非全透明");
+    // ── シェルは初回 `\s` cue まで非表示（defect #5・2026-07-13 実機#5）: `\s[2100]` 適用前の shell
+    //    scope0 は供給面未生成＝`read_back` Err（合成面なし＝透過）。attach で surface0 を焼き付けない。 ──
+    assert!(
+        harness.wiring.read_back_target(shell_target(0)).is_err(),
+        "S2 前提: shell scope0 は初回 \\s cue 前は非表示（供給面未生成・read_back Err・defect #5）"
+    );
 
     // ── Phase 1: シェル面指令（\s[2100]）＋テキスト cue **のみ**を配送する。dispatcher は now→
     //    elapsed=(now-base)/1000 換算で start_time 順に cue を解放する（Emote@0.0→Text@0.05→
@@ -970,15 +1027,17 @@ fn spine_s2_talk_drives_surface_switch_and_typewriter_reveal() {
         _ => unreachable!("position で ShowSurface を選別済み"),
     }
 
-    // apply 後、shell readback が surface0 baseline から実際に変化する（面切替の実描画まで観測・R8.2）。
+    // apply 後、shell が非表示から surface2100 の実描画へ遷移する（初回面表示の実描画まで観測・R8.2）。
+    // defect #5 ゆえ attach 時の初期 surface0 baseline は存在せず、hidden（read_back Err）→shown
+    // （opaque_count>0）が `\s[2100]` の実描画の証跡になる。
     harness.wiring.apply_present(&mut harness.world, show);
     let after_switch = harness
         .wiring
         .read_back_target(shell_target(0))
-        .expect("\\s[2100] 適用後の shell scope0 readback");
-    assert_ne!(
-        after_switch, baseline,
-        "S2: \\s[2100] 適用で shell 面が surface0 baseline から実際に変化する（面切替の実描画・R3.1/R8.2）"
+        .expect("\\s[2100] 適用後は shell scope0 の供給面が生成され read_back 可能");
+    assert!(
+        opaque_count(&after_switch) > 0,
+        "S2: \\s[2100] 適用で shell scope0 が surface2100 の実描画へ遷移（非表示→非全透明・R3.1/R8.2）"
     );
 
     // ── (2) typewriter（R2.2/2.3/R8.5）: Clear 未配送（テキストのみの単一 talk バッファ）に対し注入
