@@ -12,6 +12,8 @@
 - **計算＝sakura**: テキスト→暗黙再生時間 D を算出する**単一の純関数** `text_playback_duration` を所有し、compile が各テキスト cue へ D を焼き込みつつ `offset += D` で絶対時刻を確定。明示 `\_w` は **action を持たず duration のみの第一級 `CueCommand::Wait` cue** として発行し、台本を自己完結した楽譜にする。talk 冒頭に Clear を前置（#6）。
 - **服従＝全表現者（emo-text/seriko/未来の演者）**: **同期契約**——受け取った任意 cue の duration を、その action を処理するか否かに関わらず必ず honor する。無視するのは action だけで duration は決して落とさない。action 対象は演者側 relevance で選別（中央 router に依存しない）。emo-text は reveal を配送 D に従わせ自前 char_wait を撤去する。
 
+さらに本 spec は、この三権を**正しい層**へ据える構造統合を伴う（討議 #2 Topic 3・§Design Decisions D7）: cue 再生の"制御"（変換・状態機械・完了・バリア・broadcast）を、散在していた sakura `drive` と旧世代 wintf `ecs/cue` から **dola（`"Declarative Orchestration for Live Animation"` 層）へ一本化**し、`CueSheet→schedule` 変換を 1 本・`CuePlayer` 受動ランタイム・`CueSink` トレイト 1 本へ集約、**wintf `ecs/cue` 一式（`compile_sheet` 含む）を撤去**する。sakura は front-end＋talk glue に縮小。これにより「同じロジックの似て非なる版が散在」を根絶し、duration/absolute_start/horizon/broadcast を最初から正しい土台へ載せる。
+
 決定論（注入時刻 `talk_time` 駆動・sleep/`Instant` 不使用）と serde 後方互換を維持する。新規クレート・新規依存なし。
 
 ### Goals
@@ -115,31 +117,40 @@ graph LR
 ### Directory Structure
 ```
 crates/
-├── dola/src/cue/
-│   ├── command.rs            # [変更] Cue に duration: f64 追加（#[serde(default)]）／CueCommand::Wait 追加（additive）
-│   ├── sheet.rs              # [変更] CueSheet に absolute_start_time: f64 追加（dispatch 刻印・#[serde(default)]）＝自己完結絶対時刻台本
-│   └── schedule.rs           # [変更] TimedSchedule に horizon=max(offset+duration) を保持（insert 時に duration から更新）・is_completed は entry 枯渇かつ現在≥horizon で真（占有終了まで完了扱いしない）
-├── areka-sakura/src/
-│   ├── duration.rs           # [新規] text_playback_duration + CHAR_NOMINAL_MS（純粋・唯一の権威）
-│   ├── lib.rs                # [変更] pub mod duration;
-│   ├── compile.rs            # [変更] Text へ D 付与＋offset+=D・Wait cue 発行＋offset+=d・Clear 前置・emit に duration
-│   ├── contract.rs           # [変更] TalkCue に duration: f64／cue_target_of は relevance ヘルパとして存置（Wait を分類へ追加）
-│   └── drive.rs              # [変更] on_tick が全 cue を両 sink へ broadcast／to_schedule が duration 複写
+├── dola/src/cue/                # cue 再生の唯一のエンジン（アニメ制御は dola 層・演者/スクリプト/プラットフォーム非依存・注入時刻）
+│   ├── command.rs            # [変更] Cue に duration: f64（#[serde(default)]）／CueCommand::Wait（additive）／配送エンベロープ（旧 sakura TalkCue 相当）を dola 型へ移設
+│   ├── sheet.rs              # [変更] CueSheet に absolute_start_time／CueSheet→schedule 正規化を 1 本へ統合（旧 compile_sheet と sakura to_schedule を廃し canonical 化・先頭待ち保存・同一 at FIFO・絶対アンカー・horizon 算出）
+│   ├── schedule.rs           # [変更] TimedSchedule に horizon 保持・is_completed は占有終了（現在≥horizon）で真
+│   ├── runtime.rs            # [新規] CuePlayer＝受動的注入時刻ランタイム（再生状態機械・完了 horizon・バリア seam・Choice 先積み・broadcast fan-out）。旧 wintf CueQueue と sakura drive on_tick の制御責務を吸収
+│   ├── sink.rs               # [新規] CueSink トレイト 1 本（演者非依存の出力契約・旧 SurfaceSink/TextSink 2 本を統合）／cue_target_of relevance 分類器を dola へ移設
+│   └── mod.rs                # [変更] 上記 pub use
+├── areka-sakura/src/            # さくらスクリプト前段＋talk アクター glue（配送は dola へ委譲・再実装しない）
+│   ├── duration.rs           # [新規] text_playback_duration + CHAR_NOMINAL_MS（SakuraScript 固有・唯一の権威）
+│   ├── compile.rs            # [変更] SakuraScript→CueSheet（D 焼込み・Wait cue・Clear 前置・absolute_start_time 刻印口）。front-end に専念
+│   ├── drive.rs              # [変更・縮小] talk アクター: dola CuePlayer を包み注入時刻を送り、完了(horizon)→TalkDone を kanade へ中継・Close/中断 funnel・バリア再調停。to_schedule/on_tick/完了判定は dola へ移設し再実装しない
+│   ├── contract.rs           # [縮小] TalkCue/cue_target_of を dola へ移設（sakura は front-end 型のみ残す）
+│   └── lib.rs                # [変更] pub mod duration;
 ├── areka-emo-text/src/
-│   ├── state.rs              # [変更] char_wait 撤去・apply_cue が cue.duration からペース導出・honor 契約
-│   └── actor.rs              # [変更] apply_cue の config 引数除去・honor
+│   ├── state.rs              # [変更] char_wait 撤去・reveal は配送 duration 由来・honor 契約
+│   └── actor.rs              # [変更] dola::CueSink を実装（単一 sink・演者側 relevance で action・非該当は duration honor）
 ├── areka-seriko/src/
-│   └── actor.rs              # [変更] broadcast 許容（非 Shell action 無視・duration honor・warn→良性 debug）
-└── areka-ghost/              # [変更] live path 配線ハーネス（kanade→dispatcher→sakura drive→sinks）
-    ├── src/sink.rs           # command_kind に Wait 腕（catch-all 無し流儀）／診断既定 sink を単一 broadcast 配線へ（二重ログ解消）
-    ├── src/dispatcher.rs     # broadcast 配線・surface partition assertion を broadcast-aware へ改訂
-    └── tests/ghost/spine_e2e_test.rs # S1 の per-sink 分割列 assertion を broadcast へ更新
+│   └── actor.rs              # [変更] dola::CueSink を実装（単一 sink・Shell relevance で action・非該当は duration honor）
+├── areka-ghost/                 # live path 配線ハーネス（kanade→dispatcher→dola CuePlayer→CueSinks）
+│   ├── src/sink.rs           # [変更] LogSink を単一 dola::CueSink へ（両 trait 二重配線を解消＝二重ログ消滅）・command_kind に Wait 腕（catch-all 無し）
+│   ├── src/dispatcher.rs     # [変更] dola CuePlayer への配線・partition assertion を broadcast-aware へ改訂
+│   └── tests/ghost/spine_e2e_test.rs # [変更] broadcast/単一 sink へ更新
+└── wintf/src/ecs/cue/           # [撤去] 旧世代 CueQueue/dispatch/tracker/compile_sheet 一式を削除。制御能力は dola CuePlayer が吸収・ECS 演者が要れば dola::CueSink 実装で足る（別 cue エンジンを作らない）
 ```
 
 ### Modified Files
 - `crates/dola/src/cue/command.rs`
   - `Cue` に `#[serde(default)] pub duration: f64`（既定 0.0＝瞬時点）。doc に「この cue の presentation 占有時間（秒）・全表現者が action 可否に関わらず honor する・後続 cue の絶対時刻はこの分だけ焼き込まれる」を明記。全 in-source `Cue { ... }` リテラルへ `duration` 追加。後方互換 serde テスト（duration 欠落 JSON→0.0）追加。
   - `CueCommand::Wait` を additive 追加（unit variant `"Wait"`・action を持たず時間は envelope duration が担う）。doc に「純粋な待ち・action なし・duration のみ・全表現者が honor」を明記。variant 数 8→9・`cue_command_eight_variants` テストを 9 へ更新。既存 variant ワイヤ形不変を固定する檻を維持。
+  - 配送エンベロープ（旧 sakura `TalkCue` 相当・`{ at, actor, command, duration }`）を dola 型として定義（`CuePlayer`／`CueSink` の入出力）。
+- `crates/dola/src/cue/sheet.rs` — `CueSheet { absolute_start_time: f64, cues }`（`#[serde(default)]`・dispatch 刻印）。**`CueSheet→schedule` 正規化を dola の唯一の変換へ統合**（旧 `compile_sheet` の min 正規化＝先頭待ちを食う挙動を廃し、絶対アンカー＋相対 start_time をそのまま・同一 at FIFO・horizon 算出）。sakura `to_schedule` はこれへ吸収。
+- `crates/dola/src/cue/schedule.rs` — `TimedSchedule` に完了 horizon（`max(start+duration)`）を保持し `is_completed` を「entry 枯渇かつ現在 ≥ horizon」へ（占有終了まで完了扱いしない・Topic 1）。`Entry::Payload` signature は不変（duration は配送エンベロープ／CueSheet 側が保持）。
+- `crates/dola/src/cue/runtime.rs` — **新規 `CuePlayer`**（受動的注入時刻ランタイム）。再生状態機械（Playing/Paused/Waiting/Completed）・完了判定（horizon）・バリア seam（外部解決待ちで停止）・Choice 先積み・**broadcast fan-out（登録 `CueSink` 群へ ready cue を同一絶対時刻で配る）**。旧 wintf `CueQueue`（`TimedSchedule` への薄い ECS ラッパ）と sakura `drive.on_tick` の制御責務を一本化。スレッド/channel は持たない（アクター化は sakura の領分）。
+- `crates/dola/src/cue/sink.rs` — **新規 `CueSink` トレイト 1 本**（`fn emit(&mut self, cue: 配送エンベロープ)`）。旧 `SurfaceSink`/`TextSink` 2 本を統合（broadcast＋演者側 relevance ゆえ役割分割不要）。`cue_target_of`（Shell/Balloon 分類器）を dola へ移し、全演者が共有する relevance 単一権威とする。
 - `crates/areka-sakura/src/duration.rs` — **新規**。`pub const CHAR_NOMINAL_MS: u64 = 50;` と `pub fn text_playback_duration(text: &str) -> f64`（暗黙 per-char のみ）。純粋・決定的・no I/O。入力依存全分岐の単体テストを同ファイル `#[cfg(test)]` に。
 - `crates/areka-sakura/src/lib.rs` — `pub mod duration;`。
 - `crates/areka-sakura/src/compile.rs`
@@ -148,17 +159,19 @@ crates/
   - 他の emit（Emote/BalloonSurface/NewLine/Clear）: `duration=0.0`。
   - 走査後、**書き込み balloon スコープ集合**（Text/NewLine を emit したスコープ）を `BTreeSet<u32>` で収集し `Clear`（`start_time=0.0`・duration 0.0）を各スコープぶん先頭前置。
   - `emit` は `duration` 引数を取る。既存テスト更新＋新規（D 焼込み・Wait cue・Clear 前置・非退行）。
-- `crates/areka-sakura/src/contract.rs` — `TalkCue` に `pub duration: f64`。`cue_target_of` は**中央 router でなく演者側 relevance ヘルパ**として存置し、`Wait => None`（どの sink の担当でもない＝全員が action 無視・duration のみ honor）を追加（catch-all 無しゆえ variant 追加でコンパイラ強制）。
-- `crates/areka-sakura/src/drive.rs`
-  - `to_schedule` の `TalkCue` 構築に `duration: cue.duration` 追加。`CueSheet.absolute_start_time` を `TimedSchedule` の絶対アンカーへ流し、各 Payload の duration を horizon 更新へ供給。
-  - `on_tick`: `ready()` の各 cue を**両 sink（surface_sink と text_sink）へ broadcast** emit（型による 1→1 振り分けを撤去）。`None` の中央エラーログを廃し、無視は演者側に委ねる。
-  - **完了判定**: `TalkDone`（自然終了）は entry 枯渇の瞬間でなく、**`is_completed()`（entry 枯渇かつ現在時刻 ≥ horizon）が真になったとき**に発火する。末尾・単独の Wait／最終 Text の duration が talk 終端で落ちない（早期終了しない）。in-source テストの `TalkCue { ... }` リテラルへ `duration` 追加。
+- `crates/areka-sakura/src/contract.rs` — **縮小**: 配送エンベロープ（旧 `TalkCue`）と `cue_target_of`（relevance 分類器）を **dola へ移設**（`dola::cue::{command, sink}`）。sakura は SakuraScript front-end の型のみ残す。`Wait => None`（どの演者の担当でもない＝全員 action 無視・duration のみ honor）は dola 側分類器で網羅（catch-all 無し）。
+- `crates/areka-sakura/src/drive.rs` — **縮小して talk アクター glue に専念**。
+  - dola `CuePlayer` を包み、注入時刻を送る（配送・状態機械・完了 horizon・バリア seam は dola へ委譲し再実装しない）。
+  - `compile` 結果の `CueSheet` へ `absolute_start_time` を dispatch 時刻で刻印し `CuePlayer` へ渡す。
+  - **完了中継**: `CuePlayer` の完了（現在 ≥ horizon）を検知して `TalkDone` を kanade へ発火（entry 枯渇でなく占有終了・末尾 Wait/最終 Text の duration を落とさない）。Close/中断の funnel・バリア seam での絶対開始時刻再調停も担う。
+  - 旧 `to_schedule`／`on_tick` broadcast は dola `CuePlayer` へ移設ゆえ削除（車輪の再発明を絶つ）。
 - `crates/areka-emo-text/src/state.rs` — `TextLayerConfig.char_wait` 撤去（`line_pitch_factor` 残置）。`apply_cue` から `config` 引数除去（reveal ペースは `cue.duration` 由来）。`RevealSchedule::extend_chunk` 第 3 引数を `char_wait`→`interval`（=`D/N`）へ意味変更。**honor 契約**: 非担当 cue（Emote/Wait/BalloonSurface 等）は action 無視・duration は honor（talk extent 整合）。reveal 系テストを D 駆動へ更新。
-- `crates/areka-emo-text/src/actor.rs` — `apply_cue` の config 引数除去。`config`（`line_pitch_factor`）は `DWriteMetrics::new` 用に保持。in-source テストヘルパへ `duration` 追加。
-- `crates/areka-seriko/src/actor.rs` — broadcast 許容: 受け取った全 cue のうち Shell 系のみ action、他（Text/Wait/Clear/NewLine/Choice）は **action 無視・duration honor**。非 Shell 受信は「想定外」でなく**正常**ゆえ `warn` → 良性 `debug` へ。in-source テストヘルパへ `duration` 追加。
-- `crates/areka-ghost/src/sink.rs` — **live path 配線ハーネス**（design が変更対象に挙げ漏れていた・kanade→dispatcher→sakura drive→sinks）。`command_kind` の網羅 match へ `Wait => "Wait"` を追加（catch-all 無し流儀・`command_kind_covers_every_cue_command_variant` テストへ Wait を追加）。**診断既定 sink**（`LogSink`＝SurfaceSink/TextSink 両実装のスキャフォールド）を broadcast 下で **cue ごと 1 回**ログするよう単一 broadcast 配線へ寄せる（旧: 両スロットへ同一 sink＝二重ログ）。本番差込時は surface=seriko/text=emo-text の別オブジェクトゆえ二重ログは元々発生しない。
-- `crates/areka-ghost/src/dispatcher.rs`／`tests/ghost/spine_e2e_test.rs` — broadcast 化で surface sink が Text cue も受信するため、`surface.len()==2`／`surface[i]==Emote` 系の partition assertion を **broadcast-aware**（surface が全 cue を受け relevance で action を選ぶ）へ改訂。
-- **横断機械変更**: `Cue { ... }` / `TalkCue { ... }` リテラルは全構築点（**wintf・dola/tests・各 crate の `*_test.rs` 含む**・例 `dola/tests/cue/sheet_test.rs`・`wintf/tests/ecs/cue_*_test.rs`）で `duration` 追加が必要（コンパイラ強制）。`CueCommand::Wait` 追加で全 `apply_cue`/`handle_message`/`cue_target_of`/**areka-ghost `command_kind`** の網羅 match がコンパイラ強制更新。broadcast 化で areka-ghost の `dispatcher`/`spine_e2e` の per-sink partition assertion が要改訂。wintf ランタイム match は catch-all（`_ => None`／`other =>`）ゆえ Wait を安全に吸収。
+- `crates/areka-emo-text/src/actor.rs` — **`dola::CueSink` を実装**（単一 sink・旧 TextSink 置換）。`apply_cue` の config 引数除去（`config`＝`line_pitch_factor` は `DWriteMetrics::new` 用に保持）。演者側 relevance（`cue_target_of==Balloon`）で action・非該当は duration honor。in-source テストヘルパへ `duration` 追加。
+- `crates/areka-seriko/src/actor.rs` — **`dola::CueSink` を実装**（単一 sink・旧 SurfaceSink 置換）。受け取った全 cue のうち `cue_target_of==Shell` のみ action、他（Text/Wait/Clear/NewLine/Choice）は **action 無視・duration honor**。非 Shell 受信は正常ゆえ `warn`→良性 `debug`。in-source テストヘルパへ `duration` 追加。
+- `crates/areka-ghost/src/sink.rs` — **live path 配線ハーネス**（kanade→dispatcher→dola CuePlayer→CueSinks）。`LogSink` を **単一 `dola::CueSink`** へ（旧 SurfaceSink/TextSink 両実装＋両スロット二重配線を解消＝**二重ログが根から消える**・1 演者 1 sink）。`command_kind` の網羅 match へ `Wait => "Wait"`（catch-all 無し流儀・`command_kind_covers_every_cue_command_variant` テストへ Wait を追加）。
+- `crates/areka-ghost/src/dispatcher.rs`／`tests/ghost/spine_e2e_test.rs` — dola `CuePlayer` へ配線（旧 `spawn_talk` の surface/text 2 slot を単一 `CueSink` 群の登録へ）。`surface.len()==2`／`surface[i]==Emote` 系の partition assertion を **broadcast-aware**（1 sink が全 cue を受け relevance で action 選択）へ改訂。
+- `crates/wintf/src/ecs/cue/` — **撤去（旧世代）**。`CueQueue`／`dispatch`／`tracker`／`compile_sheet` 消費一式と関連 `*_test.rs` を削除。制御能力（状態機械・バリア応答・Choice・完了）は dola `CuePlayer` が吸収。将来 wintf 側で cue を要すれば `dola::CueSink` 実装で足る（別 cue エンジンを作らない）。`compile_sheet` も dola から削除し canonical 変換へ統合。
+- **横断機械変更**: `Cue { ... }`／配送エンベロープ リテラルは全構築点（`dola/tests`・各 crate の `*_test.rs` 含む）で `duration` 追加が必要（コンパイラ強制）。`CueCommand::Wait` 追加で全 `apply_cue`／`handle_message`／`cue_target_of`／`command_kind` の網羅 match がコンパイラ強制更新。wintf ecs/cue 撤去に伴い当該 crate の cue 構築点・テストは削除（duration 対応でなく除去）。
 - **前提条件の再確認**: 着手時に `crates/**` を `punctuation_wait` と drive.rs 生スクリプト診断ログで再 grep（現状ゼロ・撤去作業は発生しない見込み）。
 
 ## System Flows
@@ -441,6 +454,12 @@ pub fn compile(instructions: &[Instruction]) -> CompiledTalk;
 - **Selected**: **`CueSheet` へ `absolute_start_time: f64` を追加**（dispatch 時刻印・`#[serde(default)]`）し、各 cue の相対 `start_time` ＋ envelope duration と併せて台本を**絶対時刻で自己完結**させる。**cue は点でなく区間 `[start_time, start_time+duration)`**。talk の**絶対終了時刻** = `absolute_start_time + max(cue.start_time + cue.duration)`。配送は従来どおり各 cue の絶対時刻で点配送（二重待ちなし）だが、**完了**（`is_completed`／`TalkDone`）は entry 枯渇でなく**現在時刻 ≥ 絶対終了時刻**で判定する（`TimedSchedule` が horizon を保持）。
 - **Rationale**: (1) **同期**——絶対アンカーが台本に載るため、broadcast された台本を受けた任意の表現者（プロセス跨ぎ）が協調なしに同一絶対発火時刻・同一完了時刻を独立算出できる（dola の本質「同一台本を同一絶対時刻で」の物理的な形）。(2) **自己完結**——R5.3 を最強形へ：extent だけでなく絶対的配置が台本で閉じる。(3) **早期終了解決**——完了が「台本から導ける絶対終了時刻」になり、drive／kanade／表現者のどこで判定しても同一値。ゆえに「horizon をどの層に置くか」は些末事化し、決めるべきは**データ配置**（台本に `absolute_start_time`・各 cue に `duration`）だった。`CompiledTalk.end`（終端理由 enum）と終了「時刻」を峻別する。
 - **棄却案**: (乙) horizon を sakura `CompiledTalk` のみに持たせ dola schedule を点配送の素の道具に留める案は、duration 普遍（D5）の下では「cue を零幅点と見なす timeline」＝「duration 欠落 command」のタイムライン版という同種の穴を残すため不採用。占有はタイムラインの本性とする。
+
+### D7: cue 再生エンジンを dola 層へ統合・車輪の再発明を絶つ（Topic 3 / 討議 #2）
+- **Context**: `compile_sheet`（dola・min 正規化）と `to_schedule`（sakura・絶対保存）の 2 変換、および wintf `ecs/cue`（`CueQueue`＝`TimedSchedule` の薄い ECS ラッパ）と sakura `drive`（actor）の 2 つの cue 再生"制御"が並存＝**同じ責務の似て非なる実装が散在**（開発者「車輪の再発明は許容しない・コードは 1 か所に集約・アニメ制御は dola 層が筋」）。dola の実体は `"Declarative Orchestration for Live Animation"`（storyboard/keyframe/transition/runtime/playback を備えたアニメ統括層・[lib.rs](../../../crates/dola/src/lib.rs)）ゆえ cue 再生制御の正しい住処は dola。wintf `ecs/cue` は sakura drive（wintf 非依存・注入時刻）に置換された**旧世代**（生きた App に未配線・`CueQueue::new`/`dispatch_pending_cue_sheets` は doc 例とテストのみ・開発者「旧世代・撤去可」確認済）。
+- **Selected**: **cue 再生ランタイムを dola `cue` モジュールへ集約**。dola が (1) `CueSheet→schedule` 正規化を **1 本**（`compile_sheet`/`to_schedule` 統合・先頭待ち保存・絶対アンカー・horizon）、(2) **`CuePlayer`**（受動的注入時刻ランタイム: 状態機械・完了 horizon・バリア seam・Choice・broadcast fan-out）、(3) **`CueSink` トレイト 1 本**（`SurfaceSink`/`TextSink` 統合）＋`cue_target_of` relevance 分類器、(4) 配送エンベロープ型を所有。**sakura は front-end（SakuraScript→CueSheet・text_playback_duration）＋talk アクター glue（`CuePlayer` を包み注入時刻・完了→`TalkDone`・Close・バリア再調停）に縮小**し配送を再実装しない。**seriko/emo-text は `dola::CueSink` を実装**（各演者 1 sink）。**wintf `ecs/cue` は撤去**（`compile_sheet` 含む）。dola は受動ライブラリのまま（スレッド/channel はアクター側 sakura の領分・[[areka-concurrency-model]] 整合）で、storyboard runtime とは別モデルの兄弟として cue runtime を `cue` モジュールに置く（storyboard runtime へ混ぜない）。
+- **Rationale**: 「同じロジックのちょっと違う版が散在」を根絶し、cue 再生制御を設計本来の層（dola＝アニメ統括）へ一本化する。これにより **3 topic が同時に溶ける**: Topic 1（完了 horizon）は dola runtime の本来責務として自然着地、Topic 2（二重ログ/2 sink trait）は `CueSink` 1 本＝1 演者 1 sink で消滅、Topic 3（変換二重化/wintf duration 欠落）は変換 1 本＋wintf 撤去で消滅。
+- **棄却案**: (甲) wintf 経路へ duration を通し 2 エンジン温存＝重複固定化ゆえ却下。(乙) 統合を別 spec に切り出し本 spec を duration のみに絞る案＝duration とランタイムの居場所は不可分で二度手間ゆえ却下（開発者「(A) 本 spec へ畳む」決裁）。
 
 ## Supporting References
 - 詳細な選択肢比較・Topic 1 開発者決裁・dola 表現範囲の外壁・設計ディスカッション #1（envelope/Wait/broadcast/honor）の全経緯は `research.md`（§3・§6・§7・§9）に記録。design.md は結論を自足的に保持する。

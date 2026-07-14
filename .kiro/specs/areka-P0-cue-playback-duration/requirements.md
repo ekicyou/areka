@@ -24,6 +24,7 @@
 - **In scope**:
   - cue タイムラインへの**テキスト再生 duration の第一級モデル化**（`Cue` envelope の一律フィールド・全 presentation cue が保持・瞬時は 0）。
   - **`CueSheet` の絶対開始時刻保持**（`absolute_start_time`・dispatch 刻印）による**自己完結した絶対時刻台本**——台本のみから各 cue の絶対発火時刻と talk 絶対終了時刻を復元可能にし、cue を区間 `[start_time, start_time+duration)` として扱い、完了を「配送し終えた」でなく「再生し終えた（絶対終了時刻到達）」で判定する。
+  - **cue 再生エンジンの層統合**（討議 #2）: cue 再生の"制御"（`CueSheet→schedule` 変換・再生状態機械・完了・バリア・broadcast）を dola（アニメ統括層）へ一本化し、変換 1 本・`CuePlayer` 受動ランタイム・`CueSink` 1 本へ集約。旧世代 wintf `ecs/cue`（`compile_sheet` 含む）を撤去し、sakura は front-end＋talk glue に縮小する（同じロジックの似て非なる版の散在＝車輪の再発明を根絶）。
   - **単一の純関数**「テキスト→暗黙 per-char 再生時間」（所在は sakura）。明示 `\_w` は parser が分離済みゆえ compile のタイムライン累積が合成を担う。
   - sakura compile が各テキスト cue へ再生時間を付与し、後続 cue の絶対発火時刻を整列。
   - **純粋 Wait cue の第一級発行**（`\_w`→`CueCommand::Wait`・action 空・duration のみ）＝台本の自己完結（末尾・単独の待ちも cue として台本に残る）。
@@ -145,3 +146,14 @@
 3. When 本 spec の実装に着手する, the 実装者 shall `punctuation_wait` ハックおよび drive.rs の生スクリプト診断ログの不在を再確認し、万一残存する場合は撤去する。
 4. If `\s` 表情同期を超える表情変化（bind/mayuna 合成）や実行時サーフェスリサイズが要求される, then the 本 spec shall それを対象外とし、それぞれ `mayuna-compose`／`surface-resize-resnap` へ委譲する。
 5. Where 動的制御フロー（一時停止・選択肢・Barrier シームからの再開）が要求される, the 本 spec shall それを dola の外側（オーケストレーターによる絶対開始時刻の再調停・台本再配信）とし、本 spec の静的 duration タイムラインへ持ち込まない。
+
+### Requirement 11: cue 再生エンジンの層統合（1 か所集約・アニメ制御は dola）
+**Objective:** areka コードベースの保守者として、cue を時刻再生する"制御"ロジックが複数箇所に似て非なる版で散在する状態を根絶し、正しい層（dola＝アニメ統括層）へ一本化したい。そうすれば車輪の再発明が消え、duration/絶対時刻/完了/broadcast が単一の土台に載る。
+
+#### Acceptance Criteria
+1. The dola cue 層 shall `CueSheet → 時刻スケジュール` の正規化を**単一の変換**として提供し、min 正規化で先頭待ちを消す旧 `compile_sheet` と sakura 独自 `to_schedule` の二重実装を廃する（絶対アンカー＋相対 `start_time` を保存・同一 `at` FIFO・horizon 算出）。
+2. The dola cue 層 shall cue 再生ランタイム `CuePlayer`（受動的注入時刻オブジェクト: 再生状態機械・完了 horizon・バリア seam・Choice 先積み・全 `CueSink` への broadcast fan-out）を所有し、旧 wintf `CueQueue` と sakura `drive` の配送制御を一本化する（dola はスレッド/channel を持たず、アクター化は上流の責務）。
+3. The dola cue 層 shall 演者非依存の出力契約 `CueSink` を**単一トレイト**として提供し、旧 `SurfaceSink`/`TextSink` の 2 トレイト分割を統合する（broadcast＋演者側 relevance ゆえ役割分割不要）。relevance 分類器 `cue_target_of` も dola が単一権威として所有する。
+4. The areka-sakura shall SakuraScript front-end（`compile`・`text_playback_duration`）と talk アクター glue（`CuePlayer` を包み注入時刻を送り、完了→`TalkDone` 中継・Close/中断 funnel・バリア再調停）に縮小し、配送・状態機械・完了判定を再実装しない。
+5. The 本 spec shall 旧世代 wintf `ecs/cue`（`CueQueue`/`dispatch`/`tracker`/`compile_sheet` 一式）を撤去し、その制御能力を dola `CuePlayer` へ移す（将来 ECS 演者が要る場合は `dola::CueSink` 実装で足り、別 cue エンジンを新設しない）。
+6. The seriko/emo-text 各演者 shall `dola::CueSink` を各 1 実装として持ち、演者側 relevance で action・非該当 cue は duration を honor する。
