@@ -173,6 +173,8 @@ emo2 が起動して喋る。下記 5 トラックを結線して達成（⓪ �
 - seriko:`mayuna-compose` / `seriko-loop`
 - ghost:`position-persist`（自己＋window-placement）
 
+> **⚠️ 時限ゲート（2026-07-14・`cue-playback-duration` 実装中の並走判定）**: 上表の「M-boot 依存のみ」は静的な依存構造。**`areka-P0-cue-playback-duration` が実装中の現在**は、それが触る **cue モデル4ファイル（dola `CueCommand`/`command.rs`・sakura `compile.rs`・`contract.rs cue_target_of`・emo-text `state.rs apply_cue`）を共有するユニットは一時的に並走不可**。該当＝**`mayuna-compose`**（両 brief が「cue-playback 先行→settled cue モデルへ additive」を明記＝emit()/Cue 署名確定待ち）。**cue モデルに触れない `position-persist`（完全直交）・`seriko-loop`（blink＝seriko 内部タイマ・sakura cue 非経由）・`idle-talk`（kanade 内部・script 生産者であって cue モデル編集者でない）は cue-playback と真に並走可**＝これが現行の並走フロント。cue-playback 完了後は `mayuna-compose` も解禁（`CueCommand` の additive 拡張は balloon-face-cue で実績あり＝安全）。
+
 **クロスエンジン結合（I/O 契約を先に1つ決めれば両側を並列実装可）**:
 - **撫で（M-life）**: emo:`collision-geometry`（入力 mouse→region/actor）⟷ kanade:`input-events`（出力 OnMouseMove→SHIORI）。先に **region/actor I/O 契約**。
 - **選択肢/メニュー（M-dialogue）**: sakura:`sakura-dialogue-tags`（`\q` 出力）⟷ emo:`choice-render`（表示）⟷ kanade:`input-events`（OnChoiceSelectEx）。先に **\q/選択 契約**。
