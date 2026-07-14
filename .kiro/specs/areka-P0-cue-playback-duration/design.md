@@ -37,7 +37,7 @@
 ### This Spec Owns
 - **保持（dola）**: `Cue` envelope の `duration: f64` フィールド（additive・`#[serde(default)]`・全 presentation cue が保持）。`CueCommand::Wait`（action 空・duration のみ・additive 追加）。**`CueSheet.absolute_start_time: f64`**（dispatch 刻印・`#[serde(default)]`）＝自己完結絶対時刻台本。`TimedSchedule` の horizon 保持と `is_completed`（entry 枯渇かつ現在≥horizon）による占有終了判定。dola は duration/絶対時刻を不透明に保持・**broadcast 配送**するのみ。
 - **計算（sakura）**: 純関数 `text_playback_duration(text) -> f64`（暗黙 per-char）と per-char 定数 `CHAR_NOMINAL_MS` の**唯一の定義**。compile による各テキスト cue への D 付与・`offset += D` 焼き込み・**`\_w` の第一級 Wait cue 発行**・talk 冒頭 `ClearAll` 前置。
-- **配送（sakura drive）**: 全 cue を全 sink へ **broadcast** する `on_tick`（中央 1→1 振り分けの廃止）。`TalkCue` エンベロープの `duration` フィールド（serde 非依存の搬送体）。
+- **配送（dola `CuePlayer`）**: 全 cue を登録 `CueSink` 群へ **broadcast** fan-out する受動ランタイム（中央 1→1 振り分けの廃止）。配送エンベロープの `duration` フィールド（serde 非依存の搬送体）。sakura talk アクターは CuePlayer を包み注入時刻を送るのみ（配送を再実装しない）。
 - **服従（全表現者）**: **duration honor 契約**——任意 cue の duration を action 可否に関わらず honor。emo-text reveal を配送 D から導出・`char_wait` 撤去。seriko が broadcast を許容（非 Shell action 無視・duration honor・良性ログ）。
 - **実機受け入れ**: #3・#4・#6・`\s` 同期の人間サインオフ観測手順。
 
@@ -52,7 +52,7 @@
 ### Allowed Dependencies
 - **dola `cue` モジュール**（`Cue`/`CueCommand`/`CuePayload`/`TimedSchedule`/`CueSheet`）— duration の保持場所・Wait 追加先。既存 variant のワイヤ形は不変。
 - **areka-parsers `sakura`**（`Instruction` 列・`Wait(Duration)`/`Text(String)`）— compile の入力。`\_w`→`Wait`、`\w`→`Wait` の既存正規化に依存（`WAIT_UNIT_MS=50` は別概念で流用しない）。
-- **areka-sakura contract**（`TalkCue`/`cue_target_of`）・drive（`to_schedule`/`on_tick`）— D の搬送・broadcast 配送経路。
+- **dola `cue` runtime**（`CuePlayer`／`CueSink`／canonical 変換／配送エンベロープ／`cue_target_of`）— D の搬送・broadcast 配送・完了 horizon の集約点。**areka-sakura** は front-end（`compile`/`text_playback_duration`）＋talk アクター glue として CuePlayer を駆動。
 - **areka-emo-text state/actor**・**areka-seriko actor** — honor 契約・reveal 服従の実装先。
 - 新規 crates.io 依存の追加は**禁止**（Rust 2024・bevy_ecs・serde の既存スタックのみ）。
 
@@ -85,17 +85,17 @@ graph LR
     Script[SakuraScript 文字列] --> Parse[areka-parsers sakura parse]
     Parse -->|Instruction 列| Compile[sakura compile 計算]
     Nominal[text_playback_duration + CHAR_NOMINAL_MS] --> Compile
-    Compile -->|各 cue に envelope duration 焼込み + Wait cue + Clear 前置| Sheet[dola CueSheet 保持]
-    Sheet --> Schedule[dola TimedSchedule 点配送]
-    Schedule -->|broadcast 全 cue| SurfaceSink[SurfaceSink seriko]
-    Schedule -->|broadcast 全 cue| TextSink[TextSink emo-text]
-    SurfaceSink -->|relevance で action 選別 + duration honor| SurfDraw[表情/面]
-    TextSink -->|relevance で action 選別 + duration honor| Reveal[RevealSchedule D 由来]
+    Compile -->|各 cue に envelope duration 焼込み + Wait cue + ClearAll 前置 + absolute_start 刻印| Sheet[dola CueSheet 保持]
+    Sheet --> Player[dola CuePlayer 受動ランタイム・horizon 完了]
+    Player -->|broadcast 全 cue| Surf[CueSink seriko]
+    Player -->|broadcast 全 cue| Text[CueSink emo-text]
+    Surf -->|relevance で action 選別 + duration honor| SurfDraw[表情/面]
+    Text -->|relevance で action 選別 + duration honor| Reveal[RevealSchedule D 由来]
 ```
 
 **Architecture Integration**:
 - **保持の一律性（R1）**: duration は `Cue` envelope の一律フィールド。全 presentation cue が保持し（瞬時は 0）、「duration フィールドを持たない cue command」概念は作らない。これにより表現者は**コマンドを解釈せずに `cue.duration` を一律 honor** できる——honor 契約が例外なく回る前提。
-- **配送の broadcast（R2）**: `on_tick` は全 cue を全 sink へ broadcast。型による中央振り分けを廃し、無視は演者側 relevance フィルタ（既存）で行う。dola の「同一台本を全表現者へ」を配送経路でも成立させる。
+- **配送の broadcast（R2）**: dola `CuePlayer` が全 cue を登録 `CueSink` 群へ broadcast fan-out。型による中央振り分けを廃し、無視は演者側 relevance フィルタで行う。dola の「同一台本を全表現者へ」を配送経路でも成立させる（sakura on_tick から dola へ移設・§D7）。
 - **honor 契約（R2）**: 各表現者は受け取った任意 cue の duration を、action 可否に関わらず honor（自身の timeline 整合・末尾の hold）。action は選択的無視可、duration は不可。
 - **Wait の第一級化（R5）**: `\_w` を offset へ吸収せず `CueCommand::Wait`（action 空・duration のみ）として発行し `offset += d`。台本が自己完結（末尾・単独の待ちも cue として残る＝プロセス跨ぎで全時間範囲復元可能）。
 - **整列は 2 段の焼き込み（案 2-A）**: sakura compile が `offset += D`／`offset += d` で各 cue の**相対** `start_time`（台本内 0 基準）を焼き込み、**絶対アンカー `CueSheet.absolute_start_time` は dispatch 時に刻印**する。dola は配送時に時刻を導出せず（相対＋アンカーの和で各表現者が独立に同一絶対時刻を得る）。時刻を配送時導出すると表現者ごと独立計算＝desync ゆえ絶対時刻は同期の必須要件（開発者決裁・research §7.4）。
@@ -105,8 +105,8 @@ graph LR
 
 | Layer | Choice / Version | Role in Feature | Notes |
 |-------|------------------|-----------------|-------|
-| 演出定義（保持） | dola（`serde` 1・externally tagged） | `Cue.duration` 保持・`CueCommand::Wait`・broadcast 配送・serde 後方互換 | 既存 variant ワイヤ形不変・`#[serde(default)]`・Wait は additive |
-| 計算（台本） | areka-sakura（Rust 2024・純粋関数） | `text_playback_duration`・compile 焼込み・Wait 発行・Clear 前置・broadcast on_tick | GPU/COM 非依存・全分岐単体テスト可 |
+| 演出/再生（dola） | dola（`serde` 1・externally tagged） | `Cue.duration`・`CueSheet.absolute_start_time` 保持・`Wait`/`ClearAll`・**`CuePlayer` 受動ランタイム＋`CueSink` broadcast＋完了 horizon**・canonical 変換・serde 後方互換 | 既存 variant ワイヤ形不変・`#[serde(default)]`・受動ライブラリ（スレッドなし） |
+| 計算/glue（sakura） | areka-sakura（Rust 2024） | `text_playback_duration`・compile 焼込み・Wait 発行・ClearAll 前置・talk アクター glue（CuePlayer 駆動・配送は dola） | GPU/COM 非依存・純関数/compile は全分岐単体テスト可 |
 | 服従（reveal/honor） | areka-emo-text・areka-seriko | 配送 D から reveal・duration honor・`char_wait` 撤去 | 注入時刻駆動・`Instant` 不使用 |
 | 入力 | areka-parsers sakura（既存） | `\_w`→`Wait(Duration)`・`Text(String)` | `WAIT_UNIT_MS=50` は別概念・流用しない |
 
@@ -204,16 +204,16 @@ sequenceDiagram
 
 ```mermaid
 sequenceDiagram
-    participant Sch as dola TimedSchedule
-    participant Surf as SurfaceSink seriko
-    participant Text as TextSink emo-text
+    participant Sch as dola CuePlayer
+    participant Surf as CueSink seriko
+    participant Text as CueSink emo-text
     participant Rev as RevealSchedule
     Sch->>Surf: ready() の各 cue（絶対 at・duration）を broadcast
     Sch->>Text: ready() の各 cue（絶対 at・duration）を broadcast
-    Note over Surf: Emote/BalloonSurface=action／Text/Wait/Clear=action 無視・duration は honor
+    Note over Surf: Emote/BalloonSurface=action／Text/Wait/Clear/ClearAll=action 無視・duration は honor
     Note over Text: Text=reveal(interval=duration/glyph)／Emote/Wait=action 無視・duration は honor
     Text->>Rev: Text 適用: interval = duration / glyph_count・r_0 = at
-    Note over Surf,Text: 両 sink は同一絶対時刻の同一台本を受け・協調不要で同期成立（R1.4・R8.4）
+    Note over Surf,Text: 全 CueSink は同一絶対時刻の同一台本を受け・協調不要で同期成立（R1.4・R8.4）
 ```
 
 **honor 契約の帰結**: どの表現者も、自分が action しない cue の duration も honor するため、末尾 Wait を含む talk の全時間範囲を各自で復元でき、早期終了しない（R5.3）。同期の真実源は焼き込み絶対 `start_time`、duration は presentation メタデータ兼その原始量（二重待ち禁止）。
@@ -227,11 +227,11 @@ sequenceDiagram
 | 1.1 | duration を envelope 一律フィールドで保持 | dola `Cue.duration`・sakura `TalkCue.duration` | 焼き込み |
 | 1.2 | 瞬時は明示 0・フィールド欠落なし | `duration: f64` default 0・reveal 縮退 | broadcast honor |
 | 1.3 | 絶対 start_time を導出せず保持配送 | `Cue.start_time`・`TimedSchedule` | 焼き込み |
-| 1.4 | 同一台本を全表現者へ同一絶対時刻で配送（絶対アンカーを台本が保持） | `CueSheet.absolute_start_time`・broadcast on_tick | broadcast honor |
+| 1.4 | 同一台本を全表現者へ同一絶対時刻で配送（絶対アンカーを台本が保持） | `CueSheet.absolute_start_time`・CuePlayer broadcast | broadcast honor |
 | 1.5 | duration は不透明秒数・50ms 焼かない | `Cue.duration`・`CHAR_NOMINAL_MS`(sakura) | — |
 | 1.6 | Barrier/Routing は duration 非該当 | `CuePayload` 別アーム | — |
 | 1.7 | CueSheet が絶対開始時刻を保持し台本のみから絶対発火/終了時刻を復元 | `CueSheet.absolute_start_time`・horizon | 焼き込み・完了 |
-| 2.1 | 全 cue を全表現者へ broadcast | drive `on_tick`（両 sink emit） | broadcast honor |
+| 2.1 | 全 cue を全表現者へ broadcast | dola `CuePlayer` broadcast fan-out | broadcast honor |
 | 2.2 | 葉の表現者はローカル遅延を生じさせない（否定的 no-op） | emo-text/seriko honor（no-op 制約） | broadcast honor |
 | 2.3 | action は無視可・duration は不可 | emo-text/seriko honor arms | broadcast honor |
 | 2.4 | action 対象は演者側 relevance で選別 | `cue_target_of`(演者側)・apply_cue match | broadcast honor |
@@ -335,7 +335,7 @@ pub fn compile(instructions: &[Instruction]) -> CompiledTalk;
 **Responsibilities & Constraints**
 - `dola::cue::Cue` に `#[serde(default)] pub duration: f64`（既定 0.0）。**全 presentation cue が保持**（瞬時は 0・欠落フィールド概念なし＝9.5）。既存 `CueCommand` variant のワイヤ形は不変（9.3）。既存 serde 済みデータ（duration 欠落）は default で 0.0（9.4・1.2）。
 - `CueCommand::Wait`（unit variant）を additive 追加。action を持たず、時間は envelope `duration` が担う（Wait 単体では `Cue{payload:Command(Wait), duration:d}`）。
-- `areka_sakura::contract::TalkCue` に `pub duration: f64`（serde 非依存の搬送体）。`to_schedule` が `Cue.duration` を無変形複写。
+- 配送エンベロープ（旧 `TalkCue`・dola へ移設）に `duration`（serde 非依存の搬送体）。dola canonical 変換が `Cue.duration` を無変形複写して `CuePlayer`／`CueSink` へ運ぶ。
 - dola は duration を SakuraScript 意味に解釈しない（1.5）。`start_time` は絶対時刻として保持し導出しない（1.3）。
 - **Barrier/Routing は duration 非該当（1.6）**: `CuePayload::Barrier`/`Routing` は presentation でなく（Barrier＝動的停止点・Routing＝表現者未配送）、静的 duration タイムラインの外。envelope duration は presentation cue のみ意味を持つ。
 
@@ -355,7 +355,7 @@ pub fn compile(instructions: &[Instruction]) -> CompiledTalk;
 | Requirements | 2.1, 2.2, 2.3, 2.4, 5.4, 7.1, 7.2, 7.3, 7.4, 7.5 |
 
 **Responsibilities & Constraints**
-- **broadcast 受信（2.1）**: `on_tick` が全 cue を両 sink へ配送。各表現者は全 cue を受け取る。
+- **broadcast 受信（2.1）**: dola `CuePlayer` が全 cue を登録 `CueSink` 群へ配送。各表現者は全 cue を受け取る。
 - **honor 契約＝2 段（2.2/2.3/2.5/5.4/7.5）**: 「honor」は二段で成立し、いずれも**新たなローカル遅延を生まない**（タイミングは焼き込み絶対時刻が担う・二重待ち禁止）:
   - **葉の表現者（本 spec 内: emo-text/seriko）**: 自分が action しない cue の duration は**ローカル時計を進めず・後続 action を遅延させない**＝葉の局所挙動としては実質 no-op の**否定的制約**。担当 cue は焼き込み絶対時刻で action する。duration が envelope 一律ゆえ command を解釈せず読める、という**将来 honor の前提**を確保することが本 spec での眼目。
   - **talk ライフサイクル（自己完結台本 → drive の完了判定）**: talk の**絶対終了時刻** = `CueSheet.absolute_start_time + max(cue.start_time + cue.duration)`。これは**台本 1 枚から導ける絶対時刻**で、drive／kanade／任意の表現者が同一台本から同一値を独立算出する（協調なしの跨プロセス完了同期）。drive の `TalkDone`（自然終了）は cue を配り終えた瞬間（entry 枯渇）でなく、この**絶対終了時刻に達したとき**に発火する＝末尾 Wait・最終 Text の duration を落とさず早期終了しない。**注意**: `CompiledTalk.end` は終端**理由**（`TalkEndReason` enum: Ended/Quit）であって時間量ではない——終了「時刻」の権威は台本の `absolute_start_time + horizon`（`is_completed` が duration を含めて判定）であり、両者は別概念。
@@ -411,11 +411,11 @@ pub fn compile(instructions: &[Instruction]) -> CompiledTalk;
 - **emo-text reveal 縮退（1.2/7.3）**: D=0＋N>0 で全グリフ即時（`at`）。N=0 で無追記。interval=D/N の reveal 時刻式（期待値は同一算術で再計算）。
 
 ### Integration Tests（クロス層・実 channel/schedule）
-- **broadcast 配送（2.1/2.2）**: 1 台本を on_tick へ流し、**両 sink（surface_sink/text_sink）が同一 cue 列を受信**する（旧「片方だけ受信」を broadcast へ更新）。emo-text は Emote/Wait を action 無視・seriko は Text/Wait を action 無視、両者とも duration を honor。**areka-ghost**: dispatcher/spine_e2e の partition assertion を broadcast-aware（surface も全 cue 受信・relevance で action 選択）へ更新し、診断既定 sink が cue ごと **1 回**ログ（二重でない）ことを固定。
+- **broadcast 配送（2.1/2.2）**: 1 台本を dola `CuePlayer` へ流し、**登録 `CueSink` 群が同一 cue 列を受信**する（旧「片方だけ受信」を broadcast へ更新）。emo-text は Emote/Wait を action 無視・seriko は Text/Wait を action 無視、両者とも duration を honor。**areka-ghost**: dispatcher/spine_e2e の partition assertion を broadcast-aware（各 sink が全 cue 受信・relevance で action 選択）へ更新し、診断既定 sink が cue ごと **1 回**ログ（二重でない）ことを固定。
 - **honor 契約（2.2/2.3/2.5/5.4/7.5）**: ①葉の表現者——emo-text が非担当 cue（Emote/Wait）を受けても、後続の担当 Text cue の reveal `r_0 = cue.at` は**当該 duration ぶんの遅延を受けない**（ローカル遅延を生まない・no-op 否定制約）。②**ライフサイクル（drive-level・注入 tick）**——末尾 `\_w[800]`（Text@0 dur D／Wait@D dur 0.8）および裸の末尾 Text（at=0 dur D）を drive へ流し、`TalkDone` が entry 枯渇時刻（前者 D・後者 ≈0）でなく**絶対終了時刻**（前者 D+0.8・後者 D）に達するまで**発火しない**ことを注入 tick で固定する（compile-level の extent 檻だけでは早期終了を捕捉できず drive-level 檻が必須）。加えて `CompiledTalk.end` は `TalkEndReason` であって終了「時刻」でないことを型で固定。③relevance partition——全 `CueCommand` variant について `cue_target_of` の分類と emo-text の action 判定が**一致**し、variant ごとに action する表現者が高々一つ（発散なし・partition 檻）。
-- **2 sink 同期（1.4/8.4）**: `\s[7]` を含む台本で、Emote が該当テキストの D 後の絶対時刻で発火し、両 sink が同一絶対時刻の同一台本を受ける（`\s` 表情同期）。
+- **多 sink 同期（1.4/8.4）**: `\s[7]` を含む台本で、Emote が該当テキストの D 後の絶対時刻で発火し、全 `CueSink` が同一絶対時刻の同一台本を受ける（`\s` 表情同期）。
 - **ClearAll 前置 FIFO（6.2）**: 前 talk のテキスト（**非書込スコープ含む**）が新 talk 冒頭 `ClearAll` で消え、同一 `at=0.0` で ClearAll→Text の順に配送（`same_at_cues_preserve_script_order_fifo` 相当）。多スコープ前 talk→単スコープ新 talk で残存スコープも消えることを檻。
-- **duration 搬送（1.1/7.1）**: compile→to_schedule→sink→apply_cue で `TalkCue.duration` が無変形に届き reveal 時刻が D 由来になる。
+- **duration 搬送（1.1/7.1）**: compile→dola canonical 変換→`CuePlayer`→`CueSink` で配送エンベロープの `duration` が無変形に届き reveal 時刻が D 由来になる。
 
 ### E2E / 実機受け入れ（人間サインオフ・8.1–8.5）
 - 実 emo2 ゴーストを実 pasta.dll・実 DPI・**絶対パス**で起動（相対パスは helper の pasta.dll LoadLibrary 失敗＝MOD_NOT_FOUND を招くため必須）。
