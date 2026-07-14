@@ -1,0 +1,28 @@
+{
+  "feature_name": "areka-P0-surface-resize-resnap",
+  "created_at": "2026-07-13T11:13:31Z",
+  "updated_at": "2026-07-14T09:48:59Z",
+  "language": "ja",
+  "phase": "completed",
+  "approvals": {
+    "requirements": {
+      "generated": true,
+      "approved": true
+    },
+    "design": {
+      "generated": true,
+      "approved": true
+    },
+    "tasks": {
+      "generated": true,
+      "approved": true
+    },
+    "implementation": {
+      "generated": true,
+      "approved": true,
+      "completed": true,
+      "completed_at": "2026-07-14T09:48:59Z"
+    }
+  },
+  "ready_for_implementation": true
+}

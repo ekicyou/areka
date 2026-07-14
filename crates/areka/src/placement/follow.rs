@@ -10,9 +10,11 @@
 //! - [`move_window_to`]: R7 公開 API（UI スレッド関数・物理 px スクリーン座標直渡し）
 //! - [`DragPositionPolicy`]／[`BottomSnapPolicy`]: bottom 吸着ドラッグ（4.7・
 //!   DD15 v2・task 8.2R）の核——「生ドラッグ座標→実窓位置」の純粋写像トレイトと
-//!   その bottom 吸着実装。`BottomSnap` キャラ窓は `DragConfig{move_window:false}`
-//!   で wndproc 移動を止め、[`on_char_drag`]／[`on_char_drag_end`] が適用済み座標を
-//!   **単一ライター**として書く（v1 の事後再釘付けは wndproc と競合し振動→撤去）
+//!   その bottom 吸着実装（[`project_anchor`] の `Bottom` 腕が委譲）。非 Free
+//!   アンカーのキャラ窓は `DragConfig{move_window:false}` で wndproc 移動を止め、
+//!   [`on_char_drag`]／[`on_char_drag_end`] が [`Anchored`] を読んで [`project_anchor`]
+//!   適用済み座標を**単一ライター**として書く（v1 の事後再釘付けは wndproc と
+//!   競合し振動→撤去）
 //! - [`MonitorSnapshot`]／[`work_area_for_window`]: 全モニタ work area 集合の
 //!   Resource と窓中心→モニタ解決の純粋ヘルパ（task 8.1・ポリシーの入力）
 //!
@@ -30,16 +32,16 @@
 //! 後続の領分（7.3）。
 
 use bevy_ecs::prelude::*;
+use bevy_ecs::system::SystemState;
 use tracing::{debug, warn};
 use windows::Win32::UI::WindowsAndMessaging::{SWP_NOACTIVATE, SWP_NOSIZE, SWP_NOZORDER};
 use wintf::ecs::drag::{DragEndEvent, DragEvent, DraggingState};
 use wintf::ecs::layout::{Arrangement, Offset};
 use wintf::ecs::pointer::Phase;
 use wintf::ecs::window::monitor::Monitor;
-use wintf::ecs::{Point, SetWindowPosCommand, WindowHandle, WindowPos};
+use wintf::ecs::{Point, SetWindowPosCommand, SizeI, WindowHandle, WindowPos};
 
-use super::resolver::{PointPx, RectPx, SizePx};
-use super::spawn::BottomSnap;
+use super::resolver::{Anchor, PointPx, RectPx, SizePx};
 
 // =============================================================================
 // DragPositionPolicy（task 8.2R・DD15 v2・4.7）
@@ -51,7 +53,7 @@ use super::spawn::BottomSnap;
 /// 「実ウィンドウ位置の算出」を分離する。実装は純粋関数であること——
 /// `raw`（生ドラッグ座標＝ドラッグ開始時窓位置＋カーソル差分・物理 px）と
 /// 窓寸法・モニタ snapshot だけから実窓位置を返し、World に触れない。
-/// 反映段階（`enqueue_window_move`）には**適用済み座標のみ**が渡る＝
+/// 反映段階（`enqueue_window_set_pos`）には**適用済み座標のみ**が渡る＝
 /// 事後補正が存在しないため、v1 の wndproc 競合振動は原理的に起きない。
 pub trait DragPositionPolicy {
     /// 生ドラッグ座標 `raw` に対する実窓位置を返す（物理 px・純粋）。
@@ -104,6 +106,111 @@ impl DragPositionPolicy for BottomSnapPolicy {
     }
 }
 
+/// 変換 T: 解決済みアンカー＋生位置＋新寸から、アンカー辺を work area 対応辺へ
+/// 固定した窓左上位置を返す純粋射影（5 アンカー・task 2.1・Req1.1/1.2/2.1-2.5/3.4/5.4）。
+///
+/// シェル座標系（アンカー辺基準）→ ウィンドウ座標系（サーフェス寸法基準）の変換 T の
+/// 恒常維持を担う純粋関数（World 不可視・物理 px 単一通貨・`saturating_*` 演算で
+/// panic しない）。ドラッグ（`policy_mapped_position`）とリサイズ（後続 task の
+/// `resize_window_to`）の**両者が同一 T を呼ぶ**ことで座標系変換の二重化を避ける
+/// （R1.6）。
+///
+/// # 射影規則（`wa` 取得成功かつ正寸のとき）
+///
+/// `wa` は「生位置 `raw` に置いた窓矩形の中心が属するモニタの work area」
+/// （[`work_area_for_window`]）。モニタ跨ぎは live 算出＝跨いだ先の対応辺へ再吸着する。
+/// - `Bottom`: 既存 [`BottomSnapPolicy::resolve`] へ**委譲**（X 保持・`y = wa.bottom − h`）。
+///   再定義しない（Req1.2・bottom は T の一事例）。
+/// - `Top`: `x = raw.x`（保持）・`y = wa.top`。
+/// - `Left`: `x = wa.left`・`y = raw.y`（保持）。
+/// - `Right`: `x = wa.right − w`・`y = raw.y`（保持）。
+/// - `Free`: `raw` 素通し（identity・position 再計算なし・Req2.5）。
+///
+/// # graceful degradation（identity＝`raw` 素通し・panic しない・既存 `BottomSnapPolicy` 流儀）
+///
+/// - `Free` は常に identity（`wa` 不要・寸法・snapshot を問わない）。
+/// - 非正寸（w≤0 or h≤0）は identity＋`debug!`。`wa.right − w`／`wa.bottom − h` が
+///   `i32::MAX` 方向へ暴走する前に弾く（Req3.4・`BottomSnapPolicy` の CW_USEDEFAULT
+///   センチネル縮退と整合）。
+/// - `snapshot` 不在（`None`）／空 snapshot（[`work_area_for_window`] が `None`）は
+///   identity＋`debug!`。ドラッグ経路 spam 回避で `warn!` でなく `debug!`（既存流儀）。
+///
+/// # 不変条件（テストで固定）
+///
+/// 正寸・snapshot 有効時、適用後の窓のアンカー辺 ≡ work area 対応辺。既にアンカー辺
+/// 一致の位置に対しては同値を返す（べき等の基礎・R3.1）。
+#[allow(dead_code)] // consumer（resize_window_to／on_char_drag 改修）は後続 task 2.2-2.4 の領分
+pub fn project_anchor(
+    anchor: Anchor,
+    raw: PointPx,
+    size: SizePx,
+    snapshot: Option<&MonitorSnapshot>,
+) -> PointPx {
+    // Free: アンカー辺なし＝常に identity（wa 不要・寸法・snapshot を問わない・Req2.5）
+    if let Anchor::Free = anchor {
+        return raw;
+    }
+
+    // Bottom: 既存 BottomSnapPolicy へ全面委譲（再定義しない・Req1.2）。縮退規約
+    // （snapshot 不在/空・非正寸）も同ポリシーが所有し、T の bottom 事例＝同値になる
+    if let Anchor::Bottom = anchor {
+        return BottomSnapPolicy.resolve(raw, size, snapshot);
+    }
+
+    // 以下 Top/Left/Right（bottom の一般化）。非正寸は wa.right−w／暴走の前に弾く
+    if size.w <= 0 || size.h <= 0 {
+        debug!(?size, ?anchor, "窓寸法が不明（非正）のため identity 縮退");
+        return raw;
+    }
+    let Some(snapshot) = snapshot else {
+        debug!(?anchor, "MonitorSnapshot 未挿入（フォールバック経路）のため identity 縮退");
+        return raw;
+    };
+    // wa＝生位置に置いた窓矩形の中心が属するモニタの work area（live 算出・跨ぎ再吸着）
+    let window = RectPx {
+        left: raw.x,
+        top: raw.y,
+        right: raw.x.saturating_add(size.w),
+        bottom: raw.y.saturating_add(size.h),
+    };
+    let Some(wa) = work_area_for_window(snapshot, window) else {
+        debug!(?anchor, "空 snapshot のため identity 縮退");
+        return raw;
+    };
+
+    match anchor {
+        // 上端固定・X 保持（Req2.2）
+        Anchor::Top => PointPx { x: raw.x, y: wa.top },
+        // 左端固定・Y 保持（Req2.3）
+        Anchor::Left => PointPx { x: wa.left, y: raw.y },
+        // 右端固定（left_X = wa.right − w）・Y 保持（Req2.4）。極端入力でも panic
+        // しない契約で saturating_sub（BottomSnapPolicy の bottom−h と同型の防波堤）
+        Anchor::Right => PointPx {
+            x: wa.right.saturating_sub(size.w),
+            y: raw.y,
+        },
+        // Bottom／Free は冒頭で return 済み（到達不能・網羅性のための恒等既定）
+        Anchor::Bottom | Anchor::Free => raw,
+    }
+}
+
+/// キャラ窓が保持する現在の解決済みアンカー（drag／resize が読む単一の真実源・4.2/1.4）。
+///
+/// 全 char 窓へ 1 つだけ付与される 5 値アンカー表現（`Anchor` は 5 値ゆえ、二値
+/// `BottomSnap` marker を generalize した後継。単一真実源＝二つ目の格納表現を作らない・
+/// Req1.6）。値は spawn 時に `config.alignment` 由来（`ScopePlacement.anchor`＝
+/// `Anchor::from_alignment` の解決結果）で焼き込まれ（付与は spawn の領分・task 3.1）、
+/// runtime は seriko（本 spec 非所有＝`\![set,alignmenttodesktop]` の routing）が
+/// 書き換える。`Changed<Anchored>` がアンカー変化での変換 T 再適用トリガとなる
+/// （反応 system は後続 task の領分・本 spec は consumer 契約のみ・Req1.4/4.2）。
+///
+/// ドラッグ（`on_char_drag`）とリサイズ（`resize_window_to`）の**両者がこの値を読んで**
+/// 同一射影 T（`project_anchor`）を呼ぶ——`Free` か否かで wndproc 委譲／単一ライターを
+/// 分岐する。
+#[allow(dead_code)] // spawn 付与（task 3.1）は後続 task の領分——構築が付くまで dead_code 警告を抑える
+#[derive(Component, Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Anchored(pub Anchor);
+
 /// キャラ窓に付与するバルーン追従 Component（4.2/4.4/4.8）。
 ///
 /// `offset` の初期値は配置時に確定する暫定 offset（物理 px・
@@ -128,21 +235,24 @@ pub struct BalloonFollow {
 /// （ハードニング・DD15 v2 (6)。wintf のドラッグ対象は `DragConfig` を持つ
 /// 窓 entity 自身なので、実 flow では常に一致する）。
 ///
-/// # BottomSnap キャラ窓（4.7・DD15 v2・task 8.2R——単一ライター）
+/// # 非 Free アンカーのキャラ窓（4.7/1.6・DD15 v2・単一ライター）
 ///
-/// `Bottom`/`Seam` スコープのキャラ窓は `DragConfig { move_window: false }` で
-/// spawn され、wndproc は窓を動かさない。本ハンドラが唯一のライターとして、
-/// [`DraggingState`]＋DragEvent のカーソル座標から生ドラッグ座標を復元し
-/// （[`policy_mapped_position`]）、[`BottomSnapPolicy`] 適用済みの座標を
+/// 分岐は [`Anchored`]（drag／resize が読む単一真実源）で判定する。非 `Free`
+/// （`Bottom` 等）のキャラ窓は `DragConfig { move_window: false }` で spawn され、
+/// wndproc は窓を動かさない。本ハンドラが唯一のライターとして、[`DraggingState`]＋
+/// DragEvent のカーソル座標から生ドラッグ座標を復元し（[`policy_mapped_position`]）、
+/// [`project_anchor`] 適用済み（`Bottom` は [`BottomSnapPolicy`] へ委譲）の座標を
 /// **一度だけ**書く——反映段階で既に正しい座標が確定しているため、v1 の
-/// 「wndproc 移動→事後再釘付け」の毎サイクル振動は原理的に起きない。
-/// モニタ跨ぎ再吸着はポリシーの live 算出が担う。
+/// 「wndproc 移動→事後再釘付け」の毎サイクル振動は原理的に起きない。ドラッグと
+/// リサイズが同一 [`project_anchor`] を通ることで座標系変換を二重化しない（Req1.6）。
+/// モニタ跨ぎ再吸着は射影の live 算出が担う。
 ///
-/// # Free キャラ窓（marker なし・挙動不変）
+/// # Free キャラ窓／`Anchored` 不在（挙動不変・wndproc 委譲）
 ///
-/// `DragConfig { move_window: true }` のまま wndproc レベルで移動済み。
-/// 本ハンドラは wndproc が更新した `WindowPos.position`（物理 px）を読むだけで
-/// 窓を書かない（wndproc の領分）。
+/// `Anchored(Free)`（および安全側フォールバックとして `Anchored` 不在）のキャラ窓は
+/// `DragConfig { move_window: true }` のまま wndproc レベルで移動済み。本ハンドラは
+/// wndproc が更新した `WindowPos.position`（物理 px）を読むだけで窓を書かない
+/// （wndproc の領分）。
 ///
 /// どちらの経路でも、バルーン追従は**確定後のキャラ窓座標**へ
 /// `BalloonFollow.offset` を加算して enqueue する（再スケールなし・U4）。
@@ -160,21 +270,29 @@ pub(crate) fn on_char_drag(
                 return false;
             }
 
-            let pos = if world.get::<BottomSnap>(entity).is_some() {
-                // 単一ライター経路: 生ドラッグ座標→ポリシー適用済み座標を書く
-                let Some(mapped) = policy_mapped_position(world, entity, ev.position) else {
-                    return false;
-                };
-                if !enqueue_window_move(world, entity, mapped.x, mapped.y) {
-                    return false;
+            // 分岐は Anchored（drag／resize が読む単一真実源）で判定する（Req1.6）。
+            // 非 Free → project_anchor 単一ライター／Free・Anchored 不在 → wndproc 委譲
+            // （不在も Free と同じく wndproc へ倒す＝旧「marker 無し＝Free」意味論の保存・安全側）。
+            let anchor = world.get::<Anchored>(entity).map(|a| a.0);
+            let pos = match anchor {
+                Some(anchor) if anchor != Anchor::Free => {
+                    // 単一ライター経路: 生ドラッグ座標→アンカー射影 T 適用済み座標を書く
+                    let Some(mapped) = policy_mapped_position(world, entity, anchor, ev.position)
+                    else {
+                        return false;
+                    };
+                    if !enqueue_window_set_pos(world, entity, mapped.x, mapped.y, None) {
+                        return false;
+                    }
+                    mapped
                 }
-                mapped
-            } else {
-                // Free 経路: wndproc（move_window=true）が移動済みの位置を読むだけ
-                let Some(pos) = world.get::<WindowPos>(entity).and_then(|wp| wp.position) else {
-                    return false;
-                };
-                pos
+                _ => {
+                    // Free・Anchored 不在: wndproc（move_window=true）が移動済みの位置を読むだけ
+                    let Some(pos) = world.get::<WindowPos>(entity).and_then(|wp| wp.position) else {
+                        return false;
+                    };
+                    pos
+                }
             };
 
             follow_balloon(world, entity, pos);
@@ -183,8 +301,8 @@ pub(crate) fn on_char_drag(
     }
 }
 
-/// `OnDragEnd` ハンドラ: BottomSnap キャラ窓の最終カーソル位置へ同写像を適用する
-/// （4.7・DD15 v2 (3)・task 8.2R）。
+/// `OnDragEnd` ハンドラ: 非 Free アンカーのキャラ窓の最終カーソル位置へ同写像を
+/// 適用する（4.7/1.6・DD15 v2 (3)）。分岐は [`Anchored`] で判定する。
 ///
 /// wintf の accumulator は LBUTTONUP で `current_dragging_entity` を先にクリア
 /// するため、最終カーソル位置の DragEvent は配送されない（debug 調査 2026-07-11）。
@@ -196,7 +314,7 @@ pub(crate) fn on_char_drag(
 /// 窓は wndproc の巻き戻しが存在せず、吸着不変量（Y=下端）を満たす位置で終える
 /// のが 4.7 の意図に最も忠実（M1 簡素化・開始位置への復元は将来領分）。
 ///
-/// spawn（task 8.2R）が BottomSnap キャラ窓にのみ結線する。Free 窓・バルーン窓は
+/// spawn が非 Free アンカーのキャラ窓にのみ結線する。Free 窓・バルーン窓は
 /// wndproc が最終位置まで動かし切るため不要。
 pub(crate) fn on_char_drag_end(
     world: &mut World,
@@ -210,13 +328,19 @@ pub(crate) fn on_char_drag_end(
             if ev.target != entity {
                 return false;
             }
-            if world.get::<BottomSnap>(entity).is_none() {
-                return false;
-            }
-            let Some(mapped) = policy_mapped_position(world, entity, ev.position) else {
+            // 非 Free アンカーのキャラ窓のみ最終位置を確定する（Free・Anchored 不在は
+            // wndproc が最終位置まで動かし切るため skip・Req1.6）。
+            let Some(anchor) = world
+                .get::<Anchored>(entity)
+                .map(|a| a.0)
+                .filter(|a| *a != Anchor::Free)
+            else {
                 return false;
             };
-            if !enqueue_window_move(world, entity, mapped.x, mapped.y) {
+            let Some(mapped) = policy_mapped_position(world, entity, anchor, ev.position) else {
+                return false;
+            };
+            if !enqueue_window_set_pos(world, entity, mapped.x, mapped.y, None) {
                 return false;
             }
             follow_balloon(world, entity, mapped);
@@ -225,17 +349,25 @@ pub(crate) fn on_char_drag_end(
     }
 }
 
-/// BottomSnap キャラ窓の「カーソル座標→ポリシー適用済み窓位置」（DD15 v2・8.2R）。
+/// 非 Free アンカーのキャラ窓の「カーソル座標→アンカー射影 T 適用済み窓位置」
+/// （DD15 v2・Req1.6）。`anchor` は呼び出し側が [`Anchored`] から読んだ現在アンカー。
 ///
 /// 生ドラッグ座標（＝move_window=true なら wndproc が書いたであろう位置）を
 /// wndproc と同じ式で復元する: `initial_window_pos + (cursor − drag_start)`。
 /// [`DraggingState`] の `initial_inset` は wintf dispatch が「ドラッグ開始時の
-/// 窓位置」を転記したもの（フィールド名は歴史的経緯・dispatch.rs 参照）。
+/// 窓位置」を転記したもの（フィールド名は歴史的経緯・dispatch.rs 参照）。復元した
+/// 生座標へ [`project_anchor`] を適用する——リサイズ（[`resize_window_to`]）と同一の
+/// 射影 T を通し、座標系変換を二重化しない（Req1.6）。
 ///
 /// `None` は「[`DraggingState`] 不在で生座標を復元できない」場合のみ（実 flow では
 /// dispatch が DragEvent より先に挿入するため起きない・`debug!` の上で no-op）。
-/// 寸法不明・snapshot 不在は [`BottomSnapPolicy`] が identity へ縮退する。
-fn policy_mapped_position(world: &World, entity: Entity, cursor: Point) -> Option<Point> {
+/// 寸法不明・snapshot 不在は [`project_anchor`] が identity へ縮退する。
+fn policy_mapped_position(
+    world: &World,
+    entity: Entity,
+    anchor: Anchor,
+    cursor: Point,
+) -> Option<Point> {
     let Some(ds) = world.get::<DraggingState>(entity) else {
         debug!(
             ?entity,
@@ -257,9 +389,11 @@ fn policy_mapped_position(world: &World, entity: Entity, cursor: Point) -> Optio
             w: s.width,
             h: s.height,
         })
-        // 不在は非正寸法（＝寸法不明）としてポリシーの identity 縮退へ委ねる
+        // 不在は非正寸法（＝寸法不明）として project_anchor の identity 縮退へ委ねる
         .unwrap_or(SizePx { w: 0, h: 0 });
-    let mapped = BottomSnapPolicy.resolve(raw, size, world.get_resource::<MonitorSnapshot>());
+    // drag と resize（resize_window_to）が同一 project_anchor を通ることで座標系変換を
+    // 二重化しない（Req1.6）。bottom は project_anchor 内で BottomSnapPolicy へ委譲。
+    let mapped = project_anchor(anchor, raw, size, world.get_resource::<MonitorSnapshot>());
     Some(Point {
         x: mapped.x,
         y: mapped.y,
@@ -282,11 +416,12 @@ fn follow_balloon(world: &mut World, entity: Entity, pos: Point) {
         "char window position out of virtual-screen range: {pos:?} + {:?}",
         follow.offset
     );
-    enqueue_window_move(
+    enqueue_window_set_pos(
         world,
         follow.balloon,
         pos.x + follow.offset.x,
         pos.y + follow.offset.y,
+        None,
     );
 }
 
@@ -365,7 +500,7 @@ pub(crate) fn on_balloon_drag(
 pub fn move_window_to(world: &mut World, window: Entity, x: i32, y: i32) -> bool {
     let follow = world.get::<BalloonFollow>(window).copied();
 
-    if !enqueue_window_move(world, window, x, y) {
+    if !enqueue_window_set_pos(world, window, x, y, None) {
         return false;
     }
 
@@ -375,25 +510,206 @@ pub fn move_window_to(world: &mut World, window: Entity, x: i32, y: i32) -> bool
             "move target out of virtual-screen range: ({x},{y}) + {:?}",
             follow.offset
         );
-        // バルーン側の失敗（WindowHandle 未付与等）は enqueue_window_move が
+        // バルーン側の失敗（WindowHandle 未付与等）は enqueue_window_set_pos が
         // warn! 済み。対象自身の移動は成立しているため true のまま返す。
-        enqueue_window_move(world, follow.balloon, x + follow.offset.x, y + follow.offset.y);
+        enqueue_window_set_pos(world, follow.balloon, x + follow.offset.x, y + follow.offset.y, None);
     }
 
     true
 }
 
-/// 1 窓ぶんの移動を enqueue する共通経路（物理 px 素通し）。
+/// 単一ライター反映口: 新しい表示サーフェス寸法に対しアンカー射影 T を再適用し、
+/// 確定した position＋size を単一ライター経路で**一度だけ**書く（task 2.4・
+/// Req1.1/1.3/1.7/3.1/3.4＋2.6/3.3）。
+///
+/// `char_window` の現在アンカー（[`Anchored`]＝単一真実源）を読み、[`project_anchor`]
+/// で新 position を導出する——ドラッグ（[`policy_mapped_position`]）と**同一の T** を
+/// 呼び、座標系変換を二重化しない（Req1.6）。`bottom` は `wa.bottom − h'` の再計算、
+/// `snapshot` 不在は `project_anchor` が identity 縮退する。
+///
+/// # 縮退・失敗経路（log-first・silent failure を作らない）
+///
+/// - [`Anchored`] 欠落: char 窓は spawn で必ず付与される＝異常系ゆえ `warn!`＋`false`。
+/// - 非正寸（w≤0 or h≤0）: T を再適用せず現状保持＋`warn!`＋`false`（Req3.4・
+///   [`BottomSnapPolicy`] の非正寸縮退と整合）。
+/// - `WindowPos`／`WindowPos.position` 不在（窓生成前の異常系）: 生位置 `raw` を
+///   導出できないため `warn!`＋`false`（panic しない）。
+/// - べき等（Req3.1）: 導出 `(position, size)` が現 `WindowPos` と同一なら書込を行わず
+///   `false`（冗長な再配置を避ける・正常系ゆえ `debug!`）。
+/// - `WindowHandle` 未付与/対象不在: [`enqueue_window_set_pos`] が `warn!`＋`false`
+///   （Req3.3）。このとき随伴バルーンも動かさない（[`move_window_to`] と同じ流儀）。
+///
+/// # 不変条件（Req1.5/1.7）
+///
+/// 位置・サイズは [`enqueue_window_set_pos`]（`Some(new_size)`）で 1 コマンドだけ
+/// 発行する——`enqueue_window_move` を迂回する新たな bypass 書込を新設せず、単一
+/// ライター規律（bypass ミラー＋Arrangement 同期）を継承する。反映段階で既に確定
+/// 座標のみを書くため、切替・アンカー変更で窓が振動しない。書込成功後は
+/// [`follow_balloon`] が [`BalloonFollow.offset`] を保って随伴させる（Req2.6・
+/// 恒等式 `balloon_pos − char_pos ≡ offset` 維持）。
+#[allow(dead_code)] // 呼び出し側（anchor_changed_system task 2.6・frame resnap シーム）は後続 task の領分
+pub fn resize_window_to(world: &mut World, char_window: Entity, new_size: SizePx) -> bool {
+    // 1. Anchored（drag／resize が読む単一真実源）を読む。char 窓は spawn で必ず
+    //    付与される＝欠落は異常系ゆえ log-first で no-op（silent failure にしない）。
+    let Some(Anchored(anchor)) = world.get::<Anchored>(char_window).copied() else {
+        warn!(
+            entity = ?char_window,
+            "Anchored 未付与（char 窓は spawn で必ず付与）のため resize しない"
+        );
+        return false;
+    };
+
+    // 2. 非正寸ガード（Req3.4）: T を再適用せず現状保持。wa.right−w／wa.bottom−h の
+    //    暴走を先に弾く（BottomSnapPolicy の CW_USEDEFAULT センチネル縮退と整合）。
+    if new_size.w <= 0 || new_size.h <= 0 {
+        warn!(
+            entity = ?char_window,
+            ?new_size,
+            "新しいサーフェス寸法が非正のため T 再適用せず現状保持"
+        );
+        return false;
+    }
+
+    // 3. 現在位置（生位置 raw）と現寸を読む。WindowPos／position 不在（窓生成前の
+    //    異常系）は raw を作れないため安全に no-op（panic しない・log-first）。
+    let (raw, current_size) = {
+        let Some(wp) = world.get::<WindowPos>(char_window) else {
+            warn!(
+                entity = ?char_window,
+                "WindowPos 未付与（窓生成前）のため raw を導出できず resize しない"
+            );
+            return false;
+        };
+        let Some(pos) = wp.position else {
+            warn!(
+                entity = ?char_window,
+                "WindowPos.position 不在（窓生成前）のため raw を導出できず resize しない"
+            );
+            return false;
+        };
+        (PointPx { x: pos.x, y: pos.y }, wp.size)
+    };
+
+    // 新位置 = アンカー射影 T（bottom は wa.bottom−h' 再計算・snapshot 不在は
+    // project_anchor が identity 縮退）。drag と同一 T を呼び二重化しない（Req1.6）。
+    let snapshot = world.get_resource::<MonitorSnapshot>();
+    let new_pos = project_anchor(anchor, raw, new_size, snapshot);
+
+    // 4. べき等 skip（Req3.1）: 導出 (position, size) が現 WindowPos と同一なら書かない
+    //    （冗長な再配置を避ける・こちらは正常系ゆえ debug!）。
+    if new_pos == raw && current_size == Some(SizeI::new(new_size.w, new_size.h)) {
+        debug!(
+            entity = ?char_window,
+            ?new_pos,
+            ?new_size,
+            "導出 position/size が現在値と同一のため書込をスキップ（べき等）"
+        );
+        return false;
+    }
+
+    // 5. 一度書き（Req1.5/1.7）: 位置＋サイズを単一ライター経路で 1 コマンド発行。
+    //    WindowHandle 未付与/不在は enqueue が warn!＋false（Req3.3）——false なら
+    //    随伴バルーンも動かさず false を返す（move_window_to と同じ流儀）。
+    if !enqueue_window_set_pos(world, char_window, new_pos.x, new_pos.y, Some(new_size)) {
+        return false;
+    }
+
+    // 6. 随伴バルーン維持（Req2.6）: 確定後キャラ窓座標＋offset で追従（offset 恒等式維持）。
+    follow_balloon(
+        world,
+        char_window,
+        Point {
+            x: new_pos.x,
+            y: new_pos.y,
+        },
+    );
+
+    true
+}
+
+/// アンカー変化トリガ（Req1.4・consumer 契約のみ・producer=seriko は非所有）。
+///
+/// `Changed<Anchored>` の char 窓それぞれについて、**現在の表示寸法**
+/// （`WindowPos.size`＝新寸ではなく今まさに表示している寸法）を読み、
+/// [`resize_window_to`] を呼んで**新しいアンカー**（変化後の [`Anchored`]）に対応する
+/// 射影 T を再適用する——新しいアンカー辺を work area の対応辺へ合わせる。
+/// アンカー値の解決（`seriko.alignmenttodesktop` 優先度チェーン）と
+/// `\![set,alignmenttodesktop]` の cue routing は上流（parsers／seriko）の領分＝
+/// 本 spec は非所有。本 system は `Anchored` の変化に反応する **consumer** に徹する
+/// （design「System Flows > アンカー変化トリガ」・Req4.2）。schedule への登録（結線）は
+/// main.rs／runtime 側の領分ゆえ、本 task は system の**定義のみ**を持つ
+/// （`create_windows` が window_system.rs で定義のみ・登録は runtime、という repo 慣行）。
+///
+/// # 変更検知の永続性（毎フレーム全マッチしない・Req1.4 の要）
+///
+/// [`SystemState`] を [`Local`] に保持して `last_run` tick を run を跨いで引き継ぐ。
+/// 毎 run で新規 `QueryState` を作ると `last_run` が過去 0 のまま `Changed` が全窓へ
+/// 誤マッチするため不可。[`SystemState::get`] は fetch 後に `last_run` を進めるので、
+/// 次 run 以降は「前回 run 以後に `Anchored` が変わった窓」だけがマッチする。
+/// 初回 run は `SystemState::new` が `last_run` を過去へ置く仕様で全 char 窓が
+/// マッチし得るが、[`resize_window_to`] が同寸・同位置でべき等 skip して吸収する
+/// （design Implementation Notes）。
+///
+/// # 縮退（panic しない・log-first）
+///
+/// `WindowPos.size` 不在／未生成（窓生成前）の窓は skip する（現寸を導出できない）。
+/// アンカー欠落・非正寸・`WindowHandle` 未付与など残りの縮退は [`resize_window_to`]
+/// 側が warn＋no-op で吸収する（Req3.3/3.4・二重に弾かない）。
+///
+/// # Concurrency
+///
+/// UI スレッド・World 排他（`&mut World`）。他 actor は触れない（design State Management）。
+#[allow(dead_code)] // schedule 登録（結線）は main.rs／runtime 側の領分（本 task は定義のみ）
+pub fn anchor_changed_system(
+    world: &mut World,
+    mut state: Local<Option<SystemState<Query<'static, 'static, Entity, Changed<Anchored>>>>>,
+) {
+    // Changed<Anchored> 検知の永続シーム: SystemState を跨 run で使い回し last_run を保つ。
+    let state = state.get_or_insert_with(|| SystemState::new(world));
+    // 変更窓を collect して borrow を即解放してから &mut World ループへ（先例
+    // create_windows の collect→release→&mut World ループを Changed 対応にしたもの）。
+    let changed: Vec<Entity> = state.get(world).iter().collect();
+    for entity in changed {
+        // 現在の表示寸法（新寸ではない）を読む。size 不在／未生成は skip（panic しない）。
+        let Some(size) = world.get::<WindowPos>(entity).and_then(|wp| wp.size) else {
+            continue;
+        };
+        // 現寸で resize_window_to → 現在アンカー（変化後）で project_anchor を再適用。
+        resize_window_to(
+            world,
+            entity,
+            SizePx {
+                w: size.width,
+                h: size.height,
+            },
+        );
+    }
+}
+
+/// 1 窓ぶんの位置（と任意で寸法）を enqueue する共通経路（物理 px 素通し・
+/// 単一ライター・task 2.3 で move 専用から size 対応へ一般化）。
 ///
 /// `WindowHandle` を直接引いて `SetWindowPosCommand` を enqueue し、ECS 側の
 /// `WindowPos.position` を `bypass_change_detection()` で先行反映する。
+///
+/// # size 引数（`None`＝移動専用の後方互換／`Some`＝位置＋寸を一度に反映）
+///
+/// - `None`: 移動専用。flags は `SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE`・
+///   width/height=0 で、`WindowPos.position` のみ bypass ミラーし `WindowPos.size`
+///   は**触らない**（`move_window_to`／drag 経路の従来挙動と完全に同一）。
+/// - `Some(s)`: flags から `SWP_NOSIZE` を外し（＝`SWP_NOZORDER | SWP_NOACTIVATE`）、
+///   `width=s.w`／`height=s.h` を渡す。`WindowPos.position` に加え `WindowPos.size`
+///   を `SizeI::new(s.w, s.h)` で bypass ミラーする（`resize_window_to` の反映口）。
+///
+/// `size.is_some()` で明示分岐して flags/寸法を合成し、`SWP_NOSIZE` の付け外しミスを
+/// 防ぐ（Req1.5：本経路を迂回する第二の bypass 書込経路を新設しない）。
 ///
 /// bypass の理由: 実アプリでは flush 後の `SetWindowPos` が同期発火させる
 /// `WM_WINDOWPOSCHANGED` echo が同値を（同じく bypass で）再書込するため、
 /// ここで `Changed<WindowPos>` を発火させると `apply_window_pos_changes` が
 /// 別フラグの `SetWindowPos` を二重発行してしまう。bypass なら発行は本関数の
 /// 1 コマンドに閉じ、headless World（echo が来ない）でも `WindowPos` が
-/// 期待座標を示す決定論シームになる。
+/// 期待座標・寸法を示す決定論シームになる。
 ///
 /// # Arrangement.offset の直接同期（task 8.3-fix・4.8 実機ブロッカ）
 ///
@@ -408,7 +724,13 @@ pub fn move_window_to(world: &mut World, window: Entity, x: i32, y: i32) -> bool
 /// `GlobalArrangement.bounds` は零寸のため `window_pos_sync_system` の
 /// `width <= 0` ガードが skip し、`SetWindowPos` echo ループにはならない
 /// （donor の DragEnd 同期と同じ性質）。
-fn enqueue_window_move(world: &mut World, window: Entity, x: i32, y: i32) -> bool {
+fn enqueue_window_set_pos(
+    world: &mut World,
+    window: Entity,
+    x: i32,
+    y: i32,
+    size: Option<SizePx>,
+) -> bool {
     let Some(handle) = world.get::<WindowHandle>(window).copied() else {
         warn!(
             entity = ?window,
@@ -418,19 +740,31 @@ fn enqueue_window_move(world: &mut World, window: Entity, x: i32, y: i32) -> boo
         return false;
     };
 
+    // size 有無で flags と width/height を明示分岐（SWP_NOSIZE の付け外しミスを防ぐ）。
+    // None＝移動専用（SWP_NOSIZE 付・後方互換）／Some＝位置＋寸（SWP_NOSIZE 外し）。
+    let (flags, w, h) = match size {
+        Some(s) => (SWP_NOZORDER | SWP_NOACTIVATE, s.w, s.h),
+        None => (SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE, 0, 0),
+    };
+
     SetWindowPosCommand::enqueue(SetWindowPosCommand::new(
         handle.hwnd,
         x,
         y,
-        0,
-        0,
-        SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE,
+        w,
+        h,
+        flags,
         None,
     ));
 
     match world.get_mut::<WindowPos>(window) {
         Some(mut wp) => {
-            wp.bypass_change_detection().position = Some(Point { x, y });
+            let wp = wp.bypass_change_detection();
+            wp.position = Some(Point { x, y });
+            // Some のときのみ寸法もミラー（None は size を触らない＝移動専用の後方互換）
+            if let Some(s) = size {
+                wp.size = Some(SizeI::new(s.w, s.h));
+            }
         }
         None => {
             debug!(
@@ -929,7 +1263,6 @@ mod tests {
 
     use super::{BottomSnapPolicy, DragPositionPolicy, on_char_drag_end};
     use crate::placement::resolver::SizePx;
-    use crate::placement::spawn::BottomSnap;
 
     /// emo2 scope0 実寸のキャラ窓寸法（物理 px）。
     const CHAR_SIZE: SizePx = SizePx { w: 434, h: 687 };
@@ -1002,6 +1335,261 @@ mod tests {
     }
 
     // -------------------------------------------------------------------------
+    // project_anchor（変換 T・task 2.1・4.2/DD15・Req1.1/1.2/2.1-2.5/3.1/3.4/5.4）
+    // 5 アンカー射影の純粋檻: アンカー辺固定・非アンカー軸保持・Bottom 委譲・
+    // Free identity・縮退・モニタ跨ぎ live 算出・べき等の不動点。
+    // 座標・work area 辺は 96 の非倍数を含め、隠れた dpi/96 再スケールの檻とする。
+    // -------------------------------------------------------------------------
+
+    use super::project_anchor;
+    use crate::placement::resolver::Anchor;
+
+    /// 全 4 辺が 96 の非倍数の単一モニタ snapshot（各アンカー辺再計算の再スケール檻）。
+    /// left=53・top=37・right=1877・bottom=1043（いずれも 96 で割り切れない・非零原点）。
+    fn odd_edge_snapshot() -> MonitorSnapshot {
+        MonitorSnapshot {
+            work_areas: vec![rect(53, 37, 1877, 1043)],
+        }
+    }
+
+    /// #1 Bottom: X 保持・Y=wa.bottom−h。既存 `BottomSnapPolicy` へ委譲し再定義しない
+    /// ——同一入力で `BottomSnapPolicy.resolve` と**同値**（再利用の証明・Req1.2/2.1）。
+    #[test]
+    fn project_anchor_bottom_delegates_to_bottom_snap_policy() {
+        let snapshot = odd_edge_snapshot();
+        // 中心 (700+217, 300+343)=(917, 643) は単一モニタ内
+        let raw = PointPx { x: 700, y: 300 };
+        let mapped = project_anchor(Anchor::Bottom, raw, CHAR_SIZE, Some(&snapshot));
+        assert_eq!(mapped, PointPx { x: 700, y: 1043 - 687 }, "X 保持・Y=下端−h");
+        assert_eq!(
+            mapped,
+            BottomSnapPolicy.resolve(raw, CHAR_SIZE, Some(&snapshot)),
+            "Bottom は BottomSnapPolicy と同値（再定義しない）"
+        );
+    }
+
+    /// #1 Top: X 保持・Y=wa.top（96 非倍数の top で再計算を固定・Req2.2）。
+    #[test]
+    fn project_anchor_top_pins_top_edge_and_keeps_x() {
+        let snapshot = odd_edge_snapshot();
+        let raw = PointPx { x: 700, y: 300 };
+        assert_eq!(
+            project_anchor(Anchor::Top, raw, CHAR_SIZE, Some(&snapshot)),
+            PointPx { x: 700, y: 37 }
+        );
+    }
+
+    /// #1 Left: X=wa.left・Y 保持（96 非倍数の left で再計算を固定・Req2.3）。
+    #[test]
+    fn project_anchor_left_pins_left_edge_and_keeps_y() {
+        let snapshot = odd_edge_snapshot();
+        let raw = PointPx { x: 700, y: 300 };
+        assert_eq!(
+            project_anchor(Anchor::Left, raw, CHAR_SIZE, Some(&snapshot)),
+            PointPx { x: 53, y: 300 }
+        );
+    }
+
+    /// #1 Right: X=wa.right−w・Y 保持（96 非倍数の right で再計算を固定・Req2.4）。
+    #[test]
+    fn project_anchor_right_pins_right_edge_and_keeps_y() {
+        let snapshot = odd_edge_snapshot();
+        let raw = PointPx { x: 700, y: 300 };
+        assert_eq!(
+            project_anchor(Anchor::Right, raw, CHAR_SIZE, Some(&snapshot)),
+            PointPx { x: 1877 - 434, y: 300 }
+        );
+    }
+
+    /// #1/#2 Free: raw 素通し（identity・position 再計算なし・Req2.5）。snapshot 有無・
+    /// 寸法（非正含む）を問わず常に identity。
+    #[test]
+    fn project_anchor_free_is_always_identity() {
+        let snapshot = odd_edge_snapshot();
+        let raw = PointPx { x: 700, y: 300 };
+        assert_eq!(
+            project_anchor(Anchor::Free, raw, CHAR_SIZE, Some(&snapshot)),
+            raw,
+            "snapshot 有・正寸でも Free は identity"
+        );
+        assert_eq!(
+            project_anchor(Anchor::Free, raw, CHAR_SIZE, None),
+            raw,
+            "snapshot 不在でも identity"
+        );
+        assert_eq!(
+            project_anchor(Anchor::Free, raw, SizePx { w: 0, h: 0 }, Some(&snapshot)),
+            raw,
+            "非正寸でも Free は identity（寸法を問わない）"
+        );
+        assert_eq!(
+            project_anchor(
+                Anchor::Free,
+                raw,
+                SizePx {
+                    w: i32::MIN,
+                    h: i32::MIN,
+                },
+                None,
+            ),
+            raw,
+        );
+    }
+
+    /// #2 縮退（Req3.4）: Bottom/Top/Left/Right とも snapshot 不在(None)/空・非正寸
+    /// （0・負・i32::MIN）で identity 縮退（`BottomSnapPolicy` の非正寸縮退と整合・
+    /// `wa.right−w`／`wa.bottom−h` の暴走を先に弾く檻・panic しない）。
+    #[test]
+    fn project_anchor_degrades_to_identity_on_missing_snapshot_or_nonpositive_size() {
+        let raw = PointPx { x: 700, y: 300 };
+        let empty = MonitorSnapshot { work_areas: vec![] };
+        let snapshot = odd_edge_snapshot();
+        for anchor in [Anchor::Bottom, Anchor::Top, Anchor::Left, Anchor::Right] {
+            assert_eq!(
+                project_anchor(anchor, raw, CHAR_SIZE, None),
+                raw,
+                "{anchor:?}: snapshot 不在は identity"
+            );
+            assert_eq!(
+                project_anchor(anchor, raw, CHAR_SIZE, Some(&empty)),
+                raw,
+                "{anchor:?}: 空 snapshot は identity"
+            );
+            for size in [
+                SizePx { w: 0, h: 687 },
+                SizePx { w: 434, h: 0 },
+                SizePx { w: -434, h: -687 },
+                SizePx {
+                    w: i32::MIN,
+                    h: i32::MIN,
+                },
+            ] {
+                assert_eq!(
+                    project_anchor(anchor, raw, size, Some(&snapshot)),
+                    raw,
+                    "{anchor:?}: 非正寸 {size:?} は identity"
+                );
+            }
+        }
+    }
+
+    /// #3 モニタ跨ぎ（Req1.1/2.4）: Right/Bottom は raw 位置の窓中心が属するモニタの
+    /// 対応辺へ live 算出する（跨いだ先の右端／下端へ再吸着）。下端・右端が異なる
+    /// 2 面で固定する。
+    #[test]
+    fn project_anchor_resolves_per_crossed_monitor() {
+        let snapshot = MonitorSnapshot {
+            work_areas: vec![
+                rect(0, 0, 1920, 1040),       // primary（右端 1920・下端 1040）
+                rect(1920, -213, 4477, 1227), // 右モニタ（右端 4477・下端 1227・96 非倍数）
+            ],
+        };
+        // 中心 (700+217, 300+343)=(917, 643) → primary
+        let raw_primary = PointPx { x: 700, y: 300 };
+        // 中心 (2700+217, 300+343)=(2917, 643) → 右モニタ
+        let raw_right = PointPx { x: 2700, y: 300 };
+
+        // Right: 属するモニタの右端で live 算出
+        assert_eq!(
+            project_anchor(Anchor::Right, raw_primary, CHAR_SIZE, Some(&snapshot)),
+            PointPx { x: 1920 - 434, y: 300 },
+            "primary 帰属 → primary 右端"
+        );
+        assert_eq!(
+            project_anchor(Anchor::Right, raw_right, CHAR_SIZE, Some(&snapshot)),
+            PointPx { x: 4477 - 434, y: 300 },
+            "右モニタ帰属 → 右モニタ右端（跨ぎ再吸着）"
+        );
+        // Bottom: 属するモニタの下端で live 算出
+        assert_eq!(
+            project_anchor(Anchor::Bottom, raw_right, CHAR_SIZE, Some(&snapshot)),
+            PointPx { x: 2700, y: 1227 - 687 },
+            "右モニタ帰属 → 右モニタ下端"
+        );
+        assert_eq!(
+            project_anchor(Anchor::Bottom, raw_primary, CHAR_SIZE, Some(&snapshot)),
+            PointPx { x: 700, y: 1040 - 687 },
+            "primary 帰属 → primary 下端"
+        );
+    }
+
+    /// #5 べき等の不動点（Req3.1）: 既にアンカー辺一致の位置＋同寸で project_anchor が
+    /// 同値を返す（drag/resize の再適用が振動を生まない基礎）。加えて T∘T = T
+    /// （二重適用同値）を Bottom/Right で固定する。
+    #[test]
+    fn project_anchor_is_idempotent_at_anchor_aligned_positions() {
+        let snapshot = odd_edge_snapshot(); // rect(53, 37, 1877, 1043)
+        // 各アンカー辺に既に一致する位置は不動点（中心はいずれも単一モニタ内）
+        let bottom_fixed = PointPx { x: 700, y: 1043 - 687 };
+        assert_eq!(
+            project_anchor(Anchor::Bottom, bottom_fixed, CHAR_SIZE, Some(&snapshot)),
+            bottom_fixed,
+            "Bottom 不動点"
+        );
+        let top_fixed = PointPx { x: 700, y: 37 };
+        assert_eq!(
+            project_anchor(Anchor::Top, top_fixed, CHAR_SIZE, Some(&snapshot)),
+            top_fixed,
+            "Top 不動点"
+        );
+        let left_fixed = PointPx { x: 53, y: 300 };
+        assert_eq!(
+            project_anchor(Anchor::Left, left_fixed, CHAR_SIZE, Some(&snapshot)),
+            left_fixed,
+            "Left 不動点"
+        );
+        let right_fixed = PointPx { x: 1877 - 434, y: 300 };
+        assert_eq!(
+            project_anchor(Anchor::Right, right_fixed, CHAR_SIZE, Some(&snapshot)),
+            right_fixed,
+            "Right 不動点"
+        );
+
+        // T∘T = T: 任意の生位置を一度射影した結果に再射影しても同値
+        for anchor in [Anchor::Bottom, Anchor::Right] {
+            let once = project_anchor(anchor, PointPx { x: 700, y: 999 }, CHAR_SIZE, Some(&snapshot));
+            assert_eq!(
+                project_anchor(anchor, once, CHAR_SIZE, Some(&snapshot)),
+                once,
+                "{anchor:?}: T∘T = T（べき等）"
+            );
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    // Anchored（Component・task 2.2・Req4.2/1.4）
+    //
+    // 解決済みアンカーを窓 entity へ 1 つだけ紐づけ、drag／resize が読む単一の
+    // 真実源として付与・読み出しできることを固定する（表現のみ）。spawn 時付与
+    // （task 3.1）・`Changed<Anchored>` 反応 system（task 2.6）・`BottomSnap`→
+    // `Anchored` 移行（task 2.7）は後続 task の領分ゆえ先取りしない。
+    // -------------------------------------------------------------------------
+
+    use super::Anchored;
+
+    /// 観測可能な完了条件（4.2/1.4）: 任意の窓 entity へ 5 値アンカーのうち任意の
+    /// 1 つを付与し、`world.get::<Anchored>()` で読み出せる。付け替えると読み出しも
+    /// 変わる＝単一値を保持する（drag／resize が読む単一真実源・二重格納しない）。
+    #[test]
+    fn anchored_component_attaches_and_reads_back_on_window_entity() {
+        let mut world = World::new();
+
+        // 5 値のうち任意の 1 つ（Left）を窓 entity へ付与して読み出せる
+        let e = world
+            .spawn((fake_handle(0x1000), Anchored(Anchor::Left)))
+            .id();
+        assert_eq!(world.get::<Anchored>(e), Some(&Anchored(Anchor::Left)));
+
+        // 別 anchor（Bottom）でも 1 件確認＝「5 値のうち任意の 1 つを保持できる」
+        let e2 = world.spawn(Anchored(Anchor::Bottom)).id();
+        assert_eq!(world.get::<Anchored>(e2), Some(&Anchored(Anchor::Bottom)));
+
+        // 付け替えたら読み出しも変わる（単一値の保持・格納は 1 つだけ）
+        world.entity_mut(e).insert(Anchored(Anchor::Top));
+        assert_eq!(world.get::<Anchored>(e), Some(&Anchored(Anchor::Top)));
+    }
+
+    // -------------------------------------------------------------------------
     // bottom 吸着ドラッグ（task 8.2R・4.7・DD15 v2: 単一ライター）
     //
     // BottomSnap キャラ窓は DragConfig{move_window:false}＝wndproc は窓を動かさず、
@@ -1064,7 +1652,7 @@ mod tests {
             .spawn((
                 fake_handle(0x1000),
                 window_pos_sized(1207, 356, 434, 687), // 釘付け済み初期位置
-                BottomSnap,
+                Anchored(Anchor::Bottom),
                 dragging_state((1207, 356), start),
             ))
             .id();
@@ -1085,6 +1673,47 @@ mod tests {
         }
     }
 
+    /// (b') 非 Bottom アンカーの drag 配線存在チェック（Req1.6・design Integration
+    /// Tests #8 末尾・[[test-only-decision-branches-not-proven-wiring]] の「一度」）:
+    /// `Anchored(Left)` 窓のドラッグで X=`wa.left` 固定・Y 保持（縦自由）になる。
+    ///
+    /// これは `on_char_drag` の drag 配線が**実 `Anchored.0`（Left）を `project_anchor`
+    /// へ転送している**証拠であり、`Anchor::Bottom` をハードコードしていないことを
+    /// 弁別する檻——もし Bottom 決め打ちなら X=raw.x（≠wa.left）・Y=wa.bottom−h
+    /// （≠raw.y）となって落ちる。期待 `(wa.left, raw.y)` と Bottom 誤配線の
+    /// `(raw.x, wa.bottom−h)` が両軸とも全く異なる座標になるよう値を選ぶ。Top/Right
+    /// の drag は同一配線の再確認ゆえ足さない（proven-wiring 過剰檻の回避）。
+    #[test]
+    fn on_char_drag_left_anchor_pins_left_edge_and_keeps_y() {
+        let mut world = World::new();
+        // 96 非倍数の left=53・bottom=1043・非零原点（dpi/96 再スケール混入の檻）
+        world.insert_resource(odd_edge_snapshot()); // rect(53, 37, 1877, 1043)
+        let start = (1400, 600);
+        // 初期窓位置＋カーソル差分で生ドラッグ座標 raw を復元（policy_mapped_position と同式）:
+        // raw.x = 700 + (1500−1400) = 800／raw.y = 300 + (917−600) = 617
+        let window = world
+            .spawn((
+                fake_handle(0x1000),
+                window_pos_sized(700, 300, 434, 687),
+                Anchored(Anchor::Left),
+                dragging_state((700, 300), start),
+            ))
+            .id();
+
+        let ev = Phase::Bubble(drag_event_at(window, start, (1500, 917)));
+        // donor 同様イベントは消費しない（伝播続行＝false）
+        assert!(!on_char_drag(&mut world, window, window, &ev));
+
+        // Left（左端固定・縦自由）: X=wa.left=53・Y=raw.y=617。もし配線が Bottom を
+        // ハードコードしていたら (raw.x=800, wa.bottom−h=1043−687=356) となり、両軸とも
+        // 全く異なる座標で落ちる（wa.left 53 ≠ raw.x 800／wa.bottom−h 356 ≠ raw.y 617）。
+        assert_eq!(
+            position_of(&world, window),
+            Point { x: 53, y: 617 },
+            "実 Anchored.0=Left を転送: X=wa.left 固定・Y=raw.y 保持（Bottom 決め打ちなら落ちる）"
+        );
+    }
+
     /// (c) モニタ跨ぎ: 生ドラッグ位置の窓中心が隣モニタへ移ったら、跨いだ先の
     /// work area 下端へ再吸着し、戻れば元モニタの下端へ戻る（live 算出・4.7）。
     #[test]
@@ -1101,7 +1730,7 @@ mod tests {
             .spawn((
                 fake_handle(0x1000),
                 window_pos_sized(1400, 353, 434, 687), // primary の下端に釘付け済み
-                BottomSnap,
+                Anchored(Anchor::Bottom),
                 dragging_state((1400, 353), start),
             ))
             .id();
@@ -1129,9 +1758,9 @@ mod tests {
         );
     }
 
-    /// (d) Free 窓（BottomSnap なし＝move_window=true）は wndproc 委譲のまま:
+    /// (d) Free 窓（`Anchored(Free)`＝move_window=true）は wndproc 委譲のまま:
     /// ハンドラはキャラ窓を書かず、DraggingState があってもポリシー写像を使わない
-    /// （wndproc 更新済み WindowPos 基準でバルーン追従のみ・挙動不変・4.7）。
+    /// （wndproc 更新済み WindowPos 基準でバルーン追従のみ・挙動不変・4.7/Req1.6）。
     #[test]
     fn on_char_drag_free_window_stays_wndproc_delegated() {
         let mut world = World::new();
@@ -1144,6 +1773,7 @@ mod tests {
             .spawn((
                 fake_handle(0x1000),
                 window_pos_sized(1207, 217, 434, 687), // wndproc がドラッグ中に更新した位置
+                Anchored(Anchor::Free),
                 BalloonFollow { balloon, offset },
                 // DraggingState が居ても free 経路は写像を使わない檻（実 flow でも挿入される）
                 dragging_state((999, 888), (0, 0)),
@@ -1154,6 +1784,42 @@ mod tests {
         assert!(!on_char_drag(&mut world, window, window, &ev));
 
         // キャラ窓は不動（wndproc の領分）・バルーンは WindowPos 基準で追従
+        assert_eq!(position_of(&world, window), Point { x: 1207, y: 217 });
+        assert_eq!(
+            position_of(&world, balloon),
+            Point {
+                x: 1207 + offset.x,
+                y: 217 + offset.y
+            }
+        );
+    }
+
+    /// (d') `Anchored` 不在（安全側フォールバック・task 2.7 の新規判断分岐）: marker が
+    /// 一切無い窓は Free と同じく wndproc 委譲へ倒す——DraggingState が居ても単一ライター
+    /// 写像を走らせず、キャラ窓を書かない（旧「marker 無し＝Free」意味論の保存・Req1.6）。
+    #[test]
+    fn on_char_drag_without_anchored_stays_wndproc_delegated() {
+        let mut world = World::new();
+        world.insert_resource(single_monitor_snapshot());
+        let balloon = world
+            .spawn((fake_handle(0x2000), window_pos_at(0, 0)))
+            .id();
+        let offset = PointPx { x: 498, y: -37 };
+        let start = (1400, 600);
+        let window = world
+            .spawn((
+                fake_handle(0x1000),
+                window_pos_sized(1207, 217, 434, 687), // wndproc がドラッグ中に更新した位置
+                // Anchored は付けない（None）——DraggingState は実 flow 同様に挿入される
+                BalloonFollow { balloon, offset },
+                dragging_state((999, 888), start),
+            ))
+            .id();
+
+        let ev = Phase::Bubble(drag_event_at(window, start, (1601, 113)));
+        assert!(!on_char_drag(&mut world, window, window, &ev));
+
+        // 単一ライター写像は走らず、キャラ窓は wndproc 更新位置のまま不動
         assert_eq!(position_of(&world, window), Point { x: 1207, y: 217 });
         assert_eq!(
             position_of(&world, balloon),
@@ -1179,7 +1845,7 @@ mod tests {
             .spawn((
                 fake_handle(0x1000),
                 window_pos_sized(1207, 356, 434, 687),
-                BottomSnap,
+                Anchored(Anchor::Bottom),
                 BalloonFollow { balloon, offset },
                 dragging_state((1207, 356), start),
             ))
@@ -1217,7 +1883,7 @@ mod tests {
                 fake_handle(0x1000),
                 // 「最後に配送された DragEvent 時点」の位置を模す（最終位置とはずれている）
                 window_pos_sized(1250, 356, 434, 687),
-                BottomSnap,
+                Anchored(Anchor::Bottom),
                 BalloonFollow { balloon, offset },
                 // OnDragEnd 配送時点では DraggingState はまだ生きている（dispatch.rs は
                 // ハンドラ配送**後**に remove する）——実 flow 準拠
@@ -1249,7 +1915,7 @@ mod tests {
             .spawn((
                 fake_handle(0x1000),
                 window_pos_sized(1250, 356, 434, 687),
-                BottomSnap,
+                Anchored(Anchor::Bottom),
                 dragging_state((1207, 356), start),
             ))
             .id();
@@ -1275,7 +1941,7 @@ mod tests {
             .spawn((
                 fake_handle(0x1000),
                 window_pos_sized(1207, 356, 434, 687),
-                BottomSnap,
+                Anchored(Anchor::Bottom),
                 BalloonFollow {
                     balloon,
                     offset: initial,
@@ -1316,7 +1982,7 @@ mod tests {
             .spawn((
                 fake_handle(0x1000),
                 window_pos_sized(1207, 356, 434, 687),
-                BottomSnap,
+                Anchored(Anchor::Bottom),
                 BalloonFollow { balloon, offset },
                 dragging_state((1207, 356), start),
             ))
@@ -1351,7 +2017,7 @@ mod tests {
             .spawn((
                 fake_handle(0x1000),
                 wp,
-                BottomSnap,
+                Anchored(Anchor::Bottom),
                 dragging_state((1207, 356), start),
             ))
             .id();
@@ -1364,7 +2030,7 @@ mod tests {
             .spawn((
                 fake_handle(0x2000),
                 window_pos_at(1207, 356),
-                BottomSnap,
+                Anchored(Anchor::Bottom),
                 dragging_state((1207, 356), start),
             ))
             .id();
@@ -1387,7 +2053,7 @@ mod tests {
             .spawn((
                 fake_handle(0x1000),
                 window_pos_sized(1207, 356, 434, 687),
-                BottomSnap,
+                Anchored(Anchor::Bottom),
                 BalloonFollow {
                     balloon,
                     offset: PointPx { x: 11, y: 22 },
@@ -1535,7 +2201,7 @@ mod tests {
             .spawn((
                 fake_handle(0x1000),
                 window_pos_sized(1207, 356, 434, 687),
-                BottomSnap,
+                Anchored(Anchor::Bottom),
                 BalloonFollow {
                     balloon,
                     offset: initial,
@@ -1680,7 +2346,7 @@ mod tests {
     // -------------------------------------------------------------------------
     // Arrangement.offset 同期（task 8.3-fix・4.8 実機ブロッカ）
     //
-    // enqueue_window_move は WindowPos を bypass_change_detection() で書くため
+    // enqueue_window_set_pos は WindowPos を bypass_change_detection() で書くため
     // Changed<WindowPos> が発火せず、wintf の
     // sync_window_arrangement_from_window_pos は走らない。同期を怠ると
     // GlobalArrangement（αマスクヒットテストの境界）が spawn 位置に取り残され、
@@ -1729,7 +2395,7 @@ mod tests {
                 fake_handle(0x1000),
                 window_pos_sized(1207, 356, 434, 687),
                 arrangement_at(1207.0, 356.0),
-                BottomSnap,
+                Anchored(Anchor::Bottom),
                 BalloonFollow { balloon, offset },
                 dragging_state((1207, 356), start),
             ))
@@ -1816,5 +2482,598 @@ mod tests {
             arrangement_offset_of(&world, window),
             Offset { x: 1531.0, y: 883.0 }
         );
+    }
+
+    // -------------------------------------------------------------------------
+    // enqueue_window_set_pos（size 対応一般化・task 2.3・Req1.5/3.3・
+    // design Testing Strategy > Integration Tests #5）
+    //
+    // 既存 move 専用発行口の一般化。`None` は移動専用の後方互換（position のみ
+    // ミラー・size 不変・SWP_NOSIZE 継続）、`Some` は位置＋寸を一度に反映
+    // （WindowPos.size も bypass ミラー）。観測境界は `WindowPos.position`／
+    // `WindowPos.size` のミラー——`SetWindowPosCommand` キューは private TLS で
+    // flush せず flags/width/height を覗けないため（design Validation の指定）。
+    // 座標・寸法は 96 の非倍数を使い、隠れた dpi/96 再スケールの檻とする。
+    // -------------------------------------------------------------------------
+
+    use super::enqueue_window_set_pos;
+
+    /// entity の WindowPos.size を読む（未設定は panic で検出）。
+    fn size_of(world: &World, entity: Entity) -> SizeI {
+        world
+            .get::<WindowPos>(entity)
+            .expect("WindowPos があるはず")
+            .size
+            .expect("size があるはず")
+    }
+
+    /// `None`（後方互換・移動専用）: position のみ更新し size は触らない
+    /// （既存移動専用挙動＝SWP_NOSIZE 継続の観測境界）。
+    #[test]
+    fn enqueue_window_set_pos_none_updates_position_leaves_size() {
+        let mut world = World::new();
+        let window = world
+            .spawn((fake_handle(0x1234), window_pos_sized(10, 20, 434, 687)))
+            .id();
+
+        assert!(enqueue_window_set_pos(&mut world, window, 1531, 883, None));
+        assert_eq!(position_of(&world, window), Point { x: 1531, y: 883 });
+        // size は不変（移動専用＝寸法を書かない）
+        assert_eq!(size_of(&world, window), SizeI::new(434, 687));
+    }
+
+    /// `Some`: 位置と寸法の**双方**が更新される（WindowPos.size = SizeI::new(w,h)）。
+    #[test]
+    fn enqueue_window_set_pos_some_updates_position_and_size() {
+        let mut world = World::new();
+        let window = world
+            .spawn((fake_handle(0x1234), window_pos_sized(10, 20, 434, 687)))
+            .id();
+
+        assert!(enqueue_window_set_pos(
+            &mut world,
+            window,
+            907,
+            1201,
+            Some(SizePx { w: 517, h: 823 }),
+        ));
+        assert_eq!(position_of(&world, window), Point { x: 907, y: 1201 });
+        assert_eq!(size_of(&world, window), SizeI::new(517, 823));
+    }
+
+    /// 不在/未付与（Req3.3）: `WindowHandle` 無し entity は `false`＋位置/寸法不変
+    /// （warn no-op・`Some` 経路でも既存 warn 経路を継承）。
+    #[test]
+    fn enqueue_window_set_pos_without_handle_returns_false_and_leaves_state() {
+        let mut world = World::new();
+        let window = world.spawn(window_pos_sized(10, 20, 434, 687)).id();
+
+        assert!(!enqueue_window_set_pos(
+            &mut world,
+            window,
+            907,
+            1201,
+            Some(SizePx { w: 517, h: 823 }),
+        ));
+        assert_eq!(position_of(&world, window), Point { x: 10, y: 20 });
+        assert_eq!(size_of(&world, window), SizeI::new(434, 687));
+    }
+
+    // -------------------------------------------------------------------------
+    // resize_window_to（単一ライター反映口・task 2.4・
+    // Req1.1/1.3/1.7/3.1/3.4＋2.6/3.3・design Integration Tests #1・#4 一部）
+    //
+    // 新しい表示寸法へアンカー射影 T を再適用し、確定 position＋size を単一ライター
+    // 経路で一度だけ書く（bottom は wa.bottom−h' 再計算）。観測境界は headless World
+    // （偽 HWND）の WindowPos.position／WindowPos.size ミラー——SetWindowPosCommand
+    // キューは private TLS で flush せず flags/width/height を覗けないため。縮退
+    // （べき等・非正寸・不在・Anchored 欠落）は false＋状態不変で固定する。座標・
+    // 寸法は 96 の非倍数を使い、隠れた dpi/96 再スケールの檻とする。
+    // -------------------------------------------------------------------------
+
+    use super::resize_window_to;
+
+    /// #1 一度書き＋re-snap（Req1.1/1.3/1.7/2.1）: `Anchored(Bottom)` の char 窓を
+    /// 新寸へ resize すると、`WindowPos.size` が新寸・`position.y` が `wa.bottom − h'`
+    /// （X 保持）へ更新され `true`。下端・寸法とも 96 非倍数で dpi/96 再スケール混入の檻。
+    #[test]
+    fn resize_window_to_bottom_resnaps_size_and_position_once() {
+        let mut world = World::new();
+        world.insert_resource(single_monitor_snapshot()); // 下端 1043
+        let window = world
+            .spawn((
+                fake_handle(0x1000),
+                window_pos_sized(731, 356, 434, 687), // 旧寸で下端釘付け済み
+                Anchored(Anchor::Bottom),
+            ))
+            .id();
+
+        // 新寸 (517×823・いずれも 96 非倍数): Y=1043−823=220・X=731 保持
+        assert!(resize_window_to(&mut world, window, SizePx { w: 517, h: 823 }));
+        assert_eq!(
+            position_of(&world, window),
+            Point {
+                x: 731,
+                y: 1043 - 823
+            },
+            "X 保持・Y=wa.bottom−h'（bottom 再計算）"
+        );
+        assert_eq!(size_of(&world, window), SizeI::new(517, 823));
+    }
+
+    /// #4 べき等 skip（Req3.1）: 既に射影済み位置＋同寸の窓へ同寸 resize すると、
+    /// 書込なし・`false`・状態不変（冗長な再配置を避ける）。
+    #[test]
+    fn resize_window_to_is_idempotent_on_same_size_and_position() {
+        let mut world = World::new();
+        world.insert_resource(single_monitor_snapshot()); // 下端 1043・Y=1043−687=356
+        let window = world
+            .spawn((
+                fake_handle(0x1000),
+                window_pos_sized(731, 356, 434, 687), // 既に bottom 射影済み
+                Anchored(Anchor::Bottom),
+            ))
+            .id();
+
+        // 同寸 → 導出 (731,356)＋(434,687) は現在値と同一 → 書込なし・false
+        assert!(!resize_window_to(&mut world, window, SizePx { w: 434, h: 687 }));
+        assert_eq!(position_of(&world, window), Point { x: 731, y: 356 });
+        assert_eq!(size_of(&world, window), SizeI::new(434, 687));
+    }
+
+    /// #4 非正寸縮退（Req3.4）: w≤0 or h≤0 は T 再適用せず `false`・位置/寸不変
+    /// （warn・`BottomSnapPolicy` の非正寸縮退と整合）。
+    #[test]
+    fn resize_window_to_nonpositive_size_holds_state() {
+        let mut world = World::new();
+        world.insert_resource(single_monitor_snapshot());
+        let window = world
+            .spawn((
+                fake_handle(0x1000),
+                window_pos_sized(731, 356, 434, 687),
+                Anchored(Anchor::Bottom),
+            ))
+            .id();
+
+        for bad in [
+            SizePx { w: 0, h: 823 },
+            SizePx { w: 517, h: 0 },
+            SizePx { w: -517, h: -823 },
+        ] {
+            assert!(
+                !resize_window_to(&mut world, window, bad),
+                "{bad:?}: 非正寸は false"
+            );
+            assert_eq!(position_of(&world, window), Point { x: 731, y: 356 });
+            assert_eq!(size_of(&world, window), SizeI::new(434, 687));
+        }
+    }
+
+    /// #4 不在/未付与（Req3.3）: `WindowHandle` 未付与の char 窓は `false`・状態不変
+    /// （`enqueue_window_set_pos` の warn no-op を継承・随伴バルーンも動かさない）。
+    #[test]
+    fn resize_window_to_without_handle_returns_false_and_leaves_state() {
+        let mut world = World::new();
+        world.insert_resource(single_monitor_snapshot());
+        let window = world
+            .spawn((
+                // WindowHandle なし（窓生成前）
+                window_pos_sized(731, 356, 434, 687),
+                Anchored(Anchor::Bottom),
+            ))
+            .id();
+
+        assert!(!resize_window_to(&mut world, window, SizePx { w: 517, h: 823 }));
+        assert_eq!(position_of(&world, window), Point { x: 731, y: 356 });
+        assert_eq!(size_of(&world, window), SizeI::new(434, 687));
+    }
+
+    /// #4 Anchored 欠落: 単一真実源 `Anchored` 未付与の窓は `false`・状態不変
+    /// （char 窓は spawn で必ず付与＝異常系・warn no-op）。
+    #[test]
+    fn resize_window_to_without_anchored_returns_false_and_leaves_state() {
+        let mut world = World::new();
+        world.insert_resource(single_monitor_snapshot());
+        let window = world
+            .spawn((
+                fake_handle(0x1000),
+                window_pos_sized(731, 356, 434, 687),
+                // Anchored なし
+            ))
+            .id();
+
+        assert!(!resize_window_to(&mut world, window, SizePx { w: 517, h: 823 }));
+        assert_eq!(position_of(&world, window), Point { x: 731, y: 356 });
+        assert_eq!(size_of(&world, window), SizeI::new(434, 687));
+    }
+
+    /// #1 随伴バルーン維持（Req2.6）: `BalloonFollow` 付き char 窓を resize すると、
+    /// バルーンが `new_char_pos + offset` へ随伴し `balloon_pos − char_pos ≡ offset` が
+    /// 維持される（offset を破壊しない）。
+    #[test]
+    fn resize_window_to_preserves_balloon_follow_offset() {
+        let mut world = World::new();
+        world.insert_resource(single_monitor_snapshot()); // 下端 1043
+        let balloon = world
+            .spawn((fake_handle(0x2000), window_pos_at(0, 0)))
+            .id();
+        let offset = PointPx { x: -412, y: -25 };
+        let window = world
+            .spawn((
+                fake_handle(0x1000),
+                window_pos_sized(731, 356, 434, 687),
+                Anchored(Anchor::Bottom),
+                BalloonFollow { balloon, offset },
+            ))
+            .id();
+
+        // 新寸 (517×823) → char (731, 220)・balloon (731−412, 220−25)
+        assert!(resize_window_to(&mut world, window, SizePx { w: 517, h: 823 }));
+        let char_pos = position_of(&world, window);
+        let balloon_pos = position_of(&world, balloon);
+        assert_eq!(char_pos, Point { x: 731, y: 1043 - 823 });
+        assert_eq!(
+            balloon_pos,
+            Point {
+                x: 731 + offset.x,
+                y: (1043 - 823) + offset.y
+            }
+        );
+        // offset 恒等式（balloon_pos − char_pos ≡ offset）の維持
+        assert_eq!(balloon_pos.x - char_pos.x, offset.x);
+        assert_eq!(balloon_pos.y - char_pos.y, offset.y);
+    }
+
+    // -------------------------------------------------------------------------
+    // resize_window_to 5 アンカー統合網羅（task 2.5・テスト固定タスク・
+    // Req1.1/2.1-2.6/3.1/3.3/3.4・design Integration Tests #2・#3・#4）
+    //
+    // task 2.4 が Bottom で押さえた「一度書き＋re-snap／べき等／非正寸／不在／
+    // Anchored 欠落／随伴バルーン維持」を、残る Top/Left/Right/Free へ拡張する。
+    // resize_window_to 本体は 2.4 で完成済み＝本群は「既存配線が 5 アンカーで
+    // 正しく `Anchored.0` を転送している（非 Bottom を `Anchor::Bottom` へ
+    // ハードコードしていない）」ことを固定する回帰檻（非 Bottom 配線バグ＝
+    // 2.4 エスケープの捕捉）。
+    //
+    // 全辺 96 非倍数の odd_edge_snapshot（rect(53,37,1877,1043)）で各アンカー辺の
+    // 再計算を dpi/96 再スケール混入の檻とし、各アンカーで「固定辺の座標」と
+    // 「非アンカー軸の保持」を両方 assert する（Top↔Bottom は Y・Left↔Right は X が
+    // 合わず落ちる取り違え耐性）。
+    // -------------------------------------------------------------------------
+
+    /// #2 Top resize（Req2.2）: `Anchored(Top)` を新寸へ resize すると `WindowPos.size`
+    /// 新寸・`position.y = wa.top`（上端固定）・`position.x` 保持で `true`。
+    /// Bottom と取り違えれば Y が `wa.bottom−h'` になって落ちる（辺取り違え耐性）。
+    #[test]
+    fn resize_window_to_top_pins_top_edge_and_keeps_x() {
+        let mut world = World::new();
+        world.insert_resource(odd_edge_snapshot()); // rect(53, 37, 1877, 1043)
+        let window = world
+            .spawn((
+                fake_handle(0x1000),
+                window_pos_sized(731, 500, 434, 687),
+                Anchored(Anchor::Top),
+            ))
+            .id();
+
+        // 新寸 (517×823・いずれも 96 非倍数): Y=wa.top=37・X=731 保持
+        assert!(resize_window_to(&mut world, window, SizePx { w: 517, h: 823 }));
+        assert_eq!(
+            position_of(&world, window),
+            Point { x: 731, y: 37 },
+            "X 保持・Y=wa.top（上端固定・Bottom と取り違えたら 1043−823 で落ちる）"
+        );
+        assert_eq!(size_of(&world, window), SizeI::new(517, 823));
+    }
+
+    /// #2 Left resize（Req2.3）: `Anchored(Left)` を新寸へ resize すると `WindowPos.size`
+    /// 新寸・`position.x = wa.left`（左端固定）・`position.y` 保持で `true`。
+    /// Right と取り違えれば X が `wa.right−w'` になって落ちる（辺取り違え耐性）。
+    #[test]
+    fn resize_window_to_left_pins_left_edge_and_keeps_y() {
+        let mut world = World::new();
+        world.insert_resource(odd_edge_snapshot()); // rect(53, 37, 1877, 1043)
+        let window = world
+            .spawn((
+                fake_handle(0x1000),
+                window_pos_sized(731, 500, 434, 687),
+                Anchored(Anchor::Left),
+            ))
+            .id();
+
+        // 新寸 (517×823): X=wa.left=53・Y=500 保持
+        assert!(resize_window_to(&mut world, window, SizePx { w: 517, h: 823 }));
+        assert_eq!(
+            position_of(&world, window),
+            Point { x: 53, y: 500 },
+            "X=wa.left（左端固定・Right と取り違えたら 1877−517 で落ちる）・Y 保持"
+        );
+        assert_eq!(size_of(&world, window), SizeI::new(517, 823));
+    }
+
+    /// #2 Right resize（Req2.4）: `Anchored(Right)` を新寸へ resize すると `WindowPos.size`
+    /// 新寸・`position.x = wa.right − w'`（右端固定）・`position.y` 保持で `true`。
+    /// Left と取り違えれば X が `wa.left` になって落ちる（辺取り違え耐性）。
+    #[test]
+    fn resize_window_to_right_pins_right_edge_and_keeps_y() {
+        let mut world = World::new();
+        world.insert_resource(odd_edge_snapshot()); // rect(53, 37, 1877, 1043)
+        let window = world
+            .spawn((
+                fake_handle(0x1000),
+                window_pos_sized(731, 500, 434, 687),
+                Anchored(Anchor::Right),
+            ))
+            .id();
+
+        // 新寸 (517×823): X = wa.right − w' = 1877 − 517 = 1360・Y=500 保持
+        assert!(resize_window_to(&mut world, window, SizePx { w: 517, h: 823 }));
+        assert_eq!(
+            position_of(&world, window),
+            Point { x: 1877 - 517, y: 500 },
+            "X=wa.right−w'（右端固定・Left と取り違えたら 53 で落ちる）・Y 保持"
+        );
+        assert_eq!(size_of(&world, window), SizeI::new(517, 823));
+    }
+
+    /// #2 Free resize（Req2.5）: `Anchored(Free)` はアンカー辺を持たず position を
+    /// 保持し、`WindowPos.size` のみ新寸へ反映する。size が変わるので冗長でなく
+    /// `true`（書込あり）。Bottom へ取り違えれば position.y が動いて落ちる
+    /// （射影なし・寸法反映のみの区別）。
+    #[test]
+    fn resize_window_to_free_keeps_position_and_updates_size_only() {
+        let mut world = World::new();
+        world.insert_resource(odd_edge_snapshot());
+        let window = world
+            .spawn((
+                fake_handle(0x1000),
+                window_pos_sized(731, 500, 434, 687),
+                Anchored(Anchor::Free),
+            ))
+            .id();
+
+        // Free: 射影なし＝position 不変・size のみ新寸（size 変化ゆえ冗長でなく true）
+        assert!(resize_window_to(&mut world, window, SizePx { w: 517, h: 823 }));
+        assert_eq!(
+            position_of(&world, window),
+            Point { x: 731, y: 500 },
+            "Free は position 再計算なし（現在位置保持・Bottom 取り違えなら Y が動く）"
+        );
+        assert_eq!(size_of(&world, window), SizeI::new(517, 823));
+    }
+
+    /// #3 随伴バルーン維持（非 Bottom・Req2.6）: `Anchored(Left)`＋`BalloonFollow` の
+    /// char 窓を resize すると、char は左端固定（Y 保持）へ移り、バルーンは
+    /// `new_char_pos + offset` へ随伴し `balloon_pos − char_pos ≡ offset` を維持する
+    /// （task 2.4 の Bottom 版と別アンカーで offset 恒等式を固定）。
+    #[test]
+    fn resize_window_to_left_preserves_balloon_follow_offset() {
+        let mut world = World::new();
+        world.insert_resource(odd_edge_snapshot()); // 左端 53
+        let balloon = world
+            .spawn((fake_handle(0x2000), window_pos_at(0, 0)))
+            .id();
+        let offset = PointPx { x: -412, y: -25 };
+        let window = world
+            .spawn((
+                fake_handle(0x1000),
+                window_pos_sized(731, 500, 434, 687),
+                Anchored(Anchor::Left),
+                BalloonFollow { balloon, offset },
+            ))
+            .id();
+
+        // 新寸 (517×823) → char 左端固定 (53, 500)・balloon (53−412, 500−25)
+        assert!(resize_window_to(&mut world, window, SizePx { w: 517, h: 823 }));
+        let char_pos = position_of(&world, window);
+        let balloon_pos = position_of(&world, balloon);
+        assert_eq!(char_pos, Point { x: 53, y: 500 }, "左端固定・Y 保持");
+        assert_eq!(
+            balloon_pos,
+            Point {
+                x: 53 + offset.x,
+                y: 500 + offset.y
+            }
+        );
+        // offset 恒等式（balloon_pos − char_pos ≡ offset）の維持
+        assert_eq!(balloon_pos.x - char_pos.x, offset.x);
+        assert_eq!(balloon_pos.y - char_pos.y, offset.y);
+    }
+
+    /// #4 べき等（非 Bottom・Req3.1）: 既に左端一致（x=wa.left）の位置＋同寸へ
+    /// `Anchored(Left)` を resize すると、導出 (position, size) が現在値と同一ゆえ
+    /// 書込なし・`false`・状態不変（Bottom 版 idempotent の非 Bottom 対応・
+    /// 同一寸法/同一アンカーの再適用が窓状態を変更しない＝冗長書込をしない）。
+    #[test]
+    fn resize_window_to_left_is_idempotent_on_same_size_and_position() {
+        let mut world = World::new();
+        world.insert_resource(odd_edge_snapshot()); // 左端 53
+        let window = world
+            .spawn((
+                fake_handle(0x1000),
+                window_pos_sized(53, 500, 517, 823), // 既に左端射影済み・同寸
+                Anchored(Anchor::Left),
+            ))
+            .id();
+
+        // 同寸・既に左端一致 → 導出 (53,500)＋(517,823) は現在値と同一 → 書込なし・false
+        assert!(!resize_window_to(&mut world, window, SizePx { w: 517, h: 823 }));
+        assert_eq!(position_of(&world, window), Point { x: 53, y: 500 });
+        assert_eq!(size_of(&world, window), SizeI::new(517, 823));
+    }
+
+    /// #4 非 Bottom 縮退（Req3.3/3.4）: 縮退経路がアンカー非依存（Bottom 特化でない）
+    /// ことを代表として Top で固定する。task 2.4 が Bottom で押さえた縮退を、
+    /// 別アンカーでも配線が同一であることの確認（過剰重複を避け 1 件へ集約）。
+    /// - 非正寸（w≤0 or h≤0）: project_anchor 前に弾かれ `false`・位置/寸不変。
+    /// - `WindowHandle` 未付与: 射影は走るが enqueue が warn no-op＝`false`・位置/寸不変。
+    #[test]
+    fn resize_window_to_non_bottom_degrades_on_nonpositive_and_missing_handle() {
+        let mut world = World::new();
+        world.insert_resource(odd_edge_snapshot());
+
+        // (a) Top＋非正寸: project_anchor 前に弾かれ false・状態不変（Bottom と同一縮退）
+        let with_handle = world
+            .spawn((
+                fake_handle(0x1000),
+                window_pos_sized(731, 500, 434, 687),
+                Anchored(Anchor::Top),
+            ))
+            .id();
+        for bad in [
+            SizePx { w: 0, h: 823 },
+            SizePx { w: 517, h: 0 },
+            SizePx { w: -517, h: -823 },
+        ] {
+            assert!(
+                !resize_window_to(&mut world, with_handle, bad),
+                "{bad:?}: 非正寸は false（Top でも Bottom と同一縮退）"
+            );
+            assert_eq!(position_of(&world, with_handle), Point { x: 731, y: 500 });
+            assert_eq!(size_of(&world, with_handle), SizeI::new(434, 687));
+        }
+
+        // (b) Top＋WindowHandle 未付与: 射影は走るが enqueue が warn no-op＝false・状態不変
+        let no_handle = world
+            .spawn((
+                // WindowHandle なし（窓生成前）
+                window_pos_sized(731, 500, 434, 687),
+                Anchored(Anchor::Top),
+            ))
+            .id();
+        assert!(!resize_window_to(&mut world, no_handle, SizePx { w: 517, h: 823 }));
+        assert_eq!(position_of(&world, no_handle), Point { x: 731, y: 500 });
+        assert_eq!(size_of(&world, no_handle), SizeI::new(434, 687));
+    }
+
+    // -------------------------------------------------------------------------
+    // anchor_changed_system（アンカー変化トリガ・task 2.6・Req1.4・
+    // design「Anchored（Component）/ anchor_changed_system」「System Flows >
+    // アンカー変化トリガ」「File Structure Plan > follow.rs」）
+    //
+    // producer（seriko の `\![set,alignmenttodesktop]` routing）は本 spec 非所有＝
+    // 本群は `Changed<Anchored>` に反応する **consumer** のみを固定し、テストは
+    // `Anchored` を直接書き換えて駆動する。change tick を正しく管理するため system は
+    // `Schedule` に登録して run し（同一 Schedule インスタンスを使い回すことで
+    // 永続 `SystemState` の `last_run` を run 跨ぎで効かせる）、初回 run の全マッチは
+    // resize_window_to のべき等 skip で吸収する。全辺 96 非倍数の odd_edge_snapshot
+    // （rect(53,37,1877,1043)）で dpi/96 再スケール混入の檻とする。
+    // -------------------------------------------------------------------------
+
+    use super::anchor_changed_system;
+
+    /// #1 アンカー変化で再射影（Req1.4 の核）: `Anchored(Bottom)` の釘付け済み char 窓を
+    /// spawn し、初回 run はべき等 skip（初回 Changed 付与を resize が同寸・同位置で吸収
+    /// ＝位置不変）。次に `Anchored` を Top へ**直接書換**→再 run で「現在の表示寸法の
+    /// まま」新アンカー辺（y=wa.top）へ再配置され、X 保持・size 不変（新寸を与えない
+    /// ので size は変わらない）。
+    #[test]
+    fn anchor_changed_system_reprojects_to_new_anchor_edge_at_current_size() {
+        let mut world = World::new();
+        world.insert_resource(odd_edge_snapshot()); // rect(53, 37, 1877, 1043)
+        // Bottom 釘付け済み: y = wa.bottom − h = 1043 − 687 = 356・x=731（96 非倍数）
+        let e = world
+            .spawn((
+                fake_handle(0x1000),
+                window_pos_sized(731, 356, 434, 687),
+                Anchored(Anchor::Bottom),
+            ))
+            .id();
+
+        let mut schedule = Schedule::default();
+        schedule.add_systems(anchor_changed_system);
+
+        // 初回 run: 初回 Changed 付与で発火し得るが、Bottom は現寸で y=356 のまま
+        // ＝べき等 skip で吸収（位置・寸法不変）。
+        schedule.run(&mut world);
+        assert_eq!(
+            position_of(&world, e),
+            Point { x: 731, y: 356 },
+            "初回 run はべき等 skip（位置不変）"
+        );
+        assert_eq!(size_of(&world, e), SizeI::new(434, 687), "初回 run: size 不変");
+
+        // Anchored を Top へ直接書換（producer=seriko の代替＝consumer 駆動の檻）。
+        world.get_mut::<Anchored>(e).unwrap().0 = Anchor::Top;
+
+        // 再 run: 現在の表示寸法(434×687)のまま新アンカー辺 y=wa.top=37 へ再射影。
+        schedule.run(&mut world);
+        assert_eq!(
+            position_of(&world, e),
+            Point { x: 731, y: 37 },
+            "新アンカー辺 y=wa.top へ再配置・X=731 保持（Bottom のままなら y=356 で落ちる）"
+        );
+        assert_eq!(
+            size_of(&world, e),
+            SizeI::new(434, 687),
+            "現在の表示寸法のまま（新寸を与えないので size は不変）"
+        );
+    }
+
+    /// #2 Anchored 未変化では発火しない（変更検知の正しさの檻・最重要）: 初回 run で
+    /// 初回 Changed を消費した後、`Anchored` を触らずに `WindowPos.position` を故意に
+    /// アンカー辺から外して再 run しても**再スナップされない**（system は `Anchored`
+    /// 変化にのみ反応し `WindowPos` 変化には反応しない）。毎 run 全マッチ実装
+    /// （fresh QueryState の last_run=0）ならここで y=356 へ戻り落ちる。
+    #[test]
+    fn anchor_changed_system_does_not_fire_when_anchor_unchanged() {
+        let mut world = World::new();
+        world.insert_resource(odd_edge_snapshot()); // 下端 1043
+        let e = world
+            .spawn((
+                fake_handle(0x1000),
+                window_pos_sized(731, 356, 434, 687), // Bottom 釘付け済み（y=1043−687）
+                Anchored(Anchor::Bottom),
+            ))
+            .id();
+
+        let mut schedule = Schedule::default();
+        schedule.add_systems(anchor_changed_system);
+
+        // 初回 run で初回 Changed<Anchored> を消費（べき等 skip・位置不変）。
+        schedule.run(&mut world);
+        assert_eq!(position_of(&world, e), Point { x: 731, y: 356 });
+
+        // Anchored は触らず、WindowPos.position をアンカー辺から外れた位置へ手動移動。
+        world.get_mut::<WindowPos>(e).unwrap().position = Some(Point { x: 731, y: 900 });
+
+        // 再 run: Anchored 未変化ゆえ Changed にマッチせず再スナップしない。
+        schedule.run(&mut world);
+        assert_eq!(
+            position_of(&world, e),
+            Point { x: 731, y: 900 },
+            "Anchored 未変化では再スナップしない（毎 run 全マッチ実装ならここで y=356 へ戻り落ちる）"
+        );
+    }
+
+    /// #3 別遷移（Bottom→Left）: `Anchored` を Left へ直接書換すると、現在の表示寸法の
+    /// まま左端固定（x=wa.left=53）へ再射影され Y 保持（Top 以外の辺でも配線が
+    /// `Anchored.0` を正しく転送していることの補強）。
+    #[test]
+    fn anchor_changed_system_reprojects_bottom_to_left() {
+        let mut world = World::new();
+        world.insert_resource(odd_edge_snapshot()); // 左端 53・下端 1043
+        let e = world
+            .spawn((
+                fake_handle(0x1000),
+                window_pos_sized(731, 356, 434, 687), // Bottom 釘付け済み
+                Anchored(Anchor::Bottom),
+            ))
+            .id();
+
+        let mut schedule = Schedule::default();
+        schedule.add_systems(anchor_changed_system);
+        schedule.run(&mut world); // 初回 Changed 消費（べき等・位置不変）
+        assert_eq!(position_of(&world, e), Point { x: 731, y: 356 });
+
+        world.get_mut::<Anchored>(e).unwrap().0 = Anchor::Left;
+        schedule.run(&mut world);
+        // Left: x=wa.left=53・Y=356 保持・size 不変
+        assert_eq!(
+            position_of(&world, e),
+            Point { x: 53, y: 356 },
+            "x=wa.left=53（左端固定）・Y=356 保持"
+        );
+        assert_eq!(size_of(&world, e), SizeI::new(434, 687));
     }
 }
