@@ -104,9 +104,10 @@
 **Objective:** sakura compile として、各 talk 台本の冒頭に Clear cue を前置したい。そうすれば新しい talk が空のバルーンから始まり、前 talk のテキストが累積しない（#6）。
 
 #### Acceptance Criteria
-1. When 新しい talk 台本を compile する, the sakura compile shall 台本の先頭に、当該 talk が書き込むスコープのバルーンをクリアする Clear cue を前置する。
-2. When 新しい talk が再生を開始する, the areka talk 再生パイプライン shall 前 talk のバルーンテキストを表示から取り除き、新しい talk のテキストのみを表示する。
-3. While talk が複数のスコープ（`\0`/`\1` 等）へテキストを書く, the sakura compile shall 当該 talk が書き込む各スコープが新 talk 開始時に前 talk の残存テキストを持たないよう Clear を発行する。
+1. When 新しい talk 台本を compile する, the sakura compile shall 台本の先頭に**全スコープのバルーンをクリアする `ClearAll` cue を単一前置**する（compile は残存スコープを列挙できないため、"全消し"を presenter 側が自らの全スコープを消す自己完結コマンドで表現する）。
+2. When 新しい talk が再生を開始する, the areka talk 再生パイプライン shall 前 talk の**全バルーンテキスト**（当該 talk が書き込まないスコープを含む）を表示から取り除き、新しい talk のテキストのみを表示する。
+3. The dola cue モデル shall `ClearAll` を既存 variant のワイヤ形を変えない additive な追加として保持する（`Clear`＝対象スコープのみ消去／`ClearAll`＝全スコープ消去・両者を峻別）。
+4. When テキスト表現者が `ClearAll` cue を受け取る, the 表現者 shall 自身が保持する**全スコープ**の表示テキスト（未表示分を含む）を消去する（対象スコープのみの `Clear` と区別）。
 
 ### Requirement 7: emo-text reveal が付与された再生時間に服従（服従＝emo-text）
 **Objective:** バルーンテキストの reveal 層 emo-text として、自前の char_wait 計算を捨て台本が定めた再生時間に従って文字を出したい。そうすれば reveal がタイムラインの単一真実源と協調する。
@@ -115,7 +116,7 @@
 1. When テキスト cue を受け取る, the emo-text reveal shall 台本が定めた再生時間（配送された cue の duration）に基づいて文字送りのタイミングを決定する。
 2. The emo-text reveal shall 独自の per-char ウェイト定数を保持せず、再生時間の真実源から文字送りを導出する。
 3. While テキスト cue の再生時間 D と文字数 N が与えられる, the emo-text reveal shall N 文字を概ね D 秒かけて表示する。
-4. When Clear cue を受け取る, the emo-text reveal shall 当該スコープの表示テキスト（未表示分を含む）を消去する。
+4. When Clear cue を受け取る, the emo-text reveal shall 当該スコープの表示テキスト（未表示分を含む）を消去し、`ClearAll` cue を受け取る場合は自身の全スコープを消去する。
 5. When emo-text が自身の担当でない cue（Emote・Wait 等）を受け取る, the emo-text shall その action を無視しつつ cue の duration を honor する（Requirement 2 整合）。
 
 ### Requirement 8: 実機受け入れ（#3・#4・#6・`\s` 同期）

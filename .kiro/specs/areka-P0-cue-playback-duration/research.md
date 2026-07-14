@@ -377,3 +377,9 @@ Topic 3（wintf CueQueue が duration を落とす doc 矛盾）を深掘りし�
 **開発者決裁**: 「duration≤0 や NaN は 0 とみなせばよい・0 なら全文字同時表示・0 割りは例外処理で回避」。
 **解（(A) を clamp 規則で確定）**: **duration を「有限かつ ≥0」へ clamp（NaN/±inf/負→0）を dola ingress（統合した canonical 変換／`CuePlayer`）に単一権威で置く**（+inf も horizon=∞＝永遠に終わらない同種病理ゆえ畳込み）。duration は reveal だけでなく horizon（`max(start+duration)`・完了判定）も使うため、ingress で正せば reveal 単調性と horizon 完了が**同時に**守られる。N=0 の 0 割り回避は reveal 側（`interval=if N>0 {D/N} else {0}`・追記なし）。duration=0→interval=0→全グリフ即時（同時）表示。design.md:367 の偽 monotonic 主張を訂正（obvious fix ⑤ 畳込み）。負/NaN 注入の決定論檻。
 **反映**: requirements R1.8 新設。design Error Handling（clamp 単一権威）・File Structure（sheet.rs 変換で clamp・state.rs N=0 ガード）・Testing 縮退檻。
+
+### 10.10 Topic 5 解決（ClearAll 追加・自己完結な全消し）
+実コード確認: [state.rs:181](../../../crates/areka-emo-text/src/state.rs:181) の `Clear` は `cue.actor` スコープのみ消去・[test clear_only_affects_target_actor](../../../crates/areka-emo-text/src/state.rs:343) が固定・talk 境界の自動リセット無し（[state.rs:158](../../../crates/areka-emo-text/src/state.rs:158)）。ゆえに旧設計（書込スコープのみ per-scope Clear 前置）では、多スコープ前 talk→単スコープ新 talk で**書かないスコープの前 talk 文字が永久残存**＝R6.2「新 talk はテキストのみ」に反する（emo2 単一キャラゆえ #6 実機では潜伏・M2 で顕在）。
+**開発者提起**: 「ClearAll とか必要じゃないのか？」。
+**解**: `CueCommand::ClearAll`（unit・additive・duration=0・relevance=Balloon）を追加。**per-scope Clear が R6.2 を満たせない根本原因＝compile は消すべき全スコープを列挙できない**（書いたスコープしか知らず残存は runtime 状態）。ClearAll は裏返し——コマンドは「全部消せ」と言い、**自スコープを知る presenter（emo-text）が全消去**＝台本は跨 talk 状態を知らずに全消しを表現でき自己完結を破らない。compile は冒頭へ**単一 ClearAll** を前置（旧: 書込スコープ `BTreeSet` 収集＋per-scope Clear を廃止・簡素化）。emo-text は ClearAll で全 actor_states 消去（Clear は cue.actor のみ）。seriko 等は duration honor の no-op。これで R6.2 が字義通り満たされ、kanade 不要・emo-text talk 境界リセット不要。
+**反映**: requirements R6 を 4 AC へ改稿（ClearAll 前置・全消去・additive・presenter 全消去）・R7.4 に ClearAll。design: variant 8→10（Wait+ClearAll）・compile 冒頭 ClearAll 前置・emo-text ClearAll arm・cue_target_of(ClearAll)=Balloon・Data Models/Traceability(6.1-6.4)/System Flows/Testing 反映。

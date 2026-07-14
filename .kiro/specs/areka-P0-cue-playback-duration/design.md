@@ -9,7 +9,7 @@
 本 spec は開発者決定の**案A（duration 付き cue の三権分立）**を、次の統合モデルで実現する:
 
 - **保持＝dola**: 再生時間 duration を **`Cue` envelope の一律フィールド**として全 presentation cue へ持たせる（瞬時は明示的 0・「duration フィールドを持たない cue command」概念は作らない）。さらに **`CueSheet` が絶対開始時刻 `absolute_start_time` を保持**し（dispatch 時に刻印）、各 cue の相対 `start_time` ＋ duration と併せて**台本 1 枚が「いつ始まり・各 cue がいつ鳴り・いつ終わるか」を絶対時刻で自己完結**する。dola は絶対時刻を導出せず保持し、全表現者へ **broadcast** 配送する。
-- **計算＝sakura**: テキスト→暗黙再生時間 D を算出する**単一の純関数** `text_playback_duration` を所有し、compile が各テキスト cue へ D を焼き込みつつ `offset += D` で絶対時刻を確定。明示 `\_w` は **action を持たず duration のみの第一級 `CueCommand::Wait` cue** として発行し、台本を自己完結した楽譜にする。talk 冒頭に Clear を前置（#6）。
+- **計算＝sakura**: テキスト→暗黙再生時間 D を算出する**単一の純関数** `text_playback_duration` を所有し、compile が各テキスト cue へ D を焼き込みつつ `offset += D` で絶対時刻を確定。明示 `\_w` は **action を持たず duration のみの第一級 `CueCommand::Wait` cue** として発行し、台本を自己完結した楽譜にする。talk 冒頭に `ClearAll` を前置（#6・全スコープ消去）。
 - **服従＝全表現者（emo-text/seriko/未来の演者）**: **同期契約**——受け取った任意 cue の duration を、その action を処理するか否かに関わらず必ず honor する。無視するのは action だけで duration は決して落とさない。action 対象は演者側 relevance で選別（中央 router に依存しない）。emo-text は reveal を配送 D に従わせ自前 char_wait を撤去する。
 
 さらに本 spec は、この三権を**正しい層**へ据える構造統合を伴う（討議 #2 Topic 3・§Design Decisions D7）: cue 再生の"制御"（変換・状態機械・完了・バリア・broadcast）を、散在していた sakura `drive` と旧世代 wintf `ecs/cue` から **dola（`"Declarative Orchestration for Live Animation"` 層）へ一本化**し、`CueSheet→schedule` 変換を 1 本・`CuePlayer` 受動ランタイム・`CueSink` トレイト 1 本へ集約、**wintf `ecs/cue` 一式（`compile_sheet` 含む）を撤去**する。sakura は front-end＋talk glue に縮小。これにより「同じロジックの似て非なる版が散在」を根絶し、duration/absolute_start/horizon/broadcast を最初から正しい土台へ載せる。
@@ -36,7 +36,7 @@
 
 ### This Spec Owns
 - **保持（dola）**: `Cue` envelope の `duration: f64` フィールド（additive・`#[serde(default)]`・全 presentation cue が保持）。`CueCommand::Wait`（action 空・duration のみ・additive 追加）。**`CueSheet.absolute_start_time: f64`**（dispatch 刻印・`#[serde(default)]`）＝自己完結絶対時刻台本。`TimedSchedule` の horizon 保持と `is_completed`（entry 枯渇かつ現在≥horizon）による占有終了判定。dola は duration/絶対時刻を不透明に保持・**broadcast 配送**するのみ。
-- **計算（sakura）**: 純関数 `text_playback_duration(text) -> f64`（暗黙 per-char）と per-char 定数 `CHAR_NOMINAL_MS` の**唯一の定義**。compile による各テキスト cue への D 付与・`offset += D` 焼き込み・**`\_w` の第一級 Wait cue 発行**・talk 冒頭 Clear 前置。
+- **計算（sakura）**: 純関数 `text_playback_duration(text) -> f64`（暗黙 per-char）と per-char 定数 `CHAR_NOMINAL_MS` の**唯一の定義**。compile による各テキスト cue への D 付与・`offset += D` 焼き込み・**`\_w` の第一級 Wait cue 発行**・talk 冒頭 `ClearAll` 前置。
 - **配送（sakura drive）**: 全 cue を全 sink へ **broadcast** する `on_tick`（中央 1→1 振り分けの廃止）。`TalkCue` エンベロープの `duration` フィールド（serde 非依存の搬送体）。
 - **服従（全表現者）**: **duration honor 契約**——任意 cue の duration を action 可否に関わらず honor。emo-text reveal を配送 D から導出・`char_wait` 撤去。seriko が broadcast を許容（非 Shell action 無視・duration honor・良性ログ）。
 - **実機受け入れ**: #3・#4・#6・`\s` 同期の人間サインオフ観測手順。
@@ -118,7 +118,7 @@ graph LR
 ```
 crates/
 ├── dola/src/cue/                # cue 再生の唯一のエンジン（アニメ制御は dola 層・演者/スクリプト/プラットフォーム非依存・注入時刻）
-│   ├── command.rs            # [変更] Cue に duration: f64（#[serde(default)]）／CueCommand::Wait（additive）／配送エンベロープ（旧 sakura TalkCue 相当）を dola 型へ移設
+│   ├── command.rs            # [変更] Cue に duration: f64（#[serde(default)]）／CueCommand::Wait・ClearAll（additive）／配送エンベロープ（旧 sakura TalkCue 相当）を dola 型へ移設
 │   ├── sheet.rs              # [変更] CueSheet に absolute_start_time／CueSheet→schedule 正規化を 1 本へ統合（旧 compile_sheet と sakura to_schedule を廃し canonical 化・先頭待ち保存・同一 at FIFO・絶対アンカー・horizon 算出）
 │   ├── schedule.rs           # [変更] TimedSchedule に horizon 保持・is_completed は占有終了（現在≥horizon）で真
 │   ├── runtime.rs            # [新規] CuePlayer＝受動的注入時刻ランタイム（再生状態機械・完了 horizon・バリア seam・Choice 先積み・broadcast fan-out）。旧 wintf CueQueue と sakura drive on_tick の制御責務を吸収
@@ -145,7 +145,7 @@ crates/
 ### Modified Files
 - `crates/dola/src/cue/command.rs`
   - `Cue` に `#[serde(default)] pub duration: f64`（既定 0.0＝瞬時点）。doc に「この cue の presentation 占有時間（秒）・全表現者が action 可否に関わらず honor する・後続 cue の絶対時刻はこの分だけ焼き込まれる」を明記。全 in-source `Cue { ... }` リテラルへ `duration` 追加。後方互換 serde テスト（duration 欠落 JSON→0.0）追加。
-  - `CueCommand::Wait` を additive 追加（unit variant `"Wait"`・action を持たず時間は envelope duration が担う）。doc に「純粋な待ち・action なし・duration のみ・全表現者が honor」を明記。variant 数 8→9・`cue_command_eight_variants` テストを 9 へ更新。既存 variant ワイヤ形不変を固定する檻を維持。
+  - `CueCommand::Wait`・`ClearAll` を additive 追加（unit variant `"Wait"`／`"ClearAll"`）。`Wait`＝action なし・duration のみ・全表現者が honor。`ClearAll`＝全テキストスコープ消去（`Clear` は対象スコープのみ）・relevance は Balloon。variant 数 8→**10**・`cue_command_eight_variants` テストを 10 へ更新。既存 variant ワイヤ形不変を固定する檻を維持。
   - 配送エンベロープ（旧 sakura `TalkCue` 相当・`{ at, actor, command, duration }`）を dola 型として定義（`CuePlayer`／`CueSink` の入出力）。
 - `crates/dola/src/cue/sheet.rs` — `CueSheet { absolute_start_time: f64, cues }`（`#[serde(default)]`・dispatch 刻印）。**`CueSheet→schedule` 正規化を dola の唯一の変換へ統合**（旧 `compile_sheet` の min 正規化＝先頭待ちを食う挙動を廃し、絶対アンカー＋相対 start_time をそのまま・同一 at FIFO・horizon 算出）。sakura `to_schedule` はこれへ吸収。**変換時に各 cue の duration を有限・非負へ clamp**（NaN/±inf/負→0・Topic 4）＝horizon/reveal の単一権威ガード。
 - `crates/dola/src/cue/schedule.rs` — `TimedSchedule` に完了 horizon（`max(start+duration)`）を保持し `is_completed` を「entry 枯渇かつ現在 ≥ horizon」へ（占有終了まで完了扱いしない・Topic 1）。`Entry::Payload` signature は不変（duration は配送エンベロープ／CueSheet 側が保持）。
@@ -157,7 +157,7 @@ crates/
   - Text arm: `D = text_playback_duration(text)` を算出、Text cue へ `duration=D` 付与、直後 `offset += D`。
   - Wait arm: `d = duration.as_secs_f64()` で **`CueCommand::Wait` cue を `duration=d` で emit**、直後 `offset += d`（吸収を廃し第一級化）。
   - 他の emit（Emote/BalloonSurface/NewLine/Clear）: `duration=0.0`。
-  - 走査後、**書き込み balloon スコープ集合**（Text/NewLine を emit したスコープ）を `BTreeSet<u32>` で収集し `Clear`（`start_time=0.0`・duration 0.0）を各スコープぶん先頭前置。
+  - **冒頭 `ClearAll` 前置（#6）**: 台本先頭へ `ClearAll`（`start_time=0.0`・duration 0.0）を単一前置（旧: 書込スコープを `BTreeSet` 収集し per-scope Clear ＝残存スコープを消せない問題を解消・簡素化）。`CueSheet::new` 安定ソート＋同一 `at` FIFO で先頭配送。
   - `emit` は `duration` 引数を取る。既存テスト更新＋新規（D 焼込み・Wait cue・Clear 前置・非退行）。
 - `crates/areka-sakura/src/contract.rs` — **縮小**: 配送エンベロープ（旧 `TalkCue`）と `cue_target_of`（relevance 分類器）を **dola へ移設**（`dola::cue::{command, sink}`）。sakura は SakuraScript front-end の型のみ残す。`Wait => None`（どの演者の担当でもない＝全員 action 無視・duration のみ honor）は dola 側分類器で網羅（catch-all 無し）。
 - `crates/areka-sakura/src/drive.rs` — **縮小して talk アクター glue に専念**。
@@ -165,7 +165,7 @@ crates/
   - `compile` 結果の `CueSheet` へ `absolute_start_time` を dispatch 時刻で刻印し `CuePlayer` へ渡す。
   - **完了中継**: `CuePlayer` の完了（現在 ≥ horizon）を検知して `TalkDone` を kanade へ発火（entry 枯渇でなく占有終了・末尾 Wait/最終 Text の duration を落とさない）。Close/中断の funnel・バリア seam での絶対開始時刻再調停も担う。
   - 旧 `to_schedule`／`on_tick` broadcast は dola `CuePlayer` へ移設ゆえ削除（車輪の再発明を絶つ）。
-- `crates/areka-emo-text/src/state.rs` — `TextLayerConfig.char_wait` 撤去（`line_pitch_factor` 残置）。`apply_cue` から `config` 引数除去（reveal ペースは `cue.duration` 由来）。`RevealSchedule::extend_chunk` 第 3 引数を `char_wait`→`interval` へ意味変更・**`interval = if N>0 { duration/N } else { 0.0 }`（N=0 は 0 割り回避・追記なし）**。duration は dola ingress で clamp 済（有限・非負）ゆえ `times` は常に単調＝`visible` の二分探索前提が全域で成立。duration=0 → interval=0 → 全グリフ即時（同時）表示。**honor 契約**: 非担当 cue（Emote/Wait/BalloonSurface 等）は action 無視・duration は honor（talk extent 整合）。reveal 系テストを D 駆動へ更新（負/NaN clamp・N=0・D=0 の縮退檻を含む）。
+- `crates/areka-emo-text/src/state.rs` — `TextLayerConfig.char_wait` 撤去（`line_pitch_factor` 残置）。`apply_cue` から `config` 引数除去（reveal ペースは `cue.duration` 由来）。`RevealSchedule::extend_chunk` 第 3 引数を `char_wait`→`interval` へ意味変更・**`interval = if N>0 { duration/N } else { 0.0 }`（N=0 は 0 割り回避・追記なし）**。duration は dola ingress で clamp 済（有限・非負）ゆえ `times` は常に単調＝`visible` の二分探索前提が全域で成立。duration=0 → interval=0 → 全グリフ即時（同時）表示。**honor 契約**: 非担当 cue（Emote/Wait/BalloonSurface 等）は action 無視・duration は honor（talk extent 整合）。**`ClearAll` は自身の全 actor_states を消去**（`Clear` は cue.actor スコープのみ・#6 の冒頭全消しを担う）。reveal 系テストを D 駆動へ更新（負/NaN clamp・N=0・D=0 の縮退檻・ClearAll 全消去檻を含む）。
 - `crates/areka-emo-text/src/actor.rs` — **`dola::CueSink` を実装**（単一 sink・旧 TextSink 置換）。`apply_cue` の config 引数除去（`config`＝`line_pitch_factor` は `DWriteMetrics::new` 用に保持）。演者側 relevance（`cue_target_of==Balloon`）で action・非該当は duration honor。in-source テストヘルパへ `duration` 追加。
 - `crates/areka-seriko/src/actor.rs` — **`dola::CueSink` を実装**（単一 sink・旧 SurfaceSink 置換）。受け取った全 cue のうち `cue_target_of==Shell` のみ action、他（Text/Wait/Clear/NewLine/Choice）は **action 無視・duration honor**。非 Shell 受信は正常ゆえ `warn`→良性 `debug`。in-source テストヘルパへ `duration` 追加。
 - `crates/areka-ghost/src/sink.rs` — **live path 配線ハーネス**（kanade→dispatcher→dola CuePlayer→CueSinks）。`LogSink` を **単一 `dola::CueSink`** へ（旧 SurfaceSink/TextSink 両実装＋両スロット二重配線を解消＝**二重ログが根から消える**・1 演者 1 sink）。`command_kind` の網羅 match へ `Wait => "Wait"`（catch-all 無し流儀・`command_kind_covers_every_cue_command_variant` テストへ Wait を追加）。
@@ -195,7 +195,7 @@ sequenceDiagram
     Note over C: offset += 0.5 → 0.75（第一級化・吸収しない）
     P->>C: Surface("7")  (\s[7])
     C->>S: emit Emote cue(start_time=0.75, duration=0.0)
-    Note over C: 走査後: written 各スコープの Clear を start_time=0.0 で先頭前置
+    Note over C: 走査後: 冒頭へ ClearAll を start_time=0.0 で単一前置（全スコープ消去）
 ```
 
 `\_w` は **Wait cue として台本に残る**（末尾・単独でも）。`\s`（Emote）はテキスト D と `\_w` を焼き込んだ offset（=0.75）で発火＝**喋り完了後に表情切替**（R8.4）。整列は compile が絶対 `start_time` へ焼き込み、dola は導出せず配送するのみ。
@@ -249,13 +249,14 @@ sequenceDiagram
 | 5.2 | Wait は additive・ワイヤ形不変 | `CueCommand::Wait`(unit) | — |
 | 5.3 | 純粋待ちも cue に含め台本のみで全時間復元 | Wait cue・honor 契約 | broadcast honor |
 | 5.4 | Wait cue は duration を honor（action なし） | 全表現者 honor | broadcast honor |
-| 6.1 | talk 冒頭へ Clear cue 前置 | compile Clear 前置 post-pass | 焼き込み |
-| 6.2 | 新 talk で前 talk テキスト除去 | compile Clear＋emo-text Clear | broadcast honor |
-| 6.3 | 書き込む各スコープをクリア | compile 書込スコープ集合→per-scope Clear | 焼き込み |
+| 6.1 | talk 冒頭へ ClearAll cue 単一前置 | compile ClearAll 前置 | 焼き込み |
+| 6.2 | 新 talk で前 talk 全テキスト除去（非書込スコープ含む） | compile ClearAll＋emo-text 全消去 | broadcast honor |
+| 6.3 | ClearAll は additive・ワイヤ形不変 | `CueCommand::ClearAll`(unit) | — |
+| 6.4 | 表現者は ClearAll で全スコープ消去 | emo-text ClearAll arm | broadcast honor |
 | 7.1 | reveal が配送 D からタイミング決定 | emo-text `apply_cue`(cue.duration) | broadcast honor |
 | 7.2 | 独自 per-char 定数を保持しない | `TextLayerConfig`(char_wait 撤去) | — |
 | 7.3 | N 文字を概ね D 秒で表示 | `RevealSchedule`(interval=D/N) | 縮退込 |
-| 7.4 | Clear cue で未表示分含め消去 | emo-text Clear（既存） | broadcast honor |
+| 7.4 | Clear/ClearAll で未表示分含め消去（対象/全スコープ） | emo-text Clear/ClearAll | broadcast honor |
 | 7.5 | 非担当 cue も action 無視で duration honor | emo-text honor arm | broadcast honor |
 | 8.1–8.5 | 実機 #3/#4/#6/`\s`・人間サインオフ・絶対パス | 全パイプライン（実機） | 全 |
 | 9.1 | 注入時刻駆動・sleep/Instant 不使用 | 全層（無改変で維持） | — |
@@ -301,13 +302,13 @@ pub fn text_playback_duration(text: &str) -> f64;
 
 | Field | Detail |
 |-------|--------|
-| Intent | 各テキスト cue へ D を付与し絶対 start_time へ焼き込み、`\_w` を第一級 Wait cue として発行し、talk 冒頭へ Clear を前置する |
+| Intent | 各テキスト cue へ D を付与し絶対 start_time へ焼き込み、`\_w` を第一級 Wait cue として発行し、talk 冒頭へ `ClearAll` を前置する |
 | Requirements | 4.1, 4.2, 4.3, 4.4, 5.1, 6.1, 6.3 |
 
 **Responsibilities & Constraints**
 - **D 付与＋焼込み（4.1/4.2/4.3）**: `Text(t)` で `D = text_playback_duration(t)` を算出、当該 Text cue の `duration=D` として emit、直後 `offset += D`。
 - **Wait 第一級化（5.1/4.4）**: `Wait(d)` で `CueCommand::Wait` cue を `duration=d.as_secs_f64()` として当該 offset へ emit、直後 `offset += d.as_secs_f64()`。吸収を廃し台本に残す（末尾・単独でも）。既存 `Wait` 累積の非退行を保つ。
-- **Clear 前置（6.1/6.3）**: 走査中に Text/NewLine を emit したスコープを `BTreeSet<u32>` へ収集。走査後、各スコープの `Clear`（`start_time=0.0`・`duration=0.0`）を cue 列の**先頭へ前置**。`CueSheet::new` の安定ソートと `on_tick` の同一 `at` FIFO により Clear が先に配送される。
+- **冒頭 `ClearAll` 前置（6.1/6.2/6.4）**: 台本先頭へ単一 `ClearAll`（`start_time=0.0`・`duration=0.0`）を前置し全スコープを新 talk 開始時にクリアする（compile は残存スコープを列挙できないため per-scope Clear でなく全消し `ClearAll`・自己完結）。`CueSheet::new` の安定ソートと同一 `at` FIFO により先頭配送。
 - 純粋・決定的・no I/O を維持。`emit` は `duration` 引数を追加（各 arm が適切な値を渡す・瞬時は 0.0）。
 
 **Contracts**: Service [x] / State [x]
@@ -319,7 +320,7 @@ fn emit(scope: u32, offset: f64, duration: f64, command: CueCommand) -> Cue;
 // compile シグネチャは不変（内部で D 焼込み・Wait 発行・Clear 前置）。
 pub fn compile(instructions: &[Instruction]) -> CompiledTalk;
 ```
-- Postconditions: `sheet` 内 `start_time` は有限・非負・非減少。各 Text cue の `duration>0`（N>0 時）。各 Wait cue の `duration>0`。書込スコープの Clear が `start_time=0.0` で先頭に存在。台本のみから talk 全時間範囲（`max(start_time+duration)`）が復元可能。
+- Postconditions: `sheet` 内 `start_time` は有限・非負・非減少。各 Text cue の `duration>0`（N>0 時）。各 Wait cue の `duration>0`。冒頭 `ClearAll` が `start_time=0.0` で先頭に単一存在。台本のみから talk 全時間範囲（`max(start_time+duration)`）が復元可能。
 - Invariants: 同一入力→同一出力。`Wait` の累積挙動（`offset += d`）は不変。
 
 ### 保持層（dola）／搬送（sakura）
@@ -375,7 +376,7 @@ pub fn compile(instructions: &[Instruction]) -> CompiledTalk;
 
 ### Domain Model
 - **不変台本（CueSheet）**: `CueSheet { absolute_start_time, cues: Vec<Cue> }`。`Cue { actor, start_time, payload, duration }` の列。`start_time` は talk 起点（台本先頭 0）からの相対（焼き込み済み・compile 確定）秒、`absolute_start_time` は talk が再生開始する壁時計の絶対秒（dispatch 刻印）——**各 cue の絶対発火時刻 = `absolute_start_time + start_time`**。`duration` は当該 cue の presentation 占有秒（Text=reveal D／Wait=待ち／瞬時=0）＝cue は区間 `[start_time, start_time+duration)`。start_time/duration は `text_playback_duration` の単一計算の 2 投影を不変台本へ凍結（実行時ドリフト不能・再タイミング＝再 compile）。**全 presentation cue が duration を保持**し、フィールド欠落は存在しない。**talk 絶対終了時刻 = `absolute_start_time + max(start_time + duration)`**（台本のみから復元可能・完了判定の権威）。
-- **`CueCommand`（9 variant）**: 既存 8（Text/Clear/Emote/Choice/EntityRef/Custom/NewLine/BalloonSurface）＋ **Wait（unit・action 空）**。時間は常に envelope `duration` が担い、コマンドは action の種別のみを表す。
+- **`CueCommand`（10 variant）**: 既存 8（Text/Clear/Emote/Choice/EntityRef/Custom/NewLine/BalloonSurface）＋ **Wait（unit・action 空・duration のみ）** ＋ **ClearAll（unit・全テキストスコープ消去）**。時間は常に envelope `duration` が担い、コマンドは action の種別のみを表す（`Clear`＝対象スコープ／`ClearAll`＝全スコープ）。
 - **搬送体（TalkCue）**: `{ at, actor, command, duration }`。`Cue` の実行時投影（serde 非依存）。全 sink が broadcast で受け、各自 duration を honor・reveal は `duration` を読む。
 
 ### Data Contracts & Integration
@@ -405,7 +406,7 @@ pub fn compile(instructions: &[Instruction]) -> CompiledTalk;
 - **`text_playback_duration`（3.1–3.5）**: 空文字＝0.0／`"こんにちは"`＝5×50ms／多バイト（`"aあ🦆"`）が 3 char＝3 単位／決定性。`\_w` を畳まないこと（純関数は `&str` のみで Wait を観測不能）を型で担保。
 - **compile D 焼込み（4.1–4.3）**: `Text→Surface` で Emote の `start_time` が text の D 後。連続 Text で累積 D。Text cue の `duration>0`。
 - **compile Wait 第一級化（5.1/5.3/4.4）**: `Text\_w[500]Text` で ①中央に `CueCommand::Wait` cue が `duration=0.5` で存在 ②2 つ目 Text の start_time が D+0.5。**末尾 `\_w`**（`Text\_w[800]`）で Wait cue が台本末尾に残り、`max(start_time+duration)` が text 完了＋0.8 になる（自己完結）。`wait_accumulation_is_monotonic` を D 込みで再固定。
-- **compile Clear 前置（6.1/6.3）**: 単一/マルチスコープで先頭 Clear@0.0・balloon 未書込スコープには前置しない。
+- **compile ClearAll 前置（6.1/6.2）**: 台本先頭に単一 `ClearAll`@0.0 が 1 件存在（書込スコープ数に依らず 1 件）。前 talk が書いた任意スコープが新 talk で消えることを emo-text 統合で確認。
 - **serde 後方互換（9.3/9.4/9.5）**: duration 欠落 JSON→0.0。新 `Cue` roundtrip。`CueCommand::Wait` ワイヤ形 `"Wait"`。既存 variant ワイヤ形不変（既存檻維持）。
 - **emo-text reveal 縮退（1.2/7.3）**: D=0＋N>0 で全グリフ即時（`at`）。N=0 で無追記。interval=D/N の reveal 時刻式（期待値は同一算術で再計算）。
 
@@ -413,7 +414,7 @@ pub fn compile(instructions: &[Instruction]) -> CompiledTalk;
 - **broadcast 配送（2.1/2.2）**: 1 台本を on_tick へ流し、**両 sink（surface_sink/text_sink）が同一 cue 列を受信**する（旧「片方だけ受信」を broadcast へ更新）。emo-text は Emote/Wait を action 無視・seriko は Text/Wait を action 無視、両者とも duration を honor。**areka-ghost**: dispatcher/spine_e2e の partition assertion を broadcast-aware（surface も全 cue 受信・relevance で action 選択）へ更新し、診断既定 sink が cue ごと **1 回**ログ（二重でない）ことを固定。
 - **honor 契約（2.2/2.3/2.5/5.4/7.5）**: ①葉の表現者——emo-text が非担当 cue（Emote/Wait）を受けても、後続の担当 Text cue の reveal `r_0 = cue.at` は**当該 duration ぶんの遅延を受けない**（ローカル遅延を生まない・no-op 否定制約）。②**ライフサイクル（drive-level・注入 tick）**——末尾 `\_w[800]`（Text@0 dur D／Wait@D dur 0.8）および裸の末尾 Text（at=0 dur D）を drive へ流し、`TalkDone` が entry 枯渇時刻（前者 D・後者 ≈0）でなく**絶対終了時刻**（前者 D+0.8・後者 D）に達するまで**発火しない**ことを注入 tick で固定する（compile-level の extent 檻だけでは早期終了を捕捉できず drive-level 檻が必須）。加えて `CompiledTalk.end` は `TalkEndReason` であって終了「時刻」でないことを型で固定。③relevance partition——全 `CueCommand` variant について `cue_target_of` の分類と emo-text の action 判定が**一致**し、variant ごとに action する表現者が高々一つ（発散なし・partition 檻）。
 - **2 sink 同期（1.4/8.4）**: `\s[7]` を含む台本で、Emote が該当テキストの D 後の絶対時刻で発火し、両 sink が同一絶対時刻の同一台本を受ける（`\s` 表情同期）。
-- **Clear 前置 FIFO（6.2）**: 前 talk のテキストが新 talk 冒頭 Clear で消え、同一 `at=0.0` で Clear→Text の順に配送（`same_at_cues_preserve_script_order_fifo` 相当）。
+- **ClearAll 前置 FIFO（6.2）**: 前 talk のテキスト（**非書込スコープ含む**）が新 talk 冒頭 `ClearAll` で消え、同一 `at=0.0` で ClearAll→Text の順に配送（`same_at_cues_preserve_script_order_fifo` 相当）。多スコープ前 talk→単スコープ新 talk で残存スコープも消えることを檻。
 - **duration 搬送（1.1/7.1）**: compile→to_schedule→sink→apply_cue で `TalkCue.duration` が無変形に届き reveal 時刻が D 由来になる。
 
 ### E2E / 実機受け入れ（人間サインオフ・8.1–8.5）
