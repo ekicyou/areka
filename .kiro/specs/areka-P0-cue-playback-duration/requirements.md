@@ -28,7 +28,7 @@
   - **単一の純関数**「テキスト→暗黙 per-char 再生時間」（所在は sakura）。明示 `\_w` は parser が分離済みゆえ compile のタイムライン累積が合成を担う。
   - sakura compile が各テキスト cue へ再生時間を付与し、後続 cue の絶対発火時刻を整列。
   - **純粋 Wait cue の第一級発行**（`\_w`→`CueCommand::Wait`・action 空・duration のみ）＝台本の自己完結（末尾・単独の待ちも cue として台本に残る）。
-  - sakura compile が talk 台本の冒頭へ `Clear` cue を前置（#6・新 talk＝バルーン自動クリア）。
+  - sakura compile が talk 台本の冒頭へ `ClearAll` cue を単一前置（#6・新 talk＝全バルーン自動クリア）。
   - **全 cue の broadcast 配送＋全表現者の duration honor 契約**（コマンド種別で特定表現者から cue を隠さず、無視は表現者側の relevance 判定で行う）。
   - emo-text reveal が**渡された再生時間に服従**（自前 char_wait 計算を撤去）。
   - 実機受け入れ: #3（`\_w` が pause として体感）・#4（`\n` が `\_w` 分だけ遅れる）・#6（新 talk で前会話が消える）・`\s` 表情同期。
@@ -100,8 +100,8 @@
 3. When talk 台本を配送する, the areka talk 再生パイプライン shall 純粋な待ち（末尾・単独の待ちを含む）を cue として台本に含め、**台本のみから talk の全時間範囲が復元可能**である（側チャンネルの `end` 情報に依存しない）。
 4. When 表現者が Wait cue を受け取る, the 表現者 shall その duration を honor する（Requirement 2）——Wait は action を持たない。
 
-### Requirement 6: 台本冒頭 Clear cue の前置（#6・sakura）
-**Objective:** sakura compile として、各 talk 台本の冒頭に Clear cue を前置したい。そうすれば新しい talk が空のバルーンから始まり、前 talk のテキストが累積しない（#6）。
+### Requirement 6: 台本冒頭 ClearAll cue の前置（#6・sakura）
+**Objective:** sakura compile として、各 talk 台本の冒頭に ClearAll cue を単一前置したい。そうすれば新しい talk が全バルーン空の状態から始まり、前 talk のテキスト（当該 talk が書き込まないスコープを含む）が累積しない（#6）。
 
 #### Acceptance Criteria
 1. When 新しい talk 台本を compile する, the sakura compile shall 台本の先頭に**全スコープのバルーンをクリアする `ClearAll` cue を単一前置**する（compile は残存スコープを列挙できないため、"全消し"を presenter 側が自らの全スコープを消す自己完結コマンドで表現する）。
