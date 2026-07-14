@@ -60,6 +60,7 @@
 5. The dola cue モデル shall 再生時間 duration を不透明な秒数データとして受け取り、SakuraScript 固有の 1文字あたりウェイト値（例: 50ms）をハードコードしない。
 6. Where cue のペイロードが Barrier（動的停止点）または Routing（制御プレーン・表現者未配送）である, the dola shall それらを duration 概念の非該当として扱い、静的 duration タイムラインの外に置く（本 spec の duration モデルは presentation cue のみを対象とする）。
 7. The dola cue モデル shall `CueSheet` に絶対開始時刻 `absolute_start_time` を保持し、各 cue の相対 `start_time` ＋ duration と併せて、台本のみから全 cue の絶対発火時刻（`absolute_start_time + start_time`）と talk 絶対終了時刻（`absolute_start_time + max(start_time + duration)`）を復元可能にする（自己完結した絶対時刻台本・アンカーは dispatch 時に刻印）。
+8. When cue の duration が非有限（NaN/±inf）または負である, the dola cue 層 shall それを 0（瞬時）とみなして clamp する（dola ingress の単一権威）——これにより horizon の完了判定と reveal の可視グリフ数計算（`times` の単調性）が、検証されない台本でも全域で well-defined になる。duration=0 は全グリフ同時表示、N=0（空テキスト）は reveal 追記なしで 0 割りを回避する。
 
 ### Requirement 2: 全表現者の duration honor 契約（配送＝dola／服従＝全表現者）
 **Objective:** areka talk 再生パイプラインとして、全 cue を全表現者へ配り、各表現者が自分に無関係なコマンドの duration すら無視しないようにしたい。そうすれば、どの表現者が何を演じるかに関わらず、全員のタイムラインが協調なしに同期する。honor は 2 段で成立する——**葉の表現者**は自分の担当でない cue から新たなローカル遅延を生じさせず（否定的 no-op）、**talk ライフサイクル**は台本の絶対終了時刻まで talk を早期終了させない。

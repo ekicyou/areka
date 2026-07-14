@@ -147,7 +147,7 @@ crates/
   - `Cue` に `#[serde(default)] pub duration: f64`（既定 0.0＝瞬時点）。doc に「この cue の presentation 占有時間（秒）・全表現者が action 可否に関わらず honor する・後続 cue の絶対時刻はこの分だけ焼き込まれる」を明記。全 in-source `Cue { ... }` リテラルへ `duration` 追加。後方互換 serde テスト（duration 欠落 JSON→0.0）追加。
   - `CueCommand::Wait` を additive 追加（unit variant `"Wait"`・action を持たず時間は envelope duration が担う）。doc に「純粋な待ち・action なし・duration のみ・全表現者が honor」を明記。variant 数 8→9・`cue_command_eight_variants` テストを 9 へ更新。既存 variant ワイヤ形不変を固定する檻を維持。
   - 配送エンベロープ（旧 sakura `TalkCue` 相当・`{ at, actor, command, duration }`）を dola 型として定義（`CuePlayer`／`CueSink` の入出力）。
-- `crates/dola/src/cue/sheet.rs` — `CueSheet { absolute_start_time: f64, cues }`（`#[serde(default)]`・dispatch 刻印）。**`CueSheet→schedule` 正規化を dola の唯一の変換へ統合**（旧 `compile_sheet` の min 正規化＝先頭待ちを食う挙動を廃し、絶対アンカー＋相対 start_time をそのまま・同一 at FIFO・horizon 算出）。sakura `to_schedule` はこれへ吸収。
+- `crates/dola/src/cue/sheet.rs` — `CueSheet { absolute_start_time: f64, cues }`（`#[serde(default)]`・dispatch 刻印）。**`CueSheet→schedule` 正規化を dola の唯一の変換へ統合**（旧 `compile_sheet` の min 正規化＝先頭待ちを食う挙動を廃し、絶対アンカー＋相対 start_time をそのまま・同一 at FIFO・horizon 算出）。sakura `to_schedule` はこれへ吸収。**変換時に各 cue の duration を有限・非負へ clamp**（NaN/±inf/負→0・Topic 4）＝horizon/reveal の単一権威ガード。
 - `crates/dola/src/cue/schedule.rs` — `TimedSchedule` に完了 horizon（`max(start+duration)`）を保持し `is_completed` を「entry 枯渇かつ現在 ≥ horizon」へ（占有終了まで完了扱いしない・Topic 1）。`Entry::Payload` signature は不変（duration は配送エンベロープ／CueSheet 側が保持）。
 - `crates/dola/src/cue/runtime.rs` — **新規 `CuePlayer`**（受動的注入時刻ランタイム）。再生状態機械（Playing/Paused/Waiting/Completed）・完了判定（horizon）・バリア seam（外部解決待ちで停止）・Choice 先積み・**broadcast fan-out（登録 `CueSink` 群へ ready cue を同一絶対時刻で配る）**。旧 wintf `CueQueue`（`TimedSchedule` への薄い ECS ラッパ）と sakura `drive.on_tick` の制御責務を一本化。スレッド/channel は持たない（アクター化は sakura の領分）。
 - `crates/dola/src/cue/sink.rs` — **新規 `CueSink` トレイト 1 本**（`fn emit(&mut self, cue: 配送エンベロープ)`）。旧 `SurfaceSink`/`TextSink` 2 本を統合（broadcast＋演者側 relevance ゆえ役割分割不要）。`cue_target_of`（Shell/Balloon 分類器）を dola へ移し、全演者が共有する relevance 単一権威とする。
@@ -165,7 +165,7 @@ crates/
   - `compile` 結果の `CueSheet` へ `absolute_start_time` を dispatch 時刻で刻印し `CuePlayer` へ渡す。
   - **完了中継**: `CuePlayer` の完了（現在 ≥ horizon）を検知して `TalkDone` を kanade へ発火（entry 枯渇でなく占有終了・末尾 Wait/最終 Text の duration を落とさない）。Close/中断の funnel・バリア seam での絶対開始時刻再調停も担う。
   - 旧 `to_schedule`／`on_tick` broadcast は dola `CuePlayer` へ移設ゆえ削除（車輪の再発明を絶つ）。
-- `crates/areka-emo-text/src/state.rs` — `TextLayerConfig.char_wait` 撤去（`line_pitch_factor` 残置）。`apply_cue` から `config` 引数除去（reveal ペースは `cue.duration` 由来）。`RevealSchedule::extend_chunk` 第 3 引数を `char_wait`→`interval`（=`D/N`）へ意味変更。**honor 契約**: 非担当 cue（Emote/Wait/BalloonSurface 等）は action 無視・duration は honor（talk extent 整合）。reveal 系テストを D 駆動へ更新。
+- `crates/areka-emo-text/src/state.rs` — `TextLayerConfig.char_wait` 撤去（`line_pitch_factor` 残置）。`apply_cue` から `config` 引数除去（reveal ペースは `cue.duration` 由来）。`RevealSchedule::extend_chunk` 第 3 引数を `char_wait`→`interval` へ意味変更・**`interval = if N>0 { duration/N } else { 0.0 }`（N=0 は 0 割り回避・追記なし）**。duration は dola ingress で clamp 済（有限・非負）ゆえ `times` は常に単調＝`visible` の二分探索前提が全域で成立。duration=0 → interval=0 → 全グリフ即時（同時）表示。**honor 契約**: 非担当 cue（Emote/Wait/BalloonSurface 等）は action 無視・duration は honor（talk extent 整合）。reveal 系テストを D 駆動へ更新（負/NaN clamp・N=0・D=0 の縮退檻を含む）。
 - `crates/areka-emo-text/src/actor.rs` — **`dola::CueSink` を実装**（単一 sink・旧 TextSink 置換）。`apply_cue` の config 引数除去（`config`＝`line_pitch_factor` は `DWriteMetrics::new` 用に保持）。演者側 relevance（`cue_target_of==Balloon`）で action・非該当は duration honor。in-source テストヘルパへ `duration` 追加。
 - `crates/areka-seriko/src/actor.rs` — **`dola::CueSink` を実装**（単一 sink・旧 SurfaceSink 置換）。受け取った全 cue のうち `cue_target_of==Shell` のみ action、他（Text/Wait/Clear/NewLine/Choice）は **action 無視・duration honor**。非 Shell 受信は正常ゆえ `warn`→良性 `debug`。in-source テストヘルパへ `duration` 追加。
 - `crates/areka-ghost/src/sink.rs` — **live path 配線ハーネス**（kanade→dispatcher→dola CuePlayer→CueSinks）。`LogSink` を **単一 `dola::CueSink`** へ（旧 SurfaceSink/TextSink 両実装＋両スロット二重配線を解消＝**二重ログが根から消える**・1 演者 1 sink）。`command_kind` の網羅 match へ `Wait => "Wait"`（catch-all 無し流儀・`command_kind_covers_every_cue_command_variant` テストへ Wait を追加）。
@@ -389,10 +389,11 @@ pub fn compile(instructions: &[Instruction]) -> CompiledTalk;
 本 spec は失敗経路を新設しない。既存の log-first 規律（`error!`＋継続・panic は致命限定）を踏襲する。
 
 ### Error Categories and Responses
-- **縮退（正常経路）**: `duration=0` かつ N>0 → 即時可視。`duration<0`（想定外）→ `interval<0` は `max(r_{i-1}+interval, at)` が `at` 下限で吸収（monotonic 保持）。負値は sakura が生成しないため防御的縮退に留める。
+- **duration の clamp（dola ingress・単一権威／Topic 4）**: canonical 変換／`CuePlayer` が **duration を「有限かつ ≥0」へ clamp**（NaN/±inf/負 → 0）。開発者決裁「duration≤0 や NaN は 0 とみなす」（+inf も horizon=∞＝talk が永遠に終わらない同種病理ゆえ畳込み）。これにより horizon（`max(start+duration)`）の完了判定と reveal の `times` 単調性（`visible` の二分探索前提）が、跨プロセスの未検証台本でも**全域で well-defined**。旧「`interval<0` を `max` が吸収（monotonic 保持）」は**単一 chunk でしか成り立たず chunk 跨ぎで非単調化しうる誤り**だったため、ingress clamp で根本解消する。
+- **縮退（正常経路）**: `duration=0`（clamp 後を含む）かつ N>0 → interval=0 → 全グリフが `at` で**即時（同時）表示**。
 - **N=0（空テキスト）**: reveal 追記なし・除算回避。
 - **broadcast の非担当 cue**: 各表現者は action せず duration を honor（エラーでない・正常）。旧「unclassifiable」中央エラーログは撤去（broadcast では非担当受信が正常）。
-- **非有限 tick**: drive `on_tick` の既存 NaN/inf ガード（schedule を進めず `error!`・ループ継続）を無改変で維持（9.1）。**duration が offset へ流れるため、`text_playback_duration` の戻り値の有限・非負を計算層で保証**（`TimedSchedule` の非負ガードは debug-only ゆえ release で NaN が partition_point を壊す・D3-V/P25）。
+- **非有限 tick**: drive／`CuePlayer` の tick 時刻側 NaN/inf ガード（schedule を進めず `error!`・ループ継続）を維持（9.1）。duration 側は上記 **ingress clamp が単一権威**（`text_playback_duration` の有限・非負だけに頼らず＝自作 cue に限る穴を ingress clamp が塞ぐ）。D3-V/P25 の release NaN ハザードを horizon／reveal 両面で無効化する。
 - **serde 欠損**: `#[serde(default)]` により欠落 duration は 0.0（エラーにしない・9.4）。
 
 ### Monitoring

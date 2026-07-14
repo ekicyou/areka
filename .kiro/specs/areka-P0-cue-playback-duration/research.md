@@ -371,3 +371,9 @@ Topic 3（wintf CueQueue が duration を落とす doc 矛盾）を深掘りし�
 - **3 topic 同時解消**: Topic 1（horizon）＝dola runtime 本来責務／Topic 2（二重ログ/2 sink trait）＝CueSink 1 本で消滅／Topic 3（変換二重化/wintf duration 欠落）＝変換 1 本＋wintf 撤去で消滅。
 - **反映**: requirements R11 新設（6 AC）・In scope 追記。design Overview 統合節・D7・File Structure（dola `runtime.rs`/`sink.rs` 新規・`sheet.rs` 変換統合・`drive.rs` 縮小・`contract.rs` 移設・wintf 撤去）・emo-text/seriko/ghost を CueSink 化。記憶 [[areka-cue-runtime-consolidated-in-dola]] 新設。
 - **詳細設計初手（未確定）**: dola 既存 `runtime`（storyboard 系: interpolator/timeline_manager/instance_manager…）と cue runtime の結線は cue モジュール内新設で確定（storyboard runtime へ混ぜない・精読済）。
+
+### 10.9 Topic 4 解決（reveal 負/NaN duration → dola ingress で 0 clamp）
+実コード確認: [state.rs:97-99](../../../crates/areka-emo-text/src/state.rs:97) `visible(t)=times.partition_point(r<=t)` は `times` 単調非減少が前提。`extend_chunk` の `r_i=max(r_{i-1}+interval, chunk_start)` は interval 正の間だけ単調＝負/NaN interval かつ chunk 跨ぎで非単調化し `partition_point` が黙って誤カウント（panic せず視覚グリッチ）。design の「interval<0 を max が吸収（monotonic 保持）」は**単一 chunk のみ成立の誤り**。現状 live は単一プロセス・duration=N×50ms（正）ゆえ実害なしだが、Topic 1 の跨プロセス自己完結台本モデルが招く境界の穴。
+**開発者決裁**: 「duration≤0 や NaN は 0 とみなせばよい・0 なら全文字同時表示・0 割りは例外処理で回避」。
+**解（(A) を clamp 規則で確定）**: **duration を「有限かつ ≥0」へ clamp（NaN/±inf/負→0）を dola ingress（統合した canonical 変換／`CuePlayer`）に単一権威で置く**（+inf も horizon=∞＝永遠に終わらない同種病理ゆえ畳込み）。duration は reveal だけでなく horizon（`max(start+duration)`・完了判定）も使うため、ingress で正せば reveal 単調性と horizon 完了が**同時に**守られる。N=0 の 0 割り回避は reveal 側（`interval=if N>0 {D/N} else {0}`・追記なし）。duration=0→interval=0→全グリフ即時（同時）表示。design.md:367 の偽 monotonic 主張を訂正（obvious fix ⑤ 畳込み）。負/NaN 注入の決定論檻。
+**反映**: requirements R1.8 新設。design Error Handling（clamp 単一権威）・File Structure（sheet.rs 変換で clamp・state.rs N=0 ガード）・Testing 縮退檻。
