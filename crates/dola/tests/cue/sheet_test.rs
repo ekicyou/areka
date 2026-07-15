@@ -18,16 +18,19 @@ fn cue_sheet_sorts_by_start_time() {
             actor: ActorKey::from("a"),
             start_time: 3.0,
             payload: CueCommand::Clear.into(),
+            duration: 0.0,
         },
         Cue {
             actor: ActorKey::from("a"),
             start_time: 1.0,
             payload: CueCommand::Text("first".into()).into(),
+            duration: 0.0,
         },
         Cue {
             actor: ActorKey::from("a"),
             start_time: 2.0,
             payload: CueCommand::Text("second".into()).into(),
+            duration: 0.0,
         },
     ]);
 
@@ -49,11 +52,13 @@ fn cue_sheet_len() {
             actor: ActorKey::from("a"),
             start_time: 0.0,
             payload: CueCommand::Clear.into(),
+            duration: 0.0,
         },
         Cue {
             actor: ActorKey::from("b"),
             start_time: 1.0,
             payload: CueCommand::Clear.into(),
+            duration: 0.0,
         },
     ]);
     assert_eq!(sheet.len(), 2);
@@ -68,16 +73,19 @@ fn cue_sheet_stable_sort_preserves_equal_start_time_order() {
             actor: ActorKey::from("a"),
             start_time: 1.0,
             payload: CueCommand::Text("first".into()).into(),
+            duration: 0.0,
         },
         Cue {
             actor: ActorKey::from("a"),
             start_time: 1.0,
             payload: CueCommand::Text("second".into()).into(),
+            duration: 0.0,
         },
         Cue {
             actor: ActorKey::from("a"),
             start_time: 0.5,
             payload: CueCommand::Clear.into(),
+            duration: 0.0,
         },
     ]);
 
@@ -109,16 +117,19 @@ fn filter_by_actor() {
             actor: ActorKey::from("sakura"),
             start_time: 0.0,
             payload: CueCommand::Text("hello".into()).into(),
+            duration: 0.0,
         },
         Cue {
             actor: ActorKey::from("kero"),
             start_time: 0.5,
             payload: CueCommand::Emote { key: "grumble".into() }.into(),
+            duration: 0.0,
         },
         Cue {
             actor: ActorKey::from("sakura"),
             start_time: 1.0,
             payload: CueCommand::Clear.into(),
+            duration: 0.0,
         },
     ]);
 
@@ -139,16 +150,19 @@ fn actors_unique_list() {
             actor: ActorKey::from("sakura"),
             start_time: 0.0,
             payload: CueCommand::Clear.into(),
+            duration: 0.0,
         },
         Cue {
             actor: ActorKey::from("kero"),
             start_time: 0.5,
             payload: CueCommand::Clear.into(),
+            duration: 0.0,
         },
         Cue {
             actor: ActorKey::from("sakura"),
             start_time: 1.0,
             payload: CueCommand::Clear.into(),
+            duration: 0.0,
         },
     ]);
 
@@ -169,16 +183,19 @@ fn compile_sheet_normalizes_to_zero_base() {
             actor: ActorKey::from("a"),
             start_time: 5.0,
             payload: CueCommand::Text("first".into()).into(),
+            duration: 0.0,
         },
         Cue {
             actor: ActorKey::from("a"),
             start_time: 7.0,
             payload: CueCommand::Text("second".into()).into(),
+            duration: 0.0,
         },
         Cue {
             actor: ActorKey::from("a"),
             start_time: 10.0,
             payload: CueCommand::Clear.into(),
+            duration: 0.0,
         },
     ]);
 
@@ -204,11 +221,13 @@ fn compile_sheet_preserves_actor() {
             actor: ActorKey::from("sakura"),
             start_time: 0.0,
             payload: CueCommand::Text("hello".into()).into(),
+            duration: 0.0,
         },
         Cue {
             actor: ActorKey::from("kero"),
             start_time: 1.0,
             payload: CueCommand::Clear.into(),
+            duration: 0.0,
         },
     ]);
 
@@ -227,11 +246,13 @@ fn compile_sheet_normalizes_negative_start_times() {
             actor: ActorKey::from("a"),
             start_time: -2.0,
             payload: CueCommand::Text("first".into()).into(),
+            duration: 0.0,
         },
         Cue {
             actor: ActorKey::from("a"),
             start_time: 1.0,
             payload: CueCommand::Clear.into(),
+            duration: 0.0,
         },
     ]);
 
@@ -248,11 +269,13 @@ fn compile_sheet_preserves_barrier_and_routing_kinds() {
             actor: ActorKey::from("a"),
             start_time: 1.0,
             payload: CueCommand::Text("cmd".into()).into(),
+            duration: 0.0,
         },
         Cue {
             actor: ActorKey::from("a"),
             start_time: 2.0,
             payload: CuePayload::Barrier(BarrierKind::WaitForInput { timeout: None }),
+            duration: 0.0,
         },
         Cue {
             actor: ActorKey::from("a"),
@@ -260,6 +283,7 @@ fn compile_sheet_preserves_barrier_and_routing_kinds() {
             payload: CuePayload::Routing(RoutingCommand::RouteRemove {
                 target: CueTarget::Shell,
             }),
+            duration: 0.0,
         },
     ]);
 
@@ -289,16 +313,19 @@ fn cue_sheet_new_with_nan_start_time_does_not_panic() {
             actor: ActorKey::from("a"),
             start_time: 2.0,
             payload: CueCommand::Clear.into(),
+            duration: 0.0,
         },
         Cue {
             actor: ActorKey::from("a"),
             start_time: f64::NAN,
             payload: CueCommand::Text("nan".into()).into(),
+            duration: 0.0,
         },
         Cue {
             actor: ActorKey::from("a"),
             start_time: 1.0,
             payload: CueCommand::Clear.into(),
+            duration: 0.0,
         },
     ]);
     assert_eq!(sheet.len(), 3);
@@ -314,16 +341,19 @@ fn compile_sheet_nan_start_time_excluded_from_min_yields_nan_offset() {
             actor: ActorKey::from("a"),
             start_time: f64::NAN,
             payload: CueCommand::Text("nan".into()).into(),
+            duration: 0.0,
         },
         Cue {
             actor: ActorKey::from("a"),
             start_time: 5.0,
             payload: CueCommand::Clear.into(),
+            duration: 0.0,
         },
         Cue {
             actor: ActorKey::from("a"),
             start_time: 7.0,
             payload: CueCommand::Clear.into(),
+            duration: 0.0,
         },
     ]);
 
@@ -348,11 +378,13 @@ fn compile_sheet_all_infinite_start_times_yield_nan_offsets() {
             actor: ActorKey::from("a"),
             start_time: f64::INFINITY,
             payload: CueCommand::Text("x".into()).into(),
+            duration: 0.0,
         },
         Cue {
             actor: ActorKey::from("a"),
             start_time: f64::INFINITY,
             payload: CueCommand::Clear.into(),
+            duration: 0.0,
         },
     ]);
 
@@ -373,11 +405,13 @@ fn compile_sheet_partial_infinite_start_time_is_never_delivered() {
             actor: ActorKey::from("a"),
             start_time: 0.0,
             payload: CueCommand::Text("now".into()).into(),
+            duration: 0.0,
         },
         Cue {
             actor: ActorKey::from("a"),
             start_time: f64::INFINITY,
             payload: CueCommand::Text("never".into()).into(),
+            duration: 0.0,
         },
     ]);
 
@@ -454,16 +488,19 @@ fn compile_sheet_to_timed_schedule_integration() {
             actor: ActorKey::from("sakura"),
             start_time: 2.0,
             payload: CueCommand::Text("hello".into()).into(),
+            duration: 0.0,
         },
         Cue {
             actor: ActorKey::from("sakura"),
             start_time: 2.5,
             payload: CuePayload::Barrier(BarrierKind::WaitForInput { timeout: None }),
+            duration: 0.0,
         },
         Cue {
             actor: ActorKey::from("sakura"),
             start_time: 3.0,
             payload: CueCommand::Clear.into(),
+            duration: 0.0,
         },
     ]);
 
@@ -500,11 +537,13 @@ fn cue_sheet_serde_roundtrip() {
             actor: ActorKey::from("sakura"),
             start_time: 0.0,
             payload: CueCommand::Text("hello".into()).into(),
+            duration: 0.0,
         },
         Cue {
             actor: ActorKey::from("kero"),
             start_time: 1.0,
             payload: CuePayload::Barrier(BarrierKind::Timeout { duration: 3.0 }),
+            duration: 0.0,
         },
     ]);
 

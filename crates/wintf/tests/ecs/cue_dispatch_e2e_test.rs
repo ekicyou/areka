@@ -45,11 +45,13 @@ fn dispatch_distributes_commands_to_correct_queues() {
             actor: ActorKey::from("sakura"),
             start_time: 0.0,
             payload: CueCommand::Text("hello".into()).into(),
+            duration: 0.0,
         },
         Cue {
             actor: ActorKey::from("sakura"),
             start_time: 1.0,
             payload: CueCommand::Clear.into(),
+            duration: 0.0,
         },
     ]);
 
@@ -100,11 +102,13 @@ fn dispatch_multiple_actors_independent_consumption() {
             actor: ActorKey::from("sakura"),
             start_time: 0.0,
             payload: CueCommand::Text("sakura says hi".into()).into(),
+            duration: 0.0,
         },
         Cue {
             actor: ActorKey::from("unyu"),
             start_time: 0.5,
             payload: CueCommand::Text("unyu says hello".into()).into(),
+            duration: 0.0,
         },
     ]);
 
@@ -177,12 +181,14 @@ fn routing_commands_update_registry_only() {
                 to: EntityKey::Balloon("new_b".into()),
             }
             .into(),
+            duration: 0.0,
         },
         // 切替後にテキストを配送
         Cue {
             actor: ActorKey::from("sakura"),
             start_time: 0.1,
             payload: CueCommand::Text("after switch".into()).into(),
+            duration: 0.0,
         },
     ]);
 
@@ -232,6 +238,7 @@ fn non_routing_commands_broadcast_to_all_slots() {
         actor: ActorKey::from("sakura"),
         start_time: 0.0,
         payload: CueCommand::Text("broadcast test".into()).into(),
+        duration: 0.0,
     }]);
 
     let tracker_entity = world.spawn_empty().id();
@@ -273,11 +280,13 @@ fn unregistered_actor_skipped_others_delivered() {
             actor: ActorKey::from("ghost"),
             start_time: 0.0,
             payload: CueCommand::Text("I am ghost".into()).into(),
+            duration: 0.0,
         },
         Cue {
             actor: ActorKey::from("sakura"),
             start_time: 0.0,
             payload: CueCommand::Text("I am sakura".into()).into(),
+            duration: 0.0,
         },
     ]);
 
@@ -310,6 +319,7 @@ fn dispatch_converts_relative_to_absolute_time() {
         actor: ActorKey::from("sakura"),
         start_time: 0.5, // 相対 0.5 秒
         payload: CueCommand::Text("delayed".into()).into(),
+        duration: 0.0,
     }]);
 
     let tracker_entity = world.spawn_empty().id();

@@ -16,16 +16,19 @@ fn cue_sheet_sorts_by_start_time_ascending() {
             actor: ActorKey::from("sakura"),
             start_time: 2.0,
             payload: CueCommand::Clear.into(),
+            duration: 0.0,
         },
         Cue {
             actor: ActorKey::from("sakura"),
             start_time: 0.5,
             payload: CueCommand::Text("hello".into()).into(),
+            duration: 0.0,
         },
         Cue {
             actor: ActorKey::from("unyu"),
             start_time: 1.0,
             payload: CueCommand::Clear.into(),
+            duration: 0.0,
         },
     ]);
 
@@ -42,16 +45,19 @@ fn cue_sheet_filter_by_actor() {
             actor: ActorKey::from("sakura"),
             start_time: 0.0,
             payload: CueCommand::Text("hi".into()).into(),
+            duration: 0.0,
         },
         Cue {
             actor: ActorKey::from("unyu"),
             start_time: 0.5,
             payload: CueCommand::Clear.into(),
+            duration: 0.0,
         },
         Cue {
             actor: ActorKey::from("sakura"),
             start_time: 1.0,
             payload: CueCommand::Clear.into(),
+            duration: 0.0,
         },
     ]);
 
@@ -68,16 +74,19 @@ fn cue_sheet_actors_dedup() {
             actor: ActorKey::from("sakura"),
             start_time: 0.0,
             payload: CueCommand::Clear.into(),
+            duration: 0.0,
         },
         Cue {
             actor: ActorKey::from("sakura"),
             start_time: 1.0,
             payload: CueCommand::Clear.into(),
+            duration: 0.0,
         },
         Cue {
             actor: ActorKey::from("unyu"),
             start_time: 0.5,
             payload: CueCommand::Clear.into(),
+            duration: 0.0,
         },
     ]);
 

@@ -192,6 +192,25 @@ pub struct Cue {
     pub start_time: f64,
     /// 演出ペイロード（コマンド / バリア / ルーティング）
     pub payload: CuePayload,
+    /// この cue の presentation 占有時間（秒）。
+    ///
+    /// 全表現者が action を処理するか否かに関わらず honor する（duration honor 契約）。
+    /// 後続 cue の絶対時刻はこの分だけ上流（sakura compile）で焼き込まれるため、
+    /// 表現者はこの値から新たなローカル遅延を生じさせてはならない（二重待ち禁止）。
+    ///
+    /// 全 presentation cue が本フィールドを保持し、時間を占有しない瞬時コマンドは
+    /// **明示的な 0** を持つ（「duration フィールドを持たない cue」という概念を作らない）。
+    /// `#[serde(default)]` により、本フィールドを持たない旧シリアライズ資産は 0 として
+    /// 従来どおり解釈される（後方互換・既存 variant のワイヤ形は不変）。
+    ///
+    /// 値は**不透明な秒数**であり、dola は SakuraScript 固有の意味論
+    /// （1 文字あたりのウェイト値等）を内包しない——算出は上流（sakura）の責務。
+    ///
+    /// 注: `CuePayload::Barrier`（動的停止点）／`Routing`（表現者未配送の制御プレーン）は
+    /// presentation でなく duration 概念が本質的に非該当のため、静的 duration
+    /// タイムラインの外に置かれる（envelope としては一律にフィールドを持ち値は 0）。
+    #[serde(default)]
+    pub duration: f64,
 }
 
 #[cfg(test)]
@@ -434,12 +453,14 @@ mod tests {
             actor: ActorKey::from("sakura"),
             start_time: 1.5,
             payload: CueCommand::Text("hello".into()).into(),
+            duration: 0.0,
         };
         let json = serde_json::to_string(&cue).unwrap();
         let parsed: Cue = serde_json::from_str(&json).unwrap();
         assert_eq!(parsed.actor, cue.actor);
         assert_eq!(parsed.start_time, cue.start_time);
         assert_eq!(parsed.payload, cue.payload);
+        assert_eq!(parsed.duration, cue.duration);
     }
 
     // ── D3-V 境界特性化テスト ──
@@ -465,6 +486,7 @@ mod tests {
             actor: ActorKey::from("sakura"),
             start_time: 1.5,
             payload: CueCommand::Text("hello".into()).into(),
+            duration: 0.0,
         };
         assert_eq!(cue.actor.as_str(), "sakura");
         assert_eq!(cue.start_time, 1.5);
@@ -472,5 +494,111 @@ mod tests {
             cue.payload,
             CuePayload::Command(CueCommand::Text(_))
         ));
+    }
+
+    // ── duration（再生時間）envelope 檻 ──
+
+    #[test]
+    fn cue_duration_defaults_to_zero_for_legacy_serialized_data() {
+        // 再生時間フィールドを持たない旧シリアライズ資産（3 フィールド）を読み込むと
+        // duration=0（瞬時）として従来どおり解釈できる（後方互換）。
+        let legacy = r#"{"actor":"0","start_time":0.0,"payload":{"Command":{"Text":"hi"}}}"#;
+        let parsed: Cue = serde_json::from_str(legacy).unwrap();
+        assert_eq!(parsed.actor, ActorKey::from("0"));
+        assert_eq!(parsed.start_time, 0.0);
+        assert_eq!(parsed.payload, CueCommand::Text("hi".into()).into());
+        assert_eq!(
+            parsed.duration, 0.0,
+            "duration 欠落の旧資産は 0（瞬時）として復元されねばならない"
+        );
+
+        // Barrier / Routing ペイロード（duration 非該当）の旧資産も同様に読める。
+        let legacy_barrier = r#"{"actor":"0","start_time":1.0,"payload":{"Barrier":{"WaitForInput":{"timeout":null}}}}"#;
+        let parsed: Cue = serde_json::from_str(legacy_barrier).unwrap();
+        assert_eq!(parsed.duration, 0.0);
+    }
+
+    #[test]
+    fn cue_duration_roundtrip_preserves_value() {
+        // 新規往復では duration の値が保たれ、既存ペイロードのワイヤ形は変わらない。
+        let cue = Cue {
+            actor: ActorKey::from("sakura"),
+            start_time: 1.5,
+            payload: CueCommand::Text("hello".into()).into(),
+            duration: 0.25,
+        };
+        let json = serde_json::to_string(&cue).unwrap();
+        assert!(
+            json.contains(r#""payload":{"Command":{"Text":"hello"}}"#),
+            "既存 variant のワイヤ形は envelope 拡張後も不変: {json}"
+        );
+
+        let parsed: Cue = serde_json::from_str(&json).unwrap();
+        // Cue は PartialEq 非導出のためフィールドごとに検証する。
+        assert_eq!(parsed.actor, cue.actor);
+        assert_eq!(parsed.start_time, cue.start_time);
+        assert_eq!(parsed.payload, cue.payload);
+        assert_eq!(parsed.duration, 0.25);
+    }
+
+    #[test]
+    fn duration_is_uniform_envelope_field_across_all_payloads() {
+        // 「再生時間フィールドを持たない cue」という概念を作らない——
+        // 全 presentation cue（CueCommand 全 variant）が envelope duration を保持し、
+        // 瞬時コマンドは明示的 0 を持つ（欠落でない）。
+        let payloads: Vec<CuePayload> = vec![
+            CueCommand::Text("hello".into()).into(),
+            CueCommand::Clear.into(),
+            CueCommand::Emote {
+                key: "smile".into(),
+            }
+            .into(),
+            CueCommand::Choice {
+                id: "yes".into(),
+                text: "はい".into(),
+            }
+            .into(),
+            CueCommand::EntityRef(42).into(),
+            CueCommand::Custom {
+                command: "fade".into(),
+                params: DynamicValue::Null,
+            }
+            .into(),
+            CueCommand::NewLine { ratio: 1.0 }.into(),
+            CueCommand::BalloonSurface { key: "2".into() }.into(),
+            // duration 非該当ペイロード（Barrier / Routing）も envelope としては
+            // 一律にフィールドを持つ（値は 0・静的 duration タイムラインの外）。
+            BarrierKind::Timeout { duration: 5.0 }.into(),
+            RoutingCommand::RouteRemove {
+                target: CueTarget::Shell,
+            }
+            .into(),
+        ];
+
+        for payload in payloads {
+            // 瞬時（明示的 0）
+            let instant = Cue {
+                actor: ActorKey::from("sakura"),
+                start_time: 0.0,
+                payload: payload.clone(),
+                duration: 0.0,
+            };
+            let parsed: Cue =
+                serde_json::from_str(&serde_json::to_string(&instant).unwrap()).unwrap();
+            assert_eq!(parsed.duration, 0.0, "瞬時 cue は明示的 0 を保持する");
+            assert_eq!(parsed.payload, instant.payload);
+
+            // 時間占有（不透明秒数）
+            let timed = Cue {
+                actor: ActorKey::from("sakura"),
+                start_time: 0.0,
+                payload,
+                duration: 1.25,
+            };
+            let parsed: Cue =
+                serde_json::from_str(&serde_json::to_string(&timed).unwrap()).unwrap();
+            assert_eq!(parsed.duration, 1.25);
+            assert_eq!(parsed.payload, timed.payload);
+        }
     }
 }

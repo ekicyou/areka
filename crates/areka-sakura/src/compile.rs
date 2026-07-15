@@ -109,6 +109,8 @@ fn emit(scope: u32, offset: f64, command: CueCommand) -> Cue {
         actor: ActorKey::from(scope.to_string()),
         start_time: offset,
         payload: CuePayload::Command(command),
+        // 現状の compile は全 cue を瞬時（明示的 0）として発行する。
+        duration: 0.0,
     }
 }
 

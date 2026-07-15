@@ -7,7 +7,7 @@
   - _Requirements: 10.1, 10.2, 10.3, 10.4, 10.5_
 
 - [ ] 2. Foundation: cue envelope の拡張（duration・Wait・ClearAll・配送エンベロープ）
-- [ ] 2.1 cue envelope へ再生時間を第一級データとして追加し、既存資産の後方互換を保証する
+- [x] 2.1 cue envelope へ再生時間を第一級データとして追加し、既存資産の後方互換を保証する
   - あらゆる cue が再生時間（瞬時は明示的 0）を保持できるようにし、「再生時間フィールドを持たない cue」という概念を作らない
   - 再生時間データを SakuraScript 固有の意味に解釈しない不透明な秒数として扱う
   - 再生時間フィールドを持たない既存のシリアライズ済み cue データを読み込んだ場合、再生時間 0 として解釈できる
@@ -178,3 +178,6 @@
 
 - **Task 1（前提確認・Requirements 10.1–10.5）**: `punctuation_wait` は `crates/**` で grep ゼロ（ヒットは `vendors/pasta` サブモジュールと spec/steering 文書のみ＝areka 実コード外）。`crates/areka-sakura/src/drive.rs` の生スクリプト診断ログも不在——`script` は `drive.rs:148` で `areka_parsers::sakura::parse(&script)` へ渡されるのみで、既存 `tracing` 呼び出し（78/141/159/194/200/208/221/235/265/273/303 行）はいずれも構造化エラー/デバッグ経路であり raw script 本文を出力しない。撤去作業は発生せず。対象外領域（wintf `Typewriter`・テキストレイアウト/描画・mayuna/bind・サーフェスリサイズ・動的制御フロー）への変更もゼロ（作業ツリー clean からの着手）。
 - **検証コマンド**: `cargo test --workspace`（ベースライン全緑・exit 0 を着手前に確認済）。host-32 の i686 成果物（`target/i686-pc-windows-msvc/debug/{shiori.dll,shiori-host32-helper.exe}`）はビルド済みゆえ workspace テストの前提は充足。
+- **リポジトリは rustfmt-clean でない**（HEAD 時点で `cargo fmt --all` は 248 ファイル・`cargo fmt -p dola -- --check` は 40 件の既存 Diff を出す）。`cargo fmt --all` を実行すると本 spec と無関係な整形チャーンが大量混入するため**使わないこと**。整形の是非は本 spec のスコープ外。
+- **Task 5.x への申し送り（Task 2.1 レビュー FINDINGS 2）**: `crates/areka-sakura/src/compile.rs` のテストヘルパ `cue_eq` は `actor`/`start_time`/`payload` のみを比較し `duration` を見ない。全 cue が `duration: 0.0` の現状では無害だが、compile がテキスト cue へ D を焼き込む時点で**必ず `duration` 比較へ拡張が必要**（さもなくば compile の決定性テストが D の回帰を素通しする）。
+- **要件 9.3 括弧内の字句は緩い（実装への指摘ではない）**: 「`#[serde(default)]`＝0 はワイヤ省略」は機構として不正確（省略には `skip_serializing_if` が要る）。規範部は「既存 variant のワイヤ形不変・additive 拡張」であり、design §Data Contracts の「新 JSON は 4 フィールド目を持つ」が権威。**素の `#[serde(default)]` が設計正解**で、`skip_serializing_if` の追加こそが逸脱。

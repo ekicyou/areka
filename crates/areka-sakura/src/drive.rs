@@ -627,12 +627,14 @@ mod tests {
                 actor: ActorKey::from("0"),
                 start_time: 0.0,
                 payload: CuePayload::Command(CueCommand::Text("keep".into())),
+                duration: 0.0,
             },
             Cue {
                 actor: ActorKey::from("0"),
                 start_time: 0.0,
                 // M-boot compile は生成しない payload（防御枝を叩くため直接投入）。
                 payload: CuePayload::Barrier(BarrierKind::WaitForInput { timeout: None }),
+                duration: 0.0,
             },
         ]);
 
