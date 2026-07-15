@@ -1,6 +1,6 @@
 # Implementation Plan
 
-- [ ] 1. 実装前提とスコープ境界の確認
+- [x] 1. 実装前提とスコープ境界の確認
   - `punctuation_wait` ハックと drive の生スクリプト診断ログが残存していないかを確認し、残っていれば撤去する
   - wintf `Typewriter` widget・テキストレイアウト/描画（縦書き・折返し・フォントメトリクス）・mayuna/bind 合成・実行時サーフェスリサイズ・動的制御フロー（一時停止・選択肢）が本 spec の変更範囲に含まれないことを確認する（隣接 spec への委譲を保つ）
   - 観測可能な完了条件: 前提確認結果（ハックが不在または撤去済み・対象外領域に変更が入っていない）が記録される
@@ -173,3 +173,8 @@
   - 観測可能な完了条件: 実機での #3・#4・#6・表情同期の観測結果と人間サインオフの記録が残る
   - _Requirements: 8.1, 8.2, 8.3, 8.4, 8.5_
   - _Depends: 9.1, 9.2, 9.3, 9.4, 9.5_
+
+## Implementation Notes
+
+- **Task 1（前提確認・Requirements 10.1–10.5）**: `punctuation_wait` は `crates/**` で grep ゼロ（ヒットは `vendors/pasta` サブモジュールと spec/steering 文書のみ＝areka 実コード外）。`crates/areka-sakura/src/drive.rs` の生スクリプト診断ログも不在——`script` は `drive.rs:148` で `areka_parsers::sakura::parse(&script)` へ渡されるのみで、既存 `tracing` 呼び出し（78/141/159/194/200/208/221/235/265/273/303 行）はいずれも構造化エラー/デバッグ経路であり raw script 本文を出力しない。撤去作業は発生せず。対象外領域（wintf `Typewriter`・テキストレイアウト/描画・mayuna/bind・サーフェスリサイズ・動的制御フロー）への変更もゼロ（作業ツリー clean からの着手）。
+- **検証コマンド**: `cargo test --workspace`（ベースライン全緑・exit 0 を着手前に確認済）。host-32 の i686 成果物（`target/i686-pc-windows-msvc/debug/{shiori.dll,shiori-host32-helper.exe}`）はビルド済みゆえ workspace テストの前提は充足。
