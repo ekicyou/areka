@@ -63,6 +63,8 @@ fn command_kind(command: &CueCommand) -> &'static str {
         CueCommand::Custom { .. } => "Custom",
         CueCommand::NewLine { .. } => "NewLine",
         CueCommand::BalloonSurface { .. } => "BalloonSurface",
+        CueCommand::Wait => "Wait",
+        CueCommand::ClearAll => "ClearAll",
     }
 }
 
@@ -248,6 +250,8 @@ mod tests {
             command_kind(&CueCommand::BalloonSurface { key: "2".into() }),
             "BalloonSurface"
         );
+        assert_eq!(command_kind(&CueCommand::Wait), "Wait");
+        assert_eq!(command_kind(&CueCommand::ClearAll), "ClearAll");
     }
 
     /// `LogSink` は無蓄積の unit 相当構造体ゆえ、`Clone` した 2 インスタンスを別々に

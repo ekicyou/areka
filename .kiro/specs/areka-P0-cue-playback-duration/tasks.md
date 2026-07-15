@@ -14,7 +14,7 @@
   - 観測可能な完了条件: 再生時間欠落の旧シリアライズ資産を読み込むと再生時間 0 として復元され、新規往復（roundtrip）でも値が保たれることがテストで示される
   - _Requirements: 1.1, 1.2, 1.5, 9.3, 9.4, 9.5_
 
-- [ ] 2.2 純粋な待ちと全消去を第一級コマンドとして追加する
+- [x] 2.2 純粋な待ちと全消去を第一級コマンドとして追加する
   - 明示的な待ち（action を持たず再生時間のみを持つ）を独立したコマンド種別として表現できるようにする
   - 全スコープのバルーン表示を一括で消去するコマンドを、特定スコープのみを消去する既存コマンドと区別して追加する
   - 既存コマンド種別のワイヤ形式を変えない加算的な拡張として実装する
@@ -180,4 +180,7 @@
 - **検証コマンド**: `cargo test --workspace`（ベースライン全緑・exit 0 を着手前に確認済）。host-32 の i686 成果物（`target/i686-pc-windows-msvc/debug/{shiori.dll,shiori-host32-helper.exe}`）はビルド済みゆえ workspace テストの前提は充足。
 - **リポジトリは rustfmt-clean でない**（HEAD 時点で `cargo fmt --all` は 248 ファイル・`cargo fmt -p dola -- --check` は 40 件の既存 Diff を出す）。`cargo fmt --all` を実行すると本 spec と無関係な整形チャーンが大量混入するため**使わないこと**。整形の是非は本 spec のスコープ外。
 - **Task 5.x への申し送り（Task 2.1 レビュー FINDINGS 2）**: `crates/areka-sakura/src/compile.rs` のテストヘルパ `cue_eq` は `actor`/`start_time`/`payload` のみを比較し `duration` を見ない。全 cue が `duration: 0.0` の現状では無害だが、compile がテキスト cue へ D を焼き込む時点で**必ず `duration` 比較へ拡張が必要**（さもなくば compile の決定性テストが D の回帰を素通しする）。
+- **emo-text の `ClearAll` 全スコープ消去は Task 2.2 で実装済み**（design.md:169「`ClearAll` は自身の全 actor_states を消去」＋ D4 の relevance 単一権威が強制。`cue_target_of(ClearAll)==Balloon` ゆえ ignore-arm は D4 と矛盾する嘘のコメントになり、`todo!()` は禁止マーカー）。Task 6.1 は reveal の duration 駆動・`char_wait` 撤去・`CueSink` 実装・7.1/7.2/7.3/7.5 を引き続き所有する。
+- **`ClearAll` は `actors.clear()` でなく `values_mut()` で各エントリを中身だけ空にすること（load-bearing 不変条件）**: `crates/areka-emo-text/src/actor.rs` の `present_frame` は `state.actors()` を走査して再描画対象を決めるため、マップからエントリを**削除**すると当該スコープが再描画対象から落ち、既に描いたテキストが画面へ残留する＝#6 欠陥そのものを再現する。既存 `Clear` と同じイディオム（エントリは残し中身を空に）を守ること。檻 `clear_all_erases_every_actor_scope_unlike_clear` が変異テストで固定済み。
+- **Task 6.2 への申し送り**: `crates/areka-seriko/src/actor.rs` の `None` 腕は「分類できない cue command を受領」と `warn!` する。`Wait => None` は「分類不能」でなく「どの演者の担当でもない」ゆえ、5.2 が Wait を発行し始めると意味的に不正確な warn がノイズになる。6.2 は warn→良性 debug の格下げと**併せてメッセージ文言も**直すこと。
 - **要件 9.3 括弧内の字句は緩い（実装への指摘ではない）**: 「`#[serde(default)]`＝0 はワイヤ省略」は機構として不正確（省略には `skip_serializing_if` が要る）。規範部は「既存 variant のワイヤ形不変・additive 拡張」であり、design §Data Contracts の「新 JSON は 4 フィールド目を持つ」が権威。**素の `#[serde(default)]` が設計正解**で、`skip_serializing_if` の追加こそが逸脱。

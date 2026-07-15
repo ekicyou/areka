@@ -115,15 +115,18 @@ pub enum RoutingCommand {
 // 演出コマンド
 // ============================================================================
 
-/// 演出コマンド（8 バリアント、データ系のみ）。
+/// 演出コマンド（10 バリアント、データ系のみ）。
 ///
 /// バリアは `BarrierKind` として、ルーティングは `RoutingCommand` として、
 /// それぞれ `Entry` レベルで分離済み。
+///
+/// 各コマンドは **action の種別のみ**を表し、時間は常に `Cue` envelope の
+/// `duration` が担う（`Wait` も同様——コマンド側に時間値を埋め込まない）。
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub enum CueCommand {
     /// テキスト表示。意味解釈（縦書き、装飾等）は消費者の責務。
     Text(String),
-    /// コンテンツクリア
+    /// コンテンツクリア（**対象スコープのみ**消去）。全スコープ消去は `ClearAll`。
     Clear,
     /// 演技発現。key の意味解釈は消費者が担う。
     Emote { key: String },
@@ -142,6 +145,19 @@ pub enum CueCommand {
     /// 解釈（数値化・alias）は消費者（seriko）の責務。dola は状態を持たない。
     /// `Emote { key }` と完全対称の不透明 key 転写語彙。
     BalloonSurface { key: String },
+    /// 純粋な待ち（**action を持たない**第一級コマンド）。
+    ///
+    /// 待ち時間は本 variant でなく `Cue` envelope の `duration` が保持する
+    /// （envelope 一律ゆえ、表現者はコマンドを解釈せず duration を honor できる）。
+    /// 上流（sakura compile）が明示ウェイトを offset へ吸収して消さず本 cue として
+    /// 台本に残すことで、末尾・単独の待ちも失われない自己完結した楽譜になる。
+    /// action がないため、どの表現者にとっても担当外（duration のみ honor する）。
+    Wait,
+    /// **全スコープ**のコンテンツクリア（`Clear`＝対象スコープのみ、との峻別）。
+    ///
+    /// 上流は残存スコープを列挙できないため、"全消し"を表現者が自らの全スコープを
+    /// 消す自己完結コマンドとして表現する。テキスト表現者（バルーン）が消費する。
+    ClearAll,
 }
 
 // ============================================================================
@@ -252,7 +268,7 @@ mod tests {
     }
 
     #[test]
-    fn cue_command_eight_variants() {
+    fn cue_command_ten_variants() {
         let cmds = vec![
             CueCommand::Text("hello".into()),
             CueCommand::Clear,
@@ -270,8 +286,10 @@ mod tests {
             },
             CueCommand::NewLine { ratio: 1.0 },
             CueCommand::BalloonSurface { key: "2".into() },
+            CueCommand::Wait,
+            CueCommand::ClearAll,
         ];
-        assert_eq!(cmds.len(), 8);
+        assert_eq!(cmds.len(), 10);
 
         // Clone + Debug + PartialEq
         for cmd in &cmds {
@@ -344,6 +362,116 @@ mod tests {
             let json = serde_json::to_string(&cmd).unwrap();
             let parsed: CueCommand = serde_json::from_str(&json).unwrap();
             assert_eq!(cmd, parsed, "BalloonSurface(key={key:?}) must roundtrip");
+        }
+    }
+
+    /// `Wait`（純粋な待ち）・`ClearAll`（全スコープ消去）の additive 追加檻。
+    ///
+    /// 両者は unit variant ゆえ externally tagged のワイヤ形は裸の文字列
+    /// （`"Wait"` / `"ClearAll"`）になる（5.2・6.3）。
+    #[test]
+    fn cue_command_wait_and_clear_all_serde_roundtrip() {
+        for (cmd, wire) in [
+            (CueCommand::Wait, r#""Wait""#),
+            (CueCommand::ClearAll, r#""ClearAll""#),
+        ] {
+            let json = serde_json::to_string(&cmd).unwrap();
+            assert_eq!(json, wire, "{cmd:?} は unit variant のワイヤ形を持つ");
+            let parsed: CueCommand = serde_json::from_str(&json).unwrap();
+            assert_eq!(cmd, parsed, "{cmd:?} は往復で同一へ復元される");
+        }
+    }
+
+    /// `Clear`（対象スコープのみ消去）と `ClearAll`（全スコープ消去）は峻別される
+    /// 別コマンドであり、ワイヤ上でも取り違えられない（6.3）。
+    #[test]
+    fn clear_and_clear_all_are_distinct_commands() {
+        assert_ne!(CueCommand::Clear, CueCommand::ClearAll);
+        assert_ne!(
+            serde_json::to_string(&CueCommand::Clear).unwrap(),
+            serde_json::to_string(&CueCommand::ClearAll).unwrap()
+        );
+
+        // 一方のワイヤ形が他方へ deserialize されることはない。
+        let parsed: CueCommand = serde_json::from_str(r#""Clear""#).unwrap();
+        assert_eq!(parsed, CueCommand::Clear);
+        let parsed: CueCommand = serde_json::from_str(r#""ClearAll""#).unwrap();
+        assert_eq!(parsed, CueCommand::ClearAll);
+    }
+
+    /// `Wait` は action を持たない（unit variant）——時間は envelope `duration` が担う
+    /// （D2/D3: payload 埋め込みでなく envelope）。ワイヤ形にも duration は現れない（5.1/5.2）。
+    #[test]
+    fn wait_carries_no_action_and_time_lives_in_envelope_duration() {
+        // Wait 単体のワイヤ形に時間値は含まれない（payload は裸の "Wait" のみ）。
+        assert_eq!(
+            serde_json::to_string(&CueCommand::Wait).unwrap(),
+            r#""Wait""#
+        );
+
+        // 待ち時間は envelope 側 `Cue.duration` が保持する。
+        let cue = Cue {
+            actor: ActorKey::from("0"),
+            start_time: 1.0,
+            payload: CueCommand::Wait.into(),
+            duration: 0.5,
+        };
+        let parsed: Cue = serde_json::from_str(&serde_json::to_string(&cue).unwrap()).unwrap();
+        assert_eq!(parsed.payload, CueCommand::Wait.into());
+        assert_eq!(parsed.start_time, 1.0);
+        assert_eq!(
+            parsed.duration, 0.5,
+            "Wait の時間は envelope duration が担う"
+        );
+    }
+
+    /// 既存 8 variant のワイヤ形が Wait/ClearAll の additive 追加後も**完全に不変**である
+    /// ことを、期待 JSON リテラルで固定する（5.2・6.3・9.3）。
+    #[test]
+    fn existing_eight_variants_wire_forms_are_unchanged_by_additive_extension() {
+        let expected: Vec<(CueCommand, &str)> = vec![
+            (CueCommand::Text("hello".into()), r#"{"Text":"hello"}"#),
+            (CueCommand::Clear, r#""Clear""#),
+            (
+                CueCommand::Emote {
+                    key: "smile".into(),
+                },
+                r#"{"Emote":{"key":"smile"}}"#,
+            ),
+            (
+                CueCommand::Choice {
+                    id: "yes".into(),
+                    text: "はい".into(),
+                },
+                r#"{"Choice":{"id":"yes","text":"はい"}}"#,
+            ),
+            (CueCommand::EntityRef(42), r#"{"EntityRef":42}"#),
+            (
+                CueCommand::Custom {
+                    command: "fade".into(),
+                    params: DynamicValue::Null,
+                },
+                r#"{"Custom":{"command":"fade","params":null}}"#,
+            ),
+            (
+                CueCommand::NewLine { ratio: 1.0 },
+                r#"{"NewLine":{"ratio":1.0}}"#,
+            ),
+            (
+                CueCommand::BalloonSurface { key: "2".into() },
+                r#"{"BalloonSurface":{"key":"2"}}"#,
+            ),
+        ];
+        assert_eq!(expected.len(), 8, "既存 variant は 8 種");
+
+        for (cmd, wire) in expected {
+            let json = serde_json::to_string(&cmd).unwrap();
+            assert_eq!(
+                json, wire,
+                "{cmd:?} のワイヤ形は additive 拡張後も不変でなければならない"
+            );
+            let parsed: CueCommand = serde_json::from_str(wire).unwrap();
+            assert_eq!(parsed, cmd, "既存ワイヤ形の資産は従来どおり読める");
         }
     }
 
@@ -566,6 +694,8 @@ mod tests {
             .into(),
             CueCommand::NewLine { ratio: 1.0 }.into(),
             CueCommand::BalloonSurface { key: "2".into() }.into(),
+            CueCommand::Wait.into(),
+            CueCommand::ClearAll.into(),
             // duration 非該当ペイロード（Barrier / Routing）も envelope としては
             // 一律にフィールドを持つ（値は 0・静的 duration タイムラインの外）。
             BarrierKind::Timeout { duration: 5.0 }.into(),

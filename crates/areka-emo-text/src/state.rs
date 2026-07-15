@@ -183,6 +183,21 @@ impl TextLayerState {
                 // schedule ごと初期状態へ戻す（未リビールの文字も含めて破棄＝後出し優先・R2.3）。
                 *self.actors.entry(cue.actor.clone()).or_default() = ActorTextState::default();
             }
+            CueCommand::ClearAll => {
+                tracing::debug!(actor = %cue.actor, "ClearAll cue 適用（全スコープを未リビール分含め消去）");
+                // 対象スコープのみの `Clear` と峻別: 保持する**全** actor スコープの表示
+                // テキスト（未リビール分を含む）を消去する。上流は残存スコープを列挙
+                // できないため、全消しは本状態機械が自己完結して行う。
+                //
+                // 各スコープを初期状態へ**戻す**（`actors` から entry を除去しない）。
+                // 提示層（`present_frame`）は `actors()` の走査で再描画対象を決めるため、
+                // entry ごと消すと当該スコープが走査から外れ、既描画のテキストが画面に
+                // 残留する（＝消えない）。`Clear` と同じ「entry は残し中身を空にする」
+                // 流儀を守ることで、次フレームで空描画され実際に消える。
+                for state in self.actors.values_mut() {
+                    *state = ActorTextState::default();
+                }
+            }
             CueCommand::Choice { .. } => {
                 // M1 対象外（choice-render シーム）: actor ごと初回のみ warn!＋無視・状態は汚さない。
                 if self.choice_warned.insert(cue.actor.clone()) {
@@ -193,10 +208,15 @@ impl TextLayerState {
             // 対象外——上流 routing の責務。防御的に無視する（catch-all を置かず、dola の
             // variant 追加時にコンパイラが再検討を強制する）。`BalloonSurface` は表示系
             // （SurfaceSink/seriko）の消費対象＝文字状態機械へは配送しない防御面（R3.2）。
+            // `Wait` は action を持たない純粋な待ち（cue_target_of が `None` 分類）＝
+            // どの表現者の担当でもなく、本状態機械は状態を変えない。時間は envelope
+            // duration が担い、上流が後続 cue の時刻へ焼き込み済みゆえ、ここで新たな
+            // ローカル遅延を生じさせてはならない（二重待ち禁止）。
             CueCommand::Emote { .. }
             | CueCommand::EntityRef(..)
             | CueCommand::Custom { .. }
-            | CueCommand::BalloonSurface { .. } => {
+            | CueCommand::BalloonSurface { .. }
+            | CueCommand::Wait => {
                 tracing::debug!(actor = %cue.actor, command = ?cue.command, "文字状態機械が消費しない cue を無視（上流 routing の対象外流入）");
             }
         }
@@ -352,6 +372,49 @@ mod tests {
             items_of(&state, "1"),
             &[TextItem::Glyph { ch: 'け' }, TextItem::Glyph { ch: 'ろ' }]
         );
+    }
+
+    /// `ClearAll` は保持する**全**スコープを消去し、対象スコープのみの `Clear` と
+    /// 峻別される。cue の actor（ここでは "0"）に関わらず、当該 talk が書き込んで
+    /// いないスコープ（"1"）も消える点が要点。
+    #[test]
+    fn clear_all_erases_every_actor_scope_unlike_clear() {
+        let mut state = TextLayerState::default();
+        let config = TextLayerConfig::default();
+        state.apply_cue(&cue("0", 0.0, CueCommand::Text("さくら".into())), &config);
+        state.apply_cue(&cue("1", 0.0, CueCommand::Text("けろ".into())), &config);
+
+        // 対象スコープのみの Clear では他スコープが残る（対比）。
+        state.apply_cue(&cue("0", 0.5, CueCommand::Clear), &config);
+        assert!(!items_of(&state, "1").is_empty());
+
+        // ClearAll は cue の actor に関わらず全スコープを消す。
+        state.apply_cue(&cue("0", 1.0, CueCommand::ClearAll), &config);
+        assert!(items_of(&state, "0").is_empty());
+        assert!(
+            items_of(&state, "1").is_empty(),
+            "ClearAll は当該 cue が名指ししていないスコープも消去する"
+        );
+    }
+
+    /// `Wait`（action を持たない純粋な待ち）は文字状態機械の担当外——受け取っても
+    /// テキスト状態を一切変えない（葉の否定的 no-op・二重待ちを生まない）。
+    #[test]
+    fn wait_cue_leaves_text_state_untouched() {
+        let mut state = TextLayerState::default();
+        let config = TextLayerConfig::default();
+        state.apply_cue(&cue("0", 0.0, CueCommand::Text("あ".into())), &config);
+        let before = state
+            .actor_state(&ActorKey::from("0"))
+            .expect("actor state should exist")
+            .clone();
+
+        state.apply_cue(&cue("0", 0.5, CueCommand::Wait), &config);
+
+        let after = state
+            .actor_state(&ActorKey::from("0"))
+            .expect("actor state should exist");
+        assert_eq!(&before, after, "Wait は状態を変えない（action なし）");
     }
 
     // ── R1.6: actor 別振り分け・独立状態・lazily 生成 ──

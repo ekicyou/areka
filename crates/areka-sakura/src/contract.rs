@@ -55,8 +55,9 @@ pub struct TalkCue {
 /// CueCommand → 配送先スロットの分類（写像の正本・R3.3 の 2 系統分離）。
 ///
 /// `Emote` / `EntityRef` / `BalloonSurface` → [`CueTarget::Shell`]、
-/// `Text` / `NewLine` / `Clear` / `Choice` → [`CueTarget::Balloon`]。
-/// 分類不能（`Custom` 等・M-boot compile は生成しない）は `None`（呼び手が error ログ）。
+/// `Text` / `NewLine` / `Clear` / `ClearAll` / `Choice` → [`CueTarget::Balloon`]。
+/// 分類不能（`Custom` 等・M-boot compile は生成しない）と、**どの表現者の担当でもない
+/// `Wait`**（action を持たず duration のみ）は `None`。
 ///
 /// バルーン面切替（`BalloonSurface`）はサーフェス消費系＝表示系（SurfaceSink/seriko 行き）
 /// ゆえ [`CueTarget::Shell`] へ分類する。文字状態機械（`CueTarget::Balloon`＝TextSink/
@@ -72,8 +73,14 @@ pub fn cue_target_of(command: &CueCommand) -> Option<CueTarget> {
         CueCommand::Text(..) => Some(CueTarget::Balloon),
         CueCommand::NewLine { .. } => Some(CueTarget::Balloon),
         CueCommand::Clear => Some(CueTarget::Balloon),
+        // 全スコープ消去はテキスト表現者（バルーン）の担当（Clear と同系）。
+        CueCommand::ClearAll => Some(CueTarget::Balloon),
         CueCommand::Choice { .. } => Some(CueTarget::Balloon),
         CueCommand::Custom { .. } => None,
+        // Wait は action を持たない純粋な待ち＝どの表現者の担当でもない（全員が
+        // action を無視し duration のみ honor する）。分類不能（Custom）とは別理由で
+        // `None` だが、「action する表現者がいない」点で帰結は同じ。
+        CueCommand::Wait => None,
     }
 }
 
@@ -121,6 +128,11 @@ mod tests {
             cue_target_of(&CueCommand::Clear),
             Some(CueTarget::Balloon)
         );
+        // 全スコープ消去もテキスト表現者の担当（対象スコープのみの Clear と同分類）。
+        assert_eq!(
+            cue_target_of(&CueCommand::ClearAll),
+            Some(CueTarget::Balloon)
+        );
         assert_eq!(
             cue_target_of(&CueCommand::Choice {
                 id: "yes".into(),
@@ -137,5 +149,8 @@ mod tests {
             }),
             None
         );
+
+        // Wait は action を持たない＝担当する表現者がいない（全員が duration のみ honor）。
+        assert_eq!(cue_target_of(&CueCommand::Wait), None);
     }
 }
