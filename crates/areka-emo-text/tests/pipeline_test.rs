@@ -45,6 +45,7 @@ fn cue(actor: &str, at: f64, command: CueCommand) -> TalkCue {
         at,
         actor: ActorKey::from(actor),
         command,
+        duration: 0.0,
     }
 }
 

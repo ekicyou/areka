@@ -281,6 +281,7 @@ mod tests {
             at: 5.0,
             actor: ActorKey::from("0"),
             command: CueCommand::Text("hi".into()),
+            duration: 0.0,
         };
         sink.emit(cue.clone());
 

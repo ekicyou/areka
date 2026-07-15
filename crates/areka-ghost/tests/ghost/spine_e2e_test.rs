@@ -394,11 +394,13 @@ mod tests {
             at: 0.0,
             actor: ActorKey::from("0"),
             command: CueCommand::Text("via surface".to_string()),
+            duration: 0.0,
         };
         let text_cue = TalkCue {
             at: 1.0,
             actor: ActorKey::from("0"),
             command: CueCommand::Text("via text".to_string()),
+            duration: 0.0,
         };
 
         SurfaceSink::emit(&mut surface_clone, surface_cue.clone());

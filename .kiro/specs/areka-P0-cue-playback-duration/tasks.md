@@ -22,7 +22,7 @@
   - _Requirements: 5.1, 5.2, 6.1, 6.3_
   - _Depends: 2.1_
 
-- [ ] 2.3 演者へ cue を届ける配送エンベロープを演出タイミング基盤側の型として定義する
+- [x] 2.3 演者へ cue を届ける配送エンベロープを演出タイミング基盤側の型として定義する
   - 発火時刻・演者・コマンド・再生時間を運ぶ搬送体を、さくらスクリプト固有の層でなく演出タイミング基盤側に置く
   - 観測可能な完了条件: 搬送体が再生時間フィールドを保持し、コマンド由来の値を無変形で運べることがテストで示される
   - _Requirements: 1.1_
@@ -182,5 +182,7 @@
 - **Task 5.x への申し送り（Task 2.1 レビュー FINDINGS 2）**: `crates/areka-sakura/src/compile.rs` のテストヘルパ `cue_eq` は `actor`/`start_time`/`payload` のみを比較し `duration` を見ない。全 cue が `duration: 0.0` の現状では無害だが、compile がテキスト cue へ D を焼き込む時点で**必ず `duration` 比較へ拡張が必要**（さもなくば compile の決定性テストが D の回帰を素通しする）。
 - **emo-text の `ClearAll` 全スコープ消去は Task 2.2 で実装済み**（design.md:169「`ClearAll` は自身の全 actor_states を消去」＋ D4 の relevance 単一権威が強制。`cue_target_of(ClearAll)==Balloon` ゆえ ignore-arm は D4 と矛盾する嘘のコメントになり、`todo!()` は禁止マーカー）。Task 6.1 は reveal の duration 駆動・`char_wait` 撤去・`CueSink` 実装・7.1/7.2/7.3/7.5 を引き続き所有する。
 - **`ClearAll` は `actors.clear()` でなく `values_mut()` で各エントリを中身だけ空にすること（load-bearing 不変条件）**: `crates/areka-emo-text/src/actor.rs` の `present_frame` は `state.actors()` を走査して再描画対象を決めるため、マップからエントリを**削除**すると当該スコープが再描画対象から落ち、既に描いたテキストが画面へ残留する＝#6 欠陥そのものを再現する。既存 `Clear` と同じイディオム（エントリは残し中身を空に）を守ること。檻 `clear_all_erases_every_actor_scope_unlike_clear` が変異テストで固定済み。
+- **搬送体 `TalkCue` は dola に唯一定義・sakura は re-export**（Task 2.3）: `dola::cue::TalkCue { at, actor, command, duration }`。`Cue`＝ワイヤ型（Serialize/Deserialize・PartialEq 非導出）と `TalkCue`＝実行時投影（PartialEq・serde 非導出）の derive 分割は設計どおりゆえ崩さないこと。`areka_sakura::contract::TalkCue` は dola 型の re-export で、Task 7.1 が前段の型定義を最終的に片付ける。
+- **Task 3.2 への申し送り（Task 2.3 レビュー FINDINGS 1）**: `crates/dola/src/cue/command.rs` の `talk_cue_envelope_carries_cue_duration_untransformed` と `talk_cue_duration_is_uniform_across_every_command_variant` は、テスト本体で `TalkCue { .., duration: cue.duration }` を組み立ててから等価を主張する**自己充足的な檻**（Rust の構造体代入が自分自身を主張しているだけ・変異テストで素通しを実測済）。構造の檻としては有効だが「無変形」の behavioral な証明は `crates/areka-sakura/src/drive.rs` 側の `to_bits()` 檻が担っている。**3.2 で canonical 変換を dola へ移す際に、この 2 テストを実変換を通す形へ書き直して檻を load-bearing にすること**。
 - **Task 6.2 への申し送り**: `crates/areka-seriko/src/actor.rs` の `None` 腕は「分類できない cue command を受領」と `warn!` する。`Wait => None` は「分類不能」でなく「どの演者の担当でもない」ゆえ、5.2 が Wait を発行し始めると意味的に不正確な warn がノイズになる。6.2 は warn→良性 debug の格下げと**併せてメッセージ文言も**直すこと。
 - **要件 9.3 括弧内の字句は緩い（実装への指摘ではない）**: 「`#[serde(default)]`＝0 はワイヤ省略」は機構として不正確（省略には `skip_serializing_if` が要る）。規範部は「既存 variant のワイヤ形不変・additive 拡張」であり、design §Data Contracts の「新 JSON は 4 フィールド目を持つ」が権威。**素の `#[serde(default)]` が設計正解**で、`skip_serializing_if` の追加こそが逸脱。

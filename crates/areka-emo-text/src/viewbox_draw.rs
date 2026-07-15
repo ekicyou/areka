@@ -1189,6 +1189,7 @@ mod tests {
             at: 0.0,
             actor: actor.clone(),
             command: cmd,
+            duration: 0.0,
         };
         // example の共有 fixture フル シナリオ（行1/2/3＋あふれ誘発の短行 9 本でスクロール発火）。
         state.apply_cue(&mk(CueCommand::Text("おっはよー！".into())), &config);
@@ -1385,6 +1386,7 @@ mod tests {
                 at,
                 actor: self.actor.clone(),
                 command: CueCommand::Text(s.to_owned()),
+                duration: 0.0,
             };
             self.apply(&cue);
         }
@@ -1395,6 +1397,7 @@ mod tests {
                 at,
                 actor: self.actor.clone(),
                 command: CueCommand::NewLine { ratio: 1.0 },
+                duration: 0.0,
             };
             self.apply(&cue);
         }
@@ -1405,6 +1408,7 @@ mod tests {
                 at,
                 actor: self.actor.clone(),
                 command: CueCommand::Clear,
+                duration: 0.0,
             };
             self.apply(&cue);
         }
@@ -1810,6 +1814,7 @@ mod tests {
             at,
             actor: actor.clone(),
             command: cmd,
+            duration: 0.0,
         };
         state.apply_cue(&cue_at(0.0, CueCommand::Text("おっはよー！".into())), &config);
         state.apply_cue(&cue_at(0.5, CueCommand::NewLine { ratio: 1.0 }), &config);
@@ -2055,6 +2060,7 @@ mod tests {
             at: 0.0,
             actor: actor.clone(),
             command: cmd,
+            duration: 0.0,
         };
         // 実 example と同一の cue `at` スケジュール（LINE1 at 0.0・LINE2 at 0.5・LINE3 at 1.2・
         // あふれ短行 at 2.0）。at を分散させることで「幽霊空行」（未リビール NewLine による）
@@ -2063,6 +2069,7 @@ mod tests {
             at,
             actor: actor.clone(),
             command: cmd,
+            duration: 0.0,
         };
         state.apply_cue(&cue_at(0.0, CueCommand::Text("おっはよー！".into())), &config);
         state.apply_cue(&cue_at(0.5, CueCommand::NewLine { ratio: 1.0 }), &config);

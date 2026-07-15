@@ -294,6 +294,8 @@ fn to_schedule(sheet: &CueSheet) -> TimedSchedule<TalkCue> {
                     at: cue.start_time,
                     actor: cue.actor.clone(),
                     command: command.clone(),
+                    // 再生時間は**無変形**で複写する（加工・丸めは行わない）。
+                    duration: cue.duration,
                 };
                 // per-cue insert（extend 禁止）: 同一 at 群を記述順（FIFO）で保つ。
                 schedule.insert(Entry::Payload(cue.start_time, talk_cue));
@@ -646,6 +648,73 @@ mod tests {
         assert_eq!(ready.len(), 1, "非 Command(Barrier) は skip され Command のみ残る");
         assert_eq!(ready[0].command, CueCommand::Text("keep".into()));
         assert_eq!(ready[0].at, 0.0);
+    }
+
+    /// **`Cue.duration` が配送エンベロープへ無変形で複写される**ことを検証する（1.1）。
+    ///
+    /// 相異なる duration（瞬時 0・端数・非表現可能値・長尺）を持つ cue を同一 `at=0.0` へ
+    /// 並べ、`to_schedule` が組んだ [`TalkCue`] が元の値を**ビット等価**で保持することを
+    /// 確認する（10 進近似での一致でなく `to_bits()` ＝どこかで丸め・スケールが入れば FAIL）。
+    /// 同一 `at` 群は記述順（FIFO）で `ready()` に並ぶ（`same_at_cues_preserve_script_order_fifo_within_a_sink`）。
+    #[test]
+    fn to_schedule_copies_cue_duration_into_envelope_untransformed() {
+        use crate::contract::{ActorKey, Cue, CuePayload, CueSheet};
+
+        let durations = [0.0_f64, 0.05, 1.0 / 3.0, 12.345_678_9];
+        let cues: Vec<Cue> = durations
+            .iter()
+            .enumerate()
+            .map(|(i, &d)| Cue {
+                actor: ActorKey::from("0"),
+                start_time: 0.0,
+                payload: CuePayload::Command(CueCommand::Text(format!("t{i}"))),
+                duration: d,
+            })
+            .collect();
+        let sheet = CueSheet::new(cues);
+
+        let mut schedule = to_schedule(&sheet);
+        schedule.tick(0.0);
+        let ready = schedule.ready();
+
+        assert_eq!(ready.len(), durations.len(), "全 cue が due（同一 at=0.0）");
+        for (i, &d) in durations.iter().enumerate() {
+            assert_eq!(
+                ready[i].command,
+                CueCommand::Text(format!("t{i}")),
+                "同一 at 群は記述順（FIFO）で並ぶ"
+            );
+            assert_eq!(
+                ready[i].duration.to_bits(),
+                d.to_bits(),
+                "duration={d} は搬送体へビット等価で複写される（無変形）"
+            );
+        }
+    }
+
+    /// 純粋な待ち（`CueCommand::Wait`）の時間も、コマンド側でなく**搬送体の duration**が
+    /// 運ぶ（1.1・envelope 一律）。担当演者のいない cue でも duration は落ちない。
+    #[test]
+    fn to_schedule_carries_duration_for_wait_cue_without_action() {
+        use crate::contract::{ActorKey, Cue, CuePayload, CueSheet};
+
+        let sheet = CueSheet::new(vec![Cue {
+            actor: ActorKey::from("0"),
+            start_time: 0.0,
+            payload: CuePayload::Command(CueCommand::Wait),
+            duration: 0.5,
+        }]);
+
+        let mut schedule = to_schedule(&sheet);
+        schedule.tick(0.0);
+        let ready = schedule.ready();
+
+        assert_eq!(ready.len(), 1);
+        assert_eq!(ready[0].command, CueCommand::Wait, "action は持たない");
+        assert_eq!(
+            ready[0].duration, 0.5,
+            "Wait の時間は搬送体の duration が運ぶ（コマンド埋め込みでない）"
+        );
     }
 
     /// **終端時に done 受信端が drop 済みでも body が panic せず clean exit する**ことを検証する

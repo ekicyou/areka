@@ -256,6 +256,7 @@ mod tests {
             at,
             actor: ActorKey::from(actor),
             command,
+            duration: 0.0,
         }
     }
 

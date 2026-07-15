@@ -19,6 +19,7 @@ fn emote_cue(at: f64, scope: &str, key: &str) -> TalkCue {
         at,
         actor: ActorKey::from(scope),
         command: CueCommand::Emote { key: key.into() },
+        duration: 0.0, // 表情切替は瞬時（明示的 0）。
     }
 }
 

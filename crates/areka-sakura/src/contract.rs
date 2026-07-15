@@ -1,9 +1,12 @@
 //! 契約層（contract）— kanade との授受型・出力契約・cue 写像の宣言。
 //!
 //! kanade（③）・seriko（⑤）・emo（⑥）・ghost-setup が消費するメッセージ／出力／
-//! 終端型と、cue ドメインへの**写像**（[`TalkCue`]・[`cue_target_of`]）を所有する。
+//! 終端型と、cue ドメインへの**写像**（[`cue_target_of`]）を所有する。
 //!
 //! - 出力の意味論は cue ドメイン（dola 正本の型）で表現し、本層は写像を所有する。
+//! - 配送エンベロープ [`TalkCue`] の物理定義は **dola**（`dola::cue::TalkCue`）にあり、
+//!   本層は re-export のみを行う（cue 再生の"制御"＝配送は dola の責務・二重定義しない）。
+//!   下流の import パス（`areka_sakura::contract::TalkCue`）は不変に保つ。
 //! - [`TalkId`]/[`StartTalk`]/[`TalkDone`]/[`TalkEndReason`] は正本 `areka-talk` からの
 //!   re-export（DD-1 解消・kanade↔sakura 授受契約の唯一の物理定義は `areka-talk`）。
 //!   下流の import パス（`areka_sakura::contract::*`）は不変に保つ。
@@ -41,17 +44,6 @@ pub use areka_talk::{StartTalk, TalkDone, TalkEndReason, TalkId};
 
 // ── 出力契約（cue ドメイン・写像の正本は本仕様） ──
 
-/// 1 発火（両 sink 共通形）。requirements の SurfaceCommand級/TextCommand級 の実現形。
-#[derive(Clone, Debug, PartialEq)]
-pub struct TalkCue {
-    /// talk 起点からの相対秒（R2.1・f64 秒＝dola ドメイン）。
-    pub at: f64,
-    /// 話者スコープの転写（scope n → ActorKey(n.to_string())・既定 "0"・R5）。
-    pub actor: ActorKey,
-    /// 演出コマンド（dola 正本・Emote は SurfaceArg の不透明転写・R3.2）。
-    pub command: CueCommand,
-}
-
 /// CueCommand → 配送先スロットの分類（写像の正本・R3.3 の 2 系統分離）。
 ///
 /// `Emote` / `EntityRef` / `BalloonSurface` → [`CueTarget::Shell`]、
@@ -86,7 +78,9 @@ pub fn cue_target_of(command: &CueCommand) -> Option<CueTarget> {
 
 // ── 再輸出（二重定義しない） ──
 pub use areka_parsers::sakura::{NewLineRatio, SurfaceArg};
-pub use dola::cue::{ActorKey, BarrierKind, Cue, CueCommand, CuePayload, CueSheet, CueTarget};
+pub use dola::cue::{
+    ActorKey, BarrierKind, Cue, CueCommand, CuePayload, CueSheet, CueTarget, TalkCue,
+};
 
 #[cfg(test)]
 mod tests {

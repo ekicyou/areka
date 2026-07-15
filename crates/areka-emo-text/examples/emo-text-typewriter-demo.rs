@@ -92,6 +92,7 @@ fn cue(at: f64, command: CueCommand) -> TalkCue {
         at,
         actor: actor(),
         command,
+        duration: 0.0,
     }
 }
 

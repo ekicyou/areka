@@ -13,6 +13,7 @@
 //! | `CuePayload` | CueSheet 記述時の統一型 |
 //! | `CueSheet` | 相対時刻コマンド列（演出台本） |
 //! | `ActorKey` / `CueTarget` / `EntityKey` / `Cue` | 演出ドメイン型 |
+//! | `TalkCue` | 配送エンベロープ（`Cue` の実行時投影・serde 非依存） |
 
 mod command;
 pub mod schedule;
@@ -20,6 +21,7 @@ pub mod sheet;
 
 pub use command::{
     ActorKey, BarrierKind, Cue, CueCommand, CuePayload, CueTarget, EntityKey, RoutingCommand,
+    TalkCue,
 };
 pub use schedule::{Entry, TimedSchedule};
 pub use sheet::{CompiledCue, CueSheet, compile_sheet};

@@ -95,16 +95,19 @@ mod tests {
                 at: 0.0,
                 actor: ActorKey::from("0"),
                 command: CueCommand::Text("hello".into()),
+                duration: 0.0,
             },
             TalkCue {
                 at: 1.5,
                 actor: ActorKey::from("0"),
                 command: CueCommand::Emote { key: "smile".into() },
+                duration: 0.0,
             },
             TalkCue {
                 at: 3.25,
                 actor: ActorKey::from("1"),
                 command: CueCommand::Text("world".into()),
+                duration: 0.0,
             },
         ];
 
@@ -135,6 +138,7 @@ mod tests {
             at: 2.0,
             actor: ActorKey::from("0"),
             command: CueCommand::NewLine { ratio: 1.0 },
+            duration: 0.0,
         };
         TextSink::emit(&mut sink, cue.clone());
         assert_eq!(&*handle.lock().unwrap(), &vec![cue]);

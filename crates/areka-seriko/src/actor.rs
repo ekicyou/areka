@@ -281,6 +281,7 @@ mod tests {
             at,
             actor: ActorKey::from(scope),
             command: CueCommand::Emote { key: key.into() },
+            duration: 0.0, // 表情切替は瞬時（明示的 0）。
         }
     }
 
@@ -411,6 +412,7 @@ mod tests {
             at,
             actor: ActorKey::from(scope),
             command: CueCommand::EntityRef(entity),
+            duration: 0.0,
         }
     }
 
@@ -420,6 +422,7 @@ mod tests {
             at,
             actor: ActorKey::from(scope),
             command: CueCommand::BalloonSurface { key: key.into() },
+            duration: 0.0,
         }
     }
 
