@@ -36,7 +36,7 @@ OnSecondChange リクエストが**正典 Reference（Ref0〜3）＋`Status` ヘ
 
 - **cue-playback-duration と交差面ゼロ**: 編集面は `crates/areka-kanade`（steady/events）＋テストのみ。dola/sakura/emo-text/seriko 不触＝時限ゲート非該当。**ただし実機サインオフは talk 再生品質（#3/#4）の影響を受ける**——サインオフ判定は「自発 talk が発火する」ことに限定し、再生タイミングの正しさは cue-playback の受け入れに帰属（判定を混ぜない）。
 - **position-persist との近接**: 双方 kanade を触るが boot.rs（persist＝初回ゲート）vs steady.rs/events.rs（本 spec）——`events.rs` は双方が additive（persist=OnFirstBoot Ref0・本 spec=OnSecondChange Ref/Status）＝別関数・並走可。
-- **input-events との契約整合**: `Status: choosing`（選択肢表示中）は M-dialogue の増分＝本 spec はヘッダ注入の**口**（enum 化）だけ用意し、値の増分を input-events/choice-render 側が足せる形に。
+- **input-events との契約整合**: `Status: choosing`（選択肢表示中）は M-dialogue の増分＝本 spec はヘッダ注入の**口**（enum 化）だけ用意し、値の増分（`choosing`）は **`areka-P0-choice-select-events`**（2026-07-16 名称確定・再入精査⑧）が足せる形に。
 - **ticker は不触**: 毎秒 Tick の供給は ghost-setup ✅ の ticker（絶対グリッド整列）が正本——本 spec は受けた Tick の**中身の充足**のみ扱う。
 
 ## ukadoc 必読（design 着手時に ukadoc MCP `get_doc`/`search_docs` で正典参照・2026-07-16 裏取り済み）
