@@ -2,7 +2,7 @@
 
 > **種別**: 本坑（main）増分。④ sakura 帰属（M-dialogue の起点＝script 語彙の cue 貫通）＋⓪末端（`\![move]` 消費のみ・薄い結線）。
 > **調査日**: 2026-07-16（再入精査⑧・fixture 実物調査＋コード実態偵察）。
-> **⛔ 時限ゲート**: `areka-P0-cue-playback-duration`（実装中）の**完了が前提**——本 spec の編集面（sakura `compile.rs`・dola `CueCommand`/配送）は同 spec が全面改修中（settled な duration 付き cue モデル＋`CueSink`/`CuePlayer` へ載せる）。着手時に同 spec の最終形（`dola/src/cue/sink.rs`/`runtime.rs`）を再突合すること。
+> **⛔ 時限ゲート（フェーズ別・2026-07-16 精密化）**: `areka-P0-cue-playback-duration`（実装中）の完了が **tasks 生成・実装フェーズの前提**——本 spec の編集面（sakura `compile.rs`・dola `CueCommand`/配送）は同 spec が全面改修中。**要件・設計は先行着手可**（**推奨即時着手**——design で **choice cue 形＋barrier 並び規則を早期確定**し、下流 choice-render の Fable 設計討議へ契約を供給する先鋒の役）。**義務**: cue-playback マージ後に `/kiro-validate-design` を settled コード（`dola/src/cue/sink.rs`/`runtime.rs` の最終形）へ再実行（再突合）してから tasks へ（roadmap 時限ゲート注記「フェーズ別ゲート精密化」が正本）。
 
 ## Problem
 

@@ -2,7 +2,7 @@
 
 > **種別**: 本坑（main）増分。③ kanade 帰属（M-dialogue の完成ユニット＝選択確定→SHIORI→次シーン）。`areka-P0-input-events` brief が明示分離した「OnChoiceSelectEx は choice-render 完了後の増分」の**宛先**（2026-07-16 名称確定・input-events の「マウス入力→kanade→GET→StartTalk」背骨を再利用）。
 > **調査日**: 2026-07-16（再入精査⑧・fixture 実物調査＋コード実態偵察＋ukadoc 裏取り）。
-> **順序**: choice-render（ChoiceSelection 契約の正本）と契約先決ペア——契約が brief 間で先決済みのため**並走可**（撫でクラスタと同型）。cue-playback（CuePlayer/resolve_choice）完了が実質前提。
+> **順序（フェーズ別・2026-07-16 精密化）**: choice-render（ChoiceSelection 契約の正本）と契約先決ペア——契約が brief 間で先決済みのため**並走可**（撫でクラスタと同型）。cue-playback（CuePlayer/resolve_choice）完了が **tasks 生成・実装フェーズの実質前提**——**要件・設計は先行着手可**（カスケード判定純関数・Reference 組立・Status 遷移は cue モデル非依存。OnID 形は正典確定済みで設計不確実性は低い＝Opus xhigh で足りる）。**義務**: cue-playback マージ後に `/kiro-validate-design` 再突合してから tasks へ（roadmap 時限ゲート注記が正本）。
 
 ## Problem
 

@@ -2,7 +2,7 @@
 
 > **種別**: 本坑（main）増分。⑤ seriko 帰属（M-life 構成要素＝まばたき等の自律アニメーション）。roadmap 増分「⑤ seriko: `seriko-loop`（SERIKO ループ＝blink random/bind+random）」の brief 化（2026-07-16 実査注記を正式化）。
 > **調査日**: 2026-07-16（再入精査⑧・2026-07-16 再入精査⑦の実査を継承）。
-> **⛔ 時限ゲート**: `areka-P0-cue-playback-duration`（実装中）の**完了が前提**（再入精査⑦裁定）——同 spec の設計討議が **seriko の cue 受信面を `dola::CueSink` 実装へ書き換える**（記憶 [[areka-cue-runtime-consolidated-in-dola]]）ため、本 spec の Tick 注入口は **settled な受信面**へ増設する。
+> **⛔ 時限ゲート（フェーズ別・2026-07-16 精密化）**: `areka-P0-cue-playback-duration`（実装中）の完了が **tasks 生成・実装フェーズの前提**（再入精査⑦裁定）——同 spec の設計討議が **seriko の cue 受信面を `dola::CueSink` 実装へ書き換える**（記憶 [[areka-cue-runtime-consolidated-in-dola]]）ため、本 spec の Tick 注入口は **settled な受信面**へ増設する。**要件・設計は先行着手可**（**Fable 早期投入の1本目・推奨即時着手**——pattern 純関数・PatternState 公開形・乱数注入・合成入力拡張は cue モデル**非依存**＝設計の大半が今できる。Tick 注入口の節のみ branch 実測を暫定参照と明記）。**義務**: cue-playback マージ後に `/kiro-validate-design` を settled コードへ再実行（再突合）してから tasks へ（roadmap 時限ゲート注記「フェーズ別ゲート精密化」が正本）。
 
 ## Problem
 
