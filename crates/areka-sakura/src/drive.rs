@@ -1246,4 +1246,257 @@ mod tests {
             );
         }
     }
+
+    // ── task 7.2: 完了通知を占有 horizon まで遅らせる drive-level 注入時刻檻（R2.5/D6） ──
+    //
+    // これらは **drive-level**（実 talk アクター＋done チャンネル）でしか捕捉できない早期終了の檻
+    // である（compile-level の extent 檻は「配送し終えた」時点の完了を検知できない）。共通の骨子:
+    //
+    // - **負の窓（早期終了しないことの決定的証明）**: horizon 未満の注入時刻まで駆動した後、
+    //   `done_rx.recv_timeout(NEG_WINDOW)` が **timeout（`is_err()`）** することを主張する。完了通知は
+    //   `is_completed()`（占有 horizon gated）でしか送られないため、horizon 未満では送信自体が起きず
+    //   recv は必ず timeout する。逆にもし「entry 枯渇＝完了」の早期終了バグがあれば、この窓で
+    //   `TalkDone` が既に届き `recv_timeout` が **成功**して `is_err()` が偽になり檻が落ちる（バグ検出）。
+    //   窓長（数百 ms）はアクターの tick 処理（μs 台）を遥かに上回るため、正常系では送信が無く必ず
+    //   timeout、バグ系では送信が窓内に届く——両方向に決定的（実時計依存は安全余裕であって精度要件でない）。
+    // - **時間障壁の兼用**: `recv_timeout(NEG_WINDOW)` の待機中にアクターは投函済み Tick を全消化して
+    //   recv でブロックするため、窓明けの `records`（全 cue 配送済み）と `is_finished()==false`
+    //   （駆動継続）は race なく観測できる。
+    // - **正の確認**: その後 horizon 到達の Tick を投函し `recv_timeout(5s)` で `TalkDone` を受けることで
+    //   「horizon 到達で初めて完了する」を示す（末尾の待ち・最終テキストの duration が終端で切り捨てられない）。
+
+    /// 早期終了バグを疑って完了通知を待つ負の窓長（正常系の timeout 待機・アクター処理 μs を遥かに上回る）。
+    const NEG_WINDOW: Duration = Duration::from_millis(200);
+
+    /// **末尾に明示的な待ちを持つ talk**: 完了通知は cue 配送完了（entry 枯渇）でなく、末尾 Wait の
+    /// 再生時間を含む占有 horizon 到達で初めて発火する（R2.5/D6・#3 の実機構）。
+    ///
+    /// `\s[10]hello\_w[800]\e` の台本（アンカー 0）:
+    ///   ClearAll@0 / Emote{10}@0 / hello@0(dur=D) / Wait@D(dur=0.8)。
+    /// 全 cue の配送は Tick(D) で完了する（entry 枯渇）が、占有 horizon＝`D + 0.8` であり、そこへ達する
+    /// まで `TalkDone` は発火しない。末尾待ちの 0.8 秒が talk 終端で切り捨てられない（早期終了しない）。
+    #[test]
+    fn trailing_wait_talkdone_fires_at_horizon_not_at_cue_exhaustion() {
+        let (done_tx, done_rx) = mpsc::channel::<TalkDone>();
+        let talk_id = TalkId(720);
+        let start = StartTalk {
+            script: r"\s[10]hello\_w[800]\e".to_string(),
+            talk_id,
+        };
+        let sink = RecordingSink::new();
+        let records = sink.records();
+        let handle = spawn_talk(start, done_tx, sink, NoopSink);
+
+        // 期待値は本番と同一の算術で導出（10 進直書きの表現誤差を排除・注入時刻決定論）。
+        let d_hello = text_playback_duration("hello"); // 0.25
+        let w = Duration::from_millis(800).as_secs_f64(); // 0.8（\_w[800]）
+        let t_wait = d_hello; // Wait cue の相対発火時刻
+        let horizon = d_hello + w; // 占有 horizon＝末尾 Wait の再生完了時刻（1.05）
+        let near_horizon = d_hello + w * 0.5; // horizon 手前（entry 枯渇後・horizon 未満）
+
+        // 初回 Tick(0.0) 刻印。Tick(D) で Wait を配送し **entry を枯渇**、さらに horizon 手前まで前進する
+        // （いずれも horizon 未満・単調増加 0.0 < 0.25 < 0.65 < 1.05）。
+        handle.inbox.send(SakuraMsg::Tick(0.0)).unwrap();
+        handle.inbox.send(SakuraMsg::Tick(t_wait)).unwrap();
+        handle.inbox.send(SakuraMsg::Tick(near_horizon)).unwrap();
+
+        // 負の窓: entry 枯渇かつ horizon 手前では完了通知が **発火しない**（配送 ≠ 再生完了・早期終了しない）。
+        assert!(
+            done_rx.recv_timeout(NEG_WINDOW).is_err(),
+            "全 cue 配送済み（entry 枯渇）かつ horizon 未満では TalkDone は発火してはならない（配送 ≠ 完了・R2.5）"
+        );
+        // 窓明けの race なし観測: 全 cue は既に broadcast 配送済み（配送完了）だが完了はしていない。
+        assert_eq!(
+            commands(&records),
+            vec![
+                CueCommand::ClearAll,
+                CueCommand::Emote { key: "10".into() },
+                CueCommand::Text("hello".into()),
+                CueCommand::Wait,
+            ],
+            "末尾 Wait まで含め全 cue が配送済み（占有 horizon 未達でも配送は完了している）"
+        );
+        assert!(
+            !handle.actor.is_finished(),
+            "配送完了後も horizon 未達ゆえ talk は駆動継続（早期終了せず TalkDone 未送出）"
+        );
+
+        // horizon 到達で初めて完了する（末尾 Wait の 0.8 秒が終端で切り捨てられない）。
+        handle.inbox.send(SakuraMsg::Tick(horizon)).unwrap();
+        let done = done_rx
+            .recv_timeout(Duration::from_secs(5))
+            .expect("占有 horizon 到達で TalkDone が発火するべき");
+        assert_eq!(done.talk_id, talk_id, "talk_id エコー");
+        assert_eq!(done.reason, TalkEndReason::Ended, "`\\e` は Ended");
+        handle.actor.join().expect("body は正常終了する");
+    }
+
+    /// **待ちを持たない末尾テキストのみの talk**: 完了通知は最終テキストの **配送時刻**（発火 start）でなく、
+    /// その再生時間 D を含む絶対終了時刻（start + D）到達で発火する（R2.5/D6）。
+    ///
+    /// `\s[10]hello\_w[500]world\e` の台本（アンカー 0）:
+    ///   ClearAll@0 / Emote{10}@0 / hello@0(dur=D_h) / Wait@D_h(dur=0.5) / world@(D_h+0.5)(dur=D_w)。
+    /// 末尾 cue は Text(world)。world は Tick(D_h+0.5) で配送されるが（entry 枯渇）、占有 horizon＝
+    /// `(D_h+0.5) + D_w` であり、world の **再生時間 D_w** が終端で落とされずそこまで完了は遅れる。
+    #[test]
+    fn trailing_final_text_talkdone_fires_after_text_duration_not_at_delivery() {
+        let (done_tx, done_rx) = mpsc::channel::<TalkDone>();
+        let talk_id = TalkId(721);
+        let start = StartTalk {
+            script: r"\s[10]hello\_w[500]world\e".to_string(),
+            talk_id,
+        };
+        let sink = RecordingSink::new();
+        let records = sink.records();
+        let handle = spawn_talk(start, done_tx, sink, NoopSink);
+
+        let d_hello = text_playback_duration("hello"); // 0.25
+        let w = Duration::from_millis(500).as_secs_f64(); // 0.5（\_w[500]）
+        let d_world = text_playback_duration("world"); // 0.25
+        let t_world = d_hello + w; // 末尾テキスト world の配送時刻（0.75）
+        let horizon = t_world + d_world; // world の再生完了時刻＝占有 horizon（1.0）
+
+        // 初回 Tick(0.0) 刻印 → Tick(D_h) で Wait 配送 → Tick(t_world) で末尾 world を配送し entry 枯渇。
+        // t_world は末尾テキストの **発火時刻** であって完了時刻ではない（単調 0.0 < 0.25 < 0.75）。
+        handle.inbox.send(SakuraMsg::Tick(0.0)).unwrap();
+        handle.inbox.send(SakuraMsg::Tick(d_hello)).unwrap();
+        handle.inbox.send(SakuraMsg::Tick(t_world)).unwrap();
+
+        // 負の窓: 末尾テキストは配送済み（発火 start 到達）だが、その再生時間 D_w ぶん完了は遅れる。
+        assert!(
+            done_rx.recv_timeout(NEG_WINDOW).is_err(),
+            "末尾テキストの配送時刻（発火 start）では TalkDone は発火してはならない（再生時間を終端で落とさない・R2.5）"
+        );
+        assert_eq!(
+            commands(&records),
+            vec![
+                CueCommand::ClearAll,
+                CueCommand::Emote { key: "10".into() },
+                CueCommand::Text("hello".into()),
+                CueCommand::Wait,
+                CueCommand::Text("world".into()),
+            ],
+            "末尾テキスト world まで全 cue 配送済み（発火はしたが再生は未完了）"
+        );
+        assert!(
+            !handle.actor.is_finished(),
+            "末尾テキスト配送後も start+D 未達ゆえ駆動継続（配送 ≠ 再生完了）"
+        );
+
+        // start + D（世界の再生完了＝占有 horizon）到達で初めて完了する。
+        handle.inbox.send(SakuraMsg::Tick(horizon)).unwrap();
+        let done = done_rx
+            .recv_timeout(Duration::from_secs(5))
+            .expect("末尾テキストの再生完了（start+D）で TalkDone が発火するべき");
+        assert_eq!(done.talk_id, talk_id, "talk_id エコー");
+        assert_eq!(done.reason, TalkEndReason::Ended, "`\\e` は Ended");
+        handle.actor.join().expect("body は正常終了する");
+    }
+
+    /// **tick 源の liveness 契約**: horizon 未満で tick が止まると `TalkDone` は発火せず、horizon まで
+    /// tick を送り続けると発火する（task 7.2 申し送り＝「tick 源は entries 枯渇後も horizon 到達まで
+    /// tick を送り続ける」）。本 spec は本番 tick 源を変えず、drive は `is_completed()` 成立で発火する。
+    ///
+    /// `\s[10]ab\_w[600]\e`（ab=2char→D=0.1・Wait 0.6・horizon=0.7）で、entry 枯渇（0.1）でも、その先の
+    /// horizon 手前（0.5）でも、tick を止めれば完了通知は保留され、horizon（0.7）到達で初めて発火する。
+    #[test]
+    fn talkdone_withheld_while_ticks_stop_below_horizon_then_fires_on_resume() {
+        let (done_tx, done_rx) = mpsc::channel::<TalkDone>();
+        let talk_id = TalkId(722);
+        let start = StartTalk {
+            script: r"\s[10]ab\_w[600]\e".to_string(),
+            talk_id,
+        };
+        let handle = spawn_talk(start, done_tx, NoopSink, NoopSink);
+
+        let d_ab = text_playback_duration("ab"); // 0.1
+        let w = Duration::from_millis(600).as_secs_f64(); // 0.6
+        let horizon = d_ab + w; // 0.7
+
+        // 初回 Tick(0.0) 刻印 → Tick(D) で Wait 配送＝entry 枯渇。ここで tick を **止める**。
+        handle.inbox.send(SakuraMsg::Tick(0.0)).unwrap();
+        handle.inbox.send(SakuraMsg::Tick(d_ab)).unwrap();
+        // tick 停止中（entry 枯渇・horizon 未満）は完了通知が発火しない。
+        assert!(
+            done_rx.recv_timeout(NEG_WINDOW).is_err(),
+            "tick が horizon 未満で止まると TalkDone は発火しない（entry 枯渇 ≠ 完了・R2.5）"
+        );
+        assert!(!handle.actor.is_finished(), "駆動継続（未完了）");
+
+        // tick を再開するが依然 horizon 手前（0.5 < 0.7）。まだ発火しない。
+        handle.inbox.send(SakuraMsg::Tick(0.5)).unwrap();
+        assert!(
+            done_rx.recv_timeout(NEG_WINDOW).is_err(),
+            "horizon 手前まで進めても未達なら TalkDone は発火しない"
+        );
+        assert!(!handle.actor.is_finished(), "horizon 手前ゆえ依然駆動継続");
+
+        // horizon まで tick を送り切ると初めて発火する（liveness 契約の正の側）。
+        handle.inbox.send(SakuraMsg::Tick(horizon)).unwrap();
+        let done = done_rx
+            .recv_timeout(Duration::from_secs(5))
+            .expect("horizon まで tick を送り続けると TalkDone が発火するべき");
+        assert_eq!(done.talk_id, talk_id, "talk_id エコー");
+        assert_eq!(done.reason, TalkEndReason::Ended, "`\\e` は Ended");
+        handle.actor.join().expect("body は正常終了する");
+    }
+
+    /// **終端理由と絶対終了時刻の型的別概念（D6・R2.5）**: `TalkDone.reason` は compile 時に確定する
+    /// 終端理由 `TalkEndReason`（`Ended`/`Quit`＝時間量でない）に等しく、一方 **発火の時刻** は台本由来の
+    /// 占有 horizon（`absolute_end_time`）で決まる——この 2 つは互いに独立した事実である。
+    ///
+    /// `\s[10]hi\_w[700]\-`（末尾 `\-`→Quit・末尾に Wait 0.7）で、(1) `done.reason` が compile の
+    /// `TalkEndReason::Quit` に一致し（`Ended` の反例で時間由来でないことを示す）、(2) その発火は
+    /// `compiled.sheet.absolute_end_time()` 由来の horizon 到達まで遅れる（entry 枯渇では発火しない）ことを固定する。
+    #[test]
+    fn talkdone_reason_is_compiled_end_while_firing_time_is_horizon_derived() {
+        let script = r"\s[10]hi\_w[700]\-";
+
+        // FACT 1（終端理由）: reason は compile 時に確定する TalkEndReason（時間量でない enum）。
+        let compiled = compile(&areka_parsers::sakura::parse(script));
+        assert_eq!(
+            compiled.end,
+            TalkEndReason::Quit,
+            "末尾 `\\-` の終端理由は Quit（時刻でなく理由）"
+        );
+        // FACT 2（終了時刻）: 発火時刻の権威は台本由来の占有 horizon（アンカー未刻印＝0 起点で導出）。
+        let horizon = compiled.sheet.absolute_end_time(); // 0.1(hi) + 0.7(\_w[700]) = 0.8
+
+        let (done_tx, done_rx) = mpsc::channel::<TalkDone>();
+        let talk_id = TalkId(723);
+        let start = StartTalk {
+            script: script.to_string(),
+            talk_id,
+        };
+        let handle = spawn_talk(start, done_tx, NoopSink, NoopSink);
+
+        let d_hi = text_playback_duration("hi"); // 0.1（末尾 Wait の発火時刻＝entry 枯渇点）
+
+        // 初回 Tick(0.0) 刻印 → Tick(D) で末尾 Wait 配送＝entry 枯渇（horizon=0.8 の遥か手前）。
+        handle.inbox.send(SakuraMsg::Tick(0.0)).unwrap();
+        handle.inbox.send(SakuraMsg::Tick(d_hi)).unwrap();
+        // 発火時刻が horizon 由来である証: entry 枯渇では発火しない（reason が確定していても時刻は別権威）。
+        assert!(
+            done_rx.recv_timeout(NEG_WINDOW).is_err(),
+            "終端理由が確定していても発火は entry 枯渇でなく horizon 到達に従う（時刻は別権威・D6）"
+        );
+        assert!(!handle.actor.is_finished(), "horizon 未達ゆえ駆動継続");
+
+        // 台本由来の horizon 到達で発火。reason は compile 由来（Quit）で、firing time は horizon 由来。
+        handle.inbox.send(SakuraMsg::Tick(horizon)).unwrap();
+        let done = done_rx
+            .recv_timeout(Duration::from_secs(5))
+            .expect("台本由来の horizon 到達で TalkDone が発火するべき");
+        assert_eq!(done.talk_id, talk_id, "talk_id エコー");
+        assert_eq!(
+            done.reason, compiled.end,
+            "reason は compile が確定した TalkEndReason（Quit）に等しい（時間量でない）"
+        );
+        assert_eq!(
+            done.reason,
+            TalkEndReason::Quit,
+            "末尾 `\\-` は Quit（Ended でない＝reason は時刻でなく理由由来）"
+        );
+        handle.actor.join().expect("body は正常終了する");
+    }
 }
