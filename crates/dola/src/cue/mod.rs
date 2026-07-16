@@ -14,10 +14,13 @@
 //! | `CueSheet` | 相対時刻コマンド列（演出台本） |
 //! | `ActorKey` / `CueTarget` / `EntityKey` / `Cue` | 演出ドメイン型 |
 //! | `TalkCue` | 配送エンベロープ（`Cue` の実行時投影・serde 非依存） |
+//! | `CueSink` | 演者非依存の単一出力契約トレイト（全表現者が各自 1 実装） |
+//! | `cue_target_of` | cue→演者担当の relevance 分類（全演者共有の単一権威） |
 
 mod command;
 pub mod schedule;
 pub mod sheet;
+mod sink;
 
 pub use command::{
     ActorKey, BarrierKind, Cue, CueCommand, CuePayload, CueTarget, EntityKey, RoutingCommand,
@@ -25,3 +28,4 @@ pub use command::{
 };
 pub use schedule::{Entry, TimedSchedule};
 pub use sheet::{CompiledCue, CueSheet, compile_sheet, to_talk_schedule};
+pub use sink::{CueSink, cue_target_of};

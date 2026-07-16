@@ -45,7 +45,7 @@
   - _Depends: 3.1_
 
 - [ ] 4. Core: cue 再生ランタイムの一本化
-- [ ] 4.1 演者非依存の出力契約と relevance 判定の単一権威を演出タイミング基盤へ定義する
+- [x] 4.1 演者非依存の出力契約と relevance 判定の単一権威を演出タイミング基盤へ定義する
   - どの演者にも実装できる単一の出力契約（cue を受け取る手段）を用意し、既存の 2 種類に分かれていた出力契約を統合する
   - どの cue がどの演者の担当かを判定する権威を単一の場所へ集約する
   - 観測可能な完了条件: 単一の出力契約を実装したダミー演者が、relevance 判定結果に基づいて担当 cue を選別できることがテストで示される
@@ -189,6 +189,7 @@
 - **`TimedSchedule` に `horizon: f64` フィールド＋`with_horizon(start, horizon)` ctor**（Task 3.2）: `new(start)` は horizon 0.0 既定（**死んだ wintf `CueQueue` パスの `is_completed` 4 箇所を挙動不変に保つため必須**）。`is_completed() = entries.is_empty() && current_barrier.is_none() && current_offset >= horizon`。`Entry::Payload` シグネチャは不変（duration はエンベロープが保持）。0-duration cue では horizon=最終 offset ゆえ従来挙動を保存（5.2 が非零 duration を焼くと horizon-gating が発効）。
 - **sakura の独立変換 `fn to_schedule` は削除済み・drive は `to_talk_schedule` へ委譲**（Task 3.2）。drive のアクター構造（on_tick/完了検知/Close）は据え置き＝shrink は Task 7.1。`compile_sheet` は据え置き（消費者は死んだ wintf ecs/cue のみ・Task 8.2 が撤去）。
 - **Task 2.3 の自己充足檻 2 件は sheet_test.rs へ移設し実変換を通す形へ書き直し済み**（Task 3.2 で load-bearing 化・`to_bits()` で無変形を固定）。command.rs には NOTE breadcrumb を残置。
+- **`dola::cue::CueSink` 単一トレイト＋`cue_target_of` は dola に唯一定義**（Task 4.1）: `sink.rs` に `pub trait CueSink { fn emit(&mut self, cue: TalkCue); }`（infallible・SurfaceSink/TextSink の役割統合＝broadcast＋演者側 relevance ゆえ役割分割不要）と `cue_target_of`（exhaustive・catch-all 無し・10 variant 全分類）を移設。`areka_sakura::contract::cue_target_of` は dola からの re-export（`drive.rs::on_tick` の import パス不変）。**SurfaceSink/TextSink は据え置き**（消費者 emo-text/seriko/ghost の移行は 6.1/6.2/8.1）。演者側 action ゲートは `cue_target_of` に一致させること（seriko=Shell/emo-text=Balloon・D4 単一権威）。
 - **Task 7.2 への申し送り**: drive-level の `TalkDone` を horizon まで遅らせる注入時刻檻と「tick 源は entries 枯渇後も horizon 到達まで tick を送り続ける」liveness 契約は Task 7.2 の領分（3.2 は schedule-level の `is_completed` horizon-gating のみ固定）。
 - **GPU/UI-pump 系の稀な flaky（既知・本 spec 起因でない）**: areka-ghost `spine_e2e_test::s5_close_deadline_exceeded_forces_termination_via_tick_injection` 等の多アクター Tick 注入系も fail-fast 全走時にごく稀に単発落ちする（単独/再走で緑・cue 発火は horizon 変更と独立）。 `cargo test --workspace` を fail-fast で回すと、ごく稀に初期の GPU/UI-pump 実行系スイートが 1 件落ちることがある（`--no-fail-fast` で再現せず・dola/sakura 差分と無関係）。dola のみの変更で緑判定する際は `--no-fail-fast` を用い、GPU 系の単発落ちは本 spec の回帰と混同しないこと（memory: areka-no-ci-gpu-tests-in-cargo-test / 低頻度 race）。
 - **Task 6.2 への申し送り**: `crates/areka-seriko/src/actor.rs` の `None` 腕は「分類できない cue command を受領」と `warn!` する。`Wait => None` は「分類不能」でなく「どの演者の担当でもない」ゆえ、5.2 が Wait を発行し始めると意味的に不正確な warn がノイズになる。6.2 は warn→良性 debug の格下げと**併せてメッセージ文言も**直すこと。
