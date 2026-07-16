@@ -184,7 +184,7 @@ ukadoc MCP で「Status/talking/choosing」を2度検索したがいずれも no
 ## 7. Recommendations for Design Phase
 
 ### 7.1 優先設計判断
-1. **`Status` シーム host32 改変の是非と形**（Option A/B/C）を design 冒頭で決裁。brief 前提「host 側改変なし」は**反証済み**——host32 の `ShioriRequest`/`build_request` 改変は不可避（§3 の file:line 証拠）。
+1. **`Status` シームの形**（Option A/B/C）を design 冒頭で決裁。**是非は決着済み**——要件ディスカッション #1（2026-07-17）で開発者が **(a) M1 に維持**を選択（Requirement 2 据え置き）。brief 前提「host 側改変なし」は**反証済み**ゆえ host32（`shiori-host32-host`）の `ShioriRequest`/`build_request` 破壊的改変は**受容済みコスト**（§3 の file:line 証拠）。設計は「やるか否か」ではなく「どの形（A/B/C）で層貫通させるか」のみを扱う。
 2. **`Status` 値の表現**（拡張 enum: `Talking` 実装・`Choosing`/`Online` シーム）と、talk 無し時の**省略 vs 空値**の扱い（Req2.2・SSP 実挙動 Unknown → 保守的に省略で開始し記録）。
 3. **status を全 `ShioriCall` の属性にするか OnSecondChange 専用にするか**（Req2.3 の一貫性要求との整合）。
 4. **RecordedCall の status 観測フィールド**追加（Req5.3 の観測可能性）。
@@ -201,3 +201,9 @@ ukadoc MCP で「Status/talking/choosing」を2度検索したがいずれも no
 
 ### 7.4 Next Step
 本ギャップ分析を踏まえ `/kiro-design areka-P0-idle-talk` で技術設計へ。design 冒頭で §7.1 の4判断（特に Status シーム host32 改変）を明示的に決裁すること。
+
+---
+
+## 8. 要件ディスカッション決着ログ
+
+- **#1（2026-07-17）— `Status` ヘッダの M1 スコープ帰属**: 開発者決裁 **(a) M1 に維持**。Requirement 2（2.1/2.2/2.3）据え置き。host32（`shiori-host32-host`）の `ShioriRequest`/`build_request` 破壊的 API 変更を**受容済みコスト**として確定（§3 反証を受けて）。設計判断 B1 は「是非」から「形（Option A/B/C）」へ縮退（§7.1.1 参照）。根拠: Req6 実機サインオフ（放置→自発会話）の成立条件が Status での発火制御に依存し得るため、Status を欠くとサインオフ自体が危うい。
