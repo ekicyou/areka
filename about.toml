@@ -1,0 +1,26 @@
+# cargo-about 設定 — 配布物同梱用の第三者ライセンス謝辞を生成する
+#
+# 実行: cargo about generate about.hbs -o THIRD-PARTY-NOTICES.md
+#
+# accepted に列挙したライセンスのみ受理。deny.toml の allow と一致させ、
+# 「ゲートを通る＝謝辞も生成できる」を保つ。
+
+# 依存収集の範囲は CLI で指定する:
+#   cargo about generate --workspace about.hbs -o THIRD-PARTY-NOTICES.md
+# （feature/target はこの about.toml ではなくコマンドライン引数で渡す）
+
+# 配布バイナリに乗らない dev-dependency（test/example 専用。例: wintf の
+# image→ravif→rav1e→libfuzzer-sys(NCSA) チェーン）は謝辞対象から除外する。
+ignore-dev-dependencies = true
+
+accepted = [
+    "MIT",
+    "Apache-2.0",
+    "Apache-2.0 WITH LLVM-exception",
+    "Unlicense",
+    "Zlib",
+    "0BSD",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "Unicode-3.0",
+]
