@@ -26,6 +26,9 @@ areka-P0-input-events: ③ kanade 帰属の入力配信ユニット（M-life「�
   - 暫定退避終了の具体手段を 1 つ確定する（例: 修飾つきダブルクリック、または既存 env-gate 系）。
   - 当たり判定が無い（`None`）場合の Ref4 値（空文字転写か省略か）・Ref6 入力デバイス種の具体値を確定する。
   - M1 送出マウスイベント集合表（OnMouseMove / OnMouseDoubleClick の 2 種）を確定し、`idle-talk` の送出ホワイトリスト檻と整合させる。
+  - （ギャップ分析 §5.2 追加）マウス Input のフェーズルーティング（Steady のみ処理し boot／close 中は防御的に無視する等）を確定する。
+  - （ギャップ分析 §5.2 追加）配線層の保持資源（kanade 投函端・間引き状態・当たり判定 resolver）を UI 側へ載せる方式と粒度（per-scope／per-window）を確定する。
+  - （ギャップ分析 §5.2 追加）座標契約——配線層が渡す窓 client 物理 px 座標＝Ref0／Ref1 の「ローカル座標」＝resolver 入力座標の三者一致（DPI 等倍）——を明文で固定する。
 
 ## Requirements
 
