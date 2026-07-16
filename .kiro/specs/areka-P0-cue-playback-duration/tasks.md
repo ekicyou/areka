@@ -52,7 +52,7 @@
   - _Requirements: 2.4, 11.3_
   - _Depends: 2.3_
 
-- [ ] 4.2 cue 再生ランタイムの状態機械骨格（バリア seam・選択肢先積み）を構築する
+- [x] 4.2 cue 再生ランタイムの状態機械骨格（バリア seam・選択肢先積み）を構築する
   - 既存の 2 箇所に分かれていた cue 再生の状態管理（再生中・停止中・入力待ち・選択肢待ち・完了）を、演出タイミング基盤側の受動的なランタイムへ一本化する
   - 外部解決待ちの停止点（バリア）と選択肢の先積みを、動的な一時停止/再開の状態は持ち込まずに最小限の範囲で移植する
   - 観測可能な完了条件: バリアに到達すると停止し、外部からの解決通知で再開することがテストで示される
@@ -190,6 +190,8 @@
 - **sakura の独立変換 `fn to_schedule` は削除済み・drive は `to_talk_schedule` へ委譲**（Task 3.2）。drive のアクター構造（on_tick/完了検知/Close）は据え置き＝shrink は Task 7.1。`compile_sheet` は据え置き（消費者は死んだ wintf ecs/cue のみ・Task 8.2 が撤去）。
 - **Task 2.3 の自己充足檻 2 件は sheet_test.rs へ移設し実変換を通す形へ書き直し済み**（Task 3.2 で load-bearing 化・`to_bits()` で無変形を固定）。command.rs には NOTE breadcrumb を残置。
 - **`dola::cue::CueSink` 単一トレイト＋`cue_target_of` は dola に唯一定義**（Task 4.1）: `sink.rs` に `pub trait CueSink { fn emit(&mut self, cue: TalkCue); }`（infallible・SurfaceSink/TextSink の役割統合＝broadcast＋演者側 relevance ゆえ役割分割不要）と `cue_target_of`（exhaustive・catch-all 無し・10 variant 全分類）を移設。`areka_sakura::contract::cue_target_of` は dola からの re-export（`drive.rs::on_tick` の import パス不変）。**SurfaceSink/TextSink は据え置き**（消費者 emo-text/seriko/ghost の移行は 6.1/6.2/8.1）。演者側 action ゲートは `cue_target_of` に一致させること（seriko=Shell/emo-text=Balloon・D4 単一権威）。
+- **`CuePlayer` は `crates/dola/src/cue/runtime.rs`・受動的注入時刻ランタイム**（Task 4.2）: `from_sheet(&CueSheet)`（内部で唯一の canonical `to_talk_schedule` を通す）／`from_schedule(TimedSchedule<TalkCue>)`、`tick(t)`／`ready()`（Choice 除外の action cue）／`resolve_click`／`resolve_choice(id)`／`skip_barrier`／`state()`／`pending_choices()`／`current_barrier()`／`remaining()`（テスト内観用・完了契約ではない）。`CuePlayerState::{Playing, WaitingForInput, WaitingForChoice, Completed}`（**Paused なし**＝pause/resume は Non-Goal・dola へ持ち込まない）。Choice cue は `pending_choices` へ先積みし `ready()` から除外。`Timeout` バリアは `Playing` 維持＋継続 tick で schedule 自動解除。**dola には logger（tracing）依存が無い**（新規依存禁止）ゆえ wintf の `Error(EmptyChoiceBarrier)` 状態は移植せず、空 choice の `WaitForChoice` は観測可能に `WaitingForChoice` へ入り `skip_barrier()` で脱出可能（silent dead-end でない・compile は現状バリア非生成の防御パス）。
+- **Task 4.3 への申し送り**: broadcast fan-out＋`register_sink`＋caller-facing `is_completed()`/完了問い合わせ＋`stop()`/discard は 4.2 に未実装（4.3 の領分）。4.2 は `ready()` を観測窓として提供済み・内部 `Completed` は `schedule.is_completed()`（horizon-gated）で遷移する。
 - **Task 7.2 への申し送り**: drive-level の `TalkDone` を horizon まで遅らせる注入時刻檻と「tick 源は entries 枯渇後も horizon 到達まで tick を送り続ける」liveness 契約は Task 7.2 の領分（3.2 は schedule-level の `is_completed` horizon-gating のみ固定）。
 - **GPU/UI-pump 系の稀な flaky（既知・本 spec 起因でない）**: areka-ghost `spine_e2e_test::s5_close_deadline_exceeded_forces_termination_via_tick_injection` 等の多アクター Tick 注入系も fail-fast 全走時にごく稀に単発落ちする（単独/再走で緑・cue 発火は horizon 変更と独立）。 `cargo test --workspace` を fail-fast で回すと、ごく稀に初期の GPU/UI-pump 実行系スイートが 1 件落ちることがある（`--no-fail-fast` で再現せず・dola/sakura 差分と無関係）。dola のみの変更で緑判定する際は `--no-fail-fast` を用い、GPU 系の単発落ちは本 spec の回帰と混同しないこと（memory: areka-no-ci-gpu-tests-in-cargo-test / 低頻度 race）。
 - **Task 6.2 への申し送り**: `crates/areka-seriko/src/actor.rs` の `None` 腕は「分類できない cue command を受領」と `warn!` する。`Wait => None` は「分類不能」でなく「どの演者の担当でもない」ゆえ、5.2 が Wait を発行し始めると意味的に不正確な warn がノイズになる。6.2 は warn→良性 debug の格下げと**併せてメッセージ文言も**直すこと。
