@@ -23,12 +23,26 @@
 //!
 //! 旧 `CueQueue` の状態機械のうち、**バリア seam＋Choice 先積み＋占有 horizon 完了**のみを
 //! 移植する。動的な一時停止/再開（`Paused`/`pause`/`resume`）は Non-Goals ゆえ**持ち込まない**
-//! （dola へ pause/resume 状態を持ち込まない・§Non-Goals）。broadcast fan-out・sink 登録・
-//! caller 向け完了問い合わせ API・中断/破棄は後続 Task 4.3 の領分（本 module では扱わない）。
+//! （dola へ pause/resume 状態を持ち込まない・§Non-Goals）。
+//!
+//! # 配送・完了・中断（Task 4.3）
+//!
+//! Task 4.2 の状態機械骨格の上に、演者への配送口と caller 向けの終了 API を載せる:
+//!
+//! - **broadcast fan-out**（[`register_sink`](CuePlayer::register_sink)／[`tick`](CuePlayer::tick)）:
+//!   準備完了した action cue を、登録された**全** [`CueSink`] へ**選別せず一斉配送**する
+//!   （中央 router による事前振り分けは廃止・どの action を演じるかは演者側 relevance の責務・
+//!   D4）。全 sink が同一の cue 列を同一絶対時刻で受け、協調なしに同期が成立する（R2.1/R1.4）。
+//! - **占有終了検知**（[`is_completed`](CuePlayer::is_completed)）: 配送完了（entry 枯渇）でなく
+//!   占有 horizon 到達で初めて完了とする（末尾 Wait・最終 Text の duration を終端で落とさない・
+//!   早期終了しない・R2.5/D6）。
+//! - **中断/破棄**（[`stop`](CuePlayer::stop)）: 残 entry を破棄して以降の配送を止める（Close/
+//!   中断の discard プリミティブ・アクター層の Close funnel 自体は上流 sakura の領分）。
 
 use super::command::{BarrierKind, CueCommand, TalkCue};
 use super::schedule::TimedSchedule;
 use super::sheet::{CueSheet, to_talk_schedule};
+use super::sink::CueSink;
 
 /// 選択肢バリア（`WaitForChoice`）の手前で先積みされた選択肢データ。
 ///
@@ -75,7 +89,6 @@ enum BarrierReached {
 /// 保持し、その上に再生状態機械（[`CuePlayerState`]）・選択肢先積み（[`PendingChoice`]）・
 /// バリア解決 seam を載せる。旧 wintf `CueQueue`（状態機械）と sakura `drive.on_tick`
 /// （schedule tick＋ready 処理）の制御責務を一本化したもの（D7）。
-#[derive(Debug)]
 pub struct CuePlayer {
     /// 時刻管理の中核（canonical 変換が組む・占有 horizon 保持）。
     schedule: TimedSchedule<TalkCue>,
@@ -85,6 +98,23 @@ pub struct CuePlayer {
     pending_choices: Vec<PendingChoice>,
     /// 直前 tick で配送可能になった cue（Choice 除外済み）のバッファ。
     filtered_ready: Vec<TalkCue>,
+    /// 登録された出力先（演者）。**登録順**で保持し、broadcast はこの順で全 sink へ配る
+    /// （どの sink も全 cue を受ける・演者側 relevance が action を選別する・D4）。
+    sinks: Vec<Box<dyn CueSink>>,
+}
+
+// `Box<dyn CueSink>` は `Debug` を要求しない（`CueSink` は infallible な emit のみの契約）ため
+// `#[derive(Debug)]` は使えない。sink 群は数だけを出し、他フィールドは委譲する手動実装とする。
+impl std::fmt::Debug for CuePlayer {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("CuePlayer")
+            .field("schedule", &self.schedule)
+            .field("state", &self.state)
+            .field("pending_choices", &self.pending_choices)
+            .field("filtered_ready", &self.filtered_ready)
+            .field("sink_count", &self.sinks.len())
+            .finish()
+    }
 }
 
 impl CuePlayer {
@@ -108,7 +138,22 @@ impl CuePlayer {
             state: CuePlayerState::Playing,
             pending_choices: Vec::new(),
             filtered_ready: Vec::new(),
+            sinks: Vec::new(),
         }
+    }
+
+    // ── sink 登録（broadcast 配送先） ──
+
+    /// 出力先（演者）を 1 つ登録する。演者は再生開始前／開始時に登録する想定で、broadcast は
+    /// **登録順**で全 sink へ配る（決定論的順序）。
+    ///
+    /// 登録された全 sink は [`tick`](Self::tick) で準備完了した action cue を**選別なく**受け取る
+    /// （broadcast＝どの sink も全 cue を受ける）。自分が担当する action か否かの選別は**演者側の
+    /// relevance 判定**（[`cue_target_of`](super::sink::cue_target_of) が単一権威）が行い、
+    /// 担当外 cue でも duration は honor する——この振り分けは演者の責務であり本ランタイムは
+    /// 中央 router として事前振り分けしない（D4）。
+    pub fn register_sink(&mut self, sink: Box<dyn CueSink>) {
+        self.sinks.push(sink);
     }
 
     // ── 2 フェーズ API ──
@@ -136,6 +181,11 @@ impl CuePlayer {
             return;
         }
 
+        // schedule が本 tick で実際に前進したか（entry を pop したか）の判定材料。
+        // schedule は前進時のみ ready_buffer を clear→再収集し entries を pop する（remaining 減少）。
+        // 冪等な再 tick や Timeout バリア継続は early-return で ready_buffer を据え置く（remaining
+        // 不変）ため、この差分で「新規に配送可能になった cue」だけを broadcast できる（下記参照）。
+        let remaining_before = self.schedule.remaining();
         self.schedule.tick(current_time);
 
         // ready() から Choice を分離（Choice は先積みし action cue として surface しない）。
@@ -149,6 +199,19 @@ impl CuePlayer {
                     });
                 }
                 _ => self.filtered_ready.push(cue.clone()),
+            }
+        }
+
+        // broadcast fan-out: 準備完了した action cue を、登録された**全** sink へ選別なく配る
+        // （R2.1/R1.4）。schedule が前進して entry を pop した tick（remaining 減少）に限り配送し、
+        // 冪等再 tick・Timeout 継続の early-return（remaining 不変・ready_buffer 据え置き）では
+        // 配送しない——これにより各 cue は生涯 1 回のみ配送される（二重配送しない）。バリア到達で
+        // 待機へ遷移する場合も、バリア**手前**の cue はここで既に配り済み（barrier match より前）。
+        if self.schedule.remaining() < remaining_before {
+            for cue in &self.filtered_ready {
+                for sink in self.sinks.iter_mut() {
+                    sink.emit(cue.clone());
+                }
             }
         }
 
@@ -255,11 +318,37 @@ impl CuePlayer {
         }
     }
 
+    // ── 中断/破棄 ──
+
+    /// 再生を中断し、残 entry を破棄して以降の配送を止める（Close/中断の discard プリミティブ）。
+    ///
+    /// 呼び出し後、プレイヤーは終端（`Completed`）となり、[`tick`](Self::tick) は cue を配送しない。
+    /// これは配送を止める最小プリミティブであり、アクター層の Close funnel（中断トリガの集約・
+    /// `TalkDone` の中断 ACK 返却）自体は上流 sakura talk アクターの領分（本ランタイムは受動）。
+    /// 中断による終端か占有 horizon による自然完了かの区別は、呼び出し側（drive）が保持する
+    /// （本ランタイムはどちらも「以降配送しない終端」として同一に扱う）。
+    pub fn stop(&mut self) {
+        self.schedule.clear();
+        self.pending_choices.clear();
+        self.filtered_ready.clear();
+        self.state = CuePlayerState::Completed;
+    }
+
     // ── 状態照会 ──
 
     /// 現在の再生状態。
     pub fn state(&self) -> &CuePlayerState {
         &self.state
+    }
+
+    /// 占有終了に達したか（caller 向けの完了問い合わせ）。
+    ///
+    /// `true` は占有 horizon 到達（全 entry 配送済み**かつ**現在注入時刻 ≥ 占有 horizon）で確定した
+    /// `Completed` 状態を意味する。entry 枯渇（＝最後の cue の**配送時刻**到達）だけでは `false` の
+    /// ままで、末尾 Wait・最終 Text の duration を含む占有 horizon 到達で初めて `true` になる
+    /// （配送 ≠ 再生完了・早期終了しない・R2.5/D6）。[`stop`](Self::stop) による中断終端でも `true`。
+    pub fn is_completed(&self) -> bool {
+        matches!(self.state, CuePlayerState::Completed)
     }
 
     /// 先積みされた選択肢データ（`WaitForChoice` バリアの手前で蓄積されたもの）。
