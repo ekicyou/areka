@@ -527,8 +527,188 @@ fn compile_sheet_to_timed_schedule_integration() {
 }
 
 // ============================================================================
+// 自己完結した絶対時刻台本（absolute_start_time）テスト — R1.7
+// ============================================================================
+
+/// 絶対開始時刻を刻印していない台本のアンカーは 0.0（既定）。
+#[test]
+fn cue_sheet_absolute_start_time_defaults_to_zero() {
+    let sheet = CueSheet::new(vec![Cue {
+        actor: ActorKey::from("a"),
+        start_time: 1.0,
+        payload: CueCommand::Text("hi".into()).into(),
+        duration: 0.25,
+    }]);
+
+    assert_eq!(sheet.absolute_start_time(), 0.0);
+}
+
+/// R1.7: 各 cue の絶対発火時刻は台本のみから `absolute_start_time + start_time` で導ける。
+#[test]
+fn absolute_fire_time_of_every_cue_derives_from_sheet_alone() {
+    let sheet = CueSheet::new(vec![
+        Cue {
+            actor: ActorKey::from("a"),
+            start_time: 0.0,
+            payload: CueCommand::ClearAll.into(),
+            duration: 0.0,
+        },
+        Cue {
+            actor: ActorKey::from("a"),
+            start_time: 0.5,
+            payload: CueCommand::Text("hello".into()).into(),
+            duration: 0.25,
+        },
+        Cue {
+            actor: ActorKey::from("a"),
+            start_time: 2.25,
+            payload: CueCommand::Emote { key: "3".into() }.into(),
+            duration: 0.0,
+        },
+    ])
+    .with_absolute_start_time(100.0);
+
+    let fired: Vec<f64> = sheet
+        .cues()
+        .iter()
+        .map(|cue| sheet.absolute_fire_time(cue))
+        .collect();
+
+    // アンカー 100.0 ＋ 相対 start_time（相対値は変換されない）
+    assert_eq!(fired, vec![100.0, 100.5, 102.25]);
+}
+
+/// R1.7: talk の絶対終了時刻は `absolute_start_time + max(start_time + duration)`。
+///
+/// 「最後に発火する cue」でも「最大 start_time」でもなく**占有区間の最大端**であることを
+/// 固定する（最長 duration を持つ cue が末尾でない配置で検証）。
+#[test]
+fn absolute_end_time_is_max_of_start_plus_duration_not_last_cue_start() {
+    let sheet = CueSheet::new(vec![
+        Cue {
+            actor: ActorKey::from("a"),
+            // 1.0 + 5.0 = 6.0 が最大端（末尾 cue ではない）
+            start_time: 1.0,
+            payload: CueCommand::Text("long".into()).into(),
+            duration: 5.0,
+        },
+        Cue {
+            actor: ActorKey::from("a"),
+            // 3.0 + 0.5 = 3.5（最大 start_time だが最大端ではない）
+            start_time: 3.0,
+            payload: CueCommand::Wait.into(),
+            duration: 0.5,
+        },
+    ])
+    .with_absolute_start_time(10.0);
+
+    assert_eq!(sheet.absolute_end_time(), 16.0);
+    // 最大 start_time（10.0+3.0）にも、最後の cue の発火時刻にも縮退しない
+    assert_ne!(sheet.absolute_end_time(), 13.0);
+    assert_ne!(sheet.absolute_end_time(), 13.5);
+}
+
+/// R1.7: 末尾の純粋 Wait cue の duration は絶対終了時刻へ算入される（早期終了しない・R2.5 の土台）。
+#[test]
+fn absolute_end_time_includes_trailing_wait_duration() {
+    let sheet = CueSheet::new(vec![
+        Cue {
+            actor: ActorKey::from("a"),
+            start_time: 0.0,
+            payload: CueCommand::Text("bye".into()).into(),
+            duration: 0.15,
+        },
+        Cue {
+            actor: ActorKey::from("a"),
+            start_time: 0.15,
+            payload: CueCommand::Wait.into(),
+            duration: 2.0,
+        },
+    ])
+    .with_absolute_start_time(50.0);
+
+    // 末尾 Wait の発火時刻（50.15）でなく、その duration の終端（52.15）
+    assert_eq!(sheet.absolute_end_time(), 52.15);
+}
+
+/// 空台本は時間を占有しない＝絶対終了時刻はアンカーそのもの。
+#[test]
+fn absolute_end_time_of_empty_sheet_is_the_anchor() {
+    let sheet = CueSheet::new(vec![]).with_absolute_start_time(7.5);
+
+    assert_eq!(sheet.absolute_end_time(), 7.5);
+}
+
+/// 刻印は相対時刻を書き換えない（cue の相対 start_time / duration は不変）。
+#[test]
+fn stamping_absolute_start_time_leaves_relative_times_untouched() {
+    let cues = vec![
+        Cue {
+            actor: ActorKey::from("a"),
+            start_time: 0.0,
+            payload: CueCommand::Text("x".into()).into(),
+            duration: 0.5,
+        },
+        Cue {
+            actor: ActorKey::from("a"),
+            start_time: 0.5,
+            payload: CueCommand::NewLine { ratio: 1.0 }.into(),
+            duration: 0.0,
+        },
+    ];
+    let unstamped = CueSheet::new(cues.clone());
+    let stamped = CueSheet::new(cues).with_absolute_start_time(1234.5);
+
+    let rel = |s: &CueSheet| -> Vec<(f64, f64)> {
+        s.cues()
+            .iter()
+            .map(|c| (c.start_time, c.duration))
+            .collect()
+    };
+    assert_eq!(rel(&stamped), rel(&unstamped));
+    assert_eq!(stamped.absolute_start_time(), 1234.5);
+    // 同一台本でもアンカーが違えば絶対時刻だけがずれる（相対は共有）
+    assert_eq!(
+        stamped.absolute_end_time() - unstamped.absolute_end_time(),
+        1234.5
+    );
+}
+
+// ============================================================================
 // serde テスト
 // ============================================================================
+
+/// R9.3: `absolute_start_time` は `#[serde(default)]`＝アンカーを持たない JSON は 0.0。
+#[test]
+fn cue_sheet_deserializes_without_absolute_start_time_as_zero() {
+    let json = r#"{"cues":[
+        {"actor":"sakura","start_time":0.0,"payload":{"Command":{"Text":"hi"}}}
+    ]}"#;
+    let sheet: CueSheet = serde_json::from_str(json).unwrap();
+
+    assert_eq!(sheet.absolute_start_time(), 0.0);
+    assert_eq!(sheet.len(), 1);
+    assert_eq!(sheet.absolute_end_time(), 0.0);
+}
+
+/// 刻印済みアンカーは roundtrip を跨いで保存される（自己完結台本の搬送）。
+#[test]
+fn cue_sheet_serde_roundtrip_preserves_absolute_start_time() {
+    let sheet = CueSheet::new(vec![Cue {
+        actor: ActorKey::from("sakura"),
+        start_time: 0.5,
+        payload: CueCommand::Text("hello".into()).into(),
+        duration: 0.25,
+    }])
+    .with_absolute_start_time(42.0);
+
+    let json = serde_json::to_string(&sheet).unwrap();
+    let parsed: CueSheet = serde_json::from_str(&json).unwrap();
+
+    assert_eq!(parsed.absolute_start_time(), 42.0);
+    assert_eq!(parsed.absolute_fire_time(&parsed.cues()[0]), 42.5);
+    assert_eq!(parsed.absolute_end_time(), 42.75);
+}
 
 #[test]
 fn cue_sheet_serde_roundtrip() {

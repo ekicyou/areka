@@ -29,7 +29,7 @@
   - _Depends: 2.1, 2.2_
 
 - [ ] 3. Foundation: 自己完結した絶対時刻台本と占有終了判定
-- [ ] 3.1 台本に絶対開始時刻を持たせ、自己完結した絶対時刻台本にする
+- [x] 3.1 台本に絶対開始時刻を持たせ、自己完結した絶対時刻台本にする
   - 台本自身が絶対開始時刻を保持できるようにし、各 cue の相対発火時刻と組み合わせて絶対発火時刻・talk の絶対終了時刻を台本のみから復元可能にする
   - 観測可能な完了条件: 絶対開始時刻を持つ台本から、任意の cue の絶対発火時刻と talk の絶対終了時刻が計算で導出できることがテストで示される
   - _Requirements: 1.7_
@@ -184,5 +184,7 @@
 - **`ClearAll` は `actors.clear()` でなく `values_mut()` で各エントリを中身だけ空にすること（load-bearing 不変条件）**: `crates/areka-emo-text/src/actor.rs` の `present_frame` は `state.actors()` を走査して再描画対象を決めるため、マップからエントリを**削除**すると当該スコープが再描画対象から落ち、既に描いたテキストが画面へ残留する＝#6 欠陥そのものを再現する。既存 `Clear` と同じイディオム（エントリは残し中身を空に）を守ること。檻 `clear_all_erases_every_actor_scope_unlike_clear` が変異テストで固定済み。
 - **搬送体 `TalkCue` は dola に唯一定義・sakura は re-export**（Task 2.3）: `dola::cue::TalkCue { at, actor, command, duration }`。`Cue`＝ワイヤ型（Serialize/Deserialize・PartialEq 非導出）と `TalkCue`＝実行時投影（PartialEq・serde 非導出）の derive 分割は設計どおりゆえ崩さないこと。`areka_sakura::contract::TalkCue` は dola 型の re-export で、Task 7.1 が前段の型定義を最終的に片付ける。
 - **Task 3.2 への申し送り（Task 2.3 レビュー FINDINGS 1）**: `crates/dola/src/cue/command.rs` の `talk_cue_envelope_carries_cue_duration_untransformed` と `talk_cue_duration_is_uniform_across_every_command_variant` は、テスト本体で `TalkCue { .., duration: cue.duration }` を組み立ててから等価を主張する**自己充足的な檻**（Rust の構造体代入が自分自身を主張しているだけ・変異テストで素通しを実測済）。構造の檻としては有効だが「無変形」の behavioral な証明は `crates/areka-sakura/src/drive.rs` 側の `to_bits()` 檻が担っている。**3.2 で canonical 変換を dola へ移す際に、この 2 テストを実変換を通す形へ書き直して檻を load-bearing にすること**。
+- **`CueSheet` は named struct・`absolute_start_time` は `#[serde(default)]`**（Task 3.1）: tuple `(Vec<Cue>)`→`{ absolute_start_time: f64, cues: Vec<Cue> }`（serde 形が配列→オブジェクト・永続化資産無しゆえ後方互換対象外）。導出アクセサ `absolute_fire_time(&cue) = absolute_start_time + cue.start_time`、`absolute_end_time() = absolute_start_time + max(start_time + duration)`（空台本はアンカーそのもの＝相対 horizon の下限 0.0 の fold）。`with_absolute_start_time(t)` で dispatch 時刻を刻印（呼び出しは Task 7.1）。**duration の NaN/±inf/負値 clamp はここで行わず 3.2 の canonical 変換（dola ingress 単一権威）が担う**——`absolute_end_time` へ 2 個目の clamp を足さないこと。`CompiledTalk.end`（`TalkEndReason` enum＝終端理由）と `absolute_end_time`（f64＝終了時刻）は別概念（D6）。
+- **GPU/UI-pump 系の稀な flaky（既知・本 spec 起因でない）**: `cargo test --workspace` を fail-fast で回すと、ごく稀に初期の GPU/UI-pump 実行系スイートが 1 件落ちることがある（`--no-fail-fast` で再現せず・dola/sakura 差分と無関係）。dola のみの変更で緑判定する際は `--no-fail-fast` を用い、GPU 系の単発落ちは本 spec の回帰と混同しないこと（memory: areka-no-ci-gpu-tests-in-cargo-test / 低頻度 race）。
 - **Task 6.2 への申し送り**: `crates/areka-seriko/src/actor.rs` の `None` 腕は「分類できない cue command を受領」と `warn!` する。`Wait => None` は「分類不能」でなく「どの演者の担当でもない」ゆえ、5.2 が Wait を発行し始めると意味的に不正確な warn がノイズになる。6.2 は warn→良性 debug の格下げと**併せてメッセージ文言も**直すこと。
 - **要件 9.3 括弧内の字句は緩い（実装への指摘ではない）**: 「`#[serde(default)]`＝0 はワイヤ省略」は機構として不正確（省略には `skip_serializing_if` が要る）。規範部は「既存 variant のワイヤ形不変・additive 拡張」であり、design §Data Contracts の「新 JSON は 4 フィールド目を持つ」が権威。**素の `#[serde(default)]` が設計正解**で、`skip_serializing_if` の追加こそが逸脱。
