@@ -888,6 +888,13 @@ mod tests {
     /// fixture 駆動の統合テスト（主 observable・R9.3）。`\s[10]hello\w[2]world\e` を注入 Tick 列で
     /// 駆動し、broadcast の単一記録 sink が ClearAll/Emote/hello/Wait/world を **at 昇順・FIFO** で
     /// 受け、最後に `TalkDone{Ended}`（talk_id エコー・R6.6）が返ることを確認する。
+    ///
+    /// **task 9.5（再生時間搬送 e2e・R1.1/7.1）**: 併せて、各 delivered cue の **envelope
+    /// `duration`** が、コンパイル時に焼き込んだ再生時間と**同一算術**（テキストは
+    /// `text_playback_duration`・`\w[2]` は 2×50ms の `Duration` 算術）で一致することを固定する。
+    /// これは実際の `compile → drive → CuePlayer broadcast → sink` 経路上で観測した delivered
+    /// duration が無変形で届くことの唯一の檻であり（他 hop は個別 crate で既に檻済み）、演者側
+    /// reveal 完了時刻（区間 `[at, at+duration)` の終端）を導く素が正しく搬送されることを示す。
     #[test]
     fn fixture_script_drives_broadcast_and_returns_ended() {
         let (done_tx, done_rx) = mpsc::channel::<TalkDone>();
@@ -939,6 +946,40 @@ mod tests {
         for pair in recs.windows(2) {
             assert!(pair[0].at <= pair[1].at, "broadcast は at 昇順");
         }
+
+        // ── task 9.5: delivered envelope duration の無変形搬送檻（R1.1/7.1） ──
+        // 期待値は production 経路と**同一算術**で導く（10 進リテラル直書きは IEEE-754 表現誤差ゆえ
+        // 使わない）: テキストは compile が呼ぶのと同じ `text_playback_duration`、`\w[2]` は parser が
+        // 生成するのと同じ `Duration::from_millis(2 × 50ms).as_secs_f64()`。この delivered duration が
+        // 期待値とビット同一（`==`）なら、D 焼き込み → `to_talk_schedule` → CuePlayer broadcast の
+        // どの hop でも duration が落とされ／ゼロ化され／再導出されていない（無変形搬送）ことの証拠。
+        let d_hello = text_playback_duration("hello");
+        let w2 = Duration::from_millis(100).as_secs_f64(); // \w[2] = 2 × 50ms（parser 算術と同一）
+        let d_world = text_playback_duration("world");
+        assert_eq!(recs[0].duration, 0.0, "ClearAll は瞬時（duration=0）");
+        assert_eq!(recs[1].duration, 0.0, "Emote は瞬時（duration=0）");
+        assert_eq!(
+            recs[2].duration, d_hello,
+            "hello の delivered duration はコンパイル焼き込み D（text_playback_duration）と無変形一致（R1.1/7.1）"
+        );
+        assert_eq!(
+            recs[3].duration, w2,
+            "Wait の delivered duration は \\w[2]=100ms（envelope duration が待ち時間を担う・無変形）"
+        );
+        assert_eq!(
+            recs[4].duration, d_world,
+            "world の delivered duration もコンパイル焼き込み D と無変形一致（演者側 reveal 完了時刻の素）"
+        );
+
+        // 演者側 reveal 完了時刻は delivered cue の区間 `[at, at+duration)` 終端で導かれる
+        // （emo-text state.rs 檻）。その素になる hello の占有終端（at+duration）が後続 Wait の発火
+        // 時刻（＝hello 再生完了後）と一致することを固定し、焼き込み duration が下流タイムラインの
+        // 整列に無変形で効く e2e（コンパイル値 → reveal 完了時刻が同一算術）を drive 層で観測する。
+        assert_eq!(
+            recs[2].at + recs[2].duration,
+            recs[3].at,
+            "hello の reveal 完了時刻（at+duration）は後続 Wait の発火時刻と一致（焼き込み duration が整列の素）"
+        );
     }
 
     /// 冪等/逆行 `Tick` で二重発火しない（設計クリティカルな二重発火ガードの固定・R11.x）。

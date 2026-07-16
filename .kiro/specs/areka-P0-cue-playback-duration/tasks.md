@@ -136,33 +136,33 @@
   - _Depends: 4.3, 3.2_
 
 - [ ] 9. Validation: 横断統合テストと決定論回帰
-- [ ] 9.1 broadcast 配送と relevance 選別の統合テストを追加する
+- [x] 9.1 broadcast 配送と relevance 選別の統合テストを追加する
   - 1 つの台本を cue 再生ランタイムへ流し、登録した複数の出力先が全て同一の cue 列を受信することを確認する
   - 観測可能な完了条件: 表情切替とテキストが混在する台本で、両出力先が受信する cue 列が一致することがテストで示される
   - _Requirements: 2.1, 2.4_
   - _Depends: 8.1_
 
-- [ ] 9.2 honor 契約の統合テストを追加する（葉の no-op・ライフサイクル早期終了防止・relevance の網羅整合）
+- [x] 9.2 honor 契約の統合テストを追加する（葉の no-op・ライフサイクル早期終了防止・relevance の網羅整合）
   - 担当でない cue を受け取っても新たなローカル遅延が生じないこと、末尾の待ちを含む talk がライフサイクルレベルで早期終了しないこと（時刻注入で確認）、全コマンド種別について relevance 判定と各演者の動作対象判定が食い違わないことを確認する
   - talk のコンパイル時に確定する終端理由（正常終了/中断等の区別）と、ライフサイクルレベルの絶対終了「時刻」が別概念であることを型で固定し、両者を混同する回帰を防ぐ
   - 観測可能な完了条件: 担当外 cue 受信後も担当 cue の発火時刻が遅延しないこと、末尾待ちを含む talk の完了通知が絶対終了時刻まで発火しないこと、全コマンド種別で動作する演者が高々 1 つであることがそれぞれテストで示される
   - _Requirements: 2.2, 2.3, 2.5, 5.3, 5.4, 7.5_
   - _Depends: 7.2, 8.1_
 
-- [ ] 9.3 表情切替の再生同期を確認する統合テストを追加する
+- [x] 9.3 表情切替の再生同期を確認する統合テストを追加する
   - テキスト再生完了後の絶対時刻で表情切替 cue が発火し、全出力先が同一絶対時刻の同一台本を受け取ることを確認する
   - 観測可能な完了条件: テキストと表情切替を含む台本で、表情切替の発火時刻がテキストの再生完了時刻と一致することがテストで示される
   - _Requirements: 1.4_
   - _Depends: 8.1_
 
-- [ ] 9.4 talk 冒頭の全消去とその配送順序を確認する統合テストを追加する
+- [x] 9.4 talk 冒頭の全消去とその配送順序を確認する統合テストを追加する
   - 複数スコープに書き込む talk の後に単一スコープへ書き込む talk が続く場合、書き込まれなかったスコープの残存テキストも新しい talk の開始時に消えることを確認する
   - 同一時刻に並ぶ全消去とテキストの配送順序が台本記述順どおりであることを確認する
   - 観測可能な完了条件: 前の talk が複数スコープへ書き込み、次の talk が一部スコープにしか書き込まない場合でも、次の talk 開始時に前の talk の全スコープの表示が消えることがテストで示される
   - _Requirements: 6.2_
   - _Depends: 8.1_
 
-- [ ] 9.5 再生時間搬送のエンドツーエンド決定論テストを追加する
+- [x] 9.5 再生時間搬送のエンドツーエンド決定論テストを追加する
   - コンパイルされた再生時間が、台本正規化・cue 再生ランタイム・出力契約を経て、演者側の reveal タイミングまで無変形に届くことを確認する
   - 観測可能な完了条件: コンパイル時に付与した再生時間の値と、演者側で観測される reveal 完了時刻が、同一の算術で導かれた期待値と一致することがテストで示される
   - _Requirements: 1.1, 7.1_
@@ -210,3 +210,9 @@
 - **Task 8.2 への申し送り**: 旧世代 wintf `ecs/cue`（`CueQueue`/`dispatch`/`tracker`/`compile_sheet` 消費一式＋関連 `*_test.rs`）撤去は 8.1 のスコープ外＝**未着手**（8.1 は `wintf/src/ecs/cue` に一切触れていない）。8.2 は生きた App 未配線の旧世代を削除する（design §File Structure「wintf/src/ecs/cue [撤去]」・R11.5）。撤去後に他クレートのビルド・既存テスト無影響を確認すること。
 - **Task 9.x への申し送り（partition 檻の防御深度・8.1 レビュー観察）**: `spine_e2e_test.rs` の partition 檻は owner table を `cue_target_of` と照合する形で seriko の action gate（＝`cue_target_of` そのもの）と `cue_target_of` 自体を固定する。emo-text の `apply_cue` arm を（`cue_target_of` を触らず）act/ignore 間で動かす発散は本檻では捕まらず、emo-text 側 task 6.1 の honor/state 檻＋網羅 match compile 檻が担う。Task 9.2（honor 契約の網羅整合）で「全 variant について relevance 判定と各演者の動作対象判定が食い違わない」を演者実 arm 側からも固定すると防御深度が上がる（design §Testing honor 契約 ③・任意の増分）。
 - **Task 8.2 で旧世代 wintf `ecs/cue` 全撤去＋dola `compile_sheet` 系撤去完了**: `crates/wintf/src/ecs/cue/` ディレクトリ一式（command/component/dispatch/error/mod/queue/registry/systems/tracker）＋`ecs/mod.rs` の `pub mod cue;`＋`tests/ecs.rs` の cue test 8 宣言＋`tests/ecs/cue_*_test.rs` 8 本を削除。旧世代は生きた App に未配線（撤去前の cue/ 外参照は `pub mod cue;` のみ）ゆえ他クレート無影響。「台本正規化の旧実装」= dola `compile_sheet`＋`CompiledCue`＋`CuePayload::into_entry`（compile_sheet 専用ヘルパ）を `sheet.rs` から撤去し `mod.rs` re-export も除去（新 runtime は `to_talk_schedule` を使い compile_sheet 不使用）。`sheet_test.rs` の `compile_sheet_*`/`into_entry_*` 陳腐化テストを除去（`cue_sheet_new_with_nan_start_time_does_not_panic`＝`CueSheet::new` 検証は保全・`to_talk_schedule_preserves_leading_wait_unlike_compile_sheet`→`to_talk_schedule_preserves_leading_wait` に改修し compile_sheet 対照ブロックのみ除去、to_talk_schedule assertion は温存）。`compile_sheet` 言及コメント（`areka-sakura/src/compile.rs`・dola `sheet.rs`）も撤去済みで `git grep -E "compile_sheet|CompiledCue|into_entry|ecs::cue" -- crates/` は ZERO。**残存の `CueQueue`/`EntityRegistry` は dola 新 runtime（`command.rs`/`runtime.rs`/`schedule.rs`）の設計系譜ドキュメント散文のみ（コード参照ゼロ・タスク 4.x 由来・8.2 撤去境界外・「旧 CueQueue」は意図的な設計履歴）＝将来の任意 tidy 対象で 8.2 の欠陥ではない**。`TimedSchedule`/`Entry`/`CueSheet`/`to_talk_schedule`/`CuePlayer`/`CueSink`/`cue_target_of` 等の生き runtime は無傷。全 workspace テスト緑（既知の低頻度 GPU/多アクター flake `spine_e2e_test::s3_helper_liveness_detected` は単独再走で緑・本撤去と無関係）。
+- **Task 9.1〜9.4 は既存 load-bearing テストで充足済み（冗長テスト非追加・5 エージェント並列カバレッジ・アセスメント＋スポット実読で確認）**。各要件の cross-layer 統合は実装過程（4.3/5.2/6.1/7.2/8.1）で判断分岐ごとに檻化済みで、合成テストは証明済み fan-out 配線の再テスト＝[[test-only-decision-branches-not-proven-wiring]]違反ゆえ追加しない。引用（各要件→既存檻）:
+  - **9.1（R2.1/2.4）**: `dola/tests/cue/runtime_test.rs::broadcast_delivers_identical_stream_to_every_sink_at_same_absolute_time`（Emote+Text+Wait 混在台本→実 CuePlayer→3 sink が同一 cue 列を同一絶対時刻で無変形受信）＋`dola/tests/cue/sink_test.rs::dummy_presenter_selects_only_its_relevant_cues_by_relevance`（両演者が同一 broadcast を受け relevance で action 選別・全 duration honor）＋`cue_target_of_classifies_every_variant`＋ghost `spine_e2e_test.rs::broadcast_relevance_partition::{every_variant..., emote_acts_only_on_seriko...}`。
+  - **9.2（R2.2/2.3/2.5/5.3/5.4/7.5）**: 葉 no-op＝emo-text `state.rs::non_relevant_cue_adds_no_local_delay_to_following_text_reveal`＋seriko `actor.rs::non_shell_and_wait_are_no_op_then_shell_cue_still_emits`／ライフサイクル早期終了防止＝sakura `drive.rs::{trailing_wait_talkdone_fires_at_horizon_not_at_cue_exhaustion, talkdone_withheld_while_ticks_stop_below_horizon_then_fires_on_resume, trailing_final_text_talkdone_fires_after_text_duration_not_at_delivery}`＋dola `runtime_test.rs::is_completed_is_gated_by_occupancy_horizon_for_trailing_wait`／partition＝上記 ghost 檻／型区別＝sakura `drive.rs::talkdone_reason_is_compiled_end_while_firing_time_is_horizon_derived`（`TalkEndReason`≠終了時刻）。
+  - **9.3（R1.4）**: sakura `compile.rs::cue_after_text_fires_after_text_playback_completes`（Emote.start_time==text D）＋dola `runtime_test.rs::broadcast_delivers_identical_stream...`（多 sink 同一絶対時刻）＋sheet_test アンカー/相対時刻保存檻。
+  - **9.4（R6.2）**: emo-text `actor.rs::clear_all_clears_every_attached_actor_render_not_just_cue_actor`（多スコープ書込→単一 ClearAll で非命名スコープも readback で消去）＋sakura `compile.rs::clear_all_is_prepended_once_regardless_of_scope_count`＋dola `sheet_test.rs::cue_sheet_stable_sort_preserves_equal_start_time_order`（同一 at FIFO）＋ghost spine_e2e S1 boot talk（compile 済み ClearAll が broadcast で text sink へ）。
+- **Task 9.5 のみ真の欠落を発見し焦点テストを追加**: 唯一の実 compile→drive→CuePlayer→CueSink 経路檻 `areka-sakura/src/drive.rs::fixture_script_drives_broadcast_and_returns_ended` は配送 `.at` を検証するが**配送 `.duration` envelope を未検証**だった（reveal 側 state.rs 檻も局所生成 duration ゆえ compile 由来でない）。同テストへ additive に配送 `.duration` 検証を追加（`\s[10]hello\w[2]world\e` で ClearAll/Emote=0.0・Text("hello")==`text_playback_duration("hello")`・Wait==`Duration::from_millis(100).as_secs_f64()`（`\w[2]`=2×`WAIT_UNIT_MS`）・Text("world")==`text_playback_duration("world")`）＋占有 tie `recs[2].at + recs[2].duration == recs[3].at`（reveal 完了時刻の linkage）。**FP 規律**: 期待値は全て production と同一算術（decimal リテラル不使用・bit-exact `==`）。drive.rs のみ変更・本番ロジック不変・レビュー APPROVED。
