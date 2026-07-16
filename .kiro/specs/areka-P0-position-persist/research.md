@@ -151,7 +151,7 @@
 5. **初回ゲートの kanade 注入形**: `KanadeConfig` の additive フィールド（既定で現行不変）とし boot cascade `Phase::BootInit` 分岐を追加する形。既存の kanade 決定論テスト資産（happy-path・ログ檻）を壊さない既定値設計。`resolve_kanade_config`（ghost/config.rs）での値源解決の結線。
 6. **vanish 読取経路の署名変更**: `events::on_first_boot()`（pub・Ref0="0" 固定）を count 引数化。fixture／統合ハーネス／`events.rs` の檻（`on_first_boot_is_get_with_fixed_zero_ref0` 等）の更新範囲。M1 実値は常に 0（`\![vanish]` 未実装）だが読取経路を正にする。
 7. **起動記録の書込タイミングと結線**: 「初回だった」事実を誰がいつ保存するか。kanade は純粋層ゆえ IO 不可＝ghost/main 側で boot 完了を観測して GhostState へ記録する結線（R3.4）。
-8. **保存トリガ頻度と保存ライタの所在**（軸C）: DragEnd 即書込（C1）か dirty＋shutdown flush（C2）か両者か。GhostState を持つのは Resource か actor か、単一ライター規律・UI スレッド契約（follow が `&mut World` のみで完結する既存契約）との整合。shutdown flush 口（`main.rs:321`／`GhostRuntime::shutdown`）の選定。
+8. **保存トリガ頻度と保存ライタの所在**（軸C）: **【要件ディスカッション#1 決定】耐久性レベルはハイブリッド（C1＋C2）に確定＝DragEnd で即時に永続ストレージへ確定し、shutdown で最終フラッシュを行う。クラッシュ／強制終了でも直近 DragEnd 時点の位置を次回起動で復元可能に保つ（要件 R1.1／R1.2／R1.3／R2.1 が明文化）。** design に残る論点は機構のみ: GhostState を持つのは Resource か actor か、単一ライター規律・UI スレッド契約（follow が `&mut World` のみで完結する既存契約）との整合、shutdown flush 口（`main.rs:321`／`GhostRuntime::shutdown`）の選定、DragEnd 即時書込の原子性（§4-11 の temp→rename と併せて）。
 9. **バルーン相対 offset の永続化と復元適用**（R2）: `BalloonFollow.offset`（session-only）の GhostState 保存と、boot 復元時の `spawn_ghost_windows` への適用（`ScopePlacement.balloon_offset` 経路へ復元値を差すか、別途 offset 復元パスか）。
 10. **陳腐化テストの更新範囲**（obsolete-vs-broken-test-policy）: `placement/mod.rs:503-565`（ghost.dat 不使用の檻）を新契約（plant→復元）へ書換え。kanade `events` の vanish 固定値檻・boot cascade の初回無条件発火を前提にした檻の更新。
 11. **原子的書込の具体**（R6.3）: temp→rename の Windows 上の挙動（同一ボリューム前提・`std::fs::rename` の atomic 性）、書込中断で旧状態を破壊しない保証、tempfile クレート不使用（手書き temp 名＋rename）の可否。
