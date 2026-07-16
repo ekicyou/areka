@@ -284,6 +284,7 @@ where
 mod tests {
     use super::*;
     use crate::contract::{CueCommand, TalkId};
+    use crate::duration::text_playback_duration;
     use crate::sink::MockSink;
     use std::time::Duration;
 
@@ -353,8 +354,10 @@ mod tests {
     /// 未 due の発火は Tick を受けても**保留**され、`at` 到達（境界含む・`at <= tick`）の Tick で
     /// 初めて配送されることを、**中間観測で決定的に**検証する（実時計・sleep 非依存）。
     ///
-    /// script `\s[10]hello\w[2]probeA\w[2]probeB\w[2]world\e` の発火予定:
-    ///   Emote{10}@0.0(surface) / hello@0.0 / probeA@0.1 / probeB@0.2 / world@0.3 (text) / `\e`。
+    /// script `\s[10]hello\w[2]probeA\w[2]probeB\w[2]world\e` の発火予定（task 5.2 の D 焼き込み後）:
+    ///   Emote{10}@0.0(surface) / ClearAll@0.0・hello@0.0・probeA@0.35・probeB@0.75・world@1.15 (text)。
+    ///   テキストは per-char D（hello=5×50ms=0.25／probeA・probeB=6×50ms=0.30）と `\w[2]`＝100ms を
+    ///   累積した絶対時刻へ焼き込まれる。冒頭には全消去 `ClearAll`（Balloon）が前置される。
     ///
     /// **barrier 技法**: probe を受信できた時点で当該 Tick の ready 群は出し切られており、
     /// 次の Tick を送るまで後続（未 due）の発火は到着し得ない。ゆえに `try_recv()==Empty` が
@@ -382,40 +385,49 @@ mod tests {
             ChannelSink { tx: text_tx },
         );
 
-        // 期待発火時刻。**compile と同一の `as_secs_f64()` 累積**で導出する（設計 Testing Strategy
-        // の戒め: 10 進リテラル直書き `from_millis(300)`=0.3 は累積 0.1+0.1+0.1=0.30000000000000004
-        // と異なる f64 となり、`Tick(0.3)` が world 未達＝境界包含判定を誤る）。
-        let w = Duration::from_millis(100).as_secs_f64(); // `\w[2]`＝2×50ms
+        // 期待発火時刻。**compile と同一の `text_playback_duration`/`as_secs_f64()` 累積**で導出する
+        // （設計 Testing Strategy の戒め: 10 進リテラル直書きは累積の f64 と異なり境界包含判定を誤る）。
+        let d_hello = text_playback_duration("hello"); // 5×50ms = 0.25
+        let d_probe = text_playback_duration("probeA"); // 6×50ms = 0.30（probeA/probeB 同数）
+        let w = Duration::from_millis(100).as_secs_f64(); // `\w[2]`＝2×50ms = 0.10
         let at0 = 0.0_f64;
-        let at_a = w; // probeA: 1×`\w[2]`
-        let at_b = at_a + w; // probeB: 2×`\w[2]`（累積）
-        let at_w = at_b + w; // world:  3×`\w[2]`（累積）
+        let at_a = d_hello + w; // probeA: hello 再生後 + \w[2]        = 0.35
+        let at_b = at_a + d_probe + w; // probeB: probeA 再生後 + \w[2] = 0.75
+        let at_w = at_b + d_probe + w; // world:  probeB 再生後 + \w[2] = 1.15
         let recv = |rx: &mpsc::Receiver<TalkCue>| {
             rx.recv_timeout(Duration::from_secs(5))
                 .expect("due な発火は届くこと")
         };
 
-        // ── Tick(0.1): hello@0.0 と probeA@0.1 のみ due。probeB(0.2)/world(0.3) は未 due。 ──
+        // ── Tick(at_a=0.35): ClearAll@0.0・hello@0.0・probeA@0.35 が due。probeB(0.75)/world(1.15) は未 due。 ──
         handle
             .inbox
             .send(SakuraMsg::Tick(at_a))
-            .expect("Tick(0.1) 投函");
+            .expect("Tick(at_a) 投函");
         // surface: Emote@0.0（1 件のみ・以降 surface 発火なし）。
         let s0 = recv(&surface_rx);
         assert_eq!(s0.at, at0, "surface Emote の発火時刻は 0.0");
         assert_eq!(s0.command, CueCommand::Emote { key: "10".into() });
-        // text: hello@0.0 → probeA@0.1（at 昇順）。probeA 受信＝Tick(0.1) の ready 出し切り barrier。
+        // text: ClearAll@0.0 → hello@0.0 → probeA@0.35（at 昇順・FIFO）。
+        // probeA 受信＝Tick(at_a) の ready 出し切り barrier。
+        let clear_all = recv(&text_rx);
+        assert_eq!(
+            clear_all.command,
+            CueCommand::ClearAll,
+            "冒頭は全消去 ClearAll"
+        );
+        assert_eq!(clear_all.at, at0);
         let hello = recv(&text_rx);
         assert_eq!(hello.command, CueCommand::Text("hello".into()));
         assert_eq!(hello.at, at0);
         let probe_a = recv(&text_rx);
         assert_eq!(probe_a.command, CueCommand::Text("probeA".into()));
         assert_eq!(probe_a.at, at_a);
-        // ★保留の決定的証明: probeA barrier 到達時点で probeB(0.2)/world(0.3) は届いていない。
+        // ★保留の決定的証明: probeA barrier 到達時点で probeB(0.75)/world(1.15) は届いていない。
         assert_eq!(
             text_rx.try_recv().unwrap_err(),
             TryRecvError::Empty,
-            "at=0.1 の Tick では未 due の probeB(0.2)/world(0.3) が保留されること"
+            "at=0.35 の Tick では未 due の probeB(0.75)/world(1.15) が保留されること"
         );
         assert_eq!(
             surface_rx.try_recv().unwrap_err(),
@@ -423,33 +435,40 @@ mod tests {
             "surface 側も追加発火が無いこと"
         );
 
-        // ── Tick(0.2): probeB@0.2 のみ新規 due。world(0.3) は依然 未 due。 ──
+        // ── Tick(at_b=0.75): probeB@0.75 のみ新規 due。world(1.15) は依然 未 due。 ──
         handle
             .inbox
             .send(SakuraMsg::Tick(at_b))
-            .expect("Tick(0.2) 投函");
+            .expect("Tick(at_b) 投函");
         let probe_b = recv(&text_rx);
         assert_eq!(probe_b.command, CueCommand::Text("probeB".into()));
         assert_eq!(probe_b.at, at_b);
-        // ★保留の決定的証明: probeB barrier 到達時点でも world(0.3) は未着。
+        // ★保留の決定的証明: probeB barrier 到達時点でも world(1.15) は未着。
         assert_eq!(
             text_rx.try_recv().unwrap_err(),
             TryRecvError::Empty,
-            "at=0.2 の Tick でも未 due の world(0.3) が保留されること"
+            "at=0.75 の Tick でも未 due の world(1.15) が保留されること"
         );
 
-        // ── Tick(0.3): world@0.3 が due（境界含む `at <= tick`）→ ここで初めて発火。 ──
+        // ── Tick(at_w=1.15): world@1.15 が due（境界含む `at <= tick`）→ ここで初めて発火。 ──
         handle
             .inbox
             .send(SakuraMsg::Tick(at_w))
-            .expect("Tick(0.3) 投函");
+            .expect("Tick(at_w) 投函");
         let world = recv(&text_rx);
         assert_eq!(
             world.command,
             CueCommand::Text("world".into()),
-            "world は at=0.3 到達で初めて発火する"
+            "world は at=1.15 到達で初めて発火する"
         );
-        assert_eq!(world.at, at_w, "world の発火時刻は 0.3（境界包含 at<=tick で発火）");
+        assert_eq!(world.at, at_w, "world の発火時刻は 1.15（境界包含 at<=tick で発火）");
+
+        // 占有 horizon（world 再生完了＝1.15 + 0.25 = 1.40）まで tick を進めて自然終端させる
+        // （末尾テキストの duration を落とさない・horizon-gated 完了）。
+        handle
+            .inbox
+            .send(SakuraMsg::Tick(2.0))
+            .expect("Tick(horizon 超) 投函");
 
         // 自然終端（`\e`＝Ended）・talk_id エコー。
         let done = done_rx
@@ -463,10 +482,11 @@ mod tests {
     /// **同一 `at`・同一 sink 内の発火順が記述順（FIFO）で保たれる**ことを検証する
     /// （canonical 変換 `to_talk_schedule` の per-cue `insert`＝`extend` 禁止の load-bearing 性質を統合レベルで固定）。
     ///
-    /// script `\s[10]hello\nworld\e`（`\w` 無し）→ 全 cue が `at=0.0`:
-    ///   Emote{10}(surface) / Text("hello") / NewLine / Text("world")（text）。
-    /// 単一 `Tick(0.0)` で全 due・自然終端。text sink は **hello → NewLine → world** の
-    /// 記述順で受信する（`extend` なら同一 at 群が逆順化し hello/world が入れ替わる＝R4.1/4.2 違反）。
+    /// script `\s[10]hello\nworld\e`（`\w` 無し）→ D 焼き込み後の text 発火:
+    ///   ClearAll@0.0 / Text("hello")@0.0（at=0.0 群）→ NewLine@0.25 / Text("world")@0.25（at=0.25 群）。
+    ///   hello の per-char D（0.25）が NewLine/world を 0.25 へ押し出すため、同一 at 群は 2 つに分かれる。
+    /// 単一 `Tick(0.5)` で全 due・自然終端。各 at 群内は**記述順（FIFO）**で受信する
+    /// （`extend` なら同一 at 群が逆順化し ClearAll/hello や NewLine/world が入れ替わる＝R4.1/4.2 違反）。
     #[test]
     fn same_at_cues_preserve_script_order_fifo_within_a_sink() {
         let (done_tx, done_rx) = std::sync::mpsc::channel::<TalkDone>();
@@ -481,11 +501,11 @@ mod tests {
         let text_records = text.records();
 
         let handle = spawn_talk(start, done_tx, surface, text);
-        // 全 cue が at=0.0 ゆえ単一 Tick(0.0) で全 due→自然終端。
+        // 単一 Tick(0.5) で全 due（world 再生完了 horizon=0.50 到達）→自然終端。
         handle
             .inbox
-            .send(SakuraMsg::Tick(0.0))
-            .expect("Tick(0.0) 投函");
+            .send(SakuraMsg::Tick(0.5))
+            .expect("Tick(0.5) 投函");
         let done = done_rx
             .recv_timeout(Duration::from_secs(5))
             .expect("単一 Tick で自然終端");
@@ -497,24 +517,39 @@ mod tests {
         assert_eq!(surface.len(), 1);
         assert_eq!(surface[0].command, CueCommand::Emote { key: "10".into() });
 
-        // text: hello → NewLine → world の**記述順（FIFO）**で 3 件（全て at=0.0）。
+        // text: ClearAll → hello（at=0.0 群）→ NewLine → world（at=0.25 群）の**記述順（FIFO）**で 4 件。
+        let d_hello = text_playback_duration("hello");
         let text = text_records.lock().unwrap();
-        assert_eq!(text.len(), 3, "text 発火は hello/NewLine/world の 3 件");
-        assert!(text.iter().all(|c| c.at == 0.0), "同一 at=0.0 群であること");
+        assert_eq!(
+            text.len(),
+            4,
+            "text 発火は ClearAll/hello/NewLine/world の 4 件"
+        );
+        // at=0.0 群（ClearAll → hello）は記述順・冒頭前置。
         assert_eq!(
             text[0].command,
-            CueCommand::Text("hello".into()),
-            "先頭は記述順どおり hello（extend なら逆順化する）"
+            CueCommand::ClearAll,
+            "冒頭は全消去 ClearAll（at=0.0）"
         );
-        assert!(
-            matches!(text[1].command, CueCommand::NewLine { .. }),
-            "中央は NewLine"
-        );
+        assert_eq!(text[0].at, 0.0);
         assert_eq!(
-            text[2].command,
-            CueCommand::Text("world".into()),
-            "末尾は記述順どおり world（extend なら hello と入れ替わる）"
+            text[1].command,
+            CueCommand::Text("hello".into()),
+            "at=0.0 群 2 件目は hello（extend なら ClearAll と逆順化する）"
         );
+        assert_eq!(text[1].at, 0.0);
+        // at=0.25 群（NewLine → world）は記述順（hello の D で 0.25 へ押し出される）。
+        assert!(
+            matches!(text[2].command, CueCommand::NewLine { .. }),
+            "at=0.25 群先頭は NewLine"
+        );
+        assert_eq!(text[2].at, d_hello);
+        assert_eq!(
+            text[3].command,
+            CueCommand::Text("world".into()),
+            "at=0.25 群 2 件目は world（extend なら NewLine と入れ替わる）"
+        );
+        assert_eq!(text[3].at, d_hello);
     }
 
     /// **`Start` の二重受領が無視される**ことを検証する（プロトコルガード・drive.rs `on_start`）。
@@ -555,9 +590,9 @@ mod tests {
             .send(SakuraMsg::Start(start_b))
             .expect("2 本目 Start(B) 投函");
 
-        // A を駆動して自然終端。
+        // A を駆動して自然終端（world 再生完了 horizon=0.60 を跨ぐ Tick(1.0) まで進める）。
         handle.inbox.send(SakuraMsg::Tick(0.0)).unwrap();
-        handle.inbox.send(SakuraMsg::Tick(0.2)).unwrap();
+        handle.inbox.send(SakuraMsg::Tick(1.0)).unwrap();
         let done = done_a_rx
             .recv_timeout(Duration::from_secs(5))
             .expect("A の TalkDone");
@@ -573,10 +608,12 @@ mod tests {
             CueCommand::Emote { key: "10".into() },
             "surface は A の \\s[10]（B の 77 でない）"
         );
+        // text は A の 冒頭 ClearAll＋hello/world の 3 件（B の DIFFERENT は現れない）。
         let text = text_records.lock().unwrap();
-        assert_eq!(text.len(), 2, "text は A の hello/world の 2 件");
-        assert_eq!(text[0].command, CueCommand::Text("hello".into()));
-        assert_eq!(text[1].command, CueCommand::Text("world".into()));
+        assert_eq!(text.len(), 3, "text は ClearAll/hello/world の 3 件");
+        assert_eq!(text[0].command, CueCommand::ClearAll);
+        assert_eq!(text[1].command, CueCommand::Text("hello".into()));
+        assert_eq!(text[2].command, CueCommand::Text("world".into()));
 
         // 無視された B は TalkDone を受け取らない（受信端 drop で disconnect＝recv 即 Err）。
         assert!(
@@ -615,7 +652,7 @@ mod tests {
         // 終端の TalkDone 送出前に受信端を drop（送出は Err になる）。
         drop(done_rx);
         handle.inbox.send(SakuraMsg::Tick(0.0)).unwrap();
-        handle.inbox.send(SakuraMsg::Tick(0.2)).unwrap();
+        handle.inbox.send(SakuraMsg::Tick(1.0)).unwrap();
 
         // done 受信端 drop でも panic せず正常終了すること（join が Ok・ハングしない）。
         handle
@@ -624,10 +661,11 @@ mod tests {
             .expect("done 受信端 drop でも body は panic せず正常終了する");
 
         // 発火は正常に行われた（done drop は終端信号にのみ影響）。
+        // text は 冒頭 ClearAll＋hello/world の 3 件。
         assert_eq!(
             text_records.lock().unwrap().len(),
-            2,
-            "done drop は発火に影響しない（hello/world は配送済み）"
+            3,
+            "done drop は発火に影響しない（ClearAll/hello/world は配送済み）"
         );
     }
 
@@ -771,20 +809,21 @@ mod tests {
 
         let handle = spawn_talk(start, done_tx, surface, text);
 
-        // 期待発火時刻（`\w[2]`＝100ms＝Duration::from_millis(100).as_secs_f64()）。
-        // リテラル直書きの表現誤差を避けるため同一計算で導出する。
+        // 期待発火時刻。compile と同一計算で導出（リテラル直書きの表現誤差を避ける）。
+        // world は hello の per-char D（0.25）と `\w[2]`（100ms）の累積後に発火する。
         let at_hello = 0.0_f64;
-        let at_world = Duration::from_millis(100).as_secs_f64();
+        let at_world = text_playback_duration("hello") + Duration::from_millis(100).as_secs_f64();
 
-        // 注入 Tick 列: 0.0（先頭群 hello/surface を発火）→ 待ち跨ぎ 0.2（world を発火＋末尾到達）。
+        // 注入 Tick 列: 0.0（at=0.0 群 ClearAll/hello/surface を発火）→ 占有 horizon（world 再生完了
+        // ＝at_world + 0.25 = 0.60）を跨ぐ Tick(1.0)（world を発火＋末尾到達）。
         handle
             .inbox
             .send(SakuraMsg::Tick(0.0))
             .expect("Tick(0.0) 投函");
         handle
             .inbox
-            .send(SakuraMsg::Tick(0.2))
-            .expect("Tick(0.2) 投函");
+            .send(SakuraMsg::Tick(1.0))
+            .expect("Tick(1.0) 投函");
 
         // 自然終端で TalkDone{Ended} が返ること（talk_id エコー・R6.6）。
         let done = done_rx
@@ -796,7 +835,7 @@ mod tests {
         // body の正常終了を同期してから観測（全発火が確定済みになる）。
         handle.actor.join().expect("body は正常終了する");
 
-        // surface 系: Emote{key:"10"}（at=0.0・actor="0"）1 件のみ。
+        // surface 系: Emote{key:"10"}（at=0.0・actor="0"）1 件のみ（ClearAll は Balloon ゆえ非該当）。
         let surface = surface_records.lock().unwrap();
         assert_eq!(surface.len(), 1, "surface 発火は 1 件（サーフェス切替）");
         assert_eq!(surface[0].at, at_hello, "surface 発火時刻は 0.0");
@@ -807,23 +846,34 @@ mod tests {
             "surface 発火は Emote{{key:10}}"
         );
 
-        // text 系: Text("hello")（at=0.0）→ Text("world")（at=0.1）の 2 件が at 昇順・FIFO。
+        // text 系: ClearAll（at=0.0）→ Text("hello")（at=0.0）→ Text("world")（at=0.35）の 3 件が at 昇順・FIFO。
         let text = text_records.lock().unwrap();
-        assert_eq!(text.len(), 2, "text 発火は 2 件（hello/world）");
-        assert_eq!(text[0].at, at_hello, "hello の発火時刻は 0.0");
+        assert_eq!(text.len(), 3, "text 発火は 3 件（ClearAll/hello/world）");
+        assert_eq!(text[0].at, at_hello, "冒頭 ClearAll の発火時刻は 0.0");
         assert_eq!(
             text[0].command,
-            CueCommand::Text("hello".into()),
-            "先頭 text は hello"
+            CueCommand::ClearAll,
+            "冒頭は全消去 ClearAll"
         );
-        assert_eq!(text[1].at, at_world, "world の発火時刻は \\w[2]＝100ms");
+        assert_eq!(text[1].at, at_hello, "hello の発火時刻は 0.0");
         assert_eq!(
             text[1].command,
+            CueCommand::Text("hello".into()),
+            "2 件目 text は hello"
+        );
+        assert_eq!(
+            text[2].at, at_world,
+            "world の発火時刻は hello の D（0.25）＋\\w[2]（100ms）＝0.35"
+        );
+        assert_eq!(
+            text[2].command,
             CueCommand::Text("world".into()),
             "後続 text は world"
         );
         // at 昇順（FIFO・R4.1/R9.2）。
-        assert!(text[0].at <= text[1].at, "text 発火は at 昇順");
+        for pair in text.windows(2) {
+            assert!(pair[0].at <= pair[1].at, "text 発火は at 昇順");
+        }
     }
 
     /// 冪等/逆行 `Tick` で二重発火しない（設計クリティカルな二重発火ガードの固定・R11.x）。
@@ -847,13 +897,13 @@ mod tests {
 
         let handle = spawn_talk(start, done_tx, surface, text);
 
-        // 同値・逆行 Tick を織り交ぜて先頭群（at=0.0）を発火させる。
+        // 同値・逆行 Tick を織り交ぜて at=0.0 群（ClearAll/Emote/hello）を発火させる。
         handle.inbox.send(SakuraMsg::Tick(0.0)).unwrap();
         handle.inbox.send(SakuraMsg::Tick(0.0)).unwrap(); // 同値 → no-op
         handle.inbox.send(SakuraMsg::Tick(-1.0)).unwrap(); // 逆行 → no-op
-        handle.inbox.send(SakuraMsg::Tick(0.1)).unwrap(); // 前進だが world(at=0.5) 未達
+        handle.inbox.send(SakuraMsg::Tick(0.1)).unwrap(); // 前進だが world(at=0.75) 未達
 
-        // 終端まで進めて body を閉じる（\w[10]=500ms を跨ぐ）。
+        // 終端まで進めて body を閉じる（hello の D=0.25＋\w[10]=500ms の後 world@0.75・horizon=1.0 を跨ぐ）。
         handle.inbox.send(SakuraMsg::Tick(1.0)).unwrap();
         let done = done_rx
             .recv_timeout(Duration::from_secs(5))
@@ -861,7 +911,7 @@ mod tests {
         assert_eq!(done.reason, TalkEndReason::Ended);
         handle.actor.join().expect("body は正常終了する");
 
-        // 二重発火していないこと: surface=1（Emote 1 回）・text=2（hello/world 各 1 回）。
+        // 二重発火していないこと: surface=1（Emote 1 回）・text=3（ClearAll/hello/world 各 1 回）。
         assert_eq!(
             surface_records.lock().unwrap().len(),
             1,
@@ -869,8 +919,8 @@ mod tests {
         );
         assert_eq!(
             text_records.lock().unwrap().len(),
-            2,
-            "text が二重発火していないこと（hello/world 各 1 回）"
+            3,
+            "text が二重発火していないこと（ClearAll/hello/world 各 1 回）"
         );
     }
 
@@ -899,8 +949,9 @@ mod tests {
         handle.inbox.send(SakuraMsg::Tick(f64::INFINITY)).unwrap();
 
         // 正常 Tick 列で通常どおり駆動・終端する（ガードがループを殺していないことの証）。
+        // world 再生完了 horizon=0.60 を跨ぐ Tick(1.0) まで進める。
         handle.inbox.send(SakuraMsg::Tick(0.0)).unwrap();
-        handle.inbox.send(SakuraMsg::Tick(0.2)).unwrap();
+        handle.inbox.send(SakuraMsg::Tick(1.0)).unwrap();
 
         let done = done_rx
             .recv_timeout(Duration::from_secs(5))
@@ -916,8 +967,8 @@ mod tests {
         );
         assert_eq!(
             text_records.lock().unwrap().len(),
-            2,
-            "非有限 Tick で text が早期全量配信されていないこと"
+            3,
+            "非有限 Tick で text が早期全量配信されていないこと（ClearAll/hello/world）"
         );
     }
 
@@ -946,7 +997,7 @@ mod tests {
 
         let handle = spawn_talk(start, done_tx, surface, text);
 
-        // 先頭群（at=0.0）だけ発火させる（world は at=0.5・未達）。
+        // at=0.0 群（ClearAll/Emote/hello）だけ発火させる（world は at=0.75・未達）。
         handle.inbox.send(SakuraMsg::Tick(0.0)).expect("Tick(0.0) 投函");
 
         // 中断（Close）を送る。進行中の再生を即時停止し Interrupted ACK を返すべき。
@@ -967,7 +1018,7 @@ mod tests {
         // body の正常終了（Break）を join で確認する。以降 Close を送っても再返信は不能。
         handle.actor.join().expect("body は Break 後に正常終了する");
 
-        // 先頭群のみ届き、未発火分（world）は sink に届いていないこと（R7.2）。
+        // at=0.0 群のみ届き、未発火分（world@0.75）は sink に届いていないこと（R7.2）。
         let surface = surface_records.lock().unwrap();
         assert_eq!(surface.len(), 1, "surface は先頭 Emote のみ（中断前）");
         assert_eq!(
@@ -975,12 +1026,22 @@ mod tests {
             CueCommand::Emote { key: "10".into() },
             "surface 発火は Emote{{key:10}}"
         );
+        // text は 冒頭 ClearAll と hello の 2 件（world は未発火＝破棄）。
         let text = text_records.lock().unwrap();
-        assert_eq!(text.len(), 1, "text は hello のみ（world は未発火＝破棄）");
+        assert_eq!(
+            text.len(),
+            2,
+            "text は ClearAll/hello のみ（world は未発火＝破棄）"
+        );
         assert_eq!(
             text[0].command,
+            CueCommand::ClearAll,
+            "冒頭は全消去 ClearAll"
+        );
+        assert_eq!(
+            text[1].command,
             CueCommand::Text("hello".into()),
-            "中断前に届いた text は hello のみ"
+            "中断前に届いた text は ClearAll に続く hello のみ"
         );
     }
 
@@ -1004,9 +1065,9 @@ mod tests {
 
         let handle = spawn_talk(start, done_tx, surface, text);
 
-        // 自然終端まで駆動する（0.0 → 待ち跨ぎ 0.2）。
+        // 自然終端まで駆動する（0.0 → 占有 horizon=0.60 を跨ぐ 1.0）。
         handle.inbox.send(SakuraMsg::Tick(0.0)).expect("Tick(0.0) 投函");
-        handle.inbox.send(SakuraMsg::Tick(0.2)).expect("Tick(0.2) 投函");
+        handle.inbox.send(SakuraMsg::Tick(1.0)).expect("Tick(1.0) 投函");
 
         // 自然終端で TalkDone{Ended} が返ること（recv が done_rx を consume）。
         let done = done_rx
@@ -1067,11 +1128,11 @@ mod tests {
         let handle_a = spawn_talk(start_a, done_a_tx, surface_a, text_a);
         let handle_b = spawn_talk(start_b, done_b_tx, surface_b, text_b);
 
-        // 各 talk を自分の注入 Tick 列で終端まで駆動する。
+        // 各 talk を自分の注入 Tick 列で終端まで駆動する（占有 horizon: A=0.60・B=0.45 を跨ぐ 1.0）。
         handle_a.inbox.send(SakuraMsg::Tick(0.0)).expect("A Tick(0.0)");
-        handle_a.inbox.send(SakuraMsg::Tick(0.2)).expect("A Tick(0.2)");
+        handle_a.inbox.send(SakuraMsg::Tick(1.0)).expect("A Tick(1.0)");
         handle_b.inbox.send(SakuraMsg::Tick(0.0)).expect("B Tick(0.0)");
-        handle_b.inbox.send(SakuraMsg::Tick(0.2)).expect("B Tick(0.2)");
+        handle_b.inbox.send(SakuraMsg::Tick(1.0)).expect("B Tick(1.0)");
 
         // 各 done channel には自分の talk_id を帯びた TalkDone がちょうど返る。
         let done_a = done_a_rx
@@ -1101,7 +1162,7 @@ mod tests {
         let surface_b = surface_b_records.lock().unwrap();
         let text_b = text_b_records.lock().unwrap();
 
-        // talk A の sink: Emote{key:"10"} 1 件＋Text("hello")/Text("world")。
+        // talk A の sink: Emote{key:"10"} 1 件＋冒頭 ClearAll/Text("hello")/Text("world")。
         assert_eq!(surface_a.len(), 1, "A surface は 1 件");
         assert_eq!(
             surface_a[0].command,
@@ -1111,13 +1172,14 @@ mod tests {
         assert_eq!(
             text_a.iter().map(|c| c.command.clone()).collect::<Vec<_>>(),
             vec![
+                CueCommand::ClearAll,
                 CueCommand::Text("hello".into()),
                 CueCommand::Text("world".into()),
             ],
-            "A text は hello/world"
+            "A text は ClearAll/hello/world"
         );
 
-        // talk B の sink: Emote{key:"20"} 1 件＋Text("bye")/Text("done")。
+        // talk B の sink: Emote{key:"20"} 1 件＋冒頭 ClearAll/Text("bye")/Text("done")。
         assert_eq!(surface_b.len(), 1, "B surface は 1 件");
         assert_eq!(
             surface_b[0].command,
@@ -1127,10 +1189,11 @@ mod tests {
         assert_eq!(
             text_b.iter().map(|c| c.command.clone()).collect::<Vec<_>>(),
             vec![
+                CueCommand::ClearAll,
                 CueCommand::Text("bye".into()),
                 CueCommand::Text("done".into()),
             ],
-            "B text は bye/done"
+            "B text は ClearAll/bye/done"
         );
 
         // 相互排他の明示: A の内容が B の sink に、B の内容が A の sink に混入していないこと。
@@ -1178,9 +1241,9 @@ mod tests {
             let text_records = text.records();
 
             let handle = spawn_talk(start, done_tx, surface, text);
-            // 同一注入 Tick 列（sleep なし・決定的）。
+            // 同一注入 Tick 列（sleep なし・決定的）。占有 horizon=0.60 を跨ぐ 1.0 まで進める。
             handle.inbox.send(SakuraMsg::Tick(0.0)).expect("Tick(0.0)");
-            handle.inbox.send(SakuraMsg::Tick(0.2)).expect("Tick(0.2)");
+            handle.inbox.send(SakuraMsg::Tick(1.0)).expect("Tick(1.0)");
 
             let done = done_rx
                 .recv_timeout(Duration::from_secs(5))
@@ -1195,7 +1258,11 @@ mod tests {
         let baseline = run_once();
         // baseline 自体が期待形（surface=Emote 1 件・text=hello/world・Ended）であることを固定する。
         assert_eq!(baseline.0.len(), 1, "baseline surface は 1 件");
-        assert_eq!(baseline.1.len(), 2, "baseline text は 2 件");
+        assert_eq!(
+            baseline.1.len(),
+            3,
+            "baseline text は 3 件（ClearAll/hello/world）"
+        );
         assert_eq!(baseline.2, TalkEndReason::Ended, "baseline は Ended");
 
         for run in 1..RUNS {

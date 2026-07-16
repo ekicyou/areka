@@ -613,14 +613,20 @@ mod s1_boot_success {
         );
 
         let text = text_records.lock().expect("records mutex poisoned").clone();
+        // 冒頭 ClearAll（#6・全消去・Balloon）＋"hello" 由来の Text の 2 件（compile が talk 先頭へ
+        // ClearAll を単一前置する・task 5.2）。両者とも at=0.0（hello に per-char D はあるが後続 cue が
+        // 無いため先頭群に留まる）。
         assert_eq!(
             text.len(),
-            1,
-            "text 発火は \"hello\" 由来の Text 1 件のみのはず: {text:?}"
+            2,
+            "text 発火は 冒頭 ClearAll＋\"hello\" 由来の Text の 2 件のはず: {text:?}"
         );
         assert_eq!(text[0].at, 0.0);
         assert_eq!(text[0].actor, ActorKey::from("0"));
-        assert_eq!(text[0].command, CueCommand::Text("hello".to_string()));
+        assert_eq!(text[0].command, CueCommand::ClearAll);
+        assert_eq!(text[1].at, 0.0);
+        assert_eq!(text[1].actor, ActorKey::from("0"));
+        assert_eq!(text[1].command, CueCommand::Text("hello".to_string()));
 
         // at 昇順（両 sink とも単調非減少であること・design「発火列」節）。
         for pair in surface.windows(2) {

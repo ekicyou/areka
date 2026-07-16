@@ -331,15 +331,16 @@ mod tests {
         }))
         .expect("send Start(B)");
 
-        // B を完走させる（\w[2]=100ms・base_now は最初の Tick の now で確定）。
+        // B を完走させる（D 焼き込み後 B/B_END の再生完了＋\w[2] を含む占有 horizon=0.40 を跨ぐ
+        // elapsed 0.5・base_now は最初の Tick の now で確定）。
         tx.send(DispatcherMsg::Tick {
             now: MonotonicMs(1_000),
         })
         .expect("send Tick(base)");
         tx.send(DispatcherMsg::Tick {
-            now: MonotonicMs(1_100),
+            now: MonotonicMs(1_500),
         })
-        .expect("send Tick(base+100ms)");
+        .expect("send Tick(base+500ms)");
 
         // kanade は B の TalkDone のみを受け取る（A の stale Interrupted は転送されない）。
         let done = kanade_rx
@@ -406,15 +407,16 @@ mod tests {
         }))
         .expect("send manual stale Done(A)");
 
-        // B の slot は乱されず、B を完走させれば正しく kanade へ転送される。
+        // B の slot は乱されず、B を完走させれば正しく kanade へ転送される
+        // （D 焼き込み後の占有 horizon=0.40 を跨ぐ elapsed 0.5）。
         tx.send(DispatcherMsg::Tick {
             now: MonotonicMs(2_000),
         })
         .expect("send Tick(base)");
         tx.send(DispatcherMsg::Tick {
-            now: MonotonicMs(2_100),
+            now: MonotonicMs(2_500),
         })
-        .expect("send Tick(base+100ms)");
+        .expect("send Tick(base+500ms)");
 
         let done = kanade_rx
             .recv_timeout(Duration::from_secs(5))
@@ -493,18 +495,24 @@ mod tests {
 
         let (tx, handle) = spawn_dispatcher(kanade_tx, surface, text);
 
-        // \w[4]=200ms・\w[6]=300ms(累積500ms)。
+        // \w[4]=200ms・\w[6]=300ms。D 焼き込み後の text 発火:
+        //   ClearAll@0.0・FIRST@0.0 / SECOND@0.45（FIRST の D=0.25 + \w[4]=0.20）/
+        //   THIRD@1.05（SECOND の D=0.30 + \w[6]=0.30）。占有 horizon=1.30（THIRD 再生完了）。
         tx.send(DispatcherMsg::Start(StartTalk {
             talk_id: TalkId(31),
             script: r"\s[5]FIRST\w[4]SECOND\w[6]THIRD\e".to_string(),
         }))
         .expect("send Start");
 
-        // 初回 tick: elapsed=0.0 起点 → FIRST のみ due。
+        // 初回 tick: elapsed=0.0 起点 → ClearAll@0.0・FIRST@0.0 のみ due（SECOND/THIRD は未 due）。
         tx.send(DispatcherMsg::Tick {
             now: MonotonicMs(5_000),
         })
         .expect("send first Tick (anchors base_now)");
+        let clear_all = text_rx
+            .recv_timeout(Duration::from_secs(5))
+            .expect("ClearAll should fire at elapsed 0.0 (冒頭前置)");
+        assert_eq!(clear_all.command, CueCommand::ClearAll);
         let first = text_rx
             .recv_timeout(Duration::from_secs(5))
             .expect("FIRST should fire at elapsed 0.0");
@@ -514,29 +522,35 @@ mod tests {
             "SECOND/THIRD must not fire before their elapsed time is reached"
         );
 
-        // 2 回目 tick: now - base = 200ms → elapsed=0.2 → SECOND due（THIRD はまだ）。
-        tx.send(DispatcherMsg::Tick {
-            now: MonotonicMs(5_200),
-        })
-        .expect("send second Tick (elapsed 0.2)");
-        let second = text_rx
-            .recv_timeout(Duration::from_secs(5))
-            .expect("SECOND should fire once elapsed reaches 0.2");
-        assert_eq!(second.command, CueCommand::Text("SECOND".into()));
-        assert!(
-            text_rx.try_recv().is_err(),
-            "THIRD must not fire before elapsed 0.5 is reached"
-        );
-
-        // 3 回目 tick: now - base = 500ms → elapsed=0.5 → THIRD due・自然終端。
+        // 2 回目 tick: now - base = 500ms → elapsed=0.5 → SECOND@0.45 due（THIRD@1.05 はまだ）。
         tx.send(DispatcherMsg::Tick {
             now: MonotonicMs(5_500),
         })
-        .expect("send third Tick (elapsed 0.5)");
+        .expect("send second Tick (elapsed 0.5)");
+        let second = text_rx
+            .recv_timeout(Duration::from_secs(5))
+            .expect("SECOND should fire once elapsed reaches 0.45");
+        assert_eq!(second.command, CueCommand::Text("SECOND".into()));
+        assert!(
+            text_rx.try_recv().is_err(),
+            "THIRD must not fire before elapsed 1.05 is reached"
+        );
+
+        // 3 回目 tick: now - base = 1100ms → elapsed=1.1 → THIRD@1.05 due。
+        tx.send(DispatcherMsg::Tick {
+            now: MonotonicMs(6_100),
+        })
+        .expect("send third Tick (elapsed 1.1)");
         let third = text_rx
             .recv_timeout(Duration::from_secs(5))
-            .expect("THIRD should fire once elapsed reaches 0.5");
+            .expect("THIRD should fire once elapsed reaches 1.05");
         assert_eq!(third.command, CueCommand::Text("THIRD".into()));
+
+        // 4 回目 tick: elapsed=1.4 → 占有 horizon=1.30 到達で自然終端（末尾テキストの D を落とさない）。
+        tx.send(DispatcherMsg::Tick {
+            now: MonotonicMs(6_400),
+        })
+        .expect("send fourth Tick (elapsed 1.4 ≥ horizon 1.30)");
 
         let done = kanade_rx
             .recv_timeout(Duration::from_secs(5))
@@ -584,10 +598,11 @@ mod tests {
             now: MonotonicMs(9_000),
         })
         .expect("send Tick(base)");
+        // D 焼き込み後 C の占有 horizon=0.60（world 再生完了）を跨ぐ elapsed 0.7。
         tx.send(DispatcherMsg::Tick {
-            now: MonotonicMs(9_200),
+            now: MonotonicMs(9_700),
         })
-        .expect("send Tick(base+200ms)");
+        .expect("send Tick(base+700ms)");
 
         let done_c = kanade_rx
             .recv_timeout(Duration::from_secs(5))
@@ -607,10 +622,15 @@ mod tests {
             script: r"\s[8]again\e".to_string(),
         }))
         .expect("send Start(D)");
+        // D（`again`＝5 char・D=0.25）の占有 horizon=0.25 を跨ぐため base(10_000)＋elapsed 0.3 の 2 tick。
         tx.send(DispatcherMsg::Tick {
             now: MonotonicMs(10_000),
         })
-        .expect("send Tick for D");
+        .expect("send Tick(base) for D");
+        tx.send(DispatcherMsg::Tick {
+            now: MonotonicMs(10_300),
+        })
+        .expect("send Tick(base+300ms) for D");
 
         let done_d = kanade_rx
             .recv_timeout(Duration::from_secs(5))
