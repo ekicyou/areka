@@ -2,13 +2,13 @@
 //!
 //! クレートの **公開 API のみ** を用いて（task 3.2 の re-export が外部から使えることも同時に検証）、
 //! 実 emo2 fixture の alias 実データで解決テーブルを構築し、数値・alias・非表示・別スコープを
-//! 混在させた `TalkCue` 列を `SerikoSink::emit` で直入力する。停止同期は `close()`→`join()` のみ
+//! 混在させた `TalkCue` 列を単一の出力契約 `CueSink::emit` で直入力する。停止同期は `close()`→`join()` のみ
 //! （sleep・polling・表示を一切伴わない・要件 7.2）。`join` 復帰時点で先行 Cue は全て FIFO
 //! 単一スレッドで処理済みゆえ、`MockSurfaceOutput::records()` の全 `DisplayCommand` 列を
 //! 期待列と全値比較（binds 含む）できる。
 
 use areka_emo_compose::EmoWorld;
-use areka_sakura::{ActorKey, CueCommand, SurfaceSink, TalkCue};
+use areka_sakura::{ActorKey, CueCommand, CueSink, TalkCue};
 use areka_seriko::{
     build_static_bindset, spawn_seriko, DisplayCommand, MockSurfaceOutput, SurfaceResolver,
 };
@@ -65,10 +65,10 @@ fn cue_sequence_emits_expected() {
 
     // アクター起動→fixture 系列を emit→Close→join で終了同期（唯一の同期点・sleep なし）。
     let (mut sink, handle) = spawn_seriko(resolver, binds.clone(), mock);
-    SurfaceSink::emit(&mut sink, emote_cue(0.0, "0", "2100")); // 数値
-    SurfaceSink::emit(&mut sink, emote_cue(1.0, "0", "静観")); // alias（複数 id→先頭）
-    SurfaceSink::emit(&mut sink, emote_cue(2.0, "0", "-1")); // 非表示
-    SurfaceSink::emit(&mut sink, emote_cue(3.0, "1", "10")); // 別スコープ・数値
+    CueSink::emit(&mut sink, emote_cue(0.0, "0", "2100")); // 数値
+    CueSink::emit(&mut sink, emote_cue(1.0, "0", "静観")); // alias（複数 id→先頭）
+    CueSink::emit(&mut sink, emote_cue(2.0, "0", "-1")); // 非表示
+    CueSink::emit(&mut sink, emote_cue(3.0, "1", "10")); // 別スコープ・数値
     sink.close().expect("Close を送れること");
     handle.join().expect("Close で正常終了する");
 

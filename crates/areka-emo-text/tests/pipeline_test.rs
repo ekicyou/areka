@@ -33,8 +33,7 @@ use areka_parsers::balloon::{
     parse_str, BalloonModel, Font, FontColor, Origin, ValidRect, WindowPosition, WordWrapPoint,
 };
 use areka_parsers::charset::{decode, DefaultEncoding};
-use areka_sakura::contract::{ActorKey, CueCommand, TalkCue};
-use areka_sakura::TextSink;
+use areka_sakura::contract::{ActorKey, CueCommand, CueSink, TalkCue};
 use windows::Win32::UI::WindowsAndMessaging::PostQuitMessage;
 use wintf_winmsg_executor::{FilterResult, MessageLoop};
 

@@ -228,9 +228,9 @@ impl TextLayerState {
                 }
             }
             // 文字状態機械が消費しない command（cue_target_of が Shell/None に分類）は本状態機械の
-            // 対象外——上流 routing の責務。防御的に無視する（catch-all を置かず、dola の
+            // 対象外——演者側 relevance の責務。防御的に無視する（catch-all を置かず、dola の
             // variant 追加時にコンパイラが再検討を強制する）。`BalloonSurface` は表示系
-            // （SurfaceSink/seriko）の消費対象＝文字状態機械へは配送しない防御面（R3.2）。
+            // （seriko＝`cue_target_of` が Shell 分類）の消費対象＝文字状態機械へは動作させない防御面（R3.2）。
             // `Wait` は action を持たない純粋な待ち（cue_target_of が `None` 分類）＝
             // どの表現者の担当でもなく、本状態機械は状態を変えない。時間は envelope
             // duration が担い、上流が後続 cue の時刻へ焼き込み済みゆえ、ここで新たな

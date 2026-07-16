@@ -21,9 +21,8 @@
 //!
 //! 演者非依存の**単一の出力契約** [`dola::cue::CueSink`]（task 4.1）を実装する [`SerikoSink`] が
 //! 差し込み口となる。`emit` は届いた [`TalkCue`] を [`SerikoMsg::Cue`] として専用 inbox（std mpsc）
-//! へ橋渡しする。ghost live-path が `CueSink` 注入へ移行する task 8.1 まで、暫定で
-//! [`areka_sakura::SurfaceSink`] 実装も同一送出本体（[`SerikoSink::deliver`]）へ委譲して並存させる
-//! （`GhostBootOptions.surface_sink` 経由の注入を維持・emo-text の `TextSink` 暫定並存と同型）。
+//! へ橋渡しする。ghost live-path も `CueSink` 注入で結線する（task 8.1 で旧 `SurfaceSink` 経路を
+//! 撤去し `CueSink` 一本へ集約・broadcast＋演者側 relevance ゆえ役割別トレイトは不要）。
 //!
 //! # 停止経路の形
 //!
@@ -33,14 +32,14 @@
 //!
 //! # 失敗経路のログ規律（infallible・silent failure 禁止）
 //!
-//! 両出力契約（[`dola::cue::CueSink`]／暫定 [`SurfaceSink`]）の `emit` は infallible（`()` 返し）で
-//! 送出本体 [`SerikoSink::deliver`] を共用する。inbox 全受信端が消失した後の送出は `send` が `Err`
+//! 単一の出力契約 [`dola::cue::CueSink`] の `emit` は infallible（`()` 返し）で送出本体
+//! [`SerikoSink::deliver`] を用いる。inbox 全受信端が消失した後の送出は `send` が `Err`
 //! を返すが、`unwrap`／`expect` で panic させず [`tracing::error!`] で観測して戻る
 //! （log-first・R6.3／通常入力で panic しない・R6.4）。
 
 use std::ops::ControlFlow;
 
-use areka_sakura::{cue_target_of, CueCommand, CueTarget, SurfaceSink, TalkCue};
+use areka_sakura::{cue_target_of, CueCommand, CueTarget, TalkCue};
 
 use crate::output::{DisplayCommand, SurfaceOutput};
 use crate::resolve::{resolve_balloon_key, BalloonResolve, SurfaceResolver, SurfaceTarget};
@@ -61,13 +60,11 @@ pub enum SerikoMsg {
 ///
 /// inbox（std mpsc）の `Sender` を内包し、届いた発火を [`SerikoMsg::Cue`] として橋渡しする。
 /// broadcast された全 cue が本 sink へ届き、担当（Shell）選別は [`handle_message`] の演者側
-/// relevance（`cue_target_of`）が行う。ghost live-path の移行（task 8.1）まで暫定で
-/// [`SurfaceSink`] も並存実装する（同一送出本体 [`SerikoSink::deliver`] へ委譲）。
+/// relevance（`cue_target_of`）が行う。
 ///
 /// `Clone` を導出する（内側 `mpsc::Sender<SerikoMsg>` は常に `Clone`）。全 clone は単一の
-/// seriko アクター inbox への送信端であり配送意味は同一（`areka_ghost::boot` が要求する
-/// `S: SurfaceSink + Clone + Send + 'static`、および cue 再生ランタイムが要求する
-/// `dola::cue::CueSink + Clone + Send + 'static` の双方を満たし、dispatcher が talk ごとに
+/// seriko アクター inbox への送信端であり配送意味は同一（cue 再生ランタイム・`areka_ghost::boot`
+/// が要求する `dola::cue::CueSink + Clone + Send + 'static` を満たし、dispatcher が talk ごとに
 /// sink を clone しても全 cue が同一 inbox へ FIFO 到着する）。
 #[derive(Clone)]
 pub struct SerikoSink {
@@ -93,8 +90,8 @@ impl SerikoSink {
         self.tx.send(SerikoMsg::Close)
     }
 
-    /// 1 発火を inbox へ橋渡しする送出本体（infallible）——両出力契約
-    /// （[`dola::cue::CueSink`]／暫定 [`SurfaceSink`]）の `emit` が共用する。
+    /// 1 発火を inbox へ橋渡しする送出本体（infallible）——単一の出力契約
+    /// [`dola::cue::CueSink`] の `emit` が用いる。
     ///
     /// 受信端（inbox／アクター）が消失していると `send` は `Err` を返すが、`unwrap`／`expect`
     /// では panic するため用いず、[`tracing::error!`] で落とした発火を記録して戻る
@@ -120,20 +117,9 @@ impl SerikoSink {
 /// `CuePlayer` は登録された全 sink へ全 cue を **broadcast** し、seriko は担当（Shell）か否かを
 /// 演者側 relevance（`cue_target_of`）で選別する——action を無視しても duration は honor する
 /// （担当外 cue も本 sink 経由で inbox へ届き、[`handle_message`] が良性に読み飛ばす・R2.2/R2.3）。
-/// 配送先スロットの 2 分割（旧 `SurfaceSink`/`TextSink`）は broadcast＋演者側 relevance ゆえ不要。
+/// 配送先スロットの 2 分割（旧 `SurfaceSink`/`TextSink`）は broadcast＋演者側 relevance ゆえ廃した
+/// （task 8.1 で暫定並存の `SurfaceSink` 実装を撤去し `CueSink` 一本へ集約）。
 impl dola::cue::CueSink for SerikoSink {
-    fn emit(&mut self, cue: TalkCue) {
-        self.deliver(cue);
-    }
-}
-
-/// **暫定の並存 impl**（task 8.1 で撤去予定）: ghost live-path は task 8.1 が
-/// `dola::cue::CueSink` 注入へ張り替えるまで [`areka_sakura::SurfaceSink`] 経由で本 sink を
-/// 注入する（`GhostBootOptions.surface_sink`）。それまでの間、上の `CueSink` 実装と本
-/// `SurfaceSink` 実装を**同一の送出本体**（[`SerikoSink::deliver`]）へ委譲して並存させ、ghost が
-/// コンパイルし続けられるようにする。8.1 が ghost を `CueSink` 注入へ移行した時点で本 impl を
-/// 削除する（emo-text の `TextSink` 暫定並存・task 6.1 と同型）。
-impl SurfaceSink for SerikoSink {
     fn emit(&mut self, cue: TalkCue) {
         self.deliver(cue);
     }
@@ -321,7 +307,8 @@ fn handle_message<O: SurfaceOutput>(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use areka_sakura::{ActorKey, CueCommand, SurfaceSink, TalkCue};
+    use areka_sakura::{ActorKey, CueCommand, TalkCue};
+    use dola::cue::CueSink;
     use crate::output::{DisplayCommand, MockSurfaceOutput};
 
     /// テスト用の TalkCue（Shell 系 Emote・at/actor 込み）を組む。
@@ -335,13 +322,13 @@ mod tests {
     }
 
     /// 受信端が生きていれば `emit` が `SerikoMsg::Cue` を inbox へ橋渡しする（R1.1/1.2）。
-    /// trait 実装＝結線契約（追加の口を設けず SurfaceSink 経由でのみ届く）。
+    /// trait 実装＝結線契約（追加の口を設けず単一の出力契約 `CueSink` 経由でのみ届く）。
     #[test]
     fn emit_forwards_cue_to_inbox() {
         let (tx, rx) = std::sync::mpsc::channel::<SerikoMsg>();
         let mut sink = SerikoSink::new(tx);
 
-        SurfaceSink::emit(&mut sink, emote_cue(1.5, "0", "smile"));
+        CueSink::emit(&mut sink, emote_cue(1.5, "0", "smile"));
 
         match rx.recv() {
             Ok(SerikoMsg::Cue(cue)) => {
@@ -359,8 +346,7 @@ mod tests {
 
     /// コンパイル時検証: `SerikoSink` は cue 再生ランタイムへ登録可能な**単一の出力契約**
     /// （`dola::cue::CueSink + Clone + Send + 'static`）を満たす（R11.6・task 4.1 の単一トレイト）。
-    /// トレイトはフルパス束縛のみで参照し、`emit` の名前解決が暫定並存の `SurfaceSink` と衝突しない
-    /// ようにする（emo-text 6.1 の `assert_cue_sink_contract` と同型）。
+    /// トレイトはフルパス束縛で参照する（emo-text 6.1 の `assert_cue_sink_contract` と同型）。
     fn assert_cue_sink_contract<T: dola::cue::CueSink + Clone + Send + 'static>() {}
 
     #[test]
@@ -368,8 +354,8 @@ mod tests {
         assert_cue_sink_contract::<SerikoSink>();
     }
 
-    /// 単一の出力契約 [`dola::cue::CueSink`] の `emit` 経由でも発火が `SerikoMsg::Cue` として
-    /// inbox へ無変形で橋渡しされる（`SurfaceSink` と同一送出本体 `deliver` を共用・R11.6）。
+    /// 単一の出力契約 [`dola::cue::CueSink`] の `emit` 経由で発火が `SerikoMsg::Cue` として
+    /// inbox へ無変形で橋渡しされる（送出本体 `deliver` を用いる・R11.6）。
     #[test]
     fn cue_sink_emit_forwards_cue_to_inbox() {
         let (tx, rx) = std::sync::mpsc::channel::<SerikoMsg>();
@@ -404,7 +390,7 @@ mod tests {
 
         // emit は infallible。send 失敗経路（Err）を通り、panic せず戻ること自体が合格条件。
         let logs = capture_logs(|| {
-            SurfaceSink::emit(&mut sink, emote_cue(0.0, "0", "smile"));
+            CueSink::emit(&mut sink, emote_cue(0.0, "0", "smile"));
         });
 
         // silent failure 禁止（R6.3）: send 失敗が error! として観測できること。
@@ -443,7 +429,7 @@ mod tests {
 
         // アクター起動→単純な Shell 系 Emote 1 件を emit→Close→join で終了同期。
         let (mut sink, handle) = spawn_seriko(resolver, binds.clone(), out);
-        SurfaceSink::emit(&mut sink, emote_cue(0.0, "0", "2100"));
+        CueSink::emit(&mut sink, emote_cue(0.0, "0", "2100"));
         sink.close().expect("Close を送れること");
         handle.join().expect("Close で正常終了する");
 
@@ -618,8 +604,8 @@ mod tests {
         let records2 = out2.records();
         let (mut sink, handle) =
             spawn_seriko(tiny_resolver(), BindSet::from_ids([1100, 1207]), out2);
-        SurfaceSink::emit(&mut sink, entityref_cue(0.0, "0", 7)); // 防御枝＝skip
-        SurfaceSink::emit(&mut sink, emote_cue(1.0, "0", "2100")); // 有効
+        CueSink::emit(&mut sink, entityref_cue(0.0, "0", 7)); // 防御枝＝skip
+        CueSink::emit(&mut sink, emote_cue(1.0, "0", "2100")); // 有効
         sink.close().expect("Close を送れること");
         handle.join().expect("Close で正常終了する");
 
@@ -699,7 +685,7 @@ mod tests {
 
         // 停止後の emit: send は Err だが panic せず error! を残して戻る（infallible 契約・6.3/6.4）。
         let logs = capture_logs(|| {
-            SurfaceSink::emit(&mut sink, emote_cue(0.0, "0", "2100"));
+            CueSink::emit(&mut sink, emote_cue(0.0, "0", "2100"));
         });
 
         assert!(
@@ -1096,9 +1082,9 @@ mod tests {
         let (mut sink, handle) =
             spawn_seriko(tiny_resolver(), BindSet::from_ids([1100, 1207]), out);
 
-        SurfaceSink::emit(&mut sink, text_cue(0.0, "0", "担当外テキスト")); // 非 Shell＝skip
-        SurfaceSink::emit(&mut sink, wait_cue(0.5, "0", 1.0)); // Wait＝skip
-        SurfaceSink::emit(&mut sink, emote_cue(1.5, "0", "2100")); // 担当＝発行
+        CueSink::emit(&mut sink, text_cue(0.0, "0", "担当外テキスト")); // 非 Shell＝skip
+        CueSink::emit(&mut sink, wait_cue(0.5, "0", 1.0)); // Wait＝skip
+        CueSink::emit(&mut sink, emote_cue(1.5, "0", "2100")); // 担当＝発行
         sink.close().expect("Close を送れること");
         handle.join().expect("Close で正常終了する");
 

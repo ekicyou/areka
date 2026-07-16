@@ -591,8 +591,7 @@ mod runtime_tests {
     use areka_parsers::balloon::{
         BalloonModel, Font, FontColor, Origin, ValidRect, WindowPosition, WordWrapPoint,
     };
-    use areka_sakura::contract::{ActorKey, CueCommand, TalkCue};
-    use areka_sakura::TextSink;
+    use areka_sakura::contract::{ActorKey, CueCommand, CueSink, TalkCue};
     use bevy_ecs::hierarchy::ChildOf;
     use bevy_ecs::name::Name;
     use bevy_ecs::prelude::World;

@@ -160,19 +160,24 @@ fn default_helper_exe_path() -> std::path::PathBuf {
 /// - `shiori`: `ShioriWiring::Helper { helper_exe }`（実行ファイル隣接の 32bit helper・本番結線）。
 /// - `default_encoding`: `DefaultEncoding::Ansi`（charset 未宣言時の SSP 既定・記憶
 ///   areka-descript-encoding-ishiori-utf8）。
-/// - `surface_sink`／`text_sink`: 両方とも本番既定の `LogSink`（task 2.4・無蓄積）。
+/// - `surface_sink`: 診断既定の `LogSink`（無蓄積・cue を構造化ログへ落とす）。
+///   `text_sink`: 破棄専用の `DiscardSink`。broadcast（D4）で全 cue は登録された全 sink へ配られるため、
+///   両スロットを `LogSink` にすると 1 cue が 2 回ログされる（二重ログ）。**片スロットだけを `LogSink`**
+///   にし、もう一方を `DiscardSink` で埋めることで cue ごと 1 回ログへ正す（設計 D4 Topic 2）。
+///   型が `GhostBootOptions<LogSink, DiscardSink>` であること自体が「診断既定は記録 sink を 1 本だけ持つ」
+///   ことをコンパイル時に保証する（両スロット `LogSink` への退行を型で防ぐ）。
 /// - `ticker`: `TickerMode::Real` を既定 `TickerConfig`（`base_interval=50ms`／
 ///   `kanade_interval=1000ms`／実クロック `GetTickCount64`）で駆動する。
 fn ghost_boot_options(
     ghost_root: std::path::PathBuf,
     helper_exe: std::path::PathBuf,
-) -> areka_ghost::GhostBootOptions<areka_ghost::sink::LogSink, areka_ghost::sink::LogSink> {
+) -> areka_ghost::GhostBootOptions<areka_ghost::sink::LogSink, areka_ghost::sink::DiscardSink> {
     areka_ghost::GhostBootOptions {
         ghost_root,
         default_encoding: areka_parsers::charset::DefaultEncoding::Ansi,
         shiori: areka_ghost::ShioriWiring::Helper { helper_exe },
         surface_sink: areka_ghost::sink::LogSink::new(),
-        text_sink: areka_ghost::sink::LogSink::new(),
+        text_sink: areka_ghost::sink::DiscardSink::new(),
         ticker: areka_ghost::TickerMode::Real(Default::default()),
     }
 }

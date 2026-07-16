@@ -96,8 +96,7 @@ use areka_emo_text::viewbox_draw::DrawStats;
 use areka_emo_text::writing::WritingMode;
 use areka_parsers::balloon::{parse_str, BalloonModel};
 use areka_parsers::charset::{decode, DefaultEncoding};
-use areka_sakura::contract::{ActorKey, CueCommand, TalkCue};
-use areka_sakura::TextSink;
+use areka_sakura::contract::{ActorKey, CueCommand, CueSink, TalkCue};
 
 // ---------------------------------------------------------------------------
 // 定数・fixture パス解決

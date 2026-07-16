@@ -18,8 +18,8 @@
 //! # 経路の要所
 //!
 //! - `BalloonSurface`（`\b`）は `cue_target_of` が `Some(CueTarget::Shell)` へ分類する＝
-//!   表示系（`SurfaceSink`→seriko）へ届く（テキスト状態機械へは行かない・要件 3.2）。
-//!   ゆえに本 E2E の text 系 sink は破棄専用の [`NullTextSink`] で足りる。
+//!   表示系（seriko）が action する（テキスト状態機械へは行かない・要件 3.2）。broadcast ゆえ
+//!   全 cue は両 sink へ届くが、text 系は本 E2E の観測対象外——破棄専用の [`NullTextSink`] で足りる。
 //! - 解決テーブルは空 alias 表（`BTreeMap::new()`）で足りる。数値 key（`"0"`/`"2"`/`"-1"`）は
 //!   alias を引かず数値枝で解決できる（`resolve` / `resolve_balloon_key` の数値枝）。
 
