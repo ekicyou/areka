@@ -6,19 +6,19 @@
 
 自発会話の背骨（毎秒の pump・応答→トーク起動・talk 中の非割り込み）は既に完成した kanade 運行状態機械に配線済みである。本 spec は新規経路を作らず、その OnSecondChange リクエストを **ukadoc 正典どおりの Reference（Ref0〜3）＋ `Status` 共通ヘッダ**へ充足させ、送信イベント集合が正典の許可集合に留まることを回帰檻で固定し、実機で emo2 を放置したときに自発会話が発火することを人間がサインオフする。
 
-正典は ukadoc（`OnSecondChange`: Reference0=OS 連続起動時間(hour)／Reference1=見切れ／Reference2=重なり／Reference3=トーク再生可能／再生不能時は Reference3=0 で NOTIFY・返却スクリプト無視）。emo2 は最小適合 fixture であって書式の聖典ではない。
+正典は ukadoc（`OnSecondChange`: Reference0=OS 連続起動時間(hour)／Reference1=見切れ／Reference2=重なり／Reference3=トーク再生可能／再生不能時は Reference3=0 で NOTIFY・返却スクリプト無視）。`Status` ヘッダも ukadoc 正典（`Status [SSP拡張]`）に準拠し、ゴーストの実行状態をカンマ連結の状態集合（talking／choosing／minimizing／induction／passive／timecritical／nouserbreak／online／opening(種類)／balloon(ID群)）で表す——M1 は源が既に配線済みの `talking` を実導出し、残状態は語彙に第一級で保持しつつ非アクティブへ縮退＋実測差替シームを持つ（Reference1/Reference2 と同型）。emo2 は最小適合 fixture であって書式の聖典ではない。
 
 ## Boundary Context
 
 - **In scope**:
   - OnSecondChange リクエストの Reference 正典充足（Reference0＝実 OS 連続起動時間、Reference1/Reference2＝M1 固定 "0"＋将来の実測差し替えシーム、Reference3＝トーク再生可否）。
-  - OnSecondChange への `Status` 共通ヘッダ注入（`talking` を最小実装・将来値を追加できる拡張の口）。
+  - OnSecondChange への `Status` 共通ヘッダ注入＝ukadoc `Status [SSP拡張]` の実行状態語彙全体（talking／choosing／minimizing／induction／passive／timecritical／nouserbreak／online／opening(種類)／balloon(ID群)）をカンマ連結の第一級状態集合として保持。M1 は `talking` を実導出（源＝運行状態 Steady{talk}）、残状態は語彙保持のまま非アクティブへ縮退＋実測差替シーム（Reference1/Reference2 と同型）。アクティブ集合が空のときはヘッダ行を省略（実 SSP wire 準拠）。
   - 送出 SHIORI イベント ID のホワイトリスト固定と、`OnTalk`/`OnHour` の恒久不送出檻。
   - 応答調停の回帰檻（GET→Value をトーク起動・204 は無起動・NOTIFY 応答スクリプトの破棄・talk 中非割り込み）。
   - 実 emo2・実 pasta.dll での放置→自発会話の実機サインオフ。
 - **Out of scope**:
   - 見切れ／重なりの実測値算出（Reference1/2 は M1 固定 "0"・実測は将来増分）。
-  - `Status: choosing` と選択肢連動（M-dialogue／`areka-P0-choice-select-events` の領分）。
+  - `Status` 残実行状態の**実導出**（源サブシステムからの実値算出）: choosing＝選択肢UI（`areka-P0-choice-select-events`）／balloon・minimizing・induction・passive・timecritical・nouserbreak・online・opening＝各源サブシステム着地時（追跡台帳＝`areka-P0-status-execution-states`）。本 spec は語彙保持＋非アクティブ縮退＋差替シームのみを所有し、残状態の実導出はしない。
   - 入力イベント（OnMouseMove 等）の送出（`input-events` の領分）。
   - トーク再生タイミングの正しさ（`areka-P0-cue-playback-duration` の領分）。
   - `secondchangeinterval` 等の発火間隔設定（プラグイン領分・M1 外）。
@@ -44,15 +44,21 @@
 5. While アクティブなトークが再生中（トーク再生不能）, the OnSecondChange リクエスト shall Reference3 に文字列 "0" を載せる。
 6. Where 将来の増分で見切れ・重なりの実測値が供給される, the kanade shall OnSecondChange の送出契約（ヘッダ構成・Reference の連番）を変えずに Reference1/Reference2 の値を実測値へ差し替えられる。
 
-### Requirement 2: OnSecondChange の `Status` 共通ヘッダ
+### Requirement 2: OnSecondChange の `Status` 共通ヘッダ（ukadoc 実行状態語彙への準拠）
 
-**Objective:** As an emo2 互換ベースウェアの運用者, I want OnSecondChange リクエストが現在のトーク状態を `Status` ヘッダで伝えること, so that pasta が状態に応じて発火（自発会話）を制御できる
+**Objective:** As an emo2 互換ベースウェアの運用者, I want OnSecondChange リクエストの `Status` ヘッダが ukadoc 正典 `Status [SSP拡張]` の実行状態語彙にカンマ連結形式で準拠すること, so that pasta が正典どおりの実行状態情報で発火（自発会話）を制御できる
+
+> 正典典拠: ukadoc `Status [SSP拡張]`（`ukadoc:spec_shiori3:Status_20_5bSSP_62e1_5f35_5d:1`）＝ゴーストの実行状態。複数ある場合はカンマでつなげたもの。語彙 = talking／choosing／minimizing／induction／passive／timecritical／nouserbreak／online／opening(種類)／balloon(ID群)。
 
 #### Acceptance Criteria
 
-1. While アクティブなトークが再生中, the OnSecondChange リクエスト shall `Status` ヘッダに `talking` を含める。
-2. While アクティブなトークが無い, the OnSecondChange リクエスト shall `talking` 状態を送出しない（M1 では `Status` に `talking` を載せない）。
-3. Where 選択肢表示など将来の状態値が追加される, the OnSecondChange リクエスト shall それらの値を `talking` と同一の送出経路で伝えられる（M1 で実装する状態値は `talking` のみ）。
+1. The `Status` ヘッダ表現 shall ukadoc 正典 `Status [SSP拡張]` の実行状態語彙全体（talking／choosing／minimizing／induction／passive／timecritical／nouserbreak／online／opening(種類)／balloon(ID群)）を第一級の状態集合として保持し、パラメータ付き状態（opening(種類)／balloon(ID群)）の下位書式（`/` 区切り列挙・`charID=balloonID` 等）を表現できる。
+2. While 1つ以上の実行状態がアクティブ, the OnSecondChange リクエスト shall アクティブな全状態を正典の語彙名でカンマ（`,`）連結し `Status` ヘッダに載せる。
+3. While アクティブな実行状態が1つも無い（アイドル）, the OnSecondChange リクエスト shall `Status` ヘッダ行を一切付与しない（空値でも非 talking 値でもなく、行そのものを省略する＝実 SSP wire 準拠）。
+4. While アクティブなトークが再生中, the kanade shall 実行状態 `talking` を運行状態 `Steady{talk}` から実値で導出する。
+5. The kanade shall `Status` の各実行状態をそれぞれの権威ある源から導出し、M1 で源サブシステムが未実装の状態（choosing／minimizing／induction／passive／timecritical／nouserbreak／online／opening(種類)／balloon(ID群)）を語彙から除外せず、常に非アクティブとして導出する（Reference1/Reference2 と同型の実測差替シームを各状態に備える）。
+6. Where 将来の増分で状態の源サブシステムが供給される, the kanade shall `Status` の送出契約（カンマ連結書式・ヘッダ位置・空集合→行省略）を変えずに当該状態の導出を実値へ差し替えられる。
+7. The kanade shall `talking` をトーク再生中に限って送出し、アイドル時に `talking` を送出しない（アイドル時の `Status: talking` は pasta の自発会話を恒久抑制するため・Requirement 6 実機サインオフの前提）。
 
 ### Requirement 3: 送出イベント集合のホワイトリスト檻（`OnTalk`/`OnHour` 恒久不送出）
 
