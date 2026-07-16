@@ -6,7 +6,7 @@ emo2 の撫で反応（`OnMouseMove` の actor×region ルーティング）と�
 
 本 spec は、マウス座標（窓 client 物理 px）と scope から当たり判定名（不透明 String・例 "Head"/"Bust"）を**決定論で解決する純粋層**を emo に確立し、`input-events`（③kanade）が消費できる I/O 契約 `HitRegion { scope, region: Option<String> }` を**正本として**立てる。層は (1) hit→region 純関数コア（含端・重なり優先・None 経路）、(2) 現在表示中サーフェス id の読み口（emo-present に対する additive）、(3) それらを束ねる UI スレッド用リゾルバ合成（emo2_boot 結線層）から成る。統合（撫で一周の実機サインオフ）は input-events 側へ委譲し、本 spec の観測は純粋層で独立に完結する。
 
-正典は ukadoc（`collision*,始点X,始点Y,終点X,終点Y,ID`／`collision-sort`／`OnMouseMove` の Reference4=当たり判定の識別子）であり、emo2 は最小適合 fixture にすぎない。
+正典は ukadoc（`collision*,始点X,始点Y,終点X,終点Y,ID` の矩形定義／`OnMouseMove` の Reference4=当たり判定の識別子）であり、emo2 は最小適合 fixture にすぎない。ただし当たり判定が重なった際の優先順位は、SSP の `collision-sort`（既定 none＝先書きが手前）に忠実追従せず、emo の合成規約である**画家のアルゴリズム**（後に定義された領域が手前＝勝ち・`crates/areka-emo-compose/src/blit.rs:83` の「下層→上層」合成と一貫）に揃える（要件ディスカッション議題1で決定・SSP とは逆向き）。
 
 ## Boundary Context
 
@@ -28,7 +28,7 @@ emo2 の撫で反応（`OnMouseMove` の actor×region ルーティング）と�
   - Upstream `areka-P0-emo-present`（presenter・target）／`areka-P0-emo2-boot`（target_map・結線層）に依存する。
   - Downstream `areka-P0-input-events` が `HitRegion` 契約の第一消費者であり、本節を参照して再定義しない。region が `None` の場合を空文字 Reference4 へ転写するのは `input-events` の責務である。
   - 座標契約は emo-present の「物理 px 等倍」に整合する（窓 client 物理 px をサーフェス px と同一空間で照合）。DPI 契約の明文確認は design で行う。
-  - 含端規則（境界の内外）および非既定 `collision-sort` の厳密解決は、design 冒頭で ukadoc collision 節から確定表にする。
+  - 含端規則（境界の内外）は design 冒頭で ukadoc collision 節から確定表にする。重なり時の優先順位は**画家のアルゴリズム（後に定義された領域が手前）で確定済み**（議題1）＝SSP `collision-sort` の忠実解決は行わず、差し替え用の型シーム（`SortOrder` 相当を予約）のみ備える。既存 wintf `HitRegionMap` は先勝ち（逆向き・`crates/wintf/src/ecs/layout/hit_region/mod.rs:356`）ゆえ、統合可否は design で判断する。
   - 実装制約: Rust 2024・新規依存なし・tokio 不使用・emo-present 本体無改変（additive の読み口のみ）。
 
 ## Requirements
@@ -43,12 +43,13 @@ emo2 の撫で反応（`OnMouseMove` の actor×region ルーティング）と�
 4. When 点が当たり判定矩形の境界上にある, the 当たり判定解決関数 shall 単一の正典含端規則（design で ukadoc collision 節から確定）に従い決定論的かつ一貫して解決する。
 5. While 同一の入力（サーフェスの当たり判定集合と点）が与えられている間, the 当たり判定解決関数 shall 常に同一の結果を返す。
 
-### Requirement 2: 重なり領域の優先順位（正典 collision-sort）
-**Objective:** As a 複数の当たり判定が重なりうるシェルを扱う emo, I want 重なり時に一意な領域名へ収束する規則, so that 撫で先が曖昧にならず決定論で1つに定まる
+### Requirement 2: 重なり領域の優先順位（画家のアルゴリズム）
+**Objective:** As a 複数の当たり判定が重なりうるシェルを扱う emo, I want 重なり時の優先順位を emo の合成規約（画家のアルゴリズム）と一貫させる, so that 撫で先が曖昧にならず、見た目で手前の層と撫で解決が一致する
 
 #### Acceptance Criteria
-1. When 点が複数の当たり判定領域に同時に含まれる, the 当たり判定解決関数 shall 正典 collision-sort が定める優先順位に従って単一の領域名を決定論で返す。
-2. Where collision-sort が宣言されていない（emo2 fixture の既定）, the 当たり判定解決関数 shall 定義順で先に記述された領域を優先する（先書きが手前）。
+1. When 点が複数の当たり判定矩形に同時に含まれる, the 当たり判定解決関数 shall 画家のアルゴリズム（後に定義された矩形が手前）に従い、最も後に定義された領域の名前を決定論で返す。
+2. The 当たり判定解決関数 shall この優先規則を単一の決定論規則として適用し、SSP の `collision-sort` 宣言（none/ascend/descend）の忠実解決には依存しない（emo2 は `collision-sort` 未宣言）。
+3. The 当たり判定解決層 shall 優先順位規則を将来差し替え可能な型シーム（`SortOrder` 相当の enum を予約）として構成し、本 spec では画家のアルゴリズム（後定義が手前）のみを実装する。
 
 ### Requirement 3: 現在表示中サーフェスの読み口（emo-present additive）
 **Objective:** As a 当たり判定リゾルバ, I want 対象ウィンドウ（target）が現在表示中のサーフェス id を引く読み口, so that 呼び手が surface を知らなくても正しい当たり判定集合を選べる

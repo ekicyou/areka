@@ -145,3 +145,19 @@
 - **推奨アプローチ（暫定・ディスカッションで確定）**: 純関数コア＝A-1（emo-compose に整数厳密・wintf 非依存の純関数）／現 id 読み口＝B-1（presenter additive フィールド＋accessor・`TextSlotView` 踏襲）／resolver＝C-1（presenter 結合メソッド＋emo2_boot 薄 glue）。理由: 物理 px 等倍・整数・不透明 String・wintf 非依存・本体無改変・単一真実源の全要件に最小コストで整合し、全網羅 unit を GPU 不要で成立させられる。
 - **design 冒頭で必ず確定**: (a) ukadoc collision 節の含端・優先・None 値・透明画素関係の確定表（§7）、(b) collision-sort 伝播の可否と R2.1 のスコープ（§6-3）、(c) 現 id 読み口の Hide/invalidate 意味論（§6-4）、(d) HitRegion 型の定義 crate と点型/DPI 契約（§6-6/7）。
 - **持ち越す研究項目**: §7 の ukadoc 5 点のみ。外部依存調査は無し。
+
+## 9. 要件ディスカッション決定（議題1・2026-07-17）
+
+**論点**: §6-3（collision-sort の伝播）＝重なり時の優先順位規則の確定。
+
+**決定（開発者裁定）**: 重なり時の優先順位は **emo の合成規約＝画家のアルゴリズム**（後に定義された領域が手前＝勝ち）に一貫させる。SSP の `collision-sort`（none/ascend/descend）には**忠実追従しない**。
+
+- **根拠（実コード裏取り）**:
+  - emo 合成は画家のアルゴリズム＝下層→上層（`crates/areka-emo-compose/src/blit.rs:83`「命令を順に転写（画家のアルゴリズム・下層から上層）」）＝**後定義が手前**。
+  - SSP `collision-sort none` は「先に書かれている方が手前」（ukadoc `descript_shell_surfaces` collision-sort）＝**先定義が手前**＝画家のアルゴリズムと**逆向き**。
+  - 既存 wintf `HitRegionMap::hit_test_region` は「定義順の先勝ち」（`crates/wintf/src/ecs/layout/hit_region/mod.rs:356`）＝SSP `none` と同じ＝**画家のアルゴリズムとは逆**。
+- **要件への反映**: R2.1＝画家のアルゴリズム（後定義が手前）／R2.2＝SSP `collision-sort` 忠実解決に非依存／R2.3＝`SortOrder` 相当の型シーム予約（本 spec は画家一本のみ実装）。従来 R2.2「先書きが手前」は反転。
+- **design へ持ち越す論点（更新）**:
+  - §6-3（collision-sort 伝播）は**不要化**（SSP 忠実 sort を実装しないため `collision_sort` の `SurfaceMaster` 伝播は本 spec 不要）。代わりに `SortOrder` 型シームの置き場所（emo-compose 純関数近傍が候補）を design 判断。
+  - **既存 wintf `HitRegionMap`（先勝ち）との不一致の扱い**: 本 spec の純関数は逆向き（後勝ち）ゆえ、A-2（HitRegionMap 再利用）はロジック不一致がさらに増える＝§4 論点A で A-1（emo-compose 新規純関数）へさらに傾く。design で「統合／別実装／将来 reconcile」を明記する。
+  - 実装形: 「矩形リストを後方から評価し最初に当たった領域を返す（逆順先勝ち）」＝画家のアルゴリズム等価の決定論実装。
