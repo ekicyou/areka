@@ -148,8 +148,8 @@ fn cue(actor: &str, at: f64, command: CueCommand) -> TalkCue {
     }
 }
 
-/// 1 行（先頭行以外は先に改行マーカー）を emit する。全 cue は at=0.0（reveal は char_wait 累積で
-/// ≤ 0.5s・FULLY_REVEALED で全可視）。行末尾に改行を付けない＝部分リビール時の空行を作らない
+/// 1 行（先頭行以外は先に改行マーカー）を emit する。全 cue は at=0.0・duration=0（配送 duration=0
+/// ＝全グリフが at=0.0 で即時可視ゆえ FULLY_REVEALED で全可視）。行末尾に改行を付けない＝部分リビール時の空行を作らない
 /// （常に全可視で描くため実際には無関係だが、行構造を「1 行 1 グリフ」に厳密化する）。
 fn emit_line(sink: &mut EmoTextSink, line_index: usize) {
     if line_index > 0 {

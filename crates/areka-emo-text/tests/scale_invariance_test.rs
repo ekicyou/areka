@@ -19,7 +19,7 @@
 use areka_emo_text::actor::{ResolvedBalloonText, TextSlotBinding};
 use areka_emo_text::layout::{FixedMetrics, LayoutEngine, PositionedLine, VisibleWindow};
 use areka_emo_text::region::{ImagePx, PhysicalPx, ScaleContract};
-use areka_emo_text::state::{TextItem, TextLayerConfig, TextLayerState};
+use areka_emo_text::state::{TextItem, TextLayerState};
 use areka_emo_text::writing::WritingMode;
 use areka_parsers::balloon::{
     BalloonModel, Font, FontColor, Origin, ValidRect, WindowPosition, WordWrapPoint,
@@ -69,21 +69,23 @@ fn physical_surface(image: (u32, u32), k: f32) -> (u32, u32) {
     )
 }
 
-/// テスト用 cue 生成ヘルパ（pipeline_test.rs と同型）。
+/// reveal 間隔（0.25＝2 の冪・正確表現）。reveal は配送 duration 由来（`interval = duration / N`）
+/// ゆえ Text cue へ `N × REVEAL_INTERVAL` を焼き込むと interval=0.25 の決定論的リビール時刻列を得る
+/// （旧 char_wait=0.25 檻と機能等価・pipeline_test.rs と同方針）。
+const REVEAL_INTERVAL: f64 = 0.25;
+
+/// テスト用 cue 生成ヘルパ（pipeline_test.rs と同型）。Text cue には配送
+/// duration = `N × REVEAL_INTERVAL` を焼き込む（reveal interval=0.25）。他は瞬時（duration=0）。
 fn cue(actor: &str, at: f64, command: CueCommand) -> TalkCue {
+    let duration = match &command {
+        CueCommand::Text(t) => t.chars().count() as f64 * REVEAL_INTERVAL,
+        _ => 0.0,
+    };
     TalkCue {
         at,
         actor: ActorKey::from(actor),
         command,
-        duration: 0.0,
-    }
-}
-
-/// FP 丸めに依存しない検証用 config（char_wait=0.25 は 2 の冪＝正確表現・state.rs と同方針）。
-fn exact_config() -> TextLayerConfig {
-    TextLayerConfig {
-        char_wait: 0.25,
-        ..TextLayerConfig::default()
+        duration,
     }
 }
 
@@ -284,8 +286,7 @@ fn layout_decision_is_scale_independent_for_horizontal_text() {
         (Some(46), Some(-56), Some(36), Some(-44)),
         None,
     );
-    // 同一 cue 列（typewriter 進行込み・char_wait=0.25）: 自動折返し＋明示改行＋あふれ。
-    let config = exact_config();
+    // 同一 cue 列（typewriter 進行込み・reveal interval=0.25）: 自動折返し＋明示改行＋あふれ。
     let actor = ActorKey::from("0");
     let mut state = TextLayerState::default();
     for c in [
@@ -294,7 +295,7 @@ fn layout_decision_is_scale_independent_for_horizontal_text() {
         cue("0", 2.5, CueCommand::NewLine { ratio: 1.0 }),
         cue("0", 2.5, CueCommand::Text("さし".into())),
     ] {
-        state.apply_cue(&c, &config);
+        state.apply_cue(&c);
     }
     // 注入時刻列（リビール途中〜全量・2 の冪グリッド＋飽和点）。
     let probe_times = [0.0, 1.0, 2.25, 2.75, 10.0];

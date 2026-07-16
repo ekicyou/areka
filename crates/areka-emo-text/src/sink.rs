@@ -1,8 +1,12 @@
-//! # sink — sakura の cue 受信口（結線層）
+//! # sink — cue 受信口（結線層）
 //!
-//! sakura の `TextSink` を実装する `EmoTextSink` と搬送 envelope `TextMsg` を担う。
-//! `emit` は sakura drive の worker スレッド上で呼ばれ、cue を UI ドレインへ非ブロック
-//! 送出する（`UiSender` が配送口そのもの）。
+//! **単一の出力契約** [`dola::cue::CueSink`] を実装する `EmoTextSink` と搬送 envelope
+//! `TextMsg` を担う。`emit` は cue 再生ランタイム（`CuePlayer`）／sakura drive の worker
+//! スレッド上で呼ばれ、cue を UI ドレインへ非ブロック送出する（`UiSender` が配送口そのもの）。
+//!
+//! 演者非依存の `CueSink` 1 本へ集約する（旧 `SurfaceSink`/`TextSink` の 2 分割は
+//! broadcast＋演者側 relevance ゆえ不要・R11.6）。ghost live-path が `CueSink` 注入へ移行する
+//! task 8.1 までは、暫定で [`areka_sakura::TextSink`] 実装も並存させる（同一送出本体へ委譲）。
 //!
 //! **層規律**: 結線層。送信失敗（UI アクター停止後）は `tracing::error!` のみ・panic しない
 //! （`emit` は infallible 契約・log-first）。
@@ -26,12 +30,14 @@ pub enum TextMsg {
     Close,
 }
 
-/// sakura の [`TextSink`] 実装——Balloon 向け cue を UI ドレインへ非ブロック送出する受信口。
+/// **単一の出力契約** [`dola::cue::CueSink`] の実装——broadcast された全 cue を UI ドレインへ
+/// 非ブロック送出する受信口（担当外 cue も届き、reveal を汚さず duration を honor する）。
 ///
-/// - `TextSink + Clone + Send + 'static` を満たす（`GhostBootOptions.text_sink` へ注入可能な
-///   形・注入自体は emo2-boot の責務・R10.1）。
-/// - `emit` は sakura drive の worker スレッド上で呼ばれる＝受信端はワーカー側（R1.3 前半)。
-///   中間アクターは設けない（[`UiSender`] が配送口そのもの——design.md 結線層）。
+/// - `dola::cue::CueSink + Clone + Send + 'static` を満たす（cue 再生ランタイムへ登録可能な形）。
+///   暫定で `TextSink + Clone + Send + 'static` も満たす（`GhostBootOptions.text_sink` へ注入可能・
+///   注入自体は emo2-boot の責務・task 8.1 まで並存・R10.1）。
+/// - `emit` は `CuePlayer`／sakura drive の worker スレッド上で呼ばれる＝受信端はワーカー側
+///   （R1.3 前半)。中間アクターは設けない（[`UiSender`] が配送口そのもの——design.md 結線層）。
 /// - cue は FIFO で UI ドレインへ到達する（unbounded・非ブロック）。
 ///
 /// # Invariants
@@ -61,15 +67,14 @@ impl EmoTextSink {
             );
         }
     }
-}
 
-impl TextSink for EmoTextSink {
-    /// 1 発火を UI ドレインへ積む（unbounded・非ブロック・R1.1）。
+    /// 1 発火を UI ドレインへ積む（unbounded・非ブロック・R1.1）。両出力契約
+    /// （[`dola::cue::CueSink`]／[`TextSink`]）の `emit` が共用する送出本体。
     ///
     /// 送信失敗（UI ドレイン停止後）は失われた cue の文脈付き `tracing::error!` のみで、
     /// panic せず infallible 契約に従い戻り値なし（R1.5・log-first）。後続の `emit` も
     /// 引き続き受理される（受信口は失敗で壊れない）。
-    fn emit(&mut self, cue: TalkCue) {
+    fn deliver(&mut self, cue: TalkCue) {
         if let Err(UiSendError(TextMsg::Cue(lost))) = self.tx.send(TextMsg::Cue(cue)) {
             tracing::error!(
                 at = lost.at,
@@ -79,6 +84,29 @@ impl TextSink for EmoTextSink {
                  dropping cue and continuing"
             );
         }
+    }
+}
+
+/// **単一の出力契約**（R11.6・task 4.1）: 演者非依存の [`dola::cue::CueSink`] を実装する。
+///
+/// `CuePlayer` は登録された全 sink へ全 cue を broadcast し、emo-text は担当（Balloon）か否かを
+/// 演者側 relevance（`cue_target_of`）で選別する——action を無視しても duration は honor する
+/// （担当外 cue も本 sink 経由で純粋状態機械へ届き、reveal を汚さない・R2.2/R2.3）。配送先スロットの
+/// 2 分割（旧 SurfaceSink/TextSink）は broadcast＋演者側 relevance ゆえ不要。
+impl dola::cue::CueSink for EmoTextSink {
+    fn emit(&mut self, cue: TalkCue) {
+        self.deliver(cue);
+    }
+}
+
+/// **暫定の並存 impl**（task 8.1 で撤去予定）: ghost live-path は task 8.1 が
+/// `dola::cue::CueSink` へ張り替えるまで [`areka_sakura::TextSink`] 経由で本 sink を注入する
+/// （`GhostBootOptions.text_sink`・R10.1）。それまでの間、上の `CueSink` 実装と本 `TextSink`
+/// 実装を**同一の送出本体**（[`EmoTextSink::deliver`]）へ委譲する形で並存させ、ghost が
+/// コンパイルし続けられるようにする。8.1 が ghost を `CueSink` 注入へ移行した時点で本 impl を削除する。
+impl TextSink for EmoTextSink {
+    fn emit(&mut self, cue: TalkCue) {
+        self.deliver(cue);
     }
 }
 
@@ -240,10 +268,22 @@ mod tests {
     fn assert_injection_contract<T: TextSink + Clone + Send + 'static>() {}
 
     /// コンパイル時検証: `EmoTextSink` は `GhostBootOptions.text_sink` へ注入可能な形
-    /// （`TextSink + Clone + Send + 'static`）を満たす（R10.1・注入自体は emo2-boot）。
+    /// （`TextSink + Clone + Send + 'static`）を満たす（R10.1・注入自体は emo2-boot・
+    /// task 8.1 まで暫定並存）。
     #[test]
     fn emo_text_sink_satisfies_injection_contract() {
         assert_injection_contract::<EmoTextSink>();
+    }
+
+    /// 単一出力契約（`dola::cue::CueSink`）への登録可能性を型で検証する（トレイトは
+    /// フルパス束縛のみで参照し、`emit` の名前解決が TextSink と衝突しないようにする）。
+    fn assert_cue_sink_contract<T: dola::cue::CueSink + Clone + Send + 'static>() {}
+
+    /// コンパイル時検証: `EmoTextSink` は cue 再生ランタイムへ登録可能な**単一の出力契約**
+    /// （`dola::cue::CueSink + Clone + Send + 'static`）を満たす（R11.6・task 4.1 の単一トレイト）。
+    #[test]
+    fn emo_text_sink_satisfies_cue_sink_contract() {
+        assert_cue_sink_contract::<EmoTextSink>();
     }
 
     // ── 終了規律の正準写像（handle_text_msg・純粋部） ──

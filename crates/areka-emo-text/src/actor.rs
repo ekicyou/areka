@@ -144,7 +144,8 @@ pub struct TextLayerRuntime {
     layout_input: HashMap<ActorKey, ResolvedBalloonText>,
     /// actor 別の描画資源（遅延生成——初回解決フレームで World 資源から構築・装着）。
     surfaces: HashMap<ActorKey, ActorRender>,
-    /// 調整値（char_wait／line_pitch 係数）。
+    /// 調整値（line_pitch 係数）。reveal ペースは配送 duration 由来ゆえ char_wait は持たない
+    /// （本 config は `DWriteMetrics::new` の行送り算出にのみ使う）。
     config: TextLayerConfig,
     /// 未解決 actor の warn を actor ごと初回のみに抑える記録（以降は debug!——
     /// design Error Handling「未 binding actor の cue」）。
@@ -207,15 +208,42 @@ impl TextLayerRuntime {
 
     /// cue を actor 別の純粋状態機械へ適用する（UI ドレインの適用点・World に触れない）。
     ///
-    /// `Clear` は全域リセット要求点でもある（planner 初期化＋確定行 TextLayout キャッシュの全破棄——
-    /// design「Clear で全破棄」・破棄はこの口だけ・次フレームは `FramePlan::FullClear`＝全域透明・R4.3）。
+    /// `Clear`／`ClearAll` は描画実行部の全域リセット要求点でもある（planner 初期化＋確定行
+    /// TextLayout キャッシュの全破棄——design「Clear で全破棄」・破棄はこの口だけ・次フレームは
+    /// `FramePlan::FullClear`＝全域透明・R4.3）。純粋状態（[`TextLayerState::apply_cue`]）を
+    /// 空にするだけでは既描画サーフェスに古いピクセルが残留するため（#6 欠陥）、提示層の
+    /// 描画実行部にも同じ消去を伝える必要がある:
+    ///
+    /// - `Clear`＝**対象スコープのみ**（`cue.actor` の描画実行部だけをクリア・R6.4/R7.4）。
+    /// - `ClearAll`＝**全スコープ**（装着済み全 actor の描画実行部をクリア・#6 の冒頭全消し・
+    ///   R6.4/R7.4）。上流は残存スコープを列挙できないため、全消しは本ランタイムが自己完結して
+    ///   行う（`state.rs::apply_cue` の全 `actor_states` 消去と対）。
     pub fn apply_cue(&mut self, cue: &TalkCue) {
-        if matches!(cue.command, CueCommand::Clear) {
-            if let Some(render) = self.surfaces.get_mut(&cue.actor) {
-                render.executor.request_clear();
+        // catch-all を置かず variant を明示し、将来 dola が clear 系 variant を追加した際に
+        // コンパイラへ描画実行部側の再検討を強制する（no-catch-all 規律）。
+        match &cue.command {
+            CueCommand::Clear => {
+                if let Some(render) = self.surfaces.get_mut(&cue.actor) {
+                    render.executor.request_clear();
+                }
             }
+            CueCommand::ClearAll => {
+                for render in self.surfaces.values_mut() {
+                    render.executor.request_clear();
+                }
+            }
+            // 他コマンドは描画実行部への全域クリアを要さない（グリフ更新は present_frame が
+            // リビール進行として描き、非担当コマンドは reveal を汚さない）。
+            CueCommand::Text(_)
+            | CueCommand::Emote { .. }
+            | CueCommand::Choice { .. }
+            | CueCommand::EntityRef(_)
+            | CueCommand::Custom { .. }
+            | CueCommand::NewLine { .. }
+            | CueCommand::BalloonSurface { .. }
+            | CueCommand::Wait => {}
         }
-        self.state.apply_cue(cue, &self.config);
+        self.state.apply_cue(cue);
     }
 
     /// 純粋状態機械（可視グリフ数・actor 状態の読み取り口）。
@@ -223,7 +251,7 @@ impl TextLayerRuntime {
         &self.state
     }
 
-    /// 調整値（char_wait／line_pitch 係数）。
+    /// 調整値（line_pitch 係数）。
     pub fn config(&self) -> &TextLayerConfig {
         &self.config
     }
@@ -625,13 +653,23 @@ mod runtime_tests {
 
     // ── テスト土台 ──
 
-    /// テスト用 cue。
+    /// reveal 間隔（秒/グリフ）。reveal は配送 duration 由来（`interval = duration / N`）ゆえ、
+    /// Text cue へ `N × REVEAL_INTERVAL` の duration を焼き込むことで interval=0.05 の進行を得る
+    /// （旧 char_wait=0.05 既定と機能等価・進行観測は安全マージン付き時刻 0.06/0.11 で行う）。
+    const REVEAL_INTERVAL: f64 = 0.05;
+
+    /// テスト用 cue。Text cue には配送 duration = `N × REVEAL_INTERVAL` を焼き込む
+    /// （reveal interval=0.05）。他コマンドは瞬時（duration=0）。
     fn cue(actor: &str, at: f64, command: CueCommand) -> TalkCue {
+        let duration = match &command {
+            CueCommand::Text(t) => t.chars().count() as f64 * REVEAL_INTERVAL,
+            _ => 0.0,
+        };
         TalkCue {
             at,
             actor: ActorKey::from(actor),
             command,
-            duration: 0.0,
+            duration,
         }
     }
 
@@ -703,7 +741,7 @@ mod runtime_tests {
                 let actor = ActorKey::from("0");
                 let state = rt.state().actor_state(&actor).expect("actor state が生成される");
                 assert_eq!(state.items().len(), 4, "グリフ 3＋改行マーカー 1 が追記される");
-                // 注入時刻でのリビール進行（既定 char_wait=0.05・丸め安全マージン付き時刻）。
+                // 注入時刻でのリビール進行（reveal interval=0.05〔duration 由来〕・丸め安全マージン付き時刻）。
                 assert_eq!(rt.state().visible_glyphs(&actor, 0.0), 1);
                 assert_eq!(rt.state().visible_glyphs(&actor, 0.06), 2);
                 assert_eq!(rt.state().visible_glyphs(&actor, 0.11), 3);
@@ -894,7 +932,7 @@ mod runtime_tests {
             "GraphicsCommandList は挿入しない（wintf 描画系と競合しない）"
         );
 
-        // 注入時刻フレームごとの進行（既定 char_wait=0.05・r=[0.0, 0.05, 0.10]）。
+        // 注入時刻フレームごとの進行（reveal interval=0.05〔duration 由来〕・r=[0.0, 0.05, 0.10]）。
         let read = |rt: &TextLayerRuntime| -> usize {
             opaque_count(
                 &rt.surface(&actor)
@@ -989,6 +1027,92 @@ mod runtime_tests {
             "描画呼び出し回数は単調非減少: {} -> {}",
             stats.draw_text_layout_calls,
             stats2.draw_text_layout_calls
+        );
+    }
+
+    /// 観測可能な完了状態（task 6.1・R6.4/R7.4・#6）: `ClearAll` は純粋状態の全スコープ消去に
+    /// 加え、**装着済み全 actor の描画実行部**へ全域クリアを伝え、既描画サーフェスに古い
+    /// ピクセルを残さない（`Clear` は cue.actor スコープのみ）。2 actor を装着してインクを載せ、
+    /// 一方の actor 名で発行した `ClearAll` が**両**供給面を全域透明へ戻すことを readback で固定する
+    /// （提示層でも全 render をクリアしないと #6＝前会話残留が再現する）。
+    #[test]
+    fn clear_all_clears_every_attached_actor_render_not_just_cue_actor() {
+        unsafe {
+            let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
+        }
+        let core = GraphicsCore::new().expect("GraphicsCore::new 失敗");
+        let wuc = WucGraphicsResource::new(core.d2d_device().expect("d2d_device"))
+            .expect("WucGraphicsResource::new 失敗");
+
+        let mut world = World::new();
+        let (window0, slot0) = spawn_reserved_slot(&mut world);
+        let (window1, slot1) = spawn_reserved_slot(&mut world);
+        world.insert_resource(core);
+        world.insert_resource(wuc);
+
+        let sakura = ActorKey::from("0");
+        let kero = ActorKey::from("1");
+        let mut rt = TextLayerRuntime::new(TextLayerConfig::default());
+
+        // 2 actor へテキストを流し、各々の予約スロットへ装着する。
+        rt.apply_cue(&cue("0", 0.0, CueCommand::Text("アヒル".into())));
+        rt.apply_cue(&cue("1", 0.0, CueCommand::Text("けろ".into())));
+        let image = (120u32, 60u32);
+        rt.register_actor(
+            sakura.clone(),
+            TextSlotBinding::new(slot0, window0, 1.0, image),
+            ResolvedBalloonText::resolve(&geo_model(), image),
+        );
+        rt.register_actor(
+            kero.clone(),
+            TextSlotBinding::new(slot1, window1, 1.0, image),
+            ResolvedBalloonText::resolve(&geo_model(), image),
+        );
+
+        // 全リビール済み時刻で提示——両供給面にインクが載る。
+        present_frame(&mut rt, &mut world, 10.0).expect("装着＋描画フレーム");
+        let read = |rt: &TextLayerRuntime, a: &ActorKey| -> usize {
+            opaque_count(
+                &rt.surface(a)
+                    .expect("装着済み供給面")
+                    .read_back()
+                    .expect("read_back"),
+            )
+        };
+        assert!(read(&rt, &sakura) > 0, "actor 0 にインクが載る");
+        assert!(read(&rt, &kero) > 0, "actor 1 にインクが載る");
+        // ClearAll 前の FullClear 累計（基準）——ここまで FullClear は発生していない。
+        let sakura_fc0 = rt.draw_stats(&sakura).expect("draw_stats(0)").full_clears;
+        let kero_fc0 = rt.draw_stats(&kero).expect("draw_stats(1)").full_clears;
+
+        // cue.actor="0" で ClearAll を発行——cue が名指ししない actor(1) を含む全スコープの
+        // 状態が消え、両描画実行部へ全域クリア（request_clear）が伝わる。
+        rt.apply_cue(&cue("0", 11.0, CueCommand::ClearAll));
+        present_frame(&mut rt, &mut world, 12.0).expect("ClearAll 後フレーム");
+        assert_eq!(
+            read(&rt, &sakura),
+            0,
+            "ClearAll は cue.actor（0）の供給面を全域透明へ戻す"
+        );
+        assert_eq!(
+            read(&rt, &kero),
+            0,
+            "ClearAll は cue が名指ししない actor（1）の供給面も全域透明へ戻す（#6・全 render クリア）"
+        );
+        // 両描画実行部が **FullClear**（request_clear 経由）を 1 回ずつ行ったことを固定する。
+        // これがないと ClearAll が cue.actor の render しかクリアせず（＝退行）、
+        // 名指しされない actor(1) の executor は request_clear を受けない（full_clears 不変）ため
+        // 本 assert が退行を捕捉する（可視の透明化は planner の縮退経路でも起こり得るが、
+        // FullClear 計上は request_clear が実際に全 render へ届いた証跡）。
+        assert_eq!(
+            rt.draw_stats(&sakura).expect("draw_stats(0)").full_clears,
+            sakura_fc0 + 1,
+            "ClearAll は cue.actor（0）の描画実行部に FullClear を 1 回起こす"
+        );
+        assert_eq!(
+            rt.draw_stats(&kero).expect("draw_stats(1)").full_clears,
+            kero_fc0 + 1,
+            "ClearAll は名指しされない actor（1）の描画実行部にも FullClear を起こす（request_clear が全 render へ届いた証跡）"
         );
     }
 }

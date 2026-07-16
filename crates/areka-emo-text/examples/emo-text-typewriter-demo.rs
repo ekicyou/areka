@@ -3,7 +3,7 @@
 //! # emo-text-typewriter-demo — バルーン＋タイプライター表示のインタラクティブデモ
 //!
 //! emo2 fixture のバルーン枠を実表示し、挨拶テキストを **実時間タイプライター**
-//! （`char_wait` 秒/グリフ・注入時刻＝フレーム経過時間で駆動）で表示する。
+//! （配送 duration 由来の interval＝`CHAR_WAIT` 秒/グリフ・注入時刻＝フレーム経過時間で駆動）で表示する。
 //! テキストは表示しきったあと少し間を置いて全消去し、繰り返す（ループ）。
 //!
 //! **バルーンをダブルクリックするとデモが終了する**（`OnPointerPressed` の bubble 相で
@@ -87,12 +87,19 @@ fn load_balloon_model() -> Option<BalloonModel> {
 fn actor() -> ActorKey {
     ActorKey::from("0")
 }
+/// デモ用 cue。reveal は配送 duration 由来（`interval = duration / N`）ゆえ、Text cue へ
+/// `N × CHAR_WAIT` を焼き込むと 1 グリフあたり CHAR_WAIT 秒の typewriter 進行になる
+/// （全 cue at=0.0 なので reveal は連続的に累積・旧 char_wait 定数と機能等価）。
 fn cue(at: f64, command: CueCommand) -> TalkCue {
+    let duration = match &command {
+        CueCommand::Text(t) => t.chars().count() as f64 * CHAR_WAIT,
+        _ => 0.0,
+    };
     TalkCue {
         at,
         actor: actor(),
         command,
-        duration: 0.0,
+        duration,
     }
 }
 
@@ -208,11 +215,11 @@ fn build_and_spawn(world: &mut World) {
         win,
         assets: Some(assets),
         model,
-        // タイプ速度をデモ用に遅くする（既定 0.05 → CHAR_WAIT）。
-        runtime: Rc::new(RefCell::new(TextLayerRuntime::new(TextLayerConfig {
-            char_wait: CHAR_WAIT,
-            ..TextLayerConfig::default()
-        }))),
+        // タイプ速度は配送 duration 由来（cue ヘルパが Text へ N×CHAR_WAIT を焼き込む）。
+        // config は line_pitch_factor のみゆえ既定でよい。
+        runtime: Rc::new(RefCell::new(TextLayerRuntime::new(
+            TextLayerConfig::default(),
+        ))),
         attached: false,
         cycle_start: 0.0,
         fed: false,
@@ -315,7 +322,7 @@ fn drive_typewriter(demo: &mut Demo, world: &mut World) {
     let now = world.get_resource::<FrameTime>().map(|ft| ft.0).unwrap_or(0.0);
     let t = now - demo.cycle_start;
 
-    // サイクル頭で挨拶 cue を一度だけ流す（全 at=0.0＝リビールは char_wait で連続進行）。
+    // サイクル頭で挨拶 cue を一度だけ流す（全 at=0.0＝リビールは配送 duration で連続進行）。
     if !demo.fed {
         let mut rt = demo.runtime.borrow_mut();
         rt.apply_cue(&cue(0.0, CueCommand::Text(LINE1.into())));
