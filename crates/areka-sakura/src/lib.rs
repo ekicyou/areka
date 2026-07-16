@@ -32,6 +32,7 @@
 pub mod compile;
 pub mod contract;
 pub mod drive;
+pub mod duration;
 pub mod error;
 pub mod sink;
 
