@@ -1,10 +1,10 @@
-//! CueSheet と compile_sheet のユニットテスト
+//! CueSheet 構築と canonical 変換 to_talk_schedule のユニットテスト。
 //!
-//! Task 6.3: 昇順ソート、0 ベース正規化、into_entry 3 種変換の検証。
+//! 昇順ソート・絶対アンカー保存・先頭待ち保存・duration clamp・占有 horizon を検証する。
 
 use dola::cue::{
     ActorKey, BarrierKind, Cue, CueCommand, CuePayload, CueSheet, CueTarget,
-    RoutingCommand, compile_sheet, to_talk_schedule,
+    RoutingCommand, to_talk_schedule,
 };
 
 // ============================================================================
@@ -173,134 +173,6 @@ fn actors_unique_list() {
 }
 
 // ============================================================================
-// compile_sheet テスト
-// ============================================================================
-
-#[test]
-fn compile_sheet_normalizes_to_zero_base() {
-    let sheet = CueSheet::new(vec![
-        Cue {
-            actor: ActorKey::from("a"),
-            start_time: 5.0,
-            payload: CueCommand::Text("first".into()).into(),
-            duration: 0.0,
-        },
-        Cue {
-            actor: ActorKey::from("a"),
-            start_time: 7.0,
-            payload: CueCommand::Text("second".into()).into(),
-            duration: 0.0,
-        },
-        Cue {
-            actor: ActorKey::from("a"),
-            start_time: 10.0,
-            payload: CueCommand::Clear.into(),
-            duration: 0.0,
-        },
-    ]);
-
-    let compiled = compile_sheet(&sheet);
-    assert_eq!(compiled.len(), 3);
-
-    // 最小 start_time=5.0 を 0 に正規化
-    let offsets: Vec<f64> = compiled.iter().map(|c| c.offset).collect();
-    assert_eq!(offsets, vec![0.0, 2.0, 5.0]);
-}
-
-#[test]
-fn compile_sheet_empty() {
-    let sheet = CueSheet::new(vec![]);
-    let compiled = compile_sheet(&sheet);
-    assert!(compiled.is_empty());
-}
-
-#[test]
-fn compile_sheet_preserves_actor() {
-    let sheet = CueSheet::new(vec![
-        Cue {
-            actor: ActorKey::from("sakura"),
-            start_time: 0.0,
-            payload: CueCommand::Text("hello".into()).into(),
-            duration: 0.0,
-        },
-        Cue {
-            actor: ActorKey::from("kero"),
-            start_time: 1.0,
-            payload: CueCommand::Clear.into(),
-            duration: 0.0,
-        },
-    ]);
-
-    let compiled = compile_sheet(&sheet);
-    assert_eq!(compiled[0].actor.as_str(), "sakura");
-    assert_eq!(compiled[1].actor.as_str(), "kero");
-}
-
-#[test]
-fn compile_sheet_normalizes_negative_start_times() {
-    // D3-T: 負の start_time も最小値を 0 基準に正規化する
-    // （TimedSchedule::insert は非負オフセットを debug_assert で要求するため、
-    //  この正規化が負時刻台本を安全に接続する境界となる）
-    let sheet = CueSheet::new(vec![
-        Cue {
-            actor: ActorKey::from("a"),
-            start_time: -2.0,
-            payload: CueCommand::Text("first".into()).into(),
-            duration: 0.0,
-        },
-        Cue {
-            actor: ActorKey::from("a"),
-            start_time: 1.0,
-            payload: CueCommand::Clear.into(),
-            duration: 0.0,
-        },
-    ]);
-
-    let compiled = compile_sheet(&sheet);
-    let offsets: Vec<f64> = compiled.iter().map(|c| c.offset).collect();
-    assert_eq!(offsets, vec![0.0, 3.0]);
-}
-
-#[test]
-fn compile_sheet_preserves_barrier_and_routing_kinds() {
-    // D3-T: コマンド/バリア/ルーティング混在台本が Entry 3 種へ正しく振り分けられる
-    let sheet = CueSheet::new(vec![
-        Cue {
-            actor: ActorKey::from("a"),
-            start_time: 1.0,
-            payload: CueCommand::Text("cmd".into()).into(),
-            duration: 0.0,
-        },
-        Cue {
-            actor: ActorKey::from("a"),
-            start_time: 2.0,
-            payload: CuePayload::Barrier(BarrierKind::WaitForInput { timeout: None }),
-            duration: 0.0,
-        },
-        Cue {
-            actor: ActorKey::from("a"),
-            start_time: 3.0,
-            payload: CuePayload::Routing(RoutingCommand::RouteRemove {
-                target: CueTarget::Shell,
-            }),
-            duration: 0.0,
-        },
-    ]);
-
-    let compiled = compile_sheet(&sheet);
-    assert_eq!(compiled.len(), 3);
-    assert!(
-        matches!(&compiled[0].entry, dola::cue::Entry::Payload(t, CueCommand::Text(_)) if *t == 0.0)
-    );
-    assert!(
-        matches!(&compiled[1].entry, dola::cue::Entry::Barrier(t, BarrierKind::WaitForInput { .. }) if *t == 1.0)
-    );
-    assert!(
-        matches!(&compiled[2].entry, dola::cue::Entry::Routing(t, RoutingCommand::RouteRemove { .. }) if *t == 2.0)
-    );
-}
-
-// ============================================================================
 // 非有限 start_time の境界（D3-V 特性化）
 // ============================================================================
 
@@ -329,201 +201,6 @@ fn cue_sheet_new_with_nan_start_time_does_not_panic() {
         },
     ]);
     assert_eq!(sheet.len(), 3);
-}
-
-#[test]
-fn compile_sheet_nan_start_time_excluded_from_min_yields_nan_offset() {
-    // 特性化: NaN の start_time は f64::min が NaN を無視するため最小値計算から
-    // 脱落し、当該 Cue のオフセットのみ NaN となる（有限 Cue の正規化は正しいまま）。
-    // NaN オフセットは TimedSchedule::insert の debug_assert 対象（P25 参照）。
-    let sheet = CueSheet::new(vec![
-        Cue {
-            actor: ActorKey::from("a"),
-            start_time: f64::NAN,
-            payload: CueCommand::Text("nan".into()).into(),
-            duration: 0.0,
-        },
-        Cue {
-            actor: ActorKey::from("a"),
-            start_time: 5.0,
-            payload: CueCommand::Clear.into(),
-            duration: 0.0,
-        },
-        Cue {
-            actor: ActorKey::from("a"),
-            start_time: 7.0,
-            payload: CueCommand::Clear.into(),
-            duration: 0.0,
-        },
-    ]);
-
-    let compiled = compile_sheet(&sheet);
-    assert_eq!(compiled.len(), 3);
-    let nan_offsets = compiled.iter().filter(|c| c.offset.is_nan()).count();
-    assert_eq!(nan_offsets, 1, "NaN start_time の Cue のみ NaN オフセットとなる");
-    let finite: Vec<f64> = compiled
-        .iter()
-        .filter(|c| c.offset.is_finite())
-        .map(|c| c.offset)
-        .collect();
-    assert_eq!(finite, vec![0.0, 2.0], "有限 Cue は min=5.0 基準で正規化される");
-}
-
-#[test]
-fn compile_sheet_all_infinite_start_times_yield_nan_offsets() {
-    // 特性化: 全 Cue が +inf の場合 min = +inf となり、inf - inf = NaN オフセット
-    // が生成される（P25 参照）。
-    let sheet = CueSheet::new(vec![
-        Cue {
-            actor: ActorKey::from("a"),
-            start_time: f64::INFINITY,
-            payload: CueCommand::Text("x".into()).into(),
-            duration: 0.0,
-        },
-        Cue {
-            actor: ActorKey::from("a"),
-            start_time: f64::INFINITY,
-            payload: CueCommand::Clear.into(),
-            duration: 0.0,
-        },
-    ]);
-
-    let compiled = compile_sheet(&sheet);
-    assert_eq!(compiled.len(), 2);
-    assert!(compiled.iter().all(|c| c.offset.is_nan()));
-}
-
-#[test]
-fn compile_sheet_partial_infinite_start_time_is_never_delivered() {
-    // 特性化: 一部の Cue のみ +inf の場合、そのオフセットは +inf となり
-    // TimedSchedule 上で永遠に配信されない（is_completed() が true にならない
-    // liveness 喪失 — P25 参照）。+inf は insert の非負 debug_assert は通過する。
-    use dola::cue::TimedSchedule;
-
-    let sheet = CueSheet::new(vec![
-        Cue {
-            actor: ActorKey::from("a"),
-            start_time: 0.0,
-            payload: CueCommand::Text("now".into()).into(),
-            duration: 0.0,
-        },
-        Cue {
-            actor: ActorKey::from("a"),
-            start_time: f64::INFINITY,
-            payload: CueCommand::Text("never".into()).into(),
-            duration: 0.0,
-        },
-    ]);
-
-    let compiled = compile_sheet(&sheet);
-    assert_eq!(compiled[1].offset, f64::INFINITY);
-
-    let mut sched = TimedSchedule::<CueCommand>::new(0.0);
-    for cc in &compiled {
-        sched.insert(cc.entry.clone());
-    }
-
-    sched.tick(f64::MAX); // 表現可能な最大の有限時刻まで進めても
-    assert_eq!(sched.ready().len(), 1); // "now" のみ配信
-    assert_eq!(sched.remaining(), 1); // "never" は残置
-    assert!(!sched.is_completed()); // スケジュールは完了しない
-}
-
-// ============================================================================
-// into_entry 3 種変換テスト
-// ============================================================================
-
-#[test]
-fn into_entry_command_becomes_payload() {
-    let payload = CuePayload::Command(CueCommand::Text("test".into()));
-    let entry = payload.into_entry(1.5);
-    match entry {
-        dola::cue::Entry::Payload(t, cmd) => {
-            assert_eq!(t, 1.5);
-            assert!(matches!(cmd, CueCommand::Text(_)));
-        }
-        _ => panic!("Expected Entry::Payload"),
-    }
-}
-
-#[test]
-fn into_entry_barrier_becomes_barrier() {
-    let payload = CuePayload::Barrier(BarrierKind::WaitForInput { timeout: None });
-    let entry = payload.into_entry(2.0);
-    match entry {
-        dola::cue::Entry::Barrier(t, kind) => {
-            assert_eq!(t, 2.0);
-            assert!(matches!(kind, BarrierKind::WaitForInput { .. }));
-        }
-        _ => panic!("Expected Entry::Barrier"),
-    }
-}
-
-#[test]
-fn into_entry_routing_becomes_routing() {
-    let routing = RoutingCommand::RouteRemove {
-        target: CueTarget::Shell,
-    };
-    let payload = CuePayload::Routing(routing);
-    let entry = payload.into_entry(0.0);
-    match entry {
-        dola::cue::Entry::Routing(t, r) => {
-            assert_eq!(t, 0.0);
-            assert!(matches!(r, RoutingCommand::RouteRemove { .. }));
-        }
-        _ => panic!("Expected Entry::Routing"),
-    }
-}
-
-// ============================================================================
-// compile_sheet → TimedSchedule 統合テスト
-// ============================================================================
-
-#[test]
-fn compile_sheet_to_timed_schedule_integration() {
-    use dola::cue::TimedSchedule;
-
-    let sheet = CueSheet::new(vec![
-        Cue {
-            actor: ActorKey::from("sakura"),
-            start_time: 2.0,
-            payload: CueCommand::Text("hello".into()).into(),
-            duration: 0.0,
-        },
-        Cue {
-            actor: ActorKey::from("sakura"),
-            start_time: 2.5,
-            payload: CuePayload::Barrier(BarrierKind::WaitForInput { timeout: None }),
-            duration: 0.0,
-        },
-        Cue {
-            actor: ActorKey::from("sakura"),
-            start_time: 3.0,
-            payload: CueCommand::Clear.into(),
-            duration: 0.0,
-        },
-    ]);
-
-    let compiled = compile_sheet(&sheet);
-    let mut sched = TimedSchedule::<CueCommand>::new(10.0); // 絶対時刻 10.0 開始
-
-    for cc in &compiled {
-        sched.insert(cc.entry.clone());
-    }
-
-    // offset=0.0 → Text
-    sched.tick(10.0);
-    assert_eq!(sched.ready().len(), 1);
-    assert!(matches!(sched.ready()[0], CueCommand::Text(_)));
-
-    // offset=0.5 → Barrier 到達
-    sched.tick(10.5);
-    assert!(sched.current_barrier().is_some());
-
-    // バリア解除後に Clear 取得
-    sched.notify_barrier_resolved(None);
-    sched.tick(11.0);
-    assert!(matches!(sched.ready()[0], CueCommand::Clear));
 }
 
 // ============================================================================
@@ -737,8 +414,8 @@ fn cue_sheet_serde_roundtrip() {
 // ============================================================================
 // canonical 変換 to_talk_schedule — R11.1 / R1.3 / R1.6 / R1.8 / R2.5
 //
-// 台本→時刻スケジュールへの**唯一の変換**。旧 compile_sheet（min 正規化＝先頭待ちを
-// 食う）と旧 sakura to_schedule（独自実装）の二重を廃した dola ingress の単一権威。
+// 台本→時刻スケジュールへの**唯一の変換**。旧 2 実装（min 正規化で先頭待ちを食う版と
+// sakura 独自版・task 8.2 で撤去）を廃した dola ingress の単一権威。
 // 絶対アンカー（absolute_start_time）＋相対 start_time を保存し、同一 at は記述順（FIFO）、
 // duration を有限・非負へ clamp（envelope と horizon の両方に適用）、占有 horizon を保持して
 // is_completed を占有終了で判定する。
@@ -746,10 +423,10 @@ fn cue_sheet_serde_roundtrip() {
 
 /// R11.1: 先頭に待ちを持つ台本を変換しても待ちが消えない（相対 start_time を保存）。
 ///
-/// 旧 `compile_sheet` は min 正規化で最小 start_time を 0 へ食う。canonical 変換は
-/// 相対時刻をそのまま保つため、先頭 Wait(at=0.5) は 0.5 で due になる（食われない）。
+/// canonical 変換は相対時刻をそのまま保つため、先頭 Wait(at=0.5) は 0.5 で due になる
+/// （min 正規化で 0 へ食う旧実装と異なり、食われない）。
 #[test]
-fn to_talk_schedule_preserves_leading_wait_unlike_compile_sheet() {
+fn to_talk_schedule_preserves_leading_wait() {
     let sheet = CueSheet::new(vec![
         Cue {
             actor: ActorKey::from("0"),
@@ -764,13 +441,6 @@ fn to_talk_schedule_preserves_leading_wait_unlike_compile_sheet() {
             duration: 0.0,
         },
     ]);
-
-    // 対照: 旧 compile_sheet は先頭 0.5 を 0.0 へ食う（min 正規化）。
-    let compiled = compile_sheet(&sheet);
-    assert_eq!(
-        compiled[0].offset, 0.0,
-        "compile_sheet は先頭待ちを食う（min 正規化・対照）"
-    );
 
     // canonical 変換は相対 start_time を保存する（先頭待ちを食わない）。
     let mut schedule = to_talk_schedule(&sheet);

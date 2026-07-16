@@ -1,7 +1,7 @@
 //! CueSheet — 自己完結した絶対時刻台本（絶対開始時刻＋相対時刻コマンド列）と
-//! compile_sheet 関数。
+//! canonical 変換 `to_talk_schedule`（dola ingress の単一権威・duration clamp・占有 horizon）。
 
-use super::command::{ActorKey, Cue, CueCommand, CuePayload, TalkCue};
+use super::command::{ActorKey, Cue, CuePayload, TalkCue};
 use super::schedule::{Entry, TimedSchedule};
 use serde::{Deserialize, Serialize};
 
@@ -123,72 +123,6 @@ impl CueSheet {
     }
 }
 
-/// コンパイル済みの 0 ベース相対オフセットエントリ。
-pub struct CompiledCue {
-    /// 0 ベース相対オフセット
-    pub offset: f64,
-    /// 対象演者
-    pub actor: ActorKey,
-    /// エントリ（Payload / Barrier / Routing）
-    pub entry: Entry<CueCommand>,
-}
-
-/// CuePayload を Entry<CueCommand> に変換する。
-///
-/// - `CuePayload::Command` → `Entry::Payload`
-/// - `CuePayload::Barrier` → `Entry::Barrier`
-/// - `CuePayload::Routing` → `Entry::Routing`
-impl CuePayload {
-    /// Entry<CueCommand> への変換（compile_sheet 内で使用）。
-    pub fn into_entry(self, offset: f64) -> Entry<CueCommand> {
-        match self {
-            CuePayload::Command(cmd) => Entry::Payload(offset, cmd),
-            CuePayload::Barrier(kind) => Entry::Barrier(offset, kind),
-            CuePayload::Routing(routing) => Entry::Routing(offset, routing),
-        }
-    }
-}
-
-/// CueSheet を 0 ベース相対オフセットに正規化。
-///
-/// `Cue::start_time` の最小値を 0 基準にし、`CuePayload::into_entry()` で Entry に変換。
-/// 絶対時刻への変換は `TimedSchedule::new(start_time)` が担当。
-///
-/// NOTE(D3-V): start_time の有限性は検証されない（CueSheet 経路には DolaDocument の
-/// validate() に相当する検証層がない — P25 参照）。非有限値の縮退は次のとおり
-/// （いずれも tests/cue/sheet_test.rs の特性化テストで固定済み）:
-/// - NaN の start_time は `f64::min` が NaN を無視するため最小値計算から脱落し、
-///   当該 Cue のオフセットは NaN となる（TimedSchedule 側の NaN ハザードへ接続）。
-/// - 全 Cue が +inf の場合、min = +inf となり inf - inf = NaN オフセットを生成する。
-/// - 一部の Cue のみ +inf の場合、オフセットは +inf となり TimedSchedule 上で
-///   永遠に配信されず is_completed() が true にならない（liveness 喪失）。
-pub fn compile_sheet(sheet: &CueSheet) -> Vec<CompiledCue> {
-    if sheet.is_empty() {
-        return Vec::new();
-    }
-
-    // 最小 start_time を 0 基準に正規化
-    let min_time = sheet
-        .cues()
-        .iter()
-        .map(|c| c.start_time)
-        .fold(f64::INFINITY, f64::min);
-
-    sheet
-        .cues()
-        .iter()
-        .map(|cue| {
-            let offset = cue.start_time - min_time;
-            let entry = cue.payload.clone().into_entry(offset);
-            CompiledCue {
-                offset,
-                actor: cue.actor.clone(),
-                entry,
-            }
-        })
-        .collect()
-}
-
 /// duration を「有限かつ非負」へ丸める（dola ingress の**単一権威**・R1.8）。
 ///
 /// 非有限（NaN/±inf）・負値はすべて 0（瞬時）とみなす。+inf も畳み込む——horizon が ∞ に
@@ -207,7 +141,7 @@ fn clamp_duration(duration: f64) -> f64 {
 /// 台本 [`CueSheet`] を時刻駆動可能な [`TimedSchedule`]`<`[`TalkCue`]`>` へ変換する
 /// **唯一の canonical 変換**（R11.1・dola ingress の単一権威）。
 ///
-/// 旧 [`compile_sheet`]（min 正規化＝**先頭待ちを食う**）と、旧 sakura `to_schedule`（独自実装）
+/// 旧 2 変換（min 正規化で**先頭待ちを食う**版と、旧 sakura の独自 `to_schedule`・いずれも撤去済）
 /// の二重を廃した 1 本。以下を同時に成立させる:
 ///
 /// - **絶対アンカーの継承**: スケジュールの `start_time` に [`CueSheet::absolute_start_time`]

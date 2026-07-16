@@ -31,5 +31,5 @@ pub use command::{
 };
 pub use runtime::{CuePlayer, CuePlayerState, PendingChoice};
 pub use schedule::{Entry, TimedSchedule};
-pub use sheet::{CompiledCue, CueSheet, compile_sheet, to_talk_schedule};
+pub use sheet::{CueSheet, to_talk_schedule};
 pub use sink::{CueSink, cue_target_of};

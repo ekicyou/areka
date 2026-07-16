@@ -1,7 +1,6 @@
 mod app;
 pub mod common;
 pub mod clickthrough;
-pub mod cue;
 pub mod dola;
 pub mod drag;
 mod graphics;

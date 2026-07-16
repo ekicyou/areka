@@ -17,11 +17,12 @@
 //!
 //! して発火時刻付きの [`CueSheet`] を構築する。
 //!
-//! # 禁止事項
+//! # 先頭待ちの保存（R2.4）
 //!
-//! `dola::cue::compile_sheet` は最小 `start_time` を 0 起点へ正規化するため、**先頭に待ち命令が
-//! ある script でその待ち時間が 0 へ潰れる**。本関数は 0 起点相対秒（`offset` を 0.0 から累積）を
-//! そのまま `start_time` とし、`compile_sheet` を使わない。先頭待ちは保存される（R2.4）。
+//! 本関数は 0 起点相対秒（`offset` を 0.0 から累積）をそのまま `start_time` とし、min 正規化を
+//! 行わない（min 正規化は**先頭に待ち命令がある script でその待ち時間を 0 へ潰す**ため）。下流の
+//! canonical 変換 [`dola::cue::to_talk_schedule`] も相対 `start_time` を保存するため、先頭待ちは
+//! 台本〜スケジュールを通して保存される。
 
 use crate::contract::{ActorKey, Cue, CueCommand, CuePayload, CueSheet, TalkEndReason};
 use areka_parsers::sakura::Instruction;
@@ -298,7 +299,7 @@ mod tests {
     }
 
     /// 先頭に待ち命令がある場合でもその待ち時間が 0 へ潰れず保存される（R2.4）。
-    /// `compile_sheet` の 0 正規化を使っていないことの固定。第一級化後は、先頭待ちが
+    /// min 正規化（先頭待ちを 0 へ食う旧実装）を使っていないことの固定。第一級化後は、先頭待ちが
     /// `duration` 付き Wait cue（`start_time=0.0`）として台本に残り、後続 Text はその分だけ遅れる。
     #[test]
     fn leading_wait_is_preserved_not_collapsed() {
