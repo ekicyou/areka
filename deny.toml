@@ -1,0 +1,53 @@
+# cargo-deny 設定 — areka の MIT 化を守るライセンスゲート
+#
+# 目的: 依存グラフに強コピーレフト（GPL/AGPL/LGPL/MPL 等）が
+#       紛れ込んだ瞬間に `cargo deny check` を失敗させ、
+#       areka を MIT で配布し続けられる状態を機械的に担保する。
+#
+# 実行: cargo deny check licenses   （ライセンスのみ）
+#       cargo deny check            （全チェック）
+#
+# 方針メモ:
+#   - allow に列挙した SPDX ライセンスのみ許可。未列挙は全て拒否。
+#   - `A OR B` 形式の crate は allow 内のいずれかを満たせば通過するため、
+#     r-efi (Apache-2.0 OR LGPL-2.1-or-later OR MIT) は LGPL を
+#     allow せずとも MIT/Apache 側で自動的に通る＝LGPL は締め出したまま。
+#   - `A AND B` 形式（encoding_rs, unicode-ident）は両方を allow 必須。
+
+[graph]
+# 全ターゲット横断で評価（Windows/macOS/Linux/wasm/i686 helper を漏らさない）
+all-features = true
+
+[licenses]
+# 確信度しきい値（ライセンス本文の一致度）
+confidence-threshold = 0.8
+
+# areka 依存グラフに実在し、いずれも permissive（MIT 互換）なライセンスのみ許可
+allow = [
+    "MIT",
+    "Apache-2.0",
+    "Apache-2.0 WITH LLVM-exception",
+    "Unlicense",
+    "Zlib",
+    "0BSD",
+    "BSD-2-Clause",
+    "BSD-3-Clause",   # encoding_rs の AND 側で必須
+    "Unicode-3.0",    # unicode-ident の AND 側で必須
+]
+
+[advisories]
+# RustSec 脆弱性 DB のチェックはゲートに含める（yanked/脆弱性は警告→将来 deny 可）
+version = 2
+yanked = "warn"
+
+[bans]
+# 重複バージョンやワイルドカードは今は警告に留める（ライセンスゲートが主目的）
+multiple-versions = "warn"
+wildcards = "warn"
+# 内部 workspace crate の path 依存（例: dola）はバージョン無指定が正常ゆえ許可
+allow-wildcard-paths = true
+
+[sources]
+# crates.io / vendored path 以外の未知ソースを拒否
+unknown-registry = "deny"
+unknown-git = "deny"

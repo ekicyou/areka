@@ -113,6 +113,7 @@ argument-hint: <feature-name>
 2. **ベースラインゲート**（最低限・常時検証）:
    - **Spec Gate**: 当該 spec の `tasks.md` が全タスク `[x]` 完了であること。
    - **Test Gate**: テストスイートが全通過していること（下記3）。
+   - **License Gate**: 依存グラフのライセンス健全性を検証し、配布用の第三者謝辞を最新化すること（下記4。設定ファイルを持つリポジトリのみ）。
    - workflow.md がある場合は、そこで定義された追加ゲート（例: Doc / Steering 等）も順に検証する。
 3. **Test Gate**: ワークスペース全体のテストを実行し、全通過を確認する。
    ```powershell
@@ -120,7 +121,22 @@ argument-hint: <feature-name>
    ```
    - **スキップ可**: 直近のターンで `cargo test --workspace` が実行され `test result: ok` を確認済みで、その後にテスト対象コードの変更が無い場合は再実行を省略してよい。スキップ時は完了チェックリストに「(直近の実行結果により省略)」と注記する。
    - 判断に迷う場合は実行する。`kiro-verify-completion` スキルがある場合は、その fresh-evidence ゲートに委ねてもよい。
-4. **いずれかのゲートが失敗した場合**: ワークフローを中断し、開発者に報告。
+4. **License Gate**: MIT 配布を守るライセンス健全性ゲート。ルートに設定ファイルが存在する場合のみ実行し、無ければスキップする（ポータビリティ確保）。**この2コマンドを回す**:
+
+   ```powershell
+   # (a) 汚染ゲート: 強コピーレフト(GPL/LGPL/AGPL/MPL 等)や許可外ライセンスの混入を検出
+   #     deny.toml が存在する場合のみ実行。許可外検出＝失敗ならワークフロー中断・開発者へ報告。
+   cargo deny check
+
+   # (b) 第三者謝辞の再生成: 配布バイナリ同梱用の attribution を最新化
+   #     about.toml が存在する場合のみ実行。生成差分はステップ2/7のコミットに含める。
+   cargo about generate --workspace about.hbs -o THIRD-PARTY-NOTICES.md
+   ```
+
+   - **ツール未導入時**: `cargo install cargo-deny --locked` / `cargo install cargo-about --features cli --locked` で導入してから実行する。
+   - **設定ファイル不在**: `deny.toml`・`about.toml` が無いリポジトリでは License Gate 全体をスキップし、チェックリストに「(設定不在により省略)」と注記する。
+   - **謝辞に差分が出た場合**: 依存が変化した証跡。差分は後続のコミット（ステップ2/7）に自然に取り込まれるため、ここで個別コミットはしない。
+5. **いずれかのゲートが失敗した場合**: ワークフローを中断し、開発者に報告。
 
 ### ステップ2: 未コミットファイルのコミット
 
@@ -277,8 +293,9 @@ PR の**作成またはマージ（API）が失敗**した場合（コンフリ�
 ## 完了チェックリスト
 
 ```
-- [ ] DoD ベースラインゲート通過（Spec / Test。workflow.md が存在すれば追加ゲートも）
+- [ ] DoD ベースラインゲート通過（Spec / Test / License。workflow.md が存在すれば追加ゲートも）
 - [ ] cargo test --workspace 成功（または直近の実行結果により省略）
+- [ ] License Gate: `cargo deny check` 成功 + `cargo about generate --workspace about.hbs -o THIRD-PARTY-NOTICES.md` で謝辞再生成（deny.toml/about.toml があるリポジトリ。無ければ「設定不在により省略」）
 - [ ] 未コミットファイルをコミット済み（ステップ2）
 - [ ] completedフォルダへ移動済み（ステップ3）※繰り返し仕様はスキップ
 - [ ] spec.json の phase を "completed" に更新済み + updated_at 更新（ステップ4）※繰り返し仕様はスキップ
@@ -312,6 +329,14 @@ PR の**作成またはマージ（API）が失敗**した場合（コンフリ�
 ### テスト失敗時
 - **症状**: `cargo test --workspace` が失敗
 - **対策**: ワークフローを中断し開発者に報告。テスト修正後に再実行
+
+### License Gate 失敗時
+- **症状**: `cargo deny check` が失敗（許可外ライセンス・強コピーレフト混入を検出）
+- **対策**: ワークフローを中断し開発者に報告。混入 crate と経路を提示し、依存の差し替え／除外か allowlist 妥当性の再検討を仰ぐ。**安易に allow を広げて通さない**（MIT 配布の前提が崩れる）
+- **症状**: `cargo deny` / `cargo about` が未導入（`no such command`）
+- **対策**: `cargo install cargo-deny --locked` / `cargo install cargo-about --features cli --locked` で導入後に再実行
+- **症状**: `cargo about generate` が `failed to satisfy license requirements` で失敗
+- **対策**: 出荷対象外の dev-dependency が混入していないか確認（`about.toml` の `ignore-dev-dependencies = true`）。真に出荷される新規ライセンスなら permissive 性を確認のうえ `about.toml` の `accepted` と `deny.toml` の `allow` を揃えて追記
 
 ### リモート同期関連（ステップ8 PR ベース）
 
