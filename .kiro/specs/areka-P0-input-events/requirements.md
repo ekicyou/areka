@@ -51,9 +51,10 @@ areka-P0-input-events: ③ kanade 帰属の入力配信ユニット（M-life「�
 #### Acceptance Criteria
 
 1. When OnMouseMove 相当のマウス入力を受領した, the kanade engine shall `OnMouseMove` を GET として発行する。
-2. The kanade engine shall OnMouseMove の Reference を正典 layout（Ref0=ローカル x 座標・Ref1=ローカル y 座標・Ref2=ホイール回転量・Ref3=対象スコープ〔本体 0／相方 1〕・Ref4=当たり判定の識別子・Ref6=入力デバイス種）どおりに構成する。
+2. The kanade engine shall OnMouseMove の Reference を正典 layout（Ref0=ローカル x 座標・Ref1=ローカル y 座標・Ref2=ホイール回転量・Ref3=対象スコープ〔本体 0／相方 1〕・Ref4=当たり判定の識別子・Ref5=ボタン識別枠〔SSP/NINIX 準拠・移動時は常に "0"〕・Ref6=入力デバイス種）どおりに構成する。
 3. The kanade engine shall Ref4（当たり判定の識別子）を collision resolver 由来の領域名（不透明 String）として解釈せず転写し、当たり判定が無い（`None`）場合の Ref4 値は正典（ukadoc／SSP 挙動）に従う（空文字転写か省略かは design で確定）。
 4. Where ホイールイベントを送出しない M1 構成, the kanade engine shall Ref2（ホイール回転量）を固定値 "0" で構成し、実ホイール量の載せ替えは increment シームとして残す。
+5. Where SSP/NINIX 準拠構成, the kanade engine shall OnMouseMove の Ref5 を固定値 "0" で構成する（マウス移動にはボタン押下が伴わないため、SSP/NINIX と同じく常時 "0" の予約枠として送出し、Reference 構造を OnMouseDoubleClick と一致させる）。
 
 ### Requirement 3: OnMouseDoubleClick の正典 Reference 組立と発行
 

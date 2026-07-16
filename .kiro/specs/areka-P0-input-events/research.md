@@ -149,7 +149,7 @@
 4. **（要件既載）** 暫定退避終了の具体手段を 1 つ（Ctrl+ダブルクリック→ForceQuit が有力・3.4）。
 5. **（要件既載）** 当たり判定 `None` 時の Ref4 値（空文字転写/省略）・Ref6 デバイス種の具体値（"mouse" 固定が既定候補）を ukadoc/SSP で確定。
 6. **（要件既載）** M1 送出マウスイベント集合表（Move/DblClick の 2 種）を idle-talk のホワイトリスト檻と整合。
-7. **（新規・本分析）** **OnMouseMove の Ref5**（ukadoc「※SSP/NINIX のみ・常に 0」）を発行するか省略するか。要件・brief が触れていない。OnMouseDoubleClick の Ref5（左右）とは意味が別である点に注意。
+7. **（要件ディスカッション #1 で解決＝SSP 準拠で送出）** **OnMouseMove の Ref5** を固定値 "0" で送出する（SSP/NINIX と同一・移動時は常に 0 の予約枠・Ref2 wheel の "0" 固定 seam と対称で Reference 構造を DoubleClick と一致）。requirements Req2.2／Req2.5 に反映済み。OnMouseDoubleClick の Ref5（左 0／右 1）とは意味が別（あちらは実ボタン識別）である点に注意。
 8. **（新規・本分析）** マウス Input のフェーズルーティング（`step()` 横断アームで Steady のみ処理 vs `dispatch_phase` 経由で boot/close は防御的無視）。
 9. **（新規・本分析）** kanade Sender の World 露出方式（Resource vs NonSend）と、間引き状態・(mock/実) resolver の同居・置き場（per-scope/per-window 粒度）。
 10. **（新規・本分析）** 座標契約の明文確認: PointerState.`client_point`（物理 px）＝Ref0/1 の「ローカル座標」＝resolver 入力の「窓 client 物理 px」の三者一致（DPI 等倍・collision brief §座標系）を design で固定。
