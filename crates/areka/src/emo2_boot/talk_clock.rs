@@ -104,6 +104,17 @@ impl<T: TextSink + Clone> TextSink for ClockedTextSink<T> {
     }
 }
 
+/// 演者非依存の単一出力契約 [`dola::cue::CueSink`] を実装する（`areka_ghost::boot` の broadcast
+/// 登録先が要求する形・task 7.1）。broadcast 下では担当外 cue（`Emote` 等）も本 sink へ届くが、
+/// `observe_cue` は `cue.at` 一貫で epoch を単調 max 推定するため無害（設計 §Revalidation Triggers）。
+/// 内側 sink（本番は `EmoTextSink`）へ `CueSink::emit` で非改変転送する。
+impl<T: TextSink + dola::cue::CueSink + Clone> dola::cue::CueSink for ClockedTextSink<T> {
+    fn emit(&mut self, cue: TalkCue) {
+        self.clock.observe_cue(cue.at);
+        dola::cue::CueSink::emit(&mut self.inner, cue);
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

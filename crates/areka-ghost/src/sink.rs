@@ -5,7 +5,7 @@
 //! （design.md「ghost::sink」）。sakura の `MockSink`（テスト用・無限蓄積）を
 //! 本番へ置かないための最小実装——蓄積フィールドを一切持たない unit 相当構造体。
 
-use areka_sakura::contract::{CueCommand, TalkCue};
+use areka_sakura::contract::{CueCommand, CueSink, TalkCue};
 use areka_sakura::sink::{SurfaceSink, TextSink};
 
 /// 本番既定の sink。発火のたびに `tracing::info!(target: "ghost-sink", ...)` で
@@ -43,6 +43,18 @@ impl SurfaceSink for LogSink {
 }
 
 impl TextSink for LogSink {
+    fn emit(&mut self, cue: TalkCue) {
+        self.log(&cue);
+    }
+}
+
+/// 演者非依存の単一出力契約 [`dola::cue::CueSink`] を実装する（`boot` の broadcast 登録先が
+/// 要求する形）。broadcast された全 cue を構造化ログへ落とすだけの診断既定 sink。
+///
+/// NOTE(task 8.1 申し送り): `boot` の fallback は同一 `LogSink` を surface/text の**両スロット**へ
+/// 二重配線するため、broadcast 下では 1 cue が 2 回ログされる（二重ログ）。この二重配線を単一 sink へ
+/// 畳む解消（設計 D4 Topic 2）は task 8.1 の領分ゆえ、本 task では CueSink 実装の追加のみに留める。
+impl CueSink for LogSink {
     fn emit(&mut self, cue: TalkCue) {
         self.log(&cue);
     }

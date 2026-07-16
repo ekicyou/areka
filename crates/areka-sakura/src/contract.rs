@@ -52,5 +52,6 @@ pub use areka_talk::{StartTalk, TalkDone, TalkEndReason, TalkId};
 // dola 側 `crates/dola/tests/cue/sink_test.rs` の `cue_target_of_classifies_every_variant`）。
 pub use areka_parsers::sakura::{NewLineRatio, SurfaceArg};
 pub use dola::cue::{
-    ActorKey, BarrierKind, Cue, CueCommand, CuePayload, CueSheet, CueTarget, TalkCue, cue_target_of,
+    ActorKey, BarrierKind, Cue, CueCommand, CuePayload, CueSheet, CueSink, CueTarget, TalkCue,
+    cue_target_of,
 };

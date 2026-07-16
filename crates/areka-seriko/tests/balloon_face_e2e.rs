@@ -25,21 +25,21 @@
 
 use areka_emo_compose::BindSet;
 use areka_sakura::{
-    spawn_talk, ActorKey, SakuraMsg, StartTalk, TalkCue, TalkDone, TalkEndReason, TalkId, TextSink,
+    spawn_talk, ActorKey, CueSink, SakuraMsg, StartTalk, TalkCue, TalkDone, TalkEndReason, TalkId,
 };
 use areka_seriko::{spawn_seriko, DisplayCommand, MockSurfaceOutput, SurfaceResolver};
 use std::collections::BTreeMap;
 use std::time::Duration;
 
-/// text 系（→emo text-layer⑥）の出力先を破棄する test-local sink。
+/// text 系（→emo text-layer⑥）に相当する broadcast の 2 つ目のスロットを破棄する test-local sink。
 ///
-/// 本 E2E は表示系（`SurfaceSink`→seriko）だけを観測する。`Text`/`NewLine`/`Clear`/`Choice`
-/// 等の text 系発火は観測対象外ゆえ、届いた `TalkCue` を握って捨てる（記録しない）。
+/// 本 E2E は表示系（seriko）が発行する DisplayCommand だけを観測する。broadcast ゆえ本 sink にも
+/// 全 cue（`Text`/`Wait`/`Emote` 等）が届くが、いずれも観測対象外ゆえ握って捨てる（記録しない）。
 struct NullTextSink;
 
-impl TextSink for NullTextSink {
+impl CueSink for NullTextSink {
     fn emit(&mut self, _cue: TalkCue) {
-        // 破棄のみ（本 E2E の観測対象は SurfaceSink→seriko 経路の表示指令だけ）。
+        // 破棄のみ（本 E2E の観測対象は seriko の表示指令だけ）。
     }
 }
 

@@ -2,8 +2,8 @@
 //!
 //! 本ファイルは 2 つのテスト専用型を提供する（task 4.1 の成果物）:
 //! - [`ScriptedShioriBackend`] — `areka_kanade::ShioriBackend` を実装する台本 fake。
-//! - [`RecordingSink`] — `areka_sakura::sink::{SurfaceSink, TextSink}` を実装する、
-//!   `Clone` 可能な記録 sink。
+//! - [`RecordingSink`] — 演者非依存の単一出力契約 `areka_sakura::contract::CueSink` を実装する、
+//!   `Clone` 可能な記録 sink（broadcast で全 cue を受ける）。
 //!
 //! 後続タスク（4.2〜4.7）はこのファイルへ boot〜close の各シナリオ（S1〜S6）の
 //! `#[test]` を追加していく。本タスク（4.1）はその土台となる 2 型自体の構築・検証
@@ -13,8 +13,7 @@ use std::collections::{HashMap, VecDeque};
 use std::sync::{Arc, Mutex};
 
 use areka_kanade::ShioriBackend;
-use areka_sakura::contract::{ActorKey, CueCommand, TalkCue};
-use areka_sakura::sink::{SurfaceSink, TextSink};
+use areka_sakura::contract::{ActorKey, CueCommand, CueSink, TalkCue};
 use shiori_host32_host::{ExitKind, HelperStatus, RequestError, ShutdownError};
 
 // ===================== ScriptedShioriBackend =====================
@@ -215,14 +214,13 @@ impl ScriptedShioriHandle {
 
 // ===================== RecordingSink =====================
 
-/// テスト専用の `Clone` 可能な記録 sink（`SurfaceSink`/`TextSink` 両方を実装する）。
+/// テスト専用の `Clone` 可能な記録 sink（演者非依存の単一出力契約 [`CueSink`] を実装する）。
 ///
 /// sakura の `MockSink`（`tests/ghost/` から見て他クレートの凍結面）とは同型だが
-/// `Clone` を実装しない。dispatcher の per-talk 注入（`S: SurfaceSink + Clone`/
-/// `T: TextSink + Clone`）を満たすため、`tests/ghost/` 側で定義し直す（sakura の
-/// `sink.rs` には手を入れない・design.md 「spine e2e」参照）。`dispatcher.rs` の
-/// テストローカル `RecordingSink` と同じ形——ここでは `tests/ghost/` 配下の複数
-/// テストファイル（4.2〜4.7）が 1 つの定義を共有できるようにする。
+/// `Clone` を実装しない。dispatcher の per-talk 注入（`S: CueSink + Clone`/`T: CueSink + Clone`）
+/// を満たすため、`tests/ghost/` 側で定義し直す（sakura の `sink.rs` には手を入れない・
+/// design.md 「spine e2e」参照）。broadcast ゆえ登録された全 sink が全 cue を受ける
+/// （surface/text スロットの別なく同一の全 cue が届く・演者側 relevance が action を選別する）。
 #[derive(Clone)]
 pub struct RecordingSink {
     records: Arc<Mutex<Vec<TalkCue>>>,
@@ -249,16 +247,7 @@ impl Default for RecordingSink {
     }
 }
 
-impl SurfaceSink for RecordingSink {
-    fn emit(&mut self, cue: TalkCue) {
-        self.records
-            .lock()
-            .expect("records mutex poisoned")
-            .push(cue);
-    }
-}
-
-impl TextSink for RecordingSink {
+impl CueSink for RecordingSink {
     fn emit(&mut self, cue: TalkCue) {
         self.records
             .lock()
@@ -379,35 +368,36 @@ mod tests {
         );
     }
 
-    /// シナリオ6: `RecordingSink` の clone 共有蓄積。2 つの clone それぞれから
-    /// `SurfaceSink`/`TextSink` 経由で 1 件ずつ emit すると、同一の共有蓄積へ FIFO で
-    /// 積まれること（dispatcher の per-talk 注入で clone を渡す使い方を裏付ける）。
+    /// シナリオ6: `RecordingSink` の clone 共有蓄積。2 つの clone それぞれから単一出力契約
+    /// [`CueSink`] 経由で 1 件ずつ emit すると、同一の共有蓄積へ FIFO で積まれること
+    /// （dispatcher が broadcast で全 sink（各 talk へ clone した surface/text スロット）へ
+    /// 同一 cue を配る使い方を裏付ける）。
     #[test]
-    fn recording_sink_clones_share_storage_across_both_sink_traits_in_fifo_order() {
+    fn recording_sink_clones_share_storage_in_fifo_order() {
         let sink = RecordingSink::new();
         let records = sink.records();
 
-        let mut surface_clone = sink.clone();
-        let mut text_clone = sink.clone();
+        let mut clone_a = sink.clone();
+        let mut clone_b = sink.clone();
 
-        let surface_cue = TalkCue {
+        let cue_a = TalkCue {
             at: 0.0,
             actor: ActorKey::from("0"),
-            command: CueCommand::Text("via surface".to_string()),
+            command: CueCommand::Text("via clone a".to_string()),
             duration: 0.0,
         };
-        let text_cue = TalkCue {
+        let cue_b = TalkCue {
             at: 1.0,
             actor: ActorKey::from("0"),
-            command: CueCommand::Text("via text".to_string()),
+            command: CueCommand::Text("via clone b".to_string()),
             duration: 0.0,
         };
 
-        SurfaceSink::emit(&mut surface_clone, surface_cue.clone());
-        TextSink::emit(&mut text_clone, text_cue.clone());
+        CueSink::emit(&mut clone_a, cue_a.clone());
+        CueSink::emit(&mut clone_b, cue_b.clone());
 
         let recorded = records.lock().expect("records mutex poisoned");
-        assert_eq!(&*recorded, &vec![surface_cue, text_cue]);
+        assert_eq!(&*recorded, &vec![cue_a, cue_b]);
     }
 }
 
@@ -593,51 +583,49 @@ mod s1_boot_success {
             "起動系列（OnInitialize→OnFirstBoot→OnBoot→basewareversion）が正典順序で発火していない"
         );
 
-        // ---- (b)(c) RecordingSink の発火列（at 昇順・内容一致）----
+        // ---- (b)(c) RecordingSink の発火列（broadcast・at 昇順・内容一致）----
+        // broadcast ゆえ surface/text の両 sink が**同一の全 cue** を受ける（中央振り分け廃止・
+        // どの action を演じるかは演者側 relevance の責務）。`\s[0]hello\e` の期待 broadcast 列:
+        //   ClearAll@0（#6 全消去・task 5.2 冒頭前置）/ Emote{0}@0（\s[0]）/ Text(hello)@0
+        //   （後続 cue が無く先頭群に留まる）。発火は drive の on_tick 内で同期 broadcast されるが、
+        // probe loop の break 直後に部分列を読む競合を避けるため、両 sink が 3 件に達するまで
+        // 有界スピンで整定を待つ（sleep 不使用・yield のみ）。
+        let expected = vec![
+            CueCommand::ClearAll,
+            CueCommand::Emote {
+                key: "0".to_string(),
+            },
+            CueCommand::Text("hello".to_string()),
+        ];
+        for _ in 0..1_000_000u32 {
+            let s = surface_records.lock().expect("records mutex poisoned").len();
+            let t = text_records.lock().expect("records mutex poisoned").len();
+            if s >= expected.len() && t >= expected.len() {
+                break;
+            }
+            std::thread::yield_now();
+        }
         let surface = surface_records
             .lock()
             .expect("records mutex poisoned")
             .clone();
-        assert_eq!(
-            surface.len(),
-            1,
-            "surface 発火は \\s[0] 由来の Emote 1 件のみのはず: {surface:?}"
-        );
-        assert_eq!(surface[0].at, 0.0);
-        assert_eq!(surface[0].actor, ActorKey::from("0"));
-        assert_eq!(
-            surface[0].command,
-            CueCommand::Emote {
-                key: "0".to_string()
-            }
-        );
-
         let text = text_records.lock().expect("records mutex poisoned").clone();
-        // 冒頭 ClearAll（#6・全消去・Balloon）＋"hello" 由来の Text の 2 件（compile が talk 先頭へ
-        // ClearAll を単一前置する・task 5.2）。両者とも at=0.0（hello に per-char D はあるが後続 cue が
-        // 無いため先頭群に留まる）。
-        assert_eq!(
-            text.len(),
-            2,
-            "text 発火は 冒頭 ClearAll＋\"hello\" 由来の Text の 2 件のはず: {text:?}"
-        );
-        assert_eq!(text[0].at, 0.0);
-        assert_eq!(text[0].actor, ActorKey::from("0"));
-        assert_eq!(text[0].command, CueCommand::ClearAll);
-        assert_eq!(text[1].at, 0.0);
-        assert_eq!(text[1].actor, ActorKey::from("0"));
-        assert_eq!(text[1].command, CueCommand::Text("hello".to_string()));
-
-        // at 昇順（両 sink とも単調非減少であること・design「発火列」節）。
-        for pair in surface.windows(2) {
-            assert!(
-                pair[0].at <= pair[1].at,
-                "surface 発火列は at 昇順であるべき"
+        let assert_broadcast = |cues: &[TalkCue], who: &str| {
+            let commands: Vec<CueCommand> = cues.iter().map(|c| c.command.clone()).collect();
+            assert_eq!(
+                commands, expected,
+                "{who} sink は broadcast で ClearAll/Emote/hello を受ける（partition は演者側 relevance）: {cues:?}"
             );
-        }
-        for pair in text.windows(2) {
-            assert!(pair[0].at <= pair[1].at, "text 発火列は at 昇順であるべき");
-        }
+            for cue in cues {
+                assert_eq!(cue.at, 0.0, "{who} 発火は全て at=0.0");
+                assert_eq!(cue.actor, ActorKey::from("0"), "{who} 発火 actor は 既定 scope 0");
+            }
+            for pair in cues.windows(2) {
+                assert!(pair[0].at <= pair[1].at, "{who} 発火列は at 昇順であるべき");
+            }
+        };
+        assert_broadcast(&surface, "surface");
+        assert_broadcast(&text, "text");
 
         // ---- 後片付け兼 (c) の間接証跡 ----
         // TalkDone{Ended} が dispatcher→kanade へ転送済みであること（dispatcher の slot が
