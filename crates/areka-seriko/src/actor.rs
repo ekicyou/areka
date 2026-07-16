@@ -1,7 +1,7 @@
-//! アクター駆動モジュール — inbox メッセージ・SurfaceSink ブリッジ・停止経路・アクター本体。
+//! アクター駆動モジュール — inbox メッセージ・CueSink ブリッジ・停止経路・アクター本体。
 //!
-//! 受け口（`SurfaceSink` を実装する [`SerikoSink`] ブリッジ）と inbox メッセージ列挙
-//! （[`SerikoMsg`]）・停止経路（mpsc チャネル）に加え、アクター本体の spawn
+//! 受け口（単一の出力契約 [`dola::cue::CueSink`] を実装する [`SerikoSink`] ブリッジ）と inbox
+//! メッセージ列挙（[`SerikoMsg`]）・停止経路（mpsc チャネル）に加え、アクター本体の spawn
 //! （[`spawn_seriko`]）・inbox ハンドラ（解釈 2.1→状態更新 2.2→発行 2.3 を一本の経路で結ぶ）・
 //! 単一発行点（[`emit_display`]）を持つ。
 //!
@@ -12,15 +12,18 @@
 //! `cue_target_of` で分類され、Shell 系 `Emote{key}` のみが「解決（[`SurfaceResolver`]）→
 //! 状態確定（[`ScopeStates::apply`]）→発行（[`emit_display`]）」の一本経路を通る。状態確定から
 //! 表示指令発行までは単一関数 [`emit_display`] に集約され、後続の時間駆動ループ（`seriko-loop`）が
-//! 同じ発行点を再利用できる（5.3）。解釈できない／分類できない入力は記録を残して読み飛ばし
-//! （6.1/6.2）、ループは継続する。停止は Close 受領・全 Sender drop の 2 経路（1.4）。
+//! 同じ発行点を再利用できる（5.3）。broadcast（D4）で seriko は全 cue を受け取るため、担当外
+//! （非 Shell）・純粋 Wait の受信は「正常な担当外受信」＝良性 `debug!`＋skip（action を無視し
+//! duration を honor・R2.2/2.3/5.4）、破損入力（Unresolved/Invalid=`error!`／NameForm/EntityRef=
+//! `warn!`）のみが真の異常。いずれもループは継続する。停止は Close 受領・全 Sender drop の 2 経路（1.4）。
 //!
-//! # 結線契約（受け口＝trait 実装）
+//! # 結線契約（受け口＝単一の出力契約）
 //!
-//! sakura（④）の surface 系出力先は [`areka_sakura::SurfaceSink`] 一本であり、その実装
-//! [`SerikoSink`] が唯一の差し込み口となる（追加の口を設けない・ghost-setup 期待）。
-//! `SerikoSink::emit` は届いた [`TalkCue`] を [`SerikoMsg::Cue`] として専用 inbox（std mpsc）
-//! へ橋渡しする。
+//! 演者非依存の**単一の出力契約** [`dola::cue::CueSink`]（task 4.1）を実装する [`SerikoSink`] が
+//! 差し込み口となる。`emit` は届いた [`TalkCue`] を [`SerikoMsg::Cue`] として専用 inbox（std mpsc）
+//! へ橋渡しする。ghost live-path が `CueSink` 注入へ移行する task 8.1 まで、暫定で
+//! [`areka_sakura::SurfaceSink`] 実装も同一送出本体（[`SerikoSink::deliver`]）へ委譲して並存させる
+//! （`GhostBootOptions.surface_sink` 経由の注入を維持・emo-text の `TextSink` 暫定並存と同型）。
 //!
 //! # 停止経路の形
 //!
@@ -30,9 +33,10 @@
 //!
 //! # 失敗経路のログ規律（infallible・silent failure 禁止）
 //!
-//! `SurfaceSink::emit` は infallible（`()` 返し）。inbox 全受信端が消失した後の送出は
-//! `send` が `Err` を返すが、`unwrap`／`expect` で panic させず [`tracing::error!`] で
-//! 観測して戻る（log-first・R6.3／通常入力で panic しない・R6.4）。
+//! 両出力契約（[`dola::cue::CueSink`]／暫定 [`SurfaceSink`]）の `emit` は infallible（`()` 返し）で
+//! 送出本体 [`SerikoSink::deliver`] を共用する。inbox 全受信端が消失した後の送出は `send` が `Err`
+//! を返すが、`unwrap`／`expect` で panic させず [`tracing::error!`] で観測して戻る
+//! （log-first・R6.3／通常入力で panic しない・R6.4）。
 
 use std::ops::ControlFlow;
 
@@ -47,21 +51,24 @@ use crate::state::{ApplyOutcome, ScopeStates};
 /// 共有 Close 型は無い規約に従い、`SakuraMsg::Close` を先例に自前 `Close` を持つ（DD3）。
 #[derive(Debug)]
 pub enum SerikoMsg {
-    /// surface 系発火（`SerikoSink::emit` が橋渡しする・到着順に適用＝R1.5）。
+    /// broadcast された 1 発火（`SerikoSink::emit` が橋渡しする・到着順に適用＝R1.5）。
     Cue(TalkCue),
     /// kanade 由来の停止指令（areka-actor 停止規約の Close 相当・正常終了させる）。
     Close,
 }
 
-/// [`SurfaceSink`] を実装する送出ブリッジ（sakura dispatcher が保持する結線契約）。
+/// 単一の出力契約 [`dola::cue::CueSink`] を実装する送出ブリッジ（cue 再生ランタイムが保持する結線契約）。
 ///
 /// inbox（std mpsc）の `Sender` を内包し、届いた発火を [`SerikoMsg::Cue`] として橋渡しする。
-/// この trait 実装が唯一の受け口＝差し込み口であり、追加の注入メソッドは設けない。
+/// broadcast された全 cue が本 sink へ届き、担当（Shell）選別は [`handle_message`] の演者側
+/// relevance（`cue_target_of`）が行う。ghost live-path の移行（task 8.1）まで暫定で
+/// [`SurfaceSink`] も並存実装する（同一送出本体 [`SerikoSink::deliver`] へ委譲）。
 ///
 /// `Clone` を導出する（内側 `mpsc::Sender<SerikoMsg>` は常に `Clone`）。全 clone は単一の
 /// seriko アクター inbox への送信端であり配送意味は同一（`areka_ghost::boot` が要求する
-/// `S: SurfaceSink + Clone + Send + 'static` を満たし、dispatcher が talk ごとに sink を
-/// clone しても全 cue が同一 inbox へ FIFO 到着する）。
+/// `S: SurfaceSink + Clone + Send + 'static`、および cue 再生ランタイムが要求する
+/// `dola::cue::CueSink + Clone + Send + 'static` の双方を満たし、dispatcher が talk ごとに
+/// sink を clone しても全 cue が同一 inbox へ FIFO 到着する）。
 #[derive(Clone)]
 pub struct SerikoSink {
     tx: std::sync::mpsc::Sender<SerikoMsg>,
@@ -85,15 +92,14 @@ impl SerikoSink {
     pub fn close(&self) -> Result<(), std::sync::mpsc::SendError<SerikoMsg>> {
         self.tx.send(SerikoMsg::Close)
     }
-}
 
-impl SurfaceSink for SerikoSink {
-    /// 1 発火を inbox へ橋渡しする（infallible）。
+    /// 1 発火を inbox へ橋渡しする送出本体（infallible）——両出力契約
+    /// （[`dola::cue::CueSink`]／暫定 [`SurfaceSink`]）の `emit` が共用する。
     ///
     /// 受信端（inbox／アクター）が消失していると `send` は `Err` を返すが、`unwrap`／`expect`
     /// では panic するため用いず、[`tracing::error!`] で落とした発火を記録して戻る
     /// （silent failure 禁止・R6.3／通常運転で panic しない・R6.4）。
-    fn emit(&mut self, cue: TalkCue) {
+    fn deliver(&mut self, cue: TalkCue) {
         if let Err(err) = self.tx.send(SerikoMsg::Cue(cue)) {
             // Err の内側に move された SerikoMsg::Cue から発火の識別情報を復元してログへ載せる。
             let SerikoMsg::Cue(dropped) = err.0 else {
@@ -106,6 +112,30 @@ impl SurfaceSink for SerikoSink {
                 "seriko inbox が消失: surface 発火を配送できず破棄した（受信端全消失）"
             );
         }
+    }
+}
+
+/// **単一の出力契約**（R11.6・task 4.1）: 演者非依存の [`dola::cue::CueSink`] を実装する。
+///
+/// `CuePlayer` は登録された全 sink へ全 cue を **broadcast** し、seriko は担当（Shell）か否かを
+/// 演者側 relevance（`cue_target_of`）で選別する——action を無視しても duration は honor する
+/// （担当外 cue も本 sink 経由で inbox へ届き、[`handle_message`] が良性に読み飛ばす・R2.2/R2.3）。
+/// 配送先スロットの 2 分割（旧 `SurfaceSink`/`TextSink`）は broadcast＋演者側 relevance ゆえ不要。
+impl dola::cue::CueSink for SerikoSink {
+    fn emit(&mut self, cue: TalkCue) {
+        self.deliver(cue);
+    }
+}
+
+/// **暫定の並存 impl**（task 8.1 で撤去予定）: ghost live-path は task 8.1 が
+/// `dola::cue::CueSink` 注入へ張り替えるまで [`areka_sakura::SurfaceSink`] 経由で本 sink を
+/// 注入する（`GhostBootOptions.surface_sink`）。それまでの間、上の `CueSink` 実装と本
+/// `SurfaceSink` 実装を**同一の送出本体**（[`SerikoSink::deliver`]）へ委譲して並存させ、ghost が
+/// コンパイルし続けられるようにする。8.1 が ghost を `CueSink` 注入へ移行した時点で本 impl を
+/// 削除する（emo-text の `TextSink` 暫定並存・task 6.1 と同型）。
+impl SurfaceSink for SerikoSink {
+    fn emit(&mut self, cue: TalkCue) {
+        self.deliver(cue);
     }
 }
 
@@ -131,11 +161,13 @@ fn emit_display<O: SurfaceOutput>(out: &mut O, command: DisplayCommand) {
 /// [`SerikoMsg::Close`] 受領（handler が `Break`）または全 `Sender` drop（inbox 切断）の
 /// 2 経路で正常終了する。前者は [`SerikoSink::close`]、後者は全 [`SerikoSink`] drop で駆動する。
 ///
-/// # 失敗経路（6.1/6.2/6.3/6.4）
+/// # 失敗経路・担当外受信（6.1/6.2/6.3/6.4）
 ///
-/// 解決不能（[`SurfaceTarget::Unresolved`]）は `error!`＋skip、非 Shell／分類不能／防御枝の
-/// `EntityRef` は `warn!`＋skip で、いずれもループを殺さず継続する（silent failure 禁止・
-/// 入力起因では panic しない）。
+/// 真の異常——解決不能（[`SurfaceTarget::Unresolved`]）・破損バルーン数値（`Invalid`）は
+/// `error!`＋skip、名前形バルーン key（`NameForm`）・防御枝 `EntityRef` は `warn!`＋skip。
+/// 対して broadcast の担当外受信——非 Shell（Balloon 系）・純粋 Wait は「正常経路」ゆえ良性
+/// `debug!`＋skip（action 無視・duration honor・新ローカル遅延なし・R2.2/2.3/5.4）。いずれも
+/// ループを殺さず継続する（silent failure 禁止・入力起因では panic しない）。
 pub fn spawn_seriko<O>(
     resolver: SurfaceResolver,
     static_binds: areka_emo_compose::BindSet,
@@ -158,8 +190,9 @@ where
 /// inbox メッセージ 1 件を処理し、`run_inbox` 用の [`ControlFlow`] を返す。
 ///
 /// - [`SerikoMsg::Close`] → `Break`（正常終了・1.4）。
-/// - [`SerikoMsg::Cue`] → 分類（`cue_target_of`）・解決・状態更新・発行の一本経路。Shell 系
-///   `Emote{key}` のみが解決層へ進み、それ以外は記録を残して skip（6.1/6.2）。常に `Continue`。
+/// - [`SerikoMsg::Cue`] → 演者側 relevance（`cue_target_of`・D4 単一権威）で担当（Shell）を選別し、
+///   `Emote{key}`／`BalloonSurface` のみが解決層へ進む一本経路。担当外（非 Shell・純粋 Wait）は
+///   良性 `debug!`＋skip（正常経路・duration honor）、破損入力は `warn!`/`error!`＋skip。常に `Continue`。
 fn handle_message<O: SurfaceOutput>(
     resolver: &SurfaceResolver,
     states: &mut ScopeStates,
@@ -172,24 +205,40 @@ fn handle_message<O: SurfaceOutput>(
         SerikoMsg::Cue(cue) => cue,
     };
 
-    // 分類（DD1/6.2）: Shell 系のみ本アクターが扱う。非 Shell・分類不能は warn!＋skip。
+    // 分類（DD1/D4/6.2）: Shell 系のみ本アクターが action する。broadcast（D4）で seriko は
+    // 全 cue を受け取るため、担当外（非 Shell）・純粋 Wait の受信は「異常」でなく「正常な担当外
+    // 受信」——action を無視しつつ duration を honor（seriko は自前 reveal/timeline を持たず
+    // タイミングは焼き込み絶対時刻が担うので、skip が新ローカル遅延を生まない＝否定的 no-op）。
+    // ゆえに良性 debug!＋skip（warn/error でない・実害ない水準・R2.2/2.3/5.4）。genuine anomaly
+    // （Unresolved/Invalid=error!／NameForm/EntityRef=warn!）は下流で severity を維持する。
     match cue_target_of(&cue.command) {
         Some(CueTarget::Shell) => {}
         Some(other) => {
-            // Balloon 等（→emo text-layer）は本アクターの管轄外。到来しない想定だが防御的に skip。
-            tracing::warn!(
+            // Balloon 系（Text/NewLine/Clear/ClearAll/Choice→emo-text の担当）。broadcast の
+            // 正常な担当外受信ゆえ action を無視し duration は honor（新ローカル遅延なし）して skip。
+            tracing::debug!(
                 target = ?other,
                 command = ?cue.command,
-                "seriko: 非 Shell 系 cue を受領; surface 系ではないため読み飛ばす（R6.2）"
+                "seriko: 担当外（非 Shell）cue を broadcast 受信; action を無視し duration を honor して読み飛ばす（正常経路・R2.2/2.3）"
             );
             return ControlFlow::Continue(());
         }
         None => {
-            // 分類不能（Custom 等・M-boot compile は非生成）。記録を残して skip。
-            tracing::warn!(
-                command = ?cue.command,
-                "seriko: 分類できない cue command を受領; 読み飛ばす（R6.2）"
-            );
+            // `cue_target_of==None` は Wait（純粋な待ち・action なし）と Custom（分類不能）。
+            // Wait は「分類不能」でなく「どの演者の担当でもない」ゆえ文言を分ける（申し送り是正）。
+            // broadcast 下ではいずれも良性の担当外受信＝debug!＋skip（duration honor・否定的 no-op）。
+            if matches!(cue.command, CueCommand::Wait) {
+                tracing::debug!(
+                    command = ?cue.command,
+                    "seriko: 純粋 Wait cue を broadcast 受信; どの演者の担当でもない待ち＝action なし・duration は焼き込み絶対時刻が担うため読み飛ばす（正常経路・R5.4）"
+                );
+            } else {
+                // Custom 等（M-boot compile は非生成）。broadcast 下で非 Shell 受信は一律良性ゆえ debug!。
+                tracing::debug!(
+                    command = ?cue.command,
+                    "seriko: 担当の演者がいない cue を broadcast 受信; 読み飛ばす（正常経路）"
+                );
+            }
             return ControlFlow::Continue(());
         }
     }
@@ -308,6 +357,42 @@ mod tests {
         }
     }
 
+    /// コンパイル時検証: `SerikoSink` は cue 再生ランタイムへ登録可能な**単一の出力契約**
+    /// （`dola::cue::CueSink + Clone + Send + 'static`）を満たす（R11.6・task 4.1 の単一トレイト）。
+    /// トレイトはフルパス束縛のみで参照し、`emit` の名前解決が暫定並存の `SurfaceSink` と衝突しない
+    /// ようにする（emo-text 6.1 の `assert_cue_sink_contract` と同型）。
+    fn assert_cue_sink_contract<T: dola::cue::CueSink + Clone + Send + 'static>() {}
+
+    #[test]
+    fn seriko_sink_satisfies_cue_sink_contract() {
+        assert_cue_sink_contract::<SerikoSink>();
+    }
+
+    /// 単一の出力契約 [`dola::cue::CueSink`] の `emit` 経由でも発火が `SerikoMsg::Cue` として
+    /// inbox へ無変形で橋渡しされる（`SurfaceSink` と同一送出本体 `deliver` を共用・R11.6）。
+    #[test]
+    fn cue_sink_emit_forwards_cue_to_inbox() {
+        let (tx, rx) = std::sync::mpsc::channel::<SerikoMsg>();
+        let mut sink = SerikoSink::new(tx);
+
+        // 担当外の Text cue（broadcast 受信）でも sink は無変形で inbox へ橋渡しする
+        // （担当判定は handler の演者側 relevance の領分・sink は選別しない）。
+        dola::cue::CueSink::emit(&mut sink, text_cue(2.5, "1", "アヒル"));
+
+        match rx.recv() {
+            Ok(SerikoMsg::Cue(cue)) => {
+                assert_eq!(cue.at, 2.5, "at が保たれる");
+                assert_eq!(cue.actor, ActorKey::from("1"), "actor が保たれる");
+                assert!(
+                    matches!(cue.command, CueCommand::Text(ref t) if t == "アヒル"),
+                    "Text が保たれる: {:?}",
+                    cue.command
+                );
+            }
+            other => panic!("CueSink::emit でも Cue が inbox へ届くこと: {other:?}"),
+        }
+    }
+
     /// 受信端（inbox/アクター）消失後に `emit` を呼んでも、`error!` ログを残しつつ
     /// panic せず正常に戻る（infallible 契約・send 失敗を黙殺しない・R6.3/6.4）。
     #[test]
@@ -423,6 +508,26 @@ mod tests {
             actor: ActorKey::from(scope),
             command: CueCommand::BalloonSurface { key: key.into() },
             duration: 0.0,
+        }
+    }
+
+    /// 非 Shell（Balloon 担当＝emo-text 行き）の TalkCue（`Text`）を組む——broadcast 受信の担当外例（6.2）。
+    fn text_cue(at: f64, scope: &str, text: &str) -> TalkCue {
+        TalkCue {
+            at,
+            actor: ActorKey::from(scope),
+            command: CueCommand::Text(text.into()),
+            duration: 0.0,
+        }
+    }
+
+    /// 純粋な待ち（どの演者の担当でもない・action なし・duration のみ）の TalkCue（`Wait`）を組む。
+    fn wait_cue(at: f64, scope: &str, duration: f64) -> TalkCue {
+        TalkCue {
+            at,
+            actor: ActorKey::from(scope),
+            command: CueCommand::Wait,
+            duration,
         }
     }
 
@@ -865,6 +970,147 @@ mod tests {
                 },
             ],
             "シェル面（Show+binds）とバルーン面（ShowBalloon）が独立に記録される（4.6）"
+        );
+    }
+
+    // ─────────────────────────────────────────────────────────────────────
+    // Task 6.2: broadcast honor 契約——担当外 cue の受信は正常経路（良性 debug!）（2.2/2.3/5.4/11.6）。
+    //
+    // broadcast（D4）で seriko は全 cue を受け取る。Balloon 系（Text/NewLine/Clear/ClearAll/Choice）は
+    // emo-text の担当、Wait はどの演者の担当でもない純粋な待ち。いずれも seriko にとって「異常」でなく
+    // 「正常な担当外受信」であり、action を無視しつつ duration を honor（＝新ローカル遅延を生まない・
+    // seriko は自前 reveal/timeline を持たないので skip で自明に満たす）。ログは良性 debug! へ格下げ
+    // （warn/error を出さない＝実害ない水準）。genuine anomaly（Unresolved=error/Invalid=error/
+    // NameForm=warn/EntityRef=warn）は据え置き——本タスクで格下げしない。
+    // ─────────────────────────────────────────────────────────────────────
+
+    /// ケース12（6.2/2.3・broadcast honor）: 担当外（非 Shell＝Balloon 担当）の cue を broadcast
+    /// 受信すると、異常でなく正常経路として skip され、ログは良性 `debug!`（WARN/ERROR を出さない）。
+    ///
+    /// 同期 `handle_message`＋`capture_logs_flow` で、WARN も ERROR も 0 件・DEBUG は観測可能
+    /// （silent 化でなく格下げ）・状態不変・`Continue` を固定する。RED では `Some(other)` 腕が
+    /// `warn!` を出すため WARN=0 の assert が落ちる。
+    #[test]
+    fn non_shell_broadcast_reception_is_benign_debug_no_warn_error() {
+        let resolver = tiny_resolver();
+        let mut states = fresh_states();
+        let mut out = MockSurfaceOutput::new();
+        let records = out.records();
+
+        let flow = capture_logs_flow(|| {
+            handle_message(
+                &resolver,
+                &mut states,
+                &mut out,
+                SerikoMsg::Cue(text_cue(0.0, "0", "アヒルやアヒル")),
+            )
+        });
+
+        assert_eq!(
+            flow.1,
+            ControlFlow::Continue(()),
+            "担当外 cue も正常経路として処理継続する（6.2）"
+        );
+        assert_eq!(
+            flow.0.matches("level=WARN").count(),
+            0,
+            "担当外 broadcast 受信は WARN を出さない（異常でなく正常経路・実害ない水準・R2.2/2.3）: {}",
+            flow.0
+        );
+        assert_eq!(
+            flow.0.matches("level=ERROR").count(),
+            0,
+            "担当外 broadcast 受信は ERROR を出さない: {}",
+            flow.0
+        );
+        assert!(
+            flow.0.contains("level=DEBUG"),
+            "担当外 broadcast 受信は良性 debug! として観測できる（silent 化でなく格下げ・log-first）: {}",
+            flow.0
+        );
+        assert!(
+            records.lock().expect("records mutex poisoned").is_empty(),
+            "担当外 cue では発行しない（action 無視・状態不変・skip）"
+        );
+    }
+
+    /// ケース13（6.2/5.4・純粋 Wait honor）: Wait cue（どの演者の担当でもない純粋な待ち）を
+    /// broadcast 受信すると、action なしで skip され、ログは良性 `debug!`（WARN/ERROR なし）。
+    ///
+    /// `cue_target_of(Wait)==None` だが「分類不能」ではなく「担当演者なし」——5.2 が Wait cue を
+    /// 発行し始めた今、`warn!("分類できない")` は意味的に不正確なノイズ（申し送り）。debug! へ格下げし
+    /// 文言も是正したことを固定する。seriko は自前 timeline を持たず skip が新ローカル遅延を生まない
+    /// （duration honor＝否定的 no-op・R5.4）。RED では `None` 腕が `warn!` を出すため WARN=0 が落ちる。
+    #[test]
+    fn wait_broadcast_reception_is_benign_debug_no_warn_error() {
+        let resolver = tiny_resolver();
+        let mut states = fresh_states();
+        let mut out = MockSurfaceOutput::new();
+        let records = out.records();
+
+        let flow = capture_logs_flow(|| {
+            handle_message(
+                &resolver,
+                &mut states,
+                &mut out,
+                SerikoMsg::Cue(wait_cue(0.0, "0", 0.5)),
+            )
+        });
+
+        assert_eq!(
+            flow.1,
+            ControlFlow::Continue(()),
+            "Wait も正常経路として処理継続する（5.4）"
+        );
+        assert_eq!(
+            flow.0.matches("level=WARN").count(),
+            0,
+            "Wait 受信は WARN を出さない（分類不能でなく担当演者なし・正常経路）: {}",
+            flow.0
+        );
+        assert_eq!(
+            flow.0.matches("level=ERROR").count(),
+            0,
+            "Wait 受信は ERROR を出さない: {}",
+            flow.0
+        );
+        assert!(
+            flow.0.contains("level=DEBUG"),
+            "Wait 受信は良性 debug! として観測できる: {}",
+            flow.0
+        );
+        assert!(
+            records.lock().expect("records mutex poisoned").is_empty(),
+            "Wait では発行しない（action なし・状態不変）"
+        );
+    }
+
+    /// ケース14（2.2/2.3・honor＝否定的 no-op の observable）: 担当外 cue（非 Shell・Wait）を
+    /// 挟んでも、後続の担当 cue（Emote）は焼き込み絶対時刻どおりに発行され、担当外 cue は状態も
+    /// タイミングも乱さない（新たなローカル遅延なし・二重待ちなし）。spawn 経由 observable ゆえ
+    /// cross-thread log には依存せず、発行列でスキップの純粋 no-op 性を示す。
+    #[test]
+    fn non_shell_and_wait_are_no_op_then_shell_cue_still_emits() {
+        let out = MockSurfaceOutput::new();
+        let records = out.records();
+        let (mut sink, handle) =
+            spawn_seriko(tiny_resolver(), BindSet::from_ids([1100, 1207]), out);
+
+        SurfaceSink::emit(&mut sink, text_cue(0.0, "0", "担当外テキスト")); // 非 Shell＝skip
+        SurfaceSink::emit(&mut sink, wait_cue(0.5, "0", 1.0)); // Wait＝skip
+        SurfaceSink::emit(&mut sink, emote_cue(1.5, "0", "2100")); // 担当＝発行
+        sink.close().expect("Close を送れること");
+        handle.join().expect("Close で正常終了する");
+
+        let recorded = records.lock().expect("records mutex poisoned");
+        assert_eq!(
+            &*recorded,
+            &[DisplayCommand::Show {
+                scope: ActorKey::from("0"),
+                surface_id: 2100,
+                binds: BindSet::from_ids([1100, 1207]),
+            }],
+            "担当外（非 Shell/Wait）は skip され、担当 Emote のみ発行＝状態/タイミング不変（honor 否定的 no-op・2.2/2.3）"
         );
     }
 
