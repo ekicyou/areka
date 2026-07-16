@@ -70,7 +70,7 @@ emo2 のむらさきは表情を **`\s[1000]`（本体サーフェス）＋ `\![
 ## Existing Spec Touchpoints
 
 - **Extends**: `completed/areka-P0-seriko-engine`（`static_binds` 置き場を動的マップへ差し替え＝予約どおり）。
-- **Adjacent（相互調整）**: `areka-P0-cue-playback-duration`（**共有編集面4ファイル＝上記クロスユニット契約で先決・推奨は cue-playback 先行**）／`areka-P0-surface-resize-resnap`（**交差面ゼロ**＝placement/emo-present-size と bind は無関係＝完全並走可）／`completed/areka-P0-balloon-face-cue`（同型テンプレート・`resolve_balloon_key`→`resolve_bind_key` の対応）。
+- **Adjacent（相互調整）**: `areka-P0-cue-playback-duration`（**共有編集面4ファイル＝上記クロスユニット契約で先決・推奨は cue-playback 先行**）／`areka-P0-surface-resize-resnap`（**交差面ゼロ**＝placement/emo-present-size と bind は無関係＝完全並走可）／`completed/areka-P0-balloon-face-cue`（同型テンプレート・`resolve_balloon_key`→`resolve_bind_key` の対応）／**`areka-P0-sakura-dialogue-tags`**（2026-07-16 新 brief・**compile.rs catch-all 近接**＝別 variant 救出の additive アーム〔本 spec=`GenericCommand{bind}`・同 spec=Choice/Cursor/Move/SystemVar〕＝マージ可能・同時着手時は rebase 注意）／**`areka-P0-seriko-loop`**（2026-07-16 新 brief・**seriko state.rs 近接**——本 spec の動的 bind マップが seriko-loop の bind+random 発火ゲートの **read-only 読み口**になる契約＝推奨順序 mayuna→seriko-loop。fixture のまばたき bindgroup1400-1402 は `default,1` 無し＝**既定 OFF** ゆえ、本 spec の動的 bind 無しでは sakura まばたきが観測不能＝先行推奨の実質根拠）。
 - **Supersedes（スコープ吸収）**: roadmap 増分の旧「⑤seriko のみ `mayuna-compose`（bind 状態の動的管理）」表記を**②④⑤垂直スライスへ拡張**（#2 仕分けで確定・roadmap line 151 の再スコープ注記が根拠）。
 
 ## Constraints
