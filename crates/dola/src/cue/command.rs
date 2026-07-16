@@ -764,97 +764,14 @@ mod tests {
     }
 
     // ── 配送エンベロープ（TalkCue）檻 ──
-
-    /// 配送エンベロープは**再生時間フィールドを保持**し、`Cue.duration` 由来の値を
-    /// **無変形**（丸め・スケール・既定値差し替えなし）で運ぶ（1.1）。
-    ///
-    /// 「無変形」は 10 進の近似一致でなく `to_bits()` のビット等価で固定する
-    /// （`1.0/3.0` 等の非表現可能値がどこかで丸められれば FAIL する）。
-    #[test]
-    fn talk_cue_envelope_carries_cue_duration_untransformed() {
-        for duration in [
-            0.0_f64,
-            0.05,
-            0.25,
-            1.0 / 3.0,
-            12.345_678_9,
-            f64::MIN_POSITIVE,
-        ] {
-            let cue = Cue {
-                actor: ActorKey::from("0"),
-                start_time: 1.5,
-                payload: CueCommand::Text("hello".into()).into(),
-                duration,
-            };
-            let CuePayload::Command(command) = cue.payload.clone() else {
-                unreachable!("presentation cue（Command ペイロード）を組んでいる");
-            };
-
-            // 上流（canonical 変換）が行う複写と同一形。envelope は値を運ぶだけで加工しない。
-            let envelope = TalkCue {
-                at: cue.start_time,
-                actor: cue.actor.clone(),
-                command,
-                duration: cue.duration,
-            };
-
-            assert_eq!(
-                envelope.duration.to_bits(),
-                cue.duration.to_bits(),
-                "envelope の duration は Cue.duration をビット等価で運ぶ（無変形）"
-            );
-            assert_eq!(envelope.at, cue.start_time, "発火時刻も無変形で運ぶ");
-            assert_eq!(envelope.actor, cue.actor, "演者も無変形で運ぶ");
-            assert_eq!(envelope.command, CueCommand::Text("hello".into()));
-
-            // Clone でも値は保たれる（搬送体は broadcast で複製されて各 CueSink へ届く）。
-            assert_eq!(envelope.clone(), envelope);
-        }
-    }
-
-    /// 搬送体の duration は**コマンド種別を問わない一律フィールド**である（1.1・D5 整合）。
-    ///
-    /// 全 `CueCommand` variant について、瞬時（明示的 0）・時間占有の双方を運べる
-    /// （「duration を運べないコマンド」という概念を作らない）。
-    #[test]
-    fn talk_cue_duration_is_uniform_across_every_command_variant() {
-        let commands = vec![
-            CueCommand::Text("hello".into()),
-            CueCommand::Clear,
-            CueCommand::Emote {
-                key: "smile".into(),
-            },
-            CueCommand::Choice {
-                id: "yes".into(),
-                text: "はい".into(),
-            },
-            CueCommand::EntityRef(42),
-            CueCommand::Custom {
-                command: "fade".into(),
-                params: DynamicValue::Null,
-            },
-            CueCommand::NewLine { ratio: 1.0 },
-            CueCommand::BalloonSurface { key: "2".into() },
-            CueCommand::Wait,
-            CueCommand::ClearAll,
-        ];
-        assert_eq!(commands.len(), 10, "presentation コマンドは 10 種");
-
-        for command in commands {
-            for duration in [0.0_f64, 1.25] {
-                let envelope = TalkCue {
-                    at: 0.0,
-                    actor: ActorKey::from("0"),
-                    command: command.clone(),
-                    duration,
-                };
-                assert_eq!(
-                    envelope.duration.to_bits(),
-                    duration.to_bits(),
-                    "{command:?} の搬送体も duration を一律に保持する"
-                );
-                assert_eq!(envelope.command, command, "command は無変形で運ばれる");
-            }
-        }
-    }
+    //
+    // NOTE(Task 3.2): 旧 `talk_cue_envelope_carries_cue_duration_untransformed` と
+    // `talk_cue_duration_is_uniform_across_every_command_variant` は、テスト本体で
+    // `TalkCue { .., duration: cue.duration }` を組んでから自身に等価を主張する**自己充足檻**
+    // だった（Rust の構造体代入が自分自身を主張しているだけ・変異テストで素通しを実測）。
+    // 「無変形の carry」の behavioral な証明は、実 canonical 変換 `dola::cue::to_talk_schedule` を
+    // 通す `crates/dola/tests/cue/sheet_test.rs` の
+    // `to_talk_schedule_carries_finite_duration_untransformed` /
+    // `to_talk_schedule_duration_uniform_across_every_command_variant` が load-bearing に担う
+    // ため、こちらの自己充足檻は撤去した。
 }

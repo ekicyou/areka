@@ -6,7 +6,8 @@
 //! [`TalkHandle`] として呼び出し元へ返す。
 //!
 //! body は `Start` 受領時に上流 [`areka_parsers::sakura::parse`] → [`crate::compile::compile`]
-//! を呼び、発火列を [`to_schedule`] で時刻駆動可能な [`TimedSchedule`] へ変換する。
+//! を呼び、発火列を dola の canonical 変換 `to_talk_schedule` で時刻駆動可能な
+//! [`TimedSchedule`] へ変換する。
 //! **空 sheet**（発火列が空）なら時間軸駆動を行わず、コンパイル結果の終端理由を伴う
 //! [`TalkDone`] を直ちに返して `Break`（R1.4/R6.2・裸の `\-` は空 sheet＋`end=Quit` ゆえ
 //! `Ended` を固定送出しない）。
@@ -22,13 +23,14 @@ use std::sync::mpsc::Sender;
 
 use crate::compile::compile;
 use crate::contract::{
-    cue_target_of, CuePayload, CueSheet, CueTarget, SakuraMsg, StartTalk, TalkCue, TalkDone,
-    TalkEndReason, TalkHandle, TalkId,
+    cue_target_of, CueTarget, SakuraMsg, StartTalk, TalkCue, TalkDone, TalkEndReason, TalkHandle,
+    TalkId,
 };
 use crate::error::SakuraError;
 use crate::sink::{SurfaceSink, TextSink};
 use areka_actor::{run_inbox, spawn_actor};
-use dola::cue::schedule::{Entry, TimedSchedule};
+use dola::cue::schedule::TimedSchedule;
+use dola::cue::to_talk_schedule;
 
 /// per-talk transient を起動し、`Tick`/`Close` の投函端と join ハンドルを返す。
 ///
@@ -39,7 +41,7 @@ use dola::cue::schedule::{Entry, TimedSchedule};
 /// `Tick`/`Close` のみ送る。
 ///
 /// body（[`run_inbox`] ループ）は `Start` 受領時に上流 parse → [`compile`] →
-/// [`to_schedule`] を行い発火列を時刻駆動可能形へ変換する。空 sheet なら時間軸駆動せず
+/// dola canonical 変換 `to_talk_schedule` を行い発火列を時刻駆動可能形へ変換する。空 sheet なら時間軸駆動せず
 /// 即 [`TalkDone`]`{compiled.end}` を送出して `Break`（R1.4/R6.2）。
 ///
 /// `done` は `TalkDone` の届け先（呼び出し側 inbox への変換投函・`D: From<TalkDone>`）。
@@ -93,7 +95,8 @@ where
 struct TalkState {
     /// talk 相関 ID（全出力へ対応付け・R1.3/R6.6）。
     talk_id: TalkId,
-    /// 時刻駆動可能形（0 起点・`TimedSchedule::new(0.0)`）。task 5.2 が駆動する。
+    /// 時刻駆動可能形（`to_talk_schedule` が組む・アンカー＝`absolute_start_time`・現状 0.0・
+    /// 占有 horizon 保持）。task 5.2 が駆動する。
     schedule: TimedSchedule<TalkCue>,
     /// コンパイル時点で確定した終端理由（自然終端で返す reason）。
     end: TalkEndReason,
@@ -133,7 +136,7 @@ where
         }
     }
 
-    /// `Start` 受領: parse → compile → to_schedule。空 sheet なら即 `TalkDone`→`Break`、
+    /// `Start` 受領: parse → compile → to_talk_schedule（dola canonical）。空 sheet なら即 `TalkDone`→`Break`、
     /// 非空 sheet なら状態を確定して継続（Tick 駆動は task 5.2）。
     fn on_start(&mut self, start: StartTalk) -> ControlFlow<()> {
         // Start 二重受領は error!＋無視（プロトコル異常・非 panic）。
@@ -161,8 +164,9 @@ where
             return ControlFlow::Break(());
         }
 
-        // 非空 sheet: 駆動可能形へ変換し状態を確定して継続（Tick 駆動は task 5.2）。
-        let schedule = to_schedule(&compiled.sheet);
+        // 非空 sheet: dola の canonical 変換で駆動可能形へ変換し状態を確定して継続
+        // （Tick 駆動は task 5.2）。変換は dola ingress の単一権威（`to_schedule` 独自実装は撤去）。
+        let schedule = to_talk_schedule(&compiled.sheet);
         self.state = Some(TalkState {
             talk_id,
             schedule,
@@ -274,39 +278,6 @@ where
         }
         ControlFlow::Break(())
     }
-}
-
-/// 内部: [`CueSheet`] → [`TimedSchedule`]`<TalkCue>`（0 起点・`TimedSchedule::new(0.0)`）。
-///
-/// [`dola::cue::compile_sheet`] は使わない（min 正規化が先頭待ちを消すため・禁止）。
-/// 挿入は [`CueSheet::cues`] の記述順に 1 件ずつ [`TimedSchedule::insert`] で行う
-/// （`extend` 禁止）: insert は同一オフセット群の前方へ挿入し末尾 pop が挿入順を保つため、
-/// 同一 `at` の cue は `CueSheet` 記述順（FIFO）で配信される（R4.1/4.2）。
-///
-/// [`CuePayload::Command`] 以外（Barrier/Routing・M-boot compile は非生成）は
-/// `tracing::error!` を記録してスキップする（防御・非 panic）。
-fn to_schedule(sheet: &CueSheet) -> TimedSchedule<TalkCue> {
-    let mut schedule = TimedSchedule::new(0.0);
-    for cue in sheet.cues() {
-        match &cue.payload {
-            CuePayload::Command(command) => {
-                let talk_cue = TalkCue {
-                    at: cue.start_time,
-                    actor: cue.actor.clone(),
-                    command: command.clone(),
-                    // 再生時間は**無変形**で複写する（加工・丸めは行わない）。
-                    duration: cue.duration,
-                };
-                // per-cue insert（extend 禁止）: 同一 at 群を記述順（FIFO）で保つ。
-                schedule.insert(Entry::Payload(cue.start_time, talk_cue));
-            }
-            other => {
-                // M-boot compile は Command 以外を生成しない防御枝（非到達）。
-                tracing::error!(payload = ?other, "non-Command CuePayload in CueSheet; skipping");
-            }
-        }
-    }
-    schedule
 }
 
 #[cfg(test)]
@@ -490,7 +461,7 @@ mod tests {
     }
 
     /// **同一 `at`・同一 sink 内の発火順が記述順（FIFO）で保たれる**ことを検証する
-    /// （`to_schedule` の per-cue `insert`＝`extend` 禁止の load-bearing 性質を統合レベルで固定）。
+    /// （canonical 変換 `to_talk_schedule` の per-cue `insert`＝`extend` 禁止の load-bearing 性質を統合レベルで固定）。
     ///
     /// script `\s[10]hello\nworld\e`（`\w` 無し）→ 全 cue が `at=0.0`:
     ///   Emote{10}(surface) / Text("hello") / NewLine / Text("world")（text）。
@@ -614,108 +585,14 @@ mod tests {
         );
     }
 
-    /// **`to_schedule` が非 `Command` payload（Barrier/Routing）を skip する**防御枝を、
-    /// module-private `to_schedule` を直接呼んで検証する（M-boot compile は生成しないが防御固定）。
-    ///
-    /// `CuePayload::Command` と `CuePayload::Barrier` を同一 `at=0.0` で混在させた `CueSheet` を
-    /// 渡し、生成された `TimedSchedule` を `tick(0.0)`→`ready()` で観測すると、**Command 由来の
-    /// `TalkCue` 1 件のみ**が出て Barrier は skip されている（非 panic）ことを確認する。
-    #[test]
-    fn to_schedule_skips_non_command_payload_without_panic() {
-        use crate::contract::{ActorKey, BarrierKind, Cue, CuePayload, CueSheet};
-
-        let sheet = CueSheet::new(vec![
-            Cue {
-                actor: ActorKey::from("0"),
-                start_time: 0.0,
-                payload: CuePayload::Command(CueCommand::Text("keep".into())),
-                duration: 0.0,
-            },
-            Cue {
-                actor: ActorKey::from("0"),
-                start_time: 0.0,
-                // M-boot compile は生成しない payload（防御枝を叩くため直接投入）。
-                payload: CuePayload::Barrier(BarrierKind::WaitForInput { timeout: None }),
-                duration: 0.0,
-            },
-        ]);
-
-        let mut schedule = to_schedule(&sheet);
-        schedule.tick(0.0);
-        let ready = schedule.ready();
-
-        // Barrier は skip され、Command 由来の TalkCue 1 件のみが due（非 panic）。
-        assert_eq!(ready.len(), 1, "非 Command(Barrier) は skip され Command のみ残る");
-        assert_eq!(ready[0].command, CueCommand::Text("keep".into()));
-        assert_eq!(ready[0].at, 0.0);
-    }
-
-    /// **`Cue.duration` が配送エンベロープへ無変形で複写される**ことを検証する（1.1）。
-    ///
-    /// 相異なる duration（瞬時 0・端数・非表現可能値・長尺）を持つ cue を同一 `at=0.0` へ
-    /// 並べ、`to_schedule` が組んだ [`TalkCue`] が元の値を**ビット等価**で保持することを
-    /// 確認する（10 進近似での一致でなく `to_bits()` ＝どこかで丸め・スケールが入れば FAIL）。
-    /// 同一 `at` 群は記述順（FIFO）で `ready()` に並ぶ（`same_at_cues_preserve_script_order_fifo_within_a_sink`）。
-    #[test]
-    fn to_schedule_copies_cue_duration_into_envelope_untransformed() {
-        use crate::contract::{ActorKey, Cue, CuePayload, CueSheet};
-
-        let durations = [0.0_f64, 0.05, 1.0 / 3.0, 12.345_678_9];
-        let cues: Vec<Cue> = durations
-            .iter()
-            .enumerate()
-            .map(|(i, &d)| Cue {
-                actor: ActorKey::from("0"),
-                start_time: 0.0,
-                payload: CuePayload::Command(CueCommand::Text(format!("t{i}"))),
-                duration: d,
-            })
-            .collect();
-        let sheet = CueSheet::new(cues);
-
-        let mut schedule = to_schedule(&sheet);
-        schedule.tick(0.0);
-        let ready = schedule.ready();
-
-        assert_eq!(ready.len(), durations.len(), "全 cue が due（同一 at=0.0）");
-        for (i, &d) in durations.iter().enumerate() {
-            assert_eq!(
-                ready[i].command,
-                CueCommand::Text(format!("t{i}")),
-                "同一 at 群は記述順（FIFO）で並ぶ"
-            );
-            assert_eq!(
-                ready[i].duration.to_bits(),
-                d.to_bits(),
-                "duration={d} は搬送体へビット等価で複写される（無変形）"
-            );
-        }
-    }
-
-    /// 純粋な待ち（`CueCommand::Wait`）の時間も、コマンド側でなく**搬送体の duration**が
-    /// 運ぶ（1.1・envelope 一律）。担当演者のいない cue でも duration は落ちない。
-    #[test]
-    fn to_schedule_carries_duration_for_wait_cue_without_action() {
-        use crate::contract::{ActorKey, Cue, CuePayload, CueSheet};
-
-        let sheet = CueSheet::new(vec![Cue {
-            actor: ActorKey::from("0"),
-            start_time: 0.0,
-            payload: CuePayload::Command(CueCommand::Wait),
-            duration: 0.5,
-        }]);
-
-        let mut schedule = to_schedule(&sheet);
-        schedule.tick(0.0);
-        let ready = schedule.ready();
-
-        assert_eq!(ready.len(), 1);
-        assert_eq!(ready[0].command, CueCommand::Wait, "action は持たない");
-        assert_eq!(
-            ready[0].duration, 0.5,
-            "Wait の時間は搬送体の duration が運ぶ（コマンド埋め込みでない）"
-        );
-    }
+    // NOTE(Task 3.2): 旧 module-private `to_schedule` を直接叩いていた 3 テスト
+    // （非 Command payload skip / duration 無変形複写 / Wait cue の duration 搬送）は、
+    // 変換が dola の唯一の canonical 変換 `dola::cue::to_talk_schedule` へ統合されたため
+    // dola 側（`crates/dola/tests/cue/sheet_test.rs`）へ移設した。Barrier/Routing は
+    // 旧 sakura 実装の「skip」から canonical の「Entry へ routing」へ改まったため、移設先では
+    // `to_talk_schedule_routes_barrier_and_routing_not_skipping` として routing を檻に固定する
+    // （skip 特性化は退役）。drive 側は spawn_talk 統合テスト（FIFO・保留・自然終端）で
+    // canonical 変換の end-to-end を引き続き固定する。
 
     /// **終端時に done 受信端が drop 済みでも body が panic せず clean exit する**ことを検証する
     /// （R11.1/11.4・全終端経路が `done.send(..).is_err()` を error ログで受けるガードの固定）。

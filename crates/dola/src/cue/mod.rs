@@ -24,4 +24,4 @@ pub use command::{
     TalkCue,
 };
 pub use schedule::{Entry, TimedSchedule};
-pub use sheet::{CompiledCue, CueSheet, compile_sheet};
+pub use sheet::{CompiledCue, CueSheet, compile_sheet, to_talk_schedule};
