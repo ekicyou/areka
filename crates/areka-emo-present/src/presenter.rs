@@ -35,7 +35,7 @@ use bevy_ecs::world::World;
 
 use areka_actor::ReplySender;
 use areka_emo_atlas::AtlasTable;
-use areka_emo_compose::{BindSet, ComposeError, Composer, EmoWorld};
+use areka_emo_compose::{BindSet, ComposeError, Composer, EmoWorld, RegionPriority};
 
 use wintf::ecs::{AlphaMaskResource, GraphicsCore, WucGraphicsResource};
 
@@ -66,6 +66,14 @@ struct PresentTarget {
     chain: Option<SwapChainPresenter>,
     /// 現在可視か（`Hide`／全透明退化で false・`ShowSurface` 成功で true）。
     visible: bool,
+    /// 現在表示中のサーフェス id ＝「**最後に表示が成立した id**」（CurrentSurfaceRead・R3.1-3.3）。
+    ///
+    /// 画面の絵ではなく表示成立の結果を刻む（全透明合成でも表示成立＝その id が正・α 非依存で collision
+    /// 解決の単一真実源）。`Hide`／`EmptyComposition` 縮退で `None`。書き込みは既存 `visible` 更新点と
+    /// 同一の3箇所のみ（表示成立＝`Some(surface_id)`／縮退・Hide＝`None`）で、失敗経路は表示成立点より
+    /// 手前で early return するため前値を保持する（`ComposeKey` からは導出しない＝`invalidate_all` で
+    /// キーが消えても表示は残るため画面と乖離する）。
+    current_surface_id: Option<u32>,
 }
 
 /// 予約 text 層スロットへの読み取り専用の到達手段（emo-text-layer が消費する additive 公開増分・R9.1/9.2）。
@@ -165,6 +173,7 @@ impl EmoPresenter {
                 mount: None,
                 chain: None,
                 visible: false,
+                current_surface_id: None,
             },
         );
         Ok(())
@@ -235,6 +244,8 @@ impl EmoPresenter {
                         mount.set_visible(world, false);
                     }
                     target.visible = false;
+                    // EmptyComposition 縮退は Hide と同じ表示結果ゆえ現サーフェス無し（R3.2・Key decisions (b)）。
+                    target.current_surface_id = None;
                     Self::reply(reply, Ok(()));
                     return;
                 }
@@ -350,6 +361,8 @@ impl EmoPresenter {
         mount.set_visible(world, true);
         mount.set_bounds(world, size);
         target.visible = true;
+        // 表示成立＝この id が現サーフェス（全透明でも成立・α 非依存の単一真実源・R3.1/3.3・Key decisions）。
+        target.current_surface_id = Some(surface_id);
 
         tracing::info!(
             ?target_id,
@@ -380,6 +393,8 @@ impl EmoPresenter {
         }
         tracing::debug!(?target_id, was_visible = target.visible, "apply(Hide): 非表示へ");
         target.visible = false;
+        // Hide（`\s[-1]` 相当）は表示していない＝現サーフェス無し（R3.2/4.4・Key decisions (a)）。
+        target.current_surface_id = None;
         Self::reply(reply, Ok(()));
     }
 
@@ -411,6 +426,30 @@ impl EmoPresenter {
             surface_size: chain.size(),
             scale: CURRENT_COMPOSE_SCALE,
         })
+    }
+
+    /// target がいま表示しているサーフェス id（CurrentSurfaceRead・R3.1-3.3）。
+    ///
+    /// 「最後に表示が成立したサーフェス id」を返す（画面の絵ではなく表示成立の結果・α 非依存）。
+    /// 未表示（一度も `ShowSurface` していない）・`Hide` 済み・空合成へ縮退した場合、および未登録
+    /// target は `None`。単一真実源は `PresentTarget.current_surface_id`（`ComposeKey` から導出しない・
+    /// design §CurrentSurfaceRead State Management）。既存の表示ロジックへ分岐を足さない additive な
+    /// 読み取りのみ（R3.4）。
+    pub fn current_surface_id(&self, target: TargetId) -> Option<u32> {
+        self.targets.get(&target)?.current_surface_id
+    }
+
+    /// 現サーフェスの当たり判定領域名を解決する（`current_surface_id` → `EmoWorld::surface` → 純関数・R4.1/4.4）。
+    ///
+    /// 座標はサーフェス px（＝窓 client 物理 px・k=1.0 契約）。現サーフェス無し（未表示／`Hide`／空合成
+    /// 縮退／未登録 target）は `None`（R4.4）。重なりは画家のアルゴリズム（後定義が手前・[`RegionPriority::Painter`]）で
+    /// 解決する。`EmoWorld` を presenter 外へ露出しない（`&SurfaceMaster` を外へ出さない）ため純関数
+    /// [`areka_emo_compose::hit_region`] の呼出は本メソッド内で閉じ、戻り値の寿命は `&self` に従う
+    /// （マウス移動ごとの割当を生まない・design §CurrentSurfaceRead Service Interface）。
+    pub fn hit_region(&self, target: TargetId, x: i64, y: i64) -> Option<&str> {
+        let t = self.targets.get(&target)?;
+        let master = t.emo_world.surface(t.current_surface_id?)?;
+        areka_emo_compose::hit_region(master, x, y, RegionPriority::Painter)
     }
 
     /// target の表示中画素を CPU へ読み戻す（R6.2/R8.3・検証・将来の直読みヒットテスト基盤）。
@@ -1465,6 +1504,243 @@ mod tests {
         assert_eq!(
             slot_before, slot_after,
             "同寸・異 id 再表示で文字スロット表示（slot/window/surface_size/scale）が変化した（TextSlotView が不安定）"
+        );
+    }
+
+    // ── CurrentSurfaceRead: 現サーフェス id 状態のライフサイクル固定（Task 2・R3.1-3.4）───────────
+    // 現サーフェス id は「最後に表示が成立したサーフェス id」（画面の絵でなく表示成立の結果・α非依存）。
+    // 書き込みは既存 `visible` 更新点と同一の3箇所のみ（表示成立/EmptyComposition 縮退/Hide）＝additive。
+
+    /// テスト 10・R3.2 観測完了（未表示→None）: `attach_target` 直後（一度も `ShowSurface` していない）は
+    /// `current_surface_id` が `None`。`hit_region` も現サーフェス無しゆえ `None`（純関数へ届かない）。
+    ///
+    /// `attach_target` は skeleton 登録のみで World に触れないため、GPU 不要の素の `World` で決定論固定する。
+    #[test]
+    fn current_surface_id_is_none_before_first_show() {
+        let mut world = World::new();
+        let window = world.spawn_empty().id();
+        let (emo_world, atlas, _golden) = build_target_assets(3, 2, 0x10);
+
+        let mut presenter = EmoPresenter::new();
+        presenter
+            .attach_target(&mut world, TargetId(0), window, emo_world, atlas)
+            .expect("attach_target 失敗");
+
+        assert_eq!(
+            presenter.current_surface_id(TargetId(0)),
+            None,
+            "attach_target 直後（未表示）は現サーフェス無し（3.2）"
+        );
+        assert_eq!(
+            presenter.hit_region(TargetId(0), 0, 0),
+            None,
+            "未表示 target の hit_region は現サーフェス無しゆえ None"
+        );
+    }
+
+    /// テスト 11・R3.1 観測完了（表示後→直近 id）: 有効 `ShowSurface(1000)` 適用後、`current_surface_id`
+    /// が `Some(1000)`（直近に表示が成立したサーフェス id）。
+    #[test]
+    fn current_surface_id_is_last_shown_after_display() {
+        let mut world = make_world_with_gpu();
+        let window = world.spawn_empty().id();
+        let (emo_world, atlas, _golden) = build_target_assets(3, 2, 0x11);
+
+        let mut presenter = EmoPresenter::new();
+        presenter
+            .attach_target(&mut world, TargetId(0), window, emo_world, atlas)
+            .expect("attach_target 失敗");
+
+        let (tx, rx) = reply_channel::<PresentOutcome>();
+        presenter.apply(
+            &mut world,
+            PresentCommand::ShowSurface {
+                target: TargetId(0),
+                surface_id: 1000,
+                binds: BindSet::default(),
+                reply: Some(tx),
+            },
+        );
+        assert!(
+            matches!(rx.recv_timeout(Duration::from_secs(10)), Ok(Ok(()))),
+            "前提の有効 ShowSurface が Ok でない"
+        );
+
+        assert_eq!(
+            presenter.current_surface_id(TargetId(0)),
+            Some(1000),
+            "表示成立後は直近に表示した id（3.1）"
+        );
+    }
+
+    /// テスト 12・R3.3 観測完了（切替→新 id）: 面 1000 表示中に同寸の別 id 3000 を `ShowSurface` すると、
+    /// `current_surface_id` が `Some(3000)` へ追随する（以後の問い合わせは新 id）。
+    #[test]
+    fn current_surface_id_follows_surface_switch() {
+        let mut world = make_world_with_gpu();
+        let window = world.spawn_empty().id();
+        let (emo_world, atlas, _g1, _g3) = build_two_face_assets(6, 5);
+
+        let mut presenter = EmoPresenter::new();
+        presenter
+            .attach_target(&mut world, TargetId(0), window, emo_world, atlas)
+            .expect("attach_target 失敗");
+
+        let show = |presenter: &mut EmoPresenter, world: &mut World, id: u32| {
+            let (tx, rx) = reply_channel::<PresentOutcome>();
+            presenter.apply(
+                world,
+                PresentCommand::ShowSurface {
+                    target: TargetId(0),
+                    surface_id: id,
+                    binds: BindSet::default(),
+                    reply: Some(tx),
+                },
+            );
+            assert!(
+                matches!(rx.recv_timeout(Duration::from_secs(10)), Ok(Ok(()))),
+                "ShowSurface が Ok でない"
+            );
+        };
+
+        show(&mut presenter, &mut world, 1000);
+        assert_eq!(
+            presenter.current_surface_id(TargetId(0)),
+            Some(1000),
+            "初回表示成立後は Some(1000)"
+        );
+
+        show(&mut presenter, &mut world, 3000);
+        assert_eq!(
+            presenter.current_surface_id(TargetId(0)),
+            Some(3000),
+            "別 id へ切替後は新 id を返す（3.3）"
+        );
+    }
+
+    /// テスト 13・R3.2/4.4 観測完了（Hide→None）: 有効表示後の `Hide` で `current_surface_id` が `None`
+    /// （「未表示等」に Hide が含まれる＝`\s[-1]` 相当で表示していない）。
+    #[test]
+    fn current_surface_id_is_none_after_hide() {
+        let mut world = make_world_with_gpu();
+        let window = world.spawn_empty().id();
+        let (emo_world, atlas, _golden) = build_target_assets(4, 3, 0x13);
+
+        let mut presenter = EmoPresenter::new();
+        presenter
+            .attach_target(&mut world, TargetId(0), window, emo_world, atlas)
+            .expect("attach_target 失敗");
+
+        let (tx0, rx0) = reply_channel::<PresentOutcome>();
+        presenter.apply(
+            &mut world,
+            PresentCommand::ShowSurface {
+                target: TargetId(0),
+                surface_id: 1000,
+                binds: BindSet::default(),
+                reply: Some(tx0),
+            },
+        );
+        assert!(
+            matches!(rx0.recv_timeout(Duration::from_secs(10)), Ok(Ok(()))),
+            "前提の有効 ShowSurface が Ok でない"
+        );
+        assert_eq!(
+            presenter.current_surface_id(TargetId(0)),
+            Some(1000),
+            "Hide 前は Some(1000)（前提）"
+        );
+
+        let (txh, rxh) = reply_channel::<PresentOutcome>();
+        presenter.apply(
+            &mut world,
+            PresentCommand::Hide {
+                target: TargetId(0),
+                reply: Some(txh),
+            },
+        );
+        assert!(
+            matches!(rxh.recv_timeout(Duration::from_secs(10)), Ok(Ok(()))),
+            "Hide が Ok でない"
+        );
+
+        assert_eq!(
+            presenter.current_surface_id(TargetId(0)),
+            None,
+            "Hide 後は現サーフェス無し（3.2/4.4）"
+        );
+        assert_eq!(
+            presenter.hit_region(TargetId(0), 0, 0),
+            None,
+            "Hide 後は hit_region も現サーフェス無しゆえ None"
+        );
+    }
+
+    /// テスト 14 観測完了（InvalidateCache→不変）: 有効表示後に `InvalidateCache` を適用しても
+    /// `current_surface_id` は不変（キャッシュ無効化は表示を変えない）。単一真実源が `ComposeKey` 由来では
+    /// なくフィールドであることの回帰檻（`invalidate_all` でキーが消えても現サーフェス id は残る）。
+    #[test]
+    fn current_surface_id_unchanged_by_invalidate_cache() {
+        let mut world = make_world_with_gpu();
+        let window = world.spawn_empty().id();
+        let (emo_world, atlas, _golden) = build_target_assets(4, 3, 0x14);
+
+        let mut presenter = EmoPresenter::new();
+        presenter
+            .attach_target(&mut world, TargetId(0), window, emo_world, atlas)
+            .expect("attach_target 失敗");
+
+        let (tx0, rx0) = reply_channel::<PresentOutcome>();
+        presenter.apply(
+            &mut world,
+            PresentCommand::ShowSurface {
+                target: TargetId(0),
+                surface_id: 1000,
+                binds: BindSet::default(),
+                reply: Some(tx0),
+            },
+        );
+        assert!(
+            matches!(rx0.recv_timeout(Duration::from_secs(10)), Ok(Ok(()))),
+            "前提の有効 ShowSurface が Ok でない"
+        );
+
+        let (txi, rxi) = reply_channel::<PresentOutcome>();
+        presenter.apply(
+            &mut world,
+            PresentCommand::InvalidateCache {
+                target: TargetId(0),
+                reply: Some(txi),
+            },
+        );
+        assert!(
+            matches!(rxi.recv_timeout(Duration::from_secs(10)), Ok(Ok(()))),
+            "InvalidateCache が Ok でない"
+        );
+
+        assert_eq!(
+            presenter.current_surface_id(TargetId(0)),
+            Some(1000),
+            "InvalidateCache は表示を変えないため現サーフェス id は不変（ComposeKey 由来案の棄却根拠）"
+        );
+    }
+
+    /// テスト 15・R3.2 観測完了（未登録 target→None）: 一度も `attach_target` していない target に対し
+    /// `current_surface_id`／`hit_region` の両アクセサが `None`（未登録＝現サーフェス無し）。
+    ///
+    /// 両アクセサとも `HashMap` 引きのみで GPU/World を要さないため、`EmoPresenter::new()` 単体で固定する。
+    #[test]
+    fn unregistered_target_returns_none_for_both_accessors() {
+        let presenter = EmoPresenter::new();
+        assert_eq!(
+            presenter.current_surface_id(TargetId(0)),
+            None,
+            "未登録 target の current_surface_id は None"
+        );
+        assert_eq!(
+            presenter.hit_region(TargetId(0), 10, 20),
+            None,
+            "未登録 target の hit_region は None"
         );
     }
 }

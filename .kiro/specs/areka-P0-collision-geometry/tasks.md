@@ -12,7 +12,7 @@
   - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 2.1, 2.2, 2.3, 6.1, 6.2, 7.1, 7.2_
   - _Boundary: HitCore_
 
-- [ ] 2. CurrentSurfaceRead: current_surface_id 状態と accessor を additive に実装し、ライフサイクル全遷移を単体テストで固定する
+- [x] 2. CurrentSurfaceRead: current_surface_id 状態と accessor を additive に実装し、ライフサイクル全遷移を単体テストで固定する
   - `PresentTarget` へ private フィールド `current_surface_id: Option<u32>` を追加し、既存の `visible` 更新点と同一の3箇所（表示成立／`EmptyComposition` 縮退／Hide）でのみ書き込む（分岐を1本も足さない・失敗経路は前値保持が自動成立）
   - `EmoPresenter::current_surface_id(target) -> Option<u32>` と `EmoPresenter::hit_region(target, x, y) -> Option<&str>`（`current_surface_id` → `EmoWorld::surface` → HitCore の `hit_region` の順に合成）を追加する
   - 単体テスト（既存 presenter テスト方式に準拠）: 未表示→None／表示後→直近 id／切替→新 id／Hide→None／InvalidateCache→不変／未登録 target→None／既存 present テストスイートの非退行
