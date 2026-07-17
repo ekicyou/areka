@@ -161,3 +161,52 @@
   - §6-3（collision-sort 伝播）は**不要化**（SSP 忠実 sort を実装しないため `collision_sort` の `SurfaceMaster` 伝播は本 spec 不要）。代わりに `SortOrder` 型シームの置き場所（emo-compose 純関数近傍が候補）を design 判断。
   - **既存 wintf `HitRegionMap`（先勝ち）との不一致の扱い**: 本 spec の純関数は逆向き（後勝ち）ゆえ、A-2（HitRegionMap 再利用）はロジック不一致がさらに増える＝§4 論点A で A-1（emo-compose 新規純関数）へさらに傾く。design で「統合／別実装／将来 reconcile」を明記する。
   - 実装形: 「矩形リストを後方から評価し最初に当たった領域を返す（逆順先勝ち）」＝画家のアルゴリズム等価の決定論実装。
+
+## 10. 隣接 spec 衝突スイープ（2026-07-17・要件確定後）
+
+> **目的**: 本 spec と衝突しうる他仕様の全数確認。走査 **20 本**（active 10＋契約確立済み completed 10）・衝突主張 7 件は全て独立した敵対的検証で棄却＝**spec 対 spec の衝突 0 件**。
+> **本節の位置づけ**: 下記 10.2 は**未決**であり、**main での総合判断（別セッション）へ渡す情報**＝本 spec 単独では決着させない（開発者方針 2026-07-17・`input-events` 側でも衝突が検知されたため両 spec を並べて裁く）。
+
+### 10.1 結論: spec 対 spec の衝突なし
+
+- §9 の画家則決定と `HitRegion` 正本主張は、いずれも他 spec からの**反証を受けていない**。
+- `areka-P0-input-events`（brief.md:5,19,40）が「**正本は collision-geometry**／消費側は**再定義しない**」と3箇所で明記。同 spec は brief のみ＝競合定義が存在し得ない。
+- `event-hit-test-*` 4本: `AlphaMask` は α 由来のみで**領域名を持たない**＝R6 の層分離は自然成立（`wintf-clickthrough-alpha-toggle` も同様・不触で両立）。
+- `choice-render` の hit は `TextRegion` 行矩形＋バルーン窓（target 奇数）＝本 spec（shell・target 偶数）と互いに素。
+- 走査済み（生存衝突ゼロ）: `input-events` / `seriko-loop` / `mayuna-compose` / `cue-playback-duration` / `choice-render` / `choice-select-events` / `emo2-conformance-e2e` / `idle-talk` / `position-persist` / `sakura-dialogue-tags` / `completed:` `event-hit-test-named-regions` `event-hit-test-alpha-mask` `event-hit-test` `event-hit-test-cache` `emo-compose` `emo-present` `emo2-boot` `kanade` `wintf-clickthrough-alpha-toggle` `event-mouse-basic`。
+
+### 10.2 【未決・要総合判断】steering「本番ゴースト先行の原則」と R7.3 の緊張
+
+- **相手**: `.kiro/steering/roadmap.md`（**steering＝spec より上位の権威**・spec スイープの走査面外だった）。
+- **該当文（本 spec を名指し）**: 「上記規約〔fixture/mock で観測を独立化〕は**純粋層**にのみ適用。**UI 位置決め・座標系ユニット（window-placement・collision-geometry 等）は逆**——本番ゴースト（emo2 実 surface 表示）＋**実 DPI（≠96）実行**が観測条件であり、単発デモへの合わせ込みは**無効**」（2026-07-05 追記・**window-placement リジェクトの教訓**・記憶 `areka-placement-real-ghost-first`／`areka-window-placement-dpi-coordinate-defect`）。
+- **本 spec の R7.3**: 「統合（撫で一周の実機サインオフ）を input-events 側へ委譲し、**本 spec の観測は純粋層で独立に完結する**」＝steering が本 spec に**名指しで禁じた姿勢**そのもの。
+- **評価**: R1/R2 の純関数コアは**真の純粋層**＝unit 檻で正当。緊張は **R4 リゾルバ＝座標系シーム**（窓 client 物理 px→サーフェス px）に集中＝「dpi=96 の自己整合が欠陥を隠す」層。
+- **未採用の候補案（判断材料）**: 観測を2段に分割＝(a) 純関数＝全網羅 unit（現行のまま）／(b) **リゾルバの座標契約＝実 DPI（≠96）・本番 emo2 表示での証跡を必須**とし input-events へ丸投げしない＋`input-events` 側にも DPI≠96 証跡義務を明記する coordination note。最悪形＝**双方が「相手がやる」と書いて誰も検証しない**。
+- **判断者への申し送り**: 本項は R7.3（および R7 全体の観測契約）の書き換えを要する可能性がある。`input-events` 側の衝突と**同時に**裁くこと。
+
+### 10.3 未走査の座標系隣接（design で吸収・衝突ではない）
+
+- **`completed/areka-P0-surface-resize-resnap`**（main 直近 `9412e467`・スイープ 20 本に**不在**＝最も近い隣接なのに未走査だった）:
+  1. `crates/areka/src/emo2_boot/frame.rs:563` が既に `presenter.text_slot_view(shell_target(scope))` を **shell target に対し read-only 消費**（`:545`「balloon_target は読まない」明記）→ R3 は「**`TextSlotView` へ現 surface id を additive 追加**」が §4 論点B の**第4案**として有力（B-1 の新フィールドより既存規律と整合）。
+  2. `crates/areka-emo-present/src/presenter.rs:110-112` の `TextSlotView::scale()` doc＝「将来 DPI スケーリング（k＝モニタDPI÷author_dpi）を導入したら、供給値の変更点は**ここ1点**」→ **R4.3「サーフェス px で照合」は k=1.0 への暗黙依存**。design で「k=1.0 限定契約＋再検証トリガ＝この1点」を明記（`crates/areka-emo-text/src/actor.rs:83` が `view.scale()` と `view.surface_size()` を**対で**受ける前例）。
+  3. resize-resnap は実行時に窓寸を変える→**現 surface id・surface_size・窓 bounds を同一フレーム／同一適用点で一致**させないと hit がズレる。
+- **他の座標正本**: `completed/areka-P0-window-placement`（物理 px 単一通貨）・`completed/event-drag-system`。design 冒頭の確定表に「**物理/論理・原点・scale k**」の3列を作り、この3 spec を典拠として引くこと。
+
+### 10.4 collision の順序不変条件が未約束（画家則の足場・design で固める）
+
+- `crates/areka-emo-compose/src/normalized.rs:74` は `elements` に「**layer 昇順・同 layer は登場順**」と不変条件を宣言。対して `:76` の `collisions` は「当たり判定領域（**転記のまま**）」のみで**順序の約束が無い**。画家則（§9）は「偶然の転記順」に意味論を載せている。
+- `fold.rs:121-122` が `surface.append` の collision を**末尾連結**→画家則では **append 由来が base 由来に常に勝つ**（SSP `none` 則なら逆＝base が勝つ）。
+- **emo2 では観測不能**: collision は sakura `surfaces.txt:23-24`（surface1000）と kero `:417-418`（`surface.append10,2100-2110,2200-2210`）の2箇所のみ・**kero の base surface(2100〜) に自前 collision 無し**＝重複も重なりも発生しない。檻でも e2e でも露見しない。
+- **ukadoc**: `collision*` の ID は「同じ surface 内で**重複しない通し番号**」＝append で index が重複する形は正典外領域。画家則なら後勝ちで決定論縮退する（長所）が**明記が要る**。
+- **design で**: (a) `SurfaceMaster.collisions` の順序不変条件（登場順・append は末尾）を **doc レベルで明文化**（additive＝「正規化形の再定義をしない」に抵触せず）、(b) **fold 出力を入力にした檻を1本**（append 由来が勝つことを意図として固定）、(c) 重複 index 時の後勝ちを design 表に記載。
+
+### 10.5 型ドリフト（衝突ではない・design で1本化）
+
+- `HitRegion.scope: usize`（brief）⇔ `target_map.rs:36 scope_of -> Option<u32>`／seriko `ActorKey`＝**型を1本化**すること。
+- `HitRegion` に**窓種別（shell/balloon）の識別子が無い**。target 偶奇で互いに素ゆえ実害は結線ミス時のみだが、「リゾルバは shell 専用」を契約に明記するか要判断。ukadoc `OnMouseMove` の Reference に**バルーン識別子は無い**（Ref0/1=ローカル座標・Ref2=ホイール回転量・Ref3=本体0/相方1・Ref4=当たり判定の識別子・Ref5=常に0・Ref6=入力デバイス種別）＝区別は areka 側の結線規律で担保するしかない。
+
+### 10.6 残る blind spot
+
+- **画家則の SSP 逸脱は e2e で永久に検出されない**: emo2 には重なり collision も `collision-sort` 宣言も無い（fixture 実測）。`emo2-conformance-e2e` が主張するのは「SSP 完全適合」ではなく「**emo2 適合**」である旨を、design か e2e brief のどちらかに1行残す（coordination note）。
+- **`Hide` 時の現 surface id 意味論**が未定（§6-4）: seriko `output.rs:36 DisplayCommand::Hide{scope}` に対し R3.2「未表示＝無し」をどう倒すか。なお `Show{surface_id,binds}`（`output.rs:28-34`）＝アニメは binds 表現ゆえ **seriko-loop 実装後も base surface id は安定**＝brief:45「読み口契約は不変」は実型で裏取り済み。
+- **collision 非保有 surface への切替**: emo2 sakura は **surface1000 のみが collision 保持**＝`\s[1010]` 等へ切り替わると region=None が正しい挙動。R7.2 の檻 (e) は**この実データを典拠にできる**（人工 fixture 不要）。
