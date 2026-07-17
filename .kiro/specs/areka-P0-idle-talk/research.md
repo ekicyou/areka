@@ -209,3 +209,60 @@ ukadoc MCP で「Status/talking/choosing」を2度検索したがいずれも no
 - **#1（2026-07-17）— `Status` ヘッダの M1 スコープ帰属**: 開発者決裁 **(a) M1 に維持**。Requirement 2（2.1/2.2/2.3）据え置き。host32（`shiori-host32-host`）の `ShioriRequest`/`build_request` 破壊的 API 変更を**受容済みコスト**として確定（§3 反証を受けて）。設計判断 B1 は「是非」から「形（Option A/B/C）」へ縮退（§7.1.1 参照）。根拠: Req6 実機サインオフ（放置→自発会話）の成立条件が Status での発火制御に依存し得るため、Status を欠くとサインオフ自体が危うい。
 
 - **#2（2026-07-17）— `Status` の状態語彙と放置時表現**: 開発者指摘「Status を最小実装へ丸めるな・ukadoc に準じよ」を受け、`Status` を ukadoc `Status [SSP拡張]`（`ukadoc:spec_shiori3:Status_20_5bSSP_62e1_5f35_5d:1`）の実行状態語彙全体（talking／choosing／minimizing／induction／passive／timecritical／nouserbreak／online／opening(種類)／balloon(ID群)・カンマ連結）へ拡充。**決裁 (甲)**: M1 は源が既配線の `talking` のみ実導出・残9状態は語彙保持＋非アクティブ縮退＋実測差替シーム（Reference1/2 同型）。放置時は**アクティブ集合が空→ヘッダ行省略**（正典＋実 SSP 捕獲ログ `ayame.log` 一致・`Status: talking` は再生中のみ）。逆側の罠＝アイドル時 `Status: talking` 送出は pasta 自発会話を恒久抑制（実 pasta `virtual_dispatcher.lua:98/123` の負ガード `req.status == "talking"` → skip）＝Req6 前提。**残状態の実導出**は本 spec 外＝choosing は `areka-P0-choice-select-events`・他は新設追跡 spec `areka-P0-status-execution-states`（2026-07-17 立ち上げ）＋ロードマップ追記。Requirement 2 を7基準へ全面改稿（旧「talking のみ・将来値」フレーミングを撤回）。裏取り根拠は本会話の研究ワークフロー（ukadoc 正典・emo2 fixture・実 SSP wire・敵対的検証3レンズ全会一致）。
+
+---
+
+## 9. セッション引き継ぎ（2026-07-17・設計フェーズ再開用）
+
+> 要件フェーズ完了時点のセッション情報。**別セッションで `/kiro-design areka-P0-idle-talk` を再開する際の必読事項**。全事実は code/git で一次確認済み（ブロッカー監査ワークフロー・多角スイープ＋敵対的検証3レンズ）。
+
+### 9.1 現在地
+
+- `phase=requirements-generated`／要件ディスカッション完了（#1・#2 決裁済み＝§8）。design／tasks／implementation は未実施。
+- 次コマンド: `/kiro-design areka-P0-idle-talk`。
+
+### 9.2 【必須】設計着手前の機械的前提条件 — `origin/main` をマージすること
+
+- 本 spec の作業ブランチ base は `fec6c693`＝**PR #60（`areka-P0-cue-playback-duration`・main `9b8317cb`・2026-07-17 19:25 マージ）の直前**。
+- #60 は idle-talk が編集する `ShioriBackend` 実装5箇所のうち**3箇所を書き換え済み**（`crates/areka-ghost/tests/ghost/spine_e2e_test.rs` +289行・`crates/areka-ghost/src/runtime.rs`・`crates/areka/src/emo2_boot/spine.rs`）。加えて `areka_sakura::sink::{SurfaceSink,TextSink}` → `areka_sakura::contract::CueSink` へ、`GhostRuntime::boot` の型境界も変化。
+- **→ 設計は必ず #60 以降の settled コードに対して行うこと**（pre-#60 の実測シンボルで設計すると存在しないコードを参照する）。roadmap:195 の「先行 spec は cue-playback マージ後に `/kiro-validate-design` で再突合」義務を、本 spec も**merits で継承すべき**（roadmap 上は「ゲート下でない」ため形式的には免除されているが、その免除根拠は §9.6 のとおり偽）。
+- 朗報: `git diff fec6c693 9b8317cb -- crates/areka-kanade crates/shiori-host32-host` は**空**＝ギャップ分析の中核証拠（§3＝`ShioriRequest` に status 無し・`build_request` は固定ヘッダ集合）は今日の main でも**有効**。
+
+### 9.3 ブロッカー監査の結論（2026-07-17）
+
+- **ブロッカー = ゼロ**（確信度 高）。順序ゲート（M-boot／pilot host-32）は消化済み。時限ゲートは**前提消滅**（#60 マージ済＝`mayuna-compose`・`seriko-loop`・M-dialogue 3本も全て解禁）。生存ワークツリー（`collision-geometry`／`input-events`／`position-persist`）は**コード編集面ゼロ**（spec 文書のみ・いずれも requirements-generated）。
+- **方向は逆＝idle-talk は上流**: `status-execution-states`（brief「Depends: idle-talk＝Status 語彙構造の正本」）・`choice-select-events`（brief「Status ヘッダの口＝idle-talk が設計」）・`input-events` が Status 契約を消費。**遅らせると M-dialogue を止める側**＝先に着地させるのが衝突最小順。
+- Req1（Ref0〜3 正典充足）は**既に実装済み**（`events.rs:86-101` ＋既存 unit test）＝本 spec の実作業は **Status がほぼ全て**＋檻。
+- Req6 は**既に実機観測済み**: #60 の Task 10 サインオフ記録（`completed/areka-P0-cue-playback-duration/tasks.md:218`・開発者承認）に実 emo2＋実 pasta.dll(i386)＋実 DPI で「**6 talk 実行（起動1＋ランダム5）**、各 steady talk が `steady_talk`→4〜5秒後に `steady_talk_done`」＝pasta の `talk_interval` 15〜30秒による自発 OnTalk が5回発火。今 Status を送っていない（`req.status=nil`＝抑制ゲートが開いている）ことが、それが出る理由でもある＝**着手前ベースライン観測が可能**。
+
+### 9.4 【設計冒頭の決裁事項】
+
+1. **Status シームの形**（§7.1.1・Option A/B/C）＋**爆風の選択**: `ShioriBackend::get/notify`（`crates/areka-kanade/src/shiori/real.rs:47-56`）の**署名変更**（実装5箇所・**4クレート**＝areka-kanade〔real.rs:58,290〕／shiori-host32-host／areka-ghost〔runtime.rs:464・spine_e2e_test.rs:138〕／areka〔emo2_boot/spine.rs:157〕）**vs 既定実装メソッド／`ShioriConnection` 保持**（＝爆風を2クレートに封じ込め）。Status シームは**3 spec 横断契約**ゆえ明示決裁必須。
+   - **⚠️ §11 の「2クレート4層」は過少計上**——層は4で正しいが**クレートは最大4**（trait の fan-out を見落としていた）。
+2. **命名衝突**: `ShioriBackend` には既に**無関係**の `fn status(&mut self) -> HelperStatus`（`real.rs:55`・helper 死活）がある。SHIORI/3.0 実行状態ヘッダは `execution_status`／`StatusHeader` 等へ別名化し理由を記録すること。
+3. **檻は二層**: Req2.3（アクティブ集合が空→`Status` 行省略）は**wire 特性**＝kanade の mock（`RecordedCall` は ShioriMsg 層・`Option::None` しか見えない）では観測不能。`shiori-host32-host` の `build_request` に**バイト級 assert** が要る（先例: `shiori3.rs:424-436`「Reference ヘッダを出さない」）。
+4. `RecordedCall` の status 観測フィールド（§7.1.4）。
+5. Reference1/2 将来シームの口（§7.1.5）。
+
+### 9.5 【未決＝次セッションで要開発者決裁】要件の実質的欠陥4件（議題#3候補・**本セッションでは未適用**）
+
+> ブロッカー監査で発見。開発者の決裁前ゆえ requirements.md へは**未反映**。設計フェーズ冒頭で議題化すること。
+
+1. **[最重要・隠れギャップ級] Req2.2 のカンマ連結が emo2 に対し fail-open する**: 実 pasta の talk 抑制ゲートは `act.req.status == "talking"` の**完全一致比較**（`vendors/pasta/crates/pasta_lua/scripts/pasta/shiori/event/virtual_dispatcher.lua:96,121`）であって**集合メンバシップ判定ではない**（値は `lua_request.rs:110` で生文字列のまま転記）。ゆえに `talking,online` 等「talking と別状態の同時アクティブ」で抑制が fail-open し、**talk 再生中に OnTalk が発火**する（areka 側は NOTIFY 応答破棄で飲むため症状は「トークが黙って捨てられる」＋pasta の `next_talk_time`／チェイン状態だけが進む）。**M1 が無事なのは Req2.5 の非アクティブ縮退で wire が厳密に `talking` になるからに過ぎない**＝**Req2.6 の「送出契約を変えず実値へ差し替えられる」保証は適合対象 emo2 に対して条件付き**。→ Req2.6 のシームへ但し書きを明記し `areka-P0-status-execution-states` 台帳へ申し送るべき。
+2. **Req6.1 の文言が事実誤り**: 「自発会話（**時報系トーク等**）」は実 pasta と矛盾。`check_hour` は初回呼出で `next_hour_unix` を次の正時に設定して nil を返すだけ＝**発火は次の正時（最大約1時間後）**、さらに `hour_margin`（既定30秒・emo2 `pasta.toml` 未設定）で正時直前は OnTalk までスキップ。**数分放置で観測できる自発会話は OnTalk のみ**（emo2 `pasta.toml` `[ghost] talk_interval_min=15`／`talk_interval_max=30` 秒）。→ 観測対象を **OnTalk** へ訂正すべき（brief:19 の「hour.pasta が在る＝時報が来る」も同様に誤読を誘う）。
+3. **Req6.2 は実機で観測不能（非事象）**: talk 占有は実測4〜5秒 vs 間隔15〜30秒＝**自然な重なりが構造的に起きない**＝人間が「割り込まなかった」を確認できる瞬間が存在しない。Req4.3 の決定論檻が既に完全被覆。→ 実機基準から外すか、ログ観測（talk 中の Tick で NOTIFY＋Ref3=0 が出ること）へ書換。なお **Req6.3 の「タイミングの正しさは cue-playback の領分ゆえ判定に含めない」は同 spec 完了により根拠文が失効**（無害だが陳腐）。
+4. **Req3.1 の檻に漏れ**: `force_quit`（`crates/areka-kanade/src/schedule/mod.rs:160-176`）が events.rs の表**外**で `ShioriCall::Notify{id:"OnClose"}` を inline 構築しており（「events.rs 実装後は委ねる」旧 TODO 残置）、ホワイトリストを events.rs だけに錨付けすると**「単一列挙点」が偽**になる。同箇所は「ForceQuit 時の OnClose にどの Status を添えるか」も未回答。→ 設計で名指しすること（in-crate＝idle-talk 自身の作業）。
+
+### 9.6 未訂正の失効記述（既知・本セッションでは意図的に触れず）
+
+- **`brief.md` Approach 手順3**「ヘッダ付与は `Shiori3Client` の既存汎用 request 経路に乗る（host 側改変なし・`build_request` は汎用ヘッダ対応済み）」＝**反証済み**（§3 の file:line 証拠）。brief は discovery 時点の記録として残置＝**この前提を信じないこと**。
+- **`.kiro/steering/roadmap.md:192`** の idle-talk 並走根拠「③・kanade steady/events のみ＝script 生産者であって cue モデル編集者でない」＝**偽**（実際は kanade＋shiori-host32-host＋ShioriBackend 実装群）。**判定（並走可）は正しいが根拠が誤り**——ゲートの判定基準は roadmap:195 自身が「時限ゲートの実体は**コード編集面の衝突**」と定めており、正しい基準を当てれば #60 マージ前は idle-talk は cue-playback と**編集面を共有していた**（実装5箇所のうち3箇所を #60 が書換）＝**タイミングに救われただけ**。誤基準の再利用を避けるため要訂正。訂正文案: 「編集面＝kanade steady/events ＋ shiori-host32-host〔Status ヘッダ〕＋ ShioriBackend 実装（areka-ghost/areka）＝**cue モデルとの交差ゼロ**ゆえ並走可」。
+- **`roadmap.md:190`／`:167`・`focus.md:67`** が `areka-P0-cue-playback-duration` を「**実装中**（別坑）」と記述＝**失効**（#60 完了・`completed/` アーカイブ済）。時限ゲート節ごと退役し `mayuna-compose`・`seriko-loop`・M-dialogue 3本の解禁を明記すべき。
+- **⚠️ 並行編集の衝突注意**: 別ワークツリー `epic-kepler-bdbee8` が `.kiro/steering/roadmap.md` を**未コミット編集中**（ゲート解除・追記㉗）＝**本 spec は roadmap の当該箇所に敢えて触れず衝突を回避した**（本 spec の roadmap 編集は `status-execution-states` の登録＋M2 送り注記＋idle-talk 行の Status 語彙追記のみ）。上記訂正はそちらと調整のこと（[[harness-shell-quirks]] の kiro-complete コンフリクト定石）。
+- **既知の隣接欠陥（kanade 領分・#60 Task 10 記録）**: 起動挨拶で非致命 ERROR `unknown_talk_done talk_id=1`（kanade が挨拶の talk_id を追跡せず TalkDone が無照合 slot へ到着）。Req6 には影響しないが **idle-talk が自然な引受先**として記録されている。
+
+### 9.7 実機サインオフ（Req6）の運用メモ
+
+- 自動ハーネス `AREKA_EMO2_REAL_RUN` は `AREKA_APP_SMOKE_EXIT_MS=1500`（ms）で自動 close するため **idle-talk（15〜30秒待ち）の観測には使えない**＝文書化済みの**手動直接起動**（`target\<profile>\areka.exe <ghost_root> <balloon_root>`）を使う。
+- **罠**: `cargo build/test --workspace` は **x64 の `shiori-host32-helper.exe` を `target/debug/` へ落とす**＝32bit `pasta.dll` を LoadLibrary できない。**i686 ビルドを `areka.exe` 隣へ上書きコピー**すること（`crates/areka/tests/emo2_real_run.rs:26-34`）。
+- brief の「起動は絶対パス必須（MOD_NOT_FOUND）」と `emo2_real_run.rs:75-95` の文書化手順（相対パス表記）が食い違う＝design で運用手順を一本化すること。
