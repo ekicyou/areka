@@ -192,6 +192,9 @@ crates/areka-kanade/src/
 | `crates/areka-kanade/src/shiori/real.rs` | `ShioriBackend::{get,notify}` へ `status: Option<&str>` 追加。`ShioriConnection` impl が `Shiori3Client` へ転送。`handle_call`（`:99-111`）が `ExecutionStatus::render()` の結果を forward |
 | `crates/shiori-host32-host/src/shiori3.rs` | `ShioriRequest` へ `status: Option<&'a str>`。`build_request` が `Sender:` の後・`ID:` の前に `Status: <v>\r\n` を発行（`None` は行ごと省略） |
 | `crates/shiori-host32-host/src/client.rs` | `Shiori3Client::{get,notify}`（`:115,143`）へ `status: Option<&str>` を追加し `ShioriRequest` 構築へ渡す |
+| `crates/shiori-host32-host/tests/shiori_request_e2e.rs` | `Shiori3Client::{get,notify}` 呼出（`:228,240,339`）へ `None` 追加＝署名追随 |
+| `crates/shiori-host32-host/tests/lifecycle_kill_e2e.rs` | 同（`:240,286`） |
+| `crates/shiori-host32-host/tests/lifecycle_cyclic_e2e.rs` | 同（`:241,251,379`） |
 | `crates/areka-ghost/src/runtime.rs` | `FakeShioriBackend`（`:464`）の署名追随 |
 | `crates/areka-ghost/tests/ghost/spine_e2e_test.rs` | `ScriptedShioriBackend`（`:138`）の署名追随 |
 | `crates/areka/src/emo2_boot/spine.rs` | `ScriptedShioriBackend`（`:157`）の署名追随 |
@@ -199,7 +202,7 @@ crates/areka-kanade/src/
 | `crates/areka-kanade/tests/kanade/steady_test.rs` | 期待値構築を `expected_call(events::on_second_change(..))` へ寄せ、Status/ID 檻を additive 追加 |
 | `crates/areka-kanade/tests/kanade/close_test.rs` | `force_quit_onclose_notify`（`:560-565`）の期待値を `events::on_close_notify` 由来へ |
 
-> `ShioriCall` の残りの構築・分解点（`msg.rs`／`actor.rs`／`real.rs` の in-source テスト等）は**コンパイラ捕捉の機械的追随**。`ShioriCall` に derive が無い（`msg.rs:80`）ため比較は既存の手動 destructure 方式を踏襲する。
+> **機械的追随の適用範囲は 3 型**（`ShioriCall`／`ShioriRequest`／`Shiori3Client`）。内訳＝`ShioriCall` の残りの構築・分解点（`msg.rs`／`actor.rs`／`real.rs` の in-source テスト等）／`ShioriRequest` の構造体リテラル 7 箇所（`shiori3.rs:363,386,403,425,442,458,474`＝in-source テスト・`status: None` 追加）／`Shiori3Client::{get,notify}` の e2e 呼出 8 箇所（上表の host32 tests 3 ファイル）。いずれも**コンパイラ捕捉の機械的追随**である。`ShioriCall` に derive が無い（`msg.rs:80`）ため比較は既存の手動 destructure 方式を踏襲する。
 
 ## System Flows
 
@@ -379,6 +382,13 @@ pub struct ExecutionSnapshot {
     //   choosing        → areka-P0-choice-select-events
     //   balloon/minimizing/induction/passive/timecritical/nouserbreak/online/opening
     //                   → areka-P0-status-execution-states（台帳）
+    //
+    // NOTE(シームの実体＝「フィールド 1 本」では閉じない): 源が Phase の外にある状態
+    //   （窓 geometry・Tick 付帯で運ばれる minimizing/balloon/opening・Ref1/Ref2）は
+    //   `snapshot_of(&Phase)` の入力に届かないため、シーム発動時は**供給側の署名を広げる**
+    //   （将来形 `snapshot_of(&Phase, &TickExtras)`）ことがシームに含まれる。
+    //   Req1.6/2.6 が不変を保証するのは **wire 送出契約**（カンマ連結書式・ヘッダ位置・
+    //   空集合→行省略・Reference 連番）であって内部シグネチャではない。
 }
 
 impl ExecutionSnapshot {
@@ -670,7 +680,7 @@ Status: <state>[,<state>]*
 |---|---|---|
 | **消費側 fail-open（Req2.6 ただし書き・DD-IT-9）**: pasta の抑制ゲートは `req.status == "talking"` の**完全一致**（`virtual_dispatcher.lua:98,123`）。正典どおりの複合値（例 `talking,balloon(0=0)`）では**発火せず**、talk 中に OnTalk が漏れる。実 SSP は実際に複合値を送っており、pasta 側が SSP に対して既に fail-open している | 将来 `balloon`／`choosing` 等が実導出された瞬間に talk 中の OnTalk 漏れが再発（症状＝トークが黙って捨てられ pasta の `next_talk_time` だけ進む） | **M1 は縮退により wire が厳密に `talking` 単独**＝ゲートが発火する（安全）。実値差替の解禁時は**複合値 wire での消費側互換検証を受け入れ条件に含める**（台帳 `areka-P0-status-execution-states` の Approach 2b が正本／`choosing` は `areka-P0-choice-select-events` が最初に踏む）。Revalidation Triggers に登記済み |
 | **正典 `/` と実 SSP `,` の乖離（DD-IT-9）**: ukadoc は `balloon(0=2/1=0)`、実 SSP 2.3.86 は `balloon(0=2,1=0)` | M1 は両状態とも非アクティブ＝**送出せず実害ゼロ**。将来の実導出時に消費側の期待と食い違う可能性 | 正典（`/`・自己無矛盾）を採用し、乖離を本書と research へ記録。実導出の所有者（台帳 spec）が実 SSP 互換の再検証時に決着させる |
-| **4 クレート横断の破壊的変更** | `areka-ghost`／`areka` のビルドが同時に落ちる | 機械的・コンパイラ捕捉。実装 5 箇所は既知（本書 File Structure Plan に列挙）。roadmap W1 の「契約正本の先鋒」＝共有型の shaper が先行する順序で衝突最小（追記㉘/㉙） |
+| **4 クレート横断の破壊的変更** | `areka-ghost`／`areka` のビルドが同時に落ちる | 機械的・コンパイラ捕捉。爆風は**2 軸**＝① `ShioriBackend` 実装 5 箇所（本番 1＋テスト 4）／② `Shiori3Client` 署名の呼出 8 箇所＋`ShioriRequest` リテラル 7 箇所。いずれも本書 File Structure Plan に列挙済み（旧版は②を計上しておらず、`cargo test --workspace`＝DoD Gate を落とす見落としだった）。roadmap W1 の「契約正本の先鋒」＝共有型の shaper が先行する順序で衝突最小（追記㉘/㉙） |
 | **`Status` 追加が pasta の talk スケジュールを変える** | 抑制ゲートが初めて閉じるため、talk 中は `check_talk` が `next_talk_time` を初期化・進行しない（`virtual_dispatcher.lua:120-128`）＝発火間隔の体感が変わり得る | 仕様どおりの挙動（SSP と同じ）。Req6.1 の判定は「発火するか」のみでタイミングを含めない（Req6.3）。ベースライン比較で回帰でないことを確認する |
 | **既存 `..` 分解による Status の黙殺** | `steady_test.rs:287-290` 等は `Get{references, ..}` で分解しており、フィールド追加後も**コンパイルは通るが Status を検査しない** | 期待値構築を `expected_call(events::on_second_change(..))` へ寄せる（Testing Strategy 15） |
 
