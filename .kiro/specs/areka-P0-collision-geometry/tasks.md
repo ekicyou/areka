@@ -30,7 +30,7 @@
   - _Boundary: HitRegionContract, Resolver_
 
 - [ ] 4. Probe: リゾルバの座標契約を実 DPI・本番 emo2 表示で実測する
-- [ ] 4.1 実 DPI 受け入れ example を実装する（本番窓寸規則駆動・マウス経路照合込み）
+- [x] 4.1 実 DPI 受け入れ example を実装する（本番窓寸規則駆動・マウス経路照合込み）
   - `crates/areka/examples/collision-probe.rs` を新設し、`#[path]` で `target_map.rs`／`hit_region.rs`／`placement/mod.rs` を私有 include する（read-only 再利用・production 不改変）
   - `placement::spawn::spawn_ghost_windows` を意図的に誤った placeholder 寸で呼び窓を生成（`Anchored` 付与）→ `attach_target` → `apply(ShowSurface { surface_id: 1000, binds: 実 bind 値集合 })` を適用する
   - `text_slot_view(shell_target(0)).surface_size()` を読み、本番の `placement::follow::resize_window_to` で窓へ適用する（戻り値 `true` を assert）
