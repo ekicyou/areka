@@ -1,6 +1,6 @@
 # Implementation Plan
 
-- [ ] 1. Foundation: `Status` 実行状態語彙の契約層（ゴースト実行状態の語彙とスナップショットの実装）
+- [x] 1. Foundation: `Status` 実行状態語彙の契約層（ゴースト実行状態の語彙とスナップショットの実装）
   - ukadoc 正典の実行状態語彙（talking・choosing・minimizing・induction・passive・timecritical・nouserbreak・online・opening(種類)・balloon(ID群)）を、パラメータ付き状態の下位書式（`/` 区切り列挙）込みで第一級の型として表現する
   - アクティブな状態集合を正典の語彙定義順で保持し、カンマ連結の wire 文字列（アクティブ状態が1つも無い場合はワイヤ行そのものを省略する値）へ写す変換を実装する
   - 送出時点のゴースト運行状態を表す単一のスナップショット型を用意し、この後の全ての状態導出（送出可否・実行状態集合）が同じ入力から生まれるようにする
