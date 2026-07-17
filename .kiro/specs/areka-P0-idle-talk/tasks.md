@@ -72,7 +72,7 @@
   - _Boundary: shiori-host32-host tests/_
   - _Depends: 3.1_
 
-- [ ] 4. Integration: kanade↔host32 境界の接続
+- [x] 4. Integration: kanade↔host32 境界の接続
 - [x] 4.1 SHIORI backend 境界での `Status` 転送
   - backend 抽象の呼出関数（GET／NOTIFY）へ実行状態の wire 値引数を追加する
   - 実装済みの本番 backend が、受け取った実行状態の wire 値を 3.1 で用意した host32 側の呼出関数へそのまま転送するようにする
@@ -83,7 +83,7 @@
   - _Boundary: areka-kanade shiori/real.rs_
   - _Depends: 2.5, 3.2_
 
-- [ ] 4.2 下流 backend 実装の追随
+- [x] 4.2 下流 backend 実装の追随
   - backend 抽象の署名変更に伴い、他クレートに存在する backend 実装（テスト用スタブ含む）を新しい署名へ追随させる
   - 観測可能な完了条件: `cargo build --workspace` が全クレートで成功する
   - _Requirements: 2.2, 2.3_
@@ -141,4 +141,5 @@
 - **DD-IT-12（起動挨拶の正規追跡）は completed kanade の確定判断「boot は close-gate しない」を再開封する**: 挨拶中の close が通常 talk と同じ `CloseTalkWait` 経由へ変わる。開発者が旧来の fire-and-forget 維持を選ぶ場合は Task 2.4／5.4 の該当コミットの revert で戻せる（設計ディスカッション #2 で事後拒否権を明示済み）。
 - **本 spec が意図的に扱わない事項**（design.md Open Items 1・2・4）: `build_request` の `SecurityLevel` 位置の既存逸脱、`doc/emo2-conformance-scope.md` の記載訂正、fault 終端が「窓は残るがプロセスは死なない」挙動（`Failed` 全般に共通する kanade の既存欠陥）——いずれも本タスク群では対処しない。引受先候補は `areka-P0-emo2-conformance-e2e`。
 - Task 3.1〜4.1 完走までの間、`cargo build --workspace` は意図的に壊れる区間がある（host32 signature 変更後・real.rs 追随前）。DoD ゲートは Task 4.2 完了時点（`cargo build --workspace` 成功）以降で評価すること。
+- **Task 4.2 のスコープ穴（kiro-impl 実行時発見・2026-07-18）**: 4.2 は設計上「下流 backend 実装の署名追随」だけだったが、Group A（2.1/2.2）の破壊的変更（`ShioriCall` の status field・`events::*` の snapshot 引数）が `areka-ghost/tests/ghost/spine_e2e_test.rs` の**テスト本体**（`expected_from_shiori_call` の分解・events 期待値構築・直接 backend 呼出＝23コンパイルエラー）を壊しており、これはどのタスクにも明示割当が無かった。4.2 に畳み込んで追随（`, ..`／`&ExecutionSnapshot::INACTIVE`／`, None`）。さらに DD-IT-12（挨拶追跡）が `KanadeMsg::Tick` を kanade へ送る2シナリオを意味論的に変えた: S3（post-boot OnSecondChange が GET/NOTIFY 両可能→両 script）・S5（CloseRequest が greeting 中は pending_close へ延期→deadline Tick 前に OnClose GET 出現を有界 spin-wait）。obsolete-vs-broken 方針で新正解へ更新（弱体化なし）。`cargo test -p areka-ghost`=38+15 緑（×3 flakiness ゼロ）・`cargo test -p areka`=274+1+2 緑。教訓＝契約破壊は本体specの tests/ 以外（隣接クレートの e2e）にも波及し得る。
 - **実装時の群化（kiro-impl 実行判断・2026-07-18）**: `ShioriCall` へ必須フィールド `status` を足すと kanade クレート全体（events.rs 構築6点・schedule 呼出・actor/real 分解点・in-source テスト）が一度に壊れ、個別サブタスクは独立に `--lib` すら green にできない＝原子的コンパイル単位。よって **Task 2.1+2.2+2.3 を1コミットに束ねて実装**した（各群が `cargo test -p areka-kanade --lib` green を残す・設計の各ファイル変更内容は完全に温存）。機械的 ripple として real.rs `handle_call` は `..` で status を無視（転送は Task 4.1）・real.rs in-source テスト構築点・actor.rs `probe_get_call` に status を付与。統合テスト（tests/kanade/）は Task 5.x で更新するため群A時点では `--lib` のみ検証（full `cargo test` は 5.x まで赤）。Task 2.4（boot DD-IT-12）・2.5（actor ホワイトリスト）は別コミットへ隔離。
