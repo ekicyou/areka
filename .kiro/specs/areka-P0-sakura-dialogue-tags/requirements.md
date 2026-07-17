@@ -11,7 +11,7 @@ emo2（互換ベースウェアの適合 fixture ゴースト）の**メニュ�
 
 本 spec は、この 4 語彙を **settled な cue モデル**（`completed/areka-P0-cue-playback-duration`＝envelope 一律 duration・自己完結した絶対時刻台本・単一 `CueSink`・relevance 単一権威・broadcast 配送・占有 horizon での完了）の上へ **additive に載せ**、fixture script の直入力から**決定論的に正しい cue／barrier 列**が得られ、`\![move]` は**末端まで貫通して実機の初回起動でエモが横へ動く**ところまでを実現する。
 
-本 spec は M-dialogue（メニュー一周）の**先鋒＝契約の正本**である。**choice cue の形**（表示ラベル／ID／references の載せ方）と**「選択肢群＋選択待ち barrier」の並び規則**は本 spec が確定し、下流の `areka-P0-choice-render`（表示）と `areka-P0-choice-select-events`（選択確定カスケード）は**消費のみ**を行う。
+本 spec は M-dialogue（メニュー一周）の**先鋒＝契約の正本**である。**choice cue の形**（表示ラベル／ID／references の載せ方）と**「選択肢群＋選択待ち barrier」の並び規則**は本 spec が確定し、下流の `areka-P0-choice-render`（表示）と `areka-P0-choice-select-events`（選択確定カスケード）は**消費のみ**を行う。さらに **`\!` 汎用コマンドキャリア cue の形**も本 spec が確定する（2026-07-18 裁定＝正典実測 183 コマンド〔下限・非有界〕の個別 typed 化は破綻するため、単一の不透明キャリア＋消費側のコマンド名選別。`\![bind]` を消費する `areka-P0-mayuna-compose` 以降の全 `\!` 消費者はこのキャリアに乗る）。
 
 正典は ukadoc であり、emo2 は最小適合 fixture にすぎない（正典が沈黙する箇所は areka 裁量＋対応表記録＝互換契約）。
 
@@ -21,14 +21,16 @@ emo2（互換ベースウェアの適合 fixture ゴースト）の**メニュ�
   - `\q`（選択肢）の cue 化＝**表示ラベル／ID／references を欠落なく運ぶ choice cue の形の確定**（下流の消費契約の正本）。
   - **選択待ち barrier の並び規則の確定**（選択肢を含む talk は選択が解決されるまで完了しない）。
   - `\_l`（カーソル位置）の cue 化＝**単位・相対指定を不透明文字列のまま転写**（解釈は消費側）。
-  - `\![move]`（キャラクタ移動）の cue 化＋**末端まで貫通した実際の窓移動**（即時移動のみ・随伴バルーン込み）。
+  - **`\!` ベースウェアコマンド名前空間全体の汎用キャリア cue 化**（単一の不透明キャリア＝契約の正本。正典 183 コマンド〔下限〕の全転写・コマンドごとの typed cue 語彙の個別新設は禁止・消費はコマンド名による消費側選別）。
+  - `\![move]`（キャラクタ移動）＝汎用キャリアの最初の実消費者＋**末端まで貫通した実際の窓移動**（即時移動のみ・随伴バルーン込み）。
   - `%username` の**展開**（値源は起動構成からの注入・未注入時は既定値）と、未対応システム変数名の**素通し縮退**。
   - 既存の「無視されるタグ」仕様（除外の檻）の**意図的更新**（対象 4 語彙の卒業）と、既存 cue 挙動の非退行。
   - fixture script 直入力による**決定論的検証**と、実 emo2 初回起動での**実機サインオフ**（エモの位置調整）。
 - **Out of scope**:
   - 選択肢の**表示・UI・ヒットテスト・ハイライト**、および `\_l` の単位換算（em/lh/%）＝`areka-P0-choice-render` の領分。
   - **選択確定→SHIORI カスケード**（任意名イベント直接発火／`OnChoiceSelect(Ex)` の判別規則）・選択のタイムアウト時間の決定・`OnChoiceTimeout`＝`areka-P0-choice-select-events` の領分。
-  - `\![bind]`（`areka-P0-mayuna-compose`）・`\![raise]` 等その他の汎用コマンド（M1 外・従来通り無視のまま）。
+  - `\![bind]` の**消費**（seriko の動的 bind 状態＝`areka-P0-mayuna-compose`）・`\![raise]` 等その他コマンドの**消費**（M1 外）。※いずれも cue 化（転写）は本 spec の汎用キャリアが行い、compile の無音落ちには戻さない——縮退は消費側の良性スキップ。
+  - **compile 側 allowlist（時間指令系）の実導出**（`quicksection`／`set,balloonwait`／`set,choicetimeout`／`set,balloontimeout`／`embed`／`sound,wait`／`wait,syncobject` 等＝R4.3 の但し書き。emo2 未使用・語彙保持＋縮退のみ。実導出は源が着地した時点の追跡 spec へ）。
   - **時間指定付きの移動アニメーション**（emo2 未使用＝M1 は即時移動へ縮退し語彙のみ保持）。`\![moveasync]` も同様に M1 外。
   - **選択肢タイムアウト属性**（`\*` ／ `\![set,choicetimeout,時間]`＝スクリプト単位属性・fixture 未使用）の実導出。
   - **位置の永続化そのもの**（`ghost.dat` 保存/復元＝`areka-P0-position-persist`）。本 spec は「`\![move]` が永続値を書かない」ことのみを担保する。
@@ -39,6 +41,7 @@ emo2（互換ベースウェアの適合 fixture ゴースト）の**メニュ�
   - **選択の解決（ユーザーのクリック→どの選択肢が選ばれたか）を起こすのは下流**（choice-render／choice-select-events）。本 spec は「選択待ちで止まり、解決されたら再開する」台本側の契約のみを確定する。
   - **choice cue の配送は責務二分**（設計判断#1 帰結）: **配送列＝配置/表示情報の単一真実源**（choice-render が cue 列として消費）／**先積みバッグ＝解決照合の単一真実源**（choice-select-events が `resolve_choice` の id 照合に使う）。本 spec は「choice cue を他 cue と順序を保って配送する」ところまでを正本として確定し、settled な先積み一択の観測挙動を仕様変更として明示的に更新する（R8.6）。表示・ヒットテストは choice-render の領分。
   - **選択解決の口は本 spec が定義・W5 が消費**（R2.7）: 解決は talk アクター境界の型付き入力（`SakuraMsg` の additive アーム）経由でのみ到達する。`CuePlayer::resolve_choice` を**外部から直接呼ぶ経路は構造的に存在しない**（アクター内に閉じている）ため、`areka-P0-choice-select-events` は「`resolve_choice` を直接呼ぶ」のでなく本 spec が定義するこの口へ選択 id を投入する。W5 brief の旧記述（直接呼び出し前提）は本 spec 着地時に訂正する申し送り済み。
+  - **`\!` 汎用キャリアは W2（mayuna-compose）へ申し送り済み**（2026-07-18 調停）: 同 brief の typed `CueCommand::Bind` variant 計画（dola variant＋compile アーム＋`cue_target_of` アーム＋emo-text 無視列挙）は本キャリア裁定で**廃止へ差替**——mayuna は「汎用 cue のコマンド名 `bind` の消費者」（parsers 名前解決表・seriko 動的 bind 状態・emo-present 回帰は存続）へ縮小し、共有編集面 4 ファイルの近接警告は W1 への一方向依存に解消される。境界原則: **コンテンツタグ（`\s`/`\b`/`\q`/`\_l` 等）＝typed cue／`\!` コマンド名前空間＝汎用キャリア**（balloon-face-cue の「同型」引用はコンテンツタグにのみ有効）。
   - **`\_l` 直後の行揃えリセット**（ukadoc: `\_l` 実行直後は左揃えへ戻る）や `@` 相対指定の解決は**表示側の責務**であり、本 spec は記述を欠落なく運ぶことに徹する。
   - **`\![move]` の位置は永続化されない**（ポートフォリオ合流裁定＝保存値はユーザーの明示的ドラッグ確定のみが更新する二層分離）。その帰結として、`areka-P0-position-persist` の初回ゲート導入後は**未ドラッグの 2 回目以降の起動で初回位置調整が既定配置へ戻る**——これは許容仕様であり、最終確認は `areka-P0-emo2-conformance-e2e` の実機適合走行へ申し送る。
   - **システム変数の値源は sylphya（プロパティシステム）が用意し、⓪ ghost が読み口スナップショットとして `StartTalk` に手渡す**。本 spec は sakura がそのスナップショットを消費する契約（R7）のみを確定し、sylphya の実体着地を待たずに W1 を出荷できる（emo2 は 204 固定＝暫定 provider でも本実装でも観測は既定値で不変）。sylphya spec の新設と roadmap 宿題化は discovery 継続中（本 spec のブロッカーではない）。
@@ -81,21 +84,21 @@ emo2（互換ベースウェアの適合 fixture ゴースト）の**メニュ�
 4. The cursor cue shall 発行時点の現在スコープへ帰属する。
 5. When x・y の双方が空である, the sakura コンパイラ shall なお cursor cue を発行する（「無効果」の判定は消費側の責務であり、記述の存在を台本から失わせない）。
 
-### Requirement 4: キャラクタ移動 `\![move]` の cue 化
-**Objective:** sakura として、`\![move]` を引数の意味を解釈せずに move cue へ転写したい。そうすれば、座標系と基準点の知識を持つ窓配置側が単一の権威として意味を与えられる。
+### Requirement 4: `\!` 汎用コマンドの cue 化（汎用キャリア＝契約の正本・move を含む）
+**Objective:** sakura として、`\![name,args...]` のベースウェアコマンド名前空間**全体**を、名前と引数を解釈せず**単一種別の汎用コマンド cue** へ転写したい。そうすれば、正典で 183 コマンド（下限・52 族・SSP の版とともに非有界に増える）を数える名前空間を型付き語彙の個別実装で追いかける破綻を避け、意味の知識を持つ消費側（ghost＝move・seriko＝bind 等）が解釈を担い、未対応コマンドも語彙を失わず台本に第一級で残る。
 
 #### Acceptance Criteria
-1. When `\![move,...]` を含む talk script をコンパイルする, the sakura コンパイラ shall 対応する move cue を発行する（無音で破棄しない）。
-2. The move cue shall 引数列を**記述順のまま・欠落なく**保持し、空引数（省略）を空の要素として保持する。
-3. The sakura コンパイラ shall 引数の意味（座標・基準点・時間・名前付き引数形）を**解釈しない**。
-4. The move cue shall 発行時点の現在スコープへ帰属する（`\1\![move,...]` は相方側の移動として運ばれる）。
-5. Where `\!` コマンドが `move` 以外である, the sakura コンパイラ shall 従来通り cue を発行せず記録して継続する（本 spec の対象外・`\![moveasync]` を含む）。
+1. When `\![name,args...]` を含む talk script をコンパイルする, the sakura コンパイラ shall コマンド名と引数列を保持した**単一種別の汎用コマンド cue** を発行する（無音で破棄しない・コマンドごとの型付き cue 語彙を**新設しない**——`move` も `bind` も `moveasync` も同一キャリアに乗る）。
+2. The 汎用コマンド cue shall 引数列を**カンマ分割の生トークン列**として記述順のまま・欠落なく保持し、空引数（省略スロット）を空トークンとして、名前付き引数（`--key=value` 形）を素通しのトークンとして保持する（位置形・名前付き形の両形が正典に併存するため双方を透過・fixture の `\![move,-353,,,0,base,base]` は空トークン 2 個を保った 6 トークン列となる）。
+3. The sakura コンパイラ shall コマンド名・引数の意味（座標・基準点・対象・時間）を**解釈しない**。ただし、テキスト再生時間の焼き込み・barrier パラメータ・実行時未確定の待機に構造上干渉する**明示 allowlist の時間指令系**（`quicksection`／`set,balloonwait`／`set,choicetimeout`／`set,balloontimeout`／`embed`／`sound,wait`／`wait,syncobject`／同期 `move` 系の持続時間引数）に限り、転写に**加えて** compile 自身が追加解釈してよい（allowlist 外の compile 側解釈は禁止）。M1 は allowlist の実導出を行わず語彙保持＋縮退に留める（emo2 未使用・実導出は源が着地した時点で just-in-time）。
+4. The 汎用コマンド cue shall 発行時点の現在スコープへ帰属する（`\1\![move,...]` は相方側として運ばれる）。
+5. The 汎用コマンド cue の消費 shall **コマンド名による消費側選別**で行われる: 1 つのコマンド名を action する消費者は**高々 1 つ**とし、名前→担当消費者の対応は**単一の権威表**が所有する（消費者ごとの私的名前リストへ分散させない）。担当外・未知のコマンド名は全消費者が記録付きで**良性スキップ**し、envelope duration の honor は従来どおり不変とする。
 
 ### Requirement 5: `\![move]` の末端反映（実際に窓が動く）
 **Objective:** ゴーストとして、move cue を実際のキャラクタ窓の移動として反映したい。そうすれば、初回起動時の立ち位置調整というユーザーに見える機能が復活する。
 
 #### Acceptance Criteria
-1. When move cue が配送される, the ghost shall 対象スコープのキャラクタ窓を指定された位置へ**即時に移動**させる。
+1. When 汎用コマンド cue のうちコマンド名 `move` のもの（以下「move cue」）が配送される, the ghost shall 対象スコープのキャラクタ窓を指定された位置へ**即時に移動**させる（消費の選別は R4.5 の名前選別に従う）。
 2. The ghost shall `\![move]` の引数意味論（基準点・符号・単位・省略引数の扱い）を **ukadoc 正典に従って解決**し、正典が沈黙する箇所は areka 裁量として決定したうえで対応表へ記録する。
 3. When 移動対象のキャラクタ窓に随伴するバルーン窓が在る, the ghost shall バルーンを**相対オフセットを保ったまま随伴移動**させる。
 4. Where 移動指定に時間（アニメーション）が含まれる, the ghost shall M1 では補間せず**最終位置へ即時反映**し、その縮退を記録する（語彙は保持する）。
@@ -124,11 +127,12 @@ emo2（互換ベースウェアの適合 fixture ゴースト）の**メニュ�
 
 #### Acceptance Criteria
 1. The dola cue 語彙 shall **既存 cue の外部表現（シリアライズ形）を変えずに additive 拡張**され、既存台本データの読み込み互換を保つ。
-2. When 未対応タグ（`\![bind]` 等の汎用コマンド・パススルー生データ）を含む script をコンパイルする, the sakura コンパイラ shall 従来通り cue を発行せず、記録して継続する（寛容・異常終了しない）。
-3. The 「無視されるタグ」の集合 shall `\q`／`\_l`／`\![move]`／`%username` を**含まない**（既存の除外仕様＝檻を、仕様変更として明示的に更新する）。
+2. When パススルー生データ（構文区切りできない Raw）を含む script をコンパイルする, the sakura コンパイラ shall 従来通り cue を発行せず、記録して継続する（寛容・異常終了しない）。`\!` コマンドは本除外から**卒業**し、R4 の汎用コマンド cue として全て台本に載る（未対応コマンドの縮退は compile の無音落ちでなく**消費側の良性スキップ**へ移る）。
+3. The 「無視されるタグ」の集合 shall `\q`／`\_l`／**`\!` コマンド名前空間全体**／`%username` を**含まない**（既存の除外仕様＝檻を、仕様変更として明示的に更新する。compile 側に残る除外は Raw のみ）。
 4. When 本 spec の対象タグを含む talk script をコンパイルする, the sakura コンパイラ shall 既存の台本規則（冒頭の全消去の前置・duration の焼き込み・絶対時刻整列）を対象タグにも**一貫して**適用する。
 5. Where 新しい種別の cue が broadcast 配送される, the areka shall それに関心のない表現者側で**良性にスキップ**させ（記録あり・無音破棄でも異常終了でもない）、既存の表示を変化させない。
 6. The 除外仕様の意図的更新 shall sakura compile の除外集合に留まらず、settled な cue 再生ランタイムの挙動——「choice cue を配送列から分離し表現者へ surface しない先積み一択」——にも及ぶ。choice cue は他 cue と**同一の配送列へ順序を保って broadcast** され、先積みバッグは選択解決時の id 照合専用（配置/表示情報は配送列が単一真実源・解決照合はバッグが単一真実源＝責務二分）に限定して並存する。
+7. The 除外仕様の意図的更新 shall relevance 分類の権威文言にも及ぶ: `cue_target_of` は**型レベル分類の単一権威**に限定され、汎用コマンド cue の型レベル分類（担当スロットなし）は「誰も action しない」でなく「**コマンド名レベルの選別（R4.5）への委譲**」を意味するものへ意図的に改訂する（settled 側の「分類不能＝どの演者も action しない」という注釈・rustdoc の前提は本 spec が仕様変更として更新する——settled 型定義が `Custom` を「消費者固有コマンド」と定義しながら注釈が「誰も action しない」と読む内部矛盾を、型設計の意図側へ解消する）。duration honor（envelope 一律）は改訂しない。
 
 ### Requirement 9: 決定論的検証と実機サインオフ
 **Objective:** 開発者として、4 語彙の写像を実時間や外部環境に依存せず検証し、最後に実機で位置調整を目視確認したい。そうすれば、下流 2 spec が消費する契約が「実物」として固定され、初回起動の位置調整が本当に効いていることを保証できる。
@@ -136,7 +140,8 @@ emo2（互換ベースウェアの適合 fixture ゴースト）の**メニュ�
 #### Acceptance Criteria
 1. The areka shall 本 spec の全写像（script → cue／barrier 列）を、**script 直入力**から検証可能にする（実時間の待機や外部環境への依存を伴わない）。
 2. When fixture のメインメニュー script（`\q` 3 個＋`\_l`＋改行）を直入力する, the 検証 shall 期待される cue 列（choice cue 3 個・cursor cue・選択待ち barrier の順序と時刻整列）と一致することを確認する。
-3. When fixture の `\1\![move,-353,,,0,base,base]` を直入力する, the 検証 shall 相方側スコープの move cue が引数を保持したまま発行されることを確認する。
+3. When fixture の `\1\![move,-353,,,0,base,base]` を直入力する, the 検証 shall 相方側スコープの汎用コマンド cue（コマンド名 `move`）が**空トークンを含む生引数列**を保持したまま発行されることを確認する。
+3b. When 未知・M1 未対応のコマンド名を持つ `\!` を含む script を直入力し配送する, the 検証 shall 汎用コマンド cue が台本に第一級で現れ、全消費者が記録付きで良性スキップして talk 再生が完了することを決定論的に確認する（名前 partition の檻: 権威表上の 1 コマンド名の担当が高々 1 であることの検査を含む）。
 4. When `%username` を含む script を、値ありスナップショット／値なしスナップショットで直入力する, the 検証 shall それぞれスナップショット値／既定値へ展開されたテキストを確認する（sakura が値源を持たず、手渡された写像のみを参照することの決定論檻）。
 5. The 検証 shall `\![move]` 経路が**永続化対象の位置状態を更新しない**ことを決定論的に確認する（第二の位置ライター混入の恒久的な防止）。
 6. When 実 emo2・実 SHIORI・実 DPI で**初回起動（OnFirstBoot 経路）**する, the 開発者 shall エモ（相方側）の立ち位置調整が効いていることを目視でサインオフする（通常起動の talk には移動が無いため、観測は初回起動状態で行う）。
