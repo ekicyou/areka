@@ -1,9 +1,9 @@
 {
   "feature_name": "areka-P0-idle-talk",
   "created_at": "2026-07-16T14:07:47Z",
-  "updated_at": "2026-07-17T13:01:08Z",
+  "updated_at": "2026-07-17T15:00:00Z",
   "language": "ja",
-  "phase": "design-generated",
+  "phase": "tasks-generated",
   "approvals": {
     "requirements": {
       "generated": true,
@@ -13,13 +13,17 @@
     },
     "design": {
       "generated": true,
-      "approved": false,
-      "generated_at": "2026-07-17T13:01:08Z"
+      "approved": true,
+      "generated_at": "2026-07-17T13:01:08Z",
+      "approved_at": "2026-07-17T15:00:00Z",
+      "note": "設計ディスカッション（議題#1〜#4・実測付き敵対的検証込み）を本セッションで完走・開発者裁定を全て設計へ反映済みにつき承認扱い"
     },
     "tasks": {
-      "generated": false,
-      "approved": false
+      "generated": true,
+      "approved": true,
+      "generated_at": "2026-07-17T15:00:00Z",
+      "approved_at": "2026-07-17T15:10:00Z"
     }
   },
-  "ready_for_implementation": false
+  "ready_for_implementation": true
 }
