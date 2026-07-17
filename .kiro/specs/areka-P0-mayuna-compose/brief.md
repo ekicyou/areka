@@ -3,6 +3,11 @@
 > **種別**: 本坑（main）増分。⑤ seriko 帰属だが**②parsers・④sakura・⑤seriko・⑥emo を貫く垂直スライス**（`areka-P0-balloon-face-cue` と同型）。
 > 由来: 2026-07-13 M-boot（`areka-P0-emo2-boot`）R9.3 実機サインオフの実機欠陥 **#2「着せ替え（bind）で表情変化せず」**。roadmap「M-boot 実機サインオフ発見」節 #2 が本 spec を名指し（「登録済み増分 `mayuna-compose`（⑤seriko）を②④⑤垂直スライスへ再スコープ」）。
 > **調査日**: 2026-07-13（実 emo2 murasaki スクリプト接地＋実装現況精査）。
+> **⚠️ 調停（2026-07-18・`areka-P0-sakura-dialogue-tags` 要件ディスカッション帰結・受領済み）**: `\![...]` ベースウェアコマンドは **typed variant を個別新設せず、W1 が確立する単一の汎用コマンド cue**（コマンド名＋生引数列の不透明転写・空トークン保持・消費側のコマンド名選別・未知名は全消費者が良性スキップ）**に乗る**。根拠＝正典実測でコマンド 183 個（下限・52 族・非有界）に対し emo2 実使用は move/bind の 2 個（1%）＝型付き個別実装は破綻。境界原則: **コンテンツタグ（`\s`/`\b` 等）＝typed cue／`\!` コマンド名前空間＝汎用キャリア**——本 brief の「balloon-face-cue と完全同型」引用はコンテンツタグ側にのみ有効で `\!` へは延長しない。これに伴い下記 Approach を読み替える:
+> - **step 2（dola `CueCommand::Bind` variant 追加）＝廃止**。bind は W1 汎用キャリアに乗る（dola 無改修）。
+> - **step 3（compile bind アーム・`cue_target_of` Bind→Shell・emo-text 無視列挙追加）＝廃止**。`\!` の転写・emo-text 側の無視アームは W1 が汎用キャリアに対し一度だけ実装済みとなる（以後コマンドが増えても共有 4 ファイルは不変）。
+> - **step 1（parsers 名前解決表）・step 4（seriko 動的 bind 状態——ただし入力照合は typed variant でなく「汎用 cue のコマンド名 `bind`」の名前ゲート＝`SerikoSink` の BalloonSurface 処理と同型）・step 5（emo-present 回帰）＝存続**。
+> - 帰結: 本 spec は共有編集面 4 ファイル（dola command.rs／sakura compile.rs／dola sink.rs／emo-text state.rs）を**触らなくなり**、下記クロスユニット契約の「近接編集」警告は「W1 汎用キャリア契約への一方向依存」へ解消される。1 コマンド名の担当消費者は高々 1（単一権威表）＝`bind` の担当は seriko として同表に登記する。
 
 ## Problem
 
