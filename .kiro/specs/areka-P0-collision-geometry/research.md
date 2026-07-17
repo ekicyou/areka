@@ -345,3 +345,19 @@
 - 一方**戦略面のスティールマンが繰延優位を立証**: ①ポインタ配線は roadmap 台帳（:183）が W2 割当 ②保持の方式と粒度（per-scope／per-window）は input-events design の予約事項（同 requirements:30） ③W1 内のシムは呼び手ゼロの dead code（存在チェック不能） ④C-7 堅持で W1「共有ファイル0」が sibling（dialogue-tags の Move 配線未釘留め）に頑健。
 - **決定**: アクセサ＋ハンドラの実装は W2。線引き＝「呼び手が spec 内に居るもの＝実物・次ウェーブに居るもの＝地図」。design へ (a) Resolver 節「リゾルバ到達性」（検証事実の台帳）(b) C-8 を推奨形（emo2_boot 側で装着）へ格上げ (c) C-9 新設（presenter private・アクセサは W2 の作業・参考ハンドラ形）(d) Revalidation Trigger 8（tick 固定順への依存）を焼き込み。
 - 副産物の実測: `adapter.rs:16` は `crate::emo2_boot::target_map` 形ゆえ include 不能の先例（`hit_region.rs` は必ず `super::target_map` 形で書く）。placement 全7ファイルの `crate::` 出現13箇所は全て `#[cfg(test)]` 内（C-8 前提の brace 実測確認）。
+
+### 12.2 議題2: probe の証拠力（design-validation Critical Issue 2）＝本番窓寸規則の駆動へ改稿（検証により確定・議題撤回）
+
+- 敵対検証2本の帰結: (1) 旧主張「独立な2源」は実は**2経路1値**——extent 事前計算と `chain.size()` は同一関数 `compute_extent` の出力（`plan.rs:444,366`・`chain.rs:173-194`）＝事前計算に固有の証拠価値なし。(2) 旧形は**resize 経路の DPI 混入**（window-placement v1 を廃案にした `wire_drag` dpi/96 再スケールと同じ実在欠陥クラス）を完全に取り逃がす。(3) `resize_window_to` は pub（`follow.rs:551`）で placement `#[path]` include（`window-placement.rs:107-113` 前例）から呼べる。(4) completed `surface-resize-resnap` の実機証跡は目視・単一 DPI(125%)・数値記録なし（acceptance-record.md 不存在）＝**本番 resize 経路の数値 k=1.0 実測は本 probe が初**＝option 1（文面のみ）のスティールマンは証拠粒度で崩壊。
+- 決定: probe＝「placeholder 誤寸で `spawn_ghost_windows`（Anchored 付与）→ ShowSurface(1000,実binds) → `surface_size()` を本番 `resize_window_to` で適用 → **次フレーム**に実窓 `GetClientRect` assert」。檻の注意: `WindowPos.size` は enqueue 時 bypass ミラー（`follow.rs:760-767`）ゆえ WindowPos での assert は偽緑。C-7 維持（placement include は read-only・編集ゼロ）。
+
+### 12.3 議題3: マウス経路の空間照合（design-validation Critical Issue 3）＝プロトコル5へ追加（検証により確定・議題撤回）
+
+- 検証帰結: probe 窓への `OnPointerMoved` 配送は donor 構造のまま成立（hit test 既定 Bounds＋surface 子 entity の alpha_mask ヒット・`dispatch_pointer_events` は `PointerState` 存続中**毎 tick 発火**＝静止サンプル取得可・`dispatch/mod.rs:221-229`）。装着は spawn バンドル1行（`OnPointerPressed` 前例＝`emo-present.rs:523`）。
+- 形式: インライン hard assert は不可（キュー配送 coalesce＋クリック透過 poll 12ms の過渡 race）→ **記録行ペア列（client_x/y・s2c_x/y・Δ）＋静止500ms＋Δ=(0,0) 厳密一致＋1px 再静止1回**。ペア列は不透明画素行（Head/Bust）のみ＝背景 None 行の欠測はクリック透過の正しい挙動（C-3 整合）。
+- 捕捉クラス: per-monitor v2 の awareness 経路間不一致・wintf 配管の f32→i32 歪み・HWND 取り違え・狙点での本番イベント配送の実在証明。C-4/Open Risk 3 を「空間一致は本 spec 確認済み・合流サインオフ残余は配送〜SHIORI 一周」へ精緻化。
+
+### 12.4 議題4: 含端規則の SSP 実挙動突合＝机上不能と確定・閉区間維持（検証により確定・議題撤回）
+
+- 実査: **SSP ソースは非公開**（作者 GitHub 全14リポ・ukatech org 全18リポ・公式サイト・コミュニティ一覧2件・GitHub 全域コード検索の5系統が独立一致・2026-07-17）。「SSP はオープンソース化された」は**フォークロア**（ssp-i18n 等の周辺リポジトリの誤認）。互換クローン ninix-kagari は crossing-number 法（閉/半開いずれとも不一致の非対称境界）で先例にならない。
+- 帰結: Revalidation Trigger 3 の発火条件（SSP 実挙動の排他境界判明）は机上で到達不能＝**閉区間（wintf 前例）が立ったまま・設計変更なし**。将来の唯一の実証経路は実 SSP バイナリへの境界1pxブラックボックス突合（1px 境界プローブ用ゴーストで OnMouseMove Reference4 を観測・撫でクラスタ合流サインオフと同席が自然）。Open Risk 1 へ実査結果を焼き込み。
