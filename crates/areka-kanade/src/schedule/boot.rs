@@ -5,7 +5,7 @@
 //! 2.1 では骨格（呼出面）のみを用意し、[`crate::schedule::mod`] の `step` から
 //! フェーズ分岐として呼び出せるようにする。
 
-use super::{events, Action, Input, Phase, State};
+use super::{events, snapshot_of, Action, ActiveTalk, Input, Phase, State};
 use crate::msg::{CloseReason, KanadeConfig, ShioriOutcome};
 use crate::status::ExecutionSnapshot;
 use crate::talk::{StartTalk, TalkId};
@@ -83,11 +83,16 @@ fn on_reply(state: State, outcome: ShioriOutcome, config: &KanadeConfig) -> (Sta
             other => unexpected_reply(state, "BootMain", other),
         },
         // BootVersion + Notified: basewareversion 完了→boot 系列完了・Steady へ（Req 1.4 完了）。
-        Phase::BootVersion => match outcome {
+        // DD-IT-12: 追跡中の挨拶 talk（BootVersion{talk: Some}）を Steady{talk} へそのまま引き継ぐ
+        // （204 経路は None のまま＝従来意味論を保存）。以後の Tick は Steady{Some} 由来で
+        // NOTIFY・Ref3=0・Status: talking を発行し、挨拶 TalkDone は slot と照合される。
+        Phase::BootVersion { .. } => match outcome {
             ShioriOutcome::Notified => {
                 let mut state = state;
                 tracing::info!(target: "kanade", event = "boot_complete", "basewareversion 完了——boot 系列完了・定常運転へ");
-                state.phase = Phase::Steady { talk: None };
+                if let Phase::BootVersion { talk } = state.phase {
+                    state.phase = Phase::Steady { talk };
+                }
                 (state, Vec::new())
             }
             other => unexpected_reply(state, "BootVersion", other),
@@ -102,24 +107,40 @@ fn on_reply(state: State, outcome: ShioriOutcome, config: &KanadeConfig) -> (Sta
 
 /// StartTalk（Value 時のみ・一意採番）を積み、basewareversion NOTIFY を発行し BootVersion へ。
 ///
-/// Value（`Some`）なら [`State::next_talk_id`] を採番して [`Action::StartTalk`] を先頭に積む
-/// （単調増番・再利用しない・Req 2.1）。204（`None`）なら StartTalk なし（Req 2.3）。boot の
-/// talk は fire-and-forget であり、boot は talk 完了を待たず basewareversion へ進む（close-gate
-/// しない）。boot は常に `Steady{talk: None}` へ完了する（talk 待ちには入らない）。
+/// Value（`Some`）なら [`State::next_talk_id`] を採番して [`Action::StartTalk`] を先頭に積み
+/// （単調増番・再利用しない・Req 2.1）、その挨拶を [`ActiveTalk`]（`origin="boot"`）として
+/// `Phase::BootVersion{talk: Some(_)}` で**正規追跡する**（DD-IT-12）。204（`None`）なら
+/// StartTalk なし・`BootVersion{talk: None}`（Req 2.3・従来意味論を保存）。boot の talk は
+/// fire-and-forget（完了を待たず basewareversion へ進む）だが、追跡 slot は boot 完了時に
+/// `Steady{talk}` へ引き継がれる（`Steady{talk: None}` へ丸めない）。
+///
+/// `baseware_version` の `Status` は**フェーズ更新後**のスナップショットから導出する
+/// （DD-IT-12・DD-IT-4「送出時点の phase」）。Value 経路は `BootVersion{Some}`→`talk_active=true`
+/// ＝`Status: talking`、204 経路は `BootVersion{None}`→非アクティブ＝Status 行なし。
 fn to_baseware_version(
     mut state: State,
     script: Option<String>,
     config: &KanadeConfig,
 ) -> (State, Vec<Action>) {
     let mut actions: Vec<Action> = Vec::new();
-    if let Some(script) = script {
+    let talk = if let Some(script) = script {
         let talk_id = TalkId(state.next_talk_id);
         state.next_talk_id += 1;
         tracing::info!(target: "kanade", event = "boot_talk", talk_id = talk_id.0, "起動グリーティングを再生起動");
         actions.push(Action::StartTalk(StartTalk { talk_id, script }));
-    }
-    state.phase = Phase::BootVersion;
-    actions.push(Action::ShioriRequest(events::baseware_version(config, &ExecutionSnapshot::INACTIVE)));
+        Some(ActiveTalk {
+            talk_id,
+            origin: "boot",
+        })
+    } else {
+        None
+    };
+    // フェーズを先に確定してからスナップショットを撮る（DD-IT-4: 送出時点の phase）。
+    state.phase = Phase::BootVersion { talk };
+    actions.push(Action::ShioriRequest(events::baseware_version(
+        config,
+        &snapshot_of(&state.phase),
+    )));
     (state, actions)
 }
 
@@ -189,7 +210,7 @@ mod tests {
     // --- Full happy path: Idle→…→Steady（各段の Phase＋Action を厳密検証） ---
 
     #[test]
-    fn full_boot_sequence_reaches_steady_with_talk_none() {
+    fn full_boot_sequence_carries_greeting_talk_into_steady() {
         let cfg = config();
 
         // 1. Idle + Boot → OnInitialize NOTIFY / BootInit（Req 1.1）。
@@ -222,7 +243,8 @@ mod tests {
         assert_eq!(actions.len(), 1);
         assert_get(&actions[0], &events::on_boot(&cfg, &ExecutionSnapshot::INACTIVE));
 
-        // 4. BootMain + Value("greeting") → StartTalk(id=1) + basewareversion NOTIFY / BootVersion。
+        // 4. BootMain + Value("greeting") → StartTalk(id=1) + basewareversion NOTIFY /
+        //    BootVersion{talk: Some(挨拶)}（DD-IT-12: 挨拶を正規追跡）。
         let (s, actions) = step(
             s,
             Input::ShioriReply {
@@ -230,7 +252,18 @@ mod tests {
             },
             &cfg,
         );
-        assert!(matches!(s.phase, Phase::BootVersion));
+        assert!(
+            matches!(
+                s.phase,
+                Phase::BootVersion {
+                    talk: Some(ActiveTalk {
+                        talk_id: TalkId(1),
+                        ..
+                    })
+                }
+            ),
+            "挨拶 talk を BootVersion{{talk: Some}} で追跡する"
+        );
         assert_eq!(actions.len(), 2);
         match &actions[0] {
             Action::StartTalk(StartTalk { talk_id, script }) => {
@@ -239,11 +272,13 @@ mod tests {
             }
             _ => panic!("expected StartTalk first"),
         }
+        // baseware_version の id/references（Status の検証は専用檻
+        // `baseware_version_status_reflects_greeting_tracking` が担う）。
         assert_notify(&actions[1], &events::baseware_version(&cfg, &ExecutionSnapshot::INACTIVE));
         // 採番カウンタが進む。
         assert_eq!(s.next_talk_id, 2);
 
-        // 5. BootVersion + Notified → Steady{talk: None}（Req 1.4 完了）。
+        // 5. BootVersion{Some} + Notified → Steady{talk: Some(挨拶)}（DD-IT-12: 挨拶を引き継ぐ）。
         let (s, actions) = step(
             s,
             Input::ShioriReply {
@@ -251,7 +286,18 @@ mod tests {
             },
             &cfg,
         );
-        assert!(matches!(s.phase, Phase::Steady { talk: None }));
+        assert!(
+            matches!(
+                s.phase,
+                Phase::Steady {
+                    talk: Some(ActiveTalk {
+                        talk_id: TalkId(1),
+                        ..
+                    })
+                }
+            ),
+            "挨拶 talk は boot 完了後も Steady へ引き継がれる（Steady{{talk: None}} へ丸めない）"
+        );
         assert!(actions.is_empty(), "boot 完了は副作用なし");
         assert!(s.pending_close.is_none());
     }
@@ -280,7 +326,18 @@ mod tests {
             },
             &cfg,
         );
-        assert!(matches!(s.phase, Phase::BootVersion), "OnBoot をスキップし BootVersion へ");
+        assert!(
+            matches!(
+                s.phase,
+                Phase::BootVersion {
+                    talk: Some(ActiveTalk {
+                        talk_id: TalkId(1),
+                        ..
+                    })
+                }
+            ),
+            "OnBoot をスキップし BootVersion{{talk: Some(挨拶)}} へ（DD-IT-12）"
+        );
         assert_eq!(actions.len(), 2);
         match &actions[0] {
             Action::StartTalk(StartTalk { talk_id, script }) => {
@@ -317,7 +374,10 @@ mod tests {
             },
             &cfg,
         );
-        assert!(matches!(s.phase, Phase::BootVersion));
+        assert!(
+            matches!(s.phase, Phase::BootVersion { talk: None }),
+            "204 は挨拶を追跡せず BootVersion{{talk: None}}（Req 2.3）"
+        );
         // basewareversion NOTIFY のみ（StartTalk なし）。
         assert_eq!(actions.len(), 1);
         assert_notify(&actions[0], &events::baseware_version(&cfg, &ExecutionSnapshot::INACTIVE));
@@ -388,7 +448,7 @@ mod tests {
             Phase::BootInit,
             Phase::BootType,
             Phase::BootMain,
-            Phase::BootVersion,
+            Phase::BootVersion { talk: None },
         ] {
             let s = State {
                 phase,
@@ -469,7 +529,66 @@ mod tests {
         );
     }
 
-    // 参照: ActiveTalk が boot からは生成されないこと（Steady{talk:None} 完了）を型で担保。
-    #[allow(dead_code)]
-    fn _active_talk_type_is_referenced(_: ActiveTalk) {}
+    // --- DD-IT-12 追加檻: baseware_version の Status が挨拶追跡を反映する ---
+
+    /// Testing Strategy「DD-IT-12 追加檻（Unit）」: 挨拶（Value）経路の `baseware_version` は
+    /// `Status: talking`（フェーズ更新後スナップショット＝`BootVersion{Some}`）、204 経路は
+    /// Status 行なし（`None`）を運ぶ。events.rs の status 檻の boot 版であり、`baseware_version`
+    /// 送出値が phase 更新の**後**に撮られること（DD-IT-4）を wire 値で担保する。
+    #[test]
+    fn baseware_version_status_reflects_greeting_tracking() {
+        let cfg = config();
+
+        // 送出された basewareversion NOTIFY の Status wire 値（`None` ⇔ ヘッダ行なし）を取り出す。
+        fn baseware_status(actions: &[Action]) -> Option<Option<String>> {
+            actions.iter().find_map(|a| match a {
+                Action::ShioriRequest(crate::msg::ShioriCall::Notify { id, status, .. })
+                    if *id == "basewareversion" =>
+                {
+                    Some(status.render())
+                }
+                _ => None,
+            })
+        }
+
+        // Value（挨拶）経路: BootMain + Value → Status: talking。
+        let greeting = State {
+            phase: Phase::BootMain,
+            last_now: None,
+            next_talk_id: 1,
+            pending_close: None,
+        };
+        let (_, actions) = step(
+            greeting,
+            Input::ShioriReply {
+                outcome: ShioriOutcome::Value("hi".to_string()),
+            },
+            &cfg,
+        );
+        assert_eq!(
+            baseware_status(&actions),
+            Some(Some("talking".to_string())),
+            "挨拶起動後の basewareversion は Status: talking を運ぶ（DD-IT-12）"
+        );
+
+        // 204 経路: BootMain + NoContent → Status 行なし。
+        let no_greeting = State {
+            phase: Phase::BootMain,
+            last_now: None,
+            next_talk_id: 1,
+            pending_close: None,
+        };
+        let (_, actions) = step(
+            no_greeting,
+            Input::ShioriReply {
+                outcome: ShioriOutcome::NoContent,
+            },
+            &cfg,
+        );
+        assert_eq!(
+            baseware_status(&actions),
+            Some(None),
+            "204 経路の basewareversion は Status 行を出さない（None）"
+        );
+    }
 }

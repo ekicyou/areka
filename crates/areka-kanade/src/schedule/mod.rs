@@ -52,7 +52,9 @@ pub(crate) enum Phase {
     BootInit,
     BootType,
     BootMain,
-    BootVersion,
+    /// basewareversion 応答待ち。起動挨拶を追跡する場合は `talk: Some(_)`（DD-IT-12）。
+    /// 挨拶が無い（204）boot は `talk: None`＝従来どおり `Steady{talk: None}` へ完了する。
+    BootVersion { talk: Option<ActiveTalk> },
     Steady { talk: Option<ActiveTalk> },
     ClosePending { reason: CloseReason },
     CloseTalkWait { talk_id: TalkId, deadline: Option<MonotonicMs> },
@@ -162,7 +164,10 @@ pub(crate) fn step(state: State, input: Input, config: &KanadeConfig) -> (State,
 /// アクティブな talk を運ぶ phase のみ talk_active=true。
 pub(crate) fn snapshot_of(phase: &Phase) -> ExecutionSnapshot {
     match phase {
-        Phase::Steady { talk: Some(_) } => ExecutionSnapshot { talk_active: true },
+        // アクティブな talk を運ぶ phase＝Steady{Some} と（挨拶追跡中の）BootVersion{Some}（DD-IT-12）。
+        Phase::Steady { talk: Some(_) } | Phase::BootVersion { talk: Some(_) } => {
+            ExecutionSnapshot { talk_active: true }
+        }
         _ => ExecutionSnapshot::INACTIVE,
     }
 }
@@ -269,9 +274,11 @@ fn unloading_reply(mut state: State, outcome: ShioriOutcome) -> (State, Vec<Acti
 /// フェーズ固有遷移への委譲（boot／steady／close・後続タスクが本体を実装）。
 fn dispatch_phase(state: State, input: Input, config: &KanadeConfig) -> (State, Vec<Action>) {
     match state.phase {
-        Phase::Idle | Phase::BootInit | Phase::BootType | Phase::BootMain | Phase::BootVersion => {
-            boot::step(state, input, config)
-        }
+        Phase::Idle
+        | Phase::BootInit
+        | Phase::BootType
+        | Phase::BootMain
+        | Phase::BootVersion { .. } => boot::step(state, input, config),
         Phase::Steady { .. } => steady::step(state, input, config),
         Phase::ClosePending { .. } | Phase::CloseTalkWait { .. } => {
             close::step(state, input, config)
@@ -299,7 +306,7 @@ fn awaits_reply(phase: &Phase) -> bool {
         Phase::BootInit
             | Phase::BootType
             | Phase::BootMain
-            | Phase::BootVersion
+            | Phase::BootVersion { .. }
             | Phase::Steady { .. }
             | Phase::ClosePending { .. }
     )
@@ -308,7 +315,12 @@ fn awaits_reply(phase: &Phase) -> bool {
 /// 現フェーズが突合対象とする active talk の talk_id（無ければ None）。
 fn current_talk_id(phase: &Phase) -> Option<TalkId> {
     match phase {
+        // 挨拶追跡中の BootVersion も突合対象に含める（TalkDone が BootVersion 中に届いた場合の
+        // 防御・DD-IT-12）。主要な突合は BootVersion→Steady 完了後の Steady{Some} で成立する。
         Phase::Steady {
+            talk: Some(active), ..
+        }
+        | Phase::BootVersion {
             talk: Some(active), ..
         } => Some(active.talk_id),
         Phase::CloseTalkWait { talk_id, .. } => Some(*talk_id),
