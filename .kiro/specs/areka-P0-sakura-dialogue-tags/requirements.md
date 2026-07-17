@@ -37,6 +37,7 @@ emo2（互換ベースウェアの適合 fixture ゴースト）の**メニュ�
   - **cue 再生の settled モデルは既に main に在る**（duration・絶対時刻台本・broadcast・選択待ち状態と選択解決の口）。本 spec は**そこへ別アームを足す**形であり、時間モデル・配送モデル・完了判定の**規則そのものを再定義しない**。
   - **選択の解決（ユーザーのクリック→どの選択肢が選ばれたか）を起こすのは下流**（choice-render／choice-select-events）。本 spec は「選択待ちで止まり、解決されたら再開する」台本側の契約のみを確定する。
   - **choice cue の配送は責務二分**（設計判断#1 帰結）: **配送列＝配置/表示情報の単一真実源**（choice-render が cue 列として消費）／**先積みバッグ＝解決照合の単一真実源**（choice-select-events が `resolve_choice` の id 照合に使う）。本 spec は「choice cue を他 cue と順序を保って配送する」ところまでを正本として確定し、settled な先積み一択の観測挙動を仕様変更として明示的に更新する（R8.6）。表示・ヒットテストは choice-render の領分。
+  - **選択解決の口は本 spec が定義・W5 が消費**（R2.7）: 解決は talk アクター境界の型付き入力（`SakuraMsg` の additive アーム）経由でのみ到達する。`CuePlayer::resolve_choice` を**外部から直接呼ぶ経路は構造的に存在しない**（アクター内に閉じている）ため、`areka-P0-choice-select-events` は「`resolve_choice` を直接呼ぶ」のでなく本 spec が定義するこの口へ選択 id を投入する。W5 brief の旧記述（直接呼び出し前提）は本 spec 着地時に訂正する申し送り済み。
   - **`\_l` 直後の行揃えリセット**（ukadoc: `\_l` 実行直後は左揃えへ戻る）や `@` 相対指定の解決は**表示側の責務**であり、本 spec は記述を欠落なく運ぶことに徹する。
   - **`\![move]` の位置は永続化されない**（ポートフォリオ合流裁定＝保存値はユーザーの明示的ドラッグ確定のみが更新する二層分離）。その帰結として、`areka-P0-position-persist` の初回ゲート導入後は**未ドラッグの 2 回目以降の起動で初回位置調整が既定配置へ戻る**——これは許容仕様であり、最終確認は `areka-P0-emo2-conformance-e2e` の実機適合走行へ申し送る。
   - 実機起動は**絶対パス必須**（相対パスでは SHIORI helper が DLL を読めず MOD_NOT_FOUND）。
@@ -66,6 +67,7 @@ emo2（互換ベースウェアの適合 fixture ゴースト）の**メニュ�
 4. When 選択が解決される, the cue 再生ランタイム shall 停止していた台本の再生を再開する。
 5. Where talk script に `\q` が 1 つも含まれない, the sakura コンパイラ shall 選択待ち barrier を発行せず、既存 talk の完了挙動を変えない。
 6. The sakura コンパイラ shall 選択待ちに**タイムアウト時間を指定しない**（M1 は無期限待ち）。タイムアウト時間の決定と時間切れ時の振る舞いは本 spec の範囲外とし、語彙（タイムアウト指定の口）のみ保持する。
+7. The sakura talk アクター shall 選択解決を**アクター入力（`SakuraMsg` の additive アーム）として受け取る型付きの口**を定義する。`CuePlayer::resolve_choice` はアクター内に閉じ外部から直接呼べないため、解決はこの talk アクター境界の入力経由でのみ到達する（既存の `Start`／`Tick`／`Close` と同格の入力種を 1 つ足す・`#[non_exhaustive]` ゆえ非破壊）。本 spec はこの口を**定義するのみ**であり、口を叩く消費（ユーザークリック→選択確定→SHIORI カスケード）は下流 `areka-P0-choice-select-events`（W5）が行う。
 
 ### Requirement 3: カーソル `\_l` の cue 化（不透明転写）
 **Objective:** sakura として、`\_l` のカーソル位置指定を記述通りに cue へ転写したい。そうすれば、単位（em/lh/%/裸数値）や相対指定の解釈を持つ表示側が、後から正典どおりに解決できる。
@@ -137,3 +139,4 @@ emo2（互換ベースウェアの適合 fixture ゴースト）の**メニュ�
 5. The 検証 shall `\![move]` 経路が**永続化対象の位置状態を更新しない**ことを決定論的に確認する（第二の位置ライター混入の恒久的な防止）。
 6. When 実 emo2・実 SHIORI・実 DPI で**初回起動（OnFirstBoot 経路）**する, the 開発者 shall エモ（相方側）の立ち位置調整が効いていることを目視でサインオフする（通常起動の talk には移動が無いため、観測は初回起動状態で行う）。
 7. When fixture のメインメニュー script を直入力し cue を**配送**する, the 検証 shall choice cue 3 個が改行・カーソル cue との交互位置を保って**配送列**に現れること（compile 出力の順序だけでなく、消費側が観測する配送列で体裁再構成可能性が成立すること）を決定論的に確認する。
+8. When 選択解決を**注入した入力**（実クリックでなく `SakuraMsg` の解決アームへ id を直接投入）で与える, the 検証 shall 選択待ち barrier で停止していた talk が再開し完了へ到達することを決定論的に確認する（口の存在と再開挙動の檻）。end-to-end の解決（ユーザークリック→カスケード→SHIORI 発火）は本 spec の検証範囲外であり、`areka-P0-choice-select-events`（決定論）および `areka-P0-emo2-conformance-e2e`（実機メニュー一周）へ申し送る。
