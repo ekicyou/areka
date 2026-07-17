@@ -30,8 +30,7 @@ use areka_parsers::balloon::{
     BalloonModel, Font, FontColor, Origin, ValidRect, WindowPosition, WordWrapPoint,
 };
 use areka_parsers::shell::{AppendTarget, DefRef, Element, ElementPath, Shell, Surface};
-use areka_sakura::contract::{ActorKey, CueCommand, TalkCue};
-use areka_sakura::TextSink;
+use areka_sakura::contract::{ActorKey, CueCommand, CueSink, TalkCue};
 use bevy_ecs::entity::Entity;
 use bevy_ecs::prelude::World;
 use windows::Win32::System::Com::{CoInitializeEx, COINIT_MULTITHREADED};
@@ -168,6 +167,7 @@ fn cue(actor: &str, at: f64, command: CueCommand) -> TalkCue {
         at,
         actor: ActorKey::from(actor),
         command,
+        duration: 0.0,
     }
 }
 

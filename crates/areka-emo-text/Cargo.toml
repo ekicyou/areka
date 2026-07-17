@@ -14,8 +14,11 @@ publish = false
 thiserror = { workspace = true }
 # log-first 規律（失敗は error!＋Err 戻り値・安易な panic 禁止）の記録手段。
 tracing = { workspace = true }
-# cue 契約の正本（TextSink/TalkCue/ActorKey/CueCommand——design.md Dependencies・再定義しない）。
+# cue 契約の正本（TalkCue/ActorKey/CueCommand/CueSink 再輸出——design.md Dependencies・再定義しない）。
 areka-sakura = { path = "../areka-sakura" }
+# cue 再生の単一出力契約トレイト（dola::cue::CueSink）。演者は各自 1 実装を持つ
+# （broadcast＋演者側 relevance の単一権威・R11.3/R11.6）。EmoTextSink が実装する。
+dola = { path = "../dola" }
 # 結線層（sink.rs/actor.rs）の UI スレッド配送ブリッジ（spawn_ui/UiSender——design.md
 # Key Dependencies「areka-actor spawn_ui (P0)」。EmoTextSink の配送口そのもの）。
 areka-actor = { path = "../areka-actor" }

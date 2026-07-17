@@ -115,15 +115,18 @@ pub enum RoutingCommand {
 // 演出コマンド
 // ============================================================================
 
-/// 演出コマンド（8 バリアント、データ系のみ）。
+/// 演出コマンド（10 バリアント、データ系のみ）。
 ///
 /// バリアは `BarrierKind` として、ルーティングは `RoutingCommand` として、
 /// それぞれ `Entry` レベルで分離済み。
+///
+/// 各コマンドは **action の種別のみ**を表し、時間は常に `Cue` envelope の
+/// `duration` が担う（`Wait` も同様——コマンド側に時間値を埋め込まない）。
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub enum CueCommand {
     /// テキスト表示。意味解釈（縦書き、装飾等）は消費者の責務。
     Text(String),
-    /// コンテンツクリア
+    /// コンテンツクリア（**対象スコープのみ**消去）。全スコープ消去は `ClearAll`。
     Clear,
     /// 演技発現。key の意味解釈は消費者が担う。
     Emote { key: String },
@@ -142,6 +145,19 @@ pub enum CueCommand {
     /// 解釈（数値化・alias）は消費者（seriko）の責務。dola は状態を持たない。
     /// `Emote { key }` と完全対称の不透明 key 転写語彙。
     BalloonSurface { key: String },
+    /// 純粋な待ち（**action を持たない**第一級コマンド）。
+    ///
+    /// 待ち時間は本 variant でなく `Cue` envelope の `duration` が保持する
+    /// （envelope 一律ゆえ、表現者はコマンドを解釈せず duration を honor できる）。
+    /// 上流（sakura compile）が明示ウェイトを offset へ吸収して消さず本 cue として
+    /// 台本に残すことで、末尾・単独の待ちも失われない自己完結した楽譜になる。
+    /// action がないため、どの表現者にとっても担当外（duration のみ honor する）。
+    Wait,
+    /// **全スコープ**のコンテンツクリア（`Clear`＝対象スコープのみ、との峻別）。
+    ///
+    /// 上流は残存スコープを列挙できないため、"全消し"を表現者が自らの全スコープを
+    /// 消す自己完結コマンドとして表現する。テキスト表現者（バルーン）が消費する。
+    ClearAll,
 }
 
 // ============================================================================
@@ -192,6 +208,56 @@ pub struct Cue {
     pub start_time: f64,
     /// 演出ペイロード（コマンド / バリア / ルーティング）
     pub payload: CuePayload,
+    /// この cue の presentation 占有時間（秒）。
+    ///
+    /// 全表現者が action を処理するか否かに関わらず honor する（duration honor 契約）。
+    /// 後続 cue の絶対時刻はこの分だけ上流（sakura compile）で焼き込まれるため、
+    /// 表現者はこの値から新たなローカル遅延を生じさせてはならない（二重待ち禁止）。
+    ///
+    /// 全 presentation cue が本フィールドを保持し、時間を占有しない瞬時コマンドは
+    /// **明示的な 0** を持つ（「duration フィールドを持たない cue」という概念を作らない）。
+    /// `#[serde(default)]` により、本フィールドを持たない旧シリアライズ資産は 0 として
+    /// 従来どおり解釈される（後方互換・既存 variant のワイヤ形は不変）。
+    ///
+    /// 値は**不透明な秒数**であり、dola は SakuraScript 固有の意味論
+    /// （1 文字あたりのウェイト値等）を内包しない——算出は上流（sakura）の責務。
+    ///
+    /// 注: `CuePayload::Barrier`（動的停止点）／`Routing`（表現者未配送の制御プレーン）は
+    /// presentation でなく duration 概念が本質的に非該当のため、静的 duration
+    /// タイムラインの外に置かれる（envelope としては一律にフィールドを持ち値は 0）。
+    #[serde(default)]
+    pub duration: f64,
+}
+
+// ============================================================================
+// 配送エンベロープ
+// ============================================================================
+
+/// 1 発火の配送エンベロープ（搬送体）— cue 再生ランタイムから演者への受け渡し単位。
+///
+/// [`Cue`] の**実行時投影**であり serde 非依存（ワイヤ型は [`Cue`]・本型は配送経路の
+/// 通貨）。上流の canonical 変換が [`Cue`] の各フィールドを**無変形**で複写して組み、
+/// 登録された全出力先へ broadcast される。
+///
+/// 演者は受け取った任意の搬送体について、[`Self::command`] の action を処理するか否かに
+/// 関わらず [`Self::duration`] を honor する（duration honor 契約）。duration が
+/// コマンド種別を問わない一律フィールドであることが、「コマンドを解釈せずに時間を読める」
+/// ＝honor 契約が例外なく回る前提を担保する。
+#[derive(Clone, Debug, PartialEq)]
+pub struct TalkCue {
+    /// 発火時刻（f64 秒＝dola ドメイン）。上流が確定した値をそのまま運ぶ（導出しない）。
+    pub at: f64,
+    /// 対象演者の識別子（話者スコープ）。
+    pub actor: ActorKey,
+    /// 演出コマンド（action の種別のみ・時間は本 envelope の `duration` が担う）。
+    pub command: CueCommand,
+    /// この cue の presentation 占有時間（秒）— [`Cue::duration`] の無変形複写。
+    ///
+    /// 全演者が action 可否に関わらず honor する。後続 cue の発火時刻は上流で既に
+    /// この分だけ焼き込まれているため、演者はこの値から**新たなローカル遅延を
+    /// 生じさせてはならない**（二重待ち禁止）。瞬時コマンドは明示的な 0 を持つ
+    /// （「duration を持たない搬送体」という概念は作らない）。
+    pub duration: f64,
 }
 
 #[cfg(test)]
@@ -233,7 +299,7 @@ mod tests {
     }
 
     #[test]
-    fn cue_command_eight_variants() {
+    fn cue_command_ten_variants() {
         let cmds = vec![
             CueCommand::Text("hello".into()),
             CueCommand::Clear,
@@ -251,8 +317,10 @@ mod tests {
             },
             CueCommand::NewLine { ratio: 1.0 },
             CueCommand::BalloonSurface { key: "2".into() },
+            CueCommand::Wait,
+            CueCommand::ClearAll,
         ];
-        assert_eq!(cmds.len(), 8);
+        assert_eq!(cmds.len(), 10);
 
         // Clone + Debug + PartialEq
         for cmd in &cmds {
@@ -325,6 +393,116 @@ mod tests {
             let json = serde_json::to_string(&cmd).unwrap();
             let parsed: CueCommand = serde_json::from_str(&json).unwrap();
             assert_eq!(cmd, parsed, "BalloonSurface(key={key:?}) must roundtrip");
+        }
+    }
+
+    /// `Wait`（純粋な待ち）・`ClearAll`（全スコープ消去）の additive 追加檻。
+    ///
+    /// 両者は unit variant ゆえ externally tagged のワイヤ形は裸の文字列
+    /// （`"Wait"` / `"ClearAll"`）になる（5.2・6.3）。
+    #[test]
+    fn cue_command_wait_and_clear_all_serde_roundtrip() {
+        for (cmd, wire) in [
+            (CueCommand::Wait, r#""Wait""#),
+            (CueCommand::ClearAll, r#""ClearAll""#),
+        ] {
+            let json = serde_json::to_string(&cmd).unwrap();
+            assert_eq!(json, wire, "{cmd:?} は unit variant のワイヤ形を持つ");
+            let parsed: CueCommand = serde_json::from_str(&json).unwrap();
+            assert_eq!(cmd, parsed, "{cmd:?} は往復で同一へ復元される");
+        }
+    }
+
+    /// `Clear`（対象スコープのみ消去）と `ClearAll`（全スコープ消去）は峻別される
+    /// 別コマンドであり、ワイヤ上でも取り違えられない（6.3）。
+    #[test]
+    fn clear_and_clear_all_are_distinct_commands() {
+        assert_ne!(CueCommand::Clear, CueCommand::ClearAll);
+        assert_ne!(
+            serde_json::to_string(&CueCommand::Clear).unwrap(),
+            serde_json::to_string(&CueCommand::ClearAll).unwrap()
+        );
+
+        // 一方のワイヤ形が他方へ deserialize されることはない。
+        let parsed: CueCommand = serde_json::from_str(r#""Clear""#).unwrap();
+        assert_eq!(parsed, CueCommand::Clear);
+        let parsed: CueCommand = serde_json::from_str(r#""ClearAll""#).unwrap();
+        assert_eq!(parsed, CueCommand::ClearAll);
+    }
+
+    /// `Wait` は action を持たない（unit variant）——時間は envelope `duration` が担う
+    /// （D2/D3: payload 埋め込みでなく envelope）。ワイヤ形にも duration は現れない（5.1/5.2）。
+    #[test]
+    fn wait_carries_no_action_and_time_lives_in_envelope_duration() {
+        // Wait 単体のワイヤ形に時間値は含まれない（payload は裸の "Wait" のみ）。
+        assert_eq!(
+            serde_json::to_string(&CueCommand::Wait).unwrap(),
+            r#""Wait""#
+        );
+
+        // 待ち時間は envelope 側 `Cue.duration` が保持する。
+        let cue = Cue {
+            actor: ActorKey::from("0"),
+            start_time: 1.0,
+            payload: CueCommand::Wait.into(),
+            duration: 0.5,
+        };
+        let parsed: Cue = serde_json::from_str(&serde_json::to_string(&cue).unwrap()).unwrap();
+        assert_eq!(parsed.payload, CueCommand::Wait.into());
+        assert_eq!(parsed.start_time, 1.0);
+        assert_eq!(
+            parsed.duration, 0.5,
+            "Wait の時間は envelope duration が担う"
+        );
+    }
+
+    /// 既存 8 variant のワイヤ形が Wait/ClearAll の additive 追加後も**完全に不変**である
+    /// ことを、期待 JSON リテラルで固定する（5.2・6.3・9.3）。
+    #[test]
+    fn existing_eight_variants_wire_forms_are_unchanged_by_additive_extension() {
+        let expected: Vec<(CueCommand, &str)> = vec![
+            (CueCommand::Text("hello".into()), r#"{"Text":"hello"}"#),
+            (CueCommand::Clear, r#""Clear""#),
+            (
+                CueCommand::Emote {
+                    key: "smile".into(),
+                },
+                r#"{"Emote":{"key":"smile"}}"#,
+            ),
+            (
+                CueCommand::Choice {
+                    id: "yes".into(),
+                    text: "はい".into(),
+                },
+                r#"{"Choice":{"id":"yes","text":"はい"}}"#,
+            ),
+            (CueCommand::EntityRef(42), r#"{"EntityRef":42}"#),
+            (
+                CueCommand::Custom {
+                    command: "fade".into(),
+                    params: DynamicValue::Null,
+                },
+                r#"{"Custom":{"command":"fade","params":null}}"#,
+            ),
+            (
+                CueCommand::NewLine { ratio: 1.0 },
+                r#"{"NewLine":{"ratio":1.0}}"#,
+            ),
+            (
+                CueCommand::BalloonSurface { key: "2".into() },
+                r#"{"BalloonSurface":{"key":"2"}}"#,
+            ),
+        ];
+        assert_eq!(expected.len(), 8, "既存 variant は 8 種");
+
+        for (cmd, wire) in expected {
+            let json = serde_json::to_string(&cmd).unwrap();
+            assert_eq!(
+                json, wire,
+                "{cmd:?} のワイヤ形は additive 拡張後も不変でなければならない"
+            );
+            let parsed: CueCommand = serde_json::from_str(wire).unwrap();
+            assert_eq!(parsed, cmd, "既存ワイヤ形の資産は従来どおり読める");
         }
     }
 
@@ -434,12 +612,14 @@ mod tests {
             actor: ActorKey::from("sakura"),
             start_time: 1.5,
             payload: CueCommand::Text("hello".into()).into(),
+            duration: 0.0,
         };
         let json = serde_json::to_string(&cue).unwrap();
         let parsed: Cue = serde_json::from_str(&json).unwrap();
         assert_eq!(parsed.actor, cue.actor);
         assert_eq!(parsed.start_time, cue.start_time);
         assert_eq!(parsed.payload, cue.payload);
+        assert_eq!(parsed.duration, cue.duration);
     }
 
     // ── D3-V 境界特性化テスト ──
@@ -465,6 +645,7 @@ mod tests {
             actor: ActorKey::from("sakura"),
             start_time: 1.5,
             payload: CueCommand::Text("hello".into()).into(),
+            duration: 0.0,
         };
         assert_eq!(cue.actor.as_str(), "sakura");
         assert_eq!(cue.start_time, 1.5);
@@ -473,4 +654,124 @@ mod tests {
             CuePayload::Command(CueCommand::Text(_))
         ));
     }
+
+    // ── duration（再生時間）envelope 檻 ──
+
+    #[test]
+    fn cue_duration_defaults_to_zero_for_legacy_serialized_data() {
+        // 再生時間フィールドを持たない旧シリアライズ資産（3 フィールド）を読み込むと
+        // duration=0（瞬時）として従来どおり解釈できる（後方互換）。
+        let legacy = r#"{"actor":"0","start_time":0.0,"payload":{"Command":{"Text":"hi"}}}"#;
+        let parsed: Cue = serde_json::from_str(legacy).unwrap();
+        assert_eq!(parsed.actor, ActorKey::from("0"));
+        assert_eq!(parsed.start_time, 0.0);
+        assert_eq!(parsed.payload, CueCommand::Text("hi".into()).into());
+        assert_eq!(
+            parsed.duration, 0.0,
+            "duration 欠落の旧資産は 0（瞬時）として復元されねばならない"
+        );
+
+        // Barrier / Routing ペイロード（duration 非該当）の旧資産も同様に読める。
+        let legacy_barrier = r#"{"actor":"0","start_time":1.0,"payload":{"Barrier":{"WaitForInput":{"timeout":null}}}}"#;
+        let parsed: Cue = serde_json::from_str(legacy_barrier).unwrap();
+        assert_eq!(parsed.duration, 0.0);
+    }
+
+    #[test]
+    fn cue_duration_roundtrip_preserves_value() {
+        // 新規往復では duration の値が保たれ、既存ペイロードのワイヤ形は変わらない。
+        let cue = Cue {
+            actor: ActorKey::from("sakura"),
+            start_time: 1.5,
+            payload: CueCommand::Text("hello".into()).into(),
+            duration: 0.25,
+        };
+        let json = serde_json::to_string(&cue).unwrap();
+        assert!(
+            json.contains(r#""payload":{"Command":{"Text":"hello"}}"#),
+            "既存 variant のワイヤ形は envelope 拡張後も不変: {json}"
+        );
+
+        let parsed: Cue = serde_json::from_str(&json).unwrap();
+        // Cue は PartialEq 非導出のためフィールドごとに検証する。
+        assert_eq!(parsed.actor, cue.actor);
+        assert_eq!(parsed.start_time, cue.start_time);
+        assert_eq!(parsed.payload, cue.payload);
+        assert_eq!(parsed.duration, 0.25);
+    }
+
+    #[test]
+    fn duration_is_uniform_envelope_field_across_all_payloads() {
+        // 「再生時間フィールドを持たない cue」という概念を作らない——
+        // 全 presentation cue（CueCommand 全 variant）が envelope duration を保持し、
+        // 瞬時コマンドは明示的 0 を持つ（欠落でない）。
+        let payloads: Vec<CuePayload> = vec![
+            CueCommand::Text("hello".into()).into(),
+            CueCommand::Clear.into(),
+            CueCommand::Emote {
+                key: "smile".into(),
+            }
+            .into(),
+            CueCommand::Choice {
+                id: "yes".into(),
+                text: "はい".into(),
+            }
+            .into(),
+            CueCommand::EntityRef(42).into(),
+            CueCommand::Custom {
+                command: "fade".into(),
+                params: DynamicValue::Null,
+            }
+            .into(),
+            CueCommand::NewLine { ratio: 1.0 }.into(),
+            CueCommand::BalloonSurface { key: "2".into() }.into(),
+            CueCommand::Wait.into(),
+            CueCommand::ClearAll.into(),
+            // duration 非該当ペイロード（Barrier / Routing）も envelope としては
+            // 一律にフィールドを持つ（値は 0・静的 duration タイムラインの外）。
+            BarrierKind::Timeout { duration: 5.0 }.into(),
+            RoutingCommand::RouteRemove {
+                target: CueTarget::Shell,
+            }
+            .into(),
+        ];
+
+        for payload in payloads {
+            // 瞬時（明示的 0）
+            let instant = Cue {
+                actor: ActorKey::from("sakura"),
+                start_time: 0.0,
+                payload: payload.clone(),
+                duration: 0.0,
+            };
+            let parsed: Cue =
+                serde_json::from_str(&serde_json::to_string(&instant).unwrap()).unwrap();
+            assert_eq!(parsed.duration, 0.0, "瞬時 cue は明示的 0 を保持する");
+            assert_eq!(parsed.payload, instant.payload);
+
+            // 時間占有（不透明秒数）
+            let timed = Cue {
+                actor: ActorKey::from("sakura"),
+                start_time: 0.0,
+                payload,
+                duration: 1.25,
+            };
+            let parsed: Cue =
+                serde_json::from_str(&serde_json::to_string(&timed).unwrap()).unwrap();
+            assert_eq!(parsed.duration, 1.25);
+            assert_eq!(parsed.payload, timed.payload);
+        }
+    }
+
+    // ── 配送エンベロープ（TalkCue）檻 ──
+    //
+    // NOTE(Task 3.2): 旧 `talk_cue_envelope_carries_cue_duration_untransformed` と
+    // `talk_cue_duration_is_uniform_across_every_command_variant` は、テスト本体で
+    // `TalkCue { .., duration: cue.duration }` を組んでから自身に等価を主張する**自己充足檻**
+    // だった（Rust の構造体代入が自分自身を主張しているだけ・変異テストで素通しを実測）。
+    // 「無変形の carry」の behavioral な証明は、実 canonical 変換 `dola::cue::to_talk_schedule` を
+    // 通す `crates/dola/tests/cue/sheet_test.rs` の
+    // `to_talk_schedule_carries_finite_duration_untransformed` /
+    // `to_talk_schedule_duration_uniform_across_every_command_variant` が load-bearing に担う
+    // ため、こちらの自己充足檻は撤去した。
 }

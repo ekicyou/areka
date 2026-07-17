@@ -1,15 +1,15 @@
 //! talk 時刻の推定（epoch 推定・クロック注入）とテキスト sink への時刻付与。
 //!
 //! `TalkClock`（cue 観測による単調 max epoch 推定・クロック注入可・負値 0.0 clamp・
-//! epoch 未確立は `None`）と `ClockedTextSink<T: TextSink + Clone>`（`emit` 時に `observe_cue`
-//! した後に内側 sink へ透過転送）を所有する（sakura 契約型＋dola clock を消費）。
+//! epoch 未確立は `None`）と `ClockedTextSink<T: dola::cue::CueSink + Clone>`（`emit` 時に
+//! `observe_cue` した後に内側 sink へ透過転送）を所有する（sakura 契約型＋dola clock を消費）。
 //!
 //! 骨格のみ。`TalkClock::new`／`observe_cue`／`talk_time` と `ClockedTextSink` の実装は
 //! tasks.md task 2.2 が担う。
 
 use std::sync::{Arc, Mutex};
 
-use areka_sakura::{TalkCue, TextSink};
+use areka_sakura::TalkCue;
 
 /// talk 起点相対秒（`talk_time`）の時刻源（design.md「時刻源 / talk_clock」・R2.2/R2.3）。
 ///
@@ -76,31 +76,35 @@ impl TalkClock {
     }
 }
 
-/// `TextSink` に talk 時刻観測を挟むデコレータ（design.md「時刻源 / talk_clock」）。
+/// 単一の出力契約 [`dola::cue::CueSink`] に talk 時刻観測を挟むデコレータ（design.md「時刻源 / talk_clock」）。
 ///
 /// `emit` ごとに `cue.at` を [`TalkClock::observe_cue`] へ渡して epoch を推定し、その後 cue を
 /// **非改変**で内側 sink（本番は `EmoTextSink`）へ透過転送する。`T: Send` のとき自動的に `Send`
-/// となり、`areka_ghost::boot` の型境界 `TextSink + Clone + Send + 'static` を満たす。
+/// となり、`areka_ghost::boot` の型境界 `dola::cue::CueSink + Clone + Send + 'static` を満たす。
 #[derive(Clone)]
-pub struct ClockedTextSink<T: TextSink + Clone> {
+pub struct ClockedTextSink<T: dola::cue::CueSink + Clone> {
     /// 透過転送先（本番は `EmoTextSink`）。
     inner: T,
     /// 観測を記録する共有時刻源。
     clock: TalkClock,
 }
 
-impl<T: TextSink + Clone> ClockedTextSink<T> {
+impl<T: dola::cue::CueSink + Clone> ClockedTextSink<T> {
     /// 内側 sink と共有 `TalkClock` を束ねてデコレータを生成する。
     pub fn new(inner: T, clock: TalkClock) -> Self {
         Self { inner, clock }
     }
 }
 
-impl<T: TextSink + Clone> TextSink for ClockedTextSink<T> {
+/// 演者非依存の単一出力契約 [`dola::cue::CueSink`] を実装する（`areka_ghost::boot` の broadcast
+/// 登録先が要求する形・task 7.1）。broadcast 下では担当外 cue（`Emote` 等）も本 sink へ届くが、
+/// `observe_cue` は `cue.at` 一貫で epoch を単調 max 推定するため無害（設計 §Revalidation Triggers）。
+/// 内側 sink（本番は `EmoTextSink`）へ `CueSink::emit` で非改変転送する。
+impl<T: dola::cue::CueSink + Clone> dola::cue::CueSink for ClockedTextSink<T> {
     fn emit(&mut self, cue: TalkCue) {
         // emit ごとに cue.at を観測して epoch を推定し、cue は非改変で内側へ透過転送する。
         self.clock.observe_cue(cue.at);
-        self.inner.emit(cue);
+        dola::cue::CueSink::emit(&mut self.inner, cue);
     }
 }
 
@@ -108,6 +112,7 @@ impl<T: TextSink + Clone> TextSink for ClockedTextSink<T> {
 mod tests {
     use super::*;
     use areka_sakura::{ActorKey, CueCommand};
+    use dola::cue::CueSink;
     use std::sync::{Arc, Mutex};
 
     /// テスト用の可制御クロック: 返り値の `Arc<Mutex<f64>>` に「壁時刻」を書けば、
@@ -125,8 +130,7 @@ mod tests {
         *now.lock().expect("test clock mutex poisoned") = wall;
     }
 
-    /// テスト用の記録 TextSink（`ClockedTextSink<T: TextSink + Clone>` に載せるため Clone）。
-    /// `MockSink` は記録するが `Clone` を導出していないためここでは使えない（本 sink で代替）。
+    /// テスト用の記録 `CueSink`（`ClockedTextSink<T: dola::cue::CueSink + Clone>` に載せるため Clone）。
     #[derive(Clone)]
     struct RecordingTextSink {
         cues: Arc<Mutex<Vec<TalkCue>>>,
@@ -147,7 +151,7 @@ mod tests {
         }
     }
 
-    impl TextSink for RecordingTextSink {
+    impl dola::cue::CueSink for RecordingTextSink {
         fn emit(&mut self, cue: TalkCue) {
             self.cues
                 .lock()
@@ -156,10 +160,10 @@ mod tests {
         }
     }
 
-    /// boot の型境界（`TextSink + Clone + Send + 'static`）を `ClockedTextSink<T>` が
+    /// boot の型境界（`dola::cue::CueSink + Clone + Send + 'static`）を `ClockedTextSink<T>` が
     /// 保つことをコンパイル時に固定する（具体 `EmoTextSink` 結線は task 5.1 の責務ゆえ、
-    /// ここでは汎用の Send な TextSink 実装で型のみを表明する）。
-    fn assert_send_clone_static<T: TextSink + Clone + Send + 'static>() {
+    /// ここでは汎用の Send な `CueSink` 実装で型のみを表明する）。
+    fn assert_send_clone_static<T: dola::cue::CueSink + Clone + Send + 'static>() {
         fn require<X: Send + Clone + 'static>() {}
         require::<ClockedTextSink<T>>();
     }
@@ -281,6 +285,7 @@ mod tests {
             at: 5.0,
             actor: ActorKey::from("0"),
             command: CueCommand::Text("hi".into()),
+            duration: 0.0,
         };
         sink.emit(cue.clone());
 

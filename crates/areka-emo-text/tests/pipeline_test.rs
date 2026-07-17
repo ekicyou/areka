@@ -15,8 +15,9 @@
 //! （受信端はワーカー側・R1.3 の形を踏襲）。時刻は常に注入（talk 起点相対秒）で、
 //! 実時間 sleep／`Instant` 不使用（決定論）。
 //!
-//! FP 誤差を排するため char_wait・cue 時刻・注入時刻はすべて 2 の冪（0.25 の倍数）を
-//! 基本とする（state.rs の檻と同方針）。
+//! FP 誤差を排するため reveal 間隔・cue 時刻・注入時刻はすべて 2 の冪（0.25 の倍数）を
+//! 基本とする（state.rs の檻と同方針）。reveal ペースは配送 duration 由来
+//! （`interval = duration / N`）ゆえ、Text cue へ `N × REVEAL_INTERVAL` を焼き込む。
 
 use std::cell::RefCell;
 use std::ops::ControlFlow;
@@ -26,33 +27,35 @@ use std::rc::Rc;
 use areka_emo_text::layout::{FixedMetrics, LayoutEngine, PositionedLine, VisibleWindow};
 use areka_emo_text::region::TextRegion;
 use areka_emo_text::sink::{handle_text_msg, EmoTextSink, TextMsg};
-use areka_emo_text::state::{TextLayerConfig, TextLayerState};
+use areka_emo_text::state::TextLayerState;
 use areka_emo_text::writing::WritingMode;
 use areka_parsers::balloon::{
     parse_str, BalloonModel, Font, FontColor, Origin, ValidRect, WindowPosition, WordWrapPoint,
 };
 use areka_parsers::charset::{decode, DefaultEncoding};
-use areka_sakura::contract::{ActorKey, CueCommand, TalkCue};
-use areka_sakura::TextSink;
+use areka_sakura::contract::{ActorKey, CueCommand, CueSink, TalkCue};
 use windows::Win32::UI::WindowsAndMessaging::PostQuitMessage;
 use wintf_winmsg_executor::{FilterResult, MessageLoop};
 
 // ── パイプライン土台（実 channel・実 spawn_ui・専用 pump スレッド） ──────────────────
 
-/// テスト用 cue 生成ヘルパ（state.rs／sink.rs の檻と同型）。
+/// reveal 間隔（0.25＝2 の冪・正確表現）。reveal は配送 duration 由来（`interval = duration / N`）
+/// ゆえ、Text cue へ `N × REVEAL_INTERVAL` を焼き込むと interval=0.25 の決定論的リビール時刻列を
+/// 得る（旧 char_wait=0.25 檻と機能等価・期待時刻は同一 `D/N` 算術で成立）。
+const REVEAL_INTERVAL: f64 = 0.25;
+
+/// テスト用 cue 生成ヘルパ（state.rs／sink.rs の檻と同型）。Text cue には配送
+/// duration = `N × REVEAL_INTERVAL` を焼き込み（reveal interval=0.25）、他は瞬時（duration=0）。
 fn cue(actor: &str, at: f64, command: CueCommand) -> TalkCue {
+    let duration = match &command {
+        CueCommand::Text(t) => t.chars().count() as f64 * REVEAL_INTERVAL,
+        _ => 0.0,
+    };
     TalkCue {
         at,
         actor: ActorKey::from(actor),
         command,
-    }
-}
-
-/// FP 丸めに依存しない検証用 config（char_wait=0.25 は 2 の冪＝正確表現・state.rs と同方針）。
-fn exact_config() -> TextLayerConfig {
-    TextLayerConfig {
-        char_wait: 0.25,
-        ..TextLayerConfig::default()
+        duration,
     }
 }
 
@@ -77,7 +80,7 @@ fn pump_until_idle() {
 ///
 /// 描画（DirectWrite/D2D/COM）は一切呼ばない——状態適用まで（レイアウト・可視窓の
 /// 決定は呼び出し側が純粋層 API で行う）。
-fn run_channel_pipeline(cues: Vec<TalkCue>, config: TextLayerConfig) -> TextLayerState {
+fn run_channel_pipeline(cues: Vec<TalkCue>) -> TextLayerState {
     std::thread::spawn(move || {
         let state = Rc::new(RefCell::new(TextLayerState::default()));
         let shared = Rc::clone(&state);
@@ -85,7 +88,7 @@ fn run_channel_pipeline(cues: Vec<TalkCue>, config: TextLayerConfig) -> TextLaye
             "emo-text-pipeline-test",
             move |msg: TextMsg| -> Result<ControlFlow<()>, String> {
                 handle_text_msg(msg, |cue| {
-                    shared.borrow_mut().apply_cue(&cue, &config);
+                    shared.borrow_mut().apply_cue(&cue);
                     Ok(())
                 })
             },
@@ -114,10 +117,10 @@ fn run_channel_pipeline(cues: Vec<TalkCue>, config: TextLayerConfig) -> TextLaye
 }
 
 /// channel を介さない直結適用の参照インスタンス（channel が cue を変形しないことの対照）。
-fn run_direct_pipeline(cues: &[TalkCue], config: &TextLayerConfig) -> TextLayerState {
+fn run_direct_pipeline(cues: &[TalkCue]) -> TextLayerState {
     let mut state = TextLayerState::default();
     for c in cues {
-        state.apply_cue(c, config);
+        state.apply_cue(c);
     }
     state
 }
@@ -202,7 +205,6 @@ fn horizontal_region() -> TextRegion {
 /// actor 1 の Clear 後可視数）も同時に固定する。
 #[test]
 fn same_cues_and_times_yield_identical_visible_counts_and_windows_across_instances() {
-    let config = exact_config();
     // 代表 cue 列: actor "0"（全角・明示改行 4 行→あふれ）と actor "1"（半角・Clear 割込み）。
     let cues = vec![
         cue("0", 0.0, CueCommand::Text("あい".into())),
@@ -224,9 +226,9 @@ fn same_cues_and_times_yield_identical_visible_counts_and_windows_across_instanc
     let region = horizontal_region();
 
     // 実 channel の独立インスタンス 2 本（各自の pump スレッド）＋直結参照 1 本。
-    let via_channel_a = run_channel_pipeline(cues.clone(), config);
-    let via_channel_b = run_channel_pipeline(cues.clone(), config);
-    let direct = run_direct_pipeline(&cues, &config);
+    let via_channel_a = run_channel_pipeline(cues.clone());
+    let via_channel_b = run_channel_pipeline(cues.clone());
+    let direct = run_direct_pipeline(&cues);
 
     let trace_a = observe(
         &via_channel_a,
@@ -305,10 +307,9 @@ fn same_cues_and_times_yield_identical_visible_counts_and_windows_across_instanc
 ///
 /// 幾何: validrect bottom36・font 10 → pitch 13。行構成（全量時）: L0"あい" L1"うえ"
 /// L2"お" L3"か"（top 0/13/26/39・下端 10/23/36/49）。リビール時刻:
-/// r=[0.0, 0.25, 0.5, 0.75, 1.0, 1.5]（char_wait 0.25・chunk at が下限）。
+/// r=[0.0, 0.25, 0.5, 0.75, 1.0, 1.5]（reveal interval=0.25・chunk at が下限）。
 #[test]
 fn typewriter_reveal_drives_layout_and_window_through_the_pipeline() {
-    let config = exact_config();
     let cues = vec![
         cue("0", 0.0, CueCommand::Text("あい".into())),
         cue("0", 0.25, CueCommand::NewLine { ratio: 1.0 }),
@@ -318,7 +319,7 @@ fn typewriter_reveal_drives_layout_and_window_through_the_pipeline() {
         cue("0", 1.0, CueCommand::NewLine { ratio: 1.0 }),
         cue("0", 1.5, CueCommand::Text("か".into())),
     ];
-    let state = run_channel_pipeline(cues, config);
+    let state = run_channel_pipeline(cues);
     let region = horizontal_region();
     let actor = ActorKey::from("0");
 
@@ -370,14 +371,13 @@ fn typewriter_reveal_drives_layout_and_window_through_the_pipeline() {
 /// は旧 tail に影響されず自身の at 起点で始まる。
 #[test]
 fn clear_mid_reveal_resets_visibility_and_window_through_the_pipeline() {
-    let config = exact_config();
     let cues = vec![
         // r=[0.0, 0.25, 0.5, 0.75] のうち後半 2 グリフが未リビールの時刻で Clear が届く。
         cue("0", 0.0, CueCommand::Text("あいうえ".into())),
         cue("0", 0.3, CueCommand::Clear),
         cue("0", 0.75, CueCommand::Text("xy".into())),
     ];
-    let state = run_channel_pipeline(cues, config);
+    let state = run_channel_pipeline(cues);
     let region = horizontal_region();
     let actor = ActorKey::from("0");
 
@@ -472,8 +472,7 @@ fn vertical_fixture_pipeline_scrolls_horizontally_and_is_deterministic() {
     let region = TextRegion::resolve(&merged, (400, 224), mode);
 
     // 25 列（各列 全角 1 グリフ・明示改行区切り）。cue 時刻は 0.25 グリッド＝
-    // グリフ i のリビール時刻 r_i = 0.25×i（char_wait 0.25・at が下限）。
-    let config = exact_config();
+    // グリフ i のリビール時刻 r_i = 0.25×i（reveal interval=0.25・at が下限）。
     let mut cues = Vec::new();
     for i in 0..25 {
         let at = i as f64 * 0.25;
@@ -483,8 +482,8 @@ fn vertical_fixture_pipeline_scrolls_horizontally_and_is_deterministic() {
         cues.push(cue("0", at, CueCommand::Text("あ".into())));
     }
 
-    let state_a = run_channel_pipeline(cues.clone(), config);
-    let state_b = run_channel_pipeline(cues, config);
+    let state_a = run_channel_pipeline(cues.clone());
+    let state_b = run_channel_pipeline(cues);
     let actors = [ActorKey::from("0")];
     let probe_times = [0.0, 1.0, 3.0, 6.0, 10.0];
 

@@ -59,11 +59,32 @@ pub struct TimedSchedule<T> {
     current_offset: f64,
     /// バリアタイムアウトの絶対オフセット（barrier_offset + timeout_duration）
     barrier_timeout_offset: Option<f64>,
+    /// 占有終了 horizon（相対オフセット・0 ベース）。台本の全 cue の
+    /// `max(start_time + duration)` を canonical 変換が焼き込む（D6）。
+    ///
+    /// cue は点でなく区間 `[start, start+duration)` ゆえ、**entries を配り終えた**（＝
+    /// 最後の cue の**配送時刻**に達した）だけでは talk は完了でなく、**現在時刻が
+    /// この horizon に達して初めて**占有終了＝完了とみなす（末尾 Wait・最終 Text の
+    /// duration を終端で落とさない・早期終了しない）。
+    ///
+    /// [`new`](Self::new) の既定は 0.0。`current_offset` は常に非負（`tick` の負値ガード）
+    /// ゆえ horizon=0.0 は `current_offset >= horizon` を常に満たし、
+    /// [`is_completed`](Self::is_completed) は「entries 枯渇かつ barrier なし」の
+    /// 旧挙動に一致する（手組みスケジュールの後方互換）。
+    horizon: f64,
 }
 
 impl<T: Clone + Debug> TimedSchedule<T> {
-    /// 絶対時刻 `start_time` でスケジュールを構築。
+    /// 絶対時刻 `start_time` でスケジュールを構築（占有 horizon は 0.0 既定）。
     pub fn new(start_time: f64) -> Self {
+        Self::with_horizon(start_time, 0.0)
+    }
+
+    /// 絶対時刻 `start_time` と占有 horizon（相対）を指定してスケジュールを構築。
+    ///
+    /// canonical 変換（[`crate::cue::to_talk_schedule`]）が台本の占有 horizon を焼き込むために
+    /// 使う。手組みスケジュール（[`new`](Self::new)）は horizon=0.0 で旧挙動を保つ。
+    pub fn with_horizon(start_time: f64, horizon: f64) -> Self {
         Self {
             start_time,
             entries: Vec::new(),
@@ -72,6 +93,7 @@ impl<T: Clone + Debug> TimedSchedule<T> {
             current_barrier: None,
             current_offset: 0.0,
             barrier_timeout_offset: None,
+            horizon,
         }
     }
 
@@ -255,12 +277,22 @@ impl<T: Clone + Debug> TimedSchedule<T> {
         self.entries.len()
     }
 
-    /// 全エントリが消費済みかつバリア中でないか
+    /// 占有終了（完了）判定: 全エントリ消費済み・バリア中でない・かつ現在時刻が
+    /// 占有 horizon に達している。
+    ///
+    /// entries 枯渇（＝最後の cue の**配送時刻**到達）だけでは完了とせず、cue を区間
+    /// `[start, start+duration)` と見て**占有終了 horizon**（`max(start+duration)`）到達まで
+    /// 完了扱いしない（末尾 Wait・最終 Text の duration を終端で落とさない・D6/R2.5）。
+    ///
+    /// horizon=0.0（[`new`](Self::new) 既定）では `current_offset >= 0.0` が常に真ゆえ
+    /// 「entries 枯渇かつ barrier なし」の旧挙動に一致する（手組みスケジュールの後方互換）。
     pub fn is_completed(&self) -> bool {
-        self.entries.is_empty() && self.current_barrier.is_none()
+        self.entries.is_empty()
+            && self.current_barrier.is_none()
+            && self.current_offset >= self.horizon
     }
 
-    /// 全エントリとバッファをクリア
+    /// 全エントリとバッファをクリア（horizon も 0.0 へリセット＝clear 済みは完了状態）。
     pub fn clear(&mut self) {
         self.entries.clear();
         self.ready_buffer.clear();
@@ -268,5 +300,6 @@ impl<T: Clone + Debug> TimedSchedule<T> {
         self.current_barrier = None;
         self.current_offset = 0.0;
         self.barrier_timeout_offset = None;
+        self.horizon = 0.0;
     }
 }

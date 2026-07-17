@@ -1185,26 +1185,33 @@ mod tests {
         let actor = ActorKey::from("0");
         let mut state = TextLayerState::default();
 
-        let mk = |cmd| TalkCue {
+        // reveal は配送 duration 由来（interval = duration / N）。全 cue at=0.0 ゆえ、
+        // Text へ N×REVEAL_INTERVAL を焼き込むと reveal が連続 typewriter 進行する
+        // （旧 char_wait=0.05 と機能等価・注入時刻はこの間隔で刻む）。
+        const REVEAL_INTERVAL: f64 = 0.05;
+        let mk = |cmd: CueCommand| TalkCue {
             at: 0.0,
             actor: actor.clone(),
+            duration: match &cmd {
+                CueCommand::Text(t) => t.chars().count() as f64 * REVEAL_INTERVAL,
+                _ => 0.0,
+            },
             command: cmd,
         };
         // example の共有 fixture フル シナリオ（行1/2/3＋あふれ誘発の短行 9 本でスクロール発火）。
-        state.apply_cue(&mk(CueCommand::Text("おっはよー！".into())), &config);
-        state.apply_cue(&mk(CueCommand::NewLine { ratio: 1.0 }), &config);
-        state.apply_cue(&mk(CueCommand::Text("めっちゃええ朝やん！".into())), &config);
-        state.apply_cue(&mk(CueCommand::NewLine { ratio: 1.0 }), &config);
-        state.apply_cue(&mk(CueCommand::Text("今日もいくでー！".into())), &config);
+        state.apply_cue(&mk(CueCommand::Text("おっはよー！".into())));
+        state.apply_cue(&mk(CueCommand::NewLine { ratio: 1.0 }));
+        state.apply_cue(&mk(CueCommand::Text("めっちゃええ朝やん！".into())));
+        state.apply_cue(&mk(CueCommand::NewLine { ratio: 1.0 }));
+        state.apply_cue(&mk(CueCommand::Text("今日もいくでー！".into())));
         for _ in 0..9 {
-            state.apply_cue(&mk(CueCommand::NewLine { ratio: 1.0 }), &config);
-            state.apply_cue(&mk(CueCommand::Text("ほな".into())), &config);
+            state.apply_cue(&mk(CueCommand::NewLine { ratio: 1.0 }));
+            state.apply_cue(&mk(CueCommand::Text("ほな".into())));
         }
 
         let total_glyphs = 6 + 10 + 8 + 9 * 2;
-        let char_wait = config.char_wait;
         for step in 0..=(total_glyphs + 2) {
-            let t = step as f64 * char_wait + 0.001;
+            let t = step as f64 * REVEAL_INTERVAL + 0.001;
             let visible = state.visible_glyphs(&actor, t);
             let items: Vec<TextItem> = state
                 .actor_state(&actor)
@@ -1240,7 +1247,7 @@ mod tests {
         // present_at(earlier t_mid) で行うパターン）を検証する: 大 t（スクロール済み）から
         // 小 t（未スクロール）へ戻したとき、viewbox が un-scroll を正しく扱い oracle と一致するか。
         // viewbox は前方スクロール前提ゆえ、後方でスクロールアウト行の再露出を取りこぼすと diverge。
-        let big_t = (total_glyphs as f64 + 5.0) * char_wait;
+        let big_t = (total_glyphs as f64 + 5.0) * REVEAL_INTERVAL;
         for &back_t in &[big_t, 0.05, 0.3, 0.1, 0.5] {
             let visible = state.visible_glyphs(&actor, back_t);
             let items: Vec<TextItem> = state
@@ -1309,8 +1316,6 @@ mod tests {
         mode: WritingMode,
         /// フォント高さ（純粋レイアウトへ渡す・FixedMetrics と対）。
         font_height: f32,
-        /// typewriter 調整値（char_wait／line_pitch 係数）。
-        config: TextLayerConfig,
         /// 対象 actor（単一 actor で十分——byte 等価は actor 非依存）。
         actor: ActorKey,
         /// cue 駆動の純粋状態機械（両方式へ同一入力を供給する単一の正本）。
@@ -1363,7 +1368,6 @@ mod tests {
                 contract,
                 mode,
                 font_height: font_height as f32,
-                config: TextLayerConfig::default(),
                 actor: ActorKey::from("0"),
                 state: TextLayerState::default(),
                 rig,
@@ -1376,7 +1380,7 @@ mod tests {
                 self.oracle.clear_cache();
                 self.viewbox.request_clear();
             }
-            self.state.apply_cue(cue, &self.config);
+            self.state.apply_cue(cue);
         }
 
         /// Text cue（追記）を適用する。
@@ -1385,6 +1389,7 @@ mod tests {
                 at,
                 actor: self.actor.clone(),
                 command: CueCommand::Text(s.to_owned()),
+                duration: 0.0,
             };
             self.apply(&cue);
         }
@@ -1395,6 +1400,7 @@ mod tests {
                 at,
                 actor: self.actor.clone(),
                 command: CueCommand::NewLine { ratio: 1.0 },
+                duration: 0.0,
             };
             self.apply(&cue);
         }
@@ -1405,6 +1411,7 @@ mod tests {
                 at,
                 actor: self.actor.clone(),
                 command: CueCommand::Clear,
+                duration: 0.0,
             };
             self.apply(&cue);
         }
@@ -1806,19 +1813,25 @@ mod tests {
         let mut viewbox = ViewboxExecutor::new(&rig.core).expect("ViewboxExecutor");
         let actor = ActorKey::from("0");
         let mut state = TextLayerState::default();
-        let cue_at = |at: f64, cmd| TalkCue {
+        // reveal は配送 duration 由来（interval = duration / N）。Text へ N×0.05 を焼き込むと
+        // 各 chunk 内が旧 char_wait=0.05 と同一ペースで per-glyph 進行する（chunk 境界は at で gate）。
+        let cue_at = |at: f64, cmd: CueCommand| TalkCue {
             at,
             actor: actor.clone(),
+            duration: match &cmd {
+                CueCommand::Text(t) => t.chars().count() as f64 * 0.05,
+                _ => 0.0,
+            },
             command: cmd,
         };
-        state.apply_cue(&cue_at(0.0, CueCommand::Text("おっはよー！".into())), &config);
-        state.apply_cue(&cue_at(0.5, CueCommand::NewLine { ratio: 1.0 }), &config);
-        state.apply_cue(&cue_at(0.5, CueCommand::Text("めっちゃええ朝やん！".into())), &config);
-        state.apply_cue(&cue_at(1.2, CueCommand::NewLine { ratio: 1.0 }), &config);
-        state.apply_cue(&cue_at(1.2, CueCommand::Text("今日もいくでー！".into())), &config);
+        state.apply_cue(&cue_at(0.0, CueCommand::Text("おっはよー！".into())));
+        state.apply_cue(&cue_at(0.5, CueCommand::NewLine { ratio: 1.0 }));
+        state.apply_cue(&cue_at(0.5, CueCommand::Text("めっちゃええ朝やん！".into())));
+        state.apply_cue(&cue_at(1.2, CueCommand::NewLine { ratio: 1.0 }));
+        state.apply_cue(&cue_at(1.2, CueCommand::Text("今日もいくでー！".into())));
         for _ in 0..9 {
-            state.apply_cue(&cue_at(2.0, CueCommand::NewLine { ratio: 1.0 }), &config);
-            state.apply_cue(&cue_at(2.0, CueCommand::Text("ほな".into())), &config);
+            state.apply_cue(&cue_at(2.0, CueCommand::NewLine { ratio: 1.0 }));
+            state.apply_cue(&cue_at(2.0, CueCommand::Text("ほな".into())));
         }
 
         // 密な時間格子で前進提示（viewbox は状態依存ゆえ昇順に全フレーム）。各フレームで byte 比較。
@@ -2055,23 +2068,30 @@ mod tests {
             at: 0.0,
             actor: actor.clone(),
             command: cmd,
+            duration: 0.0,
         };
         // 実 example と同一の cue `at` スケジュール（LINE1 at 0.0・LINE2 at 0.5・LINE3 at 1.2・
         // あふれ短行 at 2.0）。at を分散させることで「幽霊空行」（未リビール NewLine による）
         // の発生タイミングも実機と一致する（全 at=0.0 だと即座に空行が出て人工的にスクロールする）。
-        let cue_at = |at: f64, cmd| TalkCue {
+        // reveal は配送 duration 由来（interval = duration / N）。Text へ N×0.05 を焼き込むと
+        // 各 chunk 内が旧 char_wait=0.05 と同一ペースで per-glyph 進行する（chunk 境界は at で gate）。
+        let cue_at = |at: f64, cmd: CueCommand| TalkCue {
             at,
             actor: actor.clone(),
+            duration: match &cmd {
+                CueCommand::Text(t) => t.chars().count() as f64 * 0.05,
+                _ => 0.0,
+            },
             command: cmd,
         };
-        state.apply_cue(&cue_at(0.0, CueCommand::Text("おっはよー！".into())), &config);
-        state.apply_cue(&cue_at(0.5, CueCommand::NewLine { ratio: 1.0 }), &config);
-        state.apply_cue(&cue_at(0.5, CueCommand::Text("めっちゃええ朝やん！".into())), &config);
-        state.apply_cue(&cue_at(1.2, CueCommand::NewLine { ratio: 1.0 }), &config);
-        state.apply_cue(&cue_at(1.2, CueCommand::Text("今日もいくでー！".into())), &config);
+        state.apply_cue(&cue_at(0.0, CueCommand::Text("おっはよー！".into())));
+        state.apply_cue(&cue_at(0.5, CueCommand::NewLine { ratio: 1.0 }));
+        state.apply_cue(&cue_at(0.5, CueCommand::Text("めっちゃええ朝やん！".into())));
+        state.apply_cue(&cue_at(1.2, CueCommand::NewLine { ratio: 1.0 }));
+        state.apply_cue(&cue_at(1.2, CueCommand::Text("今日もいくでー！".into())));
         for _ in 0..9 {
-            state.apply_cue(&cue_at(2.0, CueCommand::NewLine { ratio: 1.0 }), &config);
-            state.apply_cue(&cue_at(2.0, CueCommand::Text("ほな".into())), &config);
+            state.apply_cue(&cue_at(2.0, CueCommand::NewLine { ratio: 1.0 }));
+            state.apply_cue(&cue_at(2.0, CueCommand::Text("ほな".into())));
         }
         let _ = mk;
 
@@ -2079,9 +2099,9 @@ mod tests {
         let dt = 0.02f64;
         let mut dump_times: Vec<f64> = vec![0.35, 1.10, 1.90, 2.02, 2.10, 2.30, 2.60, 3.00];
         eprintln!(
-            "[diag] out_dir={out_dir} pitch={pitch} region_h={} char_wait={}",
+            "[diag] out_dir={out_dir} pitch={pitch} region_h={} reveal_interval={}",
             region.bottom() - region.top(),
-            config.char_wait
+            0.05
         );
         let mut t = 0.0f64;
         while t <= 3.05 {

@@ -119,6 +119,83 @@ fn clear_resets_all_state() {
 }
 
 // ============================================================================
+// 占有 horizon と is_completed（占有終了判定・D6 / R2.5）
+//
+// is_completed は「entries 枯渇かつ barrier なしかつ current_offset >= horizon」。
+// new(start) は horizon=0.0 を既定とし、current_offset は常に >=0 ゆえ horizon=0 は
+// 素通り＝「entries 枯渇かつ barrier なし」の旧挙動に一致する（手組みスケジュールの後方互換）。
+// ============================================================================
+
+/// `new(start)` の既定 horizon は 0.0 ゆえ、is_completed は entry 枯渇で即真（旧挙動保存）。
+#[test]
+fn new_defaults_horizon_to_zero_preserving_legacy_is_completed() {
+    let mut sched = TimedSchedule::<String>::new(0.0);
+    sched.insert(Entry::Payload(1.0, "a".into()));
+    assert!(!sched.is_completed());
+    sched.tick(1.0);
+    assert!(
+        sched.is_completed(),
+        "horizon=0.0（既定）では entry 枯渇で即完了（旧挙動）"
+    );
+}
+
+/// horizon > 最終 entry offset のとき、entry を配り終えても current_offset が horizon に
+/// 達するまで完了しない（占有終了判定）。
+#[test]
+fn with_horizon_defers_completion_until_current_offset_reaches_horizon() {
+    let mut sched = TimedSchedule::<String>::with_horizon(0.0, 5.0);
+    sched.insert(Entry::Payload(1.0, "a".into()));
+
+    sched.tick(1.0);
+    assert_eq!(sched.remaining(), 0, "entry は配り終えた");
+    assert!(
+        !sched.is_completed(),
+        "current_offset(1.0) < horizon(5.0) ゆえ未完了"
+    );
+
+    sched.tick(4.999);
+    assert!(!sched.is_completed(), "horizon 直前は未完了");
+
+    sched.tick(5.0);
+    assert!(sched.is_completed(), "horizon 到達で完了");
+}
+
+/// horizon を超過していても barrier 中は完了しない（barrier 優先）。解除後に完了する。
+#[test]
+fn with_horizon_not_completed_while_barrier_active_even_past_horizon() {
+    let mut sched = TimedSchedule::<String>::with_horizon(0.0, 1.0);
+    sched.insert(Entry::Barrier(
+        0.5,
+        BarrierKind::WaitForInput { timeout: None },
+    ));
+
+    sched.tick(2.0); // horizon(1.0) 超過だが barrier で停止
+    assert!(sched.current_barrier().is_some());
+    assert!(!sched.is_completed(), "barrier 中は horizon 超過でも未完了");
+
+    sched.notify_barrier_resolved(None);
+    assert!(
+        sched.is_completed(),
+        "解除後 entries 空・current_offset>=horizon で完了"
+    );
+}
+
+/// `clear()` は horizon も 0.0 へリセットするため、clear 済みスケジュールは完了状態になる。
+#[test]
+fn clear_resets_horizon_so_cleared_schedule_is_completed() {
+    let mut sched = TimedSchedule::<String>::with_horizon(0.0, 5.0);
+    sched.insert(Entry::Payload(1.0, "a".into()));
+    sched.tick(1.0);
+    assert!(!sched.is_completed(), "horizon 5.0 未到達ゆえ未完了");
+
+    sched.clear();
+    assert!(
+        sched.is_completed(),
+        "clear は horizon をリセットし完了状態にする"
+    );
+}
+
+// ============================================================================
 // バリアテスト
 // ============================================================================
 

@@ -1,14 +1,14 @@
 //! 回帰テスト（アクター・発行列観測）— 冪等性・未解決混在の継続・emo2 alias 分類（要件 3.4/5.3/6.1/7.x）。
 //!
 //! クレートの **公開 API のみ** を用い、実 emo2 fixture の alias 実データで解決テーブルを構築して
-//! `TalkCue` 列を `SerikoSink::emit` で直入力する。停止同期は `close()`→`join()` のみ
+//! `TalkCue` 列を単一の出力契約 `CueSink::emit` で直入力する。停止同期は `close()`→`join()` のみ
 //! （sleep・polling・表示を一切伴わない・要件 7.2/7.4）。`join` 復帰時点で先行 Cue は全て
 //! FIFO 単一スレッドで処理済みゆえ、`MockSurfaceOutput::records()` の全 `DisplayCommand` 列を
 //! 期待列と全値比較（binds 含む）できる。3 ケースはいずれも発行列 observable で判定でき、
 //! cross-thread の log 捕捉を要しない（log 檻は task 4.1 の同期 handler テストの領分）。
 
 use areka_emo_compose::EmoWorld;
-use areka_sakura::{ActorKey, CueCommand, SurfaceSink, TalkCue};
+use areka_sakura::{ActorKey, CueCommand, CueSink, TalkCue};
 use areka_seriko::{
     build_static_bindset, spawn_seriko, DisplayCommand, MockSurfaceOutput, SurfaceResolver,
 };
@@ -19,6 +19,7 @@ fn emote_cue(at: f64, scope: &str, key: &str) -> TalkCue {
         at,
         actor: ActorKey::from(scope),
         command: CueCommand::Emote { key: key.into() },
+        duration: 0.0, // 表情切替は瞬時（明示的 0）。
     }
 }
 
@@ -67,12 +68,12 @@ fn idempotent_repeat_surface_no_reemit() {
     let records = mock.records();
 
     let (mut sink, handle) = spawn_seriko(resolver, binds.clone(), mock);
-    SurfaceSink::emit(&mut sink, emote_cue(0.0, "0", "2100")); // 初回 Show(2100)
-    SurfaceSink::emit(&mut sink, emote_cue(1.0, "0", "通常")); // 通常→[2100]＝同一状態・再発行なし
-    SurfaceSink::emit(&mut sink, emote_cue(2.0, "0", "2100")); // 同一 id 再指定・再発行なし
-    SurfaceSink::emit(&mut sink, emote_cue(3.0, "0", "-1")); // Hide（Changed）
-    SurfaceSink::emit(&mut sink, emote_cue(4.0, "0", "-1")); // 既に Hidden・再発行なし
-    SurfaceSink::emit(&mut sink, emote_cue(5.0, "0", "2200")); // 別 surface（Changed）
+    CueSink::emit(&mut sink, emote_cue(0.0, "0", "2100")); // 初回 Show(2100)
+    CueSink::emit(&mut sink, emote_cue(1.0, "0", "通常")); // 通常→[2100]＝同一状態・再発行なし
+    CueSink::emit(&mut sink, emote_cue(2.0, "0", "2100")); // 同一 id 再指定・再発行なし
+    CueSink::emit(&mut sink, emote_cue(3.0, "0", "-1")); // Hide（Changed）
+    CueSink::emit(&mut sink, emote_cue(4.0, "0", "-1")); // 既に Hidden・再発行なし
+    CueSink::emit(&mut sink, emote_cue(5.0, "0", "2200")); // 別 surface（Changed）
     sink.close().expect("Close を送れること");
     handle.join().expect("Close で正常終了する");
 
@@ -120,9 +121,9 @@ fn unresolved_mixed_still_processes_following() {
     let records = mock.records();
 
     let (mut sink, handle) = spawn_seriko(resolver, binds.clone(), mock);
-    SurfaceSink::emit(&mut sink, emote_cue(0.0, "0", "2100")); // 有効
-    SurfaceSink::emit(&mut sink, emote_cue(1.0, "0", "存在しない別名")); // 未解決＝skip
-    SurfaceSink::emit(&mut sink, emote_cue(2.0, "0", "2200")); // 有効（継続の証跡）
+    CueSink::emit(&mut sink, emote_cue(0.0, "0", "2100")); // 有効
+    CueSink::emit(&mut sink, emote_cue(1.0, "0", "存在しない別名")); // 未解決＝skip
+    CueSink::emit(&mut sink, emote_cue(2.0, "0", "2200")); // 有効（継続の証跡）
     sink.close().expect("Close を送れること");
     handle.join().expect("Close で正常終了する");
 
@@ -167,8 +168,8 @@ fn emo2_alias_single_and_multi_classification() {
     let records = mock.records();
 
     let (mut sink, handle) = spawn_seriko(resolver, binds.clone(), mock);
-    SurfaceSink::emit(&mut sink, emote_cue(0.0, "0", "通常")); // 単一候補 [2100]→2100
-    SurfaceSink::emit(&mut sink, emote_cue(1.0, "1", "静観")); // 複数候補 [2106,2206]→先頭 2106
+    CueSink::emit(&mut sink, emote_cue(0.0, "0", "通常")); // 単一候補 [2100]→2100
+    CueSink::emit(&mut sink, emote_cue(1.0, "1", "静観")); // 複数候補 [2106,2206]→先頭 2106
     sink.close().expect("Close を送れること");
     handle.join().expect("Close で正常終了する");
 
