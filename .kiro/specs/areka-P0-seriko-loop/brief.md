@@ -2,13 +2,13 @@
 
 > **種別**: 本坑（main）増分。⑤ seriko 帰属（M-life 構成要素＝まばたき等の自律アニメーション）。roadmap 増分「⑤ seriko: `seriko-loop`（SERIKO ループ＝blink random/bind+random）」の brief 化（2026-07-16 実査注記を正式化）。
 > **調査日**: 2026-07-16（再入精査⑧・2026-07-16 再入精査⑦の実査を継承）。
-> **⛔ 時限ゲート（フェーズ別・2026-07-16 精密化）**: `areka-P0-cue-playback-duration`（実装中）の完了が **tasks 生成・実装フェーズの前提**（再入精査⑦裁定）——同 spec の設計討議が **seriko の cue 受信面を `dola::CueSink` 実装へ書き換える**（記憶 [[areka-cue-runtime-consolidated-in-dola]]）ため、本 spec の Tick 注入口は **settled な受信面**へ増設する。**要件・設計は先行着手可**（**Fable 早期投入の1本目・推奨即時着手**——pattern 純関数・PatternState 公開形・乱数注入・合成入力拡張は cue モデル**非依存**＝設計の大半が今できる。Tick 注入口の節のみ branch 実測を暫定参照と明記）。**義務**: cue-playback マージ後に `/kiro-validate-design` を settled コードへ再実行（再突合）してから tasks へ（roadmap 時限ゲート注記「フェーズ別ゲート精密化」が正本）。
+> **⛔ 時限ゲート（フェーズ別・2026-07-16 精密化）→ ✅ 解除（2026-07-17・cue-playback 完了＝追記㉗）**: ~~`areka-P0-cue-playback-duration`（実装中）の完了が tasks 生成・実装フェーズの前提~~ **→充足済み**＝seriko 受信面の `dola::CueSink` 化は main 着地済み（`actor.rs:122-126` `impl dola::cue::CueSink for SerikoSink`・受信面は `SerikoMsg = Cue | Close` のまま時間源なし＝Tick 注入口の増設要は不変・2026-07-17 実測）。全フェーズ着手可（**Fable 早期投入の1本目・推奨即時着手**——pattern 純関数・PatternState 公開形・乱数注入・合成入力拡張は cue モデル**非依存**）。着手時は settled コードを直接参照する。**完了ゲート（2026-07-17 合流裁定＝推奨から格上げ・roadmap 追記㉘）**: 本 spec の **/kiro-complete は `mayuna-compose` 完了が前提**——実機サインオフ必達条件「まばたき2系統」のうち sakura 側（bind+random）は bindgroup1400-1402 が既定 OFF（fixture に `default,1` 無し）で、ON にする唯一の源は `\![bind]` 貫通＝mayuna の成果物のため。決定論檻・kero 側（bind 非依存 `interval,random`）の実装/観測は mayuna 未完でも先行可。
 
 ## Problem
 
 emo2 は起動しても**まばたきしない**。SERIKO の時限アニメ（interval,random 系）を駆動するランタイムが不在:
 
-- **seriko に時間源が無い**（確認済み 2026-07-16）: 受信面は `SerikoMsg = Cue(TalkCue) | Close` のみ（`actor.rs:49-54`）＝**cue 到着駆動オンリー**。`handle_message` は `cue.at` をログ以外に使わず、クロック・スケジューラ・`Instant` は皆無。
+- **seriko に時間源が無い**（確認済み 2026-07-16・#60 後の 2026-07-17 再実測でも不変）: 受信面は `SerikoMsg = Cue(TalkCue) | Close` のみ（現行 `actor.rs:52-57`〔旧 :49-54〕・`impl dola::cue::CueSink for SerikoSink` は `:122-126`）＝**cue 到着駆動オンリー**。`handle_message` は `cue.at` をログ以外に使わず、クロック・スケジューラ・`Instant` は皆無。
 - **pattern 状態が合成入力に無い**: emo-present のキャッシュキー（`cache.rs:46-47`・module doc `:8-10`）に「将来 seriko がアニメ pattern 状態を合成入力へ加える際は本キーへ追加する」の**予約記述が実在**。emo-compose 側は `plan.rs:11-14` が **pattern0 固定の合成規則**（pattern 進行の通貨なし＝本 spec の拡張対象）・予約シームは `world.rs:154-159`（将来の seriko system 統合用の脱出口）——いずれにせよ pattern を進めても表示に反映する通貨が無い。
 - emo2 実例は**2系統**（fixture 実測 2026-07-16）: **kero＝`interval,random,4`**（`surfaces.txt:429-431` 系・`surface.append10,2100…` の blink・pattern に `overlay,-1`＝層クリア終端）／**sakura＝`interval,bind+random,4`**（`surfaces.txt:73,79,84`＝animation1400-1402・**まばたきカテゴリ bindgroup1400-1402〔shell descript.txt:50-52＝通常/半目/ジトー〕の bind が ON のときだけ** random 発火——bind ゲートの有無が2系統の差。**⚠️ 1400-1402 に `default,1` が無い＝既定 OFF**＝static_binds のままでは sakura は一切まばたきしない。なお scope doc §2 の「**目**カテゴリ bind ON かつ random」表記は fixture 実測と不一致——目カテゴリは別グループ bindgroup1300 系＝design で scope doc を訂正）。
 

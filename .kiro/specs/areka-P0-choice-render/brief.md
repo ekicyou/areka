@@ -2,20 +2,20 @@
 
 > **種別**: 本坑（main）増分。⑥ emo 帰属（M-dialogue の表示側＝バルーン内選択肢 UI）。**ChoiceSelection I/O 契約の正本**（choice-select-events が消費・撫でクラスタの `HitRegion` 正本パターン再演）。
 > **調査日**: 2026-07-16（再入精査⑧・fixture 実物調査＋コード実態偵察）。
-> **⛔ 時限ゲート（フェーズ別・2026-07-16 精密化）**: `areka-P0-cue-playback-duration`（実装中）完了が **tasks 生成・実装フェーズの前提**（emo-text の cue 受信面 `CueSink` 化＋`CuePlayer` の pending choices 供給）。**要件・設計は先行着手可**（**Fable 早期投入の2本目**——選択肢 resident・hit 幾何・ハイライト描画・`\_l` 消費・原子性は cue モデル**非依存**＝先に設計可。cue 供給節のみ **`sakura-dialogue-tags` design が確定させる choice cue 形**を消費——同 spec の design 先行完了を待って着手するのが推奨順序）。**義務**: cue-playback マージ後に `/kiro-validate-design` を settled コードへ再実行（再突合）してから tasks へ（roadmap 時限ゲート注記「フェーズ別ゲート精密化」が正本）。
+> **⛔ 時限ゲート（フェーズ別・2026-07-16 精密化）→ ✅ 解除（2026-07-17・cue-playback 完了＝追記㉗）**: ~~`areka-P0-cue-playback-duration`（実装中）完了が tasks 生成・実装フェーズの前提~~ **→充足済み**＝emo-text の cue 受信面 `CueSink` 化・`CuePlayer` の `pending_choices`（`runtime.rs:98`・読み口 `:355`）/`resolve_choice`（`:279`）は settled シームとして main 着地済み（2026-07-17 実測）。全フェーズ着手可（**Fable 早期投入の2本目**——選択肢 resident・hit 幾何・ハイライト描画・`\_l` 消費・原子性は cue モデル**非依存**。cue 供給節のみ **`sakura-dialogue-tags` design が確定させる choice cue 形**を消費——同 spec の design 先行完了を待って着手するのが推奨順序）。着手時は settled コードを直接参照する。
 
 ## Problem
 
 emo2 のメニュー（`menu.pasta`）は `\q[おしゃべり頻度,Onおしゃべり頻度メニュー]` 等の選択肢**表示**を要求するが、areka に選択肢 UI が存在しない:
 
-- emo-text `apply_cue` は Choice cue を**「actor ごと一度 warn して無視」する明示シーム**として実装済み（`state.rs:186-191`・warn 実文言「Choice cue は M1 未対応のため無視する（choice-render シーム）」）——本 spec がこのシームの宛先。
+- emo-text `apply_cue` は Choice cue を**「actor ごと一度 warn して無視」する明示シーム**として実装済み（#60 後の現行 `state.rs:224-229`・warn は `:227`〔旧 :186-191〕・実文言「Choice cue は M1 未対応のため無視する（choice-render シーム）」・2026-07-17 実測）——本 spec がこのシームの宛先。
 - 内容キャンバスの住人は `ResidentContent`＝`GlyphRun | Image | Surface`（`canvas.rs:171-180`・`#[non_exhaustive]`・Image/Surface は型シームのみ）——**クリック可能な住人・選択肢 resident が無い**。hover/highlight 能力も無い（`region.rs` は幾何のみ）。
 - emo-present `PresentCommand` は Show/Hide/Invalidate のみ（`command.rs:38-67`）＝**ハイライトを present 層で重ねる経路は無い**→ 反転描画は emo-text canvas 自前（1枚物合成の思想どおり・[[areka-emo-own-compositor-atlas]]）。
 - メニューは `\_l[5em,2lh]`（em/lh 単位カーソル）で「閉じる/もどる」を字下げ配置する——**`\_l` の消費（単位換算＋カーソル適用）も無所属**＝本 spec が所有。
 
 ## Current State（2026-07-16 実装偵察）
 
-- **供給側は cue-playback ブランチが建設中**: `CuePlayer` が `CueCommand::Choice{id,text}` を `pending_choices` バッファへ分離（要素型 `PendingChoice`＝`runtime.rs:53`・分離実体は tick 内 `:193-201`）し、`WaitForChoice` barrier で停止（`:65-71,231-235`）・`pending_choices()` 読み口（`:355`）・`resolve_choice()` 解除（`:279`）まで実装済み。**表示器が居ない**だけ。
+- **供給側は settled（→✅ 2026-07-17 main 着地・現行実測へ更新）**: `CuePlayer` が `CueCommand::Choice{id,text}` を `pending_choices` バッファへ分離（要素型 `PendingChoice`＝`runtime.rs:52-58`・分離実体は tick 内 `:195-200`）し、`WaitingForChoice` で停止（`:71`・遷移 `:231-237`）・`pending_choices()` 読み口（`:355-357`）・`resolve_choice()` 解除（`:279-293`）まで実装済み。**表示器が居ない**だけ。
 - **描画基盤は完備**: emo-text の状態機械→レイアウト→D2D 描画→`TextSurface`（viewbox 済み）・`TextSlotView`（emo-present 予約スロット）・DirectWrite フォントメトリクス（em/lh 換算の材料）・`TextRegion` 幾何。
 - **入力基盤は完備**: wintf event/hit-test ✅・バルーン窓は `GhostWindows.balloon_window(scope)` で実在（`spawn.rs:88-93,101-123`）。バルーン窓のクリック捕捉と AlphaMask の関係（バルーン枠の不透明域＝クリック可）は emo-present 実装済み領分。
 - **fixture 実物**（メニューの実形・`menu.pasta:15/33/62`）: 選択肢は**テキスト行として縦に並ぶ**（`\n` 区切り・2〜4項目〔:62 は2項目〕）・**バルーン fixture は cursor.\* スタイルキーを明示指定**（`emo2-kakukaku/descript.txt:41-51`＝`cursor.style,square`・`cursor.brush.color` 105,25,25・`cursor.font.color` 白・`cursor.blendmethod,none`——ukadoc 上 cursor.\* は選択肢マーカーの**描画スタイルキー群**であり画像ではない）＝**M1 ハイライトの期待値は fixture 指定スタイル（指定色の矩形塗り＋文字色切替）が第一候補**（scope doc §4「矩形反転で代替可」は cursor.\* 未指定時の縮退として保持・design で ukadoc/SSP 実観察と突合し確定）。
@@ -69,7 +69,7 @@ Choice cue（＋直後の WaitForChoice barrier）を受けた emo-text が**バ
 
 ## Existing Spec Touchpoints
 
-- **Extends**: `completed/areka-P0-emo-text-layer`（`state.rs:186-191` の明示シームを実装で置換・既存 typewriter/scroll 決定論資産は不変）。
+- **Extends**: `completed/areka-P0-emo-text-layer`（`state.rs:224-229`〔現行実測〕の明示シームを実装で置換・既存 typewriter/scroll 決定論資産は不変）。
 - **Adjacent**: `areka-P0-input-events`（バルーン窓 pointer 配線の流儀を共有——ゴースト窓＝input-events・バルーン窓＝本 spec で**窓が別＝衝突なし**・申し送り整合済み）／`areka-P0-emo-text-viewbox` ✅（差分再描画への相乗り）。
 - **Consumes**: scope doc §4「cursor.* 省略可＝矩形反転代替」（`doc/emo2-conformance-scope.md`）。
 

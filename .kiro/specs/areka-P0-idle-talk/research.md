@@ -210,6 +210,8 @@ ukadoc MCP で「Status/talking/choosing」を2度検索したがいずれも no
 
 - **#2（2026-07-17）— `Status` の状態語彙と放置時表現**: 開発者指摘「Status を最小実装へ丸めるな・ukadoc に準じよ」を受け、`Status` を ukadoc `Status [SSP拡張]`（`ukadoc:spec_shiori3:Status_20_5bSSP_62e1_5f35_5d:1`）の実行状態語彙全体（talking／choosing／minimizing／induction／passive／timecritical／nouserbreak／online／opening(種類)／balloon(ID群)・カンマ連結）へ拡充。**決裁 (甲)**: M1 は源が既配線の `talking` のみ実導出・残9状態は語彙保持＋非アクティブ縮退＋実測差替シーム（Reference1/2 同型）。放置時は**アクティブ集合が空→ヘッダ行省略**（正典＋実 SSP 捕獲ログ `ayame.log` 一致・`Status: talking` は再生中のみ）。逆側の罠＝アイドル時 `Status: talking` 送出は pasta 自発会話を恒久抑制（実 pasta `virtual_dispatcher.lua:98/123` の負ガード `req.status == "talking"` → skip）＝Req6 前提。**残状態の実導出**は本 spec 外＝choosing は `areka-P0-choice-select-events`・他は新設追跡 spec `areka-P0-status-execution-states`（2026-07-17 立ち上げ）＋ロードマップ追記。Requirement 2 を7基準へ全面改稿（旧「talking のみ・将来値」フレーミングを撤回）。裏取り根拠は本会話の研究ワークフロー（ukadoc 正典・emo2 fixture・実 SSP wire・敵対的検証3レンズ全会一致）。
 
+- **#3（2026-07-17・ポートフォリオ合流セッション）— §9.5 の実質欠陥4件の要件本文適用**: 並走4spec 要件マージ後の合流セッション（開発者指示「衝突を正しく解決しロードマップ・要件を書き直せ」）で決裁・適用済み。(1) Req2.6 へ fail-open ただし書き（pasta 完全一致比較・実測行は **:98/:123**〔§9.5 の :96,121 は僅少ドリフト〕・台帳/choice-select-events へ申し送り）。(2) Req6.1 を「自発トーク（OnTalk 由来）」へ訂正——敵対的検証の指摘により 15-30 秒は**要件値でなく fixture 既定値の注記**へ降格（メニューで実行時可変・emo2 は聖典でない）。(3) Req6.2 を削除でなく**ログ/wire 観測**（NOTIFY・Ref3="0"・`Status: talking`）へ書換（Req5.3 観測資産で無償・非事象問題を回避しつつ実機相関証跡を残す）。(4) Req3.1 へ全構築点被覆を明文化＋推奨実装＝チョークポイント（`handle_call`／`run_shiori_loop`）検証・force_quit stale TODO 解消と OnClose の Status 添付は design 送り。あわせて Req6.3 の失効参照を completed へ更新。実装順裁定: **idle-talk 先行→input-events**（`ShioriCall`/`ShioriBackend` 共有型の shaper 先行＝衝突最小・ハードゲートではない＝逆順は機械的追随）——正本は roadmap 追記㉘。
+
 ---
 
 ## 9. セッション引き継ぎ（2026-07-17・設計フェーズ再開用）
@@ -244,9 +246,9 @@ ukadoc MCP で「Status/talking/choosing」を2度検索したがいずれも no
 4. `RecordedCall` の status 観測フィールド（§7.1.4）。
 5. Reference1/2 将来シームの口（§7.1.5）。
 
-### 9.5 【未決＝次セッションで要開発者決裁】要件の実質的欠陥4件（議題#3候補・**本セッションでは未適用**）
+### 9.5 【✅決着済み 2026-07-17】要件の実質的欠陥4件（→ §8 決着ログ #3 で要件本文へ適用済み）
 
-> ブロッカー監査で発見。開発者の決裁前ゆえ requirements.md へは**未反映**。設計フェーズ冒頭で議題化すること。
+> ブロッカー監査で発見→ **2026-07-17 ポートフォリオ合流セッションで4件全て requirements.md へ適用済み**（適用形・修正差分は §8 #3 が正本。以下は発見時の記録＝履歴保存。なお (1) の行番号は実測 :98/:123）。
 
 1. **[最重要・隠れギャップ級] Req2.2 のカンマ連結が emo2 に対し fail-open する**: 実 pasta の talk 抑制ゲートは `act.req.status == "talking"` の**完全一致比較**（`vendors/pasta/crates/pasta_lua/scripts/pasta/shiori/event/virtual_dispatcher.lua:96,121`）であって**集合メンバシップ判定ではない**（値は `lua_request.rs:110` で生文字列のまま転記）。ゆえに `talking,online` 等「talking と別状態の同時アクティブ」で抑制が fail-open し、**talk 再生中に OnTalk が発火**する（areka 側は NOTIFY 応答破棄で飲むため症状は「トークが黙って捨てられる」＋pasta の `next_talk_time`／チェイン状態だけが進む）。**M1 が無事なのは Req2.5 の非アクティブ縮退で wire が厳密に `talking` になるからに過ぎない**＝**Req2.6 の「送出契約を変えず実値へ差し替えられる」保証は適合対象 emo2 に対して条件付き**。→ Req2.6 のシームへ但し書きを明記し `areka-P0-status-execution-states` 台帳へ申し送るべき。
 2. **Req6.1 の文言が事実誤り**: 「自発会話（**時報系トーク等**）」は実 pasta と矛盾。`check_hour` は初回呼出で `next_hour_unix` を次の正時に設定して nil を返すだけ＝**発火は次の正時（最大約1時間後）**、さらに `hour_margin`（既定30秒・emo2 `pasta.toml` 未設定）で正時直前は OnTalk までスキップ。**数分放置で観測できる自発会話は OnTalk のみ**（emo2 `pasta.toml` `[ghost] talk_interval_min=15`／`talk_interval_max=30` 秒）。→ 観測対象を **OnTalk** へ訂正すべき（brief:19 の「hour.pasta が在る＝時報が来る」も同様に誤読を誘う）。

@@ -2,7 +2,7 @@
 
 > **種別**: 本坑（main）増分。③ kanade 帰属（M-life 構成要素）。roadmap 増分「③ kanade: `idle-talk`（OnSecondChange 自発会話）」の brief 化。
 > **調査日**: 2026-07-16（再入精査⑦・実装偵察で**背骨は既に配線済み**と判明→「正典充足＋実機サインオフ」へ再スコープ）。
-> **並走性**: 編集面は kanade のみ＝実装中の `areka-P0-cue-playback-duration`（dola/sakura/emo-text/seriko）と**真に並走可**。
+> **並走性**: 編集面は kanade のみ＝実装中の `areka-P0-cue-playback-duration`（dola/sakura/emo-text/seriko）と**真に並走可**。**【2026-07-17 訂正】**「編集面は kanade のみ」は要件討議 #2 の `Status` 拡充で失効——実編集面は **kanade＋shiori-host32-host＋ShioriBackend 実装（areka-ghost/areka）の4クレート**（research §3/§9.4 が正本）。cue モデル（ゲート定義面）との交差ゼロは真＝並走可の結論は不変（cue-playback は 2026-07-17 完了済み）。
 
 ## Problem
 
@@ -28,7 +28,7 @@ OnSecondChange リクエストが**正典 Reference（Ref0〜3）＋`Status` ヘ
 
 1. **design 冒頭の実査**: `events.rs:86-101` の現 Reference 充足を確認し、正典4値（Ref0=OS 連続起動 hour・Ref1=見切れ・Ref2=重なり・Ref3=cantalk）との差分表を design.md に載せる。
 2. **Ref0〜2 の値源と縮退**: Ref0＝OS uptime（`GetTickCount64` 系・注入可能な時刻源に載せ決定論維持）。**Ref1（見切れ）/Ref2（重なり）は M1 固定 0＋算出シーム**（真値は窓 geometry＝UI スレッド側の知識。kanade worker へ運ぶには Tick メッセージへの付帯が要る＝**TickInfo 拡張の口だけ**設計し、実測は増分へ。emo2 dic が見切れ/重なりを実際に使うかを design で grep 確認し、未使用なら固定 0 の正当性を記録）。
-3. **`Status` ヘッダ**: kanade の ShioriCall 生成（`events.rs`）へ共通ヘッダ注入の口を設け、`Steady{talk}` から `talking` を導出（talk 無し時は省略 or `Status` 無し＝SSP 挙動を ukadoc/実物で確認）。ヘッダ付与は `Shiori3Client` の既存汎用 request 経路に乗る（host 側改変なしを design で確認・`build_request` は汎用ヘッダ対応済み）。
+3. **`Status` ヘッダ**: kanade の ShioriCall 生成（`events.rs`）へ共通ヘッダ注入の口を設け、`Steady{talk}` から `talking` を導出（talk 無し時は省略 or `Status` 無し＝SSP 挙動を ukadoc/実物で確認）。~~ヘッダ付与は `Shiori3Client` の既存汎用 request 経路に乗る（host 側改変なしを design で確認・`build_request` は汎用ヘッダ対応済み）。~~ **【2026-07-17 反証済み＝この前提を信じないこと】** `build_request` は固定ヘッダ集合のみで任意ヘッダ注入機構は無い（`shiori3.rs:58-118` 実測）＝**host32（`shiori-host32-host`）の破壊的改変が必須**（research §3 の file:line 証拠・要件討議 #1 で受容済みコスト）。
 4. **回帰檻**: 送信イベント集合ホワイトリスト（mock shiori が受けた ID 列を検査）・NOTIFY Value 破棄・Status 遷移（None→無/Some→talking）を決定論テスト化（[[deterministic-test-coverage-mandate]]）。
 5. **実機サインオフ**: 実 emo2 を数分放置→自発会話（hour.pasta 系）の発火を目視。talk 中の非割込みも確認。
 

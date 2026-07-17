@@ -57,7 +57,7 @@
 3. While アクティブな実行状態が1つも無い（アイドル）, the OnSecondChange リクエスト shall `Status` ヘッダ行を一切付与しない（空値でも非 talking 値でもなく、行そのものを省略する＝実 SSP wire 準拠）。
 4. While アクティブなトークが再生中, the kanade shall 実行状態 `talking` を運行状態 `Steady{talk}` から実値で導出する。
 5. The kanade shall `Status` の各実行状態をそれぞれの権威ある源から導出し、M1 で源サブシステムが未実装の状態（choosing／minimizing／induction／passive／timecritical／nouserbreak／online／opening(種類)／balloon(ID群)）を語彙から除外せず、常に非アクティブとして導出する（Reference1/Reference2 と同型の実測差替シームを各状態に備える）。
-6. Where 将来の増分で状態の源サブシステムが供給される, the kanade shall `Status` の送出契約（カンマ連結書式・ヘッダ位置・空集合→行省略）を変えずに当該状態の導出を実値へ差し替えられる。
+6. Where 将来の増分で状態の源サブシステムが供給される, the kanade shall `Status` の送出契約（カンマ連結書式・ヘッダ位置・空集合→行省略）を変えずに当該状態の導出を実値へ差し替えられる。**ただし書き（2026-07-17 合流裁定＝research §9.5.1 の適用）**: 本保証は wire 書式の契約であり、適合対象 emo2（実 pasta）の talk 抑制ゲートは `Status` 値の**完全一致比較**（`virtual_dispatcher.lua:98,123`＝`status == "talking"`・集合メンバシップ判定でない）であるため、talking と他状態の同時アクティブ（カンマ連結値）や非 talking 単独値では抑制が **fail-open** する。実値差替の解禁時は消費側互換の検証（複合値 wire での実機/harness 観測）を受け入れ条件に含めること（台帳 `areka-P0-status-execution-states`・M1 最初の非 talking 値 `choosing` は `areka-P0-choice-select-events` へ申し送り済み）。M1 が安全なのは非アクティブ縮退により wire が厳密に `talking` 単独になるためである。
 7. The kanade shall `talking` をトーク再生中に限って送出し、アイドル時に `talking` を送出しない（アイドル時の `Status: talking` は pasta の自発会話を恒久抑制するため・Requirement 6 実機サインオフの前提）。
 
 ### Requirement 3: 送出イベント集合のホワイトリスト檻（`OnTalk`/`OnHour` 恒久不送出）
@@ -66,7 +66,7 @@
 
 #### Acceptance Criteria
 
-1. The kanade shall SHIORI へ送出し得るイベント ID の集合を確定したホワイトリストに限定する。
+1. The kanade shall SHIORI へ送出し得るイベント ID の集合を確定したホワイトリストに限定する。**檻の被覆範囲（2026-07-17 合流裁定＝research §9.5.4 の適用）**: 本檻は events.rs の表を単一列挙点と仮定せず、**全 `ShioriCall` 構築点**（`schedule/mod.rs` `force_quit` の inline `OnClose` 構築〔:165-175・「events.rs 実装後は委ねる」旧 TODO 残置〕を含む）を被覆する。推奨実装＝本番/mock が共通で通る単一チョークポイント（`handle_call`／`run_shiori_loop`・real.rs:99/113）での ID 検証（現在・将来の全構築点を構造的に被覆）。force_quit の stale TODO の解消（events.rs へ委譲 or 檻被覆済み注記）と、ForceQuit 時 OnClose に添える `Status` の扱いは design で確定する。
 2. The kanade shall いかなる運行状態においても `OnTalk` および `OnHour` を送出しない（emo2 が OnSecondChange 内部で自発生成するため・二重発火防止・恒久制約）。
 3. When 自発会話（OnSecondChange 応答由来のトーク）が発火する, the kanade shall `OnTalk`/`OnHour` を新たに送出せずに当該トークの再生を開始する。
 
@@ -97,6 +97,6 @@
 
 #### Acceptance Criteria
 
-1. While 実 emo2・実 pasta.dll を起動して数分放置している, the areka ゴースト shall 自発会話（時報系トーク等）を発火させる。
-2. While アクティブなトークが再生中, when 次の毎秒 Tick が発生する, the areka ゴースト shall 進行中のトークに割り込まない。
-3. The 実機サインオフの合否判定 shall 「自発トークが発火すること」に限定し、トーク再生タイミングの正しさ（`areka-P0-cue-playback-duration` の領分）を判定に含めない。
+1. While 実 emo2・実 pasta.dll を起動して数分放置している, the areka ゴースト shall 自発会話（pasta が OnSecondChange から内部生成する自発トーク＝OnTalk 由来）を発火させる。（**2026-07-17 訂正**＝research §9.5.2 の適用: 旧文言「時報系トーク等」は事実誤り——時報は次の正時まで構造的に発火しない〔`check_hour` が初回呼出で `next_hour_unix` を次正時へ設定・`virtual_dispatcher.lua:87-95`〕。数分放置で観測できるのは OnTalk のみ。観測所要時間の目安は emo2 既定 `pasta.toml` `talk_interval_min/max`＝15〜30秒だが、これは実行時にメニューで可変〔30-45/60-90/180-300 秒〕な fixture 既定値であって要件値ではない。なお OnTalk は pasta 内部生成であり areka は送出しない〔Requirement 3〕。）
+2. While アクティブなトークが再生中, when 次の毎秒 Tick が発生する, the areka ゴースト shall OnSecondChange を NOTIFY（Reference3="0"・`Status: talking`）で送出していることをログ/wire 観測で確認できる。（**2026-07-17 書換**＝research §9.5.3 の適用: 旧文言「進行中のトークに割り込まない」の実機目視は非事象——talk 実測 4〜5 秒 vs 発火間隔 15〜30 秒で自然な割り込み機会が構造的に生じない。非割込みの正本は Requirement 4.3 の決定論檻であり、実機はその相関証跡〔NOTIFY/Ref3/Status〕の観測に留める。）
+3. The 実機サインオフの合否判定 shall 「自発トークが発火すること」に限定し、トーク再生タイミングの正しさ（`completed/areka-P0-cue-playback-duration` が 2026-07-17 実機サインオフ済みで所有）を判定に含めない。

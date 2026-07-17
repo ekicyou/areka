@@ -175,7 +175,16 @@
 - `choice-render` の hit は `TextRegion` 行矩形＋バルーン窓（target 奇数）＝本 spec（shell・target 偶数）と互いに素。
 - 走査済み（生存衝突ゼロ）: `input-events` / `seriko-loop` / `mayuna-compose` / `cue-playback-duration` / `choice-render` / `choice-select-events` / `emo2-conformance-e2e` / `idle-talk` / `position-persist` / `sakura-dialogue-tags` / `completed:` `event-hit-test-named-regions` `event-hit-test-alpha-mask` `event-hit-test` `event-hit-test-cache` `emo-compose` `emo-present` `emo2-boot` `kanade` `wintf-clickthrough-alpha-toggle` `event-mouse-basic`。
 
-### 10.2 【未決・要総合判断】steering「本番ゴースト先行の原則」と R7.3 の緊張
+### 10.2 【✅決着済み 2026-07-17】steering「本番ゴースト先行の原則」と R7.3 の緊張
+
+> **決着（2026-07-17 ポートフォリオ合流セッション・要件本文へ反映済み）**: 下記候補案の**2段観測分割を採択**し、input-events research §6.2 の保存選択肢 **(A') 合流サインオフ＋(C') collision-geometry 先行**と複合。R7 を全面改稿（Introduction・Adjacent expectations も追随）:
+> - **(a) 純関数コア**＝全網羅 unit（現行のまま・R7.1/7.2）。
+> - **(b) リゾルバ座標契約**＝本 spec 内の probe（example）で実 DPI（≠96）・本番 emo2 表示の実測証跡を必須化（R7.3 新設・丸投げ禁止）。**敵対的検証で検出した罠を封じる条件**: probe の入力点は**実表示窓の client 座標経路**から取得（サーフェス空間の collision 値から合成した点の直接注入は不可＝「dpi=96 自己整合が欠陥を隠す」と同型のトートロジー回避）＋ k=1.0（窓 client 寸法＝surface px 寸法）の assert を含む。
+> - **(c) 撫で一周の統合サインオフ**＝撫でクラスタ合流サインオフとして input-events Req8.3 が1回実施（R7.4 新設・本 spec resolver の main マージが前提・mock resolver では完了と見なさない）。probe は表示側契約まで＝マウス由来座標との空間一致は合流サインオフが所有（検証の空白なし）。
+> - **完了順**: collision-geometry 先行完了（probe 証跡で自前完結）→ input-events は実装並走（mock 檻）・完了のみ合流待ち＝完了順デッドロック解消。
+> - 実装注記: probe example から届くよう、リゾルバ合成は `crate::` パス無しモジュールか lib crate 側へ（`emo2_boot/mod.rs` は `crate::` 参照ありで example include 不能・window-placement example 前例）。
+
+以下は決着前の記録（履歴保存）:
 
 - **相手**: `.kiro/steering/roadmap.md`（**steering＝spec より上位の権威**・spec スイープの走査面外だった）。
 - **該当文（本 spec を名指し）**: 「上記規約〔fixture/mock で観測を独立化〕は**純粋層**にのみ適用。**UI 位置決め・座標系ユニット（window-placement・collision-geometry 等）は逆**——本番ゴースト（emo2 実 surface 表示）＋**実 DPI（≠96）実行**が観測条件であり、単発デモへの合わせ込みは**無効**」（2026-07-05 追記・**window-placement リジェクトの教訓**・記憶 `areka-placement-real-ghost-first`／`areka-window-placement-dpi-coordinate-defect`）。
