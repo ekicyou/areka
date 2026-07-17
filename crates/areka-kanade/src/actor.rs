@@ -201,6 +201,7 @@ fn send_shiori(shiori: &Sender<ShioriMsg>, msg: ShioriMsg) -> Result<(), ShioriM
 mod tests {
     use super::*;
     use crate::msg::CloseReason;
+    use crate::status::{ExecutionSnapshot, ExecutionStatus};
     use std::sync::mpsc::{self, Receiver};
     use std::thread;
     use std::time::Duration;
@@ -456,6 +457,7 @@ mod tests {
         ShioriCall::Get {
             id: "OnBoot",
             references: vec!["master".to_string()],
+            status: ExecutionStatus::derive(&ExecutionSnapshot::INACTIVE),
         }
     }
 

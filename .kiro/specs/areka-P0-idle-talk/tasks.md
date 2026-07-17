@@ -10,7 +10,7 @@
   - _Boundary: areka-kanade status.rs, lib.rs（再エクスポート）_
 
 - [ ] 2. Core: kanade 状態機械への `Status` 貫通
-- [ ] 2.1 境界メッセージ型への `Status` 同梱と内部規律違反の失敗語彙追加
+- [x] 2.1 境界メッセージ型への `Status` 同梱と内部規律違反の失敗語彙追加
   - SHIORI 呼出の境界メッセージ型（GET/NOTIFY 双方）へ実行状態集合を同梱し、全ての構築点が Status を明示せざるを得ない形にする
   - 呼出失敗の区別語彙へ、外部要因（タイムアウト／SHIORI エラー／helper 死活／接続確立失敗）とは別に、送出前に検出される内部規律違反のための語彙を1つ追加する（既存の境界写像関数はこの新語彙を生成しないことを保つ）
   - 観測可能な完了条件: 境界メッセージ型が Status を保持すること・失敗語彙の Display 文字列が期待どおりであることを検証する単体テストが green になる
@@ -18,7 +18,7 @@
   - _Boundary: areka-kanade msg.rs_
   - _Depends: 1_
 
-- [ ] 2.2 イベント構築正本の Status・許可 ID 表への統合
+- [x] 2.2 イベント構築正本の Status・許可 ID 表への統合
   - 毎秒イベントの構築を、再生可否と実行状態集合の双方を単一のスナップショットから導出する形へ統一する（両者の不整合な組み合わせが構築時点で作れないようにする）
   - 見切れ・重なりの参照値を名前付き定数として明示し、将来の実測差し替えが送出契約（ヘッダ構成・参照連番）を変えずに行えることをコードで表す
   - 送出し得るイベント ID の確定集合を純データとして定義し、集合外判定を行う関数を用意する（`OnTalk`／`OnHour` は集合に含めない）
@@ -29,7 +29,7 @@
   - _Boundary: areka-kanade schedule/events.rs, lib.rs（ファサード再エクスポート）_
   - _Depends: 2.1_
 
-- [ ] 2.3 定常運転・強制終了系列へのスナップショット供給
+- [x] 2.3 定常運転・強制終了系列へのスナップショット供給
   - 運行フェーズからスナップショットを導出する変換を実装し、アクティブなトークを運ぶフェーズについてのみ「再生中」を報告するようにする
   - 定常運転の毎秒イベント発行・通常の終了要求発行の各呼出点へ、上記スナップショットを供給する形へ更新する
   - 強制終了時のインライン構築済みイベントを、2.2 で増設した構築正本の呼び出しへ委譲する
@@ -141,3 +141,4 @@
 - **DD-IT-12（起動挨拶の正規追跡）は completed kanade の確定判断「boot は close-gate しない」を再開封する**: 挨拶中の close が通常 talk と同じ `CloseTalkWait` 経由へ変わる。開発者が旧来の fire-and-forget 維持を選ぶ場合は Task 2.4／5.4 の該当コミットの revert で戻せる（設計ディスカッション #2 で事後拒否権を明示済み）。
 - **本 spec が意図的に扱わない事項**（design.md Open Items 1・2・4）: `build_request` の `SecurityLevel` 位置の既存逸脱、`doc/emo2-conformance-scope.md` の記載訂正、fault 終端が「窓は残るがプロセスは死なない」挙動（`Failed` 全般に共通する kanade の既存欠陥）——いずれも本タスク群では対処しない。引受先候補は `areka-P0-emo2-conformance-e2e`。
 - Task 3.1〜4.1 完走までの間、`cargo build --workspace` は意図的に壊れる区間がある（host32 signature 変更後・real.rs 追随前）。DoD ゲートは Task 4.2 完了時点（`cargo build --workspace` 成功）以降で評価すること。
+- **実装時の群化（kiro-impl 実行判断・2026-07-18）**: `ShioriCall` へ必須フィールド `status` を足すと kanade クレート全体（events.rs 構築6点・schedule 呼出・actor/real 分解点・in-source テスト）が一度に壊れ、個別サブタスクは独立に `--lib` すら green にできない＝原子的コンパイル単位。よって **Task 2.1+2.2+2.3 を1コミットに束ねて実装**した（各群が `cargo test -p areka-kanade --lib` green を残す・設計の各ファイル変更内容は完全に温存）。機械的 ripple として real.rs `handle_call` は `..` で status を無視（転送は Task 4.1）・real.rs in-source テスト構築点・actor.rs `probe_get_call` に status を付与。統合テスト（tests/kanade/）は Task 5.x で更新するため群A時点では `--lib` のみ検証（full `cargo test` は 5.x まで赤）。Task 2.4（boot DD-IT-12）・2.5（actor ホワイトリスト）は別コミットへ隔離。

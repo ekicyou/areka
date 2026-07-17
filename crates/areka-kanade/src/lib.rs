@@ -51,6 +51,7 @@ pub use talk::{StartTalk, TalkDone, TalkEndReason, TalkId};
 /// `pub(crate)` のまま非公開に保つ。
 pub mod events {
     pub use crate::schedule::events::{
-        baseware_version, on_boot, on_close, on_first_boot, on_initialize, on_second_change,
+        ALLOWED_EVENT_IDS, baseware_version, is_allowed_event_id, on_boot, on_close,
+        on_close_notify, on_first_boot, on_initialize, on_second_change,
     };
 }

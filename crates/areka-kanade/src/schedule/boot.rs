@@ -7,6 +7,7 @@
 
 use super::{events, Action, Input, Phase, State};
 use crate::msg::{CloseReason, KanadeConfig, ShioriOutcome};
+use crate::status::ExecutionSnapshot;
 use crate::talk::{StartTalk, TalkId};
 
 /// boot 系列（Idle / BootInit / BootType / BootMain / BootVersion）のフェーズ分岐。
@@ -41,7 +42,7 @@ fn boot_start(mut state: State) -> (State, Vec<Action>) {
     state.phase = Phase::BootInit;
     (
         state,
-        vec![Action::ShioriRequest(events::on_initialize())],
+        vec![Action::ShioriRequest(events::on_initialize(&ExecutionSnapshot::INACTIVE))],
     )
 }
 
@@ -55,7 +56,7 @@ fn on_reply(state: State, outcome: ShioriOutcome, config: &KanadeConfig) -> (Sta
                 state.phase = Phase::BootType;
                 (
                     state,
-                    vec![Action::ShioriRequest(events::on_first_boot())],
+                    vec![Action::ShioriRequest(events::on_first_boot(&ExecutionSnapshot::INACTIVE))],
                 )
             }
             other => unexpected_reply(state, "BootInit", other),
@@ -66,7 +67,7 @@ fn on_reply(state: State, outcome: ShioriOutcome, config: &KanadeConfig) -> (Sta
             ShioriOutcome::NoContent => {
                 let mut state = state;
                 state.phase = Phase::BootMain;
-                (state, vec![Action::ShioriRequest(events::on_boot(config))])
+                (state, vec![Action::ShioriRequest(events::on_boot(config, &ExecutionSnapshot::INACTIVE))])
             }
             ShioriOutcome::Value(script) => {
                 tracing::info!(target: "kanade", event = "boot_type_script", "起動種別にスクリプト——OnBoot をスキップし basewareversion へ");
@@ -118,7 +119,7 @@ fn to_baseware_version(
         actions.push(Action::StartTalk(StartTalk { talk_id, script }));
     }
     state.phase = Phase::BootVersion;
-    actions.push(Action::ShioriRequest(events::baseware_version(config)));
+    actions.push(Action::ShioriRequest(events::baseware_version(config, &ExecutionSnapshot::INACTIVE)));
     (state, actions)
 }
 
@@ -153,10 +154,11 @@ mod tests {
     fn assert_get(action: &Action, expected: &crate::msg::ShioriCall) {
         match (action, expected) {
             (
-                Action::ShioriRequest(crate::msg::ShioriCall::Get { id, references }),
+                Action::ShioriRequest(crate::msg::ShioriCall::Get { id, references, .. }),
                 crate::msg::ShioriCall::Get {
                     id: eid,
                     references: erefs,
+                    ..
                 },
             ) => {
                 assert_eq!(id, eid, "GET id 不一致");
@@ -170,10 +172,11 @@ mod tests {
     fn assert_notify(action: &Action, expected: &crate::msg::ShioriCall) {
         match (action, expected) {
             (
-                Action::ShioriRequest(crate::msg::ShioriCall::Notify { id, references }),
+                Action::ShioriRequest(crate::msg::ShioriCall::Notify { id, references, .. }),
                 crate::msg::ShioriCall::Notify {
                     id: eid,
                     references: erefs,
+                    ..
                 },
             ) => {
                 assert_eq!(id, eid, "NOTIFY id 不一致");
@@ -193,7 +196,7 @@ mod tests {
         let (s, actions) = step(initial(), Input::Boot, &cfg);
         assert!(matches!(s.phase, Phase::BootInit));
         assert_eq!(actions.len(), 1);
-        assert_notify(&actions[0], &events::on_initialize());
+        assert_notify(&actions[0], &events::on_initialize(&ExecutionSnapshot::INACTIVE));
 
         // 2. BootInit + Notified → OnFirstBoot GET / BootType（Req 1.2）。
         let (s, actions) = step(
@@ -205,7 +208,7 @@ mod tests {
         );
         assert!(matches!(s.phase, Phase::BootType));
         assert_eq!(actions.len(), 1);
-        assert_get(&actions[0], &events::on_first_boot());
+        assert_get(&actions[0], &events::on_first_boot(&ExecutionSnapshot::INACTIVE));
 
         // 3. BootType + NoContent(204) → OnBoot GET / BootMain（Req 1.3）。
         let (s, actions) = step(
@@ -217,7 +220,7 @@ mod tests {
         );
         assert!(matches!(s.phase, Phase::BootMain));
         assert_eq!(actions.len(), 1);
-        assert_get(&actions[0], &events::on_boot(&cfg));
+        assert_get(&actions[0], &events::on_boot(&cfg, &ExecutionSnapshot::INACTIVE));
 
         // 4. BootMain + Value("greeting") → StartTalk(id=1) + basewareversion NOTIFY / BootVersion。
         let (s, actions) = step(
@@ -236,7 +239,7 @@ mod tests {
             }
             _ => panic!("expected StartTalk first"),
         }
-        assert_notify(&actions[1], &events::baseware_version(&cfg));
+        assert_notify(&actions[1], &events::baseware_version(&cfg, &ExecutionSnapshot::INACTIVE));
         // 採番カウンタが進む。
         assert_eq!(s.next_talk_id, 2);
 
@@ -286,7 +289,7 @@ mod tests {
             }
             _ => panic!("expected StartTalk first"),
         }
-        assert_notify(&actions[1], &events::baseware_version(&cfg));
+        assert_notify(&actions[1], &events::baseware_version(&cfg, &ExecutionSnapshot::INACTIVE));
 
         // OnBoot GET が一切発行されていないことを確認（フォールスルー打ち切り）。
         for a in &actions {
@@ -317,7 +320,7 @@ mod tests {
         assert!(matches!(s.phase, Phase::BootVersion));
         // basewareversion NOTIFY のみ（StartTalk なし）。
         assert_eq!(actions.len(), 1);
-        assert_notify(&actions[0], &events::baseware_version(&cfg));
+        assert_notify(&actions[0], &events::baseware_version(&cfg, &ExecutionSnapshot::INACTIVE));
         assert!(
             !actions.iter().any(|a| matches!(a, Action::StartTalk(_))),
             "204 は talk 起動しない（Req 2.3）"

@@ -19,6 +19,7 @@
 //! `Unloading{Fault}`→`Stopped` の正規遷移で表現する・Req 6.4）。
 
 use crate::msg::{CloseReason, KanadeConfig, MonotonicMs, ShioriCall, ShioriOutcome};
+use crate::status::ExecutionSnapshot;
 use crate::talk::{StartTalk, TalkDone, TalkEndReason, TalkId};
 
 pub(crate) mod boot;
@@ -157,20 +158,27 @@ pub(crate) fn step(state: State, input: Input, config: &KanadeConfig) -> (State,
     }
 }
 
+/// 送出時点の運行フェーズから実行状態スナップショットを導出する（DD-IT-3）。
+/// アクティブな talk を運ぶ phase のみ talk_active=true。
+pub(crate) fn snapshot_of(phase: &Phase) -> ExecutionSnapshot {
+    match phase {
+        Phase::Steady { talk: Some(_) } => ExecutionSnapshot { talk_active: true },
+        _ => ExecutionSnapshot::INACTIVE,
+    }
+}
+
 /// ForceQuit の横断遷移（DD-10）: best-effort OnClose NOTIFY を先頭に積み Unloading{Forced} へ。
 ///
-/// OnClose の Reference 表構成は本来 `events.rs`（タスク 2.2）が唯一の実装点だが、
-/// 2.1 は events へ依存できないため、この 1 本の退化した NOTIFY のみをインラインで組む。
-/// events.rs 実装後は Reference 表構成をそちらへ委ねる。
+/// OnClose NOTIFY の構築は events.rs（[`events::on_close_notify`]）へ委譲する——events.rs が
+/// `ShioriCall` 構築の単一列挙点であり、force_quit はもはや inline 構築しない（DD-IT-8）。
+/// スナップショットは Unloading へ遷移**後**の [`snapshot_of`]（＝INACTIVE）を渡す（DD-IT-4）。
 fn force_quit(mut state: State, reason: CloseReason) -> (State, Vec<Action>) {
     tracing::warn!(target: "kanade", event = "force_quit", reason = reason.as_ref_str(), "強制終了指示——終了系列（Forced）へ直行");
     state.phase = Phase::Unloading {
         cause: TermCause::Forced,
     };
-    let notify = Action::ShioriRequest(ShioriCall::Notify {
-        id: "OnClose",
-        references: vec![reason.as_ref_str().to_string()],
-    });
+    let notify =
+        Action::ShioriRequest(events::on_close_notify(reason, &snapshot_of(&state.phase)));
     (state, vec![notify, Action::ShioriUnload])
 }
 
@@ -407,7 +415,7 @@ mod tests {
         assert!(matches!(next.phase, Phase::Unloading { cause: TermCause::Forced }));
         assert_eq!(actions.len(), 2);
         match &actions[0] {
-            Action::ShioriRequest(ShioriCall::Notify { id, references }) => {
+            Action::ShioriRequest(ShioriCall::Notify { id, references, .. }) => {
                 assert_eq!(*id, "OnClose");
                 assert_eq!(references, &vec!["system".to_string()]);
             }
