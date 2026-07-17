@@ -523,7 +523,7 @@ pub fn resolve_hit_region(
 
 1. **環境**: per-monitor v2・実 DPI ≠ 96（125%/150%/200% ＝ dpi 120/144/192 のいずれか2水準以上）。**dpi=96 のみの確認は不合格**（`window-placement.rs:41-68` の前例に倣う）。
 2. **表示**: 本番 emo2 の `surface1000` を有効 bind 実値付きで shell target（scope=0 → `shell_target(0)`）へ実表示する（起動系は `emo-present.rs` の donor＝fixture ロード→`EmoWorld` 構築→`attach_target`→`apply(ShowSurface)`。ただし Input 契約 1.–3. の3点は donor から**必ず逸脱させる**）。
-3. **k=1.0 の assert（7.3(b)・自動・hard assert）**: Win32 `GetClientRect(hwnd)` の client 矩形寸法が `presenter.text_slot_view(shell_target(0))` の `surface_size()`（現表示サーフェスの物理 px 原寸）と**一致**し、かつ `scale() == 1.0` であること。**OS 側の真実（`GetClientRect`）と emo 側の真実（`chain.size()`）という独立な2源の突合せ**であり、窓が論理 px 寸で作られる欠陥クラス（例: dpi=144 で client 651×820 vs surface 434×687）を捕捉する。**取り逃がすもの**: 原点ずれ（寸法一致のままの平行移動）とマウス経路のスケーリング（→ 5. と C-4）。
+3. **k=1.0 の assert（7.3(b)・自動・hard assert）**: Win32 `GetClientRect(hwnd)` の client 矩形寸法が `presenter.text_slot_view(shell_target(0))` の `surface_size()`（現表示サーフェスの物理 px 原寸）と**一致**し、かつ `scale() == 1.0` であること。**OS 側の真実（`GetClientRect`）と emo 側の真実（`chain.size()`）という独立な2源の突合せ**であり、窓が論理 px 寸で作られる欠陥クラス（例: dpi=144 で client 651×820 vs surface 434×687）を捕捉する。**取り逃がすもの**: 窓 client 原点 ⇄ 合成ビットマップ原点の平行移動（寸法一致のまま生じうる）と、マウス経路のスケーリング（→ 5. と C-4）。ただし**合成ビットマップ原点 ≡ サーフェス画像原点は構造的に保証される**——`compute_extent` は原点 (0,0) 固定・負オフセットを原点でクリップして外形を取る（`plan.rs:355-383`）ため、合成結果の原点がサーフェス画像原点からずれる自由度が存在しない。よって原点の未検証な自由度は「**窓 client ⇄ 合成**」の1リンクのみに縮み、それは 5. の目視（描かれた頭/胸と解決結果の一致）が捕捉する。
 4. **描画一致の anchor（自動・マウス経路非依存）**: `EmoPresenter::read_back()`（`presenter.rs:419`＝表示画素の CPU 読み戻し）で Head（`93,62`–`271,130`）／Bust（`133,270`–`229,326`）各矩形の中心画素が**不透明**（実際に絵が描かれている）ことを assert する。**collision 値と実描画画素の対応**を機械的に固定する検査であり、マウスを介さないため 5. のトートロジー問題と独立に成立する。
 5. **解決一致（7.3(a)・目視が証拠力の中核）**: 点は**実表示窓の client 座標経路からのみ取得する**——`GetCursorPos`（実カーソル位置・screen）→ `ScreenToClient` → 得られた client 点を `resolve_hit_region(presenter, 0, x, y)` へ渡し、結果を live にログする。操作者（人間または agent）は**画面に見えているゴーストの頭／胸／背景を目視で狙って**カーソルを動かし、「視覚上その部位に載っていること」と解決結果（`"Head"`／`"Bust"`／`None`）の一致を記録する。実測 client 座標と解決結果を物理 px で表に残す（`window-placement` acceptance-record の「実測証跡（物理 px）」列と同形）。
    - **禁止（7.3(a) の反トートロジー条件の実装）**: **collision 実値から合成した screen 座標への `SetCursorPos`/`SendInput` を証跡としてはならない**。`ClientToScreen` と `ScreenToClient` は client 原点の平行移動の**厳密な逆写像**であるため、collision 由来の点を狙って撃ち戻すと「注入した点をそのまま読み戻して純関数へ渡す」＝要件が「証跡と認めない」と名指しした自己整合の罠に落ちる（文面上は client 経路を通っていても実質は違反）。狙点の供給源は**目視**（または 4. の read_back から導出した描画由来の点）に限る。
@@ -594,27 +594,27 @@ pub fn resolve_hit_region(
 
 ### Unit Tests（`areka-emo-present` / 既存 presenter テスト方式に準拠）
 
-11. **未表示→None**: `attach_target` 直後の `current_surface_id` が `None`（3.2）。
-12. **表示後→直近 id**: `ShowSurface(id)` 適用後に `Some(id)`（3.1）。
-13. **切替→新 id**: 別 id を適用後に新 id（3.3）。
-14. **Hide→None**: `apply_hide` 後に `None`（3.2/4.4「未表示等」の確定）。
-15. **InvalidateCache→不変**: キャッシュ無効化は表示を変えないため id 不変（`ComposeKey` 由来案を棄却した根拠の檻）。
-16. **未登録 target→None**: `current_surface_id`/`hit_region` とも `None`。
-17. **非退行**: 既存 present テストスイートが緑のままであること（3.4）＝新規の観測を足さない（証明済み配線を再テストしない）。
+10. **未表示→None**: `attach_target` 直後の `current_surface_id` が `None`（3.2）。
+11. **表示後→直近 id**: `ShowSurface(id)` 適用後に `Some(id)`（3.1）。
+12. **切替→新 id**: 別 id を適用後に新 id（3.3）。
+13. **Hide→None**: `apply_hide` 後に `None`（3.2/4.4「未表示等」の確定）。
+14. **InvalidateCache→不変**: キャッシュ無効化は表示を変えないため id 不変（`ComposeKey` 由来案を棄却した根拠の檻）。
+15. **未登録 target→None**: `current_surface_id`/`hit_region` とも `None`。
+16. **非退行**: 既存 present テストスイートが緑のままであること（3.4）＝新規の観測を足さない（証明済み配線を再テストしない）。
 
 ### Unit Tests（`areka` bin / in-crate `#[cfg(test)]`・GPU 不要）
 
-18. **未表示 scope→`HitRegion { scope, region: None }`**: `EmoPresenter::new()` ＋未 attach で 4.4 を檻に入れる。`areka` は bin-only ゆえ `tests/` 不可＝in-crate `#[cfg(test)]` に置く。
+17. **未表示 scope→`HitRegion { scope, region: None }`**: `EmoPresenter::new()` ＋未 attach で 4.4 を檻に入れる。`areka` は bin-only ゆえ `tests/` 不可＝in-crate `#[cfg(test)]` に置く。
 
 > scope→target 写像（`shell_target`）の正しさは `target_map.rs` の既存テストが所有する＝本 spec で再テストしない（証明済み配線）。
 
 ### Manual / Acceptance（7.3）
 
-19. **実 DPI probe**: 上記「プロトコル」1–6 を実行し `acceptance-record.md` に記録。**k=1.0 assert**（自動・hard assert）＋**Head/Bust/None の OS 往復経路一致**（実測表）。dpi≠96 の2水準必達。
+18. **実 DPI probe**: 上記「プロトコル」1–6 を実行し `acceptance-record.md` に記録。**k=1.0 assert**（自動・hard assert）＋**Head/Bust/None の OS 往復経路一致**（実測表）。dpi≠96 の2水準必達。
 
 ### 本 spec で実施しないもの
 
-20. **撫で一周（マウス入力→SHIORI→応答 talk）の統合実機サインオフ** — `input-events` Req8.3（撫でクラスタ合流サインオフ）が1回で実施する（7.4）。本 spec の resolver が main へマージ済みであることがその前提であり、mock resolver では完了と見なさない。
+19. **撫で一周（マウス入力→SHIORI→応答 talk）の統合実機サインオフ** — `input-events` Req8.3（撫でクラスタ合流サインオフ）が1回で実施する（7.4）。本 spec の resolver が main へマージ済みであることがその前提であり、mock resolver では完了と見なさない。
 
 ## Performance & Scalability
 
@@ -640,7 +640,7 @@ pub fn resolve_hit_region(
 1. **含端規則（C2）が正典の裏付けを持たない**: 閉区間はリポジトリ内前例（wintf）と「囲まれた範囲」の読みに基づく決定であり、SSP 実挙動との突合はしていない。影響範囲は境界1px＝撫で体験に実害はほぼ無いが、変更点を純関数の比較式1箇所に閉じ、境界檻で固定することで是正コストを最小化する（Revalidation Trigger 3）。
 2. **画家則の SSP 逸脱が e2e で検出されない**（C-5）: 検出手段が無いこと自体を記録として残す以上の緩和策は無い（意図的逸脱ゆえ）。
 3. **probe の証跡は表示側に限られる**（C-4）: マウス由来座標との一致は合流サインオフ待ち。両 spec の分担を要件本文（7.3/7.4）と本節で二重に明示し、「双方が相手に任せて誰も検証しない」最悪形を封じる。
-4. **`emo2_boot/hit_region.rs` の `crate::` パス禁止規律は機械的に強制されない**: 破ると probe の `#[path]` include が壊れて初めて発覚する。ファイル冒頭の doc に規律と理由を明記する（`window-placement.rs:99-113` 前例と同様）。同じ罠が W2 側にも待つ（C-8）。
+4. **`emo2_boot/hit_region.rs` の `crate::` パス禁止規律は常設ゲートが機械的に強制する**: `collision-probe.rs` が当該ファイルを `#[path]` include するため、規律を破れば example がコンパイル不能となり `cargo build --examples`／`cargo test --workspace`（examples をビルドする）で即座に発覚する。ファイル冒頭の doc に規律と理由を明記する（`window-placement.rs:99-113` 前例と同様）のは、発覚時に**理由**を伝えるためであって検出のためではない。**強制が効かないのは W2 側**（C-8）: `spawn.rs` へ `crate::` を1行入れて壊れるのは無関係な completed spec の `window-placement.rs` であり、W2 実装者は因果を掴みにくい。
 5. **probe の証拠力の中核は目視である**（プロトコル 5.）: 3.（k=1.0）と 4.（read_back による描画一致）は自動化できるが、「collision 矩形が**視覚上の頭/胸**と対応する」ことの最終判断は人間または agent の目視に依存する。これは自動化不足ではなく**本番ゴースト先行の原則の必然**（狙点を collision 値から機械生成した瞬間にトートロジーへ落ちる＝7.3 が明示的に禁じた形）。`window-placement` の acceptance-record も同じ性質の記録である。
 6. **probe は donor（`emo-present.rs`）から3点で必ず逸脱する**（表示 id・BindSet・窓寸の供給源＝Batch の Input 契約）: donor をそのまま流用すると (a) k=1.0 assert が構成上必ず失敗し、(b) 全透明の窓が「成功」として表示される。実装時に donor のコピーで済ませないこと。
 </content>
