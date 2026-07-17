@@ -4,7 +4,7 @@
 
 emo2 の撫で反応（`OnMouseMove` の actor×region ルーティング）とメニュー（`OnMouseDoubleClick` の Reference4=当たり判定名）を成立させるには、「マウス座標がどの当たり判定（Head/Bust）に居るか」を解決する層が必要である。現状、parsers→emo-compose の正規化形 `SurfaceMaster` は collision（矩形＋領域名）を保持しているが、どこにも露出・消費されていない。wintf のヒットテストは合成ビットマップ由来の `AlphaMask`（画素の不透明性）しか知らず、部位名を知らない。「見える・触れるは emo が窓口＝kanade へは解決済みイベントだけ渡す」という原則における、その解決役が不在である。
 
-本 spec は、マウス座標（窓 client 物理 px）と scope から当たり判定名（不透明 String・例 "Head"/"Bust"）を**決定論で解決する純粋層**を emo に確立し、`input-events`（③kanade）が消費できる I/O 契約 `HitRegion { scope, region: Option<String> }` を**正本として**立てる。層は (1) hit→region 純関数コア（含端・重なり優先・None 経路）、(2) 現在表示中サーフェス id の読み口（emo-present に対する additive）、(3) それらを束ねる UI スレッド用リゾルバ合成（emo2_boot 結線層）から成る。統合（撫で一周の実機サインオフ）は input-events 側へ委譲し、本 spec の観測は純粋層で独立に完結する。
+本 spec は、マウス座標（窓 client 物理 px）と scope から当たり判定名（不透明 String・例 "Head"/"Bust"）を**決定論で解決する純粋層**を emo に確立し、`input-events`（③kanade）が消費できる I/O 契約 `HitRegion { scope, region: Option<String> }` を**正本として**立てる。層は (1) hit→region 純関数コア（含端・重なり優先・None 経路）、(2) 現在表示中サーフェス id の読み口（emo-present に対する additive）、(3) それらを束ねる UI スレッド用リゾルバ合成から成る。**観測は2段**（2026-07-17 ポートフォリオ合流裁定＝research §10.2 の未決を決着）: (1)(2) の純粋層は GPU/表示なしの全網羅 unit で独立に完結し、(3) リゾルバの座標契約は**本 spec 内**で実 DPI（≠96）・本番 emo2 表示の実測証跡を必須とする（steering「本番ゴースト先行の原則」roadmap が本 spec を名指しで要求・input-events への丸投げ禁止）。撫で一周（マウス入力→SHIORI→応答 talk）の統合サインオフは**撫でクラスタ合流サインオフ＝input-events Req8.3** が1回で実施し、本 spec の resolver 実測証跡はその前提供給となる。
 
 正典は ukadoc（`collision*,始点X,始点Y,終点X,終点Y,ID` の矩形定義／`OnMouseMove` の Reference4=当たり判定の識別子）であり、emo2 は最小適合 fixture にすぎない。ただし当たり判定が重なった際の優先順位は、SSP の `collision-sort`（既定 none＝先書きが手前）に忠実追従せず、emo の合成規約である**画家のアルゴリズム**（後に定義された領域が手前＝勝ち・`crates/areka-emo-compose/src/blit.rs:83` の「下層→上層」合成と一貫）に揃える（要件ディスカッション議題1で決定・SSP とは逆向き）。
 
@@ -29,6 +29,10 @@ emo2 の撫で反応（`OnMouseMove` の actor×region ルーティング）と�
   - Downstream `areka-P0-input-events` が `HitRegion` 契約の第一消費者であり、本節を参照して再定義しない。region が `None` の場合を空文字 Reference4 へ転写するのは `input-events` の責務である。
   - 座標契約は emo-present の「物理 px 等倍」に整合する（窓 client 物理 px をサーフェス px と同一空間で照合）。DPI 契約の明文確認は design で行う。
   - 含端規則（境界の内外）は design 冒頭で ukadoc collision 節から確定表にする。重なり時の優先順位は**画家のアルゴリズム（後に定義された領域が手前）で確定済み**（議題1）＝SSP `collision-sort` の忠実解決は行わず、差し替え用の型シーム（`SortOrder` 相当を予約）のみ備える。既存 wintf `HitRegionMap` は先勝ち（逆向き・`crates/wintf/src/ecs/layout/hit_region/mod.rs:356`）ゆえ、統合可否は design で判断する。
+  - **順序不変条件の明文化（design で実施・research §10.4）**: `SurfaceMaster.collisions` は現状「転記のまま」で順序の約束が無い（`normalized.rs:76-77`・elements には layer 昇順宣言あり）。画家則はこの転記順に意味論を載せるため、design で (a) 順序不変条件（登場順・`surface.append` は末尾連結＝`fold.rs:121-122`・画家則では append 由来が勝つ）を doc 明文化し、(b) fold 出力を入力にした檻を1本置く。
+  - **scope 型の1本化（design で実施・research §10.5）**: `HitRegion.scope` は brief の `usize` でなく既存正本 `target_map.rs` の **u32** へ揃える（`shell_target(scope: u32)`／`scope_of -> Option<u32>` 実測）。リゾルバは shell 窓（target 偶数）専用であることを契約に明記する。
+  - **k=1.0 依存の明文化（design で実施・research §10.3）**: R4.3「サーフェス px で照合」は物理 px 等倍（k=1.0）への暗黙依存。将来 DPI スケーリング導入時の単一変更点は `TextSlotView::scale()`（`presenter.rs:110-111` doc）＝design で「k=1.0 限定契約＋再検証トリガ＝この1点」を明記する。
+  - **リゾルバ合成の配置制約（2026-07-17 合流裁定の実装注記）**: R7 の実 DPI probe（検証 example）から届く形にする——`emo2_boot/mod.rs` は `crate::` パス参照を含み example から include 不能。`window-placement` example の前例（`crate::` パス無しモジュールを example 私有 include）に倣い、リゾルバ合成は `crate::` パス無しモジュールか lib crate 側へ置く（配置は design で確定）。
   - 実装制約: Rust 2024・新規依存なし・tokio 不使用・emo-present 本体無改変（additive の読み口のみ）。
 
 ## Requirements
@@ -85,10 +89,13 @@ emo2 の撫で反応（`OnMouseMove` の actor×region ルーティング）と�
 1. When 点が透明画素上にありかつ当たり判定矩形の内側にある, the 当たり判定解決関数 shall 画素の α に関わらず領域名を解決する。
 2. The 当たり判定解決層 shall 既存の `AlphaMask`（クリック透過・is_hit）を変更せず、当たり判定の解決をそれとは独立に行う。
 
-### Requirement 7: 決定論的テスト網羅（品質要件）
-**Objective:** As a 品質を担保する開発者, I want GPU/表示なしで当たり判定解決を全網羅テストできる, so that 回帰檻を決定論で構築できる
+### Requirement 7: 観測の2段構え（純粋層の決定論網羅＋リゾルバ座標契約の実機証跡）
+**Objective:** As a 品質を担保する開発者, I want 純関数コアは GPU/表示なしで全網羅し、リゾルバの座標契約は実 DPI・本番 emo2 表示で実測できる, so that 回帰檻の決定論と座標正しさの実証（本番ゴースト先行の原則）を両立できる
+
+> 2026-07-17 ポートフォリオ合流裁定: 旧 R7.3「統合サインオフは input-events へ委譲・本 spec の観測は純粋層で独立完結」は steering「本番ゴースト先行の原則」（collision-geometry 名指し・単発デモ合わせ込み無効）と矛盾するため、2段観測へ改稿（research §10.2 の決着）。
 
 #### Acceptance Criteria
 1. The 当たり判定解決関数 shall GPU・実描画・実表示を要さず、純関数として全経路を単体テスト可能である。
 2. Where emo2 fixture の実 collision 値が用いられる, the 当たり判定解決層 shall (a) 矩形内→領域名、(b) 矩形外→None、(c) 境界 on/off、(d) 重なり優先、(e) collision 未定義→None の各判断分岐を網羅検証できる。
-3. The 当たり判定解決層 shall 統合（撫で一周の実機サインオフ）を input-events 側へ委譲し、本 spec の観測は純粋層で独立に完結する。
+3. The 当たり判定リゾルバ（R4） shall 実 DPI（≠96）・本番 emo2 表示下での実測証跡を**本 spec 内の検証手段（example/probe）**として記録する。証跡は (a) **実表示窓の client 座標経路から取得した点**（実カーソル位置→ScreenToClient 等・**サーフェス空間の collision 値から合成した点の直接注入は証跡と認めない**＝自己整合の罠の排除）に対する Head／Bust／None の解決一致、および (b) 窓 client 矩形寸法＝現表示サーフェス px 寸法（等倍 k=1.0）の assert、を含む。
+4. The 当たり判定解決層 shall 撫で一周（マウス入力→SHIORI→応答 talk）の統合実機サインオフを**撫でクラスタ合流サインオフ**（input-events Req8.3・本 spec の resolver が main へマージ済みであることが前提）へ帰属させる。R7.3 の probe 証跡は表示側座標契約に限られ、**マウス由来座標との空間一致は合流サインオフのみが検証する**（両 spec で検証の空白を作らない）。

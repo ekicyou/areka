@@ -226,7 +226,15 @@
 - **`seriko-loop`**: 実行時 `\![set,alignmenttodesktop]` によるアンカー書き換えの所有者。本 spec の **R1.8「アンカーは永続化せず毎起動 config から再解決」**との接点に注意（実行時変更は再解決で失われる意味論）。ただし seriko-loop は時限ゲート下＋brief-only＝実装着手は確実に本 spec より後。
 - **`sakura-dialogue-tags`**: `\![move]` ＝将来の**第二の位置ライター**候補。本 spec の R1.9「永続値を更新するのはユーザーのドラッグのみ」との相互作用は **Out of scope**（M-dialogue 領分）。
 
-### 8.4 再開の手引き（設計セッション用）
+### 8.4 ポートフォリオ合流裁定の反映（2026-07-17・別セッション＝要件本文は無改変）
+
+> 並走4spec 要件マージ後の合流セッション（roadmap 追記㉘が正本）で、本 spec に関わる3点が決着:
+
+1. **`\![move]` の帰属確定**: Out of scope に留保していた「`\![move]` との相互作用」は合流裁定で決着——**`\![move]` は表示位置のみを変え永続値を書かない**（R1.9「ユーザーの明示的ドラッグ確定によってのみ更新」の排他に従属・裁定の焼込先は `sakura-dialogue-tags` brief〔檻1本の予約＝move 経路が永続状態を dirty にしない決定論 assert 込み〕）。本 spec の要件・実装に変更なし。
+2. **終了手段の依存が担保**: input-events の design 送り事項④（暫定退避終了）へ「**人間が任意タイミングで引ける操作**であること（env-gate 時限自動終了のみ不可）」の制約が要件明文化された＝本 spec の実機検証「ドラッグ→終了→再起動」の前提（§8.3 の逆向き soft 依存）は解消。
+3. **「完全独立」の精密化**: 本 spec の独立性は**関数粒度**の直交（kanade `events.rs`/boot 系へ additive 交差あり）。idle-talk の `Status` 実装（`ShioriCall` 形＋`ShioriBackend` 署名の破壊的変更・4クレート波及）が先行マージされた場合、本 spec の `on_first_boot` 署名変更等は**機械的・コンパイラ捕捉の追随**（数分規模）を要する——ブロッカーではない。
+
+### 8.5 再開の手引き（設計セッション用）
 
 1. **最初にやること＝再突合**（[[parallel-worktree-brief-staleness-rebase-before-design]]）: brief／research の「file:line 引用」と「並走可」主張は**他坑のマージで無言に腐る**。設計着手前に必ず実測し直すこと:
    ```powershell

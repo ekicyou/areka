@@ -17,13 +17,13 @@ areka-P0-input-events: ③ kanade 帰属の入力配信ユニット（M-life「�
   - talk 起動契約（`StartTalk` / `TalkDone`）と Steady の単一 slot 調停は `completed/areka-P0-kanade` が正本であり、本仕様は既存棚へ載せるのみで新しい調停を発明しない。
   - kanade への結線・channel／relay の流儀は actor 基盤（`areka-actor`）と `completed/areka-P0-ghost-setup` が正本であり、本仕様は独自のスレッド／通信流儀を発明しない。
   - 正典 Reference layout の典拠は ukadoc（`OnMouseMove` / `OnMouseDoubleClick`）であり、emo2 fixture は最小適合サンプルにすぎない。
-  - `Status` ヘッダ（`idle-talk` が設計）へ将来 `choosing` を足すのは M-dialogue 側の申し送りであり、本仕様は触れない。
+  - `Status` ヘッダ（`idle-talk` が設計）へ将来 `choosing` を足すのは M-dialogue 側の申し送りであり、本仕様は触れない。**（2026-07-17 合流裁定の順序注記）**: idle-talk の `Status` 実装は `ShioriCall` 形＋`ShioriBackend` trait 署名＋wire builder の**破壊的変更**（波及4クレート＝areka-kanade／shiori-host32-host／areka-ghost／areka）であり、本仕様の新規 constructor（`on_mouse_*`）は同じ型を構築する。**契約正本は idle-talk・実装推奨順は idle-talk 先行→本仕様**（共有型の shaper が先＝衝突最小）。ただしハードゲートではない——逆順でも追随はコンパイラ捕捉の機械的作業（数分規模）。
   - OnChoiceSelectEx（選択確定イベント）は本仕様の「マウス入力→kanade→GET→StartTalk」背骨と Ref 組立の型をそのまま再利用できる形（イベント種の拡張余地）に切ることを M-dialogue へ申し送る。
 - **design 送り事項**（要件では確定しない・design で ukadoc 正典参照の上確定）:
   - talk 再生中のマウス GET の扱い（送出するか・抑止するか・NOTIFY 化するか）を SSP 挙動に基づき確定する。
   - 右ダブルクリックの SSP 既定動作（本体メニューかゴースト送出か）を確認し、M1 は owner-draw メニュー不在ゆえ右も SHIORI へ素直に送る案を既定に検証する。
   - OnMouseMove の間引き規則を 1 つ確定する（例: 当たり判定の変化時＋一定間隔）。
-  - 暫定退避終了の具体手段を 1 つ確定する（例: 修飾つきダブルクリック、または既存 env-gate 系）。
+  - 暫定退避終了の具体手段を 1 つ確定する（例: 修飾つきダブルクリック→ForceQuit）。**制約（2026-07-17 合流裁定）**: 手段は**人間が任意タイミングで引ける操作**であること——env-gate の時限自動終了（`AREKA_APP_SMOKE_EXIT_MS` 系）**のみ**にしてはならない（position-persist の実機検証「ドラッグ→終了→再起動→位置一致」が手動終了手段の存在を前提とするため・research §6.4）。
   - 当たり判定が無い（`None`）場合の Ref4 値（空文字転写か省略か）・Ref6 入力デバイス種の具体値を確定する。
   - M1 送出マウスイベント集合表（OnMouseMove / OnMouseDoubleClick の 2 種）を確定し、`idle-talk` の送出ホワイトリスト檻と整合させる。
   - （ギャップ分析 §5.2 追加）マウス Input のフェーズルーティング（Steady のみ処理し boot／close 中は防御的に無視する等）を確定する。
@@ -117,4 +117,4 @@ areka-P0-input-events: ③ kanade 帰属の入力配信ユニット（M-life「�
 
 1. The 観測ハーネス shall mock shiori・注入マウス入力・sleep 非依存で、(a) OnMouseMove 入力→GET・Ref0〜6 が期待 layout（region 転写含む）、(b) 左ダブルクリック→GET・Ref5="0"、(c) 応答 Value→StartTalk（既存 slot 調停・active talk 中の置換規律）、(d) 204→無動作、(e) 送出間引き規則、を単一 pass/fail として検証する。
 2. The 観測ハーネス shall 実時間 sleep に依存せず（時刻／入力注入）、反復実行で同一結果となる。
-3. When 実 emo2・実 pasta.dll・実 DPI で起動した, the areka アプリ shall Head を撫でると touch.pasta が反応し、ダブルクリックで menu.pasta の応答 talk が起動することを人間が確認できる（応答 talk が再生されるところまで——`\q` 選択肢の見た目の完成度は M-dialogue `choice-render` の領分）。
+3. When 実 emo2・実 pasta.dll・実 DPI（**≠96**）で起動した, the areka アプリ shall Head を撫でると touch.pasta が反応し、ダブルクリックで menu.pasta の応答 talk が起動することを人間が確認できる（応答 talk が再生されるところまで——`\q` 選択肢の見た目の完成度は M-dialogue `choice-render` の領分）。本サインオフは**撫でクラスタ合流サインオフ**（2026-07-17 ポートフォリオ合流裁定＝research §6.2 の (A')+(C') 採択）であり、(a) collision-geometry の実 resolver が main へマージ済みであることを前提に**実 resolver で実施**する（mock resolver による代替では完了と見なさない——実 region "Head" が Ref4 に載らねば撫では物理的に発火しない〔touch.pasta:19〕）、(b) **マウス由来座標とサーフェス px の空間一致の検証は本サインオフが所有**する（collision-geometry R7.3 の probe 証跡は表示側座標契約まで＝両 spec で検証の空白を作らない）。本 spec の実装は mock resolver（Requirement 1.5）で並走可能であり、合流待ちは完了（/kiro-complete）のみ。

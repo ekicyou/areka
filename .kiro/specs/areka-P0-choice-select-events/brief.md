@@ -2,7 +2,7 @@
 
 > **種別**: 本坑（main）増分。③ kanade 帰属（M-dialogue の完成ユニット＝選択確定→SHIORI→次シーン）。`areka-P0-input-events` brief が明示分離した「OnChoiceSelectEx は choice-render 完了後の増分」の**宛先**（2026-07-16 名称確定・input-events の「マウス入力→kanade→GET→StartTalk」背骨を再利用）。
 > **調査日**: 2026-07-16（再入精査⑧・fixture 実物調査＋コード実態偵察＋ukadoc 裏取り）。
-> **順序（フェーズ別・2026-07-16 精密化）**: choice-render（ChoiceSelection 契約の正本）と契約先決ペア——契約が brief 間で先決済みのため**並走可**（撫でクラスタと同型）。cue-playback（CuePlayer/resolve_choice）完了が **tasks 生成・実装フェーズの実質前提**——**要件・設計は先行着手可**（カスケード判定純関数・Reference 組立・Status 遷移は cue モデル非依存。OnID 形は正典確定済みで設計不確実性は低い＝Opus xhigh で足りる）。**義務**: cue-playback マージ後に `/kiro-validate-design` 再突合してから tasks へ（roadmap 時限ゲート注記が正本）。
+> **順序（フェーズ別・2026-07-16 精密化）→ ✅ ゲート解除（2026-07-17・cue-playback 完了＝追記㉗）**: choice-render（ChoiceSelection 契約の正本）と契約先決ペア——契約が brief 間で先決済みのため**並走可**（撫でクラスタと同型）。~~cue-playback（CuePlayer/resolve_choice）完了が tasks 生成・実装フェーズの実質前提~~ **→充足済み**（`CuePlayer`/`pending_choices`/`resolve_choice` は settled シームとして main 着地済み）。着手時は settled コードを直接参照すればよい（設計を先行させた場合の `/kiro-validate-design` 再突合義務は 2026-07-17 現在未発生＝要件未着手）。**実装順注記（2026-07-17 合流裁定・roadmap 追記㉘）**: 本 spec は input-events の背骨＋idle-talk の `Status` 口＋dialogue-tags の choice cue 形＋choice-render の ChoiceSelection を消費する**実質最後尾**ユニット。
 
 ## Problem
 
@@ -31,7 +31,7 @@
 1. **カスケード則の確定（design 冒頭・最重要）**: ukadoc は **OnID 形（`\q[タイトル,OnID,r0,r1...]`＝On 始まり ID→任意名イベント直接発火・r\* は Ref0 起点）を正典定義済み**（2026-07-16 検証）＝emo2 の2引数 On〜 はこの形（references 空→Ref 無しで OnID を GET）。design で確定すべき残りは「**OnID 形でも OnChoiceSelectEx/無印が先行発火するか**」「非 On ID の 204 フォールバック順序」——`\*` doc の「選択時は通常通り OnChoiceSelectEx（トークがなければ OnChoiceSelect）」との整合を SSP 実挙動込みで裁定し、**判定を純関数化**して全網羅檻に。emo2 実物（OnID 直接）と正典 Ex/無印形の両方を檻で固定。
 2. **kanade 増分（additive・input-events 背骨再利用）**: `Input::ChoiceSelected{selection}` variant＋`events.rs` に on_choice_select_ex/on_choice_select/任意名 GET の組立→Steady で GET 発行→応答 Value は既存 StartTalk 棚（`steady.rs:92-103`）へ。**選択で旧 talk が終わる/続く**の裁定（`resolve_choice` の戻り＝barrier 後続の有無）と StartTalk slot 調停（新 talk 差替）を design で確定。
 3. **CuePlayer 連携**: ChoiceSelection→`resolve_choice(id)` 呼出（barrier 解除・後続 cue 続行）と SHIORI カスケードの**順序・排他**（選択は1回だけ有効・解除後の遅延クリックは棄却）を確定。
-4. **`Status: choosing`**: idle-talk が設計するヘッダ注入 enum の口へ `choosing` を追加（kanade は選択待ち状態を choice-render の表示状態でなく**自分の配送状態**として保持＝単一真実源）。
+4. **`Status: choosing`**: idle-talk が設計するヘッダ注入 enum の口へ `choosing` を追加（kanade は選択待ち状態を choice-render の表示状態でなく**自分の配送状態**として保持＝単一真実源）。**⚠️ 消費側互換（2026-07-17 合流裁定の登記＝choosing は M1 最初の非 talking `Status` 値）**: 実 pasta の自発トーク抑制は `status == "talking"` **完全一致**（`virtual_dispatcher.lua:98,123`）ゆえ、選択待ち中に `Status: choosing`（talking 非含有）で OnSecondChange GET が届くと pasta 側抑制は掛からず OnTalk が漏れ得る。選択待ち中の自発トーク抑止は **kanade 側の調停**として design で確定すること——cue-playback の `WaitingForChoice` は talk 未完了（占有 horizon 未到達）＝kanade の active talk slot が占有継続→NOTIFY・Ref3="0" が自然形（この場合 `Status` は `talking,choosing` か `choosing` 単独かも含めて wire 形を裁定・idle-talk Req2.6 ただし書き／`status-execution-states` 台帳 2b と整合させる）。
 5. **タイムアウト**: 「トーク表示が全て終わってから」のカウント開始＝**cue-playback の talk 絶対終了時刻**（duration 権威・記憶 [[areka-dola-absolute-time-sync-broadcast]] の占有 horizon）を起点に、既定値（SSP de-facto・ukadoc で確認）で OnChoiceTimeout GET→204 なら選択解除。**emo2 は未使用（ハンドラ無し・`\*` 無し・choicetimeout 設定無し）**＝M1 は「実装するが emo2 では 204 経路のみ通る」——実装 or 型シーム縮退の最終裁定は design（正典準拠を既定・工数過大なら明示縮退を記録）。
 
 ## クロスユニット契約（並走を詰ませない事前考慮・2026-07-16）

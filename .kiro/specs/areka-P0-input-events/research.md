@@ -188,6 +188,8 @@
 
 ### 6.2 撫でクラスタ合流ゲート（＝繰延した判断）
 
+> **【✅決着 2026-07-17・ポートフォリオ合流セッション】** 保存選択肢のうち **(A') 合流サインオフ＋(C') collision-geometry 先行**の複合を採択（(B') Req8.3 二分割は不採用＝サインオフは合流1回）。Req8.3 本文へ反映済み: (1) 実 DPI（**≠96**）明文化、(2) 「撫でクラスタ合流サインオフ」と位置づけ＝collision-geometry の実 resolver の main マージが前提・mock 代替では完了と見なさない、(3) マウス由来座標とサーフェス px の空間一致の検証は本サインオフが所有（collision 側 R7.3 probe は表示側契約まで）、(4) 実装は mock resolver で並走可・合流待ちは /kiro-complete のみ。相方 collision-geometry は R7 を2段観測へ改稿（純粋層 unit＋リゾルバ座標契約の実 DPI probe を自前で必須化＝先行完了のデッドロック解消）。同 spec research §10.2 も併せて決着済み。
+
 **確定した事実（実 fixture 実測）**:
 
 - `fixtures/emo2/ghost/master/dic/touch.pasta:19` → `if region == nil or region == "" then return nil end`（＋:31 `local key = region .. actor`）＝**実 region（"Head"）が Ref4 に載らねば撫では物理的に発火しない**。mock resolver の固定値では Req8.3 の「**Head を**撫でると」を満たせない。
@@ -220,4 +222,4 @@
 
 - **→ `areka-P0-position-persist`（逆向き soft 依存・design 送り事項④に効く）**: 本 spec は「dblclick 即終了」＝**現状唯一の手動終了手段**を退役させる（Req6.1）。一方 position-persist の実機検証は「ドラッグ→**終了**→再起動→位置一致」＝**終了手段の存在が前提**。ゆえに **design 送り事項④（暫定退避終了）は「人間が任意タイミングで引ける手段」（例: Ctrl+ダブルクリック→`ForceQuit`）を残すこと**——env-gate の時限自動終了（`AREKA_APP_SMOKE_EXIT_MS` 系）**だけ**にすると position-persist の手動検証が詰む。本 spec の DoD には無関係だが design 判断の制約。
 - **→ `areka-P0-idle-talk`（brief の編集面申告漏れ）**: idle-talk brief:37 は編集面を「`crates/areka-kanade`（steady/events）＋テストのみ」と申告するが、`Status` ヘッダ注入には **`msg.rs:80-89` の `ShioriCall`（今日ヘッダ枠が無い）の改変**が要る＝**共有型の変更**で本 spec の新規マウス constructor にも波及。**本 spec が先に着地するのが現実的**（あちらは未 init）＝その場合**影響ゼロ**（idle-talk が自分のパスでマウス constructor も含めて更新）。逆順なら機械的・コンパイラ捕捉・数分の作業。**idle-talk の init 時に brief を訂正すべき**。
-- **→ ポートフォリオセッション（roadmap 正本の陳腐化2件・実測 2026-07-17）**: #60 の `/kiro-complete` は roadmap を**部分的にしか更新していない**。`roadmap.md:142`（エンジン別ポートフォリオ）は ✅完了（2026-07-17）へ更新済みだが、**(a) `:166` M1残工程ゴール表の `cue-playback-duration` 行が「実装中（別坑）」のまま**、**(b) `:189-190` 時限ゲート節が「`cue-playback-duration` が実装中の現在は…⛔一時並走不可（`mayuna-compose`／`seriko-loop`）」のまま**＝`:193`「cue-playback 完了後に `mayuna-compose`・`seriko-loop`・M-dialogue 3本を解禁」が**発火していない**。**本 spec のワークツリーは main より 1 コミット古いため、ここでは steering を編集しない**（陳腐化した複製への編集＋並走 steering 編集は `/kiro-complete` のマージ衝突源＝[[harness-shell-quirks]]）。**rebase 済みのポートフォリオセッションで是正すること**（ゲート解除は本 spec 単独で決めるべき判断でもない）。
+- **→ ポートフォリオセッション（roadmap 正本の陳腐化2件・実測 2026-07-17）【✅ 同日ポートフォリオ合流セッションで是正済み＝ゴール表更新・時限ゲート解除・追記㉘】**: #60 の `/kiro-complete` は roadmap を**部分的にしか更新していない**。`roadmap.md:142`（エンジン別ポートフォリオ）は ✅完了（2026-07-17）へ更新済みだが、**(a) `:166` M1残工程ゴール表の `cue-playback-duration` 行が「実装中（別坑）」のまま**、**(b) `:189-190` 時限ゲート節が「`cue-playback-duration` が実装中の現在は…⛔一時並走不可（`mayuna-compose`／`seriko-loop`）」のまま**＝`:193`「cue-playback 完了後に `mayuna-compose`・`seriko-loop`・M-dialogue 3本を解禁」が**発火していない**。**本 spec のワークツリーは main より 1 コミット古いため、ここでは steering を編集しない**（陳腐化した複製への編集＋並走 steering 編集は `/kiro-complete` のマージ衝突源＝[[harness-shell-quirks]]）。**rebase 済みのポートフォリオセッションで是正すること**（ゲート解除は本 spec 単独で決めるべき判断でもない）。

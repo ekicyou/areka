@@ -2,7 +2,7 @@
 
 > **種別**: 本坑（main）増分。④ sakura 帰属（M-dialogue の起点＝script 語彙の cue 貫通）＋⓪末端（`\![move]` 消費のみ・薄い結線）。
 > **調査日**: 2026-07-16（再入精査⑧・fixture 実物調査＋コード実態偵察）。
-> **⛔ 時限ゲート（フェーズ別・2026-07-16 精密化）**: `areka-P0-cue-playback-duration`（実装中）の完了が **tasks 生成・実装フェーズの前提**——本 spec の編集面（sakura `compile.rs`・dola `CueCommand`/配送）は同 spec が全面改修中。**要件・設計は先行着手可**（**推奨即時着手**——design で **choice cue 形＋barrier 並び規則を早期確定**し、下流 choice-render の Fable 設計討議へ契約を供給する先鋒の役）。**義務**: cue-playback マージ後に `/kiro-validate-design` を settled コード（`dola/src/cue/sink.rs`/`runtime.rs` の最終形）へ再実行（再突合）してから tasks へ（roadmap 時限ゲート注記「フェーズ別ゲート精密化」が正本）。
+> **⛔ 時限ゲート（フェーズ別・2026-07-16 精密化）→ ✅ 解除（2026-07-17・cue-playback 完了＝追記㉗）**: ~~`areka-P0-cue-playback-duration`（実装中）の完了が tasks 生成・実装フェーズの前提~~ **→充足済み**＝settled cue モデル（10 variant・envelope 一律 duration・単一 `CueSink`・`cue_target_of` 単一権威・broadcast・占有 horizon）が main 着地済み。全フェーズ着手可（**推奨即時着手**——design で **choice cue 形＋barrier 並び規則を早期確定**し、下流 choice-render の Fable 設計討議へ契約を供給する先鋒の役）。着手時は settled コード（`dola/src/cue/sink.rs`/`runtime.rs`）を直接参照する（branch 実測引用は本 brief 内に残るが最終形は main が正）。
 
 ## Problem
 
@@ -40,7 +40,7 @@ fixture script 直入力で、4語彙が**決定論的に正しい cue／barrier
 - **cue-playback-duration が絶対上流**: duration 焼込・`ClearAll` 前置・first-class `Wait`（branch task 5.2 済）の settled compile 構造へ**別アームを足す**形。emit 署名・`Cue` 形が動いている間は着手しない（時限ゲート）。
 - **mayuna-compose と compile.rs 近接**: 双方 catch-all から別 variant を救出する additive アーム（mayuna=`GenericCommand{bind}`・本 spec=Choice/Cursor/Move/SystemVar）＝**別アーム・マージ可能**（balloon-face-cue 実績）。同時着手時は rebase 近接に注意のみ。
 - **`\_l` の消費は choice-render**（em/lh 換算・カーソル適用は emo-text 側の知識）——本 spec は cue 転写まで（単位文字列は不透明のまま運ぶ）。
-- **`\![move]` と position-persist の座標整合**: move 後の位置はドラッグ同様「ユーザ位置」か（persist 対象か）を design で position-persist brief と突合（`move_window_to` は既に BalloonFollow 随伴を処理）。
+- **`\![move]` と永続化＝✅確定（2026-07-17 ポートフォリオ合流裁定・position-persist の out-of-scope 留保を本裁定で閉じる）**: **`\![move]` は表示位置のみを変え、永続値を書かない**——position-persist R1.9「永続値を更新するのはユーザーの明示的ドラッグ確定のみ」の二層分離（保存値＝ユーザー意図／表示位置＝写像）に従属。実装形とも一致（`move_window_to` は DragEnd 観測点〔`on_char_drag_end`/`on_balloon_drag`〕を経由しない）。**檻を1本予約**: `\![move]`→`move_window_to` 経路が永続状態を dirty にしないことの決定論 assert（第二の位置ライター混入の恒久防止）。**帰結の許容仕様**: emo2 の `\![move]` は OnFirstBoot 限定（boot.pasta:79・通常起動4バンドに move 無し）ゆえ、position-persist の初回ゲート導入後は**未ドラッグの2回目以降の起動で初回位置調整が既定配置へ戻る**（回復手段＝ユーザードラッグ永続化 or menu.pasta:65 の位置調整メニュー）。SSP の de-facto（script move 後の位置保存有無）は未検証（ukadoc に永続化規定なし）＝本挙動の最終確認は `emo2-conformance-e2e` 適合走行の実機判断へ申し送り。
 
 ## ukadoc 必読（design 着手時に ukadoc MCP `get_doc`/`search_docs` で正典参照・2026-07-16 裏取り）
 

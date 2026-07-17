@@ -58,6 +58,8 @@ M1 ゴール「emo2 が**そのまま** boot→talk→touch→menu→close ま�
 - **M-dual の吸収・退役（本 brief が正本）**: roadmap 増分の `areka-P0-dual-surface`（⑤）・`areka-P0-dual-window`（⑥）は**ユニット名を退役**——実体（kero 窓 spawn・target 偶奇・alias 解決・`\p` 交替）は M-boot で充足済みであり、残る「kero 側の束ねた検証」は項目 #10 が所有。検証で構造的 gap が出た場合のみ、その症状に対する個別 spec を just-in-time で切る（旧名を復活させない）。
 - **各ユニットの実機サインオフとの関係**: 各上流ユニットは自分の症状の実機確認を済ませて完了する（判定は各 spec 帰属）——本 spec は**相互作用と一周**（例: 撫で talk 中にメニュー・選択待ち中の自発 talk 抑止=Status: choosing）を観測対象とする。**判定を混ぜない**規律は idle-talk brief と同型。
 - **決定論 spine の資産系譜**: ghost-setup `ScriptedShioriBackend`／emo2-boot spine／kanade 統合テストの拡張であり**新しいテスト機構を発明しない**。
+- **画家則の適合範囲（2026-07-17 合流裁定で登記・collision-geometry research §10.6 の申し送り受領）**: collision 重なり優先は emo 合成規約＝**画家のアルゴリズム**（後定義が手前）で SSP `collision-sort`（既定 none＝先書き手前）とは**逆向き**（collision-geometry 議題1裁定）。emo2 fixture には重なり collision も `collision-sort` 宣言も無く、本 spec の適合走行はこの逸脱を**検出しない**——本 spec が証明するのは「**emo2 適合**」であって「SSP 完全適合」ではない。
+- **`\![move]` の2回目起動挙動（2026-07-17 合流裁定 E の申し送り・項目 #9/#12 の相互作用）**: `\![move]` は永続値を書かない（position-persist R1.9 二層分離・sakura-dialogue-tags brief が正本）。emo2 の `\![move]` は OnFirstBoot 限定ゆえ、初回ゲート（#12）導入後は**未ドラッグの2回目起動で初回位置調整が既定配置へ戻る**＝許容仕様として裁定済みだが、**適合走行時に開発者の実機判断で最終確定**すること（違和感があれば just-in-time の個別 spec で扱う）。
 
 ## ukadoc 必読（design 着手時に ukadoc MCP で正典参照）
 

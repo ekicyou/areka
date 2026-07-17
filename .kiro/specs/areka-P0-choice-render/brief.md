@@ -2,7 +2,7 @@
 
 > **種別**: 本坑（main）増分。⑥ emo 帰属（M-dialogue の表示側＝バルーン内選択肢 UI）。**ChoiceSelection I/O 契約の正本**（choice-select-events が消費・撫でクラスタの `HitRegion` 正本パターン再演）。
 > **調査日**: 2026-07-16（再入精査⑧・fixture 実物調査＋コード実態偵察）。
-> **⛔ 時限ゲート（フェーズ別・2026-07-16 精密化）**: `areka-P0-cue-playback-duration`（実装中）完了が **tasks 生成・実装フェーズの前提**（emo-text の cue 受信面 `CueSink` 化＋`CuePlayer` の pending choices 供給）。**要件・設計は先行着手可**（**Fable 早期投入の2本目**——選択肢 resident・hit 幾何・ハイライト描画・`\_l` 消費・原子性は cue モデル**非依存**＝先に設計可。cue 供給節のみ **`sakura-dialogue-tags` design が確定させる choice cue 形**を消費——同 spec の design 先行完了を待って着手するのが推奨順序）。**義務**: cue-playback マージ後に `/kiro-validate-design` を settled コードへ再実行（再突合）してから tasks へ（roadmap 時限ゲート注記「フェーズ別ゲート精密化」が正本）。
+> **⛔ 時限ゲート（フェーズ別・2026-07-16 精密化）→ ✅ 解除（2026-07-17・cue-playback 完了＝追記㉗）**: ~~`areka-P0-cue-playback-duration`（実装中）完了が tasks 生成・実装フェーズの前提~~ **→充足済み**＝emo-text の cue 受信面 `CueSink` 化・`CuePlayer` の `pending_choices`（`runtime.rs:98`・読み口 `:355`）/`resolve_choice`（`:279`）は settled シームとして main 着地済み（2026-07-17 実測）。全フェーズ着手可（**Fable 早期投入の2本目**——選択肢 resident・hit 幾何・ハイライト描画・`\_l` 消費・原子性は cue モデル**非依存**。cue 供給節のみ **`sakura-dialogue-tags` design が確定させる choice cue 形**を消費——同 spec の design 先行完了を待って着手するのが推奨順序）。着手時は settled コードを直接参照する。
 
 ## Problem
 

@@ -37,6 +37,7 @@ ukadoc `Status` 実行状態語彙の各状態が、それぞれの源サブシ�
 
 1. **本 spec は台帳＝先行設計しない**。源サブシステムが実物として着地したら、その状態の実導出（純関数＋源読み口）を idle-talk の `Status` 構造へ additive に差し込む。
 2. **契約不変**: idle-talk が確立した「カンマ連結・ヘッダ位置・空集合→行省略」の送出契約は変えない（idle-talk Req2.6 の差替シーム）。
+2b. **消費側互換の檻（2026-07-17 合流裁定で登記・idle-talk Req2.6 ただし書きの台帳側正本）**: 実 pasta の talk 抑制ゲートは `status == "talking"` の**完全一致比較**（`vendors/pasta/.../virtual_dispatcher.lua:98,123`）＝カンマ連結値（例 `talking,online`）や非 talking 単独値で **fail-open**（talk 中に OnTalk が漏れる）。任意状態の実導出を解禁する際は、emo2 系消費側の互換検証（複合値 wire の実機/harness 観測）を差替の**受け入れ条件**に含めること。`choosing`（M1 最初の非 talking 値）は `choice-select-events` が同檻を先に踏む。
 3. `choosing` は `choice-select-events` に委譲（重複実装しない・調整のみ）。
 4. UI スレッド源（balloon／minimizing）は Reference1/Reference2 の窓 geometry 配線（TickInfo 拡張）と同一の配線問題＝相乗り可能。
 
