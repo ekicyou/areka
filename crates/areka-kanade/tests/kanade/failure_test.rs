@@ -3,8 +3,8 @@
 //! mock 結線（`super::common` のハーネス）で、kanade の失敗・停止・回復各経路を統合層で
 //! 決定的に観測する（実時間 sleep なし・全 join は期限付き・宙吊りしない）。検証する 4 系:
 //!
-//! 1. **区別語彙ごとの呼出失敗 → 観測可能な終了**（Req 6.1）: [`ShioriFailure`] の 4 語彙
-//!    （Handshake／Timeout／Ipc／Shiori）それぞれについて、boot 最初の呼出（`OnInitialize`）を
+//! 1. **区別語彙ごとの呼出失敗 → 観測可能な終了**（Req 6.1）: [`ShioriFailure`] の 5 語彙
+//!    （Handshake／Timeout／Ipc／Shiori／Internal）それぞれについて、boot 最初の呼出（`OnInitialize`）を
 //!    その語彙で失敗させ、kanade が終了系列（Unloading{Fault}→best-effort Unload→Stopped）へ
 //!    倒れて停止すること（kanade の期限付き join 成功＋Unload 記録）を観測する。
 //! 2. **死活報告 → 観測可能な停止**（Req 5.4）: boot 定常化後に `KanadeMsg::ShioriDown` を注入し、
@@ -47,7 +47,7 @@ fn assert_unload_recorded_once(recorded: &[super::common::RecordedCall]) {
 // ケース 1: 区別語彙ごとの呼出失敗 → 観測可能な終了（Req 6.1）
 // ============================================================================
 
-/// [`ShioriFailure`] の 4 語彙それぞれについて、boot 最初の呼出（`OnInitialize`）を当該語彙で
+/// [`ShioriFailure`] の 5 語彙それぞれについて、boot 最初の呼出（`OnInitialize`）を当該語彙で
 /// 失敗させると kanade が終了系列（Unloading{Fault}→Unload→Stopped）へ倒れて停止する。
 ///
 /// # 駆動と観測（決定的・sleep なし）
@@ -60,20 +60,23 @@ fn assert_unload_recorded_once(recorded: &[super::common::RecordedCall]) {
 /// - Failed が終了を駆動しなければ kanade は BootInit で応答待ちのまま止まらず、join が期限超過して
 ///   panic する（＝失敗が観測可能な終了へ写像されていないことを検出する）。
 /// - Fault 経路が Unload を発行しなければ `assert_unload_recorded_once` が落ちる。
-/// - 4 語彙をループで網羅し、いずれか 1 つでも終了しなければそのイテレーションで panic する。
+/// - 5 語彙をループで網羅し、いずれか 1 つでも終了しなければそのイテレーションで panic する。
 #[test]
 fn each_failure_vocabulary_drives_observable_termination() {
-    // 4 語彙を静的に網羅する。ShioriFailure は非 Clone ゆえ Copy な FailKind で回し、mock 内で
+    // 5 語彙を静的に網羅する。ShioriFailure は非 Clone ゆえ Copy な FailKind で回し、mock 内で
     // その都度 fresh に構築する（Fixture/FailOn は Copy／Clone で複製可能）。
     for kind in [
         FailKind::Handshake,
         FailKind::Timeout,
         FailKind::Ipc,
         FailKind::Shiori,
+        FailKind::Internal,
     ] {
         // 網羅の非空虚性を型で担保: 各 kind は実 ShioriFailure のバリアントに 1:1 対応する。
-        // `FailKind::Internal`（DD-IT-11）は本ループの掃引対象外（5.2 が Internal→fault を専用檻で
-        // 掃引する）だが、match の網羅性のためアームを持つ（本 dispatch は語彙完全化のみ・5.1）。
+        // `FailKind::Internal`（DD-IT-11・kanade 内部規律違反＝ホワイトリスト違反で choke が返す語彙）
+        // も本ループで掃引し、`Failed(Internal)` が外部4語彙と同じく既存 fault 終端（Unloading{Fault}
+        // →Unload→Stopped）へ合流することを統合層で確認する（設計 Testing Strategy #7・DD-IT-11:
+        // choke の ID 検証自体は actor.rs in-source 檻が担い、本檻は Internal→fault の routing を担う）。
         let _witness: ShioriFailure = match kind {
             FailKind::Handshake => ShioriFailure::Handshake(String::new()),
             FailKind::Timeout => ShioriFailure::Timeout(String::new()),
