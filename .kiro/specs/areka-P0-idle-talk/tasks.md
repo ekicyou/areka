@@ -73,7 +73,7 @@
   - _Depends: 3.1_
 
 - [ ] 4. Integration: kanade↔host32 境界の接続
-- [ ] 4.1 SHIORI backend 境界での `Status` 転送
+- [x] 4.1 SHIORI backend 境界での `Status` 転送
   - backend 抽象の呼出関数（GET／NOTIFY）へ実行状態の wire 値引数を追加する
   - 実装済みの本番 backend が、受け取った実行状態の wire 値を 3.1 で用意した host32 側の呼出関数へそのまま転送するようにする
   - 呼出の仲介処理が、2.1〜2.5 で用意した実行状態集合の wire 変換結果を backend へ渡すようにする

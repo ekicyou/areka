@@ -46,9 +46,25 @@ pub struct ShioriConnection {
 /// sticky 状態（helper 死活キャッシュ）を更新し得るため各メソッドは `&mut self` を取る。
 pub trait ShioriBackend {
     /// 応答を要するイベント（GET）。`Ok(Some)`＝Value・`Ok(None)`＝204・`Err`＝失敗。
-    fn get(&mut self, id: &str, references: &[String]) -> Result<Option<String>, RequestError>;
+    ///
+    /// `status` は `ExecutionStatus::render()` 済みの wire 値（`None`＝`Status` ヘッダ行なし・Req 2.3）。
+    /// 語彙は kanade が所有し、backend は解釈せず host32 へそのまま転記する（DD-IT-1 語彙非漏洩・Req 2.2）。
+    fn get(
+        &mut self,
+        id: &str,
+        references: &[String],
+        status: Option<&str>,
+    ) -> Result<Option<String>, RequestError>;
     /// 片道イベント（NOTIFY）。`Ok(())`＝完了・`Err`＝失敗。
-    fn notify(&mut self, id: &str, references: &[String]) -> Result<(), RequestError>;
+    ///
+    /// `status` は GET と同じく render 済みの wire 値（`None`＝ヘッダ行なし）——backend は解釈せず
+    /// host32 へそのまま転記する（DD-IT-1 語彙非漏洩・Req 2.2/2.3）。
+    fn notify(
+        &mut self,
+        id: &str,
+        references: &[String],
+        status: Option<&str>,
+    ) -> Result<(), RequestError>;
     /// 正規 clean shutdown（unload → helper 正常終了観測）。
     fn unload(&mut self) -> Result<ExitKind, ShutdownError>;
     /// 非ブロッキング死活問い合わせ（sticky）。
@@ -56,12 +72,22 @@ pub trait ShioriBackend {
 }
 
 impl ShioriBackend for ShioriConnection {
-    fn get(&mut self, id: &str, references: &[String]) -> Result<Option<String>, RequestError> {
-        Shiori3Client::new(&self.window).get(id, references)
+    fn get(
+        &mut self,
+        id: &str,
+        references: &[String],
+        status: Option<&str>,
+    ) -> Result<Option<String>, RequestError> {
+        Shiori3Client::new(&self.window).get(id, references, status)
     }
 
-    fn notify(&mut self, id: &str, references: &[String]) -> Result<(), RequestError> {
-        Shiori3Client::new(&self.window).notify(id, references)
+    fn notify(
+        &mut self,
+        id: &str,
+        references: &[String],
+        status: Option<&str>,
+    ) -> Result<(), RequestError> {
+        Shiori3Client::new(&self.window).notify(id, references, status)
     }
 
     fn unload(&mut self) -> Result<ExitKind, ShutdownError> {
@@ -96,19 +122,27 @@ fn map_error(err: RequestError) -> ShioriFailure {
 ///
 /// GET: `Ok(Some)`→`Value`・`Ok(None)`→`NoContent`・`Err`→`Failed(map_error(..))`。
 /// NOTIFY: `Ok(())`→`Notified`・`Err`→`Failed(map_error(..))`（NOTIFY は Value を運ばない）。
+///
+/// `status`（[`crate::status::ExecutionStatus`]）は呼出直前に `render()` して wire 値
+/// （`Option<&str>`・`None`＝ヘッダ行なし）へ落とし、そのまま backend へ渡す
+/// （語彙は kanade 所有・Req 2.2/2.3・DD-IT-1）。
 fn handle_call(backend: &mut dyn ShioriBackend, call: ShioriCall) -> ShioriOutcome {
     match call {
-        // `status` は本タスクでは backend へ転送しない（forwarding は Task 4.1・host32 側の変更に
-        // gate される）。ここでは `..` で吸収し、id/references の写像挙動を不変に保つ。
-        ShioriCall::Get { id, references, .. } => match backend.get(id, &references) {
-            Ok(Some(value)) => ShioriOutcome::Value(value),
-            Ok(None) => ShioriOutcome::NoContent,
-            Err(e) => ShioriOutcome::Failed(map_error(e)),
-        },
-        ShioriCall::Notify { id, references, .. } => match backend.notify(id, &references) {
-            Ok(()) => ShioriOutcome::Notified,
-            Err(e) => ShioriOutcome::Failed(map_error(e)),
-        },
+        ShioriCall::Get { id, references, status } => {
+            let status_wire = status.render();
+            match backend.get(id, &references, status_wire.as_deref()) {
+                Ok(Some(value)) => ShioriOutcome::Value(value),
+                Ok(None) => ShioriOutcome::NoContent,
+                Err(e) => ShioriOutcome::Failed(map_error(e)),
+            }
+        }
+        ShioriCall::Notify { id, references, status } => {
+            let status_wire = status.render();
+            match backend.notify(id, &references, status_wire.as_deref()) {
+                Ok(()) => ShioriOutcome::Notified,
+                Err(e) => ShioriOutcome::Failed(map_error(e)),
+            }
+        }
     }
 }
 
@@ -254,8 +288,9 @@ mod tests {
 
     const BOUND: Duration = Duration::from_secs(5);
 
-    /// 全 `ShioriCall` 構築点が明示する共通ヘッダ status（本タスクでは wire 検証対象でなく、
-    /// backend への転送は Task 4.1 で行う）。INACTIVE 由来ゆえ `render()==None`（空ヘッダ）。
+    /// 全 `ShioriCall` 構築点が明示する共通ヘッダ status。INACTIVE 由来ゆえ `render()==None`
+    /// （空ヘッダ）——`handle_call` はこの `None` を backend の `status` 引数へそのまま届ける
+    /// （転送檻は `handle_call_forwards_rendered_status_to_backend`）。
     fn inactive_status() -> ExecutionStatus {
         ExecutionStatus::derive(&ExecutionSnapshot::INACTIVE)
     }
@@ -276,10 +311,11 @@ mod tests {
         }
     }
 
-    /// fake の GET 応答クロージャ（スクリプト化した戻り値・`Send`）。
-    type GetFn = Box<dyn Fn(&str, &[String]) -> Result<Option<String>, RequestError> + Send>;
-    /// fake の NOTIFY 応答クロージャ（スクリプト化した戻り値・`Send`）。
-    type NotifyFn = Box<dyn Fn(&str, &[String]) -> Result<(), RequestError> + Send>;
+    /// fake の GET 応答クロージャ（スクリプト化した戻り値・`Send`・第 3 引数＝render 済み wire status）。
+    type GetFn =
+        Box<dyn Fn(&str, &[String], Option<&str>) -> Result<Option<String>, RequestError> + Send>;
+    /// fake の NOTIFY 応答クロージャ（スクリプト化した戻り値・`Send`・第 3 引数＝render 済み wire status）。
+    type NotifyFn = Box<dyn Fn(&str, &[String], Option<&str>) -> Result<(), RequestError> + Send>;
     /// fake の unload 応答クロージャ（スクリプト化した戻り値・`Send`・状態変化を許すため `FnMut`）。
     type UnloadFn = Box<dyn FnMut() -> Result<ExitKind, ShutdownError> + Send>;
     /// fake の status 応答クロージャ（スクリプト化した戻り値・`Send`・状態変化を許すため `FnMut`）。
@@ -298,11 +334,21 @@ mod tests {
     }
 
     impl ShioriBackend for FakeBackend {
-        fn get(&mut self, id: &str, references: &[String]) -> Result<Option<String>, RequestError> {
-            (self.get_result)(id, references)
+        fn get(
+            &mut self,
+            id: &str,
+            references: &[String],
+            status: Option<&str>,
+        ) -> Result<Option<String>, RequestError> {
+            (self.get_result)(id, references, status)
         }
-        fn notify(&mut self, id: &str, references: &[String]) -> Result<(), RequestError> {
-            (self.notify_result)(id, references)
+        fn notify(
+            &mut self,
+            id: &str,
+            references: &[String],
+            status: Option<&str>,
+        ) -> Result<(), RequestError> {
+            (self.notify_result)(id, references, status)
         }
         fn unload(&mut self) -> Result<ExitKind, ShutdownError> {
             (self.unload_result)()
@@ -315,11 +361,13 @@ mod tests {
     /// GET だけを差し替えた fake（NOTIFY／unload は使われない前提で unreachable・status は常に
     /// `Running` を返し死活監視ノイズを起こさない）。
     fn fake_get(
-        f: impl Fn(&str, &[String]) -> Result<Option<String>, RequestError> + Send + 'static,
+        f: impl Fn(&str, &[String], Option<&str>) -> Result<Option<String>, RequestError>
+        + Send
+        + 'static,
     ) -> FakeBackend {
         FakeBackend {
             get_result: Box::new(f),
-            notify_result: Box::new(|_, _| unreachable!("notify not expected in this test")),
+            notify_result: Box::new(|_, _, _| unreachable!("notify not expected in this test")),
             unload_result: Box::new(|| unreachable!("unload not expected in this test")),
             status_result: Box::new(|| HelperStatus::Running),
         }
@@ -328,10 +376,10 @@ mod tests {
     /// NOTIFY だけを差し替えた fake（GET／unload は使われない前提で unreachable・status は常に
     /// `Running`）。
     fn fake_notify(
-        f: impl Fn(&str, &[String]) -> Result<(), RequestError> + Send + 'static,
+        f: impl Fn(&str, &[String], Option<&str>) -> Result<(), RequestError> + Send + 'static,
     ) -> FakeBackend {
         FakeBackend {
-            get_result: Box::new(|_, _| unreachable!("get not expected in this test")),
+            get_result: Box::new(|_, _, _| unreachable!("get not expected in this test")),
             notify_result: Box::new(f),
             unload_result: Box::new(|| unreachable!("unload not expected in this test")),
             status_result: Box::new(|| HelperStatus::Running),
@@ -344,8 +392,8 @@ mod tests {
         f: impl FnMut() -> Result<ExitKind, ShutdownError> + Send + 'static,
     ) -> FakeBackend {
         FakeBackend {
-            get_result: Box::new(|_, _| unreachable!("get not expected in this test")),
-            notify_result: Box::new(|_, _| unreachable!("notify not expected in this test")),
+            get_result: Box::new(|_, _, _| unreachable!("get not expected in this test")),
+            notify_result: Box::new(|_, _, _| unreachable!("notify not expected in this test")),
             unload_result: Box::new(f),
             status_result: Box::new(|| HelperStatus::Running),
         }
@@ -433,7 +481,7 @@ mod tests {
 
     #[test]
     fn get_ok_some_maps_to_value() {
-        let backend = fake_get(|id, refs| {
+        let backend = fake_get(|id, refs, _status| {
             assert_eq!(id, "OnBoot");
             assert_eq!(refs, &["master".to_string()]);
             Ok(Some(r"\0hi\e".to_string()))
@@ -454,7 +502,7 @@ mod tests {
 
     #[test]
     fn get_ok_none_maps_to_no_content() {
-        let backend = fake_get(|_, _| Ok(None));
+        let backend = fake_get(|_, _, _| Ok(None));
         let outcome = round_trip_via_runner(
             backend,
             ShioriCall::Get {
@@ -473,7 +521,7 @@ mod tests {
     fn get_err_each_vocabulary_maps_to_failed() {
         // Timeout
         let outcome = round_trip_via_runner(
-            fake_get(|_, _| Err(RequestError::Timeout)),
+            fake_get(|_, _, _| Err(RequestError::Timeout)),
             ShioriCall::Get { id: "OnBoot", references: Vec::new(), status: inactive_status() },
         );
         assert!(
@@ -483,7 +531,7 @@ mod tests {
 
         // Handshake
         let outcome = round_trip_via_runner(
-            fake_get(|_, _| Err(RequestError::Handshake(HandshakeError::Timeout))),
+            fake_get(|_, _, _| Err(RequestError::Handshake(HandshakeError::Timeout))),
             ShioriCall::Get { id: "OnBoot", references: Vec::new(), status: inactive_status() },
         );
         assert!(
@@ -493,7 +541,7 @@ mod tests {
 
         // Ipc
         let outcome = round_trip_via_runner(
-            fake_get(|_, _| Err(RequestError::Ipc(IpcError::SendFailed))),
+            fake_get(|_, _, _| Err(RequestError::Ipc(IpcError::SendFailed))),
             ShioriCall::Get { id: "OnBoot", references: Vec::new(), status: inactive_status() },
         );
         assert!(
@@ -503,7 +551,7 @@ mod tests {
 
         // Shiori
         let outcome = round_trip_via_runner(
-            fake_get(|_, _| {
+            fake_get(|_, _, _| {
                 Err(RequestError::Shiori(ShioriError::Status {
                     status: 400,
                     error_level: None,
@@ -522,7 +570,7 @@ mod tests {
 
     #[test]
     fn notify_ok_maps_to_notified() {
-        let backend = fake_notify(|id, refs| {
+        let backend = fake_notify(|id, refs, _status| {
             assert_eq!(id, "OnInitialize");
             assert!(refs.is_empty());
             Ok(())
@@ -543,7 +591,7 @@ mod tests {
 
     #[test]
     fn notify_err_maps_to_failed() {
-        let backend = fake_notify(|_, _| Err(RequestError::Ipc(IpcError::SendFailed)));
+        let backend = fake_notify(|_, _, _| Err(RequestError::Ipc(IpcError::SendFailed)));
         let outcome = round_trip_via_runner(
             backend,
             ShioriCall::Notify { id: "OnClose", references: Vec::new(), status: inactive_status() },
@@ -551,6 +599,61 @@ mod tests {
         assert!(
             matches!(outcome, ShioriOutcome::Failed(ShioriFailure::Ipc(_))),
             "NOTIFY Err は Failed へ: got {}", describe(&outcome)
+        );
+    }
+
+    // --- status 転送檻: render 済み wire 値が backend の status 引数へ届く（Req 2.2/2.3・Testing #9）---
+
+    /// `handle_call` が `ExecutionStatus::render()` の結果を backend の `status` 引数へ Some/None
+    /// 双方で届けることを固定する（語彙は kanade 所有・backend は転記のみ・DD-IT-1）。
+    #[test]
+    fn handle_call_forwards_rendered_status_to_backend() {
+        // talk_active=true → render() == Some("talking") が NOTIFY backend の status へ届く（Req 2.2）。
+        let (talking_tx, talking_rx) = mpsc::channel::<Option<String>>();
+        let notify_backend = fake_notify(move |_id, _refs, status: Option<&str>| {
+            let _ = talking_tx.send(status.map(|s| s.to_string()));
+            Ok(())
+        });
+        let outcome = round_trip_via_runner(
+            notify_backend,
+            ShioriCall::Notify {
+                id: "OnSecondChange",
+                references: Vec::new(),
+                status: ExecutionStatus::derive(&ExecutionSnapshot { talk_active: true }),
+            },
+        );
+        assert!(
+            matches!(outcome, ShioriOutcome::Notified),
+            "NOTIFY 往復は Notified: got {}", describe(&outcome)
+        );
+        assert_eq!(
+            talking_rx.recv_timeout(BOUND).expect("status captured"),
+            Some("talking".to_string()),
+            "talk_active=true の render 結果 Some(\"talking\") が backend の status へ届く"
+        );
+
+        // INACTIVE → render() == None（ヘッダ行なし）が GET backend の status へ届く（Req 2.3）。
+        let (idle_tx, idle_rx) = mpsc::channel::<Option<String>>();
+        let get_backend = fake_get(move |_id, _refs, status: Option<&str>| {
+            let _ = idle_tx.send(status.map(|s| s.to_string()));
+            Ok(None)
+        });
+        let outcome = round_trip_via_runner(
+            get_backend,
+            ShioriCall::Get {
+                id: "OnSecondChange",
+                references: Vec::new(),
+                status: ExecutionStatus::derive(&ExecutionSnapshot::INACTIVE),
+            },
+        );
+        assert!(
+            matches!(outcome, ShioriOutcome::NoContent),
+            "GET 往復（Ok(None)）は NoContent: got {}", describe(&outcome)
+        );
+        assert_eq!(
+            idle_rx.recv_timeout(BOUND).expect("status captured"),
+            None,
+            "INACTIVE の render 結果 None（ヘッダ行なし）が backend の status へ届く"
         );
     }
 
@@ -626,8 +729,8 @@ mod tests {
     #[test]
     fn death_detected_once_reports_shiori_down_and_only_once() {
         let backend = FakeBackend {
-            get_result: Box::new(|_, _| Ok(Some(r"\0hi\e".to_string()))),
-            notify_result: Box::new(|_, _| unreachable!("notify not expected in this test")),
+            get_result: Box::new(|_, _, _| Ok(Some(r"\0hi\e".to_string()))),
+            notify_result: Box::new(|_, _, _| unreachable!("notify not expected in this test")),
             unload_result: Box::new(|| unreachable!("unload not expected in this test")),
             status_result: Box::new(|| HelperStatus::Exited(ExitKind::Abnormal(1))),
         };
@@ -685,8 +788,8 @@ mod tests {
         let status_flag = exited.clone();
         let unload_flag = exited.clone();
         let backend = FakeBackend {
-            get_result: Box::new(|_, _| unreachable!("get not expected in this test")),
-            notify_result: Box::new(|_, _| unreachable!("notify not expected in this test")),
+            get_result: Box::new(|_, _, _| unreachable!("get not expected in this test")),
+            notify_result: Box::new(|_, _, _| unreachable!("notify not expected in this test")),
             unload_result: Box::new(move || {
                 unload_flag.store(true, Ordering::SeqCst);
                 Ok(ExitKind::Clean)
@@ -733,7 +836,7 @@ mod tests {
 
     #[test]
     fn all_senders_dropped_terminates_runner() {
-        let backend = fake_get(|_, _| unreachable!("no request"));
+        let backend = fake_get(|_, _, _| unreachable!("no request"));
         let (tx, rx) = mpsc::channel::<ShioriMsg>();
         let (on_down_tx, _on_down_rx) = mpsc::channel::<KanadeMsg>();
         let handle =
