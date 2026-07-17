@@ -99,7 +99,7 @@ emo2（互換ベースウェアの適合 fixture ゴースト）の**メニュ�
 
 #### Acceptance Criteria
 1. When 汎用コマンド cue のうちコマンド名 `move` のもの（以下「move cue」）が配送される, the ghost shall 対象スコープのキャラクタ窓を指定された位置へ**即時に移動**させる（消費の選別は R4.5 の名前選別に従う）。
-2. The ghost shall `\![move]` の引数意味論（基準点・符号・単位・省略引数の扱い）を **ukadoc 正典に従って解決**し、正典が沈黙する箇所は areka 裁量として決定したうえで対応表へ記録する。
+2. The ghost shall `\![move]` の引数意味論（基準点・符号・単位・省略引数の扱い）を **ukadoc 正典に従って解決**し、正典が沈黙する箇所は areka 裁量として決定したうえで対応表へ記録する。基準位置 `base` の解決は**正典既定の basepos（x=サーフェス幅÷2・y=下端）のみを実導出**する（emo2 は `point.basepos` を宣言せず正典既定がそのまま適用される正規経路・fixture は Y=fix ゆえ実効は basepos.x のみ）。宣言 `point.basepos` の実導出は本 spec の範囲外とし、差し替え可能な型シームを予約したうえで追跡 spec `areka-P0-surfaces-basepos` へ申し送る。裸 `base`（ドット無し形・正典形式は `X基準.Y基準`）は `base.base` と等価に解する（areka 裁量・対応表記録）。
 3. When 移動対象のキャラクタ窓に随伴するバルーン窓が在る, the ghost shall バルーンを**相対オフセットを保ったまま随伴移動**させる。
 4. Where 移動指定に時間（アニメーション）が含まれる, the ghost shall M1 では補間せず**最終位置へ即時反映**し、その縮退を記録する（語彙は保持する）。
 5. If 移動対象が解決できない（対象の窓が存在しない等）, then the ghost shall 警告を記録して talk の再生を継続する（無音で失敗せず、異常終了もしない）。
