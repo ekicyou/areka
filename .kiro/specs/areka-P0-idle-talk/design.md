@@ -141,6 +141,7 @@ graph TB
 | **DD-IT-8** | `force_quit` の stale 注記（Req3.1 が design 送り） | `events::on_close_notify(reason, &snapshot)` を**新設**し委譲。events.rs を構築の**単一列挙点**へ回復 | `mod.rs:161-164` の「events.rs 実装後は委ねる」注記は events.rs 実在の今も未実行。委譲不能だった理由は実測で判明＝`events::on_close` は **GET** を返すが force_quit は **NOTIFY** を要する。NOTIFY 版の増設で解消する |
 | **DD-IT-9** | パラメータ付き状態の下位書式 | **ukadoc 正典（内部 `/` 区切り）を採用**。実 SSP の `,` 差異は台帳 spec へ申し送り | 正典 `balloon(0=2/1=0)` に対し実 SSP 2.3.86 は `balloon(0=2,1=0)` を送る（`shiori-sample.log:3727`）。後者は**トップレベルのカンマと衝突**し `split(',')` を壊す＝曖昧。正典の `/` は自己無矛盾。steering「正典は ukadoc」に従う。**M1 は両状態とも非アクティブ＝送出せず＝実害ゼロ** |
 | **DD-IT-10** | Ref1/Ref2 の差替シーム（Req1.6） | events.rs の名前付き定数＋シーム注記。実測供給時は `ExecutionSnapshot` へフィールドを足す＝**Status 残状態と同一シーム** | 要件が「Reference1/Reference2 と同型」（Req2.5）と言う関係を**文字どおり同一の口**で実現する。構築が events.rs 一点に集中しているため、値の差替は Reference 連番・ヘッダ構成を変えない |
+| **DD-IT-11** | 檻違反の失敗語彙（設計ディスカッション #1・2026-07-17 開発者裁定「あるべき正しい姿・シンプルに誠実に」） | `ShioriFailure` へ `Internal(String)` を **1 variant のみ**追加（`#[error("kanade internal violation: {0}")]`）。檻違反は `Failed(Internal)` で返す。`map_error` は不変＝`Internal` は境界写像が**決して生成しない** variant（kanade 内部でのみ構成） | `Shiori` は「SHIORI エラー応答」の境界写像（`msg.rs:117-119`）であり、**未送出**の内部バグに使うのは範疇錯誤——kanade Req6.1 の区別語彙を汚染し、input-events の whitelist 追加漏れが「pasta のエラー」と誤診される。先例は実在＝`SessionError::RequestInFlight`（利用規律違反・`areka/src/shiori_session.rs:48-61`）／`UiSpawnError`（「検出可能な前提違反を error! 記録のうえ返す予約型」・`areka-actor/src/ui.rs:165-177`）＝発明でなく既存規律への合流。爆風実測＝破壊は cfg(test) `describe`（`real.rs:257`）1箇所＋テスト記述子 `FailKind` の追随のみ・本番消費2箇所（`mod.rs:235,254`）は `%failure`（Display）経由で**無改変** |
 
 ### 実 wire 証拠（本設計の裏取り・一次確認済み）
 
@@ -183,13 +184,13 @@ crates/areka-kanade/src/
 | ファイル | 変更内容 |
 |---|---|
 | `crates/areka-kanade/src/lib.rs` | `pub mod status;`＋`ExecutionSnapshot`/`ExecutionState`/`ExecutionStatus` 再エクスポート。`events` ファサードへ `on_close_notify`・`ALLOWED_EVENT_IDS`・`is_allowed_event_id` を追加 |
-| `crates/areka-kanade/src/msg.rs` | `ShioriCall::{Get,Notify}` へ `status: ExecutionStatus` を追加（共通ヘッダ＝全構築点が Status を明示する） |
+| `crates/areka-kanade/src/msg.rs` | `ShioriCall::{Get,Notify}` へ `status: ExecutionStatus` を追加（共通ヘッダ＝全構築点が Status を明示する）。`ShioriFailure` へ `Internal(String)` variant 追加（DD-IT-11）＋enum doc を「外部4語彙＝`RequestError` 境界写像・`Internal` のみ kanade 内部構成」へ更新＋Display 語彙テスト（`:173-185`）へ 1 行追加 |
 | `crates/areka-kanade/src/schedule/events.rs` | 全構築関数が `&ExecutionSnapshot` を取る。`on_second_change(now, snapshot)` が Ref3 と Status を**単一入力から**導出。`on_close_notify(reason, snapshot)` 新設（DD-IT-8）。Ref1/Ref2 を名前付き定数＋シーム注記へ。`ALLOWED_EVENT_IDS` 表＋`is_allowed_event_id` |
 | `crates/areka-kanade/src/schedule/mod.rs` | `fn snapshot_of(phase: &Phase) -> ExecutionSnapshot`（`Steady{talk: Some}` のみ `talk_active=true`）。`force_quit` の inline 構築（`:170-173`）を `events::on_close_notify` へ委譲し stale 注記（`:161-164`）を解消 |
 | `crates/areka-kanade/src/schedule/steady.rs` | `on_second_change`／`begin_close` の呼出へスナップショットを供給（`talk_playable` 引数は廃止） |
 | `crates/areka-kanade/src/schedule/boot.rs` | `events::` 呼出（`:44,58,69,121`）へスナップショット供給（boot 系列は構造上 talk 非アクティブ） |
 | `crates/areka-kanade/src/actor.rs` | `round_trip_request`（`:146`）に **ID ホワイトリスト檻**（違反＝送出せず `error!`＋`Failed`）と wire 観測 `trace!(event="shiori_request")`（Req6.2 の証跡）を追加 |
-| `crates/areka-kanade/src/shiori/real.rs` | `ShioriBackend::{get,notify}` へ `status: Option<&str>` 追加。`ShioriConnection` impl が `Shiori3Client` へ転送。`handle_call`（`:99-111`）が `ExecutionStatus::render()` の結果を forward |
+| `crates/areka-kanade/src/shiori/real.rs` | `ShioriBackend::{get,notify}` へ `status: Option<&str>` 追加。`ShioriConnection` impl が `Shiori3Client` へ転送。`handle_call`（`:99-111`）が `ExecutionStatus::render()` の結果を forward。in-source `describe`（`:257`・cfg(test)・ワークスペース唯一の `ShioriFailure` 網羅 match）へ `Failed(Internal)` アーム追加 |
 | `crates/shiori-host32-host/src/shiori3.rs` | `ShioriRequest` へ `status: Option<&'a str>`。`build_request` が `Sender:` の後・`ID:` の前に `Status: <v>\r\n` を発行（`None` は行ごと省略） |
 | `crates/shiori-host32-host/src/client.rs` | `Shiori3Client::{get,notify}`（`:115,143`）へ `status: Option<&str>` を追加し `ShioriRequest` 構築へ渡す |
 | `crates/shiori-host32-host/tests/shiori_request_e2e.rs` | `Shiori3Client::{get,notify}` 呼出（`:228,240,339`）へ `None` 追加＝署名追随 |
@@ -198,11 +199,12 @@ crates/areka-kanade/src/
 | `crates/areka-ghost/src/runtime.rs` | `FakeShioriBackend`（`:464`）の署名追随 |
 | `crates/areka-ghost/tests/ghost/spine_e2e_test.rs` | `ScriptedShioriBackend`（`:138`）の署名追随 |
 | `crates/areka/src/emo2_boot/spine.rs` | `ScriptedShioriBackend`（`:157`）の署名追随 |
-| `crates/areka-kanade/tests/kanade/common/mod.rs` | `RecordedCall` へ `status: Option<String>`（render 済み wire 値）。`from_call`（`:84-100`）が写す |
+| `crates/areka-kanade/tests/kanade/common/mod.rs` | `RecordedCall` へ `status: Option<String>`（render 済み wire 値）。`from_call`（`:84-100`）が写す。テスト記述子 `FailKind`（`:301,314`）へ `Internal` を追加（記述子は `ShioriFailure` でなく `FailKind` を match するため**追随しないと網羅檻が黙って嘘になる**・DD-IT-11） |
+| `crates/areka-kanade/tests/kanade/failure_test.rs` | `FailKind` 檻を 5 語彙へ（`:66` の「4 語彙を静的に網羅」注記の更新・`:75-80` witness へ `Internal` アーム・`Failed(Internal)`→fault 経路の檻を追加） |
 | `crates/areka-kanade/tests/kanade/steady_test.rs` | 期待値構築を `expected_call(events::on_second_change(..))` へ寄せ、Status/ID 檻を additive 追加 |
 | `crates/areka-kanade/tests/kanade/close_test.rs` | `force_quit_onclose_notify`（`:560-565`）の期待値を `events::on_close_notify` 由来へ |
 
-> **機械的追随の適用範囲は 3 型**（`ShioriCall`／`ShioriRequest`／`Shiori3Client`）。内訳＝`ShioriCall` の残りの構築・分解点（`msg.rs`／`actor.rs`／`real.rs` の in-source テスト等）／`ShioriRequest` の構造体リテラル 7 箇所（`shiori3.rs:363,386,403,425,442,458,474`＝in-source テスト・`status: None` 追加）／`Shiori3Client::{get,notify}` の e2e 呼出 8 箇所（上表の host32 tests 3 ファイル）。いずれも**コンパイラ捕捉の機械的追随**である。`ShioriCall` に derive が無い（`msg.rs:80`）ため比較は既存の手動 destructure 方式を踏襲する。
+> **機械的追随の適用範囲は 4 型**（`ShioriCall`／`ShioriRequest`／`Shiori3Client`／`ShioriFailure`）。内訳＝`ShioriCall` の残りの構築・分解点（`msg.rs`／`actor.rs`／`real.rs` の in-source テスト等）／`ShioriRequest` の構造体リテラル 7 箇所（`shiori3.rs:363,386,403,425,442,458,474`＝in-source テスト・`status: None` 追加）／`Shiori3Client::{get,notify}` の e2e 呼出 8 箇所（上表の host32 tests 3 ファイル）／`ShioriFailure::Internal` の破壊点＝cfg(test) `describe`（`real.rs:257`）**1箇所のみ**（`cargo build` は緑のまま・`cargo test` が捕捉）＋コンパイラが捕捉**しない** `FailKind` 記述子の意図的追随（上表）。いずれも機械的である。`ShioriCall` に derive が無い（`msg.rs:80`）ため比較は既存の手動 destructure 方式を踏襲する。
 
 ## System Flows
 
@@ -504,7 +506,8 @@ pub fn on_close_notify(reason: CloseReason, snapshot: &ExecutionSnapshot) -> Shi
 /// GET／NOTIFY の同期往復。送出前に ID ホワイトリストを検証する（Req3.1・DD-IT-7）。
 ///
 /// 許可集合外: 送出せず `error!(target:"kanade", event="event_id_not_allowed", id=%id)` を残し
-///             `ShioriOutcome::Failed(ShioriFailure::Shiori(..))` を返す（状態機械は既存の fault 経路で処理）。
+///             `ShioriOutcome::Failed(ShioriFailure::Internal(..))` を返す（DD-IT-11・
+///             状態機械は既存の fault 経路で処理＝檻専用の応答を発明しない）。
 /// 許可集合内: `trace!(target:"kanade", event="shiori_request", method, id, references, status)` を残して送出。
 fn round_trip_request(shiori: &Sender<ShioriMsg>, call: ShioriCall) -> ShioriOutcome;
 ```
@@ -613,7 +616,7 @@ Status: <state>[,<state>]*
 
 | 事象 | 分類 | 応答 |
 |---|---|---|
-| 送出 ID がホワイトリスト外（実装バグ） | 内部規律違反 | **送出せず** `error!(event="event_id_not_allowed", id=%id)`＋`ShioriOutcome::Failed(ShioriFailure::Shiori(..))` → 状態機械の既存 fault 経路（`to_unloading_fault`）。適合を壊したまま走り続けるより**明示的に落ちる**方を選ぶ |
+| 送出 ID がホワイトリスト外（実装バグ） | 内部規律違反 | **送出せず** `error!(event="event_id_not_allowed", id=%id)`＋`ShioriOutcome::Failed(ShioriFailure::Internal(..))`（DD-IT-11） → 状態機械の既存 fault 経路（`to_unloading_fault`）＝檻専用の応答を発明しない。SHIORI 適合を壊したまま**送出は続けない**（kanade は Fault 終端で停止する）。ただし実測では fault 終端は**プロセス終了まで届かず窓が残る**（全 `Failed` 共通の既存挙動＝Open Item 4。旧版の「明示的に落ちる」はプロセスレベルでは不成立だったため本行を事実へ訂正） |
 | `Steady{Some}` に Value が届く（想定外経路） | 防御 | 既存どおり `warn!(event="steady_value_during_talk")`＋破棄（DD-6・変更なし） |
 | SHIORI 往復失敗（timeout/ipc/handshake） | 外部障害 | 既存どおり `map_error` → `ShioriFailure`（変更なし） |
 | `Status` の render 失敗 | — | **起こり得ない**（純データの写像・失敗経路を持たない） |
@@ -636,7 +639,7 @@ Status: <state>[,<state>]*
 4. **`events.rs` OnSecondChange 檻**（1.1–1.5/2.2/2.3/2.4/2.7/5.2）: 既存 4 テストを拡張し、`talk_active=false` → GET・Ref3=`"1"`・status `None`／`true` → NOTIFY・Ref3=`"0"`・status `Some("talking")`。Ref0 の切り捨て（`3_599_999ms → "0"`）を保存
 5. **`events.rs` 許可 ID 檻**（3.1/3.2）: `ALLOWED_EVENT_IDS` が期待集合と**完全一致**／`OnTalk`・`OnHour` を含まない／全構築関数の返す `id` が表の要素である
 6. **`events.rs` `on_close_notify` 檻**（3.1・DD-IT-8）: NOTIFY・Ref0=reason・status が snapshot 由来
-7. **`actor.rs` チョークポイント判断分岐檻**（3.1/3.2・DD-IT-7）: 許可 ID → チャネルへ送出される／禁止 ID（`OnTalk`）→ **送出されず** `Failed` が返り `error!` が出る（`log_capture` 資産で捕捉）
+7. **`actor.rs` チョークポイント判断分岐檻**（3.1/3.2・DD-IT-7/DD-IT-11）: 許可 ID → チャネルへ送出される／禁止 ID（`OnTalk`）→ **送出されず** `Failed(ShioriFailure::Internal)` が返り `error!` が出る（`log_capture` 資産で捕捉）。`Failed(Internal)` → fault 終端の経路檻は `failure_test.rs` の 5 語彙檻が担う
 8. **`shiori3.rs` バイト級檻**（2.3/5.3）: `Some("talking")` → `Status: talking\r\n` が在り、その位置が `Sender:` の後・`ID:` の前／`None` → `Status` 行が**一切無い**／値は verbatim（`talking,balloon(0=2/1=0)` を解釈せず素通し）
 9. **`real.rs` `handle_call` 転送檻**（2.2/2.3）: `ExecutionStatus` が render されて backend の `status` 引数へ Some/None 双方で届く
 
@@ -680,7 +683,7 @@ Status: <state>[,<state>]*
 |---|---|---|
 | **消費側 fail-open（Req2.6 ただし書き・DD-IT-9）**: pasta の抑制ゲートは `req.status == "talking"` の**完全一致**（`virtual_dispatcher.lua:98,123`）。正典どおりの複合値（例 `talking,balloon(0=0)`）では**発火せず**、talk 中に OnTalk が漏れる。実 SSP は実際に複合値を送っており、pasta 側が SSP に対して既に fail-open している | 将来 `balloon`／`choosing` 等が実導出された瞬間に talk 中の OnTalk 漏れが再発（症状＝トークが黙って捨てられ pasta の `next_talk_time` だけ進む） | **M1 は縮退により wire が厳密に `talking` 単独**＝ゲートが発火する（安全）。実値差替の解禁時は**複合値 wire での消費側互換検証を受け入れ条件に含める**（台帳 `areka-P0-status-execution-states` の Approach 2b が正本／`choosing` は `areka-P0-choice-select-events` が最初に踏む）。Revalidation Triggers に登記済み |
 | **正典 `/` と実 SSP `,` の乖離（DD-IT-9）**: ukadoc は `balloon(0=2/1=0)`、実 SSP 2.3.86 は `balloon(0=2,1=0)` | M1 は両状態とも非アクティブ＝**送出せず実害ゼロ**。将来の実導出時に消費側の期待と食い違う可能性 | 正典（`/`・自己無矛盾）を採用し、乖離を本書と research へ記録。実導出の所有者（台帳 spec）が実 SSP 互換の再検証時に決着させる |
-| **4 クレート横断の破壊的変更** | `areka-ghost`／`areka` のビルドが同時に落ちる | 機械的・コンパイラ捕捉。爆風は**2 軸**＝① `ShioriBackend` 実装 5 箇所（本番 1＋テスト 4）／② `Shiori3Client` 署名の呼出 8 箇所＋`ShioriRequest` リテラル 7 箇所。いずれも本書 File Structure Plan に列挙済み（旧版は②を計上しておらず、`cargo test --workspace`＝DoD Gate を落とす見落としだった）。roadmap W1 の「契約正本の先鋒」＝共有型の shaper が先行する順序で衝突最小（追記㉘/㉙） |
+| **4 クレート横断の破壊的変更** | `areka-ghost`／`areka` のビルドが同時に落ちる | 機械的・コンパイラ捕捉。爆風は**3 軸**＝① `ShioriBackend` 実装 5 箇所（本番 1＋テスト 4）／② `Shiori3Client` 署名の呼出 8 箇所＋`ShioriRequest` リテラル 7 箇所／③ `ShioriFailure::Internal` の破壊 1 箇所（cfg(test) `describe`）＋`FailKind` 意図的追随。いずれも本書 File Structure Plan に列挙済み（旧版は②を計上しておらず、`cargo test --workspace`＝DoD Gate を落とす見落としだった）。roadmap W1 の「契約正本の先鋒」＝共有型の shaper が先行する順序で衝突最小（追記㉘/㉙） |
 | **`Status` 追加が pasta の talk スケジュールを変える** | 抑制ゲートが初めて閉じるため、talk 中は `check_talk` が `next_talk_time` を初期化・進行しない（`virtual_dispatcher.lua:120-128`）＝発火間隔の体感が変わり得る | 仕様どおりの挙動（SSP と同じ）。Req6.1 の判定は「発火するか」のみでタイミングを含めない（Req6.3）。ベースライン比較で回帰でないことを確認する |
 | **既存 `..` 分解による Status の黙殺** | `steady_test.rs:287-290` 等は `Get{references, ..}` で分解しており、フィールド追加後も**コンパイルは通るが Status を検査しない** | 期待値構築を `expected_call(events::on_second_change(..))` へ寄せる（Testing Strategy 15） |
 
@@ -689,3 +692,4 @@ Status: <state>[,<state>]*
 1. `build_request` の `SecurityLevel` 位置が ukadoc（「ID ヘッダより前に現れる」）および実 SSP 観測順と食い違う（既存逸脱）— 引受先候補＝`areka-P0-emo2-conformance-e2e`
 2. `doc/emo2-conformance-scope.md:18` の「Status ... 9種」は正典の 10 種に対し**過少**、かつ同行の「`Reference0..n` を emo2 が読む」は OnSecondChange については偽（pasta は Reference を読まない）— 文書の訂正は本 spec の実装スコープ外
 3. `unknown_talk_done talk_id=1`（起動挨拶の talk_id 追跡欠落）— kanade 領分だが本 spec の要件外（Out of Boundary）
+4. **fault 終端の「沈黙のゾンビ」**（檻固有でなく**全 `Failed` 共通**の既存挙動・2026-07-17 設計ディスカッション #1 で実測登記）: kanade は `Unloading{Fault}` → `Stopped` → スレッド終了まで到達するが、プロセス終了は `main` の `app.run()`（窓メッセージループ・`main.rs:318`）が所有し、走行中に `kanade_handle` を監視する者がいない（join は `run()` 復帰後の `shutdown` のみ・`runtime.rs:195`）。結果、fault 後も**窓は画面に残り操作可能・SHIORI 活動のみ永久停止**。運用者が見るログは 3 行（ERROR `shiori_failed`＋INFO `unload_clean`＋INFO `close`）で、ticker が dead inbox 検出の INFO 1 行（`ticker.rs:228-236`）を最後に沈黙＝ほぼ正常終了に見える。kanade Req6「観測可能な状態遷移」のプロセスレベル欠落。引受先候補＝`areka-P0-emo2-conformance-e2e`（実機一周での異常終了挙動の検分）または ghost ライフサイクル増分 spec。本 spec は檻の応答を既存 fault 経路へ**合流させるのみ**で、この欠陥を吸収しない

@@ -411,3 +411,21 @@ ukadoc MCP で「Status/talking/choosing」を2度検索したがいずれも no
 - 実需正本 — `doc/emo2-conformance-scope.md:18,22,27`（emo2 が読むヘッダ・OnSecondChange＝心臓部・`OnTalk`/`OnHour` 送出禁止）
 - 先例 — `.kiro/specs/completed/areka-P0-cue-playback-duration/tasks.md:218`（実機サインオフ運用＝絶対パス起動・i686 helper 上書きコピー）
 - 下流契約 — `.kiro/specs/areka-P0-status-execution-states/brief.md`（残状態の台帳・Approach 2b＝消費側互換の檻）
+
+## 16. 設計ディスカッション決着ログ（2026-07-17）
+
+### #1 檻違反の失敗語彙 → `ShioriFailure::Internal(String)` 追加（DD-IT-11）
+
+**開発者裁定**: 「あるべき正しい姿にすべき。必要ならスコープを増やす。無意味に型を増やしすぎるのもよくない。シンプルに、誠実に。」＝ variant 1 本の追加を採択（新 enum の発明は不採用）。
+
+**裁定を支えた実測**（50 subagent・47 主張の敵対的検証＝34 confirmed / 12 imprecise / 1 refuted）:
+
+1. **爆風＝ワークスペース全体で 1 箇所**。`ShioriFailure` は `msg.rs:105-120`（derive は Debug+thiserror のみ・`#[non_exhaustive]` 無し・Clone 無しは `common/mod.rs:297` が意図明記）。variant 追加でコンパイルが壊れるのは cfg(test) 内 `describe`（`real.rs:256-267`・ワイルドカード無し nested match）**のみ**＝`cargo build` 緑・`cargo test` が捕捉。本番消費は 2 箇所（`schedule/mod.rs:235-240,254-256`）とも `ref failure`＋`%failure`（Display）で variant を見ない＝**無改変で正しく流れる**。
+2. **コンパイラが捕捉しない追随が 1 系統**: テスト記述子 `FailKind`（`common/mod.rs:301,314`・`failure_test.rs:75-80`）は `ShioriFailure` でなく `FailKind` を match するため、5 本目を足しても両檻は黙って通り「4 語彙を静的に網羅」（`failure_test.rs:66`）が嘘になる。→ File Structure Plan へ意図的追随として計上。
+3. **「内部規律違反 variant の先例なし」は反証された**: `SessionError::RequestInFlight`（`areka/src/shiori_session.rs:48-61`・「利用規律」違反と外部 `Shiori(#[from])` の同居）／`UiSpawnError`（`areka-actor/src/ui.rs:165-177`・「検出可能な前提違反を error! 記録のうえ返す経路として予約された型・panic はしない」）。`Internal` は発明でなく既存規律への合流。
+4. **失敗方針の正本は steering に無い**: `.kiro/steering/` 全 9 ファイル grep で不在。正本＝`completed/areka-P0-actor-foundation/design.md:523`（検出可能な前提違反は `error!`＋`Err`・panic は致命限定）＋`completed/areka-P0-kanade/requirements.md:88-97`（Req6.1 区別語彙・6.3 ログ無し失敗禁止・6.4 致命ログ後のみ panic 許容）。panic 案の棄却根拠は「panic 禁止」でなく「檻違反＝検出可能な前提違反」条項。
+5. **fault 終端の実挙動＝「沈黙のゾンビ」**（旧設計文「明示的に落ちる」は事実に反した）: `Failed` は `round_trip_request` を無記録で素通し（`actor.rs:173-174`・ログは transport 失敗 3 種のみ）→ `Input::ShioriReply` 再注入（`:129-135`）→ `awaits_reply` 6/10 phase のみ `ERROR shiori_failed` 1 行で `to_unloading_fault`（`mod.rs:234-240`）→ `Unloading{Fault}`→`Stopped`→`StopSelf`＝スレッド終了。**プロセスは死なない**: `app.run()`（`main.rs:318`）が窓ループでブロック・`kanade_handle` の join は `run()` 復帰後の `shutdown` のみ（`runtime.rs:195`）・走行中の監視者ゼロ。運用者ログは 3 行（ERROR 1＋INFO 2）＋ticker の dead-inbox INFO（`ticker.rs:228-236`）で以後沈黙。→ 全 `Failed` 共通の kanade 既存欠陥として **Open Item 4 に登記**（本 spec は吸収しない）・設計文は事実へ訂正済み。
+6. **檻チョークポイントの保証水準**（検証で判明・議題 #3 へ）: `round_trip_request` は kanade drive ループ内の唯一の egress だが、`ShioriMsg` は pub（`msg.rs:65`）・`spawn_shiori_actor` は再エクスポート（`lib.rs:39`）＝`Sender<ShioriMsg>` 保持者は檻を迂回して直接 post できる（in-tree 使用例 `real.rs:762`・`common/mod.rs:1110`）。被覆は**型保証でなく所有規律**（sender は kanade actor のみが保持・`areka-ghost/src/runtime.rs:117`）。
+7. **下流の檻負担の実測**（議題 #4 の布石）: input-events（W2）＝追加 2 ID のみ・自要件で檻を 2 回名指し済み（`requirements.md:28,103`）。position-persist（W3）＝追加ゼロ。**choice-select-events（W5）＝構造的非互換**——ukadoc 正典 `\q[タイトル,OnID,...]` は実行時スクリプト由来の**任意名イベント**を発火し（emo2 は fixture grep 0 件でこの形のみに依存・`brief.md:13`）、`&'static str` の id（`msg.rs:82,86`）にも固定 const 表にも載らない。
+
+**適用差分**: design.md＝DD-IT-11 新設・Error Handling 表 1 行目（Internal＋ゾンビ事実訂正）・actor.rs Service Interface doc・File Structure Plan（msg.rs／real.rs／common/mod.rs／failure_test.rs 行）・機械的追随注記 4 型化・Risks 爆風 3 軸化・Testing Strategy #7・Open Items #4 新設。
