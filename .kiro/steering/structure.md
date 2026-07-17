@@ -49,7 +49,6 @@ updated_at: 2026-07-02
 - `widget/` - UIウィジェット、テキスト、画像、ブラシ
 - `pointer/` - ポインター入力のバッファリングと配信
 - `drag/` - ドラッグ状態管理とディスパッチ
-- `cue/` - CueQueueとCueSheet配送のECS統合
 - `dola/` - DolaRuntimeのECS Component化
 - `world/` - schedule labels、vsync、フレーム進行
 - `app.rs` - アプリケーション状態管理（ウィンドウカウント、ディスプレイ構成変更）
@@ -85,25 +84,20 @@ updated_at: 2026-07-02
 - 代表的な型: ポインターバッファー、ドラッグコンテキスト、キャプチャガード
 - 特徴: Win32メッセージ境界とECSイベント処理を分離
 
-**6. Cue System** (`cue/`)
-- 責務: 離散コマンド配信のECS統合レイヤー
-- 代表的なコンポーネント: `CueQueue`（`dola::TimedSchedule<CueCommand>` を内包）, `CueSheetTracker`
-- 型の再エクスポート: `dola::cue::*`（`CueCommand`, `BarrierKind`, `RoutingCommand`, ドメイン型）を `pub use` で提供
-- 主要システム: `dispatch_pending_cue_sheets`
-- 特徴: `Entity::to_bits()` / `from_bits()` 変換をECS境界で実行、`EntityRef(u64)` のラウンドトリップ
+> **cue の ECS 統合レイヤーは撤去済み（2026-07-17）**: 旧 `ecs/cue/`（`CueQueue`／`dispatch_pending_cue_sheets`／`CueSheetTracker`／`EntityRegistry`）は**旧世代**（生きた App へ未配線）ゆえ `completed/areka-P0-cue-playback-duration` で削除した。cue 再生の制御（変換・状態機械・完了 horizon・バリア・broadcast）は **dola `cue` モジュールが単一の住処**（`CuePlayer` 受動ランタイム＋`CueSink` 単一トレイト＋`to_talk_schedule` 変換1本）。将来 wintf 側で cue を要する場合も**別 cue エンジンを新設せず** `dola::cue::CueSink` を実装すれば足りる。
 
-**7. Dola Animator** (`dola/`)
+**6. Dola Animator** (`dola/`)
 - 責務: `DolaRuntime` のエンティティごとのECS Component化
 - 代表的なコンポーネント: `DolaAnimator`（`DolaRuntime` を内部所有、`unsafe impl Send + Sync`）
 - 主要システム: `tick_dola_animators`（`Query<&mut DolaAnimator>` + `Res<FrameTime>` で全エンティティ一括tick）
 - 安全性保証: `Query<&mut>` の排他アクセスにより1 tick 1回・単一スレッドでの更新を型レベルで保証
 - 消費パターン: 後続システムが `Query<&DolaAnimator>` の `last_result()` で `UpdateResult` を読み取る
 
-**8. World Scheduling** (`world/`)
+**7. World Scheduling** (`world/`)
 - 責務: schedule label、vsync、フレーム時間管理
 - 特徴: グラフィックス更新、入力処理、アニメーション処理順序を明示する
 
-**9. Application State** (`app.rs`)
+**8. Application State** (`app.rs`)
 - 責務: アプリケーション全体の状態管理
 - 代表的な構造体: `App`（ウィンドウカウント、ディスプレイ構成変更検出、メッセージウィンドウ管理）
 - 特徴: ECS Resourceとしてワールドに導入、ウィンドウの作成・破棄を追跡
@@ -203,7 +197,7 @@ COMリソースコンポーネント内部のアクセスメソッドは、COM/W
   - `validate/` - バリデーション（`rules.rs` 等）
   - `error.rs` - エラー型
   - `compile/` - 解決・型変換（`resolve.rs`, `types.rs`）
-  - `cue/` - CueSheet/TimedScheduleモデル
+  - `cue/` - **cue 再生の唯一のエンジン**（`completed/areka-P0-cue-playback-duration` で統合）。`command.rs`（`Cue` envelope＝**一律 `duration: f64`**・`CueCommand` 10 variant・配送エンベロープ `TalkCue`）／`sheet.rs`（`CueSheet`＝`absolute_start_time` 付き**自己完結絶対時刻台本**＋canonical 変換 `to_talk_schedule` **1 本**＋duration の ingress clamp）／`schedule.rs`（`TimedSchedule`＋占有 horizon・`is_completed` は entry 枯渇 **かつ** horizon 到達）／`runtime.rs`（**`CuePlayer`**＝受動的注入時刻ランタイム・状態機械・バリア seam・Choice 先積み・**broadcast fan-out**）／`sink.rs`（**`CueSink`** 単一出力契約＋`cue_target_of` relevance 単一権威）。**受動ライブラリ**（スレッド/channel を持たず、アクター化は上流 sakura の領分）
   - `runtime/` - 実行系。ファサード、インスタンス管理、補間、購読管理、タイムライン、ループ制御をサブディレクトリモジュールに分割（`instance_manager/`, `interpolator/`, `subscription_manager/`, `timeline_manager/`, `loop_controller/` 等）
 - `tests/` - テスト
 
