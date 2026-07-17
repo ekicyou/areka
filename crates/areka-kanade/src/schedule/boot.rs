@@ -591,4 +591,110 @@ mod tests {
             "204 経路の basewareversion は Status 行を出さない（None）"
         );
     }
+
+    // --- DD-IT-12 追加檻: 挨拶 TalkDone が slot と照合され unknown_talk_done ERROR が出ない ---
+
+    /// Testing Strategy「DD-IT-12 追加檻」の相関節を in-source で実現する（Req 1.5/2.4・DD-IT-12）:
+    /// boot 挨拶（Value）で `Steady{talk: Some(挨拶, id=1)}` へ到達させ、その挨拶 talk の
+    /// `TalkDone{id=1, Ended}` が slot と照合されて (a) `Steady{talk: None}` へ復帰し、かつ
+    /// (b) `unknown_talk_done` ERROR が**発火しない**ことを検証する。
+    ///
+    /// # なぜ in-source（log_capture）か
+    /// 統合層（close_test の boot 挨拶檻）は kanade アクターが別スレッドで走るため、thread-local な
+    /// [`crate::schedule::log_capture`] では挨拶 TalkDone の相関ログ（の不在）を直接観測できない。
+    /// 純粋 step 機械は本テストスレッド上で同期的に走るため、ここでこそ「未知 talk 扱いされていない
+    /// （＝`unknown_talk_done` ERROR が出ない）」を直接、ログの**不在**として表明できる。挨拶 talk は
+    /// boot 由来ゆえ本 boot モジュールの檻に置く（`Steady{Some}` へは `step` で boot を通して到達する）。
+    ///
+    /// # `assert_logged` との対比
+    /// `log_firing_tests` はログの**存在**を `assert_logged` で表明するが、本檻は逆に**不在**を
+    /// 表明する必要があるため、捕捉列 `Vec<CapturedEvent>` を直接走査する（`target="kanade"`・ERROR・
+    /// `event="unknown_talk_done"` を持つ要素が 1 件も無いこと）。相関ロジック（`current_talk_id` による
+    /// slot 照合）が退行して挨拶 TalkDone が未知扱いになれば、この不在表明が失敗する。
+    #[test]
+    fn boot_greeting_talkdone_correlates_without_unknown_error() {
+        use crate::schedule::log_capture::capture;
+        use crate::talk::{TalkDone, TalkEndReason};
+        use tracing::Level;
+
+        let cfg = config();
+
+        // boot を Idle→…→`Steady{talk: Some(挨拶, id=1)}` まで駆動する（挨拶 Value 経路・DD-IT-12）。
+        let (s, _) = step(initial(), Input::Boot, &cfg); // Idle→BootInit（OnInitialize NOTIFY）
+        let (s, _) = step(
+            s,
+            Input::ShioriReply {
+                outcome: ShioriOutcome::Notified,
+            },
+            &cfg,
+        ); // BootInit→BootType
+        let (s, _) = step(
+            s,
+            Input::ShioriReply {
+                outcome: ShioriOutcome::NoContent,
+            },
+            &cfg,
+        ); // BootType→BootMain（OnBoot GET）
+        let (s, _) = step(
+            s,
+            Input::ShioriReply {
+                outcome: ShioriOutcome::Value("greeting".to_string()),
+            },
+            &cfg,
+        ); // BootMain(Value)→BootVersion{talk: Some(id=1)}
+        let (s, _) = step(
+            s,
+            Input::ShioriReply {
+                outcome: ShioriOutcome::Notified,
+            },
+            &cfg,
+        ); // BootVersion{Some}→Steady{talk: Some(id=1)}
+        assert!(
+            matches!(
+                s.phase,
+                Phase::Steady {
+                    talk: Some(ActiveTalk {
+                        talk_id: TalkId(1),
+                        ..
+                    })
+                }
+            ),
+            "boot 挨拶を Steady{{talk: Some(id=1)}} で正規追跡しているはず（DD-IT-12）"
+        );
+
+        // 挨拶 talk の TalkDone{id=1, Ended} を捕捉付きで投入する（相関ロジックは mod.rs の横断アーム）。
+        let mut phase_is_none = false;
+        let mut actions_empty = false;
+        let events = capture(|| {
+            let (next, actions) = step(
+                s,
+                Input::TalkDone(TalkDone {
+                    talk_id: TalkId(1),
+                    reason: TalkEndReason::Ended,
+                }),
+                &cfg,
+            );
+            phase_is_none = matches!(next.phase, Phase::Steady { talk: None });
+            actions_empty = actions.is_empty();
+        });
+
+        // (a) 挨拶 TalkDone{id=1, Ended} は slot と照合され `Steady{talk: None}` へ復帰する（副作用なし）。
+        assert!(
+            phase_is_none,
+            "挨拶 TalkDone{{id=1, Ended}} は slot と照合され Steady{{talk: None}} へ復帰するはず"
+        );
+        assert!(actions_empty, "定常復帰（挨拶 talk 完了）は副作用なし");
+
+        // (b) `unknown_talk_done` ERROR が発火していない（照合成立＝未知 talk 扱いされていない・DD-IT-12）。
+        //     log_capture の assert_logged は「存在」を表明するため、ここは捕捉列を直接走査して不在を表明する。
+        let unknown_fired = events.iter().any(|e| {
+            e.target == "kanade"
+                && e.level == Level::ERROR
+                && e.event.as_deref() == Some("unknown_talk_done")
+        });
+        assert!(
+            !unknown_fired,
+            "挨拶 TalkDone が slot と照合されれば unknown_talk_done ERROR は出ないはず: {events:#?}"
+        );
+    }
 }
