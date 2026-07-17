@@ -16,7 +16,7 @@
 //! 4. **強制終了直行**（Req 4.4・DD-10）: ForceQuit → best-effort OnClose NOTIFY → Unload →
 //!    StopSelf へ直行し join 成功。
 
-use areka_kanade::{CloseReason, KanadeConfig, KanadeMsg, MonotonicMs, ShioriCall, events};
+use areka_kanade::{CloseReason, ExecutionSnapshot, KanadeConfig, KanadeMsg, MonotonicMs, events};
 
 use super::common::{
     CallMethod, DEFAULT_TIMEOUT, FIXED_FAREWELL_SCRIPT, FIXED_STEADY_SCRIPT, Fixture, Harness,
@@ -25,8 +25,11 @@ use super::common::{
 };
 
 /// 記録列中の OnClose GET（events 表導出・reason 指定）の初出インデックスを返す。
+///
+/// 通常握手の OnClose は talk 非アクティブ（`begin_close` が INACTIVE スナップショットで発行）ゆえ
+/// Status 行なし。events 表から導出して照合する（References/Status をハードコードしない）。
 fn onclose_get_index(recorded: &[RecordedCall], reason: CloseReason) -> Option<usize> {
-    let onclose = expected_call(events::on_close(reason));
+    let onclose = expected_call(events::on_close(reason, &ExecutionSnapshot::INACTIVE));
     recorded.iter().position(|c| *c == onclose)
 }
 
@@ -42,15 +45,18 @@ fn onclose_get_index(recorded: &[RecordedCall], reason: CloseReason) -> Option<u
 /// ことで観測する。これにより、cross-thread な TalkDone 到着順に依らず「join 成功＝全記録確定」
 /// の後に記録を検証できる（poll も sleep も不要・full_run_test.rs / steady_test.rs と同じ枠組み）:
 ///
-/// 1. Boot → pre-close Tick（`Steady{None}`・OnSecondChange 204＝talk なし）。
-/// 2. CloseRequest{User}（即握手）→ OnClose GET → 別れの Value → close talk（受領 index 1・
+/// 1. Boot → 挨拶なし boot（`Steady{None}` 直行）→ pre-close Tick（`Steady{None}`・OnSecondChange
+///    204＝talk なし）。
+/// 2. CloseRequest{User}（即握手）→ OnClose GET → 別れの Value → close talk（受領 index 0・
 ///    quit:false）→ **終了拒否**・`Steady{None}` 復帰（kanade は close talk の TalkDone を待って
 ///    CloseTalkWait に留まり、到着で復帰する）。
 /// 3. 復帰後の Tick で OnSecondChange GET（pump 再開・Req 3.4）→ fixture が Value（steady_value_indices
-///    に「復帰後にだけ現れる GET 出現」を仕込む）→ steady talk（受領 index 2・quit:true）→ 終了系列完走。
+///    に「復帰後にだけ現れる GET 出現」を仕込む）→ steady talk（受領 index 1・quit:true）→ 終了系列完走。
 ///
-/// close talk（index 1）で終了せず、その後の steady talk（index 2）で初めて終了する構成ゆえ、
-/// 「終了拒否点で停止していない・pump が再開した」ことが終了到達それ自体で保証される。
+/// close talk（index 0）で終了せず、その後の steady talk（index 1）で初めて終了する構成ゆえ、
+/// 「終了拒否点で停止していない・pump が再開した」ことが終了到達それ自体で保証される。挨拶なし boot
+/// （`without_boot_greeting`）で boot→`Steady{None}` へ直行させ、pre-close Tick を確実に GET index 0
+/// にする（DD-IT-12 の挨拶 talk race を断つ）。
 ///
 /// # 非空虚性
 /// - close 握手を通らなければ OnClose GET が現れず (a) が落ちる。
@@ -61,8 +67,11 @@ fn onclose_get_index(recorded: &[RecordedCall], reason: CloseReason) -> Option<u
 fn close_refused_resumes_pump_then_terminates_via_resumed_talk() {
     // steady_value_indices=[1]: OnSecondChange GET の 2 度目の出現（0 始まり index 1）に Value。
     // 1 度目の GET 出現（index 0）は close 前の pre-close Tick で消費し 204、2 度目の GET 出現は
-    // close 拒否→復帰後の pump で現れ Value を返す（＝pump 再開の直接証左）。
-    let fixture = Fixture::quitting().with_steady_value_indices([1]);
+    // close 拒否→復帰後の pump で現れ Value を返す（＝pump 再開の直接証左）。挨拶なし boot ゆえ
+    // pre-close Tick は確実に GET index 0 になる（DD-IT-12 の race を断つ）。
+    let fixture = Fixture::quitting()
+        .with_steady_value_indices([1])
+        .without_boot_greeting();
 
     // close 握手の deadline を実質無限にする。本シナリオは close talk を「拒否」で復帰させる意図であり、
     // CloseTalkWait で TalkDone を待つ間に注入する poll Tick が既定 deadline（last_now+30_000ms）を
@@ -72,8 +81,9 @@ fn close_refused_resumes_pump_then_terminates_via_resumed_talk() {
     let mut config = KanadeConfig::new("master", "1.0.0");
     config.close_talk_deadline_ms = u64::MAX;
 
-    // quit_flags: boot(index0)=false・close(index1)=false（終了拒否）・steady(index2)=true（終了駆動）。
-    let harness = spawn_harness(config, fixture, QuitPolicy::PerTalk(vec![false, false, true]));
+    // quit_flags: close(index0)=false（終了拒否）・steady(index1)=true（終了駆動）。挨拶なし boot ゆえ
+    // boot talk は無く、close talk が先頭 StartTalk＝index 0・resumed steady talk が index 1。
+    let harness = spawn_harness(config, fixture, QuitPolicy::PerTalk(vec![false, true]));
 
     // 起動 → pre-close Tick（GET 出現 index 0＝204・talk なし）。
     harness.sender.send(KanadeMsg::Boot).expect("send Boot");
@@ -330,7 +340,9 @@ fn silent_close_on_204_terminates_without_extra_events() {
     // OnClose GET は記録列にちょうど 1 度（追加 OnClose なし）。
     let onclose_count = recorded
         .iter()
-        .filter(|c| **c == expected_call(events::on_close(CloseReason::User)))
+        .filter(|c| {
+            **c == expected_call(events::on_close(CloseReason::User, &ExecutionSnapshot::INACTIVE))
+        })
         .count();
     assert_eq!(onclose_count, 1, "OnClose GET はちょうど 1 度（再発行なし）");
 
@@ -364,9 +376,10 @@ fn silent_close_on_204_terminates_without_extra_events() {
 /// DeadlineExceeded を検出して終了系列を継続する（TalkDone 不着でも join 成功＝宙吊りなし）。
 ///
 /// # 駆動（保留ハーネスで close talk の TalkDone を差し止める）
-/// Boot → Tick(now=1s)（`last_now=Some(1s)` を確定）→ CloseRequest{User}（即握手・OnClose GET→
-/// 別れの Value→close talk・**保留**）→ CloseTalkWait 進入時に deadline=`last_now + D`=1s+5s=6s。
-/// → Tick(now=100s)（>> 6s）→ DeadlineExceeded → Unload → StopSelf。
+/// Boot（挨拶なし・`Steady{None}` 直行）→ Tick(now=1s)（`last_now=Some(1s)` を確定）→
+/// CloseRequest{User}（`Steady{None}` の即握手・OnClose GET→別れの Value→close talk・**保留**）→
+/// CloseTalkWait 進入時に deadline=`last_now + D`=1s+5s=6s。→ Tick(now=100s)（>> 6s）→
+/// DeadlineExceeded → Unload → StopSelf。
 ///
 /// deadline 基準は握手入口の `last_now`（Tick(1s) で Some(1s)）ゆえ deadline=6s に確定する。注入
 /// Tick(100s) は余裕を持って超過し、単一 Tick で確実に判定される（入口 last_now が Some の経路）。
@@ -380,13 +393,15 @@ fn close_talk_deadline_exceeded_terminates_without_talkdone() {
     let mut config = KanadeConfig::new("master", "1.0.0");
     config.close_talk_deadline_ms = 5_000;
 
-    // close talk（受領 index 1）の TalkDone を保留し、CloseTalkWait を維持したまま Tick を注入する。
+    // 挨拶なし boot（without_boot_greeting）で boot→Steady{None} へ直行させ、CloseRequest を確実に
+    // `Steady{None}` の即握手にする（DD-IT-12 の挨拶 talk race を断つ）。close talk（受領 index 0・挨拶
+    // なし boot ゆえ先頭 StartTalk）の TalkDone を保留し、CloseTalkWait を維持したまま Tick を注入する。
     // quit_policy は使われない（保留 talk は解放されない・deadline で終了する）が、契約上与える。
     let (harness, gate) = spawn_harness_gated(
         config,
-        Fixture::quitting(),
-        QuitPolicy::PerTalk(vec![false, false]),
-        vec![1],
+        Fixture::quitting().without_boot_greeting(),
+        QuitPolicy::PerTalk(vec![false]),
+        vec![0],
     );
 
     harness.sender.send(KanadeMsg::Boot).expect("send Boot");
@@ -553,13 +568,11 @@ fn force_quit_terminates_directly_with_best_effort_onclose_notify() {
 
 /// ForceQuit（DD-10）が Action 先頭に積む best-effort OnClose **NOTIFY** の期待記録。
 ///
-/// この NOTIFY は `src/schedule/mod.rs` の `force_quit` がインラインで組む退化 NOTIFY であり
-/// （events 表の OnClose は GET・タスク 2.1 の Implementation Note）、id=`"OnClose"`・
-/// Ref0=`reason.as_ref_str()` で構成される。`ShioriCall::Notify` を [`RecordedCall`] へ写して
-/// 期待値とすることで、ハーネスに References 文字列をハードコードしない。
+/// DD-IT-8: この NOTIFY は `events::on_close_notify` が単一列挙点として構成する（`force_quit` は
+/// もはや inline 構築しない）。通常握手の [`events::on_close`] は **GET** を返すため force_quit には
+/// 流用できず、NOTIFY 版を別に用いる。snapshot は Unloading{Forced} 遷移後の
+/// [`ExecutionSnapshot::INACTIVE`]（Status 行なし・DD-IT-4）。events 表から導出することで、ハーネスに
+/// References/Status 文字列をハードコードしない。
 fn force_quit_onclose_notify(reason: CloseReason) -> RecordedCall {
-    expected_call(ShioriCall::Notify {
-        id: "OnClose",
-        references: vec![reason.as_ref_str().to_string()],
-    })
+    expected_call(events::on_close_notify(reason, &ExecutionSnapshot::INACTIVE))
 }

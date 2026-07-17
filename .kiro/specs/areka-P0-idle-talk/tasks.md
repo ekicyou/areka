@@ -91,7 +91,7 @@
   - _Depends: 4.1_
 
 - [ ] 5. Validation: 決定論回帰檻の拡張
-- [ ] 5.1 観測ハーネスへの `Status` 観測面と失敗語彙記述子の追加
+- [x] 5.1 観測ハーネスへの `Status` 観測面と失敗語彙記述子の追加
   - 統合テストの記録型へ、送出された実行状態の wire 値（有無・値）を観測できるフィールドを追加する
   - テスト用の失敗語彙記述子へ、内部規律違反に対応する項目を追加する
   - 観測可能な完了条件: 統合テストハーネスが実行状態の有無・値を記録・取得できることを確認する疎通テストが green になる
@@ -141,5 +141,6 @@
 - **DD-IT-12（起動挨拶の正規追跡）は completed kanade の確定判断「boot は close-gate しない」を再開封する**: 挨拶中の close が通常 talk と同じ `CloseTalkWait` 経由へ変わる。開発者が旧来の fire-and-forget 維持を選ぶ場合は Task 2.4／5.4 の該当コミットの revert で戻せる（設計ディスカッション #2 で事後拒否権を明示済み）。
 - **本 spec が意図的に扱わない事項**（design.md Open Items 1・2・4）: `build_request` の `SecurityLevel` 位置の既存逸脱、`doc/emo2-conformance-scope.md` の記載訂正、fault 終端が「窓は残るがプロセスは死なない」挙動（`Failed` 全般に共通する kanade の既存欠陥）——いずれも本タスク群では対処しない。引受先候補は `areka-P0-emo2-conformance-e2e`。
 - Task 3.1〜4.1 完走までの間、`cargo build --workspace` は意図的に壊れる区間がある（host32 signature 変更後・real.rs 追随前）。DoD ゲートは Task 4.2 完了時点（`cargo build --workspace` 成功）以降で評価すること。
+- **tests/kanade/ は原子的コンパイル単位＋DD-IT-12 意味論の波及（kiro-impl 実行時発見・2026-07-18）**: `tests/kanade.rs` が全 `*_test.rs` を `#[path]` で1バイナリへ束ねる＝単一コンパイル単位ゆえ、5.1（common/mod.rs）だけでは crate が緑にならず boot/steady/close/full_run 全ファイルの機械的追随が同時に要る（boot_test/full_run_test は 5.x のどのタスクにも未割当だった穴）。そこで **Task 5.1 に「全 tests/kanade/ 再緑化」を畳み込んで一括実装**（5.2/5.3/5.4 の新規檻は別コミット・段B）。さらに **RecordedCall へ status を足すと期待値が status も比較する**ため、DD-IT-12（挨拶追跡→boot が Steady{Some}）で `baseware_version` の期待 status が greeting 経路で `Some("talking")`（spine_e2e と違い kanade harness は status を落とさない）。「idle steady pump」意図のテスト6本は greeting talk の TalkDone が Tick とレースするため、新設 `Fixture::without_boot_greeting()`（OnBoot→204→boot が Steady{None} 直行・決定論）へ切替（弱体化なし・意図保存）。ハーネスの `spawn_harness_gated`/`SakuraGate`（TalkDone park）で active-talk 窓を決定論化。緑 ×24 flakiness ゼロ。教訓＝正典機能の挙動変更（DD-IT-12）は本体 src だけでなく決定論ハーネスの期待値・fixture 設計まで波及する。
 - **Task 4.2 のスコープ穴（kiro-impl 実行時発見・2026-07-18）**: 4.2 は設計上「下流 backend 実装の署名追随」だけだったが、Group A（2.1/2.2）の破壊的変更（`ShioriCall` の status field・`events::*` の snapshot 引数）が `areka-ghost/tests/ghost/spine_e2e_test.rs` の**テスト本体**（`expected_from_shiori_call` の分解・events 期待値構築・直接 backend 呼出＝23コンパイルエラー）を壊しており、これはどのタスクにも明示割当が無かった。4.2 に畳み込んで追随（`, ..`／`&ExecutionSnapshot::INACTIVE`／`, None`）。さらに DD-IT-12（挨拶追跡）が `KanadeMsg::Tick` を kanade へ送る2シナリオを意味論的に変えた: S3（post-boot OnSecondChange が GET/NOTIFY 両可能→両 script）・S5（CloseRequest が greeting 中は pending_close へ延期→deadline Tick 前に OnClose GET 出現を有界 spin-wait）。obsolete-vs-broken 方針で新正解へ更新（弱体化なし）。`cargo test -p areka-ghost`=38+15 緑（×3 flakiness ゼロ）・`cargo test -p areka`=274+1+2 緑。教訓＝契約破壊は本体specの tests/ 以外（隣接クレートの e2e）にも波及し得る。
 - **実装時の群化（kiro-impl 実行判断・2026-07-18）**: `ShioriCall` へ必須フィールド `status` を足すと kanade クレート全体（events.rs 構築6点・schedule 呼出・actor/real 分解点・in-source テスト）が一度に壊れ、個別サブタスクは独立に `--lib` すら green にできない＝原子的コンパイル単位。よって **Task 2.1+2.2+2.3 を1コミットに束ねて実装**した（各群が `cargo test -p areka-kanade --lib` green を残す・設計の各ファイル変更内容は完全に温存）。機械的 ripple として real.rs `handle_call` は `..` で status を無視（転送は Task 4.1）・real.rs in-source テスト構築点・actor.rs `probe_get_call` に status を付与。統合テスト（tests/kanade/）は Task 5.x で更新するため群A時点では `--lib` のみ検証（full `cargo test` は 5.x まで赤）。Task 2.4（boot DD-IT-12）・2.5（actor ホワイトリスト）は別コミットへ隔離。

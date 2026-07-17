@@ -71,12 +71,15 @@ fn each_failure_vocabulary_drives_observable_termination() {
         FailKind::Ipc,
         FailKind::Shiori,
     ] {
-        // 網羅の非空虚性を型で担保: 各 kind は実 ShioriFailure の 4 バリアントに 1:1 対応する。
+        // 網羅の非空虚性を型で担保: 各 kind は実 ShioriFailure のバリアントに 1:1 対応する。
+        // `FailKind::Internal`（DD-IT-11）は本ループの掃引対象外（5.2 が Internal→fault を専用檻で
+        // 掃引する）だが、match の網羅性のためアームを持つ（本 dispatch は語彙完全化のみ・5.1）。
         let _witness: ShioriFailure = match kind {
             FailKind::Handshake => ShioriFailure::Handshake(String::new()),
             FailKind::Timeout => ShioriFailure::Timeout(String::new()),
             FailKind::Ipc => ShioriFailure::Ipc(String::new()),
             FailKind::Shiori => ShioriFailure::Shiori(String::new()),
+            FailKind::Internal => ShioriFailure::Internal(String::new()),
         };
 
         // boot 最初の呼出（OnInitialize NOTIFY）を当該語彙で失敗させる。
