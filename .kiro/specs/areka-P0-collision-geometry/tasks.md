@@ -20,7 +20,7 @@
   - _Requirements: 3.1, 3.2, 3.3, 3.4_
   - _Boundary: CurrentSurfaceRead_
 
-- [ ] 3. HitRegionContract と Resolver: scope→target→id→純関数を束ねる I/O 契約を実装する
+- [x] 3. HitRegionContract と Resolver: scope→target→id→純関数を束ねる I/O 契約を実装する
   - `crates/areka/src/emo2_boot/hit_region.rs`（新規）に `HitRegion { scope: u32, region: Option<String> }` を定義する（`region` は不透明 String・意味解釈しない）。型 doc に**本リゾルバは shell 窓専用（target 偶数）であり balloon（target 奇数）は扱わない**制約を明記する
   - 同ファイルに `resolve_hit_region(presenter: &EmoPresenter, scope: u32, x: i64, y: i64) -> HitRegion` を実装する：`super::target_map::shell_target` で scope→target 写像→`EmoPresenter::hit_region` で解決→`HitRegion` へ包む。非テストコードは `crate::` パスを一切使わず `super::target_map` と外部 crate のみを参照する（ファイル冒頭 doc に規律と理由を明記）。関数 doc にも shell 窓専用の制約を明記する
   - `emo2_boot/mod.rs` へ `pub mod hit_region;` を1行追加する
