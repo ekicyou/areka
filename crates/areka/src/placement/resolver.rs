@@ -79,10 +79,15 @@ pub struct ScopePlacement {
     /// 恒等式 `balloon_offset ≡ balloon_pos − char_pos` は恒久の事後条件
     /// （design Postconditions）。
     pub balloon_offset: PointPx,
-    /// bottom 吸着スコープか（`alignment=Bottom|Seam(_)`＝true・`Free`＝false・
-    /// 4.7／DD15）。spawn がキャラ窓 entity の `BottomSnap` marker として転写し、
-    /// ドラッグ中の Y 釘付け（task 8.2）が消費する。
-    pub bottom_snap: bool,
+    /// このスコープの解決済みアンカー種別（5 値・単一真実源）。
+    ///
+    /// `alignment` の cascade 解決結果を `Anchor::from_alignment` で解釈した値
+    /// （どの辺を work area の対応辺へ固定するか・`Free`＝アンカー辺なし＝非吸着・
+    /// 4.2／DD15）。spawn がキャラ窓 entity へ焼き込み、ドラッグ／リサイズの射影 T
+    /// が消費する。二値の吸着フラグ（旧 `bottom_snap`）はこの単一値から
+    /// `!anchor.is_free()`（＝`!matches!(anchor, Anchor::Free)`）で導出する
+    /// ——二つ目の格納表現を作らない（単一真実源・Req1.6）。
+    pub anchor: Anchor,
 }
 
 /// 既定位置解決（純粋関数・パニックしない・入力順のまま返す・出力長＝入力長）。
@@ -196,8 +201,10 @@ pub fn resolve_placement(
                 x: balloon_pos.x.saturating_sub(char_pos.x),
                 y: balloon_pos.y.saturating_sub(char_pos.y),
             },
-            // 4.7/DD15: Bottom/Seam＝下端吸着スコープ・Free のみ非吸着
-            bottom_snap: matches!(sc.alignment, Alignment::Bottom | Alignment::Seam(_)),
+            // 4.2/DD15: cascade 解決済み alignment を 5 値アンカーへ解釈（単一真実源・
+            // Req1.6）。旧 bottom_snap（二値）はここでは格納せず、使用点で
+            // !anchor.is_free() として導出する
+            anchor: Anchor::from_alignment(&sc.alignment),
         });
     }
 
@@ -227,10 +234,71 @@ pub fn virtual_desktop_union(monitor_bounds: &[RectPx]) -> Option<RectPx> {
     })
 }
 
+/// 5 値アンカー種別（純粋値・`seriko.alignmenttodesktop` の解決済み解釈結果・4.2）。
+///
+/// 「シェル座標系のどの辺を work area の対応辺へ固定するか」を表す不変値。
+/// wintf/bevy 非依存で `resolver` に在住し（U5・純粋 DPI 檻が wintf 非依存で走る）、
+/// 後続で `ScopePlacement.anchor` として spawn へ運ばれ `Anchored(Anchor)` Component
+/// として char 窓へ焼き込まれる。射影 T（`project_anchor`）は follow 層が所有する。
+#[allow(dead_code)] // scaffold（task 1.1）: ScopePlacement への結線は task 1.2・射影消費は follow（task）
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Anchor {
+    /// 上端固定（`y = wa.top`・X 保持）。
+    Top,
+    /// 下端固定（既定・`y = wa.bottom − h`・X 保持）。既存 `BottomSnapPolicy` の一般化元。
+    Bottom,
+    /// 左端固定（`x = wa.left`・Y 保持）。
+    Left,
+    /// 右端固定（`x = wa.right − w`・Y 保持）。
+    Right,
+    /// アンカー辺なし（position 保持・寸法のみ反映・全方向ドラッグ自由）。
+    Free,
+}
+
+#[allow(dead_code)] // scaffold（task 1.1）: 結線は task 1.2 以降
+impl Anchor {
+    /// cascade 解決済み `Alignment` を 5 値アンカーへ解釈する消費写像（4.2）。
+    ///
+    /// **優先度チェーンの読取り・解決は行わない**（config.rs の領分・Req6.3）。
+    /// 既に解決済みの `Alignment` を解釈消費するのみ:
+    /// - `Bottom`→`Bottom`・`Free`→`Free`
+    /// - `Seam(s)`: `s.trim().to_ascii_lowercase()` で正規化し `"top"`→`Top`・
+    ///   `"left"`→`Left`・`"right"`→`Right`・それ以外（未知値）→`Bottom`（フォールバック・
+    ///   window-placement DD9「未知は bottom 相当」を継承）＋`warn!`。正規化は防御
+    ///   （parsers 側で正規化済み前提だが大小文字・前後空白へ念のため備える）。
+    pub fn from_alignment(alignment: &Alignment) -> Anchor {
+        match alignment {
+            Alignment::Bottom => Anchor::Bottom,
+            Alignment::Free => Anchor::Free,
+            Alignment::Seam(value) => match value.trim().to_ascii_lowercase().as_str() {
+                "top" => Anchor::Top,
+                "left" => Anchor::Left,
+                "right" => Anchor::Right,
+                // 未知アンカー指定は bottom 相当へフォールバック（DD9）＋警告を残す
+                _ => {
+                    warn!(
+                        value = %value,
+                        "alignmenttodesktop の未知アンカー指定（bottom 相当で解釈・4.2/DD9）"
+                    );
+                    Anchor::Bottom
+                }
+            },
+        }
+    }
+
+    /// アンカー辺を持たない（＝`Free`）か（格納でなく導出・可読性用述語）。
+    /// bottom_snap 等の boolean が要る使用点は `!is_free()` で導出できる。
+    pub fn is_free(self) -> bool {
+        matches!(self, Anchor::Free)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::placement::config::{Alignment, BalloonSide, PlacementConfig, ScopeConfig};
+    use crate::placement::config::{
+        build_placement_config, Alignment, BalloonSide, PlacementConfig, ScopeConfig,
+    };
 
     /// DPI パラメタ水準（3.4・U5）。
     const DPIS: [i32; 4] = [96, 120, 144, 192];
@@ -479,10 +547,14 @@ mod tests {
     }
 
     // ------------------------------------------------------------------
-    // T-R5: シーム値＝bottom 同一出力（2.8・DD9）
+    // T-R5: シーム値＝bottom 同一幾何出力（2.8・DD9）
     // ------------------------------------------------------------------
 
-    /// T-R5: `Alignment::Seam(値)` は値によらず Bottom と完全同一の出力（DD9）。
+    /// T-R5: `Alignment::Seam(値)` は値によらず Bottom と同一**幾何**出力
+    /// （位置・寸法・バルーン・DD9＝挙動出力不変）。ただし `anchor` は 5 値解釈で
+    /// 相違する（`top`/`left`/`right`→対応辺・未知値→`Bottom` フォールバック・4.2）。
+    /// 旧版は構造体全体一致だったが、`bottom_snap:bool`→`anchor:Anchor` のフィールド化
+    /// （task 1.2）で幾何一致＋anchor 別検証へ意味を保って更新した。
     #[test]
     fn t_r5_seam_output_identical_to_bottom() {
         for dpi in DPIS {
@@ -500,7 +572,12 @@ mod tests {
             // 空 Vec 同士の空虚一致（RED スタブで観測）を封じる
             assert_eq!(expected.len(), 2, "dpi={dpi}: 比較基準が空では無意味");
 
-            for seam_value in ["top", "left", "right", "unknown-value"] {
+            for (seam_value, expected_anchor) in [
+                ("top", Anchor::Top),
+                ("left", Anchor::Left),
+                ("right", Anchor::Right),
+                ("unknown-value", Anchor::Bottom),
+            ] {
                 let seam = cfg_of(vec![
                     (
                         0,
@@ -511,11 +588,31 @@ mod tests {
                         scope_cfg(Alignment::Seam(seam_value.to_owned()), Some(0), None),
                     ),
                 ]);
-                assert_eq!(
-                    resolve_placement(&seam, wa, &inputs),
-                    expected,
-                    "dpi={dpi} seam={seam_value}: Seam は Bottom と同一出力"
-                );
+                let out = resolve_placement(&seam, wa, &inputs);
+                assert_eq!(out.len(), 2, "dpi={dpi} seam={seam_value}");
+                for (s, b) in out.iter().zip(&expected) {
+                    // 幾何（位置・寸法・バルーン）は Bottom と同一（DD9・挙動出力不変）
+                    assert_eq!(s.scope, b.scope, "dpi={dpi} seam={seam_value}");
+                    assert_eq!(
+                        s.char_pos, b.char_pos,
+                        "dpi={dpi} seam={seam_value}: Seam の char_pos は Bottom と同一"
+                    );
+                    assert_eq!(s.char_size, b.char_size, "dpi={dpi} seam={seam_value}");
+                    assert_eq!(
+                        s.balloon_pos, b.balloon_pos,
+                        "dpi={dpi} seam={seam_value}: Seam の balloon_pos は Bottom と同一"
+                    );
+                    assert_eq!(s.balloon_size, b.balloon_size, "dpi={dpi} seam={seam_value}");
+                    assert_eq!(
+                        s.balloon_offset, b.balloon_offset,
+                        "dpi={dpi} seam={seam_value}"
+                    );
+                    // anchor は 5 値解釈で相違（top/left/right→対応辺・未知→Bottom・4.2）
+                    assert_eq!(
+                        s.anchor, expected_anchor,
+                        "dpi={dpi} seam={seam_value}: anchor は 5 値解釈で解決"
+                    );
+                }
             }
         }
     }
@@ -680,9 +777,9 @@ mod tests {
     }
 
     /// T-R4 補: free で両成分未指定 → **幾何**（位置・寸法・バルーン）は Bottom と
-    /// 完全同一（2.6 の極限）。ただし `bottom_snap` だけは alignment 由来で相違する
-    /// （free は幾何が bottom へフォールバックしても全方向移動可＝非吸着・4.7。
-    /// task 8.1 で構造体全体一致から幾何一致＋snap 相違へ更新）。
+    /// 完全同一（2.6 の極限）。ただし `anchor` だけは alignment 由来で相違する
+    /// （free は幾何が bottom へフォールバックしても全方向移動可＝非吸着＝`Anchor::Free`・
+    /// 4.2。task 8.1 で構造体全体一致から幾何一致＋anchor 相違へ更新）。
     #[test]
     fn t_r4_free_both_unspecified_equals_bottom() {
         for dpi in DPIS {
@@ -710,9 +807,13 @@ mod tests {
                 assert_eq!(f.balloon_pos, b.balloon_pos, "dpi={dpi}");
                 assert_eq!(f.balloon_size, b.balloon_size, "dpi={dpi}");
                 assert_eq!(f.balloon_offset, b.balloon_offset, "dpi={dpi}");
-                // 吸着情報だけは alignment 由来で相違（free＝非吸着・4.7）
-                assert!(!f.bottom_snap, "dpi={dpi}: free は幾何フォールバックでも非吸着");
-                assert!(b.bottom_snap, "dpi={dpi}: bottom は吸着");
+                // アンカー情報だけは alignment 由来で相違（free＝非吸着・4.2）
+                assert_eq!(
+                    f.anchor,
+                    Anchor::Free,
+                    "dpi={dpi}: free は幾何フォールバックでも非吸着（Anchor::Free）"
+                );
+                assert_eq!(b.anchor, Anchor::Bottom, "dpi={dpi}: bottom は吸着（Anchor::Bottom）");
             }
         }
     }
@@ -974,37 +1075,45 @@ mod tests {
     }
 
     // ------------------------------------------------------------------
-    // bottom_snap 伝搬（4.7・DD15 基盤・task 8.1）
+    // anchor 伝搬（4.2・DD15 基盤・task 1.2）
+    //
+    // 旧 `bottom_snap`（二値）伝搬テストを 5 値アンカー検証へ意味を保って差し替え
+    // （単一真実源＝`ScopePlacement.anchor`・Req1.6）。二値の吸着フラグは
+    // `!anchor.is_free()` で導出可能ゆえ格納しない。
     // ------------------------------------------------------------------
 
-    /// 4.7: `alignment=Bottom`／`Seam(_)`（値不問）は `bottom_snap=true`・
-    /// `Free` は false（吸着ドラッグ（task 8.2）が消費する情報伝搬の檻）。
+    /// 4.2: cascade 解決済み `alignment` が 5 値アンカーとして `ScopePlacement.anchor`
+    /// へ伝搬する（`Bottom`→`Bottom`・`Seam("top"/"left"/"right")`→対応辺・
+    /// `Seam(未知)`→`Bottom`（フォールバック）・`Free`→`Free`）。吸着ドラッグ／
+    /// リサイズの射影 T（後続 task）が消費する情報伝搬の檻。
     #[test]
-    fn bottom_snap_true_for_bottom_and_seam_false_for_free() {
+    fn anchor_propagates_five_values_from_resolved_alignment() {
         for dpi in DPIS {
             let wa = work_area(dpi);
             let (w, h) = (px(400, dpi), px(600, dpi));
             let cases = [
-                (Alignment::Bottom, true),
-                (Alignment::Seam("top".to_owned()), true),
-                (Alignment::Seam("unknown-value".to_owned()), true),
-                (Alignment::Free, false),
+                (Alignment::Bottom, Anchor::Bottom),
+                (Alignment::Seam("top".to_owned()), Anchor::Top),
+                (Alignment::Seam("left".to_owned()), Anchor::Left),
+                (Alignment::Seam("right".to_owned()), Anchor::Right),
+                (Alignment::Seam("unknown-value".to_owned()), Anchor::Bottom),
+                (Alignment::Free, Anchor::Free),
             ];
             for (alignment, expected) in cases {
                 let cfg = cfg_of(vec![(0, scope_cfg(alignment.clone(), Some(0), None))]);
                 let out = resolve_placement(&cfg, wa, &[input(0, w, h)]);
                 assert_eq!(
-                    out[0].bottom_snap, expected,
-                    "dpi={dpi} alignment={alignment:?}: bottom_snap の伝搬"
+                    out[0].anchor, expected,
+                    "dpi={dpi} alignment={alignment:?}: anchor の伝搬"
                 );
             }
         }
     }
 
-    /// 4.7 補: 混在スコープでスコープごとに独立に伝搬し、`cfg.scopes` 未収載
-    /// スコープは既定 `ScopeConfig`（＝Bottom）ゆえ true。
+    /// 4.2 補: 混在スコープでスコープごとに独立に伝搬し、`cfg.scopes` 未収載
+    /// スコープは既定 `ScopeConfig`（＝Bottom）ゆえ `Anchor::Bottom`。
     #[test]
-    fn bottom_snap_mixed_scopes_and_missing_config_defaults_true() {
+    fn anchor_mixed_scopes_and_missing_config_defaults_to_bottom() {
         for dpi in DPIS {
             let wa = work_area(dpi);
             let cfg = cfg_of(vec![
@@ -1023,9 +1132,80 @@ mod tests {
                     input(2, px(200, dpi), px(400, dpi)), // 未収載 → 既定 Bottom
                 ],
             );
-            assert!(out[0].bottom_snap, "dpi={dpi}: Bottom → true");
-            assert!(!out[1].bottom_snap, "dpi={dpi}: Free → false");
-            assert!(out[2].bottom_snap, "dpi={dpi}: 未収載＝既定 Bottom → true");
+            assert_eq!(out[0].anchor, Anchor::Bottom, "dpi={dpi}: Bottom → Anchor::Bottom");
+            assert_eq!(out[1].anchor, Anchor::Free, "dpi={dpi}: Free → Anchor::Free");
+            assert_eq!(
+                out[2].anchor,
+                Anchor::Bottom,
+                "dpi={dpi}: 未収載＝既定 Bottom → Anchor::Bottom"
+            );
+        }
+    }
+
+    /// 4.2 完了条件: **4 層優先度カスケード**（`build_placement_config`）で解決された
+    /// 各アンカー設定（bottom・free・未指定＝既定 bottom・混在スコープ）が、
+    /// `resolve_placement` を通って対応する 5 値アンカーとして `ScopePlacement.anchor`
+    /// へ正しく伝搬する（KV → config → resolver → anchor の実経路）。
+    ///
+    /// - scope0: shell scope 接頭層 `sakura.seriko.alignmenttodesktop=bottom` が
+    ///   ghost scope 接頭層 `sakura.seriko.alignmenttodesktop=free` を**上書き**
+    ///   （shell ＞ ghost の層優先で解決）→ `Bottom`
+    /// - scope1: shell scope 接頭層 `kero.seriko.alignmenttodesktop=free` → `Free`
+    ///   （スコープごとに独立伝搬）
+    /// - scope2: `char2.` 接頭キーでスコープ検出のみ・alignment はどの層にも不在
+    ///   → 既定 `Bottom`（未指定＝既定）
+    ///
+    /// cascade 解決自体は config.rs の領分（改変しない・Req6.3）。ここでは解決済み
+    /// alignment が anchor として正しく運ばれることのみを固定する。
+    #[test]
+    fn anchor_propagates_through_build_placement_config_cascade() {
+        use std::collections::BTreeMap;
+
+        fn kv(pairs: &[(&str, &str)]) -> BTreeMap<String, String> {
+            pairs
+                .iter()
+                .map(|(k, v)| (k.to_string(), v.to_string()))
+                .collect()
+        }
+
+        let ghost_kv = kv(&[
+            ("kero.name", "エモ"),                        // scope1 検出
+            ("sakura.seriko.alignmenttodesktop", "free"), // scope0 の弱層（shell に負ける）
+        ]);
+        let shell_kv = kv(&[
+            ("sakura.seriko.alignmenttodesktop", "bottom"), // scope0 強層（ghost free を上書き）
+            ("kero.seriko.alignmenttodesktop", "free"),     // scope1
+            ("char2.defaultx", "0"),                        // scope2 検出のみ（alignment 未指定）
+        ]);
+        let cfg = build_placement_config(&ghost_kv, &shell_kv);
+
+        for dpi in DPIS {
+            let wa = work_area(dpi);
+            let out = resolve_placement(
+                &cfg,
+                wa,
+                &[
+                    input(0, px(400, dpi), px(600, dpi)),
+                    input(1, px(320, dpi), px(480, dpi)),
+                    input(2, px(200, dpi), px(400, dpi)),
+                ],
+            );
+            assert_eq!(out.len(), 3, "dpi={dpi}: 3 スコープ解決（空虚一致封じ）");
+            assert_eq!(
+                out[0].anchor,
+                Anchor::Bottom,
+                "dpi={dpi}: scope0 は shell 強層 bottom が ghost 弱層 free を上書き → Anchor::Bottom"
+            );
+            assert_eq!(
+                out[1].anchor,
+                Anchor::Free,
+                "dpi={dpi}: scope1 接頭層 free → Anchor::Free（スコープ独立伝搬）"
+            );
+            assert_eq!(
+                out[2].anchor,
+                Anchor::Bottom,
+                "dpi={dpi}: scope2 alignment どの層にも不在＝既定 → Anchor::Bottom"
+            );
         }
     }
 
@@ -1065,5 +1245,62 @@ mod tests {
                 );
             }
         }
+    }
+
+    // ------------------------------------------------------------------
+    // Anchor::from_alignment（4.2・design Testing Strategy Unit #4）
+    // ------------------------------------------------------------------
+
+    /// 4.2: cascade 解決済み `Alignment` の 5 値アンカーへの解釈写像を全分岐固定する。
+    /// `Bottom`→`Bottom`・`Free`→`Free`・`Seam("top"/"left"/"right")`→対応値・
+    /// 未知 `Seam` →`Bottom`（フォールバック・DD9「未知は bottom 相当」を継承）。
+    #[test]
+    fn from_alignment_maps_all_branches() {
+        assert_eq!(
+            Anchor::from_alignment(&Alignment::Bottom),
+            Anchor::Bottom,
+            "Bottom → Bottom"
+        );
+        assert_eq!(
+            Anchor::from_alignment(&Alignment::Free),
+            Anchor::Free,
+            "Free → Free"
+        );
+        assert_eq!(
+            Anchor::from_alignment(&Alignment::Seam("top".to_owned())),
+            Anchor::Top,
+            "Seam(top) → Top"
+        );
+        assert_eq!(
+            Anchor::from_alignment(&Alignment::Seam("left".to_owned())),
+            Anchor::Left,
+            "Seam(left) → Left"
+        );
+        assert_eq!(
+            Anchor::from_alignment(&Alignment::Seam("right".to_owned())),
+            Anchor::Right,
+            "Seam(right) → Right"
+        );
+        assert_eq!(
+            Anchor::from_alignment(&Alignment::Seam("unknown-value".to_owned())),
+            Anchor::Bottom,
+            "Seam(未知) → Bottom（フォールバック）"
+        );
+    }
+
+    /// 4.2 補: `Seam` 値は `trim().to_ascii_lowercase()` で正規化してから解釈する
+    /// （parsers 側で正規化済み前提だが防御・design Implementation Notes Risks）。
+    #[test]
+    fn from_alignment_normalizes_case_and_whitespace() {
+        assert_eq!(
+            Anchor::from_alignment(&Alignment::Seam(" TOP ".to_owned())),
+            Anchor::Top,
+            "前後空白＋大文字も Top へ"
+        );
+        assert_eq!(
+            Anchor::from_alignment(&Alignment::Seam("Right".to_owned())),
+            Anchor::Right,
+            "大文字混じりも Right へ"
+        );
     }
 }

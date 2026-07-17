@@ -1,0 +1,28 @@
+# Third-Party Notices
+
+このファイルは `cargo about generate about.hbs -o THIRD-PARTY-NOTICES.md` で
+自動生成されます。手で編集しないでください。
+
+areka はバイナリ配布時に、以下の第三者パッケージのライセンス表示を同梱します。
+areka 自身のライセンスは MIT です（ルートの `LICENSE-MIT` を参照）。
+
+使用ライセンス一覧:
+{{#each overview}}
+- {{{name}}} ({{count}} crate)
+{{/each}}
+
+---
+{{#each licenses}}
+## {{{name}}}
+
+対象 crate:
+{{#each used_by}}
+- {{{crate.name}}} {{crate.version}}
+{{/each}}
+
+```
+{{{text}}}
+```
+
+---
+{{/each}}

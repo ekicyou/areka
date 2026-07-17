@@ -52,7 +52,7 @@ use windows::Win32::UI::WindowsAndMessaging::PostQuitMessage;
 use wintf::ecs::{GraphicsCore, WucGraphicsResource};
 use wintf::executor::{FilterResult, JoinHandle, MessageLoop};
 
-use crate::placement::resolver::{PointPx, ScopePlacement, SizePx};
+use crate::placement::resolver::{Anchor, PointPx, ScopePlacement, SizePx};
 use crate::placement::source::GhostTitles;
 use crate::placement::spawn::spawn_ghost_windows;
 
@@ -254,7 +254,7 @@ fn two_scope_placements() -> Vec<ScopePlacement> {
             balloon_pos: PointPx { x: 1071, y: 708 },
             balloon_size: SizePx { w: 223, h: 158 },
             balloon_offset: PointPx { x: -412, y: -25 },
-            bottom_snap: true,
+            anchor: Anchor::Bottom,
         },
         ScopePlacement {
             scope: 1,
@@ -263,7 +263,7 @@ fn two_scope_placements() -> Vec<ScopePlacement> {
             balloon_pos: PointPx { x: 1334, y: 1044 },
             balloon_size: SizePx { w: 223, h: 158 },
             balloon_offset: PointPx { x: 285, y: -19 },
-            bottom_snap: true,
+            anchor: Anchor::Bottom,
         },
     ]
 }
