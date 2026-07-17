@@ -125,7 +125,7 @@
   - _Boundary: areka-kanade tests/kanade/close_test.rs, schedule/boot.rs（in-source #[cfg(test)]）_
   - _Depends: 5.1, 2.4_
 
-- [ ] 6. Validation: 実機サインオフ（実 emo2・実 pasta.dll での自発トーク発火の確認）
+- [x] 6. Validation: 実機サインオフ（実 emo2・実 pasta.dll での自発トーク発火の確認）
   - i686 版 helper を areka.exe と同じ場所へ配置し、絶対パスで実 emo2・実 pasta.dll を起動する
   - 起動直後の起動挨拶再生中に、毎秒イベントが再生中の意味論（応答無視・実行状態に再生中を含む）で送出されていることをログ／wire 証跡から確認する
   - 数分間の放置後、自発トークが発火することを目視確認する
@@ -134,6 +134,13 @@
   - _Requirements: 6.1, 6.2, 6.3_
   - _Boundary: 実機検証（E2E）_
   - _Depends: 5.2, 5.3, 5.4_
+  - **サインオフ記録（2026-07-18・実 emo2＋実 ghost/master/pasta.dll・i686 helper を target\debug\ へ配置・`RUST_LOG=info,kanade=trace`・`AREKA_APP_SMOKE_EXIT_MS=180000`〔既定1500msでなく3分へ延長＝観測窓確保〕で絶対パス起動・exit 0 で正常終了）**:
+    - **[Req 6.1 合否の主] 自発トーク発火＝PASS**: `event="steady_talk"`（"OnSecondChange にスクリプト——再生起動"）が **6回**発火（talk_id 2 以降）＋起動挨拶1本。`steady_talk_done` 7回（挨拶1＋自発6）。数分放置で OnTalk 由来の自発会話が実物で流れることを確認。
+    - **[Req 6.2] 再生中 Tick の相関証跡＝確認**: `event="shiori_request"` 全184件中 **41件が NOTIFY・Ref3="0"・status=Some("talking")**。起動直後 ~1 秒（起動挨拶再生中）に `OnSecondChange NOTIFY Ref3="0" status=Some("talking")` を確定観測（ランダムトーク待ち不要・DD-IT-12 の予告どおり）。残 ~143 件は idle GET・Ref3="1"・status=None。
+    - **[Req 3.2 恒久禁止] OnTalk/OnHour 不送出＝確認**: `event_id_not_allowed`=0・areka の `shiori_request` に OnTalk/OnHour が **1件も現れず**（ホワイトリスト egress 檻が実機で機能）。
+    - **DD-IT-12 実機証跡**: `basewareversion` が status=Some("talking")（挨拶を BootVersion{Some} で追跡・OnFirstBoot Value で挨拶起動→OnBoot は正典フォールスルーで skip）。**DD-IT-4/#14**: 終了時 `OnClose NOTIFY status=None`（Unloading 遷移後 INACTIVE）。正常終了 `unload_clean`（unload→helper exit(0)）。
+    - kanade の ERROR は皆無（ログの「ERROR」ヒット6件は無害な shell-bake WARN〔null.png KeyColor 脱落・既存資産〕2件＋Bevy despawn teardown 注記4件で idle-talk と無関係）。
+    - 実施＝kiro-impl 実行者が開発者の指示（「起動してもらえる？」）で実機起動・ログ捕捉。合否判定は Req 6.3 どおり「自発トークの発火」に限定（再生タイミングは cue-playback-duration の領分・判定外）。
 
 ## Implementation Notes
 
