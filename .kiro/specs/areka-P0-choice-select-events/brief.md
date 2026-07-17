@@ -16,7 +16,7 @@
 ## Current State（2026-07-16 実装偵察）
 
 - **kanade の再利用棚**: 応答 `Value`→`TalkId` 採番→`Action::StartTalk` の調停（`steady.rs:92-103`）・active talk 単一 slot（dispatcher）・`events.rs` の Reference 組立様式——**新しい調停を発明しない**（input-events と同じ規律）。
-- **CuePlayer 側の解除口は建設中**: cue-playback ブランチの `CuePlayer` に `WaitingForChoice` 停止（`runtime.rs:65-71,231-235`）と **`resolve_choice(choice_id) -> Option<String>`**（`:279`）が実装済み＝**選択確定で barrier を解いて talk を続行/終了する機構は供給される**。本 spec はその呼び手＋SHIORI 配送。
+- **CuePlayer 側の解除口は settled（→✅ 2026-07-17 main 着地・現行実測へ更新）**: dola `CuePlayer` に `WaitingForChoice` 停止（`runtime.rs:71`・遷移 `:231-237`）と **`resolve_choice(choice_id) -> Option<String>`**（`:279-293`）が main 実装済み＝**選択確定で barrier を解いて talk を続行/終了する機構は供給済み**。本 spec はその呼び手＋SHIORI 配送。
 - **入力の供給元**: choice-render の `ChoiceSelection{scope, id, label, extras}`（同 brief 正本・mock で先行観測可能）。
 - **正典 layout（ukadoc 裏取り済み 2026-07-16）**: **OnChoiceSelectEx**＝Ref0=ラベル・Ref1=ID・Ref2+=拡張引数（`\q` の r2 以降）・OnChoiceSelect より**先に**発生／**OnChoiceSelect**＝Ref0=ID／**OnChoiceTimeout**＝Ref0=タイムアウトしたスクリプト。
 

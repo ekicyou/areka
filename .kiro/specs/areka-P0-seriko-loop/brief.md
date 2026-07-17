@@ -8,7 +8,7 @@
 
 emo2 は起動しても**まばたきしない**。SERIKO の時限アニメ（interval,random 系）を駆動するランタイムが不在:
 
-- **seriko に時間源が無い**（確認済み 2026-07-16）: 受信面は `SerikoMsg = Cue(TalkCue) | Close` のみ（`actor.rs:49-54`）＝**cue 到着駆動オンリー**。`handle_message` は `cue.at` をログ以外に使わず、クロック・スケジューラ・`Instant` は皆無。
+- **seriko に時間源が無い**（確認済み 2026-07-16・#60 後の 2026-07-17 再実測でも不変）: 受信面は `SerikoMsg = Cue(TalkCue) | Close` のみ（現行 `actor.rs:52-57`〔旧 :49-54〕・`impl dola::cue::CueSink for SerikoSink` は `:122-126`）＝**cue 到着駆動オンリー**。`handle_message` は `cue.at` をログ以外に使わず、クロック・スケジューラ・`Instant` は皆無。
 - **pattern 状態が合成入力に無い**: emo-present のキャッシュキー（`cache.rs:46-47`・module doc `:8-10`）に「将来 seriko がアニメ pattern 状態を合成入力へ加える際は本キーへ追加する」の**予約記述が実在**。emo-compose 側は `plan.rs:11-14` が **pattern0 固定の合成規則**（pattern 進行の通貨なし＝本 spec の拡張対象）・予約シームは `world.rs:154-159`（将来の seriko system 統合用の脱出口）——いずれにせよ pattern を進めても表示に反映する通貨が無い。
 - emo2 実例は**2系統**（fixture 実測 2026-07-16）: **kero＝`interval,random,4`**（`surfaces.txt:429-431` 系・`surface.append10,2100…` の blink・pattern に `overlay,-1`＝層クリア終端）／**sakura＝`interval,bind+random,4`**（`surfaces.txt:73,79,84`＝animation1400-1402・**まばたきカテゴリ bindgroup1400-1402〔shell descript.txt:50-52＝通常/半目/ジトー〕の bind が ON のときだけ** random 発火——bind ゲートの有無が2系統の差。**⚠️ 1400-1402 に `default,1` が無い＝既定 OFF**＝static_binds のままでは sakura は一切まばたきしない。なお scope doc §2 の「**目**カテゴリ bind ON かつ random」表記は fixture 実測と不一致——目カテゴリは別グループ bindgroup1300 系＝design で scope doc を訂正）。
 
