@@ -163,3 +163,61 @@
 
 - 本ギャップ分析を要件ディスカッションで確認 → `/kiro-design areka-P0-input-events` で技術設計へ進む。
 - design 冒頭で ukadoc `OnMouseMove`/`OnMouseDoubleClick`/`memo_shiorievent` を再参照し、5.2 の 10 項目を確定表にすること。
+- **設計着手前に本ワークツリーを `origin/main` へ rebase/merge すること**（理由は §6.3）。
+
+---
+
+## 6. 並走衝突予想と撫でクラスタ合流ゲート（要件ディスカッション議題2・2026-07-17 実地検証）
+
+> **帰結: 本セッションでは判断せず、ポートフォリオセッションへ明示繰延**（開発者裁定 2026-07-17）。
+> 繰延理由・再開トリガ・保存した選択肢は §6.2。
+> 検証方法: 並走4本の brief＋roadmap 正本＋**実ソース／実 fixture** を5並列 subagent で突合（2026-07-17）。憶測ではなく実測。
+
+### 6.1 衝突マップ（実測・2026-07-17）
+
+**真に相互衝突する spec はゼロ。** roadmap:191 も `input-events` を「**✅ 真に並走可（2026-07-16 確定・4本）**」に明示列挙し、⛔ 時限ゲート（roadmap:190・192）の対象外。
+
+| 相手 spec | 関係 | 本 spec の完了をブロックするか | 実測根拠 |
+|---|---|---|---|
+| **`areka-P0-collision-geometry`** | **契約依存**（producer/consumer＝撫でクラスタ） | **Req8.3 のみ限定的に yes**（§6.2） | 契約 `HitRegion{scope, region:Option<String>}` の正本は**あちら**（同 brief:5,30）・本 spec は消費側（Req1.3）。編集面の交差は `crates/areka/src/emo2_boot/` の **resolver 1個の接合点のみ**（あちら=置く側 / うち=引いて `KanadeMsg` を送る側・collision brief:38）。本 spec の主戦場（`areka-kanade/src/schedule/*`・`placement/spawn.rs:321-344`）にあちらは一切触れない。**現況: brief.md 単独（spec.json 無し＝未 init）・コード実体ゼロ**（`HitRegion` の grep 一致は wintf の別物 `HitRegionMap` のみ） |
+| **`areka-P0-position-persist`** | **編集面隣接**（別関数 additive） | **no** | 共有は `placement/spawn.rs`・`kanade/schedule/events.rs`・`main.rs` の3ファイルだが**全て別関数**: うち=`on_ghost_pressed`(:321-344) / あちら=`placements` 引数(:139・既に外部引数ゆえ spawn.rs 本体編集は実質ゼロ)。events.rs もうち=`on_mouse_*` 新規追加 / あちら=`on_first_boot`(:42-52)。kanade 内も型すら別（うち=`Input` enum / あちら=`KanadeConfig`）。**逆向きの soft 依存あり**（§6.4） |
+| **`areka-P0-idle-talk`** | **編集面隣接**（別イベント・別 match アーム） | **no** | 共有は `events.rs`・`steady.rs`。events.rs は**独立純関数の集合**（1 ukadoc イベント＝1 constructor）＝並列 additive の理想形。steady.rs はうち=`Input::Mouse*` 新アーム / あちら=既存 `on_tick` 本体。**Req7 の「整合」は衝突でなく調整点**——あちら=`OnTalk`/`OnHour` の**禁止リスト**（talk 生成イベント名前空間）/ うち=マウス2種の**許可リスト**（マウス名前空間）＝**名前空間が交わらず和は自明に無矛盾**。`Status` ヘッダはうちが明示的に非スコープ（requirements.md「Adjacent expectations」）・あちらは口だけ用意＝**相互に契約を消費しない**。**現況: brief.md 単独（未 init）** |
+| **`areka-P0-cue-playback-duration`** | **完了済み**（旧「実装中と並走」前提は陳腐化） | **no** | **PR #60 / commit `9b8317cb` で 2026-07-17 に main へ squash マージ済み**・`completed/` へアーカイブ済み（spec.json `phase: completed`）。詳細と手当は §6.3 |
+
+**brief.md:41「cue-playback-duration と交差面ゼロ」の精度訂正**: 結論（並走安全）は正しいが**ファイル単位では不正確**。cue-playback は `emo2_boot/mod.rs`・`spine.rs`・`talk_clock.rs`（＝本 spec が「emo2_boot 結線」と主張する面）を編集済み。ただし重なりは**コンパイル時アサーションの型境界改名**（`SurfaceSink` → `dola::cue::CueSink`）＝additive・別関数。そして**主張の実質は生存**——`crates/areka-kanade/**` と `crates/areka/src/placement/**` は cue-playback の差分**ゼロ（実測 empty diff）**、消費する契約の物理定義 `areka-talk`（`StartTalk`/`TalkDone`/`TalkId`）も**無傷**。ゆえに contract-dependency ではなく edit-adjacency。
+
+### 6.2 撫でクラスタ合流ゲート（＝繰延した判断）
+
+**確定した事実（実 fixture 実測）**:
+
+- `fixtures/emo2/ghost/master/dic/touch.pasta:19` → `if region == nil or region == "" then return nil end`（＋:31 `local key = region .. actor`）＝**実 region（"Head"）が Ref4 に載らねば撫では物理的に発火しない**。mock resolver の固定値では Req8.3 の「**Head を**撫でると」を満たせない。
+- `fixtures/emo2/ghost/master/dic/menu.pasta:10-15` → `＊OnMouseDoubleClick` は **region 参照なしで無条件応答**＝**Req8.3 のメニュー talk 半分は collision-geometry 非依存**で単独観測可能。
+- **Req1.3** が自前 resolver 実装を仕様で封鎖＝「暫定 real resolver を自前搭載」で回避する道は無い。
+- **collision-geometry brief:26**「統合は M-life 統合（**input-events 側の実機サインオフ**）へ委譲＝観測の独立化」＝**あちらも実機観測をこちらへ委譲**＝実機サインオフは**両 spec の合流ゲート**（相互依存だが循環デッドロックではない: 実装は並走し、最後に片方のワークツリーで合流させれば解ける）。
+- **繰延先が存在しないことの確認**（当初検討した「e2e へ繰延」案は roadmap と非整合）: roadmap:134「マイルストーンは**統合点であって作業単位ではない**」（＝M-life に所有者なし）／roadmap:171「e2e は**全ユニット完了後（最終）**」（＝逆順の依存ゆえ繰延先になれない）／roadmap:87「**本番ゴースト先行の原則**」（＝UI・座標系ユニットの実機観測繰延を window-placement リジェクトの教訓として**明示否定**）。
+
+**繰延の理由（開発者裁定 2026-07-17）**: 本件は**要件の中身ではなく完了オーケストレーションの判断**（Req8.3 の本文は望む結果の記述として正しく、争点は「いつ・誰と合流して観測するか」）。かつ (1) 相方 collision-geometry が **brief のみ・resolver 提供形は「最終形は design」と保留**＝書かれていない相方に対する順序判断になる、(2) **足場が動く**（§6.3 の cue-playback マージを掘って初めて発見）、(3) roadmap:194 の確立済み規律「**時限ゲートの適用は tasks 生成・実装フェーズのみ＝要件・設計は先行可・マージ後に `/kiro-validate-design` 再突合が義務**」と同型。**単一 spec の椅子から決めるべきでない。**
+
+**再開トリガ**: 並走フロント各本（`collision-geometry`／`position-persist`／`idle-talk`）を要件定義まで進め → 全 PR マージ → 全合流した**ポートフォリオセッション**で一括判断する。
+
+**保存した選択肢**（再開時の出発点・要件本文は無改変のまま）:
+
+- **(A') 合流サインオフ**: Req8.3 現状維持。実装は並走し、実機サインオフは collision-geometry の resolver 着地後に**撫でクラスタ2本の合流として1回**で実施（collision brief:26 の設計どおり・roadmap:87 に整合）。代償＝本 spec の `/kiro-complete` が合流待ち。
+- **(B') Req8.3 二分割**: メニュー半分（region 非依存・実測済み）を単独先行サインオフ・撫で半分を合流へ明示繰延。要 requirements 修正。代償＝「撫でユニットが撫でを実機で見ずに完了」の据わりの悪さ。
+- **(C') collision-geometry 先行着手**: 実装は並走しつつ collision-geometry を `/kiro-start`（roadmap:140 いわく「純関数＋現 surface 読み口の薄い増分」＝軽量）→ 合流を近づける。(A') と併用可。
+
+### 6.3 base 陳腐化（**設計着手前の必須手当**）
+
+**本ワークツリーは `fec6c693`（#59）基点＝`origin/main`（`9b8317cb`）より1コミット遅れ**。brief の Current State 偵察は 2026-07-16 の**マージ前ツリー**に対する記述ゆえ、引用が3箇所ドリフト済み:
+
+1. **`dispatcher.rs:97-113` → `:96-112`**（`areka-ghost`）。`on_start` の Close-then-spawn 本体は**バイト等価で無傷**＝本 spec が依存する単一 slot 差替シームは**安全**。
+2. **emo2_boot の boot 型境界が `S: dola::cue::CueSink + Clone + Send + 'static`**（旧 `SurfaceSink`）。design が sink 境界を名指す場合に影響。
+3. **`TalkDone` の意味論が変化**——entry 枯渇でなく**占有 horizon（絶対終了時刻）到達で発火**（[[areka-dola-absolute-time-sync-broadcast]]）。**design 送り事項①（talk 再生中のマウス GET の扱い）の判断材料が変わった**: active talk がスロットを**より長く・より正しく**占有する＝「再生中のマウス GET」アームの**実発火頻度が上がる**。kanade のコードは無改変ゆえコード衝突ではなく**設計推論の入力**。
+
+**隠れ依存の解消（重要）**: cue-playback の実機欠陥 **#6「新 talk で前の会話が消えない」**（バルーンにテキストが累積）は、マージ前ツリーでは本 spec の実機サインオフ「ダブルクリックで menu.pasta の応答 talk が**起動する**」の観測性を毀損していた（一目での判別が不能＝内容を読む必要）。cue-playback の `ClearAll` 前置（台本冒頭）で**既に解消済み**。**main へ rebase したツリーで実機サインオフを行えば観測は明瞭**。#3/#4（wait/改行タイミング）は「速すぎる talk も起動は見える」ゆえ観測性を脅かさない＝再生タイミング品質の cue-playback 帰属は clean な分離。
+
+### 6.4 他ユニットへの申し送り（本 spec では実施しない）
+
+- **→ `areka-P0-position-persist`（逆向き soft 依存・design 送り事項④に効く）**: 本 spec は「dblclick 即終了」＝**現状唯一の手動終了手段**を退役させる（Req6.1）。一方 position-persist の実機検証は「ドラッグ→**終了**→再起動→位置一致」＝**終了手段の存在が前提**。ゆえに **design 送り事項④（暫定退避終了）は「人間が任意タイミングで引ける手段」（例: Ctrl+ダブルクリック→`ForceQuit`）を残すこと**——env-gate の時限自動終了（`AREKA_APP_SMOKE_EXIT_MS` 系）**だけ**にすると position-persist の手動検証が詰む。本 spec の DoD には無関係だが design 判断の制約。
+- **→ `areka-P0-idle-talk`（brief の編集面申告漏れ）**: idle-talk brief:37 は編集面を「`crates/areka-kanade`（steady/events）＋テストのみ」と申告するが、`Status` ヘッダ注入には **`msg.rs:80-89` の `ShioriCall`（今日ヘッダ枠が無い）の改変**が要る＝**共有型の変更**で本 spec の新規マウス constructor にも波及。**本 spec が先に着地するのが現実的**（あちらは未 init）＝その場合**影響ゼロ**（idle-talk が自分のパスでマウス constructor も含めて更新）。逆順なら機械的・コンパイラ捕捉・数分の作業。**idle-talk の init 時に brief を訂正すべき**。
+- **→ ポートフォリオセッション（roadmap 正本の陳腐化2件・実測 2026-07-17）**: #60 の `/kiro-complete` は roadmap を**部分的にしか更新していない**。`roadmap.md:142`（エンジン別ポートフォリオ）は ✅完了（2026-07-17）へ更新済みだが、**(a) `:166` M1残工程ゴール表の `cue-playback-duration` 行が「実装中（別坑）」のまま**、**(b) `:189-190` 時限ゲート節が「`cue-playback-duration` が実装中の現在は…⛔一時並走不可（`mayuna-compose`／`seriko-loop`）」のまま**＝`:193`「cue-playback 完了後に `mayuna-compose`・`seriko-loop`・M-dialogue 3本を解禁」が**発火していない**。**本 spec のワークツリーは main より 1 コミット古いため、ここでは steering を編集しない**（陳腐化した複製への編集＋並走 steering 編集は `/kiro-complete` のマージ衝突源＝[[harness-shell-quirks]]）。**rebase 済みのポートフォリオセッションで是正すること**（ゲート解除は本 spec 単独で決めるべき判断でもない）。
