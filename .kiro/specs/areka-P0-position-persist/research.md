@@ -187,4 +187,54 @@
 
 ## 7. 次ステップ
 
-要件ディスカッション（`/kiro-requirements-discussion areka-P0-position-persist`）で §4 の設計判断アイテム（特に論点1 座標表現・論点2 保存先/識別キー・論点3 直列化形式・論点4 所有境界）を詰め、確定後に `/kiro-design` で技術設計へ進む。本 spec は「新機構を作らず既存注入口へ入力を差す」層に徹する方針（brief・既存資産調査と整合）。
+要件ディスカッションは **完了済み**（下記 §8 参照）。次は `/kiro-design areka-P0-position-persist` で技術設計へ進む。§4 の設計判断アイテムのうち **#1 座標表現・#2 保存先/識別キー・#3 直列化形式・#4 所有境界** を design 冒頭で確定すること（#8・#9 は要件ディスカッションで決着済み＝下記）。本 spec は「新機構を作らず既存注入口へ入力を差す」層に徹する方針（brief・既存資産調査と整合）。
+
+---
+
+## 8. セッション記録（要件フェーズ完了・2026-07-17）
+
+> **本セクションは別セッションで設計フェーズを再開するための引き継ぎ**。要件フェーズはこのセッションで完了し、PR squash マージで `main` へ合流済み。設計以降は新規ワークツリーで再開する。
+
+### 8.1 到達点
+
+- `requirements.md` 確定（**R1〜R8**）／`research.md`（本ギャップ分析）確定／`spec.json` は `phase: "requirements-generated"`・**`approvals.requirements.approved = false`**。
+- 要件ディスカッション **3 議題すべて決着**（各コミットは要件フェーズ PR に squash 済み）。
+
+### 8.2 ディスカッション決定（3 件・要件本文へ反映済み）
+
+| # | 議題 | 決定 | 反映先 |
+|---|---|---|---|
+| 1 | クラッシュ時の位置耐久性 | **ハイブリッド**＝DragEnd 即時確定＋shutdown 最終フラッシュ。クラッシュでも直近 DragEnd 位置を保つ | R1.1／R1.2／R1.3／R2.1・§4-8 |
+| 2 | バルーン相対 offset の基準点 | **キャラのアンカー辺（下端）基準**＝サーフェス寸に不変。**左上基準は禁止**（下端吸着ゆえ `char_topleft.y = work_area.bottom − h` が高さ変動で動く） | R2.2／R1.6／R1.8・§4-9 |
+| 3 | 再射影は保存値を上書きするか | **原本保持**＝永続値を更新するのはユーザーの明示的ドラッグのみ。自動再射影／再吸着は表示位置のみ変え永続状態を書き換えない | R1.9／R5.4 |
+
+**3 議題を貫く背骨**: 「**保存値＝ユーザーの意図** ／ **表示位置＝意図と現在の物理制約との写像**」の二層分離。設計はこの分離を壊さないこと。
+
+### 8.3 ブロッカー監査（2026-07-17・23 エージェント・敵対的反証つき）
+
+**結論: ブロッカーは存在しない（blockers=0 / gates_blocking=0）。** active spec 11 本すべてを個別スキャン＋各結論を敵対的に反証した結果:
+
+- **時限ゲート非該当**: roadmap.md:189 の時限ゲート（`cue-playback-duration` の編集面〔dola cue／sakura compile／emo-text state／seriko sink〕を共有する spec は一時的に並走不可）に本 spec は該当しない。**roadmap.md:191 が明示的に除外**——「✅ 真に並走可（2026-07-16 確定・4本）: **position-persist**（⓪・完全直交＝placement/ghost/kanade-boot のみ）・idle-talk・collision-geometry・input-events」。
+- **静的依存は全て充足済み**: M-boot（`areka-P0-emo2-boot`・2026-07-13 完了）／`window-placement`／`surface-resize-resnap`／`ghost-setup`／`kanade` はいずれも `completed/` に在籍。
+- **本 spec が最先行**: 他 10 本はすべて **brief-only**（`spec.json` 不在＝`/kiro-start` 未実行）。唯一実装中の `cue-playback-duration` とは交差面ゼロ。
+- **二坑モデル**: 本坑（main）増分・`_Depends(confirmed):` 記載なし・対応 pilot なし＝two-tunnel.md:99「直行許容」に該当＝BLOCKED ではない。
+
+**coordination-needed（7 本）＝並走可だが作法制約あり**: `choice-render`／`choice-select-events`／`cue-playback-duration`／`idle-talk`／`input-events`／`mayuna-compose`／`seriko-loop`。いずれも**ブロッカーではなく「additive を維持せよ」の申し送り**:
+
+- **`input-events`**: `spawn.rs` の pressed ハンドラ（`on_ghost_pressed` `spawn.rs:321-344`）を差し替える。本 spec は `spawn.rs` を **placements 注入（`:139` 引数）のみ**＝別関数。双方とも新規アーム／フック追加に留めること。
+- **`idle-talk`**: kanade 近接だが `boot.rs`（本 spec）vs `steady.rs`（idle-talk）で別フェーズ。`events.rs` は双方 additive。
+- **`seriko-loop`**: 実行時 `\![set,alignmenttodesktop]` によるアンカー書き換えの所有者。本 spec の **R1.8「アンカーは永続化せず毎起動 config から再解決」**との接点に注意（実行時変更は再解決で失われる意味論）。ただし seriko-loop は時限ゲート下＋brief-only＝実装着手は確実に本 spec より後。
+- **`sakura-dialogue-tags`**: `\![move]` ＝将来の**第二の位置ライター**候補。本 spec の R1.9「永続値を更新するのはユーザーのドラッグのみ」との相互作用は **Out of scope**（M-dialogue 領分）。
+
+### 8.4 再開の手引き（設計セッション用）
+
+1. **最初にやること＝再突合**（[[parallel-worktree-brief-staleness-rebase-before-design]]）: brief／research の「file:line 引用」と「並走可」主張は**他坑のマージで無言に腐る**。設計着手前に必ず実測し直すこと:
+   ```powershell
+   git log --oneline <base>..origin/main
+   git diff --stat <base>..origin/main -- crates/areka/src/placement crates/areka-ghost crates/areka-kanade
+   ```
+   （`git show origin/main:<path>` は Git Bash が噛むので **PowerShell で**実行する）
+2. **要件承認**: `spec.json` の `approvals.requirements.approved` は **false**。`/kiro-design areka-P0-position-persist` は内部で `kiro-spec-design -y`（要件自動承認）を通すため、要件を承認扱いで設計へ進む。要件に異議があるなら設計前に議論すること。
+3. **design 冒頭で確定する論点**（§4 より）: **#1 保存座標の表現**（最優先・2026-07-05 DPI 欠陥の再来面）／**#2 保存先ディレクトリと ghost 識別キー**（ukadoc `file_structure` の profile 慣行を MCP で参照・emo2 fixture を汚さない）／**#3 直列化形式**（自前 KV＋`areka-parsers::kv` 再利用＝新規依存ゼロ vs serde＝要承認）／**#4 所有クレートと GhostState 読取箇所**（A2 有力）。
+4. **決着済みゆえ蒸し返さない論点**: §4-8（保存頻度＝ハイブリッド確定・残るは機構のみ）／§4-9（バルーン基準＝下端確定・残るは変換の置き場のみ）。
+5. **受け入れ条件の制約**: 本 spec は UI 位置決めユニット＝**本番ゴースト先行の原則**（roadmap.md:87）の射程。実 emo2・**実 DPI（≠96）**・マルチモニタでの人間サインオフが必達（R8.4）。起動は絶対パス必須（相対だと helper が pasta.dll を LoadLibrary できず MOD_NOT_FOUND）。
