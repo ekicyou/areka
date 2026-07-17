@@ -429,3 +429,24 @@ ukadoc MCP で「Status/talking/choosing」を2度検索したがいずれも no
 7. **下流の檻負担の実測**（議題 #4 の布石）: input-events（W2）＝追加 2 ID のみ・自要件で檻を 2 回名指し済み（`requirements.md:28,103`）。position-persist（W3）＝追加ゼロ。**choice-select-events（W5）＝構造的非互換**——ukadoc 正典 `\q[タイトル,OnID,...]` は実行時スクリプト由来の**任意名イベント**を発火し（emo2 は fixture grep 0 件でこの形のみに依存・`brief.md:13`）、`&'static str` の id（`msg.rs:82,86`）にも固定 const 表にも載らない。
 
 **適用差分**: design.md＝DD-IT-11 新設・Error Handling 表 1 行目（Internal＋ゾンビ事実訂正）・actor.rs Service Interface doc・File Structure Plan（msg.rs／real.rs／common/mod.rs／failure_test.rs 行）・機械的追随注記 4 型化・Risks 爆風 3 軸化・Testing Strategy #7・Open Items #4 新設。
+
+### #2〜#4 再検討（2026-07-17・開発者指示「考えればわかるものを議題にするな・危険な分岐だけを議事に」）
+
+**メタ裁定の適用**: 残り3議題を #1 裁定原理（あるべき姿・シンプルに誠実に・必要ならスコープ増・型の乱造禁止）へ照らして再検討した結果、**3件とも導出可能＝開発者判断が必須の危険分岐は 0 件**。以下は導出記録（#2 のみ completed spec の確定判断の再開封を含むため事後拒否権を明示）。
+
+#### #2 起動挨拶中の wire 正直性 → **O2（boot talk 正規追跡）を導出適用＝DD-IT-12**
+
+- **導出**: Req1.5「アクティブなトークが再生中は Ref3=0」に boot 例外条項は無い。挨拶（実測 4〜5 秒）は実再生される talk であり、fire-and-forget（`boot.rs:102-107`）による非追跡は「源の欠落」であって要件免除ではない。「誠実に」＝wire は事実を申告する。よって O1（縮退受容＋注記）は「要件との不一致の容認」となり裁定原理に反する。
+- **敵対的自己検証で確認した安全性**: ① 挨拶中 close は `CloseTalkWait`（中断 ACK 待ち）＝**通常 talk の close と同型化**＝より正規形（`canonical-not-minimal-lifecycle`）② TalkDone(挨拶) の配送は既知 ERROR `unknown_talk_done` の存在自体が証明 ③ pasta 側は挨拶中ゲートが閉じ初回ランダムトークが挨拶終了後起算（〜5 秒後ろ倒し・SSP 同型・Req6.3 でタイミングは判定外）④ 檻期待値の更新は Value 経路のみ（`obsolete-vs-broken` 方針の「更新」に該当）。
+- **副産物**: `unknown_talk_done` 根治（旧 Open Item 3 解消・「ついで吸収」でなく Req1.5 充足の帰結）・Req6.2 実機証跡が起動直後の挨拶窓で確定観測可能。
+- **事後拒否権**: completed kanade の「boot は close-gate しない」DD の再開封を含む。開発者が fire-and-forget 維持（O1）を選ぶ場合は本コミット 1 個の revert で戻る（設計のみ・実装未着手）。
+
+#### #3 チョークポイントの保証水準 → **保証境界の明文化のみ（分岐なし）**
+
+- **導出**: 檻の主語は Req3.2 の文言どおり kanade。`Sender<ShioriMsg>` 直接 post による迂回（`msg.rs:65` pub・`lib.rs:39` 再エクスポート・in-tree 使用例 `real.rs:762`／`common/mod.rs:1110`）は「kanade の送出」ではなく、同階級のコードは `Shiori3Client` 直叩きも可能＝kanade 内の檻で防御不能な階級であり、どの設計を選んでも消えない。型封鎖は mock 統合ハーネスの検証様式（`ShioriMsg` の受理・構築）と非両立。→ 選択肢が実在しない＝議題でなく注記。actor.rs Responsibilities へ「保証境界」bullet を追加。
+- 檻の実効範囲＝「kanade 状態機械の全構築点（現在・将来）」は DD-IT-7 のとおり成立（本番・mock 双方が `round_trip_request` を通過）。
+
+#### #4 `ALLOWED_EVENT_IDS` と W5 任意名イベント → **シーム注記＋W5 申し送りのみ（今決めるのは憶測先行）**
+
+- **事実**: choice-select-events（W5）は `\q[タイトル,OnID]`＝実行時スクリプト由来の任意名イベント発火に依存（emo2 唯一の依存形・`menu.pasta:15` 実物・fixture に OnChoiceSelect 系ハンドラ 0 件）。任意名は `&'static str` の id（`msg.rs:82,86`）にも固定 const 表にも載らない。
+- **導出**: W5 の拡張は受理規則への**カテゴリ追加（additive）**であり檻の解体ではない＝チョークポイント・固定表・`OnTalk`/`OnHour` 恒久禁止は不変のまま将来拡張可能。今 String 化や拡張受理規則を先取りするのは「憶測先行設計しない」（status-execution-states 台帳の規律・YAGNI）に反し、`\q[x,OnTalk]` と Req3.2 恒久禁止の交差は W5 の要件フェーズの議題（`portfolio-convergence`＝単一 spec の椅子から決めない）。→ events.rs へ SEAM(W5) doc・Revalidation Triggers 行を精密化・本節を W5 への申し送りの正本とする。

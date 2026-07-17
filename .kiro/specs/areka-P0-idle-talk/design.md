@@ -44,7 +44,7 @@
 - **トーク配送・再生**（sakura／emo-text／dispatcher）／talk 再生品質
 - **毎秒 Tick の供給機構**（`completed/areka-P0-ghost-setup` の ticker が絶対グリッド整列で供給。本 spec は受領した Tick の**中身の充足**のみを扱う）
 - **`build_request` の `SecurityLevel` 位置**: 実 SSP と ukadoc は `SecurityLevel` を `ID` より前に置くが、現実装は末尾に置く（既存逸脱）。本 spec は `Status` の位置のみを扱い、この既存逸脱は**修正しない**（研究ログ §10.4 に記録・`areka-P0-emo2-conformance-e2e` の適合検証が引受先候補）
-- **既知の隣接欠陥 `unknown_talk_done talk_id=1`**（起動挨拶の talk_id を kanade が追跡せず TalkDone が無照合 slot へ到着＝非致命 ERROR・research §9.6）。kanade 領分だが本 spec の要件に無く、Req6 にも影響しない＝**「ついでに」吸収しない**
+- ~~既知の隣接欠陥 `unknown_talk_done talk_id=1`~~ → **本 spec が DD-IT-12 で根治する**（討議 #2 で境界判断を訂正: 挨拶の非追跡は Req1.5/2.4 の wire 不実の**根因**であり「要件に無い隣接欠陥」ではなかった。根治は Req1.5 充足の副産物＝「ついでの吸収」に非ず）
 
 ### Allowed Dependencies
 
@@ -62,7 +62,7 @@
 | `ShioriCall::{Get,Notify}` の形状変更 | `areka-P0-input-events`（`on_mouse_*` 構築）・`areka-P0-position-persist`（`on_first_boot` Ref0） |
 | `ShioriBackend::get/notify` の署名変更 | `areka-ghost`（`runtime.rs`・`spine_e2e_test.rs`）・`areka`（`emo2_boot/spine.rs`）＝実装5箇所 |
 | `ShioriRequest`／`build_request` のヘッダ集合・順序の変更 | `shiori-host32-host` の全 wire 檻・実 pasta 適合 |
-| `ALLOWED_EVENT_IDS` への ID 追加 | `areka-P0-input-events`（マウス2種を許可集合へ追加する側）・`areka-P0-choice-select-events`（選択肢カスケード） |
+| `ALLOWED_EVENT_IDS` への ID 追加 | `areka-P0-input-events`（マウス2種を許可集合へ追加する側）・`areka-P0-choice-select-events`（選択肢カスケード＝固定 ID 追加でなく**受理カテゴリの additive 拡張**・events.rs の SEAM(W5) 注記参照） |
 
 ## Architecture
 
@@ -142,6 +142,7 @@ graph TB
 | **DD-IT-9** | パラメータ付き状態の下位書式 | **ukadoc 正典（内部 `/` 区切り）を採用**。実 SSP の `,` 差異は台帳 spec へ申し送り | 正典 `balloon(0=2/1=0)` に対し実 SSP 2.3.86 は `balloon(0=2,1=0)` を送る（`shiori-sample.log:3727`）。後者は**トップレベルのカンマと衝突**し `split(',')` を壊す＝曖昧。正典の `/` は自己無矛盾。steering「正典は ukadoc」に従う。**M1 は両状態とも非アクティブ＝送出せず＝実害ゼロ** |
 | **DD-IT-10** | Ref1/Ref2 の差替シーム（Req1.6） | events.rs の名前付き定数＋シーム注記。実測供給時は `ExecutionSnapshot` へフィールドを足す＝**Status 残状態と同一シーム** | 要件が「Reference1/Reference2 と同型」（Req2.5）と言う関係を**文字どおり同一の口**で実現する。構築が events.rs 一点に集中しているため、値の差替は Reference 連番・ヘッダ構成を変えない |
 | **DD-IT-11** | 檻違反の失敗語彙（設計ディスカッション #1・2026-07-17 開発者裁定「あるべき正しい姿・シンプルに誠実に」） | `ShioriFailure` へ `Internal(String)` を **1 variant のみ**追加（`#[error("kanade internal violation: {0}")]`）。檻違反は `Failed(Internal)` で返す。`map_error` は不変＝`Internal` は境界写像が**決して生成しない** variant（kanade 内部でのみ構成） | `Shiori` は「SHIORI エラー応答」の境界写像（`msg.rs:117-119`）であり、**未送出**の内部バグに使うのは範疇錯誤——kanade Req6.1 の区別語彙を汚染し、input-events の whitelist 追加漏れが「pasta のエラー」と誤診される。先例は実在＝`SessionError::RequestInFlight`（利用規律違反・`areka/src/shiori_session.rs:48-61`）／`UiSpawnError`（「検出可能な前提違反を error! 記録のうえ返す予約型」・`areka-actor/src/ui.rs:165-177`）＝発明でなく既存規律への合流。爆風実測＝破壊は cfg(test) `describe`（`real.rs:257`）1箇所＋テスト記述子 `FailKind` の追随のみ・本番消費2箇所（`mod.rs:235,254`）は `%failure`（Display）経由で**無改変** |
+| **DD-IT-12** | 起動挨拶中の wire 正直性（設計ディスカッション #2・**#1 裁定原理からの導出適用**＝開発者議題にせず） | boot の talk を正規追跡する。`to_baseware_version` が挨拶の `ActiveTalk` を `Phase::BootVersion{talk}` で運び、boot 完了を `Steady{talk: Some(挨拶)}` へ。挨拶再生中の Tick は NOTIFY・Ref3=`"0"`・`Status: talking` | 現行は fire-and-forget（`boot.rs:102-107`「常に `Steady{talk:None}` へ完了」）＝挨拶の実測 4〜5 秒間、wire が GET・Ref3=`"1"`・Status 無しと**事実に反する申告**をする。Req1.5「アクティブなトークが再生中は Ref3=0」に boot 例外条項は無い＝これは**本 spec 要件の直接要請**であって「ついで」ではない。副産物2つ: ① TalkDone(挨拶) が slot と照合し既知欠陥 `unknown_talk_done`（旧 Open Item 3）が**根治** ② Req6.2 の実機証跡（NOTIFY・Ref3=0・Status talking）が起動直後 4〜5 秒で**確定観測可能**になる（ランダムトークの再生窓を待ち構える必要が消える）。completed kanade の「boot は close-gate しない」確定判断の再開封を含む（挨拶中 close は通常 talk と同じ `CloseTalkWait`＝中断 ACK 待ち・ForceQuit 不変＝**より正規形**へ揃う。`canonical-not-minimal-lifecycle` 方針と整合） |
 
 ### 実 wire 証拠（本設計の裏取り・一次確認済み）
 
@@ -186,9 +187,9 @@ crates/areka-kanade/src/
 | `crates/areka-kanade/src/lib.rs` | `pub mod status;`＋`ExecutionSnapshot`/`ExecutionState`/`ExecutionStatus` 再エクスポート。`events` ファサードへ `on_close_notify`・`ALLOWED_EVENT_IDS`・`is_allowed_event_id` を追加 |
 | `crates/areka-kanade/src/msg.rs` | `ShioriCall::{Get,Notify}` へ `status: ExecutionStatus` を追加（共通ヘッダ＝全構築点が Status を明示する）。`ShioriFailure` へ `Internal(String)` variant 追加（DD-IT-11）＋enum doc を「外部4語彙＝`RequestError` 境界写像・`Internal` のみ kanade 内部構成」へ更新＋Display 語彙テスト（`:173-185`）へ 1 行追加 |
 | `crates/areka-kanade/src/schedule/events.rs` | 全構築関数が `&ExecutionSnapshot` を取る。`on_second_change(now, snapshot)` が Ref3 と Status を**単一入力から**導出。`on_close_notify(reason, snapshot)` 新設（DD-IT-8）。Ref1/Ref2 を名前付き定数＋シーム注記へ。`ALLOWED_EVENT_IDS` 表＋`is_allowed_event_id` |
-| `crates/areka-kanade/src/schedule/mod.rs` | `fn snapshot_of(phase: &Phase) -> ExecutionSnapshot`（`Steady{talk: Some}` のみ `talk_active=true`）。`force_quit` の inline 構築（`:170-173`）を `events::on_close_notify` へ委譲し stale 注記（`:161-164`）を解消 |
+| `crates/areka-kanade/src/schedule/mod.rs` | `fn snapshot_of(phase: &Phase) -> ExecutionSnapshot`（アクティブ talk を運ぶ phase＝`Steady{talk: Some}`／`BootVersion{talk: Some}` が `talk_active=true`・DD-IT-12）。`force_quit` の inline 構築（`:170-173`）を `events::on_close_notify` へ委譲し stale 注記（`:161-164`）を解消 |
 | `crates/areka-kanade/src/schedule/steady.rs` | `on_second_change`／`begin_close` の呼出へスナップショットを供給（`talk_playable` 引数は廃止） |
-| `crates/areka-kanade/src/schedule/boot.rs` | `events::` 呼出（`:44,58,69,121`）へスナップショット供給（boot 系列は構造上 talk 非アクティブ） |
+| `crates/areka-kanade/src/schedule/boot.rs` | `events::` 呼出へスナップショット供給（OnInitialize/OnFirstBoot/OnBoot は talk 非アクティブ）。**DD-IT-12**: `to_baseware_version`（`:108-122`）が StartTalk の `ActiveTalk` を `Phase::BootVersion{talk}` へ記録＝`baseware_version` は挨拶起動後スナップショット（Value 経路は `talking`）で構築・boot 完了（`:89`）は `Steady{talk: 引継ぎ}` へ。既存檻の期待値更新（Value 経路のみ `talk:None`→`Some`・204 経路は `None` のまま） |
 | `crates/areka-kanade/src/actor.rs` | `round_trip_request`（`:146`）に **ID ホワイトリスト檻**（違反＝送出せず `error!`＋`Failed`）と wire 観測 `trace!(event="shiori_request")`（Req6.2 の証跡）を追加 |
 | `crates/areka-kanade/src/shiori/real.rs` | `ShioriBackend::{get,notify}` へ `status: Option<&str>` 追加。`ShioriConnection` impl が `Shiori3Client` へ転送。`handle_call`（`:99-111`）が `ExecutionStatus::render()` の結果を forward。in-source `describe`（`:257`・cfg(test)・ワークスペース唯一の `ShioriFailure` 網羅 match）へ `Failed(Internal)` アーム追加 |
 | `crates/shiori-host32-host/src/shiori3.rs` | `ShioriRequest` へ `status: Option<&'a str>`。`build_request` が `Sender:` の後・`ID:` の前に `Status: <v>\r\n` を発行（`None` は行ごと省略） |
@@ -278,12 +279,12 @@ graph TB
 | 1.2 | Ref0＝注入時刻源から OS 連続起動時間 hour | `events.rs`（`MS_PER_HOUR`・既存） | `MonotonicMs` | A |
 | 1.3 | Ref1/Ref2＝`"0"` 固定 | `events.rs` 名前付き定数 | — | A |
 | 1.4 | 再生可能時 Ref3=`"1"` | `events.rs` | `ExecutionSnapshot::talk_active` | A |
-| 1.5 | 再生中 Ref3=`"0"` | `events.rs` | 同上 | A |
+| 1.5 | 再生中 Ref3=`"0"` | `events.rs`・`schedule/{boot,mod}.rs`（挨拶 talk 追跡＝DD-IT-12） | 同上 | A |
 | 1.6 | Ref1/Ref2 の実測差替シーム（契約不変） | `events.rs` 定数＋シーム・`ExecutionSnapshot` | `ExecutionSnapshot` | — |
 | 2.1 | 正典語彙全10状態＋下位書式の表現 | `status.rs`：`ExecutionState`・`OpeningKinds`・`BalloonBindings` | `render` | B |
 | 2.2 | アクティブ全状態を正典順でカンマ連結 | `status.rs`：`ExecutionStatus` | `render` | A・B |
 | 2.3 | 空集合→ヘッダ行を省略 | `status.rs`・`shiori3.rs` `build_request` | `render -> Option<String>`・`ShioriRequest::status` | B |
-| 2.4 | `talking` を `Steady{talk}` から実導出 | `schedule/mod.rs` `snapshot_of`・`status.rs` `derive` | `ExecutionSnapshot` | A |
+| 2.4 | `talking` を `Steady{talk}` から実導出 | `schedule/mod.rs` `snapshot_of`（`BootVersion{talk}` 含む・DD-IT-12）・`status.rs` `derive` | `ExecutionSnapshot` | A |
 | 2.5 | 残9状態は語彙保持のまま非アクティブ縮退＋シーム | `status.rs` 導出表 | `ExecutionSnapshot` の将来フィールド | — |
 | 2.6 | 契約不変の実値差替（＋fail-open ただし書き） | `status.rs` 導出表・Revalidation Triggers | `ExecutionSnapshot` | — |
 | 2.7 | アイドル時に `talking` を送出しない | `snapshot_of`・`derive` | — | A・B |
@@ -443,6 +444,12 @@ impl ExecutionStatus {
 ```rust
 /// 送出し得るイベント ID の確定ホワイトリスト（Req3.1）。
 /// `OnTalk`／`OnHour` は emo2 が OnSecondChange 内部で自発生成するため**恒久的に含めない**（Req3.2）。
+///
+/// SEAM(W5・choice-select-events): `\q[タイトル,OnID]` は実行時スクリプト由来の**任意名イベント**を
+/// 発火する（emo2 唯一の依存形・menu.pasta:15 実物）＝固定 const 表にも `&'static str` の id にも載らない。
+/// W5 での拡張は本表への ID 追加ではなく**受理規則へのカテゴリ追加**（additive）で行う——チョークポイント・
+/// 本表（正典固定 ID の部分集合）・`OnTalk`/`OnHour` 恒久禁止は不変。任意名カテゴリと Req3.2 恒久禁止の
+/// 交差（`\q[x,OnTalk]` を書くゴーストの扱い）は choice-select-events の要件フェーズで決着（research §16 申し送り）。
 pub const ALLOWED_EVENT_IDS: &[&str] = &[
     "OnInitialize", "OnFirstBoot", "OnBoot", "basewareversion", "OnSecondChange", "OnClose",
 ];
@@ -491,7 +498,8 @@ pub fn on_close_notify(reason: CloseReason, snapshot: &ExecutionSnapshot) -> Shi
 
 **Responsibilities & Constraints**
 - `round_trip_request`（`actor.rs:146`）は `Action::ShioriRequest` の唯一の実行点であり、**本番・mock 双方が必ず通る**（DD-IT-7）
-- 許可集合外の ID は **SHIORI へ送出しない**。`error!` を残し `ShioriOutcome::Failed` を返す（panic しない・宙吊りにしない）
+- 許可集合外の ID は **SHIORI へ送出しない**。`error!` を残し `ShioriOutcome::Failed(Internal)` を返す（panic しない・宙吊りにしない・DD-IT-11）
+- **保証境界（討議 #3 で明文化）**: 檻の主語は kanade＝「kanade shall 送出しない」（Req3.2）。`ShioriMsg` は pub（`msg.rs:65`）・`spawn_shiori_actor` は再エクスポート（`lib.rs:39`）ゆえ `Sender<ShioriMsg>` 保持者は構造上 `ShioriMsg::Request` を直接 post できるが、それは kanade の送出ではない（同じコードは `Shiori3Client` を直接叩くこともできる＝kanade 内の檻で原理的に防御不能な階級）。sender の単独保持は結線層の所有規律（`areka-ghost/src/runtime.rs:117`）が担い、型による封鎖はメッセージ境界差替（mock 統合ハーネスが `ShioriMsg` を受理・構築する検証様式）と両立しないため**採らない**
 
 **Dependencies**
 - Inbound: `drive`（Action バッチ実行・P0）
@@ -658,6 +666,14 @@ Status: <state>[,<state>]*
 17. **再生中の相関証跡**（6.2）: talk 中 Tick の `shiori_request` trace が NOTIFY・Ref3=`"0"`・status=`talking` を示す
 18. **判定の限定**（6.3）: 合否は「自発トークが発火すること」のみ。再生タイミングの正しさは `completed/areka-P0-cue-playback-duration`（サインオフ済み）に帰属し、判定に混ぜない
 
+### DD-IT-12 追加檻（boot 挨拶の正規追跡）
+
+- **Unit**: `to_baseware_version` の Value 経路 → `baseware_version` の status が `Some("talking")`（挨拶起動後スナップショット）／204 経路 → `None`
+- **Integration**: boot Value → `Steady{Some(挨拶)}` → 直後の Tick が NOTIFY・Ref3=`"0"`・`Status: talking`（11 と同型・talk の源が boot 由来）
+- **Integration**: 挨拶 TalkDone → slot 照合成立（`unknown_talk_done` ERROR が**出ない**ことを log_capture で檻に）→ 次 Tick から GET 再開（4.4 と同型）
+- **Integration**: 挨拶中 CloseRequest → `CloseTalkWait` 経由で OnClose（既存 close 檻の boot 由来 talk 版）。既存 boot 檻は期待値更新（Value 経路 `talk:None`→`Some`・204 経路不変＝`obsolete-vs-broken` 方針の「意味あるが動かぬ→更新」）
+- **実機**: 手順 4 の放置観測に先立ち、**起動直後 4〜5 秒**の `shiori_request` trace が NOTIFY・Ref3=`"0"`・status=`talking` を示す＝17 の証跡が挨拶窓で確定取得できる（ランダムトーク待ち不要）
+
 #### 実機サインオフ運用手順（研究 §9.7 の食い違いを本設計で一本化）
 
 1. i686 helper を先にビルドし、**`areka.exe` の隣へ上書きコピー**する（`cargo build/test --workspace` は **x64 版** `shiori-host32-helper.exe` を `target/debug/` へ置くため、放置すると 32bit `pasta.dll` を LoadLibrary できない）
@@ -684,12 +700,12 @@ Status: <state>[,<state>]*
 | **消費側 fail-open（Req2.6 ただし書き・DD-IT-9）**: pasta の抑制ゲートは `req.status == "talking"` の**完全一致**（`virtual_dispatcher.lua:98,123`）。正典どおりの複合値（例 `talking,balloon(0=0)`）では**発火せず**、talk 中に OnTalk が漏れる。実 SSP は実際に複合値を送っており、pasta 側が SSP に対して既に fail-open している | 将来 `balloon`／`choosing` 等が実導出された瞬間に talk 中の OnTalk 漏れが再発（症状＝トークが黙って捨てられ pasta の `next_talk_time` だけ進む） | **M1 は縮退により wire が厳密に `talking` 単独**＝ゲートが発火する（安全）。実値差替の解禁時は**複合値 wire での消費側互換検証を受け入れ条件に含める**（台帳 `areka-P0-status-execution-states` の Approach 2b が正本／`choosing` は `areka-P0-choice-select-events` が最初に踏む）。Revalidation Triggers に登記済み |
 | **正典 `/` と実 SSP `,` の乖離（DD-IT-9）**: ukadoc は `balloon(0=2/1=0)`、実 SSP 2.3.86 は `balloon(0=2,1=0)` | M1 は両状態とも非アクティブ＝**送出せず実害ゼロ**。将来の実導出時に消費側の期待と食い違う可能性 | 正典（`/`・自己無矛盾）を採用し、乖離を本書と research へ記録。実導出の所有者（台帳 spec）が実 SSP 互換の再検証時に決着させる |
 | **4 クレート横断の破壊的変更** | `areka-ghost`／`areka` のビルドが同時に落ちる | 機械的・コンパイラ捕捉。爆風は**3 軸**＝① `ShioriBackend` 実装 5 箇所（本番 1＋テスト 4）／② `Shiori3Client` 署名の呼出 8 箇所＋`ShioriRequest` リテラル 7 箇所／③ `ShioriFailure::Internal` の破壊 1 箇所（cfg(test) `describe`）＋`FailKind` 意図的追随。いずれも本書 File Structure Plan に列挙済み（旧版は②を計上しておらず、`cargo test --workspace`＝DoD Gate を落とす見落としだった）。roadmap W1 の「契約正本の先鋒」＝共有型の shaper が先行する順序で衝突最小（追記㉘/㉙） |
-| **`Status` 追加が pasta の talk スケジュールを変える** | 抑制ゲートが初めて閉じるため、talk 中は `check_talk` が `next_talk_time` を初期化・進行しない（`virtual_dispatcher.lua:120-128`）＝発火間隔の体感が変わり得る | 仕様どおりの挙動（SSP と同じ）。Req6.1 の判定は「発火するか」のみでタイミングを含めない（Req6.3）。ベースライン比較で回帰でないことを確認する |
+| **`Status` 追加が pasta の talk スケジュールを変える** | 抑制ゲートが初めて閉じるため、talk 中は `check_talk` が `next_talk_time` を初期化・進行しない（`virtual_dispatcher.lua:120-128`）＝発火間隔の体感が変わり得る。DD-IT-12 により挨拶中もゲートが閉じる＝初回ランダムトークは**挨拶終了後起算**（〜5 秒の後ろ倒し・SSP 同型） | 仕様どおりの挙動（SSP と同じ）。Req6.1 の判定は「発火するか」のみでタイミングを含めない（Req6.3）。ベースライン比較で回帰でないことを確認する |
 | **既存 `..` 分解による Status の黙殺** | `steady_test.rs:287-290` 等は `Get{references, ..}` で分解しており、フィールド追加後も**コンパイルは通るが Status を検査しない** | 期待値構築を `expected_call(events::on_second_change(..))` へ寄せる（Testing Strategy 15） |
 
 **Open Items（本 spec では決めない・所有者へ申し送り）**
 
 1. `build_request` の `SecurityLevel` 位置が ukadoc（「ID ヘッダより前に現れる」）および実 SSP 観測順と食い違う（既存逸脱）— 引受先候補＝`areka-P0-emo2-conformance-e2e`
 2. `doc/emo2-conformance-scope.md:18` の「Status ... 9種」は正典の 10 種に対し**過少**、かつ同行の「`Reference0..n` を emo2 が読む」は OnSecondChange については偽（pasta は Reference を読まない）— 文書の訂正は本 spec の実装スコープ外
-3. `unknown_talk_done talk_id=1`（起動挨拶の talk_id 追跡欠落）— kanade 領分だが本 spec の要件外（Out of Boundary）
+3. ~~`unknown_talk_done talk_id=1`~~ — **解消（DD-IT-12）**: 挨拶 talk の正規追跡により TalkDone が slot と照合される。旧記載「本 spec の要件外」は誤り（挨拶非追跡＝Req1.5/2.4 の wire 不実の根因）と討議 #2 で訂正
 4. **fault 終端の「沈黙のゾンビ」**（檻固有でなく**全 `Failed` 共通**の既存挙動・2026-07-17 設計ディスカッション #1 で実測登記）: kanade は `Unloading{Fault}` → `Stopped` → スレッド終了まで到達するが、プロセス終了は `main` の `app.run()`（窓メッセージループ・`main.rs:318`）が所有し、走行中に `kanade_handle` を監視する者がいない（join は `run()` 復帰後の `shutdown` のみ・`runtime.rs:195`）。結果、fault 後も**窓は画面に残り操作可能・SHIORI 活動のみ永久停止**。運用者が見るログは 3 行（ERROR `shiori_failed`＋INFO `unload_clean`＋INFO `close`）で、ticker が dead inbox 検出の INFO 1 行（`ticker.rs:228-236`）を最後に沈黙＝ほぼ正常終了に見える。kanade Req6「観測可能な状態遷移」のプロセスレベル欠落。引受先候補＝`areka-P0-emo2-conformance-e2e`（実機一周での異常終了挙動の検分）または ghost ライフサイクル増分 spec。本 spec は檻の応答を既存 fault 経路へ**合流させるのみ**で、この欠陥を吸収しない
