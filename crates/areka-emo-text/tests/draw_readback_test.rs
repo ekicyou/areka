@@ -49,8 +49,7 @@ use areka_parsers::balloon::{
     BalloonModel, Font, FontColor, Origin, ValidRect, WindowPosition, WordWrapPoint,
 };
 use areka_parsers::shell::{AppendTarget, DefRef, Element, ElementPath, Shell, Surface};
-use areka_sakura::contract::{ActorKey, CueCommand, TalkCue};
-use areka_sakura::TextSink;
+use areka_sakura::contract::{ActorKey, CueCommand, CueSink, TalkCue};
 use bevy_ecs::hierarchy::ChildOf;
 use bevy_ecs::name::Name;
 use bevy_ecs::prelude::World;
@@ -189,12 +188,23 @@ fn show_surface(presenter: &mut EmoPresenter, world: &mut World, target: TargetI
 
 // ── 共通補助 ─────────────────────────────────────────────────────────────────────────
 
-/// テスト用 cue。
+/// reveal 間隔（秒/グリフ）。reveal は配送 duration 由来（`interval = duration / N`）ゆえ、
+/// Text cue へ `N × REVEAL_INTERVAL` を焼き込むと interval=0.05 の per-glyph 進行を得る
+/// （旧 char_wait=0.05 既定と機能等価・進行観測は安全マージン付き時刻 0.11/0.16/… で行う）。
+const REVEAL_INTERVAL: f64 = 0.05;
+
+/// テスト用 cue。Text cue には配送 duration = `N × REVEAL_INTERVAL` を焼き込み
+/// （reveal interval=0.05）、他コマンドは瞬時（duration=0）。
 fn cue(actor: &str, at: f64, command: CueCommand) -> TalkCue {
+    let duration = match &command {
+        CueCommand::Text(t) => t.chars().count() as f64 * REVEAL_INTERVAL,
+        _ => 0.0,
+    };
     TalkCue {
         at,
         actor: ActorKey::from(actor),
         command,
+        duration,
     }
 }
 

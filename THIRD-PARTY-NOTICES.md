@@ -90,7 +90,7 @@ DEALINGS IN THE SOFTWARE.
 - backtrace 0.3.76
 - cfg-if 1.0.4
 - js-sys 0.3.103
-- rustc-demangle 0.1.28
+- rustc-demangle 0.1.27
 - wasm-bindgen-macro-support 0.2.126
 - wasm-bindgen-macro 0.2.126
 - wasm-bindgen-shared 0.2.126
@@ -164,9 +164,9 @@ DEALINGS IN THE SOFTWARE.
 ## MIT License
 
 対象 crate:
-- bitflags 2.13.1
+- bitflags 2.13.0
 - log 0.4.33
-- regex-automata 0.4.16
+- regex-automata 0.4.14
 - regex-syntax 0.8.11
 
 ```
@@ -202,7 +202,7 @@ DEALINGS IN THE SOFTWARE.
 ## MIT License
 
 対象 crate:
-- uuid 1.24.0
+- uuid 1.23.4
 
 ```
 Copyright (c) 2014 The Rust Project Developers
@@ -520,7 +520,7 @@ DEALINGS IN THE SOFTWARE.
 
 対象 crate:
 - rustc_version 0.4.1
-- thread_local 1.1.10
+- thread_local 1.1.9
 
 ```
 Copyright (c) 2016 The Rust Project Developers
@@ -1321,12 +1321,12 @@ DEALINGS IN THE SOFTWARE.
 - is_terminal_polyfill 1.70.2
 - once_cell_polyfill 1.70.2
 - serde_spanned 1.1.1
-- toml 1.1.3+spec-1.1.0
+- toml 1.1.2+spec-1.1.0
 - toml_datetime 0.7.5+spec-1.1.0
 - toml_datetime 1.1.1+spec-1.1.0
 - toml_edit 0.23.10+spec-1.0.0
 - toml_parser 1.1.2+spec-1.1.0
-- toml_writer 1.1.2+spec-1.1.0
+- toml_writer 1.1.1+spec-1.1.0
 
 ```
 Copyright (c) Individual contributors
@@ -1426,7 +1426,7 @@ DEALINGS IN THE SOFTWARE.
 
 対象 crate:
 - rand 0.10.2
-- rand 0.9.5
+- rand 0.9.4
 - rand_chacha 0.9.0
 - rand_core 0.9.5
 
@@ -1464,7 +1464,7 @@ DEALINGS IN THE SOFTWARE.
 ## MIT License
 
 対象 crate:
-- zerocopy 0.8.54
+- zerocopy 0.8.52
 
 ```
 Copyright 2023 The Fuchsia Authors
@@ -1881,20 +1881,20 @@ SOFTWARE.
 - proc-macro2 1.0.106
 - quote 1.0.46
 - rustix 1.1.4
-- rustversion 1.0.23
+- rustversion 1.0.22
 - semver 1.0.28
 - serde 1.0.228
 - serde_core 1.0.228
 - serde_derive 1.0.228
 - serde_json 1.0.150
-- syn 2.0.119
+- syn 2.0.118
 - thiserror-impl 2.0.18
 - thiserror 2.0.18
 - typeid 1.0.3
 - unicode-ident 1.0.24
 - wasip2 1.0.4+wasi-0.2.12
 - wit-bindgen 0.57.1
-- zmij 1.0.23
+- zmij 1.0.21
 
 ```
 Permission is hereby granted, free of charge, to any
@@ -1928,7 +1928,7 @@ DEALINGS IN THE SOFTWARE.
 
 対象 crate:
 - winnow 0.7.15
-- winnow 1.0.4
+- winnow 1.0.3
 
 ```
 Permission is hereby granted, free of charge, to any person obtaining
@@ -2014,7 +2014,7 @@ THE SOFTWARE.
 ## MIT License
 
 対象 crate:
-- spin 0.10.1
+- spin 0.10.0
 
 ```
 The MIT License (MIT)
@@ -2045,7 +2045,7 @@ SOFTWARE.
 
 対象 crate:
 - byteorder 1.5.0
-- memchr 2.8.3
+- memchr 2.8.2
 
 ```
 The MIT License (MIT)
@@ -2203,8 +2203,8 @@ SOFTWARE.
 ## MIT License
 
 対象 crate:
-- crossbeam-queue 0.3.13
-- crossbeam-utils 0.8.22
+- crossbeam-queue 0.3.12
+- crossbeam-utils 0.8.21
 
 ```
 The MIT License (MIT)

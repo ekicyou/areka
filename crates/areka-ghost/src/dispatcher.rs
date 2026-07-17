@@ -20,9 +20,8 @@ use std::sync::mpsc::Sender;
 
 use areka_actor::{ActorHandle, reply_channel, run_inbox, spawn_actor};
 use areka_kanade::{KanadeMsg, MonotonicMs};
-use areka_sakura::contract::{SakuraMsg, StartTalk, TalkDone, TalkHandle, TalkId};
+use areka_sakura::contract::{CueSink, SakuraMsg, StartTalk, TalkDone, TalkHandle, TalkId};
 use areka_sakura::drive::spawn_talk;
-use areka_sakura::sink::{SurfaceSink, TextSink};
 
 /// dispatcher の inbox（1 アクター 1 enum・areka-actor inbox 規約）。
 pub enum DispatcherMsg {
@@ -79,8 +78,8 @@ struct DispatcherState<S, T> {
 
 impl<S, T> DispatcherState<S, T>
 where
-    S: SurfaceSink + Clone + Send + 'static,
-    T: TextSink + Clone + Send + 'static,
+    S: CueSink + Clone + Send + 'static,
+    T: CueSink + Clone + Send + 'static,
 {
     fn handle(&mut self, msg: DispatcherMsg) -> ControlFlow<()> {
         match msg {
@@ -195,8 +194,8 @@ pub fn spawn_dispatcher<S, T>(
     text_sink: T,
 ) -> (Sender<DispatcherMsg>, ActorHandle)
 where
-    S: SurfaceSink + Clone + Send + 'static,
-    T: TextSink + Clone + Send + 'static,
+    S: CueSink + Clone + Send + 'static,
+    T: CueSink + Clone + Send + 'static,
 {
     let (self_tx_reply, self_tx_recv) = reply_channel::<Sender<DispatcherMsg>>();
 
@@ -265,16 +264,9 @@ mod tests {
         }
     }
 
-    impl SurfaceSink for RecordingSink {
-        fn emit(&mut self, cue: TalkCue) {
-            self.records
-                .lock()
-                .expect("records mutex poisoned")
-                .push(cue);
-        }
-    }
-
-    impl TextSink for RecordingSink {
+    // broadcast: 単一の `CueSink` として登録され、全 cue を受ける（surface/text スロットの別なく
+    // 両スロットが同一の全 cue を受信する）。演者側 relevance が action を選別する（本 sink は記録のみ）。
+    impl CueSink for RecordingSink {
         fn emit(&mut self, cue: TalkCue) {
             self.records
                 .lock()
@@ -290,13 +282,7 @@ mod tests {
         tx: mpsc::Sender<TalkCue>,
     }
 
-    impl SurfaceSink for ChannelSink {
-        fn emit(&mut self, cue: TalkCue) {
-            let _ = self.tx.send(cue);
-        }
-    }
-
-    impl TextSink for ChannelSink {
+    impl CueSink for ChannelSink {
         fn emit(&mut self, cue: TalkCue) {
             let _ = self.tx.send(cue);
         }
@@ -331,15 +317,16 @@ mod tests {
         }))
         .expect("send Start(B)");
 
-        // B を完走させる（\w[2]=100ms・base_now は最初の Tick の now で確定）。
+        // B を完走させる（D 焼き込み後 B/B_END の再生完了＋\w[2] を含む占有 horizon=0.40 を跨ぐ
+        // elapsed 0.5・base_now は最初の Tick の now で確定）。
         tx.send(DispatcherMsg::Tick {
             now: MonotonicMs(1_000),
         })
         .expect("send Tick(base)");
         tx.send(DispatcherMsg::Tick {
-            now: MonotonicMs(1_100),
+            now: MonotonicMs(1_500),
         })
-        .expect("send Tick(base+100ms)");
+        .expect("send Tick(base+500ms)");
 
         // kanade は B の TalkDone のみを受け取る（A の stale Interrupted は転送されない）。
         let done = kanade_rx
@@ -406,15 +393,16 @@ mod tests {
         }))
         .expect("send manual stale Done(A)");
 
-        // B の slot は乱されず、B を完走させれば正しく kanade へ転送される。
+        // B の slot は乱されず、B を完走させれば正しく kanade へ転送される
+        // （D 焼き込み後の占有 horizon=0.40 を跨ぐ elapsed 0.5）。
         tx.send(DispatcherMsg::Tick {
             now: MonotonicMs(2_000),
         })
         .expect("send Tick(base)");
         tx.send(DispatcherMsg::Tick {
-            now: MonotonicMs(2_100),
+            now: MonotonicMs(2_500),
         })
-        .expect("send Tick(base+100ms)");
+        .expect("send Tick(base+500ms)");
 
         let done = kanade_rx
             .recv_timeout(Duration::from_secs(5))
@@ -493,50 +481,66 @@ mod tests {
 
         let (tx, handle) = spawn_dispatcher(kanade_tx, surface, text);
 
-        // \w[4]=200ms・\w[6]=300ms(累積500ms)。
+        // \w[4]=200ms・\w[6]=300ms。D 焼き込み後の発火（broadcast ゆえ text sink も全 cue を受ける）:
+        //   ClearAll@0.0・Emote{5}@0.0・FIRST@0.0 / Wait@0.25 / SECOND@0.45（FIRST の D=0.25 + \w[4]=0.20）/
+        //   Wait@0.75 / THIRD@1.05（SECOND の D=0.30 + \w[6]=0.30）。占有 horizon=1.30（THIRD 再生完了）。
         tx.send(DispatcherMsg::Start(StartTalk {
             talk_id: TalkId(31),
             script: r"\s[5]FIRST\w[4]SECOND\w[6]THIRD\e".to_string(),
         }))
         .expect("send Start");
 
-        // 初回 tick: elapsed=0.0 起点 → FIRST のみ due。
+        // broadcast: text sink には Emote/Wait 等の担当外 cue も届く。本テストは Text 発火の
+        // 順序・保留のみを観測するため、次の目的 Text 発火まで担当外 cue を読み飛ばす barrier ヘルパを使う。
+        let recv_text = |want: &str| {
+            loop {
+                let cue = text_rx
+                    .recv_timeout(Duration::from_secs(5))
+                    .expect("due な Text 発火は届くこと");
+                if cue.command == CueCommand::Text(want.into()) {
+                    return cue;
+                }
+            }
+        };
+
+        // 初回 tick: elapsed=0.0 起点 → ClearAll@0.0・Emote@0.0・FIRST@0.0 のみ due（SECOND/THIRD は未 due）。
         tx.send(DispatcherMsg::Tick {
             now: MonotonicMs(5_000),
         })
         .expect("send first Tick (anchors base_now)");
-        let first = text_rx
-            .recv_timeout(Duration::from_secs(5))
-            .expect("FIRST should fire at elapsed 0.0");
+        let first = recv_text("FIRST");
         assert_eq!(first.command, CueCommand::Text("FIRST".into()));
+        // FIRST まで drain した時点で Wait@0.25/SECOND@0.45/THIRD は未 due（保留の決定的証明）。
         assert!(
             text_rx.try_recv().is_err(),
             "SECOND/THIRD must not fire before their elapsed time is reached"
         );
 
-        // 2 回目 tick: now - base = 200ms → elapsed=0.2 → SECOND due（THIRD はまだ）。
-        tx.send(DispatcherMsg::Tick {
-            now: MonotonicMs(5_200),
-        })
-        .expect("send second Tick (elapsed 0.2)");
-        let second = text_rx
-            .recv_timeout(Duration::from_secs(5))
-            .expect("SECOND should fire once elapsed reaches 0.2");
-        assert_eq!(second.command, CueCommand::Text("SECOND".into()));
-        assert!(
-            text_rx.try_recv().is_err(),
-            "THIRD must not fire before elapsed 0.5 is reached"
-        );
-
-        // 3 回目 tick: now - base = 500ms → elapsed=0.5 → THIRD due・自然終端。
+        // 2 回目 tick: now - base = 500ms → elapsed=0.5 → Wait@0.25・SECOND@0.45 due（THIRD@1.05 はまだ）。
         tx.send(DispatcherMsg::Tick {
             now: MonotonicMs(5_500),
         })
-        .expect("send third Tick (elapsed 0.5)");
-        let third = text_rx
-            .recv_timeout(Duration::from_secs(5))
-            .expect("THIRD should fire once elapsed reaches 0.5");
+        .expect("send second Tick (elapsed 0.5)");
+        let second = recv_text("SECOND");
+        assert_eq!(second.command, CueCommand::Text("SECOND".into()));
+        assert!(
+            text_rx.try_recv().is_err(),
+            "THIRD must not fire before elapsed 1.05 is reached"
+        );
+
+        // 3 回目 tick: now - base = 1100ms → elapsed=1.1 → Wait@0.75・THIRD@1.05 due。
+        tx.send(DispatcherMsg::Tick {
+            now: MonotonicMs(6_100),
+        })
+        .expect("send third Tick (elapsed 1.1)");
+        let third = recv_text("THIRD");
         assert_eq!(third.command, CueCommand::Text("THIRD".into()));
+
+        // 4 回目 tick: elapsed=1.4 → 占有 horizon=1.30 到達で自然終端（末尾テキストの D を落とさない）。
+        tx.send(DispatcherMsg::Tick {
+            now: MonotonicMs(6_400),
+        })
+        .expect("send fourth Tick (elapsed 1.4 ≥ horizon 1.30)");
 
         let done = kanade_rx
             .recv_timeout(Duration::from_secs(5))
@@ -584,10 +588,11 @@ mod tests {
             now: MonotonicMs(9_000),
         })
         .expect("send Tick(base)");
+        // D 焼き込み後 C の占有 horizon=0.60（world 再生完了）を跨ぐ elapsed 0.7。
         tx.send(DispatcherMsg::Tick {
-            now: MonotonicMs(9_200),
+            now: MonotonicMs(9_700),
         })
-        .expect("send Tick(base+200ms)");
+        .expect("send Tick(base+700ms)");
 
         let done_c = kanade_rx
             .recv_timeout(Duration::from_secs(5))
@@ -607,10 +612,15 @@ mod tests {
             script: r"\s[8]again\e".to_string(),
         }))
         .expect("send Start(D)");
+        // D（`again`＝5 char・D=0.25）の占有 horizon=0.25 を跨ぐため base(10_000)＋elapsed 0.3 の 2 tick。
         tx.send(DispatcherMsg::Tick {
             now: MonotonicMs(10_000),
         })
-        .expect("send Tick for D");
+        .expect("send Tick(base) for D");
+        tx.send(DispatcherMsg::Tick {
+            now: MonotonicMs(10_300),
+        })
+        .expect("send Tick(base+300ms) for D");
 
         let done_d = kanade_rx
             .recv_timeout(Duration::from_secs(5))
@@ -627,15 +637,22 @@ mod tests {
             "exactly two TalkDone (C then D) — no stray duplicates or stale entries"
         );
 
-        // 両 talk の surface 発火（scope 9 → C・scope 8 → D）が記録されていること。
+        // broadcast: surface sink には両 talk の全 cue（ClearAll/Text/Wait 含む）が届くため、
+        // Emote 発火だけを抽出して「C=scope9・D=scope8 が 1 件ずつ」を確認する（partition は演者側 relevance の責務）。
         let surface = surface_records.lock().expect("records mutex poisoned");
+        let emotes: Vec<&CueCommand> = surface
+            .iter()
+            .map(|c| &c.command)
+            .filter(|c| matches!(c, CueCommand::Emote { .. }))
+            .collect();
         assert_eq!(
-            surface.len(),
-            2,
-            "both C and D produced exactly one surface cue each"
+            emotes,
+            vec![
+                &CueCommand::Emote { key: "9".into() },
+                &CueCommand::Emote { key: "8".into() },
+            ],
+            "broadcast 経由でも Emote 発火は C(scope9)→D(scope8) の 1 件ずつ"
         );
-        assert_eq!(surface[0].command, CueCommand::Emote { key: "9".into() });
-        assert_eq!(surface[1].command, CueCommand::Emote { key: "8".into() });
 
         tx.send(DispatcherMsg::Close).expect("send Close");
         run_bounded(

@@ -38,7 +38,6 @@ use areka_emo_text::state::TextLayerConfig;
 use areka_ghost::{GhostBootOptions, ShioriWiring, TickerMode};
 use areka_parsers::charset::DefaultEncoding;
 use areka_parsers::package::MountError;
-use areka_sakura::SurfaceSink;
 use areka_seriko::{SerikoSink, SurfaceResolver, spawn_seriko};
 use tracing::{error, info, warn};
 use wintf::WinApp;
@@ -173,16 +172,18 @@ fn classify_wiring_error(err: &BootWiringError) {
     }
 }
 
-/// `spawn_seriko` が返す [`SerikoSink`] が boot の型境界（`SurfaceSink + Clone + Send + 'static`）を
-/// 満たすことをコンパイル時に固定する（upstream `areka-seriko` の `Clone` 契約の回帰檻）。
+/// `spawn_seriko` が返す [`SerikoSink`] が boot の型境界（単一の出力契約
+/// `dola::cue::CueSink + Clone + Send + 'static`）を満たすことをコンパイル時に固定する
+/// （upstream `areka-seriko` の `Clone`／`CueSink` 契約の回帰檻）。
 ///
-/// `areka_ghost::boot` は `S: SurfaceSink + Clone + Send + 'static` を要求し、dispatcher は talk ごとに
-/// sink を clone する（`areka-ghost` dispatcher.rs — 構造的に `Clone` 必須）。[`SerikoSink`] は upstream
-/// `areka-seriko` で `#[derive(Clone)]` 済み（内側 `mpsc::Sender<SerikoMsg>` は常に `Clone`・全 clone は
-/// 単一 seriko inbox への送信端で配送意味は同一）ゆえ、`spawn_seriko` の戻り値を直接 boot へ渡せる。
-/// 万一この upstream `Clone` 導出が外れると本アサーションがコンパイルを止め、境界破れを早期検出する。
+/// `areka_ghost::boot` は `S: dola::cue::CueSink + Clone + Send + 'static` を要求し、dispatcher は talk
+/// ごとに sink を clone する（`areka-ghost` dispatcher.rs — 構造的に `Clone` 必須）。[`SerikoSink`] は
+/// upstream `areka-seriko` で `dola::cue::CueSink` を実装し `#[derive(Clone)]` 済み（内側
+/// `mpsc::Sender<SerikoMsg>` は常に `Clone`・全 clone は単一 seriko inbox への送信端で配送意味は同一）
+/// ゆえ、`spawn_seriko` の戻り値を直接 boot へ渡せる。万一この upstream 契約が外れると本アサーションが
+/// コンパイルを止め、境界破れを早期検出する。
 const _: fn() = || {
-    fn assert_boot_surface_bounds<S: SurfaceSink + Clone + Send + 'static>() {}
+    fn assert_boot_surface_bounds<S: dola::cue::CueSink + Clone + Send + 'static>() {}
     assert_boot_surface_bounds::<SerikoSink>();
 };
 
@@ -273,9 +274,9 @@ pub fn wire_emo2_boot(
         resolver,
         static_binds,
     } = assets;
-    // boot は S: SurfaceSink + Clone を要求する。SerikoSink は upstream `areka-seriko` で
-    // `#[derive(Clone)]` 済み（内側 mpsc::Sender は常に Clone・全 clone は単一 inbox 送信端で配送同一）
-    // ゆえ spawn_seriko の戻り値を直接 surface_sink として boot へ渡す（Arc<Mutex<>> 共有 shim は不要）。
+    // boot は S: dola::cue::CueSink + Clone を要求する。SerikoSink は upstream `areka-seriko` で
+    // `CueSink` を実装し `#[derive(Clone)]` 済み（内側 mpsc::Sender は常に Clone・全 clone は単一 inbox
+    // 送信端で配送同一）ゆえ spawn_seriko の戻り値を直接 surface_sink として boot へ渡す（共有 shim は不要）。
     let (surface_sink, seriko_handle) = spawn_seriko(resolver, static_binds.clone(), bridge);
     let wiring_assets = BootAssets {
         shells,

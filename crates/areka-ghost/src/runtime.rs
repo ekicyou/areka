@@ -13,7 +13,7 @@ use areka_actor::ActorHandle;
 use areka_kanade::{KanadeMsg, ShioriBackend, spawn_kanade, spawn_shiori_actor};
 use areka_parsers::charset::DefaultEncoding;
 use areka_parsers::package::{MountError, MountModel, resolve};
-use areka_sakura::sink::{SurfaceSink, TextSink};
+use areka_sakura::contract::CueSink;
 
 use crate::config::resolve_kanade_config;
 use crate::dispatcher::{DispatcherMsg, spawn_dispatcher};
@@ -300,8 +300,8 @@ impl GhostRuntime {
 /// 不要——何も起動していない）。
 pub fn boot<S, T>(options: GhostBootOptions<S, T>) -> Result<GhostRuntime, GhostBootError>
 where
-    S: SurfaceSink + Clone + Send + 'static,
-    T: TextSink + Clone + Send + 'static,
+    S: CueSink + Clone + Send + 'static,
+    T: CueSink + Clone + Send + 'static,
 {
     // 1. マウント解決（失敗は即座に打ち切り・要件 2.1/2.5）。
     let mount = match resolve(&options.ghost_root, options.default_encoding) {
@@ -489,11 +489,7 @@ mod tests {
     #[derive(Clone)]
     struct NoopSink;
 
-    impl SurfaceSink for NoopSink {
-        fn emit(&mut self, _cue: TalkCue) {}
-    }
-
-    impl TextSink for NoopSink {
+    impl CueSink for NoopSink {
         fn emit(&mut self, _cue: TalkCue) {}
     }
 

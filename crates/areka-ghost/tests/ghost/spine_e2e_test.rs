@@ -2,8 +2,8 @@
 //!
 //! 本ファイルは 2 つのテスト専用型を提供する（task 4.1 の成果物）:
 //! - [`ScriptedShioriBackend`] — `areka_kanade::ShioriBackend` を実装する台本 fake。
-//! - [`RecordingSink`] — `areka_sakura::sink::{SurfaceSink, TextSink}` を実装する、
-//!   `Clone` 可能な記録 sink。
+//! - [`RecordingSink`] — 演者非依存の単一出力契約 `areka_sakura::contract::CueSink` を実装する、
+//!   `Clone` 可能な記録 sink（broadcast で全 cue を受ける）。
 //!
 //! 後続タスク（4.2〜4.7）はこのファイルへ boot〜close の各シナリオ（S1〜S6）の
 //! `#[test]` を追加していく。本タスク（4.1）はその土台となる 2 型自体の構築・検証
@@ -13,8 +13,7 @@ use std::collections::{HashMap, VecDeque};
 use std::sync::{Arc, Mutex};
 
 use areka_kanade::ShioriBackend;
-use areka_sakura::contract::{ActorKey, CueCommand, TalkCue};
-use areka_sakura::sink::{SurfaceSink, TextSink};
+use areka_sakura::contract::{ActorKey, CueCommand, CueSink, TalkCue};
 use shiori_host32_host::{ExitKind, HelperStatus, RequestError, ShutdownError};
 
 // ===================== ScriptedShioriBackend =====================
@@ -215,14 +214,13 @@ impl ScriptedShioriHandle {
 
 // ===================== RecordingSink =====================
 
-/// テスト専用の `Clone` 可能な記録 sink（`SurfaceSink`/`TextSink` 両方を実装する）。
+/// テスト専用の `Clone` 可能な記録 sink（演者非依存の単一出力契約 [`CueSink`] を実装する）。
 ///
 /// sakura の `MockSink`（`tests/ghost/` から見て他クレートの凍結面）とは同型だが
-/// `Clone` を実装しない。dispatcher の per-talk 注入（`S: SurfaceSink + Clone`/
-/// `T: TextSink + Clone`）を満たすため、`tests/ghost/` 側で定義し直す（sakura の
-/// `sink.rs` には手を入れない・design.md 「spine e2e」参照）。`dispatcher.rs` の
-/// テストローカル `RecordingSink` と同じ形——ここでは `tests/ghost/` 配下の複数
-/// テストファイル（4.2〜4.7）が 1 つの定義を共有できるようにする。
+/// `Clone` を実装しない。dispatcher の per-talk 注入（`S: CueSink + Clone`/`T: CueSink + Clone`）
+/// を満たすため、`tests/ghost/` 側で定義し直す（sakura の `sink.rs` には手を入れない・
+/// design.md 「spine e2e」参照）。broadcast ゆえ登録された全 sink が全 cue を受ける
+/// （surface/text スロットの別なく同一の全 cue が届く・演者側 relevance が action を選別する）。
 #[derive(Clone)]
 pub struct RecordingSink {
     records: Arc<Mutex<Vec<TalkCue>>>,
@@ -249,16 +247,7 @@ impl Default for RecordingSink {
     }
 }
 
-impl SurfaceSink for RecordingSink {
-    fn emit(&mut self, cue: TalkCue) {
-        self.records
-            .lock()
-            .expect("records mutex poisoned")
-            .push(cue);
-    }
-}
-
-impl TextSink for RecordingSink {
+impl CueSink for RecordingSink {
     fn emit(&mut self, cue: TalkCue) {
         self.records
             .lock()
@@ -379,33 +368,197 @@ mod tests {
         );
     }
 
-    /// シナリオ6: `RecordingSink` の clone 共有蓄積。2 つの clone それぞれから
-    /// `SurfaceSink`/`TextSink` 経由で 1 件ずつ emit すると、同一の共有蓄積へ FIFO で
-    /// 積まれること（dispatcher の per-talk 注入で clone を渡す使い方を裏付ける）。
+    /// シナリオ6: `RecordingSink` の clone 共有蓄積。2 つの clone それぞれから単一出力契約
+    /// [`CueSink`] 経由で 1 件ずつ emit すると、同一の共有蓄積へ FIFO で積まれること
+    /// （dispatcher が broadcast で全 sink（各 talk へ clone した surface/text スロット）へ
+    /// 同一 cue を配る使い方を裏付ける）。
     #[test]
-    fn recording_sink_clones_share_storage_across_both_sink_traits_in_fifo_order() {
+    fn recording_sink_clones_share_storage_in_fifo_order() {
         let sink = RecordingSink::new();
         let records = sink.records();
 
-        let mut surface_clone = sink.clone();
-        let mut text_clone = sink.clone();
+        let mut clone_a = sink.clone();
+        let mut clone_b = sink.clone();
 
-        let surface_cue = TalkCue {
+        let cue_a = TalkCue {
             at: 0.0,
             actor: ActorKey::from("0"),
-            command: CueCommand::Text("via surface".to_string()),
+            command: CueCommand::Text("via clone a".to_string()),
+            duration: 0.0,
         };
-        let text_cue = TalkCue {
+        let cue_b = TalkCue {
             at: 1.0,
             actor: ActorKey::from("0"),
-            command: CueCommand::Text("via text".to_string()),
+            command: CueCommand::Text("via clone b".to_string()),
+            duration: 0.0,
         };
 
-        SurfaceSink::emit(&mut surface_clone, surface_cue.clone());
-        TextSink::emit(&mut text_clone, text_cue.clone());
+        CueSink::emit(&mut clone_a, cue_a.clone());
+        CueSink::emit(&mut clone_b, cue_b.clone());
 
         let recorded = records.lock().expect("records mutex poisoned");
-        assert_eq!(&*recorded, &vec![surface_cue, text_cue]);
+        assert_eq!(&*recorded, &vec![cue_a, cue_b]);
+    }
+}
+
+// ===================== broadcast per-sink relevance partition（task 8.1） =====================
+//
+// design.md「Testing Strategy → Integration Tests → honor 契約 ③（relevance partition）」・
+// Revalidation Trigger「`cue_target_of` を relevance の単一権威とし、各表現者の action 判定が
+// `cue_target_of` の分類と一致すること（partition）を再確認する」。
+//
+// broadcast（D4）では全 cue が登録された全 sink（seriko/emo-text）へ配られる。どの action を
+// 演じるかは演者側 relevance（`cue_target_of` が単一権威）が決めるため、**変異 variant ごとに
+// action する演者は高々一つ**でなければならない（二重 action / 暗黙ドロップの発散を型で塞ぐ）。
+// 本モジュールは `CueCommand` の全 10 variant について、`cue_target_of` の分類が
+// 「Shell→seriko だけが action／Balloon→emo-text だけが action／None→誰も action しない」の
+// partition になっていることを純関数として固定する（GPU 不要・決定論）。
+#[cfg(test)]
+mod broadcast_relevance_partition {
+    use areka_sakura::contract::{cue_target_of, CueCommand, CueTarget};
+
+    /// broadcast された cue に対して action する演者の同定（分類が単一権威 `cue_target_of`）。
+    #[derive(Debug, PartialEq, Eq, Clone, Copy)]
+    enum Performer {
+        /// seriko⑤（`cue_target_of == Shell` を action ゲートにする）。
+        Seriko,
+        /// emo-text⑥（`cue_target_of == Balloon` を action ゲートにする）。
+        EmoText,
+    }
+
+    /// `cue_target_of` の分類（`Option<CueTarget>`）から**action する演者**を導く（高々一つ）。
+    ///
+    /// `Option<CueTarget>` が単一値ゆえ「variant あたり action する演者は高々一つ」は構造的に
+    /// 保証される——本関数はその分類を演者同定へ写す唯一の権威。`CueTarget` を exhaustive に
+    /// 網羅し（catch-all なし）、将来 `CueTarget` variant が増えたらコンパイラが再検討を強制する。
+    fn acting_performer(target: Option<CueTarget>) -> Option<Performer> {
+        match target {
+            Some(CueTarget::Shell) => Some(Performer::Seriko),
+            Some(CueTarget::Balloon) => Some(Performer::EmoText),
+            None => None, // Wait（純粋な待ち）・Custom（分類不能）＝どの演者も action しない。
+        }
+    }
+
+    /// 全 10 `CueCommand` variant を列挙する（catch-all なし・dola が variant を追加したら
+    /// コンパイラが本網羅を強制的に再検討させる＝partition の漏れを型で塞ぐ）。
+    fn every_cue_command() -> Vec<CueCommand> {
+        // exhaustive の型檻: variant を 1 つでも落としたらここが不完全になるため、
+        // `match` で全 variant を触れてから値を積む（新 variant 追加時にコンパイル停止）。
+        let sample = CueCommand::Wait;
+        match &sample {
+            CueCommand::Text(_)
+            | CueCommand::Clear
+            | CueCommand::Emote { .. }
+            | CueCommand::Choice { .. }
+            | CueCommand::EntityRef(_)
+            | CueCommand::Custom { .. }
+            | CueCommand::NewLine { .. }
+            | CueCommand::BalloonSurface { .. }
+            | CueCommand::Wait
+            | CueCommand::ClearAll => {}
+        }
+        vec![
+            CueCommand::Text("hi".into()),
+            CueCommand::Clear,
+            CueCommand::Emote { key: "0".into() },
+            CueCommand::Choice {
+                id: "yes".into(),
+                text: "はい".into(),
+            },
+            CueCommand::EntityRef(42),
+            CueCommand::Custom {
+                command: "fade".into(),
+                params: dola::DynamicValue::Null,
+            },
+            CueCommand::NewLine { ratio: 1.0 },
+            CueCommand::BalloonSurface { key: "2".into() },
+            CueCommand::Wait,
+            CueCommand::ClearAll,
+        ]
+    }
+
+    /// **partition 檻**: 全 variant について、action する演者が高々一つであり、かつ
+    /// `cue_target_of` の分類（Shell→seriko／Balloon→emo-text／None→誰も action しない）と
+    /// **一致**する（各演者の action ゲートが `cue_target_of` の単一権威に従う・D4/R2.4）。
+    #[test]
+    fn every_variant_has_at_most_one_acting_performer_consistent_with_cue_target_of() {
+        // 各 variant の期待 action 演者（表示系＝Shell→seriko／文字系＝Balloon→emo-text／
+        // action なし＝None）。この表は `cue_target_of`（dola 単一権威）と 1:1 で対応する。
+        let expected: &[(CueCommand, Option<Performer>)] = &[
+            (CueCommand::Emote { key: "0".into() }, Some(Performer::Seriko)),
+            (CueCommand::EntityRef(42), Some(Performer::Seriko)),
+            (
+                CueCommand::BalloonSurface { key: "2".into() },
+                Some(Performer::Seriko),
+            ),
+            (CueCommand::Text("hi".into()), Some(Performer::EmoText)),
+            (CueCommand::NewLine { ratio: 1.0 }, Some(Performer::EmoText)),
+            (CueCommand::Clear, Some(Performer::EmoText)),
+            (CueCommand::ClearAll, Some(Performer::EmoText)),
+            (
+                CueCommand::Choice {
+                    id: "y".into(),
+                    text: "はい".into(),
+                },
+                Some(Performer::EmoText),
+            ),
+            (
+                CueCommand::Custom {
+                    command: "fade".into(),
+                    params: dola::DynamicValue::Null,
+                },
+                None,
+            ),
+            (CueCommand::Wait, None),
+        ];
+
+        // (a) 期待表の各 variant が `cue_target_of` の分類と一致する（action 演者は高々一つ）。
+        for (command, want) in expected {
+            let got = acting_performer(cue_target_of(command));
+            assert_eq!(
+                &got, want,
+                "variant {command:?} の action 演者は cue_target_of の分類と一致するはず（partition・単一権威）"
+            );
+        }
+
+        // (b) 全 10 variant が期待表に過不足なく現れる（漏れ・重複がない＝partition が全域）。
+        assert_eq!(
+            expected.len(),
+            every_cue_command().len(),
+            "期待表は全 10 CueCommand variant を過不足なく網羅する（partition の全域性）"
+        );
+    }
+
+    /// **acceptance 補完檻**: 表情切替（`Emote`）は seriko（Shell）だけが action し、
+    /// テキスト演者（emo-text＝Balloon）は action しない（broadcast で受信はするが動作しない・
+    /// duration のみ honor する・R8.4/R2.3）。`ClearAll`／`Wait` の対比も併せて固定する。
+    #[test]
+    fn emote_acts_only_on_seriko_text_performer_receives_but_does_not_act() {
+        let emote = CueCommand::Emote { key: "0".into() };
+        assert_eq!(
+            acting_performer(cue_target_of(&emote)),
+            Some(Performer::Seriko),
+            "Emote（表情切替）は seriko だけが action する（Shell 分類）"
+        );
+        assert_ne!(
+            acting_performer(cue_target_of(&emote)),
+            Some(Performer::EmoText),
+            "テキスト演者（emo-text）は Emote を broadcast 受信するが action しない（duration のみ honor）"
+        );
+
+        // #6 全消去はテキスト演者だけが action（seriko は受信のみ）。
+        assert_eq!(
+            acting_performer(cue_target_of(&CueCommand::ClearAll)),
+            Some(Performer::EmoText),
+            "ClearAll は emo-text だけが action する（Balloon 分類・#6）"
+        );
+
+        // 純粋な待ちはどの演者も action しない（duration だけ honor）。
+        assert_eq!(
+            acting_performer(cue_target_of(&CueCommand::Wait)),
+            None,
+            "Wait はどの演者も action しない（action なし・duration のみ）"
+        );
     }
 }
 
@@ -591,45 +744,49 @@ mod s1_boot_success {
             "起動系列（OnInitialize→OnFirstBoot→OnBoot→basewareversion）が正典順序で発火していない"
         );
 
-        // ---- (b)(c) RecordingSink の発火列（at 昇順・内容一致）----
+        // ---- (b)(c) RecordingSink の発火列（broadcast・at 昇順・内容一致）----
+        // broadcast ゆえ surface/text の両 sink が**同一の全 cue** を受ける（中央振り分け廃止・
+        // どの action を演じるかは演者側 relevance の責務）。`\s[0]hello\e` の期待 broadcast 列:
+        //   ClearAll@0（#6 全消去・task 5.2 冒頭前置）/ Emote{0}@0（\s[0]）/ Text(hello)@0
+        //   （後続 cue が無く先頭群に留まる）。発火は drive の on_tick 内で同期 broadcast されるが、
+        // probe loop の break 直後に部分列を読む競合を避けるため、両 sink が 3 件に達するまで
+        // 有界スピンで整定を待つ（sleep 不使用・yield のみ）。
+        let expected = vec![
+            CueCommand::ClearAll,
+            CueCommand::Emote {
+                key: "0".to_string(),
+            },
+            CueCommand::Text("hello".to_string()),
+        ];
+        for _ in 0..1_000_000u32 {
+            let s = surface_records.lock().expect("records mutex poisoned").len();
+            let t = text_records.lock().expect("records mutex poisoned").len();
+            if s >= expected.len() && t >= expected.len() {
+                break;
+            }
+            std::thread::yield_now();
+        }
         let surface = surface_records
             .lock()
             .expect("records mutex poisoned")
             .clone();
-        assert_eq!(
-            surface.len(),
-            1,
-            "surface 発火は \\s[0] 由来の Emote 1 件のみのはず: {surface:?}"
-        );
-        assert_eq!(surface[0].at, 0.0);
-        assert_eq!(surface[0].actor, ActorKey::from("0"));
-        assert_eq!(
-            surface[0].command,
-            CueCommand::Emote {
-                key: "0".to_string()
-            }
-        );
-
         let text = text_records.lock().expect("records mutex poisoned").clone();
-        assert_eq!(
-            text.len(),
-            1,
-            "text 発火は \"hello\" 由来の Text 1 件のみのはず: {text:?}"
-        );
-        assert_eq!(text[0].at, 0.0);
-        assert_eq!(text[0].actor, ActorKey::from("0"));
-        assert_eq!(text[0].command, CueCommand::Text("hello".to_string()));
-
-        // at 昇順（両 sink とも単調非減少であること・design「発火列」節）。
-        for pair in surface.windows(2) {
-            assert!(
-                pair[0].at <= pair[1].at,
-                "surface 発火列は at 昇順であるべき"
+        let assert_broadcast = |cues: &[TalkCue], who: &str| {
+            let commands: Vec<CueCommand> = cues.iter().map(|c| c.command.clone()).collect();
+            assert_eq!(
+                commands, expected,
+                "{who} sink は broadcast で ClearAll/Emote/hello を受ける（partition は演者側 relevance）: {cues:?}"
             );
-        }
-        for pair in text.windows(2) {
-            assert!(pair[0].at <= pair[1].at, "text 発火列は at 昇順であるべき");
-        }
+            for cue in cues {
+                assert_eq!(cue.at, 0.0, "{who} 発火は全て at=0.0");
+                assert_eq!(cue.actor, ActorKey::from("0"), "{who} 発火 actor は 既定 scope 0");
+            }
+            for pair in cues.windows(2) {
+                assert!(pair[0].at <= pair[1].at, "{who} 発火列は at 昇順であるべき");
+            }
+        };
+        assert_broadcast(&surface, "surface");
+        assert_broadcast(&text, "text");
 
         // ---- 後片付け兼 (c) の間接証跡 ----
         // TalkDone{Ended} が dispatcher→kanade へ転送済みであること（dispatcher の slot が

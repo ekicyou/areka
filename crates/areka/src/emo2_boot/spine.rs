@@ -936,7 +936,8 @@ fn text_surface_opaque(harness: &SpineHarness, actor: &ActorKey) -> usize {
 /// # 二段配送で単一 talk 内のリビール→Clear を分離（talk_clock 既知制約に整合）
 ///
 /// emo-text の cue は**到着即時適用**（state.rs `apply_cue`）: `Text` は追記＋per-glyph リビール時刻
-/// `r_i=max(r_{i-1}+char_wait, at)` 確定、`Clear` は**配送即時にバッファ全消去**（時刻ゲートではない）。
+/// `r_i=max(r_{i-1}+interval, at)`（`interval = cue.duration / N`・配送 duration 由来＝
+/// areka-P0-cue-playback-duration で `char_wait` を撤去）確定、`Clear` は**配送即時にバッファ全消去**（時刻ゲートではない）。
 /// リビールの時刻ゲートは `visible(t)=|{i:r_i≤t}|` のみ。よって単調非減少の階段は「Text 配送済み・
 /// Clear 未配送」のバッファに注入 `talk_time`（clock 非経由・R8.3）を振って観測し（Phase 1）、その後
 /// dispatcher の elapsed を Clear（`\w[20]`＝at=1.05）超へ進めて Clear を配送し全消去を観測する
