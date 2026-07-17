@@ -238,7 +238,7 @@ fn cyclic_run_and_clean_shutdown() {
     for i in 0..REPETITIONS {
         // GET: 固定 Value を取り出す（request 正組立＋Value 抽出＋所有権往復の証明・R3.2/3.3）。
         let value = client
-            .get(TEST_GET_ID, &[])
+            .get(TEST_GET_ID, &[], None)
             .unwrap_or_else(|e| panic!("反復 {i}: GET(OnTestValue) が Err（{e:?}）"));
         assert_eq!(
             value,
@@ -248,7 +248,7 @@ fn cyclic_run_and_clean_shutdown() {
 
         // NOTIFY: 片道イベント（fixture は 204・client は応答を破棄して Ok(())・R3.2）。
         client
-            .notify(TEST_NOTIFY_ID, &[])
+            .notify(TEST_NOTIFY_ID, &[], None)
             .unwrap_or_else(|e| panic!("反復 {i}: NOTIFY(OnTestNotify) が Err（{e:?}）"));
 
         // helper 生存継続（sticky・非ブロッキング status()・R3.4）。
@@ -376,7 +376,7 @@ fn cyclic_real_pasta_optional() {
     for i in 0..N_PASTA {
         // notify transport が成功すること（応答 status は破棄・内容に assert しない・R6.1）。
         client
-            .notify("OnSecondChange", &[])
+            .notify("OnSecondChange", &[], None)
             .unwrap_or_else(|e| panic!("反復 {i}: notify(OnSecondChange) の transport が Err（{e:?}）"));
 
         // helper 生存継続（sticky・非ブロッキング status()）。

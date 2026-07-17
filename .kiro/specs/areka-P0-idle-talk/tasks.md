@@ -56,7 +56,7 @@
   - _Boundary: areka-kanade actor.rs_
   - _Depends: 2.2, 2.3_
 
-- [ ] 3. Core: host32 wire codec への `Status` 貫通
+- [x] 3. Core: host32 wire codec への `Status` 貫通
 - [x] 3.1 SHIORI/3.0 ワイヤへの `Status` ヘッダ発行
   - SHIORI リクエストの構築要素へ実行状態の wire 値（任意）を追加し、値が無い場合はヘッダ行そのものを出さない形にする
   - ワイヤの構築処理へ、Sender ヘッダの後・ID ヘッダの前という位置で Status 行を発行する処理を追加する（値の中身は解釈せず転記のみ行う）
@@ -65,7 +65,7 @@
   - _Requirements: 2.3, 5.3_
   - _Boundary: shiori-host32-host shiori3.rs, client.rs_
 
-- [ ] 3.2 host32 呼出関数の追随
+- [x] 3.2 host32 呼出関数の追随
   - 3.1 で追加した引数に伴い、SHIORI クライアント呼出関数を使用している既存の統合テスト群の呼出箇所を、実行状態値なしを渡す形へ更新する
   - 観測可能な完了条件: `cargo test -p shiori-host32-host` が全 green のまま維持される
   - _Requirements: 2.3, 5.3_

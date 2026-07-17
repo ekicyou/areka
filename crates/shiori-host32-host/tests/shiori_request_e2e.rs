@@ -225,7 +225,7 @@ fn request_e2e_get_value_and_notify_discard() {
     // --- ③ GET: 固定 Value を取り出す（request 正組立＋Value 抽出＋HGLOBAL 所有権往復の証明・R6.4）---
     //     誤組立なら fixture は 400 を返し get は Err(RequestError::Shiori) へ写る。
     let value = client
-        .get(TEST_GET_ID, &[])
+        .get(TEST_GET_ID, &[], None)
         .expect("GET(OnTestValue) が Err（request 誤組立なら fixture 400→Err・R6.4）");
     assert_eq!(
         value,
@@ -237,7 +237,7 @@ fn request_e2e_get_value_and_notify_discard() {
     //     誤組立なら fixture は 400 を返すが notify は応答 status を破棄する契約ゆえ、
     //     primary assertion は Ok(()) とする（204 決定的経路に依拠）。
     client
-        .notify(TEST_NOTIFY_ID, &[])
+        .notify(TEST_NOTIFY_ID, &[], None)
         .expect("NOTIFY(OnTestNotify) は Ok(())（fixture 204 を client が破棄・R4.8/6.9）");
 
     // --- ⑤ 往復後も helper は生存継続（no-crash・所有権規約無違反の傍証・R6.4）---
@@ -336,7 +336,7 @@ fn request_e2e_real_pasta_optional() {
     //     OnBoot Reference0=シェル名（ukadoc）ゆえ emo2 のシェル dir 名 "master" を渡す。
     let client = Shiori3Client::new(&parent);
     let value = client
-        .get("OnBoot", &["master".to_string()])
+        .get("OnBoot", &["master".to_string()], None)
         .expect("OnBoot GET が Err（実 pasta との request 往復が失敗・R6.5）");
 
     // OnBoot は起動あいさつのさくらスクリプト Value を返す＝Some かつ非空を assert（R6.5）。
