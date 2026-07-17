@@ -43,6 +43,8 @@ pub mod atlas_bind;
 pub mod plan;
 pub use plan::BlitOp;
 pub mod blit;
+pub mod hit;
+pub use hit::{hit_region, RegionPriority};
 
 use areka_emo_atlas::AtlasTable;
 

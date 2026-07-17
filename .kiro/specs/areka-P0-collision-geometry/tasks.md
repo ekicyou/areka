@@ -2,7 +2,7 @@
 
 ## Task List
 
-- [ ] 1. HitCore: hit_region() 純関数と RegionPriority 型シームを実装し、全判断分岐を単体テストで固定する
+- [x] 1. HitCore: hit_region() 純関数と RegionPriority 型シームを実装し、全判断分岐を単体テストで固定する
   - `RegionPriority`（`Painter` 単一 variant・`#[non_exhaustive]`・`Default`）を実装する
   - `hit_region(&SurfaceMaster, x, y, priority) -> Option<&str>` を実装する：閉区間比較（4辺すべて含端）・`collisions` を逆順走査して最初に当たった領域を返す（画家則＝後定義が手前）・α／`collision-sort`／DPI／wintf 型を一切参照しない・反転/退化矩形は正規化せず当たらない
   - `hit_region` 内の `RegionPriority` に対する match には**ワイルドカード `_` アームを置かない**（優先規則の型シーム 2.3 を守る唯一の担保機序であり、テストでは代替できないためコード doc に明記しレビュー担保とする）
