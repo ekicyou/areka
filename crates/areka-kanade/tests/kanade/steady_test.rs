@@ -45,6 +45,19 @@
 //! 次 Tick は必ず `Steady{Some}` から処理され NOTIFY（Ref3=0）を発行する（interleaving が起きない・
 //! sleep も wall-clock も用いない）。観測後に保留を解放（`release_all`）すれば `Steady{None}` へ復帰
 //! し、以降は 2 パターンと同じ quit 経路（OnClose→別れの talk→終了）で記録列を確定できる。
+//!
+//! # 追加: 送出 ID egress スイープと完了後の GET 再開（Testing Strategy #13／#12）
+//! さらに 2 つの定常統合檻を追加する（いずれも additive・既存 4 テストは無改変）:
+//! - `spontaneous_talk_egress_sweep_only_allowed_ids_no_ontalk_onhour`（#13・Req 3.2／3.3）: 自発トーク
+//!   （`OnSecondChange` Value→StartTalk）が**確実に発火する** run 全域の `recorded()` を走査し、`OnTalk`／
+//!   `OnHour` が 1 件も現れず・Unload を除く全 SHIORI イベント id が `ALLOWED_EVENT_IDS` に属することを
+//!   検証する。自発トークは pasta が `OnSecondChange` 内部で生成する＝kanade は OnTalk/OnHour を新規に
+//!   足さず、StartTalk として下流へ配送する（新規 SHIORI イベント id を増やさない）。
+//! - `talk_completion_resumes_get_pump_ref3_one_status_none`（#12・Req 4.4）: steady talk 完了（TalkDone
+//!   着弾）後の次 Tick で `OnSecondChange` GET pump（Ref3=1・Status なし）が再開することを統合層で検証する。
+//!   `active_talk_tick_emits_notify_ref3_zero` は NOTIFY 窓までしか観測せず、close_test の close 拒否復帰は
+//!   `CloseTalkWait` 由来ゆえ、`Steady{Some}`→TalkDone→`Steady{None}` の復帰は本 cage が埋める（純粋状態
+//!   機械では `steady.rs::steady_talk_done_ended_resumes_steady_and_pump_restarts` が被覆済み）。
 
 use std::collections::HashSet;
 
@@ -54,8 +67,8 @@ use areka_kanade::{
 
 use super::common::{
     BlockOn, CallMethod, DEFAULT_TIMEOUT, FIXED_FAREWELL_SCRIPT, FIXED_STEADY_SCRIPT, Fixture,
-    Harness, QuitPolicy, RecordedCall, join_bounded, spawn_harness, spawn_harness_blocking,
-    spawn_harness_gated,
+    Harness, QuitPolicy, RecordedCall, expected_call, expected_unload, join_bounded, spawn_harness,
+    spawn_harness_blocking, spawn_harness_gated,
 };
 
 /// 駆動結果: 確定した shiori 記録列と、宛先へ到達した StartTalk 列。
@@ -130,6 +143,23 @@ fn count_second_change_get(recorded: &[RecordedCall]) -> usize {
         .iter()
         .filter(|c| c.method == CallMethod::Get && c.id == "OnSecondChange")
         .count()
+}
+
+/// active talk 窓（`OnSecondChange` NOTIFY）**より後**に現れる最初の `OnSecondChange` GET
+/// （＝pump 再開・完了後の GET 復帰）を返す（Testing Strategy #12・Req 4.4）。
+///
+/// 記録列に `OnSecondChange` NOTIFY（Steady{Some} の active 窓）が無ければ `None`。NOTIFY 以降は
+/// `Steady{Some}` 中は NOTIFY のみで GET は出ず、TalkDone 着弾で `Steady{None}` へ復帰した後に初めて
+/// GET が現れるため、「NOTIFY より後の最初の GET」が完了後の pump 再開を一意に指す。
+fn resumed_get_after_active_window(recorded: &[RecordedCall]) -> Option<&RecordedCall> {
+    let notify_idx = recorded
+        .iter()
+        .position(|c| c.method == CallMethod::Notify && c.id == "OnSecondChange")?;
+    recorded
+        .iter()
+        .enumerate()
+        .find(|(i, c)| *i > notify_idx && c.method == CallMethod::Get && c.id == "OnSecondChange")
+        .map(|(_, c)| c)
 }
 
 /// 応答なし（204）→ 再生起動要求が発生しない（Req 2.3）。
@@ -629,5 +659,253 @@ fn blocking_call_ticks_catch_up_in_order_without_loss_or_duplication() {
         notify_count, 0,
         "active talk が無い catch-up では OnSecondChange NOTIFY は 1 件も現れないはず: {:?}",
         recorded
+    );
+}
+
+/// 送出 ID egress スイープ: 自発トーク発火 run 全域で禁止 ID（OnTalk／OnHour）が現れず、記録された
+/// SHIORI イベント ID は全て許可集合に属する（Req 3.2・3.3・Testing Strategy #13）。
+///
+/// 挨拶なし boot（`without_boot_greeting`）＋ `with_steady_value_indices([0])` で、最初の
+/// `OnSecondChange` GET 出現（index 0）に Value を仕込む。boot→`Steady{None}` 直行ゆえ最初の steady
+/// Tick は確実に GET（index 0）で Value を返し、**自発トーク（spontaneous talk）が 1 本発火する**。
+/// close talk（quit:true）で終了系列を駆動し、`recorded()` を確定してから全域を走査する（決定的）。
+///
+/// # なぜ自発トークを確実に発火させるのか（Testing Strategy #13 の核）
+/// 「自発トーク（Value→StartTalk）発火時も新規 ID が増えない」節は、Value が実際に talk を起こす run で
+/// なければ空振りする。emo2/pasta は `OnSecondChange` 内部で自発会話を生成する（＝areka は OnTalk/OnHour
+/// イベントを新規に足さない）。本 cage はその自発トークを StartTalk として下流へ配送し、SHIORI 側には
+/// 新規イベント ID が一切増えないことを end-to-end で固定する。
+///
+/// # 検証
+/// - 自発トークが 1 本、StartTalk として sakura へ配送される（＝新規 SHIORI イベントでなく StartTalk・Req 3.3）。
+/// - 記録列のどの呼出も id が `"OnTalk"`／`"OnHour"` でない（Req 3.2・kanade は恒久的に送出しない）。
+/// - Unload（正規終了経路・events 表対象外）を除く全 GET/NOTIFY の id が `ALLOWED_EVENT_IDS` の要素。
+/// - 自発トークの trigger（`OnSecondChange`）が現に記録にある（スイープの非空虚性）。
+#[test]
+fn spontaneous_talk_egress_sweep_only_allowed_ids_no_ontalk_onhour() {
+    // 自発トークを確実に発火させる: index 0 の OnSecondChange GET が Value を返す（挨拶なし boot ゆえ
+    // 最初の steady Tick は必ず GET index 0）。quit_flags=[steady=false, close=true] で終了駆動。
+    let fixture = Fixture::quitting()
+        .with_steady_value_indices([0])
+        .without_boot_greeting();
+    let driven = drive_steady(fixture, 8, vec![false, true]);
+
+    // (1) 自発トークが現に発火し StartTalk として sakura へ配送された（＝新規 SHIORI イベントでなく
+    //     StartTalk として下流へ流れた・Req 3.3）。
+    let spontaneous = driven
+        .started
+        .iter()
+        .filter(|s| s.script == FIXED_STEADY_SCRIPT)
+        .count();
+    assert_eq!(
+        spontaneous, 1,
+        "OnSecondChange Value で自発トークが 1 本発火し StartTalk として配送されるはず: {:?}",
+        driven.started
+    );
+
+    // (2) 記録列のどの呼出も OnTalk／OnHour でない（Req 3.2・kanade は恒久的に送出しない。自発トークは
+    //     pasta が OnSecondChange 内部で生成する＝areka は OnTalk/OnHour イベントを足さない）。
+    assert!(
+        driven
+            .recorded
+            .iter()
+            .all(|c| c.id != "OnTalk" && c.id != "OnHour"),
+        "記録列に OnTalk／OnHour が現れてはならない（Req 3.2）: {:?}",
+        driven.recorded
+    );
+
+    // (3) Unload を除く全 GET/NOTIFY の id が許可集合の要素（ホワイトリストが end-to-end で成立・Req 3.1）。
+    for call in &driven.recorded {
+        if call.method == CallMethod::Unload {
+            // Unload（id="Unload"）は events 表対象外の正規終了経路ゆえ許可集合の被覆から除外する。
+            continue;
+        }
+        assert!(
+            events::is_allowed_event_id(&call.id),
+            "記録された SHIORI イベント id={} が許可集合 {:?} に属さない: {:?}",
+            call.id,
+            events::ALLOWED_EVENT_IDS,
+            driven.recorded
+        );
+    }
+
+    // (4) 非空虚性: 自発トークの trigger（OnSecondChange）が現に記録にある＝(2)(3) が空振りしていない。
+    //     記録の distinct な（Unload を除く）SHIORI id は全て許可集合の部分集合であり、自発トークの発火は
+    //     SHIORI イベント列を kind として変えていない（新規 ID を増やさない）。
+    let distinct_shiori_ids: HashSet<&str> = driven
+        .recorded
+        .iter()
+        .filter(|c| c.method != CallMethod::Unload)
+        .map(|c| c.id.as_str())
+        .collect();
+    assert!(
+        distinct_shiori_ids.contains(&"OnSecondChange"),
+        "自発トークを起こす OnSecondChange が記録に現れているはず（スイープの非空虚性）: {:?}",
+        driven.recorded
+    );
+    assert!(
+        distinct_shiori_ids
+            .iter()
+            .all(|&id| events::is_allowed_event_id(id)),
+        "記録の distinct SHIORI id は全て許可集合の部分集合であるはず（新規 ID を増やさない）: {:?}",
+        distinct_shiori_ids
+    );
+}
+
+/// 完了後の復帰: steady talk 完了（TalkDone 着弾）→ 次 Tick で `OnSecondChange` GET pump が再開する
+/// （Ref3=1・Status なし・Req 4.4・Testing Strategy #12）。
+///
+/// `active_talk_tick_emits_notify_ref3_zero` は active talk 窓での NOTIFY までを観測するが、TalkDone
+/// 着弾後の GET 再開（次 Tick）は観測しない。close_test の `close_refused_resumes_...` は close 拒否
+/// （`CloseTalkWait`）からの復帰を観測するが、**steady talk 完了**（`Steady{Some}`→TalkDone→`Steady{None}`）
+/// からの GET 再開は統合層で未観測ゆえ、本 cage が additive に埋める（純粋状態機械では
+/// `steady.rs::steady_talk_done_ended_resumes_steady_and_pump_restarts` が被覆済み）。
+///
+/// # 決定的駆動（full_run/steady/close と同一の talk 駆動終了イディオム）
+/// 挨拶なし boot で `Steady{None}` 直行。保留ハーネスで最初の steady talk（受領 index 0）を保留し
+/// active 窓を作る。`with_steady_value_indices([0, 1])`: GET 出現 index 0＝保留 talk を起こし、index 1＝
+/// **復帰後**の pump が起こす talk（quit:true）で終了を駆動する。
+///
+/// 1. Boot → `Steady{None}`（挨拶なし・cross-thread TalkDone なし）。
+/// 2. Tick 1（1s）: `Steady{None}`→GET(occ0)→Value→steady talk 0（id=1・**保留**）→`Steady{Some}`。
+/// 3. Tick 2（2s）: `Steady{Some}`→`OnSecondChange` NOTIFY（Ref3=0・active 窓）。
+/// 4. `release_all` → 保留 talk 0 の TalkDone{Ended}（quit:false）着弾 → `Steady{None}` 復帰。
+/// 5. 復帰後 Tick → GET(occ1・Ref3=1・Status なし・**pump 再開**）→ Value → steady talk 1（id=2・
+///    quit:true）→ 終了系列完走。
+///
+/// # 非空虚性
+/// - 復帰後 pump が GET でなく NOTIFY のままなら Value が破棄され talk 1 が起きず終了が駆動されない
+///   （＝復帰しなかったことを join 期限超過で検出する）。
+/// - active 窓（NOTIFY）が無ければ `resumed_get_after_active_window` が `None`＝(2) が落ちる。
+#[test]
+fn talk_completion_resumes_get_pump_ref3_one_status_none() {
+    let fixture = Fixture::quitting()
+        .with_steady_value_indices([0, 1])
+        .without_boot_greeting();
+
+    // hold_indices=[0]: 最初の steady talk（受領 index 0）を保留し active 窓を作る。
+    // quit_flags: index0（保留 steady talk）=false（Ended→復帰）・index1（復帰後 steady talk）=true（Quit→終了）。
+    let (harness, gate) = spawn_harness_gated(
+        KanadeConfig::new("master", "1.0.0"),
+        fixture,
+        QuitPolicy::PerTalk(vec![false, true]),
+        vec![0],
+    );
+
+    harness.sender.send(KanadeMsg::Boot).expect("send Boot");
+
+    // Tick 1: Steady{None}→GET(occ0)→Value→steady talk 0（保留）→Steady{Some}。
+    harness
+        .sender
+        .send(KanadeMsg::Tick {
+            now: MonotonicMs(1_000),
+        })
+        .expect("send Tick 1");
+
+    // Tick 2: Steady{Some}→OnSecondChange NOTIFY（Ref3=0・active 窓）。
+    harness
+        .sender
+        .send(KanadeMsg::Tick {
+            now: MonotonicMs(2_000),
+        })
+        .expect("send Tick 2");
+
+    // 保留 talk 0 の TalkDone{Ended}（quit:false）を解放 → Steady{None} 復帰。
+    gate.release_all();
+
+    // 復帰後の pump を駆動する。復帰前（Steady{Some}）Tick は NOTIFY のみ・復帰後の GET(occ1) が Value を
+    // 返し steady talk 1（quit:true）を起こして終了を駆動する。sleep を用いず、「1 Tick 送出→ yield →
+    // 記録確認」を有界回数繰り返し、GET 再開の証左（active 窓後の GET）か inbox 切断（＝終了自走）で
+    // 打ち切る（close_test::close_refused_resumes_... と同一イディオム・race-free）。
+    let mut resumed = false;
+    'drive: for i in 3..=500u64 {
+        if harness
+            .sender
+            .send(KanadeMsg::Tick {
+                now: MonotonicMs(i * 1_000),
+            })
+            .is_err()
+        {
+            // inbox 切断＝復帰後 pump talk（quit:true）で終了済み（復帰の証左）。
+            resumed = true;
+            break 'drive;
+        }
+        for _ in 0..64 {
+            std::thread::yield_now();
+            if resumed_get_after_active_window(&harness.shiori.recorded()).is_some() {
+                resumed = true;
+                break 'drive;
+            }
+        }
+    }
+    assert!(
+        resumed,
+        "steady talk 完了後、有界回数内に OnSecondChange GET pump が再開するはず（Req 4.4）"
+    );
+
+    let Harness {
+        sender,
+        kanade,
+        shiori,
+        sakura,
+    } = harness;
+
+    // 終了系列完走（復帰後 pump→steady talk quit:true→Unloading{Quit}→Unload→StopSelf）まで期限付き join。
+    // join 成功それ自体が「完了点で停止せず pump が再開し talk を起こした」ことの保証である。
+    join_bounded("kanade resume join", DEFAULT_TIMEOUT, kanade)
+        .expect("kanade terminates via the resumed pump talk (quit:true)");
+
+    drop(sender);
+    let started = sakura.started();
+    sakura.join_bounded("mock-sakura resume join", DEFAULT_TIMEOUT);
+    let recorded = shiori.recorded();
+
+    // (1) sakura へ配送された talk は保留 steady talk（id=1）と復帰後 steady talk（id=2）のちょうど 2 本
+    //     （いずれも steady スクリプト・close talk は無い＝終了は steady quit:true で駆動）。
+    assert_eq!(
+        started.len(),
+        2,
+        "保留 talk と復帰後 talk のちょうど 2 本が配送されるはず: {:?}",
+        started
+    );
+    assert!(
+        started.iter().all(|s| s.script == FIXED_STEADY_SCRIPT),
+        "2 本とも steady スクリプト（close talk は起きない）: {:?}",
+        started
+    );
+    let ids: HashSet<u64> = started.iter().map(|s| s.talk_id.0).collect();
+    assert_eq!(ids.len(), 2, "talk_id は一意（再利用しない）: {:?}", started);
+    assert_eq!(started[0].talk_id, TalkId(1), "保留 talk は先頭採番 id=1");
+    assert_eq!(started[1].talk_id, TalkId(2), "復帰後 talk は id=2（単調増番）");
+
+    // (2) 完了後の GET 再開（本 cage の核心・Req 4.4）: active 窓（OnSecondChange NOTIFY）より後に
+    //     OnSecondChange GET が現れ、その Ref3・Status が events 表導出の shape（Steady{None}＝GET・Ref3=1・
+    //     Status なし）と一致する。復帰後の GET の now はループ依存ゆえ、now 非依存の Ref3／Status のみを
+    //     events から導出して照合する（ハードコードしない・Testing Strategy #15）。
+    let resumed_get = resumed_get_after_active_window(&recorded)
+        .expect("active 窓の後に pump 再開 GET が現れるはず（Req 4.4）");
+    let expected_shape = expected_call(events::on_second_change(
+        MonotonicMs(0),
+        &ExecutionSnapshot::INACTIVE,
+    ));
+    assert_eq!(
+        resumed_get.references.len(),
+        4,
+        "OnSecondChange の References は 4 要素"
+    );
+    assert_eq!(
+        resumed_get.references[3], expected_shape.references[3],
+        "再開 pump の Ref3 は events 導出値（\"1\"・GET・talk 再生可能）"
+    );
+    assert_eq!(
+        resumed_get.status, expected_shape.status,
+        "再開 pump（Steady{{None}}）は Status 行を出さない（events 導出 None）"
+    );
+
+    // (3) 終了系列完走: 末尾は Unload（復帰後 steady talk quit:true→Unloading{Quit}→Unload）で閉じる。
+    assert_eq!(
+        recorded.last().expect("記録列は空でない"),
+        &expected_unload(),
+        "末尾は Unload（復帰後 pump talk quit:true の終了系列完走）で閉じるはず"
     );
 }
