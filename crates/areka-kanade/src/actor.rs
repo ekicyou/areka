@@ -142,8 +142,50 @@ fn drive(
     }
 }
 
-/// GET／NOTIFY の同期往復（送出＋応答受領）。失敗は error!＋`Failed(Ipc)` へ写像（宙吊りなし）。
+/// GET／NOTIFY の同期往復。SHIORI へ出る**唯一の実行点**であり（本番・mock 双方が必ず通る・
+/// DD-IT-7）、送出前に送出イベント ID がホワイトリストの要素であることを検証する egress
+/// チョークポイントである（Req3.1）。
+///
+/// - 許可集合外（`OnTalk`／`OnHour` 等・Req3.2）: SHIORI へ**送出せず** `error!`（event=
+///   `event_id_not_allowed`）を残し、内部規律違反の失敗語彙 `ShioriOutcome::Failed(ShioriFailure::
+///   Internal(..))` を返す（DD-IT-11・状態機械は既存の fault 経路で処理＝檻専用の応答を発明しない・
+///   panic しない・宙吊りにしない）。
+/// - 許可集合内: 送出前に Method・イベント ID・参照値・実行状態の wire 証跡を `trace!`（event=
+///   `shiori_request`）で残して送出する（Req6.2）。往復失敗は error!＋`Failed(Ipc)` へ写像（宙吊りなし）。
 fn round_trip_request(shiori: &Sender<ShioriMsg>, call: ShioriCall) -> ShioriOutcome {
+    // 送出しようとしているイベントの Method／ID／参照値／実行状態（wire 値）を取り出す。
+    // `status.render()` は `None` ⇔ Status ヘッダ行なし（Req6.2・DD-IT-5 の kanade 層観測）。
+    let (method, id, references, status_wire) = match &call {
+        ShioriCall::Get { id, references, status } => ("GET", *id, references, status.render()),
+        ShioriCall::Notify { id, references, status } => {
+            ("NOTIFY", *id, references, status.render())
+        }
+    };
+
+    // ID ホワイトリスト檻（Req3.1/3.2・DD-IT-7/DD-IT-11）: 許可集合外は送出せず内部規律違反として失敗させる。
+    if !crate::schedule::events::is_allowed_event_id(id) {
+        tracing::error!(
+            target: "kanade",
+            event = "event_id_not_allowed",
+            id = %id,
+            "送出禁止イベント ID——ホワイトリスト違反ゆえ送出せず内部規律違反として失敗させる"
+        );
+        return ShioriOutcome::Failed(ShioriFailure::Internal(format!(
+            "event_id_not_allowed: {id}"
+        )));
+    }
+
+    // 送出前の wire 証跡（Req6.2）。status=None は Status ヘッダ欠落として観測可能（DD-IT-5）。
+    tracing::trace!(
+        target: "kanade",
+        event = "shiori_request",
+        method = %method,
+        id = %id,
+        references = ?references,
+        status = ?status_wire,
+        "SHIORI 送出"
+    );
+
     let (reply_tx, reply_rx) = reply_channel::<ShioriOutcome>();
     round_trip(shiori, ShioriMsg::Request { call, reply: reply_tx }, reply_rx)
 }
@@ -519,5 +561,80 @@ mod tests {
             "reply-drop helper が期限内に受領を完了すべき（possible hang）"
         );
         helper.join().expect("reply-drop helper joins cleanly");
+    }
+
+    // --- 7. egress チョークポイント判断分岐檻（タスク 2.5・Req 3.1／3.2／6.2・DD-IT-7／DD-IT-11） ---
+    //
+    // SHIORI へ出る唯一の実行点 `round_trip_request` を**直接**呼び、送出 ID の許可判定という
+    // 入力依存の判断分岐を両側から檻に入れる（test-only-decision-branches-not-proven-wiring）。
+    // ヘルパは同期関数ゆえログはテストスレッドで発行され `log_capture::capture` で確実に捕捉される。
+
+    // (a) 許可 ID（OnBoot）→ チャネルへ送出され、送出前の wire 証跡 trace! が残る（Req6.2）。
+    #[test]
+    fn allowed_event_id_is_sent_and_wire_trace_logged() {
+        let (shiori_tx, rec_rx, shiori_handle) = spawn_mock_shiori(benign);
+
+        let mut outcome: Option<ShioriOutcome> = None;
+        let events = capture(|| {
+            outcome = Some(round_trip_request(&shiori_tx, probe_get_call()));
+        });
+
+        // 許可 ID の GET は送出され mock の良性応答（NoContent）が返る。
+        assert!(
+            matches!(outcome, Some(ShioriOutcome::NoContent)),
+            "許可 ID の GET は送出され mock の良性応答が返るべき"
+        );
+        // mock が当該 Request を受領した＝チャネルへ送出された（Req3.1 許可路）。
+        assert_eq!(
+            rec_rx
+                .recv_timeout(Duration::from_secs(5))
+                .expect("許可 ID はチャネルへ送出され mock が受領するはず"),
+            Recorded::Get("OnBoot".to_string())
+        );
+        // Method・ID・参照値・実行状態の wire 証跡（Req6.2・DD-IT-7）。
+        assert_logged(&events, Level::TRACE, "shiori_request");
+
+        drop(shiori_tx);
+        drop(shiori_handle);
+    }
+
+    // (b) 禁止 ID（OnTalk／OnHour）→ 送出されず error! を残し Failed(Internal) へ写像される（Req3.2）。
+    //     チャネルへ何も届かないことを保持した record Receiver の try_recv=Empty で確認する。
+    #[test]
+    fn forbidden_event_id_is_not_sent_maps_to_internal_and_logs_error() {
+        for forbidden in ["OnTalk", "OnHour"] {
+            let (shiori_tx, rec_rx, shiori_handle) = spawn_mock_shiori(benign);
+
+            let mut outcome: Option<ShioriOutcome> = None;
+            let events = capture(|| {
+                outcome = Some(round_trip_request(
+                    &shiori_tx,
+                    ShioriCall::Get {
+                        id: forbidden,
+                        references: vec!["master".to_string()],
+                        status: ExecutionStatus::derive(&ExecutionSnapshot::INACTIVE),
+                    },
+                ));
+            });
+
+            // (i) 送出せず内部規律違反の失敗語彙へ写像（DD-IT-11・状態機械は既存 fault 経路を使う）。
+            assert!(
+                matches!(
+                    outcome,
+                    Some(ShioriOutcome::Failed(ShioriFailure::Internal(_)))
+                ),
+                "{forbidden} は送出せず Failed(Internal) へ写像されるべき"
+            );
+            // (ii) 規約の error! 発火（削除・語彙変更・レベル変更で失敗する回帰檻）。
+            assert_logged(&events, Level::ERROR, "event_id_not_allowed");
+            // (iii) チャネルへ何も届かない＝禁止 ID は送出前に返る（Req3.2 恒久不送出）。
+            assert!(
+                rec_rx.try_recv().is_err(),
+                "{forbidden} はチャネルへ送出されてはならない（Req3.2）"
+            );
+
+            drop(shiori_tx);
+            drop(shiori_handle);
+        }
     }
 }
