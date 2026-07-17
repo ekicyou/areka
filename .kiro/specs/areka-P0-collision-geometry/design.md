@@ -89,6 +89,7 @@
 5. **collision 集合が base surface id のみで決まらなくなる変更**（`animation*.collision*` の実装・`base` 描画メソッドによる collision 差替＝seriko-loop / mayuna-compose） → 現サーフェス読み口の契約（id だけで collision 集合が決まる）が破れ、bind を含む鍵が必要になる。
 6. **`SurfaceMaster.collisions` の順序変更**（fold が末尾連結以外の順序へ変わる） → 画家則の意味論が転記順に依存するため檻が破れる。
 7. **リゾルバの shell 専用契約の変更**（balloon target を扱う要求） → target 偶奇の互いに素性が前提（`target_map.rs` DD-3 不変条件）。
+8. **tick 固定順（Input≪FrameFinalize）または `Emo2Wiring` の NonSend 常駐形の変更** → Resolver 節「リゾルバ到達性」の前提（ハンドラ実行時に wiring が必ず在る）が破れ、W2 配線の再検証を要する（順序の檻＝`world/mod.rs:508-520`・`tick_order_tests`）。
 
 ## Architecture
 
@@ -500,6 +501,16 @@ pub fn resolve_hit_region(
 - Validation: 未表示 scope → `region: None` は GPU 不要で檻に入る（`EmoPresenter::new()` ＋未 attach target）。scope→target の写像自体は `target_map` の既存テストが持つ＝再テストしない（証明済み配線）。
 - Risks: `resolve_hit_region` は所有 `String` を作る（`Option<&str>` → `Option<String>`）。マウス移動ごとの割当だが、対象は最大 256 矩形中の1名前・撫では低頻度（人間の手の速度）ゆえ許容する。
 
+##### リゾルバ到達性（設計討議#1・2026-07-17）
+
+R4「同期で得られる単一の窓口」の到達性は以下の実測事実で担保される。本 spec は到達経路を**実装しない**——ポインタ配線は roadmap 台帳の W2 割当であり、resolver の保持方式と粒度（per-scope／per-window）は `input-events` design の予約事項。線引きは「**呼び手が spec 内に居るもの＝実物を作る・次ウェーブに居るもの＝地図を残す**」（呼び手ゼロの配線は正しさを証明できない）。以下が W2 へ残す地図である。
+
+- **呼出文脈**: ポインタハンドラは排他 system `dispatch_pointer_events(world: &mut World)`（`dispatch/mod.rs:209-253`・Input schedule）から UI スレッドで呼ばれる。wndproc は hit_test＋バッファ蓄積のみでハンドラを呼ばない。
+- **`Emo2Wiring` の可用性**: remove→insert 窓（`frame.rs:648-659`）は FrameFinalize（tick 13本の最後尾）に閉じ、Input（先頭）との関係は同一 tick 内の固定順で完全直列（`world/mod.rs:508-520`・`tick_order_tests` が檻）。tick 中の wndproc 再入は try_borrow スキップ（`wndproc_bridge.rs:78`）＋`IS_TICK_FLUSH_IN_PROGRESS`（`vsync.rs:37-46`）＋SetWindowPos 遅延 flush（`tick_bridge.rs:199-200`）の三重防御で遮断される。**ゆえにハンドラ実行時点で `world.get_non_send_resource::<Emo2Wiring>()` は（`wire_emo2_boot` 済みなら）必ず `Some`**。`None` は wire 前のフォールバック boot のみ＝`region: None` 縮退がその状態の正しい写像（race の隠蔽ではない）。
+- **座標**: `PointerState.client_point: PhysicalPoint`＝窓 client 物理 px（`types/mod.rs:92-94`・WM_MOUSEMOVE lparam 直系）＝リゾルバ入力契約と同一空間・無変換で渡せる。
+- **scope**: `CharWindowMarker { scope: usize }`（`spawn.rs:65-68`）で entity→scope が O(1)。shell/balloon の判別（balloon 除外規律の実装点）も同 marker で足りる。
+- **読みの鮮度**: presenter の読みは前フレーム FrameFinalize の確定値（最大1フレーム遅延）。欠陥ではなく仕様注記として W2 へ申し送る。
+
 #### Probe
 
 | Field | Detail |
@@ -633,7 +644,23 @@ pub fn resolve_hit_region(
 - **C-5（`emo2-conformance-e2e` W5 へ）**: 本 spec の重なり優先は**画家則＝SSP `collision-sort none` とは逆向き**の意図的逸脱である（確定表 C3）。emo2 fixture には重なり collision も `collision-sort` 宣言も存在しない（実測）ため、**この逸脱は e2e では永久に検出されない**。e2e が主張できるのは「SSP 完全適合」ではなく「**emo2 適合**」である（研究 §10.6 の申し送り）。
 - **C-6（`seriko-loop` / `mayuna-compose` W2–W3 へ）**: 現サーフェス読み口の契約は「**collision 集合は base surface id だけで決まる**」ことに依存する。正典には `animation*.collision*`（アニメーション動作中限定の collision）と `base` 描画メソッド（「collision もコマのサーフェスに定義されたものに更新される」）が存在する。これらを実装する時点で本契約は破れ、bind を含む鍵が必要になる（Revalidation Trigger 5）。emo2 fixture は animation collision を持たない（collision 行は4行のみ・実測）ため M1 では顕在化しない。
 - **C-7（W1 内・`sakura-dialogue-tags` へ）**: 本 spec が areka bin で触るのは `emo2_boot/hit_region.rs`（新規）と `emo2_boot/mod.rs` の**1行追加**（`pub mod hit_region;`）のみ。`frame.rs`・`adapter.rs`・`spawn.rs`・`follow.rs` は不触＝W1 の「共有ファイル 0」を維持する。
-- **C-8（`input-events` W2 へ・`completed` 成果物を壊す罠）**: **`crates/areka/src/placement/` の非テストコードは現在 `crate::` パスを1つも含まない**（`crate::` の出現は全ファイルとも `#[cfg(test)]` 以降に限られる・実測）。この性質が `examples/window-placement.rs:99-113` の `#[path]` include（completed spec `areka-P0-window-placement` の**実 DPI 受け入れ成果物**）を成立させている唯一の条件である。input-events の配線点は `placement/spawn.rs`（brief が `on_ghost_pressed` を名指し）であり、そこから本 spec の resolver を呼ぶには `crate::emo2_boot::hit_region::...` の**絶対パスが不可避**（`super::` ＝ `crate::placement` では届かない）。**この1行を入れた瞬間 `window-placement.rs` はコンパイル不能になる**。W2 は配線を `frame.rs` 側へ寄せる／placement 側は関数ポインタ・trait 注入で受ける等の回避形を設計時に選ぶこと。本 spec は spawn.rs を不触ゆえ顕在化しないが、**気づけるのは W2 が壊してから**であるため事前に申し送る。
+- **C-8（`input-events` W2 へ・`completed` 成果物を壊す罠）**: **`crates/areka/src/placement/` の非テストコードは現在 `crate::` パスを1つも含まない**（`crate::` の出現は全ファイルとも `#[cfg(test)]` 以降に限られる・実測）。この性質が `examples/window-placement.rs:99-113` の `#[path]` include（completed spec `areka-P0-window-placement` の**実 DPI 受け入れ成果物**）を成立させている唯一の条件である。input-events の配線点は `placement/spawn.rs`（brief が `on_ghost_pressed` を名指し）であり、そこから本 spec の resolver を呼ぶには `crate::emo2_boot::hit_region::...` の**絶対パスが不可避**（`super::` ＝ `crate::placement` では届かない）。**この1行を入れた瞬間 `window-placement.rs` はコンパイル不能になる**。回避の推奨形（設計討議#1で検証済み）: **ハンドラも装着も emo2_boot 側に置く**——`OnPointerMoved` は wintf::ecs 再export（外部 crate import・placement 非改変）であり、装着は `run_attach_phase`（`&mut World` 保持・GhostWindows ゲート済み・`frame.rs:257-281`）または `Added<WindowHandle>` system（`spawn.rs:288-293` 前例）を emo2_boot 側から行えば、spawn.rs へ `crate::` を持ち込まず本罠は構造的に踏めない。
+- **C-9（`input-events` W2 へ・到達口は W2 が開ける・設計討議#1）**: `Emo2Wiring.presenter` は private（`frame.rs:171`・本番用 read 口なし）。リゾルバへ届くには **W2 が frame.rs へ `pub(crate) fn presenter(&self) -> &EmoPresenter` 相当のアクセサ（3行規模）を自ら追加する**こと（W2 相方 mayuna-compose は frame.rs 不触＝roadmap 台帳ゆえ無衝突）。本 spec が先作りしない理由: 呼び手ゼロの配線は正しさを証明できず、保持の方式と粒度は `input-events` design の予約事項＝形は呼び手が決める。到達可能性そのものは Resolver 節「リゾルバ到達性」が実測で担保済み。W2 ハンドラの参考形（本 spec は実装しない）:
+
+  ```rust
+  fn on_shell_pointer_moved(world: &mut World, _s: Entity, entity: Entity,
+                            ev: &Phase<PointerState>) -> bool {
+      let Phase::Bubble(state) = ev else { return false };
+      let Some(m) = world.get::<CharWindowMarker>(entity) else { return false };
+      let (scope, p) = (m.scope as u32, state.client_point);
+      let hit = match world.get_non_send_resource::<Emo2Wiring>() {
+          Some(w) => resolve_hit_region(w.presenter(), scope, p.x as i64, p.y as i64),
+          None => HitRegion { scope, region: None }, // wire_emo2_boot 前のみ・正常縮退
+      };
+      let _ = hit; // → kanade へ投函（W2 の領分）
+      false
+  }
+  ```
 
 ## Open Risks
 

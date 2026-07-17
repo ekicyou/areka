@@ -336,3 +336,12 @@
 
 - **roadmap.md:210 の義務チェックポイント**: 先行 spec は cue-playback マージ後に `/kiro-validate-design` を settled コードへ再実行してから tasks へ進む。本 spec の design は **cue-playback マージ後の main（`653ae3ea` 時点）へ実測突合せ済み**（11.2＝crates 差分ゼロを確認）であり、かつ roadmap:207 が「cue-playback は emo-present 不触」と明言するためドリフト risk は低いが、義務は無条件ゆえ tasks 前に再実行すること。
 - 実装時、`hit_region.rs` の `crate::` パス禁止規律をファイル冒頭 doc に明記（機械的強制がないため）。
+
+## 12. 設計ディスカッション決定（2026-07-17）
+
+### 12.1 議題1: リゾルバ到達性（design-validation Critical Issue 1）＝実装繰延＋証明焼き込み
+
+- 4並列敵対検証（dispatch 交錯／モジュールグラフ／シムのテスト成立性／台帳スティールマン）の結果、**技術面の障害はゼロ**: ポインタハンドラは排他 system（Input schedule・`dispatch/mod.rs:209-253`）＝`emo2_frame_system`（FrameFinalize）と同一 tick 内で完全直列・remove 窓との交錯は構造的に不可能（wndproc 再入は try_borrow スキップ＋`IS_TICK_FLUSH_IN_PROGRESS`＋SetWindowPos 遅延 flush の三重防御）。`client_point` は窓 client 物理 px・`CharWindowMarker{scope}` で entity→scope O(1)。
+- 一方**戦略面のスティールマンが繰延優位を立証**: ①ポインタ配線は roadmap 台帳（:183）が W2 割当 ②保持の方式と粒度（per-scope／per-window）は input-events design の予約事項（同 requirements:30） ③W1 内のシムは呼び手ゼロの dead code（存在チェック不能） ④C-7 堅持で W1「共有ファイル0」が sibling（dialogue-tags の Move 配線未釘留め）に頑健。
+- **決定**: アクセサ＋ハンドラの実装は W2。線引き＝「呼び手が spec 内に居るもの＝実物・次ウェーブに居るもの＝地図」。design へ (a) Resolver 節「リゾルバ到達性」（検証事実の台帳）(b) C-8 を推奨形（emo2_boot 側で装着）へ格上げ (c) C-9 新設（presenter private・アクセサは W2 の作業・参考ハンドラ形）(d) Revalidation Trigger 8（tick 固定順への依存）を焼き込み。
+- 副産物の実測: `adapter.rs:16` は `crate::emo2_boot::target_map` 形ゆえ include 不能の先例（`hit_region.rs` は必ず `super::target_map` 形で書く）。placement 全7ファイルの `crate::` 出現13箇所は全て `#[cfg(test)]` 内（C-8 前提の brace 実測確認）。
