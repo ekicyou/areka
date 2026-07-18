@@ -1,7 +1,7 @@
 # Brief: areka-P0-collision-dpi-hittest
 
 > **種別**: 本坑（main）新規。⑥ emo 帰属（**`collision-geometry` の DPI追従後続＝当たり判定の point÷k**）。2026-07-18 `collision-geometry` Task 4.2 受け入れ却下から派生。
-> **調査日**: 2026-07-18（同 DPI追従スコープ調査ワークフロー）。一次分析は `specs/areka-P0-collision-geometry/research.md §13`。
+> **調査日**: 2026-07-18（同 DPI追従スコープ調査ワークフロー）。一次分析は `specs/completed/areka-P0-collision-geometry/research.md §13`。
 > **上流（必須・ブロッキング）**: **`areka-P0-emo-dpi-scaling`**（`scale()` が k を返し、マスコットが実際に k× 拡大表示される——**これ無しでは実機に scale≠1.0 の状態が存在せず ÷k を no-op としてしか観測できない**）／`completed/areka-P0-collision-geometry`（純関数 `hit_region`・resolver・presenter 読み口・probe——本 spec が拡張する土台・Task 1-4.1 は不変）。
 > **下流**: `input-events`（撫で配信・k 補正後の region を消費）／`emo2-conformance-e2e`。
 > **collision-geometry との関係**: 本 spec は collision-geometry の **k=1.0 限定契約（`design.md:50`・Revalidation Trigger 2 `:86`）を解除**し、point÷k を第一級実装する。

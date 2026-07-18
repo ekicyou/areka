@@ -1,7 +1,7 @@
 # Brief: areka-P0-emo-dpi-scaling
 
 > **種別**: 本坑（main）新規。⑥ emo 帰属（**DPI追従レンダリング基盤＝render-scaling foundation**）。2026-07-18 `collision-geometry` Task 4.2 実 DPI 受け入れ却下から派生（開発者指示: 必要なだけ新 spec を立て roadmap 化・依存調整・引き継ぎ網羅）。
-> **調査日**: 2026-07-18（DPI追従スコープ調査ワークフロー・7エージェント配管精読）。一次分析は `specs/areka-P0-collision-geometry/research.md §13`。
+> **調査日**: 2026-07-18（DPI追従スコープ調査ワークフロー・7エージェント配管精読）。一次分析は `specs/completed/areka-P0-collision-geometry/research.md §13`。
 > **上流**: emo 合成基盤（`completed/areka-P0-emo-atlas`/`-emo-compose`/`-emo-present`）／wintf `DPI` component（既存・`GetDpiForWindow`／`WM_DPICHANGED` ライブ更新）。
 > **下流（必須依存）**: **`areka-P0-collision-dpi-hittest`**（当たり判定 ÷k がこの `scale()`→k と実 k× 表示に依存）／DPI追従が波及する全 emo 消費者（`window-placement` 窓寸・`emo-text-layer` 行寸・balloon 寸・`choice-render`）＝各 spec の Revalidation Trigger。
 > **M1/M2 配置・collision-geometry 合流**: **未決＝別セッションの計画判断**（[[portfolio-convergence-decided-in-separate-session]]）。DPI追従は開発者言明の**基本設計**だが emo2 は k=1.0 でも E2E 実走する（M1 blocker か否かは要判断）。
