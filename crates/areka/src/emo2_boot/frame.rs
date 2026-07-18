@@ -35,6 +35,7 @@ use crate::placement::resolver::SizePx;
 use crate::placement::spawn::GhostWindows;
 
 use super::assets::{BootAssets, ScopeAssets};
+use super::move_cue::MoveDirective;
 use super::talk_clock::TalkClock;
 use super::target_map::{balloon_target, shell_target};
 
@@ -171,6 +172,18 @@ pub struct Emo2Wiring {
     presenter: EmoPresenter,
     /// worker（seriko 経由 `PresentBridge`）からの表示指令受信端（task 4.2 の drain で消費）。
     rx: Receiver<PresentCommand>,
+    /// talk スレッド（`MoveCueSink`）からの `\![move]` 指令受信端（frame 相 drain＝task 9.2 が消費）。
+    ///
+    /// `PresentBridge` の `rx` と同型の配線: `wire_emo2_boot`（task 9.1）が
+    /// `mpsc::channel::<MoveDirective>()` の受信端を受け渡し、frame 相の `emo2_frame_system` が
+    /// `apply_move_directive` へ drain する（drain 実装は task 9.2）。
+    ///
+    /// task 9.1 段階では受信端の保持と test-support アクセサ（`drain_move_directives`・`#[cfg(test)]`）
+    /// のみで、非 test の本番 drain 経路（task 9.2）が未着ゆえ本番ビルドからは未読取り。段階実装の
+    /// 想定内であり、task 9.2 の frame 相 drain 着地でこの `allow` は撤去する（move_cue.rs の
+    /// staged `#![allow(dead_code)]` と同流儀）。
+    #[allow(dead_code)]
+    move_rx: Receiver<MoveDirective>,
     /// バルーン文字層ランタイム（`register_actor_view`／`present_frame` の所有・`!Send`）。
     runtime: Rc<RefCell<TextLayerRuntime>>,
     /// talk 起点相対秒の時刻源（task 4.2 の text フェーズで `talk_time` を引く）。
@@ -182,11 +195,13 @@ pub struct Emo2Wiring {
 }
 
 impl Emo2Wiring {
-    /// 結線資源を構築する（`wire_emo2_boot`＝task 5.1 が呼ぶ）。`assets` は `Some` で保持し、
-    /// attach フェーズ（[`run_attach_phase`]）が `take` で高々 1 回消費する。
+    /// 結線資源を構築する（`wire_emo2_boot`＝task 5.1／9.1 が呼ぶ）。`assets` は `Some` で保持し、
+    /// attach フェーズ（[`run_attach_phase`]）が `take` で高々 1 回消費する。`move_rx` は
+    /// `MoveCueSink`（talk スレッド）と対の受信端で、frame 相 drain（task 9.2）が消費する。
     pub fn new(
         presenter: EmoPresenter,
         rx: Receiver<PresentCommand>,
+        move_rx: Receiver<MoveDirective>,
         runtime: Rc<RefCell<TextLayerRuntime>>,
         clock: TalkClock,
         assets: BootAssets,
@@ -194,11 +209,22 @@ impl Emo2Wiring {
         Self {
             presenter,
             rx,
+            move_rx,
             runtime,
             clock,
             assets: Some(assets),
             attached: false,
         }
+    }
+
+    /// `\![move]` 指令受信端への test-support アクセサ（task 9.1 の存在檻・9.3 の e2e で消費）。
+    ///
+    /// 本番の frame 相 drain（task 9.2）は `move_rx` を private に閉じて `apply_move_directive` へ
+    /// 適用する。9.1 段階では channel 配線の到達性（`MoveCueSink`→`Emo2Wiring` の受信端が届く）を
+    /// 決定論に固定するための最小 read 口として `#[cfg(test)]` で開ける（本番表面は増やさない）。
+    #[cfg(test)]
+    pub(crate) fn drain_move_directives(&self) -> Vec<MoveDirective> {
+        self.move_rx.try_iter().collect()
     }
 
     // ── spine 観測用 test-support アクセサ（tasks.md task 6.2・spine S1/S3/S4） ──────────
@@ -866,6 +892,7 @@ mod tests {
         let mut wiring = Emo2Wiring::new(
             EmoPresenter::new(),
             mpsc::channel::<PresentCommand>().1,
+            mpsc::channel::<MoveDirective>().1,
             Rc::new(RefCell::new(TextLayerRuntime::new(TextLayerConfig::default()))),
             TalkClock::new(Arc::new(|| 0.0)),
             synth_assets(&[(0, 0), (1, 10)]),
@@ -884,6 +911,53 @@ mod tests {
         run_attach_phase(&mut wiring, &mut world);
         assert!(!wiring.attached, "再試行でもゲート不成立なら未装着");
         assert!(wiring.assets.is_some(), "再試行でも assets を保持");
+    }
+
+    /// task 9.1 存在檻: `MoveCueSink`（送出端）→ `Emo2Wiring`（受信端 `move_rx`）の channel 配線が
+    /// 到達可能であること（`wire_emo2_boot` が `mpsc::channel::<MoveDirective>()` を生成し送出端を
+    /// sinks 第 3 要素の `MoveCueSink` へ、受信端を `Emo2Wiring` へ渡す配線の縮図）。
+    ///
+    /// 送出端を持つ `MoveCueSink` に `\![move]` キャリア cue を `emit` すると、`Emo2Wiring` が保持する
+    /// 受信端から同一 `MoveDirective` が drain できる（frame 相 drain＝task 9.2 の適用は本檻の範囲外）。
+    #[test]
+    fn move_cue_sink_reaches_emo2_wiring_receiver() {
+        use super::super::move_cue::MoveCueSink;
+        use dola::cue::{ActorKey, CueCommand, CueSink, TalkCue};
+
+        // wire_emo2_boot 手順4 と同型: 単一 channel の送出端を sink へ、受信端を Emo2Wiring へ。
+        let (move_tx, move_rx) = mpsc::channel::<MoveDirective>();
+        let mut move_sink = MoveCueSink::new(move_tx);
+        let wiring = Emo2Wiring::new(
+            EmoPresenter::new(),
+            mpsc::channel::<PresentCommand>().1,
+            move_rx,
+            Rc::new(RefCell::new(TextLayerRuntime::new(TextLayerConfig::default()))),
+            TalkClock::new(Arc::new(|| 0.0)),
+            synth_assets(&[(0, 0)]),
+        );
+
+        // sink（talk スレッド相当）へ `\![move]` キャリアを emit → 受信端（Emo2Wiring）へ届く。
+        move_sink.emit(TalkCue {
+            at: 0.0,
+            actor: ActorKey::from("1"),
+            command: CueCommand::command_carrier(
+                "move",
+                ["-353", "", "", "0", "base", "base"]
+                    .iter()
+                    .map(|s| s.to_string())
+                    .collect(),
+            ),
+            duration: 0.0,
+        });
+
+        let drained = wiring.drain_move_directives();
+        assert_eq!(drained.len(), 1, "sink→Emo2Wiring の受信端へちょうど 1 件届く");
+        assert_eq!(drained[0].scope, 1, "scope は cue.actor（\\1）由来");
+        assert_eq!(
+            drained[0].base,
+            crate::emo2_boot::move_cue::MoveBase::Scope(0),
+            "base=scope0（fixture 形）"
+        );
     }
 
     // ── task 4.2: drain／text フェーズ＋emo2_frame_system の檻 ──────────────────────
@@ -960,6 +1034,7 @@ mod tests {
         Emo2Wiring::new(
             EmoPresenter::new(),
             rx,
+            mpsc::channel::<MoveDirective>().1,
             Rc::new(RefCell::new(TextLayerRuntime::new(TextLayerConfig::default()))),
             clock,
             synth_assets(&[(0, 0)]),

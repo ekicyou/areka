@@ -164,7 +164,7 @@
   - _Depends: 1.2, 1.3_
 
 - [ ] 9. emo2_boot 結線（move 末端の配線）
-- [ ] 9.1 MoveCueSink の登録とチャンネル配線を実装する
+- [x] 9.1 MoveCueSink の登録とチャンネル配線を実装する
   - `emo2_boot/mod.rs` で `mpsc::channel::<MoveDirective>()` を生成し `MoveCueSink` を `GhostBootOptions.sinks` へ第 3 要素として登録する
   - `Receiver<MoveDirective>` を `Emo2Wiring` へ受け渡す（`PresentBridge` と同型の配線）
   - _Requirements: 5.1_

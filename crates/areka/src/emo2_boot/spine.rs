@@ -59,6 +59,7 @@ use crate::placement::spawn::spawn_ghost_windows;
 use super::adapter::PresentBridge;
 use super::assets::{build_boot_assets, BootAssets};
 use super::frame::{run_attach_phase, run_text_phase, Emo2Wiring};
+use super::move_cue::MoveDirective;
 use super::talk_clock::{ClockedTextSink, TalkClock};
 use super::target_map::{balloon_target, shell_target};
 
@@ -449,7 +450,12 @@ impl SpineHarness {
         let ghost = boot(options).expect("scripted boot は解決可能な emo2 ghost_root で成功する");
 
         // ── frame 三相結線状態（wire_emo2_boot 手順6 相当・System 登録はせず直接駆動する） ──
-        let wiring = Emo2Wiring::new(presenter, rx, Rc::clone(&runtime), clock, wiring_assets);
+        // move channel（wire_emo2_boot 手順4 と同型・task 9.1）: このハーネスは move sink を sinks へ
+        // 登録しない（move の spine e2e＝task 9.3 が実 MoveCueSink を wire する）ため送出端は生成のみ
+        // で保持不要。Emo2Wiring は受信端 move_rx を保持し frame 相 drain（task 9.2）に備える。
+        let (_move_tx, move_rx) = mpsc::channel::<MoveDirective>();
+        let wiring =
+            Emo2Wiring::new(presenter, rx, move_rx, Rc::clone(&runtime), clock, wiring_assets);
 
         SpineHarness { world, wiring, runtime, ghost, seriko, shiori_handle, text_pump }
     }
