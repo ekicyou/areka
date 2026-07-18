@@ -8,6 +8,8 @@ areka の実 boot 経路（descript.txt 起点マウント → SHIORI DLL ロー
 
 M1 の正典イベント最小集合は既存運行表（`OnInitialize` / `OnFirstBoot` / `OnBoot` / `basewareversion` / `OnSecondChange` / `OnClose`）に一致させる。`InProc` シームは M2 の native x64 SHIORI4 が乗る正規シームでもあるが、これは第一級だが**副次**の関心として扱い、テストエルゴノミクスの焦点を薄めない。
 
+テスト脳の応答台本は**実 emo2 `pasta.dll` の出力から採取したゴールデンスナップショット**（正典イベントごとの実応答を凍結した静的 fixture）を replay する方式を採り、shell/balloon 資産は emo2 実物をそのまま流用する（非決定論は脳＝SHIORI に局在するため、そこだけを x64 決定論 DLL へ差し替える）。常設ゲートは cue sink 受領レベルで境界の決定論を保証し、実 shell/balloon を実描画まで貫くエミュレーションは流用資産上の opt-in 追加確認に留める（常設ゲート必須ではない）。
+
 ## Boundary Context
 
 - **In scope**: x64 SHIORI4 テスト DLL（cdylib・決定論固定台本）／正規 in-proc ロード経路 `ShioriWiring::InProc`＋`IShiori`→`ShioriBackend` アダプタ／マウント可能テストゴースト fixture（descript＋最小 shell、必要なら最小 balloon）／boot→talk→close の決定論 e2e（常設・`cargo test --workspace`）／既存 emo2 依存 smoke の乗り換え可否の仕分け。
@@ -36,10 +38,11 @@ M1 の正典イベント最小集合は既存運行表（`OnInitialize` / `OnFir
 #### Acceptance Criteria
 
 1. The SHIORI4 テスト DLL shall be an x64 dynamic library that exposes the areka 内部 SHIORI4 生成入口（`shiori_factory`・`extern "system"`）conforming to the existing IShiori COM ABI（`IShioriFactory`／`IShiori`・生成＋load 融合）、so that it loads through the same entry a future native x64 SHIORI4 would。
-2. When the DLL receives a request for a canonical M1 イベント（`OnInitialize`／`OnFirstBoot`／`OnBoot`／`basewareversion`／`OnSecondChange`／`OnClose`）, the DLL shall return the固定の決定論応答（さくらスクリプト／ステータス）derived from a single authoritative 台本 source。
+2. When the DLL receives a request for a canonical M1 イベント（`OnInitialize`／`OnFirstBoot`／`OnBoot`／`basewareversion`／`OnSecondChange`／`OnClose`）, the DLL shall return the固定の決定論応答（さくらスクリプト／ステータス）を、**実 emo2 `pasta.dll` の出力から採取したゴールデンスナップショット**（正典イベントごとの実応答を凍結した静的 fixture データ）から返す。
 3. When the DLL receives a request for an未知または未台本の ID, the DLL shall return a 204 相当（No Content）応答（silent success ではなく明示的な No Content）。
 4. If the DLL receives a malformed または構造不整合の request, then the DLL shall return a検出可能な失敗応答（fail-visible）and shall not panic。
-5. The DLL shall carry request/response content as opaque SHIORI/3.0 テキスト（不透明搬送）and shall not invent an独自 content スキーマや意味づけ分岐。
+5. The DLL shall carry request/response content as opaque SHIORI/3.0 テキスト（不透明搬送）and shall not invent an独自 content スキーマや意味づけ分岐（採取したスナップショットをそのまま replay する＝最も忠実な不透明搬送）。
+6. The 台本 スナップショット shall be採取される——実 emo2 `pasta.dll` を env-gate 実 pasta 経路（要件 6.1）で走らせて正典イベントの実応答を観測し、静的 fixture として commit する。常設決定論テストはこの静的スナップショットを replay し、実行時に `pasta.dll` を呼ばない。スナップショットは pasta の乱数応答のうち**1つの代表応答を凍結したもの**であり（pasta が常に同一応答を返すことの主張ではない）、その凍結応答上で boot→talk→close が決定論的に振る舞うことを保証する。
 
 ### Requirement 3: 正規 in-proc ロード経路（`ShioriWiring::InProc`）＋ `IShiori`→`ShioriBackend` アダプタ
 
@@ -60,9 +63,9 @@ M1 の正典イベント最小集合は既存運行表（`OnInitialize` / `OnFir
 
 #### Acceptance Criteria
 
-1. The テストゴースト fixture shall provide a完全なゴーストフォルダ（`ghost/master/descript.txt`＝charset UTF-8＋`shiori,<testdll>` 行・最小 shell（`surfaces.txt`＋数枚の PNG））that the実 boot 経路の descript 駆動マウント解決が成功裏に解決できる。
-2. When boot が the fixture を起点にマウント解決する, the fixture shall supply、過不足なく、the boot→talk→close 経路が実際に消費する要素（descript・shell、必要であれば最小 balloon）。
-3. The テストゴースト fixture shall be a決定論的で軽量な emo2 の代替であり、`pasta.dll` や 32bit 成果物を一切含まない。
+1. The テストゴースト fixture shall provide a完全なゴーストフォルダ（`ghost/master/descript.txt`＝charset UTF-8＋`shiori,<testdll>` 行）that the実 boot 経路の descript 駆動マウント解決が成功裏に解決できる。shell（`surfaces.txt`＋PNG）と balloon 資産は emo2 の**実物をそのまま流用**する（静的データ＝決定論を損なわない）——最小 shell を自作しない。
+2. When boot が the fixture を起点にマウント解決する, the fixture shall supply、過不足なく、the boot→talk→close 経路が実際に消費する要素（descript・emo2 流用 shell、必要であれば emo2 流用 balloon）。
+3. The 決定論 boot→talk→close 経路 shall not load `pasta.dll` や 32bit 成果物（脳＝x64 テストDLL）。fixture の shell/balloon は emo2 実物の流用でよく——非決定論性は脳＝SHIORI に局在し、それを x64 決定論 DLL へ差し替えることが本 fixture の本質。
 
 ### Requirement 5: boot→talk→close 決定論 e2e（常設ゲート）
 
@@ -74,6 +77,7 @@ M1 の正典イベント最小集合は既存運行表（`OnInitialize` / `OnFir
 2. When the boot 系列が発火する, the e2e shall observe that the canonical `OnBoot` talk（台本どおりの cue 列）が cue sink に届く。
 3. When close が発生する, the e2e shall observe a clean close 握手（正規終了）。
 4. The 決定論 e2e shall pass as part of `cargo test --workspace`、sleep 不使用・注入時刻（Tick）のみで駆動して。
+5. The 常設決定論ゲート shall observe at the cue sink 受領レベル（さくらスクリプト→cue 配送の決定論）and shall not require 実描画（seriko/emo 合成・pixel readback）。Where deeper fidelity is wanted, 流用した emo2 実 shell/balloon 資産の上で実描画エミュレーションを opt-in の追加テストとして駆動してよい（実描画は SERIKO random blink 等の別途種固定を要し・描画の正しさ自体は emo 系既存檻が正本）。
 
 ### Requirement 6: 既存テスト資産との共存・置換規律
 

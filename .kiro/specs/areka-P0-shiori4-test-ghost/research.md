@@ -131,6 +131,8 @@
 
 以下は要件討議・設計フェーズで解く論点（番号は討議入力用）。
 
+> **【要件討議#1 決着（2026-07-18）】** 台本源とfixture方針が確定＝**ゴールデンスナップショット録画再生方式**: 実 emo2 `pasta.dll` の出力（正典イベントごとの実応答さくらスクリプト）を env-gate 実 pasta 経路（要件6.1）で一度観測・凍結し、テストDLLは静的 fixture として replay する。fixture の shell/balloon は emo2 実物を流用（脳のみ差替＝非決定論は SHIORI に局在）。常設ゲート深度は cue sink 受領レベル・実描画は流用資産上の opt-in 追加。これにより **D-5（fixture実消費範囲）＝流用で確定**・**D-4（台本content解析範囲）＝ID行のみ読み対応スナップショットを返す方向で確定**（残る設計詳細＝スナップショットの格納形式・採取ハーネスの自動化度は設計フェーズ）。
+
 - **D-1（DLL パス解決）[未知]**: `InProc` に何を渡すか＝(a) 明示 `dll_path` 絶対パス／(b) `mount.shiori.dir.join(file)` を load 元にしテストが cdylib を fixture へコピー／(c) env 逃がし。`resolve` は file 名のみ返し、cdylib は `target/` に出る現実との整合が核心。`CARGO_BIN_EXE_*` は bin のみ・cdylib は同等 env が無い点に注意（テストからビルド済み cdylib パスをどう得るか＝**cdylib のテスト時ビルド保証も併せて要研究**：workspace member であっても `cargo test` が依存として自動ビルドするとは限らない＝`[dev-dependencies]` に cdylib を積む／build script／明示ビルド前提のいずれか）。
 - **D-2（carve-out の是非と範囲）[未知]**: Option A/B/C の選択。「reference 脳を種に活用」（brief）と「areka bin-only・in-crate テスト」（記憶）の緊張をどう解くか。M2 native 脳の前方整合（要件 7.1）を脳側公開面で担保するか、InProc シーム側だけで足りるか。
 - **D-3（SHIORI 交信列の観測点）[未知]**: 要件 1.4 は「送出イベント id・NOTIFY/GET・順序」を assert 可能にせよと要求。実 DLL backend では ScriptedShioriBackend のような記録が backend 内に置けない。観測点候補＝(a) InProc アダプタに記録フックを挿す／(b) テスト DLL 側に受領ログ（ReferenceBrain の `notifications` に相当）を持たせ AsImpl で覗く／(c) kanade↔shiori の間に記録デコレータ backend を噛ませる。決定論檻の粒度に直結。
