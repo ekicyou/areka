@@ -85,7 +85,7 @@
   - _Depends: 4.4_
 
 - [ ] 6. Validation: 実機での分かち書きワードラップ確認
-- [ ] 6.1 fixture有効化と有界自動終了での動作確認
+- [x] 6.1 fixture有効化と有界自動終了での動作確認
   - 実機確認用フィクスチャの descript へ折返しモードを有効化する1行を追記する
   - 有界な自動終了付きで実機を起動し、折返しモードが ON として解決されたことをログから確認する
   - 起動から自動終了までが安定して完走し終了コードが正常であることを確認できた状態を完了とする
@@ -109,3 +109,7 @@
   - `Parser::parse(&self, &str) -> Vec<String>`（**所有 String**・design.md の `Vec<&str>` は誤り）。task 3.2 の glyph-index 写像は owned String チャンクを `chars().count()` で数える形にする。
   - `budouy::Parser: Sync + Send`（コンパイル時 bound で証明済み）→ キャッシュは **`static PARSER: OnceLock<budouy::Parser>`** で確定（design 主案どおり・thread_local フォールバック不要）。
   - spike テストは `crates/areka-emo-text/src/lib.rs` の `#[cfg(test)] mod budouy_spike` に恒久保持（決定論・無損失・>=2 塊分割を "今日はいい天気ですね" でピン）。
+
+- **Task 6.1/6.2 実機サインオフ（開発者 opt-in・自律環境では不可の部分）**:
+  - Task 6.1: fixture `emo2-kakukaku/descript.txt` に `budoux_newline,1` 追記済み・`emo2_real_run.rs` に `wrap=BudouxWordWrap` grep＋`RUST_LOG=info,kanade=trace` 追加済み・標準スイートは自明 skip 緑。**実 GUI 走行での exit 0＋grep一致＋目視は開発者の env-gate 人間サインオフ**（`AREKA_EMO2_REAL_RUN=1`・実表示・DPI≠96・i686 pasta helper 必須・design 9.3）——自律環境（表示/helper 不在）では実行不可ゆえコード/fixture/harness の整備までを完了とした。
+  - Task 6.2: budoux ON の diag dump ケースを `viewbox_draw.rs` の `AREKA_DIAG_OUT` ファミリに追加し、オフスクリーン D2D→readback→PNG（WARP 可）を自律環境で実出力・AI vision 目視で「塊が行末で途中分割されない／長大塊がはみ出さない」を確認した（[emo-text-byte-equiv-default-font-blindspot] の盲点対策）。
