@@ -95,5 +95,5 @@ M1 の正典イベント最小集合は既存運行表（`OnInitialize` / `OnFir
 1. The `ShioriWiring::InProc` シーム shall be positioned as the正規シーム that a future M2 native x64 SHIORI4 will reuse（前方整合・第一級の布石）。
 2. The 本 spec shall leave 本番 main の結線 unchanged（M1 本番ゴースト＝emo2・`Helper` 経路のまま）。
 3. The descript 駆動の bitness／種別自動判別 shall remain M2 シーム予約であり、本 spec の範囲外とする（判別鍵は将来 charset 規則）。
-4. The テスト DLL shall not implement `IShioriHost::Raise` 起点の自発イベントや deferred（`SHIORI_S_PENDING`）を、ReferenceBrain の既存檻が持つ範囲を超えて（必要最小のみに留める）。
+4. The テスト DLL shall limit 自発イベント（`IShioriHost::Raise` 起点）と deferred 応答（`SHIORI_S_PENDING`）を、決定論 e2e（要件 5）が要求する範囲のみに留め、それを超える網羅を実装しない（即時応答中心の最小脳・実装基盤の選択には依存しない要件）。
 5. The 本 spec shall not対象とする SAORI・里々・YAYA を。
