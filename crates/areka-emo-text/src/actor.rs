@@ -26,10 +26,12 @@ use crate::canvas::ContentCanvas;
 use crate::draw::{DWriteMetrics, ResolvedFont};
 use crate::layout::{LayoutEngine, WrapPlan};
 use crate::region::{ImagePx, ScaleContract, TextRegion};
+use crate::segment::segment_plan;
 use crate::sink::{EmoTextSink, TextMsg, handle_text_msg};
 use crate::state::{TextLayerConfig, TextLayerState};
 use crate::surface::TextSurface;
 use crate::viewbox_draw::{DrawStats, ViewboxExecutor};
+use crate::wrap::WrapMode;
 use crate::writing::WritingMode;
 
 /// actor の装着先（結線側が emo-present `TextSlotView` から構築して routing へ登録する）。
@@ -89,11 +91,12 @@ impl TextSlotBinding {
     }
 }
 
-/// actor 1 人分の layout 入力——`writing_mode`／領域／フォントの解決済み束
+/// actor 1 人分の layout 入力——`writing_mode`／領域／フォント／折返しモードの解決済み束
 /// （design.md `TextLayerRuntime.layout_input` の値型）。
 ///
 /// 解決はすべて既存の一点解決口（[`WritingMode::resolve`]／[`TextRegion::resolve`]／
-/// [`ResolvedFont::resolve`]）の合成であり、本型は束ねるだけで独自解釈を持たない。
+/// [`ResolvedFont::resolve`]／[`WrapMode::resolve`]）の合成であり、本型は束ねるだけで
+/// 独自解釈を持たない。
 #[derive(Clone, Debug, PartialEq)]
 pub struct ResolvedBalloonText {
     /// 2 層マージ済み `writing_mode` の解釈結果。
@@ -102,6 +105,8 @@ pub struct ResolvedBalloonText {
     pub region: TextRegion,
     /// 解決済みフォント一式（欠落は ukadoc 既定で充足済み）。
     pub font: ResolvedFont,
+    /// 折返しモードの解釈結果（`budoux_newline` 語彙解決・ON 時のみ分かち書き境界を計算）。
+    pub wrap: WrapMode,
 }
 
 impl ResolvedBalloonText {
@@ -114,6 +119,7 @@ impl ResolvedBalloonText {
             mode,
             region: TextRegion::resolve(model, image_size, mode),
             font: ResolvedFont::resolve(model),
+            wrap: WrapMode::resolve(model),
         }
     }
 }
@@ -468,6 +474,7 @@ fn present_actor(
             actor = %actor,
             slot = ?binding.slot,
             ?physical_size,
+            wrap = ?resolved.wrap,
             "テキスト供給面を予約スロットへ装着した（actor ごと初回のみ・以降は Present のみ）"
         );
     }
@@ -486,6 +493,18 @@ fn present_actor(
         return Ok(());
     };
     let visible = runtime.state.visible_glyphs(actor, talk_time);
+    // 折返し計画: ON（BudouxWordWrap）のときだけ分かち書き境界を全 items から計算し
+    // layout へ供給する。OFF（CharByChar）は plan を計算すらしない（R4.2 の構造保証——
+    // segment_plan を呼ぶのは Segmented アームだけ）。`plan` は ON アームでのみ束縛され、
+    // 借用 `&plan` が layout 呼出まで生存するよう遅延初期化パターンで宣言する。
+    let plan;
+    let wrap = match resolved.wrap {
+        WrapMode::CharByChar => WrapPlan::CharByChar,
+        WrapMode::BudouxWordWrap => {
+            plan = segment_plan(actor_state.items());
+            WrapPlan::Segmented(&plan)
+        }
+    };
     let lines = LayoutEngine::layout(
         actor_state.items(),
         visible,
@@ -493,7 +512,7 @@ fn present_actor(
         resolved.mode,
         resolved.font.height,
         &render.metrics,
-        WrapPlan::CharByChar,
+        wrap,
     );
     let window = LayoutEngine::visible_window(&lines, &resolved.region, resolved.mode);
     let canvas = ContentCanvas::from_layout(&lines, &resolved.region, resolved.mode);
@@ -617,6 +636,7 @@ mod runtime_tests {
         ResolvedBalloonText, TextLayerRuntime, TextSlotBinding, present_frame, spawn_emo_text,
     };
     use crate::state::TextLayerConfig;
+    use crate::wrap::WrapMode;
 
     // ── ログ檻（WARN/ERROR 件数を数える最小 Subscriber・sink.rs の檻パターン踏襲） ──
 
@@ -1099,6 +1119,41 @@ mod runtime_tests {
             "描画呼び出し回数は単調非減少: {} -> {}",
             stats.draw_text_layout_calls,
             stats2.draw_text_layout_calls
+        );
+    }
+
+    /// task 5 配線の存在チェック（R4.2/R9.1・[test-only-decision-branches]）:
+    /// balloon model の `budoux_newline` が `ResolvedBalloonText.wrap` へ他の解決値
+    /// （mode/region/font）と同じ一点解決経路で反映される。ON model（`budoux_newline,1`）
+    /// → `BudouxWordWrap`・キー無し → `CharByChar`（既定）。`WrapMode::resolve` の受理語彙は
+    /// wrap.rs の檻、`segment_plan` の境界計算は segment.rs の檻ゆえここでは再テストしない
+    /// （配線は存在チェック 1 本）。ON 時のみ segment_plan が走る構造保証は present_actor の
+    /// `match`（OFF アームは segment_plan を呼ばない）が担い、性能/構造の主張につき檻化しない。
+    #[test]
+    fn resolve_wires_wrap_mode_from_balloon_model() {
+        let image = (120u32, 60u32);
+        // ON: budoux_newline,1 を持つ model（`new` の末尾 positional 引数）。
+        let on_model = BalloonModel::new(
+            WindowPosition::new(None, None),
+            Origin::new(Some(0), Some(0)),
+            WordWrapPoint::new(None, None),
+            ValidRect::new(None, None, None, None),
+            Font::new(None, None, FontColor::new(None, None, None)),
+            None,
+            Some("1".into()),
+        );
+        let resolved_on = ResolvedBalloonText::resolve(&on_model, image);
+        assert_eq!(
+            resolved_on.wrap,
+            WrapMode::BudouxWordWrap,
+            "budoux_newline,1 の model は wrap=BudouxWordWrap を束ねる（他の解決値と同一経路）"
+        );
+        // OFF: キー無し（geo_model）→ CharByChar（既定・ログなし正常系）。
+        let resolved_off = ResolvedBalloonText::resolve(&geo_model(), image);
+        assert_eq!(
+            resolved_off.wrap,
+            WrapMode::CharByChar,
+            "キー無しの model は wrap=CharByChar（既定）"
         );
     }
 
