@@ -169,7 +169,7 @@ flowchart TD
 **フロー上の決定**:
 
 - **塊先決の判定式**（3.1/2.2）: `cap_rem = threshold − inline_pos`（残り行幅）・`cap_full = threshold − inline_start`（行頭からの行幅）とし、`seg_sum ≤ cap_rem` → 現在行へ継続、`cap_rem < seg_sum ≤ cap_full` → 塊の前で行送り、`seg_sum > cap_full` → 当該塊のみ文字単位縮退。行頭（current 空）では `inline_pos == inline_start` ゆえ `cap_rem == cap_full` となり「塊前の行送り」分岐は構造的に発火しない——**ワードラップは空行を作らない**（保証がガード無しで成立する）。
-- **塊内は追加判定なし**（2.1/2.3）: 塊先頭で先決した後、その塊の残りグリフは折返し判定を通さず配置する。浮動小数の丸め揺れで塊が途中分割される事故を構造的に排除する（「塊は途中分割されない」の型保証）。
+- **塊内は追加判定なし**（2.1/2.3）: 塊先頭で先決した後、その塊の残りグリフは折返し判定を通さず配置する。浮動小数の丸め揺れで塊が途中分割される事故を構造的に排除する（「塊は途中分割されない」の型保証）。**「塊内」の判定は `segment_starting_at` の Some/None ではなく、先決済み塊の残グリフ数カウンタで追跡する**——カウンタ正＝塊内（判定なし配置）・カウンタ 0 かつ塊先頭でない＝plan 非被覆（下記 Error Handling の縮退契約に従い既存 CharByChar 式で判定）。この 2 状態の区別が validation Issue 2 の吸収点（素朴な Some/None 分岐だと非被覆グリフが折返し判定を通らず行内へ無限に積まれる実装が書けてしまう）。
 - **縮退は塊に閉じる**（3.3）: 縮退フラグは当該塊のグリフ数ぶんだけ有効。縮退中は既存の文字単位規則（行頭 1 グリフは閾値超過でも配置＝無限折返し回避・3.2）へ完全委譲し、次の塊の先頭で通常のワードラップ判定を再開する。
 - **保留フラッシュとの順序**（5.3）: 塊先決はゲート②のフラッシュ**後**に走る。フラッシュ直後は行頭（`inline_pos == inline_start`）ゆえ「塊先頭かつ残り行幅最大」の状態で先決される——deferred newline の意味論（保留・累算・実体化・蒸発）は一切変わらない。
 
@@ -306,6 +306,7 @@ impl WrapMode {
 - **glyph index 写像**: budouy `parse(&str) -> Vec<&str>` の各チャンクを `chars().count()` で累積し、**全 items 中の Glyph のみを 0 起点で数えた通し番号**（visible gate と同じ数え方）上の `(start, len)` へ 1:1 に写す。グリフ単位は Rust `char`（state.rs 正準・M1 は書記素クラスタ結合なし）ゆえ写像は無損失。
 - **全文 lookahead の源（7.1・INV-1）**: 入力は常に全 `items`（可視 prefix ではない）。可視で切った部分列からの計算はレビューエラー（リフロー跳びの構造原因）。
 - **budouy Parser のライフサイクル（8.1）**: `static PARSER: OnceLock<budouy::Parser>` をモジュール内部に持ち、初回のみ `budouy::model::load_default_japanese_parser()` でロードする（present_frame 毎のモデルロード禁止）。vendored-models＝ネットワーク不要・同一入力→同一境界（決定論・オフライン CI 整合）。
+- **実装順序の note（validation Issue 1 の吸収）**: budouy の実ビルド・API 実形（`vendored-models` での parse 1 回・`Parser: Sync` の成否・ロード API の Result 有無）は docs.rs 参照のみで未検証のため、**tasks の先頭タスクを「budouy 依存追加＋最小 spike」として独立に切り**、その結果で `OnceLock`／`thread_local!` を確定してから segment.rs 本実装へ進む（非 Sync なら `thread_local!` へ退避——layout は UI スレッド駆動のため機能等価）。
 - 純粋層規律: `windows` 非依存（budouy は非 windows 依存ゆえ構造檻に抵触しない）。`lib.rs` の `PURE_SOURCES` へ登録。
 
 ##### Service Interface
@@ -456,7 +457,7 @@ let lines = LayoutEngine::layout(items, visible, &region, mode, font_h, &render.
 
 - **未知語彙**（1.4）: `WrapMode::resolve` が値を含む `warn!` を 1 回出力し `CharByChar` へフォールバック（`writing_mode` と同文型・縮退継続）。
 - **長大セグメント**（3.1/3.2）: エラーではなく設計された縮退——当該塊のみ文字単位折返し。行頭 1 グリフ配置の既存規則により、はみ出し・無限ループ・グリフ喪失は構造的に発生しない。
-- **plan と items の不整合**（呼び手契約違反）: panic せず、塊先頭に該当しないグリフは文字単位規則で配置される（優しい縮退）。本番配線は 1 箇所で同一 items から導出するため通常到達しない。
+- **plan と items の不整合**（呼び手契約違反）: panic せず、**plan 非被覆のグリフ（塊内カウンタ 0 かつ塊先頭に該当しない）は既存の文字単位折返し式（CharByChar と同一判定）で配置される**（優しい縮退・System Flows の 2 状態区別を参照）。この縮退は檻 1 本で固定する（非被覆入力→文字単位配置のアサート）。本番配線は 1 箇所で同一 items から導出するため通常到達しない。
 - **budouy モデルロード**: `vendored-models` は同梱データのロードのみ（I/O・ネットワークなし）。ロード API が Result を返す場合は初回に `error!`＋以降 OFF 縮退の写像とする（実装時に API 実形へ合わせる——失敗を握りつぶさない）。
 
 ### Monitoring
