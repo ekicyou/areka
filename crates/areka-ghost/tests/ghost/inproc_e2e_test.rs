@@ -25,6 +25,7 @@
 //! いたが、その応急措置は 5.0 完了で撤去した）。残る低頻度残存はこの並列マルチエージェント build セッション
 //! 特有の兄弟コンパイル burst 下でのみ稀に spine settle ループが飢餓するもので、本テスト自体は無関係。
 
+use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
@@ -33,6 +34,7 @@ use areka_ghost::{GhostBootOptions, ShioriWiring, TickerMode, boot, inproc_conne
 use areka_kanade::{CloseReason, MonotonicMs, ShioriBackend};
 use areka_parsers::charset::DefaultEncoding;
 use areka_parsers::package;
+use areka_parsers::package::ShioriMount;
 use areka_sakura::contract::{ActorKey, CueCommand, TalkCue};
 
 use shiori_host32_host::{ExitKind, HelperStatus, RequestError, ShutdownError};
@@ -454,4 +456,137 @@ fn i2_inproc_one_lap_records_both_exchange_sequence_and_greeting_cues() {
     assert_greeting_broadcast(&text, "text");
 
     // 共有 fixture（shared_test_ghost）はプロセス寿命 leak ゆえ本テストでは削除しない（意図的）。
+}
+
+// ============================================================================
+// I3: ロード失敗の主要態様を決定論的に検証する（task 5.3・design.md「inproc 決定論 e2e」
+//     シナリオ I3・Error Handling「connect 失敗」行・要件 3.5）。
+//
+// I1/I2 が実 InProc DLL 越しの一周（boot→talk→shutdown）を協調ループで駆動するのに対し、
+// I3 は **boot しない**——`inproc_connect(shiori)()` を直接（unit-style）呼び、ロード確立の
+// 3 態様（参照先未指定 / DLL 欠落 / 不正イメージ）がいずれも **panic せず** `Err`（log-first・
+// 要件 3.5）として顕在化することのみを軽量・決定論的に確かめる。アクタースレッド・drive ループ・
+// 共有 fixture・実ビルド済み DLL のいずれも要さない（3 態様とも「失敗」検証ゆえ成功ロードが不要）。
+// ============================================================================
+
+/// I3 用フィクスチャ組み立てヘルパ（`shiori_wiring.rs::build_shiori_mount` を鏡写しにしたもの）。
+///
+/// 一意な一時ゴースト（`ghost/master/descript.txt`＋`shell/master/` dir）を作り、本番と同じ
+/// 経路（`package::resolve`）で `ShioriMount` を得る（`ShioriMount` は `#[non_exhaustive]` ゆえ
+/// struct リテラルで組めない・実フィクスチャの resolve が唯一の入手経路）。`shiori_line` が
+/// `Some(name)` なら descript に `shiori,<name>` 行を書き `file: Some(name)`、`None` なら行を
+/// 書かず `file: None`（resolve は推測しない）。掃除のため root パスも返す（呼び出し側が
+/// best-effort で削除する）。`dll_bytes` が `Some` なら resolve 後の `mount.shiori.dir`
+/// （=`ghost/master`・`inproc_connect` が `dir.join(file)` で組むロード元）へ指定バイト列を
+/// `shiori_line` の名前で書き出す（不正イメージ態様のため）。
+fn build_i3_mount(
+    shiori_line: Option<&str>,
+    dll_bytes: Option<&[u8]>,
+) -> (ShioriMount, PathBuf) {
+    let unique = format!(
+        "areka-ghost-i3-load-failure-{}-{:?}-{}",
+        std::process::id(),
+        std::thread::current().id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_nanos())
+            .unwrap_or(0)
+    );
+    let root = std::env::temp_dir().join(unique);
+    let master_dir = root.join("ghost").join("master");
+    std::fs::create_dir_all(&master_dir).expect("fixture master dir 作成に失敗");
+    std::fs::create_dir_all(root.join("shell").join("master")).expect("fixture shell dir 作成に失敗");
+
+    let mut descript = String::new();
+    if let Some(name) = shiori_line {
+        descript.push_str(&format!("shiori,{name}\n"));
+    }
+    std::fs::write(master_dir.join("descript.txt"), descript)
+        .expect("fixture descript.txt 書き込みに失敗");
+
+    let mount = package::resolve(&root, DefaultEncoding::Ansi).expect("fixture ghost_root の resolve に失敗");
+    let shiori = mount.shiori;
+
+    // 不正イメージ態様: resolve 済み shiori.dir（ロード元 dir）へ非 PE バイト列を DLL 名で置く。
+    if let Some(bytes) = dll_bytes {
+        let name = shiori_line.expect("dll_bytes を書くには shiori_line（DLL 名）が要る");
+        std::fs::write(shiori.dir.join(name), bytes).expect("非 PE テキストの書き出しに失敗");
+    }
+
+    (shiori, root)
+}
+
+/// I3-① **参照先未指定**（`file: None`）: descript に `shiori,` 行が無ければ `file: None` になり、
+/// `inproc_connect(shiori)()` は DLL ロードを試みず即座に `Err`（推測しない・log-first・要件 3.5）。
+/// 偽陽性（別理由の失敗）を避けるため、エラー文言が DLL ファイル名未解決由来であること
+/// （`inproc_connect` の `file: None` 枝の文言に「ファイル名」を含む）まで確認する。
+#[test]
+fn i3_load_failure_missing_reference_returns_err() {
+    let (shiori, root) = build_i3_mount(None, None);
+    assert_eq!(shiori.file, None, "fixture は shiori 行なし＝file:None のはず");
+
+    let connect = inproc_connect(shiori);
+    let result = connect();
+
+    // 後始末（best-effort）: assert より先に一時ディレクトリを掃除する。
+    let _ = std::fs::remove_dir_all(&root);
+
+    match result {
+        Err(err) => assert!(
+            err.contains("ファイル名"),
+            "参照先未指定はファイル名未解決として顕在化すること（別理由の失敗でない）: {err}"
+        ),
+        Ok(_) => panic!("参照先未指定（file:None）はロード失敗になるはず（inproc_connect は panic せず Err）"),
+    }
+}
+
+/// I3-② **DLL 欠落**: `shiori,someMissing.dll` 行はあるが `ghost/master/` に当該 DLL が存在しない。
+/// `inproc_connect` は `LoadLibraryW` を不在パスへ試み、失敗を `error!` 済み `Err` へ写す（panic せず・
+/// 要件 3.5）。
+#[test]
+fn i3_load_failure_missing_dll_returns_err() {
+    let (shiori, root) = build_i3_mount(Some("someMissing.dll"), None);
+    assert_eq!(
+        shiori.file,
+        Some("someMissing.dll".to_string()),
+        "fixture は shiori 行あり＝file:Some のはず"
+    );
+    // DLL 実体は書いていない＝ロード元に不在（LoadLibraryW が失敗する前提）。
+    assert!(
+        !shiori.dir.join("someMissing.dll").exists(),
+        "態様前提: DLL は存在しないこと"
+    );
+
+    let connect = inproc_connect(shiori);
+    let result = connect();
+
+    let _ = std::fs::remove_dir_all(&root);
+
+    match result {
+        Err(_) => {}
+        Ok(_) => panic!("DLL 欠落はロード失敗になるはず（inproc_connect は panic せず Err）"),
+    }
+}
+
+/// I3-③ **不正イメージ**: `shiori,bogus.dll` 行があり `ghost/master/bogus.dll` は非 PE テキスト。
+/// `LoadLibraryW` は不正イメージを拒否し、`inproc_connect` は失敗を `error!` 済み `Err` へ写す
+/// （panic せず・要件 3.5）。
+#[test]
+fn i3_load_failure_invalid_image_returns_err() {
+    let (shiori, root) = build_i3_mount(Some("bogus.dll"), Some(b"this is not a valid PE image"));
+    // 不正イメージ実体がロード元に存在すること（LoadLibraryW がイメージ検証で拒否する前提）。
+    assert!(
+        shiori.dir.join("bogus.dll").exists(),
+        "態様前提: 非 PE テキストの bogus.dll が存在すること"
+    );
+
+    let connect = inproc_connect(shiori);
+    let result = connect();
+
+    let _ = std::fs::remove_dir_all(&root);
+
+    match result {
+        Err(_) => {}
+        Ok(_) => panic!("不正イメージはロード失敗になるはず（inproc_connect は panic せず Err）"),
+    }
 }
