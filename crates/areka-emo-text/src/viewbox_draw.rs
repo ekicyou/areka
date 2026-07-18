@@ -2496,4 +2496,147 @@ mod tests {
             t += dt;
         }
     }
+
+    /// 目視診断（budoux ワードラップ・R9.2/9.3）: 実 fixture（emo2-kakukaku・Yu Gothic UI 28px・
+    /// 狭い validrect 320×122・`wordwrappoint.x=-49`）へ、(1) 通常文を **OFF（文字単位）** と
+    /// **ON（分かち書き）** の両方、(2) budoux 境界を持たない長大塊を **ON** で描き、fully-revealed
+    /// （全グリフ可視）で PNG を保存する。
+    ///
+    /// - **通常ケース（OFF/ON 並置）**: 狭いバルーンでは OFF が文節を行末で途中分割するが、ON は
+    ///   塊を丸ごと次行へ送る（R9.1）。`diag_budoux_normal_off.png` と `diag_budoux_normal_on.png`
+    ///   を並べて改善を目視できる。
+    /// - **長大塊ケース（ON）**: 行頭からでも 1 行に収まらない塊（budoux 境界のない連続カナ）は
+    ///   当該塊に限って文字単位縮退し、バルーン（validrect＝供給面寸）からはみ出さない（R9.2）。
+    ///   `diag_budoux_longseg_on.png` を出す。最右インク列が供給面右端で張り付いていない（＝
+    ///   はみ出しクリップでない）ことを `eprintln!` の数値でも補助確認する。
+    ///
+    /// byte 等価檻（`diag_line_boundary_dropout_vs_oracle` 等）は「viewbox==oracle」を保証するが、
+    /// 「分かち書き折返しが読みやすく見えるか・長大塊がはみ出さないか」は人（AI vision）が画像を
+    /// 見るしかない（記憶 emo-text-byte-equiv-default-font-blindspot）。全域再描画オラクル
+    /// [`DrawExecutor`] を使い fully-revealed の完成画像を 1 フレームで得る。
+    /// `cargo test -p areka-emo-text --lib -- --ignored --nocapture diag_dump_budoux_wordwrap_pngs`
+    /// （出力先は env `AREKA_DIAG_OUT`・無指定はカレント）。
+    #[test]
+    #[ignore = "PNG ダンプ（ファイル副作用・目視診断用・明示実行のみ）"]
+    fn diag_dump_budoux_wordwrap_pngs() {
+        let out_dir = std::env::var("AREKA_DIAG_OUT").unwrap_or_else(|_| ".".to_string());
+        let mut rig = Rig::new();
+        // 実 fixture（emo2-kakukaku）を実ファイルからロード（Yu Gothic UI・validrect 320×122・
+        // wordwrappoint.x=-49）——diag_dump_horizontal_pngs と同一経路。狭いバルーンが char-by-char
+        // の途中分割を誘発する（＝ON の改善が見える台）。
+        let fixture_dir = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../pilot/examples/shiori-host-32/fixtures/emo2/emo2-kakukaku");
+        let read_dec = |name: &str| -> String {
+            let bytes = std::fs::read(fixture_dir.join(name)).expect("fixture 読取");
+            areka_parsers::charset::decode(&bytes, areka_parsers::charset::DefaultEncoding::Utf8)
+        };
+        let model = areka_parsers::balloon::parse_str(
+            &read_dec("descript.txt"),
+            Some(&read_dec("balloons0s.txt")),
+        );
+        // balloon 画像原寸（surface0＝400×224）で region を解決する（validrect は image 相対）。
+        let balloon_image = (400u32, 224u32);
+        let resolved = crate::actor::ResolvedBalloonText::resolve(&model, balloon_image);
+        let mode = resolved.mode;
+        let font = &resolved.font;
+        let region = &resolved.region;
+        // 供給面＝validrect 物理寸（ceil(validrect × k)・k=1）＝バルーンの折返し閾/はみ出し境界。
+        let image = (
+            (region.right() - region.left()).ceil() as u32,
+            (region.bottom() - region.top()).ceil() as u32,
+        );
+        let contract = ScaleContract::new(1.0, None);
+        let config = TextLayerConfig::default();
+        let factory = rig.core.dwrite_factory().expect("dwrite_factory").clone();
+        let metrics = DWriteMetrics::new(&factory, font, mode, &config).expect("DWriteMetrics");
+        let pitch = {
+            use crate::layout::GlyphMetrics;
+            metrics.line_pitch(font.height) as u32
+        };
+        eprintln!(
+            "[diag-budoux] model: font={} height={} mode={mode:?} validrect=[{},{}]x[{},{}] surface={image:?} wrap_threshold={}",
+            font.name,
+            font.height,
+            region.left(),
+            region.right(),
+            region.top(),
+            region.bottom(),
+            region.wrap_threshold()
+        );
+
+        // 1 ケース（sentence を fully-revealed で描画）を PNG 保存するヘルパ。ON（use_budoux=true）は
+        // actor.rs と同型の遅延初期化で segment_plan を計算し WrapPlan::Segmented を供給する（OFF は
+        // segment_plan を呼ばず CharByChar）。戻り値＝(行数, 最右インク列 x)。
+        let dump_case =
+            |rig: &mut Rig, tag: &str, sentence: &str, use_budoux: bool| -> (usize, Option<u32>) {
+                let items = glyph_items(sentence);
+                let visible = items
+                    .iter()
+                    .filter(|i| matches!(i, TextItem::Glyph { .. }))
+                    .count();
+                let plan; // ON アームでのみ束縛（借用 &plan が layout 呼出まで生存）。
+                let wrap = if use_budoux {
+                    plan = crate::segment::segment_plan(&items);
+                    let segs: Vec<(usize, usize)> =
+                        plan.segments().iter().map(|s| (s.start, s.len)).collect();
+                    eprintln!("[diag-budoux]   segments(start,len)={segs:?}");
+                    WrapPlan::Segmented(&plan)
+                } else {
+                    WrapPlan::CharByChar
+                };
+                let lines = LayoutEngine::layout(
+                    &items,
+                    visible,
+                    region,
+                    mode,
+                    font.height,
+                    &metrics,
+                    wrap,
+                );
+                let window = LayoutEngine::visible_window(&lines, region, mode);
+                let canvas = ContentCanvas::from_layout(&lines, region, mode);
+                let mut surface = rig.attach(image, 1.0);
+                let mut exec = DrawExecutor::new(&rig.core).expect("DrawExecutor");
+                exec.render(&canvas, &window, font, mode, &contract, &mut surface)
+                    .expect("render");
+                let bytes = surface.read_back().expect("read_back");
+                let (w, h) = surface.size();
+                // 最右インク列（inline はみ出しの定量指標・供給面は validrect 寸ゆえ描画は自動クリップ＝
+                // w-1 に張り付くならはみ出しをクリップで隠している疑い）。
+                let rightmost = {
+                    let mut r: Option<u32> = None;
+                    for x in (0..w).rev() {
+                        let hit = (0..h).any(|y| bytes[((y * w + x) * 4 + 3) as usize] != 0);
+                        if hit {
+                            r = Some(x);
+                            break;
+                        }
+                    }
+                    r
+                };
+                let rgba = diag_composite_rgba(&bytes, w, h, pitch);
+                let png = diag_encode_png_rgba(&rgba, w, h);
+                let path = format!("{out_dir}/diag_budoux_{tag}.png");
+                std::fs::write(&path, &png).expect("PNG 書き込み");
+                eprintln!(
+                    "[diag-budoux]   saved {path}  budoux={use_budoux} sentence=「{sentence}」 \
+                     visible={visible} lines={} rightmost_ink_x={rightmost:?} (surface_w={w} pitch={pitch})",
+                    lines.len()
+                );
+                (lines.len(), rightmost)
+            };
+
+        // ── 通常ケース: 狭いバルーンで char-by-char が文節を途中分割する和文（OFF/ON 並置）。 ──
+        let normal = "今日はとても良い天気ですね一緒に近くの公園へ遊びに行きましょう";
+        eprintln!("[diag-budoux] === 通常ケース（OFF: 文字単位） ===");
+        dump_case(&mut rig, "normal_off", normal, false);
+        eprintln!("[diag-budoux] === 通常ケース（ON: 分かち書き） ===");
+        dump_case(&mut rig, "normal_on", normal, true);
+
+        // ── 長大塊ケース: budoux 境界を持たない連続カナ（行頭からでも 1 行に収まらない）を ON で。 ──
+        // 前後に通常の和文を置き「長大塊のみ縮退し前後は分かち書き継続」を目視できる形にする（R3.3）。
+        let longseg = "むかしむかしバアアアアアアアアアアアアアアアアアアアアアア山という所に住んでいました";
+        eprintln!("[diag-budoux] === 長大塊ケース（ON: 縮退＋はみ出しなし） ===");
+        dump_case(&mut rig, "longseg_on", longseg, true);
+    }
 }
