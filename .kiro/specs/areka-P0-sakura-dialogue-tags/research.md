@@ -439,3 +439,127 @@ if self.schedule.remaining() < remaining_before {
 | `username` は SHIORI リソースでもある | `ukadoc:list_shiori_resource:username` |
 | `username` プロパティは別概念（同時起動相手の呼ばれ方・SSP 2.3.51+） | `ukadoc:list_propertysystem:username` |
 | 未設定 username はゴースト側が既定を代入する de-facto | `yaya:Tips/ユーザーの名前を覚える`（「名無し」代入例） |
+
+---
+
+# design フェーズ追記（2026-07-18・kiro-spec-design）
+
+> 本節以降が design フェーズの正本。§5/§7 のうち要件ディスカッション（2026-07-17〜18・5 議題）で裁定済みの項目は**決定済み**として上書きされる（requirements.md が現行の権威）。
+
+## 10. 実測再検証（design 着手時）
+
+crate コードは origin/main と同一（本ブランチの差分は `.kiro/` 配下のみ）。以下の載荷点を全て直接再実測し、§1〜§4 の引用が現時点でも正確であることを確認した:
+
+| 事実 | 実測位置 |
+|---|---|
+| `CueCommand` 10 variant・`Custom{command,params:DynamicValue}` | `crates/dola/src/cue/command.rs:126-161`（Custom `:137-141`） |
+| ワイヤ檻は既存 8 variant の JSON リテラル固定のみ（additive 安全） | `command.rs:462-507`・additive 前例檻 `:399-414` |
+| `CueTarget` は `Shell`/`Balloon` の 2 variant（serde・`EntityKey` から参照） | `command.rs:57-64` |
+| `CuePlayer::tick` は Choice のみ `pending_choices` へ分離・他は全 sink へ broadcast | `runtime.rs:193-216` |
+| `cue_target_of` は runtime 実行コードから未参照（演者側 relevance のみ） | `runtime.rs` 全文・`sink.rs:50-67` |
+| `CuePlayer` は `sinks: Vec<Box<dyn CueSink>>`＋`register_sink` で既に任意個 | `runtime.rs:103,155` |
+| barrier は完了判定より先に判定され return（R2.3 構造充足） | `runtime.rs:221-248`・`schedule.rs:289-293` |
+| `resolve_choice` は id 照合・解決後 `settle_completion_after_resolve` | `runtime.rs:279-293,315-319` |
+| `SakuraMsg` は Start/Tick/Close の 3 種・`#[non_exhaustive]` | `contract.rs:23-34` |
+| `spawn_talk(start, done, surface_sink, text_sink)`・TalkDriver は `Vec<Box<dyn CueSink>>` 保持 | `drive.rs:65-92,126-134` |
+| `TalkDone` は `settle_after_tick`（on_tick 経由）でのみ送出（R-5 の一 tick 遅延） | `drive.rs:270-290` |
+| compile catch-all・`emit()` は CueCommand 専用・ClearAll 前置・除外檻 | `compile.rs:117-122,146-153,132-134,511-544` |
+| `GhostBootOptions` は 2 固定スロット `surface_sink`/`text_sink`（generic S,T） | `areka-ghost/src/runtime.rs:65-79`・「2スロット構造」明文 `sink.rs:52` |
+| dispatcher は per-talk に sink を `clone()` して `spawn_talk` | `areka-ghost/src/dispatcher.rs:96-105` |
+| `StartTalk{talk_id,script}` は areka-talk 正本・kanade 側に複数の構築点 | `areka-talk/src/lib.rs:17-19`・`areka-kanade/src/schedule/boot.rs:118`・`close.rs:68` ほか |
+| `move_window_to` 物理 px 素通し・BalloonFollow 随伴・warn+false | `areka/src/placement/follow.rs:490-519` |
+| `WindowPos{position:Option<Point>,size:Option<SizeI>}`（物理 px） | `wintf/src/ecs/window/window_pos/mod.rs:59-62` |
+| `GhostWindows`（scope→char/balloon Entity・Resource） | `areka/src/placement/spawn.rs:88-123` |
+| `Anchored`（ドラッグ確定系の単一真実源） | `follow.rs:212` |
+| seriko sink＝`SerikoSink`・relevance ゲート＝`handle_message`（None/他 target は debug skip・Shell 系 match は catch-all あり） | `areka-seriko/src/actor.rs:122-126,200-230,279-286` |
+| emo-text `apply_cue` は網羅 match（Choice=warn-once・Emote/EntityRef/Custom/BalloonSurface/Wait=debug skip） | `areka-emo-text/src/state.rs:224-244` |
+| `ClockedTextSink` デコレータ前例・`PresentBridge` UI 配送前例 | `areka/src/emo2_boot/talk_clock.rs:85-109`・`emo2_boot/mod.rs:268-269` |
+| Choice 先積み檻（意図的更新の対象） | `dola/tests/cue/runtime_test.rs:156-163` |
+
+**R-2 解決（旧仕様形の parser 挙動・実測）**: `crates/areka-parsers/src/sakura/decode.rs:47-48,63-67` — 旧 2 連 `\q[ID][タイトル]` は**単一 `Raw` へ吸収**（Choice 化しない・settled）。`\![*]` マーカーは直後の現行 `\q` へ畳まれ、単独なら `GenericCommand{name:"*"}`。`script:` 形・複数 ID 形は現行 2 引数形として `Choice{disp,target}` に載る（target は不透明）。→ R1.7 は「旧 2 連形＝Raw 除外の記録」「`script:` 形＝不透明転写（解釈は W5）」で追加実装なしに充足。
+
+## 11. 要件ディスカッション裁定の反映（§5/§7 の上書き）
+
+| 旧項 | 裁定 |
+|---|---|
+| §5.1 choice 配送 seam | **案C 確定**（配送列＝配置/表示の単一真実源・バッグ＝解決照合専用の並存）。R8.6 が檻更新を明文化 |
+| §5.2 basepos | **A-1 確定**（正典既定 basepos のみ実導出・宣言 point.basepos は型シーム＋追跡 spec `areka-P0-surfaces-basepos`・裸 `base`≡`base.base`） |
+| §5.3 sink スロット | 未決→ **本 design で S-3 を採択**（D10） |
+| §5.4 Move variant 案 | **廃**——`\!` は汎用キャリア（typed `Move` variant は新設しない・R4 全面改稿）。Cursor はコンテンツタグゆえ typed variant 存続。`Choice.references` は案(i) を本 design で採択（D4） |
+| §5.5 値源 U-1 | 骨子存続だが**供給形が変わる**: `GhostBootOptions` の素の map でなく「provider（ghost 所有・sylphya 差替シーム）→ per-talk 凍結スナップショット→ talk 起動時手渡し」（D8/D9） |
+| §3.B 解決の口 | **案A 確定**（`SakuraMsg` additive アーム・R2.7）。R-5（TalkDone 一 tick 遅延）は D7 で解消 |
+| §3.C %username | R7 全面改稿済み（スナップショット消費・値源非所有・emo2 は 204 固定＝観測は常に既定値） |
+
+## 12. Design Decisions（本 design の裁定）
+
+### D1: `\!` キャリアの物理形＝既存 `Custom` variant の再利用（新 variant を作らない）
+- **選択肢**: (a) `Custom{command,params}` 再利用（params=`DynamicValue::Array` の String 列） / (b) 新 variant `Command{name,args:Vec<String>}`
+- **採択**: **(a)**。
+- **根拠**: `Custom` は settled 型定義がまさに「消費者固有コマンド」と定義する汎用不透明 cue であり、R8.7 はその内部矛盾（注釈「誰も action しない」）を**型設計の意図側へ**解消せよと明文化している。新 variant を足すと「単一の不透明汎用 cue」（R4.1）の傍らに同義語彙が並び、[[areka-cue-runtime-consolidated-in-dola]]（同型二重の根絶）に反する。(a) は R8.1（既存ワイヤ形不変）を自明に満たし、`command.rs:462-507` の檻・`cue_target_of` の網羅 match・emo-text/ghost の網羅 match が**全て無改変で緑**のまま。
+- **弱点と緩和**: `DynamicValue` は `#[serde(untagged)]` ゆえ形が型保証されない → **dola が正準コンストラクタ/抽出子の対を単一権威として所有**する（`CueCommand::command_carrier(name, tokens)` / `as_command_carrier() -> Option<(&str, Vec<&str>)>`。非 Array・非 String 要素は `None`＝消費側の記録付き良性スキップへ縮退）。areka 内の生成は compile 一点で正準形のみ（檻で固定）。ワイヤ形は `{"Custom":{"command":"move","params":["-353","","","0","base","base"]}}` を檻で追加固定。
+
+### D2: コマンド名の権威表＝dola `sink.rs` の `command_target_of(name)`＋`CueTarget::Window` additive
+- **採択**: 型レベル `cue_target_of` の隣（`dola/src/cue/sink.rs`）に名前レベル単一権威 `pub fn command_target_of(name: &str) -> Option<CueTarget>` を新設。`CueTarget` に第 3 variant `Window`（窓/placement 演者スロット）を additive 追加（serde unit variant＝ワイヤ後方互換・`EntityKey` 参照も非破壊）。M1 の表: `"move" → Some(Window)`・他は全て `None`（全消費者が良性スキップ）。W2 が `"bind" → Some(Shell)` を追記する。
+- **根拠**: R4.5「単一の権威表・消費者ごとの私的リスト禁止」と R8.7「型レベル分類の `None`＝名前レベル選別への委譲」を、type-level と name-level の 2 段が同居する一箇所で表現できる。「1 名前＝高々 1 消費者」は関数が `Option` を返す構造自体が保証（檻は写像値の固定＋未知名 `None`）。
+- **棄却**: (i) typed `Move` variant＋`CueTarget` 分類（§5.4 旧案）＝キャリア裁定で廃。(ii) 表を areka 側（sakura contract）に置く＝relevance 権威が 2 крート に分裂し R8.7 の「cue_target_of の隣で委譲を閉じる」構図が崩れる。
+
+### D3: `Cursor` は typed variant（コンテンツタグ境界原則）
+- `CueCommand::Cursor{x:String,y:String}`（不透明・単位/相対/空の区別保持）・`cue_target_of(Cursor)=Some(Balloon)`・瞬時（duration 0）。x/y 双方空でも発行（R3.5）。網羅 match の強制更新点: emo-text `state.rs`（warn-once skip・choice-render シーム）・ghost `sink.rs::command_kind`・dola `sink_test`。seriko は Balloon 分類の既存 debug-skip 枝が吸収（改修不要・実測 `actor.rs:202-211`）。
+
+### D4: `Choice.references`＝`#[serde(default, skip_serializing_if = "Vec::is_empty")]` フィールド追加
+- references 空（emo2 の全 `\q`）でワイヤ形が現行と完全同一 → `command.rs:477` の檻リテラルは不変のまま緑（R8.1）。旧資産は `default` で読める。名称写像は parser `disp/target` → dola `text/id`。`PendingChoice` は **id/text のまま不変**（裁定#1: バッグは解決照合専用・references は配送列が運び、カスケード時の消費は W5 の領分）。
+
+### D5: 選択待ち barrier＝走査終了後・最終 offset へ 1 個後置
+- choice cue を 1 個以上発行した台本に限り、`CuePayload::Barrier(WaitForChoice{timeout:None})` を**走査完了後の最終 offset**（＝全内容の後・duration 0）へ 1 個 append する。`CueSheet::new` の安定ソート＋同一 at FIFO により全 choice cue より後が保証される（R2.1/2.2）。`\e`/`\q` の順序に依らず、切詰め後の出力に choice があれば発行。barrier offset は占有 horizon と一致するため、解決→`settle_completion_after_resolve`→完了が正典的なメニュー完了（選択で talk 終了→W5 がイベント発火→新 talk）と一致する。compile へ barrier 発行口（`emit` とは別の Barrier 用ヘルパ）を新設（§4.2 の Missing 解消）。
+
+### D6: choice 配送＝案C の実装（dola `runtime.rs`）
+- `tick` の Choice アームを「`pending_choices` へ積み**かつ** `filtered_ready` へも積む」に変更（分離廃止・順序は schedule の FIFO をそのまま保存）。`runtime_test.rs:156-163` の檻は**仕様変更として意図的更新**（R8.6・R9.7 の配送列檻へ書換え）。`ready()`/`tick` の rustdoc から「Choice 除外済み」文言を撤去。
+
+### D7: 解決の口＝`SakuraMsg::ResolveChoice{id:String}`＋即時 settle（R-5 解消）
+- `#[non_exhaustive]` の additive アーム。TalkDriver: `Driving` で `player.resolve_choice(&id)`——`Some` かつ `player.is_completed()` なら**その場で** `TalkDone{end}` 送出＋`Break`（`settle_after_tick` と同型の後始末を共用）。次 Tick を待たないため R-5（一 tick 遅延）は構造的に消える。`None`（不一致 id・非待機）は記録して継続、`Armed`/`Idle` は warn して継続（防御枝）。口の消費（クリック→id 投入）は W5 の領分（本 spec は檻 R9.8 で注入検証のみ）。
+
+### D8: スナップショット手渡し＝talk 起動境界（`spawn_talk` 引数）・`StartTalk` 構造体は非拡張
+- **選択肢**: (a) `areka_talk::StartTalk` へ field 追加 / (b) `spawn_talk` の引数として talk 起動時に手渡し
+- **採択**: **(b)**。型 `SystemVarSnapshot`（`BTreeMap<String,String>` NewType・決定論順序）は **areka-sakura**（消費側契約の crate・`sysvar` module）が正本として所有し contract から re-export。
+- **根拠**: (a) は `StartTalk` の構造体リテラル構築点が **areka-kanade schedule 群**（boot.rs/close.rs ほか）に複数あり、フィールド追加が W1 併走 spec `idle-talk` の編集面（kanade）へ機械的破壊を波及させる——ウェーブ規律（共有ファイル 0・[[prefer-clean-waves-over-max-parallelism]]）に抵触する。(b) は R7.3 の本質（**talk 起動時に ghost から手渡される凍結像**のみを参照し、値源を所有しない・provider 差替で sakura 契約不変）を、W1 編集面（dola＋sakura＋move 結線＝ghost dispatcher 含む）の内側だけで満たす。dispatcher（⓪ghost の部品）が per-talk に provider から凍結像を取得して `spawn_talk` へ渡す＝「⓪ ghost がスナップショットを埋める」の実装点。
+- **申し送り**: sylphya 着地ウェーブ（kanade 編集面を持てる）で `StartTalk` 構造体への統合を再検討可（sakura 側は `compile(instructions, vars)` 契約のまま不変）。
+
+### D9: 暫定 provider＝`GhostBootOptions.system_vars: SystemVarSource`（per-talk 呼出の closure）
+- `type SystemVarSource = Box<dyn Fn() -> SystemVarSnapshot + Send>`。dispatcher が talk 起動ごとに呼び出して凍結像を得る（将来 sylphya の「talk ごと凍結」意味論に一致する形）。W1 の暫定実装は ghost 側ヘルパ `default_system_vars()`（`{"username": DEFAULT_USERNAME}` を充填・要件 L47 の「ghost が既定値スナップショットを充填」）。差替＝closure の中身を sylphya 読み口凍結に置換するのみ（sakura・dispatcher とも無改変）。
+- **既定値の単一定義**: `DEFAULT_USERNAME` は areka-sakura `sysvar` が唯一の定義点（R7.4 の縮退規則の所有者）。ghost の暫定 provider はこれを import（二重定義しない）。**具体値は「あなた」**（areka 裁量: 呼びかけ語として fixture の撫で talk 文面『%usernameったらもう♪』に自然に嵌る・決定論定数・対応表記録の対象。正典は沈黙＝§3.C）。
+- **展開規則（compile 側・純関数）**: スナップショットに名前あり→その値 / 名前なしだが M1 対応語彙（`username` のみ）→ `DEFAULT_USERNAME`（R7.4）/ それ以外→ `%名前` をテキスト素通し＋記録（R7.5）。展開結果は独立の Text cue（D 焼き込み・併合しない＝D12）。
+
+### D10: sink スロット＝S-3（可変長）採択
+- `GhostBootOptions` の `surface_sink: S`/`text_sink: T`（generic 2 固定スロット）を `sinks: Vec<Box<dyn BootCueSink>>` へ意図的更新（`sink.rs:52` の「2スロット構造」明文の仕様変更）。`BootCueSink: CueSink + Send`＋`clone_box`（`CueSink+Clone+Send+'static` への blanket impl・dispatcher の per-talk clone 要件を満たす）。`spawn_talk` は `sinks: Vec<Box<dyn CueSink + Send>>` を受ける（`TalkDriver` は既に Vec 保持・`CuePlayer` は既に任意個）。登録順＝Vec 順（broadcast の決定論順序）。
+- **根拠**: `CuePlayer` が既に Vec（構造に素直）・W4 choice-render の演者追加で同じ議論を繰り返さない・「Move は seriko の cue でない」のにデコレータ相乗り（S-2）する層の濁りを避ける。コスト＝boot 呼出側（spine/emo2_boot/runtime tests/drive tests）の機械的書換え。
+
+### D11: move 末端＝`MoveCueSink`（talk スレッド・純粋解釈）＋ mpsc ＋ frame 相での適用（UI スレッド）
+- **2 段分割**: ①純粋解釈 `parse_move_directive(scope, tokens) -> Result<MoveDirective, MoveDegradation>`（talk スレッド・決定論檻で全網羅）: 正典 positional 表（X/Y 省略=fix・time 省略=0・基準省略=screen・基準位置省略=left.top）・裸 `base`≡`base.base`・`--key=value` 名前付き形は検出して記録付き縮退（M1 は positional のみ実導出・語彙は `MoveDirective` 型が完全形で保持）・time>0 は即時へ縮退記録（R5.4）。②ライブ解決＋適用 `apply_move_directive(world, &GhostWindows, directive)`（UI スレッド・`emo2_frame_system` が mpsc を drain）: scope→窓 Entity（`GhostWindows`）・基準窓の `WindowPos.position`＋basepos・移動窓の basepos で最終物理 px を算出し `move_window_to` を呼ぶ（dead_code 解消・バルーン随伴は既存内包）。
+- **座標系の確定（R-6）**: 計算は**全経路とも物理 px**に統一する。basepos の分母となる窓サイズは `WindowPos.size`（物理 px・placement の契約）から取る——**論理 px 系（BoxStyle 等）を経由しない**ことで [[areka-window-placement-dpi-coordinate-defect]] の混在事故を構造的に遮断。dpi=96 では自己整合して差が出ないため、最終確認は R9.6 の実 DPI 実機サインオフが正（檻は幾何計算の決定論部のみを固定する）。
+- **basepos 型シーム**: `BaseposResolver` trait＋`CanonDefaultBasepos`（x=幅÷2・y=下端＝高さ）実装のみ M1 実導出（A-1）。宣言 `point.basepos` の実導出は追跡 spec `areka-P0-surfaces-basepos` が本 trait の別実装として差す。
+- **fixture 逐語検算**: `\1\![move,-353,,,0,base,base]` → `x = pos0.x + w0/2 − 353 − w1/2`・`y = 現状維持`（scope0 窓位置＋scope0 basepos.x を基準に、エモ自身の basepos.x が着地する点＝−353px）。
+- **縮退**: 基準 `screen`/`primaryscreen`/`me`/`global` は語彙保持＋warn 縮退（M1 非実導出・emo2 未使用）。対象窓/基準窓の不在は warn＋継続（R5.5・`move_window_to` の既存縮退と整合）。
+
+### D12: `%username` 展開は独立 Text cue（併合しない）
+- `Text("仕方ないなあ～、") / Text("あなた") / Text("ったらもう♪")` の 3 cue。D は文字数比例ゆえ合計時間は併合と同一・タイプライタ表示も cue.at 起点の連続 reveal で観測同一。併合は compile に先読み状態を持ち込み純粋走査の単純さを壊す割に観測利得ゼロ。R9.4 の期待列はこの形で固定する。
+
+### D13: emo-text の Choice/Cursor 受信
+- Choice: 従来 warn-once の檻文言を「配送列に第一級で現れる（R8.6 仕様変更）・表示消費は choice-render（W4）」へ更新し、挙動は warn-once＋状態不変のまま（良性スキップ・R8.5）。Cursor: 同型の warn-once アームを追加（choice-render シーム）。seriko・ghost LogSink は既存パターンの機械的追随。
+
+## 13. リスクと緩和（design 時点）
+
+| リスク | 緩和 |
+|---|---|
+| 座標系（R-6・最高技術リスク）: dpi=96 で自己整合し檻が嘘をつく | D11 の物理 px 一元化（`WindowPos` のみを源に）＋実 DPI 実機サインオフ（R9.6）を DoD に残す。幾何計算は純関数化して単体檻 |
+| `Custom` 再利用の形無保証（untagged） | D1 の正準コンストラクタ/抽出子（dola 単一権威）＋compile 生成一点＋ワイヤ檻追加。奇形 params は消費側で warn＋良性スキップ |
+| settled 檻 2 本の意図的更新（choice 先積み・compile 除外）が非退行と紛れる | R8.3/R8.6 を design 本文で「仕様変更」と明記し、更新後の檻（配送列順序・Raw-only 除外）を同 PR 内で対で置換 |
+| `spawn_talk`/`GhostBootOptions` 署名変更の波及（テスト多数） | 機械的置換（[[obsolete-vs-broken-test-policy]]: 意味は不変・形だけ更新）。spine e2e は S-3 の Vec 形へ 1 箇所ずつ |
+| barrier 位置と `\e` 切詰めの相互作用 | D5 の「切詰め後出力に choice があれば最終 offset へ」規則で一意化・檻で固定 |
+| emo-text が Choice を実受信するようになる観測変化 | 表示状態は不変（warn-once スキップ）＝実機の見た目に変化なし。W4 が実消費に差し替える |
+
+## 14. 参照（design 追加分）
+
+- `\![move]` positional 正典: 一次 SSP HTML `https://ssp.shillest.net/ukadoc/manual/list_sakura_script.html`（§9 のとおり・MCP スナップショットは引数表欠落）
+- basepos 既定: `ukadoc:descript_shell_surfaces`（point.basepos.x=幅÷2 / .y=下端）
+- 裁定メモ: [[areka-bang-commands-generic-carrier]]（\!汎用キャリア 1 本）・[[areka-sylphya-unified-property-system]]（%username=SHIORI Resource・emo2 は 204 固定）・[[prefer-clean-waves-over-max-parallelism]]（D8 の根拠）
+- sylphya 供給側契約: `.kiro/specs/areka-P0-sylphya/brief.md`「申し送り」節（W1 暫定 provider→sylphya 差替）
