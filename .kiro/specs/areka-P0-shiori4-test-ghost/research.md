@@ -151,3 +151,37 @@
 - **主な欠落**: (1) cdylib テスト DLL＋台本脳（ID 分岐＝reference のエコーとは別種）、(2) `ShioriWiring::InProc`＋x64 COM ロード経路＋`IShiori`→`ShioriBackend` アダプタ（両端 codec 挟み込み・status/unload 写像）、(3) マウント可能 fixture、(4) boot→talk→close 決定論 e2e。
 - **未確定の要研究**: DLL 絶対パスの boot への渡し方とテスト時 cdylib ビルド保証（D-1）、SHIORI 交信列の観測点（D-3）、fixture の実消費範囲（D-5）。
 - **要件 6 の共存はほぼ自動達成**、ただし emo2 smoke は実は SHIORI 境界を決定論的に踏んでおらず（wire 成立止まり）、本 spec の e2e とは目的が別＝「残置＋追加」が素直な仕分け仮説。
+
+---
+
+## 7. 設計フェーズ決定記録（2026-07-18 設計生成・design.md と同時確定）
+
+> §5 の D 項目を設計としてすべて決着した。正本は design.md（本節は根拠ログ）。
+
+### 7.1 D 項目の決着
+
+- **D-1（DLL パス解決・確定）**: (1) e2e は `std::env::current_exe()`（`target/<profile>/deps/<test>.exe`）から `deps` を 1 段 pop して `target/<profile>/` を導出し、`shiori4_testdll.dll` を locate する（`CARGO_TARGET_DIR` 上書きにも自動追従・build.rs 不使用＝リポジトリに build.rs は現状ゼロで、新設する必要もない）。不在時は明示 panic（メッセージで `cargo test --workspace` を指示・[[workspace-test-needs-i686-host32-artifacts]] の「明示 panic」流儀）。(2) `ShioriWiring::InProc` は**追加パラメータを持たないユニット variant** とし、DLL パスは `mount.shiori.dir.join(file)`（＝descript の `shiori,<name>` 行）から解決する。e2e はビルド済み cdylib を fixture の `ghost/master/` へコピーしてから boot する——本番（M2 native）と完全同型の解決経路になり、テスト専用パラメータがゼロになる。(3) ビルド保証: 新 cdylib はワークスペースメンバ（`crates/*` glob で自動編入）＝`cargo test --workspace` が自動ビルド。さらに `crate-type = ["cdylib", "rlib"]` とし areka-ghost が **dev-dependency**（rlib 面）で契約定数（DLL ファイル名・スナップショット表）を共有する——ビルド順序辺も張られる。注意: `cargo test -p areka-ghost` 単独では cdylib が `target/<profile>/` へ uplift されない場合があり得る＝明示 panic が誘導する（要件 1.2 の保証範囲は `--workspace`）。
+- **D-2（carve-out・確定＝Option B 採用）**: テスト DLL は `shiori-abi`（＋windows-core）のみに依存して自給し、areka bin から一切借りない。**決定打は「正規シームは既に areka-ghost に居る」という観察**——`real_connect`（Helper 本番結線）が `areka-ghost/src/shiori_wiring.rs` に居る以上、InProc 結線も同じ crate の本体 src に並置すれば、それ自体が本番コード（要件 3.6）であり、M2 native x64 SHIORI4 は `boot()`＋`ShioriWiring::InProc` という**既存の本番経路**で同一シームに乗る（要件 7.1）。新 lib crate の切り出し（Option A/C）は不要。補強根拠: (a) 要件討議#1 でテスト脳が**スナップショット replay 脳**へ確定し、ReferenceBrain（エコー脳）の実体価値は `#[implement]`／factory／`shiori_factory` export の**パターン雛形のみ**になった（brief の「種として活用」はパターン踏襲として履行）。(b) 要件 7.4 が deferred／Raise の網羅を明示的に除外するため、ShioriSession（単一 in-flight・遅延タイムアウト）と ShioriHostSink（メールボックス・突合枠）の移設は本 spec には**投機的抽象**（design-synthesis の Simplification 直撃）。(c) bin→lib 移設の影響半径（in-crate テスト群の再配線・[[areka-bin-crate-internal-tests-in-crate]]）を丸ごと回避。二重化懸念への回答: 即時応答のみの InProc アダプタは状態機械を持たない（呼出は shiori アクター単一スレッドで直列化済み）ため、「似て非なる再実装」に当たる決定ロジックが**存在しない**。ShioriSession は deferred in-proc 駆動の authority として areka 内の檻ごと残置。
+- **D-3（交信列観測・詳細確定）**: `inproc_connect(shiori: ShioriMount) -> impl FnOnce() -> Result<Box<dyn ShioriBackend>, String> + Send` を**公開関数**とし、`ShioriWiring::InProc` は boot() 内でこれへ委譲するだけの素通しにする。`Recorder<B: ShioriBackend>` はテスト支援（`areka-ghost/tests/ghost/recorder.rs`）に置き、交信列を記録したいテストは `ShioriWiring::Custom(Box::new(move || Ok(Box::new(Recorder::new(inproc_connect(mount)()?, handle)))))` の合成で同一の実 DLL backend を包む——variant 経路と関数が単一（fork なし）なので「同一手口」が保たれる。正準 e2e（要件 5.1）は素の `InProc` variant で駆動する。Recorder は production crate を汚さない（檻に入れるのは判断分岐のみ・[[test-only-decision-branches-not-proven-wiring]]）。
+- **D-4（content 解析範囲・確定）**: ID 行のみ読む（request line の GET/NOTIFY 判別＋`ID:` ヘッダ抽出＝i686 testdll の `parse_request` と同型の純関数）。References は**参照しない**（スナップショットは ID キーの replay ゆえ分岐に不要）。
+- **D-6（スレッド座・COM アパートメント・確定）**: connect closure は shiori アクタースレッド上で一度だけ実行され、HMODULE と全 COM 参照（`IShiori`／`IShioriHost`）はそのスレッドから出ない（`ShioriBackend` トレイトに Send 境界なし・`ShioriConnection` の `!Send` window と同じ座）。**CoInitializeEx は呼ばない**——本経路は windows-core `#[implement]` オブジェクトへの直接 vtable dispatch のみで、アクティベーション（CoCreateInstance）もマーシャリングも使わない（areka の reference_brain in-crate テストが COM 未初期化スレッドで通っている実績と同条件・[[areka-wuc-runs-on-mta-thread]] の「unit test スレッドは COM 未初期化」の観察に整合）。
+- **D-7（unload/status 写像・確定）**: `status()` ＝ロード中は常に `HelperStatus::Running`、unload 完了後は `Exited(ExitKind::Clean)`（正直な語彙写像・run_shiori_loop の sticky 検査は unload 後 status を見ないので挙動影響なし）。`unload()` ＝明示 teardown（`IShiori` drop → host drop → `FreeLibrary`）を best-effort 完走して常に `Ok(ExitKind::Clean)`（FreeLibrary 失敗は `error!` のみ・teardown は構造的に不能失敗）。接続失敗＝connect closure の `Err(String)` → 既存経路で `ShioriDown`（spine S2 と同型に自然説明できることを確認済み）。**get の異常系写像**: `SHIORI_S_PENDING`（M1 InProc 非対応）・COM error HRESULT・`parse_response` 失敗はいずれも `error!`（詳細は log が正本・[[areka-log-first-no-silent-failure]]）＋ `Err(RequestError::Shiori(ShioriError::Parse))` へ写す——`RequestError` 語彙（host32）へ variant を足すと `map_error` 等の網羅 match が波及するため**語彙不変**を優先し、「サポート契約下で解釈不能な応答」として Parse に集約する（テスト DLL は即時・整形応答のみゆえ実行時到達しない防衛線）。
+- **D-8（命名・確定）**: crate 名 `shiori4-testdll`・`[lib] name = "shiori4_testdll"`・出力 `shiori4_testdll.dll`・fixture descript は `shiori,shiori4_testdll.dll`。i686 testdll（`shiori.dll`・別 target dir）と名前・所在とも非衝突。
+- **スナップショット格納＋採取ハーネス（要件討議#1 残課題・確定）**: 格納＝`crates/shiori4-testdll/snapshots/<EventID>.txt`（イベント 1 ファイル・SHIORI/3.0 応答全文）を `include_str!` で静的表へ埋め込み、**埋込時に行末を CRLF へ正規化**する純関数を通す（git の EOL 変換に免疫）。採取＝**Recorder を採取装置に流用**した env-gate ハーネス（`HOST32_PASTA_DLL`＋`AREKA_SNAPSHOT_OUT` の両設定時のみ実行・areka-ghost tests・real_pasta_test の resolve_helper_exe/fixture 流儀を踏襲）: 実 emo2 を `Custom(Recorder(real_connect(..)))` で boot→talk→close 一周し、記録された GET 交信の ID→応答（初出のみ＝代表 1 応答の凍結）を正準 envelope（200+Charset+Value／204）へ再構成してファイル出力する。**忠実度ノート**: 採取点は codec 通過後の値レベル（生バイトではない）だが、Value 文字列は pasta 出力を逐語搬送し、envelope は自前 codec の正準形で再構成する——replay 側 parse も同 codec ゆえ意味論は同一。イベント・References・Status は本番 kanade がまさに送る実物（ボトム採取より文脈忠実）。コミットは人手（代表応答のレビュー後）。
+- **要件 6.3 仕分け（確定）**: `smoke_boot_loop_exit`／`emo2_real_run` は**残置**（役割＝窓/wire plumbing smoke と実機サインオフであり、SHIORI 境界の決定論検証ではない——ギャップ分析 §2 の観察どおり wire 成立止まり）。本 spec の e2e は**追加**であり乗り換えは行わない。
+
+### 7.2 設計シンセシス記録
+
+- **Generalization**: `Recorder<B: ShioriBackend>` を backend 非依存の総称デコレータとして 1 個だけ設計——scripted fake／InProc 実 DLL／Helper 実 pasta の 3 者を同一手口で観測でき、**回帰 assert（e2e）と台本採取（capture）の 2 用途を単一装置**で賄う（要件 1.4 と 2.6 が同じ器械の 2 面と判明した）。
+- **Build vs Adopt**: DLL ロードは `LoadLibraryW`＋`GetProcAddress` 手書き最小を採用（`libloading` 等の新規依存は「新規依存なし」制約により不採用・`shiori_proxy.rs` の所有権規約テンプレを x64/COM へ写経）。SHIORI/3.0 codec（`build_request`／`parse_response`）・spine の Tick 注入駆動技法・`RecordingSink`（pub 既存）は再利用し再実装しない。
+- **Simplification**: 新 lib crate なし（Option C 棄却）／ShioriSession・ShioriHostSink の移設なし／fixture へ balloon 非同梱（boot 経路が消費しない・resolve は balloon に触れない）／opt-in 実描画 e2e は**本 spec では実装しない**（要件 5.5 は許可規定であり義務ではない・描画正しさの正本は emo 系既存檻）。
+
+### 7.3 残リスクと手当
+
+| リスク | 手当 |
+|---|---|
+| git EOL 変換でスナップショットの CRLF が壊れる | 埋込時 CRLF 正規化（純関数・単体檻つき）で構造的に吸収 |
+| `cargo test -p areka-ghost` 単独時に cdylib 未 uplift | locate 失敗を明示 panic＋`--workspace` 誘導文言（保証範囲は要件 1.2 どおり `--workspace`） |
+| FreeLibrary 前に DLL 実装 COM 参照が残る（UB） | `InProcBackend` のフィールド宣言順（shiori→host→library）で drop 順を構造的に固定・factory は CreateInstance 直後にスコープ落ち・契約を rustdoc 化 |
+| スナップショット実採取（実機・env-gate）前の開発期間 | 暫定手書き応答（正準形式・明示マーキング）で実装/檻を先行し、**DoD 前に実採取で差し替え凍結**（tasks で採取タスクを独立に立てる） |
+| pasta 応答の乱数性 | 代表 1 応答の凍結という要件 2.6 の建付けどおり（凍結応答上の決定論のみ保証） |
