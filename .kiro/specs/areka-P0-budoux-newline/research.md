@@ -88,7 +88,7 @@
 ## 5. 設計判断アイテム（要件ディスカッションへ供給・番号付き）
 
 1. **segment 計算の配置と layout 配線**（D1）: 案 A（layout 内計算・呼出波及最小）／案 B（wiring precompute・layout は budouy 非依存）／案 C（segment 純関数＋`WrapMode` enum・推奨方向）のいずれを採るか。state.rs 非改変（W3 干渉回避）は全案で満たすが、Parser キャッシュ置き場が変わる。
-2. **`WrapMode` の型形**（D2）: `writing_mode` 同格の enum（`CharByChar`/`BudouxWordWrap`）か bool か。境界列を型に載せるか別引数か。
+2. **`WrapMode` の型形**（D2）: `writing_mode` 同格の enum（`CharByChar`/`BudouxWordWrap`）か bool か。境界列を型に載せるか別引数か。**討議 #1 決定（2026-07-18）**: descript の受理値は bool（ON＝`1`/`true`・OFF＝`0`/`false`・双方受理）に留めるが、内部の値解決型は将来のワードラップ戦略名を第一級化しうる **`WrapMode` enum のシームで確保**する（実導出は bool・案③）。よって D2 は「enum で型シームを確保しつつ本 spec の受理・実導出は bool 2 値に閉じる」形で設計する。
 3. **`BalloonModel::new` signature 拡張**: `budoux_newline: Option<String>` 追加で全 `BalloonModel::new` 呼出（parser/emo-text テスト多数）が更新される。`#[non_exhaustive]` 前提でも `new` は位置引数ゆえ波及。builder 化はスコープ外か。
 4. **OFF 不変の構造保証手段**（R4）: 新パラメータの OFF 既定で旧 char 経路へ落ちる分岐を、既存 layout 檻が非回帰檻を兼ねる形にどう構造化するか（enum variant 分離 vs フラグ分岐）。
 5. **リフロー跳び先決の明文規則**（R7×R5）: 「セグメント境界は全 items から計算・可視は別ゲート」「②保留フラッシュ直後の行頭で③塊先決」を design 不変条件として固定し、決定論檻で全分岐を檻化する範囲。

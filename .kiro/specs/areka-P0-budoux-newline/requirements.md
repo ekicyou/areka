@@ -10,7 +10,7 @@ emo テキスト層（crate `areka-emo-text`）の自動折り返しは**文字�
 
 本 spec における折り返しの正準モデルは「**分かち書き境界で区切られた塊（セグメント）は、行末で途中分割せず、残り行幅に収まらなければ塊まるごと次行へ送る**」である。閾値そのもの（`TextRegion.wrap_threshold`＝ balloon descript `wordwrappoint`・無指定時は validrect 遠辺へ縮退）は不変で、変えるのは「どこで行を分けるか（分割点の選択）」だけである。塊の先頭グリフを置く時点で「塊全体が残り行幅に収まるか」を実グリフ advance の合計で先決し、収まらなければ塊の前で行を送る。この**先決**により、typewriter が塊の途中を reveal した後に配置済みグリフが行を移る「リフロー跳び」は起きない。
 
-`budoux_newline` は SSP に存在しない**純 areka 拡張**であり、`writing_mode` と同格の snake_case・prefix 無しの拡張キー規約に従う。既定は OFF（キー無し・`0`/`false`）で、OFF 時は既存の文字単位折返しコードパスを一切変えない。未知値は `warn!` の上で OFF へフォールバックする（`writing_mode` と同じ縮退姿勢）。分かち書き境界の計算は決定論的な純関数であり、実描画（DirectWrite metrics）に依存せず全網羅的に検証できる。あふれ→スクロール機構それ自体・明示改行（`\n` 系）の意味論・`wordwrappoint`／`validrect` の解決規則は変更しない。
+`budoux_newline` は SSP に存在しない**純 areka 拡張**であり、`writing_mode` と同格の snake_case・prefix 無しの拡張キー規約に従う。既定は OFF（キー無し・`0`/`false`）で、OFF 時は既存の文字単位折返しコードパスを一切変えない。未知値は `warn!` の上で OFF へフォールバックする（`writing_mode` と同じ縮退姿勢）。受理値は真偽フラグ（ON＝`1`／`true`・OFF＝`0`／`false`——伝統的な数字フラグと今風の `true`/`false` の双方を受理する）に留めるが、値解決は将来のワードラップ戦略名を第一級化しうる型シーム（`WrapMode` enum・設計で確保）に載せ、本 spec の実導出は bool 受理に閉じる（討議 #1 決定 2026-07-18・[defer-canon-with-full-vocabulary-and-tracking-spec] のシーム確保姿勢）。分かち書き境界の計算は決定論的な純関数であり、実描画（DirectWrite metrics）に依存せず全網羅的に検証できる。あふれ→スクロール機構それ自体・明示改行（`\n` 系）の意味論・`wordwrappoint`／`validrect` の解決規則は変更しない。
 
 ## Boundary Context
 
