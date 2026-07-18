@@ -33,7 +33,7 @@ use std::sync::mpsc::Sender;
 
 use crate::compile::compile;
 use crate::contract::{
-    CueSheet, SakuraMsg, StartTalk, TalkDone, TalkEndReason, TalkHandle, TalkId,
+    CueSheet, SakuraMsg, StartTalk, SystemVarSnapshot, TalkDone, TalkEndReason, TalkHandle, TalkId,
 };
 use crate::error::SakuraError;
 use areka_actor::{run_inbox, spawn_actor};
@@ -47,9 +47,15 @@ use dola::cue::{CuePlayer, CueSink};
 /// 呼び出し元へは [`TalkHandle`]`{inbox, actor}` を返し、以降 kanade/テストは inbox へ
 /// `Tick`/`Close` のみ送る。
 ///
-/// `surface_sink`／`text_sink` はいずれも演者非依存の単一出力契約 [`CueSink`] で、初回 `Tick`
-/// 時に [`CuePlayer`] へ**登録順**（surface, text）で登録され、以降 broadcast で全 cue を受ける
-/// （どの action を演じるかは演者側 relevance の責務・中央振り分けなし・D4）。
+/// `sinks` は演者非依存の単一出力契約 [`CueSink`] の可変長列（S-3）で、初回 `Tick` 時に
+/// [`CuePlayer`] へ**登録順のまま**登録され、以降 broadcast で全 cue を受ける（どの action を
+/// 演じるかは演者側 relevance の責務・中央振り分けなし・D4）。順序が broadcast 順を決めるため
+/// 呼び出し側（ghost の boot 結線）が決定論的な登録順を与える。
+///
+/// `system_vars` は **talk 起動時に ⓪ghost から手渡される名前→値の凍結スナップショット**
+/// （プロパティシステム読み口の凍結像・R7.3）で、`Start` 受領時のコンパイルへそのまま渡す。
+/// sakura は値源を所有せず（永続化層・SHIORI・OS 環境を直接読まない）このスナップショットを
+/// 参照するだけである（D8: スナップショットは `StartTalk` でなく talk 起動境界で手渡す）。
 ///
 /// `done` は `TalkDone` の届け先（呼び出し側 inbox への変換投函・`D: From<TalkDone>`）。
 ///
@@ -65,8 +71,8 @@ use dola::cue::{CuePlayer, CueSink};
 pub fn spawn_talk<D>(
     start: StartTalk,
     done: Sender<D>,
-    surface_sink: impl CueSink + Send + 'static,
-    text_sink: impl CueSink + Send + 'static,
+    sinks: Vec<Box<dyn CueSink + Send>>,
+    system_vars: SystemVarSnapshot,
 ) -> TalkHandle
 where
     D: From<TalkDone> + Send + 'static,
@@ -75,10 +81,9 @@ where
     let name = format!("sakura-talk-{}", talk_id.0);
 
     let (inbox, actor) = spawn_actor::<SakuraMsg, _>(&name, move |rx| {
-        // 演者 sink を Box<dyn CueSink> 化し register 順（surface, text）で保持する。
+        // 演者 sink（Send 境界付き＝thread へ move 可）を register 順のまま保持する。
         // 初回 Tick で刻印済み台本の CuePlayer へ broadcast 登録する（4.3 register_sink）。
-        let sinks: Vec<Box<dyn CueSink>> = vec![Box::new(surface_sink), Box::new(text_sink)];
-        let mut driver = TalkDriver::new(sinks, done);
+        let mut driver = TalkDriver::new(sinks, system_vars, done);
         run_inbox::<SakuraMsg, std::convert::Infallible>(rx, move |msg| Ok(driver.handle(msg)));
     });
 
@@ -126,9 +131,12 @@ enum TalkPhase {
 struct TalkDriver<D> {
     /// 駆動状態機械。
     phase: TalkPhase,
-    /// 初回 `Tick` で [`CuePlayer`] へ登録する演者 sink（register 順: surface, text）。
+    /// 初回 `Tick` で [`CuePlayer`] へ登録する演者 sink（register 順＝呼び出し側が与える broadcast 順）。
     /// 初回 `Tick` で drain して CuePlayer へ move する（それ以降は空）。
-    sinks: Vec<Box<dyn CueSink>>,
+    sinks: Vec<Box<dyn CueSink + Send>>,
+    /// talk 起動時に ⓪ghost から手渡された名前→値の凍結スナップショット（R7.3・値源非所有）。
+    /// `Start` 受領時のコンパイルへ参照渡しする（sakura は値源を所有しない・D8）。
+    system_vars: SystemVarSnapshot,
     /// `TalkDone` の届け先（呼び出し側 inbox への変換投函）。
     done: Sender<D>,
 }
@@ -137,10 +145,15 @@ impl<D> TalkDriver<D>
 where
     D: From<TalkDone> + Send + 'static,
 {
-    fn new(sinks: Vec<Box<dyn CueSink>>, done: Sender<D>) -> Self {
+    fn new(
+        sinks: Vec<Box<dyn CueSink + Send>>,
+        system_vars: SystemVarSnapshot,
+        done: Sender<D>,
+    ) -> Self {
         Self {
             phase: TalkPhase::Idle,
             sinks,
+            system_vars,
             done,
         }
     }
@@ -151,6 +164,7 @@ where
             SakuraMsg::Start(start) => self.on_start(start),
             SakuraMsg::Tick(t) => self.on_tick(t),
             SakuraMsg::Close => self.on_close(),
+            SakuraMsg::ResolveChoice { id } => self.on_resolve_choice(id),
         }
     }
 
@@ -167,10 +181,9 @@ where
 
         // 上流パーサで Instruction 列へ変換（再パースしない・R1.2）→ 純粋コンパイル。
         let instructions = areka_parsers::sakura::parse(&script);
-        // TEMPORARY BRIDGE (task 5.1): `spawn_talk` を通した実 `SystemVarSnapshot` の threading は
-        // task 5.1 の領分。ここでは空スナップショット（`%username` は既定値へ縮退）を渡して
-        // compile 署名変更に機械的に追随する。task 5.1 で TalkDriver が保持する snapshot へ差し替える。
-        let compiled = compile(&instructions, &crate::sysvar::SystemVarSnapshot::default());
+        // talk 起動時に手渡された凍結スナップショット（R7.3・D8）を参照してコンパイルする。
+        // sakura は値源を所有せず、この凍結像だけを見る（provider 差替で本層は無改変＝差替シーム）。
+        let compiled = compile(&instructions, &self.system_vars);
 
         // 空 sheet: 時間軸駆動せず即終端（R1.4/R6.2）。end は Ended 固定でなく compiled.end
         // （裸の `\-` は空 sheet＋Quit）。
@@ -325,6 +338,23 @@ where
         }
     }
 
+    /// `ResolveChoice{id}` 受領: 選択待ち（barrier）で止まった talk へ選択 id を投入する型付き口
+    /// （R2.7）。
+    ///
+    /// **task 5.1 スコープ = 口（アーム）の定義のみ**。ここでは受領を記録して継続するに留める。
+    /// 実際の解決ロジック（`Driving` → `player.resolve_choice(&id)`・`Some` 後の即時 settle＝
+    /// `player.is_completed()` なら `TalkDone{end}` 送出＋`Break`／`None` は記録して継続／
+    /// `Armed`・`Idle` は warn 継続の防御枝）は **task 5.2** で本メソッドへ充填する（design
+    /// "解決の口＋spawn 署名" §450）。それまでは barrier で止まった talk は再開しない（暫定）。
+    fn on_resolve_choice(&mut self, id: String) -> ControlFlow<()> {
+        // task 5.2 で resolve_choice/即時 settle を実装する。現状は受領の記録のみ（継続）。
+        tracing::debug!(
+            choice_id = %id,
+            "ResolveChoice received; handler is filled in by task 5.2 (recorded, continuing)"
+        );
+        ControlFlow::Continue(())
+    }
+
     /// 自然終端の `TalkDone{reason}` を送出する（受信端 drop は error ログ・黙殺しない・R11.1/11.4）。
     fn send_done(&self, talk_id: TalkId, reason: TalkEndReason) {
         let done = TalkDone { talk_id, reason };
@@ -389,6 +419,16 @@ mod tests {
         fn emit(&mut self, _cue: TalkCue) {}
     }
 
+    /// テスト用: 2 演者 sink を register 順（S-3・登録順＝broadcast 順）で `spawn_talk` の
+    /// `Vec<Box<dyn CueSink + Send>>` へ束ねるヘルパ。broadcast ゆえ両 sink は同一 cue 列を受け、
+    /// 順序は broadcast 順にのみ効く（観測 sink をどちらへ置いても記録内容は不変）。
+    fn two_sinks(
+        first: impl CueSink + Send + 'static,
+        second: impl CueSink + Send + 'static,
+    ) -> Vec<Box<dyn CueSink + Send>> {
+        vec![Box::new(first), Box::new(second)]
+    }
+
     /// 発火の到着を barrier として同期受信するチャンネル sink（保留の決定的証明に使う）。
     struct ChannelSink {
         tx: mpsc::Sender<TalkCue>,
@@ -425,7 +465,12 @@ mod tests {
         let records = sink.records();
 
         // Tick を一切送らずに spawn_talk を呼ぶ（時間軸駆動を要求しない）。
-        let handle = spawn_talk(start, done_tx, sink, NoopSink);
+        let handle = spawn_talk(
+            start,
+            done_tx,
+            two_sinks(sink, NoopSink),
+            SystemVarSnapshot::default(),
+        );
 
         // TalkDone が即座に到達すること（Tick 不要・時間軸駆動なし）。
         let done = done_rx
@@ -457,7 +502,12 @@ mod tests {
         let surface_records = surface.records();
         let text_records = text.records();
 
-        let handle = spawn_talk(start, done_tx, surface, text);
+        let handle = spawn_talk(
+            start,
+            done_tx,
+            two_sinks(surface, text),
+            SystemVarSnapshot::default(),
+        );
         // 初回 Tick(0.0) でアンカー刻印（0.0）、占有 horizon（world 再生完了＝0.35+0.25=0.60）を跨ぐ 1.0。
         handle.inbox.send(SakuraMsg::Tick(0.0)).unwrap();
         handle.inbox.send(SakuraMsg::Tick(1.0)).unwrap();
@@ -506,7 +556,12 @@ mod tests {
                 talk_id: TalkId(1),
             };
             let (tx, rx) = mpsc::channel::<TalkCue>();
-            let handle = spawn_talk(start, done_tx, ChannelSink { tx }, NoopSink);
+            let handle = spawn_talk(
+            start,
+            done_tx,
+            two_sinks(ChannelSink { tx }, NoopSink),
+            SystemVarSnapshot::default(),
+        );
 
             // barrier 技法: 記録 sink を挟まず、bye の着弾のみをチャンネルで観測する。
             let bye_seen = |rx: &mpsc::Receiver<TalkCue>| -> bool {
@@ -617,7 +672,12 @@ mod tests {
         };
 
         let (tx, rx) = mpsc::channel::<TalkCue>();
-        let handle = spawn_talk(start, done_tx, ChannelSink { tx }, NoopSink);
+        let handle = spawn_talk(
+            start,
+            done_tx,
+            two_sinks(ChannelSink { tx }, NoopSink),
+            SystemVarSnapshot::default(),
+        );
 
         let d_hello = text_playback_duration("hello"); // 0.25
         let d_probe = text_playback_duration("probeA"); // 0.30
@@ -701,7 +761,12 @@ mod tests {
         let sink = RecordingSink::new();
         let records = sink.records();
 
-        let handle = spawn_talk(start, done_tx, sink, NoopSink);
+        let handle = spawn_talk(
+            start,
+            done_tx,
+            two_sinks(sink, NoopSink),
+            SystemVarSnapshot::default(),
+        );
         // 初回 Tick(0.0) 刻印＋単一 Tick(0.5) で全 due（world 再生完了 horizon=0.50 到達）→自然終端。
         handle.inbox.send(SakuraMsg::Tick(0.0)).unwrap();
         handle.inbox.send(SakuraMsg::Tick(0.5)).unwrap();
@@ -750,7 +815,12 @@ mod tests {
         };
         let sink = RecordingSink::new();
         let records = sink.records();
-        let handle = spawn_talk(start_a, done_a_tx, sink, NoopSink);
+        let handle = spawn_talk(
+            start_a,
+            done_a_tx,
+            two_sinks(sink, NoopSink),
+            SystemVarSnapshot::default(),
+        );
 
         // 2 本目 Start(B)（別 script）を inbox へ。自己投函の Start(A) の後に処理され、無視される。
         let id_b = TalkId(99);
@@ -802,7 +872,12 @@ mod tests {
         };
         let sink = RecordingSink::new();
         let records = sink.records();
-        let handle = spawn_talk(start, done_tx, sink, NoopSink);
+        let handle = spawn_talk(
+            start,
+            done_tx,
+            two_sinks(sink, NoopSink),
+            SystemVarSnapshot::default(),
+        );
 
         drop(done_rx); // 終端 TalkDone 送出前に受信端を drop（送出は Err になる）。
         handle.inbox.send(SakuraMsg::Tick(0.0)).unwrap();
@@ -837,7 +912,12 @@ mod tests {
         let sink = RecordingSink::new();
         let records = sink.records();
 
-        let handle = spawn_talk(start, done_tx, sink, NoopSink);
+        let handle = spawn_talk(
+            start,
+            done_tx,
+            two_sinks(sink, NoopSink),
+            SystemVarSnapshot::default(),
+        );
         let done = done_rx
             .recv_timeout(Duration::from_secs(5))
             .expect("無視タグのみの script も空 sheet 経路で即座に TalkDone を返すべき");
@@ -871,7 +951,12 @@ mod tests {
         let sink = RecordingSink::new();
         let records = sink.records();
 
-        let handle = spawn_talk(start, done_tx, sink, NoopSink);
+        let handle = spawn_talk(
+            start,
+            done_tx,
+            two_sinks(sink, NoopSink),
+            SystemVarSnapshot::default(),
+        );
         let done = done_rx
             .recv_timeout(Duration::from_secs(5))
             .expect("quit 相当のみの script も空 sheet 経路で即座に TalkDone を返すべき");
@@ -915,7 +1000,12 @@ mod tests {
         let sink = RecordingSink::new();
         let records = sink.records();
 
-        let handle = spawn_talk(start, done_tx, sink, NoopSink);
+        let handle = spawn_talk(
+            start,
+            done_tx,
+            two_sinks(sink, NoopSink),
+            SystemVarSnapshot::default(),
+        );
 
         let at_world = text_playback_duration("hello") + Duration::from_millis(100).as_secs_f64();
 
@@ -1002,7 +1092,12 @@ mod tests {
         let sink = RecordingSink::new();
         let records = sink.records();
 
-        let handle = spawn_talk(start, done_tx, sink, NoopSink);
+        let handle = spawn_talk(
+            start,
+            done_tx,
+            two_sinks(sink, NoopSink),
+            SystemVarSnapshot::default(),
+        );
 
         // 初回 Tick(0.0) 刻印。同値・逆行 Tick を織り交ぜて at=0.0 群を発火させる。
         handle.inbox.send(SakuraMsg::Tick(0.0)).unwrap();
@@ -1044,7 +1139,12 @@ mod tests {
         let sink = RecordingSink::new();
         let records = sink.records();
 
-        let handle = spawn_talk(start, done_tx, sink, NoopSink);
+        let handle = spawn_talk(
+            start,
+            done_tx,
+            two_sinks(sink, NoopSink),
+            SystemVarSnapshot::default(),
+        );
 
         // 刻印前に非有限 Tick を送る: 無視され（error ログ＋SakuraError 記録）刻印もされない。
         handle.inbox.send(SakuraMsg::Tick(f64::NAN)).unwrap();
@@ -1082,7 +1182,12 @@ mod tests {
         let sink = RecordingSink::new();
         let records = sink.records();
 
-        let handle = spawn_talk(start, done_tx, sink, NoopSink);
+        let handle = spawn_talk(
+            start,
+            done_tx,
+            two_sinks(sink, NoopSink),
+            SystemVarSnapshot::default(),
+        );
 
         // 初回 Tick(0.0) 刻印＋at=0.0 群を発火（world は at=0.75・未達）。
         handle
@@ -1125,7 +1230,12 @@ mod tests {
             script: r"\s[10]hello\w[2]world\e".to_string(),
             talk_id,
         };
-        let handle = spawn_talk(start, done_tx, NoopSink, NoopSink);
+        let handle = spawn_talk(
+            start,
+            done_tx,
+            two_sinks(NoopSink, NoopSink),
+            SystemVarSnapshot::default(),
+        );
 
         // 自然終端まで駆動する（0.0 刻印 → 占有 horizon=0.60 を跨ぐ 1.0）。
         handle
@@ -1179,8 +1289,18 @@ mod tests {
         let sink_b = RecordingSink::new();
         let records_b = sink_b.records();
 
-        let handle_a = spawn_talk(start_a, done_a_tx, sink_a, NoopSink);
-        let handle_b = spawn_talk(start_b, done_b_tx, sink_b, NoopSink);
+        let handle_a = spawn_talk(
+            start_a,
+            done_a_tx,
+            two_sinks(sink_a, NoopSink),
+            SystemVarSnapshot::default(),
+        );
+        let handle_b = spawn_talk(
+            start_b,
+            done_b_tx,
+            two_sinks(sink_b, NoopSink),
+            SystemVarSnapshot::default(),
+        );
 
         handle_a
             .inbox
@@ -1269,7 +1389,12 @@ mod tests {
             let sink = RecordingSink::new();
             let records = sink.records();
 
-            let handle = spawn_talk(start, done_tx, sink, NoopSink);
+            let handle = spawn_talk(
+            start,
+            done_tx,
+            two_sinks(sink, NoopSink),
+            SystemVarSnapshot::default(),
+        );
             handle.inbox.send(SakuraMsg::Tick(0.0)).expect("Tick(0.0)");
             handle.inbox.send(SakuraMsg::Tick(1.0)).expect("Tick(1.0)");
 
@@ -1335,7 +1460,12 @@ mod tests {
         };
         let sink = RecordingSink::new();
         let records = sink.records();
-        let handle = spawn_talk(start, done_tx, sink, NoopSink);
+        let handle = spawn_talk(
+            start,
+            done_tx,
+            two_sinks(sink, NoopSink),
+            SystemVarSnapshot::default(),
+        );
 
         // 期待値は本番と同一の算術で導出（10 進直書きの表現誤差を排除・注入時刻決定論）。
         let d_hello = text_playback_duration("hello"); // 0.25
@@ -1398,7 +1528,12 @@ mod tests {
         };
         let sink = RecordingSink::new();
         let records = sink.records();
-        let handle = spawn_talk(start, done_tx, sink, NoopSink);
+        let handle = spawn_talk(
+            start,
+            done_tx,
+            two_sinks(sink, NoopSink),
+            SystemVarSnapshot::default(),
+        );
 
         let d_hello = text_playback_duration("hello"); // 0.25
         let w = Duration::from_millis(500).as_secs_f64(); // 0.5（\_w[500]）
@@ -1457,7 +1592,12 @@ mod tests {
             script: r"\s[10]ab\_w[600]\e".to_string(),
             talk_id,
         };
-        let handle = spawn_talk(start, done_tx, NoopSink, NoopSink);
+        let handle = spawn_talk(
+            start,
+            done_tx,
+            two_sinks(NoopSink, NoopSink),
+            SystemVarSnapshot::default(),
+        );
 
         let d_ab = text_playback_duration("ab"); // 0.1
         let w = Duration::from_millis(600).as_secs_f64(); // 0.6
@@ -1521,7 +1661,12 @@ mod tests {
             script: script.to_string(),
             talk_id,
         };
-        let handle = spawn_talk(start, done_tx, NoopSink, NoopSink);
+        let handle = spawn_talk(
+            start,
+            done_tx,
+            two_sinks(NoopSink, NoopSink),
+            SystemVarSnapshot::default(),
+        );
 
         let d_hi = text_playback_duration("hi"); // 0.1（末尾 Wait の発火時刻＝entry 枯渇点）
 

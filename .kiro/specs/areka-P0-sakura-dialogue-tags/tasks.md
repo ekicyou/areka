@@ -86,7 +86,7 @@
   - _Depends: 4.3_
 
 - [ ] 5. 選択解決の口とアクター境界の実装
-- [ ] 5.1 SakuraMsg::ResolveChoice アームと spawn_talk 署名を実装する
+- [x] 5.1 SakuraMsg::ResolveChoice アームと spawn_talk 署名を実装する
   - `SakuraMsg`（`#[non_exhaustive]`）へ `ResolveChoice { id: String }` を additive アームとして追加する
   - `spawn_talk` の署名を `sinks: Vec<Box<dyn CueSink + Send>>`（S-3・登録順＝broadcast 順）・`system_vars: SystemVarSnapshot`（talk 起動時手渡しの凍結像）を受け取る形へ変更する
   - `TalkDriver::on_start`（`drive.rs:170`）の `compile(&instructions)` 呼び出しを、4.1 で拡張された 2 引数署名 `compile(&instructions, &system_vars)` へ更新する（このタスクは 4.1 の compile 署名変更が着地していないとビルドできない＝並列不可）
