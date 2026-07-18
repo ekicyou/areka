@@ -220,10 +220,29 @@
 
 - [ ] 11. 実機での初回起動位置調整サインオフ
   - workspace をビルドし、i686 版 `shiori-host32-helper.exe` を `target/debug/` の areka.exe 隣へ上書きコピーする
+  - **修正済み vendors/pasta から i686 `pasta.dll`（`pasta_shiori` crate・`[lib] name="pasta"`）を再ビルドして fixture の ghost/master へ配置**（PowerShell 必須・pasta transpile キャッシュ残存時は除去＝Task 12.2 修正を stale cache が隠すのを防ぐ）
   - 実 emo2・実 pasta.dll・実 DPI（≠96 推奨）・絶対パスで起動し、OnFirstBoot 経路でエモ（相方側）がむらさきの左隣へ横移動することを目視確認する
   - dpi=96 は自己整合して座標欠陥を隠すため、実 DPI での確認を省略しない
   - _Requirements: 9.6_
-  - _Depends: 10.4_
+  - _Depends: 10.4, 12.1, 12.2_
+
+- [ ] 12. 正典スコープタグ修理（9.3 実装中の cross-spec 発見・開発者裁定 2026-07-18 で本 spec 内対応）
+- [ ] 12.1 areka-parsers の正典スコープタグ写像（bare `\0`/`\1`/`\h`/`\u`＋括弧なし `\pN`）
+  - `decode_bare` へ `'0'|'h' -> SpeakerScope{n:0}`・`'1'|'u' -> SpeakerScope{n:1}` を追加する（ukadoc 正典＝`\0`もしくは`\h`＝本体側／`\1`もしくは`\u`＝相方側）
+  - 括弧なし `\pN`（正典「0〜9のみ使用可能」）を lexer の SHORTHAND 機構（`SHORTHAND_WORDS` へ `'p'` 追加）で `SpeakerScope{n}` へ写像する。着手前に `\wN` の桁消費規則を実測し 1 桁限定へ整合（`\p10`＝scope1＋Text("0")）。`\p[...]` 既存 Tag 経路は bracket 分岐で共存・`\p`+非数字は Bare→Raw 維持
+  - decode.rs のモジュール doc/コメント（「\0→Raw」記述）を正典写像へ改訂。ukadoc 典拠＋完了 spec `areka-P0-sakura-parse` 要件11.2 の意図的 superset 更新（emo2 は `\p[n]` ゆえ非破壊）を rustdoc へ明記
+  - 檻の対置換＋新設: `decode_tests.rs:367-370` Raw→SpeakerScope{0} 反転・`validation_tests.rs:100-108` 第1要素反転（lexer 終端検証は維持）・新檻 `\1`/`\h`/`\u`/`\p2`/`\p[2]`（非退行）/`\p10` 境界/`\p`単独→Raw
+  - areka-sakura 側コメント追随（挙動不変・`drive.rs` の `\0` filler 説明・`compile.rs` 例示）
+  - _Requirements: 1.5, 4.4（正典スコープタグ充足）_
+  - _Boundary: areka-parsers sakura decode/lexer（意図的編集面拡張）_
+
+- [ ] 12.2 pasta codegen rename 漏れ修正（vendors/pasta サブモジュール）
+  - `vendors/pasta/crates/pasta_lua/src/code_gen/element_gen.rs:191` `act:sakura_script(` → `act:raw_script(`（Lua runtime の実メソッドは `raw_script`・`act.lua:188`・`__index` は未知キーに nil 返却＝現状 nil 呼び出しで Lua エラー→OnFirstBoot のインライン raw sakura 行が死ぬ）
+  - code_gen が emit する全 `act:*` メソッド名が Lua 側に実在するか grep 突合（同種 rename 漏れの一掃）
+  - 回帰檻: インライン raw sakura action を含む scene を transpile→runtime 実行し raw 素通し＋`\p[N]` 前置を assert する e2e を追加（現状この経路の動的テスト皆無）
+  - vendors/pasta 内でブランチ作成→コミット→**origin push**（areka PR の submodule SHA 到達性のため必須・失敗時は申し送り）。main マージは開発者裁量。areka 側で submodule pointer bump
+  - _Requirements: 9.6（OnFirstBoot 実機サインオフの前提）_
+  - _Boundary: vendors/pasta（別リポジトリ・開発者自身のプロジェクト・ホットフィックス）_
 
 ## Implementation Notes
 - 1.2: `CueCommand::Cursor` variant 追加時、dola 内網羅 match `cue_target_of`（sink.rs）が非網羅コンパイルエラーを出すため、機械的追随として `Cursor→Balloon` アームを先行追加済み（設計:159 と一致）。→ Task 1.4 は当該アームが既に存在する前提で、`command_target_of` 新設・`Custom` rustdoc 改訂・檻の追加に集中すること。
@@ -235,3 +254,8 @@
 - 6.2 完了メモ: `GhostBootOptions` に必須 `system_vars: SystemVarSource` フィールドが増えたため、bin caller `crates/areka/src/emo2_boot/mod.rs`（~291行）は現在未コンパイル（`system_vars`/新 sinks Vec 未供給）→ **Task 9.1** で `default_system_vars()` 供給＋sinks Vec 3要素へ追随。areka-ghost 単体は緑。`default_system_vars()` は `areka_ghost` から公開（lib.rs re-export）済。
 - 【実施順序変更】areka bin は areka-emo-text（Cursor網羅match欠落）に依存しビルド不能だったため、**Task 8 を Task 7 より先に実施**（Task 8 は (P)・Task 7 非依存）。8 完了で areka-emo-text 緑化。残る bin blocker は `emo2_boot/mod.rs` の GhostBootOptions 呼び出しのみ → **Task 7.1 が bin を組むための最小 mod.rs ブリッジ（既存 sinks を Vec 化＋`default_system_vars()` 供給・MoveCueSink はまだ足さない）を併せて行い**、Task 9.1 が MoveCueSink 登録＋channel 配線で完成させる。
 - 9.2 完了メモ: frame 相 move drain のゲートを **GhostWindows 存在**にした（present drain の GPU `attached` ゲートとは別条件・move はキャラ窓 entity へ作用しGPU attach不要／窓生成前のOnFirstBoot移動を try_iter が消費して取りこぼすのを防ぐ buffering）。単体檻は gate 開/閉の各状態をシミュレートするが、**実ブート順で「移動→窓生成でゲート closed→open」遷移が end-to-end に効くこと**は Task 9.3 の spine e2e ／ Task 11 実機で確認する。
+- 【9.3 実装中の cross-spec 発見・2026-07-18・開発者裁定=本 spec 内で両方対応】実 fixture `boot.pasta:79`/`menu.pasta` は **bare `\1\![move,...]`** を使うが、独立した 2 バグで R4.4/R9.6 が実機で成立しない:
+  - **問題A（areka-parsers）**: `decode_bare` が bare `\0`/`\1`（正典スコープ切替タグ）を Raw へ落とし SpeakerScope へ写像しない → move が scope0（むらさき）で発火＝エモが動かない。完了 spec `areka-P0-sakura-parse` 11.2 の設計帰結（emo2 builder が `\p[n]` を吐く前提）だが本 spec R1.5/R4.4 は `\0`/`\1` をスコープタグ前提で記述済＝**実装を承認済要件へ揃える superset 修理**。→ **Task 12.1**。
+  - **問題B（vendors/pasta）**: codegen `element_gen.rs:191` が `act:sakura_script(` を吐くが Lua runtime の実メソッドは `raw_script` のみ（`__index` は未知キー nil 返却）→ インライン raw sakura を含む OnFirstBoot 応答が **Lua エラーで丸ごと死ぬ**（既存テストは word 定義経由のみで未検出）。→ **Task 12.2**（サブモジュール修正＋push＋pointer bump）。
+  - **実行順序**: 12.1 → 9.3 仕上げ直し（spine 檻を scope1・(1208,1063) へ再照準してからレビュー・コミット）→ 12.2 → 10.x → 11。ukadoc 典拠: `\0`/`\h`=本体側・`\1`/`\u`=相方側・`\p[ID]`=任意番号・`\pN`(0〜9)=任意番号。design.md の Boundary「areka-parsers 0 ファイル」は Task 12.1 で意図的更新。
+- 9.3 未コミット注意: `crates/areka/src/emo2_boot/spine.rs` に 9.3 実装（実 MoveCueSink 3本目登録＋move e2e）が **scope0・(1130,733) 期待で未コミット滞留中**。W3（12.1 着地後）で bare `\1`→scope1 の正典写像に合わせ `char_window(1)`・期待座標 `x'=1483+434/2−353−278/2=1208`・y=scope1 現在値へ再計算し、doc コメントブロックを改訂してからレビュー・コミットする。
