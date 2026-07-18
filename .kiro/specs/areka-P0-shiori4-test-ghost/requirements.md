@@ -25,7 +25,7 @@ M1 の正典イベント最小集合は既存運行表（`OnInitialize` / `OnFir
 #### Acceptance Criteria
 
 1. When a test author sets up a deterministic boundary-crossing SHIORI4 test, the テストハーネス shall boot it through the existing `GhostBootOptions`／`ShioriWiring` seam by supplying only the テストゴースト fixture path と in-proc 結線の選択（専用の別 boot 入口や独自オーケストレーションを新設しない）。
-2. The 決定論 e2e shall run as part of `cargo test --workspace`（常設ゲート）without any env-gate や opt-in、i686 成果物、32bit helper プロセス、`pasta.dll`、または別プロセス spawn。
+2. The 決定論 e2e shall run as part of `cargo test --workspace`（常設ゲート）without any env-gate や opt-in、i686 成果物、32bit helper プロセス、`pasta.dll`、別プロセス spawn、**または手動 cdylib プリビルド段**。x64 テストDLL は同一ネイティブ target のワークスペースメンバとして `cargo test --workspace` が自動ビルドする（i686 成果物を手動プリビルドする既存慣行とは非対称——本 DLL はクロスビルドでなくネイティブ同一 target ゆえ自動ビルドされる）。
 3. While driving the deterministic test, the テストハーネス shall advance time only through injected Tick input と shall not use sleep や実時計待機。
 4. When the test exercises the boot→talk→close 経路, the テストハーネス shall let the author assert both the SHIORI 交信列（送出されたイベント id・NOTIFY/GET の別・発火順序）and the resulting cue sink 出力（内容・順序）。交信列の観測は `ShioriBackend` seam に噛ませる記録デコレータ（`Recorder<B: ShioriBackend>` 相当）を通じて行い、InProc 実DLL backend と既存 `Custom`／`ScriptedShioriBackend` fake の**双方で同一手口**とする（cue sink 記録装置と対をなす二記録装置）。
 5. The テストゴースト応答 shall be deterministic——同一入力に対し常に同一応答を返す（乱数・実時計に依存しない）。
@@ -76,7 +76,7 @@ M1 の正典イベント最小集合は既存運行表（`OnInitialize` / `OnFir
 1. When the 常設 e2e が走る, the e2e shall boot the テストゴースト fixture through `ShioriWiring::InProc` and drive 実 mount 解決 → x64 SHIORI4 DLL 実ロード → SHIORI 交信 → talk 再生 → close 握手 を一周する。
 2. When the boot 系列が発火する, the e2e shall observe that the canonical `OnBoot` talk（台本どおりの cue 列）が cue sink に届く。
 3. When close が発生する, the e2e shall observe a clean close 握手（正規終了）。
-4. The 決定論 e2e shall pass as part of `cargo test --workspace`、sleep 不使用・注入時刻（Tick）のみで駆動して。
+4. The 決定論 e2e shall pass as part of `cargo test --workspace`、sleep 不使用・注入時刻（Tick）のみで駆動して、追加の手動 cdylib プリビルド段を要さない（x64 テストDLL は自動ビルドされ、e2e が build 済み DLL を locate する）。
 5. The 常設決定論ゲート shall observe at the cue sink 受領レベル（さくらスクリプト→cue 配送の決定論）and shall not require 実描画（seriko/emo 合成・pixel readback）。Where deeper fidelity is wanted, 流用した emo2 実 shell/balloon 資産の上で実描画エミュレーションを opt-in の追加テストとして駆動してよい（実描画は SERIKO random blink 等の別途種固定を要し・描画の正しさ自体は emo 系既存檻が正本）。
 
 ### Requirement 6: 既存テスト資産との共存・置換規律
