@@ -63,7 +63,7 @@
 
 ## Upstream / Downstream
 
-- **Upstream**: **`areka-P0-choice-render`（ChoiceSelection 正本・契約先決で並走可）**／**`areka-P0-sakura-dialogue-tags`（choice cue/id 通貨）**／**`areka-P0-cue-playback-duration`（resolve_choice・talk 終了時刻）**／`areka-P0-input-events`（背骨・順序推奨で先行）／`completed/areka-P0-kanade`（StartTalk 棚）／`areka-P0-idle-talk`（Status ヘッダの口）。
+- **Upstream**: **`areka-P0-choice-render`（ChoiceSelection 正本・契約先決で並走可）**／**`completed/areka-P0-sakura-dialogue-tags`（choice cue/id 通貨）**／**`areka-P0-cue-playback-duration`（resolve_choice・talk 終了時刻）**／`areka-P0-input-events`（背骨・順序推奨で先行）／`completed/areka-P0-kanade`（StartTalk 棚）／`areka-P0-idle-talk`（Status ヘッダの口）。
 - **Downstream**: `areka-P0-emo2-conformance-e2e`（メニュー一周の適合項目＝M-dialogue 完成の証明はここ）。
 
 ## Existing Spec Touchpoints

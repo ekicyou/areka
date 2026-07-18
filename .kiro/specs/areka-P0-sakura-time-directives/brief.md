@@ -34,7 +34,7 @@ compile の汎用キャリアアームへ allowlist 判定を追加（純関数�
 
 ## Upstream / Downstream
 
-- **Upstream**: `areka-P0-sakura-dialogue-tags`（汎用キャリア＋R4.3 allowlist 契約の正本）／completed `cue-playback-duration`（絶対時刻台本・Barrier シーム・envelope duration）。
+- **Upstream**: `completed/areka-P0-sakura-dialogue-tags`（汎用キャリア＋R4.3 allowlist 契約の正本）／completed `cue-playback-duration`（絶対時刻台本・Barrier シーム・envelope duration）。
 - **Downstream**: これらのコマンドを使う実ゴーストの適合／`areka-P0-choice-select-events`（`choicetimeout` の**ランタイム消費側**＝タイムアウト起点・OnChoiceTimeout 発火は W5 の領分・本 spec は compile 焼込のみ）。
 
 ## Constraints

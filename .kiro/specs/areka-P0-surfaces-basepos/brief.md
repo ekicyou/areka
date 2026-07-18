@@ -13,7 +13,7 @@ M1（sakura-dialogue-tags）は**正典既定のみを実導出**する: `point.
 ## Current State
 
 - emo2 `shell/master/surfaces.txt` は `point.basepos` を宣言しない（2026-07-17 実測）。
-- `areka-P0-sakura-dialogue-tags` R5.2 が既定 basepos 算出＋**差し替え可能な型シーム**を要件化（実装着地後に file:line をここへ追記すること）。
+- `completed/areka-P0-sakura-dialogue-tags` R5.2 が既定 basepos 算出＋**差し替え可能な型シーム**を要件化・着地済み（2026-07-18）: `BaseposResolver` trait（`fn basepos(&self, window_size: SizeI) -> PointPx`）＋既定実装 `CanonDefaultBasepos`（x=幅÷2・y=下端）＝`crates/areka/src/emo2_boot/move_cue.rs`。座標算出は `resolve_move_target_position`（同ファイル）が `BaseposResolver` を注入で受け取る形＝本 spec（宣言 `point.basepos` の実導出）はこの trait の別実装を差し替えるだけで済む型シームが確保済み。
 - 裸 `base`（ドット無し形・正典形式は `X基準.Y基準`）は `base.base` と等価に解する areka 裁量を対応表へ記録済み（同 R5.2）。
 
 ## Desired Outcome
@@ -33,7 +33,7 @@ surfaces.txt の `point.basepos.x/y` 宣言が parse で転記され、move 解�
 
 ## Upstream / Downstream
 
-- **Upstream**: `areka-P0-sakura-dialogue-tags`（既定 basepos＋型シームの正本・R5.2）／completed shell-parse 系（surfaces 転記層）。
+- **Upstream**: `completed/areka-P0-sakura-dialogue-tags`（既定 basepos＋型シームの正本・R5.2）／completed shell-parse 系（surfaces 転記層）。
 - **Downstream**: emo2 以外の実シェル適合（`emo2-conformance-e2e` の後継たる実ゴースト互換検証）。
 
 ## Constraints
