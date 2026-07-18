@@ -1598,6 +1598,11 @@ mod tests {
 
     /// 構築済みリグに対し 5 チェックポイント（あふれ前→スクロール発火→連続→Clear→再追記）を
     /// byte 完全一致で檻化する（font/サイズを変えたリグで再利用——G4 の AA ガード実効性検証）。
+    ///
+    /// 【newline-defer】本シナリオは全 cue を `at=0.0` で発行し、各 checkpoint 時点までに追記済み
+    /// content が完全リビールされる（＝末尾/部分の保留改行が残らない）。ゆえ各改行は次のグリフを
+    /// 伴って実体化し、あふれ発火のタイミングは遅延化の影響を受けない（幽霊空行由来の発火が無く
+    /// checkpoint 前提は不変）。発火時刻の後退は部分リビール（at 分散）を伴う診断ダンプ側の論点。
     fn run_live_diff_scenario_on(ld: &mut LiveDiffRig) {
         // ① あふれ前（3 行・可視窓は不動）。
         ld.apply_text(0.0, "あ");
@@ -2116,10 +2121,14 @@ mod tests {
             duration: 0.0,
         };
         // 実 example と同一の cue `at` スケジュール（LINE1 at 0.0・LINE2 at 0.5・LINE3 at 1.2・
-        // あふれ短行 at 2.0）。at を分散させることで「幽霊空行」（未リビール NewLine による）
-        // の発生タイミングも実機と一致する（全 at=0.0 だと即座に空行が出て人工的にスクロールする）。
-        // reveal は配送 duration 由来（interval = duration / N）。Text へ N×0.05 を焼き込むと
-        // 各 chunk 内が旧 char_wait=0.05 と同一ペースで per-glyph 進行する（chunk 境界は at で gate）。
+        // あふれ短行 at 2.0）。reveal は配送 duration 由来（interval = duration / N）。Text へ
+        // N×0.05 を焼き込むと各 chunk 内が旧 char_wait=0.05 と同一ペースで per-glyph 進行する
+        // （chunk 境界は at で gate）。
+        // 【newline-defer】かつて（即時意味論では）at を分散させると未リビール NewLine が即座に
+        // 「幽霊空行」を出し人工的なスクロールを誘発した——遅延化（deferred newline）で保留改行は
+        // 次の可視グリフが reveal されるまで行を開かないため、幽霊空行はもはや生じず、あふれ発火は
+        // 実体化時刻（改行より後ろのグリフの reveal 時）へ後退する。at 分散は実機の reveal タイミングを
+        // 模す診断ダンプの時間対応としてのみ残す（幽霊空行の再現目的ではない）。
         let cue_at = |at: f64, cmd: CueCommand| TalkCue {
             at,
             actor: actor.clone(),
