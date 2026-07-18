@@ -30,13 +30,14 @@
 ### This Spec Owns
 
 - `LayoutEngine::layout`（`crates/areka-emo-text/src/layout.rs`）の走査ループが担う**改行の実体化タイミングの意味論**（遅延・累算・実体化・蒸発）。
-- 上記意味論の決定論檻（既存檻の意味更新＋新規檻）——`layout.rs`／`canvas.rs` のテストモジュール。
+- `ScrollPlanner::plan_with_overhangs`（`crates/areka-emo-text/src/viewbox.rs`）の**後方縮退ガードの拡張 1 点**（DD-9・遅延化で到達可能になる行内縮小フレーム列への防御・開発者承認 2026-07-18 のスコープ追加）。
+- 上記意味論の決定論檻（既存檻の意味更新＋新規檻）——`layout.rs`／`canvas.rs`／`viewbox.rs` のテストモジュール、および `viewbox_draw.rs` の行内縮小 byte 等価恒久檻。
 - 完了済み `areka-P0-emo-text-layer` R2.2（NewLine 即時行送り）意味論の正式改訂と、関連 doc コメントの整合更新。
 - R8 実機サインオフの手順定義（有界 auto-exit＋ログ grep＋人間目視）。
 
 ### Out of Boundary
 
-- `visible_window`／`ContentCanvas::from_layout`／`DrawExecutor`／`ViewboxExecutor`／`TextLayerState` の**本番コード**（すべて非改変。layout の出力変化を通じて自動的に正しくなる）。
+- `visible_window`／`ContentCanvas::from_layout`／`DrawExecutor`／`ViewboxExecutor`／`TextLayerState` の**本番コード**（非改変。layout の出力変化を通じて自動的に正しくなる——**例外は viewbox.rs の後方縮退ガード 1 点のみ（DD-9・This Spec Owns へ移管）**）。
 - cue 層（`areka-sakura` の `TalkCue`／`CueCommand::NewLine`・duration 意味論）——NewLine cue は瞬時 duration 0 のまま非改変。
 - `state.rs` の cue バッファ追記（後出し優先の記録）——`items` への `LineBreak` 追記は即時のまま維持する（遅延するのは行送りの可視化のみ・R4.3）。
 - `areka-P0-choice-render` の宛先である `state.rs:224-229`（Choice シーム）——不触（W3 開始前に本 spec を完了させる編成契約）。
@@ -101,9 +102,10 @@ graph TB
 | DD-3 | 保留フラッシュと可視 prefix 打切りの順序 | **`placed == visible_count` の break を保留フラッシュより前に置く**（正準固定）。 | R4.2 の要。取り違えると「リビールカーソルが改行を通過したが次可視グリフが無い」ケースで行送りが漏れて壊れる。実装・レビューはこの順序を契約として扱う。 |
 | DD-4 | `opened` フラグ | **撤去**し、末尾の行確定を `!current.is_empty()` で判定する。 | 遅延化後、行の確定は常にグリフ配置に隣接するため「グリフを 1 つも含まない末尾 current」は構造的に生じない（`opened` と等価）。フラグの意味残留を残すより単純。 |
 | DD-5 | 保留の表現 | **`pending: Option<f32>`**（`None`＝保留なし・`Some(Σratio)`）。 | `\n[0]`（ratio 0）でも「行を替える（新行・送りゼロ）」意味を保存するため、`f32` 単独（0.0 と区別不能）ではなく Option。既存の即時意味論でも `LineBreak{0.0}` は行を閉じており、縮退挙動を等価に維持する。 |
-| DD-6 | 下流の非改変確定 | `visible_window`／`canvas.rs`／`draw.rs`／`viewbox.rs`／`viewbox_draw.rs`／`state.rs` の**本番コードは非改変**。 | canvas は行を写すだけ・visible_window は行列入力・draw/viewbox は `first_visible_line` 消費のみ（実測）。行 index 1:1 不変条件は「layout 出力の行」に対する契約であり、空行が出力されなくなっても保たれる。 |
+| DD-6 | 下流の非改変確定 | `visible_window`／`canvas.rs`／`draw.rs`／`viewbox.rs`／`viewbox_draw.rs`／`state.rs` の**本番コードは原則非改変**。**例外＝viewbox.rs の後方縮退ガード 1 点（DD-9・実装中の実測で開発者追加承認 2026-07-18）**。 | canvas は行を写すだけ・visible_window は行列入力・draw/viewbox は `first_visible_line` 消費のみ（実測）。行 index 1:1 不変条件は「layout 出力の行」に対する契約であり、空行が出力されなくなっても保たれる。**訂正（実装中の実測）**: 「oracle=viewbox byte 等価は両側が同一 layout 出力を消費するため意味論非依存」はステートレスな oracle にのみ成立——stateful な viewbox（増分描画）は**フレーム列**依存であり、遅延化が新たに到達可能にするフレーム列で既存欠陥が露出する（DD-9）。 |
 | DD-7 | 既存檻の棚卸し（実測確定） | 更新対象は **4 檻＋doc コメント**（詳細は Testing Strategy）。`draw.rs`・`viewbox.rs`・`viewbox_draw.rs` の檻は**アサーション非影響**（内部改行のみ使用／oracle=viewbox 等価は意味論非依存）。 | gap 分析 §4-6 の「draw.rs 檻更新見込み」は本設計の実測で否定（draw.rs:1627/1726/1730 の LineBreak はすべて後続グリフあり＝実体化される内部改行）。`viewbox_draw.rs:2074` の「幽霊空行」コメントのみ陳腐化（現象自体が本修正で消滅）→ コメント更新。 |
 | DD-8 | R8 実機サインオフの grep 設計 | `emo2_real_run` 定石へ接続した**手順**として定義（新規常設テストは作らない・DoD の決定論担保は R7 檻が担う）。詳細は Testing Strategy「実機サインオフ」。 | 実機の talk 選択は SHIORI 依存で非決定のため、常設檻には載せない（決定論檻の対象は判断分岐のみ）。判定はログ marker の grep＋人間目視で有界に行う（実機サインオフの定石）。 |
+| DD-9 | 遅延化で到達可能になる「行内縮小」フレーム列と viewbox 増分描画の既存欠陥（実装中に発見・スコープ追加） | `ScrollPlanner::plan_with_overhangs`（viewbox.rs）の後方縮退ガードを「行数減少（`residents.len() < prev_lines.len()`）」から「**同一 index 行の被覆不能な指紋変化**（block 位置移動・extent 縮小＝新 extent の変化行矩形が旧インクを覆えない）」まで拡張し、既存の全域ダーティ縮退へ合流させる。**開発者承認 2026-07-18・本 spec スコープへ追加**。 | 既存欠陥（行内縮小時に退避インクが未クリア）は**改行非依存**で再現（fresh-context デバッグ調査が改行ゼロの縮小列で同一 diverge を実証）。旧・即時意味論では trailing 空行が行数減少ガードを偶然発火させ欠陥を**マスク**していたが、遅延化（trailing 改行の蒸発）がマスクを外し、後方時刻ジャンプ（C8 検分・un-reveal）で `diag_line_boundary_dropout_vs_oracle` が正しく検出して落ちる。前方 typewriter（text prefix 伸長・extent 増加・block 不動）は不発＝増分ホットパス影響なし。行内開始位置は layout の不変則（全行同一の行内開始）ゆえ extent＋block_pos の指紋のみで被覆判定は健全。修正は viewbox.rs:209 の既存縮退哲学（「全域ダーティへ縮退して正しさを優先・最悪でもレガシー全域再描画と等価な 1 フレーム」）の**同型拡張**であり新機構ではない。R3.3「機構それ自体は非改変」は**あふれ評価タイミングの意味論**への規定であり、本修正は増分描画の正しさ欠陥の修復（oracle 等価の回復）＝意味論不変。 |
 
 ## File Structure Plan
 
@@ -116,7 +118,8 @@ graph TB
 | `crates/areka-emo-text/src/layout.rs` | **改訂**（唯一の本番変更） | 更新＋新規 | `layout()` 走査ループ: LineBreak アーム＝pending 累算へ・Glyph アーム＝break→フラッシュ→折返し→配置の順・`opened` 撤去・末尾 finish は `!current.is_empty()`。モジュール doc「可視 prefix 規則」（改行即時反映の記述）と `layout()` doc を遅延意味論へ更新。既存檻 3 本更新＋新規檻追加。 |
 | `crates/areka-emo-text/src/canvas.rs` | 非改変 | 更新 | 檻 `empty_lines_are_preserved_as_empty_glyph_residents` を遅延意味論へ更新（trailing 改行→住人 1・1:1 維持）。doc コメント「空行も空のグリフ住人として保持」の記述を「layout 出力の行を 1:1 で写す（改行由来の空行は遅延意味論では生じない）」へ整合。 |
 | `crates/areka-emo-text/src/state.rs` | 非改変 | doc のみ | R2.2 参照の doc コメント（「NewLine＝改行マーカー追記」）へ「行送りの可視化は layout の遅延解釈（newline-defer）」の注記を追加。追記動作・檻は不変。 |
-| `crates/areka-emo-text/src/viewbox_draw.rs` | 非改変 | コメントのみ | `viewbox_draw.rs:2074` 付近の「幽霊空行（未リビール NewLine による）」コメントを更新（遅延化により幽霊空行は生じない・シナリオ自体は oracle=viewbox 等価檻として有効なまま）。 |
+| `crates/areka-emo-text/src/viewbox.rs` | **改訂（ガード 1 点・DD-9）** | 新規 | `plan_with_overhangs` の後方縮退条件を「行数減少」から「同一 index 行の被覆不能な指紋変化（block 位置移動・extent 縮小）」まで拡張（既存の全域ダーティ縮退へ合流）。新規檻: 行内縮小→全域縮退・前方伸長→増分維持（ホットパス檻）。 |
+| `crates/areka-emo-text/src/viewbox_draw.rs` | 非改変 | コメント＋新規檻 | `viewbox_draw.rs:2074` 付近の「幽霊空行（未リビール NewLine による）」コメントを更新（遅延化により幽霊空行は生じない・シナリオ自体は oracle=viewbox 等価檻として有効なまま）。新規檻: **改行を一切含まない行内縮小**（例「おっはよー！」→「おっ」）の oracle vs viewbox byte 等価（DD-9 欠陥の改行非依存性を恒久固定）。 |
 | `crates/areka-emo-text/src/draw.rs` | 非改変 | 非改変（見込み） | 檻はすべて内部改行（後続グリフあり）のみ使用のため非影響。実変更後の全スイート実行で確認する。 |
 
 ## System Flows
@@ -269,6 +272,12 @@ flowchart TB
 5. **あふれの実体化時評価**（3.2/7.3 後段）: 満杯 3 行＋`\n`＋次グリフ（visible に含む）→ `visible_window` が従来どおり発火（`first_visible_line=1`）。更新檻 3（前段・不発火）と対で R7.3 を成す。
 6. **縦書き同一規則**（6.1/6.2): 累算実体化＋trailing 蒸発を `vertical_rl`／`vertical_lr` で檻化（前進量は軸読み替え式・横書きと同一分岐）。
 7. **決定論**（7.1）: 既存 `same_input_yields_identical_output` 系の入力へ連続・trailing 改行を含む列を追加（新分岐の同一入力→同一出力）。
+
+### 新規檻（DD-9・viewbox.rs／viewbox_draw.rs）
+
+8. **行内縮小の全域縮退**（viewbox.rs unit・純粋層）: 同一 index 行の text/extent が縮む新 canvas に対し `plan` が全域ダーティの Update（blit 0・面全域・全住人）へ縮退する。block 位置移動も同様。
+9. **前方伸長の増分維持**（viewbox.rs unit・ホットパス檻）: text prefix 伸長・extent 増加・block 不動の変化行は従来どおり増分（変化行矩形のみの dirty）を維持し、全域縮退が誤発火しない。
+10. **改行なし行内縮小の byte 等価**（viewbox_draw.rs・実 metrics）: 改行を一切含まない単一行の縮小再提示（「おっはよー！」→「おっ」）で oracle と viewbox の read_back が byte 一致する（DD-9 欠陥が改行非依存であることの恒久固定・`diag_line_boundary_dropout_vs_oracle` の後方ジャンプ検分は無改変のまま緑が正）。
 
 R2.4（別テキスト状態で実体化しない）は、pending が単一 `layout()` 呼出のローカルであるという構造と、state の per-actor 分離既存檻で担保する（新規檻不要——構造的に他 actor の配置が本 actor の walk に入り込む経路が存在しない）。
 
