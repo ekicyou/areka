@@ -90,7 +90,7 @@ DEALINGS IN THE SOFTWARE.
 - backtrace 0.3.76
 - cfg-if 1.0.4
 - js-sys 0.3.103
-- rustc-demangle 0.1.27
+- rustc-demangle 0.1.28
 - wasm-bindgen-macro-support 0.2.126
 - wasm-bindgen-macro 0.2.126
 - wasm-bindgen-shared 0.2.126
@@ -166,7 +166,7 @@ DEALINGS IN THE SOFTWARE.
 対象 crate:
 - bitflags 2.13.0
 - log 0.4.33
-- regex-automata 0.4.14
+- regex-automata 0.4.15
 - regex-syntax 0.8.11
 
 ```
@@ -520,7 +520,7 @@ DEALINGS IN THE SOFTWARE.
 
 対象 crate:
 - rustc_version 0.4.1
-- thread_local 1.1.9
+- thread_local 1.1.10
 
 ```
 Copyright (c) 2016 The Rust Project Developers
@@ -1426,7 +1426,7 @@ DEALINGS IN THE SOFTWARE.
 
 対象 crate:
 - rand 0.10.2
-- rand 0.9.4
+- rand 0.9.5
 - rand_chacha 0.9.0
 - rand_core 0.9.5
 
@@ -1464,7 +1464,7 @@ DEALINGS IN THE SOFTWARE.
 ## MIT License
 
 対象 crate:
-- zerocopy 0.8.52
+- zerocopy 0.8.54
 
 ```
 Copyright 2023 The Fuchsia Authors
@@ -1881,7 +1881,7 @@ SOFTWARE.
 - proc-macro2 1.0.106
 - quote 1.0.46
 - rustix 1.1.4
-- rustversion 1.0.22
+- rustversion 1.0.23
 - semver 1.0.28
 - serde 1.0.228
 - serde_core 1.0.228
@@ -2045,7 +2045,7 @@ SOFTWARE.
 
 対象 crate:
 - byteorder 1.5.0
-- memchr 2.8.2
+- memchr 2.8.3
 
 ```
 The MIT License (MIT)
@@ -2203,8 +2203,8 @@ SOFTWARE.
 ## MIT License
 
 対象 crate:
-- crossbeam-queue 0.3.12
-- crossbeam-utils 0.8.21
+- crossbeam-queue 0.3.13
+- crossbeam-utils 0.8.22
 
 ```
 The MIT License (MIT)
