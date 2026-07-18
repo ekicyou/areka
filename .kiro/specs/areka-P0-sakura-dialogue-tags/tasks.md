@@ -41,7 +41,7 @@
   - _Requirements: 8.6, 9.7_
   - _Depends: 2.1_
 
-- [ ] 3. (P) sysvar 展開契約の実装（SystemVarSnapshot・DEFAULT_USERNAME・resolve_system_var）
+- [x] 3. (P) sysvar 展開契約の実装（SystemVarSnapshot・DEFAULT_USERNAME・resolve_system_var）
   - `SystemVarSnapshot`（名前→値の決定論順序スナップショット・`get`/`insert`）を新規モジュール `sysvar` に実装する
   - `DEFAULT_USERNAME = "ユーザーさん"` を唯一の定義点として実装する（伺かの伝統的な未指定時デフォルト・対応表記録）
   - `ResolvedVar`（`Text`/`PassThrough`）と純関数 `resolve_system_var(name, vars)` を実装する（値あり→値／`username` 欠落→既定値／未対応名→素通し）
@@ -228,3 +228,4 @@
 ## Implementation Notes
 - 1.2: `CueCommand::Cursor` variant 追加時、dola 内網羅 match `cue_target_of`（sink.rs）が非網羅コンパイルエラーを出すため、機械的追随として `Cursor→Balloon` アームを先行追加済み（設計:159 と一致）。→ Task 1.4 は当該アームが既に存在する前提で、`command_target_of` 新設・`Custom` rustdoc 改訂・檻の追加に集中すること。
 - 検証コマンドは crate 単位 `cargo test -p <crate>`（worktree root から）。`--workspace` は host-32 i686 成果物前提のため実装中は使わない。worktree 絶対パス `...\.claude\worktrees\areka-p0-balloon-face-cue-18b0ad` 必須。
+- 3: `doc/COMPAT_ARCHITECTURE.md` に既存の対応表が無かったため §8「沈黙ルール対応表」を新設し `%username`→`ユーザーさん` を登記済み。→ Task 4.2/7.1/7.2 の対応表登記は §8 の既存テーブルへ行追記する形でよい。`DEFAULT_USERNAME` の定義点は sysvar.rs のみ（Task 6.2 の provider は re-export で二重定義しない）。
