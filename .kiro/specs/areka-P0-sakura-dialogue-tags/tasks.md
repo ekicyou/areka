@@ -218,7 +218,7 @@
   - _Depends: 1.1, 1.2, 1.3, 9.3_
   - _Boundary: dola cue 語彙増分_
 
-- [ ] 11. 実機での初回起動位置調整サインオフ
+- [x] 11. 実機での初回起動位置調整サインオフ
   - workspace をビルドし、i686 版 `shiori-host32-helper.exe` を `target/debug/` の areka.exe 隣へ上書きコピーする
   - **修正済み vendors/pasta から i686 `pasta.dll`（`pasta_shiori` crate・`[lib] name="pasta"`）を再ビルドして fixture の ghost/master へ配置**（PowerShell 必須・pasta transpile キャッシュ残存時は除去＝Task 12.2 修正を stale cache が隠すのを防ぐ）
   - 実 emo2・実 pasta.dll・実 DPI（≠96 推奨）・絶対パスで起動し、OnFirstBoot 経路でエモ（相方側）がむらさきの左隣へ横移動することを目視確認する
@@ -263,6 +263,6 @@
   - **問題B（vendors/pasta・未確定・保留）**: codegen `element_gen.rs:191` の `act:sakura_script(` vs runtime `raw_script` の名前不一致疑惑。だが `scene_test.rs:148` がインライン `\s[0]` 含む scene を `.exec()` 実行しており（released v0.1.6）静的には決着せず。**別リポジトリゆえ本 spec では修正せず**（本家反映されないホットフィックスは無意味・開発者指摘）＝**Task 11 実機で判定**（→ Task 12.2 の扱い参照）。
   - **実行順序**: 12.1 → 9.3 仕上げ直し（bare `\1`→scope1 の正典写像に合わせ再照準）→ 10.x → 11（11 で B を実機判定）。design.md の Boundary「areka-parsers 0 ファイル」は Task 12.1 で意図的更新。
 - 【Task 11 実機ログ確認・2026-07-18・Claudia 代行】有界自動終了（`AREKA_APP_SMOKE_EXIT_MS=25000`・`RUST_LOG=info,kanade=trace,areka=debug`）で areka.exe を **実 emo2・実 i686 helper・出荷済み追跡 pasta.dll（3.4MB）**で実走 → OnFirstBoot 経路で **move が末端まで発火**をログで確定:
-  - 成功マーカー: `apply_move_directive: move 適用完了 scope=1 base_scope=0 from_x=2972 from_y=1700 to_x=3102 to_y=1700`（**scope=1＝エモ側で発火**・y 不変 Fix・物理px・1回・apply 縮退warn 0件・talk 116行フル再生）＝R4.4/R9.6 のパイプラインを実機ログで充足。`\1`→pasta が `\p[1]` 前置→areka SpeakerScope{1}→move が相方側へ、が実機で通ることを確認。**残る目視（DPI≠96 でエモが むらさきの左隣に見えるか）は開発者判断**（ログは pass を強く予測）。
+  - 成功マーカー: `apply_move_directive: move 適用完了 scope=1 base_scope=0 from_x=2972 from_y=1700 to_x=3102 to_y=1700`（**scope=1＝エモ側で発火**・y 不変 Fix・物理px・1回・apply 縮退warn 0件・talk 116行フル再生）＝R4.4/R9.6 のパイプラインを実機ログで充足。`\1`→pasta が `\p[1]` 前置→areka SpeakerScope{1}→move が相方側へ、が実機で通ることを確認。**開発者目視サインオフ（2026-07-18）**: 実走で **エモ（相方側）が むらさきの左隣に配置される**ことを開発者が目視確認＝R9.6 合格。move は R5.4 通り即時反映ゆえ画面上の滑走は視認されない（「動く瞬間」でなく「正しい最終位置＝エモが左」が合否基準）＝仕様準拠。マーカー再現性も確認（2回走行で同一 scope=1・(2972,1700)→(3102,1700)）。→ **Task 11 完了**。
   - **Problem B の実機所見**: 出荷済み追跡 pasta.dll（3.4MB・git 追跡）は **LOAD 成功・OnFirstBoot フル応答・Lua エラー無し**＝この dll では B 顕現せず、本 spec は非ブロック。一方 **現行 submodule（048d646c）から fresh ビルドした i686 pasta.dll（12.7MB・debug）は `load()` が false（`[helper] LoadReturnedFalse`）で SHIORI が LOAD 段階で死亡**。→ 現行 pasta submodule に LOAD 退行が実在（debug-vs-release か Problem B かは未切り分け＝pasta 本家の領分）。**出荷 pasta.dll は無改変で復元済み（git clean）**・areka PR は現行 submodule pointer のまま（bump しない）。pasta 側の LOAD 退行調査は開発者裁量の申し送り。
 - 9.3 未コミット注意: `crates/areka/src/emo2_boot/spine.rs` に 9.3 実装（実 MoveCueSink 3本目登録＋move e2e）が **scope0・(1130,733) 期待で未コミット滞留中**。W3（12.1 着地後）で bare `\1`→scope1 の正典写像に合わせ `char_window(1)`・期待座標 `x'=1483+434/2−353−278/2=1208`・y=scope1 現在値(1063)へ再計算し、doc コメントブロックを改訂してからレビュー・コミットする。
