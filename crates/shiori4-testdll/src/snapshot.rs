@@ -41,7 +41,7 @@ const RAW_SNAPSHOTS: &[(&str, &str)] = &[
 /// 暫定応答に帯同する PROVISIONAL マーカーヘッダ（値レベルの単一権威）。
 ///
 /// task 6.2 の実採取差し替えでこのヘッダは消える（実採取応答はマーカーを持たない）。
-pub(crate) const PROVISIONAL_MARKER: &str = "X-Areka-Snapshot: PROVISIONAL";
+pub const PROVISIONAL_MARKER: &str = "X-Areka-Snapshot: PROVISIONAL";
 
 /// 全ての行末表現（lone `\n`・`\r\n`）を一様な `\r\n` へ正規化する純関数。
 ///
@@ -60,7 +60,7 @@ pub(crate) fn normalize_crlf(s: &str) -> String {
 ///
 /// 参照は `static` [`OnceLock`] が保持する正規化済み文字列を指すため `'static`。同一入力（＝呼出）に
 /// 常に同一参照を返す（事後条件）。
-pub(crate) fn snapshots() -> &'static [(&'static str, &'static str)] {
+pub fn snapshots() -> &'static [(&'static str, &'static str)] {
     /// CRLF 正規化済みの表を一度だけ構築し保持する（`static` ゆえ参照は `'static`）。
     static TABLE: OnceLock<Vec<(&'static str, &'static str)>> = OnceLock::new();
     TABLE.get_or_init(|| {
@@ -83,7 +83,7 @@ pub(crate) fn snapshots() -> &'static [(&'static str, &'static str)] {
 ///
 /// 返り値は `&'static str`（task 1.4 が `select_response` の `lookup: Fn(&str) -> Option<&'static str>`
 /// へ無改修で差し込むため／`Selection::Snapshot(&'static str)` が保持するため）。
-pub(crate) fn snapshot_for(id: &str) -> Option<&'static str> {
+pub fn snapshot_for(id: &str) -> Option<&'static str> {
     snapshots()
         .iter()
         .find(|(key, _)| *key == id)

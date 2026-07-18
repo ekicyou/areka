@@ -26,7 +26,7 @@
   - _Boundary: shiori4-testdll/snapshot.rs_
   - _Depends: 1.1_
 
-- [ ] 1.4 IShiori COM境界を横断する決定論replay脳と生成入口を実装する
+- [x] 1.4 IShiori COM境界を横断する決定論replay脳と生成入口を実装する
   - 生成入口は本番SHIORI4が使うのと同じ規約に準拠させる（1.1のスタブ生成入口を実体へ差し替える）
   - Get呼び出しは1.2のID判定・1.3の凍結応答参照を用いて常に即時応答とし、pending（遅延）を返さない
   - Notifyは受信のみ・内容不問で決定論的に成功を返す

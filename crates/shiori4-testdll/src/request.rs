@@ -14,13 +14,10 @@
 //! いずれも panic しない総和的な純関数であり、malformed 入力は panic でなく
 //! [`Selection::BadRequest`]（400 相当）として fail-visible に扱う（要件 2.4）。
 //!
-//! 本モジュールの項目は crate 内消費（`pub(crate)`）。task 1.4 が `lib.rs` の `ReplayBrain::Get`
-//! からこれらを呼び、`lookup` に task 1.3 の `snapshot::snapshot_for` を無改修で差し込む。
-//!
-//! 本 task（1.2）時点では `shiori_factory`／`ReplayBrain` へ未結線（task 1.4 で結線）ゆえ、
-//! これらの `pub(crate)` 項目は非テストビルドでは未使用となる。判定分岐は単体テストで全網羅
-//! 済み（下記 `#[cfg(test)]`）であり、結線までの間 `dead_code` を意図的に許容する。
-#![allow(dead_code)]
+//! 本モジュールの項目は crate 内消費（`pub(crate)`）。task 1.4 で `lib.rs` の `ReplayBrain::Get`
+//! が [`parse_request`]→[`select_response`]→[`response_text`] を呼び、`lookup` に task 1.3 の
+//! `snapshot::snapshot_for` を無改修で差し込む（結線済み）。判定分岐は単体テストで全網羅する
+//! （下記 `#[cfg(test)]`）。
 
 /// SHIORI/3.0 request line の種別（design.md D-4: GET/NOTIFY の別を読む）。
 ///
