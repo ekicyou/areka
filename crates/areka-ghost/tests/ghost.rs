@@ -7,7 +7,7 @@
 // 後続タスク 4.2〜4.7 が同ファイルへ boot〜close の各シナリオ（S1〜S6）の `#[test]` を
 // 追加していく）。`real_pasta_test.rs`（task 4.8・env ゲート実 pasta 追験）は
 // `spine_e2e_test` の `RecordingSink` を再利用する（`crate::spine_e2e_test::RecordingSink`）。
-#[path = "ghost/spine_e2e_test.rs"]
-mod spine_e2e_test;
 #[path = "ghost/real_pasta_test.rs"]
 mod real_pasta_test;
+#[path = "ghost/spine_e2e_test.rs"]
+mod spine_e2e_test;

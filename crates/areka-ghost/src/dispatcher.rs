@@ -20,11 +20,10 @@ use std::sync::mpsc::Sender;
 
 use areka_actor::{ActorHandle, reply_channel, run_inbox, spawn_actor};
 use areka_kanade::{KanadeMsg, MonotonicMs};
-use areka_sakura::contract::{
-    CueSink, SakuraMsg, StartTalk, SystemVarSnapshot, TalkDone, TalkHandle, TalkId,
-};
+use areka_sakura::contract::{CueSink, SakuraMsg, StartTalk, TalkDone, TalkHandle, TalkId};
 use areka_sakura::drive::spawn_talk;
 
+use crate::runtime::SystemVarSource;
 use crate::sink::BootCueSink;
 
 /// dispatcher の inbox（1 アクター 1 enum・areka-actor inbox 規約）。
@@ -77,6 +76,9 @@ struct DispatcherState {
     /// 構築時注入の可変長 sink 列（S-3・登録順＝broadcast 順）。talk 起動ごとに各要素を
     /// `clone_box` して per-talk の `spawn_talk` へ手渡す（要件 4.6/8.5）。
     sinks: Vec<Box<dyn BootCueSink>>,
+    /// システム変数の供給シーム（S-3・R7.3/7.4）。talk 起動ごとに一度呼び出して凍結
+    /// スナップショットを得、per-talk の `spawn_talk` へ手渡す（凍結像の刻印点）。
+    system_vars: SystemVarSource,
     /// per-talk transient へ渡す自身の inbox クローン（self-sender ハンドオフ）。
     self_sender: Sender<DispatcherMsg>,
 }
@@ -108,10 +110,12 @@ impl DispatcherState {
             .map(|sink| sink.clone_box() as Box<dyn CueSink + Send>)
             .collect();
 
-        // TODO(task 6.2): 暫定の既定スナップショット橋渡し。task 6.2 が `SystemVarSource` provider を
-        // GhostBootOptions/DispatcherState に通し、ここで per-talk に呼び出した凍結像へ差し替える
-        // （現状は値源不在ゆえ既定＝空スナップショットで talk を起動する）。
-        let system_vars = SystemVarSnapshot::default();
+        // 凍結像の刻印点（design.md「GhostBootOptions S-3＋provider」・R7.3/7.4）: provider を
+        // **この talk の起動時点で一度だけ**呼び出し、返った凍結スナップショットを per-talk へ
+        // 手渡す。talk ごとに独立して凍結される（sylphya の per-talk 凍結と同形）＝boot 時 1 回
+        // きりの固定像ではない。sakura は値源を所有せず、この凍結像だけを参照する（差替シーム:
+        // provider を sylphya 読み口へ差し替えても本層は無改変）。
+        let system_vars = (self.system_vars)();
 
         let handle = spawn_talk(start, self.self_sender.clone(), sinks, system_vars);
         self.active = Some(ActiveTalk {
@@ -196,12 +200,15 @@ impl DispatcherState {
 
 /// dispatcher を起動する。`sinks` は構築時注入の可変長 sink 列（S-3・要件 4.6/8.5・setter なし）で、
 /// 各 per-talk transient へは各 sink を `clone_box` した専用インスタンス列を渡す（登録順＝broadcast 順）。
+/// `system_vars` は per-talk のシステム変数供給シーム（R7.3/7.4）で、talk 起動ごとに一度呼び出して
+/// 得た凍結スナップショットを `spawn_talk` へ手渡す（凍結像の刻印点）。
 ///
 /// self-sender ハンドオフ（モジュール doc 参照）により、dispatcher の inbox は全 `Sender`
 /// drop による切断へ到達し得ない——唯一の停止経路は [`DispatcherMsg::Close`] である。
 pub fn spawn_dispatcher(
     kanade: Sender<KanadeMsg>,
     sinks: Vec<Box<dyn BootCueSink>>,
+    system_vars: SystemVarSource,
 ) -> (Sender<DispatcherMsg>, ActorHandle) {
     let (self_tx_reply, self_tx_recv) = reply_channel::<Sender<DispatcherMsg>>();
 
@@ -214,6 +221,7 @@ pub fn spawn_dispatcher(
             active: None,
             kanade,
             sinks,
+            system_vars,
             self_sender,
         };
 
@@ -303,7 +311,11 @@ mod tests {
         let surface = RecordingSink::new();
         let text = RecordingSink::new();
 
-        let (tx, handle) = spawn_dispatcher(kanade_tx, vec![Box::new(surface), Box::new(text)]);
+        let (tx, handle) = spawn_dispatcher(
+            kanade_tx,
+            vec![Box::new(surface), Box::new(text)],
+            crate::runtime::default_system_vars(),
+        );
 
         let talk_a = TalkId(1);
         let talk_b = TalkId(2);
@@ -375,7 +387,11 @@ mod tests {
         let surface = RecordingSink::new();
         let text = RecordingSink::new();
 
-        let (tx, handle) = spawn_dispatcher(kanade_tx, vec![Box::new(surface), Box::new(text)]);
+        let (tx, handle) = spawn_dispatcher(
+            kanade_tx,
+            vec![Box::new(surface), Box::new(text)],
+            crate::runtime::default_system_vars(),
+        );
 
         let talk_a = TalkId(11);
         let talk_b = TalkId(12);
@@ -450,7 +466,11 @@ mod tests {
         let surface = RecordingSink::new();
         let text = RecordingSink::new();
 
-        let (tx, handle) = spawn_dispatcher(kanade_tx, vec![Box::new(surface), Box::new(text)]);
+        let (tx, handle) = spawn_dispatcher(
+            kanade_tx,
+            vec![Box::new(surface), Box::new(text)],
+            crate::runtime::default_system_vars(),
+        );
 
         // 長い待ちを持つ script（Close 時点では自然完了していない）。
         tx.send(DispatcherMsg::Start(StartTalk {
@@ -484,7 +504,11 @@ mod tests {
         let surface = RecordingSink::new();
         let text = ChannelSink { tx: text_tx };
 
-        let (tx, handle) = spawn_dispatcher(kanade_tx, vec![Box::new(surface), Box::new(text)]);
+        let (tx, handle) = spawn_dispatcher(
+            kanade_tx,
+            vec![Box::new(surface), Box::new(text)],
+            crate::runtime::default_system_vars(),
+        );
 
         // \w[4]=200ms・\w[6]=300ms。D 焼き込み後の発火（broadcast ゆえ text sink も全 cue を受ける）:
         //   ClearAll@0.0・Emote{5}@0.0・FIRST@0.0 / Wait@0.25 / SECOND@0.45（FIRST の D=0.25 + \w[4]=0.20）/
@@ -581,7 +605,11 @@ mod tests {
         let text = RecordingSink::new();
         let surface_records = surface.records();
 
-        let (tx, handle) = spawn_dispatcher(kanade_tx, vec![Box::new(surface), Box::new(text)]);
+        let (tx, handle) = spawn_dispatcher(
+            kanade_tx,
+            vec![Box::new(surface), Box::new(text)],
+            crate::runtime::default_system_vars(),
+        );
 
         let talk_c = TalkId(41);
         tx.send(DispatcherMsg::Start(StartTalk {
@@ -657,6 +685,115 @@ mod tests {
                 &CueCommand::Emote { key: "8".into() },
             ],
             "broadcast 経由でも Emote 発火は C(scope9)→D(scope8) の 1 件ずつ"
+        );
+
+        tx.send(DispatcherMsg::Close).expect("send Close");
+        run_bounded(
+            "dispatcher join after Close",
+            Duration::from_secs(5),
+            move || {
+                handle
+                    .join()
+                    .expect("dispatcher terminates normally after Close");
+            },
+        );
+    }
+
+    /// シナリオ6（task 6.2・凍結像の刻印点）: `system_vars` provider が talk 起動ごとに
+    /// 一度呼び出され、その時点で凍結されたスナップショットが sakura 側のコンパイルへ流れる
+    /// ことを end-to-end に固定する（R7.3/7.4）。
+    ///
+    /// 呼び出しのたびに `username` を `user1`→`user2`… と変える counter provider を注入し、
+    /// `%username` を含む talk を 2 回起動する。各 talk の `%username` は**その talk の起動
+    /// 時点で凍結された**値（1 本目=`user1`／2 本目=`user2`）の Text cue へ展開され、broadcast
+    /// で観測できる。値が talk 間で異なること自体が「talk ごとに独立して凍結される」意味論
+    /// （sylphya の per-talk 凍結と同形）の直接証跡になる。provider の呼出回数が talk 起動数と
+    /// 一致することも固定する（＝ per-talk 刻印であって boot 時 1 回きりの固定像ではない）。
+    ///
+    /// task 6.1 の暫定既定橋渡し（`SystemVarSnapshot::default()`）のままでは provider は
+    /// 一度も呼ばれず、`%username` は既定値 `DEFAULT_USERNAME` へ展開されるため、本檻は
+    /// `user1`/`user2` を観測できず（かつ呼出回数 0）RED になる。
+    #[test]
+    fn system_vars_provider_is_invoked_and_frozen_per_talk_start() {
+        use crate::runtime::SystemVarSource;
+        use areka_sakura::contract::SystemVarSnapshot;
+        use std::sync::Arc;
+        use std::sync::atomic::{AtomicUsize, Ordering};
+
+        let (kanade_tx, _kanade_rx) = mpsc::channel::<KanadeMsg>();
+        let (text_tx, text_rx) = mpsc::channel::<TalkCue>();
+        let surface = RecordingSink::new();
+        let text = ChannelSink { tx: text_tx };
+
+        // 呼び出しごとに username を `user{n}` と変える provider（凍結＝各 talk が自分の
+        // 起動時点の値を見ることの証明用）。呼出回数も観測する。
+        let calls = Arc::new(AtomicUsize::new(0));
+        let calls_for_provider = Arc::clone(&calls);
+        let provider: SystemVarSource = Box::new(move || {
+            let n = calls_for_provider.fetch_add(1, Ordering::SeqCst) + 1;
+            let mut snapshot = SystemVarSnapshot::default();
+            snapshot.insert("username", format!("user{n}"));
+            snapshot
+        });
+
+        let (tx, handle) =
+            spawn_dispatcher(kanade_tx, vec![Box::new(surface), Box::new(text)], provider);
+
+        // broadcast: text sink には ClearAll/Emote 等の担当外 cue も届く。次の Text 発火まで読み飛ばす。
+        let recv_text = |want: &str| -> TalkCue {
+            loop {
+                let cue = text_rx
+                    .recv_timeout(Duration::from_secs(5))
+                    .expect("due な Text 発火は届くこと");
+                if cue.command == CueCommand::Text(want.into()) {
+                    return cue;
+                }
+            }
+        };
+
+        // talk 1: `%username`（→ 起動時点で凍結された provider 値 `user1` へ展開）。
+        tx.send(DispatcherMsg::Start(StartTalk {
+            talk_id: TalkId(61),
+            script: r"\s[0]%username\e".to_string(),
+        }))
+        .expect("send Start(1)");
+        // 初回 Tick で base_now 刻印＋elapsed=0.0 群（ClearAll/Emote/Text@0.0）を発火。
+        tx.send(DispatcherMsg::Tick {
+            now: MonotonicMs(1_000),
+        })
+        .expect("send Tick for talk 1");
+        let first = recv_text("user1");
+        assert_eq!(
+            first.command,
+            CueCommand::Text("user1".into()),
+            "talk 1 の %username は起動時点で凍結された provider 値 user1 へ展開される（既定値でない）"
+        );
+        assert_eq!(
+            calls.load(Ordering::SeqCst),
+            1,
+            "provider は talk 1 の起動で 1 回だけ呼ばれる（刻印点）"
+        );
+
+        // talk 2: 差し替え起動（talk 1 は Close funnel で終了）。provider の次の呼出＝`user2`。
+        tx.send(DispatcherMsg::Start(StartTalk {
+            talk_id: TalkId(62),
+            script: r"\s[0]%username\e".to_string(),
+        }))
+        .expect("send Start(2)");
+        tx.send(DispatcherMsg::Tick {
+            now: MonotonicMs(2_000),
+        })
+        .expect("send Tick for talk 2");
+        let second = recv_text("user2");
+        assert_eq!(
+            second.command,
+            CueCommand::Text("user2".into()),
+            "talk 2 は自分の起動時点で凍結された provider 値 user2 を見る（talk ごと独立凍結）"
+        );
+        assert_eq!(
+            calls.load(Ordering::SeqCst),
+            2,
+            "provider の呼出回数が talk 起動数と一致（per-talk 刻印・boot 時 1 回固定でない）"
         );
 
         tx.send(DispatcherMsg::Close).expect("send Close");

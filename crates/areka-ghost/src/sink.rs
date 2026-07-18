@@ -285,7 +285,9 @@ mod tests {
         assert_eq!(command_kind(&CueCommand::Text("x".into())), "Text");
         assert_eq!(command_kind(&CueCommand::Clear), "Clear");
         assert_eq!(
-            command_kind(&CueCommand::Emote { key: "smile".into() }),
+            command_kind(&CueCommand::Emote {
+                key: "smile".into()
+            }),
             "Emote"
         );
         assert_eq!(
@@ -304,10 +306,7 @@ mod tests {
             }),
             "Custom"
         );
-        assert_eq!(
-            command_kind(&CueCommand::NewLine { ratio: 1.0 }),
-            "NewLine"
-        );
+        assert_eq!(command_kind(&CueCommand::NewLine { ratio: 1.0 }), "NewLine");
         assert_eq!(
             command_kind(&CueCommand::BalloonSurface { key: "2".into() }),
             "BalloonSurface"
@@ -359,7 +358,8 @@ mod tests {
         let instructions = areka_parsers::sakura::parse(r"\s[0]hello\e");
         // task 6.1 の機械的追随: compile は task 5.1 で 2 引数化（凍結像 SystemVarSnapshot を
         // 参照渡し）。本テストはシステム変数展開を検査しないため既定スナップショットを渡す。
-        let compiled = areka_sakura::compile(&instructions, &areka_sakura::SystemVarSnapshot::default());
+        let compiled =
+            areka_sakura::compile(&instructions, &areka_sakura::SystemVarSnapshot::default());
         let sheet = compiled.sheet.with_absolute_start_time(0.0);
 
         let mut player = CuePlayer::from_sheet(&sheet);
@@ -375,10 +375,8 @@ mod tests {
 
         // ghost-sink（LogSink）の emit ログのみ抽出。DiscardSink はログを出さないため、
         // 記録系統は LogSink 1 本＝各 cue はちょうど 1 回だけログされる（二重でない）。
-        let logs: Vec<&CapturedEvent> = events
-            .iter()
-            .filter(|e| e.target == "ghost-sink")
-            .collect();
+        let logs: Vec<&CapturedEvent> =
+            events.iter().filter(|e| e.target == "ghost-sink").collect();
 
         // command_kind ごとの件数を数える（各 presentation cue が 1 回だけ・2 回でない）。
         let count_kind = |kind: &str| {

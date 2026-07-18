@@ -13,6 +13,8 @@ use areka_actor::ActorHandle;
 use areka_kanade::{KanadeMsg, ShioriBackend, spawn_kanade, spawn_shiori_actor};
 use areka_parsers::charset::DefaultEncoding;
 use areka_parsers::package::{MountError, MountModel, resolve};
+use areka_sakura::contract::SystemVarSnapshot;
+use areka_sakura::sysvar::DEFAULT_USERNAME;
 
 use crate::config::resolve_kanade_config;
 use crate::dispatcher::{DispatcherMsg, spawn_dispatcher};
@@ -53,6 +55,15 @@ pub enum ShioriWiring {
     Custom(Box<dyn FnOnce() -> Result<Box<dyn ShioriBackend>, String> + Send>),
 }
 
+/// per-talk に呼ばれ、システム変数の凍結スナップショットを返す供給シーム
+/// （design.md「GhostBootOptions S-3＋provider」・R7.3）。
+///
+/// dispatcher が talk 起動ごとに一度だけ呼び出し、返ったスナップショットを per-talk の
+/// `spawn_talk` へ手渡す（**凍結像の刻印点**＝talk ごと凍結の意味論・sylphya の per-talk
+/// 凍結と同形）。W1 の暫定 provider（[`default_system_vars`]）を将来 `areka-P0-sylphya` の
+/// 読み口へ差し替える差替点で、sakura 側の契約（[`SystemVarSnapshot`]）は無改変のまま。
+pub type SystemVarSource = Box<dyn Fn() -> SystemVarSnapshot + Send>;
+
 /// ticker 起動方式（design.md「ghost::runtime」Service Interface）。
 pub enum TickerMode {
     /// 実クロック駆動（本番）。
@@ -77,8 +88,27 @@ pub struct GhostBootOptions {
     /// per-talk の `spawn_talk` へ手渡す。診断既定は `vec![LogSink, DiscardSink]` 相当
     /// （cue ごと 1 回ログの既存性質を維持・design.md「GhostBootOptions S-3」）。
     pub sinks: Vec<Box<dyn BootCueSink>>,
+    /// システム変数の供給シーム（S-3・R7.3/7.4）。⓪ghost が埋める責務の実装点で、
+    /// dispatcher が talk 起動ごとに一度呼び出し、返った凍結スナップショットを per-talk へ
+    /// 手渡す（凍結像の刻印点）。本番の暫定既定は [`default_system_vars`]（`%username` のみ）。
+    pub system_vars: SystemVarSource,
     /// ticker 起動方式。
     pub ticker: TickerMode,
+}
+
+/// W1 暫定 provider（design.md「GhostBootOptions S-3＋provider」・R7.4）。
+///
+/// `{"username": DEFAULT_USERNAME}` だけを充填した凍結スナップショットを毎回新規構築して
+/// 返すクロージャを返す。既定値は sakura 側 [`areka_sakura::sysvar::DEFAULT_USERNAME`] の
+/// **唯一の定義点**を re-use し、`%username` の既定を⓪ghost 側へ書き写して二重定義しない
+/// （偽ストアを作らない・R7.4）。将来 `areka-P0-sylphya` の読み口へ差し替える差替シームで、
+/// 差替時も本関数の型（[`SystemVarSource`]）と dispatcher の刻印点は無改変のまま。
+pub fn default_system_vars() -> SystemVarSource {
+    Box::new(|| {
+        let mut snapshot = SystemVarSnapshot::default();
+        snapshot.insert("username", DEFAULT_USERNAME);
+        snapshot
+    })
 }
 
 /// ghost 結線層が起動した全コンポーネントの所有者。
@@ -339,9 +369,10 @@ pub fn boot(options: GhostBootOptions) -> Result<GhostRuntime, GhostBootError> {
     // 6. kanade（シグネチャ不変・start_tx を「自身の」sakura Sender として渡す）。
     let (kanade_tx, kanade_handle) = spawn_kanade(config, shiori_tx, start_tx);
 
-    // 7. sakura dispatcher（可変長 sink 列を構築時注入・S-3・要件 4.6/8.5）。
+    // 7. sakura dispatcher（可変長 sink 列＋system_vars provider を構築時注入・S-3・
+    //    要件 4.6/8.5/7.3）。provider は dispatcher が talk 起動ごとに呼び出す（刻印点）。
     let (dispatcher_tx, dispatcher_handle) =
-        spawn_dispatcher(kanade_tx.clone(), options.sinks);
+        spawn_dispatcher(kanade_tx.clone(), options.sinks, options.system_vars);
 
     // 8. relay 2 本（循環解消・design.md 参照）。
     let start_relay_handle = spawn_relay::<areka_kanade::StartTalk, DispatcherMsg>(
@@ -516,6 +547,7 @@ mod tests {
                 Ok(Box::new(FakeShioriBackend) as Box<dyn ShioriBackend>)
             })),
             sinks: vec![Box::new(NoopSink), Box::new(NoopSink)],
+            system_vars: default_system_vars(),
             ticker: TickerMode::Disabled,
         };
 
@@ -564,6 +596,7 @@ mod tests {
                 );
             })),
             sinks: vec![Box::new(NoopSink), Box::new(NoopSink)],
+            system_vars: default_system_vars(),
             ticker: TickerMode::Disabled,
         };
 
@@ -616,6 +649,7 @@ mod tests {
                 Ok(Box::new(FakeShioriBackend) as Box<dyn ShioriBackend>)
             })),
             sinks: vec![Box::new(NoopSink), Box::new(NoopSink)],
+            system_vars: default_system_vars(),
             ticker: TickerMode::Disabled,
         };
 
@@ -657,6 +691,7 @@ mod tests {
                 Ok(Box::new(FakeShioriBackend) as Box<dyn ShioriBackend>)
             })),
             sinks: vec![Box::new(NoopSink), Box::new(NoopSink)],
+            system_vars: default_system_vars(),
             ticker: TickerMode::Disabled,
         };
 

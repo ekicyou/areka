@@ -107,7 +107,7 @@
   - 既存 boot 呼出（spine/emo2_boot/tests）を Vec 形へ機械的追随させ、既存 spine テストが緑であることを確認する
   - _Requirements: 8.5_
 
-- [ ] 6.2 system_vars provider シームと既定 provider を実装する
+- [x] 6.2 system_vars provider シームと既定 provider を実装する
   - `SystemVarSource = Box<dyn Fn() -> SystemVarSnapshot + Send>` を定義する
   - `default_system_vars()`（W1 暫定 provider＝`{"username": DEFAULT_USERNAME}`）を実装する（既定値の二重定義をしない・sysvar 側定数を re-export）
   - dispatcher の `on_start` で `sinks.iter().map(clone_box)` と `(system_vars)()` を取得し `spawn_talk` へ渡す（凍結像の刻印点）
@@ -232,3 +232,4 @@
 - 4.1: (a) `drive.rs` on_start と一部テストの compile 呼び出しに `&SystemVarSnapshot::default()` の暫定ブリッジを差した → **Task 5.1** で実 snapshot threading へ差し替える。(b) drive.rs の空シート即時TalkDone檻2件のフィラーを `\q`→`%username`/`\![raise,OnBoot]` へ差し替えた。これらは 4.1 では無 cue だが **Task 4.2** で SystemVar/GenericCommand が cue 化するため再破綻する → 4.2 で恒久的に無視される `Raw(...)` フィラーへ置換すること。
 - 【重要・横断】additive な dola 変更（1.1 references／1.2 Cursor／1.3 Window）により **areka-ghost・areka-emo-text・areka(bin) は現時点でテストビルドが赤**（網羅 match の Cursor 欠落・`Choice` の references 欠落・`command_target_of`未配線・`sink.rs:320` の 1 引数 compile 呼び出し等）。これは設計:164 の「横断・機械的追随」通り想定内。各下流 crate はそれを touch するタスク（areka-ghost=Task 6、emo-text/ghost LogSink=Task 8、areka bin=Task 9）が走る時に機械的追随で緑化する。→ **Task 6.1 は areka-ghost をビルドさせるため必要な機械的追随を全て行う（`command_kind` の Cursor アーム含む・cage は Task 8 が追加）**。1.2/1.4 で `Cursor→Balloon` アームを先行追加し cage を後続に回したのと同型。
 - 6.1 完了メモ: (a) dispatcher `on_start` に `SystemVarSnapshot::default()` の暫定橋渡し（`TODO(task 6.2)` マーク済）→ **Task 6.2** で `SystemVarSource` provider を `GhostBootOptions`/`DispatcherState` に通し per-talk 凍結像へ差し替える。(b) `spine_e2e_test.rs`/`real_pasta_test.rs` の埋没破断（references・Window/Cursor 網羅 match）を機械修復済 → **Task 9.3** は 3-sink 構成・move cue e2e など S-3 形の本体を仕上げる（既に compile は通っている前提）。(c) `command_kind` に Cursor 最小ラベルアーム追加済・`command_kind_covers_every_cue_command_variant` 檻への Cursor 明示アサーションは **Task 8** で追加。
+- 6.2 完了メモ: `GhostBootOptions` に必須 `system_vars: SystemVarSource` フィールドが増えたため、bin caller `crates/areka/src/emo2_boot/mod.rs`（~291行）は現在未コンパイル（`system_vars`/新 sinks Vec 未供給）→ **Task 9.1** で `default_system_vars()` 供給＋sinks Vec 3要素へ追随。areka-ghost 単体は緑。`default_system_vars()` は `areka_ghost` から公開（lib.rs re-export）済。
