@@ -29,12 +29,17 @@
 //!   （[`MoveDirective::m1_degradations`] が `UnsupportedBase` として surface）。
 //! - `time>0` は最終位置へ即時反映＋記録（`Ok` のまま `duration_ms` 保持・R5.4）。
 
-// task 7.1/7.2 は純粋な型＋parse＋basepos シーム＋座標算出を載せる段階で、UI 末端の消費点
-// （`MoveCueSink`＝7.3・`apply_move_directive`＝7.4・`mod.rs` の channel 配線＝9.1）は後続
-// タスクが足す。それまでは非 test ビルド（bin 本体）から未参照ゆえ dead_code が出るが、これは
-// 段階実装の想定内であり、後続タスクの結線で解消される（本 allow は wiring 着地時に撤去する）。
+// task 7.1/7.2 が純粋な型＋parse＋basepos シーム＋座標算出、task 7.3 が talk スレッド側消費
+// `MoveCueSink` を載せる。残る UI 末端の消費点（`apply_move_directive`＝7.4・`mod.rs` の channel
+// 配線＝9.1）は後続タスクが足す。それまで `MoveCueSink`／`resolve_move_target_position` 等は
+// 非 test ビルド（bin 本体）から未参照ゆえ dead_code が出るが、これは段階実装の想定内であり、
+// 後続タスクの結線（9.1）で解消される（本 allow は wiring 着地時に撤去する）。
 #![allow(dead_code)]
 
+use std::sync::mpsc::Sender;
+
+use dola::cue::{command_target_of, CueCommand, CueTarget, TalkCue};
+use tracing::{debug, warn};
 use wintf::ecs::{SizeI, WindowPos};
 
 use crate::placement::resolver::PointPx;
@@ -404,6 +409,114 @@ pub fn resolve_move_target_position(
     Some(PointPx { x, y })
 }
 
+// =============================================================================
+// MoveCueSink（talk スレッド純粋解釈）— `\![move]` 名前選別消費の最初の実消費者
+// （task 7.3・R4.5・R8.5）
+// =============================================================================
+
+/// `\![move]` の talk スレッド側消費 sink（design「MoveCueSink＋純粋解釈＋UI 適用」・R4.5）。
+///
+/// broadcast された全 cue のうち、キャリア正準形（`Custom` の String Array）でありコマンド名
+/// レベルの単一権威表 [`command_target_of`] が `"move"` を [`CueTarget::Window`] へ割り当てる
+/// もの**だけ**を解釈し、[`parse_move_directive`] の結果を mpsc で UI スレッド（frame 相の
+/// `apply_move_directive`＝task 7.4／channel 配線＝task 9.1）へ送出する。それ以外
+/// （非キャリア・担当外コマンド名・非数値 scope・parse 縮退）は**記録付き良性スキップ**へ
+/// 縮退する——無音破棄でも panic でもない（R4.5／R8.5・log-first）。
+///
+/// # 名前選別（R4.5・高々 1 消費者）
+///
+/// 担当判定は [`command_target_of`] 単一が権威表であり、`MoveCueSink` は私的名前リストを持たない。
+/// `command_target_of(name) == Some(Window)` かつ `name == "move"` の 2 条件で自らの担当を限定する
+/// （`Window` 割り当てが将来 `"move"` 以外へ拡張されても本 sink は `"move"` 専任＝高々 1 消費者を保つ）。
+///
+/// # duration honor 不変（R4.5 後段）
+///
+/// 本 sink は cue を**観測**するのみで envelope の `duration` に一切触れない——名前で担当が引けても
+/// 引けなくても、duration honor 契約（全演者が任意 cue の `duration` を尊重する）に影響を与えない。
+///
+/// # Clone + Send（boot 型境界）
+///
+/// dispatcher は talk ごとに sink を clone する（`GhostBootOptions.sinks` は
+/// `dola::cue::CueSink + Clone + Send + 'static`）。内側 [`Sender`] は常に `Clone` で、全 clone は
+/// 単一の受信端（`Emo2Wiring` の `Receiver`）への送信端＝配送意味は同一ゆえ、そのまま `derive(Clone)`
+/// が成り立つ（`MoveDirective: Send` により `Sender<MoveDirective>: Send`）。
+#[derive(Clone)]
+pub struct MoveCueSink {
+    /// UI スレッド（frame 相 drain）への送出端（Clone 可・全 clone は単一受信端へ配送）。
+    tx: Sender<MoveDirective>,
+}
+
+impl MoveCueSink {
+    /// mpsc 送信端（`Emo2Wiring` の `Receiver` と対・task 9.1 が生成）から sink を構築する。
+    pub fn new(tx: Sender<MoveDirective>) -> Self {
+        Self { tx }
+    }
+}
+
+/// 演者非依存の単一出力契約 [`dola::cue::CueSink`] を実装する（`GhostBootOptions.sinks` の
+/// broadcast 登録先が要求する形・task 7.3）。broadcast 下では担当外 cue（`Text`／`Emote`／
+/// 他コマンド名のキャリア等）も本 sink へ届くが、名前選別で `"move"` 以外は記録付き良性スキップへ
+/// 縮退する（duration honor には触れない・R4.5/R8.5）。
+impl dola::cue::CueSink for MoveCueSink {
+    fn emit(&mut self, cue: TalkCue) {
+        // 1) キャリア抽出。非キャリア（Text/Emote 等の担当外 broadcast）は良性スキップ。
+        //    Custom なのに非正準 params のときのみ異常として warn（design「破損・異常」・R8.5）。
+        let Some((name, tokens)) = cue.command.as_command_carrier() else {
+            if matches!(cue.command, CueCommand::Custom { .. }) {
+                warn!(
+                    command = ?cue.command,
+                    "MoveCueSink: 非正準 Custom params（as_command_carrier=None）を良性スキップ（R8.5）"
+                );
+            } else {
+                debug!(
+                    command = ?cue.command,
+                    "MoveCueSink: 非キャリア cue を良性スキップ（担当外・R8.5）"
+                );
+            }
+            return;
+        };
+
+        // 2) 名前レベル選別（単一権威表 command_target_of）。"move"→Window のみ解釈する。
+        //    高々 1 消費者: MoveCueSink は "move" 専任ゆえ name=="move" も併せ確認する（R4.5）。
+        if command_target_of(name) != Some(CueTarget::Window) || name != "move" {
+            debug!(
+                name,
+                "MoveCueSink: 担当外コマンド名を良性スキップ（名前選別・R4.5/R8.5）"
+            );
+            return;
+        }
+
+        // 3) scope は cue.actor（"0"/"1"）の u32 parse。非数値は warn＋スキップ（design「破損・異常」）。
+        let scope = match cue.actor.as_str().parse::<u32>() {
+            Ok(scope) => scope,
+            Err(_) => {
+                warn!(
+                    actor = cue.actor.as_str(),
+                    "MoveCueSink: cue.actor が非数値 scope のため \\![move] をスキップ（R5.5）"
+                );
+                return;
+            }
+        };
+
+        // 4) 純粋解釈（決定論・no I/O）。Err（名前付き -- 形等）は記録付き良性スキップ（非 panic・R5.4）。
+        let tokens: Vec<String> = tokens.iter().map(|s| s.to_string()).collect();
+        match parse_move_directive(scope, &tokens) {
+            Ok(directive) => {
+                if self.tx.send(directive).is_err() {
+                    // 受信端（Emo2Wiring）切断は talk を殺さない（log-first・非 panic・R5.5）。
+                    warn!("MoveCueSink: MoveDirective の送出に失敗（受信端切断）");
+                }
+            }
+            Err(degradation) => {
+                warn!(
+                    ?degradation,
+                    "MoveCueSink: \\![move] の縮退を記録付き良性スキップ（語彙保持・R5.4）"
+                );
+            }
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -680,5 +793,126 @@ mod tests {
             resolve_move_target_position(&CanonDefaultBasepos, &base, &target, &directive).is_none(),
             "Px 軸で寸法欠落は算出不能＝None"
         );
+    }
+}
+
+// =============================================================================
+// MoveCueSink 名前選別 sink 檻（task 7.3・R4.5・R8.5）
+// =============================================================================
+
+#[cfg(test)]
+mod move_sink_tests {
+    use super::*;
+    use dola::cue::{ActorKey, CueCommand, CueSink, TalkCue};
+    use std::sync::mpsc::{channel, TryRecvError};
+
+    /// `\![name,tokens...]` 汎用キャリア cue を組む（正準形＝`Custom` の String Array）。
+    fn carrier_cue(actor: &str, name: &str, tokens: &[&str]) -> TalkCue {
+        let toks: Vec<String> = tokens.iter().map(|s| s.to_string()).collect();
+        TalkCue {
+            at: 0.0,
+            actor: ActorKey::from(actor),
+            command: CueCommand::command_carrier(name, toks),
+            duration: 0.0,
+        }
+    }
+
+    /// 名前選別: `"move"` キャリアのみ解釈して MoveDirective を送出する（R4.5・最初の実消費者）。
+    #[test]
+    fn move_carrier_sends_directive() {
+        let (tx, rx) = channel::<MoveDirective>();
+        let mut sink = MoveCueSink::new(tx);
+        sink.emit(carrier_cue("0", "move", &["-353", "", "", "0", "base", "base"]));
+        let d = rx.try_recv().expect("move キャリアは MoveDirective を送出する");
+        assert_eq!(d.scope, 0);
+        assert_eq!(d.x, AxisSpec::Px(-353));
+        assert_eq!(d.base, MoveBase::Scope(0));
+        assert_eq!(rx.try_recv(), Err(TryRecvError::Empty), "送出は 1 件のみ");
+    }
+
+    /// 担当外キャリア（`bind`/`raise`/未知名）は良性スキップ＝何も送出しない
+    /// （高々 1 消費者・`command_target_of` 単一権威表・R4.5）。
+    #[test]
+    fn non_move_carrier_is_benign_skip() {
+        for name in ["bind", "raise", "unknownfoo"] {
+            let (tx, rx) = channel::<MoveDirective>();
+            let mut sink = MoveCueSink::new(tx);
+            sink.emit(carrier_cue("0", name, &["1", "2"]));
+            assert_eq!(
+                rx.try_recv(),
+                Err(TryRecvError::Empty),
+                "担当外キャリア {name} は何も送出しない（良性スキップ・R8.5）"
+            );
+        }
+    }
+
+    /// 非キャリア cue（`Text` 等の担当外 broadcast）は良性スキップ＝何も送出しない（R8.5）。
+    #[test]
+    fn non_carrier_cue_is_benign_skip() {
+        let (tx, rx) = channel::<MoveDirective>();
+        let mut sink = MoveCueSink::new(tx);
+        sink.emit(TalkCue {
+            at: 0.0,
+            actor: ActorKey::from("0"),
+            command: CueCommand::Text("アヒル".into()),
+            duration: 0.0,
+        });
+        assert_eq!(rx.try_recv(), Err(TryRecvError::Empty));
+    }
+
+    /// scope 抽出: `\1` actor → `MoveDirective.scope == 1`（scope は cue.actor 由来）。
+    #[test]
+    fn scope_reflects_actor() {
+        let (tx, rx) = channel::<MoveDirective>();
+        let mut sink = MoveCueSink::new(tx);
+        sink.emit(carrier_cue("1", "move", &["-353", "", "", "0", "base", "base"]));
+        let d = rx.try_recv().expect("送出される");
+        assert_eq!(d.scope, 1, "scope は cue.actor（\\1）由来");
+    }
+
+    /// 非数値 actor（`sakura` 等）は warn＋スキップ＝非 panic・何も送出しない（design 破損・異常）。
+    #[test]
+    fn non_numeric_actor_is_skipped() {
+        let (tx, rx) = channel::<MoveDirective>();
+        let mut sink = MoveCueSink::new(tx);
+        sink.emit(carrier_cue("sakura", "move", &["-353"]));
+        assert_eq!(
+            rx.try_recv(),
+            Err(TryRecvError::Empty),
+            "非数値 scope はスキップ（非 panic）"
+        );
+    }
+
+    /// parse の `Err`（名前付き `--` 形）→ 記録付き良性スキップ・何も送出しない・非 panic（R5.4）。
+    #[test]
+    fn parse_err_named_form_is_skipped() {
+        let (tx, rx) = channel::<MoveDirective>();
+        let mut sink = MoveCueSink::new(tx);
+        sink.emit(carrier_cue("0", "move", &["--X=80", "--Y=-400"]));
+        assert_eq!(
+            rx.try_recv(),
+            Err(TryRecvError::Empty),
+            "名前付き -- 形は Err 縮退で送出しない"
+        );
+    }
+
+    /// `MoveCueSink` は Clone: clone 側から送出しても同一受信端へ届く
+    /// （dispatcher が talk ごとに sink を clone する前提・boot 型境界）。
+    #[test]
+    fn clone_reaches_same_receiver() {
+        let (tx, rx) = channel::<MoveDirective>();
+        let sink = MoveCueSink::new(tx);
+        let mut clone = sink.clone();
+        clone.emit(carrier_cue("0", "move", &["10", "", "", "0", "base", "base"]));
+        let d = rx.try_recv().expect("clone からの送出も同一受信端へ届く");
+        assert_eq!(d.x, AxisSpec::Px(10));
+        drop(sink); // 元 sink 生存の確認（Clone は独立ハンドル）。
+    }
+
+    /// boot 型境界（`dola::cue::CueSink + Clone + Send + 'static`）をコンパイル時に固定する。
+    #[test]
+    fn satisfies_boot_sink_bounds() {
+        fn require<T: dola::cue::CueSink + Clone + Send + 'static>() {}
+        require::<MoveCueSink>();
     }
 }

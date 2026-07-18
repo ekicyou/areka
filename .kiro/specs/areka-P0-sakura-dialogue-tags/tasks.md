@@ -132,7 +132,7 @@
   - _Requirements: 5.2_
   - _Depends: 7.1_
 
-- [ ] 7.3 MoveCueSink（talk スレッド純粋解釈）を実装する
+- [x] 7.3 MoveCueSink（talk スレッド純粋解釈）を実装する
   - `CueSink` を実装する `MoveCueSink`（`Sender<MoveDirective>`）を新設する
   - `as_command_carrier` と `command_target_of(name)==Some(Window)` かつ `name=="move"` の場合のみ解釈し mpsc へ送出、他は記録付き良性スキップとする
   - `emo2_boot` モジュールへ `move_cue` の mod 宣言を追加する
