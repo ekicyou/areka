@@ -44,7 +44,7 @@ emo2（互換ベースウェアの適合 fixture ゴースト）の**メニュ�
   - **`\!` 汎用キャリアは W2（mayuna-compose）へ申し送り済み**（2026-07-18 調停）: 同 brief の typed `CueCommand::Bind` variant 計画（dola variant＋compile アーム＋`cue_target_of` アーム＋emo-text 無視列挙）は本キャリア裁定で**廃止へ差替**——mayuna は「汎用 cue のコマンド名 `bind` の消費者」（parsers 名前解決表・seriko 動的 bind 状態・emo-present 回帰は存続）へ縮小し、共有編集面 4 ファイルの近接警告は W1 への一方向依存に解消される。境界原則: **コンテンツタグ（`\s`/`\b`/`\q`/`\_l` 等）＝typed cue／`\!` コマンド名前空間＝汎用キャリア**（balloon-face-cue の「同型」引用はコンテンツタグにのみ有効）。
   - **`\_l` 直後の行揃えリセット**（ukadoc: `\_l` 実行直後は左揃えへ戻る）や `@` 相対指定の解決は**表示側の責務**であり、本 spec は記述を欠落なく運ぶことに徹する。
   - **`\![move]` の位置は永続化されない**（ポートフォリオ合流裁定＝保存値はユーザーの明示的ドラッグ確定のみが更新する二層分離）。その帰結として、`areka-P0-position-persist` の初回ゲート導入後は**未ドラッグの 2 回目以降の起動で初回位置調整が既定配置へ戻る**——これは許容仕様であり、最終確認は `areka-P0-emo2-conformance-e2e` の実機適合走行へ申し送る。
-  - **システム変数の値源は sylphya（プロパティシステム）が用意し、⓪ ghost が読み口スナップショットとして `StartTalk` に手渡す**。本 spec は sakura がそのスナップショットを消費する契約（R7）のみを確定し、sylphya の実体着地を待たずに W1 を出荷できる（emo2 は 204 固定＝暫定 provider でも本実装でも観測は既定値で不変）。discovery 完了＝`areka-P0-sylphya` brief 確定（既存 spec への具体デルタ・ウェーブ配置提案・roadmap 宿題は同 brief 末尾「申し送り」節が正本）。本 spec のブロッカーでないことは不変。W1 の暫定 provider（ghost が既定値スナップショットを充填）は sylphya 着地時に sylphya 読み口からのスナップショット生成へ**差し替える**（sakura 側契約は無改変＝差替シーム）。
+  - **システム変数の値源は sylphya（プロパティシステム）が用意し、⓪ ghost が talk 開始時に読み口スナップショットとして手渡す**。本 spec は sakura がそのスナップショットを消費する契約（R7）のみを確定し、sylphya の実体着地を待たずに W1 を出荷できる（emo2 は 204 固定＝暫定 provider でも本実装でも観測は既定値で不変）。discovery 完了＝`areka-P0-sylphya` brief 確定（既存 spec への具体デルタ・ウェーブ配置提案・roadmap 宿題は同 brief 末尾「申し送り」節が正本）。本 spec のブロッカーでないことは不変。W1 の暫定 provider（ghost が既定値スナップショットを充填）は sylphya 着地時に sylphya 読み口からのスナップショット生成へ**差し替える**（sakura 側契約は無改変＝差替シーム）。
   - 実機起動は**絶対パス必須**（相対パスでは SHIORI helper が DLL を読めず MOD_NOT_FOUND）。
 
 ## Requirements
@@ -117,7 +117,7 @@ emo2（互換ベースウェアの適合 fixture ゴースト）の**メニュ�
 #### Acceptance Criteria
 1. When `%username` を含む talk script をコンパイルする, the sakura コンパイラ shall 当該トークンを**手渡された名前→値スナップショットの値へ展開**し、生の `%username` をバルーンへ露出させない。
 2. The 展開結果 shall 通常のテキストと**同じ扱い**を受ける（記述順の保持・テキストと同一の再生時間規則の適用）。
-3. The sakura コンパイラ shall システム変数の値を **`StartTalk` 経由で手渡される名前→値スナップショット（プロパティシステム読み口の凍結像）から解決**し、**自ら値源を所有しない**（永続化層・SHIORI・OS 環境のいずれも sakura は直接読まない）。スナップショットを埋めるのは ⓪ ghost の責務であり、`%username` の正典的な値源は SHIORI リソース（`GET SHIORI/3.0`・`ID: username`）である（emo2/pasta は 204 No Content を返す＝実機観測値は常に既定値）。スナップショットの生成元は最終的に `areka-P0-sylphya` の読み口（凍結像）であり、provider の差し替えで sakura 側の契約・実装は変わらない（差替シーム）。
+3. The sakura コンパイラ shall システム変数の値を **talk 開始時に手渡される名前→値スナップショット（プロパティシステム読み口の凍結像）から解決**し、**自ら値源を所有しない**（永続化層・SHIORI・OS 環境のいずれも sakura は直接読まない）。スナップショットを埋めるのは ⓪ ghost の責務であり、`%username` の正典的な値源は SHIORI リソース（`GET SHIORI/3.0`・`ID: username`）である（emo2/pasta は 204 No Content を返す＝実機観測値は常に既定値）。スナップショットの生成元は最終的に `areka-P0-sylphya` の読み口（凍結像）であり、provider の差し替えで sakura 側の契約・実装は変わらない（差替シーム）。
 4. If スナップショットに当該名の値が無い（未解決・SHIORI が 204 等）, then the sakura コンパイラ shall **既定値**へ展開する（生の `%username` を露出させず、結果は決定論的である）。既定値の具体は正典が規定しないため areka 裁量＋対応表記録とする。
 5. Where スナップショットに載らない（M1 未解決の）システム変数名が現れる, the sakura コンパイラ shall 元の記述（`%名前`）を**テキストとしてそのまま出力**し、記録する（情報を失わない縮退・システム変数という語彙は第一級のまま保持する）。
 6. The sakura コンパイラ shall システム変数の展開を**名前→値スナップショットの参照として純粋に行い**、OS のユーザー名などの外部環境を暗黙に読まない（同一入力・同一スナップショットなら常に同一出力＝決定論・no I/O）。
