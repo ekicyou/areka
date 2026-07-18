@@ -185,7 +185,7 @@
   - _Depends: 9.2_
 
 - [ ] 10. 統合決定論檻（配送・barrier解決・未知名縮退・move経路・ワイヤ互換）
-- [ ] 10.1 配送列檻を追加する
+- [x] 10.1 配送列檻を追加する
   - compile→`CuePlayer`＋記録 sink 複数→broadcast 観測順が compile 順と一致すること（Choice が NewLine/Cursor と交互のまま現れる）を確認する
   - 同一 Choice がバッグへも同時に積まれる（責務二分）ことを確認する
   - _Requirements: 9.1, 9.7_

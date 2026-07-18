@@ -1966,4 +1966,145 @@ mod tests {
             "誤投函で早期全量配信されず、通常 5 cue が届く"
         );
     }
+
+    // ── task 10.1: 配送列統合檻（R9.7/R1.8/R8.6・責務二分） ──
+
+    /// **配送列統合檻（R9.7/R1.8/R8.6）**: 実 `parse`→`compile` の menu 台本を `CuePlayer` ＋記録
+    /// sink×**複数**で駆動し、broadcast 観測順が **compile 順**に一致すること（Choice が NewLine/
+    /// Cursor と**交互のまま**配送列に現れること・R1.8）と、同一 Choice が同時に**バッグ**
+    /// （`pending_choices`）へも積まれること（責務二分＝配送列は表示の単一真実源／バッグは解決照合の
+    /// 単一真実源・R8.6/R9.7）を、実 `compile → CuePlayer broadcast → sink` 経路上で固定する。
+    ///
+    /// **task 2.2 との差**: 2.2 は dola `runtime_test.rs` で**手組みの CueSheet** を使う runtime 檻。
+    /// 本檻は **areka-sakura の実 `parse`＋実 `compile`** から得た CueSheet を出発点とし、
+    /// **複数**記録 sink へ broadcast させて配送列とバッグの並存を end-to-end で固定する統合檻である
+    /// （案C の「Choice 除外」廃止・配送列合流を実 compile 出力に対して立証する）。
+    ///
+    /// 弁別: もし Choice が配送列から隠される（旧・先積み一択）なら配送列の等価 assert が FAIL し、
+    /// もしバッグへ積まれなければ `pending_choices` の assert が FAIL する（配送列とバッグの乖離を捕捉）。
+    #[test]
+    fn compile_broadcast_stream_preserves_order_and_choices_also_land_in_bag() {
+        use dola::cue::{CuePlayer, PendingChoice};
+
+        // menu.pasta:15 の raw さくらスクリプト断片（`\q \n \q \_l[5em,2lh] \q`・task 4.4 cage と同一）。
+        // 実 parse → 実 compile を通す（手組み Instruction でなく、パーサ〜コンパイラの実経路を出発点にする）。
+        let script = concat!(
+            r"\q[おしゃべり頻度,Onおしゃべり頻度メニュー]",
+            r"\n",
+            r"\q[エモの位置調整,Onエモの位置調整メニュー]",
+            r"\_l[5em,2lh]",
+            r"\q[閉じる,Onメニュー閉じる]",
+        );
+        let instructions = areka_parsers::sakura::parse(script);
+        let compiled = compile(&instructions, &SystemVarSnapshot::default());
+
+        // 実 compile 出力から CuePlayer を構築し、記録 sink を **2 本** broadcast 登録する
+        // （どの sink も全 cue を受ける・登録順は配送内容に影響しない）。
+        let mut player = CuePlayer::from_sheet(&compiled.sheet);
+        let sink_a = RecordingSink::new();
+        let sink_b = RecordingSink::new();
+        let records_a = sink_a.records();
+        let records_b = sink_b.records();
+        player.register_sink(Box::new(sink_a));
+        player.register_sink(Box::new(sink_b));
+
+        // 全内容は瞬時（at=0）＋末尾に選択待ち barrier@0。単一 tick(0.0) で offset 0 群（内容 6 cue）を
+        // 配送し barrier@0 到達 → WaitingForChoice（barrier 手前の cue は配送済み）。
+        player.tick(0.0);
+        assert_eq!(
+            player.state(),
+            &dola::cue::CuePlayerState::WaitingForChoice,
+            "menu 台本は末尾 barrier で WaitingForChoice へ停止する（barrier 手前は配送済み）"
+        );
+
+        // 期待配送列（compile 順）: 冒頭 ClearAll 前置＋内容 5 件（Choice が NewLine/Cursor と交互）。
+        // barrier は配送列に現れない（Barrier は presentation でなく sink へ配られない）。
+        let expected_stream = vec![
+            CueCommand::ClearAll,
+            CueCommand::Choice {
+                id: "Onおしゃべり頻度メニュー".into(),
+                text: "おしゃべり頻度".into(),
+                references: vec![],
+            },
+            CueCommand::NewLine { ratio: 1.0 },
+            CueCommand::Choice {
+                id: "Onエモの位置調整メニュー".into(),
+                text: "エモの位置調整".into(),
+                references: vec![],
+            },
+            CueCommand::Cursor {
+                x: "5em".into(),
+                y: "2lh".into(),
+            },
+            CueCommand::Choice {
+                id: "Onメニュー閉じる".into(),
+                text: "閉じる".into(),
+                references: vec![],
+            },
+        ];
+        // 複数 sink が **同一の配送列を同一順序**で受ける（broadcast・Choice を隠さず交互のまま合流・R1.8）。
+        assert_eq!(
+            commands(&records_a),
+            expected_stream,
+            "sink A: 配送列が compile 順（Choice が NewLine/Cursor と交互のまま現れる・R1.8/R9.7）"
+        );
+        assert_eq!(
+            commands(&records_b),
+            expected_stream,
+            "sink B: broadcast ゆえ両 sink が同一の配送列を受ける（中央振り分けなし）"
+        );
+
+        // 交互配置の直接固定（index 1/3/5 が Choice・2 が NewLine・4 が Cursor）。full-vector 等価に
+        // 加えて「交互のまま」の意図を legible に残す（Choice が改行/カーソルに埋もれず順序保持）。
+        let stream_a = commands(&records_a);
+        assert!(
+            matches!(stream_a[1], CueCommand::Choice { .. })
+                && matches!(stream_a[2], CueCommand::NewLine { .. })
+                && matches!(stream_a[3], CueCommand::Choice { .. })
+                && matches!(stream_a[4], CueCommand::Cursor { .. })
+                && matches!(stream_a[5], CueCommand::Choice { .. }),
+            "Choice/NewLine/Choice/Cursor/Choice が交互のまま配送列に並ぶ（R1.8）"
+        );
+
+        // 責務二分（R8.6/R9.7）: **同一 3 Choice** がバッグ（解決照合の単一真実源）へも**同時に**積まれる。
+        // バッグ内容は id/text で配送列の 3 Choice と一致する（配送列とバッグが乖離しない）。
+        let expected_bag = vec![
+            PendingChoice {
+                id: "Onおしゃべり頻度メニュー".into(),
+                text: "おしゃべり頻度".into(),
+            },
+            PendingChoice {
+                id: "Onエモの位置調整メニュー".into(),
+                text: "エモの位置調整".into(),
+            },
+            PendingChoice {
+                id: "Onメニュー閉じる".into(),
+                text: "閉じる".into(),
+            },
+        ];
+        assert_eq!(
+            player.pending_choices(),
+            expected_bag.as_slice(),
+            "同一 3 Choice がバッグへも同時に積まれる（責務二分＝配送列とバッグが並存・R8.6）"
+        );
+
+        // 配送列側の Choice を抽出し、バッグと (id, text) で完全一致することを固定する
+        // （同一 Choice が配送列とバッグの**両路**に現れる＝責務二分の相互整合）。
+        let stream_choices: Vec<(String, String)> = stream_a
+            .iter()
+            .filter_map(|cmd| match cmd {
+                CueCommand::Choice { id, text, .. } => Some((id.clone(), text.clone())),
+                _ => None,
+            })
+            .collect();
+        let bag_choices: Vec<(String, String)> = player
+            .pending_choices()
+            .iter()
+            .map(|c| (c.id.clone(), c.text.clone()))
+            .collect();
+        assert_eq!(
+            stream_choices, bag_choices,
+            "配送列に現れる 3 Choice とバッグの 3 Choice が同一（id/text・順序とも一致）"
+        );
+    }
 }
