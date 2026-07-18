@@ -12,7 +12,7 @@
   - Cursor のワイヤ形檻（`{"Cursor":{"x":"5em","y":"2lh"}}`）を追加する
   - _Requirements: 3.1, 3.2, 8.1_
 
-- [ ] 1.3 CueTarget::Window とキャリア正準形（command_carrier/as_command_carrier）を追加する
+- [x] 1.3 CueTarget::Window とキャリア正準形（command_carrier/as_command_carrier）を追加する
   - `CueTarget::Window` を additive unit variant として追加する
   - `CueCommand::command_carrier(name, tokens)` コンストラクタと `as_command_carrier(&self)` 抽出子を実装する（`Custom{command,params:Array<String>}` を正準形として単一箇所で構築）
   - 往復同一（`as_command_carrier(&command_carrier(n,t)) == Some((n,t))`）とキャリアのワイヤ形（`{"Custom":{"command":"move","params":["-353","","","0","base","base"]}}`）を檻で固定する

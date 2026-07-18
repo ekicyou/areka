@@ -61,6 +61,10 @@ pub enum CueTarget {
     Shell,
     /// バルーン（テキスト表示）— Text, Clear, Choice, WaitForChoice を主に消費
     Balloon,
+    /// 窓/placement 系（窓移動等）— `\!` 汎用キャリアのうち `command_target_of` が
+    /// ここへ割り当てるコマンド名（M1: `"move"`）を消費する演者スロット。
+    /// additive unit variant（既存 variant のワイヤ形不変・`EntityKey` 参照非破壊）。
+    Window,
 }
 
 /// CueCommand の配送先スロット内でのキー識別子。
@@ -144,7 +148,18 @@ pub enum CueCommand {
     },
     /// ECS エンティティ参照渡し（u64 = Entity::to_bits() 変換済み）
     EntityRef(u64),
-    /// 消費者固有コマンド。DynamicValue は JSON 互換辞書型。
+    /// `\!` ベースウェアコマンド名前空間全体の汎用キャリア（正典 183 コマンドの全転写）。
+    ///
+    /// コマンドごとの typed cue 語彙は**新設しない**——`move` も `bind` も同一の本キャリアに
+    /// 乗り（正準形は [`CueCommand::command_carrier`] が単一箇所で構築する）、消費は
+    /// **コマンド名レベルの選別**（`command_target_of`）へ委譲される。ゆえに本 variant の
+    /// 型レベル分類 `cue_target_of(Custom)=None` は「誰も action しない」ではなく
+    /// 「コマンド名レベル選別への委譲」を意味する（R8.7）。
+    ///
+    /// `params` は JSON 互換辞書型。汎用キャリアとしての正準形は
+    /// `DynamicValue::Array([String…])`（トークン列）だが、それ以外の消費者固有形も
+    /// 型としては表現可能で、非正準 params は [`CueCommand::as_command_carrier`] が
+    /// `None` を返し消費側は記録付き良性スキップへ縮退する。
     Custom {
         command: String,
         params: DynamicValue,
@@ -175,6 +190,43 @@ pub enum CueCommand {
     /// 上流は残存スコープを列挙できないため、"全消し"を表現者が自らの全スコープを
     /// 消す自己完結コマンドとして表現する。テキスト表現者（バルーン）が消費する。
     ClearAll,
+}
+
+impl CueCommand {
+    /// `\![name,args...]` の汎用キャリア正準形を構築する（生成はこの一点を通す）。
+    ///
+    /// `Custom { command: name, params: DynamicValue::Array([String…]) }` を組む。
+    /// トークンは記述順のまま無変形で載せ、空トークン（省略スロット）・`--key=value`
+    /// トークンも素通しで保持する（R4.2）。往復同一は [`Self::as_command_carrier`] が保証する。
+    pub fn command_carrier(name: impl Into<String>, tokens: Vec<String>) -> CueCommand {
+        CueCommand::Custom {
+            command: name.into(),
+            params: DynamicValue::Array(tokens.into_iter().map(DynamicValue::String).collect()),
+        }
+    }
+
+    /// キャリア正準形の抽出子（消費はこの一点を通す）。
+    ///
+    /// `Custom` かつ `params` が全要素 String の `Array`（＝正準形）のときのみ
+    /// `Some((name, tokens))` を返す。`Custom` 以外・非 `Array`・非 String 要素混入の
+    /// いずれも `None`＝消費側は記録付き良性スキップへ縮退する（R4.5）。空トークンは保持される。
+    pub fn as_command_carrier(&self) -> Option<(&str, Vec<&str>)> {
+        let CueCommand::Custom { command, params } = self else {
+            return None;
+        };
+        let DynamicValue::Array(items) = params else {
+            return None;
+        };
+        let mut tokens = Vec::with_capacity(items.len());
+        for item in items {
+            match item {
+                DynamicValue::String(s) => tokens.push(s.as_str()),
+                // 非 String 要素が 1 つでもあれば非正準 → None（記録付き良性スキップ）。
+                _ => return None,
+            }
+        }
+        Some((command.as_str(), tokens))
+    }
 }
 
 // ============================================================================
@@ -872,6 +924,122 @@ mod tests {
             assert_eq!(parsed.duration, 1.25);
             assert_eq!(parsed.payload, timed.payload);
         }
+    }
+
+    // ── `\!` 汎用キャリア正準形（command_carrier / as_command_carrier）檻（4.1・4.2・8.1）──
+
+    /// 往復同一（4.1・4.2）: `as_command_carrier(&command_carrier(n, t)) == Some((n, t))`。
+    /// 空トークン（省略スロット）を欠落させず保持する（fixture `\![move,-353,,,0,base,base]`
+    /// は空トークン 2 個を保った 6 トークン列・4.2）。
+    #[test]
+    fn command_carrier_round_trip_preserves_empty_tokens() {
+        let tokens = vec![
+            "-353".to_string(),
+            "".to_string(),
+            "".to_string(),
+            "0".to_string(),
+            "base".to_string(),
+            "base".to_string(),
+        ];
+        let cmd = CueCommand::command_carrier("move", tokens.clone());
+        let expected: Vec<&str> = tokens.iter().map(String::as_str).collect();
+        assert_eq!(
+            cmd.as_command_carrier(),
+            Some(("move", expected)),
+            "往復同一・空トークンを保持する"
+        );
+    }
+
+    /// キャリアのワイヤ形（不変条件・8.1）: 正準コンストラクタは `Custom` の
+    /// `params: Array<String>` 正準形を単一箇所で構築し、設計「Data Models / ワイヤ形」表の
+    /// `\!` キャリア行と**バイト同一**の JSON になる。
+    #[test]
+    fn command_carrier_wire_form_is_canonical() {
+        let cmd = CueCommand::command_carrier(
+            "move",
+            vec![
+                "-353".into(),
+                "".into(),
+                "".into(),
+                "0".into(),
+                "base".into(),
+                "base".into(),
+            ],
+        );
+        let json = serde_json::to_string(&cmd).unwrap();
+        assert_eq!(
+            json,
+            r#"{"Custom":{"command":"move","params":["-353","","","0","base","base"]}}"#
+        );
+        let parsed: CueCommand = serde_json::from_str(&json).unwrap();
+        assert_eq!(parsed, cmd);
+    }
+
+    /// 非正準は `None`（消費側は記録付き良性スキップへ縮退）: `Custom` 以外／`params` が
+    /// Array でない／Array 要素に非 String が混じる、のいずれも `None`。
+    #[test]
+    fn as_command_carrier_returns_none_for_non_canonical() {
+        // (a) `Custom` 以外の variant は非キャリア → None。
+        assert_eq!(CueCommand::Text("hi".into()).as_command_carrier(), None);
+        assert_eq!(CueCommand::Wait.as_command_carrier(), None);
+        assert_eq!(
+            CueCommand::BalloonSurface { key: "2".into() }.as_command_carrier(),
+            None
+        );
+
+        // (b) `Custom` だが params が Array でない → None。
+        assert_eq!(
+            CueCommand::Custom {
+                command: "move".into(),
+                params: DynamicValue::Null,
+            }
+            .as_command_carrier(),
+            None
+        );
+
+        // (c) `Custom` かつ Array だが非 String 要素が混じる → None（all-String でない）。
+        assert_eq!(
+            CueCommand::Custom {
+                command: "move".into(),
+                params: DynamicValue::Array(vec![
+                    DynamicValue::String("a".into()),
+                    DynamicValue::Integer(3),
+                ]),
+            }
+            .as_command_carrier(),
+            None
+        );
+
+        // 空 Array（トークン 0 個）は正準（all-String を空虚に満たす）→ Some(空列)。
+        assert_eq!(
+            CueCommand::command_carrier("raise", vec![]).as_command_carrier(),
+            Some(("raise", Vec::<&str>::new()))
+        );
+    }
+
+    /// `CueTarget::Window` は additive unit variant（8.1）。既存 variant のワイヤ形は不変で、
+    /// `EntityKey` 参照は非破壊（Window を含むスロットも構築可）。
+    #[test]
+    fn cue_target_window_is_additive_unit_variant() {
+        let target = CueTarget::Window;
+        let json = serde_json::to_string(&target).unwrap();
+        assert_eq!(json, r#""Window""#);
+        let parsed: CueTarget = serde_json::from_str(&json).unwrap();
+        assert_eq!(parsed, target);
+
+        // 既存 variant のワイヤ形は additive 追加後も不変。
+        assert_eq!(
+            serde_json::to_string(&CueTarget::Shell).unwrap(),
+            r#""Shell""#
+        );
+        assert_eq!(
+            serde_json::to_string(&CueTarget::Balloon).unwrap(),
+            r#""Balloon""#
+        );
+
+        // `EntityKey` 参照非破壊（Window を含む Actor スロットも構築可）。
+        let key = EntityKey::Actor(ActorKey::from("0"), CueTarget::Window);
+        assert_eq!(key, EntityKey::Actor(ActorKey::from("0"), CueTarget::Window));
     }
 
     // ── 配送エンベロープ（TalkCue）檻 ──
