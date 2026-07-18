@@ -83,7 +83,7 @@
   - _Boundary: areka-ghost/tests/ghost/inproc_fixture.rs（locate 部分）_
   - _Depends: 1.1_
 
-- [ ] 4.2 実在ゴーストの外観資産を流用した最小テストゴーストを組み立てる
+- [x] 4.2 実在ゴーストの外観資産を流用した最小テストゴーストを組み立てる
   - 実在ゴーストのシェル資産をそのまま複製し、独自の最小シェルは作らない
   - 設定ファイルは新設のテストDLLを指すようにする
   - 特定済みのビルド済みDLL（4.1）を、1.4で完成した実体DLLとしてゴースト構成へ配置する
@@ -149,3 +149,4 @@
 - **[1.3 提供データ] 暫定 OnBoot Value スクリプト = `\0\s[0]おはようございますわ（暫定）\e`**（`X-Areka-Snapshot: PROVISIONAL` header 付き・parse_response が未知 header を無視するので wire 上 inert）。OnFirstBoot = 204。task 5.1 の期待 cue 列は `snapshot_for("OnBoot")` から導出＋ドリフト検出 assert。task 6.2 が実採取で PROVISIONAL を置換する際は 5.1 の期待定数も更新すること。
 - **[2.1] clippy `-D warnings` 全体ゲートは使用不可**（既存 toolchain ドリフト＝rust-1.97.0 の `collapsible_if` 等が areka-kanade/runtime/ticker/sink/dola に既在・本 spec 境界外）。真のゲートは `cargo test`（DoD は `cargo test --workspace`・memory areka-no-ci-gpu-tests-in-cargo-test）。各タスクの clippy 検証は「変更ファイルに警告が帰属しないこと」で足る。areka-ghost の `windows` は workspace 継承で `Win32_System_LibraryLoader` を得ており feature 追加不要。areka-ghost に `shiori-abi`（prod）＋`shiori4-testdll`（dev-dep）を追加済み。
 - **[2.3→5.1 申し送り] snapshot API が外部到達不可**: task 1.4 で `snapshot_for`/`snapshots`/`PROVISIONAL_MARKER` を `pub` にしたが `shiori4-testdll/src/lib.rs` の宣言が `mod snapshot;`（**非公開モジュール**）ゆえ `shiori4_testdll::snapshot::snapshot_for` は crate 外から到達不可。task 5.1 の**ドリフト検出 assert**（e2e が `snapshot_for("OnBoot")` の凍結 Value と期待定数の一致を確認）には外部到達が必須ゆえ、5.1 で `pub mod snapshot;` へ変更するか crate root へ `pub use snapshot::{snapshot_for, snapshots};` を追加すること（boundary に `shiori4-testdll/src/lib.rs` を含める）。2.3 は暫定リテラル `\0\s[0]おはようございますわ（暫定）\e` 比較で回避済み。
+- **[4.2 重大・5.1/5.2必読] ghostテストバイナリの飢餓回避**: 新規fixtureテストが**並列**で重いFS I/O（emo2 shell PNG木の再帰コピー・実行DLLコピー・remove_dir_all）を行うと、**Windows Defenderの新規ファイル再スキャン**がコアを占有し、`spine_e2e_test.rs`の**壁時計なし協調ループ**（`for _ in 0..10_000 { Tick; yield_now() }`）を飢餓させ、ghostスイートが15/15緑→~10/15にflaky化する（実測A/B）。spineは§6.2ゆえ改変不可。**根治策=inproc_fixture.rsの`pub fn shared_test_ghost() -> &'static Path`**（OnceLock・assemble一度・**hardlink優先**materialize＝新規バイトなしでDefender再スキャン回避・直列化mutex・鮮度ガード付きクロスラン再利用・意図的leak）。**task 5.1/5.2 は自前assembleせず`shared_test_ghost()`を再利用し、駆動ループは反復回数境界でなく壁時計deadline境界（task 2.4方式）にすること**。disposableが要る場合のみ`assemble_test_ghost(tag)->TempGhost`（Drop=remove_dir_all・hardlinkゆえ原本無傷）。新e2e追加後は`cargo test -p areka-ghost --test ghost`を15回以上回し0失敗を確認せよ。
