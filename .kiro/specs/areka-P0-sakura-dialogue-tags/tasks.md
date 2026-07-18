@@ -101,7 +101,7 @@
   - _Depends: 5.1_
 
 - [ ] 6. ghost boot S-3（sink Vec・provider シーム）
-- [ ] 6.1 BootCueSink trait と GhostBootOptions の可変長 sink 化を実装する
+- [x] 6.1 BootCueSink trait と GhostBootOptions の可変長 sink 化を実装する
   - `BootCueSink: CueSink + Send`（`clone_box`）を定義し、`CueSink + Clone + Send + 'static` への blanket impl を実装する（既存 sink は無改変で適合）
   - `GhostBootOptions.sinks: Vec<Box<dyn BootCueSink>>` へ変更する（`boot` の generic `<S,T>` 境界を撤去）・「2 スロット構造」文言を意図的に更新する
   - 既存 boot 呼出（spine/emo2_boot/tests）を Vec 形へ機械的追随させ、既存 spine テストが緑であることを確認する
@@ -231,3 +231,4 @@
 - 3: `doc/COMPAT_ARCHITECTURE.md` に既存の対応表が無かったため §8「沈黙ルール対応表」を新設し `%username`→`ユーザーさん` を登記済み。→ Task 4.2/7.1/7.2 の対応表登記は §8 の既存テーブルへ行追記する形でよい。`DEFAULT_USERNAME` の定義点は sysvar.rs のみ（Task 6.2 の provider は re-export で二重定義しない）。
 - 4.1: (a) `drive.rs` on_start と一部テストの compile 呼び出しに `&SystemVarSnapshot::default()` の暫定ブリッジを差した → **Task 5.1** で実 snapshot threading へ差し替える。(b) drive.rs の空シート即時TalkDone檻2件のフィラーを `\q`→`%username`/`\![raise,OnBoot]` へ差し替えた。これらは 4.1 では無 cue だが **Task 4.2** で SystemVar/GenericCommand が cue 化するため再破綻する → 4.2 で恒久的に無視される `Raw(...)` フィラーへ置換すること。
 - 【重要・横断】additive な dola 変更（1.1 references／1.2 Cursor／1.3 Window）により **areka-ghost・areka-emo-text・areka(bin) は現時点でテストビルドが赤**（網羅 match の Cursor 欠落・`Choice` の references 欠落・`command_target_of`未配線・`sink.rs:320` の 1 引数 compile 呼び出し等）。これは設計:164 の「横断・機械的追随」通り想定内。各下流 crate はそれを touch するタスク（areka-ghost=Task 6、emo-text/ghost LogSink=Task 8、areka bin=Task 9）が走る時に機械的追随で緑化する。→ **Task 6.1 は areka-ghost をビルドさせるため必要な機械的追随を全て行う（`command_kind` の Cursor アーム含む・cage は Task 8 が追加）**。1.2/1.4 で `Cursor→Balloon` アームを先行追加し cage を後続に回したのと同型。
+- 6.1 完了メモ: (a) dispatcher `on_start` に `SystemVarSnapshot::default()` の暫定橋渡し（`TODO(task 6.2)` マーク済）→ **Task 6.2** で `SystemVarSource` provider を `GhostBootOptions`/`DispatcherState` に通し per-talk 凍結像へ差し替える。(b) `spine_e2e_test.rs`/`real_pasta_test.rs` の埋没破断（references・Window/Cursor 網羅 match）を機械修復済 → **Task 9.3** は 3-sink 構成・move cue e2e など S-3 形の本体を仕上げる（既に compile は通っている前提）。(c) `command_kind` に Cursor 最小ラベルアーム追加済・`command_kind_covers_every_cue_command_variant` 檻への Cursor 明示アサーションは **Task 8** で追加。

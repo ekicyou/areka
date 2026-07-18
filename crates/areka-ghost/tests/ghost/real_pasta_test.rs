@@ -183,8 +183,7 @@ fn real_pasta_boot_observes_a_cue_then_shuts_down_cleanly() {
         ghost_root: root.clone(),
         default_encoding: DefaultEncoding::Utf8,
         shiori: ShioriWiring::Helper { helper_exe },
-        surface_sink,
-        text_sink,
+        sinks: vec![Box::new(surface_sink), Box::new(text_sink)],
         ticker: TickerMode::Real(TickerConfig::default()),
     };
 

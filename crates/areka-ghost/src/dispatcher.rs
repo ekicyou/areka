@@ -20,8 +20,12 @@ use std::sync::mpsc::Sender;
 
 use areka_actor::{ActorHandle, reply_channel, run_inbox, spawn_actor};
 use areka_kanade::{KanadeMsg, MonotonicMs};
-use areka_sakura::contract::{CueSink, SakuraMsg, StartTalk, TalkDone, TalkHandle, TalkId};
+use areka_sakura::contract::{
+    CueSink, SakuraMsg, StartTalk, SystemVarSnapshot, TalkDone, TalkHandle, TalkId,
+};
 use areka_sakura::drive::spawn_talk;
+
+use crate::sink::BootCueSink;
 
 /// dispatcher の inbox（1 アクター 1 enum・areka-actor inbox 規約）。
 pub enum DispatcherMsg {
@@ -67,20 +71,17 @@ struct ActiveTalk {
 }
 
 /// dispatcher body の状態（`Option<ActiveTalk>` が単一 slot・要件 4.2）。
-struct DispatcherState<S, T> {
+struct DispatcherState {
     active: Option<ActiveTalk>,
     kanade: Sender<KanadeMsg>,
-    surface_sink: S,
-    text_sink: T,
+    /// 構築時注入の可変長 sink 列（S-3・登録順＝broadcast 順）。talk 起動ごとに各要素を
+    /// `clone_box` して per-talk の `spawn_talk` へ手渡す（要件 4.6/8.5）。
+    sinks: Vec<Box<dyn BootCueSink>>,
     /// per-talk transient へ渡す自身の inbox クローン（self-sender ハンドオフ）。
     self_sender: Sender<DispatcherMsg>,
 }
 
-impl<S, T> DispatcherState<S, T>
-where
-    S: CueSink + Clone + Send + 'static,
-    T: CueSink + Clone + Send + 'static,
-{
+impl DispatcherState {
     fn handle(&mut self, msg: DispatcherMsg) -> ControlFlow<()> {
         match msg {
             DispatcherMsg::Start(start) => self.on_start(start),
@@ -97,12 +98,22 @@ where
         self.close_active_if_any();
 
         let talk_id = start.talk_id;
-        let handle = spawn_talk(
-            start,
-            self.self_sender.clone(),
-            self.surface_sink.clone(),
-            self.text_sink.clone(),
-        );
+
+        // 凍結像の刻印点（design.md「GhostBootOptions S-3」）: 保持する各 sink を per-talk に
+        // clone_box して独立インスタンスの `Vec<Box<dyn CueSink + Send>>` を組む（登録順＝broadcast 順）。
+        // `Box<dyn BootCueSink>` は上位境界 `CueSink + Send` を持つため upcast できる。
+        let sinks: Vec<Box<dyn CueSink + Send>> = self
+            .sinks
+            .iter()
+            .map(|sink| sink.clone_box() as Box<dyn CueSink + Send>)
+            .collect();
+
+        // TODO(task 6.2): 暫定の既定スナップショット橋渡し。task 6.2 が `SystemVarSource` provider を
+        // GhostBootOptions/DispatcherState に通し、ここで per-talk に呼び出した凍結像へ差し替える
+        // （現状は値源不在ゆえ既定＝空スナップショットで talk を起動する）。
+        let system_vars = SystemVarSnapshot::default();
+
+        let handle = spawn_talk(start, self.self_sender.clone(), sinks, system_vars);
         self.active = Some(ActiveTalk {
             talk_id,
             handle,
@@ -183,20 +194,15 @@ where
     }
 }
 
-/// dispatcher を起動する。`surface_sink`／`text_sink` は構築時注入（要件 4.6・setter なし）で、
-/// 各 per-talk transient へは `Clone` した専用インスタンスを渡す。
+/// dispatcher を起動する。`sinks` は構築時注入の可変長 sink 列（S-3・要件 4.6/8.5・setter なし）で、
+/// 各 per-talk transient へは各 sink を `clone_box` した専用インスタンス列を渡す（登録順＝broadcast 順）。
 ///
 /// self-sender ハンドオフ（モジュール doc 参照）により、dispatcher の inbox は全 `Sender`
 /// drop による切断へ到達し得ない——唯一の停止経路は [`DispatcherMsg::Close`] である。
-pub fn spawn_dispatcher<S, T>(
+pub fn spawn_dispatcher(
     kanade: Sender<KanadeMsg>,
-    surface_sink: S,
-    text_sink: T,
-) -> (Sender<DispatcherMsg>, ActorHandle)
-where
-    S: CueSink + Clone + Send + 'static,
-    T: CueSink + Clone + Send + 'static,
-{
+    sinks: Vec<Box<dyn BootCueSink>>,
+) -> (Sender<DispatcherMsg>, ActorHandle) {
     let (self_tx_reply, self_tx_recv) = reply_channel::<Sender<DispatcherMsg>>();
 
     let (tx, handle) = spawn_actor::<DispatcherMsg, _>("ghost-dispatcher", move |rx| {
@@ -207,8 +213,7 @@ where
         let mut state = DispatcherState {
             active: None,
             kanade,
-            surface_sink,
-            text_sink,
+            sinks,
             self_sender,
         };
 
@@ -298,7 +303,7 @@ mod tests {
         let surface = RecordingSink::new();
         let text = RecordingSink::new();
 
-        let (tx, handle) = spawn_dispatcher(kanade_tx, surface, text);
+        let (tx, handle) = spawn_dispatcher(kanade_tx, vec![Box::new(surface), Box::new(text)]);
 
         let talk_a = TalkId(1);
         let talk_b = TalkId(2);
@@ -370,7 +375,7 @@ mod tests {
         let surface = RecordingSink::new();
         let text = RecordingSink::new();
 
-        let (tx, handle) = spawn_dispatcher(kanade_tx, surface, text);
+        let (tx, handle) = spawn_dispatcher(kanade_tx, vec![Box::new(surface), Box::new(text)]);
 
         let talk_a = TalkId(11);
         let talk_b = TalkId(12);
@@ -445,7 +450,7 @@ mod tests {
         let surface = RecordingSink::new();
         let text = RecordingSink::new();
 
-        let (tx, handle) = spawn_dispatcher(kanade_tx, surface, text);
+        let (tx, handle) = spawn_dispatcher(kanade_tx, vec![Box::new(surface), Box::new(text)]);
 
         // 長い待ちを持つ script（Close 時点では自然完了していない）。
         tx.send(DispatcherMsg::Start(StartTalk {
@@ -479,7 +484,7 @@ mod tests {
         let surface = RecordingSink::new();
         let text = ChannelSink { tx: text_tx };
 
-        let (tx, handle) = spawn_dispatcher(kanade_tx, surface, text);
+        let (tx, handle) = spawn_dispatcher(kanade_tx, vec![Box::new(surface), Box::new(text)]);
 
         // \w[4]=200ms・\w[6]=300ms。D 焼き込み後の発火（broadcast ゆえ text sink も全 cue を受ける）:
         //   ClearAll@0.0・Emote{5}@0.0・FIRST@0.0 / Wait@0.25 / SECOND@0.45（FIRST の D=0.25 + \w[4]=0.20）/
@@ -576,7 +581,7 @@ mod tests {
         let text = RecordingSink::new();
         let surface_records = surface.records();
 
-        let (tx, handle) = spawn_dispatcher(kanade_tx, surface, text);
+        let (tx, handle) = spawn_dispatcher(kanade_tx, vec![Box::new(surface), Box::new(text)]);
 
         let talk_c = TalkId(41);
         tx.send(DispatcherMsg::Start(StartTalk {
