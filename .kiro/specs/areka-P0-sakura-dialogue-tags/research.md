@@ -526,7 +526,7 @@ crate コードは origin/main と同一（本ブランチの差分は `.kiro/` 
 
 ### D9: 暫定 provider＝`GhostBootOptions.system_vars: SystemVarSource`（per-talk 呼出の closure）
 - `type SystemVarSource = Box<dyn Fn() -> SystemVarSnapshot + Send>`。dispatcher が talk 起動ごとに呼び出して凍結像を得る（将来 sylphya の「talk ごと凍結」意味論に一致する形）。W1 の暫定実装は ghost 側ヘルパ `default_system_vars()`（`{"username": DEFAULT_USERNAME}` を充填・要件 L47 の「ghost が既定値スナップショットを充填」）。差替＝closure の中身を sylphya 読み口凍結に置換するのみ（sakura・dispatcher とも無改変）。
-- **既定値の単一定義**: `DEFAULT_USERNAME` は areka-sakura `sysvar` が唯一の定義点（R7.4 の縮退規則の所有者）。ghost の暫定 provider はこれを import（二重定義しない）。**具体値は「あなた」**（areka 裁量: 呼びかけ語として fixture の撫で talk 文面『%usernameったらもう♪』に自然に嵌る・決定論定数・対応表記録の対象。正典は沈黙＝§3.C）。
+- **既定値の単一定義**: `DEFAULT_USERNAME` は areka-sakura `sysvar` が唯一の定義点（R7.4 の縮退規則の所有者）。ghost の暫定 provider はこれを import（二重定義しない）。**具体値は「ユーザーさん」**（開発者裁定 2026-07-18 設計ディスカッション#2: 伺かの伝統的な未指定時デフォルト。決定論定数・対応表記録の対象。正典は沈黙＝§3.C。design 仮決めの「あなた」から差替）。
 - **展開規則（compile 側・純関数）**: スナップショットに名前あり→その値 / 名前なしだが M1 対応語彙（`username` のみ）→ `DEFAULT_USERNAME`（R7.4）/ それ以外→ `%名前` をテキスト素通し＋記録（R7.5）。展開結果は独立の Text cue（D 焼き込み・併合しない＝D12）。
 
 ### D10: sink スロット＝S-3（可変長）採択
@@ -541,7 +541,7 @@ crate コードは origin/main と同一（本ブランチの差分は `.kiro/` 
 - **縮退**: 基準 `screen`/`primaryscreen`/`me`/`global` は語彙保持＋warn 縮退（M1 非実導出・emo2 未使用）。対象窓/基準窓の不在は warn＋継続（R5.5・`move_window_to` の既存縮退と整合）。
 
 ### D12: `%username` 展開は独立 Text cue（併合しない）
-- `Text("仕方ないなあ～、") / Text("あなた") / Text("ったらもう♪")` の 3 cue。D は文字数比例ゆえ合計時間は併合と同一・タイプライタ表示も cue.at 起点の連続 reveal で観測同一。併合は compile に先読み状態を持ち込み純粋走査の単純さを壊す割に観測利得ゼロ。R9.4 の期待列はこの形で固定する。
+- `Text("仕方ないなあ～、") / Text("ユーザーさん") / Text("ったらもう♪")` の 3 cue。D は文字数比例ゆえ合計時間は併合と同一・タイプライタ表示も cue.at 起点の連続 reveal で観測同一。併合は compile に先読み状態を持ち込み純粋走査の単純さを壊す割に観測利得ゼロ。R9.4 の期待列はこの形で固定する。
 
 ### D13: emo-text の Choice/Cursor 受信
 - Choice: 従来 warn-once の檻文言を「配送列に第一級で現れる（R8.6 仕様変更）・表示消費は choice-render（W4）」へ更新し、挙動は warn-once＋状態不変のまま（良性スキップ・R8.5）。Cursor: 同型の warn-once アームを追加（choice-render シーム）。seriko・ghost LogSink は既存パターンの機械的追随。

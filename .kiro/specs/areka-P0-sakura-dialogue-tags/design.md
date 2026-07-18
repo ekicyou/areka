@@ -258,7 +258,7 @@ flowchart LR
 | 7.1 | `%username` 展開・生露出なし | sysvar / compile | スナップショット参照→Text cue | — |
 | 7.2 | テキスト同格（順序・D 規則） | compile | `text_playback_duration` 適用＋offset 前進 | — |
 | 7.3 | 値源非所有・凍結像消費・差替シーム | sysvar / dispatcher / provider | `SystemVarSnapshot` を talk 起動時手渡し（provider＝ghost） | — |
-| 7.4 | 値なしは既定値へ（決定論） | sysvar | `DEFAULT_USERNAME`（「あなた」・対応表記録） | — |
+| 7.4 | 値なしは既定値へ（決定論） | sysvar | `DEFAULT_USERNAME`（「ユーザーさん」・対応表記録） | — |
 | 7.5 | 未対応名は素通し＋記録 | sysvar / compile | `%名前` を Text で出力＋tracing 記録 | — |
 | 7.6 | 純粋写像・外部環境非読取 | sysvar / compile | 純関数（no I/O） | — |
 | 8.1 | 既存ワイヤ形不変の additive | dola command | 既存 8 variant 檻が無改変で緑・references は skip_serializing | — |
@@ -384,8 +384,8 @@ impl SystemVarSnapshot {
     pub fn insert(&mut self, name: impl Into<String>, value: impl Into<String>);
 }
 
-/// R7.4 の既定値（areka 裁量・正典沈黙・対応表記録対象）。唯一の定義点。
-pub const DEFAULT_USERNAME: &str = "あなた";
+/// R7.4 の既定値（伺かの伝統的デフォルト・正典沈黙・対応表記録対象）。唯一の定義点。
+pub const DEFAULT_USERNAME: &str = "ユーザーさん";
 
 /// 展開結果（compile が Text cue へ写像する）。
 pub enum ResolvedVar {
@@ -623,7 +623,7 @@ pub fn apply_move_directive(world: &mut World, directive: &MoveDirective) -> boo
 | 項目 | 裁量 | 根拠 |
 |---|---|---|
 | 裸 `base`（ドット無し基準位置） | `base.base` と等価 | 正典形式は `X.Y`・fixture の de-facto（R5.2 明文） |
-| `%username` 既定値 | `あなた` | 正典沈黙・呼びかけ語として fixture 文面に自然・決定論定数（R7.4） |
+| `%username` 既定値 | `ユーザーさん` | 正典沈黙・**伺かの伝統的な未指定時デフォルト**（開発者裁定 2026-07-18・設計ディスカッション#2）・決定論定数（R7.4） |
 | move 名前付き `--` 形 | M1 縮退（記録付きスキップ・語彙保持） | emo2 未使用・positional が canon 正 |
 | move 基準 `screen`/`primaryscreen`/`me`/`global` | M1 縮退（記録・語彙保持） | emo2 未使用（数値スコープのみ実導出） |
 | time>0 の移動 | 最終位置へ即時（縮退記録） | R5.4 明文・fixture は time 空=0 |
