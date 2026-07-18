@@ -498,6 +498,7 @@ impl<B: ShioriBackend> ShioriBackend for Recorder<B> { /* 記録して委譲（s
 ##### Batch / Job Contract
 
 - **`locate_built_test_dll() -> PathBuf`**: `current_exe()`（`target/<profile>/deps/…`）→ `deps` を pop → `target/<profile>/shiori4_testdll.dll`（`DLL_FILE_NAME` 定数を rlib 面から参照）。不在なら **明示 panic**（「`cargo test --workspace` で自動ビルドされる。単独実行時は `cargo build -p shiori4-testdll` を先に」）——silent skip しない
+- **単一正準位置・フォールバックなし（設計討議#1 決着）**: DLL 名は決定論的に確定し、配置先も所与の cargo バージョンにおいて決定論的（未実測なだけ）。よって実装の**先頭タスクで uplift 実証 spike**（`cargo test --workspace` 実行後の成果物位置の実測・数分）を行い、確定した**単一の正準位置のみ**を locate する。glob／mtime 等の多段フォールバックは**採らない**——将来 cargo の挙動変化時に deps/ の古い DLL を拾って silent green を維持し、壊れた現行ビルドを隠蔽しうるため（fail-visible 規律違反）。挙動変化は明示 panic で即座に顕在化させる
 - **`assemble_test_ghost(tag) -> TempGhost`**: 一意 temp root に (1) `ghost/master/descript.txt` を UTF-8 生成（`charset,UTF-8`／`name,Shiori4TestGhost`／`shiori,shiori4_testdll.dll`／`seriko.defaultsurfacedirectoryname,master`）、(2) emo2 実物 `shell/master/` を再帰コピー（surfaces.txt＋PNG 一式の流用・自作最小 shell を作らない・要件 4.1）、(3) `locate_built_test_dll()` の DLL を `ghost/master/` へコピー。balloon は**非同梱**（boot 経路＝`resolve()` が balloon に触れない実測に基づく「過不足なく」の判断・要件 4.2。opt-in 実描画を将来足す際に `emo2-kakukaku` 流用を追加する）
 - Idempotency: tag 付き一意ディレクトリ＋事前削除（spine の `unique_temp_dir` 流儀）。テスト終了時に削除
 

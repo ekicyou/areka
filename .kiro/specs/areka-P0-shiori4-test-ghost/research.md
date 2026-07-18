@@ -182,6 +182,7 @@
 |---|---|
 | git EOL 変換でスナップショットの CRLF が壊れる | 埋込時 CRLF 正規化（純関数・単体檻つき）で構造的に吸収 |
 | `cargo test -p areka-ghost` 単独時に cdylib 未 uplift | locate 失敗を明示 panic＋`--workspace` 誘導文言（保証範囲は要件 1.2 どおり `--workspace`） |
+| `cargo test --workspace` の cdylib uplift 位置が未実測（validation Issue 1） | **設計討議#1 決着＝spike-first・単一正準位置・フォールバックなし**: tasks 先頭の uplift 実証 spike で位置を実測確定し、locate は確定した単一位置のみ参照（glob/mtime 多段フォールバックは古い deps/ DLL の silent green＝ビルド破壊隠蔽リスクゆえ不採用・挙動変化は明示 panic で顕在化） |
 | FreeLibrary 前に DLL 実装 COM 参照が残る（UB） | `InProcBackend` のフィールド宣言順（shiori→host→library）で drop 順を構造的に固定・factory は CreateInstance 直後にスコープ落ち・契約を rustdoc 化 |
 | スナップショット実採取（実機・env-gate）前の開発期間 | 暫定手書き応答（正準形式・明示マーキング）で実装/檻を先行し、**DoD 前に実採取で差し替え凍結**（tasks で採取タスクを独立に立てる） |
 | pasta 応答の乱数性 | 代表 1 応答の凍結という要件 2.6 の建付けどおり（凍結応答上の決定論のみ保証） |
