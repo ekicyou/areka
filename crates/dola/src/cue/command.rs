@@ -573,8 +573,41 @@ mod tests {
         );
     }
 
+    // ── R8.1 ワイヤ互換回帰 カバレッジマトリクス（Task 10.5）──
+    //
+    // R8.1「既存 cue の外部表現（シリアライズ形）を変えずに additive 拡張し、既存台本データの
+    // 読み込み互換を保つ」の回帰は、本 spec の 4 つの additive デルタ
+    // （references skip_serializing・Cursor variant・`\!` キャリア形・CueTarget::Window）が
+    // 既存ワイヤ形のバイト列を一切変えないことを、以下の既存檻が**期待 JSON リテラル**で
+    // 網羅固定している（設計 Data Models「ワイヤ形」表・Testing Strategy Integration#5 の
+    // 「ワイヤ檻〔既存 8 variant 無改変緑＋Cursor/references/キャリア形の追加檻〕」に一致）。
+    // Task 10.5 監査結論: 下記で完全網羅ゆえ、同一リテラルを再主張する檻の新設は
+    // 重複（[[test-only-decision-branches-not-proven-wiring]]）——追加せず、この対応表を正典とする。
+    //
+    //   R8.1 デルタ／義務                     | 固定する檻（本モジュール）
+    //   ------------------------------------ | ------------------------------------------------
+    //   既存 8 variant がバイト同一（現行spec）| existing_eight_variants_wire_forms_are_unchanged_by_additive_extension
+    //     └ Choice(references:vec![]) 込み    |   （8th variant の期待 JSON に references キー無し＝skip 後を固定）
+    //   references 空＝現行とバイト同一        | choice_references_additive_wire_form (a)
+    //   references あり＝キー付き記述順        | choice_references_additive_wire_form (b)
+    //   references 欠落の旧 Choice を default 読 | choice_references_additive_wire_form (c)
+    //   Cursor（additive・空/単位/相対/裸/%）  | cue_command_cursor_serde_roundtrip
+    //   `\!` キャリア（Custom params 正準形）   | command_carrier_wire_form_is_canonical
+    //   キャリア非正準は None（良性スキップ）    | as_command_carrier_returns_none_for_non_canonical
+    //   CueTarget::Window（additive unit・既存不変）| cue_target_window_is_additive_unit_variant
+    //   Cue.duration 欠落の旧資産を 0 で読む     | cue_duration_defaults_to_zero_for_legacy_serialized_data
+    //   Wait/ClearAll unit variant のワイヤ形    | cue_command_wait_and_clear_all_serde_roundtrip
+    //
+    // 注記: Cursor/キャリア(Custom)/Window は externally-tagged enum への variant 追加ゆえ、
+    // 既存 variant のバイト列は構造的に不変（新タグは既存タグの表現へ干渉しない）。上記 8-variant
+    // 檻はその不変を期待リテラルで固定し、万一の破壊を回帰として捕捉する load-bearing な檻である。
+
     /// 既存 8 variant のワイヤ形が Wait/ClearAll の additive 追加後も**完全に不変**である
     /// ことを、期待 JSON リテラルで固定する（5.2・6.3・9.3）。
+    ///
+    /// Task 10.5 監査: Choice の期待 JSON は `references` キーを持たない（`references: vec![]`
+    /// が `skip_serializing_if = "Vec::is_empty"` で消える形）ため、本檻は references 追加**後**の
+    /// 8-variant バイト同一を固定する consolidated 回帰檻でもある（R8.1・上の対応表参照）。
     #[test]
     fn existing_eight_variants_wire_forms_are_unchanged_by_additive_extension() {
         let expected: Vec<(CueCommand, &str)> = vec![

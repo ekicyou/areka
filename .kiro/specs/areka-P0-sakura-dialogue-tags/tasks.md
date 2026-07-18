@@ -211,7 +211,7 @@
   - _Depends: 9.2_
   - _Boundary: move 末端（areka bin）_
 
-- [ ] 10.5 (P) ワイヤ互換回帰檻を追加する
+- [x] 10.5 (P) ワイヤ互換回帰檻を追加する
   - 既存 8 variant のワイヤ檻が期待 JSON リテラル不変のまま緑であること（`references`/`Cursor`/キャリア形追加後も）を確認する
   - 旧資産（`references` フィールドなしの `Choice` シリアライズ）が `default` で読めることを確認する
   - _Requirements: 8.1_
