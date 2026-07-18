@@ -36,7 +36,7 @@
   - _Depends: 1.1, 1.2, 1.3_
 
 - [ ] 2. areka-ghost: 正規in-processロード経路
-- [ ] 2.1 (P) x64 DLLをロードし生成入口を解決するRAII機構を実装する
+- [x] 2.1 (P) x64 DLLをロードし生成入口を解決するRAII機構を実装する
   - ロード失敗（DLL欠落・不正イメージ・シンボル未解決）はいずれもログ記録済みの失敗として返す
   - 取得済みリソースはいかなる失敗経路でも確実に解放される
   - 正常ロードの単体テストは1.1で確立したスタブDLLを対象に行う
@@ -147,3 +147,4 @@
 - **[1.1 spike 実測] cdylib の正準位置は `target/<profile>/deps/shiori4_testdll.dll`**（設計 D-1 の記述「deps を pop して `target/<profile>/`」は誤り）。`cargo test`／`cargo test --workspace` は cdylib を top-level へ uplift せず deps のみ（`cargo build` のみが top-level へ uplift）。実測: test-only ビルド後 top-level 不在・deps 存在。よって **task 3／4.1 の `locate_built_test_dll()` は `current_exe().parent().join(DLL_FILE_NAME)`（deps ディレクトリ・deps-pop しない）で解決すること**。areka-ghost の e2e test binary も同じ deps/ に居るため、この deps-dir 解決が単一正準・フォールバックなしで機能する。不在時は `cargo test --workspace` を促す明示 panic。
 - **[1.3] snapshot 表 API は `pub(crate)` で先行**（設計 Service Interface は `pub`）。task 1.4 で `snapshot_for`/`snapshots`/`PROVISIONAL_MARKER` を **`pub` へ広げる**（areka-ghost の rlib 面が task 4.1/5.1 で `DLL_FILE_NAME`＋スナップショット表を参照するため）。`DLL_FILE_NAME` は task 1.1 時点で既に `pub`。
 - **[1.3 提供データ] 暫定 OnBoot Value スクリプト = `\0\s[0]おはようございますわ（暫定）\e`**（`X-Areka-Snapshot: PROVISIONAL` header 付き・parse_response が未知 header を無視するので wire 上 inert）。OnFirstBoot = 204。task 5.1 の期待 cue 列は `snapshot_for("OnBoot")` から導出＋ドリフト検出 assert。task 6.2 が実採取で PROVISIONAL を置換する際は 5.1 の期待定数も更新すること。
+- **[2.1] clippy `-D warnings` 全体ゲートは使用不可**（既存 toolchain ドリフト＝rust-1.97.0 の `collapsible_if` 等が areka-kanade/runtime/ticker/sink/dola に既在・本 spec 境界外）。真のゲートは `cargo test`（DoD は `cargo test --workspace`・memory areka-no-ci-gpu-tests-in-cargo-test）。各タスクの clippy 検証は「変更ファイルに警告が帰属しないこと」で足る。areka-ghost の `windows` は workspace 継承で `Win32_System_LibraryLoader` を得ており feature 追加不要。areka-ghost に `shiori-abi`（prod）＋`shiori4-testdll`（dev-dep）を追加済み。

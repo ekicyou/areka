@@ -26,6 +26,7 @@ pub mod config;
 pub mod dispatcher;
 pub mod relay;
 pub mod runtime;
+pub mod shiori_inproc;
 pub mod shiori_wiring;
 pub mod sink;
 pub mod ticker;
