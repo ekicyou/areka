@@ -27,7 +27,7 @@
   - _Depends: 1.2, 1.3_
 
 - [ ] 2. choice 配送モデルの意図的更新（案C＝配送列とバッグの責務二分）
-- [ ] 2.1 CuePlayer の Choice 配送を配送列合流へ変更する
+- [x] 2.1 CuePlayer の Choice 配送を配送列合流へ変更する
   - `tick` の Choice アームを「`pending_choices` へ積み**かつ** `filtered_ready` へも積む」へ変更し、先積み分離を廃止する
   - bag への積みを配送ゲート（`remaining` 減少判定）と同一条件の内側へ移す（同一時刻の冪等再 tick で重複積みしないよう構造で保証する）
   - `pending_choices`／`resolve_choice`（id 照合・解決時 clear）の型・挙動は変更しない

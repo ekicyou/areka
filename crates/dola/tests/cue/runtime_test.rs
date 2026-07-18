@@ -133,9 +133,14 @@ fn wait_for_input_barrier_stops_and_resolve_click_resumes() {
 // WaitForChoice バリア: 選択肢先積み ＋ resolve_choice で再開
 // ============================================================================
 
-/// **選択肢先積み ＋ 再開（Task 4.2）**: WaitForChoice バリアの手前で連続投入された Choice cue は
-/// `ready()` に action cue として現れず `pending_choices()` へ先積みされる。バリア到達で
-/// WaitingForChoice へ停止し、`resolve_choice` で再開する。
+/// **選択肢の配送列合流 ＋ 解決照合バッグ並存 ＋ 再開（案C・R1.8/R8.6）**: WaitForChoice バリアの
+/// 手前で連続投入された Choice cue は `ready()` の配送列へ**順序を保って合流**し（配送列＝表示の
+/// 単一真実源）、同時に `pending_choices()` へも積まれる（バッグ＝解決照合の単一真実源）。バリア
+/// 到達で WaitingForChoice へ停止し、`resolve_choice` で再開する。
+///
+/// 注: 配送列合流の交互配置（`\q`/`\n`/`\_l` の順序保存）と冪等再 tick の bag 不変を厚く固定する
+/// 檻は Task 2.2 の対置換（配送列檻＋バッグ並存檻）に委ねる。ここでは旧「先積み一択」檻を新挙動へ
+/// 最小追従させる（Choice が配送列に現れることの確認へ反転）。
 #[test]
 fn wait_for_choice_barrier_preloads_choices_and_resolve_choice_resumes() {
     // Choice(a)@0.0, Choice(b)@0.0 → Barrier(WaitForChoice)@0.1 → picked@0.2。
@@ -154,13 +159,13 @@ fn wait_for_choice_barrier_preloads_choices_and_resolve_choice_resumes() {
         "WaitForChoice バリアで WaitingForChoice へ停止する"
     );
 
-    // Choice は ready action cue として現れず、pending_choices へ先積みされる。
+    // 案C（R1.8/R8.6）: Choice は配送列（ready）へ順序を保って合流し、かつ pending_choices へも積まれる。
     assert!(
-        !player
+        player
             .ready()
             .iter()
             .any(|c| matches!(c.command, CueCommand::Choice { .. })),
-        "Choice は ready の action cue として surface されない（先積みプロトコル）"
+        "Choice は配送列（ready）へ合流する（配送列＝表示の単一真実源・案C＝R1.8/R8.6）"
     );
     let ids: Vec<&str> = player
         .pending_choices()

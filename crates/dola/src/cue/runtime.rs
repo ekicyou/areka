@@ -1,7 +1,7 @@
 //! `CuePlayer` — cue 再生の受動的注入時刻ランタイム。
 //!
-//! cue 再生の"制御"（再生状態の状態機械・外部解決待ちのバリア seam・選択肢の先積み・
-//! 占有 horizon による完了判定）を、散在していた sakura `drive` と旧世代 wintf `ecs/cue`
+//! cue 再生の"制御"（再生状態の状態機械・外部解決待ちのバリア seam・選択肢の配送列合流＋
+//! 解決照合バッグ・占有 horizon による完了判定）を、散在していた sakura `drive` と旧世代 wintf `ecs/cue`
 //! （`CueQueue`）から dola へ一本化する受動ランタイム（D7）。dola は
 //! `"Declarative Orchestration for Live Animation"` 層であり、cue 再生制御の正しい住処。
 //!
@@ -15,14 +15,14 @@
 //! # 2 フェーズ API（`TimedSchedule` と対称）
 //!
 //! ```text
-//! player.tick(current_time)  → 内部 schedule を進め、バリア到達・Choice 先積みを処理
-//! player.ready()             → 直前 tick で配送可能になった cue（Choice 除外済み）
+//! player.tick(current_time)  → 内部 schedule を進め、バリア到達・choice 配送列合流を処理
+//! player.ready()             → 直前 tick で配送可能になった cue（Choice も順序保持で合流）
 //! ```
 //!
 //! # port 範囲（Task 4.2）
 //!
-//! 旧 `CueQueue` の状態機械のうち、**バリア seam＋Choice 先積み＋占有 horizon 完了**のみを
-//! 移植する。動的な一時停止/再開（`Paused`/`pause`/`resume`）は Non-Goals ゆえ**持ち込まない**
+//! 旧 `CueQueue` の状態機械のうち、**バリア seam＋choice 配送列合流／解決照合バッグ＋占有 horizon
+//! 完了**のみを移植する。動的な一時停止/再開（`Paused`/`pause`/`resume`）は Non-Goals ゆえ**持ち込まない**
 //! （dola へ pause/resume 状態を持ち込まない・§Non-Goals）。
 //!
 //! # 配送・完了・中断（Task 4.3）
@@ -44,11 +44,15 @@ use super::schedule::TimedSchedule;
 use super::sheet::{CueSheet, to_talk_schedule};
 use super::sink::CueSink;
 
-/// 選択肢バリア（`WaitForChoice`）の手前で先積みされた選択肢データ。
+/// 選択肢バリア（`WaitForChoice`）の手前で蓄積された選択肢データ（**解決照合専用のバッグ**）。
 ///
-/// 上流の台本は選択肢を `WaitForChoice` バリアの直前に連続投入する（先積みプロトコル）。
-/// `CuePlayer` はこれらを [`ready`](CuePlayer::ready) の action cue として surface せず、
-/// 本型として蓄積し、[`pending_choices`](CuePlayer::pending_choices) で取得可能にする。
+/// 上流の台本は選択肢を `WaitForChoice` バリアの直前に連続投入する。案C（R1.8/R8.6）では
+/// `CuePlayer` はこれらを [`ready`](CuePlayer::ready) の配送列へ**順序を保って合流**させる
+/// （配送列＝配置/表示情報の単一真実源）と同時に、本型として蓄積して
+/// [`pending_choices`](CuePlayer::pending_choices) で取得可能にする（バッグ＝解決照合の単一
+/// 真実源＝[`resolve_choice`](CuePlayer::resolve_choice) の id 照合用）。この責務二分により、
+/// choice の表示・ヒットテストは配送列を消費する下流（choice-render）が担い、選択解決は
+/// バッグの id 照合が担う。
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct PendingChoice {
     /// 選択肢 ID（解決時に [`resolve_choice`](CuePlayer::resolve_choice) へ渡す照合キー）。
@@ -94,9 +98,9 @@ pub struct CuePlayer {
     schedule: TimedSchedule<TalkCue>,
     /// 現在の再生状態。
     state: CuePlayerState,
-    /// 選択肢バリアの手前で先積みされた選択肢データ。
+    /// 選択肢バリアの手前で蓄積された選択肢データ（解決照合専用バッグ・配送列とは別軸）。
     pending_choices: Vec<PendingChoice>,
-    /// 直前 tick で配送可能になった cue（Choice 除外済み）のバッファ。
+    /// 直前 tick で配送可能になった cue のバッファ（案C＝Choice も順序保持で合流する配送列）。
     filtered_ready: Vec<TalkCue>,
     /// 登録された出力先（演者）。**登録順**で保持し、broadcast はこの順で全 sink へ配る
     /// （どの sink も全 cue を受ける・演者側 relevance が action を選別する・D4）。
@@ -161,9 +165,10 @@ impl CuePlayer {
     /// Phase 1: 注入時刻でランタイムを進める。
     ///
     /// `current_time` は絶対時刻（スケジュールのアンカー基準）。内部 [`TimedSchedule::tick`] に
-    /// 委譲し、到達済み cue のうち `Choice` を [`pending_choices`](Self::pending_choices) へ
-    /// 先積み（action cue としては surface しない）、残りを [`ready`](Self::ready) バッファへ
-    /// 収集する。バリア到達（`WaitForInput`/`WaitForChoice`）で待機状態へ遷移して**停止**し、
+    /// 委譲し、到達済み cue を [`ready`](Self::ready) 配送列へ収集する。案C（R1.8/R8.6）: `Choice`
+    /// も他 cue と**順序を保って配送列へ合流**しつつ、解決照合用に
+    /// [`pending_choices`](Self::pending_choices) へも積む（配送列＝表示の真実源／バッグ＝照合の
+    /// 真実源＝責務二分）。バリア到達（`WaitForInput`/`WaitForChoice`）で待機状態へ遷移して**停止**し、
     /// 以降の cue は外部解決まで配送しない。占有 horizon 到達（かつ entry 枯渇・バリアなし）で
     /// `Completed` へ遷移する。
     ///
@@ -188,27 +193,33 @@ impl CuePlayer {
         let remaining_before = self.schedule.remaining();
         self.schedule.tick(current_time);
 
-        // ready() から Choice を分離（Choice は先積みし action cue として surface しない）。
+        // ready() を配送列へ collect する。案C（R1.8/R8.6）: Choice は他 cue（改行/カーソル/
+        // テキスト等）と**順序を保って配送列へ合流**する（配送列から隠さない）。schedule の安定
+        // FIFO をそのまま複写ゆえ、`\q \n \q \_l \q` の交互配置が broadcast 列に現れる。
+        // 分離（Choice を配送列から隠す先積み一択）は廃止した。Choice の pending_choices への
+        // 積み（解決照合専用のバッグ）は、下の配送ゲート内側で行う（冪等再 tick で二重積みしない
+        // ことを構造で保証する・後述）。
         self.filtered_ready.clear();
         for cue in self.schedule.ready() {
-            match &cue.command {
-                CueCommand::Choice { id, text, .. } => {
+            self.filtered_ready.push(cue.clone());
+        }
+
+        // broadcast fan-out ＋ 選択肢バッグ積み: 準備完了した cue を、登録された**全** sink へ選別
+        // なく配る（R2.1/R1.4）。あわせて Choice cue は解決照合用に pending_choices へ積む
+        // （責務二分＝配送列は表示の単一真実源／バッグは照合の単一真実源・R8.6）。両者とも schedule
+        // が前進して entry を pop した tick（remaining 減少）に限り実行し、冪等再 tick・Timeout 継続
+        // の early-return（remaining 不変・ready_buffer 据え置き）では実行しない——これにより各 cue は
+        // 生涯 1 回のみ配送され、各 Choice は生涯 1 回のみバッグへ積まれる（同一時刻の再 tick で
+        // 二重積みしない＝「bag 内容は tick 列に不変」をゲート内側化で構造保証）。バリア到達で待機へ
+        // 遷移する場合も、バリア**手前**の cue はここで既に配り・積み済み（barrier match より前）。
+        if self.schedule.remaining() < remaining_before {
+            for cue in &self.filtered_ready {
+                if let CueCommand::Choice { id, text, .. } = &cue.command {
                     self.pending_choices.push(PendingChoice {
                         id: id.clone(),
                         text: text.clone(),
                     });
                 }
-                _ => self.filtered_ready.push(cue.clone()),
-            }
-        }
-
-        // broadcast fan-out: 準備完了した action cue を、登録された**全** sink へ選別なく配る
-        // （R2.1/R1.4）。schedule が前進して entry を pop した tick（remaining 減少）に限り配送し、
-        // 冪等再 tick・Timeout 継続の early-return（remaining 不変・ready_buffer 据え置き）では
-        // 配送しない——これにより各 cue は生涯 1 回のみ配送される（二重配送しない）。バリア到達で
-        // 待機へ遷移する場合も、バリア**手前**の cue はここで既に配り済み（barrier match より前）。
-        if self.schedule.remaining() < remaining_before {
-            for cue in &self.filtered_ready {
                 for sink in self.sinks.iter_mut() {
                     sink.emit(cue.clone());
                 }
@@ -248,10 +259,11 @@ impl CuePlayer {
         }
     }
 
-    /// Phase 2: 直前 tick で配送可能になった cue のスライス（`Choice` は除外済み）。
+    /// Phase 2: 直前 tick で配送可能になった cue のスライス（案C＝`Choice` も順序保持で合流）。
     ///
-    /// 選択肢は [`pending_choices`](Self::pending_choices) で取得する。次の [`tick`](Self::tick)
-    /// まで何度でも参照可能。
+    /// これが配置/表示情報の単一真実源であり、`Choice` cue も他 cue との相対順序を保って現れる
+    /// （R1.8/R8.6）。同じ選択肢は解決照合用に [`pending_choices`](Self::pending_choices) にも
+    /// 積まれる（責務二分）。次の [`tick`](Self::tick) まで何度でも参照可能。
     pub fn ready(&self) -> &[TalkCue] {
         &self.filtered_ready
     }
