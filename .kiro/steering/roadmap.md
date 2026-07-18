@@ -1,6 +1,6 @@
 ---
 inclusion: manual
-updated_at: 2026-07-17
+updated_at: 2026-07-18
 ---
 
 # Roadmap — areka M1（最小 SSP 互換ベースウェア）
@@ -166,7 +166,7 @@ emo2 が起動して喋る。下記 5 トラックを結線して達成（⓪ �
 |---|---|---|---|
 | （横断） | talk 再生時間が単一権威台本に載り実機 #3/#4/#6 解消 | `completed/cue-playback-duration` | ✅ **完了（2026-07-17・追記㉗）** |
 | M-mayuna | `\![bind]` で実機の表情パーツが着脱される | `mayuna-compose` | **W2**（下のウェーブ編成表・追記㉙）・seriko-loop 完了の前提（追記㉘） |
-| M-life | 放置で自発会話・まばたき2系統・撫で反応が実機で同時成立 | ~~`idle-talk`~~✅／`seriko-loop`／`collision-geometry`＋`input-events`（＋⓪`position-persist`） | **idle-talk 完了（2026-07-18・spec=`completed/areka-P0-idle-talk`・実機サインオフ済）**・残3本＋⓪は**ウェーブ編成表（追記㉙㉚）**が正本〔collision-geometry＝**W1**（進行中）／input-events＝**W2**（完了＝撫でクラスタ合流サインオフ）／seriko-loop・position-persist＝**W3**〕・順序根拠＝追記㉘ |
+| M-life | 放置で自発会話・まばたき2系統・撫で反応が実機で同時成立 | ~~`idle-talk`~~✅／~~`collision-geometry`~~✅／`seriko-loop`／`input-events`（＋⓪`position-persist`） | **idle-talk 完了（2026-07-18・spec=`completed/areka-P0-idle-talk`・実機サインオフ済）・collision-geometry 完了（2026-07-18・spec=`completed/areka-P0-collision-geometry`・k=1.0 契約下・DPI追従は追記㉜の新クラスタへ切り出し）**・残2本＋⓪は**ウェーブ編成表（追記㉙㉚）**が正本〔input-events＝**W2**（完了＝撫でクラスタ合流サインオフ）／seriko-loop・position-persist＝**W3**〕・順序根拠＝追記㉘ |
 | M-dialogue | メニュー一周＋`\![move]` 位置調整が実機完走 | `sakura-dialogue-tags`→`choice-render`→`choice-select-events` | ウェーブ編成表（追記㉙㉚）が正本〔dialogue-tags＝**W1**（choice cue 形の正本・先鋒）／choice-render＝**W3**（追記㉚で W4→W3・編集面事前割当）／choice-select-events＝**W4**（消費契約が全て実物の最後尾）〕 |
 | M-dual | **（退役）** kero 側検証は M-e2e 適合項目 #10 へ吸収 | — | — |
 | M-e2e | 適合14項目の一周走行＋DoD＝**M1 完成宣言** | `emo2-conformance-e2e` | 全ユニット完了後（最終） |
@@ -179,13 +179,31 @@ emo2 が起動して喋る。下記 5 トラックを結線して達成（⓪ �
 
 | Wave | ユニット | 開始コマンド | 上流充足（このウェーブで解禁される理由） |
 |---|---|---|---|
-| **W1** | `idle-talk` ∥ `collision-geometry` ∥ `sakura-dialogue-tags` | `/kiro-design areka-P0-idle-talk`・`/kiro-design areka-P0-collision-geometry`・`/kiro-start areka-P0-sakura-dialogue-tags` | 3本とも上流なし＝**契約正本の先鋒**（`Status`／`HitRegion`／choice cue 形が W1 で全て実物になる）。編集面はエンジン帰属が互いに素: kanade＋shiori-host32／emo（純関数＋present 読み口＋probe）／dola＋sakura compile＋move 結線 |
+| **W1** | `idle-talk` ∥ ✅`collision-geometry`（**2026-07-18 完了・PR マージ済**） ∥ `sakura-dialogue-tags` | `/kiro-design areka-P0-idle-talk`・~~`/kiro-design areka-P0-collision-geometry`~~・`/kiro-start areka-P0-sakura-dialogue-tags` | 3本とも上流なし＝**契約正本の先鋒**（`Status`／`HitRegion`／choice cue 形が W1 で全て実物になる）。編集面はエンジン帰属が互いに素: kanade＋shiori-host32／emo（純関数＋present 読み口＋probe）／dola＋sakura compile＋move 結線。`collision-geometry` は k=1.0 契約下で完了（`HitRegion` 契約が W2 `input-events` へ供給可能）・DPI追従は追記㉜の新クラスタへ分離 |
 | **W2** | `input-events` ∥ `mayuna-compose` | `/kiro-design areka-P0-input-events`・`/kiro-start areka-P0-mayuna-compose` | input-events ← W1 の settled `Status` 形＋実 resolver（撫でクラスタ合流サインオフ込みで完了可能）。mayuna ← W1 との compile.rs／`CueCommand` 衝突がウェーブ分離で直列化。相互共有ファイルなし（kanade＋spawn.rs＋ポインタ配線 vs parsers＋dola＋sakura＋seriko＋present test-only） |
 | **W3** | `seriko-loop` ∥ `position-persist` ∥ `choice-render`（**Fable 討議2本の同時実施＝開発者希望 2026-07-17・追記㉚**） | `/kiro-start areka-P0-seriko-loop`・`/kiro-design areka-P0-position-persist`・`/kiro-start areka-P0-choice-render` | seriko-loop ← W2 mayuna の動的 bind 読み口（完了ゲート充足）。position-persist ← `events.rs`（idle-talk）・`spawn.rs`（input-events）・`follow.rs`（dialogue-tags）の隣接が W1/W2 で全て直列化＋手動退避終了が W2 で着地済み。choice-render ← W1 choice cue 形（設計討議の消費契約・W1 完了で実装込み settled）＋W2 input-events のポインタ配線 donor。**W3 内の編集面事前割当（結合クラスタ原則＝契約先決なら並列可）**: seriko-loop＝seriko＋compose plan＋present cache.rs＋**emo2_boot frame.rs（時間源）を単独所有**／choice-render＝emo-text＋バルーンポインタ配線は **W2 donor に倣う配線モジュール側（frame.rs・spawn.rs 本体は不触）**・emo-present は TextSlotView（presenter.rs）additive のみ（cache.rs 不触）／position-persist＝placement＋ghost＋kanade-boot——3本とも**共有ファイル 0** |
 | **W4** | `choice-select-events`（単独） | `/kiro-start areka-P0-choice-select-events` | ← W1 `Status` 口・W2 kanade 背骨・W3 `ChoiceSelection`＝消費契約が**全て実物**（mock 先行不要の最後尾） |
 | **W5** | `emo2-conformance-e2e`（最終） | `/kiro-start areka-P0-emo2-conformance-e2e` | 全ユニット完了後＝適合14項目の一周走行→**M1 完成宣言** |
 
 > **直列化された干渉ペアの台帳**（ウェーブ境界の根拠・裁定㉘の写像）: idle-talk⇄input-events〔kanade msg/events/steady 共有〕=W1→W2／idle-talk⇄position-persist〔events.rs〕=W1→W3／input-events⇄position-persist〔spawn.rs〕=W2→W3／dialogue-tags⇄position-persist〔follow.rs〕=W1→W3／dialogue-tags⇄mayuna〔compile.rs＋CueCommand〕=W1→W2／mayuna⇄seriko-loop〔state.rs＋完了ゲート〕=W2→W3／dialogue-tags→choice-render〔choice cue 契約〕=W1→W3／seriko-loop⇄choice-render〔emo2_boot frame/UI 配線の**潜在**近接〕=**W3 同居＋編集面事前割当で解消**（追記㉚・双方の設計が割当を破る場合のみ後着側をウェーブ分離へ戻す）／choice-render→choice-select-events〔ChoiceSelection 契約〕=W3→W4。W1 内の注記: idle-talk と dialogue-tags は共に crate areka-ghost/areka に触れるが**別ファイル**（`ShioriBackend` impl 追随＝runtime.rs/spine 系 vs move sink 新設＋follow.rs dead_code 解消）・dialogue-tags の観測は script→cue 列 mock＋実機 move で spine 檻不要＝同居も生じない。`status-execution-states` は台帳（着手しない）・追記㉘の「最大8本並走」次フロント記述は本編成で**置換**。
+
+**DPI追従下の当たり判定＝新クラスタ（2026-07-18 追記㉜・`collision-geometry` Task 4.2 受け入れ却下から派生・M1/M2 配置は別セッション判断）**:
+
+> **経緯**: `collision-geometry`（W1）の実 DPI 受け入れ（Task 4.2）で、モニタ DPI を2水準（125%/200%）変えて当たり判定を検証したが、emo が **k=1.0 ハードワイヤ**（マスコットが DPI 追従で拡大しない）ゆえ両水準ともマスコット同一物理寸＝ヒットテスト経路が同一で、**DPI追従下（scale≠1.0）の当たり判定が全く未検証**と開発者が判断し**受け入れ却下**（2026-07-18）。areka の**基本設計は DPI追従**（[[areka-dpi-following-core-design]]・SSP と別思想・k=1.0 は途中状態）。詳細分析（7エージェント配管調査・file:line）は `specs/completed/areka-P0-collision-geometry/research.md §13`。
+>
+> **隣接発見との関係（追記㉛）**: 同日、`idle-talk` 実機サインオフ直後の運転で**別角度の DPI追従 gap**（窓が `WM_DPICHANGED` でリサイズされない・調査先行 spec `areka-P0-dpi-window-vanish` が brief 済）が独立に発見された。両者は根は同じ「DPI追従 未実装」だが症状が異なる（本クラスタ＝マスコット**合成**が k=1.0 固定／`dpi-window-vanish`＝**窓**が DPI 変化でリサイズされない）。統合判断は別セッション（未決事項1 と同根）。
+>
+> **新 spec 2 本（brief 済 2026-07-18・依存あり）**:
+> - **`areka-P0-emo-dpi-scaling`**（⑥ emo・render 基盤）: emo が surface を k=monitorDPI÷author_dpi で実拡大レンダ・`scale()` が k を返す・窓/swapchain 追従。wintf `DPI` component（既存・`GetDpiForWindow`／`WM_DPICHANGED`）を consume。wintf は既に k≠1.0 レンダ実績あり（`taffy_systems.rs`→`render.rs` `SetTransform`）＝greenfield でない。**broad な emo 基盤**（全 emo 消費者が波及）。
+> - **`areka-P0-collision-dpi-hittest`**（⑥ emo・collision 後続）: `EmoPresenter::hit_region` の point÷k＋fake-k 決定論 unit＋`collision-geometry` の k=1.0 契約改訂＋scale≠1.0 実機受け入れ（Task 4.2 の正しい受け入れ）。純 `hit.rs` 不変。**`emo-dpi-scaling` に依存**（実 k× 表示なしでは実機で ÷k を no-op としてしか観測できない＝合流ゲート）。
+>
+> **依存**: `emo-dpi-scaling` → `collision-dpi-hittest`。両者とも `collision-geometry`（純関数・resolver・probe＝Task 1-4.1 完成・不変）を土台に使う。DPI追従が波及する既存消費者（`completed/window-placement` 窓寸・`emo-text-layer` 行寸・balloon・`choice-render`）は **Revalidation Trigger**（`emo-dpi-scaling` 着地後に各 spec 再検証）。
+>
+> **✅決着済み（2026-07-18 開発者承認）事項2**: `collision-geometry` の合流/マージ——**先に merge を選択**。却下理由（scale≠1.0 の当たり判定未検証）が `emo-dpi-scaling`＋`collision-dpi-hittest` へ切り出されたことを確認した上で、Task 1-4.1（k=1.0 resolver＋`HitRegion` 契約）を合格へ整合し `completed/` へ移動・PR squash マージ済み。DPI追従 hit-test は新 spec が追跡する。
+>
+> **⚠️ 別セッションで決める未決事項（[[portfolio-convergence-decided-in-separate-session]]・単一 spec の椅子から決めない）**:
+> 1. **M1/M2 配置**: DPI追従は基本設計だが emo2 は k=1.0 でも E2E 実走する（M1 blocker か M2 送りか）。
+> 2. **Strategy A（emo-compose 鮮明ラスタ）vs B（WUC transform）**・author_dpi 定義・整数倍/連続・÷k 丸め・WM_DPICHANGED ライブ再スケール・seriko/mayuna collision 相互作用（各 brief の open questions）。
 
 **アプリ組み上げの所有マップ（2026-07-05 確定・「誰がアプリとしての areka を組むか」）**:
 - **三段構え**: ① `app-shell`（骨格＝main.rs 所有・構成入力・デモ保全・**検証用ダミー窓＋replace-me シーム**〔app が run() 所有・後続が本物窓へ差替〕・早期）→ ② `ghost-setup`（骨格の差し込み口にエンジン結線・boot 指示・close 握手待ち・エンジン群完了後）→ ③ `emo2-conformance-e2e`（完成アプリでの一周適合＝M1 ゴール証明）。

@@ -74,6 +74,12 @@ pub struct SurfaceMaster {
     /// layer 昇順・同 layer は登場順の正規化 element 群。
     pub elements: Vec<NormalizedElement>,
     /// 当たり判定領域（転記のまま）。
+    ///
+    /// 順序不変条件: **登場順**。`surface.append` 由来は末尾へ連結される（`fold.rs:121-122`）。
+    /// 画家則（後定義が手前）はこの順序に意味論を載せる（HitCore [`hit_region`] が逆順走査で
+    /// 最前面を決める・collision-geometry 要件 2.1）ため、この順序は挙動上の意味を持つ。
+    ///
+    /// [`hit_region`]: crate::hit::hit_region
     pub collisions: Vec<areka_parsers::shell::Collision>,
     /// SERIKO animation 群（interval/pattern を転記のまま保持）。
     pub animations: Vec<areka_parsers::shell::Animation>,
