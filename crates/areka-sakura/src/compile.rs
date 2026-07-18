@@ -192,8 +192,10 @@ pub fn compile(instructions: &[Instruction], vars: &SystemVarSnapshot) -> Compil
             }
             // 残る除外（`Raw` および `#[non_exhaustive]` の未知 variant）は無視ログを記録し cue を
             // 生成せず継続する（寛容・非 panic・型シーム・R8.2/8.3/R11.2）。Choice/Cursor は task 4.1、
-            // Move/GenericCommand/SystemVar は task 4.2 で専用アームへ卒業済み（catch-all は Raw＋
-            // 未知 variant のみ）。catch-all の Raw-only 化の明文檻は task 4.3。
+            // Move/GenericCommand/SystemVar は task 4.2 で専用アームへ卒業したため、catch-all が無視
+            // する除外集合は Raw＋未知 variant のみへ縮小済み（`Instruction` は別 crate の
+            // `#[non_exhaustive]` ゆえ本 catch-all は構造上必須・未知 variant は防御経路）。Raw-only
+            // 化の明文檻は `catch_all_ignored_set_is_raw_only`（task 4.3・R8.3）。
             other => {
                 tracing::debug!(instruction = ?other, "M-boot 外タグを無視");
             }
@@ -553,21 +555,65 @@ mod tests {
         assert!(compiled.sheet.is_empty());
     }
 
-    /// catch-all に残る除外（`Raw`）は cue を生成しない（無視ログ・非 panic）。task 4.2 で
-    /// SystemVar/Move/GenericCommand は専用アームへ卒業したため、本檻の「無視される集合」からは
-    /// 除外し `Raw` のみを対象とする（catch-all の Raw-only 化の明文檻は task 4.3）。
+    /// 除外集合の Raw-only 対置換（catch-all の意図的更新の檻・R8.2/8.3・Testing Strategy 項目 6）。
+    ///
+    /// task 4.1（Choice/Cursor）・task 4.2（Move/GenericCommand/SystemVar）で 5 語彙が専用アームへ
+    /// **卒業**した結果、compile の catch-all が無視する除外集合は `Raw`＋`#[non_exhaustive]` の未知
+    /// variant のみへ縮小された（`Instruction` は別 crate の `#[non_exhaustive]` ゆえ catch-all は
+    /// 構造上必須・未知 variant は防御経路だが workspace 内に合成手段がなく直接は載せられない）。
+    /// 本檻はその縮小後の除外集合を **Raw-only** で固定し、4.1/4.2 の卒業と決して矛盾させない:
+    /// (1) `Raw` は cue を 0 個生成する（無視ログ・非 panic・従来挙動維持・R8.2）、
+    /// (2) 卒業した 5 語彙（Choice / Cursor / Move / GenericCommand / SystemVar）は除外集合に
+    ///     **含まれない**＝各々 cue を生成する（本檻は決してこれらが「無視される」とは主張しない・
+    ///     R8.3）。各語彙の写像詳細は個別 behavioral 檻が担い、ここでは除外集合の境界のみを固定する。
     #[test]
-    fn non_basic_variants_produce_no_cue() {
+    fn catch_all_ignored_set_is_raw_only() {
+        use areka_parsers::sakura::{Choice, MoveArgs};
+
+        // (1) Raw は除外集合ゆえ 0 cue。中途に Raw を挟んでも内容は後続 Text のみ（ClearAll 前置）。
         let compiled = compile(&[
             Instruction::Raw("\\?".into()),
             Instruction::Text("hi".into()),
         ]);
-        // Raw は cue を生成せず、内容は Text のみ（冒頭に ClearAll が前置される）。
         let cues = assert_clear_all_prefix_and_rest(compiled.sheet.cues());
-        assert_eq!(cues.len(), 1);
+        assert_eq!(cues.len(), 1, "Raw は cue を生成しない（除外集合は Raw のみ）");
         match command_of(&cues[0]) {
             CueCommand::Text(s) => assert_eq!(s, "hi"),
             other => panic!("expected Text, got {other:?}"),
+        }
+        // Raw 単独（後続なし）は空 sheet（内容 cue ゼロゆえ ClearAll 前置もなし・R8.2）。
+        assert!(
+            compile(&[Instruction::Raw("\\0".into())]).sheet.is_empty(),
+            "Raw のみの台本は空 sheet（除外集合の 0 cue を単独でも固定）"
+        );
+
+        // (2) 卒業した 5 語彙は除外集合の外＝各々 cue を生成する（sheet 非空）。ここでこれらが
+        //     「無視される」と主張することは 4.1/4.2 と矛盾するため、本檻は生成側のみを固定する
+        //     （R8.3 対置換）。詳細写像は個別 behavioral 檻（`*_maps_to_*` 等）が担う。
+        let graduated: [Instruction; 5] = [
+            Instruction::Choice(Choice {
+                disp: "はい".into(),
+                target: "OnYes".into(),
+                references: vec![],
+            }),
+            Instruction::Cursor {
+                x: "5em".into(),
+                y: "2lh".into(),
+            },
+            Instruction::Move(MoveArgs {
+                args: vec!["100".into()],
+            }),
+            Instruction::GenericCommand {
+                name: "raise".into(),
+                raw_args: vec!["OnBoot".into()],
+            },
+            Instruction::SystemVar("username".into()),
+        ];
+        for instruction in graduated {
+            assert!(
+                !compile(std::slice::from_ref(&instruction)).sheet.is_empty(),
+                "卒業語彙は除外集合に含まれず cue を生成する（4.1/4.2 の卒業を明示）: {instruction:?}"
+            );
         }
     }
 

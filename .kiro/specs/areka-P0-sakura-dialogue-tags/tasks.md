@@ -70,7 +70,7 @@
   - _Requirements: 2.1, 2.2, 2.5, 2.6, 4.1, 4.2, 4.3, 4.4, 7.2, 8.4_
   - _Depends: 4.1_
 
-- [ ] 4.3 除外集合を Raw-only へ縮小し意図的更新の檻を対置換する
+- [x] 4.3 除外集合を Raw-only へ縮小し意図的更新の檻を対置換する
   - catch-all を `Raw`＋`#[non_exhaustive]` 未知 variant のみへ縮小する（Choice/Cursor/Move/GenericCommand/SystemVar は卒業）
   - 除外檻 `compile.rs:511-544` を「Raw＋未知 variant のみ 0 cue」を確認する檻へ書き換える（4 語彙の卒業を明示するコメント付き）
   - _Requirements: 8.2, 8.3_
