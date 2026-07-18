@@ -957,8 +957,10 @@ mod tests {
         let (done_tx, done_rx) = mpsc::channel::<TalkDone>();
         let talk_id = TalkId(55);
         // task 4.2 で SystemVar/GenericCommand は cue を発行するようになったため、無 cue フィラーには
-        // 恒久的に compile 除外される `Raw`（parser が `\0` を `Instruction::Raw("\0")` へ転記＝本 spec
-        // 全域で cue 化されない）を用いる。empty-sheet 即時 TalkDone 経路を保つ（消すべき内容 cue 皆無）。
+        // `\0` を用いる。parser は `\0` を正典スコープタグ `SpeakerScope{n:0}` へ写像するが（task 12.1・
+        // R1.5/R4.4）、compile は `SpeakerScope{n}` を「scope 状態更新のみ・cue 非発行」で扱う
+        // （`compile.rs` の SpeakerScope アーム）。ゆえに内容 cue は皆無で empty-sheet 即時 TalkDone
+        // 経路を保つ（`\0` の写像先が Raw から SpeakerScope へ変わっても本檻の観測は不変）。
         let start = StartTalk {
             script: r"\0".to_string(),
             talk_id,
@@ -995,9 +997,10 @@ mod tests {
     fn quit_only_script_ends_immediately_with_quit_not_ended() {
         let (done_tx, done_rx) = mpsc::channel::<TalkDone>();
         let talk_id = TalkId(56);
-        // task 4.2 で SystemVar は cue を発行するようになったため、`\-` の先行フィラーには恒久的に
-        // compile 除外される `Raw`（`\0` → `Instruction::Raw`）を用いる。先行内容 cue のない `\-` の
-        // empty-sheet＋Quit 経路を保つ（Raw は破棄され `\-` が Quit で切詰め＝空 sheet＋end=Quit）。
+        // task 4.2 で SystemVar は cue を発行するようになったため、`\-` の先行フィラーには `\0` を用いる。
+        // parser は `\0` を `SpeakerScope{n:0}` へ写像し（task 12.1・R1.5/R4.4）、compile はそれを
+        // scope 状態更新のみ（cue 非発行）で扱う。先行内容 cue のない `\-` の empty-sheet＋Quit 経路を
+        // 保つ（SpeakerScope は cue を生まず `\-` が Quit で切詰め＝空 sheet＋end=Quit）。
         let start = StartTalk {
             script: r"\0\-".to_string(),
             talk_id,

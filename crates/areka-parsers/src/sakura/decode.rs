@@ -12,7 +12,9 @@
 //!   （素の `\n` = 1.0、`percent`/100、`half` = 0.5、負値は符号付き保持。要件 4）。
 //! - 選択肢 `\q[disp,target,refs...]` → `Choice`（disp/target 分離・要件 5.1/5.2）。
 //! - キャラ移動 `\![move,...]` → `Move(MoveArgs)`（引数区切りのみ・要件 7.1）。
-//! - 話者 `\p[n]` → `SpeakerScope`、サーフェス `\s[...]` → `Surface`（無加工保持）、
+//! - 話者スコープ → `SpeakerScope`: 角括弧付き `\p[n]`、括弧なし `\pN`（0〜9・shorthand）、
+//!   および正典 bare 形 `\0`/`\h`（本体側=0）・`\1`/`\u`（相方側=1）を写像（ukadoc・R1.5/R4.4）。
+//!   サーフェス `\s[...]` → `Surface`（無加工保持）、
 //!   カーソル `\_l[x,y]` → `Cursor`、制御 `\e`/`\c`/`\-` → `End`/`Clear`/`Quit`（要件 2/6）。
 //! - システム変数 `%keyword` → `SystemVar`（展開なし・要件 8）、テキスト → `Text`（要件 9）。
 //!
@@ -140,8 +142,12 @@ fn decode_token(token: Token) -> Instruction {
         Token::Shorthand { word: 'b', n } => {
             Instruction::BalloonSurface(SurfaceArg::new(n.to_string()))
         }
+        // 話者スコープ括弧なし短縮 `\pN`（ukadoc `\pID`＝任意番号・0〜9 のみ・R1.5/R4.4）:
+        // 単一桁を scope 番号として `SpeakerScope{n}` へ。`\p[n]` ブラケット形（`decode_tag`
+        // の `"p"` アーム）と等価。lexer が 1 桁のみ消費するため `\p10` = scope 1 ＋ Text("0")。
+        Token::Shorthand { word: 'p', n } => Instruction::SpeakerScope { n: n as u32 },
         // 対象外の短縮語（`SHORTHAND_WORDS` の想定外拡張時）への防御。lexer は現状
-        // `'w'`/`'b'` のみ産むため到達不能だが、panic せず生情報を失わない `Raw` に留める。
+        // `'w'`/`'b'`/`'p'` のみ産むため到達不能だが、panic せず生情報を失わない `Raw` に留める。
         Token::Shorthand { word, n } => Instruction::Raw(format!("\\{word}{n}")),
         Token::Bare(c) => decode_bare(c),
         Token::Tag { word, args } => decode_tag(word, args),
@@ -153,13 +159,24 @@ fn decode_token(token: Token) -> Instruction {
 /// bare タグ（角括弧なし 1 文字）を写像する。
 ///
 /// `\n`（bare）は既定比率 1.0 の改行（要件 4.2）。`\e`/`\c`/`\-` は制御命令（要件 6.2-6.4）。
+///
+/// **正典スコープタグ（bare 形・R1.5/R4.4）**: ukadoc により `\0`/`\h` = 本体側
+/// （scope 0）、`\1`/`\u` = 相方側（scope 1）。これらを `SpeakerScope{n}` へ写像する
+/// （角括弧付き `\p[n]` と等価な話者スコープ切替）。これは完了 spec
+/// `areka-P0-sakura-parse` req 11.2（bare スコープタグを「M1 未使用 → passthrough」と
+/// 分類）の**意図的なスーパーセット更新**であり、非 emo2 ゴースト・bare タグ経路の
+/// fixture（`boot.pasta:79` の `\1\![move,...]` 等）が正しく動くようにする（emo2 自身は
+/// `\p[n]` を発行するため無影響）。
 fn decode_bare(c: char) -> Instruction {
     match c {
         'e' => Instruction::End,
         'c' => Instruction::Clear,
         '-' => Instruction::Quit,
         'n' => Instruction::NewLine(NewLineRatio::new(1.0)),
-        // subset 外の bare タグ（`\0` `\1` 等）はタスク 4.2 のパススルー領分。
+        // 正典スコープタグ bare 形（R1.5/R4.4・ukadoc）: `\0`/`\h`=本体側、`\1`/`\u`=相方側。
+        '0' | 'h' => Instruction::SpeakerScope { n: 0 },
+        '1' | 'u' => Instruction::SpeakerScope { n: 1 },
+        // 上記以外の subset 外 bare タグ（`\i` `\j` 等）はタスク 4.2 のパススルー領分。
         other => decode_passthrough_bare(other),
     }
 }
@@ -274,7 +291,8 @@ fn speaker_scope_n(arg: Option<&String>) -> u32 {
 //
 // emo2 subset 外タグ・`move` 以外の `\!`・不正トークンの吸収先。`move` 以外の
 // `\!` は `GenericCommand`（種別＋生引数保持）、それ以外（subset 外正準タグ・
-// subset 外 bare・lexer Raw 断片）は生情報を失わない `Raw` へ。いずれもエラーを
+// subset 外 bare＝**正典スコープ bare `\0`/`\1`/`\h`/`\u` を除く**・lexer Raw 断片）は
+// 生情報を失わない `Raw` へ。いずれもエラーを
 // 送出せず解析を中断しない（要件 10.2）。`\q` 旧 2 連形・`\![*]` マーカーは
 // シーケンス依存ゆえ `decode` の peekable 走査側で捕捉する（fold_* 群）。
 // ───────────────────────────────────────────────────────────────────
@@ -301,7 +319,9 @@ fn decode_passthrough_bang(args: Vec<String>) -> Instruction {
     Instruction::GenericCommand { name, raw_args }
 }
 
-/// 【タスク 4.2】subset 外の bare タグ（`\0` `\1` 等）→ 生情報を保持して `Raw`（要件 11.2）。
+/// 【タスク 4.2】subset 外の bare タグ（`\i` `\j` 等・**スコープタグを除く**）→ 生情報を
+/// 保持して `Raw`（要件 11.2）。正典スコープ bare 形 `\0`/`\1`/`\h`/`\u` は `decode_bare` で
+/// `SpeakerScope` へ写像されるため、ここへは到達しない（R1.5/R4.4）。
 fn decode_passthrough_bare(c: char) -> Instruction {
     Instruction::Raw(format!("\\{c}"))
 }
