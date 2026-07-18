@@ -29,7 +29,7 @@
   - _Requirements: 4.1, 4.2, 4.3, 4.4, 5.1, 5.2, 5.3, 5.4_
   - _Boundary: HitRegionContract, Resolver_
 
-- [ ] 4. Probe: リゾルバの座標契約を実 DPI・本番 emo2 表示で実測する
+- [x] 4. Probe: リゾルバの座標契約を実 DPI・本番 emo2 表示で実測する
 - [x] 4.1 実 DPI 受け入れ example を実装する（本番窓寸規則駆動・マウス経路照合込み）
   - `crates/areka/examples/collision-probe.rs` を新設し、`#[path]` で `target_map.rs`／`hit_region.rs`／`placement/mod.rs` を私有 include する（read-only 再利用・production 不改変）
   - `placement::spawn::spawn_ghost_windows` を意図的に誤った placeholder 寸で呼び窓を生成（`Anchored` 付与）→ `attach_target` → `apply(ShowSurface { surface_id: 1000, binds: 実 bind 値集合 })` を適用する
@@ -43,8 +43,8 @@
   - _Depends: 3_
   - _Boundary: Probe_
 
-- [ ] 4.2 実 DPI（≠96）2 水準での手動受け入れ検証を実施し acceptance-record.md へ記録する
-  - _Blocked: 受け入れ不成立（2026-07-18 開発者判断）。areka の基本設計は DPI追従だが、現状 `scale()` は常に 1.0 ゆえ両 DPI 水準ともマスコットは同一物理寸（k=1.0）＝ヒットテスト経路が同一で、「scale≠1.0（DPI追従で拡大した状態）での当たり判定の正しさ」が未実装・未検証。DPI追従下の当たり判定（点÷k）の実装＋検証が要る。スコープ判断待ち（collision-geometry 拡張か・emo-present の DPI追従レンダリングと合わせるか・別 spec か）。_
+- [x] 4.2 実 DPI（≠96）2 水準での手動受け入れ検証を実施し acceptance-record.md へ記録する
+  - _合格（2026-07-18 開発者承認）。本 spec 要件 7.3 本文＝**k=1.0 契約下**の座標契約実証は dpi=120/192 の2水準で充足（Head/Bust/None 目視解決一致・静止 Δ=(0,0)・GetClientRect=382×547 の k=1.0）。当初の却下理由「scale≠1.0（DPI追従で拡大した状態）での当たり判定が未検証」は本 spec 要件本文の外の設計思想ギャップであり、新 spec `areka-P0-emo-dpi-scaling`（render 基盤）＋`areka-P0-collision-dpi-hittest`（point÷k・実機受け入れ）へ切り出し済み（roadmap 追記㉚・research.md §13）。切り出し確認の上で合格。_
   - per-monitor v2・実 DPI ≠96 を2水準以上（例: 125%/150%/200%）で collision-probe example を実行し、①〜⑥のプロトコル全項目を確認する
   - k=1.0 assert・read_back anchor assert・マウス経路ペア列（Δ=(0,0) 一致）・Head/Bust/None の目視解決一致を実測値（物理 px）で表へ記録する
   - 撫で一周（マウス→SHIORI→応答 talk）の統合実機サインオフは本 spec の対象外（7.4・`input-events` Req8.3 が実施）である旨を判定行に明記する
@@ -56,4 +56,4 @@
 - **並列マーカー不使用の理由**: 4 major task の新規コードは design.md「Allowed Dependencies」の crate 依存方向（`areka-parsers → areka-emo-atlas → areka-emo-compose → areka-emo-present → areka(bin)`）どおりに前段を直接呼び出す線形連鎖（Task2 の `EmoPresenter::hit_region` は Task1 の `hit_region()` を呼ぶ／Task3 の `resolve_hit_region` は Task2 の `EmoPresenter::hit_region` を呼ぶ／Task4 は Task3 の `resolve_hit_region` を呼ぶ）。真のデータ依存が全段に渡るため `(P)` マーカーは1件も付与していない。
 - **要件 7.4 は本 spec 内で実装しない**: 「撫で一周の統合実機サインオフを撫でクラスタ合流サインオフへ帰属させる」は Coordination Notes C-4／Non-Goals で既に決着済みの設計判断であり、実装作業を要さない。Task 4.2 の acceptance-record 判定行にその旨を明記することでカバーする（意図的な繰延・追跡先＝`input-events` Req8.3）。
 - **Task 1/2/3 が単一チェックボックスに畳まれている理由**: 各 major task の実質的な作業単位が「1コンポーネントの実装＋その単体テスト」という不可分の1成果物であるため（Task Hierarchy Rules の畳み込み規則）。Task 4 のみ「example 実装」と「実 DPI 手動検証・記録」という独立した2つの検証可能な成果物を持つため `4.1`/`4.2` の2段構成を維持する。
-- **Task 4.2 受け入れ不成立・要スコープ判断（2026-07-18 開発者判断）**: 実 DPI≠96 の2水準（DELL S3221QS dpi=120/125% ＋ 副 dpi=192/200%）で `collision-probe` を実走し、k=1.0 下の②③④自動 assert・⑤目視解決（Head/None/Bust・静止 Δ=(0,0)）・192 の外部 GetClientRect=382×547 を実測した（`acceptance-record.md` に証跡あり）。**しかしこれは受け入れとして不十分**——areka の基本設計は **DPI追従**（画面 DPI に追従してマスコット拡大縮小）であるのに、現状 `scale()` は常に 1.0 を返し、両 DPI 水準ともマスコットは同一物理寸（382×547・k=1.0）＝**ヒットテストの座標経路が完全に同一**だった。ゆえに 2 水準は「座標配管が DPI で誤再スケールしない（k=1.0 plumbing の DPI-clean 性）」は確認できたが、**DPI追従の核心＝「scale≠1.0（拡大表示）状態での当たり判定の正しさ（点を k で縮約して照合）」は未実装かつ未検証**。開発者が「これでは受け入れできない」と判断。→ DPI追従下の当たり判定対応（`EmoPresenter::hit_region` で点÷k・純関数の scale 対応・決定論 unit 檻・実機再検証）の実装が要る。射程（collision-geometry 拡張／emo-present の DPI追従レンダリングと連動／別 spec）は開発者のスコープ判断待ち。design の k=1.0 限定契約（Revalidation Trigger 2）自体が DPI追従を基本設計と扱えば要見直し。
+- **Task 4.2 合格（2026-07-18・却下→切り出し確認の上で承認）**: 実 DPI≠96 の2水準（DELL S3221QS dpi=120/125% ＋ 副 dpi=192/200%）で `collision-probe` を実走し、k=1.0 下の②③④自動 assert・⑤目視解決（Head/None/Bust・静止 Δ=(0,0)）・192 の外部 GetClientRect=382×547 を実測（`acceptance-record.md` に証跡）。**本 spec 要件 7.3 本文＝k=1.0 契約下の座標契約実証は充足**。当初 2026-07-18 に一度却下——理由は areka の基本設計 **DPI追従**（scale≠1.0 で拡大表示された状態の当たり判定＝点÷k）が未実装・未検証だったこと。ただしこれは本 spec 要件本文の外の設計思想ギャップであり、新 spec `areka-P0-emo-dpi-scaling`（render 基盤・emo が k× 実拡大レンダ）＋`areka-P0-collision-dpi-hittest`（`EmoPresenter::hit_region` で点÷k・fake-k 決定論 unit・scale≠1.0 実機受け入れ・k=1.0 契約改訂）へ**切り出し済み**（roadmap 追記㉚・research.md §13）。開発者が「却下理由が別仕様に切り出されたことを確認したうえで合格とせよ」と承認（2026-07-18）＝本 spec は k=1.0 契約下で完成。design の k=1.0 限定契約（Revalidation Trigger 2）の見直しは `collision-dpi-hittest` の領分。
