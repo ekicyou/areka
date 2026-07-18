@@ -29,7 +29,7 @@
   - _Requirements: 4.1, 4.2, 4.3, 4.4, 5.1, 5.2, 5.3, 5.4_
   - _Boundary: HitRegionContract, Resolver_
 
-- [ ] 4. Probe: リゾルバの座標契約を実 DPI・本番 emo2 表示で実測する
+- [x] 4. Probe: リゾルバの座標契約を実 DPI・本番 emo2 表示で実測する
 - [x] 4.1 実 DPI 受け入れ example を実装する（本番窓寸規則駆動・マウス経路照合込み）
   - `crates/areka/examples/collision-probe.rs` を新設し、`#[path]` で `target_map.rs`／`hit_region.rs`／`placement/mod.rs` を私有 include する（read-only 再利用・production 不改変）
   - `placement::spawn::spawn_ghost_windows` を意図的に誤った placeholder 寸で呼び窓を生成（`Anchored` 付与）→ `attach_target` → `apply(ShowSurface { surface_id: 1000, binds: 実 bind 値集合 })` を適用する
@@ -43,7 +43,7 @@
   - _Depends: 3_
   - _Boundary: Probe_
 
-- [ ] 4.2 実 DPI（≠96）2 水準での手動受け入れ検証を実施し acceptance-record.md へ記録する
+- [x] 4.2 実 DPI（≠96）2 水準での手動受け入れ検証を実施し acceptance-record.md へ記録する
   - per-monitor v2・実 DPI ≠96 を2水準以上（例: 125%/150%/200%）で collision-probe example を実行し、①〜⑥のプロトコル全項目を確認する
   - k=1.0 assert・read_back anchor assert・マウス経路ペア列（Δ=(0,0) 一致）・Head/Bust/None の目視解決一致を実測値（物理 px）で表へ記録する
   - 撫で一周（マウス→SHIORI→応答 talk）の統合実機サインオフは本 spec の対象外（7.4・`input-events` Req8.3 が実施）である旨を判定行に明記する
@@ -55,4 +55,4 @@
 - **並列マーカー不使用の理由**: 4 major task の新規コードは design.md「Allowed Dependencies」の crate 依存方向（`areka-parsers → areka-emo-atlas → areka-emo-compose → areka-emo-present → areka(bin)`）どおりに前段を直接呼び出す線形連鎖（Task2 の `EmoPresenter::hit_region` は Task1 の `hit_region()` を呼ぶ／Task3 の `resolve_hit_region` は Task2 の `EmoPresenter::hit_region` を呼ぶ／Task4 は Task3 の `resolve_hit_region` を呼ぶ）。真のデータ依存が全段に渡るため `(P)` マーカーは1件も付与していない。
 - **要件 7.4 は本 spec 内で実装しない**: 「撫で一周の統合実機サインオフを撫でクラスタ合流サインオフへ帰属させる」は Coordination Notes C-4／Non-Goals で既に決着済みの設計判断であり、実装作業を要さない。Task 4.2 の acceptance-record 判定行にその旨を明記することでカバーする（意図的な繰延・追跡先＝`input-events` Req8.3）。
 - **Task 1/2/3 が単一チェックボックスに畳まれている理由**: 各 major task の実質的な作業単位が「1コンポーネントの実装＋その単体テスト」という不可分の1成果物であるため（Task Hierarchy Rules の畳み込み規則）。Task 4 のみ「example 実装」と「実 DPI 手動検証・記録」という独立した2つの検証可能な成果物を持つため `4.1`/`4.2` の2段構成を維持する。
-- **Task 4.2 は自律 /kiro-impl では完了不能な手動ゲート（2026-07-18）**: 実 DPI≠96 の2水準＋GPU 窓セッションでの probe 実走と、反トートロジー条件（7.3(a)）を満たす**目視**による頭/胸/背景の狙いを要するため、非対話の自律実行では実測値を埋められない。`acceptance-record.md` を PENDING 雛形（probe プロトコル①〜⑥と1:1・DPI 2水準の記入枠・7.4 担当外注記は確定済みで記入済み）として作成済み。実施者が `cargo run -p areka --example collision-probe` を実 DPI≠96 で走らせ、実測値記入・各項目 PASS 更新・PENDING ブロック削除で完了する。Task 1–4.1（実装成果物）は全て実装→独立レビュー APPROVED→コミット済み。
+- **Task 4.2 完了（2026-07-18・協働手動実行）**: 実 DPI≠96 の2水準（DELL S3221QS 3840×2160 dpi=120/125% ＋ 副 2880×1800 dpi=192/200%）で `collision-probe` を実走。②③④は起動時に自動 hard assert 通過（surface1000=382×547・k=1.0・read_back Head/Bust 中心不透明）。⑤は開発者の目視操作（実カーソルで頭/胸/背景を狙う・反トートロジー遵守＝probe は SetCursorPos/SendInput 不使用）で Head/None/Bust の解決一致＋マウス経路ペア列 静止 Δ=(0,0) を両水準で実測。dpi=192 の数値 k=1.0 は別プロセス（PowerShell・per-monitor v2）の `GetClientRect`＝char 窓 382×547（=surface_size）・DPI192・非拡大 で外部確定（＝DPI 比例拡大しない k=1.0 契約の実機実証）。`acceptance-record.md` に全実測値・全項目 PASS を記録（PENDING 除去）。動作中の過渡 Δ が 200% で最大 9px 出るのは physical px 移動量 2倍による時刻差＝系統的オフセットでない（静止行は全 Δ=(0,0)）。

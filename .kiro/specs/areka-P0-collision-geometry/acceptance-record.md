@@ -1,94 +1,88 @@
 # 実 DPI 受け入れ検証記録（Task 4.2 / 要件 7.3・7.4）
 
-> **状態: PENDING（未実施・手動実 DPI 実行待ち）**
->
-> 本記録は `cargo run -p areka --example collision-probe` を **per-monitor v2・実 DPI≠96 の2水準以上**で実走し、
-> probe の rustdoc プロトコル①〜⑥を目視・実測で確認した結果を記入するための雛形である。
-> **未記入セル（`—`）と `PENDING` 判定が残る限り Task 4.2 は未完了**であり、`/kiro-impl` の自律実行では埋められない
-> （実 DPI≠96 のGPU窓セッションと、反トートロジー条件〔7.3(a)〕を満たす**目視**による頭/胸/背景の狙いを要するため）。
-> 実施者は下記「実行手順」に従い、実測値を埋め、各項目の判定を PASS/FAIL へ更新し、本ブロックを削除すること。
+- 実施日: 2026-07-18
+- 実施者: 目視操作＝開発者（実カーソルで頭/胸/背景を目視で狙う）／駆動・記録・自動 assert・外部窓寸実測＝Claude（Claudia）
+- 対象: `cargo run -p areka --example collision-probe`（debug ビルド・PID 26028 他）
+- 検証環境（per-monitor v2・全座標は物理 px で実測）:
+  - **DPI 水準①（PRIMARY）**: DELL S3221QS・3840×2160・**dpi=120（125%）**・rcMonitor (0,0)-(3840,2160)・work (0,0)-(3840,2100)
+  - **DPI 水準②（SECONDARY）**: 2880×1800・**dpi=192（200%）**・rcMonitor (-2880,365)-(0,2165)
+  - DPI awareness は wintf `WinApp` 初期化がプロセスへ per-monitor v2 を設定。**dpi=96 は不使用**（両モニタとも ≠96）。
+  - モニタ実効 DPI は per-monitor-v2 aware スレッドから `GetDpiForMonitor(MDT_EFFECTIVE_DPI)` で実測（120／192）。
 
-- 実施日: —
-- 実施者: —（実 DPI≠96 実機での目視サインオフ担当。人間または表示可能な agent）
-- 対象: `cargo run -p areka --example collision-probe`（ビルド種別・PID を記入）
-- 検証環境（記入）:
-  - **DPI 水準①**: モニタ名 ・解像度 ・**dpi=___（___%）** ・work area ___
-  - **DPI 水準②**: モニタ名 ・解像度 ・**dpi=___（___%）** ・work area ___
-  - per-monitor v2（example は `WinApp` 経由で DPI awareness 設定・全座標は物理 px で実測）
-  - **dpi=96 のみの確認は不合格**（プロトコル①・`window-placement` 前例に倣う）
+> **反トートロジー遵守（7.3(a)）**: probe は `SetCursorPos`/`SendInput` を一切呼ばない（コード grep で確認済み）。狙点は操作者の**目視**による実カーソル移動のみ。collision 実値から合成した座標の注入は行っていない。
 
 ---
 
-## 実行手順（probe rustdoc ①〜⑥に対応）
+## 表示対象（②・両水準共通）
 
-1. 実 DPI≠96 のモニタ（125%/150%/200% ＝ dpi 120/144/192 のいずれか2水準以上）で
-   `cargo run -p areka --example collision-probe` を起動する。
-2. probe は自動で本番 emo2 の `surface1000`（実 bind `[1101,1206,1302,1502,1800]`）を shell target（scope=0）へ実表示し、
-   placeholder 誤寸(100×100)で spawn した窓を本番 `resize_window_to` で実寸へ反映する。
-3. **k=1.0 assert（③・自動 hard assert）**: probe が次フレームで `GetClientRect`＝`surface_size()`・`scale()==1.0` を assert。
-   パニックせず通過すれば PASS。落ちたら実測値（client 寸法／surface 寸法／scale）をFAIL証跡として記録。
-4. **描画一致 anchor（④・自動）**: probe が `read_back` で Head 中心(182,96)／Bust 中心(181,298)の不透明を assert。通過で PASS。
-5. **解決一致（⑤・目視が証拠力の中核）**: 画面に見えるゴーストの**頭／胸／背景を目視で狙って**カーソルを移動し、
-   各記録行で 500ms 以上静止。probe が `GetCursorPos→ScreenToClient` した client 点を `resolve_hit_region(_,0,x,y)` へ渡し
-   live ログする解決結果（`"Head"`/`"Bust"`/`None`）と、視覚上その部位に載っている事実の一致を記録。
-   併せてマウス経路ペア列（`client_point` vs `ScreenToClient(GetCursorPos())`・Δ=(0,0) 厳密一致）を実測表へ併記。
-   - **禁止（反トートロジー 7.3(a)）**: collision 実値から合成した screen 座標への `SetCursorPos`/`SendInput` を証跡としてはならない。狙点は目視由来のみ。
-6. **判定（⑥）**: 全項目 PASS かつ dpi≠96 を2水準で充足したことを下の判定行に明記する。
+- **surface1000**（emo2 で collision を持つ唯一のサーフェス）を有効 bind 実値 `[1101,1206,1302,1502,1800]` 付きで shell target（scope=0）へ実表示。
+- placeholder **誤寸 100×100** で spawn → 本番 `placement::follow::resize_window_to` で現表示実寸へ反映（戻り値 **true**）。
+- 現表示実寸 = `text_slot_view(shell_target(0)).surface_size()` = **382×547**（scale=1.0）。
+- 当たり判定（surfaces.txt・サーフェス px）: **Head=(93,62,271,130)** / **Bust=(133,270,229,326)**。
 
 ---
 
-## プロトコル結果（rustdoc ①〜⑥・DPI 水準ごとに記入）
-
-### DPI 水準①（dpi=___）
+## DPI 水準①（dpi=120 / 125% / PRIMARY）
 
 | # | 項目 | 結果 | 実測証跡（物理 px） |
 |---|---|---|---|
-| ① | per-monitor v2・dpi≠96 で実行 | PENDING | dpi=___ / dpi=96 不使用 |
-| ② | surface1000 を実 bind 付きで shell target(scope=0) へ実表示 | PENDING | 表示 id ・bind 集合 ・窓生成→resize 経路 |
-| ③ | k=1.0 assert（GetClientRect==surface_size() かつ scale()==1.0・自動 hard assert） | PENDING | GetClientRect ___×___ ／ surface_size ___×___ ／ scale ___ |
-| ④ | read_back 描画 anchor（Head 中心(182,96)／Bust 中心(181,298) 不透明・自動） | PENDING | Head α=___ ／ Bust α=___ |
-| ⑤ | 解決一致（目視で Head／Bust／None を狙い resolve 結果一致） | PENDING | 下の「解決一致 実測表」参照 |
-| ⑥ | 結果と実 DPI 値の記録 | PENDING | 本記録 |
+| ① | per-monitor v2・dpi≠96 で実行 | **PASS** | dpi=120（≠96）で実行。dpi=96 不使用 |
+| ② | surface1000 を実 bind 付きで shell target(scope=0) へ実表示 | **PASS** | `apply(ShowSurface) surface_id=1000 width=382 height=547`・bind `[1101,1206,1302,1502,1800]`・placeholder 100→resize_window_to→382×547（true） |
+| ③ | k=1.0 hard assert（GetClientRect==surface_size ∧ scale==1.0） | **PASS** | probe 内自動 assert 通過: `client_w=382 client_h=547 surface_w=382 surface_h=547 scale=1.0`（次フレームで実窓 `GetClientRect`・`WindowPos` ミラーではない） |
+| ④ | read_back 描画 anchor（Head 中心(182,96)／Bust 中心(181,298) 不透明） | **PASS** | `assert_drawn_anchor` が panic せず通過（α=0xFF）。read_back は合成パイプライン由来ゆえ DPI 非依存 |
+| ⑤ | 解決一致（目視で Head／Bust／None を狙い resolve 結果一致） | **PASS** | 下の「解決一致 実測表①」参照 |
+| ⑥ | 結果と実 DPI 値の記録 | **PASS** | 本記録 |
 
-#### 解決一致 実測表（DPI 水準①・目視狙点）
+### 解決一致 実測表①（dpi=120・目視狙点・静止行 Δ=(0,0)）
 
-| 狙った部位 | client_x | client_y | s2c_x | s2c_y | Δx | Δy | resolve 結果 | 目視一致 |
+| 狙った部位（目視） | client_x | client_y | s2c_x | s2c_y | Δx | Δy | resolve 結果 | 目視一致 |
 |---|---|---|---|---|---|---|---|---|
-| Head（不透明） | — | — | — | — | — | — | — | — |
-| Bust（不透明） | — | — | — | — | — | — | — | — |
-| 背景（None・脚注※） | — | — | — | — | — | — | None | — |
+| Head（頭・不透明） | 179 | 84 | 179 | 84 | 0 | 0 | **Some("Head")** | ✓ |
+| Bust（胸・不透明） | 187 | 278 | 187 | 278 | 0 | 0 | **Some("Bust")** | ✓ |
+| None（腹〜下半身・不透明・判定枠外） | 204 | 500 | 204 | 500 | 0 | 0 | **None** | ✓ |
 
-※ 背景（None）行はクリック透過（`WS_EX_TRANSPARENT`＋`HTTRANSPARENT`）によりイベント自体が窓へ届かず、
-ペア列（client_point）は欠測が正しい挙動（design C-3 整合）。resolve は目視狙点（ScreenToClient 由来）で None を確認する。
-
-### DPI 水準②（dpi=___）
-
-| # | 項目 | 結果 | 実測証跡（物理 px） |
-|---|---|---|---|
-| ① | per-monitor v2・dpi≠96 で実行 | PENDING | dpi=___ / dpi=96 不使用 |
-| ② | surface1000 を実 bind 付きで shell target(scope=0) へ実表示 | PENDING | 表示 id ・bind 集合 ・窓生成→resize 経路 |
-| ③ | k=1.0 assert（GetClientRect==surface_size() かつ scale()==1.0・自動 hard assert） | PENDING | GetClientRect ___×___ ／ surface_size ___×___ ／ scale ___ |
-| ④ | read_back 描画 anchor（Head 中心(182,96)／Bust 中心(181,298) 不透明・自動） | PENDING | Head α=___ ／ Bust α=___ |
-| ⑤ | 解決一致（目視で Head／Bust／None を狙い resolve 結果一致） | PENDING | 下の「解決一致 実測表」参照 |
-| ⑥ | 結果と実 DPI 値の記録 | PENDING | 本記録 |
-
-#### 解決一致 実測表（DPI 水準②・目視狙点）
-
-| 狙った部位 | client_x | client_y | s2c_x | s2c_y | Δx | Δy | resolve 結果 | 目視一致 |
-|---|---|---|---|---|---|---|---|---|
-| Head（不透明） | — | — | — | — | — | — | — | — |
-| Bust（不透明） | — | — | — | — | — | — | — | — |
-| 背景（None・脚注※） | — | — | — | — | — | — | None | — |
+- Head 静止サンプル: client_y ∈ [77,127]（Head 枠 62–130 内）・28 サンプル・全 Δ=(0,0)。
+- Bust 静止サンプル: client_y ∈ [273,325]（Bust 枠 270–326 内）・全 Δ=(0,0)。
+- None 静止サンプル: client_y ∈ [131,546]（枠間 131–269・枠下 327–）・193 サンプル・全 Δ=(0,0)。**None 行も本番マウス経路で観測できたのは、狙点が「透明余白」でなく「不透明に描かれた判定枠外の胴体」だから**（クリック透過は透明画素のみ・design C-3 整合）。
+- 動作中の過渡のみ Δ=(0,0) から外れる（dy=-1・下方向移動時の 1px サンプル時刻差）＝設計脚注どおり・記録行（静止）は厳密一致。
 
 ---
 
-## 撫で一周の統合実機サインオフ（要件 7.4）— 本 spec の対象外（記入不要）
+## DPI 水準②（dpi=192 / 200% / SECONDARY）
 
-> 本判定行は測定でなく**確定済みの設計判断**であり、実行前に記入済みである。
+char 窓を目視操作で SECONDARY（200%）モニタへドラッグして計測。
+
+| # | 項目 | 結果 | 実測証跡（物理 px） |
+|---|---|---|---|
+| ① | per-monitor v2・dpi≠96 で実行 | **PASS** | char 窓 `GetDpiForWindow=192`（≠96）・SECONDARY モニタ上 |
+| ② | surface1000 を shell target(scope=0) で表示（水準①から継続） | **PASS** | 同一 char 窓（surface1000）を 200% モニタへ移動。窓は再合成せず内容不変 |
+| ③ | k=1.0 数値確認（外部 per-monitor-v2 aware `GetClientRect`） | **PASS** | 別プロセス（PowerShell・per-monitor v2）実測: char 窓 **client=382×547**（=surface_size）・windowRect (-432,1618)-(-50,2165)＝width 382/height 547（frameless ゆえ client≡window）・`GetDpiForWindow=192`。**窓は DPI 比例拡大せず（もし k≠1.0 なら 764×1094）＝k=1.0 が dpi=192 で数値確定** |
+| ④ | read_back 描画 anchor | **PASS（DPI 非依存）** | ④ は合成ビットマップ（emo compose パイプライン）由来で表示モニタに非依存。水準①で通過済み・200% でも合成内容は不変 |
+| ⑤ | 解決一致（目視で Head／Bust／None を狙い resolve 結果一致） | **PASS** | 下の「解決一致 実測表②」参照 |
+| ⑥ | 結果と実 DPI 値の記録 | **PASS** | 本記録 |
+
+### 解決一致 実測表②（dpi=192・目視狙点・静止行 Δ=(0,0)）
+
+| 狙った部位（目視） | client_x | client_y | s2c_x | s2c_y | Δx | Δy | resolve 結果 | 目視一致 |
+|---|---|---|---|---|---|---|---|---|
+| Head（頭・不透明） | 171 | 108 | 171 | 108 | 0 | 0 | **Some("Head")** | ✓ |
+| Bust（胸・不透明） | 177 | 296 | 177 | 296 | 0 | 0 | **Some("Bust")** | ✓ |
+| None（首〜胴・不透明・判定枠外） | 177 | 197 | 177 | 197 | 0 | 0 | **None** | ✓ |
+
+- Head 静止: (203,72)/(203,77)/(171,108) 等（Head 枠 62–130 内）・Δ=(0,0)。
+- Bust 静止: (177,296)/(177,295)/(165,280) 等（Bust 枠 270–326 内）・Δ=(0,0)。
+- None 静止: (177,197)/(177,244)/(177,162) 等（枠間 131–269）・Δ=(0,0)。
+- **動作中の過渡 Δ が最大 9px** まで観測（水準①は最大 1px）。**これは欠陥ではない**——同一の視覚上の手の速さでも 200% モニタは物理 px 移動量が 2倍ゆえ、`WM_MOUSEMOVE` lparam（メッセージ投函時刻）と `GetCursorPos`（ハンドラ実行時刻）のサンプル時刻差が physical px で約 2倍に出るだけ（過渡 23/899 行）。**静止行（記録対象）は全て Δ=(0,0)＝系統的オフセット皆無**（awareness 経路不一致なら静止でも Δ≠0 になるはずだが、それが無い）。design プロトコル ⑤ 脚注どおり。
+
+---
+
+## 撫で一周の統合実機サインオフ（要件 7.4）— 本 spec の対象外
+
+> 本判定行は測定でなく**確定済みの設計判断**。
 
 撫で一周（マウス入力→SHIORI→応答 talk）の統合実機サインオフは**本 spec の対象外**であり、
 **撫でクラスタ合流サインオフ＝`input-events` Req8.3** が1回で実施する（要件 7.4・design Coordination Notes C-4／Non-Goals で決着済み）。
-本 probe の証跡は**表示側座標契約**（k=1.0）と**マウス経路の空間一致**（`client_point` ≡ `ScreenToClient`・Δ=(0,0)）に限られ、
+本 probe の証跡は**表示側座標契約**（k=1.0・両水準）と**マウス経路の空間一致**（`client_point` ≡ `ScreenToClient`・静止行 Δ=(0,0)・両水準）に限られ、
 本 spec の resolver が main へマージ済みであることが合流サインオフの前提供給となる。
 マウス由来座標と collision 空間の**意味的**一致（撫で意味論・Reference4 組立～応答 talk）は合流サインオフのみが検証する。
 
@@ -96,6 +90,9 @@
 
 ## 判定
 
-**判定: PENDING（未実施）** — 実 DPI≠96 の2水準で全項目 PASS を確認し、本行を
-「**全項目 PASS（dpi≠96 必達条件を ___/___ の 2 水準で充足）**」へ更新すること。
-7.4 の担当外注記（上節）は確定済みで記入済み。
+**全項目 PASS（dpi≠96 必達条件を 120（125%）／192（200%）の 2 水準で充足）**
+
+- 表示側恒等契約（k=1.0）: 水準① probe 内 hard assert（GetClientRect==surface_size ∧ scale==1.0）／水準② 外部 per-monitor-v2 `GetClientRect`＝382×547（=surface_size）・DPI192・非拡大＝数値確定。
+- マウス経路の空間一致: 両水準とも静止記録行 Δ=(0,0) 厳密一致（過渡の physical px 差は DPI 比例で説明でき系統的オフセットなし）。
+- 解決一致: 両水準とも目視で狙った Head／Bust／None が resolve 結果と一致（反トートロジー遵守＝狙点は目視のみ・SetCursorPos/SendInput 不使用）。
+- 7.4 の統合実機サインオフは撫でクラスタ合流（input-events Req8.3）へ帰属（本 spec 対象外）。
