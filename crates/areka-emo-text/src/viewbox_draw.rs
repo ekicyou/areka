@@ -1284,6 +1284,51 @@ mod tests {
         }
     }
 
+    /// DD-9: 改行を一切含まない行内縮小（visible=6「おっはよー！」→ visible=2「おっ」）で
+    /// oracle（全域再描画）と viewbox（ダーティスクロール）の read_back が byte 一致する。
+    /// `diag_line_boundary_dropout_vs_oracle` の後方ジャンプ検分が捕えた退避インク未クリア欠陥が
+    /// **改行非依存**（本 spec の遅延化と直交・後方時刻ジャンプ/un-reveal で単一行が縮む任意
+    /// アクセスで再現）であることを恒久固定する。guard 拡張（viewbox.rs DD-9）で緑になる。
+    #[test]
+    fn within_line_shrink_no_newline_stays_byte_equal_to_oracle() {
+        let mut rig = Rig::new();
+        let image = (320u32, 122u32);
+        let mut oracle_surface = rig.attach(image, 1.0);
+        let mut viewbox_surface = rig.attach(image, 1.0);
+        let mode = WritingMode::HorizontalTb;
+        let model = geo_model(Some(28));
+        let font = ResolvedFont::resolve(&model);
+        let region = TextRegion::resolve(&model, image, mode);
+        let contract = ScaleContract::new(1.0, None);
+        let config = TextLayerConfig::default();
+        let factory = rig.core.dwrite_factory().expect("dwrite_factory").clone();
+        let metrics = DWriteMetrics::new(&factory, &font, mode, &config).expect("DWriteMetrics");
+        let mut oracle = DrawExecutor::new(&rig.core).expect("DrawExecutor");
+        let mut viewbox = ViewboxExecutor::new(&rig.core).expect("ViewboxExecutor");
+        // 単一行・改行なし。visible を 6→2 と縮める 2 フレーム（後方時刻ジャンプの un-reveal 相当）。
+        let items: Vec<TextItem> = "おっはよー！"
+            .chars()
+            .map(|ch| TextItem::Glyph { ch })
+            .collect();
+        for &visible in &[6usize, 2usize] {
+            let lines = LayoutEngine::layout(&items, visible, &region, mode, font.height, &metrics);
+            let window = LayoutEngine::visible_window(&lines, &region, mode);
+            let canvas = ContentCanvas::from_layout(&lines, &region, mode);
+            oracle
+                .render(&canvas, &window, &font, mode, &contract, &mut oracle_surface)
+                .expect("oracle render");
+            viewbox
+                .render(&canvas, &window, &font, mode, &contract, &mut viewbox_surface)
+                .expect("viewbox render");
+            let ob = oracle_surface.read_back().expect("oracle read_back");
+            let vb = viewbox_surface.read_back().expect("viewbox read_back");
+            assert_eq!(
+                ob, vb,
+                "行内縮小 visible={visible} で viewbox が oracle と byte 一致（DD-9・退避インク一掃）"
+            );
+        }
+    }
+
     // ════ live-diff pixel 等価主檻（task 10・R4.5/R6.1/R6.2/R6.3/R6.5/R8.1・design Testing
     //      Strategy「Integration Tests #1」） ════
     //

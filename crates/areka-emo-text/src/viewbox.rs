@@ -201,12 +201,17 @@ impl ScrollPlanner {
             return FramePlan::FullClear;
         }
         // 後方（un-reveal/un-scroll）縮退: 内容が前回確定より減った＝スクロールアウトした行の
-        // 再露出を面内 blit で保持できない（保持していない）ため、露出帯 ∪ 変化行の差分描画では
-        // 取りこぼす。全域ダーティ（blit=0・面全域・全住人）へ縮退して正しさを優先する（既存の
-        // format 変更/不整合縮退と同型・design Error Handling「最悪でもレガシー全域再描画と等価な
-        // 1 フレーム」）。前方 typewriter では住人は単調増加ゆえ通常不発——注入時刻の後方ジャンプ
-        // 等の異常アクセスに対する防御（確定 content を再露出する任意アクセスパターンで byte 等価を保つ）。
-        if canvas.residents.len() < self.prev_lines.len() {
+        // 再露出、または確定行の行内縮小（同一 index 行の block 位置移動・extent 縮小）を面内
+        // blit＋差分描画で保持できない（退避インクを取りこぼす）ため、全域ダーティ（blit=0・
+        // 面全域・全住人）へ縮退して正しさを優先する（既存の format 変更/不整合縮退と同型・
+        // design Error Handling「最悪でもレガシー全域再描画と等価な 1 フレーム」・DD-9）。
+        // 前方 typewriter（住人単調増加・prefix 伸長で extent 増加・block 不動）では不発ゆえ
+        // 増分ホットパスは維持——注入時刻の後方ジャンプ・un-reveal 等（確定 content を縮める
+        // 任意アクセスパターン）に対する防御で byte 等価（oracle 全域再描画）を保つ。
+        // 遅延化（newline-defer）で trailing 空行が消え、旧・即時意味論では行数減少で偶然
+        // マスクされていた行内縮小欠陥が露出したため、判定を行数減少から被覆不能変化へ拡張した。
+        let new_lines = Self::committed_lines(canvas, mode);
+        if Self::is_backward_shrink(&self.prev_lines, &new_lines) {
             let (dirty, draw_lines) = Self::derive_dirty_with_overhangs(
                 canvas,
                 window,
@@ -402,6 +407,36 @@ impl ScrollPlanner {
             .iter()
             .map(|resident| line_fingerprint(resident, mode))
             .collect()
+    }
+
+    /// 後方縮退（面内 blit＋差分描画で保持できない content 減少）の判定（純粋・決定論・DD-9）。
+    ///
+    /// 次のいずれかで true——(a) 行数減少（`new_lines.len() < prev_lines.len()`＝行がスクロール
+    /// アウト/消滅）、(b) 共通 prefix の同一 index 行で **block 軸位置が動いた**（旧位置のインクを
+    /// 新変化行矩形が覆えない）、(c) 同一 index 行で **extent が縮んだ**（旧インクの外側＝退避分を
+    /// 新矩形が覆えない）。前方 typewriter（prefix 伸長で extent 増加・block 不動）では false ゆえ
+    /// 増分描画のホットパスを維持する。行内開始位置は layout の不変則（全行同一の行内開始）ゆえ、
+    /// block 位置＋extent の指紋だけで被覆可否は健全に判定できる（text 内容は覆えれば無関係）。
+    fn is_backward_shrink(prev_lines: &[CommittedLine], new_lines: &[CommittedLine]) -> bool {
+        if new_lines.len() < prev_lines.len() {
+            return true;
+        }
+        prev_lines.iter().zip(new_lines).any(|(prev, new)| {
+            // (b) block 軸位置が動いた行は、旧位置のインクを新変化行矩形が覆えない。
+            if prev.block_pos_bits != new.block_pos_bits {
+                return true;
+            }
+            // (c) extent が縮んだ行は、旧インクの退避分（縮小の外側）を新矩形が覆えない。
+            let (pw, ph) = (
+                f32::from_bits(prev.extent_bits.0),
+                f32::from_bits(prev.extent_bits.1),
+            );
+            let (nw, nh) = (
+                f32::from_bits(new.extent_bits.0),
+                f32::from_bits(new.extent_bits.1),
+            );
+            nw < pw || nh < ph
+        })
     }
 
     /// ダーティ矩形と描画対象行を導出する（純粋・状態不変・DD4）。
@@ -993,6 +1028,92 @@ mod tests {
         // 実測はみ出しは COM 層 render が付与。本 pure 層檻は既定 0 の幾何を檻化）。露出帯なし（blit=0）。
         assert_eq!(dirty, vec![phys(0, 0, 21, 11)], "現在行のみ");
         assert_eq!(draw, vec![0], "描画対象は現在行のみ");
+    }
+
+    // ── DD-9: 行内縮小の後方縮退（遅延化で到達可能・`plan` の guard 経路）──
+
+    /// DD-9: 同一 index 行の extent が縮む（行内縮小・改行なし）と `plan` は全域ダーティ
+    /// （blit 0・面全域・全 GlyphRun 住人）へ縮退する——差分描画では退避インク（縮小の外側）を
+    /// 取りこぼすため（後方時刻ジャンプ・un-reveal で確定行が縮む任意アクセスへの防御）。
+    #[test]
+    fn within_line_shrink_falls_back_to_full_dirty() {
+        let contract = ScaleContract::new(1.0, None);
+        let mode = WritingMode::HorizontalTb;
+        let vr = (Some(0), Some(100), Some(0), Some(400));
+        let surface = (400u32, 100u32);
+        // 前回確定＝広い行（全角 4「ああああ」・幅 40）。
+        let wide = canvas_for(
+            &[
+                TextItem::Glyph { ch: 'あ' },
+                TextItem::Glyph { ch: 'あ' },
+                TextItem::Glyph { ch: 'あ' },
+                TextItem::Glyph { ch: 'あ' },
+            ],
+            mode,
+            vr,
+            10.0,
+        );
+        let mut planner = ScrollPlanner::new();
+        commit_initial(&mut planner, &wide, mode, &contract, surface);
+        // 新 canvas＝同 index 行が縮む（全角 2「ああ」・幅 20・block 不動）。
+        let narrow = canvas_for(
+            &[TextItem::Glyph { ch: 'あ' }, TextItem::Glyph { ch: 'あ' }],
+            mode,
+            vr,
+            10.0,
+        );
+        let plan = planner.plan(&narrow, &window(0, 0.0), mode, &contract, surface);
+        match plan {
+            FramePlan::Update {
+                blit,
+                dirty,
+                draw_lines,
+            } => {
+                assert_eq!(blit, (0, 0), "縮退は blit 0");
+                assert_eq!(dirty, vec![phys(0, 0, 400, 100)], "面全域 1 枚（退避インク一掃）");
+                assert_eq!(draw_lines, vec![0], "全 GlyphRun 住人を再描画");
+            }
+            other => panic!("行内縮小は全域ダーティ Update を期待: {other:?}"),
+        }
+    }
+
+    /// DD-9: 前方伸長（extent 増加・block 不動）は縮退せず増分（変化行のみ dirty）を維持する
+    /// ——typewriter ホットパスが guard の過剰発火で全域再描画へ落ちないことの固定。
+    #[test]
+    fn forward_line_growth_stays_incremental() {
+        let contract = ScaleContract::new(1.0, None);
+        let mode = WritingMode::HorizontalTb;
+        let vr = (Some(0), Some(100), Some(0), Some(400));
+        let surface = (400u32, 100u32);
+        let narrow = canvas_for(
+            &[TextItem::Glyph { ch: 'あ' }, TextItem::Glyph { ch: 'あ' }],
+            mode,
+            vr,
+            10.0,
+        );
+        let mut planner = ScrollPlanner::new();
+        commit_initial(&mut planner, &narrow, mode, &contract, surface);
+        // 伸長（全角 2→4・同一行・block 不動）。
+        let grown = canvas_for(
+            &[
+                TextItem::Glyph { ch: 'あ' },
+                TextItem::Glyph { ch: 'あ' },
+                TextItem::Glyph { ch: 'あ' },
+                TextItem::Glyph { ch: 'あ' },
+            ],
+            mode,
+            vr,
+            10.0,
+        );
+        let (blit, dirty) =
+            expect_update(&planner.plan(&grown, &window(0, 0.0), mode, &contract, surface));
+        assert_eq!(blit, (0, 0));
+        assert_ne!(
+            dirty,
+            vec![phys(0, 0, 400, 100)],
+            "全域縮退しない（増分を維持）"
+        );
+        assert_eq!(dirty.len(), 1, "変化行 0 の矩形のみ（露出帯なし・blit 0）");
     }
 
     /// D2 の核: 実測インクはみ出し（[`LineOverhang`]）を渡すと変化行のダーティが em ボックスから
