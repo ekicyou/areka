@@ -155,7 +155,7 @@ crates/areka/src/emo2_boot/move_cue.rs   # MoveDirective（完全語彙型）・
 
 ### Modified Files
 
-- `crates/dola/src/cue/command.rs` — `Choice` へ `references`（`serde(default, skip_serializing_if)`）追加・`Cursor{x,y}` variant 追加・`CueTarget::Window` variant 追加・キャリア正準コンストラクタ/抽出子（`command_carrier`/`as_command_carrier`）・`Custom` rustdoc 改訂（R8.7）・ワイヤ檻の追加（Cursor/references/キャリア形。既存 8 variant 檻は無改変で緑）。
+- `crates/dola/src/cue/command.rs` — `Choice` へ `references`（`serde(default, skip_serializing_if)`）追加・`Cursor{x,y}` variant 追加・`CueTarget::Window` variant 追加・キャリア正準コンストラクタ/抽出子（`command_carrier`/`as_command_carrier`）・`Custom` rustdoc 改訂（R8.7）・ワイヤ檻の追加（Cursor/references/キャリア形。既存 8 variant 檻は**期待 JSON リテラル不変**＝ワイヤ形バイト同一・檻内の `Choice` 構築行 `:473-476` のみ `references: vec![]` の機械的追随）。
 - `crates/dola/src/cue/sink.rs` — `cue_target_of` へ `Cursor→Balloon` アーム追加・`Custom→None` の注釈を「名前レベル選別への委譲」へ改訂（R8.7）・**新設** `command_target_of(name)->Option<CueTarget>`（名前権威表: `"move"→Window`・他 `None`）。
 - `crates/dola/src/cue/runtime.rs` — tick の Choice アームを「バッグ積み＋配送列合流」（案C）へ変更・rustdoc の「Choice 除外」文言更新（R8.6）。
 - `crates/dola/tests/cue/runtime_test.rs` — `:156-163` の先積み一択檻を**意図的更新**（配送列に順序どおり現れる檻＋バッグ並存檻へ対置換）。
@@ -303,7 +303,7 @@ flowchart LR
 
 **Responsibilities & Constraints**
 
-- `Choice { id, text, references: Vec<String> }` — `#[serde(default, skip_serializing_if = "Vec::is_empty")]`。references 空のシリアライズ形は現行と**バイト同一**（既存檻 `command.rs:462-507` は無改変で緑＝R8.1 の直接証跡）。
+- `Choice { id, text, references: Vec<String> }` — `#[serde(default, skip_serializing_if = "Vec::is_empty")]`。references 空のシリアライズ形は現行と**バイト同一**（既存檻 `command.rs:462-507` の**期待 JSON リテラルは不変のまま緑**＝R8.1 の直接証跡。檻内の構築行のみ `references: vec![]` の機械的追随が要る＝「無改変」ではない）。
 - `Cursor { x: String, y: String }` — 不透明転写（単位付き/裸数値/`@` 相対/空の区別を失わない）。
 - `CueTarget::Window` — additive unit variant（窓/placement 演者スロット）。
 - `Custom` の rustdoc を R8.7 に従い改訂: 「`\!` 汎用コマンドキャリアの正準形。型レベル分類 `None` は『誰も action しない』でなく『コマンド名レベル選別（`command_target_of`）への委譲』」。
@@ -359,6 +359,7 @@ pub fn command_target_of(name: &str) -> Option<CueTarget>;
 **Responsibilities & Constraints**
 
 - `tick` の Choice アーム: `pending_choices` へ積み**かつ** `filtered_ready` へも積む（分離廃止）。順序は schedule の安定 FIFO をそのまま保存＝`\q \n \q \_l \q` の交互配置が broadcast 列に現れる。
+- **bag 積みは配送ゲートと同一条件の内側で行う**（現行はゲート外＝`runtime.rs:191-216`。同一時刻の冪等再 tick で schedule の ready buffer が据え置かれるため〔`schedule.rs:166-168`〕、生 `CuePlayer` 利用では bag へ重複積みされ得る——書き換え時にゲート内へ移すか重複排除し、「**bag 内容は tick 列に不変**」をバッグ並存檻の assert に含める）。
 - `pending_choices`／`resolve_choice`（id 照合・解決時 clear）は不変（バッグは照合専用に限定・`PendingChoice{id,text}` 形も不変）。
 - **意図的仕様変更**: `runtime_test.rs:156-163`（「Choice は surface されない」檻）を配送列檻＋バッグ並存檻へ**対置換**（R8.6。削除でなく置換＝非退行の観測を残す）。
 
@@ -558,7 +559,7 @@ pub fn apply_move_directive(world: &mut World, directive: &MoveDirective) -> boo
 
 | 対象 | ワイヤ形 | 互換性 |
 |---|---|---|
-| Choice（references 空） | `{"Choice":{"id":"OnYes","text":"はい"}}` | **現行とバイト同一**（既存檻が無改変で緑） |
+| Choice（references 空） | `{"Choice":{"id":"OnYes","text":"はい"}}` | **現行とバイト同一**（檻の期待 JSON リテラル不変・構築行のみ機械的追随） |
 | Choice（references あり） | `{"Choice":{"id":"OnYes","text":"はい","references":["r0","r1"]}}` | `default` で旧資産も読める |
 | Cursor | `{"Cursor":{"x":"5em","y":"2lh"}}` | 新規（additive） |
 | `\!` キャリア | `{"Custom":{"command":"move","params":["-353","","","0","base","base"]}}` | 既存 `Custom` ワイヤ形の範囲内（形は正準コンストラクタが固定） |
