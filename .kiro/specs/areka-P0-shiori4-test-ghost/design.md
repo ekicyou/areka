@@ -304,6 +304,7 @@ sequenceDiagram
 - `snapshots/<EventID>.txt`（SHIORI/3.0 応答**全文**・イベント 1 ファイル）を `include_str!` で埋め込み、**埋込時に行末を CRLF へ正規化**する（git EOL 変換への免疫・純関数 `normalize_crlf`）
 - 実行時 I/O ゼロ（DLL は自分のファイル所在に依存しない＝決定論・要件 1.5）
 - 同梱集合は採取結果（kanade が GET する正典 ID）に一致させる。表はデータ駆動で、どの ID が GET/NOTIFY かの仮定を持たない
+- **narrowing（要件 2.2 との対応・明文化）**: スナップショット対象は **GET 交信のみ**。NOTIFY 発火の正典イベント（`OnInitialize` 等）は SHIORI ワイヤ契約上応答が破棄されるため採取不能であり、replay 脳は 204 受領で応答する——要件 2.2 の「固定の決定論応答」は NOTIFY に対しては**決定論的な 204 受領**として充足される（要件逸脱ではない）
 
 ##### Service Interface
 
@@ -524,6 +525,7 @@ impl<B: ShioriBackend> ShioriBackend for Recorder<B> { /* 記録して委譲（s
 - Trigger: `HOST32_PASTA_DLL` と `AREKA_SNAPSHOT_OUT` の**両方**が設定された場合のみ実行（どちらか欠落は silent skip・既存 env-gate 流儀）。i686 helper は `real_pasta_test.rs::resolve_helper_exe` と同手順で解決
 - 手順: 実 pasta fixture を組立（real_pasta_test の `write_real_pasta_ghost_fixture` 流儀）→ `ShioriWiring::Custom(Recorder(real_connect(helper_exe, mount)))` で boot→talk→close を一周（実時間可・本ハーネスは決定論を要求されない）→ 記録から **GET 交信の ID ごと初出**を取り、`Value(s)`→`SHIORI/3.0 200 OK`＋`Charset: UTF-8`＋`Value: <s>` の正準 envelope、`NoContent`→204 envelope へ再構成し `AREKA_SNAPSHOT_OUT/<ID>.txt` へ書き出す
 - Output / 運用: 出力ファイルを人手レビューの上 `crates/shiori4-testdll/snapshots/` へコミット（代表 1 応答の凍結・要件 2.6。pasta の乱数性はこの建付けで吸収）。忠実度ノート＝採取点は codec 通過後の値レベルだが Value は逐語搬送・envelope は replay 側と同一 codec の正準形（research.md §7.1）
+- **DoD 位置づけ（隠れブロッカーの顕在化）**: 「実採取＋凍結コミット＋I1 期待 cue 列の更新」は **DoD 直前の独立タスク**として tasks.md に編成する（PROVISIONAL 手書き応答のまま spec 完了しない——要件 2.2 の充足点はこのタスクの完了。実機 env-gate 手順は [[areka-real-machine-signoff-bounded-auto-exit]] の流儀を踏襲）
 - Idempotency: 再実行は上書き（採取のたびに新しい代表を選び直してよい——凍結はコミットが確定点）
 
 ## Data Models
