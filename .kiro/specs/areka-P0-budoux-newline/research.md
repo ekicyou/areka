@@ -95,3 +95,41 @@
 6. **長大セグメント縮退の境界式**（R3）: 「行頭からでも収まらない」の判定式（塊 advance 合計 >（閾値 − 行頭 inline 開始））と、縮退中の行頭1グリフ配置（既存無限折返し回避）との一致確認。
 7. **budouy Parser キャッシュ戦略**（Research 1）: モデルロードを1回に抑える機構（`OnceCell`/thread_local）と純粋層規律（決定論檻）の両立。
 8. **実機 fixture 追記先**（Research 6）: 基層 descript か画像別層か・sakura/kero どちらのバルーンで確認するか。
+
+---
+
+## 6. 設計フェーズ追記（design 生成時の再調査と決着・2026-07-18）
+
+> Discovery Scope: **Extension（light discovery）**。§1–§5 のギャップ分析を現行コードで再実測し、§5 の設計判断アイテム 8 件をすべて決着した。決論は design.md 本文へ再掲済み（本節は背景と証跡）。
+
+### 6.1 コード再実測（design 直前の鮮度確認）
+
+- **layout 4 段ゲートの現在地**: `LayoutEngine::layout` は `layout.rs:169`〜。① 可視打切り `layout.rs:204`・② 保留フラッシュ `layout.rs:211`（`pending.take()`）・③ 折返し判定 `layout.rs:228`（`!current.is_empty() && inline_pos + advance > threshold`）・④ 配置 `layout.rs:241`。§0 の記載と一致（ズレなし）。
+- **layout 呼出点**: `LayoutEngine::layout(` は **10 ファイル・53 箇所**（本番は `actor.rs:482` 相当の `present_actor` 内 1 箇所のみ・他はテスト/example）。`WrapPlan::CharByChar` の機械的追加で更新。
+- **`BalloonModel::new` 呼出点**: **16 ファイル・23 箇所**（§5-3 の想定より具体化）。全て `None` 追加の機械的更新。
+- **fixture 実確認**: `crates/pilot/examples/shiori-host-32/fixtures/emo2/emo2-kakukaku/` に `descript.txt`（基層・`charset,UTF-8`・`font.name,Yu Gothic UI`・`font.height,28`・`wordwrappoint.x,-34`）＋`balloons0s.txt`／`balloonk0s.txt`（画像別層・`wordwrappoint.x,-49` 等）を実在確認。
+- **実機定石の部材**: `AREKA_APP_SMOKE_EXIT_MS`（`crates/areka/src/main.rs:614`・`tests/emo2_real_run.rs`）と env ゲート diag dump（`viewbox_draw.rs` の `diag_dump_horizontal_pngs`・`AREKA_DIAG_OUT`）を実在確認——R9 は既存部材の適用＋dump ケース 1 件追加で足りる。
+
+### 6.2 設計判断アイテムの決着（§5 の 8 件）
+
+| # | アイテム | 決着 |
+|---|---|---|
+| 1 | segment 計算の配置と layout 配線（D1） | **案 C 採用**。`segment.rs`（純関数・budouy 消費の唯一の場所・`OnceLock<Parser>` 内部保持）＋ `layout()` は `WrapPlan<'a>`（`CharByChar`／`Segmented(&SegmentPlan)`）で境界値のみ消費。理由 = (1) R4 の OFF 不変を enum variant で構造保証、(2) segment を単独全網羅檻化・layout は budouy 非依存維持、(3) R7 の「境界は全 items・可視は別ゲート」の役割分離。state.rs 非改変が確定 |
+| 2 | `WrapMode` の型形（D2・討議 #1 済み） | 新規 `wrap.rs` に `WrapMode { CharByChar (default), BudouxWordWrap }`。受理は bool 4 語彙（`1`/`true`/`0`/`false`）完全一致・未知値 warn+OFF。layout 入力は別型 `WrapPlan<'a>`（境界参照を運ぶ・ライフタイム問題は参照 variant で解決）——語彙シームと layout 入力を分けることで wrap.rs は plan 非依存・layout は budouy 非依存を両立 |
+| 3 | `BalloonModel::new` signature 拡張 | 末尾 positional `budoux_newline: Option<String>` 追加・23 箇所へ `None` 機械追加。builder 化はスコープ外（writing_mode 追加時と同じ判断） |
+| 4 | OFF 不変の構造保証手段（R4） | enum variant 分離（フラグ分岐でなく）。`CharByChar` アームは既存③の式そのまま・既存 layout 檻は引数追加のみで OFF 非回帰檻を兼ねる。OFF 時は `segment_plan` を**呼ばない**（actor.rs 側 match で構造保証・R4.2） |
+| 5 | リフロー跳び先決の明文規則（R7×R5） | design 不変条件 INV-1（塊先決は visible_count 非依存＝全 items 由来の plan のみ）・INV-2（prefix 安定性: 可視 v の出力は全量出力の先頭 v グリフと一致——檻で固定）・②フラッシュ→③塊先決の順序契約を明文化 |
+| 6 | 長大セグメント縮退の境界式（R3） | `cap_rem = threshold − inline_pos`・`cap_full = threshold − inline_start` として、`seg_sum ≤ cap_rem`→継続・`≤ cap_full`→塊前行送り・`> cap_full`→当該塊のみ文字単位縮退（既存 char 経路へ委譲＝行頭 1 グリフ配置と自動一致）。行頭では `cap_rem == cap_full` ゆえ空行を作る分岐が構造的に不発火（INV-3）。塊内は追加判定なし（float 丸めでの途中分割を型で排除） |
+| 7 | budouy Parser キャッシュ戦略 | `segment.rs` 内 `static OnceLock<budouy::Parser>`・初回のみ `load_default_japanese_parser()`。plan は**フレーム毎再計算を受容**（budouy parse は O(トーク長)・数百 char で無視可能。items 世代キャッシュは将来シームのみ予約——state.rs 非改変維持）。`Parser: Sync` でない場合は `thread_local!` へ退避（実装時確認・機能等価） |
+| 8 | 実機 fixture 追記先 | **基層 `descript.txt`** へ `budoux_newline,1`。sakura/kero 両バルーンが ON（基層継承の後勝ちマージ経路も実機で通る）・効果は kero 側（≈全角 9 字）で最も可視。実機証跡は装着 `info!` へ `wrap` フィールド追記（grep `wrap=BudouxWordWrap`）＋diag dump PNG の AI vision 目視 |
+
+### 6.3 Synthesis 適用結果
+
+- **Generalization**: 折返し戦略を `WrapMode` enum の interface で一般化（討議 #1 の縫い込み）。実装は bool 2 値に閉じる——interface のみ一般化・実装は現要件どまり。`Segment`/`SegmentPlan` は M2 テキスト装飾（装飾単位）での再利用余地を持つが、本 spec では折返し専用として実装（先回りの汎用化なし）。
+- **Build vs. Adopt**: 分かち書きは budouy 0.2.2 採用（開発者指名・pasta 上流と同一 crate・vendored-models で決定論/オフライン）。禁則エンジンの自作は不採用（budoux 境界が実用上吸収・Out of scope 確定）。
+- **Simplification**: (1) plan キャッシュ層を落としフレーム毎再計算（計測に基づく単純化）、(2) layout の縮退は既存 char 経路への委譲で新規コードを増やさない、(3) `WrapPlan` を `Option<&SegmentPlan>` にしない（自己文書性と将来 variant のため enum——ここだけは単純化より seam を優先）。
+
+### 6.4 リスク更新
+
+- **最大リスク（§3）だった R7×R5 相互作用**は INV-1/INV-2/INV-3 の明文化＋prefix 安定性檻（可視段階増加で全量 prefix 一致）で決定論檻に落ちた。
+- 残リスク: `budouy::Parser` の `Sync` 未確認（→ thread_local 退避で吸収）・vendored モデル更新で segment.rs の実境界ピン檻が割れうる（→ 割れたら檻更新＝[obsolete-vs-broken-test-policy]・性質檻は不変）。
