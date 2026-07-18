@@ -50,7 +50,7 @@
 
 ### 1.5 collision-geometry 契約（相方 spec）
 
-- **`.kiro/specs/areka-P0-collision-geometry/brief.md` は存在**（同時制定 2026-07-16・I/O 契約の正本）。契約: `HitRegion{scope:usize, region:Option<String>}`／入力 `(scope, 窓 client 物理 px 座標)`／「現在の surface id は emo 側が内部で引く」／提供形は UI スレッド同期呼出 resolver（channel 化不要）。
+- **`.kiro/specs/completed/areka-P0-collision-geometry/brief.md` は存在**（同時制定 2026-07-16・I/O 契約の正本・2026-07-18 completed へ移動）。契約: `HitRegion{scope:usize, region:Option<String>}`／入力 `(scope, 窓 client 物理 px 座標)`／「現在の surface id は emo 側が内部で引く」／提供形は UI スレッド同期呼出 resolver（channel 化不要）。
 - **resolver の実体コードは本ワークツリーに未実装**（`HitRegion`/resolver 型は grep 不検出）。→ 本 spec は**消費側**。並走を詰ませないため **mock resolver で全経路を決定論観測**（Req1.5/Req8）する形が前提。
 - 参考: wintf に `hit_region`/`hit_test` モジュールが既存（`event-hit-test-named-regions` 完了・`wintf/src/ecs/layout/hit_region/`）。collision-geometry がこれを土台にする可能性はあるが、**本 spec は collision-geometry の出力契約のみを消費**し、幾何解決を自前で再定義しない（Req1.3）。
 

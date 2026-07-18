@@ -14,6 +14,7 @@
 //! 機能実装は後続タスク（2〜6）が担う。
 
 pub mod target_map;
+pub mod hit_region;
 pub mod adapter;
 pub mod talk_clock;
 pub mod assets;

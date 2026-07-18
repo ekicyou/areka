@@ -99,12 +99,15 @@ impl<'a> Shiori3Client<'a> {
 
     /// 応答を要するイベントを送り、Value を取り出す（要件 4.1/4.3/4.7・design.md §GET 往復）。
     ///
-    /// build（`GET SHIORI/3.0`＋ID＋References）→ `send_request(Request, bytes, 実効 timeout)` →
+    /// build（`GET SHIORI/3.0`＋ID＋References＋任意 `Status`）→ `send_request(Request, bytes, 実効 timeout)` →
     /// `parse_response` を結線する。結果は [`map_get_result`] の意味論に従い:
     /// - 200（＋その他の非エラー status）→ `Ok(Some(Value))`／Value 欠落なら `Ok(None)`
     /// - 204 → `Ok(None)`（成功・スクリプト無し）
     /// - 400 / 500 / `ErrorLevel` あり → `Err(RequestError::Shiori(ShioriError::Status{..}))`
     /// - 311 / 312 等の許容 status → `Ok(value)`（drop せず区別可能・要件 2.7）
+    ///
+    /// `status` は `Status` ヘッダの wire 値（`None`⇒行を出さない）であり、codec へ verbatim に透過する
+    /// （中身は解釈しない・語彙は kanade が所有・DD-IT-6）。
     ///
     /// # Errors
     /// - wire timeout → [`RequestError::Timeout`]（要件 5.1）
@@ -112,12 +115,18 @@ impl<'a> Shiori3Client<'a> {
     /// - 未ハンドシェイク → [`RequestError::Handshake`]（構造上通常起きない・要件 3.3）
     /// - malformed 応答 → [`RequestError::Shiori`]（`ShioriError::Parse`）
     /// - SHIORI エラー応答（400/500/ErrorLevel）→ [`RequestError::Shiori`]（`ShioriError::Status`・要件 5.2）
-    pub fn get(&self, id: &str, references: &[String]) -> Result<Option<String>, RequestError> {
+    pub fn get(
+        &self,
+        id: &str,
+        references: &[String],
+        status: Option<&str>,
+    ) -> Result<Option<String>, RequestError> {
         let bytes = build_request(&ShioriRequest {
             method: Method::Get,
             id,
             references,
             sender: self.sender,
+            status,
             charset: Charset::Utf8,
         });
         // GET/NOTIFY は wire tag = MsgTag::Request で合流（要件 4.7）。
@@ -137,15 +146,24 @@ impl<'a> Shiori3Client<'a> {
     /// helper 側で処理済ゆえ、本 API は bytes を受け取って**破棄**するだけでよい（解析も surface も
     /// しない）。片道化すると応答 HGLOBAL の解放漏れを招くため、GET と同一契約に統一する。
     ///
+    /// `status` は GET と同じく `Status` ヘッダの wire 値を codec へ verbatim に透過する（中身は解釈しない・
+    /// `None`⇒行を出さない・DD-IT-6）。
+    ///
     /// # Errors
     /// transport 失敗の写像は [`Shiori3Client::get`] と同一（[`map_send_error`] 経由）。SHIORI 応答の
     /// status は破棄するため、NOTIFY はエラー status を `Err` にしない（応答を surface しない・要件 4.8）。
-    pub fn notify(&self, id: &str, references: &[String]) -> Result<(), RequestError> {
+    pub fn notify(
+        &self,
+        id: &str,
+        references: &[String],
+        status: Option<&str>,
+    ) -> Result<(), RequestError> {
         let bytes = build_request(&ShioriRequest {
             method: Method::Notify,
             id,
             references,
             sender: self.sender,
+            status,
             charset: Charset::Utf8,
         });
         // 同期往復（要件 4.8）: wire tag は GET と同じ MsgTag::Request（要件 4.7）。

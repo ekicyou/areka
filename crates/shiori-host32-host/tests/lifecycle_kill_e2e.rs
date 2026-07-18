@@ -237,7 +237,7 @@ fn kill_injection_detection_and_reporting() {
 
     // --- ③ baseline GET: kill 前の healthy round-trip を確認（fixture 固定 Value を返す）---
     let baseline = client
-        .get(TEST_GET_ID, &[])
+        .get(TEST_GET_ID, &[], None)
         .expect("baseline GET(OnTestValue) が Err（kill 前は健全に往復するべき）");
     assert_eq!(
         baseline,
@@ -283,7 +283,7 @@ fn kill_injection_detection_and_reporting() {
     // --- ⑥ 有限復帰（R4.2）: kill 後の GET が無限待ちにならず、有限時間内に観測可能なエラーで返る ---
     let started = Instant::now();
     let err = client
-        .get(TEST_GET_ID, &[])
+        .get(TEST_GET_ID, &[], None)
         .expect_err("post-kill GET must fail (helper dead)");
     let elapsed = started.elapsed();
     // 観測可能なエラー: transport 送出失敗（Ipc）または wire timeout（R4.2）。

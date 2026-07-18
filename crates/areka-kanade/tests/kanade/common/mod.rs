@@ -79,21 +79,37 @@ pub struct RecordedCall {
     pub id: String,
     /// Reference 構成（順序保持）。
     pub references: Vec<String>,
+    /// 送出時の `Status` 実行状態集合の wire 値（`None` ⇔ ヘッダ行なし・5.1）。
+    ///
+    /// `ExecutionStatus::render()` の結果を写す。これにより mock が記録した呼出と
+    /// [`expected_call`] 導出の期待値が Status ヘッダまで含めて突合される
+    /// （Testing Strategy #15・DD-IT-3/DD-IT-5）。Unload は Status を持たないため `None`。
+    pub status: Option<String>,
 }
 
 impl RecordedCall {
-    /// [`ShioriCall`] を記録単位へ変換する（GET/NOTIFY の別と id・References を写す）。
+    /// [`ShioriCall`] を記録単位へ変換する（GET/NOTIFY の別と id・References・Status を写す）。
     fn from_call(call: &ShioriCall) -> Self {
         match call {
-            ShioriCall::Get { id, references } => RecordedCall {
+            ShioriCall::Get {
+                id,
+                references,
+                status,
+            } => RecordedCall {
                 method: CallMethod::Get,
                 id: (*id).to_string(),
                 references: references.clone(),
+                status: status.render(),
             },
-            ShioriCall::Notify { id, references } => RecordedCall {
+            ShioriCall::Notify {
+                id,
+                references,
+                status,
+            } => RecordedCall {
                 method: CallMethod::Notify,
                 id: (*id).to_string(),
                 references: references.clone(),
+                status: status.render(),
             },
         }
     }
@@ -117,6 +133,8 @@ pub fn expected_unload() -> RecordedCall {
         method: CallMethod::Unload,
         id: "Unload".to_string(),
         references: Vec::new(),
+        // Unload は Status ヘッダを持たない正規終了経路（5.1）。
+        status: None,
     }
 }
 
@@ -139,6 +157,16 @@ pub fn expected_unload() -> RecordedCall {
 pub struct Fixture {
     /// `OnBoot` GET 200 の固定スクリプト。
     pub boot_script: String,
+    /// `OnBoot` が起動挨拶 Value を返すか（DD-IT-12）。`true`＝固定スクリプトの Value（挨拶 talk を
+    /// 起こし `Steady{talk: Some(_)}` へ完了）。`false`＝204（挨拶なし・`Steady{talk: None}` へ直行）。
+    ///
+    /// DD-IT-12 で boot は挨拶 talk を正規追跡するようになった。挨拶 talk の TalkDone は mock sakura
+    /// が別スレッドから返すため、その到着は後続 Tick と inbox 上で競合する（GET/NOTIFY・Ref3 が
+    /// 非決定になる）。定常 pump（`Steady{None}` の GET・Req 2.1/2.3/3.3）を**決定的に**観測する
+    /// テストは、この挨拶を出さない（`false`）ことで boot→`Steady{None}` へ直行させ競合を発生源から
+    /// 断つ（設計 Testing Strategy「boot が 204 を返す fixture」）。挨拶 boot 自体の観測は
+    /// boot_test／full_run_test が担う。
+    pub boot_greets: bool,
     /// `OnSecondChange`（GET）で Value を返す出現インデックス集合（0 始まり）。
     pub steady_value_indices: Vec<usize>,
     /// `OnSecondChange` GET 200 の固定スクリプト。
@@ -150,10 +178,11 @@ pub struct Fixture {
 }
 
 impl Default for Fixture {
-    /// 既定シナリオ: 散発 Value なし・無言 close（最小の疎通に足る保守的既定）。
+    /// 既定シナリオ: 起動挨拶あり・散発 Value なし・無言 close（最小の疎通に足る保守的既定）。
     fn default() -> Self {
         Fixture {
             boot_script: FIXED_BOOT_SCRIPT.to_string(),
+            boot_greets: true,
             steady_value_indices: Vec::new(),
             steady_script: FIXED_STEADY_SCRIPT.to_string(),
             close_quits: false,
@@ -174,6 +203,15 @@ impl Fixture {
     /// 指定した `OnSecondChange`（GET）出現で Value を返すよう構成する（連鎖記法）。
     pub fn with_steady_value_indices(mut self, indices: impl IntoIterator<Item = usize>) -> Self {
         self.steady_value_indices = indices.into_iter().collect();
+        self
+    }
+
+    /// 起動挨拶（`OnBoot` Value）を出さない構成にする（`OnBoot`→204・DD-IT-12・連鎖記法）。
+    ///
+    /// boot→`Steady{talk: None}` へ直行させ、挨拶 talk の TalkDone と後続 Tick の競合を発生源から
+    /// 断つ。定常 pump（`Steady{None}` の GET）を決定的に観測するテスト専用（設計 Testing Strategy）。
+    pub fn without_boot_greeting(mut self) -> Self {
+        self.boot_greets = false;
         self
     }
 }
@@ -201,7 +239,14 @@ impl FixtureState {
             }
             ShioriCall::Get { id, .. } => match *id {
                 "OnFirstBoot" => ShioriOutcome::NoContent,
-                "OnBoot" => ShioriOutcome::Value(self.fixture.boot_script.clone()),
+                // DD-IT-12: 挨拶ありは固定 Value（`Steady{Some}` 完了）、なしは 204（`Steady{None}` 直行）。
+                "OnBoot" => {
+                    if self.fixture.boot_greets {
+                        ShioriOutcome::Value(self.fixture.boot_script.clone())
+                    } else {
+                        ShioriOutcome::NoContent
+                    }
+                }
                 "OnSecondChange" => {
                     let index = self.second_change_get_seen;
                     self.second_change_get_seen += 1;
@@ -292,11 +337,11 @@ pub fn spawn_mock_shiori(fixture: Fixture) -> MockShiori {
 // 失敗注入付き mock shiori（4.6 専用・区別語彙ごとの呼出失敗を観測する）
 // ============================================================================
 
-/// 失敗注入の区別語彙（[`ShioriFailure`] の 4 種に 1:1 対応する COPYABLE 記述子）。
+/// 失敗注入の区別語彙（[`ShioriFailure`] の 5 種に 1:1 対応する COPYABLE 記述子）。
 ///
 /// [`ShioriFailure`] 自体は `Clone` を実装しないため（かつ `Fixture` は `Clone` 派生ゆえ
 /// 中に持てない）、fixture 側にはこの Copy な種別のみを持たせ、実 `ShioriFailure` は mock の
-/// `respond` 内でその都度 fresh に構築する（設計「Error Categories」の 4 語彙）。
+/// `respond` 内でその都度 fresh に構築する（設計「Error Categories」の 5 語彙）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum FailKind {
     /// [`ShioriFailure::Handshake`]（接続確立失敗）。
@@ -307,6 +352,9 @@ pub enum FailKind {
     Ipc,
     /// [`ShioriFailure::Shiori`]（SHIORI エラー応答）。
     Shiori,
+    /// [`ShioriFailure::Internal`]（kanade 内部規律違反・境界写像では生成されない・DD-IT-11）。
+    /// 5.1 は記述子のみ追加し語彙を完全化する（実掃引は 5.2 の担当）。
+    Internal,
 }
 
 impl FailKind {
@@ -317,6 +365,7 @@ impl FailKind {
             FailKind::Timeout => ShioriFailure::Timeout("injected timeout".into()),
             FailKind::Ipc => ShioriFailure::Ipc("injected ipc failure".into()),
             FailKind::Shiori => ShioriFailure::Shiori("injected shiori error".into()),
+            FailKind::Internal => ShioriFailure::Internal("injected internal violation".into()),
         }
     }
 }
@@ -1091,7 +1140,7 @@ pub fn spawn_harness_no_sink(config: KanadeConfig, fixture: Fixture) -> Sinkless
 mod smoke {
     use super::*;
     use areka_actor::reply_channel;
-    use areka_kanade::{TalkId, events};
+    use areka_kanade::{ExecutionSnapshot, TalkId, events};
 
     /// mock shiori 単独駆動: `OnBoot` GET へ即時に固定 Value を返し、記録が
     /// events 表から導出した期待値と一致する（fixture・assert・実装の三点一正本）。
@@ -1100,9 +1149,10 @@ mod smoke {
         let config = KanadeConfig::new("master", "1.0.0");
         let shiori = spawn_mock_shiori(Fixture::default());
 
-        // events 表から GET OnBoot の呼出を導出して送る（ハードコードしない）。
-        let call = events::on_boot(&config);
-        let expected = expected_call(events::on_boot(&config));
+        // events 表から GET OnBoot の呼出を導出して送る（ハードコードしない）。boot 系列は
+        // talk 非アクティブ（INACTIVE スナップショット・DD-IT-4）ゆえ Status ヘッダは出ない。
+        let call = events::on_boot(&config, &ExecutionSnapshot::INACTIVE);
+        let expected = expected_call(events::on_boot(&config, &ExecutionSnapshot::INACTIVE));
 
         let (reply, receiver) = reply_channel::<ShioriOutcome>();
         shiori

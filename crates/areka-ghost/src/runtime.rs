@@ -466,11 +466,17 @@ mod tests {
             &mut self,
             _id: &str,
             _references: &[String],
+            _status: Option<&str>,
         ) -> Result<Option<String>, RequestError> {
             Ok(None)
         }
 
-        fn notify(&mut self, _id: &str, _references: &[String]) -> Result<(), RequestError> {
+        fn notify(
+            &mut self,
+            _id: &str,
+            _references: &[String],
+            _status: Option<&str>,
+        ) -> Result<(), RequestError> {
             Ok(())
         }
 

@@ -268,3 +268,185 @@ ukadoc MCP で「Status/talking/choosing」を2度検索したがいずれも no
 - 自動ハーネス `AREKA_EMO2_REAL_RUN` は `AREKA_APP_SMOKE_EXIT_MS=1500`（ms）で自動 close するため **idle-talk（15〜30秒待ち）の観測には使えない**＝文書化済みの**手動直接起動**（`target\<profile>\areka.exe <ghost_root> <balloon_root>`）を使う。
 - **罠**: `cargo build/test --workspace` は **x64 の `shiori-host32-helper.exe` を `target/debug/` へ落とす**＝32bit `pasta.dll` を LoadLibrary できない。**i686 ビルドを `areka.exe` 隣へ上書きコピー**すること（`crates/areka/tests/emo2_real_run.rs:26-34`）。
 - brief の「起動は絶対パス必須（MOD_NOT_FOUND）」と `emo2_real_run.rs:75-95` の文書化手順（相対パス表記）が食い違う＝design で運用手順を一本化すること。
+
+---
+
+## 10. 設計フェーズ Discovery（2026-07-17・`/kiro-design` 実行）
+
+> **Discovery Scope**: Extension（light discovery＝既存2クレートへの層貫通拡張）＋正典/実 wire の一次裏取り。
+> **前提条件の充足**: §9.2 の必須マージ条件は**充足済み**——作業ブランチ HEAD＝`dd888f2f`＝`origin/main` の先端（PR #60/#65/#66 を含む）。`git merge-base --is-ancestor origin/main HEAD` が真。ゆえに設計は #60 以降の settled コードに対して行った。
+> **Key Findings**: (1) 実 SSP 捕獲ログを発見し「空集合→行省略」を実物で裏取り（§10.2）(2) `Status` の wire 位置と正典順を実物で確定（§10.2）(3) Req3.1 が推奨したチョークポイントは前提が偽と判明し、真の唯一出口を特定（§10.3）(4) pasta は OnSecondChange の Reference を**一切読まない**＝Ref1/Ref2 固定 0 の正当性を消費側コードで再確認（§10.1）。
+
+### 10.1 pasta（消費側）の実査 — `vendors/pasta` @ `048d646c`
+
+| 調査項目 | 実測 | 含意 |
+|---|---|---|
+| talk 抑制ゲート | `virtual_dispatcher.lua:98`（`check_hour`）・`:123`（`check_talk`）＝`if act.req.status == "talking" then return nil`。**完全一致比較** | §9.5.1 の指摘を確認（行番号は **:98/:123** が実測＝§9.5 の :96,121 は僅少ドリフト）。集合メンバシップ判定でない |
+| Status の受渡し | `pasta_shiori/src/lua_request.rs:110` `Rule::key_status => table.set("status", value)` — split/parse なしの**生文字列転記** | 複合値は Lua 側でも分解されない＝fail-open は構造的 |
+| OnSecondChange の Reference 消費 | **皆無**。`second_change.lua:14-18` は `dispatcher.dispatch(act)` のみ。dispatcher が読む request フィールドは `req.date.unix`（:84,:119）と `req.status`（:98,:123）の**2つだけ**。`act.lua:161` の `transfer_req_to_var`（`r0..r9` 露出）は**どこからも呼ばれない** | **Req1.3（Ref1/Ref2 固定 "0"）の正当性を消費側コードで再確認**（§1.2 の fixture grep に加えた二重の裏取り）。Ref0/Ref3 すら pasta には inert |
+| `check_hour` の初回デッドウィンドウ | `:87-90` — `next_hour_unix == 0` なら次の正時を設定して `return nil`。`calculate_next_hour_unix`（:50-53）＝`unix - (unix % 3600) + 3600` | §9.5.2 を確認＝**数分放置で観測できる自発会話は OnTalk のみ**（Req6.1 の訂正が正しい） |
+| ゲート後の状態 | `check_hour` の skip は `next_hour_unix` を**消費しない**（:103 の更新前に return）。`check_talk` の skip は `next_talk_time` の初期化（:128）**より前** | アイドル時に `talking` を誤送出すると自発会話が**恒久停止**する（Req2.7 の罠）＝実機サインオフが検出する |
+| `talk_interval` | submodule HEAD 既定＝`:40-41` の `180`/`300`。emo2 fixture が上書き＝`fixtures/emo2/ghost/master/pasta.toml:23-24` の `15`/`30`。`menu.pasta:36-49` が実行時プリセット（30-45／60-90／180-300）を提供 | Req6.1 の「15〜30秒は fixture 既定値であって要件値でない」注記が正しい。なお submodule HEAD の script は `pasta_talk_interval*` を読まず `get_config` が初回キャッシュ＝**同梱 `pasta.dll` は HEAD と別ビルド**（emo2 は聖典でない原則の実例） |
+
+### 10.2 実 SSP wire の一次証拠 — **`ayame.log` は存在しない**
+
+§8 #2 が参照した `ayame.log` は**リポジトリに実在しない**（worktree 全域を grep：言及は `research.md:211` の散文のみ）。実 wire の正本は以下である:
+
+**`vendors/pasta/crates/pasta_shiori/doc/shiori-sample.log`**（実 SSP 2.3.86 捕獲・8,517 行・903 SHIORI メッセージ・387 `Status:` 行・39 OnSecondChange ブロック＝GET 19／NOTIFY 20）
+
+| 観測 | 証拠 | 設計への含意 |
+|---|---|---|
+| **アイドル時は `Status` 行が無い** | `:2291-2300` — `GET`／`Charset`／`Sender`／`SecurityLevel`／`ID: OnSecondChange`／`Reference0..4`。空値 `Status:` **ではなく行そのものが不在**。Ref3=1・Ref4=1 | **Req2.3 を実物が裏付ける**（DD-IT-5）。ukadoc には省略に関する記述が無いため、これが唯一の実挙動証拠 |
+| talk 中は `Status: talking,balloon(0=0)`＋Ref3=0＋NOTIFY | `:1307-1318` | ukadoc の NOTIFY 規則と一致。**かつ実 SSP は複合値を送る**＝pasta は SSP に対し既に fail-open |
+| ヘッダ順は一貫 | `Charset → Sender → SecurityLevel → Status → ID → Reference*` | **`Status` は `ID` より前**（DD-IT-6） |
+| 観測された `Status` 値は6種のみ | `balloon(0=0)` 97回／`talking,balloon(0=0)` 208回／`talking` 1回（`ID: rateofusegraph`・:1253）／`choosing,balloon(0=2,1=0)` 43回／`talking,choosing,balloon(0=2)` 5回／`talking,choosing,balloon(0=2,1=0)` 33回 | **全て正典の語彙定義順**（talking→choosing→balloon）＝「正典順で連結」を実物が裏付ける |
+| **正典と実 SSP の乖離** | 正典＝`balloon(0=2/1=0)`（`/` 区切り）／実 SSP＝`balloon(0=2,1=0)`（**`,` 区切り**・`:3727` 他 76 箇所） | 実 SSP 形はトップレベル `,` と衝突し `split(',')` を壊す＝曖昧。正典の `/` は自己無矛盾 → **DD-IT-9 で正典を採用** |
+
+### 10.3 Req3.1 の推奨チョークポイントは前提が偽 — 真の出口を特定
+
+要件 3.1 は「本番/mock が共通で通る単一チョークポイント（`handle_call`／`run_shiori_loop`・real.rs:99/113）」を推奨するが、**実測でこの前提は成り立たない**:
+
+- 統合ハーネスの mock（`crates/areka-kanade/tests/kanade/common/mod.rs:255` `spawn_mock_shiori`）は **`ShioriMsg` チャネル層で shiori アクター丸ごとを差し替える**（同 mod.rs:7-9 が「trait 不要＝型レベル差し替え」と明記）。`ShioriBackend` を**一切使わない**＝`handle_call` を通らない。
+- `handle_call`（`real.rs:99-111`）を通るのは本番 `ShioriConnection` と in-source `FakeBackend`（`real.rs:290`）のみ。
+
+**真の唯一出口＝`actor.rs::round_trip_request`（`actor.rs:146-149`）**。`Action::ShioriRequest` の実行点は `drive` の `actor.rs:111-113` ただ1箇所で、そこから `round_trip_request` へ入り `ShioriMsg::Request` を送る。本番・統合 mock の**双方が必ず通る**。→ Req3.1 の**規範節**（「全 `ShioriCall` 構築点を被覆」）を真に満たすのはこちら。推奨実装は根拠が誤りゆえ設計で変更した（DD-IT-7・要件本文の変更は不要＝規範節は満たす）。
+
+### 10.4 その他の実測（設計に反映／申し送り）
+
+- **`ShioriCall` 構築点の全数**（prod）: `events.rs` 7 箇所（:36,48,58,68,91,96,107）＋ **`schedule/mod.rs:170` の `force_quit` inline のみ**。§9.5.4 の指摘を確認。`boot.rs`／`close.rs` は自前構築ゼロ（events 経由）。
+- **委譲不能の理由が判明**: `events::on_close` は **GET**（`:107`）だが `force_quit` は **NOTIFY** を要する（`mod.rs:170`）。ゆえに単純委譲は不可 → **`on_close_notify` の増設**が解（DD-IT-8）。`mod.rs:161-164` の注記は「TODO」の語を含まないが実質 stale。
+- **`ShioriBackend` 実装は 5 箇所・4 クレート**（§9.4.1 の指摘どおり）: `real.rs:58`（本番 `ShioriConnection`）／`real.rs:290`（`FakeBackend`・test）／`areka-ghost/src/runtime.rs:464`（`FakeShioriBackend`・test）／`areka-ghost/tests/ghost/spine_e2e_test.rs:138`／`areka/src/emo2_boot/spine.rs:157`。**本番実装は 1 つのみ**。
+- **命名衝突は 2 件**（§9.4.2 の指摘＋1件）: `ShioriBackend::status() -> HelperStatus`（`real.rs:55`・helper 死活）と、`areka/src/emo2_boot/spine.rs` の `RecordedCall::Status`（同じく helper 死活）。→ `ExecutionStatus`／`ExecutionState`／`ExecutionSnapshot` で別名化（DD-IT-2）。
+- **`..` による黙殺リスク**: `steady_test.rs:287-290, 398-401, 543-546, 566-569` は既に `Get{references, ..}` で分解＝フィールド追加後も**コンパイルは通るが Status を検査しない**。→ 期待値構築を `expected_call(events::..)` へ寄せる（design Testing Strategy 15）。
+- **`build_request` の既存 wire 檻は `contains` ベース**（`shiori3.rs:361-485`）＝Status 行の追加は非破壊。ただし `build_empty_references_still_terminated`（`:424`）の `!contains("Reference")` は将来の Status 値と衝突し得る（本設計の正典語彙とは非衝突）。
+- **【申し送り／本 spec 外】`SecurityLevel` の位置逸脱**: ukadoc `spec_shiori3:SecurityLevel:1` は「できるだけ最初のほうの行で通知される。少なくとも **ID ヘッダより前に現れる**」と定め、実 SSP も `Charset→Sender→SecurityLevel→Status→ID` の順で送る。**現 `build_request` は `SecurityLevel` を末尾に置く**（`shiori3.rs:113`）＝既存逸脱。本 spec は `Status` の位置のみを扱い**修正しない**（Out of Boundary）。引受先候補＝`areka-P0-emo2-conformance-e2e`。
+- **【申し送り／文書】`doc/emo2-conformance-scope.md:18`** の「`Status`（talking/choosing/online 等**9種**）」は正典の **10 種**に対し過少。同行の「`Reference0..n`」も OnSecondChange については偽（§10.1）。scope doc は実需正本として有効だが、語彙の正本は ukadoc。
+
+---
+
+## 11. Architecture Pattern Evaluation（`Status` シームの形）
+
+| Option | Description | Strengths | Risks / Limitations | 判定 |
+|--------|-------------|-----------|---------------------|---|
+| **A: 層貫通の第一級フィールド** | 各層の型へ `status` を追加。kanade が語彙を所有し host32 へは不透明文字列で渡す | 型で明示・全リクエストへ一貫適用・観測が漏れない・下流3 spec の消費契約として素直 | 4 クレート横断の破壊的変更（実装5箇所・構築点23箇所） | **採用**（DD-IT-1） |
+| B: OnSecondChange 専用の別経路 | `get_with_status` 等を1本足す | 影響範囲を局限 | 「共通ヘッダ」要件語彙と乖離／**どのみち host32 改変は必須**ゆえ利得が限定的／Req2.6 の汎用化で二度手間 | 棄却 |
+| C: 共通ヘッダ束を導入 | `status` を第一メンバとする束を1つ足す | 将来ヘッダの器 | **M1 は単一メンバ**＝束は過剰（synthesis 簡素化レンズ）。要件が約束するのは*状態値*の差替（Req2.6）であって*ヘッダ集合*の拡張ではない | 棄却 |
+
+---
+
+## 12. Design Decisions（design.md「設計判断」表の trade-off 補遺）
+
+### Decision: 単一スナップショット（`ExecutionSnapshot`）から Ref3 と Status を導出（DD-IT-3）
+- **Context**: 今日 `on_second_change(now, talk_playable)` は Ref3 と GET/NOTIFY を `talk_playable` から決める。ここへ Status を足すと**同じ源を2度読む**形になる（events.rs:86-101 は `talk_playable` の3つ目の消費者を招く）。
+- **Alternatives Considered**: 1. `on_second_change(now, talk_playable, status)` — 呼び手が両者を独立に渡す／2. `on_second_change(now, &ExecutionStatus)` — Ref3 を `status.contains(Talking)` から導く。
+- **Selected Approach**: `on_second_change(now, &ExecutionSnapshot)`。スナップショットが Ref3・GET/NOTIFY・Status の**唯一の源**。
+- **Rationale**: 案1は「Ref3=`"1"` かつ `Status: talking`」という**不整合の組み合わせを表現可能**にする（実装バグの余地）。案2は Reference3（トーク再生可否）の意味を Status 語彙へ**意味的に結合**してしまう（別概念）。スナップショット案は不整合を型で表現不能にしつつ両概念を分離したまま保つ。
+- **Trade-offs**: 全構築関数の署名が変わる（+7 箇所）。見返りに**構築点が Status を忘れられない**（共通ヘッダの構造的強制）。
+- **Follow-up**: 将来「トーク再生可否」が talk 有無以外の条件を得たら、`ExecutionSnapshot` に別フィールドを設けて分岐させる（Ref3 と `talking` を同一 bool に癒着させない）。
+
+### Decision: ForceQuit 時 OnClose の Status（Req3.1 の design 送り事項・DD-IT-4）
+- **Context**: 要件が「ForceQuit 時 OnClose に添える `Status` の扱いは design で確定する」と明示。
+- **Alternatives Considered**: 1. 常に非アクティブを固定（強制終了は talk を放棄するため）／2. 遷移**前**の phase から導出（talk 中なら `talking`）／3. 遷移**後**の phase から導出。
+- **Selected Approach**: **3**。`force_quit`（`mod.rs:166-175`）は `state.phase = Phase::Unloading{Forced}` を**代入した後**に NOTIFY を構築する既存順序を持つ。`snapshot_of(&state.phase)` をその位置で呼べば自動的に非アクティブ＝ヘッダ行省略。
+- **Rationale**: 案1は「例外規則」を1つ作る（規則が2つに割れる）。案2は「放棄した talk を再生中と主張する」ことになり、かつ ForceQuit 経路にだけ特別な読み出し順序を要求する。案3は**単一規則「Status ＝送出時点の phase のスナップショット」を例外なく全構築点へ適用**しつつ、結果的に案1と同じ安全側の値を出す。
+- **Trade-offs**: 「talk 中に強制終了した」という情報は wire に出ない。ただし当該 NOTIFY は best-effort で応答は構造的に破棄され、直後に unload するため消費側に影響しない。
+- **Follow-up**: `close_test.rs:560-565` の期待値を `events::on_close_notify` 由来へ寄せる（inline 二重定義の解消）。
+
+### Decision: パラメータ付き状態の下位書式は正典（`/`）を採用（DD-IT-9）
+- **Context**: 正典 `balloon(0=2/1=0)` vs 実 SSP 2.3.86 `balloon(0=2,1=0)`（§10.2）。
+- **Alternatives Considered**: 1. 実 SSP に合わせ `,`／2. 正典どおり `/`／3. 切替可能にする。
+- **Selected Approach**: **2**（正典）。
+- **Rationale**: (a) steering「正典は ukadoc・実装は聖典でない」。(b) **技術的にも正典が優る**——内部が `,` だとトップレベルの `,` 連結と衝突し `split(',')` が `balloon(0=2` と `1=0)` に割れる。`/` は非衝突＝自己無矛盾。(c) **M1 は `opening`／`balloon` とも非アクティブ＝送出せず実害ゼロ**——今決めても消費者が居らず、決めないと `render` が半端になる。案3は憶測の可変性（`spec 工場の禁止`）。
+- **Trade-offs**: 将来 `balloon` を実導出したとき、`,` を期待する消費側と食い違う可能性。
+- **Follow-up**: 実導出の所有者（`areka-P0-status-execution-states`）が**実 SSP 互換の再検証時に決着**させる（同 brief Approach 2b の受け入れ条件に相乗り）。
+
+### Decision: 既定実装メソッドで爆風を封じ込めない（§9.4.1 の「爆風の選択」への回答）
+- **Context**: `ShioriBackend::get/notify` の署名変更は 4 クレート・5 実装へ波及。既定実装メソッド／`ShioriConnection` 保持で 2 クレートに封じ込める案があった。
+- **Selected Approach**: **署名変更を受容**（Option A）。
+- **Rationale**: 既定実装は「未追随の実装が Status を黙って落とす」＝**fail-open** を生む。本 spec は 3 spec 横断の**契約正本**であり、契約を黙って落とす経路を残せない。爆風は機械的・コンパイラ捕捉で、実装 5 箇所のうち**本番は 1 つだけ**（残 4 はテストダブル）。roadmap W1 の「共有型の shaper が先行」順序（追記㉘/㉙）がこの爆風を最小化する編成そのもの。
+- **Trade-offs**: `areka-ghost`／`areka` が同時に落ちる期間が生じる（同一 PR 内で解消）。
+
+---
+
+## 13. Synthesis Outcomes（3レンズ適用）
+
+### 13.1 一般化（Generalization）
+- **Req1.6（Ref1/Ref2 の差替シーム）と Req2.5/2.6（Status 残状態の差替シーム）は同じ問題の変種**——要件自身が「Reference1/Reference2 と同型」と述べている。→ **`ExecutionSnapshot` という単一の口へ一般化**した。見切れ／重なりの実測供給も、実行状態の源着地も、**同じ構造体へフィールドを1本足す**という同一の操作になる。インターフェイスのみ一般化し、実装は現要件の範囲（`talk_active` 1本）に留める。
+- **`Status` は OnSecondChange 専用でなく全リクエストの共通属性**へ一般化（要件の語彙「共通ヘッダ」に忠実）。ただし M1 で非空になるのは OnSecondChange のみ（他は phase から自動的に空）＝実装スコープは広げない。
+
+### 13.2 Build vs. Adopt
+- **wire 整形**: 既存 `build_request`（自前 SHIORI/3.0 codec）を**採用・拡張**。任意ヘッダマップ機構は導入しない（M1 の追加ヘッダは `Status` 1本＝汎用機構は過剰）。
+- **観測ハーネス**: 既存 `spawn_mock_shiori`／`RecordedCall`／`log_capture` を**採用・additive 拡張**。新規ハーネスを建てない。
+- **`Status` 語彙**: 既製の解決策なし（伺か固有）＝**自前**。ただし**正典（ukadoc）＋実 SSP 捕獲ログという既存の一次資料へ全面的に従属**させ、発明を排した。
+- **決定論檻**: 既存の events.rs 単体テスト・steady_test.rs 統合テストを**保存**（`test-only-decision-branches-not-proven-wiring`／`obsolete-vs-broken-test-policy`）。
+
+### 13.3 簡素化（Simplification）
+- **共通ヘッダ束（Option C）を棄却**——単一メンバの束は間接層の水増し。要件が約束するのは*状態値*の差替であって*ヘッダ集合*の拡張ではない。
+- **`StatusInputs` と `ExecutionStatus` を別々に持つ案を却下**し、源＝`ExecutionSnapshot` 1本に統合（Reference と Status の共通の源＝重複した「源の型」を作らない）。
+- **TickInfo 拡張を今回作らない**——見切れ／重なりの実測は Out of scope。口は `ExecutionSnapshot` のコメント付きシームで足り、**存在しない供給者のための構造体を先に建てない**（`spec 工場の禁止`）。
+- **9状態のためのダミー源を作らない**——非アクティブ縮退は導出表の「行＋シーム注記」で表す（Ref1/Ref2 の固定 `"0"`＋注記と同型）。M1 の入力空間は bool 1本＝**全網羅テスト可能**という副次利得。
+- **`unknown_talk_done` 欠陥を吸収しない**（要件外・Out of Boundary へ明記）。
+
+---
+
+## 14. Risks & Mitigations（設計フェーズ時点）
+
+- **消費側 fail-open（最重要・Req2.6 ただし書き）** — M1 は縮退により wire が厳密に `talking` 単独ゆえ安全。実値差替の解禁時に複合値 wire の消費側互換検証を受け入れ条件へ（台帳 spec へ登記済み・design Revalidation Triggers）。
+- **正典 `/` と実 SSP `,` の乖離** — M1 は送出せず実害ゼロ。実導出の所有者が決着（DD-IT-9 Follow-up）。
+- **4 クレート横断の破壊的変更** — 機械的・コンパイラ捕捉。実装5箇所は特定済み。W1 先鋒順序が衝突を最小化。
+- **`Status` 追加が pasta の talk スケジュールを変える** — 抑制ゲートが初めて閉じるため talk 中は `next_talk_time` が進まない（`virtual_dispatcher.lua:120-128`）＝発火間隔の体感が変わり得る。仕様どおり（SSP と同じ）。Req6 の判定はタイミングを含めない（Req6.3）。
+- **既存 `..` 分解による Status の黙殺** — 期待値構築を `expected_call(events::..)` へ寄せる。
+- **実機サインオフの運用ミス** — x64 helper が `target/debug/` に居ると 32bit `pasta.dll` を load できない／自動ハーネスは 1500ms で close する。design の運用手順へ一本化（絶対パス・i686 上書きコピー・自動 close なし・`RUST_LOG=info,kanade=trace`）。
+
+---
+
+## 15. References
+
+- ukadoc `Status [SSP拡張]` — `ukadoc:spec_shiori3:Status_20_5bSSP_62e1_5f35_5d:1`（実行状態語彙10種・カンマ連結・`opening(種類)` と `balloon(ID群)` の `/` 区切り下位書式）
+- ukadoc `OnSecondChange` — `ukadoc:list_shiori_event:OnSecondChange:1`（Ref0〜4・再生不能時 Ref3=0＋NOTIFY＋返却スクリプト無視）
+- ukadoc `SecurityLevel` — `ukadoc:spec_shiori3:SecurityLevel:1`（「少なくとも ID ヘッダより前に現れる」＝§10.4 の既存逸脱の根拠）
+- **実 SSP 捕獲ログ** — `vendors/pasta/crates/pasta_shiori/doc/shiori-sample.log`（SSP 2.3.86・903 メッセージ・39 OnSecondChange。**`ayame.log` は実在しない**＝§8 #2 の参照先を本ログへ訂正）
+- pasta 消費側 — `vendors/pasta/crates/pasta_lua/scripts/pasta/shiori/event/virtual_dispatcher.lua:98,123`（完全一致ゲート）・`:87-90`（check_hour 初回デッドウィンドウ）・`pasta_shiori/src/lua_request.rs:110`（生文字列転記）
+- emo2 fixture — `crates/pilot/examples/shiori-host-32/fixtures/emo2/ghost/master/pasta.toml:23-24`（`talk_interval` 15/30）・`dic/menu.pasta:36-49`（実行時プリセット）
+- 実需正本 — `doc/emo2-conformance-scope.md:18,22,27`（emo2 が読むヘッダ・OnSecondChange＝心臓部・`OnTalk`/`OnHour` 送出禁止）
+- 先例 — `.kiro/specs/completed/areka-P0-cue-playback-duration/tasks.md:218`（実機サインオフ運用＝絶対パス起動・i686 helper 上書きコピー）
+- 下流契約 — `.kiro/specs/areka-P0-status-execution-states/brief.md`（残状態の台帳・Approach 2b＝消費側互換の檻）
+
+## 16. 設計ディスカッション決着ログ（2026-07-17）
+
+### #1 檻違反の失敗語彙 → `ShioriFailure::Internal(String)` 追加（DD-IT-11）
+
+**開発者裁定**: 「あるべき正しい姿にすべき。必要ならスコープを増やす。無意味に型を増やしすぎるのもよくない。シンプルに、誠実に。」＝ variant 1 本の追加を採択（新 enum の発明は不採用）。
+
+**裁定を支えた実測**（50 subagent・47 主張の敵対的検証＝34 confirmed / 12 imprecise / 1 refuted）:
+
+1. **爆風＝ワークスペース全体で 1 箇所**。`ShioriFailure` は `msg.rs:105-120`（derive は Debug+thiserror のみ・`#[non_exhaustive]` 無し・Clone 無しは `common/mod.rs:297` が意図明記）。variant 追加でコンパイルが壊れるのは cfg(test) 内 `describe`（`real.rs:256-267`・ワイルドカード無し nested match）**のみ**＝`cargo build` 緑・`cargo test` が捕捉。本番消費は 2 箇所（`schedule/mod.rs:235-240,254-256`）とも `ref failure`＋`%failure`（Display）で variant を見ない＝**無改変で正しく流れる**。
+2. **コンパイラが捕捉しない追随が 1 系統**: テスト記述子 `FailKind`（`common/mod.rs:301,314`・`failure_test.rs:75-80`）は `ShioriFailure` でなく `FailKind` を match するため、5 本目を足しても両檻は黙って通り「4 語彙を静的に網羅」（`failure_test.rs:66`）が嘘になる。→ File Structure Plan へ意図的追随として計上。
+3. **「内部規律違反 variant の先例なし」は反証された**: `SessionError::RequestInFlight`（`areka/src/shiori_session.rs:48-61`・「利用規律」違反と外部 `Shiori(#[from])` の同居）／`UiSpawnError`（`areka-actor/src/ui.rs:165-177`・「検出可能な前提違反を error! 記録のうえ返す経路として予約された型・panic はしない」）。`Internal` は発明でなく既存規律への合流。
+4. **失敗方針の正本は steering に無い**: `.kiro/steering/` 全 9 ファイル grep で不在。正本＝`completed/areka-P0-actor-foundation/design.md:523`（検出可能な前提違反は `error!`＋`Err`・panic は致命限定）＋`completed/areka-P0-kanade/requirements.md:88-97`（Req6.1 区別語彙・6.3 ログ無し失敗禁止・6.4 致命ログ後のみ panic 許容）。panic 案の棄却根拠は「panic 禁止」でなく「檻違反＝検出可能な前提違反」条項。
+5. **fault 終端の実挙動＝「沈黙のゾンビ」**（旧設計文「明示的に落ちる」は事実に反した）: `Failed` は `round_trip_request` を無記録で素通し（`actor.rs:173-174`・ログは transport 失敗 3 種のみ）→ `Input::ShioriReply` 再注入（`:129-135`）→ `awaits_reply` 6/10 phase のみ `ERROR shiori_failed` 1 行で `to_unloading_fault`（`mod.rs:234-240`）→ `Unloading{Fault}`→`Stopped`→`StopSelf`＝スレッド終了。**プロセスは死なない**: `app.run()`（`main.rs:318`）が窓ループでブロック・`kanade_handle` の join は `run()` 復帰後の `shutdown` のみ（`runtime.rs:195`）・走行中の監視者ゼロ。運用者ログは 3 行（ERROR 1＋INFO 2）＋ticker の dead-inbox INFO（`ticker.rs:228-236`）で以後沈黙。→ 全 `Failed` 共通の kanade 既存欠陥として **Open Item 4 に登記**（本 spec は吸収しない）・設計文は事実へ訂正済み。
+6. **檻チョークポイントの保証水準**（検証で判明・議題 #3 へ）: `round_trip_request` は kanade drive ループ内の唯一の egress だが、`ShioriMsg` は pub（`msg.rs:65`）・`spawn_shiori_actor` は再エクスポート（`lib.rs:39`）＝`Sender<ShioriMsg>` 保持者は檻を迂回して直接 post できる（in-tree 使用例 `real.rs:762`・`common/mod.rs:1110`）。被覆は**型保証でなく所有規律**（sender は kanade actor のみが保持・`areka-ghost/src/runtime.rs:117`）。
+7. **下流の檻負担の実測**（議題 #4 の布石）: input-events（W2）＝追加 2 ID のみ・自要件で檻を 2 回名指し済み（`requirements.md:28,103`）。position-persist（W3）＝追加ゼロ。**choice-select-events（W5）＝構造的非互換**——ukadoc 正典 `\q[タイトル,OnID,...]` は実行時スクリプト由来の**任意名イベント**を発火し（emo2 は fixture grep 0 件でこの形のみに依存・`brief.md:13`）、`&'static str` の id（`msg.rs:82,86`）にも固定 const 表にも載らない。
+
+**適用差分**: design.md＝DD-IT-11 新設・Error Handling 表 1 行目（Internal＋ゾンビ事実訂正）・actor.rs Service Interface doc・File Structure Plan（msg.rs／real.rs／common/mod.rs／failure_test.rs 行）・機械的追随注記 4 型化・Risks 爆風 3 軸化・Testing Strategy #7・Open Items #4 新設。
+
+### #2〜#4 再検討（2026-07-17・開発者指示「考えればわかるものを議題にするな・危険な分岐だけを議事に」）
+
+**メタ裁定の適用**: 残り3議題を #1 裁定原理（あるべき姿・シンプルに誠実に・必要ならスコープ増・型の乱造禁止）へ照らして再検討した結果、**3件とも導出可能＝開発者判断が必須の危険分岐は 0 件**。以下は導出記録（#2 のみ completed spec の確定判断の再開封を含むため事後拒否権を明示）。
+
+#### #2 起動挨拶中の wire 正直性 → **O2（boot talk 正規追跡）を導出適用＝DD-IT-12**
+
+- **導出**: Req1.5「アクティブなトークが再生中は Ref3=0」に boot 例外条項は無い。挨拶（実測 4〜5 秒）は実再生される talk であり、fire-and-forget（`boot.rs:102-107`）による非追跡は「源の欠落」であって要件免除ではない。「誠実に」＝wire は事実を申告する。よって O1（縮退受容＋注記）は「要件との不一致の容認」となり裁定原理に反する。
+- **敵対的自己検証で確認した安全性**: ① 挨拶中 close は `CloseTalkWait`（中断 ACK 待ち）＝**通常 talk の close と同型化**＝より正規形（`canonical-not-minimal-lifecycle`）② TalkDone(挨拶) の配送は既知 ERROR `unknown_talk_done` の存在自体が証明 ③ pasta 側は挨拶中ゲートが閉じ初回ランダムトークが挨拶終了後起算（〜5 秒後ろ倒し・SSP 同型・Req6.3 でタイミングは判定外）④ 檻期待値の更新は Value 経路のみ（`obsolete-vs-broken` 方針の「更新」に該当）。
+- **副産物**: `unknown_talk_done` 根治（旧 Open Item 3 解消・「ついで吸収」でなく Req1.5 充足の帰結）・Req6.2 実機証跡が起動直後の挨拶窓で確定観測可能。
+- **事後拒否権**: completed kanade の「boot は close-gate しない」DD の再開封を含む。開発者が fire-and-forget 維持（O1）を選ぶ場合は本コミット 1 個の revert で戻る（設計のみ・実装未着手）。
+
+#### #3 チョークポイントの保証水準 → **保証境界の明文化のみ（分岐なし）**
+
+- **導出**: 檻の主語は Req3.2 の文言どおり kanade。`Sender<ShioriMsg>` 直接 post による迂回（`msg.rs:65` pub・`lib.rs:39` 再エクスポート・in-tree 使用例 `real.rs:762`／`common/mod.rs:1110`）は「kanade の送出」ではなく、同階級のコードは `Shiori3Client` 直叩きも可能＝kanade 内の檻で防御不能な階級であり、どの設計を選んでも消えない。型封鎖は mock 統合ハーネスの検証様式（`ShioriMsg` の受理・構築）と非両立。→ 選択肢が実在しない＝議題でなく注記。actor.rs Responsibilities へ「保証境界」bullet を追加。
+- 檻の実効範囲＝「kanade 状態機械の全構築点（現在・将来）」は DD-IT-7 のとおり成立（本番・mock 双方が `round_trip_request` を通過）。
+
+#### #4 `ALLOWED_EVENT_IDS` と W5 任意名イベント → **シーム注記＋W5 申し送りのみ（今決めるのは憶測先行）**
+
+- **事実**: choice-select-events（W5）は `\q[タイトル,OnID]`＝実行時スクリプト由来の任意名イベント発火に依存（emo2 唯一の依存形・`menu.pasta:15` 実物・fixture に OnChoiceSelect 系ハンドラ 0 件）。任意名は `&'static str` の id（`msg.rs:82,86`）にも固定 const 表にも載らない。
+- **導出**: W5 の拡張は受理規則への**カテゴリ追加（additive）**であり檻の解体ではない＝チョークポイント・固定表・`OnTalk`/`OnHour` 恒久禁止は不変のまま将来拡張可能。今 String 化や拡張受理規則を先取りするのは「憶測先行設計しない」（status-execution-states 台帳の規律・YAGNI）に反し、`\q[x,OnTalk]` と Req3.2 恒久禁止の交差は W5 の要件フェーズの議題（`portfolio-convergence`＝単一 spec の椅子から決めない）。→ events.rs へ SEAM(W5) doc・Revalidation Triggers 行を精密化・本節を W5 への申し送りの正本とする。
