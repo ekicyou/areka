@@ -155,7 +155,12 @@ impl ScriptedShioriBackend {
 }
 
 impl ShioriBackend for ScriptedShioriBackend {
-    fn get(&mut self, id: &str, references: &[String]) -> Result<Option<String>, RequestError> {
+    fn get(
+        &mut self,
+        id: &str,
+        references: &[String],
+        _status: Option<&str>,
+    ) -> Result<Option<String>, RequestError> {
         self.calls.lock().expect("calls mutex poisoned").push(RecordedCall::Get {
             id: id.to_string(),
             references: references.to_vec(),
@@ -165,7 +170,12 @@ impl ShioriBackend for ScriptedShioriBackend {
         })
     }
 
-    fn notify(&mut self, id: &str, references: &[String]) -> Result<(), RequestError> {
+    fn notify(
+        &mut self,
+        id: &str,
+        references: &[String],
+        _status: Option<&str>,
+    ) -> Result<(), RequestError> {
         self.calls.lock().expect("calls mutex poisoned").push(RecordedCall::Notify {
             id: id.to_string(),
             references: references.to_vec(),

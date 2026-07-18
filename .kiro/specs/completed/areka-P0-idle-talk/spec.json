@@ -1,0 +1,34 @@
+{
+  "feature_name": "areka-P0-idle-talk",
+  "created_at": "2026-07-16T14:07:47Z",
+  "updated_at": "2026-07-18T00:00:00Z",
+  "language": "ja",
+  "phase": "completed",
+  "approvals": {
+    "requirements": {
+      "generated": true,
+      "approved": true,
+      "approved_at": "2026-07-17T13:01:08Z",
+      "note": "kiro-spec-design -y による自動承認（設計フェーズ進行のため）"
+    },
+    "design": {
+      "generated": true,
+      "approved": true,
+      "generated_at": "2026-07-17T13:01:08Z",
+      "approved_at": "2026-07-17T15:00:00Z",
+      "note": "設計ディスカッション（議題#1〜#4・実測付き敵対的検証込み）を本セッションで完走・開発者裁定を全て設計へ反映済みにつき承認扱い"
+    },
+    "tasks": {
+      "generated": true,
+      "approved": true,
+      "generated_at": "2026-07-17T15:00:00Z",
+      "approved_at": "2026-07-17T15:10:00Z"
+    },
+    "implementation": {
+      "completed": true,
+      "completed_at": "2026-07-18T00:00:00Z",
+      "note": "全15タスク実装・reviewer 検証・実機サインオフ（実 emo2・実 pasta.dll・自発トーク6回・talking Tick 41・禁止ID 0・exit 0）完了。開発者裁定「OnSecondChange 確認で良い」でトーク面のサインオフ確定"
+    }
+  },
+  "ready_for_implementation": true
+}

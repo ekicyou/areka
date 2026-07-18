@@ -136,7 +136,12 @@ impl ScriptedShioriBackend {
 }
 
 impl ShioriBackend for ScriptedShioriBackend {
-    fn get(&mut self, id: &str, references: &[String]) -> Result<Option<String>, RequestError> {
+    fn get(
+        &mut self,
+        id: &str,
+        references: &[String],
+        _status: Option<&str>,
+    ) -> Result<Option<String>, RequestError> {
         self.calls
             .lock()
             .expect("calls mutex poisoned")
@@ -152,7 +157,12 @@ impl ShioriBackend for ScriptedShioriBackend {
             })
     }
 
-    fn notify(&mut self, id: &str, references: &[String]) -> Result<(), RequestError> {
+    fn notify(
+        &mut self,
+        id: &str,
+        references: &[String],
+        _status: Option<&str>,
+    ) -> Result<(), RequestError> {
         self.calls
             .lock()
             .expect("calls mutex poisoned")
@@ -272,7 +282,7 @@ mod tests {
             .get("OnBoot", Ok(Some("\\h\\s0hello\\e".to_string())))
             .build();
 
-        let result = backend.get("OnBoot", &[]);
+        let result = backend.get("OnBoot", &[], None);
 
         // `RequestError` は `PartialEq` を実装しないため（凍結面の消費のみ・機械的写像の
         // 都合）、`Result` 全体の `assert_eq!` はできない——`Ok` の中身を直接照合する。
@@ -300,7 +310,7 @@ mod tests {
             .get("OnSecondChange", Err(RequestError::Timeout))
             .build();
 
-        let result = backend.get("OnSecondChange", &[]);
+        let result = backend.get("OnSecondChange", &[], None);
 
         match result {
             Err(RequestError::Timeout) => {}
@@ -316,7 +326,7 @@ mod tests {
             .build();
 
         let references = vec!["reason".to_string()];
-        let result = backend.notify("OnCloseAll", &references);
+        let result = backend.notify("OnCloseAll", &references, None);
 
         assert!(result.is_ok(), "expected Ok(()), got {result:?}");
 
@@ -614,11 +624,11 @@ mod s1_boot_success {
     /// ため、ここで同旨の変換を用意する（task 4.2 参照材料 6 の指示どおり）。
     fn expected_from_shiori_call(call: ShioriCall) -> RecordedCall {
         match call {
-            ShioriCall::Get { id, references } => RecordedCall::Get {
+            ShioriCall::Get { id, references, .. } => RecordedCall::Get {
                 id: id.to_string(),
                 references,
             },
-            ShioriCall::Notify { id, references } => RecordedCall::Notify {
+            ShioriCall::Notify { id, references, .. } => RecordedCall::Notify {
                 id: id.to_string(),
                 references,
             },
@@ -726,10 +736,20 @@ mod s1_boot_success {
         // calls() には Get/Notify の間に RecordedCall::Status が挟まる。起動系列の
         // 順序判定はこの死活監視ノイズと無関係なので除外して比較する。
         let expected_boot_prefix = vec![
-            expected_from_shiori_call(events::on_initialize()),
-            expected_from_shiori_call(events::on_first_boot()),
-            expected_from_shiori_call(events::on_boot(&config)),
-            expected_from_shiori_call(events::baseware_version(&config)),
+            expected_from_shiori_call(events::on_initialize(
+                &areka_kanade::ExecutionSnapshot::INACTIVE,
+            )),
+            expected_from_shiori_call(events::on_first_boot(
+                &areka_kanade::ExecutionSnapshot::INACTIVE,
+            )),
+            expected_from_shiori_call(events::on_boot(
+                &config,
+                &areka_kanade::ExecutionSnapshot::INACTIVE,
+            )),
+            expected_from_shiori_call(events::baseware_version(
+                &config,
+                &areka_kanade::ExecutionSnapshot::INACTIVE,
+            )),
         ];
         let calls = handle.calls();
         let calls_without_status: Vec<RecordedCall> = calls
@@ -1059,17 +1079,27 @@ mod s3_helper_liveness_detected {
         let _ = std::fs::remove_dir_all(&root);
         write_ghost_fixture(&root, SHELL_NAME);
 
-        // boot 系列一式（S1 と同旨）＋ OnSecondChange（Steady pump の 1 発・talk:None ゆえ
-        // GET／Ref3=1）＋ unload（Fault 系列が発行する ShioriUnload の応答・best-effort ゆえ
-        // Abnormal でも Stopped へ収束する）を台本化する。OnClose は台本化しない——S3 は
-        // Fault 経路のため kanade 自身が OnClose NOTIFY を発行することはない（正規 close
-        // 握手は S4/S5 の担当領域）。
+        // boot 系列一式（S1 と同旨）＋ OnSecondChange（Steady pump の 1 発）＋ unload
+        // （Fault 系列が発行する ShioriUnload の応答・best-effort ゆえ Abnormal でも Stopped へ
+        // 収束する）を台本化する。OnClose は台本化しない——S3 は Fault 経路のため kanade 自身が
+        // OnClose NOTIFY を発行することはない（正規 close 握手は S4/S5 の担当領域）。
+        //
+        // DD-IT-12: boot は挨拶 talk を追跡し `Steady{talk: Some(greeting)}` へ完了する。ゆえに
+        // 下で注入する単一の `KanadeMsg::Tick` が pump する OnSecondChange は、挨拶 talk の
+        // TalkDone が kanade に届いて `Steady{talk: None}` へ戻った後なら GET（Ref3=1）、まだ
+        // 挨拶再生中なら NOTIFY（Ref3=0・`Status: talking`）になる（この 2 経路の別は挨拶
+        // TalkDone の到達と注入 Tick の到達順というスレッド間タイミング次第・S3 の観測点は
+        // 死活検出であり GET/NOTIFY の別に依存しない）。どちらの方式でも OnSecondChange は
+        // shiori actor へ到達し、到達時 status() 確認が Exited を検出する（Req2.2/DD-IT-12）——
+        // ゆえに GET/NOTIFY 双方を台本化し、レースが選んだ側だけが消費される（他方は未消費で
+        // 無害）。
         let (backend, handle) = ScriptedShioriBackend::builder()
             .notify("OnInitialize", Ok(()))
             .get("OnFirstBoot", Ok(None))
             .get("OnBoot", Ok(Some(r"\s[0]hello\e".to_string())))
             .notify("basewareversion", Ok(()))
             .get("OnSecondChange", Ok(None))
+            .notify("OnSecondChange", Ok(()))
             .unload(Ok(ExitKind::Abnormal(1)))
             .build();
 
@@ -1306,11 +1336,11 @@ mod s4_close_handshake {
     /// （S1 の `expected_from_shiori_call` と同旨のローカル複製・Req 7.1）。
     fn expected_from_shiori_call(call: ShioriCall) -> RecordedCall {
         match call {
-            ShioriCall::Get { id, references } => RecordedCall::Get {
+            ShioriCall::Get { id, references, .. } => RecordedCall::Get {
                 id: id.to_string(),
                 references,
             },
-            ShioriCall::Notify { id, references } => RecordedCall::Notify {
+            ShioriCall::Notify { id, references, .. } => RecordedCall::Notify {
                 id: id.to_string(),
                 references,
             },
@@ -1452,11 +1482,24 @@ mod s4_close_handshake {
         // 死活監視ノイズ（RecordedCall::Status）を除外して比較する（S1/S3 と同旨）。
         // 本シナリオは kanade へ Tick を一切送らないため OnSecondChange は発火しない。
         let expected_sequence = vec![
-            expected_from_shiori_call(events::on_initialize()),
-            expected_from_shiori_call(events::on_first_boot()),
-            expected_from_shiori_call(events::on_boot(&config)),
-            expected_from_shiori_call(events::baseware_version(&config)),
-            expected_from_shiori_call(events::on_close(CloseReason::User)),
+            expected_from_shiori_call(events::on_initialize(
+                &areka_kanade::ExecutionSnapshot::INACTIVE,
+            )),
+            expected_from_shiori_call(events::on_first_boot(
+                &areka_kanade::ExecutionSnapshot::INACTIVE,
+            )),
+            expected_from_shiori_call(events::on_boot(
+                &config,
+                &areka_kanade::ExecutionSnapshot::INACTIVE,
+            )),
+            expected_from_shiori_call(events::baseware_version(
+                &config,
+                &areka_kanade::ExecutionSnapshot::INACTIVE,
+            )),
+            expected_from_shiori_call(events::on_close(
+                CloseReason::User,
+                &areka_kanade::ExecutionSnapshot::INACTIVE,
+            )),
             RecordedCall::Unload,
         ];
         let calls_without_status: Vec<RecordedCall> = handle
@@ -1576,11 +1619,11 @@ mod s5_close_deadline {
     /// （S1/S4 の `expected_from_shiori_call` と同旨のローカル複製・Req 7.1）。
     fn expected_from_shiori_call(call: ShioriCall) -> RecordedCall {
         match call {
-            ShioriCall::Get { id, references } => RecordedCall::Get {
+            ShioriCall::Get { id, references, .. } => RecordedCall::Get {
                 id: id.to_string(),
                 references,
             },
-            ShioriCall::Notify { id, references } => RecordedCall::Notify {
+            ShioriCall::Notify { id, references, .. } => RecordedCall::Notify {
                 id: id.to_string(),
                 references,
             },
@@ -1689,6 +1732,40 @@ mod s5_close_deadline {
             })
             .expect("kanade actor should still be alive to receive the close request");
 
+        // ---- close 握手が Steady を抜けて OnClose GET を発行するまで有界スピン待機する ----
+        // DD-IT-12: boot は挨拶 talk を追跡し `Steady{talk: Some(greeting)}` へ完了する。ゆえに
+        // CloseRequest 受領時に挨拶 talk がまだ active なら kanade は即握手せず `pending_close`
+        // に記録して `Steady{Some}` を維持し、挨拶 talk の TalkDone 受領時に初めて握手を開始する
+        // （steady.rs `on_close_request` / `on_talk_done`）。この間に下の deadline 用 Tick を
+        // 送ってしまうと、Tick は `Steady{Some}` の pump として消費され OnSecondChange NOTIFY を
+        // 発行してしまう（CloseTalkWait の deadline を進めない）。ゆえに OnClose GET が calls() に
+        // 現れる＝kanade が Steady を抜け ClosePending 以降へ遷移したことを確認してから deadline
+        // 用 Tick を注入する（挨拶 TalkDone の到達は dispatcher が自律的に kanade へ転送するため
+        // 追加 Tick 不要・実時間待機なし・`yield_now` のみ）。OnClose GET が現れた後の kanade は
+        // ClosePending か CloseTalkWait のいずれかにあり、どちらでも下の 2 Tick は last_now を
+        // 起点に deadline を確定・超過させる（ClosePending の Tick は last_now 更新のみ→続く
+        // Value 応答で `deadline_from(Some)` 確定／CloseTalkWait の Tick は deadline=None を
+        // 起点確定・close.rs 参照）。
+        let mut handshake_reached = false;
+        for _ in 0..1_000_000u32 {
+            let onclose_issued = handle
+                .calls()
+                .lock()
+                .expect("calls mutex poisoned")
+                .iter()
+                .any(|c| matches!(c, RecordedCall::Get { id, .. } if id == "OnClose"));
+            if onclose_issued {
+                handshake_reached = true;
+                break;
+            }
+            std::thread::yield_now();
+        }
+        assert!(
+            handshake_reached,
+            "S5: OnClose GET was never issued after CloseRequest — the greeting-tracking close \
+             deferral (DD-IT-12) never resolved into a close handshake within bound"
+        );
+
         // ---- deadline 超過を Tick 2 本の注入だけで駆動する（sleep 不使用・要件 7.4) ----
         // 1本目: CloseTalkWait 入場後 初めて受ける Tick——deadline を
         // `arm_now + close_talk_deadline_ms` へ確定するだけで比較はしない
@@ -1736,11 +1813,24 @@ mod s5_close_deadline {
         // ---- (a) 起動系列＋close 開始＋強制終了系列が正典順序で発火 ----
         // 死活監視ノイズ（RecordedCall::Status）を除外して比較する（S1/S3/S4 と同旨）。
         let expected_sequence = vec![
-            expected_from_shiori_call(events::on_initialize()),
-            expected_from_shiori_call(events::on_first_boot()),
-            expected_from_shiori_call(events::on_boot(&config)),
-            expected_from_shiori_call(events::baseware_version(&config)),
-            expected_from_shiori_call(events::on_close(CloseReason::User)),
+            expected_from_shiori_call(events::on_initialize(
+                &areka_kanade::ExecutionSnapshot::INACTIVE,
+            )),
+            expected_from_shiori_call(events::on_first_boot(
+                &areka_kanade::ExecutionSnapshot::INACTIVE,
+            )),
+            expected_from_shiori_call(events::on_boot(
+                &config,
+                &areka_kanade::ExecutionSnapshot::INACTIVE,
+            )),
+            expected_from_shiori_call(events::baseware_version(
+                &config,
+                &areka_kanade::ExecutionSnapshot::INACTIVE,
+            )),
+            expected_from_shiori_call(events::on_close(
+                CloseReason::User,
+                &areka_kanade::ExecutionSnapshot::INACTIVE,
+            )),
             RecordedCall::Unload,
         ];
         let calls_without_status: Vec<RecordedCall> = handle

@@ -22,6 +22,7 @@
 
 use super::{events, Action, ActiveTalk, Input, Phase, State};
 use crate::msg::{CloseReason, KanadeConfig, MonotonicMs, ShioriOutcome};
+use crate::status::ExecutionSnapshot;
 use crate::talk::{StartTalk, TalkDone, TalkId};
 
 /// 定常運転（Steady）のフェーズ分岐。
@@ -54,6 +55,10 @@ pub(crate) fn step(state: State, input: Input, _config: &KanadeConfig) -> (State
 /// - `talk: Some` → OnSecondChange **NOTIFY**（Ref3=0・応答無視・pending_close は消化しない）。
 fn on_tick(mut state: State, now: MonotonicMs) -> (State, Vec<Action>) {
     state.last_now = Some(now);
+    // GET/NOTIFY・Ref3・Status を単一スナップショットから導出する（DD-IT-3）。snapshot_of は
+    // Steady{None}→talk 非アクティブ（GET・Ref3=1・status 空）、Steady{Some}→talk アクティブ
+    // （NOTIFY・Ref3=0・status talking）を与える——既存の wire 挙動を保存する。
+    let snapshot = super::snapshot_of(&state.phase);
     match state.phase {
         Phase::Steady { talk: None } => {
             if let Some(reason) = state.pending_close.take() {
@@ -62,7 +67,7 @@ fn on_tick(mut state: State, now: MonotonicMs) -> (State, Vec<Action>) {
                 // pump 問い合わせ（GET・Ref3=1）。応答待ちのまま Steady{None} を維持する。
                 (
                     state,
-                    vec![Action::ShioriRequest(events::on_second_change(now, true))],
+                    vec![Action::ShioriRequest(events::on_second_change(now, &snapshot))],
                 )
             }
         }
@@ -71,7 +76,7 @@ fn on_tick(mut state: State, now: MonotonicMs) -> (State, Vec<Action>) {
             // ここでは握手を開始しない——当該 talk の TalkDone を待つ（DD-6・補足遷移）。
             (
                 state,
-                vec![Action::ShioriRequest(events::on_second_change(now, false))],
+                vec![Action::ShioriRequest(events::on_second_change(now, &snapshot))],
             )
         }
         // Steady 以外はルーティング上到達しない（防御アーム）。
@@ -175,7 +180,14 @@ fn on_close_request(mut state: State, reason: CloseReason) -> (State, Vec<Action
 fn begin_close(mut state: State, reason: CloseReason) -> (State, Vec<Action>) {
     tracing::info!(target: "kanade", event = "close_handshake_begin", reason = reason.as_ref_str(), "OnClose GET を発行し握手を開始");
     state.phase = Phase::ClosePending { reason };
-    (state, vec![Action::ShioriRequest(events::on_close(reason))])
+    // 通常 close 握手は talk 非アクティブで行う（INACTIVE スナップショット）。
+    (
+        state,
+        vec![Action::ShioriRequest(events::on_close(
+            reason,
+            &ExecutionSnapshot::INACTIVE,
+        ))],
+    )
 }
 
 /// Steady 以外の Phase が steady::step に届いた場合の防御アーム（構造上発生しない）。
@@ -234,24 +246,36 @@ mod tests {
     fn assert_shiori(action: &Action, expected: &ShioriCall) {
         match (action, expected) {
             (
-                Action::ShioriRequest(ShioriCall::Get { id, references }),
+                Action::ShioriRequest(ShioriCall::Get {
+                    id,
+                    references,
+                    status,
+                }),
                 ShioriCall::Get {
                     id: eid,
                     references: erefs,
+                    status: estatus,
                 },
             ) => {
                 assert_eq!(id, eid, "GET id 不一致");
                 assert_eq!(references, erefs, "GET references 不一致");
+                assert_eq!(status, estatus, "GET status 不一致");
             }
             (
-                Action::ShioriRequest(ShioriCall::Notify { id, references }),
+                Action::ShioriRequest(ShioriCall::Notify {
+                    id,
+                    references,
+                    status,
+                }),
                 ShioriCall::Notify {
                     id: eid,
                     references: erefs,
+                    status: estatus,
                 },
             ) => {
                 assert_eq!(id, eid, "NOTIFY id 不一致");
                 assert_eq!(references, erefs, "NOTIFY references 不一致");
+                assert_eq!(status, estatus, "NOTIFY status 不一致");
             }
             _ => panic!("ShioriRequest の GET/NOTIFY 種別が期待と不一致"),
         }
@@ -282,7 +306,7 @@ mod tests {
         assert_eq!(next.last_now, Some(now), "last_now は Tick ごとに更新される");
         assert_eq!(actions.len(), 1);
         // GET（Ref3=1）——events:: の出力と厳密一致。
-        assert_shiori(&actions[0], &events::on_second_change(now, true));
+        assert_shiori(&actions[0], &events::on_second_change(now, &ExecutionSnapshot { talk_active: false }));
     }
 
     // --- Steady{Some} + Tick → OnSecondChange NOTIFY（Ref3=0）・Steady{Some} ---
@@ -300,7 +324,7 @@ mod tests {
         assert_eq!(next.last_now, Some(now));
         assert_eq!(actions.len(), 1);
         // NOTIFY（Ref3=0）——events:: の出力と厳密一致。
-        assert_shiori(&actions[0], &events::on_second_change(now, false));
+        assert_shiori(&actions[0], &events::on_second_change(now, &ExecutionSnapshot { talk_active: true }));
     }
 
     // --- Steady{None} + Tick with pending_close → OnClose GET・ClosePending・pending 消化 ---
@@ -318,7 +342,7 @@ mod tests {
         assert!(next.pending_close.is_none(), "pending_close は消化される");
         assert_eq!(next.last_now, Some(now), "握手開始でも last_now は更新される");
         assert_eq!(actions.len(), 1);
-        assert_shiori(&actions[0], &events::on_close(CloseReason::User));
+        assert_shiori(&actions[0], &events::on_close(CloseReason::User, &ExecutionSnapshot::INACTIVE));
         // OnSecondChange は発行しない。
         assert_no_second_change(&actions);
     }
@@ -502,7 +526,7 @@ mod tests {
         let (after, tick_actions) = step(next, Input::Tick { now }, &config());
         assert!(matches!(after.phase, Phase::Steady { talk: None }));
         assert_eq!(tick_actions.len(), 1);
-        assert_shiori(&tick_actions[0], &events::on_second_change(now, true));
+        assert_shiori(&tick_actions[0], &events::on_second_change(now, &ExecutionSnapshot { talk_active: false }));
     }
 
     // --- Steady{Some(id)} + TalkDone{id, Interrupted}, pending None → 同じく Steady{None} 復帰 ---
@@ -546,7 +570,7 @@ mod tests {
         );
         assert!(next.pending_close.is_none(), "pending_close は消化される");
         assert_eq!(actions.len(), 1);
-        assert_shiori(&actions[0], &events::on_close(CloseReason::System));
+        assert_shiori(&actions[0], &events::on_close(CloseReason::System, &ExecutionSnapshot::INACTIVE));
     }
 
     // === CloseRequest ===
@@ -564,7 +588,7 @@ mod tests {
         );
         assert!(matches!(next.phase, Phase::ClosePending { reason: CloseReason::User }));
         assert_eq!(actions.len(), 1);
-        assert_shiori(&actions[0], &events::on_close(CloseReason::User));
+        assert_shiori(&actions[0], &events::on_close(CloseReason::User, &ExecutionSnapshot::INACTIVE));
     }
 
     // --- Steady{Some} + CloseRequest → pending_close 記録・Steady{Some} 維持（OnClose まだ） ---

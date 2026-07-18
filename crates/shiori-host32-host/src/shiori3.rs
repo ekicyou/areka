@@ -64,6 +64,9 @@ pub struct ShioriRequest<'a> {
     pub references: &'a [String],
     /// `Sender` ヘッダ値（例 `"areka"`・design.md §送出ヘッダ最小集合）。単一差替点。
     pub sender: &'a str,
+    /// `Status` ヘッダの wire 値。`None` ⇒ ヘッダ行を出さない／`Some(v)` ⇒ `Status: v` を1行。
+    /// **値は解釈しない**（汎用 codec・語彙は kanade が所有・DD-IT-6）。
+    pub status: Option<&'a str>,
     /// charset（本仕様は [`Charset::Utf8`] 固定・要件 1.6）。
     pub charset: Charset,
 }
@@ -74,6 +77,7 @@ pub struct ShioriRequest<'a> {
 /// - request line: `GET SHIORI/3.0` / `NOTIFY SHIORI/3.0`（要件 1.1/1.2）
 /// - `Charset: UTF-8`（要件 1.6）
 /// - `Sender: <sender>`（`req.sender` をそのまま・単一差替点）
+/// - `Status: <status>`（`req.status` が `Some` のときのみ・`Sender` の後・`ID` の前・DD-IT-6・要件 2.3）
 /// - `ID: <id>`（要件 1.4・汎用・特定イベント分岐なし＝要件 1.5）
 /// - `Reference0`・`Reference1`・…（`references` を 0 起点連番で・要件 1.4）
 /// - `SecurityLevel: local`（pasta 実テスト準拠・de-facto）
@@ -99,6 +103,13 @@ pub fn build_request(req: &ShioriRequest) -> Vec<u8> {
     out.push_str("Sender: ");
     out.push_str(req.sender);
     out.push_str("\r\n");
+    // `Status` は `Sender` の後・`ID` の前（DD-IT-6）。`None` は行ごと省略（要件 2.3）。
+    // 値は解釈せず verbatim に転記する（語彙は kanade が所有・DD-IT-6）。
+    if let Some(status) = req.status {
+        out.push_str("Status: ");
+        out.push_str(status);
+        out.push_str("\r\n");
+    }
     out.push_str("ID: ");
     out.push_str(req.id);
     out.push_str("\r\n");
@@ -365,6 +376,7 @@ mod tests {
             id: "OnBoot",
             references: &references,
             sender: "areka",
+            status: None,
             charset: Charset::Utf8,
         };
         let bytes = build_request(&req);
@@ -388,6 +400,7 @@ mod tests {
             id: "OnSecondChange",
             references: &[],
             sender: "areka",
+            status: None,
             charset: Charset::Utf8,
         };
         let bytes = build_request(&req);
@@ -405,6 +418,7 @@ mod tests {
             id: "OnTest",
             references: &references,
             sender: "areka",
+            status: None,
             charset: Charset::Utf8,
         };
         let bytes = build_request(&req);
@@ -427,6 +441,7 @@ mod tests {
             id: "version",
             references: &[],
             sender: "areka",
+            status: None,
             charset: Charset::Utf8,
         };
         let bytes = build_request(&req);
@@ -444,6 +459,7 @@ mod tests {
             id: "OnTest",
             references: &references,
             sender: "areka",
+            status: None,
             charset: Charset::Utf8,
         };
         let bytes = build_request(&req);
@@ -460,6 +476,7 @@ mod tests {
                 id,
                 references: &[],
                 sender: "areka",
+                status: None,
                 charset: Charset::Utf8,
             };
             let bytes = build_request(&req);
@@ -476,11 +493,75 @@ mod tests {
             id: "OnBoot",
             references: &[],
             sender: "custom-baseware",
+            status: None,
             charset: Charset::Utf8,
         };
         let bytes = build_request(&req);
         let s = std::str::from_utf8(&bytes).expect("valid UTF-8");
         assert!(s.contains("Sender: custom-baseware\r\n"), "request:\n{s}");
         assert!(!s.contains("Sender: SSP"), "must not hardcode SSP:\n{s}");
+    }
+
+    /// `Some(status)` → `Status:` 行が発行され、その位置が `Sender:` の後・`ID:` の前（DD-IT-6・要件 2.3/5.3）。
+    #[test]
+    fn build_with_status_emits_line_between_sender_and_id() {
+        let req = ShioriRequest {
+            method: Method::Get,
+            id: "OnSecondChange",
+            references: &[],
+            sender: "areka",
+            status: Some("talking"),
+            charset: Charset::Utf8,
+        };
+        let bytes = build_request(&req);
+        let s = std::str::from_utf8(&bytes).expect("valid UTF-8");
+        assert!(s.contains("Status: talking\r\n"), "Status 行が無い:\n{s}");
+        // 位置関係: Sender < Status < ID（DD-IT-6）。
+        let sender = s.find("Sender:").expect("Sender present");
+        let status = s.find("Status:").expect("Status present");
+        let id = s.find("ID:").expect("ID present");
+        assert!(
+            sender < status && status < id,
+            "Status の位置は Sender の後・ID の前でなければならない（DD-IT-6）:\n{s}"
+        );
+    }
+
+    /// `None` → `Status:` 行が一切出ない（要件 2.3・空集合はヘッダ行そのものを省略）。
+    #[test]
+    fn build_without_status_emits_no_line() {
+        let req = ShioriRequest {
+            method: Method::Get,
+            id: "OnSecondChange",
+            references: &[],
+            sender: "areka",
+            status: None,
+            charset: Charset::Utf8,
+        };
+        let bytes = build_request(&req);
+        let s = std::str::from_utf8(&bytes).expect("valid UTF-8");
+        assert!(!s.contains("Status:"), "None なら Status 行を出してはならない:\n{s}");
+    }
+
+    /// Status 値は verbatim に写る（codec は解釈/分割/整形しない・DD-IT-6 語彙非漏洩）。
+    #[test]
+    fn build_status_value_is_verbatim() {
+        let value = "talking,balloon(0=2/1=0)";
+        let req = ShioriRequest {
+            method: Method::Get,
+            id: "OnSecondChange",
+            references: &[],
+            sender: "areka",
+            status: Some(value),
+            charset: Charset::Utf8,
+        };
+        let bytes = build_request(&req);
+        let s = std::str::from_utf8(&bytes).expect("valid UTF-8");
+        // カンマ・括弧・スラッシュ・等号を含む値がそのまま 1 行に載る（解釈しない）。
+        assert!(
+            s.contains("Status: talking,balloon(0=2/1=0)\r\n"),
+            "Status 値は verbatim でなければならない:\n{s}"
+        );
+        // 語彙非漏洩の確認: 値に "Reference" が無い限り Reference 行を捏造しない（既存檻と非衝突）。
+        assert!(!s.contains("Reference"), "Status 値が Reference 行を汚染してはならない:\n{s}");
     }
 }
