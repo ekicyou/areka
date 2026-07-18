@@ -18,7 +18,7 @@
   - 往復同一（`as_command_carrier(&command_carrier(n,t)) == Some((n,t))`）とキャリアのワイヤ形（`{"Custom":{"command":"move","params":["-353","","","0","base","base"]}}`）を檻で固定する
   - _Requirements: 4.1, 4.2, 8.1_
 
-- [ ] 1.4 名前権威表 command_target_of と relevance 文言の意図的更新を実装する
+- [x] 1.4 名前権威表 command_target_of と relevance 文言の意図的更新を実装する
   - `command_target_of(name: &str) -> Option<CueTarget>` を新設し、M1 唯一のエントリ `"move" -> Some(CueTarget::Window)` を登記する（未知名は `None`）
   - `cue_target_of` へ `Cursor -> Balloon` アームを追加する
   - `Custom` の rustdoc を「型レベル `None` はコマンド名レベル選別（`command_target_of`）への委譲」へ改訂する（R8.7・settled 側の「誰も action しない」という内部矛盾の解消）
