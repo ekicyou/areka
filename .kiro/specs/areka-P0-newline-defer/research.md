@@ -203,3 +203,40 @@ Option A を基本に、あふれ判定側でも「未実体化空行を最新�
 - **確定すべき鍵**: §4 論点 1（連続改行の単一累算 vs 中間空行）・論点 3（break/flush 順序＝R4.2 の要）・論点 4（`opened` 再定義）。これらが視覚正準を決める。
 - **検証戦略**: 純粋 layout の判断分岐を `FixedMetrics` で決定論全網羅（R7）。既存 immediate 前提檻は「意味の変更に伴う更新」（陳腐化除外ではない）。実機 R8 は有界 auto-exit＋grep＋vision の定石で A→B 現象消失・A→B→A 段落維持を確認。
 - 次アクション: 要件ディスカッションで §4 の設計判断項目（特に論点 1）を詰め、`/kiro-design areka-P0-newline-defer` で設計へ。
+
+---
+
+## 8. 設計フェーズ追記（2026-07-18・design.md 生成時の決定記録）
+
+> discovery 種別: **light**（完了済み crate の拡張・新規依存/新規外部技術なし・web 調査不要——SSP 遅延意味論は要件ディスカッションで開発者決裁済み、ukadoc はこの粒度の描画意味論を記述しない）。
+
+### 8.1 §4 設計判断 8 論点の決着（design.md DD-1〜DD-8 が正本）
+
+| 論点 | 決着 |
+|---|---|
+| 1. 連続改行の実体化形 | **単一累算・中間空行なし**（要件正文 R1.3/R2.2/R1.2 が確定済みのため SSP 追観測は不要と裁定）。グリフ幾何は immediate と同一・消えるのは空行住人のみ。 |
+| 2. 先頭改行 | **空行を作らず行送りのみ**（正準モデル「行は配置された可視コンテンツのみが作る」）。`[\n, a]` → 1 行（block 前進済み位置）・`[\n]` のみ → 0 行。 |
+| 3. break/flush 順序 | **可視 prefix 打切り（break）を保留フラッシュより前**に固定（R4.2 の要・順序契約として専用檻で檻化）。 |
+| 4. `opened` フラグ | **撤去**し末尾 finish を `!current.is_empty()` で判定（遅延化後は行確定が常にグリフ配置に隣接するため等価）。 |
+| 5. canvas 1:1 | canvas 本番非改変を明文確定（行→住人 1:1 は layout 出力に対する契約のまま保たれる）。 |
+| 6. 既存檻の棚卸し | **実測で 4 檻＋doc コメントに確定**: layout.rs:714（prefix 内改行）・layout.rs:750（trailing 空行）・layout.rs:1019（trailing あふれ参加）・canvas.rs:468（空住人）。**gap 分析 §4-6 の「draw.rs 檻更新見込み」は実測で否定**——draw.rs:1627/1726/1730 の LineBreak はすべて後続グリフあり（内部改行＝実体化される）でアサーション非影響。viewbox.rs／viewbox_draw.rs の檻も oracle=viewbox byte 等価（両側が同一 layout 出力を消費）ゆえ意味論非依存で非影響。viewbox_draw.rs:2074 の「幽霊空行」コメントのみ陳腐化（現象自体が本修正で消滅）→ コメント更新。 |
+| 7. 新規檻 | design.md Testing Strategy に 7 系列を確定（累算実体化・先頭改行/改行のみ 0 行・ratio 0 縮退・reveal 整合・あふれ実体化時評価・縦書き 3 方向・決定論入力拡張）。 |
+| 8. R8 実機 grep | `emo2_real_run` 定石へ接続する**手順**として確定（常設テスト化しない）: `AREKA_APP_SMOKE_EXIT_MS=180000`＋`RUST_LOG=info,areka_emo_text=debug`、(a) シナリオ存在＝`NewLine cue 適用` `ratio=1.5`（pasta spot_newlines 既定 1.5 の指紋）≥1 件、(b) 現象消失＝`あふれ発火`（visible_window 既存 debug marker）0 件（正当あふれ観測時は ratio=1.5 直後窓で縮退判定）、(c) A→B→A 段落維持＝人間目視（決定論等価物は R7 檻）。 |
+
+### 8.2 Research Needed の消化状況
+
+- **[R-1] SSP 連続改行の実機追観測**: 不要と裁定（要件正文が単一累算・空行不反映を確定済み——追観測は要件を覆せない）。
+- **[R-2] 実機再現台本と grep 設計**: grep 設計は 8.1 論点 8 で確定。専用台本は作らない（pasta の spot 切替は通常運転で発生・ratio=1.5 指紋で実走内の発生を機械確認・外れなら再実行）。A→B→A の決定論等価物は R7 新規檻（reveal 整合・実体化）が常設で担保。
+- **[R-3] 既存檻の全リスト**: 消化済み（8.1 論点 6 の実測棚卸し・`LineBreak`/`NewLine` 全使用箇所の grep 全数照合による）。
+
+### 8.3 synthesis 帰結（Generalization / Build-vs-Adopt / Simplification）
+
+- **Generalization**: 実体化トリガを「次の**可視コンテンツ**の配置」と定式化（配置点＝Glyph アーム直前のフラッシュ）。将来の画像住人も同じ配置点にフラッシュを置けば同一モデルを継承できる（インタフェースの一般化のみ・実装はグリフのみ）。
+- **Build-vs-Adopt**: 該当なし（外部依存・新規ライブラリなし。既存の軸読み替え・折返し・可視窓機構をそのまま再利用）。
+- **Simplification**: 新規型・新規シーム・新規ファイル・フレーム跨ぎ状態はゼロ。「reveal カーソル通過」の追跡状態機械は不要（layout が毎フレーム `visible_count` から純関数で再導出＝R4.1/R4.2 が状態なしで成立）。Option B/C は棄却（design.md Architecture 参照）。
+
+### 8.4 リスクと緩和
+
+- **順序契約の取り違え**（break/flush・R4.2 破壊）: 最大リスク。専用檻（visible 増分 1→2 の実体化檻）で固定。
+- **落ち檻の見落とし**: 実変更後 `cargo test --workspace` 全走（i686 host-32 成果物の先ビルド前提）で落ちた檻を「意味の変更に伴う更新／陳腐化」個別判定（obsolete-vs-broken 方針）。
+- **実機 grep の偽陰性**（talk 抽選で spot 切替が出ない）: ratio=1.5 指紋 0 件なら再実行と手順に明記。
