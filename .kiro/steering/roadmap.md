@@ -188,6 +188,21 @@ emo2 が起動して喋る。下記 5 トラックを結線して達成（⓪ �
 
 > **直列化された干渉ペアの台帳**（ウェーブ境界の根拠・裁定㉘の写像）: idle-talk⇄input-events〔kanade msg/events/steady 共有〕=W1→W2／idle-talk⇄position-persist〔events.rs〕=W1→W3／input-events⇄position-persist〔spawn.rs〕=W2→W3／dialogue-tags⇄position-persist〔follow.rs〕=W1→W3／dialogue-tags⇄mayuna〔compile.rs＋CueCommand〕=W1→W2／mayuna⇄seriko-loop〔state.rs＋完了ゲート〕=W2→W3／dialogue-tags→choice-render〔choice cue 契約〕=W1→W4／seriko-loop⇄choice-render〔emo2_boot frame/UI 配線近接〕=W3→W4／choice-render→choice-select-events〔ChoiceSelection 契約〕=W4→W5。W1 内の注記: idle-talk と dialogue-tags は共に crate areka-ghost/areka に触れるが**別ファイル**（`ShioriBackend` impl 追随＝runtime.rs/spine 系 vs move sink 新設＋follow.rs dead_code 解消）・dialogue-tags の観測は script→cue 列 mock＋実機 move で spine 檻不要＝同居も生じない。`status-execution-states` は台帳（着手しない）・追記㉘の「最大8本並走」次フロント記述は本編成で**置換**。
 
+**DPI追従下の当たり判定＝新クラスタ（2026-07-18 追記㉚・`collision-geometry` Task 4.2 受け入れ却下から派生・M1/M2 配置は別セッション判断）**:
+
+> **経緯**: `collision-geometry`（W1）の実 DPI 受け入れ（Task 4.2）で、モニタ DPI を2水準（125%/200%）変えて当たり判定を検証したが、emo が **k=1.0 ハードワイヤ**（マスコットが DPI 追従で拡大しない）ゆえ両水準ともマスコット同一物理寸＝ヒットテスト経路が同一で、**DPI追従下（scale≠1.0）の当たり判定が全く未検証**と開発者が判断し**受け入れ却下**（2026-07-18）。areka の**基本設計は DPI追従**（[[areka-dpi-following-core-design]]・SSP と別思想・k=1.0 は途中状態）。詳細分析（7エージェント配管調査・file:line）は `specs/areka-P0-collision-geometry/research.md §13`。
+>
+> **新 spec 2 本（brief 済 2026-07-18・依存あり）**:
+> - **`areka-P0-emo-dpi-scaling`**（⑥ emo・render 基盤）: emo が surface を k=monitorDPI÷author_dpi で実拡大レンダ・`scale()` が k を返す・窓/swapchain 追従。wintf `DPI` component（既存・`GetDpiForWindow`／`WM_DPICHANGED`）を consume。wintf は既に k≠1.0 レンダ実績あり（`taffy_systems.rs`→`render.rs` `SetTransform`）＝greenfield でない。**broad な emo 基盤**（全 emo 消費者が波及）。
+> - **`areka-P0-collision-dpi-hittest`**（⑥ emo・collision 後続）: `EmoPresenter::hit_region` の point÷k＋fake-k 決定論 unit＋`collision-geometry` の k=1.0 契約改訂＋scale≠1.0 実機受け入れ（Task 4.2 の正しい受け入れ）。純 `hit.rs` 不変。**`emo-dpi-scaling` に依存**（実 k× 表示なしでは実機で ÷k を no-op としてしか観測できない＝合流ゲート）。
+>
+> **依存**: `emo-dpi-scaling` → `collision-dpi-hittest`。両者とも `collision-geometry`（純関数・resolver・probe＝Task 1-4.1 完成・不変）を土台に使う。DPI追従が波及する既存消費者（`completed/window-placement` 窓寸・`emo-text-layer` 行寸・balloon・`choice-render`）は **Revalidation Trigger**（`emo-dpi-scaling` 着地後に各 spec 再検証）。
+>
+> **⚠️ 別セッションで決める未決事項（[[portfolio-convergence-decided-in-separate-session]]・単一 spec の椅子から決めない）**:
+> 1. **M1/M2 配置**: DPI追従は基本設計だが emo2 は k=1.0 でも E2E 実走する（M1 blocker か M2 送りか）。
+> 2. **`collision-geometry` の合流/マージ**: Task 1-4.1（k=1.0 resolver＋`HitRegion` 契約＝`input-events` W2 が必要）は完成。k=1.0 記録を暫定確定として先に merge（DPI追従 hit-test を新 spec で追跡）するか、`collision-dpi-hittest` 着地まで開けておくか。
+> 3. **Strategy A（emo-compose 鮮明ラスタ）vs B（WUC transform）**・author_dpi 定義・整数倍/連続・÷k 丸め・WM_DPICHANGED ライブ再スケール・seriko/mayuna collision 相互作用（各 brief の open questions）。
+
 **アプリ組み上げの所有マップ（2026-07-05 確定・「誰がアプリとしての areka を組むか」）**:
 - **三段構え**: ① `app-shell`（骨格＝main.rs 所有・構成入力・デモ保全・**検証用ダミー窓＋replace-me シーム**〔app が run() 所有・後続が本物窓へ差替〕・早期）→ ② `ghost-setup`（骨格の差し込み口にエンジン結線・boot 指示・close 握手待ち・エンジン群完了後）→ ③ `emo2-conformance-e2e`（完成アプリでの一周適合＝M1 ゴール証明）。
 - **boot/close のイベント発火順序＝kanade の運行表**（上記 kanade 行・app は器に徹する）／**永続化（vanish count・窓位置）＝position-persist**（M-life）。

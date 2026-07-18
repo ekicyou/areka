@@ -361,3 +361,43 @@
 
 - 実査: **SSP ソースは非公開**（作者 GitHub 全14リポ・ukatech org 全18リポ・公式サイト・コミュニティ一覧2件・GitHub 全域コード検索の5系統が独立一致・2026-07-17）。「SSP はオープンソース化された」は**フォークロア**（ssp-i18n 等の周辺リポジトリの誤認）。互換クローン ninix-kagari は crossing-number 法（閉/半開いずれとも不一致の非対称境界）で先例にならない。
 - 帰結: Revalidation Trigger 3 の発火条件（SSP 実挙動の排他境界判明）は机上で到達不能＝**閉区間（wintf 前例）が立ったまま・設計変更なし**。将来の唯一の実証経路は実 SSP バイナリへの境界1pxブラックボックス突合（1px 境界プローブ用ゴーストで OnMouseMove Reference4 を観測・撫でクラスタ合流サインオフと同席が自然）。Open Risk 1 へ実査結果を焼き込み。
+
+## 13. DPI追従下の当たり判定＝Task 4.2 受け入れ却下と新 spec 分割（2026-07-18・引き継ぎ）
+
+> **この節は別セッションへの引き継ぎ記録**（開発者指示 2026-07-18「開発は別セッションで行う・課題が漏れなく引き継がれるよう網羅」）。実装成果物 Task 1-4.1 は完成・コミット済みだが、Task 4.2（実 DPI 受け入れ）は**却下**され、DPI追従下の当たり判定は新 spec 2 本へ分割した。
+
+### 13.1 経緯: 実 DPI 受け入れ却下
+
+`collision-probe` を実 DPI≠96 の2水準（DELL S3221QS 3840×2160 **dpi=120/125%** primary ＋ 副 2880×1800 **dpi=192/200%**）で実走し、②③④自動 assert（surface1000=382×547・k=1.0・read_back Head/Bust 中心不透明）＋⑤目視解決（Head/None/Bust・静止 Δ=(0,0)）＋192 の外部 `GetClientRect`=382×547 を実測（`acceptance-record.md` に証跡保持）。**しかし開発者が却下**——理由:
+
+- areka の**基本設計は DPI追従**（画面 DPI に追従してマスコット拡大縮小・SSP の固定px等倍とは別思想）。k=1.0（非拡大）は**現実装の途中状態であって設計目標ではない**（[[areka-dpi-following-core-design]]）。
+- 現状 `TextSlotView::scale()` は常に 1.0 ゆえ、**両 DPI 水準ともマスコットは同一物理寸（382×547）＝ヒットテストの座標経路が完全に同一**。「モニタ DPI を2水準変える」は k=1.0 plumbing の DPI-clean 性（dpi/96 誤再スケールが無いこと）を確認したにとどまり、**DPI追従の核心＝「マスコットが scale≠1.0 で拡大表示された状態で、拡大後の窓 client 点を k で縮約（÷k）して当たり判定が正しいか」は未実装かつ未検証**。
+- ＝「拡大率設定が異なるときに正しくヒットテストされるか」が全く未検証。**これでは受け入れできない**（開発者言明）。
+
+### 13.2 配管調査（2026-07-18・7エージェント workflow・実測 file:line）
+
+- emo 層は **k=1.0 がコンパイル時定数でハードワイヤ**: `CURRENT_COMPOSE_SCALE: f32 = 1.0`（`presenter.rs:126`）→`TextSlotView.scale`（`:427`）。`hit_region`（`:449-453`）は点を無変換で純関数へ（÷k なし）。純 `hit.rs:57-62` は scale/k を取らない。`compute_extent`（`plan.rs:366-383`）・`blit.rs:69-163`（1:1 整数コピー・リサンプラ不在）。下流寸法（swapchain/visual/窓）は composed extent 従属。
+- **per-window DPI は入手可能・未消費**: wintf `DPI` component（`dpi.rs:21-28`・`GetDpiForWindow` `window_handle.rs:223-238`・`WM_DPICHANGED` `window_pos.rs:285-343`・re-export `ecs/mod.rs:46`）。presenter は `window: Entity`＋`&mut World` を持つが `world.get::<DPI>()` を読んでいない。単一変更点＝`TextSlotView::scale()`。
+- **wintf は既に k≠1.0 レンダリング実績あり**（`taffy_systems.rs:214-225`→`arrangement.rs:196-234`→`render.rs:95-111` `SetTransform`）。emo-present は意図的バイパス（`mount.rs:60-72`）＝greenfield でない。
+- **必要なピース（end-to-end）**: (a) k× でレンダ〔emo-compose A案リサンプラ or emo-present B案 transform〕 (b) `scale()` が k を返す〔emo-present・単一変更点〕 (c) `hit_region` が点÷k〔本 collision 系・caller 境界〕 (d) 窓/swapchain = k×surface〔A案は自動追従〕。
+- **正直な限界**: (c) の point÷k＋fake-k 決定論 unit は今・GPU 不要で書けるが、実機 7.3 は render が実際に scale しないと満たせない（÷k を no-op としてしか観測できず正誤を実機で判別不能）。fake-k 注入 unit は 7.3 の「合成点注入は証跡と認めない」に同型ゆえ回帰檻には足るが実機証跡には数えない。＝point÷k 単独は**必要だが不十分**。
+
+### 13.3 分割決定（新 spec 2 本・brief 済 2026-07-18）
+
+- **`areka-P0-emo-dpi-scaling`**（⑥ emo・render 基盤・broad）: emo が surface を k=monitorDPI÷author_dpi で実拡大レンダ・`scale()` が k を返す・窓/swapchain 追従。wintf `DPI` を consume。全 emo 消費者が波及。
+- **`areka-P0-collision-dpi-hittest`**（⑥ emo・collision 後続・**`emo-dpi-scaling` に依存**）: `EmoPresenter::hit_region` の point÷k＋fake-k 決定論 unit＋本 spec の k=1.0 契約改訂＋scale≠1.0 実機受け入れ。純 `hit.rs` 不変。
+- 両者とも本 spec（`collision-geometry`）の純関数・resolver・probe を土台に使う。DPI追従波及の既存消費者（`window-placement` 窓寸・`emo-text-layer` 行寸・balloon・`choice-render`）は Revalidation Trigger。
+
+### 13.4 本 spec（collision-geometry）の状態
+
+- **Task 1-4.1 完成・コミット済み**（k=1.0 純関数 `hit_region`＋`RegionPriority`／`current_surface_id` 読み口／`HitRegion` 契約＋`resolve_hit_region`／collision-probe）。これらは DPI追従でも**土台として不変**（÷k は caller 境界で吸収・純核は DPI 非参照のまま）。`HitRegion` 契約は `input-events`（W2）が今すぐ必要とする実物。
+- **Task 4.2 は却下＝未完了**（tasks.md で `[ ]`＋`_Blocked_`・`acceptance-record.md` 冒頭に REJECTED 明示）。k=1.0 plumbing の実測値は有効ゆえ保持。DPI追従 hit-test 受け入れは `collision-dpi-hittest` へ移管。
+- design の k=1.0 限定契約（`design.md:50`）と Revalidation Trigger 2（`:86`）は「将来 optional」の書き方だが、DPI追従を基本設計とみなすと**この限定契約自体が要見直し**＝`collision-dpi-hittest` が改訂する。
+
+### 13.5 別セッションで決める未決事項（再開トリガ・[[portfolio-convergence-decided-in-separate-session]]）
+
+1. **M1/M2 配置**: DPI追従は基本設計だが emo2 は k=1.0 でも E2E 実走する。M1 blocker（M-life に組込）か M2 送りか。
+2. **collision-geometry の合流/マージ**: Task 1-4.1（k=1.0 resolver＋`HitRegion` 契約）を暫定確定として先に merge（DPI追従 hit-test を新 spec で追跡）するか、`collision-dpi-hittest` 着地まで開けておくか。input-events（W2）が `HitRegion` を必要とする点が判断材料。
+3. **Strategy A（emo-compose 鮮明ラスタ・`blit.rs` リサンプラ）vs B（WUC transform・軟い/低コスト）**・**author_dpi 定義**（k の分母・ukadoc 正典）・**整数倍/連続**・**÷k 丸め**（floor/round・境界1px）・**WM_DPICHANGED ライブ再スケール**・**seriko/mayuna collision との相互作用**（各 brief の open questions）。
+
+> 正本参照: 新 spec 2 本の brief（`specs/areka-P0-emo-dpi-scaling/brief.md`・`specs/areka-P0-collision-dpi-hittest/brief.md`）／roadmap 追記㉚／[[areka-dpi-following-core-design]]。
