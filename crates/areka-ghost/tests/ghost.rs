@@ -15,3 +15,7 @@ mod real_pasta_test;
 // `crate::recorder::*`（`Recorder`／`ExchangeRecord` 等）を e2e／採取ハーネスから消費する。
 #[path = "ghost/recorder.rs"]
 mod recorder;
+// `inproc_fixture`（task 4.1 が成果物 DLL の locate、task 4.2 が InProc 実 DLL 駆動のテストゴースト
+// 組立を定義する）はテスト支援モジュール。後続タスク（5.x）が e2e ハーネスから消費する。
+#[path = "ghost/inproc_fixture.rs"]
+mod inproc_fixture;
