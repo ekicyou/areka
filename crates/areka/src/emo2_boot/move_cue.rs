@@ -1253,4 +1253,151 @@ mod apply_move_tests {
         );
         assert_eq!(pos_of(&world, target), before, "適用不成立で対象窓は不動");
     }
+
+    // -------------------------------------------------------------------------
+    // task 10.4 — MoveCueSink→channel→apply_move_directive→move_window_to の
+    // 末端 pipeline を **一続きの unit** として駆動する統合檻（R5.3/5.5/6.1/6.2/9.5）。
+    //
+    // 既存檻との差分（重複回避）:
+    //   - 7.4 `apply_move_tests`: `apply_move_directive` を **単体**で駆動（directive を
+    //     parse で直接構築・sink/channel を経ない apply-in-isolation）。
+    //   - 9.1 `move_cue_sink_reaches_emo2_wiring_receiver`（frame.rs）: sink→channel→
+    //     `drain_move_directives` まで（**apply を呼ばない**＝窓を動かさない）。
+    //   - 9.2 `run_move_drain_phase_applies_directive_when_ghost_windows_present`（frame.rs）:
+    //     **生 `tx.send(directive)`**（sink を経ない）→drain→apply（channel→apply 結線）。
+    //   - 9.3 `spine_move_cue_drives_window_move_end_to_end`（spine.rs）: full async spine
+    //     （cue script→compile→dispatch→broadcast→実 MoveCueSink→channel→drain→apply）だが
+    //     **座標のみ** assert（balloon 随伴・Anchored ビット同一・対象不在は檻に入れていない）。
+    //
+    // 10.4 の固有価値: `MoveCueSink::emit(キャリア cue)` の **名前選別＋actor→scope＋parse＋
+    // channel handoff** と `apply_move_directive` の **座標算出＋move_window_to 反映** が
+    // headless 単一スレッドで **正しく合成する** ことを、R5.3（balloon 随伴 offset 維持）・
+    // R6/9.5（Anchored ビット同一）・R5.5（対象不在 warn+false・no mutation）まで **pipeline 越し**
+    // に固定する（9.3 の full boot を要さない move-only の焦点檻）。
+
+    use dola::cue::{ActorKey, CueCommand, CueSink, TalkCue};
+    use std::sync::mpsc::channel;
+
+    /// `\![move]` キャリア cue を **実 `MoveCueSink`→mpsc channel** に通し、drain した
+    /// `MoveDirective` を返す（sink の名前選別＋`cue.actor`→scope＋`parse_move_directive`＋
+    /// channel handoff を実経路で通す＝末端 pipeline の前段そのもの）。
+    fn directive_via_sink(actor: &str, tokens: &[&str]) -> MoveDirective {
+        let (tx, rx) = channel::<MoveDirective>();
+        let mut sink = MoveCueSink::new(tx);
+        sink.emit(TalkCue {
+            at: 0.0,
+            actor: ActorKey::from(actor),
+            command: CueCommand::command_carrier(
+                "move",
+                tokens.iter().map(|s| s.to_string()).collect(),
+            ),
+            duration: 0.0,
+        });
+        rx.try_recv()
+            .expect("move キャリアは sink→channel を通って MoveDirective を送出する")
+    }
+
+    /// R5.3/6.1/6.2/9.5: fixture `\1\![move,-353,,,0,base,base]` を **sink→channel→apply**
+    /// の一続きに通し、①対象窓が fixture 検算座標へ移動②バルーン随伴 offset 維持③対象・基準の
+    /// `Anchored` がビット同一——を **pipeline 越し** に同時固定する（sink 名前選別＋parse＋
+    /// handoff と apply の座標算出＋move_window_to が正しく合成する証明）。
+    #[test]
+    fn pipeline_sink_to_apply_moves_keeps_balloon_and_anchored() {
+        let (mut world, gw) = move_world();
+        let target = gw.char_window(1).unwrap();
+        let base = gw.char_window(0).unwrap();
+        let balloon = gw.balloon_window(1).unwrap();
+
+        let offset = world
+            .get::<BalloonFollow>(target)
+            .copied()
+            .expect("target に BalloonFollow")
+            .offset;
+        let target_anchored_before = world
+            .get::<Anchored>(target)
+            .copied()
+            .expect("target に Anchored（spawn が付与）");
+        let base_anchored_before = world
+            .get::<Anchored>(base)
+            .copied()
+            .expect("base に Anchored（spawn が付与）");
+
+        // 末端 pipeline を一続きに駆動: キャリア cue→MoveCueSink::emit→channel→drain→apply。
+        let directive = directive_via_sink("1", &["-353", "", "", "0", "base", "base"]);
+        assert_eq!(
+            directive.scope, 1,
+            "sink が cue.actor（\\1）から scope=1 を導出する（pipeline 前段）"
+        );
+        assert!(
+            apply_move_directive(&mut world, &directive),
+            "対象・基準窓が揃うので pipeline 越しの適用は成功する"
+        );
+
+        // ① fixture 検算座標（x'=1000+200−353−150=697・y=Fix は現状維持 800）。
+        assert_eq!(
+            pos_of(&world, target),
+            Point { x: 697, y: 800 },
+            "sink→channel→apply の一続きで対象窓が fixture 座標へ移動する"
+        );
+
+        // ② バルーン随伴 offset 維持（R5.3）——pipeline 越しに balloon_pos − char_pos ≡ offset。
+        let cpos = pos_of(&world, target);
+        let bpos = pos_of(&world, balloon);
+        assert_eq!(bpos.x - cpos.x, offset.x, "offset x が pipeline 越しに維持される");
+        assert_eq!(bpos.y - cpos.y, offset.y, "offset y が pipeline 越しに維持される");
+
+        // ③ Anchored ビット同一（R6.1/6.2/9.5）——sink 経由でも永続確定系へ触れない。
+        assert_eq!(
+            world.get::<Anchored>(target).copied(),
+            Some(target_anchored_before),
+            "対象窓の Anchored はビット同一（pipeline 越しに永続確定系へ触れない）"
+        );
+        assert_eq!(
+            world.get::<Anchored>(base).copied(),
+            Some(base_anchored_before),
+            "基準窓の Anchored もビット同一"
+        );
+    }
+
+    /// R5.5: 対象 scope 不在の move キャリアを **sink→channel→apply** に通しても、apply は
+    /// warn＋`false` を返し World は不変（Anchored 含む）——非 panic・talk を殺さない縮退が
+    /// pipeline 越しに成立する。sink 段は正常に scope=1 の directive を送出し（名前選別・parse は
+    /// 通る）、対象不在の縮退は apply 段でのみ起きる分離を固定する。
+    #[test]
+    fn pipeline_target_absent_warns_false_no_mutation() {
+        // GhostWindows に scope0（基準）のみ挿入・fixture の対象 scope1 は不在。
+        let placements = vec![placement(0, 1000, 500, 400, 687, PointPx { x: 285, y: -19 })];
+        let mut world = World::new();
+        let gw = spawn_ghost_windows(
+            &mut world,
+            &placements,
+            &GhostTitles::from_scope_titles([(0, "a".to_string())]),
+        );
+        attach_fake_handles(&mut world, &gw);
+        let base = gw.char_window(0).unwrap();
+        let before = pos_of(&world, base);
+        let base_anchored_before = world
+            .get::<Anchored>(base)
+            .copied()
+            .expect("base に Anchored");
+
+        // sink 段は正常送出（actor=1・parse は通る）。対象不在の縮退は apply 段でのみ起きる。
+        let directive = directive_via_sink("1", &["-353", "", "", "0", "base", "base"]);
+        assert_eq!(directive.scope, 1, "sink 段は対象不在を知らず directive を送出する");
+
+        assert!(
+            !apply_move_directive(&mut world, &directive),
+            "対象 scope1 不在は pipeline 越しでも warn＋false（R5.5）"
+        );
+        assert_eq!(
+            pos_of(&world, base),
+            before,
+            "適用不成立で基準窓の位置は不変（no mutation）"
+        );
+        assert_eq!(
+            world.get::<Anchored>(base).copied(),
+            Some(base_anchored_before),
+            "適用不成立で Anchored も不変（永続確定系へ触れない・R6/9.5）"
+        );
+    }
 }

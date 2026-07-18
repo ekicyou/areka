@@ -204,7 +204,7 @@
   - _Requirements: 8.2, 9.3b_
   - _Depends: 1.4, 8, 10.2_
 
-- [ ] 10.4 (P) move 経路の統合檻を追加する
+- [x] 10.4 (P) move 経路の統合檻を追加する
   - `MoveCueSink`→channel→`apply_move_directive`→`move_window_to` のフルパイプラインを headless 環境で駆動する
   - バルーン随伴 offset の維持、対象不在時の warn+false、`Anchored` ビット同一を通しで確認する
   - _Requirements: 5.3, 5.5, 6.1, 6.2, 9.5_
