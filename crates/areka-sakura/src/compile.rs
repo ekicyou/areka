@@ -25,6 +25,7 @@
 //! 台本〜スケジュールを通して保存される。
 
 use crate::contract::{ActorKey, Cue, CueCommand, CuePayload, CueSheet, TalkEndReason};
+use crate::sysvar::SystemVarSnapshot;
 use areka_parsers::sakura::Instruction;
 
 /// 純粋コンパイル: `Instruction` 列 → cue ドメインの発火列＋確定終端理由（決定的・no I/O）。
@@ -37,7 +38,16 @@ use areka_parsers::sakura::Instruction;
 /// （`start_time=0.0`・`duration=0.0`）を持ち、台本のみから talk 全時間範囲
 /// （`max(start_time + duration)`）が復元可能。同一入力に対し同一出力（決定的・R2.5）。
 /// 各 `Cue::actor` はその発火時点の有効 scope の転写。
-pub fn compile(instructions: &[Instruction]) -> CompiledTalk {
+///
+/// `vars` は ⓪ghost が talk 開始時に手渡す名前→値の凍結スナップショット（`%username` 等の
+/// システム変数展開の値源・R7）。本関数は参照するのみで OS 環境・SHIORI・永続化層を直接
+/// 読まない（純粋・決定論を保つ）。task 4.1 時点では Choice/Cursor アームは `vars` を観測せず、
+/// SystemVar アーム（task 4.2）が展開に用いるため署名の一部として先行導入する。
+pub fn compile(instructions: &[Instruction], vars: &SystemVarSnapshot) -> CompiledTalk {
+    // NOTE(task 4.2): `vars` は SystemVar アーム（次 task）が `resolve_system_var` で参照する。
+    // task 4.1 の Choice/Cursor アームは sysvar 非依存のため本 task では未使用。名前 `vars` を
+    // 4.2 のために保つ目的で明示破棄し unused 警告を抑える（署名は 4.2 のために先行導入）。
+    let _ = vars;
     let mut offset: f64 = 0.0;
     let mut scope: u32 = 0;
     let mut cues: Vec<Cue> = Vec::new();
@@ -103,6 +113,38 @@ pub fn compile(instructions: &[Instruction]) -> CompiledTalk {
             Instruction::Clear => {
                 cues.push(emit(scope, offset, 0.0, CueCommand::Clear));
             }
+            // 選択肢 `\q[disp,target,refs...]`（→Balloon・R1.1/1.2/1.4/1.5/1.6）。
+            // `id = target`（選択 ID・第 2 引数）・`text = disp`（表示ラベル・第 1 引数）・
+            // `references`（第 3 引数以降）を欠落なく不透明転写する（ID 解釈・整数化なし）。
+            // 台本内順序＝記述順（emit が現在 scope・offset を転写・瞬時 duration 0）。
+            // barrier 発行（choice ⩾1 の台本へ最終 offset に 1 個）は task 4.2 の領分。
+            Instruction::Choice(choice) => {
+                cues.push(emit(
+                    scope,
+                    offset,
+                    0.0,
+                    CueCommand::Choice {
+                        id: choice.target.clone(),
+                        text: choice.disp.clone(),
+                        references: choice.references.clone(),
+                    },
+                ));
+            }
+            // カーソル絶対位置 `\_l[x,y]`（→Balloon・R3.1/3.3/3.4/3.5）。x・y は記述通りの
+            // 不透明文字列で転写する（単位付き `5em`/`2lh`・裸数値・`@` 相対・空の区別を失わない・
+            // 単位換算/座標解決は消費側の責務）。双方が空でも無条件に発行する（記述の存在を台本から
+            // 失わせない・R3.5）。emit が現在 scope・offset を転写・瞬時 duration 0。
+            Instruction::Cursor { x, y } => {
+                cues.push(emit(
+                    scope,
+                    offset,
+                    0.0,
+                    CueCommand::Cursor {
+                        x: x.clone(),
+                        y: y.clone(),
+                    },
+                ));
+            }
             // 終端 `\e`（R6.1/6.5）: 終端理由 Ended を確定し以降を切り詰める。
             // ukadoc `\e` = この後に書かれたスクリプトは実行・表示されない。
             Instruction::End => {
@@ -114,9 +156,10 @@ pub fn compile(instructions: &[Instruction]) -> CompiledTalk {
                 end = TalkEndReason::Quit;
                 break;
             }
-            // M-boot 外タグ（Choice/Cursor/Move/SystemVar/GenericCommand/Raw）および
-            // `#[non_exhaustive]` の未知 variant は無視ログを記録し cue を生成せず継続する
-            // （寛容・非 panic・型シーム・R8.1/8.2/8.3/R11.2）。写像先は後続 M-dialogue。
+            // 残る M-boot 外タグ（Move/SystemVar/GenericCommand/Raw）および `#[non_exhaustive]`
+            // の未知 variant は無視ログを記録し cue を生成せず継続する（寛容・非 panic・型シーム・
+            // R8.1/8.2/8.3/R11.2）。Choice/Cursor は task 4.1 で専用アームへ卒業済み。
+            // Move/GenericCommand/SystemVar のアーム化と catch-all の Raw-only 化は task 4.2/4.3。
             other => {
                 tracing::debug!(instruction = ?other, "M-boot 外タグを無視");
             }
@@ -165,8 +208,18 @@ pub struct CompiledTalk {
 mod tests {
     use super::*;
     use crate::duration::text_playback_duration;
+    use crate::sysvar::SystemVarSnapshot;
     use areka_parsers::sakura::{NewLineRatio, SurfaceArg};
     use std::time::Duration;
+
+    /// task 4.1 で `compile` 署名が `(instructions, vars)` へ変わった。既存檻は sysvar を
+    /// 観測しない（値源展開＝SystemVar アームは task 4.2 の領分）ため、空スナップショットを
+    /// 渡すテスト用の薄いブリッジで機械的に追随する。`use super::*` の glob import を
+    /// 明示定義が shadow するため、既存の `compile(&[...])` 呼び出しは無改変のまま本 1 引数
+    /// ヘルパへ解決される。実スナップショットを渡す新檻は `super::compile(.., &snap)` を直呼びする。
+    fn compile(instructions: &[Instruction]) -> CompiledTalk {
+        super::compile(instructions, &SystemVarSnapshot::default())
+    }
 
     /// `Cue::payload` から `CueCommand` を取り出すヘルパ（`Cue` は PartialEq 非導出）。
     fn command_of(cue: &Cue) -> &CueCommand {
@@ -503,24 +556,19 @@ mod tests {
         assert_eq!(compiled.end, TalkEndReason::Quit);
     }
 
-    /// M-boot 外タグ（Choice/Cursor/Move/SystemVar/GenericCommand/Raw）は
+    /// task 4.1 以降も未対応の M-boot 外タグ（Move/SystemVar/GenericCommand/Raw）は
     /// 無視ログのみで cue を生成せず非 panic。間に挟んだ Text だけが cue になる
-    /// （R8.1/8.3/11.2）。無視のログ記録（R8.2・`tracing::debug!`）は実装済みだが
-    /// 本テストは no-cue＋非 panic を主観測とし、ログ出力自体はコード検査で担保する。
+    /// （R8.1/8.3/11.2）。Choice/Cursor は task 4.1 で専用アームへ卒業したため本檻の
+    /// 「無視される集合」からは除外し、それぞれ専用の behavioral 檻で写像を固定する
+    /// （`choice_and_cursor_arms_map_menu_fragment_in_description_order` 他）。Move/
+    /// GenericCommand/SystemVar のアーム化・catch-all の Raw-only 化は task 4.2/4.3 で行う。
+    /// 無視のログ記録（R8.2・`tracing::debug!`）は実装済みだが本テストは no-cue＋非 panic を
+    /// 主観測とし、ログ出力自体はコード検査で担保する。
     #[test]
-    fn m_boot_outside_tags_are_ignored_without_cue_or_panic() {
-        use areka_parsers::sakura::{Choice, MoveArgs};
+    fn remaining_m_boot_outside_tags_are_ignored_without_cue_or_panic() {
+        use areka_parsers::sakura::MoveArgs;
 
         let compiled = compile(&[
-            Instruction::Choice(Choice {
-                disp: "はい".into(),
-                target: "OnYes".into(),
-                references: vec!["ref".into()],
-            }),
-            Instruction::Cursor {
-                x: "10".into(),
-                y: "20".into(),
-            },
             Instruction::Move(MoveArgs {
                 args: vec!["100".into(), "200".into()],
             }),
@@ -532,7 +580,7 @@ mod tests {
             Instruction::Raw("\\?".into()),
             Instruction::Text("only-me".into()),
         ]);
-        // 無視タグ群は 0 cue、内容は Text のみ（冒頭に ClearAll が前置される）。
+        // 未対応タグ群は 0 cue、内容は Text のみ（冒頭に ClearAll が前置される）。
         let cues = assert_clear_all_prefix_and_rest(compiled.sheet.cues());
         assert_eq!(cues.len(), 1);
         match command_of(&cues[0]) {
@@ -789,6 +837,146 @@ mod tests {
             .sheet
             .is_empty(),
             "無視タグのみの script は空 sheet（ClearAll 前置なし）"
+        );
+    }
+
+    // ── task 4.1: Choice/Cursor アーム写像の behavioral 檻 ──
+
+    /// fixture メインメニュー script 断片（`menu.pasta:15` 相当）を直入力し、`\q`/`\_l` が
+    /// 期待どおりの Choice/Cursor cue へ写像されることを固定する（R1.1/1.2/1.5/1.6・R3.1/3.4）。
+    ///
+    /// 断片（さくらスクリプト）:
+    /// `\q[おしゃべり頻度,Onおしゃべり頻度メニュー]\n\q[エモの位置調整,Onエモの位置調整メニュー]\_l[5em,2lh]\q[閉じる,Onメニュー閉じる]`
+    /// を parse 済み `Instruction` 列として直入力する（scope="1"＝エモ）。
+    ///
+    /// 検証: (1) Choice cue は `id=target`（第 2 引数）・`text=disp`（第 1 引数）を欠落なく持つ、
+    /// (2) Cursor cue が `\_l[5em,2lh]` から `x="5em"`/`y="2lh"` で発行される、(3) 記述順が
+    /// 台本内順序として保存される（Choice/NewLine/Choice/Cursor/Choice が交互のまま並ぶ）、
+    /// (4) 各 cue が現在 scope "1" へ帰属し瞬時（duration 0）。barrier（task 4.2）・完全 at 檻
+    /// （task 4.4）はここでは主張しない。
+    #[test]
+    fn choice_and_cursor_arms_map_menu_fragment_in_description_order() {
+        use areka_parsers::sakura::Choice;
+
+        let compiled = compile(&[
+            Instruction::SpeakerScope { n: 1 },
+            Instruction::Choice(Choice {
+                disp: "おしゃべり頻度".into(),
+                target: "Onおしゃべり頻度メニュー".into(),
+                references: vec![],
+            }),
+            Instruction::NewLine(NewLineRatio::new(1.0)),
+            Instruction::Choice(Choice {
+                disp: "エモの位置調整".into(),
+                target: "Onエモの位置調整メニュー".into(),
+                references: vec![],
+            }),
+            Instruction::Cursor {
+                x: "5em".into(),
+                y: "2lh".into(),
+            },
+            Instruction::Choice(Choice {
+                disp: "閉じる".into(),
+                target: "Onメニュー閉じる".into(),
+                references: vec![],
+            }),
+        ]);
+        let cues = assert_clear_all_prefix_and_rest(compiled.sheet.cues());
+        // 内容は Choice / NewLine / Choice / Cursor / Choice の 5 件（記述順保存）。
+        assert_eq!(cues.len(), 5, "内容 cue は記述順のまま 5 件");
+
+        // [0] Choice(頻度): id=target・text=disp。
+        assert_eq!(
+            command_of(&cues[0]),
+            &CueCommand::Choice {
+                id: "Onおしゃべり頻度メニュー".into(),
+                text: "おしゃべり頻度".into(),
+                references: vec![],
+            },
+            "Choice は id=target・text=disp で写像される（R1.2）"
+        );
+        // [1] NewLine（既存写像・記述順の中間に保存）。
+        match command_of(&cues[1]) {
+            CueCommand::NewLine { ratio } => assert_eq!(*ratio, 1.0_f32),
+            other => panic!("expected NewLine, got {other:?}"),
+        }
+        // [2] Choice(位置調整)。
+        assert_eq!(
+            command_of(&cues[2]),
+            &CueCommand::Choice {
+                id: "Onエモの位置調整メニュー".into(),
+                text: "エモの位置調整".into(),
+                references: vec![],
+            }
+        );
+        // [3] Cursor(5em,2lh): 不透明転写（単位付きの区別を失わない・R3.1）。
+        assert_eq!(
+            command_of(&cues[3]),
+            &CueCommand::Cursor {
+                x: "5em".into(),
+                y: "2lh".into(),
+            },
+            "Cursor は x/y を不透明転写する（R3.1）"
+        );
+        // [4] Choice(閉じる)。
+        assert_eq!(
+            command_of(&cues[4]),
+            &CueCommand::Choice {
+                id: "Onメニュー閉じる".into(),
+                text: "閉じる".into(),
+                references: vec![],
+            }
+        );
+
+        // 全 cue が現在 scope "1" へ帰属し瞬時（duration 0）。
+        for (i, cue) in cues.iter().enumerate() {
+            assert_eq!(cue.actor.as_str(), "1", "index {i} は scope 1 帰属（R3.4）");
+            assert_eq!(cue.duration, 0.0, "index {i} は瞬時（duration 0）");
+        }
+    }
+
+    /// `\_l[,]` 相当（x・y 双方空）でも Cursor cue が無条件に発行される（記述の存在を台本から
+    /// 失わせない・R3.5）。空は代表形と別物（区別保持）。
+    #[test]
+    fn cursor_double_empty_still_emits() {
+        let compiled = compile(&[Instruction::Cursor {
+            x: "".into(),
+            y: "".into(),
+        }]);
+        let cues = assert_clear_all_prefix_and_rest(compiled.sheet.cues());
+        assert_eq!(cues.len(), 1, "双方空でも Cursor cue は発行される（R3.5）");
+        assert_eq!(
+            command_of(&cues[0]),
+            &CueCommand::Cursor {
+                x: "".into(),
+                y: "".into(),
+            },
+            "双方空の Cursor も欠落させず発行（区別保持・R3.5）"
+        );
+        assert_eq!(cues[0].duration, 0.0, "Cursor は瞬時（duration 0）");
+    }
+
+    /// `\q` の第 3 引数以降（references）を記述順を保って欠落なく運ぶ（R1.4）。
+    #[test]
+    fn choice_references_are_preserved_in_order() {
+        use areka_parsers::sakura::Choice;
+
+        let compiled = compile(&[Instruction::Choice(Choice {
+            disp: "はい".into(),
+            target: "OnYes".into(),
+            references: vec!["r0".into(), "r1".into(), "".into()],
+        })]);
+        let cues = assert_clear_all_prefix_and_rest(compiled.sheet.cues());
+        assert_eq!(cues.len(), 1);
+        assert_eq!(
+            command_of(&cues[0]),
+            &CueCommand::Choice {
+                id: "OnYes".into(),
+                text: "はい".into(),
+                // 記述順・空トークンを含め欠落なく運ぶ（不透明・ID 解釈なし・R1.4）。
+                references: vec!["r0".into(), "r1".into(), "".into()],
+            },
+            "references は記述順を保って欠落なく運ばれる（R1.4）"
         );
     }
 }

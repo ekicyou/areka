@@ -52,7 +52,7 @@
   - _Boundary: sysvar 展開（areka-sakura）_
 
 - [ ] 4. compile 増分（5 アーム＋barrier 発行＋除外集合の縮小）
-- [ ] 4.1 compile 署名を拡張し Choice/Cursor アームを実装する
+- [x] 4.1 compile 署名を拡張し Choice/Cursor アームを実装する
   - `compile(instructions: &[Instruction], vars: &SystemVarSnapshot) -> CompiledTalk` へ署名変更する（純関数のまま）
   - `Choice{disp,target,references}` → `CueCommand::Choice{id:target,text:disp,references}` の写像を実装する（現在スコープ帰属・記述順保存）
   - `Cursor{x,y}` → `CueCommand::Cursor{x,y}` の写像を実装する（双方空でも発行）
@@ -229,3 +229,5 @@
 - 1.2: `CueCommand::Cursor` variant 追加時、dola 内網羅 match `cue_target_of`（sink.rs）が非網羅コンパイルエラーを出すため、機械的追随として `Cursor→Balloon` アームを先行追加済み（設計:159 と一致）。→ Task 1.4 は当該アームが既に存在する前提で、`command_target_of` 新設・`Custom` rustdoc 改訂・檻の追加に集中すること。
 - 検証コマンドは crate 単位 `cargo test -p <crate>`（worktree root から）。`--workspace` は host-32 i686 成果物前提のため実装中は使わない。worktree 絶対パス `...\.claude\worktrees\areka-p0-balloon-face-cue-18b0ad` 必須。
 - 3: `doc/COMPAT_ARCHITECTURE.md` に既存の対応表が無かったため §8「沈黙ルール対応表」を新設し `%username`→`ユーザーさん` を登記済み。→ Task 4.2/7.1/7.2 の対応表登記は §8 の既存テーブルへ行追記する形でよい。`DEFAULT_USERNAME` の定義点は sysvar.rs のみ（Task 6.2 の provider は re-export で二重定義しない）。
+- 4.1: (a) `drive.rs` on_start と一部テストの compile 呼び出しに `&SystemVarSnapshot::default()` の暫定ブリッジを差した → **Task 5.1** で実 snapshot threading へ差し替える。(b) drive.rs の空シート即時TalkDone檻2件のフィラーを `\q`→`%username`/`\![raise,OnBoot]` へ差し替えた。これらは 4.1 では無 cue だが **Task 4.2** で SystemVar/GenericCommand が cue 化するため再破綻する → 4.2 で恒久的に無視される `Raw(...)` フィラーへ置換すること。
+- 【重要・横断】additive な dola 変更（1.1 references／1.2 Cursor／1.3 Window）により **areka-ghost・areka-emo-text・areka(bin) は現時点でテストビルドが赤**（網羅 match の Cursor 欠落・`Choice` の references 欠落・`command_target_of`未配線・`sink.rs:320` の 1 引数 compile 呼び出し等）。これは設計:164 の「横断・機械的追随」通り想定内。各下流 crate はそれを touch するタスク（areka-ghost=Task 6、emo-text/ghost LogSink=Task 8、areka bin=Task 9）が走る時に機械的追随で緑化する。→ **Task 6.1 は areka-ghost をビルドさせるため必要な機械的追随を全て行う（`command_kind` の Cursor アーム含む・cage は Task 8 が追加）**。1.2/1.4 で `Cursor→Balloon` アームを先行追加し cage を後続に回したのと同型。

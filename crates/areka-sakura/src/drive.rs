@@ -167,7 +167,10 @@ where
 
         // 上流パーサで Instruction 列へ変換（再パースしない・R1.2）→ 純粋コンパイル。
         let instructions = areka_parsers::sakura::parse(&script);
-        let compiled = compile(&instructions);
+        // TEMPORARY BRIDGE (task 5.1): `spawn_talk` を通した実 `SystemVarSnapshot` の threading は
+        // task 5.1 の領分。ここでは空スナップショット（`%username` は既定値へ縮退）を渡して
+        // compile 署名変更に機械的に追随する。task 5.1 で TalkDriver が保持する snapshot へ差し替える。
+        let compiled = compile(&instructions, &crate::sysvar::SystemVarSnapshot::default());
 
         // 空 sheet: 時間軸駆動せず即終端（R1.4/R6.2）。end は Ended 固定でなく compiled.end
         // （裸の `\-` は空 sheet＋Quit）。
@@ -824,8 +827,11 @@ mod tests {
     fn ignored_tags_only_script_ends_immediately_with_ended_and_no_firing() {
         let (done_tx, done_rx) = mpsc::channel::<TalkDone>();
         let talk_id = TalkId(55);
+        // task 4.1 で `\q`（Choice）は cue へ卒業したため、無 cue フィラーには 4.1 時点で
+        // なお ignored の `%username`（SystemVar）／`\![raise,OnBoot]`（GenericCommand）を用いる
+        // （Move/SystemVar/GenericCommand のアーム化は task 4.2）。empty-sheet 即時経路を保つ。
         let start = StartTalk {
-            script: r"\q[はい,OnYes]%username\0".to_string(),
+            script: r"%username\![raise,OnBoot]".to_string(),
             talk_id,
         };
         let sink = RecordingSink::new();
@@ -855,8 +861,11 @@ mod tests {
     fn quit_only_script_ends_immediately_with_quit_not_ended() {
         let (done_tx, done_rx) = mpsc::channel::<TalkDone>();
         let talk_id = TalkId(56);
+        // task 4.1 で `\q`（Choice）は cue へ卒業したため、`\-` の先行フィラーには 4.1 時点で
+        // なお ignored の `%username`（SystemVar）を用いる（先行 cue のない `\-` の empty-sheet＋
+        // Quit 経路を保つ）。
         let start = StartTalk {
-            script: r"\q[やめる,OnCancel]\-".to_string(),
+            script: r"%username\-".to_string(),
             talk_id,
         };
         let sink = RecordingSink::new();
@@ -1494,7 +1503,10 @@ mod tests {
         let script = r"\s[10]hi\_w[700]\-";
 
         // FACT 1（終端理由）: reason は compile 時に確定する TalkEndReason（時間量でない enum）。
-        let compiled = compile(&areka_parsers::sakura::parse(script));
+        let compiled = compile(
+            &areka_parsers::sakura::parse(script),
+            &crate::sysvar::SystemVarSnapshot::default(),
+        );
         assert_eq!(
             compiled.end,
             TalkEndReason::Quit,
