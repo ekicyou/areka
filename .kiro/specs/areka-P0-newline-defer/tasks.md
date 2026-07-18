@@ -72,12 +72,12 @@
   - _Boundary: viewbox_draw.rs（live-diff オラクル檻）_
   - _Depends: 1.2_
 
-- [ ] 7. 回帰確認
-- [ ] 7.1 crate 単体の全テストスイートを実行し、draw.rs／viewbox.rs／state.rs／sink／actor 系の既存檻が非影響のまま緑であることを確認する。落ちた檻があれば意味変更に伴う更新か陳腐化かを個別判定する
+- [x] 7. 回帰確認
+- [x] 7.1 crate 単体の全テストスイートを実行し、draw.rs／viewbox.rs／state.rs／sink／actor 系の既存檻が非影響のまま緑であることを確認する。落ちた檻があれば意味変更に伴う更新か陳腐化かを個別判定する
   - 観測可能な完了条件: `cargo test -p areka-emo-text` が全緑（更新檻・新規檻・非影響確認対象の既存檻すべて含む）
   - _Requirements: 2.4, 3.3, 5.1, 7.2_
   - _Depends: 3.6, 4, 5, 6_
-- [ ] 7.2 ワークスペース全体のテストスイートを実行し全体回帰を確認する（i686 host-32 成果物の事前ビルドが前提）
+- [x] 7.2 ワークスペース全体のテストスイートを実行し全体回帰を確認する（i686 host-32 成果物の事前ビルドが前提）
   - 観測可能な完了条件: `cargo test --workspace` が全緑
   - _Requirements: 7.1, 7.3_
 
