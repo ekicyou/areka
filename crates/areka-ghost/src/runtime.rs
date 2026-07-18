@@ -51,6 +51,16 @@ pub enum ShioriWiring {
     /// 任意 backend 注入（spine e2e＝scripted fake）。connect closure は
     /// shiori アクタースレッド上で一度だけ実行される（要件 3.1）。
     Custom(Box<dyn FnOnce() -> Result<Box<dyn ShioriBackend>, String> + Send>),
+    /// 正規 in-proc x64 SHIORI4 ロード結線（第 3 の正規結線・要件 1.1/3.1/7.1）。
+    ///
+    /// `Helper`（別プロセス 32bit helper）／`Custom`（closure 注入 fake）と**同列**に選べる
+    /// 第 3 の SHIORI 結線方式。`mount.shiori.dir.join(file)` で解決した x64 DLL を in-proc に
+    /// ロードし、SHIORI4 生成入口（`shiori_factory`）→ `IShiori` → `ShioriBackend` へ
+    /// [`crate::shiori_inproc::inproc_connect`] が写像する（要件 3.1）。ユニット variant であり
+    /// テスト専用パラメータを持たない——DLL パスはマウント解決結果から本番同型に導出される
+    /// （design.md D-1）。M2 の native x64 SHIORI4 がそのまま本番消費者として再利用する正規
+    /// シームである（要件 7.1・第一級の布石）。
+    InProc,
 }
 
 /// ticker 起動方式（design.md「ghost::runtime」Service Interface）。
@@ -332,6 +342,11 @@ where
                 mount.shiori.clone(),
             )),
             ShioriWiring::Custom(connect) => connect,
+            // 第 3 の正規結線（要件 1.1/3.1/7.1）: `Helper` arm と同型に、mount 解決済みの
+            // `ShioriMount` を渡して in-proc x64 DLL ロード connect closure を構成する。
+            ShioriWiring::InProc => {
+                Box::new(crate::shiori_inproc::inproc_connect(mount.shiori.clone()))
+            }
         };
 
     // 5. shiori actor。
@@ -745,6 +760,175 @@ mod tests {
                     .join()
                     .expect("down-relay should terminate normally (natural disconnect)");
             },
+        );
+
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    // ---- InProc 結線の生成〜駆動〜終了 統合テスト（task 2.4） ----
+
+    use std::sync::{Arc, Mutex};
+
+    /// task 2.4 専用のローカル記録 sink（`dispatcher.rs`／spine e2e の `RecordingSink` と同型・
+    /// `Clone` 可能で全 cue を `Arc<Mutex<Vec<TalkCue>>>` へ蓄積する）。tests バイナリ側の
+    /// `RecordingSink` は runtime.rs の in-crate 檻からは import できないため、ここでローカルに
+    /// 定義し直す（`areka-bin-crate-internal-tests-in-crate` の流儀）。
+    #[derive(Clone)]
+    struct RecordingSink {
+        records: Arc<Mutex<Vec<TalkCue>>>,
+    }
+
+    impl RecordingSink {
+        fn new() -> Self {
+            Self {
+                records: Arc::new(Mutex::new(Vec::new())),
+            }
+        }
+
+        fn records(&self) -> Arc<Mutex<Vec<TalkCue>>> {
+            Arc::clone(&self.records)
+        }
+    }
+
+    impl CueSink for RecordingSink {
+        fn emit(&mut self, cue: TalkCue) {
+            self.records
+                .lock()
+                .expect("records mutex poisoned")
+                .push(cue);
+        }
+    }
+
+    /// シナリオ5（task 2.4・第 3 の結線 `ShioriWiring::InProc` の生成〜駆動〜終了 一気通貫）:
+    /// 実ビルド済み x64 テスト DLL（`shiori4_testdll.dll`）を fixture の `ghost/master/` へ配置し、
+    /// `ShioriWiring::InProc`（他 2 方式＝`Helper`／`Custom` と同列に選べる第 3 の正規結線・
+    /// 要件 1.1/3.1/7.1）で boot する。boot が内部送出する `KanadeMsg::Boot` を起点に、実 DLL の
+    /// OnBoot 応答（挨拶 Value）が kanade→start-relay→dispatcher→sakura→`RecordingSink` へ届く
+    /// までを Tick 注入のみ（sleep 不使用・要件 7.3——注入時刻のみで前進）で駆動し、`RecordingSink`
+    /// に少なくとも 1 件の `TalkCue` が捕捉されること（＝実 InProc DLL 境界を横断して挨拶が sink まで
+    /// 到達した＝生成〜駆動）を確認する。続いて `shutdown(CloseReason::System)` が `Ok(())` を返す
+    /// こと（＝正規 clean close・終了）を有界待機で確認する。本番 main 結線・機種自動判別（要件
+    /// 7.2/7.3）には一切触れない——`boot()` の match へ `InProc` arm を 1 本足すのみ。
+    ///
+    /// 本テストは**結線 smoke**（第 3 arm の end-to-end 成立の証明）に留める。OnBoot cue 列の
+    /// 全順序照合＋ドリフト検出の厳密 e2e は task 5.1 の担当であり、ここでは「≥1 cue 捕捉＋clean
+    /// shutdown」で足りる（重複させない）。
+    #[test]
+    fn inproc_wiring_boots_drives_and_shuts_down_through_real_test_dll() {
+        // 実ビルド済み cdylib を deps ディレクトリから locate する（`shiori_inproc.rs` の
+        // happy_path 檻と同一導出・design.md D-1）。不在時は silent skip せず明示 panic。
+        let test_exe = std::env::current_exe().expect("test executable path is available");
+        let deps_dir = test_exe
+            .parent()
+            .expect("test executable resides in a deps directory");
+        let built_dll = deps_dir.join(shiori4_testdll::DLL_FILE_NAME);
+        assert!(
+            built_dll.exists(),
+            "built test DLL が正準位置に不在: {}\n\
+             この cdylib は `cargo test --workspace` が自動ビルドし単一の正準位置（deps）へ出力する。\
+             単独実行時は先に `cargo test --workspace`（または `cargo build -p shiori4-testdll`）を\
+             実行すること（フォールバックは設けない・design.md D-1）。",
+            built_dll.display()
+        );
+
+        let root =
+            unique_temp_dir("inproc_wiring_boots_drives_and_shuts_down_through_real_test_dll");
+        let _ = std::fs::remove_dir_all(&root);
+
+        // fixture: ghost/master/descript.txt（`shiori,` 行＝テスト DLL 名）＋ shell/master/descript.txt
+        // （shell dir 存在チェックを通すための最小 descript）。
+        let ghost_master = root.join("ghost").join("master");
+        std::fs::create_dir_all(&ghost_master).expect("create ghost/master");
+        std::fs::write(
+            ghost_master.join("descript.txt"),
+            format!(
+                "charset,UTF-8\nname,Shiori4TestGhost\nshiori,{}\nseriko.defaultsurfacedirectoryname,master\n",
+                shiori4_testdll::DLL_FILE_NAME
+            )
+            .as_bytes(),
+        )
+        .expect("write ghost descript.txt");
+
+        let shell_dir = root.join("shell").join("master");
+        std::fs::create_dir_all(&shell_dir).expect("create shell/master");
+        std::fs::write(
+            shell_dir.join("descript.txt"),
+            b"charset,UTF-8\nname,Shiori4TestShell\n",
+        )
+        .expect("write shell descript.txt");
+
+        // 実 cdylib を fixture の ghost/master/ へコピーする（`inproc_connect` が
+        // `mount.shiori.dir.join(file)` でロードする位置・D-1）。
+        std::fs::copy(&built_dll, ghost_master.join(shiori4_testdll::DLL_FILE_NAME))
+            .expect("copy built test DLL into ghost/master");
+
+        let recording = RecordingSink::new();
+        let records = recording.records();
+
+        let options = GhostBootOptions {
+            ghost_root: root.clone(),
+            default_encoding: DefaultEncoding::Utf8,
+            shiori: ShioriWiring::InProc,
+            surface_sink: recording.clone(),
+            text_sink: recording.clone(),
+            ticker: TickerMode::Disabled,
+        };
+
+        let runtime = boot(options).expect("boot should succeed through ShioriWiring::InProc");
+
+        // 駆動: dispatcher へ Tick を注入し続け、`RecordingSink` が挨拶 cue を捕捉するまで待つ
+        // （sleep 不使用・単調増加 `now` の注入と `yield_now` のみ・S1 spine 技法）。boot が内部で
+        // 送った `KanadeMsg::Boot` により OnBoot GET が発火し、StartTalk が
+        // start-relay→dispatcher の別スレッド 2 hop を渡り active slot に載った直後の Tick で
+        // 挨拶が全 broadcast される。
+        //
+        // 反復回数ではなく**壁時計デッドライン**で括る点が S1 と異なる（S1 の scripted backend は
+        // 即応するが、本 InProc 経路は最初の SHIORI 呼出が shiori アクタースレッド上で実 DLL の
+        // `LoadLibraryW`＋`CreateInstance` を初めて走らせ、これに数十 ms を要する）。デッドラインは
+        // `run_bounded` の `recv_timeout` と同じく**宙吊り防止の上限**にすぎず、シミュレーション時刻の
+        // 前進は依然として注入 Tick のみ（sleep で talk timeline を進めない・要件 7.3）。DLL ロード
+        // 完了後は最初の Tick で挨拶が必ず発火するため結果は決定論的。
+        let mut now: u64 = 1;
+        let mut fired = false;
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+        while std::time::Instant::now() < deadline {
+            runtime
+                .dispatcher()
+                .send(DispatcherMsg::Tick {
+                    now: MonotonicMs(now),
+                })
+                .expect("dispatcher actor should still be alive while probing for the boot talk");
+            now += 1;
+            if !records.lock().expect("records mutex poisoned").is_empty() {
+                fired = true;
+                break;
+            }
+            std::thread::yield_now();
+        }
+        assert!(
+            fired,
+            "InProc: OnBoot 挨拶 cue が Tick 注入後も sink に届かなかった——実 DLL 境界を横断した \
+             生成〜駆動が成立していない"
+        );
+
+        // 終了: shutdown が clean に完走し `Ok(())` を返すこと（正規 close・有界待機で宙吊り防止）。
+        run_bounded(
+            "shutdown after InProc boot talk",
+            std::time::Duration::from_secs(10),
+            move || {
+                let result = runtime.shutdown(areka_kanade::CloseReason::System);
+                assert!(
+                    result.is_ok(),
+                    "shutdown should return Ok(()) after InProc boot talk, got {result:?}"
+                );
+            },
+        );
+
+        // ≥1 cue 捕捉の最終 assert（挨拶が実 InProc DLL 境界を越えて sink に届いた・task 2.4 の
+        // 観測可能な完了条件）。
+        assert!(
+            !records.lock().expect("records mutex poisoned").is_empty(),
+            "RecordingSink には少なくとも 1 件の TalkCue が捕捉されているべき（挨拶が InProc 境界を越えた）"
         );
 
         let _ = std::fs::remove_dir_all(&root);
