@@ -1925,6 +1925,98 @@ mod tests {
         handle.actor.join().expect("body は正常終了する");
     }
 
+    /// **R2.3/2.4/9.8（full-menu 統合檻・Task 10.2）**: `menu.pasta:15` 相当の**実 3 択メニュー**
+    /// （`\q \n \q \_l[5em,2lh] \q`）を **`spawn_talk` の actor 境界**（内部で parse→compile を通す）へ
+    /// 投入し、選択待ち barrier 停止→3 択のうち**実 id の 1 つ**での解決→即時 settle を end-to-end で固定する。
+    ///
+    /// 5.2 の 3 檻（`menu_barrier_*`/`resolve_choice_*`）は**単一** `\q` の `MENU_SCRIPT` で actor 境界を
+    /// 覆い、`compile_broadcast_stream_*` は**3 択実 menu** を覆うが**生 `CuePlayer`**（actor 境界を通らない）。
+    /// 本檻はその両者の交差＝「実 3 択 menu × `spawn_talk` × 実 choice id 解決」を単一の統合檻で立証する
+    /// （5.2 の単一 `\q` では現れない、複数 Choice がバッグに並ぶ中で**中間 id** を照合して解ける経路）。
+    ///
+    /// 檻は 3 主張を 1 本の actor フローで固定する:
+    ///  - **R2.3**: barrier 停止後、horizon を遥かに越える `Tick(5.0)/Tick(50.0)` でも `TalkDone` 不送出。
+    ///  - **mismatch**: 未知 id の `ResolveChoice` では状態不変（`TalkDone` 不送出・talk 継続）。
+    ///  - **R2.4/9.8**: 3 択の**中間**実 id（`Onエモの位置調整メニュー`）で解決すると、**追加 `Tick` なしに**
+    ///    再開し `TalkDone{Ended}` へ到達する（barrier は最終 horizon 要素＝その場で settle）。
+    #[test]
+    fn full_menu_via_spawn_talk_barrier_stops_and_middle_choice_id_settles_immediately() {
+        // menu.pasta:15 の raw さくらスクリプト断片（3 択＋改行＋カーソル指定）。
+        // `spawn_talk` へ**生 script として**渡し、parse→compile は actor 内部の実経路を通す
+        // （5.2 の単一 `\q` MENU_SCRIPT でも、生 CuePlayer 檻@compile_broadcast_stream_* でもなく、
+        //  実 3 択 menu が actor 境界を貫く経路をここで初めて覆う）。
+        let script = concat!(
+            r"\q[おしゃべり頻度,Onおしゃべり頻度メニュー]",
+            r"\n",
+            r"\q[エモの位置調整,Onエモの位置調整メニュー]",
+            r"\_l[5em,2lh]",
+            r"\q[閉じる,Onメニュー閉じる]",
+        );
+        let (done_tx, done_rx) = mpsc::channel::<TalkDone>();
+        let (tx, rx) = mpsc::channel::<TalkCue>();
+        let talk_id = TalkId(810);
+        let start = StartTalk {
+            script: script.to_string(),
+            talk_id,
+        };
+        let handle = spawn_talk(
+            start,
+            done_tx,
+            two_sinks(ChannelSink { tx }, NoopSink),
+            SystemVarSnapshot::default(),
+        );
+
+        // Tick(0.0)/Tick(0.5) で offset 0 群（ClearAll/3 Choice/NewLine/Cursor）を配送し barrier@0 到達を待つ。
+        drive_menu_to_barrier(&handle, &rx);
+
+        // R2.3: horizon(=0) を遥かに越える Tick を注入しても、選択未解決ゆえ完了しない。
+        handle.inbox.send(SakuraMsg::Tick(5.0)).unwrap();
+        handle.inbox.send(SakuraMsg::Tick(50.0)).unwrap();
+        assert!(
+            done_rx.recv_timeout(NEG_WINDOW).is_err(),
+            "実 3 択 menu でも barrier 未解決の間は horizon 越え Tick で TalkDone を出さない（R2.3）"
+        );
+        assert!(
+            !handle.actor.is_finished(),
+            "barrier 未解決ゆえ talk は駆動継続（早期完了しない・R2.3）"
+        );
+
+        // mismatch: 3 択のいずれとも一致しない id では状態不変（`None` 記録＋継続・barrier は解けない）。
+        handle
+            .inbox
+            .send(SakuraMsg::ResolveChoice {
+                id: "NO_SUCH_ID".to_string(),
+            })
+            .unwrap();
+        assert!(
+            done_rx.recv_timeout(NEG_WINDOW).is_err(),
+            "不一致 id の ResolveChoice では TalkDone を出さない（状態不変・複数 Choice バッグは無傷）"
+        );
+        assert!(
+            !handle.actor.is_finished(),
+            "不一致 id は barrier を壊さず talk は待機継続する（バッグの他 id は依然解決可能）"
+        );
+
+        // R2.4/9.8: 3 択の**中間** id を投入。追加 Tick は**送らない**（即時 settle の弁別）。
+        // 中間 id を選ぶことで「先頭/末尾でなくバッグ内の任意 id を照合して解ける」ことも固定する。
+        handle
+            .inbox
+            .send(SakuraMsg::ResolveChoice {
+                id: "Onエモの位置調整メニュー".to_string(),
+            })
+            .unwrap();
+        let done = done_rx
+            .recv_timeout(Duration::from_secs(5))
+            .expect("中間実 id の解決で再開し、追加 Tick なしで TalkDone に到達すべき（R2.4/9.8）");
+        assert_eq!(done.talk_id, talk_id, "talk_id エコー");
+        assert_eq!(
+            done.reason,
+            TalkEndReason::Ended,
+            "`\\e` 無しの menu 台本は既定 Ended で完了する（compile 既定＝Ended）"
+        );
+        handle.actor.join().expect("body は正常終了する");
+    }
+
     /// **defensive（Armed 誤投函）**: 初回 `Tick` 前（`Armed`＝CuePlayer 未構築）に `ResolveChoice` が
     /// 届いても warn して継続し（防御枝）、以降の通常 Tick 駆動で talk は正常に終端する。
     #[test]

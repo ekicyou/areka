@@ -191,7 +191,7 @@
   - _Requirements: 9.1, 9.7_
   - _Depends: 2.2, 4.4_
 
-- [ ] 10.2 barrier 停止と解決の統合檻を追加する
+- [x] 10.2 barrier 停止と解決の統合檻を追加する
   - `spawn_talk` へメニュー script を投入し、horizon 越え Tick でも `TalkDone` が出ないことを確認する
   - `SakuraMsg::ResolveChoice{id}` 投函→再開→`TalkDone{Ended}` 到達（追加 Tick 不要）を確認する
   - 不一致 id の投函では状態が変化しないことを確認する
