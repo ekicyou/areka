@@ -2199,4 +2199,120 @@ mod tests {
             "配送列に現れる 3 Choice とバッグの 3 Choice が同一（id/text・順序とも一致）"
         );
     }
+
+    // ── task 10.3: 未知コマンド名の第一級縮退（統合檻・R8.2/R8.5/R9.3b） ──
+
+    /// **未知コマンド名の第一級縮退（統合檻・R8.2/R8.5/R9.3b）**: `\!` 名前空間の**未知・M1 未対応
+    /// コマンド名**（`\![raise,OnBoot]`／単独形 `\![vanish]`）を含む生 script を `spawn_talk` の actor
+    /// 境界（内部で parse→compile→CuePlayer broadcast を通す）へ投入し、次の 3 点を end-to-end で固定する:
+    ///
+    ///  - **R8.2（compile 卒業）**: 未知名 `\!` は compile の無音落ちでなく汎用コマンド cue（`Custom`
+    ///    キャリア）として**台本に第一級で載る**。ゆえに broadcast された各記録 sink の配送列に
+    ///    キャリア cue が現れる（2 名とも `raise`／`vanish` を受ける＝配送で消えない）。
+    ///  - **R8.5/R5（良性スキップ）**: どの消費者も未知名キャリアに action しない——`command_target_of`
+    ///    が未知名に対し `None`（担当消費者なし）を返す。記録 sink は全 cue を**記録**する（無音破棄でも
+    ///    異常終了でもない・honor は不変）。**複数** sink が同一列を受けて talk が完走することがその証跡。
+    ///  - **R9.3b（第一級縮退）＋partition**: 未知名は名前権威表 `command_target_of` 上で `None`＝どの
+    ///    消費者の担当でもなく、Some を返すのは M1 の `"move"` のみ（1 コマンド名の担当は高々 1）。
+    ///    partition 不変条件の網羅檻は dola `sink_test.rs::command_target_of_maps_move_and_rejects_unknown_names`
+    ///    （task 1.4）が正本であり、本檻は統合経路上でその帰結（未知名→None・move→Some）を焦点確認する。
+    ///
+    /// 弁別: もし compile が未知名を無音落ちさせるなら配送列にキャリアが現れず等価 assert が FAIL する。
+    /// もし未知名が誰かの担当（Some）へ誤配線されるなら `command_target_of` の None assert が FAIL する。
+    #[test]
+    fn unknown_command_names_broadcast_and_benign_skip_then_talk_completes() {
+        use dola::cue::{CueTarget, command_target_of};
+
+        let (done_tx, done_rx) = mpsc::channel::<TalkDone>();
+        let talk_id = TalkId(103);
+        // 未知名 2 種（引数付き `raise` と単独形 `vanish`）＋テキストを挟み `\e` で終端。
+        // parse: `\![raise,OnBoot]`→GenericCommand{"raise",["OnBoot"]}／`\![vanish]`→GenericCommand{"vanish",[]}。
+        // compile: いずれも command_carrier(name, args)（Custom キャリア）へ卒業・無音落ちしない（R8.2）。
+        let start = StartTalk {
+            script: r"\![raise,OnBoot]hello\![vanish]world\e".to_string(),
+            talk_id,
+        };
+        // broadcast の第一級性を立証するため**複数**記録 sink を登録（両者が同一配送列を受ける）。
+        let sink_a = RecordingSink::new();
+        let sink_b = RecordingSink::new();
+        let records_a = sink_a.records();
+        let records_b = sink_b.records();
+
+        let handle = spawn_talk(
+            start,
+            done_tx,
+            two_sinks(sink_a, sink_b),
+            SystemVarSnapshot::default(),
+        );
+
+        // 初回 Tick(0.0) でアンカー刻印。全内容は at=0 群（raise/hello）と at=0.25 群（vanish/world）。
+        // 占有 horizon（world 再生完了＝0.25+0.25=0.50）を跨ぐ Tick(1.0) で自然終端する。
+        handle.inbox.send(SakuraMsg::Tick(0.0)).unwrap();
+        handle.inbox.send(SakuraMsg::Tick(1.0)).unwrap();
+
+        // R8.2 の帰結: 未知名キャリアが無音落ちせず talk が完走し TalkDone{Ended} を返す。
+        let done = done_rx
+            .recv_timeout(Duration::from_secs(5))
+            .expect("未知名キャリアを含む talk も良性スキップして完了すべき（無音落ち／panic しない）");
+        assert_eq!(done.talk_id, talk_id, "talk_id エコー（R1.3）");
+        assert_eq!(
+            done.reason,
+            TalkEndReason::Ended,
+            "`\\e` 終端＝Ended（未知名は終端理由に影響しない）"
+        );
+        handle
+            .actor
+            .join()
+            .expect("未知名キャリアでも body は panic せず正常終了する（良性スキップ）");
+
+        // 期待 broadcast 列（compile 順・冒頭 ClearAll 前置）: ClearAll / raise / hello / vanish / world。
+        // 未知名キャリアが**配送列に第一級で現れる**（compile が卒業させた証・R8.2）。
+        let expected = vec![
+            CueCommand::ClearAll,
+            CueCommand::command_carrier("raise", vec!["OnBoot".into()]),
+            CueCommand::Text("hello".into()),
+            CueCommand::command_carrier("vanish", vec![]),
+            CueCommand::Text("world".into()),
+        ];
+        assert_eq!(
+            commands(&records_a),
+            expected,
+            "sink A: 未知名キャリア（raise/vanish）が配送列に第一級で現れる（無音落ちしない・R8.2）"
+        );
+        // broadcast の第一級性: 2 つ目の sink も同一列を受ける（未知名も両者へ届く＝配送で消えない・R5）。
+        assert_eq!(
+            commands(&records_b),
+            expected,
+            "sink B: broadcast ゆえ両 sink が同一配送列を受ける（未知名キャリアも欠落しない）"
+        );
+
+        // R8.5/R9.3b（良性スキップ＋担当なし）: 配送列中の各未知名キャリアについて、名前権威表
+        // `command_target_of` が **None（担当消費者なし）** を返す＝どの消費者も action しない良性スキップ。
+        // キャリア variant からのコマンド名抽出（`as_command_carrier`）を通し、抽出できた名前で判定する。
+        let carrier_names: Vec<String> = commands(&records_a)
+            .iter()
+            .filter_map(|cmd| cmd.as_command_carrier().map(|(name, _)| name.to_string()))
+            .collect();
+        assert_eq!(
+            carrier_names,
+            vec!["raise".to_string(), "vanish".to_string()],
+            "配送列から未知名キャリア 2 件（raise/vanish）が抽出される"
+        );
+        for name in &carrier_names {
+            assert_eq!(
+                command_target_of(name),
+                None,
+                "未知名 {name:?} はどの消費者の担当でもない（None＝記録付き良性スキップ・R8.5/R9.3b）"
+            );
+        }
+
+        // partition 不変条件（R9.3b）の統合経路上の焦点確認: 名前権威表で Some を返すのは M1 の
+        // `"move"` のみ（1 コマンド名の担当は高々 1）。網羅檻は dola task 1.4 の
+        // `command_target_of_maps_move_and_rejects_unknown_names` が正本（本檻は重複せず帰結のみ確認）。
+        assert_eq!(
+            command_target_of("move"),
+            Some(CueTarget::Window),
+            "M1 の権威表で担当を持つ名は \"move\" のみ（partition 網羅は dola task 1.4 が正本）"
+        );
+    }
 }
