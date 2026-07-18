@@ -149,7 +149,7 @@
   - _Requirements: 5.1, 5.3, 5.5, 6.1, 6.2, 9.5_
   - _Depends: 7.2, 7.3_
 
-- [ ] 7.5 move 決定論檻の全網羅を仕上げる
+- [x] 7.5 move 決定論檻の全網羅を仕上げる
   - 7.1〜7.4 で追加した純関数・適用檻を Testing Strategy の「parse_move_directive 檻」「move 経路檻」の全項目（基準語彙の受理/縮退分類・対象不在・バルーン随伴・Anchored 不変）で網羅されていることを確認し、不足があれば追加する
   - _Requirements: 9.5_
   - _Depends: 7.4_

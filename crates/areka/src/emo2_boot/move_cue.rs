@@ -612,6 +612,36 @@ pub fn apply_move_directive(world: &mut World, directive: &MoveDirective) -> boo
     move_window_to(world, target, pos.x, pos.y)
 }
 
+// =============================================================================
+// task 7.5 — move 決定論檻 全網羅 監査（audit + gap-fill）
+//
+// design.md Testing Strategy の 2 項目を既存檻へ 1:1 で写像し、全項目が具体的
+// （fail-if-broken）に固定済みであることを監査した結果、追加檻は不要（gap ゼロ）と確定。
+// 監査時点の写像（項目 → 檻）:
+//
+// Unit Tests item 4「parse_move_directive 檻（R5.2/5.4）」（下記 `mod tests`）:
+//   - 正典省略既定〔fix/fix/0/screen/left.top〕 → `canon_omission_defaults`
+//     （空 positional／空トークン埋めの両形で MoveDirective 構造体を厳密一致 assert）
+//   - 裸 base≡base.base                        → `bare_base_equals_base_base`
+//   - time>0 縮退                              → `timed_move_kept_and_recorded`
+//   - 名前付き形縮退                            → `named_form_is_degraded_err`（純名前形＋混在検出）
+//   - 基準語彙**全種**の受理/縮退分類          → `base_vocab_acceptance_and_classification`
+//     数値スコープ 0/1/2＝受理（is_m1_derived∧UnsupportedBase 記録なし）／
+//     screen・primaryscreen・me・global の 4 語＝各 variant 受理＋UnsupportedBase 記録／
+//     未知語＝Err(UnknownBase)。MoveBase の全 5 variant＋未知を網羅。
+//   - （fixture parse 検算）                    → `fixture_move_353_scope1`
+//   - （防御的 Err）                            → `unparsable_axis_is_err`
+//
+// Integration Tests item 4「move 経路檻（R5.1/5.3/5.5/R6/9.5）」（`mod apply_move_tests`）:
+//   - fixture 検算物理座標                      → `apply_moves_target_to_fixture_position`（Point{697,800}）
+//   - バルーン随伴 offset 維持                  → `apply_keeps_balloon_offset`
+//   - 対象不在 warn+false                       → `apply_target_absent_returns_false_without_mutation`
+//   - Anchored 不変（対象**と**基準の両窓）     → `apply_leaves_anchored_bit_identical`
+//   - （非スコープ基準 warn+false）             → `apply_non_scope_base_returns_false`
+//
+// 監査結論: 両項目とも欠落・弱檻（トートロジー/部分網羅）なし。全 26 檻が具体 assert で緑。
+// =============================================================================
+
 #[cfg(test)]
 mod tests {
     use super::*;
