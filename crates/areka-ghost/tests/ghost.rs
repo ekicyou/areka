@@ -24,3 +24,9 @@ mod inproc_fixture;
 // 凍結スナップショット由来の期待列と全順序照合する（ドリフト検出込み）。
 #[path = "ghost/inproc_e2e_test.rs"]
 mod inproc_e2e_test;
+// `snapshot_capture_test`（task 6.1・env-gate 採取ハーネス）は `recorder` の `ExchangeRecord`／
+// `ExchangeOutcome` を消費し、出力形式生成ロジック（`reconstruct_envelope`／
+// `collect_first_get_snapshots`）を純関数として単体テストする。実採取は
+// `HOST32_PASTA_DLL`＋`AREKA_SNAPSHOT_OUT` 両設定時のみ動作（欠落は silent skip）。
+#[path = "ghost/snapshot_capture_test.rs"]
+mod snapshot_capture_test;
