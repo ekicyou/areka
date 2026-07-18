@@ -52,7 +52,12 @@ mod request;
 /// research.md §7.3）。`snapshot_for(id)` は [`ReplayBrain::Get`](ReplayBrain) が `select_response` の
 /// `lookup` クロージャへ無改修で差し込む（task 1.4 で結線済み）。`snapshot_for`／`snapshots`／
 /// `PROVISIONAL_MARKER` は `pub`（areka-ghost rlib 面が契約定数・スナップショット表を共有する）。
+///
+/// モジュール自体は非公開に保ちつつ、crate ルートへ flat 再エクスポート（`shiori4_testdll::snapshot_for`）
+/// して crate 外（areka-ghost tests 5.1 の**ドリフト検出 assert**）から到達可能にする（task 5.1・
+/// tasks.md「[2.3→5.1 申し送り]」・要件 5.2）。
 mod snapshot;
+pub use snapshot::{PROVISIONAL_MARKER, snapshot_for, snapshots};
 
 /// 出力 DLL ファイル名（design.md §SnapshotTable Service Interface の契約定数・単一権威）。
 ///

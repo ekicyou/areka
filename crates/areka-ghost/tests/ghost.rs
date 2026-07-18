@@ -19,3 +19,8 @@ mod recorder;
 // 組立を定義する）はテスト支援モジュール。後続タスク（5.x）が e2e ハーネスから消費する。
 #[path = "ghost/inproc_fixture.rs"]
 mod inproc_fixture;
+// `inproc_e2e_test`（task 5.1・I1 canonical 一周 e2e）は `inproc_fixture::shared_test_ghost` の共有
+// fixture と `spine_e2e_test::RecordingSink` を再利用し、実 InProc DLL 境界を横断した起動挨拶の演出列を
+// 凍結スナップショット由来の期待列と全順序照合する（ドリフト検出込み）。
+#[path = "ghost/inproc_e2e_test.rs"]
+mod inproc_e2e_test;
