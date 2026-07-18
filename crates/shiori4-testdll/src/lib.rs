@@ -24,6 +24,14 @@ use core::ffi::c_void;
 
 use windows_core::HRESULT;
 
+/// SHIORI/3.0 リクエスト解析・応答分類の純粋ロジック（task 1.2）。
+///
+/// `parse_request`（request line の別＋`ID:` 抽出・design.md D-4）と `select_response`
+/// （収載→凍結応答／未知→204／構造不整合→400・要件 2.2/2.3/2.4）を提供する。項目は
+/// crate 内消費（`pub(crate)`）で、task 1.4 の `ReplayBrain::Get` から呼ぶ（本 task では
+/// `shiori_factory` へは未結線）。
+mod request;
+
 /// 出力 DLL ファイル名（design.md §SnapshotTable Service Interface の契約定数・単一権威）。
 ///
 /// この値は次の 2 箇所が共有する契約値である:

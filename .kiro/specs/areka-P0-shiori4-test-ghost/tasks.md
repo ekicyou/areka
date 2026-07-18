@@ -9,7 +9,7 @@
   - _Requirements: 1.2, 5.4_
   - _Boundary: shiori4-testdll crate scaffold（lib.rs スタブ）_
 
-- [ ] 1.2 (P) SHIORI要求からイベントIDを抽出し、収載/未知/不整合を判定する純粋ロジックを実装する
+- [x] 1.2 (P) SHIORI要求からイベントIDを抽出し、収載/未知/不整合を判定する純粋ロジックを実装する
   - GET/NOTIFYの別とID行を読み取る
   - 収載ID→固定応答選択、未知ID→204相当、構造不整合→400相当（fail-visible・panicしない）の全分岐を単体テストで網羅する
   - 観測可能な完了: 全分岐（正常・未知・不整合）の単体テストがgreen
