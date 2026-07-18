@@ -12,7 +12,7 @@
 //! 完了で終了系列が完走してから kanade を期限付き join する。join 成功時点で起動系列の
 //! 全 shiori 呼出は記録済みであり、実時間 sleep なしで記録列を確定できる。
 
-use areka_kanade::{CloseReason, KanadeConfig, KanadeMsg, events};
+use areka_kanade::{CloseReason, ExecutionSnapshot, KanadeConfig, KanadeMsg, events};
 
 use super::common::{
     DEFAULT_TIMEOUT, Fixture, Harness, QuitPolicy, RecordedCall, expected_call, join_bounded,
@@ -71,22 +71,31 @@ fn drive_boot_and_collect() -> Vec<RecordedCall> {
 /// 完全一致することを厳密に検証する（起動系列そのものへ焦点を絞った適合検証）。
 ///
 /// 期待起動系列（ukadoc Reference 表・design「boot 系列」）:
-/// 1. `OnInitialize` — NOTIFY（References なし）
-/// 2. `OnFirstBoot` — GET（Ref0="0"）→ fixture が 204 を返す
-/// 3. `OnBoot` — GET（Ref0=shell_name）→ fixture が固定 Value を返す
-/// 4. `basewareversion` — NOTIFY（Ref0=version・Ref1=name）
+/// 1. `OnInitialize` — NOTIFY（References なし・talk 非アクティブ＝Status 行なし）
+/// 2. `OnFirstBoot` — GET（Ref0="0"）→ fixture が 204 を返す（talk 非アクティブ）
+/// 3. `OnBoot` — GET（Ref0=shell_name）→ fixture が固定 Value を返す（talk 非アクティブ）
+/// 4. `basewareversion` — NOTIFY（Ref0=version・Ref1=name・**Status: talking**）
+///
+/// DD-IT-12: 挨拶（`OnBoot` Value）を正規追跡するため、`basewareversion` はフェーズ更新後
+/// （`BootVersion{talk: Some}`＝talk アクティブ）のスナップショットで送出され、Status ヘッダに
+/// `talking` を運ぶ。前 3 件は talk 非アクティブ（[`ExecutionSnapshot::INACTIVE`]）で Status 行なし。
 #[test]
 fn boot_sequence_matches_canonical_exactly() {
     // 期待値導出用の config（events 表への入力）。`KanadeConfig` は Clone 非実装のため、
     // ハーネスへ渡す実体は同一パラメタで別途構築する（`new` は決定的ゆえ同値になる）。
     let config = KanadeConfig::new("master", "1.0.0");
 
-    // 期待起動系列を events 表から導出する（順序・Method・Reference の単一正本・Req 7.1）。
+    // 期待起動系列を events 表から導出する（順序・Method・Reference・Status の単一正本・Req 7.1）。
+    // boot 系列前段は INACTIVE（Status 行なし）・basewareversion は挨拶追跡後の talk_active=true
+    // （Status: talking・DD-IT-12）。
     let expected_boot = vec![
-        expected_call(events::on_initialize()), // NOTIFY（References なし）
-        expected_call(events::on_first_boot()), // GET（Ref0="0"）→204
-        expected_call(events::on_boot(&config)), // GET（Ref0=shell_name）→Value
-        expected_call(events::baseware_version(&config)), // NOTIFY（Ref0=version・Ref1=name）
+        expected_call(events::on_initialize(&ExecutionSnapshot::INACTIVE)), // NOTIFY（References なし）
+        expected_call(events::on_first_boot(&ExecutionSnapshot::INACTIVE)), // GET（Ref0="0"）→204
+        expected_call(events::on_boot(&config, &ExecutionSnapshot::INACTIVE)), // GET（Ref0=shell_name）→Value
+        expected_call(events::baseware_version(
+            &config,
+            &ExecutionSnapshot { talk_active: true },
+        )), // NOTIFY（Ref0=version・Ref1=name・Status: talking）
     ];
 
     let recorded = drive_boot_and_collect();

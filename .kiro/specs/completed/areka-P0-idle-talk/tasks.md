@@ -1,0 +1,153 @@
+# Implementation Plan
+
+- [x] 1. Foundation: `Status` 実行状態語彙の契約層（ゴースト実行状態の語彙とスナップショットの実装）
+  - ukadoc 正典の実行状態語彙（talking・choosing・minimizing・induction・passive・timecritical・nouserbreak・online・opening(種類)・balloon(ID群)）を、パラメータ付き状態の下位書式（`/` 区切り列挙）込みで第一級の型として表現する
+  - アクティブな状態集合を正典の語彙定義順で保持し、カンマ連結の wire 文字列（アクティブ状態が1つも無い場合はワイヤ行そのものを省略する値）へ写す変換を実装する
+  - 送出時点のゴースト運行状態を表す単一のスナップショット型を用意し、この後の全ての状態導出（送出可否・実行状態集合）が同じ入力から生まれるようにする
+  - 新設した型をクレートの公開面（lib.rs）へ再エクスポートする
+  - 観測可能な完了条件: 全10状態の語彙→wire文字列変換・複数状態の正典順連結・空集合→行省略・スナップショットからの状態導出の各単体テストが green になり、bool 1本の入力空間を全網羅する
+  - _Requirements: 1.4, 1.5, 1.6, 2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 2.7_
+  - _Boundary: areka-kanade status.rs, lib.rs（再エクスポート）_
+
+- [x] 2. Core: kanade 状態機械への `Status` 貫通
+- [x] 2.1 境界メッセージ型への `Status` 同梱と内部規律違反の失敗語彙追加
+  - SHIORI 呼出の境界メッセージ型（GET/NOTIFY 双方）へ実行状態集合を同梱し、全ての構築点が Status を明示せざるを得ない形にする
+  - 呼出失敗の区別語彙へ、外部要因（タイムアウト／SHIORI エラー／helper 死活／接続確立失敗）とは別に、送出前に検出される内部規律違反のための語彙を1つ追加する（既存の境界写像関数はこの新語彙を生成しないことを保つ）
+  - 観測可能な完了条件: 境界メッセージ型が Status を保持すること・失敗語彙の Display 文字列が期待どおりであることを検証する単体テストが green になる
+  - _Requirements: 2.2, 2.3_
+  - _Boundary: areka-kanade msg.rs_
+  - _Depends: 1_
+
+- [x] 2.2 イベント構築正本の Status・許可 ID 表への統合
+  - 毎秒イベントの構築を、再生可否と実行状態集合の双方を単一のスナップショットから導出する形へ統一する（両者の不整合な組み合わせが構築時点で作れないようにする）
+  - 見切れ・重なりの参照値を名前付き定数として明示し、将来の実測差し替えが送出契約（ヘッダ構成・参照連番）を変えずに行えることをコードで表す
+  - 送出し得るイベント ID の確定集合を純データとして定義し、集合外判定を行う関数を用意する（`OnTalk`／`OnHour` は集合に含めない）
+  - 強制終了時の終了通知イベントを、通常の終了要求構築と同じ構築正本の中に増設する
+  - 増設した公開関数をクレートのファサード（lib.rs）へ再エクスポートする
+  - 観測可能な完了条件: 毎秒イベントの Method・参照値・Status が再生可否ごとに期待どおりであること、参照値の時刻切り捨てが保存されること、許可 ID 集合が期待集合と完全一致すること、強制終了時の終了通知イベントの構成が期待どおりであることを検証する単体テストが green になる
+  - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 2.2, 2.3, 2.4, 2.7, 3.1, 3.2, 5.2_
+  - _Boundary: areka-kanade schedule/events.rs, lib.rs（ファサード再エクスポート）_
+  - _Depends: 2.1_
+
+- [x] 2.3 定常運転・強制終了系列へのスナップショット供給
+  - 運行フェーズからスナップショットを導出する変換を実装し、アクティブなトークを運ぶフェーズについてのみ「再生中」を報告するようにする
+  - 定常運転の毎秒イベント発行・通常の終了要求発行の各呼出点へ、上記スナップショットを供給する形へ更新する
+  - 強制終了時のインライン構築済みイベントを、2.2 で増設した構築正本の呼び出しへ委譲する
+  - 観測可能な完了条件: 定常運転（再生中でない／再生中）・強制終了の各シナリオで、発行されるイベントの Status・参照値が単一のスナップショットに整合していることを検証する単体テストが green になる
+  - _Requirements: 2.4, 2.7, 3.1, 4.1, 4.2, 4.3, 4.4_
+  - _Boundary: areka-kanade schedule/mod.rs, schedule/steady.rs_
+  - _Depends: 2.2_
+
+- [x] 2.4 起動挨拶トークの正規追跡
+  - 起動系列で発行される挨拶スクリプトの再生を、以後の運行状態が「再生中」として認識できる形で引き継ぐ（現状の見失う挙動を解消する）
+  - 挨拶が再生中の間の毎秒イベントが、再生中の意味論（応答無視・再生不能report）で発行されるようにする
+  - 起動系列の他イベント（初期化・起動種別・起動）についても、上記のスナップショット供給の形へ揃える
+  - 観測可能な完了条件: 起動系列でスクリプトが返った場合に以後の運行状態が挨拶を再生中として引き継ぐこと、応答が無かった場合は非アクティブのまま引き継ぐことを検証する単体テストが green になる
+  - _Requirements: 1.5, 2.4_
+  - _Boundary: areka-kanade schedule/boot.rs_
+  - _Depends: 2.3_
+
+- [x] 2.5 送出イベント ID のホワイトリスト檻と wire 証跡ログ
+  - SHIORI へ出る唯一の実行点で、送出しようとしているイベント ID が許可集合の要素であることを検証する
+  - 許可集合外の場合は送出を止め、エラーログを残した上で内部規律違反の失敗語彙を返す（状態機械は既存の失敗処理経路をそのまま使う）
+  - 許可集合内の場合は、Method・イベント ID・参照値・実行状態の wire 証跡ログを残した上で送出する
+  - 観測可能な完了条件: 許可 ID では送出されログが残ること、禁止 ID（`OnTalk` 等）では送出されずにエラーログと失敗結果が返ることを検証する単体テストが green になる
+  - _Requirements: 3.1, 3.2, 6.2_
+  - _Boundary: areka-kanade actor.rs_
+  - _Depends: 2.2, 2.3_
+
+- [x] 3. Core: host32 wire codec への `Status` 貫通
+- [x] 3.1 SHIORI/3.0 ワイヤへの `Status` ヘッダ発行
+  - SHIORI リクエストの構築要素へ実行状態の wire 値（任意）を追加し、値が無い場合はヘッダ行そのものを出さない形にする
+  - ワイヤの構築処理へ、Sender ヘッダの後・ID ヘッダの前という位置で Status 行を発行する処理を追加する（値の中身は解釈せず転記のみ行う）
+  - 呼出関数（GET／NOTIFY）の引数へ実行状態の wire 値を追加する
+  - 観測可能な完了条件: 実行状態値ありでは該当位置に Status 行が1行出ること、値なしでは Status 行が一切出ないこと、値が解釈されず素通しされることをバイト列で検証する単体テストが green になる
+  - _Requirements: 2.3, 5.3_
+  - _Boundary: shiori-host32-host shiori3.rs, client.rs_
+
+- [x] 3.2 host32 呼出関数の追随
+  - 3.1 で追加した引数に伴い、SHIORI クライアント呼出関数を使用している既存の統合テスト群の呼出箇所を、実行状態値なしを渡す形へ更新する
+  - 観測可能な完了条件: `cargo test -p shiori-host32-host` が全 green のまま維持される
+  - _Requirements: 2.3, 5.3_
+  - _Boundary: shiori-host32-host tests/_
+  - _Depends: 3.1_
+
+- [x] 4. Integration: kanade↔host32 境界の接続
+- [x] 4.1 SHIORI backend 境界での `Status` 転送
+  - backend 抽象の呼出関数（GET／NOTIFY）へ実行状態の wire 値引数を追加する
+  - 実装済みの本番 backend が、受け取った実行状態の wire 値を 3.1 で用意した host32 側の呼出関数へそのまま転送するようにする
+  - 呼出の仲介処理が、2.1〜2.5 で用意した実行状態集合の wire 変換結果を backend へ渡すようにする
+  - 内部規律違反の失敗語彙を含む形で失敗結果の網羅性を保つ（テスト専用の網羅照合ヘルパへ新語彙アームを追加する）
+  - 観測可能な完了条件: Some／None 双方の実行状態値が backend 引数へ正しく届くこと、内部規律違反語彙を含めた失敗結果の網羅テストが green になる
+  - _Requirements: 2.2, 2.3_
+  - _Boundary: areka-kanade shiori/real.rs_
+  - _Depends: 2.5, 3.2_
+
+- [x] 4.2 下流 backend 実装の追随
+  - backend 抽象の署名変更に伴い、他クレートに存在する backend 実装（テスト用スタブ含む）を新しい署名へ追随させる
+  - 観測可能な完了条件: `cargo build --workspace` が全クレートで成功する
+  - _Requirements: 2.2, 2.3_
+  - _Boundary: areka-ghost runtime.rs, areka-ghost tests/ghost/spine_e2e_test.rs, areka emo2_boot/spine.rs_
+  - _Depends: 4.1_
+
+- [x] 5. Validation: 決定論回帰檻の拡張
+- [x] 5.1 観測ハーネスへの `Status` 観測面と失敗語彙記述子の追加
+  - 統合テストの記録型へ、送出された実行状態の wire 値（有無・値）を観測できるフィールドを追加する
+  - テスト用の失敗語彙記述子へ、内部規律違反に対応する項目を追加する
+  - 観測可能な完了条件: 統合テストハーネスが実行状態の有無・値を記録・取得できることを確認する疎通テストが green になる
+  - _Requirements: 5.1, 5.3_
+  - _Boundary: areka-kanade tests/kanade/common/mod.rs_
+  - _Depends: 4.2_
+
+- [x] 5.2 (P) 失敗語彙の統合検証の拡張
+  - 失敗語彙記述子の網羅檻を、内部規律違反を含めた形へ拡張する
+  - ホワイトリスト違反によって内部規律違反の失敗結果が返った場合に、運行状態機械の既存の終了系列（失敗経路）へ正しく合流することを検証する
+  - 観測可能な完了条件: 5 種の失敗語彙それぞれについて対応する終了経路が網羅されることを検証する統合テストが green になる
+  - _Requirements: 3.1_
+  - _Boundary: areka-kanade tests/kanade/failure_test.rs_
+  - _Depends: 5.1_
+
+- [x] 5.3 (P) 定常運転の統合検証の拡張
+  - アイドル時の毎秒イベント（再生可能・実行状態集合が空）、再生中の毎秒イベント（再生不能・実行状態に再生中を含む）の双方について、Method・参照値・実行状態の組み合わせを検証する既存統合テストを拡張する
+  - 再生完了後に次の Tick からイベント発行が再開されることを保つ
+  - 一連の実行を通じて `OnTalk`／`OnHour` が一度も送出されないこと、自発会話の発火時にも新規イベント ID が増えないことを検証する
+  - 既存の回帰検証（catch-up・応答なし時の無起動・トーク識別子の一意性）が実行状態集合追加後も保たれることを、期待値の導出元をイベント構築正本へ寄せる形で保つ
+  - 観測可能な完了条件: アイドル／再生中の各シナリオで期待どおりの Method・参照値・実行状態が観測されること、送出イベント ID の全走査で禁止 ID が現れないことを検証する統合テストが green になる
+  - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 2.2, 2.3, 2.4, 2.7, 3.2, 3.3, 4.1, 4.2, 4.3, 4.4, 5.1, 5.2_
+  - _Boundary: areka-kanade tests/kanade/steady_test.rs_
+  - _Depends: 5.1_
+
+- [x] 5.4 (P) 終了系列・起動挨拶トークの統合検証の拡張
+  - 強制終了時の終了通知イベントについて、実行状態集合が非アクティブ（行省略）で構築されることを検証する
+  - 起動挨拶の再生中に毎秒イベントが再生中の意味論で発行されること、挨拶の再生完了通知が対応するトーク識別子と正しく照合されること（無照合の警告が発生しないこと）、挨拶再生中に終了指示を受けた場合は通常のトーク終了握手と同じ経路を辿ることを検証する
+  - 観測可能な完了条件: 上記の強制終了・起動挨拶シナリオそれぞれについて期待どおりの結果を検証する統合テストが green になる
+  - _Requirements: 1.5, 2.4, 3.1_
+  - _Boundary: areka-kanade tests/kanade/close_test.rs, schedule/boot.rs（in-source #[cfg(test)]）_
+  - _Depends: 5.1, 2.4_
+
+- [x] 6. Validation: 実機サインオフ（実 emo2・実 pasta.dll での自発トーク発火の確認）
+  - i686 版 helper を areka.exe と同じ場所へ配置し、絶対パスで実 emo2・実 pasta.dll を起動する
+  - 起動直後の起動挨拶再生中に、毎秒イベントが再生中の意味論（応答無視・実行状態に再生中を含む）で送出されていることをログ／wire 証跡から確認する
+  - 数分間の放置後、自発トークが発火することを目視確認する
+  - 合否判定は「自発トークが発火すること」に限定し、再生タイミングの正しさは判定に含めない
+  - 観測可能な完了条件: 起動直後と放置後の双方で、要求されたログ／wire 証跡と自発トークの発火が確認され、サインオフ記録として残る
+  - _Requirements: 6.1, 6.2, 6.3_
+  - _Boundary: 実機検証（E2E）_
+  - _Depends: 5.2, 5.3, 5.4_
+  - **サインオフ記録（2026-07-18・実 emo2＋実 ghost/master/pasta.dll・i686 helper を target\debug\ へ配置・`RUST_LOG=info,kanade=trace`・`AREKA_APP_SMOKE_EXIT_MS=180000`〔既定1500msでなく3分へ延長＝観測窓確保〕で絶対パス起動・exit 0 で正常終了）**:
+    - **[Req 6.1 合否の主] 自発トーク発火＝PASS**: `event="steady_talk"`（"OnSecondChange にスクリプト——再生起動"）が **6回**発火（talk_id 2 以降）＋起動挨拶1本。`steady_talk_done` 7回（挨拶1＋自発6）。数分放置で OnTalk 由来の自発会話が実物で流れることを確認。
+    - **[Req 6.2] 再生中 Tick の相関証跡＝確認**: `event="shiori_request"` 全184件中 **41件が NOTIFY・Ref3="0"・status=Some("talking")**。起動直後 ~1 秒（起動挨拶再生中）に `OnSecondChange NOTIFY Ref3="0" status=Some("talking")` を確定観測（ランダムトーク待ち不要・DD-IT-12 の予告どおり）。残 ~143 件は idle GET・Ref3="1"・status=None。
+    - **[Req 3.2 恒久禁止] OnTalk/OnHour 不送出＝確認**: `event_id_not_allowed`=0・areka の `shiori_request` に OnTalk/OnHour が **1件も現れず**（ホワイトリスト egress 檻が実機で機能）。
+    - **DD-IT-12 実機証跡**: `basewareversion` が status=Some("talking")（挨拶を BootVersion{Some} で追跡・OnFirstBoot Value で挨拶起動→OnBoot は正典フォールスルーで skip）。**DD-IT-4/#14**: 終了時 `OnClose NOTIFY status=None`（Unloading 遷移後 INACTIVE）。正常終了 `unload_clean`（unload→helper exit(0)）。
+    - kanade の ERROR は皆無（ログの「ERROR」ヒット6件は無害な shell-bake WARN〔null.png KeyColor 脱落・既存資産〕2件＋Bevy despawn teardown 注記4件で idle-talk と無関係）。
+    - 実施＝kiro-impl 実行者が開発者の指示（「起動してもらえる？」）で実機起動・ログ捕捉。合否判定は Req 6.3 どおり「自発トークの発火」に限定（再生タイミングは cue-playback-duration の領分・判定外）。
+
+## Implementation Notes
+
+- **Task 2 と Task 3 は内容上は独立だが並行実行不可**: `shiori-host32-host` は `areka-kanade` の逆方向依存を持たないため Task 3 は Task 2 の出力に依存しないが、Task 3.1 が `Shiori3Client::{get,notify}` の署名を変えると、まだ更新されない `shiori/real.rs`（Task 4.1 まで手を付けない）が壊れる。Task 2 自身の検証（`cargo test -p areka-kanade`）を破壊しないよう、Task 3 は Task 2 完了後に着手する（`(P)` を付けない）。両者が再結合するのは Task 4.1。
+- **DD-IT-12（起動挨拶の正規追跡）は completed kanade の確定判断「boot は close-gate しない」を再開封する**: 挨拶中の close が通常 talk と同じ `CloseTalkWait` 経由へ変わる。開発者が旧来の fire-and-forget 維持を選ぶ場合は Task 2.4／5.4 の該当コミットの revert で戻せる（設計ディスカッション #2 で事後拒否権を明示済み）。
+- **本 spec が意図的に扱わない事項**（design.md Open Items 1・2・4）: `build_request` の `SecurityLevel` 位置の既存逸脱、`doc/emo2-conformance-scope.md` の記載訂正、fault 終端が「窓は残るがプロセスは死なない」挙動（`Failed` 全般に共通する kanade の既存欠陥）——いずれも本タスク群では対処しない。引受先候補は `areka-P0-emo2-conformance-e2e`。
+- Task 3.1〜4.1 完走までの間、`cargo build --workspace` は意図的に壊れる区間がある（host32 signature 変更後・real.rs 追随前）。DoD ゲートは Task 4.2 完了時点（`cargo build --workspace` 成功）以降で評価すること。
+- **tests/kanade/ は原子的コンパイル単位＋DD-IT-12 意味論の波及（kiro-impl 実行時発見・2026-07-18）**: `tests/kanade.rs` が全 `*_test.rs` を `#[path]` で1バイナリへ束ねる＝単一コンパイル単位ゆえ、5.1（common/mod.rs）だけでは crate が緑にならず boot/steady/close/full_run 全ファイルの機械的追随が同時に要る（boot_test/full_run_test は 5.x のどのタスクにも未割当だった穴）。そこで **Task 5.1 に「全 tests/kanade/ 再緑化」を畳み込んで一括実装**（5.2/5.3/5.4 の新規檻は別コミット・段B）。さらに **RecordedCall へ status を足すと期待値が status も比較する**ため、DD-IT-12（挨拶追跡→boot が Steady{Some}）で `baseware_version` の期待 status が greeting 経路で `Some("talking")`（spine_e2e と違い kanade harness は status を落とさない）。「idle steady pump」意図のテスト6本は greeting talk の TalkDone が Tick とレースするため、新設 `Fixture::without_boot_greeting()`（OnBoot→204→boot が Steady{None} 直行・決定論）へ切替（弱体化なし・意図保存）。ハーネスの `spawn_harness_gated`/`SakuraGate`（TalkDone park）で active-talk 窓を決定論化。緑 ×24 flakiness ゼロ。教訓＝正典機能の挙動変更（DD-IT-12）は本体 src だけでなく決定論ハーネスの期待値・fixture 設計まで波及する。
+- **Task 4.2 のスコープ穴（kiro-impl 実行時発見・2026-07-18）**: 4.2 は設計上「下流 backend 実装の署名追随」だけだったが、Group A（2.1/2.2）の破壊的変更（`ShioriCall` の status field・`events::*` の snapshot 引数）が `areka-ghost/tests/ghost/spine_e2e_test.rs` の**テスト本体**（`expected_from_shiori_call` の分解・events 期待値構築・直接 backend 呼出＝23コンパイルエラー）を壊しており、これはどのタスクにも明示割当が無かった。4.2 に畳み込んで追随（`, ..`／`&ExecutionSnapshot::INACTIVE`／`, None`）。さらに DD-IT-12（挨拶追跡）が `KanadeMsg::Tick` を kanade へ送る2シナリオを意味論的に変えた: S3（post-boot OnSecondChange が GET/NOTIFY 両可能→両 script）・S5（CloseRequest が greeting 中は pending_close へ延期→deadline Tick 前に OnClose GET 出現を有界 spin-wait）。obsolete-vs-broken 方針で新正解へ更新（弱体化なし）。`cargo test -p areka-ghost`=38+15 緑（×3 flakiness ゼロ）・`cargo test -p areka`=274+1+2 緑。教訓＝契約破壊は本体specの tests/ 以外（隣接クレートの e2e）にも波及し得る。
+- **実装時の群化（kiro-impl 実行判断・2026-07-18）**: `ShioriCall` へ必須フィールド `status` を足すと kanade クレート全体（events.rs 構築6点・schedule 呼出・actor/real 分解点・in-source テスト）が一度に壊れ、個別サブタスクは独立に `--lib` すら green にできない＝原子的コンパイル単位。よって **Task 2.1+2.2+2.3 を1コミットに束ねて実装**した（各群が `cargo test -p areka-kanade --lib` green を残す・設計の各ファイル変更内容は完全に温存）。機械的 ripple として real.rs `handle_call` は `..` で status を無視（転送は Task 4.1）・real.rs in-source テスト構築点・actor.rs `probe_get_call` に status を付与。統合テスト（tests/kanade/）は Task 5.x で更新するため群A時点では `--lib` のみ検証（full `cargo test` は 5.x まで赤）。Task 2.4（boot DD-IT-12）・2.5（actor ホワイトリスト）は別コミットへ隔離。

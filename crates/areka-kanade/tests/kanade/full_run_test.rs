@@ -14,7 +14,7 @@
 //! 新規ハーネスを spawn する）。
 
 use areka_kanade::{
-    CloseReason, KanadeConfig, KanadeMsg, MonotonicMs, StartTalk, TalkId, events,
+    CloseReason, ExecutionSnapshot, KanadeConfig, KanadeMsg, MonotonicMs, StartTalk, TalkId, events,
 };
 
 use super::common::{
@@ -90,11 +90,16 @@ fn drive_full_run() {
     // (a) 起動系列が正典順序で発火（NOTIFY／GET の別・Reference 構成込み）
     // ========================================================================
     // 期待値は events 表から導出する（ハーネスに Reference をハードコードしない・Req 7.1）。
+    // boot 系列前段は INACTIVE（Status 行なし）・basewareversion は挨拶追跡後の talk_active=true
+    // （Status: talking・DD-IT-12）。
     let expected_boot_prefix = vec![
-        expected_call(events::on_initialize()),   // NOTIFY
-        expected_call(events::on_first_boot()),   // GET →204
-        expected_call(events::on_boot(&config)),  // GET →Value
-        expected_call(events::baseware_version(&config)), // NOTIFY
+        expected_call(events::on_initialize(&ExecutionSnapshot::INACTIVE)), // NOTIFY
+        expected_call(events::on_first_boot(&ExecutionSnapshot::INACTIVE)), // GET →204
+        expected_call(events::on_boot(&config, &ExecutionSnapshot::INACTIVE)), // GET →Value
+        expected_call(events::baseware_version(
+            &config,
+            &ExecutionSnapshot { talk_active: true },
+        )), // NOTIFY（Status: talking）
     ];
     assert!(
         recorded.len() >= expected_boot_prefix.len(),
@@ -144,7 +149,8 @@ fn drive_full_run() {
     // (c) close 指示→再生完了通知を待って終了系列が完走
     // ========================================================================
     // OnClose GET（Ref0=user）が pump 群の後に現れ、記録列の末尾が Unload で閉じる。
-    let onclose = expected_call(events::on_close(CloseReason::User));
+    // 通常握手の OnClose は talk 非アクティブ（INACTIVE）で発行される（Status 行なし・begin_close）。
+    let onclose = expected_call(events::on_close(CloseReason::User, &ExecutionSnapshot::INACTIVE));
     let onclose_index = recorded
         .iter()
         .position(|c| *c == onclose)
