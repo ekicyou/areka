@@ -81,10 +81,10 @@
   - 観測可能な完了条件: `cargo test --workspace` が全緑
   - _Requirements: 7.1, 7.3_
 
-- [ ] 8. 実機サインオフ（R8・emo2 fixture・pasta SHIORI）
-- [ ] 8.1 有界 auto-exit（`AREKA_APP_SMOKE_EXIT_MS=180000`・`RUST_LOG=info,areka_emo_text=debug`）で実機を起動し、pasta の spot_newlines 指紋（`ratio=1.5` の NewLine cue 適用）がログに1件以上存在することを grep 確認する（シナリオ不在なら再実行）
+- [x] 8. 実機サインオフ（R8・emo2 fixture・pasta SHIORI）
+- [x] 8.1 有界 auto-exit（`AREKA_APP_SMOKE_EXIT_MS=180000`・`RUST_LOG=info,areka_emo_text=debug`）で実機を起動し、pasta の spot_newlines 指紋（`ratio=1.5` の NewLine cue 適用）がログに1件以上存在することを grep 確認する（シナリオ不在なら再実行）
   - 観測可能な完了条件: ログから `ratio=1.5` を伴う NewLine 適用が1件以上確認できる
-- [ ] 8.2 実走全体で「あふれ発火」marker（ANSI 色コード耐性のため固定文字列を別々に grep）が0件であることを確認し、A→B→A 再登壇時に段落区切りが維持され A→B 単純切替時に A のバルーンが動かないことを人間目視で確認する
+- [x] 8.2 実走全体で「あふれ発火」marker（ANSI 色コード耐性のため固定文字列を別々に grep）が0件であることを確認し、A→B→A 再登壇時に段落区切りが維持され A→B 単純切替時に A のバルーンが動かないことを人間目視で確認する
   - 混入時（正当な長文あふれが同一実走に含まれた場合）は機械的な窓判定を行わず、再実行または人間目視＋タスク3の決定論檻を最終根拠とする
   - 観測可能な完了条件: 「あふれ発火」marker が全走行で0件、かつ目視で A→B 切替時のスクロール消失と A→B→A の段落区切り維持の両方を確認できる
   - _Requirements: 8.1, 8.2, 8.3_
@@ -94,3 +94,5 @@
 - タスク1/2/4 は分離してグリーンにできない一体の意味変更（本番改訂が DD-7 の名指し4檻をちょうど落とす）ゆえ、タスク1.1/1.2/1.3/2/4 を1コミットの原子単位として実装した（独立レビュアー APPROVED・`cargo test -p areka-emo-text` 全緑）。
 - **DD-9 の発見（実装中）**: 遅延化で trailing 空行が消えると、旧・即時意味論では行数減少ガードで偶然マスクされていた viewbox の「行内縮小で退避インク未クリア」欠陥が後方時刻ジャンプ（`diag_line_boundary_dropout_vs_oracle`）で露出。fresh-context デバッグ調査が改行ゼロの縮小列で同一 diverge を実証（改行非依存＝本 spec と直交）。開発者承認でスコープ追加（タスク1.3）。修正は既存の全域ダーティ縮退の同型拡張（`is_backward_shrink`）で viewbox.rs 1点のみ・前方 typewriter は不発（ホットパス維持）。
 - **pipeline_test.rs の結合更新（DD-7 未列挙）**: 統合檻 `typewriter_reveal_drives_layout_and_window_through_the_pipeline` と `vertical_fixture_pipeline_scrolls_horizontally_and_is_deterministic` は即時意味論の行数/あふれ期待を持つため、タスク2と同型の「意味の変更に伴う更新」として遅延意味論の再計算値へ更新した（幽霊空行の消失・あふれ発火の実体化時刻への後退を反映）。タスク7.1 の非影響確認対象に含める。
+- **R8 実機サインオフ完了（2026-07-18）**: 実 pasta helper（i686・`target/debug/` へ配置）で emo2 fixture 実走。`ratio=1.5`（spot_newlines 段落区切り）が actor=0（さくら）/actor=1（けろ）両方で発火＝A→B spot 切替シナリオが実走に含まれた証跡をログ grep で確認（8.1）。開発者が実画面で「A→B 切替時に A のバルーンが静止（幽霊スクロール消滅）＝改行が遅延されている」ことを目視確認しサインオフ（8.2/8.3）。なお `あふれ発火` marker は正当な長文トーク（total_lines=5）由来が混入するため機械判定を用いず、DD-8 どおり人間目視＋R7 決定論檻を最終根拠とした。
+- **R8 実走の落とし穴（起動パス）**: `areka.exe` へ fixture を**相対パス**で渡すと、別プロセスの host-32 helper が CWD 差で pasta.dll を相対解決できず LoadLibrary が `0x8007007E`（MOD_NOT_FOUND）で失敗する（依存 DLL 欠落ではない——pasta.dll＋VCRUNTIME140 x86/UCRT は SysWOW64 に在り 32-bit LoadLibrary で単体ロード可）。**絶対パスで起動すること**（緑の `emo2_real_run` テストは `CARGO_MANIFEST_DIR` 由来の絶対パスを使う）。
