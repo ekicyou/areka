@@ -1464,7 +1464,7 @@ DEALINGS IN THE SOFTWARE.
 ## MIT License
 
 対象 crate:
-- zerocopy 0.8.52
+- zerocopy 0.8.53
 
 ```
 Copyright 2023 The Fuchsia Authors
@@ -1881,7 +1881,7 @@ SOFTWARE.
 - proc-macro2 1.0.106
 - quote 1.0.46
 - rustix 1.1.4
-- rustversion 1.0.22
+- rustversion 1.0.23
 - semver 1.0.28
 - serde 1.0.228
 - serde_core 1.0.228
@@ -2045,7 +2045,7 @@ SOFTWARE.
 
 対象 crate:
 - byteorder 1.5.0
-- memchr 2.8.2
+- memchr 2.8.3
 
 ```
 The MIT License (MIT)
@@ -2203,8 +2203,8 @@ SOFTWARE.
 ## MIT License
 
 対象 crate:
-- crossbeam-queue 0.3.12
-- crossbeam-utils 0.8.21
+- crossbeam-queue 0.3.13
+- crossbeam-utils 0.8.22
 
 ```
 The MIT License (MIT)
