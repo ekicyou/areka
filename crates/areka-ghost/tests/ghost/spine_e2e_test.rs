@@ -706,7 +706,8 @@ mod s1_boot_success {
         // 単一 Tick 内で完了する。
         let mut now: u64 = 1;
         let mut fired = false;
-        for _ in 0..10_000u32 {
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+        while std::time::Instant::now() < deadline {
             runtime
                 .dispatcher()
                 .send(DispatcherMsg::Tick {
@@ -778,7 +779,8 @@ mod s1_boot_success {
             },
             CueCommand::Text("hello".to_string()),
         ];
-        for _ in 0..1_000_000u32 {
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+        while std::time::Instant::now() < deadline {
             let s = surface_records.lock().expect("records mutex poisoned").len();
             let t = text_records.lock().expect("records mutex poisoned").len();
             if s >= expected.len() && t >= expected.len() {
@@ -1132,7 +1134,8 @@ mod s3_helper_liveness_detected {
         // 発火するよりずっと早く完了している）。
         let mut now: u64 = 1;
         let mut fired = false;
-        for _ in 0..10_000u32 {
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+        while std::time::Instant::now() < deadline {
             runtime
                 .dispatcher()
                 .send(DispatcherMsg::Tick {
@@ -1417,7 +1420,8 @@ mod s4_close_handshake {
         // （boot.rs「boot は常に Steady{talk: None} へ完了する」・S3 と同じ論拠）。
         let mut now: u64 = 1;
         let mut boot_talk_fired = false;
-        for _ in 0..10_000u32 {
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+        while std::time::Instant::now() < deadline {
             runtime
                 .dispatcher()
                 .send(DispatcherMsg::Tick {
@@ -1459,7 +1463,8 @@ mod s4_close_handshake {
         // 跨ぐため、`handle.calls()` に `RecordedCall::Unload` が現れるまで
         // `yield_now` のみで有界にスピン待機する（実時間待機・Tick 送出のいずれも伴わない）。
         let mut close_settled = false;
-        for _ in 0..1_000_000u32 {
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+        while std::time::Instant::now() < deadline {
             let has_unload = handle
                 .calls()
                 .lock()
@@ -1700,7 +1705,8 @@ mod s5_close_deadline {
         // （CONCERNS 参照）。
         let mut now: u64 = 1;
         let mut boot_talk_fired = false;
-        for _ in 0..10_000u32 {
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+        while std::time::Instant::now() < deadline {
             runtime
                 .dispatcher()
                 .send(DispatcherMsg::Tick {
@@ -1747,7 +1753,8 @@ mod s5_close_deadline {
         // Value 応答で `deadline_from(Some)` 確定／CloseTalkWait の Tick は deadline=None を
         // 起点確定・close.rs 参照）。
         let mut handshake_reached = false;
-        for _ in 0..1_000_000u32 {
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+        while std::time::Instant::now() < deadline {
             let onclose_issued = handle
                 .calls()
                 .lock()
@@ -1791,7 +1798,8 @@ mod s5_close_deadline {
         // ---- deadline 超過による強制終了系列の完走を有界スピン待機で確認する ----
         // （Tick 送出は上で完了済み・以降は追加 Tick も sleep も伴わない）。
         let mut deadline_settled = false;
-        for _ in 0..1_000_000u32 {
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+        while std::time::Instant::now() < deadline {
             let has_unload = handle
                 .calls()
                 .lock()

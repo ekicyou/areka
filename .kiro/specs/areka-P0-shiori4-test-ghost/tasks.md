@@ -93,6 +93,13 @@
   - _Depends: 1.4, 4.1_
 
 - [ ] 5. 決定論e2e（常設ゲート）
+- [x] 5.0 spine プローブループを壁時計 deadline で硬化する（承認済み §6.2 例外・2026-07-19 開発者承認）
+  - spine_e2e_test.rs の反復回数境界プローブループ 8 箇所を、runtime.rs task2.4 先例（`Instant` deadline 10s ＋ 既存ループ本体そのまま）へ機械変換する。対象＝boot-probe（`for _ in 0..10_000u32`）: S1@709 / S3@1135 / S4@1420 / S5@1703、spin-settle（`for _ in 0..1_000_000u32`）: S1@781 / S4@1462 / S5@1750 / S5@1794（行番号は変換で前後する・関数名で同定せよ）
+  - ループ本体・poll 条件・panic 文言・後続 assert・S1〜S6 台本・ScriptedShioriBackend・RecordingSink は一切無改変（§6.2 の意図＝シナリオ意味論の保護は維持・変更は「諦めるタイミングの測り方」＝待機形状のみ）。S2/S6 はプローブループ非保有ゆえ無改変。sim 時刻は従来どおり Tick 注入のみで進む（壁時計はスレッド起動待ちのハングガードにのみ使用）
+  - 背景: 現行の回数境界ループは壁時計の底がなく、CPU 競合下で `yield_now()` が空回りして 1万反復が数 ms で尽き、製品コードは正常なのにテストが早合点で赤になる（偽陽性）。5.1 追加**前の** baseline 単独でも ~3%（1/30）の低頻度 flake が実測され、失敗は S1/S3/S4/S5 を巡回。同ファイルは既に `run_bounded`/`join_bounded`（`recv_timeout` 10s）を 6 箇所で常用しており、deadline 化は既存イディオムへの整合
+  - 観測可能な完了: `cargo test -p areka-ghost --test ghost` を **30 回連続**実行して **0 失敗**（baseline ~3% flake が消滅した有意な証拠）
+  - _Requirements: 6.2（承認済み狭い例外・プラン承認による授権）, 1.3_
+  - _Boundary: areka-ghost/tests/ghost/spine_e2e_test.rs（待機ループ形状のみ）_
 - [ ] 5.1 起動から終話までの一周を注入時刻のみで駆動し照合する
   - 実時間待機を用いず、時刻前進の注入のみで一連の交信を進行させる
   - 起動時挨拶の演出列が凍結台本由来の期待列と全順序で一致することを照合する
@@ -100,8 +107,9 @@
   - 正常終了の握手が観測できることを確認する
   - 常設ゲートの観測は演出配送の受領レベルに留め、実描画（サーフェス合成・画素読戻し）は要求しない
   - 観測可能な完了: 一周テストがgreenで、期待列とスナップショットの不一致を意図的に注入すると確実にfailする
+  - 駆動ループは sleep 不使用（`yield_now()` ＋壁時計 deadline ハングガードのみ・task 2.4 先例と同形）。5.0 の spine 硬化が前提で成立するため、`thread::sleep` ポールバックオフは再導入しない
   - _Requirements: 5.1, 5.2, 5.3, 5.4, 5.5, 1.1, 1.3_
-  - _Depends: 2.4, 4.2_
+  - _Depends: 5.0, 2.4, 4.2_
 
 - [ ] 5.2 交信列と演出出力の双方を同一手口で照合する
   - 実DLLを駆動しながら3の交信記録機構を被せ、発行イベントの種別・ID・順序が期待どおりであることを確認する
@@ -150,3 +158,4 @@
 - **[2.1] clippy `-D warnings` 全体ゲートは使用不可**（既存 toolchain ドリフト＝rust-1.97.0 の `collapsible_if` 等が areka-kanade/runtime/ticker/sink/dola に既在・本 spec 境界外）。真のゲートは `cargo test`（DoD は `cargo test --workspace`・memory areka-no-ci-gpu-tests-in-cargo-test）。各タスクの clippy 検証は「変更ファイルに警告が帰属しないこと」で足る。areka-ghost の `windows` は workspace 継承で `Win32_System_LibraryLoader` を得ており feature 追加不要。areka-ghost に `shiori-abi`（prod）＋`shiori4-testdll`（dev-dep）を追加済み。
 - **[2.3→5.1 申し送り] snapshot API が外部到達不可**: task 1.4 で `snapshot_for`/`snapshots`/`PROVISIONAL_MARKER` を `pub` にしたが `shiori4-testdll/src/lib.rs` の宣言が `mod snapshot;`（**非公開モジュール**）ゆえ `shiori4_testdll::snapshot::snapshot_for` は crate 外から到達不可。task 5.1 の**ドリフト検出 assert**（e2e が `snapshot_for("OnBoot")` の凍結 Value と期待定数の一致を確認）には外部到達が必須ゆえ、5.1 で `pub mod snapshot;` へ変更するか crate root へ `pub use snapshot::{snapshot_for, snapshots};` を追加すること（boundary に `shiori4-testdll/src/lib.rs` を含める）。2.3 は暫定リテラル `\0\s[0]おはようございますわ（暫定）\e` 比較で回避済み。
 - **[4.2 重大・5.1/5.2必読] ghostテストバイナリの飢餓回避**: 新規fixtureテストが**並列**で重いFS I/O（emo2 shell PNG木の再帰コピー・実行DLLコピー・remove_dir_all）を行うと、**Windows Defenderの新規ファイル再スキャン**がコアを占有し、`spine_e2e_test.rs`の**壁時計なし協調ループ**（`for _ in 0..10_000 { Tick; yield_now() }`）を飢餓させ、ghostスイートが15/15緑→~10/15にflaky化する（実測A/B）。spineは§6.2ゆえ改変不可。**根治策=inproc_fixture.rsの`pub fn shared_test_ghost() -> &'static Path`**（OnceLock・assemble一度・**hardlink優先**materialize＝新規バイトなしでDefender再スキャン回避・直列化mutex・鮮度ガード付きクロスラン再利用・意図的leak）。**task 5.1/5.2 は自前assembleせず`shared_test_ghost()`を再利用し、駆動ループは反復回数境界でなく壁時計deadline境界（task 2.4方式）にすること**。disposableが要る場合のみ`assemble_test_ghost(tag)->TempGhost`（Drop=remove_dir_all・hardlinkゆえ原本無傷）。新e2e追加後は`cargo test -p areka-ghost --test ghost`を15回以上回し0失敗を確認せよ。
+- **[5.0 承認済み §6.2 例外・2026-07-19]** spine_e2e_test.rs のプローブループ 8 箇所を回数境界→壁時計 deadline へ硬化することを開発者が承認（プラン `dynamic-snuggling-wall.md` 承認による授権）。**§6.2「spine 不侵」の意図＝シナリオ意味論・S1〜S6 台本・ScriptedShioriBackend 拡張方式の保護**は完全に維持し、変更は「待機ループが諦めるタイミングの測り方」（回数→時計）のみに限定する。根拠: (1) 現行ループは壁時計の底なしで baseline 単独 ~3% flake（実測）＝**既存の潜在欠陥**であり本 spec の新テストが持ち込んだものではない、(2) 同ファイルが既に `run_bounded`/`join_bounded`（recv_timeout 10s）を 6 箇所常用＝deadline 化は既存イディオムへの整合、(3) 開発者恒久方針「決定論テスト必達・小細工禁止・壊れたが意味あるテストは更新」に合致（[[deterministic-test-coverage-mandate]] / [[canonical-not-minimal-lifecycle]] / [[obsolete-vs-broken-test-policy]]）。5.1 の 2ms sleep ポールバックオフ（spine 飢餓回避の応急措置）は 5.0 完了により不要となり撤去（yield_now＋deadline のみ）。
