@@ -1010,6 +1010,9 @@ mod ghost_wiring_tests {
                 helper_exe: actual, ..
             } => assert_eq!(actual, helper_exe),
             ShioriWiring::Custom(_) => panic!("expected ShioriWiring::Helper, got Custom"),
+            // `InProc`（areka-P0-shiori4-test-ghost の第 3 結線）は本番 main では選ばれない
+            // （要件 7.2: 本番結線は emo2＝Helper 経路のまま）。網羅性のためのみ列挙する。
+            ShioriWiring::InProc => panic!("expected ShioriWiring::Helper, got InProc"),
         }
         match options.ticker {
             TickerMode::Real(cfg) => {
