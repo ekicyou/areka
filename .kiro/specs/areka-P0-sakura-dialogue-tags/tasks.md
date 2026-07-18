@@ -93,7 +93,7 @@
   - _Requirements: 2.7, 7.3_
   - _Depends: 3, 4.1_
 
-- [ ] 5.2 ResolveChoice ハンドラと即時 settle を実装する
+- [x] 5.2 ResolveChoice ハンドラと即時 settle を実装する
   - `Driving` 状態で `ResolveChoice{id}` を受けたら `player.resolve_choice(&id)` を呼び、`Some` かつ `is_completed()` ならその場で `TalkDone` を送出する（次 Tick を待たない）
   - `None`（id 不一致・非待機）は記録して継続する。`Armed`/`Idle` への誤投函は警告して継続する（防御枝）
   - barrier 待機中に horizon 越えまで `Tick` を注入しても `TalkDone` が出ないこと（既存構造の再確認・R2.3）と、`ResolveChoice` 成立で再開・即時完了することを統合檻で確認する

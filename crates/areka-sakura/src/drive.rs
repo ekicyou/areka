@@ -339,20 +339,74 @@ where
     }
 
     /// `ResolveChoice{id}` 受領: 選択待ち（barrier）で止まった talk へ選択 id を投入する型付き口
-    /// （R2.7）。
+    /// （R2.7）。W5（`areka-P0-choice-select-events`）の解決入力の唯一の到達点であり、
+    /// [`CuePlayer::resolve_choice`] を外部から直接呼ぶ経路は存在しない（アクター内に閉じる）。
     ///
-    /// **task 5.1 スコープ = 口（アーム）の定義のみ**。ここでは受領を記録して継続するに留める。
-    /// 実際の解決ロジック（`Driving` → `player.resolve_choice(&id)`・`Some` 後の即時 settle＝
-    /// `player.is_completed()` なら `TalkDone{end}` 送出＋`Break`／`None` は記録して継続／
-    /// `Armed`・`Idle` は warn 継続の防御枝）は **task 5.2** で本メソッドへ充填する（design
-    /// "解決の口＋spawn 署名" §450）。それまでは barrier で止まった talk は再開しない（暫定）。
+    /// - **`Driving`**（駆動中＝唯一 `resolve_choice` を呼ぶ状態）: `player.resolve_choice(&id)` へ
+    ///   委譲する（id 照合＋一致時の先積みクリアは [`CuePlayer`] の責務）。
+    ///   - `Some`: 選択が解決され `Playing` へ戻った。**その場で** [`CuePlayer::is_completed`] を
+    ///     確認し、解決後に既に占有 horizon 到達（menu ケース＝barrier が最終 horizon 要素）なら
+    ///     `TalkDone{end}` を送出して `Break`——[`settle_after_tick`] と同型の後始末を共用し、次 Tick
+    ///     を待たない（R-5 の一 tick 遅延を残さない・R2.4/9.8）。未完了なら `Driving` を書き戻して継続。
+    ///   - `None`（id 不一致・非待機）: 状態を変えず記録して継続する（barrier は解けない・R2.3 継続）。
+    /// - **`Armed`/`Idle`**（初回 Tick 前・Start 前 or 終端後＝CuePlayer 未構築 or talk 不在）:
+    ///   投函経路上は非到達の**誤投函**（W5 の mis-post）。`warn!` して継続する（防御枝・talk を
+    ///   終端させない）。
     fn on_resolve_choice(&mut self, id: String) -> ControlFlow<()> {
-        // task 5.2 で resolve_choice/即時 settle を実装する。現状は受領の記録のみ（継続）。
-        tracing::debug!(
-            choice_id = %id,
-            "ResolveChoice received; handler is filled in by task 5.2 (recorded, continuing)"
-        );
-        ControlFlow::Continue(())
+        match std::mem::replace(&mut self.phase, TalkPhase::Idle) {
+            TalkPhase::Driving {
+                talk_id,
+                mut player,
+                end,
+                last_tick,
+            } => match player.resolve_choice(&id) {
+                Some(_) => {
+                    // 選択解決成功。解決後に既に占有 horizon 到達なら即時 settle（次 Tick を待たない）。
+                    // settle_after_tick と同型（同一 TalkDone{end} 構築・同一 reason・同一片付け）を
+                    // 共用し、tick 完了経路と分岐させない。last_tick は未完了時の書き戻し用に温存する。
+                    self.settle_after_tick(talk_id, player, end, last_tick)
+                }
+                None => {
+                    // id 不一致・非待機: 状態不変で記録して継続（barrier は解けない・R2.3 継続）。
+                    tracing::debug!(
+                        choice_id = %id,
+                        "ResolveChoice: no matching pending choice (id mismatch or not waiting); continuing"
+                    );
+                    self.phase = TalkPhase::Driving {
+                        talk_id,
+                        player,
+                        end,
+                        last_tick,
+                    };
+                    ControlFlow::Continue(())
+                }
+            },
+            TalkPhase::Armed {
+                talk_id,
+                sheet,
+                end,
+            } => {
+                // 誤投函（初回 Tick 前・CuePlayer 未構築）: warn して継続（防御枝・W5 mis-post 検出）。
+                tracing::warn!(
+                    choice_id = %id,
+                    "ResolveChoice received before playback started (Armed); ignoring"
+                );
+                self.phase = TalkPhase::Armed {
+                    talk_id,
+                    sheet,
+                    end,
+                };
+                ControlFlow::Continue(())
+            }
+            TalkPhase::Idle => {
+                // 誤投函（Start 前 or 終端後＝talk 不在）: warn して継続（防御枝）。phase は Idle のまま。
+                tracing::warn!(
+                    choice_id = %id,
+                    "ResolveChoice received with no active talk (Idle); ignoring"
+                );
+                ControlFlow::Continue(())
+            }
+        }
     }
 
     /// 自然終端の `TalkDone{reason}` を送出する（受信端 drop は error ログ・黙殺しない・R11.1/11.4）。
@@ -1696,5 +1750,217 @@ mod tests {
             "末尾 `\\-` は Quit（Ended でない＝reason は時刻でなく理由由来）"
         );
         handle.actor.join().expect("body は正常終了する");
+    }
+
+    // ── task 5.2: ResolveChoice ハンドラ＋即時 settle の統合檻（R2.3/2.4/9.8） ──
+    //
+    // 共通 fixture: `\s[10]hello\w[2]\q[選択A,targetA]\e`。compile 後（アンカー 0）:
+    //   ClearAll@0 / Emote{10}@0 / hello@0(D=0.25) / Wait@0.25(0.1) / Choice@0.35(id=targetA) /
+    //   Barrier@0.35（選択待ち・R2.1/2.2）。占有 horizon=0.35。barrier が**最終 horizon 要素**（menu
+    //   ケース）ゆえ、Tick(0.5) で barrier 到達後に解決すると、既に current_offset(0.5) ≥ horizon(0.35)
+    //   で **その場で** 完了する（次 Tick を待たない・settle_after_tick と同型の後始末を共用）。
+
+    const MENU_SCRIPT: &str = r"\s[10]hello\w[2]\q[選択A,targetA]\e";
+
+    /// Choice の着弾（＝barrier 到達）を決定的に観測するため、記録 sink に加えチャンネル sink を挟む
+    /// ヘルパ。Tick(0.5) を送り、Choice(id=targetA) cue の着弾を待って返す（この時点で player は
+    /// `WaitingForChoice`・後続 ResolveChoice は inbox FIFO でこの後に処理される）。
+    fn drive_menu_to_barrier(
+        handle: &TalkHandle,
+        rx: &mpsc::Receiver<TalkCue>,
+    ) {
+        // 初回 Tick(0.0) 刻印: ClearAll/Emote/hello を配送（barrier 未到達）。
+        handle.inbox.send(SakuraMsg::Tick(0.0)).unwrap();
+        // Tick(0.5): Wait@0.25・Choice@0.35 を配送し barrier@0.35 到達 → WaitingForChoice。
+        handle.inbox.send(SakuraMsg::Tick(0.5)).unwrap();
+        // Choice cue 着弾を barrier に、barrier 到達（WaitingForChoice 遷移）を決定的に待つ。
+        loop {
+            let cue = rx
+                .recv_timeout(Duration::from_secs(5))
+                .expect("Choice cue（barrier 手前）が届くべき");
+            if matches!(cue.command, CueCommand::Choice { .. }) {
+                break;
+            }
+        }
+    }
+
+    /// **R2.3（barrier-stop）**: 選択待ち barrier で止まった talk は、horizon 越えまで `Tick` を注入
+    /// しても**完了として通知されない**（選択未解決の間 `TalkDone` を出さない）。
+    #[test]
+    fn menu_barrier_withholds_talkdone_while_choice_unresolved() {
+        let (done_tx, done_rx) = mpsc::channel::<TalkDone>();
+        let (tx, rx) = mpsc::channel::<TalkCue>();
+        let start = StartTalk {
+            script: MENU_SCRIPT.to_string(),
+            talk_id: TalkId(801),
+        };
+        let handle = spawn_talk(
+            start,
+            done_tx,
+            two_sinks(ChannelSink { tx }, NoopSink),
+            SystemVarSnapshot::default(),
+        );
+
+        drive_menu_to_barrier(&handle, &rx);
+
+        // horizon(0.35) を遥かに越える Tick を注入しても、選択未解決ゆえ完了しない（R2.3）。
+        handle.inbox.send(SakuraMsg::Tick(5.0)).unwrap();
+        handle.inbox.send(SakuraMsg::Tick(50.0)).unwrap();
+
+        // 負の窓: barrier 未解決の間は TalkDone が発火しない（早期完了しない）。
+        assert!(
+            done_rx.recv_timeout(NEG_WINDOW).is_err(),
+            "選択待ち barrier 未解決の間は horizon 越え Tick でも TalkDone を出さない（R2.3）"
+        );
+        assert!(
+            !handle.actor.is_finished(),
+            "barrier 未解決ゆえ talk は駆動継続（完了通知せず）"
+        );
+
+        // 片付け: Close で中断 ACK を取り body を畳む（テスト resource の後始末）。
+        handle.inbox.send(SakuraMsg::Close).unwrap();
+        let done = done_rx
+            .recv_timeout(Duration::from_secs(5))
+            .expect("Close で中断 ACK");
+        assert_eq!(done.reason, TalkEndReason::Interrupted);
+        handle.actor.join().expect("body は正常終了する");
+    }
+
+    /// **R2.4/9.8（resolve-resume・即時 settle）**: barrier で止まった talk へ有効な選択 id を
+    /// `SakuraMsg::ResolveChoice` で投入すると、**追加の `Tick` なしに**再開し `TalkDone{Ended}` へ
+    /// 到達する（menu ケース＝barrier が最終 horizon 要素ゆえその場で完了・R-5 の一 tick 遅延を残さない）。
+    #[test]
+    fn resolve_choice_resumes_barrier_stopped_talk_and_settles_immediately() {
+        let (done_tx, done_rx) = mpsc::channel::<TalkDone>();
+        let (tx, rx) = mpsc::channel::<TalkCue>();
+        let talk_id = TalkId(802);
+        let start = StartTalk {
+            script: MENU_SCRIPT.to_string(),
+            talk_id,
+        };
+        let handle = spawn_talk(
+            start,
+            done_tx,
+            two_sinks(ChannelSink { tx }, NoopSink),
+            SystemVarSnapshot::default(),
+        );
+
+        drive_menu_to_barrier(&handle, &rx);
+
+        // 有効な選択 id を投入。追加 Tick は**送らない**（即時 settle の弁別）。
+        handle
+            .inbox
+            .send(SakuraMsg::ResolveChoice {
+                id: "targetA".to_string(),
+            })
+            .unwrap();
+
+        // 追加 Tick なしで自然終端へ到達する（barrier 解決で offset(0.5) ≥ horizon(0.35) ＝即完了）。
+        let done = done_rx
+            .recv_timeout(Duration::from_secs(5))
+            .expect("ResolveChoice で talk が再開し、追加 Tick なしで TalkDone に到達すべき（R2.4/9.8）");
+        assert_eq!(done.talk_id, talk_id, "talk_id エコー");
+        assert_eq!(
+            done.reason,
+            TalkEndReason::Ended,
+            "`\\e` 終端の menu talk は解決後 Ended で完了する"
+        );
+        handle.actor.join().expect("body は正常終了する");
+    }
+
+    /// **mismatch**: 未知の選択 id で `ResolveChoice` しても状態は不変（`None` 記録＋継続）で
+    /// `TalkDone` は出ず、talk は待機継続する。その後**有効な id** で解決すれば完了へ到達し、
+    /// 誤 id が barrier を壊していない（talk が生存継続していた）ことを示す。
+    #[test]
+    fn resolve_choice_with_unknown_id_is_noop_and_talk_continues() {
+        let (done_tx, done_rx) = mpsc::channel::<TalkDone>();
+        let (tx, rx) = mpsc::channel::<TalkCue>();
+        let talk_id = TalkId(803);
+        let start = StartTalk {
+            script: MENU_SCRIPT.to_string(),
+            talk_id,
+        };
+        let handle = spawn_talk(
+            start,
+            done_tx,
+            two_sinks(ChannelSink { tx }, NoopSink),
+            SystemVarSnapshot::default(),
+        );
+
+        drive_menu_to_barrier(&handle, &rx);
+
+        // 未知 id: resolve_choice は None → 記録して継続（状態不変・barrier は解けない）。
+        handle
+            .inbox
+            .send(SakuraMsg::ResolveChoice {
+                id: "NO_SUCH_ID".to_string(),
+            })
+            .unwrap();
+
+        // 負の窓: 誤 id では完了しない（barrier 依然未解決）。
+        assert!(
+            done_rx.recv_timeout(NEG_WINDOW).is_err(),
+            "未知 id の ResolveChoice では TalkDone を出さない（状態不変・継続）"
+        );
+        assert!(
+            !handle.actor.is_finished(),
+            "誤 id は barrier を壊さず talk は待機継続する"
+        );
+
+        // 有効 id で解決すれば完了へ到達（barrier が生きていた＝誤 id で壊れていない証）。
+        handle
+            .inbox
+            .send(SakuraMsg::ResolveChoice {
+                id: "targetA".to_string(),
+            })
+            .unwrap();
+        let done = done_rx
+            .recv_timeout(Duration::from_secs(5))
+            .expect("有効 id の解決で完了へ到達すべき（誤 id 後も barrier は生存）");
+        assert_eq!(done.talk_id, talk_id);
+        assert_eq!(done.reason, TalkEndReason::Ended);
+        handle.actor.join().expect("body は正常終了する");
+    }
+
+    /// **defensive（Armed 誤投函）**: 初回 `Tick` 前（`Armed`＝CuePlayer 未構築）に `ResolveChoice` が
+    /// 届いても warn して継続し（防御枝）、以降の通常 Tick 駆動で talk は正常に終端する。
+    #[test]
+    fn resolve_choice_before_playback_armed_is_ignored_and_playback_survives() {
+        let (done_tx, done_rx) = mpsc::channel::<TalkDone>();
+        let talk_id = TalkId(804);
+        let start = StartTalk {
+            script: r"\s[10]hello\w[2]world\e".to_string(),
+            talk_id,
+        };
+        let sink = RecordingSink::new();
+        let records = sink.records();
+        let handle = spawn_talk(
+            start,
+            done_tx,
+            two_sinks(sink, NoopSink),
+            SystemVarSnapshot::default(),
+        );
+
+        // 初回 Tick 前（Armed）に ResolveChoice 誤投函: warn して継続（CuePlayer 未構築ゆえ no-op）。
+        handle
+            .inbox
+            .send(SakuraMsg::ResolveChoice {
+                id: "targetA".to_string(),
+            })
+            .unwrap();
+
+        // 通常 Tick 列で駆動・終端する（防御枝がループを殺していない証）。
+        handle.inbox.send(SakuraMsg::Tick(0.0)).unwrap();
+        handle.inbox.send(SakuraMsg::Tick(1.0)).unwrap();
+        let done = done_rx
+            .recv_timeout(Duration::from_secs(5))
+            .expect("Armed 誤投函後も通常 Tick で終端するべき");
+        assert_eq!(done.reason, TalkEndReason::Ended, "再生は破綻せず Ended");
+        handle.actor.join().expect("body は正常終了する");
+        assert_eq!(
+            records.lock().unwrap().len(),
+            5,
+            "誤投函で早期全量配信されず、通常 5 cue が届く"
+        );
     }
 }
