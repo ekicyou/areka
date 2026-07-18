@@ -94,14 +94,16 @@ fn syntax_unknown_tag_is_syntactically_split_and_kept_raw() {
     );
 }
 
-/// 未知の bare タグ `\0` は 1 文字で終端し後続を巻き込まない（要件 13.1）。
-/// `\0あ` → Raw(`\0`) ＋ Text(`あ`)。
+/// bare スコープタグ `\0` は 1 文字で終端し後続を巻き込まない（lexer 終端規律・要件 13.1）。
+/// `\0あ` → SpeakerScope{n:0}（本体側・R1.5/R4.4・ukadoc `\0`=本体側）＋ Text(`あ`)。
+/// 眼目は lexer の 1 文字終端（`あ` を吸わない）＝decode 写像先が Raw から SpeakerScope へ
+/// 更新されても終端規律は不変であることを固定する（正典スコープ写像のスーパーセット更新）。
 #[test]
-fn syntax_unknown_bare_tag_terminates_at_one_char() {
+fn syntax_scope_bare_tag_terminates_at_one_char() {
     assert_eq!(
         parse(r"\0あ"),
         vec![
-            Instruction::Raw(r"\0".to_string()),
+            Instruction::SpeakerScope { n: 0 },
             Instruction::Text("あ".to_string()),
         ],
     );

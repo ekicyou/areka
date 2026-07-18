@@ -555,6 +555,7 @@ fn to_talk_schedule_duration_uniform_across_every_command_variant() {
         CueCommand::Choice {
             id: "yes".into(),
             text: "はい".into(),
+            references: vec![],
         },
         CueCommand::EntityRef(42),
         CueCommand::Custom {

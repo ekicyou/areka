@@ -1,0 +1,26 @@
+{
+  "feature_name": "areka-P0-sakura-dialogue-tags",
+  "created_at": "2026-07-17T12:51:46Z",
+  "updated_at": "2026-07-18T13:35:00Z",
+  "language": "ja",
+  "phase": "completed",
+  "approvals": {
+    "requirements": {
+      "generated": true,
+      "approved": true
+    },
+    "design": {
+      "generated": true,
+      "approved": true
+    },
+    "tasks": {
+      "generated": true,
+      "approved": true
+    },
+    "implementation": {
+      "completed": true,
+      "completed_at": "2026-07-18T13:35:00Z"
+    }
+  },
+  "ready_for_implementation": true
+}

@@ -22,16 +22,18 @@ where
     B: From<A> + Send + 'static,
 {
     let relay_name: String = name.to_string();
-    let (_unused_tx, handle) = areka_actor::spawn_actor::<A, _>(name, move |_unused_rx| loop {
-        match rx.recv() {
-            Ok(msg) => {
-                let converted: B = B::from(msg);
-                if tx.send(converted).is_err() {
-                    tracing::warn!(relay = %relay_name, "downstream disconnected; relay stopping");
-                    return;
+    let (_unused_tx, handle) = areka_actor::spawn_actor::<A, _>(name, move |_unused_rx| {
+        loop {
+            match rx.recv() {
+                Ok(msg) => {
+                    let converted: B = B::from(msg);
+                    if tx.send(converted).is_err() {
+                        tracing::warn!(relay = %relay_name, "downstream disconnected; relay stopping");
+                        return;
+                    }
                 }
+                Err(_) => return, // 上流全 Sender drop: 自然終了（ログ不要）。
             }
-            Err(_) => return, // 上流全 Sender drop: 自然終了（ログ不要）。
         }
     });
     handle
@@ -83,21 +85,26 @@ mod tests {
         a_tx.send(A(3)).expect("send A(3)");
 
         assert_eq!(
-            b_rx.recv_timeout(Duration::from_secs(5)).expect("recv B(1)"),
+            b_rx.recv_timeout(Duration::from_secs(5))
+                .expect("recv B(1)"),
             B(1)
         );
         assert_eq!(
-            b_rx.recv_timeout(Duration::from_secs(5)).expect("recv B(2)"),
+            b_rx.recv_timeout(Duration::from_secs(5))
+                .expect("recv B(2)"),
             B(2)
         );
         assert_eq!(
-            b_rx.recv_timeout(Duration::from_secs(5)).expect("recv B(3)"),
+            b_rx.recv_timeout(Duration::from_secs(5))
+                .expect("recv B(3)"),
             B(3)
         );
 
         // 後始末: 上流を手放して自然終了させる。
         drop(a_tx);
-        handle.join().expect("relay terminates normally after upstream drop");
+        handle
+            .join()
+            .expect("relay terminates normally after upstream drop");
     }
 
     // ケース2: 上流全 Sender drop → 自然終了（join が Ok(()) を有界時間内に返す）。
@@ -115,9 +122,9 @@ mod tests {
             "relay join after upstream drop",
             Duration::from_secs(5),
             move || {
-                handle
-                    .join()
-                    .expect("relay must terminate normally (Ok) on upstream drop, not hang or panic");
+                handle.join().expect(
+                    "relay must terminate normally (Ok) on upstream drop, not hang or panic",
+                );
             },
         );
     }

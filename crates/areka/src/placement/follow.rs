@@ -496,7 +496,9 @@ pub(crate) fn on_balloon_drag(
 ///   （silent no-op にしない）。このとき随伴バルーンも動かさない
 /// - 随伴バルーン側の `WindowHandle` 未付与は `warn!` のみ（対象自身の移動は成立
 ///   しているため戻り値は `true`）
-#[allow(dead_code)] // 呼び出し側（UI 配送ブリッジ結線）は後続 spec の領分（7.3）
+///
+/// 消費者: `emo2_boot::move_cue::apply_move_directive`（`\![move]` の UI スレッド適用・
+/// task 7.4）が唯一の位置ライターとして本 API を呼ぶ。
 pub fn move_window_to(world: &mut World, window: Entity, x: i32, y: i32) -> bool {
     let follow = world.get::<BalloonFollow>(window).copied();
 

@@ -20,7 +20,8 @@
 //!
 //! 公開 facade（design.md「File Structure Plan」の `src/lib.rs` 記載どおり）:
 //! `boot`／`GhostRuntime`／`GhostBootOptions`／`ShioriWiring`／`TickerMode`／
-//! `GhostBootError`／`GhostParts`／`GhostHandles`／`GhostShutdownError` を re-export する。
+//! `GhostBootError`／`GhostParts`／`GhostHandles`／`GhostShutdownError`／
+//! `SystemVarSource`／`default_system_vars` を re-export する。
 
 pub mod config;
 pub mod dispatcher;
@@ -32,5 +33,5 @@ pub mod ticker;
 
 pub use runtime::{
     GhostBootError, GhostBootOptions, GhostHandles, GhostParts, GhostRuntime, GhostShutdownError,
-    ShioriWiring, TickerMode, boot,
+    ShioriWiring, SystemVarSource, TickerMode, boot, default_system_vars,
 };

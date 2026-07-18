@@ -102,6 +102,44 @@ fn speaker_scope_number() {
     assert_eq!(dec(r"\p[1]"), vec![Instruction::SpeakerScope { n: 1 }]);
 }
 
+/// ブラケット `\p[n]` は**任意番号 u32**を保持し 0/1 へ clamp しない（開発者裁定#3・
+/// ukadoc `\p[ID番号]`＝任意番号・R1.5/R4.4）。`speaker_scope_n` の u32 parse が
+/// 生値を通すことを固定する（非退行）。
+#[test]
+fn speaker_scope_bracket_arbitrary_n_not_clamped() {
+    assert_eq!(dec(r"\p[2]"), vec![Instruction::SpeakerScope { n: 2 }]);
+    assert_eq!(dec(r"\p[5]"), vec![Instruction::SpeakerScope { n: 5 }]);
+    assert_eq!(dec(r"\p[42]"), vec![Instruction::SpeakerScope { n: 42 }]);
+}
+
+/// 括弧なし短縮 `\pN`（ukadoc `\pID`＝任意番号・0〜9 のみ）→ `SpeakerScope{n}`
+/// （lexer shorthand・R1.5/R4.4）。`\p2` → scope 2。ブラケット形 `\p[2]` と等価。
+#[test]
+fn speaker_scope_shorthand_single_digit() {
+    assert_eq!(dec(r"\p2"), vec![Instruction::SpeakerScope { n: 2 }]);
+}
+
+/// 短縮 `\pN` は**単一桁**のみ消費する（lexer が 1 桁で終端＝`\wN` と同一規律）。
+/// `\p10` → `SpeakerScope{1}` ＋ `Text("0")`（scope 10 ではない・ukadoc「0〜9のみ」）。
+#[test]
+fn speaker_scope_shorthand_consumes_one_digit_only() {
+    assert_eq!(
+        dec(r"\p10"),
+        vec![
+            Instruction::SpeakerScope { n: 1 },
+            Instruction::Text("0".to_string()),
+        ],
+    );
+}
+
+/// 数字を伴わない裸 `\p` は shorthand でも正典スコープ bare でもない＝既存 passthrough の
+/// まま `Raw("\p")`（`decode_bare` の match に `'p'` アームは無い・要件 11.2）。
+/// `\p2`（shorthand）・`\p[2]`（Tag）との弁別を固定する。
+#[test]
+fn bare_p_without_digit_absorbed_as_raw() {
+    assert_eq!(dec(r"\p"), vec![Instruction::Raw(r"\p".to_string())]);
+}
+
 /// `\s[...]` の中身は不透明文字列のまま無加工保持（要件 2.2/2.3）。
 #[test]
 fn surface_opaque_content_preserved() {
@@ -363,10 +401,33 @@ fn unknown_tag_absorbed_as_raw() {
     );
 }
 
-/// subset 外の bare タグ `\0` → `Raw`（要件 11.2）。
+/// 正典スコープタグ bare `\0` → `SpeakerScope{n:0}`（本体側・R1.5/R4.4・ukadoc `\0`=本体側）。
+/// これは完了 spec `areka-P0-sakura-parse` req 11.2 の passthrough 分類の意図的スーパーセット
+/// 更新（emo2 は `\p[n]` を発行するため無影響）。
+#[test]
+fn scope_bare_zero_maps_to_speaker_scope() {
+    assert_eq!(dec(r"\0"), vec![Instruction::SpeakerScope { n: 0 }]);
+}
+
+/// 正典スコープタグ bare `\1` → `SpeakerScope{n:1}`（相方側・R1.5/R4.4・ukadoc `\1`=相方側）。
+/// `boot.pasta:79` の `\1\![move,...]`（初回起動のエモ位置調整）が正しく scope 1 帰属する経路。
+#[test]
+fn scope_bare_one_maps_to_speaker_scope() {
+    assert_eq!(dec(r"\1"), vec![Instruction::SpeakerScope { n: 1 }]);
+}
+
+/// bare スコープ**別名** `\h`（本体側=0）・`\u`（相方側=1）→ `SpeakerScope`（R1.5/R4.4・
+/// ukadoc: `\0`/`\h`=本体側、`\1`/`\u`=相方側）。数字形 `\0`/`\1` と同一 scope へ写像する。
+#[test]
+fn scope_bare_h_u_aliases_map_to_speaker_scope() {
+    assert_eq!(dec(r"\h"), vec![Instruction::SpeakerScope { n: 0 }]);
+    assert_eq!(dec(r"\u"), vec![Instruction::SpeakerScope { n: 1 }]);
+}
+
+/// 真に未知の bare タグ（`\i` 等・スコープタグでない）は引き続き `Raw`（要件 11.2）。
 #[test]
 fn unknown_bare_tag_absorbed_as_raw() {
-    assert_eq!(dec(r"\0"), vec![Instruction::Raw(r"\0".to_string())]);
+    assert_eq!(dec(r"\i"), vec![Instruction::Raw(r"\i".to_string())]);
 }
 
 /// lexer が区切れず Raw 吸収した不正断片（未閉じ `[`）は decode でも Raw のまま

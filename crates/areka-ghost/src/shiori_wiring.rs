@@ -16,7 +16,7 @@ use std::time::Duration;
 use areka_kanade::{ShioriBackend, ShioriConnection};
 use areka_parsers::package::ShioriMount;
 use shiori_host32_host::process_host::LOAD_ACK_TIMEOUT;
-use shiori_host32_host::{spawn, HelperLifecycle, ParentMessageWindow};
+use shiori_host32_host::{HelperLifecycle, ParentMessageWindow, spawn};
 use shiori_host32_ipc::MsgTag;
 
 /// ハンドシェイク（HELLO 受領）の上限時間（既存 E2E の `HANDSHAKE_TIMEOUT` と同値）。
