@@ -57,6 +57,7 @@
 //! そのまま再利用できる（導出自体は実装しない・R9.4）。
 
 use crate::region::TextRegion;
+use crate::segment::SegmentPlan;
 use crate::state::{TextItem, TextLayerConfig};
 use crate::writing::WritingMode;
 
@@ -149,6 +150,20 @@ pub struct VisibleWindow {
     pub block_offset: f32,
 }
 
+/// layout への折返し計画の受け渡し（OFF は境界値を一切持たない——R4 の構造保証）。
+///
+/// ゲート③（折返し判定）の分割点選択だけを分岐させるシーム。`CharByChar` は
+/// 既存の文字単位折返し（byte 等価の非回帰経路）、`Segmented` は事前計算済みの
+/// [`SegmentPlan`] を参照した分かち書きワードラップ（塊先決＋長大塊縮退）。
+/// ゲート①（可視打切り）・②（保留フラッシュ）・④（配置）は分岐に依らず不変。
+#[derive(Clone, Copy, Debug)]
+pub enum WrapPlan<'a> {
+    /// 従来の文字単位折返し（既存コードパス・byte 等価）。
+    CharByChar,
+    /// 分かち書きワードラップ（塊境界は事前計算済みの [`SegmentPlan`] を参照）。
+    Segmented(&'a SegmentPlan),
+}
+
 /// 折返し・行送りの決定エンジン（純粋・R4.5/R6.1–6.3）。
 pub struct LayoutEngine;
 
@@ -166,6 +181,10 @@ impl LayoutEngine {
     ///   では空行を出さず・末尾の保留改行は蒸発する。
     ///
     /// 同一入力→同一出力（R2.5 系）。失敗経路なし（全入力で値を返す純関数）。
+    ///
+    /// 文字単位折返し（[`WrapPlan::CharByChar`]）へ委譲する薄いラッパ。分かち書き
+    /// ワードラップは [`LayoutEngine::layout_with_wrap`] に `WrapPlan::Segmented` を
+    /// 渡す（この委譲で既存呼出は signature 不変のまま OFF 経路を byte 等価に保つ）。
     pub fn layout(
         items: &[TextItem],
         visible_count: usize,
@@ -173,6 +192,44 @@ impl LayoutEngine {
         mode: WritingMode,
         font_height: f32,
         metrics: &dyn GlyphMetrics,
+    ) -> Vec<PositionedLine> {
+        Self::layout_with_wrap(
+            items,
+            visible_count,
+            region,
+            mode,
+            font_height,
+            metrics,
+            WrapPlan::CharByChar,
+        )
+    }
+
+    /// 折返し計画（[`WrapPlan`]）を明示指定して行列を解決する（純粋・決定論）。
+    ///
+    /// ゲート順序と①②④の意味論は [`LayoutEngine::layout`] と同一で、**ゲート③
+    /// （折返し判定）だけ**が `wrap` で分岐する:
+    /// - [`WrapPlan::CharByChar`]: 既存の文字単位規則（`行内位置＋次グリフ幅 > 閾値`）。
+    /// - [`WrapPlan::Segmented`]: 塊先決——塊先頭で塊全体の advance 合計を全文 plan から
+    ///   求め、残り行幅（`cap_rem`）に収まれば継続配置、行頭からの行幅（`cap_full`）まで
+    ///   なら塊の前で行送りしてから配置、それも超える長大塊は当該塊のみ文字単位規則へ
+    ///   縮退する（3.1/3.2）。塊内の残グリフは残数カウンタで追跡し追加判定なしで配置
+    ///   （2.1/2.3・浮動丸めでの途中分割を構造排除）。plan に被覆されないグリフ（不整合）
+    ///   は既存文字単位規則で配置される（優しい縮退・4.2）。
+    ///
+    /// 塊先決は `visible_count` に依存しない（seg_sum は全 `items` から算出・INV-1/7.1）。
+    /// ゲート①が④より先にあるため、塊途中で可視が切れても配置済み prefix の行は動かない
+    /// （INV-2/7.2/7.3）。塊前行送りは行頭では `cap_rem == cap_full` ゆえ不発火＝空行を
+    /// 作らない（INV-3）。縦書きは行内軸の `inline_pos`/`advance`/`threshold` 演算のみゆえ
+    /// 新規 mode 分岐なし（6.1/6.2）。
+    #[allow(clippy::too_many_arguments)]
+    pub fn layout_with_wrap(
+        items: &[TextItem],
+        visible_count: usize,
+        region: &TextRegion,
+        mode: WritingMode,
+        font_height: f32,
+        metrics: &dyn GlyphMetrics,
+        wrap: WrapPlan<'_>,
     ) -> Vec<PositionedLine> {
         let pitch = metrics.line_pitch(font_height);
         let threshold = region.wrap_threshold();
@@ -194,6 +251,10 @@ impl LayoutEngine {
         // `f32` 単独でなく Option なのは `\n[0]`（ratio 0＝行替え・送りゼロ）を「保留なし」
         // と区別して保存するため（DD-5）。走査ローカル＝フレームを跨ぐ状態を持たない。
         let mut pending: Option<f32> = None;
+        // 先決済み塊の残グリフ数（Segmented 経路のみ使用）。正＝塊内（追加判定なし配置）・
+        // 0 かつ塊先頭でない＝plan 非被覆（既存 CharByChar 式で判定）——この 2 状態の区別が
+        // 「塊は途中分割されない」の型保証（design System Flows「塊内は追加判定なし」）。
+        let mut seg_remaining: usize = 0;
 
         for item in items {
             match *item {
@@ -222,10 +283,56 @@ impl LayoutEngine {
                         block_pos += block_dir * pitch * sum;
                         inline_pos = inline_start;
                     }
-                    // ③ 折返し判定（正準表）: 行内位置＋次グリフ幅 > 閾値。
-                    // 行頭グリフは閾値超過でも配置（縮退・グリフを落とさない）。
+                    // ③ 折返し判定（WrapPlan で分岐・design System Flows「ゲート③」）。
+                    // feed＝この可視グリフの配置前に行送りするか。ゲート①②④・行頭 1 グリフ
+                    // 配置（無限折返し回避）・行矩形規約は分岐に依らず不変。
                     // 直前にフラッシュした場合 current は空ゆえ二重前進しない。
-                    if !current.is_empty() && inline_pos + advance > threshold {
+                    let feed = match wrap {
+                        // CharByChar: 既存の文字単位規則そのまま（byte 等価の非回帰経路）。
+                        WrapPlan::CharByChar => {
+                            !current.is_empty() && inline_pos + advance > threshold
+                        }
+                        WrapPlan::Segmented(plan) => {
+                            if seg_remaining > 0 {
+                                // 塊内: 先決済み＝追加判定なしで配置（浮動丸めでの途中分割排除・2.1/2.3）。
+                                seg_remaining -= 1;
+                                false
+                            } else if let Some(seg) = plan.segment_starting_at(placed) {
+                                // 塊先頭: 塊全体の advance 合計を全文 plan から左畳み込みで先決
+                                // （visible_count 非依存＝INV-1/7.1）。
+                                let seg_sum = segment_advance_sum(
+                                    items,
+                                    placed,
+                                    seg.len,
+                                    font_height,
+                                    metrics,
+                                );
+                                let cap_rem = threshold - inline_pos; // 残り行幅
+                                let cap_full = threshold - inline_start; // 行頭からの行幅
+                                if seg_sum <= cap_rem {
+                                    // 現在行に収まる → 分割せず継続配置（2.1/2.3）。
+                                    seg_remaining = seg.len - 1;
+                                    false
+                                } else if seg_sum <= cap_full {
+                                    // 収まらないが行頭からなら収まる → 塊の前で行送り（2.2）。
+                                    // 行頭では cap_rem == cap_full ゆえ本分岐は構造的に不発火
+                                    // ＝ワードラップは空行を作らない（INV-3）。
+                                    seg_remaining = seg.len - 1;
+                                    true
+                                } else {
+                                    // 長大塊（行頭からでも収まらない）: 当該塊のみ既存 char 規則へ
+                                    // 委譲（3.1/3.2）。seg_remaining は設定せず＝続くグリフは非被覆
+                                    // として char 規則で処理され、次の塊先頭で通常判定を再開する（3.3）。
+                                    !current.is_empty() && inline_pos + advance > threshold
+                                }
+                            } else {
+                                // plan 非被覆（不整合／長大塊の継続）: 既存 char 規則で配置
+                                // （優しい縮退・4.2・design Error Handling「plan と items の不整合」）。
+                                !current.is_empty() && inline_pos + advance > threshold
+                            }
+                        }
+                    };
+                    if feed {
                         lines.push(finish_line(
                             std::mem::take(&mut current),
                             mode,
@@ -334,6 +441,36 @@ impl LayoutEngine {
     }
 }
 
+/// 塊の advance 合計（塊先決の判定式の左辺 `seg_sum`）。
+///
+/// glyph 通し番号 `[start_serial, start_serial + len)`（`items` 中の `Glyph` のみを
+/// 0 起点で数えた範囲）のグリフ送り幅を、通し番号昇順＝**左畳み込み順**で合計する
+/// （配置も同順ゆえ浮動小数の順序依存を実装と一致させる・design Service Interface）。
+/// 全 `items` を走るため合計は `visible_count` に依存しない（INV-1/7.1）。
+fn segment_advance_sum(
+    items: &[TextItem],
+    start_serial: usize,
+    len: usize,
+    font_height: f32,
+    metrics: &dyn GlyphMetrics,
+) -> f32 {
+    let end = start_serial + len;
+    let mut sum = 0.0f32;
+    let mut serial = 0usize;
+    for item in items {
+        if let TextItem::Glyph { ch } = *item {
+            if serial >= end {
+                break;
+            }
+            if serial >= start_serial {
+                sum += metrics.advance(ch, font_height);
+            }
+            serial += 1;
+        }
+    }
+    sum
+}
+
 /// 行の確定: 行内範囲（開始〜送り終端）と行送り軸位置から行矩形を組む
 /// （行送り軸の厚み方向は行送り方向と同符号——モジュール doc「行矩形の規約」）。
 fn finish_line(
@@ -374,9 +511,10 @@ mod tests {
     };
 
     use super::{
-        FixedMetrics, GlyphMetrics, LayoutEngine, LineRect, PositionedLine, VisibleWindow,
+        FixedMetrics, GlyphMetrics, LayoutEngine, LineRect, PositionedLine, VisibleWindow, WrapPlan,
     };
     use crate::region::TextRegion;
+    use crate::segment::{Segment, SegmentPlan};
     use crate::state::TextItem;
     use crate::writing::WritingMode;
 
@@ -1376,5 +1514,333 @@ mod tests {
             let second = LayoutEngine::layout(&items, 2, &region, mode, 10.0, &FixedMetrics);
             assert_eq!(first, second, "mode {mode:?} で決定論が崩れている");
         }
+    }
+
+    // ── Task 4.1: 塊先決による折返し（WrapPlan::Segmented・手組み SegmentPlan 注入） ──
+    //
+    // budouy 非依存でゲート③の判断分岐を全網羅するため、plan は手組み（from_segments）で
+    // 注入する（design「テスト形: 手組み SegmentPlan」）。共通前提: FixedMetrics・font 10 →
+    // 全角 'あ' の advance 10・pitch 13。閾値は wordwrappoint x（横書き）／y（縦書き）。
+
+    /// (start, len) 列から手組み SegmentPlan を作る。
+    fn plan(segs: &[(usize, usize)]) -> SegmentPlan {
+        SegmentPlan::from_segments(
+            segs.iter()
+                .map(|&(start, len)| Segment { start, len })
+                .collect(),
+        )
+    }
+
+    /// 各グリフの (行 index, 行内位置, 文字) を配置順に平坦化する（prefix 一致比較用）。
+    fn flat_glyphs(lines: &[PositionedLine]) -> Vec<(usize, f32, char)> {
+        lines
+            .iter()
+            .enumerate()
+            .flat_map(|(li, l)| l.glyphs.iter().map(move |g| (li, g.inline_pos, g.ch)))
+            .collect()
+    }
+
+    /// 2.1/2.3: 残り行幅に収まる塊は分割せず現在行へ継続配置する（塊内は追加判定なし）。
+    /// 行頭の塊 {0,2}（fit）→ 続く塊 {2,2} も残り行幅 30 に収まる → 全 4 グリフが 1 行。
+    #[test]
+    fn segmented_fits_places_on_current_line_without_split() {
+        let region = TextRegion::resolve(
+            &model((Some(0), Some(0)), (Some(50), None)),
+            IMAGE,
+            WritingMode::HorizontalTb,
+        );
+        let items = glyphs(4);
+        let p = plan(&[(0, 2), (2, 2)]);
+        let lines = LayoutEngine::layout_with_wrap(
+            &items,
+            4,
+            &region,
+            WritingMode::HorizontalTb,
+            10.0,
+            &FixedMetrics,
+            WrapPlan::Segmented(&p),
+        );
+        assert_eq!(lines.len(), 1, "両塊とも残り行幅に収まる → 1 行に継続配置");
+        assert_eq!(inline_positions(&lines[0]), vec![0.0, 10.0, 20.0, 30.0]);
+    }
+
+    /// 2.2: 残り行幅に収まらないが行頭幅には収まる塊は、塊の前で行送りして塊全体を次行頭へ
+    /// 移す（途中分割しない）。塊 {4,2}（seg_sum 20）は残り行幅 10 に入らず行頭幅 50 に入る。
+    /// CharByChar（5+1 割り）との対比で ON が効いていることを示す。
+    #[test]
+    fn segmented_not_fit_breaks_before_whole_segment() {
+        let region = TextRegion::resolve(
+            &model((Some(0), Some(0)), (Some(50), None)),
+            IMAGE,
+            WritingMode::HorizontalTb,
+        );
+        let items = glyphs(6);
+        let p = plan(&[(0, 4), (4, 2)]);
+        let seg_lines = LayoutEngine::layout_with_wrap(
+            &items,
+            6,
+            &region,
+            WritingMode::HorizontalTb,
+            10.0,
+            &FixedMetrics,
+            WrapPlan::Segmented(&p),
+        );
+        assert_eq!(seg_lines.len(), 2);
+        assert_eq!(inline_positions(&seg_lines[0]), vec![0.0, 10.0, 20.0, 30.0]);
+        assert_eq!(
+            inline_positions(&seg_lines[1]),
+            vec![0.0, 10.0],
+            "塊 {{4,2}} は分割されず塊ごと次行へ"
+        );
+        // 対比: CharByChar は 5 グリフ目まで行 0（塊を割る割り方）。
+        let char_lines = LayoutEngine::layout(
+            &items,
+            6,
+            &region,
+            WritingMode::HorizontalTb,
+            10.0,
+            &FixedMetrics,
+        );
+        assert_eq!(char_lines[0].glyphs.len(), 5);
+        assert_ne!(seg_lines, char_lines, "ON（塊維持）が char 割りと異なる");
+    }
+
+    /// 2.2/2.3: 境界値の檻（`<=` vs `<`）。塊の advance 合計がちょうど残り行幅に一致すれば
+    /// 残留、1 グリフ増えて超えれば塊前で行送り。prefix {0,2}（inline 20・残り行幅 30）に対し、
+    /// seg_sum 30（={2,3}）は残留・seg_sum 40（={2,4}）は行送り。
+    #[test]
+    fn segmented_boundary_exactly_fits_stays_else_breaks() {
+        let region = TextRegion::resolve(
+            &model((Some(0), Some(0)), (Some(50), None)),
+            IMAGE,
+            WritingMode::HorizontalTb,
+        );
+        // ちょうど: seg_sum 30 == cap_rem 30 → 残留（1 行）。
+        let items5 = glyphs(5);
+        let p_fit = plan(&[(0, 2), (2, 3)]);
+        let fit = LayoutEngine::layout_with_wrap(
+            &items5,
+            5,
+            &region,
+            WritingMode::HorizontalTb,
+            10.0,
+            &FixedMetrics,
+            WrapPlan::Segmented(&p_fit),
+        );
+        assert_eq!(fit.len(), 1, "seg_sum == cap_rem は残留（<= 判定の境界檻）");
+        assert_eq!(inline_positions(&fit[0]), vec![0.0, 10.0, 20.0, 30.0, 40.0]);
+        // 1 グリフ増: seg_sum 40 > cap_rem 30 → 塊前で行送り。
+        let items6 = glyphs(6);
+        let p_over = plan(&[(0, 2), (2, 4)]);
+        let over = LayoutEngine::layout_with_wrap(
+            &items6,
+            6,
+            &region,
+            WritingMode::HorizontalTb,
+            10.0,
+            &FixedMetrics,
+            WrapPlan::Segmented(&p_over),
+        );
+        assert_eq!(over.len(), 2);
+        assert_eq!(over[0].glyphs.len(), 2, "行 0 は prefix 塊のみ");
+        assert_eq!(over[1].glyphs.len(), 4, "塊 {{2,4}} は分割されず次行へ");
+    }
+
+    /// 2.1/2.3（counter）: 先決済み塊の内部では追加判定を通さず配置する（残グリフ数カウンタ）。
+    /// threshold 30 で塊 {2,3}（seg_sum 30）が break-before で行 1 頭へ移り、3 グリフが分割
+    /// されずに行 1 へ連続配置される。CharByChar は g2 まで行 0（塊を割る）——counter による
+    /// 塊維持が char 割りと異なることを示す。
+    #[test]
+    fn segmented_predecided_segment_is_not_split_inside() {
+        let region = TextRegion::resolve(
+            &model((Some(0), Some(0)), (Some(30), None)),
+            IMAGE,
+            WritingMode::HorizontalTb,
+        );
+        let items = glyphs(5);
+        let p = plan(&[(0, 2), (2, 3)]);
+        let seg = LayoutEngine::layout_with_wrap(
+            &items,
+            5,
+            &region,
+            WritingMode::HorizontalTb,
+            10.0,
+            &FixedMetrics,
+            WrapPlan::Segmented(&p),
+        );
+        assert_eq!(seg.len(), 2);
+        assert_eq!(seg[0].glyphs.len(), 2);
+        assert_eq!(
+            inline_positions(&seg[1]),
+            vec![0.0, 10.0, 20.0],
+            "塊内は追加判定なしで連続配置（3 グリフが行 1 に一体で載る）"
+        );
+        // 対比: char 規則は g2 まで行 0（3 グリフ）→ 塊が割れる割り方。
+        let ch = LayoutEngine::layout(
+            &items,
+            5,
+            &region,
+            WritingMode::HorizontalTb,
+            10.0,
+            &FixedMetrics,
+        );
+        assert_eq!(ch[0].glyphs.len(), 3);
+        assert_ne!(seg, ch, "counter による塊維持が char 割りと異なる");
+    }
+
+    /// 4.2: plan に被覆されないグリフ（不整合・長大塊継続）は既存の文字単位規則で配置される
+    /// （優しい縮退）。塊 {0,2} のみ被覆・g2..g5 は非被覆 → 出力は純 CharByChar と完全一致。
+    #[test]
+    fn plan_non_covered_glyphs_fall_back_to_char_rule() {
+        let region = TextRegion::resolve(
+            &model((Some(0), Some(0)), (Some(50), None)),
+            IMAGE,
+            WritingMode::HorizontalTb,
+        );
+        let items = glyphs(6);
+        let p = plan(&[(0, 2)]); // glyph 2..5 は非被覆
+        let seg = LayoutEngine::layout_with_wrap(
+            &items,
+            6,
+            &region,
+            WritingMode::HorizontalTb,
+            10.0,
+            &FixedMetrics,
+            WrapPlan::Segmented(&p),
+        );
+        let ch = LayoutEngine::layout(
+            &items,
+            6,
+            &region,
+            WritingMode::HorizontalTb,
+            10.0,
+            &FixedMetrics,
+        );
+        assert_eq!(
+            seg, ch,
+            "非被覆グリフは既存文字単位規則で配置（plan 不整合の優しい縮退）"
+        );
+        assert_eq!(seg[0].glyphs.len(), 5, "char 割り（5+1）どおり");
+        assert_eq!(seg[1].glyphs.len(), 1);
+    }
+
+    /// 7.1/8.3（INV-1/INV-2）: 塊先決は visible_count に依存しない。同一 items+plan で visible を
+    /// 段階的に増やすと、各段階の配置は全量出力の先頭 v グリフ（行所属・行内位置とも）に一致する
+    /// （リフロー跳び不発生）。核心: g4（塊 {4,2} 先頭）は g5 が不可視でも行 1 へ落ちる
+    /// （seg_sum が全文 items から算出されるため——可視部分列で計算する実装なら行 0 に留まり失敗）。
+    #[test]
+    fn predecision_is_independent_of_visible_count() {
+        let region = TextRegion::resolve(
+            &model((Some(0), Some(0)), (Some(50), None)),
+            IMAGE,
+            WritingMode::HorizontalTb,
+        );
+        let items = glyphs(6);
+        let p = plan(&[(0, 4), (4, 2)]);
+        let full = LayoutEngine::layout_with_wrap(
+            &items,
+            6,
+            &region,
+            WritingMode::HorizontalTb,
+            10.0,
+            &FixedMetrics,
+            WrapPlan::Segmented(&p),
+        );
+        let full_flat = flat_glyphs(&full);
+        for v in 0..=6 {
+            let partial = LayoutEngine::layout_with_wrap(
+                &items,
+                v,
+                &region,
+                WritingMode::HorizontalTb,
+                10.0,
+                &FixedMetrics,
+                WrapPlan::Segmented(&p),
+            );
+            assert_eq!(
+                flat_glyphs(&partial).as_slice(),
+                &full_flat[..v],
+                "visible {v}: 配置が全量出力の prefix と不一致（リフロー跳び）"
+            );
+        }
+        // 核心: visible 5（g5 不可視）でも g4 は行 1（塊先決は全文由来・INV-1）。
+        let v5 = LayoutEngine::layout_with_wrap(
+            &items,
+            5,
+            &region,
+            WritingMode::HorizontalTb,
+            10.0,
+            &FixedMetrics,
+            WrapPlan::Segmented(&p),
+        );
+        assert_eq!(v5.len(), 2);
+        assert_eq!(v5[1].glyphs.len(), 1, "行 1 は g4 のみ（g5 未リビール）");
+        assert_eq!(v5[1].glyphs[0].inline_pos, 0.0);
+    }
+
+    /// 6.1/6.2: 縦書き（vertical_rl/vertical_lr）でも軸読み替えのみで同一の塊先決式が成立する。
+    /// 同一 items+plan で塊 {4,2} が 2 列目へ移り（4+2）、行内軸の先決（塊割れ点・行内位置）が
+    /// rl/lr で完全一致する（新規 mode 分岐なし・単一読み替え規則）。
+    #[test]
+    fn segmented_same_rule_in_vertical_modes() {
+        let m = model((None, None), (None, Some(50)));
+        let items = glyphs(6);
+        let p = plan(&[(0, 4), (4, 2)]);
+        let mut inline_by_mode: Vec<Vec<Vec<f32>>> = Vec::new();
+        for mode in [WritingMode::VerticalRl, WritingMode::VerticalLr] {
+            let region = TextRegion::resolve(&m, IMAGE, mode);
+            let lines = LayoutEngine::layout_with_wrap(
+                &items,
+                6,
+                &region,
+                mode,
+                10.0,
+                &FixedMetrics,
+                WrapPlan::Segmented(&p),
+            );
+            assert_eq!(lines.len(), 2, "{mode:?}: 塊 {{4,2}} が 2 列目へ");
+            assert_eq!(lines[0].glyphs.len(), 4);
+            assert_eq!(lines[1].glyphs.len(), 2, "{mode:?}: 塊は分割されない");
+            inline_by_mode.push(lines.iter().map(inline_positions).collect());
+        }
+        assert_eq!(
+            inline_by_mode[0], inline_by_mode[1],
+            "縦書き 2 方向で行内軸の塊先決（割れ点・行内位置）が不一致"
+        );
+    }
+
+    /// 4.1/4.3: `layout()`（委譲）は `WrapPlan::CharByChar` 明示指定と byte 等価
+    /// （OFF 経路の非回帰——既存 layout 檻はすべてこの委譲を通る）。
+    #[test]
+    fn char_by_char_wrap_matches_layout_delegate() {
+        let region = TextRegion::resolve(
+            &model((Some(0), Some(0)), (Some(50), None)),
+            IMAGE,
+            WritingMode::HorizontalTb,
+        );
+        let items = glyphs(6);
+        let delegate = LayoutEngine::layout(
+            &items,
+            6,
+            &region,
+            WritingMode::HorizontalTb,
+            10.0,
+            &FixedMetrics,
+        );
+        let explicit = LayoutEngine::layout_with_wrap(
+            &items,
+            6,
+            &region,
+            WritingMode::HorizontalTb,
+            10.0,
+            &FixedMetrics,
+            WrapPlan::CharByChar,
+        );
+        assert_eq!(
+            delegate, explicit,
+            "layout() は WrapPlan::CharByChar 委譲と byte 等価"
+        );
+        assert_eq!(delegate[0].glyphs.len(), 5, "char 割り（5+1）どおり");
+        assert_eq!(delegate[1].glyphs.len(), 1);
     }
 }

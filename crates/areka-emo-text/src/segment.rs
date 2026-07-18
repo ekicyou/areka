@@ -67,6 +67,16 @@ impl SegmentPlan {
     pub fn segments(&self) -> &[Segment] {
         &self.segments
     }
+
+    /// 塊境界列から直接 [`SegmentPlan`] を組む（テスト専用の手組み注入口）。
+    ///
+    /// budouy に依存せず layout ゲート③の判断分岐（塊先決・縮退・plan 非被覆）を全網羅
+    /// するため、layout.rs のテストが正準/不整合な plan を任意に構築する用途に限る
+    /// （[test-only-decision-branches] の適用・design「テスト形: 手組み SegmentPlan」）。
+    #[cfg(test)]
+    pub(crate) fn from_segments(segments: Vec<Segment>) -> Self {
+        SegmentPlan { segments }
+    }
 }
 
 /// budouy 既定日本語 parser（初回のみロード・以後再利用）。
