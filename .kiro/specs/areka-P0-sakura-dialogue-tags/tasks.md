@@ -154,7 +154,7 @@
   - _Requirements: 9.5_
   - _Depends: 7.4_
 
-- [ ] 8. (P) emo-text 演者追随の実装
+- [x] 8. (P) emo-text 演者追随の実装
   - `state.rs`/`actor.rs` の網羅 match へ `Cursor` の warn-once スキップアームを追加する（状態不変・記録あり）
   - `Choice` アームの文言を「配送列に第一級で現れる（R8.6 仕様変更）・表示消費は W4」へ更新する（挙動は warn-once スキップのまま＝実機の見た目は不変）
   - `LogSink::command_kind`（ghost）へ Cursor アームを追加する
@@ -233,3 +233,4 @@
 - 【重要・横断】additive な dola 変更（1.1 references／1.2 Cursor／1.3 Window）により **areka-ghost・areka-emo-text・areka(bin) は現時点でテストビルドが赤**（網羅 match の Cursor 欠落・`Choice` の references 欠落・`command_target_of`未配線・`sink.rs:320` の 1 引数 compile 呼び出し等）。これは設計:164 の「横断・機械的追随」通り想定内。各下流 crate はそれを touch するタスク（areka-ghost=Task 6、emo-text/ghost LogSink=Task 8、areka bin=Task 9）が走る時に機械的追随で緑化する。→ **Task 6.1 は areka-ghost をビルドさせるため必要な機械的追随を全て行う（`command_kind` の Cursor アーム含む・cage は Task 8 が追加）**。1.2/1.4 で `Cursor→Balloon` アームを先行追加し cage を後続に回したのと同型。
 - 6.1 完了メモ: (a) dispatcher `on_start` に `SystemVarSnapshot::default()` の暫定橋渡し（`TODO(task 6.2)` マーク済）→ **Task 6.2** で `SystemVarSource` provider を `GhostBootOptions`/`DispatcherState` に通し per-talk 凍結像へ差し替える。(b) `spine_e2e_test.rs`/`real_pasta_test.rs` の埋没破断（references・Window/Cursor 網羅 match）を機械修復済 → **Task 9.3** は 3-sink 構成・move cue e2e など S-3 形の本体を仕上げる（既に compile は通っている前提）。(c) `command_kind` に Cursor 最小ラベルアーム追加済・`command_kind_covers_every_cue_command_variant` 檻への Cursor 明示アサーションは **Task 8** で追加。
 - 6.2 完了メモ: `GhostBootOptions` に必須 `system_vars: SystemVarSource` フィールドが増えたため、bin caller `crates/areka/src/emo2_boot/mod.rs`（~291行）は現在未コンパイル（`system_vars`/新 sinks Vec 未供給）→ **Task 9.1** で `default_system_vars()` 供給＋sinks Vec 3要素へ追随。areka-ghost 単体は緑。`default_system_vars()` は `areka_ghost` から公開（lib.rs re-export）済。
+- 【実施順序変更】areka bin は areka-emo-text（Cursor網羅match欠落）に依存しビルド不能だったため、**Task 8 を Task 7 より先に実施**（Task 8 は (P)・Task 7 非依存）。8 完了で areka-emo-text 緑化。残る bin blocker は `emo2_boot/mod.rs` の GhostBootOptions 呼び出しのみ → **Task 7.1 が bin を組むための最小 mod.rs ブリッジ（既存 sinks を Vec 化＋`default_system_vars()` 供給・MoveCueSink はまだ足さない）を併せて行い**、Task 9.1 が MoveCueSink 登録＋channel 配線で完成させる。

@@ -233,13 +233,15 @@ impl TextLayerRuntime {
                 }
             }
             // 他コマンドは描画実行部への全域クリアを要さない（グリフ更新は present_frame が
-            // リビール進行として描き、非担当コマンドは reveal を汚さない）。
+            // リビール進行として描き、非担当コマンドは reveal を汚さない）。`Cursor` の
+            // warn-once 良性スキップ・記録は純粋層 `state.apply_cue` が担う（本口は clear 要否のみ）。
             CueCommand::Text(_)
             | CueCommand::Emote { .. }
             | CueCommand::Choice { .. }
             | CueCommand::EntityRef(_)
             | CueCommand::Custom { .. }
             | CueCommand::NewLine { .. }
+            | CueCommand::Cursor { .. }
             | CueCommand::BalloonSurface { .. }
             | CueCommand::Wait => {}
         }

@@ -311,6 +311,13 @@ mod tests {
             command_kind(&CueCommand::BalloonSurface { key: "2".into() }),
             "BalloonSurface"
         );
+        assert_eq!(
+            command_kind(&CueCommand::Cursor {
+                x: "5em".into(),
+                y: "2lh".into(),
+            }),
+            "Cursor"
+        );
         assert_eq!(command_kind(&CueCommand::Wait), "Wait");
         assert_eq!(command_kind(&CueCommand::ClearAll), "ClearAll");
     }

@@ -15,8 +15,11 @@
 //!   （R2.2）・`Clear`＝未リビール分を含む全消去（R2.3）。トーク上書きを抑止する
 //!   ガードは持たない——中断可否は上流（kanade の中断ファンネル）で決着済みの
 //!   前提で、届いた cue 列を忠実に適用するのみ（R10.5）。
-//! - `Choice` は M1 では actor ごと初回のみ `warn!`＋無視（choice-render シーム・
-//!   テキスト状態は汚さない）。
+//! - `Choice` は配送列に第一級で現れる（R8.6 仕様変更）が、表示（メニュー描画・ヒット
+//!   テスト）の消費は W4（choice-render）の領分——本 typewriter 状態機械は担当外ゆえ
+//!   actor ごと初回のみ `warn!`＋良性スキップ（テキスト状態は汚さない）。
+//! - `Cursor`（`\_l` の不透明転写）も同様に choice-render シーム（W4）の消費対象で、
+//!   actor ごと初回のみ `warn!`＋良性スキップ（状態不変・記録あり・R8.5）。
 //! - **typewriter リビール（R3／R7 系）**: `Text` 追記時に per-glyph リビール時刻を
 //!   `r_i = max(r_{i-1} + interval, at(chunk(i)))`（先頭は `r_0 = at`）で確定する。
 //!   `interval` は**配送された cue の再生時間**から `interval = duration / glyph_count`
@@ -159,6 +162,9 @@ pub struct TextLayerState {
     actors: BTreeMap<ActorKey, ActorTextState>,
     /// `Choice` cue の warn を actor ごと初回のみに抑える記録（テキスト状態の外）。
     choice_warned: BTreeSet<ActorKey>,
+    /// `Cursor` cue の warn を actor ごと初回のみに抑える記録（テキスト状態の外・
+    /// W4 choice-render シーム。`choice_warned` と同型の once-guard）。
+    cursor_warned: BTreeSet<ActorKey>,
 }
 
 impl TextLayerState {
@@ -222,9 +228,21 @@ impl TextLayerState {
                 }
             }
             CueCommand::Choice { .. } => {
-                // M1 対象外（choice-render シーム）: actor ごと初回のみ warn!＋無視・状態は汚さない。
+                // Choice cue は配送列に第一級で現れる（R8.6 仕様変更＝旧「先積み一択で配送しない」
+                // の意図的更新）。ただし表示（メニュー描画・ヒットテスト）の消費は W4（choice-render）
+                // の領分で、本 typewriter 状態機械は担当外——actor ごと初回のみ warn!＋良性スキップ・
+                // 状態は汚さない（挙動は従来どおり＝実機の見た目不変・R8.5）。
                 if self.choice_warned.insert(cue.actor.clone()) {
-                    tracing::warn!(actor = %cue.actor, "Choice cue は M1 未対応のため無視する（choice-render シーム）");
+                    tracing::warn!(actor = %cue.actor, "Choice cue は本層（typewriter）の担当外——配送列第一級だが表示消費は W4 choice-render（記録付き良性スキップ）");
+                }
+            }
+            CueCommand::Cursor { .. } => {
+                // カーソル位置指定（`\_l` の不透明転写）は choice-render シーム（W4）の消費対象——
+                // 単位換算・座標解決・原点解釈は表示側の責務で、本 typewriter 状態機械は担当外。
+                // actor ごと初回のみ warn!＋良性スキップし、テキスト状態は一切変えない
+                // （記録あり・無音破棄でも異常終了でもない・R8.5）。
+                if self.cursor_warned.insert(cue.actor.clone()) {
+                    tracing::warn!(actor = %cue.actor, "Cursor cue は本層（typewriter）の担当外——表示消費は W4 choice-render（状態不変の良性スキップ）");
                 }
             }
             // 文字状態機械が消費しない command（cue_target_of が Shell/None に分類）は本状態機械の
@@ -521,6 +539,7 @@ mod tests {
                 CueCommand::Choice {
                     id: "yes".into(),
                     text: "はい".into(),
+                    references: vec![],
                 },
             ),
             cue("1", 1.1, CueCommand::Text("……".into())),
@@ -578,6 +597,7 @@ mod tests {
                     CueCommand::Choice {
                         id: "yes".into(),
                         text: "はい".into(),
+                        references: vec![],
                     },
                 )
             };
@@ -592,6 +612,53 @@ mod tests {
         // テキスト状態は汚さない（actor エントリも作らない）。
         assert!(state.actor_state(&ActorKey::from("0")).is_none());
         assert!(state.actor_state(&ActorKey::from("1")).is_none());
+    }
+
+    // ── Cursor（W4 choice-render シーム・状態不変の良性スキップ・R8.5） ──
+
+    /// `Cursor`（`\_l` の不透明転写）は本層（typewriter）の担当外——W4 choice-render の
+    /// 消費シーム。actor ごと初回のみ warn!＋良性スキップし、テキスト状態は一切変えない
+    /// （記録あり・無音破棄でも異常終了でもない・R8.5）。Choice の warn-once 檻と同型。
+    #[test]
+    fn cursor_cue_is_benign_skipped_and_warns_once_per_actor() {
+        let warns = Arc::new(AtomicUsize::new(0));
+        let subscriber = WarnCounter {
+            warns: Arc::clone(&warns),
+        };
+
+        let state = tracing::subscriber::with_default(subscriber, || {
+            let mut state = TextLayerState::default();
+            // 既存テキストを載せた actor へ Cursor を送っても状態は不変（良性スキップ）。
+            state.apply_cue(&cue("0", 0.0, CueCommand::Text("あ".into())));
+            let before = state.actor_state(&ActorKey::from("0")).cloned();
+
+            let cursor = |actor: &str, at: f64| {
+                cue(
+                    actor,
+                    at,
+                    CueCommand::Cursor {
+                        x: "5em".into(),
+                        y: "2lh".into(),
+                    },
+                )
+            };
+            state.apply_cue(&cursor("0", 0.1)); // 同一 actor 初回 warn
+            state.apply_cue(&cursor("0", 0.2)); // 同一 actor 2 回目は warn しない
+            state.apply_cue(&cursor("1", 0.3)); // 別 actor は初回 warn
+
+            // Cursor は既存 actor の状態（items／reveal）を一切汚さない。
+            assert_eq!(
+                state.actor_state(&ActorKey::from("0")).cloned(),
+                before,
+                "Cursor は既存 actor のテキスト状態を変えない（状態不変の良性スキップ）"
+            );
+            // Cursor 単独では actor エントリを作らない（状態を汚さない・記録は状態の外）。
+            assert!(state.actor_state(&ActorKey::from("1")).is_none());
+            state
+        });
+
+        // warn は actor ごと初回のみ（"0" で 1 回・"1" で 1 回）＝記録あり良性スキップ。
+        assert_eq!(warns.load(Ordering::SeqCst), 2);
     }
 
     // ── Balloon 向けでない command の防御的無視 ──
