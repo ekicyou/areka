@@ -17,7 +17,7 @@
 //! 321×1.25=401.25→402 は round 変異を殺す）。
 
 use areka_emo_text::actor::{ResolvedBalloonText, TextSlotBinding};
-use areka_emo_text::layout::{FixedMetrics, LayoutEngine, PositionedLine, VisibleWindow};
+use areka_emo_text::layout::{FixedMetrics, LayoutEngine, PositionedLine, VisibleWindow, WrapPlan};
 use areka_emo_text::region::{ImagePx, PhysicalPx, ScaleContract};
 use areka_emo_text::state::{TextItem, TextLayerState};
 use areka_emo_text::writing::WritingMode;
@@ -130,6 +130,7 @@ fn decide_layout(
                 resolved.mode,
                 font_height,
                 &FixedMetrics,
+                WrapPlan::CharByChar,
             );
             let window = LayoutEngine::visible_window(&lines, &resolved.region, resolved.mode);
             LayoutDecision {
@@ -383,6 +384,7 @@ fn same_derived_image_size_yields_identical_layout_regardless_of_scale() {
             resolved.mode,
             40.0,
             &FixedMetrics,
+            WrapPlan::CharByChar,
         );
         let window = LayoutEngine::visible_window(&lines, &resolved.region, resolved.mode);
         (lines, window)
@@ -450,6 +452,7 @@ fn layout_decision_is_scale_independent_for_vertical_modes() {
                 resolved.mode,
                 10.0,
                 &FixedMetrics,
+                WrapPlan::CharByChar,
             );
             let window = LayoutEngine::visible_window(&lines, &resolved.region, resolved.mode);
             match &baseline {

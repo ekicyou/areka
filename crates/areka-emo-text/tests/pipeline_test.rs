@@ -24,7 +24,7 @@ use std::ops::ControlFlow;
 use std::path::PathBuf;
 use std::rc::Rc;
 
-use areka_emo_text::layout::{FixedMetrics, LayoutEngine, PositionedLine, VisibleWindow};
+use areka_emo_text::layout::{FixedMetrics, LayoutEngine, PositionedLine, VisibleWindow, WrapPlan};
 use areka_emo_text::region::TextRegion;
 use areka_emo_text::sink::{EmoTextSink, TextMsg, handle_text_msg};
 use areka_emo_text::state::TextLayerState;
@@ -156,7 +156,15 @@ fn observe(
         for &t in probe_times {
             let visible = state.visible_glyphs(actor, t);
             let lines =
-                LayoutEngine::layout(&items, visible, region, mode, font_height, &FixedMetrics);
+                LayoutEngine::layout(
+                    &items,
+                    visible,
+                    region,
+                    mode,
+                    font_height,
+                    &FixedMetrics,
+                    WrapPlan::CharByChar,
+                );
             let window = LayoutEngine::visible_window(&lines, region, mode);
             out.push(Observation {
                 actor: actor.clone(),
@@ -355,6 +363,7 @@ fn typewriter_reveal_drives_layout_and_window_through_the_pipeline() {
             WritingMode::HorizontalTb,
             10.0,
             &FixedMetrics,
+            WrapPlan::CharByChar,
         );
         assert_eq!(lines.len(), line_count, "t={t}: 行数");
         let window = LayoutEngine::visible_window(&lines, &region, WritingMode::HorizontalTb);
@@ -416,6 +425,7 @@ fn clear_mid_reveal_resets_visibility_and_window_through_the_pipeline() {
         WritingMode::HorizontalTb,
         10.0,
         &FixedMetrics,
+        WrapPlan::CharByChar,
     );
     assert!(
         lines_empty.is_empty(),
@@ -437,6 +447,7 @@ fn clear_mid_reveal_resets_visibility_and_window_through_the_pipeline() {
         WritingMode::HorizontalTb,
         10.0,
         &FixedMetrics,
+        WrapPlan::CharByChar,
     );
     assert_eq!(lines_full.len(), 1);
     assert_eq!(

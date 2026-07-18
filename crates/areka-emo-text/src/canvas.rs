@@ -273,7 +273,9 @@ mod tests {
         RESERVED_EFFECT_ROTATION, RESERVED_EFFECT_SHADOW, RegionTransform, Resident,
         ResidentContent, TextEffects,
     };
-    use crate::layout::{FixedMetrics, LayoutEngine, LineRect, PositionedGlyph, PositionedLine};
+    use crate::layout::{
+        FixedMetrics, LayoutEngine, LineRect, PositionedGlyph, PositionedLine, WrapPlan,
+    };
     use crate::region::TextRegion;
     use crate::state::TextItem;
     use crate::writing::WritingMode;
@@ -314,7 +316,15 @@ mod tests {
             .iter()
             .filter(|i| matches!(i, TextItem::Glyph { .. }))
             .count();
-        let lines = LayoutEngine::layout(items, visible, region, mode, font_height, &FixedMetrics);
+        let lines = LayoutEngine::layout(
+            items,
+            visible,
+            region,
+            mode,
+            font_height,
+            &FixedMetrics,
+            WrapPlan::CharByChar,
+        );
         let canvas = ContentCanvas::from_layout(&lines, region, mode);
         (lines, canvas)
     }

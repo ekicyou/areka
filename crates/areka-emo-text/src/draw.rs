@@ -907,7 +907,7 @@ mod tests {
     };
     use crate::TextLayerError;
     use crate::canvas::TextEffects;
-    use crate::layout::{GlyphMetrics, LayoutEngine};
+    use crate::layout::{GlyphMetrics, LayoutEngine, WrapPlan};
     use crate::region::TextRegion;
     use crate::state::{TextItem, TextLayerConfig};
     use crate::writing::WritingMode;
@@ -1515,7 +1515,15 @@ mod tests {
         metrics: &DWriteMetrics,
         contract: &ScaleContract,
     ) -> Vec<u8> {
-        let lines = LayoutEngine::layout(items, visible, region, mode, font.height, metrics);
+        let lines = LayoutEngine::layout(
+            items,
+            visible,
+            region,
+            mode,
+            font.height,
+            metrics,
+            WrapPlan::CharByChar,
+        );
         let canvas = crate::canvas::ContentCanvas::from_layout(&lines, region, mode);
         let window = LayoutEngine::visible_window(&lines, region, mode);
         executor
@@ -1957,6 +1965,7 @@ mod tests {
             WritingMode::HorizontalTb,
             DEFAULT_FONT_HEIGHT,
             &metrics,
+            WrapPlan::CharByChar,
         );
         assert_eq!(lines.len(), 2, "実測 advance が折返し判定を駆動する");
         assert_eq!(lines[0].glyphs.len(), 1);
@@ -2119,7 +2128,15 @@ mod tests {
                 let region = TextRegion::resolve(&model, (400, 224), mode);
                 let items = glyph_items(text);
                 let lines =
-                    LayoutEngine::layout(&items, items.len(), &region, mode, font.height, &metrics);
+                    LayoutEngine::layout(
+                        &items,
+                        items.len(),
+                        &region,
+                        mode,
+                        font.height,
+                        &metrics,
+                        WrapPlan::CharByChar,
+                    );
                 assert!(
                     lines.len() >= 2,
                     "{} {mode:?}: 実測駆動の折返しが実際に発生する構成",

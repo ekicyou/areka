@@ -578,7 +578,7 @@ mod tests {
     use crate::actor::TextSlotBinding;
     use crate::canvas::ContentCanvas;
     use crate::draw::{DWriteMetrics, DrawExecutor, ResolvedFont};
-    use crate::layout::{FixedMetrics, LayoutEngine, VisibleWindow};
+    use crate::layout::{FixedMetrics, LayoutEngine, VisibleWindow, WrapPlan};
     use crate::region::{ScaleContract, TextRegion};
     use crate::state::{TextItem, TextLayerConfig, TextLayerState};
     use crate::surface::TextSurface;
@@ -700,7 +700,15 @@ mod tests {
             .iter()
             .filter(|i| matches!(i, TextItem::Glyph { .. }))
             .count();
-        let lines = LayoutEngine::layout(items, visible, &region, mode, font_height, &FixedMetrics);
+        let lines = LayoutEngine::layout(
+            items,
+            visible,
+            &region,
+            mode,
+            font_height,
+            &FixedMetrics,
+            WrapPlan::CharByChar,
+        );
         let canvas = ContentCanvas::from_layout(&lines, &region, mode);
         let window = LayoutEngine::visible_window(&lines, &region, mode);
         (canvas, window)
@@ -1283,7 +1291,15 @@ mod tests {
                 .actor_state(&actor)
                 .map(|s| s.items().to_vec())
                 .unwrap_or_default();
-            let lines = LayoutEngine::layout(&items, visible, &region, mode, font.height, &metrics);
+            let lines = LayoutEngine::layout(
+                &items,
+                visible,
+                &region,
+                mode,
+                font.height,
+                &metrics,
+                WrapPlan::CharByChar,
+            );
             let window = LayoutEngine::visible_window(&lines, &region, mode);
             let canvas = ContentCanvas::from_layout(&lines, &region, mode);
             oracle
@@ -1334,7 +1350,15 @@ mod tests {
                 .actor_state(&actor)
                 .map(|s| s.items().to_vec())
                 .unwrap_or_default();
-            let lines = LayoutEngine::layout(&items, visible, &region, mode, font.height, &metrics);
+            let lines = LayoutEngine::layout(
+                &items,
+                visible,
+                &region,
+                mode,
+                font.height,
+                &metrics,
+                WrapPlan::CharByChar,
+            );
             let window = LayoutEngine::visible_window(&lines, &region, mode);
             let canvas = ContentCanvas::from_layout(&lines, &region, mode);
             oracle
@@ -1407,7 +1431,15 @@ mod tests {
             .map(|ch| TextItem::Glyph { ch })
             .collect();
         for &visible in &[6usize, 2usize] {
-            let lines = LayoutEngine::layout(&items, visible, &region, mode, font.height, &metrics);
+            let lines = LayoutEngine::layout(
+                &items,
+                visible,
+                &region,
+                mode,
+                font.height,
+                &metrics,
+                WrapPlan::CharByChar,
+            );
             let window = LayoutEngine::visible_window(&lines, &region, mode);
             let canvas = ContentCanvas::from_layout(&lines, &region, mode);
             oracle
@@ -1589,6 +1621,7 @@ mod tests {
                 self.mode,
                 self.font_height,
                 &FixedMetrics,
+                WrapPlan::CharByChar,
             );
             let window = LayoutEngine::visible_window(&lines, &self.region, self.mode);
             let canvas = ContentCanvas::from_layout(&lines, &self.region, self.mode);
@@ -1666,6 +1699,7 @@ mod tests {
                 self.mode,
                 self.font_height,
                 &FixedMetrics,
+                WrapPlan::CharByChar,
             );
             let window = LayoutEngine::visible_window(&lines, &self.region, self.mode);
             let canvas = ContentCanvas::from_layout(&lines, &self.region, self.mode);
@@ -2060,7 +2094,15 @@ mod tests {
                 .actor_state(&actor)
                 .map(|s| s.items().to_vec())
                 .unwrap_or_default();
-            let lines = LayoutEngine::layout(&items, visible, region, mode, font.height, &metrics);
+            let lines = LayoutEngine::layout(
+                &items,
+                visible,
+                region,
+                mode,
+                font.height,
+                &metrics,
+                WrapPlan::CharByChar,
+            );
             let window = LayoutEngine::visible_window(&lines, region, mode);
             let canvas = ContentCanvas::from_layout(&lines, region, mode);
             oracle
@@ -2347,7 +2389,15 @@ mod tests {
                 .actor_state(&actor)
                 .map(|s| s.items().to_vec())
                 .unwrap_or_default();
-            let lines = LayoutEngine::layout(&items, visible, &region, mode, font.height, &metrics);
+            let lines = LayoutEngine::layout(
+                &items,
+                visible,
+                &region,
+                mode,
+                font.height,
+                &metrics,
+                WrapPlan::CharByChar,
+            );
             let window = LayoutEngine::visible_window(&lines, &region, mode);
             let canvas = ContentCanvas::from_layout(&lines, &region, mode);
             oracle

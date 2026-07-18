@@ -173,6 +173,19 @@ impl LayoutEngine {
     /// - `items`: 追記順の正本（state 層の `ActorTextState::items`）。
     /// - `visible_count`: 可視グリフ数（state 層 `visible_glyphs` の出力）。
     ///   可視 prefix 規則（モジュール doc）で配置対象を切る。
+    /// - `wrap`: 折返し計画（[`WrapPlan`]）。**ゲート③（折返し判定）だけ**をこの引数で
+    ///   分岐させ、ゲート①（可視打切り）・②（保留フラッシュ）・④（配置）の意味論は
+    ///   分岐に依らず不変（design System Flows「ゲート③」）:
+    ///   - [`WrapPlan::CharByChar`]（既定・OFF 経路）: 既存の文字単位規則
+    ///     （`行内位置＋次グリフ幅 > 閾値`）。この引数を [`WrapPlan::CharByChar`] にした
+    ///     出力は本機能導入前の layout と byte 等価（非回帰の構造保証・R4.1/4.3/8.3——
+    ///     `SegmentPlan` を一切参照しないため境界値の算出自体が起きない・R4.2）。
+    ///   - [`WrapPlan::Segmented`]: 塊先決——塊先頭で塊全体の advance 合計を全文 plan から
+    ///     求め、残り行幅（`cap_rem`）に収まれば継続配置、行頭からの行幅（`cap_full`）まで
+    ///     なら塊の前で行送りしてから配置、それも超える長大塊は当該塊のみ文字単位規則へ
+    ///     縮退する（3.1/3.2）。塊内の残グリフは残数カウンタで追跡し追加判定なしで配置
+    ///     （2.1/2.3・浮動丸めでの途中分割を構造排除）。plan に被覆されないグリフ（不整合）
+    ///     は既存文字単位規則で配置される（優しい縮退・4.2）。
     /// - 折返し判定: `行内位置＋次グリフ幅 > 閾値`（3 方向共通・正準表）。
     ///   行頭の 1 グリフは閾値超過でも配置する（無限折返しの構造排除・無損失）。
     /// - 行送り量: 自動折返し＝`line_pitch`・改行マーカー＝`line_pitch × Σratio`。
@@ -180,49 +193,15 @@ impl LayoutEngine {
     ///   行を送らず保留へ累算し、次の可視グリフ配置の直前に一括実体化する。保留のみ
     ///   では空行を出さず・末尾の保留改行は蒸発する。
     ///
-    /// 同一入力→同一出力（R2.5 系）。失敗経路なし（全入力で値を返す純関数）。
-    ///
-    /// 文字単位折返し（[`WrapPlan::CharByChar`]）へ委譲する薄いラッパ。分かち書き
-    /// ワードラップは [`LayoutEngine::layout_with_wrap`] に `WrapPlan::Segmented` を
-    /// 渡す（この委譲で既存呼出は signature 不変のまま OFF 経路を byte 等価に保つ）。
-    pub fn layout(
-        items: &[TextItem],
-        visible_count: usize,
-        region: &TextRegion,
-        mode: WritingMode,
-        font_height: f32,
-        metrics: &dyn GlyphMetrics,
-    ) -> Vec<PositionedLine> {
-        Self::layout_with_wrap(
-            items,
-            visible_count,
-            region,
-            mode,
-            font_height,
-            metrics,
-            WrapPlan::CharByChar,
-        )
-    }
-
-    /// 折返し計画（[`WrapPlan`]）を明示指定して行列を解決する（純粋・決定論）。
-    ///
-    /// ゲート順序と①②④の意味論は [`LayoutEngine::layout`] と同一で、**ゲート③
-    /// （折返し判定）だけ**が `wrap` で分岐する:
-    /// - [`WrapPlan::CharByChar`]: 既存の文字単位規則（`行内位置＋次グリフ幅 > 閾値`）。
-    /// - [`WrapPlan::Segmented`]: 塊先決——塊先頭で塊全体の advance 合計を全文 plan から
-    ///   求め、残り行幅（`cap_rem`）に収まれば継続配置、行頭からの行幅（`cap_full`）まで
-    ///   なら塊の前で行送りしてから配置、それも超える長大塊は当該塊のみ文字単位規則へ
-    ///   縮退する（3.1/3.2）。塊内の残グリフは残数カウンタで追跡し追加判定なしで配置
-    ///   （2.1/2.3・浮動丸めでの途中分割を構造排除）。plan に被覆されないグリフ（不整合）
-    ///   は既存文字単位規則で配置される（優しい縮退・4.2）。
-    ///
     /// 塊先決は `visible_count` に依存しない（seg_sum は全 `items` から算出・INV-1/7.1）。
     /// ゲート①が④より先にあるため、塊途中で可視が切れても配置済み prefix の行は動かない
     /// （INV-2/7.2/7.3）。塊前行送りは行頭では `cap_rem == cap_full` ゆえ不発火＝空行を
     /// 作らない（INV-3）。縦書きは行内軸の `inline_pos`/`advance`/`threshold` 演算のみゆえ
     /// 新規 mode 分岐なし（6.1/6.2）。
+    ///
+    /// 同一入力→同一出力（R2.5 系）。失敗経路なし（全入力で値を返す純関数）。
     #[allow(clippy::too_many_arguments)]
-    pub fn layout_with_wrap(
+    pub fn layout(
         items: &[TextItem],
         visible_count: usize,
         region: &TextRegion,
@@ -588,6 +567,7 @@ mod tests {
             WritingMode::HorizontalTb,
             10.0,
             &FixedMetrics,
+            WrapPlan::CharByChar,
         );
         assert_eq!(lines.len(), 2);
         assert_eq!(
@@ -636,6 +616,7 @@ mod tests {
             WritingMode::HorizontalTb,
             12.0,
             &FixedMetrics,
+            WrapPlan::CharByChar,
         );
         assert_eq!(lines.len(), 1);
         assert_eq!(inline_positions(&lines[0]), vec![0.0, 6.0, 18.0]);
@@ -664,6 +645,7 @@ mod tests {
             WritingMode::VerticalRl,
             10.0,
             &FixedMetrics,
+            WrapPlan::CharByChar,
         );
         assert_eq!(lines.len(), 2);
         assert_eq!(inline_positions(&lines[0]), vec![0.0, 10.0, 20.0]);
@@ -706,6 +688,7 @@ mod tests {
             WritingMode::VerticalLr,
             10.0,
             &FixedMetrics,
+            WrapPlan::CharByChar,
         );
         assert_eq!(lines_lr.len(), 2);
         assert_eq!(
@@ -735,6 +718,7 @@ mod tests {
             WritingMode::VerticalRl,
             10.0,
             &FixedMetrics,
+            WrapPlan::CharByChar,
         );
         for (lr, rl) in lines_lr.iter().zip(&lines_rl) {
             assert_eq!(inline_positions(lr), inline_positions(rl));
@@ -766,6 +750,7 @@ mod tests {
             WritingMode::HorizontalTb,
             12.0,
             &FixedMetrics,
+            WrapPlan::CharByChar,
         );
         assert_eq!(lines.len(), 3);
         let tops: Vec<f32> = lines.iter().map(|l| l.rect.top).collect();
@@ -793,6 +778,7 @@ mod tests {
             WritingMode::VerticalRl,
             12.0,
             &FixedMetrics,
+            WrapPlan::CharByChar,
         );
         assert_eq!(lines.len(), 2);
         // pitch 15 × 0.5 = 7.5 だけ左へ: 列 1 の右辺 = 400 − 7.5。
@@ -817,6 +803,7 @@ mod tests {
             WritingMode::HorizontalTb,
             10.0,
             &FixedMetrics,
+            WrapPlan::CharByChar,
         );
         assert_eq!(
             lines.len(),
@@ -842,6 +829,7 @@ mod tests {
             WritingMode::HorizontalTb,
             12.0,
             &FixedMetrics,
+            WrapPlan::CharByChar,
         );
         assert!(empty.is_empty());
         let unrevealed = LayoutEngine::layout(
@@ -851,6 +839,7 @@ mod tests {
             WritingMode::HorizontalTb,
             12.0,
             &FixedMetrics,
+            WrapPlan::CharByChar,
         );
         assert!(unrevealed.is_empty());
     }
@@ -871,6 +860,7 @@ mod tests {
             WritingMode::HorizontalTb,
             12.0,
             &FixedMetrics,
+            WrapPlan::CharByChar,
         );
         assert_eq!(partial.len(), 1);
         assert_eq!(inline_positions(&partial[0]), vec![0.0, 6.0, 12.0]);
@@ -881,6 +871,7 @@ mod tests {
             WritingMode::HorizontalTb,
             12.0,
             &FixedMetrics,
+            WrapPlan::CharByChar,
         );
         assert_eq!(saturated[0].glyphs.len(), 5);
     }
@@ -908,6 +899,7 @@ mod tests {
             WritingMode::HorizontalTb,
             12.0,
             &FixedMetrics,
+            WrapPlan::CharByChar,
         );
         assert_eq!(held.len(), 1, "保留改行は行を開かない（空行を出さない）");
         assert_eq!(held[0].glyphs.len(), 1);
@@ -920,6 +912,7 @@ mod tests {
             WritingMode::HorizontalTb,
             12.0,
             &FixedMetrics,
+            WrapPlan::CharByChar,
         );
         assert_eq!(materialized.len(), 2, "次可視グリフ配置で保留改行が実体化");
         assert_eq!(materialized[0].glyphs[0].ch, 'a');
@@ -957,6 +950,7 @@ mod tests {
             WritingMode::HorizontalTb,
             12.0,
             &FixedMetrics,
+            WrapPlan::CharByChar,
         );
         assert_eq!(lines.len(), 1, "末尾保留改行は蒸発＝空行を開かない");
         assert_eq!(lines[0].glyphs.len(), 1);
@@ -989,6 +983,7 @@ mod tests {
             WritingMode::HorizontalTb,
             12.0,
             &FixedMetrics,
+            WrapPlan::CharByChar,
         );
         assert_eq!(lines.len(), 2, "連続改行は単一累算＝中間空行なし");
         let tops: Vec<f32> = lines.iter().map(|l| l.rect.top).collect();
@@ -1023,6 +1018,7 @@ mod tests {
             WritingMode::HorizontalTb,
             12.0,
             &FixedMetrics,
+            WrapPlan::CharByChar,
         );
         assert_eq!(lines.len(), 1, "先頭改行は空行を作らない");
         assert_eq!(lines[0].rect.top, 15.0, "block 位置は start + pitch へ前進");
@@ -1041,6 +1037,7 @@ mod tests {
             WritingMode::HorizontalTb,
             12.0,
             &FixedMetrics,
+            WrapPlan::CharByChar,
         );
         assert_eq!(zlines.len(), 2, "ratio 0 でも行を替える");
         let ztops: Vec<f32> = zlines.iter().map(|l| l.rect.top).collect();
@@ -1058,6 +1055,7 @@ mod tests {
             WritingMode::HorizontalTb,
             12.0,
             &FixedMetrics,
+            WrapPlan::CharByChar,
         );
         assert!(
             empty.is_empty(),
@@ -1091,6 +1089,7 @@ mod tests {
                 WritingMode::HorizontalTb,
                 12.0,
                 &FixedMetrics,
+                WrapPlan::CharByChar,
             );
             assert_eq!(
                 lines.len(),
@@ -1152,6 +1151,7 @@ mod tests {
             WritingMode::VerticalRl,
             12.0,
             &FixedMetrics,
+            WrapPlan::CharByChar,
         );
         assert_eq!(lines.len(), 2, "縦書きでも連続改行は単一累算（中間列なし）");
         assert_eq!(lines[0].rect.right, 400.0);
@@ -1167,7 +1167,15 @@ mod tests {
                 TextItem::Glyph { ch: 'あ' },
                 TextItem::LineBreak { ratio: 1.0 },
             ];
-            let t = LayoutEngine::layout(&trailing, 1, &region, mode, 12.0, &FixedMetrics);
+            let t = LayoutEngine::layout(
+                &trailing,
+                1,
+                &region,
+                mode,
+                12.0,
+                &FixedMetrics,
+                WrapPlan::CharByChar,
+            );
             assert_eq!(t.len(), 1, "{mode:?}: 末尾保留改行は蒸発（空列なし）");
         }
     }
@@ -1192,8 +1200,24 @@ mod tests {
                 TextItem::Glyph { ch: 'a' },
                 TextItem::LineBreak { ratio: 1.0 },
             ];
-            let first = LayoutEngine::layout(&items, 2, &region, mode, 10.0, &FixedMetrics);
-            let second = LayoutEngine::layout(&items, 2, &region, mode, 10.0, &FixedMetrics);
+            let first = LayoutEngine::layout(
+                &items,
+                2,
+                &region,
+                mode,
+                10.0,
+                &FixedMetrics,
+                WrapPlan::CharByChar,
+            );
+            let second = LayoutEngine::layout(
+                &items,
+                2,
+                &region,
+                mode,
+                10.0,
+                &FixedMetrics,
+                WrapPlan::CharByChar,
+            );
             assert_eq!(
                 first, second,
                 "mode {mode:?} で遅延意味論の決定論が崩れている"
@@ -1219,6 +1243,7 @@ mod tests {
             WritingMode::HorizontalTb,
             10.0,
             &FixedMetrics,
+            WrapPlan::CharByChar,
         );
         assert_eq!(lines.len(), 2);
         assert_eq!(inline_positions(&lines[1]), vec![100.0]);
@@ -1272,7 +1297,15 @@ mod tests {
             .iter()
             .filter(|i| matches!(i, TextItem::Glyph { .. }))
             .count();
-        let lines = LayoutEngine::layout(items, visible, region, mode, font_height, &FixedMetrics);
+        let lines = LayoutEngine::layout(
+            items,
+            visible,
+            region,
+            mode,
+            font_height,
+            &FixedMetrics,
+            WrapPlan::CharByChar,
+        );
         LayoutEngine::visible_window(&lines, region, mode)
     }
 
@@ -1489,6 +1522,7 @@ mod tests {
             WritingMode::HorizontalTb,
             10.0,
             &FixedMetrics,
+            WrapPlan::CharByChar,
         );
         let first = LayoutEngine::visible_window(&lines, &region, WritingMode::HorizontalTb);
         let second = LayoutEngine::visible_window(&lines, &region, WritingMode::HorizontalTb);
@@ -1510,8 +1544,24 @@ mod tests {
                 TextItem::LineBreak { ratio: 0.5 },
                 TextItem::Glyph { ch: 'a' },
             ];
-            let first = LayoutEngine::layout(&items, 2, &region, mode, 10.0, &FixedMetrics);
-            let second = LayoutEngine::layout(&items, 2, &region, mode, 10.0, &FixedMetrics);
+            let first = LayoutEngine::layout(
+                &items,
+                2,
+                &region,
+                mode,
+                10.0,
+                &FixedMetrics,
+                WrapPlan::CharByChar,
+            );
+            let second = LayoutEngine::layout(
+                &items,
+                2,
+                &region,
+                mode,
+                10.0,
+                &FixedMetrics,
+                WrapPlan::CharByChar,
+            );
             assert_eq!(first, second, "mode {mode:?} で決定論が崩れている");
         }
     }
@@ -1551,7 +1601,7 @@ mod tests {
         );
         let items = glyphs(4);
         let p = plan(&[(0, 2), (2, 2)]);
-        let lines = LayoutEngine::layout_with_wrap(
+        let lines = LayoutEngine::layout(
             &items,
             4,
             &region,
@@ -1576,7 +1626,7 @@ mod tests {
         );
         let items = glyphs(6);
         let p = plan(&[(0, 4), (4, 2)]);
-        let seg_lines = LayoutEngine::layout_with_wrap(
+        let seg_lines = LayoutEngine::layout(
             &items,
             6,
             &region,
@@ -1600,6 +1650,7 @@ mod tests {
             WritingMode::HorizontalTb,
             10.0,
             &FixedMetrics,
+            WrapPlan::CharByChar,
         );
         assert_eq!(char_lines[0].glyphs.len(), 5);
         assert_ne!(seg_lines, char_lines, "ON（塊維持）が char 割りと異なる");
@@ -1618,7 +1669,7 @@ mod tests {
         // ちょうど: seg_sum 30 == cap_rem 30 → 残留（1 行）。
         let items5 = glyphs(5);
         let p_fit = plan(&[(0, 2), (2, 3)]);
-        let fit = LayoutEngine::layout_with_wrap(
+        let fit = LayoutEngine::layout(
             &items5,
             5,
             &region,
@@ -1632,7 +1683,7 @@ mod tests {
         // 1 グリフ増: seg_sum 40 > cap_rem 30 → 塊前で行送り。
         let items6 = glyphs(6);
         let p_over = plan(&[(0, 2), (2, 4)]);
-        let over = LayoutEngine::layout_with_wrap(
+        let over = LayoutEngine::layout(
             &items6,
             6,
             &region,
@@ -1659,7 +1710,7 @@ mod tests {
         );
         let items = glyphs(5);
         let p = plan(&[(0, 2), (2, 3)]);
-        let seg = LayoutEngine::layout_with_wrap(
+        let seg = LayoutEngine::layout(
             &items,
             5,
             &region,
@@ -1683,6 +1734,7 @@ mod tests {
             WritingMode::HorizontalTb,
             10.0,
             &FixedMetrics,
+            WrapPlan::CharByChar,
         );
         assert_eq!(ch[0].glyphs.len(), 3);
         assert_ne!(seg, ch, "counter による塊維持が char 割りと異なる");
@@ -1699,7 +1751,7 @@ mod tests {
         );
         let items = glyphs(6);
         let p = plan(&[(0, 2)]); // glyph 2..5 は非被覆
-        let seg = LayoutEngine::layout_with_wrap(
+        let seg = LayoutEngine::layout(
             &items,
             6,
             &region,
@@ -1715,6 +1767,7 @@ mod tests {
             WritingMode::HorizontalTb,
             10.0,
             &FixedMetrics,
+            WrapPlan::CharByChar,
         );
         assert_eq!(
             seg, ch,
@@ -1737,7 +1790,7 @@ mod tests {
         );
         let items = glyphs(6);
         let p = plan(&[(0, 4), (4, 2)]);
-        let full = LayoutEngine::layout_with_wrap(
+        let full = LayoutEngine::layout(
             &items,
             6,
             &region,
@@ -1748,7 +1801,7 @@ mod tests {
         );
         let full_flat = flat_glyphs(&full);
         for v in 0..=6 {
-            let partial = LayoutEngine::layout_with_wrap(
+            let partial = LayoutEngine::layout(
                 &items,
                 v,
                 &region,
@@ -1764,7 +1817,7 @@ mod tests {
             );
         }
         // 核心: visible 5（g5 不可視）でも g4 は行 1（塊先決は全文由来・INV-1）。
-        let v5 = LayoutEngine::layout_with_wrap(
+        let v5 = LayoutEngine::layout(
             &items,
             5,
             &region,
@@ -1789,7 +1842,7 @@ mod tests {
         let mut inline_by_mode: Vec<Vec<Vec<f32>>> = Vec::new();
         for mode in [WritingMode::VerticalRl, WritingMode::VerticalLr] {
             let region = TextRegion::resolve(&m, IMAGE, mode);
-            let lines = LayoutEngine::layout_with_wrap(
+            let lines = LayoutEngine::layout(
                 &items,
                 6,
                 &region,
@@ -1809,25 +1862,21 @@ mod tests {
         );
     }
 
-    /// 4.1/4.3: `layout()`（委譲）は `WrapPlan::CharByChar` 明示指定と byte 等価
-    /// （OFF 経路の非回帰——既存 layout 檻はすべてこの委譲を通る）。
+    /// 4.1/4.3/8.3: OFF 経路（`WrapPlan::CharByChar`）の非回帰アンカー。既定の折返し
+    /// モード（文字単位）は本機能導入前の layout と byte 等価であり、`SegmentPlan` を
+    /// 一切参照しない（境界値の算出自体が起きない・R4.2）。閾値 50・font 10 の 6 グリフは
+    /// char 割り（5+1）で、行内位置・行矩形まで確定値へ pin する（この確定出力は
+    /// `horizontal_wraps_before_glyph_exceeding_threshold` と一致——OFF 出力が全 layout
+    /// 呼出で不変であることの明示アンカー）。
     #[test]
-    fn char_by_char_wrap_matches_layout_delegate() {
+    fn char_by_char_is_off_path_non_regression_anchor() {
         let region = TextRegion::resolve(
             &model((Some(0), Some(0)), (Some(50), None)),
             IMAGE,
             WritingMode::HorizontalTb,
         );
         let items = glyphs(6);
-        let delegate = LayoutEngine::layout(
-            &items,
-            6,
-            &region,
-            WritingMode::HorizontalTb,
-            10.0,
-            &FixedMetrics,
-        );
-        let explicit = LayoutEngine::layout_with_wrap(
+        let lines = LayoutEngine::layout(
             &items,
             6,
             &region,
@@ -1836,12 +1885,27 @@ mod tests {
             &FixedMetrics,
             WrapPlan::CharByChar,
         );
+        assert_eq!(lines.len(), 2, "char 割り（5+1）どおり");
+        assert_eq!(inline_positions(&lines[0]), vec![0.0, 10.0, 20.0, 30.0, 40.0]);
+        assert_eq!(inline_positions(&lines[1]), vec![0.0]);
         assert_eq!(
-            delegate, explicit,
-            "layout() は WrapPlan::CharByChar 委譲と byte 等価"
+            lines[0].rect,
+            LineRect {
+                left: 0.0,
+                top: 0.0,
+                right: 50.0,
+                bottom: 10.0
+            }
         );
-        assert_eq!(delegate[0].glyphs.len(), 5, "char 割り（5+1）どおり");
-        assert_eq!(delegate[1].glyphs.len(), 1);
+        assert_eq!(
+            lines[1].rect,
+            LineRect {
+                left: 0.0,
+                top: 13.0,
+                right: 10.0,
+                bottom: 23.0
+            }
+        );
     }
 
     // ── Task 4.2: 長大塊の文字単位縮退（WrapPlan::Segmented・design System Flows H-No→D→C） ──
@@ -1862,7 +1926,7 @@ mod tests {
         );
         let items = glyphs(7);
         let p = plan(&[(0, 5), (5, 2)]);
-        let lines = LayoutEngine::layout_with_wrap(
+        let lines = LayoutEngine::layout(
             &items,
             7,
             &region,
@@ -1902,7 +1966,7 @@ mod tests {
         let items = glyphs(3);
         // 単一長大塊 {0,3}（seg_sum 30 > cap_full 3）→ 当該塊のみ char 規則へ縮退。
         let p = plan(&[(0, 3)]);
-        let lines = LayoutEngine::layout_with_wrap(
+        let lines = LayoutEngine::layout(
             &items,
             3,
             &region,
@@ -1935,7 +1999,7 @@ mod tests {
         );
         let items = glyphs(7);
         let p = plan(&[(0, 4), (4, 3)]);
-        let seg = LayoutEngine::layout_with_wrap(
+        let seg = LayoutEngine::layout(
             &items,
             7,
             &region,
@@ -1962,6 +2026,7 @@ mod tests {
             WritingMode::HorizontalTb,
             10.0,
             &FixedMetrics,
+            WrapPlan::CharByChar,
         );
         assert_eq!(ch[1].glyphs.len(), 3, "char モードは行 1 が [g3,g4,g5]");
         assert_ne!(seg, ch, "後続塊で塊単位判定が再開＝char 全割りと異なる");
@@ -1979,7 +2044,7 @@ mod tests {
         let n = 50;
         let items = glyphs(n);
         let p = plan(&[(0, n)]);
-        let lines = LayoutEngine::layout_with_wrap(
+        let lines = LayoutEngine::layout(
             &items,
             n,
             &region,

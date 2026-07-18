@@ -726,7 +726,7 @@ mod tests {
         block_axis_vector,
     };
     use crate::canvas::ContentCanvas;
-    use crate::layout::{FixedMetrics, LayoutEngine, VisibleWindow};
+    use crate::layout::{FixedMetrics, LayoutEngine, VisibleWindow, WrapPlan};
     use crate::region::{ScaleContract, TextRegion};
     use crate::state::TextItem;
     use crate::writing::WritingMode;
@@ -923,7 +923,15 @@ mod tests {
             .iter()
             .filter(|i| matches!(i, TextItem::Glyph { .. }))
             .count();
-        let lines = LayoutEngine::layout(items, visible, &region, mode, font_height, &FixedMetrics);
+        let lines = LayoutEngine::layout(
+            items,
+            visible,
+            &region,
+            mode,
+            font_height,
+            &FixedMetrics,
+            WrapPlan::CharByChar,
+        );
         ContentCanvas::from_layout(&lines, &region, mode)
     }
 

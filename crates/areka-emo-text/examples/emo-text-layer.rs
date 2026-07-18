@@ -89,7 +89,7 @@ use areka_emo_text::actor::{
     present_frame, spawn_emo_text, ResolvedBalloonText, TextLayerRuntime, TextSlotBinding,
 };
 use areka_emo_text::draw::DWriteMetrics;
-use areka_emo_text::layout::{GlyphMetrics, LayoutEngine};
+use areka_emo_text::layout::{GlyphMetrics, LayoutEngine, WrapPlan};
 use areka_emo_text::sink::EmoTextSink;
 use areka_emo_text::state::TextLayerConfig;
 use areka_emo_text::viewbox_draw::DrawStats;
@@ -1015,6 +1015,7 @@ fn run_checkpoint(demo: &mut Demo, world: &mut World, stage: usize, t_check: f64
             mode,
             font_height,
             demo.metrics.as_ref().expect("attach 完了後は Some"),
+            WrapPlan::CharByChar,
         );
         let window = LayoutEngine::visible_window(&lines, &resolved.region, mode);
         Some((lines, window))
@@ -1390,6 +1391,7 @@ fn reveal_probe(demo: &Demo, actor: &ActorKey, t: f64) -> (usize, usize, usize) 
         resolved.mode,
         resolved.font.height,
         demo.metrics.as_ref().expect("attach 完了後は Some"),
+        WrapPlan::CharByChar,
     );
     let window = LayoutEngine::visible_window(&lines, &resolved.region, resolved.mode);
     (visible, window.first_visible_line, lines.len() - window.first_visible_line)

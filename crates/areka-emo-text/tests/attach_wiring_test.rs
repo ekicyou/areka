@@ -24,7 +24,7 @@ use areka_emo_present::{EmoPresenter, PresentCommand, PresentOutcome, TargetId};
 use areka_emo_text::actor::{
     ResolvedBalloonText, TextLayerRuntime, TextSlotBinding, present_frame, spawn_emo_text,
 };
-use areka_emo_text::layout::{FixedMetrics, LayoutEngine};
+use areka_emo_text::layout::{FixedMetrics, LayoutEngine, WrapPlan};
 use areka_emo_text::state::TextLayerConfig;
 use areka_parsers::balloon::{
     BalloonModel, Font, FontColor, Origin, ValidRect, WindowPosition, WordWrapPoint,
@@ -340,6 +340,7 @@ fn two_actors_are_routed_to_their_own_targets_and_draw_independently() {
         resolved.mode,
         resolved.font.height,
         &FixedMetrics,
+        WrapPlan::CharByChar,
     );
     assert!(!lines.is_empty(), "行レイアウトが再導出できる");
     let placed: usize = lines.iter().map(|l| l.glyphs.len()).sum();

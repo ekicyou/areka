@@ -24,7 +24,7 @@ use wintf::ecs::{GraphicsCore, WucGraphicsResource};
 use crate::TextLayerError;
 use crate::canvas::ContentCanvas;
 use crate::draw::{DWriteMetrics, ResolvedFont};
-use crate::layout::LayoutEngine;
+use crate::layout::{LayoutEngine, WrapPlan};
 use crate::region::{ImagePx, ScaleContract, TextRegion};
 use crate::sink::{EmoTextSink, TextMsg, handle_text_msg};
 use crate::state::{TextLayerConfig, TextLayerState};
@@ -493,6 +493,7 @@ fn present_actor(
         resolved.mode,
         resolved.font.height,
         &render.metrics,
+        WrapPlan::CharByChar,
     );
     let window = LayoutEngine::visible_window(&lines, &resolved.region, resolved.mode);
     let canvas = ContentCanvas::from_layout(&lines, &resolved.region, resolved.mode);
