@@ -34,6 +34,7 @@ pub mod canvas;
 pub mod draw;
 pub mod layout;
 pub mod region;
+pub mod segment;
 pub mod sink;
 pub mod state;
 pub mod surface;
@@ -172,6 +173,7 @@ mod tests {
             ("state.rs", include_str!("state.rs")),
             ("writing.rs", include_str!("writing.rs")),
             ("region.rs", include_str!("region.rs")),
+            ("segment.rs", include_str!("segment.rs")),
             ("layout.rs", include_str!("layout.rs")),
             ("canvas.rs", include_str!("canvas.rs")),
             ("viewbox.rs", include_str!("viewbox.rs")),
