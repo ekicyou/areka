@@ -1,0 +1,23 @@
+[package]
+name = "shiori4-testdll"
+workspace = "../.."
+description = "x64 SHIORI4 deterministic test DLL (golden-snapshot replay brain) for areka's boundary-crossing deterministic test ghost"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+# D-8: crate `shiori4-testdll` / [lib] name `shiori4_testdll` / 出力 `shiori4_testdll.dll`
+# （i686 `shiori.dll` と非衝突）。cdylib=境界横断の実ロード面／rlib=areka-ghost tests が
+# 契約定数（DLL_FILE_NAME・スナップショット表）を単一権威共有する面（design.md "Allowed Dependencies"）。
+[lib]
+name = "shiori4_testdll"
+crate-type = ["cdylib", "rlib"]
+
+# Allowed Dependencies（design.md）: shiori-abi ＋ windows-core のみ。
+# windows(Win32) 不使用・tracing 不使用・areka 系 crate 非依存（自給・D-2）。
+[dependencies]
+shiori-abi = { path = "../shiori-abi" }
+windows-core = { workspace = true }

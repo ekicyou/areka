@@ -1,7 +1,7 @@
 # Implementation Plan
 
 - [ ] 1. shiori4-testdll: 決定論replay脳（自給cdylib）
-- [ ] 1.1 (P) crate雛形を組み、cargo test --workspace 時のビルド成果物の所在を実証する
+- [x] 1.1 (P) crate雛形を組み、cargo test --workspace 時のビルド成果物の所在を実証する
   - x64 cdylib+rlib の最小crateを立て、スタブの生成入口を持たせる
   - 契約定数（出力DLLファイル名）を公開する
   - cargo test --workspace 実行後、成果物が単一の正準位置に現れることを確認するテストで実証し、その位置をコード内の定数・コメントとして確定記録する（フォールバックは設けない・不在時は明示panic文言を用意）
@@ -141,3 +141,7 @@
   - _Depends: 6.1, 5.1_
 
 > **要件7.5について**: SAORI・里々・YAYAは意図的にいかなるタスクにもマップしない。「やらないことの証明」という性質上、実装タスクを持たず、境界宣言（design.md の Out of Boundary 節）で充足される。
+
+## Implementation Notes
+
+- **[1.1 spike 実測] cdylib の正準位置は `target/<profile>/deps/shiori4_testdll.dll`**（設計 D-1 の記述「deps を pop して `target/<profile>/`」は誤り）。`cargo test`／`cargo test --workspace` は cdylib を top-level へ uplift せず deps のみ（`cargo build` のみが top-level へ uplift）。実測: test-only ビルド後 top-level 不在・deps 存在。よって **task 3／4.1 の `locate_built_test_dll()` は `current_exe().parent().join(DLL_FILE_NAME)`（deps ディレクトリ・deps-pop しない）で解決すること**。areka-ghost の e2e test binary も同じ deps/ に居るため、この deps-dir 解決が単一正準・フォールバックなしで機能する。不在時は `cargo test --workspace` を促す明示 panic。
