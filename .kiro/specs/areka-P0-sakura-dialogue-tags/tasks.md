@@ -7,7 +7,7 @@
   - references 空のシリアライズ形が現行とバイト同一であること、references ありでも `default` で読めることを確認する新規檻を追加する
   - _Requirements: 1.3, 8.1_
 
-- [ ] 1.2 Cursor variant を追加する
+- [x] 1.2 Cursor variant を追加する
   - `CueCommand::Cursor { x: String, y: String }` を追加する（単位付き・裸数値・`@` 相対・空の区別を保つ不透明転写）
   - Cursor のワイヤ形檻（`{"Cursor":{"x":"5em","y":"2lh"}}`）を追加する
   - _Requirements: 3.1, 3.2, 8.1_
@@ -224,3 +224,7 @@
   - dpi=96 は自己整合して座標欠陥を隠すため、実 DPI での確認を省略しない
   - _Requirements: 9.6_
   - _Depends: 10.4_
+
+## Implementation Notes
+- 1.2: `CueCommand::Cursor` variant 追加時、dola 内網羅 match `cue_target_of`（sink.rs）が非網羅コンパイルエラーを出すため、機械的追随として `Cursor→Balloon` アームを先行追加済み（設計:159 と一致）。→ Task 1.4 は当該アームが既に存在する前提で、`command_target_of` 新設・`Custom` rustdoc 改訂・檻の追加に集中すること。
+- 検証コマンドは crate 単位 `cargo test -p <crate>`（worktree root から）。`--workspace` は host-32 i686 成果物前提のため実装中は使わない。worktree 絶対パス `...\.claude\worktrees\areka-p0-balloon-face-cue-18b0ad` 必須。

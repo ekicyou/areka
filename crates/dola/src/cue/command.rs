@@ -155,6 +155,13 @@ pub enum CueCommand {
     /// 解釈（数値化・alias）は消費者（seriko）の責務。dola は状態を持たない。
     /// `Emote { key }` と完全対称の不透明 key 転写語彙。
     BalloonSurface { key: String },
+    /// カーソル位置指定（さくらスクリプト `\_l` の不透明転写）。
+    ///
+    /// x・y は**記述通りの不透明な文字列**であり、単位付き（`5em`/`2lh`/`50%`）・
+    /// 裸数値・相対（`@` 前置）・空（省略）の区別を失わない（R3.2）。dola は
+    /// 単位換算・座標解決・原点解釈を**行わない**——これらは消費（表示）側の責務（R3.3）。
+    /// 双方が空でも発行され得る（記述の存在を台本から失わせない・R3.5）。
+    Cursor { x: String, y: String },
     /// 純粋な待ち（**action を持たない**第一級コマンド）。
     ///
     /// 待ち時間は本 variant でなく `Cue` envelope の `duration` が保持する
@@ -404,6 +411,53 @@ mod tests {
             let json = serde_json::to_string(&cmd).unwrap();
             let parsed: CueCommand = serde_json::from_str(&json).unwrap();
             assert_eq!(cmd, parsed, "BalloonSurface(key={key:?}) must roundtrip");
+        }
+    }
+
+    /// `Cursor`（カーソル位置指定 `\_l` の不透明転写）の additive 追加檻（3.1・3.2・8.1）。
+    ///
+    /// - x・y は**記述通りの不透明 String**であり、単位付き（`5em`/`2lh`/`50%`）・裸数値・
+    ///   相対（`@` 前置）・空（省略）の区別を失わず往復する（dola は換算/解決しない・3.2/3.3）。
+    /// - externally tagged で additive（既存 variant のワイヤ形は不変・8.1）。
+    #[test]
+    fn cue_command_cursor_serde_roundtrip() {
+        // 代表形: 単位付き。設計「Data Models / ワイヤ形」表の Cursor 行と**バイト同一**。
+        let cmd = CueCommand::Cursor {
+            x: "5em".into(),
+            y: "2lh".into(),
+        };
+        let json = serde_json::to_string(&cmd).unwrap();
+        assert_eq!(json, r#"{"Cursor":{"x":"5em","y":"2lh"}}"#);
+        let parsed: CueCommand = serde_json::from_str(&json).unwrap();
+        assert_eq!(cmd, parsed);
+
+        // 双方空（省略）の区別を保つ——空でも欠落させず忠実に往復する（3.2・3.5）。
+        let empty = CueCommand::Cursor {
+            x: "".into(),
+            y: "".into(),
+        };
+        let json = serde_json::to_string(&empty).unwrap();
+        assert_eq!(json, r#"{"Cursor":{"x":"","y":""}}"#);
+        let parsed: CueCommand = serde_json::from_str(&json).unwrap();
+        assert_eq!(empty, parsed);
+        // 空は代表形と別物（区別保持）。
+        assert_ne!(empty, cmd);
+
+        // 裸数値・相対（`@` 前置）・%・片側空のいずれも不透明のまま忠実に往復する（3.2）。
+        for (x, y) in [
+            ("50", "100"),      // 裸数値
+            ("@10", "@-5"),     // 相対（`@` 前置）
+            ("50%", "25%"),     // パーセント
+            ("5em", ""),        // 片側のみ空（区別保持）
+            ("", "2lh"),        // もう片側のみ空
+        ] {
+            let cmd = CueCommand::Cursor {
+                x: x.into(),
+                y: y.into(),
+            };
+            let json = serde_json::to_string(&cmd).unwrap();
+            let parsed: CueCommand = serde_json::from_str(&json).unwrap();
+            assert_eq!(cmd, parsed, "Cursor(x={x:?}, y={y:?}) must roundtrip opaquely");
         }
     }
 

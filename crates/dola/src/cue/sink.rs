@@ -58,6 +58,8 @@ pub fn cue_target_of(command: &CueCommand) -> Option<CueTarget> {
         // 全スコープ消去はテキスト表現者（バルーン）の担当（Clear と同系）。
         CueCommand::ClearAll => Some(CueTarget::Balloon),
         CueCommand::Choice { .. } => Some(CueTarget::Balloon),
+        // カーソル位置指定（`\_l`）はバルーン系表現者（emo-text）が消費する。
+        CueCommand::Cursor { .. } => Some(CueTarget::Balloon),
         CueCommand::Custom { .. } => None,
         // Wait は action を持たない純粋な待ち＝どの演者の担当でもない（全員が action を
         // 無視し duration のみ honor する）。分類不能（Custom）とは別理由で `None` だが、
