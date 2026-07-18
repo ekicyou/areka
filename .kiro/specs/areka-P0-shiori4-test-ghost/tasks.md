@@ -17,7 +17,7 @@
   - _Boundary: shiori4-testdll/request.rs_
   - _Depends: 1.1_
 
-- [ ] 1.3 (P) 正典イベントごとの凍結応答を保持する静的テーブルを実装する（暫定データで先行）
+- [x] 1.3 (P) 正典イベントごとの凍結応答を保持する静的テーブルを実装する（暫定データで先行）
   - 応答データはファイルから埋め込み、実行時I/Oを持たない
   - 埋め込み時に行末表現を正規化し、gitの改行変換に依存しない
   - 暫定応答は正準SHIORI/3.0形式で明示的にPROVISIONALと分かる形にする
@@ -145,3 +145,5 @@
 ## Implementation Notes
 
 - **[1.1 spike 実測] cdylib の正準位置は `target/<profile>/deps/shiori4_testdll.dll`**（設計 D-1 の記述「deps を pop して `target/<profile>/`」は誤り）。`cargo test`／`cargo test --workspace` は cdylib を top-level へ uplift せず deps のみ（`cargo build` のみが top-level へ uplift）。実測: test-only ビルド後 top-level 不在・deps 存在。よって **task 3／4.1 の `locate_built_test_dll()` は `current_exe().parent().join(DLL_FILE_NAME)`（deps ディレクトリ・deps-pop しない）で解決すること**。areka-ghost の e2e test binary も同じ deps/ に居るため、この deps-dir 解決が単一正準・フォールバックなしで機能する。不在時は `cargo test --workspace` を促す明示 panic。
+- **[1.3] snapshot 表 API は `pub(crate)` で先行**（設計 Service Interface は `pub`）。task 1.4 で `snapshot_for`/`snapshots`/`PROVISIONAL_MARKER` を **`pub` へ広げる**（areka-ghost の rlib 面が task 4.1/5.1 で `DLL_FILE_NAME`＋スナップショット表を参照するため）。`DLL_FILE_NAME` は task 1.1 時点で既に `pub`。
+- **[1.3 提供データ] 暫定 OnBoot Value スクリプト = `\0\s[0]おはようございますわ（暫定）\e`**（`X-Areka-Snapshot: PROVISIONAL` header 付き・parse_response が未知 header を無視するので wire 上 inert）。OnFirstBoot = 204。task 5.1 の期待 cue 列は `snapshot_for("OnBoot")` から導出＋ドリフト検出 assert。task 6.2 が実採取で PROVISIONAL を置換する際は 5.1 の期待定数も更新すること。

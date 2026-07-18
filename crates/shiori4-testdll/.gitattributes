@@ -1,0 +1,3 @@
+# 凍結スナップショットは行末を git の EOL 変換に晒さない（追加の保険）。
+# 正しさ自体は snapshot.rs の normalize_crlf 純関数が保証するため、これは冗長な二重防御。
+snapshots/*.txt -text

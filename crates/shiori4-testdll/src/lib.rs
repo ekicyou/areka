@@ -32,6 +32,14 @@ use windows_core::HRESULT;
 /// `shiori_factory` へは未結線）。
 mod request;
 
+/// 正典 GET イベントごとの凍結ゴールデンスナップショットの静的表（task 1.3）。
+///
+/// `snapshots/<EventID>.txt`（SHIORI/3.0 応答全文）を `include_str!` でコンパイル時に埋め込み
+/// （実行時 I/O ゼロ・要件 1.5）、取り込み時に CRLF 正規化する（git EOL 変換への免疫・要件 2.5／
+/// research.md §7.3）。`snapshot_for(id)` は task 1.4 の `ReplayBrain::Get` が `select_response` の
+/// `lookup` クロージャへ無改修で差し込む（本 task では `shiori_factory` へ未結線）。
+mod snapshot;
+
 /// 出力 DLL ファイル名（design.md §SnapshotTable Service Interface の契約定数・単一権威）。
 ///
 /// この値は次の 2 箇所が共有する契約値である:
