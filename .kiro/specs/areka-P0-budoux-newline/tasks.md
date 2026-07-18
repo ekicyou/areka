@@ -1,6 +1,6 @@
 # Implementation Plan
 
-- [ ] 1. Foundation: budouy依存関係の導入とライフサイクル方針の確定
+- [x] 1. Foundation: budouy依存関係の導入とライフサイクル方針の確定
   - budouy 0.2.2（vendored-models feature）を areka-emo-text へ依存追加し、最小コード片で分かち書き結果を一度取得する
   - モデルロード関数の戻り値形（Result の有無）と Parser 型の Sync 可否を実機ビルドで確認する
   - 確認結果に基づき、Parser キャッシュ機構（OnceLock か thread_local のいずれか）を確定する
@@ -100,3 +100,12 @@
   - _Requirements: 9.2, 9.3_
   - _Boundary: 実機確認セット_
   - _Depends: 6.1_
+
+## Implementation Notes
+
+- **Task 1 spike（budouy 実 API 確定・tasks 3.2/5 へ供給）**:
+  - 依存行は `budouy = { version = "0.2.2", default-features = false, features = ["std", "vendored-models"] }`（design.md の素の `features=["vendored-models"]` は `default`＝cli→seahorse を引くため精緻化した。`cargo tree` で seahorse 不在を実証）。
+  - ローダは `budouy::model::load_default_japanese_parser() -> budouy::Parser`（**infallible**・Result ではない）。→ design Error Handling の「ロード API が Result を返す場合」分岐は不要。segment.rs はロード失敗を扱わない。
+  - `Parser::parse(&self, &str) -> Vec<String>`（**所有 String**・design.md の `Vec<&str>` は誤り）。task 3.2 の glyph-index 写像は owned String チャンクを `chars().count()` で数える形にする。
+  - `budouy::Parser: Sync + Send`（コンパイル時 bound で証明済み）→ キャッシュは **`static PARSER: OnceLock<budouy::Parser>`** で確定（design 主案どおり・thread_local フォールバック不要）。
+  - spike テストは `crates/areka-emo-text/src/lib.rs` の `#[cfg(test)] mod budouy_spike` に恒久保持（決定論・無損失・>=2 塊分割を "今日はいい天気ですね" でピン）。
