@@ -35,7 +35,7 @@ use crate::placement::resolver::SizePx;
 use crate::placement::spawn::GhostWindows;
 
 use super::assets::{BootAssets, ScopeAssets};
-use super::move_cue::MoveDirective;
+use super::move_cue::{apply_move_directive, MoveDirective};
 use super::talk_clock::TalkClock;
 use super::target_map::{balloon_target, shell_target};
 
@@ -172,17 +172,12 @@ pub struct Emo2Wiring {
     presenter: EmoPresenter,
     /// worker（seriko 経由 `PresentBridge`）からの表示指令受信端（task 4.2 の drain で消費）。
     rx: Receiver<PresentCommand>,
-    /// talk スレッド（`MoveCueSink`）からの `\![move]` 指令受信端（frame 相 drain＝task 9.2 が消費）。
+    /// talk スレッド（`MoveCueSink`）からの `\![move]` 指令受信端（frame 相 drain＝[`run_move_drain_phase`]
+    /// が消費）。
     ///
     /// `PresentBridge` の `rx` と同型の配線: `wire_emo2_boot`（task 9.1）が
-    /// `mpsc::channel::<MoveDirective>()` の受信端を受け渡し、frame 相の `emo2_frame_system` が
-    /// `apply_move_directive` へ drain する（drain 実装は task 9.2）。
-    ///
-    /// task 9.1 段階では受信端の保持と test-support アクセサ（`drain_move_directives`・`#[cfg(test)]`）
-    /// のみで、非 test の本番 drain 経路（task 9.2）が未着ゆえ本番ビルドからは未読取り。段階実装の
-    /// 想定内であり、task 9.2 の frame 相 drain 着地でこの `allow` は撤去する（move_cue.rs の
-    /// staged `#![allow(dead_code)]` と同流儀）。
-    #[allow(dead_code)]
+    /// `mpsc::channel::<MoveDirective>()` の受信端を受け渡し、frame 相の [`emo2_frame_system`] が
+    /// [`run_move_drain_phase`] 経由で `try_iter` し `apply_move_directive` へ適用する（task 9.2）。
     move_rx: Receiver<MoveDirective>,
     /// バルーン文字層ランタイム（`register_actor_view`／`present_frame` の所有・`!Send`）。
     runtime: Rc<RefCell<TextLayerRuntime>>,
@@ -514,6 +509,36 @@ pub fn run_drain_phase(wiring: &mut Emo2Wiring, world: &mut World) {
     }
 }
 
+/// move drain フェーズ（`\![move]` の末端結線・design「frame 相で drain→`apply_move_directive`」・
+/// R5.1/5.3/5.5/R6・task 9.2）: talk スレッド（`MoveCueSink`）から mpsc で届いた [`MoveDirective`]
+/// を非ブロックで FIFO 全件 drain し、UI スレッド上で [`apply_move_directive`] へ適用する。
+///
+/// `PresentBridge`（[`run_drain_phase`]）と同型の跨ぎパターンだが、ゲートは `attached`（GPU）でなく
+/// **`GhostWindows` の存在**である——move は GPU 表示層でなくキャラ窓 entity（`GhostWindows` が spawn 時
+/// に生成）へ作用するため、GPU attach を待つ必要がない。`GhostWindows` 未挿入の間はチャネルが保留
+/// バッファを兼ね（[`Receiver::try_iter`] を呼ばず取りこぼさない）、窓が生成された最初のフレームで
+/// 一括適用する（OnFirstBoot の位置調整を早期に取りこぼさないための buffering・present drain の
+/// 「attach 前は保留」と同じ意図）。
+///
+/// 各 directive の適用は [`apply_move_directive`] が完結させる: 非スコープ基準・窓/`WindowPos` 不在・
+/// 座標算出不能はいずれも同関数内で `warn!`＋`false`（log-first・非 panic・R5.5）ゆえ、本フェーズは
+/// 戻り値を捨てて次 directive へ進む（1 件の縮退が他 directive・talk を巻き込まない）。`try_iter` は
+/// チャネルが空か全送信端 drop で尽きる（ブロックしない・empty/disconnected でも panic しない）。
+pub fn run_move_drain_phase(wiring: &Emo2Wiring, world: &mut World) {
+    // GhostWindows 未挿入の間はチャネルが保留バッファを兼ねる（try_iter を呼ばず取りこぼさない）。
+    // 窓生成後の最初のフレームで一括適用する（OnFirstBoot 移動の早期取りこぼし防止・present drain と同意図）。
+    if world.get_resource::<GhostWindows>().is_none() {
+        return;
+    }
+    // try_iter: 現時点でキュー済みの MoveDirective を非ブロックで FIFO 全件取り出す（空・全送信端 drop で尽きる）。
+    // wiring.move_rx（shared 借用）と world（mut 借用・別オブジェクト）は互いに素ゆえ両立する。
+    for directive in wiring.move_rx.try_iter() {
+        // 適用の全縮退（非スコープ基準・窓不在・算出不能）は apply_move_directive 内で warn!＋false 済み
+        // （log-first・R5.5）。戻り値は捨てて次 directive へ進む（1 件の縮退で talk を殺さない・非 panic）。
+        apply_move_directive(world, &directive);
+    }
+}
+
 // ---------------------------------------------------------------------------
 // resnap シーム（tasks.md task 3.2・design「統合シーム（emo2_boot frame.rs）>
 // resnap_shell_targets / resnap_from_sizes」・Req1.3/3.1/3.2/4.1/4.3/4.5・DD-2/DD-5）
@@ -677,6 +702,10 @@ pub fn emo2_frame_system(world: &mut World) {
     // donor 慣行: remove して &mut World を各フェーズへ排他に渡し、3 フェーズ駆動後に必ず戻す。
     run_attach_phase(&mut wiring, world);
     run_drain_phase(&mut wiring, world);
+    // `\![move]` の末端結線: talk スレッドの MoveCueSink から届いた MoveDirective を drain し
+    // apply_move_directive で実窓へ即時反映する（GhostWindows ゲート・R5・task 9.2）。present drain
+    // とは独立で、GPU attach でなく GhostWindows 存在を待つ（move はキャラ窓 entity へ作用するため）。
+    run_move_drain_phase(&wiring, world);
     // drain（全 PresentCommand 適用）後に shell サーフェス寸法の変化を検知し、変化した char 窓のみ
     // アンカー再適用を駆動する（適用後の実寸を読むため drain の**後**・同一 World・同一 tick 内の
     // 直接呼び・Req4.1/4.3/1.3）。text の前後とは機能的に無関係だが drain の後であることが必須。
@@ -1495,5 +1524,97 @@ mod tests {
             assert_eq!(size_of(&world, char0), size_before, "同寸反復 {repeat}: size 不変");
             assert_eq!(pos_of(&world, char0), pos_before, "同寸反復 {repeat}: position 不変");
         }
+    }
+
+    // ── task 9.2: run_move_drain_phase（frame 相 move drain→apply）の存在＋ゲート檻 ──────
+    //
+    // 9.1 の channel 到達（`move_cue_sink_reaches_emo2_wiring_receiver`）と 7.4 の apply 単体
+    // （move_cue.rs `apply_move_tests`）を frame 相 drain で接ぐ結線の存在チェック。full spine
+    // （cue→CueSheet→dispatch→sink→channel→frame）は task 9.3 が所有する。
+
+    /// fixture `\1\![move,-353,,,0,base,base]` の `MoveDirective`（scope1・base scope0）。
+    fn fixture_move_directive() -> MoveDirective {
+        crate::emo2_boot::move_cue::parse_move_directive(
+            1,
+            &["-353", "", "", "0", "base", "base"]
+                .iter()
+                .map(|s| s.to_string())
+                .collect::<Vec<_>>(),
+        )
+        .expect("fixture move は Ok")
+    }
+
+    /// 9.2 ゲート檻: `GhostWindows` 未挿入の間は `move_rx` を drain せず保留する（取りこぼしなし）。
+    ///
+    /// 素の `World`（`GhostWindows` なし）で `run_move_drain_phase` を呼んでも、送出済みの
+    /// `MoveDirective` はチャネルに残る（後から test-support `drain_move_directives` で取り出せる＝
+    /// gate 閉で未消費の実証）。move はキャラ窓生成後に一括適用され OnFirstBoot 移動を取りこぼさない。
+    #[test]
+    fn run_move_drain_phase_buffers_until_ghost_windows_present() {
+        let (tx, rx) = mpsc::channel::<MoveDirective>();
+        let wiring = Emo2Wiring::new(
+            EmoPresenter::new(),
+            mpsc::channel::<PresentCommand>().1,
+            rx,
+            Rc::new(RefCell::new(TextLayerRuntime::new(TextLayerConfig::default()))),
+            zero_clock(),
+            synth_assets(&[(0, 0)]),
+        );
+        tx.send(fixture_move_directive()).expect("送出は成功する（受信端は wiring 保持）");
+
+        // GhostWindows 未挿入の素の World → drain せず保留（try_iter を呼ばない）。
+        let mut world = World::new();
+        run_move_drain_phase(&wiring, &mut world);
+
+        // gate 閉ゆえ未消費: 送出した 1 件がチャネルに残る（保留＝取りこぼしなし）。
+        let remaining = wiring.drain_move_directives();
+        assert_eq!(
+            remaining.len(),
+            1,
+            "GhostWindows 未挿入では drain せず保留する（取りこぼしなし）"
+        );
+        assert_eq!(remaining[0].scope, 1, "保留された directive は fixture（scope1）");
+    }
+
+    /// 9.2 apply 檻: `GhostWindows` 存在下で `move_rx` を drain すると `apply_move_directive` が
+    /// 対象窓を fixture 検算位置へ即時移動する（channel→frame 相 drain→apply→窓移動の結線存在）。
+    ///
+    /// base scope0 (1483,757,434,687)・target scope1 (1049,1087,278,357)・x=Px(-353)・y=Fix:
+    /// x' = 1483 + 434/2 − 353 − 278/2 = 1208・y は現状維持 1087（`resolve_move_target_position` 検算）。
+    #[test]
+    fn run_move_drain_phase_applies_directive_when_ghost_windows_present() {
+        let (mut world, gw) = resnap_world();
+        let target = gw.char_window(1).unwrap();
+        assert_eq!(
+            pos_of(&world, target),
+            Some(Point { x: 1049, y: 1087 }),
+            "前提: 移動前の scope1 初期位置"
+        );
+
+        let (tx, rx) = mpsc::channel::<MoveDirective>();
+        let wiring = Emo2Wiring::new(
+            EmoPresenter::new(),
+            mpsc::channel::<PresentCommand>().1,
+            rx,
+            Rc::new(RefCell::new(TextLayerRuntime::new(TextLayerConfig::default()))),
+            zero_clock(),
+            synth_assets(&[(0, 0)]),
+        );
+        tx.send(fixture_move_directive()).expect("送出は成功する");
+
+        run_move_drain_phase(&wiring, &mut world);
+
+        // channel→drain→apply→move_window_to で対象窓が fixture 検算位置へ即時移動する。
+        assert_eq!(
+            pos_of(&world, target),
+            Some(Point { x: 1208, y: 1087 }),
+            "x'=1483+217−353−139=1208・y=Fix は現状維持（channel→frame drain→apply）"
+        );
+        // drain 済みチャネルは空（二重適用なし・FIFO 全件消費）。
+        assert_eq!(
+            wiring.drain_move_directives().len(),
+            0,
+            "drain 後チャネルは空（全件消費・二重適用なし）"
+        );
     }
 }

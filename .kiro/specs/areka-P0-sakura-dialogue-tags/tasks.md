@@ -170,7 +170,7 @@
   - _Requirements: 5.1_
   - _Depends: 6.2, 7.3_
 
-- [ ] 9.2 frame 相での drain と適用を配線する
+- [x] 9.2 frame 相での drain と適用を配線する
   - frame 相（`emo2_frame_system`）で `MoveDirective` チャンネルを drain し `apply_move_directive` を呼び出す配線を実装する
   - 配線がコンパイル・既存 frame テストと共存することを確認する（決定論的な存在確認は 9.3 の spine e2e で行う・手動実機確認はしない）
   - _Requirements: 5.1_
@@ -234,3 +234,4 @@
 - 6.1 完了メモ: (a) dispatcher `on_start` に `SystemVarSnapshot::default()` の暫定橋渡し（`TODO(task 6.2)` マーク済）→ **Task 6.2** で `SystemVarSource` provider を `GhostBootOptions`/`DispatcherState` に通し per-talk 凍結像へ差し替える。(b) `spine_e2e_test.rs`/`real_pasta_test.rs` の埋没破断（references・Window/Cursor 網羅 match）を機械修復済 → **Task 9.3** は 3-sink 構成・move cue e2e など S-3 形の本体を仕上げる（既に compile は通っている前提）。(c) `command_kind` に Cursor 最小ラベルアーム追加済・`command_kind_covers_every_cue_command_variant` 檻への Cursor 明示アサーションは **Task 8** で追加。
 - 6.2 完了メモ: `GhostBootOptions` に必須 `system_vars: SystemVarSource` フィールドが増えたため、bin caller `crates/areka/src/emo2_boot/mod.rs`（~291行）は現在未コンパイル（`system_vars`/新 sinks Vec 未供給）→ **Task 9.1** で `default_system_vars()` 供給＋sinks Vec 3要素へ追随。areka-ghost 単体は緑。`default_system_vars()` は `areka_ghost` から公開（lib.rs re-export）済。
 - 【実施順序変更】areka bin は areka-emo-text（Cursor網羅match欠落）に依存しビルド不能だったため、**Task 8 を Task 7 より先に実施**（Task 8 は (P)・Task 7 非依存）。8 完了で areka-emo-text 緑化。残る bin blocker は `emo2_boot/mod.rs` の GhostBootOptions 呼び出しのみ → **Task 7.1 が bin を組むための最小 mod.rs ブリッジ（既存 sinks を Vec 化＋`default_system_vars()` 供給・MoveCueSink はまだ足さない）を併せて行い**、Task 9.1 が MoveCueSink 登録＋channel 配線で完成させる。
+- 9.2 完了メモ: frame 相 move drain のゲートを **GhostWindows 存在**にした（present drain の GPU `attached` ゲートとは別条件・move はキャラ窓 entity へ作用しGPU attach不要／窓生成前のOnFirstBoot移動を try_iter が消費して取りこぼすのを防ぐ buffering）。単体檻は gate 開/閉の各状態をシミュレートするが、**実ブート順で「移動→窓生成でゲート closed→open」遷移が end-to-end に効くこと**は Task 9.3 の spine e2e ／ Task 11 実機で確認する。
