@@ -38,11 +38,14 @@
 
 use std::sync::mpsc::Sender;
 
+use bevy_ecs::prelude::World;
 use dola::cue::{command_target_of, CueCommand, CueTarget, TalkCue};
 use tracing::{debug, warn};
 use wintf::ecs::{SizeI, WindowPos};
 
+use crate::placement::follow::move_window_to;
 use crate::placement::resolver::PointPx;
+use crate::placement::spawn::GhostWindows;
 
 /// `\![move]` の完全語彙型（design.md Service Interface・R5.2）。
 ///
@@ -517,6 +520,98 @@ impl dola::cue::CueSink for MoveCueSink {
     }
 }
 
+// =============================================================================
+// apply_move_directive（UI スレッド適用）— frame 相 drain 先の実窓反映
+// （task 7.4・R5.1/5.3/5.5/R6/9.5）
+// =============================================================================
+
+/// `\![move]` の [`MoveDirective`] を UI スレッド上で実窓へ反映する（design「MoveCueSink＋
+/// 純粋解釈＋UI 適用」・R5.1/5.3/5.5/6.1/6.2/9.5）。
+///
+/// `directive.scope`／基準スコープ→[`GhostWindows`]（Resource・World から読む）で対象・基準の
+/// キャラ窓 entity を解決し、両窓の [`WindowPos`]（物理 px）から basepos シーム
+/// （[`CanonDefaultBasepos`]・M1 実導出）経由で最終座標を算出し（[`resolve_move_target_position`]）、
+/// [`move_window_to`] **のみ**を呼んで反映する。`&mut World` 署名で UI スレッド専有を型担保する。
+///
+/// # 永続分離（R6/6.1/6.2/9.5）
+///
+/// 本関数は唯一の位置ライター [`move_window_to`] だけを呼び、[`Anchored`](crate::placement::follow::Anchored)
+/// （ドラッグ確定系の単一真実源）にも DragEnd 観測点（`on_char_drag_end`/`on_balloon_drag`）にも
+/// 構造的に触れない——表示位置のみを動かし永続確定値を更新せず（R6.1）、第二の位置ライターを
+/// 新設しない（R6.2）。統合檻は「適用前後で `Anchored` がビット同一」を直接 assert する。
+/// バルーン随伴の offset 維持（R5.3）は `move_window_to` が内部で担う。
+///
+/// # 縮退（warn＋継続・`false`・R5.5）
+///
+/// 非スコープ基準（screen/primaryscreen/me/global＝M1 非実導出・emo2 未使用）・`GhostWindows`
+/// 未挿入・対象/基準 scope の窓不在・`WindowPos` 不在・座標算出不能（位置/寸法欠落）はいずれも
+/// warn＋`false`——silent no-op でも panic でもなく talk を殺さない（log-first・
+/// [[areka-log-first-no-silent-failure]]）。
+pub fn apply_move_directive(world: &mut World, directive: &MoveDirective) -> bool {
+    // 基準は M1 では数値スコープのみ実導出。非スコープ（screen 等）は語彙保持のうえ warn＋スキップ。
+    let MoveBase::Scope(base_scope) = directive.base else {
+        warn!(
+            base = ?directive.base,
+            scope = directive.scope,
+            "apply_move_directive: 非スコープ基準は M1 非実導出のためスキップ（R5.5）"
+        );
+        return false;
+    };
+
+    // scope→GhostWindows（Resource）で対象・基準のキャラ窓 entity を解決する。
+    let Some(ghost_windows) = world.get_resource::<GhostWindows>() else {
+        warn!("apply_move_directive: GhostWindows 未挿入のため \\![move] をスキップ（R5.5）");
+        return false;
+    };
+    let Some(target) = ghost_windows.char_window(directive.scope as usize) else {
+        warn!(
+            scope = directive.scope,
+            "apply_move_directive: 対象 scope の char 窓が GhostWindows に無い（R5.5）"
+        );
+        return false;
+    };
+    let Some(base_window) = ghost_windows.char_window(base_scope as usize) else {
+        warn!(
+            base_scope,
+            "apply_move_directive: 基準 scope の char 窓が GhostWindows に無い（R5.5）"
+        );
+        return false;
+    };
+
+    // 両窓の WindowPos（物理 px・`Copy`）を読む。move_window_to は `&mut World` を要するため、
+    // ここで値コピーして共有 borrow を解放する。不在（窓生成前の異常系）は warn＋false。
+    let Some(base_pos) = world.get::<WindowPos>(base_window).copied() else {
+        warn!(
+            ?base_window,
+            "apply_move_directive: 基準窓の WindowPos 不在（窓生成前）のためスキップ（R5.5）"
+        );
+        return false;
+    };
+    let Some(target_pos) = world.get::<WindowPos>(target).copied() else {
+        warn!(
+            ?target,
+            "apply_move_directive: 対象窓の WindowPos 不在（窓生成前）のためスキップ（R5.5）"
+        );
+        return false;
+    };
+
+    // basepos シーム（M1 は CanonDefaultBasepos）経由で最終座標を算出（全て物理 px・R-6 対策）。
+    // 位置/寸法欠落で算出不能なら None＝warn＋継続（R5.5）。
+    let Some(pos) =
+        resolve_move_target_position(&CanonDefaultBasepos, &base_pos, &target_pos, directive)
+    else {
+        warn!(
+            scope = directive.scope,
+            "apply_move_directive: 位置・寸法欠落で座標算出不能のためスキップ（R5.5）"
+        );
+        return false;
+    };
+
+    // 反映は move_window_to のみ（唯一の位置ライター・バルーン随伴 offset 維持を内包・R5.3/6.2）。
+    // Anchored・DragEnd 観測点には触れない（R6/9.5）。
+    move_window_to(world, target, pos.x, pos.y)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -914,5 +1009,218 @@ mod move_sink_tests {
     fn satisfies_boot_sink_bounds() {
         fn require<T: dola::cue::CueSink + Clone + Send + 'static>() {}
         require::<MoveCueSink>();
+    }
+}
+
+// =============================================================================
+// apply_move_directive（UI スレッド適用）統合檻（task 7.4・R5.1/5.3/5.5/R6/9.5）
+//
+// 偽装境界: 実 HWND なしの headless World（`fake_handle` パターン・follow.rs 流儀）で
+// `spawn_ghost_windows` により実 GhostWindows＋char/balloon 窓（Anchored/WindowPos/
+// BalloonFollow 付き）を組み、既知 WindowPos に対し apply_move_directive を駆動して
+// fixture 検算式どおりの物理座標・バルーン随伴 offset 維持・対象不在 warn+false・
+// Anchored ビット同一（第二位置ライター非混入の構造檻）を固定する。
+// =============================================================================
+
+#[cfg(test)]
+mod apply_move_tests {
+    use super::*;
+    use bevy_ecs::prelude::{Entity, World};
+    use windows::Win32::Foundation::{HINSTANCE, HWND};
+
+    use crate::placement::follow::{Anchored, BalloonFollow};
+    use crate::placement::resolver::{Anchor, ScopePlacement, SizePx};
+    use crate::placement::source::GhostTitles;
+    use crate::placement::spawn::{spawn_ghost_windows, GhostWindows};
+    use wintf::ecs::{Point, WindowHandle, WindowPos};
+
+    /// 偽 HWND の WindowHandle（実窓なし・headless 決定論シーム）。
+    fn fake_handle(raw: usize) -> WindowHandle {
+        WindowHandle {
+            hwnd: HWND(raw as *mut _),
+            instance: HINSTANCE::default(),
+        }
+    }
+
+    /// 既知位置・寸法の解決済み配置（balloon_offset は char 窓へ BalloonFollow.offset として転写）。
+    fn placement(scope: usize, cx: i32, cy: i32, cw: i32, ch: i32, boff: PointPx) -> ScopePlacement {
+        ScopePlacement {
+            scope,
+            char_pos: PointPx { x: cx, y: cy },
+            char_size: SizePx { w: cw, h: ch },
+            balloon_pos: PointPx {
+                x: cx + boff.x,
+                y: cy + boff.y,
+            },
+            balloon_size: SizePx { w: 200, h: 150 },
+            balloon_offset: boff,
+            anchor: Anchor::Bottom,
+        }
+    }
+
+    /// 各窓へ偽 WindowHandle を付与する（move_window_to の反映口 enqueue_window_set_pos が
+    /// WindowPos を書ける条件＝WindowHandle 実在）。
+    fn attach_fake_handles(world: &mut World, gw: &GhostWindows) {
+        let mut raw = 0x100usize;
+        for scope in gw.scopes().collect::<Vec<_>>() {
+            for e in [
+                gw.char_window(scope).unwrap(),
+                gw.balloon_window(scope).unwrap(),
+            ] {
+                world.entity_mut(e).insert(fake_handle(raw));
+                raw += 0x10;
+            }
+        }
+    }
+
+    /// base=scope0 (1000,500,400,687)・target=scope1 (1200,800,300,434) の headless World＋
+    /// GhostWindows（全窓に偽 WindowHandle 付与済み）。
+    fn move_world() -> (World, GhostWindows) {
+        let placements = vec![
+            placement(0, 1000, 500, 400, 687, PointPx { x: 285, y: -19 }),
+            placement(1, 1200, 800, 300, 434, PointPx { x: 285, y: -19 }),
+        ];
+        let mut world = World::new();
+        let gw = spawn_ghost_windows(
+            &mut world,
+            &placements,
+            &GhostTitles::from_scope_titles([(0, "a".to_string()), (1, "b".to_string())]),
+        );
+        attach_fake_handles(&mut world, &gw);
+        (world, gw)
+    }
+
+    fn pos_of(world: &World, e: Entity) -> Point {
+        world
+            .get::<WindowPos>(e)
+            .expect("WindowPos があるはず")
+            .position
+            .expect("position があるはず")
+    }
+
+    /// fixture `\1\![move,-353,,,0,base,base]`（scope 1・base scope0）。
+    fn fixture_directive() -> MoveDirective {
+        parse_move_directive(
+            1,
+            &["-353", "", "", "0", "base", "base"]
+                .iter()
+                .map(|s| s.to_string())
+                .collect::<Vec<_>>(),
+        )
+        .expect("fixture move は Ok")
+    }
+
+    /// R5.1: fixture の即時移動が対象窓へ反映される。
+    /// x' = pos0.x + w0/2 − 353 − w1/2 = 1000 + 200 − 353 − 150 = 697・y は Fix ゆえ現状維持（800）。
+    #[test]
+    fn apply_moves_target_to_fixture_position() {
+        let (mut world, gw) = move_world();
+        let target = gw.char_window(1).unwrap();
+
+        assert!(
+            apply_move_directive(&mut world, &fixture_directive()),
+            "対象・基準窓が揃うので適用は成功する"
+        );
+        assert_eq!(
+            pos_of(&world, target),
+            Point { x: 697, y: 800 },
+            "x'=pos0.x+w0/2−353−w1/2=697・y=Fix は現状維持"
+        );
+    }
+
+    /// R5.3: バルーン随伴——移動後も balloon_pos − char_pos ≡ offset（move_window_to が内包）。
+    #[test]
+    fn apply_keeps_balloon_offset() {
+        let (mut world, gw) = move_world();
+        let target = gw.char_window(1).unwrap();
+        let balloon = gw.balloon_window(1).unwrap();
+        let offset = world
+            .get::<BalloonFollow>(target)
+            .copied()
+            .expect("target に BalloonFollow")
+            .offset;
+
+        assert!(apply_move_directive(&mut world, &fixture_directive()));
+
+        let cpos = pos_of(&world, target);
+        let bpos = pos_of(&world, balloon);
+        assert_eq!(bpos.x - cpos.x, offset.x, "offset x が移動後も維持される");
+        assert_eq!(bpos.y - cpos.y, offset.y, "offset y が移動後も維持される");
+    }
+
+    /// R5.5: 対象 scope の窓が GhostWindows に無い→warn＋false・state 不変（panic しない）。
+    #[test]
+    fn apply_target_absent_returns_false_without_mutation() {
+        // GhostWindows に scope0（基準）のみ。fixture の対象 scope1 は不在。
+        let placements = vec![placement(0, 1000, 500, 400, 687, PointPx { x: 285, y: -19 })];
+        let mut world = World::new();
+        let gw = spawn_ghost_windows(
+            &mut world,
+            &placements,
+            &GhostTitles::from_scope_titles([(0, "a".to_string())]),
+        );
+        attach_fake_handles(&mut world, &gw);
+        let base = gw.char_window(0).unwrap();
+        let before = pos_of(&world, base);
+
+        assert!(
+            !apply_move_directive(&mut world, &fixture_directive()),
+            "対象 scope1 不在は false（R5.5）"
+        );
+        assert_eq!(pos_of(&world, base), before, "適用不成立で state は不変");
+    }
+
+    /// R6/9.5: apply の前後で対象・基準窓の `Anchored`（ドラッグ確定系の単一真実源）が
+    /// ビット同一であること（apply が move_window_to のみを呼び第二の位置ライターを混入しない構造檻）。
+    #[test]
+    fn apply_leaves_anchored_bit_identical() {
+        let (mut world, gw) = move_world();
+        let target = gw.char_window(1).unwrap();
+        let base = gw.char_window(0).unwrap();
+        let target_before = world
+            .get::<Anchored>(target)
+            .copied()
+            .expect("target に Anchored（spawn が付与）");
+        let base_before = world
+            .get::<Anchored>(base)
+            .copied()
+            .expect("base に Anchored（spawn が付与）");
+
+        assert!(apply_move_directive(&mut world, &fixture_directive()));
+
+        assert_eq!(
+            world.get::<Anchored>(target).copied(),
+            Some(target_before),
+            "対象窓の Anchored はビット同一（永続確定系へ触れない・R6/9.5）"
+        );
+        assert_eq!(
+            world.get::<Anchored>(base).copied(),
+            Some(base_before),
+            "基準窓の Anchored もビット同一"
+        );
+    }
+
+    /// R5.5: 非スコープ基準（M1 非実導出）は warn＋false（座標算出へ進まない）。
+    #[test]
+    fn apply_non_scope_base_returns_false() {
+        let (mut world, gw) = move_world();
+        let target = gw.char_window(1).unwrap();
+        let before = pos_of(&world, target);
+        // base=screen（非スコープ・M1 縮退）。x=Px(-353)・y=Fix。
+        let directive = parse_move_directive(
+            1,
+            &["-353", "", "", "screen", "base", "base"]
+                .iter()
+                .map(|s| s.to_string())
+                .collect::<Vec<_>>(),
+        )
+        .expect("screen 基準は語彙保持で Ok");
+        assert_eq!(directive.base, MoveBase::Screen);
+
+        assert!(
+            !apply_move_directive(&mut world, &directive),
+            "非スコープ基準は M1 非実導出のため false（R5.5）"
+        );
+        assert_eq!(pos_of(&world, target), before, "適用不成立で対象窓は不動");
     }
 }

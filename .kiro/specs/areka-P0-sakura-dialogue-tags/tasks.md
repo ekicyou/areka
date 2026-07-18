@@ -140,7 +140,7 @@
   - _Requirements: 4.5, 8.5_
   - _Depends: 7.1, 1.4_
 
-- [ ] 7.4 apply_move_directive（UI スレッド適用）を実装する
+- [x] 7.4 apply_move_directive（UI スレッド適用）を実装する
   - `apply_move_directive(world, directive) -> bool` を実装する: scope→`GhostWindows` 解決→basepos シーム経由の座標算出→`move_window_to` 呼出
   - 対象・基準窓が解決できない場合は警告を記録して継続する（`false` を返す）
   - `move_window_to` の `#[allow(dead_code)]` を撤去する
