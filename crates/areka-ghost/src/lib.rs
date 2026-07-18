@@ -35,3 +35,5 @@ pub use runtime::{
     GhostBootError, GhostBootOptions, GhostHandles, GhostParts, GhostRuntime, GhostShutdownError,
     ShioriWiring, TickerMode, boot,
 };
+// task 2.3: InProc 結線の connect closure 構成関数（D-3・テストの Recorder 合成と M2 の直接利用に供する）。
+pub use shiori_inproc::inproc_connect;

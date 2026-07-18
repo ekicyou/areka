@@ -52,7 +52,7 @@
   - _Requirements: 3.1, 7.4_
   - _Depends: 2.1_
 
-- [ ] 2.3 実DLL境界とテスト駆動契約を橋渡しするアダプタを実装する
+- [x] 2.3 実DLL境界とテスト駆動契約を橋渡しするアダプタを実装する
   - 要求の組み立てから応答の解釈までを一貫させ、正常系・204相当・エラー相当・解釈不能・遅延応答受領のそれぞれを既存の結果語彙へ機械的に写像する
   - 生存中は常時「稼働中」を報告する（別プロセスの死活監視対象がないため）
   - 終了時は保持リソースを宣言順で確実に解放し、常に正常終了として報告する
@@ -148,3 +148,4 @@
 - **[1.3] snapshot 表 API は `pub(crate)` で先行**（設計 Service Interface は `pub`）。task 1.4 で `snapshot_for`/`snapshots`/`PROVISIONAL_MARKER` を **`pub` へ広げる**（areka-ghost の rlib 面が task 4.1/5.1 で `DLL_FILE_NAME`＋スナップショット表を参照するため）。`DLL_FILE_NAME` は task 1.1 時点で既に `pub`。
 - **[1.3 提供データ] 暫定 OnBoot Value スクリプト = `\0\s[0]おはようございますわ（暫定）\e`**（`X-Areka-Snapshot: PROVISIONAL` header 付き・parse_response が未知 header を無視するので wire 上 inert）。OnFirstBoot = 204。task 5.1 の期待 cue 列は `snapshot_for("OnBoot")` から導出＋ドリフト検出 assert。task 6.2 が実採取で PROVISIONAL を置換する際は 5.1 の期待定数も更新すること。
 - **[2.1] clippy `-D warnings` 全体ゲートは使用不可**（既存 toolchain ドリフト＝rust-1.97.0 の `collapsible_if` 等が areka-kanade/runtime/ticker/sink/dola に既在・本 spec 境界外）。真のゲートは `cargo test`（DoD は `cargo test --workspace`・memory areka-no-ci-gpu-tests-in-cargo-test）。各タスクの clippy 検証は「変更ファイルに警告が帰属しないこと」で足る。areka-ghost の `windows` は workspace 継承で `Win32_System_LibraryLoader` を得ており feature 追加不要。areka-ghost に `shiori-abi`（prod）＋`shiori4-testdll`（dev-dep）を追加済み。
+- **[2.3→5.1 申し送り] snapshot API が外部到達不可**: task 1.4 で `snapshot_for`/`snapshots`/`PROVISIONAL_MARKER` を `pub` にしたが `shiori4-testdll/src/lib.rs` の宣言が `mod snapshot;`（**非公開モジュール**）ゆえ `shiori4_testdll::snapshot::snapshot_for` は crate 外から到達不可。task 5.1 の**ドリフト検出 assert**（e2e が `snapshot_for("OnBoot")` の凍結 Value と期待定数の一致を確認）には外部到達が必須ゆえ、5.1 で `pub mod snapshot;` へ変更するか crate root へ `pub use snapshot::{snapshot_for, snapshots};` を追加すること（boundary に `shiori4-testdll/src/lib.rs` を含める）。2.3 は暫定リテラル `\0\s[0]おはようございますわ（暫定）\e` 比較で回避済み。
