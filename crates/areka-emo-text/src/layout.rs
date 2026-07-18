@@ -2067,4 +2067,264 @@ mod tests {
         // 全グリフが同一文字 'あ'（内容が壊れていない）。
         assert!(lines.iter().all(|l| l.glyphs.iter().all(|g| g.ch == 'あ')));
     }
+
+    // ── Task 4.4: 保留改行との整合とリフロー跳び不発生（WrapPlan::Segmented） ──
+    //
+    // ゲート順序（①可視打切り→②保留フラッシュ→③折返し判定→④配置）は 4.1 で確立済み。
+    // ここではその順序契約の帰結を檻化する: 保留改行の実体化直後は行頭（inline_pos ==
+    // inline_start）ゆえ塊先決が「塊先頭かつ残り行幅最大（cap_rem == cap_full）」で走り
+    // （design System Flows「保留フラッシュとの順序」5.3）、deferred newline の意味論
+    // （遅延・累算・蒸発）は ON でも一切変わらず（5.1/5.2）、typewriter リビール進行の
+    // 全段階で配置済みグリフの行が動かない（INV-2・7.2/7.3）。共通前提は 4.1/4.2 と同じ
+    // FixedMetrics・font 10（全角 'あ' advance 10・pitch 13）。
+
+    /// 5.3: 保留改行の実体化直後の行頭で塊先決が走る。`[塊A, \n, 塊B, 塊C]`（run2 = 塊B+塊C）で、
+    /// 保留改行が run2 を 2 行目行頭へ送り、そこで塊 C が塊ごと 3 行目へワードラップされる
+    /// （フラッシュ後の行で塊単位判定が効いている証左）。block 前進は `pitch × Σratio` で OFF と
+    /// 同一（char 経路の 2 行目 top と一致）。CharByChar は run2 を char 割りして塊 C を割る。
+    #[test]
+    fn segmented_predecision_runs_at_line_head_after_pending_flush() {
+        let region = TextRegion::resolve(
+            &model((Some(0), Some(0)), (Some(50), None)),
+            IMAGE,
+            WritingMode::HorizontalTb,
+        );
+        // 塊A(2) / \n / 塊B(3) 塊C(3)。glyph 通し番号は LineBreak を数えない → 塊B は 2、塊C は 5。
+        let mut items = glyphs(2);
+        items.push(TextItem::LineBreak { ratio: 1.0 });
+        items.extend(glyphs(6));
+        let p = plan(&[(0, 2), (2, 3), (5, 3)]);
+        let seg = LayoutEngine::layout(
+            &items,
+            8,
+            &region,
+            WritingMode::HorizontalTb,
+            10.0,
+            &FixedMetrics,
+            WrapPlan::Segmented(&p),
+        );
+        assert_eq!(seg.len(), 3, "塊A / 塊B / 塊C が 3 行に分かれる");
+        // 行 0: 塊A（保留改行の前）。
+        assert_eq!(inline_positions(&seg[0]), vec![0.0, 10.0]);
+        assert_eq!(seg[0].rect.top, 0.0);
+        // 行 1: 塊B が実体化後の行頭に塊ごと載る（塊先決が cap_rem == cap_full で走る）。
+        assert_eq!(
+            inline_positions(&seg[1]),
+            vec![0.0, 10.0, 20.0],
+            "塊B は実体化後の行頭に塊ごと配置（塊先決が行頭で先決）"
+        );
+        assert_eq!(
+            seg[1].rect.top, 13.0,
+            "block 前進 = pitch(13) × Σratio(1.0)（保留改行の送りは OFF と同一）"
+        );
+        // 行 2: 塊C は残り行幅（20）に収まらず塊ごと次行へ（フラッシュ後の行で塊単位判定が再開）。
+        assert_eq!(
+            inline_positions(&seg[2]),
+            vec![0.0, 10.0, 20.0],
+            "塊C は分割されず塊ごと 3 行目へ（ワードラップが 2 行目以降でも効く）"
+        );
+        // 対比: CharByChar は同一入力で run2 を char 割り（塊C を割る）＝実体化後の送りは同じでも
+        // 折返し粒度が異なる。2 行目 top は両経路で 13（block 前進 = pitch × Σratio は不変）。
+        let ch = LayoutEngine::layout(
+            &items,
+            8,
+            &region,
+            WritingMode::HorizontalTb,
+            10.0,
+            &FixedMetrics,
+            WrapPlan::CharByChar,
+        );
+        assert_eq!(
+            ch[1].rect.top, 13.0,
+            "OFF でも実体化後の block 前進は pitch × Σratio（deferred newline の送りは分岐不変）"
+        );
+        assert_eq!(ch[1].glyphs.len(), 5, "OFF は run2 を char 割り（5+…）");
+        assert_ne!(
+            seg, ch,
+            "ON はフラッシュ後の行で塊単位ワードラップ＝char 割りと異なる"
+        );
+    }
+
+    /// 5.1/5.2: deferred newline の意味論（遅延・累算・蒸発）は ON でも不変。ワードラップが
+    /// 発火しない（全塊が収まる）入力では Segmented 出力は CharByChar 出力と完全一致する
+    /// ——segmentation は改行意味論を変えず、行内の折返し粒度だけを担う。
+    /// (a) 末尾保留改行の蒸発（空行なし）・(b) 連続 `\n\n` の単一累算フラッシュ。
+    #[test]
+    fn deferred_newline_semantics_unchanged_under_segmented() {
+        let region = TextRegion::resolve(
+            &model((Some(0), Some(0)), (None, None)),
+            IMAGE,
+            WritingMode::HorizontalTb,
+        );
+        // (a) 末尾保留改行の蒸発: `[塊A(2), \n]` → 1 行・末尾改行は保留のまま蒸発。
+        let mut trailing = glyphs(2);
+        trailing.push(TextItem::LineBreak { ratio: 1.0 });
+        let p_a = plan(&[(0, 2)]);
+        let seg_a = LayoutEngine::layout(
+            &trailing,
+            2,
+            &region,
+            WritingMode::HorizontalTb,
+            10.0,
+            &FixedMetrics,
+            WrapPlan::Segmented(&p_a),
+        );
+        let ch_a = LayoutEngine::layout(
+            &trailing,
+            2,
+            &region,
+            WritingMode::HorizontalTb,
+            10.0,
+            &FixedMetrics,
+            WrapPlan::CharByChar,
+        );
+        assert_eq!(seg_a.len(), 1, "ON でも末尾保留改行は蒸発（空行なし）");
+        assert_eq!(
+            seg_a, ch_a,
+            "ワードラップ非発火では ON 出力 = OFF 出力（改行意味論は不変）"
+        );
+
+        // (b) 連続 `\n\n(0.5)` の単一累算フラッシュ: `[a, \n, \n(0.5), b, c]` → 2 行・Σratio 1.5。
+        // run1="a"(glyph0)・run2="bc"(glyph1,2)。塊は全て収まる → ON = OFF。
+        let acc = [
+            TextItem::Glyph { ch: 'a' },
+            TextItem::LineBreak { ratio: 1.0 },
+            TextItem::LineBreak { ratio: 0.5 },
+            TextItem::Glyph { ch: 'b' },
+            TextItem::Glyph { ch: 'c' },
+        ];
+        let p_b = plan(&[(0, 1), (1, 2)]);
+        let seg_b = LayoutEngine::layout(
+            &acc,
+            3,
+            &region,
+            WritingMode::HorizontalTb,
+            12.0,
+            &FixedMetrics,
+            WrapPlan::Segmented(&p_b),
+        );
+        let ch_b = LayoutEngine::layout(
+            &acc,
+            3,
+            &region,
+            WritingMode::HorizontalTb,
+            12.0,
+            &FixedMetrics,
+            WrapPlan::CharByChar,
+        );
+        assert_eq!(seg_b.len(), 2, "ON でも連続改行は単一累算＝中間空行なし");
+        let tops: Vec<f32> = seg_b.iter().map(|l| l.rect.top).collect();
+        assert_eq!(tops, vec![0.0, 22.5], "行間 = pitch(15) × Σratio(1.5)（ON でも不変）");
+        assert_eq!(
+            seg_b, ch_b,
+            "ワードラップ非発火では連続改行の累算意味論が ON = OFF"
+        );
+    }
+
+    /// 7.2/7.3（INV-2 の核心）: 保留改行 + ワードラップが共存する入力で、可視グリフ数を 0 から
+    /// 段階的に増やしても、各段階の配置は全量出力の先頭 v グリフ（行所属・行内位置とも）に
+    /// 常に一致する（配置済みグリフの行が後から動かない＝リフロー跳び不発生）。
+    /// `[塊A(2), \n, 塊B(3), 塊C(3)]`・threshold 50 で塊C は残り行幅に入らず塊ごと 3 行目へ。
+    /// 核心: visible 6（塊C 先頭 g5 のみ可視・g6/g7 不可視）でも g5 は 3 行目行頭に居る
+    /// ——seg_sum が全文 plan から算出されるため。可視部分列で seg_sum を計算する実装なら
+    /// g5 は 2 行目末（inline 30）に留まり、後で g6/g7 の出現で 3 行目へ跳んで失敗する。
+    #[test]
+    fn segmented_prefix_stable_across_pending_flush_and_wrap() {
+        let region = TextRegion::resolve(
+            &model((Some(0), Some(0)), (Some(50), None)),
+            IMAGE,
+            WritingMode::HorizontalTb,
+        );
+        let mut items = glyphs(2);
+        items.push(TextItem::LineBreak { ratio: 1.0 });
+        items.extend(glyphs(6));
+        let p = plan(&[(0, 2), (2, 3), (5, 3)]);
+        let full = LayoutEngine::layout(
+            &items,
+            8,
+            &region,
+            WritingMode::HorizontalTb,
+            10.0,
+            &FixedMetrics,
+            WrapPlan::Segmented(&p),
+        );
+        let full_flat = flat_glyphs(&full);
+        assert_eq!(full_flat.len(), 8);
+        for v in 0..=8 {
+            let partial = LayoutEngine::layout(
+                &items,
+                v,
+                &region,
+                WritingMode::HorizontalTb,
+                10.0,
+                &FixedMetrics,
+                WrapPlan::Segmented(&p),
+            );
+            assert_eq!(
+                flat_glyphs(&partial).as_slice(),
+                &full_flat[..v],
+                "visible {v}: 配置が全量出力の prefix と不一致（リフロー跳び発生）"
+            );
+        }
+        // 核心の明示: visible 6（g5 のみ可視）で g5 は 3 行目行頭（塊C 先決は全文由来・INV-1/INV-2）。
+        let v6 = LayoutEngine::layout(
+            &items,
+            6,
+            &region,
+            WritingMode::HorizontalTb,
+            10.0,
+            &FixedMetrics,
+            WrapPlan::Segmented(&p),
+        );
+        assert_eq!(v6.len(), 3, "行 0=塊A・行 1=塊B・行 2=塊C 先頭");
+        assert_eq!(v6[2].glyphs.len(), 1, "行 2 は g5 のみ（g6/g7 未リビール）");
+        assert_eq!(
+            v6[2].glyphs[0].inline_pos, 0.0,
+            "g5 は 3 行目行頭に先決済み（可視非依存＝リフロー跳びなし）"
+        );
+    }
+
+    /// 6.1/6.2 × 7.2/7.3: 縦書き（vertical_rl）でも保留改行 + ワードラップ共存下で prefix 安定性が
+    /// 成立する（軸読み替えのみ・新規 mode 分岐なし）。横書きと同一 items+plan を vertical_rl で
+    /// 段階リビールし、各段階の配置（列所属・行内軸位置）が全量出力の prefix に一致する。
+    #[test]
+    fn segmented_prefix_stable_in_vertical_mode() {
+        let region = TextRegion::resolve(
+            &model((None, None), (None, Some(50))),
+            IMAGE,
+            WritingMode::VerticalRl,
+        );
+        let mut items = glyphs(2);
+        items.push(TextItem::LineBreak { ratio: 1.0 });
+        items.extend(glyphs(6));
+        let p = plan(&[(0, 2), (2, 3), (5, 3)]);
+        let full = LayoutEngine::layout(
+            &items,
+            8,
+            &region,
+            WritingMode::VerticalRl,
+            10.0,
+            &FixedMetrics,
+            WrapPlan::Segmented(&p),
+        );
+        let full_flat = flat_glyphs(&full);
+        assert_eq!(full_flat.len(), 8);
+        assert_eq!(full.len(), 3, "縦書きでも 塊A / 塊B / 塊C の 3 列");
+        for v in 0..=8 {
+            let partial = LayoutEngine::layout(
+                &items,
+                v,
+                &region,
+                WritingMode::VerticalRl,
+                10.0,
+                &FixedMetrics,
+                WrapPlan::Segmented(&p),
+            );
+            assert_eq!(
+                flat_glyphs(&partial).as_slice(),
+                &full_flat[..v],
+                "vertical_rl visible {v}: 配置が全量出力の prefix と不一致（リフロー跳び）"
+            );
+        }
+    }
 }
