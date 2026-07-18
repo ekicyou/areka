@@ -31,6 +31,11 @@ areka-parsers = { path = "../areka-parsers" }
 wintf = { version = "0.0.1", path = "../wintf" }
 # slot entity への装着（&mut World insert）・TextSlotBinding の Entity（design.md Allowed Dependencies）。
 bevy_ecs = { workspace = true }
+# 分かち書き境界の決定論計算（segment.rs 消費の唯一の場所・design.md Technology Stack・8.1）。
+# `default-features = false` で CLI 依存（cli → seahorse）を落とし、`std`＋`vendored-models`
+# のみを引く（design.md の `features=["vendored-models"]` を CLI 非取込へ精緻化・task 1 spike 確認済み）。
+# vendored-models＝既定日本語モデル同梱でネットワーク/ファイル I/O 不要（オフライン CI 整合・8.1）。
+budouy = { version = "0.2.2", default-features = false, features = ["std", "vendored-models"] }
 # COM 層（surface.rs）は D3D11/DXGI 直呼び（CopyResource/Map/Present・IDXGISwapChain1 等）を要する。
 # workspace 既定へ `Win32_Graphics_Dxgi` を上乗せする（emo-present chain.rs と同型・swap chain 本体型）。
 windows = { workspace = true, features = ["Win32_Graphics_Dxgi"] }

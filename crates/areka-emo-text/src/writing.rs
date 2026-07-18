@@ -97,6 +97,7 @@ mod tests {
             ValidRect::new(None, None, None, None),
             Font::new(None, None, FontColor::new(None, None, None)),
             writing_mode.map(str::to_owned),
+            None,
         )
     }
 

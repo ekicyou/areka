@@ -17,8 +17,9 @@
 //!   `Font` は `Option<String>` を含むため `Copy` 不可（`Clone, Debug, PartialEq, Eq` のみ）。
 //! - モデル化 subset は emo2 が使う幾何＋フォントに限定する。choice/link/scroll 系キーは
 //!   モデル化しない（要件 2.7・過剰実装抑止 要件 5.5）。
-//! - 例外として `writing_mode`（areka 拡張キー）を additive な生文字列転記フィールドとして
-//!   持つ（値の解釈は下流 emo テキスト層・emo-text-layer 要件 5.6）。
+//! - 例外として `writing_mode`／`budoux_newline`（areka 拡張キー）を additive な生文字列転記
+//!   フィールドとして持つ（値の解釈は下流 emo テキスト層・emo-text-layer 要件 5.6／
+//!   budoux-newline 要件 1.1）。
 //!
 //! 構築は同クレートの `balloon::parse`（写像）とテストが公開/クレートパスで行う。
 //! `new` コンストラクタ＋read-only accessor という不変値オブジェクト流儀（`sakura::SurfaceArg` 流儀）。
@@ -36,6 +37,7 @@ pub struct BalloonModel {
     validrect: ValidRect,
     font: Font,
     writing_mode: Option<String>,
+    budoux_newline: Option<String>,
 }
 
 impl BalloonModel {
@@ -47,6 +49,7 @@ impl BalloonModel {
         validrect: ValidRect,
         font: Font,
         writing_mode: Option<String>,
+        budoux_newline: Option<String>,
     ) -> Self {
         BalloonModel {
             windowposition,
@@ -55,6 +58,7 @@ impl BalloonModel {
             validrect,
             font,
             writing_mode,
+            budoux_newline,
         }
     }
 
@@ -89,6 +93,14 @@ impl BalloonModel {
     /// 下流 emo テキスト層の責務・parser は転記に徹する）。未指定は `None`。
     pub fn writing_mode(&self) -> Option<&str> {
         self.writing_mode.as_deref()
+    }
+
+    /// 分かち書きワードラップ opt-in 宣言 `budoux_newline` の生文字列を読み取る（budoux-newline 要件 1.1）。
+    ///
+    /// 2 層マージ済みの生値をそのまま転記したもの（値の解釈・語彙判定・fallback は
+    /// 下流 emo テキスト層の責務・parser は転記に徹する）。未指定は `None`。
+    pub fn budoux_newline(&self) -> Option<&str> {
+        self.budoux_newline.as_deref()
     }
 }
 

@@ -37,12 +37,12 @@ use std::time::Duration;
 
 use areka_actor::reply_channel;
 use areka_emo_atlas::{
-    bake, AlphaParams, AtlasTable, MemoryDecoder, PackConfig, SetId, SurfaceSet, UseSelfAlpha,
+    AlphaParams, AtlasTable, MemoryDecoder, PackConfig, SetId, SurfaceSet, UseSelfAlpha, bake,
 };
 use areka_emo_compose::{BindSet, EmoWorld};
 use areka_emo_present::{EmoPresenter, PresentCommand, PresentOutcome, TargetId};
 use areka_emo_text::actor::{
-    present_frame, spawn_emo_text, ResolvedBalloonText, TextLayerRuntime, TextSlotBinding,
+    ResolvedBalloonText, TextLayerRuntime, TextSlotBinding, present_frame, spawn_emo_text,
 };
 use areka_emo_text::state::TextLayerConfig;
 use areka_parsers::balloon::{
@@ -53,7 +53,7 @@ use areka_sakura::contract::{ActorKey, CueCommand, CueSink, TalkCue};
 use bevy_ecs::hierarchy::ChildOf;
 use bevy_ecs::name::Name;
 use bevy_ecs::prelude::World;
-use windows::Win32::System::Com::{CoInitializeEx, COINIT_MULTITHREADED};
+use windows::Win32::System::Com::{COINIT_MULTITHREADED, CoInitializeEx};
 use windows::Win32::UI::WindowsAndMessaging::PostQuitMessage;
 use wintf::ecs::{
     Arrangement, GraphicsCommandList, GraphicsCore, Visual, VisualGraphics, WucGraphicsResource,
@@ -83,6 +83,7 @@ fn validrect_model(writing_mode: Option<&str>) -> BalloonModel {
         ValidRect::new(Some(46), Some(-56), Some(36), Some(-44)),
         Font::new(None, None, FontColor::new(None, None, None)),
         writing_mode.map(str::to_owned),
+        None,
     )
 }
 
@@ -161,7 +162,10 @@ fn build_target_assets(w: u32, h: u32) -> (EmoWorld, AtlasTable) {
         },
     };
     let baked = bake(&[set], &dec, PackConfig::default());
-    assert!(baked.errors.is_empty(), "atlas bake セットアップは失敗しない");
+    assert!(
+        baked.errors.is_empty(),
+        "atlas bake セットアップは失敗しない"
+    );
 
     let mut world = EmoWorld::build(&shell_of(surfaces));
     world.bind_atlas(&baked.table, SetId(0));
@@ -304,12 +308,18 @@ fn full_path_ink_monotonic_clear_transparent_and_contained_in_validrect() {
     let view = presenter
         .text_slot_view(TargetId(0))
         .expect("表示確立後の text_slot_view は Some");
-    assert_eq!(view.surface_size(), IMAGE, "バルーン原寸＝画像原寸（k=1.0）");
+    assert_eq!(
+        view.surface_size(),
+        IMAGE,
+        "バルーン原寸＝画像原寸（k=1.0）"
+    );
     let slot = view.slot();
 
     let actor = ActorKey::from("0");
     let model = validrect_model(None);
-    let runtime = Rc::new(RefCell::new(TextLayerRuntime::new(TextLayerConfig::default())));
+    let runtime = Rc::new(RefCell::new(TextLayerRuntime::new(
+        TextLayerConfig::default(),
+    )));
     runtime
         .borrow_mut()
         .register_actor_view(actor.clone(), &view, &model);
@@ -325,7 +335,10 @@ fn full_path_ink_monotonic_clear_transparent_and_contained_in_validrect() {
     {
         let mut rt = runtime.borrow_mut();
         present_frame(&mut rt, &mut world, 0.0).expect("装着フレーム（可視 0）");
-        assert!(rt.is_attached(&actor), "cue 到着済み actor は可視 0 でも装着される");
+        assert!(
+            rt.is_attached(&actor),
+            "cue 到着済み actor は可視 0 でも装着される"
+        );
     }
     let entities_after_attach = world.entities().len();
     {
@@ -428,7 +441,10 @@ fn full_path_ink_monotonic_clear_transparent_and_contained_in_validrect() {
         min_y < PITCH,
         "可視窓の先頭行は領域先頭へ詰めて描かれる（min_y={min_y}）"
     );
-    assert!(max_y < VR_SIZE.1, "スクロール後もインクは validrect 内に閉じる");
+    assert!(
+        max_y < VR_SIZE.1,
+        "スクロール後もインクは validrect 内に閉じる"
+    );
 
     // ── 述語 2: Clear の通し適用（sink 経由＝clear_cache 込み）→ 全域透明 ──
     sink.emit(cue("0", 11.0, CueCommand::Clear));
@@ -493,8 +509,12 @@ fn vertical_rl_full_path_reveals_scrolls_horizontally_and_clears_within_validrec
     let model = validrect_model(Some("vertical_rl"));
     let binding = TextSlotBinding::new(slot, window, 1.0, IMAGE);
     let resolved = ResolvedBalloonText::resolve(&model, binding.image_size);
-    let runtime = Rc::new(RefCell::new(TextLayerRuntime::new(TextLayerConfig::default())));
-    runtime.borrow_mut().register_actor(actor.clone(), binding, resolved);
+    let runtime = Rc::new(RefCell::new(TextLayerRuntime::new(
+        TextLayerConfig::default(),
+    )));
+    runtime
+        .borrow_mut()
+        .register_actor(actor.clone(), binding, resolved);
 
     // ── セッション 1: 列 0＝■■（at=0.0）＋列 1〜7＝■ 各 1（at=0.5）
     //    → 8 列 × pitch 15 = 120 ＝ validrect 幅ちょうど（あふれ前の上限） ──
@@ -525,7 +545,10 @@ fn vertical_rl_full_path_reveals_scrolls_horizontally_and_clears_within_validrec
             min_x >= VR_SIZE.0 - PITCH - FONT_H,
             "縦書きの列 0 は validrect-local 右端側から始まる（min_x={min_x}）"
         );
-        assert!(min_y < PITCH, "列内は上→下＝1 グリフ目は上端側（min_y={min_y}）");
+        assert!(
+            min_y < PITCH,
+            "列内は上→下＝1 グリフ目は上端側（min_y={min_y}）"
+        );
         // 述語 3: インクの行矩形はみ出し（縦書きで数 px 超え得る）も供給面クリップで
         // validrect 内に閉じる——readback 外接が面内で完結する。
         assert!(
@@ -539,7 +562,10 @@ fn vertical_rl_full_path_reveals_scrolls_horizontally_and_clears_within_validrec
         drop(rt);
         opaque_count(&read_back(&runtime.borrow(), &actor))
     };
-    assert!(n2 > n1, "縦書きでも非透明ピクセルは可視グリフ数とともに増加する: {n1} -> {n2}");
+    assert!(
+        n2 > n1,
+        "縦書きでも非透明ピクセルは可視グリフ数とともに増加する: {n1} -> {n2}"
+    );
 
     // 全リビール（8 列・■×9）＝あふれ前の基準。述語 3 の封じ込め構造も縦書きで成立。
     let before = {
