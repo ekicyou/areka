@@ -827,11 +827,11 @@ mod tests {
     fn ignored_tags_only_script_ends_immediately_with_ended_and_no_firing() {
         let (done_tx, done_rx) = mpsc::channel::<TalkDone>();
         let talk_id = TalkId(55);
-        // task 4.1 で `\q`（Choice）は cue へ卒業したため、無 cue フィラーには 4.1 時点で
-        // なお ignored の `%username`（SystemVar）／`\![raise,OnBoot]`（GenericCommand）を用いる
-        // （Move/SystemVar/GenericCommand のアーム化は task 4.2）。empty-sheet 即時経路を保つ。
+        // task 4.2 で SystemVar/GenericCommand は cue を発行するようになったため、無 cue フィラーには
+        // 恒久的に compile 除外される `Raw`（parser が `\0` を `Instruction::Raw("\0")` へ転記＝本 spec
+        // 全域で cue 化されない）を用いる。empty-sheet 即時 TalkDone 経路を保つ（消すべき内容 cue 皆無）。
         let start = StartTalk {
-            script: r"%username\![raise,OnBoot]".to_string(),
+            script: r"\0".to_string(),
             talk_id,
         };
         let sink = RecordingSink::new();
@@ -861,11 +861,11 @@ mod tests {
     fn quit_only_script_ends_immediately_with_quit_not_ended() {
         let (done_tx, done_rx) = mpsc::channel::<TalkDone>();
         let talk_id = TalkId(56);
-        // task 4.1 で `\q`（Choice）は cue へ卒業したため、`\-` の先行フィラーには 4.1 時点で
-        // なお ignored の `%username`（SystemVar）を用いる（先行 cue のない `\-` の empty-sheet＋
-        // Quit 経路を保つ）。
+        // task 4.2 で SystemVar は cue を発行するようになったため、`\-` の先行フィラーには恒久的に
+        // compile 除外される `Raw`（`\0` → `Instruction::Raw`）を用いる。先行内容 cue のない `\-` の
+        // empty-sheet＋Quit 経路を保つ（Raw は破棄され `\-` が Quit で切詰め＝空 sheet＋end=Quit）。
         let start = StartTalk {
-            script: r"%username\-".to_string(),
+            script: r"\0\-".to_string(),
             talk_id,
         };
         let sink = RecordingSink::new();

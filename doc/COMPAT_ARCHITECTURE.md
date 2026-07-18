@@ -126,3 +126,4 @@ ukadoc が沈黙/曖昧な箇所を areka 裁量で決定した記録（§2 沈�
 | 項目 | 裁量 | 根拠 | 出典 spec |
 |---|---|---|---|
 | `%username` 既定値（スナップショット未解決時） | `ユーザーさん` | 正典沈黙・伺かの伝統的な未指定時デフォルト・決定論定数（唯一の定義点＝`areka_sakura::sysvar::DEFAULT_USERNAME`） | areka-P0-sakura-dialogue-tags（開発者裁定 2026-07-18・設計ディスカッション#2） |
+| compile 側時間指令 allowlist（`quicksection`／`set,balloonwait`／`set,choicetimeout`／`set,balloontimeout`／`embed`／`sound,wait`／`wait,syncobject`／同期 `move` 系の持続時間引数 等） | M1 は**非実導出**（語彙保持＋縮退のみ・`\!` 全体は汎用キャリア cue へ転写し compile は allowlist の意味を追加解釈しない） | 正典が compile 干渉する時間指令を明示列挙せず・emo2 未使用ゆえ源が着地するまで実導出しない（R4.3 但書）・実導出は追跡 spec `areka-P0-sakura-time-directives` へ申し送り | areka-P0-sakura-dialogue-tags |

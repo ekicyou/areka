@@ -61,7 +61,7 @@
   - _Requirements: 1.1, 1.2, 1.4, 1.5, 1.6, 1.7, 3.1, 3.3, 3.4, 3.5_
   - _Depends: 1.1, 1.2, 3_
 
-- [ ] 4.2 Move/GenericCommand/SystemVar アームと barrier 発行ヘルパを実装する
+- [x] 4.2 Move/GenericCommand/SystemVar アームと barrier 発行ヘルパを実装する
   - `Move(MoveArgs)`／`GenericCommand{name,raw_args}` → `command_carrier(name, tokens)` の写像を実装する（`\!` 全体が第一級で台本に載る）
   - `SystemVar(name)` → `resolve_system_var` の結果を `Text` cue へ写像する（`duration = text_playback_duration(展開文字列)`・`offset += D`・独立 cue とし隣接 Text と併合しない）
   - barrier 発行ヘルパを新設する: 走査終了後、choice cue が 1 個以上あれば `CuePayload::Barrier(BarrierKind::WaitForChoice{timeout:None})` を最終 offset へ 1 個 append する
