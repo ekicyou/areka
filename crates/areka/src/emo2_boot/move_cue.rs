@@ -29,11 +29,15 @@
 //!   （[`MoveDirective::m1_degradations`] が `UnsupportedBase` として surface）。
 //! - `time>0` は最終位置へ即時反映＋記録（`Ok` のまま `duration_ms` 保持・R5.4）。
 
-// task 7.1 は純粋な型＋parse のみを載せる段階で、消費点（`MoveCueSink`＝7.3・
-// `apply_move_directive`＝7.4・`mod.rs` の channel 配線＝9.1）は後続タスクが足す。
-// それまでは非 test ビルド（bin 本体）から未参照ゆえ dead_code が出るが、これは段階実装の
-// 想定内であり、後続タスクの結線で解消される（本 allow は wiring 着地時に撤去する）。
+// task 7.1/7.2 は純粋な型＋parse＋basepos シーム＋座標算出を載せる段階で、UI 末端の消費点
+// （`MoveCueSink`＝7.3・`apply_move_directive`＝7.4・`mod.rs` の channel 配線＝9.1）は後続
+// タスクが足す。それまでは非 test ビルド（bin 本体）から未参照ゆえ dead_code が出るが、これは
+// 段階実装の想定内であり、後続タスクの結線で解消される（本 allow は wiring 着地時に撤去する）。
 #![allow(dead_code)]
+
+use wintf::ecs::{SizeI, WindowPos};
+
+use crate::placement::resolver::PointPx;
 
 /// `\![move]` の完全語彙型（design.md Service Interface・R5.2）。
 ///
@@ -302,6 +306,104 @@ fn parse_ref_point(token: &str) -> Result<RefPoint, MoveDegradation> {
     Ok(RefPoint { x, y })
 }
 
+// =============================================================================
+// basepos 型シーム＋座標算出（task 7.2・R5.2・全て物理 px・R-6 対策）
+// =============================================================================
+
+/// basepos（基準位置）解決の**型シーム**（R5.2・design「BaseposResolver」）。
+///
+/// M1 実導出は [`CanonDefaultBasepos`]（正典既定＝x=サーフェス幅÷2・y=下端）のみ。宣言
+/// `point.basepos` の実導出は本 spec の範囲外であり、このトレイトは追跡 spec
+/// `areka-P0-surfaces-basepos` が別実装（宣言値を差す resolver）を差し込むための**差替点**
+/// として型のみを予約する（doc/COMPAT_ARCHITECTURE.md §8 対応表に登記）。
+///
+/// 入力は窓寸法（物理 px・`WindowPos.size` 由来）のみ——論理 px 系（BoxStyle）を経由しない
+/// ことで 2026-07-05 の二重スケール欠陥（R-6）を型で構造遮断する。
+pub trait BaseposResolver {
+    /// 窓寸法（物理 px）に対する basepos（窓左上原点相対・物理 px）を返す。
+    fn basepos(&self, window_size: SizeI) -> PointPx;
+}
+
+/// 正典既定の basepos（x=サーフェス幅÷2・y=下端＝height・R5.2・A-1 裁定）。
+///
+/// emo2 は `point.basepos` を宣言せず、この正典既定がそのまま適用される正規経路。y の「下端」は
+/// 窓左上原点からの相対＝サーフェス高さ（`height`）そのもの。奇数幅は整数除算で切り捨てる。
+pub struct CanonDefaultBasepos;
+
+impl BaseposResolver for CanonDefaultBasepos {
+    fn basepos(&self, window_size: SizeI) -> PointPx {
+        PointPx {
+            x: window_size.width / 2,
+            y: window_size.height,
+        }
+    }
+}
+
+/// 基準窓・対象窓の [`WindowPos`]（物理 px）と [`MoveDirective`] から、対象窓の**最終位置**を
+/// 算出する純粋関数（決定論・no I/O・R5.2）。
+///
+/// 全て物理 px——窓寸法は `WindowPos.size`（物理）のみを源とし、論理 px 系（BoxStyle）を
+/// 経由しない（R-6 対策）。基準位置の解決は `resolver`（M1 は [`CanonDefaultBasepos`]）へ委ね、
+/// 宣言 `point.basepos` の追跡 spec がこの引数の差し替えで別 basepos を供給できる。
+///
+/// # 算出式（design「座標算出」）
+///
+/// - X: [`AxisSpec::Fix`] なら対象窓の現在 X を**現状維持**。[`AxisSpec::Px`]`(dx)` なら
+///   `x' = base_pos.x + basepos(base窓).x + dx − basepos(対象窓).x`。
+/// - Y: 同型（`Fix`＝現状維持／`Px(dy)`＝`base_pos.y + basepos(base窓).y + dy − basepos(対象窓).y`）。
+///
+/// fixture 検算（`\1\![move,-353,,,0,base,base]`・x=Px(-353)・y=Fix）:
+/// `x' = pos0.x + w0/2 − 353 − w1/2`・y は現状維持。
+///
+/// # 縮退（`None`）
+///
+/// 対象窓の position 欠落、または Px 軸を含むのに基準窓の position／両窓の size が欠落
+/// （窓生成前等）で算出できないとき `None`（呼び出し側＝7.4 が warn＋talk 継続・R5.5）。
+/// 両軸 [`AxisSpec::Fix`]（現状維持のみ）は basepos 不要ゆえ、基準窓・寸法が欠けても
+/// 対象窓の現在位置を返す。極端入力でも panic しない（`saturating_*`・placement と同流儀）。
+pub fn resolve_move_target_position(
+    resolver: &impl BaseposResolver,
+    base: &WindowPos,
+    target: &WindowPos,
+    directive: &MoveDirective,
+) -> Option<PointPx> {
+    let target_pos = target.position?;
+
+    // 両軸 Fix（現状維持のみ）は基準窓・寸法を要さない（no-op 移動）。
+    if directive.x == AxisSpec::Fix && directive.y == AxisSpec::Fix {
+        return Some(PointPx {
+            x: target_pos.x,
+            y: target_pos.y,
+        });
+    }
+
+    // Px 軸を含む＝基準窓の位置と両窓の寸法（basepos 算出）が要る。欠落（窓生成前等）は
+    // 算出不能ゆえ None（呼び出し側が warn＋継続・R5.5）。
+    let base_pos = base.position?;
+    let base_bp = resolver.basepos(base.size?);
+    let target_bp = resolver.basepos(target.size?);
+
+    let x = match directive.x {
+        AxisSpec::Fix => target_pos.x, // 現状維持
+        // x' = base_pos.x + basepos(base窓).x + dx − basepos(対象窓).x（全て物理 px）
+        AxisSpec::Px(dx) => base_pos
+            .x
+            .saturating_add(base_bp.x)
+            .saturating_add(dx)
+            .saturating_sub(target_bp.x),
+    };
+    let y = match directive.y {
+        AxisSpec::Fix => target_pos.y, // 現状維持（Y は Fix なら同型）
+        AxisSpec::Px(dy) => base_pos
+            .y
+            .saturating_add(base_bp.y)
+            .saturating_add(dy)
+            .saturating_sub(target_bp.y),
+    };
+
+    Some(PointPx { x, y })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -447,6 +549,136 @@ mod tests {
                 axis: Axis::X,
                 token: "abc".to_string(),
             }
+        );
+    }
+
+    // -------------------------------------------------------------------------
+    // basepos 型シーム＋座標算出（task 7.2・R5.2・全て物理 px・R-6 対策）
+    // -------------------------------------------------------------------------
+
+    use wintf::ecs::{Point, SizeI, WindowPos};
+
+    /// 位置＋寸法を持つ WindowPos（物理 px・follow.rs のヘルパ流儀）。
+    fn win(x: i32, y: i32, w: i32, h: i32) -> WindowPos {
+        WindowPos {
+            position: Some(Point { x, y }),
+            size: Some(SizeI::new(w, h)),
+            ..Default::default()
+        }
+    }
+
+    /// 正典既定 basepos は (幅÷2, 高さ＝下端)（R5.2・A-1）。奇数幅は整数切り捨て。
+    #[test]
+    fn canon_default_basepos_is_half_width_and_bottom() {
+        assert_eq!(
+            CanonDefaultBasepos.basepos(SizeI::new(400, 687)),
+            PointPx { x: 200, y: 687 },
+            "x=幅÷2・y=下端（＝height・窓左上原点相対）"
+        );
+        // 奇数幅は整数除算で切り捨て（435÷2=217）。
+        assert_eq!(
+            CanonDefaultBasepos.basepos(SizeI::new(435, 100)),
+            PointPx { x: 217, y: 100 }
+        );
+    }
+
+    /// fixture `\1\![move,-353,,,0,base,base]` の X 検算＝`pos0.x + w0/2 − 353 − w1/2`・Y 現状維持。
+    /// base=scope0=むらさき窓 pos0=(1000,500) size0=(400,687)、target=scope1=エモ窓
+    /// pos1=(1200,800) size1=(300,434) の具体値で完全一致を固定する。
+    #[test]
+    fn fixture_move_353_x_and_y_unchanged() {
+        let directive = parse_move_directive(1, &toks(&["-353", "", "", "0", "base", "base"]))
+            .expect("fixture move は Ok");
+        let base = win(1000, 500, 400, 687);
+        let target = win(1200, 800, 300, 434);
+
+        let pos = resolve_move_target_position(&CanonDefaultBasepos, &base, &target, &directive)
+            .expect("位置・寸法が揃うので算出できる");
+
+        // x' = 1000 + 200 − 353 − 150 = 697
+        assert_eq!(pos.x, 697, "x' = pos0.x + w0/2 − 353 − w1/2");
+        // Y は Fix ゆえ target の現在 Y を現状維持
+        assert_eq!(pos.y, 800, "Y=Fix は対象窓の現在 Y を現状維持");
+    }
+
+    /// Y=Px 経路も対称に効く（Y が「常に現状維持」へ hardcode されていないことの檻）。
+    /// x=Fix・y=Px(50) → x' は target.x 現状維持、y' = pos0.y + h0 + 50 − h1。
+    #[test]
+    fn y_px_axis_is_symmetric_not_hardcoded() {
+        let directive = parse_move_directive(1, &toks(&["", "50", "", "0", "base", "base"]))
+            .expect("y=Px は Ok");
+        assert_eq!(directive.x, AxisSpec::Fix);
+        assert_eq!(directive.y, AxisSpec::Px(50));
+
+        let base = win(1000, 500, 400, 687);
+        let target = win(1200, 800, 300, 434);
+        let pos = resolve_move_target_position(&CanonDefaultBasepos, &base, &target, &directive)
+            .expect("算出できる");
+
+        // X=Fix → 現状維持
+        assert_eq!(pos.x, 1200, "X=Fix は対象窓の現在 X を現状維持");
+        // y' = 500 + 687 + 50 − 434 = 803
+        assert_eq!(pos.y, 803, "y' = pos0.y + h0 + dy − h1（下端 basepos で対称）");
+    }
+
+    /// BaseposResolver はトレイト＝差替シーム。テストダブルが別 basepos を供給すると
+    /// 算出結果がその出力を用いて変わる（宣言 point.basepos の追跡 spec 差替点の証明）。
+    #[test]
+    fn computation_honors_resolver_seam() {
+        /// basepos を「幅・高さそのもの（右下端）」とする差替ダブル（正典既定＝中央下端とは別物）。
+        struct FullSizeBasepos;
+        impl BaseposResolver for FullSizeBasepos {
+            fn basepos(&self, window_size: SizeI) -> PointPx {
+                PointPx {
+                    x: window_size.width,
+                    y: window_size.height,
+                }
+            }
+        }
+
+        let directive = parse_move_directive(1, &toks(&["-353", "", "", "0", "base", "base"]))
+            .expect("fixture move は Ok");
+        let base = win(1000, 500, 400, 687);
+        let target = win(1200, 800, 300, 434);
+
+        let pos = resolve_move_target_position(&FullSizeBasepos, &base, &target, &directive)
+            .expect("算出できる");
+        // x' = pos0.x + w0 − 353 − w1 = 1000 + 400 − 353 − 300 = 747（Canon の 697 とは別）
+        assert_eq!(pos.x, 747, "resolver の basepos 出力（幅そのもの）が使われる");
+        assert_ne!(pos.x, 697, "正典既定（中央）とは異なる＝シームが効いている");
+    }
+
+    /// 両軸 Fix（現状維持のみ）は基準窓の寸法欠落でも対象窓の現在位置を返す（no-op 移動）。
+    #[test]
+    fn both_fix_returns_current_position() {
+        let directive = parse_move_directive(1, &toks(&["", "", "", "0", "base", "base"]))
+            .expect("両軸省略は Ok");
+        assert_eq!(directive.x, AxisSpec::Fix);
+        assert_eq!(directive.y, AxisSpec::Fix);
+
+        // 基準窓は寸法なし（現状維持のみゆえ basepos 不要）。
+        let base = WindowPos::default();
+        let target = win(1200, 800, 300, 434);
+        let pos = resolve_move_target_position(&CanonDefaultBasepos, &base, &target, &directive)
+            .expect("両軸 Fix は現状維持で算出できる");
+        assert_eq!(pos, PointPx { x: 1200, y: 800 });
+    }
+
+    /// 位置・寸法欠落（窓生成前等）で Px 軸を含むと算出不能＝`None`（呼び出し側が warn＋継続・R5.5）。
+    #[test]
+    fn missing_geometry_with_px_axis_is_none() {
+        let directive = parse_move_directive(1, &toks(&["-353", "", "", "0", "base", "base"]))
+            .expect("fixture move は Ok");
+        // 対象窓に寸法が無い（basepos 算出不能）。
+        let base = win(1000, 500, 400, 687);
+        let target = WindowPos {
+            position: Some(Point { x: 1200, y: 800 }),
+            size: None,
+            ..Default::default()
+        };
+        assert!(
+            resolve_move_target_position(&CanonDefaultBasepos, &base, &target, &directive).is_none(),
+            "Px 軸で寸法欠落は算出不能＝None"
         );
     }
 }
