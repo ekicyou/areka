@@ -1843,4 +1843,163 @@ mod tests {
         assert_eq!(delegate[0].glyphs.len(), 5, "char 割り（5+1）どおり");
         assert_eq!(delegate[1].glyphs.len(), 1);
     }
+
+    // ── Task 4.2: 長大塊の文字単位縮退（WrapPlan::Segmented・design System Flows H-No→D→C） ──
+    //
+    // 縮退は `seg_sum > cap_full`（行頭からでも 1 行に収まらない塊）に限って発火し、当該塊のみ
+    // 既存の文字単位規則へ委譲する（design「縮退は塊に閉じる」3.3）。共通前提は 4.1 と同じ
+    // FixedMetrics・font 10（全角 'あ' advance 10）。
+
+    /// 3.1: 縮退は `seg_sum > cap_full` の塊に限る。長大塊 {0,5}（seg_sum 50 > cap_full 30）は
+    /// 文字単位で複数行へ割られ（塊維持でも欠落でもない）、直後の収まる塊 {5,2} は縮退せず塊ごと
+    /// 1 行へ載る。threshold 30・font 10。
+    #[test]
+    fn segmented_degrades_only_when_exceeding_cap_full() {
+        let region = TextRegion::resolve(
+            &model((Some(0), Some(0)), (Some(30), None)),
+            IMAGE,
+            WritingMode::HorizontalTb,
+        );
+        let items = glyphs(7);
+        let p = plan(&[(0, 5), (5, 2)]);
+        let lines = LayoutEngine::layout_with_wrap(
+            &items,
+            7,
+            &region,
+            WritingMode::HorizontalTb,
+            10.0,
+            &FixedMetrics,
+            WrapPlan::Segmented(&p),
+        );
+        // 長大塊 {0,5} は char 規則で 3+2 に割れ（1 行 3 グリフ＝閾値 30／30）・全 5 グリフ配置。
+        assert_eq!(lines.len(), 3);
+        assert_eq!(
+            inline_positions(&lines[0]),
+            vec![0.0, 10.0, 20.0],
+            "長大塊は char 粒度で複数行へ（塊ごと 1 行に潰さない）"
+        );
+        assert_eq!(inline_positions(&lines[1]), vec![0.0, 10.0]);
+        // 直後の塊 {5,2}（seg_sum 20 ≤ cap_full 30）は縮退せず塊ごと 1 行へ（通常判定）。
+        assert_eq!(
+            inline_positions(&lines[2]),
+            vec![0.0, 10.0],
+            "収まる塊は縮退せず塊単位で維持（縮退は > cap_full に限る）"
+        );
+        // 全 7 グリフが過不足なく配置される（欠落なし）。
+        assert_eq!(flat_glyphs(&lines).len(), 7);
+    }
+
+    /// 3.2: 縮退中も行頭 1 グリフは閾値超過でも配置し（無限折返し回避）、呼出は必ず停止して
+    /// 全グリフを配置する。極小閾値 3・font 10（'あ' advance 10 > threshold）で 1 グリフ/行。
+    /// char モードの `single_glyph_exceeding_threshold_is_placed_per_line` を Segmented で鏡写す。
+    #[test]
+    fn segmented_degrade_places_line_head_glyph_and_terminates() {
+        let region = TextRegion::resolve(
+            &model((Some(0), Some(0)), (Some(3), None)),
+            IMAGE,
+            WritingMode::HorizontalTb,
+        );
+        let items = glyphs(3);
+        // 単一長大塊 {0,3}（seg_sum 30 > cap_full 3）→ 当該塊のみ char 規則へ縮退。
+        let p = plan(&[(0, 3)]);
+        let lines = LayoutEngine::layout_with_wrap(
+            &items,
+            3,
+            &region,
+            WritingMode::HorizontalTb,
+            10.0,
+            &FixedMetrics,
+            WrapPlan::Segmented(&p),
+        );
+        assert_eq!(
+            lines.len(),
+            3,
+            "閾値超過グリフは 1 行 1 グリフで前進（無限ループしない・停止する）"
+        );
+        assert_eq!(inline_positions(&lines[0]), vec![0.0]);
+        assert_eq!(inline_positions(&lines[1]), vec![0.0]);
+        assert_eq!(inline_positions(&lines[2]), vec![0.0]);
+        // 全グリフが配置される（行頭 1 グリフ配置規則で 1 個も落ちない）。
+        assert_eq!(flat_glyphs(&lines).len(), 3);
+    }
+
+    /// 3.3: 縮退は当該塊に閉じ、直後の塊で通常の塊単位判定が再開する。長大塊 {0,4}（seg_sum 40 >
+    /// cap_full 30）は char 割り、続く塊 {4,3}（seg_sum 30 == cap_full 30）は縮退を引き継がず塊前
+    /// 行送りで塊ごと次行へ載る。char モードなら g4 は行 1 に残る（塊維持でない）——差分が再開の証左。
+    #[test]
+    fn segmented_degrade_scoped_to_segment_resumes_next() {
+        let region = TextRegion::resolve(
+            &model((Some(0), Some(0)), (Some(30), None)),
+            IMAGE,
+            WritingMode::HorizontalTb,
+        );
+        let items = glyphs(7);
+        let p = plan(&[(0, 4), (4, 3)]);
+        let seg = LayoutEngine::layout_with_wrap(
+            &items,
+            7,
+            &region,
+            WritingMode::HorizontalTb,
+            10.0,
+            &FixedMetrics,
+            WrapPlan::Segmented(&p),
+        );
+        assert_eq!(seg.len(), 3);
+        // 長大塊 {0,4} は char 縮退（3+1）。
+        assert_eq!(inline_positions(&seg[0]), vec![0.0, 10.0, 20.0]);
+        assert_eq!(inline_positions(&seg[1]), vec![0.0], "縮退塊の残り g3");
+        // 後続塊 {4,3} は通常判定を再開＝塊ごと行 2 へ（塊単位 break-before・塊維持）。
+        assert_eq!(
+            inline_positions(&seg[2]),
+            vec![0.0, 10.0, 20.0],
+            "後続塊は塊単位で維持（縮退が漏れ出していない）"
+        );
+        // 縮退が漏れれば g4 は行 1（inline 10）に char 継続で載る——そうでないことを対比で固定。
+        let ch = LayoutEngine::layout(
+            &items,
+            7,
+            &region,
+            WritingMode::HorizontalTb,
+            10.0,
+            &FixedMetrics,
+        );
+        assert_eq!(ch[1].glyphs.len(), 3, "char モードは行 1 が [g3,g4,g5]");
+        assert_ne!(seg, ch, "後続塊で塊単位判定が再開＝char 全割りと異なる");
+    }
+
+    /// 8.3: 極端に長い塊でも全グリフが配置され表示が破綻しない（panic せず停止し無損失）。
+    /// 50 グリフ単一塊・threshold 30 → char 縮退で複数行に割れ、全グリフがちょうど一度ずつ現れる。
+    #[test]
+    fn segmented_extremely_long_segment_places_all_glyphs() {
+        let region = TextRegion::resolve(
+            &model((Some(0), Some(0)), (Some(30), None)),
+            IMAGE,
+            WritingMode::HorizontalTb,
+        );
+        let n = 50;
+        let items = glyphs(n);
+        let p = plan(&[(0, n)]);
+        let lines = LayoutEngine::layout_with_wrap(
+            &items,
+            n,
+            &region,
+            WritingMode::HorizontalTb,
+            10.0,
+            &FixedMetrics,
+            WrapPlan::Segmented(&p),
+        );
+        // 全 50 グリフがちょうど一度ずつ配置される（欠落・重複なし）。
+        assert_eq!(flat_glyphs(&lines).len(), n, "全グリフが配置される（無損失）");
+        // 各行は行頭 1 グリフ以外は閾値内（3 グリフ/行＝30／30）——はみ出しが構造的に起きない。
+        for line in &lines {
+            assert!(
+                line.glyphs.len() <= 3,
+                "1 行に閾値超のグリフが積まれている（縮退が効いていない）: {}",
+                line.glyphs.len()
+            );
+            assert!(!line.glyphs.is_empty(), "空行が生じている");
+        }
+        // 全グリフが同一文字 'あ'（内容が壊れていない）。
+        assert!(lines.iter().all(|l| l.glyphs.iter().all(|g| g.ch == 'あ')));
+    }
 }
