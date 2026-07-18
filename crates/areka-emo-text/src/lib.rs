@@ -39,6 +39,7 @@ pub mod state;
 pub mod surface;
 pub mod viewbox;
 pub mod viewbox_draw;
+pub mod wrap;
 pub mod writing;
 
 /// 本 crate の共通エラー型（design.md「Error Handling」正本）。
@@ -174,6 +175,7 @@ mod tests {
             ("layout.rs", include_str!("layout.rs")),
             ("canvas.rs", include_str!("canvas.rs")),
             ("viewbox.rs", include_str!("viewbox.rs")),
+            ("wrap.rs", include_str!("wrap.rs")),
         ];
         const FORBIDDEN: &[&str] = &[
             "use windows",
