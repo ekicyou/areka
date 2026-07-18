@@ -11,3 +11,7 @@
 mod spine_e2e_test;
 #[path = "ghost/real_pasta_test.rs"]
 mod real_pasta_test;
+// `recorder`（task 3・交信記録デコレータ）はテスト支援モジュール。後続タスク（5.1/5.2/6.1）が
+// `crate::recorder::*`（`Recorder`／`ExchangeRecord` 等）を e2e／採取ハーネスから消費する。
+#[path = "ghost/recorder.rs"]
+mod recorder;
