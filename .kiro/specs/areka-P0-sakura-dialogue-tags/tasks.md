@@ -76,7 +76,7 @@
   - _Requirements: 8.2, 8.3_
   - _Depends: 4.2_
 
-- [ ] 4.4 compile 決定論檻（メニュー・キャリア・sysvar 展開）を追加する
+- [x] 4.4 compile 決定論檻（メニュー・キャリア・sysvar 展開）を追加する
   - メインメニュー script 直入力→期待列 `[ClearAll, Choice(頻度), NewLine, Choice(位置調整), Cursor(5em,2lh), Choice(閉じる), Barrier(WaitForChoice)]`（順序・at・duration・scope・barrier 唯一性/最終位置）を確認する檻を追加する
   - `\q` 無し台本では barrier が発行されないことを確認する
   - `\1\![move,-353,,,0,base,base]` 直入力→6 トークン（空 2 個保持）・scope"1" のキャリアが得られることを確認する
