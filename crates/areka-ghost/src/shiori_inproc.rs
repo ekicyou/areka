@@ -43,16 +43,25 @@
 // task 2.3 が `InProcBackend`／`inproc_connect` から本モジュールを consume するまで production 経路
 // では未使用。それによる dead_code 警告を抑止する（結線時に消費される）。
 #![allow(dead_code)]
+// `#[implement(IShioriHost)]`（InProcHost）が生成する実装トレイト面は COM 規約の PascalCase
+// メソッド名（`Raise`/`Complete`/`GetProperty`/`SetProperty`）を要求する。ABI（interface.rs）と
+// 同律で、本モジュール全体で non_snake_case を許可する。
+#![allow(non_snake_case)]
 
 use core::ffi::c_void;
+use std::cell::RefCell;
+use std::collections::HashMap;
 use std::marker::PhantomData;
 use std::path::Path;
 
-use shiori_abi::interface::IShioriFactory;
-use tracing::error;
+use shiori_abi::error::{SHIORI_E_PROPERTY_NOT_FOUND, SHIORI_E_UNKNOWN_TOKEN};
+use shiori_abi::interface::{IShioriFactory, IShioriHost, IShioriHost_Impl};
+use tracing::{error, warn};
 use windows::Win32::Foundation::{FreeLibrary, HMODULE};
 use windows::Win32::System::LibraryLoader::{GetProcAddress, LoadLibraryW};
-use windows::core::{HRESULT, HSTRING, Interface, s};
+// `Result` は glob 導入しない——本モジュールの `load` は `std::result::Result<_, String>` を返すため、
+// COM の `Result<()>` は別名（`ComResult`）で受け、std `Result` を shadow しない。
+use windows::core::{HRESULT, HSTRING, Interface, Result as ComResult, implement, s};
 
 /// tracing target（design.md Monitoring・本モジュールの全ログ発火で共有）。
 const LOG_TARGET: &str = "ghost-shiori-inproc";
@@ -206,6 +215,79 @@ impl Drop for InProcLibrary {
     }
 }
 
+/// `CreateInstance` へ渡す areka-ghost 側の最小 `IShioriHost` 実装（design.md §InProcHost・要件 3.1/7.4）。
+///
+/// M1 InProc 経路が実際に消費する能力集合＝要件 7.4 の範囲に等しく、それを超える実配線は持たない:
+/// - `Raise`: `warn!` で受領を可視化（握りつぶさない）した上で `Ok(())`。M1 InProc に Raise 消費者は
+///   存在しないため実配送しない（要件 7.4・自発通知の網羅は範囲外）。
+/// - `Complete`: 常に `Err(SHIORI_E_UNKNOWN_TOKEN)`。deferred（`SHIORI_S_PENDING`）非対応ゆえ突合すべき
+///   pending 枠を持たない（要件 7.4・遅延応答の完了は範囲外）。
+/// - `SetProperty` / `GetProperty`: 内部 `HashMap` を単純に往復する。欠落 key は暗黙の空値で続行せず
+///   `Err(SHIORI_E_PROPERTY_NOT_FOUND)`（out_value 未書込）で判別可能にする。
+///
+/// areka bin の `ShioriHostSink`（メールボックス・突合枠つき）は能力集合が異なる別物であり移設しない。
+/// M2 native 消費時に host 注入シームごと再設計する（design.md §InProcHost・Revalidation Trigger）。
+///
+/// スレッド座: `RefCell`＋COM 参照ゆえ実際に `!Send`。shiori アクタースレッド常駐で用いる（D-6）。
+#[implement(IShioriHost)]
+pub(crate) struct InProcHost {
+    /// プロパティストア（`SetProperty` 格納・`GetProperty` 即答）。
+    properties: RefCell<HashMap<String, HSTRING>>,
+}
+
+impl InProcHost {
+    /// 空のプロパティストアを持つ最小 host を生成する（design.md §InProcHost）。
+    ///
+    /// 生成物は `.into()` で `IShioriHost` 化して [`IShioriFactory::CreateInstance`] へ渡す。
+    pub(crate) fn new() -> Self {
+        Self {
+            properties: RefCell::new(HashMap::new()),
+        }
+    }
+}
+
+// windows-core 0.62: `#[implement]` 生成の `InProcHost_Impl` に対し pub vtable メソッドを実装する。
+impl IShioriHost_Impl for InProcHost_Impl {
+    /// 能動通知（wakeup）。M1 InProc に消費者はいないため実配送せず、`warn!` で受領を可視化して
+    /// `Ok(())`（要件 7.4・握りつぶさない）。
+    unsafe fn Raise(&self, script: &HSTRING) -> ComResult<()> {
+        warn!(
+            target: LOG_TARGET,
+            script = %script,
+            "InProcHost が Raise（自発通知）を受領したが M1 InProc に消費者はいない（実配送せず・要件 7.4）"
+        );
+        Ok(())
+    }
+
+    /// 遅延応答の完了配送。deferred（`SHIORI_S_PENDING`）非対応ゆえ突合する pending 枠を持たず、
+    /// 任意トークンを未知として `Err(SHIORI_E_UNKNOWN_TOKEN)` で拒否する（要件 7.4）。
+    unsafe fn Complete(&self, _token: u64, _response: &HSTRING) -> ComResult<()> {
+        Err(SHIORI_E_UNKNOWN_TOKEN.into())
+    }
+
+    /// プロパティストアから同期即答する。欠落 key は暗黙の空値で続行せず
+    /// `Err(SHIORI_E_PROPERTY_NOT_FOUND)`（out_value 未書込・design.md §InProcHost）。
+    unsafe fn GetProperty(&self, key: &HSTRING, out_value: &mut HSTRING) -> ComResult<()> {
+        match self.properties.borrow().get(&key.to_string()) {
+            Some(v) => {
+                // 存在時のみ値を out へ move-out（callee 確保・caller 解放）。
+                *out_value = v.clone();
+                Ok(())
+            }
+            // 欠落 key は判別可能な失敗（out_value は書き込まない）。
+            None => Err(SHIORI_E_PROPERTY_NOT_FOUND.into()),
+        }
+    }
+
+    /// プロパティストアへ値を即書きする（`[in]` 借用は保持のため clone・所有権規約）。
+    unsafe fn SetProperty(&self, key: &HSTRING, value: &HSTRING) -> ComResult<()> {
+        self.properties
+            .borrow_mut()
+            .insert(key.to_string(), value.clone());
+        Ok(())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     //! task 2.1 の 4 態様檻（design.md Testing Strategy・要件 3.1/3.5）:
@@ -314,5 +396,79 @@ mod tests {
         drop(_unknown);
         drop(factory);
         drop(library);
+    }
+}
+
+#[cfg(test)]
+mod host_tests {
+    //! task 2.2 の `InProcHost` 4 メソッド単体檻（design.md §InProcHost・要件 3.1/7.4）。
+    //!
+    //! 全て決定論（DLL/COM アパートメント不要）で、`IShioriHost` 型付き面を通して駆動する
+    //! （interface.rs `host_sink_all_methods_dispatch` と同律）。
+    //! - SetProperty → GetProperty 往復（格納値の move-out）。
+    //! - 欠落 key の GetProperty → `SHIORI_E_PROPERTY_NOT_FOUND`（out_value 未書込）。
+    //! - Raise → `Ok(())`（M1 InProc に消費者なし・warn 記録のみ）。
+    //! - Complete（任意トークン）→ `SHIORI_E_UNKNOWN_TOKEN`（deferred 非対応＝pending 枠なし・要件 7.4）。
+
+    use super::*;
+    use shiori_abi::error::{SHIORI_E_PROPERTY_NOT_FOUND, SHIORI_E_UNKNOWN_TOKEN};
+    use shiori_abi::interface::IShioriHost;
+
+    /// SetProperty → GetProperty 往復で格納値が move-out されること（プロパティ単純往復・要件 7.4）。
+    #[test]
+    fn set_then_get_property_roundtrips() {
+        let host: IShioriHost = InProcHost::new().into();
+
+        let key = HSTRING::from("path.to.key");
+        let value = HSTRING::from("some-value");
+        unsafe { host.SetProperty(&key, &value) }.expect("SetProperty は Ok であること");
+
+        let mut out_value = HSTRING::new();
+        unsafe { host.GetProperty(&key, &mut out_value) }.expect("GetProperty は Ok であること");
+        assert_eq!(out_value, value, "設定した値が move-out されること");
+    }
+
+    /// 欠落 key の GetProperty は `SHIORI_E_PROPERTY_NOT_FOUND` で失敗し out_value を書かないこと
+    /// （欠落 key・design.md §InProcHost）。
+    #[test]
+    fn get_missing_property_returns_property_not_found() {
+        let host: IShioriHost = InProcHost::new().into();
+
+        let missing = HSTRING::from("no.such.key");
+        // 未書込の観測用に非空の番兵値を置き、失敗経路で不変であることを確かめる。
+        let sentinel = HSTRING::from("__unwritten__");
+        let mut out_value = sentinel.clone();
+        let err = unsafe { host.GetProperty(&missing, &mut out_value) }
+            .expect_err("欠落 key の GetProperty は error であること");
+        assert_eq!(
+            err.code(),
+            SHIORI_E_PROPERTY_NOT_FOUND,
+            "欠落 key は SHIORI_E_PROPERTY_NOT_FOUND であること"
+        );
+        assert_eq!(out_value, sentinel, "欠落 key では out_value を書き込まないこと");
+    }
+
+    /// Raise は消費者不在でも `Ok(())` を返すこと（warn 可視化・握りつぶさない・要件 7.4）。
+    #[test]
+    fn raise_returns_ok_without_consumer() {
+        let host: IShioriHost = InProcHost::new().into();
+
+        let script = HSTRING::from("\\h\\s[0]hello");
+        unsafe { host.Raise(&script) }.expect("Raise は受領して Ok を返すこと（消費者なし）");
+    }
+
+    /// Complete は任意トークンで `SHIORI_E_UNKNOWN_TOKEN`（deferred 非対応・pending 枠なし・要件 7.4）。
+    #[test]
+    fn complete_any_token_returns_unknown_token() {
+        let host: IShioriHost = InProcHost::new().into();
+
+        let response = HSTRING::from("response-body");
+        let err = unsafe { host.Complete(12345, &response) }
+            .expect_err("deferred 非対応ゆえ Complete は error であること");
+        assert_eq!(
+            err.code(),
+            SHIORI_E_UNKNOWN_TOKEN,
+            "任意トークンの Complete は SHIORI_E_UNKNOWN_TOKEN であること"
+        );
     }
 }

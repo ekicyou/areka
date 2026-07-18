@@ -21,6 +21,11 @@ shiori-host32-ipc = { path = "../shiori-host32-ipc" }
 # COM ABI 面（IShioriFactory）。workspace path crate であり「新規外部依存なし」に抵触しない。
 shiori-abi = { path = "../shiori-abi" }
 windows = { workspace = true }
+# task 2.2（InProcHost）: `#[implement(IShioriHost)]` の生成コードが `::windows_core` を絶対パス参照
+# するため、`windows` の再エクスポート（型のみ利用の task 2.1 では十分だった）に加え windows-core を
+# 直接依存として要する。既存の workspace 依存であり新規外部依存ではない（areka bin の ShioriHostSink
+# も同 `#[implement(IShioriHost)]` で同 dep を用いる）。
+windows-core = { workspace = true }
 tracing = { workspace = true }
 thiserror = { workspace = true }
 
