@@ -176,7 +176,7 @@
   - _Requirements: 5.1_
   - _Depends: 9.1, 7.4_
 
-- [ ] 9.3 spine/boot 呼出テストの S-3 形機械的追随を完了する
+- [x] 9.3 spine/boot 呼出テストの S-3 形機械的追随を完了する
   - `spine_e2e_test.rs` ほか boot 呼出テストを新しい Vec-sinks 署名・3 sink 構成へ機械的に追随させる
   - `CueTarget::Window` 追加による網羅 match 波及が `spine_e2e_test.rs` のみであることを確認する（他クレートは catch-all で吸収）
   - 「cue ごと 1 回ログ」診断檻が S-3 後も維持されることを確認する
