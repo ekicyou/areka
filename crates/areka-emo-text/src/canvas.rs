@@ -207,7 +207,9 @@ pub struct ContentCanvas {
 impl ContentCanvas {
     /// レイアウト結果からグリフ住人の内容キャンバスを生成する（純粋・決定論）。
     ///
-    /// - 1 行（[`PositionedLine`]）＝1 グリフ住人。空行も空のグリフ住人として保持する。
+    /// - 1 行（[`PositionedLine`]）＝1 グリフ住人。layout 出力の行を 1:1 で写す（空行を
+    ///   渡されれば空のグリフ住人にする——ただし遅延意味論（newline-defer）では改行由来の
+    ///   空行は layout から出力されないため実運用では現れない）。
     /// - 変換＝行矩形原点（左上）への平行移動（validrect-local へ validrect 原点を差引き・
     ///   端数は量子化せず素通し）。恒等/平行移動のみで構成される（R8.2）。
     /// - グリフはローカル座標へ転写: `inline_pos` は行内開始（横書き＝rect.left・
@@ -271,7 +273,7 @@ mod tests {
         RESERVED_EFFECT_ROTATION, RESERVED_EFFECT_SHADOW, RegionTransform, Resident,
         ResidentContent, TextEffects,
     };
-    use crate::layout::{FixedMetrics, LayoutEngine, PositionedLine};
+    use crate::layout::{FixedMetrics, LayoutEngine, LineRect, PositionedGlyph, PositionedLine};
     use crate::region::TextRegion;
     use crate::state::TextItem;
     use crate::writing::WritingMode;
@@ -462,10 +464,11 @@ mod tests {
         assert_eq!(inline, vec![0.0, 10.0]);
     }
 
-    /// 空行（明示改行由来）も住人として保持される（行 index 1:1 を崩さない——
-    /// VisibleWindow.first_visible_line が layout 出力 index のまま canvas に適用できる）。
+    /// 遅延意味論では改行由来の空行が layout 入力に来なくなる: trailing 改行 `[あ, \n]` は
+    /// 行 1・住人 1（1:1 維持・空住人が生じない）。first_visible_line が layout 出力 index の
+    /// まま canvas に適用できる不変条件は「layout 出力の行」に対する契約ゆえ保たれる。
     #[test]
-    fn empty_lines_are_preserved_as_empty_glyph_residents() {
+    fn trailing_newline_yields_single_resident_under_deferred_semantics() {
         let region = TextRegion::resolve(
             &model((Some(0), Some(0)), (None, None), (None, None, None, None)),
             IMAGE,
@@ -473,8 +476,48 @@ mod tests {
         );
         let items = [TextItem::Glyph { ch: 'あ' }, TextItem::LineBreak { ratio: 1.0 }];
         let (lines, canvas) = canvas_for(&items, &region, WritingMode::HorizontalTb, 12.0);
-        assert_eq!(lines.len(), 2);
-        assert_eq!(canvas.residents.len(), 2);
+        assert_eq!(lines.len(), 1, "末尾保留改行は蒸発＝空行なし");
+        assert_eq!(canvas.residents.len(), 1, "行 1 = 住人 1（1:1）");
+        assert_eq!(glyph_run(&canvas.residents[0]).glyphs.len(), 1);
+    }
+
+    /// canvas の写像自体は一般性を保つ（本番非改変の証）: 空グリフの [`PositionedLine`] を
+    /// 直接渡せば従来どおり空グリフ住人へ 1:1 で写す。遅延意味論では layout が空行を出さなく
+    /// なるだけで、写像側は空行を渡されれば空住人にする振る舞いを不変に保つ。
+    #[test]
+    fn from_layout_maps_empty_line_to_empty_resident() {
+        let region = TextRegion::resolve(
+            &model((Some(0), Some(0)), (None, None), (None, None, None, None)),
+            IMAGE,
+            WritingMode::HorizontalTb,
+        );
+        // synthetic: 1 グリフ行＋空行（行送り軸 15 の零幅矩形）を直接構築する。
+        let synthetic = [
+            PositionedLine {
+                rect: LineRect {
+                    left: 0.0,
+                    top: 0.0,
+                    right: 12.0,
+                    bottom: 12.0,
+                },
+                glyphs: vec![PositionedGlyph {
+                    ch: 'あ',
+                    inline_pos: 0.0,
+                    advance: 12.0,
+                }],
+            },
+            PositionedLine {
+                rect: LineRect {
+                    left: 0.0,
+                    top: 15.0,
+                    right: 0.0,
+                    bottom: 27.0,
+                },
+                glyphs: vec![],
+            },
+        ];
+        let canvas = ContentCanvas::from_layout(&synthetic, &region, WritingMode::HorizontalTb);
+        assert_eq!(canvas.residents.len(), 2, "写像は行数と 1:1（空行も住人化）");
         let empty = glyph_run(&canvas.residents[1]);
         assert!(empty.glyphs.is_empty());
         assert_eq!(empty.size, (0.0, 12.0), "空行は行内零幅・行送り軸は font 高");
