@@ -27,7 +27,7 @@ M1 の正典イベント最小集合は既存運行表（`OnInitialize` / `OnFir
 1. When a test author sets up a deterministic boundary-crossing SHIORI4 test, the テストハーネス shall boot it through the existing `GhostBootOptions`／`ShioriWiring` seam by supplying only the テストゴースト fixture path と in-proc 結線の選択（専用の別 boot 入口や独自オーケストレーションを新設しない）。
 2. The 決定論 e2e shall run as part of `cargo test --workspace`（常設ゲート）without any env-gate や opt-in、i686 成果物、32bit helper プロセス、`pasta.dll`、または別プロセス spawn。
 3. While driving the deterministic test, the テストハーネス shall advance time only through injected Tick input と shall not use sleep や実時計待機。
-4. When the test exercises the boot→talk→close 経路, the テストハーネス shall let the author assert both the SHIORI 交信列（送出されたイベント id・NOTIFY/GET の別・発火順序）and the resulting cue sink 出力（内容・順序）。
+4. When the test exercises the boot→talk→close 経路, the テストハーネス shall let the author assert both the SHIORI 交信列（送出されたイベント id・NOTIFY/GET の別・発火順序）and the resulting cue sink 出力（内容・順序）。交信列の観測は `ShioriBackend` seam に噛ませる記録デコレータ（`Recorder<B: ShioriBackend>` 相当）を通じて行い、InProc 実DLL backend と既存 `Custom`／`ScriptedShioriBackend` fake の**双方で同一手口**とする（cue sink 記録装置と対をなす二記録装置）。
 5. The テストゴースト応答 shall be deterministic——同一入力に対し常に同一応答を返す（乱数・実時計に依存しない）。
 6. Where a test needs custom per-test scripting without crossing the DLL boundary, the テストハーネス shall keep the existing `ShioriWiring::Custom`（closure 注入・`ScriptedShioriBackend`）seam available and usable in parallel。
 
