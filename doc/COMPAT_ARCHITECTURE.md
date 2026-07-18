@@ -127,3 +127,7 @@ ukadoc が沈黙/曖昧な箇所を areka 裁量で決定した記録（§2 沈�
 |---|---|---|---|
 | `%username` 既定値（スナップショット未解決時） | `ユーザーさん` | 正典沈黙・伺かの伝統的な未指定時デフォルト・決定論定数（唯一の定義点＝`areka_sakura::sysvar::DEFAULT_USERNAME`） | areka-P0-sakura-dialogue-tags（開発者裁定 2026-07-18・設計ディスカッション#2） |
 | compile 側時間指令 allowlist（`quicksection`／`set,balloonwait`／`set,choicetimeout`／`set,balloontimeout`／`embed`／`sound,wait`／`wait,syncobject`／同期 `move` 系の持続時間引数 等） | M1 は**非実導出**（語彙保持＋縮退のみ・`\!` 全体は汎用キャリア cue へ転写し compile は allowlist の意味を追加解釈しない） | 正典が compile 干渉する時間指令を明示列挙せず・emo2 未使用ゆえ源が着地するまで実導出しない（R4.3 但書）・実導出は追跡 spec `areka-P0-sakura-time-directives` へ申し送り | areka-P0-sakura-dialogue-tags |
+| `\![move]` の裸 `base`（ドット無しの基準位置トークン） | `base.base` と等価に解する（`parse_move_directive`：ドット無しトークンは `X基準=Y基準=token` として展開） | 正典形式は `X基準.Y基準` の 2 軸・fixture `move,-353,,,0,base,base` の de-facto（R5.2 明文） | areka-P0-sakura-dialogue-tags |
+| `\![move]` の名前付き `--key=value` 形（ukadoc 記述例の形式） | M1 縮退＝`Err(MoveDegradation::NamedForm)`（記録付き良性スキップ・語彙は将来 additive・positional のみ実導出） | emo2 は positional 形のみ使用・positional が canon 正の実導出経路 | areka-P0-sakura-dialogue-tags |
+| `\![move]` の基準 `screen`／`primaryscreen`／`me`／`global` | M1 縮退（`Ok` で語彙保持＋`MoveDirective::m1_degradations` が `UnsupportedBase` を記録・数値スコープ基準のみ実導出） | emo2 未使用（fixture は数値スコープ `0`）・非スコープ基準の解決は源が着地するまで実導出しない | areka-P0-sakura-dialogue-tags |
+| `\![move]` の時間指定 `time>0`（アニメーション付き移動） | 最終位置へ即時反映＋縮退記録（`Ok` で `duration_ms` 保持・`m1_degradations` が `TimedMoveImmediate` を記録） | R5.4 明文・fixture は time 空=0・補間は M1 外 | areka-P0-sakura-dialogue-tags |

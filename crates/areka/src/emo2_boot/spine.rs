@@ -442,8 +442,8 @@ impl SpineHarness {
             ghost_root: emo2_root(),
             default_encoding: DefaultEncoding::Ansi,
             shiori: ShioriWiring::Custom(Box::new(move || Ok(Box::new(backend) as Box<dyn ShioriBackend>))),
-            surface_sink,
-            text_sink: clocked_text_sink,
+            sinks: vec![Box::new(surface_sink), Box::new(clocked_text_sink)],
+            system_vars: areka_ghost::default_system_vars(),
             ticker: TickerMode::Disabled,
         };
         let ghost = boot(options).expect("scripted boot は解決可能な emo2 ghost_root で成功する");

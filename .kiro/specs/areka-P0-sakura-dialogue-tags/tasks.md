@@ -116,7 +116,7 @@
   - _Depends: 6.1_
 
 - [ ] 7. move 末端（純粋解釈＋UI 適用）
-- [ ] 7.1 MoveDirective 型と parse_move_directive 純関数を実装する
+- [x] 7.1 MoveDirective 型と parse_move_directive 純関数を実装する
   - `MoveDirective`（scope・x/y の `AxisSpec`(Fix|Px)・duration_ms・base(`MoveBase`)・base_offset/move_offset(`RefPoint`)）の完全語彙型を定義する
   - `parse_move_directive(scope, tokens) -> Result<MoveDirective, MoveDegradation>` を実装する（正典省略既定 fix/fix/0/screen/left.top・裸 `base`≡`base.base`）
   - 名前付き `--` 形・`time>0` は記録付き縮退（`MoveDegradation` として分類・語彙は保持）とする

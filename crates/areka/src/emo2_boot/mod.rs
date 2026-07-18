@@ -18,6 +18,7 @@ pub mod adapter;
 pub mod talk_clock;
 pub mod assets;
 pub mod frame;
+pub mod move_cue;
 
 // 決定論 spine テストハーネス（R8・task 6.1）。`areka` は [[bin]] のみ（[lib] 無し）で外部
 // tests/ から bin 内部項目へ到達できないため、既存 repo 慣行に従い in-crate #[cfg(test)]
@@ -288,14 +289,17 @@ pub fn wire_emo2_boot(
     };
 
     // 手順5: boot（実 sink 注入）。Err は既存 is_benign_boot_error 分類（R7.4）＋フォールバック。
+    // TODO(task 9.1): MoveCueSink を 3 本目の sink として追加＋channel 配線
+    //   （`mpsc::channel::<MoveDirective>()`→`MoveCueSink` を sinks 第 3 要素・Receiver を
+    //   Emo2Wiring へ）。本 bridge（task 7.1）は S-3 の 2 sink 形へ機械的追随のみ。
     let boot_options = GhostBootOptions {
         ghost_root: ghost_root.to_path_buf(),
         default_encoding: DefaultEncoding::Ansi,
         shiori: ShioriWiring::Helper {
             helper_exe: helper_exe.to_path_buf(),
         },
-        surface_sink,
-        text_sink: clocked_text_sink,
+        sinks: vec![Box::new(surface_sink), Box::new(clocked_text_sink)],
+        system_vars: areka_ghost::default_system_vars(),
         ticker: TickerMode::Real(Default::default()),
     };
     let ghost_runtime = match areka_ghost::boot(boot_options) {
