@@ -192,7 +192,7 @@ impl CuePlayer {
         self.filtered_ready.clear();
         for cue in self.schedule.ready() {
             match &cue.command {
-                CueCommand::Choice { id, text } => {
+                CueCommand::Choice { id, text, .. } => {
                     self.pending_choices.push(PendingChoice {
                         id: id.clone(),
                         text: text.clone(),

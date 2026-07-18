@@ -43,6 +43,7 @@ fn choice(start_time: f64, id: &str, s: &str) -> Cue {
         payload: CueCommand::Choice {
             id: id.into(),
             text: s.into(),
+            references: vec![],
         }
         .into(),
         duration: 0.0,

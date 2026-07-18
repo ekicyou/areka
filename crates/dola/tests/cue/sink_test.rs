@@ -210,7 +210,8 @@ fn cue_target_of_classifies_every_variant() {
     assert_eq!(
         cue_target_of(&CueCommand::Choice {
             id: "yes".into(),
-            text: "はい".into()
+            text: "はい".into(),
+            references: vec![]
         }),
         Some(CueTarget::Balloon)
     );

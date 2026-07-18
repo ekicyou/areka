@@ -1,7 +1,7 @@
 # Implementation Plan
 
 - [ ] 1. dola cue 語彙増分（Cursor・references・Window・キャリア正準形）
-- [ ] 1.1 Choice へ references フィールドを追加しワイヤ檻を追随させる
+- [x] 1.1 Choice へ references フィールドを追加しワイヤ檻を追随させる
   - `Choice { id, text, references: Vec<String> }` へ `#[serde(default, skip_serializing_if = "Vec::is_empty")]` で拡張する
   - 既存ワイヤ檻の `Choice` 構築行を `references: vec![]` へ機械的追随させる（構築行のみ・期待 JSON リテラルは不変）
   - references 空のシリアライズ形が現行とバイト同一であること、references ありでも `default` で読めることを確認する新規檻を追加する

@@ -131,7 +131,17 @@ pub enum CueCommand {
     /// 演技発現。key の意味解釈は消費者が担う。
     Emote { key: String },
     /// 選択肢データ。WaitForChoice の前に連続投入する先積みプロトコル。
-    Choice { id: String, text: String },
+    ///
+    /// `references` は `\q` の第 3 引数以降（参照列）を**記述順を保った不透明文字列列**として
+    /// 保持する（ID 解釈なし・1.3/1.4）。`#[serde(default, skip_serializing_if = "Vec::is_empty")]`
+    /// により、空のときは `references` キーを出力せず既存ワイヤ形とバイト同一を保ち、
+    /// `references` を持たない旧資産も `default` で空 vec として読める（8.1・後方互換）。
+    Choice {
+        id: String,
+        text: String,
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        references: Vec<String>,
+    },
     /// ECS エンティティ参照渡し（u64 = Entity::to_bits() 変換済み）
     EntityRef(u64),
     /// 消費者固有コマンド。DynamicValue は JSON 互換辞書型。
@@ -309,6 +319,7 @@ mod tests {
             CueCommand::Choice {
                 id: "yes".into(),
                 text: "はい".into(),
+                references: vec![],
             },
             CueCommand::EntityRef(42),
             CueCommand::Custom {
@@ -473,6 +484,7 @@ mod tests {
                 CueCommand::Choice {
                     id: "yes".into(),
                     text: "はい".into(),
+                    references: vec![],
                 },
                 r#"{"Choice":{"id":"yes","text":"はい"}}"#,
             ),
@@ -504,6 +516,50 @@ mod tests {
             let parsed: CueCommand = serde_json::from_str(wire).unwrap();
             assert_eq!(parsed, cmd, "既存ワイヤ形の資産は従来どおり読める");
         }
+    }
+
+    /// `Choice.references` の additive 拡張檻（1.3・8.1）。
+    ///
+    /// - (a) references 空のシリアライズ形は現行と**バイト同一**（`references` キーが現れない
+    ///   ＝`skip_serializing_if = "Vec::is_empty"`）。既存ワイヤ形不変の直接証跡。
+    /// - (b) references ありは `references` キー付きで往復する（欠落させず記述順を保つ・1.3）。
+    /// - (c) `references` を持たない旧 JSON 資産は `default` により空 vec へ復元される（後方互換）。
+    #[test]
+    fn choice_references_additive_wire_form() {
+        // (a) 空 references は現行とバイト同一（キーが現れない）。
+        let empty = CueCommand::Choice {
+            id: "OnYes".into(),
+            text: "はい".into(),
+            references: vec![],
+        };
+        assert_eq!(
+            serde_json::to_string(&empty).unwrap(),
+            r#"{"Choice":{"id":"OnYes","text":"はい"}}"#,
+            "references 空のシリアライズ形は現行とバイト同一（references キーは skip される）"
+        );
+
+        // (b) references ありはキー付きで往復し、記述順を保つ。
+        let with_refs = CueCommand::Choice {
+            id: "OnYes".into(),
+            text: "はい".into(),
+            references: vec!["r0".into(), "r1".into()],
+        };
+        let json = serde_json::to_string(&with_refs).unwrap();
+        assert_eq!(
+            json,
+            r#"{"Choice":{"id":"OnYes","text":"はい","references":["r0","r1"]}}"#,
+            "references ありは references キー付きで記述順を保ってシリアライズされる"
+        );
+        let parsed: CueCommand = serde_json::from_str(&json).unwrap();
+        assert_eq!(parsed, with_refs, "references ありは往復で同一へ復元される");
+
+        // (c) references を持たない旧 JSON は default で空 vec へ復元される。
+        let legacy = r#"{"Choice":{"id":"OnYes","text":"はい"}}"#;
+        let parsed: CueCommand = serde_json::from_str(legacy).unwrap();
+        assert_eq!(
+            parsed, empty,
+            "references 欠落の旧資産は default で空 vec へ復元される（後方互換）"
+        );
     }
 
     #[test]
@@ -715,6 +771,7 @@ mod tests {
             CueCommand::Choice {
                 id: "yes".into(),
                 text: "はい".into(),
+                references: vec![],
             }
             .into(),
             CueCommand::EntityRef(42).into(),
