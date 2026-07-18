@@ -40,7 +40,7 @@ use std::sync::mpsc::Sender;
 
 use bevy_ecs::prelude::World;
 use dola::cue::{command_target_of, CueCommand, CueTarget, TalkCue};
-use tracing::{debug, warn};
+use tracing::{debug, info, warn};
 use wintf::ecs::{SizeI, WindowPos};
 
 use crate::placement::follow::move_window_to;
@@ -609,7 +609,26 @@ pub fn apply_move_directive(world: &mut World, directive: &MoveDirective) -> boo
 
     // 反映は move_window_to のみ（唯一の位置ライター・バルーン随伴 offset 維持を内包・R5.3/6.2）。
     // Anchored・DragEnd 観測点には触れない（R6/9.5）。
-    move_window_to(world, target, pos.x, pos.y)
+    let moved = move_window_to(world, target, pos.x, pos.y);
+
+    // 成功経路の positive ログ（実機 OnFirstBoot サインオフ／R9.6 の grep 拠点）。degradation は
+    // 全て上で warn＋false 済みゆえ、ここは唯一の真の成功点——move_window_to が実際に窓を動かした
+    // （`true`）ときのみ 1 本出す（`false`＝窓ハンドル未生成の縮退では出さない）。target_pos.position
+    // は resolve 成功が Some を保証（[`resolve_move_target_position`] が None で早期 return）。
+    if moved {
+        let (from_x, from_y) = target_pos.position.map(|p| (p.x, p.y)).unwrap_or_default();
+        info!(
+            scope = directive.scope,
+            base_scope,
+            from_x,
+            from_y,
+            to_x = pos.x,
+            to_y = pos.y,
+            "apply_move_directive: move 適用完了（scope→物理px移動）"
+        );
+    }
+
+    moved
 }
 
 // =============================================================================
