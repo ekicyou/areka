@@ -18,6 +18,8 @@
 //! 完了を [`ShioriOutcome::Notified`] として表す——ここに `Value` を運ぶ経路が
 //! 存在しないため、NOTIFY 応答から talk を生成できないことが構造的に保証される。
 
+use crate::status::ExecutionStatus;
+
 /// 単調ミリ秒（注入時刻）。本番結線は OS 起動からの経過 ms（GetTickCount64 相当）を
 /// 注入する想定（OnSecondChange Ref0 が正典と一致する）。テストは任意の単調値。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -77,14 +79,20 @@ pub enum ShioriMsg {
 }
 
 /// GET と NOTIFY の別を境界越しに保持する（Req 5.2）。
+///
+/// `status` は全構築点が明示する共通ヘッダ（`Status` 実行状態集合の送出値）である。
+/// 構築点が Status を忘れられない構造（events.rs の各構築関数が snapshot から自ら導出する）
+/// にすることで、Ref3 と `Status` の不整合を発生源で排除する（DD-IT-3）。
 pub enum ShioriCall {
     Get {
         id: &'static str,
         references: Vec<String>,
+        status: ExecutionStatus,
     },
     Notify {
         id: &'static str,
         references: Vec<String>,
+        status: ExecutionStatus,
     },
 }
 
@@ -102,7 +110,12 @@ pub enum ShioriOutcome {
     Failed(ShioriFailure),
 }
 
-/// RequestError の区別語彙の境界写像（host32 非依存の再表現・thiserror）。
+/// 呼出失敗の区別語彙（host32 非依存の再表現・thiserror）。
+///
+/// 既存4語彙（`Handshake`／`Timeout`／`Ipc`／`Shiori`）は `RequestError` の**境界写像**であり、
+/// shiori 境界（`shiori/real.rs` の `map_error`）でのみ構成される。`Internal` は境界写像から
+/// **決して生成されない**——kanade 内部で検出した内部規律違反（許可集合外 ID の送出企図等）に
+/// 対してのみ kanade 自身が構成する（DD-IT-11）。
 #[derive(Debug, thiserror::Error)]
 pub enum ShioriFailure {
     /// 接続確立失敗。
@@ -117,6 +130,9 @@ pub enum ShioriFailure {
     /// SHIORI エラー。
     #[error("shiori error response: {0}")]
     Shiori(String),
+    /// kanade 内部規律違反（境界写像では生成されない・kanade 内部でのみ構成・DD-IT-11）。
+    #[error("kanade internal violation: {0}")]
+    Internal(String),
 }
 
 /// 運行構成（結線側が供給。既定値は [`KanadeConfig::new`] で提供）。
@@ -185,6 +201,11 @@ mod tests {
             ShioriFailure::Shiori("400".to_string()).to_string(),
             "shiori error response: 400"
         );
+        // Internal は境界写像でなく kanade 内部で構成される内部規律違反語彙（DD-IT-11）。
+        assert_eq!(
+            ShioriFailure::Internal("event_id_not_allowed: OnTalk".to_string()).to_string(),
+            "kanade internal violation: event_id_not_allowed: OnTalk"
+        );
     }
 
     #[test]
@@ -216,6 +237,7 @@ mod tests {
             call: ShioriCall::Get {
                 id: "OnBoot",
                 references: vec!["master".to_string()],
+                status: ExecutionStatus::derive(&crate::status::ExecutionSnapshot::INACTIVE),
             },
             reply,
         };
@@ -223,7 +245,7 @@ mod tests {
         match msg {
             ShioriMsg::Request { call, reply } => {
                 match call {
-                    ShioriCall::Get { id, references } => {
+                    ShioriCall::Get { id, references, .. } => {
                         assert_eq!(id, "OnBoot");
                         assert_eq!(references, vec!["master".to_string()]);
                     }
@@ -250,6 +272,7 @@ mod tests {
         let _notify = ShioriCall::Notify {
             id: "OnInitialize",
             references: Vec::new(),
+            status: ExecutionStatus::derive(&crate::status::ExecutionSnapshot::INACTIVE),
         };
     }
 }

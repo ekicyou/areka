@@ -32,9 +32,21 @@
 //! ## 可視 prefix 規則（typewriter との接続）
 //!
 //! `layout` は追記順 items の先頭から「`visible_count`+1 個目のグリフ」直前までを
-//! 配置対象とする。改行マーカーは prefix 内なら即時反映する（R2.2 の後出し優先・
-//! 空行も [`PositionedLine`] として現れる）。リビール時刻の解決
-//! （`visible_glyphs(actor, t)`）は state 層の領分で、本層は個数だけを受け取る。
+//! 配置対象とする。リビール時刻の解決（`visible_glyphs(actor, t)`）は state 層の
+//! 領分で、本層は個数だけを受け取る。
+//!
+//! ## 改行の遅延（deferred newline・SSP 準拠・areka-P0-newline-defer）
+//!
+//! 改行マーカー（`NewLine{ratio}`）は「文字書き込み位置を次行先頭へ動かす予約
+//! （reservation）」であり、**到着即時には行を送らない**。走査ローカルの保留
+//! （`pending: Option<f32>`＝Σratio）へ ratio を累算し（連続改行は単一累算）、
+//! **次の可視グリフが実際に配置される直前にのみ一括実体化**する（累算送り
+//! `pitch × Σratio` を block 位置へ適用）。保留のみでは行を開かず・空行を
+//! [`PositionedLine`] として出さず・内容ビューボックスを変えない（ビューボックスは
+//! 実際に置いた可視コンテンツだけが決める・content 種別非依存）。可視 prefix 末尾より
+//! 後ろ・後続可視グリフを持たない末尾改行は**保留のまま蒸発**する（走査終了・打切りで
+//! 単に捨てられる＝R5.2/5.3）。この規則は 3 方向（横書き／縦書き rl・lr）で同一
+//! （前進量が軸読み替え式に乗るだけ・アルゴリズム分岐なし）。
 //!
 //! ## 行矩形の規約（R9.4 の再利用シーム）
 //!
@@ -148,7 +160,10 @@ impl LayoutEngine {
     ///   可視 prefix 規則（モジュール doc）で配置対象を切る。
     /// - 折返し判定: `行内位置＋次グリフ幅 > 閾値`（3 方向共通・正準表）。
     ///   行頭の 1 グリフは閾値超過でも配置する（無限折返しの構造排除・無損失）。
-    /// - 行送り量: 自動折返し＝`line_pitch`・改行マーカー＝`line_pitch × ratio`。
+    /// - 行送り量: 自動折返し＝`line_pitch`・改行マーカー＝`line_pitch × Σratio`。
+    /// - 改行は遅延（deferred newline・モジュール doc「改行の遅延」）: 到着即時に
+    ///   行を送らず保留へ累算し、次の可視グリフ配置の直前に一括実体化する。保留のみ
+    ///   では空行を出さず・末尾の保留改行は蒸発する。
     ///
     /// 同一入力→同一出力（R2.5 系）。失敗経路なし（全入力で値を返す純関数）。
     pub fn layout(
@@ -175,19 +190,41 @@ impl LayoutEngine {
         let mut inline_pos = inline_start;
         let mut block_pos = block_start;
         let mut placed = 0usize;
-        let mut opened = false;
+        // 改行の保留（deferred newline）: None＝保留なし・Some(Σratio)＝累算済み予約。
+        // `f32` 単独でなく Option なのは `\n[0]`（ratio 0＝行替え・送りゼロ）を「保留なし」
+        // と区別して保存するため（DD-5）。走査ローカル＝フレームを跨ぐ状態を持たない。
+        let mut pending: Option<f32> = None;
 
         for item in items {
             match *item {
                 TextItem::Glyph { ch } => {
-                    // 可視 prefix の終端: visible_count+1 個目のグリフ直前で打ち切る。
+                    // ゲート順序の契約（DD-3）: ①可視 prefix 打切り → ②保留フラッシュ →
+                    // ③折返し判定 → ④配置。①を先頭に置くことで、リビールカーソルが
+                    // 改行を通過済みでも次の可視グリフが無い限り行送りは起きない（R4.2）。
                     if placed == visible_count {
                         break;
                     }
-                    opened = true;
                     let advance = metrics.advance(ch, font_height);
-                    // 折返し判定（正準表）: 行内位置＋次グリフ幅 > 閾値。
+                    // ② 保留改行の一括実体化（次の可視コンテンツ配置の直前・R2.1）。
+                    // current 非空なら現在行を確定してから block を Σratio ぶん前進させる。
+                    // 先頭改行（current 空）は空行を作らず前進のみ（DD-2）。
+                    if let Some(sum) = pending.take() {
+                        if !current.is_empty() {
+                            lines.push(finish_line(
+                                std::mem::take(&mut current),
+                                mode,
+                                inline_start,
+                                inline_pos,
+                                block_pos,
+                                font_height,
+                            ));
+                        }
+                        block_pos += block_dir * pitch * sum;
+                        inline_pos = inline_start;
+                    }
+                    // ③ 折返し判定（正準表）: 行内位置＋次グリフ幅 > 閾値。
                     // 行頭グリフは閾値超過でも配置（縮退・グリフを落とさない）。
+                    // 直前にフラッシュした場合 current は空ゆえ二重前進しない。
                     if !current.is_empty() && inline_pos + advance > threshold {
                         lines.push(finish_line(
                             std::mem::take(&mut current),
@@ -200,6 +237,7 @@ impl LayoutEngine {
                         block_pos += block_dir * pitch;
                         inline_pos = inline_start;
                     }
+                    // ④ 配置。
                     current.push(PositionedGlyph {
                         ch,
                         inline_pos,
@@ -209,22 +247,17 @@ impl LayoutEngine {
                     placed += 1;
                 }
                 TextItem::LineBreak { ratio } => {
-                    // 改行マーカーは prefix 内なら即時反映（行送り量 = pitch × ratio）。
-                    opened = true;
-                    lines.push(finish_line(
-                        std::mem::take(&mut current),
-                        mode,
-                        inline_start,
-                        inline_pos,
-                        block_pos,
-                        font_height,
-                    ));
-                    block_pos += block_dir * pitch * ratio;
-                    inline_pos = inline_start;
+                    // 遅延（deferred newline・R1.1/1.3）: 行を閉じず・block も前進させず、
+                    // 保留へ ratio を累算する（連続改行は単一累算 Σratio）。可視構造・
+                    // 内容ビューボックスはここでは一切変化しない（R1.2/1.5）。
+                    pending = Some(pending.map_or(ratio, |acc| acc + ratio));
                 }
             }
         }
-        if opened {
+        // 最終行の確定: グリフを含む現在行のみ確定する（行の確定は常にグリフ配置に
+        // 隣接するため、旧 `opened` フラグは `!current.is_empty()` と等価・DD-4）。
+        // 残存する保留（末尾改行）は実体化せず蒸発する（R5.2/5.3）。
+        if !current.is_empty() {
             lines.push(finish_line(
                 current,
                 mode,
@@ -708,10 +741,11 @@ mod tests {
         assert_eq!(saturated[0].glyphs.len(), 5);
     }
 
-    /// 可視 prefix 内の改行マーカーは即時反映され（R2.2）、直後のグリフが未リビール
-    /// でも空行として現れる。prefix 外（打ち切り後）の item は反映されない。
+    /// 可視 prefix 内の改行マーカーは遅延（deferred newline）: その後ろに可視グリフが
+    /// 現れるまで行を開かず保留する（R4.2）。次の可視グリフが reveal された時点でのみ
+    /// 一括実体化する（R4.1）——保留中は空行を出さない（R1.2）。
     #[test]
-    fn line_break_within_visible_prefix_opens_empty_line() {
+    fn line_break_defers_until_next_visible_glyph() {
         let region = TextRegion::resolve(
             &model((Some(0), Some(0)), (None, None)),
             IMAGE,
@@ -722,7 +756,8 @@ mod tests {
             TextItem::LineBreak { ratio: 1.0 },
             TextItem::Glyph { ch: 'b' },
         ];
-        let lines = LayoutEngine::layout(
+        // visible=1: b が未リビール——改行は保留のまま行を開かない（R4.2）。
+        let held = LayoutEngine::layout(
             &items,
             1,
             &region,
@@ -730,24 +765,38 @@ mod tests {
             12.0,
             &FixedMetrics,
         );
-        assert_eq!(lines.len(), 2);
-        assert_eq!(lines[0].glyphs.len(), 1);
-        assert!(lines[1].glyphs.is_empty(), "改行は即時反映＝空行が現れる");
-        // 空行の矩形: 行内零幅・行送り軸位置は pitch(15) 分進んでいる。
+        assert_eq!(held.len(), 1, "保留改行は行を開かない（空行を出さない）");
+        assert_eq!(held[0].glyphs.len(), 1);
+        assert_eq!(held[0].glyphs[0].ch, 'a');
+        // visible=2: b がリビール——保留改行が実体化して 2 行になる（R4.1）。
+        let materialized = LayoutEngine::layout(
+            &items,
+            2,
+            &region,
+            WritingMode::HorizontalTb,
+            12.0,
+            &FixedMetrics,
+        );
+        assert_eq!(materialized.len(), 2, "次可視グリフ配置で保留改行が実体化");
+        assert_eq!(materialized[0].glyphs[0].ch, 'a');
+        assert_eq!(materialized[1].glyphs[0].ch, 'b');
+        // 実体化後の 2 行目: 行内 0 起点（b は ASCII で advance 6）・行送り軸位置は
+        // pitch(15) 分進む・中間空行は生じない。
         assert_eq!(
-            lines[1].rect,
+            materialized[1].rect,
             LineRect {
                 left: 0.0,
                 top: 15.0,
-                right: 0.0,
+                right: 6.0,
                 bottom: 27.0
             }
         );
     }
 
-    /// 末尾改行（全グリフ可視）は空の新行を開く（後続 3.2 のあふれ判定入力になる形）。
+    /// 末尾改行（後続の可視グリフを持たない）は保留のまま蒸発する——空行を開かない
+    /// （R1.1/1.2/5.2）。A→B 切替で A の末尾段落区切りが痕跡を残さない核心。
     #[test]
-    fn trailing_line_break_opens_empty_line() {
+    fn trailing_line_break_defers_and_evaporates() {
         let region = TextRegion::resolve(
             &model((Some(0), Some(0)), (None, None)),
             IMAGE,
@@ -762,8 +811,232 @@ mod tests {
             12.0,
             &FixedMetrics,
         );
-        assert_eq!(lines.len(), 2);
-        assert!(lines[1].glyphs.is_empty());
+        assert_eq!(lines.len(), 1, "末尾保留改行は蒸発＝空行を開かない");
+        assert_eq!(lines[0].glyphs.len(), 1);
+    }
+
+    // ── 遅延意味論（deferred newline・newline-defer）の判断分岐（FixedMetrics 全網羅） ──
+
+    /// 3.1: 連続する複数の改行マーカーは単一の累算保留として実体化され、中間に空行が生じず
+    /// 行間が ratio 合計（`pitch × Σratio`）になる。実体化後の後続グリフは通常配置（pending
+    /// 消費済み）。`[a, \n, \n(0.5), b, c]` → 2 行（a／b c・間隔 pitch×1.5）。
+    #[test]
+    fn consecutive_newlines_accumulate_into_single_flush() {
+        let region = TextRegion::resolve(
+            &model((Some(0), Some(0)), (None, None)),
+            IMAGE,
+            WritingMode::HorizontalTb,
+        );
+        let items = [
+            TextItem::Glyph { ch: 'a' },
+            TextItem::LineBreak { ratio: 1.0 },
+            TextItem::LineBreak { ratio: 0.5 },
+            TextItem::Glyph { ch: 'b' },
+            TextItem::Glyph { ch: 'c' },
+        ];
+        // font 12 → pitch 15。累算 Σratio=1.5 → 行送り 22.5。
+        let lines = LayoutEngine::layout(
+            &items,
+            3,
+            &region,
+            WritingMode::HorizontalTb,
+            12.0,
+            &FixedMetrics,
+        );
+        assert_eq!(lines.len(), 2, "連続改行は単一累算＝中間空行なし");
+        let tops: Vec<f32> = lines.iter().map(|l| l.rect.top).collect();
+        assert_eq!(tops, vec![0.0, 22.5], "行間 = pitch(15) × Σratio(1.5)");
+        assert_eq!(lines[0].glyphs.len(), 1, "行 0 は a のみ");
+        assert_eq!(
+            lines[1].glyphs.len(),
+            2,
+            "行 1 は b c（pending 消費済みで通常配置）"
+        );
+    }
+
+    /// 3.2: 先頭改行（可視グリフ配置前の保留）は空行を作らず block 前進のみで実体化する
+    /// （DD-2）・`ratio 0` の改行は「送りゼロで行を替える」縮退挙動を保つ（DD-5）・改行
+    /// マーカーのみの入力（可視グリフなし）は 0 行を返し内容ビューボックスを変化させない（1.5）。
+    #[test]
+    fn leading_newline_zero_ratio_and_newline_only_input() {
+        let region = TextRegion::resolve(
+            &model((Some(0), Some(0)), (None, None)),
+            IMAGE,
+            WritingMode::HorizontalTb,
+        );
+        // (a) 先頭改行 `[\n, a]` → 1 行・block 位置 start + pitch(15)・空行なし。
+        let leading = [TextItem::LineBreak { ratio: 1.0 }, TextItem::Glyph { ch: 'a' }];
+        let lines = LayoutEngine::layout(
+            &leading,
+            1,
+            &region,
+            WritingMode::HorizontalTb,
+            12.0,
+            &FixedMetrics,
+        );
+        assert_eq!(lines.len(), 1, "先頭改行は空行を作らない");
+        assert_eq!(lines[0].rect.top, 15.0, "block 位置は start + pitch へ前進");
+        assert_eq!(lines[0].glyphs.len(), 1);
+
+        // (b) ratio 0 `[a, \n(0), b]` → 2 行・同一 block 位置（行替えのみ・送りゼロ）。
+        let zero = [
+            TextItem::Glyph { ch: 'a' },
+            TextItem::LineBreak { ratio: 0.0 },
+            TextItem::Glyph { ch: 'b' },
+        ];
+        let zlines = LayoutEngine::layout(
+            &zero,
+            2,
+            &region,
+            WritingMode::HorizontalTb,
+            12.0,
+            &FixedMetrics,
+        );
+        assert_eq!(zlines.len(), 2, "ratio 0 でも行を替える");
+        let ztops: Vec<f32> = zlines.iter().map(|l| l.rect.top).collect();
+        assert_eq!(ztops, vec![0.0, 0.0], "送りゼロ＝同一 block 位置");
+
+        // (c) 改行のみ `[\n, \n]`（可視グリフなし）→ 0 行（ビューボックス不変の構造的証明）。
+        let only = [
+            TextItem::LineBreak { ratio: 1.0 },
+            TextItem::LineBreak { ratio: 1.0 },
+        ];
+        let empty = LayoutEngine::layout(
+            &only,
+            0,
+            &region,
+            WritingMode::HorizontalTb,
+            12.0,
+            &FixedMetrics,
+        );
+        assert!(empty.is_empty(), "改行のみの入力は 0 行（占有範囲を作らない）");
+    }
+
+    /// 3.3: typewriter リビール進行との整合。同一 items で可視グリフ数を段階的に増やすと、
+    /// 改行マーカーの実体化はその改行より後ろの可視グリフが現れた時点でのみ起きる（R4.1/4.2）。
+    /// `[a, \n, b, \n, c]` の可視 1→2→3 で行数 1→2→3。
+    #[test]
+    fn reveal_progression_materializes_only_when_next_glyph_appears() {
+        let region = TextRegion::resolve(
+            &model((Some(0), Some(0)), (None, None)),
+            IMAGE,
+            WritingMode::HorizontalTb,
+        );
+        let items = [
+            TextItem::Glyph { ch: 'a' },
+            TextItem::LineBreak { ratio: 1.0 },
+            TextItem::Glyph { ch: 'b' },
+            TextItem::LineBreak { ratio: 1.0 },
+            TextItem::Glyph { ch: 'c' },
+        ];
+        // 可視 v のとき行数 v（改行はその後ろのグリフが reveal された時点でのみ実体化）。
+        for visible in 1..=3 {
+            let lines = LayoutEngine::layout(
+                &items,
+                visible,
+                &region,
+                WritingMode::HorizontalTb,
+                12.0,
+                &FixedMetrics,
+            );
+            assert_eq!(
+                lines.len(),
+                visible,
+                "可視 {visible}: 改行の実体化は後続グリフの reveal 時のみ（保留は行を開かない）"
+            );
+            // 末尾行は必ず可視グリフを含む（空行を出さない Postcondition 1）。
+            assert!(lines.iter().all(|l| !l.glyphs.is_empty()));
+        }
+    }
+
+    /// 3.4: 満杯付近で保留改行が実体化された直後にあふれ判定が従来どおり発火する（3.2/7.3 後段）。
+    /// 満杯 3 行＋`\n`＋**次の可視グリフ**（実体化トリガあり）→ 4 行目が実体化しあふれ発火。
+    /// 保留のみ（次グリフなし）で不発火である対の片側は `trailing_pending_newline_does_not_
+    /// trigger_overflow`（既存更新檻）が担保する。
+    #[test]
+    fn materialized_newline_near_full_triggers_overflow() {
+        let region = TextRegion::resolve(
+            &model_rect((Some(0), Some(0)), (Some(0), Some(36), Some(0), Some(400))),
+            IMAGE,
+            WritingMode::HorizontalTb,
+        );
+        // 満杯 3 行（下端 10/23/36）＋改行＋次グリフ → 改行が実体化し 4 行目（下端 49 > 36）。
+        let mut items = broken_lines(3);
+        items.push(TextItem::LineBreak { ratio: 1.0 });
+        items.push(TextItem::Glyph { ch: 'あ' });
+        let window = window_for(&items, &region, WritingMode::HorizontalTb, 10.0);
+        assert_eq!(
+            window,
+            VisibleWindow {
+                first_visible_line: 1,
+                block_offset: -13.0
+            },
+            "実体化後は従来どおりあふれ発火（次グリフが保留改行を実体化）"
+        );
+    }
+
+    /// 3.5: 縦書き（vertical_rl／vertical_lr）でも横書きと同一の遅延・累算・実体化・蒸発規則が
+    /// 成立し、行送りが軸読み替え正準表（`block_dir × pitch × Σratio`）に従う（R6.1/6.2）。
+    #[test]
+    fn deferred_rules_hold_in_vertical_modes() {
+        // (a) vertical_rl 累算実体化: `[あ, \n, \n(0.5), あ]` → 2 列・列送り −x で Σratio 1.5。
+        let region_rl = TextRegion::resolve(
+            &model((None, None), (None, None)),
+            IMAGE,
+            WritingMode::VerticalRl,
+        );
+        let acc = [
+            TextItem::Glyph { ch: 'あ' },
+            TextItem::LineBreak { ratio: 1.0 },
+            TextItem::LineBreak { ratio: 0.5 },
+            TextItem::Glyph { ch: 'あ' },
+        ];
+        // font 12 → pitch 15。書字開始角 x=400。列 1 の右辺 = 400 − 15×1.5 = 377.5。
+        let lines = LayoutEngine::layout(
+            &acc,
+            2,
+            &region_rl,
+            WritingMode::VerticalRl,
+            12.0,
+            &FixedMetrics,
+        );
+        assert_eq!(lines.len(), 2, "縦書きでも連続改行は単一累算（中間列なし）");
+        assert_eq!(lines[0].rect.right, 400.0);
+        assert_eq!(lines[1].rect.right, 377.5, "列送り = block_dir × pitch × Σratio");
+
+        // (b) 縦書き 2 方向で trailing 改行は蒸発する（`[あ, \n]` → 1 列）。
+        for mode in [WritingMode::VerticalRl, WritingMode::VerticalLr] {
+            let region = TextRegion::resolve(&model((None, None), (None, None)), IMAGE, mode);
+            let trailing = [TextItem::Glyph { ch: 'あ' }, TextItem::LineBreak { ratio: 1.0 }];
+            let t = LayoutEngine::layout(&trailing, 1, &region, mode, 12.0, &FixedMetrics);
+            assert_eq!(t.len(), 1, "{mode:?}: 末尾保留改行は蒸発（空列なし）");
+        }
+    }
+
+    /// 3.6: 決定論（同一入力→同一出力）に、連続改行・末尾改行を含む新しい入力パターンを
+    /// 追加し、遅延意味論の全分岐が 3 方向で同一入力→同一出力を返すことを確認する（7.1）。
+    #[test]
+    fn deferred_semantics_same_input_yields_identical_output() {
+        let model = model((Some(0), Some(0)), (Some(50), None));
+        for mode in [
+            WritingMode::HorizontalTb,
+            WritingMode::VerticalRl,
+            WritingMode::VerticalLr,
+        ] {
+            let region = TextRegion::resolve(&model, IMAGE, mode);
+            // 連続改行＋末尾改行を含む列（遅延・累算・実体化・蒸発の全分岐を通す）。
+            let items = [
+                TextItem::LineBreak { ratio: 1.0 },
+                TextItem::Glyph { ch: 'あ' },
+                TextItem::LineBreak { ratio: 1.0 },
+                TextItem::LineBreak { ratio: 0.5 },
+                TextItem::Glyph { ch: 'a' },
+                TextItem::LineBreak { ratio: 1.0 },
+            ];
+            let first = LayoutEngine::layout(&items, 2, &region, mode, 10.0, &FixedMetrics);
+            let second = LayoutEngine::layout(&items, 2, &region, mode, 10.0, &FixedMetrics);
+            assert_eq!(first, second, "mode {mode:?} で遅延意味論の決定論が崩れている");
+        }
     }
 
     /// 折返し・改行後の行は描画開始点の行内成分へ戻る（origin が validrect 内部の場合も
@@ -1013,25 +1286,28 @@ mod tests {
         );
     }
 
-    /// 末尾の空行（trailing 改行）も「最新行」としてあふれ判定に参加する
-    /// （追記された改行が領域を超えれば発火——3.1 の空行出力との接続）。
+    /// 末尾の保留改行はあふれ判定に参加しない（内容ビューボックスを増やさない・
+    /// R3.1/5.3/7.3 前段）。満杯 3 行（ちょうど収まる）＋trailing `\n` → 保留のまま
+    /// 蒸発しあふれ不発火（`first_visible_line=0`）。新規檻 5（実体化後発火）と対を成す。
     #[test]
-    fn trailing_empty_line_participates_in_overflow() {
+    fn trailing_pending_newline_does_not_trigger_overflow() {
         let region = TextRegion::resolve(
             &model_rect((Some(0), Some(0)), (Some(0), Some(36), Some(0), Some(400))),
             IMAGE,
             WritingMode::HorizontalTb,
         );
-        // 3 行（ちょうど収まる）＋末尾改行 → 空の 4 行目（下端 49 > 36）で発火。
+        // 3 行（下端 10/23/36——ちょうど収まる）＋末尾改行は保留のまま蒸発＝空 4 行目を
+        // 開かないためあふれ入力に現れない。
         let mut items = broken_lines(3);
         items.push(TextItem::LineBreak { ratio: 1.0 });
         let window = window_for(&items, &region, WritingMode::HorizontalTb, 10.0);
         assert_eq!(
             window,
             VisibleWindow {
-                first_visible_line: 1,
-                block_offset: -13.0
-            }
+                first_visible_line: 0,
+                block_offset: 0.0
+            },
+            "保留改行はあふれ判定に不参加（スクロール不発火）"
         );
     }
 

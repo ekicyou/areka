@@ -19,6 +19,7 @@
 //! `Unloading{Fault}`→`Stopped` の正規遷移で表現する・Req 6.4）。
 
 use crate::msg::{CloseReason, KanadeConfig, MonotonicMs, ShioriCall, ShioriOutcome};
+use crate::status::ExecutionSnapshot;
 use crate::talk::{StartTalk, TalkDone, TalkEndReason, TalkId};
 
 pub(crate) mod boot;
@@ -51,7 +52,9 @@ pub(crate) enum Phase {
     BootInit,
     BootType,
     BootMain,
-    BootVersion,
+    /// basewareversion 応答待ち。起動挨拶を追跡する場合は `talk: Some(_)`（DD-IT-12）。
+    /// 挨拶が無い（204）boot は `talk: None`＝従来どおり `Steady{talk: None}` へ完了する。
+    BootVersion { talk: Option<ActiveTalk> },
     Steady { talk: Option<ActiveTalk> },
     ClosePending { reason: CloseReason },
     CloseTalkWait { talk_id: TalkId, deadline: Option<MonotonicMs> },
@@ -157,20 +160,30 @@ pub(crate) fn step(state: State, input: Input, config: &KanadeConfig) -> (State,
     }
 }
 
+/// 送出時点の運行フェーズから実行状態スナップショットを導出する（DD-IT-3）。
+/// アクティブな talk を運ぶ phase のみ talk_active=true。
+pub(crate) fn snapshot_of(phase: &Phase) -> ExecutionSnapshot {
+    match phase {
+        // アクティブな talk を運ぶ phase＝Steady{Some} と（挨拶追跡中の）BootVersion{Some}（DD-IT-12）。
+        Phase::Steady { talk: Some(_) } | Phase::BootVersion { talk: Some(_) } => {
+            ExecutionSnapshot { talk_active: true }
+        }
+        _ => ExecutionSnapshot::INACTIVE,
+    }
+}
+
 /// ForceQuit の横断遷移（DD-10）: best-effort OnClose NOTIFY を先頭に積み Unloading{Forced} へ。
 ///
-/// OnClose の Reference 表構成は本来 `events.rs`（タスク 2.2）が唯一の実装点だが、
-/// 2.1 は events へ依存できないため、この 1 本の退化した NOTIFY のみをインラインで組む。
-/// events.rs 実装後は Reference 表構成をそちらへ委ねる。
+/// OnClose NOTIFY の構築は events.rs（[`events::on_close_notify`]）へ委譲する——events.rs が
+/// `ShioriCall` 構築の単一列挙点であり、force_quit はもはや inline 構築しない（DD-IT-8）。
+/// スナップショットは Unloading へ遷移**後**の [`snapshot_of`]（＝INACTIVE）を渡す（DD-IT-4）。
 fn force_quit(mut state: State, reason: CloseReason) -> (State, Vec<Action>) {
     tracing::warn!(target: "kanade", event = "force_quit", reason = reason.as_ref_str(), "強制終了指示——終了系列（Forced）へ直行");
     state.phase = Phase::Unloading {
         cause: TermCause::Forced,
     };
-    let notify = Action::ShioriRequest(ShioriCall::Notify {
-        id: "OnClose",
-        references: vec![reason.as_ref_str().to_string()],
-    });
+    let notify =
+        Action::ShioriRequest(events::on_close_notify(reason, &snapshot_of(&state.phase)));
     (state, vec![notify, Action::ShioriUnload])
 }
 
@@ -261,9 +274,11 @@ fn unloading_reply(mut state: State, outcome: ShioriOutcome) -> (State, Vec<Acti
 /// フェーズ固有遷移への委譲（boot／steady／close・後続タスクが本体を実装）。
 fn dispatch_phase(state: State, input: Input, config: &KanadeConfig) -> (State, Vec<Action>) {
     match state.phase {
-        Phase::Idle | Phase::BootInit | Phase::BootType | Phase::BootMain | Phase::BootVersion => {
-            boot::step(state, input, config)
-        }
+        Phase::Idle
+        | Phase::BootInit
+        | Phase::BootType
+        | Phase::BootMain
+        | Phase::BootVersion { .. } => boot::step(state, input, config),
         Phase::Steady { .. } => steady::step(state, input, config),
         Phase::ClosePending { .. } | Phase::CloseTalkWait { .. } => {
             close::step(state, input, config)
@@ -291,7 +306,7 @@ fn awaits_reply(phase: &Phase) -> bool {
         Phase::BootInit
             | Phase::BootType
             | Phase::BootMain
-            | Phase::BootVersion
+            | Phase::BootVersion { .. }
             | Phase::Steady { .. }
             | Phase::ClosePending { .. }
     )
@@ -300,7 +315,12 @@ fn awaits_reply(phase: &Phase) -> bool {
 /// 現フェーズが突合対象とする active talk の talk_id（無ければ None）。
 fn current_talk_id(phase: &Phase) -> Option<TalkId> {
     match phase {
+        // 挨拶追跡中の BootVersion も突合対象に含める（TalkDone が BootVersion 中に届いた場合の
+        // 防御・DD-IT-12）。主要な突合は BootVersion→Steady 完了後の Steady{Some} で成立する。
         Phase::Steady {
+            talk: Some(active), ..
+        }
+        | Phase::BootVersion {
             talk: Some(active), ..
         } => Some(active.talk_id),
         Phase::CloseTalkWait { talk_id, .. } => Some(*talk_id),
@@ -407,7 +427,7 @@ mod tests {
         assert!(matches!(next.phase, Phase::Unloading { cause: TermCause::Forced }));
         assert_eq!(actions.len(), 2);
         match &actions[0] {
-            Action::ShioriRequest(ShioriCall::Notify { id, references }) => {
+            Action::ShioriRequest(ShioriCall::Notify { id, references, .. }) => {
                 assert_eq!(*id, "OnClose");
                 assert_eq!(references, &vec!["system".to_string()]);
             }
