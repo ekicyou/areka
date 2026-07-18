@@ -181,12 +181,9 @@ impl TextRegion {
             WritingMode::HorizontalTb => {
                 resolve_or(model.wordwrappoint().x(), width, right, "wordwrappoint.x")
             }
-            WritingMode::VerticalRl | WritingMode::VerticalLr => resolve_or(
-                model.wordwrappoint().y(),
-                height,
-                bottom,
-                "wordwrappoint.y",
-            ),
+            WritingMode::VerticalRl | WritingMode::VerticalLr => {
+                resolve_or(model.wordwrappoint().y(), height, bottom, "wordwrappoint.y")
+            }
         };
 
         TextRegion {
@@ -308,6 +305,7 @@ mod tests {
             WordWrapPoint::new(wordwrap.0, wordwrap.1),
             ValidRect::new(validrect.0, validrect.1, validrect.2, validrect.3),
             Font::new(None, None, FontColor::new(None, None, None)),
+            None,
             None,
         )
     }

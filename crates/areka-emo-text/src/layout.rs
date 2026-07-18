@@ -300,9 +300,7 @@ impl LayoutEngine {
         // boundary＝validrect の行送り側境界。正準表のあふれ判定行と 1:1。
         type Edge = fn(&PositionedLine) -> f32;
         let (near, far, boundary, block_dir): (Edge, Edge, f32, f32) = match mode {
-            WritingMode::HorizontalTb => {
-                (|l| l.rect.top, |l| l.rect.bottom, region.bottom(), 1.0)
-            }
+            WritingMode::HorizontalTb => (|l| l.rect.top, |l| l.rect.bottom, region.bottom(), 1.0),
             WritingMode::VerticalRl => (|l| -l.rect.right, |l| -l.rect.left, -region.left(), -1.0),
             WritingMode::VerticalLr => (|l| l.rect.left, |l| l.rect.right, region.right(), 1.0),
         };
@@ -397,6 +395,7 @@ mod tests {
             ValidRect::new(None, None, None, None),
             Font::new(None, None, FontColor::new(None, None, None)),
             None,
+            None,
         )
     }
 
@@ -453,7 +452,10 @@ mod tests {
             &FixedMetrics,
         );
         assert_eq!(lines.len(), 2);
-        assert_eq!(inline_positions(&lines[0]), vec![0.0, 10.0, 20.0, 30.0, 40.0]);
+        assert_eq!(
+            inline_positions(&lines[0]),
+            vec![0.0, 10.0, 20.0, 30.0, 40.0]
+        );
         assert_eq!(inline_positions(&lines[1]), vec![0.0]);
         // 行矩形: 行内範囲＝開始〜送り終端・行送り軸は +y へ pitch(13) 進む。
         assert_eq!(
@@ -678,7 +680,11 @@ mod tests {
             10.0,
             &FixedMetrics,
         );
-        assert_eq!(lines.len(), 2, "1 行 1 グリフで前進する（無限ループしない）");
+        assert_eq!(
+            lines.len(),
+            2,
+            "1 行 1 グリフで前進する（無限ループしない）"
+        );
         assert_eq!(inline_positions(&lines[0]), vec![0.0]);
         assert_eq!(inline_positions(&lines[1]), vec![0.0]);
     }
@@ -802,7 +808,10 @@ mod tests {
             IMAGE,
             WritingMode::HorizontalTb,
         );
-        let items = [TextItem::Glyph { ch: 'あ' }, TextItem::LineBreak { ratio: 1.0 }];
+        let items = [
+            TextItem::Glyph { ch: 'あ' },
+            TextItem::LineBreak { ratio: 1.0 },
+        ];
         let lines = LayoutEngine::layout(
             &items,
             1,
@@ -865,7 +874,10 @@ mod tests {
             WritingMode::HorizontalTb,
         );
         // (a) 先頭改行 `[\n, a]` → 1 行・block 位置 start + pitch(15)・空行なし。
-        let leading = [TextItem::LineBreak { ratio: 1.0 }, TextItem::Glyph { ch: 'a' }];
+        let leading = [
+            TextItem::LineBreak { ratio: 1.0 },
+            TextItem::Glyph { ch: 'a' },
+        ];
         let lines = LayoutEngine::layout(
             &leading,
             1,
@@ -909,7 +921,10 @@ mod tests {
             12.0,
             &FixedMetrics,
         );
-        assert!(empty.is_empty(), "改行のみの入力は 0 行（占有範囲を作らない）");
+        assert!(
+            empty.is_empty(),
+            "改行のみの入力は 0 行（占有範囲を作らない）"
+        );
     }
 
     /// 3.3: typewriter リビール進行との整合。同一 items で可視グリフ数を段階的に増やすと、
@@ -1002,12 +1017,18 @@ mod tests {
         );
         assert_eq!(lines.len(), 2, "縦書きでも連続改行は単一累算（中間列なし）");
         assert_eq!(lines[0].rect.right, 400.0);
-        assert_eq!(lines[1].rect.right, 377.5, "列送り = block_dir × pitch × Σratio");
+        assert_eq!(
+            lines[1].rect.right, 377.5,
+            "列送り = block_dir × pitch × Σratio"
+        );
 
         // (b) 縦書き 2 方向で trailing 改行は蒸発する（`[あ, \n]` → 1 列）。
         for mode in [WritingMode::VerticalRl, WritingMode::VerticalLr] {
             let region = TextRegion::resolve(&model((None, None), (None, None)), IMAGE, mode);
-            let trailing = [TextItem::Glyph { ch: 'あ' }, TextItem::LineBreak { ratio: 1.0 }];
+            let trailing = [
+                TextItem::Glyph { ch: 'あ' },
+                TextItem::LineBreak { ratio: 1.0 },
+            ];
             let t = LayoutEngine::layout(&trailing, 1, &region, mode, 12.0, &FixedMetrics);
             assert_eq!(t.len(), 1, "{mode:?}: 末尾保留改行は蒸発（空列なし）");
         }
@@ -1035,7 +1056,10 @@ mod tests {
             ];
             let first = LayoutEngine::layout(&items, 2, &region, mode, 10.0, &FixedMetrics);
             let second = LayoutEngine::layout(&items, 2, &region, mode, 10.0, &FixedMetrics);
-            assert_eq!(first, second, "mode {mode:?} で遅延意味論の決定論が崩れている");
+            assert_eq!(
+                first, second,
+                "mode {mode:?} で遅延意味論の決定論が崩れている"
+            );
         }
     }
 
@@ -1082,6 +1106,7 @@ mod tests {
             WordWrapPoint::new(None, None),
             ValidRect::new(validrect.0, validrect.1, validrect.2, validrect.3),
             Font::new(None, None, FontColor::new(None, None, None)),
+            None,
             None,
         )
     }

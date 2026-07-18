@@ -294,6 +294,7 @@ mod tests {
             ValidRect::new(validrect.0, validrect.1, validrect.2, validrect.3),
             Font::new(None, None, FontColor::new(None, None, None)),
             None,
+            None,
         )
     }
 
@@ -382,14 +383,22 @@ mod tests {
     #[test]
     fn from_layout_generates_one_glyph_resident_per_line() {
         let region = TextRegion::resolve(
-            &model((Some(0), Some(0)), (Some(50), None), (None, None, None, None)),
+            &model(
+                (Some(0), Some(0)),
+                (Some(50), None),
+                (None, None, None, None),
+            ),
             IMAGE,
             WritingMode::HorizontalTb,
         );
         // layout 檻と同一幾何: 全角 6・font 10 → 2 行（行 0: 5 グリフ・行 1: 1 グリフ）。
         let (lines, canvas) = canvas_for(&glyphs(6), &region, WritingMode::HorizontalTb, 10.0);
         assert_eq!(lines.len(), 2);
-        assert_eq!(canvas.residents.len(), 2, "1 行 = 1 グリフ住人（index 1:1）");
+        assert_eq!(
+            canvas.residents.len(),
+            2,
+            "1 行 = 1 グリフ住人（index 1:1）"
+        );
         assert_eq!(canvas.size, (400.0, 224.0), "canvas 寸 = validrect 寸");
 
         // 行 0: 変換 = validrect-local の行矩形原点 (0,0)・グリフはローカル 0,10,…,40。
@@ -401,7 +410,11 @@ mod tests {
         assert_eq!(run0.size, (50.0, 10.0));
         let inline0: Vec<f32> = run0.glyphs.iter().map(|g| g.inline_pos).collect();
         assert_eq!(inline0, vec![0.0, 10.0, 20.0, 30.0, 40.0]);
-        assert!(run0.glyphs.iter().all(|g| g.ch == 'あ' && g.advance == 10.0));
+        assert!(
+            run0.glyphs
+                .iter()
+                .all(|g| g.ch == 'あ' && g.advance == 10.0)
+        );
 
         // 行 1: 変換 = (0, 13)（pitch 分の平行移動）・ローカル 0 起点。
         let r1 = &canvas.residents[1];
@@ -458,7 +471,11 @@ mod tests {
         // validrect-local: (390−360, 20−20) = (30, 0)。
         assert_eq!(resident.transform.offset(), (30.0, 0.0));
         let run = glyph_run(resident);
-        assert_eq!(run.size, (10.0, 20.0), "縦書き列: 幅=font 高・長さ=行内送り");
+        assert_eq!(
+            run.size,
+            (10.0, 20.0),
+            "縦書き列: 幅=font 高・長さ=行内送り"
+        );
         // 縦書きの行内軸は y——ローカル 0 起点で 0, 10。
         let inline: Vec<f32> = run.glyphs.iter().map(|g| g.inline_pos).collect();
         assert_eq!(inline, vec![0.0, 10.0]);
@@ -474,7 +491,10 @@ mod tests {
             IMAGE,
             WritingMode::HorizontalTb,
         );
-        let items = [TextItem::Glyph { ch: 'あ' }, TextItem::LineBreak { ratio: 1.0 }];
+        let items = [
+            TextItem::Glyph { ch: 'あ' },
+            TextItem::LineBreak { ratio: 1.0 },
+        ];
         let (lines, canvas) = canvas_for(&items, &region, WritingMode::HorizontalTb, 12.0);
         assert_eq!(lines.len(), 1, "末尾保留改行は蒸発＝空行なし");
         assert_eq!(canvas.residents.len(), 1, "行 1 = 住人 1（1:1）");
@@ -517,10 +537,18 @@ mod tests {
             },
         ];
         let canvas = ContentCanvas::from_layout(&synthetic, &region, WritingMode::HorizontalTb);
-        assert_eq!(canvas.residents.len(), 2, "写像は行数と 1:1（空行も住人化）");
+        assert_eq!(
+            canvas.residents.len(),
+            2,
+            "写像は行数と 1:1（空行も住人化）"
+        );
         let empty = glyph_run(&canvas.residents[1]);
         assert!(empty.glyphs.is_empty());
-        assert_eq!(empty.size, (0.0, 12.0), "空行は行内零幅・行送り軸は font 高");
+        assert_eq!(
+            empty.size,
+            (0.0, 12.0),
+            "空行は行内零幅・行送り軸は font 高"
+        );
         assert_eq!(canvas.residents[1].transform.offset(), (0.0, 15.0));
     }
 
@@ -610,7 +638,10 @@ mod tests {
             let (_, first) = canvas_for(&items, &region, mode, 10.0);
             let (_, second) = canvas_for(&items, &region, mode, 10.0);
             assert!(
-                first.residents.iter().all(|r| r.transform.is_translation_only()),
+                first
+                    .residents
+                    .iter()
+                    .all(|r| r.transform.is_translation_only()),
                 "mode {mode:?}: M1 の変換は恒等/平行移動のみ（R8.2）"
             );
             assert_eq!(first, second, "mode {mode:?} で決定論が崩れている");

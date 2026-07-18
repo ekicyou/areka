@@ -50,6 +50,7 @@ fn model(
         ValidRect::new(validrect.0, validrect.1, validrect.2, validrect.3),
         Font::new(None, None, FontColor::new(None, None, None)),
         writing_mode.map(str::to_owned),
+        None,
     )
 }
 
@@ -152,7 +153,10 @@ fn bindings_at_different_scales_derive_identical_image_size() {
         let surface = physical_surface(IMAGE, k);
         let b = binding(&mut world, k, surface);
         assert_eq!(b.scale, k, "k={k}: scale は透過保持される");
-        assert_eq!(b.surface_size, surface, "k={k}: 物理原寸はそのまま保持される");
+        assert_eq!(
+            b.surface_size, surface,
+            "k={k}: 物理原寸はそのまま保持される"
+        );
         assert_eq!(
             b.image_size, IMAGE,
             "k={k}: image_size = round(surface/k) が同一の画像原寸へ戻る"
@@ -216,7 +220,10 @@ fn physical_size_and_offset_map_from_region_at_each_scale() {
             contract.to_physical(ImagePx(region.left())).0,
             contract.to_physical(ImagePx(region.top())).0,
         );
-        assert_eq!(physical_size, want_size, "k={k}: 物理寸 = ceil(validrect 寸 × k)");
+        assert_eq!(
+            physical_size, want_size,
+            "k={k}: 物理寸 = ceil(validrect 寸 × k)"
+        );
         assert_eq!(
             physical_offset, want_offset,
             "k={k}: 物理オフセット = validrect 原点 × k"
@@ -246,7 +253,10 @@ fn physical_extent_ceils_fractional_values_killing_round_and_floor() {
     let resolved = ResolvedBalloonText::resolve(&m, b.image_size);
     let region = &resolved.region;
     assert_eq!(
-        (region.right() - region.left(), region.bottom() - region.top()),
+        (
+            region.right() - region.left(),
+            region.bottom() - region.top()
+        ),
         (321.0, 123.0)
     );
     let contract = ScaleContract::new(b.scale, None);
@@ -379,10 +389,16 @@ fn same_derived_image_size_yields_identical_layout_regardless_of_scale() {
     };
     let (lines_a, window_a) = layout_of(&via_identity);
     let (lines_b, window_b) = layout_of(&via_quarter);
-    assert_eq!(lines_a, lines_b, "同一 image_size → 同一レイアウト（k 非依存）");
+    assert_eq!(
+        lines_a, lines_b,
+        "同一 image_size → 同一レイアウト（k 非依存）"
+    );
     assert_eq!(window_a, window_b);
     // 空虚一致の排除: wordwrappoint.x,-49 → 401-49=352 で折返しが実際に起きている。
-    assert!(lines_a.len() > 1, "折返しが発生する幾何であること（檻の有意性）");
+    assert!(
+        lines_a.len() > 1,
+        "折返しが発生する幾何であること（檻の有意性）"
+    );
 }
 
 // ══ R11.9 構造側（縦書き）: vertical_rl／vertical_lr でも可視窓決定まで k 非依存 ══

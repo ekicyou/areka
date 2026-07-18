@@ -9,9 +9,19 @@
 
 #![cfg(test)]
 
+use std::collections::BTreeMap;
+
 use crate::balloon::{
-    BalloonModel, Font, FontColor, Origin, ValidRect, WindowPosition, WordWrapPoint,
+    BalloonModel, Font, FontColor, Origin, ValidRect, WindowPosition, WordWrapPoint, parse,
 };
+
+/// テスト用: `&[(k, v)]` からフラット KV `BTreeMap` を組む小ヘルパ（parse_tests 流儀）。
+fn kv_map(pairs: &[(&str, &str)]) -> BTreeMap<String, String> {
+    pairs
+        .iter()
+        .map(|(k, v)| ((*k).to_owned(), (*v).to_owned()))
+        .collect()
+}
 
 #[test]
 fn window_position_accessors_read_components() {
@@ -132,6 +142,7 @@ fn balloon_model_aggregates_sub_structs_via_accessors() {
             FontColor::new(Some(255), Some(255), Some(255)),
         ),
         Some("vertical_rl".to_string()),
+        Some("1".to_string()),
     );
     assert_eq!(model.windowposition().x(), Some(-34));
     assert_eq!(model.origin().y(), Some(34));
@@ -143,6 +154,8 @@ fn balloon_model_aggregates_sub_structs_via_accessors() {
     assert_eq!(model.font().color().r(), Some(255));
     // writing_mode は借用で生文字列を読む（emo-text-layer 要件 5.6）。
     assert_eq!(model.writing_mode(), Some("vertical_rl"));
+    // budoux_newline も借用で生文字列を読む（budoux-newline 要件 1.1）。
+    assert_eq!(model.budoux_newline(), Some("1"));
 }
 
 #[test]
@@ -155,6 +168,7 @@ fn balloon_model_all_unspecified_is_none_distinct_from_zero() {
         ValidRect::new(None, None, None, None),
         Font::new(None, None, FontColor::new(None, None, None)),
         None,
+        None,
     );
     assert_eq!(unspecified.windowposition().x(), None);
     assert_eq!(unspecified.origin().x(), None);
@@ -162,6 +176,8 @@ fn balloon_model_all_unspecified_is_none_distinct_from_zero() {
     assert_eq!(unspecified.font().height(), None);
     // writing_mode 未指定は None（emo-text-layer 要件 5.6）。
     assert_eq!(unspecified.writing_mode(), None);
+    // budoux_newline 未指定も None（budoux-newline 要件 1.1/1.5）。
+    assert_eq!(unspecified.budoux_newline(), None);
 
     let zeros = BalloonModel::new(
         WindowPosition::new(Some(0), Some(0)),
@@ -169,6 +185,7 @@ fn balloon_model_all_unspecified_is_none_distinct_from_zero() {
         WordWrapPoint::new(Some(0), Some(0)),
         ValidRect::new(Some(0), Some(0), Some(0), Some(0)),
         Font::new(None, Some(0), FontColor::new(Some(0), Some(0), Some(0))),
+        None,
         None,
     );
     // 未指定モデルとゼロ埋めモデルは全体としても判別される。
@@ -189,4 +206,53 @@ fn types_derive_copy_and_clone_where_specified() {
     let font = Font::new(Some("A".to_string()), Some(1), color);
     let font_cloned = font.clone();
     assert_eq!(font, font_cloned);
+}
+
+// ── budoux_newline 拡張キーの転記（要件 1.1/1.5・writing_mode 写経） ──
+
+/// 基層/画像別上書き層の後勝ちマージで `budoux_newline` が転記される（要件 1.1）。
+///
+/// 基層のみ→基層値・画像別のみ→画像別値・両層→画像別が後勝ち、という 2 層マージ
+/// （既存 `parse` の `merged` 機構）に `budoux_newline` が正しく乗ることを固定する。
+#[test]
+fn budoux_newline_two_layer_merge_image_wins() {
+    // 両層に指定 → 画像別層が descript 基層を上書き（後勝ち・要件 1.1）。
+    let descript = kv_map(&[("budoux_newline", "0")]);
+    let image = kv_map(&[("budoux_newline", "1")]);
+    let merged = parse(&descript, Some(&image));
+    assert_eq!(merged.budoux_newline(), Some("1"));
+
+    // 基層のみ（画像別層 None）→ 基層値がそのまま転記される。
+    let base_only = parse(&descript, None);
+    assert_eq!(base_only.budoux_newline(), Some("0"));
+
+    // 画像別層のみキー保持（descript に無し）→ 画像別値を継承する。
+    let image_only = parse(&BTreeMap::new(), Some(&image));
+    assert_eq!(image_only.budoux_newline(), Some("1"));
+}
+
+/// `budoux_newline` は値を検証・解釈せず生文字列のまま転記する（要件 1.1）。
+///
+/// 受理語彙外の `abc` でも parser 層は素通し転記する（語彙判定・fallback は下流 emo
+/// テキスト層の責務・[areka-parser-transcribes-tree-downstream]）。
+#[test]
+fn budoux_newline_raw_string_no_validation() {
+    let descript = kv_map(&[("budoux_newline", "abc")]);
+    let got = parse(&descript, None);
+    // 未知語彙でも解釈せず生文字列のまま転記する。
+    assert_eq!(got.budoux_newline(), Some("abc"));
+}
+
+/// `budoux_newline` を書かない既存ゴーストの挙動は不変（未知キー自然無視・要件 1.5）。
+///
+/// キー欠落 → `budoux_newline()` は `None`、かつ他のモデル化キー（origin・writing_mode）は
+/// 影響を受けない（完全一致引きゆえ既存ゴースト無害）。
+#[test]
+fn budoux_newline_absent_is_none_and_other_keys_unaffected() {
+    let descript = kv_map(&[("origin.x", "12"), ("writing_mode", "vertical_rl")]);
+    let got = parse(&descript, None);
+    assert_eq!(got.budoux_newline(), None);
+    // 既存の他キーは budoux_newline 追加の影響を受けない（既存ゴースト挙動不変）。
+    assert_eq!(got.origin().x(), Some(12));
+    assert_eq!(got.writing_mode(), Some("vertical_rl"));
 }

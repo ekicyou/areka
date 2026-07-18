@@ -7,7 +7,7 @@
   - ビルドが通り分かち書き結果が決定論的に得られることを確認できた状態を完了とする
   - _Requirements: 1.2, 8.1_
 
-- [ ] 2. Parsers: budoux_newline 拡張キーの転記
+- [x] 2. Parsers: budoux_newline 拡張キーの転記
   - balloon モデルへ budoux_newline の生文字列を保持するフィールドとアクセサを、writing_mode と同じ型で追加する
   - descript 解析処理へ budoux_newline の転記を1箇所追加し、値の検証や解釈は一切行わない
   - 基層と画像別上書き層の後勝ちマージ経路で budoux_newline が正しく転記されることを確認するテストを追加する
