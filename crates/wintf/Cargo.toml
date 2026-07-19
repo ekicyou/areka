@@ -37,4 +37,7 @@ human-panic = { workspace = true }
 rand ={ workspace = true }
 async-io = { version = "2.6", default-features = false }
 tracing-subscriber = { workspace = true }
-image = "0.25.9"
+# default-features を無効化し必要なフォーマットのみ有効化。
+# デフォルトの exr/avif フィーチャが paste (RUSTSEC-2024-0436, non-maintained)
+# を pulp→exr / rav1e→ravif 経由で引き込むため。examples は png/webp のみ使用。
+image = { version = "0.25.9", default-features = false, features = ["png", "webp"] }
