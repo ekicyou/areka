@@ -2,16 +2,19 @@
 //!
 //! spine の S1（`spine_e2e_test.rs` の `s1_boot_success`）を **実 InProc DLL 境界越し**で再演する。
 //! S1 は台本 fake backend（`ScriptedShioriBackend`）が `\s[0]hello\e` を返すのに対し、本 I1 は
-//! `ShioriWiring::InProc` で実ビルド済み `shiori4_testdll.dll` をロードし、その OnBoot 応答（凍結
-//! スナップショット由来の起動挨拶）が kanade→start-relay→dispatcher→sakura→`RecordingSink` へ
-//! 届くまでを **注入時刻のみ**（時刻前進＝talk 進行は単調増加する `DispatcherMsg::Tick` の `now` 注入のみ・
-//! 実時計は talk を進めない）で駆動し、演出 cue 列を凍結台本由来の期待列と **全順序**で照合する
-//! （要件 5.1/5.5・design.md I1）。駆動ループは反復回数境界でなく **壁時計 deadline 境界**（task 2.4 方式）で
-//! 括り、poll 周期は `yield_now()`（sleep 不使用・要件 1.3）——deadline は宙吊り防止の上限にすぎず sim 時刻は
-//! 注入 Tick の `now` のみが進める。
+//! `ShioriWiring::InProc` で実ビルド済み `shiori4_testdll.dll` をロードし、その OnFirstBoot 応答（凍結
+//! スナップショット由来の実採取起動挨拶・task 6.2）が kanade→start-relay→dispatcher→sakura→
+//! `RecordingSink` へ届くまでを **注入時刻のみ**（時刻前進＝talk 進行は単調増加する
+//! `DispatcherMsg::Tick` の `now` 注入のみ・実時計は talk を進めない）で駆動し、演出 cue 列を凍結台本
+//! 由来の期待列と **全順序**で照合する（要件 5.1/5.5・design.md I1）。駆動ループは反復回数境界でなく
+//! **壁時計 deadline 境界**（task 2.4 方式）で括り、poll 周期は `yield_now()`（sleep 不使用・要件 1.3）
+//! ——deadline は宙吊り防止の上限にすぎず sim 時刻は注入 Tick の `now` のみが進める。
 //!
-//! さらに凍結応答が差し替えられた際の検出漏れを塞ぐため、期待列と凍結スナップショット
-//! （`shiori4_testdll::snapshot_for("OnBoot")`）の整合を **ドリフト検出 assert** で固定する（要件 5.2）。
+//! さらに凍結応答が差し替えられた際の検出漏れを塞ぐため、期待列（ハードコードした
+//! `expected_greeting_sequence` の `(actor, command)` 全順序）が独立の **ドリフト検出ピン**となる
+//! （要件 5.2）——凍結 Value が変われば DLL→compile が別列を産み、この期待列に一致しなくなる。加えて
+//! 凍結スナップショット（`shiori4_testdll::snapshot_for("OnFirstBoot")`）が 200＋Value＋非空である
+//! ことも固定する。
 //! 正常終了の握手は `shutdown(CloseReason::System)==Ok(())` で観測する（要件 5.3）。観測は演出配送の
 //! **受領レベル**（`RecordingSink`）に留め、実描画（サーフェス合成・画素読戻し）は要求しない（要件 5.5）。
 //!
@@ -77,16 +80,111 @@ impl ShioriBackend for BoxedBackend {
     }
 }
 
-/// 凍結 OnBoot スナップショットの Value（起動挨拶さくらスクリプト・tasks.md「[1.3 提供データ]」）。
-///
-/// 期待 cue 列（下記）とドリフト検出 assert の **単一の値源**。task 6.2 が実採取で PROVISIONAL を
-/// 置換する際は、この定数と期待列を凍結後の実データへ更新する（tasks.md 6.2・要件 2.6）。
-const EXPECTED_ONBOOT_VALUE: &str = r"\0\s[0]おはようございますわ（暫定）\e";
+/// 凍結 OnFirstBoot スナップショットの Value 行 payload（起動挨拶さくらスクリプト・task 6.2 実採取）を
+/// 抽出する。giant literal を持たず凍結スナップショットから導出して実採取差し替えへ自動追随させる
+/// （tasks.md 6.2）。ドリフト検出（要件 5.2）の第一義の錨は**ハードコードした期待 cue 列**
+/// [`expected_greeting_sequence`] であり、凍結 Value が変われば DLL→compile が別列を産んで一致
+/// しなくなる。本値は I2 の交信列（OnFirstBoot GET の Value 結果）の照合にも用いる。
+fn expected_onfirstboot_value() -> String {
+    let snapshot = shiori4_testdll::snapshot_for("OnFirstBoot")
+        .expect("OnFirstBoot は shiori4-testdll のスナップショット表に収載されていること（narrowing: GET）");
+    snapshot
+        .lines()
+        .find_map(|l| l.strip_prefix("Value: "))
+        .expect("凍結 OnFirstBoot は 200＋Value 行を持つこと")
+        .to_string()
+}
 
-/// 起動挨拶のテキスト本文（`EXPECTED_ONBOOT_VALUE` の `\s[0]` と `\e` に挟まれた表示文字列）。
+/// I1/I2 の起動挨拶（実 emo2 OnFirstBoot 応答・task 6.2 実採取）が決定論的にコンパイルされる期待
+/// 演出列（`(actor, command)` の全順序・74 件）。
 ///
-/// 期待 Text cue の内容をこの定数から導出し、値源との連結を明示する（task 5.1）。
-const EXPECTED_GREETING_TEXT: &str = "おはようございますわ（暫定）";
+/// この列は sakura コンパイラ規則から**構造的に導出**し、実 parse+compile の観測列と**照合済み**
+/// （tasks.md「[6.2 sakura コンパイラ規則]」）である。要点: 非空台本は先頭 `ClearAll`（actor "0"）／
+/// `\p[N]` のみが actor を切替（裸 `\1` は cue も actor 切替も生まない）／`\![move/bind,...]` は無視
+/// （cue なし）／`\s[key]`→`Emote{key}`／`\_w[ms]`→第一級 `Wait`／`\n`→`NewLine{1.0}`・
+/// `\n[150]`→`NewLine{1.5}`／テキスト run→`Text`／`\e`→終端切詰め。**独立の drift-detection ピン**
+/// （要件 5.2）——凍結 Value が変われば DLL→compile 出力が変わり本列に一致しなくなる。
+///
+/// `at`/`duration` の float は照合しない（テキスト速度チューニングが台本改変なしに壊すため）——
+/// 照合対象は `(actor, command)` の全順序と `at` の非減少性のみ（tasks.md 6.2 I1）。
+fn expected_greeting_sequence() -> Vec<(ActorKey, CueCommand)> {
+    vec![
+        (ActorKey::from("0"), CueCommand::ClearAll),
+        (ActorKey::from("1"), CueCommand::Emote { key: "静観".to_string() }),
+        (ActorKey::from("1"), CueCommand::NewLine { ratio: 1.5_f32 }),
+        (ActorKey::from("0"), CueCommand::Emote { key: "1000".to_string() }),
+        (ActorKey::from("0"), CueCommand::Text("はじめましてや！！".to_string())),
+        (ActorKey::from("0"), CueCommand::Wait),
+        (ActorKey::from("0"), CueCommand::Text("うちは、".to_string())),
+        (ActorKey::from("0"), CueCommand::Wait),
+        (ActorKey::from("0"), CueCommand::NewLine { ratio: 1_f32 }),
+        (ActorKey::from("0"), CueCommand::Text("むらさき。".to_string())),
+        (ActorKey::from("0"), CueCommand::Wait),
+        (ActorKey::from("0"), CueCommand::NewLine { ratio: 1.5_f32 }),
+        (ActorKey::from("1"), CueCommand::Emote { key: "笑顔".to_string() }),
+        (ActorKey::from("1"), CueCommand::Text("僕はエモ。".to_string())),
+        (ActorKey::from("1"), CueCommand::Wait),
+        (ActorKey::from("1"), CueCommand::NewLine { ratio: 1_f32 }),
+        (ActorKey::from("1"), CueCommand::Text("クール系の可愛い娘。".to_string())),
+        (ActorKey::from("1"), CueCommand::Wait),
+        (ActorKey::from("1"), CueCommand::NewLine { ratio: 1.5_f32 }),
+        (ActorKey::from("0"), CueCommand::Emote { key: "1000".to_string() }),
+        (ActorKey::from("0"), CueCommand::Text("そこ自分でいう‥".to_string())),
+        (ActorKey::from("0"), CueCommand::Wait),
+        (ActorKey::from("0"), CueCommand::Text("‥".to_string())),
+        (ActorKey::from("0"), CueCommand::Wait),
+        (ActorKey::from("0"), CueCommand::Text("。".to_string())),
+        (ActorKey::from("0"), CueCommand::Wait),
+        (ActorKey::from("0"), CueCommand::NewLine { ratio: 1.5_f32 }),
+        (ActorKey::from("1"), CueCommand::Emote { key: "照れ怒り".to_string() }),
+        (ActorKey::from("1"), CueCommand::Text("イイジャン！".to_string())),
+        (ActorKey::from("1"), CueCommand::Wait),
+        (ActorKey::from("1"), CueCommand::NewLine { ratio: 1_f32 }),
+        (ActorKey::from("1"), CueCommand::Text("‥".to_string())),
+        (ActorKey::from("1"), CueCommand::Wait),
+        (ActorKey::from("1"), CueCommand::Text("‥".to_string())),
+        (ActorKey::from("1"), CueCommand::Wait),
+        (ActorKey::from("1"), CueCommand::Text("ええと、".to_string())),
+        (ActorKey::from("1"), CueCommand::Wait),
+        (ActorKey::from("1"), CueCommand::NewLine { ratio: 1.5_f32 }),
+        (ActorKey::from("0"), CueCommand::Emote { key: "1000".to_string() }),
+        (ActorKey::from("0"), CueCommand::NewLine { ratio: 1.5_f32 }),
+        (ActorKey::from("1"), CueCommand::Emote { key: "静観".to_string() }),
+        (ActorKey::from("1"), CueCommand::Text("僕は日常から".to_string())),
+        (ActorKey::from("1"), CueCommand::NewLine { ratio: 1_f32 }),
+        (ActorKey::from("1"), CueCommand::Text("「感情」を".to_string())),
+        (ActorKey::from("1"), CueCommand::NewLine { ratio: 1_f32 }),
+        (ActorKey::from("1"), CueCommand::Text("探してるんだ。".to_string())),
+        (ActorKey::from("1"), CueCommand::Wait),
+        (ActorKey::from("1"), CueCommand::NewLine { ratio: 1.5_f32 }),
+        (ActorKey::from("0"), CueCommand::Emote { key: "1000".to_string() }),
+        (ActorKey::from("0"), CueCommand::Text("つまり、、".to_string())),
+        (ActorKey::from("0"), CueCommand::Wait),
+        (ActorKey::from("0"), CueCommand::Emote { key: "1000".to_string() }),
+        (ActorKey::from("0"), CueCommand::Text("エモを弄ってれば".to_string())),
+        (ActorKey::from("0"), CueCommand::NewLine { ratio: 1_f32 }),
+        (ActorKey::from("0"), CueCommand::Text("OK？".to_string())),
+        (ActorKey::from("0"), CueCommand::Wait),
+        (ActorKey::from("0"), CueCommand::NewLine { ratio: 1.5_f32 }),
+        (ActorKey::from("1"), CueCommand::Emote { key: "照れ怒り".to_string() }),
+        (ActorKey::from("1"), CueCommand::Text("ちがうよう。".to_string())),
+        (ActorKey::from("1"), CueCommand::Wait),
+        (ActorKey::from("1"), CueCommand::NewLine { ratio: 1.5_f32 }),
+        (ActorKey::from("0"), CueCommand::Emote { key: "1000".to_string() }),
+        (ActorKey::from("0"), CueCommand::Text("まあ、".to_string())),
+        (ActorKey::from("0"), CueCommand::Wait),
+        (ActorKey::from("0"), CueCommand::Emote { key: "1000".to_string() }),
+        (ActorKey::from("0"), CueCommand::Text("これから、".to_string())),
+        (ActorKey::from("0"), CueCommand::Wait),
+        (ActorKey::from("0"), CueCommand::NewLine { ratio: 1_f32 }),
+        (ActorKey::from("0"), CueCommand::Text("よろしゅうに！".to_string())),
+        (ActorKey::from("0"), CueCommand::Wait),
+        (ActorKey::from("0"), CueCommand::NewLine { ratio: 1.5_f32 }),
+        (ActorKey::from("1"), CueCommand::Emote { key: "笑顔".to_string() }),
+        (ActorKey::from("1"), CueCommand::Text("よろしくね。".to_string())),
+        (ActorKey::from("1"), CueCommand::Wait),
+    ]
+}
 
 /// 有界待機ヘルパ（spine S1／runtime.rs の `run_bounded` と同旨のローカルコピー）。`shutdown` を
 /// 別スレッドへ逃がし `recv_timeout` で宙吊りを防ぐ（`ActorHandle::join` 由来のブロックを括る）。
@@ -105,23 +203,21 @@ fn run_bounded<F: FnOnce() + Send + 'static>(what: &str, timeout: Duration, f: F
 /// I1: 起動から終話までの一周を注入時刻のみで駆動し、起動挨拶の演出列が凍結台本由来の期待列と
 /// 全順序で一致することを照合する（＋ドリフト検出＋正常終了握手・要件 5.1/5.2/5.3/5.4/5.5/1.1/1.3）。
 #[test]
-fn i1_inproc_one_lap_records_frozen_onboot_greeting_and_closes_cleanly() {
-    // ---- ドリフト検出（要件 5.2）: 期待列の値源（EXPECTED_ONBOOT_VALUE）が実 DLL の凍結
-    //      スナップショットと一致することを先に固定する。凍結応答が task 6.2 等で差し替えられた
-    //      のに期待列が追随していない場合、この assert（および後段の cue 列 assert）が確実に fail し、
-    //      検出漏れ（silent drift）を塞ぐ。加えて期待 Text 本文が値源に含まれることも連結固定する。 ----
-    let snapshot = shiori4_testdll::snapshot_for("OnBoot")
-        .expect("OnBoot は shiori4-testdll のスナップショット表に収載されていること（narrowing: GET）");
+fn i1_inproc_one_lap_records_frozen_onfirstboot_greeting_and_closes_cleanly() {
+    // ---- ドリフト検出（要件 5.2）: 独立の錨は下段のハードコード期待列
+    //      （expected_greeting_sequence）——凍結 Value が差し替えられれば DLL→compile が別列を
+    //      産み、cue 列 assert が確実に fail する。ここでは加えて凍結スナップショットが 200＋Value
+    //      ＋非空であることを固定する（採取形の退行防止）。 ----
+    let snapshot = shiori4_testdll::snapshot_for("OnFirstBoot")
+        .expect("OnFirstBoot は shiori4-testdll のスナップショット表に収載されていること（narrowing: GET）");
     assert!(
-        snapshot.contains(EXPECTED_ONBOOT_VALUE),
-        "ドリフト検出: 凍結 OnBoot スナップショットが期待 Value を含まない。\
-         スナップショットが差し替えられたら期待列（EXPECTED_ONBOOT_VALUE）も更新すること（要件 5.2・tasks.md 6.2）。\n\
-         expected Value = {EXPECTED_ONBOOT_VALUE:?}\n\
-         snapshot       = {snapshot:?}"
+        snapshot.contains("200"),
+        "ドリフト検出: 凍結 OnFirstBoot は 200 応答であること: {snapshot:?}"
     );
+    let value = expected_onfirstboot_value();
     assert!(
-        EXPECTED_ONBOOT_VALUE.contains(EXPECTED_GREETING_TEXT),
-        "期待 Text 本文（EXPECTED_GREETING_TEXT）は値源 EXPECTED_ONBOOT_VALUE から導出される連結であること"
+        !value.is_empty(),
+        "ドリフト検出: 凍結 OnFirstBoot の Value 行 payload は非空であること: {snapshot:?}"
     );
 
     // ---- 実 InProc 一周の駆動 ----
@@ -146,30 +242,23 @@ fn i1_inproc_one_lap_records_frozen_onboot_greeting_and_closes_cleanly() {
 
     let runtime = boot(options).expect("boot should succeed through ShioriWiring::InProc（実テスト DLL）");
 
-    // 期待 broadcast 列（S1 と同構造）: `\0\s[0]<greeting>\e` は
-    //   ClearAll@0（#6 全消去・talk 冒頭前置）/ Emote{key:"0"}@0（\s[0]）/ Text(<greeting>)@0
-    // へコンパイルされる（`\0` は既定 scope 0 の明示ゆえ actor は "0" のまま・後続 cue が無く先頭群に
-    // 留まる）。値源 EXPECTED_GREETING_TEXT から Text 内容を導出する。
-    let expected: Vec<CueCommand> = vec![
-        CueCommand::ClearAll,
-        CueCommand::Emote {
-            key: "0".to_string(),
-        },
-        CueCommand::Text(EXPECTED_GREETING_TEXT.to_string()),
-    ];
+    // 期待 broadcast 列（実 emo2 OnFirstBoot 挨拶・74 件）。二人掛け合い自己紹介が
+    // ClearAll → Emote/Text/Wait/NewLine の全順序へコンパイルされる（構造導出＋実 compile 観測で
+    // 照合済み・tasks.md 6.2）。ここでは列長を駆動ループの整定判定に使う。
+    let expected = expected_greeting_sequence();
 
     // 駆動: dispatcher へ Tick を注入し、両 sink が期待列長へ整定するまで待つ。反復回数ではなく
     // **壁時計デッドライン**で括る（task 2.4 方式）——InProc 経路は最初の SHIORI 呼出で実 DLL の
     // `LoadLibraryW`＋`CreateInstance` を初めて走らせ数十 ms を要するため。デッドラインは宙吊り防止の上限に
-    // すぎず、talk timeline の前進は依然として注入 Tick の `now` のみ（実時計で進めない・要件 5.1）。DLL
-    // ロード完了後は最初の Tick で挨拶が全 broadcast されるため、捕捉の有無・cue 列・順序は決定論的。
+    // すぎず、talk timeline の前進は依然として注入 Tick の `now` のみ（実時計で進めない・要件 5.1）。挨拶は
+    // 複数秒の台本ゆえ `now` を **大股**（+500ms/Tick）で前進させ、単一 Tick が at 昇順で due cue を
+    // 一括排出する（`dola/src/cue/schedule.rs`）ことで数十 Tick で全 74 件を消化する。列・順序は決定論的。
     //
     // poll 周期は `yield_now()`（task 2.4 先例と同形・sleep 不使用）。兄弟 spine のプローブループは task 5.0 で
     // 壁時計 deadline へ硬化済みゆえ、本テストの並走による CPU 競合は spine の cue 到達を deadline 内で遅らせる
-    // だけで偽陽性を生まない（5.0 前は spine が反復回数境界の空 spin で早合点し飢餓したため 2ms sleep で緩和して
-    // いたが、その応急措置は 5.0 完了で不要）。sim 時刻は依然として注入 Tick の `now` のみが進める。
-    let deadline = Instant::now() + Duration::from_secs(30);
-    let mut now: u64 = 1;
+    // だけで偽陽性を生まない。sim 時刻は依然として注入 Tick の `now` のみが進める。
+    let deadline = Instant::now() + Duration::from_secs(60);
+    let mut now: u64 = 500;
     let mut captured = false;
     while Instant::now() < deadline {
         runtime
@@ -178,7 +267,7 @@ fn i1_inproc_one_lap_records_frozen_onboot_greeting_and_closes_cleanly() {
                 now: MonotonicMs(now),
             })
             .expect("dispatcher actor should still be alive while probing for the boot talk");
-        now += 1;
+        now += 500;
         let s = surface_records.lock().expect("records mutex poisoned").len();
         let t = text_records.lock().expect("records mutex poisoned").len();
         if s >= expected.len() && t >= expected.len() {
@@ -194,34 +283,15 @@ fn i1_inproc_one_lap_records_frozen_onboot_greeting_and_closes_cleanly() {
          横断した一周が成立していない（hang guard）"
     );
 
-    // ---- 演出列の全順序照合（要件 5.1・broadcast・at 昇順・内容一致）----
+    // ---- 演出列の全順序照合（要件 5.1・broadcast・(actor, command) 全順序・at 非減少）----
     let surface = surface_records
         .lock()
         .expect("records mutex poisoned")
         .clone();
     let text = text_records.lock().expect("records mutex poisoned").clone();
 
-    let assert_broadcast = |cues: &[TalkCue], who: &str| {
-        let commands: Vec<CueCommand> = cues.iter().map(|c| c.command.clone()).collect();
-        assert_eq!(
-            commands, expected,
-            "{who} sink は broadcast で ClearAll/Emote{{0}}/Text(挨拶) を全順序で受けること \
-             （partition は演者側 relevance・凍結台本由来）: {cues:?}"
-        );
-        for cue in cues {
-            assert_eq!(cue.at, 0.0, "{who} 発火は全て at=0.0（先頭群・後続 cue なし）");
-            assert_eq!(
-                cue.actor,
-                ActorKey::from("0"),
-                "{who} 発火 actor は \\0 が明示する既定 scope 0"
-            );
-        }
-        for pair in cues.windows(2) {
-            assert!(pair[0].at <= pair[1].at, "{who} 発火列は at 昇順であるべき");
-        }
-    };
-    assert_broadcast(&surface, "surface");
-    assert_broadcast(&text, "text");
+    assert_greeting_broadcast(&surface, "surface");
+    assert_greeting_broadcast(&text, "text");
 
     // ---- 正常終了の握手（要件 5.3）----
     // shutdown（ForceQuit→OnClose NOTIFY→Unload）が clean に完走し `Ok(())` を返すこと。有界待機で
@@ -242,35 +312,26 @@ fn i1_inproc_one_lap_records_frozen_onboot_greeting_and_closes_cleanly() {
     // inproc_fixture.rs のドキュメント参照）。
 }
 
-/// 起動挨拶の broadcast cue 列を全順序照合する共有ヘルパ（I1 の局所クロージャと同律・
-/// I2 が同一の演出出力 assert を「同じ手口」で再演するために free 関数へ括り出す）。
+/// 起動挨拶の broadcast cue 列を全順序照合する共有ヘルパ（I1/I2 が同一の演出出力 assert を
+/// 「同じ手口」で再演するために free 関数へ括り出す）。
 ///
-/// 期待列は値源 `EXPECTED_GREETING_TEXT`（=`EXPECTED_ONBOOT_VALUE` の表示本文）から導出した
-/// `[ClearAll, Emote{key:"0"}, Text(<greeting>)]`。broadcast ゆえ surface/text いずれの sink も
-/// 同一の全順序でこれを受ける（partition は演者側 relevance・凍結台本由来）。加えて全 cue が
-/// `at=0.0`・actor `"0"`（`\0` が明示する既定 scope）で、発火列が at 昇順であることを固定する。
+/// 期待列はハードコードした [`expected_greeting_sequence`]（実 emo2 OnFirstBoot 挨拶・74 件・
+/// 構造導出＋実 compile 観測で照合済み）。照合対象は `(actor, command)` の全順序と `at` の
+/// 非減少性のみ——`at`/`duration` の float はテキスト速度チューニングが台本改変なしに壊すため
+/// 照合しない（tasks.md 6.2 I1）。broadcast ゆえ surface/text いずれの sink も同一の全順序で
+/// これを受ける（partition は演者側 relevance・凍結台本由来）。
 fn assert_greeting_broadcast(cues: &[TalkCue], who: &str) {
-    let expected: Vec<CueCommand> = vec![
-        CueCommand::ClearAll,
-        CueCommand::Emote {
-            key: "0".to_string(),
-        },
-        CueCommand::Text(EXPECTED_GREETING_TEXT.to_string()),
-    ];
-    let commands: Vec<CueCommand> = cues.iter().map(|c| c.command.clone()).collect();
+    let golden = expected_greeting_sequence();
+    let observed: Vec<(ActorKey, CueCommand)> = cues
+        .iter()
+        .map(|c| (c.actor.clone(), c.command.clone()))
+        .collect();
     assert_eq!(
-        commands, expected,
-        "{who} sink は broadcast で ClearAll/Emote{{0}}/Text(挨拶) を全順序で受けること \
+        observed, golden,
+        "{who} sink は broadcast で凍結 OnFirstBoot 挨拶の (actor, command) 全順序を受けること \
          （partition は演者側 relevance・凍結台本由来）: {cues:?}"
     );
-    for cue in cues {
-        assert_eq!(cue.at, 0.0, "{who} 発火は全て at=0.0（先頭群・後続 cue なし）");
-        assert_eq!(
-            cue.actor,
-            ActorKey::from("0"),
-            "{who} 発火 actor は \\0 が明示する既定 scope 0"
-        );
-    }
+    // at の絶対値は照合せず非減少性のみ固定する（速度チューニング耐性・tasks.md 6.2 I1）。
     for pair in cues.windows(2) {
         assert!(pair[0].at <= pair[1].at, "{who} 発火列は at 昇順であるべき");
     }
@@ -291,9 +352,11 @@ fn assert_greeting_broadcast(cues: &[TalkCue], who: &str) {
 /// # 交信列の決定論（ticker 無効＋Tick は dispatcher 止まり）
 /// `TickerMode::Disabled` かつ dispatcher は `Tick` を kanade へ中継しない（`TalkDone` のみ中継）ため、
 /// kanade は駆動ループ中に Tick を一切受けず、定常運転由来の追加交信を発行しない。したがって交信列は
-/// boot 系列（`OnInitialize` NOTIFY → `OnFirstBoot` GET(204) → `OnBoot` GET(Value) → `basewareversion`
-/// NOTIFY）に続き、shutdown（ForceQuit）が起こす close 系列（`OnClose` NOTIFY → `Unload` Clean）で
-/// 閉じる——全順序が決定論的。記録は shutdown 完了後に読む（`OnClose`/`Unload` は shutdown が起こす）。
+/// boot 系列（`OnInitialize` NOTIFY → `OnFirstBoot` GET(Value) → `basewareversion` NOTIFY）に続き、
+/// shutdown（ForceQuit）が起こす close 系列（`OnClose` NOTIFY → `Unload` Clean）で閉じる——全順序が
+/// 決定論的。`OnFirstBoot` が Value を返すため kanade フォールスルーは `OnBoot` GET を**スキップ**する
+/// （task 6.2 実採取・`schedule/boot.rs`）。記録は shutdown 完了後に読む（`OnClose`/`Unload` は
+/// shutdown が起こす）。
 #[test]
 fn i2_inproc_one_lap_records_both_exchange_sequence_and_greeting_cues() {
     // ---- 実 InProc backend へ Recorder を合成した Custom wiring を組む（D-3）----
@@ -334,14 +397,15 @@ fn i2_inproc_one_lap_records_both_exchange_sequence_and_greeting_cues() {
 
     let runtime = boot(options).expect("boot should succeed through Custom(Recorder(inproc_connect))");
 
-    // 期待演出列長（I1 と同構造の `[ClearAll, Emote{0}, Text(挨拶)]` = 3）。
-    let expected_cue_len = 3usize;
+    // 期待演出列長（I1 と同一のハードコード golden・74 件）。
+    let expected_cue_len = expected_greeting_sequence().len();
 
     // 駆動: dispatcher へ Tick を注入し、両 sink が期待列長へ整定するまで**壁時計デッドライン**で
     // 括って待つ（I1・task 2.4 方式・sleep 不使用・`yield_now` poll）。sim 時刻は注入 Tick の `now`
-    // のみが進める。DLL ロード完了後は最初の Tick で挨拶が全 broadcast されるため決定論的。
-    let deadline = Instant::now() + Duration::from_secs(30);
-    let mut now: u64 = 1;
+    // のみが進める。挨拶は複数秒の台本ゆえ `now` を大股（+500ms/Tick）で前進させ、単一 Tick が at 昇順で
+    // due cue を一括排出する（`dola/src/cue/schedule.rs`）ことで全 74 件を消化する。決定論的。
+    let deadline = Instant::now() + Duration::from_secs(60);
+    let mut now: u64 = 500;
     let mut captured = false;
     while Instant::now() < deadline {
         runtime
@@ -350,7 +414,7 @@ fn i2_inproc_one_lap_records_both_exchange_sequence_and_greeting_cues() {
                 now: MonotonicMs(now),
             })
             .expect("dispatcher actor should still be alive while probing for the boot talk");
-        now += 1;
+        now += 500;
         let s = surface_records.lock().expect("records mutex poisoned").len();
         let t = text_records.lock().expect("records mutex poisoned").len();
         if s >= expected_cue_len && t >= expected_cue_len {
@@ -399,8 +463,10 @@ fn i2_inproc_one_lap_records_both_exchange_sequence_and_greeting_cues() {
     }
 
     // 交信列を (kind, id, outcome) の全順序で照合する（status() は Recorder 非記録・status フィールドは
-    // 定常 nuance を持つため assert 対象外）。OnBoot の Value 結果は演出列の値源 EXPECTED_ONBOOT_VALUE と
-    // 同一（`InProcBackend::get("OnBoot")` は Value 行 payload を返す）——二記録装置の連結固定。
+    // 定常 nuance を持つため assert 対象外）。OnFirstBoot の Value 結果は演出列の値源
+    // （凍結スナップショットの Value 行 payload）と同一（`InProcBackend::get("OnFirstBoot")` は Value 行
+    // payload を返す）——二記録装置の連結固定。OnFirstBoot が Value を返すため OnBoot GET はスキップ
+    // される（kanade フォールスルー・task 6.2）。
     let observed: Vec<(ExchangeKind, Option<String>, ExchangeOutcome)> = records
         .iter()
         .map(|r| (r.kind.clone(), r.id.clone(), r.outcome.clone()))
@@ -415,12 +481,7 @@ fn i2_inproc_one_lap_records_both_exchange_sequence_and_greeting_cues() {
         (
             ExchangeKind::Get,
             Some("OnFirstBoot".to_string()),
-            ExchangeOutcome::NoContent,
-        ),
-        (
-            ExchangeKind::Get,
-            Some("OnBoot".to_string()),
-            ExchangeOutcome::Value(EXPECTED_ONBOOT_VALUE.to_string()),
+            ExchangeOutcome::Value(expected_onfirstboot_value()),
         ),
         (
             ExchangeKind::Notify,

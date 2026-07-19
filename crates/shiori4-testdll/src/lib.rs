@@ -400,14 +400,15 @@ mod tests {
         );
     }
 
-    /// 収載 GET id（`OnBoot`）→ `S_OK`＋凍結スナップショット全文を即時 move-out すること
+    /// 収載 GET id（`OnFirstBoot`）→ `S_OK`＋凍結スナップショット全文を即時 move-out すること
     /// （ID 分岐 replay が実 vtable を横断して働く証拠・要件 2.2/1.5）。
     #[test]
     fn get_listed_id_returns_frozen_snapshot_immediately() {
         let (brain, _host) = make_brain();
-        let (hr, out_response, _token) = drive_get(&brain, &get_request("OnBoot"));
+        let (hr, out_response, _token) = drive_get(&brain, &get_request("OnFirstBoot"));
         assert_eq!(hr, S_OK, "収載 GET は即時 S_OK, got 0x{:08X}", hr.0);
-        let expected = crate::snapshot::snapshot_for("OnBoot").expect("OnBoot は収載されていること");
+        let expected =
+            crate::snapshot::snapshot_for("OnFirstBoot").expect("OnFirstBoot は収載されていること");
         assert_eq!(
             out_response,
             HSTRING::from(expected),
@@ -449,7 +450,7 @@ mod tests {
     fn get_never_returns_pending_on_any_path() {
         let (brain, _host) = make_brain();
         for input in [
-            get_request("OnBoot"),
+            get_request("OnFirstBoot"),
             get_request("OnNeverSeenEvent"),
             HSTRING::from("BOGUS GARBAGE LINE"),
             HSTRING::from(""),

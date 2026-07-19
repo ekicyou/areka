@@ -1,5 +1,0 @@
-SHIORI/3.0 200 OK
-Charset: UTF-8
-X-Areka-Snapshot: PROVISIONAL
-Value: \0\s[0]おはようございますわ（暫定）\e
-

@@ -10,15 +10,22 @@
 //! ## narrowing（design.md "SnapshotTable" の明文化）
 //! スナップショット対象は **GET 交信のみ**。NOTIFY 発火の正典イベント（`OnInitialize`／
 //! `basewareversion`／`OnClose` 等）は SHIORI ワイヤ契約上応答が破棄されるため採取不能であり、
-//! replay 脳は決定論的な 204 受領で応答する（task 1.4 の `Notify`）。ゆえに本表は GET イベント
-//! （`OnFirstBoot`＝204 で OnBoot 挨拶経路を駆動／`OnBoot`＝200＋挨拶さくらスクリプト）を鍵とする。
+//! replay 脳は決定論的な 204 受領で応答する（task 1.4 の `Notify`）。
 //!
-//! ## PROVISIONAL マーカー規約（暫定データの明示・research.md §7.3）
-//! 実 emo2 `pasta.dll` からの実採取（task 6.2）前の暫定応答は、SSP 寛容なカスタムヘッダ
-//! `X-Areka-Snapshot: PROVISIONAL` を各ファイルへ帯同させ、**暫定であることを明示かつ機械検出可能**に
-//! する。`parse_response`（`shiori-host32-host`）は未知ヘッダを無視するため、このマーカーはワイヤ上
-//! inert（無害）であり、task 6.2 が実採取応答（マーカー無し）へ差し替える確定点となる。暫定応答は
-//! 正準 SHIORI/3.0 形式（status line＋`Charset: UTF-8`（200 時）＋`Value:`＋空行終端）を保つ。
+//! ## 凍結セット（task 6.2 実採取後の narrowing）
+//! 実 emo2 `pasta.dll` からの実採取（task 6.2）により、正典 GET は **`OnFirstBoot` 単独**である
+//! ことが判明した。kanade のフォールスルー（`schedule/boot.rs`）は `OnFirstBoot` が Value を返すと
+//! 続く `OnBoot` GET をスキップするため、実機で観測される GET は `OnFirstBoot`（200＋起動挨拶
+//! さくらスクリプト）のみ。ゆえに本表は `OnFirstBoot` を唯一の鍵とし、旧暫定 `OnBoot` エントリは
+//! 削除された。応答は正準 SHIORI/3.0 形式（status line＋`Charset: UTF-8`＋`Value:`＋空行終端）。
+//!
+//! ## PROVISIONAL マーカー規約（実採取で消えた・research.md §7.3）
+//! task 6.2 の実採取**前**の暫定応答は、SSP 寛容なカスタムヘッダ `X-Areka-Snapshot: PROVISIONAL`
+//! を帯同して**暫定であることを明示かつ機械検出可能**にしていた。`parse_response`
+//! （`shiori-host32-host`）は未知ヘッダを無視するためワイヤ上 inert（無害）であった。task 6.2 の
+//! 実採取差し替えでこのマーカーは全エントリから消えた（実採取応答はマーカーを持たない）——
+//! [`PROVISIONAL_MARKER`] 定数は残るが、全スナップショットが**帯同しない**ことが実採取完了の
+//! 機械的証左となる（要件 2.6）。
 //!
 //! 本モジュールの項目は crate 内消費（`pub(crate)`）。task 1.4 が [`snapshot_for`] を
 //! `request::select_response` の `lookup` クロージャへ無改修で差し込む（`Fn(&str) -> Option<&'static str>`
@@ -34,13 +41,18 @@ use std::sync::OnceLock;
 /// ここでの各 `include_str!` の on-disk 行末表現には依存しない。GET 交信のみを対象とする
 /// （narrowing・上記モジュール doc）。
 const RAW_SNAPSHOTS: &[(&str, &str)] = &[
-    ("OnBoot", include_str!("../snapshots/OnBoot.txt")),
+    // task 6.2: 実 emo2 `pasta.dll` からの実採取後は正典 GET が OnFirstBoot 単独（kanade
+    // フォールスルー `schedule/boot.rs` が OnFirstBoot の Value 返却で OnBoot GET をスキップ
+    // するため）。凍結セットは {OnFirstBoot} で、応答は 200＋起動挨拶さくらスクリプト（実採取・
+    // PROVISIONAL マーカー無し）。
     ("OnFirstBoot", include_str!("../snapshots/OnFirstBoot.txt")),
 ];
 
-/// 暫定応答に帯同する PROVISIONAL マーカーヘッダ（値レベルの単一権威）。
+/// 旧暫定応答に帯同していた PROVISIONAL マーカーヘッダ（値レベルの単一権威）。
 ///
-/// task 6.2 の実採取差し替えでこのヘッダは消える（実採取応答はマーカーを持たない）。
+/// task 6.2 の実採取差し替えでこのヘッダは全エントリから消えた（実採取応答はマーカーを持たない）。
+/// 定数自体は残し、全スナップショットが**帯同しない**ことを固定するテスト
+/// （`no_snapshot_carries_provisional_marker_after_real_capture`）の値源とする（要件 2.6）。
 pub const PROVISIONAL_MARKER: &str = "X-Areka-Snapshot: PROVISIONAL";
 
 /// 全ての行末表現（lone `\n`・`\r\n`）を一様な `\r\n` へ正規化する純関数。
@@ -143,25 +155,34 @@ mod tests {
     // ---- snapshot_for / snapshots の決定論檻（要件 1.5／2.2） ------------------------------------
 
     #[test]
-    fn snapshot_for_onboot_is_present_and_crlf_normalized() {
-        let resp = snapshot_for("OnBoot").expect("OnBoot は収載されていること");
+    fn snapshot_for_onfirstboot_is_present_and_crlf_normalized() {
+        let resp = snapshot_for("OnFirstBoot").expect("OnFirstBoot は収載されていること");
         // 全行末が CRLF（lone LF なし）。
         assert_no_lone_lf(resp);
         assert!(resp.contains("\r\n"), "整形済み応答は CRLF 行末を持つこと");
     }
 
     #[test]
-    fn snapshot_for_onboot_is_200_with_value_line() {
-        let resp = snapshot_for("OnBoot").unwrap();
-        assert!(resp.contains("200"), "OnBoot は 200 応答であること: {resp:?}");
-        assert!(resp.contains("Value:"), "OnBoot は Value 行を持つこと: {resp:?}");
+    fn snapshot_for_onfirstboot_is_200_with_value_line() {
+        // task 6.2 実採取後: OnFirstBoot は 200＋起動挨拶さくらスクリプトの Value 行を持つ
+        // （旧暫定は 204 だった）。
+        let resp = snapshot_for("OnFirstBoot").unwrap();
+        assert!(resp.contains("200"), "OnFirstBoot は 200 応答であること: {resp:?}");
+        assert!(
+            resp.contains("Value:"),
+            "OnFirstBoot は Value 行を持つこと: {resp:?}"
+        );
     }
 
     #[test]
-    fn snapshot_for_onfirstboot_is_204() {
-        let resp = snapshot_for("OnFirstBoot").expect("OnFirstBoot は収載されていること");
-        assert!(resp.contains("204"), "OnFirstBoot は 204 応答であること: {resp:?}");
-        assert_no_lone_lf(resp);
+    fn snapshot_for_onboot_is_none_after_real_capture() {
+        // task 6.2 実採取後: OnBoot はもはや正典 GET でない（kanade フォールスルーが
+        // OnFirstBoot の Value 返却で OnBoot GET をスキップ）＝表から削除された。
+        assert_eq!(
+            snapshot_for("OnBoot"),
+            None,
+            "OnBoot は実採取後に非収載（凍結セットは {{OnFirstBoot}}）"
+        );
     }
 
     #[test]
@@ -174,18 +195,19 @@ mod tests {
     #[test]
     fn snapshot_for_returns_same_reference_deterministically() {
         // 同一入力 → 同一参照（要件 1.5）。
-        let a = snapshot_for("OnBoot").unwrap();
-        let b = snapshot_for("OnBoot").unwrap();
+        let a = snapshot_for("OnFirstBoot").unwrap();
+        let b = snapshot_for("OnFirstBoot").unwrap();
         assert!(std::ptr::eq(a, b), "同一 ID は同一参照を返すこと（決定論）");
     }
 
     #[test]
-    fn all_provisional_snapshots_carry_marker() {
-        // 暫定であることが明示・機械検出可能であること（task 6.2 が消す確定点）。
+    fn no_snapshot_carries_provisional_marker_after_real_capture() {
+        // task 6.2 実採取完了の機械的証左（要件 2.6）: 凍結データは全て実採取（PROVISIONAL
+        // マーカーを帯同しない）。1 件でも暫定マーカーが残っていれば差し替え漏れ＝fail。
         for (id, resp) in snapshots() {
             assert!(
-                resp.contains(PROVISIONAL_MARKER),
-                "暫定スナップショット {id} は PROVISIONAL マーカーを帯同すること: {resp:?}"
+                !resp.contains(PROVISIONAL_MARKER),
+                "スナップショット {id} が PROVISIONAL マーカーを帯同している（実採取差し替え漏れ）: {resp:?}"
             );
         }
     }
@@ -205,9 +227,16 @@ mod tests {
 
     #[test]
     fn snapshots_covers_canonical_get_ids() {
+        // task 6.2 実採取後: 正典 GET は OnFirstBoot 単独（OnBoot は非収載）。
         let ids: Vec<&str> = snapshots().iter().map(|(id, _)| *id).collect();
-        assert!(ids.contains(&"OnBoot"), "OnBoot（挨拶・GET）を収載");
-        assert!(ids.contains(&"OnFirstBoot"), "OnFirstBoot（GET・204 で OnBoot 経路駆動）を収載");
+        assert!(
+            ids.contains(&"OnFirstBoot"),
+            "OnFirstBoot（挨拶・GET・200＋Value）を収載"
+        );
+        assert!(
+            !ids.contains(&"OnBoot"),
+            "OnBoot は実採取後に非収載（フォールスルーで GET スキップ）"
+        );
     }
 
     #[test]

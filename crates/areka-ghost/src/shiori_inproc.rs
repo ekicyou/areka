@@ -922,13 +922,31 @@ mod adapter_tests {
     fn adapter_roundtrips_through_real_ishiori() {
         let mut backend = build_real_backend();
 
-        // GET OnBoot（収載）→ Ok(Some(value))＝凍結スナップショットの Value 行 payload（暫定文字列）。
-        // envelope 全文ではなく Value 行 payload のみが返ること（build_request→Get→parse→map の実証）。
-        let onboot = backend.get("OnBoot", &[], None).expect("OnBoot GET は Ok");
+        // GET OnFirstBoot（収載）→ Ok(Some(value))＝凍結スナップショットの Value 行 payload
+        // （task 6.2 実採取の起動挨拶さくらスクリプト）。envelope 全文ではなく Value 行 payload のみが
+        // 返ること（build_request→Get→parse→map の実証）。期待値は凍結スナップショットの Value 行から
+        // 導出し、実採取差し替え時に自動追随させる（ハードコード giant literal を避ける）。
+        let snapshot =
+            shiori4_testdll::snapshot_for("OnFirstBoot").expect("OnFirstBoot は収載されていること");
+        let expected_value = snapshot
+            .lines()
+            .find_map(|l| l.strip_prefix("Value: "))
+            .expect("凍結 OnFirstBoot は Value 行を持つこと")
+            .to_string();
+        let onfirstboot = backend
+            .get("OnFirstBoot", &[], None)
+            .expect("OnFirstBoot GET は Ok");
         assert_eq!(
-            onboot,
-            Some(r"\0\s[0]おはようございますわ（暫定）\e".to_string()),
-            "OnBoot は凍結スナップショットの Value 行 payload を返すこと"
+            onfirstboot,
+            Some(expected_value),
+            "OnFirstBoot は凍結スナップショットの Value 行 payload を返すこと"
+        );
+
+        // GET OnBoot（実採取後は非収載）→ 204 → Ok(None)（kanade フォールスルーで GET スキップ）。
+        assert_eq!(
+            backend.get("OnBoot", &[], None).expect("OnBoot GET は Ok"),
+            None,
+            "OnBoot は実採取後に非収載＝204→Ok(None)"
         );
 
         // GET 未収載 → 204 → Ok(None)。
