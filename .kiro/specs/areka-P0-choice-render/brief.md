@@ -64,7 +64,7 @@ Choice cue（＋直後の WaitForChoice barrier）を受けた emo-text が**バ
 
 ## Upstream / Downstream
 
-- **Upstream**: **`areka-P0-cue-playback-duration`（時限ゲート・CuePlayer/pending_choices/配送 settled）**／**`areka-P0-sakura-dialogue-tags`（choice cue 形の正本・契約先決で並走可）**／`completed/areka-P0-emo-text-layer`＋`-viewbox`（canvas・差分再描画・TextSlotView）／`completed/areka-P0-emo-present`（バルーン target・スロット）／wintf event/hit-test ✅。
+- **Upstream**: **`areka-P0-cue-playback-duration`（時限ゲート・CuePlayer/pending_choices/配送 settled）**／**`completed/areka-P0-sakura-dialogue-tags`（choice cue 形の正本・契約先決で並走可）**／`completed/areka-P0-emo-text-layer`＋`-viewbox`（canvas・差分再描画・TextSlotView）／`completed/areka-P0-emo-present`（バルーン target・スロット）／wintf event/hit-test ✅。
 - **Downstream**: `areka-P0-choice-select-events`（ChoiceSelection 消費・カスケード）／`areka-P0-emo2-conformance-e2e`（メニュー一周の適合項目）。
 
 ## Existing Spec Touchpoints

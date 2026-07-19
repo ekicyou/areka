@@ -24,15 +24,15 @@ use std::ops::ControlFlow;
 use std::path::PathBuf;
 use std::rc::Rc;
 
-use areka_emo_text::layout::{FixedMetrics, LayoutEngine, PositionedLine, VisibleWindow};
+use areka_emo_text::layout::{FixedMetrics, LayoutEngine, PositionedLine, VisibleWindow, WrapPlan};
 use areka_emo_text::region::TextRegion;
-use areka_emo_text::sink::{handle_text_msg, EmoTextSink, TextMsg};
+use areka_emo_text::sink::{EmoTextSink, TextMsg, handle_text_msg};
 use areka_emo_text::state::TextLayerState;
 use areka_emo_text::writing::WritingMode;
 use areka_parsers::balloon::{
-    parse_str, BalloonModel, Font, FontColor, Origin, ValidRect, WindowPosition, WordWrapPoint,
+    BalloonModel, Font, FontColor, Origin, ValidRect, WindowPosition, WordWrapPoint, parse_str,
 };
-use areka_parsers::charset::{decode, DefaultEncoding};
+use areka_parsers::charset::{DefaultEncoding, decode};
 use areka_sakura::contract::{ActorKey, CueCommand, CueSink, TalkCue};
 use windows::Win32::UI::WindowsAndMessaging::PostQuitMessage;
 use wintf_winmsg_executor::{FilterResult, MessageLoop};
@@ -156,7 +156,15 @@ fn observe(
         for &t in probe_times {
             let visible = state.visible_glyphs(actor, t);
             let lines =
-                LayoutEngine::layout(&items, visible, region, mode, font_height, &FixedMetrics);
+                LayoutEngine::layout(
+                    &items,
+                    visible,
+                    region,
+                    mode,
+                    font_height,
+                    &FixedMetrics,
+                    WrapPlan::CharByChar,
+                );
             let window = LayoutEngine::visible_window(&lines, region, mode);
             out.push(Observation {
                 actor: actor.clone(),
@@ -181,6 +189,7 @@ fn model_rect(
         WordWrapPoint::new(None, None),
         ValidRect::new(validrect.0, validrect.1, validrect.2, validrect.3),
         Font::new(None, None, FontColor::new(None, None, None)),
+        None,
         None,
     )
 }
@@ -330,13 +339,13 @@ fn typewriter_reveal_drives_layout_and_window_through_the_pipeline() {
     // 次のグリフ「か」が reveal される t=1.5 で初めて 4 行目が実体化してあふれる
     // （旧・即時意味論の幽霊空行スクロールが消え、あふれ発火が実体化時刻へ後退する）。
     let expected: &[(f64, usize, usize, usize, f32)] = &[
-        (0.0, 1, 1, 0, 0.0),   // r_0=0.0: "あ" のみ・1 行
-        (0.25, 2, 1, 0, 0.0),  // "あい"・末尾改行は保留（空行を開かない）
-        (0.5, 3, 2, 0, 0.0),   // "う" 実体化で L1 へ（あい / う）
-        (0.75, 4, 2, 0, 0.0),  // "うえ"・末尾改行は保留（あい / うえ）
-        (0.99, 4, 2, 0, 0.0),  // r_4=1.0 の直前——保留のまま 2 行
-        (1.0, 5, 3, 0, 0.0),   // "お" 実体化（あい / うえ / お・下端 36＝境界ちょうど・非発火）
-        (1.5, 6, 4, 1, -13.0), // "か" 実体化で 4 行目（下端 49 > 36）→ あふれ発火
+        (0.0, 1, 1, 0, 0.0),     // r_0=0.0: "あ" のみ・1 行
+        (0.25, 2, 1, 0, 0.0),    // "あい"・末尾改行は保留（空行を開かない）
+        (0.5, 3, 2, 0, 0.0),     // "う" 実体化で L1 へ（あい / う）
+        (0.75, 4, 2, 0, 0.0),    // "うえ"・末尾改行は保留（あい / うえ）
+        (0.99, 4, 2, 0, 0.0),    // r_4=1.0 の直前——保留のまま 2 行
+        (1.0, 5, 3, 0, 0.0),     // "お" 実体化（あい / うえ / お・下端 36＝境界ちょうど・非発火）
+        (1.5, 6, 4, 1, -13.0),   // "か" 実体化で 4 行目（下端 49 > 36）→ あふれ発火
         (100.0, 6, 4, 1, -13.0), // 末尾到達後は飽和
     ];
     for &(t, visible, line_count, first, offset) in expected {
@@ -354,6 +363,7 @@ fn typewriter_reveal_drives_layout_and_window_through_the_pipeline() {
             WritingMode::HorizontalTb,
             10.0,
             &FixedMetrics,
+            WrapPlan::CharByChar,
         );
         assert_eq!(lines.len(), line_count, "t={t}: 行数");
         let window = LayoutEngine::visible_window(&lines, &region, WritingMode::HorizontalTb);
@@ -391,12 +401,20 @@ fn clear_mid_reveal_resets_visibility_and_window_through_the_pipeline() {
         .expect("actor state exists")
         .items()
         .to_vec();
-    assert_eq!(items.len(), 2, "Clear で旧テキストは未リビール分も含め全消去");
+    assert_eq!(
+        items.len(),
+        2,
+        "Clear で旧テキストは未リビール分も含め全消去"
+    );
 
     // 新 chunk のリビールは自身の at=0.75 起点: r=[0.75, 1.0]。
     let expected: &[(f64, usize)] = &[(0.5, 0), (0.74, 0), (0.75, 1), (1.0, 2), (100.0, 2)];
     for &(t, visible) in expected {
-        assert_eq!(state.visible_glyphs(&actor, t), visible, "t={t}: 可視グリフ数");
+        assert_eq!(
+            state.visible_glyphs(&actor, t),
+            visible,
+            "t={t}: 可視グリフ数"
+        );
     }
 
     // 可視 0 の時刻では行も生まれず、可視窓は既定（描画対象なし）。
@@ -407,8 +425,12 @@ fn clear_mid_reveal_resets_visibility_and_window_through_the_pipeline() {
         WritingMode::HorizontalTb,
         10.0,
         &FixedMetrics,
+        WrapPlan::CharByChar,
     );
-    assert!(lines_empty.is_empty(), "Clear 直後（新 chunk リビール前）は行なし");
+    assert!(
+        lines_empty.is_empty(),
+        "Clear 直後（新 chunk リビール前）は行なし"
+    );
     assert_eq!(
         LayoutEngine::visible_window(&lines_empty, &region, WritingMode::HorizontalTb),
         VisibleWindow {
@@ -425,6 +447,7 @@ fn clear_mid_reveal_resets_visibility_and_window_through_the_pipeline() {
         WritingMode::HorizontalTb,
         10.0,
         &FixedMetrics,
+        WrapPlan::CharByChar,
     );
     assert_eq!(lines_full.len(), 1);
     assert_eq!(
@@ -472,7 +495,11 @@ fn vertical_fixture_pipeline_scrolls_horizontally_and_is_deterministic() {
         Some(&read_decoded("balloons0s.txt")),
     );
     let mode = WritingMode::resolve(&merged);
-    assert_eq!(mode, WritingMode::VerticalRl, "fixture 変種は縦書きへ解決される");
+    assert_eq!(
+        mode,
+        WritingMode::VerticalRl,
+        "fixture 変種は縦書きへ解決される"
+    );
     let region = TextRegion::resolve(&merged, (400, 224), mode);
 
     // 25 列（各列 全角 1 グリフ・明示改行区切り）。cue 時刻は 0.25 グリッド＝

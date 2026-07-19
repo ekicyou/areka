@@ -25,7 +25,8 @@
 
 use areka_emo_compose::BindSet;
 use areka_sakura::{
-    spawn_talk, ActorKey, CueSink, SakuraMsg, StartTalk, TalkCue, TalkDone, TalkEndReason, TalkId,
+    spawn_talk, ActorKey, CueSink, SakuraMsg, StartTalk, SystemVarSnapshot, TalkCue, TalkDone,
+    TalkEndReason, TalkId,
 };
 use areka_seriko::{spawn_seriko, DisplayCommand, MockSurfaceOutput, SurfaceResolver};
 use std::collections::BTreeMap;
@@ -71,8 +72,8 @@ fn run_scenario(script: &str, ticks: &[f64]) -> Vec<DisplayCommand> {
             talk_id: TalkId(2),
         },
         done_tx,
-        seriko_sink,
-        NullTextSink,
+        vec![Box::new(seriko_sink), Box::new(NullTextSink)],
+        SystemVarSnapshot::default(),
     );
 
     // ── 注入 Tick のみで駆動（sleep/polling ゼロ・要件 5.3）──

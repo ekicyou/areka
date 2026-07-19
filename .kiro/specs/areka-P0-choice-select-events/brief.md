@@ -17,6 +17,7 @@
 
 - **kanade の再利用棚**: 応答 `Value`→`TalkId` 採番→`Action::StartTalk` の調停（`steady.rs:92-103`）・active talk 単一 slot（dispatcher）・`events.rs` の Reference 組立様式——**新しい調停を発明しない**（input-events と同じ規律）。
 - **CuePlayer 側の解除口は settled（→✅ 2026-07-17 main 着地・現行実測へ更新）**: dola `CuePlayer` に `WaitingForChoice` 停止（`runtime.rs:71`・遷移 `:231-237`）と **`resolve_choice(choice_id) -> Option<String>`**（`:279-293`）が main 実装済み＝**選択確定で barrier を解いて talk を続行/終了する機構は供給済み**。本 spec はその呼び手＋SHIORI 配送。
+  - **⚠️ 訂正（2026-07-18・`areka-P0-sakura-dialogue-tags` R2.7 申し送り）**: `CuePlayer::resolve_choice` は **talk アクター内に閉じており外部から直接呼べない**。解決は sakura-dialogue-tags が定義する **talk アクター境界の型付き入力（`SakuraMsg` の additive アーム）経由**でのみ到達する。ゆえに本 spec は「`resolve_choice` を直接呼ぶ」のでなく、**その `SakuraMsg` 解決アームへ選択 id を投入**する（口の形は sakura-dialogue-tags が正本・本 spec は消費）。下記 Current State/Approach の「`resolve_choice` 呼出」は全てこの口経由と読み替える。
 - **入力の供給元**: choice-render の `ChoiceSelection{scope, id, label, extras}`（同 brief 正本・mock で先行観測可能）。
 - **正典 layout（ukadoc 裏取り済み 2026-07-16）**: **OnChoiceSelectEx**＝Ref0=ラベル・Ref1=ID・Ref2+=拡張引数（`\q` の r2 以降）・OnChoiceSelect より**先に**発生／**OnChoiceSelect**＝Ref0=ID／**OnChoiceTimeout**＝Ref0=タイムアウトしたスクリプト。
 
@@ -62,7 +63,7 @@
 
 ## Upstream / Downstream
 
-- **Upstream**: **`areka-P0-choice-render`（ChoiceSelection 正本・契約先決で並走可）**／**`areka-P0-sakura-dialogue-tags`（choice cue/id 通貨）**／**`areka-P0-cue-playback-duration`（resolve_choice・talk 終了時刻）**／`areka-P0-input-events`（背骨・順序推奨で先行）／`completed/areka-P0-kanade`（StartTalk 棚）／`areka-P0-idle-talk`（Status ヘッダの口）。
+- **Upstream**: **`areka-P0-choice-render`（ChoiceSelection 正本・契約先決で並走可）**／**`completed/areka-P0-sakura-dialogue-tags`（choice cue/id 通貨）**／**`areka-P0-cue-playback-duration`（resolve_choice・talk 終了時刻）**／`areka-P0-input-events`（背骨・順序推奨で先行）／`completed/areka-P0-kanade`（StartTalk 棚）／`areka-P0-idle-talk`（Status ヘッダの口）。
 - **Downstream**: `areka-P0-emo2-conformance-e2e`（メニュー一周の適合項目＝M-dialogue 完成の証明はここ）。
 
 ## Existing Spec Touchpoints

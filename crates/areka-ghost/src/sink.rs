@@ -5,12 +5,47 @@
 //! 旧 sakura の `MockSink`（テスト用・無限蓄積）を本番へ置かないための最小実装——蓄積フィールドを
 //! 一切持たない unit 相当構造体。
 //!
-//! `boot` は 2 スロット（surface/text）を持つが、診断既定では**片スロットだけ**を `LogSink` で
-//! 記録し、もう一方は破棄専用の `DiscardSink` で埋める。broadcast（D4）で全 cue は登録された全 sink
-//! へ配られるため、両スロットを `LogSink` にすると 1 cue が 2 回ログされてしまう（二重ログ）。
-//! `LogSink`＋`DiscardSink` の対で **cue ごと 1 回ログ**へ正す（設計 D4「挙動保存の唯一の破れ」Topic 2）。
+//! `boot` は可変長 sink（`Vec<Box<dyn BootCueSink>>`・S-3）を持つが、診断既定では登録列の
+//! **先頭だけ**を `LogSink` で記録し、残りは破棄専用の `DiscardSink` で埋める。broadcast（D4）で
+//! 全 cue は登録された全 sink へ配られるため、複数スロットを `LogSink` にすると 1 cue が複数回
+//! ログされてしまう（二重ログ）。`LogSink`＋`DiscardSink` の対（診断既定 `vec![LogSink, DiscardSink]`
+//! 相当）で **cue ごと 1 回ログ**へ正す（設計 D4「挙動保存の唯一の破れ」Topic 2）。
+//!
+//! # `BootCueSink`（S-3 可変長 sink の boot 契約）
+//!
+//! `boot` が受け取る sink は演者数に依らない可変長 `Vec<Box<dyn BootCueSink>>` である
+//! （旧「2 固定スロット（surface/text）」の意図的更新）。[`BootCueSink`] は
+//! `CueSink + Clone + Send + 'static` へ blanket impl されるため、`LogSink`／`DiscardSink` 等の
+//! 既存 sink は**無改変で適合**する。dispatcher は talk 起動ごとに [`BootCueSink::clone_box`] で
+//! 各 sink の独立インスタンスを取得し、per-talk の `spawn_talk` へ `Vec<Box<dyn CueSink + Send>>`
+//! として手渡す（登録順＝broadcast 順＝決定論・design.md「GhostBootOptions S-3」）。
 
 use areka_sakura::contract::{CueCommand, CueSink, TalkCue};
+
+/// `boot` が要求する複製可能 sink（design.md「GhostBootOptions S-3＋provider」）。
+///
+/// `CueSink + Clone + Send + 'static` を満たす全ての型へ blanket impl されるため、
+/// 既存の [`LogSink`]／[`DiscardSink`] や演者 sink（seriko／emo-text）は本 trait を
+/// **何も実装せずに**満たす。dispatcher は保持する `Vec<Box<dyn BootCueSink>>` の各要素を
+/// talk 起動ごとに [`clone_box`](BootCueSink::clone_box) で複製し、per-talk の `spawn_talk` へ
+/// `Vec<Box<dyn CueSink + Send>>` として手渡す（凍結像の刻印点・登録順＝broadcast 順）。
+///
+/// 上位境界 `CueSink + Send` を持つため、`Box<dyn BootCueSink>` は
+/// `Box<dyn CueSink + Send>` へ trait upcast できる（per-talk 手渡し時の型合わせ）。
+pub trait BootCueSink: CueSink + Send {
+    /// 自身の複製を trait object として返す（per-talk 複製の口・`dyn` 化のため
+    /// `Clone` を直接 supertrait に置けないための clone シム）。
+    fn clone_box(&self) -> Box<dyn BootCueSink>;
+}
+
+impl<T> BootCueSink for T
+where
+    T: CueSink + Clone + Send + 'static,
+{
+    fn clone_box(&self) -> Box<dyn BootCueSink> {
+        Box::new(self.clone())
+    }
+}
 
 /// 診断既定の sink。発火のたびに `tracing::info!(target: "ghost-sink", ...)` で
 /// `at`（発火時刻）・`actor`（話者スコープ）・`command_kind`（コマンド種別）を
@@ -49,11 +84,11 @@ impl CueSink for LogSink {
 
 /// 破棄専用の診断 sink（演者非依存の単一出力契約 [`dola::cue::CueSink`] を実装する）。
 ///
-/// `boot` の 2 スロット構造（`surface_sink`/`text_sink`）を保ったまま、診断既定の非記録スロットを
+/// `boot` の可変長 sink 列（`Vec<Box<dyn BootCueSink>>`・S-3）のうち、診断既定の非記録スロットを
 /// 埋めるための no-op sink。broadcast された cue を受け取っても何もしない（記録も出力もしない・
-/// 状態を持たない）。診断既定 boot は `LogSink`＋`DiscardSink` の対で結線し、`LogSink` を単一の記録先
-/// とすることで **cue ごと 1 回ログ**を成立させる（両スロットを `LogSink` にした場合の二重ログを避ける・
-/// 設計 D4 Topic 2）。本番の実 sink 差込（seriko/emo-text）では別オブジェクトゆえ元々無関係。
+/// 状態を持たない）。診断既定 boot は `vec![LogSink, DiscardSink]` 相当で結線し、`LogSink` を単一の
+/// 記録先とすることで **cue ごと 1 回ログ**を成立させる（複数スロットを `LogSink` にした場合の二重ログを
+/// 避ける・設計 D4 Topic 2）。本番の実 sink 差込（seriko/emo-text）では別オブジェクトゆえ元々無関係。
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct DiscardSink;
 
@@ -85,6 +120,10 @@ fn command_kind(command: &CueCommand) -> &'static str {
         CueCommand::Custom { .. } => "Custom",
         CueCommand::NewLine { .. } => "NewLine",
         CueCommand::BalloonSurface { .. } => "BalloonSurface",
+        // task 6.1 で exhaustive を回復させるための最小アーム（他の内容 cue と同格の
+        // 良性ログラベル）。Cursor 専用の消費・分類（CAGE）は task 8 の領分——ここでは
+        // command_kind ログの網羅性のみ回復させる（1.2/1.4 のアーム先行・cage 後追いと同型）。
+        CueCommand::Cursor { .. } => "Cursor",
         CueCommand::Wait => "Wait",
         CueCommand::ClearAll => "ClearAll",
     }
@@ -246,13 +285,16 @@ mod tests {
         assert_eq!(command_kind(&CueCommand::Text("x".into())), "Text");
         assert_eq!(command_kind(&CueCommand::Clear), "Clear");
         assert_eq!(
-            command_kind(&CueCommand::Emote { key: "smile".into() }),
+            command_kind(&CueCommand::Emote {
+                key: "smile".into()
+            }),
             "Emote"
         );
         assert_eq!(
             command_kind(&CueCommand::Choice {
                 id: "yes".into(),
-                text: "はい".into()
+                text: "はい".into(),
+                references: vec![],
             }),
             "Choice"
         );
@@ -264,13 +306,17 @@ mod tests {
             }),
             "Custom"
         );
-        assert_eq!(
-            command_kind(&CueCommand::NewLine { ratio: 1.0 }),
-            "NewLine"
-        );
+        assert_eq!(command_kind(&CueCommand::NewLine { ratio: 1.0 }), "NewLine");
         assert_eq!(
             command_kind(&CueCommand::BalloonSurface { key: "2".into() }),
             "BalloonSurface"
+        );
+        assert_eq!(
+            command_kind(&CueCommand::Cursor {
+                x: "5em".into(),
+                y: "2lh".into(),
+            }),
+            "Cursor"
         );
         assert_eq!(command_kind(&CueCommand::Wait), "Wait");
         assert_eq!(command_kind(&CueCommand::ClearAll), "ClearAll");
@@ -317,7 +363,10 @@ mod tests {
         // 表情切替（\s[0]）を含む最小台本を compile → 刻印 → CuePlayer 構築。
         // 期待 cue: ClearAll@0（#6 冒頭前置）/ Emote{0}@0（\s[0]）/ Text(hello)@0。
         let instructions = areka_parsers::sakura::parse(r"\s[0]hello\e");
-        let compiled = areka_sakura::compile(&instructions);
+        // task 6.1 の機械的追随: compile は task 5.1 で 2 引数化（凍結像 SystemVarSnapshot を
+        // 参照渡し）。本テストはシステム変数展開を検査しないため既定スナップショットを渡す。
+        let compiled =
+            areka_sakura::compile(&instructions, &areka_sakura::SystemVarSnapshot::default());
         let sheet = compiled.sheet.with_absolute_start_time(0.0);
 
         let mut player = CuePlayer::from_sheet(&sheet);
@@ -333,10 +382,8 @@ mod tests {
 
         // ghost-sink（LogSink）の emit ログのみ抽出。DiscardSink はログを出さないため、
         // 記録系統は LogSink 1 本＝各 cue はちょうど 1 回だけログされる（二重でない）。
-        let logs: Vec<&CapturedEvent> = events
-            .iter()
-            .filter(|e| e.target == "ghost-sink")
-            .collect();
+        let logs: Vec<&CapturedEvent> =
+            events.iter().filter(|e| e.target == "ghost-sink").collect();
 
         // command_kind ごとの件数を数える（各 presentation cue が 1 回だけ・2 回でない）。
         let count_kind = |kind: &str| {

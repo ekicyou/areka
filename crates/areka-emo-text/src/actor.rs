@@ -21,16 +21,18 @@ use bevy_ecs::prelude::World;
 use tracing::{debug, error, info, warn};
 use wintf::ecs::{GraphicsCore, WucGraphicsResource};
 
+use crate::TextLayerError;
 use crate::canvas::ContentCanvas;
 use crate::draw::{DWriteMetrics, ResolvedFont};
-use crate::layout::LayoutEngine;
+use crate::layout::{LayoutEngine, WrapPlan};
 use crate::region::{ImagePx, ScaleContract, TextRegion};
-use crate::sink::{handle_text_msg, EmoTextSink, TextMsg};
+use crate::segment::segment_plan;
+use crate::sink::{EmoTextSink, TextMsg, handle_text_msg};
 use crate::state::{TextLayerConfig, TextLayerState};
 use crate::surface::TextSurface;
 use crate::viewbox_draw::{DrawStats, ViewboxExecutor};
+use crate::wrap::WrapMode;
 use crate::writing::WritingMode;
-use crate::TextLayerError;
 
 /// actor の装着先（結線側が emo-present `TextSlotView` から構築して routing へ登録する）。
 ///
@@ -80,15 +82,21 @@ impl TextSlotBinding {
     /// `image_size = round(surface_size / k)` の一点導出は `new` に集約されたまま変わらない
     /// （k の多重適用・混在の構造排除——design.md「DPI/スケール契約」）。
     pub fn from_view(view: &TextSlotView) -> Self {
-        TextSlotBinding::new(view.slot(), view.window(), view.scale(), view.surface_size())
+        TextSlotBinding::new(
+            view.slot(),
+            view.window(),
+            view.scale(),
+            view.surface_size(),
+        )
     }
 }
 
-/// actor 1 人分の layout 入力——`writing_mode`／領域／フォントの解決済み束
+/// actor 1 人分の layout 入力——`writing_mode`／領域／フォント／折返しモードの解決済み束
 /// （design.md `TextLayerRuntime.layout_input` の値型）。
 ///
 /// 解決はすべて既存の一点解決口（[`WritingMode::resolve`]／[`TextRegion::resolve`]／
-/// [`ResolvedFont::resolve`]）の合成であり、本型は束ねるだけで独自解釈を持たない。
+/// [`ResolvedFont::resolve`]／[`WrapMode::resolve`]）の合成であり、本型は束ねるだけで
+/// 独自解釈を持たない。
 #[derive(Clone, Debug, PartialEq)]
 pub struct ResolvedBalloonText {
     /// 2 層マージ済み `writing_mode` の解釈結果。
@@ -97,6 +105,8 @@ pub struct ResolvedBalloonText {
     pub region: TextRegion,
     /// 解決済みフォント一式（欠落は ukadoc 既定で充足済み）。
     pub font: ResolvedFont,
+    /// 折返しモードの解釈結果（`budoux_newline` 語彙解決・ON 時のみ分かち書き境界を計算）。
+    pub wrap: WrapMode,
 }
 
 impl ResolvedBalloonText {
@@ -109,6 +119,7 @@ impl ResolvedBalloonText {
             mode,
             region: TextRegion::resolve(model, image_size, mode),
             font: ResolvedFont::resolve(model),
+            wrap: WrapMode::resolve(model),
         }
     }
 }
@@ -233,13 +244,15 @@ impl TextLayerRuntime {
                 }
             }
             // 他コマンドは描画実行部への全域クリアを要さない（グリフ更新は present_frame が
-            // リビール進行として描き、非担当コマンドは reveal を汚さない）。
+            // リビール進行として描き、非担当コマンドは reveal を汚さない）。`Cursor` の
+            // warn-once 良性スキップ・記録は純粋層 `state.apply_cue` が担う（本口は clear 要否のみ）。
             CueCommand::Text(_)
             | CueCommand::Emote { .. }
             | CueCommand::Choice { .. }
             | CueCommand::EntityRef(_)
             | CueCommand::Custom { .. }
             | CueCommand::NewLine { .. }
+            | CueCommand::Cursor { .. }
             | CueCommand::BalloonSurface { .. }
             | CueCommand::Wait => {}
         }
@@ -275,7 +288,9 @@ impl TextLayerRuntime {
     /// （R3.5/R10.3・目視非依存）。`ViewboxExecutor::stats()` は runtime 内部の `ActorRender` に
     /// 抱えられており、この読み口がないと example から R10.3 checkpoint が成立しない。
     pub fn draw_stats(&self, actor: &ActorKey) -> Option<DrawStats> {
-        self.surfaces.get(actor).map(|render| render.executor.stats())
+        self.surfaces
+            .get(actor)
+            .map(|render| render.executor.stats())
     }
 }
 
@@ -461,6 +476,7 @@ fn present_actor(
             actor = %actor,
             slot = ?binding.slot,
             ?physical_size,
+            wrap = ?resolved.wrap,
             "テキスト供給面を予約スロットへ装着した（actor ごと初回のみ・以降は Present のみ）"
         );
     }
@@ -479,6 +495,18 @@ fn present_actor(
         return Ok(());
     };
     let visible = runtime.state.visible_glyphs(actor, talk_time);
+    // 折返し計画: ON（BudouxWordWrap）のときだけ分かち書き境界を全 items から計算し
+    // layout へ供給する。OFF（CharByChar）は plan を計算すらしない（R4.2 の構造保証——
+    // segment_plan を呼ぶのは Segmented アームだけ）。`plan` は ON アームでのみ束縛され、
+    // 借用 `&plan` が layout 呼出まで生存するよう遅延初期化パターンで宣言する。
+    let plan;
+    let wrap = match resolved.wrap {
+        WrapMode::CharByChar => WrapPlan::CharByChar,
+        WrapMode::BudouxWordWrap => {
+            plan = segment_plan(actor_state.items());
+            WrapPlan::Segmented(&plan)
+        }
+    };
     let lines = LayoutEngine::layout(
         actor_state.items(),
         visible,
@@ -486,6 +514,7 @@ fn present_actor(
         resolved.mode,
         resolved.font.height,
         &render.metrics,
+        wrap,
     );
     let window = LayoutEngine::visible_window(&lines, &resolved.region, resolved.mode);
     let canvas = ContentCanvas::from_layout(&lines, &resolved.region, resolved.mode);
@@ -571,7 +600,10 @@ mod tests {
         let window = world.spawn_empty().id();
 
         let binding = TextSlotBinding::new(slot, window, 0.0, (320, 240));
-        assert_eq!(binding.scale, 1.0, "不正 k は 1.0 へ縮退（log-first・panic なし）");
+        assert_eq!(
+            binding.scale, 1.0,
+            "不正 k は 1.0 へ縮退（log-first・panic なし）"
+        );
         assert_eq!(binding.image_size, (320, 240));
     }
 }
@@ -585,8 +617,8 @@ mod runtime_tests {
 
     use std::cell::RefCell;
     use std::rc::Rc;
-    use std::sync::atomic::{AtomicUsize, Ordering};
     use std::sync::Arc;
+    use std::sync::atomic::{AtomicUsize, Ordering};
 
     use areka_parsers::balloon::{
         BalloonModel, Font, FontColor, Origin, ValidRect, WindowPosition, WordWrapPoint,
@@ -595,13 +627,18 @@ mod runtime_tests {
     use bevy_ecs::hierarchy::ChildOf;
     use bevy_ecs::name::Name;
     use bevy_ecs::prelude::World;
-    use windows::Win32::System::Com::{CoInitializeEx, COINIT_MULTITHREADED};
+    use windows::Win32::System::Com::{COINIT_MULTITHREADED, CoInitializeEx};
     use windows::Win32::UI::WindowsAndMessaging::PostQuitMessage;
-    use wintf::ecs::{GraphicsCommandList, GraphicsCore, Visual, VisualGraphics, WucGraphicsResource};
+    use wintf::ecs::{
+        GraphicsCommandList, GraphicsCore, Visual, VisualGraphics, WucGraphicsResource,
+    };
     use wintf_winmsg_executor::{FilterResult, MessageLoop};
 
-    use super::{present_frame, spawn_emo_text, ResolvedBalloonText, TextLayerRuntime, TextSlotBinding};
+    use super::{
+        ResolvedBalloonText, TextLayerRuntime, TextSlotBinding, present_frame, spawn_emo_text,
+    };
     use crate::state::TextLayerConfig;
+    use crate::wrap::WrapMode;
 
     // ── ログ檻（WARN/ERROR 件数を数える最小 Subscriber・sink.rs の檻パターン踏襲） ──
 
@@ -691,12 +728,15 @@ mod runtime_tests {
             ValidRect::new(None, None, None, None),
             Font::new(None, None, FontColor::new(None, None, None)),
             None,
+            None,
         )
     }
 
     /// emo-present `VisualMount` と同型の予約スロット（surface.rs テストと同型）。
     /// 返り値は (window, slot)。
-    fn spawn_reserved_slot(world: &mut World) -> (bevy_ecs::entity::Entity, bevy_ecs::entity::Entity) {
+    fn spawn_reserved_slot(
+        world: &mut World,
+    ) -> (bevy_ecs::entity::Entity, bevy_ecs::entity::Entity) {
         let window = world.spawn_empty().id();
         let slot = world
             .spawn((
@@ -723,10 +763,16 @@ mod runtime_tests {
     #[test]
     fn close_terminates_drain_cleanly_after_applying_cues_on_real_pump() {
         let ((), _warns, errors) = with_log_cage(|| {
-            let runtime = Rc::new(RefCell::new(TextLayerRuntime::new(TextLayerConfig::default())));
+            let runtime = Rc::new(RefCell::new(TextLayerRuntime::new(
+                TextLayerConfig::default(),
+            )));
             let (mut sink, _handle) =
                 spawn_emo_text(Rc::clone(&runtime)).expect("spawn_emo_text on the pump thread");
-            assert_eq!(Rc::strong_count(&runtime), 2, "drain handler が runtime を保持する");
+            assert_eq!(
+                Rc::strong_count(&runtime),
+                2,
+                "drain handler が runtime を保持する"
+            );
 
             sink.emit(cue("0", 0.0, CueCommand::Text("アヒル".into())));
             sink.emit(cue("0", 0.2, CueCommand::NewLine { ratio: 1.0 }));
@@ -738,8 +784,15 @@ mod runtime_tests {
             {
                 let rt = runtime.borrow();
                 let actor = ActorKey::from("0");
-                let state = rt.state().actor_state(&actor).expect("actor state が生成される");
-                assert_eq!(state.items().len(), 4, "グリフ 3＋改行マーカー 1 が追記される");
+                let state = rt
+                    .state()
+                    .actor_state(&actor)
+                    .expect("actor state が生成される");
+                assert_eq!(
+                    state.items().len(),
+                    4,
+                    "グリフ 3＋改行マーカー 1 が追記される"
+                );
                 // 注入時刻でのリビール進行（reveal interval=0.05〔duration 由来〕・丸め安全マージン付き時刻）。
                 assert_eq!(rt.state().visible_glyphs(&actor, 0.0), 1);
                 assert_eq!(rt.state().visible_glyphs(&actor, 0.06), 2);
@@ -754,7 +807,10 @@ mod runtime_tests {
             );
             drop(sink);
         });
-        assert_eq!(errors, 0, "終了指示によるクリーン終了は error ログを伴わない");
+        assert_eq!(
+            errors, 0,
+            "終了指示によるクリーン終了は error ログを伴わない"
+        );
     }
 
     /// ケース2: 全送信元切断（全 `EmoTextSink` clone drop）——queue 済み cue を適用し切った
@@ -762,7 +818,9 @@ mod runtime_tests {
     #[test]
     fn dropping_all_sinks_terminates_drain_cleanly_after_applying_queued_cues() {
         let ((), _warns, errors) = with_log_cage(|| {
-            let runtime = Rc::new(RefCell::new(TextLayerRuntime::new(TextLayerConfig::default())));
+            let runtime = Rc::new(RefCell::new(TextLayerRuntime::new(
+                TextLayerConfig::default(),
+            )));
             let (mut sink, _handle) =
                 spawn_emo_text(Rc::clone(&runtime)).expect("spawn_emo_text on the pump thread");
             let sink2 = sink.clone();
@@ -775,8 +833,15 @@ mod runtime_tests {
 
             let rt = runtime.borrow();
             let actor = ActorKey::from("1");
-            let state = rt.state().actor_state(&actor).expect("切断前に queue 済みの cue は届く");
-            assert_eq!(state.items().len(), 2, "切断前の cue は破棄されず適用される");
+            let state = rt
+                .state()
+                .actor_state(&actor)
+                .expect("切断前に queue 済みの cue は届く");
+            assert_eq!(
+                state.items().len(),
+                2,
+                "切断前の cue は破棄されず適用される"
+            );
             drop(rt);
 
             assert_eq!(
@@ -785,7 +850,10 @@ mod runtime_tests {
                 "全送信元切断で drain future が drop されクリーン終了する"
             );
         });
-        assert_eq!(errors, 0, "全送信元切断によるクリーン終了は error ログを伴わない");
+        assert_eq!(
+            errors, 0,
+            "全送信元切断によるクリーン終了は error ログを伴わない"
+        );
     }
 
     /// ケース3: 個別失敗継続——runtime が借用中（UI スレッド上の別処理が保持）で cue 適用に
@@ -793,7 +861,9 @@ mod runtime_tests {
     /// 適用され、Close でクリーン終了する。
     #[test]
     fn cue_failure_is_logged_and_drain_continues_processing_subsequent_cues() {
-        let runtime = Rc::new(RefCell::new(TextLayerRuntime::new(TextLayerConfig::default())));
+        let runtime = Rc::new(RefCell::new(TextLayerRuntime::new(
+            TextLayerConfig::default(),
+        )));
         let (mut sink, _handle) =
             spawn_emo_text(Rc::clone(&runtime)).expect("spawn_emo_text on the pump thread");
 
@@ -805,7 +875,10 @@ mod runtime_tests {
             pump_until_idle();
             drop(guard);
         });
-        assert_eq!(errors, 1, "個別適用失敗はちょうど 1 件の error ログとして記録される");
+        assert_eq!(
+            errors, 1,
+            "個別適用失敗はちょうど 1 件の error ログとして記録される"
+        );
         assert_eq!(
             Rc::strong_count(&runtime),
             2,
@@ -818,12 +891,22 @@ mod runtime_tests {
             sink.close();
             pump_until_idle();
         });
-        assert_eq!(errors, 0, "失敗後の後続 cue 適用と Close 終了は error ログを伴わない");
+        assert_eq!(
+            errors, 0,
+            "失敗後の後続 cue 適用と Close 終了は error ログを伴わない"
+        );
 
         let rt = runtime.borrow();
         let actor = ActorKey::from("0");
-        let state = rt.state().actor_state(&actor).expect("後続 cue が適用される");
-        assert_eq!(state.items().len(), 2, "失敗 cue は失われ、後続 cue のみ適用される");
+        let state = rt
+            .state()
+            .actor_state(&actor)
+            .expect("後続 cue が適用される");
+        assert_eq!(
+            state.items().len(),
+            2,
+            "失敗 cue は失われ、後続 cue のみ適用される"
+        );
         drop(rt);
         assert_eq!(Rc::strong_count(&runtime), 1, "Close でクリーン終了する");
     }
@@ -843,12 +926,21 @@ mod runtime_tests {
             present_frame(&mut rt, &mut world, 0.0).expect("未解決 actor は skip＝frame は Ok");
             present_frame(&mut rt, &mut world, 0.1).expect("再試行フレームも Ok");
         });
-        assert_eq!(warns, 1, "未解決 actor の warn は actor ごと初回のみ（2 フレーム目は debug）");
-        assert_eq!(errors, 0, "未解決 skip は error ではない（蓄積＋再試行の正常経路）");
+        assert_eq!(
+            warns, 1,
+            "未解決 actor の warn は actor ごと初回のみ（2 フレーム目は debug）"
+        );
+        assert_eq!(
+            errors, 0,
+            "未解決 skip は error ではない（蓄積＋再試行の正常経路）"
+        );
 
         let actor = ActorKey::from("0");
         assert!(!rt.is_attached(&actor), "未解決のまま装着されない");
-        let state = rt.state().actor_state(&actor).expect("状態は蓄積継続（無損失）");
+        let state = rt
+            .state()
+            .actor_state(&actor)
+            .expect("状態は蓄積継続（無損失）");
         assert_eq!(state.items().len(), 2, "skip 中も cue 状態は失われない");
     }
 
@@ -946,7 +1038,10 @@ mod runtime_tests {
         let entities_after_attach = world.entities().len();
         present_frame(&mut rt, &mut world, 0.06).expect("フレーム t=0.06");
         let n2 = read(&rt);
-        assert!(n2 > n1, "t=0.06 で 2 グリフ目まで可視（ピクセル単調増加）: {n1} -> {n2}");
+        assert!(
+            n2 > n1,
+            "t=0.06 で 2 グリフ目まで可視（ピクセル単調増加）: {n1} -> {n2}"
+        );
 
         present_frame(&mut rt, &mut world, 0.11).expect("フレーム t=0.11");
         let n3 = read(&rt);
@@ -1026,6 +1121,41 @@ mod runtime_tests {
             "描画呼び出し回数は単調非減少: {} -> {}",
             stats.draw_text_layout_calls,
             stats2.draw_text_layout_calls
+        );
+    }
+
+    /// task 5 配線の存在チェック（R4.2/R9.1・[test-only-decision-branches]）:
+    /// balloon model の `budoux_newline` が `ResolvedBalloonText.wrap` へ他の解決値
+    /// （mode/region/font）と同じ一点解決経路で反映される。ON model（`budoux_newline,1`）
+    /// → `BudouxWordWrap`・キー無し → `CharByChar`（既定）。`WrapMode::resolve` の受理語彙は
+    /// wrap.rs の檻、`segment_plan` の境界計算は segment.rs の檻ゆえここでは再テストしない
+    /// （配線は存在チェック 1 本）。ON 時のみ segment_plan が走る構造保証は present_actor の
+    /// `match`（OFF アームは segment_plan を呼ばない）が担い、性能/構造の主張につき檻化しない。
+    #[test]
+    fn resolve_wires_wrap_mode_from_balloon_model() {
+        let image = (120u32, 60u32);
+        // ON: budoux_newline,1 を持つ model（`new` の末尾 positional 引数）。
+        let on_model = BalloonModel::new(
+            WindowPosition::new(None, None),
+            Origin::new(Some(0), Some(0)),
+            WordWrapPoint::new(None, None),
+            ValidRect::new(None, None, None, None),
+            Font::new(None, None, FontColor::new(None, None, None)),
+            None,
+            Some("1".into()),
+        );
+        let resolved_on = ResolvedBalloonText::resolve(&on_model, image);
+        assert_eq!(
+            resolved_on.wrap,
+            WrapMode::BudouxWordWrap,
+            "budoux_newline,1 の model は wrap=BudouxWordWrap を束ねる（他の解決値と同一経路）"
+        );
+        // OFF: キー無し（geo_model）→ CharByChar（既定・ログなし正常系）。
+        let resolved_off = ResolvedBalloonText::resolve(&geo_model(), image);
+        assert_eq!(
+            resolved_off.wrap,
+            WrapMode::CharByChar,
+            "キー無しの model は wrap=CharByChar（既定）"
         );
     }
 

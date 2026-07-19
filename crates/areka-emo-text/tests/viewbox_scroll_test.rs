@@ -39,7 +39,7 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use areka_emo_text::actor::{
-    present_frame, spawn_emo_text, ResolvedBalloonText, TextLayerRuntime, TextSlotBinding,
+    ResolvedBalloonText, TextLayerRuntime, TextSlotBinding, present_frame, spawn_emo_text,
 };
 use areka_emo_text::sink::EmoTextSink;
 use areka_emo_text::state::TextLayerConfig;
@@ -52,7 +52,7 @@ use bevy_ecs::entity::Entity;
 use bevy_ecs::hierarchy::ChildOf;
 use bevy_ecs::name::Name;
 use bevy_ecs::prelude::World;
-use windows::Win32::System::Com::{CoInitializeEx, COINIT_MULTITHREADED};
+use windows::Win32::System::Com::{COINIT_MULTITHREADED, CoInitializeEx};
 use windows::Win32::UI::WindowsAndMessaging::PostQuitMessage;
 use wintf::ecs::{GraphicsCore, Visual, WucGraphicsResource};
 use wintf_winmsg_executor::{FilterResult, MessageLoop};
@@ -126,13 +126,9 @@ fn model() -> BalloonModel {
         WindowPosition::new(None, None),
         Origin::new(Some(0), Some(0)),
         WordWrapPoint::new(None, None),
-        ValidRect::new(
-            Some(0),
-            Some(IMAGE.1 as i32),
-            Some(0),
-            Some(IMAGE.0 as i32),
-        ),
+        ValidRect::new(Some(0), Some(IMAGE.1 as i32), Some(0), Some(IMAGE.0 as i32)),
         Font::new(None, Some(FONT_H), FontColor::new(None, None, None)),
+        None,
         None,
     )
 }
@@ -199,7 +195,9 @@ fn real_pump_scroll_redraws_only_dirty_and_unchanged_frames_touch_nothing() {
     let model = model();
     let binding = TextSlotBinding::new(slot, window, 1.0, IMAGE);
     let resolved = ResolvedBalloonText::resolve(&model, binding.image_size);
-    let runtime = Rc::new(RefCell::new(TextLayerRuntime::new(TextLayerConfig::default())));
+    let runtime = Rc::new(RefCell::new(TextLayerRuntime::new(
+        TextLayerConfig::default(),
+    )));
     runtime
         .borrow_mut()
         .register_actor(actor.clone(), binding, resolved);

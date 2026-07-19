@@ -18,10 +18,18 @@
 //! - argv[1] = ghost_root（`crates/pilot/examples/shiori-host-32/fixtures/emo2`）
 //! - argv[2] = balloon_root（同 fixture 下 `emo2/emo2-kakukaku`）
 //! - env `AREKA_APP_SMOKE_EXIT_MS` = [`SMOKE_EXIT_MS`]（自動 close で exit 0 を無人観測可能にする）
-//! - env `RUST_LOG` = `info`（wire 成立／attach 完了マーカーは `info!` ゆえ確実に捕捉する）
+//! - env `RUST_LOG` = `info,kanade=trace`（wire 成立／attach 完了マーカー・折返し ON 解決の証跡は
+//!   いずれも `info!` ゆえ確実に捕捉する。design.md「実機確認セット」Trigger 手順に一致させる）
+//!
+//! 折返しモードの実機証跡について: balloon descript 基層 fixture
+//! `crates/pilot/examples/shiori-host-32/fixtures/emo2/emo2-kakukaku/descript.txt` に
+//! `budoux_newline,1` を追記してある（sakura／kero 両バルーンへ効く基層 1 行）。ゆえに実バイナリが
+//! 実 balloon model を解決してテキスト供給面を装着した時点で、task 5 の装着 info! が
+//! `wrap=BudouxWordWrap` を残す（＝折返し ON として解決された証跡・R9.1）。
 //!
 //! 捕捉した stdout＋stderr に対し **(1) exit 0（自動 close→正常終了）・(2) wire 成立マーカー・
-//! (3) attach 完了マーカー** を assert する（design.md「E2E / Smoke」の R9.1 自動部）。
+//! (3) attach 完了マーカー・(4) 折返し ON 解決の証跡 `wrap=BudouxWordWrap`** を assert する
+//! （design.md「実機確認セット」／「E2E / Smoke」の R9.1 自動部）。
 //!
 //! ## 実走の前提（人間が opt-in 時に用意する・既定 OFF 経路は非依存）
 //! - **実 pasta helper**: `default_helper_exe_path()`（`crates/areka/src/main.rs`）は
@@ -45,8 +53,10 @@ use std::time::{Duration, Instant};
 const REAL_RUN_ENV: &str = "AREKA_EMO2_REAL_RUN";
 
 /// 子プロセスへ渡す自動 close 遅延（ms）。実表示・実 GPU の初期化と初回 attach フレーム到達、
-/// および OnBoot トークの流れ始めを無人でも観測できる程度に、smoke ドナー（500ms）より寛大に取る。
-const SMOKE_EXIT_MS: &str = "1500";
+/// OnBoot トークが流れてテキスト供給面が予約スロットへ装着され折返し解決 info!（`wrap=…`）が出るまでを
+/// 無人でも観測できる程度に、smoke ドナー（500ms）より寛大に取る。番犬（[`WATCHDOG_DEADLINE`]＝120s）
+/// より十分小さく保つ（人間目視サインオフ用の寛大な `180000` は本テストでなく直接起動時に付ける・上部 doc 参照）。
+const SMOKE_EXIT_MS: &str = "3000";
 
 /// タイムアウト番犬の締切。実 pasta helper の LOAD・実表示初期化・OnClose 握手（再生完了待ち）を
 /// 含むため smoke ドナー（60s）より寛大に取る。これを超えて終了しなければハング＝テスト失敗と判定する。
@@ -82,17 +92,31 @@ fn emo2_root() -> PathBuf {
 //   4. **close→静かな終了**: 窓 close で OnClose 応答を経てから全エンジンが静かに正常終了する
 //      （会話が途中で切れず・後片付けが行われる・R6.1/R6.2）。
 //
-// ## サインオフ実行の実際
-// - 上記 1〜4 のうち **2（typewriter）・3（ドラッグ）・4（OnClose 経由の終了）は、窓が開いたまま
-//   人間が観察・操作する必要がある**。自動 assert 用の `AREKA_APP_SMOKE_EXIT_MS`（自動 close）は
-//   **付けずに**実バイナリを直接起動して目視する:
+// ## 折返し（budoux_newline）の目視について（本 spec 固有・R9.1）
+// balloon descript 基層 fixture（`crates\pilot\examples\shiori-host-32\fixtures\emo2\emo2-kakukaku\
+// descript.txt`）に `budoux_newline,1` を追記済みゆえ、実機では sakura／kero 両バルーンとも折返し ON で
+// 起動する。目視では **バルーンのテキストが単語（分かち書き）境界で折り返り、語中で不自然に切れない**
+// ことを確認する（OFF の 1 文字ずつ折返しとの差）。ON として解決された機械可読の証跡は本ファイルの
+// `#[test]` が `wrap=BudouxWordWrap` を grep して押さえる。
 //
-//       target\<profile>\areka.exe <emo2 ghost_root> <emo2 balloon_root>
+// ## サインオフ実行の実際
+// - 上記 1〜4（＋折返しの目視）のうち **2（typewriter）・3（ドラッグ）・4（OnClose 経由の終了）は、
+//   窓が開いたまま人間が観察・操作する必要がある**。目視のための時間を確保するには、自動 assert 用の
+//   短い `AREKA_APP_SMOKE_EXIT_MS`（本テストの [`SMOKE_EXIT_MS`]）ではなく、**寛大な有界自動終了**
+//   （design.md「実機確認セット」推奨 `180000`＝3 分）を付けて実バイナリを直接起動する:
+//
+//       $env:RUST_LOG="info,kanade=trace"; $env:AREKA_APP_SMOKE_EXIT_MS="180000"; `
+//         target\<profile>\areka.exe <emo2 ghost_root> <emo2 balloon_root>
 //
 //   （`<emo2 ghost_root>` = `crates\pilot\examples\shiori-host-32\fixtures\emo2`、
-//     `<emo2 balloon_root>` = 同下 `emo2-kakukaku`）。観察後に窓を閉じて 4 を確認する。
+//     `<emo2 balloon_root>` = 同下 `emo2-kakukaku`）。3 分の間に 1〜4＋折返しを目視し、観察後に窓を
+//     閉じて 4（OnClose 経由の静かな終了）を確認する。close せず放置しても 3 分で自動終了する。
+//   ※ `180000` は**この人間 opt-in の直接起動専用**であり、番犬（[`WATCHDOG_DEADLINE`]＝120s）を持たない。
+//     本ファイルの `#[test]` の自動 close（[`SMOKE_EXIT_MS`]）は番犬締切より十分小さく保つこと
+//     （さもなくば番犬がハング判定で先に発火する）。両者を混同しない。
 // - 本ファイルの `#[test]`（`AREKA_EMO2_REAL_RUN=1` で起動）は、これと独立に**自動 close→exit 0＋
-//   マーカー**の機械可読部を押さえる。両者（自動部＋人間目視部）が揃ってサインオフ成立とする。
+//   マーカー（wire／attach／`wrap=BudouxWordWrap`）**の機械可読部を押さえる。両者（自動部＋人間目視部）
+//   が揃ってサインオフ成立とする。
 
 /// 実 pasta 実走の自動観測（R9.1 自動部）。既定 OFF（R9.2）で、env セット時のみ実バイナリを
 /// 子プロセス起動し **exit 0・wire 成立マーカー・attach 完了マーカー** を assert する。
@@ -129,9 +153,11 @@ fn emo2_real_run_boots_talks_and_exits_zero() {
         .arg(balloon_root.to_str().expect("fixture パスは UTF-8"))
         // 自動 close（無人で exit 0 を観測可能にする・R6.4/R9.1）。
         .env("AREKA_APP_SMOKE_EXIT_MS", SMOKE_EXIT_MS)
-        // wire 成立／attach 完了マーカーは info! ゆえ RUST_LOG=info を明示し確実に捕捉する
-        // （人間の shell の RUST_LOG が warn 等でも取りこぼさない）。
-        .env("RUST_LOG", "info")
+        // wire 成立／attach 完了マーカー、および折返し ON 解決の証跡（`wrap=BudouxWordWrap`）は
+        // いずれも info! ゆえ RUST_LOG を明示し確実に捕捉する（人間の shell の RUST_LOG が warn 等でも
+        // 取りこぼさない）。design.md「実機確認セット」Trigger 手順に合わせ `kanade=trace` も併せて有効化する
+        // （折返し解決の info! 自体は info レベルゆえ `info` だけでも捕捉されるが、手順の再現性のため一致させる）。
+        .env("RUST_LOG", "info,kanade=trace")
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()
@@ -201,6 +227,17 @@ fn emo2_real_run_boots_talks_and_exits_zero() {
     assert!(
         all.contains("emo2 attach: 装着計画を実行"),
         "実走は emo2 attach 完了マーカー（実表示への装着計画実行）を残すべき。\
+         \n--- child output ---\n{all}"
+    );
+
+    // (4) 折返し ON 解決の実機証跡（R9.1）。fixture の balloon descript 基層に `budoux_newline,1` を
+    //     追記してあるため、実バイナリが実 balloon model を解決してテキスト供給面を装着した時点で、
+    //     task 5 が装着 info! に足した `wrap=BudouxWordWrap`（`resolved.wrap` の Debug 表示）が
+    //     出力へ残る。ON として解決されたことをログから確認する（design.md「実機確認セット」grep 対象）。
+    assert!(
+        all.contains("wrap=BudouxWordWrap"),
+        "実走は折返し ON 解決の証跡（`wrap=BudouxWordWrap`）を残すべき。\
+         fixture の descript に `budoux_newline,1` があり、実 balloon model の解決で ON になる想定（R9.1）。\
          \n--- child output ---\n{all}"
     );
 }

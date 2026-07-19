@@ -77,6 +77,7 @@ use windows::Win32::Graphics::Direct2D::Common::D2D1_COLOR_F;
 use windows::Win32::Graphics::Direct2D::{
     D2D1_DEVICE_CONTEXT_OPTIONS_NONE, D2D1_DRAW_TEXT_OPTIONS_NONE, ID2D1Image,
 };
+use windows::Win32::Graphics::Direct3D11::ID3D11Texture2D;
 use windows::Win32::Graphics::DirectWrite::{
     DWRITE_FLOW_DIRECTION, DWRITE_FLOW_DIRECTION_LEFT_TO_RIGHT,
     DWRITE_FLOW_DIRECTION_RIGHT_TO_LEFT, DWRITE_FLOW_DIRECTION_TOP_TO_BOTTOM,
@@ -86,7 +87,6 @@ use windows::Win32::Graphics::DirectWrite::{
     DWRITE_TEXT_ALIGNMENT, DWRITE_TEXT_ALIGNMENT_LEADING, IDWriteFactory2, IDWriteFontCollection,
     IDWriteTextFormat, IDWriteTextLayout,
 };
-use windows::Win32::Graphics::Direct3D11::ID3D11Texture2D;
 use windows::Win32::Graphics::Dxgi::Common::DXGI_FORMAT_B8G8R8A8_UNORM;
 use windows::Win32::Graphics::Dxgi::IDXGISurface;
 use windows::core::{HSTRING, Interface};
@@ -103,12 +103,6 @@ use crate::writing::WritingMode;
 // （ViewboxExecutor）は viewbox_draw.rs 側で自前に持つため、非テストビルドの dead import を
 // 避けるべく cfg(test) へ隔離する（オラクル隔離の一部・task 5）。
 #[cfg(test)]
-use windows_numerics::{Matrix3x2, Vector2};
-#[cfg(test)]
-use wintf::com::d2d::{D2D1DeviceContextExt, D2D1DeviceExt};
-#[cfg(test)]
-use wintf::ecs::GraphicsCore;
-#[cfg(test)]
 use crate::canvas::{ContentCanvas, ResidentContent};
 #[cfg(test)]
 use crate::layout::VisibleWindow;
@@ -116,6 +110,12 @@ use crate::layout::VisibleWindow;
 use crate::region::ScaleContract;
 #[cfg(test)]
 use crate::surface::TextSurface;
+#[cfg(test)]
+use windows_numerics::{Matrix3x2, Vector2};
+#[cfg(test)]
+use wintf::com::d2d::{D2D1DeviceContextExt, D2D1DeviceExt};
+#[cfg(test)]
+use wintf::ecs::GraphicsCore;
 
 /// SSP 既定フォント名（**全角表記** ＭＳ ゴシック・ukadoc 既定・R4.2）。
 pub const DEFAULT_FONT_NAME: &str = "ＭＳ ゴシック";
@@ -843,10 +843,8 @@ pub(crate) fn create_d2d_target_bitmap(
         bitmapOptions: D2D1_BITMAP_OPTIONS_TARGET | D2D1_BITMAP_OPTIONS_CANNOT_DRAW,
         colorContext: core::mem::ManuallyDrop::new(None),
     };
-    unsafe {
-        dc.CreateBitmapFromDxgiSurface(&dxgi_surface, Some(&props as *const _))
-    }
-    .map_err(device_err("CreateBitmapFromDxgiSurface"))
+    unsafe { dc.CreateBitmapFromDxgiSurface(&dxgi_surface, Some(&props as *const _)) }
+        .map_err(device_err("CreateBitmapFromDxgiSurface"))
 }
 
 /// TextSurface の front（`front_tex`）を D2D ターゲット bitmap として巻く（比較専用オラクル
@@ -867,8 +865,14 @@ fn create_target_bitmap(
 /// で保全する（本番の欠落写像は各所の [`device_err`] が担う）。
 #[cfg(test)]
 fn none_err(context: &'static str) -> TextLayerError {
-    tracing::error!(context, "必須リソースが欠落（デバイス未初期化 または 前提不成立）");
-    TextLayerError::Device { hresult: 0, context }
+    tracing::error!(
+        context,
+        "必須リソースが欠落（デバイス未初期化 または 前提不成立）"
+    );
+    TextLayerError::Device {
+        hresult: 0,
+        context,
+    }
 }
 
 /// `windows_core::Error` を [`TextLayerError::Device`] へ写像する（surface.rs と同型の
@@ -903,7 +907,7 @@ mod tests {
     };
     use crate::TextLayerError;
     use crate::canvas::TextEffects;
-    use crate::layout::{GlyphMetrics, LayoutEngine};
+    use crate::layout::{GlyphMetrics, LayoutEngine, WrapPlan};
     use crate::region::TextRegion;
     use crate::state::{TextItem, TextLayerConfig};
     use crate::writing::WritingMode;
@@ -916,6 +920,7 @@ mod tests {
             WordWrapPoint::new(None, None),
             ValidRect::new(None, None, None, None),
             font,
+            None,
             None,
         )
     }
@@ -980,12 +985,22 @@ mod tests {
         let (font, warns, errors) =
             with_log_cage(|| ResolvedFont::resolve(&model_with_font(empty_font())));
         assert_eq!(font.name, DEFAULT_FONT_NAME);
-        assert_eq!(font.name, "ＭＳ ゴシック", "既定フォント名は全角 ＭＳ ゴシック");
+        assert_eq!(
+            font.name, "ＭＳ ゴシック",
+            "既定フォント名は全角 ＭＳ ゴシック"
+        );
         assert_eq!(font.height, DEFAULT_FONT_HEIGHT);
-        assert_eq!(font.height, 12.0, "既定フォント高さは 12（image px・ukadoc 既定）");
+        assert_eq!(
+            font.height, 12.0,
+            "既定フォント高さは 12（image px・ukadoc 既定）"
+        );
         assert_eq!(font.color, (0, 0, 0), "FontColor 欠落→黒");
         assert!(font.fallback_chain.is_empty());
-        assert_eq!((warns, errors), (0, 0), "ukadoc 既定の適用は正常系＝ログなし");
+        assert_eq!(
+            (warns, errors),
+            (0, 0),
+            "ukadoc 既定の適用は正常系＝ログなし"
+        );
     }
 
     #[test]
@@ -995,8 +1010,7 @@ mod tests {
             Some(20),
             FontColor::new(Some(10), Some(20), Some(30)),
         );
-        let (resolved, warns, _) =
-            with_log_cage(|| ResolvedFont::resolve(&model_with_font(font)));
+        let (resolved, warns, _) = with_log_cage(|| ResolvedFont::resolve(&model_with_font(font)));
         assert_eq!(resolved.name, "Meiryo");
         assert_eq!(resolved.height, 20.0);
         assert_eq!(resolved.color, (10, 20, 30));
@@ -1025,14 +1039,13 @@ mod tests {
     #[test]
     fn empty_font_name_falls_back_to_default_with_warn() {
         for raw in ["", "  ", " , "] {
-            let font = Font::new(
-                Some(raw.to_owned()),
-                None,
-                FontColor::new(None, None, None),
-            );
+            let font = Font::new(Some(raw.to_owned()), None, FontColor::new(None, None, None));
             let (resolved, warns, _) =
                 with_log_cage(|| ResolvedFont::resolve(&model_with_font(font)));
-            assert_eq!(resolved.name, DEFAULT_FONT_NAME, "raw {raw:?} は既定フォントへ");
+            assert_eq!(
+                resolved.name, DEFAULT_FONT_NAME,
+                "raw {raw:?} は既定フォントへ"
+            );
             assert!(resolved.fallback_chain.is_empty());
             assert_eq!(warns, 1, "raw {raw:?} はちょうど 1 回 warn を記録する");
         }
@@ -1042,8 +1055,7 @@ mod tests {
     #[test]
     fn zero_height_falls_back_to_default_with_warn() {
         let font = Font::new(None, Some(0), FontColor::new(None, None, None));
-        let (resolved, warns, _) =
-            with_log_cage(|| ResolvedFont::resolve(&model_with_font(font)));
+        let (resolved, warns, _) = with_log_cage(|| ResolvedFont::resolve(&model_with_font(font)));
         assert_eq!(resolved.height, DEFAULT_FONT_HEIGHT);
         assert_eq!(warns, 1);
     }
@@ -1052,8 +1064,7 @@ mod tests {
     #[test]
     fn partial_color_channels_default_to_zero() {
         let font = Font::new(None, None, FontColor::new(Some(255), None, Some(7)));
-        let (resolved, warns, _) =
-            with_log_cage(|| ResolvedFont::resolve(&model_with_font(font)));
+        let (resolved, warns, _) = with_log_cage(|| ResolvedFont::resolve(&model_with_font(font)));
         assert_eq!(resolved.color, (255, 0, 7));
         assert_eq!(warns, 0);
     }
@@ -1147,10 +1158,7 @@ mod tests {
                 assert_eq!(format.GetReadingDirection(), recipe.reading, "{mode:?}");
                 assert_eq!(format.GetFlowDirection(), recipe.flow, "{mode:?}");
                 assert_eq!(format.GetTextAlignment(), recipe.text_alignment);
-                assert_eq!(
-                    format.GetParagraphAlignment(),
-                    recipe.paragraph_alignment
-                );
+                assert_eq!(format.GetParagraphAlignment(), recipe.paragraph_alignment);
             }
         }
     }
@@ -1182,16 +1190,18 @@ mod tests {
         // resolve は正値を保証するため、失敗経路は手組みの縮退値で叩く（crate 内テスト特権）。
         let mut resolved = ResolvedFont::resolve(&model_with_font(empty_font()));
         resolved.height = 0.0;
-        let (result, warns, errors) = with_log_cage(|| {
-            create_text_format(&factory, &resolved, WritingMode::HorizontalTb)
-        });
+        let (result, warns, errors) =
+            with_log_cage(|| create_text_format(&factory, &resolved, WritingMode::HorizontalTb));
         match result {
             Err(TextLayerError::Device { context, .. }) => {
                 assert_eq!(context, "CreateTextFormat");
             }
             other => panic!("Device エラーを期待したが {other:?}"),
         }
-        assert_eq!(warns, 1, "初回失敗→既定フォント再試行の warn がちょうど 1 回");
+        assert_eq!(
+            warns, 1,
+            "初回失敗→既定フォント再試行の warn がちょうど 1 回"
+        );
         assert_eq!(errors, 1, "再試行失敗→error! がちょうど 1 回");
     }
 
@@ -1339,7 +1349,11 @@ mod tests {
         let first = metrics.advance('あ', DEFAULT_FONT_HEIGHT);
         assert_eq!(metrics.cached_probe_count(), 1);
         let again = metrics.advance('あ', DEFAULT_FONT_HEIGHT);
-        assert_eq!(metrics.cached_probe_count(), 1, "同一文字の再計測は probe を増やさない");
+        assert_eq!(
+            metrics.cached_probe_count(),
+            1,
+            "同一文字の再計測は probe を増やさない"
+        );
         assert_eq!(first, again);
         metrics.advance('a', DEFAULT_FONT_HEIGHT);
         assert_eq!(metrics.cached_probe_count(), 2);
@@ -1359,9 +1373,8 @@ mod tests {
             line_pitch_factor: 2.0,
             ..TextLayerConfig::default()
         };
-        let doubled =
-            DWriteMetrics::new(&factory, &resolved, WritingMode::HorizontalTb, &config)
-                .expect("非既定係数でも生成が成立する");
+        let doubled = DWriteMetrics::new(&factory, &resolved, WritingMode::HorizontalTb, &config)
+            .expect("非既定係数でも生成が成立する");
         assert_eq!(doubled.line_pitch(10.0), 20.0);
     }
 
@@ -1373,9 +1386,15 @@ mod tests {
         let metrics = default_metrics(&factory, WritingMode::HorizontalTb);
         let bound = metrics.advance('あ', DEFAULT_FONT_HEIGHT);
         let (mismatched, warns, errors) = with_log_cage(|| metrics.advance('あ', 99.0));
-        assert_eq!(warns, 1, "束縛高さと異なる font_height はちょうど 1 回 warn");
+        assert_eq!(
+            warns, 1,
+            "束縛高さと異なる font_height はちょうど 1 回 warn"
+        );
         assert_eq!(errors, 0);
-        assert_eq!(mismatched, bound, "値は束縛 format の実測のまま（縮退継続）");
+        assert_eq!(
+            mismatched, bound,
+            "値は束縛 format の実測のまま（縮退継続）"
+        );
     }
 
     // ── task 6.3 R3.1/R7.3: DrawExecutor——可視窓の全域再描画を自前供給面へ焼き込む ──
@@ -1404,8 +1423,8 @@ mod tests {
 
     /// テスト用 WUC apartment / dispatcher（surface.rs テストと同一方針:
     /// COM 未初期化のテストスレッドでは ASTA 第一候補・NONE 保険）。
-    fn make_dispatcher_and_compositor()
-    -> (windows::System::DispatcherQueueController, Compositor) {
+    fn make_dispatcher_and_compositor() -> (windows::System::DispatcherQueueController, Compositor)
+    {
         let dq = create_dispatcher_queue_controller(DQTAT_COM_ASTA)
             .or_else(|e_asta| {
                 create_dispatcher_queue_controller(DQTAT_COM_NONE).map_err(|_| e_asta)
@@ -1466,16 +1485,14 @@ mod tests {
     }
 
     /// テスト用 BalloonModel（幾何のみ・font 未指定＝既定 ＭＳ ゴシック）。
-    fn geo_model(
-        origin: (Option<i32>, Option<i32>),
-        font_height: Option<u32>,
-    ) -> BalloonModel {
+    fn geo_model(origin: (Option<i32>, Option<i32>), font_height: Option<u32>) -> BalloonModel {
         BalloonModel::new(
             WindowPosition::new(None, None),
             Origin::new(origin.0, origin.1),
             WordWrapPoint::new(None, None),
             ValidRect::new(None, None, None, None),
             Font::new(None, font_height, FontColor::new(None, None, None)),
+            None,
             None,
         )
     }
@@ -1498,7 +1515,15 @@ mod tests {
         metrics: &DWriteMetrics,
         contract: &ScaleContract,
     ) -> Vec<u8> {
-        let lines = LayoutEngine::layout(items, visible, region, mode, font.height, metrics);
+        let lines = LayoutEngine::layout(
+            items,
+            visible,
+            region,
+            mode,
+            font.height,
+            metrics,
+            WrapPlan::CharByChar,
+        );
         let canvas = crate::canvas::ContentCanvas::from_layout(&lines, region, mode);
         let window = LayoutEngine::visible_window(&lines, region, mode);
         executor
@@ -1548,7 +1573,14 @@ mod tests {
         let mut counts = Vec::new();
         for visible in 0..=items.len() {
             let bytes = render_items(
-                &mut executor, &mut surface, &items, visible, &region, mode, &font, &metrics,
+                &mut executor,
+                &mut surface,
+                &items,
+                visible,
+                &region,
+                mode,
+                &font,
+                &metrics,
                 &contract,
             );
             counts.push(opaque_count(&bytes));
@@ -1564,7 +1596,15 @@ mod tests {
         // Clear: 未リビール分含む全消去（空 canvas）＋確定行キャッシュの全破棄。
         executor.clear_cache();
         let bytes = render_items(
-            &mut executor, &mut surface, &[], 0, &region, mode, &font, &metrics, &contract,
+            &mut executor,
+            &mut surface,
+            &[],
+            0,
+            &region,
+            mode,
+            &font,
+            &metrics,
+            &contract,
         );
         assert!(
             bytes.iter().all(|&b| b == 0),
@@ -1590,13 +1630,37 @@ mod tests {
 
         let items = glyph_items("あいうえお");
         let two_first = render_items(
-            &mut executor, &mut surface, &items, 2, &region, mode, &font, &metrics, &contract,
+            &mut executor,
+            &mut surface,
+            &items,
+            2,
+            &region,
+            mode,
+            &font,
+            &metrics,
+            &contract,
         );
         let five = render_items(
-            &mut executor, &mut surface, &items, 5, &region, mode, &font, &metrics, &contract,
+            &mut executor,
+            &mut surface,
+            &items,
+            5,
+            &region,
+            mode,
+            &font,
+            &metrics,
+            &contract,
         );
         let two_again = render_items(
-            &mut executor, &mut surface, &items, 2, &region, mode, &font, &metrics, &contract,
+            &mut executor,
+            &mut surface,
+            &items,
+            2,
+            &region,
+            mode,
+            &font,
+            &metrics,
+            &contract,
         );
         assert!(opaque_count(&five) > opaque_count(&two_first));
         assert_eq!(
@@ -1628,12 +1692,28 @@ mod tests {
         items.push(TextItem::Glyph { ch: 'う' });
 
         render_items(
-            &mut executor, &mut surface, &items, 3, &region, mode, &font, &metrics, &contract,
+            &mut executor,
+            &mut surface,
+            &items,
+            3,
+            &region,
+            mode,
+            &font,
+            &metrics,
+            &contract,
         );
         assert_eq!(executor.line_layout_creations(), 2, "初回は 2 行分を生成");
 
         render_items(
-            &mut executor, &mut surface, &items, 3, &region, mode, &font, &metrics, &contract,
+            &mut executor,
+            &mut surface,
+            &items,
+            3,
+            &region,
+            mode,
+            &font,
+            &metrics,
+            &contract,
         );
         assert_eq!(
             executor.line_layout_creations(),
@@ -1644,7 +1724,15 @@ mod tests {
         // リビール進行: 行 1 が "う"→"うえ" へ——行 1 のみ都度更新（行 0 は確定キャッシュ）。
         items.push(TextItem::Glyph { ch: 'え' });
         render_items(
-            &mut executor, &mut surface, &items, 4, &region, mode, &font, &metrics, &contract,
+            &mut executor,
+            &mut surface,
+            &items,
+            4,
+            &region,
+            mode,
+            &font,
+            &metrics,
+            &contract,
         );
         assert_eq!(
             executor.line_layout_creations(),
@@ -1655,7 +1743,15 @@ mod tests {
         // Clear 適用点: 全破棄→次描画は全行を再生成する。
         executor.clear_cache();
         render_items(
-            &mut executor, &mut surface, &items, 4, &region, mode, &font, &metrics, &contract,
+            &mut executor,
+            &mut surface,
+            &items,
+            4,
+            &region,
+            mode,
+            &font,
+            &metrics,
+            &contract,
         );
         assert_eq!(
             executor.line_layout_creations(),
@@ -1687,7 +1783,15 @@ mod tests {
         // '■'（全角・インクがほぼ em ボックスを満たす）1 グリフを (20,20) へ。
         let items = glyph_items("■");
         let bytes = render_items(
-            &mut executor, &mut surface, &items, 1, &region, mode, &font, &metrics, &contract,
+            &mut executor,
+            &mut surface,
+            &items,
+            1,
+            &region,
+            mode,
+            &font,
+            &metrics,
+            &contract,
         );
         let (min_x, min_y) = ink_min(&bytes, 240).expect("インクが描かれる");
         // 正解: 画像座標 (20 + ベアリング数 px) × 2 ≈ [40, 40+2×font]。
@@ -1732,10 +1836,26 @@ mod tests {
 
         // 3 行（収まる・可視 ■×5）→ 4 行（あふれ・可視窓は行 1〜3 ＝ ■×3）。
         let before = render_items(
-            &mut executor, &mut surface, &items3, 5, &region, mode, &font, &metrics, &contract,
+            &mut executor,
+            &mut surface,
+            &items3,
+            5,
+            &region,
+            mode,
+            &font,
+            &metrics,
+            &contract,
         );
         let after = render_items(
-            &mut executor, &mut surface, &items4, 6, &region, mode, &font, &metrics, &contract,
+            &mut executor,
+            &mut surface,
+            &items4,
+            6,
+            &region,
+            mode,
+            &font,
+            &metrics,
+            &contract,
         );
         assert!(
             opaque_count(&after) < opaque_count(&before),
@@ -1750,7 +1870,15 @@ mod tests {
         );
         // 決定論: 同一入力の再描画はバイト一致（差分累積なし）。
         let again = render_items(
-            &mut executor, &mut surface, &items4, 6, &region, mode, &font, &metrics, &contract,
+            &mut executor,
+            &mut surface,
+            &items4,
+            6,
+            &region,
+            mode,
+            &font,
+            &metrics,
+            &contract,
         );
         assert_eq!(after, again, "同一入力→同一ピクセル（全域再描画の決定論）");
     }
@@ -1803,7 +1931,10 @@ mod tests {
             executor.render(&canvas, &window, &font, mode, &contract, &mut surface)
         });
         result.expect("2 回目の render も成功する");
-        assert_eq!(warns2, 0, "シーム warn は executor ごと初回のみ（スパム抑制）");
+        assert_eq!(
+            warns2, 0,
+            "シーム warn は executor ごと初回のみ（スパム抑制）"
+        );
     }
 
     /// 観測可能な完了状態（task 6.2）: LayoutEngine の外部注入点（&dyn GlyphMetrics）へ
@@ -1823,6 +1954,7 @@ mod tests {
             ValidRect::new(None, None, None, None),
             empty_font(),
             None,
+            None,
         );
         let region = TextRegion::resolve(&model, (400, 224), WritingMode::HorizontalTb);
         let items = [TextItem::Glyph { ch: 'あ' }, TextItem::Glyph { ch: 'あ' }];
@@ -1833,11 +1965,18 @@ mod tests {
             WritingMode::HorizontalTb,
             DEFAULT_FONT_HEIGHT,
             &metrics,
+            WrapPlan::CharByChar,
         );
         assert_eq!(lines.len(), 2, "実測 advance が折返し判定を駆動する");
         assert_eq!(lines[0].glyphs.len(), 1);
-        assert_eq!(lines[0].glyphs[0].advance, full, "配置グリフの advance は実測値");
-        assert_eq!(lines[1].glyphs[0].inline_pos, 0.0, "折返し行は行内開始へ戻る");
+        assert_eq!(
+            lines[0].glyphs[0].advance, full,
+            "配置グリフの advance は実測値"
+        );
+        assert_eq!(
+            lines[1].glyphs[0].inline_pos, 0.0,
+            "折返し行は行内開始へ戻る"
+        );
     }
 
     // ── task 6.4 R4.5/R6.1–6.3/R7.5: probe/描画行 TextLayout の送り幅一致 invariant ──
@@ -1984,11 +2123,20 @@ mod tests {
                     ValidRect::new(None, None, None, None),
                     empty_font(),
                     None,
+                    None,
                 );
                 let region = TextRegion::resolve(&model, (400, 224), mode);
                 let items = glyph_items(text);
                 let lines =
-                    LayoutEngine::layout(&items, items.len(), &region, mode, font.height, &metrics);
+                    LayoutEngine::layout(
+                        &items,
+                        items.len(),
+                        &region,
+                        mode,
+                        font.height,
+                        &metrics,
+                        WrapPlan::CharByChar,
+                    );
                 assert!(
                     lines.len() >= 2,
                     "{} {mode:?}: 実測駆動の折返しが実際に発生する構成",

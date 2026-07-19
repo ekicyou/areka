@@ -31,6 +31,11 @@ pub enum SakuraMsg {
     Tick(f64),
     /// kanade からの中断（単一 Close funnel・R7）。areka-actor 停止規約の Close 相当。
     Close,
+    /// 選択解決（additive・R2.7）。選択待ち（barrier）で止まった talk へ、選ばれた選択肢 id を
+    /// **talk アクター境界の型付き入力**として投入する唯一の口。`CuePlayer::resolve_choice` を
+    /// 外部から直接呼ぶ経路は構造的に存在せず（アクター内に閉じている）、投函は W5
+    /// （`areka-P0-choice-select-events`）の領分（本 spec は口の定義と檻のみ）。
+    ResolveChoice { id: String },
 }
 
 /// spawn_talk の返り値: 中断/時刻注入の投函端＋join ハンドル（validation Issue 1 の解決）。
@@ -51,6 +56,9 @@ pub use areka_talk::{StartTalk, TalkDone, TalkEndReason, TalkId};
 // 本層は re-export のみ（下流 `areka_sakura::contract::cue_target_of` パスは不変・網羅檻は
 // dola 側 `crates/dola/tests/cue/sink_test.rs` の `cue_target_of_classifies_every_variant`）。
 pub use areka_parsers::sakura::{NewLineRatio, SurfaceArg};
+// システム変数展開の消費側契約型（R7・正本は `crate::sysvar`）を re-export し、下流は安定パス
+// `areka_sakura::contract::*`（＝lib.rs で glob 再輸出）から参照できる（値源非所有・凍結像消費）。
+pub use crate::sysvar::{DEFAULT_USERNAME, ResolvedVar, SystemVarSnapshot, resolve_system_var};
 pub use dola::cue::{
     ActorKey, BarrierKind, Cue, CueCommand, CuePayload, CueSheet, CueSink, CueTarget, TalkCue,
     cue_target_of,

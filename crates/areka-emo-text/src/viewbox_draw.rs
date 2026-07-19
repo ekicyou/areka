@@ -42,7 +42,7 @@
 //! byte 等価はこの構造共有に載る。
 
 use tracing::warn;
-use windows::Win32::Graphics::Direct2D::Common::{D2D1_COLOR_F, D2D_RECT_F};
+use windows::Win32::Graphics::Direct2D::Common::{D2D_RECT_F, D2D1_COLOR_F};
 use windows::Win32::Graphics::Direct2D::{
     D2D1_ANTIALIAS_MODE_ALIASED, D2D1_DEVICE_CONTEXT_OPTIONS_NONE, D2D1_DRAW_TEXT_OPTIONS_NONE,
     ID2D1DeviceContext, ID2D1Image,
@@ -346,7 +346,8 @@ impl ViewboxExecutor {
                         bottom: (rect.y + rect.h) as f32,
                     };
                     unsafe {
-                        self.dc.PushAxisAlignedClip(&clip, D2D1_ANTIALIAS_MODE_ALIASED);
+                        self.dc
+                            .PushAxisAlignedClip(&clip, D2D1_ANTIALIAS_MODE_ALIASED);
                     }
                     // ③ 範囲内だけを透明化（premultiplied 全 0）。
                     self.dc.clear(None);
@@ -361,8 +362,12 @@ impl ViewboxExecutor {
                     });
                     // ⑤ 該当行を描画（クリップにより描画結果は dirty 矩形内へ限定される）。
                     for (origin, layout) in &draws {
-                        self.dc
-                            .draw_text_layout(*origin, layout, &brush, D2D1_DRAW_TEXT_OPTIONS_NONE);
+                        self.dc.draw_text_layout(
+                            *origin,
+                            layout,
+                            &brush,
+                            D2D1_DRAW_TEXT_OPTIONS_NONE,
+                        );
                         self.stats.draw_text_layout_calls += 1;
                     }
                     // ⑥ 範囲限定を解除。
@@ -534,8 +539,14 @@ fn plan_inconsistency(
 /// `Option` が `None`（デバイス未初期化など本来到達しない欠落）を [`TextLayerError::Device`] に
 /// する（draw.rs/surface.rs と同型の log-first ヘルパ）。
 fn none_err(context: &'static str) -> TextLayerError {
-    tracing::error!(context, "必須リソースが欠落（デバイス未初期化 または 前提不成立）");
-    TextLayerError::Device { hresult: 0, context }
+    tracing::error!(
+        context,
+        "必須リソースが欠落（デバイス未初期化 または 前提不成立）"
+    );
+    TextLayerError::Device {
+        hresult: 0,
+        context,
+    }
 }
 
 /// `windows_core::Error` を [`TextLayerError::Device`] へ写像する（draw.rs/surface.rs と同型の
@@ -567,7 +578,7 @@ mod tests {
     use crate::actor::TextSlotBinding;
     use crate::canvas::ContentCanvas;
     use crate::draw::{DWriteMetrics, DrawExecutor, ResolvedFont};
-    use crate::layout::{FixedMetrics, LayoutEngine, VisibleWindow};
+    use crate::layout::{FixedMetrics, LayoutEngine, VisibleWindow, WrapPlan};
     use crate::region::{ScaleContract, TextRegion};
     use crate::state::{TextItem, TextLayerConfig, TextLayerState};
     use crate::surface::TextSurface;
@@ -576,8 +587,8 @@ mod tests {
 
     /// テスト用 WUC apartment/dispatcher（surface.rs/draw.rs テストと同一方針:
     /// COM 未初期化のテストスレッドでは ASTA 第一候補・NONE 保険）。
-    fn make_dispatcher_and_compositor()
-    -> (windows::System::DispatcherQueueController, Compositor) {
+    fn make_dispatcher_and_compositor() -> (windows::System::DispatcherQueueController, Compositor)
+    {
         let dq = create_dispatcher_queue_controller(DQTAT_COM_ASTA)
             .or_else(|e_asta| {
                 create_dispatcher_queue_controller(DQTAT_COM_NONE).map_err(|_| e_asta)
@@ -646,6 +657,7 @@ mod tests {
             ValidRect::new(None, None, None, None),
             Font::new(None, font_height, FontColor::new(None, None, None)),
             None,
+            None,
         )
     }
 
@@ -662,7 +674,12 @@ mod tests {
             Origin::new(None, None),
             WordWrapPoint::new(None, None),
             ValidRect::new(None, None, None, None),
-            Font::new(name.map(str::to_owned), font_height, FontColor::new(None, None, None)),
+            Font::new(
+                name.map(str::to_owned),
+                font_height,
+                FontColor::new(None, None, None),
+            ),
+            None,
             None,
         )
     }
@@ -683,7 +700,15 @@ mod tests {
             .iter()
             .filter(|i| matches!(i, TextItem::Glyph { .. }))
             .count();
-        let lines = LayoutEngine::layout(items, visible, &region, mode, font_height, &FixedMetrics);
+        let lines = LayoutEngine::layout(
+            items,
+            visible,
+            &region,
+            mode,
+            font_height,
+            &FixedMetrics,
+            WrapPlan::CharByChar,
+        );
         let canvas = ContentCanvas::from_layout(&lines, &region, mode);
         let window = LayoutEngine::visible_window(&lines, &region, mode);
         (canvas, window)
@@ -733,14 +758,26 @@ mod tests {
         let changed = exec
             .render(&canvas, &window, &font, mode, &contract, &mut surface)
             .expect("render 失敗");
-        assert!(changed, "content ありの初回フレームは変化あり（present 要）");
+        assert!(
+            changed,
+            "content ありの初回フレームは変化あり（present 要）"
+        );
 
         let bytes = surface.read_back().expect("read_back 失敗");
-        assert!(opaque_count(&bytes) > 0, "初回描画で content の非透明ピクセルが現れる");
+        assert!(
+            opaque_count(&bytes) > 0,
+            "初回描画で content の非透明ピクセルが現れる"
+        );
 
         let stats: DrawStats = exec.stats();
-        assert!(stats.draw_text_layout_calls >= 1, "初回は少なくとも 1 行描画する");
-        assert_eq!(stats.blits, 0, "初回 blit=(0,0) は blits を増やさない（全面 CopyResource）");
+        assert!(
+            stats.draw_text_layout_calls >= 1,
+            "初回は少なくとも 1 行描画する"
+        );
+        assert_eq!(
+            stats.blits, 0,
+            "初回 blit=(0,0) は blits を増やさない（全面 CopyResource）"
+        );
     }
 
     /// 観測可能な完了状態 2: 同一 content・同一 window の再フレーム → plan=NoChange →
@@ -765,7 +802,10 @@ mod tests {
         let changed = exec
             .render(&canvas, &window, &font, mode, &contract, &mut surface)
             .expect("再 render 失敗");
-        assert!(!changed, "可視窓不変・content 不変のフレームは変化なし（present 不要）");
+        assert!(
+            !changed,
+            "可視窓不変・content 不変のフレームは変化なし（present 不要）"
+        );
 
         let after_second: DrawStats = exec.stats();
         assert_eq!(
@@ -961,7 +1001,10 @@ mod tests {
         exec.render(&canvas, &window, &font, mode, &contract, &mut surface)
             .expect("content render 失敗");
         let painted = surface.read_back().expect("read_back(content) 失敗");
-        assert!(opaque_count(&painted) > 0, "content の非透明ピクセルが現れる");
+        assert!(
+            opaque_count(&painted) > 0,
+            "content の非透明ピクセルが現れる"
+        );
         let full_before = exec.stats().full_clears;
 
         // Clear cue 適用点（planner 初期化＋行キャッシュ破棄はこの口だけ）。
@@ -992,7 +1035,10 @@ mod tests {
             "content 復帰は FullClear を増やさない（全域ダーティ Update）"
         );
         let restored = surface.read_back().expect("read_back(restored) 失敗");
-        assert!(opaque_count(&restored) > 0, "content が全域ダーティで復帰する");
+        assert!(
+            opaque_count(&restored) > 0,
+            "content が全域ダーティで復帰する"
+        );
     }
 
     /// 観測可能な完了状態（縮退の主檻・R3.5/Error Handling）: フォント（高さ）変更を注入すると
@@ -1067,7 +1113,12 @@ mod tests {
         use crate::viewbox::PhysicalRect;
 
         let size = (100u32, 50u32);
-        let full = PhysicalRect { x: 0, y: 0, w: 100, h: 50 };
+        let full = PhysicalRect {
+            x: 0,
+            y: 0,
+            w: 100,
+            h: 50,
+        };
 
         // 整合: 範囲内 index・面寸ちょうどの dirty → None。
         assert!(
@@ -1083,15 +1134,35 @@ mod tests {
 
         // dirty が面幅を超える（x+w=101 > 100）→ Some。
         assert!(
-            plan_inconsistency(&[PhysicalRect { x: 0, y: 0, w: 101, h: 50 }], &[], 2, size)
-                .is_some(),
+            plan_inconsistency(
+                &[PhysicalRect {
+                    x: 0,
+                    y: 0,
+                    w: 101,
+                    h: 50
+                }],
+                &[],
+                2,
+                size
+            )
+            .is_some(),
             "面幅を超える dirty を検知する"
         );
 
         // dirty が面高を超える（y+h=60 > 50）→ Some。
         assert!(
-            plan_inconsistency(&[PhysicalRect { x: 0, y: 40, w: 100, h: 20 }], &[], 2, size)
-                .is_some(),
+            plan_inconsistency(
+                &[PhysicalRect {
+                    x: 0,
+                    y: 40,
+                    w: 100,
+                    h: 20
+                }],
+                &[],
+                2,
+                size
+            )
+            .is_some(),
             "面高を超える dirty を検知する"
         );
     }
@@ -1147,7 +1218,10 @@ mod tests {
         let changed = exec
             .render(&canvas2, &window2, &font, mode, &contract, &mut surface)
             .expect("フレーム3（再試行）render 失敗");
-        assert!(changed, "再試行フレームは変化あり（未 commit ゆえ再計画される）");
+        assert!(
+            changed,
+            "再試行フレームは変化あり（未 commit ゆえ再計画される）"
+        );
         let r3 = surface.read_back().expect("read_back(frame3 再試行)");
         assert_ne!(
             r3, r1,
@@ -1217,14 +1291,36 @@ mod tests {
                 .actor_state(&actor)
                 .map(|s| s.items().to_vec())
                 .unwrap_or_default();
-            let lines = LayoutEngine::layout(&items, visible, &region, mode, font.height, &metrics);
+            let lines = LayoutEngine::layout(
+                &items,
+                visible,
+                &region,
+                mode,
+                font.height,
+                &metrics,
+                WrapPlan::CharByChar,
+            );
             let window = LayoutEngine::visible_window(&lines, &region, mode);
             let canvas = ContentCanvas::from_layout(&lines, &region, mode);
             oracle
-                .render(&canvas, &window, &font, mode, &contract, &mut oracle_surface)
+                .render(
+                    &canvas,
+                    &window,
+                    &font,
+                    mode,
+                    &contract,
+                    &mut oracle_surface,
+                )
                 .expect("oracle render");
             viewbox
-                .render(&canvas, &window, &font, mode, &contract, &mut viewbox_surface)
+                .render(
+                    &canvas,
+                    &window,
+                    &font,
+                    mode,
+                    &contract,
+                    &mut viewbox_surface,
+                )
                 .expect("viewbox render");
             let ob = oracle_surface.read_back().expect("oracle read_back");
             let vb = viewbox_surface.read_back().expect("viewbox read_back");
@@ -1254,17 +1350,41 @@ mod tests {
                 .actor_state(&actor)
                 .map(|s| s.items().to_vec())
                 .unwrap_or_default();
-            let lines = LayoutEngine::layout(&items, visible, &region, mode, font.height, &metrics);
+            let lines = LayoutEngine::layout(
+                &items,
+                visible,
+                &region,
+                mode,
+                font.height,
+                &metrics,
+                WrapPlan::CharByChar,
+            );
             let window = LayoutEngine::visible_window(&lines, &region, mode);
             let canvas = ContentCanvas::from_layout(&lines, &region, mode);
             oracle
-                .render(&canvas, &window, &font, mode, &contract, &mut oracle_surface)
+                .render(
+                    &canvas,
+                    &window,
+                    &font,
+                    mode,
+                    &contract,
+                    &mut oracle_surface,
+                )
                 .expect("oracle render(後方)");
             viewbox
-                .render(&canvas, &window, &font, mode, &contract, &mut viewbox_surface)
+                .render(
+                    &canvas,
+                    &window,
+                    &font,
+                    mode,
+                    &contract,
+                    &mut viewbox_surface,
+                )
                 .expect("viewbox render(後方)");
             let ob = oracle_surface.read_back().expect("oracle read_back(後方)");
-            let vb = viewbox_surface.read_back().expect("viewbox read_back(後方)");
+            let vb = viewbox_surface
+                .read_back()
+                .expect("viewbox read_back(後方)");
             if ob != vb {
                 let (w, h) = oracle_surface.size();
                 let mut diff_rows: Vec<u32> = Vec::new();
@@ -1311,14 +1431,36 @@ mod tests {
             .map(|ch| TextItem::Glyph { ch })
             .collect();
         for &visible in &[6usize, 2usize] {
-            let lines = LayoutEngine::layout(&items, visible, &region, mode, font.height, &metrics);
+            let lines = LayoutEngine::layout(
+                &items,
+                visible,
+                &region,
+                mode,
+                font.height,
+                &metrics,
+                WrapPlan::CharByChar,
+            );
             let window = LayoutEngine::visible_window(&lines, &region, mode);
             let canvas = ContentCanvas::from_layout(&lines, &region, mode);
             oracle
-                .render(&canvas, &window, &font, mode, &contract, &mut oracle_surface)
+                .render(
+                    &canvas,
+                    &window,
+                    &font,
+                    mode,
+                    &contract,
+                    &mut oracle_surface,
+                )
                 .expect("oracle render");
             viewbox
-                .render(&canvas, &window, &font, mode, &contract, &mut viewbox_surface)
+                .render(
+                    &canvas,
+                    &window,
+                    &font,
+                    mode,
+                    &contract,
+                    &mut viewbox_surface,
+                )
                 .expect("viewbox render");
             let ob = oracle_surface.read_back().expect("oracle read_back");
             let vb = viewbox_surface.read_back().expect("viewbox read_back");
@@ -1479,6 +1621,7 @@ mod tests {
                 self.mode,
                 self.font_height,
                 &FixedMetrics,
+                WrapPlan::CharByChar,
             );
             let window = LayoutEngine::visible_window(&lines, &self.region, self.mode);
             let canvas = ContentCanvas::from_layout(&lines, &self.region, self.mode);
@@ -1556,24 +1699,51 @@ mod tests {
                 self.mode,
                 self.font_height,
                 &FixedMetrics,
+                WrapPlan::CharByChar,
             );
             let window = LayoutEngine::visible_window(&lines, &self.region, self.mode);
             let canvas = ContentCanvas::from_layout(&lines, &self.region, self.mode);
 
             self.oracle
-                .render(&canvas, &window, &self.font, self.mode, &self.contract, &mut self.oracle_surface)
+                .render(
+                    &canvas,
+                    &window,
+                    &self.font,
+                    self.mode,
+                    &self.contract,
+                    &mut self.oracle_surface,
+                )
                 .unwrap_or_else(|e| panic!("{label}: オラクル render 失敗: {e:?}"));
             self.viewbox
-                .render(&canvas, &window, &self.font, self.mode, &self.contract, &mut self.viewbox_surface)
+                .render(
+                    &canvas,
+                    &window,
+                    &self.font,
+                    self.mode,
+                    &self.contract,
+                    &mut self.viewbox_surface,
+                )
                 .unwrap_or_else(|e| panic!("{label}: viewbox render 失敗: {e:?}"));
 
-            let ob = self.oracle_surface.read_back().unwrap_or_else(|e| panic!("{label}: オラクル read_back 失敗: {e:?}"));
-            let vb = self.viewbox_surface.read_back().unwrap_or_else(|e| panic!("{label}: viewbox read_back 失敗: {e:?}"));
+            let ob = self
+                .oracle_surface
+                .read_back()
+                .unwrap_or_else(|e| panic!("{label}: オラクル read_back 失敗: {e:?}"));
+            let vb = self
+                .viewbox_surface
+                .read_back()
+                .unwrap_or_else(|e| panic!("{label}: viewbox read_back 失敗: {e:?}"));
 
             let (w, h) = self.oracle_surface.size();
             // 非退化担保（空面同士の vacuous な一致を排除）。
-            assert!(opaque_count(&ob) > 0, "{label}: オラクル面に非透明ピクセルがある");
-            assert!(opaque_count(&vb) > 0, "{label}: viewbox 面に非透明ピクセルがある");
+            assert!(
+                opaque_count(&ob) > 0,
+                "{label}: オラクル面に非透明ピクセルがある"
+            );
+            assert!(
+                opaque_count(&vb) > 0,
+                "{label}: viewbox 面に非透明ピクセルがある"
+            );
 
             let os = block_axis_ink_span(&ob, w, h, self.mode).expect("オラクル面のインク範囲");
             let vs = block_axis_ink_span(&vb, w, h, self.mode).expect("viewbox 面のインク範囲");
@@ -1625,7 +1795,10 @@ mod tests {
             w.first_visible_line >= 1,
             "あふれ発火で可視窓が移動する（先頭可視行 ≥ 1）: {w:?}"
         );
-        assert_ne!(w.block_offset, 0.0, "発火後はブロックオフセットが非零: {w:?}");
+        assert_ne!(
+            w.block_offset, 0.0,
+            "発火後はブロックオフセットが非零: {w:?}"
+        );
 
         // ③ 連続スクロール（さらに 2 行追記・複数回スクロール）。
         ld.apply_newline(0.0);
@@ -1641,7 +1814,10 @@ mod tests {
         // ④ Clear 直後（両方式の Clear 適用点を経由・全域透明）。
         ld.apply_clear(0.0);
         let w = ld.checkpoint("Clear 直後", 40.0, false);
-        assert_eq!(w.first_visible_line, 0, "Clear 後は既定窓（先頭可視行 0）: {w:?}");
+        assert_eq!(
+            w.first_visible_line, 0,
+            "Clear 後は既定窓（先頭可視行 0）: {w:?}"
+        );
 
         // ⑤ Clear 後再追記（新規 content が全域ダーティで復帰）。
         ld.apply_text(0.0, "ら");
@@ -1697,7 +1873,10 @@ mod tests {
         ld.apply_newline(0.0);
         ld.apply_text(0.0, "え");
         let w = ld.checkpoint_block_tol("k≠1 スクロール発火", 20.0, tol);
-        assert!(w.first_visible_line >= 1, "k≠1 あふれ発火で可視窓が移動: {w:?}");
+        assert!(
+            w.first_visible_line >= 1,
+            "k≠1 あふれ発火で可視窓が移動: {w:?}"
+        );
 
         // ③ 連続スクロール。
         ld.apply_newline(0.0);
@@ -1705,7 +1884,10 @@ mod tests {
         ld.apply_newline(0.0);
         ld.apply_text(0.0, "か");
         let w = ld.checkpoint_block_tol("k≠1 連続スクロール", 30.0, tol);
-        assert!(w.first_visible_line >= 2, "k≠1 連続スクロールで可視窓が複数行進む: {w:?}");
+        assert!(
+            w.first_visible_line >= 2,
+            "k≠1 連続スクロールで可視窓が複数行進む: {w:?}"
+        );
     }
 
     /// 横書き k=1.25: あふれ→スクロール実描画で viewbox が oracle とブロック軸 ≤2px（≈ceil(0.5×1.25)
@@ -1805,12 +1987,24 @@ mod tests {
             )
             .expect("viewbox render 失敗");
 
-        let ob = ld.oracle_surface.read_back().expect("オラクル read_back 失敗");
-        let vb = ld.viewbox_surface.read_back().expect("viewbox read_back 失敗");
+        let ob = ld
+            .oracle_surface
+            .read_back()
+            .expect("オラクル read_back 失敗");
+        let vb = ld
+            .viewbox_surface
+            .read_back()
+            .expect("viewbox read_back 失敗");
 
         // 双方とも非退化（空面同士の vacuous な不一致でない）。
-        assert!(opaque_count(&ob) > 0, "オラクル面は非透明（content が描かれている）");
-        assert!(opaque_count(&vb) > 0, "viewbox 面は非透明（content が描かれている）");
+        assert!(
+            opaque_count(&ob) > 0,
+            "オラクル面は非透明（content が描かれている）"
+        );
+        assert!(
+            opaque_count(&vb) > 0,
+            "viewbox 面は非透明（content が描かれている）"
+        );
         // 比較器は差を検出する（＝live-diff の有効性・トートロジーでない）。
         assert_ne!(
             ob, vb,
@@ -1846,7 +2040,11 @@ mod tests {
         let mode = resolved.mode;
         let font = &resolved.font;
         let region = &resolved.region;
-        assert_eq!(mode, WritingMode::HorizontalTb, "fixture は横書き（D2 は横書き不具合）");
+        assert_eq!(
+            mode,
+            WritingMode::HorizontalTb,
+            "fixture は横書き（D2 は横書き不具合）"
+        );
 
         let image = (
             (region.right() - region.left()).ceil() as u32,
@@ -1876,7 +2074,10 @@ mod tests {
         };
         state.apply_cue(&cue_at(0.0, CueCommand::Text("おっはよー！".into())));
         state.apply_cue(&cue_at(0.5, CueCommand::NewLine { ratio: 1.0 }));
-        state.apply_cue(&cue_at(0.5, CueCommand::Text("めっちゃええ朝やん！".into())));
+        state.apply_cue(&cue_at(
+            0.5,
+            CueCommand::Text("めっちゃええ朝やん！".into()),
+        ));
         state.apply_cue(&cue_at(1.2, CueCommand::NewLine { ratio: 1.0 }));
         state.apply_cue(&cue_at(1.2, CueCommand::Text("今日もいくでー！".into())));
         for _ in 0..9 {
@@ -1893,14 +2094,29 @@ mod tests {
                 .actor_state(&actor)
                 .map(|s| s.items().to_vec())
                 .unwrap_or_default();
-            let lines = LayoutEngine::layout(&items, visible, region, mode, font.height, &metrics);
+            let lines = LayoutEngine::layout(
+                &items,
+                visible,
+                region,
+                mode,
+                font.height,
+                &metrics,
+                WrapPlan::CharByChar,
+            );
             let window = LayoutEngine::visible_window(&lines, region, mode);
             let canvas = ContentCanvas::from_layout(&lines, region, mode);
             oracle
                 .render(&canvas, &window, font, mode, &contract, &mut oracle_surface)
                 .expect("oracle render");
             viewbox
-                .render(&canvas, &window, font, mode, &contract, &mut viewbox_surface)
+                .render(
+                    &canvas,
+                    &window,
+                    font,
+                    mode,
+                    &contract,
+                    &mut viewbox_surface,
+                )
                 .expect("viewbox render");
             let ob = oracle_surface.read_back().expect("oracle read_back");
             let vb = viewbox_surface.read_back().expect("viewbox read_back");
@@ -1922,7 +2138,10 @@ mod tests {
             }
             t += 0.02;
         }
-        assert!(checked_opaque, "非退化: content フレームで非透明ピクセルを観測している（vacuous でない）");
+        assert!(
+            checked_opaque,
+            "非退化: content フレームで非透明ピクセルを観測している（vacuous でない）"
+        );
     }
 
     // ════ 目視診断（PNG ダンプ・#[ignore]・開発者の「出力画像を見せて」要求への回答） ════
@@ -2084,8 +2303,7 @@ mod tests {
         );
         // balloon 画像原寸（surface0＝400×224）で region を解決する（validrect は image 相対）。
         let balloon_image = (400u32, 224u32);
-        let resolved =
-            crate::actor::ResolvedBalloonText::resolve(&model, balloon_image);
+        let resolved = crate::actor::ResolvedBalloonText::resolve(&model, balloon_image);
         let mode = resolved.mode;
         let font = &resolved.font;
         let region = &resolved.region;
@@ -2106,8 +2324,12 @@ mod tests {
         };
         eprintln!(
             "[diag] model: font={} height={} mode={mode:?} validrect=[{},{}]x[{},{}] surface={image:?} wrap={}",
-            font.name, font.height,
-            region.left(), region.right(), region.top(), region.bottom(),
+            font.name,
+            font.height,
+            region.left(),
+            region.right(),
+            region.top(),
+            region.bottom(),
             region.wrap_threshold()
         );
         let mut oracle = DrawExecutor::new(&rig.core).expect("DrawExecutor");
@@ -2140,7 +2362,10 @@ mod tests {
         };
         state.apply_cue(&cue_at(0.0, CueCommand::Text("おっはよー！".into())));
         state.apply_cue(&cue_at(0.5, CueCommand::NewLine { ratio: 1.0 }));
-        state.apply_cue(&cue_at(0.5, CueCommand::Text("めっちゃええ朝やん！".into())));
+        state.apply_cue(&cue_at(
+            0.5,
+            CueCommand::Text("めっちゃええ朝やん！".into()),
+        ));
         state.apply_cue(&cue_at(1.2, CueCommand::NewLine { ratio: 1.0 }));
         state.apply_cue(&cue_at(1.2, CueCommand::Text("今日もいくでー！".into())));
         for _ in 0..9 {
@@ -2164,14 +2389,29 @@ mod tests {
                 .actor_state(&actor)
                 .map(|s| s.items().to_vec())
                 .unwrap_or_default();
-            let lines = LayoutEngine::layout(&items, visible, &region, mode, font.height, &metrics);
+            let lines = LayoutEngine::layout(
+                &items,
+                visible,
+                &region,
+                mode,
+                font.height,
+                &metrics,
+                WrapPlan::CharByChar,
+            );
             let window = LayoutEngine::visible_window(&lines, &region, mode);
             let canvas = ContentCanvas::from_layout(&lines, &region, mode);
             oracle
                 .render(&canvas, &window, font, mode, &contract, &mut oracle_surface)
                 .expect("oracle render");
             viewbox
-                .render(&canvas, &window, font, mode, &contract, &mut viewbox_surface)
+                .render(
+                    &canvas,
+                    &window,
+                    font,
+                    mode,
+                    &contract,
+                    &mut viewbox_surface,
+                )
                 .expect("viewbox render");
 
             if dump_times.first().is_some_and(|&t_target| t >= t_target) {
@@ -2255,5 +2495,148 @@ mod tests {
             }
             t += dt;
         }
+    }
+
+    /// 目視診断（budoux ワードラップ・R9.2/9.3）: 実 fixture（emo2-kakukaku・Yu Gothic UI 28px・
+    /// 狭い validrect 320×122・`wordwrappoint.x=-49`）へ、(1) 通常文を **OFF（文字単位）** と
+    /// **ON（分かち書き）** の両方、(2) budoux 境界を持たない長大塊を **ON** で描き、fully-revealed
+    /// （全グリフ可視）で PNG を保存する。
+    ///
+    /// - **通常ケース（OFF/ON 並置）**: 狭いバルーンでは OFF が文節を行末で途中分割するが、ON は
+    ///   塊を丸ごと次行へ送る（R9.1）。`diag_budoux_normal_off.png` と `diag_budoux_normal_on.png`
+    ///   を並べて改善を目視できる。
+    /// - **長大塊ケース（ON）**: 行頭からでも 1 行に収まらない塊（budoux 境界のない連続カナ）は
+    ///   当該塊に限って文字単位縮退し、バルーン（validrect＝供給面寸）からはみ出さない（R9.2）。
+    ///   `diag_budoux_longseg_on.png` を出す。最右インク列が供給面右端で張り付いていない（＝
+    ///   はみ出しクリップでない）ことを `eprintln!` の数値でも補助確認する。
+    ///
+    /// byte 等価檻（`diag_line_boundary_dropout_vs_oracle` 等）は「viewbox==oracle」を保証するが、
+    /// 「分かち書き折返しが読みやすく見えるか・長大塊がはみ出さないか」は人（AI vision）が画像を
+    /// 見るしかない（記憶 emo-text-byte-equiv-default-font-blindspot）。全域再描画オラクル
+    /// [`DrawExecutor`] を使い fully-revealed の完成画像を 1 フレームで得る。
+    /// `cargo test -p areka-emo-text --lib -- --ignored --nocapture diag_dump_budoux_wordwrap_pngs`
+    /// （出力先は env `AREKA_DIAG_OUT`・無指定はカレント）。
+    #[test]
+    #[ignore = "PNG ダンプ（ファイル副作用・目視診断用・明示実行のみ）"]
+    fn diag_dump_budoux_wordwrap_pngs() {
+        let out_dir = std::env::var("AREKA_DIAG_OUT").unwrap_or_else(|_| ".".to_string());
+        let mut rig = Rig::new();
+        // 実 fixture（emo2-kakukaku）を実ファイルからロード（Yu Gothic UI・validrect 320×122・
+        // wordwrappoint.x=-49）——diag_dump_horizontal_pngs と同一経路。狭いバルーンが char-by-char
+        // の途中分割を誘発する（＝ON の改善が見える台）。
+        let fixture_dir = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../pilot/examples/shiori-host-32/fixtures/emo2/emo2-kakukaku");
+        let read_dec = |name: &str| -> String {
+            let bytes = std::fs::read(fixture_dir.join(name)).expect("fixture 読取");
+            areka_parsers::charset::decode(&bytes, areka_parsers::charset::DefaultEncoding::Utf8)
+        };
+        let model = areka_parsers::balloon::parse_str(
+            &read_dec("descript.txt"),
+            Some(&read_dec("balloons0s.txt")),
+        );
+        // balloon 画像原寸（surface0＝400×224）で region を解決する（validrect は image 相対）。
+        let balloon_image = (400u32, 224u32);
+        let resolved = crate::actor::ResolvedBalloonText::resolve(&model, balloon_image);
+        let mode = resolved.mode;
+        let font = &resolved.font;
+        let region = &resolved.region;
+        // 供給面＝validrect 物理寸（ceil(validrect × k)・k=1）＝バルーンの折返し閾/はみ出し境界。
+        let image = (
+            (region.right() - region.left()).ceil() as u32,
+            (region.bottom() - region.top()).ceil() as u32,
+        );
+        let contract = ScaleContract::new(1.0, None);
+        let config = TextLayerConfig::default();
+        let factory = rig.core.dwrite_factory().expect("dwrite_factory").clone();
+        let metrics = DWriteMetrics::new(&factory, font, mode, &config).expect("DWriteMetrics");
+        let pitch = {
+            use crate::layout::GlyphMetrics;
+            metrics.line_pitch(font.height) as u32
+        };
+        eprintln!(
+            "[diag-budoux] model: font={} height={} mode={mode:?} validrect=[{},{}]x[{},{}] surface={image:?} wrap_threshold={}",
+            font.name,
+            font.height,
+            region.left(),
+            region.right(),
+            region.top(),
+            region.bottom(),
+            region.wrap_threshold()
+        );
+
+        // 1 ケース（sentence を fully-revealed で描画）を PNG 保存するヘルパ。ON（use_budoux=true）は
+        // actor.rs と同型の遅延初期化で segment_plan を計算し WrapPlan::Segmented を供給する（OFF は
+        // segment_plan を呼ばず CharByChar）。戻り値＝(行数, 最右インク列 x)。
+        let dump_case =
+            |rig: &mut Rig, tag: &str, sentence: &str, use_budoux: bool| -> (usize, Option<u32>) {
+                let items = glyph_items(sentence);
+                let visible = items
+                    .iter()
+                    .filter(|i| matches!(i, TextItem::Glyph { .. }))
+                    .count();
+                let plan; // ON アームでのみ束縛（借用 &plan が layout 呼出まで生存）。
+                let wrap = if use_budoux {
+                    plan = crate::segment::segment_plan(&items);
+                    let segs: Vec<(usize, usize)> =
+                        plan.segments().iter().map(|s| (s.start, s.len)).collect();
+                    eprintln!("[diag-budoux]   segments(start,len)={segs:?}");
+                    WrapPlan::Segmented(&plan)
+                } else {
+                    WrapPlan::CharByChar
+                };
+                let lines = LayoutEngine::layout(
+                    &items,
+                    visible,
+                    region,
+                    mode,
+                    font.height,
+                    &metrics,
+                    wrap,
+                );
+                let window = LayoutEngine::visible_window(&lines, region, mode);
+                let canvas = ContentCanvas::from_layout(&lines, region, mode);
+                let mut surface = rig.attach(image, 1.0);
+                let mut exec = DrawExecutor::new(&rig.core).expect("DrawExecutor");
+                exec.render(&canvas, &window, font, mode, &contract, &mut surface)
+                    .expect("render");
+                let bytes = surface.read_back().expect("read_back");
+                let (w, h) = surface.size();
+                // 最右インク列（inline はみ出しの定量指標・供給面は validrect 寸ゆえ描画は自動クリップ＝
+                // w-1 に張り付くならはみ出しをクリップで隠している疑い）。
+                let rightmost = {
+                    let mut r: Option<u32> = None;
+                    for x in (0..w).rev() {
+                        let hit = (0..h).any(|y| bytes[((y * w + x) * 4 + 3) as usize] != 0);
+                        if hit {
+                            r = Some(x);
+                            break;
+                        }
+                    }
+                    r
+                };
+                let rgba = diag_composite_rgba(&bytes, w, h, pitch);
+                let png = diag_encode_png_rgba(&rgba, w, h);
+                let path = format!("{out_dir}/diag_budoux_{tag}.png");
+                std::fs::write(&path, &png).expect("PNG 書き込み");
+                eprintln!(
+                    "[diag-budoux]   saved {path}  budoux={use_budoux} sentence=「{sentence}」 \
+                     visible={visible} lines={} rightmost_ink_x={rightmost:?} (surface_w={w} pitch={pitch})",
+                    lines.len()
+                );
+                (lines.len(), rightmost)
+            };
+
+        // ── 通常ケース: 狭いバルーンで char-by-char が文節を途中分割する和文（OFF/ON 並置）。 ──
+        let normal = "今日はとても良い天気ですね一緒に近くの公園へ遊びに行きましょう";
+        eprintln!("[diag-budoux] === 通常ケース（OFF: 文字単位） ===");
+        dump_case(&mut rig, "normal_off", normal, false);
+        eprintln!("[diag-budoux] === 通常ケース（ON: 分かち書き） ===");
+        dump_case(&mut rig, "normal_on", normal, true);
+
+        // ── 長大塊ケース: budoux 境界を持たない連続カナ（行頭からでも 1 行に収まらない）を ON で。 ──
+        // 前後に通常の和文を置き「長大塊のみ縮退し前後は分かち書き継続」を目視できる形にする（R3.3）。
+        let longseg = "むかしむかしバアアアアアアアアアアアアアアアアアアアアアア山という所に住んでいました";
+        eprintln!("[diag-budoux] === 長大塊ケース（ON: 縮退＋はみ出しなし） ===");
+        dump_case(&mut rig, "longseg_on", longseg, true);
     }
 }

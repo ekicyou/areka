@@ -425,7 +425,7 @@ mod tests {
 // partition になっていることを純関数として固定する（GPU 不要・決定論）。
 #[cfg(test)]
 mod broadcast_relevance_partition {
-    use areka_sakura::contract::{cue_target_of, CueCommand, CueTarget};
+    use areka_sakura::contract::{CueCommand, CueTarget, cue_target_of};
 
     /// broadcast された cue に対して action する演者の同定（分類が単一権威 `cue_target_of`）。
     #[derive(Debug, PartialEq, Eq, Clone, Copy)]
@@ -445,11 +445,16 @@ mod broadcast_relevance_partition {
         match target {
             Some(CueTarget::Shell) => Some(Performer::Seriko),
             Some(CueTarget::Balloon) => Some(Performer::EmoText),
+            // Window（`\![move]` 系の窓移動先）は seriko/emo-text いずれの担当でもない——
+            // 消費は areka bin 側の MoveCueSink（W5）で、この seriko/emo-text partition の
+            // 圏外ゆえ None（本テストの CueCommand→cue_target_of 経路では出現しないが、
+            // CueTarget の網羅性を型で保つためのアーム）。
+            Some(CueTarget::Window) => None,
             None => None, // Wait（純粋な待ち）・Custom（分類不能）＝どの演者も action しない。
         }
     }
 
-    /// 全 10 `CueCommand` variant を列挙する（catch-all なし・dola が variant を追加したら
+    /// 全 `CueCommand` variant を列挙する（catch-all なし・dola が variant を追加したら
     /// コンパイラが本網羅を強制的に再検討させる＝partition の漏れを型で塞ぐ）。
     fn every_cue_command() -> Vec<CueCommand> {
         // exhaustive の型檻: variant を 1 つでも落としたらここが不完全になるため、
@@ -464,6 +469,7 @@ mod broadcast_relevance_partition {
             | CueCommand::Custom { .. }
             | CueCommand::NewLine { .. }
             | CueCommand::BalloonSurface { .. }
+            | CueCommand::Cursor { .. }
             | CueCommand::Wait
             | CueCommand::ClearAll => {}
         }
@@ -474,6 +480,7 @@ mod broadcast_relevance_partition {
             CueCommand::Choice {
                 id: "yes".into(),
                 text: "はい".into(),
+                references: vec![],
             },
             CueCommand::EntityRef(42),
             CueCommand::Custom {
@@ -482,6 +489,10 @@ mod broadcast_relevance_partition {
             },
             CueCommand::NewLine { ratio: 1.0 },
             CueCommand::BalloonSurface { key: "2".into() },
+            CueCommand::Cursor {
+                x: "5em".into(),
+                y: "2lh".into(),
+            },
             CueCommand::Wait,
             CueCommand::ClearAll,
         ]
@@ -495,7 +506,10 @@ mod broadcast_relevance_partition {
         // 各 variant の期待 action 演者（表示系＝Shell→seriko／文字系＝Balloon→emo-text／
         // action なし＝None）。この表は `cue_target_of`（dola 単一権威）と 1:1 で対応する。
         let expected: &[(CueCommand, Option<Performer>)] = &[
-            (CueCommand::Emote { key: "0".into() }, Some(Performer::Seriko)),
+            (
+                CueCommand::Emote { key: "0".into() },
+                Some(Performer::Seriko),
+            ),
             (CueCommand::EntityRef(42), Some(Performer::Seriko)),
             (
                 CueCommand::BalloonSurface { key: "2".into() },
@@ -509,6 +523,15 @@ mod broadcast_relevance_partition {
                 CueCommand::Choice {
                     id: "y".into(),
                     text: "はい".into(),
+                    references: vec![],
+                },
+                Some(Performer::EmoText),
+            ),
+            // Cursor（`\_l`）はバルーン系表現者（emo-text＝Balloon）が action する。
+            (
+                CueCommand::Cursor {
+                    x: "5em".into(),
+                    y: "2lh".into(),
                 },
                 Some(Performer::EmoText),
             ),
@@ -531,11 +554,11 @@ mod broadcast_relevance_partition {
             );
         }
 
-        // (b) 全 10 variant が期待表に過不足なく現れる（漏れ・重複がない＝partition が全域）。
+        // (b) 全 variant が期待表に過不足なく現れる（漏れ・重複がない＝partition が全域）。
         assert_eq!(
             expected.len(),
             every_cue_command().len(),
-            "期待表は全 10 CueCommand variant を過不足なく網羅する（partition の全域性）"
+            "期待表は全 CueCommand variant を過不足なく網羅する（partition の全域性）"
         );
     }
 
@@ -584,7 +607,7 @@ mod s1_boot_success {
     use super::*;
 
     use areka_ghost::dispatcher::DispatcherMsg;
-    use areka_ghost::{GhostBootOptions, ShioriWiring, TickerMode, boot};
+    use areka_ghost::{GhostBootOptions, ShioriWiring, TickerMode, boot, default_system_vars};
     use areka_kanade::{KanadeConfig, MonotonicMs, ShioriCall, events};
     use areka_parsers::charset::DefaultEncoding;
 
@@ -686,8 +709,8 @@ mod s1_boot_success {
             shiori: ShioriWiring::Custom(Box::new(move || {
                 Ok(Box::new(backend) as Box<dyn ShioriBackend>)
             })),
-            surface_sink,
-            text_sink,
+            sinks: vec![Box::new(surface_sink), Box::new(text_sink)],
+            system_vars: default_system_vars(),
             ticker: TickerMode::Disabled,
         };
 
@@ -801,7 +824,11 @@ mod s1_boot_success {
             );
             for cue in cues {
                 assert_eq!(cue.at, 0.0, "{who} 発火は全て at=0.0");
-                assert_eq!(cue.actor, ActorKey::from("0"), "{who} 発火 actor は 既定 scope 0");
+                assert_eq!(
+                    cue.actor,
+                    ActorKey::from("0"),
+                    "{who} 発火 actor は 既定 scope 0"
+                );
             }
             for pair in cues.windows(2) {
                 assert!(pair[0].at <= pair[1].at, "{who} 発火列は at 昇順であるべき");
@@ -849,7 +876,10 @@ mod s2_connect_failure {
     use super::*;
 
     use areka_ghost::dispatcher::DispatcherMsg;
-    use areka_ghost::{GhostBootOptions, GhostHandles, GhostParts, ShioriWiring, TickerMode, boot};
+    use areka_ghost::{
+        GhostBootOptions, GhostHandles, GhostParts, ShioriWiring, TickerMode, boot,
+        default_system_vars,
+    };
     use areka_parsers::charset::DefaultEncoding;
 
     use areka_actor::{ActorError, ActorHandle};
@@ -926,8 +956,11 @@ mod s2_connect_failure {
             ghost_root: root.clone(),
             default_encoding: DefaultEncoding::Utf8,
             shiori: ShioriWiring::Custom(Box::new(|| Err("simulated connect failure".to_string()))),
-            surface_sink: RecordingSink::new(),
-            text_sink: RecordingSink::new(),
+            sinks: vec![
+                Box::new(RecordingSink::new()),
+                Box::new(RecordingSink::new()),
+            ],
+            system_vars: default_system_vars(),
             ticker: TickerMode::Disabled,
         };
 
@@ -1013,7 +1046,10 @@ mod s3_helper_liveness_detected {
     use super::*;
 
     use areka_ghost::dispatcher::DispatcherMsg;
-    use areka_ghost::{GhostBootOptions, GhostHandles, GhostParts, ShioriWiring, TickerMode, boot};
+    use areka_ghost::{
+        GhostBootOptions, GhostHandles, GhostParts, ShioriWiring, TickerMode, boot,
+        default_system_vars,
+    };
     use areka_kanade::{KanadeMsg, MonotonicMs};
     use areka_parsers::charset::DefaultEncoding;
 
@@ -1115,8 +1151,8 @@ mod s3_helper_liveness_detected {
             shiori: ShioriWiring::Custom(Box::new(move || {
                 Ok(Box::new(backend) as Box<dyn ShioriBackend>)
             })),
-            surface_sink,
-            text_sink,
+            sinks: vec![Box::new(surface_sink), Box::new(text_sink)],
+            system_vars: default_system_vars(),
             ticker: TickerMode::Disabled,
         };
 
@@ -1303,7 +1339,7 @@ mod s4_close_handshake {
     use super::*;
 
     use areka_ghost::dispatcher::DispatcherMsg;
-    use areka_ghost::{GhostBootOptions, ShioriWiring, TickerMode, boot};
+    use areka_ghost::{GhostBootOptions, ShioriWiring, TickerMode, boot, default_system_vars};
     use areka_kanade::{CloseReason, KanadeConfig, KanadeMsg, MonotonicMs, ShioriCall, events};
     use areka_parsers::charset::DefaultEncoding;
 
@@ -1404,8 +1440,8 @@ mod s4_close_handshake {
             shiori: ShioriWiring::Custom(Box::new(move || {
                 Ok(Box::new(backend) as Box<dyn ShioriBackend>)
             })),
-            surface_sink,
-            text_sink,
+            sinks: vec![Box::new(surface_sink), Box::new(text_sink)],
+            system_vars: default_system_vars(),
             ticker: TickerMode::Disabled,
         };
 
@@ -1588,7 +1624,7 @@ mod s5_close_deadline {
     use super::*;
 
     use areka_ghost::dispatcher::DispatcherMsg;
-    use areka_ghost::{GhostBootOptions, ShioriWiring, TickerMode, boot};
+    use areka_ghost::{GhostBootOptions, ShioriWiring, TickerMode, boot, default_system_vars};
     use areka_kanade::{CloseReason, KanadeConfig, KanadeMsg, MonotonicMs, ShioriCall, events};
     use areka_parsers::charset::DefaultEncoding;
 
@@ -1658,9 +1694,8 @@ mod s5_close_deadline {
     fn s5_close_deadline_exceeded_forces_termination_via_tick_injection() {
         const SHELL_NAME: &str = "S5DeadlineShell";
 
-        let root = unique_temp_dir(
-            "s5_close_deadline_exceeded_forces_termination_via_tick_injection",
-        );
+        let root =
+            unique_temp_dir("s5_close_deadline_exceeded_forces_termination_via_tick_injection");
         let _ = std::fs::remove_dir_all(&root);
         write_ghost_fixture(&root, SHELL_NAME);
 
@@ -1692,8 +1727,8 @@ mod s5_close_deadline {
             shiori: ShioriWiring::Custom(Box::new(move || {
                 Ok(Box::new(backend) as Box<dyn ShioriBackend>)
             })),
-            surface_sink,
-            text_sink,
+            sinks: vec![Box::new(surface_sink), Box::new(text_sink)],
+            system_vars: default_system_vars(),
             ticker: TickerMode::Disabled,
         };
 
@@ -1910,7 +1945,10 @@ mod s6_full_disconnect {
     use super::*;
 
     use areka_ghost::dispatcher::DispatcherMsg;
-    use areka_ghost::{GhostBootOptions, GhostHandles, GhostParts, ShioriWiring, TickerMode, boot};
+    use areka_ghost::{
+        GhostBootOptions, GhostHandles, GhostParts, ShioriWiring, TickerMode, boot,
+        default_system_vars,
+    };
     use areka_kanade::KanadeMsg;
     use areka_parsers::charset::DefaultEncoding;
 
@@ -2005,8 +2043,11 @@ mod s6_full_disconnect {
             shiori: ShioriWiring::Custom(Box::new(move || {
                 Ok(Box::new(backend) as Box<dyn ShioriBackend>)
             })),
-            surface_sink: RecordingSink::new(),
-            text_sink: RecordingSink::new(),
+            sinks: vec![
+                Box::new(RecordingSink::new()),
+                Box::new(RecordingSink::new()),
+            ],
+            system_vars: default_system_vars(),
             ticker: TickerMode::Disabled,
         };
 

@@ -19,6 +19,7 @@ pub mod adapter;
 pub mod talk_clock;
 pub mod assets;
 pub mod frame;
+pub mod move_cue;
 
 // 決定論 spine テストハーネス（R8・task 6.1）。`areka` は [[bin]] のみ（[lib] 無し）で外部
 // tests/ から bin 内部項目へ到達できないため、既存 repo 慣行に従い in-crate #[cfg(test)]
@@ -47,6 +48,7 @@ use wintf::ecs::FrameFinalize;
 use self::adapter::PresentBridge;
 use self::assets::{BootAssets, build_boot_assets};
 use self::frame::{Emo2Wiring, emo2_frame_system};
+use self::move_cue::{MoveCueSink, MoveDirective};
 use self::talk_clock::{ClockedTextSink, TalkClock};
 
 /// 統合結線の構築時（load-time）失敗を観測可能化する誤り型（log-first・R7.3）。
@@ -268,6 +270,10 @@ pub fn wire_emo2_boot(
     // ため空 alias 表のプレースホルダで埋める（実 resolver は seriko が保持）。
     let (tx, rx) = std::sync::mpsc::channel::<PresentCommand>();
     let bridge = PresentBridge::new(tx);
+    // move channel（PresentBridge と同型の配線・task 9.1）: talk スレッドの MoveCueSink が送出端、
+    // UI スレッドの Emo2Wiring が受信端（frame 相 drain＝task 9.2 が消費）を保持する。
+    let (move_tx, move_rx) = std::sync::mpsc::channel::<MoveDirective>();
+    let move_sink = MoveCueSink::new(move_tx);
     let BootAssets {
         shells,
         balloons,
@@ -289,14 +295,21 @@ pub fn wire_emo2_boot(
     };
 
     // 手順5: boot（実 sink 注入）。Err は既存 is_benign_boot_error 分類（R7.4）＋フォールバック。
+    // sinks は broadcast 登録先で、surface（seriko）／text（ClockedTextSink）／move（MoveCueSink）の
+    // 3 sink を第 1〜3 要素として渡す（task 9.1）。move_sink は `\![move]` を名前選別で消費し、
+    // MoveDirective を move channel 経由で UI スレッド（Emo2Wiring の move_rx）へ送出する。
     let boot_options = GhostBootOptions {
         ghost_root: ghost_root.to_path_buf(),
         default_encoding: DefaultEncoding::Ansi,
         shiori: ShioriWiring::Helper {
             helper_exe: helper_exe.to_path_buf(),
         },
-        surface_sink,
-        text_sink: clocked_text_sink,
+        sinks: vec![
+            Box::new(surface_sink),
+            Box::new(clocked_text_sink),
+            Box::new(move_sink),
+        ],
+        system_vars: areka_ghost::default_system_vars(),
         ticker: TickerMode::Real(Default::default()),
     };
     let ghost_runtime = match areka_ghost::boot(boot_options) {
@@ -325,7 +338,7 @@ pub fn wire_emo2_boot(
     // 手順6: Emo2Wiring を NonSend 挿入＋emo2_frame_system を FrameFinalize へ登録（placement の
     // click-through 登録と同位置・self-gating・順序依存なし）。EcsWorld は insert_non_send_resource を
     // 直接持たないため world_mut() 経由で bevy World へ載せる（add_systems は EcsWorld 直メソッド）。
-    let wiring = Emo2Wiring::new(presenter, rx, runtime, clock, wiring_assets);
+    let wiring = Emo2Wiring::new(presenter, rx, move_rx, runtime, clock, wiring_assets);
     app.world()
         .borrow_mut()
         .world_mut()

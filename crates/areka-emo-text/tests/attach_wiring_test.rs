@@ -17,14 +17,14 @@ use std::time::Duration;
 
 use areka_actor::reply_channel;
 use areka_emo_atlas::{
-    bake, AlphaParams, AtlasTable, MemoryDecoder, PackConfig, SetId, SurfaceSet, UseSelfAlpha,
+    AlphaParams, AtlasTable, MemoryDecoder, PackConfig, SetId, SurfaceSet, UseSelfAlpha, bake,
 };
 use areka_emo_compose::{BindSet, EmoWorld};
 use areka_emo_present::{EmoPresenter, PresentCommand, PresentOutcome, TargetId};
 use areka_emo_text::actor::{
-    present_frame, spawn_emo_text, ResolvedBalloonText, TextLayerRuntime, TextSlotBinding,
+    ResolvedBalloonText, TextLayerRuntime, TextSlotBinding, present_frame, spawn_emo_text,
 };
-use areka_emo_text::layout::{FixedMetrics, LayoutEngine};
+use areka_emo_text::layout::{FixedMetrics, LayoutEngine, WrapPlan};
 use areka_emo_text::state::TextLayerConfig;
 use areka_parsers::balloon::{
     BalloonModel, Font, FontColor, Origin, ValidRect, WindowPosition, WordWrapPoint,
@@ -33,7 +33,7 @@ use areka_parsers::shell::{AppendTarget, DefRef, Element, ElementPath, Shell, Su
 use areka_sakura::contract::{ActorKey, CueCommand, CueSink, TalkCue};
 use bevy_ecs::entity::Entity;
 use bevy_ecs::prelude::World;
-use windows::Win32::System::Com::{CoInitializeEx, COINIT_MULTITHREADED};
+use windows::Win32::System::Com::{COINIT_MULTITHREADED, CoInitializeEx};
 use windows::Win32::UI::WindowsAndMessaging::PostQuitMessage;
 use wintf::ecs::{GraphicsCommandList, GraphicsCore, VisualGraphics, WucGraphicsResource};
 use wintf_winmsg_executor::{FilterResult, MessageLoop};
@@ -113,7 +113,10 @@ fn build_target_assets(w: u32, h: u32, salt: u8) -> (EmoWorld, AtlasTable) {
         },
     };
     let baked = bake(&[set], &dec, PackConfig::default());
-    assert!(baked.errors.is_empty(), "atlas bake セットアップは失敗しない");
+    assert!(
+        baked.errors.is_empty(),
+        "atlas bake セットアップは失敗しない"
+    );
 
     let mut world = EmoWorld::build(&shell_of(surfaces));
     world.bind_atlas(&baked.table, SetId(0));
@@ -180,6 +183,7 @@ fn geo_model() -> BalloonModel {
         ValidRect::new(None, None, None, None),
         Font::new(None, None, FontColor::new(None, None, None)),
         None,
+        None,
     )
 }
 
@@ -225,7 +229,11 @@ fn two_actors_are_routed_to_their_own_targets_and_draw_independently() {
     let view1 = presenter
         .text_slot_view(TargetId(1))
         .expect("表示確立後の text_slot_view(1) は Some");
-    assert_ne!(view0.slot(), view1.slot(), "target ごとに独立の予約スロット");
+    assert_ne!(
+        view0.slot(),
+        view1.slot(),
+        "target ごとに独立の予約スロット"
+    );
     assert_eq!(view0.window(), window0);
     assert_eq!(view1.window(), window1);
     assert_eq!(view0.surface_size(), (140, 80));
@@ -235,7 +243,9 @@ fn two_actors_are_routed_to_their_own_targets_and_draw_independently() {
     let sakura = ActorKey::from("0");
     let kero = ActorKey::from("1");
     let model = geo_model();
-    let runtime = Rc::new(RefCell::new(TextLayerRuntime::new(TextLayerConfig::default())));
+    let runtime = Rc::new(RefCell::new(TextLayerRuntime::new(
+        TextLayerConfig::default(),
+    )));
     runtime
         .borrow_mut()
         .register_actor_view(sakura.clone(), &view0, &model);
@@ -255,8 +265,14 @@ fn two_actors_are_routed_to_their_own_targets_and_draw_independently() {
     {
         let mut rt = runtime.borrow_mut();
         present_frame(&mut rt, &mut world, 1.0).expect("提示フレーム（全リビール済み時刻）");
-        assert!(rt.is_attached(&sakura), "\\0 は target0 のスロットへ装着される");
-        assert!(rt.is_attached(&kero), "\\1 は target1 のスロットへ装着される");
+        assert!(
+            rt.is_attached(&sakura),
+            "\\0 は target0 のスロットへ装着される"
+        );
+        assert!(
+            rt.is_attached(&kero),
+            "\\1 は target1 のスロットへ装着される"
+        );
     }
     let rt = runtime.borrow();
 
@@ -264,8 +280,16 @@ fn two_actors_are_routed_to_their_own_targets_and_draw_independently() {
     // ＝ actor→target の振り分けが原寸レベルで正しい。
     let bytes0 = read_back(&rt, &sakura);
     let bytes1 = read_back(&rt, &kero);
-    assert_eq!(bytes0.len(), (140 * 80 * 4) as usize, "\\0 の供給面は target0 原寸");
-    assert_eq!(bytes1.len(), (120 * 60 * 4) as usize, "\\1 の供給面は target1 原寸");
+    assert_eq!(
+        bytes0.len(),
+        (140 * 80 * 4) as usize,
+        "\\0 の供給面は target0 原寸"
+    );
+    assert_eq!(
+        bytes1.len(),
+        (120 * 60 * 4) as usize,
+        "\\1 の供給面は target1 原寸"
+    );
     let ink0 = opaque_count(&bytes0);
     let ink1 = opaque_count(&bytes1);
     assert!(ink0 > 0, "\\0 のテキストが対応バルーンへ描画される");
@@ -316,6 +340,7 @@ fn two_actors_are_routed_to_their_own_targets_and_draw_independently() {
         resolved.mode,
         resolved.font.height,
         &FixedMetrics,
+        WrapPlan::CharByChar,
     );
     assert!(!lines.is_empty(), "行レイアウトが再導出できる");
     let placed: usize = lines.iter().map(|l| l.glyphs.len()).sum();
@@ -326,7 +351,10 @@ fn two_actors_are_routed_to_their_own_targets_and_draw_independently() {
             "行矩形は非退化（クリック可能範囲導出の素材・R9.4）"
         );
         for g in &line.glyphs {
-            assert!(g.advance > 0.0, "グリフ送り幅（クリック範囲の幅素材）が得られる");
+            assert!(
+                g.advance > 0.0,
+                "グリフ送り幅（クリック範囲の幅素材）が得られる"
+            );
         }
     }
 }
@@ -352,7 +380,10 @@ fn single_actor_attaches_only_to_its_own_target() {
     rt.apply_cue(&cue("0", 0.0, CueCommand::Text("アヒル".into())));
     present_frame(&mut rt, &mut world, 1.0).expect("単一 actor フレーム");
 
-    assert!(rt.is_attached(&sakura), "発話した \\0 は当該 target へ装着される");
+    assert!(
+        rt.is_attached(&sakura),
+        "発話した \\0 は当該 target へ装着される"
+    );
     assert!(!rt.is_attached(&kero), "発話しない \\1 は装着されない");
     assert!(rt.surface(&kero).is_none(), "\\1 の供給面は生成されない");
     assert!(
@@ -407,7 +438,10 @@ fn unregistered_actor_accumulates_without_disturbing_registered_actor() {
     let view1 = presenter.text_slot_view(TargetId(1)).expect("view1");
     rt.register_actor_view(kero.clone(), &view1, &model);
     present_frame(&mut rt, &mut world, 2.0).expect("後追い結線フレーム");
-    assert!(rt.is_attached(&kero), "後追い結線の次フレームで \\1 も装着される");
+    assert!(
+        rt.is_attached(&kero),
+        "後追い結線の次フレームで \\1 も装着される"
+    );
     assert!(
         opaque_count(&read_back(&rt, &kero)) > 0,
         "蓄積されていた \\1 のテキストが自分のバルーンへ描画される"

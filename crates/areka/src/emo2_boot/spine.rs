@@ -43,22 +43,25 @@ use areka_kanade::{CloseReason, MonotonicMs, ShioriBackend};
 use areka_parsers::charset::DefaultEncoding;
 use areka_sakura::ActorKey;
 use areka_seriko::{spawn_seriko, SurfaceResolver};
+use bevy_ecs::entity::Entity;
 use bevy_ecs::world::World;
 use shiori_host32_host::{ExitKind, HelperStatus, RequestError, ShutdownError};
 use tracing::field::{Field, Visit};
 use tracing_subscriber::prelude::*;
+use windows::Win32::Foundation::{HINSTANCE, HWND};
 use windows::Win32::System::Com::{CoInitializeEx, COINIT_MULTITHREADED};
 use windows::Win32::UI::WindowsAndMessaging::PostQuitMessage;
-use wintf::ecs::{GraphicsCore, WucGraphicsResource};
+use wintf::ecs::{GraphicsCore, Point, WindowHandle, WindowPos, WucGraphicsResource};
 use wintf::executor::{FilterResult, JoinHandle, MessageLoop};
 
 use crate::placement::resolver::{Anchor, PointPx, ScopePlacement, SizePx};
 use crate::placement::source::GhostTitles;
-use crate::placement::spawn::spawn_ghost_windows;
+use crate::placement::spawn::{spawn_ghost_windows, GhostWindows};
 
 use super::adapter::PresentBridge;
 use super::assets::{build_boot_assets, BootAssets};
-use super::frame::{run_attach_phase, run_text_phase, Emo2Wiring};
+use super::frame::{run_attach_phase, run_move_drain_phase, run_text_phase, Emo2Wiring};
+use super::move_cue::{MoveCueSink, MoveDirective};
 use super::talk_clock::{ClockedTextSink, TalkClock};
 use super::target_map::{balloon_target, shell_target};
 
@@ -447,19 +450,35 @@ impl SpineHarness {
             static_binds,
         };
 
+        // ── move channel＋実 MoveCueSink（wire_emo2_boot 手順4 と同型・S-3 形＝task 9.3） ──
+        // talk スレッドの MoveCueSink が送出端、UI スレッドの Emo2Wiring が受信端 move_rx（frame 相
+        // drain＝run_move_drain_phase・task 9.2）を保持する。9.1 の throwaway 送出端を実 MoveCueSink へ
+        // 差し替え、production `wire_emo2_boot` の 3-sink 構成を spine でも忠実に再現する。
+        let (move_tx, move_rx) = mpsc::channel::<MoveDirective>();
+        let move_sink = MoveCueSink::new(move_tx);
+
         // ── scripted boot（実 sink 注入・TickerMode::Disabled＝Tick 注入で駆動・R8.3） ──
+        // sinks は broadcast 登録先で surface（seriko）／text（ClockedTextSink）／move（MoveCueSink）の
+        // 3 sink を第 1〜3 要素として渡す（production mod.rs と同順・S-3 形）。
         let options = GhostBootOptions {
             ghost_root: emo2_root(),
             default_encoding: DefaultEncoding::Ansi,
             shiori: ShioriWiring::Custom(Box::new(move || Ok(Box::new(backend) as Box<dyn ShioriBackend>))),
-            surface_sink,
-            text_sink: clocked_text_sink,
+            sinks: vec![
+                Box::new(surface_sink),
+                Box::new(clocked_text_sink),
+                Box::new(move_sink),
+            ],
+            system_vars: areka_ghost::default_system_vars(),
             ticker: TickerMode::Disabled,
         };
         let ghost = boot(options).expect("scripted boot は解決可能な emo2 ghost_root で成功する");
 
         // ── frame 三相結線状態（wire_emo2_boot 手順6 相当・System 登録はせず直接駆動する） ──
-        let wiring = Emo2Wiring::new(presenter, rx, Rc::clone(&runtime), clock, wiring_assets);
+        // Emo2Wiring は move の受信端 move_rx を保持し frame 相 drain（run_move_drain_phase・task 9.2）に
+        // 備える。move の spine e2e（task 9.3）は上の実 MoveCueSink 経由で cue→channel→drain を通す。
+        let wiring =
+            Emo2Wiring::new(presenter, rx, move_rx, Rc::clone(&runtime), clock, wiring_assets);
 
         SpineHarness { world, wiring, runtime, ghost, seriko, shiori_handle, text_pump }
     }
@@ -1188,4 +1207,145 @@ fn spine_s5_close_handshake_consumes_onclose_and_joins_all_handles_bounded() {
     drop(world);
     drop(runtime);
     drop(text_pump);
+}
+
+// ===========================================================================
+// task 9.3 — move cue の決定論 spine e2e（cue→CueSheet→dispatch→broadcast→実 MoveCueSink→
+// move channel→frame 相 drain→apply→実窓移動）。
+//
+// 9.1 が置いた throwaway `(_move_tx, move_rx)` を実 `MoveCueSink`（`SpineHarness::boot_with` の
+// sinks 第 3 要素）へ差し替えた S-3 形（production `wire_emo2_boot` の 3-sink 構成）の上で、
+// `\1\![move,...]` を含む OnBoot talk を実 sink 経路で流し、`MoveDirective` が move channel へ届き
+// frame 相 drain（`run_move_drain_phase`＝task 9.2）で対象窓が fixture 検算位置へ即時移動することを
+// 固定する。9.2 の frame 相配線が spine で end-to-end に生きていることの自動檻（headless・sleep 不使用・
+// 注入 Tick のみ・手動実機確認は Task 11 に一本化）。
+// ===========================================================================
+
+/// 偽 HWND の WindowHandle（実窓なし・headless 決定論シーム・follow.rs/frame.rs の fake_handle 相当）。
+fn fake_handle(raw: usize) -> WindowHandle {
+    WindowHandle {
+        hwnd: HWND(raw as *mut _),
+        instance: HINSTANCE::default(),
+    }
+}
+
+/// spine World の各キャラ／バルーン窓へ偽 WindowHandle を付与する（`enqueue_window_set_pos` が
+/// WindowPos を書ける条件＝WindowHandle 実在。`spawn_ghost_windows` は実窓生成前ゆえ handle 未付与で、
+/// これが無いと `move_window_to` は warn＋no-op に縮退し窓が動かない）。
+fn attach_fake_window_handles(world: &mut World, gw: &GhostWindows) {
+    let mut raw = 0x100usize;
+    for scope in gw.scopes().collect::<Vec<_>>() {
+        for e in [
+            gw.char_window(scope).unwrap(),
+            gw.balloon_window(scope).unwrap(),
+        ] {
+            world.entity_mut(e).insert(fake_handle(raw));
+            raw += 0x10;
+        }
+    }
+}
+
+/// entity の WindowPos.position を読む（未設定は panic で検出）。
+fn window_position(world: &World, e: Entity) -> Point {
+    world
+        .get::<WindowPos>(e)
+        .expect("WindowPos があるはず")
+        .position
+        .expect("position があるはず")
+}
+
+/// spine move e2e（R5.1/R8.1・DD・task 9.3）: fixture 形の move script を含む OnBoot talk を実 sink 経路
+/// （ghost→sakura compile→CueSheet→dispatch→broadcast→**実 MoveCueSink**→move channel）で流し、frame 相
+/// drain（`run_move_drain_phase`＝task 9.2）が `MoveDirective` を drain して対象キャラ窓を検算位置へ即時
+/// 移動させることを固定する。9.1 が置いた throwaway 送出端を実 MoveCueSink（sinks 第 3 要素・S-3 形）へ
+/// 差し替えた配線が spine で end-to-end に生きていることの自動檻（headless・sleep 不使用・注入 Tick のみ・
+/// R8.3/8.4/8.6）。窓が実際に動く＝`MoveDirective` が channel へ届き drain→apply された唯一の経路ゆえ、
+/// 移動観測が「channel 到達＋frame 相 drain の live」を同時に証跡する。
+///
+/// # `\1` は正典どおり scope1（エモ＝相方）へ切替（観測 scope は 1・R4.4）
+///
+/// fixture は `\1\![move,-353,,,0,base,base]`（kero=scope1 を sakura=scope0 基準で動かす意図）で、
+/// **bare `\1` は正典どおり sakura compile で `SpeakerScope{1}` へ写像される**（Task 12.1 で
+/// `decode.rs`／lexer が `\0`/`\1` を SpeakerScope へ正規化・以前の `Raw` passthrough 縮退は解消済み）。
+/// ゆえに move cue の scope は切替後の 1 として発火し（`cue.actor == "1"` → `MoveDirective.scope == 1`）、
+/// base は `0`＝**scope0（むらさき＝話者）を基準にした scope1 の移動**として反映される（対象＝scope1 char 窓・
+/// 基準＝scope0 char 窓）。実 channel 到達 directive は
+/// `MoveDirective{ scope:1, x:Px(-353), y:Fix, base:Scope(0) }`。この e2e が `\1` の正典スコープ切替を
+/// parse→compile→cue.actor→MoveDirective.scope→対象窓解決まで end-to-end に固定する。
+///
+/// # 検算（`two_scope_placements`・全て物理 px・R-6）
+///
+/// 対象＝scope1 pos(1049,1063) size(278,357)・基準＝scope0 pos(1483,733) size(434,687)・x=Px(-353)・y=Fix。
+/// `CanonDefaultBasepos`（x=幅÷2）で
+/// x' = base_pos.x + basepos(base窓).x + dx − basepos(対象窓).x
+///    = 1483 + 434/2 − 353 − 278/2 = 1483 + 217 − 353 − 139 = 1208・
+/// y は Fix ゆえ対象窓（scope1）の現状維持 1063。移動先 (1208,1063) は move cue が channel→drain→apply を
+/// 通ったことの非空虚な証跡（RED では窓不動）。
+///
+/// # RED（実 MoveCueSink 未配線時）
+///
+/// 9.1 の throwaway `(_move_tx, move_rx)`（送出端即 drop・sinks に MoveCueSink なし）では move cue は
+/// seriko/text sink へのみ broadcast され両者が良性スキップ→move channel は空のまま→窓は不動（moved=false
+/// で FAIL・実測済み）。実 MoveCueSink を 3rd sink へ配線して初めて窓が動く（GREEN）。
+#[test]
+fn spine_move_cue_drives_window_move_end_to_end() {
+    // fixture 形の move script（`\1` は正典どおり scope1 へ切替・doc 参照）。bare `\1` は Task 12.1 で
+    // SpeakerScope へ写像されるため実 SHIORI 由来の現実的入力＝正典スコープ切替を e2e 検証する。
+    let mut harness = SpineHarness::boot(r"\1\![move,-353,,,0,base,base]\e");
+
+    // GhostWindows（`boot_with` が spawn_ghost_windows で資源挿入）から対象 char 窓を引き、実窓生成前ゆえ
+    // 未付与の WindowHandle を偽装付与する（move_window_to の反映口 enqueue_window_set_pos の成立条件）。
+    let gw = harness
+        .world
+        .get_resource::<GhostWindows>()
+        .expect("spine World には GhostWindows が挿入済み")
+        .clone();
+    attach_fake_window_handles(&mut harness.world, &gw);
+    // 観測 scope は 1（`\1` が正典どおり scope1 へ切替・doc 参照）。対象＝scope1（エモ）char 窓・基準＝scope0。
+    let target = gw.char_window(1).expect("scope1（エモ＝相方）の char 窓");
+
+    // 移動前の初期位置（two_scope_placements の scope1 char_pos）。
+    let baseline = window_position(&harness.world, target);
+    assert_eq!(
+        baseline,
+        Point { x: 1049, y: 1063 },
+        "前提: 移動前の scope1 初期位置（two_scope_placements）"
+    );
+
+    // OnBoot talk を Tick 注入で駆動し、各反復で実 frame 相 move drain を回す。move cue は at=0.0 ゆえ talk
+    // 起動後の最初の有効 Tick で発火するが、boot→compile→dispatch→broadcast はスレッド群を跨いで非同期に
+    // 流れるため、窓が動く（channel→drain→apply 完了）まで有界スピン（sleep 不使用・yield_now のみ）で待つ。
+    let mut moved = false;
+    for now in 1u64..=200_000 {
+        harness.inject_dispatcher_tick(now);
+        // 実 frame 相 drain（task 9.2）: move channel を try_iter し apply_move_directive で即時反映。
+        run_move_drain_phase(&harness.wiring, &mut harness.world);
+        if window_position(&harness.world, target) != baseline {
+            moved = true;
+            break;
+        }
+        std::thread::yield_now();
+    }
+    assert!(
+        moved,
+        "move cue が有界内に channel→frame drain→apply を通って対象窓を動かさない（実 MoveCueSink 配線が死んでいる？）"
+    );
+
+    // 検算位置（scope0 基準・CanonDefaultBasepos）へ即時移動＝MoveDirective が channel へ届き drain→apply された
+    // 非空虚な証跡（R5.1・9.2 の frame 相配線が spine で生きている）。
+    assert_eq!(
+        window_position(&harness.world, target),
+        Point { x: 1208, y: 1063 },
+        "x'=1483+217−353−139=1208（base=scope0 基準・CanonDefaultBasepos）・y=Fix は現状維持 1063（cue→channel→frame drain→apply→実窓移動）"
+    );
+
+    // 二重適用なし: move cue は 1 発ゆえ、追加 drain で窓はさらに動かない（channel は drain 済みで空）。
+    run_move_drain_phase(&harness.wiring, &mut harness.world);
+    assert_eq!(
+        window_position(&harness.world, target),
+        Point { x: 1208, y: 1063 },
+        "move channel は drain 済みで空（二重適用なし・FIFO 全件消費）"
+    );
+
+    harness.shutdown_bounded();
 }

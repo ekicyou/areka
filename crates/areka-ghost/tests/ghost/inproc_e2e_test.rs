@@ -33,7 +33,9 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use areka_ghost::dispatcher::DispatcherMsg;
-use areka_ghost::{GhostBootOptions, ShioriWiring, TickerMode, boot, inproc_connect};
+use areka_ghost::{
+    GhostBootOptions, ShioriWiring, TickerMode, boot, default_system_vars, inproc_connect,
+};
 use areka_kanade::{CloseReason, MonotonicMs, ShioriBackend};
 use areka_parsers::charset::DefaultEncoding;
 use areka_parsers::package;
@@ -95,40 +97,55 @@ fn expected_onfirstboot_value() -> String {
         .to_string()
 }
 
-/// I1/I2 の起動挨拶（実 emo2 OnFirstBoot 応答・task 6.2 実採取）が決定論的にコンパイルされる期待
-/// 演出列（`(actor, command)` の全順序・74 件）。
+/// I1/I2 の起動挨拶（実 emo2 OnFirstBoot 応答・task 6.2 実採取）が決定論的にコンパイルされる
+/// 期待演出列（(actor, command) の全順序・117 件）。
 ///
-/// この列は sakura コンパイラ規則から**構造的に導出**し、実 parse+compile の観測列と**照合済み**
-/// （tasks.md「[6.2 sakura コンパイラ規則]」）である。要点: 非空台本は先頭 `ClearAll`（actor "0"）／
-/// `\p[N]` のみが actor を切替（裸 `\1` は cue も actor 切替も生まない）／`\![move/bind,...]` は無視
-/// （cue なし）／`\s[key]`→`Emote{key}`／`\_w[ms]`→第一級 `Wait`／`\n`→`NewLine{1.0}`・
-/// `\n[150]`→`NewLine{1.5}`／テキスト run→`Text`／`\e`→終端切詰め。**独立の drift-detection ピン**
-/// （要件 5.2）——凍結 Value が変われば DLL→compile 出力が変わり本列に一致しなくなる。
+/// この列は sakura コンパイラ規則から構造的に導出し、実 parse+compile の観測列と照合済み
+/// （tasks.md「[6.2 sakura コンパイラ規則]」）である。要点（areka-P0-sakura-dialogue-tags 統合後の
+/// 現行規則）: 非空台本は先頭に ClearAll（actor 0）を前置／話者スコープ指定（p タグ・裸の数字
+/// スコープとも）が actor を切替（SpeakerScope・cue は生まない）／bang コマンド（move / bind 等）は
+/// command_carrier(name, tokens) 経由で Custom キャリア cue を生む（旧規則の「無視」から卒業）／
+/// サーフェス指定は Emote{key}／ウェイトは第一級 Wait／改行は NewLine{ratio}／テキスト run は Text／
+/// 終端で以降を切詰め。独立の drift-detection ピン（要件 5.2）——凍結 Value が変われば
+/// DLL→compile 出力が変わり本列に一致しなくなる。
 ///
-/// `at`/`duration` の float は照合しない（テキスト速度チューニングが台本改変なしに壊すため）——
-/// 照合対象は `(actor, command)` の全順序と `at` の非減少性のみ（tasks.md 6.2 I1）。
+/// at/duration の float は照合しない（テキスト速度チューニングが台本改変なしに壊すため）——
+/// 照合対象は (actor, command) の全順序と at の非減少性のみ（tasks.md 6.2 I1）。
 fn expected_greeting_sequence() -> Vec<(ActorKey, CueCommand)> {
     vec![
         (ActorKey::from("0"), CueCommand::ClearAll),
         (ActorKey::from("1"), CueCommand::Emote { key: "静観".to_string() }),
+        (ActorKey::from("1"), CueCommand::command_carrier("move", vec!["-353".to_string(), "".to_string(), "".to_string(), "0".to_string(), "base".to_string(), "base".to_string()])),
         (ActorKey::from("1"), CueCommand::NewLine { ratio: 1.5_f32 }),
         (ActorKey::from("0"), CueCommand::Emote { key: "1000".to_string() }),
+        (ActorKey::from("0"), CueCommand::command_carrier("bind", vec!["腕".to_string(), "伸び".to_string(), "1".to_string()])),
+        (ActorKey::from("0"), CueCommand::command_carrier("bind", vec!["紅".to_string(), "差し".to_string(), "0".to_string()])),
+        (ActorKey::from("0"), CueCommand::command_carrier("bind", vec!["口".to_string(), "にこっ".to_string(), "1".to_string()])),
+        (ActorKey::from("0"), CueCommand::command_carrier("bind", vec!["眉".to_string(), "通常".to_string(), "1".to_string()])),
+        (ActorKey::from("0"), CueCommand::command_carrier("bind", vec!["目".to_string(), "笑顔".to_string(), "1".to_string()])),
+        (ActorKey::from("0"), CueCommand::command_carrier("bind", vec!["まばたき".to_string(), "----".to_string(), "1".to_string()])),
         (ActorKey::from("0"), CueCommand::Text("はじめましてや！！".to_string())),
         (ActorKey::from("0"), CueCommand::Wait),
         (ActorKey::from("0"), CueCommand::Text("うちは、".to_string())),
         (ActorKey::from("0"), CueCommand::Wait),
-        (ActorKey::from("0"), CueCommand::NewLine { ratio: 1_f32 }),
+        (ActorKey::from("0"), CueCommand::NewLine { ratio: 1.0_f32 }),
         (ActorKey::from("0"), CueCommand::Text("むらさき。".to_string())),
         (ActorKey::from("0"), CueCommand::Wait),
         (ActorKey::from("0"), CueCommand::NewLine { ratio: 1.5_f32 }),
         (ActorKey::from("1"), CueCommand::Emote { key: "笑顔".to_string() }),
         (ActorKey::from("1"), CueCommand::Text("僕はエモ。".to_string())),
         (ActorKey::from("1"), CueCommand::Wait),
-        (ActorKey::from("1"), CueCommand::NewLine { ratio: 1_f32 }),
+        (ActorKey::from("1"), CueCommand::NewLine { ratio: 1.0_f32 }),
         (ActorKey::from("1"), CueCommand::Text("クール系の可愛い娘。".to_string())),
         (ActorKey::from("1"), CueCommand::Wait),
         (ActorKey::from("1"), CueCommand::NewLine { ratio: 1.5_f32 }),
         (ActorKey::from("0"), CueCommand::Emote { key: "1000".to_string() }),
+        (ActorKey::from("0"), CueCommand::command_carrier("bind", vec!["腕".to_string(), "組み".to_string(), "1".to_string()])),
+        (ActorKey::from("0"), CueCommand::command_carrier("bind", vec!["紅".to_string(), "差し".to_string(), "0".to_string()])),
+        (ActorKey::from("0"), CueCommand::command_carrier("bind", vec!["口".to_string(), "口開".to_string(), "1".to_string()])),
+        (ActorKey::from("0"), CueCommand::command_carrier("bind", vec!["眉".to_string(), "シュン".to_string(), "1".to_string()])),
+        (ActorKey::from("0"), CueCommand::command_carrier("bind", vec!["目".to_string(), "ジトー".to_string(), "1".to_string()])),
+        (ActorKey::from("0"), CueCommand::command_carrier("bind", vec!["まばたき".to_string(), "ジトー".to_string(), "1".to_string()])),
         (ActorKey::from("0"), CueCommand::Text("そこ自分でいう‥".to_string())),
         (ActorKey::from("0"), CueCommand::Wait),
         (ActorKey::from("0"), CueCommand::Text("‥".to_string())),
@@ -139,7 +156,7 @@ fn expected_greeting_sequence() -> Vec<(ActorKey, CueCommand)> {
         (ActorKey::from("1"), CueCommand::Emote { key: "照れ怒り".to_string() }),
         (ActorKey::from("1"), CueCommand::Text("イイジャン！".to_string())),
         (ActorKey::from("1"), CueCommand::Wait),
-        (ActorKey::from("1"), CueCommand::NewLine { ratio: 1_f32 }),
+        (ActorKey::from("1"), CueCommand::NewLine { ratio: 1.0_f32 }),
         (ActorKey::from("1"), CueCommand::Text("‥".to_string())),
         (ActorKey::from("1"), CueCommand::Wait),
         (ActorKey::from("1"), CueCommand::Text("‥".to_string())),
@@ -148,21 +165,39 @@ fn expected_greeting_sequence() -> Vec<(ActorKey, CueCommand)> {
         (ActorKey::from("1"), CueCommand::Wait),
         (ActorKey::from("1"), CueCommand::NewLine { ratio: 1.5_f32 }),
         (ActorKey::from("0"), CueCommand::Emote { key: "1000".to_string() }),
+        (ActorKey::from("0"), CueCommand::command_carrier("bind", vec!["腕".to_string(), "伸び".to_string(), "1".to_string()])),
+        (ActorKey::from("0"), CueCommand::command_carrier("bind", vec!["紅".to_string(), "差し".to_string(), "0".to_string()])),
+        (ActorKey::from("0"), CueCommand::command_carrier("bind", vec!["口".to_string(), "にこっ".to_string(), "1".to_string()])),
+        (ActorKey::from("0"), CueCommand::command_carrier("bind", vec!["眉".to_string(), "通常".to_string(), "1".to_string()])),
+        (ActorKey::from("0"), CueCommand::command_carrier("bind", vec!["目".to_string(), "通常".to_string(), "1".to_string()])),
+        (ActorKey::from("0"), CueCommand::command_carrier("bind", vec!["まばたき".to_string(), "通常".to_string(), "1".to_string()])),
         (ActorKey::from("0"), CueCommand::NewLine { ratio: 1.5_f32 }),
         (ActorKey::from("1"), CueCommand::Emote { key: "静観".to_string() }),
         (ActorKey::from("1"), CueCommand::Text("僕は日常から".to_string())),
-        (ActorKey::from("1"), CueCommand::NewLine { ratio: 1_f32 }),
+        (ActorKey::from("1"), CueCommand::NewLine { ratio: 1.0_f32 }),
         (ActorKey::from("1"), CueCommand::Text("「感情」を".to_string())),
-        (ActorKey::from("1"), CueCommand::NewLine { ratio: 1_f32 }),
+        (ActorKey::from("1"), CueCommand::NewLine { ratio: 1.0_f32 }),
         (ActorKey::from("1"), CueCommand::Text("探してるんだ。".to_string())),
         (ActorKey::from("1"), CueCommand::Wait),
         (ActorKey::from("1"), CueCommand::NewLine { ratio: 1.5_f32 }),
         (ActorKey::from("0"), CueCommand::Emote { key: "1000".to_string() }),
+        (ActorKey::from("0"), CueCommand::command_carrier("bind", vec!["腕".to_string(), "組み".to_string(), "1".to_string()])),
+        (ActorKey::from("0"), CueCommand::command_carrier("bind", vec!["紅".to_string(), "差し".to_string(), "0".to_string()])),
+        (ActorKey::from("0"), CueCommand::command_carrier("bind", vec!["口".to_string(), "にこっ".to_string(), "1".to_string()])),
+        (ActorKey::from("0"), CueCommand::command_carrier("bind", vec!["眉".to_string(), "通常".to_string(), "1".to_string()])),
+        (ActorKey::from("0"), CueCommand::command_carrier("bind", vec!["目".to_string(), "静観".to_string(), "1".to_string()])),
+        (ActorKey::from("0"), CueCommand::command_carrier("bind", vec!["まばたき".to_string(), "----".to_string(), "1".to_string()])),
         (ActorKey::from("0"), CueCommand::Text("つまり、、".to_string())),
         (ActorKey::from("0"), CueCommand::Wait),
         (ActorKey::from("0"), CueCommand::Emote { key: "1000".to_string() }),
+        (ActorKey::from("0"), CueCommand::command_carrier("bind", vec!["腕".to_string(), "組み".to_string(), "1".to_string()])),
+        (ActorKey::from("0"), CueCommand::command_carrier("bind", vec!["紅".to_string(), "差し".to_string(), "1".to_string()])),
+        (ActorKey::from("0"), CueCommand::command_carrier("bind", vec!["口".to_string(), "口開".to_string(), "1".to_string()])),
+        (ActorKey::from("0"), CueCommand::command_carrier("bind", vec!["眉".to_string(), "悲しみ".to_string(), "1".to_string()])),
+        (ActorKey::from("0"), CueCommand::command_carrier("bind", vec!["目".to_string(), "ジトー".to_string(), "1".to_string()])),
+        (ActorKey::from("0"), CueCommand::command_carrier("bind", vec!["まばたき".to_string(), "ジトー".to_string(), "1".to_string()])),
         (ActorKey::from("0"), CueCommand::Text("エモを弄ってれば".to_string())),
-        (ActorKey::from("0"), CueCommand::NewLine { ratio: 1_f32 }),
+        (ActorKey::from("0"), CueCommand::NewLine { ratio: 1.0_f32 }),
         (ActorKey::from("0"), CueCommand::Text("OK？".to_string())),
         (ActorKey::from("0"), CueCommand::Wait),
         (ActorKey::from("0"), CueCommand::NewLine { ratio: 1.5_f32 }),
@@ -171,12 +206,24 @@ fn expected_greeting_sequence() -> Vec<(ActorKey, CueCommand)> {
         (ActorKey::from("1"), CueCommand::Wait),
         (ActorKey::from("1"), CueCommand::NewLine { ratio: 1.5_f32 }),
         (ActorKey::from("0"), CueCommand::Emote { key: "1000".to_string() }),
+        (ActorKey::from("0"), CueCommand::command_carrier("bind", vec!["腕".to_string(), "伸び".to_string(), "1".to_string()])),
+        (ActorKey::from("0"), CueCommand::command_carrier("bind", vec!["紅".to_string(), "差し".to_string(), "1".to_string()])),
+        (ActorKey::from("0"), CueCommand::command_carrier("bind", vec!["口".to_string(), "笑顔2".to_string(), "1".to_string()])),
+        (ActorKey::from("0"), CueCommand::command_carrier("bind", vec!["眉".to_string(), "通常".to_string(), "1".to_string()])),
+        (ActorKey::from("0"), CueCommand::command_carrier("bind", vec!["目".to_string(), "通常".to_string(), "1".to_string()])),
+        (ActorKey::from("0"), CueCommand::command_carrier("bind", vec!["まばたき".to_string(), "通常".to_string(), "1".to_string()])),
         (ActorKey::from("0"), CueCommand::Text("まあ、".to_string())),
         (ActorKey::from("0"), CueCommand::Wait),
         (ActorKey::from("0"), CueCommand::Emote { key: "1000".to_string() }),
+        (ActorKey::from("0"), CueCommand::command_carrier("bind", vec!["腕".to_string(), "組み".to_string(), "1".to_string()])),
+        (ActorKey::from("0"), CueCommand::command_carrier("bind", vec!["紅".to_string(), "差し".to_string(), "0".to_string()])),
+        (ActorKey::from("0"), CueCommand::command_carrier("bind", vec!["口".to_string(), "にこっ".to_string(), "1".to_string()])),
+        (ActorKey::from("0"), CueCommand::command_carrier("bind", vec!["眉".to_string(), "通常".to_string(), "1".to_string()])),
+        (ActorKey::from("0"), CueCommand::command_carrier("bind", vec!["目".to_string(), "笑顔".to_string(), "1".to_string()])),
+        (ActorKey::from("0"), CueCommand::command_carrier("bind", vec!["まばたき".to_string(), "----".to_string(), "1".to_string()])),
         (ActorKey::from("0"), CueCommand::Text("これから、".to_string())),
         (ActorKey::from("0"), CueCommand::Wait),
-        (ActorKey::from("0"), CueCommand::NewLine { ratio: 1_f32 }),
+        (ActorKey::from("0"), CueCommand::NewLine { ratio: 1.0_f32 }),
         (ActorKey::from("0"), CueCommand::Text("よろしゅうに！".to_string())),
         (ActorKey::from("0"), CueCommand::Wait),
         (ActorKey::from("0"), CueCommand::NewLine { ratio: 1.5_f32 }),
@@ -235,24 +282,26 @@ fn i1_inproc_one_lap_records_frozen_onfirstboot_greeting_and_closes_cleanly() {
         ghost_root,
         default_encoding: DefaultEncoding::Utf8,
         shiori: ShioriWiring::InProc,
-        surface_sink,
-        text_sink,
+        sinks: vec![Box::new(surface_sink), Box::new(text_sink)],
+        system_vars: default_system_vars(),
         ticker: TickerMode::Disabled,
     };
 
     let runtime = boot(options).expect("boot should succeed through ShioriWiring::InProc（実テスト DLL）");
 
-    // 期待 broadcast 列（実 emo2 OnFirstBoot 挨拶・74 件）。二人掛け合い自己紹介が
-    // ClearAll → Emote/Text/Wait/NewLine の全順序へコンパイルされる（構造導出＋実 compile 観測で
-    // 照合済み・tasks.md 6.2）。ここでは列長を駆動ループの整定判定に使う。
+    // 期待 broadcast 列（実 emo2 OnFirstBoot 挨拶）。二人掛け合い自己紹介が
+    // ClearAll → Emote/Text/Wait/NewLine/Custom(bang) の全順序へコンパイルされる（構造導出＋実 compile
+    // 観測で照合済み・tasks.md 6.2）。ここでは列長を駆動ループの整定判定に使う（内容照合は後段 assert）。
     let expected = expected_greeting_sequence();
 
     // 駆動: dispatcher へ Tick を注入し、両 sink が期待列長へ整定するまで待つ。反復回数ではなく
     // **壁時計デッドライン**で括る（task 2.4 方式）——InProc 経路は最初の SHIORI 呼出で実 DLL の
-    // `LoadLibraryW`＋`CreateInstance` を初めて走らせ数十 ms を要するため。デッドラインは宙吊り防止の上限に
+    // `LoadLibraryW`／`CreateInstance` を初めて走らせ数十 ms を要するため。デッドラインは宙吊り防止の上限に
     // すぎず、talk timeline の前進は依然として注入 Tick の `now` のみ（実時計で進めない・要件 5.1）。挨拶は
     // 複数秒の台本ゆえ `now` を **大股**（+500ms/Tick）で前進させ、単一 Tick が at 昇順で due cue を
-    // 一括排出する（`dola/src/cue/schedule.rs`）ことで数十 Tick で全 74 件を消化する。列・順序は決定論的。
+    // 一括排出する（`dola/src/cue/schedule.rs`）。golden 列長は待機の**十分条件**（超過 Tick は排出済み
+    // schedule に無害）であり、届いた列の**内容**の正しさは後段の `assert_greeting_broadcast` が担う——
+    // golden が凍結 Value の実 compile と食い違えば必ず fail する fail-visible 設計（決定論）。
     //
     // poll 周期は `yield_now()`（task 2.4 先例と同形・sleep 不使用）。兄弟 spine のプローブループは task 5.0 で
     // 壁時計 deadline へ硬化済みゆえ、本テストの並走による CPU 競合は spine の cue 到達を deadline 内で遅らせる
@@ -279,8 +328,8 @@ fn i1_inproc_one_lap_records_frozen_onfirstboot_greeting_and_closes_cleanly() {
     }
     assert!(
         captured,
-        "I1: 起動挨拶の演出列が壁時計デッドライン内に両 sink へ届かなかった——実 InProc DLL 境界を \
-         横断した一周が成立していない（hang guard）"
+        "I1: 起動挨拶の演出列が壁時計デッドライン内に両 sink へ届かなかった——実 \
+         InProc DLL 境界を横断した一周が成立していない（hang guard）"
     );
 
     // ---- 演出列の全順序照合（要件 5.1・broadcast・(actor, command) 全順序・at 非減少）----
@@ -315,7 +364,7 @@ fn i1_inproc_one_lap_records_frozen_onfirstboot_greeting_and_closes_cleanly() {
 /// 起動挨拶の broadcast cue 列を全順序照合する共有ヘルパ（I1/I2 が同一の演出出力 assert を
 /// 「同じ手口」で再演するために free 関数へ括り出す）。
 ///
-/// 期待列はハードコードした [`expected_greeting_sequence`]（実 emo2 OnFirstBoot 挨拶・74 件・
+/// 期待列はハードコードした [`expected_greeting_sequence`]（実 emo2 OnFirstBoot 挨拶・117 件・
 /// 構造導出＋実 compile 観測で照合済み）。照合対象は `(actor, command)` の全順序と `at` の
 /// 非減少性のみ——`at`/`duration` の float はテキスト速度チューニングが台本改変なしに壊すため
 /// 照合しない（tasks.md 6.2 I1）。broadcast ゆえ surface/text いずれの sink も同一の全順序で
@@ -390,20 +439,21 @@ fn i2_inproc_one_lap_records_both_exchange_sequence_and_greeting_cues() {
         ghost_root: ghost_root.to_path_buf(),
         default_encoding: DefaultEncoding::Utf8,
         shiori: wiring,
-        surface_sink,
-        text_sink,
+        sinks: vec![Box::new(surface_sink), Box::new(text_sink)],
+        system_vars: default_system_vars(),
         ticker: TickerMode::Disabled,
     };
 
     let runtime = boot(options).expect("boot should succeed through Custom(Recorder(inproc_connect))");
 
-    // 期待演出列長（I1 と同一のハードコード golden・74 件）。
+    // 期待演出列長（I1 と同一のハードコード golden）。列長は待機の十分条件（内容照合は後段 assert）。
     let expected_cue_len = expected_greeting_sequence().len();
 
     // 駆動: dispatcher へ Tick を注入し、両 sink が期待列長へ整定するまで**壁時計デッドライン**で
     // 括って待つ（I1・task 2.4 方式・sleep 不使用・`yield_now` poll）。sim 時刻は注入 Tick の `now`
     // のみが進める。挨拶は複数秒の台本ゆえ `now` を大股（+500ms/Tick）で前進させ、単一 Tick が at 昇順で
-    // due cue を一括排出する（`dola/src/cue/schedule.rs`）ことで全 74 件を消化する。決定論的。
+    // due cue を一括排出する（`dola/src/cue/schedule.rs`）。golden 列長は待機の十分条件・内容の正しさは
+    // 後段 assert が担う（I1 と同律・fail-visible・決定論）。
     let deadline = Instant::now() + Duration::from_secs(60);
     let mut now: u64 = 500;
     let mut captured = false;
@@ -426,8 +476,8 @@ fn i2_inproc_one_lap_records_both_exchange_sequence_and_greeting_cues() {
     }
     assert!(
         captured,
-        "I2: 起動挨拶の演出列が壁時計デッドライン内に両 sink へ届かなかった——実 InProc DLL 境界を \
-         横断した一周が成立していない（hang guard）"
+        "I2: 起動挨拶の演出列が壁時計デッドライン内に両 sink へ届かなかった——実 \
+         InProc DLL 境界を横断した一周が成立していない（hang guard）"
     );
 
     // ---- 正常終了の握手（要件 5.3）: shutdown（ForceQuit→OnClose NOTIFY→Unload）を完走させる。----

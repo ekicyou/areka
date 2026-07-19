@@ -577,9 +577,10 @@ fn glyph_run_indices(canvas: &ContentCanvas) -> impl Iterator<Item = usize> + '_
 /// 住人 1 行の行指紋（内容文字列・ブロック軸位置・行寸）を作る（canvas-local・DD4）。
 fn line_fingerprint(resident: &Resident, mode: WritingMode) -> CommittedLine {
     let (text, extent) = match &resident.content {
-        ResidentContent::GlyphRun(run) => {
-            (run.glyphs.iter().map(|g| g.ch).collect::<String>(), run.size)
-        }
+        ResidentContent::GlyphRun(run) => (
+            run.glyphs.iter().map(|g| g.ch).collect::<String>(),
+            run.size,
+        ),
         // 画像/サーフェスのシーム住人は空 text・零寸（M1 は from_layout で生成されない）。
         ResidentContent::Image(_) | ResidentContent::Surface(_) => (String::new(), (0.0, 0.0)),
     };
@@ -647,9 +648,19 @@ fn exposure_band(blit: (i32, i32), surface_size: (u32, u32)) -> Option<PhysicalR
             return None;
         }
         return Some(if by < 0 {
-            PhysicalRect { x: 0, y: h - mag, w, h: mag } // 内容が上へ → 下端露出
+            PhysicalRect {
+                x: 0,
+                y: h - mag,
+                w,
+                h: mag,
+            } // 内容が上へ → 下端露出
         } else {
-            PhysicalRect { x: 0, y: 0, w, h: mag } // 内容が下へ → 上端露出
+            PhysicalRect {
+                x: 0,
+                y: 0,
+                w,
+                h: mag,
+            } // 内容が下へ → 上端露出
         });
     }
     if bx != 0 {
@@ -658,9 +669,19 @@ fn exposure_band(blit: (i32, i32), surface_size: (u32, u32)) -> Option<PhysicalR
             return None;
         }
         return Some(if bx < 0 {
-            PhysicalRect { x: w - mag, y: 0, w: mag, h } // 内容が左へ → 右端露出
+            PhysicalRect {
+                x: w - mag,
+                y: 0,
+                w: mag,
+                h,
+            } // 内容が左へ → 右端露出
         } else {
-            PhysicalRect { x: 0, y: 0, w: mag, h } // 内容が右へ → 左端露出
+            PhysicalRect {
+                x: 0,
+                y: 0,
+                w: mag,
+                h,
+            } // 内容が右へ → 左端露出
         });
     }
     None
@@ -705,7 +726,7 @@ mod tests {
         block_axis_vector,
     };
     use crate::canvas::ContentCanvas;
-    use crate::layout::{FixedMetrics, LayoutEngine, VisibleWindow};
+    use crate::layout::{FixedMetrics, LayoutEngine, VisibleWindow, WrapPlan};
     use crate::region::{ScaleContract, TextRegion};
     use crate::state::TextItem;
     use crate::writing::WritingMode;
@@ -866,15 +887,14 @@ mod tests {
     }
 
     /// テスト用 BalloonModel（origin (0,0)・折返し既定・validrect 指定）。
-    fn model_rect(
-        validrect: (Option<i32>, Option<i32>, Option<i32>, Option<i32>),
-    ) -> BalloonModel {
+    fn model_rect(validrect: (Option<i32>, Option<i32>, Option<i32>, Option<i32>)) -> BalloonModel {
         BalloonModel::new(
             WindowPosition::new(None, None),
             Origin::new(Some(0), Some(0)),
             WordWrapPoint::new(None, None),
             ValidRect::new(validrect.0, validrect.1, validrect.2, validrect.3),
             Font::new(None, None, FontColor::new(None, None, None)),
+            None,
             None,
         )
     }
@@ -903,7 +923,15 @@ mod tests {
             .iter()
             .filter(|i| matches!(i, TextItem::Glyph { .. }))
             .count();
-        let lines = LayoutEngine::layout(items, visible, &region, mode, font_height, &FixedMetrics);
+        let lines = LayoutEngine::layout(
+            items,
+            visible,
+            &region,
+            mode,
+            font_height,
+            &FixedMetrics,
+            WrapPlan::CharByChar,
+        );
         ContentCanvas::from_layout(&lines, &region, mode)
     }
 
@@ -1070,7 +1098,11 @@ mod tests {
                 draw_lines,
             } => {
                 assert_eq!(blit, (0, 0), "縮退は blit 0");
-                assert_eq!(dirty, vec![phys(0, 0, 400, 100)], "面全域 1 枚（退避インク一掃）");
+                assert_eq!(
+                    dirty,
+                    vec![phys(0, 0, 400, 100)],
+                    "面全域 1 枚（退避インク一掃）"
+                );
                 assert_eq!(draw_lines, vec![0], "全 GlyphRun 住人を再描画");
             }
             other => panic!("行内縮小は全域ダーティ Update を期待: {other:?}"),
@@ -1150,7 +1182,11 @@ mod tests {
             (400, 224),
             &prev,
         );
-        assert_eq!(dirty_em, vec![phys(0, 0, 21, 11)], "overhang 無し＝em ボックス丈");
+        assert_eq!(
+            dirty_em,
+            vec![phys(0, 0, 21, 11)],
+            "overhang 無し＝em ボックス丈"
+        );
 
         // 実測 overhang top=1・bottom=3（横書き＝Y 方向）。em 行 {0,0,20,10} を上へ 1・下へ 3 →
         // {0,-1,20,13}・ガード 1 → {-1,-2,21,14}・クランプ → {0,0,21,14}。
@@ -1175,7 +1211,11 @@ mod tests {
             vec![phys(0, 0, 21, 14)],
             "実測はみ出し分だけ Y 方向へ拡張（下 3・上 1）——em 丈 11 より高い"
         );
-        assert_eq!(draw_over, vec![0], "描画対象は現在行のみ（overhang は幾何を変えるだけ）");
+        assert_eq!(
+            draw_over,
+            vec![0],
+            "描画対象は現在行のみ（overhang は幾何を変えるだけ）"
+        );
 
         // 縦書き（vertical_rl）: overhang は right（X 正方向）へ効く——横書きの top/bottom（Y）は
         // 無視され、left/right（X）で列のブロック軸が広がる（軸読み替えの檻）。
@@ -1377,16 +1417,21 @@ mod tests {
             &prev,
         );
         // 行0 {0,0,20,10}×1.25 → floor/ceil {0,0,25,13}・ガード 2 → {-2,-2,27,15}・クランプ → {0,0,27,15}。
-        assert_eq!(dirty, vec![phys(0, 0, 27, 15)], "y 負側はガード後 0 へクランプ");
+        assert_eq!(
+            dirty,
+            vec![phys(0, 0, 27, 15)],
+            "y 負側はガード後 0 へクランプ"
+        );
         assert!(
-            dirty.iter().all(|r| r.x + r.w <= surface.0 && r.y + r.h <= surface.1),
+            dirty
+                .iter()
+                .all(|r| r.x + r.w <= surface.0 && r.y + r.h <= surface.1),
             "全ダーティ矩形は面寸を越えない"
         );
 
         // (c) 端の露出帯もクランプされる（下端 by=-13）。
         let scroll_canvas = canvas_for(&broken_lines(4), WritingMode::HorizontalTb, vr, 10.0);
-        let scroll_prev =
-            ScrollPlanner::committed_lines(&scroll_canvas, WritingMode::HorizontalTb);
+        let scroll_prev = ScrollPlanner::committed_lines(&scroll_canvas, WritingMode::HorizontalTb);
         let (band, _) = ScrollPlanner::derive_dirty(
             &scroll_canvas,
             &window(1, -13.0),
@@ -1397,9 +1442,14 @@ mod tests {
             &scroll_prev,
         );
         // 下端露出帯 {0,112,500,13}・ガード 2 → {-2,110,502,127}・クランプ → {0,110,500,15}。
-        assert_eq!(band, vec![phys(0, 110, 500, 15)], "端の露出帯はクランプされる");
+        assert_eq!(
+            band,
+            vec![phys(0, 110, 500, 15)],
+            "端の露出帯はクランプされる"
+        );
         assert!(
-            band.iter().all(|r| r.x + r.w <= surface.0 && r.y + r.h <= surface.1),
+            band.iter()
+                .all(|r| r.x + r.w <= surface.0 && r.y + r.h <= surface.1),
             "露出帯も面寸を越えない"
         );
     }
@@ -1493,14 +1543,32 @@ mod tests {
         let mut planner = ScrollPlanner::new();
         // 初回フレームを確定して prev_lines を張る（以後のスクロールは Update）。
         let w0 = window(0, 0.0);
-        let first = planner.plan(&canvas, &w0, WritingMode::HorizontalTb, &contract, (400, 100));
+        let first = planner.plan(
+            &canvas,
+            &w0,
+            WritingMode::HorizontalTb,
+            &contract,
+            (400, 100),
+        );
         planner.commit(&canvas, &w0, WritingMode::HorizontalTb, &contract, &first);
 
         // スクロールを未 commit で 2 回 plan → 同一計画・scroll_state 不変。
         let w1 = window(1, -13.0);
         let before = planner.scroll_state();
-        let a = planner.plan(&canvas, &w1, WritingMode::HorizontalTb, &contract, (400, 100));
-        let b = planner.plan(&canvas, &w1, WritingMode::HorizontalTb, &contract, (400, 100));
+        let a = planner.plan(
+            &canvas,
+            &w1,
+            WritingMode::HorizontalTb,
+            &contract,
+            (400, 100),
+        );
+        let b = planner.plan(
+            &canvas,
+            &w1,
+            WritingMode::HorizontalTb,
+            &contract,
+            (400, 100),
+        );
         assert_eq!(a, b, "未 commit の反復 plan は同一計画（再試行安全）");
         assert_eq!(
             planner.scroll_state(),
@@ -1519,12 +1587,27 @@ mod tests {
         let mut planner = ScrollPlanner::new();
         let w = window(0, 0.0);
         // 初回 plan は全域 Update（prev 空）。
-        let first = planner.plan(&canvas, &w, WritingMode::HorizontalTb, &contract, (400, 100));
-        assert!(matches!(first, FramePlan::Update { .. }), "初回は全域 Update");
+        let first = planner.plan(
+            &canvas,
+            &w,
+            WritingMode::HorizontalTb,
+            &contract,
+            (400, 100),
+        );
+        assert!(
+            matches!(first, FramePlan::Update { .. }),
+            "初回は全域 Update"
+        );
         planner.commit(&canvas, &w, WritingMode::HorizontalTb, &contract, &first);
         // 同一 window の次 plan は NoChange（指紋一致・blit 0）。
         assert_eq!(
-            planner.plan(&canvas, &w, WritingMode::HorizontalTb, &contract, (400, 100)),
+            planner.plan(
+                &canvas,
+                &w,
+                WritingMode::HorizontalTb,
+                &contract,
+                (400, 100)
+            ),
             FramePlan::NoChange,
             "commit 後の同一 window は変化なし"
         );
@@ -1538,16 +1621,32 @@ mod tests {
         let canvas = plan_canvas();
         let mut planner = ScrollPlanner::new();
         let w0 = window(0, 0.0);
-        let first = planner.plan(&canvas, &w0, WritingMode::HorizontalTb, &contract, (400, 100));
+        let first = planner.plan(
+            &canvas,
+            &w0,
+            WritingMode::HorizontalTb,
+            &contract,
+            (400, 100),
+        );
         planner.commit(&canvas, &w0, WritingMode::HorizontalTb, &contract, &first);
         assert_eq!(planner.scroll_state().committed, 0);
 
         // スクロール（内容不変・block_offset=-13＝内容が上へ）→ 下端露出帯付き Update。
         let w1 = window(1, -13.0);
-        let scroll = planner.plan(&canvas, &w1, WritingMode::HorizontalTb, &contract, (400, 100));
+        let scroll = planner.plan(
+            &canvas,
+            &w1,
+            WritingMode::HorizontalTb,
+            &contract,
+            (400, 100),
+        );
         match &scroll {
             FramePlan::Update { blit, dirty, .. } => {
-                assert_eq!(*blit, (0, -13), "横書きスクロールの blit は y 軸・符号素通し");
+                assert_eq!(
+                    *blit,
+                    (0, -13),
+                    "横書きスクロールの blit は y 軸・符号素通し"
+                );
                 assert!(!dirty.is_empty(), "露出帯がダーティ");
             }
             other => panic!("スクロールは Update のはず: {other:?}"),
@@ -1570,13 +1669,25 @@ mod tests {
         let w = window(0, 0.0);
 
         // (Update) 初回＝全域。
-        let first = planner.plan(&canvas, &w, WritingMode::HorizontalTb, &contract, (400, 100));
+        let first = planner.plan(
+            &canvas,
+            &w,
+            WritingMode::HorizontalTb,
+            &contract,
+            (400, 100),
+        );
         assert!(matches!(first, FramePlan::Update { .. }), "初回は Update");
         planner.commit(&canvas, &w, WritingMode::HorizontalTb, &contract, &first);
 
         // (NoChange) 変化なし。
         assert_eq!(
-            planner.plan(&canvas, &w, WritingMode::HorizontalTb, &contract, (400, 100)),
+            planner.plan(
+                &canvas,
+                &w,
+                WritingMode::HorizontalTb,
+                &contract,
+                (400, 100)
+            ),
             FramePlan::NoChange,
             "変化なしは NoChange"
         );
@@ -1584,7 +1695,13 @@ mod tests {
         // (FullClear) request_clear 後。
         planner.request_clear();
         assert_eq!(
-            planner.plan(&canvas, &w, WritingMode::HorizontalTb, &contract, (400, 100)),
+            planner.plan(
+                &canvas,
+                &w,
+                WritingMode::HorizontalTb,
+                &contract,
+                (400, 100)
+            ),
             FramePlan::FullClear,
             "Clear 要求後は FullClear"
         );
@@ -1600,10 +1717,22 @@ mod tests {
         let mut planner = ScrollPlanner::new();
         // 全域を確定 → スクロールで committed を -13 まで進める。
         let w0 = window(0, 0.0);
-        let f0 = planner.plan(&canvas, &w0, WritingMode::HorizontalTb, &contract, (400, 100));
+        let f0 = planner.plan(
+            &canvas,
+            &w0,
+            WritingMode::HorizontalTb,
+            &contract,
+            (400, 100),
+        );
         planner.commit(&canvas, &w0, WritingMode::HorizontalTb, &contract, &f0);
         let w1 = window(1, -13.0);
-        let f1 = planner.plan(&canvas, &w1, WritingMode::HorizontalTb, &contract, (400, 100));
+        let f1 = planner.plan(
+            &canvas,
+            &w1,
+            WritingMode::HorizontalTb,
+            &contract,
+            (400, 100),
+        );
         planner.commit(&canvas, &w1, WritingMode::HorizontalTb, &contract, &f1);
         assert_eq!(planner.scroll_state().committed, -13);
 
@@ -1617,19 +1746,43 @@ mod tests {
             },
             "位置/指紋が初期化される"
         );
-        let clear_plan = planner.plan(&canvas, &w0, WritingMode::HorizontalTb, &contract, (400, 100));
+        let clear_plan = planner.plan(
+            &canvas,
+            &w0,
+            WritingMode::HorizontalTb,
+            &contract,
+            (400, 100),
+        );
         assert_eq!(clear_plan, FramePlan::FullClear);
 
         // 未 commit の反復は FullClear のまま（失敗フレーム再試行安全）。
         assert_eq!(
-            planner.plan(&canvas, &w0, WritingMode::HorizontalTb, &contract, (400, 100)),
+            planner.plan(
+                &canvas,
+                &w0,
+                WritingMode::HorizontalTb,
+                &contract,
+                (400, 100)
+            ),
             FramePlan::FullClear,
             "commit するまで FullClear を保持"
         );
 
         // commit(FullClear) → フラグが落ち・prev 空ゆえ次 plan は通常導出（全域 Update）へ戻る。
-        planner.commit(&canvas, &w0, WritingMode::HorizontalTb, &contract, &clear_plan);
-        let after = planner.plan(&canvas, &w0, WritingMode::HorizontalTb, &contract, (400, 100));
+        planner.commit(
+            &canvas,
+            &w0,
+            WritingMode::HorizontalTb,
+            &contract,
+            &clear_plan,
+        );
+        let after = planner.plan(
+            &canvas,
+            &w0,
+            WritingMode::HorizontalTb,
+            &contract,
+            (400, 100),
+        );
         assert!(
             matches!(after, FramePlan::Update { .. }),
             "FullClear 確定後は通常導出へ戻る"
@@ -1680,7 +1833,13 @@ mod tests {
         let surface = (48u32, 36u32);
         // (mode, block_offset, 期待 committed, 期待 blit, 露出帯の辺)。
         let cases = [
-            (WritingMode::HorizontalTb, -13.0f32, -13, (0, -13), Edge::Bottom),
+            (
+                WritingMode::HorizontalTb,
+                -13.0f32,
+                -13,
+                (0, -13),
+                Edge::Bottom,
+            ),
             (WritingMode::VerticalRl, 13.0, 13, (13, 0), Edge::Left),
             (WritingMode::VerticalLr, -13.0, -13, (-13, 0), Edge::Right),
         ];
@@ -1707,7 +1866,11 @@ mod tests {
             let plan = driven.plan(&canvas, &window(1, offset), mode, &contract, surface);
             let (blit, dirty) = expect_update(&plan);
             assert_eq!(blit, exp_blit, "{mode:?}: plan の blit も同一");
-            assert_eq!(dirty.len(), 1, "{mode:?}: 可視窓のみ移動は露出帯 1 枚（変化行ゼロ）");
+            assert_eq!(
+                dirty.len(),
+                1,
+                "{mode:?}: 可視窓のみ移動は露出帯 1 枚（変化行ゼロ）"
+            );
             let band = dirty[0];
             let (w, h) = surface;
             let on_expected_edge = match edge {
@@ -1718,7 +1881,10 @@ mod tests {
                 // vertical_lr: 右端（内容が左へ流れ右端が露出）・全高。
                 Edge::Right => band.x + band.w == w && band.x > 0 && band.y == 0 && band.h == h,
             };
-            assert!(on_expected_edge, "{mode:?}: 露出帯が期待辺にある（band={band:?}）");
+            assert!(
+                on_expected_edge,
+                "{mode:?}: 露出帯が期待辺にある（band={band:?}）"
+            );
         }
     }
 
@@ -1838,7 +2004,11 @@ mod tests {
             let (blit, dirty) = expect_update(&plan);
             assert_eq!(blit, (0, -13), "(1) スクロールの blit は y 軸・符号素通し");
             assert_eq!(dirty.len(), 1, "(1) 露出帯 1 枚のみ（変化行ゼロ）");
-            assert_eq!(dirty[0].y + dirty[0].h, surface.1, "(1) 露出帯は下端に接する");
+            assert_eq!(
+                dirty[0].y + dirty[0].h,
+                surface.1,
+                "(1) 露出帯は下端に接する"
+            );
         }
 
         // (2) typewriter 1 グリフ進行（現在行が伸長）→ dirty＝現在行のみ・draw＝[0]。

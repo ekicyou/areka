@@ -34,7 +34,10 @@ use super::model::{
 /// - Postconditions: 常に `BalloonModel` を返す（`Result` 無し・R1.2）。存在キーは型付き・符号保持で
 ///   反映、不在/非数値/範囲外キーは当該スカラ `None`（R2.6/R3.4/R1.4）。
 /// - 未知キー・非モデル化キーは完全一致引きで自然に無視（R1.3/R2.7）。panic しない。
-pub fn parse(descript: &BTreeMap<String, String>, image: Option<&BTreeMap<String, String>>) -> BalloonModel {
+pub fn parse(
+    descript: &BTreeMap<String, String>,
+    image: Option<&BTreeMap<String, String>>,
+) -> BalloonModel {
     // 2 層マージ（D4）: descript 基層を複製し、画像別層を後勝ちで重ね合わせる（R3.2/R3.3/R3.5）。
     let merged = match image {
         Some(image_map) => {
@@ -94,6 +97,9 @@ fn map_merged(merged: &BTreeMap<String, String>) -> BalloonModel {
     // writing_mode は生文字列の転記のみ（trim は kv 層済み・値の検証・語彙判定・fallback は
     // 下流 emo テキスト層の責務・emo-text-layer 要件 5.6）。
     let writing_mode = merged.get("writing_mode").map(|v| v.to_owned());
+    // budoux_newline も生文字列の転記のみ（writing_mode と同一規律・値の検証・語彙判定・
+    // fallback は下流 emo テキスト層の責務・budoux-newline 要件 1.1）。
+    let budoux_newline = merged.get("budoux_newline").map(|v| v.to_owned());
 
     BalloonModel::new(
         windowposition,
@@ -102,6 +108,7 @@ fn map_merged(merged: &BTreeMap<String, String>) -> BalloonModel {
         validrect,
         font,
         writing_mode,
+        budoux_newline,
     )
 }
 

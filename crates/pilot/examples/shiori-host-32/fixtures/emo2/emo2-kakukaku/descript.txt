@@ -20,6 +20,8 @@ validrect.bottom,0
 validrect.left,0
 validrect.right,0
 
+budoux_newline,1
+
 
 
 font.name,Yu Gothic UI

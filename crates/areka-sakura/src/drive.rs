@@ -33,7 +33,7 @@ use std::sync::mpsc::Sender;
 
 use crate::compile::compile;
 use crate::contract::{
-    CueSheet, SakuraMsg, StartTalk, TalkDone, TalkEndReason, TalkHandle, TalkId,
+    CueSheet, SakuraMsg, StartTalk, SystemVarSnapshot, TalkDone, TalkEndReason, TalkHandle, TalkId,
 };
 use crate::error::SakuraError;
 use areka_actor::{run_inbox, spawn_actor};
@@ -47,9 +47,15 @@ use dola::cue::{CuePlayer, CueSink};
 /// 呼び出し元へは [`TalkHandle`]`{inbox, actor}` を返し、以降 kanade/テストは inbox へ
 /// `Tick`/`Close` のみ送る。
 ///
-/// `surface_sink`／`text_sink` はいずれも演者非依存の単一出力契約 [`CueSink`] で、初回 `Tick`
-/// 時に [`CuePlayer`] へ**登録順**（surface, text）で登録され、以降 broadcast で全 cue を受ける
-/// （どの action を演じるかは演者側 relevance の責務・中央振り分けなし・D4）。
+/// `sinks` は演者非依存の単一出力契約 [`CueSink`] の可変長列（S-3）で、初回 `Tick` 時に
+/// [`CuePlayer`] へ**登録順のまま**登録され、以降 broadcast で全 cue を受ける（どの action を
+/// 演じるかは演者側 relevance の責務・中央振り分けなし・D4）。順序が broadcast 順を決めるため
+/// 呼び出し側（ghost の boot 結線）が決定論的な登録順を与える。
+///
+/// `system_vars` は **talk 起動時に ⓪ghost から手渡される名前→値の凍結スナップショット**
+/// （プロパティシステム読み口の凍結像・R7.3）で、`Start` 受領時のコンパイルへそのまま渡す。
+/// sakura は値源を所有せず（永続化層・SHIORI・OS 環境を直接読まない）このスナップショットを
+/// 参照するだけである（D8: スナップショットは `StartTalk` でなく talk 起動境界で手渡す）。
 ///
 /// `done` は `TalkDone` の届け先（呼び出し側 inbox への変換投函・`D: From<TalkDone>`）。
 ///
@@ -65,8 +71,8 @@ use dola::cue::{CuePlayer, CueSink};
 pub fn spawn_talk<D>(
     start: StartTalk,
     done: Sender<D>,
-    surface_sink: impl CueSink + Send + 'static,
-    text_sink: impl CueSink + Send + 'static,
+    sinks: Vec<Box<dyn CueSink + Send>>,
+    system_vars: SystemVarSnapshot,
 ) -> TalkHandle
 where
     D: From<TalkDone> + Send + 'static,
@@ -75,10 +81,9 @@ where
     let name = format!("sakura-talk-{}", talk_id.0);
 
     let (inbox, actor) = spawn_actor::<SakuraMsg, _>(&name, move |rx| {
-        // 演者 sink を Box<dyn CueSink> 化し register 順（surface, text）で保持する。
+        // 演者 sink（Send 境界付き＝thread へ move 可）を register 順のまま保持する。
         // 初回 Tick で刻印済み台本の CuePlayer へ broadcast 登録する（4.3 register_sink）。
-        let sinks: Vec<Box<dyn CueSink>> = vec![Box::new(surface_sink), Box::new(text_sink)];
-        let mut driver = TalkDriver::new(sinks, done);
+        let mut driver = TalkDriver::new(sinks, system_vars, done);
         run_inbox::<SakuraMsg, std::convert::Infallible>(rx, move |msg| Ok(driver.handle(msg)));
     });
 
@@ -126,9 +131,12 @@ enum TalkPhase {
 struct TalkDriver<D> {
     /// 駆動状態機械。
     phase: TalkPhase,
-    /// 初回 `Tick` で [`CuePlayer`] へ登録する演者 sink（register 順: surface, text）。
+    /// 初回 `Tick` で [`CuePlayer`] へ登録する演者 sink（register 順＝呼び出し側が与える broadcast 順）。
     /// 初回 `Tick` で drain して CuePlayer へ move する（それ以降は空）。
-    sinks: Vec<Box<dyn CueSink>>,
+    sinks: Vec<Box<dyn CueSink + Send>>,
+    /// talk 起動時に ⓪ghost から手渡された名前→値の凍結スナップショット（R7.3・値源非所有）。
+    /// `Start` 受領時のコンパイルへ参照渡しする（sakura は値源を所有しない・D8）。
+    system_vars: SystemVarSnapshot,
     /// `TalkDone` の届け先（呼び出し側 inbox への変換投函）。
     done: Sender<D>,
 }
@@ -137,10 +145,15 @@ impl<D> TalkDriver<D>
 where
     D: From<TalkDone> + Send + 'static,
 {
-    fn new(sinks: Vec<Box<dyn CueSink>>, done: Sender<D>) -> Self {
+    fn new(
+        sinks: Vec<Box<dyn CueSink + Send>>,
+        system_vars: SystemVarSnapshot,
+        done: Sender<D>,
+    ) -> Self {
         Self {
             phase: TalkPhase::Idle,
             sinks,
+            system_vars,
             done,
         }
     }
@@ -151,6 +164,7 @@ where
             SakuraMsg::Start(start) => self.on_start(start),
             SakuraMsg::Tick(t) => self.on_tick(t),
             SakuraMsg::Close => self.on_close(),
+            SakuraMsg::ResolveChoice { id } => self.on_resolve_choice(id),
         }
     }
 
@@ -167,7 +181,9 @@ where
 
         // 上流パーサで Instruction 列へ変換（再パースしない・R1.2）→ 純粋コンパイル。
         let instructions = areka_parsers::sakura::parse(&script);
-        let compiled = compile(&instructions);
+        // talk 起動時に手渡された凍結スナップショット（R7.3・D8）を参照してコンパイルする。
+        // sakura は値源を所有せず、この凍結像だけを見る（provider 差替で本層は無改変＝差替シーム）。
+        let compiled = compile(&instructions, &self.system_vars);
 
         // 空 sheet: 時間軸駆動せず即終端（R1.4/R6.2）。end は Ended 固定でなく compiled.end
         // （裸の `\-` は空 sheet＋Quit）。
@@ -322,6 +338,77 @@ where
         }
     }
 
+    /// `ResolveChoice{id}` 受領: 選択待ち（barrier）で止まった talk へ選択 id を投入する型付き口
+    /// （R2.7）。W5（`areka-P0-choice-select-events`）の解決入力の唯一の到達点であり、
+    /// [`CuePlayer::resolve_choice`] を外部から直接呼ぶ経路は存在しない（アクター内に閉じる）。
+    ///
+    /// - **`Driving`**（駆動中＝唯一 `resolve_choice` を呼ぶ状態）: `player.resolve_choice(&id)` へ
+    ///   委譲する（id 照合＋一致時の先積みクリアは [`CuePlayer`] の責務）。
+    ///   - `Some`: 選択が解決され `Playing` へ戻った。**その場で** [`CuePlayer::is_completed`] を
+    ///     確認し、解決後に既に占有 horizon 到達（menu ケース＝barrier が最終 horizon 要素）なら
+    ///     `TalkDone{end}` を送出して `Break`——[`settle_after_tick`] と同型の後始末を共用し、次 Tick
+    ///     を待たない（R-5 の一 tick 遅延を残さない・R2.4/9.8）。未完了なら `Driving` を書き戻して継続。
+    ///   - `None`（id 不一致・非待機）: 状態を変えず記録して継続する（barrier は解けない・R2.3 継続）。
+    /// - **`Armed`/`Idle`**（初回 Tick 前・Start 前 or 終端後＝CuePlayer 未構築 or talk 不在）:
+    ///   投函経路上は非到達の**誤投函**（W5 の mis-post）。`warn!` して継続する（防御枝・talk を
+    ///   終端させない）。
+    fn on_resolve_choice(&mut self, id: String) -> ControlFlow<()> {
+        match std::mem::replace(&mut self.phase, TalkPhase::Idle) {
+            TalkPhase::Driving {
+                talk_id,
+                mut player,
+                end,
+                last_tick,
+            } => match player.resolve_choice(&id) {
+                Some(_) => {
+                    // 選択解決成功。解決後に既に占有 horizon 到達なら即時 settle（次 Tick を待たない）。
+                    // settle_after_tick と同型（同一 TalkDone{end} 構築・同一 reason・同一片付け）を
+                    // 共用し、tick 完了経路と分岐させない。last_tick は未完了時の書き戻し用に温存する。
+                    self.settle_after_tick(talk_id, player, end, last_tick)
+                }
+                None => {
+                    // id 不一致・非待機: 状態不変で記録して継続（barrier は解けない・R2.3 継続）。
+                    tracing::debug!(
+                        choice_id = %id,
+                        "ResolveChoice: no matching pending choice (id mismatch or not waiting); continuing"
+                    );
+                    self.phase = TalkPhase::Driving {
+                        talk_id,
+                        player,
+                        end,
+                        last_tick,
+                    };
+                    ControlFlow::Continue(())
+                }
+            },
+            TalkPhase::Armed {
+                talk_id,
+                sheet,
+                end,
+            } => {
+                // 誤投函（初回 Tick 前・CuePlayer 未構築）: warn して継続（防御枝・W5 mis-post 検出）。
+                tracing::warn!(
+                    choice_id = %id,
+                    "ResolveChoice received before playback started (Armed); ignoring"
+                );
+                self.phase = TalkPhase::Armed {
+                    talk_id,
+                    sheet,
+                    end,
+                };
+                ControlFlow::Continue(())
+            }
+            TalkPhase::Idle => {
+                // 誤投函（Start 前 or 終端後＝talk 不在）: warn して継続（防御枝）。phase は Idle のまま。
+                tracing::warn!(
+                    choice_id = %id,
+                    "ResolveChoice received with no active talk (Idle); ignoring"
+                );
+                ControlFlow::Continue(())
+            }
+        }
+    }
+
     /// 自然終端の `TalkDone{reason}` を送出する（受信端 drop は error ログ・黙殺しない・R11.1/11.4）。
     fn send_done(&self, talk_id: TalkId, reason: TalkEndReason) {
         let done = TalkDone { talk_id, reason };
@@ -386,6 +473,16 @@ mod tests {
         fn emit(&mut self, _cue: TalkCue) {}
     }
 
+    /// テスト用: 2 演者 sink を register 順（S-3・登録順＝broadcast 順）で `spawn_talk` の
+    /// `Vec<Box<dyn CueSink + Send>>` へ束ねるヘルパ。broadcast ゆえ両 sink は同一 cue 列を受け、
+    /// 順序は broadcast 順にのみ効く（観測 sink をどちらへ置いても記録内容は不変）。
+    fn two_sinks(
+        first: impl CueSink + Send + 'static,
+        second: impl CueSink + Send + 'static,
+    ) -> Vec<Box<dyn CueSink + Send>> {
+        vec![Box::new(first), Box::new(second)]
+    }
+
     /// 発火の到着を barrier として同期受信するチャンネル sink（保留の決定的証明に使う）。
     struct ChannelSink {
         tx: mpsc::Sender<TalkCue>,
@@ -422,7 +519,12 @@ mod tests {
         let records = sink.records();
 
         // Tick を一切送らずに spawn_talk を呼ぶ（時間軸駆動を要求しない）。
-        let handle = spawn_talk(start, done_tx, sink, NoopSink);
+        let handle = spawn_talk(
+            start,
+            done_tx,
+            two_sinks(sink, NoopSink),
+            SystemVarSnapshot::default(),
+        );
 
         // TalkDone が即座に到達すること（Tick 不要・時間軸駆動なし）。
         let done = done_rx
@@ -454,7 +556,12 @@ mod tests {
         let surface_records = surface.records();
         let text_records = text.records();
 
-        let handle = spawn_talk(start, done_tx, surface, text);
+        let handle = spawn_talk(
+            start,
+            done_tx,
+            two_sinks(surface, text),
+            SystemVarSnapshot::default(),
+        );
         // 初回 Tick(0.0) でアンカー刻印（0.0）、占有 horizon（world 再生完了＝0.35+0.25=0.60）を跨ぐ 1.0。
         handle.inbox.send(SakuraMsg::Tick(0.0)).unwrap();
         handle.inbox.send(SakuraMsg::Tick(1.0)).unwrap();
@@ -503,7 +610,12 @@ mod tests {
                 talk_id: TalkId(1),
             };
             let (tx, rx) = mpsc::channel::<TalkCue>();
-            let handle = spawn_talk(start, done_tx, ChannelSink { tx }, NoopSink);
+            let handle = spawn_talk(
+            start,
+            done_tx,
+            two_sinks(ChannelSink { tx }, NoopSink),
+            SystemVarSnapshot::default(),
+        );
 
             // barrier 技法: 記録 sink を挟まず、bye の着弾のみをチャンネルで観測する。
             let bye_seen = |rx: &mpsc::Receiver<TalkCue>| -> bool {
@@ -614,7 +726,12 @@ mod tests {
         };
 
         let (tx, rx) = mpsc::channel::<TalkCue>();
-        let handle = spawn_talk(start, done_tx, ChannelSink { tx }, NoopSink);
+        let handle = spawn_talk(
+            start,
+            done_tx,
+            two_sinks(ChannelSink { tx }, NoopSink),
+            SystemVarSnapshot::default(),
+        );
 
         let d_hello = text_playback_duration("hello"); // 0.25
         let d_probe = text_playback_duration("probeA"); // 0.30
@@ -698,7 +815,12 @@ mod tests {
         let sink = RecordingSink::new();
         let records = sink.records();
 
-        let handle = spawn_talk(start, done_tx, sink, NoopSink);
+        let handle = spawn_talk(
+            start,
+            done_tx,
+            two_sinks(sink, NoopSink),
+            SystemVarSnapshot::default(),
+        );
         // 初回 Tick(0.0) 刻印＋単一 Tick(0.5) で全 due（world 再生完了 horizon=0.50 到達）→自然終端。
         handle.inbox.send(SakuraMsg::Tick(0.0)).unwrap();
         handle.inbox.send(SakuraMsg::Tick(0.5)).unwrap();
@@ -747,7 +869,12 @@ mod tests {
         };
         let sink = RecordingSink::new();
         let records = sink.records();
-        let handle = spawn_talk(start_a, done_a_tx, sink, NoopSink);
+        let handle = spawn_talk(
+            start_a,
+            done_a_tx,
+            two_sinks(sink, NoopSink),
+            SystemVarSnapshot::default(),
+        );
 
         // 2 本目 Start(B)（別 script）を inbox へ。自己投函の Start(A) の後に処理され、無視される。
         let id_b = TalkId(99);
@@ -799,7 +926,12 @@ mod tests {
         };
         let sink = RecordingSink::new();
         let records = sink.records();
-        let handle = spawn_talk(start, done_tx, sink, NoopSink);
+        let handle = spawn_talk(
+            start,
+            done_tx,
+            two_sinks(sink, NoopSink),
+            SystemVarSnapshot::default(),
+        );
 
         drop(done_rx); // 終端 TalkDone 送出前に受信端を drop（送出は Err になる）。
         handle.inbox.send(SakuraMsg::Tick(0.0)).unwrap();
@@ -824,14 +956,24 @@ mod tests {
     fn ignored_tags_only_script_ends_immediately_with_ended_and_no_firing() {
         let (done_tx, done_rx) = mpsc::channel::<TalkDone>();
         let talk_id = TalkId(55);
+        // task 4.2 で SystemVar/GenericCommand は cue を発行するようになったため、無 cue フィラーには
+        // `\0` を用いる。parser は `\0` を正典スコープタグ `SpeakerScope{n:0}` へ写像するが（task 12.1・
+        // R1.5/R4.4）、compile は `SpeakerScope{n}` を「scope 状態更新のみ・cue 非発行」で扱う
+        // （`compile.rs` の SpeakerScope アーム）。ゆえに内容 cue は皆無で empty-sheet 即時 TalkDone
+        // 経路を保つ（`\0` の写像先が Raw から SpeakerScope へ変わっても本檻の観測は不変）。
         let start = StartTalk {
-            script: r"\q[はい,OnYes]%username\0".to_string(),
+            script: r"\0".to_string(),
             talk_id,
         };
         let sink = RecordingSink::new();
         let records = sink.records();
 
-        let handle = spawn_talk(start, done_tx, sink, NoopSink);
+        let handle = spawn_talk(
+            start,
+            done_tx,
+            two_sinks(sink, NoopSink),
+            SystemVarSnapshot::default(),
+        );
         let done = done_rx
             .recv_timeout(Duration::from_secs(5))
             .expect("無視タグのみの script も空 sheet 経路で即座に TalkDone を返すべき");
@@ -855,14 +997,23 @@ mod tests {
     fn quit_only_script_ends_immediately_with_quit_not_ended() {
         let (done_tx, done_rx) = mpsc::channel::<TalkDone>();
         let talk_id = TalkId(56);
+        // task 4.2 で SystemVar は cue を発行するようになったため、`\-` の先行フィラーには `\0` を用いる。
+        // parser は `\0` を `SpeakerScope{n:0}` へ写像し（task 12.1・R1.5/R4.4）、compile はそれを
+        // scope 状態更新のみ（cue 非発行）で扱う。先行内容 cue のない `\-` の empty-sheet＋Quit 経路を
+        // 保つ（SpeakerScope は cue を生まず `\-` が Quit で切詰め＝空 sheet＋end=Quit）。
         let start = StartTalk {
-            script: r"\q[やめる,OnCancel]\-".to_string(),
+            script: r"\0\-".to_string(),
             talk_id,
         };
         let sink = RecordingSink::new();
         let records = sink.records();
 
-        let handle = spawn_talk(start, done_tx, sink, NoopSink);
+        let handle = spawn_talk(
+            start,
+            done_tx,
+            two_sinks(sink, NoopSink),
+            SystemVarSnapshot::default(),
+        );
         let done = done_rx
             .recv_timeout(Duration::from_secs(5))
             .expect("quit 相当のみの script も空 sheet 経路で即座に TalkDone を返すべき");
@@ -906,7 +1057,12 @@ mod tests {
         let sink = RecordingSink::new();
         let records = sink.records();
 
-        let handle = spawn_talk(start, done_tx, sink, NoopSink);
+        let handle = spawn_talk(
+            start,
+            done_tx,
+            two_sinks(sink, NoopSink),
+            SystemVarSnapshot::default(),
+        );
 
         let at_world = text_playback_duration("hello") + Duration::from_millis(100).as_secs_f64();
 
@@ -993,7 +1149,12 @@ mod tests {
         let sink = RecordingSink::new();
         let records = sink.records();
 
-        let handle = spawn_talk(start, done_tx, sink, NoopSink);
+        let handle = spawn_talk(
+            start,
+            done_tx,
+            two_sinks(sink, NoopSink),
+            SystemVarSnapshot::default(),
+        );
 
         // 初回 Tick(0.0) 刻印。同値・逆行 Tick を織り交ぜて at=0.0 群を発火させる。
         handle.inbox.send(SakuraMsg::Tick(0.0)).unwrap();
@@ -1035,7 +1196,12 @@ mod tests {
         let sink = RecordingSink::new();
         let records = sink.records();
 
-        let handle = spawn_talk(start, done_tx, sink, NoopSink);
+        let handle = spawn_talk(
+            start,
+            done_tx,
+            two_sinks(sink, NoopSink),
+            SystemVarSnapshot::default(),
+        );
 
         // 刻印前に非有限 Tick を送る: 無視され（error ログ＋SakuraError 記録）刻印もされない。
         handle.inbox.send(SakuraMsg::Tick(f64::NAN)).unwrap();
@@ -1073,7 +1239,12 @@ mod tests {
         let sink = RecordingSink::new();
         let records = sink.records();
 
-        let handle = spawn_talk(start, done_tx, sink, NoopSink);
+        let handle = spawn_talk(
+            start,
+            done_tx,
+            two_sinks(sink, NoopSink),
+            SystemVarSnapshot::default(),
+        );
 
         // 初回 Tick(0.0) 刻印＋at=0.0 群を発火（world は at=0.75・未達）。
         handle
@@ -1116,7 +1287,12 @@ mod tests {
             script: r"\s[10]hello\w[2]world\e".to_string(),
             talk_id,
         };
-        let handle = spawn_talk(start, done_tx, NoopSink, NoopSink);
+        let handle = spawn_talk(
+            start,
+            done_tx,
+            two_sinks(NoopSink, NoopSink),
+            SystemVarSnapshot::default(),
+        );
 
         // 自然終端まで駆動する（0.0 刻印 → 占有 horizon=0.60 を跨ぐ 1.0）。
         handle
@@ -1170,8 +1346,18 @@ mod tests {
         let sink_b = RecordingSink::new();
         let records_b = sink_b.records();
 
-        let handle_a = spawn_talk(start_a, done_a_tx, sink_a, NoopSink);
-        let handle_b = spawn_talk(start_b, done_b_tx, sink_b, NoopSink);
+        let handle_a = spawn_talk(
+            start_a,
+            done_a_tx,
+            two_sinks(sink_a, NoopSink),
+            SystemVarSnapshot::default(),
+        );
+        let handle_b = spawn_talk(
+            start_b,
+            done_b_tx,
+            two_sinks(sink_b, NoopSink),
+            SystemVarSnapshot::default(),
+        );
 
         handle_a
             .inbox
@@ -1260,7 +1446,12 @@ mod tests {
             let sink = RecordingSink::new();
             let records = sink.records();
 
-            let handle = spawn_talk(start, done_tx, sink, NoopSink);
+            let handle = spawn_talk(
+            start,
+            done_tx,
+            two_sinks(sink, NoopSink),
+            SystemVarSnapshot::default(),
+        );
             handle.inbox.send(SakuraMsg::Tick(0.0)).expect("Tick(0.0)");
             handle.inbox.send(SakuraMsg::Tick(1.0)).expect("Tick(1.0)");
 
@@ -1326,7 +1517,12 @@ mod tests {
         };
         let sink = RecordingSink::new();
         let records = sink.records();
-        let handle = spawn_talk(start, done_tx, sink, NoopSink);
+        let handle = spawn_talk(
+            start,
+            done_tx,
+            two_sinks(sink, NoopSink),
+            SystemVarSnapshot::default(),
+        );
 
         // 期待値は本番と同一の算術で導出（10 進直書きの表現誤差を排除・注入時刻決定論）。
         let d_hello = text_playback_duration("hello"); // 0.25
@@ -1389,7 +1585,12 @@ mod tests {
         };
         let sink = RecordingSink::new();
         let records = sink.records();
-        let handle = spawn_talk(start, done_tx, sink, NoopSink);
+        let handle = spawn_talk(
+            start,
+            done_tx,
+            two_sinks(sink, NoopSink),
+            SystemVarSnapshot::default(),
+        );
 
         let d_hello = text_playback_duration("hello"); // 0.25
         let w = Duration::from_millis(500).as_secs_f64(); // 0.5（\_w[500]）
@@ -1448,7 +1649,12 @@ mod tests {
             script: r"\s[10]ab\_w[600]\e".to_string(),
             talk_id,
         };
-        let handle = spawn_talk(start, done_tx, NoopSink, NoopSink);
+        let handle = spawn_talk(
+            start,
+            done_tx,
+            two_sinks(NoopSink, NoopSink),
+            SystemVarSnapshot::default(),
+        );
 
         let d_ab = text_playback_duration("ab"); // 0.1
         let w = Duration::from_millis(600).as_secs_f64(); // 0.6
@@ -1494,7 +1700,10 @@ mod tests {
         let script = r"\s[10]hi\_w[700]\-";
 
         // FACT 1（終端理由）: reason は compile 時に確定する TalkEndReason（時間量でない enum）。
-        let compiled = compile(&areka_parsers::sakura::parse(script));
+        let compiled = compile(
+            &areka_parsers::sakura::parse(script),
+            &crate::sysvar::SystemVarSnapshot::default(),
+        );
         assert_eq!(
             compiled.end,
             TalkEndReason::Quit,
@@ -1509,7 +1718,12 @@ mod tests {
             script: script.to_string(),
             talk_id,
         };
-        let handle = spawn_talk(start, done_tx, NoopSink, NoopSink);
+        let handle = spawn_talk(
+            start,
+            done_tx,
+            two_sinks(NoopSink, NoopSink),
+            SystemVarSnapshot::default(),
+        );
 
         let d_hi = text_playback_duration("hi"); // 0.1（末尾 Wait の発火時刻＝entry 枯渇点）
 
@@ -1539,5 +1753,566 @@ mod tests {
             "末尾 `\\-` は Quit（Ended でない＝reason は時刻でなく理由由来）"
         );
         handle.actor.join().expect("body は正常終了する");
+    }
+
+    // ── task 5.2: ResolveChoice ハンドラ＋即時 settle の統合檻（R2.3/2.4/9.8） ──
+    //
+    // 共通 fixture: `\s[10]hello\w[2]\q[選択A,targetA]\e`。compile 後（アンカー 0）:
+    //   ClearAll@0 / Emote{10}@0 / hello@0(D=0.25) / Wait@0.25(0.1) / Choice@0.35(id=targetA) /
+    //   Barrier@0.35（選択待ち・R2.1/2.2）。占有 horizon=0.35。barrier が**最終 horizon 要素**（menu
+    //   ケース）ゆえ、Tick(0.5) で barrier 到達後に解決すると、既に current_offset(0.5) ≥ horizon(0.35)
+    //   で **その場で** 完了する（次 Tick を待たない・settle_after_tick と同型の後始末を共用）。
+
+    const MENU_SCRIPT: &str = r"\s[10]hello\w[2]\q[選択A,targetA]\e";
+
+    /// Choice の着弾（＝barrier 到達）を決定的に観測するため、記録 sink に加えチャンネル sink を挟む
+    /// ヘルパ。Tick(0.5) を送り、Choice(id=targetA) cue の着弾を待って返す（この時点で player は
+    /// `WaitingForChoice`・後続 ResolveChoice は inbox FIFO でこの後に処理される）。
+    fn drive_menu_to_barrier(
+        handle: &TalkHandle,
+        rx: &mpsc::Receiver<TalkCue>,
+    ) {
+        // 初回 Tick(0.0) 刻印: ClearAll/Emote/hello を配送（barrier 未到達）。
+        handle.inbox.send(SakuraMsg::Tick(0.0)).unwrap();
+        // Tick(0.5): Wait@0.25・Choice@0.35 を配送し barrier@0.35 到達 → WaitingForChoice。
+        handle.inbox.send(SakuraMsg::Tick(0.5)).unwrap();
+        // Choice cue 着弾を barrier に、barrier 到達（WaitingForChoice 遷移）を決定的に待つ。
+        loop {
+            let cue = rx
+                .recv_timeout(Duration::from_secs(5))
+                .expect("Choice cue（barrier 手前）が届くべき");
+            if matches!(cue.command, CueCommand::Choice { .. }) {
+                break;
+            }
+        }
+    }
+
+    /// **R2.3（barrier-stop）**: 選択待ち barrier で止まった talk は、horizon 越えまで `Tick` を注入
+    /// しても**完了として通知されない**（選択未解決の間 `TalkDone` を出さない）。
+    #[test]
+    fn menu_barrier_withholds_talkdone_while_choice_unresolved() {
+        let (done_tx, done_rx) = mpsc::channel::<TalkDone>();
+        let (tx, rx) = mpsc::channel::<TalkCue>();
+        let start = StartTalk {
+            script: MENU_SCRIPT.to_string(),
+            talk_id: TalkId(801),
+        };
+        let handle = spawn_talk(
+            start,
+            done_tx,
+            two_sinks(ChannelSink { tx }, NoopSink),
+            SystemVarSnapshot::default(),
+        );
+
+        drive_menu_to_barrier(&handle, &rx);
+
+        // horizon(0.35) を遥かに越える Tick を注入しても、選択未解決ゆえ完了しない（R2.3）。
+        handle.inbox.send(SakuraMsg::Tick(5.0)).unwrap();
+        handle.inbox.send(SakuraMsg::Tick(50.0)).unwrap();
+
+        // 負の窓: barrier 未解決の間は TalkDone が発火しない（早期完了しない）。
+        assert!(
+            done_rx.recv_timeout(NEG_WINDOW).is_err(),
+            "選択待ち barrier 未解決の間は horizon 越え Tick でも TalkDone を出さない（R2.3）"
+        );
+        assert!(
+            !handle.actor.is_finished(),
+            "barrier 未解決ゆえ talk は駆動継続（完了通知せず）"
+        );
+
+        // 片付け: Close で中断 ACK を取り body を畳む（テスト resource の後始末）。
+        handle.inbox.send(SakuraMsg::Close).unwrap();
+        let done = done_rx
+            .recv_timeout(Duration::from_secs(5))
+            .expect("Close で中断 ACK");
+        assert_eq!(done.reason, TalkEndReason::Interrupted);
+        handle.actor.join().expect("body は正常終了する");
+    }
+
+    /// **R2.4/9.8（resolve-resume・即時 settle）**: barrier で止まった talk へ有効な選択 id を
+    /// `SakuraMsg::ResolveChoice` で投入すると、**追加の `Tick` なしに**再開し `TalkDone{Ended}` へ
+    /// 到達する（menu ケース＝barrier が最終 horizon 要素ゆえその場で完了・R-5 の一 tick 遅延を残さない）。
+    #[test]
+    fn resolve_choice_resumes_barrier_stopped_talk_and_settles_immediately() {
+        let (done_tx, done_rx) = mpsc::channel::<TalkDone>();
+        let (tx, rx) = mpsc::channel::<TalkCue>();
+        let talk_id = TalkId(802);
+        let start = StartTalk {
+            script: MENU_SCRIPT.to_string(),
+            talk_id,
+        };
+        let handle = spawn_talk(
+            start,
+            done_tx,
+            two_sinks(ChannelSink { tx }, NoopSink),
+            SystemVarSnapshot::default(),
+        );
+
+        drive_menu_to_barrier(&handle, &rx);
+
+        // 有効な選択 id を投入。追加 Tick は**送らない**（即時 settle の弁別）。
+        handle
+            .inbox
+            .send(SakuraMsg::ResolveChoice {
+                id: "targetA".to_string(),
+            })
+            .unwrap();
+
+        // 追加 Tick なしで自然終端へ到達する（barrier 解決で offset(0.5) ≥ horizon(0.35) ＝即完了）。
+        let done = done_rx
+            .recv_timeout(Duration::from_secs(5))
+            .expect("ResolveChoice で talk が再開し、追加 Tick なしで TalkDone に到達すべき（R2.4/9.8）");
+        assert_eq!(done.talk_id, talk_id, "talk_id エコー");
+        assert_eq!(
+            done.reason,
+            TalkEndReason::Ended,
+            "`\\e` 終端の menu talk は解決後 Ended で完了する"
+        );
+        handle.actor.join().expect("body は正常終了する");
+    }
+
+    /// **mismatch**: 未知の選択 id で `ResolveChoice` しても状態は不変（`None` 記録＋継続）で
+    /// `TalkDone` は出ず、talk は待機継続する。その後**有効な id** で解決すれば完了へ到達し、
+    /// 誤 id が barrier を壊していない（talk が生存継続していた）ことを示す。
+    #[test]
+    fn resolve_choice_with_unknown_id_is_noop_and_talk_continues() {
+        let (done_tx, done_rx) = mpsc::channel::<TalkDone>();
+        let (tx, rx) = mpsc::channel::<TalkCue>();
+        let talk_id = TalkId(803);
+        let start = StartTalk {
+            script: MENU_SCRIPT.to_string(),
+            talk_id,
+        };
+        let handle = spawn_talk(
+            start,
+            done_tx,
+            two_sinks(ChannelSink { tx }, NoopSink),
+            SystemVarSnapshot::default(),
+        );
+
+        drive_menu_to_barrier(&handle, &rx);
+
+        // 未知 id: resolve_choice は None → 記録して継続（状態不変・barrier は解けない）。
+        handle
+            .inbox
+            .send(SakuraMsg::ResolveChoice {
+                id: "NO_SUCH_ID".to_string(),
+            })
+            .unwrap();
+
+        // 負の窓: 誤 id では完了しない（barrier 依然未解決）。
+        assert!(
+            done_rx.recv_timeout(NEG_WINDOW).is_err(),
+            "未知 id の ResolveChoice では TalkDone を出さない（状態不変・継続）"
+        );
+        assert!(
+            !handle.actor.is_finished(),
+            "誤 id は barrier を壊さず talk は待機継続する"
+        );
+
+        // 有効 id で解決すれば完了へ到達（barrier が生きていた＝誤 id で壊れていない証）。
+        handle
+            .inbox
+            .send(SakuraMsg::ResolveChoice {
+                id: "targetA".to_string(),
+            })
+            .unwrap();
+        let done = done_rx
+            .recv_timeout(Duration::from_secs(5))
+            .expect("有効 id の解決で完了へ到達すべき（誤 id 後も barrier は生存）");
+        assert_eq!(done.talk_id, talk_id);
+        assert_eq!(done.reason, TalkEndReason::Ended);
+        handle.actor.join().expect("body は正常終了する");
+    }
+
+    /// **R2.3/2.4/9.8（full-menu 統合檻・Task 10.2）**: `menu.pasta:15` 相当の**実 3 択メニュー**
+    /// （`\q \n \q \_l[5em,2lh] \q`）を **`spawn_talk` の actor 境界**（内部で parse→compile を通す）へ
+    /// 投入し、選択待ち barrier 停止→3 択のうち**実 id の 1 つ**での解決→即時 settle を end-to-end で固定する。
+    ///
+    /// 5.2 の 3 檻（`menu_barrier_*`/`resolve_choice_*`）は**単一** `\q` の `MENU_SCRIPT` で actor 境界を
+    /// 覆い、`compile_broadcast_stream_*` は**3 択実 menu** を覆うが**生 `CuePlayer`**（actor 境界を通らない）。
+    /// 本檻はその両者の交差＝「実 3 択 menu × `spawn_talk` × 実 choice id 解決」を単一の統合檻で立証する
+    /// （5.2 の単一 `\q` では現れない、複数 Choice がバッグに並ぶ中で**中間 id** を照合して解ける経路）。
+    ///
+    /// 檻は 3 主張を 1 本の actor フローで固定する:
+    ///  - **R2.3**: barrier 停止後、horizon を遥かに越える `Tick(5.0)/Tick(50.0)` でも `TalkDone` 不送出。
+    ///  - **mismatch**: 未知 id の `ResolveChoice` では状態不変（`TalkDone` 不送出・talk 継続）。
+    ///  - **R2.4/9.8**: 3 択の**中間**実 id（`Onエモの位置調整メニュー`）で解決すると、**追加 `Tick` なしに**
+    ///    再開し `TalkDone{Ended}` へ到達する（barrier は最終 horizon 要素＝その場で settle）。
+    #[test]
+    fn full_menu_via_spawn_talk_barrier_stops_and_middle_choice_id_settles_immediately() {
+        // menu.pasta:15 の raw さくらスクリプト断片（3 択＋改行＋カーソル指定）。
+        // `spawn_talk` へ**生 script として**渡し、parse→compile は actor 内部の実経路を通す
+        // （5.2 の単一 `\q` MENU_SCRIPT でも、生 CuePlayer 檻@compile_broadcast_stream_* でもなく、
+        //  実 3 択 menu が actor 境界を貫く経路をここで初めて覆う）。
+        let script = concat!(
+            r"\q[おしゃべり頻度,Onおしゃべり頻度メニュー]",
+            r"\n",
+            r"\q[エモの位置調整,Onエモの位置調整メニュー]",
+            r"\_l[5em,2lh]",
+            r"\q[閉じる,Onメニュー閉じる]",
+        );
+        let (done_tx, done_rx) = mpsc::channel::<TalkDone>();
+        let (tx, rx) = mpsc::channel::<TalkCue>();
+        let talk_id = TalkId(810);
+        let start = StartTalk {
+            script: script.to_string(),
+            talk_id,
+        };
+        let handle = spawn_talk(
+            start,
+            done_tx,
+            two_sinks(ChannelSink { tx }, NoopSink),
+            SystemVarSnapshot::default(),
+        );
+
+        // Tick(0.0)/Tick(0.5) で offset 0 群（ClearAll/3 Choice/NewLine/Cursor）を配送し barrier@0 到達を待つ。
+        drive_menu_to_barrier(&handle, &rx);
+
+        // R2.3: horizon(=0) を遥かに越える Tick を注入しても、選択未解決ゆえ完了しない。
+        handle.inbox.send(SakuraMsg::Tick(5.0)).unwrap();
+        handle.inbox.send(SakuraMsg::Tick(50.0)).unwrap();
+        assert!(
+            done_rx.recv_timeout(NEG_WINDOW).is_err(),
+            "実 3 択 menu でも barrier 未解決の間は horizon 越え Tick で TalkDone を出さない（R2.3）"
+        );
+        assert!(
+            !handle.actor.is_finished(),
+            "barrier 未解決ゆえ talk は駆動継続（早期完了しない・R2.3）"
+        );
+
+        // mismatch: 3 択のいずれとも一致しない id では状態不変（`None` 記録＋継続・barrier は解けない）。
+        handle
+            .inbox
+            .send(SakuraMsg::ResolveChoice {
+                id: "NO_SUCH_ID".to_string(),
+            })
+            .unwrap();
+        assert!(
+            done_rx.recv_timeout(NEG_WINDOW).is_err(),
+            "不一致 id の ResolveChoice では TalkDone を出さない（状態不変・複数 Choice バッグは無傷）"
+        );
+        assert!(
+            !handle.actor.is_finished(),
+            "不一致 id は barrier を壊さず talk は待機継続する（バッグの他 id は依然解決可能）"
+        );
+
+        // R2.4/9.8: 3 択の**中間** id を投入。追加 Tick は**送らない**（即時 settle の弁別）。
+        // 中間 id を選ぶことで「先頭/末尾でなくバッグ内の任意 id を照合して解ける」ことも固定する。
+        handle
+            .inbox
+            .send(SakuraMsg::ResolveChoice {
+                id: "Onエモの位置調整メニュー".to_string(),
+            })
+            .unwrap();
+        let done = done_rx
+            .recv_timeout(Duration::from_secs(5))
+            .expect("中間実 id の解決で再開し、追加 Tick なしで TalkDone に到達すべき（R2.4/9.8）");
+        assert_eq!(done.talk_id, talk_id, "talk_id エコー");
+        assert_eq!(
+            done.reason,
+            TalkEndReason::Ended,
+            "`\\e` 無しの menu 台本は既定 Ended で完了する（compile 既定＝Ended）"
+        );
+        handle.actor.join().expect("body は正常終了する");
+    }
+
+    /// **defensive（Armed 誤投函）**: 初回 `Tick` 前（`Armed`＝CuePlayer 未構築）に `ResolveChoice` が
+    /// 届いても warn して継続し（防御枝）、以降の通常 Tick 駆動で talk は正常に終端する。
+    #[test]
+    fn resolve_choice_before_playback_armed_is_ignored_and_playback_survives() {
+        let (done_tx, done_rx) = mpsc::channel::<TalkDone>();
+        let talk_id = TalkId(804);
+        let start = StartTalk {
+            script: r"\s[10]hello\w[2]world\e".to_string(),
+            talk_id,
+        };
+        let sink = RecordingSink::new();
+        let records = sink.records();
+        let handle = spawn_talk(
+            start,
+            done_tx,
+            two_sinks(sink, NoopSink),
+            SystemVarSnapshot::default(),
+        );
+
+        // 初回 Tick 前（Armed）に ResolveChoice 誤投函: warn して継続（CuePlayer 未構築ゆえ no-op）。
+        handle
+            .inbox
+            .send(SakuraMsg::ResolveChoice {
+                id: "targetA".to_string(),
+            })
+            .unwrap();
+
+        // 通常 Tick 列で駆動・終端する（防御枝がループを殺していない証）。
+        handle.inbox.send(SakuraMsg::Tick(0.0)).unwrap();
+        handle.inbox.send(SakuraMsg::Tick(1.0)).unwrap();
+        let done = done_rx
+            .recv_timeout(Duration::from_secs(5))
+            .expect("Armed 誤投函後も通常 Tick で終端するべき");
+        assert_eq!(done.reason, TalkEndReason::Ended, "再生は破綻せず Ended");
+        handle.actor.join().expect("body は正常終了する");
+        assert_eq!(
+            records.lock().unwrap().len(),
+            5,
+            "誤投函で早期全量配信されず、通常 5 cue が届く"
+        );
+    }
+
+    // ── task 10.1: 配送列統合檻（R9.7/R1.8/R8.6・責務二分） ──
+
+    /// **配送列統合檻（R9.7/R1.8/R8.6）**: 実 `parse`→`compile` の menu 台本を `CuePlayer` ＋記録
+    /// sink×**複数**で駆動し、broadcast 観測順が **compile 順**に一致すること（Choice が NewLine/
+    /// Cursor と**交互のまま**配送列に現れること・R1.8）と、同一 Choice が同時に**バッグ**
+    /// （`pending_choices`）へも積まれること（責務二分＝配送列は表示の単一真実源／バッグは解決照合の
+    /// 単一真実源・R8.6/R9.7）を、実 `compile → CuePlayer broadcast → sink` 経路上で固定する。
+    ///
+    /// **task 2.2 との差**: 2.2 は dola `runtime_test.rs` で**手組みの CueSheet** を使う runtime 檻。
+    /// 本檻は **areka-sakura の実 `parse`＋実 `compile`** から得た CueSheet を出発点とし、
+    /// **複数**記録 sink へ broadcast させて配送列とバッグの並存を end-to-end で固定する統合檻である
+    /// （案C の「Choice 除外」廃止・配送列合流を実 compile 出力に対して立証する）。
+    ///
+    /// 弁別: もし Choice が配送列から隠される（旧・先積み一択）なら配送列の等価 assert が FAIL し、
+    /// もしバッグへ積まれなければ `pending_choices` の assert が FAIL する（配送列とバッグの乖離を捕捉）。
+    #[test]
+    fn compile_broadcast_stream_preserves_order_and_choices_also_land_in_bag() {
+        use dola::cue::{CuePlayer, PendingChoice};
+
+        // menu.pasta:15 の raw さくらスクリプト断片（`\q \n \q \_l[5em,2lh] \q`・task 4.4 cage と同一）。
+        // 実 parse → 実 compile を通す（手組み Instruction でなく、パーサ〜コンパイラの実経路を出発点にする）。
+        let script = concat!(
+            r"\q[おしゃべり頻度,Onおしゃべり頻度メニュー]",
+            r"\n",
+            r"\q[エモの位置調整,Onエモの位置調整メニュー]",
+            r"\_l[5em,2lh]",
+            r"\q[閉じる,Onメニュー閉じる]",
+        );
+        let instructions = areka_parsers::sakura::parse(script);
+        let compiled = compile(&instructions, &SystemVarSnapshot::default());
+
+        // 実 compile 出力から CuePlayer を構築し、記録 sink を **2 本** broadcast 登録する
+        // （どの sink も全 cue を受ける・登録順は配送内容に影響しない）。
+        let mut player = CuePlayer::from_sheet(&compiled.sheet);
+        let sink_a = RecordingSink::new();
+        let sink_b = RecordingSink::new();
+        let records_a = sink_a.records();
+        let records_b = sink_b.records();
+        player.register_sink(Box::new(sink_a));
+        player.register_sink(Box::new(sink_b));
+
+        // 全内容は瞬時（at=0）＋末尾に選択待ち barrier@0。単一 tick(0.0) で offset 0 群（内容 6 cue）を
+        // 配送し barrier@0 到達 → WaitingForChoice（barrier 手前の cue は配送済み）。
+        player.tick(0.0);
+        assert_eq!(
+            player.state(),
+            &dola::cue::CuePlayerState::WaitingForChoice,
+            "menu 台本は末尾 barrier で WaitingForChoice へ停止する（barrier 手前は配送済み）"
+        );
+
+        // 期待配送列（compile 順）: 冒頭 ClearAll 前置＋内容 5 件（Choice が NewLine/Cursor と交互）。
+        // barrier は配送列に現れない（Barrier は presentation でなく sink へ配られない）。
+        let expected_stream = vec![
+            CueCommand::ClearAll,
+            CueCommand::Choice {
+                id: "Onおしゃべり頻度メニュー".into(),
+                text: "おしゃべり頻度".into(),
+                references: vec![],
+            },
+            CueCommand::NewLine { ratio: 1.0 },
+            CueCommand::Choice {
+                id: "Onエモの位置調整メニュー".into(),
+                text: "エモの位置調整".into(),
+                references: vec![],
+            },
+            CueCommand::Cursor {
+                x: "5em".into(),
+                y: "2lh".into(),
+            },
+            CueCommand::Choice {
+                id: "Onメニュー閉じる".into(),
+                text: "閉じる".into(),
+                references: vec![],
+            },
+        ];
+        // 複数 sink が **同一の配送列を同一順序**で受ける（broadcast・Choice を隠さず交互のまま合流・R1.8）。
+        assert_eq!(
+            commands(&records_a),
+            expected_stream,
+            "sink A: 配送列が compile 順（Choice が NewLine/Cursor と交互のまま現れる・R1.8/R9.7）"
+        );
+        assert_eq!(
+            commands(&records_b),
+            expected_stream,
+            "sink B: broadcast ゆえ両 sink が同一の配送列を受ける（中央振り分けなし）"
+        );
+
+        // 交互配置の直接固定（index 1/3/5 が Choice・2 が NewLine・4 が Cursor）。full-vector 等価に
+        // 加えて「交互のまま」の意図を legible に残す（Choice が改行/カーソルに埋もれず順序保持）。
+        let stream_a = commands(&records_a);
+        assert!(
+            matches!(stream_a[1], CueCommand::Choice { .. })
+                && matches!(stream_a[2], CueCommand::NewLine { .. })
+                && matches!(stream_a[3], CueCommand::Choice { .. })
+                && matches!(stream_a[4], CueCommand::Cursor { .. })
+                && matches!(stream_a[5], CueCommand::Choice { .. }),
+            "Choice/NewLine/Choice/Cursor/Choice が交互のまま配送列に並ぶ（R1.8）"
+        );
+
+        // 責務二分（R8.6/R9.7）: **同一 3 Choice** がバッグ（解決照合の単一真実源）へも**同時に**積まれる。
+        // バッグ内容は id/text で配送列の 3 Choice と一致する（配送列とバッグが乖離しない）。
+        let expected_bag = vec![
+            PendingChoice {
+                id: "Onおしゃべり頻度メニュー".into(),
+                text: "おしゃべり頻度".into(),
+            },
+            PendingChoice {
+                id: "Onエモの位置調整メニュー".into(),
+                text: "エモの位置調整".into(),
+            },
+            PendingChoice {
+                id: "Onメニュー閉じる".into(),
+                text: "閉じる".into(),
+            },
+        ];
+        assert_eq!(
+            player.pending_choices(),
+            expected_bag.as_slice(),
+            "同一 3 Choice がバッグへも同時に積まれる（責務二分＝配送列とバッグが並存・R8.6）"
+        );
+
+        // 配送列側の Choice を抽出し、バッグと (id, text) で完全一致することを固定する
+        // （同一 Choice が配送列とバッグの**両路**に現れる＝責務二分の相互整合）。
+        let stream_choices: Vec<(String, String)> = stream_a
+            .iter()
+            .filter_map(|cmd| match cmd {
+                CueCommand::Choice { id, text, .. } => Some((id.clone(), text.clone())),
+                _ => None,
+            })
+            .collect();
+        let bag_choices: Vec<(String, String)> = player
+            .pending_choices()
+            .iter()
+            .map(|c| (c.id.clone(), c.text.clone()))
+            .collect();
+        assert_eq!(
+            stream_choices, bag_choices,
+            "配送列に現れる 3 Choice とバッグの 3 Choice が同一（id/text・順序とも一致）"
+        );
+    }
+
+    // ── task 10.3: 未知コマンド名の第一級縮退（統合檻・R8.2/R8.5/R9.3b） ──
+
+    /// **未知コマンド名の第一級縮退（統合檻・R8.2/R8.5/R9.3b）**: `\!` 名前空間の**未知・M1 未対応
+    /// コマンド名**（`\![raise,OnBoot]`／単独形 `\![vanish]`）を含む生 script を `spawn_talk` の actor
+    /// 境界（内部で parse→compile→CuePlayer broadcast を通す）へ投入し、次の 3 点を end-to-end で固定する:
+    ///
+    ///  - **R8.2（compile 卒業）**: 未知名 `\!` は compile の無音落ちでなく汎用コマンド cue（`Custom`
+    ///    キャリア）として**台本に第一級で載る**。ゆえに broadcast された各記録 sink の配送列に
+    ///    キャリア cue が現れる（2 名とも `raise`／`vanish` を受ける＝配送で消えない）。
+    ///  - **R8.5/R5（良性スキップ）**: どの消費者も未知名キャリアに action しない——`command_target_of`
+    ///    が未知名に対し `None`（担当消費者なし）を返す。記録 sink は全 cue を**記録**する（無音破棄でも
+    ///    異常終了でもない・honor は不変）。**複数** sink が同一列を受けて talk が完走することがその証跡。
+    ///  - **R9.3b（第一級縮退）＋partition**: 未知名は名前権威表 `command_target_of` 上で `None`＝どの
+    ///    消費者の担当でもなく、Some を返すのは M1 の `"move"` のみ（1 コマンド名の担当は高々 1）。
+    ///    partition 不変条件の網羅檻は dola `sink_test.rs::command_target_of_maps_move_and_rejects_unknown_names`
+    ///    （task 1.4）が正本であり、本檻は統合経路上でその帰結（未知名→None・move→Some）を焦点確認する。
+    ///
+    /// 弁別: もし compile が未知名を無音落ちさせるなら配送列にキャリアが現れず等価 assert が FAIL する。
+    /// もし未知名が誰かの担当（Some）へ誤配線されるなら `command_target_of` の None assert が FAIL する。
+    #[test]
+    fn unknown_command_names_broadcast_and_benign_skip_then_talk_completes() {
+        use dola::cue::{CueTarget, command_target_of};
+
+        let (done_tx, done_rx) = mpsc::channel::<TalkDone>();
+        let talk_id = TalkId(103);
+        // 未知名 2 種（引数付き `raise` と単独形 `vanish`）＋テキストを挟み `\e` で終端。
+        // parse: `\![raise,OnBoot]`→GenericCommand{"raise",["OnBoot"]}／`\![vanish]`→GenericCommand{"vanish",[]}。
+        // compile: いずれも command_carrier(name, args)（Custom キャリア）へ卒業・無音落ちしない（R8.2）。
+        let start = StartTalk {
+            script: r"\![raise,OnBoot]hello\![vanish]world\e".to_string(),
+            talk_id,
+        };
+        // broadcast の第一級性を立証するため**複数**記録 sink を登録（両者が同一配送列を受ける）。
+        let sink_a = RecordingSink::new();
+        let sink_b = RecordingSink::new();
+        let records_a = sink_a.records();
+        let records_b = sink_b.records();
+
+        let handle = spawn_talk(
+            start,
+            done_tx,
+            two_sinks(sink_a, sink_b),
+            SystemVarSnapshot::default(),
+        );
+
+        // 初回 Tick(0.0) でアンカー刻印。全内容は at=0 群（raise/hello）と at=0.25 群（vanish/world）。
+        // 占有 horizon（world 再生完了＝0.25+0.25=0.50）を跨ぐ Tick(1.0) で自然終端する。
+        handle.inbox.send(SakuraMsg::Tick(0.0)).unwrap();
+        handle.inbox.send(SakuraMsg::Tick(1.0)).unwrap();
+
+        // R8.2 の帰結: 未知名キャリアが無音落ちせず talk が完走し TalkDone{Ended} を返す。
+        let done = done_rx
+            .recv_timeout(Duration::from_secs(5))
+            .expect("未知名キャリアを含む talk も良性スキップして完了すべき（無音落ち／panic しない）");
+        assert_eq!(done.talk_id, talk_id, "talk_id エコー（R1.3）");
+        assert_eq!(
+            done.reason,
+            TalkEndReason::Ended,
+            "`\\e` 終端＝Ended（未知名は終端理由に影響しない）"
+        );
+        handle
+            .actor
+            .join()
+            .expect("未知名キャリアでも body は panic せず正常終了する（良性スキップ）");
+
+        // 期待 broadcast 列（compile 順・冒頭 ClearAll 前置）: ClearAll / raise / hello / vanish / world。
+        // 未知名キャリアが**配送列に第一級で現れる**（compile が卒業させた証・R8.2）。
+        let expected = vec![
+            CueCommand::ClearAll,
+            CueCommand::command_carrier("raise", vec!["OnBoot".into()]),
+            CueCommand::Text("hello".into()),
+            CueCommand::command_carrier("vanish", vec![]),
+            CueCommand::Text("world".into()),
+        ];
+        assert_eq!(
+            commands(&records_a),
+            expected,
+            "sink A: 未知名キャリア（raise/vanish）が配送列に第一級で現れる（無音落ちしない・R8.2）"
+        );
+        // broadcast の第一級性: 2 つ目の sink も同一列を受ける（未知名も両者へ届く＝配送で消えない・R5）。
+        assert_eq!(
+            commands(&records_b),
+            expected,
+            "sink B: broadcast ゆえ両 sink が同一配送列を受ける（未知名キャリアも欠落しない）"
+        );
+
+        // R8.5/R9.3b（良性スキップ＋担当なし）: 配送列中の各未知名キャリアについて、名前権威表
+        // `command_target_of` が **None（担当消費者なし）** を返す＝どの消費者も action しない良性スキップ。
+        // キャリア variant からのコマンド名抽出（`as_command_carrier`）を通し、抽出できた名前で判定する。
+        let carrier_names: Vec<String> = commands(&records_a)
+            .iter()
+            .filter_map(|cmd| cmd.as_command_carrier().map(|(name, _)| name.to_string()))
+            .collect();
+        assert_eq!(
+            carrier_names,
+            vec!["raise".to_string(), "vanish".to_string()],
+            "配送列から未知名キャリア 2 件（raise/vanish）が抽出される"
+        );
+        for name in &carrier_names {
+            assert_eq!(
+                command_target_of(name),
+                None,
+                "未知名 {name:?} はどの消費者の担当でもない（None＝記録付き良性スキップ・R8.5/R9.3b）"
+            );
+        }
+
+        // partition 不変条件（R9.3b）の統合経路上の焦点確認: 名前権威表で Some を返すのは M1 の
+        // `"move"` のみ（1 コマンド名の担当は高々 1）。網羅檻は dola task 1.4 の
+        // `command_target_of_maps_move_and_rejects_unknown_names` が正本（本檻は重複せず帰結のみ確認）。
+        assert_eq!(
+            command_target_of("move"),
+            Some(CueTarget::Window),
+            "M1 の権威表で担当を持つ名は \"move\" のみ（partition 網羅は dola task 1.4 が正本）"
+        );
     }
 }

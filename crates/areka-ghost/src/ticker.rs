@@ -307,8 +307,14 @@ mod tests {
     #[test]
     fn remaining_counts_down_to_zero_at_boundary() {
         let schedule = BoundarySchedule::starting_at(Duration::from_millis(1000), MonotonicMs(0));
-        assert_eq!(schedule.remaining(MonotonicMs(0)), Duration::from_millis(1000));
-        assert_eq!(schedule.remaining(MonotonicMs(400)), Duration::from_millis(600));
+        assert_eq!(
+            schedule.remaining(MonotonicMs(0)),
+            Duration::from_millis(1000)
+        );
+        assert_eq!(
+            schedule.remaining(MonotonicMs(400)),
+            Duration::from_millis(600)
+        );
         assert_eq!(schedule.remaining(MonotonicMs(1000)), Duration::ZERO);
         assert_eq!(schedule.remaining(MonotonicMs(1500)), Duration::ZERO);
     }
@@ -387,7 +393,10 @@ mod tests {
     #[test]
     fn poll_50ms_base_interval_grid_matches_dispatcher_default() {
         let mut schedule = BoundarySchedule::starting_at(Duration::from_millis(50), MonotonicMs(0));
-        assert_eq!(schedule.remaining(MonotonicMs(0)), Duration::from_millis(50));
+        assert_eq!(
+            schedule.remaining(MonotonicMs(0)),
+            Duration::from_millis(50)
+        );
         let result = schedule.poll(MonotonicMs(50));
         assert!(result.fired && !result.catch_up);
         assert_eq!(schedule.next_deadline_ms, 100);
