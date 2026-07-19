@@ -198,6 +198,26 @@ fn unique_temp_dir(tag: &str) -> PathBuf {
 /// ゴーストツリーを構築する（`real_pasta_test.rs::write_real_pasta_ghost_fixture` を踏襲——
 /// `ShioriMount.dir` は常に `ghost_root/ghost/master` に固定されるため実 DLL をフィクスチャ側へ
 /// コピーして持ち込む）。
+/// `src` 直下の全エントリ（ファイル・サブディレクトリ）を `dst` へ再帰コピーする
+/// （pasta の支援資産一式を fixture の load_dir へ持ち込むため・task 6.2）。
+fn copy_dir_contents_recursive(src: &Path, dst: &Path) {
+    std::fs::create_dir_all(dst).expect("create dst dir");
+    let entries = match std::fs::read_dir(src) {
+        Ok(e) => e,
+        Err(_) => return,
+    };
+    for entry in entries.flatten() {
+        let path = entry.path();
+        let name = entry.file_name();
+        let target = dst.join(&name);
+        if path.is_dir() {
+            copy_dir_contents_recursive(&path, &target);
+        } else if path.is_file() {
+            let _ = std::fs::copy(&path, &target);
+        }
+    }
+}
+
 fn write_real_pasta_ghost_fixture(root: &Path, dll_path: &Path) {
     let ghost_master = root.join("ghost").join("master");
     std::fs::create_dir_all(&ghost_master).expect("create ghost/master");
@@ -207,8 +227,18 @@ fn write_real_pasta_ghost_fixture(root: &Path, dll_path: &Path) {
         .expect("HOST32_PASTA_DLL にファイル名がない")
         .to_string_lossy()
         .into_owned();
-    std::fs::copy(dll_path, ghost_master.join(&dll_file_name))
-        .expect("実 pasta DLL を ghost/master へコピーできませんでした");
+    // 実 pasta は応答（トーク）に自身の支援資産（`dic/`・`scripts/`・`pasta.toml` 等）を
+    // load_dir（=ghost/master）から読む。DLL 単体では OnBoot にスクリプトを返せないため、
+    // DLL の親ディレクトリ（＝実 emo2 の `ghost/master/`）の中身を丸ごと再帰コピーして
+    // pasta へフル環境を与える（task 6.2・実採取が talk を得るために必須）。
+    if let Some(src_dir) = dll_path.parent() {
+        copy_dir_contents_recursive(src_dir, &ghost_master);
+    }
+    // DLL は上のコピーに含まれるが、親不明時の保険として単体コピーも冪等に行う。
+    let dll_dst = ghost_master.join(&dll_file_name);
+    if !dll_dst.is_file() {
+        std::fs::copy(dll_path, &dll_dst).expect("実 pasta DLL を ghost/master へコピーできませんでした");
+    }
 
     std::fs::write(
         ghost_master.join("descript.txt"),
