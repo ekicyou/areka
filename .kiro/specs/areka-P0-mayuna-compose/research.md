@@ -10,7 +10,7 @@
 - **唯一の真の新規設計は parsers の名前解決表**。現行 `package/resolve.rs` は `sakura.bindgroup*.default,1` の**番号のみ**転記（`BindGroupDefaults`）で、`sakura.bindgroup*.name,カテゴリ,パーツ` は**どこも読んでいない**。`parse_kv` は最初のカンマだけで分割するため `.name` の値は `"腕,伸び"`（＋任意の第3フィールド=サムネイル名）という**多カンマ文字列のまま**得られ、下流で (カテゴリ, パーツ, [サムネ]) へ再分割が要る。
 - **seriko の消費結線は `cue_target_of` を素通りする Custom を名前で捕捉する経路が要る**。現行 `handle_message` は `cue_target_of` のみで分類し、`Custom`（bind の器）は `None`→良性 debug skip へ落ちる。bind を拾うには `command_target_of("bind")→Shell` を dola 単一権威表へ1行追記し、seriko 側に Custom キャリアを `as_command_carrier()` で開いてコマンド名選別する早期分岐（balloon 早期分岐と同型）を新設する。
 - **表示反映は「新 BindSet を載せた Show 再発行」だけで成立**。`DisplayCommand::Show{scope, surface_id, binds}` は既に binds を運び、adapter `map_display_command`（`crates/areka/src/emo2_boot/adapter.rs:37`）が `PresentCommand::ShowSurface{binds}` へ写し、ComposeCache が bind 差分にミスして再合成する。新しい合成メソッド・新 cue variant・新 DisplayCommand variant は**いずれも不要**（additive・R8.4）。
-- **正典は名前形一本**。ukadoc の script タグは `\![bind,カテゴリ名,パーツ名,数値]` のみで、**「番号直指定形」はさくらスクリプトとしては文書化されていない**（requirements R4.2 の前提は要再確認・下記 DD-6）。emo2 fixture も名前形＋明示 on/off が実測。M1 の実導出はこの形に限定し、カテゴリ単位・トグル・addid・mustselect・kero 側は縮退＋シーム（R4.3/4.4）。
+- **正典は名前形一本**。ukadoc の script タグは `\![bind,カテゴリ名,パーツ名,数値]` のみで、**「番号直指定形」はさくらスクリプトとしては文書化されていない**（→要件ディスカッション #1 で確定・旧 R4.2 削除済み・下記 DD-6【解決済み】）。emo2 fixture も名前形＋明示 on/off が実測。M1 の実導出はこの形に限定し、カテゴリ単位・トグル・addid・mustselect・kero 側は縮退＋シーム（R4.2/4.3）。
 
 ## 2. 現状調査（資産の実測・file:line は HEAD）
 
@@ -47,13 +47,13 @@
 |---|---|---|
 | `sakura/kero.bindgroup*.name,カテゴリ名,パーツ名,サムネイル名` | animation ID *番のパーツにカテゴリ/パーツ名を定義。`\![bind]` 名前操作に**必須**（SSPのみ）。第3=サムネ名は任意 | **実導出**（→②名前解決・R1）。サムネ名は M1 不使用（保持/破棄は DD-2） |
 | `sakura/kero.bindgroup*.default,数値` | ID *番を起動時に表示するか（1=表示,0=非表示） | 実装済（`BindGroupDefaults`・初期 on 集合の源・R3.1） |
-| `\![bind,カテゴリ名,パーツ名,数値]` | 着せ替え着脱。**1=着衣, 0=脱衣**。**パーツ名空欄=カテゴリ単位**。**数値空欄/省略=ON/OFFトグル**。実行後 OnDressupChanged→OnNotifyDressupInfo | **名前形＋明示 on/off のみ実導出**（R4.1）。カテゴリ単位/トグルは縮退（R4.3）。イベントは範囲外（R4.5） |
-| `\![bind-noevent,…]` | bind と同じだが**イベント発生させない** | 範囲外（イベント自体を扱わない・R4.5） |
-| `sakura/kero.bindgroup*.addid,ID` | 同時実行（カンマ区切り複数可）。有効化時に addid も同時有効化 | 語彙/構造のみ保持・実挙動なし（R4.4・シーム） |
-| `char*.bindoption*.group,カテゴリ名,オプション`（mustselect/multiple） | カテゴリに排他/複数選択オプション | 語彙/構造のみ保持・実挙動なし（R4.4・シーム） |
+| `\![bind,カテゴリ名,パーツ名,数値]` | 着せ替え着脱。**1=着衣, 0=脱衣**。**パーツ名空欄=カテゴリ単位**。**数値空欄/省略=ON/OFFトグル**。実行後 OnDressupChanged→OnNotifyDressupInfo | **名前形＋明示 on/off のみ実導出**（R4.1）。カテゴリ単位/トグルは縮退（R4.2）。イベントは範囲外（R4.4） |
+| `\![bind-noevent,…]` | bind と同じだが**イベント発生させない** | 範囲外（イベント自体を扱わない・R4.4） |
+| `sakura/kero.bindgroup*.addid,ID` | 同時実行（カンマ区切り複数可）。有効化時に addid も同時有効化 | 語彙/構造のみ保持・実挙動なし（R4.3・シーム） |
+| `char*.bindoption*.group,カテゴリ名,オプション`（mustselect/multiple） | カテゴリに排他/複数選択オプション | 語彙/構造のみ保持・実挙動なし（R4.3・シーム）。**emo2 実使用あり**（descript:75-78 で 腕/口/眉/目 の4カテゴリに mustselect 宣言・ただしスクリプト側が明示 on/off 連打で自前排他するため実挙動なしでも表示は正しく成立＝design で要注記） |
 
 **正典との突合で判明した要注意点**:
-- **番号直指定のスクリプト形は正典に無い**。ukadoc の script タグは名前形 `\![bind,カテゴリ名,パーツ名,数値]` のみ。requirements R4.2「Where 番号直指定形…が与えられるとき」は **emo2 未使用かつ正典未文書**の仮説。design で「名前形一本・番号形は非該当（または受理しても名前解決を経ないパススルー as-is）」を確定要（DD-6）。
+- **番号直指定のスクリプト形は正典に無い**（✅ 要件ディスカッション #1・2026-07-19 で確定済み）。ukadoc の script タグは名前形 `\![bind,カテゴリ名,パーツ名,数値]` のみ（`dev_bind` 全文でも記述例は名前形のみ・数字が現れるのは descript `menuitem*` のメニュー構成だけでスクリプト形でない）。emo2 も名前形一本（menuitem すら不使用）。→ 旧 R4.2（番号直指定）は**削除**・数値に見える入力は不透明文字列として名前解決に回り R3.7（解決不能 log+skip）が自然吸収。
 - `.name` の値は **(カテゴリ, パーツ, [サムネ])** の可変長。`parse_kv` が最初のカンマだけ割るので value 側を再分割する層が要る（②名前解決の設計点・DD-2）。
 - bindgroup 番号 = **surfaces.txt の `animation*.interval,bind` の `*`** = BindSet 値（恒等）。名前解決の帰結はこの番号を BindSet へ入れるだけ（seriko bind.rs と一貫）。
 
@@ -64,7 +64,7 @@
 | R1 名前宣言取込・(カテゴリ,パーツ)→ID 解決 | descript `.name` 読取＋名前解決表を `MountModel` へ | `BindGroupDefaults`（.default のみ）・`parse_kv` | **Missing**（.name 未読取・値再分割・sakura/kero 別・空パーツのカテゴリ集合解決） |
 | R2 `bind` を表示系へ配送・消費者結線 | `command_target_of("bind")→Shell`＋emo-text 無視 | W1 汎用キャリア・`command_target_of`（move のみ）・emo-text 網羅 match | **Missing（1行追記）**。emo-text は Custom を既に無視（新規列挙不要の可能性・DD-3 で確認） |
 | R3 動的 bind 状態・on/off 積算・Show 再発行・冪等・解決失敗 skip | per-scope 可変 BindSet＋Custom 早期分岐 | `ScopeStates`（静的 binds）・balloon 早期分岐・`apply`冪等・`emit_display` | **Missing**（動的マップ・積算・現 surface_id 保持での Show 再発行・DD-1/DD-5） |
-| R4 引数意味論の M1 縮退境界 | 名前形実導出・他形は skip+log/シーム | balloon の NameForm/Invalid severity split 先例 | **Constraint/Missing**（縮退規律の明文化・番号形の要否 DD-6） |
+| R4 引数意味論の M1 縮退境界 | 名前形実導出・他形は skip+log/シーム | balloon の NameForm/Invalid severity split 先例 | **Constraint/Missing**（縮退規律の明文化。番号形は DD-6 解決済み＝正典に無く旧 R4.2 削除） |
 | R5 決定論 e2e・純関数全網羅 | fixture script 直入力→mock sink・注入 Tick | `MockSurfaceOutput`・`handle_message` 同期呼・`balloon_face_e2e.rs` 先例 | **Present（テンプレ流用）**＋fixture 自前用意 |
 | R6 emo-present 再合成回帰 | bind 差分ミス→再合成の test | `ComposeCache`＋`different_binds…must_miss` 既存 | **Present（test-only 追加で足りる）** |
 | R7 実機サインオフ | 実 emo2・実 pasta・実 DPI・絶対パス起動 | emo2-boot 実機経路・adapter 貫通 | **Constraint**（本番ゴースト先行・絶対パス） |
@@ -114,7 +114,7 @@
 3. **DD-3 emo-text 側の bind 無視**: emo-text `apply_cue` は Custom を既に無視しているか（新規無視列挙が不要か）。要 `crates/areka-emo-text/src/state.rs` の Custom アーム確認（W1 で一度実装済みの見込み）。誤配線防止 R2.3 の充足経路を明示。
 4. **DD-4 名前解決表の seriko への注入**: `spawn_seriko` 署名に名前解決表を additive 追加（`SurfaceResolver` と同様の所有スナップショット注入）。ghost-setup 側の結線点。
 5. **DD-5 Show 再発行時の surface_id と Hidden の扱い**: bind 変化時、現 `Shown(id)` を引いて `Show{id, new_binds}` 再発行。当該 scope が Hidden のとき（未表示）に bind だけ変えた場合の挙動（状態のみ更新し発行しない／次 Show まで保留）。
-6. **DD-6 番号直指定形（R4.2）の正典整合**: ukadoc に番号直指定の script 形は無い（名前形のみ）。R4.2 を「名前形一本・番号形は非該当」へ寄せるか、「番号が来たら名前解決を経ず as-is で BindSet 操作」の縮退シームとして残すか。requirements 本文は無改変前提ゆえ、design での解釈確定として整理。
+6. **DD-6 番号直指定形の正典整合**【✅ 解決済み・要件ディスカッション #1（2026-07-19）】: ukadoc・emo2 実データ・開発者知見の三者一致で「スクリプト形は名前キー一本・番号直指定形は正典に存在しない」と確定。旧 R4.2 を削除（R4.3〜4.5 繰り上げ）。番号形のシームは**設けない**（正典外語彙の捏造を避ける）。数値に見えるカテゴリ名/パーツ名は不透明文字列として通常の名前解決に回り、宣言なしなら R3.7（解決不能 log+skip）が吸収する。付随確定: emo2 surfaces.txt で bindgroup 番号=animation ID の恒等が実データで成立（RN-3 の非空虚性を先行確認・1100↔1100 等）・まばたき1400-1402 は `interval,bind+random,4`（seriko-loop 領分・境界整合OK）。
 7. **DD-7 scope→sakura/kero 名前空間の写像**: bindgroup default/name は sakura/kero 別。per-scope 動的 bind の ActorKey（"0"/"1"…）を sakura/kero どちらの名前解決表・初期集合へ結ぶか。kero 側は M1 実挙動なし（R4.4）だが取込までは行う（R1.2）ゆえ、写像規約を明文化。
 8. **DD-8 縮退の具体形（R4.3/4.4）**: カテゴリ単位（パーツ空）・トグル（数値空）・addid・mustselect を「log+skip」か「不透明保持のシームのみ」か。balloon の NameForm=warn/Invalid=error の severity split を踏襲するか。数の正の assert（優しい縮退の非空虚化）を添える方針（記憶 defer-canon-with-full-vocabulary…）。
 9. **DD-9 冪等ガードの単位**: 結果 BindSet が直前と同一なら再発行しない、を per-scope で。on→on の重複 bind、off→off、順序違いで同一集合に至る列（BindSet は昇順dedup）での冪等を純関数檻で固定。
@@ -123,5 +123,5 @@
 
 - **RN-1** emo-text `apply_cue`（`crates/areka-emo-text/src/state.rs`）の Custom アーム実測 — W1 が Custom を良性無視にしているかを確認し、DD-3 を確定（本 gap では未読）。
 - **RN-2** `ghost-setup`／emo2-boot 起動経路での `spawn_seriko` 呼出箇所と名前解決表の供給源（`MountModel.bindgroups`→seriko 注入の結線点）— DD-4 の実配線先。
-- **RN-3** surfaces.txt の `animation*.interval,bind` と descript `bindgroup*` 番号の突合が emo2 で成立しているか（番号=animation ID の恒等が実データで閉じるか・R1 の非空虚性）。
+- **RN-3** surfaces.txt の `animation*.interval,bind` と descript `bindgroup*` 番号の突合が emo2 で成立しているか（番号=animation ID の恒等が実データで閉じるか・R1 の非空虚性）。**【✅ 先行確認済み・2026-07-19 ディスカッション #1 裏取り】** emo2 実データで恒等成立（descript bindgroup1100-1801 ↔ surfaces animation1100-1801・まばたき系のみ `bind+random`＝seriko-loop 領分）。design では網羅表の再掲のみでよい。
 - **RN-4** `balloon_face_e2e.rs` の e2e ハーネス形（TalkCue 列直入力→mock sink→注入 Tick）を bind へ流用する際の差分（fixture 自前用意の最小ゴースト構成）。
