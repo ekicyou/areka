@@ -9,6 +9,8 @@
 > - **step 1（parsers 名前解決表）・step 4（seriko 動的 bind 状態——ただし入力照合は typed variant でなく「汎用 cue のコマンド名 `bind`」の名前ゲート＝`SerikoSink` の BalloonSurface 処理と同型）・step 5（emo-present 回帰）＝存続**。
 > - 帰結: 本 spec は共有編集面 4 ファイル（dola command.rs／sakura compile.rs／dola sink.rs／emo-text state.rs）を**触らなくなり**、下記クロスユニット契約の「近接編集」警告は「W1 汎用キャリア契約への一方向依存」へ解消される。1 コマンド名の担当消費者は高々 1（単一権威表）＝`bind` の担当は seriko として同表に登記する。
 
+> **📌 2026-07-19 追記㉟陳腐化補正（W1 マージ後の実測）**: 本文 Problem の「④sakura: `GenericCommand` は catch-all で drop され cue 化されない」は **失効**——W1 `sakura-dialogue-tags` 着地により現行は `compile.rs:176` で汎用キャリア Custom cue へ転写・配送済み（`command_carrier` は `compile.rs:165` move 系と同経路）。dola 側 `command_target_of`（`sink.rs`・単一権威表）は現在 **"move" のみ登録＝「"bind" の消費者登録（→seriko）」が本 spec の作業**。`CueCommand` variant 数の本文記述もドリフト（Choice/Cursor/Custom 増）。上の調停ヘッダの縮小スコープ（dola variant 新設なし・compile アーム新設なし・消費者側実装のみ）が正。
+
 ## Problem
 
 emo2 のむらさきは表情を **`\s[1000]`（本体サーフェス）＋ `\![bind,category,partname,1/0]`（名前キーによる着せ替え bind の on/off）連打**で作る（実機観測: `\![bind,腕,伸び,1]` 等 6 連）。ところが areka はこの **名前キー bind を一切処理せず捨てている**ため、実機でスクリプトが表情を変えても**むらさきの見た目が変化しない**（bind パーツが乗らない＝素の surface1000 のまま）。「着せ替えで表情が変わる」は emo2 の中核表現であり、この欠落は M-boot の目視品質を損なう。

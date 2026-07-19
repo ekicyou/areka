@@ -4,6 +4,15 @@
 > **調査日**: 2026-07-16（再入精査⑧・fixture 実物調査＋コード実態偵察）。
 > **⛔ 時限ゲート（フェーズ別・2026-07-16 精密化）→ ✅ 解除（2026-07-17・cue-playback 完了＝追記㉗）**: ~~`areka-P0-cue-playback-duration`（実装中）完了が tasks 生成・実装フェーズの前提~~ **→充足済み**＝emo-text の cue 受信面 `CueSink` 化・`CuePlayer` の `pending_choices`（`runtime.rs:98`・読み口 `:355`）/`resolve_choice`（`:279`）は settled シームとして main 着地済み（2026-07-17 実測）。全フェーズ着手可（**Fable 早期投入の2本目**——選択肢 resident・hit 幾何・ハイライト描画・`\_l` 消費・原子性は cue モデル**非依存**。cue 供給節のみ **`sakura-dialogue-tags` design が確定させる choice cue 形**を消費——同 spec の design 先行完了を待って着手するのが推奨順序）。着手時は settled コードを直接参照する。
 
+> **📌 2026-07-19 追記㉟調停（2分割＋陳腐化補正・本ブロックが以下の本文より優先）**:
+> - **2分割（開発者裁定）**: 本 spec は**描画半分（W4）**へ縮小——選択肢 resident 描画・`\_l` 消費・ハイライト**描画**・**行ヒットジオメトリ＋hover 状態 API の契約正本**（注入 hover 状態で決定論描画・実ポインタ不要）。**実ポインタ配線・hover 追従駆動・クリック→`ChoiceSelection` 発行は新設 `areka-P0-choice-interact`（W5）へ分離**＝`ChoiceSelection` 契約の正本も interact へ移動（本文の「ChoiceSelection I/O 契約の正本」「Approach 4./5. のクリック解決・synthetic click 檻」「観測 (c)(d)」は interact の領分へ読み替え）。分割根拠＝粒度基準「done が複数の独立観測に割れるなら分割」（描画=pixel 檻／対話=ポインタ檻の2独立観測・20タスク超の兆候）。
+> - **陳腐化補正（W1＋割込3本マージ後の実測 2026-07-19）**:
+>   - シーム移動: emo-text Choice アームは **`state.rs:234-241`**（warn は `:240`）・コメント文言も「配送列第一級だが表示消費は choice-render（記録付き良性スキップ）」へ変更済み（本文の `:224-229`／旧文言は失効）。
+>   - **Choice 配送モデルは main で確定**: Choice cue は sink へ第一級配送**かつ** `pending_choices` へ push の二重真実源（dola `runtime.rs:199-218`・doc「配送列＝表示の真実源／バッグ＝照合の真実源」`:170`）＝本文 open question「`pending_choices()` 直読み vs cue 配送」は**配送された Choice cue の消費で確定**。
+>   - **`\_l` は typed `Cursor` cue として実装済み**（sakura-dialogue-tags 着地・emo-text `state.rs:243-251` 良性スキップ・`sink.rs:66` Cursor→Balloon）＝本 spec の残作業は **em/lh 単位換算＋カーソル適用のみ**（「`\_l` の消費も無所属」は失効）。
+>   - dola 行番号ドリフト: `pending_choices`=`runtime.rs:102`・`resolve_choice`=`:291`・`WaitingForChoice` 遷移=`:246`。
+>   - **newline-defer（SSP 準拠改行遅延＝改行は次グリフ配置まで保留・あふれ評価は実体化時）と budoux-newline（分かち書き折返し opt-in）が layout.rs へ着地済み**＝選択肢行 resident・`\_l` カーソル移動と遅延改行不変条件の整合を design 冒頭で必須確認（本文はどちらも未反映）。
+
 ## Problem
 
 emo2 のメニュー（`menu.pasta`）は `\q[おしゃべり頻度,Onおしゃべり頻度メニュー]` 等の選択肢**表示**を要求するが、areka に選択肢 UI が存在しない:
