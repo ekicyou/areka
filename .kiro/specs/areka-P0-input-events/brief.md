@@ -5,6 +5,8 @@
 > **クロスエンジン結合**: 撫で＝`collision-geometry`（⑥入力解決）⟷ **本 spec**（③SHIORI 配信）——**region/actor I/O 契約の正本は collision-geometry brief**（2026-07-16 同時制定・本 brief は消費側＝再定義しない）。
 > **並走性**: cue モデル非接触＝実装中の `areka-P0-cue-playback-duration` と**並走可**。
 
+> **📌 2026-07-19 追記㉟陳腐化補正（W1 マージ後の実測）**: `collision-geometry` は**完了済み**（`completed/`・PR マージ済）＝リゾルバは実コード **`crates/areka/src/emo2_boot/hit_region.rs`**——brief/requirements の「並走契約・mock リゾルバ」前提は**実物消費**へ読み替える（撫でクラスタ合流サインオフ Req8.3 の「実 resolver 前提」は充足可能に）。`idle-talk` も settled（kanade events/steady/`Status` ヘッダ実在）＝隣接注記は「並走中」でなく「settled main」。dblclick 即終了 stand-in は `spawn.rs:321` `on_ghost_pressed`（despawn `:337`・登録 `:167/:205`）に現存＝退役対象は不変。**設計フェーズ着手時に kanade `events.rs`/`steady.rs` の行アンカーを settled main へ再突合すること**（idle-talk が Status/Reference 機構を追加済み）。
+
 ## Problem
 
 マウス入力を SHIORI へ届ける経路が**ゼロ**。emo2 の撫で（`dic/touch.pasta:7`＝OnMouseMove）とダブルクリックメニュー（`dic/menu.pasta:10`＝OnMouseDoubleClick→`\q` 選択肢）は M1 ゴール（boot→talk→**touch**→**menu**→close）の中核だが:
