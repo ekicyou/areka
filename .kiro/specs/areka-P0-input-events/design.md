@@ -427,7 +427,7 @@ pub(super) fn on_mouse(state: State, input: MouseInput) -> (State, Vec<Action>);
 **Implementation Notes**
 - Integration: in-flight ≤1・同期往復ゆえ「GET 発行時のフェーズ＝reply 到着時のフェーズ」が保証される（割り込み入力なし）。置換時の旧 talk 後始末は dispatcher 既存実装（close_active_if_any＋stale Done 破棄）に完全委譲
 - Validation: `ShioriReply` の origin 追加は `pub(crate)` 内部・構築点 actor.rs 一点。既存テストは harness（KanadeMsg 注入）経由のため署名変更の影響は destructure の機械的追随のみ
-- Risks: DD-6 アームの意味が「防御専用」から「OnSecondChange origin 限定の防御」へ狭まる。既存檻 `steady_value_during_talk` は origin 前提を明示する形で更新する（[[obsolete-vs-broken-test-policy]]＝意味は生きているので更新）
+- Risks: DD-6 アームの意味が「防御専用」から「OnSecondChange origin 限定の防御」へ狭まる。既存檻 `steady_value_during_talk` は origin 前提を明示する形で更新する（[[obsolete-vs-broken-test-policy]]＝意味は生きているので更新）。マウス origin の置換は実機では実 pasta の talking 自衛（204 相当）により構造的に発火せず **mock 檻が唯一の検証手段**であるため、置換檻（マウス origin→置換）と DD-6 保存檻（OnSecondChange origin→warn＋破棄）は**同一テスト群で対に配置**し、origin の match を **wildcard にしない**（第 3 の origin 追加時にレビューで必ず気づける形に保つ）
 
 ### areka / UI 配線
 
@@ -591,7 +591,7 @@ pub(crate) fn plan_mouse_move(
 
 1. **(c) Value→StartTalk**: マウス GET へ Value 応答 → mock sakura が `StartTalk{talk_id=n, script}` を受領・`ActiveTalk.origin` が実イベント名
 2. **(c') active talk 中の置換**: `spawn_harness_gated` で talk を保持 → マウス GET が **GET のまま**発行され `Status: talking` を帯びる（DD-IE-1 檻）→ Value 応答 → 新 talk_id で StartTalk（置換）・旧 talk の Done は棄却され状態整合
-3. **DD-6 保存**: OnSecondChange origin の Value-during-talk は従来どおり warn＋破棄（idle-talk 檻の更新形）
+3. **DD-6 保存**: OnSecondChange origin の Value-during-talk は従来どおり warn＋破棄（idle-talk 檻の更新形）。置換檻（(c')）と本檻は**対**であり同一テスト群に配置する——実機では実 pasta の talking 自衛により置換が発火しないため mock 檻が唯一の検証手段。origin の match は wildcard にしない
 4. **talk_id 単調性**: マウス起動 talk と OnSecondChange 起動 talk が混在しても talk_id が再利用されない
 
 ### Unit Tests（areka in-crate — Req8 (e)＋配線）
@@ -610,6 +610,7 @@ pub(crate) fn plan_mouse_move(
 3. **メニュー**: 左ダブルクリック → menu.pasta の応答 talk（メニュー本文）再生を目視（`\q` 見た目の完成度は choice-render 領分）
 4. **退避**: Ctrl+左ダブルクリック → アプリ終了（OnClose NOTIFY→Unload→exit 0 をログで確認）
 5. talk 再生中の撫で: `Status: talking` 付き GET が送出され、実 pasta が自衛（nil）することをログで確認（置換は発生しない＝実機の期待挙動）
+6. **応答遅延の滞留兆候**: 持続撫で中の talk 起動遅延を体感確認し、ログ上の `shiori_request` GET 送出時刻→応答時刻の差を観測する（実 32bit helper の往復遅延が 100ms を超える場合、in-flight ≤1 ゆえ kanade inbox に古い座標の GET が滞留し得る——design は有界性のみ論証済み・鮮度は本項が実測）。滞留兆候があれば `MOUSE_MOVE_MIN_INTERVAL_MS` の値調整のみで対処する（定数シーム・構造変更不要）
 
 ## Performance & Scalability
 
