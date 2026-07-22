@@ -778,6 +778,107 @@ mod tests {
         assert_eq!(ghost_count(&mut world), 0, "全ゴースト窓 despawn");
     }
 
+    /// 配線層 per-scope 独立檻（5.x・DD-IE-5／DD-IE-9・task 4.4 NEW）: 1 つの `MouseWiring`
+    /// （`HashMap<u32, MouseMoveThrottle>` per-scope 保持）を通し、scope 0 が間引きで抑制されている
+    /// 最中でも scope 1 の初回移動は独立に送出される。scope の間引き状態が `HashMap` で別キーに
+    /// 保持されている（共有でない）ことの配線層証拠——throttle.rs の純関数 per-scope 檻
+    /// （別々の `MouseMoveThrottle` 値を使う）とは別レイヤ（同一 wiring の map を通す）。
+    #[test]
+    fn wiring_throttles_scopes_independently_via_hashmap() {
+        // clock: 各ハンドラ呼出で +10ms（間隔 100ms 未満）。
+        let (mut world, rx) = world_with_wiring(
+            |_, _, _| HitRegion {
+                scope: 0,
+                region: Some("Head".to_string()),
+            },
+            stepping_clock(1000, 10),
+        );
+        let e0 = world.spawn(CharWindowMarker { scope: 0 }).id();
+        let e1 = world.spawn(CharWindowMarker { scope: 1 }).id();
+
+        // scope 0 初回移動（now=1000）→ 送出。
+        let ev = bubble_pointer(10, 20, DoubleClick::None, false);
+        assert!(on_char_pointer_moved(&mut world, e0, e0, &ev), "scope 0 初回は送出");
+        match rx.try_recv().expect("scope 0 の Move が届く") {
+            KanadeMsg::Mouse(m) => assert_eq!(m.scope, 0),
+            _ => panic!("Mouse(Move) を期待"),
+        }
+
+        // scope 0 移動・同一 region・間隔未経過（now=1010, delta=10 < 100）→ 抑制。
+        let ev = bubble_pointer(11, 20, DoubleClick::None, false);
+        assert!(
+            !on_char_pointer_moved(&mut world, e0, e0, &ev),
+            "scope 0 は間引きで抑制される"
+        );
+        assert!(rx.try_recv().is_err(), "scope 0 の 2 回目は届かない");
+
+        // scope 1 初回移動（now=1020）→ scope 0 の抑制状態と独立に送出される。
+        // もし throttle 状態が scope 間で共有なら「同一 region・間隔未経過」で抑制されるはず。
+        // HashMap が別キーで保持するため scope 1 は fresh（first_send）で送出される。
+        let ev = bubble_pointer(10, 20, DoubleClick::None, false);
+        assert!(
+            on_char_pointer_moved(&mut world, e1, e1, &ev),
+            "scope 1 は scope 0 の抑制と独立に初回送出される"
+        );
+        match rx.try_recv().expect("scope 1 の Move が届く") {
+            KanadeMsg::Mouse(m) => assert_eq!(m.scope, 1, "送出された Move は scope 1"),
+            _ => panic!("Mouse(Move) を期待"),
+        }
+        assert!(rx.try_recv().is_err(), "他に送出はない");
+    }
+
+    /// 「暫定退避操作でのみ全窓終了が起きる」統合檻（6.1/6.2/6.3・DD-IE-7・task 4.4 NEW）:
+    /// 移動・中ボタンダブルクリック・単発クリック・Ctrl なし左ダブルクリックの**いずれも**
+    /// `GhostWindowMarker` 窓を despawn しない（非退避操作）。Ctrl+左ダブルクリック**のみ**が
+    /// 全窓を despawn する。「でのみ」の排他性を単一 pass/fail で固定する（plain-left 単独の
+    /// `handler_left_double_click_without_ctrl_does_not_despawn_and_sends` に対し、非退避操作
+    /// 全集合の否定＋退避の肯定を 1 檻へ集約する）。
+    #[test]
+    fn only_escape_terminates_ghost_windows() {
+        let (mut world, _rx) = world_with_wiring(
+            |_, _, _| HitRegion {
+                scope: 0,
+                region: Some("Head".to_string()),
+            },
+            stepping_clock(1000, 1000),
+        );
+        // 実キャラ窓は GhostWindowMarker かつ CharWindowMarker（ハンドラが scope を読める）。
+        let w = world
+            .spawn((GhostWindowMarker, CharWindowMarker { scope: 0 }))
+            .id();
+        world.spawn(GhostWindowMarker);
+        world.spawn(GhostWindowMarker);
+        assert_eq!(ghost_count(&mut world), 3);
+
+        // 非退避操作はいずれも despawn しない。
+        let non_escape = [
+            bubble_pointer(10, 20, DoubleClick::None, false), // 移動（None）
+            bubble_pointer(10, 21, DoubleClick::Middle, false), // 中ボタン dblclick
+            bubble_pointer(10, 22, DoubleClick::XButton1, false), // 拡張ボタン dblclick
+            bubble_pointer(10, 23, DoubleClick::None, false), // 単発クリック
+            bubble_pointer(10, 24, DoubleClick::Left, false), // Ctrl なし左 dblclick
+        ];
+        // 移動は on_char_pointer_moved、他は on_char_pointer_pressed。
+        assert!(on_char_pointer_moved(&mut world, w, w, &non_escape[0]));
+        for ev in &non_escape[1..] {
+            on_char_pointer_pressed(&mut world, w, w, ev);
+        }
+        assert_eq!(
+            ghost_count(&mut world),
+            3,
+            "非退避操作（移動/中/拡張/単発/Ctrl なし左）は 1 つも despawn しない"
+        );
+
+        // 退避操作（Ctrl+左）のみが全窓を despawn する。
+        let escape = bubble_pointer(10, 20, DoubleClick::Left, true);
+        assert!(on_char_pointer_pressed(&mut world, w, w, &escape));
+        assert_eq!(
+            ghost_count(&mut world),
+            0,
+            "暫定退避操作でのみ全ゴースト窓が despawn される"
+        );
+    }
+
     /// Tunnel 相は両ハンドラとも no-op（Bubble のみ処理）: 退避も送出も起きない。
     #[test]
     fn handlers_ignore_tunnel_phase() {
