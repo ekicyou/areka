@@ -925,12 +925,14 @@ mod log_firing_tests {
 
     #[test]
     fn warn_steady_value_during_talk_logs() {
-        // Steady{Some} + Value（DD-6 防御）→ steady_value_during_talk。
+        // Steady{Some} + 非マウス Value（DD-6 防御・narrowed）→ steady_value_during_talk。
+        // origin は非マウス（OnSecondChange）——マウス origin は置換アームへ抜けて warn しない
+        // ため、DD-6 破棄ログの発火には非マウス origin が必要（DD-IE-2 の意味の縮小）。
         let ev = run_step(
             steady_with_talk(TalkId(5)),
             Input::ShioriReply {
                 outcome: ShioriOutcome::Value("late".to_string()),
-                origin: "test",
+                origin: "OnSecondChange",
             },
         );
         assert_logged(&ev, Level::WARN, "steady_value_during_talk");

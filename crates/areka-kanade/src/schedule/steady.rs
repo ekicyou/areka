@@ -34,9 +34,9 @@ use crate::talk::{StartTalk, TalkDone, TalkId};
 pub(crate) fn step(state: State, input: Input, _config: &KanadeConfig) -> (State, Vec<Action>) {
     match input {
         Input::Tick { now } => on_tick(state, now),
-        // origin（DD-IE-3）はタスク 2.2 のマウス GET origin 別 reply 政策で参照する。本タスクの
-        // on_reply は origin を消費しないため destructure で読み飛ばす（seam）。
-        Input::ShioriReply { outcome, .. } => on_reply(state, outcome),
+        // origin（DD-IE-3）はマウス GET origin 別 reply 政策（本タスク 2.3）で消費する:
+        // 応答の出所を ActiveTalk.origin へ転記し、talk 再生中の置換／防御破棄の分岐に用いる。
+        Input::ShioriReply { outcome, origin } => on_reply(state, outcome, origin),
         Input::TalkDone(done) => on_talk_done(state, done),
         Input::CloseRequest { reason } => on_close_request(state, reason),
         // 上記以外（Boot・ForceQuit 等）は横断アームで捌かれ Steady には届かない。
@@ -143,30 +143,39 @@ fn on_tick(mut state: State, now: MonotonicMs) -> (State, Vec<Action>) {
     }
 }
 
-/// Steady での ShioriReply（talk 調停・Req 2.1／2.3／3.3）。
+/// Steady での ShioriReply（origin 別 talk 起動政策・Req 2.1／2.3／3.3／4.1／4.3／4.4・DD-IE-2／DD-IE-3）。
 ///
-/// mod.rs は非 Failed 応答のみを Steady へ委譲する（Failed は横断アームで Unloading{Fault}）。
-/// - `talk: None` + `Value(script)` → 一意 talk_id 採番＋StartTalk・`Steady{Some}` へ（Req 3.3・2.1）。
-/// - `talk: None` + `NoContent`（204）→ StartTalk なし・`Steady{None}` 維持（Req 2.3）。
+/// mod.rs は非 Failed 応答のみを Steady へ委譲する（Failed は横断アームで Unloading{Fault}）。`origin`
+/// は応答の出所イベント ID（actor が発行 call の id を転記・pump は "OnSecondChange"／マウスは
+/// "OnMouseMove"／"OnMouseDoubleClick"）。これを ActiveTalk へ転記し、再生中の分岐に用いる:
+/// - `talk: None` + `Value(script)` → 一意 talk_id 採番＋StartTalk・`Steady{Some(origin)}` へ（origin ラベルは
+///   応答の実イベント名・OnSecondChange 起動／マウス起動を同一経路で扱う・Req 4.1）。
+/// - `talk: None` + `NoContent`（204）→ StartTalk なし・`Steady{None}` 維持（Req 2.3／4.2）。
+/// - `talk: Some` + `Value` + origin ∈ {OnMouseMove, OnMouseDoubleClick} → **置換**: 新 talk_id 採番＋slot
+///   上書き＋StartTalk（dispatcher の既存 Close-then-spawn が旧 talk を閉じ、旧 Done を stale 破棄する・
+///   kanade 側は slot 上書きと採番のみ＝新調停なし・Req 4.3・DD-IE-2）。
+/// - `talk: Some` + `Value` + その他 origin（例 OnSecondChange）→ 既存 DD-6 防御破棄・warn!＋破棄・維持。
 /// - `talk: Some` + `Notified` → NOTIFY pump の応答・`Steady{Some}` 維持（無視）。
-/// - `talk: Some` + `Value` → DD-6 防御（構造上発生しない）・warn!＋破棄・`Steady{Some}` 維持。
-fn on_reply(mut state: State, outcome: ShioriOutcome) -> (State, Vec<Action>) {
+fn on_reply(
+    mut state: State,
+    outcome: ShioriOutcome,
+    origin: &'static str,
+) -> (State, Vec<Action>) {
     match state.phase {
         Phase::Steady { talk: None } => match outcome {
             ShioriOutcome::Value(script) => {
                 let talk_id = TalkId(state.next_talk_id);
                 state.next_talk_id += 1;
-                tracing::info!(target: "kanade", event = "steady_talk", talk_id = talk_id.0, "OnSecondChange にスクリプト——再生起動");
+                tracing::info!(target: "kanade", event = "steady_talk", talk_id = talk_id.0, origin = origin, "応答にスクリプト——再生起動");
+                // origin は応答の出所（動的化・DD-IE-3）。pump なら "OnSecondChange"、マウスなら
+                // 当該マウスイベント名がそのまま ActiveTalk のラベルに載る。
                 state.phase = Phase::Steady {
-                    talk: Some(ActiveTalk {
-                        talk_id,
-                        origin: "OnSecondChange",
-                    }),
+                    talk: Some(ActiveTalk { talk_id, origin }),
                 };
                 (state, vec![Action::StartTalk(StartTalk { talk_id, script })])
             }
             ShioriOutcome::NoContent => {
-                // 204: talk なし（Req 2.3）。Steady{None} を維持し次 Tick で pump 再開。
+                // 204: talk なし（Req 2.3／4.2）。Steady{None} を維持し次 Tick で pump 再開。
                 (state, Vec::new())
             }
             other => steady_reply_unexpected(state, "Steady{None}", other),
@@ -176,12 +185,31 @@ fn on_reply(mut state: State, outcome: ShioriOutcome) -> (State, Vec<Action>) {
                 // NOTIFY pump（Ref3=0）の応答。構造的に無視し Steady{Some} を維持する。
                 (state, Vec::new())
             }
-            ShioriOutcome::Value(_) => {
-                // DD-6 防御: active talk は NOTIFY を発行するため Value は届かないはず。
-                // 万一届いても StartTalk・キュー・中断を一切行わず破棄する。
-                tracing::warn!(target: "kanade", event = "steady_value_during_talk", "active talk 中に Value——構造上想定外・破棄（キュー/中断なし）");
-                (state, Vec::new())
-            }
+            // 出所別の Value 政策（DD-IE-2）。origin の match は **wildcard にしない**——マウス系を
+            // 明示列挙し、第 3 の origin 追加時にレビューで必ず政策判断を要求する（design Risks）。
+            ShioriOutcome::Value(script) => match origin {
+                "OnMouseMove" | "OnMouseDoubleClick" => {
+                    // 置換（Req 4.3・DD-IE-2）: マウス由来の Value は active talk を差し替える。
+                    // kanade 側は新 talk_id 採番＋slot 上書き＋StartTalk のみ。旧 talk の後始末
+                    // （Close-then-spawn・旧 Done の stale 破棄）は dispatcher 既存実装へ完全委譲する。
+                    let talk_id = TalkId(state.next_talk_id);
+                    state.next_talk_id += 1;
+                    tracing::info!(target: "kanade", event = "steady_talk_replace", talk_id = talk_id.0, origin = origin, "active talk 中にマウス由来 Value——単一 slot 置換（新 talk_id 採番）");
+                    state.phase = Phase::Steady {
+                        talk: Some(ActiveTalk { talk_id, origin }),
+                    };
+                    (state, vec![Action::StartTalk(StartTalk { talk_id, script })])
+                }
+                // DD-6 防御破棄（非マウス origin 限定）。本アームの意味は「全 origin 防御」から
+                // **「非マウス origin 限定の防御」へ狭まった**——マウス origin は上の置換アームへ
+                // 抜けるため、ここへ届くのは pump（OnSecondChange）等の非マウス Value のみ。active
+                // talk は NOTIFY を発行するため構造上ここへは届かないはずだが、万一届いても
+                // StartTalk・キュー・中断を一切行わず破棄し、idle-talk 檻の防御規律を保存する。
+                _ => {
+                    tracing::warn!(target: "kanade", event = "steady_value_during_talk", origin = origin, "active talk 中に非マウス Value——構造上想定外・破棄（キュー/中断なし・DD-6）");
+                    (state, Vec::new())
+                }
+            },
             other => steady_reply_unexpected(state, "Steady{Some}", other),
         },
         _ => steady_phase_unexpected(state, "ShioriReply"),
@@ -464,7 +492,7 @@ mod tests {
             steady_none(5),
             Input::ShioriReply {
                 outcome: ShioriOutcome::Value("hello".to_string()),
-                origin: "test",
+                origin: "OnSecondChange",
             },
             &config(),
         );
@@ -473,7 +501,7 @@ mod tests {
                 talk: Some(ActiveTalk { talk_id, origin }),
             } => {
                 assert_eq!(talk_id, TalkId(5));
-                assert_eq!(origin, "OnSecondChange");
+                assert_eq!(origin, "OnSecondChange", "origin は応答の出所を転記（pump 起動）");
             }
             _ => panic!("expected Steady{{Some}}"),
         }
@@ -492,7 +520,7 @@ mod tests {
             steady_none(s1.next_talk_id),
             Input::ShioriReply {
                 outcome: ShioriOutcome::Value("world".to_string()),
-                origin: "test",
+                origin: "OnSecondChange",
             },
             &config(),
         );
@@ -542,7 +570,9 @@ mod tests {
         assert!(actions.is_empty());
     }
 
-    // --- Steady{Some} + Value → warn!+破棄・Steady{Some} 維持・StartTalk なし（DD-6 防御） ---
+    // --- Steady{Some} + 非マウス Value → warn!+破棄・Steady{Some} 維持・StartTalk なし（DD-6 防御） ---
+    // origin は非マウス（OnSecondChange）——マウス origin は置換アームへ抜けるため、DD-6 破棄は
+    // 非マウス origin 限定に狭まった（origin 別 reply 政策・DD-IE-2）。
 
     #[test]
     fn steady_some_value_is_discarded_without_start_talk() {
@@ -550,7 +580,7 @@ mod tests {
             steady_some(TalkId(3), 6),
             Input::ShioriReply {
                 outcome: ShioriOutcome::Value("late".to_string()),
-                origin: "test",
+                origin: "OnSecondChange",
             },
             &config(),
         );
@@ -566,6 +596,161 @@ mod tests {
             "Value-during-talk は StartTalk しない（DD-6）"
         );
         assert!(actions.is_empty(), "キュー・中断も発行しない");
+    }
+
+    // === origin 別 reply 政策: 置換 vs DD-6 防御破棄（Req 4.1／4.3／4.4・DD-IE-2／DD-IE-3） ===
+    // 置換檻（マウス origin→置換）と DD-6 保存檻（非マウス origin→warn＋破棄）は**対**であり
+    // 同一テスト群に配置する。実機では実 pasta の talking 自衛（204 相当）により置換が構造的に
+    // 発火しないため mock 檻が唯一の検証手段。origin の match は wildcard にしない（第 3 の origin
+    // 追加時にレビューで必ず政策を意識させるため）。
+
+    // --- (c) Steady{None} + Value（マウス origin）→ StartTalk・ActiveTalk.origin=マウス名（4.1・DD-IE-3） ---
+
+    #[test]
+    fn steady_none_mouse_value_starts_talk_with_mouse_origin() {
+        let (next, actions) = step(
+            steady_none(5),
+            Input::ShioriReply {
+                outcome: ShioriOutcome::Value("nade".to_string()),
+                origin: "OnMouseMove",
+            },
+            &config(),
+        );
+        match next.phase {
+            Phase::Steady {
+                talk: Some(ActiveTalk { talk_id, origin }),
+            } => {
+                assert_eq!(talk_id, TalkId(5));
+                assert_eq!(origin, "OnMouseMove", "origin は応答の出所（マウス名）を帯びる（動的化）");
+            }
+            _ => panic!("expected Steady{{Some}}"),
+        }
+        assert_eq!(next.next_talk_id, 6);
+        assert_eq!(actions.len(), 1);
+        match &actions[0] {
+            Action::StartTalk(StartTalk { talk_id, script }) => {
+                assert_eq!(*talk_id, TalkId(5));
+                assert_eq!(script, "nade");
+            }
+            _ => panic!("expected StartTalk"),
+        }
+    }
+
+    // --- (c') Steady{Some(id=3)} + Value + origin=OnMouseDoubleClick → 置換（新 talk_id・slot 上書き・4.3） ---
+
+    #[test]
+    fn steady_some_mouse_value_replaces_slot_with_new_talk_id() {
+        let (next, actions) = step(
+            steady_some(TalkId(3), 6),
+            Input::ShioriReply {
+                outcome: ShioriOutcome::Value("menu".to_string()),
+                origin: "OnMouseDoubleClick",
+            },
+            &config(),
+        );
+        match next.phase {
+            Phase::Steady {
+                talk: Some(ActiveTalk { talk_id, origin }),
+            } => {
+                assert_eq!(talk_id, TalkId(6), "slot は新 talk_id で上書きされる（置換）");
+                assert_eq!(origin, "OnMouseDoubleClick", "slot の origin も置換 origin へ更新");
+            }
+            _ => panic!("expected Steady{{Some}} replaced"),
+        }
+        assert_eq!(next.next_talk_id, 7, "置換は新 talk_id を採番する");
+        assert_eq!(actions.len(), 1);
+        match &actions[0] {
+            Action::StartTalk(StartTalk { talk_id, script }) => {
+                assert_eq!(*talk_id, TalkId(6), "StartTalk は新 talk_id（旧 talk は dispatcher が Close-then-spawn）");
+                assert_eq!(script, "menu");
+            }
+            _ => panic!("expected StartTalk（置換）"),
+        }
+    }
+
+    // --- DD-6 保存: Steady{Some} + Value + 非マウス origin(OnSecondChange) → warn＋破棄・維持（4.3/4.4） ---
+    // 置換檻（上）と対。DD-6 防御の意味は「全 origin 防御」から「非マウス origin 限定の防御」へ
+    // 狭まる——マウス origin は上の置換アームへ抜けるため、本檻は非マウス origin でのみ発火する。
+
+    #[test]
+    fn steady_some_non_mouse_value_is_discarded_dd6() {
+        let (next, actions) = step(
+            steady_some(TalkId(3), 6),
+            Input::ShioriReply {
+                outcome: ShioriOutcome::Value("late".to_string()),
+                origin: "OnSecondChange",
+            },
+            &config(),
+        );
+        match next.phase {
+            Phase::Steady {
+                talk: Some(ActiveTalk { talk_id, .. }),
+            } => assert_eq!(talk_id, TalkId(3), "非マウス origin の Value は置換せず維持（DD-6）"),
+            _ => panic!("expected Steady{{Some}} preserved"),
+        }
+        assert_eq!(next.next_talk_id, 6, "破棄ゆえ採番しない");
+        assert!(
+            !actions.iter().any(|a| matches!(a, Action::StartTalk(_))),
+            "非マウス Value-during-talk は StartTalk しない（DD-6）"
+        );
+        assert!(actions.is_empty(), "キュー・中断も発行しない");
+    }
+
+    // --- talk_id 単調性: マウス起動と OnSecondChange 起動を混在させても再利用しない ---
+
+    #[test]
+    fn talk_ids_never_reused_across_mixed_origins() {
+        // OnSecondChange 起動（id=5）。
+        let (s1, _) = step(
+            steady_none(5),
+            Input::ShioriReply {
+                outcome: ShioriOutcome::Value("a".to_string()),
+                origin: "OnSecondChange",
+            },
+            &config(),
+        );
+        assert_eq!(s1.next_talk_id, 6);
+        // 当該 talk 完了 → 定常復帰。
+        let (s2, _) = step(
+            s1,
+            Input::TalkDone(TalkDone {
+                talk_id: TalkId(5),
+                reason: TalkEndReason::Ended,
+            }),
+            &config(),
+        );
+        // マウス起動（id=6・再利用しない）。
+        let (s3, actions3) = step(
+            s2,
+            Input::ShioriReply {
+                outcome: ShioriOutcome::Value("b".to_string()),
+                origin: "OnMouseMove",
+            },
+            &config(),
+        );
+        let id = match &actions3[0] {
+            Action::StartTalk(StartTalk { talk_id, .. }) => *talk_id,
+            _ => panic!("expected StartTalk"),
+        };
+        assert_eq!(id, TalkId(6), "id は混在起動でも単調・再利用しない");
+        assert_eq!(s3.next_talk_id, 7);
+    }
+
+    // --- 204: マウス origin の NoContent（Steady{None}）→ StartTalk なし（4.2） ---
+
+    #[test]
+    fn steady_none_mouse_no_content_starts_no_talk() {
+        let (next, actions) = step(
+            steady_none(5),
+            Input::ShioriReply {
+                outcome: ShioriOutcome::NoContent,
+                origin: "OnMouseDoubleClick",
+            },
+            &config(),
+        );
+        assert!(matches!(next.phase, Phase::Steady { talk: None }));
+        assert_eq!(next.next_talk_id, 5, "204 は採番しない");
+        assert!(actions.is_empty(), "マウス origin の 204 も talk 起動しない（Req 4.2）");
     }
 
     // === TalkDone{reason: Ended | Interrupted}（非 quit の 2 値ルーティング網羅） ===
