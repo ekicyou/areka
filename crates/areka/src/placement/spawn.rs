@@ -21,13 +21,17 @@
 //!   アンカーの単一真実源・**全 char 窓へ無条件付与**＝Free 窓も resize の identity 射影で
 //!   読む・4.2）＋`DragConfig`（全面ドラッグ・4.1。`move_window` は非 Free アンカーの
 //!   キャラ窓のみ false＝on_char_drag 単一ライター・DD15 v2／4.7、Free は true＝wndproc
-//!   委譲）＋`OnDrag(on_char_drag)`＋`BalloonFollow`＋`OnPointerPressed(on_ghost_pressed)`
-//!   （ダブルクリックで全 `GhostWindowMarker` despawn→`run()` 正常復帰）。非 Free アンカーの
+//!   委譲）＋`OnDrag(on_char_drag)`＋`BalloonFollow`＋`OnPointerMoved(on_char_pointer_moved)`
+//!   ＋`OnPointerPressed(on_char_pointer_pressed)`（areka-P0-input-events task 3.2：マウス移動／
+//!   ダブルクリックを `input_events` 経由で kanade へ配信。Ctrl+左ダブルクリックは暫定退避＝
+//!   全 `GhostWindowMarker` despawn→window-close funnel→`run()` 正常復帰。stand-in 即終了
+//!   `on_ghost_pressed` は退役）。非 Free アンカーの
 //!   キャラ窓はさらに `OnDragEnd(on_char_drag_end)`（最終カーソル位置への同写像適用・
 //!   DD15 v2 (3)）
 //! - バルーン窓: 同型（marker は `BalloonWindowMarker{scope}`・`DragConfig::default()`
 //!   は付与＝バルーン単独ドラッグ可・4.5。`OnDrag(on_balloon_drag)` で単独ドラッグの
-//!   相対位置記憶（4.8・DD16・task 8.3）・`BalloonFollow` なし）
+//!   相対位置記憶（4.8・DD16・task 8.3）・`BalloonFollow` なし。M1 はマウス送出なし＝
+//!   ポインタハンドラを付けない・DD-IE-12。バルーン入力は M-dialogue／choice-render の領分）
 //!
 //! # clickthrough 登録（task 5.2）
 //!
@@ -40,7 +44,7 @@ use std::collections::BTreeMap;
 
 use bevy_ecs::name::Name;
 use bevy_ecs::prelude::*;
-use tracing::{debug, info};
+use tracing::debug;
 use windows::Win32::Foundation::HWND;
 use windows::Win32::UI::WindowsAndMessaging::{
     WS_EX_LAYERED, WS_EX_TOOLWINDOW, WS_POPUP, WS_VISIBLE,
@@ -48,8 +52,10 @@ use windows::Win32::UI::WindowsAndMessaging::{
 use wintf::ecs::clickthrough::ClickThroughRegistryHandle;
 use wintf::ecs::drag::{DragConfig, OnDrag, OnDragEnd};
 use wintf::ecs::layout::HitTest;
-use wintf::ecs::pointer::{DoubleClick, OnPointerPressed, Phase, PointerState};
+use wintf::ecs::pointer::{OnPointerMoved, OnPointerPressed};
 use wintf::ecs::{Point, SizeI, Window, WindowHandle, WindowPos, WindowStyle};
+
+use crate::input_events::{on_char_pointer_moved, on_char_pointer_pressed};
 
 use super::follow::{on_balloon_drag, on_char_drag, on_char_drag_end, Anchored, BalloonFollow};
 use super::resolver::ScopePlacement;
@@ -149,7 +155,10 @@ pub fn spawn_ghost_windows(
         // バルーン窓（design「窓 entity 構成（バルーン窓）」: キャラ窓と同型・
         // marker は BalloonWindowMarker・DragConfig::default() 付与＝単独ドラッグ可
         // （4.5）・OnDrag(on_balloon_drag) で単独ドラッグの相対位置記憶
-        // （4.8・DD16・task 8.3）・BalloonFollow なし）
+        // （4.8・DD16・task 8.3）・BalloonFollow なし。
+        // M1 はバルーンにマウス送出なし＝ポインタハンドラを付けない（DD-IE-12・
+        // task 3.2：stand-in `on_ghost_pressed` 登録を撤去。バルーン入力は
+        // M-dialogue／choice-render の領分でリゾルバは shell 窓専用）。
         let balloon_window = world
             .spawn((
                 Name::new(format!("Ghost-Balloon-Window-{}", p.scope)),
@@ -164,7 +173,6 @@ pub fn spawn_ghost_windows(
                 HitTest::none(),
                 DragConfig::default(),
                 OnDrag(on_balloon_drag),
-                OnPointerPressed(on_ghost_pressed),
             ))
             .id();
 
@@ -202,7 +210,18 @@ pub fn spawn_ghost_windows(
                     balloon: balloon_window,
                     offset: p.balloon_offset,
                 },
-                OnPointerPressed(on_ghost_pressed),
+                // マウス入力配線（areka-P0-input-events task 3.2）: キャラ窓の
+                // ポインタ移動／押下を `input_events` の正規ハンドラへ結線する
+                // （stand-in 即終了 `on_ghost_pressed` を退役して差し替え）。
+                // `on_char_pointer_moved` は当たり判定を解決し間引きを通して
+                // kanade へ Move を配信、`on_char_pointer_pressed` は左／右ダブル
+                // クリックを DoubleClick として配信する（DD-IE-10・self-gating）。
+                // Ctrl+左ダブルクリックは**暫定退避**＝全 `GhostWindowMarker` を
+                // despawn し既存 window-close funnel（run() 復帰→main shutdown→
+                // ForceQuit 系列）へ委ねる（stand-in 直接経路は新設しない・DD-IE-7）。
+                // この暫定退避は M-dialogue の `\-` メニュー終了完成で退役する。
+                OnPointerMoved(on_char_pointer_moved),
+                OnPointerPressed(on_char_pointer_pressed),
             ))
             .id();
 
@@ -311,38 +330,6 @@ fn register_ghost_windows_via<R: ClickThroughRegistrar>(
     }
 }
 
-/// `OnPointerPressed` ハンドラ: ダブルクリック（左）で全 [`GhostWindowMarker`]
-/// 窓を despawn する（design main.rs seam: despawn → wintf の
-/// `on_window_handle_remove` → `WM_CLOSE` → `DestroyWindow` → `WindowRegistry`
-/// 空遷移 → `run()` 正常復帰。`spawn_dummy_window` の `on_dummy_pressed` と同じ作法）。
-///
-/// `Phase::Bubble` の `DoubleClick::Left` のみ処理して true を返す。それ以外
-/// （他ボタン・`Phase::Tunnel`）は false（伝播続行）。
-fn on_ghost_pressed(
-    world: &mut World,
-    _sender: Entity,
-    _entity: Entity,
-    ev: &Phase<PointerState>,
-) -> bool {
-    match ev {
-        Phase::Tunnel(_) => false,
-        Phase::Bubble(state) => {
-            if state.double_click == DoubleClick::Left {
-                info!("ゴースト窓ダブルクリック検出 — 全ゴースト窓を閉じます");
-                let targets: Vec<Entity> = world
-                    .query_filtered::<Entity, With<GhostWindowMarker>>()
-                    .iter(world)
-                    .collect();
-                for e in targets {
-                    world.despawn(e);
-                }
-                return true;
-            }
-            false
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use bevy_ecs::prelude::*;
@@ -351,7 +338,7 @@ mod tests {
     };
     use wintf::ecs::drag::{DragConfig, DragConstraint, OnDrag, OnDragEnd};
     use wintf::ecs::layout::{BoxStyle, HitTest};
-    use wintf::ecs::pointer::{DoubleClick, OnPointerPressed, Phase, PointerState};
+    use wintf::ecs::pointer::{OnPointerMoved, OnPointerPressed, Phase};
     use wintf::ecs::{Point, SizeI, Window, WindowPos, WindowStyle};
 
     use super::{
@@ -402,13 +389,6 @@ mod tests {
             .query_filtered::<Entity, With<GhostWindowMarker>>()
             .iter(world)
             .collect()
-    }
-
-    fn pressed_event(double_click: DoubleClick) -> PointerState {
-        PointerState {
-            double_click,
-            ..Default::default()
-        }
     }
 
     // -------------------------------------------------------------------------
@@ -558,18 +538,51 @@ mod tests {
         }
     }
 
-    /// T-I1 補: 全窓が `HitTest::none()`（全面ヒットで透過を殺さない）と
-    /// `OnPointerPressed`（ダブルクリック close）を持つ。
+    /// T-I1 補: 全窓が `HitTest::none()`（全面ヒットで透過を殺さない）を持つ。
+    /// キャラ窓は正規ポインタハンドラ（`OnPointerMoved`＋`OnPointerPressed`＝
+    /// areka-P0-input-events task 3.2 で stand-in `on_ghost_pressed` を退役して
+    /// 差し替え）を持ち、バルーン窓はポインタハンドラを一切持たない（M1 は
+    /// バルーンにマウス送出なし・DD-IE-12）。ハンドラ実挙動の檻は input_events の
+    /// task 2.7 檻＝proven-wiring ゆえ存在の有無だけ固定する
+    /// （[[test-only-decision-branches-not-proven-wiring]]）。
     #[test]
-    fn t_i1_all_windows_have_hit_test_none_and_pointer_pressed() {
+    fn t_i1_all_windows_have_hit_test_none_and_char_has_pointer_handlers() {
         let mut world = World::new();
         let placements = two_scope_placements();
 
-        spawn_ghost_windows(&mut world, &placements, &titles());
+        let gw = spawn_ghost_windows(&mut world, &placements, &titles());
 
         for e in ghost_window_entities(&mut world) {
             assert_eq!(world.get::<HitTest>(e).copied(), Some(HitTest::none()));
-            assert!(world.get::<OnPointerPressed>(e).is_some());
+        }
+
+        for p in &placements {
+            let char_e = gw.char_window(p.scope).unwrap();
+            let balloon_e = gw.balloon_window(p.scope).unwrap();
+
+            // キャラ窓は正規の移動／押下ハンドラを両方持つ（task 3.2 差し替え）
+            assert!(
+                world.get::<OnPointerMoved>(char_e).is_some(),
+                "scope{}: キャラ窓は OnPointerMoved を持つ",
+                p.scope
+            );
+            assert!(
+                world.get::<OnPointerPressed>(char_e).is_some(),
+                "scope{}: キャラ窓は OnPointerPressed を持つ",
+                p.scope
+            );
+
+            // バルーン窓はポインタハンドラを一切持たない（DD-IE-12・stand-in 撤去）
+            assert!(
+                world.get::<OnPointerMoved>(balloon_e).is_none(),
+                "scope{}: バルーン窓に OnPointerMoved を付けない（DD-IE-12）",
+                p.scope
+            );
+            assert!(
+                world.get::<OnPointerPressed>(balloon_e).is_none(),
+                "scope{}: バルーン窓に OnPointerPressed を付けない（DD-IE-12）",
+                p.scope
+            );
         }
     }
 
@@ -734,54 +747,18 @@ mod tests {
     }
 
     // -------------------------------------------------------------------------
-    // OnPointerPressed close（design main.rs seam: ダブルクリック → 全
-    // GhostWindowMarker despawn → run() 正常復帰）
+    // stand-in 即終了（`on_ghost_pressed`）の退役（areka-P0-input-events task 3.2・6.1）
+    //
+    // 旧テスト `double_click_left_despawns_all_ghost_windows` /
+    // `non_left_double_click_and_tunnel_do_not_despawn_ghost_windows` は stand-in
+    // 即終了（プレーンなダブルクリックで全窓 despawn）の挙動を檻にしていたが、
+    // 本 task で stand-in を退役し正規ハンドラ（`on_char_pointer_pressed`）へ
+    // 差し替えたため仕様退役＝除去した（[[obsolete-vs-broken-test-policy]]）。
+    // 正規ハンドラの挙動檻（プレーン dblclick は despawn せず DoubleClick 送出／
+    // Ctrl+左 dblclick で暫定退避 despawn）は input_events の task 2.7 檻が所有し、
+    // task 4.4 で再カバーされる。本 spawn.rs 側は登録の存在
+    // （`t_i1_all_windows_have_hit_test_none_and_char_has_pointer_handlers`）で足る。
     // -------------------------------------------------------------------------
-
-    /// ダブルクリック（左）の Bubble で全 `GhostWindowMarker` 窓を despawn し
-    /// true を返す。マーカーを持たない entity は残す。
-    #[test]
-    fn double_click_left_despawns_all_ghost_windows() {
-        let mut world = World::new();
-        let placements = two_scope_placements();
-        let gw = spawn_ghost_windows(&mut world, &placements, &titles());
-        let other = world.spawn_empty().id();
-
-        let char0 = gw.char_window(0).unwrap();
-        let handler = world
-            .get::<OnPointerPressed>(char0)
-            .expect("OnPointerPressed")
-            .0;
-
-        let ev = Phase::Bubble(pressed_event(DoubleClick::Left));
-        assert!(handler(&mut world, char0, char0, &ev));
-
-        assert!(ghost_window_entities(&mut world).is_empty());
-        assert!(world.get_entity(other).is_ok());
-    }
-
-    /// 左以外のダブルクリック・Tunnel フェーズでは despawn しない（false）。
-    #[test]
-    fn non_left_double_click_and_tunnel_do_not_despawn_ghost_windows() {
-        let mut world = World::new();
-        let placements = two_scope_placements();
-        let gw = spawn_ghost_windows(&mut world, &placements, &titles());
-
-        let balloon1 = gw.balloon_window(1).unwrap();
-        let handler = world
-            .get::<OnPointerPressed>(balloon1)
-            .expect("OnPointerPressed")
-            .0;
-
-        for dc in [DoubleClick::None, DoubleClick::Right, DoubleClick::Middle] {
-            let ev = Phase::Bubble(pressed_event(dc));
-            assert!(!handler(&mut world, balloon1, balloon1, &ev));
-        }
-        let ev = Phase::Tunnel(pressed_event(DoubleClick::Left));
-        assert!(!handler(&mut world, balloon1, balloon1, &ev));
-
-        assert_eq!(ghost_window_entities(&mut world).len(), 4);
-    }
 
     // -------------------------------------------------------------------------
     // T-I4: clickthrough 登録 system（6.1・task 5.2）

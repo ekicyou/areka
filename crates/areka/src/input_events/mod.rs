@@ -32,8 +32,9 @@ use throttle::{MouseMoveThrottle, plan_mouse_move};
 /// 本 struct と送出ヘルパは task 2.6 の範囲。ポインタハンドラ（`on_char_pointer_moved` /
 /// `on_char_pointer_pressed`）と暫定退避（Ctrl+左ダブルクリック）は task 2.7。`wire_mouse_input`
 /// による World 挿入（main.rs の boot 成功後呼出）は task 3.1 で結線済み＝`new` は本番から到達可能。
-/// 送出ヘルパ群はポインタハンドラ経由でのみ参照される（ハンドラは窓登録＝task 3.2 まで
-/// `#[allow(dead_code)]`・その先の呼び出しは dead 抑止の伝播対象）。
+/// 送出ヘルパ群はポインタハンドラ経由でのみ参照される。ハンドラのキャラ窓登録は task 3.2
+/// （`placement::spawn` が stand-in `on_ghost_pressed` を退役して差し替え）で完了済み＝
+/// 本番消費者が到達したため dead_code 抑止は不要になった。
 pub(crate) struct MouseWiring {
     /// `GhostRuntime::kanade()` クローン（1.4・std mpsc）。
     sender: Sender<KanadeMsg>,
@@ -214,8 +215,8 @@ pub(crate) fn wire_mouse_input(world: &mut World, sender: Sender<KanadeMsg>) {
 //
 // 署名は `fn(&mut World, sender: Entity, entity: Entity, ev: &Phase<PointerState>) -> bool`
 // （`wintf::ecs::pointer::PointerEventHandler`）。Bubble 相のみ処理し Tunnel は no-op false
-// （伝播続行）。窓への登録は task 3.2（spawn.rs）が行うまで非テストコードから未参照ゆえ
-// `#[allow(dead_code)]`（"registered on windows by task 3.2"）。
+// （伝播続行）。キャラ窓への登録は task 3.2（`placement::spawn`）で完了済み＝stand-in
+// `on_ghost_pressed` を退役して `OnPointerMoved`／`OnPointerPressed` へ差し替え。
 // ---------------------------------------------------------------------------
 
 /// キャラ窓 `CharWindowMarker.scope`（usize→u32）を取り出す（M1 実値 {0,1} を `debug_assert`）。
@@ -251,7 +252,6 @@ fn resolve_region_owned(world: &World, scope: u32, x: i64, y: i64) -> Option<Str
 /// なし）を取り、当たり判定を解決し [`plan_mouse_move`] の間引き判定を通して送出条件成立時のみ
 /// `KanadeMsg::Mouse(Move)` を送出する。`MouseWiring` 不在（wiring 前）は self-gating no-op（false・
 /// trace）。Tunnel 相は伝播続行のため常に false。
-#[allow(dead_code)] // registered on windows by task 3.2
 pub(crate) fn on_char_pointer_moved(
     world: &mut World,
     _sender: Entity,
@@ -296,7 +296,6 @@ pub(crate) fn on_char_pointer_moved(
 ///
 /// Tunnel 相は伝播続行のため常に false。送出系は `MouseWiring` 不在時 self-gating no-op（暫定退避は
 /// 上流で処理済みゆえ wiring 非依存）。
-#[allow(dead_code)] // registered on windows by task 3.2
 pub(crate) fn on_char_pointer_pressed(
     world: &mut World,
     _sender: Entity,

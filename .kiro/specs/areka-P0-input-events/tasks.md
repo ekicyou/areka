@@ -72,7 +72,7 @@
   - _Requirements: 1.4_
   - _Depends: 2.6_
 
-- [ ] 3.2 stand-in ダブルクリック即終了を退役し正規ハンドラへ差し替える
+- [x] 3.2 stand-in ダブルクリック即終了を退役し正規ハンドラへ差し替える
   - キャラ窓の従来の即終了処理を削除し新しいポインタハンドラを登録する
   - バルーン窓のマウスハンドラ登録を撤去する
   - Observable: ダブルクリックで従来の全窓即終了が発生せず新経路が呼ばれることを確認できる
@@ -120,3 +120,7 @@
   - Observable: 上記すべてが実機ログと目視で確認され、記録に残る
   - _Requirements: 8.3_
   - _Depends: 3.1, 3.2_
+
+## Implementation Notes
+
+- 3.2: stand-in `on_ghost_pressed` 退役に伴い、example の doc コメント（`crates/areka/examples/window-placement.rs:35`・`collision-probe.rs:322`）が「ダブルクリックで全窓終了」と旧挙動を記述したまま陳腐化（コメントのみ・コンパイル非参照・境界外ゆえ未修正）。実挙動は Ctrl+左ダブルクリックが暫定退避。
