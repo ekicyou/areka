@@ -21,7 +21,7 @@
 //! タスク 2.5 の責務）。
 
 use super::{events, Action, ActiveTalk, Input, Phase, State};
-use crate::msg::{CloseReason, KanadeConfig, MonotonicMs, ShioriOutcome};
+use crate::msg::{CloseReason, KanadeConfig, MonotonicMs, MouseInput, ShioriOutcome};
 use crate::status::ExecutionSnapshot;
 use crate::talk::{StartTalk, TalkDone, TalkId};
 
@@ -34,7 +34,9 @@ use crate::talk::{StartTalk, TalkDone, TalkId};
 pub(crate) fn step(state: State, input: Input, _config: &KanadeConfig) -> (State, Vec<Action>) {
     match input {
         Input::Tick { now } => on_tick(state, now),
-        Input::ShioriReply { outcome } => on_reply(state, outcome),
+        // origin（DD-IE-3）はタスク 2.2 のマウス GET origin 別 reply 政策で参照する。本タスクの
+        // on_reply は origin を消費しないため destructure で読み飛ばす（seam）。
+        Input::ShioriReply { outcome, .. } => on_reply(state, outcome),
         Input::TalkDone(done) => on_talk_done(state, done),
         Input::CloseRequest { reason } => on_close_request(state, reason),
         // 上記以外（Boot・ForceQuit 等）は横断アームで捌かれ Steady には届かない。
@@ -44,6 +46,37 @@ pub(crate) fn step(state: State, input: Input, _config: &KanadeConfig) -> (State
             (state, Vec::new())
         }
     }
+}
+
+/// Steady でのマウス入力受理シーム（DD-IE-8・タスク 1 の差し込み口）。
+///
+/// mod.rs の横断アームが Steady フェーズのマウス入力のみを本関数へ委譲する。**本タスク（1）は
+/// シームの骨格のみ**を用意し、実際のイベント発行（`OnMouseMove` / `OnMouseDoubleClick` GET の
+/// 構築と送出）は**タスク 2.2 がここに実装する**。ゆえに現段階では Action を一切発行せず
+/// `(state, Vec::new())` を返す（events.rs のマウス構築子はタスク 2.1 まで存在しない）。
+///
+/// close 保留中（`pending_close.is_some()`）はマウス GET を発行しない防御を構造として先に置く
+/// （close 優先・DD-IE-8）。本タスクでは GET 自体が未実装のため無動作だが、タスク 2.2 が GET を
+/// 実装した後もこの guard によってマウス入力が close 握手へ割り込まないことが保証される。
+/// いずれの経路もフェーズ遷移は起こさない（in-flight ≤ 1・GET 発行時と reply 到着時の
+/// フェーズ同一性はシェルの同期往復が保証する）。
+pub(super) fn on_mouse(state: State, input: MouseInput) -> (State, Vec<Action>) {
+    if state.pending_close.is_some() {
+        tracing::trace!(
+            target: "kanade",
+            event = "mouse_seam_close_pending",
+            ?input,
+            "close 保留中——マウス GET を発行しない（close 優先・DD-IE-8。GET 発行はタスク 2.2）"
+        );
+        return (state, Vec::new());
+    }
+    tracing::trace!(
+        target: "kanade",
+        event = "mouse_seam",
+        ?input,
+        "Steady のマウス入力受理シーム——GET 発行はタスク 2.2 が実装する"
+    );
+    (state, Vec::new())
 }
 
 /// Steady での Tick（pump ゲート・Req 3.1／3.4／DD-6）。
@@ -405,6 +438,7 @@ mod tests {
             steady_none(5),
             Input::ShioriReply {
                 outcome: ShioriOutcome::Value("hello".to_string()),
+                origin: "test",
             },
             &config(),
         );
@@ -432,6 +466,7 @@ mod tests {
             steady_none(s1.next_talk_id),
             Input::ShioriReply {
                 outcome: ShioriOutcome::Value("world".to_string()),
+                origin: "test",
             },
             &config(),
         );
@@ -451,6 +486,7 @@ mod tests {
             steady_none(5),
             Input::ShioriReply {
                 outcome: ShioriOutcome::NoContent,
+                origin: "test",
             },
             &config(),
         );
@@ -467,6 +503,7 @@ mod tests {
             steady_some(TalkId(3), 6),
             Input::ShioriReply {
                 outcome: ShioriOutcome::Notified,
+                origin: "test",
             },
             &config(),
         );
@@ -487,6 +524,7 @@ mod tests {
             steady_some(TalkId(3), 6),
             Input::ShioriReply {
                 outcome: ShioriOutcome::Value("late".to_string()),
+                origin: "test",
             },
             &config(),
         );

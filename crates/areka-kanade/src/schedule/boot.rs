@@ -24,8 +24,8 @@ pub(crate) fn step(state: State, input: Input, config: &KanadeConfig) -> (State,
     match input {
         // 起動指示（Idle 前提・非 Idle は mod.rs 側で warn!＋無視済み）。
         Input::Boot => boot_start(state),
-        // 応答進行（各待ち点で直前呼出の結果を受ける）。
-        Input::ShioriReply { outcome } => on_reply(state, outcome, config),
+        // 応答進行（各待ち点で直前呼出の結果を受ける）。origin（DD-IE-3）は boot では未使用。
+        Input::ShioriReply { outcome, .. } => on_reply(state, outcome, config),
         // boot 中の close 指示は保留記録のみ（boot 継続・握手は後続層）。
         Input::CloseRequest { reason } => record_pending_close(state, reason),
         // 上記以外（Tick・TalkDone など）は boot 進行に無関係——防御的に無視する。
@@ -224,6 +224,7 @@ mod tests {
             s,
             Input::ShioriReply {
                 outcome: ShioriOutcome::Notified,
+                origin: "test",
             },
             &cfg,
         );
@@ -236,6 +237,7 @@ mod tests {
             s,
             Input::ShioriReply {
                 outcome: ShioriOutcome::NoContent,
+                origin: "test",
             },
             &cfg,
         );
@@ -249,6 +251,7 @@ mod tests {
             s,
             Input::ShioriReply {
                 outcome: ShioriOutcome::Value("greeting".to_string()),
+                origin: "test",
             },
             &cfg,
         );
@@ -283,6 +286,7 @@ mod tests {
             s,
             Input::ShioriReply {
                 outcome: ShioriOutcome::Notified,
+                origin: "test",
             },
             &cfg,
         );
@@ -313,6 +317,7 @@ mod tests {
             s,
             Input::ShioriReply {
                 outcome: ShioriOutcome::Notified,
+                origin: "test",
             },
             &cfg,
         );
@@ -323,6 +328,7 @@ mod tests {
             s,
             Input::ShioriReply {
                 outcome: ShioriOutcome::Value("earlygreet".to_string()),
+                origin: "test",
             },
             &cfg,
         );
@@ -371,6 +377,7 @@ mod tests {
             s,
             Input::ShioriReply {
                 outcome: ShioriOutcome::NoContent,
+                origin: "test",
             },
             &cfg,
         );
@@ -405,6 +412,7 @@ mod tests {
             s1,
             Input::ShioriReply {
                 outcome: ShioriOutcome::Value("a".to_string()),
+                origin: "test",
             },
             &cfg,
         );
@@ -426,6 +434,7 @@ mod tests {
             s2,
             Input::ShioriReply {
                 outcome: ShioriOutcome::Value("b".to_string()),
+                origin: "test",
             },
             &cfg,
         );
@@ -498,6 +507,7 @@ mod tests {
             s,
             Input::ShioriReply {
                 outcome: ShioriOutcome::Notified,
+                origin: "test",
             },
             &cfg,
         );
@@ -505,6 +515,7 @@ mod tests {
             s,
             Input::ShioriReply {
                 outcome: ShioriOutcome::NoContent,
+                origin: "test",
             },
             &cfg,
         );
@@ -512,6 +523,7 @@ mod tests {
             s,
             Input::ShioriReply {
                 outcome: ShioriOutcome::NoContent,
+                origin: "test",
             },
             &cfg,
         );
@@ -519,6 +531,7 @@ mod tests {
             s,
             Input::ShioriReply {
                 outcome: ShioriOutcome::Notified,
+                origin: "test",
             },
             &cfg,
         );
@@ -562,6 +575,7 @@ mod tests {
             greeting,
             Input::ShioriReply {
                 outcome: ShioriOutcome::Value("hi".to_string()),
+                origin: "test",
             },
             &cfg,
         );
@@ -582,6 +596,7 @@ mod tests {
             no_greeting,
             Input::ShioriReply {
                 outcome: ShioriOutcome::NoContent,
+                origin: "test",
             },
             &cfg,
         );
@@ -625,6 +640,7 @@ mod tests {
             s,
             Input::ShioriReply {
                 outcome: ShioriOutcome::Notified,
+                origin: "test",
             },
             &cfg,
         ); // BootInit→BootType
@@ -632,6 +648,7 @@ mod tests {
             s,
             Input::ShioriReply {
                 outcome: ShioriOutcome::NoContent,
+                origin: "test",
             },
             &cfg,
         ); // BootType→BootMain（OnBoot GET）
@@ -639,6 +656,7 @@ mod tests {
             s,
             Input::ShioriReply {
                 outcome: ShioriOutcome::Value("greeting".to_string()),
+                origin: "test",
             },
             &cfg,
         ); // BootMain(Value)→BootVersion{talk: Some(id=1)}
@@ -646,6 +664,7 @@ mod tests {
             s,
             Input::ShioriReply {
                 outcome: ShioriOutcome::Notified,
+                origin: "test",
             },
             &cfg,
         ); // BootVersion{Some}→Steady{talk: Some(id=1)}

@@ -18,7 +18,7 @@
 //! 失敗経路は存在しない。panic は新規導入しない（回復不能はすべて
 //! `Unloading{Fault}`→`Stopped` の正規遷移で表現する・Req 6.4）。
 
-use crate::msg::{CloseReason, KanadeConfig, MonotonicMs, ShioriCall, ShioriOutcome};
+use crate::msg::{CloseReason, KanadeConfig, MonotonicMs, MouseInput, ShioriCall, ShioriOutcome};
 use crate::status::ExecutionSnapshot;
 use crate::talk::{StartTalk, TalkDone, TalkEndReason, TalkId};
 
@@ -41,8 +41,18 @@ pub(crate) enum Input {
     CloseRequest { reason: CloseReason },
     ForceQuit { reason: CloseReason },
     ShioriDown { reason: String },
+    /// マウス入力（移動／ダブルクリック）。Steady のみ `steady::on_mouse` へ委譲し、
+    /// 他フェーズでは状態を変えず安全に無視する（DD-IE-8）。
+    Mouse(MouseInput),
     /// 直前の Action::ShioriRequest／ShioriUnload の結果（シェルが即時再投入）。
-    ShioriReply { outcome: ShioriOutcome },
+    ///
+    /// `origin` は再投入元の呼出イベント ID（シェルが送出した call の id を転記・DD-IE-3）。
+    /// 後続処理（マウス GET の origin 別 reply 政策・タスク 2.2）が応答の出所を識別するための
+    /// 内部情報。unload の応答には出所イベントが無いため `"Unload"` を転記する。
+    ShioriReply {
+        outcome: ShioriOutcome,
+        origin: &'static str,
+    },
 }
 
 /// 運行フェーズ（可視化は System Flows の状態機械図）。各待ち点は「直前に発行した
@@ -138,8 +148,24 @@ pub(crate) fn step(state: State, input: Input, config: &KanadeConfig) -> (State,
         Input::TalkDone(done) => on_talk_done(state, done, config),
 
         // ShioriReply: Unload 完了・呼出失敗（Failed）の横断判定を先に行い、
-        // それ以外は応答待ちフェーズへ委譲する（Req 6.1）。
-        Input::ShioriReply { outcome } => on_shiori_reply(state, outcome, config),
+        // それ以外は応答待ちフェーズへ委譲する（Req 6.1）。origin は応答の出所（DD-IE-3）。
+        Input::ShioriReply { outcome, origin } => on_shiori_reply(state, outcome, origin, config),
+
+        // Mouse（DD-IE-8）: Steady でのみ受理し steady::on_mouse へ委譲する。他フェーズ
+        // （boot／close／terminate 後）では状態を変えず安全に無視する。boot 時のマウス移動は
+        // 正常な環境入力ゆえ warn ではなく trace で観測する（沈黙の無視経路は作らない）。
+        Input::Mouse(m) => match state.phase {
+            Phase::Steady { .. } => steady::on_mouse(state, m),
+            _ => {
+                tracing::trace!(
+                    target: "kanade",
+                    event = "mouse_input_ignored",
+                    phase = phase_label(&state.phase),
+                    "非 Steady フェーズのマウス入力——状態を変えず無視（DD-IE-8）"
+                );
+                (state, Vec::new())
+            }
+        },
 
         // --- 防御アーム・フェーズ固有遷移への委譲 ---
 
@@ -169,6 +195,23 @@ pub(crate) fn snapshot_of(phase: &Phase) -> ExecutionSnapshot {
             ExecutionSnapshot { talk_active: true }
         }
         _ => ExecutionSnapshot::INACTIVE,
+    }
+}
+
+/// フェーズの静的ラベル（ログ観測用）。`Phase` は Debug を持たないため、可観測性ログ
+/// （例 `mouse_input_ignored`）に添える人間可読な識別子をここで与える。
+fn phase_label(phase: &Phase) -> &'static str {
+    match phase {
+        Phase::Idle => "Idle",
+        Phase::BootInit => "BootInit",
+        Phase::BootType => "BootType",
+        Phase::BootMain => "BootMain",
+        Phase::BootVersion { .. } => "BootVersion",
+        Phase::Steady { .. } => "Steady",
+        Phase::ClosePending { .. } => "ClosePending",
+        Phase::CloseTalkWait { .. } => "CloseTalkWait",
+        Phase::Unloading { .. } => "Unloading",
+        Phase::Stopped => "Stopped",
     }
 }
 
@@ -233,9 +276,14 @@ fn on_talk_done(state: State, done: TalkDone, config: &KanadeConfig) -> (State, 
 }
 
 /// ShioriReply の横断判定（Unload 完了・Failed）＋応答待ちフェーズ委譲。
+///
+/// `origin`（応答の出所イベント ID・DD-IE-3）は横断判定では使わないが、応答待ちフェーズへ
+/// 委譲する際に `Input::ShioriReply` として保持したまま流す（タスク 2.2 のマウス GET origin 別
+/// reply 政策がフェーズ固有遷移側で参照する）。
 fn on_shiori_reply(
     state: State,
     outcome: ShioriOutcome,
+    origin: &'static str,
     config: &KanadeConfig,
 ) -> (State, Vec<Action>) {
     // Unloading 中の応答は Unload 完了として扱う。Unloaded／Failed のいずれも Stopped へ
@@ -258,8 +306,8 @@ fn on_shiori_reply(
         return (state, Vec::new());
     }
 
-    // 正常応答（Value／NoContent／Notified）は応答待ちフェーズ固有遷移へ委譲。
-    dispatch_phase(state, Input::ShioriReply { outcome }, config)
+    // 正常応答（Value／NoContent／Notified）は応答待ちフェーズ固有遷移へ委譲（origin を保持）。
+    dispatch_phase(state, Input::ShioriReply { outcome, origin }, config)
 }
 
 /// Unloading 中の ShioriReply: Unloaded／Failed とも Stopped＋StopSelf へ（Failed は error!）。
@@ -459,6 +507,7 @@ mod tests {
             state_in(Phase::BootType),
             Input::ShioriReply {
                 outcome: ShioriOutcome::Failed(ShioriFailure::Timeout("30s".to_string())),
+                origin: "test",
             },
             &config(),
         );
@@ -506,6 +555,7 @@ mod tests {
             state_in(Phase::Idle),
             Input::ShioriReply {
                 outcome: ShioriOutcome::Notified,
+                origin: "test",
             },
             &config(),
         );
@@ -523,6 +573,7 @@ mod tests {
             }),
             Input::ShioriReply {
                 outcome: ShioriOutcome::Unloaded,
+                origin: "test",
             },
             &config(),
         );
@@ -538,6 +589,7 @@ mod tests {
             }),
             Input::ShioriReply {
                 outcome: ShioriOutcome::Failed(ShioriFailure::Ipc("pipe closed".to_string())),
+                origin: "test",
             },
             &config(),
         );
@@ -554,6 +606,83 @@ mod tests {
         assert_eq!(s.last_now, None);
         assert_eq!(s.next_talk_id, 1);
         assert!(s.pending_close.is_none());
+    }
+
+    // --- 10. Mouse 横断ルーティング（Task 1・DD-IE-8） ---
+
+    use crate::msg::{MouseEventKind, MouseInput};
+
+    fn mouse_move() -> MouseInput {
+        MouseInput {
+            scope: 0,
+            x: 10,
+            y: 20,
+            region: Some("head".to_string()),
+            kind: MouseEventKind::Move,
+        }
+    }
+
+    // 非 Steady フェーズ（boot／close／terminate 後）への Mouse は状態不変・SHIORI 問い合わせ
+    // 一切なし（DD-IE-8: マウスは Steady でのみ受理・他は安全に無視）。
+    #[test]
+    fn mouse_input_in_non_steady_phases_is_ignored() {
+        for phase in [
+            Phase::Idle,
+            Phase::BootMain,
+            Phase::ClosePending {
+                reason: CloseReason::User,
+            },
+            Phase::Stopped,
+        ] {
+            let before = std::mem::discriminant(&phase);
+            let (next, actions) = step(state_in(phase), Input::Mouse(mouse_move()), &config());
+            assert_eq!(
+                std::mem::discriminant(&next.phase),
+                before,
+                "非 Steady フェーズでは Mouse で phase が変わらない"
+            );
+            assert!(
+                actions.is_empty(),
+                "非 Steady フェーズでは Mouse で Action（SHIORI 問い合わせ含む）を発行しない"
+            );
+        }
+    }
+
+    // Steady では seam（steady::on_mouse）へ委譲されるが、Task 1 の stub は GET を発行しない
+    // （実発行は Task 2.2）。phase 不変・Action なしで seam 契約を固定する。
+    #[test]
+    fn mouse_input_in_steady_is_seam_and_emits_no_get_yet() {
+        // Steady{None}。
+        let (next, actions) = step(
+            state_in(Phase::Steady { talk: None }),
+            Input::Mouse(mouse_move()),
+            &config(),
+        );
+        assert!(matches!(next.phase, Phase::Steady { talk: None }));
+        assert!(actions.is_empty(), "Task 1 の on_mouse stub は GET を発行しない（seam）");
+
+        // Steady{Some}。
+        let (next, actions) = step(
+            state_in(steady_with_talk(TalkId(5))),
+            Input::Mouse(mouse_move()),
+            &config(),
+        );
+        assert!(matches!(next.phase, Phase::Steady { talk: Some(_) }));
+        assert!(actions.is_empty());
+    }
+
+    // close 保留中は Steady であってもマウス GET を発行しない防御（構造的シーム・DD-IE-8）。
+    #[test]
+    fn mouse_input_in_steady_with_pending_close_emits_no_get() {
+        let mut s = state_in(Phase::Steady { talk: None });
+        s.pending_close = Some(CloseReason::System);
+        let (next, actions) = step(s, Input::Mouse(mouse_move()), &config());
+        assert!(matches!(next.phase, Phase::Steady { talk: None }));
+        assert!(
+            matches!(next.pending_close, Some(CloseReason::System)),
+            "guard は pending_close を消費しない"
+        );
+        assert!(actions.is_empty(), "close 保留中はマウス GET を発行しない");
     }
 }
 
@@ -628,6 +757,7 @@ mod log_firing_tests {
             Phase::BootType,
             Input::ShioriReply {
                 outcome: ShioriOutcome::Failed(ShioriFailure::Timeout("30s".to_string())),
+                origin: "test",
             },
         );
         assert_logged(&ev, Level::ERROR, "shiori_failed");
@@ -655,6 +785,7 @@ mod log_firing_tests {
             },
             Input::ShioriReply {
                 outcome: ShioriOutcome::Failed(ShioriFailure::Ipc("pipe closed".to_string())),
+                origin: "test",
             },
         );
         assert_logged(&ev, Level::ERROR, "unload_failed");
@@ -708,6 +839,7 @@ mod log_firing_tests {
             Phase::Idle,
             Input::ShioriReply {
                 outcome: ShioriOutcome::Notified,
+                origin: "test",
             },
         );
         assert_logged(&ev, Level::WARN, "unexpected_reply");
@@ -738,6 +870,7 @@ mod log_firing_tests {
             Phase::BootInit,
             Input::ShioriReply {
                 outcome: ShioriOutcome::Value("unexpected".to_string()),
+                origin: "test",
             },
         );
         assert_logged(&ev, Level::WARN, "boot_unexpected_reply");
@@ -754,6 +887,7 @@ mod log_firing_tests {
                 state_in(Phase::Idle),
                 Input::ShioriReply {
                     outcome: ShioriOutcome::Notified,
+                    origin: "test",
                 },
                 &cfg,
             );
@@ -772,6 +906,7 @@ mod log_firing_tests {
             steady_with_talk(TalkId(5)),
             Input::ShioriReply {
                 outcome: ShioriOutcome::Value("late".to_string()),
+                origin: "test",
             },
         );
         assert_logged(&ev, Level::WARN, "steady_value_during_talk");
@@ -784,6 +919,7 @@ mod log_firing_tests {
             Phase::Steady { talk: None },
             Input::ShioriReply {
                 outcome: ShioriOutcome::Unloaded,
+                origin: "test",
             },
         );
         assert_logged(&ev, Level::WARN, "steady_unexpected_reply");
@@ -833,6 +969,7 @@ mod log_firing_tests {
             },
             Input::ShioriReply {
                 outcome: ShioriOutcome::Notified,
+                origin: "test",
             },
         );
         assert_logged(&ev, Level::WARN, "close_notified_unexpected");
@@ -847,6 +984,7 @@ mod log_firing_tests {
             },
             Input::ShioriReply {
                 outcome: ShioriOutcome::Unloaded,
+                origin: "test",
             },
         );
         assert_logged(&ev, Level::WARN, "close_reply_unexpected");
