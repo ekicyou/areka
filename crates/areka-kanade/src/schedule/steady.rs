@@ -21,7 +21,7 @@
 //! タスク 2.5 の責務）。
 
 use super::{events, Action, ActiveTalk, Input, Phase, State};
-use crate::msg::{CloseReason, KanadeConfig, MonotonicMs, MouseInput, ShioriOutcome};
+use crate::msg::{CloseReason, KanadeConfig, MonotonicMs, MouseEventKind, MouseInput, ShioriOutcome};
 use crate::status::ExecutionSnapshot;
 use crate::talk::{StartTalk, TalkDone, TalkId};
 
@@ -48,35 +48,61 @@ pub(crate) fn step(state: State, input: Input, _config: &KanadeConfig) -> (State
     }
 }
 
-/// Steady でのマウス入力受理シーム（DD-IE-8・タスク 1 の差し込み口）。
+/// Steady でのマウス入力受理（DD-IE-1／DD-IE-8・Req 1.4／2.1／3.1）。
 ///
-/// mod.rs の横断アームが Steady フェーズのマウス入力のみを本関数へ委譲する。**本タスク（1）は
-/// シームの骨格のみ**を用意し、実際のイベント発行（`OnMouseMove` / `OnMouseDoubleClick` GET の
-/// 構築と送出）は**タスク 2.2 がここに実装する**。ゆえに現段階では Action を一切発行せず
-/// `(state, Vec::new())` を返す（events.rs のマウス構築子はタスク 2.1 まで存在しない）。
+/// mod.rs の横断アームが Steady フェーズのマウス入力のみを本関数へ委譲する。受領した
+/// [`MouseInput`] から正典イベント（`OnMouseMove` / `OnMouseDoubleClick`）の GET を 1 件構築し
+/// 発行する。GET の応答（204／Value）に対する reply／置換政策は本関数の責務ではなく後続の
+/// `on_reply` アーム（タスク 2.3）が担う——本関数は**GET 発行まで**である。
 ///
-/// close 保留中（`pending_close.is_some()`）はマウス GET を発行しない防御を構造として先に置く
-/// （close 優先・DD-IE-8）。本タスクでは GET 自体が未実装のため無動作だが、タスク 2.2 が GET を
-/// 実装した後もこの guard によってマウス入力が close 握手へ割り込まないことが保証される。
+/// # close 保留中の防御（close 優先・DD-IE-8）
+/// close 保留中（`pending_close.is_some()`）はマウス GET を発行しない。close 握手はマウス入力に
+/// 割り込まれてはならないため、guard を最初に置き GET 発行より優先する（`pending_close` は
+/// 消費しない・trace で観測）。
+///
+/// # Status の併送（DD-IE-1）
+/// talk 再生中の Steady（`Steady{Some}`）でもマウス GET は**抑止せず常に発行**し、`Status: talking`
+/// を [`super::snapshot_of`] 由来のスナップショットから併送する（NOTIFY 化しない）。GET/NOTIFY を
+/// 使い分ける OnSecondChange pump とは異なり、マウス系は常に GET である。
+///
 /// いずれの経路もフェーズ遷移は起こさない（in-flight ≤ 1・GET 発行時と reply 到着時の
 /// フェーズ同一性はシェルの同期往復が保証する）。
 pub(super) fn on_mouse(state: State, input: MouseInput) -> (State, Vec<Action>) {
     if state.pending_close.is_some() {
         tracing::trace!(
             target: "kanade",
-            event = "mouse_seam_close_pending",
+            event = "mouse_close_pending",
             ?input,
-            "close 保留中——マウス GET を発行しない（close 優先・DD-IE-8。GET 発行はタスク 2.2）"
+            "close 保留中——マウス GET を発行しない（close 優先・DD-IE-8）"
         );
         return (state, Vec::new());
     }
+    // 送出時点の Steady フェーズから Status を導出する（active talk 中は talking を併送・DD-IE-1）。
+    let snapshot = super::snapshot_of(&state.phase);
+    let call = match input.kind {
+        MouseEventKind::Move => events::on_mouse_move(
+            input.x,
+            input.y,
+            input.scope,
+            input.region.as_deref(),
+            &snapshot,
+        ),
+        MouseEventKind::DoubleClick { button } => events::on_mouse_double_click(
+            input.x,
+            input.y,
+            input.scope,
+            input.region.as_deref(),
+            button,
+            &snapshot,
+        ),
+    };
     tracing::trace!(
         target: "kanade",
-        event = "mouse_seam",
+        event = "mouse_get",
         ?input,
-        "Steady のマウス入力受理シーム——GET 発行はタスク 2.2 が実装する"
+        "Steady のマウス入力受理——正典イベント GET を発行（DD-IE-1・フェーズ遷移なし）"
     );
-    (state, Vec::new())
+    (state, vec![Action::ShioriRequest(call)])
 }
 
 /// Steady での Tick（pump ゲート・Req 3.1／3.4／DD-6）。
@@ -651,5 +677,139 @@ mod tests {
             "pending_close に記録される（TalkDone を待つ）"
         );
         assert!(actions.is_empty(), "OnClose はまだ発行しない");
+    }
+
+    // === マウス GET 発行（Req 1.4／2.1／3.1・DD-IE-1／DD-IE-8） ===
+    // seam（on_mouse）の意図的充填。step() 経由（横断アーム込み）で駆動し、期待 GET は
+    // events:: の構築子と共有する（Reference 手書き重複を作らない）。
+
+    use crate::msg::{MouseButton, MouseEventKind, MouseInput};
+
+    fn mouse_move_input(region: Option<&str>) -> MouseInput {
+        MouseInput {
+            scope: 0,
+            x: 10,
+            y: 20,
+            region: region.map(str::to_string),
+            kind: MouseEventKind::Move,
+        }
+    }
+
+    fn mouse_dbl_input(button: MouseButton) -> MouseInput {
+        MouseInput {
+            scope: 0,
+            x: 10,
+            y: 20,
+            region: Some("Bust".to_string()),
+            kind: MouseEventKind::DoubleClick { button },
+        }
+    }
+
+    // --- Steady{None} + Move(region=Some) → OnMouseMove GET・Steady{None} 維持 ---
+
+    #[test]
+    fn steady_none_mouse_move_emits_get_and_keeps_phase() {
+        let (next, actions) = step(
+            steady_none(5),
+            Input::Mouse(mouse_move_input(Some("Head"))),
+            &config(),
+        );
+        assert!(matches!(next.phase, Phase::Steady { talk: None }), "マウス GET は phase を変えない");
+        assert_eq!(next.next_talk_id, 5, "マウス GET は採番しない");
+        assert_eq!(actions.len(), 1, "GET を 1 件だけ発行");
+        // Reference 完全一致は構築子と共有（talk 非アクティブ→INACTIVE・Status 行なし）。
+        assert_shiori(
+            &actions[0],
+            &events::on_mouse_move(10, 20, 0, Some("Head"), &ExecutionSnapshot { talk_active: false }),
+        );
+    }
+
+    // --- Steady{None} + DoubleClick{Left/Right} → OnMouseDoubleClick GET・Ref5 分岐 ---
+
+    #[test]
+    fn steady_none_mouse_double_click_left_emits_get_ref5_zero() {
+        let (next, actions) = step(
+            steady_none(5),
+            Input::Mouse(mouse_dbl_input(MouseButton::Left)),
+            &config(),
+        );
+        assert!(matches!(next.phase, Phase::Steady { talk: None }));
+        assert_eq!(actions.len(), 1);
+        assert_shiori(
+            &actions[0],
+            &events::on_mouse_double_click(
+                10,
+                20,
+                0,
+                Some("Bust"),
+                MouseButton::Left,
+                &ExecutionSnapshot { talk_active: false },
+            ),
+        );
+    }
+
+    #[test]
+    fn steady_none_mouse_double_click_right_emits_get_ref5_one() {
+        let (_next, actions) = step(
+            steady_none(5),
+            Input::Mouse(mouse_dbl_input(MouseButton::Right)),
+            &config(),
+        );
+        assert_eq!(actions.len(), 1);
+        assert_shiori(
+            &actions[0],
+            &events::on_mouse_double_click(
+                10,
+                20,
+                0,
+                Some("Bust"),
+                MouseButton::Right,
+                &ExecutionSnapshot { talk_active: false },
+            ),
+        );
+    }
+
+    // --- Steady{Some(active)} + Move → GET は抑止せず発行・Status: talking を帯びる（DD-IE-1） ---
+    // active talk 中でもマウス GET は NOTIFY 化せず GET のまま。snapshot_of(Steady{Some}) から
+    // talking が導出され Status ヘッダに載る。active talk は維持される。
+
+    #[test]
+    fn steady_some_mouse_move_emits_get_with_talking_status() {
+        let (next, actions) = step(
+            steady_some(TalkId(3), 6),
+            Input::Mouse(mouse_move_input(Some("Head"))),
+            &config(),
+        );
+        match next.phase {
+            Phase::Steady {
+                talk: Some(ActiveTalk { talk_id, .. }),
+            } => assert_eq!(talk_id, TalkId(3), "active talk は維持される"),
+            _ => panic!("expected Steady{{Some}} preserved"),
+        }
+        assert_eq!(actions.len(), 1, "active talk 中でもマウス GET を発行（抑止しない・DD-IE-1）");
+        // 期待 GET は talk_active=true スナップショット由来＝Status: talking を帯びる。
+        let expected =
+            events::on_mouse_move(10, 20, 0, Some("Head"), &ExecutionSnapshot { talk_active: true });
+        assert_shiori(&actions[0], &expected);
+        // GET のまま（NOTIFY 化しない）ことも明示。
+        assert!(
+            matches!(&actions[0], Action::ShioriRequest(ShioriCall::Get { .. })),
+            "マウス系は常に GET（NOTIFY 化しない・DD-IE-1）"
+        );
+    }
+
+    // --- pending_close 中は Steady でもマウス GET を発行しない（close 優先・DD-IE-8） ---
+
+    #[test]
+    fn steady_mouse_with_pending_close_emits_no_get() {
+        let mut s = steady_none(5);
+        s.pending_close = Some(CloseReason::System);
+        let (next, actions) = step(s, Input::Mouse(mouse_move_input(Some("Head"))), &config());
+        assert!(matches!(next.phase, Phase::Steady { talk: None }), "phase 不変");
+        assert!(
+            matches!(next.pending_close, Some(CloseReason::System)),
+            "guard は pending_close を消費しない"
+        );
+        assert!(actions.is_empty(), "close 保留中はマウス GET を発行しない（close 優先）");
     }
 }

@@ -648,27 +648,51 @@ mod tests {
         }
     }
 
-    // Steady では seam（steady::on_mouse）へ委譲されるが、Task 1 の stub は GET を発行しない
-    // （実発行は Task 2.2）。phase 不変・Action なしで seam 契約を固定する。
+    /// 単一 Action が期待 GET（id・references・status）と厳密一致することを検証する。
+    /// ShioriCall は PartialEq を持たないため field 単位で比較する。
+    fn assert_get(action: &Action, expected: &ShioriCall) {
+        match (action, expected) {
+            (
+                Action::ShioriRequest(ShioriCall::Get { id, references, status }),
+                ShioriCall::Get { id: eid, references: erefs, status: estatus },
+            ) => {
+                assert_eq!(id, eid, "GET id 不一致");
+                assert_eq!(references, erefs, "GET references 不一致");
+                assert_eq!(status.render(), estatus.render(), "GET status 不一致");
+            }
+            _ => panic!("期待した GET でない Action"),
+        }
+    }
+
+    // Steady では横断アームが steady::on_mouse へ委譲し、Task 2.2 の実装で GET を発行する
+    // （seam の意図的充填）。step() 経由（横断アーム込み）で GET が 1 件出ることを固定する。
     #[test]
-    fn mouse_input_in_steady_is_seam_and_emits_no_get_yet() {
-        // Steady{None}。
+    fn mouse_input_in_steady_emits_get_via_crosscutting_arm() {
+        // Steady{None} + Move → OnMouseMove GET（Status 行なし・INACTIVE）。phase 不変。
         let (next, actions) = step(
             state_in(Phase::Steady { talk: None }),
             Input::Mouse(mouse_move()),
             &config(),
         );
-        assert!(matches!(next.phase, Phase::Steady { talk: None }));
-        assert!(actions.is_empty(), "Task 1 の on_mouse stub は GET を発行しない（seam）");
+        assert!(matches!(next.phase, Phase::Steady { talk: None }), "マウス GET は phase を変えない");
+        assert_eq!(actions.len(), 1, "マウス入力で GET を 1 件発行する（Task 2.2）");
+        assert_get(
+            &actions[0],
+            &events::on_mouse_move(10, 20, 0, Some("head"), &ExecutionSnapshot::INACTIVE),
+        );
 
-        // Steady{Some}。
+        // Steady{Some} + Move → GET のまま発行され Status: talking を帯びる（DD-IE-1）。phase 不変。
         let (next, actions) = step(
             state_in(steady_with_talk(TalkId(5))),
             Input::Mouse(mouse_move()),
             &config(),
         );
-        assert!(matches!(next.phase, Phase::Steady { talk: Some(_) }));
-        assert!(actions.is_empty());
+        assert!(matches!(next.phase, Phase::Steady { talk: Some(_) }), "active talk は維持される");
+        assert_eq!(actions.len(), 1);
+        assert_get(
+            &actions[0],
+            &events::on_mouse_move(10, 20, 0, Some("head"), &ExecutionSnapshot { talk_active: true }),
+        );
     }
 
     // close 保留中は Steady であってもマウス GET を発行しない防御（構造的シーム・DD-IE-8）。
