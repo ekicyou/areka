@@ -119,9 +119,33 @@
 8. **DD-8 縮退の具体形（R4.3/4.4）**: カテゴリ単位（パーツ空）・トグル（数値空）・addid・mustselect を「log+skip」か「不透明保持のシームのみ」か。balloon の NameForm=warn/Invalid=error の severity split を踏襲するか。数の正の assert（優しい縮退の非空虚化）を添える方針（記憶 defer-canon-with-full-vocabulary…）。
 9. **DD-9 冪等ガードの単位**: 結果 BindSet が直前と同一なら再発行しない、を per-scope で。on→on の重複 bind、off→off、順序違いで同一集合に至る列（BindSet は昇順dedup）での冪等を純関数檻で固定。
 
-## 8. Research Needed（design フェーズへ持ち越し）
+## 8. Research Needed（design フェーズへ持ち越し）— 全件解決済み（2026-07-22 design 生成時実測）
 
-- **RN-1** emo-text `apply_cue`（`crates/areka-emo-text/src/state.rs`）の Custom アーム実測 — W1 が Custom を良性無視にしているかを確認し、DD-3 を確定（本 gap では未読）。
-- **RN-2** `ghost-setup`／emo2-boot 起動経路での `spawn_seriko` 呼出箇所と名前解決表の供給源（`MountModel.bindgroups`→seriko 注入の結線点）— DD-4 の実配線先。
-- **RN-3** surfaces.txt の `animation*.interval,bind` と descript `bindgroup*` 番号の突合が emo2 で成立しているか（番号=animation ID の恒等が実データで閉じるか・R1 の非空虚性）。**【✅ 先行確認済み・2026-07-19 ディスカッション #1 裏取り】** emo2 実データで恒等成立（descript bindgroup1100-1801 ↔ surfaces animation1100-1801・まばたき系のみ `bind+random`＝seriko-loop 領分）。design では網羅表の再掲のみでよい。
-- **RN-4** `balloon_face_e2e.rs` の e2e ハーネス形（TalkCue 列直入力→mock sink→注入 Tick）を bind へ流用する際の差分（fixture 自前用意の最小ゴースト構成）。
+- **RN-1【✅解決】** emo-text `apply_cue` の Custom アーム実測: `crates/areka-emo-text/src/state.rs:260-266` で `CueCommand::Custom { .. }` は明示列挙の良性 `debug!` skip 済み（W1 実装済み）。**emo-text は無改変**（R2.3 は既存資産で充足・design D3）。
+- **RN-2【✅解決】** `spawn_seriko` 呼出点: 本番 `crates/areka/src/emo2_boot/mod.rs:287`（`wire_emo2_boot` 手順4）と `crates/areka/src/emo2_boot/spine.rs:444`。名前解決表の供給源は `build_boot_assets`（`crates/areka/src/emo2_boot/assets.rs`）が既に呼ぶ `package::resolve()` の `MountModel.bindgroups` — ここへ名前転記を増設し `BootAssets` 新フィールド `bind_resolver` 経由で注入する（design D4）。**付随発見**: 現行の static_binds は `default_bind_ids`（assets.rs:48-72・shell KV 直読・sakura 限定）由来で、`MountModel.bindgroups`（`BindGroupDefaults`）とは**供給源が二重化**している（既知の技術的負債・本仕様では統合しない＝additive 優先・design「areka — 起動配線」に登記）。
+- **RN-3【✅解決済み・再掲】** bindgroup 番号=animation ID の恒等は emo2 実データで成立（1100-1801）。design の 3 分類表「付随確定」に再掲済み。
+- **RN-4【✅解決】** `crates/areka-seriko/tests/balloon_face_e2e.rs` のハーネス（script 直入力→Tick 注入→TalkDone→SerikoSink drop→seriko join→records 照合・sleep ゼロ）は bind e2e へそのまま流用可。差分は (a) `spawn_seriko` へ test-local `BindResolver` 表（腕/伸び→1100 等）を直接注入（descript 読取不要＝R5.5 の fixture は parsers テスト側で tempdir 自前用意）、(b) `static_binds` に emo2 相当の defaults を渡し off→on の差分を観測可能にする、の 2 点（design Testing Strategy E2E）。
+
+## 9. 設計決定（design 生成・2026-07-22 確定）
+
+design.md「Design Decisions」D1〜D10 が正本。要点のみ:
+
+- **D1（DD-1）**: bind 消費は `handle_message` の `cue_target_of==None` 枝**内側**（Wait 判定前）で `as_command_carrier()`→`command_target_of(name)==Some(Shell) && name=="bind"` の 2 条件ゲート（`MoveCueSink`（`move_cue.rs:467-484`）前例・冒頭先取り案は分類順序を組み替えるため棄却）。
+- **D2（DD-2）**: `.name` 値の再分割（`splitn(3,',')`）と (カテゴリ,パーツ)→ID 問い合わせアクセサは **parsers**（`BindGroupDefaults` へ additive・R1.3/1.4 の主語がマウントモデルのため）。カテゴリ集合解決アクセサ `category_ids` は提供するが M1 の seriko は未消費（縮退・シーム）。重複宣言はキー昇順の後勝ち。
+- **D4（DD-4）**: `spawn_seriko` へ `BindResolver` を additive 引数追加。`BindResolver` は素データ構築（seriko→parsers 依存を作らない・`SurfaceResolver` 同型）。追随更新: areka mod.rs/spine.rs＋seriko テスト群（`BindResolver::empty()`）。
+- **D5（DD-5）**: bind 変化時、`Shown(id)` なら `Show{id, 新binds}` 再発行・**`Hidden`/未知 scope は状態のみ更新し発行しない**（次 Show へ保留）。既存 `apply` の Show binds は static 固定→per-scope 現在集合へ差替（bind cue 不在時は同値＝非退行）。**R3.5 の設計上の精緻化**: R3.5 は「表示中 scope への再発行」として充足（Hidden scope には載せる surface_id が存在せず、強制表示は `\s[-1]` 意味論を破る）。要件ギャップではなく前提（表示中）の明文化として本 research に記録。
+- **D7（DD-7）**: scope→名前空間写像は `"0"→sakura`・`"1"→kero`・他→写像なし（warn+skip）。kero は取込まで行い機構は scope 非依存＝emo2 では空表で自然に解決不能（R4.3 のシームを空表の同一機構で実現・人工的無効化コードなし）。
+- **D8（DD-8）**: severity split＝解決不能=`error!`／M1 縮退の正典形（トグル・カテゴリ単位）=`warn!`／破損（カテゴリ欠落・on/off 値不正）=`error!`／非正準 params・未登記名=`debug!`（balloon NameForm/Invalid・MoveCueSink 前例踏襲）。全縮退枝に正カウント assert（非空虚化）。
+- **D9（DD-9）**: 冪等単位は per-scope の**結果 BindSet 同値**（`BindSet` 昇順 dedup ゆえ順序・重複不感）。純関数 `accumulate` で檻化。
+- **D10（新規発見）**: `command_target_of` へ `"bind"→Shell` 追記で dola 既存檻 `command_target_of_maps_move_and_rejects_unknown_names`（`dola/tests/cue/sink_test.rs:250-282`）の「bind は未知名」「Some は move のみ」assert が意図どおり FAIL→**檻を {move, bind} へ意味ある更新**（obsolete-vs-broken 規律・partition 檻は維持強化）。
+
+### 統合（synthesis）記録
+
+- **一般化**: bind 名前解決は `SurfaceResolver`／`resolve_balloon_key` と同じ「所有スナップショット＋純関数解決・severity は呼び手」の族へ一般化（インターフェースの族一致・実装は M1 要件分のみ）。
+- **build vs adopt**: 全構成要素が既存パターンの再演（W1 キャリア・MoveCueSink 名前ゲート・balloon 早期分岐・ScopeStates 冪等・ComposeCache 檻）。新規発明は `BindDirective` 類別と `dynamic_binds` マップのみ。外部依存追加なし。
+- **単純化**: 番号直指定形シームを設けない（D6・正典外）。kero 無効化の専用コードを書かない（D7・空表で自然縮退）。emo-compose/emo-present/sakura compile/emo-text へ触れない。`BindApplyOutcome` は 3 値（Changed/StateOnly/Unchanged）で発行要否と保留を型で峻別。
+
+### design レビューゲート結果（2026-07-22）
+
+- 機械チェック: 全 38 要件 ID（1.1–8.4）が Traceability に存在・Boundary 4 節充足・File Structure Plan 具体・コンポーネント⇔ファイル対応に孤児なし。
+- 判定レビュー: R3.5 の Hidden scope 非適用域を D5 で設計精緻化（上記）。要件ギャップなし・1 パスで通過。
