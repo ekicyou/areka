@@ -250,7 +250,7 @@ sequenceDiagram
 | 名前写像退役＋消費者台帳 | 配送層/結線層 | dola 語彙フリー化・台帳は areka 移設 | 2.1/2.2/2.4–2.6 | — | Service |
 | BindResolver＋引数解釈（seriko） | 解決層 | トークン→指令→ID の純関数 | 3.2/3.3/4.1/4.2 | emo-compose BindSet（P0） | Service |
 | 動的 bind 状態（seriko state） | 状態層 | per-scope 積算・冪等・Show 決定 | 3.1/3.4–3.6/3.8 | — | State |
-| bind 消費分岐（seriko actor） | アクター層 | 名前ゲート→一本経路結線 | 2.2/3.2–3.7 | dola command_target_of（P0） | Event |
+| bind 消費分岐（seriko actor） | アクター層 | 名前自己選別→一本経路結線 | 2.2/3.2–3.7 | dola as_command_carrier（P0） | Event |
 | 起動配線（areka） | app 層 | MountModel→BindResolver→spawn 注入 | 7.1 | parsers/seriko（P0） | Service |
 | 再合成回帰（emo-present） | 表示層 | test-only 檻 | 6.1–6.3 | — | — |
 
