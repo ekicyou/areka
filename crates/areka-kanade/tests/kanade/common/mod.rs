@@ -24,6 +24,7 @@
 
 #![allow(dead_code)]
 
+use std::collections::HashMap;
 use std::sync::mpsc::{Receiver, Sender};
 use std::sync::{Arc, Mutex};
 use std::thread;
@@ -142,6 +143,21 @@ pub fn expected_unload() -> RecordedCall {
 // Fixture — イベント id → 応答の対応（シナリオ構成可能）
 // ============================================================================
 
+/// マウス GET（`OnMouseMove`／`OnMouseDoubleClick`）へ注入する応答パターン（4.1）。
+///
+/// 4.2／4.3 の檻がマウス GET へ「talk スクリプト応答」または「無応答（204）」を任意に
+/// 注入するための語彙。`Fixture` のマウス応答表（[`Fixture::mouse_responses`]）の値として
+/// 用いる。既存の boot／steady／close 応答（それぞれ専用フィールド）と同じく、mock は
+/// この記述子どおりの [`ShioriOutcome`] を即応する（設計「Fixture へマウス応答（script／204）の
+/// additive 拡張」）。
+#[derive(Debug, Clone)]
+pub enum MouseResponse {
+    /// talk スクリプト Value を返す（`Steady{None}` から StartTalk を起こす・Req 8.1(c)）。
+    Script(String),
+    /// 204 / NoContent を返す（無応答・StartTalk 不発・Req 8.1(d)）。
+    NoContent,
+}
+
 /// mock shiori の応答表（Req 7.1）。シナリオごとに構成する。
 ///
 /// 基調は fixture 表どおり（OnInitialize→Notified／OnFirstBoot→204／OnBoot→固定 Value／
@@ -175,6 +191,12 @@ pub struct Fixture {
     pub close_quits: bool,
     /// `OnClose` GET 200（quit シナリオ）の固定スクリプト。
     pub farewell_script: String,
+    /// マウス GET id（`"OnMouseMove"`／`"OnMouseDoubleClick"`）→ 注入応答の対応（4.1）。
+    ///
+    /// 含まれない mouse id は 204（`NoContent`）——未注入既定は従来の catch-all（未知 GET＝204）と
+    /// 同値ゆえ additive（既存 consumer は mouse GET を発しないので無影響）。4.2／4.3 の檻が
+    /// [`Fixture::with_mouse_response`] でイベント別に script／204 を注入する。
+    pub mouse_responses: HashMap<&'static str, MouseResponse>,
 }
 
 impl Default for Fixture {
@@ -187,6 +209,7 @@ impl Default for Fixture {
             steady_script: FIXED_STEADY_SCRIPT.to_string(),
             close_quits: false,
             farewell_script: FIXED_FAREWELL_SCRIPT.to_string(),
+            mouse_responses: HashMap::new(),
         }
     }
 }
@@ -212,6 +235,17 @@ impl Fixture {
     /// 断つ。定常 pump（`Steady{None}` の GET）を決定的に観測するテスト専用（設計 Testing Strategy）。
     pub fn without_boot_greeting(mut self) -> Self {
         self.boot_greets = false;
+        self
+    }
+
+    /// マウス GET id へ注入応答（script Value ／ 204）を設定する（4.1・連鎖記法）。
+    ///
+    /// `id` は `"OnMouseMove"` ／ `"OnMouseDoubleClick"`。同一 id への再指定は後勝ちで上書きする。
+    /// 未設定の mouse id は 204（`NoContent`）のまま——4.2／4.3 が「talk 応答」「無応答」の両
+    /// パターンをイベント別に注入するための唯一の口（設計 Testing Strategy #4「204→無動作」／
+    /// Integration #1「Value→StartTalk」）。
+    pub fn with_mouse_response(mut self, id: &'static str, response: MouseResponse) -> Self {
+        self.mouse_responses.insert(id, response);
         self
     }
 }
@@ -261,6 +295,16 @@ impl FixtureState {
                         ShioriOutcome::Value(self.fixture.farewell_script.clone())
                     } else {
                         ShioriOutcome::NoContent
+                    }
+                }
+                // マウス GET は fixture の注入表を引く（未注入は 204・4.1）。script Value は
+                // 既存 talk 起動棚（Steady の StartTalk）へそのまま載る（Req 8.1(c)/(d)）。
+                mouse_id @ ("OnMouseMove" | "OnMouseDoubleClick") => {
+                    match self.fixture.mouse_responses.get(mouse_id) {
+                        Some(MouseResponse::Script(script)) => {
+                            ShioriOutcome::Value(script.clone())
+                        }
+                        Some(MouseResponse::NoContent) | None => ShioriOutcome::NoContent,
                     }
                 }
                 // 未知 GET は 204（保守的既定・M1 の対象イベントは上記で網羅）。
@@ -1140,7 +1184,7 @@ pub fn spawn_harness_no_sink(config: KanadeConfig, fixture: Fixture) -> Sinkless
 mod smoke {
     use super::*;
     use areka_actor::reply_channel;
-    use areka_kanade::{ExecutionSnapshot, TalkId, events};
+    use areka_kanade::{ExecutionSnapshot, MouseButton, TalkId, events};
 
     /// mock shiori 単独駆動: `OnBoot` GET へ即時に固定 Value を返し、記録が
     /// events 表から導出した期待値と一致する（fixture・assert・実装の三点一正本）。
@@ -1228,5 +1272,75 @@ mod smoke {
         // StartTalk 送信端を drop → sink スレッドは自然終了（期限付き join）。
         drop(talk_tx);
         sakura.join_bounded("mock-sakura join", DEFAULT_TIMEOUT);
+    }
+
+    /// 4.1 配管の疎通: マウス GET へ script Value と 204 を任意注入でき、mock がそれを返す。
+    ///
+    /// `Fixture::with_mouse_response` で `OnMouseMove` に script を注入・`OnMouseDoubleClick` は
+    /// 未注入（既定 204）とし、events 表から導出した両 GET を送って注入どおりの [`ShioriOutcome`]
+    /// が返ることを確認する（4.2／4.3 の (c)/(d) 檻の土台＝注入点が実在することの証明）。
+    #[test]
+    fn mock_shiori_injects_mouse_response() {
+        const MOUSE_SCRIPT: &str = r"\0\s[0]なでなで\e";
+        // OnMouseMove へ script を注入・OnMouseDoubleClick は未注入（既定 204）。
+        let fixture = Fixture::default()
+            .with_mouse_response("OnMouseMove", MouseResponse::Script(MOUSE_SCRIPT.to_string()));
+        let shiori = spawn_mock_shiori(fixture);
+
+        // (c) script 注入: OnMouseMove GET → Value（events 表から導出・ハードコードしない）。
+        let move_call = events::on_mouse_move(10, 20, 0, Some("Head"), &ExecutionSnapshot::INACTIVE);
+        let (reply, receiver) = reply_channel::<ShioriOutcome>();
+        shiori
+            .sender
+            .send(ShioriMsg::Request {
+                call: move_call,
+                reply,
+            })
+            .expect("send OnMouseMove to mock shiori");
+        let outcome = receiver
+            .recv_timeout(DEFAULT_TIMEOUT)
+            .expect("mock shiori should reply immediately");
+        match outcome {
+            ShioriOutcome::Value(script) => assert_eq!(script, MOUSE_SCRIPT),
+            _ => panic!("expected injected Value(script) for OnMouseMove"),
+        }
+
+        // (d) 未注入: OnMouseDoubleClick GET → 204（NoContent・StartTalk 不発の源）。
+        let dbl_call = events::on_mouse_double_click(
+            10,
+            20,
+            0,
+            Some("Head"),
+            MouseButton::Left,
+            &ExecutionSnapshot::INACTIVE,
+        );
+        let (reply, receiver) = reply_channel::<ShioriOutcome>();
+        shiori
+            .sender
+            .send(ShioriMsg::Request {
+                call: dbl_call,
+                reply,
+            })
+            .expect("send OnMouseDoubleClick to mock shiori");
+        let outcome = receiver
+            .recv_timeout(DEFAULT_TIMEOUT)
+            .expect("mock shiori should reply immediately");
+        match outcome {
+            ShioriOutcome::NoContent => {}
+            _ => panic!("expected 204 (NoContent) for un-injected OnMouseDoubleClick"),
+        }
+
+        // 両 GET が events 導出の期待値どおり記録される（Ref layout 込みの突合は 4.2／4.3 が担う）。
+        let recorded = shiori.recorded();
+        assert_eq!(recorded.len(), 2);
+        assert_eq!(recorded[0].id, "OnMouseMove");
+        assert_eq!(recorded[1].id, "OnMouseDoubleClick");
+
+        shiori
+            .sender
+            .send(ShioriMsg::Close)
+            .expect("send close to mock shiori");
+        join_bounded("mock-shiori join", DEFAULT_TIMEOUT, shiori.handle)
+            .expect("mock shiori body completes normally");
     }
 }
