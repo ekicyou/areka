@@ -62,6 +62,12 @@ mod placement;
 /// `wire_emo2_boot`）。
 mod emo2_boot;
 
+/// UI→kanade のマウス入力配信配線（areka-P0-input-events）。キャラ窓のポインタイベントを
+/// 捉え、当たり判定名を resolver で解決し、送出間引き（`throttle`）を通して kanade へ配信する
+/// 薄い配線層。現状は `throttle`（送出間引きの純粋判定・task 2.4）のみ。ポインタハンドラ結線と
+/// per-scope 状態保持（`MouseWiring`）は task 2.6／2.7 で増設される。
+mod input_events;
+
 /// 遅延応答と push 経路の end-to-end 結合テスト。
 /// モック脳が `SHIORI_S_PENDING`＋token を返し、後で保持 host へ safe `complete`/`raise` を発火する
 /// 一連の流れを `ShioriSession` 越しに 1 シナリオで通す（sink/session の単体テストと重複させない）。
