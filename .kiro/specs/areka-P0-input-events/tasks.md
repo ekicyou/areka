@@ -10,7 +10,7 @@
   - _Requirements: 1.1, 1.2, 4.4_
 
 - [ ] 2. Core: 正典イベント発行と UI 配線基盤
-- [ ] 2.1 OnMouseMove/OnMouseDoubleClick の正典 Reference 組立と送出許可リストへの追加
+- [x] 2.1 OnMouseMove/OnMouseDoubleClick の正典 Reference 組立と送出許可リストへの追加
   - 座標・ホイール量・対象スコープ・当たり判定識別子・ボタン識別・入力デバイス種を正典レイアウトで組み立てる構築処理を追加する
   - 当たり判定が無い場合の識別子表現、左右ボタンの識別値を正しく構成する
   - 送出許可イベント一覧にマウス系 2 種を追加する

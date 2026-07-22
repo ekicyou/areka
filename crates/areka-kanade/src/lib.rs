@@ -52,6 +52,7 @@ pub use talk::{StartTalk, TalkDone, TalkEndReason, TalkId};
 pub mod events {
     pub use crate::schedule::events::{
         ALLOWED_EVENT_IDS, baseware_version, is_allowed_event_id, on_boot, on_close,
-        on_close_notify, on_first_boot, on_initialize, on_second_change,
+        on_close_notify, on_first_boot, on_initialize, on_mouse_double_click, on_mouse_move,
+        on_second_change,
     };
 }
