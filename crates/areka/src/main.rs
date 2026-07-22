@@ -289,6 +289,14 @@ fn main() -> Result<()> {
     let outcome = emo2_boot::wire_emo2_boot(&app, &cfg.ghost_root, &cfg.balloon_root, &helper_exe);
     let (ghost_runtime, seriko_handle) = if outcome.wired {
         tracing::info!("実 sink 結線で起動しました（emo2-boot wire 成立）");
+        // マウス配信資源を World へ結線（task 3.1・design「main.rs＋wire_mouse_input」・
+        // DD-IE-9）: kanade Sender クローンで MouseWiring（NonSend・Presenter）を挿入する。
+        // 挿入は wire_emo2_boot 成功後＝Emo2Wiring 挿入済みゆえ presenter 経由の region 解決が
+        // 成立する（Emo2Wiring 挿入と同位置・同型・self-gating）。窓へのハンドラ登録は task 3.2。
+        if let Some(runtime) = outcome.ghost.as_ref() {
+            let sender = runtime.kanade().clone();
+            input_events::wire_mouse_input(app.world().borrow_mut().world_mut(), sender);
+        }
         (outcome.ghost, outcome.seriko)
     } else {
         // フォールバック（R7.3・DD-7）: 現行の `LogSink`×2 boot を UI 基盤・起動窓の後へ

@@ -30,12 +30,10 @@ use throttle::{MouseMoveThrottle, plan_mouse_move};
 /// UI スレッド所有ゆえ NonSend 1 個に束ねる（`Emo2Wiring` 前例と同型・順序依存なし self-gating）。
 ///
 /// 本 struct と送出ヘルパは task 2.6 の範囲。ポインタハンドラ（`on_char_pointer_moved` /
-/// `on_char_pointer_pressed`）と暫定退避（Ctrl+左ダブルクリック）は task 2.7、`wire_mouse_input`
-/// による World 挿入（main.rs 呼出）は task 3.1 で本 mod へ増設される。
-///
-/// `#[allow(dead_code)]`: 送出ヘルパ群は task 2.7 のハンドラ／3.1 の配線が消費するまで非テスト
-/// コードから未参照（throttle.rs が collision-geometry の第一消費者まで携えたのと同型）。
-#[allow(dead_code)]
+/// `on_char_pointer_pressed`）と暫定退避（Ctrl+左ダブルクリック）は task 2.7。`wire_mouse_input`
+/// による World 挿入（main.rs の boot 成功後呼出）は task 3.1 で結線済み＝`new` は本番から到達可能。
+/// 送出ヘルパ群はポインタハンドラ経由でのみ参照される（ハンドラは窓登録＝task 3.2 まで
+/// `#[allow(dead_code)]`・その先の呼び出しは dead 抑止の伝播対象）。
 pub(crate) struct MouseWiring {
     /// `GhostRuntime::kanade()` クローン（1.4・std mpsc）。
     sender: Sender<KanadeMsg>,
@@ -49,17 +47,17 @@ pub(crate) struct MouseWiring {
 
 /// 当たり判定名の供給源シーム（実／mock）。
 ///
-/// `#[allow(dead_code)]`: `Presenter` variant の実運用消費は task 2.7 のハンドラ／3.1 の配線
-/// （`RegionSource::Presenter` を構築）まで非テストコードから未参照。
-#[allow(dead_code)]
+/// `Presenter` は `wire_mouse_input`（task 3.1）が本番構築する。`Mock` は決定論檻専用。
 pub(crate) enum RegionSource {
     /// 実運用: presenter で `resolve_hit_region` を呼ぶ（1.3）。
     Presenter,
     /// 決定論檻: 固定写像で `HitRegion` を返す（1.5）。
+    ///
+    /// `#[allow(dead_code)]`: mock seam ゆえ本番からは構築されない（テスト専用・恒久）。
+    #[allow(dead_code)]
     Mock(fn(u32, i64, i64) -> HitRegion),
 }
 
-#[allow(dead_code)]
 impl MouseWiring {
     /// 実運用の構築子（既定 clock＝構築時に捕捉した [`Instant`] からの経過 ms）。
     ///
@@ -196,6 +194,19 @@ impl MouseWiring {
             );
         }
     }
+}
+
+/// boot 成功後に main から呼ぶ（task 3.1・DD-IE-9）。
+///
+/// kanade Sender クローンで `MouseWiring`（NonSend・`RegionSource::Presenter`）を World へ挿入する。
+/// `Emo2Wiring` 挿入と同型（emo2_boot/mod.rs:341-345）・self-gating＝窓 spawn と挿入の順序に
+/// 依存しない（click-through 登録と同型）。窓へのポインタハンドラ登録は task 3.2（spawn.rs）。
+///
+/// `wire_emo2_boot` 成功時（`wired=true`）に呼ばれる前提で `Presenter` を選ぶ。boot 成功時は
+/// `Emo2Wiring` 挿入済みゆえ presenter 経由の region 解決が成立する（万一 presenter 不在でも
+/// `resolve_region` が region None へ正常縮退する・DD-IE-9）。
+pub(crate) fn wire_mouse_input(world: &mut World, sender: Sender<KanadeMsg>) {
+    world.insert_non_send_resource(MouseWiring::new(sender, RegionSource::Presenter));
 }
 
 // ---------------------------------------------------------------------------
@@ -529,6 +540,24 @@ mod tests {
             }
             _ => panic!("Mouse(DoubleClick) を期待"),
         }
+    }
+
+    /// 配線挿入檻（3.1・DD-IE-9）: `wire_mouse_input` は fresh World へ `MouseWiring`
+    /// を NonSend 挿入する（Presenter region source・proven-wiring ゆえ存在確認で足る・
+    /// [[test-only-decision-branches-not-proven-wiring]]・窓ハンドラ登録は task 3.2）。
+    #[test]
+    fn wire_mouse_input_inserts_mouse_wiring_non_send() {
+        let (tx, _rx) = mpsc::channel::<KanadeMsg>();
+        let mut world = World::new();
+        assert!(
+            world.get_non_send_resource::<MouseWiring>().is_none(),
+            "挿入前は MouseWiring 不在"
+        );
+        wire_mouse_input(&mut world, tx);
+        assert!(
+            world.get_non_send_resource::<MouseWiring>().is_some(),
+            "wire_mouse_input 後は MouseWiring が NonSend 挿入されている"
+        );
     }
 
     /// presenter 不在の正常縮退（1.3・DD-IE-9）: `RegionSource::Presenter` で presenter=None なら
