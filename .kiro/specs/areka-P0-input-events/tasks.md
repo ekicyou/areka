@@ -95,7 +95,7 @@
   - _Requirements: 8.1, 8.2_
   - _Depends: 4.1, 1, 2.1, 2.2_
 
-- [ ] 4.3 マウス応答による talk 起動と置換の統合檻を追加する
+- [x] 4.3 マウス応答による talk 起動と置換の統合檻を追加する
   - 応答受領による talk 起動を検証する
   - talk 再生中のマウス由来置換を検証する
   - talk 再生中の他出所防御破棄が保存されていることを対で検証する（置換檻と防御破棄檻を同一テスト群に配置し、出所の一致判定を緩めない）
@@ -124,3 +124,5 @@
 ## Implementation Notes
 
 - 3.2: stand-in `on_ghost_pressed` 退役に伴い、example の doc コメント（`crates/areka/examples/window-placement.rs:35`・`collision-probe.rs:322`）が「ダブルクリックで全窓終了」と旧挙動を記述したまま陳腐化（コメントのみ・コンパイル非参照・境界外ゆえ未修正）。実挙動は Ctrl+左ダブルクリックが暫定退避。
+- 4.3: kanade 統合ハーネスは「再生中に非マウス origin の `Value`」を投入する経路を構造的に持たない（active talk 中の `OnSecondChange` pump は NOTIFY・Value 非搬送＝DD-6）。ゆえに置換檻（マウス origin→置換）と DD-6 保存檻（非マウス origin→破棄）の「対」は、統合層で置換＋構造的前提（非マウス pump=NOTIFY）を co-locate し、リテラルな DD-6 破棄分岐は task 2.3 のユニット檻（`steady_some_non_mouse_value_is_discarded_dd6`）が担う二層構成で成立。origin 判定の非 wildcard 性はユニット檻が固定。
+- 4.3: 壁時計なし有界リトライループ（`for _ in 1..=500 { drive; yield_now }`）は並行フルスイート負荷下で async reply スレッドが飢餓し空回り→非決定 flake になる（[[areka-defender-rescan-starves-cooperative-test-loops]] と同型）。修正＝`spawn_harness_gated` の park-count バリア（`expected_holds`/`hold_indices`）＋`join_bounded`。**注意**: `steady_test.rs:781` が同じ 500-bound idiom を使っており潜在 flake の疑い（本 spec 境界外・別途要観測）。
