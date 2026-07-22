@@ -42,7 +42,7 @@
   - _Requirements: 5.1, 5.2, 5.3_
   - _Boundary: MouseMoveThrottle_
 
-- [ ] 2.5 (P) 当たり判定 resolver への読み口を UI 配線層へ公開する
+- [x] 2.5 (P) 当たり判定 resolver への読み口を UI 配線層へ公開する
   - 表示結線から当たり判定 resolver 呼び出しに必要な読み取り専用アクセスを追加する
   - Observable: UI 配線層から当たり判定 resolver を呼び出せることを確認できる
   - _Requirements: 1.3_

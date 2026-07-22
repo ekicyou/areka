@@ -212,6 +212,22 @@ impl Emo2Wiring {
         }
     }
 
+    /// 当たり判定 resolver への読み口（design DD-IE-9/DD-IE-10・「Modified Files」mod.rs 行）。
+    ///
+    /// 内包する [`EmoPresenter`] を読み取り専用で貸し出す。`input-events` の region 解決
+    /// （`RegionSource::Presenter`＝task 2.6/2.7）が、この借用を
+    /// [`super::hit_region::resolve_hit_region`]`(presenter, scope, x, y)` の第 1 引数
+    /// （`&EmoPresenter`）へそのまま渡して当たり判定を解決する（Req 1.3・collision-geometry の
+    /// 契約を消費のみ）。所有・可変アクセスは presenter を専有する frame 相（attach/drain/text）に
+    /// 閉じたまま、UI 配線層へは read 口のみを開ける（本番表面を最小に保つ）。
+    ///
+    /// 第一 production 消費者（`input-events`＝roadmap W2・task 2.6/2.7）が生えるまでは呼び出しが
+    /// 無く dead_code 警告になる（`areka` は bin crate・baseline は警告皆無）ため明示抑止する。
+    #[allow(dead_code)]
+    pub(crate) fn presenter(&self) -> &EmoPresenter {
+        &self.presenter
+    }
+
     /// `\![move]` 指令受信端への test-support アクセサ（task 9.1 の存在檻・9.3 の e2e で消費）。
     ///
     /// 本番の frame 相 drain（task 9.2）は `move_rx` を private に閉じて `apply_move_directive` へ
@@ -940,6 +956,38 @@ mod tests {
         run_attach_phase(&mut wiring, &mut world);
         assert!(!wiring.attached, "再試行でもゲート不成立なら未装着");
         assert!(wiring.assets.is_some(), "再試行でも assets を保持");
+    }
+
+    /// task 2.5（Req 1.3）: UI 配線層（`Emo2Wiring`）の presenter 読み口から collision-geometry の
+    /// `resolve_hit_region` を呼べることを固定する。`input-events` の第一消費者（task 2.6/2.7 の
+    /// `RegionSource::Presenter`）が `Emo2Wiring::presenter()` を借りて resolver を叩く経路の縮図。
+    ///
+    /// 未装着 `EmoPresenter`（現サーフェス無し）では collision-geometry の documented degrade により
+    /// `region: None` へ正常縮退する（hit_region.rs 4.4/5.3）。GPU/表示なしで決定論的に成立する。
+    #[test]
+    fn presenter_accessor_feeds_resolve_hit_region() {
+        use crate::emo2_boot::hit_region::{resolve_hit_region, HitRegion};
+
+        let wiring = Emo2Wiring::new(
+            EmoPresenter::new(),
+            mpsc::channel::<PresentCommand>().1,
+            mpsc::channel::<MoveDirective>().1,
+            Rc::new(RefCell::new(TextLayerRuntime::new(TextLayerConfig::default()))),
+            TalkClock::new(Arc::new(|| 0.0)),
+            synth_assets(&[(0, 0), (1, 10)]),
+        );
+
+        // UI 配線層の読み口から resolver を呼べる（Req 1.3・型が resolve_hit_region の
+        // 第 1 引数 &EmoPresenter に一致することをコンパイル時にも固定）。未装着ゆえ region None。
+        let got = resolve_hit_region(wiring.presenter(), 0, 100, 100);
+        assert_eq!(
+            got,
+            HitRegion {
+                scope: 0,
+                region: None,
+            },
+            "未装着 presenter は region None（collision-geometry の正常縮退・Req1.3）"
+        );
     }
 
     /// task 9.1 存在檻: `MoveCueSink`（送出端）→ `Emo2Wiring`（受信端 `move_rx`）の channel 配線が
