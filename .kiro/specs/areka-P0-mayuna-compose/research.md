@@ -145,6 +145,15 @@ design.md「Design Decisions」D1〜D10 が正本。要点のみ:
 - **build vs adopt**: 全構成要素が既存パターンの再演（W1 キャリア・MoveCueSink 名前ゲート・balloon 早期分岐・ScopeStates 冪等・ComposeCache 檻）。新規発明は `BindDirective` 類別と `dynamic_binds` マップのみ。外部依存追加なし。
 - **単純化**: 番号直指定形シームを設けない（D6・正典外）。kero 無効化の専用コードを書かない（D7・空表で自然縮退）。emo-compose/emo-present/sakura compile/emo-text へ触れない。`BindApplyOutcome` は 3 値（Changed/StateOnly/Unchanged）で発行要否と保留を型で峻別。
 
+### 設計ディスカッション #1 帰結（2026-07-23・D1/D8④/D10 改定＋要件調整）
+
+- **Custom は完全不透明キャリア**（開発者裁定）: 「その他有象無象の任意事象を引き受ける」のが Custom の存在理由。dola にコマンド名語彙（`command_target_of`・W1 遺産）を置く中間状態は、コマンド追加のたび dola 編集を強いる歪み＝**本仕様で退役**。実測: 同 API の実行時利用者は MoveCueSink の冗長ゲート 1 箇所のみで配送（broadcast＋自己選別）に不関与。以後の 2 択規律=「消費者だけが意味を知る→Custom／dola 側 semantics 必須（時間・バリア・ライフサイクル級）→variant 昇格（Wait/ClearAll 前例）」。
+- **D1 改定**: seriko のゲートは `name == "bind"` 単独（`command_target_of` 非参照）。
+- **D8④ 改定（宛名規律）**: `Custom{command}` は開封失敗でも読める→**自分宛の破損のみ `warn!`・他人宛/未知名は正準・非正準問わず `debug!`**（未知名=将来コマンドの正常系）。MoveCueSink も同規律へ整列。設計検証 Issue 1 はこの規律確定で解消。
+- **D10 改定**: `command_target_of` 退役（sink.rs/mod.rs/doc）・dola 檻 `sink_test.rs:250-282` 退役＋委譲檻文言更新・`drive.rs:2212-2313` 参照檻更新・MoveCueSink ゲート簡素化＋severity 整列・**「1 名前=高々 1 消費者」台帳を areka 結線層へ移設**（宣言表 `move`→MoveCueSink・`bind`→seriko＋一意性檻）。以後コマンド追加は消費者＋台帳 1 行のみ＝dola 永久無改変。
+- **要件調整（契約変更）**: R2.2/R2.4/R2.5 改稿・**R2.6 新設**（配送層の語彙フリー契約）・R8.4 を「ワイヤ形・variant 不変＋退役は明示スコープ」へ精密化・Boundary In-scope へ dola 語彙フリー化を追加。
+- 旧 §5「bind 消費者結線 Option A（単一権威・dola 1 行追記）」は本帰結で **superseded**（dola への追記は行わない）。
+
 ### design レビューゲート結果（2026-07-22）
 
 - 機械チェック: 全 38 要件 ID（1.1–8.4）が Traceability に存在・Boundary 4 節充足・File Structure Plan 具体・コンポーネント⇔ファイル対応に孤児なし。
