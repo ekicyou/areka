@@ -15,7 +15,7 @@ use std::sync::mpsc::Sender;
 use areka_emo_present::EmoPresenter;
 use areka_kanade::{KanadeMsg, MouseButton, MouseEventKind, MouseInput};
 use bevy_ecs::prelude::*;
-use wintf::ecs::pointer::{DoubleClick, Phase, PointerState};
+use wintf::ecs::pointer::{DoubleClick, OnPointerMoved, OnPointerPressed, Phase, PointerState};
 
 use crate::emo2_boot::frame::Emo2Wiring;
 use crate::emo2_boot::hit_region::{HitRegion, resolve_hit_region};
@@ -32,9 +32,10 @@ use throttle::{MouseMoveThrottle, plan_mouse_move};
 /// 本 struct と送出ヘルパは task 2.6 の範囲。ポインタハンドラ（`on_char_pointer_moved` /
 /// `on_char_pointer_pressed`）と暫定退避（Ctrl+左ダブルクリック）は task 2.7。`wire_mouse_input`
 /// による World 挿入（main.rs の boot 成功後呼出）は task 3.1 で結線済み＝`new` は本番から到達可能。
-/// 送出ヘルパ群はポインタハンドラ経由でのみ参照される。ハンドラのキャラ窓登録は task 3.2
-/// （`placement::spawn` が stand-in `on_ghost_pressed` を退役して差し替え）で完了済み＝
-/// 本番消費者が到達したため dead_code 抑止は不要になった。
+/// 送出ヘルパ群はポインタハンドラ経由でのみ参照される。ハンドラのキャラ窓登録は本モジュールの
+/// [`attach_char_pointer_handlers`]（依存方向 input_events→placement。stand-in `on_ghost_pressed`
+/// を退役して差し替え・main.rs が spawn 直後に呼ぶ）で完了済み＝本番消費者が到達したため
+/// dead_code 抑止は不要になった。
 pub(crate) struct MouseWiring {
     /// `GhostRuntime::kanade()` クローン（1.4・std mpsc）。
     sender: Sender<KanadeMsg>,
@@ -210,13 +211,47 @@ pub(crate) fn wire_mouse_input(world: &mut World, sender: Sender<KanadeMsg>) {
     world.insert_non_send_resource(MouseWiring::new(sender, RegionSource::Presenter));
 }
 
+/// キャラ窓へポインタハンドラ（[`on_char_pointer_moved`]／[`on_char_pointer_pressed`]）を装着する。
+///
+/// 全 [`CharWindowMarker`] 窓に `OnPointerMoved`＋`OnPointerPressed` を挿入する
+/// （バルーン窓には付けない＝M1 はバルーンにマウス送出なし・DD-IE-12）。
+///
+/// # 依存方向（regression 修正）
+///
+/// この結線は本来 `placement::spawn` が担うのが素直だが、placement 本体は
+/// `crate::` パスを持てない（example が `#[path]` で私有 include するため・
+/// `window-placement.rs`／`collision-probe.rs`）。設計の依存方向も
+/// `input_events → placement` ゆえ、ハンドラ装着は placement に依存できる
+/// **本モジュール側**が所有する（stand-in 即終了 `on_ghost_pressed` は退役）。
+///
+/// # タイミング契約
+///
+/// `spawn_ghost_windows` の**直後**に同一 `&mut World` クロージャ内で呼ぶこと
+/// （キャラ窓が既に存在する状態・main.rs の `open_startup_window` 結線）。同一
+/// World-mutation 内で同期実行するため async race はない。
+pub(crate) fn attach_char_pointer_handlers(world: &mut World) {
+    // `&mut World` を借用中にクエリで別の可変借用を取れないため、まず対象 entity を
+    // 収集してから 1 件ずつ挿入する。
+    let char_windows: Vec<Entity> = world
+        .query_filtered::<Entity, With<CharWindowMarker>>()
+        .iter(world)
+        .collect();
+    for e in char_windows {
+        world.entity_mut(e).insert((
+            OnPointerMoved(on_char_pointer_moved),
+            OnPointerPressed(on_char_pointer_pressed),
+        ));
+    }
+}
+
 // ---------------------------------------------------------------------------
 // ポインタハンドラ（task 2.7・wintf `PointerEventHandler` 署名）
 //
 // 署名は `fn(&mut World, sender: Entity, entity: Entity, ev: &Phase<PointerState>) -> bool`
 // （`wintf::ecs::pointer::PointerEventHandler`）。Bubble 相のみ処理し Tunnel は no-op false
-// （伝播続行）。キャラ窓への登録は task 3.2（`placement::spawn`）で完了済み＝stand-in
-// `on_ghost_pressed` を退役して `OnPointerMoved`／`OnPointerPressed` へ差し替え。
+// （伝播続行）。キャラ窓への登録は本モジュールの `attach_char_pointer_handlers`（依存方向
+// input_events→placement・main.rs が spawn 直後に呼ぶ）で行う＝stand-in `on_ghost_pressed`
+// を退役して `OnPointerMoved`／`OnPointerPressed` へ差し替え。
 // ---------------------------------------------------------------------------
 
 /// キャラ窓 `CharWindowMarker.scope`（usize→u32）を取り出す（M1 実値 {0,1} を `debug_assert`）。

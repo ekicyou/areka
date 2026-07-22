@@ -21,13 +21,17 @@
 //!   アンカーの単一真実源・**全 char 窓へ無条件付与**＝Free 窓も resize の identity 射影で
 //!   読む・4.2）＋`DragConfig`（全面ドラッグ・4.1。`move_window` は非 Free アンカーの
 //!   キャラ窓のみ false＝on_char_drag 単一ライター・DD15 v2／4.7、Free は true＝wndproc
-//!   委譲）＋`OnDrag(on_char_drag)`＋`BalloonFollow`＋`OnPointerMoved(on_char_pointer_moved)`
-//!   ＋`OnPointerPressed(on_char_pointer_pressed)`（areka-P0-input-events task 3.2：マウス移動／
-//!   ダブルクリックを `input_events` 経由で kanade へ配信。Ctrl+左ダブルクリックは暫定退避＝
-//!   全 `GhostWindowMarker` despawn→window-close funnel→`run()` 正常復帰。stand-in 即終了
-//!   `on_ghost_pressed` は退役）。非 Free アンカーの
+//!   委譲）＋`OnDrag(on_char_drag)`＋`BalloonFollow`。非 Free アンカーの
 //!   キャラ窓はさらに `OnDragEnd(on_char_drag_end)`（最終カーソル位置への同写像適用・
-//!   DD15 v2 (3)）
+//!   DD15 v2 (3)）。
+//!   なおキャラ窓へのポインタハンドラ（`OnPointerMoved`／`OnPointerPressed`）は
+//!   **本モジュールでは付けない**——マウス移動／ダブルクリックを kanade へ配信する結線は
+//!   `input_events::attach_char_pointer_handlers` が spawn 直後に装着する（依存方向
+//!   input_events→placement。placement は `crate::` パスを持たず `super::`／外部 crate のみ
+//!   参照する＝example の `#[path]` include で成立させるため。areka-P0-input-events）。
+//!   Ctrl+左ダブルクリックは暫定退避（全 `GhostWindowMarker` despawn→window-close funnel→
+//!   `run()` 正常復帰）で、これも input_events 側ハンドラ／main.rs の結線が担う（stand-in
+//!   即終了 `on_ghost_pressed` は退役）
 //! - バルーン窓: 同型（marker は `BalloonWindowMarker{scope}`・`DragConfig::default()`
 //!   は付与＝バルーン単独ドラッグ可・4.5。`OnDrag(on_balloon_drag)` で単独ドラッグの
 //!   相対位置記憶（4.8・DD16・task 8.3）・`BalloonFollow` なし。M1 はマウス送出なし＝
@@ -52,10 +56,7 @@ use windows::Win32::UI::WindowsAndMessaging::{
 use wintf::ecs::clickthrough::ClickThroughRegistryHandle;
 use wintf::ecs::drag::{DragConfig, OnDrag, OnDragEnd};
 use wintf::ecs::layout::HitTest;
-use wintf::ecs::pointer::{OnPointerMoved, OnPointerPressed};
 use wintf::ecs::{Point, SizeI, Window, WindowHandle, WindowPos, WindowStyle};
-
-use crate::input_events::{on_char_pointer_moved, on_char_pointer_pressed};
 
 use super::follow::{on_balloon_drag, on_char_drag, on_char_drag_end, Anchored, BalloonFollow};
 use super::resolver::ScopePlacement;
@@ -210,18 +211,13 @@ pub fn spawn_ghost_windows(
                     balloon: balloon_window,
                     offset: p.balloon_offset,
                 },
-                // マウス入力配線（areka-P0-input-events task 3.2）: キャラ窓の
-                // ポインタ移動／押下を `input_events` の正規ハンドラへ結線する
-                // （stand-in 即終了 `on_ghost_pressed` を退役して差し替え）。
-                // `on_char_pointer_moved` は当たり判定を解決し間引きを通して
-                // kanade へ Move を配信、`on_char_pointer_pressed` は左／右ダブル
-                // クリックを DoubleClick として配信する（DD-IE-10・self-gating）。
-                // Ctrl+左ダブルクリックは**暫定退避**＝全 `GhostWindowMarker` を
-                // despawn し既存 window-close funnel（run() 復帰→main shutdown→
-                // ForceQuit 系列）へ委ねる（stand-in 直接経路は新設しない・DD-IE-7）。
-                // この暫定退避は M-dialogue の `\-` メニュー終了完成で退役する。
-                OnPointerMoved(on_char_pointer_moved),
-                OnPointerPressed(on_char_pointer_pressed),
+                // マウス入力配線（areka-P0-input-events）: キャラ窓のポインタ移動／押下を
+                // kanade へ配信する `OnPointerMoved`／`OnPointerPressed` は**ここでは付けない**。
+                // 依存方向は input_events→placement（placement は `crate::` パスを持てない＝
+                // example の `#[path]` include で成立させるため）ゆえ、ハンドラ装着は spawn
+                // 直後に `input_events::attach_char_pointer_handlers` が行う（stand-in 即終了
+                // `on_ghost_pressed` は退役。Ctrl+左ダブルクリック暫定退避もそのハンドラ側の
+                // 責務・DD-IE-7）。
             ))
             .id();
 
@@ -539,18 +535,23 @@ mod tests {
     }
 
     /// T-I1 補: 全窓が `HitTest::none()`（全面ヒットで透過を殺さない）を持つ。
-    /// キャラ窓は正規ポインタハンドラ（`OnPointerMoved`＋`OnPointerPressed`＝
-    /// areka-P0-input-events task 3.2 で stand-in `on_ghost_pressed` を退役して
-    /// 差し替え）を持ち、バルーン窓はポインタハンドラを一切持たない（M1 は
-    /// バルーンにマウス送出なし・DD-IE-12）。ハンドラ実挙動の檻は input_events の
-    /// task 2.7 檻＝proven-wiring ゆえ存在の有無だけ固定する
-    /// （[[test-only-decision-branches-not-proven-wiring]]）。
+    /// `spawn_ghost_windows` 自体はポインタハンドラを付けない（依存方向
+    /// input_events→placement・placement は `crate::` パスを持てないため）。
+    /// spawn 直後に `input_events::attach_char_pointer_handlers` を呼ぶと、キャラ窓は
+    /// 正規ポインタハンドラ（`OnPointerMoved`＋`OnPointerPressed`＝stand-in
+    /// `on_ghost_pressed` を退役して差し替え）を持ち、バルーン窓はポインタハンドラを
+    /// 一切持たない（M1 はバルーンにマウス送出なし・DD-IE-12）。ハンドラ実挙動の檻は
+    /// input_events の task 2.7 檻＝proven-wiring ゆえ存在の有無だけ固定する
+    /// （[[test-only-decision-branches-not-proven-wiring]]）。本テストは `#[cfg(test)]`
+    /// ゆえ `crate::` パス使用可（example の `#[path]` include 不変条件は非テストコード限定）。
     #[test]
     fn t_i1_all_windows_have_hit_test_none_and_char_has_pointer_handlers() {
         let mut world = World::new();
         let placements = two_scope_placements();
 
         let gw = spawn_ghost_windows(&mut world, &placements, &titles());
+        // spawn は crate::-free ゆえハンドラを付けない。装着は input_events が担う。
+        crate::input_events::attach_char_pointer_handlers(&mut world);
 
         for e in ghost_window_entities(&mut world) {
             assert_eq!(world.get::<HitTest>(e).copied(), Some(HitTest::none()));

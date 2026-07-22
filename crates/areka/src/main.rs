@@ -523,6 +523,12 @@ fn open_startup_window(app: &WinApp, cfg: &ConfigInputs) {
                         &prepared.placements,
                         &prepared.titles,
                     );
+                    // マウス入力ハンドラ装着（areka-P0-input-events・依存方向 input_events→
+                    // placement）: placement は `crate::` パスを持てない（example の `#[path]`
+                    // include で成立させるため）ゆえ、キャラ窓へのポインタハンドラ結線は
+                    // input_events 側が担う。spawn 直後の同一 World-mutation クロージャ内で
+                    // 同期実行するため、キャラ窓は既に存在し async race はない。
+                    input_events::attach_char_pointer_handlers(world);
                     let scopes: Vec<usize> = windows.scopes().collect();
                     tracing::info!(
                         ?scopes,
