@@ -211,7 +211,7 @@
   - _Requirements: 3.4, 7.2_
   - _Boundary: areka emo2_boot spine.rs (E2E)_
 
-- [ ] 10.3 実機サインオフ（有界 auto-exit + grep + 人間目視）
+- [ ] 10.3 実機サインオフ（有界 auto-exit + grep + 人間目視）_HumanRequired: autonomous 完遂不可（実 emo2・実 pasta.dll・実 DPI での GUI 起動＋人間目視が受入条件・R9.3）。手順は下記 Implementation Notes「10.3 実機サインオフ手順」参照。_
   - 実 emo2・実 pasta.dll・実 DPI で起動し、`AREKA_APP_SMOKE_EXIT_MS` 有界 auto-exit＋`RUST_LOG` grep（抽選/再生マーカー）で機械判定する
   - kero（`random`）のまばたきと、sakura の bindgroup を `\![bind,まばたき,通常,1]` で ON にした状態でのまばたきを人間が目視確認する
   - 完了状態: 実機ログに抽選発火・再生開始/停止/残留マーカーが記録され、開発者が両まばたきの目視確認結果を判定として記録する
@@ -223,6 +223,22 @@
 
 - **1.2 method/interval 転記**: `Interval::Other(Box<str>)` は単一文字列＝**keyword のみ**保持（`sometimes,5` → `Other("sometimes")`・K=5 は非採録）。設計 (design.md `Box<str>` 型形状＋討議 #1 裁定「sometimes と書いたのに動かない」診断性) どおりで承認済。未認識 interval **単独**行（pattern 無し）も認識 interval 単独行と対称に slot を確定する（faithful transcription・非駆動）。cargo は PowerShell 経由で実行（Git Bash coreutils の link.exe が MSVC link を遮蔽するため）。
 - **cross-crate ripple（1.1/1.2 後の baseline 修復・commit `<repair>`）**: parser `Pattern` への `method: DrawMethod` 欄追加は非 `#[non_exhaustive]` struct ゆえ**下流の全 `Pattern {..}` 構築サイト（test fixture のみ・production は parser のみが構築）を破壊**する。修復先＝emo-atlas manifest.rs / emo-compose plan.rs・log_firing_tests.rs・composer_tests.rs / emo-present presenter.rs（全て `#[cfg(test)]`）に `method: DrawMethod::new("overlay".to_string())` を追加。加えて 1.1 は `DrawMethod` を shell `mod.rs` の `pub use` へ再エクスポートし忘れていた（`pub` 欄型は公開必須）——併せて修正。**教訓: struct 欄追加タスクのレビューは `-p <crate>` でなく `cargo test --workspace --no-run` で下流回帰を検出すべし。** 以降 output.rs / command.rs 等の enum 欄追加（4.2, 8.2）も同様に workspace-tests build で追随漏れを検出する。
-- **areka ビルド赤ウィンドウ（4.2〜9.3・設計意図どおり）**: `DisplayCommand::Show/ShowBalloon` への `pattern` 欄追加（4.2）で `crates/areka/src/emo2_boot/adapter.rs`（`map_display_command` の網羅 match＋テスト構築子）がコンパイル不能になる＝設計「発見 D＝意図された強制追随」。9.3（adapter/frame の pattern 透過）で解消するまで **`cargo build -p areka` は expected-red**。中間タスク（5.x/6.1/7.x/8.x）のレビューは各 `-p <crate>` ゲートで判定（seriko/emo-compose/emo-present は areka に非依存ゆえ独立にグリーン）。9.3＋9.2 完了で `cargo build -p areka`（非テスト）**GREEN 復旧済**（commit 9.2）。残る `cargo build -p areka --tests` 赤は spine.rs のみ＝9.4 が追随。9.4 完了後に workspace 全体テストビルドを復旧確認する。
+- **areka ビルド赤ウィンドウ（4.2〜9.3・設計意図どおり）**: `DisplayCommand::Show/ShowBalloon` への `pattern` 欄追加（4.2）で `crates/areka/src/emo2_boot/adapter.rs`（`map_display_command` の網羅 match＋テスト構築子）がコンパイル不能になる＝設計「発見 D＝意図された強制追随」。9.3（adapter/frame の pattern 透過）で解消するまで **`cargo build -p areka` は expected-red**。中間タスク（5.x/6.1/7.x/8.x）のレビューは各 `-p <crate>` ゲートで判定（seriko/emo-compose/emo-present は areka に非依存ゆえ独立にグリーン）。9.3＋9.2 完了で `cargo build -p areka`（非テスト）**GREEN 復旧済**（commit 9.2）。残る `cargo build -p areka --tests` 赤は spine.rs のみ＝9.4 が追随。9.4 完了後に workspace 全体テストビルドを復旧確認する。**追記（9.4 後）**: areka examples（emo-present/window-placement/collision-probe）＋areka-emo-text tests/examples も ShowSurface.pattern（8.2）／compose param（7.1）波及で赤化＝baseline sweep commit で `&PatternState::default()` 追随済。`cargo build --workspace --tests --examples` GREEN 確認済。
+- **workspace テストの既知フレーク（本 feature 無関係）**: `cargo test --workspace` で `areka-kanade` の統合テスト `close_test::boot_greeting_talkdone_resumes_get_pump` / `steady_test::talk_completion_resumes_get_pump_ref3_one_status_none` が「5s 以内に disconnect せず」で断続失敗（再実行で 2件→1件と揺れる＝タイミングデッドライン依存のフレーク）。本ブランチは kanade を一切変更していない（`git diff --name-only main...HEAD | grep kanade` 空）＝回帰ではなく環境起因（[areka-defender-rescan-starves-cooperative-test-loops]）。feature の全対象クレート（parsers/emo-atlas/emo-compose/emo-present/seriko/ghost/areka）は GREEN。
+
+### 10.3 実機サインオフ手順（人間実行）
+
+autonomous 実装は 1.1〜10.2 まで完了（全 reviewer 承認）。10.3 は実機・人間目視ゆえ開発者が実行:
+
+1. **前提**: i686 host-32 helper 成果物をビルド（32bit SHIORI 駆動・PowerShell で `cargo build -p shiori-host32-helper --target i686-pc-windows-msvc`）。実 emo2 ゴースト（実 pasta.dll・辞書込みフルゴースト）を配置。
+2. **有界 auto-exit 起動＋grep**（機械判定）:
+   ```powershell
+   $env:AREKA_APP_SMOKE_EXIT_MS="20000"; $env:RUST_LOG="info"; cargo run -p areka 2>&1 | Tee-Object areka_signoff.log
+   ```
+   終了後、ログに以下マーカーが記録されることを grep で確認: `seriko: loop 抽選発火`（抽選/再生開始）・`seriko: loop 停止`（`-1` ベース復帰）・`seriko: loop 末尾残留`（sakura 残留）・`seriko: loop ticker を Close`（終了順序①）・boot 時の `seed`（再現用）。
+3. **人間目視**（受入条件・R9.1/9.2/9.3）:
+   - kero（`random`）のまばたきが起動しているだけで発生することを目視。
+   - sakura の bindgroup を `\![bind,まばたき,通常,1]` で ON にした状態でまばたきが発生することを目視（既定 OFF では起きない対照）。
+4. **判定記録**: 両まばたきの目視確認結果を開発者が判定として記録（DoD ゲート）。齟齬時は SSP 実観察で裏取り（R9.4）。
 - **5.3 残テスト分岐（10.1 で拾う）**: LoopRuntime の `-2`（`-1` 以外の負 surface）warn-once dedup 分岐（`warned_negative` set）に looper 専用テストが未配置。非ログ挙動は `-1` 経路と同一（base 復帰）・frame_at の `-2→Stopped` は timeline.rs で検証済ゆえ非ブロッキングだが、[deterministic-test-coverage-mandate] 遵守のため **10.1 looper 統合テストで `-2` warn-once ケース**（seriko の tracing capture helper 使用）を追加すること。
 - **emo-present テストバイナリ赤ウィンドウ（7.1〜8.1）**: `compose`/`compose_into` への `pattern` 引数追加（7.1）で emo-present の `#[cfg(test)]` caller（presenter tests・chain.rs・cache.rs tests）が `.compose()` を旧アリティで呼び赤化。7.1 は emo-present **LIB** ビルドのみ default 追随でグリーン化（presenter.rs:229）。**8.1（emo-present cache）は自タスクで emo-present テスト caller 群を `&PatternState::default()` で追随させ `cargo test -p areka-emo-present` を復旧すること**（ComposeKey 追加と併せて）。実 pattern 配線は 8.2。
