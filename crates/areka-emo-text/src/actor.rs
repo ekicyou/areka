@@ -285,11 +285,26 @@ impl TextLayerRuntime {
                 if let Some(render) = self.surfaces.get_mut(&cue.actor) {
                     render.executor.request_clear();
                 }
+                // 選択肢ライフサイクルの原子的無効化（R5.1/5.2/5.4）: 当該 actor の hover を None へ
+                // リセットし、ヒット行スナップショットを純粋状態の選択肢消去と**同時**に無効化する
+                // （表示と hit の片方だけが古い状態に残らない——present を待たず `choice_hit_rows` が空・
+                // `choice_active` が false へ揃う）。スパン初期化は下段 `state.apply_cue(Clear)` が
+                // items と同一ライフサイクルで担う。snapshot を明示除去するのは、`choice_active` が
+                // span 由来で即時に false へ倒れる一方、snapshot は present まで stale 行を保持しうる
+                // 隙間を塞ぎ、5.2 の原子性を照会時点で成立させるため（次 present の空再導出と冪等）。
+                self.choice_hover.remove(&cue.actor);
+                self.choice_snapshot.remove(&cue.actor);
             }
             CueCommand::ClearAll => {
                 for render in self.surfaces.values_mut() {
                     render.executor.request_clear();
                 }
+                // 全スコープの原子的無効化（R5.1/5.2/5.4・#6 冒頭全消し）: 保持する**全** actor の
+                // hover／ヒット行スナップショットを一括初期化する（上流は残存スコープを列挙できない——
+                // `state.rs::apply_cue(ClearAll)` の全 actor_states 消去と対）。cue が名指ししない
+                // actor の stale hover／snapshot も同時に消え、片方だけ古い状態が残らない（5.2）。
+                self.choice_hover.clear();
+                self.choice_snapshot.clear();
             }
             // 他コマンドは描画実行部への全域クリアを要さない（グリフ更新は present_frame が
             // リビール進行として描き、非担当コマンドは reveal を汚さない）。`Cursor` の
@@ -1625,5 +1640,169 @@ mod runtime_tests {
         );
         // ヒット行照会は hover 非依存（count 不変）。
         assert_eq!(rt.choice_hit_rows(&actor).len(), 2, "hover 後もヒット行は 2");
+    }
+
+    // ══ task 8.3: Clear/ClearAll の原子的無効化（hover リセット＋ヒット行スナップショット無効化・R5.1/5.2/5.4） ══
+
+    /// Observable（5.1/5.2/5.4）: `apply_cue(Clear)` は当該 actor の hover を None へリセットし、
+    /// ヒット行スナップショットを純粋状態の選択肢消去と**原子的**に無効化する（present を待たず
+    /// `choice_hit_rows` が空・`choice_active` が false へ同時に揃う——表示と hit の片方だけが
+    /// 古い状態に残らない）。後続の新選択肢集合は stale hover を引き継がず、ハイライト無しで描画される。
+    #[test]
+    fn clear_resets_hover_and_invalidates_hit_rows_atomically_no_stale_highlight() {
+        let (mut world, window, slot) = com_world();
+        let actor = ActorKey::from("0");
+        let mut rt = TextLayerRuntime::new(TextLayerConfig::default());
+        rt.apply_cue(&choice_cue("0", 0.0, "OnYes", "はい", &["r0"]));
+        rt.apply_cue(&choice_cue("0", 0.2, "OnNo", "いいえ", &["r1"]));
+        let image = (120u32, 60u32);
+        rt.register_actor(
+            actor.clone(),
+            TextSlotBinding::new(slot, window, 1.0, image),
+            ResolvedBalloonText::resolve(&geo_model(), image),
+        );
+
+        // 選択肢を提示しヒット行を population・ordinal 0 を hover 注入して再提示（ハイライトが載る）。
+        present_frame(&mut rt, &mut world, 10.0).expect("提示（population）");
+        assert_eq!(rt.choice_hit_rows(&actor).len(), 2, "Clear 前はヒット行 2");
+        assert!(rt.choice_active(&actor), "Clear 前は choice_active=true");
+        rt.inject_choice_hover(&actor, Some(0));
+        present_frame(&mut rt, &mut world, 10.0).expect("hover 提示");
+
+        // Clear 注入——present を待たず表示層 state と hit スナップショットが原子的に無効化される。
+        rt.apply_cue(&cue("0", 11.0, CueCommand::Clear));
+        assert!(
+            rt.choice_hit_rows(&actor).is_empty(),
+            "Clear は present を待たずヒット行スナップショットを無効化する（5.2 原子性）"
+        );
+        assert!(
+            !rt.choice_active(&actor),
+            "Clear は選択肢スパンを消し choice_active=false（5.1）"
+        );
+
+        // Clear 後フレーム: 全透明へ戻り、ヒット行は空のまま・choice_active も false のまま。
+        present_frame(&mut rt, &mut world, 12.0).expect("Clear 後フレーム");
+        assert!(
+            rt.choice_hit_rows(&actor).is_empty(),
+            "Clear 後の提示もヒット行は空"
+        );
+        assert!(!rt.choice_active(&actor), "Clear 後も choice_active=false");
+
+        // 新しい選択肢集合を注入——stale hover（Some(0)）を引き継がず、ハイライト無しで描画される（5.4）。
+        rt.apply_cue(&choice_cue("0", 13.0, "OnA", "あか", &["a"]));
+        rt.apply_cue(&choice_cue("0", 13.2, "OnB", "あお", &["b"]));
+        present_frame(&mut rt, &mut world, 20.0).expect("新選択肢提示");
+        let rows = rt.choice_hit_rows(&actor).to_vec();
+        assert_eq!(rows.len(), 2, "新選択肢集合のヒット行は 2");
+        assert_eq!(rows[0].id, "OnA", "新選択肢のみ（前選択肢は残らない・5.3）");
+        assert_eq!(rows[1].id, "OnB");
+
+        let read = |rt: &TextLayerRuntime| -> usize {
+            opaque_count(
+                &rt.surface(&actor)
+                    .expect("供給面")
+                    .read_back()
+                    .expect("read_back"),
+            )
+        };
+        let after_new = read(&rt);
+        // hover を明示 None にして再提示——Clear が hover を既に None へ揃えていれば NoChange
+        // （ハイライトの増減なし）。stale hover が残っていれば present で剥がれてピクセルが減る。
+        rt.inject_choice_hover(&actor, None);
+        present_frame(&mut rt, &mut world, 20.0).expect("None 再提示");
+        let after_none = read(&rt);
+        assert_eq!(
+            after_new, after_none,
+            "Clear が hover を None へリセット済み＝新選択肢に stale ハイライトが載らない（5.4）"
+        );
+    }
+
+    /// Observable（5.1/5.2/5.4・ClearAll 全スコープ）: `apply_cue(ClearAll)` は cue が名指ししない
+    /// actor を含む**全** actor の hover を None へリセットし、各 actor のヒット行スナップショットを
+    /// 純粋状態の全スコープ消去と原子的に無効化する。後続の新選択肢集合は stale hover を引き継がない。
+    #[test]
+    fn clear_all_resets_hover_and_hit_rows_for_every_actor() {
+        unsafe {
+            let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
+        }
+        let core = GraphicsCore::new().expect("GraphicsCore::new 失敗");
+        let wuc = WucGraphicsResource::new(core.d2d_device().expect("d2d_device"))
+            .expect("WucGraphicsResource::new 失敗");
+        let mut world = World::new();
+        let (window0, slot0) = spawn_reserved_slot(&mut world);
+        let (window1, slot1) = spawn_reserved_slot(&mut world);
+        world.insert_resource(core);
+        world.insert_resource(wuc);
+
+        let a0 = ActorKey::from("0");
+        let a1 = ActorKey::from("1");
+        let mut rt = TextLayerRuntime::new(TextLayerConfig::default());
+        let image = (120u32, 60u32);
+        // 両 actor に選択肢＋装着。
+        rt.apply_cue(&choice_cue("0", 0.0, "Q0", "はい", &["r0"]));
+        rt.apply_cue(&choice_cue("1", 0.0, "Q1", "いいえ", &["r1"]));
+        rt.register_actor(
+            a0.clone(),
+            TextSlotBinding::new(slot0, window0, 1.0, image),
+            ResolvedBalloonText::resolve(&geo_model(), image),
+        );
+        rt.register_actor(
+            a1.clone(),
+            TextSlotBinding::new(slot1, window1, 1.0, image),
+            ResolvedBalloonText::resolve(&geo_model(), image),
+        );
+
+        present_frame(&mut rt, &mut world, 10.0).expect("提示（population）");
+        assert_eq!(rt.choice_hit_rows(&a0).len(), 1, "ClearAll 前 actor0 ヒット行 1");
+        assert_eq!(rt.choice_hit_rows(&a1).len(), 1, "ClearAll 前 actor1 ヒット行 1");
+        // 両 actor に hover 注入して再提示（両供給面へハイライトが載る）。
+        rt.inject_choice_hover(&a0, Some(0));
+        rt.inject_choice_hover(&a1, Some(0));
+        present_frame(&mut rt, &mut world, 10.0).expect("hover 提示");
+
+        // ClearAll（cue.actor="0"）——名指ししない actor(1) を含む全スコープが原子的に無効化される。
+        rt.apply_cue(&cue("0", 11.0, CueCommand::ClearAll));
+        for a in [&a0, &a1] {
+            assert!(
+                rt.choice_hit_rows(a).is_empty(),
+                "ClearAll は present を待たず全 actor のヒット行を無効化する（5.2）"
+            );
+            assert!(
+                !rt.choice_active(a),
+                "ClearAll は全 actor の choice_active=false（5.1）"
+            );
+        }
+        present_frame(&mut rt, &mut world, 12.0).expect("ClearAll 後フレーム");
+
+        // 新選択肢集合を両 actor へ——stale hover を引き継がずハイライト無しで描画（5.4）。
+        rt.apply_cue(&choice_cue("0", 13.0, "N0", "あか", &["a"]));
+        rt.apply_cue(&choice_cue("1", 13.0, "N1", "あお", &["b"]));
+        present_frame(&mut rt, &mut world, 20.0).expect("新選択肢提示");
+        let read = |rt: &TextLayerRuntime, a: &ActorKey| -> usize {
+            opaque_count(
+                &rt.surface(a)
+                    .expect("供給面")
+                    .read_back()
+                    .expect("read_back"),
+            )
+        };
+        assert_eq!(rt.choice_hit_rows(&a0).len(), 1, "actor0 新選択肢ヒット行 1");
+        assert_eq!(rt.choice_hit_rows(&a1).len(), 1, "actor1 新選択肢ヒット行 1");
+        let after_new_0 = read(&rt, &a0);
+        let after_new_1 = read(&rt, &a1);
+        // 両 actor の hover を明示 None にして再提示——ClearAll が既に None へ揃えていれば NoChange。
+        rt.inject_choice_hover(&a0, None);
+        rt.inject_choice_hover(&a1, None);
+        present_frame(&mut rt, &mut world, 20.0).expect("None 再提示");
+        assert_eq!(
+            read(&rt, &a0),
+            after_new_0,
+            "ClearAll が actor0 の hover を None へリセット済み＝stale ハイライト無し（5.4）"
+        );
+        assert_eq!(
+            read(&rt, &a1),
+            after_new_1,
+            "ClearAll が名指ししない actor1 の hover も None へリセット済み＝stale ハイライト無し（5.4）"
+        );
     }
 }

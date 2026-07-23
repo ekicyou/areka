@@ -148,7 +148,7 @@
   - _Requirements: 3.1, 3.2, 3.3, 5.2, 6.3_
   - _Boundary: RuntimeContract_
 
-- [ ] 8.3 Clear/ClearAll の原子的無効化を配線する
+- [x] 8.3 Clear/ClearAll の原子的無効化を配線する
   - _Depends: 8.2_
   - 既存の Clear/ClearAll `apply_cue` アーム（既に items を消去済み）を拡張し、当該 actor（ClearAll は全 actor）の hover を `None` へリセットする（スパン無効化は 1.2 の items 同時初期化に相乗り済み）
   - Observable: Clear 注入後の提示で `choice_hit_rows` が空になり `choice_active=false` となり、後続の新選択肢集合へ stale な hover が誤適用されない
@@ -241,3 +241,4 @@
 - viewbox_draw.rs: highlight 描画は Phase1(BeginDraw前=ブラシ生成+SetDrawingEffect・?伝播)→Phase2(FillRectangle→DrawTextLayout)分割。`segment_text_range` はグリフ中心が resident-local inline_range に入る連続 subrange を UTF-16 len 累積で DWRITE_TEXT_RANGE 化（多コード単位対応）。Choice 行は毎フレーム全範囲 SetDrawingEffect(None) リセット（cached TextLayout の stale 効果一掃・None=既定ゆえ素描画非回帰）。`ViewboxExecutor::scroll_state()->ScrollState{pos,committed}` additive 追加（task 8 スナップショットが committed 消費）。
 - actor.rs: per-actor `choice_hover: HashMap<ActorKey,Option<usize>>`/`choice_snapshot: HashMap<ActorKey,Vec<ChoiceHitRow>>`（8.2 で populate）。`ResolvedBalloonText.choice_style` は resolve 時に `ResolvedChoiceStyle::resolve(Some(model.cursor()), font.color)` で一度解決。`choice_active`=`ActorTextState::choices()` 非空（DD-6・barrier ではない）。`ChoiceHitRow` は actor.rs 所有・`HitRectPx` は `pub use crate::choice::HitRectPx`。
 - actor.rs present_actor: 1回の layout→annotate→(from_layout→decorate)→render、成功 Update フレームのみ derive_hit_rows+to_window_physical で snapshot 更新（display と hit は同一 lines/segments＝単一導出 5.2/3.3）。NoChange/Err は snapshot 不変（if changed ゲート内）。committed=`executor.scroll_state().committed`。`layout_with_cursor_warn`+persistent `cursor_warn: CursorWarnGuard` 配線で 6.5 warn-once を production 有効化（4.2 申し送り消化）。折返し跨ぎ選択肢は同一 ordinal の複数 ChoiceHitRow（設計意図）。
+- actor.rs apply_cue: Clear=`choice_hover.remove`+`choice_snapshot.remove`（per-actor）、ClearAll=両 map `.clear()`（全 actor）。snapshot も即時無効化（choice_active は span 由来で即 false・snapshot は次 present まで stale ゆえ照会窓で表示/hit 齟齬＝5.2 破れ回避）。次 present 空再導出と冪等・無害。
