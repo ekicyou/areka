@@ -114,7 +114,7 @@
   - _Depends: 3.1, 4.3_
   - _Requirements: 3.3, 3.4, 6.1, 6.7, 8.1_
 
-- [ ] 5.2 アクター起動・Publisher・Barrier
+- [x] 5.2 アクター起動・Publisher・Barrier
   - `spawn_sylphya(SylphyaInit) -> SylphyaParts`（起動時に全スコープを寛容ロードし初期鏡像を構築）を `areka-actor` の 5 規約（inbox／envelope／停止／流量／拡張凍結）に準拠して実装する
   - `SylphyaPublisher`（`publish_static`／`publish_shiori`／`set`／`persist_put`／`barrier`）を実装する
   - `barrier()` 復帰時点でそれ以前に同一送信端から投函した全メッセージが鏡像へ反映済みであること（mpsc FIFO＋直列処理）を確認する
