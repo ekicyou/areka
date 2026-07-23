@@ -94,7 +94,7 @@
   - _Requirements: 4.2, 4.3, 6.1, 6.5_
   - _Boundary: ChoicePure_
 
-- [ ] 5.4 canvas 装飾を実装する
+- [x] 5.4 canvas 装飾を実装する
   - _Depends: 5.1, 5.3, 3_
   - `decorate_canvas(canvas, segments, hover, style, default_font_color)` を実装（セグメントを含む GlyphRun 住人を Choice 住人へ置換し hover 印＋正規化済みハイライト塗りを焼き込む・セグメント空なら canvas を無変更で返す）
   - Observable: `hover=Some(ordinal)` で装飾すると該当行の `ChoiceLineContent.highlight` にのみ解決済み塗りが設定され他行は `None`、セグメント空リストでは入力と同一の canvas が返る
@@ -236,3 +236,4 @@
 - **Task 8.2 申し送り**: layout.rs は加法的に `layout_with_cursor_warn(…, actor, &mut CursorWarnGuard)` を新設。`layout` ラッパ経由は縮退 warn を抑止（挙動は同一・字下げは効く）。production の縮退 warn-once（6.5）を有効化するには present_actor が persistent `CursorWarnGuard`（`unresolved_warned` と同型）を保持して `layout_with_cursor_warn` を呼ぶ必要あり＝Task 8.2 の配線。
 - choice.rs: `PositionedLine{rect: LineRect, glyphs: Vec<PositionedGlyph>}`・`PositionedGlyph{ch, inline_pos, advance}`（inline_pos=行内軸 image px 絶対）。annotate は配置済みグリフを0起点連番で数え items 全序数と一致させ純整数交差（lo/hi）で部分リビール自然打切り。lib.rs `PURE_SOURCES` へ choice.rs 登録済。
 - **設計不整合の解決（Task 8 申し送り）**: design 型枠は `derive_hit_rows(lines, segments, mode)` だが §座標写像式（正本）＋型枠 doc は canvas-local 入力を要求。layout 出力は絶対 image px ゆえ validrect 原点差引きが必須で、実装は `derive_hit_rows(lines, segments, mode, region: &TextRegion)` へ region を additive 追加（from_layout の `rect.left-region.left()` と同一パターン）。**Task 8 の present_actor は `derive_hit_rows(.., region)` を呼ぶこと**（region は既に present_actor が保持）。`to_window_physical(row, region, mode, committed, contract)` は §座標写像式どおり。
+- **Task 8.2 申し送り（5.4 署名逸脱）**: `decorate_canvas(canvas, segments, hover, style, default_font_color, region: &TextRegion, mode: WritingMode)` へ region+mode を additive 追加（5.2 と同型・絶対 inline_range→resident-local 変換に必要）。present_actor は `decorate_canvas(.., region, mode)` を呼ぶこと。line_index↔resident は 1:1（from_layout が行毎に1住人）。ChoiceRowSegment.inline_range は resident-local（GlyphRunContent ローカル系）。
