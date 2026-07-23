@@ -153,7 +153,7 @@
 
 ## 9. Integration: areka emo2_boot 結線
 
-- [ ] 9.1 BootAssets に loop_tables を追加する
+- [x] 9.1 BootAssets に loop_tables を追加する
   - shell 表・balloon 表それぞれの `EmoWorld` スナップショットから `AnimationTable::from_world` で構築し、`BootAssets.loop_tables: LoopTables { shell, balloon }` へ格納する（面種非依存・裁定 (a)）
   - 完了状態: boot 時のファイル I/O 追加なしで表が構築されることを確認する
   - _Depends: 5.1_
