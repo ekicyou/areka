@@ -32,8 +32,8 @@ use std::time::Duration;
 
 use areka_actor::{ActorError, ActorHandle, spawn_actor};
 use areka_kanade::{
-    KanadeConfig, KanadeMsg, ShioriCall, ShioriFailure, ShioriMsg, ShioriOutcome, StartTalk,
-    TalkDone, TalkEndReason, spawn_kanade,
+    KanadeConfig, KanadeMsg, MonotonicMs, ShioriCall, ShioriFailure, ShioriMsg, ShioriOutcome,
+    StartTalk, TalkDone, TalkEndReason, spawn_kanade,
 };
 
 /// 期限付き待機の既定上限（mock は即応ゆえ十分に余裕を持たせた保険値）。
@@ -975,6 +975,53 @@ pub fn join_bounded(what: &str, timeout: Duration, handle: ActorHandle) -> Resul
     match res_rx.recv_timeout(timeout) {
         Ok(result) => result,
         Err(_) => panic!("'{what}' join did not complete within {timeout:?} (possible hang)"),
+    }
+}
+
+/// Tick を 1 秒刻みで送り続け、kanade の終了（inbox 切断＝send Err）で戻る。
+/// quit:true talk の帰結として終了が必然の台本でのみ使うこと。
+/// kanade が終了しない（欠陥）場合は DEFAULT_TIMEOUT の壁時計 deadline で
+/// ハングでなく panic（失敗）として検出する。
+///
+/// 復帰駆動の完了バリア（R7' 新構造・7.1/7.3/8.5）。`first_tick_second` から 1 秒刻みで
+/// 単調増加する `now`（＝`MonotonicMs(second * 1_000)`）を持つ [`KanadeMsg::Tick`] を、
+/// `sender.send` が `Err`（Receiver drop＝kanade スレッド終了＝inbox 切断）を返すまで
+/// 反復送出する（反復回数の上限は持たない・上限非依存の完了バリア）。
+///
+/// 供給ペーシングは送出ごとの [`std::thread::yield_now`] 1 回で足る（kanade へ処理を譲る）。
+/// 滞留した Tick は切断時に破棄され意味論に影響しない（設計 Implementation Notes）。
+///
+/// # 非空虚性（ハング→失敗変換・7.3）
+/// kanade が終了しない欠陥時は send が成功し続けるが、`DEFAULT_TIMEOUT` の
+/// [`std::time::Instant`] deadline をループ内で毎回判定し、超過したら `what` を含む
+/// 説明的メッセージで [`panic!`] する（silent hang を作らない）。
+pub fn drive_ticks_until_disconnect(
+    sender: &Sender<KanadeMsg>,
+    first_tick_second: u64,
+    what: &str,
+) {
+    let deadline = std::time::Instant::now() + DEFAULT_TIMEOUT;
+    let mut second = first_tick_second;
+    loop {
+        // 切断（Receiver drop＝kanade 終了）で戻る＝完了バリア。上限回数は持たない。
+        if sender
+            .send(KanadeMsg::Tick {
+                now: MonotonicMs(second * 1_000),
+            })
+            .is_err()
+        {
+            return;
+        }
+        // 供給ペーシング: 送出ごとに 1 回 kanade へ処理を譲る。
+        std::thread::yield_now();
+        // ハング検出: deadline 超過は必ず panic（kanade 非終了の欠陥を失敗へ変換）。
+        if std::time::Instant::now() >= deadline {
+            panic!(
+                "'{what}' did not disconnect within {DEFAULT_TIMEOUT:?} \
+                 (kanade failed to terminate; possible hang)"
+            );
+        }
+        second += 1;
     }
 }
 
