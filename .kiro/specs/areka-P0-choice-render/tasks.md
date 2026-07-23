@@ -27,7 +27,7 @@
   - _Boundary: StateIncrement_
 
 - [ ] 2. (P) Foundation: バルーン cursor.\* スタイルモデル（areka-parsers・独立クレート）
-- [ ] 2.1 (P) balloon descript モデルへ cursor.\* の additive サブ構造体を追加する
+- [x] 2.1 (P) balloon descript モデルへ cursor.\* の additive サブ構造体を追加する
   - `Cursor{style, brush_color, pen_color, font_color, blendmethod}` を追加し、既存 KV 後勝ちマージへ相乗りする
   - 未モデル化サブキー（shadowcolor/shadowstyle 等）は寛容パース passthrough のまま保持する
   - Observable: `cursor.style`/`cursor.brush.color`/`cursor.font.color`/`cursor.blendmethod` を含む descript.txt をパースすると対応フィールドが値を持ち、cursor.\* 未記載の descript.txt では全フィールドが `None` になる
@@ -231,3 +231,4 @@
 
 ## Implementation Notes
 - state.rs のテストモジュールに `WarnCounter`（tracing::Subscriber 実装, `tracing::subscriber::with_default` で使用）ログ檻あり — warn 回数アサーションに再利用可（4.2/viewbox の warn-once テスト等）。
+- balloon cursor.* モデル: `BalloonModel::new` は7引数のまま不変・`with_cursor(self, BalloonCursor)` ビルダーでマージに相乗り。`CursorColor` は `FontColor` のミラー（+Default）。fields private + accessor（`cursor() -> &BalloonCursor`）。5.3 の `ResolvedChoiceStyle::resolve` は accessor 経由で読む。

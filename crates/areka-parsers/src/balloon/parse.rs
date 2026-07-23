@@ -21,7 +21,8 @@ use std::str::FromStr;
 use crate::kv::parse_kv;
 
 use super::model::{
-    BalloonModel, Font, FontColor, Origin, ValidRect, WindowPosition, WordWrapPoint,
+    BalloonCursor, BalloonModel, CursorColor, Font, FontColor, Origin, ValidRect, WindowPosition,
+    WordWrapPoint,
 };
 
 /// 主入口: 既に KV マップ化済みの 2 層（descript 既定層＋画像別上書き層・任意）を写像する。
@@ -101,6 +102,33 @@ fn map_merged(merged: &BTreeMap<String, String>) -> BalloonModel {
     // fallback は下流 emo テキスト層の責務・budoux-newline 要件 1.1）。
     let budoux_newline = merged.get("budoux_newline").map(|v| v.to_owned());
 
+    // cursor.* スタイルモデル（additive・要件 4.2/6.2）。既存の完全一致引き＋2 層後勝ちマージに
+    // 相乗りする。style/blendmethod は生文字列転記（語彙判定は下流）。brush/pen/font の各色成分は
+    // `font.color.*` と同型に個別 u8 パース（部分欠落は個別 None）。未モデル化サブキー
+    // （cursor.shadowcolor.* / cursor.shadowstyle 等）は完全一致引きゆえ自然に非採用＝KV 層が
+    // 語彙を落とさない寛容パス素通しのまま（6.2 の語彙シーム）。
+    let cursor = BalloonCursor::new(
+        // style は文字列値（数値化しない・要件 4.2/6.5）。
+        merged.get("cursor.style").map(|v| v.to_owned()),
+        CursorColor::new(
+            get_scalar::<u8>(merged, "cursor.brush.color.r"),
+            get_scalar::<u8>(merged, "cursor.brush.color.g"),
+            get_scalar::<u8>(merged, "cursor.brush.color.b"),
+        ),
+        CursorColor::new(
+            get_scalar::<u8>(merged, "cursor.pen.color.r"),
+            get_scalar::<u8>(merged, "cursor.pen.color.g"),
+            get_scalar::<u8>(merged, "cursor.pen.color.b"),
+        ),
+        CursorColor::new(
+            get_scalar::<u8>(merged, "cursor.font.color.r"),
+            get_scalar::<u8>(merged, "cursor.font.color.g"),
+            get_scalar::<u8>(merged, "cursor.font.color.b"),
+        ),
+        // blendmethod は不透明転写（数値化しない・要件 6.5）。
+        merged.get("cursor.blendmethod").map(|v| v.to_owned()),
+    );
+
     BalloonModel::new(
         windowposition,
         origin,
@@ -110,6 +138,7 @@ fn map_merged(merged: &BTreeMap<String, String>) -> BalloonModel {
         writing_mode,
         budoux_newline,
     )
+    .with_cursor(cursor)
 }
 
 /// マージ済みマップから `key` を完全一致で引き、値を `T` へ整数パースする寛容ヘルパ（R1.4/R2.6）。
