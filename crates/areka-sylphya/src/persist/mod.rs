@@ -358,6 +358,8 @@ fn push_axis_family(
 mod tests {
     use super::*;
     use crate::key::parse_dotted;
+    use crate::test_log_capture::{assert_logged, capture};
+    use tracing::Level;
 
     fn all_families() -> Vec<PersistKey> {
         vec![
@@ -587,6 +589,58 @@ mod tests {
         // 既存内容は無傷（原子的確定・R6.2）——1 のまま。
         assert!(
             load_scope(PersistScope::Ghost, &roots, &io).contains(&(PersistKey::BootCount, "1".into()))
+        );
+    }
+
+    // === Task 4.4 ログ表明檻（criteria 明示要求の「警告」「error ログ」を capture 経由で檻へ）===
+    //
+    // criteria は寛容読取（Criterion 2）で **警告発火** を、commit 中断（Criterion 3）で **error
+    // ログ** を明示的に要求する。format 層の縮退 warn は `format.rs` 側で檻済みだが、load/save
+    // orchestration（本モジュール）の縮退アーム——load の read 障害段（R6.3「読み取れない」）と
+    // save の commit 失敗段（R6.2/R8.1）——は outcome のみ檻済みでログ未表明だった。ここを共有
+    // ヘルパ [`crate::test_log_capture`]（interest-keeper で並列決定論化）経由で檻へ入れる
+    // （bare `with_default` は使わない）。
+
+    // --- Criterion 2 (R6.3/R6.7): load_scope の read 障害段——warn ＋ 空縮退 ＋ 起動継続 ---
+    #[test]
+    fn load_read_failure_emits_warn_and_degrades() {
+        let io = FakePersistIo::new();
+        let roots = ScopeRoots { ghost: Some(PathBuf::from("/g")), ..ScopeRoots::default() };
+        save_scope(PersistScope::Ghost, &roots, &io, vec![(PersistKey::BootCount, "1".into())]);
+        io.fail_next_read();
+        let events = capture(|| {
+            // 読み取れない → 空縮退（panic なし＝起動継続）。
+            let loaded = load_scope(PersistScope::Ghost, &roots, &io);
+            assert!(loaded.is_empty(), "read 障害は空縮退（起動継続）");
+        });
+        // 縮退アームが LOG_TARGET・WARN で「persist read failed」を発火（無音失敗なし・R6.7/R8.1）。
+        // ログ削除・語彙変更・レベル降格で赤になる。
+        assert_logged(&events, Level::WARN, LOG_TARGET, "persist read failed");
+    }
+
+    // --- Criterion 3 (R6.2/R8.1): save_scope の commit 失敗段——既存無傷 ＋ error ログ ---
+    #[test]
+    fn save_commit_failure_emits_error_log() {
+        let io = FakePersistIo::new();
+        let roots = ScopeRoots { ghost: Some(PathBuf::from("/g")), ..ScopeRoots::default() };
+        save_scope(PersistScope::Ghost, &roots, &io, vec![(PersistKey::BootCount, "1".into())]);
+        io.fail_next_commit();
+        let events = capture(|| {
+            let outcome = save_scope(
+                PersistScope::Ghost,
+                &roots,
+                &io,
+                vec![(PersistKey::BootCount, "2".into())],
+            );
+            assert_eq!(outcome, PersistOutcome::Degraded, "commit 失敗は Degraded 縮退（panic なし）");
+        });
+        // commit 失敗アームが LOG_TARGET・ERROR で「persist commit failed」を発火（R8.1 無音失敗禁止）。
+        assert_logged(&events, Level::ERROR, LOG_TARGET, "persist commit failed");
+        // 既存内容は無傷（temp→rename の原子的確定・R6.2）——1 のまま。
+        assert!(
+            load_scope(PersistScope::Ghost, &roots, &io)
+                .contains(&(PersistKey::BootCount, "1".into())),
+            "commit 中断後も既存内容が無傷であること"
         );
     }
 

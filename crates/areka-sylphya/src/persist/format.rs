@@ -372,6 +372,17 @@ mod tests {
     }
 
     #[test]
+    fn missing_version_emits_warn() {
+        // 欠落バージョン（format-version 不在）は未知バージョンと同一縮退アームを踏む。
+        // warn 語彙「unknown/absent format-version」が absent 側でも発火することを明示的に檻へ
+        // 入れる（Task 4.4 Criterion 2「未知/欠落バージョン→warn」）。
+        let events = capture(|| {
+            let _ = read_toml_str("[boot]\ncount = \"1\"\n");
+        });
+        assert_logged(&events, Level::WARN, LOG_TARGET, "unknown/absent format-version");
+    }
+
+    #[test]
     fn parse_failure_emits_warn() {
         let events = capture(|| {
             let _ = read_toml_str("[[[ broken");
