@@ -38,7 +38,7 @@
   - _Requirements: 1.4_
   - _Boundary: areka-sylphya vocab/shiori_resource.rs_
 
-- [ ] 2.5 語彙台帳・key パーサ 決定論単体テスト群
+- [x] 2.5 語彙台帳・key パーサ 決定論単体テスト群
   - セレクタ 5 形の受理と `PropPath` 構造の一致、不正形の `KeyParseError` 決定論を検証する
   - 台帳件数檻（フラット 26／ルート枝 10／汎用名 17／Resource 159／SET 有効群全項目の網羅）を検証する
   - username のみ `ConsumerDefault`、`%*` が解決対象外、ext イベント名が予約のみで発火しないことを検証する

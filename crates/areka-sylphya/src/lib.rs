@@ -45,6 +45,10 @@ pub mod reader;
 pub mod value;
 pub mod vocab;
 
+// Task 2.5: 語彙台帳・key パーサ 決定論単体テスト群（criterion → assertion 集約・test-only）。
+#[cfg(test)]
+mod ledger_key_determinism_tests;
+
 // --- 公開面 re-export（後続タスクが素直に使えるよう主要型を crate 直下へ）---
 pub use asker::{AskerContext, AskerId};
 pub use key::{parse_dotted, KeyParseError, PathSeg, PropPath, Selector};
