@@ -27,7 +27,7 @@ use areka_emo_atlas::{
 };
 use areka_parsers::shell::Shell;
 
-use crate::{BindSet, Composer, ComposedSurface, EmoWorld};
+use crate::{BindSet, Composer, ComposedSurface, EmoWorld, PatternState};
 
 /// emo2 fixture 実資産のパスを組む。
 /// `CARGO_MANIFEST_DIR` = `crates/areka-emo-compose`。fixtures はパイロット crate 配下。
@@ -157,7 +157,7 @@ fn surface0_element0_single_layer_equals_inserted_image() {
     // 空 BindSet で surface0 を合成（着せ替え bind を一切適用しない単層経路）。
     let mut composer = Composer::new();
     let out: ComposedSurface = composer
-        .compose(&world, &atlas, 0, &BindSet::default())
+        .compose(&world, &atlas, 0, &BindSet::default(), &PatternState::default())
         .expect("surface0 の単層合成は Ok（要件 11.1）");
 
     // 外形一致: キャンバス外形 == 挿入画像外形（trim 恒等・原点配置ゆえ）。
@@ -192,7 +192,7 @@ fn surface0_golden_is_non_vacuous() {
     let mut world_ok = EmoWorld::build(&shell);
     world_ok.bind_atlas(&atlas_ok, SetId(0));
     let out_ok = Composer::new()
-        .compose(&world_ok, &atlas_ok, 0, &BindSet::default())
+        .compose(&world_ok, &atlas_ok, 0, &BindSet::default(), &PatternState::default())
         .expect("Ok");
     assert_eq!(out_ok.bytes(), correct.as_slice(), "正しい挿入画像とはバイト等価");
 
@@ -209,7 +209,7 @@ fn surface0_golden_is_non_vacuous() {
     let mut world_other = EmoWorld::build(&shell);
     world_other.bind_atlas(&atlas_other, SetId(0));
     let out_other = Composer::new()
-        .compose(&world_other, &atlas_other, 0, &BindSet::default())
+        .compose(&world_other, &atlas_other, 0, &BindSet::default(), &PatternState::default())
         .expect("Ok");
 
     // 異なる挿入画像 → 合成結果は「正しい期待画像」と一致しない（byte-equality が識別する）。
@@ -312,7 +312,7 @@ fn compose_surface1000(shell: &Shell, atlas: &AtlasTable, binds: &BindSet) -> Co
     let mut world = EmoWorld::build(shell);
     world.bind_atlas(atlas, SetId(0));
     Composer::new()
-        .compose(&world, atlas, 1000, binds)
+        .compose(&world, atlas, 1000, binds, &PatternState::default())
         .expect("surface1000 の合成は Ok（surface 存在＋静的外形非ゼロ・要件 6.6）")
 }
 
@@ -626,7 +626,7 @@ fn surface0_trimmed_composite_equals_untrimmed_placement() {
     let mut world = EmoWorld::build(&shell);
     world.bind_atlas(&atlas, SetId(0));
     let out = Composer::new()
-        .compose(&world, &atlas, 0, &BindSet::default())
+        .compose(&world, &atlas, 0, &BindSet::default(), &PatternState::default())
         .expect("surface0 の単層合成は Ok（要件 11.1）");
 
     // 外形は原寸 40×40（有効 bind 非依存の静的外形＝原点+original・トリム後コアではない）。
@@ -672,7 +672,7 @@ fn surface0_trim_equivalence_is_non_vacuous() {
     let mut world = EmoWorld::build(&shell);
     world.bind_atlas(&atlas, SetId(0));
     let out = Composer::new()
-        .compose(&world, &atlas, 0, &BindSet::default())
+        .compose(&world, &atlas, 0, &BindSet::default(), &PatternState::default())
         .expect("Ok");
 
     // 誤った期待: コアを trim_offset を足さず原点 (0,0) に置いた 40×40 バッファ。
@@ -794,12 +794,12 @@ fn surface1000_compose_into_two_fresh_buffers_are_byte_equal() {
 
     let mut out_a = ComposedSurface::new(0, 0);
     composer
-        .compose_into(&mut out_a, &world, &atlas, 1000, &binds)
+        .compose_into(&mut out_a, &world, &atlas, 1000, &binds, &PatternState::default())
         .expect("compose_into A は Ok");
 
     let mut out_b = ComposedSurface::new(0, 0);
     composer
-        .compose_into(&mut out_b, &world, &atlas, 1000, &binds)
+        .compose_into(&mut out_b, &world, &atlas, 1000, &binds, &PatternState::default())
         .expect("compose_into B は Ok");
 
     assert!(
@@ -835,7 +835,7 @@ fn surface1000_recompose_steady_state_zero_allocation() {
 
     // ウォームアップ（初回）: バッファ／スクラッチのサイズがここで確定する。
     composer
-        .compose_into(&mut out, &world, &atlas, 1000, &binds)
+        .compose_into(&mut out, &world, &atlas, 1000, &binds, &PatternState::default())
         .expect("初回 compose_into は Ok");
 
     let ptr0 = out.bytes().as_ptr();
@@ -846,7 +846,7 @@ fn surface1000_recompose_steady_state_zero_allocation() {
     // 定常状態: 同一 surface＋同一 BindSet を反復。初回で確定した容量から一切成長しないこと。
     for iter in 0..8 {
         composer
-            .compose_into(&mut out, &world, &atlas, 1000, &binds)
+            .compose_into(&mut out, &world, &atlas, 1000, &binds, &PatternState::default())
             .unwrap_or_else(|e| panic!("反復 {iter} 回目の compose_into は Ok: {e:?}"));
 
         assert_eq!(
@@ -893,14 +893,14 @@ fn surface1000_build_plan_scratch_capacity_is_stable() {
     let mut visited = Vec::new();
 
     // 初回: 容量確定。
-    let extent0 = build_plan(&mut ops, &mut visited, &world, &atlas, 1000, &binds)
+    let extent0 = build_plan(&mut ops, &mut visited, &world, &atlas, 1000, &binds, &PatternState::default())
         .expect("初回 build_plan は Ok（surface1000 存在＋外形非ゼロ）");
     let ops_cap0 = ops.capacity();
     let visited_cap0 = visited.capacity();
     let ops_len0 = ops.len();
 
     for iter in 0..8 {
-        let extent = build_plan(&mut ops, &mut visited, &world, &atlas, 1000, &binds)
+        let extent = build_plan(&mut ops, &mut visited, &world, &atlas, 1000, &binds, &PatternState::default())
             .unwrap_or_else(|e| panic!("反復 {iter} 回目の build_plan は Ok: {e:?}"));
 
         // 外形・命令数は決定的（毎回同一）。
@@ -946,7 +946,7 @@ fn surface1000_instruction_count_is_linear_in_layers() {
 
     let mut ops = Vec::new();
     let mut visited = Vec::new();
-    let extent = build_plan(&mut ops, &mut visited, &world, &atlas, 1000, &binds)
+    let extent = build_plan(&mut ops, &mut visited, &world, &atlas, 1000, &binds, &PatternState::default())
         .expect("build_plan は Ok（surface1000 存在＋外形非ゼロ）");
 
     // 命令数 == 描画層数（有効 bind 数）。線形＝非二次・非画素比例。
@@ -975,14 +975,14 @@ fn surface1000_instruction_count_is_linear_in_layers() {
     let one = BindSet::from_ids([surface1000_bind_parts()[0].anim_id]);
     let mut ops1 = Vec::new();
     let mut visited1 = Vec::new();
-    build_plan(&mut ops1, &mut visited1, &world, &atlas, 1000, &one)
+    build_plan(&mut ops1, &mut visited1, &world, &atlas, 1000, &one, &PatternState::default())
         .expect("単一 bind でも Ok");
     assert_eq!(ops1.len(), 1, "有効 bind 1 本 → 命令 1 本（層数に線形）");
 
     // 空 bind 集合 → 命令ゼロ（静的 element ゼロゆえ描画層皆無・外形は非ゼロで Ok）。
     let mut ops0 = Vec::new();
     let mut visited0 = Vec::new();
-    build_plan(&mut ops0, &mut visited0, &world, &atlas, 1000, &BindSet::default())
+    build_plan(&mut ops0, &mut visited0, &world, &atlas, 1000, &BindSet::default(), &PatternState::default())
         .expect("空 bind でも surface 存在＋外形非ゼロで Ok");
     assert_eq!(ops0.len(), 0, "空 bind 集合 → 描画命令ゼロ（層数 0）");
 }
@@ -1048,7 +1048,7 @@ fn emo2_blink_binds_are_statically_inactive() {
     // [1302] のみ（目/通常・pattern0 あり）。
     let mut ops_base = Vec::new();
     let mut vis_base = Vec::new();
-    build_plan(&mut ops_base, &mut vis_base, &world, &atlas, 1000, &BindSet::from_ids([1302]))
+    build_plan(&mut ops_base, &mut vis_base, &world, &atlas, 1000, &BindSet::from_ids([1302]), &PatternState::default())
         .expect("目/通常のみでも surface1000 存在＋外形非ゼロで Ok");
 
     // [1302,1400,1403]（＋まばたき・pattern0 なし）。
@@ -1061,6 +1061,7 @@ fn emo2_blink_binds_are_statically_inactive() {
         &atlas,
         1000,
         &BindSet::from_ids([1302, 1400, 1403]),
+        &PatternState::default(),
     )
     .expect("まばたき込みでも Ok");
 

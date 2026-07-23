@@ -35,7 +35,7 @@ use bevy_ecs::world::World;
 
 use areka_actor::ReplySender;
 use areka_emo_atlas::AtlasTable;
-use areka_emo_compose::{BindSet, ComposeError, Composer, EmoWorld, RegionPriority};
+use areka_emo_compose::{BindSet, ComposeError, Composer, EmoWorld, PatternState, RegionPriority};
 
 use wintf::ecs::{AlphaMaskResource, GraphicsCore, WucGraphicsResource};
 
@@ -226,7 +226,9 @@ impl EmoPresenter {
         if !cache_hit {
             match target
                 .composer
-                .compose(&target.emo_world, &target.atlas, surface_id, &binds)
+                // task 7.1 keep-compiling: pattern を既定（空）で埋める。ShowSurface.pattern からの
+                // 実スレッドは task 8.2 が置換する（空 PatternState は拡張前と観測等価・R5.4）。
+                .compose(&target.emo_world, &target.atlas, surface_id, &binds, &PatternState::default())
             {
                 Ok(composed) => {
                     // 挿入時にマスクを 1 回だけ生成し、表示バッファと対で束ねる（R2.1/R2.4）。

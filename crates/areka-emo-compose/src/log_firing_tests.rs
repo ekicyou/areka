@@ -154,7 +154,7 @@ fn cycle_detection_warn_fires_with_surface_id() {
     let logs = capture_logs(|| {
         // build_plan は compute_extent（extent 経路）→ derive_ops（ops 経路）の両方を走らせる。
         // ops 経路（flatten_surface）の循環 WARN を狙って結果自体も固定する。
-        let extent = build_plan(&mut ops, &mut visited, &world, &atlas, 1000, &binds)
+        let extent = build_plan(&mut ops, &mut visited, &world, &atlas, 1000, &binds, &PatternState::default())
             .expect("自己参照でも部分結果で Ok（非パニック・要件 7.1）");
         // 部分結果: 静的 self.png 1 本が積まれ、自己参照枝は打ち切られる。
         assert_eq!(ops.len(), 1, "静的層のみ（自己参照枝は打ち切り）");
@@ -199,7 +199,7 @@ fn extent_cycle_warn_fires_with_surface_id() {
     let mut ops = Vec::new();
     let mut visited = Vec::new();
     let logs = capture_logs(|| {
-        build_plan(&mut ops, &mut visited, &world, &atlas, 2000, &binds)
+        build_plan(&mut ops, &mut visited, &world, &atlas, 2000, &binds, &PatternState::default())
             .expect("自己参照でも Ok（外形は非ゼロ）");
     });
 
@@ -247,7 +247,7 @@ fn pattern0_less_bind_skip_fires_debug_and_no_warn_error() {
     let mut ops = Vec::new();
     let mut visited = Vec::new();
     let logs = capture_logs(|| {
-        build_plan(&mut ops, &mut visited, &world, &atlas, 1000, &binds)
+        build_plan(&mut ops, &mut visited, &world, &atlas, 1000, &binds, &PatternState::default())
             .expect("pattern0 なし bind でも surface1000 存在＋外形非ゼロで Ok（要件 6.6）");
     });
 
@@ -415,7 +415,7 @@ fn surface_not_found_error_fires_with_surface_id() {
     let mut composer = Composer::new();
     let mut result = Ok(ComposedSurface::new(0, 0));
     let logs = capture_logs(|| {
-        result = composer.compose(&world, &atlas, 9999, &binds);
+        result = composer.compose(&world, &atlas, 9999, &binds, &PatternState::default());
     });
 
     // 副作用: Err(SurfaceNotFound)（要件 10.5）。
@@ -443,7 +443,7 @@ fn empty_composition_error_fires_with_surface_id() {
     let mut composer = Composer::new();
     let mut result = Ok(ComposedSurface::new(0, 0));
     let logs = capture_logs(|| {
-        result = composer.compose(&world, &atlas, 7000, &binds);
+        result = composer.compose(&world, &atlas, 7000, &binds, &PatternState::default());
     });
 
     // 副作用: Err(EmptyComposition)（要件 10.5・議題2裁定）。

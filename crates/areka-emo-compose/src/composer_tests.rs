@@ -162,7 +162,7 @@ fn compose_returns_ok_composed_surface_for_valid_input() {
     let binds = BindSet::from_ids([1]);
     let mut composer = Composer::new();
     let out = composer
-        .compose(&world, &atlas, 1000, &binds)
+        .compose(&world, &atlas, 1000, &binds, &PatternState::default())
         .expect("有効入力は Ok（要件 5.1）");
 
     // 外形一致（要件 9.1）: w=200・h=30・stride == w*4。
@@ -200,17 +200,17 @@ fn composer_holds_no_result_no_stale_cache() {
     let binds = BindSet::default();
     let mut composer = Composer::new();
 
-    let out_a = composer.compose(&world, &atlas, 100, &binds).expect("A Ok");
+    let out_a = composer.compose(&world, &atlas, 100, &binds, &PatternState::default()).expect("A Ok");
     assert_eq!(out_a.width(), 10);
     assert_eq!(px(&out_a, 0, 0), [200, 0, 0, 255], "A は青");
 
     // 直後に B を compose → B（緑 20×20）を反映（A の残像・寸法を持ち越さない）。
-    let out_b = composer.compose(&world, &atlas, 200, &binds).expect("B Ok");
+    let out_b = composer.compose(&world, &atlas, 200, &binds, &PatternState::default()).expect("B Ok");
     assert_eq!(out_b.width(), 20, "B の外形（20）を反映＝A の 10 を持ち越さない");
     assert_eq!(px(&out_b, 0, 0), [0, 200, 0, 255], "B は緑（stale な A の青でない）");
 
     // 再度 A → 依然 A（Composer は前回 B を保持しない）。
-    let out_a2 = composer.compose(&world, &atlas, 100, &binds).expect("A2 Ok");
+    let out_a2 = composer.compose(&world, &atlas, 100, &binds, &PatternState::default()).expect("A2 Ok");
     assert_eq!(out_a2.bytes(), out_a.bytes(), "A の再合成は初回 A とバイト等価（キャッシュ非依存）");
 }
 
@@ -230,7 +230,7 @@ fn compose_into_reuses_buffer_across_calls() {
     let mut out = ComposedSurface::new(0, 0);
 
     composer
-        .compose_into(&mut out, &world, &atlas, 5000, &binds)
+        .compose_into(&mut out, &world, &atlas, 5000, &binds, &PatternState::default())
         .expect("1 回目 Ok");
     let len1 = out.bytes().len();
     let ptr1 = out.bytes().as_ptr();
@@ -238,7 +238,7 @@ fn compose_into_reuses_buffer_across_calls() {
     let ops_cap1 = composer.ops.capacity();
 
     composer
-        .compose_into(&mut out, &world, &atlas, 5000, &binds)
+        .compose_into(&mut out, &world, &atlas, 5000, &binds, &PatternState::default())
         .expect("2 回目 Ok");
     let len2 = out.bytes().len();
     let ptr2 = out.bytes().as_ptr();
@@ -263,7 +263,7 @@ fn absent_surface_propagates_surface_not_found() {
 
     let binds = BindSet::default();
     let mut composer = Composer::new();
-    let result = composer.compose(&world, &atlas, 9999, &binds);
+    let result = composer.compose(&world, &atlas, 9999, &binds, &PatternState::default());
     assert_eq!(
         result.err(),
         Some(ComposeError::SurfaceNotFound(9999)),
@@ -280,7 +280,7 @@ fn no_layers_degenerate_propagates_empty_composition() {
 
     let binds = BindSet::default();
     let mut composer = Composer::new();
-    let result = composer.compose(&world, &atlas, 7000, &binds);
+    let result = composer.compose(&world, &atlas, 7000, &binds, &PatternState::default());
     assert_eq!(
         result.err(),
         Some(ComposeError::EmptyComposition(7000)),
@@ -305,7 +305,7 @@ fn all_transparent_surface_is_ok_transparent_nonzero_extent() {
     let binds = BindSet::default();
     let mut composer = Composer::new();
     let out = composer
-        .compose(&world, &atlas, 3000, &binds)
+        .compose(&world, &atlas, 3000, &binds, &PatternState::default())
         .expect("全透明でもエラーにせず Ok（要件 6.6）");
 
     // 外形は原寸で非ゼロ（全透明でも original で寄与＝300×300 が支配）。
@@ -339,11 +339,11 @@ fn compose_equals_compose_into_fresh_buffer() {
     let binds = BindSet::from_ids([1]);
     let mut composer = Composer::new();
 
-    let via_compose = composer.compose(&world, &atlas, 1000, &binds).expect("compose Ok");
+    let via_compose = composer.compose(&world, &atlas, 1000, &binds, &PatternState::default()).expect("compose Ok");
 
     let mut fresh = ComposedSurface::new(0, 0);
     composer
-        .compose_into(&mut fresh, &world, &atlas, 1000, &binds)
+        .compose_into(&mut fresh, &world, &atlas, 1000, &binds, &PatternState::default())
         .expect("compose_into Ok");
 
     assert_eq!(via_compose.width(), fresh.width());
@@ -376,8 +376,8 @@ fn compose_is_deterministic() {
     let binds = BindSet::from_ids([1, 2]);
     let mut c1 = Composer::new();
     let mut c2 = Composer::new();
-    let a = c1.compose(&world, &atlas, 1000, &binds).expect("Ok");
-    let b = c2.compose(&world, &atlas, 1000, &binds).expect("Ok");
+    let a = c1.compose(&world, &atlas, 1000, &binds, &PatternState::default()).expect("Ok");
+    let b = c2.compose(&world, &atlas, 1000, &binds, &PatternState::default()).expect("Ok");
     assert_eq!(a.width(), b.width());
     assert_eq!(a.height(), b.height());
     assert_eq!(a.bytes(), b.bytes(), "同一入力→バイト等価（決定性・要件 10.1）");
@@ -422,7 +422,7 @@ fn end_to_end_multilayer_ascend_wiring() {
 
     let binds = BindSet::from_ids([1, 2, 3]);
     let mut composer = Composer::new();
-    let out = composer.compose(&world, &atlas, 1000, &binds).expect("Ok");
+    let out = composer.compose(&world, &atlas, 1000, &binds, &PatternState::default()).expect("Ok");
 
     assert_eq!(out.width(), 4);
     assert_eq!(out.height(), 4);

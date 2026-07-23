@@ -109,7 +109,7 @@
 
 ## 7. Core: emo-compose の PatternState 合流
 
-- [ ] 7.1 (P) compose_into/compose 署名に pattern を追加する
+- [x] 7.1 (P) compose_into/compose 署名に pattern を追加する
   - `compose_into(out, world, atlas, surface_id, active_binds, pattern: &PatternState)`／`compose` へ引数追加し、`build_plan`/`derive_ops` へ透過する
   - 完了状態: `cargo build -p areka-emo-compose` が新シグネチャで成功する
   - _Depends: 2_
@@ -225,3 +225,4 @@
 - **cross-crate ripple（1.1/1.2 後の baseline 修復・commit `<repair>`）**: parser `Pattern` への `method: DrawMethod` 欄追加は非 `#[non_exhaustive]` struct ゆえ**下流の全 `Pattern {..}` 構築サイト（test fixture のみ・production は parser のみが構築）を破壊**する。修復先＝emo-atlas manifest.rs / emo-compose plan.rs・log_firing_tests.rs・composer_tests.rs / emo-present presenter.rs（全て `#[cfg(test)]`）に `method: DrawMethod::new("overlay".to_string())` を追加。加えて 1.1 は `DrawMethod` を shell `mod.rs` の `pub use` へ再エクスポートし忘れていた（`pub` 欄型は公開必須）——併せて修正。**教訓: struct 欄追加タスクのレビューは `-p <crate>` でなく `cargo test --workspace --no-run` で下流回帰を検出すべし。** 以降 output.rs / command.rs 等の enum 欄追加（4.2, 8.2）も同様に workspace-tests build で追随漏れを検出する。
 - **areka ビルド赤ウィンドウ（4.2〜9.3・設計意図どおり）**: `DisplayCommand::Show/ShowBalloon` への `pattern` 欄追加（4.2）で `crates/areka/src/emo2_boot/adapter.rs`（`map_display_command` の網羅 match＋テスト構築子）がコンパイル不能になる＝設計「発見 D＝意図された強制追随」。9.3（adapter/frame の pattern 透過）で解消するまで **`cargo build -p areka` は expected-red**。中間タスク（5.x/6.1/7.x/8.x）のレビューは各 `-p <crate>` ゲートで判定（seriko/emo-compose/emo-present は areka に非依存ゆえ独立にグリーン）。9.3 完了後に workspace 全体ビルドを復旧確認する。
 - **5.3 残テスト分岐（10.1 で拾う）**: LoopRuntime の `-2`（`-1` 以外の負 surface）warn-once dedup 分岐（`warned_negative` set）に looper 専用テストが未配置。非ログ挙動は `-1` 経路と同一（base 復帰）・frame_at の `-2→Stopped` は timeline.rs で検証済ゆえ非ブロッキングだが、[deterministic-test-coverage-mandate] 遵守のため **10.1 looper 統合テストで `-2` warn-once ケース**（seriko の tracing capture helper 使用）を追加すること。
+- **emo-present テストバイナリ赤ウィンドウ（7.1〜8.1）**: `compose`/`compose_into` への `pattern` 引数追加（7.1）で emo-present の `#[cfg(test)]` caller（presenter tests・chain.rs・cache.rs tests）が `.compose()` を旧アリティで呼び赤化。7.1 は emo-present **LIB** ビルドのみ default 追随でグリーン化（presenter.rs:229）。**8.1（emo-present cache）は自タスクで emo-present テスト caller 群を `&PatternState::default()` で追随させ `cargo test -p areka-emo-present` を復旧すること**（ComposeKey 追加と併せて）。実 pattern 配線は 8.2。
