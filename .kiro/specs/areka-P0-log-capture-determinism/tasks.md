@@ -77,7 +77,7 @@
   - _Depends: 3.1, 3.2_
 
 - [ ] 5. Cross-crate: 第二の workspace ゲート flake（wintf WIC MTA use-after-free）の根治（本セッション取込・Req 9）
-- [ ] 5.1 WicCore にプロセス寿命 MTA キーパーを導入し無言スキップにログを付す
+- [x] 5.1 WicCore にプロセス寿命 MTA キーパーを導入し無言スキップにログを付す
   - `crates/wintf/src/ecs/widget/bitmap_source/wic_core.rs` の `WicCore::new()` の `CoCreateInstance` 前へ `ensure_process_mta()`（`OnceLock` ガードの `CoIncrementMTAUsage`・cookie は意図的 leak＝decrement しない・失敗は `?` で Err 伝播）を前置する
   - `crates/wintf/src/ecs/world/mod.rs`（62 行付近）の `WicCore::new()` 生成失敗を握る `if let Ok` へ `Err` 側の `error!`（log-first・steering areka-log-first-no-silent-failure）を付す。縮退挙動（factory 無しで継続）は維持
   - SAFETY doc（wic_core.rs 21-30 行付近の「本プロセスは MTA で初期化される**前提**」）を「`WicCore` が `ensure_process_mta` で MTA を**自己強制**する」へ更新。`factory` 型・`factory()`・`Send/Sync` impl・利用側は無改変。新規依存を追加しない（`windows` 既存 dep の `Win32_System_Com` feature）

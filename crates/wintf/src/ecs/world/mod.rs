@@ -17,7 +17,7 @@ use bevy_ecs::system::*;
 use std::cell::RefCell;
 use std::rc::Weak;
 use std::time::Instant;
-use tracing::trace;
+use tracing::{error, trace};
 use windows::Win32::Foundation::HWND;
 
 /// 外側 `Rc<RefCell<EcsWorld>>` への弱参照を保持する NonSend リソース（task 4.3）。
@@ -59,8 +59,18 @@ impl EcsWorld {
         world.insert_resource(crate::ecs::graphics::SurfaceCreationStats::default());
 
         // WicCore初期化（Device Lostの影響を受けない独立リソース）
-        if let Ok(wic_core) = crate::ecs::widget::bitmap_source::WicCore::new() {
-            world.insert_resource(wic_core);
+        // 生成失敗は無言スキップにせず error! で記録する（Req 9.4・log-first）。
+        // factory 無しでも縮退継続する（画像デコード不可のまま return しない）。
+        match crate::ecs::widget::bitmap_source::WicCore::new() {
+            Ok(wic_core) => {
+                world.insert_resource(wic_core);
+            }
+            Err(e) => {
+                error!(
+                    error = %e,
+                    "WicCore の生成に失敗（WIC factory 未取得）。画像デコード機能を欠いたまま継続する"
+                );
+            }
         }
 
         // FrameTime初期化（dola::runtime::clock::now() の値を保持）
