@@ -100,6 +100,7 @@
   - `choice-select-events`（W6）: kanade events 面（SHIORI 発火シームを実装する場合に交差）
   - `emo-dpi-scaling`（W6）: broad な emo 基盤改修 → 並走不可
   - `collision-dpi-hittest`/`dpi-window-vanish`（W7）: emo-present hit_region・placement follow/spawn——ファイル単位では非交差だが「少しでも干渉するならウェーブを分ける」方針に従い併走は推奨しない
+  - `mayuna-compose`（**W2・discovery 時点で実装中**）: 実編集面に `emo2_boot/frame.rs` を含む（下記追補の実測）→ ウェーブ直列（W2 完了後に W7.5）が安全根拠。**「ファイルが別だから安全」ではない**点に注意
 
 ## Constraints
 
@@ -117,3 +118,29 @@
 5. `Status: balloon(ID群)` の M1 実導出有無（源は本 spec で着地・UI→kanade 通知路の要否と一体）。
 6. 中断系（dblclick スクリプトブレーク等）での即時 hide の要否（`\t` 正典・input-events の中断挙動との整合）。
 7. talk 終了信号の実装形: TalkDone の UI 配線 vs dola 占有 horizon の UI 側観測（`TalkClock` 近傍）。
+
+## 追補: セッション内 Q&A 確定事項（2026-07-23・discovery 同日）
+
+### 実現層の確定（開発者質問への回答）
+
+主役は **⑥ emo 帰属**（roadmap「emo の責務範囲＝UI 層全般」宣言どおり）。ただしコードの落ち先は seriko/emo-present の**内部ではなく `crates/areka/src/emo2_boot/` 統合層**（新モジュール＋`frame.rs:438-446` 是正）＝`areka-P0-emo2-boot` と同じ統合層性格の spec。内訳:
+
+| 役割 | 置き場 | 新規/消費 |
+|---|---|---|
+| 頭脳（可視性コントローラ） | `emo2_boot/` 新モジュール＋`frame.rs` 是正 | **新設** |
+| 表示実行 | emo-present `VisualMount` show/hide | **既存消費**（balloon-face-cue 経路） |
+| talk 終了信号の UI 配線 | ⓪ghost/③kanade `TalkDone`→UI の薄い線（kanade 本体無改修） | **新設** |
+| フォーカス観測 | バルーン窓ポインタ配線（現 `HitTest::none()`） | **新設** |
+
+### mayuna-compose（W2・着せ替え）との干渉実測
+
+- **結論: 衝突しない。ただし根拠は「ファイルが別」ではなく「ウェーブ直列」**（W2 完了マージ→…→W7.5 着手）。
+- 実測（`git diff --stat main...claude/areka-p0-mayuna-compose-47cd1c`・2026-07-23）: mayuna の編集面は seriko `state.rs`(+522)/`actor.rs`(+761)/新規 `bind.rs`(+723)・emo-present `cache.rs`(+78)・parsers `package/*`・**`emo2_boot/frame.rs`(+6)** ——frame.rs は本 spec の頭脳配置先と**同一ファイル**。並走させれば当たる。
+- ただし mayuna の frame.rs 変更は `:337` 付近の struct 分解へ `bind_resolver: _` 追加＋テストのみ＝**主犯 `:438-446` は無傷**。
+- mayuna は「シェルは初 `\s` まで非表示・bind は初 `Show{binds}` に載る」構造を強化中＝本 spec がバルーンへ適用したい原理の**先例**。本 spec は mayuna settle 後の main の上に積む関係。
+- 教訓: 本 brief の file:line 引用は W2〜W7 のマージで陳腐化しうる（並走 brief 陳腐化の既知則）→ **着手時（設計前）に settled main へ実測再突合**すること（`git log <base>..origin/main`＋`git diff --stat`・`git show origin/main:path` は PowerShell で）。
+
+### 継続時の所在（重要・別セッション申し送り）
+
+- 本 brief と roadmap 追記㊲は **branch `claude/areka-ghost-balloon-behavior-28c177`**（collision-geometry worktree 転用）に commit `3d520542`＋追補 commit として存在し、**main 未着地**。
+- 別セッションで継続する場合: このブランチを拾う（同 worktree 続行 or main へ PR 着地させてから新 worktree）こと。**main から新 worktree を切ると本 brief が見えない**——input-events 完了時の「brief は main に存在」前提と異なる点に注意。
