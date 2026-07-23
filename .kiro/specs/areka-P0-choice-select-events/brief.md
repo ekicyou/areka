@@ -70,7 +70,7 @@
 
 - **Extends**: `completed/areka-P0-kanade`（Input/events/steady の additive 増分・決定論資産不変）。
 - **Adjacent**: `areka-P0-input-events`（同じ kanade events/steady を触る——マウス2イベント vs choice 1アーム＝**別アーム additive**・同時着手時は近接注意）／`areka-P0-idle-talk`（Status enum 共有・別値 additive）。
-- **Consumes**: `.kiro/specs/areka-P0-input-events/brief.md` の M-dialogue 申し送り（「choice 確定イベントがそのまま再利用できる形」）＝本 spec が受領。
+- **Consumes**: `.kiro/specs/completed/areka-P0-input-events/brief.md` の M-dialogue 申し送り（「choice 確定イベントがそのまま再利用できる形」）＝本 spec が受領。
 
 ## Constraints
 
