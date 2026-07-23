@@ -49,7 +49,7 @@
   - _Boundary: CanvasChoice, ViewboxFingerprint, HighlightDraw, DrawOracle_
 
 - [ ] 4. (P) Core: `\_l` カーソル換算とレイアウト注入（layout.rs）
-- [ ] 4.1 em/lh/px→image px 換算を実装する
+- [x] 4.1 em/lh/px→image px 換算を実装する
   - _Depends: 1.1_
   - `cursor_to_image_px(coord, origin, font_height, line_pitch)` を実装（絶対 Px/Em/Lh の非負値は `Some(image px)`、それ以外は `None`）
   - Observable: 既知の `font_height`/`line_pitch` で各単位を呼び出すと正典式どおりの値を返し、非対応形は `None` を返す

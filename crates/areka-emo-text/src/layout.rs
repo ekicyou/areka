@@ -58,7 +58,7 @@
 
 use crate::region::TextRegion;
 use crate::segment::SegmentPlan;
-use crate::state::{TextItem, TextLayerConfig};
+use crate::state::{CursorCoord, CursorUnit, TextItem, TextLayerConfig};
 use crate::writing::WritingMode;
 
 /// グリフ送りの注入点（metrics 依存の唯一の口・R4.5）。
@@ -489,6 +489,45 @@ fn finish_line(
     PositionedLine { rect, glyphs }
 }
 
+/// `\_l` カーソル座標 → image px 絶対座標の M1 実導出換算（純粋・全域・layout.rs 所有＝
+/// レイアウトカーソル意味論）。
+///
+/// 絶対 Px/Em/Lh の**非負値**のみ `Some(image px 絶対座標)` を返す。Percent／Relative（`@`）／
+/// 負値絶対／[`CursorCoord::Invalid`]／[`CursorCoord::Omitted`] は `None`（呼び手が状態不変
+/// スキップ＋warn-once・R2.4/6.5）。換算式（design Supporting References §`\_l 換算式`）:
+///
+/// - `Px`: `image_px = value`（裸数値＝バルーン画像 px 恒等）
+/// - `Em`: `image_px = value × font_height`（1em＝タグ時点の文字高さ＝`ResolvedFont::height`）
+/// - `Lh`: `image_px = value × line_pitch`（1lh＝行送りピッチ＝`ceil(font_height × 1.25)`）
+/// - 最終座標 ＝ `origin`（当該軸の validrect 原点＝`\_l` 原点・文字描画範囲左上・RN-3）＋ `image_px`
+///
+/// `origin`／`font_height`／`line_pitch` は呼び手が軸読み替え・metrics 解決済みで渡す
+/// （本関数は係数乗算と原点加算のみ——`line_pitch` は引数として受け取り内部算出しない）。
+/// パニックせず全入力で `Option<f32>` を返す（`Result` なし・R2.4 決定論）。物理化（`×k`）は
+/// 呼び手の領分で、本換算は image px で完結する（2 空間モデルの規律・2.2）。
+pub fn cursor_to_image_px(
+    coord: CursorCoord,
+    origin: f32,
+    font_height: f32,
+    line_pitch: f32,
+) -> Option<f32> {
+    match coord {
+        // 絶対 Px/Em/Lh の非負値のみ実導出（負値絶対はここで弾かず下の match ガードで None）。
+        CursorCoord::Absolute { value, unit } if value >= 0.0 => {
+            let factor = match unit {
+                CursorUnit::Px => 1.0,
+                CursorUnit::Em => font_height,
+                CursorUnit::Lh => line_pitch,
+                // Percent は M1 縮退保持（実導出せず None＝当該軸スキップ）。
+                CursorUnit::Percent => return None,
+            };
+            Some(origin + value * factor)
+        }
+        // 負値絶対・Relative（@）・Invalid・Omitted は縮退（None＝状態不変スキップ・warn-once）。
+        _ => None,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use areka_parsers::balloon::{
@@ -496,11 +535,12 @@ mod tests {
     };
 
     use super::{
-        FixedMetrics, GlyphMetrics, LayoutEngine, LineRect, PositionedLine, VisibleWindow, WrapPlan,
+        cursor_to_image_px, FixedMetrics, GlyphMetrics, LayoutEngine, LineRect, PositionedLine,
+        VisibleWindow, WrapPlan,
     };
     use crate::region::TextRegion;
     use crate::segment::{Segment, SegmentPlan};
-    use crate::state::TextItem;
+    use crate::state::{CursorCoord, CursorUnit, TextItem};
     use crate::writing::WritingMode;
 
     /// テスト画像原寸（image px・region.rs の檻と同一値）。
@@ -551,6 +591,124 @@ mod tests {
         let m = FixedMetrics;
         assert_eq!(m.line_pitch(12.0), 15.0); // 15.0（割り切れ）
         assert_eq!(m.line_pitch(10.0), 13.0); // 12.5 → 13（ceil でなければ fail）
+    }
+
+    // ── R2.1/2.2/2.4: `\_l` カーソル座標 → image px 換算（cursor_to_image_px・タスク 4.1） ──
+    //
+    // 換算式（design §`\_l 換算式`）: Px＝恒等・Em＝×font_height・Lh＝×line_pitch、最終座標は
+    // origin（当該軸 validrect 原点）加算。実導出は絶対 Px/Em/Lh の非負値のみ Some、
+    // Percent／Relative(@)／負値絶対／Invalid／Omitted は None（縮退＝当該軸スキップ）。
+
+    /// 絶対 Px/Em/Lh の非負値は正典式どおり `origin + value × factor` を返す
+    /// （factor: Px=1・Em=font_height・Lh=line_pitch）。単位ごとに異なる factor を檻化。
+    #[test]
+    fn cursor_to_image_px_converts_absolute_units_with_origin() {
+        // Px: image_px = value（恒等）→ origin(10) + 5 = 15。font_height/line_pitch は無関与。
+        assert_eq!(
+            cursor_to_image_px(
+                CursorCoord::Absolute {
+                    value: 5.0,
+                    unit: CursorUnit::Px,
+                },
+                10.0,
+                20.0,
+                25.0,
+            ),
+            Some(15.0)
+        );
+        // Em: image_px = value × font_height → 2 × 20 = 40 → origin(10) + 40 = 50。
+        assert_eq!(
+            cursor_to_image_px(
+                CursorCoord::Absolute {
+                    value: 2.0,
+                    unit: CursorUnit::Em,
+                },
+                10.0,
+                20.0,
+                25.0,
+            ),
+            Some(50.0)
+        );
+        // Lh: image_px = value × line_pitch → 3 × 25 = 75 → origin(10) + 75 = 85。
+        assert_eq!(
+            cursor_to_image_px(
+                CursorCoord::Absolute {
+                    value: 3.0,
+                    unit: CursorUnit::Lh,
+                },
+                10.0,
+                20.0,
+                25.0,
+            ),
+            Some(85.0)
+        );
+    }
+
+    /// 非負境界 value=0.0 は Some(origin)（≥0 ゲートは 0 を含む＝原点そのもの・境界檻）。
+    #[test]
+    fn cursor_to_image_px_zero_value_maps_to_origin() {
+        for unit in [CursorUnit::Px, CursorUnit::Em, CursorUnit::Lh] {
+            assert_eq!(
+                cursor_to_image_px(CursorCoord::Absolute { value: 0.0, unit }, 7.0, 20.0, 25.0),
+                Some(7.0),
+                "{unit:?}: value 0 は origin へ写る（≥0 ゲート内）"
+            );
+        }
+    }
+
+    /// 縮退全形は None（当該軸スキップ・warn-once）: 負値絶対・Percent・Relative(@)・
+    /// Invalid・Omitted。origin/font_height/line_pitch に依らず None を返す。
+    #[test]
+    fn cursor_to_image_px_degenerate_forms_return_none() {
+        // 負値絶対（Px/Em/Lh いずれも）: 非負ゲート外＝None。
+        for unit in [CursorUnit::Px, CursorUnit::Em, CursorUnit::Lh] {
+            assert_eq!(
+                cursor_to_image_px(
+                    CursorCoord::Absolute { value: -1.0, unit },
+                    10.0,
+                    20.0,
+                    25.0
+                ),
+                None,
+                "{unit:?}: 負値絶対は None"
+            );
+        }
+        // Percent（縮退保持・非負でも実導出しない）。
+        assert_eq!(
+            cursor_to_image_px(
+                CursorCoord::Absolute {
+                    value: 5.0,
+                    unit: CursorUnit::Percent,
+                },
+                10.0,
+                20.0,
+                25.0,
+            ),
+            None
+        );
+        // Relative（@ 接頭）: 単位が Px/Em/Lh でも M1 は None。
+        assert_eq!(
+            cursor_to_image_px(
+                CursorCoord::Relative {
+                    value: 5.0,
+                    unit: CursorUnit::Px,
+                },
+                10.0,
+                20.0,
+                25.0,
+            ),
+            None
+        );
+        // Invalid（パース不能）。
+        assert_eq!(
+            cursor_to_image_px(CursorCoord::Invalid, 10.0, 20.0, 25.0),
+            None
+        );
+        // Omitted（当該軸省略）。
+        assert_eq!(
+            cursor_to_image_px(CursorCoord::Omitted, 10.0, 20.0, 25.0),
+            None
+        );
     }
 
     // ── R6.1: 横書き——行内 +x・行送り +y・折返し閾値 wordwrappoint.x ──
