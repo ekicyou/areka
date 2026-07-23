@@ -15,7 +15,7 @@
   - 不正形（空セグメント・括弧不閉・非数値 index）に対し決定論的な `KeyParseError` を返すことを確認する（`parse_dotted` が同一入力に対し常に同一の Ok/Err を返す）
   - _Requirements: 1.3, 2.4, 2.6, 3.6_
 
-- [ ] 2.2 (P) フラット語彙台帳
+- [x] 2.2 (P) フラット語彙台帳
   - フラット 26 トークン全数を `FlatEntry`（token／layer／m1／degrade）として `FLAT_VOCAB` に登録する（username のみ `ConsumerDefault`、他は `PassThroughRaw`）
   - `%*`・`%property[...]` を構文記録専用の `SYNTAX_RECORDS` として保持し（解決対象外）、`\%` は語彙に含めないことを確認する
   - `FLAT_VOCAB.len() == 26` を単体テストで檻化する（件数が観測可能な完了条件）
