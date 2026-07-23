@@ -180,7 +180,7 @@
   - _Depends: 9.1_
 
 - [ ] 10. mustselect 排他選択の実導出（2026-07-23 実機サインオフ改定・R4.5/D11）
-- [ ] 10.1 (P) descript の mustselect カテゴリ宣言を取り込む
+- [x] 10.1 (P) descript の mustselect カテゴリ宣言を取り込む
   - `sakura/kero.bindoption*.group,カテゴリ名,mustselect` を走査し、mustselect と宣言されたカテゴリ名の集合をマウントモデルへ転記する（`multiple` 指定・非宣言は既定＝非排他として無視）
   - 本体側・相方側を区別して保持し、あるカテゴリが mustselect かを判別できるアクセサを用意する
   - Observable: emo2 相当の descript を読み込むと、腕・口・眉・目 が mustselect と判別でき、宣言のないカテゴリ（紅など）は非 mustselect と判別できる

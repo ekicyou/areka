@@ -56,6 +56,11 @@ pub struct BindGroupDefaults {
     pub sakura_names: Vec<BindGroupName>,
     /// `kero.bindgroup*.name,…` の名前宣言転記（相方側・本体側と区別・Req 1.2）。
     pub kero_names: Vec<BindGroupName>,
+    /// `sakura.bindoption*.group,カテゴリ名,mustselect` と宣言されたカテゴリ名（本体側・Req 4.5）。
+    /// `multiple`／非宣言は既定＝非排他ゆえ収録しない（転記のみ・保持は転記順・欠落は空 `Vec`）。
+    pub sakura_mustselect: Vec<String>,
+    /// `kero.bindoption*.group,カテゴリ名,mustselect` と宣言されたカテゴリ名（相方側・本体側と区別・Req 4.5）。
+    pub kero_mustselect: Vec<String>,
 }
 
 /// bindgroup 名前宣言 1 件の忠実転記（不透明文字列・ID 非生成・Req 1.5）。
@@ -120,6 +125,22 @@ impl BindGroupDefaults {
         ids.sort_unstable();
         ids.dedup();
         ids
+    }
+
+    /// スコープに対応する mustselect カテゴリ名スライスを返す（内部ヘルパ）。
+    fn mustselect(&self, scope: BindScope) -> &[String] {
+        match scope {
+            BindScope::Sakura => &self.sakura_mustselect,
+            BindScope::Kero => &self.kero_mustselect,
+        }
+    }
+
+    /// 当該スコープで `category` が mustselect（排他選択）と宣言されているか（Req 4.5）。
+    ///
+    /// `sakura/kero.bindoption*.group,カテゴリ,mustselect` で宣言されたカテゴリのみ真。
+    /// `multiple`／非宣言は既定＝非排他ゆえ偽。純関数（同一入力同一出力・副作用なし）。
+    pub fn is_mustselect(&self, scope: BindScope, category: &str) -> bool {
+        self.mustselect(scope).iter().any(|c| c == category)
     }
 }
 
@@ -254,5 +275,40 @@ mod bindgroup_name_tests {
         assert_eq!(defaults.category_ids(BindScope::Sakura, "腕"), vec![1100, 1200, 1300]);
         assert_eq!(defaults.category_ids(BindScope::Sakura, "頬"), vec![9000]);
         assert!(defaults.category_ids(BindScope::Sakura, "脚").is_empty());
+    }
+
+    /// 空の mustselect 表への問い合わせは全カテゴリ偽（既定＝非排他・R4.5）。
+    #[test]
+    fn is_mustselect_on_empty_returns_false() {
+        let defaults = BindGroupDefaults::default();
+        assert!(!defaults.is_mustselect(BindScope::Sakura, "腕"));
+        assert!(!defaults.is_mustselect(BindScope::Kero, "腕"));
+    }
+
+    /// 宣言済みカテゴリのみ mustselect＝真、非宣言は偽（R4.5）。
+    #[test]
+    fn is_mustselect_returns_declared_only() {
+        let defaults = BindGroupDefaults {
+            sakura_mustselect: vec!["腕".to_string(), "目".to_string()],
+            ..Default::default()
+        };
+        assert!(defaults.is_mustselect(BindScope::Sakura, "腕"));
+        assert!(defaults.is_mustselect(BindScope::Sakura, "目"));
+        // 非宣言カテゴリ（紅＝multiple/既定）は偽。
+        assert!(!defaults.is_mustselect(BindScope::Sakura, "紅"));
+    }
+
+    /// mustselect は本体（sakura）／相方（kero）を区別する（R4.5・スコープ隔離）。
+    #[test]
+    fn is_mustselect_distinguishes_scope() {
+        let defaults = BindGroupDefaults {
+            sakura_mustselect: vec!["腕".to_string()],
+            kero_mustselect: vec!["口".to_string()],
+            ..Default::default()
+        };
+        assert!(defaults.is_mustselect(BindScope::Sakura, "腕"));
+        assert!(!defaults.is_mustselect(BindScope::Kero, "腕"));
+        assert!(defaults.is_mustselect(BindScope::Kero, "口"));
+        assert!(!defaults.is_mustselect(BindScope::Sakura, "口"));
     }
 }
