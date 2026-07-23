@@ -56,7 +56,7 @@
   - _Requirements: 2.1, 2.2, 2.4_
   - _Boundary: LayoutCursor_
 
-- [ ] 4.2 pending-cursor 遅延実体化を実装する
+- [x] 4.2 pending-cursor 遅延実体化を実装する
   - _Depends: 1.2_
   - `CursorMove` 到着時は換算のうえ保留するのみ（現在行は閉じない）。次の可視グリフ配置直前にフラッシュ: 現在行が非空なら確定→保留改行 Σratio を適用→指定軸を上書き。後続可視グリフの無い末尾 `CursorMove` は蒸発。両軸 `None` は完全 no-op（行区切りもしない）
   - `cursor_to_image_px` が `None` を返す4つの縮退分岐（負値絶対・`%`・`@`・パース不能）について、actor ごとの warn-once ログを追加する
@@ -233,3 +233,4 @@
 - state.rs のテストモジュールに `WarnCounter`（tracing::Subscriber 実装, `tracing::subscriber::with_default` で使用）ログ檻あり — warn 回数アサーションに再利用可（4.2/viewbox の warn-once テスト等）。
 - balloon cursor.* モデル: `BalloonModel::new` は7引数のまま不変・`with_cursor(self, BalloonCursor)` ビルダーでマージに相乗り。`CursorColor` は `FontColor` のミラー（+Default）。fields private + accessor（`cursor() -> &BalloonCursor`）。5.3 の `ResolvedChoiceStyle::resolve` は accessor 経由で読む。
 - ResidentContent variant 集合 = {GlyphRun, Choice, Image, Surface}。task 3 で wildcard `seam =>` アームを明示 `Image(_) | Surface(_)` へ変換済（Choice の暗黙吸収防止）。line_fingerprint の Choice アームは task 6.1 で choice_marker を足す前提の GlyphRun ミラー。
+- **Task 8.2 申し送り**: layout.rs は加法的に `layout_with_cursor_warn(…, actor, &mut CursorWarnGuard)` を新設。`layout` ラッパ経由は縮退 warn を抑止（挙動は同一・字下げは効く）。production の縮退 warn-once（6.5）を有効化するには present_actor が persistent `CursorWarnGuard`（`unresolved_warned` と同型）を保持して `layout_with_cursor_warn` を呼ぶ必要あり＝Task 8.2 の配線。
