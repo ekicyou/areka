@@ -90,10 +90,14 @@ areka-kanade のテスト専用ログ捕捉基盤 `crates/areka-kanade/src/sched
 4. The `close_test.rs` の `wait_until` ヘルパー（100,000 yield 有界・壁時計なし）shall 壁時計 deadline ベースへ置換される。
 5. When 二次修正が適用される, the 対象テスト shall 既存の検証意味論（非空虚性を含む）を変えずに緑を維持する。
 
-### Requirement 8: 受け入れ検証（RED→GREEN の証拠）
+### Requirement 8: 受け入れ検証（病の性質別の証拠形式）
 **Objective:** 修正の有効性を確認する開発者として、修正前後の再現・解消を実行可能な証拠で示すことを求める。それにより恒久解であることを客観的に確認できる。
 
+> **討議#2 帰結（2026-07-23）**: 証拠形式は病の性質に合わせる。keeper（R1〜R6）は「確率再現可能な病」ゆえ RED→GREEN ストレス（lib exe 対象）。R7' の対象ループ（integration exe 在住）は「反復上限＝時間の代用」という構造的な病で、飢餓由来 flake は原理的に統計再現できない（Defender 再スキャン等は制御不能）ゆえ、構造証明＋回帰緑で判定する。
+
 #### Acceptance Criteria
-1. When 修正前に lib テスト実行ファイル（mtime 最新）を 4 プロセス並列 × 25 ラウンドで起動する, the 検証 shall ≥1 件の失敗で欠陥を再現するか、~100 実行で未再現の場合はその旨を記録して workspace 反復判定へ委ねる。
+1. When 修正前に lib テスト実行ファイル（mtime 最新）を 4 プロセス並列 × 25 ラウンドで起動する, the 検証 shall ≥1 件の失敗で keeper 欠陥を再現するか、~100 実行で未再現の場合はその旨を記録して workspace 反復判定へ委ねる。
 2. When 修正後に同一のストレス実行を行う, the 検証 shall 失敗 0 件を示す。
 3. When 修正後に `cargo test -p areka-kanade` と `cargo test --workspace`（連続 5 回以上）を実行する, the 検証 shall 全回で失敗 0 件を示す。
+4. The R7' 対象ループの検証 shall 反復回数上限の不在（意味論的完了バリアと壁時計 deadline で駆動される構造的性質）をコードレビューで確認し、`cargo test -p areka-kanade` と workspace 反復（AC 8.3）で対象テストが緑であることをもって足りるものとし、飢餓の人工再現や integration exe への RED→GREEN ストレスは要求しない。
+5. The R7' の非空虚性 shall kanade が復帰しない欠陥時に壁時計 deadline がハングでなく失敗として検出する経路の存在をレビュー観点で担保する。
