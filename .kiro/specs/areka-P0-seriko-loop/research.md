@@ -140,6 +140,8 @@ ghost `runtime.rs` の boot 配線（`:381-408`）では ticker は kanade と d
 9. **デファクト推定2点の確定挙動化（R9.4）**: 「-1 無し末尾到達＝最終コマ残留でアニメ終了状態」「再生中は再抽選対象外（restart しない）」を檻の期待値として実装し、実機齟齬時のみ SSP 実観察で裏取り。要件で既に確定挙動として要求済み＝design で純関数の期待値へ焼き込む。
 10. **スコープ規律の実装形（R8）**: parser `Interval` は 3 種のみ（`#[non_exhaustive]`）。seriko 側 interval 分岐を「random/bind+random のみ駆動・他は完全形で非駆動明示」に保つ表現（match の網羅と将来 additive シーム）。
 
+11. **描画メソッド（method）の転記拡張と駆動範囲（要件ディスカッション #2 で scope 拡大確定・2026-07-23）**: 既存 `Pattern` モデルは `{index, surface_id, wait, x, y}` で **method 欄が無く**、正典（ukadoc `animation*.pattern*,描画メソッド,サーフェス番号,ウェイト,X,Y`＝method 先頭位置・旧形式は第3位置）を不完全転記していた＝転記層の欠落。本 spec は scope を上流 pattern モデルへ拡大し **method を忠実に転記**（描画メソッド語彙は overlay/base/move/scaling/start/stop/alternativestart/alternativestop/parallelstart/parallelstop/insert/auto 等。一部は surface/wait/XY を無視する独自意味論を持つ＝単なる合成フラグではなく制御フロー含む）。**設計で詰める点**: (a) parser `Pattern` への method フィールド追加の型（完全語彙 enum か文字列忠実転記か・新旧位置差の吸収）＝転記層の忠実性を保つ形／(b) PatternState の method 搬送形（R-3 と統合）／(c) 合成側の method ディスパッチ——emo2 は overlay のみ実 fixture を持つゆえ overlay を駆動しテスト、他メソッド（制御系 start/stop/parallel/alternative・幾何 move/scaling・着せ替え insert）は完全形保持のまま非駆動（R8.4）＝どのメソッドに実 semantics を与え、どれを型シームに留めるかの線引き。**注意**: `-1`/`-2` 時 method 無視（R4.3）は method 欄存在が前提。
+
 ---
 
 ## 7. Next Steps

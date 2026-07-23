@@ -10,10 +10,11 @@ areka（ukadoc 準拠の互換ベースウェア）で emo2 ゴーストは起�
 
 ## Boundary Context
 
-- **In scope**: 自律 tick 時間源の供給／`random,N` の毎秒抽選（bind 非依存）／`bind+random,N` の着せ替えゲート抽選／pattern タイムライン進行規則（wait[ms] 累積・現在コマ1枚・`-1` 停止・末尾残留・再生中は非再抽選）／合成入力の PatternState 第一級拡張（合成署名＋合成キャッシュキー）／冪等発行／注入 tick＋注入乱数による決定論／実機まばたき2系統の人間サインオフ。
+- **In scope**: 自律 tick 時間源の供給／`random,N` の毎秒抽選（bind 非依存）／`bind+random,N` の着せ替えゲート抽選／pattern タイムライン進行規則（wait[ms] 累積・現在コマ1枚・`-1` 停止・末尾残留・再生中は非再抽選）／コマ描画メソッド（method）の忠実転記・PatternState 搬送・合成適用（下記「parser スコープ拡大」を含む）／合成入力の PatternState 第一級拡張（合成署名＋合成キャッシュキー）／冪等発行／注入 tick＋注入乱数による決定論／実機まばたき2系統の人間サインオフ。
 - **Out of scope**: 動的 bind 切替（上流 mayuna-compose 完了・read-only 参照のみ）／talk cue 再生（上流 cue-playback 完了）／他の interval 語彙（sometimes/rarely/periodic/always/runonce/never/yen-e/talk/bind/bind+always/bind+runonce）・`-2`・wait 範囲記法・exclusive option（いずれも emo2 未使用）／口パク（`interval,talk`）／`\i[N]` 明示再生タグ。
 - **Adjacent expectations**: bindgroup の ON/OFF は上流の着せ替え状態を read-only で参照するのみで本ランタイムは変更しない。合成側（emo-compose）の animation ID 整列規則（昇順描画＝画家のアルゴリズム）と pattern0 厳格選択は不変で、transient コマは同キーで合流する。合成キャッシュ（emo-present）はキーを PatternState 分だけ拡張し容量1メモ化の思想は不変。自律 tick 源は既存の他系統 tick を改変せず additive に追加する。talk cue タイムラインと pattern タイムラインは別の時間系であり、pattern ループは talk 非従属の自律駆動である。
 - **Surface 種別の非仕切り（areka シェル/バルーン統一グラフィック思想）**: pattern ループの駆動対象は surface 種別（シェル／バルーン）を区別せず、interval アニメを定義する任意の surface に一様適用される。能力を面種で仕切ることはしない（将来「バルーン surface 内にキャラを貼って喋らせる」「シェル領域にテキスト領域を置く」等の統合を要件が阻害しないため）。emo2 fixture が interval アニメを立ち絵 surface のみに定義するのは観測されたデータ事実であり、本 spec のスコープ制限ではない。pattern タイムライン評価器・毎秒抽選・PatternState はいずれも surface 非依存に保つ。
+- **Parser スコープ拡大（描画メソッド転記）**: SERIKO コマ記法は正典（ukadoc `animation*.pattern*,描画メソッド,サーフェス番号,ウェイト,X座標,Y座標`）で描画メソッド（method）を先頭の位置引数に持ち（旧形式は第3位置）、コマの合成は「厳密には描画メソッドによる」。既存の pattern 転記モデルはこの method を落として emo2 の overlay を暗黙化していた＝転記層の欠落。本 spec はこれを転記の穴と見なし、pattern 定義に描画メソッドを忠実に転記する拡張を scope に含める（本 spec の作業は上流 pattern 転記モデルへ及ぶ）。`-1`/`-2` 時に method/X/Y が無視される正典挙動（R4.3）は method 欄の存在を前提とする。
 
 ## Requirements
 
@@ -57,10 +58,11 @@ areka（ukadoc 準拠の互換ベースウェア）で emo2 ゴーストは起�
 #### Acceptance Criteria
 
 1. When アニメ再生が開始する, the pattern タイムライン評価器 shall 各コマの wait（前コマからそのコマへ切り替わるまでの遅延）を累積した経過時刻に従ってコマを進める。
-2. The pattern タイムライン評価器 shall 各時点で当該アニメの「現在コマ1枚」を表す（各コマは直前コマをリセットしてベースへ合成し、overlay を累積しない）。
+2. The pattern タイムライン評価器 shall 各時点で当該アニメの「現在コマ1枚」を表す（各コマは直前コマをリセットしてベースへ合成する＝合成方法は当該コマの描画メソッドに従い〔R4.6〕、既定では前コマ overlay を無制限に累積しない）。
 3. When コマの surface が `-1`, the pattern タイムライン評価器 shall 当該アニメを停止してベース表示へリセットし、method/x/y を無視する。
 4. When `-1` 終端が無いまま最終コマへ到達, the pattern タイムライン評価器 shall 最終コマを残留させたまま当該アニメを終了状態にする。
 5. The pattern タイムライン評価器 shall wait の単位を 1ms（SERIKO 2.0）として解釈する。
+6. The pattern タイムライン評価器 shall 各コマの描画メソッド（method）を SERIKO 描画メソッド語彙の忠実な転記値として保持し、`-1` 以外のコマではベースへの合成方法として当該メソッドを解釈する（emo2 が用いる overlay を駆動し、他メソッドの完全形保持は R8 に従う）。
 
 ### Requirement 5: 合成入力の PatternState 拡張
 
@@ -68,7 +70,7 @@ areka（ukadoc 準拠の互換ベースウェア）で emo2 ゴーストは起�
 
 #### Acceptance Criteria
 
-1. The SERIKO ループランタイム shall 合成入力に、サーフェス識別子・有効な着せ替え集合（BindSet）に加えて pattern 進行状態（PatternState）を第一級要素として供給する。
+1. The SERIKO ループランタイム shall 合成入力に、サーフェス識別子・有効な着せ替え集合（BindSet）に加えて pattern 進行状態（PatternState＝現在コマの surface_id・描画メソッド・x/y 等）を第一級要素として供給する。
 2. When PatternState が変化する, the 合成キャッシュ shall pattern 進行状態をキャッシュキーの一部として扱い再合成する（容量1メモ化の思想は不変）。
 3. The 合成 shall transient な pattern コマを既存の animation ID 整列規則（昇順描画＝画家のアルゴリズム）へ合流させ、整列規則そのものは変更しない。
 4. Where PatternState が空, the 合成 shall 従来（pattern0 静的土台のみ）の合成結果と一致する。
@@ -104,6 +106,7 @@ areka（ukadoc 準拠の互換ベースウェア）で emo2 ゴーストは起�
 1. The 実装 shall 挙動として `random,N` と `bind+random,N` の2つのみを駆動する。
 2. Where 他の interval 語彙（sometimes/rarely/periodic,N/always/runonce/never/yen-e/talk,N/bind/bind+always/bind+runonce）・`-2`・wait 範囲記法・exclusive option が定義に現れる, the システム shall それらの型／語彙を完全形で保持し、本 spec では駆動しない。
 3. The システム shall 口パク（`interval,talk`）・`\i[N]` 明示再生タグ・動的 bind 切替・talk cue 再生を本 spec の駆動対象から除外する。
+4. Where コマの描画メソッド語彙（overlay/base/move/scaling/start/stop/alternativestart/alternativestop/parallelstart/parallelstop/insert/auto 等）が定義に現れる, the システム shall 全メソッドを忠実に転記し完全形の型値として保持したうえで、本 spec では emo2 が用いる合成メソッド（overlay）を駆動し、他メソッド（制御系 start/stop/parallel/alternative・幾何系 move/scaling・着せ替え系 insert 等）は完全形保持のまま駆動しない。
 
 ### Requirement 9: 実機まばたき2系統サインオフ
 
