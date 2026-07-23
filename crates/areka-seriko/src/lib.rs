@@ -5,7 +5,8 @@
 //! re-export に集約する（唯一の公開面・idiomatic な re-export パターン）。
 //!
 //! - 解決層 [`SurfaceResolver`]／[`SurfaceTarget`]: `Emote{key}` を解決結果へ写す純粋層。
-//! - 状態層 [`ScopeStates`]／[`ScopeState`]／[`ApplyOutcome`]: per-scope surface 状態と冪等ガード。
+//! - 状態層 [`ScopeStates`]／[`ScopeState`]／[`ApplyOutcome`]／[`BindApplyOutcome`]: per-scope
+//!   surface 状態・冪等ガードと、動的 bind 適用結果に応じた表示発行の判定。
 //! - 発行層 [`DisplayCommand`]／[`SurfaceOutput`]／[`MockSurfaceOutput`]: emo への表示指令と発行先抽象。
 //! - アクター層 [`SerikoMsg`]／[`SerikoSink`]／[`spawn_seriko`]: 独立スレッド稼働・単一発行点。
 //! - 構築層 [`build_static_bindset`]: bindgroup default → 静的 `BindSet`（恒等写像）。
@@ -27,4 +28,4 @@ pub use bind::{
 };
 pub use output::{DisplayCommand, MockSurfaceOutput, SurfaceOutput};
 pub use resolve::{SurfaceResolver, SurfaceTarget};
-pub use state::{ApplyOutcome, ScopeState, ScopeStates};
+pub use state::{ApplyOutcome, BindApplyOutcome, ScopeState, ScopeStates};

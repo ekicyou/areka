@@ -17,6 +17,7 @@ use std::collections::HashMap;
 use areka_emo_compose::BindSet;
 use areka_sakura::ActorKey;
 
+use crate::bind::accumulate;
 use crate::output::DisplayCommand;
 use crate::resolve::SurfaceTarget;
 
@@ -38,6 +39,29 @@ pub enum ApplyOutcome {
     /// 発行すべき指令（状態が変化した・要件 5.1/5.2）。
     Changed(DisplayCommand),
     /// 状態不変＝発行しない（冪等・要件 3.4）。
+    Unchanged,
+}
+
+/// [`ScopeStates::apply_bind`] の適用結果（着せ替え変化に応じた表示発行の判定・要件 3.5/3.6/3.8）。
+///
+/// 動的 bind の適用は「per-scope の結果 bind 集合」の更新であり、表示発行が要るかは対象 scope の
+/// **シェル面**表示状態で決まる（D5）。[`ApplyOutcome`] を鏡映しつつ、非表示 scope での「状態のみ
+/// 更新」を第 3 の区分 [`BindApplyOutcome::StateOnly`] で表す。
+///
+/// - [`BindApplyOutcome::Changed`]: 集合が変化し、かつ対象 scope が表示中（`Shown(id)`）→ 現在の
+///   シェル surface id を載せた [`DisplayCommand::Show`] を発行すべき（要件 3.5・D5）。
+/// - [`BindApplyOutcome::StateOnly`]: 集合は変化したが対象 scope が非表示（`Hidden`）または未知
+///   （未表示）→ 発行せず状態のみ更新し、次の Show へ新集合を保留する（D5・`\s[-1]` 意味論を
+///   破らないため非表示 scope へ Show を強制しない）。
+/// - [`BindApplyOutcome::Unchanged`]: 適用結果が直前と同値の集合 → 状態も書き込まず発行もしない
+///   （冪等・要件 3.6・D9）。
+#[derive(Clone, Debug, PartialEq)]
+pub enum BindApplyOutcome {
+    /// 表示中 scope での集合変化 → 現シェル surface id を載せた Show を発行すべき（要件 3.5・D5）。
+    Changed(DisplayCommand),
+    /// 非表示／未知 scope での集合変化 → 発行なし・状態のみ更新（次 Show へ保留・D5）。
+    StateOnly,
+    /// 結果集合が直前と同値 → 状態書き込みも発行もなし（冪等・要件 3.6・D9）。
     Unchanged,
 }
 
@@ -216,6 +240,53 @@ impl ScopeStates {
         match self.dynamic_binds.get(scope) {
             Some(binds) => binds,
             None => &self.static_binds,
+        }
+    }
+
+    /// 対象 scope の動的 bind 集合へ 1 件の on/off を積算し、表示発行の要否を判定する
+    /// （要件 3.4/3.5/3.6/3.8・D5/D9）。
+    ///
+    /// 手順:
+    /// 1. 現在集合 [`current_binds`] に対し `accumulate(id, on)` で新集合を求める（純関数・積算保持）。
+    /// 2. **冪等ガード（要件 3.6・D9）**: 新集合が現在集合と同値なら状態を書き込まず
+    ///    [`BindApplyOutcome::Unchanged`] を返す（発行なし）。同値判定の単位は結果 `BindSet` の
+    ///    同値（`BindSet` は昇順 dedup の正準形ゆえ順序・重複に不感・D9）。
+    /// 3. 変化があれば `dynamic_binds` へ新集合を書き込む（状態更新・要件 3.4 積算保持）。
+    /// 4. **発行判定（D5）**: 対象 scope の**シェル面**状態 `scopes` を見て、
+    ///    - `Shown(sid)` → [`BindApplyOutcome::Changed`]`(Show{ scope, surface_id: sid, binds: 新集合 })`
+    ///      （現 surface を新しい着せ替え集合で再合成させる・要件 3.5）。
+    ///    - `Hidden` または未知（`None`）→ [`BindApplyOutcome::StateOnly`]（発行せず状態のみ更新。
+    ///      非表示 scope へ Show を強制すると `\s[-1]` 意味論を破るため・D5。新集合は次の Show 発行時に
+    ///      [`current_binds`] 経由で載る）。
+    ///
+    /// **非退行（要件 3.8）**: 本メソッドは `dynamic_binds` のみを書き込み、シェル面 `scopes`・
+    /// バルーン面 `balloon` の状態機械には一切干渉しない（[`apply`]／[`apply_balloon`] の遷移は不変）。
+    ///
+    /// [`current_binds`]: ScopeStates::current_binds
+    /// [`apply`]: ScopeStates::apply
+    /// [`apply_balloon`]: ScopeStates::apply_balloon
+    pub fn apply_bind(&mut self, scope: &ActorKey, id: u32, on: bool) -> BindApplyOutcome {
+        // (1) 現在集合から新集合を積算（純関数）。
+        let new = accumulate(self.current_binds(scope), id, on);
+
+        // (2) 冪等ガード: 結果が現在集合と同値なら状態を書き込まず発行しない（要件 3.6・D9）。
+        if new == *self.current_binds(scope) {
+            return BindApplyOutcome::Unchanged;
+        }
+
+        // (3) 状態更新: 動的集合のみ書き込む（要件 3.4 積算保持・シェル/バルーン state は不変・R3.8）。
+        self.dynamic_binds.insert(scope.clone(), new.clone());
+
+        // (4) 発行判定: 対象 scope のシェル面状態で決める（D5）。
+        match self.scopes.get(scope) {
+            // 表示中 → 現 surface id を新集合で再発行（要件 3.5）。
+            Some(ScopeState::Shown(sid)) => BindApplyOutcome::Changed(DisplayCommand::Show {
+                scope: scope.clone(),
+                surface_id: *sid,
+                binds: new,
+            }),
+            // 非表示または未知 scope → 状態のみ更新・発行なし（D5・次 Show へ保留）。
+            Some(ScopeState::Hidden) | None => BindApplyOutcome::StateOnly,
         }
     }
 }
@@ -702,5 +773,197 @@ mod tests {
             "apply(Hide) 後もバルーン面状態は不変（R4.6）"
         );
         assert_eq!(states.scopes.get(&scope), Some(&ScopeState::Hidden));
+    }
+
+    // ---- apply_bind（動的 bind 適用結果に応じた表示発行の判定・要件 3.5/3.6/3.8・D5/D9） ----
+
+    /// 表示中シーンでの集合変化 → 現シェル surface id を載せた Show を新規発行（R3.5・D5）。
+    /// binds は直前集合∪{新 id}、surface_id は現在表示中の id と一致すること。
+    #[test]
+    fn apply_bind_shown_set_change_emits_changed_show() {
+        let mut states = empty_states(); // static = {1100, 1207}
+        let scope = ActorKey::from("0");
+
+        // シェル面を Shown(2100) に確定させる。
+        states.apply(&scope, SurfaceTarget::Show(2100));
+
+        // 集合を変える bind（1302 を on） → Changed(Show{現 sid=2100, 新集合})。
+        let outcome = states.apply_bind(&scope, 1302, true);
+        assert_eq!(
+            outcome,
+            BindApplyOutcome::Changed(DisplayCommand::Show {
+                scope: scope.clone(),
+                surface_id: 2100,
+                binds: BindSet::from_ids([1100, 1207, 1302]),
+            }),
+            "表示中シーンでの着せ替え変化は現 surface id を載せた新 Show を発行（R3.5・D5）"
+        );
+        // 動的集合として保持されていること。
+        assert_eq!(
+            states.current_binds(&scope),
+            &BindSet::from_ids([1100, 1207, 1302])
+        );
+    }
+
+    /// 非表示シーンでの集合変化 → 発行なし・状態のみ更新（D5：Hidden への強制 Show 禁止）。
+    #[test]
+    fn apply_bind_hidden_set_change_is_state_only() {
+        let mut states = empty_states();
+        let scope = ActorKey::from("0");
+
+        // シェル面を Hidden にする。
+        states.apply(&scope, SurfaceTarget::Show(2100));
+        states.apply(&scope, SurfaceTarget::Hide);
+        assert_eq!(states.scopes.get(&scope), Some(&ScopeState::Hidden));
+
+        // 集合を変える bind → StateOnly（発行なし）。
+        let outcome = states.apply_bind(&scope, 1302, true);
+        assert_eq!(
+            outcome,
+            BindApplyOutcome::StateOnly,
+            "非表示シーンでの着せ替え変化は発行せず状態のみ更新（D5）"
+        );
+        // 状態（動的集合）は更新されている＝次 Show へ保留。
+        assert_eq!(
+            states.current_binds(&scope),
+            &BindSet::from_ids([1100, 1207, 1302]),
+            "Hidden でも集合は積算保持（次 Show へ持ち越し・D5）"
+        );
+    }
+
+    /// 未知（未表示）scope での集合変化 → 発行なし・状態のみ更新（D5）。
+    #[test]
+    fn apply_bind_unknown_scope_set_change_is_state_only() {
+        let mut states = empty_states();
+        let scope = ActorKey::from("0");
+
+        // 一度も Show していない scope。
+        assert_eq!(states.scopes.get(&scope), None);
+
+        let outcome = states.apply_bind(&scope, 1302, true);
+        assert_eq!(
+            outcome,
+            BindApplyOutcome::StateOnly,
+            "未知 scope への着せ替え変化は発行せず状態のみ更新（D5）"
+        );
+        assert_eq!(
+            states.current_binds(&scope),
+            &BindSet::from_ids([1100, 1207, 1302]),
+            "未知 scope でも集合は積算保持"
+        );
+        // シェル状態を作らない（Show を強制しない）。
+        assert_eq!(states.scopes.get(&scope), None, "apply_bind はシェル状態を作らない");
+    }
+
+    /// 同一集合への変化 → Unchanged・状態書き込みなし・発行なし（冪等・R3.6・D9）。
+    #[test]
+    fn apply_bind_same_set_is_unchanged() {
+        let mut states = empty_states(); // static = {1100, 1207}
+        let scope = ActorKey::from("0");
+        states.apply(&scope, SurfaceTarget::Show(2100));
+
+        // 不在 id の off は結果集合が現状と同値 → Unchanged。
+        let outcome = states.apply_bind(&scope, 9999, false);
+        assert_eq!(
+            outcome,
+            BindApplyOutcome::Unchanged,
+            "結果集合が直前と同値なら再発行不要（冪等・R3.6・D9）"
+        );
+        // 状態は書き込まれない（current_binds は依然 static 既定を返す）。
+        assert_eq!(
+            states.current_binds(&scope),
+            &BindSet::from_ids([1100, 1207]),
+            "同値ゆえ dynamic_binds へ書き込まれず static 既定のまま"
+        );
+
+        // 既に含む id の on も同値 → Unchanged。
+        let outcome2 = states.apply_bind(&scope, 1100, true);
+        assert_eq!(outcome2, BindApplyOutcome::Unchanged);
+        assert_eq!(
+            states.current_binds(&scope),
+            &BindSet::from_ids([1100, 1207])
+        );
+    }
+
+    /// 冪等 on→on（R3.6・D9）: 表示中 scope で同一 (id, true) を 2 回。
+    /// 1 回目 Changed（集合変化）、2 回目 Unchanged（既に含む）。
+    #[test]
+    fn apply_bind_idempotent_on_on_shown() {
+        let mut states = empty_states();
+        let scope = ActorKey::from("0");
+        states.apply(&scope, SurfaceTarget::Show(2100));
+
+        let first = states.apply_bind(&scope, 1302, true);
+        assert!(
+            matches!(first, BindApplyOutcome::Changed(_)),
+            "初回の集合変化は Changed"
+        );
+
+        let second = states.apply_bind(&scope, 1302, true);
+        assert_eq!(
+            second,
+            BindApplyOutcome::Unchanged,
+            "同一 id の再 on は集合不変ゆえ Unchanged（冪等・R3.6・D9）"
+        );
+    }
+
+    /// 非退行（R3.8）: 一連の apply_bind はシェル面・バルーン面の状態機械を変更しない。
+    #[test]
+    fn apply_bind_does_not_touch_shell_or_balloon_state() {
+        let mut states = empty_states();
+        let scope = ActorKey::from("0");
+
+        // シェル面 Shown(2100)・バルーン面 Shown(2) を確定。
+        states.apply(&scope, SurfaceTarget::Show(2100));
+        states.apply_balloon(&scope, SurfaceTarget::Show(2));
+        assert_eq!(states.scopes.get(&scope), Some(&ScopeState::Shown(2100)));
+        assert_eq!(states.balloon.get(&scope), Some(&ScopeState::Shown(2)));
+
+        // 複数 apply_bind を通しても scopes / balloon は不変（R3.8）。
+        states.apply_bind(&scope, 1302, true);
+        states.apply_bind(&scope, 1500, true);
+        states.apply_bind(&scope, 1100, false);
+        assert_eq!(
+            states.scopes.get(&scope),
+            Some(&ScopeState::Shown(2100)),
+            "apply_bind はシェル面状態を変更しない（R3.8）"
+        );
+        assert_eq!(
+            states.balloon.get(&scope),
+            Some(&ScopeState::Shown(2)),
+            "apply_bind はバルーン面状態を変更しない（R3.8）"
+        );
+    }
+
+    /// 積算（R3.4 隣接）: 表示中 scope で 2 つの bind を続けて on。
+    /// 2 回目 Changed は直前集合を保持したまま両 id を載せる。
+    #[test]
+    fn apply_bind_accumulates_across_two_binds_when_shown() {
+        let mut states = empty_states(); // static = {1100, 1207}
+        let scope = ActorKey::from("0");
+        states.apply(&scope, SurfaceTarget::Show(2100));
+
+        // idA を on。
+        let a = states.apply_bind(&scope, 1302, true);
+        assert_eq!(
+            a,
+            BindApplyOutcome::Changed(DisplayCommand::Show {
+                scope: scope.clone(),
+                surface_id: 2100,
+                binds: BindSet::from_ids([1100, 1207, 1302]),
+            })
+        );
+
+        // idB を on → 直前集合 {1100,1207,1302} を保持したまま 1500 を追加。
+        let b = states.apply_bind(&scope, 1500, true);
+        assert_eq!(
+            b,
+            BindApplyOutcome::Changed(DisplayCommand::Show {
+                scope: scope.clone(),
+                surface_id: 2100,
+                binds: BindSet::from_ids([1100, 1207, 1302, 1500]),
+            }),
+            "2 つ目の bind は直前状態を保持したまま積算（R3.4 隣接）"
+        );
     }
 }
