@@ -97,7 +97,7 @@
 
 ## 6. Core: seriko actor の Tick 受理と単一発行点継承
 
-- [ ] 6.1 SerikoMsg::Tick・send_tick・spawn_seriko 拡張・handle_message Tick 腕を実装する
+- [x] 6.1 SerikoMsg::Tick・send_tick・spawn_seriko 拡張・handle_message Tick 腕を実装する
   - `SerikoMsg::Tick { now_ms: u64 }` を additive 追加し、`SerikoSink::send_tick(&self, now_ms)` を実装する（送出失敗は debug!・shutdown 期待事象）
   - `spawn_seriko` に `loop_config: SerikoLoopConfig` 引数を追加する（既存呼び手は `SerikoLoopConfig::disabled()` で従来挙動と同値）
   - `handle_message` に Tick 腕を追加し、`loop_runtime.on_tick` の返す指令列を既存 `emit_display` 単一発行点のみで発行する

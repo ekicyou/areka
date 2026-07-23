@@ -39,7 +39,9 @@ use areka_sakura::{
     spawn_talk, ActorKey, CueCommand, CueSink, SakuraMsg, StartTalk, SystemVarSnapshot, TalkCue,
     TalkDone, TalkEndReason, TalkId,
 };
-use areka_seriko::{spawn_seriko, BindResolver, DisplayCommand, MockSurfaceOutput, SurfaceResolver};
+use areka_seriko::{
+    spawn_seriko, BindResolver, DisplayCommand, MockSurfaceOutput, SerikoLoopConfig, SurfaceResolver,
+};
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -134,6 +136,7 @@ fn run_core(
         SurfaceResolver::new(BTreeMap::new()),
         static_binds,
         resolver,
+        SerikoLoopConfig::disabled(),
         out,
     );
 
