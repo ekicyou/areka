@@ -84,7 +84,7 @@
   - _Requirements: 1.2, 2.1, 2.4, 4.1, 4.2, 4.3, 4.4, 4.5, 7.1, 7.5, 8.2, 9.4_
   - _Boundary: timeline (areka-seriko timeline.rs)_
 
-- [ ] 5.3 LoopRuntime.on_tick を実装する
+- [x] 5.3 LoopRuntime.on_tick を実装する
   - 抽選（境界跨ぎ時のみ・表示中×非再生中×bind ゲート通過）→ 進行（`frame_at` で全再生中アニメの新 PatternState 組立）→ `commit_pattern` への差分反映、を統括する
   - 抽選消費順序を固定（scope 昇順→Shell→Balloon→animation id 昇順）にする
   - `IdleResidual` から再抽選発火した瞬間に残留コマを即時クリアする（討議 #2 裁定：表示は `frame_at` の結果のみに依存し直前 PatternState に依存しない）
@@ -224,3 +224,4 @@
 - **1.2 method/interval 転記**: `Interval::Other(Box<str>)` は単一文字列＝**keyword のみ**保持（`sometimes,5` → `Other("sometimes")`・K=5 は非採録）。設計 (design.md `Box<str>` 型形状＋討議 #1 裁定「sometimes と書いたのに動かない」診断性) どおりで承認済。未認識 interval **単独**行（pattern 無し）も認識 interval 単独行と対称に slot を確定する（faithful transcription・非駆動）。cargo は PowerShell 経由で実行（Git Bash coreutils の link.exe が MSVC link を遮蔽するため）。
 - **cross-crate ripple（1.1/1.2 後の baseline 修復・commit `<repair>`）**: parser `Pattern` への `method: DrawMethod` 欄追加は非 `#[non_exhaustive]` struct ゆえ**下流の全 `Pattern {..}` 構築サイト（test fixture のみ・production は parser のみが構築）を破壊**する。修復先＝emo-atlas manifest.rs / emo-compose plan.rs・log_firing_tests.rs・composer_tests.rs / emo-present presenter.rs（全て `#[cfg(test)]`）に `method: DrawMethod::new("overlay".to_string())` を追加。加えて 1.1 は `DrawMethod` を shell `mod.rs` の `pub use` へ再エクスポートし忘れていた（`pub` 欄型は公開必須）——併せて修正。**教訓: struct 欄追加タスクのレビューは `-p <crate>` でなく `cargo test --workspace --no-run` で下流回帰を検出すべし。** 以降 output.rs / command.rs 等の enum 欄追加（4.2, 8.2）も同様に workspace-tests build で追随漏れを検出する。
 - **areka ビルド赤ウィンドウ（4.2〜9.3・設計意図どおり）**: `DisplayCommand::Show/ShowBalloon` への `pattern` 欄追加（4.2）で `crates/areka/src/emo2_boot/adapter.rs`（`map_display_command` の網羅 match＋テスト構築子）がコンパイル不能になる＝設計「発見 D＝意図された強制追随」。9.3（adapter/frame の pattern 透過）で解消するまで **`cargo build -p areka` は expected-red**。中間タスク（5.x/6.1/7.x/8.x）のレビューは各 `-p <crate>` ゲートで判定（seriko/emo-compose/emo-present は areka に非依存ゆえ独立にグリーン）。9.3 完了後に workspace 全体ビルドを復旧確認する。
+- **5.3 残テスト分岐（10.1 で拾う）**: LoopRuntime の `-2`（`-1` 以外の負 surface）warn-once dedup 分岐（`warned_negative` set）に looper 専用テストが未配置。非ログ挙動は `-1` 経路と同一（base 復帰）・frame_at の `-2→Stopped` は timeline.rs で検証済ゆえ非ブロッキングだが、[deterministic-test-coverage-mandate] 遵守のため **10.1 looper 統合テストで `-2` warn-once ケース**（seriko の tracing capture helper 使用）を追加すること。

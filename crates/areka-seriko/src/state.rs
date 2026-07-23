@@ -480,6 +480,31 @@ impl ScopeStates {
             Some(&ScopeState::Hidden) | None => PatternApplyOutcome::Unchanged,
         }
     }
+
+    /// 表示中（`Shown`）の全 (scope, slot, surface_id) を列挙する読み取り専用アクセサ
+    /// （[`LoopRuntime`] の抽選・進行の対象 slot 列挙用・要件 2.1）。
+    ///
+    /// シェル面 `scopes`・バルーン面 `balloon` の両 map を走査し、`Shown(sid)` のエントリのみを
+    /// `(scope, slot, surface_id)` で返す（`Hidden`／未知は除外）。[`LoopRuntime`] は表示中 slot に
+    /// のみ抽選・進行を走らせる（表示中ゲート）ため、この列挙が評価対象を与える。列挙順は `HashMap`
+    /// 由来で非決定ゆえ、消費側（[`LoopRuntime`]）が固定順（scope 昇順→Shell→Balloon）へ整列する
+    /// （D-7）。状態は一切変更しない純粋な読み取りで、`LoopRuntime` は bind／表示状態機械へ書き込まない。
+    ///
+    /// [`LoopRuntime`]: crate::looper::LoopRuntime
+    pub fn shown_slots(&self) -> Vec<(ActorKey, Slot, u32)> {
+        let mut out = Vec::new();
+        for (scope, st) in &self.scopes {
+            if let ScopeState::Shown(sid) = st {
+                out.push((scope.clone(), Slot::Shell, *sid));
+            }
+        }
+        for (scope, st) in &self.balloon {
+            if let ScopeState::Shown(sid) = st {
+                out.push((scope.clone(), Slot::Balloon, *sid));
+            }
+        }
+        out
+    }
 }
 
 /// 未格納 (scope, slot) 用の空 [`PatternState`]（プロセス共有・不変）。
@@ -1519,6 +1544,33 @@ mod tests {
                 pattern: p.clone(),
             }),
             "bind 変化の Show 再発行は current_pattern(Shell) を同梱（現在コマ保持で再合成）"
+        );
+    }
+
+    /// `shown_slots` は `Shown` の (scope, slot, surface_id) のみ列挙する（`Hidden`／未知は除外・要件 2.1）。
+    #[test]
+    fn shown_slots_enumerates_only_shown_shell_and_balloon() {
+        let mut states = empty_states();
+        let s0 = ActorKey::from("0");
+        let s1 = ActorKey::from("1");
+
+        // scope0: シェル面 Shown(2100)・バルーン面 Shown(2)。
+        states.apply(&s0, SurfaceTarget::Show(2100));
+        states.apply_balloon(&s0, SurfaceTarget::Show(2));
+        // scope1: シェル面を Show→Hide で Hidden にする（除外されるべき）。
+        states.apply(&s1, SurfaceTarget::Show(3000));
+        states.apply(&s1, SurfaceTarget::Hide);
+
+        let mut shown = states.shown_slots();
+        shown.sort_by(|a, b| a.0.cmp(&b.0).then(format!("{:?}", a.1).cmp(&format!("{:?}", b.1))));
+
+        // scope0 の Shell/Balloon 2 件のみ（scope1 は Hidden ゆえ除外）。
+        assert_eq!(shown.len(), 2, "Shown な slot のみ列挙（Hidden は除外）");
+        assert!(shown.contains(&(s0.clone(), Slot::Shell, 2100)));
+        assert!(shown.contains(&(s0.clone(), Slot::Balloon, 2)));
+        assert!(
+            !shown.iter().any(|(scope, _, _)| *scope == s1),
+            "Hidden の scope1 は列挙されない"
         );
     }
 }
