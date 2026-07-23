@@ -145,7 +145,7 @@
   - _Boundary: areka BootAssets_
   - _Depends: 1.2_
 
-- [ ] 7.2 seriko 起動呼び出しへ名前解決情報を配線し、bind を消費者台帳へ登録する
+- [x] 7.2 seriko 起動呼び出しへ名前解決情報を配線し、bind を消費者台帳へ登録する
   - 起動時資産に構築した名前解決情報を、seriko の起動呼び出しへ渡す
   - コマンド名 bind の担当消費者として seriko を消費者台帳へ登録する
   - Observable: 台帳に bind→seriko の登録が存在し、move の登録と共存すること、および同一名前の重複登録が検出されることを確認できる

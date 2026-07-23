@@ -286,9 +286,10 @@ pub fn wire_emo2_boot(
     // boot は S: dola::cue::CueSink + Clone を要求する。SerikoSink は upstream `areka-seriko` で
     // `CueSink` を実装し `#[derive(Clone)]` 済み（内側 mpsc::Sender は常に Clone・全 clone は単一 inbox
     // 送信端で配送同一）ゆえ spawn_seriko の戻り値を直接 surface_sink として boot へ渡す（共有 shim は不要）。
-    // TODO(task 7.2): BindResolver::empty() は暫定コンパイル橋。task 7.2 が BootAssets.bind_resolver（実名前解決表）へ差し替える。
+    // `bind_resolver`（BootAssets・task 7.1 が MountModel の名前転記から構築した実名前解決表）を
+    // seriko の起動へ値渡しで配線する。bind cue（`\![bind]`）の着せ替え名解決はこの実表が担う（task 7.2）。
     let (surface_sink, seriko_handle) =
-        spawn_seriko(resolver, static_binds.clone(), BindResolver::empty(), bridge);
+        spawn_seriko(resolver, static_binds.clone(), bind_resolver, bridge);
     let wiring_assets = BootAssets {
         shells,
         balloons,
@@ -296,7 +297,8 @@ pub fn wire_emo2_boot(
         // attach は resolver を一切読まない（Task 4.1 申し送り）ため無害なプレースホルダ。
         resolver: SurfaceResolver::new(BTreeMap::new()),
         static_binds,
-        bind_resolver,
+        // 実 bind_resolver は seriko が値消費済み（attach は bind_resolver を読まない）ため空表プレースホルダ。
+        bind_resolver: BindResolver::empty(),
     };
 
     // 手順5: boot（実 sink 注入）。Err は既存 is_benign_boot_error 分類（R7.4）＋フォールバック。

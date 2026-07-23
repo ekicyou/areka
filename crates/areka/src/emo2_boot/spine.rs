@@ -448,16 +448,18 @@ impl SpineHarness {
             static_binds,
             bind_resolver,
         } = assets;
-        // TODO(task 7.2): BindResolver::empty() は暫定コンパイル橋。task 7.2 が BootAssets.bind_resolver（実名前解決表）へ差し替える。
+        // 実名前解決表（BootAssets.bind_resolver・task 7.1 が emo2 fixture の MountModel から構築）を
+        // seriko の起動へ値渡しで配線する（production wire_emo2_boot と同型・task 7.2）。
         let (surface_sink, seriko) =
-            spawn_seriko(resolver, static_binds.clone(), BindResolver::empty(), bridge);
+            spawn_seriko(resolver, static_binds.clone(), bind_resolver, bridge);
         let wiring_assets = BootAssets {
             shells,
             balloons,
             balloon_model,
             resolver: SurfaceResolver::new(BTreeMap::new()),
             static_binds,
-            bind_resolver,
+            // 実 bind_resolver は seriko が値消費済み（attach は bind_resolver を読まない）ため空表プレースホルダ。
+            bind_resolver: BindResolver::empty(),
         };
 
         // ── move channel＋実 MoveCueSink（wire_emo2_boot 手順4 と同型・S-3 形＝task 9.3） ──

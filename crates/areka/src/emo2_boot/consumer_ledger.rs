@@ -15,7 +15,7 @@
 //!
 //! [`ConsumerLedger::try_register`] は同一コマンド名を二重登録しようとすると
 //! [`LedgerError::Duplicate`] を返す（多重結線の検出を観測可能化する）。正準台帳
-//! [`ConsumerLedger::canonical`] はこの try_register を用いて `move`（＋将来 `bind`）を
+//! [`ConsumerLedger::canonical`] はこの try_register を用いて `move`・`bind` を
 //! 登記し、重複があれば構築時に panic する（正準表は一意ゆえ実際には発火しない・回帰檻）。
 
 use std::collections::BTreeMap;
@@ -29,12 +29,12 @@ use std::collections::BTreeMap;
 /// - [`MoveSink`](CommandConsumer::MoveSink): `\![move]` を消費する
 ///   [`MoveCueSink`](super::move_cue::MoveCueSink)（talk スレッド側名前選別 sink）。
 /// - [`Seriko`](CommandConsumer::Seriko): `\![bind]`（着せ替え）を消費する表示系 seriko。
-///   本 spec の task 7.2 が台帳へ `bind` → `Seriko` を 1 行で登記する（それまで variant のみ予約）。
+///   正準台帳（[`ConsumerLedger::canonical`]）が `bind` → `Seriko` を登記する（task 7.2）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CommandConsumer {
     /// `\![move]` の担当消費者（[`MoveCueSink`](super::move_cue::MoveCueSink)）。
     MoveSink,
-    /// `\![bind]`（着せ替え）の担当消費者（表示系 seriko）。task 7.2 が登記する。
+    /// `\![bind]`（着せ替え）の担当消費者（表示系 seriko）。正準台帳が登記する（task 7.2）。
     Seriko,
 }
 
@@ -86,17 +86,20 @@ impl ConsumerLedger {
         self.table.get(name).copied()
     }
 
-    /// 正準台帳を構築する（現行登記＝`move` → [`CommandConsumer::MoveSink`]）。
+    /// 正準台帳を構築する（現行登記＝`move` → [`CommandConsumer::MoveSink`]・`bind` →
+    /// [`CommandConsumer::Seriko`]）。
     ///
-    /// task 7.2 が `bind` → [`CommandConsumer::Seriko`] を 1 行（`ledger.try_register("bind",
-    /// CommandConsumer::Seriko)?`）で追加する（dola 無改変・R2.6）。正準表は一意ゆえ
-    /// [`try_register`](Self::try_register) は Ok を返す——万一将来の編集で重複を作れば
-    /// `expect` が構築時に panic して回帰を止める（一意性の内部整合檻）。
+    /// 以後のコマンド追加は「消費者＋本表 1 行（`try_register`）」のみで **dola 無改変**（R2.6）。
+    /// 正準表は一意ゆえ [`try_register`](Self::try_register) は Ok を返す——万一将来の編集で重複を
+    /// 作れば `expect` が構築時に panic して回帰を止める（一意性の内部整合檻）。
     pub fn canonical() -> Self {
         let mut ledger = Self::new();
         ledger
             .try_register("move", CommandConsumer::MoveSink)
             .expect("正準台帳: 'move' は一意（重複は編集ミス）");
+        ledger
+            .try_register("bind", CommandConsumer::Seriko)
+            .expect("正準台帳: 'bind' は一意（重複は編集ミス）");
         ledger
     }
 }
@@ -105,28 +108,27 @@ impl ConsumerLedger {
 mod tests {
     use super::*;
 
-    /// 正準台帳に `move` が登記されている → 照会で [`CommandConsumer::MoveSink`] が引ける
-    /// （台帳に move の登録が存在する・Observable の前半）。
+    /// 正準台帳に `move`・`bind` が共に登記されている → 照会で `move`→[`CommandConsumer::MoveSink`]・
+    /// `bind`→[`CommandConsumer::Seriko`] が引ける（両登録の共存・Observable の中核・task 7.2）。
     #[test]
-    fn canonical_has_move_registered() {
+    fn canonical_has_move_and_bind_registered() {
         let ledger = ConsumerLedger::canonical();
         assert_eq!(
             ledger.consumer_of("move"),
             Some(CommandConsumer::MoveSink),
             "正準台帳は move → MoveSink を登記している（R2.2）"
         );
+        assert_eq!(
+            ledger.consumer_of("bind"),
+            Some(CommandConsumer::Seriko),
+            "正準台帳は bind → Seriko を登記している（task 7.2・R2.2）"
+        );
     }
 
     /// 未登記のコマンド名は `None`（自己選別モデルでは未知名は良性未処理・R2.5）。
-    /// `bind` は本 task では未登記（task 7.2 が登記する）ゆえ現時点では `None`。
     #[test]
     fn unregistered_name_is_none() {
         let ledger = ConsumerLedger::canonical();
-        assert_eq!(
-            ledger.consumer_of("bind"),
-            None,
-            "bind は task 7.2 まで未登記＝None（未知名は良性未処理）"
-        );
         assert_eq!(
             ledger.consumer_of("noexist"),
             None,
@@ -156,16 +158,34 @@ mod tests {
         assert_eq!(ledger.consumer_of("move"), Some(CommandConsumer::MoveSink));
     }
 
-    /// 正準台帳の構築は重複なしで成功する（内部整合＝一意性檻が緑）。
+    /// 正準台帳の構築は重複なしで成功する（内部整合＝一意性檻が緑）。二エントリ（move・bind）が
+    /// 共存しても一意性檻は保たれ、既登記名（`bind`）の再登記は [`LedgerError::Duplicate`] で
+    /// 検出され、別名の追加は独立に成功する（task 7.2・R2.2）。
     #[test]
     fn canonical_builds_without_duplicate() {
-        // canonical() は内部 try_register が Ok（重複なら expect が panic する）。
+        // canonical() は内部 try_register（move・bind）が Ok（重複なら expect が panic する）。
         let ledger = ConsumerLedger::canonical();
-        // 相異なる名前は独立に登記できる（別名は重複でない）ことも確認する。
+        assert_eq!(ledger.consumer_of("move"), Some(CommandConsumer::MoveSink));
+        assert_eq!(ledger.consumer_of("bind"), Some(CommandConsumer::Seriko));
+
+        // 二エントリ共存下でも一意性檻は保たれる: 既登記名 bind の再登記は Duplicate で検出される。
         let mut ext = ledger.clone();
-        ext.try_register("bind", CommandConsumer::Seriko)
-            .expect("別名 bind の追加は重複でない（task 7.2 の 1 行追加を先取り検証）");
+        let err = ext
+            .try_register("bind", CommandConsumer::MoveSink)
+            .expect_err("既登記名 bind の再登記は Err で検出される（1 名前=高々 1 消費者・R2.2）");
+        assert_eq!(
+            err,
+            LedgerError::Duplicate {
+                name: "bind".to_string(),
+            },
+            "二エントリ共存下でも重複は Duplicate{{name}} として観測可能"
+        );
+        // 既登記の担当は据え置き（上書きしない）。
         assert_eq!(ext.consumer_of("bind"), Some(CommandConsumer::Seriko));
-        assert_eq!(ext.consumer_of("move"), Some(CommandConsumer::MoveSink));
+
+        // 相異なる名前は独立に登記できる（別名は重複でない）。
+        ext.try_register("resize", CommandConsumer::Seriko)
+            .expect("別名 resize の追加は重複でない");
+        assert_eq!(ext.consumer_of("resize"), Some(CommandConsumer::Seriko));
     }
 }
