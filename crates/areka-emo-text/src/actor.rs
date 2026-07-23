@@ -23,6 +23,7 @@ use wintf::ecs::{GraphicsCore, WucGraphicsResource};
 
 use crate::TextLayerError;
 use crate::canvas::ContentCanvas;
+use crate::choice::ResolvedChoiceStyle;
 use crate::draw::{DWriteMetrics, ResolvedFont};
 use crate::layout::{LayoutEngine, WrapPlan};
 use crate::region::{ImagePx, ScaleContract, TextRegion};
@@ -107,6 +108,9 @@ pub struct ResolvedBalloonText {
     pub font: ResolvedFont,
     /// 折返しモードの解釈結果（`budoux_newline` 語彙解決・ON 時のみ分かち書き境界を計算）。
     pub wrap: WrapMode,
+    /// hover ハイライトスタイルの解決正規形（balloon `cursor.*` モデル＋既定文字色から一点解決）。
+    /// 装飾（`decorate_canvas`）が hover 行へ焼く塗り/文字色の源（design.md RuntimeContract・R4.2/4.3）。
+    pub choice_style: ResolvedChoiceStyle,
 }
 
 impl ResolvedBalloonText {
@@ -115,13 +119,42 @@ impl ResolvedBalloonText {
     /// 物理 px を渡すのはレビューエラー（2 空間モデル——design.md「DPI/スケール契約」）。
     pub fn resolve(model: &BalloonModel, image_size: (u32, u32)) -> ResolvedBalloonText {
         let mode = WritingMode::resolve(model);
+        let font = ResolvedFont::resolve(model);
+        // hover ハイライトスタイルはバルーン cursor.* モデル＋解決済み既定文字色から一度だけ解決する
+        // （下流 present_actor の装飾は本値を読むだけ・choice.rs へは依存しない・design.md Integration）。
+        let choice_style = ResolvedChoiceStyle::resolve(Some(model.cursor()), font.color);
         ResolvedBalloonText {
             mode,
             region: TextRegion::resolve(model, image_size, mode),
-            font: ResolvedFont::resolve(model),
+            font,
             wrap: WrapMode::resolve(model),
+            choice_style,
         }
     }
+}
+
+/// choice.rs（純粋層）所有のバルーン窓物理 px 矩形を結線層から再輸出する（design.md RuntimeContract）。
+/// 下流（choice-interact）は [`ChoiceHitRow::rect`] を本型で受ける——照会契約の座標系正本。
+pub use crate::choice::HitRectPx;
+
+/// 行ヒットジオメトリ契約（本 spec 正本・choice-interact が消費・design.md RuntimeContract）。
+///
+/// 提示フレーム同期スナップショットの 1 行分——1 選択肢セグメントの窓物理 px 矩形に、
+/// 下流 `ChoiceSelection` 構成材料（`ordinal`/`id`/`label`/`references`）を同梱し、契約の
+/// 再照会を不要にする（design.md「下流契約」）。スナップショットの population は present_actor
+/// （task 8.2）が担い、本 task（8.1）では per-actor スナップショットは空のまま。
+#[derive(Clone, Debug, PartialEq)]
+pub struct ChoiceHitRow {
+    /// スパンの配送順序数（[`crate::state::ChoiceSpan::ordinal`]・hover 注入／選択解決の主キー）。
+    pub ordinal: usize,
+    /// `\q` ID（不透明転写）。
+    pub id: String,
+    /// 表示文字列（不透明転写）。
+    pub label: String,
+    /// `\q` 第 3 引数以降（参照列・不透明転写）。
+    pub references: Vec<String>,
+    /// ヒット矩形（バルーン窓物理 px・スクロール committed 反映済み・[`HitRectPx`]）。
+    pub rect: HitRectPx,
 }
 
 /// actor 1 人分の描画資源（供給面＋描画実行部＋実測 metrics——font/mode に束縛されるため
@@ -161,6 +194,12 @@ pub struct TextLayerRuntime {
     /// 未解決 actor の warn を actor ごと初回のみに抑える記録（以降は debug!——
     /// design Error Handling「未 binding actor の cue」）。
     unresolved_warned: BTreeSet<ActorKey>,
+    /// actor → hover 注入状態（`None`＝ハイライト無し・[`inject_choice_hover`](Self::inject_choice_hover)
+    /// で更新・present_actor の装飾（task 8.2）が読む・UI スレッド専用）。
+    choice_hover: HashMap<ActorKey, Option<usize>>,
+    /// actor → 提示フレーム同期ヒット行スナップショット（[`choice_hit_rows`](Self::choice_hit_rows)
+    /// の照会源）。population は present_actor（task 8.2）が present 成功時に行う——本 task では空のまま。
+    choice_snapshot: HashMap<ActorKey, Vec<ChoiceHitRow>>,
 }
 
 impl TextLayerRuntime {
@@ -173,6 +212,8 @@ impl TextLayerRuntime {
             surfaces: HashMap::new(),
             config,
             unresolved_warned: BTreeSet::new(),
+            choice_hover: HashMap::new(),
+            choice_snapshot: HashMap::new(),
         }
     }
 
@@ -291,6 +332,52 @@ impl TextLayerRuntime {
         self.surfaces
             .get(actor)
             .map(|render| render.executor.stats())
+    }
+
+    /// hover 状態注入（契約正本・R4.1）。`None`＝ハイライト無し。UI スレッド専用（runtime は `!Send`）。
+    ///
+    /// 注入値は actor ごとに保持し、次の提示フレームの装飾（task 8.2）が読む。`ordinal` が現存
+    /// 選択肢スパンに無い場合も **panic せず**そのまま保持し、描画時に「ハイライト無し」として
+    /// 縮退する（stale ordinal——`decorate_canvas` が hover 印を付けない・design.md RuntimeContract）。
+    /// 縮退検出時は `debug!` を一件出す（log-first・ループを殺さない）。
+    pub fn inject_choice_hover(&mut self, actor: &ActorKey, hover: Option<usize>) {
+        // 現存スパンに無い ordinal は縮退（ハイライト無し）——検出を debug ログに残す（panic しない）。
+        if let Some(ordinal) = hover {
+            let exists = self
+                .state
+                .actor_state(actor)
+                .is_some_and(|s| s.choices().iter().any(|span| span.ordinal == ordinal));
+            if !exists {
+                debug!(
+                    actor = %actor,
+                    ordinal,
+                    "inject_choice_hover: 現存選択肢スパンに無い ordinal——ハイライト無しとして縮退（保持のみ・panic なし）"
+                );
+            }
+        }
+        self.choice_hover.insert(actor.clone(), hover);
+    }
+
+    /// 行ヒットジオメトリ照会（契約正本・R3.2）。
+    ///
+    /// **鮮度契約**: 最後に提示（present）したフレームの導出値＝表示と同一 layout からの単一導出
+    /// （R3.3/5.2・population は present_actor＝task 8.2）。未装着・選択肢なし・スナップショット未
+    /// population は空 slice。
+    pub fn choice_hit_rows(&self, actor: &ActorKey) -> &[ChoiceHitRow] {
+        self.choice_snapshot
+            .get(actor)
+            .map_or(&[], Vec::as_slice)
+    }
+
+    /// 「選択肢表示中」照会（R1.3・照会のみ＝バリア解決はしない）。
+    ///
+    /// **表示層自身**の選択肢スパン集合（[`ActorTextState::choices`](crate::state::ActorTextState::choices)）が
+    /// 非空であることを表す（DD-6——供給側 `CuePlayerState::WaitingForChoice` バリアの真実源とは別）。
+    /// 未知 actor・スパン空は `false`。
+    pub fn choice_active(&self, actor: &ActorKey) -> bool {
+        self.state
+            .actor_state(actor)
+            .is_some_and(|s| !s.choices().is_empty())
     }
 }
 
@@ -637,6 +724,7 @@ mod runtime_tests {
     use super::{
         ResolvedBalloonText, TextLayerRuntime, TextSlotBinding, present_frame, spawn_emo_text,
     };
+    use crate::choice::ResolvedChoiceStyle;
     use crate::state::TextLayerConfig;
     use crate::wrap::WrapMode;
 
@@ -1242,6 +1330,96 @@ mod runtime_tests {
             rt.draw_stats(&kero).expect("draw_stats(1)").full_clears,
             kero_fc0 + 1,
             "ClearAll は名指しされない actor（1）の描画実行部にも FullClear を起こす（request_clear が全 render へ届いた証跡）"
+        );
+    }
+
+    // ══ task 8.1: 選択肢契約 API（inject_choice_hover／choice_hit_rows／choice_active・純粋・COM 不要） ══
+
+    /// 選択肢テキストを載せる Choice cue（duration は文字数×REVEAL_INTERVAL・runtime_tests の cue 流儀）。
+    fn choice_cue(actor: &str, at: f64, id: &str, text: &str, refs: &[&str]) -> TalkCue {
+        TalkCue {
+            at,
+            actor: ActorKey::from(actor),
+            command: CueCommand::Choice {
+                id: id.into(),
+                text: text.into(),
+                references: refs.iter().map(|s| s.to_string()).collect(),
+            },
+            duration: text.chars().count() as f64 * REVEAL_INTERVAL,
+        }
+    }
+
+    /// Observable（3.5/4.1）: 現存しない ordinal で `inject_choice_hover` を呼んでもパニックせず、
+    /// `choice_active` は選択肢スパンの実状態を反映し続ける（選択肢あり＝true）。
+    #[test]
+    fn inject_choice_hover_nonexistent_ordinal_does_not_panic_and_choice_active_holds() {
+        let mut rt = TextLayerRuntime::new(TextLayerConfig::default());
+        let actor = ActorKey::from("0");
+        rt.apply_cue(&choice_cue("0", 0.0, "OnYes", "はい", &["r0"]));
+        assert!(rt.choice_active(&actor), "選択肢スパンありで choice_active=true");
+
+        // 現存スパン（ordinal 0）に無い ordinal 999 を注入——panic せず縮退（debug ログ）。
+        rt.inject_choice_hover(&actor, Some(999));
+        // 実存 ordinal 0 の注入・解除も panic しない。
+        rt.inject_choice_hover(&actor, Some(0));
+        rt.inject_choice_hover(&actor, None);
+
+        // stale ordinal 注入後も choice_active はスパンの実状態を反映し続ける（hover は照会に影響しない）。
+        assert!(
+            rt.choice_active(&actor),
+            "stale ordinal 注入後も choice_active はスパン実状態を反映"
+        );
+    }
+
+    /// `choice_active`（1.3）: スパン非空で true・スパン無し／未知 actor で false。
+    #[test]
+    fn choice_active_reflects_span_set_presence() {
+        let mut rt = TextLayerRuntime::new(TextLayerConfig::default());
+        let choosing = ActorKey::from("0");
+        let plain = ActorKey::from("1");
+        let unknown = ActorKey::from("9");
+
+        rt.apply_cue(&choice_cue("0", 0.0, "q", "はい", &[]));
+        rt.apply_cue(&cue("1", 0.0, CueCommand::Text("ただの本文".into())));
+
+        assert!(rt.choice_active(&choosing), "Choice cue 消費 actor は true");
+        assert!(
+            !rt.choice_active(&plain),
+            "Text のみ（選択肢スパン無し）actor は false"
+        );
+        assert!(!rt.choice_active(&unknown), "未知 actor は false");
+    }
+
+    /// `choice_hit_rows`（3.2）: 未知 actor・選択肢無し actor は空 slice を返す
+    /// （スナップショット population は task 8.2——8.1 では常に空）。
+    #[test]
+    fn choice_hit_rows_empty_for_unknown_or_no_snapshot_actor() {
+        let mut rt = TextLayerRuntime::new(TextLayerConfig::default());
+        let unknown = ActorKey::from("9");
+        assert!(
+            rt.choice_hit_rows(&unknown).is_empty(),
+            "未知 actor は空 slice"
+        );
+
+        // 選択肢スパンを持つ actor でも 8.1 時点ではスナップショット未 population＝空 slice。
+        let actor = ActorKey::from("0");
+        rt.apply_cue(&choice_cue("0", 0.0, "q", "はい", &[]));
+        assert!(
+            rt.choice_hit_rows(&actor).is_empty(),
+            "スナップショット未 population（8.2 前）は空 slice"
+        );
+    }
+
+    /// `ResolvedBalloonText` は balloon cursor モデルから解決した `choice_style` を運ぶ（Integration）。
+    /// cursor.\* 未指定の geo_model → `Invert`（未指定バルーン＝M1 実導出）。
+    #[test]
+    fn resolved_balloon_text_carries_choice_style_from_cursor_model() {
+        let image = (120u32, 60u32);
+        let resolved = ResolvedBalloonText::resolve(&geo_model(), image);
+        assert_eq!(
+            resolved.choice_style,
+            ResolvedChoiceStyle::Invert,
+            "cursor.* 未指定バルーンは choice_style=Invert（既定文字色反転縮退）"
         );
     }
 }

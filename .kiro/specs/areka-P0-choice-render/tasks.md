@@ -132,7 +132,7 @@
   - _Boundary: HighlightDraw_
 
 - [ ] 8. Integration: ランタイム契約 API と提示パイプライン（actor.rs）
-- [ ] 8.1 選択肢契約 API を実装する
+- [x] 8.1 選択肢契約 API を実装する
   - _Depends: 5.3_
   - `TextLayerRuntime::inject_choice_hover(actor, Option<ordinal>)`／`choice_hit_rows(actor) -> &[ChoiceHitRow]`／`choice_active(actor) -> bool` を実装し、`ResolvedBalloonText.choice_style` を balloon cursor モデルから一度解決する
   - 実ポインタ配線・クリック解決・`ChoiceSelection` の定義/発行は明示的に対象外とする（`areka-P0-choice-interact` の領分）
@@ -239,3 +239,4 @@
 - **Task 8.2 申し送り（5.4 署名逸脱）**: `decorate_canvas(canvas, segments, hover, style, default_font_color, region: &TextRegion, mode: WritingMode)` へ region+mode を additive 追加（5.2 と同型・絶対 inline_range→resident-local 変換に必要）。present_actor は `decorate_canvas(.., region, mode)` を呼ぶこと。line_index↔resident は 1:1（from_layout が行毎に1住人）。ChoiceRowSegment.inline_range は resident-local（GlyphRunContent ローカル系）。
 - viewbox.rs: `CommittedLine.choice_marker: u32`（Choice=`hovered.map_or(0,|o|o+1)`・他=0）。`is_backward_shrink` は block_pos_bits/extent_bits のみ比較で choice_marker を見ない＝hover のみ変化は全域縮退へ落ちず per-line 増分ダーティを維持（4.4）。
 - viewbox_draw.rs: highlight 描画は Phase1(BeginDraw前=ブラシ生成+SetDrawingEffect・?伝播)→Phase2(FillRectangle→DrawTextLayout)分割。`segment_text_range` はグリフ中心が resident-local inline_range に入る連続 subrange を UTF-16 len 累積で DWRITE_TEXT_RANGE 化（多コード単位対応）。Choice 行は毎フレーム全範囲 SetDrawingEffect(None) リセット（cached TextLayout の stale 効果一掃・None=既定ゆえ素描画非回帰）。`ViewboxExecutor::scroll_state()->ScrollState{pos,committed}` additive 追加（task 8 スナップショットが committed 消費）。
+- actor.rs: per-actor `choice_hover: HashMap<ActorKey,Option<usize>>`/`choice_snapshot: HashMap<ActorKey,Vec<ChoiceHitRow>>`（8.2 で populate）。`ResolvedBalloonText.choice_style` は resolve 時に `ResolvedChoiceStyle::resolve(Some(model.cursor()), font.color)` で一度解決。`choice_active`=`ActorTextState::choices()` 非空（DD-6・barrier ではない）。`ChoiceHitRow` は actor.rs 所有・`HitRectPx` は `pub use crate::choice::HitRectPx`。
