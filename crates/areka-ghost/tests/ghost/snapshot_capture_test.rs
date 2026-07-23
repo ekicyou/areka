@@ -95,7 +95,7 @@ use std::time::{Duration, Instant};
 
 use areka_ghost::shiori_wiring::real_connect;
 use areka_ghost::ticker::TickerConfig;
-use areka_ghost::{GhostBootOptions, ShioriWiring, TickerMode, boot, default_system_vars};
+use areka_ghost::{GhostBootOptions, ShioriWiring, SystemVarWiring, TickerMode, boot};
 use areka_kanade::{CloseReason, ShioriBackend};
 use areka_parsers::charset::DefaultEncoding;
 use areka_parsers::package;
@@ -346,7 +346,8 @@ fn capture_real_pasta_snapshots() {
         default_encoding: DefaultEncoding::Utf8,
         shiori: wiring,
         sinks: vec![Box::new(surface_sink), Box::new(text_sink)],
-        system_vars: default_system_vars(),
+        system_vars: SystemVarWiring::Custom(crate::common::test_system_vars()),
+        app_profile_dir: None,
         // 実時計駆動（本ハーネスは決定論を要求されない・OnBoot 一周を実運行で起こす）。
         ticker: TickerMode::Real(TickerConfig::default()),
     };

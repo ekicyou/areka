@@ -184,7 +184,7 @@
   - _Depends: 5.2, 6.2, 8.1_
   - _Requirements: 2.2, 4.2, 5.1, 6.5, 7.1, 8.2_
 
-- [ ] 8.3 既存テスト呼出面（約 20 箇所）の Custom 注入更新
+- [x] 8.3 既存テスト呼出面（約 20 箇所）の Custom 注入更新
   - `default_system_vars()`／`system_vars:` 構築子に依存する in-crate テスト（runtime.rs 約 5 箇所・dispatcher.rs 約 5 箇所）を `SystemVarWiring::Custom` 注入へ更新する
   - tests/ghost 統合テスト（spine_e2e_test 約 5 箇所・inproc_e2e_test 2 箇所・snapshot_capture_test・real_pasta_test ほか）を同様に更新する
   - 更新後、これら既存テストが従来どおりの意図（陳腐化ではなく生きているテストの更新）で green になることを確認する

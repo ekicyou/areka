@@ -525,6 +525,21 @@ mod tests {
     use super::*;
     use std::path::PathBuf;
 
+    /// task 8.3: 退役した `default_system_vars()` の忠実な代役スタンドイン。
+    ///
+    /// `{"username": DEFAULT_USERNAME}` のみを充填した凍結スナップショットを毎回新規構築して
+    /// 返す（退役前 provider と同一挙動）。既存テストの意図——既定 username 前提の凍結像刻印——を
+    /// [`SystemVarWiring::Custom`] 経由で無改変のまま保つための in-crate 共有ヘルパ。sylphya 読み口
+    /// （[`SystemVarWiring::FromSylphya`]）差替後も、これら既存テストは従来どおりの直接注入
+    /// セマンティクスを `Custom` で維持する（R7.1・R9.1・design「テスト呼出面の一括更新」）。
+    fn test_system_vars() -> SystemVarSource {
+        Box::new(|| {
+            let mut snapshot = SystemVarSnapshot::default();
+            snapshot.insert("username", areka_sakura::sysvar::DEFAULT_USERNAME);
+            snapshot
+        })
+    }
+
     #[test]
     fn mount_variant_constructs_and_displays() {
         let err = GhostBootError::Mount(MountError::StartPointMissing {
@@ -655,7 +670,8 @@ mod tests {
                 Ok(Box::new(FakeShioriBackend) as Box<dyn ShioriBackend>)
             })),
             sinks: vec![Box::new(NoopSink), Box::new(NoopSink)],
-            system_vars: default_system_vars(),
+            system_vars: SystemVarWiring::Custom(test_system_vars()),
+            app_profile_dir: None,
             ticker: TickerMode::Disabled,
         };
 
@@ -704,7 +720,8 @@ mod tests {
                 );
             })),
             sinks: vec![Box::new(NoopSink), Box::new(NoopSink)],
-            system_vars: default_system_vars(),
+            system_vars: SystemVarWiring::Custom(test_system_vars()),
+            app_profile_dir: None,
             ticker: TickerMode::Disabled,
         };
 
@@ -757,7 +774,8 @@ mod tests {
                 Ok(Box::new(FakeShioriBackend) as Box<dyn ShioriBackend>)
             })),
             sinks: vec![Box::new(NoopSink), Box::new(NoopSink)],
-            system_vars: default_system_vars(),
+            system_vars: SystemVarWiring::Custom(test_system_vars()),
+            app_profile_dir: None,
             ticker: TickerMode::Disabled,
         };
 
@@ -799,7 +817,8 @@ mod tests {
                 Ok(Box::new(FakeShioriBackend) as Box<dyn ShioriBackend>)
             })),
             sinks: vec![Box::new(NoopSink), Box::new(NoopSink)],
-            system_vars: default_system_vars(),
+            system_vars: SystemVarWiring::Custom(test_system_vars()),
+            app_profile_dir: None,
             ticker: TickerMode::Disabled,
         };
 
@@ -834,6 +853,8 @@ mod tests {
             kanade,
             dispatcher,
             ticker: _,
+            sylphya,
+            sylphya_reader: _,
             handles,
         } = parts;
         let GhostHandles {
@@ -843,6 +864,7 @@ mod tests {
             start_relay: start_relay_handle,
             down_relay: down_relay_handle,
             ticker: _,
+            sylphya: sylphya_handle,
         } = handles;
 
         // shutdown() と同等の手順を手作業で駆動する（ForceQuit→join→Close→join→
@@ -876,6 +898,12 @@ mod tests {
                 down_relay_handle
                     .join()
                     .expect("down-relay should terminate normally (natural disconnect)");
+
+                // sylphya 供給者停止＋join（shutdown() 最終段の手作業ミラー・design「shutdown」step 10）。
+                sylphya.close();
+                sylphya_handle
+                    .join()
+                    .expect("sylphya should terminate normally after Close");
             },
         );
 
@@ -987,7 +1015,8 @@ mod tests {
             default_encoding: DefaultEncoding::Utf8,
             shiori: ShioriWiring::InProc,
             sinks: vec![Box::new(recording.clone()), Box::new(recording.clone())],
-            system_vars: default_system_vars(),
+            system_vars: SystemVarWiring::Custom(test_system_vars()),
+            app_profile_dir: None,
             ticker: TickerMode::Disabled,
         };
 
