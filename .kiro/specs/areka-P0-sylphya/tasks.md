@@ -72,7 +72,7 @@
   - _Requirements: 2.1, 2.3, 2.5, 2.6, 3.1, 3.2, 9.1, 9.2_
 
 - [ ] 4. Core: 永続層
-- [ ] 4.1 (P) TOML 直列化形式と寛容読取
+- [x] 4.1 (P) TOML 直列化形式と寛容読取
   - この永続層は語彙台帳（Major 2）にも鏡像（Major 3）にも依存しない自己完結モジュールであり、Major 1 完了後ただちに並走着手可能（Major 2・3 と並行実施可）
   - `format-version = 1` を持つ TOML スキーマ（`[window."ID"]`／`[balloon-offset."ID"]`／`[boot]`／`[vanish]`、値はすべて文字列）を実装する
   - 寛容読取 3 段（ファイル不在→debug＋全不在／parse 失敗・未知 `format-version`→warn＋全不在・ファイル温存／key 欠落→当該 key のみ不在）を実装する

@@ -14,3 +14,9 @@ thiserror = { workspace = true }
 tracing = { workspace = true }
 toml = { workspace = true }
 areka-actor = { path = "../areka-actor" }
+
+[dev-dependencies]
+# 寛容読取の未知バージョン警告（R6.4「未知バージョン→warn・旧形式判別可能」）を実行可能
+# テストで捕捉するための tracing subscriber。workspace 既出（areka／wintf／kanade が使用済み）・
+# テスト限定であり、設計「新規外部依存なし」（＝runtime 依存の制約）には抵触しない。
+tracing-subscriber = { workspace = true }
