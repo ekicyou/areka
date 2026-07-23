@@ -1,6 +1,6 @@
 # Implementation Plan
 
-- [ ] 1. Foundation: `\_l` 語彙と Choice/Cursor cue の実消費（state.rs）
+- [x] 1. Foundation: `\_l` 語彙と Choice/Cursor cue の実消費（state.rs）
 - [x] 1.1 `\_l` 座標語彙とパーサを実装する
   - `CursorCoord`/`CursorUnit` enum を追加（絶対 px/em/lh・相対 `@`・`%`・省略・パース不能の全形を表現）
   - `parse_cursor_coord` を純関数として実装（不透明文字列の全入力に対し値を返す・パニックしない・`Result` を返さない）
@@ -26,7 +26,7 @@
   - _Requirements: 1.5, 2.1, 2.4, 5.1, 5.3, 6.5, 7.5_
   - _Boundary: StateIncrement_
 
-- [ ] 2. (P) Foundation: バルーン cursor.\* スタイルモデル（areka-parsers・独立クレート）
+- [x] 2. (P) Foundation: バルーン cursor.\* スタイルモデル（areka-parsers・独立クレート）
 - [x] 2.1 (P) balloon descript モデルへ cursor.\* の additive サブ構造体を追加する
   - `Cursor{style, brush_color, pen_color, font_color, blendmethod}` を追加し、既存 KV 後勝ちマージへ相乗りする
   - 未モデル化サブキー（shadowcolor/shadowstyle 等）は寛容パース passthrough のまま保持する
@@ -48,7 +48,7 @@
   - _Requirements: 1.1, 1.4, 9.5_
   - _Boundary: CanvasChoice, ViewboxFingerprint, HighlightDraw, DrawOracle_
 
-- [ ] 4. (P) Core: `\_l` カーソル換算とレイアウト注入（layout.rs）
+- [x] 4. (P) Core: `\_l` カーソル換算とレイアウト注入（layout.rs）
 - [x] 4.1 em/lh/px→image px 換算を実装する
   - _Depends: 1.1_
   - `cursor_to_image_px(coord, origin, font_height, line_pitch)` を実装（絶対 Px/Em/Lh の非負値は `Some(image px)`、それ以外は `None`）
@@ -70,7 +70,7 @@
   - _Requirements: 2.2, 2.4, 2.5, 7.5_
   - _Boundary: LayoutCursor_
 
-- [ ] 5. (P) Core: ChoicePure モジュール（choice.rs）
+- [x] 5. (P) Core: ChoicePure モジュール（choice.rs）
 - [x] 5.1 選択肢スパンからの行注釈を実装する
   - _Depends: 1.2_
   - `lib.rs` へ `pub mod choice;` を追加し、`pure_layer_modules_have_no_windows_imports` 構造檻のモジュール一覧へ登録する
@@ -109,7 +109,7 @@
   - _Requirements: 3.4, 4.2, 4.3, 4.5, 6.5, 7.5_
   - _Boundary: ChoicePure_
 
-- [ ] 6. Core: hover 対応ダーティ導出（viewbox.rs）
+- [x] 6. Core: hover 対応ダーティ導出（viewbox.rs）
 - [x] 6.1 行指紋へ hover 印フィールドを追加する
   - _Depends: 3, 5.4_
   - `CommittedLine` へ `choice_marker` フィールドを追加（非 Choice 行は0・Choice 行は `hovered.map_or(0, |o| o+1)`）し、既存 `line_fingerprint`/`derive_dirty` アルゴリズムは無改変のまま供給する
@@ -131,7 +131,7 @@
   - _Requirements: 4.2, 4.3, 4.5, 4.6, 9.4_
   - _Boundary: HighlightDraw_
 
-- [ ] 8. Integration: ランタイム契約 API と提示パイプライン（actor.rs）
+- [x] 8. Integration: ランタイム契約 API と提示パイプライン（actor.rs）
 - [x] 8.1 選択肢契約 API を実装する
   - _Depends: 5.3_
   - `TextLayerRuntime::inject_choice_hover(actor, Option<ordinal>)`／`choice_hit_rows(actor) -> &[ChoiceHitRow]`／`choice_active(actor) -> bool` を実装し、`ResolvedBalloonText.choice_style` を balloon cursor モデルから一度解決する
@@ -155,7 +155,7 @@
   - _Requirements: 5.1, 5.2, 5.3, 5.4_
   - _Boundary: RuntimeContract_
 
-- [ ] 9. Integration: 決定論的観測テスト群
+- [x] 9. Integration: 決定論的観測テスト群
 - [x] 9.1 描画＋字下げの readback テスト
   - _Depends: 8.3_
   - Choice cue×3＋NewLine＋Cursor cue を注入して提示し、readback で3行の選択肢が期待どおりの字下げ位置に描画されていることを検証する（注入 cue／Tick のみ・synthetic pointer・sleep 不使用）
@@ -199,7 +199,7 @@
   - _Requirements: 8.2, 8.4, 8.6_
   - _Boundary: HoverInjectConduit_
 
-- [ ] 11. Validation: 実フォント目視確認と fixture
+- [x] 11. Validation: 実フォント目視確認と fixture
 - [x] 11.1 test-local fixture 準備と実フォント目視確認
   - _Depends: 9.3_
   - 9.3 で用意済みの cursor.\* 指定 descript を再利用し、cursor.\* 未指定 descript（新規）＋短い2〜4項目メニュー台本を追加する。pixel 檻テストに加えて実フォント出力の目視確認を行う
