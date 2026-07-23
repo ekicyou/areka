@@ -100,7 +100,7 @@
   - _Requirements: 10.1, 10.2, 10.4_
   - _Boundary: e2e 安全弁整合（spine_e2e_test.rs）_
 
-- [ ] 4.4 workspace 反復ゲートを通過させる（interest-keeper ＋ WIC MTA-keeper ＋ e2e 安全弁整合 込みの最終ゲート）
+- [x] 4.4 workspace 反復ゲートを通過させる（interest-keeper ＋ WIC MTA-keeper ＋ e2e 安全弁整合 込みの最終ゲート）
   - i686 前提成果物ビルド後、`cargo test --workspace` を連続 5 回以上（PowerShell）実行し、全回で**失敗 0 件かつ 0xC0000005 クラッシュ 0 件かつ host-32 e2e タイムアウト 0 件**（`error: test failed` 行が出ないこと）であることを確認する
   - 全 5 回以上の実行結果（failed 0・クラッシュ 0）が記録として残り、他クレートへの副作用がないことも確認できる
   - もし第四以降の flake が出た場合は Req 10 注記の停止則（(a) main 既存 (b) テスト基盤・有界待機クラス (c) 数行で直る の全条件充足でのみ吸収・欠ければ `_Blocked:_` で開発者判断委譲）に従う
@@ -117,5 +117,7 @@
 - 4.4（初回・wintf 修正前）: `cargo test --workspace` × 5 連続で areka-kanade は**全 5 回緑**（lib 136/0・log 捕捉檻の失敗 0 件＝Req 1.4 本旨は充足）だが、run 2 で **wintf `--test layout` が 0xC0000005 でクラッシュ**（`error: test failed`）。この第二 flake の根本原因を追加調査で**確定**（下記）→ **本セッションの開発者判断で本 spec に取込**（Req 9・タスク 5.1/5.2 新設）。4.4 は wintf 修正（5.1）反映後に再取得する（_Depends: 5.1 追加）。
 - 5.1: `WicCore` に `ensure_process_mta()`（`OnceLock` ガードの `CoIncrementMTAUsage`・cookie 意図的 leak）を `CoCreateInstance` 前へ前置。`world/mod.rs:62` の無言スキップを `match` 化し `Err` 側へ `tracing::error!`。SAFETY doc を「MTA 前提」→「自己強制」へ更新。`cargo test -p wintf` 全緑・2 ファイルに限定。
 - 5.2: wintf layout GREEN ストレス（8 プロセス並列 × 12 波 = **96 実行 / 0 クラッシュ**・全 exit 0）。RED（修正前 8/40 ≈20%）に対し 96/0＝恒久解を客観実証。workspace 5 回全回でも 0xC0000005 は 0 件。
-- 4.4（再取得・wintf 修正後）: `cargo test --workspace` × 5。**0xC0000005 は全 5 回 0 件**（本 spec 核心の第一/第二 flake 根治を実証）。ただし run 1 のみ **第三の flake**（`areka-ghost --test ghost` の `spine_e2e_test::s4_close_handshake::..._completes_regular_shutdown_...`）が高負荷下でタイムアウト failed=1（`spine_e2e_test.rs:1516`「Unload was never observed ... within bound」）。runs 2-5 完全クリーン・単独 10/10 PASS。これは host-32 IPC 有界 e2e の**負荷起因タイミング flake**（本 spec 変更対象外・areka-ghost は `git diff main...HEAD` に無し＝main 既存・memory areka-defender-rescan-starves-cooperative-test-loops と同型）。4.4 の扱いは開発者判断中。
+- 4.4（再取得・wintf 修正後）: `cargo test --workspace` × 5。**0xC0000005 は全 5 回 0 件**（本 spec 核心の第一/第二 flake 根治を実証）。ただし run 1 のみ **第三の flake**（`areka-ghost --test ghost` の `spine_e2e_test::s4_close_handshake::..._completes_regular_shutdown_...`）が高負荷下でタイムアウト failed=1（`spine_e2e_test.rs:1516`「Unload was never observed ... within bound」）。runs 2-5 完全クリーン・単独 10/10 PASS。これは host-32 IPC 有界 e2e の**負荷起因タイミング flake**（本 spec 変更対象外・areka-ghost は `git diff main...HEAD` に無し＝main 既存・memory areka-defender-rescan-starves-cooperative-test-loops と同型）。→ 開発者判断で本 spec 取込（Req 10・task 5.3）。
+- 5.3: spine_e2e_test.rs の安全弁 14 箇所（inline 11＋const BOUND 3）を共有 `const E2E_BOUND = from_secs(60)`（兄弟 e2e 規約）へ集約。`super::E2E_BOUND` 参照・意味論バリア/assert/Tick 仮想時間は無改変・`from_secs(10)` 残存 0。`cargo test -p areka-ghost` 全緑。
+- 4.4（最終・三修正込み）: `cargo test --workspace` × **5 回全回クリーン**（exit 0・FAILED 行 0・`error: test failed` 0・**0xC0000005 0**・3488 passed/0 failed が 5 回完全一致）。第一/第二/第三 flake すべて根治し workspace DoD ゲートが決定論的に緑になったことを実証。**第四以降の flake は出現せず**（停止則の追加吸収は不要だった）。
 - Req 9 根本原因（確定・一次実証）: layout テストバイナリは `CoInitializeEx` を呼ばないが `EcsWorld::new()`→`WicCore::new()` が `CoCreateInstance(WIC)` を呼ぶ。並走テスト（可視ウィンドウ生成の MSCTF/TSF ロード）が副作用で一時的 MTA を立てる窓で生成が成功し、その借り物 MTA 解体で COM ランタイムごと factory が解放→`EcsWorld` drop の `IUnknown::Release` が use-after-free で即死。全 8 クラッシュの WER フォールトオフセットが `windows_core::unknown::IUnknown::Drop` で一致・容疑 2 テスト（`taffy_flex_layout_pure_test`/`taffy_layout_integration_test::unit_integration`）両 skip で 0/48・単独プロセス 135 実行 0 クラッシュ・8 プロセス並列で 8/40 再現。処方＝`WicCore` 自身が `CoIncrementMTAUsage` でプロセス寿命 MTA を確立（interest-keeper と同型・DD-9）。
