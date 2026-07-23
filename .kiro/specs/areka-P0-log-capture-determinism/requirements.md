@@ -12,6 +12,10 @@ areka-kanade のテスト専用ログ捕捉基盤 `crates/areka-kanade/src/sched
 
 **第二の workspace ゲート flake（4.4 検証で判明・Req 9）**: 本仕様の受け入れ検証（Task 4.4・`cargo test --workspace` 反復）の実測で、log 捕捉とは**別の第二の確率的クラッシュ**が判明した——`cargo test --workspace` 並列負荷下で wintf `--test layout` テストバイナリが **~13% の確率で 0xC0000005 アクセス違反により即死**する。根本原因は確定済み（一次実証）: layout テストバイナリは `CoInitializeEx` を一切呼ばないが、`EcsWorld::new()` が `WicCore::new()` で `CoCreateInstance(CLSID_WICImagingFactory2)` を呼ぶ。通常は `CO_E_NOTINITIALIZED` で失敗し `if let Ok`（`world/mod.rs:62`）が無言スキップするが、並走テスト（可視ウィンドウ生成に伴う MSCTF/TSF ロード）が副作用で**一時的な MTA を発生**させる窓では生成が成功し WIC factory を取得してしまう。その借り物 MTA が解体されると COM ランタイムごと factory が解放され、`EcsWorld` drop 時の `IUnknown::Release` が解放済みメモリへ仮想呼出して即死する（全 8 クラッシュの WER フォールトオフセットが `windows_core::unknown::IUnknown::Drop` で一致・容疑 2 テスト両 skip でクラッシュ完全消失を実証）。この第二 flake も log_capture 欠陥と同じく**全 spec の kiro-complete workspace DoD Test Gate を確率的に赤くする**プロジェクト横断の毒であり、本セッションの開発者判断により本仕様のスコープへ取り込む。処方は Req 1 の interest-keeper と**同型**——`WicCore` がプロセス寿命の MTA キーパーを自ら確立し、借り物寿命依存を構造的に根絶する（Req 9）。
 
+**第三の workspace ゲート flake（4.4 再検証で判明・Req 10）**: Req 9 修正後の 4.4 再取得（`cargo test --workspace` × 5）で、0xC0000005 は全 5 回で根絶されたが、run 1（最高負荷）で**第三の確率的失敗**が判明した——areka-ghost の host-32 IPC 有界 e2e（`spine_e2e_test.rs` の `s4_close_handshake` 他）が workspace 並列負荷下で安全弁 10 秒に間に合わずタイムアウトする（単独 10/10 PASS・runs 2-5 クリーン＝ハングでなく飢餓）。当該テストは既に**正しい設計**（意味論バリア＝`Unload` 出現までの `yield_now` spin ＋ 壁時計安全弁）だが、安全弁 `from_secs(10)`（14 箇所）が同クレートの兄弟 e2e ファイル（`inproc_e2e_test.rs`・`real_pasta_test.rs`・`snapshot_capture_test.rs` は既に 60s）から外れた過小値であることが真因。安全弁は「ハング検出器」であり性能表明ではない（steering: areka-real-machine-signoff-bounded-auto-exit の 3 分・areka-defender-rescan-starves-cooperative-test-loops の教訓と同旨）。この第三 flake も DoD ゲートの毒であり、本セッションの開発者判断で本仕様へ取り込む（Req 10・兄弟規約 60s への整合）。
+
+**メタ: workspace ゲートのもぐら叩き停止則（Req 10 注記）**: AC 8.3 の `cargo test --workspace` は**リポジトリ全体**の決定論を測るゲートゆえ、一つ根治するたび次の最弱 flake が露出しうる。無限スコープ化を防ぐため、追加 flake を本仕様へ吸収してよいのは次の全条件を満たす場合に限る: (a) `git diff main...HEAD` で当該クレートが本ブランチ未変更＝main 既存 (b) テスト基盤・有界待機クラスの flake (c) 数行の決定論化（安全弁整合・keeper 導入等）で直る。1 つでも欠ける場合（本番の真の欠陥・別サブシステムの再設計を要する等）は 4.4 を `_Blocked:_` とし開発者へ判断委譲する（無言吸収は禁止）。
+
 ## Boundary Context
 
 - **In scope**:
@@ -19,11 +23,12 @@ areka-kanade のテスト専用ログ捕捉基盤 `crates/areka-kanade/src/sched
   - RED→GREEN 検証（並列プロセス・ストレス実行 ＋ `cargo test --workspace` 反復）
   - （同一境界の二次修正・討議#1で確定）areka-kanade テスト内の「反復回数上限を時間の代用にする協調ループ」の上限非依存決定論化: 同型 `'drive` ループ 3 箇所（`steady_test.rs:821`・`close_test.rs:170`・`close_test.rs:806`）＋ `close_test.rs:57` の `wait_until` ヘルパー（100,000 yield 有界）
   - （4.4 検証で判明した第二の workspace ゲート flake・本セッションの開発者判断で本 spec 取込・Req 9）wintf の `WicCore`（`crates/wintf/src/ecs/widget/bitmap_source/wic_core.rs`）が COM アパートメントの借り物寿命に依拠して並列負荷下で確率的にクラッシュ（0xC0000005）する本番欠陥の根治: プロセス寿命 MTA キーパー（`CoIncrementMTAUsage`）の自己確立 ＋ `world/mod.rs:62` の無言スキップへの `error!` 付与
+  - （4.4 再検証で判明した第三の workspace ゲート flake・本セッションの開発者判断で本 spec 取込・Req 10）areka-ghost の host-32 IPC 有界 e2e（`crates/areka-ghost/tests/ghost/spine_e2e_test.rs`）の安全弁 `from_secs(10)`（14 箇所）が workspace 並列負荷下の飢餓で偽赤する問題の根治: 兄弟 e2e ファイル既存規約（60s）への整合（意味論バリアは無改変）
 - **Out of scope**:
   - `capture`/`assert_logged` の API 変更・シグネチャ変更・32 檻の書き換え
   - areka-kanade 本体（非テスト）コードへの変更、kanade 本体の挙動・ログ語彙の変更（Req 6）
   - tracing / tracing-subscriber のバージョン更新・差し替え
-  - 他クレート（wintf 等）のテスト基盤（テストハーネス／檻）への横展開・wintf の COM 寿命修正（Req 9）を超える wintf 本体挙動の変更
+  - 他クレート（wintf 等）のテスト基盤（テストハーネス／檻）への横展開・wintf の COM 寿命修正（Req 9）を超える wintf 本体挙動の変更・areka-ghost の安全弁サイズ整合（Req 10）を超える areka-ghost 挙動やテスト意味論の変更（意味論バリア・spin 構造・src 側の待機は無改変）
   - cargo-deny advisories への新規 allow 追加
 - **Adjacent expectations**:
   - areka-P0-input-events（未マージブランチ・全タスク完了・実機サインオフ済み・開発者承認済み）の kiro-complete は本仕様のマージによって Test Gate が決定論的に緑となり再開・完了できる。input-events 側の機能変更は本仕様のスコープ外であり、マージ解除は本仕様の帰結にすぎない。
@@ -119,3 +124,15 @@ areka-kanade のテスト専用ログ捕捉基盤 `crates/areka-kanade/src/sched
 4. If `WicCore::new()` の factory 生成が失敗する, then the wintf shall 無言スキップにせず失敗を `error!`（log-first・steering: areka-log-first-no-silent-failure）で記録する（縮退挙動自体は維持してよい）。
 5. The 修正 shall 本番挙動の意味論を変えない（本番は `WinApp::new` が既に `CoInitializeEx(MTA)` をプロセス寿命で確立済ゆえ MTA キーパーは参照カウント増分のみ・無害）・新規依存を追加しない（`windows::Win32::System::Com` は使用済）・wintf の他テスト基盤や他クレートへ変更を横展開しない。
 6. When 修正の有効性を確認する, the 検証 shall 修正前に並列プロセス負荷で 0xC0000005 を再現し（RED）、修正後に同一のストレスで 0 クラッシュを示す（GREEN）——本 flake は「確率再現可能な病」ゆえ RED→GREEN ストレスで判定する。
+
+### Requirement 10: areka-ghost host-32 IPC 有界 e2e の飢餓耐性化（第三の workspace ゲート flake の根治・本セッション取込）
+**Objective:** テストスイートを実行する開発者として、`cargo test --workspace` 並列負荷下で areka-ghost の host-32 IPC 有界 e2e が安全弁の過小さに起因する飢餓で偽赤しないことを求める。それにより Req 1／Req 9 と併せて workspace DoD ゲートが真に決定論的に緑になる。
+
+> **根本原因（確定）**: `spine_e2e_test.rs` の e2e は意味論バリア（`Unload`／surface cue の出現までの `yield_now` spin）＋壁時計安全弁で正しく組まれているが、安全弁 `from_secs(10)`（14 箇所）が同クレート兄弟 e2e ファイル（`inproc_e2e_test.rs`／`real_pasta_test.rs`／`snapshot_capture_test.rs`＝既に 60s）より過小で、workspace 並列負荷下（多数のテストバイナリ＋host-32 helper 別プロセスの CPU 競合）で host-32 ハンドシェイクが 10 秒に間に合わずタイムアウトする。飢餓由来ゆえ**単独では 10/10 PASS**（`s4_close_handshake` を単独反復）・**runs 2-5 クリーン**。areka-ghost は本ブランチ未変更＝main 既存。
+
+#### Acceptance Criteria
+1. The areka-ghost の `spine_e2e_test.rs` の有界待機安全弁（現 `from_secs(10)`・14 箇所）shall 同クレート兄弟 e2e ファイルの既存規約（60s）へ整合され、workspace 並列負荷下の飢餓でタイムアウト偽赤しない。
+2. The 修正 shall 各 e2e の**意味論バリア**（`Unload`／surface cue 等の出現を待つ spin 条件）・spin 構造・検証意味論を無改変に保つ（安全弁の**サイズのみ**を変える）。それにより正常経路はバリア成立で即完了し、真のハングは拡大後の安全弁で依然として失敗として検出される。
+3. When `cargo test --workspace` が並列負荷下で連続 5 回以上実行される, the areka-ghost の e2e shall 安全弁不足によるタイムアウト失敗を 0 件にする。
+4. The 修正 shall areka-ghost の src（本番）コード・テスト意味論・兄弟 e2e ファイル・他クレートを変更しない（対象は `spine_e2e_test.rs` の安全弁定数のみ）。
+5. The R10 の検証 shall 飢餓が統計再現不能である性質に鑑み、安全弁が兄弟規約へ整合されたことの構造証明 ＋ workspace 反復緑（AC 8.3）をもって足りるものとし、飢餓の人工再現は要求しない（R7' 討議#2 と同型の論法）。

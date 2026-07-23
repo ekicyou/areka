@@ -6,7 +6,7 @@
 
 **Users**: テストスイートを実行する開発者・32 個の回帰檻を保守する開発者が、確率的な偽赤を疑うことなく `cargo test --workspace` の結果を信頼できるようになる。
 
-**Impact**: 変更は主に areka-kanade のテスト基盤に完結する。(1) `log_capture.rs` へプロセスグローバル interest-keeper を ~15 行前置し、(2) 同一境界の二次修正として、復帰駆動テスト 3 箇所の「反復回数上限＝時間の代用」ループを意味論的完了バリア＋壁時計 deadline へ置換する。areka-kanade の本番（非テスト）コード・`capture`/`assert_logged` の API・32 檻はすべて無改変。加えて (3) **4.4 検証で判明した第二の workspace ゲート flake**（wintf `--test layout` の COM 借り物寿命 use-after-free・0xC0000005・~13%）を、本セッションの開発者判断で本 spec に取り込み、`WicCore` へプロセス寿命 MTA キーパーを導入して根治する（Req 9・interest-keeper と同型の「keeper による構造的根絶」）。この (3) のみ wintf の本番コード（`wic_core.rs` の COM 寿命・`world/mod.rs` の無言スキップへのログ付与）に限定して触れる。
+**Impact**: 変更は主に areka-kanade のテスト基盤に完結する。(1) `log_capture.rs` へプロセスグローバル interest-keeper を ~15 行前置し、(2) 同一境界の二次修正として、復帰駆動テスト 3 箇所の「反復回数上限＝時間の代用」ループを意味論的完了バリア＋壁時計 deadline へ置換する。areka-kanade の本番（非テスト）コード・`capture`/`assert_logged` の API・32 檻はすべて無改変。加えて (3) **4.4 検証で判明した第二の workspace ゲート flake**（wintf `--test layout` の COM 借り物寿命 use-after-free・0xC0000005・~13%）を、本セッションの開発者判断で本 spec に取り込み、`WicCore` へプロセス寿命 MTA キーパーを導入して根治する（Req 9・interest-keeper と同型の「keeper による構造的根絶」）。この (3) のみ wintf の本番コード（`wic_core.rs` の COM 寿命・`world/mod.rs` の無言スキップへのログ付与）に限定して触れる。さらに (4) **4.4 再検証で判明した第三の workspace ゲート flake**（areka-ghost `spine_e2e_test.rs` の host-32 IPC 有界 e2e の安全弁 10s が並列負荷の飢餓で偽赤）を、本セッションの開発者判断で本 spec に取り込み、安全弁 14 箇所を同クレート兄弟 e2e の既存規約（60s）へ整合して根治する（Req 10・意味論バリアは無改変）。この (4) は areka-ghost の**テスト安全弁定数のみ**に触れる。
 
 ### Goals
 
@@ -22,8 +22,9 @@
 - areka-kanade 本番コード・kanade 本体の挙動・ログ語彙・イベント語彙の変更
 - tracing / tracing-subscriber のバージョン更新・差し替え
 - 他クレート（wintf 等）のテスト基盤への横展開・wintf の Req 9 修正（`WicCore` の COM 寿命＋`world/mod.rs` のログ付与）を超える wintf 本体挙動の変更
+- areka-ghost の Req 10 修正（`spine_e2e_test.rs` の安全弁 60s 整合）を超える areka-ghost 挙動・テスト意味論・src・兄弟 e2e の変更
 - cargo-deny advisories への新規 allow 追加
-- R7' 対象ループへの integration-exe ストレスや飢餓の人工再現（討議#2 で棄却済み）
+- R7'・R10 対象への integration-exe ストレスや飢餓の人工再現（討議#2 / DD-10 で棄却済み）
 
 ## Boundary Commitments
 
@@ -32,6 +33,7 @@
 - `crates/areka-kanade/src/schedule/log_capture.rs` の interest-keeper 機構とモジュール doc（PITFALL 節）
 - areka-kanade テストハーネスの復帰駆動イディオム: `drive_ticks_until_disconnect` ヘルパー（common/mod.rs 新設）と、それを消費する 3 テストのループ置換・`wait_until` の deadline 化
 - （Req 9・本セッション取込）wintf `WicCore` の COM アパートメント寿命の決定論化: `crates/wintf/src/ecs/widget/bitmap_source/wic_core.rs` へのプロセス寿命 MTA キーパー導入 ＋ `crates/wintf/src/ecs/world/mod.rs:62` の無言スキップへの `error!` 付与
+- （Req 10・本セッション取込）areka-ghost host-32 IPC 有界 e2e の飢餓耐性化: `crates/areka-ghost/tests/ghost/spine_e2e_test.rs` の安全弁 14 箇所を兄弟 e2e 規約（60s）へ整合（共有 `const` へ集約・意味論バリアは無改変）
 - 本仕様の検証手順（RED→GREEN ストレス・wintf ストレス・workspace 反復）の定義と実施
 
 ### Out of Boundary
@@ -40,6 +42,7 @@
 - areka-kanade 本番（非テスト）コード全域。kanade 状態機械・ログ発行側は 1 文字も変えない
 - 他クレートのテスト基盤・tracing 系依存のバージョン
 - wintf の Req 9 修正**以外**の挙動全域（`WicCore` の COM 寿命と `world/mod.rs:62` のログ付与のみが対象・WIC のデコード意味論・factory 利用側・他システムは無改変）
+- areka-ghost の Req 10 修正**以外**（`spine_e2e_test.rs` の安全弁定数のみが対象・意味論バリア・spin 構造・検証意味論・src 側の待機・兄弟 e2e ファイルは無改変）
 - areka-P0-input-events のマージ作業（本仕様マージの帰結として別 worktree で実施される Downstream・brief.md Part B）
 
 ### Allowed Dependencies
@@ -56,6 +59,7 @@
 - log_capture.rs に per-layer filter や別のグローバル subscriber 初期化を導入する変更（keeper の expect が panic する設計＝先に本設計の不変条件を見直すこと）
 - areka-kanade テストへ「反復回数上限を時間の代用にする」ループを再導入する変更（本設計のヘルパーを使うこと）
 - （Req 9）`windows` crate のバージョンが Cargo.lock で動いた場合（`CoIncrementMTAUsage` / `CO_MTA_USAGE_COOKIE` の feature・シグネチャ・Drop 挙動の再確認）、または `WicCore::new` へ別の COM 初期化を導入する変更（keeper の不変条件を先に見直すこと）
+- （Req 10）areka-ghost `spine_e2e_test.rs` へ新規の有界待機を追加する変更（共有 `const E2E_BOUND` を使うこと）、または兄弟 e2e 規約（60s）が動いた場合（安全弁の整合先を再確認）
 
 ## Architecture
 
@@ -108,6 +112,7 @@ graph TB
 | DD-6 | RED→GREEN はコマンド手順（本書記載）・スクリプト非コミット | 一回性の証拠取り・外部 CI 無し。討議#2 の証拠形式分離に従う（8.1〜8.5） |
 | DD-7 | 復帰駆動は共有ヘルパー `drive_ticks_until_disconnect` へ一般化 | 同形 3 ループの三重複を単一契約に集約し、上限依存ループの再発明を構造的に防ぐ（7.1〜7.3） |
 | DD-8 | workspace gate は i686 前提ビルド＋PowerShell＋submodule 初期化を明記 | steering: workspace-test-needs-i686-host32-artifacts / harness-shell-quirks |
+| DD-10 | areka-ghost `spine_e2e_test.rs` の安全弁 14 箇所を共有 `const E2E_BOUND = Duration::from_secs(60)` へ集約し兄弟 e2e 規約へ整合 | 病名＝「安全弁の過小さ」であって「反復上限＝時間の代用」（R7'）ではない——テストは既に意味論バリア（`Unload`/surface cue の spin）＋壁時計安全弁で正しく組まれ、安全弁が兄弟ファイル（`inproc_e2e_test.rs`/`real_pasta_test.rs`/`snapshot_capture_test.rs`＝60s）より過小なだけ。**意味論バリア・spin 条件・検証意味論は無改変**（正常時はバリア成立で即完了・真のハングは 60s で依然検出）。inline 11 箇所＋スコープ内 `const BOUND`（935/1102/2002）を共有 const へ集約。**棄却案**: spin をイベント駆動 condvar へ全面改修（正常経路は既にバリア即 break ゆえ 60s 安全弁で実効十分・大工事の過剰対応として棄却）。証拠形式は構造証明＋回帰緑（R10.5・飢餓は統計再現不能） |
 | DD-9 | wintf WIC は `WicCore` が自ら**プロセス寿命 MTA キーパー**を持つ（`CoIncrementMTAUsage`・cookie を leak＝decrement しない） | interest-keeper と同型。`WicCore::new()` 先頭で一度だけ `CoIncrementMTAUsage` を確立（`OnceLock` ガード）→ 以降 `CoCreateInstance` は実装で apartment を借りず自前 MTA 上で成功し、COM ランタイムが factory より長生きして use-after-free（`IUnknown::Release`）が構造的に到達不能。cookie は `CO_MTA_USAGE_COOKIE`（`!Send`）ゆえ static 保持せず**意図的 leak**（プロセス寿命 MTA が目的・CoDecrementMTAUsage は呼ばない）。失敗（極稀）は `?` で `Err` 伝播（panic しない・`WicCore::new` の既存 `Result` 契約）。**棄却案**: テスト側だけで `CoInitializeEx` する小細工＝本番の潜在 use-after-free を残すため不採用（steering: canonical-not-minimal-lifecycle）。`world/mod.rs:62` の生成失敗無言スキップには `error!` を付す（Req 9.4・log-first） |
 
 ### Technology Stack
@@ -131,6 +136,7 @@ graph TB
 - `crates/areka-kanade/tests/kanade/close_test.rs` — (a) `wait_until`（57 行）を Instant deadline 版へ置換（シグネチャ不変・呼出 3 箇所 671/789/959 は無改変）。(b) `close_refused_resumes_pump_then_terminates_via_resumed_talk` の `'drive` ループ（170 行付近）と `boot_greeting_talkdone_resumes_get_pump` の `'drive` ループ（806 行付近）をヘルパー呼出へ置換し、ループ内観測・フラグ・中間 assert を削除（join 後の既存最終表明 (c)/(d)・(b) が担う）。doc コメント更新
 - （Req 9・wintf 本番）`crates/wintf/src/ecs/widget/bitmap_source/wic_core.rs` — `WicCore::new()` の `CoCreateInstance` 前へプロセス寿命 MTA キーパー確立（`OnceLock` ガードの `ensure_process_mta()`＋`CoIncrementMTAUsage`・cookie 意図的 leak）を前置。SAFETY doc（現 21-30 行の「本プロセスは MTA で初期化される**前提**」）を「`WicCore` が自ら MTA を**強制**する」へ更新。**factory 型・`factory()`・利用側は無改変**
 - （Req 9・wintf 本番）`crates/wintf/src/ecs/world/mod.rs` — `WicCore::new()` の生成失敗を握る `if let Ok`（62 行付近）へ `Err` 側の `error!`（log-first）を付す。縮退挙動（factory 無しで継続）自体は不変
+- （Req 10・areka-ghost テスト）`crates/areka-ghost/tests/ghost/spine_e2e_test.rs` — 共有 `const E2E_BOUND: Duration = Duration::from_secs(60)` を新設し、`from_secs(10)` の安全弁 14 箇所（inline 11＋スコープ内 `const BOUND` 935/1102/2002）をこれへ集約。**意味論バリア・spin 条件・検証意味論・各 assert は無改変**（安全弁のサイズのみ拡大）
 
 > 境界整合: 変更 4 ファイルはすべて Boundary Commitments「This Spec Owns」の範囲内。src 側は log_capture.rs のみ・tests 側は復帰駆動イディオムのみ。
 > 「検証手順」コンポーネント（Components and Interfaces 参照）は**意図的にファイルを持たない**——RED→GREEN ストレスは一回性の証拠取りでありスクリプトをコミットしない（DD-6）。手順の正本は本書 Testing Strategy。
@@ -234,6 +240,11 @@ sequenceDiagram
 | 9.4 | 生成失敗を無言スキップにせず `error!` で記録 | WIC MTA-keeper | `world/mod.rs:62` の `if let Ok` へ `else { error!(..) }` | — |
 | 9.5 | 本番挙動不変・新規依存なし・横展開なし | WIC MTA-keeper | 本番は MTA 済ゆえ増分のみ・`Win32_System_Com` 既存 | — |
 | 9.6 | 修正前 RED（0xC0000005 再現）→修正後 GREEN（0 クラッシュ） | 検証手順 | wintf 並列プロセスストレス（DD-6 と同系・8.6） | — |
+| 10.1 | spine_e2e 安全弁を兄弟規約 60s へ整合 | e2e 安全弁整合 | 共有 `const E2E_BOUND`（DD-10） | — |
+| 10.2 | 意味論バリア・spin・検証意味論は無改変（安全弁サイズのみ） | e2e 安全弁整合 | spin 条件・assert 本体 無改変 | — |
+| 10.3 | workspace 並列 5 回以上で安全弁不足タイムアウト 0 | e2e 安全弁整合・検証手順 | workspace 反復（8.3） | — |
+| 10.4 | src・テスト意味論・兄弟 e2e・他クレート不変 | e2e 安全弁整合 | 変更は spine_e2e_test.rs の安全弁定数のみ | — |
+| 10.5 | R10 は構造証明＋回帰緑で判定（飢餓の人工再現不要） | e2e 安全弁整合・検証手順 | コードレビュー観点＋workspace 反復 | — |
 
 ## Components and Interfaces
 
@@ -244,7 +255,8 @@ sequenceDiagram
 | 復帰駆動テスト置換 ×3 | tests（integration exe） | ループ内観測を廃し join 後表明へ一本化 | 7.1, 7.2, 7.5, 8.4 | drive ヘルパー（P0）・join_bounded（P0） | — |
 | wait_until 置換 | tests（close_test.rs ローカル） | 100,000 yield 有界を壁時計 deadline 化 | 7.4 | std Instant（P0） | Service |
 | WIC MTA-keeper | src 本番（wintf・bitmap_source） | WIC factory の COM 借り物寿命 use-after-free を構造的に根絶 | 9.1–9.6 | windows `CoIncrementMTAUsage`（P0）・std OnceLock（P0）・tracing error!（P1） | Service, State |
-| 検証手順 | 運用（非コード） | 病の性質別の証拠取り | 1.4, 4.1, 8.1–8.4, 9.6 | PowerShell・i686 toolchain（P0） | Batch |
+| e2e 安全弁整合 | tests（areka-ghost・spine_e2e） | host-32 IPC 有界 e2e の安全弁を兄弟規約 60s へ整合し飢餓偽赤を除く | 10.1–10.5 | std Duration（P0） | — |
+| 検証手順 | 運用（非コード） | 病の性質別の証拠取り | 1.4, 4.1, 8.1–8.4, 9.6, 10.5 | PowerShell・i686 toolchain（P0） | Batch |
 
 ### src テスト基盤
 
@@ -472,9 +484,16 @@ PowerShell 手順（スクリプトはコミットしない・DD-6。scratchpad 
 
 > スクリプトはコミットしない（DD-6・一回性の証拠取り）。scratchpad で実行し結果を検証記録へ。
 
-### Gate: workspace 反復（1.4/8.3/9.3・DD-8）
+### Req 10: areka-ghost 安全弁整合の構造証明＋回帰緑（10.5・飢餓は統計再現不能）
 
-interest-keeper（Req 1）と WIC MTA-keeper（Req 9）の両修正が入った状態で、workspace が並列負荷下で真に決定論的に緑（log 捕捉檻の失敗 0・wintf クラッシュ 0）であることを確認する:
+- コードレビュー観点: (a) `spine_e2e_test.rs` の安全弁 14 箇所が共有 `const E2E_BOUND`（60s・兄弟 e2e 規約）へ集約され、`from_secs(10)` が残存しないこと (b) 各 e2e の**意味論バリア**（`Unload`/surface cue の spin 条件）・spin 構造・assert 本体が無改変であること（安全弁のサイズのみ変わったこと）
+- 回帰緑: `cargo test -p areka-ghost` の全緑 ＋ workspace 反復（8.3）。飢餓の人工再現は行わない（統計再現不能・R7' 討議#2 と同型）
+
+> **メタ: workspace ゲートの停止則（Req 10 注記の設計反映）**: 追加 flake の本仕様吸収は「(a) main 既存 (b) テスト基盤・有界待機クラス (c) 数行の決定論化で直る」の全条件を満たす場合のみ。欠ける場合は 4.4 を `_Blocked:_` とし開発者判断へ委譲（無言吸収禁止）。
+
+### Gate: workspace 反復（1.4/8.3/9.3/10.3・DD-8）
+
+interest-keeper（Req 1）・WIC MTA-keeper（Req 9）・e2e 安全弁整合（Req 10）の全修正が入った状態で、workspace が並列負荷下で真に決定論的に緑（log 捕捉檻の失敗 0・wintf クラッシュ 0・host-32 e2e タイムアウト 0）であることを確認する:
 
 ```powershell
 # worktree では submodule 初期化を先行（steering: harness-shell-quirks）

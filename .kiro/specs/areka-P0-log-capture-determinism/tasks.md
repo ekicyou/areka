@@ -92,11 +92,20 @@
   - _Requirements: 9.3, 9.6_
   - _Depends: 5.1_
 
-- [ ] 4.4 workspace 反復ゲートを通過させる（interest-keeper ＋ WIC MTA-keeper 込みの最終ゲート）
-  - i686 前提成果物ビルド後、`cargo test --workspace` を連続 5 回以上（PowerShell）実行し、全回で**失敗 0 件かつ 0xC0000005 クラッシュ 0 件**（`error: test failed` 行が出ないこと）であることを確認する
+- [ ] 5.3 areka-ghost host-32 IPC 有界 e2e の安全弁を兄弟規約（60s）へ整合する（第三 flake の根治・Req 10）
+  - `crates/areka-ghost/tests/ghost/spine_e2e_test.rs` に共有 `const E2E_BOUND: Duration = Duration::from_secs(60)` を新設し、`from_secs(10)` の安全弁 **14 箇所**（inline 11 ＋ スコープ内 `const BOUND` 935/1102/2002 行付近）をこれへ集約する
+  - 各 e2e の**意味論バリア**（`Unload`／surface cue の出現を待つ spin 条件）・spin 構造・各 assert 本体・検証意味論は**無改変**（安全弁のサイズのみ拡大）。src 側の待機（5s/10s）・兄弟 e2e ファイル・他クレートには触れない
+  - doc コメントに「10 秒」への言及があれば「60 秒（兄弟 e2e 規約整合・安全弁はハング検出器）」へ更新
+  - `cargo test -p areka-ghost` が全緑であることを確認する。`git diff --name-only HEAD` が spine_e2e_test.rs 1 ファイルのみであることを確認する
+  - _Requirements: 10.1, 10.2, 10.4_
+  - _Boundary: e2e 安全弁整合（spine_e2e_test.rs）_
+
+- [ ] 4.4 workspace 反復ゲートを通過させる（interest-keeper ＋ WIC MTA-keeper ＋ e2e 安全弁整合 込みの最終ゲート）
+  - i686 前提成果物ビルド後、`cargo test --workspace` を連続 5 回以上（PowerShell）実行し、全回で**失敗 0 件かつ 0xC0000005 クラッシュ 0 件かつ host-32 e2e タイムアウト 0 件**（`error: test failed` 行が出ないこと）であることを確認する
   - 全 5 回以上の実行結果（failed 0・クラッシュ 0）が記録として残り、他クレートへの副作用がないことも確認できる
-  - _Requirements: 1.4, 8.3, 6.4, 9.3_
-  - _Depends: 1.1, 5.1_
+  - もし第四以降の flake が出た場合は Req 10 注記の停止則（(a) main 既存 (b) テスト基盤・有界待機クラス (c) 数行で直る の全条件充足でのみ吸収・欠ければ `_Blocked:_` で開発者判断委譲）に従う
+  - _Requirements: 1.4, 8.3, 6.4, 9.3, 10.3_
+  - _Depends: 1.1, 5.1, 5.3_
 
 ## Implementation Notes
 
