@@ -88,7 +88,7 @@
   - _Requirements: 6.2, 8.3, 9.2_
   - _Boundary: areka-sylphya persist/io.rs_
 
-- [ ] 4.3 層別スコープ・4 key 族の型付けモデルと load/save 編成
+- [x] 4.3 層別スコープ・4 key 族の型付けモデルと load/save 編成
   - `PersistScope`（App／Ghost／Shell／Balloon）と `ScopeRoots`（各スコープの `Option<PathBuf>`・呼び出し側供給）を実装する
   - `PersistKey`（WindowPos{scope,axis}／BalloonOffset{scope,axis}／BootCount／VanishCount）と正準 key 文字列（`areka.window.scope(ID).x` 等）への写像を実装する
   - 全スコープの寛容ロード（起動時一括）と、当該スコープの原子的保存（write-through）を編成する `load_scope`／`save_scope` を実装する
@@ -247,3 +247,4 @@
 ## Implementation Notes
 
 - 3.2: 点付き key の正準文字列形は `PropPath::to_canonical_string()`（key.rs）が唯一の権威。鏡像の dotted 区画 key・reader 解決・**Task 5.x の publish/persist の dotted key 格納**は必ずこの同一 stringifier（または既に正準なリテラル）を使うこと。往復不一致は NotFound を招く。
+- 4.1/4.3: tracing ログ捕捉テストは必ず `crate::test_log_capture::capture`（interest-keeper 常駐＝プロセスグローバル `set_global_default(registry())` で callsite `Interest::never` 焼き付きを根絶）経由で書くこと。素の `with_default` 単独は並列 `cargo test` 下で ~1/10-1/20 偽赤。kanade `schedule/log_capture.rs` と同機構（sylphya は最下層ゆえ kanade 非依存で複製）。

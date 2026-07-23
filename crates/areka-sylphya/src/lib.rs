@@ -49,10 +49,19 @@ pub mod vocab;
 #[cfg(test)]
 mod ledger_key_determinism_tests;
 
+// Task 4.1 flaky 根治: テスト専用ログ捕捉ヘルパ（interest-keeper で並列負荷下の Interest::never
+// 焼き付きを根絶・決定論檻の共有基盤・R9.1／R8.1）。persist/format.rs・persist/mod.rs・後続 4.4 が
+// `crate::test_log_capture::capture` から利用する。
+#[cfg(test)]
+mod test_log_capture;
+
 // --- 公開面 re-export（後続タスクが素直に使えるよう主要型を crate 直下へ）---
 pub use asker::{AskerContext, AskerId};
 pub use key::{parse_dotted, KeyParseError, PathSeg, PropPath, Selector};
 pub use mirror::{MirrorImage, SharedMirror};
+pub use persist::{
+    load_scope, save_scope, Axis, PersistKey, PersistOutcome, PersistScope, ScopeRoots,
+};
 pub use reader::SylphyaReader;
 pub use value::{DottedResolution, FlatResolution};
 pub use vocab::{BackingLayer, DegradePolicy, M1Status, SetSemantics};

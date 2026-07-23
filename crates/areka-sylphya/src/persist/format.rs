@@ -248,12 +248,8 @@ fn read_str(table: &toml::Table, field: &str) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::sync::{Arc, Mutex};
-    use tracing::field::{Field, Visit};
-    use tracing::{Event, Level, Subscriber};
-    use tracing_subscriber::layer::{Context, Layer};
-    use tracing_subscriber::prelude::*;
-    use tracing_subscriber::registry::LookupSpan;
+    use crate::test_log_capture::{assert_logged, capture};
+    use tracing::Level;
 
     // --- 直列化・往復・寛容読取の決定論檻（R6.3/R6.4/R6.6・design「Validation」）---
 
@@ -359,68 +355,20 @@ mod tests {
     }
 
     // --- 未知バージョンの warn 発火檻（R6.4「未知バージョン→warn・旧形式判別可能」）---
-
-    #[derive(Clone)]
-    struct CapturedEvent {
-        target: String,
-        level: Level,
-        message: String,
-    }
-
-    struct MessageVisitor {
-        message: String,
-    }
-
-    impl Visit for MessageVisitor {
-        fn record_debug(&mut self, field: &Field, value: &dyn std::fmt::Debug) {
-            if field.name() == "message" {
-                self.message = format!("{value:?}");
-            }
-        }
-    }
-
-    struct CaptureLayer {
-        sink: Arc<Mutex<Vec<CapturedEvent>>>,
-    }
-
-    impl<S> Layer<S> for CaptureLayer
-    where
-        S: Subscriber + for<'a> LookupSpan<'a>,
-    {
-        fn on_event(&self, event: &Event<'_>, _ctx: Context<'_, S>) {
-            let mut visitor = MessageVisitor { message: String::new() };
-            event.record(&mut visitor);
-            let meta = event.metadata();
-            self.sink.lock().unwrap().push(CapturedEvent {
-                target: meta.target().to_string(),
-                level: *meta.level(),
-                message: visitor.message,
-            });
-        }
-    }
-
-    fn capture<F: FnOnce()>(f: F) -> Vec<CapturedEvent> {
-        let sink: Arc<Mutex<Vec<CapturedEvent>>> = Arc::new(Mutex::new(Vec::new()));
-        let subscriber =
-            tracing_subscriber::registry().with(CaptureLayer { sink: sink.clone() });
-        tracing::subscriber::with_default(subscriber, f);
-        std::mem::take(&mut *sink.lock().unwrap())
-    }
+    //
+    // ログ捕捉は共有ヘルパ [`crate::test_log_capture`] を経由する。並列 `cargo test` 負荷下で
+    // tracing callsite の Interest が `Never` に焼き付いて warn が偽消失する確率欠陥は、当該
+    // ヘルパの interest-keeper（プロセスグローバル bare registry 常駐）で根絶される（Task 4.1
+    // flaky 根治・R9.1「テスト可能領域は決定論的に檻へ」）。
 
     #[test]
     fn unknown_version_emits_warn() {
         let events = capture(|| {
             let _ = read_toml_str("format-version = 99\n[boot]\ncount = \"1\"\n");
         });
-        let hit = events.iter().any(|e| {
-            e.target == LOG_TARGET
-                && e.level == Level::WARN
-                && e.message.contains("unknown/absent format-version")
-        });
-        assert!(hit, "未知バージョンの warn 未検出。捕捉={:?}", events
-            .iter()
-            .map(|e| (e.target.clone(), e.level, e.message.clone()))
-            .collect::<Vec<_>>());
+        // 未知バージョンの縮退アームが LOG_TARGET・WARN で「unknown/absent format-version」を
+        // 発火することを表明（ログ削除・語彙変更・レベル降格で赤になる）。
+        assert_logged(&events, Level::WARN, LOG_TARGET, "unknown/absent format-version");
     }
 
     #[test]
@@ -428,15 +376,8 @@ mod tests {
         let events = capture(|| {
             let _ = read_toml_str("[[[ broken");
         });
-        let hit = events.iter().any(|e| {
-            e.target == LOG_TARGET
-                && e.level == Level::WARN
-                && e.message.contains("parse failed")
-        });
-        assert!(hit, "parse 失敗の warn 未検出。捕捉={:?}", events
-            .iter()
-            .map(|e| (e.target.clone(), e.level, e.message.clone()))
-            .collect::<Vec<_>>());
+        // parse 失敗の縮退アームが LOG_TARGET・WARN で「parse failed」を発火することを表明。
+        assert_logged(&events, Level::WARN, LOG_TARGET, "parse failed");
     }
 
     #[test]
