@@ -150,7 +150,7 @@
   - _Depends: 6.1_
   - _Requirements: 4.1, 9.3_
 
-- [ ] 6.3 kanade 統合テスト群（mock shiori）
+- [x] 6.3 kanade 統合テスト群（mock shiori）
   - boot 記録列で username GET が OnInitialize 後・OnFirstBoot 前に 1 回だけ現れることを検証する
   - 200→sink に `Value`・204→`NoContent`・タイムアウト→`Failed`＋boot 続行を検証する
   - 許可外リソース ID 送出の拒否と egress スイープ檻の許可語彙更新を検証する
