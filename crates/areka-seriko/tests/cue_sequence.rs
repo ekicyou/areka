@@ -7,7 +7,7 @@
 //! 単一スレッドで処理済みゆえ、`MockSurfaceOutput::records()` の全 `DisplayCommand` 列を
 //! 期待列と全値比較（binds 含む）できる。
 
-use areka_emo_compose::EmoWorld;
+use areka_emo_compose::{EmoWorld, PatternState};
 use areka_sakura::{ActorKey, CueCommand, CueSink, TalkCue};
 use areka_seriko::{
     build_static_bindset, spawn_seriko, BindResolver, DisplayCommand, MockSurfaceOutput,
@@ -79,11 +79,13 @@ fn cue_sequence_emits_expected() {
             scope: ActorKey::from("0"),
             surface_id: 2100,
             binds: binds.clone(),
+            pattern: PatternState::default(),
         },
         DisplayCommand::Show {
             scope: ActorKey::from("0"),
             surface_id: 2106,
             binds: binds.clone(),
+            pattern: PatternState::default(),
         },
         DisplayCommand::Hide {
             scope: ActorKey::from("0"),
@@ -92,6 +94,7 @@ fn cue_sequence_emits_expected() {
             scope: ActorKey::from("1"),
             surface_id: 10,
             binds: binds.clone(),
+            pattern: PatternState::default(),
         },
     ];
 

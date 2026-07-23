@@ -7,7 +7,7 @@
 //! 期待列と全値比較（binds 含む）できる。3 ケースはいずれも発行列 observable で判定でき、
 //! cross-thread の log 捕捉を要しない（log 檻は task 4.1 の同期 handler テストの領分）。
 
-use areka_emo_compose::EmoWorld;
+use areka_emo_compose::{EmoWorld, PatternState};
 use areka_sakura::{ActorKey, CueCommand, CueSink, TalkCue};
 use areka_seriko::{
     build_static_bindset, spawn_seriko, BindResolver, DisplayCommand, MockSurfaceOutput,
@@ -84,6 +84,7 @@ fn idempotent_repeat_surface_no_reemit() {
             scope: ActorKey::from("0"),
             surface_id: 2100,
             binds: binds.clone(),
+            pattern: PatternState::default(),
         },
         DisplayCommand::Hide {
             scope: ActorKey::from("0"),
@@ -92,6 +93,7 @@ fn idempotent_repeat_surface_no_reemit() {
             scope: ActorKey::from("0"),
             surface_id: 2200,
             binds: binds.clone(),
+            pattern: PatternState::default(),
         },
     ];
 
@@ -133,11 +135,13 @@ fn unresolved_mixed_still_processes_following() {
             scope: ActorKey::from("0"),
             surface_id: 2100,
             binds: binds.clone(),
+            pattern: PatternState::default(),
         },
         DisplayCommand::Show {
             scope: ActorKey::from("0"),
             surface_id: 2200,
             binds: binds.clone(),
+            pattern: PatternState::default(),
         },
     ];
 
@@ -179,11 +183,13 @@ fn emo2_alias_single_and_multi_classification() {
             scope: ActorKey::from("0"),
             surface_id: 2100,
             binds: binds.clone(),
+            pattern: PatternState::default(),
         },
         DisplayCommand::Show {
             scope: ActorKey::from("1"),
             surface_id: 2106,
             binds: binds.clone(),
+            pattern: PatternState::default(),
         },
     ];
 

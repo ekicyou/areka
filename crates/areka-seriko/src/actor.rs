@@ -572,6 +572,7 @@ mod tests {
                 scope: ActorKey::from("0"),
                 surface_id: 2100,
                 binds: BindSet::from_ids([1100, 1207]),
+                pattern: PatternState::default(),
             },
             "解決→状態確定→単一発行点発行の一本経路の結果が期待どおり"
         );
@@ -592,7 +593,7 @@ mod tests {
 
     use crate::resolve::SurfaceResolver;
     use crate::state::ScopeStates;
-    use areka_emo_compose::BindSet;
+    use areka_emo_compose::{BindSet, PatternState};
     use std::collections::{BTreeMap, BTreeSet};
 
     /// 同期 `handle_message` 用の小さな解決層（"通常"→2100 の 1 件のみ）。
@@ -757,6 +758,7 @@ mod tests {
                 scope: ActorKey::from("0"),
                 surface_id: 2100,
                 binds: BindSet::from_ids([1100, 1207]),
+                pattern: PatternState::default(),
             }],
             "悪 cue は skip され、後続有効 cue のみ発行＝ループ継続の observable（6.2）"
         );
@@ -882,6 +884,7 @@ mod tests {
             &[DisplayCommand::ShowBalloon {
                 scope: ActorKey::from("0"),
                 surface_id: 2,
+                pattern: PatternState::default(),
             }],
             "数値 key は ShowBalloon をちょうど 1 件発行する（単一発行点共用・4.1）"
         );
@@ -1060,6 +1063,7 @@ mod tests {
             &[DisplayCommand::ShowBalloon {
                 scope: ActorKey::from("0"),
                 surface_id: 2,
+                pattern: PatternState::default(),
             }],
             "同一面の再指定は再発行しない（冪等・4.3）"
         );
@@ -1104,10 +1108,12 @@ mod tests {
                     scope: ActorKey::from("0"),
                     surface_id: 2100,
                     binds: BindSet::from_ids([1100, 1207]),
+                    pattern: PatternState::default(),
                 },
                 DisplayCommand::ShowBalloon {
                     scope: ActorKey::from("0"),
                     surface_id: 2,
+                    pattern: PatternState::default(),
                 },
             ],
             "シェル面（Show+binds）とバルーン面（ShowBalloon）が独立に記録される（4.6）"
@@ -1257,6 +1263,7 @@ mod tests {
                 scope: ActorKey::from("0"),
                 surface_id: 2100,
                 binds: BindSet::from_ids([1100, 1207]),
+                pattern: PatternState::default(),
             }],
             "担当外（非 Shell/Wait）は skip され、担当 Emote のみ発行＝状態/タイミング不変（honor 否定的 no-op・2.2/2.3）"
         );
@@ -1366,6 +1373,7 @@ mod tests {
                 scope: scope.clone(),
                 surface_id: 2100,
                 binds: BindSet::from_ids([1100, 1207, 1302]),
+                pattern: PatternState::default(),
             }],
             "表示中 scope の解決可能 Apply は現 surface を新集合で再発行（R3.5・D5）"
         );
@@ -1421,11 +1429,13 @@ mod tests {
                     scope: scope.clone(),
                     surface_id: 2100,
                     binds: BindSet::from_ids([1100, 1207, 1301]),
+                    pattern: PatternState::default(),
                 },
                 DisplayCommand::Show {
                     scope: scope.clone(),
                     surface_id: 2100,
                     binds: BindSet::from_ids([1100, 1207, 1304]),
+                    pattern: PatternState::default(),
                 },
             ],
             "mustselect カテゴリの 2 度目着衣は旧パーツ(1301) を自動 off し新パーツ(1304) のみ有効（R4.5・D11）"

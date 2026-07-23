@@ -14,7 +14,7 @@
 
 use std::collections::HashMap;
 
-use areka_emo_compose::BindSet;
+use areka_emo_compose::{BindSet, PatternState};
 use areka_sakura::ActorKey;
 
 use crate::bind::accumulate;
@@ -149,6 +149,9 @@ impl ScopeStates {
                     surface_id: id,
                     // scope の現在 bind 集合を同梱（動的 bind 不在なら static_binds＝非退行・R3.8）。
                     binds: self.current_binds(scope).clone(),
+                    // pattern 進行状態は cue 由来 Show では空（ループ非活性＝従来と観測等価・R5.4）。
+                    // 実 pattern の同梱（commit_pattern／current_pattern 経由）は後続タスク（4.1）。
+                    pattern: PatternState::default(),
                 })
             }
             SurfaceTarget::Hide => {
@@ -202,6 +205,8 @@ impl ScopeStates {
                 ApplyOutcome::Changed(DisplayCommand::ShowBalloon {
                     scope: scope.clone(),
                     surface_id: id,
+                    // cue 由来のバルーン面 Show は空 pattern（実 pattern 同梱は後続タスク 4.1・R5.4）。
+                    pattern: PatternState::default(),
                 })
             }
             SurfaceTarget::Hide => {
@@ -333,6 +338,8 @@ impl ScopeStates {
                 scope: scope.clone(),
                 surface_id: *sid,
                 binds: new,
+                // bind 再合成の Show も cue 駆動＝空 pattern（実 pattern 同梱は後続タスク 4.1・R5.4）。
+                pattern: PatternState::default(),
             }),
             // 非表示または未知 scope → 状態のみ更新・発行なし（D5・次 Show へ保留）。
             Some(ScopeState::Hidden) | None => BindApplyOutcome::StateOnly,
@@ -368,6 +375,7 @@ mod tests {
                 scope: scope0.clone(),
                 surface_id: 2100,
                 binds: binds_1100_1207(),
+                pattern: PatternState::default(),
             })
         );
         assert_eq!(states.scopes.get(&scope0), Some(&ScopeState::Shown(2100)));
@@ -381,6 +389,7 @@ mod tests {
                 scope: scope1.clone(),
                 surface_id: 2200,
                 binds: binds_1100_1207(),
+                pattern: PatternState::default(),
             })
         );
         assert_eq!(
@@ -447,6 +456,7 @@ mod tests {
                 scope: scope.clone(),
                 surface_id: 2100,
                 binds: binds_1100_1207(),
+                pattern: PatternState::default(),
             })
         );
 
@@ -470,6 +480,7 @@ mod tests {
                 scope: scope.clone(),
                 surface_id: 2106,
                 binds: binds_1100_1207(),
+                pattern: PatternState::default(),
             })
         );
         assert_eq!(states.scopes.get(&scope), Some(&ScopeState::Shown(2106)));
@@ -494,6 +505,7 @@ mod tests {
                 scope: scope.clone(),
                 surface_id: 2106,
                 binds: binds_1100_1207(),
+                pattern: PatternState::default(),
             })
         );
         assert_eq!(states.scopes.get(&scope), Some(&ScopeState::Shown(2106)));
@@ -553,6 +565,7 @@ mod tests {
                 scope: scope.clone(),
                 surface_id: 2100,
                 binds: static_set,
+                pattern: PatternState::default(),
             })
         );
     }
@@ -618,6 +631,7 @@ mod tests {
             ApplyOutcome::Changed(DisplayCommand::ShowBalloon {
                 scope: scope.clone(),
                 surface_id: 2,
+                pattern: PatternState::default(),
             })
         );
         assert_eq!(states.balloon.get(&scope), Some(&ScopeState::Shown(2)));
@@ -635,6 +649,7 @@ mod tests {
             ApplyOutcome::Changed(DisplayCommand::ShowBalloon {
                 scope: scope.clone(),
                 surface_id: 2,
+                pattern: PatternState::default(),
             })
         );
         // 2 回目: 同一 id ゆえ Unchanged。
@@ -658,6 +673,7 @@ mod tests {
             ApplyOutcome::Changed(DisplayCommand::ShowBalloon {
                 scope: scope.clone(),
                 surface_id: 6,
+                pattern: PatternState::default(),
             })
         );
         assert_eq!(states.balloon.get(&scope), Some(&ScopeState::Shown(6)));
@@ -720,6 +736,7 @@ mod tests {
             ApplyOutcome::Changed(DisplayCommand::ShowBalloon {
                 scope: scope.clone(),
                 surface_id: 6,
+                pattern: PatternState::default(),
             })
         );
         assert_eq!(states.balloon.get(&scope), Some(&ScopeState::Shown(6)));
@@ -844,6 +861,7 @@ mod tests {
                 scope: scope.clone(),
                 surface_id: 2100,
                 binds: BindSet::from_ids([1100, 1207, 1302]),
+                pattern: PatternState::default(),
             }),
             "表示中シーンでの着せ替え変化は現 surface id を載せた新 Show を発行（R3.5・D5）"
         );
@@ -1000,6 +1018,7 @@ mod tests {
                 scope: scope.clone(),
                 surface_id: 2100,
                 binds: BindSet::from_ids([1100, 1207, 1302]),
+                pattern: PatternState::default(),
             })
         );
 
@@ -1011,6 +1030,7 @@ mod tests {
                 scope: scope.clone(),
                 surface_id: 2100,
                 binds: BindSet::from_ids([1100, 1207, 1302, 1500]),
+                pattern: PatternState::default(),
             }),
             "2 つ目の bind は直前状態を保持したまま積算（R3.4 隣接）"
         );
@@ -1034,6 +1054,7 @@ mod tests {
                 scope: scope.clone(),
                 surface_id: 2100,
                 binds: BindSet::from_ids([1207, 1304]),
+                pattern: PatternState::default(),
             }),
             "同カテゴリ旧パーツを外し target のみ有効・非カテゴリは保持（高々 1 パーツ・R4.5・D11）"
         );

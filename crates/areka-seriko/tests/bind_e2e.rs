@@ -34,7 +34,7 @@
 //! （`(腕,伸び)→1100`・`(頬,赤面)→1200`）。静的既定 bind 集合は解決可能 id を含む `{1100,1207}` とし、
 //! `腕,伸び` の on/off が確定的に集合を出入りさせる（off で 1100 が抜け `{1207}`、on で戻る）。
 
-use areka_emo_compose::BindSet;
+use areka_emo_compose::{BindSet, PatternState};
 use areka_sakura::{
     spawn_talk, ActorKey, CueCommand, CueSink, SakuraMsg, StartTalk, SystemVarSnapshot, TalkCue,
     TalkDone, TalkEndReason, TalkId,
@@ -106,6 +106,7 @@ fn show(surface_id: u32, ids: impl IntoIterator<Item = u32>) -> DisplayCommand {
         scope: ActorKey::from("0"),
         surface_id,
         binds: BindSet::from_ids(ids),
+        pattern: PatternState::default(),
     }
 }
 
