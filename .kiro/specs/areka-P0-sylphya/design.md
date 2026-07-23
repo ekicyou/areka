@@ -172,6 +172,7 @@ crates/areka-sylphya/
 - `crates/areka-ghost/Cargo.toml` — `areka-sylphya` 依存追加
 - `crates/areka-ghost/src/sylphya_wiring.rs`（新規） — アクター spawn・`derive_flat_statics`（keroname フォールバック等の純関数）・静的構成/baseware publish・provider 生成・prefetch sink クロージャ
 - `crates/areka-ghost/src/runtime.rs` — `GhostBootOptions.system_vars` を `SystemVarWiring` enum へ・boot での sylphya 起動/結線・`default_system_vars()` 退役・shutdown へ sylphya 段追加・`GhostHandles`/`GhostParts` へ sylphya ハンドル追加
+- **テスト呼出面の一括更新**（DoD ゲート直結・編集量として明示）: `default_system_vars()`／`system_vars:` 構築子に依存する既存テスト——in-crate（runtime.rs 約 5・dispatcher.rs 約 5）＋ tests/ghost 統合テスト（spine_e2e_test 約 5・inproc_e2e_test 2・snapshot_capture_test・real_pasta_test ほか）計約 20 箇所——を `SystemVarWiring::Custom` 注入へ一括更新する（陳腐化でなく生きているテスト＝更新方針。tasks で独立タスクとして列挙すること）
 - `crates/areka/src/shiori_host.rs` — `properties: Mutex<HashMap>` 撤去・`ShioriHostSink::with_sylphya(reader, publisher, asker)`・GetProperty＝reader 委譲・SetProperty＝publisher 投函・`set_property_value`＝publisher 委譲ラッパ・テスト(d)系を barrier 駆動へ更新
 - `crates/areka/src/main.rs`／`crates/areka/src/emo2_boot/mod.rs`／`crates/areka/src/emo2_boot/spine.rs` — provider 差替 3 箇所（`SystemVarWiring::FromSylphya`）＋app スコープ root 供給（既定＝実行ファイル隣接 `profile/areka/`・env `AREKA_PROFILE_DIR` で上書き可＝R8.2 の AREKA_ 冠準拠）
 - `doc/COMPAT_ARCHITECTURE.md` — 対応表 4 記録の追記
@@ -664,8 +665,8 @@ pub fn derive_flat_statics(names: &GhostNames) -> Vec<(String, String)>;
 
 **Implementation Notes**
 - Integration: HSTRING⇄String 橋は sink 境界に閉じる（sylphya は String のみ・shiori-abi 流儀）
-- Validation: 既存テスト (d)(e) を barrier 駆動へ更新（set→barrier→get の決定論列）。欠落 key・再入・別スレッド set の檻は維持
-- Risks: Set→Get 即時可視に依存する将来の SHIORI 脳が現れた場合は epoch フェンス読み（予約シーム）を実装する——現行消費者（native 脳デモ/e2e）に該当依存なし（research §1.5）
+- Validation: 既存テスト (d)(e) を barrier 駆動へ更新（set→barrier→get の決定論列）。欠落 key・再入・別スレッド set の檻は維持。**加えて、本番呼出列（shiori_session 系初期化列）に set→直後 Get の順序依存が無いことを統合タスクの検証項目として実測確認する**（research §1.5 は使用面列挙であり順序依存の実測確認ではないため）
+- Risks: Set→Get 即時可視に依存する将来の SHIORI 脳が現れた場合は epoch フェンス読み（予約シーム）を実装する——現行消費者（native 脳デモ/e2e）に該当依存なし（research §1.5）。**上記実測確認で初期化列に依存が見つかった場合は、`set_property_value` 充填ラッパ内 barrier を初期化列に限り適用する（公開予定の barrier 委譲で対処可能・設計変更不要）**
 
 ## Data Models
 
