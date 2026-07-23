@@ -80,7 +80,7 @@
   - _Requirements: 6.3, 6.4_
   - _Boundary: areka-sylphya persist/format.rs_
 
-- [ ] 4.2 (P) 原子的 PersistIo シーム
+- [x] 4.2 (P) 原子的 PersistIo シーム
   - `PersistIo` トレイト（`read`／`commit`）を定義し、実装として temp 書込→`rename`（Windows は既存宛先を置換）による原子的確定を行う real 実装を作成する
   - テスト用に故障注入可能な fake `PersistIo`（メモリ内・commit 中断シミュレート）を実装する
   - commit 中断時に既存ファイル内容が無傷であることを fake IO で確認する（原子性の観測条件）

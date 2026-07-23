@@ -2,3 +2,5 @@
 
 pub mod format;
 pub mod io;
+
+pub use io::{FakePersistIo, FsPersistIo, PersistIo};
