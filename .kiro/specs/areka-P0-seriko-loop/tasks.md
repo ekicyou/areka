@@ -34,7 +34,7 @@
 
 ## 3. (P) Foundation: ghost additive tick レーン
 
-- [ ] 3. (P) `spawn_loop_ticker` を既存 ticker に additive 追加する
+- [x] 3. (P) `spawn_loop_ticker` を既存 ticker に additive 追加する
   - `LoopTickerConfig`（既定 16ms・`GetTickCount64` クロック・テスト注入可）を定義する
   - `BoundarySchedule` を再利用し、クロージャ配送（`Box<dyn FnMut(Tick)+Send>`）でグリッド発火ごとに 1 回 `deliver` を呼ぶ単発スポーナーを実装する
   - 既存 `spawn_ticker`・`TickerConfig`・2 系統は一切変更しない

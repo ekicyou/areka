@@ -241,6 +241,82 @@ where
     })
 }
 
+/// ループ tick レーン構成（既定: 16ms・`GetTickCount64`）。
+///
+/// [`spawn_ticker`] の 2 系統（dispatcher 50ms／kanade 1000ms）とは独立した、
+/// SERIKO ループ評価専用の単発 tick レーン（[`spawn_loop_ticker`]）の運行構成。
+/// 16ms は 60Hz 近似で、`\w` 系の最小 wait（22ms）を 1 tick 以内で拾える解像度
+/// （design.md「spawn_loop_ticker」）。
+pub struct LoopTickerConfig {
+    /// ループ評価の基本周期（既定 16ms）。
+    pub interval: Duration,
+    /// 時刻供給源（既定 `GetTickCount64`）。決定論テストは任意の単調値を返すクロージャへ
+    /// 差し替える。
+    pub clock: Box<dyn Fn() -> MonotonicMs + Send>,
+}
+
+impl Default for LoopTickerConfig {
+    /// 既定値: `interval = 16ms`・`clock = GetTickCount64`。
+    fn default() -> Self {
+        LoopTickerConfig {
+            interval: Duration::from_millis(16),
+            clock: Box::new(real_clock),
+        }
+    }
+}
+
+/// SERIKO ループ評価向けの単発 tick レーンを起動する。
+///
+/// [`spawn_ticker`] と同じ [`BoundarySchedule`]（絶対グリッド整列・catch-up 1 回）を
+/// **再利用**し、単一系統として `config.clock` を絶対グリッドへ整列させる。グリッド境界へ
+/// 到達するたびに `deliver` を**ちょうど 1 回**呼ぶ（複数境界を跨いだ大幅遅延でも catch-up
+/// 政策により 1 回に畳む）。`TickerMsg::Close` 受領または制御チャンネル切断（`stop_rx`
+/// disconnected）で正常終了する（design.md「spawn_loop_ticker」・R1.1/1.3/1.4）。
+///
+/// 配送は **クロージャ**（`Box<dyn FnMut(Tick) + Send>`）経由で行い、`From<Tick>` による
+/// 型付きチャネル境界（[`spawn_ticker`] の流儀）は使わない。これは意図的な設計判断で、
+/// ghost が seriko の型を知らずに済ませる（orphan rule 回避・型結合ゼロ・design D-1
+/// 「areka-ghost は seriko に依存しない」）。配送失敗の観測は closure 側の責務とする。
+///
+/// worker スレッド駆動＝表示状態・vsync に非従属（R1.3）。既存 [`spawn_ticker`]・
+/// [`TickerConfig`]・2 系統の挙動／シグネチャは一切変更しない純粋な additive 追加（R1.4）。
+pub fn spawn_loop_ticker(
+    config: LoopTickerConfig,
+    mut deliver: Box<dyn FnMut(Tick) + Send>,
+) -> (Sender<TickerMsg>, ActorHandle) {
+    let LoopTickerConfig { interval, clock } = config;
+
+    areka_actor::spawn_actor::<TickerMsg, _>("loop-ticker", move |stop_rx| {
+        let start_now = clock();
+        let mut schedule = BoundarySchedule::starting_at(interval, start_now);
+
+        loop {
+            let now = clock();
+            let remaining = schedule.remaining(now);
+
+            match stop_rx.recv_timeout(remaining) {
+                Ok(TickerMsg::Close) => return,
+                Err(RecvTimeoutError::Disconnected) => return,
+                Err(RecvTimeoutError::Timeout) => {
+                    let now = clock();
+                    let poll = schedule.poll(now);
+                    if poll.fired {
+                        if poll.catch_up {
+                            tracing::info!(
+                                target = "loop_ticker",
+                                "loop ticker catch-up: skipped multiple boundaries, firing once"
+                            );
+                        }
+                        // 発火ごとに 1 回だけ配送（catch-up 時も 1 回）。配送失敗の扱いは
+                        // closure の内部責務。
+                        deliver(Tick { now });
+                    }
+                }
+            }
+        }
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -576,6 +652,162 @@ mod tests {
                 handle
                     .join()
                     .expect("ticker terminates normally after Close");
+            },
+        );
+    }
+
+    // ---- 単発ループレーン: spawn_loop_ticker ----
+
+    #[test]
+    fn loop_ticker_config_default_is_16ms_and_real_clock() {
+        let config = LoopTickerConfig::default();
+        assert_eq!(config.interval, Duration::from_millis(16));
+        // 既定 clock が実クロック（非減少）であることのみ確認する。
+        let first = (config.clock)();
+        let second = (config.clock)();
+        assert!(second.0 >= first.0, "default clock must be non-decreasing");
+    }
+
+    #[test]
+    fn spawn_loop_ticker_delivers_once_per_grid_firing_on_injected_clock() {
+        let clock_value = Arc::new(Mutex::new(0u64));
+        let (started_tx, started_rx) = mpsc::channel::<()>();
+
+        let config = LoopTickerConfig {
+            interval: Duration::from_millis(16),
+            clock: shared_clock(Arc::clone(&clock_value), started_tx),
+        };
+
+        // deliver クロージャは Tick を検証用チャネルへ横流しする（配送 = クロージャ経由・
+        // From<Tick> 型結合なし）。
+        let (tick_tx, tick_rx) = mpsc::channel::<Tick>();
+        let deliver: Box<dyn FnMut(Tick) + Send> = Box::new(move |tick: Tick| {
+            let _ = tick_tx.send(tick);
+        });
+
+        let (stop_tx, handle) = spawn_loop_ticker(config, deliver);
+
+        // 起動時刻読取（start_now）完了を待ってから時計を進める（レース防止・shared_clock doc）。
+        started_rx
+            .recv_timeout(Duration::from_secs(5))
+            .expect("loop ticker should read the clock once at startup");
+
+        // 16ms グリッド境界へ到達させる。
+        *clock_value.lock().expect("lock") = 16;
+
+        let tick = tick_rx
+            .recv_timeout(Duration::from_secs(5))
+            .expect("deliver should be called once the clock reaches a 16ms boundary");
+        assert_eq!(tick.now, MonotonicMs(16));
+
+        stop_tx.send(TickerMsg::Close).expect("send Close");
+        run_bounded(
+            "loop ticker join after Close",
+            Duration::from_secs(5),
+            move || {
+                handle
+                    .join()
+                    .expect("loop ticker terminates normally after Close");
+            },
+        );
+    }
+
+    #[test]
+    fn spawn_loop_ticker_catch_up_delivers_exactly_once_across_multiple_missed_boundaries() {
+        let clock_value = Arc::new(Mutex::new(0u64));
+        let (started_tx, started_rx) = mpsc::channel::<()>();
+
+        let config = LoopTickerConfig {
+            interval: Duration::from_millis(16),
+            clock: shared_clock(Arc::clone(&clock_value), started_tx),
+        };
+
+        let (tick_tx, tick_rx) = mpsc::channel::<Tick>();
+        let deliver: Box<dyn FnMut(Tick) + Send> = Box::new(move |tick: Tick| {
+            let _ = tick_tx.send(tick);
+        });
+
+        let (stop_tx, handle) = spawn_loop_ticker(config, deliver);
+
+        started_rx
+            .recv_timeout(Duration::from_secs(5))
+            .expect("loop ticker should read the clock once at startup");
+
+        // 0 から 100 まで一気に進める＝16,32,48,64,80,96 の 6 境界を跨ぐ（サスペンド復帰等）。
+        // catch-up 政策により deliver は**ちょうど 1 回**だけ呼ばれる。
+        *clock_value.lock().expect("lock") = 100;
+
+        let tick = tick_rx
+            .recv_timeout(Duration::from_secs(5))
+            .expect("catch-up must deliver exactly once with the current clock");
+        assert_eq!(tick.now, MonotonicMs(100));
+
+        // 2 回目の配送が来ないこと＝跨いだ中間境界を再送しない（catch-up = 1）。
+        // 時計は 100 のまま（次デッドライン 112 未満）なので追加発火は起きない。
+        assert!(
+            tick_rx.recv_timeout(Duration::from_millis(200)).is_err(),
+            "catch-up must collapse multiple missed boundaries into a single deliver"
+        );
+
+        stop_tx.send(TickerMsg::Close).expect("send Close");
+        run_bounded(
+            "loop ticker join after catch-up scenario",
+            Duration::from_secs(5),
+            move || {
+                handle
+                    .join()
+                    .expect("loop ticker terminates normally after Close");
+            },
+        );
+    }
+
+    #[test]
+    fn spawn_loop_ticker_stops_on_close() {
+        let clock_value = Arc::new(Mutex::new(0u64));
+        let (started_tx, _started_rx) = mpsc::channel::<()>();
+        let config = LoopTickerConfig {
+            interval: Duration::from_millis(16),
+            clock: shared_clock(Arc::clone(&clock_value), started_tx),
+        };
+
+        // deliver は呼ばれない想定（境界未到達で即 Close）。
+        let deliver: Box<dyn FnMut(Tick) + Send> = Box::new(|_tick: Tick| {});
+        let (stop_tx, handle) = spawn_loop_ticker(config, deliver);
+
+        stop_tx.send(TickerMsg::Close).expect("send Close");
+        run_bounded(
+            "loop ticker join after Close",
+            Duration::from_secs(5),
+            move || {
+                handle
+                    .join()
+                    .expect("loop ticker terminates normally after Close");
+            },
+        );
+    }
+
+    #[test]
+    fn spawn_loop_ticker_stops_on_control_channel_disconnect() {
+        let clock_value = Arc::new(Mutex::new(0u64));
+        let (started_tx, _started_rx) = mpsc::channel::<()>();
+        let config = LoopTickerConfig {
+            interval: Duration::from_millis(16),
+            clock: shared_clock(Arc::clone(&clock_value), started_tx),
+        };
+
+        let deliver: Box<dyn FnMut(Tick) + Send> = Box::new(|_tick: Tick| {});
+        let (stop_tx, handle) = spawn_loop_ticker(config, deliver);
+
+        // 制御チャンネルの送信端を手放す＝disconnected 経路で正常終了する。
+        drop(stop_tx);
+
+        run_bounded(
+            "loop ticker join after control channel disconnect",
+            Duration::from_secs(5),
+            move || {
+                handle
+                    .join()
+                    .expect("loop ticker terminates normally on control channel disconnect");
             },
         );
     }
