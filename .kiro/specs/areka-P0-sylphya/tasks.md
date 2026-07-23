@@ -166,7 +166,7 @@
   - _Boundary: areka-parsers package/model.rs, package/resolve.rs_
 
 - [ ] 8. Integration: ghost 結線
-- [ ] 8.1 derive_flat_statics 純関数（selfname 系フォールバック）
+- [x] 8.1 derive_flat_statics 純関数（selfname 系フォールバック）
   - `derive_flat_statics(&GhostNames) -> Vec<(String,String)>` を純関数として実装する: `sakura.name`→selfname／`sakura.name2`→selfname2（未定義時は積まない＝素通し縮退）／`kero.name`→keroname（未定義時は `sakura.name` へフォールバック、両方未定義なら積まない）
   - selfname2 未定義時の素通し縮退、keroname の SSP 互換フォールバック規則を `doc/COMPAT_ARCHITECTURE.md` 対応表へ記録する
   - kero あり／kero なし＋sakura あり／両方なしの 3 分岐と、name2 の有無を決定論単体テストで検証する（descript 実値解決の決定論檻）

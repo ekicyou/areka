@@ -381,8 +381,12 @@ pub fn boot(options: GhostBootOptions) -> Result<GhostRuntime, GhostBootError> {
     // 5. shiori actor。
     let (shiori_tx, shiori_handle) = spawn_shiori_actor(connect, down_tx);
 
-    // 6. kanade（シグネチャ不変・start_tx を「自身の」sakura Sender として渡す）。
-    let (kanade_tx, kanade_handle) = spawn_kanade(config, shiori_tx, start_tx);
+    // 6. kanade（start_tx を「自身の」sakura Sender として渡す）。
+    //    task 6.2 で `spawn_kanade` に 4 番目の引数 `resource_sink: ResourceSink` が加わった。
+    //    ここは task 8.1 の最小ビルド復旧として no-op sink を渡すのみ（task 8.2 が実 publish＋
+    //    barrier sink へ差し替える予定）。
+    let (kanade_tx, kanade_handle) =
+        spawn_kanade(config, shiori_tx, start_tx, Box::new(|_, _| {}));
 
     // 7. sakura dispatcher（可変長 sink 列＋system_vars provider を構築時注入・S-3・
     //    要件 4.6/8.5/7.3）。provider は dispatcher が talk 起動ごとに呼び出す（刻印点）。

@@ -30,6 +30,7 @@ pub mod runtime;
 pub mod shiori_inproc;
 pub mod shiori_wiring;
 pub mod sink;
+pub mod sylphya_wiring;
 pub mod ticker;
 
 pub use runtime::{
