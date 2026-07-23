@@ -235,7 +235,7 @@
   - _Boundary: emo-compose plan.rs_
   - _Depends: 11.1_
 
-- [ ] 11.3 ワークスペース全体の回帰確認（pattern0 是正後）
+- [x] 11.3 ワークスペース全体の回帰確認（pattern0 是正後）
   - 本増分適用後、既存のテストを含むワークスペース全体のテストがすべて成功することを確認する（emo-present ComposeCache 檻・seriko bind_e2e・mustselect 檻・emo-compose golden を含む）
   - Observable: ワークスペース全体のテスト実行が成功で完了する
   - _Requirements: 8.1, 9.4_
