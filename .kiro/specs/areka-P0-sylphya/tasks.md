@@ -1,6 +1,6 @@
 # Implementation Plan
 
-- [ ] 1. crates/areka-sylphya の雛形とワークスペース依存整備
+- [x] 1. crates/areka-sylphya の雛形とワークスペース依存整備
   - Cargo.toml（依存: thiserror・tracing・toml・areka-actor のみ。上流 areka クレートへの依存は禁止）を作成し、design.md の File Structure Plan どおりの空モジュール群（key.rs／value.rs／asker.rs／vocab/mod.rs・flat.rs・dotted.rs・shiori_resource.rs／mirror.rs／reader.rs／actor.rs／persist/mod.rs・format.rs・io.rs）を配置する
   - lib.rs に crate 正本 rustdoc（掲示板モデル・5 実体層・読み口 2 形の要約）を記述する
   - root Cargo.toml の `[workspace.dependencies]` へ `toml = "0.8"` を hoist する（`members = ["crates/*"]` glob により新クレートは自動でワークスペース参加）

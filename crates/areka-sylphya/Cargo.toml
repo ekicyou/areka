@@ -1,0 +1,16 @@
+[package]
+name = "areka-sylphya"
+workspace = "../.."
+description = "Unified property system for areka (materialized-view bulletin-board model); lowest-layer, minimal-dependency, no upstream areka deps"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[dependencies]
+thiserror = { workspace = true }
+tracing = { workspace = true }
+toml = { workspace = true }
+areka-actor = { path = "../areka-actor" }
