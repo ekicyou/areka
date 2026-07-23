@@ -25,7 +25,7 @@
 
 ## 2. (P) Foundation: PatternState 公開型正本（emo-compose）
 
-- [ ] 2. (P) `PatternState`／`PatternFrame` を emo-compose の新モジュールへ定義する
+- [x] 2. (P) `PatternState`／`PatternFrame` を emo-compose の新モジュールへ定義する
   - `PatternState`（`BTreeMap<u32, PatternFrame>` ラップ・正準順序で Eq 安定・`Default`=空）と `PatternFrame { surface_id: u32, method: ComposeMethod, x: i64, y: i64 }` を定義する
   - `set`/`remove`/`get`/`iter`/`is_empty` を実装する
   - 完了状態: `PatternState::default().is_empty()` が true・`cargo build -p areka-emo-compose` が成功する
