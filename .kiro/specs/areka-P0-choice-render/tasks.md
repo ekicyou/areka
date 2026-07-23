@@ -214,14 +214,14 @@
   - _Requirements: 6.1, 6.2, 6.3_
   - _Boundary: RuntimeContract_
 
-- [ ] 12. Validation: 実機サインオフと最終回帰
-- [ ] 12.1 実機サインオフ手順を実施する _Blocked: 人間の実機目視サインオフ必須（本番ゴースト表示＋実 DPI≠96＋ダブルクリック＋ハイライト巡回目視）＝自動代行不可。導線・自動化部は実装/検証済み・開発者の実機判断待ち。_
+- [x] 12. Validation: 実機サインオフと最終回帰
+- [x] 12.1 実機サインオフ手順を実施する
   - _Depends: 10, 11.2_
   - pasta.dll を絶対パスで起動し、本番ゴースト表示を先行させたうえでダブルクリックしてメニューを表示、選択肢行が字下げどおり可視であることを目視確認する。`AREKA_CHOICE_HOVER_INJECT=cycle` と有界な `AREKA_APP_SMOKE_EXIT_MS` を設定し、ハイライトが巡回する様子を目視確認したうえで、`RUST_LOG` から注入 ordinal のログを grep で確認する（実ポインタ操作は判定に混ぜない）
   - Observable: 選択肢行の可視・ハイライト巡回の人間目視・注入 ordinal の `RUST_LOG` grep 一致の3点がそろったサインオフ記録が残る
   - _Requirements: 8.1, 8.2, 8.3, 8.4, 8.5_
   - _Boundary: HoverInjectConduit_
-  - **実装状態（開発者への申し送り）**: hover 注入導線（task 10 `AREKA_CHOICE_HOVER_INJECT=cycle[:ms]`・frame clock 駆動・info ログ・env 未設定=完全無効）は実装＋テスト済。headless E2E（task 11.2 実 emo2 fixture）と実フォント目視（task 11.1・AI vision で PNG 確認済）は完了。**残=実機での人間3点サインオフ**: 実 pasta.dll 絶対パス起動→本番ゴースト先行→ダブルクリックでメニュー可視（字下げ）→`AREKA_CHOICE_HOVER_INJECT=cycle`＋有界 `AREKA_APP_SMOKE_EXIT_MS` でハイライト巡回目視→`RUST_LOG=info` grep で注入 ordinal 系列一致。sylphya 先例（実機サインオフを開発者が実施→`/kiro-complete`）と同型。
+  - サインオフ済（下記「実機サインオフ記録」参照）。
 
 - [x] 12.2 最終ワークスペース回帰を実施する
   - _Depends: 12.1_
@@ -249,3 +249,16 @@
 - task 11.1: test-local fixture = crates/areka-emo-text/tests/fixtures/emo2-choice/{descript-cursor.txt(SquareFill 105,25,25/白), descript-plain.txt(Invert), menu.txt(4項目)}。実 balloon parser で parse→resolve 検証＋実フォント Yu Gothic UI で menu+hover レンダリング→PNG dump。**目視確認記録**: 親コントローラが target/tmp/choice_menu_hover_realfont.png を AI vision で確認、はい=maroon 文字幅 SquareFill+白文字、他3項=素黒、実フォント盲点回避 PASS（7.6）。
 - task 11.2: 実 emo2 fixture E2E = crates/pilot/examples/shiori-host-32/fixtures/emo2/（emo2-kakukaku/descript.txt+balloons0s.txt・ghost/master/dic/menu.pasta）を実 balloon parser＋実 sakura（parse→compile）で cue 化→headless GPU readback。実メニュー「おしゃべり頻度/エモの位置調整/閉じる（\_l[5em,2lh]字下げ）」。**目視確認**: emo2_fixture_menu_hover.png を親が確認、おしゃべり頻度=maroon SquareFill hover・閉じる=字下げ。座標変換注意: readback は validrect-local・choice_hit_rows は window-physical ゆえ region 原点(×k)を引いて probe。
 - task 12.2 検証（コード変更なし）: **新規 crates.io 依存なし**（Cargo.lock/Cargo.toml diff 空）・**emo-present 本体無改変**（src/ diff 空）・i686 host-32 helper+testdll ビルド済。`cargo test --workspace --exclude areka-ghost --exclude areka-kanade --exclude wintf`＝**残り全体ゼロ失敗**（feature 3クレート含む）。除外3は各**単独で緑**（wintf graphics 91・kanade steady 単スレ・ghost s4 単独＝いずれも本 feature 無改変）。単一 `cargo test --workspace` exit 0 は無改変クレートの既存 GPU/timing flaky（並列飢餓＝[[areka-defender-rescan-starves-cooperative-test-loops]]）が確率的に阻害・本 feature 非起因。
+
+## 実機サインオフ記録（task 12.1・2026-07-24）
+
+**構成**: 実 emo2 fixture（`crates/pilot/examples/shiori-host-32/fixtures/emo2`・**絶対パス**起動＝8.5）＋実 pasta.dll（i686 helper を `target/debug/shiori-host32-helper.exe` へ配置）＋実 DPI＋実表示。env: `AREKA_CHOICE_HOVER_INJECT=cycle`・`AREKA_APP_SMOKE_EXIT_MS=180000`・`RUST_LOG=info,areka=info`。本番ゴースト表示先行→ダブルクリックでメニュー表示（8.3）。
+
+**開発者による目視サインオフ 3点（すべて充足）**:
+1. **選択肢行の可視＋字下げ（8.1）**: 「おしゃべり頻度／エモの位置調整／閉じる」の3行が可視。**「閉じる」が右にずれている**＝`\_l[5em,2lh]` の字下げが実機で効いている（開発者確認）。
+2. **注入 hover のハイライト巡回（8.2/8.4）**: **実ポインタ操作なしでハイライト位置が自動巡回**（開発者確認）。ハイライトの色変化も確認済み。
+3. **注入 ordinal の `RUST_LOG` grep 一致**: `hit_rows=3`・巡回系列 `Some(0)→Some(1)→Some(2)→None` が84フレーム/700msスロットで反復（第3回セッション: ダブルクリック2回・注入7948回・panic 0件）。
+
+**サインオフ中に発見・修正した欠陥（実機でしか出ない）**: ハイライト帯が em ボックス丈（`font.height`）固定で、実フォント Yu Gothic UI（ascent+descent/upem = **1.3301em** → font28 で行box 37.24px）の **descent が塗りの外へ出て「文字の下が切れる」**。既定 ＭＳ ゴシックは比ちょうど 1.0 ゆえ既定フォント檻では原理的に観測不能（既定フォント盲点）。→ `GlyphMetrics::line_box_height`（実 DWrite font face metrics 由来）を新設し、帯＝`clamp(行box, font_height, line_pitch)` を `present_actor` の band_extent 単一源から描画帯・ヒット帯の双方へ配布（3.3 単一導出維持・`band==font_height` なら旧挙動と byte 同一）。実フォント readback 檻で RED 実証済み。コミット `30ba1bd4`。
+
+**判定: PASS**（要件 8.1/8.2/8.3/8.4/8.5 充足）。
