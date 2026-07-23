@@ -185,7 +185,7 @@
   - _Requirements: 7.1, 7.2, 7.3_
   - _Boundary: areka emo2_boot spine.rs_
 
-- [ ] 9.5 main.rs の shutdown 順序と実機 grep マーカーを整備する
+- [x] 9.5 main.rs の shutdown 順序と実機 grep マーカーを整備する
   - shutdown 順序を「loop ticker Close→join → ghost.shutdown → seriko join」に設定する
   - 実機 grep マーカー（抽選発火・再生開始/停止/残留）の info! ログを配置する
   - 完了状態: `AREKA_APP_SMOKE_EXIT_MS` 有界 auto-exit 後に `RUST_LOG` grep でマーカーが検出できることを確認する
