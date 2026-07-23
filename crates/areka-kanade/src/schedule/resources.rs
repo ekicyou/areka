@@ -12,9 +12,14 @@
 //! 恒久禁止するイベント檻の語彙とは意味論が異なる。両者を混ぜず別集合として保つことで、
 //! イベント語彙 8 ID の不変量を保存したままリソース ID（M1: `"username"`）を additive に増分する。
 //!
-//! # M1 の範囲（本タスク 6.1）
-//! 本モジュールは許可集合と判定のみを持つ。`resource_username` 構築関数・`ResourceOutcome`／
-//! `ResourceSink` 型・boot 系列 prefetch はタスク 6.2 の担当であり本タスクでは実装しない。
+//! # M1 の範囲（タスク 6.1／6.2）
+//! タスク 6.1 が許可集合と判定（[`ALLOWED_RESOURCE_IDS`]／[`is_allowed_resource_id`]）を、
+//! タスク 6.2 が照会構築関数 [`resource_username`]・結果語彙 [`ResourceOutcome`]・注入シーム
+//! [`ResourceSink`]（boot 系列 prefetch から呼ばれる）を持つ。prefetch 段そのものの挿入は
+//! `boot.rs`（OnInitialize 後・OnFirstBoot 前）が担う。
+
+use crate::msg::ShioriCall;
+use crate::status::{ExecutionSnapshot, ExecutionStatus};
 
 /// SHIORI Resource 照会で送出し得るリソース ID の確定ホワイトリスト（M1: `username` 1 件・Req4.1）。
 ///
@@ -33,6 +38,54 @@ pub const ALLOWED_RESOURCE_IDS: &[&str] = &["username"];
 pub fn is_allowed_resource_id(id: &str) -> bool {
     ALLOWED_RESOURCE_IDS.contains(&id)
 }
+
+/// `username` リソース照会（GET・References なし・Status は既存イベント同様 snapshot から導出）。
+///
+/// SHIORI Resource `username` への GET 照会を組み立てる純粋関数（副作用なし・Req4.1）。既存イベント
+/// 構築関数（`events::*`）と同じく `snapshot` から [`ExecutionStatus`] を導出し、送出時点の実行状態を
+/// wire 証跡へ載せる。boot prefetch 段は talk 非アクティブ（[`ExecutionSnapshot::INACTIVE`]）で呼ぶ。
+///
+/// References は持たない（正典 Resource GET は Reference を要しない）。応答（200 Value／204／失敗）の
+/// [`ResourceOutcome`] への写像・[`ResourceSink`] 呼出・完了固定ログは prefetch 段（`boot.rs`）が担う。
+///
+/// SEAM(M2・159 項目汎用化): `id` は M1 ではリテラル `&'static str` の `"username"` に据え置く。
+/// SHIORI Resource は正典で 159 項目あるが、159 項目の String 汎用化（任意リソース名への一般化）は
+/// M2 のシームであり、[`ShioriCall`] の `id: &'static str` 契約と `ALLOWED_RESOURCE_IDS` への ID 追加
+/// （additive）で段階的に拡張する。
+pub fn resource_username(snapshot: &ExecutionSnapshot) -> ShioriCall {
+    ShioriCall::Get {
+        id: "username",
+        references: Vec::new(),
+        status: ExecutionStatus::derive(snapshot),
+    }
+}
+
+/// リソース照会の結果語彙（prefetch 段が SHIORI 応答から写像し [`ResourceSink`] へ渡す）。
+///
+/// - [`Value`](ResourceOutcome::Value): 200 応答の値（不透明文字列）。
+/// - [`NoContent`](ResourceOutcome::NoContent): 204 / 空値（既定値縮退は消費側 sakura の責務・R4.2）。
+/// - [`Failed`](ResourceOutcome::Failed): タイムアウト・IPC 断等の照会失敗（理由文字列を保持）。
+///   失敗でも boot は殺さず続行する（prefetch 段が warn＋本語彙を sink へ渡す・R4.1）。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ResourceOutcome {
+    /// 200 応答の値（不透明文字列）。
+    Value(String),
+    /// 204 / 空値（既定値縮退は消費側 sakura に残置・R4.2）。
+    NoContent,
+    /// 照会失敗（タイムアウト・IPC 断等・理由文字列を保持）。
+    Failed(String),
+}
+
+/// リソース照会結果の注入シンク（kanade 構築時に注入・prefetch 段が**同期的に**呼ぶ）。
+///
+/// `SystemVarSource` と同型の疎結合シームであり、kanade は結果の消費側（ghost/sylphya）へ**依存しない**
+/// （sink は素のクロージャ）。prefetch 段は `(id, outcome)` を渡して sink が**返るまで boot を進めない**
+/// （ghost が据える sink 内の publish＋barrier により初回 talk までの反映が決定論化する・研究 §12-1）。
+///
+/// # 契約（design Preconditions）
+/// sink は `Send`（別スレッドの kanade アクターから呼ばれる）であり、呼出で panic しない（ghost 結線の
+/// 責務）。既存テストのように結果を使わない構成では no-op sink（`Box::new(|_, _| {})`）を注入してよい。
+pub type ResourceSink = Box<dyn Fn(&'static str, ResourceOutcome) + Send>;
 
 #[cfg(test)]
 mod tests {
@@ -79,5 +132,72 @@ mod tests {
                 "イベント ID {ev} はリソース許可集合に属してはならない（別族）"
             );
         }
+    }
+
+    /// `resource_username` は GET・id=`"username"`・References なし・Status は snapshot 由来
+    /// （INACTIVE→ヘッダ行なし・Req4.1）。id は許可集合を通る。
+    #[test]
+    fn resource_username_is_get_with_no_references() {
+        let call = resource_username(&ExecutionSnapshot::INACTIVE);
+        match call {
+            ShioriCall::Get {
+                id,
+                references,
+                status,
+            } => {
+                assert_eq!(id, "username", "リソース照会 id は username リテラル（M1）");
+                assert!(references.is_empty(), "Resource GET は References を持たない");
+                assert_eq!(
+                    status.render(),
+                    None,
+                    "INACTIVE スナップショットは Status ヘッダを出さない"
+                );
+                assert!(is_allowed_resource_id(id), "username は送出許可集合を通る");
+            }
+            ShioriCall::Notify { .. } => panic!("resource_username は GET を返すべき"),
+        }
+    }
+
+    /// talk_active=true では Status: talking を snapshot から導出する（既存イベント構築子と同一規律）。
+    #[test]
+    fn resource_username_carries_talking_status_when_active() {
+        let call = resource_username(&ExecutionSnapshot { talk_active: true });
+        let status = match call {
+            ShioriCall::Get { status, .. } => status.render(),
+            ShioriCall::Notify { .. } => panic!("expected GET"),
+        };
+        assert_eq!(status, Some("talking".to_string()));
+    }
+
+    /// `ResourceOutcome` の 3 語彙が構築でき、値の同一性（PartialEq/Eq）で観測できる。
+    #[test]
+    fn resource_outcome_variants_construct_and_compare() {
+        assert_eq!(
+            ResourceOutcome::Value("bob".to_string()),
+            ResourceOutcome::Value("bob".to_string())
+        );
+        assert_ne!(ResourceOutcome::NoContent, ResourceOutcome::Value("x".to_string()));
+        assert_ne!(
+            ResourceOutcome::Failed("timeout".to_string()),
+            ResourceOutcome::NoContent
+        );
+    }
+
+    /// `ResourceSink` は素のクロージャシームであり、`(&'static str, ResourceOutcome)` で呼べる。
+    /// 既存テスト向けの no-op sink（`Box::new(|_, _| {})`）が型検査を通る（Implementation Notes）。
+    #[test]
+    fn resource_sink_is_a_plain_closure_seam() {
+        use std::sync::{Arc, Mutex};
+        let seen: Arc<Mutex<Vec<(&'static str, ResourceOutcome)>>> = Arc::new(Mutex::new(Vec::new()));
+        let seen_body = Arc::clone(&seen);
+        let sink: ResourceSink =
+            Box::new(move |id, outcome| seen_body.lock().unwrap().push((id, outcome)));
+        sink("username", ResourceOutcome::Value("bob".to_string()));
+        assert_eq!(
+            seen.lock().unwrap().as_slice(),
+            &[("username", ResourceOutcome::Value("bob".to_string()))]
+        );
+        // no-op sink も同じ型で構築できる（既存呼び手の無害注入・Implementation Notes）。
+        let _noop: ResourceSink = Box::new(|_, _| {});
     }
 }

@@ -140,7 +140,7 @@
   - _Requirements: 4.1_
   - _Boundary: areka-kanade actor.rs, schedule/resources.rs (新規)_
 
-- [ ] 6.2 username 照会関数・ResourceSink・boot prefetch 段
+- [x] 6.2 username 照会関数・ResourceSink・boot prefetch 段
   - `resource_username(&ExecutionSnapshot) -> ShioriCall`（`ShioriCall::Get{id:"username"}`・M1 はリテラル `&'static str` 据え置き）を実装する
   - `ResourceOutcome`（Value／NoContent／Failed）と `ResourceSink`（`Box<dyn Fn(&'static str, ResourceOutcome) + Send>`、kanade 構築時注入）を実装する
   - boot 運行表へ prefetch 段（OnInitialize 後・OnFirstBoot 前に 1 回・既存 shiori request 経路をそのまま使用）を挿入する
@@ -248,3 +248,4 @@
 
 - 3.2: 点付き key の正準文字列形は `PropPath::to_canonical_string()`（key.rs）が唯一の権威。鏡像の dotted 区画 key・reader 解決・**Task 5.x の publish/persist の dotted key 格納**は必ずこの同一 stringifier（または既に正準なリテラル）を使うこと。往復不一致は NotFound を招く。
 - 4.1/4.3: tracing ログ捕捉テストは必ず `crate::test_log_capture::capture`（interest-keeper 常駐＝プロセスグローバル `set_global_default(registry())` で callsite `Interest::never` 焼き付きを根絶）経由で書くこと。素の `with_default` 単独は並列 `cargo test` 下で ~1/10-1/20 偽赤。kanade `schedule/log_capture.rs` と同機構（sylphya は最下層ゆえ kanade 非依存で複製）。
+- 6.2: `spawn_kanade` は resource_sink 引数を加え **4 引数**化した。areka-ghost（runtime.rs・ghost 統合テスト）は 3 引数のままゆえ **Task 8.2 着手前はワークスペース全体ビルドが赤**（kanade 単体は緑）。8.2 が実 sink（publish_shiori＋barrier クロージャ）を注入して解消する。DoD ゲート `cargo test --workspace`（10.2）は 8.2/8.3 完了まで赤で正常。

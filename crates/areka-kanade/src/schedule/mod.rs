@@ -63,6 +63,10 @@ pub(crate) enum Input {
 pub(crate) enum Phase {
     Idle,
     BootInit,
+    /// username リソース照会（prefetch）応答待ち（OnInitialize 後・OnFirstBoot 前・R4.1）。
+    /// 応答（Value/NoContent/Failed）は [`resources::ResourceOutcome`] へ写像され sink へ渡される
+    /// （talk は生成しない・Invariant）。照会失敗でも boot は殺さず OnFirstBoot へ続行する。
+    BootPrefetch,
     BootType,
     BootMain,
     /// basewareversion 応答待ち。起動挨拶を追跡する場合は `talk: Some(_)`（DD-IT-12）。
@@ -123,6 +127,13 @@ pub(crate) enum Action {
     /// unload 発行（同上）。
     ShioriUnload,
     StartTalk(StartTalk),
+    /// リソース照会結果を注入クロージャ（[`resources::ResourceSink`]）へ**同期的に**渡す
+    /// （prefetch・R4.1）。シェルが sink を呼ぶ副作用指示であり、sink が返るまで次段（OnFirstBoot）
+    /// へ進まない。リソース照会は talk を生成しない——結果を StartTalk へ流さず sink へ渡すのみ（Invariant）。
+    ResourceOutcome {
+        id: &'static str,
+        outcome: resources::ResourceOutcome,
+    },
     /// 終了系列完了（シェルは shiori へ Close を送り自身も Break する）。
     StopSelf,
 }
@@ -207,6 +218,7 @@ fn phase_label(phase: &Phase) -> &'static str {
     match phase {
         Phase::Idle => "Idle",
         Phase::BootInit => "BootInit",
+        Phase::BootPrefetch => "BootPrefetch",
         Phase::BootType => "BootType",
         Phase::BootMain => "BootMain",
         Phase::BootVersion { .. } => "BootVersion",
@@ -295,6 +307,13 @@ fn on_shiori_reply(
         return unloading_reply(state, outcome);
     }
 
+    // prefetch 応答（username GET）は横断 Failed→Fault 経路に載せない（起動を殺さない・R4.1）。
+    // Value/NoContent/Failed の全てを boot::step が [`resources::ResourceOutcome`] へ写像し、sink 呼出
+    // 指示＋完了固定ログを添えて OnFirstBoot へ続行する。Failed の Fault 化を封じるため横断判定より先に捌く。
+    if matches!(state.phase, Phase::BootPrefetch) {
+        return boot::step(state, Input::ShioriReply { outcome, origin }, config);
+    }
+
     // 応答待ちフェーズでの Failed は横断的に Unloading{Fault} へ（Req 6.1）。
     if let ShioriOutcome::Failed(ref failure) = outcome
         && awaits_reply(&state.phase)
@@ -327,6 +346,7 @@ fn dispatch_phase(state: State, input: Input, config: &KanadeConfig) -> (State, 
     match state.phase {
         Phase::Idle
         | Phase::BootInit
+        | Phase::BootPrefetch
         | Phase::BootType
         | Phase::BootMain
         | Phase::BootVersion { .. } => boot::step(state, input, config),

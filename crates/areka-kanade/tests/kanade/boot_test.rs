@@ -12,7 +12,7 @@
 //! 完了で終了系列が完走してから kanade を期限付き join する。join 成功時点で起動系列の
 //! 全 shiori 呼出は記録済みであり、実時間 sleep なしで記録列を確定できる。
 
-use areka_kanade::{CloseReason, ExecutionSnapshot, KanadeConfig, KanadeMsg, events};
+use areka_kanade::{CloseReason, ExecutionSnapshot, KanadeConfig, KanadeMsg, events, resources};
 
 use super::common::{
     DEFAULT_TIMEOUT, Fixture, Harness, QuitPolicy, RecordedCall, expected_call, join_bounded,
@@ -70,15 +70,17 @@ fn drive_boot_and_collect() -> Vec<RecordedCall> {
 /// ハードコードしない・単一正本＝events 表を共有・Req 7.1）。記録列の先頭 4 件が期待起動系列と
 /// 完全一致することを厳密に検証する（起動系列そのものへ焦点を絞った適合検証）。
 ///
-/// 期待起動系列（ukadoc Reference 表・design「boot 系列」）:
+/// 期待起動系列（ukadoc Reference 表・design「boot 系列」＋prefetch 増分・R4.1）:
 /// 1. `OnInitialize` — NOTIFY（References なし・talk 非アクティブ＝Status 行なし）
-/// 2. `OnFirstBoot` — GET（Ref0="0"）→ fixture が 204 を返す（talk 非アクティブ）
-/// 3. `OnBoot` — GET（Ref0=shell_name）→ fixture が固定 Value を返す（talk 非アクティブ）
-/// 4. `basewareversion` — NOTIFY（Ref0=version・Ref1=name・**Status: talking**）
+/// 2. `username` — GET（References なし・prefetch リソース照会）→ fixture が 204 を返す（R4.1）
+/// 3. `OnFirstBoot` — GET（Ref0="0"）→ fixture が 204 を返す（talk 非アクティブ）
+/// 4. `OnBoot` — GET（Ref0=shell_name）→ fixture が固定 Value を返す（talk 非アクティブ）
+/// 5. `basewareversion` — NOTIFY（Ref0=version・Ref1=name・**Status: talking**）
 ///
-/// DD-IT-12: 挨拶（`OnBoot` Value）を正規追跡するため、`basewareversion` はフェーズ更新後
+/// prefetch（`username` 照会）は OnInitialize の後・OnFirstBoot の前に 1 回だけ挟まる（R4.1・design
+/// boot 図）。DD-IT-12: 挨拶（`OnBoot` Value）を正規追跡するため、`basewareversion` はフェーズ更新後
 /// （`BootVersion{talk: Some}`＝talk アクティブ）のスナップショットで送出され、Status ヘッダに
-/// `talking` を運ぶ。前 3 件は talk 非アクティブ（[`ExecutionSnapshot::INACTIVE`]）で Status 行なし。
+/// `talking` を運ぶ。前 4 件は talk 非アクティブ（[`ExecutionSnapshot::INACTIVE`]）で Status 行なし。
 #[test]
 fn boot_sequence_matches_canonical_exactly() {
     // 期待値導出用の config（events 表への入力）。`KanadeConfig` は Clone 非実装のため、
@@ -90,6 +92,7 @@ fn boot_sequence_matches_canonical_exactly() {
     // （Status: talking・DD-IT-12）。
     let expected_boot = vec![
         expected_call(events::on_initialize(&ExecutionSnapshot::INACTIVE)), // NOTIFY（References なし）
+        expected_call(resources::resource_username(&ExecutionSnapshot::INACTIVE)), // GET（prefetch・R4.1）→204
         expected_call(events::on_first_boot(&ExecutionSnapshot::INACTIVE)), // GET（Ref0="0"）→204
         expected_call(events::on_boot(&config, &ExecutionSnapshot::INACTIVE)), // GET（Ref0=shell_name）→Value
         expected_call(events::baseware_version(
