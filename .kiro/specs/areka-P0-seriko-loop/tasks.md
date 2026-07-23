@@ -195,7 +195,7 @@
 
 ## 10. Validation: 決定論テストと実機サインオフ
 
-- [ ] 10.1 looper 統合テスト（注入 tick+rng 列で全経路網羅）
+- [x] 10.1 looper 統合テスト（注入 tick+rng 列で全経路網羅）
   - kero 型（`-1` 終端→ベース復帰）・sakura 型（末尾残留）・再生中の非再抽選・bind OFF での判定不発（乱数非消費）・bind ON での発火・変化なし tick の無発行・surface 切替でのコマ消滅・残留→再発火の即時クリア、を固定注入 tick 列＋乱数列で網羅する
   - sleep を使用せず `send_tick`/`handle_message` の直接駆動＋`Close→join` 同期で行う
   - 完了状態: 固定注入列に対して期待 PatternState 列・発行列が完全一致することがテストで確認できる
