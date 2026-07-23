@@ -1,0 +1,18 @@
+// emo2-choice 短メニュー台本（task 11.1・R7.6）: 2〜4 項目の最小選択肢メニュー
+//
+// choice-render の目視確認用に、実フォントで描く短いメニュー（4 項目）を定義する。
+// さくらスクリプト表現（\q タグ＝選択肢〔表示文字,ID〕・\n＝改行で各項目を別行へ）:
+\q[はい,OnYes]\n\q[いいえ,OnNo]\n\q[どちらでも,OnMaybe]\n\q[あとで,OnLater]
+//
+// 上のスクリプトに対応する、テスト（choice_fixture_test.rs）が注入する cue 列
+// （CueCommand・全 at=0.0・NewLine 区切りで各項目を別行へ配置し、hover 行の限定を観測可能にする）:
+//   Choice{ id:"OnYes",   text:"はい",       references:["r0"] }
+//   NewLine{ ratio:1.0 }
+//   Choice{ id:"OnNo",    text:"いいえ",     references:["r1"] }
+//   NewLine{ ratio:1.0 }
+//   Choice{ id:"OnMaybe", text:"どちらでも", references:["r2"] }
+//   NewLine{ ratio:1.0 }
+//   Choice{ id:"OnLater", text:"あとで",     references:["r3"] }
+//
+// 目視確認（PNG）では ordinal 0（"はい"）に hover を注入し、その行だけが
+// SquareFill（cursor 指定時）／Invert（未指定時）のハイライト矩形＋反転文字で塗られる。

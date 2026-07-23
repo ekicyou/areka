@@ -200,7 +200,7 @@
   - _Boundary: HoverInjectConduit_
 
 - [ ] 11. Validation: 実フォント目視確認と fixture
-- [ ] 11.1 test-local fixture 準備と実フォント目視確認
+- [x] 11.1 test-local fixture 準備と実フォント目視確認
   - _Depends: 9.3_
   - 9.3 で用意済みの cursor.\* 指定 descript を再利用し、cursor.\* 未指定 descript（新規）＋短い2〜4項目メニュー台本を追加する。pixel 檻テストに加えて実フォント出力の目視確認を行う
   - Observable: test-local fixture がテストツリー配下に存在し、実フォント出力の目視確認記録が pixel 檻テストに伴っている
@@ -245,3 +245,4 @@
 - **9.1 が潜在バグ検出→修正**: `\_l` 横字下げがヒット幾何には効くが描画に落ちていた（3.3 違反）。`finish_line` が `LineRect` の inline-near edge を `inline_start`（カーソル未反映）から取っていたのが原因。修正=near edge を最初の配置グリフの `inline_pos` から導出（`glyphs.first().map_or(inline_start,|g|g.inline_pos)`）。非カーソル行は first glyph inline_pos==inline_start ゆえ byte 同一・全 mode 対称。単体テストの盲点を readback 檻が発見した実例。
 - 9.5 検証（コード変更なし）: 既存 byte 等価 golden・typewriter・scroll・viewbox 全緑（lib 361+integration 23・0 failed）。additive-ness 構造確認=dola cue command.rs は main と byte 同一（Choice/Cursor は既存 variant・新 cue 新設なし）・integration tests/ 無改変・task3 の choice_resident_renders_pixel_identical_to_glyph_run が非退行証明。
 - task 10 hover_inject.rs: `AREKA_CHOICE_HOVER_INJECT`（unset/空/不正=完全 no-op・cycle=700ms・cycle:<ms>）。`cycle_ordinal(t,period,count)=floor(t/period)%(count+1)`（slot0=None・純関数・sleep 不使用）。frame.rs `run_text_phase` の present_frame 後に `hover_inject::drive(&mut runtime, talk_time)`。公開 API のみ消費（emo-text 無改変・8.6）。NTFS mtime で cargo が新規モジュールを再コンパイルしない罠あり→PowerShell で mtime 強制。
+- task 11.1: test-local fixture = crates/areka-emo-text/tests/fixtures/emo2-choice/{descript-cursor.txt(SquareFill 105,25,25/白), descript-plain.txt(Invert), menu.txt(4項目)}。実 balloon parser で parse→resolve 検証＋実フォント Yu Gothic UI で menu+hover レンダリング→PNG dump。**目視確認記録**: 親コントローラが target/tmp/choice_menu_hover_realfont.png を AI vision で確認、はい=maroon 文字幅 SquareFill+白文字、他3項=素黒、実フォント盲点回避 PASS（7.6）。

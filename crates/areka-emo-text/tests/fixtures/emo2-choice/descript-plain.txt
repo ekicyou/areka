@@ -1,0 +1,24 @@
+charset,UTF-8
+// emo2-choice fixture（task 11.1・R7.6）: cursor.* 未指定バルーン descript
+//
+// cursor.* を 1 キーも持たない未指定バルーン。choice ハイライトは矩形反転縮退
+// （Invert・M1 実導出——塗り=バルーン既定 font.color・hover 文字=各成分 255−c）へ解決される。
+// descript-cursor.txt と同一幾何・同一実フォントで、差は「cursor.* の有無」だけに絞る
+// （指定→SquareFill／未指定→Invert の分岐を fixture の対で観測可能にする）。
+//
+// 実フォント指定（既定 ＭＳ ゴシック盲点の回避）。
+font.name,Yu Gothic UI
+font.height,20
+font.color.r,0
+font.color.g,0
+font.color.b,0
+
+// バルーン幾何（descript-cursor.txt と同値）。
+origin.x,0
+origin.y,0
+validrect.top,5
+validrect.left,5
+validrect.right,-5
+validrect.bottom,-5
+
+// cursor.* キーは意図的に一切書かない（未指定＝Invert 縮退の観測台）。
