@@ -24,7 +24,7 @@
 //! | `OnSecondChange` | GET（talk 再生可能時）／NOTIFY（talk 再生不能時） | Ref0=`now_ms / 3_600_000` の 10 進文字列・Ref1=`"0"`・Ref2=`"0"`・Ref3=`"1"`(GET)/`"0"`(NOTIFY) |
 //! | `OnClose` | GET | Ref0=`reason.as_ref_str()`（"user"/"system"・Ref1/2 省略） |
 
-use crate::msg::{CloseReason, KanadeConfig, MonotonicMs, ShioriCall};
+use crate::msg::{CloseReason, KanadeConfig, MonotonicMs, MouseButton, ShioriCall};
 use crate::status::{ExecutionSnapshot, ExecutionStatus};
 
 /// `OnSecondChange` Ref0 の除数（ミリ秒→時。正典: OS 連続起動時間 hour）。
@@ -36,6 +36,17 @@ const REF1_OFFSCREEN_M1: &str = "0";
 /// Ref2（重なり）の M1 固定値。
 // SEAM(Req1.6): 実測供給時は ExecutionSnapshot の geometry から導出する。
 const REF2_OVERLAP_M1: &str = "0";
+
+/// OnMouseMove Ref2（ホイール回転量）の M1 固定値＝increment シーム（Req2.4）。
+///
+/// M1 はホイールイベントを送出しないため常に "0" で構成する。実ホイール量の供給が
+/// 実装されたら、この定数の載せ替え（呼び手が実値を渡す形へ）で拡張する。
+pub(crate) const REF2_WHEEL_M1: &str = "0";
+/// マウス系イベント Ref6（入力デバイス種）の M1 固定値（DD-IE-6）。
+///
+/// M1 は物理マウスのみを対象とするため常に "mouse"。touch/pen/eraser の区別は
+/// M2 のシーム（呼び手がデバイス種を渡す形へ）として残す。
+pub(crate) const REF6_DEVICE_MOUSE: &str = "mouse";
 
 /// 送出し得るイベント ID の確定ホワイトリスト（Req3.1）。
 /// `OnTalk`／`OnHour` は emo2 が OnSecondChange 内部で自発生成するため**恒久的に含めない**（Req3.2）。
@@ -52,6 +63,8 @@ pub const ALLOWED_EVENT_IDS: &[&str] = &[
     "basewareversion",
     "OnSecondChange",
     "OnClose",
+    "OnMouseMove",
+    "OnMouseDoubleClick",
 ];
 
 /// `id` が送出許可集合（[`ALLOWED_EVENT_IDS`]）に属するかを判定する（Req3.1）。
@@ -169,6 +182,82 @@ pub fn on_close_notify(reason: CloseReason, snapshot: &ExecutionSnapshot) -> Shi
     ShioriCall::Notify {
         id: "OnClose",
         references: vec![reason.as_ref_str().to_string()],
+        status: ExecutionStatus::derive(snapshot),
+    }
+}
+
+/// `OnMouseMove`（GET・Ref0..6 正典 layout）。
+///
+/// 撫で入力を SSP/NINIX 準拠の正典 Reference layout で組み立てる純粋関数（副作用なし）。
+/// Reference 数は常に 7。
+///
+/// - Ref0=`x`（ローカル x 座標・窓 client 物理 px）。
+/// - Ref1=`y`（ローカル y 座標・同上）。
+/// - Ref2=[`REF2_WHEEL_M1`]（ホイール回転量・M1 固定 "0"・Req2.4）。
+/// - Ref3=`scope`（対象スコープ・本体 0／相方 1）。
+/// - Ref4=`region`（当たり判定の識別子・不透明転写・`None`→空文字・Req2.3/DD-IE-6）。
+/// - Ref5=`"0"`（移動はボタン押下を伴わないため常に "0"・Req2.5）。
+/// - Ref6=[`REF6_DEVICE_MOUSE`]（入力デバイス種・M1 固定 "mouse"・DD-IE-6）。
+///
+/// `region` は collision resolver 由来の領域名を意味解釈せず不透明転写する（kanade は
+/// 当たり判定名を解釈しない・[[areka-surface-args-opaque-string-downstream-resolve]] と同精神）。
+pub fn on_mouse_move(
+    x: i64,
+    y: i64,
+    scope: u32,
+    region: Option<&str>,
+    snapshot: &ExecutionSnapshot,
+) -> ShioriCall {
+    ShioriCall::Get {
+        id: "OnMouseMove",
+        references: vec![
+            x.to_string(),
+            y.to_string(),
+            REF2_WHEEL_M1.to_string(),
+            scope.to_string(),
+            region.unwrap_or("").to_string(),
+            "0".to_string(),
+            REF6_DEVICE_MOUSE.to_string(),
+        ],
+        status: ExecutionStatus::derive(snapshot),
+    }
+}
+
+/// `OnMouseDoubleClick`（GET・Ref0..6 正典 layout）。
+///
+/// ダブルクリック入力を SSP/NINIX 準拠の正典 Reference layout で組み立てる純粋関数
+/// （副作用なし）。Reference 数は常に 7。[`on_mouse_move`] と同一の Reference 構造で、
+/// Ref2 が常に "0"・Ref5 がボタン識別（左 "0"／右 "1"・Req3.3）である点のみ異なる。
+///
+/// - Ref0=`x`／Ref1=`y`（座標・窓 client 物理 px）。
+/// - Ref2=`"0"`（正典で常に "0"・Req3.2）。
+/// - Ref3=`scope`（対象スコープ・本体 0／相方 1）。
+/// - Ref4=`region`（当たり判定の識別子・不透明転写・`None`→空文字・Req3.4/DD-IE-6）。
+/// - Ref5=`button`（左 [`MouseButton::Left`]→"0"／右 [`MouseButton::Right`]→"1"・Req3.3）。
+/// - Ref6=[`REF6_DEVICE_MOUSE`]（入力デバイス種・M1 固定 "mouse"・DD-IE-6）。
+pub fn on_mouse_double_click(
+    x: i64,
+    y: i64,
+    scope: u32,
+    region: Option<&str>,
+    button: MouseButton,
+    snapshot: &ExecutionSnapshot,
+) -> ShioriCall {
+    let button_ref5 = match button {
+        MouseButton::Left => "0",
+        MouseButton::Right => "1",
+    };
+    ShioriCall::Get {
+        id: "OnMouseDoubleClick",
+        references: vec![
+            x.to_string(),
+            y.to_string(),
+            "0".to_string(),
+            scope.to_string(),
+            region.unwrap_or("").to_string(),
+            button_ref5.to_string(),
+            REF6_DEVICE_MOUSE.to_string(),
+        ],
         status: ExecutionStatus::derive(snapshot),
     }
 }
@@ -323,9 +412,11 @@ mod tests {
         assert_eq!(references, vec!["system".to_string()]);
     }
 
-    /// 許可 ID 檻（Req3.1/3.2・DD-IT-8）: 表が期待6集合と完全一致し `OnTalk`/`OnHour` を含まない。
+    /// 許可 ID 檻（Req3.1/3.2/7.1・DD-IT-8・DD-IE-11）: 表が期待8集合と完全一致し
+    /// `OnTalk`/`OnHour` を含まない。マウス系2種（OnMouseMove/OnMouseDoubleClick）は
+    /// Task 2.1 で additive 追加された（whitelist が意図的に6→8へ増えたための更新）。
     #[test]
-    fn allowed_event_ids_are_exactly_the_six_and_exclude_ontalk_onhour() {
+    fn allowed_event_ids_are_exactly_the_eight_and_exclude_ontalk_onhour() {
         assert_eq!(
             ALLOWED_EVENT_IDS,
             &[
@@ -335,7 +426,14 @@ mod tests {
                 "basewareversion",
                 "OnSecondChange",
                 "OnClose",
+                "OnMouseMove",
+                "OnMouseDoubleClick",
             ]
+        );
+        assert!(is_allowed_event_id("OnMouseMove"), "OnMouseMove は許可集合に属する（Req7.1）");
+        assert!(
+            is_allowed_event_id("OnMouseDoubleClick"),
+            "OnMouseDoubleClick は許可集合に属する（Req7.1）"
         );
         assert!(!is_allowed_event_id("OnTalk"), "OnTalk は恒久的に許可しない（Req3.2）");
         assert!(!is_allowed_event_id("OnHour"), "OnHour は恒久的に許可しない（Req3.2）");
@@ -343,6 +441,96 @@ mod tests {
         for id in ALLOWED_EVENT_IDS {
             assert!(is_allowed_event_id(id), "{id} は表にあるのに許可されない");
         }
+    }
+
+    /// OnMouseMove 正典 layout（Req2.1/2.2/2.5・DD-IE-6）: References が期待7並びと完全一致。
+    #[test]
+    fn on_mouse_move_builds_canonical_seven_reference_layout() {
+        let call = on_mouse_move(10, 20, 0, Some("Head"), &ExecutionSnapshot::INACTIVE);
+        assert_eq!(
+            call_status(&call),
+            None,
+            "INACTIVE スナップショットは Status ヘッダを出さない"
+        );
+        let (id, references) = expect_get(call);
+        assert_eq!(id, "OnMouseMove");
+        assert_eq!(
+            references,
+            vec![
+                "10".to_string(),   // Ref0=x
+                "20".to_string(),   // Ref1=y
+                "0".to_string(),    // Ref2=wheel（M1 固定・Req2.4）
+                "0".to_string(),    // Ref3=scope（本体0）
+                "Head".to_string(), // Ref4=region（不透明転写）
+                "0".to_string(),    // Ref5=移動は常に "0"（Req2.5）
+                "mouse".to_string(),// Ref6=デバイス種（DD-IE-6）
+            ]
+        );
+        assert_eq!(references.len(), 7, "Reference 数は常に 7");
+    }
+
+    /// Ref4 の None→空文字転写（Req2.3・DD-IE-6）: 位置は保持され Vec 長は 7 のまま。
+    #[test]
+    fn on_mouse_move_region_none_transcribes_to_empty_ref4() {
+        let (_, references) = expect_get(on_mouse_move(1, 2, 1, None, &ExecutionSnapshot::INACTIVE));
+        assert_eq!(references[4], "", "None は空文字へ転写（省略ではない）");
+        assert_eq!(references[3], "1", "Ref3=scope 相方は 1");
+        assert_eq!(references.len(), 7, "None でも Reference 数は 7 のまま");
+    }
+
+    /// OnMouseDoubleClick 正典 layout・左ボタン（Req3.1/3.2/3.3）: Ref5="0"・Ref2="0"・Ref6="mouse"。
+    #[test]
+    fn on_mouse_double_click_left_builds_ref5_zero() {
+        let call = on_mouse_double_click(
+            10,
+            20,
+            0,
+            Some("Bust"),
+            MouseButton::Left,
+            &ExecutionSnapshot::INACTIVE,
+        );
+        let (id, references) = expect_get(call);
+        assert_eq!(id, "OnMouseDoubleClick");
+        assert_eq!(
+            references,
+            vec![
+                "10".to_string(),
+                "20".to_string(),
+                "0".to_string(), // Ref2=常に "0"（Req3.2）
+                "0".to_string(),
+                "Bust".to_string(),
+                "0".to_string(), // Ref5=左 "0"（Req3.3）
+                "mouse".to_string(),
+            ]
+        );
+    }
+
+    /// OnMouseDoubleClick 右ボタン（Req3.3）: Ref5="1"。
+    #[test]
+    fn on_mouse_double_click_right_builds_ref5_one() {
+        let (_, references) = expect_get(on_mouse_double_click(
+            -5,
+            0,
+            1,
+            None,
+            MouseButton::Right,
+            &ExecutionSnapshot::INACTIVE,
+        ));
+        assert_eq!(references[5], "1", "右ボタンは Ref5 \"1\"（Req3.3）");
+        assert_eq!(references[2], "0", "Ref2 は常に \"0\"（Req3.2）");
+        assert_eq!(references[4], "", "Ref4 None→空文字（Req3.4）");
+        assert_eq!(references[6], "mouse", "Ref6=デバイス種");
+        assert_eq!(references.len(), 7);
+    }
+
+    /// talk_active=true では両構築子が `Status: talking` を snapshot から導出する（DD-IT-3）。
+    #[test]
+    fn mouse_constructors_carry_talking_status_when_active() {
+        let active = ExecutionSnapshot { talk_active: true };
+        let mv = on_mouse_move(0, 0, 0, Some("Head"), &active);
+        assert_eq!(call_status(&mv), Some("talking".to_string()));
+        let dbl = on_mouse_double_click(0, 0, 0, None, MouseButton::Left, &active);
+        assert_eq!(call_status(&dbl), Some("talking".to_string()));
     }
 
     /// 全構築関数の返す `id` が許可集合の要素であること（Service Interface Postcondition）。
@@ -359,6 +547,8 @@ mod tests {
             on_second_change(MonotonicMs(0), &ExecutionSnapshot { talk_active: true }),
             on_close(CloseReason::User, &snap),
             on_close_notify(CloseReason::System, &snap),
+            on_mouse_move(0, 0, 0, Some("Head"), &snap),
+            on_mouse_double_click(0, 0, 0, None, MouseButton::Left, &snap),
         ];
         for call in &calls {
             let id = call_id(call);

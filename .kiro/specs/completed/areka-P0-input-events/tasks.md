@@ -1,0 +1,130 @@
+# Implementation Plan
+
+- [x] 1. マウス入力メッセージ型を追加し、kanade の受信経路とフェーズ横断ルーティングまで一貫して配線する
+  - マウス移動/ダブルクリックの種別・座標・対象スコープ・当たり判定名・ボタン識別を保持する境界メッセージ型を追加する
+  - kanade メッセージ種別へ新種別を追加し、既存の受信経路がこの新種別を漏れなく内部入力へ写像できるようにする
+  - Steady フェーズでのみマウス入力を受理し、他フェーズ（boot／close／terminate 後）では状態を変えず安全に無視する横断ルーティングを追加する（実際のイベント発行は後続タスクで実装する差し込み口として用意する）
+  - close 保留中はマウス入力を受理しても SHIORI への問い合わせを発行しない防御を追加する
+  - SHIORI 応答がどのイベント由来か後続処理が識別できるよう、応答の内部表現へ出所情報を追加し、既存の応答処理をこの新しい形へ追従させる
+  - Observable: 新メッセージ種別を注入してもクレート全体のビルドと既存テストがグリーンのまま、非 Steady フェーズでは状態が変化せず SHIORI への問い合わせも発行されないことを確認できる
+  - _Requirements: 1.1, 1.2, 4.4_
+
+- [x] 2. Core: 正典イベント発行と UI 配線基盤
+- [x] 2.1 OnMouseMove/OnMouseDoubleClick の正典 Reference 組立と送出許可リストへの追加
+  - 座標・ホイール量・対象スコープ・当たり判定識別子・ボタン識別・入力デバイス種を正典レイアウトで組み立てる構築処理を追加する
+  - 当たり判定が無い場合の識別子表現、左右ボタンの識別値を正しく構成する
+  - 送出許可イベント一覧にマウス系 2 種を追加する
+  - Observable: 構築処理の出力が期待される Reference 並びと完全一致することをユニットテストで確認できる
+  - _Requirements: 2.1, 2.2, 2.3, 2.4, 2.5, 3.1, 3.2, 3.3, 3.4, 7.1, 7.2_
+  - _Depends: 1_
+
+- [x] 2.2 Steady フェーズ到達時の GET 発行を実装する
+  - タスク 1 で用意した差し込み口を実装で満たし、Steady フェーズでマウス入力受領時に正典イベント構築処理を呼び GET を発行する
+  - close 保留中は GET を発行しない防御が実際に効くことを組み込む
+  - Observable: マウス入力メッセージ注入から GET 発行までが単一 pass/fail のテストで再現できる
+  - _Requirements: 1.4, 2.1, 3.1_
+  - _Depends: 1, 2.1_
+
+- [x] 2.3 マウス GET 応答の出所別 talk 起動政策を実装する
+  - 応答出所を actor 層から転記する経路を実装する
+  - talk 非再生中に Value を受けた場合は一意な talk_id で talk 起動要求を送出する
+  - talk 再生中にマウス由来の Value を受けた場合は既存の単一 slot 調停に従って置換する
+  - talk 再生中にマウス以外の出所から Value を受けた場合は既存の防御破棄を保存する（意味の縮小を明文化し、出所の一致判定を緩めない）
+  - 204 応答時は talk 起動要求を送出しない
+  - Observable: 応答出所ごとに異なる政策（置換／防御破棄）が単一テストで再現できる
+  - _Requirements: 4.1, 4.2, 4.3, 4.4_
+  - _Depends: 2.2_
+
+- [x] 2.4 (P) OnMouseMove の送出間引き判定を実装する
+  - 位置変化・当たり判定変化・経過時間から送出可否を純粋関数で判定する処理を追加する
+  - スコープごとに独立した間引き状態を保持する
+  - Observable: 位置不変時は送出抑制・当たり判定変化時は即時送出・間隔経過後は送出、の各分岐が注入テストで再現できる
+  - _Requirements: 5.1, 5.2, 5.3_
+  - _Boundary: MouseMoveThrottle_
+
+- [x] 2.5 (P) 当たり判定 resolver への読み口を UI 配線層へ公開する
+  - 表示結線から当たり判定 resolver 呼び出しに必要な読み取り専用アクセスを追加する
+  - Observable: UI 配線層から当たり判定 resolver を呼び出せることを確認できる
+  - _Requirements: 1.3_
+  - _Boundary: Emo2Wiring_
+
+- [x] 2.6 マウス入力配信資源と mock 差し替えシームを追加する
+  - kanade への送信端・スコープ別間引き状態・当たり判定解決先（実／mock）・注入可能な時刻源をまとめた UI スレッド資源を追加する
+  - 実運用は当たり判定 resolver 消費、決定論檻は固定写像で差し替え可能にする
+  - Observable: mock 差し替えを使って配信資源単体からマウス入力メッセージを送出し受信側で観測できる
+  - _Requirements: 1.4, 1.5_
+  - _Boundary: MouseWiring_
+  - _Depends: 2.4_
+
+- [x] 2.7 マウス移動・ダブルクリックのポインタハンドラを実装する
+  - 移動イベントで当たり判定を解決し間引き判定を経て条件成立時のみマウス入力を送出する
+  - 左右ダブルクリックで当たり判定を解決しマウス入力を送出する（単発クリック・中／拡張ボタンのダブルクリックは送出しない）
+  - 修飾キー付き左ダブルクリックは既存の正規終了経路へ委ねる暫定退避として扱う
+  - The Hand・collisionex・owner-draw 右クリックメニューに相当する処理は追加しない
+  - Observable: 合成入力でハンドラを直接呼び出し、期待どおりの送出／非送出をテストで確認できる
+  - _Requirements: 1.1, 1.2, 1.3, 6.2, 6.3, 7.3, 7.4_
+  - _Depends: 2.4, 2.5, 2.6_
+
+- [x] 3. Integration: 結線と stand-in 即終了の退役
+- [x] 3.1 起動シーケンスへマウス配信資源の結線を追加する
+  - 表示結線の成功後にマウス配信資源を World へ組み込む
+  - Observable: 起動シーケンス完走後に World 内へマウス配信資源が挿入されていることを確認できる（窓へのハンドラ登録は次タスクで行う）
+  - _Requirements: 1.4_
+  - _Depends: 2.6_
+
+- [x] 3.2 stand-in ダブルクリック即終了を退役し正規ハンドラへ差し替える
+  - キャラ窓の従来の即終了処理を削除し新しいポインタハンドラを登録する
+  - バルーン窓のマウスハンドラ登録を撤去する
+  - Observable: ダブルクリックで従来の全窓即終了が発生せず新経路が呼ばれることを確認できる
+  - _Requirements: 6.1_
+  - _Depends: 2.7, 3.1_
+
+- [x] 4. Validation: 決定論檻と実機受け入れ
+- [x] 4.1 決定論観測ハーネスへマウス応答の差し替えを追加する
+  - mock SHIORI 応答にマウスイベント向けスクリプト応答／無応答パターンを追加する
+  - Observable: 既存ハーネスの型でマウス GET へ任意の応答を注入できる
+  - _Requirements: 8.1, 8.2_
+
+- [x] 4.2 マウスイベント発行の単一 pass/fail 檻を追加する
+  - 移動イベントの Reference 組立が期待どおりであることを検証する
+  - 当たり判定なしの場合の識別子表現を検証する
+  - 左右ダブルクリックのボタン識別を検証する
+  - 無応答時に talk 起動要求が発行されないことを検証する
+  - 非 Steady フェーズでの入力無視、close 保留中の GET 抑止を検証する
+  - Observable: 上記すべてが sleep 非依存の単一 pass/fail テストとして緑になる
+  - _Requirements: 8.1, 8.2_
+  - _Depends: 4.1, 1, 2.1, 2.2_
+
+- [x] 4.3 マウス応答による talk 起動と置換の統合檻を追加する
+  - 応答受領による talk 起動を検証する
+  - talk 再生中のマウス由来置換を検証する
+  - talk 再生中の他出所防御破棄が保存されていることを対で検証する（置換檻と防御破棄檻を同一テスト群に配置し、出所の一致判定を緩めない）
+  - talk_id の単調性を検証する
+  - Observable: 置換檻と防御破棄檻が同一テスト群で対に緑になる
+  - _Requirements: 4.1, 4.2, 4.3, 8.1, 8.2_
+  - _Depends: 4.1, 2.3_
+
+- [x] 4.4 UI 配線層の決定論檻を追加する
+  - 送出間引きの全分岐を検証する
+  - 配線資源から観測側までの一連の送出を検証する
+  - 中／拡張ボタンダブルクリック・単発クリックが送出されないことを検証する
+  - 暫定退避操作でのみ全窓終了が起きることを検証する
+  - Observable: 上記すべてが GPU・実窓不要の単一 pass/fail テストとして緑になる
+  - _Requirements: 1.5, 5.1, 5.2, 5.3, 7.1, 7.3, 7.4, 8.1, 8.2_
+  - _Depends: 2.4, 2.6, 2.7, 3.2_
+
+- [x] 4.5 実機での撫で・メニュー・退避の人間サインオフを実施する
+  - 実当たり判定 resolver・実 DPI（96 以外）で起動し、撫ででの反応・ダブルクリックでのメニュー応答・暫定退避操作での終了を確認する
+  - talk 再生中の撫でで実ゴーストが自衛し置換が発生しないことをログで確認する
+  - 応答遅延時のマウス GET 滞留兆候（送出時刻と応答時刻の差）を観測する
+  - Observable: 上記すべてが実機ログと目視で確認され、記録に残る
+  - _Requirements: 8.3_
+  - _Depends: 3.1, 3.2_
+
+## Implementation Notes
+
+- 3.2: stand-in `on_ghost_pressed` 退役に伴い、example の doc コメント（`crates/areka/examples/window-placement.rs:35`・`collision-probe.rs:322`）が「ダブルクリックで全窓終了」と旧挙動を記述したまま陳腐化（コメントのみ・コンパイル非参照・境界外ゆえ未修正）。実挙動は Ctrl+左ダブルクリックが暫定退避。
+- 4.5: 実機サインオフ完了（2026-07-23・開発者承認）。実 emo2 pasta ゴースト（dic 込みフルゴースト・i686 helper 隣接）＋実 DPI（物理座標 >1920＝高 DPI/マルチモニタ）で `RUST_LOG=info,areka_kanade=trace,areka::input_events=trace` 起動。実機ログ証拠: ①撫で→反応 talk（`steady_talk` origin=OnMouseMove talk_id=7,11,12）②左ダブルクリック→メニュー応答 ③Ctrl+左ダブルクリック→全窓 despawn→window-close funnel→**exit 0**（クリーン終了） ④再生中の撫で→`steady_talk_replace` talk_id=9 が talk_id=8 を置換＋dispatcher `stale TalkDone discarded talk_id=8`（DD-IE-2 単一 slot 置換を実機実証） ⑤連続撫でで talk 連発せず（単一 slot 置換＋10Hz 間引き＋pasta talking 自衛で積み上がらない・talk_id は 1→16 単調・重複なし）。注記: 挨拶 talk 中の `steady_unexpected_reply` WARN 連発は本 spec 由来でなく元 kanade spec（commit 2f867cdd）の既存防御アーム＝境界外。
+- 4.3: kanade 統合ハーネスは「再生中に非マウス origin の `Value`」を投入する経路を構造的に持たない（active talk 中の `OnSecondChange` pump は NOTIFY・Value 非搬送＝DD-6）。ゆえに置換檻（マウス origin→置換）と DD-6 保存檻（非マウス origin→破棄）の「対」は、統合層で置換＋構造的前提（非マウス pump=NOTIFY）を co-locate し、リテラルな DD-6 破棄分岐は task 2.3 のユニット檻（`steady_some_non_mouse_value_is_discarded_dd6`）が担う二層構成で成立。origin 判定の非 wildcard 性はユニット檻が固定。
+- 4.3: 壁時計なし有界リトライループ（`for _ in 1..=500 { drive; yield_now }`）は並行フルスイート負荷下で async reply スレッドが飢餓し空回り→非決定 flake になる（[[areka-defender-rescan-starves-cooperative-test-loops]] と同型）。修正＝`spawn_harness_gated` の park-count バリア（`expected_holds`/`hold_indices`）＋`join_bounded`。**注意**: `steady_test.rs:781` が同じ 500-bound idiom を使っており潜在 flake の疑い（本 spec 境界外・別途要観測）。
+- 最終検証 regression: task 3.2 が `placement/spawn.rs`（非テストコード）に `use crate::input_events::...` を足したが、examples（`window-placement.rs`/`collision-probe.rs`）は `placement/mod.rs` を `#[path]` private include し「placement 非テストは `crate::` パスを持たない」不変条件に依拠する（win-placement.rs:17-20・collision-probe.rs:136）ため `cargo test -p areka`（examples ビルド）が E0432 で破綻。**各タスクレビュアーが `cargo build -p areka` / `cargo test -p areka --bins`（バイナリのみ＝main.rs 経由で解決）を使い examples を一度もビルドしなかったため見逃した**。修正＝依存性逆転（設計の依存方向 `input_events→placement` に準拠）: spawn.rs からハンドラ付与を撤去し `input_events::attach_char_pointer_handlers(world)` を新設（CharWindowMarker 照会＋付与）・main.rs が spawn 直後の同一 World クロージャで呼ぶ。**教訓: areka で placement 等 example が `#[path]` include するモジュールを触る変更は必ず `cargo test -p areka`（`--bins` 無し＝examples 込み）で検証せよ**。

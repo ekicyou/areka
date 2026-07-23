@@ -67,6 +67,7 @@ pub fn spawn_kanade(
                 KanadeMsg::CloseRequest { reason } => Input::CloseRequest { reason },
                 KanadeMsg::ForceQuit { reason } => Input::ForceQuit { reason },
                 KanadeMsg::ShioriDown { reason } => Input::ShioriDown { reason },
+                KanadeMsg::Mouse(m) => Input::Mouse(m),
             };
             match drive(&mut state, input, &config, &shiori, &sakura) {
                 Drive::Continue => Ok(ControlFlow::Continue(())),
@@ -94,7 +95,10 @@ fn drive(
     // 初回 step。以降は state を差し替えつつ actions を回す。
     let (mut st, mut actions) = step(std::mem::replace(state, State::initial()), input, config);
     loop {
-        let mut last_reply: Option<ShioriOutcome> = None;
+        // 直前の往復応答と、その応答が由来する呼出イベント ID（origin・DD-IE-3）を控える。
+        // reinject する `Input::ShioriReply` へ origin を転記し、後続処理が応答の出所を識別できる
+        // ようにする（マウス GET の origin 別 reply 政策はタスク 2.2）。
+        let mut last_reply: Option<(ShioriOutcome, &'static str)> = None;
         let mut stop = false;
         for action in actions {
             match action {
@@ -109,10 +113,16 @@ fn drive(
                     }
                 }
                 Action::ShioriRequest(call) => {
-                    last_reply = Some(round_trip_request(shiori, call));
+                    // 送出前に call のイベント ID を控える（round_trip_request が call を消費するため）。
+                    let origin = match &call {
+                        ShioriCall::Get { id, .. } | ShioriCall::Notify { id, .. } => *id,
+                    };
+                    last_reply = Some((round_trip_request(shiori, call), origin));
                 }
                 Action::ShioriUnload => {
-                    last_reply = Some(round_trip_unload(shiori));
+                    // unload には出所イベントが無いため "Unload" を転記する（Unloading 応答は
+                    // origin を参照しないが、契約上必ず値を持たせる）。
+                    last_reply = Some((round_trip_unload(shiori), "Unload"));
                 }
                 Action::StopSelf => {
                     // 終了系列完了: shiori へ Close を送り自身も停止する。
@@ -127,9 +137,9 @@ fn drive(
             return Drive::Stop;
         }
         match last_reply {
-            // 往復応答を再投入して次の遷移を得る（Actions が尽きるまで反復）。
-            Some(outcome) => {
-                let (s, a) = step(st, Input::ShioriReply { outcome }, config);
+            // 往復応答を再投入して次の遷移を得る（Actions が尽きるまで反復）。origin を転記する。
+            Some((outcome, origin)) => {
+                let (s, a) = step(st, Input::ShioriReply { outcome, origin }, config);
                 st = s;
                 actions = a;
             }
@@ -427,6 +437,48 @@ mod tests {
                     .join()
                     .expect("kanade continues past StartTalk failure, then stops on Close");
             },
+        );
+        drop(shiori_handle);
+    }
+
+    // --- 3c. Mouse 写像（Task 1）: KanadeMsg::Mouse → Input::Mouse・非 Steady（Idle）では ---
+    //         SHIORI 問い合わせを一切発行せず、その後 Close で正常停止する（DD-IE-8）。
+
+    #[test]
+    fn mouse_msg_maps_to_input_and_is_ignored_in_idle_phase() {
+        use crate::msg::{MouseButton, MouseEventKind, MouseInput};
+
+        let (shiori_tx, rec_rx, shiori_handle) = spawn_mock_shiori(benign);
+        let (sakura_tx, _sakura_rx) = mpsc::channel::<StartTalk>();
+
+        let (kanade_tx, kanade_handle) = spawn_kanade(config(), shiori_tx, sakura_tx);
+
+        // 起動前（Idle）にマウス入力を注入 → KanadeMsg::Mouse→Input::Mouse 写像→非 Steady 無視。
+        kanade_tx
+            .send(KanadeMsg::Mouse(MouseInput {
+                scope: 0,
+                x: 5,
+                y: 7,
+                region: Some("head".to_string()),
+                kind: MouseEventKind::DoubleClick {
+                    button: MouseButton::Left,
+                },
+            }))
+            .expect("send Mouse");
+        // 停止させて有界に join する。
+        kanade_tx.send(KanadeMsg::Close).expect("send Close");
+        drop(kanade_tx);
+
+        run_bounded("kanade join after Mouse+Close", Duration::from_secs(5), move || {
+            kanade_handle
+                .join()
+                .expect("kanade stops cleanly after Mouse in Idle");
+        });
+
+        // Idle でのマウスは SHIORI へ何も届けない（Close も StopSelf 経路を通らないため未受領）。
+        assert!(
+            rec_rx.try_recv().is_err(),
+            "Idle でのマウス入力は SHIORI へ問い合わせを発行しない（DD-IE-8）"
         );
         drop(shiori_handle);
     }

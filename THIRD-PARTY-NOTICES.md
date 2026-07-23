@@ -1747,7 +1747,7 @@ DEALINGS IN THE SOFTWARE.
 ## MIT License
 
 対象 crate:
-- cfg_aliases 0.2.2
+- cfg_aliases 0.2.1
 
 ```
 MIT License
@@ -2090,7 +2090,7 @@ SOFTWARE.
 - pin-project 1.1.13
 - polling 3.11.0
 - portable-atomic-util 0.2.7
-- portable-atomic 1.14.0
+- portable-atomic 1.13.1
 - proc-macro2 1.0.106
 - quote 1.0.46
 - rustix 1.1.4

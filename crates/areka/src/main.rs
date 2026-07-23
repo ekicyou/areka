@@ -62,6 +62,12 @@ mod placement;
 /// `wire_emo2_boot`）。
 mod emo2_boot;
 
+/// UI→kanade のマウス入力配信配線（areka-P0-input-events）。キャラ窓のポインタイベントを
+/// 捉え、当たり判定名を resolver で解決し、送出間引き（`throttle`）を通して kanade へ配信する
+/// 薄い配線層。現状は `throttle`（送出間引きの純粋判定・task 2.4）のみ。ポインタハンドラ結線と
+/// per-scope 状態保持（`MouseWiring`）は task 2.6／2.7 で増設される。
+mod input_events;
+
 /// 遅延応答と push 経路の end-to-end 結合テスト。
 /// モック脳が `SHIORI_S_PENDING`＋token を返し、後で保持 host へ safe `complete`/`raise` を発火する
 /// 一連の流れを `ShioriSession` 越しに 1 シナリオで通す（sink/session の単体テストと重複させない）。
@@ -283,6 +289,14 @@ fn main() -> Result<()> {
     let outcome = emo2_boot::wire_emo2_boot(&app, &cfg.ghost_root, &cfg.balloon_root, &helper_exe);
     let (ghost_runtime, seriko_handle) = if outcome.wired {
         tracing::info!("実 sink 結線で起動しました（emo2-boot wire 成立）");
+        // マウス配信資源を World へ結線（task 3.1・design「main.rs＋wire_mouse_input」・
+        // DD-IE-9）: kanade Sender クローンで MouseWiring（NonSend・Presenter）を挿入する。
+        // 挿入は wire_emo2_boot 成功後＝Emo2Wiring 挿入済みゆえ presenter 経由の region 解決が
+        // 成立する（Emo2Wiring 挿入と同位置・同型・self-gating）。窓へのハンドラ登録は task 3.2。
+        if let Some(runtime) = outcome.ghost.as_ref() {
+            let sender = runtime.kanade().clone();
+            input_events::wire_mouse_input(app.world().borrow_mut().world_mut(), sender);
+        }
         (outcome.ghost, outcome.seriko)
     } else {
         // フォールバック（R7.3・DD-7）: 現行の `LogSink`×2 boot を UI 基盤・起動窓の後へ
@@ -509,6 +523,12 @@ fn open_startup_window(app: &WinApp, cfg: &ConfigInputs) {
                         &prepared.placements,
                         &prepared.titles,
                     );
+                    // マウス入力ハンドラ装着（areka-P0-input-events・依存方向 input_events→
+                    // placement）: placement は `crate::` パスを持てない（example の `#[path]`
+                    // include で成立させるため）ゆえ、キャラ窓へのポインタハンドラ結線は
+                    // input_events 側が担う。spawn 直後の同一 World-mutation クロージャ内で
+                    // 同期実行するため、キャラ窓は既に存在し async race はない。
+                    input_events::attach_char_pointer_handlers(world);
                     let scopes: Vec<usize> = windows.scopes().collect();
                     tracing::info!(
                         ?scopes,

@@ -67,8 +67,8 @@ use areka_kanade::{
 
 use super::common::{
     BlockOn, CallMethod, DEFAULT_TIMEOUT, FIXED_FAREWELL_SCRIPT, FIXED_STEADY_SCRIPT, Fixture,
-    Harness, QuitPolicy, RecordedCall, expected_call, expected_unload, join_bounded, spawn_harness,
-    spawn_harness_blocking, spawn_harness_gated,
+    Harness, QuitPolicy, RecordedCall, drive_ticks_until_disconnect, expected_call, expected_unload,
+    join_bounded, spawn_harness, spawn_harness_blocking, spawn_harness_gated,
 };
 
 /// 駆動結果: 確定した shiori 記録列と、宛先へ到達した StartTalk 列。
@@ -761,7 +761,7 @@ fn spontaneous_talk_egress_sweep_only_allowed_ids_no_ontalk_onhour() {
 /// からの GET 再開は統合層で未観測ゆえ、本 cage が additive に埋める（純粋状態機械では
 /// `steady.rs::steady_talk_done_ended_resumes_steady_and_pump_restarts` が被覆済み）。
 ///
-/// # 決定的駆動（full_run/steady/close と同一の talk 駆動終了イディオム）
+/// # 決定的駆動（バリア駆動・壁時計 deadline・join 後表明）
 /// 挨拶なし boot で `Steady{None}` 直行。保留ハーネスで最初の steady talk（受領 index 0）を保留し
 /// active 窓を作る。`with_steady_value_indices([0, 1])`: GET 出現 index 0＝保留 talk を起こし、index 1＝
 /// **復帰後**の pump が起こす talk（quit:true）で終了を駆動する。
@@ -773,10 +773,15 @@ fn spontaneous_talk_egress_sweep_only_allowed_ids_no_ontalk_onhour() {
 /// 5. 復帰後 Tick → GET(occ1・Ref3=1・Status なし・**pump 再開**）→ Value → steady talk 1（id=2・
 ///    quit:true）→ 終了系列完走。
 ///
+/// 復帰後 Tick は `drive_ticks_until_disconnect` が 1 秒刻みで送り続ける。復帰した pump talk（quit:true）が
+/// 終了系列を完走させ kanade が Receiver を drop すると send が Err＝inbox 切断バリアで戻る。復帰の表明は
+/// この駆動ループ内では行わず、**join 後の最終記録列**（(1)(2)(3)）に対してのみ評価する（Req 7.1/7.2）。
+///
 /// # 非空虚性
-/// - 復帰後 pump が GET でなく NOTIFY のままなら Value が破棄され talk 1 が起きず終了が駆動されない
-///   （＝復帰しなかったことを join 期限超過で検出する）。
-/// - active 窓（NOTIFY）が無ければ `resumed_get_after_active_window` が `None`＝(2) が落ちる。
+/// - 復帰後 pump が GET でなく NOTIFY のままなら Value が破棄され talk 1 が起きず終了が駆動されない。
+///   その場合 send は成功し続け、`drive_ticks_until_disconnect` が `DEFAULT_TIMEOUT` の壁時計 deadline に
+///   到達して panic する＝復帰しなかったことを非空虚に検出する（Req 7.3）。
+/// - active 窓（NOTIFY）が無ければ join 後の `resumed_get_after_active_window` が `None`＝(2) が落ちる。
 #[test]
 fn talk_completion_resumes_get_pump_ref3_one_status_none() {
     let fixture = Fixture::quitting()
@@ -814,34 +819,11 @@ fn talk_completion_resumes_get_pump_ref3_one_status_none() {
     gate.release_all();
 
     // 復帰後の pump を駆動する。復帰前（Steady{Some}）Tick は NOTIFY のみ・復帰後の GET(occ1) が Value を
-    // 返し steady talk 1（quit:true）を起こして終了を駆動する。sleep を用いず、「1 Tick 送出→ yield →
-    // 記録確認」を有界回数繰り返し、GET 再開の証左（active 窓後の GET）か inbox 切断（＝終了自走）で
-    // 打ち切る（close_test::close_refused_resumes_... と同一イディオム・race-free）。
-    let mut resumed = false;
-    'drive: for i in 3..=500u64 {
-        if harness
-            .sender
-            .send(KanadeMsg::Tick {
-                now: MonotonicMs(i * 1_000),
-            })
-            .is_err()
-        {
-            // inbox 切断＝復帰後 pump talk（quit:true）で終了済み（復帰の証左）。
-            resumed = true;
-            break 'drive;
-        }
-        for _ in 0..64 {
-            std::thread::yield_now();
-            if resumed_get_after_active_window(&harness.shiori.recorded()).is_some() {
-                resumed = true;
-                break 'drive;
-            }
-        }
-    }
-    assert!(
-        resumed,
-        "steady talk 完了後、有界回数内に OnSecondChange GET pump が再開するはず（Req 4.4）"
-    );
+    // 返し steady talk 1（quit:true）を起こして終了を駆動する。1 秒刻みで Tick を送り続け、復帰した pump
+    // talk（quit:true）が終了系列を完走させ kanade が Receiver を drop → send が Err＝inbox 切断バリアで戻る。
+    // 復帰しなければ send が成功し続け DEFAULT_TIMEOUT の壁時計 deadline で panic する（非空虚）。復帰の
+    // 表明はこのループでは行わず、join 後の最終記録列 (1)(2)(3) に対してのみ評価する（Req 7.1/7.2/7.3）。
+    drive_ticks_until_disconnect(&harness.sender, 3, "talk_completion resume drive");
 
     let Harness {
         sender,

@@ -16,6 +16,11 @@ use areka_kanade::ShioriBackend;
 use areka_sakura::contract::{ActorKey, CueCommand, CueSink, TalkCue};
 use shiori_host32_host::{ExitKind, HelperStatus, RequestError, ShutdownError};
 
+/// host-32 IPC 有界 e2e の壁時計安全弁（ハング検出器）。兄弟 e2e 規約（inproc/real_pasta/
+/// snapshot_capture = 60s）へ整合。意味論 deadline は MonotonicMs 仮想時間で注入されるため
+/// この壁時計値はテスト意味論に影響せず、workspace 並列負荷の飢餓による偽赤のみを防ぐ。
+const E2E_BOUND: std::time::Duration = std::time::Duration::from_secs(60);
+
 // ===================== ScriptedShioriBackend =====================
 
 /// backend が受領した 1 呼出の記録（照合用・要件 7.1「発火内容を蓄積して照合できる」）。
@@ -729,7 +734,7 @@ mod s1_boot_success {
         // 単一 Tick 内で完了する。
         let mut now: u64 = 1;
         let mut fired = false;
-        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+        let deadline = std::time::Instant::now() + super::E2E_BOUND;
         while std::time::Instant::now() < deadline {
             runtime
                 .dispatcher()
@@ -802,7 +807,7 @@ mod s1_boot_success {
             },
             CueCommand::Text("hello".to_string()),
         ];
-        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+        let deadline = std::time::Instant::now() + super::E2E_BOUND;
         while std::time::Instant::now() < deadline {
             let s = surface_records.lock().expect("records mutex poisoned").len();
             let t = text_records.lock().expect("records mutex poisoned").len();
@@ -848,7 +853,7 @@ mod s1_boot_success {
         // 発火列検証に置く（CONCERNS 参照）。
         run_bounded(
             "shutdown after S1 boot talk completion",
-            std::time::Duration::from_secs(10),
+            super::E2E_BOUND,
             move || {
                 let result = runtime.shutdown(areka_kanade::CloseReason::System);
                 assert!(
@@ -932,7 +937,7 @@ mod s2_connect_failure {
         }
     }
 
-    const BOUND: std::time::Duration = std::time::Duration::from_secs(10);
+    const BOUND: std::time::Duration = super::E2E_BOUND;
 
     /// S2: 接続失敗——connect が即 `Err` を返しても `boot()` 自体は成功する
     /// （connect 失敗は shiori アクタースレッド**内部**で非同期に起こるため、`boot()`
@@ -1099,7 +1104,7 @@ mod s3_helper_liveness_detected {
         }
     }
 
-    const BOUND: std::time::Duration = std::time::Duration::from_secs(10);
+    const BOUND: std::time::Duration = super::E2E_BOUND;
 
     /// S3: helper 死活検出——scripted `status()` をシナリオ途中で `Exited(Abnormal)` へ差し
     /// 替え、`runtime.kanade()` へ Tick を 1 回注入するだけで（Steady pump が発行する
@@ -1170,7 +1175,7 @@ mod s3_helper_liveness_detected {
         // 発火するよりずっと早く完了している）。
         let mut now: u64 = 1;
         let mut fired = false;
-        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+        let deadline = std::time::Instant::now() + super::E2E_BOUND;
         while std::time::Instant::now() < deadline {
             runtime
                 .dispatcher()
@@ -1456,7 +1461,7 @@ mod s4_close_handshake {
         // （boot.rs「boot は常に Steady{talk: None} へ完了する」・S3 と同じ論拠）。
         let mut now: u64 = 1;
         let mut boot_talk_fired = false;
-        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+        let deadline = std::time::Instant::now() + super::E2E_BOUND;
         while std::time::Instant::now() < deadline {
             runtime
                 .dispatcher()
@@ -1499,7 +1504,7 @@ mod s4_close_handshake {
         // 跨ぐため、`handle.calls()` に `RecordedCall::Unload` が現れるまで
         // `yield_now` のみで有界にスピン待機する（実時間待機・Tick 送出のいずれも伴わない）。
         let mut close_settled = false;
-        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+        let deadline = std::time::Instant::now() + super::E2E_BOUND;
         while std::time::Instant::now() < deadline {
             let has_unload = handle
                 .calls()
@@ -1566,7 +1571,7 @@ mod s4_close_handshake {
         // 検証済みだった経路）を、本 e2e が初めて実地の回帰檻として固定する。
         run_bounded(
             "shutdown after S4 regular close handshake completion",
-            std::time::Duration::from_secs(10),
+            super::E2E_BOUND,
             move || {
                 let result = runtime.shutdown(CloseReason::System);
                 assert!(
@@ -1740,7 +1745,7 @@ mod s5_close_deadline {
         // （CONCERNS 参照）。
         let mut now: u64 = 1;
         let mut boot_talk_fired = false;
-        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+        let deadline = std::time::Instant::now() + super::E2E_BOUND;
         while std::time::Instant::now() < deadline {
             runtime
                 .dispatcher()
@@ -1788,7 +1793,7 @@ mod s5_close_deadline {
         // Value 応答で `deadline_from(Some)` 確定／CloseTalkWait の Tick は deadline=None を
         // 起点確定・close.rs 参照）。
         let mut handshake_reached = false;
-        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+        let deadline = std::time::Instant::now() + super::E2E_BOUND;
         while std::time::Instant::now() < deadline {
             let onclose_issued = handle
                 .calls()
@@ -1833,7 +1838,7 @@ mod s5_close_deadline {
         // ---- deadline 超過による強制終了系列の完走を有界スピン待機で確認する ----
         // （Tick 送出は上で完了済み・以降は追加 Tick も sleep も伴わない）。
         let mut deadline_settled = false;
-        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+        let deadline = std::time::Instant::now() + super::E2E_BOUND;
         while std::time::Instant::now() < deadline {
             let has_unload = handle
                 .calls()
@@ -1900,7 +1905,7 @@ mod s5_close_deadline {
         // talk があっても shutdown は有界時間内に完走する（CONCERNS 参照）。
         run_bounded(
             "shutdown after S5 close deadline exceeded",
-            std::time::Duration::from_secs(10),
+            super::E2E_BOUND,
             move || {
                 let result = runtime.shutdown(CloseReason::System);
                 assert!(
@@ -1999,7 +2004,7 @@ mod s6_full_disconnect {
         }
     }
 
-    const BOUND: std::time::Duration = std::time::Duration::from_secs(10);
+    const BOUND: std::time::Duration = super::E2E_BOUND;
 
     /// S6: 全断線（段階的解体）——`into_parts` で分解し、①dispatcher へ `Close`→join
     /// （Close-only アクターの正規停止・「アクター別の停止経路」表の dispatcher 行）②

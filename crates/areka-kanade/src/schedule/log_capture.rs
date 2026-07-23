@@ -11,8 +11,38 @@
 //! 差し込み、クロージャ内で発行されたイベントのみを捕える。`step()` はテストスレッド上で
 //! 同期的に走る純粋関数ゆえ、そのイベントは確実に同一スレッドで捕捉される（spawn した
 //! アクタースレッドのログは捕えない——それはタスク 6.2 の担当）。
+//!
+//! ## 並列負荷下の確率欠陥と interest-keeper による根治
+//! `with_default` は呼出ごとに transient dispatcher を登録/破棄する。`cargo test --workspace`
+//! の並列負荷下では **live dispatcher が 0 個になる瞬間**が生じ、その窓で別スレッドの
+//! callsite が初回 `register()` されると tracing-core が Interest を `Never` に**焼き付ける**
+//! （tracing-core 0.1.36 `callsite.rs:505` の `unwrap_or_else(Interest::never)`・sticky で
+//! 次の dispatcher 登録まで復活しない）。焼き付いた callsite のイベントは以降マクロの静的
+//! チェックで捨てられ、対象檻が ~1/10〜1/20 の確率で偽赤する。これは areka-P0-kanade 時代から
+//! main に存在した欠陥で、並列度が上がると露呈する。
+//!
+//! 根治は [`install_interest_keeper`] が初回 [`capture`] で一度だけ確立する
+//! **プロセスグローバル interest-keeper**（[`INTEREST_KEEPER`]）。素の
+//! `tracing_subscriber::registry()`（per-layer filter 無し・`register_callsite=always`・
+//! `event` は no-op＝`sharded.rs:222-235` の bare registry 挙動）を
+//! `set_global_default` で常駐させると、その subscriber Arc は leak され
+//! （`dispatcher.rs:314-319`）**プロセス生存期間ずっと registrar が生き続ける**。以後は
+//! live dispatcher 数が 0 になる瞬間が構造的に存在しなくなり、`callsite.rs:505` の
+//! `Interest::never` 焼き付きが**到達不能**になる。確立の瞬間に全 callsite が rebuild され
+//! （`callsite.rs:484-488`）、確立以前に焼き付いた callsite も治癒される。
+//!
+//! ## 不変条件
+//! **本モジュール（interest-keeper）より先に、別のグローバル subscriber を設定してはならない。**
+//! フィルタ付きの global を先に置くと callsite Interest がそちらの評価で `Never` へ焼き付き直され
+//! capture が壊れる。違反時は [`install_interest_keeper`] が `set_global_default` の `Err` を
+//! `.expect()` で受けて**大声で panic** する（silent 縮退なし・log-first）。
+//!
+//! bare registry を global 常駐させても capture の意味論は不変: capture 外のイベントは Registry の
+//! `event` no-op へ落ち（従来の `NoSubscriber` と観測差なし）、capture 内のイベントは
+//! `with_default` の thread-local subscriber が global を shadow する（`dispatcher.rs:379-398`）
+//! ため thread-local のみへ配送され、捕捉列が相互に混在しない。
 
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, OnceLock};
 
 use tracing::field::{Field, Visit};
 use tracing::{Event, Level, Subscriber};
@@ -70,8 +100,34 @@ where
     }
 }
 
+/// プロセスグローバル interest-keeper（一度だけ確立・leak されて永久生存）。
+///
+/// 確立済みか否かの二値のみを保持する（中身なし）。`OnceLock` が初期化競合を直列化するため、
+/// 並行初回呼出でも `set_global_default` はプロセスで高々 1 回しか走らない。
+static INTEREST_KEEPER: OnceLock<()> = OnceLock::new();
+
+/// tracing callsite Interest の `Never` 焼き付きを根絶する（機構の詳細はモジュール doc「決定性の要」）。
+///
+/// [`capture`] の先頭から呼ぶ。初回のみ素の `registry()` を global default として常駐させ、
+/// 全 callsite の Interest を再評価する。2 回目以降は `OnceLock` の no-op 参照で即返る。
+fn install_interest_keeper() {
+    INTEREST_KEEPER.get_or_init(|| {
+        // bare registry（per-layer filter 無し）を global default として leak・常駐させる。
+        // 以降 live dispatcher 数が 0 になる瞬間が消え、Interest::never 焼き付きが到達不能になる。
+        tracing::subscriber::set_global_default(tracing_subscriber::registry()).expect(
+            "log_capture の interest-keeper より先に別のグローバル subscriber を設定してはならない: \
+             フィルタ付き global は callsite Interest を Never へ焼き付け直し capture を壊す。\
+             対処: テストプロセスで log_capture 以外の set_global_default / init を行わないこと",
+        );
+        // 登録時 rebuild で理論上は十分だが、確立以前に焼き付いた callsite の再評価保険＋意図の
+        // 自己文書化として明示呼出する（コスト 0）。
+        tracing::callsite::rebuild_interest_cache();
+    });
+}
+
 /// `f` を実行し、その間にテストスレッドで発行された `tracing` イベントを捕捉して返す。
 pub(crate) fn capture<F: FnOnce()>(f: F) -> Vec<CapturedEvent> {
+    install_interest_keeper();
     let sink: Arc<Mutex<Vec<CapturedEvent>>> = Arc::new(Mutex::new(Vec::new()));
     let layer = CaptureLayer { sink: sink.clone() };
     let subscriber = tracing_subscriber::registry().with(layer);

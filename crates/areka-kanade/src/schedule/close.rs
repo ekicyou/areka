@@ -56,7 +56,7 @@ pub(crate) fn step(state: State, input: Input, config: &KanadeConfig) -> (State,
 /// - その他 → 防御アーム（warn!＋維持）。
 fn on_close_pending(mut state: State, input: Input, config: &KanadeConfig) -> (State, Vec<Action>) {
     match input {
-        Input::ShioriReply { outcome } => match outcome {
+        Input::ShioriReply { outcome, .. } => match outcome {
             ShioriOutcome::Value(script) => {
                 // 応答スクリプトあり: 一意 talk_id を採番し再生起動要求として配送、
                 // CloseTalkWait へ遷移して再生完了通知まで運行を保留する（Req 4.2・2.1）。
@@ -231,6 +231,7 @@ mod tests {
             close_pending(CloseReason::User, Some(MonotonicMs(1_000)), 5),
             Input::ShioriReply {
                 outcome: ShioriOutcome::Value("bye".to_string()),
+                origin: "test",
             },
             &config(),
         );
@@ -273,6 +274,7 @@ mod tests {
             close_pending(CloseReason::System, Some(MonotonicMs(1_000)), 5),
             Input::ShioriReply {
                 outcome: ShioriOutcome::Value("stay".to_string()),
+                origin: "test",
             },
             &config(),
         );
@@ -316,6 +318,7 @@ mod tests {
             close_pending(CloseReason::System, Some(MonotonicMs(1_000)), 5),
             Input::ShioriReply {
                 outcome: ShioriOutcome::Value("stay".to_string()),
+                origin: "test",
             },
             &config(),
         );
@@ -347,6 +350,7 @@ mod tests {
             close_pending(CloseReason::User, Some(MonotonicMs(1_000)), 5),
             Input::ShioriReply {
                 outcome: ShioriOutcome::NoContent,
+                origin: "test",
             },
             &config(),
         );
@@ -469,6 +473,7 @@ mod tests {
             close_pending(CloseReason::System, None, 5),
             Input::ShioriReply {
                 outcome: ShioriOutcome::Value("hi".to_string()),
+                origin: "test",
             },
             &config(),
         );
@@ -490,6 +495,7 @@ mod tests {
             close_pending(CloseReason::User, Some(MonotonicMs(1_000)), 5),
             Input::ShioriReply {
                 outcome: ShioriOutcome::Notified,
+                origin: "test",
             },
             &config(),
         );
@@ -509,6 +515,7 @@ mod tests {
             s,
             Input::ShioriReply {
                 outcome: ShioriOutcome::Notified,
+                origin: "test",
             },
             &config(),
         );
