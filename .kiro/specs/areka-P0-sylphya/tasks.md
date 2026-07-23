@@ -8,7 +8,7 @@
   - _Requirements: 6.4_
 
 - [ ] 2. Core: key モデルと語彙台帳
-- [ ] 2.1 正準 key モデルと共有語彙型・asker コンテキスト
+- [x] 2.1 正準 key モデルと共有語彙型・asker コンテキスト
   - `PropPath`／`PathSeg`／`Selector`（括弧名選択・`.index(ID)`・`.current`・`.count`・数値括弧の 5 形を完全収容）と `parse_dotted` を実装する
   - 台帳共通型 `BackingLayer`（5 値）・`DegradePolicy`（PassThroughRaw／ConsumerDefault／NotFound）・`M1Status`・`SetSemantics`（RuntimeCommand／StoreWrite）を定義する
   - `AskerId`／`AskerContext`（問い合わせ元コンテキスト第一級）を定義する

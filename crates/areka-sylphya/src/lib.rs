@@ -44,3 +44,8 @@ pub mod persist;
 pub mod reader;
 pub mod value;
 pub mod vocab;
+
+// --- 公開面 re-export（後続タスクが素直に使えるよう主要型を crate 直下へ）---
+pub use asker::{AskerContext, AskerId};
+pub use key::{parse_dotted, KeyParseError, PathSeg, PropPath, Selector};
+pub use vocab::{BackingLayer, DegradePolicy, M1Status, SetSemantics};
