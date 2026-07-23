@@ -126,3 +126,17 @@ emo2 のむらさきは表情を `\s[1000]`（本体サーフェス）と `\![bi
 2. The システム shall 新規の外部（crates.io）依存を追加しない。
 3. The システム shall Rust 2024 で構築し、tokio を導入しない。
 4. The システム shall 既存の cue コマンド語彙のワイヤ形・既存 variant を変更しない（新しい cue variant を新設せず W1 の汎用コマンドキャリアに乗る）。dola 名前写像 API `command_target_of` の退役（Requirement 2 の配送層語彙フリー化）は本仕様の明示スコープであり、ワイヤ形（serde 形）と既存 cue の配送タイミングには影響させない。
+
+### Requirement 9: pattern0 を持たない bind アニメーションの静的合成非寄与（2026-07-23 実機サインオフ第2欠陥改定）
+
+**Objective:** 保守者として、有効 bind の静的合成が `pattern0`（index==0）のみを土台に採り、pattern0 を持たないアニメーション（まばたき等の再生専用フレーム）を土台へ誤って合成しないことを求める。これにより、実 pasta が bind するまばたき（`interval,bind+random`）の閉じ目フレームがベース立ち絵の目を覆う「常時閉じ目」欠陥を根治し、正典（pattern0＝静的土台・pattern1 以降＝seriko-loop 再生フレーム）へ忠実化する。
+
+（経緯: 2026-07-23 実機サインオフ第2欠陥。emo2 のまばたき animation 1400（`bind+random`・pattern1..3）・1403（`bind`・pattern2）は pattern0 を持たず、emo-compose `flatten_surface` の `patterns.iter().min_by_key(|p| p.index)` が最小 index の閉じ目フレーム（surface 1412/1414）を静的土台として拾っていた。実 pasta は `\![bind,まばたき,…,1]` を on 連打するため BindSet に常駐し、目が常時閉じる。設計は「まばたきは default OFF のまま触れない」と仮定していたが実機で反証された。瞬き再生自体は seriko-loop（M-life）の領分のまま。）
+
+#### Acceptance Criteria
+
+1. If 有効 bind の animation が `pattern0`（index==0 の pattern）を持たないとき、then the 静的合成 shall 当該 animation を静的合成へ寄与させず良性に skip する（pattern1 以降の再生用フレームを土台に採らない）。
+2. The 静的合成 shall `pattern0` を持つ bind animation については従来どおり `pattern0` のみを合成し、疎 index の最小値（pattern1 以降）へフォールバックしない。
+3. When 上記の skip が発生するとき、the システム shall 良性ログ（debug 水準）として記録し panic しない（既存のセンチネル skip と同水準の寛容経路）。
+4. The キャンバス外形算出（bind オン/オフ・pattern0 有無でサイズ不変の既存契約）shall 本改定によって変更されない（外形は全 bind animation の pattern 母集合から算出したまま）。
+5. The emo2 実 fixture の surface 合成 shall まばたき bind（1400 系）を含む `BindSet` と含まない `BindSet` で同一の描画命令列を生む（まばたき bind が静的に不活性であることの回帰檻・「常時閉じ目」再発防止）。

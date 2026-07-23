@@ -213,11 +213,33 @@
   - _Boundary: seriko bind e2e_
   - _Depends: 10.2_
 
-- [ ] 10.5 実機による mustselect 排他の人間サインオフ（9.2 の再実施）
-  - 実 emo2・実 pasta.dll・実 DPI・絶対パス起動で、mustselect カテゴリ（腕・口・眉・目）の表情パーツが重畳せず1枚ずつ正しく切り替わることを目視で確認する
-  - Observable: 実機での目視確認により、着せ替えパーツが積算重畳せず排他的に着脱され、むらさきの表情が破綻なく変化することが確認できる
-  - _Requirements: 4.5, 7.1, 7.2, 7.3_
-  - _Depends: 10.3, 10.4_
+- [ ] 10.5 実機による mustselect 排他＋目開き（pattern0 是正）の人間サインオフ（9.2 の再実施）
+  - 実 emo2・実 pasta.dll・実 DPI・絶対パス起動で、(a) mustselect カテゴリ（腕・口・眉・目）の表情パーツが重畳せず1枚ずつ正しく切り替わること、(b) 目が開いている（まばたきの閉じ目フレームがベース目を覆わない）ことを目視で確認する
+  - 瞬きアニメーション自体は seriko-loop（M-life）未実装ゆえ「瞬きしないだけ」は許容とする
+  - Observable: 実機での目視確認により、着せ替えパーツが積算重畳せず排他的に着脱され、かつ目が開いた状態でむらさきの表情が破綻なく変化することが確認できる
+  - _Requirements: 4.5, 7.1, 7.2, 7.3, 9.1_
+  - _Depends: 10.3, 10.4, 11.2, 11.3_
+
+- [ ] 11. emo-compose pattern0 静的合成の是正（2026-07-23 実機サインオフ第2欠陥・R9/D12）
+- [x] 11.1 仕様改定（requirements R9・design D12・tasks 群 11 の焼き込み）
+  - 実機サインオフ第2欠陥（常時閉じ目）の真因（emo-compose `flatten_surface` が pattern0 非保持アニメで最小 index の閉じ目フレームを静的合成）を仕様へ反映し、pattern0 厳密選択を本仕様スコープとして明文化する
+  - Observable: requirements.md に Requirement 9、design.md に D12＋Out of Boundary/File Structure 改定、tasks.md に群 11 が存在し、10.5 の依存が 11.2/11.3 を含む
+  - _Requirements: 9.1, 9.2, 9.3, 9.4, 9.5_
+
+- [ ] 11.2 emo-compose の静的合成を厳密 pattern0（index==0）選択へ是正する
+  - `flatten_surface`（plan.rs:307）の pattern 選択を最小 index フォールバックから index==0 厳密へ変更し、pattern0 を持たない bind animation（まばたき等の再生専用フレーム）は静的合成へ寄与させず良性 skip（debug ログ）する
+  - キャンバス外形算出（plan.rs:529）は無改変とし、bind オン/オフ・pattern0 有無でサイズ不変の契約を維持する
+  - pattern0 非保持 skip の判断分岐と emo2 まばたき bind の静的不活性を決定論テストで網羅する（pattern0 無しは寄与なし・pattern0＋pattern1 共存で pattern1 は不採用・skip の debug ログ正カウント・emo2 surface1000 が まばたき bind 有無で同一描画命令列＝「常時閉じ目」再発檻・既存 golden 非退行）
+  - Observable: pattern0 を持たない有効 bind が生成描画命令に現れず、pattern0 を持つ bind は従来どおり pattern0 のみ合成され、既存 emo-compose テスト（golden 含む）が緑のまま残る
+  - _Requirements: 9.1, 9.2, 9.3, 9.5_
+  - _Boundary: emo-compose plan.rs_
+  - _Depends: 11.1_
+
+- [ ] 11.3 ワークスペース全体の回帰確認（pattern0 是正後）
+  - 本増分適用後、既存のテストを含むワークスペース全体のテストがすべて成功することを確認する（emo-present ComposeCache 檻・seriko bind_e2e・mustselect 檻・emo-compose golden を含む）
+  - Observable: ワークスペース全体のテスト実行が成功で完了する
+  - _Requirements: 8.1, 9.4_
+  - _Depends: 11.2_
 
 ## Implementation Notes
 
