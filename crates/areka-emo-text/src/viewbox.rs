@@ -564,13 +564,19 @@ impl ScrollPlanner {
     }
 }
 
-/// GlyphRun 住人の index を昇順で返す（描画対象・全域ダーティの draw_lines 共通口）。
+/// グリフ描画対象住人の index を昇順で返す（描画対象・全域ダーティの draw_lines 共通口）。
+/// Choice 住人は内包 `run` を GlyphRun と同格に素描画するため同じく対象に含める（R9.5）。
 fn glyph_run_indices(canvas: &ContentCanvas) -> impl Iterator<Item = usize> + '_ {
     canvas
         .residents
         .iter()
         .enumerate()
-        .filter(|(_, r)| matches!(r.content, ResidentContent::GlyphRun(_)))
+        .filter(|(_, r)| {
+            matches!(
+                r.content,
+                ResidentContent::GlyphRun(_) | ResidentContent::Choice(_)
+            )
+        })
         .map(|(i, _)| i)
 }
 
@@ -580,6 +586,12 @@ fn line_fingerprint(resident: &Resident, mode: WritingMode) -> CommittedLine {
         ResidentContent::GlyphRun(run) => (
             run.glyphs.iter().map(|g| g.ch).collect::<String>(),
             run.size,
+        ),
+        // Choice 住人は内包 run から GlyphRun と同一の指紋を作る（非 hover の素描画が
+        // GlyphRun と同一ゆえ指紋も同一・R9.5。hover セグメントの指紋反映は task 6.1）。
+        ResidentContent::Choice(choice) => (
+            choice.run.glyphs.iter().map(|g| g.ch).collect::<String>(),
+            choice.run.size,
         ),
         // 画像/サーフェスのシーム住人は空 text・零寸（M1 は from_layout で生成されない）。
         ResidentContent::Image(_) | ResidentContent::Surface(_) => (String::new(), (0.0, 0.0)),
@@ -600,8 +612,9 @@ fn line_fingerprint(resident: &Resident, mode: WritingMode) -> CommittedLine {
 /// 住人の描画面矩形（新スクロール位置・物理 px 整数・ガード＋クランプ済み）を返す。
 ///
 /// canvas-local 位置 `transform.offset()` にブロック軸の `block_offset` を加算し × k した float
-/// 矩形を [`expand_guard_clamp`] へ通す。非 GlyphRun 住人（シーム）は描画実体を持たないため
-/// `None`（描画対象にもダーティにも寄与しない——COM 層 draw の warn!＋skip と整合）。
+/// 矩形を [`expand_guard_clamp`] へ通す。GlyphRun／Choice 住人は内包 `run` から同一のインク矩形を
+/// 導く（R9.5）。非グリフ住人（シーム）は描画実体を持たないため `None`（描画対象にもダーティ
+/// にも寄与しない——COM 層 draw の warn!＋skip と整合）。
 fn resident_rect(
     resident: &Resident,
     block_offset: f32,
@@ -610,8 +623,12 @@ fn resident_rect(
     surface_size: (u32, u32),
     overhang: LineOverhang,
 ) -> Option<PhysicalRect> {
-    let ResidentContent::GlyphRun(run) = &resident.content else {
-        return None;
+    let run = match &resident.content {
+        ResidentContent::GlyphRun(run) => run,
+        // Choice 住人は内包 run から GlyphRun と同一のインク矩形を導く（R9.5）。
+        ResidentContent::Choice(choice) => &choice.run,
+        // 非グリフ住人（シーム）は描画実体を持たない＝ダーティにも描画対象にも寄与しない。
+        ResidentContent::Image(_) | ResidentContent::Surface(_) => return None,
     };
     let (dx, dy) = resident.transform.offset();
     let (w, h) = run.size;

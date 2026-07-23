@@ -219,6 +219,13 @@ impl ViewboxExecutor {
                         .line_layout(index, &text, &format, font.height, mode)?;
                     self.line_store.overhang(index).unwrap_or_default()
                 }
+                // Choice 住人は内包 run を GlyphRun と同一経路で計測する（R9.5）。
+                ResidentContent::Choice(choice) if !choice.run.glyphs.is_empty() => {
+                    let text: String = choice.run.glyphs.iter().map(|g| g.ch).collect();
+                    self.line_store
+                        .line_layout(index, &text, &format, font.height, mode)?;
+                    self.line_store.overhang(index).unwrap_or_default()
+                }
                 // 空行/シーム住人は実インクを持たない＝はみ出し 0（em ボックス丈）。
                 _ => LineOverhang::default(),
             };
@@ -274,8 +281,11 @@ impl ViewboxExecutor {
                     let resident = &canvas.residents[index];
                     let run = match &resident.content {
                         ResidentContent::GlyphRun(run) => run,
-                        seam => {
-                            // planner の draw_lines は GlyphRun のみゆえ通常不発の防御経路
+                        // Choice 住人は内包 run を GlyphRun と同一の素描画経路で描く
+                        // （highlight=None の素描画のみ・ハイライト塗りは後続タスク・R9.5）。
+                        ResidentContent::Choice(choice) => &choice.run,
+                        seam @ (ResidentContent::Image(_) | ResidentContent::Surface(_)) => {
+                            // planner の draw_lines は GlyphRun/Choice のみゆえ通常不発の防御経路
                             // （warn は executor ごと初回のみ・DrawExecutor と同規律）。
                             if !self.seam_warned {
                                 self.seam_warned = true;
@@ -576,7 +586,7 @@ mod tests {
 
     use super::{DrawStats, ViewboxExecutor};
     use crate::actor::TextSlotBinding;
-    use crate::canvas::ContentCanvas;
+    use crate::canvas::{ChoiceLineContent, ContentCanvas, Resident, ResidentContent};
     use crate::draw::{DWriteMetrics, DrawExecutor, ResolvedFont};
     use crate::layout::{FixedMetrics, LayoutEngine, VisibleWindow, WrapPlan};
     use crate::region::{ScaleContract, TextRegion};
@@ -777,6 +787,94 @@ mod tests {
         assert_eq!(
             stats.blits, 0,
             "初回 blit=(0,0) は blits を増やさない（全面 CopyResource）"
+        );
+    }
+
+    /// canvas の GlyphRun 住人を、内包 run が等価な非 hover の Choice 住人へ写す
+    /// （`segments` 空・`hovered=None`・`highlight=None`）。transform/effects は不変。
+    /// 「Choice は GlyphRun と同格の素描画」（R1.4/R9.5）を検証するための等価変換。
+    fn as_choice_canvas(canvas: &ContentCanvas) -> ContentCanvas {
+        let residents = canvas
+            .residents
+            .iter()
+            .map(|r| match &r.content {
+                ResidentContent::GlyphRun(run) => Resident {
+                    content: ResidentContent::Choice(ChoiceLineContent {
+                        run: run.clone(),
+                        segments: Vec::new(),
+                        hovered: None,
+                        highlight: None,
+                    }),
+                    transform: r.transform,
+                    effects: r.effects,
+                },
+                _ => r.clone(),
+            })
+            .collect();
+        ContentCanvas {
+            residents,
+            size: canvas.size,
+        }
+    }
+
+    /// R1.4/R9.5（ピクセル同一）: 非 hover（`highlight=None`）の Choice 住人は、内包 run が
+    /// 等価な GlyphRun 住人と**readback バイト完全一致**で描画される。GlyphRun canvas と
+    /// Choice canvas をそれぞれ独立の executor/供給面へ初回フレーム描画し、read_back を byte 比較する。
+    /// （Choice アームが run を GlyphRun と別経路で描く・寸を取り違える等の変異はこの檻で赤くなる。）
+    #[test]
+    fn choice_resident_renders_pixel_identical_to_glyph_run() {
+        let mut rig = Rig::new();
+        let image = (80u32, 40u32);
+        let mode = WritingMode::HorizontalTb;
+        let font = ResolvedFont::resolve(&geo_model(Some(10)));
+        let region = TextRegion::resolve(&geo_model(Some(10)), image, mode);
+        let contract = ScaleContract::new(1.0, None);
+
+        // 2 行（"あい" / "うえお"）＝複数住人。全角混在で実インクを確実に載せる。
+        let mut items = glyph_items("あい");
+        items.push(TextItem::LineBreak { ratio: 1.0 });
+        items.extend(glyph_items("うえお"));
+        let (glyph_canvas, window) = build(&items, &region, mode, 10.0);
+        let choice_canvas = as_choice_canvas(&glyph_canvas);
+
+        // 等価変換の健全性（偽 GO 防止）: Choice canvas は実際に Choice 住人を持ち、
+        // 住人数・寸は GlyphRun canvas と一致する。
+        assert!(
+            choice_canvas
+                .residents
+                .iter()
+                .any(|r| matches!(r.content, ResidentContent::Choice(_))),
+            "変換後 canvas は Choice 住人を含む"
+        );
+        assert_eq!(
+            choice_canvas.residents.len(),
+            glyph_canvas.residents.len(),
+            "住人数は等価"
+        );
+
+        // GlyphRun canvas を独立 executor/供給面へ初回描画。
+        let mut surface_glyph = rig.attach(image, 1.0);
+        let mut exec_glyph = ViewboxExecutor::new(&rig.core).expect("ViewboxExecutor::new 失敗");
+        exec_glyph
+            .render(&glyph_canvas, &window, &font, mode, &contract, &mut surface_glyph)
+            .expect("GlyphRun render 失敗");
+        let bytes_glyph = surface_glyph.read_back().expect("read_back 失敗");
+
+        // Choice canvas を別の独立 executor/供給面へ初回描画。
+        let mut surface_choice = rig.attach(image, 1.0);
+        let mut exec_choice = ViewboxExecutor::new(&rig.core).expect("ViewboxExecutor::new 失敗");
+        exec_choice
+            .render(&choice_canvas, &window, &font, mode, &contract, &mut surface_choice)
+            .expect("Choice render 失敗");
+        let bytes_choice = surface_choice.read_back().expect("read_back 失敗");
+
+        assert!(
+            opaque_count(&bytes_glyph) > 0,
+            "GlyphRun 描画で実インクが載る（空比較で偽 GO にしない）"
+        );
+        assert_eq!(
+            bytes_choice, bytes_glyph,
+            "非 hover の Choice 住人は等価な GlyphRun 住人とピクセル同一に描画される（R1.4/R9.5）"
         );
     }
 

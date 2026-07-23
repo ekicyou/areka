@@ -695,7 +695,10 @@ impl DrawExecutor {
         {
             let run = match &resident.content {
                 ResidentContent::GlyphRun(run) => run,
-                seam => {
+                // Choice 住人は内包 run を GlyphRun と同一の素描画で描く（比較オラクルは
+                // ハイライトを持たない＝byte 等価 golden が不変に保たれる・R9.5）。
+                ResidentContent::Choice(choice) => &choice.run,
+                seam @ (ResidentContent::Image(_) | ResidentContent::Surface(_)) => {
                     // M1 型シーム（Image/Surface）: warn（executor ごと初回のみ）＋skip（R8.5）。
                     if !self.seam_warned {
                         self.seam_warned = true;

@@ -41,7 +41,7 @@
   - _Requirements: 4.2, 6.2, 9.5_
   - _Boundary: BalloonCursorModel_
 
-- [ ] 3. (P) Foundation: 選択肢住人型と既存 match 箇所への通し配線（canvas.rs/viewbox.rs/viewbox_draw.rs/draw.rs）
+- [x] 3. (P) Foundation: 選択肢住人型と既存 match 箇所への通し配線（canvas.rs/viewbox.rs/viewbox_draw.rs/draw.rs）
   - `ResidentContent::Choice(ChoiceLineContent)` と `ChoiceLineContent{run, segments, hovered, highlight}`／`ChoiceRowSegment`／`HighlightPaint` を canvas.rs の純データ型として追加する
   - viewbox.rs（`line_fingerprint`/`resident_rect`）・viewbox_draw.rs（`render`）・draw.rs（oracle）へ、Choice 行を等価な GlyphRun とまったく同様に扱う Choice アームを追加する（ハイライトはまだ描かない・挙動変化なし）
   - Observable: 新しい `#[non_exhaustive]` variant を含めて workspace 全体がビルドに成功し、hover 無しの Choice 住人が等価な GlyphRun 住人とピクセル同一に描画される
@@ -232,3 +232,4 @@
 ## Implementation Notes
 - state.rs のテストモジュールに `WarnCounter`（tracing::Subscriber 実装, `tracing::subscriber::with_default` で使用）ログ檻あり — warn 回数アサーションに再利用可（4.2/viewbox の warn-once テスト等）。
 - balloon cursor.* モデル: `BalloonModel::new` は7引数のまま不変・`with_cursor(self, BalloonCursor)` ビルダーでマージに相乗り。`CursorColor` は `FontColor` のミラー（+Default）。fields private + accessor（`cursor() -> &BalloonCursor`）。5.3 の `ResolvedChoiceStyle::resolve` は accessor 経由で読む。
+- ResidentContent variant 集合 = {GlyphRun, Choice, Image, Surface}。task 3 で wildcard `seam =>` アームを明示 `Image(_) | Surface(_)` へ変換済（Choice の暗黙吸収防止）。line_fingerprint の Choice アームは task 6.1 で choice_marker を足す前提の GlyphRun ミラー。
