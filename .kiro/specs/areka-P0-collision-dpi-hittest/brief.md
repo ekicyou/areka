@@ -7,6 +7,10 @@
 > **collision-geometry との関係**: 本 spec は collision-geometry の **k=1.0 限定契約（`design.md:50`・Revalidation Trigger 2 `:86`）を解除**し、point÷k を第一級実装する。
 > **M1/M2・合流**: **未決＝別セッションの計画判断**（[[portfolio-convergence-decided-in-separate-session]]・下記）。
 
+> **📌 2026-07-23 追記㊵陳腐化補正（本ブロックが以下の本文より優先）**:
+> - **M1/M2 は決着済み＝M1 編入**（2026-07-19 追記㉟開発者裁定）・**ウェーブ配置=W5**（追記㊵攻め再編＝`dpi-window-vanish` ∥ `choice-select-events` と同居・emo-dpi-scaling は W4）。
+> - **÷k の着地点の実体訂正（2026-07-23 実測）**: 本文の `presenter.rs:449-453` `EmoPresenter::hit_region` は読み口であり、hit 解決の実体は **`crates/areka/src/emo2_boot/hit_region.rs`**（`resolve_hit_region`・冒頭 doc L4-9 で「shell 窓専用・balloon は扱わない」を明文化）＋ **`crates/areka/src/input_events/mod.rs:96`**（「座標は素通し＝DPI 変換なし（DD-IE-10）」規約）。÷k の挿入点は design でこの2箇所を第一候補として確定すること。**input_events/mod.rs は W4 `choice-interact` がバルーンハンドラを増設する共有面**＝W5 配置（chI 完了後）の根拠。
+
 ## Problem
 
 `collision-geometry` は当たり判定を **k=1.0 前提**で実装した（点を無変換で純関数へ照合）。これは DPI追従（基本設計・[[areka-dpi-following-core-design]]）下では不正——マスコットが k× 拡大表示されると、窓 client 物理 px は k 倍空間になるが collision 矩形は author/surface px のまま。**拡大後の点を k で縮約（÷k）してから照合しないと当たらない**。この ÷k は現状:

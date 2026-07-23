@@ -3,6 +3,8 @@
 > **性格**: 実機不具合の**調査先行 spec**（診断 → 根本原因確定 → 理想形修正）。憶測修正は禁止＝原因未確定のまま実装フェーズへ進まない（開発者選択 2026-07-18「診断 repro を先に」）。
 > **由来**: 2026-07-18 `areka-P0-idle-talk` Task 6 実機サインオフ直後の実機運転で開発者が報告。idle-talk 本体は「OnSecondChange 自発トーク確認＝完了」で**不変**（本事象は表示系＝idle-talk へ混ぜない・開発者裁定）。
 
+> **📌 2026-07-23 追記㊵ウェーブ更新（本文の旧ウェーブ番号より優先）**: 攻め5ウェーブ再編により本 spec の実装は **W5**（`collision-dpi-hittest` ∥ `choice-select-events` と3本同居・ファイル集合は互いに素＝本 spec は placement follow/spawn＋wintf window_proc/drag を単独所有）。前提: W4 `position-persist`（follow.rs/spawn.rs 解放）＋W4 `emo-dpi-scaling`（**確定事実④「WM_DPICHANGED でも窓 336x400 物理固定」＝唯一確定の設計 gap を W4 が先に解消する**＝本 spec の診断 Q1-Q4 は dpi-scaling 着地後の実機状態で再評価してから修正フェーズへ）。診断/文書フェーズの随時先行可は不変。
+
 ## Problem
 
 実機（マルチモニタ・混在 DPI 125%/200%・screen 座標 3200 超）で emo2 を運転中、**キャラ「えも」（kero 側・scope 1）の窓とバルーンが消失**し、「むらさき」（sakura 側・scope 0）だけが残った。開発者所感「知らないうちに消えてて再現性が微妙」＝消失の瞬間は未目撃・決定的な再現手順は未確立。

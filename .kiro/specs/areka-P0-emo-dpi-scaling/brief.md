@@ -6,6 +6,11 @@
 > **下流（必須依存）**: **`areka-P0-collision-dpi-hittest`**（当たり判定 ÷k がこの `scale()`→k と実 k× 表示に依存）／DPI追従が波及する全 emo 消費者（`window-placement` 窓寸・`emo-text-layer` 行寸・balloon 寸・`choice-render`）＝各 spec の Revalidation Trigger。
 > **M1/M2 配置・collision-geometry 合流**: **未決＝別セッションの計画判断**（[[portfolio-convergence-decided-in-separate-session]]）。DPI追従は開発者言明の**基本設計**だが emo2 は k=1.0 でも E2E 実走する（M1 blocker か否かは要判断）。
 
+> **📌 2026-07-23 追記㊵陳腐化補正（本ブロックが以下の本文より優先）**:
+> - **M1/M2 は決着済み＝M1 編入**（2026-07-19 追記㉟開発者裁定）・**ウェーブ配置=W4**（追記㊵攻め再編＝`position-persist` ∥ `choice-interact` と同居）。同居の**事前割当契約**: 本 spec は `measure.rs`＋emo-atlas/compose/present＋wintf に限定・**`spawn.rs` 不触**（spawn.rs は position-persist 単独所有・窓寸の k 倍は `placement/measure.rs` 源で吸収する）。エスケープ: 設計が spawn.rs 改変を要求する形に着地したらその部分を W5 へ。
+> - **編集面の追加（2026-07-23 実測・本文未記載）**: 窓寸法の源は **`crates/areka/src/placement/measure.rs::measure_scope_sizes`**（L62・compose_size で surface 原寸を測る）＝k≠1.0 なら物理窓寸=原寸×k となり measure→spawn 消費が動く。「窓/swapchain 追従」は `chain.rs`（ResizeBuffers L115-118）だけでは閉じない。
+> - **W3 settled 前提**: seriko-loop（present `cache.rs` 合成キー拡張）・choice-render（`presenter.rs` `TextSlotView`＝k 供給点 :126 の同居 struct）が W3 で先行着地する＝本 spec の design はその実形へ再突合してから（本文の presenter.rs/plan.rs/blit.rs 行アンカーは W2-W3 マージでドリフト済みの可能性）。
+
 ## Problem
 
 areka の**基本設計は DPI追従**（画面 DPI に追従してマスコット/サーフェスが拡大縮小する・SSP の固定px等倍とは**異なる思想**・[[areka-dpi-following-core-design]]）。ところが現状、emo 層は **k=1.0 がコンパイル時定数でハードワイヤ**され、マスコットは高 DPI モニタでも拡大しない（固定物理 px）。この「途中状態」が `collision-geometry` Task 4.2 の実 DPI 受け入れを**不成立**にした——モニタ DPI を 2 水準（125%/200%）変えてもマスコットが同一物理寸ゆえ、DPI追従下（scale≠1.0）の当たり判定が全く検証できなかった。
