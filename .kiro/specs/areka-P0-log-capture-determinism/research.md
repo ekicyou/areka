@@ -159,3 +159,49 @@ Option A の keeper 導入に加え、steady_test の 500-bound ループを `ex
 - **設計で確定すべき鍵**: DD-2（rebuild_interest_cache 要否）・DD-3（fail-loud 実装形）・DD-4（グローバル常駐の副作用範囲）・DD-7（steady cage バリア設計）。
 - **持ち越す研究項目**: R-1〜R-4（tracing 内部の一次確認・実装/レビュー時）。
 - **次工程**: `/kiro-spec-design areka-P0-log-capture-determinism`（要件ディスカッションで DD-1〜DD-8 を解消後）。
+
+---
+
+# 設計フェーズ Discovery ログ（2026-07-23・kiro-spec-design）
+
+> Extension 分類 → light discovery を実施。以下は設計フェーズで**新たに確定した事実と判断**。設計本文は design.md が正本（本節は調査痕跡と根拠の保管庫）。
+
+## 8. R-1〜R-4 の一次ソース検証 — **全件 RESOLVED（設計フェーズで完了・実装持ち越し不要）**
+
+**前提修正**: §1.4 の「registry 未展開（NOT-FOUND）」は **`~/.cargo` を見た誤り**。本機の `CARGO_HOME=c:\rust\cargo` であり、`c:\rust\cargo\registry\src\index.crates.io-1949cf8c6b5b557f\` 配下に tracing-core 0.1.36 / tracing 0.1.44 / tracing-subscriber 0.3.23 の**全ソースが展開済み**。設計フェーズで全行番号を直接読了した。
+
+| 項目 | 判定 | 一次証拠（実読・行番号確認済み） |
+|---|---|---|
+| **R-1** 行番号引用の妥当性 | ✅ 全一致 | `tracing-core-0.1.36/src/callsite.rs:505` = `let interest = interest.unwrap_or_else(Interest::never);`（dispatcher 0 個で rebuild → Never 焼き付き）。`dispatcher.rs:314-319` = `Arc::into_raw(s)` leak（コメント「the global default will never be dropped」原文確認）。`tracing-subscriber-0.3.23/src/registry/sharded.rs:222-228` = `register_callsite` が per-layer filter 無しで `Interest::always()`・`:230-235` = `enabled` true・`:288` = `fn event(&self, _: &Event<'_>) {}`（no-op） |
+| **R-2** bare registry が TRACE を落とさない | ✅ | 上記 sharded.rs に加え、max-level hint: `callsite.rs:407-421` の `rebuild_interest` は `dispatch.max_level_hint().unwrap_or(LevelFilter::TRACE)`（:412）＝Registry は `max_level_hint` を実装しない（デフォルト None）ため **TRACE と仮定**され、`LevelFilter::set_max` は TRACE 以上に固定（keeper 生存中 OFF に落ちない）。dispatcher 0 個時のみ `max_level` が初期値 `OFF` のまま（:408→:421）＝ブリーフの「max-level OFF 窓」も確認 |
+| **R-3** `rebuild_interest_cache` の公開性 | ✅ | `tracing-core callsite.rs:222` に `pub fn rebuild_interest_cache()`。tracing 0.1.44 は `lib.rs:963-966` で `pub use tracing_core::{ callsite::{self, Callsite}, .. }`（`#[doc(hidden)]` だが公開パス）→ **`tracing::callsite::rebuild_interest_cache()` で到達可**。areka-kanade は `tracing`（通常 dep）＋`tracing-subscriber`（dev-dep）のみで足りる＝新規依存ゼロ |
+| **R-4** leak → Interest ≥ Sometimes の構造根拠 | ✅ | 連鎖を全読: `tracing::subscriber::set_global_default(S)`（tracing subscriber.rs）→ `Dispatch::new`（dispatcher.rs:472-481）→ `callsite::register_dispatch`（callsite.rs:484-488）が Registrar（Weak）を LOCKED_DISPATCHERS へ push ＋ **`CALLSITES.rebuild_interest` を即実行** → `dispatcher::set_global_default` が Arc を leak（:314-319）→ Weak は永久 upgrade 可能 → 以降のあらゆる rebuild（`Rebuilder::Read` の `filter_map(Registrar::upgrade)`・callsite.rs:568-572）で dispatcher ≥1 が保証 → `:505` の `unwrap_or_else(Interest::never)` は**構造的に到達不能**。`Interest::and` の意味論（tracing-core subscriber.rs:658-664: 同値→そのまま・異値→`sometimes`）より、global always 存在下の合成 Interest は**常に ≥ Sometimes**。`NoSubscriber::register_callsite = Interest::never()`（subscriber.rs:676-678）も原文確認 |
+
+**追加発見（設計に反映）**:
+- **keeper 導入自体が全 callsite を治癒する**: `Dispatch::new` 経由の `callsite::register_dispatch`（callsite.rs:487）が**登録時に全 callsite の rebuild を実行**する。ゆえに「初回 capture 以前に capture 外の `step()` 呼出等で Never 焼き付き済み」の callsite も keeper 確立の瞬間に再評価・治癒される。**DD-1 の lazy 確立（初回 capture 時）は健全**——初回 capture 前のイベントはそもそもどの檻の表明対象でもない。
+- 明示的 `rebuild_interest_cache()` は上記により**理論上冗長**だが、意図の自己文書化＋内部実装変更への保険としてコスト 0 で残す（DD-2 の結論根拠）。
+- スレッドローカル shadow の一次確認（Req 2.3/2.4）: `dispatcher::get_default`（dispatcher.rs:379-398）は scoped（`with_default`）設定中のスレッドでは scoped を使い、それ以外は global へ fallback。**capture クロージャ内のイベントは thread-local の Layered にのみ配送**（global と二重配送しない）＝捕捉列の相互混在なし・意味論不変。
+- capture 外イベントの挙動変化（DD-4）: 従来 `NoSubscriber`（全部 no-op）→ keeper 後は global Registry（event no-op・sharded.rs:288）。**出力・挙動の観測可能な変化なし**。span を作る経路があれば Registry の slab に登録されるが kanade のログ規約は event のみ・テストプロセス限定・出力なし。keeper は `#[cfg(test)]` の lib テストプロセスにのみ存在（integration exe には log_capture 自体が無い）＝steering logging.md「ライブラリは Subscriber 初期化しない」は**本番境界の規律であり不抵触**。
+
+## 9. 設計判断の確定（DD-1〜DD-8 最終状態）
+
+| DD | 結論 | 根拠 |
+|---|---|---|
+| DD-1 keeper 確立契機 | **初回 capture 時の lazy 確立（Option A）で確定** | Req 1.3 文言と一致。初回 capture 前の焼き付きは keeper 確立時の全 callsite rebuild で治癒（§8 追加発見）＝Option B（ctor 等）の動機が消滅 |
+| DD-2 rebuild_interest_cache | **残す（保険・自己文書化）** | 理論上は `Dispatch::new` の登録時 rebuild で十分だが、コスト 0・意図明示・tracing 内部変更への防御。公開 API 確認済み（R-3） |
+| DD-3 fail-loud 実装形 | **`.expect()` 一発** | 失敗原因は「先行する外部 global subscriber」の単一系。expect メッセージに原因＋対処（keeper より先に global を設定しない）を焼き込む。match 分岐は過剰 |
+| DD-4 グローバル常駐の副作用 | **無害と確認** | §8 追加発見のとおり（event no-op・shadow 意味論一次確認・プロセス境界は lib テスト exe のみ） |
+| DD-5 module doc 更新 | **「決定性の要（PITFALL）」節へ統合追記** | 根本原因（Interest 焼き付き・行番号引用）＋keeper 機構＋不変条件「本モジュールより先に global subscriber を設定しない」を追記。79-83 行の旧 `Arc::try_unwrap` 注記は履歴として保持 |
+| DD-6 RED→GREEN 実行形態 | **手順記載（design.md にコマンド骨子）・スクリプトはコミットしない** | 一回性の証拠取り・外部 CI 無し（steering: areka-no-ci）。scratchpad で ad hoc 実行し結果を検証記録へ。討議#2 の証拠形式分離（keeper=lib exe ストレス・R7'=構造証明＋回帰緑）に従う |
+| DD-7 復帰駆動バリア | **討議#1 確定を設計へ具体化**: 共有ヘルパー `drive_ticks_until_disconnect`（common/mod.rs 新設）＋ループ内観測の全廃＋join 後表明＋`wait_until` の Instant deadline 化 | 同型 3 ループの三重複を単一ヘルパーへ一般化（synthesis）。詳細契約は design.md |
+| DD-8 i686 前提と workspace gate | **検証手順へ明記** | i686 2 クレート先行ビルド・PowerShell 実行・worktree では `git submodule update --init` 先行（steering: harness-shell-quirks） |
+
+## 10. Synthesis 帰結（generalization / build-vs-adopt / simplification）
+
+- **Generalization**: 同型 `'drive` ループ 3 箇所（steady_test.rs / close_test.rs ×2）は完全同形（Tick 送出→64 yield 観測→500 上限）→ **単一ヘルパー `drive_ticks_until_disconnect(sender, first_tick_second, what)` へ一般化**し common/mod.rs に置く（テスト間共有の既存ホーム・`join_bounded`/`DEFAULT_TIMEOUT` と同居）。将来の同型テストの再堕落（上限依存ループの再発明）を構造的に防ぐ。
+- **Build vs Adopt**: keeper は std `OnceLock`＋既存依存（tracing/tracing-subscriber）のみ＝新規依存ゼロ。`tracing-test` crate 等の採用は棄却（依存追加禁止・R6.3 の趣旨・API 意味論変更リスク）。
+- **Simplification**: keeper は関数 1 本＋static 1 本（trait/config/フレームワーク化なし・steering: 並行モデル「フレームワーク化禁止」に整合）。3 テストのループ内観測コード（`resumed`/`pump_resumed` フラグ・64-yield 内側ループ・中間 assert）は**削除**——各テスト既存の join 後最終表明（steady (2)・close#1 (c)/(d)・close#7 (b)）が復帰意味論を既に完全に担っており、ループ内観測は冗長な race 源でしかない（要件 7.2 の「表明の強化」は既存最終表明への一本化で達成）。
+
+## 11. 検証残（実装フェーズへ）
+
+- なし（R-1〜R-4 は本フェーズで解決済み）。kiro-review A-3 のレビュアー再読は `c:\rust\cargo\registry\src\index.crates.io-1949cf8c6b5b557f\` 配下で可能（展開済み・パス確定）。
