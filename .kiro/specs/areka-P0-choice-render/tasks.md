@@ -215,12 +215,13 @@
   - _Boundary: RuntimeContract_
 
 - [ ] 12. Validation: 実機サインオフと最終回帰
-- [ ] 12.1 実機サインオフ手順を実施する
+- [ ] 12.1 実機サインオフ手順を実施する _Blocked: 人間の実機目視サインオフ必須（本番ゴースト表示＋実 DPI≠96＋ダブルクリック＋ハイライト巡回目視）＝自動代行不可。導線・自動化部は実装/検証済み・開発者の実機判断待ち。_
   - _Depends: 10, 11.2_
   - pasta.dll を絶対パスで起動し、本番ゴースト表示を先行させたうえでダブルクリックしてメニューを表示、選択肢行が字下げどおり可視であることを目視確認する。`AREKA_CHOICE_HOVER_INJECT=cycle` と有界な `AREKA_APP_SMOKE_EXIT_MS` を設定し、ハイライトが巡回する様子を目視確認したうえで、`RUST_LOG` から注入 ordinal のログを grep で確認する（実ポインタ操作は判定に混ぜない）
   - Observable: 選択肢行の可視・ハイライト巡回の人間目視・注入 ordinal の `RUST_LOG` grep 一致の3点がそろったサインオフ記録が残る
   - _Requirements: 8.1, 8.2, 8.3, 8.4, 8.5_
   - _Boundary: HoverInjectConduit_
+  - **実装状態（開発者への申し送り）**: hover 注入導線（task 10 `AREKA_CHOICE_HOVER_INJECT=cycle[:ms]`・frame clock 駆動・info ログ・env 未設定=完全無効）は実装＋テスト済。headless E2E（task 11.2 実 emo2 fixture）と実フォント目視（task 11.1・AI vision で PNG 確認済）は完了。**残=実機での人間3点サインオフ**: 実 pasta.dll 絶対パス起動→本番ゴースト先行→ダブルクリックでメニュー可視（字下げ）→`AREKA_CHOICE_HOVER_INJECT=cycle`＋有界 `AREKA_APP_SMOKE_EXIT_MS` でハイライト巡回目視→`RUST_LOG=info` grep で注入 ordinal 系列一致。sylphya 先例（実機サインオフを開発者が実施→`/kiro-complete`）と同型。
 
 - [x] 12.2 最終ワークスペース回帰を実施する
   - _Depends: 12.1_
