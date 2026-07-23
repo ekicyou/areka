@@ -170,8 +170,18 @@ pub fn make_username_resource_sink(publisher: SylphyaPublisher, asker: AskerId) 
 pub fn from_sylphya_provider(reader: SylphyaReader, asker: AskerId) -> SystemVarSource {
     let ctx = AskerContext { asker };
     Box::new(move || {
+        let raw = reader.talk_snapshot(&ctx);
+        // provider 差替の証跡（design Monitoring 固定ログ・R9.3 サインオフ用）。
+        // talk 起動ごとに 1 回、スナップショットの源が sylphya 読み口であることを記録する
+        // （固定 target/メッセージは Revalidation Trigger——変更時は design Monitoring を更新）。
+        tracing::debug!(
+            target: "areka_ghost",
+            asker = ctx.asker.as_str(),
+            count = raw.len(),
+            "talk snapshot from sylphya reader"
+        );
         let mut snapshot = SystemVarSnapshot::default();
-        for (name, value) in reader.talk_snapshot(&ctx) {
+        for (name, value) in raw {
             snapshot.insert(name, value);
         }
         snapshot
@@ -315,5 +325,55 @@ mod tests {
                 ("keroname".to_string(), "むらさき".to_string()),
             ]
         );
+    }
+
+    // --- provider 差替の固定ログ（design Monitoring・R9.3 サインオフ証跡・Task 10.1） ---
+
+    /// `from_sylphya_provider` が生成するスナップショットのたびに、design Monitoring の固定ログ
+    /// `debug!(target: "areka_ghost", "talk snapshot from sylphya reader")` が**必ず 1 回**発火する
+    /// （provider の源が sylphya 読み口であることの R9.3 grep 証跡）。ログが削除・target/メッセージ
+    /// 変更・レベル変更されると本檻が落ちる（固定ログの回帰檻）。
+    ///
+    /// interest-keeper 経由の [`crate::test_log_capture::capture`] で捕捉し、並列 `cargo test` 負荷下
+    /// でも `Interest::never` 焼き付きに影響されず決定論的に判定する（bare `with_default` 不使用）。
+    #[test]
+    fn provider_snapshot_emits_fixed_debug_log() {
+        use crate::test_log_capture::{assert_logged, capture};
+
+        // 空 roots（全 None）で sylphya を起動——FsPersistIo だが root 不在で FS を一切触らない
+        // （load_scope は root 不在→空縮退・決定論）。selfname を publish して asker 区画へ着地させる。
+        let parts = spawn_ghost_sylphya(ScopeRoots::default());
+        let asker = AskerId::new("ghost/provider-log-cage");
+        parts.publisher.publish_static(
+            asker.clone(),
+            vec![("selfname".into(), "さくら".into())],
+            vec![],
+        );
+        parts.publisher.barrier().expect("barrier while actor alive");
+
+        let provider = from_sylphya_provider(parts.reader.clone(), asker);
+
+        // provider をテストスレッド上で駆動——debug! は同一スレッドで発火し capture が確実に捕える。
+        let mut snapshot = None;
+        let events = capture(|| {
+            snapshot = Some(provider());
+        });
+
+        // 固定ログが規約どおり（target="areka_ghost"・DEBUG・固定メッセージ）で発火している。
+        assert_logged(
+            &events,
+            tracing::Level::DEBUG,
+            "areka_ghost",
+            "talk snapshot from sylphya reader",
+        );
+        // スナップショットの源が sylphya 読み口であること（publish した値が provider 像に載る）。
+        assert_eq!(
+            snapshot.expect("provider produced a snapshot").get("selfname"),
+            Some("さくら"),
+            "provider 像は sylphya 鏡像由来（publish した selfname が載る）"
+        );
+
+        parts.publisher.close();
+        parts.handle.join().expect("clean close joins without panic");
     }
 }

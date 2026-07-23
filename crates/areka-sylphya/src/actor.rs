@@ -917,6 +917,53 @@ mod tests {
         assert_eq!(core().apply(&msg), vec![Effect::Barrier]);
     }
 
+    // === design Monitoring 固定ログ: アクター適用記録 debug!（R9.3 サインオフ証跡・Task 10.1）===
+
+    /// SET store-write の適用時に、design Monitoring の固定ログ
+    /// `debug!(target: "areka_sylphya::actor", ...)`（publish/SET/persist の適用記録）が発火する
+    /// （R9.3 grep 証跡・無音でない適用記録・R8.1）。`apply` は純関数ゆえテストスレッド上で駆動でき、
+    /// interest-keeper 経由 [`crate::test_log_capture::capture`] で並列負荷下でも決定論捕捉する
+    /// （bare `with_default` 不使用）。ログが削除・target/レベル変更されると本檻が落ちる。
+    #[test]
+    fn apply_store_write_emits_actor_debug_log() {
+        use crate::test_log_capture::{assert_logged, capture};
+
+        let events = capture(|| {
+            let _ = core().apply(&SylphyaMsg::Set {
+                asker: asker(),
+                key: "myplugin.customstate".into(),
+                value: "on".into(),
+            });
+        });
+        assert_logged(
+            &events,
+            tracing::Level::DEBUG,
+            LOG_TARGET,
+            "SET store-write to host dotted region",
+        );
+    }
+
+    /// PublishShiori{None}（204/失敗＝不在記録）の適用時にも同 target の固定 debug! が発火する
+    /// （SHIORI 照会系の適用記録・無音でない不在縮退・R8.1）。
+    #[test]
+    fn apply_publish_shiori_absent_emits_actor_debug_log() {
+        use crate::test_log_capture::{assert_logged, capture};
+
+        let events = capture(|| {
+            let _ = core().apply(&SylphyaMsg::PublishShiori {
+                asker: asker(),
+                name: "username".into(),
+                value: None,
+            });
+        });
+        assert_logged(
+            &events,
+            tracing::Level::DEBUG,
+            LOG_TARGET,
+            "shiori resource absent",
+        );
+    }
+
     // === 決定論（同一入力 → 同一効果列・I/O なし）===
 
     #[test]

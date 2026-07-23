@@ -224,7 +224,7 @@
   - _Requirements: 7.2, 9.1, 9.2_
 
 - [ ] 10. Validation: 横断規律・最終検証
-- [ ] 10.1 固定ログイベントと無音失敗監査
+- [x] 10.1 固定ログイベントと無音失敗監査
   - design.md の Monitoring 節に定義された固定ログイベント（kanade prefetch `info!`・sylphya actor `debug!`・ghost provider `debug!`）が実装どおりに出力されることを確認する
   - 全エラー経路（解決系・SHIORI 照会系・永続系・アクター系・SET 系）が無音失敗せず、必ず warn!/error! と定義済み縮退へ到達することを監査する
   - 環境変数制御箇所（`AREKA_PROFILE_DIR` 等）がすべて `AREKA_` 名前空間であることを確認する

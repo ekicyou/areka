@@ -33,6 +33,12 @@ pub mod sink;
 pub mod sylphya_wiring;
 pub mod ticker;
 
+// Task 10.1: 固定ログイベント檻の共有基盤（interest-keeper で並列負荷下の Interest::never 焼き付きを
+// 根絶・決定論檻・R9.3／R8.1）。`crate::sylphya_wiring` の provider debug 固定ログテストが
+// `crate::test_log_capture::capture` から利用する。
+#[cfg(test)]
+mod test_log_capture;
+
 pub use runtime::{
     GhostBootError, GhostBootOptions, GhostHandles, GhostParts, GhostRuntime, GhostShutdownError,
     ShioriWiring, SystemVarSource, SystemVarWiring, TickerMode, boot,
