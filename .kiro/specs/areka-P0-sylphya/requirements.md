@@ -4,13 +4,13 @@
 
 areka（ukadoc 準拠の互換ベースウェア）には現在、「名前で引ける値」の解決機構が存在せず、確定コースのままでは同一関心が 3 箱へ分裂する: (a) %系環境変数の値源（emo2 の撫で talk で `%username` は W1 の暫定 provider による既定値展開のみ・実 SHIORI 照会は未結線）、(b) `areka-P0-position-persist` が要件化した専用のゴースト別永続ストア（未承認）、(c) 既存の IShioriHost プロパティストア（dotted key・同期即答・充填源未結線）。開発者裁定により、areka は統一プロパティシステム **sylphya** を 1 つだけ新設する。「プロパティ」とは名前で引けるものすべてであり、%フラット名前空間と点付き名前空間は単一の系の 2 つの窓である（ukadoc は両方法の併存を記すが単一名前空間の正準宣言は無く、統一は正典と無矛盾な areka のアーキテクチャ判断として本 spec が確立する）。
 
-本ユニットは、(1) 単一名前空間・key モデル・読み口 API（talk 決定論用の凍結スナップショット＋逐次解決）・値源（backing）差替シーム・永続 backing を 1 機構として提供し、(2) フラット語彙 26 トークン・点付き 10 ルート枝・SHIORI Resource 全 159 項目の全語彙を**完全形で第一級保持**したうえで、M1 は源のあるものだけ実導出し残りは差替シーム付きで決定論的に縮退させ、(3) `%username` の実 SHIORI 照会経路と `%selfname`/`%selfname2`/`%keroname` の descript 導出を実装し、(4) position-persist の 4 永続フィールドを収容する永続 backing（原子的書込・寛容読取・バージョン付き形式・ゴースト単位識別キー）を提供し、(5) 既存の暫定 provider と IShioriHost プロパティストアを統合して「同じ関心の 2 箱目・3 箱目」を消す。プロパティ解決に起因するいかなる失敗でもゴーストの起動・実行を停止させない（失敗はログ＋定義済み縮退）。
+本ユニットは、(1) 単一名前空間・key モデル・読み口 API（talk 決定論用の凍結スナップショット＋逐次解決）・値源（backing）差替シーム・永続 backing を 1 機構として提供し、(2) フラット語彙 26 トークン・点付き 10 ルート枝・SHIORI Resource 全 159 項目の全語彙を**完全形で第一級保持**したうえで、M1 は源のあるものだけ実導出し残りは差替シーム付きで決定論的に縮退させ、(3) `%username` の実 SHIORI 照会経路と `%selfname`/`%selfname2`/`%keroname` の descript 導出を実装し、(4) position-persist の 4 永続フィールドを収容する層別永続 backing（areka アプリ/SHIORI/シェル/バルーンの永続スコープ・対応層 profile フォルダ配置・TOML 直列化・原子的書込・寛容読取・バージョン付き形式）を提供し、(5) 既存の暫定 provider と IShioriHost プロパティストアを統合して「同じ関心の 2 箱目・3 箱目」を消す。プロパティ解決に起因するいかなる失敗でもゴーストの起動・実行を停止させない（失敗はログ＋定義済み縮退）。
 
 ## Boundary Context
 
-- **In scope**: 単一名前空間と key モデル（フラット 26 トークン・点付き 10 ルート枝＋汎用プロパティ名 17 種＋セレクタ 5 形・SHIORI Resource 159 項目の第一級保持）／読み口 2 形（talk 開始時の凍結スナップショット＝dialogue-tags R7 契約の供給側・逐次解決）／値源（backing）差替シームと決定論的縮退（素通し・既定値・NOT_FOUND）／M1 実導出: `%username`（SHIORI Resource GET 照会・204→既定値縮退）・`%selfname`（descript sakura.name）・`%selfname2`（descript sakura.name2・読取拡張含む）・`%keroname`（descript kero.name）・点付き `baseware.name`/`baseware.version`／永続 backing（窓位置 scope 別・バルーン相対オフセット scope 別・起動記録・vanish 回数の 4 key 族、原子的書込・寛容読取・バージョン付き形式・ゴースト単位識別キー・往復耐久）／ghost の暫定 provider（W1 差替点）の sylphya 読み口への差し替え（消費側契約無改変）／IShioriHost プロパティ応答（GetProperty/SetProperty）の sylphya への統合（第 2 ストアの解消）／SET 有効群の書込型シーム予約（実書込なし）／全判断分岐の決定論単体テスト檻。
+- **In scope**: 単一名前空間と key モデル（フラット 26 トークン・点付き 10 ルート枝＋汎用プロパティ名 17 種＋セレクタ 5 形・SHIORI Resource 159 項目の第一級保持）／読み口 2 形（talk 開始時の凍結スナップショット＝dialogue-tags R7 契約の供給側・逐次解決）／値源（backing）差替シームと決定論的縮退（素通し・既定値・NOT_FOUND）／M1 実導出: `%username`（SHIORI Resource GET 照会・204→既定値縮退）・`%selfname`（descript sakura.name）・`%selfname2`（descript sakura.name2・読取拡張含む）・`%keroname`（descript kero.name）・点付き `baseware.name`/`baseware.version`／永続 backing（窓位置 scope 別・バルーン相対オフセット scope 別・起動記録・vanish 回数の 4 key 族、層別永続スコープ〔areka アプリ/SHIORI/シェル/バルーン〕と対応層 profile フォルダ配置、TOML 直列化、原子的書込・寛容読取・バージョン付き形式・往復耐久）／ghost の暫定 provider（W1 差替点）の sylphya 読み口への差し替え（消費側契約無改変）／IShioriHost プロパティ応答（GetProperty/SetProperty）の sylphya への統合（第 2 ストアの解消）／SET 有効群の書込型シーム予約（実書込なし）／全判断分岐の決定論単体テスト檻。
 - **Out of scope**: 縮退指定語彙の実導出（時刻系 5・画面系 2・exh/et/wronghour・単語ランダム系 10・インストール文脈系 2・system.\*・ghostlist/activeghostlist/currentghost/balloonlist/headlinelist/pluginlist/history/rateofuselist 配下——各々差替シームと追跡宿題を残す）／`\![vanish]` 実装（カウント増分の発生源＝M2）・ゴースト切替・多重ゴースト／SSTP EXECUTE GetProperty・SetProperty（SSTP サーバ自体が M1 外）／SHIORI・PLUGIN イベント property.get/property.set の発火実装（ext 亜枝の実働＝M2）／単語ランダム系の候補辞書（出所自体が未確認）／さくらスクリプト展開器そのものの改変（展開器は dialogue-tags 完了済の領分・本ユニットは値源と読み口のみ）／SET 有効群への実書込（M2）／SSP `ghost.dat` バイナリ互換（不要・areka 自由形式）／ネットワーク系プロパティの実照会・ヘッドライン/更新系機能／選択肢 UI・メニュー描画。
-- **Adjacent expectations**: 完了済 `areka-P0-sakura-dialogue-tags` の R7 契約（名前→値の凍結スナップショット・既定値の唯一定義点・素通し縮退・per-talk 凍結）が消費側の正本であり、本ユニットは消費側契約を**無改変**のまま供給側を実体化する（差替点は W1 が ghost 側に用意済みの供給シーム）。`areka-P0-position-persist`（未承認・後続ウェーブ）は本ユニットの永続 backing の**消費者**へ再切削され、復元意味論（アンカー再射影・OnFirstBoot ゲート運行・Reference0 注入・観測点消費）は同 spec に残存する（デルタの正本＝本 spec brief.md 申し送り節）。既存 IShioriHost プロパティストアの観測挙動（dotted key・GetProperty 同期即答・欠落 key はプロパティ不在エラー）は統合後も維持し、統合の方式・段階は design で確定する（Boundary Candidate 継承）。SHIORI 照会は既存の GET 経路（任意リソース ID の照会が機構的に可能）を用い、動的 key 照会の内部制約は design 論点。次の Boundary Candidates は design 討議へ引き継ぐ: `%property[...]` の字句拡張（現行走査規則ではトークン化不能）／`%screenwidth`・`%screenheight` の実導出（物理/論理 px 契約の確定が前提）／`currentghost` の name 系点付き実導出／暦時計注入シームの新設を本 spec で行うか追跡 spec へ譲るか／永続直列化形式（自前 KV か serde 形式か・serde の workspace hoist）。正典は ukadoc とし、正典が沈黙する箇所（既定値・未定義時挙動・SET 失敗挙動等）は areka 裁量＋対応表記録とする。
+- **Adjacent expectations**: 完了済 `areka-P0-sakura-dialogue-tags` の R7 契約（名前→値の凍結スナップショット・既定値の唯一定義点・素通し縮退・per-talk 凍結）が消費側の正本であり、本ユニットは消費側契約を**無改変**のまま供給側を実体化する（差替点は W1 が ghost 側に用意済みの供給シーム）。`areka-P0-position-persist`（未承認・後続ウェーブ）は本ユニットの永続 backing の**消費者**へ再切削され、復元意味論（アンカー再射影・OnFirstBoot ゲート運行・Reference0 注入・観測点消費）は同 spec に残存する（デルタの正本＝本 spec brief.md 申し送り節）。既存 IShioriHost プロパティストアの観測挙動（dotted key・GetProperty 同期即答・欠落 key はプロパティ不在エラー）は統合後も維持し、統合の方式・段階は design で確定する（Boundary Candidate 継承）。SHIORI 照会は既存の GET 経路（任意リソース ID の照会が機構的に可能）を用い、動的 key 照会の内部制約は design 論点。次の Boundary Candidates は design 討議へ引き継ぐ: `%property[...]` の字句拡張（現行走査規則ではトークン化不能）／`%screenwidth`・`%screenheight` の実導出（物理/論理 px 契約の確定が前提）／`currentghost` の name 系点付き実導出／暦時計注入シームの新設を本 spec で行うか追跡 spec へ譲るか。永続直列化形式は要件討議（2026-07-23）で開発者裁定により **TOML** に確定済み（採用クレートと導入形は design で確定）。正典は ukadoc とし、正典が沈黙する箇所（既定値・未定義時挙動・SET 失敗挙動等）は areka 裁量＋対応表記録とする。
 
 ## Requirements
 
@@ -37,7 +37,8 @@ areka（ukadoc 準拠の互換ベースウェア）には現在、「名前で�
 2. The sylphya プロパティシステム shall 既存のスナップショット消費契約（dialogue-tags R7: 名前→値写像・値あり→その値・`username` 欠落→既定値・未対応名→素通し）を消費側無改変のまま満たすスナップショットを供給可能とする。
 3. The sylphya プロパティシステム shall 逐次解決の読み口（名前 1 件を与えて値または不在を同期的に得る）を提供する。
 4. The sylphya プロパティシステム shall 読み口の結果に値の由来（どの値源・backing から来たか）を含めない（消費者は由来へ依存できない）。
-5. While 値源の状態が同一であるとき, the sylphya プロパティシステム shall 同一名の解決に対して常に同一の結果を返す（決定論）。
+5. While 値源の状態が同一であるとき, the sylphya プロパティシステム shall 同一の問い合わせ元コンテキストからの同一名の解決に対して常に同一の結果を返す（決定論）。
+6. The sylphya プロパティシステム shall 解決要求に問い合わせ元コンテキスト（どの SHIORI／ゴーストからの照会か）を第一級で受け取り、問い合わせ元に相対的な語彙（`currentghost` 系等）を問い合わせ元ごとに解決可能な形とする（`system.*` 等の大域語彙は問い合わせ元へ依存しない。M1 は単一ゴースト運行のため実挙動は単一だが、読み口 API の形は問い合わせ元コンテキストを含む）。
 
 ### Requirement 3: 決定論的縮退と値源差替シーム
 
@@ -81,8 +82,8 @@ areka（ukadoc 準拠の互換ベースウェア）には現在、「名前で�
 1. The sylphya プロパティシステム shall areka 独自名前空間の永続 key 族として、窓位置（キャラクタースコープ別）・バルーン相対オフセット（キャラクタースコープ別）・起動記録・vanish 回数の 4 key 族を保存・復元可能とする。
 2. When 永続値の保存が要求されるとき, the sylphya プロパティシステム shall 書込が途中で中断しても以前に保存済みの有効状態を破壊しない原子的な確定（一時書込→置換）で保存する。
 3. If 永続状態が存在しない・読み取れない・解釈できない（破損・未知形式/バージョンを含む）とき, the sylphya プロパティシステム shall 警告ログを記録して「不在」として寛容に縮退し、呼び出し側の起動継続を妨げない。
-4. The sylphya プロパティシステム shall 永続形式をバージョン識別可能な形式とし、将来の形式進化時に旧形式を判別できるようにする。
-5. The sylphya プロパティシステム shall 永続状態をゴースト固有の識別キーで分離し、他のゴーストの状態と混同しない。
+4. The sylphya プロパティシステム shall 永続直列化形式として TOML を採用し、バージョン識別可能な形式として将来の形式進化時に旧形式を判別できるようにする。
+5. The sylphya プロパティシステム shall 永続状態を層別の永続スコープ（areka アプリレベル・SHIORI〔ゴースト〕レベル・シェルレベル・バルーンレベル）で管理し、各層の永続情報を対応する層の profile フォルダへ保存する（伺か慣行準拠）。スコープ内は所属実体（ゴースト等）固有の識別で分離し、他実体・他層の状態と混同しない。
 6. The sylphya プロパティシステム shall 4 key 族すべてについて保存→復元の往復で値等価を保証する。
 7. If 永続化に起因するいかなる失敗（保存失敗・読取失敗・形式異常）が発生しても, the sylphya プロパティシステム shall panic せず、エラー/警告ログと定義済み縮退で継続する（ゴーストの起動・実行を停止させない）。
 
@@ -112,7 +113,7 @@ areka（ukadoc 準拠の互換ベースウェア）には現在、「名前で�
 
 #### Acceptance Criteria
 
-1. The sylphya プロパティシステム shall 全判断分岐（フラット/点付き解決・素通し/既定値/NOT_FOUND 縮退・per-talk 凍結・SHIORI 照会値源の 204 縮退・寛容読取・原子的書込・往復値等価・ゴースト識別キー分離・セレクタ文法解釈）を、注入シーム経由の決定論的な単体テストで検証可能とする。
+1. The sylphya プロパティシステム shall 全判断分岐（フラット/点付き解決・素通し/既定値/NOT_FOUND 縮退・per-talk 凍結・SHIORI 照会値源の 204 縮退・寛容読取・原子的書込・往復値等価・層別永続スコープ分離・問い合わせ元コンテキスト分岐・セレクタ文法解釈）を、注入シーム経由の決定論的な単体テストで検証可能とする。
 2. The sylphya プロパティシステム shall 決定論テストを x64 純粋テストとして実行可能とする（実 SHIORI・実ファイルシステム障害・実 OS 環境は偽境界の注入で代替する）。
 3. The 受け入れ判定 shall 実機（emo2）の撫で talk で `%username` が生文字列としてバルーンへ露出せず、既定値（204 縮退）で表示されること、かつその経路が実 SHIORI 照会値源を通ったことを、有界自動終了＋ログ確認の決定論的判定で確認することを必達とする。
 4. The sylphya プロパティシステム shall `%selfname`・`%selfname2`・`%keroname` が descript 実値（および未定義時の縮退規則）どおりに解決されることを決定論的な単体テストで検証可能とする。
