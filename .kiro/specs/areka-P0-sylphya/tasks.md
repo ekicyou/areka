@@ -7,7 +7,7 @@
   - `cargo build -p areka-sylphya` が空実装のままコンパイル成功することを確認する（クレート単体のビルド可能性が観測可能な完了条件）
   - _Requirements: 6.4_
 
-- [ ] 2. Core: key モデルと語彙台帳
+- [x] 2. Core: key モデルと語彙台帳
 - [x] 2.1 正準 key モデルと共有語彙型・asker コンテキスト
   - `PropPath`／`PathSeg`／`Selector`（括弧名選択・`.index(ID)`・`.current`・`.count`・数値括弧の 5 形を完全収容）と `parse_dotted` を実装する
   - 台帳共通型 `BackingLayer`（5 値）・`DegradePolicy`（PassThroughRaw／ConsumerDefault／NotFound）・`M1Status`・`SetSemantics`（RuntimeCommand／StoreWrite）を定義する
@@ -46,7 +46,7 @@
   - _Depends: 2.1, 2.2, 2.3, 2.4_
   - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.6, 3.1, 3.4, 3.5, 3.6, 9.1, 9.2_
 
-- [ ] 3. Core: 鏡像と SylphyaReader
+- [x] 3. Core: 鏡像と SylphyaReader
 - [x] 3.1 不変鏡像（per-asker/global 区画）
   - `MirrorImage { epoch: u64, flat_per_asker, flat_global, dotted_global, dotted_per_asker }` を不変値として実装する（設計討議 #1: フラット実導出語彙はゴースト相対ゆえ per-asker へ着地・global は将来の大域語彙用に確保）
   - `SharedMirror`（`RwLock<Arc<MirrorImage>>`）による epoch 交換（copy-on-write・publish 時に新しい `Arc` を構築して swap）を実装する
@@ -71,7 +71,7 @@
   - _Depends: 3.1, 3.2_
   - _Requirements: 2.1, 2.3, 2.5, 2.6, 3.1, 3.2, 9.1, 9.2_
 
-- [ ] 4. Core: 永続層
+- [x] 4. Core: 永続層
 - [x] 4.1 (P) TOML 直列化形式と寛容読取
   - この永続層は語彙台帳（Major 2）にも鏡像（Major 3）にも依存しない自己完結モジュールであり、Major 1 完了後ただちに並走着手可能（Major 2・3 と並行実施可）
   - `format-version = 1` を持つ TOML スキーマ（`[window."ID"]`／`[balloon-offset."ID"]`／`[boot]`／`[vanish]`、値はすべて文字列）を実装する
@@ -104,7 +104,7 @@
   - _Depends: 4.3_
   - _Requirements: 6.1, 6.2, 6.3, 6.4, 6.5, 6.6, 6.7, 9.1, 9.2_
 
-- [ ] 5. Core: sylphya アクター
+- [x] 5. Core: sylphya アクター
 - [x] 5.1 SylphyaMsg envelope と SylphyaCore 純関数中核
   - `SylphyaMsg`（`PublishStatic{asker,flat,dotted}`／`PublishShiori{asker,name,value}`／`Set{asker,key,value}`／`PersistPut{scope,entries,reply}`／`Barrier{reply}`／`Close`）を定義する
   - 判断分岐を純関数中核 `SylphyaCore::apply(msg) -> 効果列` へ寄せる（受信ループは薄い配線のみ）
@@ -131,7 +131,7 @@
   - _Depends: 5.2_
   - _Requirements: 3.3, 3.4, 6.7, 8.1, 9.1, 9.2_
 
-- [ ] 6. Integration: kanade SHIORI リソース照会の座席
+- [x] 6. Integration: kanade SHIORI リソース照会の座席
 - [x] 6.1 (P) リソース許可集合と submit ガード拡張
   - この座席は `ResourceSink` クロージャで疎結合されており areka-sylphya クレートへ依存しない（design 論点1）。Major 2-5 と並走可能
   - イベント檻（`ALLOWED_EVENT_IDS`）とは別族の `ALLOWED_RESOURCE_IDS`（M1: `["username"]`）と `is_allowed_resource_id` を実装する
@@ -165,7 +165,7 @@
   - _Requirements: 4.4_
   - _Boundary: areka-parsers package/model.rs, package/resolve.rs_
 
-- [ ] 8. Integration: ghost 結線
+- [x] 8. Integration: ghost 結線
 - [x] 8.1 derive_flat_statics 純関数（selfname 系フォールバック）
   - `derive_flat_statics(&GhostNames) -> Vec<(String,String)>` を純関数として実装する: `sakura.name`→selfname／`sakura.name2`→selfname2（未定義時は積まない＝素通し縮退）／`kero.name`→keroname（未定義時は `sakura.name` へフォールバック、両方未定義なら積まない）
   - selfname2 未定義時の素通し縮退、keroname の SSP 互換フォールバック規則を `doc/COMPAT_ARCHITECTURE.md` 対応表へ記録する
@@ -198,7 +198,7 @@
   - _Depends: 8.2, 8.3_
   - _Requirements: 2.1, 2.2, 4.2, 4.3, 4.4, 4.5, 5.1, 7.1, 9.1, 9.2, 9.4_
 
-- [ ] 9. Integration: ShioriHostSink 統合
+- [x] 9. Integration: ShioriHostSink 統合
 - [x] 9.1 (P) HashMap ストア撤去・with_sylphya 構築
   - この統合は sylphya アクター（Major 5）完了のみに依存し、ghost 結線（Major 8）とは異なるファイル（bin crate 内の shiori_host.rs）を扱うため並走可能
   - `ShioriHostSink.properties: Mutex<HashMap<String, HSTRING>>` を撤去する
@@ -223,7 +223,7 @@
   - _Depends: 9.2_
   - _Requirements: 7.2, 9.1, 9.2_
 
-- [ ] 10. Validation: 横断規律・最終検証
+- [x] 10. Validation: 横断規律・最終検証
 - [x] 10.1 固定ログイベントと無音失敗監査
   - design.md の Monitoring 節に定義された固定ログイベント（kanade prefetch `info!`・sylphya actor `debug!`・ghost provider `debug!`）が実装どおりに出力されることを確認する
   - 全エラー経路（解決系・SHIORI 照会系・永続系・アクター系・SET 系）が無音失敗せず、必ず warn!/error! と定義済み縮退へ到達することを監査する
