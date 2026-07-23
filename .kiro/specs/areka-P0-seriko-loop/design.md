@@ -544,7 +544,7 @@ impl PatternState {
   3. 各 id: PatternState にコマがあれば**コマが優先**（同 ID の pattern0 静的寄与を置換＝「各コマは直前コマをリセットしてベースへ」4.2）。無ければ従来の pattern0 経路。
   4. コマの描画: `method.is_implemented()`（＝Overlay）なら pattern0 と同様に `frame.surface_id` へ (x,y) 累積オフセットで再帰 flatten。非 Overlay は warn!（method 名込み）＋当該コマ不描画（完全形保持のまま非駆動・8.4）。
 - pattern0 静的経路にも同じ method ゲートを追加する（parser のフィルタ撤去で非 overlay pattern0 がモデルへ流入し得るため・D-5 の是正）。emo2 は全 overlay ゆえ golden byte 不変。
-- `compute_extent`（外形）は**変更しない**: 外形は従来どおり静的母集合（全 element＋全 bind pattern0）から算出し、transient コマは外形へ寄与しない。まばたきコマ（1410-1412/2106-2110）はベース外形内に収まる前提を維持し、bind オン/オフ・pattern 進行でサイズが揺れない不変条件（emo-present のバッファ再利用）を守る。コマがベース外形を越える場合は越えた分がクリップされる（既存クリップ規則・許容劣化として記録）。
+- `compute_extent`（外形）は**変更しない**: 外形は従来どおり静的母集合（全 element＋全 bind pattern0）から算出し、transient コマは外形へ寄与しない。まばたきコマ（1410-1412/2106-2110）はベース外形内に収まる前提を維持し、bind オン/オフ・pattern 進行でサイズが揺れない不変条件（emo-present のバッファ再利用）を守る。コマがベース外形を越える場合は越えた分がクリップされる（既存クリップ規則・許容劣化として記録）。**この前提は宣言に留めず、emo2 fixture の実測檻で裏取りする**（Testing Strategy 参照——採録アニメ全コマの原寸＋(x,y) が当該ベース Extent 内に収まることを検証。前提が崩れた場合はテストで露見し R9 実機まで持ち越さない）。
 
 **Contracts**: Service [x]
 
@@ -694,7 +694,7 @@ log-first・silent failure 禁止（[areka-log-first-no-silent-failure]）。入
 
 1. `looper::on_tick`（同期・`handle_message` 経由）— 注入 tick 列＋注入乱数列で期待 PatternState 列と発行列が完全一致（7.2）: kero 型（`-1` 終端→ベース復帰）・sakura 型（末尾残留）・再生中の非再抽選（2.3）・bind OFF で判定不発（乱数**非消費**の檻・3.1）・ON で発火（3.2）・変化なし tick は無発行（6.2）・surface 切替でコマ消滅（リセット）。
 2. `state::commit_pattern` — 冪等（同値 Unchanged）・Changed の Show/ShowBalloon 同梱値（binds・pattern）・`apply` の surface 切替 pattern クリア・`apply_bind` 再発行への current_pattern 同梱。
-3. emo-compose golden — 空 PatternState で拡張前と **byte 等価**（5.4）・transient コマ合流の golden（同 ID 置換・ID 整列不変・5.3）・非 Overlay コマの warn!＋不描画（8.4）・`compute_extent` 不変。
+3. emo-compose golden — 空 PatternState で拡張前と **byte 等価**（5.4）・transient コマ合流の golden（同 ID 置換・ID 整列不変・5.3）・非 Overlay コマの warn!＋不描画（8.4）・`compute_extent` 不変・**外形前提の実測檻**: emo2 fixture の採録アニメ全コマ（kero 2106-2110／sakura 1410-1412）について原寸＋(x,y) オフセットが当該ベース surface の Extent 内に収まることをアサート（クリップ許容劣化が emo2 では発生しないことの裏取り）。
 4. emo-present cache — pattern 差分でミス・同値でヒット・invalidate_all 不変（5.2）。
 5. adapter — pattern 非改変転写（Show/ShowBalloon 両写像）。
 6. ghost `spawn_loop_ticker` — 注入クロックでグリッド発火・catch-up 1 回・Close/切断停止（既存 ticker テスト流儀）。
