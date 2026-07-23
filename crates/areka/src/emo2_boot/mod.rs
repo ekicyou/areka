@@ -281,6 +281,7 @@ pub fn wire_emo2_boot(
         balloon_model,
         resolver,
         static_binds,
+        bind_resolver,
     } = assets;
     // boot は S: dola::cue::CueSink + Clone を要求する。SerikoSink は upstream `areka-seriko` で
     // `CueSink` を実装し `#[derive(Clone)]` 済み（内側 mpsc::Sender は常に Clone・全 clone は単一 inbox
@@ -295,6 +296,7 @@ pub fn wire_emo2_boot(
         // attach は resolver を一切読まない（Task 4.1 申し送り）ため無害なプレースホルダ。
         resolver: SurfaceResolver::new(BTreeMap::new()),
         static_binds,
+        bind_resolver,
     };
 
     // 手順5: boot（実 sink 注入）。Err は既存 is_benign_boot_error 分類（R7.4）＋フォールバック。

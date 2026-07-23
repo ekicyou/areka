@@ -440,7 +440,14 @@ impl SpineHarness {
         //    （attach は resolver を読まない・Task 4.1 申し送り・wire_emo2_boot 手順4 と同型）。 ──
         let (tx, rx) = mpsc::channel::<PresentCommand>();
         let bridge = PresentBridge::new(tx);
-        let BootAssets { shells, balloons, balloon_model, resolver, static_binds } = assets;
+        let BootAssets {
+            shells,
+            balloons,
+            balloon_model,
+            resolver,
+            static_binds,
+            bind_resolver,
+        } = assets;
         // TODO(task 7.2): BindResolver::empty() は暫定コンパイル橋。task 7.2 が BootAssets.bind_resolver（実名前解決表）へ差し替える。
         let (surface_sink, seriko) =
             spawn_seriko(resolver, static_binds.clone(), BindResolver::empty(), bridge);
@@ -450,6 +457,7 @@ impl SpineHarness {
             balloon_model,
             resolver: SurfaceResolver::new(BTreeMap::new()),
             static_binds,
+            bind_resolver,
         };
 
         // ── move channel＋実 MoveCueSink（wire_emo2_boot 手順4 と同型・S-3 形＝task 9.3） ──

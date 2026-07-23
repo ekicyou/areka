@@ -22,7 +22,7 @@ use areka_parsers::balloon::BalloonModel;
 use areka_parsers::charset::{DefaultEncoding, decode};
 use areka_parsers::kv::parse_kv;
 use areka_parsers::package::resolve;
-use areka_seriko::{SurfaceResolver, build_static_bindset};
+use areka_seriko::{BindResolver, SurfaceResolver, build_static_bindset};
 use tracing::warn;
 
 use super::BootWiringError;
@@ -109,6 +109,9 @@ pub struct BootAssets {
     pub resolver: SurfaceResolver,
     /// 起動時オンの静的 bind 集合（shell descript `sakura.bindgroup{N}.default==1`・DD-8）。
     pub static_binds: BindSet,
+    /// bind 名前解決情報（`MountModel.bindgroups` の名前宣言由来・`(カテゴリ, パーツ)`→着せ替え ID）。
+    /// task 7.2 で `spawn_seriko` の actor 構築へ手渡す（本タスクは起動時資産への保持のみ）。
+    pub bind_resolver: BindResolver,
 }
 
 /// 構築入力（[`BootAssets`]）を一括組立する（tasks.md task 2.6・design「構築入力 / assets」）。
@@ -144,6 +147,21 @@ pub fn build_boot_assets(
 
     // マウント解決で shell dir を得る（起点 ghost/master/descript.txt・placement source と同経路）。
     let model = resolve(ghost_root, DefaultEncoding::Ansi).map_err(BootWiringError::Mount)?;
+
+    // bind 名前解決情報: `MountModel.bindgroups` の名前宣言（`(カテゴリ, パーツ)`→着せ替え ID）を
+    // 起動時資産へ焼き込む（既存 default_bind_ids/static_binds 経路は無改変・R independence）。
+    // sakura_names/kero_names は昇順転写ゆえ FORWARD 反復で insert すれば、parsers の
+    // last-declaration-wins（後宣言優先）と一致する（BTreeMap::insert が後勝ちで上書き）。
+    let mut sakura_map: BTreeMap<(String, String), u32> = BTreeMap::new();
+    for name in &model.bindgroups.sakura_names {
+        sakura_map.insert((name.category.clone(), name.part.clone()), name.id);
+    }
+    let mut kero_map: BTreeMap<(String, String), u32> = BTreeMap::new();
+    for name in &model.bindgroups.kero_names {
+        kero_map.insert((name.category.clone(), name.part.clone()), name.id);
+    }
+    let bind_resolver = BindResolver::new(sakura_map, kero_map);
+
     let shell_dir = model.shell.dir;
 
     // シェル: surfaces.txt 読取 → parse → bake を **1 回**（donor build_shell_target・placement measure 同経路）。
@@ -225,6 +243,7 @@ pub fn build_boot_assets(
         balloon_model,
         resolver,
         static_binds,
+        bind_resolver,
     })
 }
 
@@ -260,7 +279,7 @@ fn read_decoded_lenient(path: &Path) -> Option<String> {
 mod tests {
     use std::path::PathBuf;
 
-    use areka_seriko::SurfaceTarget;
+    use areka_seriko::{BindNamespace, SurfaceTarget};
     use windows::Win32::System::Com::{COINIT_MULTITHREADED, CoInitializeEx};
 
     use super::*;
@@ -382,6 +401,34 @@ mod tests {
             boot.static_binds.ids(),
             &[1100, 1207, 1302, 1500, 1800],
             "shell descript の sakura.bindgroup{{N}}.default==1（DD-8）"
+        );
+    }
+
+    /// 観測可能な完了条件（tasks.md task 7.1）: 名前宣言を持つ emo2 fixture を渡すと、
+    /// 起動時資産 `BootAssets.bind_resolver` から対応する着せ替え ID が解決できる。
+    ///
+    /// emo2 shell descript の `sakura.bindgroup1100.name,腕,伸び` 由来で
+    /// `resolve(Sakura, "腕", "伸び") == Some(1100)`（task 1.2 の `emo2_declared_names_all_resolve`
+    /// で存在確認済みの (カテゴリ, パーツ)→id 対）。未宣言の組は `None`（捏造しない・R3.7）。
+    #[test]
+    fn build_boot_assets_bind_resolver_resolves_emo2_names() {
+        // SAFETY: bake の WIC デコードに要る COM 初期化（既初期化の S_FALSE/RPC_E_CHANGED_MODE は無視）。
+        unsafe {
+            let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
+        }
+
+        let boot = build_boot_assets(&emo2_root(), &emo2_balloon_root(), &[0, 1])
+            .expect("emo2 fixture の BootAssets 組立は成功する");
+
+        assert_eq!(
+            boot.bind_resolver.resolve(BindNamespace::Sakura, "腕", "伸び"),
+            Some(1100),
+            "shell descript の名前宣言 `sakura.bindgroup1100.name,腕,伸び` が起動時資産から解決できる（7.1）"
+        );
+        assert_eq!(
+            boot.bind_resolver.resolve(BindNamespace::Sakura, "腕", "存在しない"),
+            None,
+            "未宣言の (カテゴリ, パーツ) は None（捏造しない・R3.7）"
         );
     }
 
