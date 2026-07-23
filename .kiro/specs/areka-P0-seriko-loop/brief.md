@@ -2,7 +2,7 @@
 
 > **種別**: 本坑（main）増分。⑤ seriko 帰属（M-life 構成要素＝まばたき等の自律アニメーション）。roadmap 増分「⑤ seriko: `seriko-loop`（SERIKO ループ＝blink random/bind+random）」の brief 化。
 > **調査日**: 2026-07-23（**全面リフレッシュ**＝mayuna-compose 実装完了後の実コード実査＋ukadoc 正典調査を反映。旧版 2026-07-16 の「要確定」事項を大幅解決）。
-> **✅ ゲート全解除（2026-07-23 時点）**: ①cue-playback-duration ✅完了（seriko 受信面の `dola::CueSink` 化は settled・`actor.rs:123-127`）。②**mayuna-compose 実装完了**（全タスク完・実機サインオフ済・kiro-complete 待ち）＝完了ゲート（追記㉘）の実質充足——動的 bind（`dynamic_binds`）・mustselect 排他・**emo-compose pattern0 厳格選択（実機第2欠陥の是正）**が着地済み。bind 読み口契約は**先決不要＝実在 API を消費するだけ**（下記）。mayuna の PR マージ後に `/kiro-start` で即着手可。
+> **✅ ゲート全解除（2026-07-23 時点）**: ①cue-playback-duration ✅完了（seriko 受信面の `dola::CueSink` 化は settled・`actor.rs:123-127`）。②**mayuna-compose 完了・マージ済**（全タスク完・実機サインオフ済・2026-07-23 PR squash マージ＝`completed/areka-P0-mayuna-compose`）＝完了ゲート（追記㉘）の充足——動的 bind（`dynamic_binds`）・mustselect 排他・**emo-compose pattern0 厳格選択（実機第2欠陥の是正）**が着地済み。bind 読み口契約は**先決不要＝実在 API を消費するだけ**（下記）。`/kiro-start` で即着手可。
 
 ## Problem
 
@@ -85,13 +85,13 @@ emo2 の**まばたき2系統**（kero=random・sakura=bind+random）が実機�
 
 ## Upstream / Downstream
 
-- **Upstream**: `areka-P0-mayuna-compose`（✅実装完了・動的 bind＋pattern0 厳格選択・PR マージが着手前提）／`completed/areka-P0-cue-playback-duration`（settled 受信面）／`completed/areka-P0-seriko-engine`（emit_display・冪等・ScopeStates）／`completed/areka-P0-emo-compose`＋`-present`（予約 TODO の宿主）／`completed/areka-P0-ghost-setup`（ticker）／`completed/areka-P0-shell-parse`（interval/pattern 転記✅）。
+- **Upstream**: `completed/areka-P0-mayuna-compose`（✅完了・マージ済・動的 bind＋pattern0 厳格選択）／`completed/areka-P0-cue-playback-duration`（settled 受信面）／`completed/areka-P0-seriko-engine`（emit_display・冪等・ScopeStates）／`completed/areka-P0-emo-compose`＋`-present`（予約 TODO の宿主）／`completed/areka-P0-ghost-setup`（ticker）／`completed/areka-P0-shell-parse`（interval/pattern 転記✅）。
 - **Downstream**: M-life（統合点・idle-talk✅/collision-geometry✅/input-events と合流）／`areka-P0-emo2-conformance-e2e`（まばたき2系統を適合項目に）／将来の SERIKO 拡張 interval・口パク（M2・型シーム）。
 
 ## Existing Spec Touchpoints
 
 - **Extends**: `completed/areka-P0-seriko-engine`（受信面・状態・発行点への additive 増分）。
-- **Adjacent**: `areka-P0-mayuna-compose`（state.rs 同居・read-only 消費）／areka-ghost ticker（第3系統 additive）。
+- **Adjacent**: `completed/areka-P0-mayuna-compose`（state.rs 同居・read-only 消費）／areka-ghost ticker（第3系統 additive）。
 - **Consumes**: emo-compose `plan.rs:306-318`（pattern0 厳格選択＝本 spec への宿題明記コメント）・emo-present `cache.rs:43-52` の予約記述・`PresentCommand` `#[non_exhaustive]` 拡張余地。
 
 ## Constraints
