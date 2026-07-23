@@ -1,7 +1,7 @@
 # Implementation Plan
 
 - [ ] 1. Foundation: `\_l` 語彙と Choice/Cursor cue の実消費（state.rs）
-- [ ] 1.1 `\_l` 座標語彙とパーサを実装する
+- [x] 1.1 `\_l` 座標語彙とパーサを実装する
   - `CursorCoord`/`CursorUnit` enum を追加（絶対 px/em/lh・相対 `@`・`%`・省略・パース不能の全形を表現）
   - `parse_cursor_coord` を純関数として実装（不透明文字列の全入力に対し値を返す・パニックしない・`Result` を返さない）
   - Observable: 裸数値・`Nem`・`Nlh`・`N%`・`@N`・空文字列・非数値の各入力に対する呼び出しが、対応する `CursorCoord` variant を返す

@@ -76,6 +76,97 @@ pub enum TextItem {
     },
 }
 
+/// `\_l` 座標 1 軸の語彙（不透明文字列の全語彙を保持・`Copy`・state.rs 所有）。
+///
+/// `Cursor` cue（`\_l[x,y]` の不透明転写）の各軸を、後段の換算層
+/// （`layout.rs::cursor_to_image_px`）が縮退表どおりに分岐できる語彙へ忠実転写する
+/// （design.md「純粋層 / StateIncrement」正本・R2.1/2.4/6.5）。本層は**語彙の保持**のみを
+/// 責務とし、非負ゲート・単位換算・原点解釈は下流 layout の責務（面引数不透明転写規約）。
+///
+/// M1 の縮退（design.md 縮退表）:
+/// - `Absolute { Px/Em/Lh, 非負 }` のみ layout が Some(image px) を返す実導出対象。
+/// - `Absolute { Percent, .. }`・`Relative`（`@`）・負値・`Invalid`・`Omitted` は
+///   layout が None（＝当該軸スキップ・warn-once 縮退）を返す。負の裸数値は本層では
+///   Absolute へ忠実転写し（Invalid へ写像しない）、非負ゲートは layout 層に委ねる。
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum CursorCoord {
+    /// 省略（空文字列）＝当該軸不動（正典・R2.4）。
+    Omitted,
+    /// 絶対座標（M1 実導出は Px/Em/Lh の非負値・Percent は縮退保持・負値は忠実転写）。
+    Absolute { value: f32, unit: CursorUnit },
+    /// 相対座標（`@` 接頭）。語彙保持のみ——M1 は layout が warn-once 縮退（None）。
+    Relative { value: f32, unit: CursorUnit },
+    /// パース不能（warn 縮退＝当該軸スキップ・状態不変・R6.5）。
+    Invalid,
+}
+
+/// `\_l` 座標の単位（design.md「純粋層 / StateIncrement」正本）。
+///
+/// `Px`＝image px（裸数値）・`Em`＝`em`（font 高基準）・`Lh`＝`lh`（行送り基準）・
+/// `Percent`＝`%`（縮退保持・M1 は layout が None）。
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum CursorUnit {
+    /// image px（裸数値・M1 実導出）。
+    Px,
+    /// `em`（font 高基準・M1 実導出）。
+    Em,
+    /// `lh`（行送り基準・M1 実導出）。
+    Lh,
+    /// `%`（縮退保持・M1 は layout が None）。
+    Percent,
+}
+
+/// 不透明転写文字列 → `CursorCoord` 語彙（純粋・全入力で値を返す全域関数・state.rs 所有）。
+///
+/// パニックせず `Result` も返さない（不透明文字列の全入力に対し値を返す・R2.4 決定論）。
+/// 文法:
+/// - 空文字列 `""` → [`CursorCoord::Omitted`]（当該軸省略）。
+/// - `@` 接頭 → [`CursorCoord::Relative`]（残りを本体としてパース）。無ければ
+///   [`CursorCoord::Absolute`]。
+/// - 本体末尾のサフィックス `%`／`em`／`lh` で単位を決め（無ければ [`CursorUnit::Px`]）、
+///   残りを `f32` としてパースする。
+/// - 数値本体が有限 `f32` へパースできれば当該 variant、できない／非有限なら
+///   [`CursorCoord::Invalid`]。
+///
+/// 負値は Absolute/Relative へ**忠実転写**する（非負ゲートは下流 `cursor_to_image_px`）。
+pub fn parse_cursor_coord(raw: &str) -> CursorCoord {
+    // 空文字列＝当該軸省略（正典 R2.4）。
+    if raw.is_empty() {
+        return CursorCoord::Omitted;
+    }
+
+    // `@` 接頭は相対（残りを本体としてパースし、成功時に Relative へ包む）。
+    let (is_relative, body) = match raw.strip_prefix('@') {
+        Some(rest) => (true, rest),
+        None => (false, raw),
+    };
+
+    // 末尾サフィックスで単位を決める（`%`／`em`／`lh`・無ければ裸数値＝Px）。
+    // `%` を先に剥がすことで "5%" 等を確実に Percent へ分類する。
+    let (num_str, unit) = if let Some(n) = body.strip_suffix('%') {
+        (n, CursorUnit::Percent)
+    } else if let Some(n) = body.strip_suffix("em") {
+        (n, CursorUnit::Em)
+    } else if let Some(n) = body.strip_suffix("lh") {
+        (n, CursorUnit::Lh)
+    } else {
+        (body, CursorUnit::Px)
+    };
+
+    match num_str.parse::<f32>() {
+        // 非有限（NaN／inf）は換算を汚さぬよう Invalid へ縮退（防御・R6.5）。
+        Ok(value) if value.is_finite() => {
+            if is_relative {
+                CursorCoord::Relative { value, unit }
+            } else {
+                CursorCoord::Absolute { value, unit }
+            }
+        }
+        // 数値本体が空／非数値／未知サフィックス残り→パース不能（R6.5 状態不変スキップの源）。
+        _ => CursorCoord::Invalid,
+    }
+}
+
 /// per-glyph リビール時刻列（注入時刻駆動 typewriter・R3.1–3.5／R7.1–7.3）。
 ///
 /// 時刻式（design.md「typewriter リビール」正本・決定論の正準）:
@@ -992,5 +1083,192 @@ mod tests {
         // 1 つ目 "あ"(N=1,dur0.25) の r_0=0.0・tail=0.0 → "い"(N=1,dur0.25) r = max(0.0+0.25, 0.5)=0.5。
         assert_eq!(reveal_times_of(&experiment, "0"), vec![0.0, 0.5]);
         assert_eq!(experiment.visible_glyphs(&ActorKey::from("0"), 0.5), 2);
+    }
+
+    // ══ `\_l` 座標語彙のパース（parse_cursor_coord・語彙全形の網羅・タスク 1.1） ══
+    //
+    // 不透明転写文字列 → `CursorCoord`。全入力で値を返す純粋・全域関数（パニック／`Result`
+    // なし）。表現は「後段 `layout.rs::cursor_to_image_px` が bare/em/lh の非負のみ Some・
+    // %／@／負値／Invalid／Omitted は None」を区別できる語彙に忠実転写する（設計 縮退表・
+    // R2.1/2.4/6.5）。負の裸数値は Absolute へ忠実転写し（非負ゲートは layout 層の責務）、
+    // `%` は `unit: Percent` の Absolute、`@` 接頭は Relative variant で保持する。
+
+    // ── 空文字列＝当該軸省略（Omitted・正典 R2.4） ──
+
+    #[test]
+    fn parse_empty_is_omitted() {
+        assert_eq!(parse_cursor_coord(""), CursorCoord::Omitted);
+    }
+
+    // ── 裸数値＝image px（Absolute Px・R2.1） ──
+
+    #[test]
+    fn parse_bare_number_is_absolute_px() {
+        assert_eq!(
+            parse_cursor_coord("5"),
+            CursorCoord::Absolute {
+                value: 5.0,
+                unit: CursorUnit::Px
+            }
+        );
+    }
+
+    #[test]
+    fn parse_decimal_bare_number_is_absolute_px() {
+        assert_eq!(
+            parse_cursor_coord("5.0"),
+            CursorCoord::Absolute {
+                value: 5.0,
+                unit: CursorUnit::Px
+            }
+        );
+    }
+
+    /// 負の裸数値は Absolute へ**忠実転写**する（非負ゲートは layout 層＝
+    /// `cursor_to_image_px` が None を返す責務。語彙層は負値を Invalid へ写像しない）。
+    #[test]
+    fn parse_negative_bare_number_is_absolute_px_preserving_sign() {
+        assert_eq!(
+            parse_cursor_coord("-3"),
+            CursorCoord::Absolute {
+                value: -3.0,
+                unit: CursorUnit::Px
+            }
+        );
+    }
+
+    // ── `Nem` / `Nlh`＝Absolute Em/Lh（R2.1） ──
+
+    #[test]
+    fn parse_em_suffix_is_absolute_em() {
+        assert_eq!(
+            parse_cursor_coord("5em"),
+            CursorCoord::Absolute {
+                value: 5.0,
+                unit: CursorUnit::Em
+            }
+        );
+    }
+
+    #[test]
+    fn parse_lh_suffix_is_absolute_lh() {
+        assert_eq!(
+            parse_cursor_coord("2lh"),
+            CursorCoord::Absolute {
+                value: 2.0,
+                unit: CursorUnit::Lh
+            }
+        );
+    }
+
+    // ── `N%`＝Absolute Percent（縮退保持: layout が None・R6.5） ──
+
+    #[test]
+    fn parse_percent_suffix_is_absolute_percent() {
+        assert_eq!(
+            parse_cursor_coord("50%"),
+            CursorCoord::Absolute {
+                value: 50.0,
+                unit: CursorUnit::Percent
+            }
+        );
+    }
+
+    // ── `@N`＝Relative（`@` 接頭・語彙保持: layout が None・R6.5） ──
+
+    #[test]
+    fn parse_at_prefix_bare_is_relative_px() {
+        assert_eq!(
+            parse_cursor_coord("@5"),
+            CursorCoord::Relative {
+                value: 5.0,
+                unit: CursorUnit::Px
+            }
+        );
+    }
+
+    #[test]
+    fn parse_at_prefix_em_is_relative_em() {
+        assert_eq!(
+            parse_cursor_coord("@5em"),
+            CursorCoord::Relative {
+                value: 5.0,
+                unit: CursorUnit::Em
+            }
+        );
+    }
+
+    #[test]
+    fn parse_at_prefix_percent_is_relative_percent() {
+        assert_eq!(
+            parse_cursor_coord("@5%"),
+            CursorCoord::Relative {
+                value: 5.0,
+                unit: CursorUnit::Percent
+            }
+        );
+    }
+
+    /// `@` の負値も語彙は Relative で保持（layout が None＝縮退の判定は下流）。
+    #[test]
+    fn parse_at_prefix_negative_is_relative_px_preserving_sign() {
+        assert_eq!(
+            parse_cursor_coord("@-2"),
+            CursorCoord::Relative {
+                value: -2.0,
+                unit: CursorUnit::Px
+            }
+        );
+    }
+
+    // ── パース不能＝Invalid（R6.5・状態不変スキップの源） ──
+
+    #[test]
+    fn parse_non_numeric_is_invalid() {
+        assert_eq!(parse_cursor_coord("abc"), CursorCoord::Invalid);
+    }
+
+    #[test]
+    fn parse_bare_unit_without_number_is_invalid() {
+        // 数値のない裸単位（"em"／"lh"／"%"）はパース不能。
+        assert_eq!(parse_cursor_coord("em"), CursorCoord::Invalid);
+        assert_eq!(parse_cursor_coord("lh"), CursorCoord::Invalid);
+        assert_eq!(parse_cursor_coord("%"), CursorCoord::Invalid);
+    }
+
+    #[test]
+    fn parse_lone_at_is_invalid() {
+        // `@` のみ（数値本体が空）はパース不能。
+        assert_eq!(parse_cursor_coord("@"), CursorCoord::Invalid);
+    }
+
+    #[test]
+    fn parse_trailing_garbage_is_invalid() {
+        // 数値＋未知サフィックス（"5xx"）はパース不能。
+        assert_eq!(parse_cursor_coord("5xx"), CursorCoord::Invalid);
+    }
+
+    #[test]
+    fn parse_at_prefixed_non_numeric_is_invalid() {
+        assert_eq!(parse_cursor_coord("@abc"), CursorCoord::Invalid);
+    }
+
+    /// 非有限（NaN／inf）は Invalid へ縮退（layout の換算を汚さない防御）。
+    #[test]
+    fn parse_non_finite_is_invalid() {
+        assert_eq!(parse_cursor_coord("NaN"), CursorCoord::Invalid);
+        assert_eq!(parse_cursor_coord("inf"), CursorCoord::Invalid);
+    }
+
+    /// 全域性: どの `&str` を与えてもパニックせず必ず値を返す（R2.4 決定論・total function）。
+    #[test]
+    fn parse_is_total_over_arbitrary_strings() {
+        for raw in [
+            "", "0", "-0", "5", "-3", "5.0", "5em", "5lh", "50%", "@5", "@5em", "@5%", "@-2",
+            "abc", "em", "lh", "%", "@", "5xx", "@abc", "  ", "5 em", "e", "@@5", "1e3", "1.2.3",
+        ] {
+            // パニックしないことを踏むのが主眼（戻り値の variant は各専用テストで固定）。
+            let _ = parse_cursor_coord(raw);
+        }
     }
 }
