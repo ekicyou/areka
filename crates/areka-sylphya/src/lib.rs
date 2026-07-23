@@ -53,4 +53,6 @@ mod ledger_key_determinism_tests;
 pub use asker::{AskerContext, AskerId};
 pub use key::{parse_dotted, KeyParseError, PathSeg, PropPath, Selector};
 pub use mirror::{MirrorImage, SharedMirror};
+pub use reader::SylphyaReader;
+pub use value::{DottedResolution, FlatResolution};
 pub use vocab::{BackingLayer, DegradePolicy, M1Status, SetSemantics};

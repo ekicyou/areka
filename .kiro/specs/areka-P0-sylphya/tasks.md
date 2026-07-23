@@ -54,7 +54,7 @@
   - publish 後に epoch が単調増加すること、同一鏡像 epoch では常に同一の内容が読めることを単体テストで確認する（決定論の観測条件）
   - _Requirements: 2.5, 2.6, 2.7_
 
-- [ ] 3.2 SylphyaReader 同期読み口 API
+- [x] 3.2 SylphyaReader 同期読み口 API
   - `resolve_flat`（asker×名前→`FlatResolution::Value`／台帳縮退政策に従う `Degraded`）を実装する（フラット解決は per-asker→global の順）
   - `resolve_dotted`／`resolve_dotted_str`（`DottedResolution::Value`／`NotFound`）を実装する
   - `talk_snapshot`（鏡像に値が実在するフラット名のみを `BTreeMap<String,String>` として返す・per-talk 凍結の素材）を実装する
@@ -243,3 +243,7 @@
   - バルーンに生 `%username` が露出せず既定値表示となっていることを目視確認する
   - _Depends: 10.2_
   - _Requirements: 9.3_
+
+## Implementation Notes
+
+- 3.2: 点付き key の正準文字列形は `PropPath::to_canonical_string()`（key.rs）が唯一の権威。鏡像の dotted 区画 key・reader 解決・**Task 5.x の publish/persist の dotted key 格納**は必ずこの同一 stringifier（または既に正準なリテラル）を使うこと。往復不一致は NotFound を招く。

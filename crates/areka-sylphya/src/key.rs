@@ -33,6 +33,45 @@ pub struct PathSeg {
     pub selector: Option<Selector>,
 }
 
+impl PropPath {
+    /// 正準文字列形（鏡像の点付き区画 key として使われる正規化表示）。
+    ///
+    /// 各セグメントを `.` で連結し、セレクタは `(内容)` として付す（`ByName` は名文字列、
+    /// `ByIndex` は 10 進数字）。この形は [`parse_dotted`] と往復整合する: 正準形の
+    /// 文字列を `parse_dotted` してから本メソッドで戻すと元の正準形へ一致する（冪等）。
+    /// [`crate::reader::SylphyaReader::resolve_dotted`] は本メソッドで得た文字列で
+    /// 点付き区画（同じ正準形で格納される）を引く。
+    pub fn to_canonical_string(&self) -> String {
+        let mut out = String::new();
+        for (i, seg) in self.segs.iter().enumerate() {
+            if i > 0 {
+                out.push('.');
+            }
+            out.push_str(&seg.name);
+            match &seg.selector {
+                Some(Selector::ByName(s)) => {
+                    out.push('(');
+                    out.push_str(s);
+                    out.push(')');
+                }
+                Some(Selector::ByIndex(n)) => {
+                    out.push('(');
+                    out.push_str(&n.to_string());
+                    out.push(')');
+                }
+                None => {}
+            }
+        }
+        out
+    }
+}
+
+impl std::fmt::Display for PropPath {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.to_canonical_string())
+    }
+}
+
 /// 括弧セレクタ。名選択（`ByName`）と数値選択（`ByIndex`）の 2 形。
 ///
 /// `.current` / `.count` はセレクタ無しの名前セグメントとして表現する（design §key.rs）。
@@ -280,5 +319,54 @@ mod tests {
         let b = parse_dotted("index(abc)");
         assert_eq!(a, b);
         assert!(a.is_err());
+    }
+
+    // --- 正準文字列形（鏡像 dotted key 形）と往復整合 ---
+
+    #[test]
+    fn canonical_string_plain_segments() {
+        let p = parse_dotted("system.baseware").unwrap();
+        assert_eq!(p.to_canonical_string(), "system.baseware");
+        assert_eq!(p.to_string(), "system.baseware");
+    }
+
+    #[test]
+    fn canonical_string_numeric_bracket() {
+        let p = parse_dotted("areka.window.scope(0).x").unwrap();
+        assert_eq!(p.to_canonical_string(), "areka.window.scope(0).x");
+    }
+
+    #[test]
+    fn canonical_string_by_name_bracket() {
+        let p = parse_dotted("ghostlist(名前)").unwrap();
+        assert_eq!(p.to_canonical_string(), "ghostlist(名前)");
+    }
+
+    #[test]
+    fn canonical_string_index_id() {
+        let p = parse_dotted("activeghostlist(foo).index(3)").unwrap();
+        assert_eq!(p.to_canonical_string(), "activeghostlist(foo).index(3)");
+    }
+
+    /// 冪等: 正準形入力 → parse → 正準形 が入力へ一致（鏡像格納 key との往復整合）。
+    #[test]
+    fn canonical_string_is_idempotent_for_canonical_inputs() {
+        for k in [
+            "system.baseware",
+            "baseware.name",
+            "baseware.version",
+            "areka.window.scope(0).x",
+            "areka.window.scope(2).y",
+            "areka.balloon.offset.scope(0).x",
+            "areka.boot.count",
+            "areka.vanish.count",
+            "ghostlist(名前)",
+            "activeghostlist(foo).index(3)",
+            "currentghost.current",
+            "ghostlist.count",
+        ] {
+            let round = parse_dotted(k).unwrap().to_canonical_string();
+            assert_eq!(round, k, "round-trip mismatch for {k}");
+        }
     }
 }
