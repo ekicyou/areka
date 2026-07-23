@@ -24,10 +24,11 @@ use wintf::ecs::{GraphicsCore, WucGraphicsResource};
 use crate::TextLayerError;
 use crate::canvas::ContentCanvas;
 use crate::choice::{
-    ResolvedChoiceStyle, annotate_lines, decorate_canvas, derive_hit_rows, to_window_physical,
+    ResolvedChoiceStyle, annotate_lines, decorate_canvas, derive_hit_rows, highlight_band_extent,
+    to_window_physical,
 };
 use crate::draw::{DWriteMetrics, ResolvedFont};
-use crate::layout::{CursorWarnGuard, LayoutEngine, WrapPlan};
+use crate::layout::{CursorWarnGuard, GlyphMetrics, LayoutEngine, WrapPlan};
 use crate::region::{ImagePx, ScaleContract, TextRegion};
 use crate::segment::segment_plan;
 use crate::sink::{EmoTextSink, TextMsg, handle_text_msg};
@@ -635,6 +636,15 @@ fn present_actor(
     // 注釈は layout 直後の同一 lines を消費する（可視窓調整後の行へ再適用しない——design Precondition）。
     let spans = actor_state.choices();
     let segments = annotate_lines(&lines, spans);
+    // ハイライト帯／ヒット帯のブロック軸寸（**単一の源**・R3.3）: 実 font metrics の行ボックス丈
+    // （descent 込み）を行送りピッチで頭打ちにした値を 1 度だけ決め、装飾（描画帯）とヒット導出
+    // （照会帯）の両方へ同一値を配る。em ボックス丈（font.height）で切ると和文フォントの descent
+    // インクが帯の外へ出る（実機不具合「選択肢の文字の下が切れる」の真因）。
+    let band_extent = highlight_band_extent(
+        resolved.font.height,
+        render.metrics.line_box_height(resolved.font.height),
+        render.metrics.line_pitch(resolved.font.height),
+    );
     // hover 印は per-actor 保持値（未注入＝None＝ハイライト無し・8.1）。
     let hover = runtime.choice_hover.get(actor).copied().flatten();
     // 装飾: hover 行へ塗り/文字色を焼く。セグメント空（選択肢無し）は decorate が恒等＝canvas 無変更（非退行）。
@@ -647,6 +657,7 @@ fn present_actor(
         resolved.font.color,
         &resolved.region,
         resolved.mode,
+        band_extent,
     );
     let changed = render.executor.render(
         &canvas,
@@ -665,7 +676,14 @@ fn present_actor(
         // （新規のスクロール可視判定は追加しない・6.3）。NoChange フレームはこの更新を丸ごと省き
         // 直前スナップショットを不変のまま保つ。
         let committed = render.executor.scroll_state().committed;
-        let hit_rows = derive_hit_rows(&lines, &segments, resolved.mode, &resolved.region);
+        // 帯は装飾（描画）へ渡したのと**同一の band_extent**——描画とヒットの座標整合（R3.3）。
+        let hit_rows = derive_hit_rows(
+            &lines,
+            &segments,
+            resolved.mode,
+            &resolved.region,
+            band_extent,
+        );
         // 各ヒット行を配送順序数で対応スパンへ突き合わせ、窓物理 px 矩形＋下流構成材料を同梱する。
         let snapshot: Vec<ChoiceHitRow> = hit_rows
             .iter()

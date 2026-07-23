@@ -80,16 +80,16 @@ use windows::Win32::Graphics::Direct2D::{
 use windows::Win32::Graphics::Direct3D11::ID3D11Texture2D;
 use windows::Win32::Graphics::DirectWrite::{
     DWRITE_FLOW_DIRECTION, DWRITE_FLOW_DIRECTION_LEFT_TO_RIGHT,
-    DWRITE_FLOW_DIRECTION_RIGHT_TO_LEFT, DWRITE_FLOW_DIRECTION_TOP_TO_BOTTOM,
+    DWRITE_FLOW_DIRECTION_RIGHT_TO_LEFT, DWRITE_FLOW_DIRECTION_TOP_TO_BOTTOM, DWRITE_FONT_METRICS,
     DWRITE_FONT_STRETCH_NORMAL, DWRITE_FONT_STYLE_NORMAL, DWRITE_FONT_WEIGHT_NORMAL,
     DWRITE_PARAGRAPH_ALIGNMENT, DWRITE_PARAGRAPH_ALIGNMENT_NEAR, DWRITE_READING_DIRECTION,
     DWRITE_READING_DIRECTION_LEFT_TO_RIGHT, DWRITE_READING_DIRECTION_TOP_TO_BOTTOM,
-    DWRITE_TEXT_ALIGNMENT, DWRITE_TEXT_ALIGNMENT_LEADING, IDWriteFactory2, IDWriteFontCollection,
-    IDWriteTextFormat, IDWriteTextLayout,
+    DWRITE_TEXT_ALIGNMENT, DWRITE_TEXT_ALIGNMENT_LEADING, IDWriteFactory, IDWriteFactory2,
+    IDWriteFontCollection, IDWriteTextFormat, IDWriteTextLayout,
 };
 use windows::Win32::Graphics::Dxgi::Common::DXGI_FORMAT_B8G8R8A8_UNORM;
 use windows::Win32::Graphics::Dxgi::IDXGISurface;
-use windows::core::{HSTRING, Interface};
+use windows::core::{BOOL, HSTRING, Interface};
 use wintf::com::dwrite::{DWriteFactoryExt, DWriteTextLayoutExt};
 
 use crate::TextLayerError;
@@ -371,6 +371,9 @@ pub struct DWriteMetrics {
     font_height: f32,
     /// 行送りピッチ係数（正本 [`TextLayerConfig::line_pitch_factor`]）。
     line_pitch_factor: f32,
+    /// 実 font face metrics 由来の行ボックス比 `(ascent + descent) ÷ designUnitsPerEm`
+    /// （生成時に一度だけ実測・文字列非依存＝フォント固有の設計値）。
+    line_box_ratio: f32,
     /// 文字単位の計測キャッシュ（probe 成功値のみ・失敗は縮退値を返しキャッシュしない）。
     cache: RefCell<HashMap<char, f32>>,
 }
@@ -388,11 +391,23 @@ impl DWriteMetrics {
         config: &TextLayerConfig,
     ) -> Result<DWriteMetrics, TextLayerError> {
         let format = create_text_format(factory, font, mode)?;
+        // 行ボックス比は **format が実際に束縛したフォント**の face metrics から実測する
+        // （既定フォント再試行後でも format 側から辿るため取り違えが起きない）。取得失敗は
+        // warn＋ピッチ係数へ縮退（帯はピッチで頭打ちゆえ縮退値でも隣接行を侵さない）。
+        let line_box_ratio = measure_line_box_ratio(factory, &format).unwrap_or_else(|| {
+            warn!(
+                font = %font.name,
+                fallback = config.line_pitch_factor,
+                "font face metrics を取得できない——行ボックス比を行送りピッチ係数へ縮退する"
+            );
+            config.line_pitch_factor
+        });
         Ok(DWriteMetrics {
             factory: factory.clone(),
             format,
             font_height: font.height,
             line_pitch_factor: config.line_pitch_factor,
+            line_box_ratio,
             cache: RefCell::new(HashMap::new()),
         })
     }
@@ -456,6 +471,64 @@ impl GlyphMetrics for DWriteMetrics {
     fn line_pitch(&self, font_height: f32) -> f32 {
         (font_height * self.line_pitch_factor).ceil()
     }
+
+    /// 実レンダリング行ボックス丈＝`font_height × (ascent + descent) ÷ designUnitsPerEm`
+    /// （生成時に実測した [`line_box_ratio`](Self::line_box_ratio) を掛けるだけ・文字列非依存）。
+    ///
+    /// 実測例: Yu Gothic UI ＝ upem 2048・ascent 2210・descent 514 → 比 1.3301
+    /// （28px で 37.24px＝em ボックス 28px より 9.24px 高い）／ＭＳ ゴシック ＝ upem 256・
+    /// ascent 220・descent 36 → 比ちょうど 1.0（既定フォントでは em ボックスと一致するため
+    /// **既定フォントだけを見ていると descent はみ出しが観測されない**——記憶
+    /// emo-text-byte-equiv-default-font-blindspot の系）。
+    fn line_box_height(&self, font_height: f32) -> f32 {
+        font_height * self.line_box_ratio
+    }
+}
+
+/// format が束縛したフォントの face metrics から行ボックス比 `(ascent + descent) ÷ upem` を実測する。
+///
+/// format 自身が持つ family 名・フォント コレクション・weight/style/stretch を辿るため、
+/// [`create_text_format`] の既定フォント再試行（R4.2）後でも**実際に描画されるフォント**を測る。
+/// 取得経路のいずれかが失敗・不在（family 未発見・upem 0 等）なら `None`（呼び手が縮退）。
+fn measure_line_box_ratio(factory: &IDWriteFactory2, format: &IDWriteTextFormat) -> Option<f32> {
+    // family 名（format 焼込値）。
+    let len = unsafe { format.GetFontFamilyNameLength() } as usize;
+    let mut name = vec![0u16; len + 1];
+    unsafe { format.GetFontFamilyName(&mut name) }.ok()?;
+    let name = HSTRING::from_wide(&name[..len]);
+    // フォント コレクション（format が持たなければシステム コレクション）。
+    let collection: IDWriteFontCollection = match unsafe { format.GetFontCollection() } {
+        Ok(c) => c,
+        Err(_) => {
+            let base: IDWriteFactory = factory.cast().ok()?;
+            let mut system: Option<IDWriteFontCollection> = None;
+            unsafe { base.GetSystemFontCollection(&mut system, false) }.ok()?;
+            system?
+        }
+    };
+    let mut index = 0u32;
+    let mut exists = BOOL(0);
+    unsafe { collection.FindFamilyName(&name, &mut index, &mut exists) }.ok()?;
+    if !exists.as_bool() {
+        return None;
+    }
+    let family = unsafe { collection.GetFontFamily(index) }.ok()?;
+    let font = unsafe {
+        family.GetFirstMatchingFont(
+            format.GetFontWeight(),
+            format.GetFontStretch(),
+            format.GetFontStyle(),
+        )
+    }
+    .ok()?;
+    let face = unsafe { font.CreateFontFace() }.ok()?;
+    let mut metrics = DWRITE_FONT_METRICS::default();
+    unsafe { face.GetMetrics(&mut metrics) };
+    let upem = metrics.designUnitsPerEm as f32;
+    if upem <= 0.0 {
+        return None;
+    }
+    Some((metrics.ascent as f32 + metrics.descent as f32) / upem)
 }
 
 /// 行 TextLayout の format 前提（フォント名・高さ・writing_mode）——変わると
@@ -1379,6 +1452,46 @@ mod tests {
         let doubled = DWriteMetrics::new(&factory, &resolved, WritingMode::HorizontalTb, &config)
             .expect("非既定係数でも生成が成立する");
         assert_eq!(doubled.line_pitch(10.0), 20.0);
+    }
+
+    /// line_box_height は**実 font face metrics**（`ascent + descent`）由来——
+    /// 既定 ＭＳ ゴシックは比ちょうど 1.0（em ボックス丈と一致）だが、Yu Gothic UI は
+    /// 1.33 倍（28px で 37.2px）へ伸びる。**この差が「hover 文字の下が切れる」不具合の量**であり、
+    /// 既定フォントだけを見ていると観測できない（既定フォント盲点）。
+    #[test]
+    fn dwrite_metrics_line_box_height_comes_from_real_font_face_metrics() {
+        let factory = dwrite_create_factory(DWRITE_FACTORY_TYPE_SHARED).expect("factory");
+        // ＭＳ ゴシック（既定・upem 256／ascent 220／descent 36）＝ちょうど 1.0em。
+        let gothic = default_metrics(&factory, WritingMode::HorizontalTb);
+        let box_12 = gothic.line_box_height(12.0);
+        assert!(
+            (box_12 - 12.0).abs() < 0.01,
+            "ＭＳ ゴシックの行ボックス丈は em ボックス丈と一致（実測 1.0em）: {box_12}"
+        );
+        // Yu Gothic UI（upem 2048／ascent 2210／descent 514）＝1.3301em。
+        let yu_font = Font::new(
+            Some("Yu Gothic UI".to_owned()),
+            Some(28),
+            FontColor::new(None, None, None),
+        );
+        let yu = DWriteMetrics::new(
+            &factory,
+            &ResolvedFont::resolve(&model_with_font(yu_font)),
+            WritingMode::HorizontalTb,
+            &TextLayerConfig::default(),
+        )
+        .expect("Yu Gothic UI で DWriteMetrics 生成が成立する");
+        let box_28 = yu.line_box_height(28.0);
+        assert!(
+            (box_28 - 37.24).abs() < 0.1,
+            "Yu Gothic UI 28px の行ボックス丈は 37.24px（(2210+514)/2048×28）: {box_28}"
+        );
+        assert!(
+            box_28 > 28.0,
+            "em ボックス丈（28）より高い＝帯を font_height で切ると descent がはみ出す"
+        );
+        // 比例（font_height 非依存の設計値）: 高さ 2 倍で丈も 2 倍。
+        assert!((yu.line_box_height(56.0) - box_28 * 2.0).abs() < 0.01);
     }
 
     /// 契約檻: advance へ束縛フォントと異なる font_height が渡されたら warn（縮退継続・

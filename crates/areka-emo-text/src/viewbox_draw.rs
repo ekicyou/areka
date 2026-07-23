@@ -236,7 +236,13 @@ impl ViewboxExecutor {
                     let text: String = choice.run.glyphs.iter().map(|g| g.ch).collect();
                     self.line_store
                         .line_layout(index, &text, &format, font.height, mode)?;
-                    self.line_store.overhang(index).unwrap_or_default()
+                    let measured = self.line_store.overhang(index).unwrap_or_default();
+                    // ハイライト帯（band_extent）は em ボックス丈より外側へ出る（descent 込み）。
+                    // ダーティ矩形が em ボックス＋実測インクはみ出しのままだと、帯の外側部分が
+                    // クリップで塗り残り／消し残りになる（hover 解除フレームに塗りが残る）。
+                    // ゆえにブロック軸の遠端はみ出しを **帯の超過分**まで広げる（横書き＝下・
+                    // 縦書き＝右——`highlight_rect` が帯を伸ばす向きと同一）。
+                    expand_overhang_for_band(measured, choice.band_extent, font.height, mode)
                 }
                 // 空行/シーム住人は実インクを持たない＝はみ出し 0（em ボックス丈）。
                 _ => LineOverhang::default(),
@@ -363,13 +369,15 @@ impl ViewboxExecutor {
                                 if Some(seg.ordinal) != choice.hovered {
                                     continue;
                                 }
-                                // hover セグメント矩形（inline_range × 行高 font_height・住人 transform
-                                // ＋block_offset 反映＝ヒット矩形／指紋と同座標系・R3.3）。
+                                // hover セグメント矩形（inline_range × ハイライト帯 band_extent・
+                                // 住人 transform ＋block_offset 反映＝ヒット矩形／指紋と同座標系・R3.3）。
+                                // 帯は em ボックス丈（font.height）ではなく choice.band_extent
+                                // （descent 込みの実行ボックス丈）——`derive_hit_rows` へ渡る値と同一。
                                 rects.push(highlight_rect(
                                     seg.inline_range,
                                     (dx, dy),
                                     block_offset,
-                                    font.height,
+                                    choice.band_extent,
                                     mode,
                                 ));
                                 // hover セグメントの文字範囲へ文字色効果を適用（run のグリフ位置から
@@ -687,7 +695,9 @@ fn color_f(rgb: (u8, u8, u8)) -> D2D1_COLOR_F {
 
 /// hover セグメント矩形を描画空間（image px・住人 transform＋block_offset 反映）で組む。
 ///
-/// 行内軸＝セグメントの `inline_range`（文字幅）・ブロック軸帯＝行高 `font_height`。住人平行移動
+/// 行内軸＝セグメントの `inline_range`（文字幅）・ブロック軸帯＝`band_extent`
+/// （[`ChoiceLineContent::band_extent`]＝実 font metrics の `ascent + descent` 由来。em ボックス丈
+/// `font_height` ではない——em で切ると和文フォントの descent インクが帯からはみ出す）。住人平行移動
 /// `(dx, dy)` と可視窓オフセット `block_offset`（横＝Y・縦＝X）を反映し、glyph 描画原点と同一系へ
 /// 揃える（ヒット矩形／指紋と同座標系・R3.3）。座標は合成スケール `k` 適用前の image px
 /// （呼び手が `SetTransform(scale(k))` 下で `FillRectangle` する）。
@@ -695,7 +705,7 @@ fn highlight_rect(
     inline_range: (f32, f32),
     offset: (f32, f32),
     block_offset: f32,
-    font_height: f32,
+    band_extent: f32,
     mode: WritingMode,
 ) -> D2D_RECT_F {
     let (i0, i1) = inline_range;
@@ -705,13 +715,40 @@ fn highlight_rect(
             left: dx + i0,
             top: dy + block_offset,
             right: dx + i1,
-            bottom: dy + block_offset + font_height,
+            bottom: dy + block_offset + band_extent,
         },
         WritingMode::VerticalRl | WritingMode::VerticalLr => D2D_RECT_F {
             left: dx + block_offset,
             top: dy + i0,
-            right: dx + block_offset + font_height,
+            right: dx + block_offset + band_extent,
             bottom: dy + i1,
+        },
+    }
+}
+
+/// Choice 住人のダーティ帯を **ハイライト帯の超過分**まで広げた [`LineOverhang`] を返す（純粋）。
+///
+/// ダーティ矩形は em ボックス（`font_height`）＋実測インクはみ出しで組まれる（D2）。ハイライト帯
+/// （`band_extent`＝`ascent + descent` 由来）はそれより外側へ出るため、超過分
+/// `band_extent − font_height` をブロック軸**遠端**（横書き＝`bottom`・縦書き＝`right`——
+/// [`highlight_rect`] が帯を伸ばす向き）の下限として与える。実測インクはみ出しの方が大きい場合は
+/// 実測値を保つ（`max`）。これにより hover フレームの塗りが欠けず、hover 解除フレームで
+/// 塗りが消し残らない（同一帯が両フレームでダーティになる）。
+fn expand_overhang_for_band(
+    measured: LineOverhang,
+    band_extent: f32,
+    font_height: f32,
+    mode: WritingMode,
+) -> LineOverhang {
+    let excess = (band_extent - font_height).max(0.0);
+    match mode {
+        WritingMode::HorizontalTb => LineOverhang {
+            bottom: measured.bottom.max(excess),
+            ..measured
+        },
+        WritingMode::VerticalRl | WritingMode::VerticalLr => LineOverhang {
+            right: measured.right.max(excess),
+            ..measured
         },
     }
 }
@@ -984,6 +1021,8 @@ mod tests {
                         segments: Vec::new(),
                         hovered: None,
                         highlight: None,
+                        // 素描画等価の検証ゆえ帯は em ボックス丈（塗りを持たない）。
+                        band_extent: run.size.1,
                     }),
                     transform: r.transform,
                     effects: r.effects,
@@ -1109,6 +1148,11 @@ mod tests {
                             }],
                             hovered,
                             highlight,
+                            // 帯は em ボックス丈（10）より**大きい** 13——実フォント
+                            // （Yu Gothic UI 比 1.33）の descent 込み帯と同じ関係を檻に持ち込む。
+                            // hover 解除フレームの「塗り画素ゼロ」判定が、ダーティ帯の帯超過分
+                            // 拡張（expand_overhang_for_band）まで含めて赤くなる。
+                            band_extent: 13.0,
                         }),
                         transform: r.transform,
                         effects: r.effects,

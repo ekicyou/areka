@@ -2322,6 +2322,9 @@ mod tests {
                 }],
                 hovered,
                 highlight: None,
+                // 帯は指紋／ダーティ導出の入力ではない（ダーティ帯の拡張は COM 層
+                // `expand_overhang_for_band` の領分）——ここでは em ボックス丈で足りる。
+                band_extent: 10.0,
             }),
             transform: RegionTransform::translation(0.0, dy),
             effects: TextEffects::default(),

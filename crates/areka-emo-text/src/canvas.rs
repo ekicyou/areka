@@ -166,6 +166,15 @@ pub struct ChoiceLineContent {
     pub hovered: Option<usize>,
     /// 解決済みハイライト塗り（`None`＝描かない＝GlyphRun と同一の素描画）。
     pub highlight: Option<HighlightPaint>,
+    /// ハイライト帯（＝ヒット帯）のブロック軸寸（image px・行矩形の block 近端起点）。
+    ///
+    /// [`highlight_band_extent`](crate::choice::highlight_band_extent) が実 font metrics
+    /// （`ascent + descent`）から決めた **descent 込みの帯丈**——`run.size` の em ボックス丈
+    /// （`font_height`）ではない。em ボックス丈で塗ると和文フォントの descent インクが帯の外へ
+    /// 出る（実機不具合「文字の下が切れる」の真因・R3.3/4.2）。COM 層はこの単一値から
+    /// ハイライト矩形とダーティ帯の両方を組み、純粋層の
+    /// [`derive_hit_rows`](crate::choice::derive_hit_rows) は同値を受け取って帯を一致させる。
+    pub band_extent: f32,
 }
 
 /// 行内の 1 選択肢セグメント（ordinal ＋ 行内軸ローカル範囲）。

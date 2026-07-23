@@ -98,6 +98,39 @@ pub fn annotate_lines(lines: &[PositionedLine], spans: &[ChoiceSpan]) -> Vec<Lin
     segments
 }
 
+/// ハイライト帯／ヒット帯のブロック軸寸を決める（純粋・**描画とヒットの唯一の源**・R3.3）。
+///
+/// ## なぜ行矩形（em ボックス）では足りないか（実機不具合の真因）
+///
+/// layout の行矩形は em ボックス丈（`font_height`）だが、DirectWrite は行を
+/// **`ascent + descent`**（[`GlyphMetrics::line_box_height`]）で組む。和文フォントでは
+/// これが em を大きく超える（実測: Yu Gothic UI ＝ 1.3301em ゆえ font.height 28 で 37.24px・
+/// インクは em ボックス下端より 4.27px はみ出す）。帯を `font_height` で切ると
+/// **descent のインクが帯の外に出る**——バルーン背景が白・hover 文字が白の実 fixture では
+/// 帯の外の文字が背景に溶けて「文字の下が切れて見える」（実機サインオフで観測された不具合）。
+/// ＭＳ ゴシックは比がちょうど 1.0 のため既定フォントの檻では観測されない（既定フォント盲点）。
+///
+/// ## 帯の決め方（下限＝em ボックス・上限＝行送りピッチ）
+///
+/// ```text
+/// band = clamp(line_box_height, font_height, max(font_height, line_pitch))
+/// ```
+///
+/// - **下限 `font_height`**: 行矩形より痩せさせない（従来挙動の非退行）。
+/// - **上限 `line_pitch`**: 帯が行送りピッチを超えると**隣接行の帯と重なる**——ハイライトが
+///   隣の行を侵し、かつヒット矩形が重なって同一点が 2 選択肢に当たる（照会の一意性が壊れる）。
+///   ゆえにピッチで頭打ちにする。実測 Yu Gothic UI 28px では `min(37.24, 35) = 35`——
+///   インク下端（em + 4.27 ＝ 32.27px）を覆いつつ次行の帯へ食い込まない。
+///   `line_pitch < font_height` の病的設定では下限が勝つ（帯 ＝ `font_height`）。
+/// - 行送り比 `\n[ratio]` で ratio < 1 を指定した行間縮小時は帯が隣接行へ届き得る（M1 既知の
+///   縮退——正典 fixture は ratio ≥ 1）。
+///
+/// 同一入力→同一出力（純粋・決定論）。失敗経路なし。
+pub fn highlight_band_extent(font_height: f32, line_box_height: f32, line_pitch: f32) -> f32 {
+    let upper = line_pitch.max(font_height);
+    line_box_height.clamp(font_height, upper)
+}
+
 /// ヒット行（純粋・canvas-local image px）: 1 選択肢セグメントの矩形＋配送順序数。
 ///
 /// `rect` は **canvas-local（validrect-local）image px**——[`ContentCanvas::from_layout`] が
@@ -133,9 +166,10 @@ pub struct HitRectPx {
 /// ヒット行導出（純粋・canvas-local image px）: セグメント×行矩形からヒット矩形を組む。
 ///
 /// 各 [`LineChoiceSegment`] について、**行内軸範囲＝セグメントの `inline_range`（＝選択肢グリフ
-/// 範囲の文字幅。行全幅ではない・正典確定「クリック領域幅＝文字幅」）**、**ブロック軸帯＝当該行の
-/// 行矩形の block 帯**（[`PositionedLine::rect`] が既に `block_pos..block_pos+font_height` を
-/// 保持）を軸読み替え正準表で x/y へ割り当て、絶対 image px のヒット矩形を組む。これを
+/// 範囲の文字幅。行全幅ではない・正典確定「クリック領域幅＝文字幅」）**、**ブロック軸帯＝行矩形の
+/// block 近端から `band_extent` 分**（[`highlight_band_extent`] が決める descent 込みの帯——
+/// 行矩形の em ボックス丈ではない。ハイライト描画（`highlight_rect`）と同一の値を受け取ることで
+/// 帯が数値一致する・R3.3）を軸読み替え正準表で x/y へ割り当て、絶対 image px のヒット矩形を組む。これを
 /// [`ContentCanvas::from_layout`] と**同一の原点差引き**（`- region.left()` / `- region.top()`）で
 /// canvas-local（validrect-local）へ写す——ゆえにハイライト描画（`decorate_canvas`）が同じ
 /// `LineChoiceSegment`＋行矩形から組む矩形と数値一致する（表示とヒットの単一導出・R3.3・
@@ -159,6 +193,7 @@ pub fn derive_hit_rows(
     segments: &[LineChoiceSegment],
     mode: WritingMode,
     region: &TextRegion,
+    band_extent: f32,
 ) -> Vec<CanvasHitRow> {
     let (ox, oy) = (region.left(), region.top());
     let mut rows = Vec::new();
@@ -172,21 +207,23 @@ pub fn derive_hit_rows(
         let Some(line) = lines.get(seg.line_index) else {
             continue;
         };
-        // 行内軸＝セグメントの inline_range（文字幅）・ブロック軸帯＝行矩形の block 帯を
-        // 軸読み替え正準表で x/y へ割り当て絶対 image px のヒット矩形を組む（横書き＝行内 x／
-        // ブロック y・縦書き＝行内 y／ブロック x）。行矩形は既に `block_pos..block_pos+font_height`
-        // を保持ゆえ block 帯はそのまま採る（描画の block 帯と同源）。
+        // 行内軸＝セグメントの inline_range（文字幅）・ブロック軸帯＝行矩形の block 近端から
+        // band_extent 分を軸読み替え正準表で x/y へ割り当て絶対 image px のヒット矩形を組む
+        // （横書き＝行内 x／ブロック y・縦書き＝行内 y／ブロック x）。block 近端（横書き＝rect.top・
+        // 縦書き＝rect.left）は描画（住人 transform の offset＝行矩形の近端）と同一の起点ゆえ、
+        // band_extent が同値なら帯は描画と数値一致する（R3.3・`band_extent == font_height` なら
+        // 従来の行矩形 block 帯と完全一致＝非退行）。
         let abs = match mode {
             WritingMode::HorizontalTb => LineRect {
                 left: i0,
                 top: line.rect.top,
                 right: i1,
-                bottom: line.rect.bottom,
+                bottom: line.rect.top + band_extent,
             },
             WritingMode::VerticalRl | WritingMode::VerticalLr => LineRect {
                 left: line.rect.left,
                 top: i0,
-                right: line.rect.right,
+                right: line.rect.left + band_extent,
                 bottom: i1,
             },
         };
@@ -262,6 +299,10 @@ pub fn to_window_physical(
 ///
 /// **セグメント空 → canvas を無変更で返す**（恒等・非退行・要件 1.4/design.md Invariants）。
 ///
+/// `band_extent`（[`highlight_band_extent`] の出力）は Choice 住人へそのまま焼き込み、COM 層の
+/// ハイライト矩形とダーティ帯がこの単一値を読む——[`derive_hit_rows`] へ渡す値と同一にすることで
+/// 描画帯とヒット帯の数値一致（R3.3）を呼び手 1 箇所で担保する。
+///
 /// ## 座標系: 絶対 image px → resident-local（GlyphRunContent ローカル系）
 ///
 /// [`LineChoiceSegment::inline_range`] は**絶対 image px**（描画開始点＝validrect 原点起点）だが、
@@ -299,6 +340,7 @@ pub fn decorate_canvas(
     default_font_color: (u8, u8, u8),
     region: &TextRegion,
     mode: WritingMode,
+    band_extent: f32,
 ) -> ContentCanvas {
     // セグメント空は恒等（非退行・要件 1.4）——入力 canvas をそのまま返す。
     if segments.is_empty() {
@@ -349,6 +391,7 @@ pub fn decorate_canvas(
             segments: row_segments,
             hovered,
             highlight,
+            band_extent,
         });
     }
     canvas
@@ -740,6 +783,10 @@ mod tests {
         }
     }
 
+    /// 既存ケースのハイライト帯＝行矩形の em ボックス丈（font 10）——`band_extent == font_height`
+    /// のとき従来（行矩形 block 帯）と完全一致することを既存期待値がそのまま檻にする（非退行）。
+    const HIT_BAND: f32 = 10.0;
+
     // ── derive_hit_rows: canvas-local ヒット矩形（文字幅・block 帯・原点差引き） ──
 
     /// 横書き・原点 (0,0): ヒット矩形の行内範囲＝セグメントの inline_range（**文字幅**）・
@@ -750,7 +797,7 @@ mod tests {
         // 行全幅 0..50・block 帯 0..10（font 10）。
         let lines = [prow(0.0, 0.0, 50.0, 10.0)];
         let segs = [seg(0, 7, (10.0, 30.0))]; // 選択肢グリフ範囲（文字幅）＝10..30。
-        let rows = derive_hit_rows(&lines, &segs, WritingMode::HorizontalTb, &region);
+        let rows = derive_hit_rows(&lines, &segs, WritingMode::HorizontalTb, &region, HIT_BAND);
         assert_eq!(
             rows,
             vec![CanvasHitRow {
@@ -773,7 +820,7 @@ mod tests {
         // 絶対 image px: 行矩形 left36/top46/right86/bottom56・セグメント 46..66。
         let lines = [prow(36.0, 46.0, 86.0, 56.0)];
         let segs = [seg(0, 0, (46.0, 66.0))];
-        let rows = derive_hit_rows(&lines, &segs, WritingMode::HorizontalTb, &region);
+        let rows = derive_hit_rows(&lines, &segs, WritingMode::HorizontalTb, &region, HIT_BAND);
         assert_eq!(
             rows[0].rect,
             LineRect {
@@ -795,7 +842,7 @@ mod tests {
             // 縦書き列矩形: x 帯 377..387（block・font 10）・y 全長 0..20。
             let lines = [prow(377.0, 0.0, 387.0, 20.0)];
             let segs = [seg(0, 1, (5.0, 15.0))]; // 行内軸（y）の文字幅範囲。
-            let rows = derive_hit_rows(&lines, &segs, mode, &region);
+            let rows = derive_hit_rows(&lines, &segs, mode, &region, HIT_BAND);
             assert_eq!(
                 rows[0].rect,
                 LineRect {
@@ -819,7 +866,7 @@ mod tests {
             seg(0, 1, (20.0, 40.0)),
             seg(1, 2, (0.0, 30.0)),
         ];
-        let rows = derive_hit_rows(&lines, &segs, WritingMode::HorizontalTb, &region);
+        let rows = derive_hit_rows(&lines, &segs, WritingMode::HorizontalTb, &region, HIT_BAND);
         assert_eq!(rows.len(), 3);
         assert_eq!(rows[0].ordinal, 0);
         assert_eq!(rows[0].rect, LineRect { left: 0.0, top: 0.0, right: 20.0, bottom: 10.0 });
@@ -834,7 +881,7 @@ mod tests {
     fn derive_empty_segments_yield_no_rows() {
         let region = region(0, 0, 400, 224);
         let lines = [prow(0.0, 0.0, 30.0, 10.0)];
-        assert!(derive_hit_rows(&lines, &[], WritingMode::HorizontalTb, &region).is_empty());
+        assert!(derive_hit_rows(&lines, &[], WritingMode::HorizontalTb, &region, HIT_BAND).is_empty());
     }
 
     /// 空範囲セグメント（`i0 >= i1`）は行を生まない（防御・annotate 既除外）。
@@ -844,7 +891,7 @@ mod tests {
         let lines = [prow(0.0, 0.0, 30.0, 10.0)];
         let segs = [seg(0, 0, (10.0, 10.0)), seg(0, 1, (20.0, 15.0))];
         assert!(
-            derive_hit_rows(&lines, &segs, WritingMode::HorizontalTb, &region).is_empty(),
+            derive_hit_rows(&lines, &segs, WritingMode::HorizontalTb, &region, HIT_BAND).is_empty(),
             "空/逆順範囲はヒット行を生まない"
         );
     }
@@ -855,7 +902,7 @@ mod tests {
         let region = region(0, 0, 400, 224);
         let lines = [prow(0.0, 0.0, 30.0, 10.0)];
         let segs = [seg(5, 0, (0.0, 10.0))];
-        assert!(derive_hit_rows(&lines, &segs, WritingMode::HorizontalTb, &region).is_empty());
+        assert!(derive_hit_rows(&lines, &segs, WritingMode::HorizontalTb, &region, HIT_BAND).is_empty());
     }
 
     // ── to_window_physical: §座標写像式（行内=(origin+inline)×k・ブロック=(origin+block)×k+committed） ──
@@ -977,21 +1024,99 @@ mod tests {
             std::slice::from_ref(&segment),
             WritingMode::HorizontalTb,
             &region,
+            HIT_BAND,
         );
         // ハイライト描画が使う canvas-local 矩形を from_layout と同一手順で独立算出:
-        // 行矩形の block 帯（top/bottom）＋セグメント inline 範囲（i0/i1）を validrect 原点差引き。
+        // 行矩形 block 近端（top）＋帯（HIT_BAND）＋セグメント inline 範囲（i0/i1）を validrect 原点差引き。
         let (ox, oy) = (region.left(), region.top());
         let (i0, i1) = segment.inline_range;
         let expected_highlight = LineRect {
             left: i0 - ox,
             top: line.rect.top - oy,
             right: i1 - ox,
-            bottom: line.rect.bottom - oy,
+            bottom: line.rect.top + HIT_BAND - oy,
         };
         assert_eq!(
             rows[0].rect, expected_highlight,
             "ヒット矩形とハイライト矩形は同一 canvas-local 座標（単一導出）"
         );
+    }
+
+    // ── descent 込みハイライト帯（highlight_band_extent／derive_hit_rows の帯適用） ──
+    //
+    // 実機不具合（実 fixture Yu Gothic UI 28px で hover 文字の下が帯からはみ出す）の真因は
+    // 「帯＝em ボックス丈（font_height）」だった。帯は実 font metrics の行ボックス丈
+    // （ascent+descent）を源にし、行送りピッチで頭打ちにする。
+
+    /// 行ボックス丈が em ボックスとピッチの間にあるとき、帯は**行ボックス丈そのもの**
+    /// （descent を覆う。ＭＳ ゴシック系＝比 1.0 は em と一致し従来どおり）。
+    #[test]
+    fn band_extent_takes_line_box_height_between_em_and_pitch() {
+        // font 28・行ボックス 32.0・ピッチ 35 → 32.0（行ボックス丈が採られる）。
+        assert_eq!(highlight_band_extent(28.0, 32.0, 35.0), 32.0);
+        // 比 1.0 のフォント（ＭＳ ゴシック実測）は em ボックス丈と一致＝従来挙動（非退行）。
+        assert_eq!(highlight_band_extent(28.0, 28.0, 35.0), 28.0);
+    }
+
+    /// 行ボックス丈が行送りピッチを超えるときはピッチで頭打ち（隣接行の帯／ヒット矩形と
+    /// 重ならせない）。実測 Yu Gothic UI 28px（行ボックス 37.242・ピッチ 35）＝35。
+    #[test]
+    fn band_extent_is_capped_by_line_pitch() {
+        assert_eq!(highlight_band_extent(28.0, 37.242, 35.0), 35.0);
+        // 隣接行の帯は接するだけで重ならない（行送り 35 ＋ 帯 35）。
+        assert!(highlight_band_extent(28.0, 37.242, 35.0) <= 35.0);
+    }
+
+    /// 下限は em ボックス丈——行ボックス丈がそれより小さくても行矩形より痩せない（非退行）。
+    /// ピッチが em を下回る病的設定でも下限が勝つ。
+    #[test]
+    fn band_extent_never_below_font_height() {
+        assert_eq!(highlight_band_extent(28.0, 20.0, 35.0), 28.0);
+        assert_eq!(highlight_band_extent(28.0, 37.0, 20.0), 28.0);
+    }
+
+    /// Observable（本不具合の純粋層側の檻）: 帯が em ボックス丈を超えるとき、ヒット矩形の
+    /// ブロック軸下端は**行矩形の bottom（em ボックス下端）より下**へ伸びる——描画側
+    /// `highlight_rect`（住人原点＋band_extent）と同一の式ゆえ数値一致する（R3.3）。
+    #[test]
+    fn hit_row_block_band_extends_beyond_em_box_when_band_is_larger() {
+        let region = region(36, 46, 356, 168);
+        // 実 fixture 相当: 行矩形 block 帯 46..74（font 28）・帯 35（Yu Gothic UI 実測の頭打ち値）。
+        let line = prow(36.0, 46.0, 200.0, 74.0);
+        let segment = seg(0, 0, (36.0, 100.0));
+        let band = highlight_band_extent(28.0, 37.242, 35.0);
+        let rows = derive_hit_rows(
+            std::slice::from_ref(&line),
+            std::slice::from_ref(&segment),
+            WritingMode::HorizontalTb,
+            &region,
+            band,
+        );
+        assert_eq!(rows[0].rect.top, 0.0, "帯の起点は行矩形 block 近端（46−46）");
+        assert_eq!(
+            rows[0].rect.bottom, 35.0,
+            "帯の終端は近端＋band_extent（em ボックス下端 28 ではない＝descent を覆う）"
+        );
+        assert!(
+            rows[0].rect.bottom > line.rect.bottom - region.top(),
+            "em ボックス丈（28）より下へ伸びる"
+        );
+    }
+
+    /// 縦書きも同一規則: 帯は行矩形の block 近端（left）から band_extent 分（右方向）。
+    #[test]
+    fn hit_row_vertical_block_band_uses_band_extent_from_left_edge() {
+        let region = region(0, 0, 400, 224);
+        for mode in [WritingMode::VerticalRl, WritingMode::VerticalLr] {
+            let lines = [prow(377.0, 0.0, 387.0, 20.0)]; // block 帯 377..387（font 10）。
+            let segs = [seg(0, 1, (5.0, 15.0))];
+            let rows = derive_hit_rows(&lines, &segs, mode, &region, 13.0);
+            assert_eq!(
+                rows[0].rect,
+                LineRect { left: 377.0, top: 5.0, right: 390.0, bottom: 15.0 },
+                "{mode:?}: block 帯は left から band_extent（13）分"
+            );
+        }
     }
 }
 
@@ -1275,6 +1400,9 @@ mod decorate_tests {
         }
     }
 
+    /// 装飾テストのハイライト帯（em ボックス丈 10.0 と**異なる**値＝焼込みが観測可能）。
+    const TEST_BAND: f32 = 13.0;
+
     /// 住人が Choice ならその中身を取り出す（さもなくば panic）。
     fn choice(resident: &Resident) -> &ChoiceLineContent {
         match &resident.content {
@@ -1306,6 +1434,7 @@ mod decorate_tests {
             (0, 0, 0),
             &region,
             WritingMode::HorizontalTb,
+            TEST_BAND,
         );
         assert_eq!(out, input, "セグメント空は恒等（無変更）");
     }
@@ -1326,6 +1455,7 @@ mod decorate_tests {
             (0, 0, 0),
             &region,
             WritingMode::HorizontalTb,
+            TEST_BAND,
         );
         let l0 = choice(&out.residents[0]);
         assert_eq!(l0.hovered, Some(0));
@@ -1357,6 +1487,7 @@ mod decorate_tests {
             (0, 0, 0),
             &region,
             WritingMode::HorizontalTb,
+            TEST_BAND,
         );
         for (i, ordinal) in [(0usize, 0usize), (1, 1)] {
             let c = choice(&out.residents[i]);
@@ -1385,6 +1516,7 @@ mod decorate_tests {
             (0, 0, 0),
             &region,
             WritingMode::HorizontalTb,
+            TEST_BAND,
         );
         let c = choice(&out.residents[0]);
         assert_eq!(
@@ -1392,6 +1524,33 @@ mod decorate_tests {
             (0.0, 20.0),
             "絶対 100..120 から行内原点 100 を差し引いた resident-local 0..20"
         );
+    }
+
+    /// Observable（R3.3 の帯単一化）: 装飾は受け取った `band_extent` を Choice 住人へそのまま
+    /// 焼き込む（em ボックス丈 10.0 ではなく 13.0）——COM 層のハイライト矩形／ダーティ帯は
+    /// この値だけを読み、`derive_hit_rows` へ渡す値と同一にすることで帯が数値一致する。
+    #[test]
+    fn decorate_bakes_band_extent_into_choice_residents() {
+        let region = region(0, 0, 400, 224);
+        let input = canvas(vec![glyph_resident((0.0, 0.0)), glyph_resident((0.0, 13.0))]);
+        let segments = [seg(0, 0, (0.0, 20.0)), seg(1, 1, (0.0, 20.0))];
+        let out = decorate_canvas(
+            input,
+            &segments,
+            Some(0),
+            square_fill(),
+            (0, 0, 0),
+            &region,
+            WritingMode::HorizontalTb,
+            TEST_BAND,
+        );
+        for i in [0usize, 1] {
+            assert_eq!(
+                choice(&out.residents[i]).band_extent,
+                TEST_BAND,
+                "住人 {i}: hover 有無に依らず帯を焼き込む（hover 解除フレームのダーティ帯にも要る）"
+            );
+        }
     }
 
     /// 縦書き（vertical_rl/lr）: 行内軸＝y。行内 offset.1=50 → 絶対 50..70 は top 原点差引きで local 0..20。
@@ -1402,7 +1561,16 @@ mod decorate_tests {
             // 縦書きは inline 軸 = y。住人 offset.1 = 50（rect.top = region.top()(0) + 50）。
             let input = canvas(vec![glyph_resident((377.0, 50.0))]);
             let segments = [seg(0, 0, (50.0, 70.0))]; // 絶対 y 範囲。
-            let out = decorate_canvas(input, &segments, None, square_fill(), (0, 0, 0), &region, mode);
+            let out = decorate_canvas(
+                input,
+                &segments,
+                None,
+                square_fill(),
+                (0, 0, 0),
+                &region,
+                mode,
+                TEST_BAND,
+            );
             let c = choice(&out.residents[0]);
             assert_eq!(
                 c.segments[0].inline_range,
@@ -1428,6 +1596,7 @@ mod decorate_tests {
             (0, 0, 0),
             &region,
             WritingMode::HorizontalTb,
+            TEST_BAND,
         );
         let c = choice(&out.residents[0]);
         assert_eq!(c.hovered, Some(0), "hover 印は付く");
@@ -1448,6 +1617,7 @@ mod decorate_tests {
             (10, 20, 30),
             &region,
             WritingMode::HorizontalTb,
+            TEST_BAND,
         );
         let c = choice(&out.residents[0]);
         assert_eq!(
@@ -1475,6 +1645,7 @@ mod decorate_tests {
             (0, 0, 0),
             &region,
             WritingMode::HorizontalTb,
+            TEST_BAND,
         );
         assert_eq!(out.residents.len(), 1, "住人数は不変（1 行 1 住人）");
         let c = choice(&out.residents[0]);
@@ -1500,6 +1671,7 @@ mod decorate_tests {
             (0, 0, 0),
             &region,
             WritingMode::HorizontalTb,
+            TEST_BAND,
         );
         for i in [0usize, 1] {
             let c = choice(&out.residents[i]);
@@ -1528,6 +1700,7 @@ mod decorate_tests {
             (0, 0, 0),
             &region,
             WritingMode::HorizontalTb,
+            TEST_BAND,
         );
         assert!(
             matches!(out.residents[0].content, ResidentContent::GlyphRun(_)),
@@ -1562,6 +1735,7 @@ mod decorate_tests {
             (0, 0, 0),
             &region,
             WritingMode::HorizontalTb,
+            TEST_BAND,
         );
         for (i, ordinal) in [(0usize, 0usize), (1, 1)] {
             let c = choice(&out.residents[i]);

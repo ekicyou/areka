@@ -78,15 +78,38 @@ pub trait GlyphMetrics {
     /// 行送りピッチ（image px）。M1 正準: `ceil(font_height × 1.25)`
     /// （係数は [`TextLayerConfig::line_pitch_factor`] が正本・既定 1.25）。
     fn line_pitch(&self, font_height: f32) -> f32;
+
+    /// **実レンダリング行ボックス丈**（image px・descent 込み＝`ascent + descent`）。
+    ///
+    /// em ボックス丈（`font_height`）ではなく、フォントが実際にインクを置く行ボックスの
+    /// ブロック軸寸。DirectWrite は行を `ascent + descent`（design metrics）で組むため、
+    /// 和文フォントでは `font_height` を大きく超える（実測: Yu Gothic UI ＝ `1.3301em`
+    /// ゆえ 28px で 37.24px・ＭＳ ゴシック ＝ ちょうど `1.0em`）。**行矩形（em ボックス）を
+    /// そのまま帯として使うと descent 側のインクが帯の外へ出る**——選択肢 hover ハイライト
+    /// 矩形／ヒット矩形のブロック軸帯はこの実測丈を源にする（design.md R3.3 の座標整合を
+    /// 保ったまま「文字の下が切れる」を構造的に排除する・[`crate::choice::highlight_band_extent`]）。
+    ///
+    /// 実装: COM 層 `DWriteMetrics` は**実 font face metrics**
+    /// （`GetMetrics` の `ascent`/`descent`/`designUnitsPerEm`）から算出し、
+    /// [`FixedMetrics`] は決定論仮想値を返す。文字列非依存（フォント固有の設計値）。
+    fn line_box_height(&self, font_height: f32) -> f32;
 }
 
 /// 構造テスト用の決定論 metrics（R4.5/R11.6）。
 ///
 /// 決定論仮想値: 全角（非 ASCII）＝`font_height`・半角（ASCII）＝`font_height / 2`。
-/// 行送りピッチは M1 正準式 `ceil(font_height × 既定係数 1.25)`。
+/// 行送りピッチは M1 正準式 `ceil(font_height × 既定係数 1.25)`。行ボックス丈は
+/// [`FIXED_LINE_BOX_RATIO`]×`font_height`。
 /// タイポグラフィ的正確さは目的でない——折返し・行送りアルゴリズムの檻のための値。
 #[derive(Clone, Copy, Debug, Default)]
 pub struct FixedMetrics;
+
+/// [`FixedMetrics`] の仮想行ボックス比（`ascent + descent` ÷ em）。
+///
+/// 和文フォントの実測（Yu Gothic UI ＝ 1.3301em）に倣った**決定論仮想値**——
+/// 「行ボックス丈 > em ボックス丈」という実フォントの性質を構造テストへ持ち込むための値で、
+/// 特定フォントの再現が目的ではない（`FixedMetrics` の advance 仮想値と同格）。
+pub const FIXED_LINE_BOX_RATIO: f32 = 1.33;
 
 impl GlyphMetrics for FixedMetrics {
     fn advance(&self, ch: char, font_height: f32) -> f32 {
@@ -99,6 +122,10 @@ impl GlyphMetrics for FixedMetrics {
 
     fn line_pitch(&self, font_height: f32) -> f32 {
         (font_height * TextLayerConfig::default().line_pitch_factor).ceil()
+    }
+
+    fn line_box_height(&self, font_height: f32) -> f32 {
+        font_height * FIXED_LINE_BOX_RATIO
     }
 }
 

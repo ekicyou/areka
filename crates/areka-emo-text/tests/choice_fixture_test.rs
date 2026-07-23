@@ -238,6 +238,32 @@ fn opaque_count(bytes: &[u8]) -> usize {
     bytes.chunks_exact(4).filter(|px| px[3] != 0).count()
 }
 
+/// 指定 x 帯 `[x0, x1)` × y 帯 `[y0, y1)` で述語に合う画素が現れた **y の最小/最大**（無ければ `None`）。
+fn y_span_where(
+    bytes: &[u8],
+    width: u32,
+    x0: u32,
+    x1: u32,
+    y0: u32,
+    y1: u32,
+    pred: impl Fn(&[u8]) -> bool,
+) -> Option<(u32, u32)> {
+    let mut span: Option<(u32, u32)> = None;
+    for y in y0..y1 {
+        for x in x0..x1 {
+            let i = ((y * width + x) * 4) as usize;
+            if pred(&bytes[i..i + 4]) {
+                span = Some(match span {
+                    None => (y, y),
+                    Some((lo, _)) => (lo, y),
+                });
+                break;
+            }
+        }
+    }
+    span
+}
+
 /// Observable（R7.6）: cursor.* 指定 fixture を**実フォント（Yu Gothic UI）**で解決し、4 項目メニュー
 /// ＋ordinal 0 の hover を通し経路で描画すると、(a) hover 行のセグメント矩形へ SquareFill 塗り色
 /// (105,25,25)＋白文字画素が載り（pixel 檻）、(b) その read_back を白背景へ合成した PNG が既知パスへ
@@ -300,6 +326,33 @@ fn real_font_menu_hover_render_dumps_png() {
         fill_pixels_in_rect(&hover, w, h, &rows[1]),
         0,
         "非 hover 行には SquareFill 塗り色画素が載らない"
+    );
+
+    // ── 回帰檻（実機不具合「hover 文字の下が切れる」）: インクがハイライト矩形から縦にはみ出さない ──
+    //
+    // 帯（ハイライト矩形＝ヒット矩形のブロック軸寸）を em ボックス丈（font.height）で切ると、
+    // DirectWrite が ascent+descent で描く実インクの descent 側が塗りの外へ落ちる（実フォント
+    // Yu Gothic UI は行ボックス 1.3301em）。白バルーン＋白 hover 文字では「下が消えた」ように見える。
+    // 走査 y 窓は「hover 行の block 起点〜次行の block 起点」＝帯寸に依存しない独立の窓。
+    let x0 = rows[0].rect.left.floor().max(0.0) as u32;
+    let x1 = (rows[0].rect.right.ceil() as u32).min(w);
+    let y0 = rows[0].rect.top.floor().max(0.0) as u32;
+    let y1 = (rows[1].rect.top.floor().max(0.0) as u32).min(h);
+    assert!(x0 < x1 && y0 < y1, "走査窓が非退化: x{x0}..{x1} y{y0}..{y1}");
+    let fill_span = y_span_where(&hover, w, x0, x1, y0, y1, |px| {
+        px[0] == 25 && px[1] == 25 && px[2] == 105 && px[3] == 255
+    })
+    .expect("hover 行に塗り画素が在る");
+    let ink_span = y_span_where(&hover, w, x0, x1, y0, y1, |px| px[3] != 0)
+        .expect("hover 行にインクが在る");
+    assert!(
+        ink_span.0 >= fill_span.0 && ink_span.1 <= fill_span.1,
+        "hover 行のインク縦範囲 y{}..{} がハイライト矩形 y{}..{} の内側に収まる\
+         （はみ出し＝**文字の下が切れる**・R3.3/4.2）",
+        ink_span.0,
+        ink_span.1,
+        fill_span.0,
+        fill_span.1
     );
 
     // ── 目視確認: read_back（premultiplied BGRA）を白背景へ合成して PNG を保存する ──

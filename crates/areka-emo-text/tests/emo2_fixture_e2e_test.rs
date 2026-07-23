@@ -323,6 +323,33 @@ fn opaque_count(bytes: &[u8]) -> usize {
     bytes.chunks_exact(4).filter(|px| px[3] != 0).count()
 }
 
+/// 指定 x 帯 `[x0, x1)` × y 帯 `[y0, y1)` の中で、述語に合う画素が現れた **y の最小/最大**を返す
+/// （1 つも無ければ `None`）。ハイライト帯とインクの縦範囲を突き合わせるための走査。
+fn y_span_where(
+    bytes: &[u8],
+    width: u32,
+    x0: u32,
+    x1: u32,
+    y0: u32,
+    y1: u32,
+    pred: impl Fn(&[u8]) -> bool,
+) -> Option<(u32, u32)> {
+    let mut span: Option<(u32, u32)> = None;
+    for y in y0..y1 {
+        for x in x0..x1 {
+            let i = ((y * width + x) * 4) as usize;
+            if pred(&bytes[i..i + 4]) {
+                span = Some(match span {
+                    None => (y, y),
+                    Some((lo, _)) => (lo, y),
+                });
+                break;
+            }
+        }
+    }
+    span
+}
+
 /// Observable（R6.1/6.2/6.3）: 実 emo2 fixture（実 descript の SquareFill＋実 validrect）へ、
 /// 実 menu.pasta 由来の cue 列（Choice/NewLine/Cursor）を通し経路
 /// （`register_actor`→`apply_cue`→`present_frame`→`inject_choice_hover`→`read_back`）で描くと、
@@ -419,6 +446,47 @@ fn real_emo2_menu_cue_sequence_renders_and_hovers_headless() {
         fill_pixels_in_rect(&hover, w, h, row1_cl),
         0,
         "非 hover 行には SquareFill 塗り色画素が載らない: canvas-local {row1_cl:?}"
+    );
+
+    // ── (d) 実機不具合の回帰檻: hover 行のインクがハイライト矩形から**縦にはみ出さない** ──
+    //
+    // 実機サインオフで「hover 中の選択肢の文字の下が切れる」が出た。真因は帯（ハイライト矩形／
+    // ヒット矩形のブロック軸寸）が em ボックス丈（font.height=28）だったこと——DirectWrite は行を
+    // ascent+descent（Yu Gothic UI 実測 1.3301em＝37.24px）で描くため descent のインクが帯の外に落ち、
+    // 白背景バルーン＋白 hover 文字では「下が消えた」ように見える。
+    //
+    // 檻: hover セグメントの x 帯 × 「この行の block 起点〜次行の block 起点」（帯寸に依存しない
+    // 独立の y 窓）を走査し、**インク（α>0）の縦範囲が塗り（fill 色）の縦範囲の内側**に収まることを
+    // 要求する。帯を font.height に戻すとインク下端が塗り下端より下に出て赤くなる。
+    let x0 = row0_cl.0.floor().max(0.0) as u32;
+    let x1 = (row0_cl.2.ceil() as u32).min(w);
+    let y0 = row0_cl.1.floor().max(0.0) as u32;
+    // y 窓の下端＝次行（ordinal 1）の block 起点——帯寸に依存しないため RED/GREEN で同一窓になる。
+    let y1 = (row1_cl.1.floor().max(0.0) as u32).min(h);
+    assert!(x0 < x1 && y0 < y1, "走査窓が非退化: x{x0}..{x1} y{y0}..{y1}");
+    let fill_span = y_span_where(&hover, w, x0, x1, y0, y1, |px| {
+        px[0] == 25 && px[1] == 25 && px[2] == 105 && px[3] == 255
+    })
+    .expect("hover 行に塗り画素が在る");
+    let ink_span = y_span_where(&hover, w, x0, x1, y0, y1, |px| px[3] != 0)
+        .expect("hover 行にインク（不透明画素）が在る");
+    assert!(
+        ink_span.0 >= fill_span.0,
+        "hover 行のインク上端 y={} がハイライト矩形の上端 y={} より上に出ている（帯が痩せている）",
+        ink_span.0,
+        fill_span.0
+    );
+    assert!(
+        ink_span.1 <= fill_span.1,
+        "hover 行のインク下端 y={} がハイライト矩形の下端 y={} より下に出ている\
+         ＝**文字の下が切れる**（帯が em ボックス丈のまま＝descent 分が塗りの外・R3.3/4.2）",
+        ink_span.1,
+        fill_span.1
+    );
+    eprintln!(
+        "[emo2-fixture-e2e] hover 行の縦範囲: 塗り y{}..{} ⊇ インク y{}..{}（font.height=28・\
+         Yu Gothic UI 行ボックス 37.24 → 帯はピッチ 35 で頭打ち）",
+        fill_span.0, fill_span.1, ink_span.0, ink_span.1
     );
 
     // ── 診断: read_back（premultiplied BGRA）を白背景へ合成して PNG を保存する（実ジオメトリ目視） ──
