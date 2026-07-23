@@ -218,6 +218,34 @@ pub fn parse_bind_directive(tokens: &[&str]) -> BindDirective {
     }
 }
 
+/// on/off 積算（純関数・[`BindSet`] は昇順 dedup ゆえ集合同値が冪等判定・D9・design 行 322）。
+///
+/// 現在の着せ替え集合 `current` に対し、対象 animation ID `id` を `on` に従って積算した
+/// 新しい [`BindSet`] を返す。状態を持たず、同一入力に常に同一出力（純粋・副作用/ログ/panic
+/// なし・R3.3/R3.4）。
+///
+/// - `on == true`  → `current` の全 ID に `id` を加えた集合。`from_ids` が dedup するため、
+///   既に含む ID を重ねても集合として不変（冪等・D9）。
+/// - `on == false` → `current` から `id` を除いた集合。含まない ID を除いても集合として不変。
+///
+/// 直前状態は保持したまま当該 ID のみ更新する（複数 cue 積算・R3.4）。結果は昇順 dedup 済みの
+/// 正準形ゆえ、順序違い・重複適用でも集合同値に至る（D9 冪等ガードの単位＝結果 BindSet の同値）。
+///
+/// [`BindSet`]: areka_emo_compose::BindSet
+pub fn accumulate(
+    current: &areka_emo_compose::BindSet,
+    id: u32,
+    on: bool,
+) -> areka_emo_compose::BindSet {
+    if on {
+        // 既存 ID に id を連結。from_ids が整列＋dedup するため重複適用は集合として no-op。
+        areka_emo_compose::BindSet::from_ids(current.ids().iter().copied().chain(std::iter::once(id)))
+    } else {
+        // id を除いた ID 群から再構築。含まない id の除去は集合として no-op。
+        areka_emo_compose::BindSet::from_ids(current.ids().iter().copied().filter(|&x| x != id))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -528,5 +556,106 @@ mod tests {
             },
             "前後空白は trim され trim 済み値が格納される"
         );
+    }
+
+    // ─────────────────────────────────────────────────────────────────────
+    // Task 3.3: 着せ替え集合の on/off 積算（accumulate）純関数。
+    // Observable = 冪等（on→on・off→off で結果集合不変）＋順序不感（適用列の順序を
+    // 入れ替えても同一 BindSet）。BindSet が昇順 dedup ゆえ集合同値が冪等判定の正準形（D9）。
+    // ─────────────────────────────────────────────────────────────────────
+
+    use areka_emo_compose::BindSet;
+
+    /// 基本（R3.3）: 空集合に on で追加→単一集合、続けて off で除去→空集合。
+    #[test]
+    fn accumulate_basic_on_then_off() {
+        let empty = BindSet::default();
+        let after_on = accumulate(&empty, 1100, true);
+        assert_eq!(after_on.ids(), &[1100], "空集合に on で ID を追加（着衣）");
+        let after_off = accumulate(&after_on, 1100, false);
+        assert_eq!(after_off.ids(), &[] as &[u32], "on 済みを off で除去（脱衣・R3.3）");
+        assert_eq!(after_off, empty, "off で元の空集合へ戻る");
+    }
+
+    /// on は直前状態を保持したまま当該 ID を追加する（複数 cue 積算・R3.4）。
+    #[test]
+    fn accumulate_on_preserves_existing() {
+        let base = BindSet::from_ids([1100]);
+        let after = accumulate(&base, 1207, true);
+        assert_eq!(
+            after.ids(),
+            &[1100, 1207],
+            "既存 1100 を保持したまま 1207 を追加（直前状態保持・R3.4）"
+        );
+    }
+
+    /// off は当該 ID のみ除去し、他は保持する（R3.3/R3.4）。
+    #[test]
+    fn accumulate_off_removes_only_target() {
+        let base = BindSet::from_ids([1100, 1207]);
+        let after = accumulate(&base, 1100, false);
+        assert_eq!(after.ids(), &[1207], "1100 のみ除去し 1207 は保持（R3.3）");
+    }
+
+    /// 冪等 on→on（D9）: 同一 (id, on=true) を 2 回適用しても 1 回と同一集合。
+    #[test]
+    fn accumulate_idempotent_on_on() {
+        let base = BindSet::from_ids([1207]);
+        let once = accumulate(&base, 1100, true);
+        let twice = accumulate(&once, 1100, true);
+        assert_eq!(
+            once, twice,
+            "on→on の重複適用は結果集合が同値（冪等・D9）"
+        );
+        assert_eq!(twice.ids(), &[1100, 1207], "重複適用でも 1100 は 1 件（dedup）");
+    }
+
+    /// 冪等 off→off（D9）: 含まない ID を off しても不変、2 回連打でも不変。
+    #[test]
+    fn accumulate_idempotent_off_off() {
+        let base = BindSet::from_ids([1207]);
+        let once = accumulate(&base, 1100, false);
+        let twice = accumulate(&once, 1100, false);
+        assert_eq!(once, base, "含まない ID の off は集合として no-op（不変）");
+        assert_eq!(twice, base, "off→off 連打でも不変（冪等・D9）");
+    }
+
+    /// 順序不感（KEY Observable・D9）: 適用列の順序を入れ替えても同一 BindSet。
+    /// [on 1207, on 1100] と [on 1100, on 1207] が同一集合へ至る（fold で畳む）。
+    #[test]
+    fn accumulate_order_insensitive() {
+        let seq_a = [(1207u32, true), (1100u32, true)];
+        let seq_b = [(1100u32, true), (1207u32, true)];
+        let fold = |seq: &[(u32, bool)]| {
+            seq.iter()
+                .fold(BindSet::default(), |acc, &(id, on)| accumulate(&acc, id, on))
+        };
+        let result_a = fold(&seq_a);
+        let result_b = fold(&seq_b);
+        assert_eq!(
+            result_a, result_b,
+            "適用順序を入れ替えても同一 BindSet（順序不感・D9）"
+        );
+        assert_eq!(result_a.ids(), &[1100, 1207], "両順序とも昇順正準形へ収束");
+    }
+
+    /// on→off 往復（D9）: on で追加した ID を off で戻すと元集合へ復帰する。
+    #[test]
+    fn accumulate_on_off_round_trip() {
+        let base = BindSet::from_ids([1302, 1500]);
+        let after_on = accumulate(&base, 1100, true);
+        let after_off = accumulate(&after_on, 1100, false);
+        assert_eq!(
+            after_off, base,
+            "on→off 往復は元集合へ復帰（直前状態保持・D9）"
+        );
+    }
+
+    /// off of absent id は no-op（入力と同値・R3.3 の縮退経路）。
+    #[test]
+    fn accumulate_off_absent_is_noop() {
+        let base = BindSet::from_ids([1100, 1207]);
+        let after = accumulate(&base, 9999, false);
+        assert_eq!(after, base, "存在しない ID の off は入力集合と同値（no-op）");
     }
 }

@@ -22,8 +22,8 @@ mod state;
 
 pub use actor::{spawn_seriko, SerikoMsg, SerikoSink};
 pub use bind::{
-    build_static_bindset, parse_bind_directive, scope_namespace, BindDirective, BindNamespace,
-    BindResolver,
+    accumulate, build_static_bindset, parse_bind_directive, scope_namespace, BindDirective,
+    BindNamespace, BindResolver,
 };
 pub use output::{DisplayCommand, MockSurfaceOutput, SurfaceOutput};
 pub use resolve::{SurfaceResolver, SurfaceTarget};
