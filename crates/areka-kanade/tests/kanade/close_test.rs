@@ -36,8 +36,8 @@ use areka_kanade::{
 
 use super::common::{
     CallMethod, DEFAULT_TIMEOUT, FIXED_BOOT_SCRIPT, FIXED_FAREWELL_SCRIPT, FIXED_STEADY_SCRIPT,
-    Fixture, Harness, QuitPolicy, RecordedCall, expected_call, expected_unload, join_bounded,
-    spawn_harness, spawn_harness_gated,
+    Fixture, Harness, QuitPolicy, RecordedCall, drive_ticks_until_disconnect, expected_call,
+    expected_unload, join_bounded, spawn_harness, spawn_harness_gated,
 };
 
 /// 記録列中の OnClose GET（events 表導出・reason 指定）の初出インデックスを返す。
@@ -49,23 +49,31 @@ fn onclose_get_index(recorded: &[RecordedCall], reason: CloseReason) -> Option<u
     recorded.iter().position(|c| *c == onclose)
 }
 
-/// `fetch` が返す記録列が `pred` を満たすまで有界回数 yield して待つ（sleep なし・満たせば true）。
+/// `fetch` が返す記録列が `pred` を満たすまで壁時計 deadline（[`DEFAULT_TIMEOUT`]）まで yield して
+/// 待つ（sleep なし・満たせば true）。
 ///
 /// mock は即応ゆえ観測対象は短時間で現れる。本ループは cross-thread な記録の可視化を待つだけの
-/// ハング検出付きバリアであり（wall-clock も sleep も用いない）、最終的な宙吊り検出は各テスト末尾の
-/// [`join_bounded`]（[`DEFAULT_TIMEOUT`]）が別途担保する。
+/// ハング検出付きバリアであり（sleep は用いず、打ち切りは反復回数ではなく壁時計 deadline のみ）、
+/// 最終的な宙吊り検出は各テスト末尾の [`join_bounded`]（[`DEFAULT_TIMEOUT`]）が別途担保する。
+///
+/// `pred` 成立で `true`、[`DEFAULT_TIMEOUT`] を測る [`std::time::Instant`] deadline を超過すれば `false`。
+/// 呼出側は既存どおり `assert!(wait_until(...))` で待機成否を表明し、deadline 超過（欠陥時）は
+/// `false` → assert 失敗として顕在化する。
 fn wait_until<F, P>(fetch: F, pred: P) -> bool
 where
     F: Fn() -> Vec<RecordedCall>,
     P: Fn(&[RecordedCall]) -> bool,
 {
-    for _ in 0..100_000 {
+    let deadline = std::time::Instant::now() + DEFAULT_TIMEOUT;
+    loop {
         if pred(&fetch()) {
             return true;
         }
+        if std::time::Instant::now() >= deadline {
+            return false;
+        }
         std::thread::yield_now();
     }
-    false
 }
 
 /// `OnSecondChange` NOTIFY（active talk 窓）**より後**に現れる最初の `OnSecondChange` GET を返す
@@ -92,10 +100,13 @@ fn resumed_get_after_notify(recorded: &[RecordedCall]) -> Option<&RecordedCall> 
 /// OnClose が別れの Value を返すが close talk の TalkDone が quit:false のとき、kanade は
 /// 終了せず定常運転へ復帰し、以降の Tick で pump（OnSecondChange GET）が再開する。
 ///
-/// # 決定的な駆動（full_run/steady と同一イディオム・talk 駆動終了）
+/// # 決定的な駆動（バリア駆動・join 後表明・talk 駆動終了）
 /// 終了拒否後の pump 再開を、**再開後の pump が起こす talk を quit:true にして終了系列を駆動する**
-/// ことで観測する。これにより、cross-thread な TalkDone 到着順に依らず「join 成功＝全記録確定」
-/// の後に記録を検証できる（poll も sleep も不要・full_run_test.rs / steady_test.rs と同じ枠組み）:
+/// ことで観測する。Tick 供給は反復回数上限でなく `drive_ticks_until_disconnect`（inbox 切断バリア＋
+/// 壁時計 deadline）へ一本化し、kanade が復帰後 pump talk で終了して inbox を切断するまで 1 秒刻みの
+/// Tick を供給する。これにより、cross-thread な TalkDone 到着順に依らず「切断＝終了＝全記録確定」の
+/// 後に join 後の最終表明で記録を検証できる（poll も sleep も不要・full_run_test.rs / steady_test.rs と
+/// 同じ枠組み）:
 ///
 /// 1. Boot → 挨拶なし boot（`Steady{None}` 直行）→ pre-close Tick（`Steady{None}`・OnSecondChange
 ///    204＝talk なし）。
@@ -112,8 +123,9 @@ fn resumed_get_after_notify(recorded: &[RecordedCall]) -> Option<&RecordedCall> 
 ///
 /// # 非空虚性
 /// - close 握手を通らなければ OnClose GET が現れず (a) が落ちる。
-/// - pump が再開しなければ復帰後 GET → steady talk が起きず、終了系列が駆動されないため join が
-///   期限超過して panic する（＝終了拒否点で停止＝復帰しなかったことを検出する）。
+/// - pump が再開しなければ復帰後 GET → steady talk が起きず、終了系列が駆動されない。kanade が終了せず
+///   inbox が切断されないため Tick send が成功し続け、`drive_ticks_until_disconnect` が DEFAULT_TIMEOUT の
+///   壁時計 deadline に達して panic する（＝終了拒否点で停止＝復帰しなかったことを決定論的に検出する）。
 /// - 復帰後 pump が GET でなく NOTIFY だと Value が破棄され steady talk が起きず、同様に終了しない。
 #[test]
 fn close_refused_resumes_pump_then_terminates_via_resumed_talk() {
@@ -156,49 +168,14 @@ fn close_refused_resumes_pump_then_terminates_via_resumed_talk() {
 
     // 終了拒否→定常復帰後の pump を駆動する。close talk の TalkDone{quit:false} は非保留 sakura が
     // 別スレッドから即返すため、その到着は test スレッドの Tick と inbox 上で競合する（別 Sender）。
-    // 復帰前（CloseTalkWait）に届いた Tick は pump しない（last_now 更新のみ）ため、単に多数の Tick を
-    // 一括送出すると「全 Tick が復帰前に消費され、復帰後に Tick が 1 本も残らない」経路があり得る。
-    // これを避け、かつ sleep を用いないため、復帰の証左が得られるまで「1 Tick 送出→ kanade へ処理を
-    // 譲る（yield）→記録確認」を有界回数繰り返す。復帰後の GET 出現（value_indices=[1]）は Value を
-    // 返し steady talk（quit:true）を起こすため、pump 再開が起きた時点で kanade は終了系列へ自走する。
-    //
-    // 復帰の証左は 2 通りで捉える（いずれも「拒否点で停止していない・pump が再開した」ことを意味する）:
-    //   (i)  記録に OnClose の後の OnSecondChange GET が現れる、または
-    //   (ii) Tick 送出が失敗する＝kanade が既に終了（＝復帰後 pump talk quit:true で自走終了した）。
-    // (ii) は復帰後 pump→Value→steady talk→終了が観測前に完走した場合であり、これも復帰の成立を示す。
-    let mut pump_resumed = false;
-    'drive: for i in 2..=500u64 {
-        if harness
-            .sender
-            .send(KanadeMsg::Tick {
-                now: MonotonicMs(i * 1_000),
-            })
-            .is_err()
-        {
-            // inbox 切断＝kanade は復帰後 pump talk（quit:true）で終了済み（証左 (ii)）。
-            pump_resumed = true;
-            break 'drive;
-        }
-        // kanade が本 Tick（および先行 TalkDone）を処理し終えるのを譲って待つ（sleep なし）。
-        for _ in 0..64 {
-            std::thread::yield_now();
-            let snap = harness.shiori.recorded();
-            if let Some(idx) = onclose_get_index(&snap, CloseReason::User) {
-                let pumped_after = snap.iter().enumerate().any(|(j, c)| {
-                    j > idx && c.method == CallMethod::Get && c.id == "OnSecondChange"
-                });
-                if pumped_after {
-                    // 証左 (i)。
-                    pump_resumed = true;
-                    break 'drive;
-                }
-            }
-        }
-    }
-    assert!(
-        pump_resumed,
-        "終了拒否→定常復帰後に pump が有界回数内に再開するはず（Req 3.4・GET 出現または終了自走で観測）"
-    );
+    // 復帰前（CloseTalkWait）に届いた Tick は pump しない（last_now 更新のみ）ため、復帰後の pump（GET
+    // 出現 value_indices=[1]）が Value を返し steady talk（quit:true）を起こすまで Tick を供給し続ける
+    // 必要がある。これを反復回数上限でなく inbox 切断バリア＋壁時計 deadline で駆動する共有ヘルパーへ
+    // 一本化する: kanade が復帰後 pump talk（quit:true）で終了して inbox を切断するまで 1 秒刻みの Tick を
+    // 供給し、切断で戻る（＝復帰→終了の完了バリア）。既存の開始秒を保存（開始秒 2）。復帰しなければ
+    // kanade は終了せず Tick send は成功し続けるため、DEFAULT_TIMEOUT の壁時計 deadline に達した時点で
+    // ヘルパーが panic し、「拒否点で停止＝復帰しなかった」欠陥を決定論的な失敗へ変換する。
+    drive_ticks_until_disconnect(&harness.sender, 2, "close_refused resume drive");
 
     let Harness {
         sender,
@@ -750,14 +727,18 @@ fn boot_greeting_active_tick_emits_notify_talking() {
 /// 捕えられないため、この相関は in-source 檻 `boot_greeting_talkdone_correlates_without_unknown_error`
 /// が直接、本 cage が挙動として、二重に固める）。
 ///
-/// # 決定的駆動（steady_test::talk_completion_resumes_... の boot 挨拶版・race-free）
+/// # 決定的駆動（バリア駆動・join 後表明・race-free）
 /// `with_steady_value_indices([0])`: 復帰後最初の GET 出現（occurrence 0）が Value を返し steady talk
 /// （quit:true）を起こして終了を駆動する。挨拶 talk（受領 index 0）を保留し、復帰後の steady talk は
-/// 受領 index 1。復帰の証左（active 窓後の GET）か inbox 切断（終了自走）で有界に打ち切る。
+/// 受領 index 1。Tick 供給は反復回数上限でなく `drive_ticks_until_disconnect`（inbox 切断バリア＋壁時計
+/// deadline）へ一本化し、kanade が復帰後 pump talk で終了して inbox を切断するまで 1 秒刻みの Tick を
+/// 供給する。復帰の表明は join 後の最終記録列（`resumed_get_after_notify`＝active 窓後の GET）が担う。
 ///
 /// # 非空虚性
-/// - 挨拶が slot と照合されず `Steady{Some}` に留まれば GET は現れず、`resumed_get_after_notify` が
-///   `None`＝終了も駆動されず join が期限超過して panic する（＝相関しなかったことを検出する）。
+/// - 挨拶が slot と照合されず `Steady{Some}` に留まれば GET は現れず終了も駆動されない。kanade が終了せず
+///   inbox が切断されないため Tick send が成功し続け、`drive_ticks_until_disconnect` が DEFAULT_TIMEOUT の
+///   壁時計 deadline に達して panic する（＝相関しなかったことを決定論的に検出する）。加えて join 後の
+///   `resumed_get_after_notify` も `None` で最終表明が落ちる。
 #[test]
 fn boot_greeting_talkdone_resumes_get_pump() {
     // 挨拶あり（default）＋復帰後 GET occurrence 0 に Value（steady talk を起こし終了駆動）。
@@ -799,34 +780,14 @@ fn boot_greeting_talkdone_resumes_get_pump() {
     gate.release_all();
 
     // 復帰後の pump を駆動する。復帰前（Steady{Some}）の Tick は NOTIFY のみ・復帰後の GET が Value を
-    // 返し steady talk（quit:true）を起こして終了を駆動する。「1 Tick 送出→yield→記録確認」を有界回数
-    // 繰り返し、active 窓後の GET（pump 再開）か inbox 切断（終了自走）で打ち切る
-    // （steady_test::talk_completion_resumes_... と同一イディオム・race-free）。
-    let mut resumed = false;
-    'drive: for i in 2..=500u64 {
-        if harness
-            .sender
-            .send(KanadeMsg::Tick {
-                now: MonotonicMs(i * 1_000),
-            })
-            .is_err()
-        {
-            // inbox 切断＝復帰後 pump talk（quit:true）で終了済み（復帰＝相関成立の証左）。
-            resumed = true;
-            break 'drive;
-        }
-        for _ in 0..64 {
-            std::thread::yield_now();
-            if resumed_get_after_notify(&harness.shiori.recorded()).is_some() {
-                resumed = true;
-                break 'drive;
-            }
-        }
-    }
-    assert!(
-        resumed,
-        "挨拶 talk 完了後、有界回数内に OnSecondChange GET pump が再開するはず（Req 4.4・DD-IT-12 相関成立の統合証左）"
-    );
+    // 返し steady talk（quit:true）を起こして終了を駆動する。Tick 供給は反復回数上限でなく
+    // `drive_ticks_until_disconnect`（inbox 切断バリア＋壁時計 deadline）へ一本化し、kanade が復帰後 pump
+    // talk で終了して inbox を切断するまで 1 秒刻みの Tick を供給する（切断で戻る＝復帰→終了の完了バリア）。
+    //
+    // 既存の開始秒を保存（開始秒 2・時刻後退は既存構造の踏襲）: 直前の NOTIFY 用 Tick は now=3,600,000
+    // （1h）だが、この drive Tick は now=2,000 から始まり時刻が後退する。これは意図的な既存挙動であり
+    // （挙動不変が目的）、開始秒を変えずそのまま保存する。
+    drive_ticks_until_disconnect(&harness.sender, 2, "boot_greeting_talkdone resume drive");
 
     let Harness {
         sender,
