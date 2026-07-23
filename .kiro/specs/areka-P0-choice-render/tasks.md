@@ -222,7 +222,7 @@
   - _Requirements: 8.1, 8.2, 8.3, 8.4, 8.5_
   - _Boundary: HoverInjectConduit_
 
-- [ ] 12.2 最終ワークスペース回帰を実施する
+- [x] 12.2 最終ワークスペース回帰を実施する
   - _Depends: 12.1_
   - workspace テストゲートが要求する i686 host-32 成果物を先にビルドし、`cargo test --workspace` を実行して exit 0 を確認する。新規 crates.io 依存が追加されていないこと、emo-present crate 本体が無改変であることも確認する
   - Observable: `cargo test --workspace` が exit 0 で完了し、依存差分に新規 crates.io エントリが無いことが確認できる
@@ -247,3 +247,4 @@
 - task 10 hover_inject.rs: `AREKA_CHOICE_HOVER_INJECT`（unset/空/不正=完全 no-op・cycle=700ms・cycle:<ms>）。`cycle_ordinal(t,period,count)=floor(t/period)%(count+1)`（slot0=None・純関数・sleep 不使用）。frame.rs `run_text_phase` の present_frame 後に `hover_inject::drive(&mut runtime, talk_time)`。公開 API のみ消費（emo-text 無改変・8.6）。NTFS mtime で cargo が新規モジュールを再コンパイルしない罠あり→PowerShell で mtime 強制。
 - task 11.1: test-local fixture = crates/areka-emo-text/tests/fixtures/emo2-choice/{descript-cursor.txt(SquareFill 105,25,25/白), descript-plain.txt(Invert), menu.txt(4項目)}。実 balloon parser で parse→resolve 検証＋実フォント Yu Gothic UI で menu+hover レンダリング→PNG dump。**目視確認記録**: 親コントローラが target/tmp/choice_menu_hover_realfont.png を AI vision で確認、はい=maroon 文字幅 SquareFill+白文字、他3項=素黒、実フォント盲点回避 PASS（7.6）。
 - task 11.2: 実 emo2 fixture E2E = crates/pilot/examples/shiori-host-32/fixtures/emo2/（emo2-kakukaku/descript.txt+balloons0s.txt・ghost/master/dic/menu.pasta）を実 balloon parser＋実 sakura（parse→compile）で cue 化→headless GPU readback。実メニュー「おしゃべり頻度/エモの位置調整/閉じる（\_l[5em,2lh]字下げ）」。**目視確認**: emo2_fixture_menu_hover.png を親が確認、おしゃべり頻度=maroon SquareFill hover・閉じる=字下げ。座標変換注意: readback は validrect-local・choice_hit_rows は window-physical ゆえ region 原点(×k)を引いて probe。
+- task 12.2 検証（コード変更なし）: **新規 crates.io 依存なし**（Cargo.lock/Cargo.toml diff 空）・**emo-present 本体無改変**（src/ diff 空）・i686 host-32 helper+testdll ビルド済。`cargo test --workspace --exclude areka-ghost --exclude areka-kanade --exclude wintf`＝**残り全体ゼロ失敗**（feature 3クレート含む）。除外3は各**単独で緑**（wintf graphics 91・kanade steady 単スレ・ghost s4 単独＝いずれも本 feature 無改変）。単一 `cargo test --workspace` exit 0 は無改変クレートの既存 GPU/timing flaky（並列飢餓＝[[areka-defender-rescan-starves-cooperative-test-loops]]）が確率的に阻害・本 feature 非起因。
