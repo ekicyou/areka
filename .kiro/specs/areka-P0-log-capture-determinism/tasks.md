@@ -92,7 +92,7 @@
   - _Requirements: 9.3, 9.6_
   - _Depends: 5.1_
 
-- [ ] 5.3 areka-ghost host-32 IPC 有界 e2e の安全弁を兄弟規約（60s）へ整合する（第三 flake の根治・Req 10）
+- [x] 5.3 areka-ghost host-32 IPC 有界 e2e の安全弁を兄弟規約（60s）へ整合する（第三 flake の根治・Req 10）
   - `crates/areka-ghost/tests/ghost/spine_e2e_test.rs` に共有 `const E2E_BOUND: Duration = Duration::from_secs(60)` を新設し、`from_secs(10)` の安全弁 **14 箇所**（inline 11 ＋ スコープ内 `const BOUND` 935/1102/2002 行付近）をこれへ集約する
   - 各 e2e の**意味論バリア**（`Unload`／surface cue の出現を待つ spin 条件）・spin 構造・各 assert 本体・検証意味論は**無改変**（安全弁のサイズのみ拡大）。src 側の待機（5s/10s）・兄弟 e2e ファイル・他クレートには触れない
   - doc コメントに「10 秒」への言及があれば「60 秒（兄弟 e2e 規約整合・安全弁はハング検出器）」へ更新
