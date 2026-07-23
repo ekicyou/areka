@@ -16,7 +16,7 @@
   - _Depends: 1.1_
   - _Requirements: 4.6, 7.5, 8.2, 8.4_
 
-- [ ] 1.3 parser テスト群を method・Interval::Other 転記の檻へ更新する
+- [x] 1.3 parser テスト群を method・Interval::Other 転記の檻へ更新する
   - `decode_tests.rs`／`parse_tests.rs`／`model_tests.rs` を更新し、method 忠実転記（overlay/replace/未知名/欠落）と `Interval::Other`（例: `sometimes`）が Bind へ倒れず原文保持されることを検証する
   - 既存 `Pattern` リテラルを新欄に追随させる
   - 完了状態: `cargo test -p areka-parsers` が新規・既存テストすべて green
