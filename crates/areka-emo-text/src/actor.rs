@@ -1901,6 +1901,233 @@ mod runtime_tests {
         assert_eq!(off_bytes, off_bytes2, "決定論（hover off 状態・バイト同一）");
     }
 
+    // task 9.3: 矩形反転縮退の pixel 檻（COM・headless・R4.3/6.1/7.2）。
+    //
+    // 9.2（`hover_toggle_paints_fill_and_stays_dirty_limited_readback_pixel_cage`）を cursor.\* 未指定
+    // バルーン（`geo_model`＝Invert 縮退）で反映する。正典確定「矩形反転縮退: セグメント矩形＝
+    // バルーン既定 font.color 塗り・文字色＝各成分 255−c」を画素で固定する: hover 行のセグメント矩形が
+    // **既定文字色（読取値・黒(0,0,0)）で全域不透明化**され、その上に**反転文字色（255−c＝白(255,255,255)）**の
+    // グリフが載る（黒矩形＋白文字＝古典反転と同観）。hover 解除で塗りが消え素描画へ戻る。
+    // 期待色はモデルの既定 font 色を **READ して 255−c で算出**する（黒と決め打ちしない・変異は assert で赤）。
+    #[test]
+    fn invert_hover_paints_default_font_color_fill_and_inverted_text_readback_pixel_cage() {
+        let (mut world, window, slot) = com_world();
+        let actor = ActorKey::from("0");
+        let mut rt = TextLayerRuntime::new(TextLayerConfig::default());
+        // 3 選択肢を別行へ配置（9.2 と同型・hover 行が 1 行に限定されることを測る台）。
+        rt.apply_cue(&choice_cue("0", 0.0, "OnYes", "はい", &["r0"]));
+        rt.apply_cue(&cue("0", 0.1, CueCommand::NewLine { ratio: 1.0 }));
+        rt.apply_cue(&choice_cue("0", 0.1, "OnNo", "いいえ", &["r1"]));
+        rt.apply_cue(&cue("0", 0.2, CueCommand::NewLine { ratio: 1.0 }));
+        rt.apply_cue(&choice_cue("0", 0.2, "OnMaybe", "どちらでも", &["r2"]));
+        let image = (200u32, 100u32);
+        // cursor.\* 未指定 geo_model → Invert（矩形反転縮退・task 5.3 resolve）。
+        let resolved = ResolvedBalloonText::resolve(&geo_model(), image);
+        assert_eq!(
+            resolved.choice_style,
+            ResolvedChoiceStyle::Invert,
+            "cursor.* 未指定バルーンは choice_style=Invert（矩形反転縮退）"
+        );
+        // バルーン既定文字色を READ（決め打ちしない）＝ geo_model は既定黒 (0,0,0)。
+        let (fr, fg, fb) = resolved.font.color;
+        assert_eq!(
+            (fr, fg, fb),
+            (0, 0, 0),
+            "geo_model 既定文字色は黒（読取値・既定が変われば期待塗り/文字色も再計算せよ）"
+        );
+        // Invert::paint 正規形（塗り＝既定 font 色・文字＝各成分 255−c）を独立算出して固定する。
+        let (tr, tg, tb) = (255 - fr, 255 - fg, 255 - fb); // 反転文字色＝白 (255,255,255)
+        assert_eq!(
+            ResolvedChoiceStyle::Invert.paint((fr, fg, fb)),
+            Some(((fr, fg, fb), (tr, tg, tb))),
+            "Invert::paint＝(既定 font 色, 255−c)"
+        );
+        rt.register_actor(
+            actor.clone(),
+            TextSlotBinding::new(slot, window, 1.0, image),
+            resolved,
+        );
+        let width = image.0;
+        let height = image.1;
+
+        // ── 画素プローブ（premultiplied BGRA・α=255・k=1.0/committed=0 ゆえ窓物理 px＝image px）──
+        // rect の floor/ceil 画素境界（9.2 と同流儀）。
+        let bounds = |r: &super::ChoiceHitRow| -> (u32, u32, u32, u32) {
+            let x0 = r.rect.left.floor().max(0.0) as u32;
+            let x1 = (r.rect.right.ceil() as u32).min(width);
+            let y0 = r.rect.top.floor().max(0.0) as u32;
+            let y1 = (r.rect.bottom.ceil() as u32).min(height);
+            (x0, x1, y0, y1)
+        };
+        // 矩形 interior（AA 端を避けて 1px 内側へ）——「塗りが全域不透明化する」を端の縁取りに惑わされず測る。
+        let interior = |r: &super::ChoiceHitRow| -> (u32, u32, u32, u32) {
+            let (x0, x1, y0, y1) = bounds(r);
+            (x0 + 1, x1.saturating_sub(1), y0 + 1, y1.saturating_sub(1))
+        };
+        let area = |(x0, x1, y0, y1): (u32, u32, u32, u32)| -> usize {
+            (x1.saturating_sub(x0) as usize) * (y1.saturating_sub(y0) as usize)
+        };
+        // 不透明画素数（α=255・塗りが矩形を全域不透明化することの述語）。
+        let opaque_in = |b: &[u8], (x0, x1, y0, y1): (u32, u32, u32, u32)| -> usize {
+            let mut n = 0usize;
+            for y in y0..y1 {
+                for x in x0..x1 {
+                    let i = ((y * width + x) * 4) as usize;
+                    if b[i + 3] == 255 {
+                        n += 1;
+                    }
+                }
+            }
+            n
+        };
+        // 既定文字色（塗り色）(fr,fg,fb) の厳密一致画素数——BGRA ゆえ B=fb,G=fg,R=fr,A=255。
+        let fill_in = |b: &[u8], (x0, x1, y0, y1): (u32, u32, u32, u32)| -> usize {
+            let mut n = 0usize;
+            for y in y0..y1 {
+                for x in x0..x1 {
+                    let i = ((y * width + x) * 4) as usize;
+                    if b[i] == fb && b[i + 1] == fg && b[i + 2] == fr && b[i + 3] == 255 {
+                        n += 1;
+                    }
+                }
+            }
+            n
+        };
+        // 反転文字色（255−c＝白）近傍画素数——AA 芯を各チャネル ±55（255→≥200・9.2 白閾値と等価）で数える。
+        let text_in = |b: &[u8], (x0, x1, y0, y1): (u32, u32, u32, u32)| -> usize {
+            let mut n = 0usize;
+            for y in y0..y1 {
+                for x in x0..x1 {
+                    let i = ((y * width + x) * 4) as usize;
+                    let db = (b[i] as i16 - tb as i16).abs();
+                    let dg = (b[i + 1] as i16 - tg as i16).abs();
+                    let dr = (b[i + 2] as i16 - tr as i16).abs();
+                    if db <= 55 && dg <= 55 && dr <= 55 && b[i + 3] == 255 {
+                        n += 1;
+                    }
+                }
+            }
+            n
+        };
+        let calls = |rt: &TextLayerRuntime| -> u64 {
+            rt.draw_stats(&actor)
+                .expect("draw_stats")
+                .draw_text_layout_calls
+        };
+
+        // ── ベースライン（hover 無し・全リビール済み）: 素描画＝既定文字色（黒）の文字・反転文字（白）皆無 ──
+        present_frame(&mut rt, &mut world, 10.0).expect("ベースライン提示");
+        let rows: Vec<super::ChoiceHitRow> = rt.choice_hit_rows(&actor).to_vec();
+        assert_eq!(rows.len(), 3, "3 選択肢＝3 行（hover 行限定を測る台）");
+        let base = rt.surface(&actor).expect("供給面").read_back().expect("read_back");
+        let r0_int = interior(&rows[0]);
+        let r0_area = area(r0_int);
+        assert!(r0_area > 0, "行 0 の interior 領域は非空");
+        // ベースライン: 反転文字色（白）画素は無い（素描画＝既定黒文字）。
+        assert_eq!(
+            text_in(&base, r0_int),
+            0,
+            "hover 無しでは反転文字色（{tr},{tg},{tb}）画素は無い"
+        );
+        // ベースライン: 矩形 interior は塗り未充填（透明ギャップ有り＝全画素不透明ではない）。
+        assert!(
+            opaque_in(&base, r0_int) < r0_area,
+            "hover 無しの矩形 interior は塗り未充填（透明ギャップ有り）: {}/{r0_area}",
+            opaque_in(&base, r0_int)
+        );
+        let base_fill = fill_in(&base, r0_int); // 素描画の既定色（黒）グリフ画素数＝背景塗り増分の基準。
+        let base_calls = calls(&rt);
+
+        // ── hover on: inject Some(0) → present → readback ──
+        rt.inject_choice_hover(&actor, Some(0));
+        present_frame(&mut rt, &mut world, 10.0).expect("hover on 提示");
+        let hover_calls = calls(&rt);
+        let hover_delta = hover_calls - base_calls;
+        // 4.4/7.4: hover トグルは当該 Choice 行 1 枚のみ再描画する（全域＝3 行ぶんではない）。
+        assert_eq!(
+            hover_delta, 1,
+            "hover on はダーティ限定＝当該行 1 枚のみ再描画（増分 1）: {hover_delta}"
+        );
+        assert!(
+            hover_delta < rows.len() as u64,
+            "全域再描画（全 {} 行）ではない: 増分 {hover_delta}",
+            rows.len()
+        );
+        let hov = rt.surface(&actor).expect("供給面").read_back().expect("read_back");
+        // 7.2/4.3【背景塗り】: hover 行のセグメント矩形は既定文字色（黒）塗りで interior 全域が不透明化する。
+        assert_eq!(
+            opaque_in(&hov, r0_int),
+            r0_area,
+            "hover 行の矩形 interior は既定文字色塗りで全画素不透明（反転縮退の背景塗り）"
+        );
+        // 7.2/4.3【塗り色＝既定 font 色】: 既定色 (fr,fg,fb) の塗り画素が素描画（グリフのみ）より大幅増する。
+        let hover_fill = fill_in(&hov, r0_int);
+        assert!(
+            hover_fill > base_fill,
+            "hover で既定文字色（{fr},{fg},{fb}）の背景塗り画素が増える: base={base_fill} hover={hover_fill}"
+        );
+        // 7.2/4.3【反転文字色】: 反転文字色（255−c＝白）のグリフ画素が矩形に載る。
+        let hover_text = text_in(&hov, r0_int);
+        assert!(
+            hover_text > 0,
+            "hover 行に反転文字色（{tr},{tg},{tb}）画素が載る"
+        );
+        // 背景塗り（黒）が反転文字ストローク（白）より支配的＝「矩形塗り＋反転文字」の対を構造保証。
+        assert!(
+            hover_fill > hover_text,
+            "背景塗り画素（{hover_fill}）は反転文字画素（{hover_text}）より支配的（矩形＝背景・文字＝ストローク）"
+        );
+        // 塗りは hover 行に限定: 非 hover 行（ordinal 1）は未充填・反転文字も無い。
+        let r1_int = interior(&rows[1]);
+        assert!(
+            opaque_in(&hov, r1_int) < area(r1_int),
+            "非 hover 行 1 の矩形は塗り未充填（塗りは hover 行に限定）"
+        );
+        assert_eq!(
+            text_in(&hov, r1_int),
+            0,
+            "非 hover 行 1 に反転文字色（白）画素は無い"
+        );
+
+        // 決定論（NoChange 再提示）: 同一状態の再 present は再描画せずバイト同一。
+        present_frame(&mut rt, &mut world, 10.0).expect("hover NoChange 再提示");
+        assert_eq!(
+            calls(&rt),
+            hover_calls,
+            "hover 状態不変の再提示は再描画しない（DrawTextLayout 不変）"
+        );
+        let hov2 = rt.surface(&actor).expect("供給面").read_back().expect("read_back");
+        assert_eq!(hov, hov2, "決定論（hover 状態・バイト同一）");
+        let steady_calls = calls(&rt);
+
+        // ── hover off: inject None → present → readback ──
+        rt.inject_choice_hover(&actor, None);
+        present_frame(&mut rt, &mut world, 10.0).expect("hover off 提示");
+        let off_delta = calls(&rt) - steady_calls;
+        // 4.4/7.4: 解除も当該行 1 枚のみ再描画（全域再描画非発生）。
+        assert_eq!(
+            off_delta, 1,
+            "hover off もダーティ限定＝当該行 1 枚のみ再描画（増分 1）: {off_delta}"
+        );
+        let off = rt.surface(&actor).expect("供給面").read_back().expect("read_back");
+        // 7.2/4.3: 反転縮退の塗りが消える（素描画へ戻る）。interior は未充填へ・反転文字（白）消滅。
+        assert!(
+            opaque_in(&off, r0_int) < r0_area,
+            "hover off で矩形 interior は未充填へ戻る（既定文字色塗りが消滅）: {}/{r0_area}",
+            opaque_in(&off, r0_int)
+        );
+        assert_eq!(
+            text_in(&off, r0_int),
+            0,
+            "hover off で反転文字色（{tr},{tg},{tb}）画素が消滅する"
+        );
+
+        // 決定論（hover off 状態の NoChange 再提示）: バイト同一。
+        present_frame(&mut rt, &mut world, 10.0).expect("off NoChange 再提示");
+        let off2 = rt.surface(&actor).expect("供給面").read_back().expect("read_back");
+        assert_eq!(off, off2, "決定論（hover off 状態・バイト同一）");
+    }
+
     // ══ task 8.3: Clear/ClearAll の原子的無効化（hover リセット＋ヒット行スナップショット無効化・R5.1/5.2/5.4） ══
 
     /// Observable（5.1/5.2/5.4）: `apply_cue(Clear)` は当該 actor の hover を None へリセットし、

@@ -170,7 +170,7 @@
   - _Requirements: 4.4, 7.2, 7.4_
   - _Boundary: RuntimeContract_
 
-- [ ] 9.3 矩形反転縮退の pixel 檻テスト
+- [x] 9.3 矩形反転縮退の pixel 檻テスト
   - _Depends: 8.3_
   - cursor.\* 未指定の test-local バルーンを用意し、hover 注入で既定文字色塗り＋反転文字色の画素を検証する
   - Observable: 反転縮退の画素アサーションが決定論的に通過する
