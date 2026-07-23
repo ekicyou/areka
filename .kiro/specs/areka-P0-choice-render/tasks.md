@@ -184,7 +184,7 @@
   - _Requirements: 5.1, 5.2, 5.3, 7.3, 7.4_
   - _Boundary: RuntimeContract_
 
-- [ ] 9.5 既存回帰確認
+- [x] 9.5 既存回帰確認
   - _Depends: 8.3_
   - 既存の byte 等価 golden・typewriter・scroll・viewbox テスト群が、選択肢を含まないフィクスチャのまま緑を維持することを確認する
   - Observable: 既存 emo-text テストが無改変のまま全て通過し、additive 増分であることが構造的に確認できる
@@ -243,3 +243,4 @@
 - actor.rs present_actor: 1回の layout→annotate→(from_layout→decorate)→render、成功 Update フレームのみ derive_hit_rows+to_window_physical で snapshot 更新（display と hit は同一 lines/segments＝単一導出 5.2/3.3）。NoChange/Err は snapshot 不変（if changed ゲート内）。committed=`executor.scroll_state().committed`。`layout_with_cursor_warn`+persistent `cursor_warn: CursorWarnGuard` 配線で 6.5 warn-once を production 有効化（4.2 申し送り消化）。折返し跨ぎ選択肢は同一 ordinal の複数 ChoiceHitRow（設計意図）。
 - actor.rs apply_cue: Clear=`choice_hover.remove`+`choice_snapshot.remove`（per-actor）、ClearAll=両 map `.clear()`（全 actor）。snapshot も即時無効化（choice_active は span 由来で即 false・snapshot は次 present まで stale ゆえ照会窓で表示/hit 齟齬＝5.2 破れ回避）。次 present 空再導出と冪等・無害。
 - **9.1 が潜在バグ検出→修正**: `\_l` 横字下げがヒット幾何には効くが描画に落ちていた（3.3 違反）。`finish_line` が `LineRect` の inline-near edge を `inline_start`（カーソル未反映）から取っていたのが原因。修正=near edge を最初の配置グリフの `inline_pos` から導出（`glyphs.first().map_or(inline_start,|g|g.inline_pos)`）。非カーソル行は first glyph inline_pos==inline_start ゆえ byte 同一・全 mode 対称。単体テストの盲点を readback 檻が発見した実例。
+- 9.5 検証（コード変更なし）: 既存 byte 等価 golden・typewriter・scroll・viewbox 全緑（lib 361+integration 23・0 failed）。additive-ness 構造確認=dola cue command.rs は main と byte 同一（Choice/Cursor は既存 variant・新 cue 新設なし）・integration tests/ 無改変・task3 の choice_resident_renders_pixel_identical_to_glyph_run が非退行証明。
