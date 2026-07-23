@@ -86,7 +86,7 @@
   - _Requirements: 2.2, 3.1, 3.3, 3.4_
   - _Boundary: ChoicePure_
 
-- [ ] 5.3 ハイライトスタイル解決を実装する
+- [x] 5.3 ハイライトスタイル解決を実装する
   - _Depends: 2.1_
   - `ResolvedChoiceStyle`（`SquareFill`/`Invert`/`NoMarker`・`#[non_exhaustive]`）と `resolve(cursor_model, default_font_color)` を実装（cursor.\* 指定→`SquareFill`、未指定→`Invert`（塗り=既定font色・文字=255−各成分）、`style=none`→`NoMarker`、underline系→warn-once `SquareFill` 縮退、ROP `blendmethod`→warn-once `none` 扱い）
   - `paint()` で描画実行用の `(fill, text)` 正規形を返す

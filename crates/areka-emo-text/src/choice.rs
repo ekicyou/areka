@@ -24,6 +24,9 @@
 //! 1 スパンのグリフ範囲が折返し境界を跨ぐ場合、跨いだ行ごとに 1 つの [`LineChoiceSegment`] を
 //! 出す（`\q` は emo2 正典上は自動折返ししないが、構造的に正しく扱う）。
 
+use areka_parsers::balloon::{BalloonCursor, CursorColor};
+use tracing::warn;
+
 use crate::layout::{LineRect, PositionedLine};
 use crate::region::{ScaleContract, TextRegion};
 use crate::state::ChoiceSpan;
@@ -243,6 +246,143 @@ pub fn to_window_physical(
             bottom: (oy + r.bottom) * k,
         },
     }
+}
+
+/// ハイライトスタイル差替シーム（cursor.\* 解決＋矩形反転縮退＋将来非正典スタイルの開放口）。
+///
+/// balloon の `cursor.*` スタイルモデル（[`BalloonCursor`]）を hover ハイライトの描画正規形へ
+/// 解決する純粋 enum（design.md「純粋層 / ChoicePure」・要件 4.2/4.3/6.1/6.5）。解決は
+/// [`resolve`](ResolvedChoiceStyle::resolve) が一点で行い、描画実行側は [`paint`](ResolvedChoiceStyle::paint)
+/// が返す `(塗り色, hover 文字色)` 正規形のみを読む（下流 viewbox/COM は本 enum に依存しない）。
+///
+/// `#[non_exhaustive]` により将来の非正典スタイル variant 追加を後方互換にする（要件 6.2）。
+#[non_exhaustive]
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum ResolvedChoiceStyle {
+    /// cursor.\* 指定形（fixture 実導出・要件 4.2）: 矩形塗り色＋hover 文字色。
+    ///
+    /// `fill`＝`cursor.brush.color`（矩形内色）・`text`＝`cursor.font.color`（hover 文字色）。
+    /// fixture 実導出形＝`SquareFill { fill: (105, 25, 25), text: (255, 255, 255) }`（square 塗り＋白文字）。
+    SquareFill {
+        /// 矩形内塗り色（`cursor.brush.color`）。
+        fill: (u8, u8, u8),
+        /// hover 文字色（`cursor.font.color`）。
+        text: (u8, u8, u8),
+    },
+    /// cursor.\* 未指定バルーンの矩形反転縮退（要件 4.3/6.1・M1 実導出＝縮退ではない）。
+    ///
+    /// [`paint`](ResolvedChoiceStyle::paint) が塗り＝バルーン既定 `font.color`・文字＝各成分 `255−c` を返す
+    /// （既定黒文字なら黒矩形＋白文字＝古典反転と同観）。
+    Invert,
+    /// `cursor.style,none`（正典・マーカー無し）。[`paint`](ResolvedChoiceStyle::paint) は `None` を返す。
+    NoMarker,
+}
+
+impl ResolvedChoiceStyle {
+    /// balloon `cursor.*` モデル＋バルーン既定文字色から hover ハイライトスタイルを解決する（純粋）。
+    ///
+    /// 判定（design.md 縮退表＋正典確定）:
+    /// - `cursor` 不在、または cursor.\* 全キー未指定 → [`Invert`](ResolvedChoiceStyle::Invert)
+    ///   （未指定バルーン判定・M1 実導出・縮退ではない＝warn なし・要件 4.3/6.1）。
+    /// - `cursor.style,none` → [`NoMarker`](ResolvedChoiceStyle::NoMarker)（正典・マーカー無し）。
+    /// - `cursor.style` underline 系（`underline`／`square+underline`）→ warn-once（解決時 1 回）＋
+    ///   [`SquareFill`](ResolvedChoiceStyle::SquareFill) へ縮退（在る色を採る・要件 6.5）。
+    /// - `cursor.style` square または style 未指定（既定 square）で他キー在り →
+    ///   [`SquareFill`](ResolvedChoiceStyle::SquareFill)（`fill=brush.color`・`text=font.color`・要件 4.2）。
+    /// - `cursor.blendmethod` が ROP 系（`none` 以外）→ warn-once（解決時 1 回）＋`none` 扱い
+    ///   （色ベース描画・variant は style 判定どおりで不変・要件 6.5）。
+    ///
+    /// `default_font_color` は [`Invert`](ResolvedChoiceStyle::Invert) の paint 材料であり本メソッドの
+    /// 分岐には用いないが、将来の非正典 variant がバルーン既定色を焼き込む拡張余地として受ける
+    /// （安定シーム）。同一入力→同一出力の純関数（失敗経路なし・縮退は値＋呼び手警告で表現）。
+    pub fn resolve(cursor: Option<&BalloonCursor>, default_font_color: (u8, u8, u8)) -> Self {
+        let _ = default_font_color;
+        // cursor 不在 → 未指定バルーン＝Invert（4.3/6.1）。
+        let Some(cursor) = cursor else {
+            return ResolvedChoiceStyle::Invert;
+        };
+        // cursor.* 全キー未指定 → 未指定バルーン＝Invert（4.3/6.1・縮退ではない＝warn なし）。
+        if cursor_all_unspecified(cursor) {
+            return ResolvedChoiceStyle::Invert;
+        }
+        // blendmethod ROP 系（none 以外）→ warn-once＋none 扱い（色ベース描画・variant 不変・6.5）。
+        if let Some(bm) = cursor.blendmethod() {
+            if !bm.eq_ignore_ascii_case("none") {
+                warn!(
+                    blendmethod = bm,
+                    "cursor.blendmethod ROP 系は M1 未対応: none 扱い（色ベース描画）へ縮退"
+                );
+            }
+        }
+        // style 解決（none→NoMarker・underline 系→warn＋SquareFill 縮退・それ以外＝既定 square→SquareFill）。
+        match cursor.style() {
+            Some(s) if s.eq_ignore_ascii_case("none") => ResolvedChoiceStyle::NoMarker,
+            Some(s) if style_has_underline(s) => {
+                warn!(
+                    style = s,
+                    "cursor.style underline 系は M1 未対応: SquareFill へ縮退"
+                );
+                square_fill_from(cursor)
+            }
+            // square 明示・style 未指定（既定 square）ともに SquareFill（正典確定 cursor.* マップ）。
+            _ => square_fill_from(cursor),
+        }
+    }
+
+    /// 描画実行の一点写像（純粋）: `(塗り色, hover 文字色)` 正規形を返す。
+    ///
+    /// - [`SquareFill`](ResolvedChoiceStyle::SquareFill) → `Some((fill, text))`（`default_font_color` 非依存）。
+    /// - [`Invert`](ResolvedChoiceStyle::Invert) → `Some((default_font_color, (255−r, 255−g, 255−b)))`
+    ///   （塗り＝バルーン既定 font 色・文字＝各成分の補色・α不変・要件 4.3）。
+    /// - [`NoMarker`](ResolvedChoiceStyle::NoMarker) → `None`（マーカー無し＝素描画）。
+    pub fn paint(&self, default_font_color: (u8, u8, u8)) -> Option<((u8, u8, u8), (u8, u8, u8))> {
+        match *self {
+            ResolvedChoiceStyle::SquareFill { fill, text } => Some((fill, text)),
+            ResolvedChoiceStyle::Invert => {
+                let (r, g, b) = default_font_color;
+                Some((default_font_color, (255 - r, 255 - g, 255 - b)))
+            }
+            ResolvedChoiceStyle::NoMarker => None,
+        }
+    }
+}
+
+/// cursor.\* 全キー未指定（style/blendmethod/brush・pen・font 各色成分がすべて `None`）を判定する。
+///
+/// 全キー未指定＝「未指定バルーン」（`ResolvedChoiceStyle::resolve` が `Invert` へ写す・要件 4.3/6.1）。
+/// いずれか 1 キーでも指定されていれば「指定バルーン」として扱う（style 未指定なら既定 square）。
+fn cursor_all_unspecified(cursor: &BalloonCursor) -> bool {
+    cursor.style().is_none()
+        && cursor.blendmethod().is_none()
+        && color_unspecified(cursor.brush_color())
+        && color_unspecified(cursor.pen_color())
+        && color_unspecified(cursor.font_color())
+}
+
+/// `CursorColor` の r/g/b 全成分が `None`（未指定）かを判定する。
+fn color_unspecified(c: CursorColor) -> bool {
+    c.r().is_none() && c.g().is_none() && c.b().is_none()
+}
+
+/// `cursor.style` が underline 系（`underline`／`square+underline`）かを判定する（大小無視）。
+fn style_has_underline(style: &str) -> bool {
+    style.to_ascii_lowercase().contains("underline")
+}
+
+/// `SquareFill { fill=brush.color, text=font.color }` を組む（欠落成分は `0` 既定・防御）。
+///
+/// 正典 fixture では brush/font とも全成分指定ゆえ既定は発火しない。style を持つが色を欠く
+/// 防御経路では各成分 `0` を採る（決定論・design は部分色の既定を規定しないため最小既定）。
+fn square_fill_from(cursor: &BalloonCursor) -> ResolvedChoiceStyle {
+    ResolvedChoiceStyle::SquareFill {
+        fill: color_tuple(cursor.brush_color()),
+        text: color_tuple(cursor.font_color()),
+    }
+}
+
+/// `CursorColor` を `(u8, u8, u8)` へ写す（欠落成分は `0` 既定・防御）。
+fn color_tuple(c: CursorColor) -> (u8, u8, u8) {
+    (c.r().unwrap_or(0), c.g().unwrap_or(0), c.b().unwrap_or(0))
 }
 
 #[cfg(test)]
@@ -746,5 +886,223 @@ mod tests {
             rows[0].rect, expected_highlight,
             "ヒット矩形とハイライト矩形は同一 canvas-local 座標（単一導出）"
         );
+    }
+}
+
+// ── タスク 5.3: ハイライトスタイル解決（ResolvedChoiceStyle::resolve / paint） ──
+//
+// design.md「純粋層 / ChoicePure」Service Interface（ResolvedChoiceStyle enum + resolve/paint）・
+// 縮退表（cursor.style underline 系→SquareFill／cursor.blendmethod ROP 系→none 扱い／
+// cursor.* 全キー未指定→Invert）・正典確定（cursor.* マップ「既定 square」・fixture 実導出形＝
+// square 塗り(105,25,25)＋白文字／矩形反転縮退「塗り=既定 font.color・文字=各成分 255−c」）。
+#[cfg(test)]
+mod style_resolve_tests {
+    use super::*;
+    use areka_parsers::balloon::{BalloonCursor, CursorColor};
+
+    /// fixture 実導出の cursor.*（square・brush=(105,25,25)・font=(255,255,255)・pen/blend 未指定）。
+    fn fixture_cursor() -> BalloonCursor {
+        BalloonCursor::new(
+            Some("square".to_string()),
+            CursorColor::new(Some(105), Some(25), Some(25)), // brush.color＝矩形内色
+            CursorColor::new(None, None, None),              // pen.color（M1 非参照）
+            CursorColor::new(Some(255), Some(255), Some(255)), // font.color＝hover 白文字
+            None,                                            // blendmethod（既定 none）
+        )
+    }
+
+    /// cursor 全体を組む簡易ビルダ。
+    fn cursor(
+        style: Option<&str>,
+        brush: (Option<u8>, Option<u8>, Option<u8>),
+        font: (Option<u8>, Option<u8>, Option<u8>),
+        blend: Option<&str>,
+    ) -> BalloonCursor {
+        BalloonCursor::new(
+            style.map(str::to_string),
+            CursorColor::new(brush.0, brush.1, brush.2),
+            CursorColor::new(None, None, None),
+            CursorColor::new(font.0, font.1, font.2),
+            blend.map(str::to_string),
+        )
+    }
+
+    // ── resolve: 未指定 → Invert（M1 実導出・縮退ではない） ──
+
+    /// cursor 不在（`None`）→ Invert（未指定バルーン判定・4.3/6.1）。
+    #[test]
+    fn resolve_none_cursor_is_invert() {
+        assert_eq!(
+            ResolvedChoiceStyle::resolve(None, (0, 0, 0)),
+            ResolvedChoiceStyle::Invert
+        );
+    }
+
+    /// cursor.* 全キー未指定（`BalloonCursor::default()`）→ Invert（4.3/6.1）。
+    #[test]
+    fn resolve_all_unspecified_cursor_is_invert() {
+        let c = BalloonCursor::default();
+        assert_eq!(
+            ResolvedChoiceStyle::resolve(Some(&c), (12, 34, 56)),
+            ResolvedChoiceStyle::Invert
+        );
+    }
+
+    // ── resolve: style=none → NoMarker ──
+
+    /// `cursor.style,none`（正典・マーカー無し）→ NoMarker。
+    #[test]
+    fn resolve_style_none_is_no_marker() {
+        let c = cursor(Some("none"), (None, None, None), (None, None, None), None);
+        assert_eq!(
+            ResolvedChoiceStyle::resolve(Some(&c), (0, 0, 0)),
+            ResolvedChoiceStyle::NoMarker
+        );
+    }
+
+    // ── resolve: fixture square → SquareFill{(105,25,25),(255,255,255)} ──
+
+    /// fixture 実導出形（square＋brush(105,25,25)＋font(255,255,255)）→ SquareFill。
+    #[test]
+    fn resolve_fixture_square_is_square_fill() {
+        let c = fixture_cursor();
+        assert_eq!(
+            ResolvedChoiceStyle::resolve(Some(&c), (0, 0, 0)),
+            ResolvedChoiceStyle::SquareFill {
+                fill: (105, 25, 25),
+                text: (255, 255, 255),
+            }
+        );
+    }
+
+    /// style 未指定でも色/キーが在れば「既定 square」→ SquareFill（正典確定 cursor.* マップ）。
+    #[test]
+    fn resolve_specified_colors_without_style_defaults_to_square_fill() {
+        let c = cursor(
+            None,
+            (Some(105), Some(25), Some(25)),
+            (Some(255), Some(255), Some(255)),
+            None,
+        );
+        assert_eq!(
+            ResolvedChoiceStyle::resolve(Some(&c), (0, 0, 0)),
+            ResolvedChoiceStyle::SquareFill {
+                fill: (105, 25, 25),
+                text: (255, 255, 255),
+            }
+        );
+    }
+
+    // ── resolve: underline 系 → warn-once + SquareFill 縮退（縮退表・6.5） ──
+
+    /// `cursor.style,underline` → SquareFill へ縮退（在る色を採る・warn は解決時 1 回）。
+    #[test]
+    fn resolve_underline_degrades_to_square_fill() {
+        let c = cursor(
+            Some("underline"),
+            (Some(105), Some(25), Some(25)),
+            (Some(255), Some(255), Some(255)),
+            None,
+        );
+        assert_eq!(
+            ResolvedChoiceStyle::resolve(Some(&c), (0, 0, 0)),
+            ResolvedChoiceStyle::SquareFill {
+                fill: (105, 25, 25),
+                text: (255, 255, 255),
+            }
+        );
+    }
+
+    /// `cursor.style,square+underline`（underline 系）→ SquareFill へ縮退。
+    #[test]
+    fn resolve_square_plus_underline_degrades_to_square_fill() {
+        let c = cursor(
+            Some("square+underline"),
+            (Some(105), Some(25), Some(25)),
+            (Some(255), Some(255), Some(255)),
+            None,
+        );
+        assert_eq!(
+            ResolvedChoiceStyle::resolve(Some(&c), (0, 0, 0)),
+            ResolvedChoiceStyle::SquareFill {
+                fill: (105, 25, 25),
+                text: (255, 255, 255),
+            }
+        );
+    }
+
+    // ── resolve: blendmethod ROP 系 → warn-once + none 扱い（variant は変えない・6.5） ──
+
+    /// `cursor.blendmethod,notmaskpen`（ROP 系）→ none 扱い（色ベース）へ縮退し variant は
+    /// style（square）どおり SquareFill のまま（blend は無視・warn は解決時 1 回）。
+    #[test]
+    fn resolve_rop_blendmethod_is_treated_as_none_and_keeps_square_fill() {
+        let c = cursor(
+            Some("square"),
+            (Some(105), Some(25), Some(25)),
+            (Some(255), Some(255), Some(255)),
+            Some("notmaskpen"),
+        );
+        assert_eq!(
+            ResolvedChoiceStyle::resolve(Some(&c), (0, 0, 0)),
+            ResolvedChoiceStyle::SquareFill {
+                fill: (105, 25, 25),
+                text: (255, 255, 255),
+            }
+        );
+    }
+
+    /// `cursor.blendmethod,none`（大小無視）は縮退警告を出さず variant はスタイルどおり。
+    #[test]
+    fn resolve_blendmethod_none_keeps_square_fill_without_degrade() {
+        let c = cursor(
+            Some("square"),
+            (Some(105), Some(25), Some(25)),
+            (Some(255), Some(255), Some(255)),
+            Some("none"),
+        );
+        assert_eq!(
+            ResolvedChoiceStyle::resolve(Some(&c), (0, 0, 0)),
+            ResolvedChoiceStyle::SquareFill {
+                fill: (105, 25, 25),
+                text: (255, 255, 255),
+            }
+        );
+    }
+
+    // ── paint: 描画実行用 (fill, text) 正規形 ──
+
+    /// SquareFill.paint → Some((fill, text))（dfc 非依存）。
+    #[test]
+    fn paint_square_fill_returns_fill_and_text() {
+        let s = ResolvedChoiceStyle::SquareFill {
+            fill: (105, 25, 25),
+            text: (255, 255, 255),
+        };
+        assert_eq!(s.paint((77, 88, 99)), Some(((105, 25, 25), (255, 255, 255))));
+    }
+
+    /// Invert.paint（dfc=(0,0,0)）→ 塗り=(0,0,0)・文字=各成分 255−c=(255,255,255)（古典反転同観）。
+    #[test]
+    fn paint_invert_black_default_is_black_fill_white_text() {
+        assert_eq!(
+            ResolvedChoiceStyle::Invert.paint((0, 0, 0)),
+            Some(((0, 0, 0), (255, 255, 255)))
+        );
+    }
+
+    /// Invert.paint（dfc=(10,20,30)）→ 塗り=既定 font 色・文字=(245,235,225)（各成分 255−c）。
+    #[test]
+    fn paint_invert_uses_default_font_fill_and_per_component_complement() {
+        assert_eq!(
+            ResolvedChoiceStyle::Invert.paint((10, 20, 30)),
+            Some(((10, 20, 30), (245, 235, 225)))
+        );
+    }
+
+    /// NoMarker.paint → None（マーカー無し＝素描画・dfc 非依存）。
+    #[test]
+    fn paint_no_marker_is_none() {
+        assert_eq!(ResolvedChoiceStyle::NoMarker.paint((10, 20, 30)), None);
     }
 }
