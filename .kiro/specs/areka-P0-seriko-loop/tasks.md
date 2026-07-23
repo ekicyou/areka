@@ -75,7 +75,7 @@
   - _Requirements: 4.5, 4.6, 7.5, 8.1, 8.2, 8.3, 8.4_
   - _Boundary: AnimationTable (areka-seriko table.rs)_
 
-- [ ] 5.2 純関数コア（frame_at・LotteryBoundary・seeded_rng・should_fire）を実装する
+- [x] 5.2 純関数コア（frame_at・LotteryBoundary・seeded_rng・should_fire）を実装する
   - `LotteryBoundary`（1000ms 絶対グリッド跨ぎ検出・catch-up 1 回）を実装する
   - `frame_at`（経過時刻→現在コマ・`Pending`/`Active`/`Stopped`/`FinishedResidual`）を実装し、デファクト2点（`-1` 無し末尾残留・再生中非再抽選対象）を期待値として焼き込む
   - `seeded_rng`（SplitMix64）・`should_fire`（1/N 抽選）を実装する

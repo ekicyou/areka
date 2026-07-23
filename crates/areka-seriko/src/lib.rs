@@ -12,6 +12,8 @@
 //! - 構築層 [`build_static_bindset`]: bindgroup default → 静的 `BindSet`（恒等写像）。
 //! - アニメ定義表 [`AnimationTable`]／[`LoopAnimation`]／[`LoopTrigger`]／[`LoopFrame`]: `EmoWorld`
 //!   からの boot 時不変スナップショット（`Random`/`BindRandom` のみ採録・method 構築時 1 回解決）。
+//! - タイムライン純関数コア [`frame_at`]／[`FrameStatus`]／[`should_fire`]／[`seeded_rng`]／[`LoopRng`]／
+//!   [`LotteryBoundary`]: 経過時刻→現在コマ・1/N 抽選・1000ms 絶対グリッド跨ぎ検出の決定論純関数群。
 //! - bind 解決層 [`BindResolver`]／[`BindNamespace`]／[`scope_namespace`]: `(カテゴリ, パーツ)`
 //!   → 着せ替え ID の名前解決と scope→名前空間写像を担う純関数群（parsers 非依存）。
 //! - bind 類別層 [`BindDirective`]／[`parse_bind_directive`]: `\![bind,...]` トークン列を
@@ -23,6 +25,7 @@ mod output;
 mod resolve;
 mod state;
 mod table;
+mod timeline;
 
 pub use actor::{spawn_seriko, SerikoMsg, SerikoSink};
 pub use bind::{
@@ -35,3 +38,4 @@ pub use state::{
     ApplyOutcome, BindApplyOutcome, PatternApplyOutcome, ScopeState, ScopeStates, Slot,
 };
 pub use table::{AnimationTable, LoopAnimation, LoopFrame, LoopTrigger};
+pub use timeline::{frame_at, seeded_rng, should_fire, FrameStatus, LoopRng, LotteryBoundary};
