@@ -156,7 +156,7 @@
   - _Boundary: RuntimeContract_
 
 - [ ] 9. Integration: 決定論的観測テスト群
-- [ ] 9.1 描画＋字下げの readback テスト
+- [x] 9.1 描画＋字下げの readback テスト
   - _Depends: 8.3_
   - Choice cue×3＋NewLine＋Cursor cue を注入して提示し、readback で3行の選択肢が期待どおりの字下げ位置に描画されていることを検証する（注入 cue／Tick のみ・synthetic pointer・sleep 不使用）
   - Observable: readback pixel アサーションが繰り返し実行でも決定論的に通過する
@@ -242,3 +242,4 @@
 - actor.rs: per-actor `choice_hover: HashMap<ActorKey,Option<usize>>`/`choice_snapshot: HashMap<ActorKey,Vec<ChoiceHitRow>>`（8.2 で populate）。`ResolvedBalloonText.choice_style` は resolve 時に `ResolvedChoiceStyle::resolve(Some(model.cursor()), font.color)` で一度解決。`choice_active`=`ActorTextState::choices()` 非空（DD-6・barrier ではない）。`ChoiceHitRow` は actor.rs 所有・`HitRectPx` は `pub use crate::choice::HitRectPx`。
 - actor.rs present_actor: 1回の layout→annotate→(from_layout→decorate)→render、成功 Update フレームのみ derive_hit_rows+to_window_physical で snapshot 更新（display と hit は同一 lines/segments＝単一導出 5.2/3.3）。NoChange/Err は snapshot 不変（if changed ゲート内）。committed=`executor.scroll_state().committed`。`layout_with_cursor_warn`+persistent `cursor_warn: CursorWarnGuard` 配線で 6.5 warn-once を production 有効化（4.2 申し送り消化）。折返し跨ぎ選択肢は同一 ordinal の複数 ChoiceHitRow（設計意図）。
 - actor.rs apply_cue: Clear=`choice_hover.remove`+`choice_snapshot.remove`（per-actor）、ClearAll=両 map `.clear()`（全 actor）。snapshot も即時無効化（choice_active は span 由来で即 false・snapshot は次 present まで stale ゆえ照会窓で表示/hit 齟齬＝5.2 破れ回避）。次 present 空再導出と冪等・無害。
+- **9.1 が潜在バグ検出→修正**: `\_l` 横字下げがヒット幾何には効くが描画に落ちていた（3.3 違反）。`finish_line` が `LineRect` の inline-near edge を `inline_start`（カーソル未反映）から取っていたのが原因。修正=near edge を最初の配置グリフの `inline_pos` から導出（`glyphs.first().map_or(inline_start,|g|g.inline_pos)`）。非カーソル行は first glyph inline_pos==inline_start ゆえ byte 同一・全 mode 対称。単体テストの盲点を readback 檻が発見した実例。

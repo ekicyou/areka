@@ -1578,6 +1578,84 @@ mod runtime_tests {
         );
     }
 
+    // task 9.1: 描画＋字下げの readback 統合檻（COM・headless・R7.1/7.4・draw==hit の R3.3）
+    #[test]
+    fn choice_rows_render_at_indented_positions_readback_pixel_cage() {
+        const FONT_H: f32 = 12.0;
+        let pitch: f32 = (FONT_H * 1.25).ceil(); // 15.0
+        let indent_x: f32 = 5.0 * FONT_H; // 5em = 60.0
+        let indent_y: f32 = 2.0 * pitch; // 2lh = 30.0
+        let (mut world, window, slot) = com_world();
+        let actor = ActorKey::from("0");
+        let mut rt = TextLayerRuntime::new(TextLayerConfig::default());
+        rt.apply_cue(&cue(
+            "0",
+            0.0,
+            CueCommand::Cursor {
+                x: "5em".into(),
+                y: "2lh".into(),
+            },
+        ));
+        rt.apply_cue(&choice_cue("0", 0.0, "OnYes", "はい", &["r0"]));
+        rt.apply_cue(&cue("0", 0.1, CueCommand::NewLine { ratio: 1.0 }));
+        rt.apply_cue(&choice_cue("0", 0.1, "OnNo", "いいえ", &["r1"]));
+        rt.apply_cue(&cue("0", 0.2, CueCommand::NewLine { ratio: 1.0 }));
+        rt.apply_cue(&choice_cue("0", 0.2, "OnMaybe", "どちらでも", &["r2"]));
+        let image = (200u32, 100u32);
+        rt.register_actor(
+            actor.clone(),
+            TextSlotBinding::new(slot, window, 1.0, image),
+            ResolvedBalloonText::resolve(&geo_model(), image),
+        );
+        present_frame(&mut rt, &mut world, 10.0).expect("提示フレーム");
+        let rows: Vec<super::ChoiceHitRow> = rt.choice_hit_rows(&actor).to_vec();
+        assert_eq!(rows.len(), 3);
+        assert_eq!(
+            (rows[0].ordinal, rows[1].ordinal, rows[2].ordinal),
+            (0, 1, 2)
+        );
+        assert_eq!(rows[0].id, "OnYes");
+        assert_eq!(rows[1].id, "OnNo");
+        assert_eq!(rows[2].id, "OnMaybe");
+        assert_eq!(rows[0].rect.left, indent_x, "先頭選択肢 5em 字下げ");
+        assert_eq!(rows[0].rect.top, indent_y, "先頭選択肢 2lh 字下げ");
+        assert_eq!(rows[1].rect.left, 0.0);
+        assert!(rows[0].rect.top < rows[1].rect.top && rows[1].rect.top < rows[2].rect.top);
+        let surface = rt.surface(&actor).expect("供給面");
+        let width = image.0;
+        let bytes = surface.read_back().expect("read_back");
+        let ink_in_rect = |b: &[u8], x0: u32, y0: u32, x1: u32, y1: u32| -> usize {
+            let mut n = 0usize;
+            for y in y0..y1 {
+                for x in x0..x1 {
+                    if b[((y * width + x) * 4) as usize + 3] != 0 {
+                        n += 1;
+                    }
+                }
+            }
+            n
+        };
+        let band = |r: &super::ChoiceHitRow| (r.rect.top as u32, r.rect.bottom.ceil() as u32);
+        let (r0y0, r0y1) = band(&rows[0]);
+        assert!(
+            ink_in_rect(&bytes, indent_x as u32, r0y0, width, r0y1) > 0,
+            "字下げ位置にインク（draw==hit）"
+        );
+        assert_eq!(
+            ink_in_rect(&bytes, 0, r0y0, (indent_x as u32).saturating_sub(10), r0y1),
+            0,
+            "字下げ前は空白"
+        );
+        assert!(opaque_count(&bytes) > 0);
+        present_frame(&mut rt, &mut world, 10.0).expect("NoChange 再提示");
+        let bytes2 = rt
+            .surface(&actor)
+            .expect("供給面")
+            .read_back()
+            .expect("read_back");
+        assert_eq!(bytes, bytes2, "決定論");
+    }
+
     /// Observable（6.3・非退行）: 選択肢スパンを持たない actor は提示後もヒット行が空
     /// （annotate/derive とも恒等・新規スクロール判定なし）。
     #[test]

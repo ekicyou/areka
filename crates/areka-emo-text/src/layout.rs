@@ -571,22 +571,32 @@ fn finish_line(
     block_pos: f32,
     font_height: f32,
 ) -> PositionedLine {
+    // 行内開始エッジ（rect の行内軸近端）は「実際に置かれた先頭グリフの inline_pos」から取る。
+    // グリフは行内軸で単調増加ゆえ先頭が近端。`\_l` カーソル字下げは pending-cursor 実体化で
+    // 各グリフの `inline_pos` に載る一方、行頭定数 `inline_start` には載らない。描画（draw.rs）は
+    // 行矩形原点（rect.left／縦書きは rect.top）を平行移動原点にして bare 文字列を DWrite で
+    // 再レイアウトする——per-glyph `inline_pos` は描画では捨てられる——ため、字下げを rect の
+    // 近端エッジへ反映しないと draw が hit（inline_pos 由来）とずれる（R3.3・字下げ描画欠落）。
+    // 非カーソル行では先頭グリフ＝`inline_start` ゆえ従来値と一致し回帰なし。3 方向とも先頭グリフ
+    // が近端＝式は writing mode に依存しない。空行は呼び手が `!current.is_empty()` で弾くため
+    // 構造上出ないが、防御的に `inline_start` へ退避する。
+    let inline_lo = glyphs.first().map_or(inline_start, |g| g.inline_pos);
     let rect = match mode {
         WritingMode::HorizontalTb => LineRect {
-            left: inline_start,
+            left: inline_lo,
             top: block_pos,
             right: inline_end,
             bottom: block_pos + font_height,
         },
         WritingMode::VerticalRl => LineRect {
             left: block_pos - font_height,
-            top: inline_start,
+            top: inline_lo,
             right: block_pos,
             bottom: inline_end,
         },
         WritingMode::VerticalLr => LineRect {
             left: block_pos,
-            top: inline_start,
+            top: inline_lo,
             right: block_pos + font_height,
             bottom: inline_end,
         },
