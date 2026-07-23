@@ -169,7 +169,7 @@
   - _Requirements: 7.4_
   - _Boundary: areka emo2_boot mod.rs_
 
-- [ ] 9.3 adapter/frame の pattern 透過を更新する
+- [x] 9.3 adapter/frame の pattern 透過を更新する
   - `map_display_command` が `Show.pattern`→`ShowSurface.pattern`／`ShowBalloon.pattern` を非改変転写するよう更新する
   - drain 相（frame.rs）の ShowSurface 網羅 match を pattern 透過へ追随させる
   - 完了状態: `cargo build -p areka` が adapter/frame の新規欄込みで成功する
