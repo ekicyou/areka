@@ -197,7 +197,7 @@
   - _Boundary: seriko bind resolver/state/actor + 呼出元追随_
   - _Depends: 10.1_
 
-- [ ] 10.3 起動配線で実 mustselect 情報を構築・注入する
+- [x] 10.3 起動配線で実 mustselect 情報を構築・注入する
   - ゴーストマウント時に取り込んだ mustselect カテゴリ集合とカテゴリ→ID索引から、起動時の名前解決情報を構築し、seriko の起動呼び出しへ渡す
   - Observable: mustselect 宣言を持つゴーストを読み込んだとき、起動時資産から対応するカテゴリが mustselect と判別でき、そのカテゴリのID集合が引けることを確認できる
   - _Requirements: 4.5, 7.1_

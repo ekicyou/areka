@@ -10,7 +10,7 @@
 //! `default_bind_ids` は tasks.md task 2.3 で実装済み。`build_boot_assets` の骨格は残り、
 //! 実装は tasks.md task 2.6 が担う。
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
 use areka_emo_atlas::{
@@ -160,13 +160,13 @@ pub fn build_boot_assets(
     for name in &model.bindgroups.kero_names {
         kero_map.insert((name.category.clone(), name.part.clone()), name.id);
     }
-    // TODO(task 10.3): 空 mustselect は暫定橋。task 10.3 が MountModel.bindgroups の mustselect から実集合を構築する。
-    let bind_resolver = BindResolver::new(
-        sakura_map,
-        kero_map,
-        std::collections::BTreeSet::new(),
-        std::collections::BTreeSet::new(),
-    );
+    // mustselect（排他選択）カテゴリ集合を `MountModel.bindgroups` の名前宣言
+    // （`sakura/kero.bindoption*.group,カテゴリ,mustselect`・Req 4.5・D11）から起動時資産へ構築する。
+    let sakura_mustselect: BTreeSet<String> =
+        model.bindgroups.sakura_mustselect.iter().cloned().collect();
+    let kero_mustselect: BTreeSet<String> =
+        model.bindgroups.kero_mustselect.iter().cloned().collect();
+    let bind_resolver = BindResolver::new(sakura_map, kero_map, sakura_mustselect, kero_mustselect);
 
     let shell_dir = model.shell.dir;
 
@@ -435,6 +435,46 @@ mod tests {
             boot.bind_resolver.resolve(BindNamespace::Sakura, "腕", "存在しない"),
             None,
             "未宣言の (カテゴリ, パーツ) は None（捏造しない・R3.7）"
+        );
+    }
+
+    /// 観測可能な完了条件（tasks.md task 10.3）: mustselect 宣言を持つ emo2 fixture を渡すと、
+    /// 起動時資産 `BootAssets.bind_resolver` から対応するカテゴリが mustselect と判別でき、
+    /// そのカテゴリの ID 集合が引ける。
+    ///
+    /// emo2 shell descript の `sakura.bindoption{0..3}.group,カテゴリ,mustselect`（腕/口/眉/目）由来で
+    /// `is_mustselect(Sakura, "腕"/"口"/"眉"/"目") == true`、非宣言カテゴリ（紅）は `false`。
+    /// mustselect カテゴリの ID 集合（目は複数 id）は非空であることを確認する（R4.5・R7.1・D11）。
+    #[test]
+    fn build_boot_assets_bind_resolver_carries_mustselect() {
+        // SAFETY: bake の WIC デコードに要る COM 初期化（既初期化の S_FALSE/RPC_E_CHANGED_MODE は無視）。
+        unsafe {
+            let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
+        }
+
+        let boot = build_boot_assets(&emo2_root(), &emo2_balloon_root(), &[0, 1])
+            .expect("emo2 fixture の BootAssets 組立は成功する");
+
+        // emo2 fixture の sakura.bindoption*.group,カテゴリ,mustselect（腕/口/眉/目）が起動時資産から判別できる。
+        for category in ["腕", "口", "眉", "目"] {
+            assert!(
+                boot.bind_resolver
+                    .is_mustselect(BindNamespace::Sakura, category),
+                "宣言済み mustselect カテゴリ `{category}` は起動時資産から真（10.3）"
+            );
+        }
+        // 非宣言カテゴリは mustselect でない（捏造しない・R4.5）。
+        assert!(
+            !boot.bind_resolver.is_mustselect(BindNamespace::Sakura, "紅"),
+            "非宣言カテゴリ `紅` は mustselect でない（R4.5）"
+        );
+        // mustselect カテゴリの ID 集合が引ける（目は複数 id を持つ）。
+        assert!(
+            !boot
+                .bind_resolver
+                .category_ids(BindNamespace::Sakura, "目")
+                .is_empty(),
+            "mustselect カテゴリ `目` の ID 集合は非空（複数 id・10.3）"
         );
     }
 
