@@ -49,23 +49,31 @@ fn onclose_get_index(recorded: &[RecordedCall], reason: CloseReason) -> Option<u
     recorded.iter().position(|c| *c == onclose)
 }
 
-/// `fetch` が返す記録列が `pred` を満たすまで有界回数 yield して待つ（sleep なし・満たせば true）。
+/// `fetch` が返す記録列が `pred` を満たすまで壁時計 deadline（[`DEFAULT_TIMEOUT`]）まで yield して
+/// 待つ（sleep なし・満たせば true）。
 ///
 /// mock は即応ゆえ観測対象は短時間で現れる。本ループは cross-thread な記録の可視化を待つだけの
-/// ハング検出付きバリアであり（wall-clock も sleep も用いない）、最終的な宙吊り検出は各テスト末尾の
-/// [`join_bounded`]（[`DEFAULT_TIMEOUT`]）が別途担保する。
+/// ハング検出付きバリアであり（sleep は用いず、打ち切りは反復回数ではなく壁時計 deadline のみ）、
+/// 最終的な宙吊り検出は各テスト末尾の [`join_bounded`]（[`DEFAULT_TIMEOUT`]）が別途担保する。
+///
+/// `pred` 成立で `true`、[`DEFAULT_TIMEOUT`] を測る [`std::time::Instant`] deadline を超過すれば `false`。
+/// 呼出側は既存どおり `assert!(wait_until(...))` で待機成否を表明し、deadline 超過（欠陥時）は
+/// `false` → assert 失敗として顕在化する。
 fn wait_until<F, P>(fetch: F, pred: P) -> bool
 where
     F: Fn() -> Vec<RecordedCall>,
     P: Fn(&[RecordedCall]) -> bool,
 {
-    for _ in 0..100_000 {
+    let deadline = std::time::Instant::now() + DEFAULT_TIMEOUT;
+    loop {
         if pred(&fetch()) {
             return true;
         }
+        if std::time::Instant::now() >= deadline {
+            return false;
+        }
         std::thread::yield_now();
     }
-    false
 }
 
 /// `OnSecondChange` NOTIFY（active talk 窓）**より後**に現れる最初の `OnSecondChange` GET を返す

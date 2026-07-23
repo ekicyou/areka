@@ -30,7 +30,7 @@
   - _Requirements: 7.1, 7.3, 8.5_
   - _Boundary: drive_ticks_until_disconnect_
 
-- [ ] 2.3 既存の有界 yield 待ちヘルパーを壁時計 deadline ベースへ書き換える
+- [x] 2.3 既存の有界 yield 待ちヘルパーを壁時計 deadline ベースへ書き換える
   - 100,000 回の yield 反復に依存していた汎用待ちヘルパーを、既存シグネチャを変えずに壁時計 deadline（成立で true・超過で false）ベースへ書き換える
   - 既存の 3 箇所の呼出はいずれも無改変のまま動作する
   - deadline 超過時に呼出元の `assert!` が失敗として顕在化することを確認できる
