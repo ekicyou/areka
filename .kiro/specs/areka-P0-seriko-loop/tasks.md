@@ -211,7 +211,7 @@
   - _Requirements: 3.4, 7.2_
   - _Boundary: areka emo2_boot spine.rs (E2E)_
 
-- [ ] 10.3 実機サインオフ（有界 auto-exit + grep + 人間目視）_HumanRequired: autonomous 完遂不可（実 emo2・実 pasta.dll・実 DPI での GUI 起動＋人間目視が受入条件・R9.3）。手順は下記 Implementation Notes「10.3 実機サインオフ手順」参照。_
+- [x] 10.3 実機サインオフ（有界 auto-exit + grep + 人間目視）_Signoff: 2026-07-24 実施・機械判定＋開発者目視ともに PASS。詳細は下記 Implementation Notes「10.3 実機サインオフ結果」参照。_
   - 実 emo2・実 pasta.dll・実 DPI で起動し、`AREKA_APP_SMOKE_EXIT_MS` 有界 auto-exit＋`RUST_LOG` grep（抽選/再生マーカー）で機械判定する
   - kero（`random`）のまばたきと、sakura の bindgroup を `\![bind,まばたき,通常,1]` で ON にした状態でのまばたきを人間が目視確認する
   - 完了状態: 実機ログに抽選発火・再生開始/停止/残留マーカーが記録され、開発者が両まばたきの目視確認結果を判定として記録する
@@ -240,5 +240,24 @@ autonomous 実装は 1.1〜10.2 まで完了（全 reviewer 承認）。10.3 は
    - kero（`random`）のまばたきが起動しているだけで発生することを目視。
    - sakura の bindgroup を `\![bind,まばたき,通常,1]` で ON にした状態でまばたきが発生することを目視（既定 OFF では起きない対照）。
 4. **判定記録**: 両まばたきの目視確認結果を開発者が判定として記録（DoD ゲート）。齟齬時は SSP 実観察で裏取り（R9.4）。
+
+### 10.3 実機サインオフ結果（2026-07-24・PASS）
+
+**前提整備**: i686 helper（`cargo build -p shiori-host32-helper --target i686-pc-windows-msvc`）を `target/debug/shiori-host32-helper.exe` へ配置（解決規則＝`current_exe()` 隣接）。
+
+**⚠️ 実機起動の必須条件＝引数は絶対パス**: 相対パスで起動すると helper が pasta.dll を解決できず `LoadLibraryFailed(0x8007007E ERROR_MOD_NOT_FOUND)` → SHIORI 接続失敗 → ゴースト無発話 → キャラ面が一度も表示されず、**表示ゲート（R2.1）で抽選が走らない＝まばたきゼロ**。絶対パス指定で完全解決。
+
+**機械判定（実走 75s・`AREKA_APP_SMOKE_EXIT_MS=75000`・`RUST_LOG=info`・exit 0）**:
+
+| マーカー | 実測 | 対応 |
+|---|---|---|
+| `loop 抽選発火` | 36（scope=0 anim=1400×18／anim=1402×17＝sakura、**scope=1 anim=0×1＝kero**） | R2.1/2.2 |
+| `loop 停止（負 surface でベース復帰）` | 1（scope="1" anim=0＝**kero の `-1` 終端**、発火と対） | R4.3/9.1 |
+| `loop 末尾残留（最終コマ保持）` | 35（scope="0" anim=1400/1402＝**sakura の残留**） | R4.4/9.4 |
+| `seed`／`実 sink 結線`／`loop ticker を Close` | いずれも記録・`LOAD 失敗` なし | R7.4/7.5 |
+
+**人間目視（R9.3・開発者判定）**: kero（`random`）・sakura（`bind+random`）**両方のまばたきを目視で確認・OK**。
+
+**観測条件の知見**: kero のまばたきは `surface.append` 対象の **10/2100/2110/2200/2210 のみ**に定義（既定面 2100）＝表情変化中は非対象ゆえ低頻度。sakura は表情系が目軸から `\![bind,まばたき,…]` を自動発行するため高頻度（目軸 4/5/1＝笑顔/静観/べそ では まばたき`----`＝bindgroup1403 となり**意図どおり瞬きしない**＝正典挙動）。
 - **5.3 残テスト分岐（10.1 で拾う）**: LoopRuntime の `-2`（`-1` 以外の負 surface）warn-once dedup 分岐（`warned_negative` set）に looper 専用テストが未配置。非ログ挙動は `-1` 経路と同一（base 復帰）・frame_at の `-2→Stopped` は timeline.rs で検証済ゆえ非ブロッキングだが、[deterministic-test-coverage-mandate] 遵守のため **10.1 looper 統合テストで `-2` warn-once ケース**（seriko の tracing capture helper 使用）を追加すること。
 - **emo-present テストバイナリ赤ウィンドウ（7.1〜8.1）**: `compose`/`compose_into` への `pattern` 引数追加（7.1）で emo-present の `#[cfg(test)]` caller（presenter tests・chain.rs・cache.rs tests）が `.compose()` を旧アリティで呼び赤化。7.1 は emo-present **LIB** ビルドのみ default 追随でグリーン化（presenter.rs:229）。**8.1（emo-present cache）は自タスクで emo-present テスト caller 群を `&PatternState::default()` で追随させ `cargo test -p areka-emo-present` を復旧すること**（ComposeKey 追加と併せて）。実 pattern 配線は 8.2。
