@@ -177,7 +177,7 @@
   - _Requirements: 4.3, 6.1, 7.2_
   - _Boundary: RuntimeContract_
 
-- [ ] 9.4 ライフサイクル無効化テスト
+- [x] 9.4 ライフサイクル無効化テスト
   - _Depends: 8.3_
   - Clear 注入、および新 talk（ClearAll＋新 Choice 集合）注入のそれぞれについて、選択肢画素の消滅・`choice_hit_rows` 空・`choice_active=false` が同一フレームで同時観測されることを検証する
   - Observable: Clear ケースと新 talk ケースの双方で同一フレーム原子性のアサーションが通過する
