@@ -24,8 +24,10 @@
 //! 1 スパンのグリフ範囲が折返し境界を跨ぐ場合、跨いだ行ごとに 1 つの [`LineChoiceSegment`] を
 //! 出す（`\q` は emo2 正典上は自動折返ししないが、構造的に正しく扱う）。
 
-use crate::layout::PositionedLine;
+use crate::layout::{LineRect, PositionedLine};
+use crate::region::{ScaleContract, TextRegion};
 use crate::state::ChoiceSpan;
+use crate::writing::WritingMode;
 
 /// 行×選択肢セグメント注釈（配置済み行へのスパン写像・折返し跨ぎは行ごと分割）。
 ///
@@ -88,6 +90,159 @@ pub fn annotate_lines(lines: &[PositionedLine], spans: &[ChoiceSpan]) -> Vec<Lin
         }
     }
     segments
+}
+
+/// ヒット行（純粋・canvas-local image px）: 1 選択肢セグメントの矩形＋配送順序数。
+///
+/// `rect` は **canvas-local（validrect-local）image px**——[`ContentCanvas::from_layout`] が
+/// 住人へ与える座標系と同一（validrect 原点を差し引いた空間）。ゆえにハイライト描画矩形と
+/// **数値まで一致**する（正典確定「ハイライト矩形＝ヒット矩形と同一」・R3.3）。窓物理 px への
+/// 写像は [`to_window_physical`]（`region` 原点 × k を戻し committed を反映）の責務。
+///
+/// [`ContentCanvas::from_layout`]: crate::canvas::ContentCanvas::from_layout
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct CanvasHitRow {
+    /// スパンの配送順序数（[`ChoiceSpan::ordinal`]・照会の主キー）。
+    pub ordinal: usize,
+    /// ヒット矩形（canvas-local＝validrect-local image px・ハイライト矩形と同座標系）。
+    pub rect: LineRect,
+}
+
+/// バルーン窓 client 座標系の物理 px 矩形（f32・Send 純データ・choice.rs 所有）。
+///
+/// [`to_window_physical`] の出力＝スクロール `committed`（面反映済み whole-pixel）を反映済みの
+/// 窓物理 px。actor.rs の照会契約 API はこの型を再輸出する（design Data Model）。
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct HitRectPx {
+    /// 左辺（窓物理 px）。
+    pub left: f32,
+    /// 上辺（窓物理 px）。
+    pub top: f32,
+    /// 右辺（窓物理 px）。
+    pub right: f32,
+    /// 下辺（窓物理 px）。
+    pub bottom: f32,
+}
+
+/// ヒット行導出（純粋・canvas-local image px）: セグメント×行矩形からヒット矩形を組む。
+///
+/// 各 [`LineChoiceSegment`] について、**行内軸範囲＝セグメントの `inline_range`（＝選択肢グリフ
+/// 範囲の文字幅。行全幅ではない・正典確定「クリック領域幅＝文字幅」）**、**ブロック軸帯＝当該行の
+/// 行矩形の block 帯**（[`PositionedLine::rect`] が既に `block_pos..block_pos+font_height` を
+/// 保持）を軸読み替え正準表で x/y へ割り当て、絶対 image px のヒット矩形を組む。これを
+/// [`ContentCanvas::from_layout`] と**同一の原点差引き**（`- region.left()` / `- region.top()`）で
+/// canvas-local（validrect-local）へ写す——ゆえにハイライト描画（`decorate_canvas`）が同じ
+/// `LineChoiceSegment`＋行矩形から組む矩形と数値一致する（表示とヒットの単一導出・R3.3・
+/// 正典確定「ハイライト矩形＝ヒット矩形と同一」）。
+///
+/// - 空範囲セグメント（`i0 >= i1`）は行を生まない（annotate は既に除外済みだが防御）。
+/// - `line_index` 範囲外は防御的にスキップ（annotate は有効添字のみ出す）。
+/// - 出力順は入力 `segments` 順（＝annotate 出力＝ordinal 昇順×行昇順）。
+///
+/// **設計注記（`region` 引数）**: design Service Interface の型枠は `region` を欠くが、
+/// §座標写像式（正本）は入力を「canvas-local（validrect-local）」と明記し
+/// [`to_window_physical`] が `region` 原点を戻す。layout 出力（`inline_range`／行矩形）は
+/// **絶対 image px**（描画開始点＝validrect 原点起点）ゆえ、canvas-local 化には validrect 原点が
+/// 必須。よって本関数は `region` を受け取り原点差引きを行う（追加・新規関数・呼び手は task 8）。
+///
+/// 同一入力→同一出力（純粋・決定論）。失敗経路なし。
+///
+/// [`ContentCanvas::from_layout`]: crate::canvas::ContentCanvas::from_layout
+pub fn derive_hit_rows(
+    lines: &[PositionedLine],
+    segments: &[LineChoiceSegment],
+    mode: WritingMode,
+    region: &TextRegion,
+) -> Vec<CanvasHitRow> {
+    let (ox, oy) = (region.left(), region.top());
+    let mut rows = Vec::new();
+    for seg in segments {
+        let (i0, i1) = seg.inline_range;
+        // 空範囲/逆順セグメントは行を生まない（防御・annotate は既に除外済み）。
+        if i0 >= i1 {
+            continue;
+        }
+        // line_index 範囲外は防御的にスキップ（annotate は有効添字のみ出す）。
+        let Some(line) = lines.get(seg.line_index) else {
+            continue;
+        };
+        // 行内軸＝セグメントの inline_range（文字幅）・ブロック軸帯＝行矩形の block 帯を
+        // 軸読み替え正準表で x/y へ割り当て絶対 image px のヒット矩形を組む（横書き＝行内 x／
+        // ブロック y・縦書き＝行内 y／ブロック x）。行矩形は既に `block_pos..block_pos+font_height`
+        // を保持ゆえ block 帯はそのまま採る（描画の block 帯と同源）。
+        let abs = match mode {
+            WritingMode::HorizontalTb => LineRect {
+                left: i0,
+                top: line.rect.top,
+                right: i1,
+                bottom: line.rect.bottom,
+            },
+            WritingMode::VerticalRl | WritingMode::VerticalLr => LineRect {
+                left: line.rect.left,
+                top: i0,
+                right: line.rect.right,
+                bottom: i1,
+            },
+        };
+        // canvas-local 化: from_layout と同一の validrect 原点差引き（x へ left・y へ top）。
+        rows.push(CanvasHitRow {
+            ordinal: seg.ordinal,
+            rect: LineRect {
+                left: abs.left - ox,
+                top: abs.top - oy,
+                right: abs.right - ox,
+                bottom: abs.bottom - oy,
+            },
+        });
+    }
+    rows
+}
+
+/// canvas-local ヒット矩形 → バルーン窓 client 物理 px 矩形（純粋・§座標写像式の正本実装）。
+///
+/// ```text
+/// 行内軸:   phys = (region_inline_origin + inline) × k
+/// ブロック軸: phys = (region_block_origin + block) × k + committed
+/// ```
+///
+/// - `k`＝[`ScaleContract::scale`]（×k 一点適用・現行契約 1.0 恒常・DPI 追従で k≠1.0 実供給）。
+/// - `committed`＝面反映済み whole-pixel スクロール（物理 px・符号済み・`ScrollPlanner::scroll_state`）。
+///   ブロック軸のみ加算する（行内軸は不動）。
+/// - `region_*_origin`＝validrect 原点（[`TextRegion::left`]/[`TextRegion::top`]）——TextSurface の
+///   窓内装着 offset（`validrect 原点 × k`）と同源ゆえ結果はバルーン窓 client 物理 px に一致する。
+/// - 軸割当は writing_mode 正準表: **horizontal_tb**＝行内 x／ブロック y・
+///   **vertical_rl/lr**＝行内 y／ブロック x（committed はブロック軸へ）。
+///
+/// 同一入力→同一出力（純粋・決定論）。失敗経路なし。
+pub fn to_window_physical(
+    row: &CanvasHitRow,
+    region: &TextRegion,
+    mode: WritingMode,
+    committed: i32,
+    contract: &ScaleContract,
+) -> HitRectPx {
+    let k = contract.scale;
+    let committed = committed as f32;
+    let (ox, oy) = (region.left(), region.top());
+    let r = &row.rect;
+    // 行内軸: phys = (region_inline_origin + inline) × k
+    // ブロック軸: phys = (region_block_origin + block) × k + committed
+    // 軸割当（正準表）: horizontal_tb＝行内 x／ブロック y・vertical_rl/lr＝行内 y／ブロック x。
+    // committed（面反映済み物理スクロール）はブロック軸のみ加算する。
+    match mode {
+        WritingMode::HorizontalTb => HitRectPx {
+            left: (ox + r.left) * k,
+            top: (oy + r.top) * k + committed,
+            right: (ox + r.right) * k,
+            bottom: (oy + r.bottom) * k + committed,
+        },
+        WritingMode::VerticalRl | WritingMode::VerticalLr => HitRectPx {
+            left: (ox + r.left) * k + committed,
+            top: (oy + r.top) * k,
+            right: (ox + r.right) * k + committed,
+            bottom: (oy + r.bottom) * k,
+        },
+    }
 }
 
 #[cfg(test)]
@@ -288,5 +443,308 @@ mod tests {
         assert!(annotate_lines(&[], &[span(0, 0..2)]).is_empty());
         assert!(annotate_lines(&[line(&[(0.0, 10.0)])], &[]).is_empty());
         assert!(annotate_lines(&[], &[]).is_empty());
+    }
+
+    // ── タスク 5.2: ヒット行導出（derive_hit_rows）と窓物理写像（to_window_physical） ──
+    //
+    // 座標系: layout 出力（inline_range／行矩形）は絶対 image px（描画開始点＝validrect 原点起点）。
+    // CanvasHitRow.rect は canvas-local（validrect-local）——from_layout と同一の原点差引きゆえ
+    // ハイライト矩形と数値一致（正典確定「ハイライト矩形＝ヒット矩形と同一」・R3.3）。
+    // 窓物理化は to_window_physical: 行内=(origin+inline)×k・ブロック=(origin+block)×k+committed。
+
+    use crate::region::{ScaleContract, TextRegion};
+    use crate::writing::WritingMode;
+    use areka_parsers::balloon::{
+        BalloonModel, Font, FontColor, Origin, ValidRect, WindowPosition, WordWrapPoint,
+    };
+
+    /// validrect 原点を持つ `TextRegion`（非負 validrect 素通し・derive/写像は left()/top() のみ使用）。
+    fn region(left: i32, top: i32, right: i32, bottom: i32) -> TextRegion {
+        let model = BalloonModel::new(
+            WindowPosition::new(None, None),
+            Origin::new(None, None),
+            WordWrapPoint::new(None, None),
+            ValidRect::new(Some(top), Some(bottom), Some(left), Some(right)),
+            Font::new(None, None, FontColor::new(None, None, None)),
+            None,
+            None,
+        );
+        TextRegion::resolve(&model, (400, 224), WritingMode::HorizontalTb)
+    }
+
+    /// 行矩形だけ指定した `PositionedLine`（derive_hit_rows は行矩形の block 帯のみ使用）。
+    fn prow(left: f32, top: f32, right: f32, bottom: f32) -> PositionedLine {
+        PositionedLine {
+            rect: LineRect {
+                left,
+                top,
+                right,
+                bottom,
+            },
+            glyphs: vec![],
+        }
+    }
+
+    /// `(line_index, ordinal, inline_range)` の [`LineChoiceSegment`]。
+    fn seg(line_index: usize, ordinal: usize, range: (f32, f32)) -> LineChoiceSegment {
+        LineChoiceSegment {
+            line_index,
+            ordinal,
+            inline_range: range,
+        }
+    }
+
+    // ── derive_hit_rows: canvas-local ヒット矩形（文字幅・block 帯・原点差引き） ──
+
+    /// 横書き・原点 (0,0): ヒット矩形の行内範囲＝セグメントの inline_range（**文字幅**）・
+    /// ブロック帯＝行矩形の top..bottom。行全幅（0..50）ではなくセグメント範囲（10..30）で切る。
+    #[test]
+    fn derive_horizontal_uses_char_width_inline_and_line_block_band() {
+        let region = region(0, 0, 400, 224);
+        // 行全幅 0..50・block 帯 0..10（font 10）。
+        let lines = [prow(0.0, 0.0, 50.0, 10.0)];
+        let segs = [seg(0, 7, (10.0, 30.0))]; // 選択肢グリフ範囲（文字幅）＝10..30。
+        let rows = derive_hit_rows(&lines, &segs, WritingMode::HorizontalTb, &region);
+        assert_eq!(
+            rows,
+            vec![CanvasHitRow {
+                ordinal: 7,
+                rect: LineRect {
+                    left: 10.0, // 行全幅 0..50 ではなくセグメント 10..30（文字幅）。
+                    top: 0.0,
+                    right: 30.0,
+                    bottom: 10.0,
+                },
+            }]
+        );
+    }
+
+    /// 横書き・非零 validrect 原点 (36,46): from_layout と同一の原点差引きで canvas-local 化する
+    /// （絶対 image px の行矩形/セグメントから validrect 原点を引く＝ハイライト矩形と同座標系）。
+    #[test]
+    fn derive_horizontal_subtracts_validrect_origin_to_canvas_local() {
+        let region = region(36, 46, 356, 168);
+        // 絶対 image px: 行矩形 left36/top46/right86/bottom56・セグメント 46..66。
+        let lines = [prow(36.0, 46.0, 86.0, 56.0)];
+        let segs = [seg(0, 0, (46.0, 66.0))];
+        let rows = derive_hit_rows(&lines, &segs, WritingMode::HorizontalTb, &region);
+        assert_eq!(
+            rows[0].rect,
+            LineRect {
+                left: 10.0,   // 46 − 36
+                top: 0.0,     // 46 − 46
+                right: 30.0,  // 66 − 36
+                bottom: 10.0, // 56 − 46
+            },
+            "絶対 image px から validrect 原点を差し引いた canvas-local"
+        );
+    }
+
+    /// 縦書き（vertical_rl / vertical_lr）: 行内軸＝y（inline_range）・ブロック軸＝x（行矩形の
+    /// left..right 帯）。軸割当が横書きと入れ替わる（正準表）。
+    #[test]
+    fn derive_vertical_assigns_inline_to_y_and_block_to_x() {
+        let region = region(0, 0, 400, 224);
+        for mode in [WritingMode::VerticalRl, WritingMode::VerticalLr] {
+            // 縦書き列矩形: x 帯 377..387（block・font 10）・y 全長 0..20。
+            let lines = [prow(377.0, 0.0, 387.0, 20.0)];
+            let segs = [seg(0, 1, (5.0, 15.0))]; // 行内軸（y）の文字幅範囲。
+            let rows = derive_hit_rows(&lines, &segs, mode, &region);
+            assert_eq!(
+                rows[0].rect,
+                LineRect {
+                    left: 377.0, // block 帯＝行矩形 left（x）
+                    top: 5.0,    // inline＝セグメント i0（y）
+                    right: 387.0,
+                    bottom: 15.0,
+                },
+                "{mode:?}: 行内=y・ブロック=x の軸割当"
+            );
+        }
+    }
+
+    /// 複数セグメント（同一行 2 個＋別行 1 個）→ 入力順どおり 3 行、それぞれ ordinal と矩形を保持。
+    #[test]
+    fn derive_multiple_segments_yield_rows_in_input_order() {
+        let region = region(0, 0, 400, 224);
+        let lines = [prow(0.0, 0.0, 40.0, 10.0), prow(0.0, 13.0, 30.0, 23.0)];
+        let segs = [
+            seg(0, 0, (0.0, 20.0)),
+            seg(0, 1, (20.0, 40.0)),
+            seg(1, 2, (0.0, 30.0)),
+        ];
+        let rows = derive_hit_rows(&lines, &segs, WritingMode::HorizontalTb, &region);
+        assert_eq!(rows.len(), 3);
+        assert_eq!(rows[0].ordinal, 0);
+        assert_eq!(rows[0].rect, LineRect { left: 0.0, top: 0.0, right: 20.0, bottom: 10.0 });
+        assert_eq!(rows[1].ordinal, 1);
+        assert_eq!(rows[1].rect, LineRect { left: 20.0, top: 0.0, right: 40.0, bottom: 10.0 });
+        assert_eq!(rows[2].ordinal, 2);
+        assert_eq!(rows[2].rect, LineRect { left: 0.0, top: 13.0, right: 30.0, bottom: 23.0 });
+    }
+
+    /// 空セグメント列 → 空のヒット行（非退行）。
+    #[test]
+    fn derive_empty_segments_yield_no_rows() {
+        let region = region(0, 0, 400, 224);
+        let lines = [prow(0.0, 0.0, 30.0, 10.0)];
+        assert!(derive_hit_rows(&lines, &[], WritingMode::HorizontalTb, &region).is_empty());
+    }
+
+    /// 空範囲セグメント（`i0 >= i1`）は行を生まない（防御・annotate 既除外）。
+    #[test]
+    fn derive_empty_range_segment_produces_no_row() {
+        let region = region(0, 0, 400, 224);
+        let lines = [prow(0.0, 0.0, 30.0, 10.0)];
+        let segs = [seg(0, 0, (10.0, 10.0)), seg(0, 1, (20.0, 15.0))];
+        assert!(
+            derive_hit_rows(&lines, &segs, WritingMode::HorizontalTb, &region).is_empty(),
+            "空/逆順範囲はヒット行を生まない"
+        );
+    }
+
+    /// `line_index` 範囲外セグメントは防御的にスキップ（annotate は有効添字のみ出す）。
+    #[test]
+    fn derive_out_of_range_line_index_is_skipped() {
+        let region = region(0, 0, 400, 224);
+        let lines = [prow(0.0, 0.0, 30.0, 10.0)];
+        let segs = [seg(5, 0, (0.0, 10.0))];
+        assert!(derive_hit_rows(&lines, &segs, WritingMode::HorizontalTb, &region).is_empty());
+    }
+
+    // ── to_window_physical: §座標写像式（行内=(origin+inline)×k・ブロック=(origin+block)×k+committed） ──
+
+    /// canvas-local (10,0,30,10)・原点 (36,46)。横書きは committed をブロック軸（y=top/bottom）へ。
+    #[test]
+    fn to_window_physical_horizontal_applies_formula() {
+        let region = region(36, 46, 356, 168);
+        let row = CanvasHitRow {
+            ordinal: 0,
+            rect: LineRect { left: 10.0, top: 0.0, right: 30.0, bottom: 10.0 },
+        };
+        // k=2・committed=50: 行内 x=(36+inline)×2・ブロック y=(46+block)×2+50。
+        let contract = ScaleContract::new(2.0, None);
+        assert_eq!(
+            to_window_physical(&row, &region, WritingMode::HorizontalTb, 50, &contract),
+            HitRectPx {
+                left: 92.0,   // (36+10)×2
+                top: 142.0,   // (46+0)×2 + 50
+                right: 132.0, // (36+30)×2
+                bottom: 162.0 // (46+10)×2 + 50
+            }
+        );
+    }
+
+    /// 縦書き（rl/lr）は committed をブロック軸（x=left/right）へ・行内軸（y）は ×k のみ。
+    #[test]
+    fn to_window_physical_vertical_puts_committed_on_x_block_axis() {
+        let region = region(36, 46, 356, 168);
+        let row = CanvasHitRow {
+            ordinal: 0,
+            rect: LineRect { left: 10.0, top: 0.0, right: 30.0, bottom: 10.0 },
+        };
+        let contract = ScaleContract::new(2.0, None);
+        for mode in [WritingMode::VerticalRl, WritingMode::VerticalLr] {
+            assert_eq!(
+                to_window_physical(&row, &region, mode, 50, &contract),
+                HitRectPx {
+                    left: 142.0,  // (36+10)×2 + 50（x=ブロック）
+                    top: 92.0,    // (46+0)×2（y=行内・committed 非加算）
+                    right: 182.0, // (36+30)×2 + 50
+                    bottom: 112.0 // (46+10)×2
+                },
+                "{mode:?}: committed は x（ブロック軸）のみ"
+            );
+        }
+    }
+
+    /// k∈{1.0,2.0}×committed∈{0,50}×3 方向の全網羅パラメタライズ（独立算出の期待値と一致）。
+    #[test]
+    fn to_window_physical_parameterized_over_k_committed_and_modes() {
+        let region = region(36, 46, 356, 168);
+        let (ox, oy) = (36.0f32, 46.0f32);
+        let row = CanvasHitRow {
+            ordinal: 0,
+            rect: LineRect { left: 10.0, top: 2.0, right: 30.0, bottom: 12.0 },
+        };
+        let r = row.rect;
+        for k in [1.0f32, 2.0] {
+            let contract = ScaleContract::new(k, None);
+            for c in [0i32, 50] {
+                let cf = c as f32;
+                for mode in [
+                    WritingMode::HorizontalTb,
+                    WritingMode::VerticalRl,
+                    WritingMode::VerticalLr,
+                ] {
+                    let got = to_window_physical(&row, &region, mode, c, &contract);
+                    let expected = match mode {
+                        // horizontal: x=行内（×k）・y=ブロック（×k+committed）。
+                        WritingMode::HorizontalTb => HitRectPx {
+                            left: (ox + r.left) * k,
+                            top: (oy + r.top) * k + cf,
+                            right: (ox + r.right) * k,
+                            bottom: (oy + r.bottom) * k + cf,
+                        },
+                        // vertical: x=ブロック（×k+committed）・y=行内（×k）。
+                        WritingMode::VerticalRl | WritingMode::VerticalLr => HitRectPx {
+                            left: (ox + r.left) * k + cf,
+                            top: (oy + r.top) * k,
+                            right: (ox + r.right) * k + cf,
+                            bottom: (oy + r.bottom) * k,
+                        },
+                    };
+                    assert_eq!(got, expected, "k={k} committed={c} mode={mode:?}");
+                }
+            }
+        }
+    }
+
+    /// 現行契約 k=1.0・committed=0（非スクロール）: 窓物理 px は絶対 image px と一致
+    /// （canvas-local + 原点 = 絶対）——2 空間モデルの恒等（R2.2 の DPI=96 経路）。
+    #[test]
+    fn to_window_physical_unit_scale_no_scroll_equals_absolute_image_px() {
+        let region = region(36, 46, 356, 168);
+        let row = CanvasHitRow {
+            ordinal: 0,
+            rect: LineRect { left: 10.0, top: 0.0, right: 30.0, bottom: 10.0 },
+        };
+        let contract = ScaleContract::new(1.0, None);
+        assert_eq!(
+            to_window_physical(&row, &region, WritingMode::HorizontalTb, 0, &contract),
+            HitRectPx { left: 46.0, top: 46.0, right: 66.0, bottom: 56.0 } // = 絶対 image px
+        );
+    }
+
+    // ── R3.3: 描画とヒットの単一導出（derive_hit_rows と from_layout の canvas-local が一致） ──
+
+    /// Observable: 固定入力に対し、derive_hit_rows の canvas-local 矩形は、ハイライト描画が
+    /// 同一 `LineChoiceSegment`＋行矩形から `from_layout` と同一の原点差引きで組む矩形と
+    /// **完全一致**する（表示とヒットが同一導出パス＝座標整合の構造保証）。
+    #[test]
+    fn hit_row_rect_matches_canvas_local_highlight_derivation() {
+        let region = region(36, 46, 356, 168);
+        let line = prow(36.0, 46.0, 86.0, 56.0); // 絶対 image px の行矩形。
+        let segment = seg(0, 3, (46.0, 66.0)); // 絶対 image px のセグメント inline 範囲。
+        let rows = derive_hit_rows(
+            std::slice::from_ref(&line),
+            std::slice::from_ref(&segment),
+            WritingMode::HorizontalTb,
+            &region,
+        );
+        // ハイライト描画が使う canvas-local 矩形を from_layout と同一手順で独立算出:
+        // 行矩形の block 帯（top/bottom）＋セグメント inline 範囲（i0/i1）を validrect 原点差引き。
+        let (ox, oy) = (region.left(), region.top());
+        let (i0, i1) = segment.inline_range;
+        let expected_highlight = LineRect {
+            left: i0 - ox,
+            top: line.rect.top - oy,
+            right: i1 - ox,
+            bottom: line.rect.bottom - oy,
+        };
+        assert_eq!(
+            rows[0].rect, expected_highlight,
+            "ヒット矩形とハイライト矩形は同一 canvas-local 座標（単一導出）"
+        );
     }
 }

@@ -79,7 +79,7 @@
   - _Requirements: 1.2, 2.3, 3.3, 3.4_
   - _Boundary: ChoicePure_
 
-- [ ] 5.2 ヒット行導出と窓物理写像を実装する
+- [x] 5.2 ヒット行導出と窓物理写像を実装する
   - _Depends: 5.1_
   - `derive_hit_rows(lines, segments, mode)`（canvas-local・文字幅のヒット矩形、行全幅ではない）と `to_window_physical(row, region, mode, committed, contract)`（`(origin + block) × k + committed` 式・writing_mode ごとの軸割当）を実装する
   - Observable: 固定入力に対し、描画とヒット行の双方が同一導出パスを使うことで矩形が完全一致する
@@ -235,3 +235,4 @@
 - ResidentContent variant 集合 = {GlyphRun, Choice, Image, Surface}。task 3 で wildcard `seam =>` アームを明示 `Image(_) | Surface(_)` へ変換済（Choice の暗黙吸収防止）。line_fingerprint の Choice アームは task 6.1 で choice_marker を足す前提の GlyphRun ミラー。
 - **Task 8.2 申し送り**: layout.rs は加法的に `layout_with_cursor_warn(…, actor, &mut CursorWarnGuard)` を新設。`layout` ラッパ経由は縮退 warn を抑止（挙動は同一・字下げは効く）。production の縮退 warn-once（6.5）を有効化するには present_actor が persistent `CursorWarnGuard`（`unresolved_warned` と同型）を保持して `layout_with_cursor_warn` を呼ぶ必要あり＝Task 8.2 の配線。
 - choice.rs: `PositionedLine{rect: LineRect, glyphs: Vec<PositionedGlyph>}`・`PositionedGlyph{ch, inline_pos, advance}`（inline_pos=行内軸 image px 絶対）。annotate は配置済みグリフを0起点連番で数え items 全序数と一致させ純整数交差（lo/hi）で部分リビール自然打切り。lib.rs `PURE_SOURCES` へ choice.rs 登録済。
+- **設計不整合の解決（Task 8 申し送り）**: design 型枠は `derive_hit_rows(lines, segments, mode)` だが §座標写像式（正本）＋型枠 doc は canvas-local 入力を要求。layout 出力は絶対 image px ゆえ validrect 原点差引きが必須で、実装は `derive_hit_rows(lines, segments, mode, region: &TextRegion)` へ region を additive 追加（from_layout の `rect.left-region.left()` と同一パターン）。**Task 8 の present_actor は `derive_hit_rows(.., region)` を呼ぶこと**（region は既に present_actor が保持）。`to_window_physical(row, region, mode, committed, contract)` は §座標写像式どおり。
