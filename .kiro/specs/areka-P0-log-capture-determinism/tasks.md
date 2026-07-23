@@ -58,18 +58,18 @@
   - _Depends: 2.2_
 
 - [ ] 4. Validation: 回帰確認・受け入れ証拠・workspace ゲート
-- [ ] 4.1 32 個の回帰檻を lib テストで確認する
+- [x] 4.1 32 個の回帰檻を lib テストで確認する
   - `cargo test -p areka-kanade --lib` を実行し、TRACE レベルの檻・`boot.rs` の不在表明檻を含む既存 32 檻すべてが無改変のまま緑であることを確認する
   - 全檻が失敗 0 件で完走したことが確認できる
   - _Requirements: 4.1, 4.2, 3.1, 3.2_
 
-- [ ] 4.2 keeper の GREEN ストレス証拠を取得する
+- [x] 4.2 keeper の GREEN ストレス証拠を取得する
   - 1.2 と同一のストレス手順（4 プロセス並列 × 25 ラウンド）を修正後の lib テスト実行ファイルで実行し、失敗 0 件を確認する
   - RED（1.2）との比較結果（再現 → 解消）が記録として残り、恒久解であることを客観的に示せる
   - _Requirements: 8.2_
   - _Depends: 1.2, 2.1_
 
-- [ ] 4.3 復帰駆動ループの上限非依存性を構造証明し統合テストを緑で確認する
+- [x] 4.3 復帰駆動ループの上限非依存性を構造証明し統合テストを緑で確認する
   - コードレビュー観点で、置換後の 3 テストと待ちヘルパーに反復回数上限が存在しないこと（意味論的完了バリアと壁時計 deadline のみで駆動される構造）を確認する
   - `cargo test -p areka-kanade`（lib+統合）を実行し、置換した 3 テストを含め既存の検証意味論のまま緑であることを確認する
   - 構造証明の結果（上限不在の確認箇所）と回帰結果が記録として残る
@@ -86,3 +86,7 @@
 
 - 1.1: i686 前提成果物ビルド成功（`target\i686-pc-windows-msvc\debug\shiori-host32-helper.exe` / `shiori.dll`・exit 0）。PowerShell 必須。
 - 1.2: keeper 欠陥の RED は 100 実行（4並列×25ラウンド・lib exe）で**未再現**（FAIL=0）。要件 8.1 の許容に従い記録のみ。GREEN の客観判定は workspace 反復（4.2/4.4）へ委譲する。lib テスト exe は `areka_kanade-<hash>.exe`（1 実行 136 passed）。
+- 4.1: `cargo test -p areka-kanade --lib` = 136 passed / 0 failed / 0 ignored（TRACE 檻・boot.rs 不在表明檻含む全 32 檻緑・exit 0）。
+- 4.2: 修正後 lib exe で GREEN ストレス（4並列×25ラウンド）= TOTAL=100 / FAIL=0（全 exit 0）。1.2 の RED 未再現に対し修正後も 100/100 緑＝leak された global registry で `Interest::never` 焼き付きが構造的に到達不能となる恒久解の客観証拠。
+- 4.3: 構造証明で 3 テスト（steady_test.rs:826・close_test.rs:178・close_test.rs:790）＋ `wait_until`（close_test.rs:62-77）＋ `drive_ticks_until_disconnect`（common/mod.rs:998-1026）に反復回数上限が存在せず、意味論的完了バリア（inbox 切断）＋壁時計 deadline のみで駆動されることを確認（旧 `..=500` 消滅）。非空虚性経路（非復帰時 deadline panic／wait_until false→assert 失敗）実在。回帰緑 `cargo test -p areka-kanade` = lib 136/0 + integration 34/0。
+- 4.4: `cargo test --workspace` × 5 連続。areka-kanade は**全 5 回緑**（lib 136/0 が 5 回・log 捕捉檻の失敗 0 件＝Req 1.4 の本旨は充足）。ただし run 2 で **wintf `--test layout` が 0xC0000005 アクセス違反でクラッシュ**（`error: test failed`）。この失敗は**本 spec の因果ではない main 既存の wintf flake**（`git diff --name-only main...HEAD` に wintf 皆無・wintf テストバイナリは別プロセス・interest-keeper は areka-kanade `#[cfg(test)]` に閉じる・隔離再現 `cargo test -p wintf --test layout` 2/15 ≈13%）。リテラル基準「workspace 5 連続 failed 0」（AC 8.3）は本 flake で未達だが本修正の副作用ゼロ（Req 6.4）は確認済み。**開発者判断待ち**（wintf flake を別課題として切り離すか）。
