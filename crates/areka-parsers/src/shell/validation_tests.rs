@@ -18,8 +18,8 @@
 //! - alias:     `KEY,[id,...]` → `SurfaceAlias { key(opaque), ids }`・重複キーは全保持。
 
 use super::model::{
-    AliasKey, Animation, AppendTarget, Collision, CollisionName, DefRef, Element, ElementPath,
-    Interval, Pattern, Shell, Surface, SurfaceAlias, SurfaceAppend,
+    AliasKey, Animation, AppendTarget, Collision, CollisionName, DefRef, DrawMethod, Element,
+    ElementPath, Interval, Pattern, Shell, Surface, SurfaceAlias, SurfaceAppend,
 };
 use super::parse;
 
@@ -135,6 +135,7 @@ kero.surface.alias
                     interval: Interval::Bind,
                     patterns: vec![Pattern {
                         index: 0,
+                        method: DrawMethod::new(String::new()),
                         surface_id: 20,
                         wait: 100,
                         x: 0,
@@ -147,6 +148,7 @@ kero.surface.alias
                     patterns: vec![
                         Pattern {
                             index: 0,
+                            method: DrawMethod::new(String::new()),
                             surface_id: 21,
                             wait: 50,
                             x: 0,
@@ -155,6 +157,7 @@ kero.surface.alias
                         Pattern {
                             // 負 ID overlay は -1 センチネルとして i64 保持（要件 5.5）。
                             index: 1,
+                            method: DrawMethod::new(String::new()),
                             surface_id: -1,
                             wait: 80,
                             x: 0,
@@ -169,6 +172,7 @@ kero.surface.alias
                     patterns: vec![
                         Pattern {
                             index: 0,
+                            method: DrawMethod::new(String::new()),
                             surface_id: 22,
                             wait: 60,
                             x: 0,
@@ -176,6 +180,7 @@ kero.surface.alias
                         },
                         Pattern {
                             index: 2,
+                            method: DrawMethod::new(String::new()),
                             surface_id: 23,
                             wait: 60,
                             x: 0,
@@ -210,6 +215,7 @@ kero.surface.alias
                 interval: Interval::Random { k: 3 },
                 patterns: vec![Pattern {
                     index: 0,
+                    method: DrawMethod::new(String::new()),
                     surface_id: 2106,
                     wait: 0,
                     x: 0,

@@ -38,8 +38,8 @@
 
 use super::lexer::Token;
 use super::model::{
-    AliasKey, Animation, AppendTarget, Collision, CollisionName, DefRef, Element, ElementPath,
-    Interval, Pattern, Shell, SortOrder, Surface, SurfaceAlias, SurfaceAppend,
+    AliasKey, Animation, AppendTarget, Collision, CollisionName, DefRef, DrawMethod, Element,
+    ElementPath, Interval, Pattern, Shell, SortOrder, Surface, SurfaceAlias, SurfaceAppend,
 };
 
 /// 構文トークン列を値正規化済みの `Shell` へ写像する（mod 内・`parse` が結線する）。
@@ -336,6 +336,9 @@ fn decode_animations(body: &[Vec<String>]) -> Vec<Animation> {
                 let pattern = Pattern {
                     // pattern index は疎許容・そのまま保持（欠番を合成しない・要件 5.4）。
                     index: index_text.parse::<u32>().unwrap_or(0),
+                    // TODO(task 1.2): field[1] を method として忠実転記する。現状は
+                    // overlay フィルタ配下ゆえ空文字プレースホルダ（下流 `Unknown` 吸収）。
+                    method: DrawMethod::new(String::new()),
                     // surface_id は i64・負センチネル（-1/-2）を失わない（要件 5.5）。
                     surface_id: field_i64(fields, 2),
                     wait: field_u32(fields, 3),

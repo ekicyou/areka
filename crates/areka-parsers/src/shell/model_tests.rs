@@ -10,8 +10,8 @@
 #![cfg(test)]
 
 use super::model::{
-    Animation, AppendTarget, AliasKey, Collision, CollisionName, Element, ElementPath, Interval,
-    Pattern, Shell, Surface, SurfaceAlias, SurfaceAppend,
+    Animation, AppendTarget, AliasKey, Collision, CollisionName, DrawMethod, Element, ElementPath,
+    Interval, Pattern, Shell, Surface, SurfaceAlias, SurfaceAppend,
 };
 
 // --- 1. 不透明 NewType の read-only 契約（要件 1.3/4.3/6.2/8.2） ---
@@ -54,6 +54,7 @@ fn interval_variants_construct_and_match() {
             Interval::Bind => {}
             Interval::Random { k } => assert_eq!(k, 5),
             Interval::BindRandom { k } => assert_eq!(k, 3),
+            Interval::Other(_) => {}
         }
     }
 }
@@ -144,6 +145,7 @@ fn assembled_shell_preserves_structure_and_duplicate_alias_keys() {
                 interval: Interval::Random { k: 4 },
                 patterns: vec![Pattern {
                     index: 0,
+                    method: DrawMethod::new("overlay".to_string()),
                     surface_id: -1, // 負値センチネル保持（要件 5.5）
                     wait: 100,
                     x: 0,

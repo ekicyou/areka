@@ -12,8 +12,8 @@
 use super::decode::decode;
 use super::lexer::lex;
 use super::model::{
-    AliasKey, Animation, AppendTarget, Collision, CollisionName, DefRef, Element, ElementPath,
-    Interval, Pattern, Shell, SortOrder, Surface, SurfaceAlias,
+    AliasKey, Animation, AppendTarget, Collision, CollisionName, DefRef, DrawMethod, Element,
+    ElementPath, Interval, Pattern, Shell, SortOrder, Surface, SurfaceAlias,
 };
 
 /// 空入力 → 空 `Shell`・非パニック（要件 3.3）。
@@ -322,6 +322,7 @@ animation0.pattern0,overlay,100,0,0,0
             interval: Interval::Bind,
             patterns: vec![Pattern {
                 index: 0,
+                method: DrawMethod::new(String::new()),
                 surface_id: 100,
                 wait: 0,
                 x: 0,
@@ -355,6 +356,7 @@ fn animation_bind_interval_with_single_pattern() {
             interval: Interval::Bind,
             patterns: vec![Pattern {
                 index: 0,
+                method: DrawMethod::new(String::new()),
                 surface_id: 1100,
                 wait: 0,
                 x: 0,
@@ -420,6 +422,7 @@ fn negative_surface_id_is_preserved_as_sentinel() {
         shell.surfaces[0].animations[0].patterns,
         vec![Pattern {
             index: 3,
+            method: DrawMethod::new(String::new()),
             surface_id: -1,
             wait: 80,
             x: 0,
@@ -572,6 +575,7 @@ animation0.pattern0,overlay,2206,0,0,0
             interval: Interval::Random { k: 4 },
             patterns: vec![Pattern {
                 index: 0,
+                method: DrawMethod::new(String::new()),
                 surface_id: 2206,
                 wait: 0,
                 x: 0,
@@ -840,6 +844,7 @@ animation0.pattern1,overlay,101,5,0,0
             interval: Interval::Bind,
             patterns: vec![Pattern {
                 index: 1,
+                method: DrawMethod::new(String::new()),
                 surface_id: 101,
                 wait: 5,
                 x: 0,
@@ -1016,6 +1021,7 @@ animation0.pattern0,overlay,2206,0,0,0
             interval: Interval::Bind,
             patterns: vec![Pattern {
                 index: 0,
+                method: DrawMethod::new(String::new()),
                 surface_id: 2206,
                 wait: 0,
                 x: 0,
@@ -1075,6 +1081,7 @@ animation0.pattern1,overlay,901,4,0,0
             interval: Interval::Bind,
             patterns: vec![Pattern {
                 index: 1,
+                method: DrawMethod::new(String::new()),
                 surface_id: 901,
                 wait: 4,
                 x: 0,

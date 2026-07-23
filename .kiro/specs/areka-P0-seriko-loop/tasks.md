@@ -2,7 +2,7 @@
 
 ## 1. Foundation: parser 転記スコープ拡張（method・interval 完全語彙）
 
-- [ ] 1.1 `DrawMethod` opaque 型・`Pattern.method` 欄・`Interval::Other` variant を追加する
+- [x] 1.1 `DrawMethod` opaque 型・`Pattern.method` 欄・`Interval::Other` variant を追加する
   - `DrawMethod(String)` を `ElementPath` と同規律の opaque NewType として定義し、`Pattern` 構造体に `method: DrawMethod` を追加する
   - `Interval` に `Other(Box<str>)` variant を追加する（`#[non_exhaustive]` 内・下流非破壊）
   - doc comment に正典位置（新形式＝第 1 位置／旧形式＝第 3 位置）を転記する

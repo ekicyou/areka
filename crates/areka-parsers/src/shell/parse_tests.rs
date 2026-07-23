@@ -8,8 +8,8 @@
 //! - subset 外/不正断片でもパニックせず部分認識を返す（要件 9.3）。
 
 use super::model::{
-    Animation, AppendTarget, Collision, CollisionName, DefRef, Element, ElementPath, Interval,
-    Pattern, Shell, Surface, SurfaceAlias, SurfaceAppend,
+    Animation, AppendTarget, Collision, CollisionName, DefRef, DrawMethod, Element, ElementPath,
+    Interval, Pattern, Shell, Surface, SurfaceAlias, SurfaceAppend,
 };
 use super::parse;
 
@@ -114,6 +114,8 @@ smile,[0,1,2]
                 interval: Interval::Bind,
                 patterns: vec![Pattern {
                     index: 0,
+                    // task 1.1: decode の placeholder（空文字 method）に追随（task 1.2 で実転記）。
+                    method: DrawMethod::new(String::new()),
                     surface_id: 100,
                     wait: 50,
                     x: 0,
