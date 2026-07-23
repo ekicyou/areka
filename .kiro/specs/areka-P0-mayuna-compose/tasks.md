@@ -107,7 +107,7 @@
   - _Depends: 5.1_
 
 - [ ] 6. seriko bind コマンド消費分岐と起動シグネチャの拡張
-- [ ] 6.1 bind コマンドの宛名選別と引数解釈への振り分け
+- [x] 6.1 bind コマンドの宛名選別と引数解釈への振り分け
   - 汎用コマンド cue のうち宛名が bind であるものを名前一致で選別し、宛名が他のコマンドまたは未登記の場合は静かに読み流す（bind-noevent のような未実装コマンド名も同様に読み流される）
   - 宛名は bind だが中身が壊れている場合は警告として記録する
   - 選別できた入力を、正常形・トグル形・カテゴリ単位形・破損形へ分類し、正常形以外はそれぞれ規律どおりの水準で記録した上で処理を打ち切る
@@ -116,13 +116,13 @@
   - _Boundary: seriko actor_
   - _Depends: 3.1, 3.2_
 
-- [ ] 6.2 起動構成へ名前解決情報を additive に注入できるようにする
+- [x] 6.2 起動構成へ名前解決情報を additive に注入できるようにする
   - seriko の起動構成に、bind の名前解決情報を渡せる引数を追加する（未指定時は空の解決情報として扱えるようにし、既存の呼び出し元がそのまま動くようにする）
   - Observable: 名前解決情報を渡さずに構築した既存経路が、変更前と同じ挙動のまま実行できることを確認できる
   - _Requirements: 8.1_
   - _Depends: 6.1_
 
-- [ ] 6.3 解決・状態適用・表示発行と実機確認用の記録
+- [x] 6.3 解決・状態適用・表示発行と実機確認用の記録
   - 正常形として分類された入力について、カテゴリ名・パーツ名を着せ替えIDへ解決し、解決できない場合は記録のうえ状態を変更せず処理を終える
   - 解決できた場合は状態への適用を行い、その結果に応じて表示発行の要否を判定する
   - 着せ替えが適用され表示発行が行われた場合、実機確認で検索できる記録を残す
@@ -131,7 +131,7 @@
   - _Boundary: seriko actor_
   - _Depends: 6.2, 5.2_
 
-- [ ] 6.4 既存の seriko 統合テストを新しい起動シグネチャへ追随させる
+- [x] 6.4 既存の seriko 統合テストを新しい起動シグネチャへ追随させる
   - 既存の統合テスト群が、空の名前解決情報を渡して構築するように更新され、挙動が変わらないことを確認する
   - Observable: 既存の統合テストがすべて変更前と同じ結果で緑になることを確認できる
   - _Requirements: 8.1_
@@ -181,5 +181,6 @@
 
 ## Implementation Notes
 
+- (task 6.1-6.4) `spawn_seriko` へ `bind_resolver: BindResolver` を additive 追加（第3引数）＝seriko in-source/統合テスト・areka 本番 mod.rs:288/spine.rs:444 の全呼出元を跨ぐコンパイル結合ゆえ 6.1〜6.4 を1つの atomic 変更として実装。**areka 側は `BindResolver::empty()` の暫定コンパイル橋（`// TODO(task 7.2)` マーカー付き）で緑を維持**——task 7.2 が `BootAssets.bind_resolver`（実名前解決表）へ差し替える。bind 分岐は `handle_message` の `cue_target_of==None` 枝内・Wait 前（D1）・`name=="bind"` 自己選別。D8 severity 全縮退枝を `capture_logs_flow` でログ捕捉檻化（bind_* 9本・対比含む）。実機 grep マーカー `info!("seriko: bind 適用")` は Changed のみ発火。**推移的注記**: empty resolver は実 `\![bind]` で ERROR ログ（D8①解決不能）を出すが表示無変化＝task 7.2 完了で解消。
 - (task 2.1-2.4) `command_target_of` は dola 本体・dola tests・areka-sakura・areka move_cue の**本番 use を跨ぐ共有シンボル**で、削除は独立コンパイル不能ゆえ 2.1〜2.4 を1つの atomic リファクタとして一括実装・一括コミット（レビュー APPROVED）。severity は D8④ 宛名規律（自分宛破損=warn／担当外=debug）へ整列し、`with_default` ログ捕捉檻で3アームを非空虚化（`move_severity_log_tests` 4本・対比檻含む）。既存の areka ログ捕捉定石は `adapter.rs:306-342` のインライン Capture Layer。「1名前=高々1消費者」は台帳（task 2.5・7.2）で保証する構造へ移設済み。
 - (task 1.3) `areka-parsers/src/package/mod.rs` は `BindGroupDefaults` を `pub use` するが `BindGroupName`/`BindScope` は未 re-export。parsers 内部テストは module パスで到達済みだが、task 7.1（areka app 層が `MountModel.bindgroups` の名前転記から `BindResolver` を構築）で公開ファサード経由の到達が必要になれば、この 2 型を `mod.rs` で re-export すること。

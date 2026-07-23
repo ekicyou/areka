@@ -41,7 +41,7 @@ use areka_emo_text::state::TextLayerConfig;
 use areka_ghost::{GhostBootOptions, ShioriWiring, TickerMode};
 use areka_parsers::charset::DefaultEncoding;
 use areka_parsers::package::MountError;
-use areka_seriko::{SerikoSink, SurfaceResolver, spawn_seriko};
+use areka_seriko::{BindResolver, SerikoSink, SurfaceResolver, spawn_seriko};
 use tracing::{error, info, warn};
 use wintf::WinApp;
 use wintf::ecs::FrameFinalize;
@@ -285,7 +285,9 @@ pub fn wire_emo2_boot(
     // boot は S: dola::cue::CueSink + Clone を要求する。SerikoSink は upstream `areka-seriko` で
     // `CueSink` を実装し `#[derive(Clone)]` 済み（内側 mpsc::Sender は常に Clone・全 clone は単一 inbox
     // 送信端で配送同一）ゆえ spawn_seriko の戻り値を直接 surface_sink として boot へ渡す（共有 shim は不要）。
-    let (surface_sink, seriko_handle) = spawn_seriko(resolver, static_binds.clone(), bridge);
+    // TODO(task 7.2): BindResolver::empty() は暫定コンパイル橋。task 7.2 が BootAssets.bind_resolver（実名前解決表）へ差し替える。
+    let (surface_sink, seriko_handle) =
+        spawn_seriko(resolver, static_binds.clone(), BindResolver::empty(), bridge);
     let wiring_assets = BootAssets {
         shells,
         balloons,

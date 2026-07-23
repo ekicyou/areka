@@ -42,7 +42,7 @@ use areka_ghost::{boot, GhostBootOptions, GhostRuntime, ShioriWiring, TickerMode
 use areka_kanade::{CloseReason, MonotonicMs, ShioriBackend};
 use areka_parsers::charset::DefaultEncoding;
 use areka_sakura::ActorKey;
-use areka_seriko::{spawn_seriko, SurfaceResolver};
+use areka_seriko::{spawn_seriko, BindResolver, SurfaceResolver};
 use bevy_ecs::entity::Entity;
 use bevy_ecs::world::World;
 use shiori_host32_host::{ExitKind, HelperStatus, RequestError, ShutdownError};
@@ -441,7 +441,9 @@ impl SpineHarness {
         let (tx, rx) = mpsc::channel::<PresentCommand>();
         let bridge = PresentBridge::new(tx);
         let BootAssets { shells, balloons, balloon_model, resolver, static_binds } = assets;
-        let (surface_sink, seriko) = spawn_seriko(resolver, static_binds.clone(), bridge);
+        // TODO(task 7.2): BindResolver::empty() は暫定コンパイル橋。task 7.2 が BootAssets.bind_resolver（実名前解決表）へ差し替える。
+        let (surface_sink, seriko) =
+            spawn_seriko(resolver, static_binds.clone(), BindResolver::empty(), bridge);
         let wiring_assets = BootAssets {
             shells,
             balloons,

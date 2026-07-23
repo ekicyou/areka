@@ -10,7 +10,8 @@
 use areka_emo_compose::EmoWorld;
 use areka_sakura::{ActorKey, CueCommand, CueSink, TalkCue};
 use areka_seriko::{
-    build_static_bindset, spawn_seriko, DisplayCommand, MockSurfaceOutput, SurfaceResolver,
+    build_static_bindset, spawn_seriko, BindResolver, DisplayCommand, MockSurfaceOutput,
+    SurfaceResolver,
 };
 
 /// テスト用の Shell 系 `TalkCue`（`Emote{key}`・at/actor 込み）を組む。
@@ -64,7 +65,7 @@ fn cue_sequence_emits_expected() {
     let records = mock.records();
 
     // アクター起動→fixture 系列を emit→Close→join で終了同期（唯一の同期点・sleep なし）。
-    let (mut sink, handle) = spawn_seriko(resolver, binds.clone(), mock);
+    let (mut sink, handle) = spawn_seriko(resolver, binds.clone(), BindResolver::empty(), mock);
     CueSink::emit(&mut sink, emote_cue(0.0, "0", "2100")); // 数値
     CueSink::emit(&mut sink, emote_cue(1.0, "0", "静観")); // alias（複数 id→先頭）
     CueSink::emit(&mut sink, emote_cue(2.0, "0", "-1")); // 非表示
