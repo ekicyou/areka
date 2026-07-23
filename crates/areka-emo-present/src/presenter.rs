@@ -222,7 +222,12 @@ impl EmoPresenter {
         };
 
         // (1) 引き当て: 合成入力（id＋binds）の完全一致のみヒット＝再合成しない（R4.2）。ミスのみ合成する。
-        let cache_hit = target.cache.get(surface_id, &binds).is_some();
+        // task 8.1: pattern はキー要素だが、ShowSurface.pattern からの実スレッドは task 8.2 が置換する。
+        // ここでは空 PatternState を既定で用いる（拡張前と観測等価・R5.4）。
+        let cache_hit = target
+            .cache
+            .get(surface_id, &binds, &PatternState::default())
+            .is_some();
         if !cache_hit {
             match target
                 .composer
@@ -232,7 +237,10 @@ impl EmoPresenter {
             {
                 Ok(composed) => {
                     // 挿入時にマスクを 1 回だけ生成し、表示バッファと対で束ねる（R2.1/R2.4）。
-                    target.cache.insert(surface_id, binds.clone(), composed);
+                    // task 8.1: pattern はキー要素・実スレッドは 8.2（ここは既定の空 PatternState）。
+                    target
+                        .cache
+                        .insert(surface_id, binds.clone(), PatternState::default(), composed);
                 }
                 Err(ComposeError::EmptyComposition(id)) => {
                     // 全透明退化（外形 0×0）: 許容される正常退化として Hide 縮退＋reply Ok（skip ではない）。
@@ -270,7 +278,7 @@ impl EmoPresenter {
             let (w, h) = {
                 let entry = target
                     .cache
-                    .get(surface_id, &binds)
+                    .get(surface_id, &binds, &PatternState::default())
                     .expect("直前に引き当て済み");
                 (entry.composed.width(), entry.composed.height())
             };
@@ -338,7 +346,7 @@ impl EmoPresenter {
         // (3) 供給面アップロード ＋ マスク同期 ＋ 可視化（同一呼び出し内＝原子入替・R2.4）。
         let entry = target
             .cache
-            .get(surface_id, &binds)
+            .get(surface_id, &binds, &PatternState::default())
             .expect("直前に引き当て済み");
         let size = (entry.composed.width(), entry.composed.height());
 
@@ -608,7 +616,7 @@ mod tests {
         // golden: presenter と同一入力を直接合成（move 前に計算する）。
         let mut composer = Composer::new();
         let golden = composer
-            .compose(&world, &atlas, 1000, &BindSet::default())
+            .compose(&world, &atlas, 1000, &BindSet::default(), &PatternState::default())
             .expect("静的 element 単体の合成は Ok");
         let golden_bytes = golden.bytes().to_vec();
 
@@ -890,7 +898,7 @@ mod tests {
         // 前提固定: 7000 は「存在するが外形 0×0」＝EmptyComposition（SurfaceNotFound ではない）。
         {
             let mut composer = Composer::new();
-            let direct = composer.compose(&emo_world, &atlas, 7000, &BindSet::default());
+            let direct = composer.compose(&emo_world, &atlas, 7000, &BindSet::default(), &PatternState::default());
             assert_eq!(
                 direct.err(),
                 Some(ComposeError::EmptyComposition(7000)),
@@ -983,7 +991,7 @@ mod tests {
                 .get(&TargetId(0))
                 .unwrap()
                 .cache
-                .get(7000, &BindSet::default())
+                .get(7000, &BindSet::default(), &PatternState::default())
                 .is_none(),
             "EmptyComposition は cache へ 0×0 を挿入しない"
         );
@@ -1058,7 +1066,7 @@ mod tests {
             let target = presenter.targets.get(&TargetId(0)).unwrap();
             assert!(target.chain.is_some(), "Hide は swap chain を保持する（R3.3）");
             assert!(
-                target.cache.get(1000, &BindSet::default()).is_some(),
+                target.cache.get(1000, &BindSet::default(), &PatternState::default()).is_some(),
                 "Hide は合成キャッシュを保持する（R3.3）"
             );
             assert!(!target.visible, "Hide 後は target.visible=false");
@@ -1258,12 +1266,12 @@ mod tests {
 
         let mut composer = Composer::new();
         let golden_plain = composer
-            .compose(&world, &atlas, 1000, &BindSet::default())
+            .compose(&world, &atlas, 1000, &BindSet::default(), &PatternState::default())
             .expect("bind 無し合成は Ok")
             .bytes()
             .to_vec();
         let golden_bound = composer
-            .compose(&world, &atlas, 1000, &BindSet::from_ids([2000]))
+            .compose(&world, &atlas, 1000, &BindSet::from_ids([2000]), &PatternState::default())
             .expect("bind 有り合成は Ok")
             .bytes()
             .to_vec();
@@ -1385,12 +1393,12 @@ mod tests {
 
         let mut composer = Composer::new();
         let golden_1000 = composer
-            .compose(&world, &atlas, 1000, &BindSet::default())
+            .compose(&world, &atlas, 1000, &BindSet::default(), &PatternState::default())
             .expect("面 1000 の合成は Ok")
             .bytes()
             .to_vec();
         let golden_3000 = composer
-            .compose(&world, &atlas, 3000, &BindSet::default())
+            .compose(&world, &atlas, 3000, &BindSet::default(), &PatternState::default())
             .expect("面 3000 の合成は Ok")
             .bytes()
             .to_vec();

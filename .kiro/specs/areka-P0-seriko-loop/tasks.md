@@ -136,7 +136,7 @@
 
 ## 8. Core: emo-present のキー/指令契約拡張
 
-- [ ] 8.1 (P) ComposeKey に pattern を追加する
+- [x] 8.1 (P) ComposeKey に pattern を追加する
   - `ComposeKey { surface_id, binds, pattern: PatternState }` へ拡張し、`get`/`insert` 署名を追随させる
   - 完了状態: pattern 差分でキャッシュミス・同値でヒットすること、`invalidate_all` の挙動が不変であることが単体テストで確認できる
   - _Depends: 2_
