@@ -97,7 +97,7 @@ graph TB
 | # | 決定 | 要点 |
 |---|---|---|
 | DD-1 | keeper は初回 `capture()` 呼出時に lazy 確立 | 1.3 の文言どおり。初回 capture 以前に焼き付いた callsite も、keeper 確立（`Dispatch::new` → `callsite::register_dispatch` → 全 callsite rebuild・`callsite.rs:484-488`）の瞬間に治癒される |
-| DD-2 | `rebuild_interest_cache()` を keeper 内で明示呼出 | 理論上は登録時 rebuild で十分だが、保険＋意図の自己文書化（コスト 0）。`tracing::callsite::rebuild_interest_cache` は公開 API（tracing lib.rs:963-966 再エクスポート確認済み） |
+| DD-2 | `rebuild_interest_cache()` を keeper 内で明示呼出 | 理論上は登録時 rebuild で十分だが、保険＋意図の自己文書化（コスト 0）。`tracing::callsite::rebuild_interest_cache` は `#[doc(hidden)]` 再エクスポート経由の公開パス（tracing lib.rs:963-966・semver 慣行は弱いが Cargo.lock 固定＋Revalidation Triggers で捕捉。万一将来消えても keeper 本体の登録時 rebuild だけで根治が成立する耐性あり） |
 | DD-3 | fail-loud は `.expect()` 一発 | 失敗原因は「先行する外部 global subscriber」の単一系。メッセージへ原因＋対処を焼き込む（5.1/5.2） |
 | DD-4 | bare registry のグローバル常駐は無害 | capture 外イベントは Registry の `event` no-op（sharded.rs:288）へ落ち、従来の NoSubscriber と観測可能な差なし。shadow 意味論（`dispatcher.rs:379-398`）により capture 内イベントは thread-local のみに配送＝混在なし（2.3/2.4） |
 | DD-5 | module doc は「決定性の要（PITFALL）」節へ統合追記 | 根本原因（行番号引用）＋keeper 機構＋不変条件「本モジュールより先に global subscriber を設定しない」。旧 `Arc::try_unwrap` 注記（79-83 行）は履歴として保持 |
@@ -327,6 +327,7 @@ pub fn drive_ticks_until_disconnect(
 **Implementation Notes**
 
 - Integration: `join_bounded` 呼出は不変（切断後の join は即座に成功するが、正常終了の検証として保持）。`wait_until` を使う release 前の確認檻（close#7 の NOTIFY 確認等）は無改変
+- close#7 の時刻構造: 直前 Tick が now=3,600,000（1h）・drive Tick が now=2,000 からと**時刻が後退する既存構造**をそのまま保存する（挙動不変が意図）。ヘルパー呼出箇所へ「既存の開始秒を保存（時刻後退は既存構造の踏襲）」のコメントを付し将来の混乱を防ぐ（設計バリデーション注意点 2 の転写）
 - Validation: `cargo test -p areka-kanade`＋workspace 反復（8.3/8.4）で緑維持
 - Risks: 中間 assert の削除は検出力を落とさない——旧構造でも最終表明と join が同じ欠陥を捕捉しており（各テストの doc が「join 成功それ自体が保証」と明記）、中間観測は打ち切り高速化のための冗長経路だった
 
