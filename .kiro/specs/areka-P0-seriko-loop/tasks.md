@@ -9,7 +9,7 @@
   - 完了状態: `cargo build -p areka-parsers` が新しい型定義を含めて成功する
   - _Requirements: 4.6, 8.4_
 
-- [ ] 1.2 decode.rs の overlay フィルタと interval フォールバックを撤去し忠実転記化する
+- [x] 1.2 decode.rs の overlay フィルタと interval フォールバックを撤去し忠実転記化する
   - `decode_animations` の `== Some("overlay")` フィルタを撤去し、field[1] を method として全 pattern 行を転記する
   - 未認識 interval キーワードの fallback-Bind を撤去し、原文を `Interval::Other` へ転記する
   - 完了状態: 非 overlay な pattern 行・未認識 interval キーワードのいずれも decode 結果から消えず、転記後のモデルに原文どおり現れる
@@ -218,3 +218,7 @@
   - _Depends: 10.2, 9.5_
   - _Requirements: 9.1, 9.2, 9.3_
   - _Boundary: 実機サインオフ手順_
+
+## Implementation Notes
+
+- **1.2 method/interval 転記**: `Interval::Other(Box<str>)` は単一文字列＝**keyword のみ**保持（`sometimes,5` → `Other("sometimes")`・K=5 は非採録）。設計 (design.md `Box<str>` 型形状＋討議 #1 裁定「sometimes と書いたのに動かない」診断性) どおりで承認済。未認識 interval **単独**行（pattern 無し）も認識 interval 単独行と対称に slot を確定する（faithful transcription・非駆動）。cargo は PowerShell 経由で実行（Git Bash coreutils の link.exe が MSVC link を遮蔽するため）。

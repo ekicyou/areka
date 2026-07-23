@@ -114,8 +114,8 @@ smile,[0,1,2]
                 interval: Interval::Bind,
                 patterns: vec![Pattern {
                     index: 0,
-                    // task 1.1: decode の placeholder（空文字 method）に追随（task 1.2 で実転記）。
-                    method: DrawMethod::new(String::new()),
+                    // task 1.2: overlay 行の method を忠実転記（field[1]＝"overlay"）。
+                    method: DrawMethod::new("overlay".to_string()),
                     surface_id: 100,
                     wait: 50,
                     x: 0,
