@@ -157,7 +157,7 @@
   - _Depends: 6.2_
   - _Requirements: 4.1, 4.2, 9.1, 9.2, 9.3_
 
-- [ ] 7. (P) parsers: sakura.name2 転記拡張
+- [x] 7. (P) parsers: sakura.name2 転記拡張
   - `GhostNames` 構造体へ `sakura_name2: Option<String>` を additive 追加する
   - `resolve.rs` の names 構築に `map.get("sakura.name2").cloned()` を 1 行追加する（忠実転記のみ・展開・推測をしない）
   - 宣言あり→`Some(値)`・宣言なし→`None` の決定論単体テストケースを既存 resolve テストへ追加する

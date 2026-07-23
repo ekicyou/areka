@@ -22,6 +22,7 @@ fn construct_mount_model_and_access_fields() {
         names: GhostNames {
             name: Some("さくら".to_string()),
             sakura_name: Some("さくら".to_string()),
+            sakura_name2: Some("桜".to_string()),
             kero_name: Some("うにゅう".to_string()),
         },
         shiori: ShioriMount {
@@ -36,6 +37,7 @@ fn construct_mount_model_and_access_fields() {
 
     // フィールドアクセス（正本の I/O 契約）。
     assert_eq!(model.names.name.as_deref(), Some("さくら"));
+    assert_eq!(model.names.sakura_name2.as_deref(), Some("桜"));
     assert_eq!(model.names.kero_name.as_deref(), Some("うにゅう"));
     assert_eq!(model.shiori.dir, PathBuf::from("ghost/master"));
     assert_eq!(model.shiori.file.as_deref(), Some("shiori.dll"));
@@ -48,6 +50,7 @@ fn ghost_names_default_is_all_none() {
     let names = GhostNames::default();
     assert_eq!(names.name, None);
     assert_eq!(names.sakura_name, None);
+    assert_eq!(names.sakura_name2, None);
     assert_eq!(names.kero_name, None);
 }
 
