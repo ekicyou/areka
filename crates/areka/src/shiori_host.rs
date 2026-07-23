@@ -157,6 +157,17 @@ impl ShioriHostSink {
             .set(self.asker.clone(), key.to_string(), value.to_string());
     }
 
+    /// sylphya の反映フェンスへ委譲する（テスト用・design.md §bin（ShioriHostSink 統合）
+    /// 「テスト用に `barrier()` 委譲も公開」）。
+    ///
+    /// 復帰時、それ以前に本 sink の `SetProperty`／`set_property_value` から投函した全変異が
+    /// sylphya 鏡像へ反映済み（mpsc FIFO＋直列処理）。決定論テストは `set → barrier → get` の列で
+    /// read-your-write の有界ラグ（研究 §12-4）をレースなく畳む。アクター死亡時は
+    /// [`areka_actor::ReplyError`] を返す（送信端で死亡観測可能・永久ブロックしない・R6.7）。
+    pub fn barrier(&self) -> std::result::Result<(), areka_actor::ReplyError> {
+        self.publisher.barrier()
+    }
+
     /// メールボックスへ thread-safe に投函する内部ヘルパ。
     fn enqueue(&self, msg: HostMessage) {
         self.mailbox

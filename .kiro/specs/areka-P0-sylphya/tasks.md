@@ -208,7 +208,7 @@
   - _Requirements: 7.2, 7.3_
   - _Boundary: crates/areka/src/shiori_host.rs_
 
-- [ ] 9.2 GetProperty/SetProperty 委譲実装
+- [x] 9.2 GetProperty/SetProperty 委譲実装
   - `GetProperty` を `resolve_dotted_str` への委譲（`Value`→HSTRING out 書込／`NotFound`→`SHIORI_E_PROPERTY_NOT_FOUND`・out 未書込）として実装する（同期即答・既存の最小ロック区間・再入規約を維持）
   - `SetProperty` を `publisher.set(asker, key, value)` の投函＋即 `Ok(())` 返却として実装する
   - `set_property_value` 充填口を publisher 委譲の薄いラッパとして存続させ、`barrier()` 委譲もテスト用に公開する
