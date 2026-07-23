@@ -17,7 +17,7 @@
   - _Requirements: 1.1, 1.2, 1.6_
   - _Depends: 1.1_
 
-- [ ] 1.3 名前解決の網羅テストと既存挙動の非退行確認
+- [x] 1.3 名前解決の網羅テストと既存挙動の非退行確認
   - 2フィールド宣言・3フィールド（サムネイル付き）宣言・パーツ欠落宣言・重複宣言・本体側と相方側の区別・未宣言の組み合わせをそれぞれ検証する
   - 既存の（既定 on/off のみを扱う）マウント結果が名前解決の追加によって変化しないことを確認する
   - Observable: 全ケースが実行テストとして緑になり、既存のマウント関連テストも変わらず緑のまま残る
@@ -178,3 +178,7 @@
   - Observable: 実機での目視確認により、着せ替えパーツの着脱が表情変化として反映されていることが確認できる
   - _Requirements: 7.1, 7.2, 7.3_
   - _Depends: 9.1_
+
+## Implementation Notes
+
+- (task 1.3) `areka-parsers/src/package/mod.rs` は `BindGroupDefaults` を `pub use` するが `BindGroupName`/`BindScope` は未 re-export。parsers 内部テストは module パスで到達済みだが、task 7.1（areka app 層が `MountModel.bindgroups` の名前転記から `BindResolver` を構築）で公開ファサード経由の到達が必要になれば、この 2 型を `mod.rs` で re-export すること。

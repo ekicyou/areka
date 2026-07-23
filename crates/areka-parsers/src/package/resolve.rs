@@ -359,6 +359,37 @@ mod bindgroup_name_transcription_tests {
         let _ = fs::remove_dir_all(&shell);
     }
 
+    /// R1.6（純粋非退行）: `.default` on/off **のみ**（`.name` 皆無）の shell descript は、
+    /// 従来どおり default 集合を転記しつつ名前表を一切生成しない（名前解決の追加が
+    /// 既定 on/off マウント結果を変えない・捏造しない）。`default_path_unchanged_alongside_names`
+    /// が `.name` 併存を扱うのに対し、本テストは名前宣言が皆無の既定 on/off 専用ケースを固定する。
+    #[test]
+    fn default_only_no_names_leaves_names_empty() {
+        let shell = shell_with_descript(
+            "default_only_no_names",
+            "charset,UTF-8\n\
+             sakura.bindgroup1100.default,1\n\
+             sakura.bindgroup1101.default,0\n\
+             kero.bindgroup2100.default,1\n\
+             kero.bindgroup2101.default,0\n",
+        );
+        let defaults = read_bindgroup_defaults(&shell, DefaultEncoding::Utf8);
+
+        // 既定 on/off は従来どおり（value=="1" のみ収集・off は非収集）。
+        assert_eq!(defaults.sakura_default_on, vec![1100]);
+        assert_eq!(defaults.kero_default_on, vec![2100]);
+
+        // 名前宣言が皆無 → 名前表は空（default,1 が名前を捏造しない・R1.5/R1.6）。
+        assert!(defaults.sakura_names.is_empty(), "名前宣言皆無なら sakura_names は空");
+        assert!(defaults.kero_names.is_empty(), "名前宣言皆無なら kero_names は空");
+
+        // 名前解決は全スコープで None（着せ替え ID を捏造しない）。
+        assert_eq!(defaults.resolve_name(BindScope::Sakura, "腕", "伸び"), None);
+        assert_eq!(defaults.resolve_name(BindScope::Kero, "腕", "伸び"), None);
+
+        let _ = fs::remove_dir_all(&shell);
+    }
+
     /// Observable（emo2 実 fixture）: 宣言済みの全 (カテゴリ, パーツ) が ID へ解決する。
     #[test]
     fn emo2_declared_names_all_resolve() {
