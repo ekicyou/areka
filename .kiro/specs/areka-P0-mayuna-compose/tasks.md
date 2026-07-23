@@ -226,7 +226,7 @@
   - Observable: requirements.md に Requirement 9、design.md に D12＋Out of Boundary/File Structure 改定、tasks.md に群 11 が存在し、10.5 の依存が 11.2/11.3 を含む
   - _Requirements: 9.1, 9.2, 9.3, 9.4, 9.5_
 
-- [ ] 11.2 emo-compose の静的合成を厳密 pattern0（index==0）選択へ是正する
+- [x] 11.2 emo-compose の静的合成を厳密 pattern0（index==0）選択へ是正する
   - `flatten_surface`（plan.rs:307）の pattern 選択を最小 index フォールバックから index==0 厳密へ変更し、pattern0 を持たない bind animation（まばたき等の再生専用フレーム）は静的合成へ寄与させず良性 skip（debug ログ）する
   - キャンバス外形算出（plan.rs:529）は無改変とし、bind オン/オフ・pattern0 有無でサイズ不変の契約を維持する
   - pattern0 非保持 skip の判断分岐と emo2 まばたき bind の静的不活性を決定論テストで網羅する（pattern0 無しは寄与なし・pattern0＋pattern1 共存で pattern1 は不採用・skip の debug ログ正カウント・emo2 surface1000 が まばたき bind 有無で同一描画命令列＝「常時閉じ目」再発檻・既存 golden 非退行）
