@@ -22,7 +22,7 @@
   - _Requirements: 1.1, 1.6, 3.1_
   - _Boundary: areka-sylphya vocab/flat.rs_
 
-- [ ] 2.3 (P) 点付き語彙台帳（ルート枝・汎用名・SET 意味論・ext 予約）
+- [x] 2.3 (P) 点付き語彙台帳（ルート枝・汎用名・SET 意味論・ext 予約）
   - 点付きルート枝 10 本を `DOTTED_ROOTS`、汎用プロパティ名 17 種を `GENERIC_PROP_NAMES` として登録する
   - SET 有効群（surface.num／animation.num／seriko.defaultsurface／mousecursor 群／seriko.cursor・tooltip／menu・bind.menu 群）を `SET_EFFECTIVE: &[(&str, SetSemantics)]` として登録する
   - ext 亜枝のイベント名予約 `EXT_EVENT_GET = "property.get"`／`EXT_EVENT_SET = "property.set"` を定義する（発火しない・予約のみ）
