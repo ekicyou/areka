@@ -34,7 +34,7 @@
   - _Requirements: 4.2, 6.2_
   - _Boundary: BalloonCursorModel_
 
-- [ ] 2.2 (P) balloon cursor.\* モデルの単体テストを書く
+- [x] 2.2 (P) balloon cursor.\* モデルの単体テストを書く
   - _Depends: 2.1_
   - 各サブキーの有無・既存の「cursor キーを font へ巻き込まない」不変条件が緑のまま・shadow 系が passthrough のままであることを検証する
   - Observable: 既存 balloon パーサテストが緑のまま、かつ cursor.\* キーが font モデルフィールドから分離されていることを示す新規テストが通過する
