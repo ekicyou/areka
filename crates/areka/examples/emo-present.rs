@@ -97,7 +97,7 @@ use wintf::*;
 use areka_emo_atlas::{
     AlphaParams, AtlasTable, PackConfig, SetId, SurfaceSet, UseSelfAlpha, WicDecoderArm, bake,
 };
-use areka_emo_compose::{BindSet, ComposeError, ComposedSurface, Composer, EmoWorld};
+use areka_emo_compose::{BindSet, ComposeError, ComposedSurface, Composer, EmoWorld, PatternState};
 use areka_emo_present::{EmoPresenter, PresentCommand, TargetId, build_balloon_target};
 
 // ---------------------------------------------------------------------------
@@ -174,6 +174,7 @@ impl CycleState {
             target: TargetId(0),
             surface_id: 1000,
             binds,
+            pattern: PatternState::default(),
             reply: None,
         }
     }
@@ -372,7 +373,7 @@ fn build_shell_target(decoder: &WicDecoderArm) -> Option<(EmoWorld, AtlasTable, 
     let atlas = baked.table;
 
     // surface0 を一度合成して窓の物理 px 外形を得る（DPI 表示契約: 窓クライアント寸 ≔ surface 原寸）。
-    let (w, h) = match Composer::new().compose(&emo_world, &atlas, 0, &BindSet::default()) {
+    let (w, h) = match Composer::new().compose(&emo_world, &atlas, 0, &BindSet::default(), &PatternState::default()) {
         Ok(cs) => (cs.width(), cs.height()),
         Err(e) => {
             tracing::error!(error = %e, "emo-present: shell surface0 の採寸合成に失敗");
@@ -399,7 +400,7 @@ fn build_balloon_assets(decoder: &WicDecoderArm) -> Option<(EmoWorld, AtlasTable
         }
     };
 
-    let (w, h) = match Composer::new().compose(&emo_world, &atlas, 0, &BindSet::default()) {
+    let (w, h) = match Composer::new().compose(&emo_world, &atlas, 0, &BindSet::default(), &PatternState::default()) {
         Ok(cs) => (cs.width(), cs.height()),
         Err(e) => {
             tracing::error!(error = %e, "emo-present: balloon surface0 の採寸合成に失敗");
@@ -613,7 +614,7 @@ fn boot_present_system(world: &mut World) {
         // 起動時 golden（task 5.1・R6.2/R8.2）: 初回表示は Surface0（surface_id=0・bind 無し）ゆえ、
         // その surface を **直接合成**した ComposedSurface を golden として先に採取する。attach_target が
         // アセットを move 消費するため、合成は move の前に行う（read_back との突き合わせは表示直後）。
-        let shell_golden = Composer::new().compose(&emo_world, &atlas, 0, &BindSet::default());
+        let shell_golden = Composer::new().compose(&emo_world, &atlas, 0, &BindSet::default(), &PatternState::default());
         match boot
             .presenter
             .attach_target(world, TargetId(0), boot.shell_window, emo_world, atlas)
@@ -627,6 +628,7 @@ fn boot_present_system(world: &mut World) {
                         target: TargetId(0),
                         surface_id: 0,
                         binds: BindSet::default(),
+                        pattern: PatternState::default(),
                         reply: None,
                     },
                 );
@@ -651,7 +653,7 @@ fn boot_present_system(world: &mut World) {
     if let Some((emo_world, atlas)) = boot.balloon_assets.take() {
         // 起動時 golden（task 5.1・R6.2/R8.2）: バルーンの初回表示は surface_id=0・bind 無し。
         // attach_target が move 消費する前に golden を採取する。
-        let balloon_golden = Composer::new().compose(&emo_world, &atlas, 0, &BindSet::default());
+        let balloon_golden = Composer::new().compose(&emo_world, &atlas, 0, &BindSet::default(), &PatternState::default());
         match boot
             .presenter
             .attach_target(world, TargetId(1), boot.balloon_window, emo_world, atlas)
@@ -663,6 +665,7 @@ fn boot_present_system(world: &mut World) {
                         target: TargetId(1),
                         surface_id: 0,
                         binds: BindSet::default(),
+                        pattern: PatternState::default(),
                         reply: None,
                     },
                 );

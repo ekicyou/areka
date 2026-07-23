@@ -12,8 +12,8 @@ use areka_emo_atlas::{
     UseSelfAlpha, bake,
 };
 use areka_parsers::shell::{
-    Animation, AppendTarget, DefRef, Element, ElementPath, Interval, Pattern, Shell, SortOrder,
-    Surface,
+    Animation, AppendTarget, DefRef, DrawMethod, Element, ElementPath, Interval, Pattern, Shell,
+    SortOrder, Surface,
 };
 use std::path::Path;
 
@@ -49,6 +49,7 @@ fn bind_anim(id: u32, ref_surface_id: i64, x: i64, y: i64) -> Animation {
         interval: Interval::Bind,
         patterns: vec![Pattern {
             index: 0,
+            method: DrawMethod::new("overlay".to_string()),
             surface_id: ref_surface_id,
             wait: 0,
             x,
@@ -161,7 +162,7 @@ fn compose_returns_ok_composed_surface_for_valid_input() {
     let binds = BindSet::from_ids([1]);
     let mut composer = Composer::new();
     let out = composer
-        .compose(&world, &atlas, 1000, &binds)
+        .compose(&world, &atlas, 1000, &binds, &PatternState::default())
         .expect("有効入力は Ok（要件 5.1）");
 
     // 外形一致（要件 9.1）: w=200・h=30・stride == w*4。
@@ -199,17 +200,17 @@ fn composer_holds_no_result_no_stale_cache() {
     let binds = BindSet::default();
     let mut composer = Composer::new();
 
-    let out_a = composer.compose(&world, &atlas, 100, &binds).expect("A Ok");
+    let out_a = composer.compose(&world, &atlas, 100, &binds, &PatternState::default()).expect("A Ok");
     assert_eq!(out_a.width(), 10);
     assert_eq!(px(&out_a, 0, 0), [200, 0, 0, 255], "A は青");
 
     // 直後に B を compose → B（緑 20×20）を反映（A の残像・寸法を持ち越さない）。
-    let out_b = composer.compose(&world, &atlas, 200, &binds).expect("B Ok");
+    let out_b = composer.compose(&world, &atlas, 200, &binds, &PatternState::default()).expect("B Ok");
     assert_eq!(out_b.width(), 20, "B の外形（20）を反映＝A の 10 を持ち越さない");
     assert_eq!(px(&out_b, 0, 0), [0, 200, 0, 255], "B は緑（stale な A の青でない）");
 
     // 再度 A → 依然 A（Composer は前回 B を保持しない）。
-    let out_a2 = composer.compose(&world, &atlas, 100, &binds).expect("A2 Ok");
+    let out_a2 = composer.compose(&world, &atlas, 100, &binds, &PatternState::default()).expect("A2 Ok");
     assert_eq!(out_a2.bytes(), out_a.bytes(), "A の再合成は初回 A とバイト等価（キャッシュ非依存）");
 }
 
@@ -229,7 +230,7 @@ fn compose_into_reuses_buffer_across_calls() {
     let mut out = ComposedSurface::new(0, 0);
 
     composer
-        .compose_into(&mut out, &world, &atlas, 5000, &binds)
+        .compose_into(&mut out, &world, &atlas, 5000, &binds, &PatternState::default())
         .expect("1 回目 Ok");
     let len1 = out.bytes().len();
     let ptr1 = out.bytes().as_ptr();
@@ -237,7 +238,7 @@ fn compose_into_reuses_buffer_across_calls() {
     let ops_cap1 = composer.ops.capacity();
 
     composer
-        .compose_into(&mut out, &world, &atlas, 5000, &binds)
+        .compose_into(&mut out, &world, &atlas, 5000, &binds, &PatternState::default())
         .expect("2 回目 Ok");
     let len2 = out.bytes().len();
     let ptr2 = out.bytes().as_ptr();
@@ -262,7 +263,7 @@ fn absent_surface_propagates_surface_not_found() {
 
     let binds = BindSet::default();
     let mut composer = Composer::new();
-    let result = composer.compose(&world, &atlas, 9999, &binds);
+    let result = composer.compose(&world, &atlas, 9999, &binds, &PatternState::default());
     assert_eq!(
         result.err(),
         Some(ComposeError::SurfaceNotFound(9999)),
@@ -279,7 +280,7 @@ fn no_layers_degenerate_propagates_empty_composition() {
 
     let binds = BindSet::default();
     let mut composer = Composer::new();
-    let result = composer.compose(&world, &atlas, 7000, &binds);
+    let result = composer.compose(&world, &atlas, 7000, &binds, &PatternState::default());
     assert_eq!(
         result.err(),
         Some(ComposeError::EmptyComposition(7000)),
@@ -304,7 +305,7 @@ fn all_transparent_surface_is_ok_transparent_nonzero_extent() {
     let binds = BindSet::default();
     let mut composer = Composer::new();
     let out = composer
-        .compose(&world, &atlas, 3000, &binds)
+        .compose(&world, &atlas, 3000, &binds, &PatternState::default())
         .expect("全透明でもエラーにせず Ok（要件 6.6）");
 
     // 外形は原寸で非ゼロ（全透明でも original で寄与＝300×300 が支配）。
@@ -338,11 +339,11 @@ fn compose_equals_compose_into_fresh_buffer() {
     let binds = BindSet::from_ids([1]);
     let mut composer = Composer::new();
 
-    let via_compose = composer.compose(&world, &atlas, 1000, &binds).expect("compose Ok");
+    let via_compose = composer.compose(&world, &atlas, 1000, &binds, &PatternState::default()).expect("compose Ok");
 
     let mut fresh = ComposedSurface::new(0, 0);
     composer
-        .compose_into(&mut fresh, &world, &atlas, 1000, &binds)
+        .compose_into(&mut fresh, &world, &atlas, 1000, &binds, &PatternState::default())
         .expect("compose_into Ok");
 
     assert_eq!(via_compose.width(), fresh.width());
@@ -375,8 +376,8 @@ fn compose_is_deterministic() {
     let binds = BindSet::from_ids([1, 2]);
     let mut c1 = Composer::new();
     let mut c2 = Composer::new();
-    let a = c1.compose(&world, &atlas, 1000, &binds).expect("Ok");
-    let b = c2.compose(&world, &atlas, 1000, &binds).expect("Ok");
+    let a = c1.compose(&world, &atlas, 1000, &binds, &PatternState::default()).expect("Ok");
+    let b = c2.compose(&world, &atlas, 1000, &binds, &PatternState::default()).expect("Ok");
     assert_eq!(a.width(), b.width());
     assert_eq!(a.height(), b.height());
     assert_eq!(a.bytes(), b.bytes(), "同一入力→バイト等価（決定性・要件 10.1）");
@@ -421,7 +422,7 @@ fn end_to_end_multilayer_ascend_wiring() {
 
     let binds = BindSet::from_ids([1, 2, 3]);
     let mut composer = Composer::new();
-    let out = composer.compose(&world, &atlas, 1000, &binds).expect("Ok");
+    let out = composer.compose(&world, &atlas, 1000, &binds, &PatternState::default()).expect("Ok");
 
     assert_eq!(out.width(), 4);
     assert_eq!(out.height(), 4);
@@ -469,3 +470,234 @@ fn default_equals_new() {
 /// 型健全性の据え置き（未使用 import 警告を出さないためのアンカ・実害なし）。
 #[allow(dead_code)]
 fn _type_anchor(_: ElementId, _: Size) {}
+
+// ============================================================================
+// task 7.3: PatternState 拡張の合成 golden 檻（空 PatternState 等価・transient コマ合流）。
+//
+// design「合成合流と method ゲート」の Postconditions（`pattern.is_empty()` なら出力命令列・外形
+// とも拡張前と完全一致・要件 5.4）と、transient コマの ID 整列合流（同 ID 置換・ID 整列不変・
+// 要件 5.3/4.2）を、composer_tests の headless bake 経路（`bake_atlas_spec` の全不透明単色画像）で
+// **byte / pixel 単位**に固定する。全不透明画像ゆえ premultiplied SourceOver は「上層優先」に帰着し、
+// 期待バッファを入力ジオメトリから**独立に再構成**できる（golden は tautology でない）。
+//
+// これらは production コード（plan.rs/lib.rs）を一切変更しない純追加の檻である。空 PatternState の
+// 合成が既知バイトへ完全一致することで「PatternState 配線の増設が空 pattern 出力を摂動しない」退行を、
+// 非空 PatternState の合成が「コマが同 ID の pattern0 を置換しつつ animation-sort 整列を保つ」ことで
+// transient 合流の中核挙動（要件 5.3）を、それぞれ回帰ガードする。
+// ============================================================================
+
+/// task 7.3 ①（要件 5.4・design Postconditions）: 空 PatternState の合成が「pattern 拡張前」の
+/// 既知バイトと **byte 完全一致**する golden。
+///
+/// bind pattern0 を持つ代表 surface（base 青 4×4 全不透明＋有効 bind pattern0 で赤 2×2 を (1,1) へ
+/// overlay）を `PatternState::default()` で合成し、合成バイトが入力ジオメトリから独立再構成した
+/// 期待バッファと byte-for-byte 一致することを固定する。空 PatternState は no-op（task 7.2 が同一
+/// ops を実証済み）ゆえ、この一致は「合成入力 PatternState 第一級化の配線が空 pattern の出力を
+/// 一切摂動しない」ことの回帰檻になる。
+#[test]
+fn empty_pattern_state_compose_is_byte_identical_to_pre_extension_golden() {
+    let base = Path::new("shell/master");
+    // base(青 4×4 全不透明) を (0,0)、有効 bind pattern0（赤 2×2）を (1,1) へ overlay。全不透明ゆえ
+    // SourceOver は上層優先＝期待バッファを独立再構成できる（tautology でない golden）。
+    let atlas = bake_atlas_spec(
+        base,
+        &[
+            ("base.png", (4, 4), Some((200, 0, 0))), // 青。
+            ("part.png", (2, 2), Some((0, 0, 200))), // 赤（bind pattern0）。
+        ],
+    );
+    let host = surface_with_anims(
+        1000,
+        vec![elem(0, "base.png", 0, 0)],
+        vec![bind_anim(1, 1100, 1, 1)], // pattern0 → surface1100（赤 part）を (1,1) へ。
+    );
+    let part = surface(1100, vec![elem(0, "part.png", 0, 0)]);
+    let world = build_bound(shell_of(vec![host, part]), &atlas);
+
+    let binds = BindSet::from_ids([1]);
+    let mut composer = Composer::new();
+    let out = composer
+        .compose(&world, &atlas, 1000, &binds, &PatternState::default())
+        .expect("空 PatternState の合成は Ok（要件 5.4）");
+
+    // 外形 4×4（base 4×4 ∪ part 2×2@(1,1)＝3×3 の和集合＝4×4・pattern は外形不寄与）。
+    assert_eq!(
+        (out.width(), out.height(), out.stride()),
+        (4, 4, 16),
+        "外形は静的母集合どおり 4×4（PatternState は外形へ寄与しない・design 不変条件）"
+    );
+
+    // 独立再構成した期待バッファ: base 青全面、その上に赤 part を (1,1)-(2,2) へ（上層優先）。
+    let mut expected: Vec<u8> = Vec::with_capacity(4 * 4 * 4);
+    for y in 0..4u32 {
+        for x in 0..4u32 {
+            let red_covered = (1..3).contains(&x) && (1..3).contains(&y);
+            if red_covered {
+                expected.extend_from_slice(&[0, 0, 200, 255]); // 赤 part（上層）。
+            } else {
+                expected.extend_from_slice(&[200, 0, 0, 255]); // 青 base。
+            }
+        }
+    }
+    assert_eq!(
+        out.bytes(),
+        expected.as_slice(),
+        "空 PatternState の合成は拡張前の既知バイトと byte 完全一致（要件 5.4・空 pattern は no-op）"
+    );
+}
+
+/// 非空虚性ガード: 「間違った期待バッファ」なら上の byte-equality が壊れることを示す（golden が
+/// tautology でないこと）。赤 part を 1px ずらした誤期待は実合成と不一致になる。
+#[test]
+fn empty_pattern_golden_is_non_vacuous() {
+    let base = Path::new("shell/master");
+    let atlas = bake_atlas_spec(
+        base,
+        &[
+            ("base.png", (4, 4), Some((200, 0, 0))),
+            ("part.png", (2, 2), Some((0, 0, 200))),
+        ],
+    );
+    let host = surface_with_anims(
+        1000,
+        vec![elem(0, "base.png", 0, 0)],
+        vec![bind_anim(1, 1100, 1, 1)],
+    );
+    let part = surface(1100, vec![elem(0, "part.png", 0, 0)]);
+    let world = build_bound(shell_of(vec![host, part]), &atlas);
+
+    let out = Composer::new()
+        .compose(&world, &atlas, 1000, &BindSet::from_ids([1]), &PatternState::default())
+        .expect("Ok");
+
+    // 赤 part を (0,0) 起点に誤配置した期待（実合成は (1,1) 起点ゆえ不一致になるべき）。
+    let mut wrong: Vec<u8> = Vec::with_capacity(4 * 4 * 4);
+    for y in 0..4u32 {
+        for x in 0..4u32 {
+            let red_covered = x < 2 && y < 2;
+            if red_covered {
+                wrong.extend_from_slice(&[0, 0, 200, 255]);
+            } else {
+                wrong.extend_from_slice(&[200, 0, 0, 255]);
+            }
+        }
+    }
+    assert_ne!(
+        out.bytes(),
+        wrong.as_slice(),
+        "誤配置の期待バッファは合成結果と不一致＝byte-equality は非空虚（part は (1,1) へ着弾）"
+    );
+}
+
+/// task 7.3 ②（要件 5.3・4.2）: transient コマが同 ID の pattern0 を置換し、animation-sort の
+/// ID 昇順描画（画家のアルゴリズム）が保たれる golden。
+///
+/// host(1000) に有効 bind 2 本（id=1→surface1100 青 4×4／id=2→surface1200 緑 2×2）を置き、
+/// `PatternState` で **id=1 の現在コマ = surface1300（赤 4×4）** を与える。合流規則（design 決定）は
+/// 対象 id 集合＝{ 有効 bind pattern0 id } ∪ { コマ id } を既存 animation-sort（Descend 既定＝id 昇順
+/// 描画）で整列し、コマがあれば同 ID の pattern0 静的寄与を置換する（4.2）。
+///
+/// 検証:
+///   (a) 置換: id=1 の層は 1100(青) でなく 1300(赤)＝青は 1 画素も現れない。
+///   (b) 整列不変: id 昇順描画で id=2(緑) が id=1(コマ赤) の**上**＝(0,0) は緑・緑外側 (2,2) は赤。
+#[test]
+fn transient_frame_replaces_same_id_pattern0_and_preserves_painter_order() {
+    let base = Path::new("shell/master");
+    let atlas = bake_atlas_spec(
+        base,
+        &[
+            ("p1.png", (4, 4), Some((200, 0, 0))), // 青＝id=1 pattern0（surface1100）。
+            ("p2.png", (2, 2), Some((0, 200, 0))), // 緑＝id=2 pattern0（surface1200・小さめ）。
+            ("p3.png", (4, 4), Some((0, 0, 200))), // 赤＝id=1 の現在コマ（surface1300）。
+        ],
+    );
+    let host = surface_with_anims(
+        1000,
+        Vec::new(), // 静的 element なし（全パーツ bind＋コマ）。
+        vec![bind_anim(1, 1100, 0, 0), bind_anim(2, 1200, 0, 0)],
+    );
+    let s1100 = surface(1100, vec![elem(0, "p1.png", 0, 0)]);
+    let s1200 = surface(1200, vec![elem(0, "p2.png", 0, 0)]);
+    let s1300 = surface(1300, vec![elem(0, "p3.png", 0, 0)]); // コマ参照先（pattern0 を持たない transient）。
+    let world = build_bound(shell_of(vec![host, s1100, s1200, s1300]), &atlas);
+
+    let binds = BindSet::from_ids([1, 2]);
+
+    // id=1 の現在コマ = surface1300（赤）を (0,0) へ。method=Overlay ゆえ駆動される。
+    let mut pattern = PatternState::default();
+    pattern.set(
+        1,
+        PatternFrame {
+            surface_id: 1300,
+            method: ComposeMethod::Overlay,
+            x: 0,
+            y: 0,
+        },
+    );
+
+    let mut composer = Composer::new();
+    let out = composer
+        .compose(&world, &atlas, 1000, &binds, &pattern)
+        .expect("transient コマ込みの合成は Ok（要件 5.3）");
+
+    // 外形 4×4（compute_extent は全 bind pattern0＝1100(4×4)∪1200(2×2) の和集合・コマ 1300 は外形不寄与）。
+    assert_eq!((out.width(), out.height()), (4, 4), "外形は bind pattern0 母集合どおり 4×4");
+
+    // (a) コマが pattern0 を置換: id=1 の層は 1100(青) でなく 1300(赤)。緑(2×2)の外側 (2,2) は赤。
+    assert_eq!(
+        px(&out, 2, 2),
+        [0, 0, 200, 255],
+        "id=1 の現在コマ(赤 surface1300)が pattern0(青 surface1100)を置換（要件 4.2）"
+    );
+    // 置換された青 pattern0 は合成に 1 画素も現れない（コマが完全に肩代わり）。
+    assert!(
+        !out.bytes().chunks_exact(4).any(|p| p == [200, 0, 0, 255]),
+        "置換された pattern0(青 surface1100)は合成へ寄与しない（要件 4.2・現在コマ 1 枚）"
+    );
+
+    // (b) animation-sort 整列不変（Descend 既定＝id 昇順描画）: id=2(緑) が id=1(コマ赤) の上。
+    assert_eq!(
+        px(&out, 0, 0),
+        [0, 200, 0, 255],
+        "id 昇順描画で id=2(緑)が上層＝合流後も整列規則そのものは不変（要件 5.3）"
+    );
+}
+
+/// transient 合流の非空虚性ガード: 空 PatternState では id=1 が青 pattern0(1100) のまま＝上檻の
+/// 「赤が置換」が pattern 由来であること（元々赤ではない）を対比で固定する。
+#[test]
+fn transient_merge_is_pattern_driven_not_static() {
+    let base = Path::new("shell/master");
+    let atlas = bake_atlas_spec(
+        base,
+        &[
+            ("p1.png", (4, 4), Some((200, 0, 0))),
+            ("p2.png", (2, 2), Some((0, 200, 0))),
+            ("p3.png", (4, 4), Some((0, 0, 200))),
+        ],
+    );
+    let host = surface_with_anims(
+        1000,
+        Vec::new(),
+        vec![bind_anim(1, 1100, 0, 0), bind_anim(2, 1200, 0, 0)],
+    );
+    let s1100 = surface(1100, vec![elem(0, "p1.png", 0, 0)]);
+    let s1200 = surface(1200, vec![elem(0, "p2.png", 0, 0)]);
+    let s1300 = surface(1300, vec![elem(0, "p3.png", 0, 0)]);
+    let world = build_bound(shell_of(vec![host, s1100, s1200, s1300]), &atlas);
+
+    // 空 PatternState → id=1 は青 pattern0(1100) のまま。緑外側 (2,2) は青（赤ではない）。
+    let out = Composer::new()
+        .compose(&world, &atlas, 1000, &BindSet::from_ids([1, 2]), &PatternState::default())
+        .expect("Ok");
+    assert_eq!(
+        px(&out, 2, 2),
+        [200, 0, 0, 255],
+        "空 PatternState では id=1 は青 pattern0(1100) のまま（赤置換は pattern 由来＝上檻は非空虚）"
+    );
+    // 赤(コマ surface1300)は空 pattern では 1 画素も現れない。
+    assert!(
+        !out.bytes().chunks_exact(4).any(|p| p == [0, 0, 200, 255]),
+        "空 PatternState では transient コマ(赤 1300)は合成に現れない"
+    );
+}

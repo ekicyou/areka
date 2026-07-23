@@ -38,8 +38,8 @@
 
 use super::lexer::Token;
 use super::model::{
-    AliasKey, Animation, AppendTarget, Collision, CollisionName, DefRef, Element, ElementPath,
-    Interval, Pattern, Shell, SortOrder, Surface, SurfaceAlias, SurfaceAppend,
+    AliasKey, Animation, AppendTarget, Collision, CollisionName, DefRef, DrawMethod, Element,
+    ElementPath, Interval, Pattern, Shell, SortOrder, Surface, SurfaceAlias, SurfaceAppend,
 };
 
 /// 構文トークン列を値正規化済みの `Shell` へ写像する（mod 内・`parse` が結線する）。
@@ -279,22 +279,21 @@ fn field_u32(fields: &[String], idx: usize) -> u32 {
 ///   `animationN` から N（`animation` 以降の数字・`unwrap_or(0)`）を、接尾辞から
 ///   `interval` / `patternM` を得る。同一 N の行は 1 個の `Animation` へ束ねる。
 ///   animation は N の**初出順**で保持する（z-order 実順序付けはしない・要件 5.6）。
-/// - **interval 3 種**（要件 5.1/5.2/5.3）: `interval,KIND[,K]` の KIND を
-///   `bind` → `Bind`、`random` → `Random{k}`、`bind+random` → `BindRandom{k}` に正規化する
-///   （K は field[2] を u32・欠落既定 0）。interval は animation 定義の始点（ukadoc）だが、
+/// - **interval 忠実転記**（要件 5.1/5.2/5.3/8.2）: `interval,KIND[,K]` の KIND を
+///   `bind` → `Bind`、`random` → `Random{k}`、`bind+random` → `BindRandom{k}` に正規化し、
+///   未認識キーワード（`sometimes`/`periodic`/`always` 等・要件 8.2）は原文のまま
+///   `Interval::Other(keyword)` へ転記する（fallback-Bind 撤去・討議 #1 裁定＝語彙を
+///   落とさない黙らない）。K は field[2] を u32・欠落既定 0。interval 行は当該 ID の
+///   slot を確定させる（interval のみで pattern が無くとも初出順で animation を積む）。
 ///   pattern が interval 行より先に現れても同一 ID へ束ねる（順序寛容）。
-/// - **既定 interval**: ある ID に pattern はあるが認識可能な interval 行が無い場合、
+/// - **既定 interval**: ある ID に pattern はあるが interval 行が一度も現れない場合、
 ///   pattern を失わせずパニックも起こさぬよう既定 `Interval::Bind` で `Animation` を積む。
-///   3 種以外の interval キーワード（`sometimes`/`periodic`/`always` 等・要件 5.7）は
-///   値化せず passthrough 吸収し、「認識可能な interval 無し」と同様に扱う。pattern を
-///   伴う ID は既定 `Bind` に倒れ、interval のみで pattern が無ければ animation を積まない
-///   （phantom を生まない・タスク 4.6 が確認・要件 5.7/10.4）。
-/// - **pattern の疎 index ＋負センチネル**（要件 5.4/5.5）: `patternM,overlay,ID,WAIT,X,Y`
-///   の M（`pattern` 以降の数字・`unwrap_or(0)`）を**そのまま**保持し、欠番を合成しない
-///   （疎許容・要件 5.4）。`surface_id` は field[2] を **i64** で保持し、負値（`-1`/`-2`）を
-///   センチネルとして失わない（要件 5.5・意味付けは下流）。overlay 以外の method
-///   （`replace` 等）は値化せず読み飛ばして passthrough 吸収する（タスク 4.6 が確認・
-///   要件 5.7）。pattern は出現順で保持する。
+/// - **pattern の忠実転記＋疎 index ＋負センチネル**（要件 4.6/5.4/5.5/8.4）:
+///   `patternM,描画メソッド,ID,WAIT,X,Y` の M（`pattern` 以降の数字・`unwrap_or(0)`）を
+///   **そのまま**保持し、欠番を合成しない（疎許容・要件 5.4）。field[1] を描画メソッドと
+///   して verbatim 転記する（overlay フィルタ撤去済み＝非 overlay も落とさない・要件
+///   4.6/8.4・意味解釈は下流）。`surface_id` は field[2] を **i64** で保持し、負値
+///   （`-1`/`-2`）をセンチネルとして失わない（要件 5.5・意味付けは下流）。出現順で保持する。
 ///
 /// 失敗しない（`Vec` を返す・パニックしない・空/崩れ入力に寛容・要件 2.x/9.2）。
 fn decode_animations(body: &[Vec<String>]) -> Vec<Animation> {
@@ -320,31 +319,34 @@ fn decode_animations(body: &[Vec<String>]) -> Vec<Animation> {
         let id = id_text.parse::<u32>().unwrap_or(0);
 
         if suffix == "interval" {
-            // interval 3 種のみ正規化する。それ以外（要件 5.7）は passthrough 吸収で
-            // 束ねずスキップし、pattern を持つ ID は既定 Bind に倒れる（タスク 4.6 が確認）。
-            if let Some(interval) = normalize_interval(fields) {
-                let anim = animation_slot(&mut animations, id);
-                anim.interval = interval;
-            }
+            // interval 行を忠実転記する（要件 8.2・討議 #1 裁定）。3 種（bind/random/
+            // bind+random）は駆動語彙へ、未認識キーワード（sometimes 等）は原文のまま
+            // `Interval::Other` へ転記する（fallback-Bind は撤去済み＝語彙を落とさない・
+            // 黙らない）。interval 行は当該 ID の slot を確定させる（初出順保持）。
+            let interval = normalize_interval(fields);
+            let anim = animation_slot(&mut animations, id);
+            anim.interval = interval;
             continue;
         }
 
         if let Some(index_text) = suffix.strip_prefix("pattern") {
-            // overlay メソッドのみ充填する（要件 5.4/5.5）。非 overlay（replace 等）は
-            // 値化せず passthrough 吸収する（タスク 4.6 が確認・要件 5.7）。
-            if fields.get(1).map(String::as_str) == Some("overlay") {
-                let pattern = Pattern {
-                    // pattern index は疎許容・そのまま保持（欠番を合成しない・要件 5.4）。
-                    index: index_text.parse::<u32>().unwrap_or(0),
-                    // surface_id は i64・負センチネル（-1/-2）を失わない（要件 5.5）。
-                    surface_id: field_i64(fields, 2),
-                    wait: field_u32(fields, 3),
-                    x: field_i64(fields, 4),
-                    y: field_i64(fields, 5),
-                };
-                let anim = animation_slot(&mut animations, id);
-                anim.patterns.push(pattern);
-            }
+            // 全 pattern 行を忠実転記する（要件 4.6/8.4）。overlay フィルタは撤去済み＝
+            // 非 overlay（replace/base/制御系 等）も落とさず method を運ぶ。意味解釈
+            // （合成方法・実装可否）は下流の責務（parser は原文を無加工で運ぶ）。
+            let pattern = Pattern {
+                // pattern index は疎許容・そのまま保持（欠番を合成しない・要件 5.4）。
+                index: index_text.parse::<u32>().unwrap_or(0),
+                // field[1] を描画メソッドとして verbatim 転記（欠落は空文字＝下流 `Unknown`
+                // 吸収）。位置・型は不変で surface_id 以降を破壊しない（要件 4.6/8.4）。
+                method: DrawMethod::new(field_string(fields, 1)),
+                // surface_id は i64・負センチネル（-1/-2）を失わない（要件 5.5）。
+                surface_id: field_i64(fields, 2),
+                wait: field_u32(fields, 3),
+                x: field_i64(fields, 4),
+                y: field_i64(fields, 5),
+            };
+            let anim = animation_slot(&mut animations, id);
+            anim.patterns.push(pattern);
             continue;
         }
 
@@ -371,21 +373,24 @@ fn animation_slot(animations: &mut Vec<Animation>, id: u32) -> &mut Animation {
     &mut animations[last]
 }
 
-/// `animationN.interval,KIND[,K]` 行を `Interval` へ正規化する（要件 5.1/5.2/5.3）。
+/// `animationN.interval,KIND[,K]` 行を `Interval` へ忠実転記する（要件 5.1/5.2/5.3/8.2）。
 ///
-/// KIND（field[1]）が 3 種のいずれでもない場合は `None` を返す（3 種以外は passthrough
-/// 吸収＝呼び出し側で pattern を持つ ID を既定 Bind へ倒す・要件 5.7・タスク 4.6 が確認）。
+/// KIND（field[1]）が駆動 3 種（bind/random/bind+random）ならその語彙へ、それ以外の
+/// 未認識キーワード（sometimes/rarely/periodic/always/runonce 等）は原文のまま
+/// `Interval::Other(keyword)` へ転記する（fallback-Bind 撤去・討議 #1 裁定・要件 8.2）。
+/// 転記層は語彙を落とさず黙らない。KIND 欠落は空文字 `Other("")`（下流吸収・要件 3.3）。
 /// K（field[2]）は u32・欠落既定 0（要件 3.3）。
-fn normalize_interval(fields: &[String]) -> Option<Interval> {
+fn normalize_interval(fields: &[String]) -> Interval {
     match fields.get(1).map(String::as_str) {
-        Some("bind") => Some(Interval::Bind),
-        Some("random") => Some(Interval::Random {
+        Some("bind") => Interval::Bind,
+        Some("random") => Interval::Random {
             k: field_u32(fields, 2),
-        }),
-        Some("bind+random") => Some(Interval::BindRandom {
+        },
+        Some("bind+random") => Interval::BindRandom {
             k: field_u32(fields, 2),
-        }),
-        _ => None,
+        },
+        // 未認識キーワード・欠落は原文（欠落は空文字）を `Other` へ忠実転記する（要件 8.2）。
+        other => Interval::Other(other.unwrap_or("").into()),
     }
 }
 

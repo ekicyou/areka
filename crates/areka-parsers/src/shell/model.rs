@@ -113,7 +113,7 @@ pub struct Animation {
     pub patterns: Vec<Pattern>,
 }
 
-/// interval 3 種（emo2 subset・拡張は non_exhaustive シーム・要件 5.1-5.3/5.7）。
+/// interval 語彙（emo2 subset は 3 種を駆動・拡張は non_exhaustive シーム・要件 5.1-5.3/5.7/8.2）。
 #[non_exhaustive]
 #[derive(Clone, Debug, PartialEq)]
 pub enum Interval {
@@ -129,13 +129,20 @@ pub enum Interval {
         /// 頻度パラメータ K。
         k: u32,
     },
+    /// 未認識 interval 語彙の原文忠実転記（sometimes/rarely/periodic/always/runonce 等・
+    /// 要件 8.2）。転記層は語彙を落とさず黙らない＝「完全形保持」が字義どおり成立する。
+    /// 駆動しない（下流 bind 分類にも静的経路にも該当しない）が値としては保持する。
+    Other(Box<str>),
 }
 
-/// animationN.patternM,overlay,SURFACE_ID,WAIT,X,Y（要件 5.4/5.5）。
+/// animationN.patternM,描画メソッド,SURFACE_ID,WAIT,X,Y（要件 5.4/5.5/4.6）。
 #[derive(Clone, Debug, PartialEq)]
 pub struct Pattern {
     /// patternM の M（疎・連番前提を置かない・要件 5.4）。
     pub index: u32,
+    /// 描画メソッド（method）の忠実転記（要件 4.6/8.4）。意味解釈（同義写像・実装可否）は
+    /// 下流の責務ゆえ parser は原文を無加工で運ぶ（`DrawMethod` 参照）。
+    pub method: DrawMethod,
     /// 参照 surface ID。負値はレイヤクリア/停止センチネル（要件 5.5・下流解釈）。
     pub surface_id: i64,
     /// WAIT（ミリ秒・値保持のみ）。
@@ -144,6 +151,32 @@ pub struct Pattern {
     pub x: i64,
     /// Y 座標。
     pub y: i64,
+}
+
+/// コマ描画メソッドの opaque 中身（意味解釈しない・要件 4.6/8.4）。
+///
+/// 正典位置（コマ記法の描画メソッド欄）を転記する:
+/// - **新形式** `animation*.pattern*,描画メソッド,サーフェス番号,ウェイト,X,Y`
+///   ＝method は第 1 位置（現行 lexer の対象）。
+/// - **旧形式**（SERIKO 1.x）＝method は第 3 位置（旧形式キー行の字句解析は emo2 subset
+///   外＝Non-Goals。将来 lexer が旧位置を吸収して同一欄へ転記する）。
+///
+/// 語彙（overlay/base/move/scaling/start/stop/alternativestart/alternativestop/
+/// parallelstart/parallelstop/insert/auto 等）は全て忠実に転記し完全形で保持する。
+/// 同義写像・実装可否の判定は下流の責務（要件 8.4）。
+#[derive(Clone, Debug, PartialEq)]
+pub struct DrawMethod(String);
+
+impl DrawMethod {
+    /// 無加工の描画メソッド文字列を保持する `DrawMethod` を構築する（要件 4.6）。
+    pub fn new(inner: String) -> Self {
+        DrawMethod(inner)
+    }
+
+    /// 描画メソッドの opaque 中身を読み取る（改変不可・要件 4.6）。
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
 }
 
 /// collisionN,LEFT,TOP,RIGHT,BOTTOM,NAME（矩形・要件 6.1/6.2）。

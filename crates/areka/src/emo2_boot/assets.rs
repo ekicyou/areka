@@ -22,7 +22,7 @@ use areka_parsers::balloon::BalloonModel;
 use areka_parsers::charset::{DefaultEncoding, decode};
 use areka_parsers::kv::parse_kv;
 use areka_parsers::package::resolve;
-use areka_seriko::{BindResolver, SurfaceResolver, build_static_bindset};
+use areka_seriko::{AnimationTable, BindResolver, SurfaceResolver, build_static_bindset};
 use tracing::warn;
 
 use super::BootWiringError;
@@ -95,6 +95,21 @@ pub struct ScopeAssets {
     pub initial_surface_id: u32,
 }
 
+/// SERIKO ループ表の一括（シェル面・バルーン面の 2 表・design「結線・資産・実機経路（assets.rs）」）。
+///
+/// 面種非依存（裁定 (a)）: 同一 `AnimationTable::from_world` がシェル世界・バルーン世界の双方から
+/// 同型に表を組む。`shell`／`balloon` は **surface ID 名前空間の別**（emo2 はシェル surface0 と
+/// バルーン面 0 が別物）であり能力の仕切りではない。両表は同一評価経路で駆動される。
+///
+/// いずれの表も既に `BootAssets` が保持する fold 完了 `EmoWorld` スナップショットから構築するため、
+/// 表の構築に **新規のファイル I/O は要らない**（「以後ファイル I/O なし」の事後条件は不変）。
+pub struct LoopTables {
+    /// シェル面のループ表（`shells[0].emo_world` から `from_world`・scope 資産不在なら空表）。
+    pub shell: AnimationTable,
+    /// バルーン面のループ表（最初のバルーン `EmoWorld` から `from_world`・資産不在なら空表）。
+    pub balloon: AnimationTable,
+}
+
 /// 表示結線に必要な load-time 資産の一括（design「構築入力 / assets」Service Interface）。
 ///
 /// 事後条件: 返る資産だけで attach フェーズが完結する（以後ファイル I/O なし）。
@@ -112,6 +127,10 @@ pub struct BootAssets {
     /// bind 名前解決情報（`MountModel.bindgroups` の名前宣言由来・`(カテゴリ, パーツ)`→着せ替え ID）。
     /// task 7.2 で `spawn_seriko` の actor 構築へ手渡す（本タスクは起動時資産への保持のみ）。
     pub bind_resolver: BindResolver,
+    /// SERIKO ループ表（シェル面・バルーン面の 2 表・面種非依存＝裁定 (a)）。
+    /// 既に保持する `EmoWorld` スナップショットから `AnimationTable::from_world` で構築する
+    /// （新規ファイル I/O なし）。`spawn_seriko` の actor 構築へ手渡す（本タスクは起動時資産への保持のみ）。
+    pub loop_tables: LoopTables,
 }
 
 /// 構築入力（[`BootAssets`]）を一括組立する（tasks.md task 2.6・design「構築入力 / assets」）。
@@ -243,6 +262,21 @@ pub fn build_boot_assets(
     }
     let balloon_model = build_balloon_model(balloon_root);
 
+    // SERIKO ループ表: 既に build 済みの EmoWorld スナップショット（shells[0]／balloons[0]）から
+    // `AnimationTable::from_world` で構築する（面種非依存＝裁定 (a)・**新規ファイル I/O なし**）。
+    // scope 資産が不在（空 scopes 等）なら空表を明示（AnimationTable::empty()）。全 scope は同一
+    // `Shell` から build 済みゆえシェル面の内容は scope 非依存＝先頭 World から 1 度だけ組めば足りる。
+    let loop_tables = LoopTables {
+        shell: shells
+            .first()
+            .map(|scope_assets| AnimationTable::from_world(&scope_assets.emo_world))
+            .unwrap_or_else(AnimationTable::empty),
+        balloon: balloons
+            .first()
+            .map(|(_, b_world, _)| AnimationTable::from_world(b_world))
+            .unwrap_or_else(AnimationTable::empty),
+    };
+
     Ok(BootAssets {
         shells,
         balloons,
@@ -250,6 +284,7 @@ pub fn build_boot_assets(
         resolver,
         static_binds,
         bind_resolver,
+        loop_tables,
     })
 }
 
@@ -407,6 +442,32 @@ mod tests {
             boot.static_binds.ids(),
             &[1100, 1207, 1302, 1500, 1800],
             "shell descript の sakura.bindgroup{{N}}.default==1（DD-8）"
+        );
+
+        // --- loop_tables: 既に保持する EmoWorld スナップショットから from_world で構築（面種非依存・裁定 (a)） ---
+        // 新規ファイル I/O なし＝保持済み World の再利用のみ。boot 内で組んだ表が、同じ retained World
+        // から再構築した表と一致する（is_empty・当該面 surface のアニメ本数）ことを固定し、reuse を担保する。
+        let shell_rebuilt = AnimationTable::from_world(&boot.shells[0].emo_world);
+        assert_eq!(
+            boot.loop_tables.shell.is_empty(),
+            shell_rebuilt.is_empty(),
+            "shell 表は shells[0].emo_world から from_world 済み（保持 World の再利用）"
+        );
+        assert_eq!(
+            boot.loop_tables.shell.animations(0).len(),
+            shell_rebuilt.animations(0).len(),
+            "shell 表は保持 World と同一エントリ（新規 I/O なし・面種非依存）"
+        );
+        let balloon_rebuilt = AnimationTable::from_world(&boot.balloons[0].1);
+        assert_eq!(
+            boot.loop_tables.balloon.is_empty(),
+            balloon_rebuilt.is_empty(),
+            "balloon 表は最初のバルーン EmoWorld から from_world 済み（保持 World の再利用）"
+        );
+        assert_eq!(
+            boot.loop_tables.balloon.animations(0).len(),
+            balloon_rebuilt.animations(0).len(),
+            "balloon 表は保持 World と同一エントリ（新規 I/O なし・面種非依存）"
         );
     }
 

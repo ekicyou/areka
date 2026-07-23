@@ -33,7 +33,9 @@ pub use method::{BlendKind, BlendMode, ComposeMethod};
 pub mod bind;
 pub mod composed;
 pub mod normalized;
+pub mod pattern;
 pub use bind::BindSet;
+pub use pattern::{PatternFrame, PatternState};
 pub use composed::ComposedSurface;
 pub use normalized::{NormalizedElement, SurfaceMaster, Transform};
 pub mod world;
@@ -117,6 +119,7 @@ impl Composer {
         atlas: &AtlasTable,
         surface_id: u32,
         active_binds: &BindSet,
+        pattern: &PatternState,
     ) -> Result<(), ComposeError> {
         // plan: 命令列＋外形を導出（Err は既に error ログ済み・そのまま伝播・要件 10.5）。
         // ops／visited は build_plan 入口で clear され再利用される（要件 10.3）。
@@ -127,6 +130,7 @@ impl Composer {
             atlas,
             surface_id,
             active_binds,
+            pattern,
         )?;
         // execute: 命令列を out へ premultiplied SourceOver 転写（out は resize_and_clear で再利用）。
         crate::blit::execute(out, extent, &self.ops, atlas);
@@ -146,10 +150,11 @@ impl Composer {
         atlas: &AtlasTable,
         surface_id: u32,
         active_binds: &BindSet,
+        pattern: &PatternState,
     ) -> Result<ComposedSurface, ComposeError> {
         // 便宜上 0×0 で確保し、compose_into 内の resize_and_clear が外形へ合わせて伸長する。
         let mut out = ComposedSurface::new(0, 0);
-        self.compose_into(&mut out, world, atlas, surface_id, active_binds)?;
+        self.compose_into(&mut out, world, atlas, surface_id, active_binds, pattern)?;
         Ok(out)
     }
 }

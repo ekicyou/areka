@@ -18,12 +18,13 @@ use crate::emo2_boot::target_map::{balloon_target, scope_of, shell_target};
 /// `DisplayCommand` → `PresentCommand` の純変換（DD-5・`target_map` を利用）。
 ///
 /// 可変状態・I/O を持たない純関数で、4 写像を与える（R3.6）:
-/// - `Show { scope, surface_id, binds }` → シェル表示対象へ `ShowSurface`。`surface_id`（数値）と
-///   `binds` を**非改変で転写**する（R3.1）。
+/// - `Show { scope, surface_id, binds, pattern }` → シェル表示対象へ `ShowSurface`。`surface_id`
+///   （数値）・`binds`・`pattern` を**非改変で転写**する（R3.1／R5.1）。
 /// - `Hide { scope }` → シェル表示対象の `Hide`（R3.2）。
-/// - `ShowBalloon { scope, surface_id }` → バルーン表示対象へ `ShowSurface`。`binds` は
+/// - `ShowBalloon { scope, surface_id, pattern }` → バルーン表示対象へ `ShowSurface`。`binds` は
 ///   `BindSet::default()`（空集合＝M-boot にバルーン着せ替えは存在しない・R3.3／R5.1）。
 ///   `surface_id` は seriko が解決済みの数値 id をそのまま転写し、**alias を再適用しない**（R5.3）。
+///   `pattern` はシェル面 `Show` と同様に非改変で転写する（R5.1・cue 由来は空 pattern＝R5.4）。
 /// - `HideBalloon { scope }` → バルーン表示対象の `Hide`（R3.4／R5.2）。
 ///
 /// `reply` は常に `None`（撃ちっぱなし・fire-and-forget）。scope（`ActorKey`）が非数値のとき
@@ -33,15 +34,17 @@ use crate::emo2_boot::target_map::{balloon_target, scope_of, shell_target};
 /// `DisplayCommand` は `#[non_exhaustive]` でないため 4 variant の網羅 `match` で全経路を尽くす。
 pub fn map_display_command(cmd: DisplayCommand) -> Option<PresentCommand> {
     Some(match cmd {
-        // Show: シェル表示対象へそのまま。surface_id・binds は非改変で転写（R3.1／R5.3）。
+        // Show: シェル表示対象へそのまま。surface_id・binds・pattern は非改変で転写（R3.1／R5.1／R5.3）。
         DisplayCommand::Show {
             scope,
             surface_id,
             binds,
+            pattern,
         } => PresentCommand::ShowSurface {
             target: shell_target(scope_of(&scope)?),
             surface_id,
             binds,
+            pattern,
             reply: None,
         },
         // Hide: シェル表示対象の非表示（R3.2）。
@@ -50,11 +53,17 @@ pub fn map_display_command(cmd: DisplayCommand) -> Option<PresentCommand> {
             reply: None,
         },
         // ShowBalloon: バルーン表示対象へ。binds は既定（空集合＝バルーン着せ替え無し・R3.3／R5.1）。
-        // surface_id は seriko 解決済み数値 id をそのまま転写（alias 非再適用・R5.3）。
-        DisplayCommand::ShowBalloon { scope, surface_id } => PresentCommand::ShowSurface {
+        // surface_id は seriko 解決済み数値 id をそのまま転写（alias 非再適用・R5.3）。pattern は
+        // シェル面 Show と同様に非改変で転写する（R5.1・cue 由来は空 pattern＝R5.4）。
+        DisplayCommand::ShowBalloon {
+            scope,
+            surface_id,
+            pattern,
+        } => PresentCommand::ShowSurface {
             target: balloon_target(scope_of(&scope)?),
             surface_id,
             binds: BindSet::default(),
+            pattern,
             reply: None,
         },
         // HideBalloon: バルーン表示対象の非表示（`\b[-1]` 相当・R3.4／R5.2）。
@@ -129,21 +138,40 @@ const _: fn() = || {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use areka_emo_compose::{ComposeMethod, PatternFrame, PatternState};
     use areka_sakura::ActorKey;
     use std::sync::mpsc::{self, TryRecvError};
     use std::sync::{Arc, Mutex};
     use tracing::field::{Field, Visit};
     use tracing_subscriber::prelude::*;
 
-    /// `Show` → シェル表示対象の `ShowSurface`。`surface_id`（非自明値）と非既定 `binds` が
-    /// 非改変で透過することを反証する（R3.1／R5.3）。`reply` は `None`。
+    /// 非空の `PatternState`（animation `anim_id` に surface `surf` の `Overlay` コマ 1 枚）を作る
+    /// （`PatternState::default()` と等価でない＝pattern 透過の非改変転写を反証する load-bearing 値）。
+    fn pattern_of(anim_id: u32, surf: u32) -> PatternState {
+        let mut p = PatternState::default();
+        p.set(
+            anim_id,
+            PatternFrame {
+                surface_id: surf,
+                method: ComposeMethod::Overlay,
+                x: 0,
+                y: 0,
+            },
+        );
+        p
+    }
+
+    /// `Show` → シェル表示対象の `ShowSurface`。`surface_id`（非自明値）・非既定 `binds`・非空
+    /// `pattern` が非改変で透過することを反証する（R3.1／R5.1／R5.3）。`reply` は `None`。
     #[test]
-    fn show_maps_to_shell_show_surface_transcribing_id_and_binds() {
+    fn show_maps_to_shell_show_surface_transcribing_id_binds_and_pattern() {
         let binds = BindSet::from_ids([1100, 1500]);
+        let pattern = pattern_of(7, 2110);
         let out = map_display_command(DisplayCommand::Show {
             scope: ActorKey::from("0"),
             surface_id: 2100,
             binds: binds.clone(),
+            pattern: pattern.clone(),
         })
         .expect("数値 scope は Some を返すこと");
 
@@ -152,11 +180,13 @@ mod tests {
                 target,
                 surface_id,
                 binds: got,
+                pattern: got_pattern,
                 reply,
             } => {
                 assert_eq!(target, shell_target(0), "Show は shell 表示対象（偶数）へ写像");
                 assert_eq!(surface_id, 2100, "surface_id は非改変で転写されること");
                 assert_eq!(got, binds, "binds はそのまま透過されること");
+                assert_eq!(got_pattern, pattern, "pattern はそのまま非改変で透過されること（R5.1）");
                 assert!(reply.is_none(), "reply は常に None（撃ちっぱなし）");
             }
             _ => panic!("Show は ShowSurface へ写像されるべき"),
@@ -180,13 +210,15 @@ mod tests {
         }
     }
 
-    /// `ShowBalloon` → バルーン表示対象の `ShowSurface`。`surface_id` は非改変転写・`binds` は
-    /// 既定（空集合）（R3.3／R5.1／R5.3）。`reply` は `None`。
+    /// `ShowBalloon` → バルーン表示対象の `ShowSurface`。`surface_id`・`pattern` は非改変転写・
+    /// `binds` は既定（空集合）（R3.3／R5.1／R5.3）。`reply` は `None`。
     #[test]
     fn show_balloon_maps_to_balloon_show_surface_with_default_binds() {
+        let pattern = pattern_of(3, 9);
         let out = map_display_command(DisplayCommand::ShowBalloon {
             scope: ActorKey::from("0"),
             surface_id: 6,
+            pattern: pattern.clone(),
         })
         .expect("数値 scope は Some を返すこと");
 
@@ -195,6 +227,7 @@ mod tests {
                 target,
                 surface_id,
                 binds,
+                pattern: got_pattern,
                 reply,
             } => {
                 assert_eq!(
@@ -204,6 +237,7 @@ mod tests {
                 );
                 assert_eq!(surface_id, 6, "surface_id は非改変で転写（alias 非再適用）");
                 assert_eq!(binds, BindSet::default(), "binds は既定（空集合）であること");
+                assert_eq!(got_pattern, pattern, "pattern はそのまま非改変で透過されること（R5.1）");
                 assert!(reply.is_none(), "reply は常に None");
             }
             _ => panic!("ShowBalloon は ShowSurface へ写像されるべき"),
@@ -241,6 +275,7 @@ mod tests {
                 scope: bad(),
                 surface_id: 2100,
                 binds: BindSet::from_ids([1100]),
+                pattern: PatternState::default(),
             })
             .is_none(),
             "Show の非数値 scope は None"
@@ -253,6 +288,7 @@ mod tests {
             map_display_command(DisplayCommand::ShowBalloon {
                 scope: bad(),
                 surface_id: 6,
+                pattern: PatternState::default(),
             })
             .is_none(),
             "ShowBalloon の非数値 scope は None"
@@ -274,6 +310,7 @@ mod tests {
                 scope: key.clone(),
                 surface_id: 10,
                 binds: BindSet::default(),
+                pattern: PatternState::default(),
             })
             .expect("数値 scope は Some");
             match show {
@@ -287,6 +324,7 @@ mod tests {
             let show_balloon = map_display_command(DisplayCommand::ShowBalloon {
                 scope: key.clone(),
                 surface_id: 10,
+                pattern: PatternState::default(),
             })
             .expect("数値 scope は Some");
             match show_balloon {
@@ -355,10 +393,12 @@ mod tests {
         let (tx, rx) = mpsc::channel::<PresentCommand>();
         let mut bridge = PresentBridge::new(tx);
 
+        let pattern = pattern_of(7, 2110);
         bridge.send(DisplayCommand::Show {
             scope: ActorKey::from("0"),
             surface_id: 2100,
             binds: BindSet::from_ids([1100]),
+            pattern: pattern.clone(),
         });
 
         // PresentCommand は #[non_exhaustive] かつ非 PartialEq ゆえフィールド分解＋`_` arm で照合。
@@ -367,11 +407,13 @@ mod tests {
                 target,
                 surface_id,
                 binds,
+                pattern: got_pattern,
                 reply,
             } => {
                 assert_eq!(target, shell_target(0), "Show は shell 表示対象へ配送");
                 assert_eq!(surface_id, 2100, "surface_id は非改変で転写");
                 assert_eq!(binds, BindSet::from_ids([1100]), "binds はそのまま透過");
+                assert_eq!(got_pattern, pattern, "pattern はそのまま非改変で透過（R5.1）");
                 assert!(reply.is_none(), "reply は常に None（撃ちっぱなし）");
             }
             _ => panic!("Show は ShowSurface へ写像されて届くべき"),
@@ -429,6 +471,7 @@ mod tests {
                 scope: ActorKey::from("0"),
                 surface_id: 2100,
                 binds: BindSet::default(),
+                pattern: PatternState::default(),
             });
         });
         // ここへ到達した時点で send は panic しなかった（infallible 契約の実証）。

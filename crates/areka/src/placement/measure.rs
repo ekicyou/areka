@@ -24,7 +24,7 @@ use std::path::Path;
 use areka_emo_atlas::{
     AlphaParams, AtlasTable, PackConfig, SetId, SurfaceSet, UseSelfAlpha, WicDecoderArm, bake,
 };
-use areka_emo_compose::{BindSet, Composer, EmoWorld};
+use areka_emo_compose::{BindSet, Composer, EmoWorld, PatternState};
 use tracing::{error, warn};
 
 use super::PlacementError;
@@ -262,8 +262,10 @@ fn compose_size(
     atlas: &AtlasTable,
     surface_id: u32,
 ) -> Result<SizePx, String> {
+    // 静的採寸経路ゆえ SERIKO ループは駆動しない → 空 pattern（`PatternState::default()`）で合成する
+    // （空 pattern は拡張前と観測等価・R5.4）。
     let composed = composer
-        .compose(world, atlas, surface_id, &BindSet::default())
+        .compose(world, atlas, surface_id, &BindSet::default(), &PatternState::default())
         .map_err(|e| format!("surface {surface_id} の合成失敗: {e}"))?;
     let (w, h) = (composed.width(), composed.height());
     if w == 0 || h == 0 {

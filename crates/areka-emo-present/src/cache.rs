@@ -5,7 +5,7 @@
 //! 全体を捕捉しない限りキャッシュは正しくない**（surface id のみをキーにすると、同一 surface で
 //! bind 集合だけ異なる着せ替え・まばたきが古い合成結果に衝突する）。本スロットは直前の合成入力と
 //! その結果を 1 件だけ保持し、**同一入力なら再利用・1 ビットでも異なれば必ずミス（＝再合成）**を
-//! 構造で担保する。多エントリ保持は採らない: 将来 seriko がアニメ pattern 状態を合成入力へ加えると
+//! 構造で担保する。多エントリ保持は採らない: seriko のアニメ pattern 状態を合成入力へ加えると
 //! 状態空間が膨張し、全保持はメモリ堆積（1 エントリ＝原寸ビットマップ）と低ヒット率の二重苦になる
 //! ため、「状態が変わらない間だけ前回画像を継続する」直近 1 件こそが正しい戦略である。
 //!
@@ -24,7 +24,7 @@
 //! [`insert`]: ComposeCache::insert
 //! [`invalidate_all`]: ComposeCache::invalidate_all
 
-use areka_emo_compose::{BindSet, ComposedSurface};
+use areka_emo_compose::{BindSet, ComposedSurface, PatternState};
 use wintf::ecs::widget::bitmap_source::AlphaMask;
 
 /// キャッシュエントリ＝表示バッファと当たり判定マスクの原子対（R2.4 の構造的担保）。
@@ -40,15 +40,18 @@ pub struct CacheEntry {
     pub mask: AlphaMask,
 }
 
-/// 合成入力キー＝合成結果を一意に定める入力の全体（surface id ＋ bind 集合）。
+/// 合成入力キー＝合成結果を一意に定める入力の全体（surface id ＋ bind 集合 ＋ pattern 状態）。
 ///
 /// `EmoWorld`／`AtlasTable` は target 構築時に固定（変わるときは [`ComposeCache::invalidate_all`] が
-/// 走る契約）ゆえキーに含めない。将来 seriko がアニメ pattern 状態を合成入力へ加える際は本キーへ
-/// 追加する（キー＝合成入力の全体、という不変条件を保つ）。
+/// 走る契約）ゆえキーに含めない。seriko のアニメ pattern 状態（[`PatternState`]）は合成入力の第一級
+/// 要素として本キーに含める（R5.2）——1 ビットでも異なれば（surface id・binds・pattern のいずれか）
+/// ミスして再合成する、という「キー＝合成入力の全体」不変条件を保つ。`PatternState` の等価は内部
+/// `BTreeMap` の正準（昇順）順序で安定する（task 2）ため、挿入順に依存せず決定論的にヒット判定できる。
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct ComposeKey {
     surface_id: u32,
     binds: BindSet,
+    pattern: PatternState,
 }
 
 /// 合成入力 → [`CacheEntry`] の容量 1 メモ化スロット（直前の合成結果のみ保持）。
@@ -70,19 +73,22 @@ impl ComposeCache {
         Self { slot: None }
     }
 
-    /// 合成結果を合成入力（surface id ＋ bind 集合）鍵で挿入し、[`AlphaMask`] を**挿入時に 1 回だけ**
-    /// 生成して束ねる。既存スロットは対ごと置換する（直前 1 件のみ保持・R2.4）。
+    /// 合成結果を合成入力（surface id ＋ bind 集合 ＋ pattern 状態）鍵で挿入し、[`AlphaMask`] を
+    /// **挿入時に 1 回だけ**生成して束ねる。既存スロットは対ごと置換する（直前 1 件のみ保持・R2.4）。
     ///
     /// 呼び手は合成済み [`ComposedSurface`] を渡すだけでよく、マスク生成
     /// （[`AlphaMask::from_pbgra32`]）は本メソッド内部で `composed.bytes()`／`width`／`height`／
     /// `stride` から一度だけ行う。マスク生成 API を挿入の内側へ隠すことで、「表示のたびに再生成
     /// しない」（R2.1）を呼び手が破れない構造にする。
     ///
-    /// 挿入したエントリへの共有参照を返す（提示段がそのまま表示・マスク同期へ用いる）。
+    /// `pattern` は seriko のアニメ pattern 状態（[`PatternState`]）で、`binds` と同格の合成入力
+    /// キー要素である（R5.2）。挿入したエントリへの共有参照を返す（提示段がそのまま表示・マスク
+    /// 同期へ用いる）。
     pub fn insert(
         &mut self,
         surface_id: u32,
         binds: BindSet,
+        pattern: PatternState,
         composed: ComposedSurface,
     ) -> &CacheEntry {
         // マスクは挿入時に 1 回だけ生成し（R2.1）、表示バッファと同一 bytes 由来で束ねる（R2.4）。
@@ -92,19 +98,34 @@ impl ComposeCache {
             composed.height(),
             composed.stride(),
         );
-        let key = ComposeKey { surface_id, binds };
+        let key = ComposeKey {
+            surface_id,
+            binds,
+            pattern,
+        };
         self.slot = Some((key, CacheEntry { composed, mask }));
         // 直前に挿入したスロットは必ず存在する。
         &self.slot.as_ref().expect("slot was just inserted").1
     }
 
-    /// 合成入力（surface id ＋ bind 集合）が直前の合成と**完全一致**するときのみエントリを返す。
+    /// 合成入力（surface id ＋ bind 集合 ＋ pattern 状態）が直前の合成と**完全一致**するときのみ
+    /// エントリを返す。
     ///
-    /// bind 集合が 1 要素でも異なればミス（＝呼び手は再合成する）。これが「同一 surface の着せ替え
-    /// 切替で古い絵を返さない」ことの構造的担保である。
-    pub fn get(&self, surface_id: u32, binds: &BindSet) -> Option<&CacheEntry> {
+    /// surface id・bind 集合・pattern 状態のいずれかが 1 ビットでも異なればミス（＝呼び手は再合成
+    /// する）。これが「同一 surface の着せ替え切替・アニメ pattern 進行で古い絵を返さない」ことの
+    /// 構造的担保である（R5.2）。`pattern` 等価は [`PatternState`] の `Eq`（正準順序で安定・task 2）に従う。
+    pub fn get(
+        &self,
+        surface_id: u32,
+        binds: &BindSet,
+        pattern: &PatternState,
+    ) -> Option<&CacheEntry> {
         match &self.slot {
-            Some((key, entry)) if key.surface_id == surface_id && key.binds == *binds => {
+            Some((key, entry))
+                if key.surface_id == surface_id
+                    && key.binds == *binds
+                    && key.pattern == *pattern =>
+            {
                 Some(entry)
             }
             _ => None,
@@ -125,7 +146,7 @@ mod tests {
     use areka_emo_atlas::{
         AlphaParams, MemoryDecoder, PackConfig, SetId, SurfaceSet, UseSelfAlpha, bake,
     };
-    use areka_emo_compose::{BindSet, Composer, EmoWorld};
+    use areka_emo_compose::{BindSet, ComposeMethod, Composer, EmoWorld, PatternFrame};
     use areka_parsers::shell::{
         AppendTarget, DefRef, Element, ElementPath, Shell, Surface,
     };
@@ -140,6 +161,22 @@ mod tests {
     /// カウント用途で十分な任意サイズの全透明合成結果（内容は不問・件数計上のみに使う）。
     fn transparent_surface(w: u32, h: u32) -> ComposedSurface {
         ComposedSurface::new(w, h)
+    }
+
+    /// 非空の `PatternState`（animation `anim_id` に surface `surf` の `Overlay` コマ 1 枚）を作る。
+    /// `PatternState::default()` と等価でないことを保証するキー要素の実体（pattern 差分の檻用）。
+    fn pattern_of(anim_id: u32, surf: u32) -> PatternState {
+        let mut p = PatternState::default();
+        p.set(
+            anim_id,
+            PatternFrame {
+                surface_id: surf,
+                method: ComposeMethod::Overlay,
+                x: 0,
+                y: 0,
+            },
+        );
+        p
     }
 
     fn elem(path: &str, x: i64, y: i64) -> Element {
@@ -205,7 +242,7 @@ mod tests {
 
         let mut composer = Composer::new();
         composer
-            .compose(&world, &baked.table, 1000, &BindSet::default())
+            .compose(&world, &baked.table, 1000, &BindSet::default(), &PatternState::default())
             .expect("静的 element 単体の合成は Ok")
     }
 
@@ -244,19 +281,19 @@ mod tests {
         let binds = BindSet::default();
 
         // 1 回目: ミス → 合成（カウンタ +1）→ 挿入。
-        if cache.get(id, &binds).is_none() {
+        if cache.get(id, &binds, &PatternState::default()).is_none() {
             compose_calls += 1;
-            cache.insert(id, binds.clone(), transparent_surface(4, 4));
+            cache.insert(id, binds.clone(), PatternState::default(), transparent_surface(4, 4));
         }
         assert_eq!(compose_calls, 1, "first access must compose exactly once");
 
         // 2 回目: 同一合成入力＝ヒット → 合成しない（カウンタ据え置き）。
-        if cache.get(id, &binds).is_none() {
+        if cache.get(id, &binds, &PatternState::default()).is_none() {
             compose_calls += 1;
-            cache.insert(id, binds.clone(), transparent_surface(4, 4));
+            cache.insert(id, binds.clone(), PatternState::default(), transparent_surface(4, 4));
         }
         assert_eq!(compose_calls, 1, "second access is a hit; must not recompute");
-        assert!(cache.get(id, &binds).is_some(), "entry must be retained after hit");
+        assert!(cache.get(id, &binds, &PatternState::default()).is_some(), "entry must be retained after hit");
     }
 
     /// 回帰檻（キャッシュ仕様バグ）: **同一 surface id でも bind 集合が異なればミス**する。
@@ -271,19 +308,113 @@ mod tests {
         let eyes_open = BindSet::from_ids([1101, 1302]);
         let eyes_closed = BindSet::from_ids([1101, 1302, 1400]);
 
-        cache.insert(id, eyes_open.clone(), transparent_surface(4, 4));
-        assert!(cache.get(id, &eyes_open).is_some(), "同一入力はヒットする");
+        cache.insert(id, eyes_open.clone(), PatternState::default(), transparent_surface(4, 4));
+        assert!(cache.get(id, &eyes_open, &PatternState::default()).is_some(), "同一入力はヒットする");
         assert!(
-            cache.get(id, &eyes_closed).is_none(),
+            cache.get(id, &eyes_closed, &PatternState::default()).is_none(),
             "同一 surface でも bind 集合が異なればミスしなければならない（着せ替えバグの回帰檻）"
         );
 
         // 異なる binds を挿入すると slot は置換され、以後は新入力のみヒットする（直前 1 件保持）。
-        cache.insert(id, eyes_closed.clone(), transparent_surface(4, 4));
-        assert!(cache.get(id, &eyes_closed).is_some(), "置換後は新入力がヒットする");
+        cache.insert(id, eyes_closed.clone(), PatternState::default(), transparent_surface(4, 4));
+        assert!(cache.get(id, &eyes_closed, &PatternState::default()).is_some(), "置換後は新入力がヒットする");
         assert!(
-            cache.get(id, &eyes_open).is_none(),
+            cache.get(id, &eyes_open, &PatternState::default()).is_none(),
             "容量 1 メモ: 置換後の旧入力はミスする（無限堆積しない）"
+        );
+    }
+
+    /// R5.2 回帰檻（pattern がキー要素）: **surface id ＋ bind 集合が完全同一でも pattern が異なれば
+    /// ミス**する。pattern を合成入力キーへ加えた（task 8.1）ことの load-bearing な証拠——この 1 点が
+    /// 欠けると seriko のアニメ pattern 進行が古い合成結果に衝突し表示が更新されない。
+    ///
+    /// 同値 pattern ではヒット、pattern を 1 コマ変えるとミス、を同一 (id, binds) で固定する。
+    #[test]
+    fn different_pattern_on_same_surface_and_binds_must_miss() {
+        let mut cache = ComposeCache::new();
+        let id = 1000;
+        let binds = BindSet::from_ids([1101, 1302]);
+        let pattern_a = pattern_of(2000, 1001);
+        let pattern_b = pattern_of(2000, 1002);
+        assert_ne!(pattern_a, pattern_b, "前提: 2 つの pattern 状態は異なる");
+
+        cache.insert(id, binds.clone(), pattern_a.clone(), transparent_surface(4, 4));
+
+        // (1) 同一 (id, binds, pattern) → ヒット。
+        assert!(
+            cache.get(id, &binds, &pattern_a).is_some(),
+            "surface id・binds・pattern が完全一致すればヒットする"
+        );
+        // (2) surface id・binds は同一だが pattern が異なる → ミス（新キー要素が load-bearing）。
+        assert!(
+            cache.get(id, &binds, &pattern_b).is_none(),
+            "surface id・binds 同一でも pattern が異なればミスしなければならない（R5.2・pattern がキー要素）"
+        );
+
+        // 置換後は新 pattern のみヒット・旧 pattern はミス（容量 1 メモ・古い絵を返さない）。
+        cache.insert(id, binds.clone(), pattern_b.clone(), transparent_surface(4, 4));
+        assert!(
+            cache.get(id, &binds, &pattern_b).is_some(),
+            "置換後は新 pattern がヒットする"
+        );
+        assert!(
+            cache.get(id, &binds, &pattern_a).is_none(),
+            "容量 1 メモ: 置換後の旧 pattern はミスする"
+        );
+    }
+
+    /// R5.4 の逆側檻（空 pattern はキーへ寄与しない＝拡張前と観測等価）と、非空 pattern の同値
+    /// ヒットを固定する。空 pattern で挿入したエントリは空 pattern の get にヒットし、非空 pattern の
+    /// get にはミスする（＝空と非空が別キー）。
+    #[test]
+    fn empty_vs_nonempty_pattern_are_distinct_keys() {
+        let mut cache = ComposeCache::new();
+        let id = 42;
+        let binds = BindSet::default();
+        let pat = pattern_of(3000, 5000);
+
+        // 空 pattern で挿入 → 空 pattern はヒット・非空 pattern はミス。
+        cache.insert(id, binds.clone(), PatternState::default(), transparent_surface(4, 4));
+        assert!(
+            cache.get(id, &binds, &PatternState::default()).is_some(),
+            "空 pattern で挿入 → 空 pattern の get はヒット（拡張前と観測等価・R5.4）"
+        );
+        assert!(
+            cache.get(id, &binds, &pat).is_none(),
+            "空 pattern で挿入 → 非空 pattern の get はミス（空と非空は別キー）"
+        );
+
+        // 非空 pattern で挿入 → 同値の非空 pattern はヒット・空 pattern はミス。
+        cache.insert(id, binds.clone(), pat.clone(), transparent_surface(4, 4));
+        assert!(
+            cache.get(id, &binds, &pat).is_some(),
+            "非空 pattern で挿入 → 同値 pattern の get はヒット"
+        );
+        assert!(
+            cache.get(id, &binds, &PatternState::default()).is_none(),
+            "非空 pattern で挿入 → 空 pattern の get はミス"
+        );
+    }
+
+    /// R4.3 変わらず: `invalidate_all` は pattern に依らずスロットを破棄する（挙動不変）。
+    /// 非空 pattern で挿入したエントリも `invalidate_all` 後は同一 pattern でミスする。
+    #[test]
+    fn invalidate_all_clears_regardless_of_pattern() {
+        let mut cache = ComposeCache::new();
+        let id = 7;
+        let binds = BindSet::from_ids([1100]);
+        let pat = pattern_of(2000, 1001);
+
+        cache.insert(id, binds.clone(), pat.clone(), transparent_surface(4, 4));
+        assert!(
+            cache.get(id, &binds, &pat).is_some(),
+            "挿入直後は同一 (id, binds, pattern) がヒットする"
+        );
+
+        cache.invalidate_all();
+        assert!(
+            cache.get(id, &binds, &pat).is_none(),
+            "invalidate_all は pattern に依らずスロットを破棄する（R4.3 挙動不変）"
         );
     }
 
@@ -305,16 +436,16 @@ mod tests {
         assert_ne!(dressed_a, dressed_b, "前提: 2 つの着せ替え集合は異なる");
 
         // 1 回目の Show（BindSet A）: ミス → 再合成（カウンタ +1）→ 挿入。
-        if cache.get(id, &dressed_a).is_none() {
+        if cache.get(id, &dressed_a, &PatternState::default()).is_none() {
             compose_calls += 1;
-            cache.insert(id, dressed_a.clone(), transparent_surface(4, 4));
+            cache.insert(id, dressed_a.clone(), PatternState::default(), transparent_surface(4, 4));
         }
         assert_eq!(compose_calls, 1, "初回 Show は 1 回だけ合成する");
 
         // 2 回目の Show（同一 surface・異なる BindSet B）: ミス → 再合成（カウンタ +1）。
-        if cache.get(id, &dressed_b).is_none() {
+        if cache.get(id, &dressed_b, &PatternState::default()).is_none() {
             compose_calls += 1;
-            cache.insert(id, dressed_b.clone(), transparent_surface(4, 4));
+            cache.insert(id, dressed_b.clone(), PatternState::default(), transparent_surface(4, 4));
         }
         assert_eq!(
             compose_calls, 2,
@@ -322,9 +453,9 @@ mod tests {
         );
 
         // 置換後は新入力のみヒット・旧入力はミス（容量 1 メモ・古い絵を返さない）。
-        assert!(cache.get(id, &dressed_b).is_some(), "再合成後の新 binds はヒットする");
+        assert!(cache.get(id, &dressed_b, &PatternState::default()).is_some(), "再合成後の新 binds はヒットする");
         assert!(
-            cache.get(id, &dressed_a).is_none(),
+            cache.get(id, &dressed_a, &PatternState::default()).is_none(),
             "容量 1 メモ: 置換後の旧 binds はミスする"
         );
     }
@@ -342,25 +473,25 @@ mod tests {
         let dressed = BindSet::from_ids([1100, 1207]);
 
         // 1 回目の Show: ミス → 再合成（カウンタ +1）→ 挿入。
-        if cache.get(id, &dressed).is_none() {
+        if cache.get(id, &dressed, &PatternState::default()).is_none() {
             compose_calls += 1;
-            cache.insert(id, dressed.clone(), transparent_surface(4, 4));
+            cache.insert(id, dressed.clone(), PatternState::default(), transparent_surface(4, 4));
         }
         assert_eq!(compose_calls, 1, "初回 Show は 1 回だけ合成する");
 
         // 2 回目の Show（同一 surface・同一 BindSet）: ヒット → 再合成しない（カウンタ据え置き）。
-        let hit = cache.get(id, &dressed);
+        let hit = cache.get(id, &dressed, &PatternState::default());
         assert!(hit.is_some(), "同一着せ替え集合の再発行はヒットする（R6.2）");
         if hit.is_none() {
             compose_calls += 1;
-            cache.insert(id, dressed.clone(), transparent_surface(4, 4));
+            cache.insert(id, dressed.clone(), PatternState::default(), transparent_surface(4, 4));
         }
         assert_eq!(
             compose_calls, 1,
             "同一 binds の再発行は再合成なしで復帰しなければならない（R6.2）"
         );
         assert!(
-            cache.get(id, &dressed).is_some(),
+            cache.get(id, &dressed, &PatternState::default()).is_some(),
             "ヒット後もキャッシュ済みサーフェスは保持される"
         );
     }
@@ -371,11 +502,14 @@ mod tests {
         let mut cache = ComposeCache::new();
         let binds = BindSet::default();
 
-        cache.insert(0, binds.clone(), transparent_surface(4, 4));
-        cache.insert(1000, binds.clone(), transparent_surface(4, 4));
-        assert!(cache.get(1000, &binds).is_some(), "直近挿入の id はヒットする");
+        cache.insert(0, binds.clone(), PatternState::default(), transparent_surface(4, 4));
+        cache.insert(1000, binds.clone(), PatternState::default(), transparent_surface(4, 4));
         assert!(
-            cache.get(0, &binds).is_none(),
+            cache.get(1000, &binds, &PatternState::default()).is_some(),
+            "直近挿入の id はヒットする"
+        );
+        assert!(
+            cache.get(0, &binds, &PatternState::default()).is_none(),
             "容量 1 メモ: 旧 id はミスする（多エントリ保持はしない）"
         );
     }
@@ -388,22 +522,22 @@ mod tests {
         let id = 7;
         let binds = BindSet::default();
 
-        if cache.get(id, &binds).is_none() {
+        if cache.get(id, &binds, &PatternState::default()).is_none() {
             compose_calls += 1;
-            cache.insert(id, binds.clone(), transparent_surface(4, 4));
+            cache.insert(id, binds.clone(), PatternState::default(), transparent_surface(4, 4));
         }
         assert_eq!(compose_calls, 1);
 
         cache.invalidate_all();
         assert!(
-            cache.get(id, &binds).is_none(),
+            cache.get(id, &binds, &PatternState::default()).is_none(),
             "id must miss after invalidate_all"
         );
 
         // 無効化後の再アクセスはミス → 再合成（カウンタ +1）。
-        if cache.get(id, &binds).is_none() {
+        if cache.get(id, &binds, &PatternState::default()).is_none() {
             compose_calls += 1;
-            cache.insert(id, binds.clone(), transparent_surface(4, 4));
+            cache.insert(id, binds.clone(), PatternState::default(), transparent_surface(4, 4));
         }
         assert_eq!(compose_calls, 2, "invalidate_all must force a recompute");
     }
@@ -421,7 +555,7 @@ mod tests {
         let binds = BindSet::default();
 
         let mut cache = ComposeCache::new();
-        let entry = cache.insert(1000, binds.clone(), composed);
+        let entry = cache.insert(1000, binds.clone(), PatternState::default(), composed);
 
         // 同一エントリに束ねたマスクが composed の α を反映する。
         assert!(
@@ -434,7 +568,7 @@ mod tests {
         );
 
         // エントリは composed とマスクを対で保持する（表示の真実源も残る）。
-        let got = cache.get(1000, &binds).expect("entry retained");
+        let got = cache.get(1000, &binds, &PatternState::default()).expect("entry retained");
         assert_eq!(got.composed.width(), w);
         assert_eq!(got.composed.height(), h);
         assert!(got.mask.is_hit(ox, oy));
