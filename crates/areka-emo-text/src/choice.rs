@@ -27,6 +27,9 @@
 use areka_parsers::balloon::{BalloonCursor, CursorColor};
 use tracing::warn;
 
+use crate::canvas::{
+    ChoiceLineContent, ChoiceRowSegment, ContentCanvas, HighlightPaint, ResidentContent,
+};
 use crate::layout::{LineRect, PositionedLine};
 use crate::region::{ScaleContract, TextRegion};
 use crate::state::ChoiceSpan;
@@ -246,6 +249,109 @@ pub fn to_window_physical(
             bottom: (oy + r.bottom) * k,
         },
     }
+}
+
+/// canvas 装飾（純粋）: 選択肢セグメントを含む GlyphRun 住人を Choice 住人へ置換する。
+///
+/// [`annotate_lines`] が出した行×選択肢セグメント（[`LineChoiceSegment`]）を源に、当該行の
+/// [`ResidentContent::GlyphRun`] 住人を [`ResidentContent::Choice`]（[`ChoiceLineContent`]）へ
+/// 置換し、hover 印（[`ChoiceLineContent::hovered`]）と解決済みハイライト塗り
+/// （[`HighlightPaint`]＝canvas.rs 純データ型）を焼き込む。`style`→`paint` の正規化
+/// （Invert の `255−c` 式含む）はこの一点で行い、下流（viewbox/COM）は choice.rs へ依存せず
+/// 純データだけを読む（design.md「純粋層 / ChoicePure」・要件 1.1/4.2/4.3/4.5）。
+///
+/// **セグメント空 → canvas を無変更で返す**（恒等・非退行・要件 1.4/design.md Invariants）。
+///
+/// ## 座標系: 絶対 image px → resident-local（GlyphRunContent ローカル系）
+///
+/// [`LineChoiceSegment::inline_range`] は**絶対 image px**（描画開始点＝validrect 原点起点）だが、
+/// [`ChoiceRowSegment::inline_range`] は**resident-local**（[`GlyphRunContent`] ローカル 0 起点）で
+/// なければならない（[`ContentCanvas::from_layout`] がグリフを行内原点差引きで住人ローカルへ写すのと
+/// 同一系）。よって行内軸の resident 原点＝`region.<inline_origin>() + resident.transform.offset.<inline>`
+/// （＝行矩形 `rect.<inline>`——`from_layout` がグリフから差し引くのと同じ原点）を絶対範囲から
+/// 差し引く。これにより装飾側の座標が [`derive_hit_rows`] の canvas-local と数値整合する（R3.3）:
+/// 住人変換で戻すと `(絶対 − rect.inline) + (rect.inline − region_origin) = 絶対 − region_origin`＝
+/// `derive_hit_rows` の出力に一致する。
+///
+/// ## 住人写像（line_index ↔ resident は 1:1）
+///
+/// [`ContentCanvas::from_layout`] は layout の各行に住人を 1 つ順番どおり生成するため、
+/// [`LineChoiceSegment::line_index`] は `canvas.residents` を直接添字する。
+/// - セグメントを持つ GlyphRun 住人 → Choice 住人へ置換（当該行の全セグメントを集約）。
+///   `\q\q` 並置（同一行複数 ordinal）は 1 つの Choice 住人へ集約・折返し跨ぎ（同一 ordinal が
+///   2 行）は 2 つの Choice 住人（両方がその ordinal hover 時に highlight）。
+/// - hover: `hover == Some(o)` かつ**この行に ordinal `o` のセグメントがある**とき
+///   [`hovered`](ChoiceLineContent::hovered)＝`Some(o)`・さもなくば `None`。hover 行のみ
+///   `style.paint(default_font_color)` を焼く（[`NoMarker`](ResolvedChoiceStyle::NoMarker) は
+///   `None`＝hover でも塗らない）。非 hover 行のセグメント持ち住人も Choice 住人になる
+///   （セグメント記録・`hovered=None`・`highlight=None`）。
+/// - Image/Surface 住人・セグメントを持たない GlyphRun 住人は素通し（無変更）。
+///
+/// 同一入力→同一出力（純粋・決定論）。失敗経路なし。
+///
+/// [`GlyphRunContent`]: crate::canvas::GlyphRunContent
+/// [`ContentCanvas::from_layout`]: crate::canvas::ContentCanvas::from_layout
+pub fn decorate_canvas(
+    canvas: ContentCanvas,
+    segments: &[LineChoiceSegment],
+    hover: Option<usize>,
+    style: ResolvedChoiceStyle,
+    default_font_color: (u8, u8, u8),
+    region: &TextRegion,
+    mode: WritingMode,
+) -> ContentCanvas {
+    // セグメント空は恒等（非退行・要件 1.4）——入力 canvas をそのまま返す。
+    if segments.is_empty() {
+        return canvas;
+    }
+    let mut canvas = canvas;
+    for (index, resident) in canvas.residents.iter_mut().enumerate() {
+        // GlyphRun 以外（Image/Surface/既 Choice）は素通し。run はローカル系のまま複製する。
+        let run = match &resident.content {
+            ResidentContent::GlyphRun(run) => run.clone(),
+            _ => continue,
+        };
+        // 行内軸の resident 原点（絶対 image px）＝ validrect 原点 + 住人 inline offset ＝ 行矩形 inline。
+        // from_layout がグリフから差し引く原点と同一——絶対 inline_range をこれで resident-local 化する。
+        let (ox, oy) = resident.transform.offset();
+        let inline_origin = match mode {
+            WritingMode::HorizontalTb => region.left() + ox,
+            WritingMode::VerticalRl | WritingMode::VerticalLr => region.top() + oy,
+        };
+        // この行に属するセグメント（line_index 一致）を resident-local 範囲へ写して集約する。
+        let row_segments: Vec<ChoiceRowSegment> = segments
+            .iter()
+            .filter(|s| s.line_index == index)
+            .map(|s| ChoiceRowSegment {
+                ordinal: s.ordinal,
+                inline_range: (s.inline_range.0 - inline_origin, s.inline_range.1 - inline_origin),
+            })
+            .collect();
+        // セグメントを持たない GlyphRun 住人は素通し（無変更）。
+        if row_segments.is_empty() {
+            continue;
+        }
+        // hover 印: hover==Some(o) かつ この行に ordinal o のセグメントがあるときのみ Some(o)。
+        let hovered = match hover {
+            Some(o) if row_segments.iter().any(|rs| rs.ordinal == o) => Some(o),
+            _ => None,
+        };
+        // ハイライト塗り: hover 行のみ style→paint 正規形を焼く（NoMarker は None＝hover でも塗らない）。
+        let highlight = if hovered.is_some() {
+            style
+                .paint(default_font_color)
+                .map(|(fill, text)| HighlightPaint { fill, text })
+        } else {
+            None
+        };
+        resident.content = ResidentContent::Choice(ChoiceLineContent {
+            run,
+            segments: row_segments,
+            hovered,
+            highlight,
+        });
+    }
+    canvas
 }
 
 /// ハイライトスタイル差替シーム（cursor.\* 解決＋矩形反転縮退＋将来非正典スタイルの開放口）。
@@ -1104,5 +1210,336 @@ mod style_resolve_tests {
     #[test]
     fn paint_no_marker_is_none() {
         assert_eq!(ResolvedChoiceStyle::NoMarker.paint((10, 20, 30)), None);
+    }
+}
+
+// ── タスク 5.4: canvas 装飾（decorate_canvas）——GlyphRun 住人 → Choice 住人置換 ──
+//
+// design.md「純粋層 / ChoicePure」・要件 1.1（Choice cue→行 resident 描画）/4.2（cursor.* 指定→
+// SquareFill）/4.3（未指定→Invert 反転）/4.5（描画実行の一点写像＝焼込済み純データ）。
+// 座標系: LineChoiceSegment.inline_range は絶対 image px・ChoiceRowSegment.inline_range は
+// resident-local（from_layout がグリフから行内原点を差し引くのと同一原点で変換）。
+#[cfg(test)]
+mod decorate_tests {
+    use super::*;
+    use crate::canvas::{GlyphRunContent, RegionTransform, Resident, TextEffects};
+    use crate::layout::PositionedGlyph;
+    use areka_parsers::balloon::{
+        BalloonModel, Font, FontColor, Origin, ValidRect, WindowPosition, WordWrapPoint,
+    };
+
+    /// validrect 原点を持つ `TextRegion`（left()/top() のみ inline 原点差引きに使用）。
+    fn region(left: i32, top: i32, right: i32, bottom: i32) -> TextRegion {
+        let model = BalloonModel::new(
+            WindowPosition::new(None, None),
+            Origin::new(None, None),
+            WordWrapPoint::new(None, None),
+            ValidRect::new(Some(top), Some(bottom), Some(left), Some(right)),
+            Font::new(None, None, FontColor::new(None, None, None)),
+            None,
+            None,
+        );
+        TextRegion::resolve(&model, (400, 224), WritingMode::HorizontalTb)
+    }
+
+    /// 変換 offset `offset` の GlyphRun 住人（グリフ内容は装飾非関与ゆえ最小の 1 グリフ）。
+    fn glyph_resident(offset: (f32, f32)) -> Resident {
+        Resident {
+            content: ResidentContent::GlyphRun(GlyphRunContent {
+                glyphs: vec![PositionedGlyph {
+                    ch: 'あ',
+                    inline_pos: 0.0,
+                    advance: 10.0,
+                }],
+                size: (10.0, 10.0),
+            }),
+            transform: RegionTransform::translation(offset.0, offset.1),
+            effects: TextEffects::default(),
+        }
+    }
+
+    /// 住人列から canvas を組む（size は validrect 寸相当の固定値）。
+    fn canvas(residents: Vec<Resident>) -> ContentCanvas {
+        ContentCanvas {
+            residents,
+            size: (400.0, 224.0),
+        }
+    }
+
+    /// `(line_index, ordinal, 絶対 inline_range)` の [`LineChoiceSegment`]。
+    fn seg(line_index: usize, ordinal: usize, range: (f32, f32)) -> LineChoiceSegment {
+        LineChoiceSegment {
+            line_index,
+            ordinal,
+            inline_range: range,
+        }
+    }
+
+    /// 住人が Choice ならその中身を取り出す（さもなくば panic）。
+    fn choice(resident: &Resident) -> &ChoiceLineContent {
+        match &resident.content {
+            ResidentContent::Choice(c) => c,
+            other => panic!("Choice 住人を期待したが {other:?}"),
+        }
+    }
+
+    /// fixture 実導出の SquareFill スタイル（square 塗り(105,25,25)＋白文字）。
+    fn square_fill() -> ResolvedChoiceStyle {
+        ResolvedChoiceStyle::SquareFill {
+            fill: (105, 25, 25),
+            text: (255, 255, 255),
+        }
+    }
+
+    // ── 恒等（非退行）: セグメント空 → canvas 無変更 ──
+
+    /// セグメント空 → 入力 canvas をまったく同一で返す（恒等・要件 1.4）。
+    #[test]
+    fn empty_segments_returns_canvas_unchanged() {
+        let region = region(0, 0, 400, 224);
+        let input = canvas(vec![glyph_resident((0.0, 0.0)), glyph_resident((0.0, 13.0))]);
+        let out = decorate_canvas(
+            input.clone(),
+            &[],
+            Some(0),
+            square_fill(),
+            (0, 0, 0),
+            &region,
+            WritingMode::HorizontalTb,
+        );
+        assert_eq!(out, input, "セグメント空は恒等（無変更）");
+    }
+
+    // ── hover: 一致行のみ highlight・他行 None ──
+
+    /// hover=Some(0) → ordinal 0 を持つ行のみ hovered/highlight が付き、他行は None。
+    #[test]
+    fn hover_sets_highlight_on_matching_line_only() {
+        let region = region(0, 0, 400, 224);
+        let input = canvas(vec![glyph_resident((0.0, 0.0)), glyph_resident((0.0, 13.0))]);
+        let segments = [seg(0, 0, (0.0, 20.0)), seg(1, 1, (0.0, 20.0))];
+        let out = decorate_canvas(
+            input,
+            &segments,
+            Some(0),
+            square_fill(),
+            (0, 0, 0),
+            &region,
+            WritingMode::HorizontalTb,
+        );
+        let l0 = choice(&out.residents[0]);
+        assert_eq!(l0.hovered, Some(0));
+        assert_eq!(
+            l0.highlight,
+            Some(HighlightPaint {
+                fill: (105, 25, 25),
+                text: (255, 255, 255),
+            })
+        );
+        let l1 = choice(&out.residents[1]);
+        assert_eq!(l1.hovered, None, "hover 対象外の行は hovered None");
+        assert_eq!(l1.highlight, None, "hover 対象外の行は highlight None");
+    }
+
+    // ── hover None: セグメントは記録するが highlight は焼かない ──
+
+    /// hover=None でもセグメント持ち行は Choice 住人化（セグメント記録・hovered/highlight None）。
+    #[test]
+    fn hover_none_still_records_segments_without_highlight() {
+        let region = region(0, 0, 400, 224);
+        let input = canvas(vec![glyph_resident((0.0, 0.0)), glyph_resident((0.0, 13.0))]);
+        let segments = [seg(0, 0, (0.0, 20.0)), seg(1, 1, (0.0, 20.0))];
+        let out = decorate_canvas(
+            input,
+            &segments,
+            None,
+            square_fill(),
+            (0, 0, 0),
+            &region,
+            WritingMode::HorizontalTb,
+        );
+        for (i, ordinal) in [(0usize, 0usize), (1, 1)] {
+            let c = choice(&out.residents[i]);
+            assert_eq!(c.hovered, None);
+            assert_eq!(c.highlight, None);
+            assert_eq!(c.segments.len(), 1);
+            assert_eq!(c.segments[0].ordinal, ordinal);
+        }
+    }
+
+    // ── 座標系: 絶対 inline_range → resident-local（行内原点差引き） ──
+
+    /// 横書き・行内 offset 100（rect.left ≠ region.left()）: 絶対 100..120 → local 0..20
+    /// （resident 原点 = region.left() + offset.0 = 100 を差し引く）。
+    #[test]
+    fn segment_inline_range_is_resident_local_subtracting_line_origin() {
+        let region = region(0, 0, 400, 224);
+        // 住人の行内 offset は 100（rect.left = region.left()(0) + 100 = 100）。
+        let input = canvas(vec![glyph_resident((100.0, 0.0))]);
+        let segments = [seg(0, 0, (100.0, 120.0))]; // 絶対 image px。
+        let out = decorate_canvas(
+            input,
+            &segments,
+            None,
+            square_fill(),
+            (0, 0, 0),
+            &region,
+            WritingMode::HorizontalTb,
+        );
+        let c = choice(&out.residents[0]);
+        assert_eq!(
+            c.segments[0].inline_range,
+            (0.0, 20.0),
+            "絶対 100..120 から行内原点 100 を差し引いた resident-local 0..20"
+        );
+    }
+
+    /// 縦書き（vertical_rl/lr）: 行内軸＝y。行内 offset.1=50 → 絶対 50..70 は top 原点差引きで local 0..20。
+    #[test]
+    fn segment_inline_range_vertical_subtracts_top_origin() {
+        let region = region(0, 0, 400, 224);
+        for mode in [WritingMode::VerticalRl, WritingMode::VerticalLr] {
+            // 縦書きは inline 軸 = y。住人 offset.1 = 50（rect.top = region.top()(0) + 50）。
+            let input = canvas(vec![glyph_resident((377.0, 50.0))]);
+            let segments = [seg(0, 0, (50.0, 70.0))]; // 絶対 y 範囲。
+            let out = decorate_canvas(input, &segments, None, square_fill(), (0, 0, 0), &region, mode);
+            let c = choice(&out.residents[0]);
+            assert_eq!(
+                c.segments[0].inline_range,
+                (0.0, 20.0),
+                "{mode:?}: 縦書きは top 原点（region.top()+offset.1）を差し引く"
+            );
+        }
+    }
+
+    // ── スタイル分岐: NoMarker は hover でも塗らない・Invert は dfc から解決 ──
+
+    /// NoMarker: hover 一致でも paint→None ゆえ highlight None（hovered は Some のまま）。
+    #[test]
+    fn no_marker_style_yields_no_highlight_even_when_hovered() {
+        let region = region(0, 0, 400, 224);
+        let input = canvas(vec![glyph_resident((0.0, 0.0))]);
+        let segments = [seg(0, 0, (0.0, 20.0))];
+        let out = decorate_canvas(
+            input,
+            &segments,
+            Some(0),
+            ResolvedChoiceStyle::NoMarker,
+            (0, 0, 0),
+            &region,
+            WritingMode::HorizontalTb,
+        );
+        let c = choice(&out.residents[0]);
+        assert_eq!(c.hovered, Some(0), "hover 印は付く");
+        assert_eq!(c.highlight, None, "NoMarker は hover でも塗らない");
+    }
+
+    /// Invert: dfc=(10,20,30)・hover 一致 → 塗り=dfc・文字=各成分 255−c=(245,235,225)。
+    #[test]
+    fn invert_style_resolves_highlight_from_default_font_color() {
+        let region = region(0, 0, 400, 224);
+        let input = canvas(vec![glyph_resident((0.0, 0.0))]);
+        let segments = [seg(0, 0, (0.0, 20.0))];
+        let out = decorate_canvas(
+            input,
+            &segments,
+            Some(0),
+            ResolvedChoiceStyle::Invert,
+            (10, 20, 30),
+            &region,
+            WritingMode::HorizontalTb,
+        );
+        let c = choice(&out.residents[0]);
+        assert_eq!(
+            c.highlight,
+            Some(HighlightPaint {
+                fill: (10, 20, 30),
+                text: (245, 235, 225),
+            })
+        );
+    }
+
+    // ── 集約: 同一行の複数 ordinal は 1 住人・折返し跨ぎは 2 住人 ──
+
+    /// `\q\q` 並置（同一行 2 ordinal）→ 1 つの Choice 住人へ両セグメント集約。hover=Some(1)。
+    #[test]
+    fn two_choices_on_one_line_group_into_one_resident() {
+        let region = region(0, 0, 400, 224);
+        let input = canvas(vec![glyph_resident((0.0, 0.0))]);
+        let segments = [seg(0, 0, (0.0, 20.0)), seg(0, 1, (20.0, 40.0))];
+        let out = decorate_canvas(
+            input,
+            &segments,
+            Some(1),
+            square_fill(),
+            (0, 0, 0),
+            &region,
+            WritingMode::HorizontalTb,
+        );
+        assert_eq!(out.residents.len(), 1, "住人数は不変（1 行 1 住人）");
+        let c = choice(&out.residents[0]);
+        assert_eq!(c.segments.len(), 2, "同一行の 2 ordinal を 1 住人へ集約");
+        assert_eq!(c.segments[0].ordinal, 0);
+        assert_eq!(c.segments[1].ordinal, 1);
+        assert_eq!(c.hovered, Some(1), "hover 対象 ordinal 1 が住人内にある");
+        assert!(c.highlight.is_some());
+    }
+
+    /// 折返し跨ぎ（同一 ordinal 0 が 2 行）→ 2 つの Choice 住人・hover=Some(0) で両方 highlight。
+    #[test]
+    fn wrapped_choice_highlights_both_lines() {
+        let region = region(0, 0, 400, 224);
+        let input = canvas(vec![glyph_resident((0.0, 0.0)), glyph_resident((0.0, 13.0))]);
+        // 同一 ordinal 0 が line0 末尾と line1 先頭に跨る（annotate_lines の行別分割）。
+        let segments = [seg(0, 0, (20.0, 30.0)), seg(1, 0, (0.0, 10.0))];
+        let out = decorate_canvas(
+            input,
+            &segments,
+            Some(0),
+            square_fill(),
+            (0, 0, 0),
+            &region,
+            WritingMode::HorizontalTb,
+        );
+        for i in [0usize, 1] {
+            let c = choice(&out.residents[i]);
+            assert_eq!(c.hovered, Some(0), "行 {i}: 跨いだ ordinal 0 が hover");
+            assert!(c.highlight.is_some(), "行 {i}: 両行とも highlight");
+        }
+    }
+
+    // ── 素通し: セグメントを持たない行は GlyphRun のまま ──
+
+    /// セグメントが line 1 のみ → line 0/2 は GlyphRun 素通し・line 1 のみ Choice 化。
+    #[test]
+    fn lines_without_segments_stay_glyph_run() {
+        let region = region(0, 0, 400, 224);
+        let input = canvas(vec![
+            glyph_resident((0.0, 0.0)),
+            glyph_resident((0.0, 13.0)),
+            glyph_resident((0.0, 26.0)),
+        ]);
+        let segments = [seg(1, 0, (0.0, 20.0))];
+        let out = decorate_canvas(
+            input,
+            &segments,
+            None,
+            square_fill(),
+            (0, 0, 0),
+            &region,
+            WritingMode::HorizontalTb,
+        );
+        assert!(
+            matches!(out.residents[0].content, ResidentContent::GlyphRun(_)),
+            "セグメント無し行 0 は GlyphRun 素通し"
+        );
+        assert!(
+            matches!(out.residents[1].content, ResidentContent::Choice(_)),
+            "セグメント有り行 1 は Choice 化"
+        );
+        assert!(
+            matches!(out.residents[2].content, ResidentContent::GlyphRun(_)),
+            "セグメント無し行 2 は GlyphRun 素通し"
+        );
     }
 }
