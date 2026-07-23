@@ -28,4 +28,6 @@ pub use bind::{
 };
 pub use output::{DisplayCommand, MockSurfaceOutput, SurfaceOutput};
 pub use resolve::{SurfaceResolver, SurfaceTarget};
-pub use state::{ApplyOutcome, BindApplyOutcome, ScopeState, ScopeStates};
+pub use state::{
+    ApplyOutcome, BindApplyOutcome, PatternApplyOutcome, ScopeState, ScopeStates, Slot,
+};

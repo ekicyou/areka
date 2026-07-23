@@ -44,7 +44,7 @@
 
 ## 4. Core: seriko 状態/出力への PatternState 配線
 
-- [ ] 4.1 (P) ScopeStates に per-(scope,slot) PatternState と commit_pattern を追加する
+- [x] 4.1 (P) ScopeStates に per-(scope,slot) PatternState と commit_pattern を追加する
   - `Slot { Shell, Balloon }` と `pattern_states` 表を `dynamic_binds` と同居させる
   - `commit_pattern`（冪等ガード→書込→表示中なら Changed）を commit_bind 鏡映で実装する
   - `apply`/`apply_balloon` の surface 切替時に当該 slot の PatternState を空へリセットする

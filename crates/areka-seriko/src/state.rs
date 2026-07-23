@@ -65,6 +65,38 @@ pub enum BindApplyOutcome {
     Unchanged,
 }
 
+/// 表示エントリの面種名前空間（シェル面／バルーン面）。
+///
+/// [`ScopeStates`] が保持する 2 つの per-scope 表示 map（シェル `scopes`／バルーン `balloon`）に
+/// 整合する **surface ID 名前空間の区別**であり、能力の仕切りではない（design「面種非依存・裁定 (a)」）。
+/// per-(scope, slot) の [`PatternState`] 表 `pattern_states` のキー成分・[`LoopRuntime`] 側の再生状態
+/// キー（後続タスク）と共有し、両 slot は同一コードパスで評価される。`HashMap` キーに用いるため
+/// `Copy`＋`Hash`＋`Eq` を導出する。
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
+pub enum Slot {
+    /// シェル面（`scopes` map・bind ゲート対象）。
+    Shell,
+    /// バルーン面（`balloon` map・M-boot は着せ替え非在）。
+    Balloon,
+}
+
+/// [`ScopeStates::commit_pattern`] の適用結果（pattern 進行状態変化に応じた表示発行の判定・要件 6.1/6.2）。
+///
+/// [`commit_bind`] を鏡映した冪等ガード（同値なら書き込まず [`PatternApplyOutcome::Unchanged`]）＋
+/// 表示中なら現 surface を新 pattern で再合成させる Show/ShowBalloon を [`PatternApplyOutcome::Changed`]
+/// で返す。非表示／未知 slot は評価自体が走らない（表示中ゲート・2.1）が、防御的に非発行（`Unchanged`）で
+/// 扱う（`apply_bind` の [`BindApplyOutcome::StateOnly`] に相当する第 3 区分は設けない——commit_pattern は
+/// 表示中 slot にのみ到達する契約ゆえ）。
+///
+/// [`commit_bind`]: ScopeStates::commit_bind
+#[derive(Clone, Debug, PartialEq)]
+pub enum PatternApplyOutcome {
+    /// 表示中 slot での pattern 変化 → 現 surface を新 pattern で再合成させる Show/ShowBalloon（要件 6.1）。
+    Changed(DisplayCommand),
+    /// 同値（冪等・要件 6.2）または非表示／未知 slot（防御的非発行）→ 発行なし。
+    Unchanged,
+}
+
 /// per-scope surface 状態・静的 bind 集合・per-scope 動的 bind 集合の所有者（状態層）。
 ///
 /// per-scope マップと静的 `BindSet` を同一構造体に同居させ（要件 4.4）、per-scope の動的
@@ -93,6 +125,14 @@ pub struct ScopeStates {
     /// [`current_binds`] は全 scope で `static_binds` を返し、Show 発行は従来と byte 同値
     /// （要件 3.8 非退行）。[`current_binds`]: ScopeStates::current_binds
     dynamic_binds: HashMap<ActorKey, BindSet>,
+    /// per-(scope, slot) の pattern 進行状態（`dynamic_binds` と同居・要件 5.1）。エントリを持つ
+    /// (scope, slot) はその [`PatternState`] を、持たない (scope, slot) は空（[`PatternState::default`]）を
+    /// Show/ShowBalloon の pattern 供給源とする（[`current_pattern`]）。SERIKO ループ評価
+    /// （後続タスク）が `commit_pattern` 経由で書き込み、surface 切替時に当該 slot が空へリセットされる。
+    /// 空である限り Show/ShowBalloon の pattern は空＝ループ不活性時は従来と観測等価（要件 5.4）。
+    ///
+    /// [`current_pattern`]: ScopeStates::current_pattern
+    pattern_states: HashMap<(ActorKey, Slot), PatternState>,
 }
 
 impl ScopeStates {
@@ -108,6 +148,9 @@ impl ScopeStates {
             // 空で起動。動的 bind の書き込みは後続タスク（apply_bind）の責務。既定 on/off の
             // 「初期値」はここを pre-populate するのではなく current_binds のフォールバックで実現。
             dynamic_binds: HashMap::new(),
+            // 空で起動。pattern の書き込みは SERIKO ループ評価（commit_pattern）の責務。未格納の
+            // (scope, slot) は current_pattern が空を返す（従来と観測等価・要件 5.4）。
+            pattern_states: HashMap::new(),
         }
     }
 
@@ -144,13 +187,17 @@ impl ScopeStates {
                 }
                 // 未知 scope は新規挿入・Hidden/別 id は上書き（要件 3.1/3.5）。
                 self.scopes.insert(scope.clone(), ScopeState::Shown(id));
+                // surface 切替（別 id への Changed）で当該シェル slot の格納 pattern を空へリセット。
+                // 新 surface のコマは未生成ゆえ空 pattern で発行し、次の commit_pattern の baseline を
+                // 空にする（design「ScopeStates 拡張」・現在コマは新面のアニメで再構成される）。
+                self.pattern_states.remove(&(scope.clone(), Slot::Shell));
                 ApplyOutcome::Changed(DisplayCommand::Show {
                     scope: scope.clone(),
                     surface_id: id,
                     // scope の現在 bind 集合を同梱（動的 bind 不在なら static_binds＝非退行・R3.8）。
                     binds: self.current_binds(scope).clone(),
                     // pattern 進行状態は cue 由来 Show では空（ループ非活性＝従来と観測等価・R5.4）。
-                    // 実 pattern の同梱（commit_pattern／current_pattern 経由）は後続タスク（4.1）。
+                    // 直上で格納 pattern をクリア済み＝空 pattern と一貫（実 pattern は commit_pattern 経由）。
                     pattern: PatternState::default(),
                 })
             }
@@ -202,10 +249,12 @@ impl ScopeStates {
                 }
                 // 未知 scope は新規挿入・Hidden/別 id は上書き（要件 4.1）。
                 self.balloon.insert(scope.clone(), ScopeState::Shown(id));
+                // surface 切替でバルーン slot の格納 pattern を空へリセット（シェル面と同一経路・裁定 (a)）。
+                self.pattern_states.remove(&(scope.clone(), Slot::Balloon));
                 ApplyOutcome::Changed(DisplayCommand::ShowBalloon {
                     scope: scope.clone(),
                     surface_id: id,
-                    // cue 由来のバルーン面 Show は空 pattern（実 pattern 同梱は後続タスク 4.1・R5.4）。
+                    // cue 由来のバルーン面 Show は空 pattern（直上でクリア済みと一貫・R5.4）。
                     pattern: PatternState::default(),
                 })
             }
@@ -334,17 +383,112 @@ impl ScopeStates {
         // (4) 発行判定: 対象 scope のシェル面状態で決める（D5）。
         match self.scopes.get(scope) {
             // 表示中 → 現 surface id を新集合で再発行（要件 3.5）。
-            Some(ScopeState::Shown(sid)) => BindApplyOutcome::Changed(DisplayCommand::Show {
-                scope: scope.clone(),
-                surface_id: *sid,
-                binds: new,
-                // bind 再合成の Show も cue 駆動＝空 pattern（実 pattern 同梱は後続タスク 4.1・R5.4）。
-                pattern: PatternState::default(),
-            }),
+            Some(ScopeState::Shown(sid)) => {
+                let sid = *sid;
+                // bind 変化の Show 再発行は現在コマ（`current_pattern`）を保ったまま再合成する
+                // （空 default ではない・design「ScopeStates 拡張」）。bind はシェル面に適用される
+                // ため Shell slot の pattern を同梱。ループ不活性（未 commit）なら空＝従来と同値（R5.4）。
+                let pattern = self.current_pattern(scope, Slot::Shell).clone();
+                BindApplyOutcome::Changed(DisplayCommand::Show {
+                    scope: scope.clone(),
+                    surface_id: sid,
+                    binds: new,
+                    pattern,
+                })
+            }
             // 非表示または未知 scope → 状態のみ更新・発行なし（D5・次 Show へ保留）。
             Some(ScopeState::Hidden) | None => BindApplyOutcome::StateOnly,
         }
     }
+
+    /// 対象 (scope, slot) の現在の pattern 進行状態を返す（要件 5.1）。
+    ///
+    /// `pattern_states` にエントリを持つ (scope, slot) はその [`PatternState`] を、持たない
+    /// (scope, slot) は空（[`PatternState::default`] 相当）を返す純粋な読み取り。`current_binds` が
+    /// 未束縛 scope で `static_binds`（既定）を返すのと同型で、pattern は「既定＝空」（pattern 寄与なし）。
+    /// Show/ShowBalloon 発行の pattern 供給源はこのアクセサであり、未格納（ループ不活性）の間は空を
+    /// 返す＝従来の発行結果と観測等価（要件 5.4）。
+    ///
+    /// 不在時は静的な空 [`PatternState`]（プロセス共有・`OnceLock`）への参照を返す（`&self` の寿命へ
+    /// 縮約される `&'static`）。
+    pub fn current_pattern(&self, scope: &ActorKey, slot: Slot) -> &PatternState {
+        match self.pattern_states.get(&(scope.clone(), slot)) {
+            Some(pattern) => pattern,
+            None => empty_pattern(),
+        }
+    }
+
+    /// 対象 (scope, slot) の pattern 進行状態を `new` へコミットし表示発行の要否を判定する
+    /// （[`commit_bind`] の鏡映・要件 6.1/6.2）。
+    ///
+    /// 手順（`commit_bind` と同型）:
+    /// 1. **冪等ガード（要件 6.2）**: `new` が現在 pattern（[`current_pattern`]・不在は空）と同値なら
+    ///    状態を書き込まず [`PatternApplyOutcome::Unchanged`] を返す（発行なし）。
+    /// 2. **状態更新**: `pattern_states` へ `new` を書き込む（bind／表示状態機械には干渉しない）。
+    /// 3. **発行判定**: 対象 slot の表示状態（Shell → `scopes`／Balloon → `balloon`）を見て、
+    ///    - `Shown(sid)` → [`PatternApplyOutcome::Changed`]。Shell は現在 bind 集合を同梱した
+    ///      [`DisplayCommand::Show`]、Balloon は binds 非同梱の [`DisplayCommand::ShowBalloon`] を、
+    ///      いずれも現 surface id＋新 pattern で構築する（現 surface を新コマで再合成・要件 6.1）。
+    ///    - `Hidden` または未知（`None`）→ [`PatternApplyOutcome::Unchanged`]（防御的非発行）。表示中
+    ///      ゲート（2.1）により commit_pattern は表示中 slot にのみ到達する契約ゆえ、非表示 slot への
+    ///      到達は通常運用では発生しないが、到達しても非表示 surface へ Show を強制しない。
+    ///
+    /// 面種非依存（裁定 (a)）: シェル slot・バルーン slot を同一コードパスで扱い、発行指令の型のみ
+    /// slot で分岐する（Shell=Show / Balloon=ShowBalloon）。
+    ///
+    /// [`commit_bind`]: ScopeStates::commit_bind
+    /// [`current_pattern`]: ScopeStates::current_pattern
+    pub fn commit_pattern(
+        &mut self,
+        scope: &ActorKey,
+        slot: Slot,
+        new: PatternState,
+    ) -> PatternApplyOutcome {
+        // (1) 冪等ガード: 現在 pattern（不在は空）と同値なら書き込まず発行しない（要件 6.2）。
+        if *self.current_pattern(scope, slot) == new {
+            return PatternApplyOutcome::Unchanged;
+        }
+
+        // (2) 状態更新: pattern 表のみ書き込む（bind／表示状態機械は不変）。
+        self.pattern_states.insert((scope.clone(), slot), new.clone());
+
+        // (3) 発行判定: 対象 slot の表示状態で決める（表示中 slot にのみ Show/ShowBalloon を発行）。
+        let shown = match slot {
+            Slot::Shell => self.scopes.get(scope),
+            Slot::Balloon => self.balloon.get(scope),
+        };
+        match shown {
+            Some(&ScopeState::Shown(sid)) => {
+                let cmd = match slot {
+                    // シェル面は現在 bind 集合を同梱（Show・要件 6.1）。
+                    Slot::Shell => DisplayCommand::Show {
+                        scope: scope.clone(),
+                        surface_id: sid,
+                        binds: self.current_binds(scope).clone(),
+                        pattern: new,
+                    },
+                    // バルーン面は binds 非同梱（ShowBalloon・M-boot 着せ替え非在）。
+                    Slot::Balloon => DisplayCommand::ShowBalloon {
+                        scope: scope.clone(),
+                        surface_id: sid,
+                        pattern: new,
+                    },
+                };
+                PatternApplyOutcome::Changed(cmd)
+            }
+            // 非表示または未知 slot → 防御的非発行（表示中ゲート 2.1 で通常運用は非到達・要件 6.2）。
+            Some(&ScopeState::Hidden) | None => PatternApplyOutcome::Unchanged,
+        }
+    }
+}
+
+/// 未格納 (scope, slot) 用の空 [`PatternState`]（プロセス共有・不変）。
+///
+/// [`ScopeStates::current_pattern`] が不在時に返す既定値。`&'static` は `&self` の寿命へ縮約される。
+/// `current_binds` が返す `static_binds` に相当する「既定＝空」の pattern 版。
+fn empty_pattern() -> &'static PatternState {
+    static EMPTY: std::sync::OnceLock<PatternState> = std::sync::OnceLock::new();
+    EMPTY.get_or_init(PatternState::default)
 }
 
 #[cfg(test)]
@@ -1157,5 +1301,224 @@ mod tests {
             "現集合が既に {{1301}} のみで target=1301 の排他置換は同値ゆえ Unchanged"
         );
         assert_eq!(states.current_binds(&scope), &BindSet::from_ids([1301]));
+    }
+
+    // ---- commit_pattern / current_pattern（per-(scope, slot) PatternState・要件 5.1/6.1/6.2） ----
+
+    use areka_emo_compose::{ComposeMethod, PatternFrame};
+
+    /// テスト用の非空 PatternState（単一コマ・Overlay）。
+    fn pat(anim_id: u32, surface_id: u32) -> PatternState {
+        let mut p = PatternState::default();
+        p.set(
+            anim_id,
+            PatternFrame {
+                surface_id,
+                method: ComposeMethod::Overlay,
+                x: 0,
+                y: 0,
+            },
+        );
+        p
+    }
+
+    /// current_pattern 既定（要件 5.1）: 未格納の (scope, slot) は空 PatternState を返す（両 slot）。
+    #[test]
+    fn current_pattern_absent_returns_empty() {
+        let states = empty_states();
+        let scope = ActorKey::from("0");
+        assert!(states.current_pattern(&scope, Slot::Shell).is_empty());
+        assert!(states.current_pattern(&scope, Slot::Balloon).is_empty());
+    }
+
+    /// 冪等 commit（要件 6.2）: 同値の再 commit は Unchanged・書込副作用なし。
+    #[test]
+    fn commit_pattern_same_value_is_unchanged_no_write() {
+        let mut states = empty_states();
+        let scope = ActorKey::from("0");
+        states.apply(&scope, SurfaceTarget::Show(2100));
+
+        let p = pat(7, 1410);
+        // 初回 nonempty commit は Changed（変化・表示中）。
+        assert!(matches!(
+            states.commit_pattern(&scope, Slot::Shell, p.clone()),
+            PatternApplyOutcome::Changed(_)
+        ));
+        // 同値の再 commit は Unchanged（再発行なし・要件 6.2）。
+        assert_eq!(
+            states.commit_pattern(&scope, Slot::Shell, p.clone()),
+            PatternApplyOutcome::Unchanged
+        );
+        assert_eq!(states.current_pattern(&scope, Slot::Shell), &p);
+    }
+
+    /// 空 commit の冪等（要件 6.2）: 未格納 (==空) へ空を commit は同値ゆえ Unchanged（書込なし）。
+    #[test]
+    fn commit_pattern_empty_on_shown_without_prior_is_unchanged() {
+        let mut states = empty_states();
+        let scope = ActorKey::from("0");
+        states.apply(&scope, SurfaceTarget::Show(2100));
+        assert_eq!(
+            states.commit_pattern(&scope, Slot::Shell, PatternState::default()),
+            PatternApplyOutcome::Unchanged,
+            "absent==空・new==空 は同値ゆえ Unchanged（発行なし）"
+        );
+    }
+
+    /// 表示中シェル slot の pattern 変化（要件 6.1）: 現 surface id＋現 binds＋新 pattern の Show を発行。
+    #[test]
+    fn commit_pattern_different_on_shown_shell_emits_changed_show() {
+        let mut states = empty_states(); // static binds {1100, 1207}
+        let scope = ActorKey::from("0");
+        states.apply(&scope, SurfaceTarget::Show(2100));
+
+        let p = pat(7, 1410);
+        let outcome = states.commit_pattern(&scope, Slot::Shell, p.clone());
+        assert_eq!(
+            outcome,
+            PatternApplyOutcome::Changed(DisplayCommand::Show {
+                scope: scope.clone(),
+                surface_id: 2100,
+                binds: binds_1100_1207(),
+                pattern: p.clone(),
+            }),
+            "表示中シェル slot の pattern 変化は現 surface id＋現 binds＋新 pattern の Show を発行（6.1）"
+        );
+        assert_eq!(states.current_pattern(&scope, Slot::Shell), &p);
+    }
+
+    /// 表示中バルーン slot の pattern 変化（要件 6.1）: binds 非同梱の ShowBalloon を発行。
+    #[test]
+    fn commit_pattern_different_on_shown_balloon_emits_changed_showballoon() {
+        let mut states = empty_states();
+        let scope = ActorKey::from("0");
+        states.apply_balloon(&scope, SurfaceTarget::Show(2));
+
+        let p = pat(3, 6);
+        let outcome = states.commit_pattern(&scope, Slot::Balloon, p.clone());
+        assert_eq!(
+            outcome,
+            PatternApplyOutcome::Changed(DisplayCommand::ShowBalloon {
+                scope: scope.clone(),
+                surface_id: 2,
+                pattern: p.clone(),
+            }),
+            "表示中バルーン slot の pattern 変化は binds 非同梱の ShowBalloon を発行（6.1・面種非依存同一経路）"
+        );
+        assert_eq!(states.current_pattern(&scope, Slot::Balloon), &p);
+    }
+
+    /// 非表示／未知 slot への commit は防御的非発行（要件 6.2）: 2.1 ゲートで実運用は非到達だが emit しない。
+    #[test]
+    fn commit_pattern_on_non_shown_slot_is_unchanged() {
+        // Hidden shell slot。
+        let mut states = empty_states();
+        let scope = ActorKey::from("0");
+        states.apply(&scope, SurfaceTarget::Show(2100));
+        states.apply(&scope, SurfaceTarget::Hide);
+        assert_eq!(
+            states.commit_pattern(&scope, Slot::Shell, pat(7, 1410)),
+            PatternApplyOutcome::Unchanged,
+            "非表示 slot への commit は発行しない（防御・6.2）"
+        );
+
+        // 未知 balloon slot。
+        let unknown = ActorKey::from("1");
+        assert_eq!(
+            states.commit_pattern(&unknown, Slot::Balloon, pat(3, 6)),
+            PatternApplyOutcome::Unchanged,
+            "未知 slot への commit も発行しない（防御）"
+        );
+    }
+
+    /// slot 独立（要件 5.1）: 同一 scope の Shell / Balloon pattern は別々に保持される。
+    #[test]
+    fn commit_pattern_slots_are_independent() {
+        let mut states = empty_states();
+        let scope = ActorKey::from("0");
+        states.apply(&scope, SurfaceTarget::Show(2100));
+        states.apply_balloon(&scope, SurfaceTarget::Show(2));
+
+        let ps = pat(7, 1410);
+        let pb = pat(3, 6);
+        states.commit_pattern(&scope, Slot::Shell, ps.clone());
+        states.commit_pattern(&scope, Slot::Balloon, pb.clone());
+        assert_eq!(states.current_pattern(&scope, Slot::Shell), &ps);
+        assert_eq!(states.current_pattern(&scope, Slot::Balloon), &pb);
+    }
+
+    /// surface 切替で格納 pattern クリア（design ScopeStates 拡張）: 別 id への Changed 前に空へリセット。
+    #[test]
+    fn apply_surface_switch_clears_stored_pattern() {
+        let mut states = empty_states();
+        let scope = ActorKey::from("0");
+        states.apply(&scope, SurfaceTarget::Show(2100));
+        states.commit_pattern(&scope, Slot::Shell, pat(7, 1410));
+        assert!(!states.current_pattern(&scope, Slot::Shell).is_empty());
+
+        // 別 surface へ切替 → 当該 slot の pattern を空へリセット（新面のコマは未生成＝空 pattern で発行）。
+        let outcome = states.apply(&scope, SurfaceTarget::Show(2106));
+        assert_eq!(
+            outcome,
+            ApplyOutcome::Changed(DisplayCommand::Show {
+                scope: scope.clone(),
+                surface_id: 2106,
+                binds: binds_1100_1207(),
+                pattern: PatternState::default(),
+            })
+        );
+        assert!(
+            states.current_pattern(&scope, Slot::Shell).is_empty(),
+            "surface 切替で格納 pattern はクリアされる（次 commit の baseline が空）"
+        );
+    }
+
+    /// バルーン面 surface 切替で格納 pattern クリア（design・シェル面と同一経路）。
+    #[test]
+    fn apply_balloon_surface_switch_clears_stored_pattern() {
+        let mut states = empty_states();
+        let scope = ActorKey::from("0");
+        states.apply_balloon(&scope, SurfaceTarget::Show(2));
+        states.commit_pattern(&scope, Slot::Balloon, pat(3, 6));
+        assert!(!states.current_pattern(&scope, Slot::Balloon).is_empty());
+
+        let outcome = states.apply_balloon(&scope, SurfaceTarget::Show(6));
+        assert_eq!(
+            outcome,
+            ApplyOutcome::Changed(DisplayCommand::ShowBalloon {
+                scope: scope.clone(),
+                surface_id: 6,
+                pattern: PatternState::default(),
+            })
+        );
+        assert!(
+            states.current_pattern(&scope, Slot::Balloon).is_empty(),
+            "バルーン面 surface 切替で格納 pattern はクリアされる"
+        );
+    }
+
+    /// bind 変化の Show 再発行は current_pattern を同梱（design）: 現在コマを保ったまま再合成する。
+    #[test]
+    fn apply_bind_reemit_carries_current_pattern() {
+        let mut states = empty_states(); // static {1100, 1207}
+        let scope = ActorKey::from("0");
+        states.apply(&scope, SurfaceTarget::Show(2100));
+
+        // シェル slot に現在コマを確定。
+        let p = pat(7, 1410);
+        states.commit_pattern(&scope, Slot::Shell, p.clone());
+
+        // bind 変化の Show 再発行は空 default ではなく current_pattern を載せる。
+        let outcome = states.apply_bind(&scope, 1302, true);
+        assert_eq!(
+            outcome,
+            BindApplyOutcome::Changed(DisplayCommand::Show {
+                scope: scope.clone(),
+                surface_id: 2100,
+                binds: BindSet::from_ids([1100, 1207, 1302]),
+                pattern: p.clone(),
+            }),
+            "bind 変化の Show 再発行は current_pattern(Shell) を同梱（現在コマ保持で再合成）"
+        );
     }
 }
