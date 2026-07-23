@@ -47,7 +47,7 @@
   - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.6, 3.1, 3.4, 3.5, 3.6, 9.1, 9.2_
 
 - [ ] 3. Core: 鏡像と SylphyaReader
-- [ ] 3.1 不変鏡像（per-asker/global 区画）
+- [x] 3.1 不変鏡像（per-asker/global 区画）
   - `MirrorImage { epoch: u64, flat_per_asker, flat_global, dotted_global, dotted_per_asker }` を不変値として実装する（設計討議 #1: フラット実導出語彙はゴースト相対ゆえ per-asker へ着地・global は将来の大域語彙用に確保）
   - `SharedMirror`（`RwLock<Arc<MirrorImage>>`）による epoch 交換（copy-on-write・publish 時に新しい `Arc` を構築して swap）を実装する
   - 読みは read lock 内で `Arc` clone するのみとし、他アクター・他スレッドへのブロッキング照会を一切行わないことをコード上の不変量として確認する
