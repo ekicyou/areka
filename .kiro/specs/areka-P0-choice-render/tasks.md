@@ -123,7 +123,7 @@
   - _Requirements: 4.4, 7.5_
   - _Boundary: ViewboxFingerprint_
 
-- [ ] 7. Core: ハイライト描画（viewbox_draw.rs）
+- [x] 7. Core: ハイライト描画（viewbox_draw.rs）
   - _Depends: 3, 5.3, 5.4, 6.1_
   - ダーティクリップ済み描画パス内で Choice 行のハイライト塗り＋文字色切替を実装する（hover セグメント矩形を塗り色で塗る→行全範囲へ `DrawingEffect` を `None` へリセット→hover セグメント範囲へ文字色効果を適用→`DrawTextLayout`。`highlight=None` の行は素描画）
   - `scroll_state()` の読み口アクセサを追加する
@@ -238,3 +238,4 @@
 - **設計不整合の解決（Task 8 申し送り）**: design 型枠は `derive_hit_rows(lines, segments, mode)` だが §座標写像式（正本）＋型枠 doc は canvas-local 入力を要求。layout 出力は絶対 image px ゆえ validrect 原点差引きが必須で、実装は `derive_hit_rows(lines, segments, mode, region: &TextRegion)` へ region を additive 追加（from_layout の `rect.left-region.left()` と同一パターン）。**Task 8 の present_actor は `derive_hit_rows(.., region)` を呼ぶこと**（region は既に present_actor が保持）。`to_window_physical(row, region, mode, committed, contract)` は §座標写像式どおり。
 - **Task 8.2 申し送り（5.4 署名逸脱）**: `decorate_canvas(canvas, segments, hover, style, default_font_color, region: &TextRegion, mode: WritingMode)` へ region+mode を additive 追加（5.2 と同型・絶対 inline_range→resident-local 変換に必要）。present_actor は `decorate_canvas(.., region, mode)` を呼ぶこと。line_index↔resident は 1:1（from_layout が行毎に1住人）。ChoiceRowSegment.inline_range は resident-local（GlyphRunContent ローカル系）。
 - viewbox.rs: `CommittedLine.choice_marker: u32`（Choice=`hovered.map_or(0,|o|o+1)`・他=0）。`is_backward_shrink` は block_pos_bits/extent_bits のみ比較で choice_marker を見ない＝hover のみ変化は全域縮退へ落ちず per-line 増分ダーティを維持（4.4）。
+- viewbox_draw.rs: highlight 描画は Phase1(BeginDraw前=ブラシ生成+SetDrawingEffect・?伝播)→Phase2(FillRectangle→DrawTextLayout)分割。`segment_text_range` はグリフ中心が resident-local inline_range に入る連続 subrange を UTF-16 len 累積で DWRITE_TEXT_RANGE 化（多コード単位対応）。Choice 行は毎フレーム全範囲 SetDrawingEffect(None) リセット（cached TextLayout の stale 効果一掃・None=既定ゆえ素描画非回帰）。`ViewboxExecutor::scroll_state()->ScrollState{pos,committed}` additive 追加（task 8 スナップショットが committed 消費）。
