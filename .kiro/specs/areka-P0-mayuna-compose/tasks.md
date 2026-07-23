@@ -179,6 +179,46 @@
   - _Requirements: 7.1, 7.2, 7.3_
   - _Depends: 9.1_
 
+- [ ] 10. mustselect 排他選択の実導出（2026-07-23 実機サインオフ改定・R4.5/D11）
+- [ ] 10.1 (P) descript の mustselect カテゴリ宣言を取り込む
+  - `sakura/kero.bindoption*.group,カテゴリ名,mustselect` を走査し、mustselect と宣言されたカテゴリ名の集合をマウントモデルへ転記する（`multiple` 指定・非宣言は既定＝非排他として無視）
+  - 本体側・相方側を区別して保持し、あるカテゴリが mustselect かを判別できるアクセサを用意する
+  - Observable: emo2 相当の descript を読み込むと、腕・口・眉・目 が mustselect と判別でき、宣言のないカテゴリ（紅など）は非 mustselect と判別できる
+  - _Requirements: 4.5_
+  - _Boundary: parsers BindGroupNames_
+
+- [ ] 10.2 seriko に排他選択の解決・状態・分岐を追加する
+  - bind 名前解決情報へ「mustselect カテゴリ集合」と「カテゴリ→着せ替えID索引」を additive に追加し、あるカテゴリが mustselect か・そのカテゴリに属するID集合を引ける純関数を提供する（parsers 非依存・素データ構築は不変）
+  - 現在の着せ替え集合から、指定カテゴリの全IDを外したうえで対象IDを有効化する排他置換の状態適用を追加する（結果集合の Changed/StateOnly/Unchanged 峻別は既存と同型・冪等も維持）
+  - bind 消費分岐で、着衣かつ mustselect カテゴリのときは排他置換を、それ以外（脱衣・非 mustselect）は既存の加算/除去を用いるよう振り分ける
+  - 名前解決情報の起動時注入シグネチャ変更に伴い、既存の呼び出し元（seriko 側テスト・e2e・app 層の橋渡し）を空の排他情報で追随させ、挙動不変を保つ
+  - Observable: mustselect カテゴリで新パーツを着衣すると同カテゴリの旧パーツが自動で外れ高々1パーツ有効になる／非 mustselect カテゴリは従来どおり加算されることをテストで確認できる
+  - _Requirements: 4.5_
+  - _Boundary: seriko bind resolver/state/actor + 呼出元追随_
+  - _Depends: 10.1_
+
+- [ ] 10.3 起動配線で実 mustselect 情報を構築・注入する
+  - ゴーストマウント時に取り込んだ mustselect カテゴリ集合とカテゴリ→ID索引から、起動時の名前解決情報を構築し、seriko の起動呼び出しへ渡す
+  - Observable: mustselect 宣言を持つゴーストを読み込んだとき、起動時資産から対応するカテゴリが mustselect と判別でき、そのカテゴリのID集合が引けることを確認できる
+  - _Requirements: 4.5, 7.1_
+  - _Boundary: areka 起動配線_
+  - _Depends: 10.1, 10.2_
+
+- [ ] 10.4 (P) mustselect 排他の決定論エンドツーエンド観測とワークスペース回帰
+  - 同一 mustselect カテゴリで複数パーツを off なしに着衣する列（実 emo2 の目=笑顔→ジトー→静観 等を模す）を直接投入し、常に高々1パーツのみ有効な着せ替え集合を載せた表示発行になることを注入時刻だけで観測する
+  - 非 mustselect カテゴリ（紅など）の明示 on/off が従来どおり成立することも合わせて観測する
+  - 本増分適用後、ワークスペース全体のテストがすべて成功することを確認する
+  - Observable: mustselect 列の投入で結果集合が「置換」（旧パーツが消え新パーツのみ）になり、非 mustselect は加算のままであることをテストで確認でき、ワークスペース全体が緑になる
+  - _Requirements: 4.5, 8.1_
+  - _Boundary: seriko bind e2e_
+  - _Depends: 10.2_
+
+- [ ] 10.5 実機による mustselect 排他の人間サインオフ（9.2 の再実施）
+  - 実 emo2・実 pasta.dll・実 DPI・絶対パス起動で、mustselect カテゴリ（腕・口・眉・目）の表情パーツが重畳せず1枚ずつ正しく切り替わることを目視で確認する
+  - Observable: 実機での目視確認により、着せ替えパーツが積算重畳せず排他的に着脱され、むらさきの表情が破綻なく変化することが確認できる
+  - _Requirements: 4.5, 7.1, 7.2, 7.3_
+  - _Depends: 10.3, 10.4_
+
 ## Implementation Notes
 
 - (task 6.1-6.4) `spawn_seriko` へ `bind_resolver: BindResolver` を additive 追加（第3引数）＝seriko in-source/統合テスト・areka 本番 mod.rs:288/spine.rs:444 の全呼出元を跨ぐコンパイル結合ゆえ 6.1〜6.4 を1つの atomic 変更として実装。**areka 側は `BindResolver::empty()` の暫定コンパイル橋（`// TODO(task 7.2)` マーカー付き）で緑を維持**——task 7.2 が `BootAssets.bind_resolver`（実名前解決表）へ差し替える。bind 分岐は `handle_message` の `cue_target_of==None` 枝内・Wait 前（D1）・`name=="bind"` 自己選別。D8 severity 全縮退枝を `capture_logs_flow` でログ捕捉檻化（bind_* 9本・対比含む）。実機 grep マーカー `info!("seriko: bind 適用")` は Changed のみ発火。**推移的注記**: empty resolver は実 `\![bind]` で ERROR ログ（D8①解決不能）を出すが表示無変化＝task 7.2 完了で解消。
