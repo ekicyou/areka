@@ -66,7 +66,7 @@ emo-text は 3 層一方向（純粋層 → COM 層 → 結線層・逆流はレ
 - **COM 層**: `viewbox_draw`（`ViewboxExecutor`＝blit＋ダーティ矩形限定 D2D 描画）／`draw`（`DWriteMetrics`・`LineLayoutStore`・比較オラクル `DrawExecutor`）／`surface`（`TextSurface`・readback）
 - **結線層**: `sink`（`CueSink` 実装）／`actor`（`TextLayerRuntime`・`present_frame`）
 
-本設計はこの縦経路の**各層へ最小の differential を addtive に差し込み**、純粋な新規導出はすべて新設 `choice.rs`（純粋層）へ集約する（research.md DD-2・Option C）。ダーティ差分機構（`line_fingerprint`→`derive_dirty`）はアルゴリズム無改変のまま、hover 状態を行指紋に含めることで流用する（DD-4）。
+本設計はこの縦経路の**各層へ最小の differential を additive に差し込み**、純粋な新規導出はすべて新設 `choice.rs`（純粋層）へ集約する（research.md DD-2・Option C）。ダーティ差分機構（`line_fingerprint`→`derive_dirty`）はアルゴリズム無改変のまま、hover 状態を行指紋に含めることで流用する（DD-4）。
 
 ### Architecture Pattern & Boundary Map
 
@@ -109,7 +109,7 @@ graph TB
 **Architecture Integration**:
 
 - Selected pattern: **シーム置換＋純粋モジュール集約のハイブリッド**（research.md Option C 採用）——連続経路（state→layout→canvas→viewbox→draw）へは最小アームを差し（語彙型＝state・換算＝layout・住人データ型＝canvas の DAG 配置）、選択肢固有の純粋導出（注釈・幾何・スタイル・装飾・窓物理写像）は `choice.rs` が単独所有
-- Domain boundaries: 選択肢の**描画とヒント幾何の提供**まで（本 spec）／ポインタとの照合以降（choice-interact）——接続点は `TextLayerRuntime` の 3 API（hit rows・hover 注入・choice_active）のみ
+- Domain boundaries: 選択肢の**描画とヒット幾何の提供**まで（本 spec）／ポインタとの照合以降（choice-interact）——接続点は `TextLayerRuntime` の 3 API（hit rows・hover 注入・choice_active）のみ
 - Existing patterns preserved: 注入時刻駆動・後出し優先・newline-defer・行指紋差分ダーティ・`×k` 一点適用・log-first・warn-once・additive アクセサ（`surface`/`draw_stats` 同型）
 - New components rationale: `choice.rs`＝GPU 不要の純関数全網羅（3.4, 7.5）を単一ファイルで成立させるため。`ResidentContent::Choice`＝hover を行指紋差分に乗せ ScrollPlanner 無改変で 4.4 を満たすため（DD-1/DD-4）
 - Steering compliance: 純粋層 windows 非依存檻へ `choice.rs` を登録・単一トークン命名・エラーは `thiserror`／`TextLayerError` 既存型
@@ -351,9 +351,9 @@ impl ResolvedChoiceStyle {
 }
 ```
 
-- Preconditions: `annotate_lines` の `lines` は同一 items からの layout 出力（グリフ序数が items のグリフ順と 1:1）
+- Preconditions: `annotate_lines` の `lines` は同一 items からの layout 出力（グリフ序数が items のグリフ順と 1:1）。**annotate は `from_layout` に渡すのと同一の `lines` を消費する**——visible_window 適用後の行列へ再適用しない（挿入点は layout 直後の一点）
 - Postconditions: `decorate_canvas` と `derive_hit_rows` は同一 `segments` を源にする（表示とヒットの座標整合・3.3）
-- Invariants: 全関数純粋・windows 非依存・スパン空なら全関数が恒等/空を返す（非退行）
+- Invariants: 全関数純粋・windows 非依存・スパン空なら全関数が恒等/空を返す（非退行）。**部分リビール（可視 prefix）中のスパン交差は可視グリフ数で打ち切る**（`min(glyph_range.end, visible_count)`＝リビール途中のヒット矩形・ハイライトは配置済みグリフ範囲のみ・序数空間は items 全体の序数で統一）
 
 **Implementation Notes**
 
@@ -631,6 +631,7 @@ log-first（`error!`＋`Err`・panic 禁止）と warn-once 縮退（既存 `cho
 
 1. `state.rs::parse_cursor_coord`＋`layout.rs::cursor_to_image_px` — 語彙全形（裸数値/em/lh/%/@/@付単位/空/負値/非数）の全網羅＋換算の縮退表全行（em=font_height・lh=line_pitch・原点加算・None 経路）
 2. `choice.rs::annotate_lines`/`derive_hit_rows` — 単一行 1 選択肢・同一行複数選択肢（正典 `\q\q` 並置）・折返し跨ぎ分割・部分リビール（可視 prefix 途中）・空範囲スパン除外・縦書き 2 方向の軸読み替え
+   - `choice.rs::to_window_physical` — **k≠1.0 × committed≠0 × writing_mode 3 方向のパラメタライズ全網羅**（現行 `ScaleContract` は k=1.0 恒常＝実機 DPI≠96 サインオフでも k≠1.0 経路は行使されない罠への先回り檻。emo-dpi-scaling 着地時の Revalidation を純関数檻で前倒しする）
 3. `choice.rs::decorate_canvas`/`ResolvedChoiceStyle` — hover None/一致/不在の印・スタイル解決全分岐（指定/未指定/none/underline 縮退/ROP 縮退）・`paint` 正規形（Invert の 255−c 式）・スパン空の恒等
 4. `state.rs` — Choice アーム（追記順スパン・reveal 時刻式・空 text warn 檻）・Cursor アーム（CursorMove 追記・グリフ/リビール不変）・Clear/ClearAll でスパン同時初期化（WarnCounter ログ檻併用）
 5. `layout.rs` — pending-cursor 遅延実体化（行区切り・保留改行との複合順序・末尾蒸発・無効果 `\_l` no-op・newline-defer 既存檻の非回帰）
