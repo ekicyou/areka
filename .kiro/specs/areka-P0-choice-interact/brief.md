@@ -2,6 +2,8 @@
 
 > `\q` 選択肢の**対話面**——実ポインタ→hover 追従→クリック確定→`ChoiceSelection` 発行（2026-07-19 追記㉟＝choice-render 2分割の対話半分・開発者裁定）
 
+> **📌 2026-07-23 追記㊵ウェーブ更新**: 攻め5ウェーブ再編により本 spec は **W4**（`position-persist` ∥ `emo-dpi-scaling` と3本同居）。本文の「W4 choice-render」「W5（単独）」等は「W3 choice-render」「W4 同居」へ読み替える。**同居の事前割当契約**: `spawn.rs` は position-persist 単独所有＝本 spec のバルーンポインタ配線は **input_events モジュール＋emo-text 幾何消費で完結**させる（バルーン窓は `BalloonWindowMarker`＋DragConfig 済〔spawn.rs:80〕＝spawn.rs 改変不要見込み。設計が spawn.rs 改変を要求したらその部分を W5 へ＝エスケープ条項）。W5 `collision-dpi-hittest` が `input_events/mod.rs` を後続共有するため、バルーンハンドラ増設は同ファイルの DPI 素通し規約（mod.rs:96・DD-IE-10）を壊さない形で。
+
 ## Problem
 
 choice-render（描画半分・W4）は選択肢 resident の描画・`\_l` 消費・ハイライト描画を**注入 hover 状態**で決定論的に実現するが、実ポインタがバルーン窓からどう届き、どの行が hover 中で、クリックがいつ「選択確定」になるかの**対話面が無所属**になる。この配線が無いと M-dialogue の「ダブルクリック→メニュー→選択→遷移」一周は完走しない。

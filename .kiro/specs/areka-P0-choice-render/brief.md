@@ -4,6 +4,8 @@
 > **調査日**: 2026-07-16（再入精査⑧・fixture 実物調査＋コード実態偵察）。
 > **⛔ 時限ゲート（フェーズ別・2026-07-16 精密化）→ ✅ 解除（2026-07-17・cue-playback 完了＝追記㉗）**: ~~`areka-P0-cue-playback-duration`（実装中）完了が tasks 生成・実装フェーズの前提~~ **→充足済み**＝emo-text の cue 受信面 `CueSink` 化・`CuePlayer` の `pending_choices`（`runtime.rs:98`・読み口 `:355`）/`resolve_choice`（`:279`）は settled シームとして main 着地済み（2026-07-17 実測）。全フェーズ着手可（**Fable 早期投入の2本目**——選択肢 resident・hit 幾何・ハイライト描画・`\_l` 消費・原子性は cue モデル**非依存**。cue 供給節のみ **`sakura-dialogue-tags` design が確定させる choice cue 形**を消費——同 spec の design 先行完了を待って着手するのが推奨順序）。着手時は settled コードを直接参照する。
 
+> **📌 2026-07-23 追記㊵ウェーブ更新**: 攻め5ウェーブ再編により本 spec（描画半分）は **W3**（`sylphya` ∥ `seriko-loop` と3本同居・実測で互いに素＝本 spec は emo-text＋presenter.rs `TextSlotView` additive のみ・cache.rs 不触・ポインタ配線なし）・choice-interact は **W4**。下記調停ブロックの「W4/W5」はこの新番号へ読み替える。design 着手時は W2 mayuna マージ後の settled main へ行アンカー再突合のこと。
+
 > **📌 2026-07-19 追記㉟調停（2分割＋陳腐化補正・本ブロックが以下の本文より優先）**:
 > - **2分割（開発者裁定）**: 本 spec は**描画半分（W4）**へ縮小——選択肢 resident 描画・`\_l` 消費・ハイライト**描画**・**行ヒットジオメトリ＋hover 状態 API の契約正本**（注入 hover 状態で決定論描画・実ポインタ不要）。**実ポインタ配線・hover 追従駆動・クリック→`ChoiceSelection` 発行は新設 `areka-P0-choice-interact`（W5）へ分離**＝`ChoiceSelection` 契約の正本も interact へ移動（本文の「ChoiceSelection I/O 契約の正本」「Approach 4./5. のクリック解決・synthetic click 檻」「観測 (c)(d)」は interact の領分へ読み替え）。分割根拠＝粒度基準「done が複数の独立観測に割れるなら分割」（描画=pixel 檻／対話=ポインタ檻の2独立観測・20タスク超の兆候）。
 > - **陳腐化補正（W1＋割込3本マージ後の実測 2026-07-19）**:

@@ -4,6 +4,11 @@
 > **調査日**: 2026-07-16（再入精査⑧・fixture 実物調査＋コード実態偵察＋ukadoc 裏取り）。
 > **順序（フェーズ別・2026-07-16 精密化）→ ✅ ゲート解除（2026-07-17・cue-playback 完了＝追記㉗）**: choice-render（ChoiceSelection 契約の正本）と契約先決ペア——契約が brief 間で先決済みのため**並走可**（撫でクラスタと同型）。~~cue-playback（CuePlayer/resolve_choice）完了が tasks 生成・実装フェーズの実質前提~~ **→充足済み**（`CuePlayer`/`pending_choices`/`resolve_choice` は settled シームとして main 着地済み）。着手時は settled コードを直接参照すればよい（設計を先行させた場合の `/kiro-validate-design` 再突合義務は 2026-07-17 現在未発生＝要件未着手）。**実装順注記（2026-07-17 合流裁定・roadmap 追記㉘）**: 本 spec は input-events の背骨＋idle-talk の `Status` 口＋dialogue-tags の choice cue 形＋choice-render の ChoiceSelection を消費する**実質最後尾**ユニット。
 
+> **📌 2026-07-23 追記㊵陳腐化補正（本ブロックが以下の本文より優先）**:
+> - **`ChoiceSelection` 契約の正本は `areka-P0-choice-interact`**（2026-07-19 追記㉟＝choice-render 2分割の対話半分・新設）——本文の「choice-render（ChoiceSelection 契約の正本）」「choice-render の ChoiceSelection を消費」等は全て **choice-interact** へ読み替える（choice-render に残るのは行ジオメトリ＋hover 状態 API の正本のみ）。
+> - **上流は全て完了済み**: input-events ✅（2026-07-23・`completed/`）・idle-talk ✅・sakura-dialogue-tags ✅＝「input-events 完了が望ましい先行」等の条件節は充足済みの確定事実へ読み替え。
+> - **ウェーブ配置=W5**（追記㊵攻め再編）: `dpi-window-vanish` ∥ `collision-dpi-hittest` と同居（3本のファイル集合は互いに素・kanade は本 spec 単独所有）。ハードゲート=W4 choice-interact の `ChoiceSelection` 実物（mock 注入の決定論檻は先行着手可＝本文どおり）。
+
 ## Problem
 
 選択肢を**選んだ後**の経路が存在しない。emo2 のメニューは選択→`＊On〜` シーン遷移→もどる/閉じる、の循環で成立するが:

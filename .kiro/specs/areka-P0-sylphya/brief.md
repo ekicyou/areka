@@ -1,5 +1,7 @@
 # Brief: areka-P0-sylphya
 
+> **📌 2026-07-23 追記㊵陳腐化補正（本ブロックが以下の本文より優先）**: 本文の discovery は 2026-07-18＝W2 完了前。以後の確定事実へ読み替える——(1) **W1/W2 は全完了**: `sakura-dialogue-tags` ✅（本文「W1 要件討議中」は失効・R7 の sysvar 差替シーム `sysvar.rs` は実装済み＝sakura 側契約無改変で差し替え可能を実コード確認済み〔追記㉟〕）・`mayuna-compose` ✅・`input-events` ✅（「W2 mayuna が parsers に触れるため」等の並走警告は全て解消）。(2) **ウェーブ配置=W3**（追記㊵攻め再編）: 単独ウェーブでなく **`seriko-loop` ∥ `choice-render` と3本同居**——実測で互いに素（本 spec=新 crate `areka-sylphya`＋ghost `runtime.rs` provider 差替点＋main 結線のみ・kanade/sakura 側の編集は design で確定するが seriko/emo-text/emo-present とは非交差）。(3) 本文の lexer.rs/compile.rs 等の行アンカーは W1-W2 マージでドリフトの可能性＝design 時に settled main へ再突合。(4) **position-persist は W4**＝本 spec 完了後に requirements へ末尾「申し送り」節のデルタを適用してから `/kiro-design`（実施タイミングの正本は変わらず本 brief 申し送り節）。
+
 ## Problem
 
 emo2 の撫で talk は `%username` が展開されずバルーンへ生文字列が露出する（`areka-P0-sakura-dialogue-tags` requirements.md:10）。この値を `GhostBootOptions` へ注入する案は「1 エントリだけの偽プロパティシステム」として開発者が却下済み。一方で `areka-P0-position-persist`（phase=requirements-generated・未承認）は窓位置・バルーンオフセット・起動記録・vanish 回数の 4 フィールドのために**専用のゴースト別ストア**を要件化しており（同 requirements.md:11-13）、放置すれば「名前で引ける値」という単一関心が **%系環境変数の解決器／永続ストア／IShioriHost プロパティストア（crates/areka/src/shiori_host.rs:74 に既存）** の 3 箱へ分裂する。「同じ関心を二度実装しない」というプロジェクト規律への違反が確定コースにある。
