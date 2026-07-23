@@ -191,7 +191,7 @@
   - _Depends: 8.2_
   - _Requirements: 7.1, 9.1_
 
-- [ ] 8.4 ghost 統合テスト群
+- [x] 8.4 ghost 統合テスト群
   - boot 後に reader で selfname 系・baseware が実値解決されることを検証する
   - shutdown 全段（sylphya 段含む）が成功することを検証する
   - mock shiori が username=Value を返す構成で、boot talk のスナップショットに当該値が必ず入る（barrier フェンスの検証・prefetch→初回 talk 順序のレース非依存）ことを検証する

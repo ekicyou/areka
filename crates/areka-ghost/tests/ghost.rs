@@ -35,3 +35,9 @@ mod inproc_e2e_test;
 // `HOST32_PASTA_DLL`＋`AREKA_SNAPSHOT_OUT` 両設定時のみ動作（欠落は silent skip）。
 #[path = "ghost/snapshot_capture_test.rs"]
 mod snapshot_capture_test;
+// `sylphya_integration_test`（task 8.4・sylphya × ghost 結線 end-to-end）は
+// `spine_e2e_test::RecordingSink` を再利用し、実 boot（mock shiori backend）を駆動して
+// (1) boot 後の reader 実値解決（selfname 系／baseware）・(2) shutdown 全段成功（sylphya 段含む）・
+// (3) username=Value → 初回 talk スナップショット包含（barrier フェンス・レース非依存）を檻化する。
+#[path = "ghost/sylphya_integration_test.rs"]
+mod sylphya_integration_test;
