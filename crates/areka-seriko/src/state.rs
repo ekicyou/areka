@@ -268,7 +268,56 @@ impl ScopeStates {
     pub fn apply_bind(&mut self, scope: &ActorKey, id: u32, on: bool) -> BindApplyOutcome {
         // (1) 現在集合から新集合を積算（純関数）。
         let new = accumulate(self.current_binds(scope), id, on);
+        // (2)-(4) 冪等ガード → 状態更新 → 発行判定は排他置換と共通（commit_bind に集約）。
+        self.commit_bind(scope, new)
+    }
 
+    /// mustselect（排他選択）カテゴリの排他置換を対象 scope へ適用する（要件 4.5・D11）。
+    ///
+    /// 新集合＝`(現在集合 − category_ids) ∪ {target_id}`。同カテゴリの旧パーツ（`category_ids`）を
+    /// すべて外したうえで対象パーツ `target_id` を有効化する（同カテゴリ内は高々 1 パーツ有効・SSP
+    /// 正典の排他選択挙動）。`target_id` 自身が `category_ids` に含まれても、フィルタで一旦除いた後
+    /// `chain` で再付与するため最終的に必ず有効になる（結果集合に含まれる）。
+    ///
+    /// 冪等ガード・状態更新・発行判定（Changed/StateOnly/Unchanged）は [`apply_bind`] と完全同型
+    /// （`commit_bind` に集約）。`dynamic_binds` のみを書き込み、シェル面 `scopes`・バルーン面
+    /// `balloon` の状態機械には一切干渉しない（要件 3.8・R3.8）。同一 target の再適用は結果集合が
+    /// 直前と同値になり [`BindApplyOutcome::Unchanged`]（冪等・D9）。
+    ///
+    /// [`apply_bind`]: ScopeStates::apply_bind
+    pub fn apply_bind_exclusive(
+        &mut self,
+        scope: &ActorKey,
+        category_ids: &[u32],
+        target_id: u32,
+    ) -> BindApplyOutcome {
+        // (1) 排他置換: 同カテゴリ全 ID を外し（target 自身も一旦除去）、target を付与（BindSet が昇順 dedup）。
+        let current = self.current_binds(scope);
+        let new = BindSet::from_ids(
+            current
+                .ids()
+                .iter()
+                .copied()
+                .filter(|id| !category_ids.contains(id))
+                .chain(std::iter::once(target_id)),
+        );
+        // (2)-(4) 冪等ガード → 状態更新 → 発行判定は加算/除去と共通（commit_bind に集約）。
+        self.commit_bind(scope, new)
+    }
+
+    /// bind 新集合を対象 scope へコミットし表示発行の要否を判定する共通後段（D5/D9・R3.8）。
+    ///
+    /// [`apply_bind`]（加算/除去）・[`apply_bind_exclusive`]（排他置換）が算出した `new` 集合を
+    /// 受け、以下を同型に行う:
+    /// 2. **冪等ガード（要件 3.6・D9）**: `new` が現在集合と同値なら状態を書き込まず
+    ///    [`BindApplyOutcome::Unchanged`]。
+    /// 3. **状態更新**: `dynamic_binds` へ `new` を書き込む（シェル/バルーン state は不変・R3.8）。
+    /// 4. **発行判定（D5）**: `Shown(sid)` → 現 surface を `new` で再発行、`Hidden`／未知 →
+    ///    [`BindApplyOutcome::StateOnly`]。
+    ///
+    /// [`apply_bind`]: ScopeStates::apply_bind
+    /// [`apply_bind_exclusive`]: ScopeStates::apply_bind_exclusive
+    fn commit_bind(&mut self, scope: &ActorKey, new: BindSet) -> BindApplyOutcome {
         // (2) 冪等ガード: 結果が現在集合と同値なら状態を書き込まず発行しない（要件 3.6・D9）。
         if new == *self.current_binds(scope) {
             return BindApplyOutcome::Unchanged;
@@ -965,5 +1014,127 @@ mod tests {
             }),
             "2 つ目の bind は直前状態を保持したまま積算（R3.4 隣接）"
         );
+    }
+
+    // ---- apply_bind_exclusive（mustselect 排他置換・要件 4.5・D11） ----
+
+    /// 排他置換（R4.5・D11）: 表示中 scope で同カテゴリ全 ID を外し target のみ有効化する。
+    /// 現集合 {1301,1303,1207}・category_ids=[1301,1303,1304]・target=1304 →
+    /// 目カテゴリ旧パーツ(1301,1303) を外し 1304 を付与、非カテゴリ 1207 は保持 → {1207,1304}。
+    #[test]
+    fn apply_bind_exclusive_replaces_same_category_on_shown() {
+        let mut states = ScopeStates::new(BindSet::from_ids([1301, 1303, 1207]));
+        let scope = ActorKey::from("0");
+        states.apply(&scope, SurfaceTarget::Show(2100));
+
+        let outcome = states.apply_bind_exclusive(&scope, &[1301, 1303, 1304], 1304);
+        assert_eq!(
+            outcome,
+            BindApplyOutcome::Changed(DisplayCommand::Show {
+                scope: scope.clone(),
+                surface_id: 2100,
+                binds: BindSet::from_ids([1207, 1304]),
+            }),
+            "同カテゴリ旧パーツを外し target のみ有効・非カテゴリは保持（高々 1 パーツ・R4.5・D11）"
+        );
+        assert_eq!(
+            states.current_binds(&scope),
+            &BindSet::from_ids([1207, 1304]),
+            "排他置換後の集合が動的集合として保持される"
+        );
+    }
+
+    /// 冪等（R3.6・D9）: 同一 target の排他置換を 2 回目は Unchanged（結果集合同値・状態書き込みなし）。
+    #[test]
+    fn apply_bind_exclusive_idempotent_second_is_unchanged() {
+        let mut states = ScopeStates::new(BindSet::from_ids([1301, 1303, 1207]));
+        let scope = ActorKey::from("0");
+        states.apply(&scope, SurfaceTarget::Show(2100));
+
+        let first = states.apply_bind_exclusive(&scope, &[1301, 1303, 1304], 1304);
+        assert!(matches!(first, BindApplyOutcome::Changed(_)), "初回は集合変化ゆえ Changed");
+
+        let second = states.apply_bind_exclusive(&scope, &[1301, 1303, 1304], 1304);
+        assert_eq!(
+            second,
+            BindApplyOutcome::Unchanged,
+            "同一 target の再排他置換は結果集合同値ゆえ Unchanged（冪等・R3.6・D9）"
+        );
+        assert_eq!(
+            states.current_binds(&scope),
+            &BindSet::from_ids([1207, 1304])
+        );
+    }
+
+    /// 非表示／未知 scope の排他置換 → 発行なし・状態のみ更新（D5：Hidden への強制 Show 禁止）。
+    #[test]
+    fn apply_bind_exclusive_hidden_or_unknown_is_state_only() {
+        // Hidden scope。
+        let mut states = ScopeStates::new(BindSet::from_ids([1301, 1303, 1207]));
+        let scope = ActorKey::from("0");
+        states.apply(&scope, SurfaceTarget::Show(2100));
+        states.apply(&scope, SurfaceTarget::Hide);
+
+        let outcome = states.apply_bind_exclusive(&scope, &[1301, 1303, 1304], 1304);
+        assert_eq!(
+            outcome,
+            BindApplyOutcome::StateOnly,
+            "非表示 scope の排他置換は発行せず状態のみ更新（D5）"
+        );
+        assert_eq!(
+            states.current_binds(&scope),
+            &BindSet::from_ids([1207, 1304]),
+            "Hidden でも排他置換は積算保持（次 Show へ持ち越し・D5）"
+        );
+
+        // 未知 scope。
+        let mut states2 = ScopeStates::new(BindSet::from_ids([1301, 1303, 1207]));
+        let unknown = ActorKey::from("1");
+        let outcome2 = states2.apply_bind_exclusive(&unknown, &[1301, 1303, 1304], 1304);
+        assert_eq!(outcome2, BindApplyOutcome::StateOnly, "未知 scope も StateOnly（D5）");
+        assert_eq!(
+            states2.scopes.get(&unknown),
+            None,
+            "apply_bind_exclusive はシェル状態を作らない（R3.8）"
+        );
+    }
+
+    /// 非退行（R3.8）: 排他置換はシェル面・バルーン面の状態機械を一切変更しない。
+    #[test]
+    fn apply_bind_exclusive_does_not_touch_shell_or_balloon_state() {
+        let mut states = ScopeStates::new(BindSet::from_ids([1301, 1303, 1207]));
+        let scope = ActorKey::from("0");
+        states.apply(&scope, SurfaceTarget::Show(2100));
+        states.apply_balloon(&scope, SurfaceTarget::Show(2));
+
+        states.apply_bind_exclusive(&scope, &[1301, 1303, 1304], 1304);
+        assert_eq!(
+            states.scopes.get(&scope),
+            Some(&ScopeState::Shown(2100)),
+            "排他置換はシェル面状態を変更しない（R3.8）"
+        );
+        assert_eq!(
+            states.balloon.get(&scope),
+            Some(&ScopeState::Shown(2)),
+            "排他置換はバルーン面状態を変更しない（R3.8）"
+        );
+    }
+
+    /// target が category_ids に含まれても最終的に有効になる（filter→chain の順序保証・D11）。
+    #[test]
+    fn apply_bind_exclusive_target_in_category_ids_stays_present() {
+        let mut states = ScopeStates::new(BindSet::from_ids([1301]));
+        let scope = ActorKey::from("0");
+        states.apply(&scope, SurfaceTarget::Show(2100));
+
+        // target=1301 は category_ids に含まれる → 一旦除去され chain で再付与 → 有効維持だが
+        // 単独になる（他の目パーツが無いので集合は {1301} のまま = 同値 → Unchanged）。
+        let outcome = states.apply_bind_exclusive(&scope, &[1301, 1303], 1301);
+        assert_eq!(
+            outcome,
+            BindApplyOutcome::Unchanged,
+            "現集合が既に {{1301}} のみで target=1301 の排他置換は同値ゆえ Unchanged"
+        );
+        assert_eq!(states.current_binds(&scope), &BindSet::from_ids([1301]));
     }
 }

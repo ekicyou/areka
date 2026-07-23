@@ -160,7 +160,13 @@ pub fn build_boot_assets(
     for name in &model.bindgroups.kero_names {
         kero_map.insert((name.category.clone(), name.part.clone()), name.id);
     }
-    let bind_resolver = BindResolver::new(sakura_map, kero_map);
+    // TODO(task 10.3): 空 mustselect は暫定橋。task 10.3 が MountModel.bindgroups の mustselect から実集合を構築する。
+    let bind_resolver = BindResolver::new(
+        sakura_map,
+        kero_map,
+        std::collections::BTreeSet::new(),
+        std::collections::BTreeSet::new(),
+    );
 
     let shell_dir = model.shell.dir;
 

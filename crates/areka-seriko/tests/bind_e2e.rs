@@ -40,7 +40,7 @@ use areka_sakura::{
     TalkDone, TalkEndReason, TalkId,
 };
 use areka_seriko::{spawn_seriko, BindResolver, DisplayCommand, MockSurfaceOutput, SurfaceResolver};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
@@ -96,7 +96,8 @@ fn test_bind_resolver() -> BindResolver {
     let mut sakura: BTreeMap<(String, String), u32> = BTreeMap::new();
     sakura.insert(("腕".into(), "伸び".into()), 1100);
     sakura.insert(("頬".into(), "赤面".into()), 1200);
-    BindResolver::new(sakura, BTreeMap::new())
+    // mustselect 空集合＝全カテゴリ非排他（従来 additive の byte 同値）。専用 mustselect e2e は task 10.4。
+    BindResolver::new(sakura, BTreeMap::new(), BTreeSet::new(), BTreeSet::new())
 }
 
 /// 既定 scope "0"・指定 bind 集合を載せたシェル面 `Show` 指令を組む（期待値ヘルパ）。

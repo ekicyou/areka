@@ -19,7 +19,7 @@ pub fn build_static_bindset(default_on: &[u32]) -> areka_emo_compose::BindSet {
     areka_emo_compose::BindSet::from_ids(default_on.iter().copied())
 }
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use areka_sakura::ActorKey;
 
@@ -50,6 +50,14 @@ pub struct BindResolver {
     sakura: BTreeMap<(String, String), u32>,
     /// 相方側（kero）: `(カテゴリ, パーツ)` → 着せ替え ID。emo2 では空（Risks）。
     kero: BTreeMap<(String, String), u32>,
+    /// 本体側（sakura）の mustselect（排他選択）カテゴリ名集合（D11・R4.5）。
+    ///
+    /// `sakura.bindoption*.group,カテゴリ,mustselect` 宣言のカテゴリ名。着衣（on）時に
+    /// 同カテゴリ他パーツを自動 off する排他置換の対象判定に使う。`multiple`／非宣言は
+    /// 既定＝非排他ゆえここに含めない（空集合＝全カテゴリ非排他＝従来 additive）。
+    sakura_mustselect: BTreeSet<String>,
+    /// 相方側（kero）の mustselect（排他選択）カテゴリ名集合（D11・R4.5）。emo2 では空。
+    kero_mustselect: BTreeSet<String>,
 }
 
 impl BindResolver {
@@ -57,22 +65,34 @@ impl BindResolver {
     ///
     /// app 層（task 7.1）が `MountModel.bindgroups` の名前転記から素データで組む。
     /// 二重定義せず、渡された表をそのまま所有スナップショットとして保持する。
+    ///
+    /// `sakura_mustselect`／`kero_mustselect` は mustselect（排他選択）カテゴリ名集合
+    /// （D11・R4.5）。空集合を渡せば全カテゴリ非排他＝従来 additive 挙動と byte 同値。
     pub fn new(
         sakura: BTreeMap<(String, String), u32>,
         kero: BTreeMap<(String, String), u32>,
+        sakura_mustselect: BTreeSet<String>,
+        kero_mustselect: BTreeSet<String>,
     ) -> Self {
-        Self { sakura, kero }
+        Self {
+            sakura,
+            kero,
+            sakura_mustselect,
+            kero_mustselect,
+        }
     }
 
-    /// 空リゾルバ（本体側・相方側とも空表）。
+    /// 空リゾルバ（本体側・相方側とも空表・mustselect も空）。
     ///
     /// bind 名前表を供給しない既存テスト（task 6.4）・bind cue 不在経路の追随用。空表は
     /// R4.3 のシームを「同一機構」で実現する——人工的な無効化コードを書かず、引きが自然に
-    /// 解決不能（`None`）へ落ちる（D7）。
+    /// 解決不能（`None`）へ落ちる（D7）。mustselect も空ゆえ排他判定は常に非排他。
     pub fn empty() -> Self {
         Self {
             sakura: BTreeMap::new(),
             kero: BTreeMap::new(),
+            sakura_mustselect: BTreeSet::new(),
+            kero_mustselect: BTreeSet::new(),
         }
     }
 
@@ -91,6 +111,38 @@ impl BindResolver {
         table
             .get(&(category.to_string(), part.to_string()))
             .copied()
+    }
+
+    /// カテゴリが名前空間 `ns` で mustselect（排他選択）宣言されているか（純粋・副作用なし・D11）。
+    ///
+    /// `sakura.bindoption*.group,カテゴリ,mustselect` 由来の集合に属せば `true`。`multiple`・
+    /// 非宣言（既定＝非排他）・未知カテゴリは `false`。名前空間は隔離され、`Sakura` は sakura
+    /// 集合のみ、`Kero` は kero 集合のみを見る。空集合（従来 additive）なら常に `false`。
+    pub fn is_mustselect(&self, ns: BindNamespace, category: &str) -> bool {
+        let set = match ns {
+            BindNamespace::Sakura => &self.sakura_mustselect,
+            BindNamespace::Kero => &self.kero_mustselect,
+        };
+        set.contains(category)
+    }
+
+    /// カテゴリに属する全着せ替え ID を名前空間 `ns` の名前表から集める（純粋・副作用なし・D11）。
+    ///
+    /// `(カテゴリ, パーツ)→ID` 表を走査し `key.0 == category` の ID を昇順・重複除去して返す
+    /// （排他置換の「同カテゴリ他パーツ off」の対象集合）。宣言のないカテゴリは空 `Vec`。
+    /// `BTreeSet` 経由で dedup＋昇順を保証する（emo2 は約 30 宣言ゆえ全走査で足りる）。
+    pub fn category_ids(&self, ns: BindNamespace, category: &str) -> Vec<u32> {
+        let table = match ns {
+            BindNamespace::Sakura => &self.sakura,
+            BindNamespace::Kero => &self.kero,
+        };
+        table
+            .iter()
+            .filter(|((cat, _part), _id)| cat == category)
+            .map(|(_key, id)| *id)
+            .collect::<BTreeSet<u32>>()
+            .into_iter()
+            .collect()
     }
 }
 
@@ -292,16 +344,88 @@ mod tests {
     // ─────────────────────────────────────────────────────────────────────
 
     use areka_sakura::ActorKey;
-    use std::collections::BTreeMap;
+    use std::collections::{BTreeMap, BTreeSet};
 
-    /// sakura/kero 各 1 件の宣言を持つ小さな名前解決表を組む。
+    /// sakura/kero 各 1 件の宣言を持つ小さな名前解決表を組む（mustselect なし）。
     /// sakura: (腕, 上げ)→1100 / kero: (脚, 組む)→2100。
     fn tiny_resolver() -> BindResolver {
         let mut sakura: BTreeMap<(String, String), u32> = BTreeMap::new();
         sakura.insert(("腕".into(), "上げ".into()), 1100);
         let mut kero: BTreeMap<(String, String), u32> = BTreeMap::new();
         kero.insert(("脚".into(), "組む".into()), 2100);
-        BindResolver::new(sakura, kero)
+        BindResolver::new(sakura, kero, BTreeSet::new(), BTreeSet::new())
+    }
+
+    /// mustselect（排他選択）宣言を持つ名前解決表を組む（D11・R4.5）。
+    /// sakura: (目,笑)→1301 / (目,普)→1303 / (目,閉)→1304 / (紅,あり)→1207。
+    /// mustselect カテゴリ = {目}（紅は非宣言＝非排他）。
+    fn mustselect_resolver() -> BindResolver {
+        let mut sakura: BTreeMap<(String, String), u32> = BTreeMap::new();
+        sakura.insert(("目".into(), "笑".into()), 1301);
+        sakura.insert(("目".into(), "普".into()), 1303);
+        sakura.insert(("目".into(), "閉".into()), 1304);
+        sakura.insert(("紅".into(), "あり".into()), 1207);
+        let mut sakura_ms: BTreeSet<String> = BTreeSet::new();
+        sakura_ms.insert("目".into());
+        BindResolver::new(sakura, BTreeMap::new(), sakura_ms, BTreeSet::new())
+    }
+
+    /// mustselect 判定は名前空間ごと・宣言カテゴリのみ true（D11）。
+    #[test]
+    fn is_mustselect_only_declared_category_per_namespace() {
+        let r = mustselect_resolver();
+        assert!(
+            r.is_mustselect(BindNamespace::Sakura, "目"),
+            "sakura で mustselect 宣言されたカテゴリは排他（D11・R4.5）"
+        );
+        assert!(
+            !r.is_mustselect(BindNamespace::Sakura, "紅"),
+            "非宣言カテゴリ（紅）は非排他（既定・従来 additive）"
+        );
+        assert!(
+            !r.is_mustselect(BindNamespace::Sakura, "未知"),
+            "未知カテゴリは非排他（false）"
+        );
+        assert!(
+            !r.is_mustselect(BindNamespace::Kero, "目"),
+            "kero では sakura の mustselect を引かない（名前空間隔離）"
+        );
+    }
+
+    /// 空リゾルバ・mustselect なしの表は常に非排他（従来 additive の byte 同値）。
+    #[test]
+    fn is_mustselect_empty_or_absent_is_false() {
+        assert!(!BindResolver::empty().is_mustselect(BindNamespace::Sakura, "目"));
+        assert!(
+            !tiny_resolver().is_mustselect(BindNamespace::Sakura, "腕"),
+            "mustselect 空集合の表は全カテゴリ非排他"
+        );
+    }
+
+    /// category_ids はカテゴリの全 ID を昇順・重複除去で返す（D11・排他置換の off 対象集合）。
+    #[test]
+    fn category_ids_collects_category_members_ascending() {
+        let r = mustselect_resolver();
+        assert_eq!(
+            r.category_ids(BindNamespace::Sakura, "目"),
+            vec![1301, 1303, 1304],
+            "カテゴリ「目」の全パーツ ID を昇順で集める（同カテゴリ他パーツ off の対象・D11）"
+        );
+        assert_eq!(
+            r.category_ids(BindNamespace::Sakura, "紅"),
+            vec![1207],
+            "単一宣言のカテゴリは 1 要素"
+        );
+        assert_eq!(
+            r.category_ids(BindNamespace::Sakura, "未知"),
+            Vec::<u32>::new(),
+            "宣言のないカテゴリは空 Vec（捏造しない）"
+        );
+        assert_eq!(
+            r.category_ids(BindNamespace::Kero, "目"),
+            Vec::<u32>::new(),
+            "kero 名前空間は sakura の宣言を引かない（隔離）"
+        );
     }
 
     /// 宣言済みの (カテゴリ, パーツ) は名前空間ごとに着せ替え ID を返す（R3.2）。

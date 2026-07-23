@@ -319,8 +319,16 @@ fn handle_message<O: SurfaceOutput>(
                         }
                     };
 
-                    // (step 6) 適用＋発行。Changed のみ単一発行点から発行し、実機 grep マーカーを発火する。
-                    match states.apply_bind(&cue.actor, id, on) {
+                    // (step 6) 適用＋発行。mustselect カテゴリの着衣（on=true）は排他置換
+                    // （同カテゴリ他パーツを自動 off・D11・R4.5）、それ以外（脱衣・非 mustselect）は
+                    // 従来の加算/除去。Changed のみ単一発行点から発行し、実機 grep マーカーを発火する。
+                    let outcome = if on && bind_resolver.is_mustselect(ns, &category) {
+                        let cat_ids = bind_resolver.category_ids(ns, &category);
+                        states.apply_bind_exclusive(&cue.actor, &cat_ids, id)
+                    } else {
+                        states.apply_bind(&cue.actor, id, on)
+                    };
+                    match outcome {
                         BindApplyOutcome::Changed(command) => {
                             emit_display(out, command); // 単一発行点（R3.5）
                             // 実機サインオフの grep マーカー（R7.1・有界 auto-exit＋ログ grep 流儀）。
@@ -585,7 +593,7 @@ mod tests {
     use crate::resolve::SurfaceResolver;
     use crate::state::ScopeStates;
     use areka_emo_compose::BindSet;
-    use std::collections::BTreeMap;
+    use std::collections::{BTreeMap, BTreeSet};
 
     /// 同期 `handle_message` 用の小さな解決層（"通常"→2100 の 1 件のみ）。
     fn tiny_resolver() -> SurfaceResolver {
@@ -1306,11 +1314,23 @@ mod tests {
         cue
     }
 
-    /// (腕,伸び)→1302 の sakura 名前表を持つ解決層（static={1100,1207} と交わらない新 id）。
+    /// (腕,伸び)→1302 の sakura 名前表を持つ解決層（static={1100,1207} と交わらない新 id・mustselect なし）。
     fn arm_bind_resolver() -> BindResolver {
         let mut sakura: BTreeMap<(String, String), u32> = BTreeMap::new();
         sakura.insert(("腕".to_string(), "伸び".to_string()), 1302);
-        BindResolver::new(sakura, BTreeMap::new())
+        BindResolver::new(sakura, BTreeMap::new(), BTreeSet::new(), BTreeSet::new())
+    }
+
+    /// mustselect カテゴリ「目」を持つ sakura 解決層（D11・R4.5・actor 経路の排他検証用）。
+    /// (目,笑)→1301 / (目,普)→1303 / (目,閉)→1304。static={1100,1207} と交わらない新 id。
+    fn eye_mustselect_resolver() -> BindResolver {
+        let mut sakura: BTreeMap<(String, String), u32> = BTreeMap::new();
+        sakura.insert(("目".to_string(), "笑".to_string()), 1301);
+        sakura.insert(("目".to_string(), "普".to_string()), 1303);
+        sakura.insert(("目".to_string(), "閉".to_string()), 1304);
+        let mut sakura_ms: BTreeSet<String> = BTreeSet::new();
+        sakura_ms.insert("目".to_string());
+        BindResolver::new(sakura, BTreeMap::new(), sakura_ms, BTreeSet::new())
     }
 
     /// ケース15（6.3/3.5/7.1・D5・D8 正常経路）: 表示中 scope で解決可能な Apply は現 surface を
@@ -1359,6 +1379,108 @@ mod tests {
             flow.0.contains("seriko: bind 適用"),
             "実機 grep マーカー文言を含む（R7.1）: {}",
             flow.0
+        );
+    }
+
+    /// mustselect 排他（R4.5・D11・actor 経路）: mustselect カテゴリ「目」で 2 つの異なる
+    /// パーツを続けて着衣（on）すると、2 度目の Show は同カテゴリ旧パーツ(1301) を外し新パーツ
+    /// (1304) のみを載せる（高々 1 パーツ有効・排他置換が actor を貫通して効くことを実証）。
+    #[test]
+    fn bind_mustselect_second_on_replaces_prior_part_in_category() {
+        let resolver = tiny_resolver();
+        let bind_resolver = eye_mustselect_resolver();
+        let mut states = fresh_states(); // static = {1100, 1207}
+        let scope = ActorKey::from("0");
+        states.apply(&scope, SurfaceTarget::Show(2100));
+
+        let mut out = MockSurfaceOutput::new();
+        let records = out.records();
+
+        // 1 度目: 目=笑（1301）を着衣 → {1100,1207,1301}。
+        handle_message(
+            &resolver,
+            &bind_resolver,
+            &mut states,
+            &mut out,
+            SerikoMsg::Cue(bind_carrier_cue("0", &["目", "笑", "1"])),
+        );
+        // 2 度目: 目=閉（1304）を着衣 → 排他置換で 1301 が外れ {1100,1207,1304}。
+        handle_message(
+            &resolver,
+            &bind_resolver,
+            &mut states,
+            &mut out,
+            SerikoMsg::Cue(bind_carrier_cue("0", &["目", "閉", "1"])),
+        );
+
+        let recorded = records.lock().expect("records mutex poisoned");
+        assert_eq!(
+            &*recorded,
+            &[
+                DisplayCommand::Show {
+                    scope: scope.clone(),
+                    surface_id: 2100,
+                    binds: BindSet::from_ids([1100, 1207, 1301]),
+                },
+                DisplayCommand::Show {
+                    scope: scope.clone(),
+                    surface_id: 2100,
+                    binds: BindSet::from_ids([1100, 1207, 1304]),
+                },
+            ],
+            "mustselect カテゴリの 2 度目着衣は旧パーツ(1301) を自動 off し新パーツ(1304) のみ有効（R4.5・D11）"
+        );
+        // 動的集合も同カテゴリで高々 1 パーツ（1301 は残らない）。
+        assert_eq!(
+            states.current_binds(&scope),
+            &BindSet::from_ids([1100, 1207, 1304]),
+            "排他置換後は同カテゴリ内高々 1 パーツ有効（1301 は残らない・R4.5）"
+        );
+    }
+
+    /// 非 mustselect カテゴリは従来どおり加算される（R4.5 の対比・actor 経路）。
+    /// 非排他の resolver（arm_bind_resolver・mustselect なし）で 2 つ着衣すると両方が積算される。
+    #[test]
+    fn bind_non_mustselect_accumulates_via_actor() {
+        // (腕,伸び)→1302 と (肩,上げ)→1500 を持つ非 mustselect 表。
+        let resolver = tiny_resolver();
+        let mut sakura: BTreeMap<(String, String), u32> = BTreeMap::new();
+        sakura.insert(("腕".to_string(), "伸び".to_string()), 1302);
+        sakura.insert(("肩".to_string(), "上げ".to_string()), 1500);
+        let bind_resolver =
+            BindResolver::new(sakura, BTreeMap::new(), BTreeSet::new(), BTreeSet::new());
+        let mut states = fresh_states(); // static = {1100, 1207}
+        let scope = ActorKey::from("0");
+        states.apply(&scope, SurfaceTarget::Show(2100));
+
+        let mut out = MockSurfaceOutput::new();
+        let records = out.records();
+
+        handle_message(
+            &resolver,
+            &bind_resolver,
+            &mut states,
+            &mut out,
+            SerikoMsg::Cue(bind_carrier_cue("0", &["腕", "伸び", "1"])),
+        );
+        handle_message(
+            &resolver,
+            &bind_resolver,
+            &mut states,
+            &mut out,
+            SerikoMsg::Cue(bind_carrier_cue("0", &["肩", "上げ", "1"])),
+        );
+
+        // 非 mustselect ゆえ両方積算（1302 も 1500 も残る）。
+        assert_eq!(
+            states.current_binds(&scope),
+            &BindSet::from_ids([1100, 1207, 1302, 1500]),
+            "非 mustselect カテゴリは従来どおり加算（両パーツ有効・R4.5 対比）"
+        );
+        assert_eq!(
+            records.lock().expect("records mutex poisoned").len(),
+            2,
+            "2 回とも表示中 scope で Changed 発行"
         );
     }
 

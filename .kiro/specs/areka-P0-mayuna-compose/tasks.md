@@ -187,7 +187,7 @@
   - _Requirements: 4.5_
   - _Boundary: parsers BindGroupNames_
 
-- [ ] 10.2 seriko に排他選択の解決・状態・分岐を追加する
+- [x] 10.2 seriko に排他選択の解決・状態・分岐を追加する
   - bind 名前解決情報へ「mustselect カテゴリ集合」と「カテゴリ→着せ替えID索引」を additive に追加し、あるカテゴリが mustselect か・そのカテゴリに属するID集合を引ける純関数を提供する（parsers 非依存・素データ構築は不変）
   - 現在の着せ替え集合から、指定カテゴリの全IDを外したうえで対象IDを有効化する排他置換の状態適用を追加する（結果集合の Changed/StateOnly/Unchanged 峻別は既存と同型・冪等も維持）
   - bind 消費分岐で、着衣かつ mustselect カテゴリのときは排他置換を、それ以外（脱衣・非 mustselect）は既存の加算/除去を用いるよう振り分ける
