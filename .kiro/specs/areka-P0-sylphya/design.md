@@ -360,7 +360,7 @@ pub const EXT_EVENT_SET: &str = "property.set";
 - `MirrorImage` は不変（生成後変更なし）。publish 適用はアクターが新しい `Arc<MirrorImage>` を構築して swap（copy-on-write。M1 の publish 頻度は微小・高頻度化時の送り側 coalescing は M2 の②層配線の領分）
 - 読みは `RwLock<Arc<MirrorImage>>` の read lock 内で Arc clone するのみ（他アクター・他スレッドへのブロッキング照会なし・R2.7）
 - 解決結果に由来（backing/層）を含めない（R2.4——ログには記録するが API 型には載せない）
-- asker 相対語彙（currentghost 系等）は per-asker 区画から、大域語彙は global 区画から引く。M1 は単一 asker だが API 形は第一級（R2.6）
+- asker 相対語彙はフラット・点付きとも per-asker 区画から、大域語彙は global 区画から引く（解決順 per-asker → global）。M1 実導出フラット語彙は全てゴースト相対ゆえ per-asker へ着地し、global 区画は将来の大域語彙用の名前空間として確保する。M1 は単一 asker だが API 形・鏡像モデルとも第一級（R2.6・設計討議 #1）
 
 **Contracts**: Service [x] / State [x]
 
@@ -403,7 +403,7 @@ impl SylphyaReader {
 
 ##### State Management
 
-- State model: `MirrorImage { epoch: u64, flat_global: BTreeMap<String,String>, dotted_global: BTreeMap<String,String>, dotted_per_asker: BTreeMap<AskerId, BTreeMap<String,String>> }`。点付き区画の key は正準文字列形（`PropPath` の正規化表示）
+- State model: `MirrorImage { epoch: u64, flat_per_asker: BTreeMap<AskerId, BTreeMap<String,String>>, flat_global: BTreeMap<String,String>, dotted_global: BTreeMap<String,String>, dotted_per_asker: BTreeMap<AskerId, BTreeMap<String,String>> }`。点付き区画の key は正準文字列形（`PropPath` の正規化表示）。**フラット解決順は per-asker → global**（M1 実導出フラット語彙〔username/selfname/selfname2/keroname〕は全てゴースト相対＝per-asker へ着地・global は将来の大域語彙〔screenwidth 系等〕用に確保——設計討議 #1 裁定）
 - Persistence & consistency: 永続層ロード結果は dotted 区画の `areka.*` へ投影（読み口 1 本化）。整合はアクター直列化＋epoch 単調増加
 - Concurrency strategy: single-writer（アクター）×multi-reader（Arc clone）。epoch はフェンス予約シーム（M1 では読み API に露出しない）
 
@@ -427,7 +427,8 @@ impl SylphyaReader {
 ```rust
 pub enum SylphyaMsg {
     /// ①静的構成層の publish（ghost 結線が boot 時に投函・フラット/点付き両区画）。
-    PublishStatic { flat: Vec<(String, String)>, dotted: Vec<(String, String)> },
+    /// flat はゴースト相対＝asker の per-asker 区画へ着地（設計討議 #1）。
+    PublishStatic { asker: AskerId, flat: Vec<(String, String)>, dotted: Vec<(String, String)> },
     /// ④SHIORI 照会層の publish（value=None は 204/失敗＝不在の観測記録）。
     PublishShiori { asker: AskerId, name: String, value: Option<String> },
     /// SET コマンド（分類・中継・host 区画書込。即応答不要＝投函して即返る）。
@@ -453,7 +454,7 @@ pub trait RuntimeCommandSink: Send {
 #[derive(Clone)]
 pub struct SylphyaPublisher { /* tx: std::sync::mpsc::Sender<SylphyaMsg> */ }
 impl SylphyaPublisher {
-    pub fn publish_static(&self, flat: Vec<(String, String)>, dotted: Vec<(String, String)>);
+    pub fn publish_static(&self, asker: AskerId, flat: Vec<(String, String)>, dotted: Vec<(String, String)>);
     pub fn publish_shiori(&self, asker: AskerId, name: String, value: Option<String>);
     pub fn set(&self, asker: AskerId, key: String, value: String);
     pub fn persist_put(&self, scope: PersistScope, entries: Vec<(PersistKey, String)>) /* reply なし版 */;
@@ -740,7 +741,7 @@ R9.3 サインオフ用の固定ログイベント（変更時は Revalidation T
 
 1. **key パーサ**: セレクタ 5 形（括弧名・`.index(ID)`・`.current`・`.count`・`scope(ID)`）の受理と `PropPath` 構造・不正形（空セグメント・括弧不閉・非数値 index）の `KeyParseError` 決定論
 2. **語彙台帳**: 件数檻（フラット 26／ルート枝 10／汎用名 17／Resource 159／SET 有効群全項）・username のみ `ConsumerDefault`・`%*` が解決対象外・ext イベント名予約の存在
-3. **解決と縮退**: 値あり→`Value`／フラット不在→政策別 `Degraded`／点付き不在→`NotFound`／asker 相対区画と global 区画の分岐（別 asker で host 区画が混ざらない・R2.6）／同一鏡像で同一結果（R2.5）
+3. **解決と縮退**: 値あり→`Value`／フラット不在→政策別 `Degraded`／点付き不在→`NotFound`／asker 相対区画と global 区画の分岐（別 asker で host 区画・フラット per-asker 区画が混ざらない＝別 asker の username/selfname 非混同・解決順 per-asker → global・R2.6）／同一鏡像で同一結果（R2.5）
 4. **鏡像と凍結**: publish 後の epoch 単調増加・`talk_snapshot` が値実在分のみ含む・スナップショット取得後に publish しても取得済み写像が不変（per-talk 凍結・R2.1）
 5. **SylphyaCore（SET 分類）**: SET 有効群→RuntimeCommand（M1 未配線 warn）・自由 key→StoreWrite（host 区画反映）・SET 無効正準語彙→NotSettable（書込なし）
 6. **永続往復**: 4 key 族全 key の put→load 値等価（R6.6）・write-through 後のファイル内容と鏡像投影の一致

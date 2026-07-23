@@ -218,6 +218,7 @@ sylphya は最下層 crate だが②の状態所有者は上位エンジンの�
 10. **論点10（R9.3 証跡）→ ログイベント名を design で固定**: kanade prefetch 完了 `info!(target:"areka_kanade::resource", id="username", outcome=..., "shiori resource prefetch done")`（outcome ∈ value/no_content/failed）・sylphya publish 適用 `debug!(target:"areka_sylphya::actor", ...)`・ghost provider `debug!(target:"areka_ghost", "talk snapshot from sylphya reader")`。実機サインオフは `AREKA_APP_SMOKE_EXIT_MS` 有界終了＋`RUST_LOG` 出力の grep（`shiori resource prefetch done` かつ `outcome="no_content"`）＋バルーン生 `%username` 非露出（既存 dialogue-tags 手順と同型）。
 11. **論点11（4 key 族契約＝W4 への確定形）**: 正準 key 名 `areka.window.scope(ID).x|y`・`areka.balloon.offset.scope(ID).x|y`・`areka.boot.count`・`areka.vanish.count`（全て SHIORI〔ゴースト〕スコープ・値は文字列）。TOML スキーマは design.md「Data Models」の表が正本。W4 の `/kiro-design` 前 rebase 時にこの契約を消費側へ渡す。kanade `on_first_boot` Ref0 差替は W4 の領分（sylphya は器のみ・不変）。
 12. **論点12（②層クロスアクター）→ §10 裁定の push 鏡像で型確定・実配線 M2**: `SylphyaMsg::Publish*` 系がそのまま②層の push 口（所有エンジンが publisher クローンを持ち状態変化時に投函・詰まったら送り側 coalescing）。M1 は②③とも縮退のまま、`BackingLayer` enum（5 層）と publish 口の型が層の存在を表現する（R3.6）。
+13. **設計討議 #1（2026-07-23・開発者裁定）: フラット per-asker 区画を最初から確保**: バリデーション指摘 1 の裁定。鏡像は `flat_per_asker`＋`flat_global` の両区画を持ち、解決順は per-asker → global。M1 実導出フラット語彙（username/selfname/selfname2/keroname）は正典上すべてゴースト相対（SHIORI Resource／descript 由来）ゆえ per-asker へ着地し、`flat_global` は将来の大域語彙（screenwidth 系等）用の名前空間として確保する。`PublishStatic`/`PublishShiori` とも asker 第一級（ghost 結線は自 AskerId で publish）。M1 単一 asker でも鏡像モデルを先に正しく持つ＝M2 多重ゴースト時の鏡像型変更（Revalidation Trigger）を回避。
 
 ### synthesis 帰結（3 レンズ）
 
