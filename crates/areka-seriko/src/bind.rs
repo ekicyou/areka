@@ -111,6 +111,113 @@ pub fn scope_namespace(scope: &ActorKey) -> Option<BindNamespace> {
     }
 }
 
+/// `\![bind,...]` トークン列の M1 類別（D8・純関数・不透明保持）。
+///
+/// [`parse_bind_directive`] が返す区分。本タスクは**類別のみ**を担い、各区分の
+/// severity（実導出／`warn!`＋skip／`error!`＋skip）は付けない——それはアクター
+/// （task 6.1）の責務（D8）。derive した `PartialEq`/`Eq` はテストの区分照合用。
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum BindDirective {
+    /// 名前キー＋明示 on/off（`on` 欄が `"1"`/`"0"`）。実導出する（R4.1）。
+    Apply {
+        /// bindgroup カテゴリ名（trim 済み）。
+        category: String,
+        /// bindgroup パーツ名（trim 済み）。
+        part: String,
+        /// `"1"`→`true`・`"0"`→`false`。
+        on: bool,
+    },
+    /// 数値欄が空欄／省略のトグル形。M1 では実導出せず安全縮退（`warn!`＋skip・R4.2）。
+    Toggle {
+        /// bindgroup カテゴリ名（trim 済み）。
+        category: String,
+        /// bindgroup パーツ名（trim 済み）。
+        part: String,
+    },
+    /// パーツ名が空欄のカテゴリ単位形。M1 では実導出せず安全縮退（`warn!`＋skip・R4.2）。
+    ///
+    /// `on` はカテゴリ単位では厳密に action されない M1 縮退ゆえ寛容に保持する
+    /// （`"1"`→`Some(true)`・`"0"`→`Some(false)`・欠落/空/その他→`None`）。不正値でも
+    /// `Malformed` にはしない（縮退形の中での不透明保持）。
+    CategoryWide {
+        /// bindgroup カテゴリ名（trim 済み）。
+        category: String,
+        /// on/off の緩やかな保持（`None` = 未指定または非 `"1"`/`"0"`）。
+        on: Option<bool>,
+    },
+    /// カテゴリ欠落／on/off 値破損（非 `"1"`/`"0"` の非空文字列）。`error!`＋skip（D8）。
+    Malformed,
+}
+
+/// `\![bind,...]` のトークン列（カテゴリ, パーツ, 値, …）を M1 区分へ類別する純関数。
+///
+/// 各トークンは trim してから判定し、返る文字列にも trim 済みの値を格納する（parsers D2
+/// の trim 規律に整合）。トークンは「不在」または「trim 後に空」のとき空とみなす。分岐は
+/// design（`parse_bind_directive` 分岐・行 ~326）の順に厳密に従う:
+///
+/// 1. カテゴリ欠落/空 → [`BindDirective::Malformed`]。
+/// 2. パーツ欠落/空 → [`BindDirective::CategoryWide`]（`on` は `"1"`/`"0"` のみ写し他は `None`）。
+/// 3. 値 `"1"` → [`BindDirective::Apply`]`{ on: true }`。
+/// 4. 値 `"0"` → [`BindDirective::Apply`]`{ on: false }`。
+/// 5. 値 欠落/空 → [`BindDirective::Toggle`]。
+/// 6. 値が非空の非 `"1"`/`"0"` 文字列 → [`BindDirective::Malformed`]（on/off 値破損）。
+///
+/// 第 4 トークン以降は無視する（正典に第 4 引数なし・不透明）。副作用なし・純粋。
+/// 各区分の severity（実導出／`warn!`／`error!`）は付けない——アクター（task 6.1）が写す（D8）。
+pub fn parse_bind_directive(tokens: &[&str]) -> BindDirective {
+    // トークンを trim して取り出す。不在または trim 後空を「空」とみなす（`None` へ畳む）。
+    let trimmed = |i: usize| -> Option<&str> {
+        tokens.get(i).map(|t| t.trim()).filter(|t| !t.is_empty())
+    };
+    let category = trimmed(0);
+    let part = trimmed(1);
+    let value = trimmed(2);
+
+    // (1) カテゴリ欠落/空 → Malformed。
+    let category = match category {
+        Some(c) => c,
+        None => return BindDirective::Malformed,
+    };
+
+    // (2) パーツ欠落/空 → CategoryWide（on は "1"/"0" のみ写し、他は None・寛容）。
+    let part = match part {
+        Some(p) => p,
+        None => {
+            let on = match value {
+                Some("1") => Some(true),
+                Some("0") => Some(false),
+                _ => None,
+            };
+            return BindDirective::CategoryWide {
+                category: category.to_string(),
+                on,
+            };
+        }
+    };
+
+    // (3)-(6) 値の類別。
+    match value {
+        // (3)(4) 明示 on/off → Apply。
+        Some("1") => BindDirective::Apply {
+            category: category.to_string(),
+            part: part.to_string(),
+            on: true,
+        },
+        Some("0") => BindDirective::Apply {
+            category: category.to_string(),
+            part: part.to_string(),
+            on: false,
+        },
+        // (5) 値欠落/空 → Toggle。
+        None => BindDirective::Toggle {
+            category: category.to_string(),
+            part: part.to_string(),
+        },
+        // (6) 非空の非 "1"/"0" → on/off 値破損 → Malformed。
+        Some(_) => BindDirective::Malformed,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -260,6 +367,166 @@ mod tests {
             scope_namespace(&ActorKey::from("x")),
             None,
             "その他の scope 識別子は判定なし（None・D7）"
+        );
+    }
+
+    // ─────────────────────────────────────────────────────────────────────
+    // Task 3.2: bind コマンド引数の類別（parse_bind_directive）純関数。
+    // Observable = 正常形（Apply）/トグル形（Toggle）/カテゴリ単位形（CategoryWide）/
+    // 破損形（Malformed）それぞれが期待どおり区分される（D8・R4.1/R4.2）。
+    // ─────────────────────────────────────────────────────────────────────
+
+    /// 正常形（R4.1）: 名前キー＋明示 on/off。"1"→on:true・"0"→on:false の Apply。
+    #[test]
+    fn parse_apply_explicit_on_off() {
+        assert_eq!(
+            parse_bind_directive(&["腕", "伸び", "1"]),
+            BindDirective::Apply {
+                category: "腕".into(),
+                part: "伸び".into(),
+                on: true
+            },
+            "値 \"1\" は Apply{{on:true}}（実導出・R4.1）"
+        );
+        assert_eq!(
+            parse_bind_directive(&["腕", "伸び", "0"]),
+            BindDirective::Apply {
+                category: "腕".into(),
+                part: "伸び".into(),
+                on: false
+            },
+            "値 \"0\" は Apply{{on:false}}（実導出・R4.1）"
+        );
+    }
+
+    /// トグル形（R4.2）: 数値欄が空欄／省略 → Toggle（M1 縮退・warn+skip は actor 責務）。
+    #[test]
+    fn parse_toggle_empty_or_absent_value() {
+        assert_eq!(
+            parse_bind_directive(&["腕", "伸び"]),
+            BindDirective::Toggle {
+                category: "腕".into(),
+                part: "伸び".into()
+            },
+            "値トークン省略は Toggle（R4.2）"
+        );
+        assert_eq!(
+            parse_bind_directive(&["腕", "伸び", ""]),
+            BindDirective::Toggle {
+                category: "腕".into(),
+                part: "伸び".into()
+            },
+            "値トークンが空欄（trim 後空）は Toggle（R4.2）"
+        );
+    }
+
+    /// カテゴリ単位形（R4.2）: パーツ名が空欄／省略 → CategoryWide。
+    /// on はカテゴリ単位では厳密に action されない M1 縮退ゆえ寛容: "1"→Some(true)・
+    /// "0"→Some(false)・欠落/空/その他→None（Malformed にしない）。
+    #[test]
+    fn parse_category_wide_part_empty_or_absent() {
+        assert_eq!(
+            parse_bind_directive(&["腕", "", ""]),
+            BindDirective::CategoryWide {
+                category: "腕".into(),
+                on: None
+            },
+            "パーツ空欄・値空欄は CategoryWide{{on:None}}（R4.2）"
+        );
+        assert_eq!(
+            parse_bind_directive(&["腕"]),
+            BindDirective::CategoryWide {
+                category: "腕".into(),
+                on: None
+            },
+            "パーツトークン省略は CategoryWide{{on:None}}（R4.2）"
+        );
+        assert_eq!(
+            parse_bind_directive(&["腕", "", "1"]),
+            BindDirective::CategoryWide {
+                category: "腕".into(),
+                on: Some(true)
+            },
+            "パーツ空欄＋値 \"1\" は CategoryWide{{on:Some(true)}}（R4.2）"
+        );
+        assert_eq!(
+            parse_bind_directive(&["腕", "", "0"]),
+            BindDirective::CategoryWide {
+                category: "腕".into(),
+                on: Some(false)
+            },
+            "パーツ空欄＋値 \"0\" は CategoryWide{{on:Some(false)}}（R4.2）"
+        );
+        assert_eq!(
+            parse_bind_directive(&["腕", "", "abc"]),
+            BindDirective::CategoryWide {
+                category: "腕".into(),
+                on: None
+            },
+            "パーツ空欄＋不正値でも CategoryWide は寛容に on:None（Malformed にしない・R4.2）"
+        );
+    }
+
+    /// 破損形: カテゴリ欠落／空欄 → Malformed（error+skip は actor 責務）。
+    #[test]
+    fn parse_malformed_category_missing() {
+        assert_eq!(
+            parse_bind_directive(&[]),
+            BindDirective::Malformed,
+            "全トークン欠落は Malformed（カテゴリ欠落）"
+        );
+        assert_eq!(
+            parse_bind_directive(&["", "伸び", "1"]),
+            BindDirective::Malformed,
+            "カテゴリが空欄（trim 後空）は Malformed"
+        );
+        assert_eq!(
+            parse_bind_directive(&["   ", "伸び", "1"]),
+            BindDirective::Malformed,
+            "カテゴリが空白のみ（trim 後空）は Malformed"
+        );
+    }
+
+    /// 破損形: on/off 値の破損（非 "1"/"0" の非空文字列） → Malformed。
+    #[test]
+    fn parse_malformed_bad_on_off_value() {
+        assert_eq!(
+            parse_bind_directive(&["腕", "伸び", "2"]),
+            BindDirective::Malformed,
+            "値 \"2\" は on/off 値破損 → Malformed"
+        );
+        assert_eq!(
+            parse_bind_directive(&["腕", "伸び", "abc"]),
+            BindDirective::Malformed,
+            "値 \"abc\" は on/off 値破損 → Malformed"
+        );
+    }
+
+    /// 第 4 トークン以降は無視（正典に第 4 引数なし・不透明）。
+    #[test]
+    fn parse_ignores_fourth_token() {
+        assert_eq!(
+            parse_bind_directive(&["腕", "伸び", "1", "extra"]),
+            BindDirective::Apply {
+                category: "腕".into(),
+                part: "伸び".into(),
+                on: true
+            },
+            "第 4 トークン \"extra\" は無視され Apply{{on:true}} のまま"
+        );
+    }
+
+    /// trim: 各トークンは trim され、返る文字列も trim 済みが格納される（parsers D2 整合）。
+    #[test]
+    fn parse_trims_tokens_and_stores_trimmed() {
+        assert_eq!(
+            parse_bind_directive(&[" 腕 ", " 伸び ", "1"]),
+            BindDirective::Apply {
+                category: "腕".into(),
+                part: "伸び".into(),
+                on: true
+            },
+            "前後空白は trim され trim 済み値が格納される"
         );
     }
 }
