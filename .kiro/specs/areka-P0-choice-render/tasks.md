@@ -8,7 +8,7 @@
   - _Requirements: 2.1, 2.4, 6.5_
   - _Boundary: StateIncrement_
 
-- [ ] 1.2 Choice/Cursor の良性スキップシームを実消費へ置換する
+- [x] 1.2 Choice/Cursor の良性スキップシームを実消費へ置換する
   - _Depends: 1.1_
   - `ChoiceSpan{ordinal,id,label,references,glyph_range}` と `ActorTextState.choices` を追加（items と同一ライフサイクル＝`Clear`/`ClearAll` で同時初期化）
   - `TextItem::CursorMove{x: CursorCoord, y: CursorCoord}` を追加し、Cursor cue 消費時に items へ追記

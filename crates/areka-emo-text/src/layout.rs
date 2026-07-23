@@ -338,6 +338,12 @@ impl LayoutEngine {
                     // 内容ビューボックスはここでは一切変化しない（R1.2/1.5）。
                     pending = Some(pending.map_or(ratio, |acc| acc + ratio));
                 }
+                TextItem::CursorMove { .. } => {
+                    // カーソル指定は非グリフ（reveal 対象外）。実配置（pending-cursor 遅延実体化＝
+                    // 現在行確定→保留改行 Σratio→カーソル指定軸上書き）は LayoutCursor タスク
+                    // （layout.rs 増分・design.md「純粋層 / LayoutCursor」）の領分。本 P0 増分では
+                    // 行レイアウトへ影響させない no-op プレースホルダとして走査を素通しする。
+                }
             }
         }
         // 最終行の確定: グリフを含む現在行のみ確定する（行の確定は常にグリフ配置に
