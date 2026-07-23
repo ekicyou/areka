@@ -13,7 +13,7 @@
   - _Requirements: 8.1_
 
 - [ ] 2. Core: interest-keeper とテストハーネス決定論化ヘルパーの実装
-- [ ] 2.1 (P) プロセスグローバル interest-keeper を実装する
+- [x] 2.1 (P) プロセスグローバル interest-keeper を実装する
   - `capture()` 呼び出し時に一度だけ確立される interest-keeper（`OnceLock` 経由の bare `registry()` global default 常駐 ＋ `rebuild_interest_cache()` 呼出）を追加し、`capture()` 先頭から呼ぶ
   - 先行する外部 global subscriber が存在する場合は、原因と対処を説明するメッセージで明示的に panic する（静かな縮退にしない）
   - モジュール doc「決定性の要（PITFALL）」節へ根本原因・keeper 機構・不変条件（本モジュールより先に global subscriber を設定しない）を統合追記し、既存の旧 flaky 注記は履歴として保持する
