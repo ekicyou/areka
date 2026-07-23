@@ -13,6 +13,7 @@ areka（ukadoc 準拠の互換ベースウェア）で emo2 ゴーストは起�
 - **In scope**: 自律 tick 時間源の供給／`random,N` の毎秒抽選（bind 非依存）／`bind+random,N` の着せ替えゲート抽選／pattern タイムライン進行規則（wait[ms] 累積・現在コマ1枚・`-1` 停止・末尾残留・再生中は非再抽選）／合成入力の PatternState 第一級拡張（合成署名＋合成キャッシュキー）／冪等発行／注入 tick＋注入乱数による決定論／実機まばたき2系統の人間サインオフ。
 - **Out of scope**: 動的 bind 切替（上流 mayuna-compose 完了・read-only 参照のみ）／talk cue 再生（上流 cue-playback 完了）／他の interval 語彙（sometimes/rarely/periodic/always/runonce/never/yen-e/talk/bind/bind+always/bind+runonce）・`-2`・wait 範囲記法・exclusive option（いずれも emo2 未使用）／口パク（`interval,talk`）／`\i[N]` 明示再生タグ。
 - **Adjacent expectations**: bindgroup の ON/OFF は上流の着せ替え状態を read-only で参照するのみで本ランタイムは変更しない。合成側（emo-compose）の animation ID 整列規則（昇順描画＝画家のアルゴリズム）と pattern0 厳格選択は不変で、transient コマは同キーで合流する。合成キャッシュ（emo-present）はキーを PatternState 分だけ拡張し容量1メモ化の思想は不変。自律 tick 源は既存の他系統 tick を改変せず additive に追加する。talk cue タイムラインと pattern タイムラインは別の時間系であり、pattern ループは talk 非従属の自律駆動である。
+- **Surface 種別の非仕切り（areka シェル/バルーン統一グラフィック思想）**: pattern ループの駆動対象は surface 種別（シェル／バルーン）を区別せず、interval アニメを定義する任意の surface に一様適用される。能力を面種で仕切ることはしない（将来「バルーン surface 内にキャラを貼って喋らせる」「シェル領域にテキスト領域を置く」等の統合を要件が阻害しないため）。emo2 fixture が interval アニメを立ち絵 surface のみに定義するのは観測されたデータ事実であり、本 spec のスコープ制限ではない。pattern タイムライン評価器・毎秒抽選・PatternState はいずれも surface 非依存に保つ。
 
 ## Requirements
 
