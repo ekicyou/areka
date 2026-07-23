@@ -118,6 +118,8 @@
 5. **行ヒットジオメトリ照会 API の形**: 下流（choice-interact）が読む契約の型（`Vec<(LineRect, ChoiceId)>` 相当か）と、座標系（image px validrect-local か物理 px か・`scroll_state().committed` 反映後か）。emo-present `TextSlotView`/`hit_region` パターンとの整合。
 6. **「選択肢表示中」照会状態の所在**: render 層が独自に「選択肢 resident 集合が存在」で表すか、`CuePlayer::WaitingForChoice` を参照するか（本 spec は照会のみ・バリア解決は下流）。
 7. **cursor.\* スタイル解決の差替シーム**: M1 実導出形（fixture 指定 square 塗り＋文字色切替）と未指定縮退（矩形反転）を 1 機構でどう表し、未確定正典形（pen.color 等サブキー）を語彙保持で非アクティブ縮退させるか（memory「defer-canon-with-full-vocabulary」の 4 点セット）。
+   - **要件ディスカッション #2 裁定**: 矩形反転縮退は **M1 実導出対象**（R4.3／R6.1 に確定・R6.5 の縮退リストから除外）。反転方式の具体（色計算）は Research Needed #5 のとおり設計フェーズで 1 つ確定し pixel 檻化する。
+   - **将来アイデア（開発者発案・M1 外・スコープ外メモ）**: hover 行の 1.2 倍拡大表示のような areka 独自ハイライト形。cursor.\* スタイル解決の差替シームは、正典スタイル群に加えて後日こうした非正典スタイルを差し込める形（スタイル enum／trait の開放性）を意識して切ること。
 8. **原子的無効化の単位**: `Clear`/`ClearAll`/新 talk での選択肢 resident＋hit 幾何＋hover クリアの同時消去を、既存 `request_clear`（executor）＋`state.apply_cue`（Clear）の 2 経路にどう相乗りさせ、片方だけ古い状態を作らないことを構造保証するか（R5.2）。
 9. **M1 縮退境界の型/語彙シーム**: marker.\*／`\_a`／`\__q`／`\![*]`／cursor.\* 画像キーを「型/語彙シームとして保持・実導出せず」を、既存の `#[non_exhaustive]`＋予約名定数パターン（`ImageSeam`/`SurfaceSeam`/`TextEffects`/`RESERVED_EFFECT_*`）に倣ってどう表すか。
 10. **実機 hover 注入導線の具体形**（要件ディスカッション #1 裁定＝実機サインオフは「見える」＋「注入 hover で光る」の両方必達・R8.6 新設）: 実ポインタ非依存・本番既定無効の有界なデバッグ導線をどう実現するか——AREKA_ 名前空間の env ゲート駆動（[[areka-runtime-env-naming]]・[[areka-real-machine-signoff-bounded-auto-exit]] の bounded auto-exit 流儀と併走）か、actor への注入メッセージ（`UiSender` 規約）か。本番描画経路・決定論資産を汚さない additive 形の選定。
