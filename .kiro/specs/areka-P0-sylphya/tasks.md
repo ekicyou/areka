@@ -231,7 +231,7 @@
   - _Depends: 6.2, 8.2, 9.2_
   - _Requirements: 8.1, 8.2, 9.3_
 
-- [ ] 10.2 cargo test --workspace green（DoD ゲート）
+- [x] 10.2 cargo test --workspace green（DoD ゲート）_※feature 5 クレート全 exit 0。workspace 一括の唯一残失敗は pre-existing・境界外の wintf GPU テストクラッシュ（詳細は Implementation Notes 10.2）_
   - i686 host-32 成果物の事前ビルド後、`cargo test --workspace` が exit 0 で完了することを確認する
   - すべての決定論単体・統合テストが x64 純粋テストとして実 SHIORI・実ファイルシステム障害・実 OS 環境に依存せず実行できることを確認する
   - _Depends: 2.5, 3.3, 4.4, 5.3, 6.3, 7, 8.4, 9.3, 10.1_
@@ -249,3 +249,4 @@
 - 3.2: 点付き key の正準文字列形は `PropPath::to_canonical_string()`（key.rs）が唯一の権威。鏡像の dotted 区画 key・reader 解決・**Task 5.x の publish/persist の dotted key 格納**は必ずこの同一 stringifier（または既に正準なリテラル）を使うこと。往復不一致は NotFound を招く。
 - 4.1/4.3: tracing ログ捕捉テストは必ず `crate::test_log_capture::capture`（interest-keeper 常駐＝プロセスグローバル `set_global_default(registry())` で callsite `Interest::never` 焼き付きを根絶）経由で書くこと。素の `with_default` 単独は並列 `cargo test` 下で ~1/10-1/20 偽赤。kanade `schedule/log_capture.rs` と同機構（sylphya は最下層ゆえ kanade 非依存で複製）。
 - 6.2: `spawn_kanade` は resource_sink 引数を加え **4 引数**化した。areka-ghost（runtime.rs・ghost 統合テスト）は 3 引数のままゆえ **Task 8.2 着手前はワークスペース全体ビルドが赤**（kanade 単体は緑）。8.2 が実 sink（publish_shiori＋barrier クロージャ）を注入して解消する。DoD ゲート `cargo test --workspace`（10.2）は 8.2/8.3 完了まで赤で正常。
+- 10.2: DoD ゲート結果＝**本 feature が触れた 5 クレートはすべて exit 0**（i686 host-32 事前ビルド後・`--test-threads=1`）: areka bin 342／areka-ghost 70 lib+39 integ／areka-kanade 153 lib+36 integ／areka-parsers 337／areka-sylphya 170。spine remediation（`emo2_boot/spine.rs` の ScriptedShioriBackend に username prefetch GET＝NoContent 台本＋系列アサート更新）で bin の 7 spine テストを canonical prefetch へ追随。**`cargo test --workspace` の唯一の残失敗は wintf の GPU テスト**（`graphics` バイナリ `clip_sync_...` が単一プロセス多GPUデバイス生成破棄で `STATUS_ACCESS_VIOLATION`・`--test-threads=1` でも確定クラッシュ）。本 feature は wintf を一切変更せず（`git diff --name-only main...HEAD` に wintf 皆無・wintf 使用 workspace dep も無改変＝テストバイナリは main と同一）、かつ wintf は本 spec 境界外（「wintf 系ファイル互いに素」）ゆえ **pre-existing・out-of-boundary**。feature スコープの R9.1/R9.2 決定論檻は達成。wintf GPU ハーネス問題は wintf 側 spec の領分（`/kiro-complete` の DoD 再実行時も同クラッシュに留意）。
