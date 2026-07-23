@@ -242,6 +242,11 @@ ghost `runtime.rs` の boot 配線（`:381-408`）では ticker は kanade と d
 ### Decision D-8: bind ゲートは抽選時のみ（3.1 文言どおり）
 - **Selected**: `bind+random` のゲートは抽選判定時に `current_binds(scope).contains(anim.id)` を read-only 参照（面種によらず scope の bind 集合を一様参照）。再生中の bind 変化は再生を中断しない（要件が抽選判定のみを規定・最小決定論）。実機齟齬が観測されたら SSP 実観察で裏取り（9.4 と同じ流儀）。
 
+### Decision D-9: interval 未認識語彙の忠実転記（design 討議 #1・2026-07-23 開発者裁定）
+- **Selected**: `Interval` に `Other(Box<str>)` variant を追加（`#[non_exhaustive]` 内・下流非破壊）。`decode_animations` の未認識 interval キーワードの **fallback-Bind を撤去**し原文を `Other` へ忠実転記。表構築は `Other` を非採録・debug! に元語彙を明示（診断可能）。emo-compose の bind 分類は `Bind` のみ＝`Other` は静的経路にも乗らない（保持されるが駆動されない）。
+- **Rationale**: method 裁定（要件討議 #2）と同型——転記層は落とさない・黙らない。R8.2「完全形保持」が字義どおり成立し、[areka-log-first-no-silent-failure]／[areka-parser-transcribes-tree-downstream] と整合。emo2 は interval 3 種のみ使用ゆえ観測不変（golden 影響ゼロ）。
+- **Rejected**: (A) decode に warn! 1 行のみ（fallback-Bind 温存＝誤分類自体が残る）／(C) 追跡 spec 送りの明記のみ（転記の穴を知りながら残す）。
+
 ## Risks & Mitigations（design 追加分）
 
 - `DisplayCommand`/`PresentCommand` 拡張の match 連鎖漏れ — 非 non_exhaustive のコンパイル強制＋spine e2e golden で検出。

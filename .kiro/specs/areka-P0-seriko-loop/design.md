@@ -166,8 +166,8 @@ crates/areka-emo-compose/src/
 
 ### Modified Files
 
-- `crates/areka-parsers/src/shell/model.rs` — `DrawMethod` opaque NewType 追加・`Pattern` に `method: DrawMethod` 欄追加（doc に正典位置＝新形式第 1 位置／旧形式第 3 位置を転記）
-- `crates/areka-parsers/src/shell/decode.rs` — pattern 行の `overlay` フィルタ撤去・field[1] を method として全メソッド忠実転記
+- `crates/areka-parsers/src/shell/model.rs` — `DrawMethod` opaque NewType 追加・`Pattern` に `method: DrawMethod` 欄追加（doc に正典位置＝新形式第 1 位置／旧形式第 3 位置を転記）・`Interval` に `Other(Box<str>)` variant 追加（未認識 interval 語彙の原文忠実転記・討議 #1 裁定）
+- `crates/areka-parsers/src/shell/decode.rs` — pattern 行の `overlay` フィルタ撤去・field[1] を method として全メソッド忠実転記・未認識 interval キーワードの fallback-Bind 撤去→`Interval::Other(原文)` 転記
 - `crates/areka-parsers/src/shell/decode_tests.rs`／`parse_tests.rs`／`model_tests.rs` — method 転記の檻追加・既存 `Pattern` リテラルの追随
 - `crates/areka-emo-compose/src/lib.rs` — `pattern` モジュール公開・`compose_into`/`compose` に `pattern: &PatternState` 引数追加
 - `crates/areka-emo-compose/src/plan.rs` — `build_plan`/`derive_ops`/`flatten_surface` に pattern 合流（層(ii) の ID 整列へ transient コマ合流・同 ID は pattern0 置換）＋ pattern0/コマ双方への method ゲート（Overlay のみ駆動・非 Overlay warn+skip）
@@ -270,7 +270,7 @@ stateDiagram-v2
 | 7.4 | 本番は実時間・実 entropy 接続 | wire_emo2_boot / ghost ticker | `LoopTickerConfig` 既定 clock・`RandomState` シード | — |
 | 7.5 | 失敗はログを伴う | 全結線点 | error!/warn!/debug! の severity 規律（下記） | — |
 | 8.1 | 駆動は random/bind+random のみ | table | `LoopTrigger` 2 種のみ採録 | — |
-| 8.2 | 他語彙・`-2` 等は完全形保持・非駆動 | parsers / table / timeline | `Interval` non_exhaustive・非採録 debug!・負値 warn! | — |
+| 8.2 | 他語彙・`-2` 等は完全形保持・非駆動 | parsers / table / timeline | `Interval::Other(原文)` 忠実転記・非採録 debug!（元語彙込み）・負値 warn! | — |
 | 8.3 | 口パク・`\i[N]`・動的 bind・talk 除外 | table / actor | 採録対象外・既存経路不変 | — |
 | 8.4 | method 全語彙の忠実転記・overlay のみ駆動 | parsers / method.rs / plan | `DrawMethod`＋`ComposeMethod` registry・`is_implemented` ゲート | — |
 | 9.1 | 実機 kero まばたき | main / wire | 実 ticker＋実 rng＋grep マーカー | tick 経路 |
@@ -308,7 +308,7 @@ stateDiagram-v2
 **Responsibilities & Constraints**
 
 - `EmoWorld`（fold 済み＝append/ターゲット展開済み）から read-only スナップショットを構築する（発見 C の解消）。UI スレッドの World を実行時に参照しない（boot 一度きり・値渡し）。
-- `Interval::Random{k}`/`BindRandom{k}` のみ採録（8.1）。`Interval::Bind` および non_exhaustive の将来 variant は**採録せず debug! で記録**（8.2 の非駆動明示・match は `Bind` 明示腕＋`other` 腕で将来 additive シームを保つ）。
+- `Interval::Random{k}`/`BindRandom{k}` のみ採録（8.1）。`Interval::Bind`・`Interval::Other(語彙)` および non_exhaustive の将来 variant は**採録せず debug! で記録**（8.2 の非駆動明示。`Other` は**元語彙文字列込み**で記録＝「sometimes と書いたのに動かない」が診断可能・討議 #1 裁定。match は `Bind`/`Other` 明示腕＋`other` 腕で将来 additive シームを保つ）。
 - method は構築時に `ComposeMethod::from_name(DrawMethod::as_str())` で 1 回解決（完全語彙の型値・8.4）。コマ列は pattern index 昇順に整列して保持（疎 index 許容・kero の 0/1/3 実例）。
 - 縮退ガード（構築時 1 回・log-first）: コマ列空のアニメは非採録（warn!）・`k == 0` は非採録（warn!・1/0 は定義不能）。
 - 面種非依存: 表はどの `EmoWorld` からでも構築できる（シェル世界・バルーン世界の双方に同型適用・裁定 (a)）。
@@ -581,8 +581,9 @@ impl PatternState {
 
 - `DrawMethod(String)` opaque NewType（`new`/`as_str`・`ElementPath` 先例と同規律）。意味解釈（同義写像・実装可否）は下流 `ComposeMethod::from_name` の責務＝parser は原文を無加工で運ぶ。
 - `Pattern { index, method: DrawMethod, surface_id, wait, x, y }`。doc comment に正典位置を転記する: **新形式** `animation*.pattern*,描画メソッド,サーフェス番号,ウェイト,X,Y`（method＝第 1 位置・現行 lexer の対象）／**旧形式**（SERIKO 1.x）は method 第 3 位置（旧形式キー行の字句解析は emo2 subset 外＝Non-Goals。将来 lexer が旧位置を吸収して同一欄へ転記する）。
+- **interval の忠実転記（討議 #1 裁定・method と同型の是正）**: `Interval` に `Other(Box<str>)` variant を追加し、`decode_animations` の未認識 interval キーワード（sometimes/rarely/periodic/always/runonce 等）の **fallback-Bind を撤去**して原文のまま `Other` へ転記する。転記層は語彙を落とさない・黙らない（R8.2 の「完全形保持」が字義どおり成立）。`#[non_exhaustive]` ゆえ下流は既存 `other` 腕で非破壊。
 - `decode_animations`: `== Some("overlay")` フィルタを**撤去**し、field[1] を method として全 pattern 行を転記（欠落は空文字転記＝下流 `Unknown` 吸収）。surface_id/wait/x/y の位置・型は不変。
-- 非退行: 下流の意味変化（非 overlay pattern の流入）は emo-compose 側 method ゲート（D-5）が受ける。emo2 fixture は全 overlay ゆえ観測不変。
+- 非退行: 下流の意味変化（非 overlay pattern の流入）は emo-compose 側 method ゲート（D-5）が受ける。emo2 fixture は全 overlay・interval 3 種のみゆえ観測不変。`Interval::Other` は emo-compose の bind 分類（`Bind` のみ）に該当せず静的経路にも乗らない＝未知語彙は「保持されるが駆動されない」で一貫（8.2）。
 
 **Contracts**: State [x]
 
@@ -663,7 +664,8 @@ log-first・silent failure 禁止（[areka-log-first-no-silent-failure]）。入
 
 | 経路 | 事象 | Severity / 応答 |
 |---|---|---|
-| 表構築（boot 1 回） | 採録外 interval（Bind・将来 variant） | debug!（非駆動明示・8.2）・非採録 |
+| 表構築（boot 1 回） | 採録外 interval（Bind・Other{元語彙}・将来 variant） | debug!（非駆動明示・8.2。Other は元語彙文字列込み＝診断可能）・非採録 |
+| 転記（parse 1 回） | 未認識 interval キーワード | `Interval::Other(原文)` 忠実転記（fallback-Bind 撤去・討議 #1）・落とさない黙らない |
 | 表構築 | コマ列空・`k == 0` | warn!・非採録（1/0 定義不能の縮退ガード） |
 | 表構築 | 未知 method 名 | `ComposeMethod::Unknown` 吸収（method.rs 既存 warn!）・完全形保持 |
 | 評価（tick） | `-1` 以外の負 surface（`-2` 等） | warn!（アニメ・値込み・初回）＋自アニメ停止扱い（他アニメ停止は駆動しない・8.2） |
@@ -687,8 +689,8 @@ log-first・silent failure 禁止（[areka-log-first-no-silent-failure]）。入
 1. `timeline::frame_at` — 累積 wait 進行（境界値: 経過= t_k ちょうど／±1ms）・疎 index（0/1/3）・`Pending`（先頭 wait > 0）・`-1` で `Stopped`（4.3）・`-1` なし末尾で `FinishedResidual` 恒久（4.4/9.4）・単一コマ・wait 0 連鎖（emo2 実測列 0/150/22 と 0/40/80 を実データで）。
 2. `timeline::LotteryBoundary` — 境界跨ぎ 1 回・複数跨ぎ（catch-up）でも 1 回・境界ちょうど・非跨ぎ false。
 3. `timeline::should_fire`／`seeded_rng` — 固定シードの再現列・[0,k) 範囲・k=1（常時発火）・fire 条件（rng==0）。
-4. `table::from_world` — random/bind+random のみ採録・Bind/他 interval 非採録（debug! 檻）・k=0/コマ空の warn! 非採録・method 解決（overlay/add 同義・未知 Unknown）・pattern index 昇順整列。
-5. parser decode — method 忠実転記（overlay/replace/未知名/欠落）・非 overlay 行が**落ちない**こと（フィルタ撤去の檻）・既存欄の非退行。
+4. `table::from_world` — random/bind+random のみ採録・Bind/`Other` 非採録（debug! 檻・Other は元語彙文字列が記録されること）・k=0/コマ空の warn! 非採録・method 解決（overlay/add 同義・未知 Unknown）・pattern index 昇順整列。
+5. parser decode — method 忠実転記（overlay/replace/未知名/欠落）・非 overlay 行が**落ちない**こと（フィルタ撤去の檻）・未認識 interval キーワード（例 sometimes）が `Interval::Other(原文)` へ**忠実転記**され Bind へ倒れないこと（fallback-Bind 撤去の檻）・既存欄の非退行。
 
 ### Integration Tests（アクター・状態・合成）
 
