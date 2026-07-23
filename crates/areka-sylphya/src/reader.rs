@@ -439,3 +439,142 @@ mod tests {
         );
     }
 }
+
+/// 鏡像・読み口 決定論単体テスト群（Task 3.3・consolidated criterion-mapped cage）。
+///
+/// design §Testing Strategy → Unit Tests 3（解決と縮退）・4（鏡像と凍結）の 4 判断分岐を
+/// 決定論檻として集約する。x64 純粋（no I/O・no std::env・no clock——注入シーム不要の
+/// 純関数的解決）。既存の強い檻は重複させず、監査で判明した **点付き per-asker 非混同**
+/// （フラット側は `flat_other_asker_does_not_leak` 済・点付き側は本群が初出）を主眼に補う。
+///
+/// ## 判断分岐 → 檻 の対応（criterion → test）
+///
+/// - **値あり `Value`／政策別 `Degraded`／点付き `NotFound`**（R2.3・3.1・3.2）:
+///   `super::tests::{flat_value_present_per_asker, flat_absent_username_is_consumer_default,
+///   flat_absent_passthrough_token_is_passthrough, flat_absent_table_outside_is_passthrough,
+///   dotted_absent_is_not_found}`（既存・全政策——ConsumerDefault／PassThroughRaw／NotFound——を網羅）。
+/// - **per-asker 非混同（フラット＋点付き 両窓・両方向）**（R2.6）:
+///   フラット片方向は `super::tests::flat_other_asker_does_not_leak`（既存）。
+///   両窓・両方向の集約檻は本群 [`per_asker_non_mixing_flat_and_dotted`]（点付き per-asker
+///   非混同の初出檻）。
+/// - **per-talk 凍結**（R2.1）: `super::tests::talk_snapshot_is_frozen_after_publish`（既存）。
+/// - **決定論（同一鏡像 epoch×同一 asker×同一名→同一結果）**（R2.5・9.1）:
+///   フラット Value＋点付き NotFound は `super::tests::determinism_same_epoch_same_result`（既存）。
+///   点付き **Value** 分岐は本群 [`determinism_dotted_value_present_stable`] が補う。
+#[cfg(test)]
+mod mirror_reader_criteria_cage {
+    use crate::asker::{AskerContext, AskerId};
+    use crate::key::parse_dotted;
+    use crate::mirror::{MirrorImage, SharedMirror};
+    use crate::reader::SylphyaReader;
+    use crate::value::{DottedResolution, FlatResolution};
+    use crate::vocab::DegradePolicy;
+    use std::sync::Arc;
+
+    fn ctx(id: &str) -> AskerContext {
+        AskerContext { asker: AskerId::new(id) }
+    }
+
+    /// per-asker 区画が **フラット・点付きとも** asker 間で混ざらないこと（R2.6・両方向）。
+    ///
+    /// 2 asker（A=ghost/a・B=ghost/b）へ各々固有のフラット値（selfname／keroname）と
+    /// 固有の点付き値（同名 key の別値＋各自だけが持つ key）を据える。検証:
+    /// - フラット両方向: A の selfname=Alice・B の selfname=Bob が独立（相互に混ざらない）。
+    /// - フラット非漏洩: A のみが持つ keroname は B からは見えず政策縮退へ落ちる。
+    /// - 点付き両方向: 同一 key `areka.window.scope(0).x` が A→10・B→99 と asker ごとに独立
+    ///   （点付き per-asker 非混同の核——本檻の初出主眼）。
+    /// - 点付き非漏洩: A 固有 key は B から `NotFound`、B 固有 key は A から `NotFound`
+    ///   （per-asker 区画を取り違え／併合すれば別 asker の値が漏れて破れる）。
+    #[test]
+    fn per_asker_non_mixing_flat_and_dotted() {
+        let a = AskerId::new("ghost/a");
+        let b = AskerId::new("ghost/b");
+        let mut img = MirrorImage::empty();
+        // asker A: 固有フラット（selfname・keroname）＋固有点付き（共有 key の別値＋A 専用 key）。
+        {
+            let pa = img.flat_per_asker.entry(a.clone()).or_default();
+            pa.insert("selfname".into(), "Alice".into());
+            pa.insert("keroname".into(), "KeroA".into());
+        }
+        {
+            let da = img.dotted_per_asker.entry(a.clone()).or_default();
+            da.insert("areka.window.scope(0).x".into(), "10".into());
+            da.insert("areka.only_a".into(), "A1".into());
+        }
+        // asker B: 固有フラット（selfname のみ・keroname は持たない）＋固有点付き。
+        {
+            let pb = img.flat_per_asker.entry(b.clone()).or_default();
+            pb.insert("selfname".into(), "Bob".into());
+        }
+        {
+            let db = img.dotted_per_asker.entry(b.clone()).or_default();
+            db.insert("areka.window.scope(0).x".into(), "99".into());
+            db.insert("areka.only_b".into(), "B2".into());
+        }
+        let reader = SylphyaReader::new(SharedMirror::new(Arc::new(img)));
+
+        // --- フラット: 両方向で独立 ---
+        assert_eq!(
+            reader.resolve_flat(&ctx("ghost/a"), "selfname"),
+            FlatResolution::Value("Alice".into())
+        );
+        assert_eq!(
+            reader.resolve_flat(&ctx("ghost/b"), "selfname"),
+            FlatResolution::Value("Bob".into())
+        );
+        // A のみが持つ keroname は B へ漏れない（政策縮退＝PassThroughRaw）。
+        assert_eq!(
+            reader.resolve_flat(&ctx("ghost/b"), "keroname"),
+            FlatResolution::Degraded(DegradePolicy::PassThroughRaw)
+        );
+
+        // --- 点付き: 同一 key が asker ごとに独立（本檻の主眼） ---
+        let shared_key = parse_dotted("areka.window.scope(0).x").unwrap();
+        assert_eq!(
+            reader.resolve_dotted(&ctx("ghost/a"), &shared_key),
+            DottedResolution::Value("10".into())
+        );
+        assert_eq!(
+            reader.resolve_dotted(&ctx("ghost/b"), &shared_key),
+            DottedResolution::Value("99".into())
+        );
+        // A 専用 key は B からは不在・B 専用 key は A からは不在（per-asker 非漏洩）。
+        let only_a = parse_dotted("areka.only_a").unwrap();
+        let only_b = parse_dotted("areka.only_b").unwrap();
+        assert_eq!(
+            reader.resolve_dotted(&ctx("ghost/b"), &only_a),
+            DottedResolution::NotFound
+        );
+        assert_eq!(
+            reader.resolve_dotted(&ctx("ghost/a"), &only_b),
+            DottedResolution::NotFound
+        );
+    }
+
+    /// 決定論（点付き **Value** 分岐）: 同一鏡像 epoch×同一 asker×同一名 → 同一結果（R2.5・9.1）。
+    ///
+    /// 既存 `determinism_same_epoch_same_result` はフラット Value＋点付き NotFound を檻化する。
+    /// 本檻は publish を挟まず（epoch 不変）点付き Value を反復解決し、値が実在する分岐でも
+    /// 結果が安定（同一 `Value`）であることを補完する。
+    #[test]
+    fn determinism_dotted_value_present_stable() {
+        let a = AskerId::new("ghost/a");
+        let mut img = MirrorImage::empty();
+        img.dotted_per_asker
+            .entry(a.clone())
+            .or_default()
+            .insert("areka.window.scope(1).y".into(), "256".into());
+        let shared = SharedMirror::new(Arc::new(img));
+        let reader = SylphyaReader::new(shared.clone());
+        // epoch は publish を挟まないので不変（同一鏡像世代）。
+        let epoch_before = shared.load().epoch;
+        let path = parse_dotted("areka.window.scope(1).y").unwrap();
+        let r1 = reader.resolve_dotted(&ctx("ghost/a"), &path);
+        let r2 = reader.resolve_dotted(&ctx("ghost/a"), &path);
+        let r3 = reader.resolve_dotted_str(&ctx("ghost/a"), "areka.window.scope(1).y");
+        assert_eq!(r1, DottedResolution::Value("256".into()));
+        assert_eq!(r1, r2);
+        assert_eq!(r2, r3);
+        assert_eq!(shared.load().epoch, epoch_before);
+    }
+}

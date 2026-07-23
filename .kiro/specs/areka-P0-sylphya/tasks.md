@@ -63,7 +63,7 @@
   - _Depends: 2.1, 2.2, 2.3, 2.4, 3.1_
   - _Requirements: 1.5, 2.1, 2.3, 2.4, 3.1, 3.2, 5.2_
 
-- [ ] 3.3 鏡像・読み口 決定論単体テスト群
+- [x] 3.3 鏡像・読み口 決定論単体テスト群
   - 値あり→`Value`／フラット不在→政策別 `Degraded`／点付き不在→`NotFound` を検証する
   - 別 asker で per-asker 区画（フラット・点付きとも）が混ざらないこと（username・selfname 等が asker ごとに独立）を検証する
   - `talk_snapshot` 取得後に publish しても取得済み写像が不変であること（per-talk 凍結）を検証する
