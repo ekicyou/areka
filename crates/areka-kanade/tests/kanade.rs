@@ -9,6 +9,8 @@ mod common;
 mod boot_test;
 #[path = "kanade/steady_test.rs"]
 mod steady_test;
+#[path = "kanade/mouse_test.rs"]
+mod mouse_test;
 #[path = "kanade/close_test.rs"]
 mod close_test;
 #[path = "kanade/failure_test.rs"]

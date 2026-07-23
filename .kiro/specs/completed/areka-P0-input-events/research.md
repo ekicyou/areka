@@ -1,3 +1,9 @@
+# Research & Design Decisions: areka-P0-input-events
+
+> §1〜§6 = ギャップ分析（2026-07-16 実施・kiro-validate-gap）。
+> §7 = 設計フェーズ discovery（2026-07-19 実施・kiro-spec-design）。design 送り事項 10 項目の確定と根拠は §7.4。
+> 言語: ja（spec.json 準拠）。
+
 # ギャップ分析: areka-P0-input-events
 
 > 対象: 確定済み requirements.md（Req1〜8）と既存コードベースの実装ギャップ分析。
@@ -223,3 +229,71 @@
 - **→ `areka-P0-position-persist`（逆向き soft 依存・design 送り事項④に効く）**: 本 spec は「dblclick 即終了」＝**現状唯一の手動終了手段**を退役させる（Req6.1）。一方 position-persist の実機検証は「ドラッグ→**終了**→再起動→位置一致」＝**終了手段の存在が前提**。ゆえに **design 送り事項④（暫定退避終了）は「人間が任意タイミングで引ける手段」（例: Ctrl+ダブルクリック→`ForceQuit`）を残すこと**——env-gate の時限自動終了（`AREKA_APP_SMOKE_EXIT_MS` 系）**だけ**にすると position-persist の手動検証が詰む。本 spec の DoD には無関係だが design 判断の制約。
 - **→ `areka-P0-idle-talk`（brief の編集面申告漏れ）**: idle-talk brief:37 は編集面を「`crates/areka-kanade`（steady/events）＋テストのみ」と申告するが、`Status` ヘッダ注入には **`msg.rs:80-89` の `ShioriCall`（今日ヘッダ枠が無い）の改変**が要る＝**共有型の変更**で本 spec の新規マウス constructor にも波及。**本 spec が先に着地するのが現実的**（あちらは未 init）＝その場合**影響ゼロ**（idle-talk が自分のパスでマウス constructor も含めて更新）。逆順なら機械的・コンパイラ捕捉・数分の作業。**idle-talk の init 時に brief を訂正すべき**。
 - **→ ポートフォリオセッション（roadmap 正本の陳腐化2件・実測 2026-07-17）【✅ 同日ポートフォリオ合流セッションで是正済み＝ゴール表更新・時限ゲート解除・追記㉘】**: #60 の `/kiro-complete` は roadmap を**部分的にしか更新していない**。`roadmap.md:142`（エンジン別ポートフォリオ）は ✅完了（2026-07-17）へ更新済みだが、**(a) `:166` M1残工程ゴール表の `cue-playback-duration` 行が「実装中（別坑）」のまま**、**(b) `:189-190` 時限ゲート節が「`cue-playback-duration` が実装中の現在は…⛔一時並走不可（`mayuna-compose`／`seriko-loop`）」のまま**＝`:193`「cue-playback 完了後に `mayuna-compose`・`seriko-loop`・M-dialogue 3本を解禁」が**発火していない**。**本 spec のワークツリーは main より 1 コミット古いため、ここでは steering を編集しない**（陳腐化した複製への編集＋並走 steering 編集は `/kiro-complete` のマージ衝突源＝[[harness-shell-quirks]]）。**rebase 済みのポートフォリオセッションで是正すること**（ゲート解除は本 spec 単独で決めるべき判断でもない）。
+
+---
+
+## 7. 設計フェーズ discovery（2026-07-19・kiro-spec-design）
+
+> 種別: Extension（integration-focused light discovery）。settled main（`5a026cf2`＝origin/main と一致・W1 マージ後）に対する再突合。
+> §1〜§6 の 2026-07-16 偵察は W1（collision-geometry／idle-talk）マージ前のツリーに対する記述であり、本節が行アンカーと前提の正本。
+
+### 7.1 settled main への再突合（§1〜§6 からの主要ドリフト）
+
+| 旧記述（§1〜§6） | settled main の実測（2026-07-19） |
+|---|---|
+| collision resolver「未実装・mock 前提必須」 | **実装済み・マージ済み**: `crates/areka/src/emo2_boot/hit_region.rs`。`HitRegion { scope: u32, region: Option<String> }`（:40-47）・`resolve_hit_region(presenter: &EmoPresenter, scope: u32, x: i64, y: i64) -> HitRegion`（:68-73・純関数・trait なし）。現サーフェス解決は `EmoPresenter::hit_region` 内部。**全 `#[allow(dead_code)]`＝本 spec が最初の消費者**。座標は窓 client 物理 px・k=1.0 契約でサーフェス px と同一空間（:54-56）。`None`→空文字転写は input-events へ明示委譲（:29-30, 63-64）。scope は **u32**（brief の usize から是正済み） |
+| `ShioriCall::{Get,Notify}{id, references}` | idle-talk 完了で **`status: ExecutionStatus` フィールド追加済み**（msg.rs:86-97）。`events.rs` 全構築子が `&ExecutionSnapshot` を取り `ExecutionStatus::derive(snapshot)` を併送（DD-IT-3）。`snapshot_of(&Phase)`（mod.rs:165-173）が `Steady{Some}`/`BootVersion{Some}` でのみ talk_active=true |
+| ホワイトリスト檻＝構想 | **実在**: `ALLOWED_EVENT_IDS`（events.rs:48-60・6 ID）＋egress チョークポイント `round_trip_request`（actor.rs:155-191・:166 で検証・違反は `Failed(Internal)` 送出前拒否） |
+| `dispatcher.rs:97-113` | `on_start` Close-then-spawn は **:99-127**・stale Done 破棄は **:131-149**。`GhostRuntime::kanade()` は **runtime.rs:189-192**（doc「後続 input-events の結線点」現存） |
+| `PointerState.client_point` 更新経路 | WM_MOUSEMOVE は thread-local バッファへ蓄積し、**`transfer_buffers_to_world`（buffers.rs:127-164）が毎 tick 冒頭（Input スケジュール前）に `client_point`/`local_point` を最新サンプルへ更新**。`OnPointerMoved` は `dispatch_pointer_events` から **tick ごと**（WM_MOUSEMOVE ごとではない）に発火＝「位置変化」検出が間引きに必須 |
+| stand-in 即終了 | `on_ghost_pressed`＝spawn.rs:321-344 現存（登録 :167 balloon／:205 char）。UI→kanade の送出は**現在ゼロ**（`Sender<KanadeMsg>` は World に無い）。`GhostRuntime` は main のローカル（main.rs:284-316）で `app.run()` 復帰後に `shutdown(CloseReason::User)`（:328-335）→ `KanadeMsg::ForceQuit` |
+
+### 7.2 実 SSP wire 証拠（talk 再生中のマウス GET＝design 送り事項①の決定打）
+
+- **Sources**: `vendors/pasta/crates/pasta_shiori/doc/shiori-sample.log`（SSP 2.3.86・6709 行・idle-talk design が実 wire 正本と認定済み）を全数集計。
+- **Findings**: OnMouse 系イベント **121 件が全件 GET**。`Status: talking,balloon(0=0)` 中の OnMouseMove GET 30 件・`talking,choosing,...` 中 24 件・`choosing` 中 16 件——**talk 中・選択肢中も抑止/NOTIFY 化の例はゼロ**。OnMouseMove の実測値: Ref2="0"・Ref5="0"・Ref6="mouse"・Ref4="Shoulder"（当たり判定内）。OnMouseDoubleClick も GET（Ref5=0）。
+- **Ref4 空値の実在**: satori れしば実録（ukadoc MCP `satori:イベント#a168f205`）に `Reference4: `（空値・ヘッダ行あり）＋`Reference6: mouse` の SSP 実 wire。加えて touch.pasta:19 が「空 region は SSP が collision 領域外で送る正常値」とコメント明記。
+- **pasta の自衛**: `check_talk`＝`if act.req.status == "talking" then return nil`（idle-talk design §実 wire 証拠・lua_request.rs:110 生文字列転記）＝実機では talk 中のマウス GET は 204 相当となり置換は発生しない。
+- **Implications**: DD-IE-1（常に GET・Status 併送）・DD-IE-2（Value は置換＝SSP 既定の中断挙動。`\t` タイムクリティカルが「防ぐ側」の opt-in であることが既定＝中断の証左）・DD-IE-6（Ref4 None→空文字転写・Ref6="mouse" 固定）。
+
+### 7.3 実ゴースト規律（間引き規則のサイズ決め）
+
+- `touch_detect.lua`（fixtures emo2）: 同一 `region:actor` で **2 秒持続**（INITIAL_DELAY）・**2 秒 debounce**（途切れリセット）・発火後は FIRED で停止。時刻は `os.time()` 秒粒度。
+- → 間引き 100ms 上限（10Hz）は 2 秒窓に 20 サンプル＝十分な余裕。region 変化即時送出で撫で対象の出入りは遅延なし。`menu.pasta` の `OnMouseDoubleClick` は region 無条件応答＝dblclick 半分は collision 非依存で観測可能（§6.2 の実測と一致）。
+
+### 7.4 Design Decisions（design 送り事項 10 項目の確定）
+
+確定表は design.md「設計判断（DD-IE-1〜12）」が正本。ここには要件の「design 送り事項」との対応と、棄却案のみ記録する。
+
+| design 送り事項 | 確定 | 棄却案と理由 |
+|---|---|---|
+| ① talk 再生中のマウス GET | DD-IE-1: 常に GET（Status 併送）＋ DD-IE-2: Value は置換 | (B) 抑止＝SSP 実測に反する（wire 全件 GET）。(C) NOTIFY 化＝同じく実測に反する（OnSecondChange の DD-6 とマウスは SSP 上別扱い）。§3.3 の事前予想 C は実測で覆った |
+| ② 右ダブルクリック | DD-IE-4: 左と同様に送出（Ref5="1"） | 本体メニュー横取り案＝M1 に owner-draw メニューが存在しないため空振り |
+| ③ 間引き規則 | DD-IE-5: 位置変化 かつ（region 変化 or 100ms 経過）・per-scope・純関数 | 「region 変化時のみ」＝同一 region 内の撫で継続が伝わらず touch_detect の 2 秒持続が成立しない。「間隔のみ」＝hover（静止）を移動と誤送出（OnPointerMoved は tick ごと発火のため位置変化条件が必須） |
+| ④ 暫定退避終了 | DD-IE-7: Ctrl+左 dblclick→全ゴースト窓 close（window-close funnel→main shutdown→ForceQuit 系列）・wiring 非依存 | ハンドラから `KanadeMsg::ForceQuit` 直送＝kanade は止まるが窓が残り `app.run()` が復帰しない（窓駆動終了が現行の正規 funnel）。despawn＋ForceQuit 併送＝main の shutdown と二重発行で順序脆弱。env-gate のみ＝要件制約（人間が任意タイミングで引ける操作）違反 |
+| ⑤ Ref4 None 値・Ref6 | DD-IE-6: 空文字転写（ヘッダ行あり）・Ref6="mouse" 固定 | Ref4 省略（6 個 Reference）＝SSP 実 wire（7 個・空値）に反し、touch.pasta の空文字期待とも不整合 |
+| ⑥ M1 送出集合表 | DD-IE-11: {OnMouseMove, OnMouseDoubleClick} を ALLOWED_EVENT_IDS へ追加（計 8）・Middle/XButton dblclick 不送出 | — （マウス名前空間と idle-talk 禁止リスト（OnTalk/OnHour）は交わらず和は無矛盾＝§6.1 実測どおり） |
+| ⑦ OnMouseMove Ref5 | 要件反映済み（Req2.5・常に "0"）→ 構築子で固定 | — |
+| ⑧ フェーズルーティング | DD-IE-8: `step()` 横断アーム・Steady のみ委譲・他 trace 無視・pending_close 中 GET 不発行 | `dispatch_phase` 経由＝boot.rs/close.rs の `_` 防御アーム（warn）に落ち、正常入力（boot 中のマウス移動）を異常扱いしてしまう。両モジュール不改変の最小 additive を優先 |
+| ⑨ 配線資源の置き場 | DD-IE-9: `MouseWiring` NonSend 1 個（Sender クローン＋per-scope throttle＋RegionSource＋注入 clock）・self-gating | Resource（Send）分離案＝リゾルバ（presenter 読み）と間引き状態が UI スレッド所有のため分割の利得なし。Emo2Wiring 前例（NonSend＋FrameFinalize・順序非依存）に整合 |
+| ⑩ 座標契約 | DD-IE-10: client 物理 px 三者一致（PointerState.client_point＝Ref0/1＝resolver 入力・k=1.0） | — （hit_region.rs:54-56 と transfer_buffers_to_world の実測で確認） |
+
+**追加決定（本 discovery で判明した論点）**:
+
+- **DD-IE-3（ShioriReply へ origin 転記）**: `Input::ShioriReply { outcome, origin: &'static str }`（actor が往復した call id を転記・`pub(crate)`・構築点 actor.rs 一点）。目的＝(1) `ActiveTalk.origin` の正確化（現状 "OnSecondChange" 固定）、(2) origin 別 reply 政策——マウス origin の Value-during-talk＝置換／OnSecondChange origin＝DD-6 防御破棄を**保存**（idle-talk 檻を壊さない）。棄却案: origin なしで `Steady{Some}+Value` を全て置換扱い＝DD-6 檻の意味を破壊し、将来イベント種が増えた際の政策分岐が不能。
+- **DD-IE-12（balloon 窓は M1 不送出）**: リゾルバは shell 窓専用（collision-geometry C-1）・balloon 入力は choice-render の領分。balloon の stand-in ハンドラ登録（spawn.rs:167）は撤去。
+- **wintf は不改変**: `client_point` は `transfer_buffers_to_world` が毎 tick 最新化済みのため、当初懸念（Enter 時の座標が stale）は不存在。wintf 側の変更ゼロで Ref0/1 の新鮮な物理 px が得られる。
+
+### 7.5 Risks & Mitigations
+
+- **DD-6 檻の意味変更**（防御専用→OnSecondChange origin 限定の防御）— 既存テスト `steady_value_during_talk` は origin 前提を明示する形で更新（[[obsolete-vs-broken-test-policy]]＝意味は生きているので更新・除外しない）。
+- **置換経路は実機で発火しない**（実 pasta が Status 自衛で 204）— 決定論檻（mock shiori で Value を返す）が置換規律を担保。実機サインオフでは「talking 付き GET＋pasta の nil 自衛」をログで確認（design Testing Strategy §E2E-5）。
+- **`Sender<KanadeMsg>` 送出と終了系列の競合**（kanade 停止後のマウス送出）— warn＋no-op の正常縮退（log-first）。
+- **scope usize→u32 変換**（placement は usize・HitRegion は u32）— M1 実値 {0,1} で安全・debug_assert を添える。
+- **実 DPI≠96 での空間一致**は本 spec の実機サインオフが所有（collision-geometry R7.3 の probe は表示側契約まで）——[[areka-dpi-following-core-design]] の受け入れの罠（scale 常時 1.0 で差分未検証）に留意し、サインオフは DPI≠96 を明文条件とする。
+
+### 7.6 References
+
+- ukadoc: `list_shiori_event:OnMouseMove:1`／`list_shiori_event:OnMouseDoubleClick:1`／`list_shiori_event:OnMouseDoubleClickEx:1`（Middle/XButton＝M2 根拠）／`memo_shiorievent`／`descript_ghost: don't need onmousemove`（送出抑止はゴースト側宣言＝M1 未対応・将来シーム）
+- 実 wire: `vendors/pasta/crates/pasta_shiori/doc/shiori-sample.log`（SSP 2.3.86）／satori れしば実録（Ref4 空値・Ref6=mouse）
+- 契約正本: `completed/areka-P0-collision-geometry/design.md`（HitRegion・C-1・k=1.0）／`completed/areka-P0-idle-talk/design.md`（Status・whitelist・DD-IT-3/5/6・実 wire 証拠）／`completed/areka-P0-kanade`（Steady・StartTalk 棚）

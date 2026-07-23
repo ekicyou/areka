@@ -42,6 +42,41 @@ impl CloseReason {
     }
 }
 
+/// マウス入力（UI 配線層 → kanade の境界メッセージ・DD-IE 系）。
+///
+/// UI 配線層が collision resolver の `HitRegion { scope, region }` を destructure して詰める
+/// 値オブジェクト（同一性なし）。kanade は `region` を意味解釈せず不透明転写する
+/// （[[areka-surface-args-opaque-string-downstream-resolve]] と同精神）。座標は窓 client 物理 px。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MouseInput {
+    /// 対象スコープ（本体 0／相方 1・Ref3 へ転写）。
+    pub scope: u32,
+    /// ローカル x 座標（Ref0・窓 client 物理 px）。
+    pub x: i64,
+    /// ローカル y 座標（Ref1・同上）。
+    pub y: i64,
+    /// 当たり判定名（Ref4・不透明転写・`None`＝判定外）。
+    pub region: Option<String>,
+    /// イベント種別（移動／ダブルクリック）。
+    pub kind: MouseEventKind,
+}
+
+/// マウスイベント種別（OnMouseMove／OnMouseDoubleClick に対応）。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MouseEventKind {
+    /// マウス移動（OnMouseMove・Ref5 は常に "0"）。
+    Move,
+    /// ダブルクリック（OnMouseDoubleClick・Ref5 は左右で分岐）。
+    DoubleClick { button: MouseButton },
+}
+
+/// マウスボタン識別（Ref5: 左 "0"／右 "1"）。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MouseButton {
+    Left,
+    Right,
+}
+
 /// kanade アクター inbox（inbox 規約: 1 アクター 1 enum）。
 /// shiori 応答は inbox を経由しない（oneshot 往復・DD-2）ため variant を持たない＝
 /// 外部から偽の SHIORI 応答を注入できない構造。
@@ -58,6 +93,9 @@ pub enum KanadeMsg {
     ForceQuit { reason: CloseReason },
     /// SHIORI 死活の暫定 seam（DD-4・lifecycle 正本確定時に実型へ差し替え）。
     ShioriDown { reason: String },
+    /// マウス入力（移動／ダブルクリック）。Steady でのみ受理され、他フェーズでは安全に
+    /// 無視される（横断ルーティングは schedule 層・DD-IE-8）。additive 増分（Req 4.4）。
+    Mouse(MouseInput),
     /// 停止規約の Close（即時停止・非常口。正規終了は運行表経由）。
     Close,
 }
@@ -180,6 +218,51 @@ mod tests {
         assert_send_static::<KanadeConfig>();
         assert_send_static::<CloseReason>();
         assert_send_static::<MonotonicMs>();
+        // マウス入力契約型（Task 1・DD-IE 系）も Send + 'static な所有データのみ。
+        assert_send_static::<MouseInput>();
+        assert_send_static::<MouseEventKind>();
+        assert_send_static::<MouseButton>();
+    }
+
+    #[test]
+    fn mouse_input_types_construct_and_compare() {
+        // 境界メッセージの形（scope・座標・当たり判定名・種別・ボタン）が構築でき、
+        // 値の同一性（PartialEq/Eq）で観測できる。
+        let mv = MouseInput {
+            scope: 0,
+            x: 12,
+            y: 34,
+            region: Some("head".to_string()),
+            kind: MouseEventKind::Move,
+        };
+        assert_eq!(mv.kind, MouseEventKind::Move);
+        assert_eq!(mv.region.as_deref(), Some("head"));
+
+        let dbl_left = MouseInput {
+            scope: 1,
+            x: -5,
+            y: 0,
+            region: None,
+            kind: MouseEventKind::DoubleClick {
+                button: MouseButton::Left,
+            },
+        };
+        assert_eq!(
+            dbl_left.kind,
+            MouseEventKind::DoubleClick {
+                button: MouseButton::Left
+            }
+        );
+        assert_ne!(
+            MouseEventKind::DoubleClick {
+                button: MouseButton::Left
+            },
+            MouseEventKind::DoubleClick {
+                button: MouseButton::Right
+            }
+        );
+        // KanadeMsg::Mouse variant が MouseInput を運ぶ（additive・Req 4.4）。
+        let _ = KanadeMsg::Mouse(mv);
     }
 
     #[test]
