@@ -110,7 +110,7 @@
   - _Boundary: ChoicePure_
 
 - [ ] 6. Core: hover 対応ダーティ導出（viewbox.rs）
-- [ ] 6.1 行指紋へ hover 印フィールドを追加する
+- [x] 6.1 行指紋へ hover 印フィールドを追加する
   - _Depends: 3, 5.4_
   - `CommittedLine` へ `choice_marker` フィールドを追加（非 Choice 行は0・Choice 行は `hovered.map_or(0, |o| o+1)`）し、既存 `line_fingerprint`/`derive_dirty` アルゴリズムは無改変のまま供給する
   - Observable: 2つの選択肢行間で hover を切り替えると、変化した2行の指紋のみが差分となり他行の指紋は不変
@@ -237,3 +237,4 @@
 - choice.rs: `PositionedLine{rect: LineRect, glyphs: Vec<PositionedGlyph>}`・`PositionedGlyph{ch, inline_pos, advance}`（inline_pos=行内軸 image px 絶対）。annotate は配置済みグリフを0起点連番で数え items 全序数と一致させ純整数交差（lo/hi）で部分リビール自然打切り。lib.rs `PURE_SOURCES` へ choice.rs 登録済。
 - **設計不整合の解決（Task 8 申し送り）**: design 型枠は `derive_hit_rows(lines, segments, mode)` だが §座標写像式（正本）＋型枠 doc は canvas-local 入力を要求。layout 出力は絶対 image px ゆえ validrect 原点差引きが必須で、実装は `derive_hit_rows(lines, segments, mode, region: &TextRegion)` へ region を additive 追加（from_layout の `rect.left-region.left()` と同一パターン）。**Task 8 の present_actor は `derive_hit_rows(.., region)` を呼ぶこと**（region は既に present_actor が保持）。`to_window_physical(row, region, mode, committed, contract)` は §座標写像式どおり。
 - **Task 8.2 申し送り（5.4 署名逸脱）**: `decorate_canvas(canvas, segments, hover, style, default_font_color, region: &TextRegion, mode: WritingMode)` へ region+mode を additive 追加（5.2 と同型・絶対 inline_range→resident-local 変換に必要）。present_actor は `decorate_canvas(.., region, mode)` を呼ぶこと。line_index↔resident は 1:1（from_layout が行毎に1住人）。ChoiceRowSegment.inline_range は resident-local（GlyphRunContent ローカル系）。
+- viewbox.rs: `CommittedLine.choice_marker: u32`（Choice=`hovered.map_or(0,|o|o+1)`・他=0）。`is_backward_shrink` は block_pos_bits/extent_bits のみ比較で choice_marker を見ない＝hover のみ変化は全域縮退へ落ちず per-line 増分ダーティを維持（4.4）。

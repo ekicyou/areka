@@ -393,6 +393,10 @@ pub(crate) struct CommittedLine {
     block_pos_bits: u32,
     /// 行寸 `(幅, 高さ)` のビット表現（image px）。
     extent_bits: (u32, u32),
+    /// hover 印（Choice 行のみ非 0・非 Choice 行は常に 0）。非 hover の Choice 行は 0・
+    /// hover 中は `ordinal + 1`（0 と衝突させない）。hover の付与/切替/解除で当該 Choice 行の
+    /// 指紋だけが変わり、既存 `derive_dirty` が当該行のみをダーティ化する（R4.4）。
+    choice_marker: u32,
 }
 
 impl ScrollPlanner {
@@ -602,10 +606,21 @@ fn line_fingerprint(resident: &Resident, mode: WritingMode) -> CommittedLine {
         WritingMode::HorizontalTb => dy,
         WritingMode::VerticalRl | WritingMode::VerticalLr => dx,
     };
+    // hover 印: Choice 行のみ非 0（非 hover=0・hover ordinal o=o+1 で 0 と衝突させない）。
+    // 非 Choice 住人は常に 0。hover の付与/切替/解除で当該 Choice 行の指紋だけが変わり、
+    // 既存 line_fingerprint/derive_dirty のアルゴリズムを無改変のまま当該行のみをダーティ化する
+    // （R4.4）。
+    let choice_marker = match &resident.content {
+        ResidentContent::Choice(choice) => choice.hovered.map_or(0, |o| o as u32 + 1),
+        ResidentContent::GlyphRun(_)
+        | ResidentContent::Image(_)
+        | ResidentContent::Surface(_) => 0,
+    };
     CommittedLine {
         text,
         block_pos_bits: block_pos.to_bits(),
         extent_bits: (extent.0.to_bits(), extent.1.to_bits()),
+        choice_marker,
     }
 }
 
@@ -740,9 +755,13 @@ mod tests {
 
     use super::{
         DIRTY_GUARD_IMG_PX, FramePlan, LineOverhang, PhysicalRect, ScrollPlanner, ScrollState,
-        block_axis_vector,
+        block_axis_vector, line_fingerprint,
     };
-    use crate::canvas::ContentCanvas;
+    use crate::canvas::{
+        ChoiceLineContent, ChoiceRowSegment, ContentCanvas, GlyphRunContent, RegionTransform,
+        Resident, ResidentContent, TextEffects,
+    };
+    use crate::layout::PositionedGlyph;
     use crate::layout::{FixedMetrics, LayoutEngine, VisibleWindow, WrapPlan};
     use crate::region::{ScaleContract, TextRegion};
     use crate::state::TextItem;
@@ -2260,5 +2279,89 @@ mod tests {
             }
             other => panic!("後方縮退は全域 Update を期待したが {other:?}"),
         }
+    }
+
+    // ── 6.1 R4.4: 行指紋の hover 印（choice_marker）——hover 切替は当該行の指紋だけを変える ──
+
+    /// 行内 n グリフの GlyphRunContent（inline_pos 連番・全角 advance 10）。
+    fn run_content(text: &str) -> GlyphRunContent {
+        let glyphs = text
+            .chars()
+            .enumerate()
+            .map(|(i, ch)| PositionedGlyph {
+                ch,
+                inline_pos: i as f32 * 10.0,
+                advance: 10.0,
+            })
+            .collect();
+        GlyphRunContent {
+            glyphs,
+            size: (text.chars().count() as f32 * 10.0, 10.0),
+        }
+    }
+
+    /// GlyphRun 住人（非 Choice・ブロック軸位置 dy）。
+    fn glyph_resident(text: &str, dy: f32) -> Resident {
+        Resident {
+            content: ResidentContent::GlyphRun(run_content(text)),
+            transform: RegionTransform::translation(0.0, dy),
+            effects: TextEffects::default(),
+        }
+    }
+
+    /// Choice 住人（hover ordinal 注入・ブロック軸位置 dy・素描画は GlyphRun と同一）。
+    fn choice_resident(text: &str, dy: f32, hovered: Option<usize>) -> Resident {
+        let run = run_content(text);
+        let w = run.size.0;
+        Resident {
+            content: ResidentContent::Choice(ChoiceLineContent {
+                run,
+                segments: vec![ChoiceRowSegment {
+                    ordinal: 0,
+                    inline_range: (0.0, w),
+                }],
+                hovered,
+                highlight: None,
+            }),
+            transform: RegionTransform::translation(0.0, dy),
+            effects: TextEffects::default(),
+        }
+    }
+
+    /// hover を選択肢行 A→B へ切り替えると、変化した 2 行（choice_marker が動いた行）の指紋のみが
+    /// 差分となり、非 Choice 行を含む他行の指紋は不変（choice_marker が hover を指紋へ運ぶ・R4.4）。
+    /// あわせて非 Choice 行の `choice_marker` は常に 0・Choice 行は `hovered.map_or(0, |o| o+1)`。
+    #[test]
+    fn choice_marker_hover_switch_dirties_only_two_changed_lines() {
+        let mode = WritingMode::HorizontalTb;
+        // 4 行: [GlyphRun, Choice A, Choice B, GlyphRun]（ブロック軸 0/13/26/39）。
+        let before = [
+            glyph_resident("見出し", 0.0),
+            choice_resident("えらぶА", 13.0, Some(0)), // A に hover
+            choice_resident("えらぶБ", 26.0, None),
+            glyph_resident("脚注", 39.0),
+        ];
+        let after = [
+            glyph_resident("見出し", 0.0),
+            choice_resident("えらぶА", 13.0, None),
+            choice_resident("えらぶБ", 26.0, Some(0)), // hover を B へ切替
+            glyph_resident("脚注", 39.0),
+        ];
+        let fp_before: Vec<_> = before.iter().map(|r| line_fingerprint(r, mode)).collect();
+        let fp_after: Vec<_> = after.iter().map(|r| line_fingerprint(r, mode)).collect();
+
+        // 変化したのは選択肢 2 行（index 1,2）のみ・他行は不変。
+        assert_eq!(fp_before[0], fp_after[0], "非 Choice 見出し行は不変");
+        assert_ne!(fp_before[1], fp_after[1], "hover が外れた選択肢行は指紋差分");
+        assert_ne!(fp_before[2], fp_after[2], "hover が乗った選択肢行は指紋差分");
+        assert_eq!(fp_before[3], fp_after[3], "非 Choice 脚注行は不変");
+
+        // 非 Choice 行の choice_marker は常に 0・Choice 行は hovered.map_or(0, |o| o+1)。
+        assert_eq!(fp_before[0].choice_marker, 0, "非 Choice は marker 0");
+        assert_eq!(fp_before[1].choice_marker, 1, "hover ordinal 0 → 1");
+        assert_eq!(fp_before[2].choice_marker, 0, "非 hover Choice → 0");
+        assert_eq!(fp_before[3].choice_marker, 0, "非 Choice は marker 0");
+        assert_eq!(fp_after[1].choice_marker, 0, "hover 解除 → 0");
+        assert_eq!(fp_after[2].choice_marker, 1, "hover 付与 → 1");
     }
 }
