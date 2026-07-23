@@ -123,3 +123,156 @@
 8. **原子的無効化の単位**: `Clear`/`ClearAll`/新 talk での選択肢 resident＋hit 幾何＋hover クリアの同時消去を、既存 `request_clear`（executor）＋`state.apply_cue`（Clear）の 2 経路にどう相乗りさせ、片方だけ古い状態を作らないことを構造保証するか（R5.2）。
 9. **M1 縮退境界の型/語彙シーム**: marker.\*／`\_a`／`\__q`／`\![*]`／cursor.\* 画像キーを「型/語彙シームとして保持・実導出せず」を、既存の `#[non_exhaustive]`＋予約名定数パターン（`ImageSeam`/`SurfaceSeam`/`TextEffects`/`RESERVED_EFFECT_*`）に倣ってどう表すか。
 10. **実機 hover 注入導線の具体形**（要件ディスカッション #1 裁定＝実機サインオフは「見える」＋「注入 hover で光る」の両方必達・R8.6 新設）: 実ポインタ非依存・本番既定無効の有界なデバッグ導線をどう実現するか——AREKA_ 名前空間の env ゲート駆動（[[areka-runtime-env-naming]]・[[areka-real-machine-signoff-bounded-auto-exit]] の bounded auto-exit 流儀と併走）か、actor への注入メッセージ（`UiSender` 規約）か。本番描画経路・決定論資産を汚さない additive 形の選定。
+
+---
+
+# 設計フェーズ Discovery＋Design Decisions（2026-07-23 追記・design.md の根拠正本）
+
+> 本追記が上記ギャップ分析の「Research Needed」5 項目と「設計判断項目」10 項目を確定させる。
+> 手段: ukadoc MCP（正典）＋settled main（W2 mayuna マージ後）の実コード再突合。
+
+## Discovery スコープ
+
+- **分類**: Extension（既存 emo-text 縦経路への additive 増分）→ light discovery＋正典確定（ukadoc）。
+- **行アンカー再突合（2026-07-23 実測・settled main）**: emo-text Choice アーム＝`state.rs:234-241`（warn `:240`）・Cursor アーム＝`state.rs:243-251`（warn `:249`）・`choice_warned`/`cursor_warned` once-guard＝`state.rs:167-171`。`actor.rs` の no-op 群＝`:249-257`。dola `CueCommand::Choice{id,text,references}`＝`command.rs:143-148`・`Cursor{x,y}`＝`:179`。CuePlayer の Choice 二重真実源（配送列 FIFO＋`pending_choices` push）＝`runtime.rs:196-227`・`WaitingForChoice` 遷移＝`:242-246`（**バリアは sink へ配送されない内部状態**——表示層は cue 列から WaitForChoice を観測できない）。`PositionedLine`/`LineRect`/`PositionedGlyph`＝`layout.rs:101-132`・遅延改行 `pending: Option<f32>`＝`:230-232`・ゲート順序①〜④＝`:243-249`。`ResidentContent`（`#[non_exhaustive]`）＝`canvas.rs:171-180`。`line_fingerprint`/`CommittedLine`＝`viewbox.rs:578-598`/`:388-396`（**text＋block_pos＋extent のみ＝ハイライト状態は指紋外**）。`ViewboxExecutor::render` の住人 match＝`viewbox_draw.rs:275-289`・`resident_rect`＝`viewbox.rs:605-618`。`TextLayerRuntime` アクセサ群（`surface`/`draw_stats` の additive パターン）＝`actor.rs:278-294`。emo2 結線＝`crates/areka/src/emo2_boot/frame.rs`（`register_actor_view` `:486`・text phase `present_frame` `:695`）。
+
+## Research Log（Research Needed 5 項目の確定）
+
+### RN-1: cursor.\* スタイルの具体マップ（確定）
+
+- **Sources**: ukadoc `descript_balloon` cursor.\* 全キー（`cursor.style`／`cursor.brush.color.{r,g,b}`／`cursor.pen.color.{r,g,b}`／`cursor.font.color.{r,g,b}`／`cursor.font.shadowcolor.\*`／`cursor.font.shadowstyle`／`cursor.blendmethod`）。
+- **Findings**:
+  - `cursor.style,形状`: 選択肢マーカーの形状。`square`＝矩形塗り／`underline`＝下線／`square+underline`＝両方／`none`＝無し。**既定 square**。
+  - `cursor.brush.color.{r,g,b}`: マーカー矩形**内**の色（0–255・既定 0）。
+  - `cursor.pen.color.{r,g,b}`: 矩形**枠**および下線の色（既定＝`cursor.font.color`）。
+  - `cursor.font.color.{r,g,b}`: hover 中の文字色（既定 0）。「ラスタオペレーションコマンドが無い場合使用」＝`blendmethod` が `none` のとき有効。
+  - `cursor.blendmethod,コマンド`: ROP2 ラスタオペレーション。`none`＝無し（既定）・`notmaskpen`・`mergepennot`・SSP のみ全 SetROP2 オペレータ。
+  - fixture `emo2-kakukaku/descript.txt:43-53` 実指定: `blendmethod,none`・`style,square`・`brush.color` (105,25,25)・`pen.color` (65,0,0)・`font.color` (255,255,255)＝**M1 実導出形は「brush.color の矩形塗り＋font.color への文字色切替（blendmethod=none）」**。
+  - `cursor,ファイル名`（マウスカーソル画像）は別キー・別物（M1 外）で確認。
+- **Implications**: M1 アクティブ形＝`square`（塗り＋文字色切替）と `none`（マーカー無し＝自明実装）。`underline`／`square+underline`／ROP 系 blendmethod は語彙保持＋warn-once 縮退。`pen.color`（枠色）は語彙保持（M1 の square 塗りは枠なし・fixture の見た目は brush 塗りが支配）・shadow 系も語彙保持のみ。
+
+### RN-2: クリック領域の幅（確定＝文字幅）
+
+- **Sources**: ukadoc `\q[タイトル,ID]` 記述例「`さくらスクリプトは好き？\q[好き,Like]\q[嫌い,Hate]。`」——複数 `\q` が**同一行に並置**できる。
+- **Findings**: `\q` はインラインの選択スパンであり、同一行に複数共存できる以上、クリック領域は**行全幅ではなく選択肢テキストのグリフ範囲（文字幅）**でなければ正典と矛盾する。
+- **Implications**: ヒット矩形＝「当該選択肢のグリフ列の行内範囲（先頭グリフ位置〜最終グリフ位置＋送り幅）× 行矩形のブロック軸範囲（font_height）」。emo2 メニュー（1 行 1 選択肢）でも自然にこの規則の特例になる。ハイライト矩形＝ヒット矩形と同一（描画とヒットの座標整合・R3.3 を単一導出で構造保証）。
+
+### RN-3: `\_l[x,y]` の単位定義（確定）
+
+- **Sources**: ukadoc `\_l[x,y]` 全文。
+- **Findings**:
+  - 裸数値＝**バルーンの文字描画範囲左上からのピクセル単位座標**（絶対）。
+  - 省略＝当該軸は移動しない（両軸省略＝無効果）。
+  - `XXem`＝文字高さ基準（1em＝タグ時点の文字高さ・小数可）。
+  - `XXlh`＝行高さ基準（**1lh＝1em＋行間**・小数可）。
+  - `XX%`＝文字高さ基準（100%＝文字高さ）。
+  - `@XX`＝現在描画位置からの相対（負値＝左/上・em/% と共存可）。
+  - `\_l` 実行直後は行揃えが左揃えへリセット（areka M1 は行揃え未実装＝該当挙動なし）。
+  - `\c[line]` 仕様より `\_l` は「行」の区切り（意図的改行と同格）＝現在行を閉じて新位置から始める。
+- **Implications**: areka 対応＝`em → ResolvedFont::height`（image px）・`lh → GlyphMetrics::line_pitch(font_height)`（`ceil(h×1.25)`＝em＋行間、正典と一致）・裸数値＝image px 恒等・原点＝validrect 左上（`TextRegion::left()/top()`＝文字描画範囲左上）。換算は image px で完結し物理化は既存 `×k` 一点適用に乗る（DPI 一貫・R2.2）。M1 実装＝絶対 px/em/lh＋省略。`%`・`@`（相対）・負値絶対＝語彙保持＋warn-once 縮退（状態不変スキップ・R2.4/R6.5——負値絶対は ukadoc に定義なし＝未確定形）。
+
+### RN-4: `\q` 表示仕様（確定）
+
+- **Sources**: ukadoc `\q[タイトル,ID]`・`\__q[ID,...]`。
+- **Findings**: `\q` は自動改行しない（自動改行は `\__q` の領分と明記）。fixture も `\n` 手動区切り。選択後イベントは OnChoiceSelect(Ex)（下流 choice-select-events の領分）。
+- **Implications**: 表示層は選択肢テキストへ明示改行を挿入しない（改行は台本の `\n`＝NewLine cue が担う）。選択肢グリフが折返し閾値を超えた場合は既存折返しに従う（M1 縮退・emo2 メニュー実測範囲では発火しない）。
+
+### RN-5: 矩形反転縮退の具体仕様（確定・要件ディスカッション #2 裁定の実装形）
+
+- **Context**: cursor.\* 未指定バルーン向けのハイライト（R4.3／R6.1・M1 実導出対象）。emo-text の文字面は**透明サーフェス上の自前合成**（下地バルーン画像は emo-present 側レイヤ）ゆえ、下地ピクセルを読んで反転する古典 ROP は層構造上不可能。自層内で完結する決定論的な「反転」を 1 つ確定する。
+- **確定仕様**: hover 中の選択肢セグメントについて、(a) セグメント矩形をバルーン既定文字色 `font.color` で塗り、(b) セグメント内の文字色を `(255−r, 255−g, 255−b)`（各成分反転・α 不変）へ切り替える。既定の黒文字なら「黒矩形＋白文字」＝古典反転マーカーと同じ見た目。同一入力→同一ピクセル（pixel 檻可能）。
+- **Implications**: cursor.\* 指定形（square 塗り）と未指定形（反転）は「矩形塗り色＋文字色」の 2 パラメータで統一表現できる→ 差替シーム（ResolvedChoiceStyle）は単一の描画実行に写像できる。
+
+## Architecture Pattern Evaluation（設計判断 #1/#2 の裁定根拠）
+
+| Option | 概要 | 強み | リスク | 裁定 |
+|---|---|---|---|---|
+| A: 既存モジュール内挿 | layout/viewbox/canvas へ選択肢・hover を直接追加 | 新規ファイル最小 | 2000 行級ファイルの責務混濁・hover が ScrollPlanner の凝集度を下げる | ✗ |
+| B: 全面新設 | choice.rs＋choice_draw.rs 新設 | 責務独立 | 既存差分再描画・キャッシュと二重機構化 | ✗ |
+| **C: ハイブリッド（採用）** | 純粋導出は新設 `choice.rs` へ集約・連続経路への差し込みは最小拡張 | 純関数全網羅（R3.4/R7.5）と既存資産流用の両取り | 分割線の規律が要る（下記 Design Decisions で確定） | ✅ |
+
+## Design Decisions（ギャップ分析「設計判断項目」10 項目の確定）
+
+### DD-1: 選択肢 resident の表現＝`ResidentContent::Choice` additive variant（新 variant 案を採用）
+
+- **Alternatives**: (a) 新 variant／(b) GlyphRun 住人＋脇レジストリ並置。
+- **Selected**: (a)。`ResidentContent`（`#[non_exhaustive]`・canvas.rs:171）へ `Choice(ChoiceLineContent)` を追加。`ChoiceLineContent`＝グリフ行（`GlyphRunContent` 同形）＋選択肢セグメントメタ（ordinal・行内範囲）＋hover 印。
+- **Rationale**: (i) 定義 crate 内は non_exhaustive でも網羅 match が強制される＝全 match 箇所（`line_fingerprint`・`resident_rect`・`viewbox_draw::render`・`draw.rs` oracle）の再検討をコンパイラが強制（no-catch-all 規律）。(ii) **hover 変化を行指紋（`CommittedLine`）差分に乗せられる**＝ScrollPlanner のダーティ導出アルゴリズム無改変で R4.4（差分再描画）が成立する（DD-4）。(b) は指紋外の状態となり差分機構の別口改造が要る。
+- **Trade-offs**: match アーム追加の波及はあるが、いずれも「GlyphRun と同じ扱い＋ハイライト」の薄い分岐。既存 GlyphRun/Image/Surface の解決・描画は無変更（R9.5）。
+
+### DD-2: モジュール分割線＝Option C（純粋導出は新設 `choice.rs`・差し込みは最小拡張・**循環禁止の DAG 配置**）
+
+- **`choice.rs`（純粋層・新設・DAG 最下流）が所有**: 選択肢スパン→行セグメント注釈・行ヒットジオメトリ導出・canvas 装飾（GlyphRun→Choice 住人への写像＋style→paint 正規化焼込）・ハイライトスタイル解決 `ResolvedChoiceStyle`（差替シーム）・窓物理座標への写像式。全て windows 非依存の純関数（lib.rs 構造檻へ登録・R3.4/R7.5）。
+- **循環回避の配置裁定**（設計レビューゲート修理 #1）: `CursorCoord`/`CursorUnit`/`parse_cursor_coord`/`ChoiceSpan` は **state.rs**（cue 消費層＝`TextItem::CursorMove`・`ActorTextState.choices` の同居地）、`cursor_to_image_px` 換算は **layout.rs**（レイアウトカーソル意味論・`GlyphMetrics` の在処）、`ChoiceLineContent`/`ChoiceRowSegment`/`HighlightPaint` は **canvas.rs**（住人モデルの同居地・純データ）へ置く。これにより純粋層内は `layout→state`・`canvas→layout/region`・`choice→state/layout/canvas/region` の一方向 DAG となり、`choice` を import するのは結線層 `actor` のみ（viewbox/COM 層は住人内の解決済み純データだけを読む）。
+- **最小拡張**: state.rs（Choice/Cursor アームの消費化＋上記語彙型）・layout.rs（pending_cursor 遅延実体化＋換算）・canvas.rs（variant＋純データ型）・viewbox.rs（指紋・矩形アーム）・viewbox_draw.rs（ハイライト描画＋`scroll_state()` 読み口）・actor.rs（契約 API）。
+
+### DD-3: `\_l` の layout 注入＝`TextItem::CursorMove`＋pending-cursor 遅延実体化
+
+- **Alternatives**: (a) `LayoutEngine::layout` へカーソルオフセット引数追加／(b) 選択肢専用の別経路レイアウト／(c) items 列への `CursorMove` アイテム追加＋遅延実体化。
+- **Selected**: (c)。`\_l` は items 流（Text/NewLine/Choice の到着順）の**中**に現れるため、順序を保存できるのは items 列上の表現だけ（(a) は単一オフセットしか運べず `\q[..]\n\q[..]\_l[..]\q[..]` の途中移動を表現できない）。実体化は既存 newline-defer と同型の遅延規則: `CursorMove` 到着時は保留（`pending_cursor`）のみ・次の可視グリフ配置直前に「現在行確定→保留改行 Σratio 適用→カーソル指定軸の上書き」の順でフラッシュ・後続可視グリフの無い末尾 `CursorMove` は蒸発。newline-defer の不変条件（保留のみで行を開かない・空行を出さない・ビューボックス不変）と完全整合（R2.5）。
+- **`\_l` の行区切り性**: フラッシュ時に現在行が非空なら確定する（`\c[line]` 正典の「`\_l` は行の区切り」に一致）。
+
+### DD-4: hover の載せ場所＝`TextLayerRuntime` 保持・ダーティは行指紋差分に乗せる（ScrollPlanner 無改変）
+
+- **Selected**: hover 注入状態（`Option<usize>`＝選択肢 ordinal）は `TextLayerRuntime` の per-actor マップが保持（reveal と直交する注入状態を純粋状態機械・ScrollPlanner のどちらにも混ぜない）。毎フレームの canvas 装飾（`choice.rs`）が hover を Choice 住人の `hovered` 印として焼き込み、`line_fingerprint` が Choice アームで hover 印を指紋に含める（`CommittedLine` へ crate 内 additive フィールド）→ hover 変化＝当該行だけ指紋差分＝既存 `derive_dirty` が当該行矩形のみをダーティ化。**旧 hover 行と新 hover 行の双方が「自行の印の変化」で独立にダーティ化される**ため、切替・解除とも差分再描画で完結し全域再描画へ退行しない（R4.4）。
+
+### DD-5: 行ヒットジオメトリ照会 API＝`TextLayerRuntime::choice_hit_rows`（バルーン窓物理 px・提示フレーム同期スナップショット）
+
+- **型**: `ChoiceHitRow { ordinal: usize, id: String, label: String, references: Vec<String>, rect: HitRectPx }`（`Send` 所有データ）。`rect` は**バルーン窓 client 座標系の物理 px**（f32 矩形）。
+- **座標写像（正本式）**: canvas-local（validrect-local image px）の行セグメント矩形 `(inline, block)` に対し、行内軸＝`(region_inline_origin + inline) × k`・ブロック軸＝`(region_block_origin + block) × k + committed`（`committed`＝`ScrollPlanner::scroll_state().committed`＝面に反映済みスクロール・viewbox.rs R9.3 契約点の消費）。surface の窓内 offset（`validrect 原点 × k`）は region 原点項が担う。
+- **鮮度契約**: スナップショットは**最後に提示（present）したフレームの導出**（表示と同一の layout・同一の可視状態から単一導出）。cue 適用〜次フレーム提示の間は表示・ヒットが揃って 1 フレーム前＝「片方だけ古い」状態は構造的に生じない（R3.3/R5.2）。下流（choice-interact）は必ずこの口から読む（`pending_choices()` や自前レイアウト再現の禁止）。
+- **付帯**: `choice_active(actor) -> bool`（DD-6）・hover 注入（DD-4）と同じ actor.rs の additive アクセサ群（`surface`/`draw_stats` と同型）。
+
+### DD-6: 「選択肢表示中」照会＝表示層自身の選択肢集合で表す
+
+- **根拠**: `WaitForChoice` バリアは CuePlayer 内部状態であり sink へ配送されない（runtime.rs 実測）＝表示層は cue 列からバリアを観測できない。よって表示層の「選択肢表示中」（R1.3）は**保持する選択肢スパン集合が非空**で表す（`choice_active`）。バリア自体の真実源は従来どおり供給側 `CuePlayerState::WaitingForChoice`（照会は下流の領分・本仕様はバリアを解決しない）。
+
+### DD-7: cursor.\* スタイル差替シーム＝`ResolvedChoiceStyle`（開放 enum・「塗り色＋文字色」正規形）
+
+- **形**: `#[non_exhaustive] enum ResolvedChoiceStyle { SquareFill { fill: (u8,u8,u8), text: (u8,u8,u8) }, Invert, NoMarker }`＋解決関数 `resolve(cursor_model, font)`。
+  - cursor.\* 指定あり＋`style=square`（既定含む）＋`blendmethod=none`（既定含む）→ `SquareFill { fill: brush.color, text: font.color }`（fixture 実導出形・R4.2）。
+  - cursor.\* 指定なし → `Invert`（RN-5 の確定仕様＝塗り＝既定 font.color・文字＝各成分 255−c・R4.3/R6.1）。
+  - `style=none` → `NoMarker`（正典・自明実装）。
+  - `style=underline|square+underline` → warn-once＋`SquareFill` へ縮退（語彙は parser モデルに保持・R6.5）。ROP 系 `blendmethod` → warn-once＋`none` 扱い。`pen.color`／shadow 系 → 語彙保持のみ（M1 の描画は参照しない）。
+- **将来シーム**（開発者発案メモの反映）: `#[non_exhaustive]` ゆえ非正典スタイル（例: hover 行 1.2 倍拡大）を variant 追加で差し込める。描画実行は「スタイル→(塗り色, 文字色) 正規形」の一点写像に集約し、将来 variant はこの写像の追加アームで済む。
+- **語彙シームの充足方式（設計 synthesis の簡素化裁定）**: marker.\*／`\_a`／`\__q`／`\![*]`／cursor 画像キーは**既存シームが既に保持**している——balloon KV 寛容パースの passthrough（未知キー非落失）・`\![*]`＝`CueCommand::Custom` 汎用キャリア・`\__q`/`\_a`＝parser 未発行（dic 不使用）。本仕様で投機的な空型を新設しない（R6.2 は既存シームの明示で満たす）。
+
+### DD-8: 原子的無効化の単位＝「単一導出＋提示フレーム同期」の構造保証
+
+- 選択肢スパンは `ActorTextState` に同居し `Clear`/`ClearAll` で items と**同時に**初期化される（新規の消去経路を作らない——既存 `state.apply_cue` の全消去に相乗り・R5.1/R5.2）。新 talk は talk 冒頭 ClearAll（既存規約）で同経路。
+- 表示（canvas）とヒット（スナップショット）は present_frame の**同一 layout 導出**から同時更新（DD-5）＝片側だけ古い状態が構造的に無い。
+- hover は runtime の `apply_cue` の `Clear`/`ClearAll` アーム（既存 `request_clear` 相乗り点）で当該 actor（ClearAll は全 actor）につき `None` へリセット（R5.4——新 talk の新選択肢へ stale ordinal が誤ハイライトする経路を閉塞）。
+
+### DD-9: reveal との関係＝選択肢グリフも配送 duration 由来の typewriter に従う
+
+- Choice cue のテキストは Text cue と同じ時刻式（`interval = duration / glyph_count`・duration=0 は即時全可視）で items へ追記する。選択肢だけの特例ペースを発明しない（服従＝再生時間の単一真実源・既存 R7 系規律の踏襲）。部分リビール中のヒット矩形は配置済みグリフ範囲（決定論）。
+
+### DD-10: 実機 hover 注入導線＝emo2_boot 結線層の env ゲート駆動（ライブラリ無改変）
+
+- **Selected**: `AREKA_CHOICE_HOVER_INJECT` env（AREKA_ 名前空間規約）。未設定/空＝**無効（本番既定）**。`cycle`（既定周期 700ms）または `cycle:<ms>` ＝ text phase（frame clock 駆動）で `choice_active` な actor の選択肢 ordinal を周期巡回で `inject_choice_hover` する（無し→0→1→…→無し→…）。実ポインタ非依存・frame clock 由来の決定論駆動・`AREKA_APP_SMOKE_EXIT_MS` の bounded auto-exit と併走（[[areka-real-machine-signoff-bounded-auto-exit]]）。
+- **Rationale**: ライブラリ（areka-emo-text）は公開注入 API（DD-4）を持つだけで導線を知らない＝本番描画経路・決定論資産は無変更（R8.6）。導線は結線層（`emo2_boot`）の 1 モジュールに閉じ、下流 choice-interact の実ポインタ配線と衝突しない（同じ注入 API の別ドライバ）。
+
+## 座標・単位の確定値（設計の定数表）
+
+| 項目 | 値 | 根拠 |
+|---|---|---|
+| `em` | `ResolvedFont::height`（image px） | RN-3・「タグを書いた時点での文字高さ」＝actor のフォント解決値 |
+| `lh` | `GlyphMetrics::line_pitch(font_height)`＝`ceil(h×1.25)` | RN-3「1lh＝1em＋行間」＝行送りピッチ |
+| 裸数値 | image px 恒等 | RN-3「文字描画範囲左上からのピクセル」＝バルーン画像 px≡image px |
+| `\_l` 原点 | validrect 左上（`TextRegion::left()/top()`） | RN-3「文字描画範囲」 |
+| ヒット矩形 | 選択肢グリフ範囲 × 行 font_height 帯 | RN-2（文字幅）＋layout.rs 行矩形規約 |
+| ハイライト矩形 | ヒット矩形と同一 | R3.3 の単一導出保証 |
+| 物理化 | image px × k 一点適用＋ブロック軸 `+committed` | region.rs/viewbox.rs 既存契約（R2.2/R9.3） |
+
+## Risks & Mitigations（設計フェーズ更新）
+
+- **cursor.\* 未モデル化**（balloon parser は cursor.\* を意図的非モデル化・validation_tests が distractor 扱い）→ `areka-parsers/balloon` へ additive な `Cursor` サブ構造体（style/brush.color/pen.color/font.color/blendmethod）を追加。既存テスト（font へ巻き込まない檻）は不変緑のまま成立。
+- **`SetDrawingEffect` の cache 前提**（行 TextLayout は `LineLayoutStore` でキャッシュ）→ Choice 行の描画毎に「全範囲へ既定 effect リセット→hover セグメント範囲へ適用」の順を正準列とし、キャッシュ再利用と決定論を両立（実装ノートに檻を設ける）。
+- **byte 等価 golden との干渉**（`DrawExecutor` oracle は選択肢ハイライトを持たない）→ 既存 golden 群は非選択肢内容のまま不変。選択肢の pixel 檻は `ViewboxExecutor` readback を直接期待値化（oracle 比較は使わない）。oracle の Choice アームは素のグリフ描画（warn なし）に留める。
+- **提示前スナップショットの stale 窓**（cue 適用〜次 present の 1 フレーム）→ 契約に明記（DD-5 鮮度契約）。下流 interact 側の解決時再検証（選択確定時の choice_active 確認）は interact の設計事項として申し送る。
+
+## References
+
+- ukadoc `descript_balloon` cursor.\* 各項・`list_sakura_script` `\_l[x,y]`／`\q[タイトル,ID]`／`\__q[ID,...]`／`\c[line,数値]`／`\f[align,寄せる側]`（ukadoc MCP 取得・2026-07-23）。
+- fixture: `crates/pilot/examples/shiori-host-32/fixtures/emo2/emo2-kakukaku/descript.txt:43-53`・`.../ghost/master/dic/menu.pasta:15/33/62`。
+- settled main 実コード（本追記「行アンカー再突合」記載の file:line）。
