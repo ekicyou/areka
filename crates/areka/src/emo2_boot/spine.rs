@@ -38,7 +38,7 @@ use areka_emo_present::{EmoPresenter, PresentCommand, TargetId};
 use areka_emo_text::actor::{spawn_emo_text, TextLayerRuntime};
 use areka_emo_text::state::TextLayerConfig;
 use areka_ghost::dispatcher::DispatcherMsg;
-use areka_ghost::{boot, GhostBootOptions, GhostRuntime, ShioriWiring, TickerMode};
+use areka_ghost::{boot, GhostBootOptions, GhostRuntime, ShioriWiring, SystemVarWiring, TickerMode};
 use areka_kanade::{CloseReason, MonotonicMs, ShioriBackend};
 use areka_parsers::charset::DefaultEncoding;
 use areka_sakura::ActorKey;
@@ -481,7 +481,11 @@ impl SpineHarness {
                 Box::new(clocked_text_sink),
                 Box::new(move_sink),
             ],
-            system_vars: areka_ghost::default_system_vars(),
+            // scripted spine harness: 本番 provider 経路（FromSylphya）を忠実に再現する。boot が
+            // 内部で sylphya を起動し selfname 系／username を publish・provider を鏡像由来に据える。
+            // App スコープ root は不要（None＝App 層不在縮退・ghost/shell スコープは emo2 mount 由来）。
+            system_vars: SystemVarWiring::FromSylphya,
+            app_profile_dir: None,
             ticker: TickerMode::Disabled,
         };
         let ghost = boot(options).expect("scripted boot は解決可能な emo2 ghost_root で成功する");

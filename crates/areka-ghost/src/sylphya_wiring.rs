@@ -1,15 +1,36 @@
 //! `areka-ghost` ⓪ghost の sylphya 結線層（task 8.1〜8.2）。
 //!
 //! ここでは descript 由来の名前情報（`GhostNames`）から sylphya のフラット静的値
-//! （`selfname`／`selfname2`／`keroname`）を導出する純関数 [`derive_flat_statics`] を提供する。
-//! 実際の publish（`PublishStatic`）・provider 差替・prefetch sink 構成は task 8.2 が担う。
+//! （`selfname`／`selfname2`／`keroname`）を導出する純関数 [`derive_flat_statics`] と、
+//! boot 系列が sylphya（統一プロパティシステム）を起動・結線するための薄い配線ヘルパ群
+//! （アクター spawn・静的構成/baseware publish・prefetch sink クロージャ・provider 生成）を
+//! 提供する（task 8.2・design「ghost（結線・provider 差替）」）。
 //!
 //! # 決定論檻（要件 9.4）
 //! [`derive_flat_statics`] は純関数（I/O・時計・乱数を持たない）であり、同一の `GhostNames`
 //! からは常に同一順序・同一内容の `Vec` を返す。descript 実値解決の全判断分岐
 //! （keroname の 3 分岐・selfname2 の有無・selfname の有無）を x64 純粋単体テストで檻に入れる。
+//! 配線ヘルパ（spawn／publish／sink／provider）は判断分岐を持たない薄い結線であり、
+//! その振る舞いは boot 統合テスト（task 8.4）が檻に入れる（記憶知見「配線は再テストしない」）。
 
+use std::path::{Path, PathBuf};
+
+use areka_kanade::resources::{ResourceOutcome, ResourceSink};
 use areka_parsers::package::GhostNames;
+use areka_sakura::contract::SystemVarSnapshot;
+use areka_sylphya::persist::FsPersistIo;
+use areka_sylphya::{
+    spawn_sylphya, AskerContext, AskerId, ScopeRoots, SylphyaInit, SylphyaParts, SylphyaPublisher,
+    SylphyaReader,
+};
+
+use crate::runtime::SystemVarSource;
+
+/// baseware 識別名（大域点付き `baseware.name`・R5.1・実値）。
+const BASEWARE_NAME: &str = "areka";
+
+/// ログ target（steering: areka-log-first-no-silent-failure）。
+const LOG_TARGET: &str = "ghost-boot";
 
 /// descript の名前情報 → sylphya フラット静的値（純関数・決定論檻対象・R9.4）。
 ///
@@ -50,6 +71,111 @@ pub fn derive_flat_statics(names: &GhostNames) -> Vec<(String, String)> {
     }
 
     out
+}
+
+// ============================================================================
+// task 8.2: sylphya 起動・結線の薄い配線ヘルパ（判断分岐なし・boot 図の結線正本）
+// ============================================================================
+
+/// スコープ root の profile フォルダ（`<base>/profile/areka/`）を組む（R6.5・層別 profile 物理分離）。
+///
+/// sylphya はパスを解釈しない最下層規律ゆえ、所属実体（ghost/shell）の分離は結線側の
+/// per-実体 profile ディレクトリの物理分離が担う。ghost スコープは `<MountModel.shiori.dir>`、
+/// shell スコープは `<ShellMount.dir>` を base に取る（design「boot 系列」）。
+pub fn profile_areka_root(base: &Path) -> PathBuf {
+    base.join("profile").join("areka")
+}
+
+/// ghost 自身の `AskerId` を `MountModel.shiori.dir` の正準文字列から構築する（設計「ghost 自身の
+/// AskerId は MountModel.shiori.dir の正準文字列から構築」）。
+///
+/// フラット静的値（selfname 等）・SHIORI 照会値（username）の per-asker 着地先であり、
+/// provider／prefetch sink が同一 asker を共有する（同一ゴーストの読み書きが一致する）。
+pub fn ghost_asker_id(shiori_dir: &Path) -> AskerId {
+    AskerId::new(shiori_dir.to_string_lossy().into_owned())
+}
+
+/// boot 系列の sylphya アクターを起動する（本番 IO＝[`FsPersistIo`]・運行 sink 未配線＝M1）。
+///
+/// `roots` は層別 profile root（ghost/shell/app/balloon）。起動時に全スコープを寛容ロードして
+/// 初期鏡像へ投影する（不在スコープは空扱い・emo2 fixture の read-only でも汚染しない——M1 本番
+/// 経路に永続書込呼出は無い・design Implementation Notes）。返る [`SylphyaParts`] の reader は
+/// 結線直後から無待機で読める。
+pub fn spawn_ghost_sylphya(roots: ScopeRoots) -> SylphyaParts {
+    spawn_sylphya(SylphyaInit {
+        roots,
+        io: Box::new(FsPersistIo),
+        runtime_sink: None,
+    })
+}
+
+/// 静的構成層を publish する（フラット＝`derive_flat_statics`・大域点付き＝baseware 2 項・R4.3-4.5/R5.1）。
+///
+/// フラット（selfname/selfname2/keroname）は `asker` の per-asker 区画へ、baseware（`baseware.name`
+/// ＝実値 `"areka"`／`baseware.version`＝`baseware_version`）は大域点付き区画へ着地する
+/// （design「boot 系列」・sylphya `PublishStatic` の flat/dotted 区分に対応）。投函のみで反映は
+/// アクターが担う——呼び出し側は必要に応じ `barrier()` で反映完了を待つ。
+pub fn publish_ghost_statics(
+    publisher: &SylphyaPublisher,
+    asker: AskerId,
+    names: &GhostNames,
+    baseware_version: &str,
+) {
+    let flat = derive_flat_statics(names);
+    let dotted = vec![
+        ("baseware.name".to_string(), BASEWARE_NAME.to_string()),
+        ("baseware.version".to_string(), baseware_version.to_string()),
+    ];
+    publisher.publish_static(asker, flat, dotted);
+}
+
+/// kanade へ注入する実 [`ResourceSink`]（publish_shiori＋barrier のクロージャ・R4.1/R4.2）。
+///
+/// prefetch 段（kanade boot 系列）が `(id, outcome)` を **同期的に** 呼ぶ。本 sink は:
+/// - [`ResourceOutcome::Value(v)`] → `publish_shiori(asker, id, Some(v))`
+/// - [`ResourceOutcome::NoContent`]／[`ResourceOutcome::Failed`] → `publish_shiori(asker, id, None)`
+///   （不在の観測記録・既定値は書かない＝sakura の唯一定義点に残置・R4.2）
+///
+/// を投函した **後** `barrier()` で反映完了を待ってから返る。これにより prefetch→初回 talk までの
+/// 反映順序が決定論化する（研究 §12-1）。barrier が [`areka_actor::ReplyError`] を返す
+/// （sylphya アクター死亡）場合は **warn＋続行**（永久ブロックしない・panic しない・design Risks）。
+pub fn make_username_resource_sink(publisher: SylphyaPublisher, asker: AskerId) -> ResourceSink {
+    Box::new(move |id, outcome| {
+        let value = match outcome {
+            ResourceOutcome::Value(v) => Some(v),
+            // 204／失敗は不在記録（既定値縮退は消費側 sakura の責務・R4.2）。
+            ResourceOutcome::NoContent | ResourceOutcome::Failed(_) => None,
+        };
+        publisher.publish_shiori(asker.clone(), id.to_string(), value);
+        // 反映フェンス: 投函済み publish の反映完了を同期観測してから返る（初回 talk 前の順序保証）。
+        if let Err(err) = publisher.barrier() {
+            tracing::warn!(
+                target: LOG_TARGET,
+                id = id,
+                error = %err,
+                "sylphya barrier failed after publishing shiori resource \
+                 (actor stopped); continuing without reflection guarantee"
+            );
+        }
+    })
+}
+
+/// `FromSylphya` provider を構築する（reader＋自 asker を捕捉・`talk_snapshot` → [`SystemVarSnapshot`]・R7.1）。
+///
+/// dispatcher が talk 起動ごとに一度呼び出す（凍結像の刻印点）。呼び出し時点の鏡像から
+/// [`SylphyaReader::talk_snapshot`]（値実在フラット名のみの `BTreeMap`）を取り、各名→値を
+/// sakura 所有の [`SystemVarSnapshot`] へ insert 写像して返す。sakura の契約（`SystemVarSnapshot`・
+/// 値源優先・既定値唯一定義点）は無改変で、変わるのは **スナップショットの源**（sylphya 鏡像）だけ
+/// （R7.1/R2.2・provider 差替の核）。
+pub fn from_sylphya_provider(reader: SylphyaReader, asker: AskerId) -> SystemVarSource {
+    let ctx = AskerContext { asker };
+    Box::new(move || {
+        let mut snapshot = SystemVarSnapshot::default();
+        for (name, value) in reader.talk_snapshot(&ctx) {
+            snapshot.insert(name, value);
+        }
+        snapshot
+    })
 }
 
 #[cfg(test)]

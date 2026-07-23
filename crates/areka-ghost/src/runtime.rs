@@ -14,7 +14,7 @@ use areka_kanade::{KanadeMsg, ShioriBackend, spawn_kanade, spawn_shiori_actor};
 use areka_parsers::charset::DefaultEncoding;
 use areka_parsers::package::{MountError, MountModel, resolve};
 use areka_sakura::contract::SystemVarSnapshot;
-use areka_sakura::sysvar::DEFAULT_USERNAME;
+use areka_sylphya::{SylphyaPublisher, SylphyaReader};
 
 use crate::config::resolve_kanade_config;
 use crate::dispatcher::{DispatcherMsg, spawn_dispatcher};
@@ -70,9 +70,28 @@ pub enum ShioriWiring {
 ///
 /// dispatcher が talk 起動ごとに一度だけ呼び出し、返ったスナップショットを per-talk の
 /// `spawn_talk` へ手渡す（**凍結像の刻印点**＝talk ごと凍結の意味論・sylphya の per-talk
-/// 凍結と同形）。W1 の暫定 provider（[`default_system_vars`]）を将来 `areka-P0-sylphya` の
-/// 読み口へ差し替える差替点で、sakura 側の契約（[`SystemVarSnapshot`]）は無改変のまま。
+/// 凍結と同形）。task 8.2 で本番既定は sylphya 読み口由来（[`SystemVarWiring::FromSylphya`]）へ
+/// 移行したが、sakura 側の契約（[`SystemVarSnapshot`]）は無改変のまま——変わるのはスナップショットの
+/// **源**（sylphya 鏡像）だけ（R7.1/R2.2）。テスト・特殊用途は [`SystemVarWiring::Custom`] で
+/// 従来どおりこのクロージャを直接注入する。
 pub type SystemVarSource = Box<dyn Fn() -> SystemVarSnapshot + Send>;
+
+/// システム変数 provider の結線方式（design「ghost（結線・provider 差替）」Service Interface・R7.1）。
+///
+/// dispatcher の刻印点（[`SystemVarSource`]）は無改変のまま、その **源** を選ぶ:
+/// - [`FromSylphya`](SystemVarWiring::FromSylphya): 本番既定。boot が内部で据えた sylphya
+///   reader ＋自 `AskerId` を捕捉し、`talk_snapshot` を [`SystemVarSnapshot`] へ写像する provider を
+///   構築する（[`crate::sylphya_wiring::from_sylphya_provider`]）。
+/// - [`Custom`](SystemVarWiring::Custom): テスト・特殊用途の直接注入（従来の [`SystemVarSource`]）。
+///
+/// いずれの場合も boot は sylphya アクターを起動して静的構成／username を publish する——`Custom`
+/// でも sylphya は生きており、provider の源だけが差し替わる（8.3/8.4 のテストは `Custom` を使う）。
+pub enum SystemVarWiring {
+    /// 本番既定: boot が内部で据えた sylphya reader からスナップショットを生成する（R7.1）。
+    FromSylphya,
+    /// テスト・特殊用途の注入（型は従来の [`SystemVarSource`]）。
+    Custom(SystemVarSource),
+}
 
 /// ticker 起動方式（design.md「ghost::runtime」Service Interface）。
 pub enum TickerMode {
@@ -98,27 +117,20 @@ pub struct GhostBootOptions {
     /// per-talk の `spawn_talk` へ手渡す。診断既定は `vec![LogSink, DiscardSink]` 相当
     /// （cue ごと 1 回ログの既存性質を維持・design.md「GhostBootOptions S-3」）。
     pub sinks: Vec<Box<dyn BootCueSink>>,
-    /// システム変数の供給シーム（S-3・R7.3/7.4）。⓪ghost が埋める責務の実装点で、
-    /// dispatcher が talk 起動ごとに一度呼び出し、返った凍結スナップショットを per-talk へ
-    /// 手渡す（凍結像の刻印点）。本番の暫定既定は [`default_system_vars`]（`%username` のみ）。
-    pub system_vars: SystemVarSource,
+    /// システム変数 provider の結線方式（S-3・R7.1/7.3）。本番は
+    /// [`SystemVarWiring::FromSylphya`]（boot が据えた sylphya reader 由来）、テストは
+    /// [`SystemVarWiring::Custom`]（従来の [`SystemVarSource`] 直接注入）。dispatcher の刻印点は
+    /// 無改変で、選ぶのはスナップショットの源だけ（R7.1/R2.2）。
+    pub system_vars: SystemVarWiring,
+    /// App スコープの永続 root（sylphya の App 層 profile フォルダ・bin が供給・R6.5）。
+    ///
+    /// `None` は App スコープ利用不可（不在縮退）。ghost／shell スコープは mount 解決結果から
+    /// 導く（`<shiori.dir>/profile/areka/`・`<shell.dir>/profile/areka/`）が、App スコープは
+    /// マウントに現れないため呼び出し側（bin）が供給する（既定＝実行ファイル隣接 `profile/areka/`・
+    /// env `AREKA_PROFILE_DIR` で上書き可・R8.2）。
+    pub app_profile_dir: Option<PathBuf>,
     /// ticker 起動方式。
     pub ticker: TickerMode,
-}
-
-/// W1 暫定 provider（design.md「GhostBootOptions S-3＋provider」・R7.4）。
-///
-/// `{"username": DEFAULT_USERNAME}` だけを充填した凍結スナップショットを毎回新規構築して
-/// 返すクロージャを返す。既定値は sakura 側 [`areka_sakura::sysvar::DEFAULT_USERNAME`] の
-/// **唯一の定義点**を re-use し、`%username` の既定を⓪ghost 側へ書き写して二重定義しない
-/// （偽ストアを作らない・R7.4）。将来 `areka-P0-sylphya` の読み口へ差し替える差替シームで、
-/// 差替時も本関数の型（[`SystemVarSource`]）と dispatcher の刻印点は無改変のまま。
-pub fn default_system_vars() -> SystemVarSource {
-    Box::new(|| {
-        let mut snapshot = SystemVarSnapshot::default();
-        snapshot.insert("username", DEFAULT_USERNAME);
-        snapshot
-    })
 }
 
 /// ghost 結線層が起動した全コンポーネントの所有者。
@@ -138,6 +150,12 @@ pub struct GhostRuntime {
     start_relay_handle: ActorHandle,
     down_relay_handle: ActorHandle,
     ticker_handle: Option<ActorHandle>,
+    /// sylphya（統一プロパティシステム）供給端。shutdown の `Close` 送出に使う。
+    sylphya_publisher: SylphyaPublisher,
+    /// sylphya 読み口（provider が捕捉するのと同一鏡像を共有・test 検証／後続用途で保持）。
+    sylphya_reader: SylphyaReader,
+    /// sylphya アクターの join ハンドル。shutdown の最終段で join して panic を観測する。
+    sylphya_handle: ActorHandle,
     #[allow(dead_code)]
     mount: MountModel,
 }
@@ -153,6 +171,8 @@ pub struct GhostHandles {
     pub down_relay: ActorHandle,
     /// `TickerMode::Real` 時のみ `Some`。
     pub ticker: Option<ActorHandle>,
+    /// sylphya アクターの join ハンドル（掲示板供給者・shutdown 最終段で join）。
+    pub sylphya: ActorHandle,
 }
 
 /// `into_parts` の分解結果（S6 段階的解体の駆動口・design.md「ghost::runtime」）。
@@ -168,7 +188,11 @@ pub struct GhostParts {
     pub dispatcher: Sender<DispatcherMsg>,
     /// `TickerMode::Real` 時のみ `Some`。
     pub ticker: Option<Sender<TickerMsg>>,
-    /// kanade／dispatcher／shiori／start-relay／down-relay／ticker(Option) の全 `ActorHandle`。
+    /// sylphya 供給端（`Close` 送出・手動解体で掲示板を畳む）。
+    pub sylphya: SylphyaPublisher,
+    /// sylphya 読み口（手動解体時の値検証・provider と同一鏡像を共有）。
+    pub sylphya_reader: SylphyaReader,
+    /// kanade／dispatcher／shiori／start-relay／down-relay／ticker(Option)／sylphya の全 `ActorHandle`。
     pub handles: GhostHandles,
 }
 
@@ -220,6 +244,9 @@ impl GhostRuntime {
             start_relay_handle,
             down_relay_handle,
             ticker_handle,
+            sylphya_publisher,
+            sylphya_reader: _,
+            sylphya_handle,
             mount: _,
         } = self;
 
@@ -289,6 +316,15 @@ impl GhostRuntime {
             failures.push(("down-relay", err));
         }
 
+        // 10. sylphya Close＋join（既存段の後・供給者停止後に掲示板を畳む・design「shutdown」）。
+        //     供給者（ghost 静的 publish は boot 済み・kanade は上流で既に停止）が全て止まった後に
+        //     掲示板を畳む。既に停止済みへの再送は SylphyaPublisher が warn＋縮退（冪等・非 panic）。
+        sylphya_publisher.close();
+        if let Err(err) = sylphya_handle.join() {
+            tracing::error!(target: "ghost-shutdown", stage = "sylphya", error = %err, "sylphya actor join failed");
+            failures.push(("sylphya", err));
+        }
+
         if failures.is_empty() {
             tracing::info!(target: "ghost-shutdown", "ghost shutdown sequence completed");
             Ok(())
@@ -312,6 +348,9 @@ impl GhostRuntime {
             start_relay_handle,
             down_relay_handle,
             ticker_handle,
+            sylphya_publisher,
+            sylphya_reader,
+            sylphya_handle,
             mount: _,
         } = self;
 
@@ -319,6 +358,8 @@ impl GhostRuntime {
             kanade: kanade_tx,
             dispatcher: dispatcher_tx,
             ticker: ticker_tx,
+            sylphya: sylphya_publisher,
+            sylphya_reader,
             handles: GhostHandles {
                 kanade: kanade_handle,
                 dispatcher: dispatcher_handle,
@@ -326,6 +367,7 @@ impl GhostRuntime {
                 start_relay: start_relay_handle,
                 down_relay: down_relay_handle,
                 ticker: ticker_handle,
+                sylphya: sylphya_handle,
             },
         }
     }
@@ -359,6 +401,33 @@ pub fn boot(options: GhostBootOptions) -> Result<GhostRuntime, GhostBootError> {
     // 2. 運行設定の値源解決（task 2.3）。
     let config = resolve_kanade_config(&mount, options.default_encoding);
 
+    // 2b. sylphya（統一プロパティシステム）起動＋静的構成 publish（task 8.2・design「boot 系列」）。
+    //     層別 profile root: ghost＝`<shiori.dir>/profile/areka/`・shell＝`<shell.dir>/profile/areka/`・
+    //     app＝bin 供給（`options.app_profile_dir`）・balloon＝None。起動時に全スコープを寛容ロード。
+    let scope_roots = areka_sylphya::ScopeRoots {
+        app: options.app_profile_dir.clone(),
+        ghost: Some(crate::sylphya_wiring::profile_areka_root(&mount.shiori.dir)),
+        shell: Some(crate::sylphya_wiring::profile_areka_root(&mount.shell.dir)),
+        balloon: None,
+    };
+    let areka_sylphya::SylphyaParts {
+        reader: sylphya_reader,
+        publisher: sylphya_publisher,
+        handle: sylphya_handle,
+    } = crate::sylphya_wiring::spawn_ghost_sylphya(scope_roots);
+
+    // ghost 自身の AskerId（MountModel.shiori.dir 由来の正準文字列・provider／prefetch sink が共有）。
+    let ghost_asker = crate::sylphya_wiring::ghost_asker_id(&mount.shiori.dir);
+
+    // 静的構成層 publish: フラット（selfname 系＝derive_flat_statics）＋大域点付き（baseware 2 項・
+    // version＝areka-ghost の CARGO_PKG_VERSION・R5.1）。投函のみ（反映は prefetch sink の barrier で担保）。
+    crate::sylphya_wiring::publish_ghost_statics(
+        &sylphya_publisher,
+        ghost_asker.clone(),
+        &mount.names,
+        env!("CARGO_PKG_VERSION"),
+    );
+
     // 3. 循環解消用の素の中継チャンネル（design.md「結線トポロジの要点」）。
     let (start_tx, start_rx) = mpsc::channel::<areka_kanade::StartTalk>();
     let (down_tx, down_rx) = mpsc::channel::<KanadeMsg>();
@@ -382,16 +451,27 @@ pub fn boot(options: GhostBootOptions) -> Result<GhostRuntime, GhostBootError> {
     let (shiori_tx, shiori_handle) = spawn_shiori_actor(connect, down_tx);
 
     // 6. kanade（start_tx を「自身の」sakura Sender として渡す）。
-    //    task 6.2 で `spawn_kanade` に 4 番目の引数 `resource_sink: ResourceSink` が加わった。
-    //    ここは task 8.1 の最小ビルド復旧として no-op sink を渡すのみ（task 8.2 が実 publish＋
-    //    barrier sink へ差し替える予定）。
-    let (kanade_tx, kanade_handle) =
-        spawn_kanade(config, shiori_tx, start_tx, Box::new(|_, _| {}));
+    //    task 8.2: prefetch 段（username GET）の応答を sylphya へ反映する実 `ResourceSink` を注入する。
+    //    sink は publish_shiori（Value→Some／204・失敗→None）投函後に barrier で反映完了を待って返る
+    //    （初回 talk 前の反映順序を決定論化・R4.1/R4.2）。
+    let resource_sink = crate::sylphya_wiring::make_username_resource_sink(
+        sylphya_publisher.clone(),
+        ghost_asker.clone(),
+    );
+    let (kanade_tx, kanade_handle) = spawn_kanade(config, shiori_tx, start_tx, resource_sink);
 
     // 7. sakura dispatcher（可変長 sink 列＋system_vars provider を構築時注入・S-3・
-    //    要件 4.6/8.5/7.3）。provider は dispatcher が talk 起動ごとに呼び出す（刻印点）。
+    //    要件 4.6/8.5/7.1）。provider は dispatcher が talk 起動ごとに呼び出す（刻印点＝無改変）。
+    //    provider の源を解決: FromSylphya＝reader＋自 asker 捕捉クロージャ（talk_snapshot→SystemVarSnapshot）／
+    //    Custom＝注入された SystemVarSource をそのまま（R7.1・design「provider 差替」）。
+    let system_var_source: SystemVarSource = match options.system_vars {
+        SystemVarWiring::FromSylphya => {
+            crate::sylphya_wiring::from_sylphya_provider(sylphya_reader.clone(), ghost_asker.clone())
+        }
+        SystemVarWiring::Custom(src) => src,
+    };
     let (dispatcher_tx, dispatcher_handle) =
-        spawn_dispatcher(kanade_tx.clone(), options.sinks, options.system_vars);
+        spawn_dispatcher(kanade_tx.clone(), options.sinks, system_var_source);
 
     // 8. relay 2 本（循環解消・design.md 参照）。
     let start_relay_handle = spawn_relay::<areka_kanade::StartTalk, DispatcherMsg>(
@@ -433,6 +513,9 @@ pub fn boot(options: GhostBootOptions) -> Result<GhostRuntime, GhostBootError> {
         start_relay_handle,
         down_relay_handle,
         ticker_handle,
+        sylphya_publisher,
+        sylphya_reader,
+        sylphya_handle,
         mount,
     })
 }

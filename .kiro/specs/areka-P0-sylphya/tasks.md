@@ -173,7 +173,7 @@
   - _Depends: 7_
   - _Requirements: 4.3, 4.4, 4.5, 9.4_
 
-- [ ] 8.2 sylphya 結線: spawn・スコープ解決・静的/baseware publish・SystemVarWiring 差替・shutdown 段
+- [x] 8.2 sylphya 結線: spawn・スコープ解決・静的/baseware publish・SystemVarWiring 差替・shutdown 段
   - `GhostBootOptions.system_vars` を `SystemVarWiring`（`FromSylphya`／`Custom(SystemVarSource)`）へ置換し、`app_profile_dir: Option<PathBuf>` フィールドを追加し、`GhostHandles`/`GhostParts` へ sylphya ハンドル用フィールドを追加する（後続タスクが依存する構造変更を本タスクで先に確定する）
   - mount 解決後に `spawn_sylphya`（roots: ghost スコープ＝`<MountModel.shiori.dir>/profile/areka/`・shell スコープ＝`<ShellMount.dir>/profile/areka/`・app スコープ＝`app_profile_dir`・balloon＝None）を呼び出す
   - `derive_flat_statics(&mount.names)` の結果と baseware 2 項（`baseware.name`＝`"areka"`／`baseware.version`＝`env!("CARGO_PKG_VERSION")`）を `PublishStatic`（自 `AskerId`＝`MountModel.shiori.dir` 由来の正準文字列）で publish する
