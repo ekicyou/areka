@@ -63,7 +63,7 @@
 
 ## 5. Core: seriko タイムライン評価コア
 
-- [ ] 5.1 EmoWorld から AnimationTable を boot 時構築する
+- [x] 5.1 EmoWorld から AnimationTable を boot 時構築する
   - `LoopTrigger{Random{k}|BindRandom{k}}`・`LoopFrame{surface_id, method, wait_ms, x, y}`・`LoopAnimation`・`AnimationTable` を定義する
   - `from_world` で `EmoWorld` から read-only スナップショットを構築し、`Random`/`BindRandom` のみ採録する
   - `Interval::Bind`・`Interval::Other(語彙)`・将来 variant は非採録・debug! に記録する（`Other` は元語彙文字列込み）

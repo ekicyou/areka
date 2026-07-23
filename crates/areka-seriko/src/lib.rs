@@ -10,6 +10,8 @@
 //! - 発行層 [`DisplayCommand`]／[`SurfaceOutput`]／[`MockSurfaceOutput`]: emo への表示指令と発行先抽象。
 //! - アクター層 [`SerikoMsg`]／[`SerikoSink`]／[`spawn_seriko`]: 独立スレッド稼働・単一発行点。
 //! - 構築層 [`build_static_bindset`]: bindgroup default → 静的 `BindSet`（恒等写像）。
+//! - アニメ定義表 [`AnimationTable`]／[`LoopAnimation`]／[`LoopTrigger`]／[`LoopFrame`]: `EmoWorld`
+//!   からの boot 時不変スナップショット（`Random`/`BindRandom` のみ採録・method 構築時 1 回解決）。
 //! - bind 解決層 [`BindResolver`]／[`BindNamespace`]／[`scope_namespace`]: `(カテゴリ, パーツ)`
 //!   → 着せ替え ID の名前解決と scope→名前空間写像を担う純関数群（parsers 非依存）。
 //! - bind 類別層 [`BindDirective`]／[`parse_bind_directive`]: `\![bind,...]` トークン列を
@@ -20,6 +22,7 @@ mod bind;
 mod output;
 mod resolve;
 mod state;
+mod table;
 
 pub use actor::{spawn_seriko, SerikoMsg, SerikoSink};
 pub use bind::{
@@ -31,3 +34,4 @@ pub use resolve::{SurfaceResolver, SurfaceTarget};
 pub use state::{
     ApplyOutcome, BindApplyOutcome, PatternApplyOutcome, ScopeState, ScopeStates, Slot,
 };
+pub use table::{AnimationTable, LoopAnimation, LoopFrame, LoopTrigger};
