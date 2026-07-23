@@ -149,3 +149,108 @@ ghost `runtime.rs` の boot 配線（`:381-408`）では ticker は kanade と d
 - 本ギャップ分析を要件ディスカッション（`kiro-requirements-discussion`・チャット窓）で§6 の設計判断を詰める。
 - その後 `kiro-design areka-P0-seriko-loop` で設計生成へ。design では特に §5 の R-1/R-2/R-3 と §6-1/6-4/6-5 を最優先で確定すること。
 - brief の file:line 参照は mayuna-compose マージ後の現行座標へ読み替え済み（本書§1.1 が現行座標の正）。
+
+---
+
+# Design Phase 追記（2026-07-23・kiro-spec-design）
+
+> 上掲 §1–§7 はギャップ分析（要件フェーズ）の記録。本追記は design 生成時の discovery（light・Extension）
+> と synthesis の結論を記録する。design.md が正本、本書は根拠と代替案の台帳。
+
+## Summary
+
+- **Feature**: `areka-P0-seriko-loop`
+- **Discovery Scope**: Extension（integration-focused light discovery・main context 実査。新規外部依存なしゆえ Web 調査は不要）
+- **Key Findings**:
+  - `areka-emo-compose` に描画メソッドの**完全語彙 registry が既存**（`method.rs`: `ComposeMethod`/`BlendKind`/`from_name`・overlay 同義 add/bind 写像・未知は `Unknown` 吸収・`is_implemented()` は Overlay のみ true）。§6-11 の「完全形の型値」は新造不要＝**adopt**。
+  - parser `decode_animations` は現状 **`overlay` 以外の pattern 行を丸ごと落とす**（`decode.rs:335` の `== Some("overlay")` フィルタ）＝転記の穴の物理位置を特定。method 欄追加と同時にこのフィルタを撤去し全メソッドを転記する。
+  - `EmoWorld` は `surface_ids()`/`surface(id)`/`SurfaceMaster.animations`（parser `Animation` 素通し保持）を**公開済み**で、`normalized.rs` に「seriko が再利用する」と明記あり＝アニメ定義表は **EmoWorld からのスナップショット構築**が最短（append 展開・fold 意味論を再実装しない）。
+  - `spawn_ticker` は kanade/dispatcher 2 系統固定だが、`BoundarySchedule`（絶対グリッド・catch-up 1 回）は純粋層で再利用可能＝**同クレート内 additive な第 3 の汎用単発スポーナー**（クロージャ配送）で既存 2 系統を不改変に保てる。
+  - `From<Tick>` 境界の第 3 系統化は **orphan rule で不成立**（`Tick` は ghost、`SerikoMsg` は seriko、impl を書けるのは両クレートのみ→不要な依存が生じる）。クロージャ配送 `Box<dyn FnMut(Tick)+Send>` なら型結合ゼロ。
+
+## Research Log（design 実査）
+
+### 時間源結線の実装形（§6-1/6-3 の確定）
+- **Context**: Opt-1A（areka 側専用 ticker）vs Opt-1B（ghost ticker 第 3 系統）。
+- **Sources**: `areka-ghost/src/ticker.rs`（`BoundarySchedule` pub(crate)・`spawn_ticker` 2 系統固定）、`runtime.rs:401-408`（TickerMode 分岐）、`areka/src/emo2_boot/mod.rs`／`spine.rs`（boot 配線・TickerMode::Disabled の決定論ハーネス）。
+- **Findings**: seriko inbox 送信端（`SerikoSink`）は areka（emo2_boot）に住み ghost boot へは `CueSink` として渡るのみ。ghost に `Sender<SerikoMsg>` を型付きで渡すには逆流配線が要る（発見 B 再確認）。`From<Tick> for SerikoMsg` は orphan rule で areka には書けない。
+- **Implications**: **ghost ticker.rs に additive な汎用単発レーン `spawn_loop_ticker(LoopTickerConfig, deliver: Box<dyn FnMut(Tick)+Send>)` を新設**（`BoundarySchedule` 再利用・既存 `spawn_ticker` 無改変）し、**areka が SerikoSink クローンを閉じ込めたクロージャで結線**する。時間源機構は ghost 帰属・結線は areka 帰属でクレート責務が保たれ、型結合（ghost⇄seriko）はゼロ。
+
+### 描画メソッド転記の型（§6-11(a) の確定）
+- **Context**: parser `Pattern` の method 欄を完全語彙 enum にするか文字列忠実転記にするか。
+- **Sources**: `areka-parsers/src/shell/model.rs`（opaque NewType 規律・`ElementPath`/`AliasKey` 先例）、`decode.rs`（overlay フィルタ）、`areka-emo-compose/src/method.rs`（完全語彙 registry 既存）。
+- **Findings**: parser は「忠実な転記層・意味解釈は下流」（steering）。emo-compose に完全語彙 enum（`#[non_exhaustive]`・同義写像・Unknown 吸収）が既に存在する。
+- **Implications**: **parser は opaque NewType `DrawMethod(String)` で原文忠実転記**（新形式=第 1 位置。旧形式（第 3 位置）は正典位置として doc 転記し、旧形式キー行の字句解析は emo2 subset 外＝現行 lexer は `animationN.patternM` キーのみ）。**型値の完全形保持（8.4）は既存 `ComposeMethod` を adopt** し、seriko の表構築時に `ComposeMethod::from_name` で 1 回解決する。二重の語彙 enum を作らない。
+
+### PatternState の住処と形（§6-7／R-3 の確定）
+- **Context**: 公開型の正本をどのクレートに置くか・形。
+- **Sources**: 依存方向（emo-compose ← seriko／emo-compose ← emo-present）、`cache.rs:43-52` 予約記述、`BindSet` の住処（emo-compose）。
+- **Findings**: `BindSet` が emo-compose に住み seriko/present 双方が消費する先例。`ComposeKey` は `PartialEq+Eq` 要求。`ComposeMethod` は `Eq` 導出済み。
+- **Implications**: **`PatternState` は emo-compose 新モジュール `pattern.rs` が正本**（`BTreeMap<u32 /*animation id*/, PatternFrame>`・正準順序で Eq 安定・`Default`=空）。`PatternFrame { surface_id: u32, method: ComposeMethod, x: i64, y: i64 }`。空 ⇒ 従来合成と byte 等価（5.4 の golden で檻）。センチネル（負値）は評価器が解決し PatternState には正の現在コマのみ載る。
+
+### 二層時間と抽選境界（§6-2/6-5／R-1 の確定）
+- **Context**: 「毎秒 1/N」と wait 最小 22ms のサブ秒コマ進行を 1 tick 系でどう合成するか。
+- **Sources**: `ticker.rs` BoundarySchedule 意味論、brief の ukadoc 正典転記（毎秒・wait 定義）、emo2 実測 wait レンジ（0/22/40/80/150/160）。
+- **Findings**: コマ進行を「経過時刻→現在コマ」の**関数**として評価すれば tick 周期に依らず正しく、粗い tick では中間コマが自然にスキップされる（現在コマ 1 枚意味論と整合・catch-up 安全）。抽選は 1000ms 絶対グリッド境界の跨ぎ検出で 1 回（catch-up 時も 1 回＝ghost ticker と同じ政策）。
+- **Implications**: tick 供給は**専用レーン既定 16ms**（60Hz 近似・wait 最小 22ms を 1 tick 以内で拾う・非表示でも止まらない worker スレッド）。評価器は (a) 1000ms 境界の抽選層と (b) 経過時刻→現在コマの進行層を持つ純粋関数群で、注入 tick 列＋注入乱数列のみで全経路決定論。
+
+### 乱数注入シーム（§6-8／R-2 の確定）
+- **Context**: 形・本番 entropy・新規依存禁止。
+- **Sources**: `TickerConfig.clock` 注入先例、tech.md（`rand` は dola 依存）、workspace 制約（新規 crates.io 依存なし）。
+- **Findings**: 必要なのは「[0,k) の一様整数」1 種のみ。`std::hash::RandomState` は OS entropy 由来のシードを無依存で得られる。
+- **Implications**: **`LoopRng = Box<dyn FnMut(u32) -> u32 + Send>`**（クロック注入と同型・戻りは [0,bound) 一様）。seriko が **`seeded_rng(seed: u64)`**（SplitMix64＋乗算シフト縮約・純粋・テスト可能）を提供し、**本番シードは areka 結線層が `RandomState` 経由で採取して `info!` でログ**（再現可能性の観測点）。テストは固定列クロージャを注入。
+
+## Architecture Pattern Evaluation（design 確定分）
+
+| Option | Description | Strengths | Risks / Limitations | 判定 |
+|---|---|---|---|---|
+| Opt-1A改（ghost に additive 汎用レーン＋areka 結線） | `spawn_loop_ticker`（クロージャ配送・BoundarySchedule 再利用）を ghost ticker.rs へ追加、areka が SerikoSink クローンで結線 | 既存 2 系統不改変・型結合ゼロ・グリッド整列/catch-up を再利用・時間源機構の帰属が ghost に残る | ticker スレッド +1 本 | **採用** |
+| Opt-1B（spawn_ticker 第 3 系統） | 既存関数を 3 系統へ拡張 | tick 集約 | `From<Tick>` orphan rule／seriko 送信端の ghost への逆流配線／既存 2 系統改修 | 棄却 |
+| Opt-2A（純関数＋薄い状態） | 抽選・進行を純関数群へ、アクターは配線のみ | 決定論全網羅・sleep 不要 | 二層時間の設計が要る（解決済み・上記） | **採用** |
+| Opt-3A（`Show` フィールド追加） | `DisplayCommand::Show`/`ShowBalloon` に `pattern` を追加 | 「Show=1 面の完全な合成入力」意味論と一致・網羅 match が追随を強制 | 下流 match の連鎖改修（意図された設計） | **採用** |
+| Opt-4A改（EmoWorld スナップショット表） | boot 時に `AnimationTable::from_world(&EmoWorld)` で不変表を構築し `spawn_seriko` へ値渡し | append/ターゲット展開・fold 意味論を再実装しない・表注入で決定論テスト可 | 定義の read-only 二重保持（boot 一度きり・許容） | **採用**（Opt-4A の供給元を parser `Shell` 直から fold 済み EmoWorld へ精緻化） |
+
+## Design Decisions（design.md へ反映済みの確定）
+
+### Decision D-1: 時間源＝ghost 汎用単発レーン＋areka 結線（§6-1/6-3）
+- **Selected**: `areka-ghost/ticker.rs` に `LoopTickerConfig{interval(既定16ms), clock(既定 GetTickCount64)}`＋`spawn_loop_ticker(config, deliver: Box<dyn FnMut(Tick)+Send>)` を additive 追加。areka `wire_emo2_boot` が `SerikoSink::send_tick(now_ms)` を叩くクロージャで結線。`SerikoMsg::Tick{now_ms: u64}` を additive 追加（素の u64＝seriko に新規依存なし）。
+- **Rationale/Trade-offs**: 既存 2 系統完全不改変（1.4）・orphan rule 回避・スレッド 1 本増は許容。停止は `TickerMsg::Close`＋join（main の shutdown 順序: loop ticker close → ghost shutdown → seriko join）。
+- **Follow-up**: 停止後 tick の `send_tick` 失敗は debug!（shutdown 期待事象・PresentBridge 先例）。
+
+### Decision D-2: 二層時間の純関数化（§6-5・R-1）
+- **Selected**: 抽選層＝1000ms 絶対グリッド境界の跨ぎ検出（跨ぎ数によらず判定 1 回）。進行層＝再生開始時刻からの経過 → 累積 wait デッドライン列の「現在コマ」関数（`Pending/Active(i)/Stopped/FinishedResidual(i)`）。tick 周期非依存・catch-up 安全。
+- **Trade-offs**: 粗い tick では中間コマがスキップされ得る（現在コマ意味論として正・16ms 既定で実用上不発生）。
+
+### Decision D-3: デファクト 2 点の期待値焼き込み（§6-9・9.4）
+- **Selected**: (a) `-1` 無し末尾到達＝`FinishedResidual(last)`（最終コマを PatternState に残したまま非再生化＝再抽選対象へ復帰）／(b) 再生中（`Pending/Active`）は抽選対象外。純関数の檻の期待値として明文化。実機齟齬時のみ SSP 実観察で裏取り。
+
+### Decision D-4: PatternState 正本と合流規則（§6-6/6-7）
+- **Selected**: emo-compose `pattern.rs` が正本。`compose_into(.., active_binds, pattern)` 拡張。`flatten_surface` の層(ii)で「有効 bind pattern0 の集合 ∪ PatternState のコマ集合」を **同一の animation ID 整列**（animation-sort 2 段規則・不変）へ合流し、**同 ID はコマが pattern0 寄与を置換**（各コマは直前をリセットしてベースへ・4.2）。合流は top-level surface のみ（コマは表示中 surface のアニメに属する）。`ComposeKey{surface_id, binds, pattern}` 拡張・容量 1 メモ化不変。
+- **Trade-offs**: `DisplayCommand`（非 non_exhaustive）の網羅 match 追随が compose/present/adapter/frame に連鎖（意図された強制追随・発見 D）。
+
+### Decision D-5: method の駆動線引き（§6-11(c)・8.4）
+- **Selected**: parser は `DrawMethod(String)` 忠実転記（全 pattern 行を転記・overlay フィルタ撤去）。seriko 表構築時に `ComposeMethod::from_name` で 1 回解決し `PatternFrame.method` に完全形で搬送。合成は `Overlay` のみ駆動（blit）・非 Overlay は warn!＋当該コマ不描画（完全形保持のまま非駆動）。plan の bind pattern0 blit にも同じ method ゲートを追加（従来は decoder フィルタが overlay を保証していた前提の是正）。`-1` は method/x/y 無視で停止（4.3）・`-1` 以外の負値（`-2` 等）は warn!＋自アニメ停止扱い（他アニメ停止は駆動しない＝8.2）。
+- **Rationale**: emo2 golden は byte 不変（全 overlay）。語彙は registry（ComposeMethod）一本で二重定義なし。
+
+### Decision D-6: 状態の住処と冪等（§6-6・R6）
+- **Selected**: `ScopeStates` に per-(scope, 面種スロット) の PatternState を同居（`dynamic_binds` 鏡映）。`commit_pattern` は commit_bind と同型（冪等ガード→書込→Shown なら Show/ShowBalloon 再発行）。surface 切替（apply）は当該スロットの PatternState を空へ戻し LoopRuntime の再生状態もリセット。発行は emit_display 単一点を継承。
+- **面種非仕切り（要件裁定 (a)）**: 評価器・表・PatternState・commit は面種非依存。シェル map／バルーン map の両表示エントリを同一経路で評価し（表はシェル世界とバルーン世界の 2 つ＝**ID 名前空間の別**であって能力の仕切りではない）、`ShowBalloon` にも `pattern` を搬送する。emo2 でバルーン表が空なのはデータ事実。
+
+### Decision D-7: 抽選順序の決定論（7.2）
+- **Selected**: 1 境界での抽選は「スロット（scope 昇順→シェル→バルーン）→ animation id 昇順」の固定順で乱数を消費。注入乱数列テストの期待値が一意に定まる。
+
+### Decision D-8: bind ゲートは抽選時のみ（3.1 文言どおり）
+- **Selected**: `bind+random` のゲートは抽選判定時に `current_binds(scope).contains(anim.id)` を read-only 参照（面種によらず scope の bind 集合を一様参照）。再生中の bind 変化は再生を中断しない（要件が抽選判定のみを規定・最小決定論）。実機齟齬が観測されたら SSP 実観察で裏取り（9.4 と同じ流儀）。
+
+## Risks & Mitigations（design 追加分）
+
+- `DisplayCommand`/`PresentCommand` 拡張の match 連鎖漏れ — 非 non_exhaustive のコンパイル強制＋spine e2e golden で検出。
+- parser overlay フィルタ撤去による下流挙動変化（非 overlay pattern がモデルへ流入） — plan/表構築の method ゲート＋emo2 golden byte 不変檻で回帰を封じる。
+- 16ms 常時 tick のアイドルコスト — 変化なし tick は評価のみで無発行（6.2）・スレッド 1 本＋軽量メッセージで許容。実測で問題なら周期は config 1 点で調整可。
+- 乱数の自前 PRNG（SplitMix64）の品質 — まばたき用途（1/4 抽選）に十分。シードをログし再現可能性を確保。
+- 実機で残留/非再抽選のデファクトが SSP と齟齬 — 9.4 の手順（SSP 実観察→期待値更新）で吸収。
+
+## References
+
+- ukadoc 正典転記は brief.md「ukadoc 正典確定（2026-07-23 調査済み）」を正とする（design での再調査不要と明記済み）。
+- 実装先例: `areka-ghost/src/ticker.rs`（BoundarySchedule）・`areka-seriko/src/state.rs`（commit_bind 鏡映元）・`areka-emo-compose/src/method.rs`（完全語彙 registry）・`areka-emo-present/src/cache.rs`（キー拡張予約）。
