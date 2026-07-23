@@ -121,7 +121,8 @@ fn drop_cancels_pending_then_reactivate_serves_requests() {
     let factory: IShioriFactory = StatefulFactory { deferred: true }.into();
 
     // host を明示生成し、drop 後に突合枠クリアを観測できるよう clone で保持する。
-    let host: IShioriHost = crate::shiori_host::ShioriHostSink::new().into();
+    // sink は sylphya 委譲済み（第 2 ストア撤去・Task 9.1/9.3）。hermetic な偽 IO sink（既知 asker）。
+    let host: IShioriHost = crate::shiori_host::spawn_test_sylphya_sink().sink.into();
     let brain = factory
         .create(&HSTRING::from("dir"), &HSTRING::from("name"), &host)
         .expect("create");

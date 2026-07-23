@@ -216,7 +216,7 @@
   - _Depends: 9.1_
   - _Requirements: 7.2_
 
-- [ ] 9.3 sink テスト更新・本番呼出列の順序依存実測
+- [x] 9.3 sink テスト更新・本番呼出列の順序依存実測
   - 既存テスト (d)(e) を `barrier()` 駆動（set→barrier→get の決定論列）へ更新する
   - 欠落 key・`Get` 実装内からの再入・別スレッド set＋barrier の檻を維持することを確認する
   - 本番呼出列（shiori_session 系初期化列）に set→直後 Get の順序依存が無いことを実測確認する（依存が見つかった場合は `set_property_value` 充填ラッパ内 barrier を初期化列に限り適用する）
