@@ -21,6 +21,7 @@ pub mod assets;
 pub mod frame;
 pub mod move_cue;
 pub mod consumer_ledger;
+pub mod hover_inject;
 
 // 決定論 spine テストハーネス（R8・task 6.1）。`areka` は [[bin]] のみ（[lib] 無し）で外部
 // tests/ から bin 内部項目へ到達できないため、既存 repo 慣行に従い in-crate #[cfg(test)]

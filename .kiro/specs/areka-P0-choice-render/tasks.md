@@ -191,7 +191,7 @@
   - _Requirements: 9.5_
   - _Boundary: DrawOracle_
 
-- [ ] 10. (P) Integration: 実機用 hover 注入デバッグ導線（emo2_boot/hover_inject.rs）
+- [x] 10. (P) Integration: 実機用 hover 注入デバッグ導線（emo2_boot/hover_inject.rs）
   - _Depends: 8.1_
   - env ゲート駆動の周期巡回導線を実装する（`AREKA_CHOICE_HOVER_INJECT=cycle[:ms]`・frame clock 時刻駆動・実 sleep 不使用で `choice_active` な actor の hit row ordinal を周期巡回し `inject_choice_hover` を呼ぶ・各ステップを info ログ）
   - `emo2_boot/mod.rs` へモジュール登録し `frame.rs` の text phase から駆動する。未設定/不正値は完全無効
@@ -244,3 +244,4 @@
 - actor.rs apply_cue: Clear=`choice_hover.remove`+`choice_snapshot.remove`（per-actor）、ClearAll=両 map `.clear()`（全 actor）。snapshot も即時無効化（choice_active は span 由来で即 false・snapshot は次 present まで stale ゆえ照会窓で表示/hit 齟齬＝5.2 破れ回避）。次 present 空再導出と冪等・無害。
 - **9.1 が潜在バグ検出→修正**: `\_l` 横字下げがヒット幾何には効くが描画に落ちていた（3.3 違反）。`finish_line` が `LineRect` の inline-near edge を `inline_start`（カーソル未反映）から取っていたのが原因。修正=near edge を最初の配置グリフの `inline_pos` から導出（`glyphs.first().map_or(inline_start,|g|g.inline_pos)`）。非カーソル行は first glyph inline_pos==inline_start ゆえ byte 同一・全 mode 対称。単体テストの盲点を readback 檻が発見した実例。
 - 9.5 検証（コード変更なし）: 既存 byte 等価 golden・typewriter・scroll・viewbox 全緑（lib 361+integration 23・0 failed）。additive-ness 構造確認=dola cue command.rs は main と byte 同一（Choice/Cursor は既存 variant・新 cue 新設なし）・integration tests/ 無改変・task3 の choice_resident_renders_pixel_identical_to_glyph_run が非退行証明。
+- task 10 hover_inject.rs: `AREKA_CHOICE_HOVER_INJECT`（unset/空/不正=完全 no-op・cycle=700ms・cycle:<ms>）。`cycle_ordinal(t,period,count)=floor(t/period)%(count+1)`（slot0=None・純関数・sleep 不使用）。frame.rs `run_text_phase` の present_frame 後に `hover_inject::drive(&mut runtime, talk_time)`。公開 API のみ消費（emo-text 無改変・8.6）。NTFS mtime で cargo が新規モジュールを再コンパイルしない罠あり→PowerShell で mtime 強制。
