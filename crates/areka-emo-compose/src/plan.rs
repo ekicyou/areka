@@ -225,7 +225,9 @@ pub(crate) fn derive_ops(
     // Composer ファサード）から借用して再利用する（要件 10.3・定常状態アロケーションなし）。
     // 走査開始前に空へ戻し、祖先スタック規律（push-on-enter／pop-on-exit）で走査後も空に戻す。
     visited.clear();
-    flatten_surface(out_ops, visited, world, atlas, surface_id, binds, pattern, 0, 0);
+    // top-level 合成対象。ここでのみ PatternState の現在コマを層(ii) へ合流させる（コマは表示中
+    // surface のアニメに属す・design「top-level surface のみ」）。入れ子再帰は is_top_level=false。
+    flatten_surface(out_ops, visited, world, atlas, surface_id, binds, pattern, 0, 0, true);
 }
 
 /// 合成対象 surface（top-level）／入れ子参照先 surface（再帰）を平坦化して `out_ops` へ積む。
@@ -243,8 +245,19 @@ pub(crate) fn derive_ops(
 /// visited は祖先スタック: 入口で `surface_id` を push、出口で pop。既訪問（＝現在の祖先経路に
 /// 存在）なら循環ゆえ `warn!` して即 return（枝打ち切り・非パニック・要件 7.2/7.3）。
 ///
-/// 引数は out_ops/visited のスクラッチ2本＋world/atlas の入力2本＋surface_id＋binds＋累積
-/// offset(x,y) の計8本。全て再帰の各段で必要ゆえ削れない（スクラッチ構造体化は将来の整理余地）。
+/// # 合成合流と method ゲート（task 7.2・要件 4.2/4.6/5.3/8.4）
+///
+/// `is_top_level`（derive_ops 直下の合成対象 surface のみ真）のとき、層(ii) の対象 id 集合へ
+/// `pattern`（[`PatternState`]）の現在コマを持つ id を合流する。合流対象 id 集合 =
+/// `{ 有効 bind pattern0 を持つ id } ∪ { PatternState に現在コマを持つ id }`。整列は既存の
+/// animation-sort 2 段規則を**変更せず**適用する（R5.3・画家のアルゴリズム）。各 id で現在コマが
+/// あれば**コマが pattern0 静的寄与を置換**する（4.2「各コマは直前コマをリセットしてベースへ」）。
+/// コマ・pattern0 いずれも method ゲート（[`ComposeMethod::is_implemented`]＝Overlay のみ）を通し、
+/// 非 Overlay は `warn!`（method 名込み）＋不描画（完全形保持のまま非駆動・8.4）。**再帰段（入れ子
+/// 参照）は `is_top_level=false` で PatternState を参照しない**（コマは表示中 surface のアニメに属す）。
+///
+/// 引数は out_ops/visited のスクラッチ2本＋world/atlas の入力2本＋surface_id＋binds＋pattern＋累積
+/// offset(x,y)＋is_top_level。全て再帰の各段で必要ゆえ削れない（スクラッチ構造体化は将来の整理余地）。
 #[allow(clippy::too_many_arguments)]
 fn flatten_surface(
     out_ops: &mut Vec<BlitOp>,
@@ -253,11 +266,12 @@ fn flatten_surface(
     atlas: &AtlasTable,
     surface_id: u32,
     binds: &BindSet,
-    // task 7.1: pattern はここまでスレッド済み。合成合流（現在コマの上乗せ／method ゲート）の
-    // 実消費は task 7.2 が本関数で行う。7.1 では再帰へ透過するのみ（観測不変・R5.4）。
+    // task 7.2: 現在コマ集合の層(ii) 合流＋コマ/pattern0 双方への method ゲートで実消費する。
+    // 合流は is_top_level のみ（コマは表示中 surface のアニメに属す）。再帰段は pattern を参照しない。
     pattern: &PatternState,
     offset_x: i64,
     offset_y: i64,
+    is_top_level: bool,
 ) {
     // 循環検出（要件 7.2/7.3）: 現在の祖先経路に既出なら打ち切り（warn・非パニック）。
     if visited.contains(&surface_id) {
@@ -276,20 +290,31 @@ fn flatten_surface(
     // 当 surface 不在なら bind 層もない（後続 task が SurfaceNotFound 分類を担う）。存在する場合のみ
     // bind 層を積む。いずれにせよ枝離脱で visited を pop する。
     if let Some((master, _binding)) = surface_and_binding(world, surface_id) {
-        // 層（ii）: 有効 bind（interval が bind 種 ∧ id ∈ binds）の animation id を収集する。
-        let mut active_ids: Vec<u32> = master
+        // 層（ii）: 合流対象 id 集合 = { 有効 bind（interval が bind 種 ∧ id ∈ binds）の pattern0 を
+        //   持つ id } ∪ { PatternState に現在コマを持つ id }。後者は **is_top_level のみ**合流する
+        //   （コマは表示中 surface のアニメに属す・design「top-level surface のみ」・要件 4.6/5.3）。
+        let mut merged_ids: Vec<u32> = master
             .animations
             .iter()
             .filter(|a| is_bind_interval(&a.interval) && binds.contains(a.id))
             .map(|a| a.id)
             .collect();
+        if is_top_level {
+            // 現在コマの id を合流（有効 bind pattern0 を持たない id も含む）。重複は既存を優先し
+            // 二重列挙しない（整列後も 1 回だけ処理される）。
+            for (id, _frame) in pattern.iter() {
+                if !merged_ids.contains(&id) {
+                    merged_ids.push(id);
+                }
+            }
+        }
 
-        // 段1: animation-sort に応じて描画順を決める（design 決定5・画家のアルゴリズム写像）。
-        //   Descend（既定）→ id 昇順に描画（大 id が上）。Ascend → id 降順に描画（小 id が上）。
-        // 段2: その方向の中で id をキーに整列する。
+        // 段1/段2: animation-sort の2段規則を**変更せず**合流後 id 集合へ適用する（design 決定5・
+        //   画家のアルゴリズム写像・R5.3）。Descend（既定）→ id 昇順に描画（大 id が上）。
+        //   Ascend → id 降順に描画（小 id が上）。
         match world.animation_sort() {
-            SortOrder::Descend => active_ids.sort_unstable(),
-            SortOrder::Ascend => active_ids.sort_unstable_by(|a, b| b.cmp(a)),
+            SortOrder::Descend => merged_ids.sort_unstable(),
+            SortOrder::Ascend => merged_ids.sort_unstable_by(|a, b| b.cmp(a)),
             // `SortOrder` は `#[non_exhaustive]`。未知値は既定 Descend（id 昇順描画）へ倒す（非パニック）。
             other => {
                 tracing::warn!(
@@ -298,12 +323,47 @@ fn flatten_surface(
                     sort = ?other,
                     "未知の animation-sort: 既定 Descend（id 昇順描画）として扱う"
                 );
-                active_ids.sort_unstable();
+                merged_ids.sort_unstable();
             }
         }
 
-        // 描画順に各有効 bind の pattern0 を静的層の後（＝上）へ積む。
-        for id in active_ids {
+        // 描画順に各 id の寄与（コマ優先・無ければ pattern0）を静的層の後（＝上）へ積む。
+        for id in merged_ids {
+            // top-level かつ当 id に現在コマがあれば **コマが pattern0 静的寄与を置換**する
+            //   （4.2「各コマは直前コマをリセットしてベースへ」）。コマは method ゲートを通す。
+            if is_top_level {
+                if let Some(frame) = pattern.get(id) {
+                    if frame.method.is_implemented() {
+                        // Overlay: pattern0 と同様、frame.surface_id へ (x,y) 累積で再帰 flatten
+                        //   （transient コマも入れ子参照を許す・循環検出は再帰入口の visited 判定）。
+                        flatten_surface(
+                            out_ops,
+                            visited,
+                            world,
+                            atlas,
+                            frame.surface_id,
+                            binds,
+                            pattern,
+                            offset_x + frame.x,
+                            offset_y + frame.y,
+                            false,
+                        );
+                    } else {
+                        // 非 Overlay: 完全形は保持しつつ非駆動＝当該コマ不描画（warn・要件 8.4）。
+                        tracing::warn!(
+                            target: "areka_emo_compose",
+                            surface_id,
+                            animation_id = id,
+                            method = ?frame.method,
+                            "非 Overlay method の現在コマ: 不描画 skip（完全形保持・非駆動・要件 8.4）"
+                        );
+                    }
+                    // コマが pattern0 を置換したゆえ、この id の pattern0 静的経路は辿らない。
+                    continue;
+                }
+            }
+
+            // コマ無し（または非 top-level）: 従来の有効 bind pattern0 静的経路。
             // 同 id の animation は fold 段で単一化済み（後勝ち）ゆえ find で足りる。
             let Some(anim) = master.animations.iter().find(|a| a.id == id) else {
                 continue;
@@ -334,6 +394,22 @@ fn flatten_surface(
                 continue;
             }
 
+            // pattern0 静的経路にも同じ method ゲート（D-5 是正）: parser の overlay フィルタ撤去
+            //   （task 1.2）で非 overlay pattern0 がモデルへ流入し得るため、原文 method を解決して
+            //   Overlay のみ駆動する。非 Overlay は warn!（method 名込み）＋不描画（8.4）。emo2 は
+            //   全 overlay ゆえ golden byte 不変。
+            let p0_method = ComposeMethod::from_name(pattern0.method.as_str());
+            if !p0_method.is_implemented() {
+                tracing::warn!(
+                    target: "areka_emo_compose",
+                    surface_id,
+                    animation_id = id,
+                    method = ?p0_method,
+                    "非 Overlay method の bind pattern0: 不描画 skip（完全形保持・非駆動・要件 8.4）"
+                );
+                continue;
+            }
+
             // 入れ子 surface 参照: pattern0 の (x,y) を累積オフセットへ足して再帰的に flatten する
             // （多段・オフセット累積・要件 7.1）。循環は再帰入口の visited 判定で打ち切る（7.2/7.3）。
             let nested_id = pattern0.surface_id as u32;
@@ -347,6 +423,7 @@ fn flatten_surface(
                 pattern,
                 offset_x + pattern0.x,
                 offset_y + pattern0.y,
+                false,
             );
         }
     }
@@ -1874,5 +1951,253 @@ mod tests {
 
         // index==0（open_eye）のみ合成。index==1（closed_eye）は静的合成に現れない。
         assert_eq!(ops_to_paths(&ops, &map), vec!["open_eye.png"]);
+    }
+
+    // ── task 7.2: PatternState 合流と method ゲート（層(ii) の transient コマ合流・要件 4.2/4.6/5.3/8.4）─
+    //
+    // flatten_surface（top-level のみ）で「有効 bind pattern0 の集合 ∪ PatternState のコマ集合」を
+    // 既存 animation-sort 整列へ合流し、同 id はコマが pattern0 寄与を置換する。コマ・pattern0 双方に
+    // method ゲート（is_implemented()＝Overlay のみ駆動）を適用し、非 Overlay は warn!（method 名込み）
+    // ＋不描画とする（8.4）。warn 発火は log_capture で檻に入れる。
+
+    use crate::log_capture::capture_logs;
+    use crate::pattern::PatternFrame;
+
+    /// 現在コマ（PatternFrame）を 1 本組む（テスト補助・任意 method／オフセット）。
+    fn koma(surface_id: u32, method: ComposeMethod, x: i64, y: i64) -> PatternFrame {
+        PatternFrame { surface_id, method, x, y }
+    }
+
+    /// pattern0（index==0）1 本だけを持つ bind animation を任意 method で組む（pattern0 method ゲート檻用）。
+    fn bind_anim_method(id: u32, ref_surface_id: i64, method: &str) -> Animation {
+        Animation {
+            id,
+            interval: Interval::Bind,
+            patterns: vec![Pattern {
+                index: 0,
+                method: DrawMethod::new(method.to_string()),
+                surface_id: ref_surface_id,
+                wait: 0,
+                x: 0,
+                y: 0,
+            }],
+        }
+    }
+
+    /// テスト7.2-①（**受入基準**・要件 8.4）: 非 Overlay method の現在コマは warn!（method 名込み）＋
+    /// 不描画。かつコマは同 id の pattern0 静的寄与を置換するゆえ、その pattern0 も現れない（4.2）。
+    ///
+    /// host=1000 は静的 base ＋ bind id=1 pattern0→part1(overlay)。id=1 の現在コマは surface 1500
+    /// （koma）method=Replace（非 Overlay）。コマは非駆動で不描画・pattern0(part1) も置換で不描画ゆえ、
+    /// 残るは base のみ。warn は method=Replace を載せる。
+    #[test]
+    fn non_overlay_koma_warns_and_is_not_drawn_replacing_pattern0() {
+        let base = Path::new("shell/master");
+        let atlas = bake_atlas(base, &["base.png", "part1.png", "koma.png"]);
+        let map = id_to_path(&atlas, &["base.png", "part1.png", "koma.png"]);
+
+        let host = surface_with_anims(
+            1000,
+            vec![elem(0, "base.png", 0, 0)],
+            vec![bind_anim(1, 1100, 0, 0)], // pattern0 は overlay。
+        );
+        let part1 = surface(1100, vec![elem(0, "part1.png", 0, 0)]);
+        let koma_surface = surface(1500, vec![elem(0, "koma.png", 0, 0)]);
+        let shell = shell_of(vec![host, part1, koma_surface]);
+        let mut world = EmoWorld::build(&shell);
+        world.bind_atlas(&atlas, SetId(0));
+
+        let binds = BindSet::from_ids([1]);
+        let mut pattern = PatternState::default();
+        pattern.set(1, koma(1500, ComposeMethod::Replace, 0, 0)); // 非 Overlay コマ。
+
+        let mut ops = Vec::new();
+        let logs = capture_logs(|| {
+            derive_ops(&mut ops, &mut Vec::new(), &world, &atlas, 1000, &binds, &pattern);
+        });
+
+        // コマ（koma）は非駆動で不描画・pattern0（part1）はコマに置換され不描画 → base のみ。
+        assert_eq!(
+            ops_to_paths(&ops, &map),
+            vec!["base.png"],
+            "非 Overlay コマは不描画・pattern0 も置換で不描画（残るは base）"
+        );
+        // warn! が method 名込みで発火する（要件 8.4・完全形保持のまま非駆動）。
+        assert!(logs.contains("level=WARN"), "非 Overlay コマは WARN: {logs}");
+        assert!(logs.contains("target=areka_emo_compose"), "target: {logs}");
+        assert!(logs.contains("method=Replace"), "method 名（判別子）を載せる: {logs}");
+        assert!(logs.contains("animation_id=1"), "対象 animation id を載せる: {logs}");
+    }
+
+    /// テスト7.2-②（要件 8.4・D-5 是正）: 非 Overlay の **bind pattern0**（静的経路）も warn!（method
+    /// 名込み）＋不描画。parser の overlay フィルタ撤去で非 overlay pattern0 が流入し得るため。
+    ///
+    /// host=1000 は静的 base ＋ bind id=1 の pattern0 method="replace"→part1。空 PatternState。
+    /// pattern0 は非 Overlay ゆえ不描画（warn method=Replace）で、残るは base のみ。
+    #[test]
+    fn non_overlay_pattern0_warns_and_is_not_drawn() {
+        let base = Path::new("shell/master");
+        let atlas = bake_atlas(base, &["base.png", "part1.png"]);
+        let map = id_to_path(&atlas, &["base.png", "part1.png"]);
+
+        let host = surface_with_anims(
+            1000,
+            vec![elem(0, "base.png", 0, 0)],
+            vec![bind_anim_method(1, 1100, "replace")], // 非 Overlay pattern0。
+        );
+        let part1 = surface(1100, vec![elem(0, "part1.png", 0, 0)]);
+        let shell = shell_of(vec![host, part1]);
+        let mut world = EmoWorld::build(&shell);
+        world.bind_atlas(&atlas, SetId(0));
+
+        let binds = BindSet::from_ids([1]);
+        let mut ops = Vec::new();
+        let logs = capture_logs(|| {
+            derive_ops(&mut ops, &mut Vec::new(), &world, &atlas, 1000, &binds, &PatternState::default());
+        });
+
+        // 非 Overlay pattern0（part1）は不描画 → base のみ。
+        assert_eq!(
+            ops_to_paths(&ops, &map),
+            vec!["base.png"],
+            "非 Overlay pattern0 は不描画（残るは base）"
+        );
+        assert!(logs.contains("level=WARN"), "非 Overlay pattern0 は WARN: {logs}");
+        assert!(logs.contains("method=Replace"), "method 名（判別子）を載せる: {logs}");
+        assert!(logs.contains("animation_id=1"), "対象 animation id を載せる: {logs}");
+    }
+
+    /// テスト7.2-③（**受入基準**・要件 4.2）: Overlay の現在コマは描画され、同 id の pattern0 静的
+    /// 寄与を**置換**する（pattern0 の surface は現れず、コマの surface が現れる）。
+    ///
+    /// host=1000 は bind id=1 pattern0→open(1100)。id=1 の現在コマは closed(1200) method=Overlay。
+    /// コマが pattern0 を置換 → closed_eye のみ現れ open_eye は現れない。
+    #[test]
+    fn overlay_koma_is_drawn_and_replaces_same_id_pattern0() {
+        let base = Path::new("shell/master");
+        let atlas = bake_atlas(base, &["open_eye.png", "closed_eye.png"]);
+        let map = id_to_path(&atlas, &["open_eye.png", "closed_eye.png"]);
+
+        let host = surface_with_anims(1000, Vec::new(), vec![bind_anim(1, 1100, 0, 0)]);
+        let open = surface(1100, vec![elem(0, "open_eye.png", 0, 0)]);
+        let closed = surface(1200, vec![elem(0, "closed_eye.png", 0, 0)]);
+        let shell = shell_of(vec![host, open, closed]);
+        let mut world = EmoWorld::build(&shell);
+        world.bind_atlas(&atlas, SetId(0));
+
+        let binds = BindSet::from_ids([1]);
+        let mut pattern = PatternState::default();
+        pattern.set(1, koma(1200, ComposeMethod::Overlay, 0, 0)); // Overlay コマ。
+
+        let mut ops = Vec::new();
+        derive_ops(&mut ops, &mut Vec::new(), &world, &atlas, 1000, &binds, &pattern);
+
+        // コマ（closed_eye）が pattern0（open_eye）を置換 → closed_eye のみ。
+        assert_eq!(
+            ops_to_paths(&ops, &map),
+            vec!["closed_eye.png"],
+            "Overlay コマが同 id の pattern0 を置換（open_eye は現れない）"
+        );
+    }
+
+    /// テスト7.2-④（要件 5.3・画家のアルゴリズム）: 合流後も id 昇順描画順が保たれる（既定 descend）。
+    ///
+    /// bind id=1 pattern0→partA(1100)、**コマのみ** id=2→partB(1200)（bind animation なし）、
+    /// bind id=3 pattern0→partC(1300)。合流集合 {1,3}∪{2}={1,2,3}。id 昇順描画で partA→partB→partC。
+    /// コマ専用 id=2 が bind ids の間へ id 順で正しく挿入されることを突く。
+    #[test]
+    fn merged_ids_preserve_id_ascending_painter_order() {
+        let base = Path::new("shell/master");
+        let atlas = bake_atlas(base, &["partA.png", "partB.png", "partC.png"]);
+        let map = id_to_path(&atlas, &["partA.png", "partB.png", "partC.png"]);
+
+        // id=2 の bind animation は無い（コマ専用）。bind は id=1,3 のみ。
+        let host = surface_with_anims(
+            1000,
+            Vec::new(),
+            vec![bind_anim(1, 1100, 0, 0), bind_anim(3, 1300, 0, 0)],
+        );
+        let part_a = surface(1100, vec![elem(0, "partA.png", 0, 0)]);
+        let part_b = surface(1200, vec![elem(0, "partB.png", 0, 0)]);
+        let part_c = surface(1300, vec![elem(0, "partC.png", 0, 0)]);
+        let shell = shell_of(vec![host, part_a, part_b, part_c]);
+        let mut world = EmoWorld::build(&shell);
+        world.bind_atlas(&atlas, SetId(0));
+
+        // bind は 1,3 のみ有効。コマ id=2 は BindSet 非依存で合流される。
+        let binds = BindSet::from_ids([1, 3]);
+        let mut pattern = PatternState::default();
+        pattern.set(2, koma(1200, ComposeMethod::Overlay, 0, 0));
+
+        let mut ops = Vec::new();
+        derive_ops(&mut ops, &mut Vec::new(), &world, &atlas, 1000, &binds, &pattern);
+
+        // 既定 descend → id 昇順描画: partA(1) → partB(2・コマ) → partC(3)。
+        assert_eq!(
+            ops_to_paths(&ops, &map),
+            vec!["partA.png", "partB.png", "partC.png"],
+            "合流後も id 昇順描画（コマ専用 id が bind ids の間へ id 順で挿入）"
+        );
+    }
+
+    /// テスト7.2-⑤（要件 5.4・byte 等価 sanity）: 空 PatternState は合流前と同一 ops を生む
+    /// （full golden は task 7.3・ここでは merge 導入で pattern0 経路が退行しないことの即時檻）。
+    #[test]
+    fn empty_pattern_state_yields_identical_ops_to_pre_merge() {
+        let base = Path::new("shell/master");
+        let atlas = bake_atlas(base, &["base.png", "part1.png"]);
+        let map = id_to_path(&atlas, &["base.png", "part1.png"]);
+
+        let host = surface_with_anims(
+            1000,
+            vec![elem(0, "base.png", 0, 0)],
+            vec![bind_anim(1, 1100, 0, 0)],
+        );
+        let part1 = surface(1100, vec![elem(0, "part1.png", 0, 0)]);
+        let shell = shell_of(vec![host, part1]);
+        let mut world = EmoWorld::build(&shell);
+        world.bind_atlas(&atlas, SetId(0));
+
+        let binds = BindSet::from_ids([1]);
+        let mut ops = Vec::new();
+        derive_ops(&mut ops, &mut Vec::new(), &world, &atlas, 1000, &binds, &PatternState::default());
+
+        // 空 PatternState → 静的 base（下）＋ bind pattern0 part1（上）＝合流前と同一。
+        assert_eq!(
+            ops_to_paths(&ops, &map),
+            vec!["base.png", "part1.png"],
+            "空 PatternState は pattern0 経路そのまま（merge 導入で退行しない）"
+        );
+    }
+
+    /// テスト7.2-⑥（要件 4.6・5.3）: bind pattern0 を持たない id の Overlay コマ単独でも描画される
+    /// （合流集合が union ゆえ・コマ専用 id）。まばたき再生（pattern0 なし bind の再生コマ）を突く。
+    #[test]
+    fn koma_only_id_without_bind_pattern0_is_drawn() {
+        let base = Path::new("shell/master");
+        let atlas = bake_atlas(base, &["blink.png"]);
+        let map = id_to_path(&atlas, &["blink.png"]);
+
+        // host は bind animation を一切持たない（静的 element も無し）。
+        let host = surface_with_anims(1000, Vec::new(), Vec::new());
+        let blink = surface(1412, vec![elem(0, "blink.png", 0, 0)]);
+        let shell = shell_of(vec![host, blink]);
+        let mut world = EmoWorld::build(&shell);
+        world.bind_atlas(&atlas, SetId(0));
+
+        // BindSet は空。コマだけが surface 1412 を Overlay で駆動する。
+        let binds = BindSet::default();
+        let mut pattern = PatternState::default();
+        pattern.set(1400, koma(1412, ComposeMethod::Overlay, 0, 0));
+
+        let mut ops = Vec::new();
+        derive_ops(&mut ops, &mut Vec::new(), &world, &atlas, 1000, &binds, &pattern);
+
+        // pattern0 が無くてもコマは駆動される（union 合流・4.6 まばたき再生）。
+        assert_eq!(
+            ops_to_paths(&ops, &map),
+            vec!["blink.png"],
+            "bind pattern0 を持たない id のコマ単独でも描画（union 合流）"
+        );
     }
 }

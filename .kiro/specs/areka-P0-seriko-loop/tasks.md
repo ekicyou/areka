@@ -116,7 +116,7 @@
   - _Requirements: 5.1_
   - _Boundary: emo-compose lib.rs_
 
-- [ ] 7.2 flatten_surface への合流と method ゲートを実装する
+- [x] 7.2 flatten_surface への合流と method ゲートを実装する
   - `flatten_surface` 層(ii) で「有効 bind pattern0 の集合 ∪ PatternState のコマ集合」を既存 animation-sort 整列へ合流し、同 ID はコマが pattern0 寄与を置換する
   - `method.is_implemented()`（Overlay のみ）でコマを描画し、非 Overlay は warn!（method 名込み）＋不描画とする
   - pattern0 静的経路にも同じ method ゲートを追加する（overlay フィルタ撤去で非 overlay pattern0 が流入し得るため）
