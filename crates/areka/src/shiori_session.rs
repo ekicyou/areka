@@ -131,8 +131,15 @@ impl ShioriSession {
         shiori_name: &HSTRING,
         timeout: Duration,
     ) -> Result<Self, SessionError> {
-        // areka 実装の sink を生成（単一 in-flight 突合枠＋メールボックス＋プロパティストアを所有）。
-        let host: IShioriHost = ShioriHostSink::new().into();
+        // areka 実装の sink を生成（単一 in-flight 突合枠＋メールボックス＋sylphya 委譲プロパティ応答）。
+        // プロパティ応答は App スコープのみの sylphya アクターへ委譲する（第 2 ストア撤去・R7.2/R7.3・
+        // design.md §bin（ShioriHostSink 統合））。セッション固有の `AskerId` は load_dir の正準文字列
+        // から構築する（ghost 側 `ghost_asker_id` が `MountModel.shiori.dir` から構築する規約に倣う）。
+        // `handle` は非 RAII（detach）で、アクターは sink 内包 publisher が生存する限り生き続けるため
+        // 破棄してよい（in-proc serving surface は join 不要・spawn_app_sylphya_sink の doc 参照）。
+        let asker = areka_sylphya::AskerId::new(load_dir.to_string());
+        let (sink, _handle) = crate::shiori_host::spawn_app_sylphya_sink(asker);
+        let host: IShioriHost = sink.into();
         // factory 経由生成: load 完了済みの IShiori を受領する（旧 ShioriExt::load 経路の置換・要件 2.1）。
         // 失敗は ShioriError（CreateFailed）へ写る（半構築非露出・要件 8.6）。
         let brain = factory.create(load_dir, shiori_name, &host)?;

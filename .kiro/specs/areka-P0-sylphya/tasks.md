@@ -199,7 +199,7 @@
   - _Requirements: 2.1, 2.2, 4.2, 4.3, 4.4, 4.5, 5.1, 7.1, 9.1, 9.2, 9.4_
 
 - [ ] 9. Integration: ShioriHostSink 統合
-- [ ] 9.1 (P) HashMap ストア撤去・with_sylphya 構築
+- [x] 9.1 (P) HashMap ストア撤去・with_sylphya 構築
   - この統合は sylphya アクター（Major 5）完了のみに依存し、ghost 結線（Major 8）とは異なるファイル（bin crate 内の shiori_host.rs）を扱うため並走可能
   - `ShioriHostSink.properties: Mutex<HashMap<String, HSTRING>>` を撤去する
   - `ShioriHostSink::with_sylphya(reader, publisher, asker)` コンストラクタを実装する

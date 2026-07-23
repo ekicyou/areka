@@ -1,10 +1,10 @@
-//! areka 本体側 `IShioriHost` 実装（単一 sink・突合枠・メールボックス投函＋プロパティストア）。
+//! areka 本体側 `IShioriHost` 実装（単一 sink・突合枠・メールボックス投函＋sylphya 委譲）。
 //!
 //! 脳（`IShiori` 実装）が [`IShioriFactory::create`](shiori_abi::interface::IShioriFactory) 時に
 //! 受け取る単一 sink を areka 側で `#[implement(IShioriHost)]` により実装する
-//! （design.md §ShioriHostSink, requirements.md 10.2/10.3/10.4/12.4）。
+//! （design.md §ShioriHostSink, requirements.md 10.2/10.3/10.4/12.4/7.2/7.3）。
 //!
-//! ## 役割（design.md §ShioriHostSink・§Boundary Commitments → This Spec Owns）
+//! ## 役割（design.md §ShioriHostSink・§bin（ShioriHostSink 統合））
 //! - **単一 sink** が能動通知（[`Raise`](shiori_abi::interface::IShioriHost::Raise)）・
 //!   遅延応答（[`Complete`](shiori_abi::interface::IShioriHost::Complete)）・
 //!   プロパティアクセス（[`GetProperty`](shiori_abi::interface::IShioriHost::GetProperty)/
@@ -14,28 +14,34 @@
 //!   `Complete` は保持中トークンと突き合わせて応答をメールボックスへ投函する（design.md §State）。
 //! - `Raise`/`Complete` は脳の任意スレッドから来うる前提（議題3）で **thread-safe にメールボックスへ
 //!   投函して即返す**。突合不能/stale/未知トークンは [`shiori_abi::error::SHIORI_E_UNKNOWN_TOKEN`] を返す。
-//! - **プロパティストア** `Mutex<HashMap<String, HSTRING>>` を内蔵し、`GetProperty` はストアから
-//!   **同期即答**する（mailbox 投函で代替しない・要件 10.3）。欠落 key は
-//!   [`shiori_abi::error::SHIORI_E_PROPERTY_NOT_FOUND`] を返す（暗黙の空値で続行しない）。`SetProperty`
-//!   は即書き。任意スレッドから呼出可能（`Mutex` が担保）。
-//! - `[in]` HSTRING は借用（呼び出し中のみ有効）。保持/投函する内容は host 側で clone する（要件 10.4/12.4）。
+//! - **プロパティ応答は sylphya へ委譲**（第 2 ストア撤去・R7.2/R7.3・design.md §bin（ShioriHostSink 統合））。
+//!   独立した `Mutex<HashMap<String, HSTRING>>` は撤去し、代わりに統一プロパティシステム sylphya の
+//!   読み口 [`SylphyaReader`]＋変異投函 [`SylphyaPublisher`]＋自セッションの [`AskerId`] を保持する
+//!   （[`ShioriHostSink::with_sylphya`] コンストラクタ）。`GetProperty` は reader の逐次同期解決
+//!   （[`SylphyaReader::resolve_dotted_str`]）で **同期即答** し（mailbox 投函で代替しない・要件 10.3）、
+//!   欠落 key（[`DottedResolution::NotFound`]）は [`shiori_abi::error::SHIORI_E_PROPERTY_NOT_FOUND`] を
+//!   返す（暗黙の空値で続行しない）。`SetProperty` は publisher へ投函して即 `Ok(())`（裁定 §10.4・
+//!   read-your-write は有界ラグ）。任意スレッドから呼出可能。
+//! - `[in]` HSTRING は借用（呼び出し中のみ有効）。保持/投函する内容は host 側で clone/String 化する
+//!   （要件 10.4/12.4）。HSTRING⇄String 橋は本 sink 境界に閉じる（sylphya は String のみ扱う）。
 //! - **非循環所有**: host struct は脳（`IShiori`）へ強参照を持たない（脳→host の一方向）。
 //!
-//! ## 再入規約（契約として doc 固定・design.md §確定設計判断 (b)・要件 10.3）
+//! ## 再入規約（契約として doc 固定・design.md §確定設計判断 (b)・要件 10.3/7.2）
 //! areka は [`IShiori::Get`](shiori_abi::interface::IShiori::Get)/
-//! [`IShiori::Notify`](shiori_abi::interface::IShiori::Notify) 呼出中にプロパティストアのロックを
-//! 保持しない。→ 脳が `Get` 処理中に同一スレッドで `get_property` を呼び戻してもデッドロックしない。
-//! これは各メソッドがロックを最小区間でのみ取得し、他 sink 呼出（`Raise`/`Complete`）を跨いで
-//! 保持しないことで構造的に担保される。
+//! [`IShiori::Notify`](shiori_abi::interface::IShiori::Notify) 呼出中にプロパティ解決でブロッキング
+//! 照会・大域ロック取得を行わない。→ 脳が `Get` 処理中に同一スレッドで `get_property` を呼び戻しても
+//! デッドロックしない。これは reader の逐次解決が **鏡像スナップショットの read lock 内 `Arc` clone のみ**
+//! （他スレッド／他アクターへの pull 照会をしない・最小区間ロック）で完結する性質により構造的に
+//! 担保される（design.md §「同期読み・非同期供給の掲示板」）。
 //!
 //! ## メールボックスの範囲（design.md §Boundary Commitments）
 //! メールボックスは「受け皿」までを本仕様が所有する（thread-safe queue の最小実装）。
 //! ECS/bevy への実際の配送は本仕様スコープ外であり、ここでは取り出して検証できる最小形に留める。
 
-use std::collections::HashMap;
 use std::collections::VecDeque;
 use std::sync::Mutex;
 
+use areka_sylphya::{AskerContext, AskerId, DottedResolution, SylphyaPublisher, SylphyaReader};
 use shiori_abi::error::{SHIORI_E_PROPERTY_NOT_FOUND, SHIORI_E_UNKNOWN_TOKEN};
 use shiori_abi::outcome::CorrelationToken;
 use windows_core::{HSTRING, Result, implement};
@@ -57,8 +63,10 @@ pub enum HostMessage {
 
 /// areka 本体側の `IShioriHost` 実装（単一 sink）。
 ///
-/// 突合枠・メールボックス・プロパティストアを thread-safe に所有する（`Mutex` による最小実装）。
-/// 脳へ強参照を持たない（非循環所有・design.md §ShioriHostSink）。
+/// 突合枠・メールボックスを thread-safe に所有し、プロパティ応答は統一プロパティシステム sylphya の
+/// 読み口 [`SylphyaReader`]＋変異投函 [`SylphyaPublisher`]＋自セッションの [`AskerId`] へ委譲する
+/// （第 2 ストア撤去・R7.2/R7.3・design.md §bin（ShioriHostSink 統合））。脳へ強参照を持たない
+/// （非循環所有・design.md §ShioriHostSink）。
 #[implement(shiori_abi::interface::IShioriHost)]
 pub struct ShioriHostSink {
     /// 唯一の保留枠（単一 in-flight・議題3）。areka が遅延 request 発行時にセットし、
@@ -66,21 +74,41 @@ pub struct ShioriHostSink {
     pending: Mutex<Option<CorrelationToken>>,
     /// 能動通知・遅延完了の受け皿（thread-safe queue の最小実装）。
     mailbox: Mutex<VecDeque<HostMessage>>,
-    /// プロパティストア（同期即答・要件 10.3・design.md §確定設計判断 (b)）。
+    /// sylphya の同期・無待機の読み口（`GetProperty` の逐次同期解決に使用・R7.2）。
     ///
-    /// `GetProperty` はここから同期即答し、`SetProperty` は即書きする。任意スレッドから
-    /// 呼出可能（`Mutex` が担保）。key は SSP プロパティシステムの dotted パス（要件 10.2）。
-    /// M1 最小 key 集合と値の充填は実装フェーズ／利用側の領分（要件 10.5）。
-    properties: Mutex<HashMap<String, HSTRING>>,
+    /// 逐次解決は鏡像スナップショットの read lock 内 `Arc` clone のみで完結し、他スレッド／他アクターへの
+    /// pull 照会をしない（大域ロックにならない・再入規約を構造的に担保・要件 7・design.md 掲示板モデル）。
+    reader: SylphyaReader,
+    /// sylphya の変異投函の送信端（`SetProperty`／`set_property_value` の投函先・R7.2）。
+    ///
+    /// 投函のみで鏡像を直接触らない（single-writer はアクターが担保）。アクター死亡後の投函は
+    /// panic せず縮退する（fire-and-forget は warn＋破棄・design.md §Error Handling）。
+    publisher: SylphyaPublisher,
+    /// 自セッション固有の問い合わせ元 ID（フラット/dotted の per-asker 着地先・R7.2）。
+    ///
+    /// `GetProperty` は本 asker から [`AskerContext`] を導いて逐次解決し、`SetProperty`／
+    /// `set_property_value` は本 asker を投函に添える（同一セッションの読み書きが一致する）。
+    asker: AskerId,
 }
 
 impl ShioriHostSink {
-    /// 空の突合枠・空メールボックス・空プロパティストアで sink を生成する。
-    pub fn new() -> Self {
+    /// sylphya の読み口・投函端・自セッション `AskerId` を与えて sink を生成する（R7.2/R7.3）。
+    ///
+    /// 突合枠・メールボックスは空で初期化する。プロパティ応答（`GetProperty`/`SetProperty`）は
+    /// 与えられた `reader`/`publisher` へ委譲し、独立した第 2 ストアは持たない（design.md
+    /// §bin（ShioriHostSink 統合））。`reader`/`publisher` は同一 sylphya アクターに由来し、
+    /// `asker` はそのセッション固有の問い合わせ元 ID である（呼び出し側＝sink 組立各所が保証する）。
+    pub fn with_sylphya(
+        reader: SylphyaReader,
+        publisher: SylphyaPublisher,
+        asker: AskerId,
+    ) -> Self {
         Self {
             pending: Mutex::new(None),
             mailbox: Mutex::new(VecDeque::new()),
-            properties: Mutex::new(HashMap::new()),
+            reader,
+            publisher,
+            asker,
         }
     }
 
@@ -117,15 +145,16 @@ impl ShioriHostSink {
         self.mailbox.lock().expect("mailbox mutex poisoned").len()
     }
 
-    /// areka 側からプロパティストアへ値を充填する（`AsImpl` 経由・要件 10.5）。
+    /// areka 側からプロパティ値を充填する（`AsImpl` 経由・要件 10.5・R7.2）。
     ///
-    /// M1 最小 key 集合の値生成源は利用側の領分であり、本 API はその充填口を提供する。
-    /// key は SSP プロパティシステムの dotted パス（要件 10.2）。任意スレッドから呼出可能。
+    /// 第 2 ストアへの直接書込ではなく sylphya publisher への **投函の薄いラッパ** として存続する
+    /// （`SetProperty` と同じ着地・design.md §bin（ShioriHostSink 統合））。key は SSP プロパティ
+    /// システムの dotted パス（要件 10.2）。任意スレッドから呼出可能（投函のみ）。反映は sylphya
+    /// アクターが担うため read-your-write は有界ラグ（研究 §12-4・テストは barrier で反映を待つ）。
     pub fn set_property_value(&self, key: &str, value: HSTRING) {
-        self.properties
-            .lock()
-            .expect("properties mutex poisoned")
-            .insert(key.to_string(), value);
+        // HSTRING⇄String 橋は sink 境界に閉じる（sylphya は String のみ）。投函して即返る。
+        self.publisher
+            .set(self.asker.clone(), key.to_string(), value.to_string());
     }
 
     /// メールボックスへ thread-safe に投函する内部ヘルパ。
@@ -137,10 +166,36 @@ impl ShioriHostSink {
     }
 }
 
-impl Default for ShioriHostSink {
-    fn default() -> Self {
-        Self::new()
-    }
+/// App スコープのみの sylphya アクターを起動し、その reader/publisher と与えた session `AskerId` で
+/// sink を構築する（sink 組立各所〔shiori_session 系〕共通の App-root-only spawn・R7.3・design.md
+/// §bin（ShioriHostSink 統合）「spawn_sylphya〔App root のみ・ghost/shell root なし〕」）。
+///
+/// - App root は bin の [`crate::default_app_profile_dir`]（env `AREKA_PROFILE_DIR` 優先・既定は
+///   実行ファイル隣接 `profile/areka/`・R8.2）を供給する。ghost/shell/balloon root は付けない
+///   （bin の serving surface は App スコープのみを据える・ghost/shell スコープは ghost boot 系列が
+///   `<shiori.dir>`／`<shell.dir>` から導く・design.md §boot 系列）。
+/// - 本番 IO は [`areka_sylphya::persist::FsPersistIo`]、運行 sink は未配線（M1・`None`）。
+///
+/// 返る [`areka_actor::ActorHandle`] は **非 RAII（drop で detach・areka-actor 規約）**。アクター
+/// スレッドは inbox の送信端（sink が内包する publisher）が生存する限り生き続けるため、返した
+/// sink が生きている間はアクターも生存する（publisher の投函は失敗しない）。呼び出し側は join して
+/// panic を観測したい場合のみ handle を保持すればよく、本経路（in-proc serving surface）は join を
+/// 要さないため handle を drop（detach）してよい。
+pub(crate) fn spawn_app_sylphya_sink(
+    asker: AskerId,
+) -> (ShioriHostSink, areka_actor::ActorHandle) {
+    let parts = areka_sylphya::spawn_sylphya(areka_sylphya::SylphyaInit {
+        roots: areka_sylphya::ScopeRoots {
+            app: Some(crate::default_app_profile_dir()),
+            ghost: None,
+            shell: None,
+            balloon: None,
+        },
+        io: Box::new(areka_sylphya::persist::FsPersistIo),
+        runtime_sink: None,
+    });
+    let sink = ShioriHostSink::with_sylphya(parts.reader, parts.publisher, asker);
+    (sink, parts.handle)
 }
 
 // windows-core 0.62: `#[implement]` 生成の `*_Impl` 型に対し pub vtable メソッドを実装する。
@@ -148,9 +203,9 @@ impl Default for ShioriHostSink {
 // `[in]` HSTRING（`&HSTRING`）は借用——呼び出し中のみ参照可で解放せず、投函/保持する内容は
 // clone して所有する（要件 10.4/12.4・interface.rs §HSTRING 所有権規約）。
 //
-// 再入規約（要件 10.3）: 各メソッドはロックを最小区間でのみ取得し、他 sink 呼出を跨いで保持しない。
-// 特に `GetProperty`/`SetProperty` は `properties` ロックのみを短く取り、`Get`/`Notify` 呼出中の
-// 同一スレッド呼び戻しでもデッドロックしない。
+// 再入規約（要件 10.3/7.2）: `GetProperty` は reader の逐次同期解決（鏡像スナップショットの read
+// lock 内 `Arc` clone のみ・他スレッド/他アクターへの pull 照会なし）で完結し、`SetProperty` は
+// publisher への投函のみで返るため、`Get`/`Notify` 呼出中の同一スレッド呼び戻しでもデッドロックしない。
 impl shiori_abi::interface::IShioriHost_Impl for ShioriHostSink_Impl {
     unsafe fn Raise(&self, script: &HSTRING) -> Result<()> {
         // `[in]` 借用: 保持するため clone して所有する（要件 10.4）。
@@ -181,27 +236,31 @@ impl shiori_abi::interface::IShioriHost_Impl for ShioriHostSink_Impl {
     }
 
     unsafe fn GetProperty(&self, key: &HSTRING, out_value: &mut HSTRING) -> Result<()> {
-        // プロパティストアから同期即答する（mailbox 投函で代替しない・要件 10.3）。
-        // ロックは最小区間で取得し、`Get`/`Notify` 呼出中の同一スレッド呼び戻しでも
-        // デッドロックしない（再入規約）。
-        let store = self.properties.lock().expect("properties mutex poisoned");
-        match store.get(&key.to_string()) {
-            Some(v) => {
-                // 存在時: 値を out へ move-out（callee 確保・caller 解放）。
-                *out_value = v.clone();
+        // sylphya reader の逐次同期解決で同期即答する（mailbox 投函で代替しない・要件 10.3/7.2）。
+        // 解決は鏡像スナップショットの read lock 内 `Arc` clone のみで完結し、`Get`/`Notify` 呼出中の
+        // 同一スレッド呼び戻しでもデッドロックしない（再入規約）。
+        // HSTRING⇄String 橋は本 sink 境界に閉じる（key: HSTRING→String〔UTF-16→UTF-8〕）。
+        let key = key.to_string();
+        let ctx = AskerContext {
+            asker: self.asker.clone(),
+        };
+        match self.reader.resolve_dotted_str(&ctx, &key) {
+            // 実在時: 値を out へ move-out（callee 確保・caller 解放・String→HSTRING）。
+            DottedResolution::Value(v) => {
+                *out_value = HSTRING::from(v);
                 Ok(())
             }
-            // 欠落 key は PROPERTY_NOT_FOUND（out_value 未書込・暗黙の空値で続行しない）。
-            None => Err(SHIORI_E_PROPERTY_NOT_FOUND.into()),
+            // 欠落 key は PROPERTY_NOT_FOUND（out_value 未書込・暗黙の空値で続行しない・R7.2）。
+            DottedResolution::NotFound => Err(SHIORI_E_PROPERTY_NOT_FOUND.into()),
         }
     }
 
     unsafe fn SetProperty(&self, key: &HSTRING, value: &HSTRING) -> Result<()> {
-        // 即書き（要件 10.1）。`[in]` 借用ゆえ key/value ともに clone して所有する。
-        self.properties
-            .lock()
-            .expect("properties mutex poisoned")
-            .insert(key.to_string(), value.clone());
+        // sylphya publisher へ投函して即 `Ok(())`（裁定 §10.4・要件 10.1/7.2）。分類・中継・host 区画
+        // 書込はアクターの領分。`[in]` 借用ゆえ key/value を String 化して所有を移す（HSTRING⇄String
+        // 橋は本 sink 境界に閉じる）。read-your-write は有界ラグ（研究 §12-4）。
+        self.publisher
+            .set(self.asker.clone(), key.to_string(), value.to_string());
         Ok(())
     }
 }
