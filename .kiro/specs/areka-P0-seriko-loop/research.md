@@ -247,6 +247,11 @@ ghost `runtime.rs` の boot 配線（`:381-408`）では ticker は kanade と d
 - **Rationale**: method 裁定（要件討議 #2）と同型——転記層は落とさない・黙らない。R8.2「完全形保持」が字義どおり成立し、[areka-log-first-no-silent-failure]／[areka-parser-transcribes-tree-downstream] と整合。emo2 は interval 3 種のみ使用ゆえ観測不変（golden 影響ゼロ）。
 - **Rejected**: (A) decode に warn! 1 行のみ（fallback-Bind 温存＝誤分類自体が残る）／(C) 追跡 spec 送りの明記のみ（転記の穴を知りながら残す）。
 
+### Decision D-10: 残留→再発火の Pending 中は即時クリア（design 討議 #2・2026-07-23 開発者裁定）
+- **Selected**: `IdleResidual` から再抽選発火した瞬間に残留コマを PatternState からクリアする。以降の表示は `frame_at`（再生経過の純関数）のみで決まり、`Pending` 中はエントリなし＝ベース露出（先頭コマは自身の deadline で表示）。
+- **Rationale**: 開発者裁定「どの案でもよいが、**直前の状態に依存しない方がよい**」——再生中アニメの表示を再生状態の純関数に保ち、直前 PatternState への依存を残さない（決定論・状態非依存）。ukadoc 無規定ゆえ確定挙動として檻に焼き込み、実機齟齬時のみ SSP 実観察で裏取り（9.4 と同じ流儀）。emo2 は全アニメ先頭 wait=0 で実機非観測＝檻は先頭 wait>0 の合成テーブルで張る。
+- **Rejected**: (A) 残留維持（Pending 中に前エントリ引き継ぎ＝直前状態依存の一手間が入る）／(C) 発火＝先頭コマ即表示の読み替え（ukadoc「ウェイトはそのコマを描画するまでの待ち時間」の字義に反する）。
+
 ## Risks & Mitigations（design 追加分）
 
 - `DisplayCommand`/`PresentCommand` 拡張の match 連鎖漏れ — 非 non_exhaustive のコンパイル強制＋spine e2e golden で検出。

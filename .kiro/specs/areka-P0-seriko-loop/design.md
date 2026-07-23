@@ -233,7 +233,7 @@ stateDiagram-v2
     IdleResidual --> Idle: surface 切替 or Hide で リセット
 ```
 
-`Idle`/`IdleResidual` が「非再生中」＝抽選対象（2.3/9.4）。`IdleResidual` は PatternState に最終コマを残したまま（4.4）。
+`Idle`/`IdleResidual` が「非再生中」＝抽選対象（2.3/9.4）。`IdleResidual` は PatternState に最終コマを残したまま（4.4）。**再発火の瞬間に残留コマは即時クリア**され、以降の表示は `frame_at`（再生経過の純関数）のみで決まる——`Pending` 中はエントリなし＝ベース露出（討議 #2 裁定: 表示を直前 PatternState に依存させない・状態非依存の決定論。emo2 は全アニメ先頭 wait=0 ゆえ実機非観測。実機齟齬時は SSP 実観察で裏取り＝9.4 と同じ流儀）。
 
 ## Requirements Traceability
 
@@ -409,7 +409,7 @@ pub fn frame_at(frames: &[LoopFrame], elapsed_ms: u64) -> FrameStatus;
 
 - アクター本体が単独所有（スレッド内・ロック不要）。状態: `LotteryBoundary` 1 個＋`HashMap<(ActorKey, Slot), SlotPlayback>`（`SlotPlayback = HashMap<u32 /*anim id*/, Playback { started_at_ms: u64 }>`）。
 - `Slot` は表示エントリの名前空間（`Shell`／`Balloon`）＝ScopeStates の 2 map に整合する **ID 名前空間の区別**であり能力の仕切りではない（裁定 (a)・両 slot を同一コードパスで評価）。
-- `on_tick(now_ms, states)`: (1) 単調性ガード（now < 前回 → debug!＋無視）。(2) 境界跨ぎなら抽選——表示中（`Shown(sid)`）の各 slot について `table.animations(sid)` を走査し、非再生（Idle/IdleResidual・2.3）かつ bind ゲート通過（`BindRandom` は `states.current_binds(scope).contains(anim.id)`・`Random` は無条件・3.1/3.2）のアニメへ `should_fire` を適用。発火で `Playback{started_at: now_ms}` 登録＋info!（実機 grep マーカー）。(3) 全再生中アニメへ `frame_at(now - started_at)` を評価し、slot ごとの新 PatternState を組み立てる（`Active/FinishedResidual` → コマ搬送・`Stopped` → エントリなし＋playback 除去・`FinishedResidual` は playback 除去のみでコマ残留）。(4) slot ごとに `states.commit_pattern` へ渡し、`Changed(cmd)` を呼び手（actor）へ返す。
+- `on_tick(now_ms, states)`: (1) 単調性ガード（now < 前回 → debug!＋無視）。(2) 境界跨ぎなら抽選——表示中（`Shown(sid)`）の各 slot について `table.animations(sid)` を走査し、非再生（Idle/IdleResidual・2.3）かつ bind ゲート通過（`BindRandom` は `states.current_binds(scope).contains(anim.id)`・`Random` は無条件・3.1/3.2）のアニメへ `should_fire` を適用。発火で `Playback{started_at: now_ms}` 登録＋info!（実機 grep マーカー）。(3) 全再生中アニメへ `frame_at(now - started_at)` を評価し、slot ごとの新 PatternState を組み立てる（`Pending` → エントリなし——**再発火前の残留コマも発火時点で即時クリア**＝再生中アニメの表示は `frame_at` の結果のみで決まり直前 PatternState に依存しない〔討議 #2〕・`Active/FinishedResidual` → コマ搬送・`Stopped` → エントリなし＋playback 除去・`FinishedResidual` は playback 除去のみでコマ残留）。(4) slot ごとに `states.commit_pattern` へ渡し、`Changed(cmd)` を呼び手（actor）へ返す。
 - 抽選順序は決定論固定（D-7）: scope 昇順（`ActorKey` 文字列順）→ Shell → Balloon → animation id 昇順。注入乱数列の消費順が一意。
 - `on_surface_changed(scope, slot)` / `on_hidden(scope, slot)`: 当該 slot の playback を全除去（PatternState クリアは ScopeStates 側の apply が行う）。ukadoc「そのサーフェスである間」＝再生とコマは表示中 surface に従属。
 - bind の書込 API は一切呼ばない（3.3）。
@@ -694,7 +694,7 @@ log-first・silent failure 禁止（[areka-log-first-no-silent-failure]）。入
 
 ### Integration Tests（アクター・状態・合成）
 
-1. `looper::on_tick`（同期・`handle_message` 経由）— 注入 tick 列＋注入乱数列で期待 PatternState 列と発行列が完全一致（7.2）: kero 型（`-1` 終端→ベース復帰）・sakura 型（末尾残留）・再生中の非再抽選（2.3）・bind OFF で判定不発（乱数**非消費**の檻・3.1）・ON で発火（3.2）・変化なし tick は無発行（6.2）・surface 切替でコマ消滅（リセット）。
+1. `looper::on_tick`（同期・`handle_message` 経由）— 注入 tick 列＋注入乱数列で期待 PatternState 列と発行列が完全一致（7.2）: kero 型（`-1` 終端→ベース復帰）・sakura 型（末尾残留）・再生中の非再抽選（2.3）・bind OFF で判定不発（乱数**非消費**の檻・3.1）・ON で発火（3.2）・変化なし tick は無発行（6.2）・surface 切替でコマ消滅（リセット）・**残留→再発火の即時クリア**（先頭 wait>0 の合成テーブルで、発火 tick に残留エントリが消えベース復帰→先頭コマ deadline で表示、の期待列＝討議 #2 裁定の檻。emo2 実測列は wait=0 ゆえ合成 fixture で網羅）。
 2. `state::commit_pattern` — 冪等（同値 Unchanged）・Changed の Show/ShowBalloon 同梱値（binds・pattern）・`apply` の surface 切替 pattern クリア・`apply_bind` 再発行への current_pattern 同梱。
 3. emo-compose golden — 空 PatternState で拡張前と **byte 等価**（5.4）・transient コマ合流の golden（同 ID 置換・ID 整列不変・5.3）・非 Overlay コマの warn!＋不描画（8.4）・`compute_extent` 不変・**外形前提の実測檻**: emo2 fixture の採録アニメ全コマ（kero 2106-2110／sakura 1410-1412）について原寸＋(x,y) オフセットが当該ベース surface の Extent 内に収まることをアサート（クリップ許容劣化が emo2 では発生しないことの裏取り）。
 4. emo-present cache — pattern 差分でミス・同値でヒット・invalidate_all 不変（5.2）。
