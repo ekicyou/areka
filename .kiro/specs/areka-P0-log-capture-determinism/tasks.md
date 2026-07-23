@@ -85,7 +85,7 @@
   - _Requirements: 9.1, 9.2, 9.4, 9.5_
   - _Boundary: WIC MTA-keeper（wic_core.rs + world/mod.rs）_
 
-- [ ] 5.2 wintf layout flake の RED→GREEN ストレス証拠を取得する
+- [x] 5.2 wintf layout flake の RED→GREEN ストレス証拠を取得する
   - `cargo test -p wintf --test layout --no-run` → `target\debug\deps\layout-*.exe`（mtime 最新）を **8 プロセス並列 × 複数波**でフルスイート起動し、0xC0000005（exit `-1073741819`）の有無を集計する
   - 修正前（5.1 適用前の HEAD）で ≥1 件クラッシュ再現＝RED 確定（実測 8/40）、修正後（5.1 適用後）で同一ストレスにて **0 件**＝GREEN を示す。犯人は `EcsWorld::new()` を呼ぶ 2 テスト（`taffy_flex_layout_pure_test` / `taffy_layout_integration_test::unit_integration`）
   - RED→GREEN の比較結果（再現→解消）が記録として残り、恒久解であることを客観的に示せる
@@ -106,4 +106,7 @@
 - 4.2: 修正後 lib exe で GREEN ストレス（4並列×25ラウンド）= TOTAL=100 / FAIL=0（全 exit 0）。1.2 の RED 未再現に対し修正後も 100/100 緑＝leak された global registry で `Interest::never` 焼き付きが構造的に到達不能となる恒久解の客観証拠。
 - 4.3: 構造証明で 3 テスト（steady_test.rs:826・close_test.rs:178・close_test.rs:790）＋ `wait_until`（close_test.rs:62-77）＋ `drive_ticks_until_disconnect`（common/mod.rs:998-1026）に反復回数上限が存在せず、意味論的完了バリア（inbox 切断）＋壁時計 deadline のみで駆動されることを確認（旧 `..=500` 消滅）。非空虚性経路（非復帰時 deadline panic／wait_until false→assert 失敗）実在。回帰緑 `cargo test -p areka-kanade` = lib 136/0 + integration 34/0。
 - 4.4（初回・wintf 修正前）: `cargo test --workspace` × 5 連続で areka-kanade は**全 5 回緑**（lib 136/0・log 捕捉檻の失敗 0 件＝Req 1.4 本旨は充足）だが、run 2 で **wintf `--test layout` が 0xC0000005 でクラッシュ**（`error: test failed`）。この第二 flake の根本原因を追加調査で**確定**（下記）→ **本セッションの開発者判断で本 spec に取込**（Req 9・タスク 5.1/5.2 新設）。4.4 は wintf 修正（5.1）反映後に再取得する（_Depends: 5.1 追加）。
+- 5.1: `WicCore` に `ensure_process_mta()`（`OnceLock` ガードの `CoIncrementMTAUsage`・cookie 意図的 leak）を `CoCreateInstance` 前へ前置。`world/mod.rs:62` の無言スキップを `match` 化し `Err` 側へ `tracing::error!`。SAFETY doc を「MTA 前提」→「自己強制」へ更新。`cargo test -p wintf` 全緑・2 ファイルに限定。
+- 5.2: wintf layout GREEN ストレス（8 プロセス並列 × 12 波 = **96 実行 / 0 クラッシュ**・全 exit 0）。RED（修正前 8/40 ≈20%）に対し 96/0＝恒久解を客観実証。workspace 5 回全回でも 0xC0000005 は 0 件。
+- 4.4（再取得・wintf 修正後）: `cargo test --workspace` × 5。**0xC0000005 は全 5 回 0 件**（本 spec 核心の第一/第二 flake 根治を実証）。ただし run 1 のみ **第三の flake**（`areka-ghost --test ghost` の `spine_e2e_test::s4_close_handshake::..._completes_regular_shutdown_...`）が高負荷下でタイムアウト failed=1（`spine_e2e_test.rs:1516`「Unload was never observed ... within bound」）。runs 2-5 完全クリーン・単独 10/10 PASS。これは host-32 IPC 有界 e2e の**負荷起因タイミング flake**（本 spec 変更対象外・areka-ghost は `git diff main...HEAD` に無し＝main 既存・memory areka-defender-rescan-starves-cooperative-test-loops と同型）。4.4 の扱いは開発者判断中。
 - Req 9 根本原因（確定・一次実証）: layout テストバイナリは `CoInitializeEx` を呼ばないが `EcsWorld::new()`→`WicCore::new()` が `CoCreateInstance(WIC)` を呼ぶ。並走テスト（可視ウィンドウ生成の MSCTF/TSF ロード）が副作用で一時的 MTA を立てる窓で生成が成功し、その借り物 MTA 解体で COM ランタイムごと factory が解放→`EcsWorld` drop の `IUnknown::Release` が use-after-free で即死。全 8 クラッシュの WER フォールトオフセットが `windows_core::unknown::IUnknown::Drop` で一致・容疑 2 テスト（`taffy_flex_layout_pure_test`/`taffy_layout_integration_test::unit_integration`）両 skip で 0/48・単独プロセス 135 実行 0 クラッシュ・8 プロセス並列で 8/40 再現。処方＝`WicCore` 自身が `CoIncrementMTAUsage` でプロセス寿命 MTA を確立（interest-keeper と同型・DD-9）。
