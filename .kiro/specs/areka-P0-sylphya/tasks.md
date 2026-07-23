@@ -105,7 +105,7 @@
   - _Requirements: 6.1, 6.2, 6.3, 6.4, 6.5, 6.6, 6.7, 9.1, 9.2_
 
 - [ ] 5. Core: sylphya アクター
-- [ ] 5.1 SylphyaMsg envelope と SylphyaCore 純関数中核
+- [x] 5.1 SylphyaMsg envelope と SylphyaCore 純関数中核
   - `SylphyaMsg`（`PublishStatic{asker,flat,dotted}`／`PublishShiori{asker,name,value}`／`Set{asker,key,value}`／`PersistPut{scope,entries,reply}`／`Barrier{reply}`／`Close`）を定義する
   - 判断分岐を純関数中核 `SylphyaCore::apply(msg) -> 効果列` へ寄せる（受信ループは薄い配線のみ）
   - SET コマンドの分類（正準語彙かつ SET 有効→`RuntimeCommand`／正準語彙外の自由 dotted key→`StoreWrite`／SET 無効な正準語彙→`NotSettable`）を実装する

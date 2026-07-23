@@ -56,6 +56,7 @@ mod ledger_key_determinism_tests;
 mod test_log_capture;
 
 // --- 公開面 re-export（後続タスクが素直に使えるよう主要型を crate 直下へ）---
+pub use actor::{classify_set, Effect, RuntimeCommandSink, SetClass, SylphyaCore, SylphyaMsg};
 pub use asker::{AskerContext, AskerId};
 pub use key::{parse_dotted, KeyParseError, PathSeg, PropPath, Selector};
 pub use mirror::{MirrorImage, SharedMirror};
