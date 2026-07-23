@@ -61,7 +61,7 @@ pub enum CueTarget {
     Shell,
     /// バルーン（テキスト表示）— Text, Clear, Choice, WaitForChoice を主に消費
     Balloon,
-    /// 窓/placement 系（窓移動等）— `\!` 汎用キャリアのうち `command_target_of` が
+    /// 窓/placement 系（窓移動等）— `\!` 汎用キャリアのうち、消費側が名前で自己選別して
     /// ここへ割り当てるコマンド名（M1: `"move"`）を消費する演者スロット。
     /// additive unit variant（既存 variant のワイヤ形不変・`EntityKey` 参照非破壊）。
     Window,
@@ -152,9 +152,9 @@ pub enum CueCommand {
     ///
     /// コマンドごとの typed cue 語彙は**新設しない**——`move` も `bind` も同一の本キャリアに
     /// 乗り（正準形は [`CueCommand::command_carrier`] が単一箇所で構築する）、消費は
-    /// **コマンド名レベルの選別**（`command_target_of`）へ委譲される。ゆえに本 variant の
-    /// 型レベル分類 `cue_target_of(Custom)=None` は「誰も action しない」ではなく
-    /// 「コマンド名レベル選別への委譲」を意味する（R8.7）。
+    /// **消費者の名前自己選別**へ委譲される（dola はコマンド名の語彙を持たない）。ゆえに
+    /// 本 variant の型レベル分類 `cue_target_of(Custom)=None` は「誰も action しない」ではなく
+    /// 「消費側が名前で自己選別する」ことを意味する（R8.7）。
     ///
     /// `params` は JSON 互換辞書型。汎用キャリアとしての正準形は
     /// `DynamicValue::Array([String…])`（トークン列）だが、それ以外の消費者固有形も

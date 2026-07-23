@@ -25,27 +25,27 @@
   - _Depends: 1.2_
 
 - [ ] 2. dola 名前語彙退役と消費者台帳基盤
-- [ ] 2.1 (P) dola のコマンド名写像機能を撤去し文書を自己選別モデルへ改訂する
+- [x] 2.1 (P) dola のコマンド名写像機能を撤去し文書を自己選別モデルへ改訂する
   - コマンド名から担当を引く機能を削除し、汎用コマンドの型注釈を「消費側が自分で名前を選別する」という説明へ書き換える
   - Observable: dola のソースにコマンド名の具体的な文字列（例 "move"）が一切残っていないことを確認できる
   - _Requirements: 2.6_
   - _Boundary: dola cue sink_
 
-- [ ] 2.2 (P) dola 側の既存検証を自己選別モデルへ更新する
+- [x] 2.2 (P) dola 側の既存検証を自己選別モデルへ更新する
   - 撤去した機能を前提にしていた dola 側の既存検証を、削除後の型注釈・振る舞いに合わせて書き換える（または陳腐化した検証として退役させる）
   - Observable: dola 側の検証がすべて緑になり、撤去前の機能への参照がどこにも残っていない
   - _Requirements: 2.6_
   - _Boundary: dola cue sink tests_
   - _Depends: 2.1_
 
-- [ ] 2.3 (P) areka-sakura 側の既存検証を自己選別モデルへ更新する
+- [x] 2.3 (P) areka-sakura 側の既存検証を自己選別モデルへ更新する
   - 撤去した機能を前提にしていた areka-sakura 側の既存検証を、消費側の自己選別モデルの帰結（未登記名はどの消費者も反応しない）を確認する検証へ書き換える
   - Observable: areka-sakura 側の検証がすべて緑になり、撤去前の機能への参照がどこにも残っていない
   - _Requirements: 2.5_
   - _Boundary: areka-sakura drive_
   - _Depends: 2.1_
 
-- [ ] 2.4 (P) 既存コマンド消費者（move）の名前自己選別への簡素化とログ水準の整列
+- [x] 2.4 (P) 既存コマンド消費者（move）の名前自己選別への簡素化とログ水準の整列
   - 既存の move コマンド消費者を、削除した写像機能を参照しない単純な名前一致判定へ書き換える
   - ログの水準を「自分宛の破損だけを警告として報告し、他人宛や未登記の名前は静かに読み流す」という統一規律へ揃える
   - Observable: move コマンドの解釈・配送先は変わらず、破損データを与えたときのログ水準が新しい規律どおりになることを確認できる
@@ -181,4 +181,5 @@
 
 ## Implementation Notes
 
+- (task 2.1-2.4) `command_target_of` は dola 本体・dola tests・areka-sakura・areka move_cue の**本番 use を跨ぐ共有シンボル**で、削除は独立コンパイル不能ゆえ 2.1〜2.4 を1つの atomic リファクタとして一括実装・一括コミット（レビュー APPROVED）。severity は D8④ 宛名規律（自分宛破損=warn／担当外=debug）へ整列し、`with_default` ログ捕捉檻で3アームを非空虚化（`move_severity_log_tests` 4本・対比檻含む）。既存の areka ログ捕捉定石は `adapter.rs:306-342` のインライン Capture Layer。「1名前=高々1消費者」は台帳（task 2.5・7.2）で保証する構造へ移設済み。
 - (task 1.3) `areka-parsers/src/package/mod.rs` は `BindGroupDefaults` を `pub use` するが `BindGroupName`/`BindScope` は未 re-export。parsers 内部テストは module パスで到達済みだが、task 7.1（areka app 層が `MountModel.bindgroups` の名前転記から `BindResolver` を構築）で公開ファサード経由の到達が必要になれば、この 2 型を `mod.rs` で re-export すること。

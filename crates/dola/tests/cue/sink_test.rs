@@ -5,9 +5,7 @@
 //! 公開 API 越しに固定する（R2.4・R11.3・D4/D7）。
 
 use dola::DynamicValue;
-use dola::cue::{
-    ActorKey, CueCommand, CueSink, CueTarget, TalkCue, command_target_of, cue_target_of,
-};
+use dola::cue::{ActorKey, CueCommand, CueSink, CueTarget, TalkCue, cue_target_of};
 
 /// テスト用ダミー演者。**単一の `CueSink` 契約のみ**を実装し、broadcast で受け取った
 /// 全 cue のうち **relevance 判定（単一権威 `cue_target_of`）が自分宛て**の cue だけを
@@ -240,69 +238,44 @@ fn cue_target_of_classifies_every_variant() {
     assert_eq!(cue_target_of(&CueCommand::Wait), None);
 }
 
-/// 名前権威表 `command_target_of` の写像・未知名・partition 檻（R4.5・R8.7・R9.3b）。
+/// `Custom`（`\!` 汎用キャリア）の型レベル分類は `None`＝**消費者の名前自己選別への委譲**
+/// を意味する（R8.7・R2.6・自己選別モデル）。
 ///
-/// 型レベル分類 `cue_target_of(Custom)=None` は「誰も action しない」でなく、
-/// この**コマンド名レベルの選別**への委譲を意味する（R8.7）。`command_target_of` は
-/// コマンド名→担当消費者スロットの**単一権威表**であり、`Option` 戻り値の構造が
-/// 「1 コマンド名を action する消費者は高々 1」を保証する（R4.5）。
+/// dola はコマンド名の語彙も名前写像 API も一切持たない（本仕様で退役済み）。
+/// `cue_target_of(Custom)=None` は「誰も action しない」ではなく、「型レベルでは担当未定＝
+/// 実際の担当は結線層（areka）の各消費者が自らのコマンド名リテラルで自己選別して決める」
+/// ことを構造的に表す。名前権威表（中央の名前→担当マップ）は存在しない——「1 名前=高々 1
+/// 消費者」は結線層の消費者台帳が保証する（dola の責務ではない）。
 #[test]
-fn command_target_of_maps_move_and_rejects_unknown_names() {
-    // M1 の唯一のエントリ: "move"→Window（窓/placement 演者スロット）。
-    assert_eq!(
-        command_target_of("move"),
-        Some(CueTarget::Window),
-        "M1 の名前権威表は \"move\"→Window を登記する"
-    );
-
-    // 未知・M1 未対応のコマンド名は None＝全消費者が記録付き良性スキップへ縮退する
-    // （名前ごとの私的リストへ分散させない・R9.3b）。
-    for unknown in ["bind", "raise", "set", "open", "close", "unknowncommand", ""] {
-        assert_eq!(
-            command_target_of(unknown),
-            None,
-            "未知名 {unknown:?} はどの消費者の担当でもない（None）"
-        );
-    }
-
-    // partition 檻（R9.3b）: 権威表上、担当スロットを持つ（Some）名は "move" ただ 1 つ
-    // ＝1 コマンド名の担当は高々 1（Option の構造がこれを型で保証する）。M1 で網羅可能な
-    // 代表名集合を通し、Some を返すのが "move" のみであることを固定する。
-    let sample_names = [
-        "move", "bind", "raise", "lower", "set", "get", "open", "close", "sound", "wait",
-    ];
-    let mapped: Vec<&str> = sample_names
-        .into_iter()
-        .filter(|name| command_target_of(name).is_some())
-        .collect();
-    assert_eq!(
-        mapped,
-        vec!["move"],
-        "M1 の権威表で担当スロットを持つ名は \"move\" のみ（1 名前＝高々 1 消費者）"
-    );
-
-    // 型レベル分類との整合（R8.7）: `Custom`（キャリア variant）の型レベル分類は None
-    // ＝名前選別への委譲であり、実際の担当は command_target_of がコマンド名で決める。
+fn custom_type_level_none_defers_to_consumer_name_self_selection() {
+    // move キャリアであっても型レベル分類は None（dola はコマンド名を見ない）。
     assert_eq!(
         cue_target_of(&CueCommand::command_carrier("move", vec![])),
         None,
-        "型レベル分類 cue_target_of(Custom)=None は command_target_of への委譲を意味する"
+        "型レベル分類 cue_target_of(Custom)=None は消費者の名前自己選別への委譲を意味する"
     );
 
-    // 委譲先で move キャリアの担当は Window に解決される（型レベル None ≠ 誰も action しない）。
-    let carrier = CueCommand::command_carrier("move", vec!["-353".into()]);
-    if let Some((name, _tokens)) = carrier.as_command_carrier() {
+    // 他のコマンド名（bind/raise/未知名）でも同じく型レベルは None——dola は名前で分岐せず、
+    // 全 Custom を一様に「消費側が自己選別する」へ委譲する（中央の名前権威表は無い）。
+    for name in ["move", "bind", "raise", "set", "open", "close", "unknowncommand", ""] {
         assert_eq!(
-            command_target_of(name),
-            Some(CueTarget::Window),
-            "move キャリアの担当はコマンド名レベルで Window へ解決される"
+            cue_target_of(&CueCommand::command_carrier(name, vec![])),
+            None,
+            "コマンド名 {name:?} に関わらず Custom の型レベル分類は一様に None（dola は名前語彙を持たない）"
         );
-    } else {
-        panic!("正準キャリアは as_command_carrier で name を抽出できねばならない");
     }
 
-    // 非正準 params のキャリアは as_command_carrier が None を返し名前選別に到達しない
-    // （非正準は記録付き良性スキップ・R4.5）。この縮退は command.rs の
+    // 委譲の実体はコマンド名の抽出（`as_command_carrier`）——名前は消費側が読み、自己選別する。
+    // dola 側はここまで（名前→担当の解決は行わない）。
+    let carrier = CueCommand::command_carrier("move", vec!["-353".into()]);
+    assert_eq!(
+        carrier.as_command_carrier().map(|(name, _)| name),
+        Some("move"),
+        "正準キャリアからは消費側が自己選別に使うコマンド名を抽出できる"
+    );
+
+    // 非正準 params のキャリアは as_command_carrier が None を返す（消費側は記録付き良性
+    // スキップへ縮退する・R4.5）。この縮退は command.rs の
     // `as_command_carrier_returns_none_for_non_canonical` が正本で固定する。
     assert_eq!(
         CueCommand::Custom {
@@ -311,6 +284,6 @@ fn command_target_of_maps_move_and_rejects_unknown_names() {
         }
         .as_command_carrier(),
         None,
-        "非正準 params のキャリアは name 抽出前に None へ縮退する（名前選別に到達しない）"
+        "非正準 params のキャリアは name 抽出前に None へ縮退する（消費側の自己選別に到達しない）"
     );
 }
