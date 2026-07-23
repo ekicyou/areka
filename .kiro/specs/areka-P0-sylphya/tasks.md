@@ -123,7 +123,7 @@
   - _Depends: 5.1_
   - _Requirements: 2.7, 3.3, 6.7_
 
-- [ ] 5.3 アクター 決定論単体テスト群
+- [x] 5.3 アクター 決定論単体テスト群
   - SET 分類 3 パターン（RuntimeCommand／StoreWrite／NotSettable）を検証する
   - publish 後の鏡像 swap で epoch が単調増加することを検証する
   - `Barrier` による反映完了フェンスが決定論的に機能することを検証する
