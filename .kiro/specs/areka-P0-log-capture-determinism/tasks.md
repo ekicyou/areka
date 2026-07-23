@@ -1,7 +1,7 @@
 # Implementation Plan
 
 - [ ] 1. Foundation: 検証前提の整備とRED証跡取得
-- [ ] 1.1 workspace ゲート用の i686 前提成果物をビルドする
+- [x] 1.1 workspace ゲート用の i686 前提成果物をビルドする
   - `shiori-host32-helper` / `shiori-host32-testdll` を `i686-pc-windows-msvc` ターゲットでビルドする（worktree では先に `git submodule update --init` を実行）
   - ビルドが成功し、後続の workspace 反復ゲートを実行できる状態になる
   - _Requirements: 1.4, 8.3_
