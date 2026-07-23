@@ -1562,3 +1562,248 @@ fn spine_blink_smoke_send_tick_drives_loop_pattern_command() {
 
     harness.shutdown_bounded();
 }
+
+// ===========================================================================
+// task 10.2 — 実 emo2 まばたき 1 周の PresentCommand 列 golden（kero/sakura）＋ R3.4 既定 OFF 対照
+//
+// 9.4 の `boot_live`/`inject_seriko_tick`/`always_fire_rng` の上に、実 emo2 fixture の実測アニメ
+// （kero surface2100 `interval,random,4` 2106/2110/-1・sakura surface1000 `interval,bind+random,4`
+// 1400 系 1412/1411/1410）を固定注入乱数＋scripted `send_tick` で 1 周歩かせ、発行される
+// `PresentCommand` 列の **厳密 golden**（pattern 搬送 surface id の完全一致）を檻に入れる。
+// あわせて R3.4「fixture 既定 OFF」の対照——`\![bind]` を通さない既定では always_fire でも bind
+// ゲートが抽選を塞ぎ **一切発行しない**——を負の檻として固定する（design Testing Strategy E2E-1/2）。
+//
+// 全て決定論（実 emo2 asset fixture＋固定注入 rng＋scripted send_tick・sleep 不使用・Close→join）。
+// 実 SHIORI/pasta 非依存（surface は注入 cue で表示・実機/実 DPI サインオフは task 10.3）。
+// ===========================================================================
+
+/// `cmd` が scope0 shell 宛の `ShowSurface{shown_surface}` であることを検証し、その pattern が
+/// `anim_id` に載せる現在コマ surface id を返す（コマ不在＝ベース復帰は `None`）。
+///
+/// golden の各 tick が運ぶのは常に「表示中 surface（`shown_surface`）の ShowSurface に、まばたき
+/// アニメの現在コマを `pattern` へ載せたもの」。表示対象（偶数 TargetId＝shell）と表示中 surface の
+/// 透過を都度 assert し、可変部（pattern のコマ surface id）を返して呼び手が golden 照合する。
+fn shell_pattern_frame(cmd: &PresentCommand, shown_surface: u32, anim_id: u32) -> Option<u32> {
+    match cmd {
+        PresentCommand::ShowSurface {
+            target,
+            surface_id,
+            pattern,
+            ..
+        } => {
+            assert_eq!(*target, shell_target(0), "shell 表示対象（scope0・偶数 TargetId・DD-3）");
+            assert_eq!(
+                *surface_id, shown_surface,
+                "表示中 surface（seriko 数値解決の透過・pattern はこの面のアニメに従属）"
+            );
+            pattern.get(anim_id).map(|f| f.surface_id)
+        }
+        other => panic!("ShowSurface を期待（golden の各 tick は面表示指令）: {}", variant_name(other)),
+    }
+}
+
+/// dispatcher tick で OnBoot talk を駆動し、scope0 shell が `surface_id` を表示する（必要なら binds に
+/// `require_bind` を含む）まで有界スピンする。観測できた指令は drain 済みゆえ、復帰後の rx は talk 由来
+/// 指令について空——以降 `inject_seriko_tick` が発行する loop 指令だけを純粋に観測できる（sleep 不使用）。
+///
+/// `require_bind` は `\![bind,...]` 貫通の証跡: bind 適用は表示中 scope で **binds 更新済みの Show 再発行**
+/// （`apply_bind`→`BindApplyOutcome::Changed`）を生むため、「shell surface が該当 bind id を含んで表示された」
+/// = current_binds へ当該 id が書き込まれた（＝bind ゲートが ON になった）ことの end-to-end 証跡になる。
+fn drive_shell_shown(harness: &mut SpineHarness, surface_id: u32, require_bind: Option<u32>) {
+    let mut satisfied = false;
+    for now in 1u64..=200_000 {
+        harness.inject_dispatcher_tick(now);
+        for cmd in harness.wiring.drain_received() {
+            if let PresentCommand::ShowSurface {
+                target,
+                surface_id: sid,
+                binds,
+                ..
+            } = &cmd
+            {
+                if *target == shell_target(0)
+                    && *sid == surface_id
+                    && require_bind.is_none_or(|id| binds.contains(id))
+                {
+                    satisfied = true;
+                }
+            }
+        }
+        if satisfied {
+            break;
+        }
+        std::thread::yield_now();
+    }
+    assert!(
+        satisfied,
+        "OnBoot talk が scope0 shell surface {surface_id}（require_bind={require_bind:?}）を有界内に表示しない（boot→talk→sink 経路不通 or bind 未貫通）"
+    );
+}
+
+/// `now_ms` の seriko tick を 1 発直接注入し、ちょうど 1 件の `PresentCommand` が rx へ届くまで有界
+/// スピンして返す（sleep 不使用・`yield_now` のみ）。golden の各コマ遷移 tick は変化 1 件を発行する
+/// （6.1/6.2）ため、この直列注入→1 件回収で発行列の順序と内容を決定論的に照合できる。届かなければ
+/// 件数 assert が落ちる（hang しない）。
+fn seriko_tick_expect_one(harness: &mut SpineHarness, now_ms: u64) -> PresentCommand {
+    harness.inject_seriko_tick(now_ms);
+    let mut buf: Vec<PresentCommand> = Vec::new();
+    for _ in 0..1_000_000u32 {
+        buf.extend(harness.wiring.drain_received());
+        if !buf.is_empty() {
+            break;
+        }
+        std::thread::yield_now();
+    }
+    assert_eq!(
+        buf.len(),
+        1,
+        "golden の各 tick はちょうど 1 指令を発行する（now_ms={now_ms}・実受信 {} 件・variants={:?}）",
+        buf.len(),
+        buf.iter().map(variant_name).collect::<Vec<_>>()
+    );
+    buf.into_iter().next().expect("len==1 を確認済み")
+}
+
+/// spine E2E-1（kero まばたき 1 周 golden・R7.2/7.3・design Testing Strategy E2E-1）: 実 emo2 shell 表
+/// ＋固定注入乱数（常時発火）で `boot_live` し、`\s[2100]`（kero まばたき surface・`interval,random,4`・
+/// bind 非依存）を注入 cue で表示させたのち、`SerikoSink::send_tick` を直接注入して 1000ms 絶対グリッド
+/// 境界を跨がせ 1 周を歩かせる。発行 `PresentCommand` 列の **厳密 golden**——pattern0=2106 → pattern1=2110
+/// → `-1`（ベース復帰＝空 pattern）——を実 fixture 実測値（surfaces.txt `surface.append10,2100` の
+/// `animation0` 2106(w0)/2110(w40)/-1(w80)・t=[0,40,120]）で固定する。
+///
+/// send_tick→LoopRuntime→emit_display→adapter→rx の end-to-end 配線が、実 emo2 表の実測列を
+/// 忠実に運ぶことの決定論自動檻（実 SHIORI/pasta・GUI 非依存・実機/実 DPI サインオフは task 10.3）。
+#[test]
+fn spine_e2e_kero_blink_one_cycle_golden() {
+    // 実表＋常時発火固定 rng でループ活性化（既存 spine テストは Inert＝非退行・本テストのみ Live）。
+    let mut harness = SpineHarness::boot_live(r"\s[2100]\e", always_fire_rng());
+    // 表示中ゲート前提: surface2100 を scope0 shell へ表示（seriko ScopeStates に記録）。bind 不要（Random）。
+    drive_shell_shown(&mut harness, 2100, None);
+
+    // 起動 tick（境界初期化・非跨ぎ・無発行）。以降は境界 1000 のみを跨いで 1 周を歩く（2000 未到達＝再抽選なし）。
+    harness.inject_seriko_tick(0);
+
+    // ── 1 周 golden（kero・-1 終端）: 2106 → 2110 → ベース復帰（空 pattern）。実 fixture t=[0,40,120]。 ──
+    let c1 = seriko_tick_expect_one(&mut harness, 1000); // 発火＋elapsed0 → pattern0
+    assert_eq!(
+        shell_pattern_frame(&c1, 2100, 0),
+        Some(2106),
+        "kero 1 周 pattern0=2106（実 fixture surface.append10,2100 animation0）"
+    );
+    let c2 = seriko_tick_expect_one(&mut harness, 1040); // elapsed40 → pattern1
+    assert_eq!(
+        shell_pattern_frame(&c2, 2100, 0),
+        Some(2110),
+        "kero pattern1=2110（wait40・実 fixture）"
+    );
+    let c3 = seriko_tick_expect_one(&mut harness, 1120); // elapsed120 → -1 Stopped → ベース復帰
+    assert_eq!(
+        shell_pattern_frame(&c3, 2100, 0),
+        None,
+        "kero pattern3=-1 到達でコマ除去＝ベース復帰（要件 4.3）"
+    );
+    // ベース復帰は「空 pattern の ShowSurface」——sakura の末尾残留（1410 が残る）との決定的な対照点。
+    match &c3 {
+        PresentCommand::ShowSurface { pattern, .. } => assert!(
+            pattern.is_empty(),
+            "kero の -1 ベース復帰は空 pattern（要件 4.3・sakura 残留と対照）"
+        ),
+        other => panic!("ShowSurface を期待: {}", variant_name(other)),
+    }
+
+    harness.shutdown_bounded();
+}
+
+/// spine E2E-2a（sakura まばたき 1 周 golden・bind ON 貫通・R7.2/9.2・design Testing Strategy E2E-2）: 実 emo2
+/// shell 表＋固定注入乱数（常時発火）で `boot_live` し、`\s[1000]`（sakura 着せ替え surface・`bind+random,4`
+/// のまばたき animation1400 を持つ）＋`\![bind,まばたき,通常,1]`（実 sakura bindgroup 貫通）を OnBoot talk で
+/// 流して 1400 bindgroup を **ON** にしたのち、`send_tick` 直接注入で 1 周を歩かせる。発行 `PresentCommand` 列の
+/// **厳密 golden**——pattern1=1412 → pattern2=1411 → pattern3=1410（**残留**・`-1` なし）——を実 fixture 実測値
+/// （surfaces.txt surface1000 `animation1400` 1412(w0)/1411(w150)/1410(w22)・t=[0,150,172]）で固定する。
+///
+/// `\![bind,まばたき,通常,1]` は OnBoot talk 内で sakura compile → Custom キャリア cue → broadcast →
+/// seriko `apply_bind`（`bind_resolver.resolve(Sakura,"まばたき","通常")==1400`）で current_binds へ 1400 を
+/// 書き込む実経路を通る（mayuna 成果物・read-only 参照）。`drive_shell_shown(.., Some(1400))` が binds に 1400 を
+/// 含む Show 再発行の観測で貫通を担保する。kero（`-1`→空 pattern）と対照的に末尾コマが残留する（要件 4.4）。
+#[test]
+fn spine_e2e_sakura_blink_after_bind_one_cycle_golden() {
+    // \s[1000]（sakura 着せ替え surface）＋ \![bind,まばたき,通常,1]（1400 bindgroup ON）。常時発火 rng で
+    // ループ活性化（bind ゲート ON の 1400 のみ発火・半目 1401/ジトー 1402 は OFF ゆえ非発火）。
+    let mut harness = SpineHarness::boot_live(r"\s[1000]\![bind,まばたき,通常,1]\e", always_fire_rng());
+    // 表示中＋bind ON 前提: scope0 shell surface1000 が binds に 1400 を含んで表示される
+    // （\![bind] 貫通で current_binds へ 1400 が書き込まれた end-to-end 証跡＝bind 再発行 Show）。
+    drive_shell_shown(&mut harness, 1000, Some(1400));
+
+    // 起動 tick（境界初期化）。以降は境界 1000 のみを跨ぎ 1 周を歩く（2000 未到達＝再抽選なし）。
+    harness.inject_seriko_tick(0);
+
+    // ── 1 周 golden（sakura・末尾残留）: 1412 → 1411 → 1410（残留・-1 なし）。実 fixture t=[0,150,172]。 ──
+    let c1 = seriko_tick_expect_one(&mut harness, 1000); // 発火＋elapsed0 → pattern1
+    assert_eq!(
+        shell_pattern_frame(&c1, 1000, 1400),
+        Some(1412),
+        "sakura 1 周 pattern1=1412（実 fixture surface1000 animation1400・先頭 wait0）"
+    );
+    let c2 = seriko_tick_expect_one(&mut harness, 1150); // elapsed150 → pattern2
+    assert_eq!(
+        shell_pattern_frame(&c2, 1000, 1400),
+        Some(1411),
+        "sakura pattern2=1411（wait150・実 fixture）"
+    );
+    let c3 = seriko_tick_expect_one(&mut harness, 1172); // elapsed172 → pattern3 末尾非負 → 残留
+    assert_eq!(
+        shell_pattern_frame(&c3, 1000, 1400),
+        Some(1410),
+        "sakura pattern3=1410 残留（-1 なし末尾＝FinishedResidual・要件 4.4）"
+    );
+    // 末尾は残留ゆえ空でない——kero の -1 ベース復帰（空 pattern）との決定的な対照点。
+    match &c3 {
+        PresentCommand::ShowSurface { pattern, .. } => assert!(
+            !pattern.is_empty(),
+            "sakura の末尾は最終コマ残留（空でない・要件 4.4・kero の -1 と対照）"
+        ),
+        other => panic!("ShowSurface を期待: {}", variant_name(other)),
+    }
+
+    harness.shutdown_bounded();
+}
+
+/// spine E2E-2b（R3.4「fixture 既定 OFF」の対照檻・design Testing Strategy E2E-2）: fixture 既定
+/// （`\![bind]` を **通さない**＝まばたき bindgroup 1400/1401/1402 は全 OFF）で surface1000 を表示し、
+/// 常時発火 rng で境界を複数跨いでも **一切発行しない**ことを固定する。bind ゲート（`BindRandom` は
+/// bindgroup ON のときだけ `should_fire` を呼ぶ・要件 3.1）が抽選そのものを塞ぐため、抽選 → 再生 → pattern
+/// 搬送が起きない。
+///
+/// # always_fire で「ゲートが塞ぐ」を積極証明する（R3.4 の核心）
+///
+/// 乱数を常時発火（1/N 抽選が呼ばれれば必ず通過）にしておくことで、もし bind ゲートが leak すれば
+/// 1400/1401/1402 は **必ず**発火し pattern 搬送指令が現れる。それが現れない＝発行ゼロは「抽選が呼ばれて
+/// いない（ゲートが塞いだ）」ことの証跡になる（sakura bind ON 版〔上〕が同じ rng+tick で発火するのと対照）。
+/// surface1000 のまばたきは全て `bind+random`（無条件 `random` は無い）ため、既定 OFF では何も動かない。
+#[test]
+fn spine_e2e_sakura_blink_default_off_emits_nothing() {
+    // fixture 既定（bind OFF・\![bind] なし）で surface1000 を表示。always_fire でもゲートが塞ぐ＝発行ゼロ。
+    let mut harness = SpineHarness::boot_live(r"\s[1000]\e", always_fire_rng());
+    drive_shell_shown(&mut harness, 1000, None); // bind なし＝1400/1401/1402 は全 OFF（R3.4 既定）
+
+    // 境界を複数跨ぐ seriko tick を注入し、発行が一切現れないことを固定する（起動 tick→1000/2000/…の境界跨ぎ）。
+    harness.inject_seriko_tick(0); // 起動 tick（境界初期化）
+    let mut emitted: Vec<PresentCommand> = Vec::new();
+    for now in [1000u64, 2000, 3000, 4000, 5000] {
+        harness.inject_seriko_tick(now); // 各々 1000ms 絶対グリッド境界を跨ぐ
+        // 有界 settle drain（spine_s4 の負検証と同流儀・sleep 不使用・yield_now のみ）。
+        for _ in 0..5_000 {
+            emitted.extend(harness.wiring.drain_received());
+            std::thread::yield_now();
+        }
+    }
+    // R3.4 の檻: bind ゲート OFF は always_fire でも抽選を塞ぐ＝発行ゼロ（ゲート leak なら pattern 搬送指令が漏れる）。
+    assert!(
+        emitted.is_empty(),
+        "R3.4 既定 OFF: bind ゲート OFF は always_fire でも一切発行しない（ゲート leak 検出・実受信 {} 件・variants={:?}）",
+        emitted.len(),
+        emitted.iter().map(variant_name).collect::<Vec<_>>()
+    );
+
+    harness.shutdown_bounded();
+}

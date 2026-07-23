@@ -203,7 +203,7 @@
   - _Requirements: 6.2, 7.2, 7.3, 9.4_
   - _Boundary: areka-seriko 統合テスト_
 
-- [ ] 10.2 spine e2e golden テスト（kero/sakura 実周期・R3.4 既定 OFF 検証・既存非退行）
+- [x] 10.2 spine e2e golden テスト（kero/sakura 実周期・R3.4 既定 OFF 検証・既存非退行）
   - 実 emo2 fixture＋固定乱数＋`send_tick` 注入で kero まばたき 1 周（2106→2110→`-1`→ベース復帰）の PresentCommand 列 golden を追加する
   - `\![bind,まばたき,通常,1]` 貫通後の sakura まばたき 1 周（1412→1411→1410 残留）と、fixture 既定（bind OFF のまま）では何も起きないことの対照を golden 化する
   - 完了状態: 既存 spine 全テストが非退行のまま、新規 golden が実 fixture ベースで green
