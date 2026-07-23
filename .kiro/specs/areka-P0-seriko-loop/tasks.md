@@ -177,7 +177,7 @@
   - _Requirements: 5.1_
   - _Boundary: areka emo2_boot adapter.rs, frame.rs_
 
-- [ ] 9.4 spine ハーネスを直接 Tick 注入方式へ更新する
+- [x] 9.4 spine ハーネスを直接 Tick 注入方式へ更新する
   - loop ticker を起動せず、`SerikoSink::send_tick(now)` の直接注入＋`SerikoLoopConfig`（実 emo2 表＋固定注入乱数列）で駆動するよう更新する
   - 既存 spine 全テストが `SerikoLoopConfig::disabled()` 相当（ループ不活性）で従来観測どおり非退行であることを先に確認してから、まばたき e2e を追加する
   - 完了状態: 既存 spine テストが loop 不活性経路で従来どおり green のまま維持される
