@@ -117,7 +117,7 @@
   - _Requirements: 4.4_
   - _Boundary: ViewboxFingerprint_
 
-- [ ] 6.2 hover 指紋統合の単体テストを書く
+- [x] 6.2 hover 指紋統合の単体テストを書く
   - hover の設定/切替/解除がそれぞれ影響行のみのダーティ導出に限定され、全域ダーティにならないことを検証する
   - Observable: `derive_dirty` の出力行数が `choice_marker` の変化した行数と厳密に一致することを示すテストが通過する
   - _Requirements: 4.4, 7.5_
