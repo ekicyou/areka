@@ -163,7 +163,7 @@
   - _Requirements: 7.1, 7.4_
   - _Boundary: RuntimeContract_
 
-- [ ] 9.2 hover pixel 檻＋ダーティ限定テスト
+- [x] 9.2 hover pixel 檻＋ダーティ限定テスト
   - _Depends: 8.3_
   - hover on/off 対を注入し、塗り色＋文字色切替の画素の出現/消滅と、`DrawStats` で影響行のみが再描画されている（全域再描画でない）ことを検証する
   - Observable: on/off 画素対のアサーションと `DrawStats` ダーティ行数アサーションの両方が決定論的に通過する

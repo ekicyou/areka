@@ -780,7 +780,8 @@ mod runtime_tests {
     use std::sync::atomic::{AtomicUsize, Ordering};
 
     use areka_parsers::balloon::{
-        BalloonModel, Font, FontColor, Origin, ValidRect, WindowPosition, WordWrapPoint,
+        BalloonCursor, BalloonModel, CursorColor, Font, FontColor, Origin, ValidRect,
+        WindowPosition, WordWrapPoint,
     };
     use areka_sakura::contract::{ActorKey, CueCommand, CueSink, TalkCue};
     use bevy_ecs::hierarchy::ChildOf;
@@ -890,6 +891,19 @@ mod runtime_tests {
             None,
             None,
         )
+    }
+
+    /// cursor.\* を持つ BalloonModel（fixture 実導出＝square 塗り(105,25,25)＋白文字(255,255,255)）。
+    /// `geo_model` の幾何既定へ `with_cursor` で SquareFill 導出の cursor を相乗せする
+    /// （`ResolvedChoiceStyle::resolve` が `SquareFill { fill:(105,25,25), text:(255,255,255) }` を束ねる）。
+    fn cursor_model() -> BalloonModel {
+        geo_model().with_cursor(BalloonCursor::new(
+            Some("square".to_string()),
+            CursorColor::new(Some(105), Some(25), Some(25)), // brush.color＝矩形塗り色
+            CursorColor::new(None, None, None),              // pen.color（M1 非参照）
+            CursorColor::new(Some(255), Some(255), Some(255)), // font.color＝hover 白文字
+            None,                                            // blendmethod（既定 none）
+        ))
     }
 
     /// emo-present `VisualMount` と同型の予約スロット（surface.rs テストと同型）。
@@ -1718,6 +1732,173 @@ mod runtime_tests {
         );
         // ヒット行照会は hover 非依存（count 不変）。
         assert_eq!(rt.choice_hit_rows(&actor).len(), 2, "hover 後もヒット行は 2");
+    }
+
+    // task 9.2: hover 画素檻＋ダーティ限定檻（COM・headless・R4.4/7.2/7.4）
+    //
+    // Observable: cursor.* 由来の SquareFill（塗り=(105,25,25)・文字=(255,255,255)）を持つバルーンで、
+    // hover on/off を注入する対フレームにおいて (a) 塗り色画素と白文字画素が ordinal-0 セグメント矩形へ
+    // 出現し、hover 解除で塗り色画素が消滅する（7.2）／(b) いずれのトグルフレームも当該 Choice 行のみが
+    // 再描画されるダーティ限定であり、全域再描画（全 Choice 行の再描画）ではない（4.4 の COM 檻・7.4）。
+    // draw_text_layout_calls は「ダーティ矩形数 × 交差住人数」の積で計上される（全域縮退なら増分＝全住人数）
+    // ため、トグルフレームの増分＝1（hover 行 1 枚のみ）で「全域再描画非発生」を決定論に固定する。
+    #[test]
+    fn hover_toggle_paints_fill_and_stays_dirty_limited_readback_pixel_cage() {
+        let (mut world, window, slot) = com_world();
+        let actor = ActorKey::from("0");
+        let mut rt = TextLayerRuntime::new(TextLayerConfig::default());
+        // 3 選択肢を別行へ配置（NewLine 区切り）——hover 行が 1 行に限定されることを観測する台
+        // （全域再描画なら 3 行ぶん、ダーティ限定なら 1 行ぶんの描画増分になる）。
+        rt.apply_cue(&choice_cue("0", 0.0, "OnYes", "はい", &["r0"]));
+        rt.apply_cue(&cue("0", 0.1, CueCommand::NewLine { ratio: 1.0 }));
+        rt.apply_cue(&choice_cue("0", 0.1, "OnNo", "いいえ", &["r1"]));
+        rt.apply_cue(&cue("0", 0.2, CueCommand::NewLine { ratio: 1.0 }));
+        rt.apply_cue(&choice_cue("0", 0.2, "OnMaybe", "どちらでも", &["r2"]));
+        let image = (200u32, 100u32);
+        rt.register_actor(
+            actor.clone(),
+            TextSlotBinding::new(slot, window, 1.0, image),
+            // cursor.* 由来の SquareFill スタイルを運ぶバルーン（未指定 geo_model は Invert）。
+            ResolvedBalloonText::resolve(&cursor_model(), image),
+        );
+        let width = image.0;
+
+        // ── 画素プローブ（premultiplied BGRA・α=255 ゆえ B=25,G=25,R=105,A=255 が塗り色の厳密表現）──
+        // 矩形内の塗り色（105,25,25）画素数。
+        let fill_in_rect = |b: &[u8], r: &super::ChoiceHitRow| -> usize {
+            let x0 = r.rect.left.floor().max(0.0) as u32;
+            let x1 = (r.rect.right.ceil() as u32).min(width);
+            let y0 = r.rect.top.floor().max(0.0) as u32;
+            let y1 = (r.rect.bottom.ceil() as u32).min(image.1);
+            let mut n = 0usize;
+            for y in y0..y1 {
+                for x in x0..x1 {
+                    let i = ((y * width + x) * 4) as usize;
+                    if b[i] == 25 && b[i + 1] == 25 && b[i + 2] == 105 && b[i + 3] == 255 {
+                        n += 1;
+                    }
+                }
+            }
+            n
+        };
+        // 矩形内の白文字（≈255,255,255）画素数——全チャネル閾値で AA 端を除いた芯を数える。
+        let white_in_rect = |b: &[u8], r: &super::ChoiceHitRow| -> usize {
+            let x0 = r.rect.left.floor().max(0.0) as u32;
+            let x1 = (r.rect.right.ceil() as u32).min(width);
+            let y0 = r.rect.top.floor().max(0.0) as u32;
+            let y1 = (r.rect.bottom.ceil() as u32).min(image.1);
+            let mut n = 0usize;
+            for y in y0..y1 {
+                for x in x0..x1 {
+                    let i = ((y * width + x) * 4) as usize;
+                    if b[i] >= 200 && b[i + 1] >= 200 && b[i + 2] >= 200 && b[i + 3] == 255 {
+                        n += 1;
+                    }
+                }
+            }
+            n
+        };
+        // 面全域の塗り色画素数（hover 解除で塗りが完全消滅することの檻）。
+        let fill_total = |b: &[u8]| -> usize {
+            let mut n = 0usize;
+            let mut i = 0usize;
+            while i + 3 < b.len() {
+                if b[i] == 25 && b[i + 1] == 25 && b[i + 2] == 105 && b[i + 3] == 255 {
+                    n += 1;
+                }
+                i += 4;
+            }
+            n
+        };
+        let calls = |rt: &TextLayerRuntime| -> u64 {
+            rt.draw_stats(&actor)
+                .expect("draw_stats")
+                .draw_text_layout_calls
+        };
+
+        // ── ベースライン（hover 無し・全リビール済み）: 素の選択肢テキスト＝塗り色画素は皆無 ──
+        present_frame(&mut rt, &mut world, 10.0).expect("ベースライン提示");
+        let rows: Vec<super::ChoiceHitRow> = rt.choice_hit_rows(&actor).to_vec();
+        assert_eq!(rows.len(), 3, "3 選択肢＝3 行（ダーティ限定を測る台）");
+        let base_bytes = rt.surface(&actor).expect("供給面").read_back().expect("read_back");
+        assert_eq!(
+            fill_total(&base_bytes),
+            0,
+            "hover 無しでは塗り色（105,25,25）画素は 1 つも無い"
+        );
+        let base_calls = calls(&rt);
+
+        // ── hover on: inject Some(0) → present → readback ──
+        rt.inject_choice_hover(&actor, Some(0));
+        present_frame(&mut rt, &mut world, 10.0).expect("hover on 提示");
+        let hover_calls = calls(&rt);
+        let hover_delta = hover_calls - base_calls;
+        // 4.4/7.4: hover トグルは当該 Choice 行 1 枚のみ再描画する（全域＝3 行ぶんではない）。
+        assert_eq!(
+            hover_delta, 1,
+            "hover on はダーティ限定＝当該行 1 枚のみ再描画（増分 1）: {hover_delta}"
+        );
+        assert!(
+            hover_delta < rows.len() as u64,
+            "全域再描画（全 {} 行）ではない: 増分 {hover_delta}",
+            rows.len()
+        );
+        let hover_bytes = rt.surface(&actor).expect("供給面").read_back().expect("read_back");
+        // 7.2: ordinal-0 セグメント矩形へ塗り色＋白文字画素が出現する。
+        assert!(
+            fill_in_rect(&hover_bytes, &rows[0]) > 0,
+            "hover 行に塗り色（105,25,25）画素が載る: {:?}",
+            rows[0].rect
+        );
+        assert!(
+            white_in_rect(&hover_bytes, &rows[0]) > 0,
+            "hover 行に白文字（255,255,255）画素が載る: {:?}",
+            rows[0].rect
+        );
+        // 非 hover 行（ordinal 1/2）には塗り色画素が載らない（面全域の塗り＝hover 行のぶんだけ）。
+        assert_eq!(
+            fill_in_rect(&hover_bytes, &rows[1]),
+            0,
+            "非 hover 行 1 には塗り色画素が載らない"
+        );
+
+        // 決定論（NoChange 再提示）: 同一状態の再 present は再描画せずバイト同一。
+        present_frame(&mut rt, &mut world, 10.0).expect("hover NoChange 再提示");
+        assert_eq!(
+            calls(&rt),
+            hover_calls,
+            "hover 状態不変の再提示は再描画しない（DrawTextLayout 不変）"
+        );
+        let hover_bytes2 = rt.surface(&actor).expect("供給面").read_back().expect("read_back");
+        assert_eq!(hover_bytes, hover_bytes2, "決定論（hover 状態・バイト同一）");
+        let steady_calls = calls(&rt);
+
+        // ── hover off: inject None → present → readback ──
+        rt.inject_choice_hover(&actor, None);
+        present_frame(&mut rt, &mut world, 10.0).expect("hover off 提示");
+        let off_calls = calls(&rt);
+        let off_delta = off_calls - steady_calls;
+        // 4.4/7.4: 解除も当該行 1 枚のみ再描画（全域再描画非発生）。
+        assert_eq!(
+            off_delta, 1,
+            "hover off もダーティ限定＝当該行 1 枚のみ再描画（増分 1）: {off_delta}"
+        );
+        assert!(
+            off_delta < rows.len() as u64,
+            "hover off も全域再描画ではない: 増分 {off_delta}"
+        );
+        let off_bytes = rt.surface(&actor).expect("供給面").read_back().expect("read_back");
+        // 7.2: 塗り色画素が面全域から消滅する（素描画へ戻る）。
+        assert_eq!(
+            fill_total(&off_bytes),
+            0,
+            "hover off で塗り色（105,25,25）画素が消滅する"
+        );
+
+        // 決定論（hover off 状態の NoChange 再提示）: バイト同一。
+        present_frame(&mut rt, &mut world, 10.0).expect("off NoChange 再提示");
+        let off_bytes2 = rt.surface(&actor).expect("供給面").read_back().expect("read_back");
+        assert_eq!(off_bytes, off_bytes2, "決定論（hover off 状態・バイト同一）");
     }
 
     // ══ task 8.3: Clear/ClearAll の原子的無効化（hover リセット＋ヒット行スナップショット無効化・R5.1/5.2/5.4） ══
