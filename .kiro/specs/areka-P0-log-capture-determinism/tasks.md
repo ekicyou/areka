@@ -6,7 +6,7 @@
   - ビルドが成功し、後続の workspace 反復ゲートを実行できる状態になる
   - _Requirements: 1.4, 8.3_
 
-- [ ] 1.2 keeper 欠陥の RED 証跡を修正前に取得する
+- [x] 1.2 keeper 欠陥の RED 証跡を修正前に取得する
   - `cargo test -p areka-kanade --lib --no-run` でビルドした lib テスト実行ファイル（mtime 最新のものを選択）を 4 プロセス並列 × 25 ラウンド起動し、失敗有無を記録する
   - ≥1 件の失敗で欠陥再現（RED 確定）とするか、~100 実行で未再現の場合は「RED 未再現」として記録し GREEN 判定を workspace 反復（4.2/4.4）へ委ねる
   - 取得した結果（失敗件数・再現有無）がタスク完了記録として残る
@@ -81,3 +81,8 @@
   - 全 5 回以上の実行結果（failed 0）が記録として残り、他クレートへの副作用がないことも確認できる
   - _Requirements: 1.4, 8.3, 6.4_
   - _Depends: 1.1_
+
+## Implementation Notes
+
+- 1.1: i686 前提成果物ビルド成功（`target\i686-pc-windows-msvc\debug\shiori-host32-helper.exe` / `shiori.dll`・exit 0）。PowerShell 必須。
+- 1.2: keeper 欠陥の RED は 100 実行（4並列×25ラウンド・lib exe）で**未再現**（FAIL=0）。要件 8.1 の許容に従い記録のみ。GREEN の客観判定は workspace 反復（4.2/4.4）へ委譲する。lib テスト exe は `areka_kanade-<hash>.exe`（1 実行 136 passed）。
