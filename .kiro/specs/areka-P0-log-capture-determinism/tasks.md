@@ -1,6 +1,6 @@
 # Implementation Plan
 
-- [ ] 1. Foundation: 検証前提の整備とRED証跡取得
+- [x] 1. Foundation: 検証前提の整備とRED証跡取得
 - [x] 1.1 workspace ゲート用の i686 前提成果物をビルドする
   - `shiori-host32-helper` / `shiori-host32-testdll` を `i686-pc-windows-msvc` ターゲットでビルドする（worktree では先に `git submodule update --init` を実行）
   - ビルドが成功し、後続の workspace 反復ゲートを実行できる状態になる
@@ -12,7 +12,7 @@
   - 取得した結果（失敗件数・再現有無）がタスク完了記録として残る
   - _Requirements: 8.1_
 
-- [ ] 2. Core: interest-keeper とテストハーネス決定論化ヘルパーの実装
+- [x] 2. Core: interest-keeper とテストハーネス決定論化ヘルパーの実装
 - [x] 2.1 (P) プロセスグローバル interest-keeper を実装する
   - `capture()` 呼び出し時に一度だけ確立される interest-keeper（`OnceLock` 経由の bare `registry()` global default 常駐 ＋ `rebuild_interest_cache()` 呼出）を追加し、`capture()` 先頭から呼ぶ
   - 先行する外部 global subscriber が存在する場合は、原因と対処を説明するメッセージで明示的に panic する（静かな縮退にしない）
@@ -38,7 +38,7 @@
   - _Requirements: 7.4_
   - _Boundary: wait_until置換_
 
-- [ ] 3. Integration: 復帰駆動テストへの新ヘルパー適用
+- [x] 3. Integration: 復帰駆動テストへの新ヘルパー適用
 - [x] 3.1 (P) 定常復帰テストの駆動ループを新ヘルパーへ置換する
   - 定常状態からの復帰後 GET pump 再開を検証するテストの反復回数依存ループを、2.2 の完了バリアヘルパー呼出へ置換する
   - ループ内観測用フラグ・内側 yield ループ・中間 assert を削除し、復帰の表明は kanade 終了後の join を経た最終記録列に対する既存の表明へ一本化する
@@ -57,7 +57,7 @@
   - _Boundary: 復帰駆動テスト置換（close_test.rs）_
   - _Depends: 2.2_
 
-- [ ] 4. Validation: 回帰確認・受け入れ証拠・workspace ゲート
+- [x] 4. Validation: 回帰確認・受け入れ証拠・workspace ゲート
 - [x] 4.1 32 個の回帰檻を lib テストで確認する
   - `cargo test -p areka-kanade --lib` を実行し、TRACE レベルの檻・`boot.rs` の不在表明檻を含む既存 32 檻すべてが無改変のまま緑であることを確認する
   - 全檻が失敗 0 件で完走したことが確認できる
@@ -76,7 +76,7 @@
   - _Requirements: 8.4, 8.5_
   - _Depends: 3.1, 3.2_
 
-- [ ] 5. Cross-crate: 第二の workspace ゲート flake（wintf WIC MTA use-after-free）の根治（本セッション取込・Req 9）
+- [x] 5. Cross-crate: 第二の workspace ゲート flake（wintf WIC MTA use-after-free）の根治（本セッション取込・Req 9）
 - [x] 5.1 WicCore にプロセス寿命 MTA キーパーを導入し無言スキップにログを付す
   - `crates/wintf/src/ecs/widget/bitmap_source/wic_core.rs` の `WicCore::new()` の `CoCreateInstance` 前へ `ensure_process_mta()`（`OnceLock` ガードの `CoIncrementMTAUsage`・cookie は意図的 leak＝decrement しない・失敗は `?` で Err 伝播）を前置する
   - `crates/wintf/src/ecs/world/mod.rs`（62 行付近）の `WicCore::new()` 生成失敗を握る `if let Ok` へ `Err` 側の `error!`（log-first・steering areka-log-first-no-silent-failure）を付す。縮退挙動（factory 無しで継続）は維持
