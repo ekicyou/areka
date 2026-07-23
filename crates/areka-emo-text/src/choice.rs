@@ -1542,4 +1542,34 @@ mod decorate_tests {
             "セグメント無し行 2 は GlyphRun 素通し"
         );
     }
+
+    // ── stale ordinal: hover が存在しない ordinal → どの行も highlight 無し（不変条件 3・4.5/6.5） ──
+
+    /// hover=Some(99)（どのセグメントも持たない ordinal）→ 全住人 hovered/highlight None・
+    /// ただしセグメント持ち行は Choice 住人化しセグメントは記録する（stale-safe 不変条件・
+    /// Data Models §不変条件 3・要件 4.5/6.5）。
+    #[test]
+    fn hover_stale_ordinal_yields_no_highlight() {
+        let region = region(0, 0, 400, 224);
+        let input = canvas(vec![glyph_resident((0.0, 0.0)), glyph_resident((0.0, 13.0))]);
+        // セグメントは ordinal 0/1 のみ。hover はそのどちらでもない 99（stale）。
+        let segments = [seg(0, 0, (0.0, 20.0)), seg(1, 1, (0.0, 20.0))];
+        let out = decorate_canvas(
+            input,
+            &segments,
+            Some(99),
+            square_fill(),
+            (0, 0, 0),
+            &region,
+            WritingMode::HorizontalTb,
+        );
+        for (i, ordinal) in [(0usize, 0usize), (1, 1)] {
+            let c = choice(&out.residents[i]);
+            assert_eq!(c.hovered, None, "行 {i}: stale ordinal は hovered None");
+            assert_eq!(c.highlight, None, "行 {i}: stale ordinal はどの行も塗らない");
+            // ただしセグメントは記録される（Choice 住人化は hover に依存しない）。
+            assert_eq!(c.segments.len(), 1, "行 {i}: セグメントは記録される");
+            assert_eq!(c.segments[0].ordinal, ordinal);
+        }
+    }
 }

@@ -101,7 +101,7 @@
   - _Requirements: 1.1, 4.2, 4.3, 4.5_
   - _Boundary: ChoicePure_
 
-- [ ] 5.5 ChoicePure モジュールの単体テストを書く
+- [x] 5.5 ChoicePure モジュールの単体テストを書く
   - `annotate_lines`/`derive_hit_rows` の単一行1選択肢・同一行複数選択肢・折返し跨ぎ・部分リビール・空範囲除外・縦書き2方向を網羅する
   - `to_window_physical` を k≠1.0・committed≠0・writing_mode 3方向でパラメタライズして網羅する
   - `decorate_canvas`/`ResolvedChoiceStyle` の hover 無し/一致/stale ordinal・全スタイル分岐・`paint()` の反転式を網羅する
