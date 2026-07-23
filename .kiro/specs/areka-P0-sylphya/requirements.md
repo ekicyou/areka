@@ -49,7 +49,8 @@ areka（ukadoc 準拠の互換ベースウェア）には現在、「名前で�
 1. When 解決要求されたフラット名が M1 実導出対象でない、または値源が値を提供しないとき, the sylphya プロパティシステム shall 当該名に定義された縮退（`%名前` の原文をそのまま返す素通し、または既定値）へ決定論的に落とし、その事実を記録する。
 2. When 点付き名が解決できないとき, the sylphya プロパティシステム shall 「不在（NOT_FOUND）」を決定論的に返す（panic・無音失敗にしない）。
 3. The sylphya プロパティシステム shall 縮退中の全語彙について、値源（backing）の登録だけで実導出へ置換できる差替シームを備える（key モデル・読み口・消費側契約を変更せずに実導出化できる）。
-4. Where SET 有効群（`surface.num`・`animation.num`・`seriko.defaultsurface`・mousecursor 群・seriko.cursor/tooltip・menu/bind.menu 群）が対象のとき, the sylphya プロパティシステム shall 書込 API の型シームのみを予約し、M1 では実書込を行わない。SET 無効項目への書込失敗挙動は正典沈黙のため areka 裁量として対応表へ記録する。
+4. Where SET 有効群（`surface.num`・`animation.num`・`seriko.defaultsurface`・mousecursor 群・seriko.cursor/tooltip・menu/bind.menu 群）が対象のとき, the sylphya プロパティシステム shall 書込 API の型シームのみを予約し、M1 では実書込を行わない。型シームは SET の 2 意味論——運行コマンド書込（`surface.num` SET＝`\s[]` 等価などランタイムへの命令）とストア書込（永続値の更新）——を区別できる形とする。SET 無効項目への書込失敗挙動は正典沈黙のため areka 裁量として対応表へ記録する。
+6. The sylphya プロパティシステム shall 値源（backing）の差替シームを、実体層の別——静的構成（load-time 由来）・リアルタイム運行状態（他エンジンが所有する状態の取得/反映）・システム環境（OS 由来・注入シーム必須）・SHIORI 照会・永続——を収容可能な形とする（M1 で実装する backing は M1 実導出対象と永続に限り、リアルタイム運行状態層・システム環境層は縮退のままシームの型のみ層の存在を表現する）。
 5. The sylphya プロパティシステム shall ext 亜枝（`activeghostlist(...).ext.*`・`pluginlist(...).ext.*`）の語彙と対応イベント名（property.get/property.set）を予約のみとし、M1 ではイベント発火を行わない。
 
 ### Requirement 4: M1 実導出（フラット名: username・selfname・selfname2・keroname）

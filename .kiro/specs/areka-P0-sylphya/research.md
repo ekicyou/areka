@@ -145,3 +145,26 @@
 2. **問い合わせ元コンテキストの第一級化（R2.6 新設）**: 同じ名前でも問い合わせ元 SHIORI により回答が異なる語彙（例: `currentghost.status`）と、大域で同一の語彙（例: `system.os.type`）がある。読み口 API は「誰が聞いているか」を第一級で受け取る形とする（M1 は単一ゴーストだが API 形を先に正しく持つ）。→ 論点1（照会座席）・論点5（key モデル）の設計入力。
 3. **永続化の層モデル（R6.5 改稿）**: 永続スコープは「areka アプリレベル」「SHIORI〔ゴースト〕レベル」「シェルレベル」「バルーンレベル」の層別で管理し、各層の永続情報は対応する層の profile フォルダへ保存する（伺か慣行準拠）。→ 論点3 の置き場問題はこの原則で確定・残件は 4 key 族→層写像とファイル命名。
 4. **直列化形式は TOML に確定（R6.4 改稿・論点3 の形式選択を解消）**: B1 自前 KV / B2 serde 汎用形式の比較は closed。残件は toml クレートの採用形（workspace hoist・寛容読取〔parse 失敗→警告＋不在縮退〕の粒度）・Windows rename 細部・ukadoc `file_structure` の profile 慣行裏取り。
+
+## 9. プロパティ実体層タクソノミー（2026-07-23・討議 #2 追補）
+
+従来の「3 バッキング（live 導出／SHIORI 照会／永続）」は粗すぎ、「live 導出」に性質の異なる実体が混在していた。ukadoc 実測（list_propertysystem）で仕分けし直した正準タクソノミー。**backing 差替シームの型はこの 5 層＋書込 2 意味論を最初から収容できる形とする**（M1 で実装する backing は①の一部・④username・⑤のみ——②③は縮退だがシームの型が層の存在を表現していること）。
+
+### 読取側の実体層（5 層）
+
+| # | 層 | 代表語彙（ukadoc 実測） | 性質 | 状態の所有者 |
+|---|---|---|---|---|
+| ① | 静的構成層 | `selfname`/`keroname`・`baseware.name`・craftman/path/thumbnail 系 | load-time 確定・reload まで不変 | parsers マウントモデル（ghost 据付） |
+| ② | リアルタイム運行状態層 | `currentghost.scope(ID).surface.num`（現在サーフェス）・`currentghost.scope(ID).x/y`（現在窓座標）・`currentghost.balloon.scope(ID).basepos.x/y`・`balloon.scope(ID).background.color` | **他エンジンが別スレッド/アクターで所有する生きた状態**。取得＝クロスアクター読取（push 型鏡像 vs pull 型同期照会）・反映＝コマンド配送 | seriko（surface）・wintf 窓層/placement（x/y）・emo（balloon 描画状態） |
+| ③ | システム環境層 | `system.memory.load`（移動平均と正典明記＝サンプリング実装）・時刻系・`screenwidth` 系 | OS 直読＝非決定源。注入シーム必達（R8.3）・決定論檻は偽境界 | OS |
+| ④ | SHIORI 照会層 | `username`・`shiori.変数名`・ext 亜枝 property.get/set | 問い合わせ元コンテキスト相対（討議 #1）・host32 は別プロセス | SHIORI（照会先） |
+| ⑤ | 永続層 | history・rateofuselist・areka 独自 4 key 族 | 層別スコープ×profile フォルダ×TOML（討議 #1 確定） | sylphya 自身 |
+
+### 書込（SET）の 2 意味論
+
+- **運行コマンド書込**: `currentghost.scope(ID).surface.num` の SET は「**設定も可能で `\s[]` タグと同じ挙動になる**」（ukadoc 明文）＝ストア書込ではなく**ランタイムエンジンへの命令**。`animation.num` SET（`\i[]` 連続等価）も同族。R3.4 の型シーム予約はこのコマンド意味論を前提に切る。
+- **ストア書込**: vanish 回数・起動記録等＝⑤への永続書込。
+
+### 論点12（新規・design 送り）: 実体層②のクロスアクター設計
+
+sylphya は最下層 crate だが②の状態所有者は上位エンジンのアクター（別スレッド）。(a) push 型＝所有エンジンが状態変化を sylphya の鏡像キャッシュへ配信（読取は常に同期・鮮度は配信ラグ）、(b) pull 型＝解決時にチャネル同期照会（鮮度最新・ブロッキングとデッドロック設計が要る）、(c) M1 型シームのみ＝②全縮退（採用・実配線は M2 以降の実導出時）。per-talk 凍結スナップショット生成点・ShioriHostSink の同期即答（SHIORI スレッドから呼ばれる）との整合が設計条件。SET 運行コマンドの配送先（kanade 経由 vs 直接）も同論点。
