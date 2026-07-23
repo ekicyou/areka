@@ -3,7 +3,9 @@
 //! 話者スコープ（`ActorKey`）ごとに独立した現在の表示状態（表示中 surface / 非表示）を
 //! `HashMap` で保持し（`ActorKey` は `Hash+Eq` を持つが `Ord` を持たないため HashMap・design
 //! 状態層）、shell descript 由来の静的 bind 集合を per-scope マップと**同居**して保持する
-//! （要件 4.4・後続 `mayuna-compose` が置き場のみ差し替えられる）。
+//! （要件 4.4）。加えて per-scope の動的着せ替え集合 `dynamic_binds` を保持し、Show 発行の
+//! bind 供給源はこの動的集合を優先し、未束縛 scope は静的既定集合へフォールバックする
+//! （要件 3.1・`mayuna-compose` が予約シームを消費）。
 //!
 //! [`ScopeStates::apply`] は 1 cue = 1 scope の更新をトランザクション境界とし、状態が実際に
 //! 変化したときだけ発行すべき [`DisplayCommand`] を [`ApplyOutcome::Changed`] で返す。状態
@@ -39,12 +41,14 @@ pub enum ApplyOutcome {
     Unchanged,
 }
 
-/// per-scope surface 状態と静的 bind 集合の所有者（状態層）。
+/// per-scope surface 状態・静的 bind 集合・per-scope 動的 bind 集合の所有者（状態層）。
 ///
-/// per-scope マップと静的 `BindSet` を同一構造体に同居させ（要件 4.4）、後続の動的切替
-/// ユニット（`mayuna-compose`）が `static_binds` の置き場のみを差し替えられる形にする。
-/// 本ユニットは bind の切替 API を持たず、`static_binds` は [`ScopeStates::new`] で一度だけ
-/// 設定して以後不変（要件 4.3）。
+/// per-scope マップと静的 `BindSet` を同一構造体に同居させ（要件 4.4）、per-scope の動的
+/// 着せ替え集合 `dynamic_binds` を併せて保持する（要件 3.1・予約シームの消費）。`static_binds`
+/// は [`ScopeStates::new`] で一度だけ設定して以後不変であり、動的 bind 未適用の scope に対する
+/// **既定（初期値）集合**として機能する（Show 発行の bind 供給源は [`ScopeStates::current_binds`]
+/// が `dynamic_binds` 優先・不在時 `static_binds` フォールバックで決める）。本ユニットは動的 bind の
+/// 変更 API（`apply_bind`）を持たず、`dynamic_binds` は空のまま起動する（後続タスクが書き込む）。
 pub struct ScopeStates {
     /// 話者スコープごとの現 surface 状態（`ActorKey` は `Ord` 非対応ゆえ HashMap・design）。
     scopes: HashMap<ActorKey, ScopeState>,
@@ -53,7 +57,18 @@ pub struct ScopeStates {
     /// シェル面と相互に不変（`apply()` は触らない・`static_binds` はバルーンでは使わない）。
     balloon: HashMap<ActorKey, ScopeState>,
     /// 静的 bind 集合（起動時に一度だけ解決・以後不変・要件 4.2/4.3/4.4）。
+    ///
+    /// 動的 bind 未適用の scope に対する既定（初期値）供給源でもある（要件 3.1・
+    /// [`ScopeStates::current_binds`] のフォールバック先）。供給元は shell descript の
+    /// `default,1`（`build_static_bindset`）。
     static_binds: BindSet,
+    /// per-scope の動的着せ替え集合（要件 3.1）。エントリを持つ scope はその集合を、持たない
+    /// scope は `static_binds`（既定・初期値）を Show の bind 供給源とする（[`current_binds`]）。
+    ///
+    /// 本ユニットでは常に空のまま（書き込む `apply_bind` は後続タスク）。空である限り
+    /// [`current_binds`] は全 scope で `static_binds` を返し、Show 発行は従来と byte 同値
+    /// （要件 3.8 非退行）。[`current_binds`]: ScopeStates::current_binds
+    dynamic_binds: HashMap<ActorKey, BindSet>,
 }
 
 impl ScopeStates {
@@ -66,6 +81,9 @@ impl ScopeStates {
             scopes: HashMap::new(),
             balloon: HashMap::new(),
             static_binds,
+            // 空で起動。動的 bind の書き込みは後続タスク（apply_bind）の責務。既定 on/off の
+            // 「初期値」はここを pre-populate するのではなく current_binds のフォールバックで実現。
+            dynamic_binds: HashMap::new(),
         }
     }
 
@@ -81,7 +99,8 @@ impl ScopeStates {
     ///   - それ以外（未知 scope・`Hidden`・別 id を表示中）→ 状態を `Shown(id)` に設定（未知 scope
     ///     は新規挿入・design「未知 scope への Show は新規挿入」）し、
     ///     [`ApplyOutcome::Changed`]`(DisplayCommand::Show { scope, surface_id: id, binds })` を返す
-    ///     （現在の静的 bind 集合を同梱・要件 5.1）。
+    ///     （scope の現在 bind 集合 [`current_binds`] を同梱・要件 5.1。動的 bind 未適用なら
+    ///     `static_binds`＝従来同値・要件 3.8）。[`current_binds`]: ScopeStates::current_binds
     /// - [`SurfaceTarget::Hide`]:
     ///   - 現状が既に `Hidden` → [`ApplyOutcome::Unchanged`]（非表示保持・要件 3.4）。
     ///   - それ以外（表示中、または未知 scope）→ 状態を `Hidden` に設定し
@@ -104,7 +123,8 @@ impl ScopeStates {
                 ApplyOutcome::Changed(DisplayCommand::Show {
                     scope: scope.clone(),
                     surface_id: id,
-                    binds: self.static_binds.clone(),
+                    // scope の現在 bind 集合を同梱（動的 bind 不在なら static_binds＝非退行・R3.8）。
+                    binds: self.current_binds(scope).clone(),
                 })
             }
             SurfaceTarget::Hide => {
@@ -176,11 +196,27 @@ impl ScopeStates {
         }
     }
 
-    /// 現在の静的 bind 集合を返す（不変・要件 4.2/4.3/4.4）。
+    /// 静的（既定）bind 集合を返す（不変・要件 4.2/4.3/4.4）。
     ///
-    /// 本ユニットは bind を変更する API を提供しない（動的切替は `mayuna-compose` の領分）。
+    /// これは per-scope 動的 bind の**既定フォールバック源**（初期値）であり、per-scope の
+    /// 現在集合は [`current_binds`] で引く。本アクセサは常に `new` で渡した静的集合を返す。
+    ///
+    /// [`current_binds`]: ScopeStates::current_binds
     pub fn binds(&self) -> &BindSet {
         &self.static_binds
+    }
+
+    /// 対象 scope の現在の bind 集合を返す（要件 3.1）。
+    ///
+    /// `dynamic_binds` にエントリを持つ scope はその動的集合を、持たない scope は静的既定集合
+    /// `static_binds`（起動直後 default on/off を初期値とする）を返す純粋な読み取り。Show 発行の
+    /// bind 供給源はこのアクセサであり、動的 bind が未適用（`dynamic_binds` が空）の間は全 scope で
+    /// `static_binds` を返す＝従来の発行結果と byte 同値（要件 3.8 非退行）。
+    pub fn current_binds(&self, scope: &ActorKey) -> &BindSet {
+        match self.dynamic_binds.get(scope) {
+            Some(binds) => binds,
+            None => &self.static_binds,
+        }
     }
 }
 
@@ -367,6 +403,38 @@ mod tests {
         // 空 bind でも accessor は静的値を返す。
         let empty = ScopeStates::new(BindSet::from_ids([]));
         assert_eq!(empty.binds(), &BindSet::from_ids([]));
+    }
+
+    /// current_binds 既定フォールバック（要件 3.1）: 動的 bind 未適用の scope は静的既定集合を返す。
+    #[test]
+    fn current_binds_unbound_scope_returns_static_default() {
+        let states = ScopeStates::new(BindSet::from_ids([1100, 1207]));
+        let scope = ActorKey::from("0");
+        // 動的 bind を一切適用していない scope は `new` で渡した既定集合（初期値）を返す。
+        assert_eq!(states.current_binds(&scope), &BindSet::from_ids([1100, 1207]));
+
+        // 別の未束縛 scope も同じ既定集合（per-scope エントリ不在時のフォールバック）。
+        let other = ActorKey::from("1");
+        assert_eq!(states.current_binds(&other), &BindSet::from_ids([1100, 1207]));
+    }
+
+    /// 非退行ロック（要件 3.8）: 動的 bind 未適用時、Show の binds は `new` の静的既定集合と一致する。
+    /// （dynamic_binds が空の間 current_binds(scope) は static_binds を返す＝従来と byte 同値）。
+    #[test]
+    fn show_carries_static_default_when_no_dynamic_bind_applied() {
+        let static_set = BindSet::from_ids([1100, 1207]);
+        let mut states = ScopeStates::new(static_set.clone());
+        let scope = ActorKey::from("0");
+
+        let outcome = states.apply(&scope, SurfaceTarget::Show(2100));
+        assert_eq!(
+            outcome,
+            ApplyOutcome::Changed(DisplayCommand::Show {
+                scope: scope.clone(),
+                surface_id: 2100,
+                binds: static_set,
+            })
+        );
     }
 
     /// Unresolved は no-op（要件 6.1）: 状態不変・発行なし・panic なし。
