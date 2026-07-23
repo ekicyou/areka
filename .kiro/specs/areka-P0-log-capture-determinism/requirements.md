@@ -15,7 +15,7 @@ areka-kanade のテスト専用ログ捕捉基盤 `crates/areka-kanade/src/sched
 - **In scope**:
   - `crates/areka-kanade/src/schedule/log_capture.rs` への interest-keeper 導入と、モジュール doc（PITFALL 節）の更新
   - RED→GREEN 検証（並列プロセス・ストレス実行 ＋ `cargo test --workspace` 反復）
-  - （推奨・同一境界の二次修正）`crates/areka-kanade/tests/kanade/steady_test.rs` の 500-bound（`for i in 3..=500u64`・821 行付近）リトライループの park-barrier 化
+  - （同一境界の二次修正・討議#1で確定）areka-kanade テスト内の「反復回数上限を時間の代用にする協調ループ」の上限非依存決定論化: 同型 `'drive` ループ 3 箇所（`steady_test.rs:821`・`close_test.rs:170`・`close_test.rs:806`）＋ `close_test.rs:57` の `wait_until` ヘルパー（100,000 yield 有界）
 - **Out of scope**:
   - `capture`/`assert_logged` の API 変更・シグネチャ変更・32 檻の書き換え
   - 本番（非テスト）コードへの一切の変更、kanade 本体の挙動・ログ語彙の変更
@@ -78,12 +78,17 @@ areka-kanade のテスト専用ログ捕捉基盤 `crates/areka-kanade/src/sched
 4. The 修正 shall 他クレート（wintf 等）のテスト基盤へ変更を横展開しない。
 5. The 修正 shall cargo-deny advisories へ新規 allow を追加しない。
 
-### Requirement 7: 二次修正（steady_test の bound ループ決定論化・同一境界・推奨）
-**Objective:** 同一境界内の潜在 flake を除きたい開発者として、`steady_test.rs` の 500-bound リトライループを壁時計非依存のバリアへ置き換えることを求める。それにより input-events レビューで指摘済みの潜在 flake を同一 PR で解消できる。
+### Requirement 7: 復帰駆動ループの上限非依存決定論化（同一境界・二次修正）
+**Objective:** 同一境界内の潜在 flake を除きたい開発者として、復帰後 pump を駆動する Tick 供給ループが反復回数上限（時間の代用）に依存せず決定論的に完了することを求める。それにより CPU 飢餓（Defender 再スキャン等）下でも偽赤せず、input-events レビューで指摘済みの潜在 flake を同一 PR で一掃できる。
+
+> **討議#1 帰結（2026-07-23）**: brief 記載の「park-barrier 化（mouse cage 10 手本）」は構造的に写像不能と調査で確定——mouse cage の `expected_holds` バリアは release-before-park race を閉じるもので既に `SakuraGate` 実装済み・復帰系 cage の固有構造（復帰点に観測可能シグナルが無く Tick 供給が構造的に必須）には効かない。真の病名は「反復上限＝時間の代用」（協調ループの CPU 飢餓・ghost e2e で根治済みの既知の病）であり、処方は「意味論的完了バリア＋壁時計 deadline」。
 
 #### Acceptance Criteria
-1. Where `crates/areka-kanade/tests/kanade/steady_test.rs` の 500-bound（`for i in 3..=500u64`）リトライループを park-barrier 化する, the テスト shall 反復回数の上限に依存せず、明示的なバリア（`spawn_harness_gated` の `expected_holds`/`hold_indices` バリア＋`join_bounded` 相当）で決定論的に駆動される。
-2. When 二次修正が適用される, the 対象テスト shall 既存の検証意味論を変えずに緑を維持する。
+1. The 対象テストの同型 `'drive` ループ 3 箇所（`steady_test.rs` の `talk_completion_resumes_get_pump_ref3_one_status_none`・`close_test.rs:170` 付近・`close_test.rs:806` 付近）shall 反復回数上限（500×64 yield 等）に依存せず、意味論的完了シグナル（quit:true talk の帰結である inbox 切断＝send Err）をループ終了バリアとして駆動される。
+2. The 対象テスト shall 復帰（pump 再開）の表明を、kanade の join 完了後の最終記録列に対して評価する（ループ内観測 race の排除・表明の強化）。
+3. If kanade が復帰せず終了しない（欠陥）, then the 対象テスト shall 壁時計 deadline（`join_bounded`・`wait_until_blocked` と同系の Instant deadline）によりハングでなく失敗として検出する。
+4. The `close_test.rs` の `wait_until` ヘルパー（100,000 yield 有界・壁時計なし）shall 壁時計 deadline ベースへ置換される。
+5. When 二次修正が適用される, the 対象テスト shall 既存の検証意味論（非空虚性を含む）を変えずに緑を維持する。
 
 ### Requirement 8: 受け入れ検証（RED→GREEN の証拠）
 **Objective:** 修正の有効性を確認する開発者として、修正前後の再現・解消を実行可能な証拠で示すことを求める。それにより恒久解であることを客観的に確認できる。

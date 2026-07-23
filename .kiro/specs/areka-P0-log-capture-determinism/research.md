@@ -126,7 +126,10 @@ Option A の keeper 導入に加え、steady_test の 500-bound ループを `ex
 4. **DD-4 グローバル常駐の副作用範囲**: bare `registry()` が `set_global_default` 後、**capture クロージャ外**（例: spawn したアクタースレッドの `tracing::error!`、`step()` を直接呼ぶ非 capture テスト）で走るイベントに対し、on_event no-op で無害か。他テストの挙動・出力を変えないことを設計で確認（R-2 と連動）。thread-local が global を shadow する意味論（Req 2.4）の実挙動確認を含む。
 5. **DD-5 module doc（PITFALL 節）更新方針**: 既存 79-83 行の旧 flaky 注記（`Arc::try_unwrap`）と 9-13 行の「決定性の要」節へ、callsite Interest 焼き付きの根本原因＋keeper 機構を統合追記する範囲・粒度。
 6. **DD-6 RED→GREEN 検証の実行形態**: 4 プロセス×25 ラウンド stress（mtime 最新 exe 選択・stale 複数残存対策）を PowerShell スクリプト化するか手順記載に留めるか。RED 未再現時（~100 実行）は「記録の上 workspace 反復へ委ねる」を要件 8.1 が許容——GREEN 判定の一次証拠を workspace 5 回反復（Req 1.4/8.3）へ寄せる設計。
-7. **DD-7 steady_test park-barrier 設計（Req 7・唯一の非自明点）**: 現行 500-bound ループは「保留解放→復帰後 GET pump を起こす追加 Tick 供給＋`resumed_get_after_active_window` polling」。mouse cage の `join_bounded` 一発とは構造が異なる（steady は Tick を能動供給する必要）。上限非依存化の候補: (a) 復帰後 pump が起こす quit:true talk の `join_bounded` を終端バリアにし、Tick 供給を「切断まで送り続ける」形へ（現 828-831 行の inbox 切断検出を主経路化）、(b) 復帰を観測する新バリア信号の追加。回帰意味論不変（Req 7.2）を保てる案を設計で確定。**Req 7 が GREEN 化困難なら Option A（keeper のみ）へ縮退可**。
+7. **DD-7 steady_test park-barrier 設計（Req 7）— ✅ 討議#1 で解決（2026-07-23）**: 追加調査により機構・範囲とも確定、要件 R7 を全面書き換え済み。
+   - **確定事実**: 同型 `'drive` ループは 3 箇所（steady_test.rs:821 / close_test.rs:170 / close_test.rs:806）＋同病亜種 `wait_until`（close_test.rs:57・100,000 yield 有界）。すべて「反復上限＝時間の代用」の協調ループで、CPU 飢餓（Defender 再スキャン等・steering 既知の病）で空回りし尽くして偽赤する。
+   - **park-barrier 棄却の明白な理由**: ①mouse cage の `expected_holds` バリアは release-before-park race 用で既に `SakuraGate` 実装済み（復帰系も享受済み）②復帰点（TalkDone 処理）は SHIORI 呼出を発行せず観測可能シグナルが無い（新設は本番コード変更＝R6 違反）③talk 1 も hold する案は単段 gate ではデッドロック・多段化しても Tick 供給 polling は消えず共有ハーネスの表面積だけ増える。
+   - **採用機構（本質解）**: (a) 意味論的完了バリア＝quit:true talk の帰結である inbox 切断（send Err）をループ終了条件に（因果連鎖: 復帰→GET→Value→talk quit:true→終了→切断が必然）(b) 復帰表明は join 後の最終記録列で評価（ループ内観測 race 排除）(c) ハング→失敗変換は壁時計 Instant deadline（`join_bounded`/`wait_until_blocked`(common/mod.rs:561) と同系＝ハーネス内に定石実装済み）(d) `wait_until` も同 deadline 化。縮退条項は撤廃（確定要件）。
 8. **DD-8 i686 前提ビルドと workspace gate**: `cargo test --workspace` 5 回反復の前に `cargo build --target i686-pc-windows-msvc -p shiori-host32-helper -p shiori-host32-testdll`（steering: workspace-test-needs-i686-host32-artifacts）。ビルド/テストは PowerShell（Git Bash の link.exe 遮蔽罠）。検証手順へ明記。
 
 ---
