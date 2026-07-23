@@ -825,6 +825,56 @@ mod tests {
         assert!(spans[0].glyph_range.end <= spans[1].glyph_range.start);
     }
 
+    /// 配送順スパン記録（R1.2）: 3 つ以上の Choice を、間に Text／NewLine を挟んで配送しても、
+    /// `ChoiceSpan` は**配送順**に並び（label が配送順に一致）・`ordinal` は **0,1,2 と厳密に
+    /// 単調増加**し（design.md「不変条件 1」の順序）・`glyph_range` は互いに素かつ追記順単調。
+    /// 序数空間はグリフのみ（挟んだ改行等の非グリフ item を数えない）。
+    #[test]
+    fn choice_cues_preserve_delivery_order_with_strictly_monotonic_ordinals() {
+        let mut state = TextLayerState::default();
+        // 選択肢の間に通常テキスト・改行を interleave して配送する。
+        state.apply_cue(&cue("0", 0.0, CueCommand::Text("どれ".into()))); // グリフ 0..2
+        state.apply_cue(&choice_cue("0", 0.1, "q0", "はい", &["a"])); // グリフ 2..4
+        state.apply_cue(&cue("0", 0.2, CueCommand::Text("か".into()))); // グリフ 4..5（間テキスト）
+        state.apply_cue(&cue("0", 0.3, CueCommand::NewLine { ratio: 1.0 })); // 非グリフ
+        state.apply_cue(&choice_cue("0", 0.4, "q1", "いいえ", &["b"])); // グリフ 5..8
+        state.apply_cue(&choice_cue("0", 0.5, "q2", "たぶん", &["c"])); // グリフ 8..11
+
+        let spans = choices_of(&state, "0");
+        assert_eq!(spans.len(), 3);
+
+        // ordinal は 0,1,2 と厳密単調増加。
+        let ordinals: Vec<usize> = spans.iter().map(|s| s.ordinal).collect();
+        assert_eq!(ordinals, vec![0, 1, 2]);
+        assert!(
+            spans.windows(2).all(|w| w[0].ordinal < w[1].ordinal),
+            "ordinal は厳密単調増加でなければならない: {ordinals:?}"
+        );
+
+        // 配送順が保存される（label／id が配送順に一致）。
+        assert_eq!(
+            spans.iter().map(|s| s.label.as_str()).collect::<Vec<_>>(),
+            vec!["はい", "いいえ", "たぶん"]
+        );
+        assert_eq!(
+            spans.iter().map(|s| s.id.as_str()).collect::<Vec<_>>(),
+            vec!["q0", "q1", "q2"]
+        );
+
+        // glyph_range は間テキストを跨いで正しく（グリフ序数空間・非グリフを数えない）。
+        assert_eq!(spans[0].glyph_range, 2..4);
+        assert_eq!(spans[1].glyph_range, 5..8);
+        assert_eq!(spans[2].glyph_range, 8..11);
+
+        // 互いに素かつ追記順単調（不変条件 1: end_i <= start_{i+1}）。
+        assert!(
+            spans
+                .windows(2)
+                .all(|w| w[0].glyph_range.end <= w[1].glyph_range.start),
+            "glyph_range は互いに素・追記順単調でなければならない"
+        );
+    }
+
     /// R1.5 縮退（design.md 縮退表 Choice text 空 row）: 空 `text` は warn!＋空範囲スパン記録・
     /// グリフ追記なし・reveal 不変。once-guard は無いので繰り返し空 Choice は毎回 warn する。
     #[test]
@@ -946,6 +996,71 @@ mod tests {
         assert!(choices_of(&state, "0").is_empty());
         // once-guard 警告は発火しない。
         assert_eq!(warns.load(Ordering::SeqCst), 0);
+    }
+
+    /// Cursor アームがグリフ／reveal 状態を一切変えないことを、対照実行（Cursor cue を
+    /// 挟まない）との**バイト等価**で固定する（1.3 checklist「グリフ/reveal 状態を変更しない」）。
+    /// CursorMove は非グリフ item ゆえ、グリフ列（items から Glyph のみ抽出）と reveal 時刻列は
+    /// Cursor cue の有無で完全に一致し、可視グリフ数も全時刻で一致する。
+    #[test]
+    fn cursor_cue_leaves_glyph_and_reveal_byte_identical_to_run_without_it() {
+        // 対照: Cursor cue なし。
+        let mut control = TextLayerState::default();
+        control.apply_cue(&cue("0", 0.0, CueCommand::Text("あい".into())));
+        control.apply_cue(&cue("0", 0.5, CueCommand::Text("うえ".into())));
+
+        // 実験: 途中と末尾に Cursor cue を挟む（Absolute/Relative/Omitted/Invalid を混在）。
+        let mut experiment = TextLayerState::default();
+        experiment.apply_cue(&cue("0", 0.0, CueCommand::Text("あい".into())));
+        experiment.apply_cue(&cue(
+            "0",
+            0.25,
+            CueCommand::Cursor {
+                x: "3em".into(),
+                y: "@-1".into(),
+            },
+        ));
+        experiment.apply_cue(&cue("0", 0.5, CueCommand::Text("うえ".into())));
+        experiment.apply_cue(&cue(
+            "0",
+            0.75,
+            CueCommand::Cursor {
+                x: "".into(),
+                y: "bogus".into(),
+            },
+        ));
+
+        // グリフ列（Glyph のみ抽出）はバイト等価。
+        let glyphs = |s: &TextLayerState| -> Vec<TextItem> {
+            items_of(s, "0")
+                .iter()
+                .copied()
+                .filter(|it| matches!(it, TextItem::Glyph { .. }))
+                .collect()
+        };
+        assert_eq!(
+            glyphs(&experiment),
+            glyphs(&control),
+            "Cursor cue はグリフ列を変えない"
+        );
+
+        // reveal 時刻列もバイト等価（CursorMove は reveal 枠を消費しない）。
+        assert_eq!(
+            reveal_times_of(&experiment, "0"),
+            reveal_times_of(&control, "0"),
+            "Cursor cue は reveal 時刻列を変えない"
+        );
+
+        // 全時刻で可視グリフ数が一致（reveal 進行が Cursor に非依存）。
+        let actor = ActorKey::from("0");
+        for i in 0..30 {
+            let t = i as f64 * 0.05;
+            assert_eq!(
+                experiment.visible_glyphs(&actor, t),
+                control.visible_glyphs(&actor, t),
+                "可視グリフ数は Cursor cue の有無で一致すべき（t={t}）"
+            );
+        }
     }
 
     // ── R5.1/R5.3/R9.5: choices は items と同一ライフサイクル（Clear/ClearAll で同時初期化） ──
@@ -1432,6 +1547,20 @@ mod tests {
             CursorCoord::Relative {
                 value: 5.0,
                 unit: CursorUnit::Percent
+            }
+        );
+    }
+
+    /// 語彙全形の網羅（1.3 checklist「CursorCoord の全形」）: Relative × Lh は他の
+    /// `@` 単位テスト（Px/Em/Percent）で唯一欠けていた組合せ——Absolute×{Px,Em,Lh,Percent}
+    /// ／Relative×{Px,Em,Lh,Percent} の完全マトリクスを閉じる。
+    #[test]
+    fn parse_at_prefix_lh_is_relative_lh() {
+        assert_eq!(
+            parse_cursor_coord("@2lh"),
+            CursorCoord::Relative {
+                value: 2.0,
+                unit: CursorUnit::Lh
             }
         );
     }

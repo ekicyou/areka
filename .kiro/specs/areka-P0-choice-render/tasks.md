@@ -18,7 +18,7 @@
   - _Requirements: 1.1, 1.2, 1.5, 2.1, 5.1, 5.3, 9.5_
   - _Boundary: StateIncrement_
 
-- [ ] 1.3 語彙と消費挙動の単体テストを書く
+- [x] 1.3 語彙と消費挙動の単体テストを書く
   - `CursorCoord` の全形（負値絶対・未知単位を含む）を網羅する
   - Choice アームの配送順スパン記録・空 text 縮退・`Clear`/`ClearAll` での items 同時初期化を網羅する
   - Cursor アームが `CursorMove` を生成し、グリフ/reveal 状態を変更しないことを検証する
@@ -228,3 +228,6 @@
   - Observable: `cargo test --workspace` が exit 0 で完了し、依存差分に新規 crates.io エントリが無いことが確認できる
   - _Requirements: 9.1, 9.2, 9.3, 9.6_
   - _Boundary: RuntimeContract_
+
+## Implementation Notes
+- state.rs のテストモジュールに `WarnCounter`（tracing::Subscriber 実装, `tracing::subscriber::with_default` で使用）ログ檻あり — warn 回数アサーションに再利用可（4.2/viewbox の warn-once テスト等）。
