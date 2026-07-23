@@ -31,7 +31,7 @@
   - _Requirements: 1.2, 3.4, 3.5_
   - _Boundary: areka-sylphya vocab/dotted.rs_
 
-- [ ] 2.4 (P) SHIORI Resource 語彙台帳
+- [x] 2.4 (P) SHIORI Resource 語彙台帳
   - SHIORI Resource 全 159 項目（SHIORI 情報 5・ゴースト情報 43・更新情報 1・オーナードローメニュー画像/文字色群・`*button.caption` 91 種＋同数の `*button.visible`・tooltip 2）を `SHIORI_RESOURCE_IDS` として登録する
   - 特殊エントリ「-」は「ID 未確認」注記付きで保持する（語彙を落とさない）
   - `SHIORI_RESOURCE_IDS.len() == 159` を単体テストで檻化する
