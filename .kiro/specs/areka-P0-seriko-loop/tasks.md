@@ -143,7 +143,7 @@
   - _Requirements: 5.2_
   - _Boundary: ComposeCache (areka-emo-present cache.rs)_
 
-- [ ] 8.2 PresentCommand::ShowSurface に pattern を追加し presenter を配線する
+- [x] 8.2 PresentCommand::ShowSurface に pattern を追加し presenter を配線する
   - `PresentCommand::ShowSurface` に `pattern: PatternState` 欄を追加する
   - presenter が ShowSurface 適用時に pattern をキャッシュ引き当てと `compose_into` へ透過する
   - 完了状態: `cargo build -p areka-emo-present` が新シグネチャ・新規呼出しで成功する
