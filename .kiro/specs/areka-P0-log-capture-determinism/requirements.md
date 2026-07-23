@@ -8,7 +8,9 @@ areka-kanade のテスト専用ログ捕捉基盤 `crates/areka-kanade/src/sched
 
 この欠陥は input-events 由来ではなく areka-P0-kanade 時代から **main に存在**しており、input-events ブランチが並列負荷を上げて露呈させただけである。確率的失敗は開発者の決定論テスト方針（deterministic-test-coverage-mandate）に違反し、**全 spec の kiro-complete DoD Test Gate を確率的に赤くする**プロジェクト横断の毒となっている。
 
-本仕様は log_capture 基盤にプロセスグローバルな interest-keeper を導入し、並列負荷下でも決定論的に緑になるようにする。`capture`/`assert_logged` の **API・意味論・32 檻は無改変**のまま保つ。本番（非テスト）コードには一切触れない。
+本仕様は log_capture 基盤にプロセスグローバルな interest-keeper を導入し、並列負荷下でも決定論的に緑になるようにする。`capture`/`assert_logged` の **API・意味論・32 檻は無改変**のまま保つ。areka-kanade 本体（非テスト）コードには一切触れない（Req 1〜6）。
+
+**第二の workspace ゲート flake（4.4 検証で判明・Req 9）**: 本仕様の受け入れ検証（Task 4.4・`cargo test --workspace` 反復）の実測で、log 捕捉とは**別の第二の確率的クラッシュ**が判明した——`cargo test --workspace` 並列負荷下で wintf `--test layout` テストバイナリが **~13% の確率で 0xC0000005 アクセス違反により即死**する。根本原因は確定済み（一次実証）: layout テストバイナリは `CoInitializeEx` を一切呼ばないが、`EcsWorld::new()` が `WicCore::new()` で `CoCreateInstance(CLSID_WICImagingFactory2)` を呼ぶ。通常は `CO_E_NOTINITIALIZED` で失敗し `if let Ok`（`world/mod.rs:62`）が無言スキップするが、並走テスト（可視ウィンドウ生成に伴う MSCTF/TSF ロード）が副作用で**一時的な MTA を発生**させる窓では生成が成功し WIC factory を取得してしまう。その借り物 MTA が解体されると COM ランタイムごと factory が解放され、`EcsWorld` drop 時の `IUnknown::Release` が解放済みメモリへ仮想呼出して即死する（全 8 クラッシュの WER フォールトオフセットが `windows_core::unknown::IUnknown::Drop` で一致・容疑 2 テスト両 skip でクラッシュ完全消失を実証）。この第二 flake も log_capture 欠陥と同じく**全 spec の kiro-complete workspace DoD Test Gate を確率的に赤くする**プロジェクト横断の毒であり、本セッションの開発者判断により本仕様のスコープへ取り込む。処方は Req 1 の interest-keeper と**同型**——`WicCore` がプロセス寿命の MTA キーパーを自ら確立し、借り物寿命依存を構造的に根絶する（Req 9）。
 
 ## Boundary Context
 
@@ -16,11 +18,12 @@ areka-kanade のテスト専用ログ捕捉基盤 `crates/areka-kanade/src/sched
   - `crates/areka-kanade/src/schedule/log_capture.rs` への interest-keeper 導入と、モジュール doc（PITFALL 節）の更新
   - RED→GREEN 検証（並列プロセス・ストレス実行 ＋ `cargo test --workspace` 反復）
   - （同一境界の二次修正・討議#1で確定）areka-kanade テスト内の「反復回数上限を時間の代用にする協調ループ」の上限非依存決定論化: 同型 `'drive` ループ 3 箇所（`steady_test.rs:821`・`close_test.rs:170`・`close_test.rs:806`）＋ `close_test.rs:57` の `wait_until` ヘルパー（100,000 yield 有界）
+  - （4.4 検証で判明した第二の workspace ゲート flake・本セッションの開発者判断で本 spec 取込・Req 9）wintf の `WicCore`（`crates/wintf/src/ecs/widget/bitmap_source/wic_core.rs`）が COM アパートメントの借り物寿命に依拠して並列負荷下で確率的にクラッシュ（0xC0000005）する本番欠陥の根治: プロセス寿命 MTA キーパー（`CoIncrementMTAUsage`）の自己確立 ＋ `world/mod.rs:62` の無言スキップへの `error!` 付与
 - **Out of scope**:
   - `capture`/`assert_logged` の API 変更・シグネチャ変更・32 檻の書き換え
-  - 本番（非テスト）コードへの一切の変更、kanade 本体の挙動・ログ語彙の変更
+  - areka-kanade 本体（非テスト）コードへの変更、kanade 本体の挙動・ログ語彙の変更（Req 6）
   - tracing / tracing-subscriber のバージョン更新・差し替え
-  - 他クレート（wintf 等）のテスト基盤への横展開
+  - 他クレート（wintf 等）のテスト基盤（テストハーネス／檻）への横展開・wintf の COM 寿命修正（Req 9）を超える wintf 本体挙動の変更
   - cargo-deny advisories への新規 allow 追加
 - **Adjacent expectations**:
   - areka-P0-input-events（未マージブランチ・全タスク完了・実機サインオフ済み・開発者承認済み）の kiro-complete は本仕様のマージによって Test Gate が決定論的に緑となり再開・完了できる。input-events 側の機能変更は本仕様のスコープ外であり、マージ解除は本仕様の帰結にすぎない。
@@ -68,8 +71,10 @@ areka-kanade のテスト専用ログ捕捉基盤 `crates/areka-kanade/src/sched
 1. If 本基盤の interest-keeper より先に他のグローバル subscriber が設定されている, then the ログ捕捉基盤 shall 静かに縮退せず、原因を説明する明示的なメッセージで panic する。
 2. The ログ捕捉基盤 shall interest-keeper の確立をログ無しの失敗経路（silent failure）にしない。
 
-### Requirement 6: 本番コード非改変とスコープ境界
-**Objective:** kanade 本体の挙動を保ちたい開発者として、本修正がテスト基盤に限定され本番コードに一切触れないことを求める。それにより修正の副作用範囲を最小に保てる。
+### Requirement 6: areka-kanade 本番コード非改変とスコープ境界
+**Objective:** kanade 本体の挙動を保ちたい開発者として、log 捕捉修正が areka-kanade のテスト基盤に限定され areka-kanade 本番コードに一切触れないことを求める。それにより修正の副作用範囲を最小に保てる。
+
+> **スコープ注記**: 本 Requirement 6 は areka-kanade の log 捕捉修正（Req 1〜5）を統べる。Task 4.4 検証で判明した wintf の WIC/COM 借り物寿命欠陥の**本番修正**は Req 9 が統べる（本セッションの開発者判断で取り込んだ意図的かつ最小の本番変更・wic_core.rs の COM 寿命に限定）。
 
 #### Acceptance Criteria
 1. The 修正 shall 本番（非テスト）コードを一切変更しない。
@@ -101,3 +106,16 @@ areka-kanade のテスト専用ログ捕捉基盤 `crates/areka-kanade/src/sched
 3. When 修正後に `cargo test -p areka-kanade` と `cargo test --workspace`（連続 5 回以上）を実行する, the 検証 shall 全回で失敗 0 件を示す。
 4. The R7' 対象ループの検証 shall 反復回数上限の不在（意味論的完了バリアと壁時計 deadline で駆動される構造的性質）をコードレビューで確認し、`cargo test -p areka-kanade` と workspace 反復（AC 8.3）で対象テストが緑であることをもって足りるものとし、飢餓の人工再現や integration exe への RED→GREEN ストレスは要求しない。
 5. The R7' の非空虚性 shall kanade が復帰しない欠陥時に壁時計 deadline がハングでなく失敗として検出する経路の存在をレビュー観点で担保する。
+
+### Requirement 9: wintf WIC factory の COM アパートメント寿命の決定論化（第二の workspace ゲート flake の根治・本セッション取込）
+**Objective:** テストスイートを実行する開発者として、`cargo test --workspace` 並列負荷下で wintf テストバイナリが COM アパートメントの借り物寿命に起因して確率的にクラッシュ（0xC0000005）しないことを求める。それにより Req 1 の log 捕捉修正と併せて workspace DoD ゲートが真に決定論的に緑になる。
+
+> **根本原因（一次実証・確定）**: `EcsWorld::new()` → `WicCore::new()` → `CoCreateInstance(CLSID_WICImagingFactory2, CLSCTX_INPROC_SERVER)`。layout テストバイナリは `CoInitializeEx` を呼ばないため通常は生成失敗（無言スキップ）だが、並走テストの副作用（可視ウィンドウ生成の MSCTF/TSF ロード）で一時的 MTA が立つ窓では生成が成功し、その借り物 MTA 解体で COM ランタイムごと factory が解放され、`EcsWorld` drop の `IUnknown::Release` が use-after-free で即死する。並列プロセス負荷（`cargo test --workspace` 相当）が発症窓の重なり確率を上げる（単独プロセスでは 135 実行 0 クラッシュ・8 プロセス同時負荷で 8/40 再現・容疑 2 テスト両 skip で 0/48）。
+
+#### Acceptance Criteria
+1. When `WicCore::new()` が WIC factory を生成する, the wintf shall 生成に先立ってプロセス寿命の MTA を自ら確立し、生成後に COM ランタイム／factory が呼び元の借り物アパートメントの解体で解放される事象を発生させない。
+2. The wintf shall プロセス内で一度だけ MTA キーパー（`CoIncrementMTAUsage` の cookie をプロセス生存期間保持＝decrement しない）を確立し、以降 `WicCore` の COM ポインタが常に生存する COM ランタイム上に在ることを保証する。
+3. When `cargo test --workspace` が並列負荷下で連続実行される, the wintf `--test layout` バイナリ shall 0xC0000005 アクセス違反でクラッシュしない。
+4. If `WicCore::new()` の factory 生成が失敗する, then the wintf shall 無言スキップにせず失敗を `error!`（log-first・steering: areka-log-first-no-silent-failure）で記録する（縮退挙動自体は維持してよい）。
+5. The 修正 shall 本番挙動の意味論を変えない（本番は `WinApp::new` が既に `CoInitializeEx(MTA)` をプロセス寿命で確立済ゆえ MTA キーパーは参照カウント増分のみ・無害）・新規依存を追加しない（`windows::Win32::System::Com` は使用済）・wintf の他テスト基盤や他クレートへ変更を横展開しない。
+6. When 修正の有効性を確認する, the 検証 shall 修正前に並列プロセス負荷で 0xC0000005 を再現し（RED）、修正後に同一のストレスで 0 クラッシュを示す（GREEN）——本 flake は「確率再現可能な病」ゆえ RED→GREEN ストレスで判定する。

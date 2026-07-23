@@ -76,11 +76,27 @@
   - _Requirements: 8.4, 8.5_
   - _Depends: 3.1, 3.2_
 
-- [ ] 4.4 workspace 反復ゲートを通過させる
-  - i686 前提成果物ビルド後、`cargo test --workspace` を連続 5 回以上（PowerShell）実行し、全回で失敗 0 件であることを確認する
-  - 全 5 回以上の実行結果（failed 0）が記録として残り、他クレートへの副作用がないことも確認できる
-  - _Requirements: 1.4, 8.3, 6.4_
-  - _Depends: 1.1_
+- [ ] 5. Cross-crate: 第二の workspace ゲート flake（wintf WIC MTA use-after-free）の根治（本セッション取込・Req 9）
+- [ ] 5.1 WicCore にプロセス寿命 MTA キーパーを導入し無言スキップにログを付す
+  - `crates/wintf/src/ecs/widget/bitmap_source/wic_core.rs` の `WicCore::new()` の `CoCreateInstance` 前へ `ensure_process_mta()`（`OnceLock` ガードの `CoIncrementMTAUsage`・cookie は意図的 leak＝decrement しない・失敗は `?` で Err 伝播）を前置する
+  - `crates/wintf/src/ecs/world/mod.rs`（62 行付近）の `WicCore::new()` 生成失敗を握る `if let Ok` へ `Err` 側の `error!`（log-first・steering areka-log-first-no-silent-failure）を付す。縮退挙動（factory 無しで継続）は維持
+  - SAFETY doc（wic_core.rs 21-30 行付近の「本プロセスは MTA で初期化される**前提**」）を「`WicCore` が `ensure_process_mta` で MTA を**自己強制**する」へ更新。`factory` 型・`factory()`・`Send/Sync` impl・利用側は無改変。新規依存を追加しない（`windows` 既存 dep の `Win32_System_Com` feature）
+  - `cargo test -p wintf` が全緑（副作用ゼロ）であることを確認する。変更は wic_core.rs ＋ world/mod.rs の 2 ファイルに閉じ、他クレート・areka-kanade には触れない
+  - _Requirements: 9.1, 9.2, 9.4, 9.5_
+  - _Boundary: WIC MTA-keeper（wic_core.rs + world/mod.rs）_
+
+- [ ] 5.2 wintf layout flake の RED→GREEN ストレス証拠を取得する
+  - `cargo test -p wintf --test layout --no-run` → `target\debug\deps\layout-*.exe`（mtime 最新）を **8 プロセス並列 × 複数波**でフルスイート起動し、0xC0000005（exit `-1073741819`）の有無を集計する
+  - 修正前（5.1 適用前の HEAD）で ≥1 件クラッシュ再現＝RED 確定（実測 8/40）、修正後（5.1 適用後）で同一ストレスにて **0 件**＝GREEN を示す。犯人は `EcsWorld::new()` を呼ぶ 2 テスト（`taffy_flex_layout_pure_test` / `taffy_layout_integration_test::unit_integration`）
+  - RED→GREEN の比較結果（再現→解消）が記録として残り、恒久解であることを客観的に示せる
+  - _Requirements: 9.3, 9.6_
+  - _Depends: 5.1_
+
+- [ ] 4.4 workspace 反復ゲートを通過させる（interest-keeper ＋ WIC MTA-keeper 込みの最終ゲート）
+  - i686 前提成果物ビルド後、`cargo test --workspace` を連続 5 回以上（PowerShell）実行し、全回で**失敗 0 件かつ 0xC0000005 クラッシュ 0 件**（`error: test failed` 行が出ないこと）であることを確認する
+  - 全 5 回以上の実行結果（failed 0・クラッシュ 0）が記録として残り、他クレートへの副作用がないことも確認できる
+  - _Requirements: 1.4, 8.3, 6.4, 9.3_
+  - _Depends: 1.1, 5.1_
 
 ## Implementation Notes
 
@@ -89,4 +105,5 @@
 - 4.1: `cargo test -p areka-kanade --lib` = 136 passed / 0 failed / 0 ignored（TRACE 檻・boot.rs 不在表明檻含む全 32 檻緑・exit 0）。
 - 4.2: 修正後 lib exe で GREEN ストレス（4並列×25ラウンド）= TOTAL=100 / FAIL=0（全 exit 0）。1.2 の RED 未再現に対し修正後も 100/100 緑＝leak された global registry で `Interest::never` 焼き付きが構造的に到達不能となる恒久解の客観証拠。
 - 4.3: 構造証明で 3 テスト（steady_test.rs:826・close_test.rs:178・close_test.rs:790）＋ `wait_until`（close_test.rs:62-77）＋ `drive_ticks_until_disconnect`（common/mod.rs:998-1026）に反復回数上限が存在せず、意味論的完了バリア（inbox 切断）＋壁時計 deadline のみで駆動されることを確認（旧 `..=500` 消滅）。非空虚性経路（非復帰時 deadline panic／wait_until false→assert 失敗）実在。回帰緑 `cargo test -p areka-kanade` = lib 136/0 + integration 34/0。
-- 4.4: `cargo test --workspace` × 5 連続。areka-kanade は**全 5 回緑**（lib 136/0 が 5 回・log 捕捉檻の失敗 0 件＝Req 1.4 の本旨は充足）。ただし run 2 で **wintf `--test layout` が 0xC0000005 アクセス違反でクラッシュ**（`error: test failed`）。この失敗は**本 spec の因果ではない main 既存の wintf flake**（`git diff --name-only main...HEAD` に wintf 皆無・wintf テストバイナリは別プロセス・interest-keeper は areka-kanade `#[cfg(test)]` に閉じる・隔離再現 `cargo test -p wintf --test layout` 2/15 ≈13%）。リテラル基準「workspace 5 連続 failed 0」（AC 8.3）は本 flake で未達だが本修正の副作用ゼロ（Req 6.4）は確認済み。**開発者判断待ち**（wintf flake を別課題として切り離すか）。
+- 4.4（初回・wintf 修正前）: `cargo test --workspace` × 5 連続で areka-kanade は**全 5 回緑**（lib 136/0・log 捕捉檻の失敗 0 件＝Req 1.4 本旨は充足）だが、run 2 で **wintf `--test layout` が 0xC0000005 でクラッシュ**（`error: test failed`）。この第二 flake の根本原因を追加調査で**確定**（下記）→ **本セッションの開発者判断で本 spec に取込**（Req 9・タスク 5.1/5.2 新設）。4.4 は wintf 修正（5.1）反映後に再取得する（_Depends: 5.1 追加）。
+- Req 9 根本原因（確定・一次実証）: layout テストバイナリは `CoInitializeEx` を呼ばないが `EcsWorld::new()`→`WicCore::new()` が `CoCreateInstance(WIC)` を呼ぶ。並走テスト（可視ウィンドウ生成の MSCTF/TSF ロード）が副作用で一時的 MTA を立てる窓で生成が成功し、その借り物 MTA 解体で COM ランタイムごと factory が解放→`EcsWorld` drop の `IUnknown::Release` が use-after-free で即死。全 8 クラッシュの WER フォールトオフセットが `windows_core::unknown::IUnknown::Drop` で一致・容疑 2 テスト（`taffy_flex_layout_pure_test`/`taffy_layout_integration_test::unit_integration`）両 skip で 0/48・単独プロセス 135 実行 0 クラッシュ・8 プロセス並列で 8/40 再現。処方＝`WicCore` 自身が `CoIncrementMTAUsage` でプロセス寿命 MTA を確立（interest-keeper と同型・DD-9）。

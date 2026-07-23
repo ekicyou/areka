@@ -6,7 +6,7 @@
 
 **Users**: テストスイートを実行する開発者・32 個の回帰檻を保守する開発者が、確率的な偽赤を疑うことなく `cargo test --workspace` の結果を信頼できるようになる。
 
-**Impact**: 変更は areka-kanade のテスト基盤に完結する。(1) `log_capture.rs` へプロセスグローバル interest-keeper を ~15 行前置し、(2) 同一境界の二次修正として、復帰駆動テスト 3 箇所の「反復回数上限＝時間の代用」ループを意味論的完了バリア＋壁時計 deadline へ置換する。本番（非テスト）コード・`capture`/`assert_logged` の API・32 檻はすべて無改変。
+**Impact**: 変更は主に areka-kanade のテスト基盤に完結する。(1) `log_capture.rs` へプロセスグローバル interest-keeper を ~15 行前置し、(2) 同一境界の二次修正として、復帰駆動テスト 3 箇所の「反復回数上限＝時間の代用」ループを意味論的完了バリア＋壁時計 deadline へ置換する。areka-kanade の本番（非テスト）コード・`capture`/`assert_logged` の API・32 檻はすべて無改変。加えて (3) **4.4 検証で判明した第二の workspace ゲート flake**（wintf `--test layout` の COM 借り物寿命 use-after-free・0xC0000005・~13%）を、本セッションの開発者判断で本 spec に取り込み、`WicCore` へプロセス寿命 MTA キーパーを導入して根治する（Req 9・interest-keeper と同型の「keeper による構造的根絶」）。この (3) のみ wintf の本番コード（`wic_core.rs` の COM 寿命・`world/mod.rs` の無言スキップへのログ付与）に限定して触れる。
 
 ### Goals
 
@@ -19,9 +19,9 @@
 ### Non-Goals
 
 - `capture`/`assert_logged` のシグネチャ変更・檻の書き換え
-- 本番コード・kanade 本体の挙動・ログ語彙・イベント語彙の変更
+- areka-kanade 本番コード・kanade 本体の挙動・ログ語彙・イベント語彙の変更
 - tracing / tracing-subscriber のバージョン更新・差し替え
-- 他クレート（wintf 等）のテスト基盤への横展開
+- 他クレート（wintf 等）のテスト基盤への横展開・wintf の Req 9 修正（`WicCore` の COM 寿命＋`world/mod.rs` のログ付与）を超える wintf 本体挙動の変更
 - cargo-deny advisories への新規 allow 追加
 - R7' 対象ループへの integration-exe ストレスや飢餓の人工再現（討議#2 で棄却済み）
 
@@ -31,13 +31,15 @@
 
 - `crates/areka-kanade/src/schedule/log_capture.rs` の interest-keeper 機構とモジュール doc（PITFALL 節）
 - areka-kanade テストハーネスの復帰駆動イディオム: `drive_ticks_until_disconnect` ヘルパー（common/mod.rs 新設）と、それを消費する 3 テストのループ置換・`wait_until` の deadline 化
-- 本仕様の検証手順（RED→GREEN ストレス・workspace 反復）の定義と実施
+- （Req 9・本セッション取込）wintf `WicCore` の COM アパートメント寿命の決定論化: `crates/wintf/src/ecs/widget/bitmap_source/wic_core.rs` へのプロセス寿命 MTA キーパー導入 ＋ `crates/wintf/src/ecs/world/mod.rs:62` の無言スキップへの `error!` 付与
+- 本仕様の検証手順（RED→GREEN ストレス・wintf ストレス・workspace 反復）の定義と実施
 
 ### Out of Boundary
 
 - `capture`/`assert_logged` の公開シグネチャ・32 檻の本文・呼出 10 箇所（actor.rs ×4・schedule/mod.rs ×6・boot.rs ×1）
-- 本番（非テスト）コード全域。kanade 状態機械・ログ発行側は 1 文字も変えない
+- areka-kanade 本番（非テスト）コード全域。kanade 状態機械・ログ発行側は 1 文字も変えない
 - 他クレートのテスト基盤・tracing 系依存のバージョン
+- wintf の Req 9 修正**以外**の挙動全域（`WicCore` の COM 寿命と `world/mod.rs:62` のログ付与のみが対象・WIC のデコード意味論・factory 利用側・他システムは無改変）
 - areka-P0-input-events のマージ作業（本仕様マージの帰結として別 worktree で実施される Downstream・brief.md Part B）
 
 ### Allowed Dependencies
@@ -45,6 +47,7 @@
 - std `OnceLock`（keeper の一度だけ確立）・std `Instant`（壁時計 deadline）
 - `tracing`（workspace 既存 dep）: `tracing::subscriber::set_global_default`・`tracing::callsite::rebuild_interest_cache`
 - `tracing-subscriber`（workspace 既存 dev-dep）: `tracing_subscriber::registry()`
+- （Req 9）`windows`（wintf 既存 dep）: `windows::Win32::System::Com::CoIncrementMTAUsage`（`CoCreateInstance` 等と同一 `Win32_System_Com` feature・既に有効）。`tracing::error!`（wintf 既存の log ファサード）
 - **新規依存の追加は禁止**（`ctor`・`tracing-test` 等は棄却済み・research.md §10）
 
 ### Revalidation Triggers
@@ -52,6 +55,7 @@
 - tracing / tracing-core / tracing-subscriber のバージョンが Cargo.lock で動いた場合（Interest キャッシュ内部仕様への依存があるため、行番号根拠 R-1〜R-4 の再確認が必要）
 - log_capture.rs に per-layer filter や別のグローバル subscriber 初期化を導入する変更（keeper の expect が panic する設計＝先に本設計の不変条件を見直すこと）
 - areka-kanade テストへ「反復回数上限を時間の代用にする」ループを再導入する変更（本設計のヘルパーを使うこと）
+- （Req 9）`windows` crate のバージョンが Cargo.lock で動いた場合（`CoIncrementMTAUsage` / `CO_MTA_USAGE_COOKIE` の feature・シグネチャ・Drop 挙動の再確認）、または `WicCore::new` へ別の COM 初期化を導入する変更（keeper の不変条件を先に見直すこと）
 
 ## Architecture
 
@@ -104,6 +108,7 @@ graph TB
 | DD-6 | RED→GREEN はコマンド手順（本書記載）・スクリプト非コミット | 一回性の証拠取り・外部 CI 無し。討議#2 の証拠形式分離に従う（8.1〜8.5） |
 | DD-7 | 復帰駆動は共有ヘルパー `drive_ticks_until_disconnect` へ一般化 | 同形 3 ループの三重複を単一契約に集約し、上限依存ループの再発明を構造的に防ぐ（7.1〜7.3） |
 | DD-8 | workspace gate は i686 前提ビルド＋PowerShell＋submodule 初期化を明記 | steering: workspace-test-needs-i686-host32-artifacts / harness-shell-quirks |
+| DD-9 | wintf WIC は `WicCore` が自ら**プロセス寿命 MTA キーパー**を持つ（`CoIncrementMTAUsage`・cookie を leak＝decrement しない） | interest-keeper と同型。`WicCore::new()` 先頭で一度だけ `CoIncrementMTAUsage` を確立（`OnceLock` ガード）→ 以降 `CoCreateInstance` は実装で apartment を借りず自前 MTA 上で成功し、COM ランタイムが factory より長生きして use-after-free（`IUnknown::Release`）が構造的に到達不能。cookie は `CO_MTA_USAGE_COOKIE`（`!Send`）ゆえ static 保持せず**意図的 leak**（プロセス寿命 MTA が目的・CoDecrementMTAUsage は呼ばない）。失敗（極稀）は `?` で `Err` 伝播（panic しない・`WicCore::new` の既存 `Result` 契約）。**棄却案**: テスト側だけで `CoInitializeEx` する小細工＝本番の潜在 use-after-free を残すため不採用（steering: canonical-not-minimal-lifecycle）。`world/mod.rs:62` の生成失敗無言スキップには `error!` を付す（Req 9.4・log-first） |
 
 ### Technology Stack
 
@@ -124,6 +129,8 @@ graph TB
 - `crates/areka-kanade/tests/kanade/common/mod.rs` — `drive_ticks_until_disconnect(sender, first_tick_second, what)` ヘルパーを新設（`join_bounded`・`DEFAULT_TIMEOUT` と同居・同系の Instant deadline 定石）
 - `crates/areka-kanade/tests/kanade/steady_test.rs` — `talk_completion_resumes_get_pump_ref3_one_status_none` の `'drive` ループ（821 行付近）をヘルパー呼出へ置換。`resumed` フラグ・64-yield 内側ループ・中間 assert を削除（join 後の既存最終表明 (2) が復帰意味論を担う）。doc コメントの駆動説明を更新
 - `crates/areka-kanade/tests/kanade/close_test.rs` — (a) `wait_until`（57 行）を Instant deadline 版へ置換（シグネチャ不変・呼出 3 箇所 671/789/959 は無改変）。(b) `close_refused_resumes_pump_then_terminates_via_resumed_talk` の `'drive` ループ（170 行付近）と `boot_greeting_talkdone_resumes_get_pump` の `'drive` ループ（806 行付近）をヘルパー呼出へ置換し、ループ内観測・フラグ・中間 assert を削除（join 後の既存最終表明 (c)/(d)・(b) が担う）。doc コメント更新
+- （Req 9・wintf 本番）`crates/wintf/src/ecs/widget/bitmap_source/wic_core.rs` — `WicCore::new()` の `CoCreateInstance` 前へプロセス寿命 MTA キーパー確立（`OnceLock` ガードの `ensure_process_mta()`＋`CoIncrementMTAUsage`・cookie 意図的 leak）を前置。SAFETY doc（現 21-30 行の「本プロセスは MTA で初期化される**前提**」）を「`WicCore` が自ら MTA を**強制**する」へ更新。**factory 型・`factory()`・利用側は無改変**
+- （Req 9・wintf 本番）`crates/wintf/src/ecs/world/mod.rs` — `WicCore::new()` の生成失敗を握る `if let Ok`（62 行付近）へ `Err` 側の `error!`（log-first）を付す。縮退挙動（factory 無しで継続）自体は不変
 
 > 境界整合: 変更 4 ファイルはすべて Boundary Commitments「This Spec Owns」の範囲内。src 側は log_capture.rs のみ・tests 側は復帰駆動イディオムのみ。
 > 「検証手順」コンポーネント（Components and Interfaces 参照）は**意図的にファイルを持たない**——RED→GREEN ストレスは一回性の証拠取りでありスクリプトをコミットしない（DD-6）。手順の正本は本書 Testing Strategy。
@@ -168,6 +175,26 @@ flowchart TB
 
 因果連鎖（駆動が完了する必然性）: 復帰 → 復帰後 Tick の GET pump → fixture Value → steady talk（quit:true）→ 終了系列 → kanade スレッド終了 → Receiver drop → `send` Err。復帰しない欠陥時はこの連鎖が起きず send が成功し続け、deadline がハングでなく失敗として検出する（7.3・8.5 の非空虚性経路）。
 
+### WIC 借り物寿命の遮断（Req 9・keeper による根絶）
+
+```mermaid
+sequenceDiagram
+    participant OT as 並走テスト
+    participant COM as COM ランタイム
+    participant EW as EcsWorld::new
+    Note over OT,EW: 修正前
+    OT->>COM: 可視ウィンドウ生成で MSCTF ロード → 一時的 MTA
+    EW->>COM: CoCreateInstance(WIC) が借り物 MTA で成功
+    OT-->>COM: 一時的 MTA 解体 → COM ランタイム／factory 解放
+    EW->>EW: EcsWorld drop の IUnknown::Release が use-after-free → 0xC0000005
+    Note over OT,EW: 修正後
+    EW->>COM: WicCore::new が ensure_process_mta で暗黙 MTA を一度だけ常駐
+    Note over COM: CoIncrementMTAUsage の cookie を leak し MTA がプロセス寿命で生存
+    EW->>COM: CoCreateInstance(WIC) は自前 MTA 上で成功
+    OT-->>COM: 並走テストの一時 MTA 解体は自前 MTA を消さない
+    EW->>EW: drop 時の Release は生存する COM ランタイム上で安全
+```
+
 ## Requirements Traceability
 
 | Requirement | Summary | Components | Interfaces | Flows |
@@ -201,6 +228,12 @@ flowchart TB
 | 8.3 | `-p areka-kanade`＋workspace 連続 5 回以上で失敗 0 | 検証手順 | Gate 手順（DD-8） | — |
 | 8.4 | R7' は構造証明＋回帰緑で判定 | 3 テスト置換・検証手順 | コードレビュー観点（反復上限の不在） | — |
 | 8.5 | R7' 非空虚性はレビュー観点で担保 | drive ヘルパー | deadline panic 経路の存在（System Flows 因果連鎖） | — |
+| 9.1 | WIC factory 生成前に MTA を自己確立・借り物解体で解放されない | WIC MTA-keeper | `ensure_process_mta`＋`CoIncrementMTAUsage`（DD-9） | WIC 借り物寿命の遮断 |
+| 9.2 | プロセス内一度だけ MTA キーパー確立・COM ポインタ常時生存 | WIC MTA-keeper | `OnceLock` ガード・cookie leak（プロセス寿命） | 同上 |
+| 9.3 | workspace 並列負荷下で layout バイナリが 0xC0000005 でクラッシュしない | WIC MTA-keeper・検証手順 | wintf ストレス＋workspace 反復 | 同上 |
+| 9.4 | 生成失敗を無言スキップにせず `error!` で記録 | WIC MTA-keeper | `world/mod.rs:62` の `if let Ok` へ `else { error!(..) }` | — |
+| 9.5 | 本番挙動不変・新規依存なし・横展開なし | WIC MTA-keeper | 本番は MTA 済ゆえ増分のみ・`Win32_System_Com` 既存 | — |
+| 9.6 | 修正前 RED（0xC0000005 再現）→修正後 GREEN（0 クラッシュ） | 検証手順 | wintf 並列プロセスストレス（DD-6 と同系・8.6） | — |
 
 ## Components and Interfaces
 
@@ -210,7 +243,8 @@ flowchart TB
 | drive_ticks_until_disconnect | tests 共有ハーネス | 復帰駆動を上限非依存の完了バリア＋deadline で提供 | 7.1, 7.3, 8.5 | std mpsc Sender・std Instant（P0） | Service |
 | 復帰駆動テスト置換 ×3 | tests（integration exe） | ループ内観測を廃し join 後表明へ一本化 | 7.1, 7.2, 7.5, 8.4 | drive ヘルパー（P0）・join_bounded（P0） | — |
 | wait_until 置換 | tests（close_test.rs ローカル） | 100,000 yield 有界を壁時計 deadline 化 | 7.4 | std Instant（P0） | Service |
-| 検証手順 | 運用（非コード） | 病の性質別の証拠取り | 1.4, 4.1, 8.1–8.4 | PowerShell・i686 toolchain（P0） | Batch |
+| WIC MTA-keeper | src 本番（wintf・bitmap_source） | WIC factory の COM 借り物寿命 use-after-free を構造的に根絶 | 9.1–9.6 | windows `CoIncrementMTAUsage`（P0）・std OnceLock（P0）・tracing error!（P1） | Service, State |
+| 検証手順 | 運用（非コード） | 病の性質別の証拠取り | 1.4, 4.1, 8.1–8.4, 9.6 | PowerShell・i686 toolchain（P0） | Batch |
 
 ### src テスト基盤
 
@@ -343,6 +377,57 @@ pub fn drive_ticks_until_disconnect(
 - シグネチャ `fn wait_until<F, P>(fetch: F, pred: P) -> bool` は不変（呼出 3 箇所 671/789/959 は無改変）。内部を「`pred` 成立で `true` / `DEFAULT_TIMEOUT` の `Instant` deadline 超過で `false` / それ以外は `yield_now` して再評価」へ書き換える
 - 呼出側は既存どおり `assert!(wait_until(...))` で失敗を表明（ハングは deadline で `false` → assert 失敗へ変換される）。doc コメントの「有界回数」記述を「壁時計 deadline」へ更新
 
+### src 本番（wintf・Req 9）
+
+#### WIC MTA-keeper（wic_core.rs）
+
+| Field | Detail |
+|-------|--------|
+| Intent | `WicCore` がプロセス寿命の暗黙 MTA を自ら確立し、WIC factory の COM 借り物寿命 use-after-free（0xC0000005）を構造的に根絶する |
+| Requirements | 9.1, 9.2, 9.3, 9.4, 9.5, 9.6 |
+
+**Responsibilities & Constraints**
+
+- `WicCore::new()` は `CoCreateInstance` に先立ち `ensure_process_mta()` を呼ぶ。`ensure_process_mta` は `OnceLock` ガード下で一度だけ `CoIncrementMTAUsage()` を実行し、暗黙 MTA をプロセス寿命で常駐させる（DD-9・interest-keeper と同型）
+- 返る `CO_MTA_USAGE_COOKIE` は `!Send` ゆえ static に保持できず、また目的はプロセス寿命 MTA ゆえ**意図的に leak**（`CoDecrementMTAUsage` は呼ばない）。cookie を drop しても windows-rs の `CO_MTA_USAGE_COOKIE` に Drop は無く MTA は維持される
+- 確立後は、`CoInitializeEx` を呼んでいないスレッド（layout テストの EcsWorld 生成スレッド等）でも暗黙 MTA に属するため `CoCreateInstance(CLSCTX_INPROC_SERVER)` が決定論的に成功し、以後 COM ランタイム／factory が呼び元アパートメントの解体で解放される事象が起きない（9.1/9.2）
+- `CoIncrementMTAUsage` の失敗（極稀）は `?` で `Err` 伝播し `WicCore::new()` の既存 `Result` 契約に載せる（panic しない・log-first の縮退は呼び元 `world/mod.rs` が担う）
+- 本番影響ゼロ: 本番は `WinApp::new` が既に `CoInitializeEx(MTA)` をプロセス寿命で確立済（`runtime/mod.rs`）。keeper は暗黙 MTA 参照を 1 つ増やすのみで観測可能な差は無い（9.5）
+
+**Dependencies**
+
+- Outbound: `windows::Win32::System::Com::CoIncrementMTAUsage` — 暗黙 MTA のプロセス寿命確立（P0・既存 `Win32_System_Com` feature）
+- Inbound: `EcsWorld::new()`（`world/mod.rs:62`）— WicCore 生成の唯一の呼び元。生成失敗の無言スキップへ `error!` を付す（9.4）
+
+**Contracts**: Service [x] / State [x]
+
+##### Service Interface
+
+```rust
+/// プロセス寿命の暗黙 MTA を一度だけ確立する（cookie は意図的に leak）。
+/// WIC free-threaded factory を、呼び元スレッドの apartment 状態に依らず
+/// 決定論的に生成・生存させるための keeper（詳細はモジュール doc / DD-9）。
+fn ensure_process_mta() -> windows::core::Result<()>;
+
+// WicCore::new() 先頭で ensure_process_mta()? を呼んでから CoCreateInstance する。
+```
+
+- Preconditions: なし（どのスレッド・COM 初期化状態からでも呼べる）
+- Postconditions: 暗黙 MTA がプロセス生存期間 常駐し、以後の `CoCreateInstance`（WIC）が成功・その COM ランタイムが factory より長生きする
+- Invariants: `OnceLock` により `CoIncrementMTAUsage` はプロセスで実質一度（並行初回でも増分数個は無害・decrement しないため過剰増分に害なし）
+
+##### State Management
+
+- State model: `static MTA_KEEPER: OnceLock<()>`（確立済みか否かの二値・cookie は保持しない＝leak）
+- Persistence & consistency: プロセス生存期間＝暗黙 MTA の生存期間（`CoDecrementMTAUsage` を呼ばない）
+- Concurrency strategy: `OnceLock` で初回を直列化。init 失敗（`CoIncrementMTAUsage` の `Err`）時は未確立のまま `Err` を返し、後続 `WicCore::new()` が同じ経路で再試行しうる（silent 縮退なし・log-first）
+
+**Implementation Notes**
+
+- Integration: `wic_core.rs` の SAFETY doc（現「本プロセスは MTA で初期化される**前提**」）を「`WicCore` が `ensure_process_mta` で MTA を**自己強制**する」へ更新。`factory` フィールド・`factory()`・`Send/Sync` impl・利用側は無改変
+- Validation: RED→GREEN ストレス（wintf 並列プロセス・9.6）＋ workspace 反復（9.3）。TRACE 檻ならぬ「クラッシュ不在」が受益経路
+- Risks: `CoIncrementMTAUsage` は `Win32_System_Com` feature（`CoCreateInstance` と同一・既に有効）。将来 windows 版が動く場合は Revalidation（本 spec は Cargo.lock 固定前提）
+
 ## Error Handling
 
 ### Error Strategy
@@ -378,14 +463,25 @@ PowerShell 手順（スクリプトはコミットしない・DD-6。scratchpad 
 - コードレビュー観点: (a) 3 ループと `wait_until` に反復回数上限が存在しない（意味論的完了バリア＋Instant deadline のみで駆動される構造的性質）(b) kanade 非復帰時に deadline panic へ到達する経路の実在（非空虚性）。integration exe への RED→GREEN ストレス・飢餓の人工再現は**行わない**（偽の安心／新たな非決定性源のため・討議#2）
 - 回帰緑: `cargo test -p areka-kanade` と workspace 反復（8.3）で対象テストが緑
 
-### Gate: workspace 反復（1.4/8.3・DD-8）
+### Req 9: wintf WIC MTA の RED→GREEN ストレス（9.6・確率再現可能な病）
+
+本 flake は単独プロセスでは再現せず（135 実行 0 クラッシュ）、`cargo test --workspace` 相当の**並列プロセス負荷**が発症窓の重なり確率を上げて初めて出る（8 プロセス同時起動で 8/40 再現）。ゆえに証拠形式は**並列プロセスストレス**（keeper の lib exe ストレスの wintf 版）:
+
+1. **RED（修正前）**: `cargo test -p wintf --test layout --no-run` → `target\debug\deps\layout-*.exe`（mtime 最新）を選択 → **8 プロセス並列 × 複数波**でフルスイート起動し exit code を集計。exit `-1073741819`（0xC0000005）を ≥1 件観測で RED 確定（実測 8/40）。犯人は `EcsWorld::new()` を呼ぶ 2 テスト（`taffy_flex_layout_pure_test` / `taffy_layout_integration_test::unit_integration`）
+2. **GREEN（修正後）**: 同一のストレス（8 プロセス並列・同波数以上）で 0xC0000005 が **0 件**（9.6）。加えて `cargo test -p wintf` の全緑（副作用ゼロ）
+
+> スクリプトはコミットしない（DD-6・一回性の証拠取り）。scratchpad で実行し結果を検証記録へ。
+
+### Gate: workspace 反復（1.4/8.3/9.3・DD-8）
+
+interest-keeper（Req 1）と WIC MTA-keeper（Req 9）の両修正が入った状態で、workspace が並列負荷下で真に決定論的に緑（log 捕捉檻の失敗 0・wintf クラッシュ 0）であることを確認する:
 
 ```powershell
 # worktree では submodule 初期化を先行（steering: harness-shell-quirks）
 git submodule update --init
 # i686 前提成果物（steering: workspace-test-needs-i686-host32-artifacts）
 cargo build --target i686-pc-windows-msvc -p shiori-host32-helper -p shiori-host32-testdll
-# 連続 5 回以上・全回 failed 0
+# 連続 5 回以上・全回 failed 0 かつ 0xC0000005 クラッシュ 0（error: test failed 行が出ないこと）
 1..5 | ForEach-Object { cargo test --workspace }
 ```
 
