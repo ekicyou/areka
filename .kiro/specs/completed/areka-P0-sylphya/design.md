@@ -770,5 +770,5 @@ R9.3 サインオフ用の固定ログイベント（変更時は Revalidation T
 ## Supporting References
 
 - 対応表へ記録する正典沈黙裁量（`doc/COMPAT_ARCHITECTURE.md` 追記予定・R3.4/4.2/4.4/4.5）: ①`%username` 204/空値→既定値「ユーザーさん」（定義点は sakura `DEFAULT_USERNAME`）②`%selfname2` 未定義→素通し縮退（フォールバック創作なし）③`%keroname` kero.name 未定義→sakura.name へフォールバック・両者未定義→素通し④SET 無効正準語彙への書込→受理（Ok）＋警告ログ＋非反映
-- 調査の生ログ・裁定の経緯は `.kiro/specs/areka-P0-sylphya/research.md`（§8-§12）
-- 語彙の全数表と典拠 URL は `.kiro/specs/areka-P0-sylphya/brief.md` の Scope 節（台帳実装時の転記元）
+- 調査の生ログ・裁定の経緯は `.kiro/specs/completed/areka-P0-sylphya/research.md`（§8-§12）
+- 語彙の全数表と典拠 URL は `.kiro/specs/completed/areka-P0-sylphya/brief.md` の Scope 節（台帳実装時の転記元）
