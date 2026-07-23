@@ -127,7 +127,22 @@ impl ScriptedShioriBackendBuilder {
 
     /// backend 本体（アクタースレッドへ move する側）と、テストが照合に使う
     /// [`ScriptedShioriHandle`] のペアを構築する。
-    fn build(self) -> (ScriptedShioriBackend, ScriptedShioriHandle) {
+    ///
+    /// # username prefetch の既定台本（task 8.2・R9.1/9.2・kanade prefetch boot 図）
+    ///
+    /// sylphya 機能（task 6.2/8.2）が正典 boot 系列へ **username SHIORI Resource GET prefetch**
+    /// （OnInitialize NOTIFY の後・OnFirstBoot GET の前）を追加した。全 boot がこの prefetch を発行
+    /// するため、テストが `username` GET を明示台本化していなければ **既定で `Ok(None)`（NoContent）**
+    /// を 1 件補う。「カスタム username 無し」＝既定 username 世界（204→既定・既定は sakura 常駐）を
+    /// faithful に再現する DRY 既定であり、将来の spine テストが username GET を毎回書かずとも
+    /// backend が panic しない（`boot_with` に手組み backend を渡す経路も同じ既定で保護される）。
+    /// テストが独自 username 応答を要すれば `.get("username", …)` で明示上書きでき、その場合は
+    /// 既に登録済みゆえ既定は補われない。
+    fn build(mut self) -> (ScriptedShioriBackend, ScriptedShioriHandle) {
+        self.get_scripts
+            .entry("username".to_string())
+            .or_insert_with(|| VecDeque::from([Ok(None)]));
+
         let calls = Arc::new(Mutex::new(Vec::new()));
         let backend = ScriptedShioriBackend {
             get_scripts: self.get_scripts,
@@ -400,9 +415,11 @@ impl SpineHarness {
     ///
     /// `on_boot` は OnBoot GET が返す応答スクリプト。6.1 は最小 talk（`\s[0]\e`）を渡す。
     fn boot(on_boot: &str) -> SpineHarness {
-        // 標準台本: boot 系列（OnInitialize→OnFirstBoot→OnBoot→basewareversion）＋
+        // 標準台本: boot 系列（OnInitialize→[username prefetch]→OnFirstBoot→OnBoot→basewareversion）＋
         // shutdown（`GhostRuntime::shutdown` は常に ForceQuit 経路＝OnClose NOTIFY→Unload・
         // ghost spine S1 と同旨）を台本化する。OnSecondChange は kanade へ Tick を送らないため不要。
+        // username prefetch GET（OnInitialize 後・OnFirstBoot 前・task 8.2・R9.1/9.2）は `build()` が
+        // 既定 `Ok(None)`（NoContent＝カスタム username 無し）を自動補填するため明示台本化しない。
         let (backend, shiori_handle) = ScriptedShioriBackend::builder()
             .notify("OnInitialize", Ok(()))
             .get("OnFirstBoot", Ok(None))
@@ -560,11 +577,12 @@ fn spine_harness_boots_scripted_ghost_and_reaches_attach_ready() {
 
     // ── (1) scripted boot 発火: boot 系列が backend へ (method,id) 順で届く ──
     // boot 系列は kanade スレッド上の同期往復のみで完走する（Tick 不要）。実スレッド境界を跨ぐため
-    // 有界スピン待機（sleep なし・yield_now のみ）で 4 呼出の到達を待ってから照合する。
+    // 有界スピン待機（sleep なし・yield_now のみ）で 5 呼出の到達を待ってから照合する。task 8.2 の
+    // username prefetch GET（OnInitialize 後・OnFirstBoot 前・R9.1/9.2）が加わり boot 系列は 5 呼出。
     let mut boot_calls = Vec::new();
     for _ in 0..100_000u32 {
         boot_calls = harness.shiori_handle.non_status_calls();
-        if boot_calls.len() >= 4 {
+        if boot_calls.len() >= 5 {
             break;
         }
         std::thread::yield_now();
@@ -579,18 +597,19 @@ fn spine_harness_boots_scripted_ghost_and_reaches_attach_ready() {
         })
         .collect();
     assert!(
-        projected.len() >= 4,
+        projected.len() >= 5,
         "scripted boot 系列が有界内に発火しない（scripted ghost を boot できていない）: {boot_calls:?}"
     );
     assert_eq!(
-        &projected[..4],
+        &projected[..5],
         &[
             ("notify", "OnInitialize"),
+            ("get", "username"),
             ("get", "OnFirstBoot"),
             ("get", "OnBoot"),
             ("notify", "basewareversion"),
         ],
-        "boot 系列が正典順序（OnInitialize→OnFirstBoot→OnBoot→basewareversion）で発火していない"
+        "boot 系列が正典順序（OnInitialize→username prefetch→OnFirstBoot→OnBoot→basewareversion）で発火していない"
     );
 
     // ── (2) Tick 注入の疎通（ghost スタック生存・sleep 不使用・R8.3） ──
@@ -1158,18 +1177,19 @@ fn spine_s5_close_handshake_consumes_onclose_and_joins_all_handles_bounded() {
     // 標準台本（OnClose NOTIFY＋Unload(Clean)）で boot。最小 OnBoot talk（\s[0]\e）。
     let harness = SpineHarness::boot(r"\s[0]\e");
 
-    // boot 系列（非 Status 4 呼出）が届くまで有界スピン（OnClose を boot ノイズと分離・sleep 不使用）。
+    // boot 系列（非 Status 5 呼出）が届くまで有界スピン（OnClose を boot ノイズと分離・sleep 不使用）。
+    // task 8.2 の username prefetch GET（OnInitialize 後・OnFirstBoot 前・R9.1/9.2）が加わり 4→5 呼出。
     let mut boot_calls = Vec::new();
     for _ in 0..100_000u32 {
         boot_calls = harness.shiori_handle.non_status_calls();
-        if boot_calls.len() >= 4 {
+        if boot_calls.len() >= 5 {
             break;
         }
         std::thread::yield_now();
     }
     assert!(
-        boot_calls.len() >= 4,
-        "S5 前提: boot 系列 4 呼出が有界内に発火する: {boot_calls:?}"
+        boot_calls.len() >= 5,
+        "S5 前提: boot 系列 5 呼出（OnInitialize/username/OnFirstBoot/OnBoot/basewareversion）が有界内に発火する: {boot_calls:?}"
     );
 
     // 分解して所有ハンドルを得る（shutdown_bounded と同型・shiori_handle は照合のため保持）。
