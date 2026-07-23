@@ -132,7 +132,7 @@
   - _Requirements: 3.3, 3.4, 6.7, 8.1, 9.1, 9.2_
 
 - [ ] 6. Integration: kanade SHIORI リソース照会の座席
-- [ ] 6.1 (P) リソース許可集合と submit ガード拡張
+- [x] 6.1 (P) リソース許可集合と submit ガード拡張
   - この座席は `ResourceSink` クロージャで疎結合されており areka-sylphya クレートへ依存しない（design 論点1）。Major 2-5 と並走可能
   - イベント檻（`ALLOWED_EVENT_IDS`）とは別族の `ALLOWED_RESOURCE_IDS`（M1: `["username"]`）と `is_allowed_resource_id` を実装する
   - kanade actor の submit 送出ガードを「イベント許可 ∨ リソース許可」へ拡張する（既存イベント檻・許可外拒否は無改変）

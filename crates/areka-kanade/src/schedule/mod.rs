@@ -30,6 +30,9 @@ pub(crate) mod log_capture;
 /// ukadoc Reference 表の実装正本（純粋関数群）。DD-9 の例外として `pub`。
 /// クレート公開面への露出は [`crate::events`] ファサード経由（[`crate::lib`] 参照）。
 pub mod events;
+/// SHIORI Resource 照会の許可集合（イベント檻とは別族・Req4.1）。DD-9 の例外として `pub`。
+/// submit ガードはイベント許可 ∨ リソース許可で判定する（`crate::actor` の egress チョークポイント）。
+pub mod resources;
 pub(crate) mod steady;
 
 /// 状態機械への入力。`KanadeMsg`（外部入力）＋シェルが同期往復で得た SHIORI 応答。

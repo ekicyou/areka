@@ -172,8 +172,13 @@ fn round_trip_request(shiori: &Sender<ShioriMsg>, call: ShioriCall) -> ShioriOut
         }
     };
 
-    // ID ホワイトリスト檻（Req3.1/3.2・DD-IT-7/DD-IT-11）: 許可集合外は送出せず内部規律違反として失敗させる。
-    if !crate::schedule::events::is_allowed_event_id(id) {
+    // ID ホワイトリスト檻（Req3.1/3.2/4.1・DD-IT-7/DD-IT-11）: 許可集合外は送出せず内部規律違反
+    // として失敗させる。送出可否は「イベント許可 ∨ リソース許可」の論理和で判定する——イベント檻
+    // （`ALLOWED_EVENT_IDS`・8 ID）とは別族のリソース許可集合（`ALLOWED_RESOURCE_IDS`・M1: username）を
+    // additive に OR する（既存イベント許可路・許可外拒否は無改変・design 論点1）。
+    let allowed = crate::schedule::events::is_allowed_event_id(id)
+        || crate::schedule::resources::is_allowed_resource_id(id);
+    if !allowed {
         tracing::error!(
             target: "kanade",
             event = "event_id_not_allowed",
@@ -688,5 +693,96 @@ mod tests {
             drop(shiori_tx);
             drop(shiori_handle);
         }
+    }
+
+    // --- 8. submit ガードのリソース許可拡張（タスク 6.1・Req 4.1・design 論点1／別族許可集合） ---
+    //
+    // egress チョークポイント `round_trip_request` の submit ガードが
+    // 「`is_allowed_event_id(id)` ∨ `is_allowed_resource_id(id)`」へ拡張されたことを、
+    // リソース ID の実送出パスから両側で檻に入れる。イベント檻・許可外拒否の既存挙動は
+    // 無改変であること（回帰檻）を並せて確認する。
+
+    /// テスト用のリソース GET 呼出（M1 リソース ID `username`）。
+    fn probe_resource_call(id: &'static str) -> ShioriCall {
+        ShioriCall::Get {
+            id,
+            references: vec!["master".to_string()],
+            status: ExecutionStatus::derive(&ExecutionSnapshot::INACTIVE),
+        }
+    }
+
+    // (a) 許可リソース ID（username）→ ガードを通過してチャネルへ送出され良性応答が返る。
+    //     従来（OR 拡張前）は非イベント ID として Failed(Internal) 拒否されていた分岐が、
+    //     リソース許可アームの追加により送出側へ倒れることを檻に入れる（Req4.1）。
+    #[test]
+    fn allowed_resource_id_passes_guard_and_is_sent() {
+        let (shiori_tx, rec_rx, shiori_handle) = spawn_mock_shiori(benign);
+
+        let outcome = round_trip_request(&shiori_tx, probe_resource_call("username"));
+
+        // 許可リソース ID の GET は送出され mock の良性応答（NoContent）が返る。
+        assert!(
+            matches!(outcome, ShioriOutcome::NoContent),
+            "許可リソース ID の GET は送出され mock の良性応答が返るべき（Req4.1）"
+        );
+        // mock が当該 Request を受領した＝ガードを通過しチャネルへ送出された。
+        assert_eq!(
+            rec_rx
+                .recv_timeout(Duration::from_secs(5))
+                .expect("許可リソース ID はチャネルへ送出され mock が受領するはず"),
+            Recorded::Get("username".to_string())
+        );
+
+        drop(shiori_tx);
+        drop(shiori_handle);
+    }
+
+    // (b) 許可外 ID（イベントでもリソースでもない）→ 従来どおり送出されず Failed(Internal)
+    //     へ写像される（既存不変量の回帰檻・Req3.2 の拒否経路が OR 拡張後も無改変）。
+    #[test]
+    fn disallowed_id_still_rejected_as_internal_after_resource_extension() {
+        let (shiori_tx, rec_rx, shiori_handle) = spawn_mock_shiori(benign);
+
+        // "notaresource" はイベント許可集合にもリソース許可集合にも属さない。
+        let outcome = round_trip_request(&shiori_tx, probe_resource_call("notaresource"));
+
+        assert!(
+            matches!(
+                outcome,
+                ShioriOutcome::Failed(ShioriFailure::Internal(_))
+            ),
+            "許可外 ID は OR 拡張後も送出されず Failed(Internal) へ写像されるべき（既存不変量）"
+        );
+        // チャネルへ何も届かない＝許可外 ID は送出前に返る（従来挙動の保存）。
+        assert!(
+            rec_rx.try_recv().is_err(),
+            "許可外 ID はチャネルへ送出されてはならない（既存不変量）"
+        );
+
+        drop(shiori_tx);
+        drop(shiori_handle);
+    }
+
+    // (c) 既存の許可イベント ID（OnBoot）は OR 拡張の影響を受けず従来どおり送出される
+    //     （イベント檻無改変の回帰檻）。
+    #[test]
+    fn allowed_event_id_unaffected_by_resource_or_extension() {
+        let (shiori_tx, rec_rx, shiori_handle) = spawn_mock_shiori(benign);
+
+        let outcome = round_trip_request(&shiori_tx, probe_get_call());
+
+        assert!(
+            matches!(outcome, ShioriOutcome::NoContent),
+            "許可イベント ID の GET は OR 拡張後も従来どおり送出されるべき"
+        );
+        assert_eq!(
+            rec_rx
+                .recv_timeout(Duration::from_secs(5))
+                .expect("許可イベント ID はチャネルへ送出され mock が受領するはず"),
+            Recorded::Get("OnBoot".to_string())
+        );
+
+        drop(shiori_tx);
+        drop(shiori_handle);
     }
 }
