@@ -23,9 +23,11 @@ use wintf::ecs::{GraphicsCore, WucGraphicsResource};
 
 use crate::TextLayerError;
 use crate::canvas::ContentCanvas;
-use crate::choice::ResolvedChoiceStyle;
+use crate::choice::{
+    ResolvedChoiceStyle, annotate_lines, decorate_canvas, derive_hit_rows, to_window_physical,
+};
 use crate::draw::{DWriteMetrics, ResolvedFont};
-use crate::layout::{LayoutEngine, WrapPlan};
+use crate::layout::{CursorWarnGuard, LayoutEngine, WrapPlan};
 use crate::region::{ImagePx, ScaleContract, TextRegion};
 use crate::segment::segment_plan;
 use crate::sink::{EmoTextSink, TextMsg, handle_text_msg};
@@ -200,6 +202,10 @@ pub struct TextLayerRuntime {
     /// actor → 提示フレーム同期ヒット行スナップショット（[`choice_hit_rows`](Self::choice_hit_rows)
     /// の照会源）。population は present_actor（task 8.2）が present 成功時に行う——本 task では空のまま。
     choice_snapshot: HashMap<ActorKey, Vec<ChoiceHitRow>>,
+    /// `\_l` カーソル換算縮退（6.5）の actor ごと warn-once 檻。present_actor が
+    /// [`LayoutEngine::layout_with_cursor_warn`] へ `&mut` で渡す持続 guard——per-frame layout 呼出での
+    /// 重複警告を走査を跨いで抑止する（`unresolved_warned` と同型・行出力へは影響しない）。
+    cursor_warn: CursorWarnGuard,
 }
 
 impl TextLayerRuntime {
@@ -214,6 +220,7 @@ impl TextLayerRuntime {
             unresolved_warned: BTreeSet::new(),
             choice_hover: HashMap::new(),
             choice_snapshot: HashMap::new(),
+            cursor_warn: CursorWarnGuard::default(),
         }
     }
 
@@ -594,7 +601,9 @@ fn present_actor(
             WrapPlan::Segmented(&plan)
         }
     };
-    let lines = LayoutEngine::layout(
+    // `\_l` 換算縮退（6.5）の warn-once を production で有効化する持続 guard を渡す
+    // （純挙動は `layout` と完全同一——差は縮退ログの有無のみ・task 4.2 が本配線へ委譲）。
+    let lines = LayoutEngine::layout_with_cursor_warn(
         actor_state.items(),
         visible,
         &resolved.region,
@@ -602,9 +611,28 @@ fn present_actor(
         resolved.font.height,
         &render.metrics,
         wrap,
+        actor,
+        &mut runtime.cursor_warn,
     );
     let window = LayoutEngine::visible_window(&lines, &resolved.region, resolved.mode);
+
+    // ── 選択肢パイプライン: 同一 lines を単一の源に 注釈→装飾→描画（表示とヒットの単一導出・R3.3/5.2） ──
+    // 注釈は layout 直後の同一 lines を消費する（可視窓調整後の行へ再適用しない——design Precondition）。
+    let spans = actor_state.choices();
+    let segments = annotate_lines(&lines, spans);
+    // hover 印は per-actor 保持値（未注入＝None＝ハイライト無し・8.1）。
+    let hover = runtime.choice_hover.get(actor).copied().flatten();
+    // 装飾: hover 行へ塗り/文字色を焼く。セグメント空（選択肢無し）は decorate が恒等＝canvas 無変更（非退行）。
     let canvas = ContentCanvas::from_layout(&lines, &resolved.region, resolved.mode);
+    let canvas = decorate_canvas(
+        canvas,
+        &segments,
+        hover,
+        resolved.choice_style,
+        resolved.font.color,
+        &resolved.region,
+        resolved.mode,
+    );
     let changed = render.executor.render(
         &canvas,
         &window,
@@ -617,6 +645,35 @@ fn present_actor(
     // 変化ありのフレームだけ提示する（`FramePlan::NoChange` は blit も描画も present も省く——
     // readback は front を読むため観測述語に影響しない・R1.1/R3.1）。
     if changed {
+        // ── ヒット行スナップショット更新（present 成功時のみ・表示と同一 lines/segments の単一導出・5.2） ──
+        // committed は既存 visible_window→executor が確定した面反映済みスクロールをそのまま消費する
+        // （新規のスクロール可視判定は追加しない・6.3）。NoChange フレームはこの更新を丸ごと省き
+        // 直前スナップショットを不変のまま保つ。
+        let committed = render.executor.scroll_state().committed;
+        let hit_rows = derive_hit_rows(&lines, &segments, resolved.mode, &resolved.region);
+        // 各ヒット行を配送順序数で対応スパンへ突き合わせ、窓物理 px 矩形＋下流構成材料を同梱する。
+        let snapshot: Vec<ChoiceHitRow> = hit_rows
+            .iter()
+            .filter_map(|row| {
+                spans
+                    .iter()
+                    .find(|span| span.ordinal == row.ordinal)
+                    .map(|span| ChoiceHitRow {
+                        ordinal: row.ordinal,
+                        id: span.id.clone(),
+                        label: span.label.clone(),
+                        references: span.references.clone(),
+                        rect: to_window_physical(
+                            row,
+                            &resolved.region,
+                            resolved.mode,
+                            committed,
+                            &contract,
+                        ),
+                    })
+            })
+            .collect();
+        runtime.choice_snapshot.insert(actor.clone(), snapshot);
         render.surface.present()?;
     }
     Ok(())
@@ -1421,5 +1478,152 @@ mod runtime_tests {
             ResolvedChoiceStyle::Invert,
             "cursor.* 未指定バルーンは choice_style=Invert（既定文字色反転縮退）"
         );
+    }
+
+    // ══ task 8.2: 提示パイプラインとヒット行スナップショット配線（COM・headless・R3.1/3.2/3.3/5.2/6.3） ══
+
+    /// 3 資源（GraphicsCore/WucGraphicsResource/予約スロット）を積んだ World を組む土台。
+    /// 返り値は (world, window, slot)。COM は本番 UI スレッド（MTA）を再現する。
+    fn com_world() -> (World, bevy_ecs::entity::Entity, bevy_ecs::entity::Entity) {
+        unsafe {
+            let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
+        }
+        let core = GraphicsCore::new().expect("GraphicsCore::new 失敗");
+        let wuc = WucGraphicsResource::new(core.d2d_device().expect("d2d_device"))
+            .expect("WucGraphicsResource::new 失敗");
+        let mut world = World::new();
+        let (window, slot) = spawn_reserved_slot(&mut world);
+        world.insert_resource(core);
+        world.insert_resource(wuc);
+        (world, window, slot)
+    }
+
+    /// Observable（3.1/3.2/3.3/5.2）: 提示成功直後の `choice_hit_rows` が、描画された選択肢行と整合する
+    /// 非退化矩形を選択肢数ぶん返し（配送順 ordinal・下流構成材料を忠実同梱）、後続 `NoChange` フレームでは
+    /// 直前スナップショットが不変のまま保たれる（再描画も更新も起きない）。
+    #[test]
+    fn present_populates_choice_hit_rows_and_nochange_preserves_snapshot() {
+        let (mut world, window, slot) = com_world();
+        let actor = ActorKey::from("0");
+        let mut rt = TextLayerRuntime::new(TextLayerConfig::default());
+        // 2 選択肢を配送順に注入（ordinal 0="はい"・1="いいえ"）。
+        rt.apply_cue(&choice_cue("0", 0.0, "OnYes", "はい", &["r0"]));
+        rt.apply_cue(&choice_cue("0", 0.2, "OnNo", "いいえ", &["r1"]));
+        let image = (120u32, 60u32);
+        rt.register_actor(
+            actor.clone(),
+            TextSlotBinding::new(slot, window, 1.0, image),
+            ResolvedBalloonText::resolve(&geo_model(), image),
+        );
+
+        // 全リビール済み時刻で提示＝present 成功時のスナップショット population。
+        present_frame(&mut rt, &mut world, 10.0).expect("提示フレーム");
+        let rows: Vec<super::ChoiceHitRow> = rt.choice_hit_rows(&actor).to_vec();
+        assert_eq!(rows.len(), 2, "選択肢数と同数のヒット行が並ぶ");
+        // 配送順 ordinal＋下流構成材料（id/label/references）を忠実転写。
+        assert_eq!(rows[0].ordinal, 0);
+        assert_eq!(rows[0].id, "OnYes");
+        assert_eq!(rows[0].label, "はい");
+        assert_eq!(rows[0].references, vec!["r0".to_string()]);
+        assert_eq!(rows[1].ordinal, 1);
+        assert_eq!(rows[1].id, "OnNo");
+        assert_eq!(rows[1].label, "いいえ");
+        assert_eq!(rows[1].references, vec!["r1".to_string()]);
+        // 矩形は非退化（描かれた選択肢行の文字幅×行高）。
+        for r in &rows {
+            assert!(r.rect.left < r.rect.right, "行内幅>0: {:?}", r.rect);
+            assert!(r.rect.top < r.rect.bottom, "行高>0: {:?}", r.rect);
+        }
+        // 横並び 2 選択肢: 配送順 1 の行内範囲は 0 の右側（k=1・committed=0・原点 0＝隣接）。
+        assert!(
+            rows[1].rect.left >= rows[0].rect.right - 0.5,
+            "配送順 1 は 0 の右側に配置される: {:?} / {:?}",
+            rows[0].rect,
+            rows[1].rect
+        );
+
+        // NoChange フレーム: 状態不変で再提示＝再描画は起きず、スナップショットは不変。
+        let calls_before = rt
+            .draw_stats(&actor)
+            .expect("draw_stats")
+            .draw_text_layout_calls;
+        present_frame(&mut rt, &mut world, 10.0).expect("NoChange 再提示");
+        let calls_after = rt
+            .draw_stats(&actor)
+            .expect("draw_stats")
+            .draw_text_layout_calls;
+        assert_eq!(
+            calls_after, calls_before,
+            "NoChange フレームは再描画しない（DrawTextLayout 不変）"
+        );
+        assert_eq!(
+            rt.choice_hit_rows(&actor),
+            rows.as_slice(),
+            "NoChange フレームは直前スナップショットを不変に保つ（更新スキップ）"
+        );
+    }
+
+    /// Observable（6.3・非退行）: 選択肢スパンを持たない actor は提示後もヒット行が空
+    /// （annotate/derive とも恒等・新規スクロール判定なし）。
+    #[test]
+    fn present_with_no_choices_yields_empty_choice_hit_rows() {
+        let (mut world, window, slot) = com_world();
+        let actor = ActorKey::from("0");
+        let mut rt = TextLayerRuntime::new(TextLayerConfig::default());
+        rt.apply_cue(&cue("0", 0.0, CueCommand::Text("ただの本文".into())));
+        let image = (120u32, 60u32);
+        rt.register_actor(
+            actor.clone(),
+            TextSlotBinding::new(slot, window, 1.0, image),
+            ResolvedBalloonText::resolve(&geo_model(), image),
+        );
+        present_frame(&mut rt, &mut world, 10.0).expect("提示フレーム");
+        assert!(
+            rt.choice_hit_rows(&actor).is_empty(),
+            "選択肢スパンの無い actor は提示後もヒット行が空（decorate/derive とも恒等）"
+        );
+    }
+
+    /// Observable（3.3/4.x 配線・単一導出）: hover 注入が decorate→render まで配線され、ハイライト塗りで
+    /// 非透明ピクセルが増える（Invert 縮退＝塗り＝既定黒文字色の矩形が hover 行へ載る）。ヒット行照会自体は
+    /// hover 非依存（count 不変）。
+    #[test]
+    fn present_with_hover_adds_highlight_pixels_over_non_hover_frame() {
+        let (mut world, window, slot) = com_world();
+        let actor = ActorKey::from("0");
+        let mut rt = TextLayerRuntime::new(TextLayerConfig::default());
+        rt.apply_cue(&choice_cue("0", 0.0, "OnYes", "はい", &["r0"]));
+        rt.apply_cue(&choice_cue("0", 0.2, "OnNo", "いいえ", &["r1"]));
+        let image = (120u32, 60u32);
+        rt.register_actor(
+            actor.clone(),
+            TextSlotBinding::new(slot, window, 1.0, image),
+            ResolvedBalloonText::resolve(&geo_model(), image),
+        );
+
+        // hover 無しで提示（素の選択肢テキスト）＝スナップショット population・hover 未注入。
+        present_frame(&mut rt, &mut world, 10.0).expect("hover 無し提示");
+        let read = |rt: &TextLayerRuntime| -> usize {
+            opaque_count(
+                &rt.surface(&actor)
+                    .expect("供給面")
+                    .read_back()
+                    .expect("read_back"),
+            )
+        };
+        let plain = read(&rt);
+        assert!(plain > 0, "選択肢テキストが描画される");
+        assert_eq!(rt.choice_hit_rows(&actor).len(), 2, "hover 前もヒット行は 2");
+
+        // ordinal 0 を hover 注入→再提示（choice_marker 変化で per-line 増分ダーティ＝Update）。
+        rt.inject_choice_hover(&actor, Some(0));
+        present_frame(&mut rt, &mut world, 10.0).expect("hover 提示");
+        let hovered = read(&rt);
+        assert!(
+            hovered > plain,
+            "hover が decorate→render へ配線され、ハイライト塗りで非透明ピクセルが増える: {plain} -> {hovered}"
+        );
+        // ヒット行照会は hover 非依存（count 不変）。
+        assert_eq!(rt.choice_hit_rows(&actor).len(), 2, "hover 後もヒット行は 2");
     }
 }

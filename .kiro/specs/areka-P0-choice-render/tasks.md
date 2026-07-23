@@ -140,7 +140,7 @@
   - _Requirements: 1.3, 3.2, 3.5, 4.1, 6.4_
   - _Boundary: RuntimeContract_
 
-- [ ] 8.2 提示パイプラインとヒット行スナップショットを配線する
+- [x] 8.2 提示パイプラインとヒット行スナップショットを配線する
   - _Depends: 8.1, 5.2, 7_
   - `present_actor` にて layout 後に `annotate_lines`→`decorate_canvas`→`executor.render` を実行し、render 成功時に同一 layout から `derive_hit_rows`＋`to_window_physical` でスナップショットを更新する（`NoChange` フレームは更新をスキップ）
   - 新規のスクロール可視判定ロジックは追加しない（既存 `visible_window` をそのまま再利用する）
@@ -240,3 +240,4 @@
 - viewbox.rs: `CommittedLine.choice_marker: u32`（Choice=`hovered.map_or(0,|o|o+1)`・他=0）。`is_backward_shrink` は block_pos_bits/extent_bits のみ比較で choice_marker を見ない＝hover のみ変化は全域縮退へ落ちず per-line 増分ダーティを維持（4.4）。
 - viewbox_draw.rs: highlight 描画は Phase1(BeginDraw前=ブラシ生成+SetDrawingEffect・?伝播)→Phase2(FillRectangle→DrawTextLayout)分割。`segment_text_range` はグリフ中心が resident-local inline_range に入る連続 subrange を UTF-16 len 累積で DWRITE_TEXT_RANGE 化（多コード単位対応）。Choice 行は毎フレーム全範囲 SetDrawingEffect(None) リセット（cached TextLayout の stale 効果一掃・None=既定ゆえ素描画非回帰）。`ViewboxExecutor::scroll_state()->ScrollState{pos,committed}` additive 追加（task 8 スナップショットが committed 消費）。
 - actor.rs: per-actor `choice_hover: HashMap<ActorKey,Option<usize>>`/`choice_snapshot: HashMap<ActorKey,Vec<ChoiceHitRow>>`（8.2 で populate）。`ResolvedBalloonText.choice_style` は resolve 時に `ResolvedChoiceStyle::resolve(Some(model.cursor()), font.color)` で一度解決。`choice_active`=`ActorTextState::choices()` 非空（DD-6・barrier ではない）。`ChoiceHitRow` は actor.rs 所有・`HitRectPx` は `pub use crate::choice::HitRectPx`。
+- actor.rs present_actor: 1回の layout→annotate→(from_layout→decorate)→render、成功 Update フレームのみ derive_hit_rows+to_window_physical で snapshot 更新（display と hit は同一 lines/segments＝単一導出 5.2/3.3）。NoChange/Err は snapshot 不変（if changed ゲート内）。committed=`executor.scroll_state().committed`。`layout_with_cursor_warn`+persistent `cursor_warn: CursorWarnGuard` 配線で 6.5 warn-once を production 有効化（4.2 申し送り消化）。折返し跨ぎ選択肢は同一 ordinal の複数 ChoiceHitRow（設計意図）。
