@@ -31,6 +31,7 @@
 
 pub mod actor;
 pub mod canvas;
+pub mod choice;
 pub mod draw;
 pub mod layout;
 pub mod region;
@@ -170,6 +171,7 @@ mod tests {
     #[test]
     fn pure_layer_modules_have_no_windows_imports() {
         const PURE_SOURCES: &[(&str, &str)] = &[
+            ("choice.rs", include_str!("choice.rs")),
             ("state.rs", include_str!("state.rs")),
             ("writing.rs", include_str!("writing.rs")),
             ("region.rs", include_str!("region.rs")),

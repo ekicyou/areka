@@ -71,7 +71,7 @@
   - _Boundary: LayoutCursor_
 
 - [ ] 5. (P) Core: ChoicePure モジュール（choice.rs）
-- [ ] 5.1 選択肢スパンからの行注釈を実装する
+- [x] 5.1 選択肢スパンからの行注釈を実装する
   - _Depends: 1.2_
   - `lib.rs` へ `pub mod choice;` を追加し、`pure_layer_modules_have_no_windows_imports` 構造檻のモジュール一覧へ登録する
   - `annotate_lines(lines, spans)` を実装（グリフ序数スパンを配置済み行へ写像・折返し跨ぎは行ごと分割・部分リビール時は可視グリフ数で範囲を打ち切り）
@@ -234,3 +234,4 @@
 - balloon cursor.* モデル: `BalloonModel::new` は7引数のまま不変・`with_cursor(self, BalloonCursor)` ビルダーでマージに相乗り。`CursorColor` は `FontColor` のミラー（+Default）。fields private + accessor（`cursor() -> &BalloonCursor`）。5.3 の `ResolvedChoiceStyle::resolve` は accessor 経由で読む。
 - ResidentContent variant 集合 = {GlyphRun, Choice, Image, Surface}。task 3 で wildcard `seam =>` アームを明示 `Image(_) | Surface(_)` へ変換済（Choice の暗黙吸収防止）。line_fingerprint の Choice アームは task 6.1 で choice_marker を足す前提の GlyphRun ミラー。
 - **Task 8.2 申し送り**: layout.rs は加法的に `layout_with_cursor_warn(…, actor, &mut CursorWarnGuard)` を新設。`layout` ラッパ経由は縮退 warn を抑止（挙動は同一・字下げは効く）。production の縮退 warn-once（6.5）を有効化するには present_actor が persistent `CursorWarnGuard`（`unresolved_warned` と同型）を保持して `layout_with_cursor_warn` を呼ぶ必要あり＝Task 8.2 の配線。
+- choice.rs: `PositionedLine{rect: LineRect, glyphs: Vec<PositionedGlyph>}`・`PositionedGlyph{ch, inline_pos, advance}`（inline_pos=行内軸 image px 絶対）。annotate は配置済みグリフを0起点連番で数え items 全序数と一致させ純整数交差（lo/hi）で部分リビール自然打切り。lib.rs `PURE_SOURCES` へ choice.rs 登録済。
