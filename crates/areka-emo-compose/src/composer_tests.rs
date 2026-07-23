@@ -12,8 +12,8 @@ use areka_emo_atlas::{
     UseSelfAlpha, bake,
 };
 use areka_parsers::shell::{
-    Animation, AppendTarget, DefRef, Element, ElementPath, Interval, Pattern, Shell, SortOrder,
-    Surface,
+    Animation, AppendTarget, DefRef, DrawMethod, Element, ElementPath, Interval, Pattern, Shell,
+    SortOrder, Surface,
 };
 use std::path::Path;
 
@@ -49,6 +49,7 @@ fn bind_anim(id: u32, ref_surface_id: i64, x: i64, y: i64) -> Animation {
         interval: Interval::Bind,
         patterns: vec![Pattern {
             index: 0,
+            method: DrawMethod::new("overlay".to_string()),
             surface_id: ref_surface_id,
             wait: 0,
             x,

@@ -588,8 +588,8 @@ mod tests {
         AlphaParams, AtlasTable, MemoryDecoder, PackConfig, SetId, SurfaceSet, UseSelfAlpha, bake,
     };
     use areka_parsers::shell::{
-        Animation, AppendTarget, DefRef, Element, ElementPath, Interval, Pattern, Shell, SortOrder,
-        Surface,
+        Animation, AppendTarget, DefRef, DrawMethod, Element, ElementPath, Interval, Pattern, Shell,
+        SortOrder, Surface,
     };
     use std::path::Path;
 
@@ -632,6 +632,7 @@ mod tests {
             patterns: vec![
                 Pattern {
                     index: 0,
+                    method: DrawMethod::new("overlay".to_string()),
                     surface_id: ref_surface_id,
                     wait: 0,
                     x,
@@ -640,6 +641,7 @@ mod tests {
                 // pattern0 以外は本 task では未使用（pattern0 のみ合成対象・要件 5.2）。
                 Pattern {
                     index: 5,
+                    method: DrawMethod::new("overlay".to_string()),
                     surface_id: 999_999,
                     wait: 0,
                     x: 7,
@@ -1793,6 +1795,7 @@ mod tests {
             interval,
             patterns: vec![Pattern {
                 index,
+                method: DrawMethod::new("overlay".to_string()),
                 surface_id: ref_surface_id,
                 wait: 0,
                 x: 0,
@@ -1846,8 +1849,8 @@ mod tests {
             id: 1,
             interval: Interval::Bind,
             patterns: vec![
-                Pattern { index: 0, surface_id: 1100, wait: 0, x: 0, y: 0 },
-                Pattern { index: 1, surface_id: 1200, wait: 0, x: 0, y: 0 },
+                Pattern { index: 0, method: DrawMethod::new("overlay".to_string()), surface_id: 1100, wait: 0, x: 0, y: 0 },
+                Pattern { index: 1, method: DrawMethod::new("overlay".to_string()), surface_id: 1200, wait: 0, x: 0, y: 0 },
             ],
         };
         let host = surface_with_anims(1000, Vec::new(), vec![anim]);

@@ -498,7 +498,8 @@ mod tests {
     };
     use areka_emo_compose::BindSet;
     use areka_parsers::shell::{
-        Animation, AppendTarget, DefRef, Element, ElementPath, Interval, Pattern, Shell, Surface,
+        Animation, AppendTarget, DefRef, DrawMethod, Element, ElementPath, Interval, Pattern, Shell,
+        Surface,
     };
 
     use wintf::ecs::{GraphicsCore, HitTest, HitTestMode, Visual, WucGraphicsResource};
@@ -1214,6 +1215,7 @@ mod tests {
                 interval: Interval::Bind,
                 patterns: vec![Pattern {
                     index: 0,
+                    method: DrawMethod::new("overlay".to_string()),
                     surface_id: 5000,
                     wait: 0,
                     x: 0,

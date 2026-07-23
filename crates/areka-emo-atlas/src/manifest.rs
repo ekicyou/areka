@@ -131,7 +131,7 @@ mod tests {
     use super::*;
     use crate::normalize::{AlphaParams, UseSelfAlpha};
     use crate::table::{AtlasKey, SetId};
-    use areka_parsers::shell::{Animation, Element, Interval, Pattern, Surface};
+    use areka_parsers::shell::{Animation, DrawMethod, Element, Interval, Pattern, Surface};
     use std::path::Path;
 
     // ---- 合成モデルビルダ（emo2 相当構造・実 fixture パースは統合 task 3.2 送り）----
@@ -163,6 +163,7 @@ mod tests {
             interval: Interval::Bind,
             patterns: vec![Pattern {
                 index: 0,
+                method: DrawMethod::new("overlay".to_string()),
                 surface_id: ref_surface_id,
                 wait: 0,
                 x: 0,

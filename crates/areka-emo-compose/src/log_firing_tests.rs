@@ -20,8 +20,8 @@ use areka_emo_atlas::{
     Placement, Point, Rect, SetId, Size, SurfaceSet, UseSelfAlpha, bake,
 };
 use areka_parsers::shell::{
-    Animation, AppendTarget, DefRef, Element, ElementPath, Interval, Pattern, Shell, Surface,
-    SurfaceAppend,
+    Animation, AppendTarget, DefRef, DrawMethod, Element, ElementPath, Interval, Pattern, Shell,
+    Surface, SurfaceAppend,
 };
 use std::path::Path;
 use std::sync::Arc;
@@ -63,6 +63,7 @@ fn bind_anim(id: u32, ref_surface_id: i64, x: i64, y: i64) -> Animation {
         interval: Interval::Bind,
         patterns: vec![Pattern {
             index: 0,
+            method: DrawMethod::new("overlay".to_string()),
             surface_id: ref_surface_id,
             wait: 0,
             x,
@@ -235,7 +236,7 @@ fn pattern0_less_bind_skip_fires_debug_and_no_warn_error() {
     let blink = Animation {
         id: 1400,
         interval: Interval::BindRandom { k: 4 },
-        patterns: vec![Pattern { index: 1, surface_id: 1412, wait: 0, x: 0, y: 0 }],
+        patterns: vec![Pattern { index: 1, method: DrawMethod::new("overlay".to_string()), surface_id: 1412, wait: 0, x: 0, y: 0 }],
     };
     let host = surface_with_anims(1000, Vec::new(), vec![blink]);
     let part = surface(1412, vec![elem(0, "closed.png", 0, 0)]);
