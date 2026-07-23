@@ -9,6 +9,8 @@
 //! - 発行層 [`DisplayCommand`]／[`SurfaceOutput`]／[`MockSurfaceOutput`]: emo への表示指令と発行先抽象。
 //! - アクター層 [`SerikoMsg`]／[`SerikoSink`]／[`spawn_seriko`]: 独立スレッド稼働・単一発行点。
 //! - 構築層 [`build_static_bindset`]: bindgroup default → 静的 `BindSet`（恒等写像）。
+//! - bind 解決層 [`BindResolver`]／[`BindNamespace`]／[`scope_namespace`]: `(カテゴリ, パーツ)`
+//!   → 着せ替え ID の名前解決と scope→名前空間写像を担う純関数群（parsers 非依存）。
 
 mod actor;
 mod bind;
@@ -17,7 +19,7 @@ mod resolve;
 mod state;
 
 pub use actor::{spawn_seriko, SerikoMsg, SerikoSink};
-pub use bind::build_static_bindset;
+pub use bind::{build_static_bindset, scope_namespace, BindNamespace, BindResolver};
 pub use output::{DisplayCommand, MockSurfaceOutput, SurfaceOutput};
 pub use resolve::{SurfaceResolver, SurfaceTarget};
 pub use state::{ApplyOutcome, ScopeState, ScopeStates};
