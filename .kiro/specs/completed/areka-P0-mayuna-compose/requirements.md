@@ -1,0 +1,142 @@
+# Requirements Document
+
+## Introduction
+
+emo2 のむらさきは表情を `\s[1000]`（本体サーフェス）と `\![bind,カテゴリ名,パーツ名,1/0]`（名前キーによる着せ替え bind の着衣/脱衣）連打で作る（実機観測: `\![bind,腕,伸び,1]` 等の6連）。しかし areka は現状この名前キー bind を表示へ反映せず捨てているため、スクリプトが表情を変えてもむらさきの見た目が変化しない（bind パーツが乗らず素の surface1000 のまま）。「着せ替えで表情が変わる」は emo2 の中核表現であり、この欠落は M-boot 実機サインオフの目視品質を損なう（実機欠陥 #2）。
+
+本仕様は、`\![bind,…]` を、着せ替えパーツの動的な着脱として、名前解決 → cue 配送 → seriko の動的 bind 状態積算 → 再合成表示まで決定論的に流す垂直スライスである。先行仕様 `areka-P0-sakura-dialogue-tags`（W1・着地済み）が確立した「`\!` コマンド名前空間を単一の汎用コマンド cue として不透明転写・配送する」基盤に乗るため、本仕様は cue 語彙の新設（dola の新 variant）やコンパイル写像アームの新設を行わず、**「`bind` コマンドを消費する側の結線と、名前解決基盤・動的 bind 状態の追加」**に縮小される。上流エンジン（areka-parsers／dola cue／sakura／seriko／emo-compose／emo-present）はいずれも完成済みで、本仕様は既存挙動を壊さない additive 増分のみを行う。完了時、実機でスクリプトの `\![bind]` が実際にむらさきの表情パーツを着脱し、着せ替えが目視で反映される。
+
+## Boundary Context
+
+- **In scope**:
+  - descript の `sakura.bindgroup*.name,カテゴリ名,パーツ名,…`（および `kero.bindgroup*.name,…`）宣言の取り込みと、(カテゴリ名, パーツ名) → 着せ替え ID の名前解決基盤（`MountModel` への増設・名前を不透明転写し ID へ解決）
+  - `\![bind,…]` コマンドを（W1 汎用コマンド cue キャリアに乗せて）表示系の消費側へ結線し、無音破棄・文字状態機械への誤配線を起こさないこと（コマンド名の意味付けは消費側の名前自己選別に限り、「1 コマンド名の担当消費者は高々 1」の台帳は結線層（app 層）で保持・検証する）
+  - 配送層（dola）のコマンド名語彙フリー化: 汎用コマンド cue はコマンド名・引数とも完全に不透明な荷物として運搬し、dola の名前写像 API（`command_target_of`）は本仕様で退役する（既存消費者 MoveCueSink は名前自己選別へ簡素化・コマンド追加が配送層の変更を要求しない構造の確立）
+  - seriko における per-scope 動的 bind 状態・on/off 積算・名前解決失敗の skip・変化時の新 `BindSet` を載せた表示（`Show`）再発行・冪等ガード
+  - emo-present の動的 `BindSet` 再表示による再合成（キャッシュミス→再合成）の additive 回帰テスト（本体無改変）
+  - 決定論的なエンドツーエンド観測（fixture スクリプト直入力・mock 表示 sink・sleep 不使用・注入 Tick のみ）
+  - 実 emo2・実 pasta.dll・実 DPI（≠96）による表情変化の人間サインオフ
+- **Out of scope**:
+  - 着せ替えの静的合成適用（有効 bind の pattern0 静的合成は `areka-P0-emo-compose` が完了済み・再定義しない）
+  - `\![bind]` 実行後の SHIORI イベント往復通知（`OnDressupChanged`／`OnNotifyDressupInfo`）およびイベント抑制形 `\![bind-noevent]` のイベント挙動（本仕様は表示変化のみを扱う表示専用スライス）
+  - 着せ替えメニュー UI・オーナードロー選択（本仕様は `\![bind]` のスクリプト発火のみ扱う・選択 UI は後続 M-dialogue/M2）
+  - SERIKO アニメーションループ（まばたき等・`areka-P0-seriko-loop`／M-life）
+  - 二人立ち相方（kero）側 bind の本格結線（M-dual・本仕様は名前宣言の取り込みまでで実挙動はシームのみ）
+  - テキスト再生 duration（`areka-P0-cue-playback-duration`・着地済み）／実行時 resize（`areka-P0-surface-resize-resnap`）
+- **Adjacent expectations**:
+  - `\![bind,…]` の引数意味論（数値 1=着衣・0=脱衣・数値欄空欄/省略=ON/OFF トグル・パーツ名空欄=カテゴリ単位動作）と descript の bindgroup 系キー（`name`／`default`／`addid` 等）の全容は ukadoc を正典として設計フェーズ冒頭で確定する。emo2 fixture（むらさきの `sakura.bindgroupN.name` 実宣言・明示 on/off・パーツ名指定）は最小適合サンプルであり典拠にしない。本仕様は M1 で emo2 が実使用する形（名前キー＋明示 on/off）を実導出し、その他の正典形（トグル・カテゴリ単位・`addid`／`mustselect`・kero 側実挙動）は語彙・構造を第一級に保持しつつ非アクティブに縮退させ差替シームを残す。
+  - スクリプトの `\![bind]` は正典上**名前キー形一本**である（2026-07-19 正典裏取り確定: ukadoc のスクリプト形は `\![bind,カテゴリ名,パーツ名,数値]` のみで、着せ替え ID を数値で直接指定するスクリプト形は存在しない。descript `menuitem*` の番号はオーナードローメニューの構成であってスクリプト形ではない）。数値に見えるカテゴリ名/パーツ名が与えられた場合も不透明文字列として通常の名前解決に回り、宣言がなければ解決不能経路（Requirement 3 の解決失敗 skip）が自然に受け止める。
+  - bind の面引数（カテゴリ名・パーツ名・on/off）はパース/転写段階では不透明文字列として忠実転写し、着せ替え ID への解決は seriko（消費側）の下流責務とする（`\s`／`\b` の面引数と対称）。
+  - 動的 `BindSet` の再表示が既存の再合成経路（`ComposeCache`・まばたき前例）を正しく駆動することを前提とし、本仕様は新しい合成メソッドを追加しない（emo-compose の純合成をそのまま消費する）。
+
+## Requirements
+
+### Requirement 1: 着せ替え名前宣言の取り込みと名前キー解決
+
+**Objective:** ゴースト作者として、descript に宣言した着せ替えの名前（カテゴリ名・パーツ名）が取り込まれ、スクリプトの名前キーが正しい着せ替え対象へ解決されることを求める。これにより、名前キー `\![bind,腕,伸び,1]` が実サーフェスの着せ替えパーツへ結び付く起点が確立する。
+
+#### Acceptance Criteria
+
+1. When ゴーストの descript が `sakura.bindgroup*.name,カテゴリ名,パーツ名,…`（本体側）を宣言しているとき、the マウントモデル shall 当該着せ替えのカテゴリ名・パーツ名を対応する着せ替え ID（アニメーション ID）へ結び付けた名前解決情報として取り込む。
+2. When descript が `kero.bindgroup*.name,…`（相方側）を宣言しているとき、the マウントモデル shall 相方側の名前解決情報として本体側と区別して取り込む。
+3. When (カテゴリ名, パーツ名) の組が問い合わされるとき、the マウントモデル shall 宣言済みの名前に対応する着せ替え ID を返し、パーツ名が空欄の場合は当該カテゴリに属する着せ替えの集合として扱える形で解決情報を提供する。
+4. If 問い合わされた (カテゴリ名, パーツ名) が descript に宣言されていないとき、then the マウントモデル shall 着せ替え ID を捏造せず「解決不能」を呼び出し側が判別できる形で返す。
+5. The マウントモデル shall カテゴリ名・パーツ名を不透明な文字列として忠実に保持し、宣言されていない着せ替え ID を新たに生成しない。
+6. The マウントモデル shall 名前解決情報の追加によって、既存のマウント結果（既存キーの解決）を変更してはならない（additive 増分）。
+
+### Requirement 2: `\![bind]` コマンドの表示系への配送と消費者結線
+
+**Objective:** ゴースト作者として、記述した `\![bind,…]` がコンパイル/配送で無音破棄されず、文字状態機械ではなく着せ替え（サーフェス表示）を司る消費側へ届くことを求める。これにより、bind コマンドが正しい宛先へ到達する。
+
+#### Acceptance Criteria
+
+1. When さくらスクリプトが `\![bind,…]` を含むとき、the cue 配送層 shall 当該コマンドを（コマンド名 `bind` と生引数列を不透明に保持した汎用コマンド cue として）破棄せず消費側へ届ける。
+2. The システム shall コマンド名 `bind` の消費者を、着せ替え状態を司る表示系（seriko）に限って結線し、「1 コマンド名の担当消費者は高々 1」の台帳を結線層（app 層）で保持・検証する（同一コマンド名を複数消費者へ多重結線しない）。
+3. The 文字状態機械（emo-text）shall コマンド名 `bind` の cue を文字として解釈せず、良性にスキップする（着せ替え表示への誤配線を起こさない）。
+4. The システム shall `bind` コマンドの消費者結線の追加によって、既存の他コマンド名（例 `move`）の配送・解釈・表示挙動を変更してはならない（ログ severity を「自分宛の破損のみ warn・担当外は debug」の統一規律へ整理することに伴うログ水準の変更のみ許す・additive 増分）。
+5. If 消費者が登記されていないコマンド名の cue が配送されるとき、then the システム shall 当該 cue を致命扱いせず全消費者が良性にスキップする（未知コマンド名は将来コマンドの正常系＝非退行）。
+6. The 配送層（dola）shall コマンド名を解釈・写像する語彙を保持しない（汎用コマンド cue の名前・引数を不透明に運搬し、名前写像 API を公開しない。コマンド名の追加が配送層の変更を要求してはならない）。
+
+### Requirement 3: seriko による動的 bind 状態と表示の再発行
+
+**Objective:** システムとして、`\![bind]` コマンド cue を消費して per-scope の着せ替え状態を動的に更新し、変化時に新しい着せ替え集合を載せた表示指令を発行することを求める。これにより、`\![bind]` が観測可能な表示変化へ到達する。
+
+#### Acceptance Criteria
+
+1. While ゴースト起動直後の状態であるとき、the seriko エンジン shall descript の既定 on/off（`bindgroup*.default`）を初期値とした per-scope の動的着せ替え状態を保持する。
+2. When 面引数が着衣（数値 1）の `\![bind,カテゴリ名,パーツ名,…]` コマンド cue を消費するとき、the seriko エンジン shall (カテゴリ名, パーツ名) を着せ替え ID へ解決したうえで当該着せ替えを有効化した新しい着せ替え集合を求める。
+3. When 面引数が脱衣（数値 0）の `\![bind,…]` コマンド cue を消費するとき、the seriko エンジン shall 当該着せ替えを無効化した新しい着せ替え集合を求める。
+4. When 複数の `\![bind,…]` コマンド cue を順に消費するとき、the seriko エンジン shall 各 on/off を per-scope 状態へ積算し、直前までの着せ替え状態を保持したまま更新する。
+5. When 着せ替え状態が更新され結果の着せ替え集合が直前と異なるとき、the seriko エンジン shall 当該スコープに対し新しい着せ替え集合を載せた表示（`Show`）指令を発行する。
+6. While 消費の結果の着せ替え集合が直前と同一であるとき、the seriko エンジン shall 冗長な表示指令を再発行しない（per-scope 冪等ガード）。
+7. If `\![bind,…]` の (カテゴリ名, パーツ名) が着せ替え ID へ解決できないとき、then the seriko エンジン shall 当該事象をログとして記録し、着せ替え状態を変更せず表示指令を発行してはならない（シェル面切替の経路を巻き込まない）。
+8. The seriko エンジン shall 動的着せ替え状態と表示再発行の追加によって、既存のシェル面切替（`\s`）の状態管理・配送挙動を変更してはならない。
+
+### Requirement 4: bind 引数意味論の M1 取り扱いと縮退境界
+
+**Objective:** 保守者として、`\![bind]` の正典引数形のうち emo2 が実使用する形を実導出し、残る形は語彙を保持したまま安全に縮退させる境界を求める。これにより、正典機能を第一級に保ちつつ M1 の実装範囲を明確化する。
+
+#### Acceptance Criteria
+
+1. The システム shall 名前キー形 `\![bind,カテゴリ名,パーツ名,1|0]`（明示 on/off・パーツ名指定）を M1 の実導出対象として着せ替えへ反映する（スクリプト形は正典上名前キー形一本であり、番号直指定のスクリプト形は存在しない）。
+2. Where 数値欄が空欄/省略のトグル形、またはパーツ名空欄のカテゴリ単位形が与えられるとき、the システム shall 当該引数を不透明に保持しつつ、M1 で未実導出の挙動を致命扱いせず安全に縮退（ログ記録のうえ skip、または将来差替シームとして保持）させる。
+3. The システム shall `addid`（同時実行）・kero 側 bind の実挙動を M1 では実導出せず、descript 上の語彙・構造を第一級に保持して将来の差替シームのみを残す。
+4. The システム shall `\![bind]` 実行後の SHIORI イベント通知（`OnDressupChanged`／`OnNotifyDressupInfo`）およびイベント抑制形 `\![bind-noevent]` のイベント挙動を本仕様では扱わない（表示変化のみを対象とする）。
+5. When `char*.bindoption*.group,カテゴリ名,mustselect`（排他選択）が宣言されたカテゴリで着衣（数値 1）の `\![bind,…]` を消費するとき、the システム shall 当該カテゴリに属する他の有効な着せ替えを自動的に無効化したうえで指定パーツを有効化する（同カテゴリ内は高々 1 パーツ有効・SSP 正典の排他選択挙動）。（2026-07-23 実機サインオフ改定: 当初 M1 では `mustselect` を実導出せず語彙保持のみとする方針だったが、実 emo2 pasta が mustselect カテゴリ（腕・口・眉・目）で off を送らず on のみ連打しベースウェアの排他選択に依存することが実機で判明し、本仕様の中核目的「着せ替えで表情が変わる」の成立に mustselect 実挙動が必須と確定したため実導出へ昇格した。`multiple`（非排他・紅など）カテゴリはスクリプトの明示 on/off で従来どおり成立する。）
+
+### Requirement 5: 決定論的なエンドツーエンド観測とテスト網羅
+
+**Objective:** 開発者として、fixture スクリプト直入力から着せ替え状態の積算・表示再発行までを決定論的に観測できることを求める。これにより、着せ替えパイプラインが回帰檻で保護される。
+
+#### Acceptance Criteria
+
+1. When `\![bind,腕,伸び,1]`／`\![bind,腕,伸び,0]` の on/off 列を含む fixture スクリプトを直接入力するとき、the システム shall mock 表示 sink 上で per-scope 着せ替え状態の積算と新しい着せ替え集合を載せた表示指令の再発行を観測可能にする。
+2. When 名前解決不能な bind コマンドを含む fixture スクリプトを直接入力するとき、the システム shall 表示指令を発行せずログ事象として観測可能にする。
+3. The システム shall 上記の観測を sleep を用いず、注入した Tick のみで決定論的に成立させる。
+4. The システム shall 各増分点（名前解決・cue 消費者結線・seriko 状態積算・表示発行・解決失敗経路）の入力依存の判断分岐を実行テストで網羅し、名前解決と on/off 積算を純関数として GPU 不要で全網羅する。
+5. The システム shall 本仕様の検証に必要な着せ替え fixture（宣言済み bindgroup 名を持つ最小ゴースト等）を test-local に自前で用意する。
+
+### Requirement 6: emo-present 再合成回帰の保証
+
+**Objective:** 開発者として、着せ替え集合の変化に伴う再表示が既存の再合成経路を正しく駆動し、再合成後の表示が更新されることを回帰テストで固定することを求める。これにより、動的着せ替えの消費が安全な土台の上に立つ。
+
+#### Acceptance Criteria
+
+1. When 直前と異なる着せ替え集合を載せた表示（`Show`）を発行するとき、the emo-present shall 既存の合成キャッシュをミスさせて再合成し、更新後のサーフェスを提示する。
+2. When 同一の着せ替え集合で表示を再発行するとき、the emo-present shall 既存の合成キャッシュから再合成なしで復帰する（既存キャッシュ挙動の維持）。
+3. The emo-present crate 本体 shall 本回帰の追加によって改変されない（test-only の additive 追加にとどめる）。
+
+### Requirement 7: 実機による表情変化の人間サインオフ
+
+**Objective:** 開発者として、実ゴースト・実描画環境でスクリプトの着せ替えが実際にむらさきの表情を変えることを人間の目視で確認できることを求める。これにより、実機欠陥 #2（着せ替えで表情変化せず）が解消されたことを保証する。
+
+#### Acceptance Criteria
+
+1. When 実 emo2・実 pasta.dll・実 DPI（≠96）でゴーストを起動しスクリプトの `\![bind,…]` が発火するとき、the システム shall むらさきの表情パーツを実際に着脱し、着せ替えが目視で反映される状態を提示する。
+2. The システム shall 実機サインオフを本番ゴースト表示を先行させたうえで行い、単発デモへの合わせ込みを判定根拠にしない。
+3. Where 実機起動を行うとき、the システム shall pasta.dll を `LoadLibrary` 可能にするため絶対パスで起動する。
+
+### Requirement 8: 既存資産の非退行（additive 制約）
+
+**Objective:** 保守者として、完成済み上流エンジンへの本増分が既存の全テスト緑・依存方針・ビルド制約を崩さないことを求める。これにより、additive 原則が担保される。
+
+#### Acceptance Criteria
+
+1. The システム shall 本増分の適用後も `cargo test --workspace` を exit 0 で成功させ、既存テストをすべて緑に保つ。
+2. The システム shall 新規の外部（crates.io）依存を追加しない。
+3. The システム shall Rust 2024 で構築し、tokio を導入しない。
+4. The システム shall 既存の cue コマンド語彙のワイヤ形・既存 variant を変更しない（新しい cue variant を新設せず W1 の汎用コマンドキャリアに乗る）。dola 名前写像 API `command_target_of` の退役（Requirement 2 の配送層語彙フリー化）は本仕様の明示スコープであり、ワイヤ形（serde 形）と既存 cue の配送タイミングには影響させない。
+
+### Requirement 9: pattern0 を持たない bind アニメーションの静的合成非寄与（2026-07-23 実機サインオフ第2欠陥改定）
+
+**Objective:** 保守者として、有効 bind の静的合成が `pattern0`（index==0）のみを土台に採り、pattern0 を持たないアニメーション（まばたき等の再生専用フレーム）を土台へ誤って合成しないことを求める。これにより、実 pasta が bind するまばたき（`interval,bind+random`）の閉じ目フレームがベース立ち絵の目を覆う「常時閉じ目」欠陥を根治し、正典（pattern0＝静的土台・pattern1 以降＝seriko-loop 再生フレーム）へ忠実化する。
+
+（経緯: 2026-07-23 実機サインオフ第2欠陥。emo2 のまばたき animation 1400（`bind+random`・pattern1..3）・1403（`bind`・pattern2）は pattern0 を持たず、emo-compose `flatten_surface` の `patterns.iter().min_by_key(|p| p.index)` が最小 index の閉じ目フレーム（surface 1412/1414）を静的土台として拾っていた。実 pasta は `\![bind,まばたき,…,1]` を on 連打するため BindSet に常駐し、目が常時閉じる。設計は「まばたきは default OFF のまま触れない」と仮定していたが実機で反証された。瞬き再生自体は seriko-loop（M-life）の領分のまま。）
+
+#### Acceptance Criteria
+
+1. If 有効 bind の animation が `pattern0`（index==0 の pattern）を持たないとき、then the 静的合成 shall 当該 animation を静的合成へ寄与させず良性に skip する（pattern1 以降の再生用フレームを土台に採らない）。
+2. The 静的合成 shall `pattern0` を持つ bind animation については従来どおり `pattern0` のみを合成し、疎 index の最小値（pattern1 以降）へフォールバックしない。
+3. When 上記の skip が発生するとき、the システム shall 良性ログ（debug 水準）として記録し panic しない（既存のセンチネル skip と同水準の寛容経路）。
+4. The キャンバス外形算出（bind オン/オフ・pattern0 有無でサイズ不変の既存契約）shall 本改定によって変更されない（外形は全 bind animation の pattern 母集合から算出したまま）。
+5. The emo2 実 fixture の surface 合成 shall まばたき bind（1400 系）を含む `BindSet` と含まない `BindSet` で同一の描画命令列を生む（まばたき bind が静的に不活性であることの回帰檻・「常時閉じ目」再発防止）。

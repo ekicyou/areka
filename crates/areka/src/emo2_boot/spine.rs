@@ -42,7 +42,7 @@ use areka_ghost::{boot, GhostBootOptions, GhostRuntime, ShioriWiring, TickerMode
 use areka_kanade::{CloseReason, MonotonicMs, ShioriBackend};
 use areka_parsers::charset::DefaultEncoding;
 use areka_sakura::ActorKey;
-use areka_seriko::{spawn_seriko, SurfaceResolver};
+use areka_seriko::{spawn_seriko, BindResolver, SurfaceResolver};
 use bevy_ecs::entity::Entity;
 use bevy_ecs::world::World;
 use shiori_host32_host::{ExitKind, HelperStatus, RequestError, ShutdownError};
@@ -440,14 +440,26 @@ impl SpineHarness {
         //    （attach は resolver を読まない・Task 4.1 申し送り・wire_emo2_boot 手順4 と同型）。 ──
         let (tx, rx) = mpsc::channel::<PresentCommand>();
         let bridge = PresentBridge::new(tx);
-        let BootAssets { shells, balloons, balloon_model, resolver, static_binds } = assets;
-        let (surface_sink, seriko) = spawn_seriko(resolver, static_binds.clone(), bridge);
+        let BootAssets {
+            shells,
+            balloons,
+            balloon_model,
+            resolver,
+            static_binds,
+            bind_resolver,
+        } = assets;
+        // 実名前解決表（BootAssets.bind_resolver・task 7.1 が emo2 fixture の MountModel から構築）を
+        // seriko の起動へ値渡しで配線する（production wire_emo2_boot と同型・task 7.2）。
+        let (surface_sink, seriko) =
+            spawn_seriko(resolver, static_binds.clone(), bind_resolver, bridge);
         let wiring_assets = BootAssets {
             shells,
             balloons,
             balloon_model,
             resolver: SurfaceResolver::new(BTreeMap::new()),
             static_binds,
+            // 実 bind_resolver は seriko が値消費済み（attach は bind_resolver を読まない）ため空表プレースホルダ。
+            bind_resolver: BindResolver::empty(),
         };
 
         // ── move channel＋実 MoveCueSink（wire_emo2_boot 手順4 と同型・S-3 形＝task 9.3） ──

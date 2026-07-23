@@ -303,14 +303,16 @@ fn flatten_surface(
             let Some(anim) = master.animations.iter().find(|a| a.id == id) else {
                 continue;
             };
-            // pattern0＝index 昇順の先頭 pattern（疎 index 許容ゆえ最小 index を pattern0 とする）。
-            let Some(pattern0) = anim.patterns.iter().min_by_key(|p| p.index) else {
-                // pattern を持たない bind animation は積むべき層がない（非パニック・skip）。
-                tracing::trace!(
+            // pattern0＝厳密に index==0 の pattern のみ（要件 9.2・D12）。疎 index の最小値へフォールバック
+            // しない: pattern0 を持たない bind animation（まばたき等の `interval,bind+random` 再生アニメ・
+            // pattern1 以降のみ）は静的土台を持たず、それらのフレームは seriko-loop（M-life）が再生する
+            // （要件 9.1）。ここで pattern1 を土台に採ると閉じ目フレームがベース目を覆う（実機第2欠陥）。
+            let Some(pattern0) = anim.patterns.iter().find(|p| p.index == 0) else {
+                tracing::debug!(
                     target: "areka_emo_compose",
                     surface_id,
                     animation_id = id,
-                    "有効 bind に pattern が無い: skip"
+                    "有効 bind に pattern0（index==0）が無い: 静的合成へ寄与なし・skip（再生は seriko-loop 領分・要件 9.1）"
                 );
                 continue;
             };
@@ -1770,5 +1772,96 @@ mod tests {
         let e2 = build_plan(&mut ops2, &mut Vec::new(), &world, &atlas, 5000, &binds).expect("Ok");
         assert_eq!(ops, ops2, "同一入力→同一 ops（バイト等価）");
         assert_eq!(e1, e2, "同一入力→同一 Extent");
+    }
+
+    // ── task 11.2: 静的合成の pattern0＝厳密 index==0 選択（実機第2欠陥・要件 9.1/9.2/9.5）──────
+    //
+    // 実機サインオフ#2: むらさきの目が常時閉じている。真因＝`flatten_surface` の pattern 選択が
+    // 最小 index フォールバック（min_by_key）だったため、pattern0 を持たない まばたき animation
+    // （emo2 1400=`interval,bind+random`・pattern1/2/3、1403=`interval,bind`・pattern2）の閉じ目
+    // フレーム（surface 1412/1414）が静的土台へ積まれ、ベースの目（1302）を覆っていた。canon では
+    // pattern0（index==0）を持たない bind animation は seriko-loop（M-life）が再生する再生専用
+    // フレームで、静的土台には寄与しない。修正＝index==0 厳密選択・不在は良性 skip（DEBUG）。
+
+    /// bind animation を「指定 index の pattern 1 本だけ」で組む（pattern0=index0 の有無を制御する）。
+    ///
+    /// `bind_anim` は index=0 と index=5 を持つが、本ヘルパは **単一 index** の pattern のみを載せる。
+    /// index を 1 以上にすれば「pattern0（index==0）を持たない再生アニメ」（まばたき相当）を作れる。
+    fn single_pattern_anim(id: u32, interval: Interval, index: u32, ref_surface_id: i64) -> Animation {
+        Animation {
+            id,
+            interval,
+            patterns: vec![Pattern {
+                index,
+                surface_id: ref_surface_id,
+                wait: 0,
+                x: 0,
+                y: 0,
+            }],
+        }
+    }
+
+    /// テスト11.2-①（**RED 核**・受入基準・要件 9.1/9.2）: pattern0（index==0）を持たない有効 bind は
+    /// 静的合成へ**一切寄与しない**（生成描画命令に現れない）。
+    ///
+    /// bind id=1400 は pattern0 を持たず index=1 のみ（surface 1412＝閉じ目相当を参照）。旧実装
+    /// （`min_by_key(index)`）は index=1 を pattern0 として採り surface 1412 を合成する→この assert が
+    /// 破れる（RED）。修正後（`find(index==0)`）は index==0 不在ゆえ skip され、命令ゼロになる（GREEN）。
+    #[test]
+    fn pattern0_less_bind_contributes_no_ops() {
+        let base = Path::new("shell/master");
+        let atlas = bake_atlas(base, &["closed_eye.png"]);
+        let map = id_to_path(&atlas, &["closed_eye.png"]);
+
+        // pattern0 なし・index=1 のみが surface 1412（閉じ目相当）を参照する再生アニメ。
+        let blink = single_pattern_anim(1400, Interval::BindRandom { k: 4 }, 1, 1412);
+        let host = surface_with_anims(1000, Vec::new(), vec![blink]);
+        let part = surface(1412, vec![elem(0, "closed_eye.png", 0, 0)]);
+        let shell = shell_of(vec![host, part]);
+        let mut world = EmoWorld::build(&shell);
+        world.bind_atlas(&atlas, SetId(0));
+
+        let binds = BindSet::from_ids([1400]);
+        let mut ops = Vec::new();
+        derive_ops(&mut ops, &mut Vec::new(), &world, &atlas, 1000, &binds);
+
+        // pattern0 を持たない有効 bind は静的合成へ寄与しない＝closed_eye.png 命令が現れない。
+        assert!(
+            ops_to_paths(&ops, &map).is_empty(),
+            "pattern0（index==0）なし bind は描画命令に現れない（旧 min_by_key は pattern1 を合成し RED）"
+        );
+        assert!(ops.is_empty(), "静的 element も無いので命令ゼロ");
+    }
+
+    /// テスト11.2-②（要件 9.2）: index==0 と index==1 が共存 → **index==0（pattern0）のみ**合成し、
+    /// index==1 フレームは静的合成に現れない（index==0 厳密選択の固定）。
+    #[test]
+    fn coexisting_pattern0_and_pattern1_composes_only_index0() {
+        let base = Path::new("shell/master");
+        let atlas = bake_atlas(base, &["open_eye.png", "closed_eye.png"]);
+        let map = id_to_path(&atlas, &["open_eye.png", "closed_eye.png"]);
+
+        // bind id=1: pattern0(index0)→open(surface 1100)、pattern1(index1)→closed(surface 1200)。
+        let anim = Animation {
+            id: 1,
+            interval: Interval::Bind,
+            patterns: vec![
+                Pattern { index: 0, surface_id: 1100, wait: 0, x: 0, y: 0 },
+                Pattern { index: 1, surface_id: 1200, wait: 0, x: 0, y: 0 },
+            ],
+        };
+        let host = surface_with_anims(1000, Vec::new(), vec![anim]);
+        let open = surface(1100, vec![elem(0, "open_eye.png", 0, 0)]);
+        let closed = surface(1200, vec![elem(0, "closed_eye.png", 0, 0)]);
+        let shell = shell_of(vec![host, open, closed]);
+        let mut world = EmoWorld::build(&shell);
+        world.bind_atlas(&atlas, SetId(0));
+
+        let binds = BindSet::from_ids([1]);
+        let mut ops = Vec::new();
+        derive_ops(&mut ops, &mut Vec::new(), &world, &atlas, 1000, &binds);
+
+        // index==0（open_eye）のみ合成。index==1（closed_eye）は静的合成に現れない。
+        assert_eq!(ops_to_paths(&ops, &map), vec!["open_eye.png"]);
     }
 }

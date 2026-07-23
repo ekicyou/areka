@@ -2209,19 +2209,20 @@ mod tests {
     ///  - **R8.2（compile 卒業）**: 未知名 `\!` は compile の無音落ちでなく汎用コマンド cue（`Custom`
     ///    キャリア）として**台本に第一級で載る**。ゆえに broadcast された各記録 sink の配送列に
     ///    キャリア cue が現れる（2 名とも `raise`／`vanish` を受ける＝配送で消えない）。
-    ///  - **R8.5/R5（良性スキップ）**: どの消費者も未知名キャリアに action しない——`command_target_of`
-    ///    が未知名に対し `None`（担当消費者なし）を返す。記録 sink は全 cue を**記録**する（無音破棄でも
-    ///    異常終了でもない・honor は不変）。**複数** sink が同一列を受けて talk が完走することがその証跡。
-    ///  - **R9.3b（第一級縮退）＋partition**: 未知名は名前権威表 `command_target_of` 上で `None`＝どの
-    ///    消費者の担当でもなく、Some を返すのは M1 の `"move"` のみ（1 コマンド名の担当は高々 1）。
-    ///    partition 不変条件の網羅檻は dola `sink_test.rs::command_target_of_maps_move_and_rejects_unknown_names`
-    ///    （task 1.4）が正本であり、本檻は統合経路上でその帰結（未知名→None・move→Some）を焦点確認する。
+    ///  - **R8.5/R5（良性スキップ）**: どの消費者も未知名キャリアに action しない——消費者は
+    ///    自らのコマンド名リテラルで**名前自己選別**するため、未知名はどの消費者の名前にも一致しない。
+    ///    記録 sink は全 cue を**記録**する（無音破棄でも異常終了でもない・honor は不変）。**複数** sink が
+    ///    同一列を受けて talk が完走することがその証跡。
+    ///  - **R9.3b/R2.6（第一級縮退＋語彙フリー）**: dola はコマンド名の語彙も名前写像 API も持たず、
+    ///    キャリアの型レベル分類は `cue_target_of(Custom)=None` に一様に落ちる＝
+    ///    「型レベルでは担当未定＝消費側が名前で自己選別する」。「1 名前=高々 1 消費者」の一意性は
+    ///    結線層（areka）の消費者台帳が保証する（dola の名前権威表ではない）。本檻は統合経路上で
+    ///    その帰結（未知名キャリアが第一級で配送され、型レベルでは担当未定＝自己選別へ委譲される）を確認する。
     ///
     /// 弁別: もし compile が未知名を無音落ちさせるなら配送列にキャリアが現れず等価 assert が FAIL する。
-    /// もし未知名が誰かの担当（Some）へ誤配線されるなら `command_target_of` の None assert が FAIL する。
     #[test]
     fn unknown_command_names_broadcast_and_benign_skip_then_talk_completes() {
-        use dola::cue::{CueTarget, command_target_of};
+        use dola::cue::cue_target_of;
 
         let (done_tx, done_rx) = mpsc::channel::<TalkDone>();
         let talk_id = TalkId(103);
@@ -2286,9 +2287,11 @@ mod tests {
             "sink B: broadcast ゆえ両 sink が同一配送列を受ける（未知名キャリアも欠落しない）"
         );
 
-        // R8.5/R9.3b（良性スキップ＋担当なし）: 配送列中の各未知名キャリアについて、名前権威表
-        // `command_target_of` が **None（担当消費者なし）** を返す＝どの消費者も action しない良性スキップ。
-        // キャリア variant からのコマンド名抽出（`as_command_carrier`）を通し、抽出できた名前で判定する。
+        // R8.5/R9.3b（良性スキップ＋自己選別への委譲）: 配送列中の各未知名キャリアについて、
+        // 型レベル分類 `cue_target_of(Custom)=None`＝「型レベルでは担当未定＝消費側が名前で自己選別
+        // する」へ一様に落ちる（dola はコマンド名の語彙を持たない・R2.6）。未知名はどの消費者の
+        // 名前リテラルにも一致しないため、どの消費者も action しない良性スキップとなる。
+        // キャリア variant からのコマンド名抽出（`as_command_carrier`）を通し、抽出できた名前で確認する。
         let carrier_names: Vec<String> = commands(&records_a)
             .iter()
             .filter_map(|cmd| cmd.as_command_carrier().map(|(name, _)| name.to_string()))
@@ -2298,21 +2301,23 @@ mod tests {
             vec!["raise".to_string(), "vanish".to_string()],
             "配送列から未知名キャリア 2 件（raise/vanish）が抽出される"
         );
-        for name in &carrier_names {
-            assert_eq!(
-                command_target_of(name),
-                None,
-                "未知名 {name:?} はどの消費者の担当でもない（None＝記録付き良性スキップ・R8.5/R9.3b）"
-            );
+        for cmd in commands(&records_a).iter() {
+            if cmd.as_command_carrier().is_some() {
+                assert_eq!(
+                    cue_target_of(cmd),
+                    None,
+                    "キャリア cue の型レベル分類は一様に None＝消費側の名前自己選別へ委譲（R8.5/R9.3b・dola は名前語彙を持たない）"
+                );
+            }
         }
 
-        // partition 不変条件（R9.3b）の統合経路上の焦点確認: 名前権威表で Some を返すのは M1 の
-        // `"move"` のみ（1 コマンド名の担当は高々 1）。網羅檻は dola task 1.4 の
-        // `command_target_of_maps_move_and_rejects_unknown_names` が正本（本檻は重複せず帰結のみ確認）。
+        // 自己選別モデル（R2.6）の統合経路上の焦点確認: dola はコマンド名で分岐しない——`move`
+        // キャリアであっても型レベル分類は None（dola は名前写像 API を持たず、名前→担当の
+        // 中央権威表は無い）。「1 名前=高々 1 消費者」の一意性は結線層（areka）の消費者台帳が保証する。
         assert_eq!(
-            command_target_of("move"),
-            Some(CueTarget::Window),
-            "M1 の権威表で担当を持つ名は \"move\" のみ（partition 網羅は dola task 1.4 が正本）"
+            cue_target_of(&CueCommand::command_carrier("move", vec![])),
+            None,
+            "move キャリアでも型レベル分類は None（dola は名前語彙を持たず消費側が自己選別する）"
         );
     }
 }

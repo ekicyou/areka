@@ -217,6 +217,62 @@ fn extent_cycle_warn_fires_with_surface_id() {
     );
 }
 
+// ── 11.2: pattern0（index==0）なし bind の良性 skip DEBUG（ops 経路・flatten_surface）──────
+
+/// 要件 9.1/9.3: pattern0（index==0）を持たない有効 bind は **DEBUG**（surface_id＋animation_id つき）を
+/// 出して skip する（非パニック・WARN/ERROR は出さない）。まばたき等 `interval,bind+random` 再生
+/// アニメの静的不活性（実機第2欠陥の是正・task 11.2）。
+///
+/// bind id=1400 は pattern0 を持たず index=1 のみ（surface 1412＝閉じ目相当）。build_plan（→derive_ops
+/// →flatten_surface）は index==0 不在ゆえ命令を積まず DEBUG を出す。extent 経路（flatten_extent・:529）は
+/// サイズ不変契約のため全 bind pattern（min_by_key）を辿るが DEBUG は出さない＝DEBUG は 1 本だけ。
+#[test]
+fn pattern0_less_bind_skip_fires_debug_and_no_warn_error() {
+    let base = Path::new("shell/master");
+    let atlas = bake_atlas(base, &["closed.png"]);
+
+    // pattern0 なし・index=1 のみが surface 1412 を参照する再生アニメ（まばたき相当）。
+    let blink = Animation {
+        id: 1400,
+        interval: Interval::BindRandom { k: 4 },
+        patterns: vec![Pattern { index: 1, surface_id: 1412, wait: 0, x: 0, y: 0 }],
+    };
+    let host = surface_with_anims(1000, Vec::new(), vec![blink]);
+    let part = surface(1412, vec![elem(0, "closed.png", 0, 0)]);
+    let mut world = EmoWorld::build(&shell_of(vec![host, part]));
+    world.bind_atlas(&atlas, SetId(0));
+
+    let binds = BindSet::from_ids([1400]);
+    let mut ops = Vec::new();
+    let mut visited = Vec::new();
+    let logs = capture_logs(|| {
+        build_plan(&mut ops, &mut visited, &world, &atlas, 1000, &binds)
+            .expect("pattern0 なし bind でも surface1000 存在＋外形非ゼロで Ok（要件 6.6）");
+    });
+
+    // 副作用: pattern0 なし bind は静的合成へ寄与しない＝描画命令ゼロ（要件 9.1）。
+    assert!(ops.is_empty(), "pattern0（index==0）なし bind は描画命令に現れない（要件 9.1）");
+
+    // DEBUG skip ログを level＋target＋discriminating field（surface_id/animation_id）で突く
+    // （この DEBUG 行を消せば必ず落ちる＝非空虚）。
+    let skip_line = logs.lines().find(|l| {
+        l.contains("level=DEBUG")
+            && l.contains("target=areka_emo_compose")
+            && l.contains("surface_id=1000")
+            && l.contains("animation_id=1400")
+    });
+    assert!(
+        skip_line.is_some(),
+        "pattern0 なし skip の DEBUG（surface_id＋animation_id つき）が発火する: {logs}",
+    );
+    // DEBUG は厳密に 1 本（ops 経路の skip のみ・extent 経路は DEBUG を出さない）。
+    let debug_count = logs.lines().filter(|l| l.contains("level=DEBUG")).count();
+    assert_eq!(debug_count, 1, "pattern0 なし skip の DEBUG は 1 本のみ: {logs}");
+    // 良性 skip ゆえ WARN/ERROR は出さない（要件 9.3）。
+    assert!(!logs.contains("level=WARN"), "良性 skip は WARN を出さない: {logs}");
+    assert!(!logs.contains("level=ERROR"), "良性 skip は ERROR を出さない: {logs}");
+}
+
 // ── 8.4: 未実装メソッド warn（blit.rs execute）────────────────────────────────────────
 
 /// premultiplied BGRA 1 画素頁を組む。

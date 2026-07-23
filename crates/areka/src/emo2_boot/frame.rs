@@ -353,6 +353,8 @@ pub fn run_attach_phase(wiring: &mut Emo2Wiring, world: &mut World) {
         // 焼き付けなくなったため。起動時オンの bindgroup default は seriko が保持し（spawn_seriko へ
         // 手渡し済み）、最初の `\s` cue が駆動する Show{shell,id,binds=static_binds} に載って表示層へ届く。
         static_binds: _,
+        // bind_resolver は attach では未使用（seriko の actor へは task 7.2 が手渡す）。
+        bind_resolver: _,
     } = assets;
     let mut shells: Vec<_> = shells.into_iter().map(Some).collect();
     let mut balloons: Vec<_> = balloons.into_iter().map(Some).collect();
@@ -739,7 +741,7 @@ mod tests {
     use areka_emo_atlas::AtlasTable;
     use areka_emo_compose::{BindSet, EmoWorld};
     use areka_emo_text::state::TextLayerConfig;
-    use areka_seriko::SurfaceResolver;
+    use areka_seriko::{BindResolver, SurfaceResolver};
     use tracing::field::{Field, Visit};
     use tracing_subscriber::prelude::*;
 
@@ -787,6 +789,8 @@ mod tests {
             balloon_model: areka_parsers::balloon::parse_str("", None),
             resolver: SurfaceResolver::new(BTreeMap::new()),
             static_binds: BindSet::default(),
+            // plan_attachments は bind_resolver を読まない（headless 純合成）＝空表で十分。
+            bind_resolver: BindResolver::empty(),
         }
     }
 

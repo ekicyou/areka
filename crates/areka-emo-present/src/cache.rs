@@ -287,6 +287,84 @@ mod tests {
         );
     }
 
+    /// R6.1: 動的 Show 再発行で **直前と異なる着せ替え集合**を載せると、合成キャッシュがミスし
+    /// 再合成が走る（mayuna 動的 bind 文脈の回帰檻）。
+    ///
+    /// seriko が per-scope の着せ替え状態を積み替えて新 `BindSet` を載せた `Show` を再発行する
+    /// 経路を、提示段の get-or-insert フローで模す。同一 surface id でも bind 集合が 1 要素でも
+    /// 異なれば `get` がミスし、提示段が再合成する（合成カウンタ +1）ことを固定する。
+    /// `different_binds_on_same_surface_must_miss` がキー完全一致の構造を固定するのに対し、
+    /// 本檻は「Show 再発行 → ミス → 再合成」という動的発行フローでの再合成駆動を固定する。
+    #[test]
+    fn dynamic_show_reissue_different_binds_recomposes() {
+        let mut cache = ComposeCache::new();
+        let mut compose_calls = 0u32;
+        let id = 1000;
+        let dressed_a = BindSet::from_ids([1100]);
+        let dressed_b = BindSet::from_ids([1100, 1207]);
+        assert_ne!(dressed_a, dressed_b, "前提: 2 つの着せ替え集合は異なる");
+
+        // 1 回目の Show（BindSet A）: ミス → 再合成（カウンタ +1）→ 挿入。
+        if cache.get(id, &dressed_a).is_none() {
+            compose_calls += 1;
+            cache.insert(id, dressed_a.clone(), transparent_surface(4, 4));
+        }
+        assert_eq!(compose_calls, 1, "初回 Show は 1 回だけ合成する");
+
+        // 2 回目の Show（同一 surface・異なる BindSet B）: ミス → 再合成（カウンタ +1）。
+        if cache.get(id, &dressed_b).is_none() {
+            compose_calls += 1;
+            cache.insert(id, dressed_b.clone(), transparent_surface(4, 4));
+        }
+        assert_eq!(
+            compose_calls, 2,
+            "着せ替え集合が変われば同一 surface でも再合成が走らねばならない（R6.1）"
+        );
+
+        // 置換後は新入力のみヒット・旧入力はミス（容量 1 メモ・古い絵を返さない）。
+        assert!(cache.get(id, &dressed_b).is_some(), "再合成後の新 binds はヒットする");
+        assert!(
+            cache.get(id, &dressed_a).is_none(),
+            "容量 1 メモ: 置換後の旧 binds はミスする"
+        );
+    }
+
+    /// R6.2: 同一の着せ替え集合で表示を再発行すると、既存キャッシュから **再合成なしで復帰**する
+    /// （既存キャッシュ挙動の維持）。
+    ///
+    /// 同一 (surface id, BindSet) の Show を 2 回発行しても 2 回目はヒットし、提示段は再合成せず
+    /// キャッシュ済みサーフェスをそのまま返す（合成カウンタ据え置き）ことを固定する。
+    #[test]
+    fn dynamic_show_reissue_same_binds_returns_cached() {
+        let mut cache = ComposeCache::new();
+        let mut compose_calls = 0u32;
+        let id = 1000;
+        let dressed = BindSet::from_ids([1100, 1207]);
+
+        // 1 回目の Show: ミス → 再合成（カウンタ +1）→ 挿入。
+        if cache.get(id, &dressed).is_none() {
+            compose_calls += 1;
+            cache.insert(id, dressed.clone(), transparent_surface(4, 4));
+        }
+        assert_eq!(compose_calls, 1, "初回 Show は 1 回だけ合成する");
+
+        // 2 回目の Show（同一 surface・同一 BindSet）: ヒット → 再合成しない（カウンタ据え置き）。
+        let hit = cache.get(id, &dressed);
+        assert!(hit.is_some(), "同一着せ替え集合の再発行はヒットする（R6.2）");
+        if hit.is_none() {
+            compose_calls += 1;
+            cache.insert(id, dressed.clone(), transparent_surface(4, 4));
+        }
+        assert_eq!(
+            compose_calls, 1,
+            "同一 binds の再発行は再合成なしで復帰しなければならない（R6.2）"
+        );
+        assert!(
+            cache.get(id, &dressed).is_some(),
+            "ヒット後もキャッシュ済みサーフェスは保持される"
+        );
+    }
+
     /// 容量 1 メモ: 異なる surface id への挿入はスロットを置換し、旧 id はミスする。
     #[test]
     fn different_surface_id_replaces_slot() {

@@ -41,9 +41,10 @@ use std::ops::ControlFlow;
 
 use areka_sakura::{cue_target_of, CueCommand, CueTarget, TalkCue};
 
+use crate::bind::{parse_bind_directive, scope_namespace, BindDirective, BindResolver};
 use crate::output::{DisplayCommand, SurfaceOutput};
 use crate::resolve::{resolve_balloon_key, BalloonResolve, SurfaceResolver, SurfaceTarget};
-use crate::state::{ApplyOutcome, ScopeStates};
+use crate::state::{ApplyOutcome, BindApplyOutcome, ScopeStates};
 
 /// seriko アクターの inbox メッセージ（areka-actor inbox 規約・投函経路は inbox 一貫）。
 ///
@@ -134,13 +135,18 @@ fn emit_display<O: SurfaceOutput>(out: &mut O, command: DisplayCommand) {
     out.send(command);
 }
 
-/// アクター起動: 解決テーブル＋静的 bind 集合＋出力先を受け、独立スレッドで稼働させる（1.3）。
+/// アクター起動: 解決テーブル＋静的 bind 集合＋bind 名前解決層＋出力先を受け、独立スレッドで
+/// 稼働させる（1.3）。
 ///
 /// [`areka_actor::spawn_actor`]`::<SerikoMsg, _>("seriko", body)` で名前付きスレッドを起動し
 /// （span `actor="seriko"` は spawn 原語が付与する）、返した `Sender` から組んだ [`SerikoSink`] を
 /// 第 1 要素に、[`areka_actor::ActorHandle`] を第 2 要素に返す。`body` は `resolver`・
-/// `static_binds`（[`ScopeStates::new`] へ move）・`out` を単独所有し、[`areka_actor::run_inbox`]
-/// で発火を到着順（FIFO）に処理する。
+/// `static_binds`（[`ScopeStates::new`] へ move）・`bind_resolver`（`\![bind]` の名前解決層・
+/// [`handle_message`] へ `&` 手渡し）・`out` を単独所有し、[`areka_actor::run_inbox`] で発火を
+/// 到着順（FIFO）に処理する。
+///
+/// `bind_resolver` は additive 追加（D4）。bind 名前表を供給しない既存経路は
+/// [`BindResolver::empty`] を渡せば従来と byte 同値（空表＝自然な解決不能で発行に影響しない）。
 ///
 /// # 停止（1.4）
 ///
@@ -157,6 +163,7 @@ fn emit_display<O: SurfaceOutput>(out: &mut O, command: DisplayCommand) {
 pub fn spawn_seriko<O>(
     resolver: SurfaceResolver,
     static_binds: areka_emo_compose::BindSet,
+    bind_resolver: BindResolver,
     out: O,
 ) -> (SerikoSink, areka_actor::ActorHandle)
 where
@@ -165,8 +172,9 @@ where
     let (tx, actor) = areka_actor::spawn_actor::<SerikoMsg, _>("seriko", move |rx| {
         let mut states = ScopeStates::new(static_binds);
         let mut out = out;
+        let bind_resolver = bind_resolver;
         areka_actor::run_inbox::<SerikoMsg, std::convert::Infallible>(rx, move |msg| {
-            Ok(handle_message(&resolver, &mut states, &mut out, msg))
+            Ok(handle_message(&resolver, &bind_resolver, &mut states, &mut out, msg))
         });
     });
 
@@ -179,8 +187,11 @@ where
 /// - [`SerikoMsg::Cue`] → 演者側 relevance（`cue_target_of`・D4 単一権威）で担当（Shell）を選別し、
 ///   `Emote{key}`／`BalloonSurface` のみが解決層へ進む一本経路。担当外（非 Shell・純粋 Wait）は
 ///   良性 `debug!`＋skip（正常経路・duration honor）、破損入力は `warn!`/`error!`＋skip。常に `Continue`。
+///   `cue_target_of == None` 枝の内側（Wait 判定より前・D1）に `\![bind]` 名前自己選別分岐を持ち、
+///   `name == "bind"` のキャリアのみ `bind_resolver` で名前解決し [`ScopeStates::apply_bind`] を通す。
 fn handle_message<O: SurfaceOutput>(
     resolver: &SurfaceResolver,
+    bind_resolver: &BindResolver,
     states: &mut ScopeStates,
     out: &mut O,
     msg: SerikoMsg,
@@ -210,22 +221,141 @@ fn handle_message<O: SurfaceOutput>(
             return ControlFlow::Continue(());
         }
         None => {
-            // `cue_target_of==None` は Wait（純粋な待ち・action なし）と Custom（分類不能）。
-            // Wait は「分類不能」でなく「どの演者の担当でもない」ゆえ文言を分ける（申し送り是正）。
-            // broadcast 下ではいずれも良性の担当外受信＝debug!＋skip（duration honor・否定的 no-op）。
-            if matches!(cue.command, CueCommand::Wait) {
-                tracing::debug!(
-                    command = ?cue.command,
-                    "seriko: 純粋 Wait cue を broadcast 受信; どの演者の担当でもない待ち＝action なし・duration は焼き込み絶対時刻が担うため読み飛ばす（正常経路・R5.4）"
-                );
-            } else {
-                // Custom 等（M-boot compile は非生成）。broadcast 下で非 Shell 受信は一律良性ゆえ debug!。
-                tracing::debug!(
-                    command = ?cue.command,
-                    "seriko: 担当の演者がいない cue を broadcast 受信; 読み飛ばす（正常経路）"
-                );
+            // `cue_target_of==None` は Wait（純粋な待ち・action なし）と Custom（`\!` 汎用キャリア）。
+            // bind 消費分岐（D1）: Wait 判定より前に `\![bind]` を名前自己選別で捌く。キャリアを
+            // 開封し `name == "bind"` のみが bind パイプラインへ入る。非該当・非キャリアは既存の
+            // 良性 skip へフォールスルー（dola の名前写像 API は退役ゆえ参照しない・D1/D10）。
+            match cue.command.as_command_carrier() {
+                // 非キャリア（純粋 Wait・非正準 params の Custom・その他）。
+                None => {
+                    if matches!(cue.command, CueCommand::Wait) {
+                        // Wait は「分類不能」でなく「どの演者の担当でもない」ゆえ文言を分ける（申し送り是正）。
+                        tracing::debug!(
+                            command = ?cue.command,
+                            "seriko: 純粋 Wait cue を broadcast 受信; どの演者の担当でもない待ち＝action なし・duration は焼き込み絶対時刻が担うため読み飛ばす（正常経路・R5.4）"
+                        );
+                    } else if let CueCommand::Custom { command, .. } = &cue.command {
+                        // 非正準 params の Custom: 宛名規律（D8④）で severity を峻別する。`Custom{command}`
+                        // フィールドは開封失敗でも読めるため宛名で判断する——宛名 `bind`＝自分宛の壊れ物
+                        // ゆえ warn!（ワイヤ破損は宛名の担当者が報告）・他人宛/未知名＝担当外ゆえ debug!。
+                        if command == "bind" {
+                            tracing::warn!(
+                                command = ?cue.command,
+                                "seriko: 自分宛（bind）の非正準 Custom params を読み飛ばす（ワイヤ破損・D8④）"
+                            );
+                        } else {
+                            tracing::debug!(
+                                command = ?cue.command,
+                                "seriko: 他人宛/未知名の非正準 Custom params を読み飛ばす（担当外・報告責任は宛名の担当者・D8④）"
+                            );
+                        }
+                    } else {
+                        // 上記以外の非キャリア（M-boot compile は非生成）。broadcast 下では一律良性ゆえ debug!。
+                        tracing::debug!(
+                            command = ?cue.command,
+                            "seriko: 担当の演者がいない cue を broadcast 受信; 読み飛ばす（正常経路）"
+                        );
+                    }
+                    return ControlFlow::Continue(());
+                }
+                // 正準キャリア（`Custom` の String Array）。名前自己選別で bind のみ消費する。
+                Some((name, tokens)) => {
+                    if name != "bind" {
+                        // 未登記/他担当名（move 等・`bind-noevent` 等も含む）は静かに読み流す
+                        // （名前自己選別・R2.5・一意性は areka 消費者台帳が保証・D1/D10）。
+                        tracing::debug!(
+                            name,
+                            command = ?cue.command,
+                            "seriko: 担当外コマンド名のキャリア cue を読み飛ばす（名前自己選別・R2.5）"
+                        );
+                        return ControlFlow::Continue(());
+                    }
+
+                    // (step 3) 引数解釈（純関数・不透明保持）。M1 縮退の正典形／破損入力を severity 分けする。
+                    let (category, part, on) = match parse_bind_directive(&tokens) {
+                        BindDirective::Apply { category, part, on } => (category, part, on),
+                        BindDirective::Toggle { .. } | BindDirective::CategoryWide { .. } => {
+                            // トグル形・カテゴリ単位形＝M1 未実導出の正当構文（将来 additive シーム・R4.2・D8②）。
+                            tracing::warn!(
+                                command = ?cue.command,
+                                "seriko: bind のトグル形/カテゴリ単位形は M1 未実導出のため読み飛ばす（正当構文・将来 additive・R4.2・D8②）"
+                            );
+                            return ControlFlow::Continue(());
+                        }
+                        BindDirective::Malformed => {
+                            // カテゴリ欠落・on/off 値破損＝破損入力（D8③）。
+                            tracing::error!(
+                                command = ?cue.command,
+                                "seriko: bind の破損入力（カテゴリ欠落・on/off 値破損）を読み飛ばす（D8③）"
+                            );
+                            return ControlFlow::Continue(());
+                        }
+                    };
+
+                    // (step 4) scope→名前空間（D7）。"0"→sakura・"1"→kero・"2"+/非数値→写像なし。
+                    let ns = match scope_namespace(&cue.actor) {
+                        Some(ns) => ns,
+                        None => {
+                            // 写像なし（char2+ は M1 未取込・M-dual 拡張シーム・D7・D8⑤）。
+                            tracing::warn!(
+                                scope = %cue.actor,
+                                "seriko: bind の scope 写像なし（scope 2 以降・非数値）で読み飛ばす（M-dual 拡張シーム・D7・D8⑤）"
+                            );
+                            return ControlFlow::Continue(());
+                        }
+                    };
+
+                    // (step 5) 名前解決（未宣言は捏造せず None・R3.7）。解決不能は error!＋skip・状態不変・発行なし。
+                    let id = match bind_resolver.resolve(ns, &category, &part) {
+                        Some(id) => id,
+                        None => {
+                            tracing::error!(
+                                scope = %cue.actor,
+                                category = %category,
+                                part = %part,
+                                "seriko: bind の (カテゴリ, パーツ) を名前解決できず読み飛ばす（未宣言・状態不変・発行なし・R3.7・D8①）"
+                            );
+                            return ControlFlow::Continue(());
+                        }
+                    };
+
+                    // (step 6) 適用＋発行。mustselect カテゴリの着衣（on=true）は排他置換
+                    // （同カテゴリ他パーツを自動 off・D11・R4.5）、それ以外（脱衣・非 mustselect）は
+                    // 従来の加算/除去。Changed のみ単一発行点から発行し、実機 grep マーカーを発火する。
+                    let outcome = if on && bind_resolver.is_mustselect(ns, &category) {
+                        let cat_ids = bind_resolver.category_ids(ns, &category);
+                        states.apply_bind_exclusive(&cue.actor, &cat_ids, id)
+                    } else {
+                        states.apply_bind(&cue.actor, id, on)
+                    };
+                    match outcome {
+                        BindApplyOutcome::Changed(command) => {
+                            emit_display(out, command); // 単一発行点（R3.5）
+                            // 実機サインオフの grep マーカー（R7.1・有界 auto-exit＋ログ grep 流儀）。
+                            tracing::info!(
+                                scope = %cue.actor,
+                                category = %category,
+                                part = %part,
+                                id,
+                                on,
+                                "seriko: bind 適用"
+                            );
+                        }
+                        // 非表示/未知 scope（StateOnly）または同値（Unchanged）は発行しない（D5・flow note (2)）。
+                        BindApplyOutcome::StateOnly | BindApplyOutcome::Unchanged => {
+                            tracing::debug!(
+                                scope = %cue.actor,
+                                category = %category,
+                                part = %part,
+                                id,
+                                on,
+                                "seriko: bind 集合を更新（非表示/未知 scope または同値ゆえ発行なし）"
+                            );
+                        }
+                    }
+                    return ControlFlow::Continue(());
+                }
             }
-            return ControlFlow::Continue(());
         }
     }
 
@@ -428,7 +558,7 @@ mod tests {
         let records = out.records();
 
         // アクター起動→単純な Shell 系 Emote 1 件を emit→Close→join で終了同期。
-        let (mut sink, handle) = spawn_seriko(resolver, binds.clone(), out);
+        let (mut sink, handle) = spawn_seriko(resolver, binds.clone(), BindResolver::empty(), out);
         CueSink::emit(&mut sink, emote_cue(0.0, "0", "2100"));
         sink.close().expect("Close を送れること");
         handle.join().expect("Close で正常終了する");
@@ -463,7 +593,7 @@ mod tests {
     use crate::resolve::SurfaceResolver;
     use crate::state::ScopeStates;
     use areka_emo_compose::BindSet;
-    use std::collections::BTreeMap;
+    use std::collections::{BTreeMap, BTreeSet};
 
     /// 同期 `handle_message` 用の小さな解決層（"通常"→2100 の 1 件のみ）。
     fn tiny_resolver() -> SurfaceResolver {
@@ -525,7 +655,12 @@ mod tests {
     #[test]
     fn close_stops_normally() {
         let out = MockSurfaceOutput::new();
-        let (sink, handle) = spawn_seriko(tiny_resolver(), BindSet::from_ids([1100, 1207]), out);
+        let (sink, handle) = spawn_seriko(
+            tiny_resolver(),
+            BindSet::from_ids([1100, 1207]),
+            BindResolver::empty(),
+            out,
+        );
 
         sink.close().expect("Close を送れること");
         // Break→スレッド正常終了。panic なし＝Ok。
@@ -543,7 +678,12 @@ mod tests {
     #[test]
     fn disconnect_stops_normally() {
         let out = MockSurfaceOutput::new();
-        let (sink, handle) = spawn_seriko(tiny_resolver(), BindSet::from_ids([1100, 1207]), out);
+        let (sink, handle) = spawn_seriko(
+            tiny_resolver(),
+            BindSet::from_ids([1100, 1207]),
+            BindResolver::empty(),
+            out,
+        );
 
         // 全送信端（唯一の SerikoSink＝唯一の Sender）を drop。Close は送らない。
         drop(sink);
@@ -573,6 +713,7 @@ mod tests {
         let flow = capture_logs_flow(|| {
             handle_message(
                 &resolver,
+                &BindResolver::empty(),
                 &mut states,
                 &mut out,
                 SerikoMsg::Cue(entityref_cue(0.0, "0", 42)),
@@ -603,7 +744,7 @@ mod tests {
         let out2 = MockSurfaceOutput::new();
         let records2 = out2.records();
         let (mut sink, handle) =
-            spawn_seriko(tiny_resolver(), BindSet::from_ids([1100, 1207]), out2);
+            spawn_seriko(tiny_resolver(), BindSet::from_ids([1100, 1207]), BindResolver::empty(), out2);
         CueSink::emit(&mut sink, entityref_cue(0.0, "0", 7)); // 防御枝＝skip
         CueSink::emit(&mut sink, emote_cue(1.0, "0", "2100")); // 有効
         sink.close().expect("Close を送れること");
@@ -638,6 +779,7 @@ mod tests {
             let flow = capture_logs_flow(|| {
                 handle_message(
                     &resolver,
+                    &BindResolver::empty(),
                     &mut states,
                     &mut out,
                     SerikoMsg::Cue(emote_cue(0.0, "0", bad)),
@@ -677,7 +819,12 @@ mod tests {
     fn emit_after_actor_stopped_logs_no_panic() {
         let out = MockSurfaceOutput::new();
         let (mut sink, handle) =
-            spawn_seriko(tiny_resolver(), BindSet::from_ids([1100, 1207]), out);
+            spawn_seriko(
+            tiny_resolver(),
+            BindSet::from_ids([1100, 1207]),
+            BindResolver::empty(),
+            out,
+        );
 
         // アクターを完全停止させる（Break→スレッド終了→inbox 受信端消失）。
         sink.close().expect("Close を送れること");
@@ -722,6 +869,7 @@ mod tests {
 
         let flow = handle_message(
             &resolver,
+            &BindResolver::empty(),
             &mut states,
             &mut out,
             SerikoMsg::Cue(balloon_cue(0.0, "0", "2")),
@@ -749,6 +897,7 @@ mod tests {
 
         let flow = handle_message(
             &resolver,
+            &BindResolver::empty(),
             &mut states,
             &mut out,
             SerikoMsg::Cue(balloon_cue(0.0, "0", "-1")),
@@ -780,6 +929,7 @@ mod tests {
         let flow = capture_logs_flow(|| {
             handle_message(
                 &resolver,
+                &BindResolver::empty(),
                 &mut states,
                 &mut out,
                 SerikoMsg::Cue(balloon_cue(0.0, "0", "バルーン１")),
@@ -835,6 +985,7 @@ mod tests {
             let flow = capture_logs_flow(|| {
                 handle_message(
                     &resolver,
+                    &BindResolver::empty(),
                     &mut states,
                     &mut out,
                     SerikoMsg::Cue(balloon_cue(0.0, "0", bad)),
@@ -888,12 +1039,14 @@ mod tests {
 
         let f1 = handle_message(
             &resolver,
+            &BindResolver::empty(),
             &mut states,
             &mut out,
             SerikoMsg::Cue(balloon_cue(0.0, "0", "2")),
         );
         let f2 = handle_message(
             &resolver,
+            &BindResolver::empty(),
             &mut states,
             &mut out,
             SerikoMsg::Cue(balloon_cue(1.0, "0", "2")),
@@ -928,12 +1081,14 @@ mod tests {
         // シェル面（Emote）→バルーン面（BalloonSurface）を同一 scope へ順に流す。
         let shell = handle_message(
             &resolver,
+            &BindResolver::empty(),
             &mut states,
             &mut out,
             SerikoMsg::Cue(emote_cue(0.0, "0", "2100")),
         );
         let balloon = handle_message(
             &resolver,
+            &BindResolver::empty(),
             &mut states,
             &mut out,
             SerikoMsg::Cue(balloon_cue(1.0, "0", "2")),
@@ -986,6 +1141,7 @@ mod tests {
         let flow = capture_logs_flow(|| {
             handle_message(
                 &resolver,
+                &BindResolver::empty(),
                 &mut states,
                 &mut out,
                 SerikoMsg::Cue(text_cue(0.0, "0", "アヒルやアヒル")),
@@ -1037,6 +1193,7 @@ mod tests {
         let flow = capture_logs_flow(|| {
             handle_message(
                 &resolver,
+                &BindResolver::empty(),
                 &mut states,
                 &mut out,
                 SerikoMsg::Cue(wait_cue(0.0, "0", 0.5)),
@@ -1080,7 +1237,12 @@ mod tests {
         let out = MockSurfaceOutput::new();
         let records = out.records();
         let (mut sink, handle) =
-            spawn_seriko(tiny_resolver(), BindSet::from_ids([1100, 1207]), out);
+            spawn_seriko(
+            tiny_resolver(),
+            BindSet::from_ids([1100, 1207]),
+            BindResolver::empty(),
+            out,
+        );
 
         CueSink::emit(&mut sink, text_cue(0.0, "0", "担当外テキスト")); // 非 Shell＝skip
         CueSink::emit(&mut sink, wait_cue(0.5, "0", 1.0)); // Wait＝skip
@@ -1098,6 +1260,551 @@ mod tests {
             }],
             "担当外（非 Shell/Wait）は skip され、担当 Emote のみ発行＝状態/タイミング不変（honor 否定的 no-op・2.2/2.3）"
         );
+    }
+
+    // ─────────────────────────────────────────────────────────────────────
+    // Task 6.1/6.3: bind 消費分岐（`cue_target_of == None` 枝内・Wait 判定前・D1）の網羅檻。
+    //
+    // `\![bind]` キャリアの名前自己選別（name=="bind"）→ 引数解釈（parse_bind_directive）→
+    // scope 写像（scope_namespace）→ 名前解決（BindResolver）→ 適用（apply_bind）→ 単一発行点
+    // （emit_display）の一本経路と、D8 severity split（①解決不能=error／②Toggle/CategoryWide=warn／
+    // ③Malformed=error／④宛名規律 non-canonical: bind=warn・他人=debug／⑤scope 写像なし=warn）を
+    // 同期 `handle_message`＋`capture_logs_flow`（テストスレッド発火）で決定論的に檻化する。
+    // 全 severity 枝は正カウント assert（優しい縮退の非空虚化・deterministic-test-coverage mandate）。
+    // ─────────────────────────────────────────────────────────────────────
+
+    /// `\![bind,tokens...]` 正準キャリア cue（`Custom` の String Array）を組む。
+    fn bind_carrier_cue(scope: &str, tokens: &[&str]) -> TalkCue {
+        let toks: Vec<String> = tokens.iter().map(|s| s.to_string()).collect();
+        TalkCue {
+            at: 0.0,
+            actor: ActorKey::from(scope),
+            command: CueCommand::command_carrier("bind", toks),
+            duration: 0.0,
+        }
+    }
+
+    /// 任意コマンド名の正準キャリア cue（名前ゲートの担当外検証用）。
+    fn named_carrier_cue(scope: &str, name: &str, tokens: &[&str]) -> TalkCue {
+        let toks: Vec<String> = tokens.iter().map(|s| s.to_string()).collect();
+        TalkCue {
+            at: 0.0,
+            actor: ActorKey::from(scope),
+            command: CueCommand::command_carrier(name, toks),
+            duration: 0.0,
+        }
+    }
+
+    /// 非正準 params の `Custom` cue（`params` が非 Array＝`as_command_carrier()==None`・宛名規律検証用）。
+    fn noncanonical_custom_cue(scope: &str, command: &str) -> TalkCue {
+        let cue = TalkCue {
+            at: 0.0,
+            actor: ActorKey::from(scope),
+            command: CueCommand::Custom {
+                command: command.to_string(),
+                params: dola::DynamicValue::Null,
+            },
+            duration: 0.0,
+        };
+        // 前提: この構成は必ずキャリア開封に失敗する（宛名規律 D8④ の入口条件）。
+        assert!(
+            cue.command.as_command_carrier().is_none(),
+            "非 Array params の Custom は as_command_carrier() が None（宛名規律の入口）"
+        );
+        cue
+    }
+
+    /// (腕,伸び)→1302 の sakura 名前表を持つ解決層（static={1100,1207} と交わらない新 id・mustselect なし）。
+    fn arm_bind_resolver() -> BindResolver {
+        let mut sakura: BTreeMap<(String, String), u32> = BTreeMap::new();
+        sakura.insert(("腕".to_string(), "伸び".to_string()), 1302);
+        BindResolver::new(sakura, BTreeMap::new(), BTreeSet::new(), BTreeSet::new())
+    }
+
+    /// mustselect カテゴリ「目」を持つ sakura 解決層（D11・R4.5・actor 経路の排他検証用）。
+    /// (目,笑)→1301 / (目,普)→1303 / (目,閉)→1304。static={1100,1207} と交わらない新 id。
+    fn eye_mustselect_resolver() -> BindResolver {
+        let mut sakura: BTreeMap<(String, String), u32> = BTreeMap::new();
+        sakura.insert(("目".to_string(), "笑".to_string()), 1301);
+        sakura.insert(("目".to_string(), "普".to_string()), 1303);
+        sakura.insert(("目".to_string(), "閉".to_string()), 1304);
+        let mut sakura_ms: BTreeSet<String> = BTreeSet::new();
+        sakura_ms.insert("目".to_string());
+        BindResolver::new(sakura, BTreeMap::new(), sakura_ms, BTreeSet::new())
+    }
+
+    /// ケース15（6.3/3.5/7.1・D5・D8 正常経路）: 表示中 scope で解決可能な Apply は現 surface を
+    /// 新集合で再発行し、実機 grep マーカー `info!("seriko: bind 適用")` を発火する。
+    #[test]
+    fn bind_apply_on_shown_emits_show_and_info_marker() {
+        let resolver = tiny_resolver();
+        let bind_resolver = arm_bind_resolver();
+        let mut states = fresh_states(); // static = {1100, 1207}
+        let scope = ActorKey::from("0");
+        // シェル面を Shown(2100) に確定させる。
+        states.apply(&scope, SurfaceTarget::Show(2100));
+
+        let mut out = MockSurfaceOutput::new();
+        let records = out.records();
+
+        let flow = capture_logs_flow(|| {
+            handle_message(
+                &resolver,
+                &bind_resolver,
+                &mut states,
+                &mut out,
+                SerikoMsg::Cue(bind_carrier_cue("0", &["腕", "伸び", "1"])),
+            )
+        });
+
+        assert_eq!(flow.1, ControlFlow::Continue(()), "適用後も処理継続（6.3）");
+        // 単一発行点から現 surface(2100) を新集合 {1100,1207,1302} で再発行（D5・R3.5）。
+        let recorded = records.lock().expect("records mutex poisoned");
+        assert_eq!(
+            &*recorded,
+            &[DisplayCommand::Show {
+                scope: scope.clone(),
+                surface_id: 2100,
+                binds: BindSet::from_ids([1100, 1207, 1302]),
+            }],
+            "表示中 scope の解決可能 Apply は現 surface を新集合で再発行（R3.5・D5）"
+        );
+        // 実機 grep マーカー（R7.1）。
+        assert!(
+            flow.0.contains("level=INFO"),
+            "bind 適用は info! マーカーを発火する（R7.1）: {}",
+            flow.0
+        );
+        assert!(
+            flow.0.contains("seriko: bind 適用"),
+            "実機 grep マーカー文言を含む（R7.1）: {}",
+            flow.0
+        );
+    }
+
+    /// mustselect 排他（R4.5・D11・actor 経路）: mustselect カテゴリ「目」で 2 つの異なる
+    /// パーツを続けて着衣（on）すると、2 度目の Show は同カテゴリ旧パーツ(1301) を外し新パーツ
+    /// (1304) のみを載せる（高々 1 パーツ有効・排他置換が actor を貫通して効くことを実証）。
+    #[test]
+    fn bind_mustselect_second_on_replaces_prior_part_in_category() {
+        let resolver = tiny_resolver();
+        let bind_resolver = eye_mustselect_resolver();
+        let mut states = fresh_states(); // static = {1100, 1207}
+        let scope = ActorKey::from("0");
+        states.apply(&scope, SurfaceTarget::Show(2100));
+
+        let mut out = MockSurfaceOutput::new();
+        let records = out.records();
+
+        // 1 度目: 目=笑（1301）を着衣 → {1100,1207,1301}。
+        handle_message(
+            &resolver,
+            &bind_resolver,
+            &mut states,
+            &mut out,
+            SerikoMsg::Cue(bind_carrier_cue("0", &["目", "笑", "1"])),
+        );
+        // 2 度目: 目=閉（1304）を着衣 → 排他置換で 1301 が外れ {1100,1207,1304}。
+        handle_message(
+            &resolver,
+            &bind_resolver,
+            &mut states,
+            &mut out,
+            SerikoMsg::Cue(bind_carrier_cue("0", &["目", "閉", "1"])),
+        );
+
+        let recorded = records.lock().expect("records mutex poisoned");
+        assert_eq!(
+            &*recorded,
+            &[
+                DisplayCommand::Show {
+                    scope: scope.clone(),
+                    surface_id: 2100,
+                    binds: BindSet::from_ids([1100, 1207, 1301]),
+                },
+                DisplayCommand::Show {
+                    scope: scope.clone(),
+                    surface_id: 2100,
+                    binds: BindSet::from_ids([1100, 1207, 1304]),
+                },
+            ],
+            "mustselect カテゴリの 2 度目着衣は旧パーツ(1301) を自動 off し新パーツ(1304) のみ有効（R4.5・D11）"
+        );
+        // 動的集合も同カテゴリで高々 1 パーツ（1301 は残らない）。
+        assert_eq!(
+            states.current_binds(&scope),
+            &BindSet::from_ids([1100, 1207, 1304]),
+            "排他置換後は同カテゴリ内高々 1 パーツ有効（1301 は残らない・R4.5）"
+        );
+    }
+
+    /// 非 mustselect カテゴリは従来どおり加算される（R4.5 の対比・actor 経路）。
+    /// 非排他の resolver（arm_bind_resolver・mustselect なし）で 2 つ着衣すると両方が積算される。
+    #[test]
+    fn bind_non_mustselect_accumulates_via_actor() {
+        // (腕,伸び)→1302 と (肩,上げ)→1500 を持つ非 mustselect 表。
+        let resolver = tiny_resolver();
+        let mut sakura: BTreeMap<(String, String), u32> = BTreeMap::new();
+        sakura.insert(("腕".to_string(), "伸び".to_string()), 1302);
+        sakura.insert(("肩".to_string(), "上げ".to_string()), 1500);
+        let bind_resolver =
+            BindResolver::new(sakura, BTreeMap::new(), BTreeSet::new(), BTreeSet::new());
+        let mut states = fresh_states(); // static = {1100, 1207}
+        let scope = ActorKey::from("0");
+        states.apply(&scope, SurfaceTarget::Show(2100));
+
+        let mut out = MockSurfaceOutput::new();
+        let records = out.records();
+
+        handle_message(
+            &resolver,
+            &bind_resolver,
+            &mut states,
+            &mut out,
+            SerikoMsg::Cue(bind_carrier_cue("0", &["腕", "伸び", "1"])),
+        );
+        handle_message(
+            &resolver,
+            &bind_resolver,
+            &mut states,
+            &mut out,
+            SerikoMsg::Cue(bind_carrier_cue("0", &["肩", "上げ", "1"])),
+        );
+
+        // 非 mustselect ゆえ両方積算（1302 も 1500 も残る）。
+        assert_eq!(
+            states.current_binds(&scope),
+            &BindSet::from_ids([1100, 1207, 1302, 1500]),
+            "非 mustselect カテゴリは従来どおり加算（両パーツ有効・R4.5 対比）"
+        );
+        assert_eq!(
+            records.lock().expect("records mutex poisoned").len(),
+            2,
+            "2 回とも表示中 scope で Changed 発行"
+        );
+    }
+
+    /// ケース16（D5）: 解決可能だがシェル面が Hidden の scope では発行しない（StateOnly）。
+    #[test]
+    fn bind_apply_on_hidden_scope_state_only_no_emit() {
+        let resolver = tiny_resolver();
+        let bind_resolver = arm_bind_resolver();
+        let mut states = fresh_states();
+        let scope = ActorKey::from("0");
+        // Show→Hide で Hidden にする。
+        states.apply(&scope, SurfaceTarget::Show(2100));
+        states.apply(&scope, SurfaceTarget::Hide);
+
+        let mut out = MockSurfaceOutput::new();
+        let records = out.records();
+
+        let flow = handle_message(
+            &resolver,
+            &bind_resolver,
+            &mut states,
+            &mut out,
+            SerikoMsg::Cue(bind_carrier_cue("0", &["腕", "伸び", "1"])),
+        );
+
+        assert_eq!(flow, ControlFlow::Continue(()), "StateOnly でも処理継続");
+        assert!(
+            records.lock().expect("records mutex poisoned").is_empty(),
+            "非表示 scope の bind 適用は発行しない（StateOnly・D5）"
+        );
+    }
+
+    /// ケース17（D8②）: トグル形（数値欄省略）は warn! を 1 回残し発行しない。
+    #[test]
+    fn bind_toggle_form_warns_no_emit() {
+        let resolver = tiny_resolver();
+        let bind_resolver = arm_bind_resolver();
+        let mut states = fresh_states();
+        states.apply(&ActorKey::from("0"), SurfaceTarget::Show(2100));
+        let mut out = MockSurfaceOutput::new();
+        let records = out.records();
+
+        let flow = capture_logs_flow(|| {
+            handle_message(
+                &resolver,
+                &bind_resolver,
+                &mut states,
+                &mut out,
+                SerikoMsg::Cue(bind_carrier_cue("0", &["腕", "伸び"])),
+            )
+        });
+
+        assert_eq!(flow.1, ControlFlow::Continue(()));
+        assert_eq!(
+            flow.0.matches("level=WARN").count(),
+            1,
+            "トグル形は warn! を 1 回残す（M1 縮退・R4.2・D8②）: {}",
+            flow.0
+        );
+        assert_eq!(
+            flow.0.matches("level=ERROR").count(),
+            0,
+            "トグル形は error! を残さない（D8②）: {}",
+            flow.0
+        );
+        assert!(
+            records.lock().expect("records mutex poisoned").is_empty(),
+            "トグル形は発行しない"
+        );
+    }
+
+    /// ケース18（D8②）: カテゴリ単位形（パーツ欄省略）は warn! を 1 回残し発行しない。
+    #[test]
+    fn bind_category_wide_form_warns_no_emit() {
+        let resolver = tiny_resolver();
+        let bind_resolver = arm_bind_resolver();
+        let mut states = fresh_states();
+        states.apply(&ActorKey::from("0"), SurfaceTarget::Show(2100));
+        let mut out = MockSurfaceOutput::new();
+        let records = out.records();
+
+        let flow = capture_logs_flow(|| {
+            handle_message(
+                &resolver,
+                &bind_resolver,
+                &mut states,
+                &mut out,
+                SerikoMsg::Cue(bind_carrier_cue("0", &["腕"])),
+            )
+        });
+
+        assert_eq!(flow.1, ControlFlow::Continue(()));
+        assert_eq!(
+            flow.0.matches("level=WARN").count(),
+            1,
+            "カテゴリ単位形は warn! を 1 回残す（M1 縮退・R4.2・D8②）: {}",
+            flow.0
+        );
+        assert!(
+            records.lock().expect("records mutex poisoned").is_empty(),
+            "カテゴリ単位形は発行しない"
+        );
+    }
+
+    /// ケース19（D8③）: 破損入力（カテゴリ欠落・on/off 値破損）は error! を 1 回残し発行しない。
+    #[test]
+    fn bind_malformed_errors_no_emit() {
+        // (a) カテゴリ欠落（トークン 0 個）、(b) on/off 値破損（"2"）。
+        for tokens in [vec![], vec!["腕", "伸び", "2"]] {
+            let resolver = tiny_resolver();
+            let bind_resolver = arm_bind_resolver();
+            let mut states = fresh_states();
+            states.apply(&ActorKey::from("0"), SurfaceTarget::Show(2100));
+            let mut out = MockSurfaceOutput::new();
+            let records = out.records();
+
+            let flow = capture_logs_flow(|| {
+                handle_message(
+                    &resolver,
+                    &bind_resolver,
+                    &mut states,
+                    &mut out,
+                    SerikoMsg::Cue(bind_carrier_cue("0", &tokens)),
+                )
+            });
+
+            assert_eq!(flow.1, ControlFlow::Continue(()));
+            assert_eq!(
+                flow.0.matches("level=ERROR").count(),
+                1,
+                "破損入力 {tokens:?} は error! を 1 回残す（D8③）: {}",
+                flow.0
+            );
+            assert_eq!(
+                flow.0.matches("level=WARN").count(),
+                0,
+                "破損入力 {tokens:?} は warn! を残さない（D8③）: {}",
+                flow.0
+            );
+            assert!(
+                records.lock().expect("records mutex poisoned").is_empty(),
+                "破損入力 {tokens:?} は発行しない"
+            );
+        }
+    }
+
+    /// ケース20（D7・D8⑤）: scope 写像なし（"2"）の Apply は warn! を 1 回残し発行しない。
+    #[test]
+    fn bind_scope_unmapped_warns_no_emit() {
+        let resolver = tiny_resolver();
+        let bind_resolver = arm_bind_resolver();
+        let mut states = fresh_states();
+        let mut out = MockSurfaceOutput::new();
+        let records = out.records();
+
+        let flow = capture_logs_flow(|| {
+            handle_message(
+                &resolver,
+                &bind_resolver,
+                &mut states,
+                &mut out,
+                SerikoMsg::Cue(bind_carrier_cue("2", &["腕", "伸び", "1"])),
+            )
+        });
+
+        assert_eq!(flow.1, ControlFlow::Continue(()));
+        assert_eq!(
+            flow.0.matches("level=WARN").count(),
+            1,
+            "scope 写像なし（\"2\"）は warn! を 1 回残す（M-dual 拡張シーム・D7・D8⑤）: {}",
+            flow.0
+        );
+        assert!(
+            records.lock().expect("records mutex poisoned").is_empty(),
+            "写像なし scope は発行しない"
+        );
+    }
+
+    /// ケース21（D8①・R3.7）: 解決不能（resolver 空）の Apply は error! を 1 回残し発行しない。
+    #[test]
+    fn bind_unresolvable_errors_no_emit() {
+        let resolver = tiny_resolver();
+        let bind_resolver = BindResolver::empty(); // (腕,伸び) を解決できない
+        let mut states = fresh_states();
+        states.apply(&ActorKey::from("0"), SurfaceTarget::Show(2100));
+        let mut out = MockSurfaceOutput::new();
+        let records = out.records();
+
+        let flow = capture_logs_flow(|| {
+            handle_message(
+                &resolver,
+                &bind_resolver,
+                &mut states,
+                &mut out,
+                SerikoMsg::Cue(bind_carrier_cue("0", &["腕", "伸び", "1"])),
+            )
+        });
+
+        assert_eq!(flow.1, ControlFlow::Continue(()));
+        assert_eq!(
+            flow.0.matches("level=ERROR").count(),
+            1,
+            "解決不能は error! を 1 回残す（R3.7・D8①）: {}",
+            flow.0
+        );
+        assert!(
+            records.lock().expect("records mutex poisoned").is_empty(),
+            "解決不能では発行しない（状態不変・R3.7）"
+        );
+    }
+
+    /// ケース22（D1・R2.5）: 名前ゲート——正準キャリアだが name!="bind"（例 "move"）は
+    /// 良性 debug! で読み飛ばし、発行なし・WARN/ERROR なし（名前自己選別）。
+    #[test]
+    fn bind_name_gate_other_name_is_benign_debug_no_emit() {
+        let resolver = tiny_resolver();
+        let bind_resolver = arm_bind_resolver();
+        let mut states = fresh_states();
+        let mut out = MockSurfaceOutput::new();
+        let records = out.records();
+
+        let flow = capture_logs_flow(|| {
+            handle_message(
+                &resolver,
+                &bind_resolver,
+                &mut states,
+                &mut out,
+                SerikoMsg::Cue(named_carrier_cue("0", "move", &["-353", "", "", "0"])),
+            )
+        });
+
+        assert_eq!(flow.1, ControlFlow::Continue(()));
+        assert_eq!(
+            flow.0.matches("level=WARN").count(),
+            0,
+            "担当外コマンド名は warn! を出さない（名前自己選別・R2.5）: {}",
+            flow.0
+        );
+        assert_eq!(
+            flow.0.matches("level=ERROR").count(),
+            0,
+            "担当外コマンド名は error! を出さない: {}",
+            flow.0
+        );
+        assert!(
+            flow.0.contains("level=DEBUG"),
+            "担当外コマンド名は良性 debug! として観測できる（R2.5）: {}",
+            flow.0
+        );
+        assert!(
+            records.lock().expect("records mutex poisoned").is_empty(),
+            "担当外コマンド名では発行しない"
+        );
+    }
+
+    /// ケース23（D8④・宛名規律）: 非正準 params の Custom で宛名が自分（"bind"）＝warn! ；
+    /// 宛名が他人（"noexist"）＝warn! を出さず debug! 素通し。いずれも発行なし。
+    #[test]
+    fn bind_noncanonical_addressee_severity_split() {
+        // (a) 宛名 "bind"（自分宛の壊れ物）→ warn!。
+        {
+            let resolver = tiny_resolver();
+            let bind_resolver = arm_bind_resolver();
+            let mut states = fresh_states();
+            let mut out = MockSurfaceOutput::new();
+            let records = out.records();
+
+            let flow = capture_logs_flow(|| {
+                handle_message(
+                    &resolver,
+                    &bind_resolver,
+                    &mut states,
+                    &mut out,
+                    SerikoMsg::Cue(noncanonical_custom_cue("0", "bind")),
+                )
+            });
+
+            assert_eq!(flow.1, ControlFlow::Continue(()));
+            assert_eq!(
+                flow.0.matches("level=WARN").count(),
+                1,
+                "宛名 bind の非正準 params は warn! を 1 回残す（自分宛の壊れ物・D8④）: {}",
+                flow.0
+            );
+            assert!(
+                records.lock().expect("records mutex poisoned").is_empty(),
+                "非正準 params では発行しない"
+            );
+        }
+        // (b) 宛名 "noexist"（他人宛/未知名）→ warn! を出さず debug! 素通し。
+        {
+            let resolver = tiny_resolver();
+            let bind_resolver = arm_bind_resolver();
+            let mut states = fresh_states();
+            let mut out = MockSurfaceOutput::new();
+            let records = out.records();
+
+            let flow = capture_logs_flow(|| {
+                handle_message(
+                    &resolver,
+                    &bind_resolver,
+                    &mut states,
+                    &mut out,
+                    SerikoMsg::Cue(noncanonical_custom_cue("0", "noexist")),
+                )
+            });
+
+            assert_eq!(flow.1, ControlFlow::Continue(()));
+            assert_eq!(
+                flow.0.matches("level=WARN").count(),
+                0,
+                "他人宛/未知名の非正準 params は warn! を出さない（報告責任は宛名の担当者・D8④）: {}",
+                flow.0
+            );
+            assert!(
+                flow.0.contains("level=DEBUG"),
+                "他人宛/未知名は良性 debug! として観測できる（D8④）: {}",
+                flow.0
+            );
+            assert!(
+                records.lock().expect("records mutex poisoned").is_empty(),
+                "非正準 params では発行しない"
+            );
+        }
     }
 
     /// `capture_logs` の変種: `f` の戻り値も併せて返す（同期 handler の `ControlFlow` 表明用）。
