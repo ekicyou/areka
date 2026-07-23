@@ -125,7 +125,7 @@
   - _Requirements: 4.2, 4.6, 5.3, 7.5, 8.4_
   - _Boundary: emo-compose plan.rs_
 
-- [ ] 7.3 golden・檻を追加する（空 PatternState 等価・transient 合流・外形内収まり）
+- [x] 7.3 golden・檻を追加する（空 PatternState 等価・transient 合流・外形内収まり）
   - 空 PatternState で拡張前と byte 等価であることの golden を追加する
   - transient コマ合流（同 ID 置換・ID 整列不変）の golden を追加する
   - emo2 fixture の採録アニメ全コマ（kero 2106-2110／sakura 1410-1412）の原寸＋(x,y) が当該ベース surface の Extent 内に収まることをアサートする
