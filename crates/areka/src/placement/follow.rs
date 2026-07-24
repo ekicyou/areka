@@ -2196,6 +2196,127 @@ mod tests {
         let _ = parts.handle.join();
     }
 
+    /// Task 8.1 偽 Free アンカー DragEnd→保存値等価の檻（Req1.1・design C2/C3・
+    /// Testing Strategy Unit §7）: `Anchored(Anchor::Free)` のキャラ窓を headless World に
+    /// 合成し、DragEnd 駆動→`project_anchor` の Free identity 腕を素通しした確定位置が、
+    /// **アンカー種別を問わず**そのまま `WindowPos` entries 化されて Ghost 永続スコープへ
+    /// write-through されることを決定論固定する。
+    ///
+    /// なぜこの檻が正本か: 保存はドラッグ中の吸着制約（Bottom 等）ではなく DragEnd の
+    /// 確定位置を書く（Req1.1）。Free は wndproc（move_window=true）が動かし切った位置を
+    /// `project_anchor` が identity で無害通過させ、本ハンドラが**保存専用アーム**として
+    /// 働く——実 emo2 は全スコープ Bottom（実機で Free の保存経路を一度も踏まない）ゆえ、
+    /// この偽 Free 檻だけがその等価性の source of truth となる。
+    ///
+    /// 檻の噛み方（射影が Free 位置を改変したら落ちる）: snapshot を挿入し、確定 raw の
+    /// Y=883 は同モニタの bottom 吸着値（1043−687=356）と**異なる**値を選ぶ。もし Free が
+    /// identity でなく（誤って Bottom 等へ）射影されれば mapped.y と保存 Y が 356 へ変わり、
+    /// position_of・load_scope の双方が落ちる。座標は 96 の非倍数（1531・883）で隠れた
+    /// dpi/96 再スケールの檻も兼ね、既定値（0・96 系）と重ならない。
+    #[test]
+    fn on_char_drag_end_persists_free_anchor_raw_position_for_scope() {
+        use std::path::{Path, PathBuf};
+        use std::sync::Arc;
+
+        use areka_sylphya::persist::{FakePersistIo, PersistIo};
+        use areka_sylphya::{
+            Axis, PersistKey, PersistScope, ScopeRoots, SylphyaInit, load_scope, spawn_sylphya,
+        };
+
+        use super::super::persist::PersistWiring;
+        use crate::placement::spawn::CharWindowMarker;
+
+        // 共有 fake IO（アクター Box 移送用と観測用で同一ストアを指す・上の Bottom 檻と同流儀）。
+        struct SharedFakeIo(Arc<FakePersistIo>);
+        impl PersistIo for SharedFakeIo {
+            fn read(&self, path: &Path) -> std::io::Result<Option<String>> {
+                self.0.read(path)
+            }
+            fn commit(&self, path: &Path, content: &str) -> std::io::Result<()> {
+                self.0.commit(path, content)
+            }
+        }
+
+        let shared = Arc::new(FakePersistIo::new());
+        let roots = ScopeRoots {
+            ghost: Some(PathBuf::from("/g")),
+            ..ScopeRoots::default()
+        };
+        let parts = spawn_sylphya(SylphyaInit {
+            roots: roots.clone(),
+            io: Box::new(SharedFakeIo(shared.clone())),
+            runtime_sink: None,
+        });
+
+        let mut world = World::new();
+        world.insert_non_send_resource(PersistWiring {
+            publisher: parts.publisher.clone(),
+        });
+        // snapshot 挿入（bottom=1043）。Free identity なら未使用だが、誤射影時に
+        // Bottom 吸着 Y=1043−687=356 が現れる差分検出のため意図的に居させる。
+        world.insert_resource(single_monitor_snapshot());
+
+        // scope=2 の Free キャラ窓。DraggingState は実 flow（dispatch_drag_events 挿入）を模す。
+        // initial_inset=(1250,356)＝ドラッグ開始時窓位置・drag_start=(1400,600)＝開始カーソル。
+        let start = (1400, 600);
+        let window = world
+            .spawn((
+                fake_handle(0x1000),
+                window_pos_sized(1250, 356, 434, 687),
+                Anchored(Anchor::Free),
+                CharWindowMarker { scope: 2 },
+                dragging_state((1250, 356), start),
+            ))
+            .id();
+
+        // 最終カーソル (1681, 1127) → raw = (1250+(1681−1400), 356+(1127−600)) = (1531, 883)。
+        // Free identity ゆえ mapped = raw = wndproc 確定位置（射影で改変されない）。
+        let ev = Phase::Bubble(drag_end_event_at(window, (1681, 1127)));
+        assert!(!on_char_drag_end(&mut world, window, window, &ev));
+
+        // 確定点: mapped=(1531,883) が WindowPos へ反映（Bottom 吸着 356 ではなく生確定 883）。
+        assert_eq!(
+            position_of(&world, window),
+            Point { x: 1531, y: 883 },
+            "Free は identity 射影＝確定 raw をそのまま反映（Bottom 誤射影なら Y=356 で落ちる）"
+        );
+
+        // barrier 復帰＝上記 put の write-through 保存まで完了（同一送信端 FIFO）。
+        parts
+            .publisher
+            .barrier()
+            .expect("barrier should resolve while actor is alive");
+
+        // 別ハンドルの load_scope で scope2 の WindowPos を読み戻す（実 IO 通過＝投函の証明）。
+        // Free アンカーでも保存値は確定 raw と value-equal（アンカー種別を問わない・Req1.1）。
+        let loaded = load_scope(PersistScope::Ghost, &roots, &SharedFakeIo(shared.clone()));
+        assert!(
+            loaded.contains(&(
+                PersistKey::WindowPos {
+                    scope: 2,
+                    axis: Axis::X
+                },
+                "1531".to_string()
+            )),
+            "Free DragEnd 確定 X=1531 が scope2 の WindowPos として保存されていない: {loaded:?}"
+        );
+        assert!(
+            loaded.contains(&(
+                PersistKey::WindowPos {
+                    scope: 2,
+                    axis: Axis::Y
+                },
+                "883".to_string()
+            )),
+            "Free DragEnd 確定 Y=883 が scope2 の WindowPos として保存されていない\
+             （Bottom 誤射影なら 356・保存脱落なら空）: {loaded:?}"
+        );
+
+        // 正典終了（アクター join）——テスト後始末（リーク回避・非本質）。
+        parts.publisher.close();
+        let _ = parts.handle.join();
+    }
+
     /// (g) target==自 entity ガード: 他 entity 宛イベントの Bubble を受けても
     /// on_char_drag／on_char_drag_end／on_balloon_drag はすべて no-op。
     #[test]

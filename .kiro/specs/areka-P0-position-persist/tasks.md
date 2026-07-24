@@ -150,7 +150,7 @@
   - _Boundary: areka-ghost tests_
 
 - [ ] 8. Validation: 決定論檻と実機サインオフ
-- [ ] 8.1 偽 Free アンカー DragEnd→保存値等価の檻
+- [x] 8.1 偽 Free アンカー DragEnd→保存値等価の檻
   - headless World に `Anchored(Anchor::Free)` のキャラ窓を合成し、DragEnd 駆動で保存 entries が wndproc 確定位置と値等価になることを固定する（emo2 は全スコープ Bottom のため実機観測不能・この檻が正本）
   - 観測可能な完了条件: Free アンカー窓の DragEnd 後、投函された entries の座標が確定位置と一致するテストが通ること
   - _Requirements: 1.1, 8.1_
