@@ -15,7 +15,7 @@
   - _Requirements: 2.2, 2.6, 8.5_
   - _Boundary: ChoiceSelection_
 
-- [ ] 2.2 BalloonWiring 資源と ChoiceSelectionInbox シームの定義
+- [x] 2.2 BalloonWiring 資源と ChoiceSelectionInbox シームの定義
   - scope→最後に注入した hover ordinal の自前追跡マップと、選択確定の発行シンク（mpsc Sender）を持つ NonSend 資源を定義する
   - Receiver を保持する M1 暫定受け口（下流 choice-select-events が受信処理へ置換するシーム）を定義し、`CuePlayer::resolve_choice` を直接呼び出さない境界を保つ
   - Observable: 単体テストで資源を World へ NonSend 挿入でき、シームの Receiver 経由で送信値を観測できる
