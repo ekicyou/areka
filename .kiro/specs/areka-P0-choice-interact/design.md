@@ -425,7 +425,7 @@ pub(crate) fn click_selection(
 
 **Implementation Notes**
 - Integration: main.rs で Input スケジュールへ登録（clickthrough 登録 system の donor slot と同型）。
-- Validation: 判断分岐は `hover_action` の檻で網羅済み。leave 対象選別（balloon 所有チェック）は bare World テストで檻に入れる。
+- Validation: 判断分岐は `hover_action` の檻で網羅済み。leave 対象選別（balloon 所有チェック）は bare World テストで檻に入れ、**スケジュール登録の存在も配線存在檻で assert する**（Integration Tests 7）。
 - Risks: なし（既存マーカー機構の消費のみ・マーカー不在フレームでは完全 no-op）。
 
 #### attach_balloon_pointer_handlers / wire_balloon_choice
@@ -541,6 +541,8 @@ impl Emo2Wiring {
 3. **ハンドラ縮退**: `Emo2Wiring` 不在 World で合成 `Phase<PointerState>` を直接呼び → `false`・panic なし・send なし（8.1 非退行の下支え）。
 4. **Tunnel 素通し**: `Phase::Tunnel` 入力で両ハンドラが `false` を返し副作用ゼロ。
 5. **leave 追随**: bare World＋`PointerLeave` 付き entity（バルーン窓の子）で `clear_balloon_hover_on_leave` → バルーン所有 entity のみ対象化・非バルーン窓の leave は無視（1.3, 3.4）。
+6. **貫通檻（R6.2 字義・条件付き）**: テスト構築可能な `TextLayerRuntime`（frame.rs の既存檻が実演済み）へ選択肢行を決定論的に population できることをタスクフェーズ冒頭で確認し、可能なら `on_balloon_pointer_pressed` へ合成 `Phase<PointerState>` を与えて `ChoiceSelectionInbox.try_recv()` で一度きり発行を観測する一気通貫檻を 1 本置く——snapshot→純関数→適用の**糊**（借用順序・ordinal 展開・send 条件）は実証済み配線ではなく新設コードであり檻の対象（2.1, 2.4, 6.2）。population が present（GPU）依存で不可能な場合のみ、分解檻（純関数全網羅＋mpsc 観測＋配線存在）で閉じることを正当とする（決定論檻の非決定例外・設計バリデーション Issue 1 の裁定）。
+7. **スケジュール登録檻**: `clear_balloon_hover_on_leave` が Input スケジュール（`dispatch_pointer_events` 後）へ登録されていることを assert し、配線存在檻の対象に含める——登録漏れは高速離脱時の hover 残置として実機目視でしか検出できないため（1.3, 6.6・設計バリデーション Issue 2 の裁定）。
 
 ### E2E／実機（R7・人間サインオフ）
 
