@@ -232,3 +232,95 @@ brief の推奨方針（A を主・B を A 確定後の縮退選択肢として�
 - `crates/wintf/src/com/wuc.rs:126-135` — `DQTYPE_THREAD_CURRENT`（スレッド束縛の根拠）
 - `.kiro/specs/wintf-gpu-test-crash/brief.md` — 診断マトリクス・タイムライン・仮説の正本
 - memory `areka-wuc-runs-on-mta-thread`／`areka-no-ci-gpu-tests-in-cargo-test`／`areka-log-first-no-silent-failure` — 制約の出典
+
+---
+
+# 根本原因記録（実装フェーズ・調査 Phase 0–3 と判定ゲート G1・2026-07-24）
+
+> 本節が Requirement 3.1–3.3 / 4.1 の証拠・宣言の**単一の正本**。以下すべて本実装 worktree（`claude/kiro-gpu-test-crash-6a952a`・バイナリ `graphics-56cbb62983609269.exe`）で実測。cdb/WinDbg は本開発機に未インストールのため、クラッシュ点特定は Requirement 3.2 が明示許容する**切り分け実験結果**を裏付け証拠として用いた。
+
+## 結論（要約）
+
+**根本原因＝H-env（環境要因）確定。クラッシュ点＝2 個目の `Compositor::new()`（生成時）。トリガ条件＝「同一プロセス内で、別スレッド上に 2 個目の MTA 束縛 `Compositor`（`DQTAT_COM_NONE`）を生成すること」。同一スレッド上の逐次再生成（生成→drop→再生成）は安全。1 個目スタックの teardown 有無・明示ドレイン有無とは無関係。**
+
+**G1 宣言＝(b) テストハーネス固有。選択経路＝Path B（SharedGpuFixture・専用オーナースレッド）。** 保守側既定則の適用はなし（証拠は分類可能・非競合）。
+
+## Phase 0: 環境記録と修正前ベースライン
+
+### 環境情報（H-env 裏取り）
+| 項目 | 値 |
+|---|---|
+| GPU | Intel(R) Arc(TM) Graphics |
+| GPU ドライバ | 32.0.101.6314（DriverDate 2024-11-26） |
+| OS | Windows 11 26200.8894（25H2・UBR 8894） |
+| 直近 Update（Get-HotFix 可視） | KB5121767(2026-07-19)・KB5100998(07-15)・KB5120102(Security・07-14)・KB5054156(2025-10-18) |
+
+**所見**: brief のタイムライン（2026-07-23 ×5 連続緑 → 07-24 100% AV）の回帰窓の間に **Get-HotFix 可視の Windows Update は 1 件も無い**（最新は 07-19）。GPU ドライバも 2024-11-26 据え置き。H-env の「トリガ」は Get-HotFix 非可視のコンポーネント更新／ドライバランタイム状態のドリフト、または WUC/composition ランタイムの累積状態と推定される（本 spec は根因の是正であり、環境ドリフトの発生源特定までは範囲外）。
+
+### 修正前ベースライン実測表（C6 マトリクス母集団・7 グループ）
+| # | 対象バイナリ | 実測コマンド | 修正前結果 |
+|---|---|---|---|
+| 1 | wintf graphics | `cargo test -p wintf --test graphics -- --test-threads=1 --exact <最小ペア>` | 💥 AV（0xc0000005・2 個目 `clip_sync_clears_clip_when_clip_is_none` 実行中）|
+| 2 | areka bin | （brief 実測・`spine_e2e_kero_blink_one_cycle_golden`）| 💥 AV（brief 正本・本節では未再実測）|
+| 3 | wintf visual | `cargo test -p wintf --test visual` | ✅ 52 passed, exit 0 |
+| 4 | wintf lib | `cargo test -p wintf --lib`（`--test-threads=1` でも）| ✅ 517 passed, exit 0 |
+| 5 | areka-emo-text lib | `cargo test -p areka-emo-text --lib` | ✅ 368 passed / 2 ignored, exit 0 |
+| 6 | areka-emo-text draw_readback | `cargo test -p areka-emo-text --test draw_readback_test` | ✅ 2 passed, exit 0（後述の重要所見あり）|
+| 7 | areka-emo-present | （未実測・Phase 4 検証マトリクスで実測予定）| — |
+
+**差分の意味**: 落ちるのは graphics と areka bin のみ。他は現状緑。緑バイナリの共通点は「同一プロセスで**別スレッド上の 2 個目 MTA/NONE Compositor** が発生しない」こと（後述の全数分析で確認）。この差分自体が「別スレッド 2 個目」がトリガであることの傍証。
+
+## Phase 1: bisect 一発判定（Requirement 3.1）
+
+- 別 worktree に `68bd2e3e~1`（=`429a4ff2c9791c00cc7ecd9fbfb6ea977136eebd`・MTA 常駐 `CoIncrementMTAUsage` 導入の**直前**リビジョン）を checkout してビルドし、最小再現ペアを実走。
+- **結果: 同一 AV（0xc0000005）を再現**。1 個目 `clip_sync_applies_all_clip_shape_variants` ok → 2 個目 `clip_sync_clears_clip_when_clip_is_none` 実行中に AV。
+- **判定: H-env 確定**。`68bd2e3e`（MTA 常駐）は犯人ではない（H-code 棄却）。gap analysis のコード物証（graphics バイナリは `WicCore`／`wic_core`／MTA 常駐経路を一切参照しない）と完全整合。
+
+## Phase 2: クラッシュ点の特定と分類（Requirement 3.2）
+
+cdb/WinDbg 未インストールのため、切り分け実験（Phase 3）の行動論的証拠でクラッシュ点を分類した（Requirement 3.2 は「デバッガのスタックトレース**または**切り分け実験結果」を許容）。
+
+**クラッシュ点＝「WUC スタック生成時」、具体的には 2 個目の `Compositor::new()`**。分類根拠（`eprintln` プローブによる到達点特定）:
+- 2 個目テストで `GraphicsCore::new()`（D3D11/D2D/DWrite）は**成功**（`after GraphicsCore::new` 到達）。→ D3D/D2D コアは 2 個目でも健全。
+- `WucGraphicsResource::new()` 内で: `create_dispatcher_queue_controller(DQTAT_COM_NONE)` は**成功**（`before Compositor::new` 到達）→ `Compositor::new()` で**クラッシュ**（`before create_graphics_device` 未到達）。
+- したがってクラッシュ点は「前 world の teardown 由来」でも「schedule 実行中」でもなく、**2 個目 `Compositor::new()` の生成時**。
+
+## Phase 3: 切り分け実験（a）（b）（c）＋統制スレッド実験
+
+すべて一時変更（最終ツリーへは未コミット・`git restore` 済み）。
+
+| 実験 | 内容 | 結果 | 含意 |
+|---|---|---|---|
+| (a) 生成のみ | 2 個目テストを `setup_world()` のみに縮小（schedule/spawn 無し）| 💥 AV（`after setup_world` 未到達）| クラッシュは**生成時**（操作時でない）|
+| (b) teardown 抑止 | 1 個目 world を `std::mem::forget`（drop 完全抑止・Compositor 生存維持）| 💥 AV（2 個目なお死亡）| **teardown 犯人説を棄却**。1 個目の生死は無関係 |
+| (c) 明示ドレイン | 1 個目 `Inner::drop` に `ShutdownQueueAsync` 発行＋ポンプドレインを内蔵（`wuc_spike` パターン）| 💥 AV（ドレインは `drain done` まで完走・なお 2 個目死亡）| **明示ドレイン（Path A の中核前提）は無効**。design.md C3 の「ドレインで治る」前提が崩壊 |
+| 統制: 同一スレッド 2 個 | 1 スレッドで Compositor 生成→drop→再生成 | ✅ PASS | **同一スレッド逐次再生成は安全** |
+| 統制: 別スレッド 2 個 | スレッド A 生成+drop(join)→スレッド B 生成 | 💥 AV（B の `Compositor::new` で死）| **別スレッド 2 個目 Compositor が真のトリガ**（A を完全 join 後でも死ぬ）|
+
+**補強証拠（in-source テスト）**: `wuc_graphics_resource_lifecycle`（`wuc_resource.rs`・`--lib`）は**同一スレッド上で** `WucGraphicsResource::new` を 2 回呼ぶ（invalidate/drop を挟む）が緑。`--lib` に MTA/NONE Compositor テストは実質これ 1 本のみ（他は ASTA 別アパートメント or 非 WUC）ゆえ「別スレッド 2 個目」が発生せず緑を保つ——Phase 0 ベースラインの差分を機序で説明する。
+
+**特記所見（emo-text draw_readback の緑）**: draw_readback は `make_world_with_gpu`（graphics `setup_world` と同一パターン）を 2 本の `#[test]` が別スレッドで呼ぶが緑。ところが**同一バイナリに素の「別スレッド 2 個 Compositor」プローブを注入すると AV する**。差分は実テストが `MessageLoop`／`pump_until_idle` で**メッセージポンプを回す**こと。DispatcherQueue の静止化が別スレッド 2 個目の生死を左右する示唆だが、素のプローブが同バイナリで死ぬ以上この緑は**偶発的・脆弱**であり、是正の基盤には据えない（Phase 4 検証マトリクスで全数の緑を担保する）。
+
+## 判定ゲート G1（Requirement 3.3, 4.1）
+
+### 宣言: **(b) テストハーネス固有**
+- **根拠**: 本番 `WinApp` は**単一 UI スレッド上に単一 Compositor**を持つ（memory `areka-wuc-runs-on-mta-thread`・`areka-concurrency-model`）。本番は「別スレッド上の 2 個目 Compositor」を生成しない。多重生成は libtest が `#[test]` ごとに別スレッドを spawn する**テストハーネス構造に固有**。同一スレッド逐次再生成（本番のゴースト再ロードが踏む経路）は実測で安全。
+- **保守側既定則（分類不能時の宣言 (a) フォールバック）は不適用**: 証拠は分類可能かつ非競合（H-env 確定・クラッシュ点特定・トリガ=別スレッド 2 個目・同一スレッド安全）。design.md G1 表の既定則行の発動条件（分類不能・相互競合）に該当しない。
+
+### 選択経路: **Path B（SharedGpuFixture・専用オーナースレッド）**
+- **Path A を選ばない理由**: design.md C3 の Path A（`Inner::drop` 有界ドレイン＋`shutdown_blocking`）は実験 (c) で**無効と実証**。teardown/ドレインは根因（別スレッド 2 個目生成）に作用しない。宣言 (b) では Path A 縮小適用または Path B を選択可（Requirement 4.3・design.md G1 表）であり、実効性のある Path B を選ぶ。
+- **安全再生成プロトコル（C7 回帰檻・C6 の正準手順）**: 「WUC スタックの生成・操作・破棄はすべて**単一のオーナースレッド上**で行う」。別スレッドでの 2 個目 Compositor 生成を構造的に排除する。同一スレッド上での逐次再生成（生成→drop→再生成）は安全に許容される。
+
+### エスカレーション判定: **不発動（通常経路で続行）**
+- design.md/tasks.md 2.4 のエスカレーション条項（実験 (a)(b)(c) すべて不成立＝プロセス内再生成が環境的に全面不能）には**該当しない**。同一スレッド再生成は成立する（緩和経路が存在する）ため、Requirement 5.1+5.2 は Path B のオーナースレッド上での再生成で充足可能。
+- **ただし Requirement 5（回帰檻）の形態調整が必要**（design.md C7 との差分・実装フェーズで反映）: design.md C7 の「独立 2 `#[test]`（別スレッド）」形態(i)は、素で実行すれば別スレッド 2 個目＝**必ず AV** となり緑にできない。回帰檻は**同一オーナースレッド上での逐次再生成**（design.md C7 形態(ii)相当）を正準形とし、別スレッド生成の再発は「共有 fixture をバイパスした WUC 生成 → プロセス AV → バイナリ失敗」という構造で検出保証する（Requirement 5.3 はサイレント成功が構造的に不可能な点で充足）。
+
+## 本番設計への含意（Requirement 3.3, 4.1・将来のゴースト再ロード／シェル切替）
+
+- **同一 UI スレッド上での WUC スタック再生成は本環境で安全**（実測: 同一スレッド 2 個 PASS・`wuc_graphics_resource_lifecycle` 緑）。ゆえに**単一 UI スレッド構成を維持する限り、ゴースト再ロード・シェル切替が WUC スタックを作り直しても本クラッシュは踏まない**。
+- **危険なのは「別スレッド上での 2 個目 Compositor 生成」のみ**。本番がこの構成を採る（例: 複数 UI スレッド／ワーカースレッドでの Compositor 生成）場合は本環境で AV する。**設計不変条件として「プロセス内の WUC Compositor は単一 UI スレッド所有・別スレッドでの Compositor 生成を禁止」を維持すべき**。
+- 以上より、**現時点で本番実在リスクは無い（宣言 b）**。将来の再生成機能は上記不変条件を前提に設計すること。
+
+## 波及（brief 追記㊹エスケープ条項の発動）
+
+Path B 採用により、本 spec は `crates/wintf/tests/graphics/*` のハーネス構造（共有 fixture）を**単独所有**する。後続 spec（**W4 emo-dpi-scaling**〔graphics テスト増設面〕・**W5 kero-balloon**〔areka `emo2_boot/spine.rs` 檻域〕）は本 spec 完了後に本構造へ **rebase 必須**（design.md Revalidation Triggers・brief 追記㊹）。
