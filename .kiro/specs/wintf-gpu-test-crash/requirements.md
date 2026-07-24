@@ -19,7 +19,7 @@
 #### Acceptance Criteria
 1. When `cargo test -p wintf --test graphics` を既定（並列）設定で実行する, the wintf graphics テストバイナリ shall 91 テストすべてを `STATUS_ACCESS_VIOLATION` を発生させずに完了する
 2. When `cargo test -p wintf --test graphics -- --test-threads=1` で逐次実行する, the wintf graphics テストバイナリ shall どの WUC スタック生成テストの組み合わせが連続しても `STATUS_ACCESS_VIOLATION` を発生させずに完了する
-3. While 既知の最小再現ペア（`clip_sync_system_test::clip_sync_applies_all_clip_shape_variants` に続けて `clip_sync_system_test::clip_sync_clears_clip_when_clip_is_none` を同一プロセスで実行する状態にある, the wintf graphics テストバイナリ shall 両テストをクラッシュなく完了する
+3. While 既知の最小再現ペア `clip_sync_system_test::clip_sync_applies_all_clip_shape_variants` に続けて `clip_sync_system_test::clip_sync_clears_clip_when_clip_is_none` を同一プロセスで実行する状態にある, the wintf graphics テストバイナリ shall 両テストをクラッシュなく完了する
 4. The wintf graphics テストスイート shall 少なくとも 5 回の連続フルスイート実行のすべてでクラッシュ・flake が 0 件である
 5. The wintf graphics テストスイート shall 修正後も外部 CI インフラを介さずローカル開発機上の `cargo test` で実行可能なままである（実 GPU/WUC を要する既存の検証様式を維持する）
 
