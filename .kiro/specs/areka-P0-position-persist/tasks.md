@@ -91,7 +91,7 @@
   - _Depends: 4.1_
   - _Boundary: areka-ghost/prop_sink.rs_
 
-- [ ] 5. Core: kanade 初回起動ゲートと Reference0
+- [x] 5. Core: kanade 初回起動ゲートと Reference0
 - [x] 5.1 (P) `KanadeConfig` additive フィールドの追加
   - `first_boot: bool`（既定 true）・`vanish_count: u32`（既定 0）・`first_boot_epilogue: Vec<EpilogueCommand>`（既定空）を additive 追加する。既定値により既存構築点は挙動不変を保つ
   - 観測可能な完了条件: 既定値で構築した `KanadeConfig` が現行の boot happy-path 檻を無改変のまま通過すること
@@ -107,7 +107,7 @@
   - _Depends: 5.1_
   - _Boundary: areka-kanade/schedule/events.rs_
 
-- [ ] 5.3 `on_prefetch_reply` のゲート分岐と epilogue 添付
+- [x] 5.3 `on_prefetch_reply` のゲート分岐と epilogue 添付
   - `on_prefetch_reply` の末尾を `config.first_boot` で分岐させ、true なら新シグネチャの `on_first_boot(&snapshot, config.vanish_count)` を呼ぶ OnFirstBoot へ、false なら OnFirstBoot を発行せず OnBoot から `Phase::BootMain` へ直行させる（204 フォールスルーは不変）
   - `to_baseware_version`（BootType-Value／BootMain-Value／BootMain-204 の単一合流点）で `config.first_boot_epilogue` を StartTalk へ添付する。トーク本文が存在しない初回（204-204）は epilogue-only の StartTalk を発行し、epilogue が空の通常起動 204 は従来どおり StartTalk なしとする
   - BootPrefetch 段（username 照会）自体は変更しない
