@@ -27,7 +27,7 @@ areka の基本設計は **DPI追従**（画面 DPI に追従してマスコッ�
   - 窓 DPI 情報は表示基盤（wintf）の既存 DPI 機構（実値取得＋DPI 変化のライブ更新）を consume するのみで、新規の外部依存・新規の基盤改造を前提としない。
   - **W4 同居の事前割当契約（roadmap 追記㊵/㊹/㊺）**: 本仕様の編集面は採寸源（`crates/areka/src/placement/measure.rs`）＋emo-atlas/compose/present＋wintf に限定し、`spawn.rs` は `position-persist` 単独所有ゆえ**不触**（窓寸の k 倍は採寸源で吸収する）。設計が spawn.rs 改変を要求する形に着地した場合、その部分は W5 へ送る（エスケープ条項）。
   - **W5 `kero-balloon` への申し送り（追記㊹）**: 採寸関数 `measure_scope_sizes` の再構造は、後続がバルーン採寸を scope 別へ改造できる席（per-scope バルーン寸法の余地）を潰さない関数分解とする。
-  - **割込 `wintf-gpu-test-crash` 完了への rebase（追記㊺）**: 本仕様で新設する WUC（Compositor）生成を伴う graphics テストは、完了済み共有 GPU オーナースレッド fixture（`crates/wintf/tests/graphics/common/mod.rs` の `on_gpu_owner_thread`）経由で実行する（素の別スレッド生成は同一プロセス 2 個目 Compositor の AV を誘発する）。
+  - **割込 `wintf-gpu-test-crash` 完了への rebase（追記㊺）**: 本仕様のテスト増分は同一プロセス内 2 個目 Compositor 生成の AV を再導入しない。wintf 配下の graphics テストターゲット（既存テストと同一プロセスで WUC を生成する場所）へ新設する場合は、完了済み共有 GPU オーナースレッド fixture（`crates/wintf/tests/graphics/common/mod.rs` の `on_gpu_owner_thread`）経由で実行する（テスト配置の振り分け基準は設計フェーズで明文化＝research.md Research Needed #7）。
   - author_dpi の正典値（ukadoc 準拠）・k 導出規約（整数段階か連続か）・拡大方式（Strategy A: k× 鮮明ラスタ／Strategy B: 合成 transform）・再スケール機構・入れ子/mayuna 着せ替えとの合成機構の確定は、設計フェーズの設計ディスカッションで行う。
 
 ## Requirements
@@ -86,8 +86,9 @@ areka の基本設計は **DPI追従**（画面 DPI に追従してマスコッ�
 
 1. The emo エンジン shall k× 拡大の出力正しさ（拡大後寸法・拡大描画結果）をオフスクリーン readback による決定論 unit テストとして `cargo test` で実行可能にする（実 DPI モニタ・synthetic pointer・sleep に依存しない）。
 2. The emo エンジン shall k 導出・寸法丸め・拡大後 extent 導出など純関数化可能な判断分岐を GPU 不要の実行テストで全網羅する。
-3. Where 本仕様が WUC（Compositor）生成を伴う graphics テストを新設するとき、the 当該テスト shall 完了済み `wintf-gpu-test-crash` が確立した共有 GPU オーナースレッド fixture 経由で実行し、同一プロセス内 2 個目 Compositor 生成によるクラッシュを再導入しない。
-4. The 本仕様のテスト増分 shall 適用後も `cargo test --workspace` を exit 0 の決定論的緑に保つ。
+3. The 本仕様のテスト増分 shall 同一プロセス内 2 個目 Compositor 生成によるクラッシュ（完了済み `wintf-gpu-test-crash` が根因解消した AV）を再導入しない。
+4. Where 新設テストを wintf 配下の graphics テストターゲット（既存テストと同一プロセスで WUC を生成する場所）へ配置するとき、the 当該テスト shall 完了済み共有 GPU オーナースレッド fixture（`on_gpu_owner_thread`）経由で実行する（配置の振り分け基準は設計フェーズで明文化する）。
+5. The 本仕様のテスト増分 shall 適用後も `cargo test --workspace` を exit 0 の決定論的緑に保つ。
 
 ### Requirement 6: 実 DPI 実機観測と人間サインオフ
 
