@@ -206,6 +206,40 @@
 
 ---
 
+## 6.5 設計フェーズ追補（2026-07-24・design.md 生成時の discovery/synthesis 台帳）
+
+> 本節は `/kiro-spec-design` 実行時の追加実測と設計決定の記録。§3 の各軸・§4 の各アイテムはここで**確定**した（正本は design.md・本節は根拠台帳）。
+
+### 追加実測（cue パイプライン・結線シーム署名の裏取り）
+
+- **kanade は script 文字列のみ発行**: 挨拶受付→`StartTalk` 発行は `to_baseware_version`（boot.rs:197-222）の単一点（BootType-Value／BootMain-Value／204 の全経路が通過）。compile は talk アクター内（sakura drive.rs:183-186・`parse`→`compile`→初回 Tick で `with_absolute_start_time` 刻印→`CuePlayer`）。
+- **末尾 cue の発火/破棄意味論（3.4 の構造根拠）**: 末尾 cue（最終 offset・duration 0）は占有 horizon 到達 tick で **TalkDone 送出前に**発火する（runtime.rs tick→settle の順序・実檻確認済み）。中断（Close funnel→`CuePlayer::stop()` runtime.rs:342-347）は**残余 cue を破棄**＝中断された初回挨拶は記録されず次回も初回扱い（R3.4 の意図と構造一致）。
+- **compile の End 切詰め**: `\e` 以降の instruction は台本に載らない——kanade がスクリプト文字列末尾へ `\![…]` を追記する案は **`\e` 終端台本で脱落**するため不成立（→ typed epilogue 採用の決定根拠）。
+- **`SylphyaPublisher`**: `#[derive(Clone)]`・内部 `std::sync::mpsc::Sender<SylphyaMsg>`＝Send（Sync は仮定しない）→ World 保持は **NonSend**（`MouseWiring` 先例）。`persist_put` は fire-and-forget（reply:None 固定）・観測は `barrier()`。
+- **`load_scope`/`save_scope`/`FakePersistIo` は crate 外到達可**（`areka_sylphya::persist::`・sylphya_wiring.rs:21 で消費実績）。boot 時 `build_initial_image` が persist 全 key を正準 dotted へ投影＝spawn 直後から `resolve_dotted_str` で読める（publish 不要・檻確認済み）。
+- **shiori.dir 導出**: `areka_parsers::package::resolve(ghost_root, enc)?.shiori.dir` → `areka_ghost::sylphya_wiring::profile_areka_root`（両方 pub）＝mount 規則の二重化なしで A1 の先読み root を導出可能（§6 の Research Needed 解消）。
+- **`work_area_for_window` は最近傍規則を持つ**（どのモニタにも属さない窓中心→clamp 距離最小の wa）＝モニタ喪失時も wa が引ける。ただし `project_anchor` はアンカー辺の**対応軸のみ**を再導出（Bottom は X 保持）——R5.1 の「作業領域内へ寄せる」を完全化するには**復元専用の補軸 clamp**（`project_restore`）が必要（新規純関数・drag 経路は不変）。
+- **消費者先例**: `MoveCueSink`（名前自己選別・良性スキップ・宛名規律 D8④・Clone+Send 型境界）＋`make_username_resource_sink`（publisher 捕獲）＝`PropSetCueSink` の合成同型。`consumer_ledger.rs` は emo2_boot/ 配下（W4 不触面）。
+
+### 設計決定（確定・design.md へ反映済み）
+
+1. **軸A＝A1 採用**（placement シーム先読み・起動順序不変・emo2_boot 不触）。A2 却下（起動シーケンス大改造＝W4 で不可）・A3 却下（一瞬既定位置表示→ジャンプの体裁劣化）。二度読みは起動時 1 回・書き手不在区間ゆえ一貫。
+2. **軸B**＝`GhostRuntime::sylphya_publisher()` additive アクセサ＋`PersistWiring`（NonSend）＋純関数 entries 構築。保存発火は char/balloon の **DragEnd 2 点のみ**（バルーンは `on_balloon_drag_end` を新設——`on_balloon_drag` は連続イベントで書込トリガにしない）。
+3. **軸C 前半**＝`KanadeConfig` additive 3 フィールド（`first_boot`=true／`vanish_count`=0／`first_boot_epilogue`=空・既定で現行挙動不変）。BootCount は**存在ゲート**（数値解釈しない・§4-8 (iv) 決着）。
+4. **軸C 後半（§4-8 残件の裁定）**: (i) SET キュー名＝`areka.prop.set`・引数＝`[正準 dotted key, 値]`（assignment のみ・増分は `areka.prop.inc` を名前予約で M1 不実装）・埋め込み＝**typed epilogue**（`StartTalk.epilogue` additive → sakura `append_epilogue` が compile 後の CueSheet 末尾へ carrier cue 付加。script 文字列追記は `\e` 切詰めで脱落するため却下）。(ii) 消費者＝`PropSetCueSink`（areka-ghost 新規・`boot()` が sinks へ push＝wired/fallback 両経路被覆・emo2_boot 不触）・書込 key 統制＝**カウンタ key 族（BootCount/VanishCount）限定・scope=Ghost 固定**（WindowPos/BalloonOffset は拒否＝R1.9 単一ライター規律の防衛）。(iii) 204 系＝OnFirstBoot 204→OnBoot Value なら **OnBoot トーク末尾**へ同 epilogue／両方 204（トーク皆無）は **epilogue-only StartTalk**（空 script・正規追跡・即時完走）で書込経路を cue 1 本に保つ。(iv) BootCount 値＝固定 "1"・ゲートは存在判定。正準 key 文字列は ghost が config へ焼き込み搬送（kanade の sylphya 非依存を維持）。
+5. **軸D**＝物理 px・仮想スクリーン絶対 i32 文字列・モニタ識別子不保存（確定）。
+6. **軸E**＝E1（write-through＋FIFO close）を正本＋E2-lite（shutdown 系列で `barrier()` 明示確認・Err=warn 継続・タイムアウト不付与——アクター既死は即 Err）。
+7. **§4-5**＝バルーン基準変換はアンカー辺基準点（Bottom=下端左・Right=右上・Top/Left/Free=左上縮退）との差分で双方向純関数化・in-session `BalloonFollow.offset`（左上基準）は不変。
+8. **§4-6**＝`prepare_never_reads_or_writes_ghost_dat` 檻は**存続**（A1＝prepare 不触は真のまま・doc 更新のみ）＋merge 側へ新契約檻。
+9. **§4-11**＝復元時再射影は merge 純関数内の `project_restore`（`project_anchor`＋補軸 clamp）・snapshot は `open_startup_window` 既存構築を消費。
+10. **§4-12 編集面確定**＝design.md File Structure Plan のとおり（新規 2: placement/persist.rs・ghost prop_sink.rs／改修: main.rs・placement mod/spawn/follow・areka Cargo.toml・ghost runtime/lib・areka-talk・sakura compile/drive・kanade msg/boot/events＋テスト追随）。`measure.rs`／`input_events/`／`emo2_boot/`（consumer_ledger.rs 含む）／dola cue／sylphya persist 中核は**不触**。`areka.prop.set` の台帳登記 1 行は W4 完了後の後送（design.md Revalidation Triggers 登記済み・暫定担保＝`areka.` 名前空間規約＋sink 檻）。
+
+### リスクと緩和（設計時点）
+
+- `StartTalk`／`on_first_boot` 署名波及＝コンパイラ捕捉の機械的追随（`StartTalk::new` で構築点更新を最小化）。
+- 204-204＋初回の epilogue-only talk は baseware_version NOTIFY の Status に talking が一瞬立つ（正規追跡の帰結・emo2 非顕現・kanade 檻で新経路固定・idle-talk の Status 契約とは非交差）。
+- ゴースト自書き `\![areka.prop.set,…]` は同経路消費されるが Ghost 自スコープ・カウンタ key 限定＝実害なし（受容面として design.md に明記・key 統制檻で固定）。
+
 ## 7. 次ステップ
 
 ギャップ分析は本改訂で現行 main（b0de116 ベース）へ再突合済み。次は要件ディスカッション（`/kiro-requirements-discussion` 相当・§4 の 12 論点を供給）→ `/kiro-design areka-P0-position-persist` で技術設計へ。design 冒頭で確定すべきは **#1 読取時機（軸A）**・**#2 publisher 到達経路**・**#7/#8 kanade 注入と書込タイミング**。本 spec は「新機構を作らず、実物のストアと実物の注入口を結線する」層に徹する（要件 Introduction と整合）。
