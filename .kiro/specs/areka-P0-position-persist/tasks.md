@@ -185,7 +185,7 @@
   - _Depends: 4.2, 4.3, 5.3_
   - _Boundary: areka-ghost tests, areka-sakura tests_
 
-- [ ] 8.6 spine_e2e_test の第 2 起動シナリオ（起動記録あり）追加
+- [x] 8.6 spine_e2e_test の第 2 起動シナリオ（起動記録あり）追加
   - `BootCount` を事前に永続化した fixture ghost で起動し、OnFirstBoot が発行されず OnBoot から運行が始まることを確認する新規シナリオを追加する
   - 観測可能な完了条件: 起動記録ありの fixture 起動で OnFirstBoot 発行が観測されず、`boot_gate skip_first_boot` ログが出力されることがテストで確認できること
   - _Requirements: 3.1, 3.3, 4.1, 6.3, 8.3_
