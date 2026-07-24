@@ -2402,4 +2402,262 @@ mod tests {
             "非 hit／stale／非表示の click は一切 send されない（Inbox は Empty・R6.2/6.3）"
         );
     }
+
+    // -------------------------------------------------------------------------
+    // 資源縮退・Tunnel 素通し 副作用ゼロ回帰檻（task 7.2・design Testing Strategy Integration
+    // Tests item 3/4・Error Handling／R8.1/8.4）
+    //
+    // 判断分岐そのもの（Tunnel 短絡／Emo2Wiring 不在=debug 縮退／BalloonWiring 不在=error 縮退／
+    // marker 不在=error）の**実行網羅**は task 4.1（moved）／4.2（pressed）の各縮退檻が既に閉じている
+    // （moved_tunnel_phase_is_noop_false／moved_emo2_absent_degrades_with_debug_not_error／
+    // moved_balloon_wiring_absent_degrades_with_error ほか・pressed 側も同型）。ただしそれらは
+    // 「戻り値 false＋ログレベル」までで、**観測資源を同居させた副作用ゼロ三点**——(a) send なし
+    // （present の `ChoiceSelectionInbox.try_recv()==Empty`）、(b) `BalloonWiring.hover` 不変、
+    // (c) runtime へ `inject_choice_hover` 未適用（借用/poison を残さず `choice_active` 不変・moved は
+    // `choice_hover_inject` を出さない）——までは固定していない（Tunnel 檻は資源を一切挿入せず、Emo2 不在
+    // 檻は BalloonWiring を挿入しないため観測点が無かった）。
+    //
+    // 本 7.2 檻はその副作用ゼロ次元を**両ハンドラ×{Tunnel, Emo2Wiring 不在, BalloonWiring 不在}**へ
+    // first-class に追試する（縮退時に対応ログ＝debug／error が出つつ、いかなる観測可能状態も動かない
+    // ことを、観測資源を同居させて固定する）。判断分岐の重複網羅ではなく副作用ゼロ観測の追加ゆえ非重複。
+    //
+    // 8.4（スレッド親和・NonSend 借用は Input スケジュール排他システム内）: 本檻は各ハンドラを単一スレッドの
+    // `&mut World` 排他呼出で直接叩く——NonSend 資源（`Emo2Wiring`／`BalloonWiring`・`Rc<RefCell>`）の借用が
+    // 排他システム内でのみ起きるという構造契約は、ハンドラの `&mut World` シグネチャ自体が強制する
+    // （別途スレッドテストは不要）。
+    // -------------------------------------------------------------------------
+
+    /// 縮退シナリオ（観測資源を同居させた副作用ゼロ回帰の分類）。
+    #[derive(Clone, Copy)]
+    enum Degrade {
+        /// Tunnel 相（全資源 present でも即 false・一切触れない）。
+        Tunnel,
+        /// `Emo2Wiring` 不在（`BalloonWiring` は present）＝debug 正常縮退。
+        Emo2Absent,
+        /// `BalloonWiring` 不在（`Emo2Wiring` は present）＝error 構成異常縮退。
+        BalloonWiringAbsent,
+    }
+
+    /// moved: Tunnel／Emo2Wiring 不在／BalloonWiring 不在のいずれも副作用ゼロで縮退する（8.1/8.4）。
+    ///
+    /// 各シナリオで観測資源（Emo2Wiring の active runtime・hover=Some(2) 仕込みの BalloonWiring・Inbox）を
+    /// 可能な限り同居させ、(1) 戻り値 false、(2) 対応ログレベル（Tunnel=無縮退ログ・Emo2 不在=DEBUG・
+    /// BalloonWiring 不在=ERROR）、(3) 副作用ゼロ三点（choice_hover_inject なし／hover 不変／Inbox Empty／
+    /// runtime 借用・active 不変）を固定する。判断分岐網羅は 4.1、本檻は副作用ゼロ観測を担う。
+    #[test]
+    fn moved_tunnel_and_resource_degrade_are_side_effect_free() {
+        for scenario in [Degrade::Tunnel, Degrade::Emo2Absent, Degrade::BalloonWiringAbsent] {
+            let mut world = World::new();
+            let e = world.spawn(BalloonWindowMarker { scope: 0 }).id();
+
+            // Emo2Wiring（active choice runtime）は Tunnel／BalloonWiringAbsent で present。
+            let runtime = match scenario {
+                Degrade::Tunnel | Degrade::BalloonWiringAbsent => {
+                    let rt = runtime_with_active_choice("0");
+                    world.insert_non_send_resource(headless_emo2_wiring(Rc::clone(&rt)));
+                    Some(rt)
+                }
+                Degrade::Emo2Absent => None,
+            };
+
+            // BalloonWiring（hover=Some(2) 仕込み）＋Inbox は Tunnel／Emo2Absent で present。
+            let inbox_rx = match scenario {
+                Degrade::Tunnel | Degrade::Emo2Absent => {
+                    let (tx, rx) = mpsc::channel::<ChoiceSelection>();
+                    let mut bw = BalloonWiring::new(tx);
+                    bw.set_hover(0, Some(2));
+                    world.insert_non_send_resource(bw);
+                    Some(rx)
+                }
+                Degrade::BalloonWiringAbsent => None,
+            };
+
+            // 事象: Tunnel は Tunnel 相（資源 present でも短絡）・それ以外は通常 Bubble move。
+            let ev = match scenario {
+                Degrade::Tunnel => Phase::Tunnel(PointerState {
+                    client_point: Point { x: 10, y: 20 },
+                    ..Default::default()
+                }),
+                _ => bubble_move(10, 20),
+            };
+
+            let logs = capture_logs(|| {
+                assert!(
+                    !on_balloon_pointer_moved(&mut world, e, e, &ev),
+                    "縮退時 moved は常に false（非侵襲）"
+                );
+            });
+
+            // ── (2) 縮退時の対応ログレベル（8.1 の観測条件）─────────────────────────────────
+            match scenario {
+                Degrade::Tunnel => assert!(
+                    !logs
+                        .iter()
+                        .any(|l| l.contains("choice_hover_inject") || l.contains("level=ERROR")),
+                    "Tunnel は短絡ゆえ inject も error も出さない: {logs:?}"
+                ),
+                Degrade::Emo2Absent => {
+                    assert!(
+                        logs.iter()
+                            .any(|l| l.contains("level=DEBUG") && l.contains("choice_moved_no_emo2")),
+                        "Emo2Wiring 不在は DEBUG で正常縮退（choice_moved_no_emo2）: {logs:?}"
+                    );
+                    assert!(
+                        !logs.iter().any(|l| l.contains("level=ERROR")),
+                        "Emo2Wiring 不在は構成異常でない＝ERROR を出さない: {logs:?}"
+                    );
+                }
+                Degrade::BalloonWiringAbsent => assert!(
+                    logs.iter()
+                        .any(|l| l.contains("level=ERROR") && l.contains("balloon_wiring_missing")),
+                    "BalloonWiring 不在は ERROR の構成異常（balloon_wiring_missing）: {logs:?}"
+                ),
+            }
+
+            // ── (3) 副作用ゼロ①: runtime へ inject_choice_hover 未適用（全シナリオ共通）───────────
+            assert!(
+                !logs.iter().any(|l| l.contains("choice_hover_inject")),
+                "縮退では runtime へ hover を注入しない（choice_hover_inject なし）: {logs:?}"
+            );
+
+            // ── (3) 副作用ゼロ②③: BalloonWiring.hover 不変＋send なし（present の場合）─────────────
+            if let Some(rx) = &inbox_rx {
+                assert_eq!(
+                    world
+                        .get_non_send_resource::<BalloonWiring>()
+                        .unwrap()
+                        .hover(0),
+                    Some(2),
+                    "縮退では BalloonWiring.hover[scope] を動かさない（仕込み Some(2) 不変）"
+                );
+                assert!(
+                    rx.try_recv().is_err(),
+                    "縮退では ChoiceSelection を発行しない（Inbox は Empty）"
+                );
+            }
+
+            // ── (3) 副作用ゼロ④: runtime 未変更（present の場合）借用/poison を残さず active 不変 ─────
+            if let Some(rt) = &runtime {
+                assert!(
+                    rt.try_borrow_mut().is_ok(),
+                    "縮退では runtime に借用/poison を残さない"
+                );
+                assert!(
+                    rt.borrow().choice_active(&ActorKey::from("0")),
+                    "縮退では runtime の choice 状態を動かさない（active 不変）"
+                );
+            }
+        }
+    }
+
+    /// pressed: Tunnel／Emo2Wiring 不在／BalloonWiring 不在のいずれも副作用ゼロで縮退する（8.1/8.4）。
+    ///
+    /// moved 版と対称。pressed の副作用は発行（send）ゆえ副作用ゼロ観測は choice_selected info の非発火＋
+    /// present な Inbox の `try_recv()==Empty`＋BalloonWiring.hover 不変＋runtime 借用/active 不変で固定する。
+    /// 判断分岐網羅は 4.2、本檻は副作用ゼロ観測を担う。
+    #[test]
+    fn pressed_tunnel_and_resource_degrade_are_side_effect_free() {
+        for scenario in [Degrade::Tunnel, Degrade::Emo2Absent, Degrade::BalloonWiringAbsent] {
+            let mut world = World::new();
+            let e = world.spawn(BalloonWindowMarker { scope: 0 }).id();
+
+            let runtime = match scenario {
+                Degrade::Tunnel | Degrade::BalloonWiringAbsent => {
+                    let rt = runtime_with_active_choice("0");
+                    world.insert_non_send_resource(headless_emo2_wiring(Rc::clone(&rt)));
+                    Some(rt)
+                }
+                Degrade::Emo2Absent => None,
+            };
+
+            let inbox_rx = match scenario {
+                Degrade::Tunnel | Degrade::Emo2Absent => {
+                    let (tx, rx) = mpsc::channel::<ChoiceSelection>();
+                    let mut bw = BalloonWiring::new(tx);
+                    bw.set_hover(0, Some(2));
+                    world.insert_non_send_resource(bw);
+                    Some(rx)
+                }
+                Degrade::BalloonWiringAbsent => None,
+            };
+
+            // 事象: Tunnel は Tunnel 相（left_down=true でも Tunnel 短絡が先）・それ以外は左シングル押下。
+            let ev = match scenario {
+                Degrade::Tunnel => Phase::Tunnel(PointerState {
+                    client_point: Point { x: 10, y: 20 },
+                    left_down: true,
+                    ..Default::default()
+                }),
+                _ => bubble_left_press(10, 20),
+            };
+
+            let logs = capture_logs(|| {
+                assert!(
+                    !on_balloon_pointer_pressed(&mut world, e, e, &ev),
+                    "縮退時 pressed は常に false（発行なし）"
+                );
+            });
+
+            // ── (2) 縮退時の対応ログレベル（8.1 の観測条件）─────────────────────────────────
+            match scenario {
+                Degrade::Tunnel => assert!(
+                    !logs
+                        .iter()
+                        .any(|l| l.contains("choice_selected") || l.contains("level=ERROR")),
+                    "Tunnel は短絡ゆえ choice_selected も error も出さない: {logs:?}"
+                ),
+                Degrade::Emo2Absent => {
+                    assert!(
+                        logs.iter().any(
+                            |l| l.contains("level=DEBUG") && l.contains("choice_pressed_no_emo2")
+                        ),
+                        "Emo2Wiring 不在は DEBUG で正常縮退（choice_pressed_no_emo2）: {logs:?}"
+                    );
+                    assert!(
+                        !logs.iter().any(|l| l.contains("level=ERROR")),
+                        "Emo2Wiring 不在は構成異常でない＝ERROR を出さない: {logs:?}"
+                    );
+                }
+                Degrade::BalloonWiringAbsent => assert!(
+                    logs.iter()
+                        .any(|l| l.contains("level=ERROR") && l.contains("balloon_wiring_missing")),
+                    "BalloonWiring 不在は ERROR の構成異常（balloon_wiring_missing）: {logs:?}"
+                ),
+            }
+
+            // ── (3) 副作用ゼロ①: 選択発行 info（choice_selected）を出さない（全シナリオ共通）───────
+            assert!(
+                !logs.iter().any(|l| l.contains("choice_selected")),
+                "縮退では選択を発行しない（choice_selected info なし）: {logs:?}"
+            );
+
+            // ── (3) 副作用ゼロ②③: BalloonWiring.hover 不変＋send なし（present の場合）─────────────
+            if let Some(rx) = &inbox_rx {
+                assert_eq!(
+                    world
+                        .get_non_send_resource::<BalloonWiring>()
+                        .unwrap()
+                        .hover(0),
+                    Some(2),
+                    "縮退では BalloonWiring.hover[scope] を動かさない（pressed は元来非更新だが回帰固定）"
+                );
+                assert!(
+                    rx.try_recv().is_err(),
+                    "縮退では ChoiceSelection を発行しない（Inbox は Empty）"
+                );
+            }
+
+            // ── (3) 副作用ゼロ④: runtime 未変更（present の場合）借用/poison を残さず active 不変 ─────
+            if let Some(rt) = &runtime {
+                assert!(
+                    rt.try_borrow_mut().is_ok(),
+                    "縮退では runtime に借用/poison を残さない"
+                );
+                assert!(
+                    rt.borrow().choice_active(&ActorKey::from("0")),
+                    "縮退では runtime の choice 状態を動かさない（active 不変）"
+                );
+            }
+        }
+    }
 }

@@ -91,7 +91,7 @@
   - _Requirements: 6.1, 6.2, 6.3, 6.4, 6.5_
   - _Depends: 6.1_
 
-- [ ] 7.2 資源縮退・Tunnel 素通し回帰檻
+- [x] 7.2 資源縮退・Tunnel 素通し回帰檻
   - `Emo2Wiring`／`BalloonWiring` 不在時の no-op 縮退と、`Phase::Tunnel` での両ハンドラの素通し（副作用ゼロ・`false` 返却）をテストする
   - Observable: 縮退時の対応するログ（`debug!`／`error!`）と副作用ゼロ、Tunnel 相での副作用ゼロが確認される
   - _Requirements: 8.1, 8.4_
