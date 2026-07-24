@@ -3,6 +3,11 @@
 > **Discovery 実施**: 2026-07-24・sylphya 実装セッション（worktree `claude/areka-p0-sylphya-fc9b81`）にて。
 > sylphya Task 10.3 実機サインオフ中に開発者が実画面で発見（kero＝エモ側バルーンがさくらスクリプト指定と異なる）。**実施は別セッション**——本ブリーフが引き継ぎ正本・調査は本セッションでコード実読済み（下記は全て path:line 根拠付きの確定事実）。
 
+> **📌 2026-07-24 追記㊹ウェーブ編成（本ブロックが以下の本文より優先）**:
+> - **ウェーブ配置=W5 同居4本目**（開発者裁定＝`dpi-window-vanish` ∥ `collision-dpi-hittest` ∥ `choice-select-events` と実測で互いに素）。**W4 は不可**——`emo-dpi-scaling` と **`measure_scope_sizes`（measure.rs:62-131）同一関数衝突**（本 spec のバルーン採寸 scope 別化と dpi の k 倍が同じ scope ループへ収斂）＝W4 dpi の再構造**後着**で per-scope 化を再突合すること。**W6 `balloon-visibility` より前が必須**——`run_attach_phase` 末尾約20行（無条件 ShowSurface :444-453 ⇄ `connect_balloon_text` :456-462）の同一関数衝突＝本 spec が先に per-scope BalloonModel の形を確定し、balloon-visibility がその実形へ再突合する。
+> - **行アンカーの陳腐化補正（2026-07-24 実測・seriko-loop マージ起因）**: frame.rs:452-457 → **:456-462**（呼出）/**:483-502**（fn 定義・共有 `&BalloonModel` 受渡は :462）・assets.rs:240-243 → **:258-262**（balloon ループ）/**:263**（build_balloon_model・`LoopTables` ブロック :269-278 が挿入済み）・measure.rs:208-229,380 → **:222-232**（balloons0 ハードコード）/**:353,:382**（共有サイズ前提のテスト定数）。`BALLOON_FACE0_TXT` assets.rs:79 は不変。`ShowSurface` は `binds`＋`pattern` 引数付きの新形（seriko-loop R5.4）。
+> - **DoD 注記の失効予定**: 本文末尾の「workspace は wintf GPU クラッシュで赤」注記は、割込ウェーブ `wintf-gpu-test-crash`（本 spec より先に完遂）で解消済みの前提＝本 spec の DoD は素の workspace 緑で判定。
+
 ## Problem
 
 kero（相方・エモ）側のバルーンが、バルーン定義の指定どおりに表示されない。emo2-kakukaku バルーンは **kero 専用の `balloonk0.png`＋`balloonk0s.txt`**（windowposition -190,-75／validrect 40,-70,24,-48＝sakura 側と別物）を持つのに、実機では **kero も sakura 用 `balloons0.png`＋`balloons0s.txt` の見た目・配置で表示**される（sylphya 10.3 サインオフのスクリーンショットで両バルーンが同一形状なのが観測そのもの）。

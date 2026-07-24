@@ -3,6 +3,11 @@
 > **Discovery 実施**: 2026-07-24・sylphya 実装セッション（worktree `claude/areka-p0-sylphya-fc9b81`）にて。
 > areka-P0-sylphya の DoD ゲート（Task 10.2 `cargo test --workspace`）で初観測し、境界外・pre-existing と判定して切り出した専用 spec の起票ブリーフ。**実施は別セッション**（本ブリーフが引き継ぎの正本・診断は全て本セッションで実測済み）。
 
+> **📌 2026-07-24 追記㊹ウェーブ編成（本ブロックが以下の本文より優先）**:
+> - **ウェーブ配置=割込（W4 前・単独先行）**——開発者裁定 2026-07-24。全 spec の DoD Test Gate を閉塞する挙動バグ最優先＝W4（position-persist ∥ choice-interact ∥ emo-dpi-scaling）は本 spec 完了後に開始し、各 spec の DoD を最初から素の workspace 緑で判定する。
+> - **実測干渉（2026-07-24）**: src 編集面（`wuc_resource.rs`／`com/wuc.rs`／`core.rs`〔GraphicsCore :15-38〕）は W4 3本と完全に素。wintf の SetTransform 経路は `ecs/graphics/systems/render.rs`・DPI は `ecs/window/dpi.rs` 等＝WUC 寿命ファイルと非交差。**エスケープ条項**: 修正が Approach B（tests/graphics ハーネス共有 fixture 化）へ転んだ場合のみ、`crates/wintf/tests/graphics/*`（W4 emo-dpi-scaling のテスト増設面）と areka `emo2_boot/spine.rs`（GPU stack setup :247-257・W5 kero-balloon の S3/S4 檻域 :800-903）を共有＝B 採用時は本 spec がハーネス構造を単独所有し後続 spec は rebase。
+> - areka bin 側の波及テストは `spine_e2e_kero_blink_one_cycle_golden`（spine.rs:1701）＝本文「影響範囲の拡大」節の実アンカー。
+
 ## Problem
 
 `cargo test -p wintf --test graphics` が **STATUS_ACCESS_VIOLATION (0xc0000005) で確定クラッシュ**する（flake ではない・100% 再現）。`cargo test --workspace` はこの 1 点だけで exit 非 0 となり、**全 spec の kiro-complete DoD Test Gate（workspace 緑）が閉塞**している。直近では areka-P0-sylphya の完了が「feature 5 クレート緑・workspace 一括だけ赤」という条件付き判定を強いられた。放置すれば以後のすべての spec 完了が同じ星取り注記を引きずる。
