@@ -220,6 +220,13 @@ impl GhostRuntime {
         &self.dispatcher_tx
     }
 
+    /// sylphya（統一プロパティシステム）供給端への参照（design.md「C5 GhostRuntime 増分」・
+    /// requirements.md 6.2）。`kanade()`／`dispatcher()` と同型の additive アクセサで、main が
+    /// この clone を捕捉して `PersistWiring`（位置永続の write-through 端）を組む。
+    pub fn sylphya_publisher(&self) -> &SylphyaPublisher {
+        &self.sylphya_publisher
+    }
+
     /// 終了統括（design.md「終了（shutdown）シーケンス」・要件 6.1/6.4/6.5）。
     ///
     /// 手順: `KanadeMsg::ForceQuit(reason)` 送出 → kanade join → `DispatcherMsg::Close`
@@ -904,6 +911,65 @@ mod tests {
                 sylphya_handle
                     .join()
                     .expect("sylphya should terminate normally after Close");
+            },
+        );
+
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    // ---- sylphya_publisher() アクセサ（task 3.1・position-persist） ----
+
+    /// シナリオ（task 3.1・position-persist）: `boot` した `GhostRuntime` から
+    /// [`GhostRuntime::sylphya_publisher`] で sylphya 供給端の参照を取得し、その参照経由で
+    /// `persist_put`（永続 put の投函）が呼び出せることを確認する（requirements.md 6.2・
+    /// design.md「C5 GhostRuntime 増分」——main が `PersistWiring` を組むために公開する
+    /// `kanade()`／`dispatcher()` と同型の additive アクセサ）。
+    ///
+    /// アクセサが返すのは boot が据えた生きた sylphya アクターの供給端であることを、
+    /// `persist_put` 投函後に `barrier()` が `Ok(())` を返す（＝アクターが投函を処理して
+    /// 反映を完了できた）ことで観測する（fire-and-forget な `persist_put` 自体は戻り値を
+    /// 持たないため、直後の反映フェンスで生存を証拠づける）。
+    #[test]
+    fn sylphya_publisher_accessor_yields_live_publisher_that_accepts_persist_put() {
+        let root = unique_temp_dir(
+            "sylphya_publisher_accessor_yields_live_publisher_that_accepts_persist_put",
+        );
+        let _ = std::fs::remove_dir_all(&root);
+        write_minimal_resolvable_ghost_fixture(&root);
+
+        let options = GhostBootOptions {
+            ghost_root: root.clone(),
+            default_encoding: DefaultEncoding::Utf8,
+            shiori: ShioriWiring::Custom(Box::new(|| {
+                Ok(Box::new(FakeShioriBackend) as Box<dyn ShioriBackend>)
+            })),
+            sinks: vec![Box::new(NoopSink), Box::new(NoopSink)],
+            system_vars: SystemVarWiring::Custom(test_system_vars()),
+            app_profile_dir: None,
+            ticker: TickerMode::Disabled,
+        };
+
+        let runtime = boot(options).expect("boot should succeed for a resolvable ghost_root");
+
+        // アクセサ経由で取得した供給端で persist_put が呼び出せる（requirements.md 6.2）。
+        let publisher: &areka_sylphya::SylphyaPublisher = runtime.sylphya_publisher();
+        publisher.persist_put(
+            areka_sylphya::PersistScope::Ghost,
+            vec![(areka_sylphya::PersistKey::BootCount, "1".into())],
+        );
+
+        // 反映フェンスで、アクセサが返したのが生きた供給端であることを観測する
+        // （投函が処理され反映が完了 → sylphya アクター生存）。宙吊り防止に有界化。
+        run_bounded(
+            "barrier after persist_put via sylphya_publisher()",
+            std::time::Duration::from_secs(10),
+            move || {
+                runtime
+                    .sylphya_publisher()
+                    .barrier()
+                    .expect("sylphya actor should process the persist_put and reflect it");
+                // アクター後片付け（宙吊りスレッド回避のため clean shutdown）。
+                let _ = runtime.shutdown(areka_kanade::CloseReason::System);
             },
         );
 

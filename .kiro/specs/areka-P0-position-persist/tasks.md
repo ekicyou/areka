@@ -55,7 +55,7 @@
   - _Boundary: placement/spawn.rs, placement/follow.rs_
 
 - [ ] 3. Core: GhostRuntime の公開面拡張
-- [ ] 3.1 (P) `sylphya_publisher()` アクセサの追加
+- [x] 3.1 (P) `sylphya_publisher()` アクセサの追加
   - `GhostRuntime` へ `kanade()`/`dispatcher()` と同型の additive アクセサを追加し、UI 側（main.rs）が `SylphyaPublisher` の clone を取得できるようにする
   - 観測可能な完了条件: アクセサ経由で取得した publisher で `persist_put` が呼び出せることをテストで確認できること
   - _Requirements: 6.2_
