@@ -148,3 +148,35 @@ Phase 1: per-target k の第一級化（導出・保持・`scale()` 照会・k=1
 ## 6. 追記（2026-07-24 要件ディスカッション #1 開発者裁定）
 
 SSP の乗算列（ユーザー拡大率×`\![set,scaling]`×SERIKO scaling・モニタ非依存固定）は**輸入しない**。areka は現代的 DPI 運用として **最終拡大率 = アプリ管理拡大率 × DPI 由来係数 k（モニタ DPI ÷ author_dpi）** の 2 因子モデルを採る（例: アプリ 200% × モニタ 200% = 最終 400%。モニタ間移動で最終拡大率が変化する＝SSP と真逆の思想）。本仕様はアプリ管理拡大率を 1.0 固定の縮退シームとして予約し、実設定手段は将来 spec（追跡の要否は別セッション棚卸しで裁定）。§1.6 の SSP 周辺語彙は「輸入対象」ではなく「写像し得る将来因子の参考資料」へ位置付けを変更。Research #1 のシーム設計はこの 2 因子モデルを前提に確定すること。
+
+---
+
+## 7. 設計フェーズ追記（2026-07-24 kiro-spec-design・discovery 再検証＋設計決定の記録）
+
+### 7.1 Discovery 再検証（light discovery・アンカー実測）
+
+§1 の全主要アンカーを design 当日に再実測し**全一致**を確認した（`CURRENT_COMPOSE_SCALE` presenter.rs:126／`TextSlotView.scale` 唯一代入 :435／`scale()` 単一変更点宣言 :116-122／`PresentTarget` scale 無し :52-77／`compute_extent` plan.rs:451／blit.rs 整数規約／chain.rs `upload` の外形変化 `ResizeBuffers` :178-194／mount.rs `physical_arrangement`＝物理 px 直指定／`measure_scope_sizes` measure.rs:62・per-scope ループ／`resize_window_to` follow.rs:553＋単一ライター `enqueue_window_set_pos` :729／wintf `DPI` dpi.rs（`scale_x/y` :61-66・`to_physical_*`＝round half away from zero :114-128）／`on_gpu_owner_thread` wintf tests/graphics/common/mod.rs:75）。追加確認:
+
+- **wintf `enumerate_monitors()`（monitor.rs:173・pub）＋ `Monitor{ dpi, is_primary }`** が既に公開 → 採寸時の初期 k₀ 導出（Research #5）は **wintf 改造ゼロ**で consume できる。
+- `load_descript_source`（source.rs:102）の `shell_kv` は生 BTreeMap → `seriko.dpi` はパーサ改造なしで読める（§1.6 確認どおり）。
+- `ComposeCache` は容量 1 スロット・`ComposeKey{surface_id, binds, pattern}`（cache.rs:51-55）・`insert` がマスクを 1 回生成（:87-109）。
+- `Emo2Wiring`／`run_attach_phase`（frame.rs）は presenter を直接所有し `attach_target` を 2 箇所（shell :391／balloon :432）で呼ぶ。`anchor_changed_system`（follow.rs:665）が `Changed<T>` 観測の `Local<SystemState>` 先例。
+
+### 7.2 設計決定（D1〜D10・design.md 本文が正本、ここは根拠ログ）
+
+- **D1 author_dpi**: shell=`seriko.dpi`／balloon=`dpi`・既定 96（ukadoc 正典・§1.6）。読取は既存生 KV（shell_kv／balloon descript の lenient KV 読み）＝パーサ改造なし。不正値・0 は warn＋96 縮退。emo2 は宣言なし＝96。→ Research #1 解消。
+- **D2 k 導出規約**: **連続・単一スカラー・有理数表現 `ScaleRatio{num, den}`（既約正準）**。`k = app_scale(1/1 固定) × window_dpi_x / author_dpi`。dpi_x≠dpi_y は warn＋dpi_x 採用。整数段階は不採用（R2.2 の 125%→約1.25 倍が要件文言）。**有理数化により f32 を画素経路から排除**（blit.rs「浮動小数を経路に持ち込まない」規約と無衝突）・cache キー等価も厳密。f32 は照会契約（`scale()`）の出口ビューのみ。→ Research #2 解消。
+- **D3 拡大方式＝Strategy A2（present 段リサンプル）**: 合成（plan/blit）は native 整数のまま**不触**。presenter が合成結果を k× リサンプルした「表示用サーフェス」を cache エントリとして保持し、以後の upload／mask／set_bounds／read_back は従来コードのまま k 寸法へ自動追従（chain の外形追従 :178-194・mount set_bounds 毎回呼び :370 実測済）。B 却下（マスク native 寸 vs client k 倍の不整合が W5 境界を侵食＋bitmap-stretch の鮮明性欠如＋mount.rs 方針逆行）。A1 却下（compose 公開 API とモジュール規約 10.2 への侵食が大きく、emo-compose の決定性檻を再検証させる）。リサンプラ実体は `ComposedSurface` 内部バイトへ到達する必要から **emo-compose の新設 `scale.rs`** に置く（合成経路 plan/blit は不触）。
+- **D4 丸め規約**: **round half away from zero**（既存 `DPI::to_physical_*` と同規約）を単一権威 `scaled_extent`（emo-compose scale.rs）に一本化。非ゼロ入力は最小 1px（0 化クリップ禁止・R2.5）。全消費点（リサンプル出力外形・窓 client・visual bounds・採寸 k 倍）が同関数を通る。→ Research #3 解消。
+- **D5 リサンプラ**: 整数固定小数点 **bilinear（premultiplied BGRA ドメイン・α 込み）**。座標写像は num/den 有理演算＋固定小数点で完全整数・決定論。`k=1/1` は恒等（バイトコピー）＝既存 golden 不変（R7.2）。
+- **D6 cache と再スケール**: `ComposeKey` へ **scale（既約有理）をキー参加**。エントリの `composed` は「k 適用済み表示用」・`mask` はその bytes から生成（既存 insert コード不変）→ AlphaMask 物理 px 契約が無修正整合。DPI 変化＝キー相違＝ミス→再合成＋再サンプル（稀イベントの再合成コストは許容・容量 1 スロット維持）。→ Research #4 解消。
+- **D7 採寸時の初期 k₀**: `enumerate_monitors()` の primary モニタ DPI ÷ author_dpi（shell/balloon 各々）。primary 不明・失敗は 96 相当＋error ログ（R1.4 と同型縮退）。窓生成後は **窓 DPI が正**（`GetDpiForWindow` 実値補正 → `Changed<DPI>` → D8 の reconcile が自己補正・`resize_window_to` のべき等 skip で k₀ 一致時は無振動）。→ Research #5 解消。
+- **D8 動的追従**: emo2_boot frame へ **`run_dpi_phase`** を新設（`Changed<DPI>` を `Local<SystemState>` 先例で観測）→ `EmoPresenter::refresh_scale`（保持した最終 show 入力＝last_show で再表示・照会値と実表示の一貫更新）→ 窓寸 reconcile（char 窓＝`resize_window_to` 再利用／balloon 窓＝follow.rs への **additive** ラッパ `resize_window_keep_position`＝私有 `enqueue_window_set_pos` の位置維持形。単一ライター規律を迂回しない）。「照会値＝実適用 k」不変条件は applied の更新点を表示成立点のみに限定して保つ。
+- **D9 テスト配置の振り分け基準（R5.4 明文化）**: (a) 純関数（k 導出・既約化・丸め・リサンプラ・author_dpi parse・採寸 k 適用）＝各 crate in-crate・GPU 不要・全網羅。(b) GPU readback 檻＝ **areka-emo-present in-crate**（既存 `make_world_with_gpu` 型・別テストバイナリ＝別プロセスゆえ 2 個目 Compositor AV と無縁・R5.3）。(c) **wintf tests/graphics へは wintf 自身の資産を檻に入れる場合のみ**新設し、その場合は `on_gpu_owner_thread` fixture 経由必須——本仕様は wintf 改造ゼロゆえ新設なし。→ Research #7 解消。§1.5 の注意と一致。
+- **D10 実機 2 水準観測**: `apply_show` 成功点の info ログ（target/`k`（num/den・f32）/author_dpi/window_dpi/native 寸/scaled 寸）＋ collision-probe 型の GetClientRect 照合。OS 表示スケール 125%→200% を切替えた 2 回の有界起動（`AREKA_APP_SMOKE_EXIT_MS` 有界 auto-exit・絶対パス起動・RUST_LOG grep 決定論判定）。→ Research #6（B 不採用で消滅）・#8 解消。
+
+### 7.3 Synthesis（3 レンズの記録）
+
+- **一般化**: 「最終拡大率＝アプリ管理拡大率×k」を単一型 `ScaleRatio` の乗算として写像（将来因子は有理係数の乗算で増やせる・語彙温存・§6 裁定準拠）。丸め・k 倍寸法の全消費点を `scaled_extent` 単一権威へ一般化。
+- **Build vs Adopt**: wintf `DPI`/`WM_DPICHANGED`/`enumerate_monitors`/`resize_window_to`/`ComposeCache`/`AlphaMask::from_pbgra32` を全面 adopt（新規 crates.io 依存ゼロ・R7.3）。自作は有理スケール型＋整数 bilinear のみ（D2D/GPU stretch は決定論 readback 檻と Strategy B 却下理由により不適）。
+- **単純化**: 新 ECS component なし・新 PresentCommand variant なし（DPI 追従は UI 側直呼び `refresh_scale`）・cache は容量 1 のまま・スケール専用の再スケールエンジンを持たず「キー相違＝ミス」の既存経路に相乗り。
