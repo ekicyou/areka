@@ -21,9 +21,10 @@
 //!   アンカーの単一真実源・**全 char 窓へ無条件付与**＝Free 窓も resize の identity 射影で
 //!   読む・4.2）＋`DragConfig`（全面ドラッグ・4.1。`move_window` は非 Free アンカーの
 //!   キャラ窓のみ false＝on_char_drag 単一ライター・DD15 v2／4.7、Free は true＝wndproc
-//!   委譲）＋`OnDrag(on_char_drag)`＋`BalloonFollow`。非 Free アンカーの
-//!   キャラ窓はさらに `OnDragEnd(on_char_drag_end)`（最終カーソル位置への同写像適用・
-//!   DD15 v2 (3)）。
+//!   委譲）＋`OnDrag(on_char_drag)`＋`BalloonFollow`。**全**キャラ窓（Free 含む）は
+//!   さらに `OnDragEnd(on_char_drag_end)` を持つ（最終カーソル位置への同写像適用＋
+//!   確定位置の永続 write-through・非 Free は最終再固定・Free は保存専用アーム・
+//!   DD15 v2 (3)・1.1・task 2.2）。
 //!   なおキャラ窓へのポインタハンドラ（`OnPointerMoved`／`OnPointerPressed`）は
 //!   **本モジュールでは付けない**——マウス移動／ダブルクリックを kanade へ配信する結線は
 //!   `input_events::attach_char_pointer_handlers` が spawn 直後に装着する（依存方向
@@ -221,17 +222,16 @@ pub fn spawn_ghost_windows(
             ))
             .id();
 
-        // DragEnd 最終適用の結線（4.7/1.6・task 8.2R/3.1）: 非 Free アンカー
-        // （Bottom/Top/Left/Right）スコープのキャラ窓のみ OnDragEnd（最終 DragEvent
-        // 欠落の穴埋め・DD15 v2 (3)）を付ける。move_window=false と連動し、
-        // on_char_drag／on_char_drag_end が Anchored を読んで単一ライターとして書く。
-        // 判定は anchor 単一値から導出（Req1.6）。単一真実源 Anchored 自体は全 char 窓へ
-        // 上で無条件付与済みゆえ、この分岐からは外す（Free 窓も Anchored(Free) を持つ）。
-        if !p.anchor.is_free() {
-            world
-                .entity_mut(char_window)
-                .insert(OnDragEnd(on_char_drag_end));
-        }
+        // DragEnd 最終適用＋位置保存の結線（1.1/1.9/4.7/1.6・design C2/C3・task 2.2）:
+        // Free 含む**全**キャラ窓へ OnDragEnd を無条件結線する（吸着はドラッグ中の制約で
+        // あって保存条件ではない・1.1）。非 Free は on_char_drag_end が Anchored を読んで
+        // project_anchor でアンカー辺へ最終再固定し（最終 DragEvent 欠落の穴埋め・DD15 v2 (3)）、
+        // Free は射影が identity ゆえ wndproc 確定位置を素通しする保存専用アームとして働く。
+        // いずれも on_char_drag_end 末尾で CharWindowMarker.scope を逆引きして位置を
+        // Ghost 永続スコープへ write-through する。
+        world
+            .entity_mut(char_window)
+            .insert(OnDragEnd(on_char_drag_end));
 
         windows.insert(
             p.scope,
@@ -674,8 +674,9 @@ mod tests {
     /// T-I3（3.1 改訂）: 窓 entity に `BoxStyle` 不在（U2・論理 DIP を持ち込まない）・
     /// `DragConstraint` 不在（DD8・全モニタドラッグ可・4.5）。`DragConfig.move_window`
     /// は「非 Free アンカーのキャラ窓のみ false（単一ライター・DD15 v2・4.7）、Free
-    /// キャラ窓とバルーン窓は true（wndproc 委譲・4.1/4.5）」。DragEnd 最終適用ハンドラ
-    /// （`OnDragEnd`）は非 Free アンカーのキャラ窓にのみ付く。`Anchored` は char 窓のみ
+    /// キャラ窓とバルーン窓は true（wndproc 委譲・4.1/4.5）」。DragEnd ハンドラ
+    /// （`OnDragEnd`）は Free 含む**全**キャラ窓に付く（非 Free は最終再固定・Free は
+    /// 保存専用アーム・1.1・task 2.2）——バルーン窓には付かない。`Anchored` は char 窓のみ
     /// （Free/非 Free とも無条件付与）・バルーン窓には付かない（4.2/1.6）。
     #[test]
     fn t_i3_no_box_style_no_drag_constraint_and_move_window_contract() {
@@ -716,8 +717,8 @@ mod tests {
             "Free キャラ窓は move_window=true（wndproc 委譲・4.1）"
         );
         assert!(
-            world.get::<OnDragEnd>(free_char).is_none(),
-            "Free キャラ窓に OnDragEnd は付けない"
+            world.get::<OnDragEnd>(free_char).is_some(),
+            "Free キャラ窓にも OnDragEnd が付く（全アンカー結線・保存専用アーム・1.1・task 2.2）"
         );
         // Anchored は char 窓のみ（Free/非 Free とも付与）・バルーン窓には付かない（4.2/1.6）
         assert_eq!(

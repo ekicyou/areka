@@ -38,7 +38,7 @@
   - _Requirements: 1.1, 1.9, 6.2, 7.1_
   - _Boundary: placement/persist.rs_
 
-- [ ] 2.2 キャラ窓 DragEnd の全アンカー結線と保存フック
+- [x] 2.2 キャラ窓 DragEnd の全アンカー結線と保存フック
   - `spawn.rs` の非 Free アンカー限定ガードを撤去し、全キャラ窓へ `OnDragEnd` を結線する
   - `on_char_drag_end` の最終確定位置（`mapped`）確定後に、当該窓のスコープと位置から保存 entries を構築して投函するフックを追加する
   - 観測可能な完了条件: 非 Free アンカーのドラッグ確定で該当スコープの窓位置 entries が投函されることをテストで確認できること

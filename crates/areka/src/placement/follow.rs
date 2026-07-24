@@ -41,7 +41,9 @@ use wintf::ecs::pointer::Phase;
 use wintf::ecs::window::monitor::Monitor;
 use wintf::ecs::{Point, SetWindowPosCommand, SizeI, WindowHandle, WindowPos};
 
+use super::persist::{char_pos_entries, persist_entries};
 use super::resolver::{Anchor, PointPx, RectPx, SizePx};
+use super::spawn::CharWindowMarker;
 
 // =============================================================================
 // DragPositionPolicy（task 8.2R・DD15 v2・4.7）
@@ -301,8 +303,9 @@ pub(crate) fn on_char_drag(
     }
 }
 
-/// `OnDragEnd` ハンドラ: 非 Free アンカーのキャラ窓の最終カーソル位置へ同写像を
-/// 適用する（4.7/1.6・DD15 v2 (3)）。分岐は [`Anchored`] で判定する。
+/// `OnDragEnd` ハンドラ: **全アンカー種別**のキャラ窓の最終カーソル位置へ同写像を
+/// 適用し、確定位置を永続へ write-through する（4.7/1.6・1.1/1.9・DD15 v2 (3)・
+/// design C2）。分岐は [`Anchored`] で判定する。
 ///
 /// wintf の accumulator は LBUTTONUP で `current_dragging_entity` を先にクリア
 /// するため、最終カーソル位置の DragEvent は配送されない（debug 調査 2026-07-11）。
@@ -314,8 +317,23 @@ pub(crate) fn on_char_drag(
 /// 窓は wndproc の巻き戻しが存在せず、吸着不変量（Y=下端）を満たす位置で終える
 /// のが 4.7 の意図に最も忠実（M1 簡素化・開始位置への復元は将来領分）。
 ///
-/// spawn が非 Free アンカーのキャラ窓にのみ結線する。Free 窓・バルーン窓は
-/// wndproc が最終位置まで動かし切るため不要。
+/// # 全アンカー結線と Free の保存専用アーム（1.1・design C2）
+///
+/// spawn は Free 含む**全**キャラ窓へ本ハンドラを結線する（吸着はドラッグ中の制約で
+/// あって保存条件ではない・1.1）。非 Free は [`project_anchor`] でアンカー辺へ最終
+/// 再固定し、Free は射影が identity ゆえ `mapped` = wndproc が動かし切った確定位置と
+/// なり（`enqueue_window_set_pos`／`follow_balloon` は identity 再釘付けで無害通過）、
+/// 本ハンドラがそのまま**保存専用アーム**として働く。[`Anchored`] 不在（防御）は生
+/// ドラッグ座標を復元する基準アンカーが無いため skip する（Req1.6）。
+///
+/// # 保存フック（1.1/1.9/7.1・design C2）
+///
+/// `mapped` 確定・`enqueue_window_set_pos`・`follow_balloon` の**後**に、当該窓の
+/// [`CharWindowMarker`]`.scope`（`usize`→`u32`）で `mapped` を [`char_pos_entries`]→
+/// [`persist_entries`] へ渡し、Ghost 永続スコープへ即時 write-through する（fire-and-forget・
+/// 非ブロッキング）。marker 不在（防御）は `debug!`＋skip（panic しない）。永続の
+/// 窓位置を書くのはこの DragEnd 観測点のみ——`on_char_drag`（ドラッグ中）・
+/// [`move_window_to`]・[`resize_window_to`]・復元時再射影は書かない（発火規律・Req1.9）。
 pub(crate) fn on_char_drag_end(
     world: &mut World,
     _sender: Entity,
@@ -328,13 +346,12 @@ pub(crate) fn on_char_drag_end(
             if ev.target != entity {
                 return false;
             }
-            // 非 Free アンカーのキャラ窓のみ最終位置を確定する（Free・Anchored 不在は
-            // wndproc が最終位置まで動かし切るため skip・Req1.6）。
-            let Some(anchor) = world
-                .get::<Anchored>(entity)
-                .map(|a| a.0)
-                .filter(|a| *a != Anchor::Free)
-            else {
+            // 全アンカー種別のキャラ窓が最終位置を確定する（1.1: 吸着はドラッグ中の
+            // 制約であって保存条件ではない）。非 Free は project_anchor でアンカー辺へ
+            // 再固定し、Free は identity 射影ゆえ mapped＝wndproc 確定位置を素通しする
+            // （保存専用アーム・射影段は無害通過）。Anchored 不在（防御）は生座標を
+            // 復元する基準アンカーが無いため skip する（Req1.6）。
+            let Some(anchor) = world.get::<Anchored>(entity).map(|a| a.0) else {
                 return false;
             };
             let Some(mapped) = policy_mapped_position(world, entity, anchor, ev.position) else {
@@ -344,6 +361,29 @@ pub(crate) fn on_char_drag_end(
                 return false;
             }
             follow_balloon(world, entity, mapped);
+
+            // 保存フック（1.1/1.9/7.1・design C2）: mapped 確定後に当該スコープの
+            // WindowPos entries を Ghost 永続スコープへ即時 write-through 投函する。
+            // スコープは CharWindowMarker から逆引き（usize→u32）。marker 不在（防御）は
+            // debug＋skip（panic しない）。発火はこの DragEnd 観測点のみ（Req1.9）。
+            match world.get::<CharWindowMarker>(entity).map(|m| m.scope) {
+                Some(scope) => {
+                    let entries = char_pos_entries(
+                        scope as u32,
+                        PointPx {
+                            x: mapped.x,
+                            y: mapped.y,
+                        },
+                    );
+                    persist_entries(world, entries);
+                }
+                None => {
+                    debug!(
+                        ?entity,
+                        "CharWindowMarker 不在のため位置保存を skip（防御・no-op）"
+                    );
+                }
+            }
             false
         }
     }
@@ -1925,6 +1965,106 @@ mod tests {
         let ev = Phase::Tunnel(drag_end_event_at(window, (1601, 113)));
         assert!(!on_char_drag_end(&mut world, window, window, &ev));
         assert_eq!(position_of(&world, window), Point { x: 1250, y: 356 });
+    }
+
+    /// Task 2.2 保存フック（Req1.1/1.9・design C2）: 非 Free アンカーのキャラ窓の
+    /// DragEnd で、確定位置 `mapped` が当該スコープの `WindowPos` entries として Ghost
+    /// 永続スコープへ write-through される。`barrier` 後に別ハンドルの `load_scope` で
+    /// 読み戻し、保存 x/y が `mapped` 位置に等しいことを固定する（persist.rs の
+    /// `persist_entries_with_wiring_write_through_to_ghost_scope` と同流儀の実 publisher 檻）。
+    #[test]
+    fn on_char_drag_end_persists_char_pos_for_scope() {
+        use std::path::{Path, PathBuf};
+        use std::sync::Arc;
+
+        use areka_sylphya::persist::{FakePersistIo, PersistIo};
+        use areka_sylphya::{
+            Axis, PersistKey, PersistScope, ScopeRoots, SylphyaInit, load_scope, spawn_sylphya,
+        };
+
+        use super::super::persist::PersistWiring;
+        use crate::placement::spawn::CharWindowMarker;
+
+        // 共有 fake IO（アクター Box 移送用と観測用で同一ストアを指す・persist.rs と同流儀）。
+        struct SharedFakeIo(Arc<FakePersistIo>);
+        impl PersistIo for SharedFakeIo {
+            fn read(&self, path: &Path) -> std::io::Result<Option<String>> {
+                self.0.read(path)
+            }
+            fn commit(&self, path: &Path, content: &str) -> std::io::Result<()> {
+                self.0.commit(path, content)
+            }
+        }
+
+        let shared = Arc::new(FakePersistIo::new());
+        let roots = ScopeRoots {
+            ghost: Some(PathBuf::from("/g")),
+            ..ScopeRoots::default()
+        };
+        let parts = spawn_sylphya(SylphyaInit {
+            roots: roots.clone(),
+            io: Box::new(SharedFakeIo(shared.clone())),
+            runtime_sink: None,
+        });
+
+        let mut world = World::new();
+        // UI スレッド常駐の保存投函口を挿入（persist_entries が引く NonSend リソース）。
+        world.insert_non_send_resource(PersistWiring {
+            publisher: parts.publisher.clone(),
+        });
+        world.insert_resource(single_monitor_snapshot()); // 下端 1043・釘付け Y=1043−687=356
+
+        let start = (1400, 600);
+        // scope=1 の非 Free（Bottom）キャラ窓。値は (f) 檻と同一＝mapped=(1408, 356) が既知。
+        let window = world
+            .spawn((
+                fake_handle(0x1000),
+                window_pos_sized(1250, 356, 434, 687),
+                Anchored(Anchor::Bottom),
+                CharWindowMarker { scope: 1 },
+                dragging_state((1207, 356), start),
+            ))
+            .id();
+
+        // 最終カーソル (1601, 113) → raw=(1408, −131) → 適用後 mapped=(1408, 356)
+        let ev = Phase::Bubble(drag_end_event_at(window, (1601, 113)));
+        assert!(!on_char_drag_end(&mut world, window, window, &ev));
+
+        // 確定点: mapped が WindowPos へ反映されている
+        assert_eq!(position_of(&world, window), Point { x: 1408, y: 356 });
+
+        // barrier 復帰＝上記 put の write-through 保存まで完了（同一送信端 FIFO）。
+        parts
+            .publisher
+            .barrier()
+            .expect("barrier should resolve while actor is alive");
+
+        // 別ハンドルの load_scope で scope1 の WindowPos を観測（実 IO 通過＝投函の証明）。
+        let loaded = load_scope(PersistScope::Ghost, &roots, &SharedFakeIo(shared.clone()));
+        assert!(
+            loaded.contains(&(
+                PersistKey::WindowPos {
+                    scope: 1,
+                    axis: Axis::X
+                },
+                "1408".to_string()
+            )),
+            "DragEnd 確定位置 X=1408 が scope1 の WindowPos として保存されていない: {loaded:?}"
+        );
+        assert!(
+            loaded.contains(&(
+                PersistKey::WindowPos {
+                    scope: 1,
+                    axis: Axis::Y
+                },
+                "356".to_string()
+            )),
+            "DragEnd 確定位置 Y=356 が scope1 の WindowPos として保存されていない: {loaded:?}"
+        );
+
+        // 正典終了（アクター join）——テスト後始末（リーク回避・非本質）。
+        parts.publisher.close();
+        let _ = parts.handle.join();
     }
 
     /// (g) target==自 entity ガード: 他 entity 宛イベントの Bubble を受けても
