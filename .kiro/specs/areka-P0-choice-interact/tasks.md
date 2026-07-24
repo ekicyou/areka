@@ -63,7 +63,7 @@
   - _Boundary: on_balloon_pointer_pressed_
   - _Depends: 2.1, 2.2, 3.3_
 
-- [ ] 5. clear_balloon_hover_on_leave の実装
+- [x] 5. clear_balloon_hover_on_leave の実装
   - 窓外離脱マーカー（`PointerLeave`）を読み、親チェーンがバルーン窓を所有する entity のみを対象に、既存 `hover_action(active, None, last)` を再利用して hover 状態を解除する排他システムを実装する
   - Observable: bare World テストでバルーン所有 leave のみ hover 解除され、非バルーン窓の leave は無視されることを確認する
   - _Requirements: 1.3, 3.4_
