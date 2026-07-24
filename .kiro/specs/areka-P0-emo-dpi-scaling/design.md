@@ -223,7 +223,7 @@ sequenceDiagram
     P->>P: info log k author_dpi window_dpi native scaled
 ```
 
-キー決定: k 導出は **show 適用ごと**に行う（導出は数命令・「照会値＝実適用 k」不変条件の維持点を 1 箇所にする）。`applied`・`current_surface_id`・`last_show` の更新は**表示成立点のみ**（失敗経路は手前で early return → 前値保持＝R4.4）。
+キー決定: k 導出は **show 適用ごと**に行う（導出は数命令・「照会値＝実適用 k」不変条件の維持点を 1 箇所にする）。`applied`・`current_surface_id`・`last_show` の更新は**表示成立点のみ**（失敗経路は手前で early return → 前値保持＝R4.4）。さらに表示成立点で今回 scaled 寸を前回適用寸と照合し、差分があれば新物理寸を呼び手（frame drain フェーズ）へ報告する——窓寸 reconcile は**表示成立という状態**に紐づき、`Changed<DPI>` エッジの消費順序に依存しない（設計ディスカッション #2 裁定・状態照合併用）。
 
 ### Flow 2: DPI 変化の動的追従（WM_DPICHANGED）
 
@@ -248,7 +248,7 @@ sequenceDiagram
     end
 ```
 
-キー決定: (a) 表示更新（Flow1 再実行）→ 窓寸 reconcile を**同一フレーム・同一 UI スレッド呼出**内で行い、完了後に照会値・表示寸・窓 client が一致する（R4.2）。(b) `resize_window_to` のべき等 skip により k 不変・同寸なら書込ゼロ（振動しない）。(c) 進行中の talk/SERIKO は状態を presenter 外（上流）に持つため、再表示はキャッシュミス 1 回のコストのみで挙動を失わない（R4.3）。(d) 窓生成時の `GetDpiForWindow` 実値補正も `Changed<DPI>` を発火するため、**初期 k₀（D7）と実窓 DPI の差分は同じ経路で自己補正**される。
+キー決定: (a) 表示更新（Flow1 再実行）→ 窓寸 reconcile を**同一フレーム・同一 UI スレッド呼出**内で行い、完了後に照会値・表示寸・窓 client が一致する（R4.2）。(b) `resize_window_to` のべき等 skip により k 不変・同寸なら書込ゼロ（振動しない）。(c) 進行中の talk/SERIKO は状態を presenter 外（上流）に持つため、再表示はキャッシュミス 1 回のコストのみで挙動を失わない（R4.3）。(d) 窓生成時の `GetDpiForWindow` 実値補正も `Changed<DPI>` を発火し**再表示のトリガ**となるが、窓寸 reconcile 自体はエッジに依存しない——初回 show を含む全表示成立点の状態照合（Flow 1 キー決定）が k₀ と実窓 DPI の差分を自己補正する（エッジが初回 show 前に消費されても不整合は残置しない・べき等 skip ゆえ常時照合でも振動しない・設計ディスカッション #2 裁定）。
 
 ### Flow 3: 起動時の初期 k₀（採寸→spawn→初回表示）
 
@@ -256,7 +256,7 @@ sequenceDiagram
 2. `enumerate_monitors()` から primary モニタ DPI を取得（不能なら 96 相当＋error ログ）→ `MeasureScaling{ shell, balloon }` を構築（D7）。
 3. `measure_scope_sizes(.., &scaling)`: native 採寸（既存経路）→ `scaled_extent` で k₀ 倍 → `ScopeInput` は k₀ 倍後の物理寸（R3.3）。
 4. `spawn_ghost_windows`（**不触**）が k₀ 倍寸を consume して窓生成（R3.4/R7.6）。
-5. attach（author_dpi 供給）→ 初回 ShowSurface＝Flow 1（窓 DPI 実値で k 導出）→ k≠k₀ なら Flow 2 の reconcile が補正。
+5. attach（author_dpi 供給）→ 初回 ShowSurface＝Flow 1（窓 DPI 実値で k 導出）→ 表示成立点の状態照合が k₀ 倍窓寸との差分を検出し、drain フェーズが同一フレーム内で窓寸 reconcile（char=`resize_window_to`／balloon=`resize_window_keep_position`）を実行して補正（`Changed<DPI>` エッジの消費順序に依存しない）。
 
 ## Requirements Traceability
 
@@ -423,7 +423,7 @@ pub fn insert(&mut self, surface_id: u32, binds: BindSet, pattern: PatternState,
 **Responsibilities & Constraints**
 
 - `PresentTarget` 追加フィールド: `policy: ScalePolicy`（attach 時確定）・`applied: Option<ScaleRatio>`（**表示成立点のみ**更新・照会の単一真実源）・`native_size: Option<(u32,u32)>`（照会契約 `surface_size` の供給源）・`last_show: Option<(u32, BindSet, PatternState)>`（refresh の再表示入力）。
-- `apply_show` 拡張（Flow 1）: `world.get::<DPI>(target.window)` → `derive_scale` → cache（scale キー）→ ミス時 `compose`（native）→ `resample` → `insert`。以降の upload／mask set／`set_bounds`／可視化は既存コードのまま scaled 値が流れる。表示成立点で `applied`/`native_size`/`last_show`/`current_surface_id` を記録し、**info ログ**（`target`, `k_num`, `k_den`, `k`(f32), `author_dpi`, `window_dpi`, `native_w/h`, `scaled_w/h`）を出す（R6.1/6.3 の判定素材）。
+- `apply_show` 拡張（Flow 1）: `world.get::<DPI>(target.window)` → `derive_scale` → cache（scale キー）→ ミス時 `compose`（native）→ `resample` → `insert`。以降の upload／mask set／`set_bounds`／可視化は既存コードのまま scaled 値が流れる。表示成立点で `applied`/`native_size`/`last_show`/`current_surface_id` を記録し、**今回 scaled 寸が前回適用寸と異なる場合は新物理寸を適用結果として呼び手へ報告**（frame drain フェーズが窓寸 reconcile に使う・議題 #2 裁定）、**info ログ**（`target`, `k_num`, `k_den`, `k`(f32), `author_dpi`, `window_dpi`, `native_w/h`, `scaled_w/h`）を出す（R6.1/6.3 の判定素材）。
 - 失敗経路は従来どおり表示成立点より手前で early return＝前 k・前表示を維持（R4.4）。
 - NonSend・UI スレッド専有は不変（R7.5）。`hit_region` は不触（R7.9）。
 
@@ -517,6 +517,7 @@ pub fn run_dpi_phase(wiring: &mut Emo2Wiring, world: &mut World);
 ```
 
 - 初回 run の全窓マッチ（`SystemState::new` 仕様）は `refresh_scale` の「k 差分なし→None」と resize のべき等 skip が吸収する（`anchor_changed_system` と同じ流儀）。
+- **窓寸 reconcile の第 2 経路（状態照合・議題 #2 裁定）**: drain フェーズが `apply_show` の scaled 寸変化報告を受けて同一フレーム内で resize（char=`resize_window_to`／balloon=`resize_window_keep_position`）を呼ぶ。`run_dpi_phase` のエッジ観測は「再表示のトリガ」に徹し、窓寸整合はエッジ消費順序に依存しない。
 - `attach_target` 呼び 2 箇所（shell/balloon）へ `BootAssets` の author_dpi を供給する（assets.rs が搬送）。
 
 ## Error Handling
