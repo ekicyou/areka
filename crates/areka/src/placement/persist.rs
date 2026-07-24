@@ -13,7 +13,7 @@
 
 use areka_sylphya::{Axis, PersistKey};
 
-use super::resolver::PointPx;
+use super::resolver::{Anchor, PointPx, SizePx};
 
 /// 永続値の寛容 parse（design C1・6.1）。
 ///
@@ -51,6 +51,55 @@ pub fn balloon_offset_entries(scope: u32, offset_persist: PointPx) -> Vec<(Persi
             offset_persist.y.to_string(),
         ),
     ]
+}
+
+/// バルーン相対オフセットのアンカー辺基準点（**char 左上相対**・物理 px・design C1）。
+///
+/// サーフェス寸法変動に対して不変な基準辺を、char 窓左上を原点とした相対点で返す:
+/// - `Bottom`（下端吸着）: `(0, h)` — 下端。左上ではなく下端を基準にすることで、
+///   サーフェス高さが変わっても下端からの距離が保たれる（2.2）。
+/// - `Top`・`Left`: `(0, 0)` — 左上。
+/// - `Right`: `(w, 0)` — 右上（右端）。
+/// - `Free`: `(0, 0)` — 左上（縮退・アンカー辺なし。往復恒等のため 0 で固定・檻固定）。
+fn anchor_edge_basis(anchor: Anchor, char_size: SizePx) -> PointPx {
+    match anchor {
+        Anchor::Bottom => PointPx { x: 0, y: char_size.h },
+        Anchor::Right => PointPx { x: char_size.w, y: 0 },
+        // Top・Left・Free は左上基準（Free は縮退・6.x/2.2）。
+        Anchor::Top | Anchor::Left | Anchor::Free => PointPx { x: 0, y: 0 },
+    }
+}
+
+/// バルーン相対オフセットを**保存方向**へ基準変換する（design C1・純関数・2.2/2.5）。
+///
+/// `offset_tl` は char 窓左上を基準に採ったセッション内表現。保存はサーフェス寸に
+/// 不変なアンカー辺基準へ移す: `persist = offset_tl − 基準点(char 左上相対)`。
+/// これにより下端吸着キャラでもサーフェス高さ変動でオフセットがずれない（2.2）。
+pub fn balloon_offset_to_persist(anchor: Anchor, offset_tl: PointPx, char_size: SizePx) -> PointPx {
+    let basis = anchor_edge_basis(anchor, char_size);
+    PointPx {
+        x: offset_tl.x - basis.x,
+        y: offset_tl.y - basis.y,
+    }
+}
+
+/// バルーン相対オフセットを**復元方向**へ基準変換する（design C1・純関数・2.2/8.5）。
+///
+/// [`balloon_offset_to_persist`] の厳密な逆で、**現在の** `char_size` で基準点を
+/// 足し戻す: `offset_tl = persisted + 基準点(char 左上相対)`。保存時と復元時で
+/// サーフェス高さが異なっても、下端基準の相対関係が保たれる（8.5）。
+///
+/// 不変条件: `balloon_offset_from_persist(a, balloon_offset_to_persist(a, o, s), s) == o`。
+pub fn balloon_offset_from_persist(
+    anchor: Anchor,
+    persisted: PointPx,
+    char_size: SizePx,
+) -> PointPx {
+    let basis = anchor_edge_basis(anchor, char_size);
+    PointPx {
+        x: persisted.x + basis.x,
+        y: persisted.y + basis.y,
+    }
 }
 
 #[cfg(test)]
@@ -159,5 +208,139 @@ mod tests {
         }
         assert_eq!(parse_px(&char_pos_entries(0, pos)[0].1), Some(pos.x));
         assert_eq!(parse_px(&char_pos_entries(0, pos)[1].1), Some(pos.y));
+    }
+
+    // ------------------------------------------------------------------
+    // balloon_offset_to_persist / _from_persist（アンカー辺基準変換・2.2/2.5・design C1）
+    //   基準点（char 左上相対）: Bottom=(0,h)・Top/Left=(0,0)・Right=(w,0)・Free=(0,0)
+    //   persist = offset_tl − 基準点(相対) ／ from_persist = persisted + 基準点(相対)
+    // ------------------------------------------------------------------
+
+    const ALL_ANCHORS: [Anchor; 5] = [
+        Anchor::Top,
+        Anchor::Bottom,
+        Anchor::Left,
+        Anchor::Right,
+        Anchor::Free,
+    ];
+
+    /// 各アンカーで基準点（char 左上相対）が design C1 の規定どおりになる。
+    #[test]
+    fn to_persist_subtracts_the_correct_anchor_edge_basis() {
+        let size = SizePx { w: 300, h: 500 };
+        let offset_tl = PointPx { x: 40, y: 70 };
+
+        // Bottom: 基準 (0, h) → persist = (40−0, 70−500) = (40, -430)
+        assert_eq!(
+            balloon_offset_to_persist(Anchor::Bottom, offset_tl, size),
+            PointPx { x: 40, y: -430 }
+        );
+        // Top: 基準 (0, 0) → persist = offset_tl
+        assert_eq!(
+            balloon_offset_to_persist(Anchor::Top, offset_tl, size),
+            PointPx { x: 40, y: 70 }
+        );
+        // Left: 基準 (0, 0) → persist = offset_tl
+        assert_eq!(
+            balloon_offset_to_persist(Anchor::Left, offset_tl, size),
+            PointPx { x: 40, y: 70 }
+        );
+        // Right: 基準 (w, 0) → persist = (40−300, 70−0) = (-260, 70)
+        assert_eq!(
+            balloon_offset_to_persist(Anchor::Right, offset_tl, size),
+            PointPx { x: -260, y: 70 }
+        );
+        // Free: 基準 (0, 0)（縮退・檻固定）→ persist = offset_tl
+        assert_eq!(
+            balloon_offset_to_persist(Anchor::Free, offset_tl, size),
+            PointPx { x: 40, y: 70 }
+        );
+    }
+
+    /// from_persist は現在の char_size で基準点を足し戻す（to_persist の逆・現寸使用）。
+    #[test]
+    fn from_persist_adds_back_the_anchor_edge_basis_with_current_size() {
+        let size = SizePx { w: 300, h: 500 };
+        // Bottom: persisted (40, -430) + 基準 (0, 500) = (40, 70)
+        assert_eq!(
+            balloon_offset_from_persist(Anchor::Bottom, PointPx { x: 40, y: -430 }, size),
+            PointPx { x: 40, y: 70 }
+        );
+        // Right: persisted (-260, 70) + 基準 (300, 0) = (40, 70)
+        assert_eq!(
+            balloon_offset_from_persist(Anchor::Right, PointPx { x: -260, y: 70 }, size),
+            PointPx { x: 40, y: 70 }
+        );
+    }
+
+    /// design C1 の不変条件（Invariant）: 全アンカー × 複数寸法で往復恒等。
+    /// `from_persist(a, to_persist(a, o, s), s) == o`。
+    #[test]
+    fn round_trip_identity_holds_for_all_anchors_and_sizes() {
+        let sizes = [
+            SizePx { w: 1, h: 1 },
+            SizePx { w: 128, h: 256 },
+            SizePx { w: 300, h: 500 },
+            SizePx { w: 1024, h: 64 },
+        ];
+        let offsets = [
+            PointPx { x: 0, y: 0 },
+            PointPx { x: -400, y: 0 },
+            PointPx { x: 40, y: 70 },
+            PointPx { x: -260, y: -430 },
+        ];
+        for anchor in ALL_ANCHORS {
+            for size in sizes {
+                for offset in offsets {
+                    let persisted = balloon_offset_to_persist(anchor, offset, size);
+                    let restored = balloon_offset_from_persist(anchor, persisted, size);
+                    assert_eq!(
+                        restored, offset,
+                        "往復恒等が破れた: anchor={anchor:?} size={size:?} offset={offset:?}"
+                    );
+                }
+            }
+        }
+    }
+
+    /// 8.5 サーフェス寸不変性: 高さ h1 で保存したオフセットを、異なる高さ h2 で復元しても
+    /// バルーンとアンカー辺（下端）の相対関係が保たれる（＝下端からの距離が不変）。
+    ///
+    /// Bottom 吸着では、下端からの縦距離 = (char 下端) − (balloon 左上 y)
+    ///   = (char.y + h) − (char.y + offset_tl.y) = h − offset_tl.y。
+    /// persist 値の y はまさに `offset_tl.y − h`（= −(下端からの距離)）であり寸法非依存。
+    /// よって別の高さ h2 で復元した offset_tl'.y は、その h2 に対して同じ「下端からの距離」を与える。
+    #[test]
+    fn balloon_offset_is_invariant_under_char_surface_height_change_bottom() {
+        // 保存時: 高さ h1。ユーザーはバルーンを char 左上から下 70px の位置へ置いた。
+        let h1 = 500;
+        let size_h1 = SizePx { w: 300, h: h1 };
+        let offset_tl_saved = PointPx { x: 40, y: 70 };
+        // 保存時の「下端からの距離」（上向き正）: h1 − offset_tl.y。
+        let distance_from_bottom_saved = h1 - offset_tl_saved.y; // 430
+
+        let persisted = balloon_offset_to_persist(Anchor::Bottom, offset_tl_saved, size_h1);
+
+        // 復元時: 異なる高さ h2（サーフェスが縮んだ／伸びた）。
+        let h2 = 620;
+        let size_h2 = SizePx { w: 300, h: h2 };
+        let offset_tl_restored =
+            balloon_offset_from_persist(Anchor::Bottom, persisted, size_h2);
+
+        // 復元後の「下端からの距離」は保存時と一致する（＝下端基準の関係が保たれた）。
+        let distance_from_bottom_restored = h2 - offset_tl_restored.y;
+        assert_eq!(
+            distance_from_bottom_restored, distance_from_bottom_saved,
+            "下端からの距離がサーフェス高さ変動で保たれていない"
+        );
+
+        // 反例の檻: もし左上基準（persist=offset_tl そのまま）だったら、
+        // 高さが変わっても左上距離を固定してしまい下端距離はずれる——それを排除する。
+        let naive_topleft_restored = persisted.y; // 左上基準なら復元 y は persist.y のまま
+        assert_ne!(
+            h2 - naive_topleft_restored,
+            distance_from_bottom_saved,
+            "この寸法差では左上基準は下端距離を保てないはず（テスト前提の健全性）"
+        );
     }
 }
