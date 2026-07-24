@@ -336,6 +336,10 @@ Path B 採用により、本 spec は `crates/wintf/tests/graphics/*` のハー�
 3. **無条件ドレインヘルパ**（Task 3・`com/wuc.rs::drain_dispatcher_queue`＋純関数 `drain_step`）。有界・log-first・panic-free。決定論単体テストで全分岐網羅。※上記の知見により最終是正は DQ 再利用に依るため、本ヘルパは canonical な bounded-drain ユーティリティとして残置（回帰檻の teardown は再利用方式ゆえ明示ドレイン不要）。
 4. **回帰檻**（Task 6・`wuc_restart_regression_test.rs`）: 独立 2 `#[test]`＋単一テスト内 3 回再生成。オーナースレッド経由の再生成を正準経路とし、再発時は AV(プロセス死) or `0x8001010E` panic で必ず失敗（R5.3）。
 
+### 設計との差分（明示・design.md C4 / File Structure Plan からの逸脱）
+- **fixture 署名**: design.md C4 は `with_shared_gpu(|world: &mut World| ...)`（**1 個の常駐スタックを共有**）を想定。実装は `on_gpu_owner_thread(|| { テスト本体 })`（**テスト本体丸ごとをオーナースレッド上で実行し、スタックは毎回再生成**）とした。理由: ①`reinit_unit_test`/`init_window_graphics_test` 等は**再生成そのもの**を検証するため共有 1 個スタックでは表現できない、②テスト毎に fresh World となり GPU 状態のブリード（C4 自身が挙げたリスク）が構造的に消える、③根因是正（全 `Compositor::new` を単一オーナースレッドへ）は本形でも完全に成立する。スタック再利用は「WUC スタックの共有」ではなく「DispatcherQueue の再利用（`WucGraphicsResource::new` の src 是正）」で担保した。
+- **src 変更と宣言 (b) の関係**: design.md「This Spec Owns」の散文は wintf src の WUC ライフサイクル是正を宣言 (a) にゲートするが、G1 判定表は宣言 (b) でも「Path A 縮小適用」を許容する。本 src 変更（DQ 再利用・`dq_controller` の `Option` 化）は後者に該当する最小是正であり、本番は初回 init で従来と byte 一致（既存 DQ が無ければ従来どおり controller を生成）・再初期化時のみ従来失敗していた経路を成功化する**本番改善**である（独立レビュー 2026-07-24 で本番安全性を確認）。
+
 ### 検証マトリクス結果（是正後・全 7 グループ＋総括）
 | # | 対象 | 是正後結果 |
 |---|---|---|
