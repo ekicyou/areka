@@ -39,7 +39,7 @@ use areka_emo_present::{EmoPresenter, PresentCommand};
 use areka_emo_text::actor::{TextLayerRuntime, spawn_emo_text};
 use areka_emo_text::state::TextLayerConfig;
 use areka_ghost::ticker::{LoopTickerConfig, Tick, TickerMsg, spawn_loop_ticker};
-use areka_ghost::{GhostBootOptions, ShioriWiring, TickerMode};
+use areka_ghost::{GhostBootOptions, ShioriWiring, SystemVarWiring, TickerMode};
 use areka_parsers::charset::DefaultEncoding;
 use areka_parsers::package::MountError;
 use areka_seriko::{
@@ -365,7 +365,8 @@ pub fn wire_emo2_boot(
             Box::new(clocked_text_sink),
             Box::new(move_sink),
         ],
-        system_vars: areka_ghost::default_system_vars(),
+        system_vars: SystemVarWiring::FromSylphya,
+        app_profile_dir: Some(crate::default_app_profile_dir()),
         ticker: TickerMode::Real(Default::default()),
     };
     let ghost_runtime = match areka_ghost::boot(boot_options) {

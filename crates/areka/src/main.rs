@@ -160,6 +160,26 @@ fn default_helper_exe_path() -> std::path::PathBuf {
     dir.join("shiori-host32-helper.exe")
 }
 
+/// App スコープの sylphya profile root を解決する（task 8.2・R8.2 の `AREKA_` 冠準拠）。
+///
+/// - 環境変数 `AREKA_PROFILE_DIR` が設定されていればそのパスを採用する（本番 env は `AREKA_`
+///   名前空間・記憶 areka-runtime-env-naming）。
+/// - 未設定なら実行ファイル隣接の `profile/areka/`（`current_exe()` の親ディレクトリ／`current_exe()`
+///   失敗時は `"."` へ寛容フォールバック——boot 呼び出し自体が非致命ゆえ panic/Err 伝播は不要）。
+///
+/// App スコープはマウント解決に現れない（ghost/shell スコープは `<shiori.dir>`／`<shell.dir>` から
+/// ghost が導く）ため、bin が本関数で供給して `GhostBootOptions.app_profile_dir` へ渡す。
+fn default_app_profile_dir() -> std::path::PathBuf {
+    if let Some(dir) = std::env::var_os("AREKA_PROFILE_DIR") {
+        return std::path::PathBuf::from(dir);
+    }
+    let base = std::env::current_exe()
+        .ok()
+        .and_then(|exe| exe.parent().map(std::path::Path::to_path_buf))
+        .unwrap_or_else(|| std::path::PathBuf::from("."));
+    base.join("profile").join("areka")
+}
+
 /// `ghost_root`／helper パスから `GhostBootOptions` を組み立てる純粋ヘルパ
 /// （design.md「main の ghost boot／shutdown 結線」）。
 ///
@@ -170,9 +190,15 @@ fn default_helper_exe_path() -> std::path::PathBuf {
 ///   全 cue は登録された全 sink へ配られるため、両スロットを `LogSink` にすると 1 cue が 2 回ログ
 ///   される（二重ログ）。記録 sink を **1 本（`LogSink`）だけ**にし、もう一方を破棄専用の
 ///   `DiscardSink` で埋めることで cue ごと 1 回ログへ正す（設計 D4 Topic 2）。
-/// - `system_vars`: W1 暫定 provider（`default_system_vars`＝`%username` の既定スナップショット）。
+/// - `system_vars`: 本番 provider（`SystemVarWiring::FromSylphya`＝boot が据えた sylphya reader
+///   由来のスナップショット・R7.1）。
+/// - `app_profile_dir`: App スコープの sylphya profile root（`default_app_profile_dir()`＝env
+///   `AREKA_PROFILE_DIR` 優先・既定は実行ファイル隣接 `profile/areka/`・R8.2）。
 /// - `ticker`: `TickerMode::Real` を既定 `TickerConfig`（`base_interval=50ms`／
 ///   `kanade_interval=1000ms`／実クロック `GetTickCount64`）で駆動する。
+///
+/// `app_profile_dir` の解決は env（`AREKA_PROFILE_DIR`）・`current_exe()` を読むため厳密には純粋
+/// ではない（副作用のない read のみ）。他フィールドの決定は従来どおり引数からの写しに留まる。
 fn ghost_boot_options(
     ghost_root: std::path::PathBuf,
     helper_exe: std::path::PathBuf,
@@ -185,7 +211,8 @@ fn ghost_boot_options(
             Box::new(areka_ghost::sink::LogSink::new()),
             Box::new(areka_ghost::sink::DiscardSink::new()),
         ],
-        system_vars: areka_ghost::default_system_vars(),
+        system_vars: areka_ghost::SystemVarWiring::FromSylphya,
+        app_profile_dir: Some(default_app_profile_dir()),
         ticker: areka_ghost::TickerMode::Real(Default::default()),
     }
 }

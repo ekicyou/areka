@@ -1,0 +1,22 @@
+[package]
+name = "areka-sylphya"
+workspace = "../.."
+description = "Unified property system for areka (materialized-view bulletin-board model); lowest-layer, minimal-dependency, no upstream areka deps"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[dependencies]
+thiserror = { workspace = true }
+tracing = { workspace = true }
+toml = { workspace = true }
+areka-actor = { path = "../areka-actor" }
+
+[dev-dependencies]
+# 寛容読取の未知バージョン警告（R6.4「未知バージョン→warn・旧形式判別可能」）を実行可能
+# テストで捕捉するための tracing subscriber。workspace 既出（areka／wintf／kanade が使用済み）・
+# テスト限定であり、設計「新規外部依存なし」（＝runtime 依存の制約）には抵触しない。
+tracing-subscriber = { workspace = true }

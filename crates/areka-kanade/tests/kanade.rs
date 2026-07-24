@@ -7,6 +7,8 @@
 mod common;
 #[path = "kanade/boot_test.rs"]
 mod boot_test;
+#[path = "kanade/prefetch_test.rs"]
+mod prefetch_test;
 #[path = "kanade/steady_test.rs"]
 mod steady_test;
 #[path = "kanade/mouse_test.rs"]

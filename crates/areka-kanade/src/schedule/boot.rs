@@ -5,8 +5,9 @@
 //! 2.1 では骨格（呼出面）のみを用意し、[`crate::schedule::mod`] の `step` から
 //! フェーズ分岐として呼び出せるようにする。
 
-use super::{events, snapshot_of, Action, ActiveTalk, Input, Phase, State};
+use super::{events, resources, snapshot_of, Action, ActiveTalk, Input, Phase, State};
 use crate::msg::{CloseReason, KanadeConfig, ShioriOutcome};
+use resources::ResourceOutcome;
 use crate::status::ExecutionSnapshot;
 use crate::talk::{StartTalk, TalkId};
 
@@ -49,18 +50,25 @@ fn boot_start(mut state: State) -> (State, Vec<Action>) {
 /// boot 各待ち点の応答進行（正典順序の状態機械）。
 fn on_reply(state: State, outcome: ShioriOutcome, config: &KanadeConfig) -> (State, Vec<Action>) {
     match state.phase {
-        // BootInit + Notified: OnInitialize 完了→OnFirstBoot GET 発行・BootType へ（Req 1.2）。
+        // BootInit + Notified: OnInitialize 完了→**username リソース照会（prefetch）GET** を発行し
+        // BootPrefetch へ（R4.1・prefetch は OnInitialize 後・OnFirstBoot 前に 1 回）。既存 shiori
+        // request 経路（単一 in-flight・shiori_tx 専有）をそのまま使う。応答受領後に OnFirstBoot へ進む。
         Phase::BootInit => match outcome {
             ShioriOutcome::Notified => {
                 let mut state = state;
-                state.phase = Phase::BootType;
+                state.phase = Phase::BootPrefetch;
                 (
                     state,
-                    vec![Action::ShioriRequest(events::on_first_boot(&ExecutionSnapshot::INACTIVE))],
+                    vec![Action::ShioriRequest(resources::resource_username(
+                        &ExecutionSnapshot::INACTIVE,
+                    ))],
                 )
             }
             other => unexpected_reply(state, "BootInit", other),
         },
+        // BootPrefetch + 応答: username 照会結果を写像・sink へ渡し（同期）・完了固定ログを出し、
+        // OnFirstBoot GET を発行して BootType へ進む（R4.1・R9.3）。失敗でも boot を殺さず続行する。
+        Phase::BootPrefetch => on_prefetch_reply(state, outcome),
         // BootType: 204→OnBoot GET（BootMain へ・Req 1.3）。Value→OnBoot をスキップし
         // StartTalk＋basewareversion（正典フォールスルー打ち切り・Req 2.1）。
         Phase::BootType => match outcome {
@@ -103,6 +111,75 @@ fn on_reply(state: State, outcome: ShioriOutcome, config: &KanadeConfig) -> (Sta
             (state, Vec::new())
         }
     }
+}
+
+/// prefetch 応答（username GET）を [`ResourceOutcome`] へ写像し、sink 呼出指示＋完了固定ログを添えて
+/// OnFirstBoot GET を発行し BootType へ進む（R4.1・R9.3）。
+///
+/// 写像: 200 Value→[`ResourceOutcome::Value`]／204→[`ResourceOutcome::NoContent`]／失敗（タイムアウト・
+/// IPC 断）→[`ResourceOutcome::Failed`]。失敗時は `warn!` を残しつつ **boot を殺さず**続行する（起動を
+/// 殺さない・R4.1）。GET 応答が構造上あり得ない Notified/Unloaded で来た場合も防御的に `Failed` 扱いとし
+/// 起動を続行する。
+///
+/// リソース照会は talk を生成しない（Invariant）——結果は [`Action::ResourceOutcome`] で sink へ渡すのみで
+/// StartTalk へは流さない。返す Action 列は `[ResourceOutcome, ShioriRequest(OnFirstBoot)]` の順であり、
+/// シェルは sink 呼出（同期・返るまで待つ）を先に実行してから OnFirstBoot を送出する（design boot 図）。
+///
+/// # 完了固定ログ（R9.3 grep 証跡）
+/// 経路によらず `info!(target: "areka_kanade::resource", id = "username", outcome = <value|no_content|
+/// failed>, "shiori resource prefetch done")` を**ちょうど 1 回**発行する（実照会経路の実機 signoff 証跡）。
+fn on_prefetch_reply(mut state: State, outcome: ShioriOutcome) -> (State, Vec<Action>) {
+    let (resource_outcome, label) = match outcome {
+        ShioriOutcome::Value(body) => (ResourceOutcome::Value(body), "value"),
+        ShioriOutcome::NoContent => (ResourceOutcome::NoContent, "no_content"),
+        ShioriOutcome::Failed(failure) => {
+            tracing::warn!(
+                target: "areka_kanade::resource",
+                id = "username",
+                error = %failure,
+                "username リソース照会が失敗——warn＋Failed を sink へ渡し boot 続行（起動を殺さない・R4.1）"
+            );
+            (ResourceOutcome::Failed(failure.to_string()), "failed")
+        }
+        // GET 応答が Notified/Unloaded になることは構造上あり得ない（NOTIFY/Unload 専用の完了語彙）。
+        // 防御的に Failed 扱いとし、固定ログを 1 回だけ出して boot を続行する（log-first・起動を殺さない）。
+        other => {
+            let kind = match other {
+                ShioriOutcome::Notified => "notified",
+                ShioriOutcome::Unloaded => "unloaded",
+                _ => "unknown",
+            };
+            tracing::warn!(
+                target: "areka_kanade::resource",
+                id = "username",
+                reply = %kind,
+                "username 照会が想定外の応答（GET は Value/NoContent/Failed のみ）——防御的に Failed 扱いで続行"
+            );
+            (
+                ResourceOutcome::Failed(format!("unexpected prefetch outcome: {kind}")),
+                "failed",
+            )
+        }
+    };
+    // R9.3 grep 証跡: prefetch 完了固定ログ（target・fields・message 固定・必ず 1 回・研究 §12-10）。
+    tracing::info!(
+        target: "areka_kanade::resource",
+        id = "username",
+        outcome = label,
+        "shiori resource prefetch done"
+    );
+    state.phase = Phase::BootType;
+    (
+        state,
+        vec![
+            // sink 呼出は OnFirstBoot 送出**より先**に実行される（Action 順・シェルは順次実行）。
+            Action::ResourceOutcome {
+                id: "username",
+                outcome: resource_outcome,
+            },
+            Action::ShioriRequest(events::on_first_boot(&ExecutionSnapshot::INACTIVE)),
+        ],
+    )
 }
 
 /// StartTalk（Value 時のみ・一意採番）を積み、basewareversion NOTIFY を発行し BootVersion へ。
@@ -219,7 +296,7 @@ mod tests {
         assert_eq!(actions.len(), 1);
         assert_notify(&actions[0], &events::on_initialize(&ExecutionSnapshot::INACTIVE));
 
-        // 2. BootInit + Notified → OnFirstBoot GET / BootType（Req 1.2）。
+        // 2. BootInit + Notified → username リソース照会（prefetch）GET / BootPrefetch（R4.1）。
         let (s, actions) = step(
             s,
             Input::ShioriReply {
@@ -228,9 +305,23 @@ mod tests {
             },
             &cfg,
         );
-        assert!(matches!(s.phase, Phase::BootType));
+        assert!(matches!(s.phase, Phase::BootPrefetch));
         assert_eq!(actions.len(), 1);
-        assert_get(&actions[0], &events::on_first_boot(&ExecutionSnapshot::INACTIVE));
+        assert_get(&actions[0], &resources::resource_username(&ExecutionSnapshot::INACTIVE));
+
+        // 2b. BootPrefetch + NoContent(204) → [ResourceOutcome, OnFirstBoot GET] / BootType（R4.1）。
+        let (s, actions) = step(
+            s,
+            Input::ShioriReply {
+                outcome: ShioriOutcome::NoContent,
+                origin: "test",
+            },
+            &cfg,
+        );
+        assert!(matches!(s.phase, Phase::BootType));
+        assert_eq!(actions.len(), 2, "sink 呼出指示＋OnFirstBoot GET の 2 件");
+        assert!(matches!(actions[0], Action::ResourceOutcome { .. }), "sink 先行");
+        assert_get(&actions[1], &events::on_first_boot(&ExecutionSnapshot::INACTIVE));
 
         // 3. BootType + NoContent(204) → OnBoot GET / BootMain（Req 1.3）。
         let (s, actions) = step(
@@ -311,7 +402,8 @@ mod tests {
     #[test]
     fn boot_type_value_skips_onboot_and_starts_talk() {
         let cfg = config();
-        // BootType へ進める（Boot→Notified）。
+        // BootType へ進める（Boot→Notified→prefetch 204）。prefetch 段が OnInitialize と OnFirstBoot の
+        // 間に挟まるため、username 照会応答（204）を 1 段挟んでから BootType へ到達する。
         let (s, _) = step(initial(), Input::Boot, &cfg);
         let (s, _) = step(
             s,
@@ -320,7 +412,15 @@ mod tests {
                 origin: "test",
             },
             &cfg,
-        );
+        ); // BootInit→BootPrefetch（username GET）
+        let (s, _) = step(
+            s,
+            Input::ShioriReply {
+                outcome: ShioriOutcome::NoContent,
+                origin: "test",
+            },
+            &cfg,
+        ); // BootPrefetch→BootType（OnFirstBoot GET）
         assert!(matches!(s.phase, Phase::BootType));
 
         // BootType + Value("earlygreet") → StartTalk + basewareversion NOTIFY / BootVersion。
@@ -502,7 +602,7 @@ mod tests {
         );
         assert!(matches!(s.phase, Phase::BootInit));
         assert!(matches!(s.pending_close, Some(CloseReason::System)));
-        // BootInit→BootType→BootMain→BootVersion→Steady を進める。
+        // BootInit→BootPrefetch→BootType→BootMain→BootVersion→Steady を進める（prefetch 1 段追加）。
         let (s, _) = step(
             s,
             Input::ShioriReply {
@@ -510,7 +610,7 @@ mod tests {
                 origin: "test",
             },
             &cfg,
-        );
+        ); // BootInit→BootPrefetch（username GET）
         let (s, _) = step(
             s,
             Input::ShioriReply {
@@ -518,7 +618,7 @@ mod tests {
                 origin: "test",
             },
             &cfg,
-        );
+        ); // BootPrefetch→BootType（OnFirstBoot GET）
         let (s, _) = step(
             s,
             Input::ShioriReply {
@@ -526,7 +626,15 @@ mod tests {
                 origin: "test",
             },
             &cfg,
-        );
+        ); // BootType→BootMain（OnBoot GET）
+        let (s, _) = step(
+            s,
+            Input::ShioriReply {
+                outcome: ShioriOutcome::NoContent,
+                origin: "test",
+            },
+            &cfg,
+        ); // BootMain→BootVersion（204・挨拶なし）
         let (s, _) = step(
             s,
             Input::ShioriReply {
@@ -534,7 +642,7 @@ mod tests {
                 origin: "test",
             },
             &cfg,
-        );
+        ); // BootVersion→Steady{None}
         assert!(matches!(s.phase, Phase::Steady { talk: None }));
         assert!(
             matches!(s.pending_close, Some(CloseReason::System)),
@@ -715,5 +823,256 @@ mod tests {
             !unknown_fired,
             "挨拶 TalkDone が slot と照合されれば unknown_talk_done ERROR は出ないはず: {events:#?}"
         );
+    }
+
+    // ========================================================================
+    // タスク 6.2: username リソース照会 prefetch（OnInitialize 後・OnFirstBoot 前・R4.1/R9.3）
+    // ========================================================================
+
+    use crate::msg::ShioriFailure;
+    use resources::ResourceOutcome;
+
+    /// Idle→Boot→(OnInitialize Notified) まで駆動し `BootPrefetch`（username GET 発行済み）へ到達させる。
+    fn drive_to_prefetch(cfg: &KanadeConfig) -> State {
+        let (s, _) = step(initial(), Input::Boot, cfg); // Idle→BootInit（OnInitialize NOTIFY）
+        let (s, actions) = step(
+            s,
+            Input::ShioriReply {
+                outcome: ShioriOutcome::Notified,
+                origin: "test",
+            },
+            cfg,
+        ); // BootInit→BootPrefetch（username GET 発行）
+        assert!(
+            matches!(s.phase, Phase::BootPrefetch),
+            "OnInitialize 完了後は BootPrefetch（username 照会待ち）であるべき"
+        );
+        // BootInit の応答は username GET を 1 件だけ発行する（OnFirstBoot ではない）。
+        assert_eq!(actions.len(), 1, "prefetch は GET を 1 件だけ発行する");
+        assert_get(
+            &actions[0],
+            &resources::resource_username(&ExecutionSnapshot::INACTIVE),
+        );
+        s
+    }
+
+    /// Action 列から `Action::ResourceOutcome` の outcome を取り出す（無ければ panic）。
+    fn resource_outcome_of(actions: &[Action]) -> &ResourceOutcome {
+        actions
+            .iter()
+            .find_map(|a| match a {
+                Action::ResourceOutcome { id, outcome } => {
+                    assert_eq!(*id, "username", "リソース照会 id は username");
+                    Some(outcome)
+                }
+                _ => None,
+            })
+            .expect("Action::ResourceOutcome が発行されるはず")
+    }
+
+    /// prefetch は OnInitialize（NOTIFY）の後・OnFirstBoot（GET）の前に username GET を 1 回だけ発行し、
+    /// 応答受領後は OnFirstBoot GET を発行して BootType へ進む（順序の檻・R4.1）。
+    #[test]
+    fn prefetch_username_get_is_issued_once_between_initialize_and_firstboot() {
+        let cfg = config();
+        // Idle+Boot → OnInitialize NOTIFY（username GET はまだ出ない）。
+        let (s, actions) = step(initial(), Input::Boot, &cfg);
+        assert_notify(&actions[0], &events::on_initialize(&ExecutionSnapshot::INACTIVE));
+        assert!(
+            !actions.iter().any(is_username_get),
+            "OnInitialize 段では username GET を発行しない"
+        );
+
+        // BootInit+Notified → username GET（OnFirstBoot はまだ出ない）。
+        let (s, actions) = step(
+            s,
+            Input::ShioriReply {
+                outcome: ShioriOutcome::Notified,
+                origin: "test",
+            },
+            &cfg,
+        );
+        assert!(matches!(s.phase, Phase::BootPrefetch));
+        assert_eq!(
+            actions.iter().filter(|a| is_username_get(a)).count(),
+            1,
+            "prefetch の username GET はちょうど 1 回"
+        );
+        assert!(
+            !actions.iter().any(is_onfirstboot_get),
+            "prefetch 応答前に OnFirstBoot を発行してはならない（照会後に続行）"
+        );
+
+        // BootPrefetch+NoContent → [ResourceOutcome, OnFirstBoot GET]・BootType。
+        let (s, actions) = step(
+            s,
+            Input::ShioriReply {
+                outcome: ShioriOutcome::NoContent,
+                origin: "test",
+            },
+            &cfg,
+        );
+        assert!(matches!(s.phase, Phase::BootType), "prefetch 完了後は BootType（OnFirstBoot 待ち）");
+        // sink 呼出指示（ResourceOutcome）が OnFirstBoot GET より前に積まれる（design boot 図: sink 先行）。
+        assert!(
+            matches!(actions[0], Action::ResourceOutcome { .. }),
+            "ResourceOutcome は OnFirstBoot より前（sink 先行）"
+        );
+        assert_eq!(
+            actions.iter().filter(|a| is_onfirstboot_get(a)).count(),
+            1,
+            "prefetch 応答後に OnFirstBoot GET をちょうど 1 回発行する"
+        );
+        // 二度目の username GET は出ない（prefetch は 1 回・後段で再照会しない）。
+        assert!(
+            !actions.iter().any(is_username_get),
+            "prefetch は 1 回のみ——後段で username を再照会しない"
+        );
+    }
+
+    /// 応答の [`ResourceOutcome`] 写像: 200 Value→Value(body)／204→NoContent／失敗→Failed（R4.1）。
+    #[test]
+    fn prefetch_maps_outcomes_to_resource_outcome() {
+        let cfg = config();
+
+        // 200 Value → ResourceOutcome::Value(body)。
+        let (_, actions) = step(
+            drive_to_prefetch(&cfg),
+            Input::ShioriReply {
+                outcome: ShioriOutcome::Value("bob".to_string()),
+                origin: "test",
+            },
+            &cfg,
+        );
+        assert_eq!(
+            resource_outcome_of(&actions),
+            &ResourceOutcome::Value("bob".to_string())
+        );
+
+        // 204 → ResourceOutcome::NoContent。
+        let (_, actions) = step(
+            drive_to_prefetch(&cfg),
+            Input::ShioriReply {
+                outcome: ShioriOutcome::NoContent,
+                origin: "test",
+            },
+            &cfg,
+        );
+        assert_eq!(resource_outcome_of(&actions), &ResourceOutcome::NoContent);
+
+        // 失敗（タイムアウト）→ ResourceOutcome::Failed（理由文字列を保持）。
+        let (_, actions) = step(
+            drive_to_prefetch(&cfg),
+            Input::ShioriReply {
+                outcome: ShioriOutcome::Failed(ShioriFailure::Timeout("30s".to_string())),
+                origin: "test",
+            },
+            &cfg,
+        );
+        match resource_outcome_of(&actions) {
+            ResourceOutcome::Failed(reason) => {
+                assert!(reason.contains("timeout"), "Failed の理由に失敗語彙が載る: {reason}");
+            }
+            other => panic!("失敗応答は ResourceOutcome::Failed へ写像されるべき: {other:?}"),
+        }
+    }
+
+    /// 照会失敗（タイムアウト/IPC 断）でも boot は殺さず OnFirstBoot へ続行する（起動を殺さない・R4.1）。
+    /// `step()`（mod.rs 横断アーム込み）を通し、BootPrefetch の Failed が Unloading{Fault} へ**倒れない**
+    /// ことを固定する（横断 Failed→Fault 経路が prefetch では迂回される檻）。
+    #[test]
+    fn prefetch_failure_continues_boot_not_fault() {
+        let cfg = config();
+        let (s, actions) = step(
+            drive_to_prefetch(&cfg),
+            Input::ShioriReply {
+                outcome: ShioriOutcome::Failed(ShioriFailure::Ipc("pipe closed".to_string())),
+                origin: "test",
+            },
+            &cfg,
+        );
+        // 終了系列（Unloading/Stopped）へ倒れず、OnFirstBoot 待ち（BootType）へ続行する。
+        assert!(
+            matches!(s.phase, Phase::BootType),
+            "prefetch 失敗は Unloading{{Fault}} へ倒さず OnFirstBoot へ続行する（起動を殺さない・R4.1）"
+        );
+        assert_eq!(
+            resource_outcome_of(&actions),
+            &ResourceOutcome::Failed("shiori ipc failure: pipe closed".to_string())
+        );
+        // OnFirstBoot GET が発行され boot が前進する（Unload ではない）。
+        assert!(
+            actions.iter().any(is_onfirstboot_get),
+            "prefetch 失敗後も OnFirstBoot を発行して boot を継続する"
+        );
+        assert!(
+            !actions.iter().any(|a| matches!(a, Action::ShioriUnload)),
+            "prefetch 失敗で Unload（終了系列）を起こしてはならない"
+        );
+    }
+
+    /// リソース照会は talk を生成しない（Invariant）: Value 応答でも StartTalk を発行しない。
+    #[test]
+    fn prefetch_value_does_not_produce_a_talk() {
+        let cfg = config();
+        let (_, actions) = step(
+            drive_to_prefetch(&cfg),
+            Input::ShioriReply {
+                outcome: ShioriOutcome::Value(r"\0greeting\e".to_string()),
+                origin: "test",
+            },
+            &cfg,
+        );
+        assert!(
+            !actions.iter().any(|a| matches!(a, Action::StartTalk(_))),
+            "リソース照会 Value は StartTalk を生成しない（sink へ渡すのみ・Invariant）"
+        );
+    }
+
+    /// 完了固定ログ（R9.3 grep 証跡）: 経路（value/no_content/failed）ごとに `info!` が
+    /// `target="areka_kanade::resource"`・`outcome=<label>`・message 固定で**ちょうど 1 回**出る。
+    #[test]
+    fn prefetch_emits_fixed_completion_log_exactly_once() {
+        use crate::schedule::log_capture::{assert_resource_prefetch_logged_once, capture};
+
+        let cases: [(ShioriOutcome, &str); 3] = [
+            (ShioriOutcome::Value("bob".to_string()), "value"),
+            (ShioriOutcome::NoContent, "no_content"),
+            (
+                ShioriOutcome::Failed(ShioriFailure::Timeout("30s".to_string())),
+                "failed",
+            ),
+        ];
+        for (outcome, label) in cases {
+            let cfg = config();
+            let s = drive_to_prefetch(&cfg);
+            let events = capture(|| {
+                let _ = step(
+                    s,
+                    Input::ShioriReply {
+                        outcome,
+                        origin: "test",
+                    },
+                    &cfg,
+                );
+            });
+            assert_resource_prefetch_logged_once(&events, label);
+        }
+    }
+
+    /// Action が username リソース GET（id="username"）か判定する。
+    fn is_username_get(action: &Action) -> bool {
+        matches!(
+            action,
+            Action::ShioriRequest(crate::msg::ShioriCall::Get { id, .. }) if *id == "username"
+        )
+    }
+
+    /// Action が OnFirstBoot GET か判定する。
+    fn is_onfirstboot_get(action: &Action) -> bool {
+        matches!(
+            action,
+            Action::ShioriRequest(crate::msg::ShioriCall::Get { id, .. }) if *id == "OnFirstBoot"
+        )
     }
 }

@@ -34,7 +34,7 @@ use std::time::{Duration, Instant};
 
 use areka_ghost::dispatcher::DispatcherMsg;
 use areka_ghost::{
-    GhostBootOptions, ShioriWiring, TickerMode, boot, default_system_vars, inproc_connect,
+    GhostBootOptions, ShioriWiring, SystemVarWiring, TickerMode, boot, inproc_connect,
 };
 use areka_kanade::{CloseReason, MonotonicMs, ShioriBackend};
 use areka_parsers::charset::DefaultEncoding;
@@ -283,7 +283,8 @@ fn i1_inproc_one_lap_records_frozen_onfirstboot_greeting_and_closes_cleanly() {
         default_encoding: DefaultEncoding::Utf8,
         shiori: ShioriWiring::InProc,
         sinks: vec![Box::new(surface_sink), Box::new(text_sink)],
-        system_vars: default_system_vars(),
+        system_vars: SystemVarWiring::Custom(crate::common::test_system_vars()),
+        app_profile_dir: None,
         ticker: TickerMode::Disabled,
     };
 
@@ -440,7 +441,8 @@ fn i2_inproc_one_lap_records_both_exchange_sequence_and_greeting_cues() {
         default_encoding: DefaultEncoding::Utf8,
         shiori: wiring,
         sinks: vec![Box::new(surface_sink), Box::new(text_sink)],
-        system_vars: default_system_vars(),
+        system_vars: SystemVarWiring::Custom(crate::common::test_system_vars()),
+        app_profile_dir: None,
         ticker: TickerMode::Disabled,
     };
 
@@ -527,6 +529,13 @@ fn i2_inproc_one_lap_records_both_exchange_sequence_and_greeting_cues() {
             ExchangeKind::Notify,
             Some("OnInitialize".to_string()),
             ExchangeOutcome::NotifyOk,
+        ),
+        // task 8.2 の username prefetch GET（OnInitialize 後・OnFirstBoot 前・R4.1）。実テスト DLL は
+        // username リソースを提供しないため NoContent が返る（既定 username＝DEFAULT_USERNAME 相当の世界）。
+        (
+            ExchangeKind::Get,
+            Some("username".to_string()),
+            ExchangeOutcome::NoContent,
         ),
         (
             ExchangeKind::Get,

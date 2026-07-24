@@ -311,7 +311,9 @@ mod tests {
         assert!(!out.is_null(), "成功時は out へ非 NULL の IShioriFactory を書き出すこと");
         let factory = unsafe { IShioriFactory::from_raw(out) };
 
-        let host: IShioriHost = ShioriHostSink::new().into();
+        // sink は sylphya 委譲済み（第 2 ストア撤去・Task 9.1/9.3）。本テスト群はプロパティ経路を
+        // 検査しないため hermetic な偽 IO sink（既知 asker）で足りる（`spawn_test_sylphya_sink`）。
+        let host: IShioriHost = crate::shiori_host::spawn_test_sylphya_sink().sink.into();
         let brain = factory
             .create(&HSTRING::from("C:/ghost/master"), &HSTRING::from("reference"), &host)
             .expect("create は Ok で IShiori 直返し");

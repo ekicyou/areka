@@ -68,6 +68,7 @@ pub fn resolve(
     let names = GhostNames {
         name: map.get("name").cloned(),
         sakura_name: map.get("sakura.name").cloned(),
+        sakura_name2: map.get("sakura.name2").cloned(),
         kero_name: map.get("kero.name").cloned(),
     };
 
@@ -245,6 +246,68 @@ fn parse_bindgroup_name(id: u32, value: &str) -> Option<BindGroupName> {
         part: part.to_owned(),
         thumbnail,
     })
+}
+
+#[cfg(test)]
+mod ghost_names_transcription_tests {
+    //! `resolve` の `GhostNames` 転記（task 7・`sakura.name2` 追加）の in-source 檻。
+    //!
+    //! ghost/master/descript.txt を合成 tempdir に書き出し、`resolve` を直接呼んで
+    //! `sakura.name2` の忠実転記（宣言あり→Some・宣言なし→None）を決定論で固定する。
+    //! 縮退・フォールバックは行わない（それは ghost 層 task 8.1 の責務）。tempfile 等
+    //! 外部クレートには依存せず temp_dir 直下を使う。
+
+    use std::fs;
+    use std::path::PathBuf;
+
+    use crate::charset::DefaultEncoding;
+
+    use super::resolve;
+
+    /// テスト専用の一意な ghost ルートを作り、descript.txt と shell/master を用意して返す。
+    fn ghost_root_with_descript(tag: &str, descript_body: &str) -> PathBuf {
+        let mut root = std::env::temp_dir();
+        root.push(format!("areka_ghost_names_tests_{tag}"));
+        let _ = fs::remove_dir_all(&root);
+        let master = root.join("ghost").join("master");
+        fs::create_dir_all(&master).expect("create ghost/master");
+        fs::write(master.join("descript.txt"), descript_body.as_bytes()).expect("write descript.txt");
+        // shell/master は存在確認（Req 3.3）を通すために用意する。
+        fs::create_dir_all(root.join("shell").join("master")).expect("create shell/master");
+        root
+    }
+
+    /// `sakura.name2` 宣言あり → `GhostNames.sakura_name2 == Some(値)`（忠実転記・R4.4）。
+    #[test]
+    fn sakura_name2_declared_is_some() {
+        let root = ghost_root_with_descript(
+            "name2_declared",
+            "charset,UTF-8\nname,テスト\nsakura.name,本体\nsakura.name2,別名\nkero.name,相方\n",
+        );
+        let model = resolve(&root, DefaultEncoding::Utf8).expect("resolve ok");
+
+        assert_eq!(model.names.sakura_name2, Some("別名".to_string()));
+        // 既存フィールドは無改変。
+        assert_eq!(model.names.sakura_name, Some("本体".to_string()));
+
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    /// `sakura.name2` 宣言なし → `GhostNames.sakura_name2 == None`（推測しない・R4.4）。
+    #[test]
+    fn sakura_name2_absent_is_none() {
+        let root = ghost_root_with_descript(
+            "name2_absent",
+            "charset,UTF-8\nname,テスト\nsakura.name,本体\nkero.name,相方\n",
+        );
+        let model = resolve(&root, DefaultEncoding::Utf8).expect("resolve ok");
+
+        assert_eq!(model.names.sakura_name2, None);
+        // 兄弟フィールドは通常どおり転記される（None は欠落を意味する）。
+        assert_eq!(model.names.sakura_name, Some("本体".to_string()));
+
+        let _ = fs::remove_dir_all(&root);
+    }
 }
 
 #[cfg(test)]

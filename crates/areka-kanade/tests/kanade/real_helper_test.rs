@@ -205,7 +205,10 @@ fn real_helper_boot_pump_close_completes() {
     //     （request_e2e_real_pasta_optional）に倣い "master" を用いる（妥当な Reference0）。
     let config = KanadeConfig::new("master", "1.0.0");
     let (talk_tx, talk_rx) = std::sync::mpsc::channel();
-    let (kanade_inbox_tx, kanade_handle) = spawn_kanade(config, shiori_tx, talk_tx);
+    // boot prefetch（username 照会・R4.1）は実 shiori 経路で駆動されるが、本追験は運行完走のみを
+    // 問い照会結果を消費しないため no-op sink を注入する（Implementation Notes）。
+    let (kanade_inbox_tx, kanade_handle) =
+        spawn_kanade(config, shiori_tx, talk_tx, Box::new(|_, _| {}));
 
     let sakura = spawn_mock_sakura(talk_rx, kanade_inbox_tx.clone(), QuitPolicy::Fixed(true));
 

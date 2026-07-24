@@ -21,6 +21,10 @@ shiori-abi = { path = "../shiori-abi" }
 areka-ghost = { path = "../areka-ghost" }
 areka-kanade = { path = "../areka-kanade" }
 areka-parsers = { path = "../areka-parsers" }
+# ShioriHostSink 統合（areka-P0-sylphya task 9.1・R7.2/R7.3）で GetProperty/SetProperty を
+# 統一プロパティシステム sylphya の reader/publisher へ委譲し第 2 ストア（HashMap）を撤去する
+# ための workspace path 依存（bin → sylphya は許容・外部 crates.io 依存の追加ではない）。
+areka-sylphya = { path = "../areka-sylphya" }
 windows-core = { workspace = true }
 human-panic = { workspace = true }
 thiserror = { workspace = true }

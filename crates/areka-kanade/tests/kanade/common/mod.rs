@@ -1058,8 +1058,10 @@ pub fn spawn_harness(config: KanadeConfig, fixture: Fixture, quit_policy: QuitPo
     // kanade→sakura の StartTalk チャンネルを 1 本張る。
     let (talk_tx, talk_rx) = std::sync::mpsc::channel::<StartTalk>();
 
-    // kanade を起動（inbox 送信端を得る）。
-    let (kanade_tx, kanade_handle) = spawn_kanade(config, shiori.sender.clone(), talk_tx);
+    // kanade を起動（inbox 送信端を得る）。boot prefetch（username 照会・R4.1）は駆動されるが、
+    // ハーネスは照会結果を消費しないため no-op sink を注入する（Implementation Notes）。
+    let (kanade_tx, kanade_handle) =
+        spawn_kanade(config, shiori.sender.clone(), talk_tx, Box::new(|_, _| {}));
 
     // sink には TalkDone 返送用に kanade inbox 送信端のクローンを渡す。
     let sakura = spawn_mock_sakura(talk_rx, kanade_tx.clone(), quit_policy);
@@ -1092,8 +1094,10 @@ pub fn spawn_harness_gated(
     // kanade→sakura の StartTalk チャンネルを 1 本張る。
     let (talk_tx, talk_rx) = std::sync::mpsc::channel::<StartTalk>();
 
-    // kanade を起動（inbox 送信端を得る）。
-    let (kanade_tx, kanade_handle) = spawn_kanade(config, shiori.sender.clone(), talk_tx);
+    // kanade を起動（inbox 送信端を得る）。boot prefetch（username 照会・R4.1）は駆動されるが、
+    // ハーネスは照会結果を消費しないため no-op sink を注入する（Implementation Notes）。
+    let (kanade_tx, kanade_handle) =
+        spawn_kanade(config, shiori.sender.clone(), talk_tx, Box::new(|_, _| {}));
 
     // sink には TalkDone 返送用に kanade inbox 送信端のクローンを渡す（保留機能付き）。
     let (sakura, gate) =
@@ -1126,8 +1130,10 @@ pub fn spawn_harness_failing(
     // kanade→sakura の StartTalk チャンネルを 1 本張る。
     let (talk_tx, talk_rx) = std::sync::mpsc::channel::<StartTalk>();
 
-    // kanade を起動（inbox 送信端を得る）。
-    let (kanade_tx, kanade_handle) = spawn_kanade(config, shiori.sender.clone(), talk_tx);
+    // kanade を起動（inbox 送信端を得る）。boot prefetch（username 照会・R4.1）は駆動されるが、
+    // ハーネスは照会結果を消費しないため no-op sink を注入する（Implementation Notes）。
+    let (kanade_tx, kanade_handle) =
+        spawn_kanade(config, shiori.sender.clone(), talk_tx, Box::new(|_, _| {}));
 
     // sink には TalkDone 返送用に kanade inbox 送信端のクローンを渡す。
     let sakura = spawn_mock_sakura(talk_rx, kanade_tx.clone(), quit_policy);
@@ -1159,8 +1165,10 @@ pub fn spawn_harness_blocking(
     // kanade→sakura の StartTalk チャンネルを 1 本張る。
     let (talk_tx, talk_rx) = std::sync::mpsc::channel::<StartTalk>();
 
-    // kanade を起動（inbox 送信端を得る）。
-    let (kanade_tx, kanade_handle) = spawn_kanade(config, shiori.sender.clone(), talk_tx);
+    // kanade を起動（inbox 送信端を得る）。boot prefetch（username 照会・R4.1）は駆動されるが、
+    // ハーネスは照会結果を消費しないため no-op sink を注入する（Implementation Notes）。
+    let (kanade_tx, kanade_handle) =
+        spawn_kanade(config, shiori.sender.clone(), talk_tx, Box::new(|_, _| {}));
 
     // sink には TalkDone 返送用に kanade inbox 送信端のクローンを渡す。
     let sakura = spawn_mock_sakura(talk_rx, kanade_tx.clone(), quit_policy);
@@ -1212,8 +1220,10 @@ pub fn spawn_harness_no_sink(config: KanadeConfig, fixture: Fixture) -> Sinkless
     // kanade→sakura の StartTalk チャンネルを 1 本張る（受信端は sink を起動せず保持する）。
     let (talk_tx, talk_rx) = std::sync::mpsc::channel::<StartTalk>();
 
-    // kanade を起動（inbox 送信端を得る・クローンは作らない）。
-    let (kanade_tx, kanade_handle) = spawn_kanade(config, shiori.sender.clone(), talk_tx);
+    // kanade を起動（inbox 送信端を得る・クローンは作らない）。boot prefetch（R4.1）は駆動されるが
+    // 照会結果を消費しないため no-op sink を注入する。
+    let (kanade_tx, kanade_handle) =
+        spawn_kanade(config, shiori.sender.clone(), talk_tx, Box::new(|_, _| {}));
 
     SinklessHarness {
         sender: kanade_tx,

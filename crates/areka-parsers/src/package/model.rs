@@ -152,6 +152,8 @@ pub struct GhostNames {
     pub name: Option<String>,
     /// descript `sakura.name`。
     pub sakura_name: Option<String>,
+    /// descript `sakura.name2`（本体側の別名・`%selfname2` 由来・Req 4.4）。
+    pub sakura_name2: Option<String>,
     /// descript `kero.name`。
     pub kero_name: Option<String>,
 }

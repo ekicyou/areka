@@ -7,6 +7,11 @@
 // 後続タスク 4.2〜4.7 が同ファイルへ boot〜close の各シナリオ（S1〜S6）の `#[test]` を
 // 追加していく）。`real_pasta_test.rs`（task 4.8・env ゲート実 pasta 追験）は
 // `spine_e2e_test` の `RecordingSink` を再利用する（`crate::spine_e2e_test::RecordingSink`）。
+// `common`（task 8.3・退役 `default_system_vars` の代役スタンドイン）はテスト支援モジュール。
+// 各 e2e／追験が `crate::common::test_system_vars` を消費し、`SystemVarWiring::Custom` 注入で
+// 既存テストの既定 username 前提を無改変のまま保つ。
+#[path = "ghost/common.rs"]
+mod common;
 #[path = "ghost/real_pasta_test.rs"]
 mod real_pasta_test;
 #[path = "ghost/spine_e2e_test.rs"]
@@ -30,3 +35,9 @@ mod inproc_e2e_test;
 // `HOST32_PASTA_DLL`＋`AREKA_SNAPSHOT_OUT` 両設定時のみ動作（欠落は silent skip）。
 #[path = "ghost/snapshot_capture_test.rs"]
 mod snapshot_capture_test;
+// `sylphya_integration_test`（task 8.4・sylphya × ghost 結線 end-to-end）は
+// `spine_e2e_test::RecordingSink` を再利用し、実 boot（mock shiori backend）を駆動して
+// (1) boot 後の reader 実値解決（selfname 系／baseware）・(2) shutdown 全段成功（sylphya 段含む）・
+// (3) username=Value → 初回 talk スナップショット包含（barrier フェンス・レース非依存）を檻化する。
+#[path = "ghost/sylphya_integration_test.rs"]
+mod sylphya_integration_test;

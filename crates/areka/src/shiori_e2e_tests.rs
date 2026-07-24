@@ -108,7 +108,8 @@ impl IShioriFactory_Impl for DeferringFactory_Impl {
 fn deferred_completion_and_push_delivered_end_to_end() {
     // --- host（sink）を明示生成し、脳と session で共有する（脳→host の配送を session が観測する）。
     let factory: IShioriFactory = DeferringFactory.into();
-    let host: IShioriHost = crate::shiori_host::ShioriHostSink::new().into();
+    // sink は sylphya 委譲済み（第 2 ストア撤去・Task 9.1/9.3）。hermetic な偽 IO sink（既知 asker）。
+    let host: IShioriHost = crate::shiori_host::spawn_test_sylphya_sink().sink.into();
 
     // factory で脳を生成（host を脳へ保持させる）。session はこの脳を move で保持する。
     let brain = factory

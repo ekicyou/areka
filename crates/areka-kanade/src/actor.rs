@@ -33,6 +33,7 @@ use std::sync::mpsc::Sender;
 use areka_actor::{ActorHandle, ReplyError, reply_channel, run_inbox, spawn_actor};
 
 use crate::msg::{KanadeConfig, KanadeMsg, ShioriCall, ShioriFailure, ShioriMsg, ShioriOutcome};
+use crate::schedule::resources::ResourceSink;
 use crate::schedule::{Action, Input, State, step};
 use crate::talk::StartTalk;
 
@@ -47,10 +48,17 @@ use crate::talk::StartTalk;
 /// 停止は `KanadeMsg::Close` 送信・`Action::StopSelf`（終了系列完了）・全 `Sender<KanadeMsg>` drop の
 /// いずれかで駆動する。`Sender<KanadeMsg>` を握ったまま停止も送らずに [`ActorHandle::join`] すると
 /// body は受信待ちのままデッドロックし得る（結線側は drop→join 順を厳守すること）。
+///
+/// # リソース照会シンク（R4.1）
+/// `resource_sink` は boot 系列の username prefetch（OnInitialize 後・OnFirstBoot 前）が受け取る
+/// [`ResourceOutcome`](crate::schedule::resources::ResourceOutcome) を**同期的に**受ける注入クロージャ
+/// （kanade は sylphya へ依存しない疎結合シーム）。sink が返るまで boot は次段へ進まない。結果を使わない
+/// 構成（既存テスト等）では no-op sink（`Box::new(|_, _| {})`）を渡す。
 pub fn spawn_kanade(
     config: KanadeConfig,
     shiori: Sender<ShioriMsg>,
     sakura: Sender<StartTalk>,
+    resource_sink: ResourceSink,
 ) -> (Sender<KanadeMsg>, ActorHandle) {
     spawn_actor("kanade", move |rx| {
         let mut state = State::initial();
@@ -69,7 +77,7 @@ pub fn spawn_kanade(
                 KanadeMsg::ShioriDown { reason } => Input::ShioriDown { reason },
                 KanadeMsg::Mouse(m) => Input::Mouse(m),
             };
-            match drive(&mut state, input, &config, &shiori, &sakura) {
+            match drive(&mut state, input, &config, &shiori, &sakura, &resource_sink) {
                 Drive::Continue => Ok(ControlFlow::Continue(())),
                 Drive::Stop => Ok(ControlFlow::Break(())),
             }
@@ -91,6 +99,7 @@ fn drive(
     config: &KanadeConfig,
     shiori: &Sender<ShioriMsg>,
     sakura: &Sender<StartTalk>,
+    resource_sink: &ResourceSink,
 ) -> Drive {
     // 初回 step。以降は state を差し替えつつ actions を回す。
     let (mut st, mut actions) = step(std::mem::replace(state, State::initial()), input, config);
@@ -118,6 +127,12 @@ fn drive(
                         ShioriCall::Get { id, .. } | ShioriCall::Notify { id, .. } => *id,
                     };
                     last_reply = Some((round_trip_request(shiori, call), origin));
+                }
+                Action::ResourceOutcome { id, outcome } => {
+                    // リソース照会結果を注入クロージャへ**同期的に**渡す（返るまで次段へ進まない・R4.1）。
+                    // 副作用は sink 内部（ghost の publish＋barrier）——talk は生成しない（Invariant）。
+                    // last_reply は変えない（SHIORI 往復ではないため再投入対象にならない）。
+                    resource_sink(id, outcome);
                 }
                 Action::ShioriUnload => {
                     // unload には出所イベントが無いため "Unload" を転記する（Unloading 応答は
@@ -172,8 +187,13 @@ fn round_trip_request(shiori: &Sender<ShioriMsg>, call: ShioriCall) -> ShioriOut
         }
     };
 
-    // ID ホワイトリスト檻（Req3.1/3.2・DD-IT-7/DD-IT-11）: 許可集合外は送出せず内部規律違反として失敗させる。
-    if !crate::schedule::events::is_allowed_event_id(id) {
+    // ID ホワイトリスト檻（Req3.1/3.2/4.1・DD-IT-7/DD-IT-11）: 許可集合外は送出せず内部規律違反
+    // として失敗させる。送出可否は「イベント許可 ∨ リソース許可」の論理和で判定する——イベント檻
+    // （`ALLOWED_EVENT_IDS`・8 ID）とは別族のリソース許可集合（`ALLOWED_RESOURCE_IDS`・M1: username）を
+    // additive に OR する（既存イベント許可路・許可外拒否は無改変・design 論点1）。
+    let allowed = crate::schedule::events::is_allowed_event_id(id)
+        || crate::schedule::resources::is_allowed_resource_id(id);
+    if !allowed {
         tracing::error!(
             target: "kanade",
             event = "event_id_not_allowed",
@@ -276,6 +296,13 @@ mod tests {
         KanadeConfig::new("master", "1.0.0")
     }
 
+    /// リソース照会結果を捨てる no-op sink（結果を使わない結線・R4.1 Implementation Notes）。
+    /// prefetch は駆動されるが sink は何もしない——本モジュールの停止・順序・失敗系テストは
+    /// prefetch 結果に依存しないため、副作用のないクロージャで十分。
+    fn noop_sink() -> crate::schedule::resources::ResourceSink {
+        Box::new(|_, _| {})
+    }
+
     /// mock shiori アクター: 任意の Request/Unload に良性応答を返し Close で停止する。
     /// 受領した ShioriMsg の要約を記録列へ蓄積する。
     #[derive(Debug, Clone, PartialEq)]
@@ -338,7 +365,7 @@ mod tests {
         let (shiori_tx, _rec_rx, shiori_handle) = spawn_mock_shiori(benign);
         let (sakura_tx, _sakura_rx) = mpsc::channel::<StartTalk>();
 
-        let (kanade_tx, kanade_handle) = spawn_kanade(config(), shiori_tx, sakura_tx);
+        let (kanade_tx, kanade_handle) = spawn_kanade(config(), shiori_tx, sakura_tx, noop_sink());
 
         // 停止駆動: Close 送信後、送信端を drop（残余 Sender で inbox を生かさない）。
         kanade_tx.send(KanadeMsg::Close).expect("send Close");
@@ -359,7 +386,7 @@ mod tests {
         let (shiori_tx, _rec_rx, shiori_handle) = spawn_mock_shiori(benign);
         let (sakura_tx, _sakura_rx) = mpsc::channel::<StartTalk>();
 
-        let (kanade_tx, kanade_handle) = spawn_kanade(config(), shiori_tx, sakura_tx);
+        let (kanade_tx, kanade_handle) = spawn_kanade(config(), shiori_tx, sakura_tx, noop_sink());
 
         // Close を送らず、全 Sender<KanadeMsg> を drop する（inbox 切断）。
         drop(kanade_tx);
@@ -385,7 +412,7 @@ mod tests {
         drop(shiori_rx); // 送出は必ず Err になる。
         let (sakura_tx, _sakura_rx) = mpsc::channel::<StartTalk>();
 
-        let (kanade_tx, kanade_handle) = spawn_kanade(config(), shiori_tx, sakura_tx);
+        let (kanade_tx, kanade_handle) = spawn_kanade(config(), shiori_tx, sakura_tx, noop_sink());
 
         // Boot → OnInitialize NOTIFY を発行 → 送出失敗 → Failed(Ipc) 再投入 → Unloading{Fault}
         // → Unload（これも送出失敗）→ Failed → Stopped → StopSelf（shiori.send も Err だが Break）。
@@ -421,7 +448,7 @@ mod tests {
         let (sakura_tx, sakura_rx) = mpsc::channel::<StartTalk>();
         drop(sakura_rx);
 
-        let (kanade_tx, kanade_handle) = spawn_kanade(config(), shiori_tx, sakura_tx);
+        let (kanade_tx, kanade_handle) = spawn_kanade(config(), shiori_tx, sakura_tx, noop_sink());
 
         // Boot → boot 系列を最後まで駆動（OnBoot Value で StartTalk 送出失敗するが継続）。
         kanade_tx.send(KanadeMsg::Boot).expect("send Boot");
@@ -451,7 +478,7 @@ mod tests {
         let (shiori_tx, rec_rx, shiori_handle) = spawn_mock_shiori(benign);
         let (sakura_tx, _sakura_rx) = mpsc::channel::<StartTalk>();
 
-        let (kanade_tx, kanade_handle) = spawn_kanade(config(), shiori_tx, sakura_tx);
+        let (kanade_tx, kanade_handle) = spawn_kanade(config(), shiori_tx, sakura_tx, noop_sink());
 
         // 起動前（Idle）にマウス入力を注入 → KanadeMsg::Mouse→Input::Mouse 写像→非 Steady 無視。
         kanade_tx
@@ -490,7 +517,7 @@ mod tests {
         let (shiori_tx, rec_rx, shiori_handle) = spawn_mock_shiori(benign);
         let (sakura_tx, _sakura_rx) = mpsc::channel::<StartTalk>();
 
-        let (kanade_tx, kanade_handle) = spawn_kanade(config(), shiori_tx, sakura_tx);
+        let (kanade_tx, kanade_handle) = spawn_kanade(config(), shiori_tx, sakura_tx, noop_sink());
 
         kanade_tx
             .send(KanadeMsg::ForceQuit {
@@ -688,5 +715,166 @@ mod tests {
             drop(shiori_tx);
             drop(shiori_handle);
         }
+    }
+
+    // --- 8. submit ガードのリソース許可拡張（タスク 6.1・Req 4.1・design 論点1／別族許可集合） ---
+    //
+    // egress チョークポイント `round_trip_request` の submit ガードが
+    // 「`is_allowed_event_id(id)` ∨ `is_allowed_resource_id(id)`」へ拡張されたことを、
+    // リソース ID の実送出パスから両側で檻に入れる。イベント檻・許可外拒否の既存挙動は
+    // 無改変であること（回帰檻）を並せて確認する。
+
+    /// テスト用のリソース GET 呼出（M1 リソース ID `username`）。
+    fn probe_resource_call(id: &'static str) -> ShioriCall {
+        ShioriCall::Get {
+            id,
+            references: vec!["master".to_string()],
+            status: ExecutionStatus::derive(&ExecutionSnapshot::INACTIVE),
+        }
+    }
+
+    // (a) 許可リソース ID（username）→ ガードを通過してチャネルへ送出され良性応答が返る。
+    //     従来（OR 拡張前）は非イベント ID として Failed(Internal) 拒否されていた分岐が、
+    //     リソース許可アームの追加により送出側へ倒れることを檻に入れる（Req4.1）。
+    #[test]
+    fn allowed_resource_id_passes_guard_and_is_sent() {
+        let (shiori_tx, rec_rx, shiori_handle) = spawn_mock_shiori(benign);
+
+        let outcome = round_trip_request(&shiori_tx, probe_resource_call("username"));
+
+        // 許可リソース ID の GET は送出され mock の良性応答（NoContent）が返る。
+        assert!(
+            matches!(outcome, ShioriOutcome::NoContent),
+            "許可リソース ID の GET は送出され mock の良性応答が返るべき（Req4.1）"
+        );
+        // mock が当該 Request を受領した＝ガードを通過しチャネルへ送出された。
+        assert_eq!(
+            rec_rx
+                .recv_timeout(Duration::from_secs(5))
+                .expect("許可リソース ID はチャネルへ送出され mock が受領するはず"),
+            Recorded::Get("username".to_string())
+        );
+
+        drop(shiori_tx);
+        drop(shiori_handle);
+    }
+
+    // (b) 許可外 ID（イベントでもリソースでもない）→ 従来どおり送出されず Failed(Internal)
+    //     へ写像される（既存不変量の回帰檻・Req3.2 の拒否経路が OR 拡張後も無改変）。
+    #[test]
+    fn disallowed_id_still_rejected_as_internal_after_resource_extension() {
+        let (shiori_tx, rec_rx, shiori_handle) = spawn_mock_shiori(benign);
+
+        // "notaresource" はイベント許可集合にもリソース許可集合にも属さない。
+        let outcome = round_trip_request(&shiori_tx, probe_resource_call("notaresource"));
+
+        assert!(
+            matches!(
+                outcome,
+                ShioriOutcome::Failed(ShioriFailure::Internal(_))
+            ),
+            "許可外 ID は OR 拡張後も送出されず Failed(Internal) へ写像されるべき（既存不変量）"
+        );
+        // チャネルへ何も届かない＝許可外 ID は送出前に返る（従来挙動の保存）。
+        assert!(
+            rec_rx.try_recv().is_err(),
+            "許可外 ID はチャネルへ送出されてはならない（既存不変量）"
+        );
+
+        drop(shiori_tx);
+        drop(shiori_handle);
+    }
+
+    // (c) 既存の許可イベント ID（OnBoot）は OR 拡張の影響を受けず従来どおり送出される
+    //     （イベント檻無改変の回帰檻）。
+    #[test]
+    fn allowed_event_id_unaffected_by_resource_or_extension() {
+        let (shiori_tx, rec_rx, shiori_handle) = spawn_mock_shiori(benign);
+
+        let outcome = round_trip_request(&shiori_tx, probe_get_call());
+
+        assert!(
+            matches!(outcome, ShioriOutcome::NoContent),
+            "許可イベント ID の GET は OR 拡張後も従来どおり送出されるべき"
+        );
+        assert_eq!(
+            rec_rx
+                .recv_timeout(Duration::from_secs(5))
+                .expect("許可イベント ID はチャネルへ送出され mock が受領するはず"),
+            Recorded::Get("OnBoot".to_string())
+        );
+
+        drop(shiori_tx);
+        drop(shiori_handle);
+    }
+
+    // --- 9. boot prefetch → ResourceSink 同期呼出（タスク 6.2・R4.1・design boot 図） ---
+    //
+    // アクター経路（spawn_kanade）で boot を駆動し、username リソース照会（prefetch）が
+    // (i) OnInitialize NOTIFY の後・OnFirstBoot GET の前に mock shiori へ 1 回だけ届き、
+    // (ii) その応答（Value）が注入 ResourceSink へ `("username", Value(..))` として同期的に渡る
+    // ことを観測する。sink は別スレッド（kanade アクター）から呼ばれるため Arc<Mutex<Vec>> に記録する。
+
+    #[test]
+    fn boot_prefetch_issues_username_between_initialize_and_firstboot_and_calls_sink() {
+        use crate::schedule::resources::{ResourceOutcome, ResourceSink};
+        use std::sync::{Arc, Mutex};
+
+        // mock shiori: OnInitialize→Notified・username GET→Value("bob")・他 GET→NoContent・Unload→Unloaded。
+        // username=Value で prefetch 経路の Value 写像を踏む（boot は挨拶なし 204 経路で Steady へ）。
+        let (shiori_tx, rec_rx, shiori_handle) = spawn_mock_shiori(|rec| match rec {
+            Recorded::Notify(_) => ShioriOutcome::Notified,
+            Recorded::Unload => ShioriOutcome::Unloaded,
+            Recorded::Get(id) if id == "username" => ShioriOutcome::Value("bob".to_string()),
+            Recorded::Get(_) => ShioriOutcome::NoContent,
+            Recorded::Close => ShioriOutcome::Notified,
+        });
+        let (sakura_tx, _sakura_rx) = mpsc::channel::<StartTalk>();
+
+        // 記録 sink: 呼出 (id, outcome) を蓄積する（同期呼出・別スレッドから）。
+        let seen: Arc<Mutex<Vec<(&'static str, ResourceOutcome)>>> = Arc::new(Mutex::new(Vec::new()));
+        let seen_body = Arc::clone(&seen);
+        let sink: ResourceSink =
+            Box::new(move |id, outcome| seen_body.lock().unwrap().push((id, outcome)));
+
+        let (kanade_tx, kanade_handle) = spawn_kanade(config(), shiori_tx, sakura_tx, sink);
+
+        // 起動を駆動 → boot 系列（prefetch 含む）が同期完走する。その後 Close で停止。
+        kanade_tx.send(KanadeMsg::Boot).expect("send Boot");
+        kanade_tx.send(KanadeMsg::Close).expect("send Close");
+        drop(kanade_tx);
+
+        run_bounded("kanade join after Boot+Close", Duration::from_secs(5), move || {
+            kanade_handle.join().expect("kanade stops cleanly after boot prefetch");
+        });
+
+        // (i) mock 受領列の先頭 3 件: OnInitialize NOTIFY → username GET → OnFirstBoot GET。
+        //     prefetch が OnInitialize 後・OnFirstBoot 前に 1 回だけ挟まる（design boot 図）。
+        let mut seq: Vec<Recorded> = Vec::new();
+        while seq.len() < 3 {
+            match rec_rx.recv_timeout(Duration::from_secs(5)) {
+                Ok(r) => seq.push(r),
+                Err(_) => break,
+            }
+        }
+        assert_eq!(
+            seq,
+            vec![
+                Recorded::Notify("OnInitialize".to_string()),
+                Recorded::Get("username".to_string()),
+                Recorded::Get("OnFirstBoot".to_string()),
+            ],
+            "prefetch（username GET）は OnInitialize 後・OnFirstBoot 前に 1 回だけ届く"
+        );
+
+        // (ii) sink は ("username", Value("bob")) で同期的に呼ばれた（ちょうど 1 回）。
+        let calls = seen.lock().unwrap().clone();
+        assert_eq!(
+            calls,
+            vec![("username", ResourceOutcome::Value("bob".to_string()))],
+            "ResourceSink は ('username', Value(\"bob\")) でちょうど 1 回呼ばれるべき（R4.1）"
+        );
+
+        drop(shiori_handle);
     }
 }

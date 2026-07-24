@@ -32,7 +32,7 @@ use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
 use areka_ghost::ticker::TickerConfig;
-use areka_ghost::{GhostBootOptions, ShioriWiring, TickerMode, boot, default_system_vars};
+use areka_ghost::{GhostBootOptions, ShioriWiring, SystemVarWiring, TickerMode, boot};
 use areka_kanade::CloseReason;
 use areka_parsers::charset::DefaultEncoding;
 
@@ -184,7 +184,8 @@ fn real_pasta_boot_observes_a_cue_then_shuts_down_cleanly() {
         default_encoding: DefaultEncoding::Utf8,
         shiori: ShioriWiring::Helper { helper_exe },
         sinks: vec![Box::new(surface_sink), Box::new(text_sink)],
-        system_vars: default_system_vars(),
+        system_vars: SystemVarWiring::Custom(crate::common::test_system_vars()),
+        app_profile_dir: None,
         ticker: TickerMode::Real(TickerConfig::default()),
     };
 
