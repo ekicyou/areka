@@ -410,6 +410,169 @@ pub(crate) fn on_balloon_pointer_moved(
     false
 }
 
+/// バルーン窓のポインタ押下ハンドラ（Bubble のみ処理・確定クリック発行・R2.1/2.3/2.4/2.5/2.6/3.1/3.2/4.2/5.1/8.4）。
+///
+/// wintf `PointerEventHandler` 署名（移動ハンドラの鏡写し）。**Bubble 相のみ処理し Tunnel は伝播続行の
+/// ため即 `false`**。**左シングルクリック限定**＝`state.left_down` のみを確定として扱い、`double_click`
+/// フィールドは**一切参照しない**（DBLCLK 2 打目も独立 press として扱う・DD-CI-9）。右・中ボタン down は
+/// 確定でないため `false` 素通し（wheel/keyboard は本 spec 未実装・R5.1）。
+///
+/// 単一クリック二重発行は wintf dispatch のエッジ検出（dispatch 後 `left_down` クリア）が構造的に防止し、
+/// 本ハンドラは 1 dispatch＝高々 1 send を守る（`Some` 選択 1 つにつき `send_selection` を高々 1 回・R2.4）。
+///
+/// **借用規律（移動ハンドラと固定同順・design §204）**:
+/// 1. `Emo2Wiring` 共有借用→`runtime()` で `Rc` clone→world 側借用解放。`Emo2Wiring` 不在（boot 前／失敗）は
+///    **正常縮退**＝`debug!(event = "choice_pressed_no_emo2")`＋no-op（donor presenter=None 同型・R4.1）。
+/// 2. `BalloonWiring` 存在確認（共有借用即解放）。不在は結線漏れ＝**構成異常**
+///    `error!(event = "balloon_wiring_missing")`＋no-op。
+/// 3. runtime `try_borrow`（不変）でスナップショット——`choice_active`＋**現行** `choice_hit_rows` を純関数
+///    [`click_selection`]（task 3.3）へ渡し `Option<ChoiceSelection>` を得る（現行 rows のみ読むことで
+///    stale 棄却が成立・R2.5/3.2）。`try_borrow` 失敗は構成異常
+///    `error!(event = "balloon_runtime_borrow_failed")`＋no-op。
+/// 4. `None`（非表示 or 非ヒット）→ `debug!(event = "choice_click_rejected", reason)`＋`false`（非発行・
+///    R2.3/3.1・reason は `!active` なら `"inactive"`／それ以外は `"no_hit"`）。`Some(sel)` →
+///    `BalloonWiring::send_selection` で高々 1 回発行。成功時 `info!(event = "choice_selected", scope, id,
+///    label, references_len)` を **1 行**発火し `true`（DD-CI-7・R7.2 grep 対象）。送出失敗（受け口消滅）→
+///    `error!(event = "choice_selection_send_failed", scope, id)`＋`false`。
+///
+/// `resolve_choice` は本 crate から呼ばない（発行まで・カスケードは W6・R2.6/5.4）。自前描画なし。
+/// `RefCell` は `try_borrow` のみ（panic しない・log-first）。座標は物理 px 素通し（k=1.0・R4.2/8.6）。
+///
+/// **戻り値**: `ChoiceSelection` を発行したときのみ `true`（棄却・縮退・非左押下・Tunnel 時は `false`）。
+///
+/// `#[allow(dead_code)]`: 本番結線（`attach_balloon_pointer_handlers`＝task 6.1）まで到達者なし——
+/// 単体檻のみ到達（M1 暫定抑止）。
+#[allow(dead_code)]
+pub(crate) fn on_balloon_pointer_pressed(
+    world: &mut World,
+    _sender: Entity,
+    entity: Entity,
+    ev: &Phase<PointerState>,
+) -> bool {
+    // (1) Bubble 相のみ処理。Tunnel は伝播続行のため即 false（移動ハンドラ同型・非侵襲）。
+    let state = match ev {
+        Phase::Tunnel(_) => return false,
+        Phase::Bubble(s) => s,
+    };
+
+    // (2) 左シングルクリック限定（R5.1）。left_down 以外（右・中 down 等の非左押下）は確定でないため
+    // false 素通し。double_click フィールドは参照しない（DBLCLK 2 打目も独立 press 扱い・DD-CI-9）。
+    if !state.left_down {
+        return false;
+    }
+
+    // scope は BalloonWindowMarker から読む（移動ハンドラの鏡写し・R-3）。attach は marker 窓のみを標的と
+    // するため不在は理論上不到達の構成異常＝error!＋no-op（silent failure 禁止・panic しない）。
+    let Some(scope) = world.get::<BalloonWindowMarker>(entity).map(|m| m.scope) else {
+        tracing::error!(
+            event = "balloon_marker_missing",
+            "BalloonWindowMarker 不在の entity へ押下ハンドラが着火（理論上不到達）: no-op 縮退"
+        );
+        return false;
+    };
+    let actor = ActorKey::from(scope.to_string());
+
+    // client 物理 px（i32）を f32 へ——スケール係数を掛けない（k=1.0 素通し・R4.2/8.6・DD-IE-10）。
+    let x = state.client_point.x as f32;
+    let y = state.client_point.y as f32;
+
+    // ── 借用規律 ① Emo2Wiring 共有借用→runtime() で Rc clone→world 側借用解放 ─────────────────
+    // Emo2Wiring 不在（boot 前／失敗）は正常縮退＝debug!＋no-op（donor presenter=None 同型・R4.1）。
+    let Some(runtime) = world
+        .get_non_send_resource::<Emo2Wiring>()
+        .map(|w| Rc::clone(w.runtime()))
+    else {
+        tracing::debug!(
+            event = "choice_pressed_no_emo2",
+            scope,
+            "Emo2Wiring 不在（boot 前／失敗）: クリック確定を no-op 縮退"
+        );
+        return false;
+    };
+
+    // ── 借用規律 ② BalloonWiring 存在確認（共有借用即解放）──────────────────────────────────
+    // BalloonWiring 不在は結線漏れ＝構成異常 error!（配線存在檻が開発時に検出）＋no-op。
+    if world.get_non_send_resource::<BalloonWiring>().is_none() {
+        tracing::error!(
+            event = "balloon_wiring_missing",
+            scope,
+            "BalloonWiring 不在（結線漏れ）: クリック確定を no-op 縮退"
+        );
+        return false;
+    }
+
+    // ── 借用規律 ③ runtime 不変借用でスナップショット（純関数 click_selection 評価）────────────
+    // 現行 choice_hit_rows のみを読む（stale 棄却は現行 rows のみ読むことで成立・R2.5/3.2）。active は
+    // 棄却理由（inactive／no_hit）の弁別のために別途控える。try_borrow 失敗（理論上不到達の構成異常）は
+    // error!＋no-op（panic しない・log-first）。
+    let (active, selection) = match runtime.try_borrow() {
+        Ok(rt) => {
+            let active = rt.choice_active(&actor);
+            let rows = rt.choice_hit_rows(&actor);
+            let selection = click_selection(active, rows, x, y, scope);
+            (active, selection)
+        }
+        Err(_) => {
+            tracing::error!(
+                event = "balloon_runtime_borrow_failed",
+                scope,
+                "runtime try_borrow 失敗（不変・click スナップショット）: no-op 縮退"
+            );
+            return false;
+        }
+    };
+    // ここで不変借用（Ref）は解放済み。
+
+    // (4) 純関数の決定を適用する（resolve_choice は呼ばない＝発行まで・R2.6/5.4／自前描画なし）。
+    match selection {
+        // 非表示（active=false）or 非ヒット → 棄却（非発行・R2.3/3.1）。理由を弁別して debug 発火。
+        None => {
+            let reason = if !active { "inactive" } else { "no_hit" };
+            tracing::debug!(
+                event = "choice_click_rejected",
+                scope,
+                reason,
+                "クリック確定を棄却（非表示中 or 非ヒット）: 非発行"
+            );
+            false
+        }
+        // ヒット確定（R2.1/2.4）: 高々 1 回だけ発行する（send_selection は 1 send・二重発行なし）。
+        Some(sel) => {
+            // info! 用の値を send 前に控える（send_selection が selection の所有権を消費するため）。
+            let id = sel.id.clone();
+            let label = sel.label.clone();
+            let references_len = sel.references.len();
+            // ② で存在確認済みの BalloonWiring を借りて発行シンクへ送る（reuse・task 2.2）。
+            let sent = world
+                .get_non_send_resource::<BalloonWiring>()
+                .expect("BalloonWiring は直上（②）で存在確認済み（donor self-gating 同型）")
+                .send_selection(sel);
+            if sent {
+                // 実機サインオフ導線（DD-CI-7・R7.2 grep 対象）: 発行 1 回につき 1 行。
+                tracing::info!(
+                    event = "choice_selected",
+                    scope,
+                    id = %id,
+                    label = %label,
+                    references_len,
+                    "選択確定: ChoiceSelection を発行"
+                );
+                true
+            } else {
+                // 送出失敗（受け口消滅後の Sender エラー）は構成異常＝error!＋no-op 縮退
+                // （design Error Handling・R7 grep 対象と別導線）。
+                tracing::error!(
+                    event = "choice_selection_send_failed",
+                    scope,
+                    id = %id,
+                    "ChoiceSelection 発行シンク送出失敗（受け口消滅後）: no-op 縮退"
+                );
+                false
+            }
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1219,6 +1382,249 @@ mod tests {
         assert!(
             !logs.iter().any(|l| l.contains("choice_hover_inject")),
             "NoopInactive は inject しない: {logs:?}"
+        );
+    }
+
+    // -------------------------------------------------------------------------
+    // on_balloon_pointer_pressed 配線層檻（task 4.2・design「配線層 > balloon ハンドラ」／
+    // Error Handling／System Flows・R2.1/2.3/2.4/2.5/2.6/3.1/3.2/4.2/5.1/8.4）
+    //
+    // 合成 `PointerState` を直接ハンドラへ与え、(a) Tunnel 素通し、(b) 非左押下（右/中 down）素通し、
+    // (c) 資源不在の縮退経路を正しい**ログレベル**（Emo2Wiring 不在=debug／BalloonWiring 不在=error）で、
+    // (d) 棄却経路（非表示=inactive／非ヒット=no_hit の reason 弁別・零 send）を実 `TextLayerRuntime` で
+    // 決定的に檻へ入れる。確定発行のフィールド一致・stale 棄却は click_selection 純関数檻（task 3.3）が
+    // 網羅済み。
+    //
+    // NOTE（runtime constructibility）: `choice_hit_rows` は `present_frame`（GPU）でしか
+    // `choice_snapshot` を埋めないため headless では現行 rows が常に空＝hit=None。ゆえに
+    // 「ヒット→send→choice_selected info」の full pass-through は本層では実演できず、design Testing
+    // Strategy item 6 の設計裁定どおり task 7.1/7.3 の pass-through 檻へ委ねる。send 機構自体は
+    // task 2.2 の `send_selection`／`ChoiceSelectionInbox` 檻で、`Some` 構成は click_selection 檻
+    // （3.3）で構造的に網羅済み。本檻はハンドラ経由の棄却・縮退・零 send を観測する。
+    // -------------------------------------------------------------------------
+
+    /// 左シングルクリックの合成 `PointerState`（client 物理 px・left_down=true）を組む。
+    /// `double_click` フィールドは既定 `None` のまま——押下ハンドラは**参照しない**（DD-CI-9）。
+    fn bubble_left_press(x: i32, y: i32) -> Phase<PointerState> {
+        Phase::Bubble(PointerState {
+            client_point: Point { x, y },
+            left_down: true,
+            ..Default::default()
+        })
+    }
+
+    /// `BalloonWiring` と生存 `Receiver`（零 send 観測用）を組む。
+    fn wiring_with_inbox() -> (BalloonWiring, Receiver<ChoiceSelection>) {
+        let (tx, rx) = mpsc::channel::<ChoiceSelection>();
+        (BalloonWiring::new(tx), rx)
+    }
+
+    /// Tunnel 素通し（R5.1・donor 同型）: Tunnel 相は資源に一切触れず即 `false`（副作用なし・零 send）。
+    #[test]
+    fn pressed_tunnel_phase_is_noop_false() {
+        let mut world = World::new();
+        let e = world.spawn(BalloonWindowMarker { scope: 0 }).id();
+        // 資源未挿入でも Tunnel は最初に短絡するため到達しない（副作用なしの担保）。
+        let tunnel = Phase::Tunnel(PointerState {
+            client_point: Point { x: 10, y: 20 },
+            left_down: true,
+            ..Default::default()
+        });
+        assert!(
+            !on_balloon_pointer_pressed(&mut world, e, e, &tunnel),
+            "Tunnel 相は即 false（伝播続行・非侵襲）"
+        );
+    }
+
+    /// 非左押下は素通し（R5.1）: 右/中ボタン down（left_down=false）は確定でないため `false`・零 send。
+    /// `double_click` を一切参照しないことを、既定 None のまま処理が left_down のみで分岐することで担保する。
+    #[test]
+    fn pressed_non_left_button_is_noop_false() {
+        let mut world = World::new();
+        let e = world.spawn(BalloonWindowMarker { scope: 0 }).id();
+
+        // Emo2Wiring/BalloonWiring を present にしても、left_down=false なら手前で false 短絡する。
+        let runtime = runtime_with_active_choice("0");
+        world.insert_non_send_resource(headless_emo2_wiring(Rc::clone(&runtime)));
+        let (bw, rx) = wiring_with_inbox();
+        world.insert_non_send_resource(bw);
+
+        // 右ボタン down（left_down=false）——確定ではない。
+        let right = Phase::Bubble(PointerState {
+            client_point: Point { x: 10, y: 20 },
+            left_down: false,
+            right_down: true,
+            ..Default::default()
+        });
+        let logs = capture_logs(|| {
+            assert!(
+                !on_balloon_pointer_pressed(&mut world, e, e, &right),
+                "非左押下（右 down）は false 素通し"
+            );
+        });
+
+        assert!(
+            rx.try_recv().is_err(),
+            "非左押下では send しない（Inbox は Empty）"
+        );
+        assert!(
+            !logs.iter().any(|l| l.contains("choice_selected")),
+            "非左押下では choice_selected を出さない: {logs:?}"
+        );
+    }
+
+    /// Emo2Wiring 不在＝正常縮退（R4.1・donor presenter=None 同型）: **DEBUG** で no-op・`false`・零 send。
+    #[test]
+    fn pressed_emo2_absent_degrades_with_debug_not_error() {
+        let mut world = World::new();
+        let e = world.spawn(BalloonWindowMarker { scope: 0 }).id();
+        let ev = bubble_left_press(10, 20);
+
+        let logs = capture_logs(|| {
+            assert!(
+                !on_balloon_pointer_pressed(&mut world, e, e, &ev),
+                "Emo2Wiring 不在は no-op false"
+            );
+        });
+
+        assert!(
+            logs.iter()
+                .any(|l| l.contains("level=DEBUG") && l.contains("choice_pressed_no_emo2")),
+            "Emo2Wiring 不在は DEBUG で正常縮退（event=choice_pressed_no_emo2）: {logs:?}"
+        );
+        assert!(
+            !logs.iter().any(|l| l.contains("level=ERROR")),
+            "Emo2Wiring 不在は構成異常ではない＝ERROR を出さない: {logs:?}"
+        );
+    }
+
+    /// BalloonWiring 不在＝構成異常（結線漏れ）: Emo2Wiring は present でも **ERROR** で no-op・`false`。
+    /// （借用規律の固定順序＝Emo2Wiring→BalloonWiring ゆえ Emo2Wiring present が前提。）
+    #[test]
+    fn pressed_balloon_wiring_absent_degrades_with_error() {
+        let mut world = World::new();
+        let e = world.spawn(BalloonWindowMarker { scope: 0 }).id();
+        let runtime = Rc::new(RefCell::new(TextLayerRuntime::new(TextLayerConfig::default())));
+        world.insert_non_send_resource(headless_emo2_wiring(Rc::clone(&runtime)));
+        let ev = bubble_left_press(10, 20);
+
+        let logs = capture_logs(|| {
+            assert!(
+                !on_balloon_pointer_pressed(&mut world, e, e, &ev),
+                "BalloonWiring 不在は no-op false"
+            );
+        });
+
+        assert!(
+            logs.iter()
+                .any(|l| l.contains("level=ERROR") && l.contains("balloon_wiring_missing")),
+            "BalloonWiring 不在は ERROR の構成異常（event=balloon_wiring_missing）: {logs:?}"
+        );
+    }
+
+    /// BalloonWindowMarker 不在（理論上不到達の構成異常）: **ERROR** で no-op・`false`（silent 禁止）。
+    #[test]
+    fn pressed_missing_marker_errors_and_noop() {
+        let mut world = World::new();
+        let e = world.spawn_empty().id(); // BalloonWindowMarker を持たない entity
+        let ev = bubble_left_press(10, 20);
+
+        let logs = capture_logs(|| {
+            assert!(
+                !on_balloon_pointer_pressed(&mut world, e, e, &ev),
+                "marker 不在は no-op false"
+            );
+        });
+
+        assert!(
+            logs.iter()
+                .any(|l| l.contains("level=ERROR") && l.contains("balloon_marker_missing")),
+            "marker 不在は ERROR で縮退（silent failure 禁止）: {logs:?}"
+        );
+    }
+
+    /// 非表示中クリックは棄却（R3.1）: choice_active=false の実 runtime へ左クリック → 発行ゼロ・
+    /// `debug!(choice_click_rejected, reason="inactive")`。Inbox の try_recv は Empty。
+    #[test]
+    fn pressed_inactive_choice_rejected_with_reason_inactive() {
+        let mut world = World::new();
+        let e = world.spawn(BalloonWindowMarker { scope: 0 }).id();
+
+        // 選択肢無しの runtime（choice_active=false）。
+        let runtime = Rc::new(RefCell::new(TextLayerRuntime::new(TextLayerConfig::default())));
+        assert!(
+            !runtime.borrow().choice_active(&ActorKey::from("0")),
+            "前提: choice_active=false（選択肢スパン無し）"
+        );
+        world.insert_non_send_resource(headless_emo2_wiring(Rc::clone(&runtime)));
+        let (bw, rx) = wiring_with_inbox();
+        world.insert_non_send_resource(bw);
+
+        let ev = bubble_left_press(10, 20);
+        let logs = capture_logs(|| {
+            assert!(
+                !on_balloon_pointer_pressed(&mut world, e, e, &ev),
+                "非表示中クリックは棄却＝false（非発行）"
+            );
+        });
+
+        assert!(
+            rx.try_recv().is_err(),
+            "非表示中クリックは send しない（Inbox は Empty・R3.1）"
+        );
+        assert!(
+            logs.iter().any(|l| l.contains("level=DEBUG")
+                && l.contains("choice_click_rejected")
+                && l.contains("inactive")),
+            "非表示中は reason=inactive の choice_click_rejected を DEBUG 発火: {logs:?}"
+        );
+        assert!(
+            !logs.iter().any(|l| l.contains("choice_selected")),
+            "棄却では choice_selected を出さない: {logs:?}"
+        );
+    }
+
+    /// 表示中・非ヒットは棄却（R2.3）: choice_active=true でも headless では choice_hit_rows が空ゆえ
+    /// 常に非ヒット → 発行ゼロ・`debug!(choice_click_rejected, reason="no_hit")`。
+    #[test]
+    fn pressed_active_non_hit_rejected_with_reason_no_hit() {
+        let mut world = World::new();
+        let e = world.spawn(BalloonWindowMarker { scope: 0 }).id();
+
+        let runtime = runtime_with_active_choice("0");
+        assert!(
+            runtime.borrow().choice_active(&ActorKey::from("0")),
+            "前提: choice_active=true（選択肢スパンあり）"
+        );
+        assert!(
+            runtime.borrow().choice_hit_rows(&ActorKey::from("0")).is_empty(),
+            "前提: headless では choice_hit_rows は空（GPU 未実行）＝常に非ヒット"
+        );
+        world.insert_non_send_resource(headless_emo2_wiring(Rc::clone(&runtime)));
+        let (bw, rx) = wiring_with_inbox();
+        world.insert_non_send_resource(bw);
+
+        let ev = bubble_left_press(10, 20);
+        let logs = capture_logs(|| {
+            assert!(
+                !on_balloon_pointer_pressed(&mut world, e, e, &ev),
+                "非ヒットは棄却＝false（非発行）"
+            );
+        });
+
+        assert!(
+            rx.try_recv().is_err(),
+            "非ヒットでは send しない（Inbox は Empty・R2.3）"
+        );
+        assert!(
+            logs.iter().any(|l| l.contains("level=DEBUG")
+                && l.contains("choice_click_rejected")
+                && l.contains("no_hit")),
+            "表示中・非ヒットは reason=no_hit の choice_click_rejected を DEBUG 発火: {logs:?}"
+        );
+        assert!(
+            !logs.iter().any(|l| l.contains("choice_selected")),
+            "棄却では choice_selected を出さない: {logs:?}"
         );
     }
 }

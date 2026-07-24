@@ -54,7 +54,7 @@
   - _Boundary: on_balloon_pointer_moved_
   - _Depends: 2.2, 3.2_
 
-- [ ] 4.2 押下ハンドラの実装（確定クリック→発行）
+- [x] 4.2 押下ハンドラの実装（確定クリック→発行）
   - 左シングルクリックのみを確定として扱い（`double_click` フィールドは不参照）、ヒット時に一度だけ ChoiceSelection を送信するハンドラを実装する
   - 送信成功時は `info!`（event = choice_selected, scope, id, label, references_len）を 1 回発行する（実機サインオフの grep 対象）
   - 非表示中／非 hit での棄却は `debug!`（event = choice_click_rejected, reason）。`Emo2Wiring` 不在は `debug!` ＋ no-op（正常縮退）、`BalloonWiring` 不在／`RefCell` 借用失敗／`selection_tx.send` 失敗は構成異常として `error!`（event = balloon_wiring_missing／balloon_runtime_borrow_failed／choice_selection_send_failed）でログし no-op 縮退する
@@ -117,3 +117,6 @@
 - 上流型: `ChoiceHitRow`（`areka_emo_text::actor`・実体 `crates/areka-emo-text/src/actor.rs:150`）・`HitRectPx`（`crates/areka-emo-text/src/choice.rs:155`・`left/top/right/bottom` は `pub` f32）。areka から実型で fixture 構築可能——ローカル並行型を作らないこと（4.1/8.5）。
 - **レビュアー厳守**: RED 再現やスタブ確認で `git checkout`/`git reset --hard` を絶対に使わない（未コミット実装を破棄する既知ハザード）。差替え検証はファイルバックアップ（cp）→復元で行い、復元後に diff 存在とテスト緑を必ず再確認する。
 - `#[allow(dead_code)]` は各シンボルへ narrow 付与（本番未消費のうちだけ・後続タスクの本番結線で撤去見込み）。crate-wide 抑止は禁止。
+- ハンドラ檻の GPU 制約: `TextLayerRuntime::choice_hit_rows` は `present_frame`(GPU) でしか `choice_snapshot` を埋めないため headless では現行 rows が常に空＝hit=None。よって「Some(ordinal) 追従」「hit→send→`choice_selected` info」の full pass-through は 4.1/4.2 の単体檻では実演不可——純関数檻(3.1/3.2/3.3)＋send機構檻(2.2)＋task 7.1/7.3 へ委譲（設計 Testing Strategy item 6 の裁定）。実 runtime は `apply_cue(TalkCue{Choice})` で活性化（fake 禁止）。
+- ログ event 名（実装確定）: 移動 Emo2 不在=`choice_moved_no_emo2`(debug)／押下 Emo2 不在=`choice_pressed_no_emo2`(debug)／`balloon_wiring_missing`(error)／`balloon_runtime_borrow_failed`(error)／`balloon_marker_missing`(error・設計 Error table 520行の marker 不在＝error!+false)／`choice_hover_inject`(debug)／`choice_click_rejected`(debug, reason=inactive|no_hit)／`choice_selected`(info・R7.2 grep 対象)／`choice_selection_send_failed`(error)。
+- 既知の軽微 concern（follow-up 候補・非ブロッキング）: send 失敗経路で `BalloonWiring::send_selection`(2.2) の `warn!(choice_selection_send_failed, scope)` と押下ハンドラ(4.2) の `error!(choice_selection_send_failed, scope, id)` が同一 event を 2 重発火。稀な GPU-gated 失敗経路のみ・R7.2 grep 対象(info)は無影響。整理案＝`send_selection` を Result 返却のみにしてハンドラが単一 error 行を所有。
