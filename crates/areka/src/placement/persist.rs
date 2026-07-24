@@ -11,10 +11,17 @@
 //! と保存 entries 構築（[`char_pos_entries`]／[`balloon_offset_entries`]）。復元 merge・
 //! 再射影・バルーン基準変換・`PersistWiring` は後続タスクで本モジュールへ追加する。
 
-use areka_sylphya::{Axis, PersistKey};
+use std::path::Path;
+
+use areka_ghost::sylphya_wiring::profile_areka_root;
+use areka_parsers::charset::DefaultEncoding;
+use areka_parsers::package::resolve;
+use areka_sylphya::persist::FsPersistIo;
+use areka_sylphya::{Axis, PersistKey, PersistScope, ScopeRoots, load_scope};
+use tracing::warn;
 
 use super::follow::{MonitorSnapshot, project_anchor, work_area_for_window};
-use super::resolver::{Anchor, PointPx, RectPx, SizePx};
+use super::resolver::{Anchor, PointPx, RectPx, ScopePlacement, SizePx};
 
 /// 永続値の寛容 parse（design C1・6.1）。
 ///
@@ -31,8 +38,20 @@ pub fn parse_px(value: &str) -> Option<i32> {
 /// 文字列化して載せる。値ドメインは物理 px・仮想スクリーン絶対 i32（負値可）。
 pub fn char_pos_entries(scope: u32, pos: PointPx) -> Vec<(PersistKey, String)> {
     vec![
-        (PersistKey::WindowPos { scope, axis: Axis::X }, pos.x.to_string()),
-        (PersistKey::WindowPos { scope, axis: Axis::Y }, pos.y.to_string()),
+        (
+            PersistKey::WindowPos {
+                scope,
+                axis: Axis::X,
+            },
+            pos.x.to_string(),
+        ),
+        (
+            PersistKey::WindowPos {
+                scope,
+                axis: Axis::Y,
+            },
+            pos.y.to_string(),
+        ),
     ]
 }
 
@@ -44,11 +63,17 @@ pub fn char_pos_entries(scope: u32, pos: PointPx) -> Vec<(PersistKey, String)> {
 pub fn balloon_offset_entries(scope: u32, offset_persist: PointPx) -> Vec<(PersistKey, String)> {
     vec![
         (
-            PersistKey::BalloonOffset { scope, axis: Axis::X },
+            PersistKey::BalloonOffset {
+                scope,
+                axis: Axis::X,
+            },
             offset_persist.x.to_string(),
         ),
         (
-            PersistKey::BalloonOffset { scope, axis: Axis::Y },
+            PersistKey::BalloonOffset {
+                scope,
+                axis: Axis::Y,
+            },
             offset_persist.y.to_string(),
         ),
     ]
@@ -64,8 +89,14 @@ pub fn balloon_offset_entries(scope: u32, offset_persist: PointPx) -> Vec<(Persi
 /// - `Free`: `(0, 0)` — 左上（縮退・アンカー辺なし。往復恒等のため 0 で固定・檻固定）。
 fn anchor_edge_basis(anchor: Anchor, char_size: SizePx) -> PointPx {
     match anchor {
-        Anchor::Bottom => PointPx { x: 0, y: char_size.h },
-        Anchor::Right => PointPx { x: char_size.w, y: 0 },
+        Anchor::Bottom => PointPx {
+            x: 0,
+            y: char_size.h,
+        },
+        Anchor::Right => PointPx {
+            x: char_size.w,
+            y: 0,
+        },
         // Top・Left・Free は左上基準（Free は縮退・6.x/2.2）。
         Anchor::Top | Anchor::Left | Anchor::Free => PointPx { x: 0, y: 0 },
     }
@@ -178,6 +209,163 @@ pub fn project_restore(
     }
 }
 
+/// 起動時の永続値先読み（本モジュール**唯一の IO 点**・design C1・A1 シーム）。
+///
+/// mount 解決（[`areka_parsers::package::resolve`]＝mount 規則の単一権威・二重実装しない）で
+/// ghost mount を得て、Ghost 永続スコープ root（[`profile_areka_root`]`(&model.shiori.dir)`＝
+/// boot 結線と同一構築・単一権威）を導出し、[`load_scope`]`(Ghost, ..)` で永続 entries を読む。
+///
+/// 全縮退は warn/debug ＋ 空 `Vec`（起動を止めない・panic しない・Req6.1/6.3）:
+/// - mount 解決失敗 → `warn!` ＋ 空（本関数で処理）。
+/// - ファイル不在・破損・read 障害 → [`load_scope`] が寛容に空へ縮退する（sylphya 契約）。
+///
+/// IO は本番実装 [`FsPersistIo`]（sylphya 内で FS に触れる唯一の型）。返り値は決定論的順序
+/// （[`load_scope`] の契約）。
+#[allow(dead_code)] // 結線（main.rs シーム・task 6.1）は後続タスクの領分
+pub fn load_restored_state(
+    ghost_root: &Path,
+    default_encoding: DefaultEncoding,
+) -> Vec<(PersistKey, String)> {
+    // mount 解決は単一権威（source.rs と同一 resolve 呼び口・規則を二重化しない）。
+    let model = match resolve(ghost_root, default_encoding) {
+        Ok(model) => model,
+        Err(err) => {
+            warn!(
+                ghost_root = %ghost_root.display(),
+                error = ?err,
+                "ゴーストのマウント解決に失敗（永続復元をスキップ＝既定位置解決へ縮退）"
+            );
+            return Vec::new();
+        }
+    };
+
+    // Ghost スコープ root＝profile_areka_root(shiori.dir)（boot 結線と同一構築・R6.5）。
+    let roots = ScopeRoots {
+        ghost: Some(profile_areka_root(&model.shiori.dir)),
+        ..ScopeRoots::default()
+    };
+
+    // load_scope は全 IO 縮退（不在・破損・read 障害）を寛容に空へ落とす（sylphya 契約・Req6.1）。
+    load_scope(PersistScope::Ghost, &roots, &FsPersistIo)
+}
+
+/// entries から指定 key の値を線形探索する（純関数・決定論）。
+fn entry_value<'a>(entries: &'a [(PersistKey, String)], target: PersistKey) -> Option<&'a str> {
+    entries
+        .iter()
+        .find(|(k, _)| *k == target)
+        .map(|(_, v)| v.as_str())
+}
+
+/// 復元 merge（純関数・決定論・**永続不書込**＝Req5.4 の構造遮断——本関数から書込 API へ
+/// 到達できない・返すのは新しい `Vec<ScopePlacement>` のみ）（design C1）。
+///
+/// 各 scope について:
+/// - `WindowPos` x/y が**両軸とも** [`parse_px`] できたときのみ char_pos を保存値へ差し替え、
+///   [`project_restore`]（アンカー再解決＋域内 clamp・毎起動 live 再射影）を適用する。片軸でも
+///   欠損/非数値なら resolver 既定 char_pos を保持する（Req1.5/6.1）。
+/// - `BalloonOffset` x/y が両軸とも parse できれば [`balloon_offset_from_persist`]（**現** char_size・
+///   anchor 基準）で左上基準オフセットを導出する。無ければ resolver 既定 offset を保持する
+///   （Req2.4）。いずれの場合も最終 char_pos に追従させて `balloon_pos` を再導出する。
+///
+/// # 事後条件（design C1 Postconditions）
+///
+/// 出力は入力と同じ scope 集合・同じ寸法（char/balloon）・同じ anchor。変わるのは char_pos と
+/// balloon 導出（`balloon_pos`/`balloon_offset`）のみ。永続状態には触れない。
+///
+/// `ScopePlacement.scope` は `usize`・[`PersistKey`] の scope は `u32` ゆえ、entries 突合は
+/// `scope as u32` で一貫キャストする。
+#[allow(dead_code)] // 結線（main.rs シーム・task 6.1）は後続タスクの領分
+pub fn apply_restored_placements(
+    placements: Vec<ScopePlacement>,
+    entries: &[(PersistKey, String)],
+    snapshot: &MonitorSnapshot,
+) -> Vec<ScopePlacement> {
+    placements
+        .into_iter()
+        .map(|p| merge_scope(p, entries, snapshot))
+        .collect()
+}
+
+/// 1 scope 分の復元 merge（[`apply_restored_placements`] の要素写像・純関数）。
+fn merge_scope(
+    placement: ScopePlacement,
+    entries: &[(PersistKey, String)],
+    snapshot: &MonitorSnapshot,
+) -> ScopePlacement {
+    let scope = placement.scope as u32;
+
+    // --- char_pos: 保存 WindowPos が両軸とも parse できたときのみ差替え＋再射影（1.4/1.5/6.1）---
+    let saved_x = entry_value(
+        entries,
+        PersistKey::WindowPos {
+            scope,
+            axis: Axis::X,
+        },
+    )
+    .and_then(parse_px);
+    let saved_y = entry_value(
+        entries,
+        PersistKey::WindowPos {
+            scope,
+            axis: Axis::Y,
+        },
+    )
+    .and_then(parse_px);
+    let char_pos = match (saved_x, saved_y) {
+        // 両軸そろったときのみ保存値を採用し、毎起動 live 再射影（アンカー再解決＋域内 clamp）。
+        (Some(x), Some(y)) => project_restore(
+            placement.anchor,
+            PointPx { x, y },
+            placement.char_size,
+            snapshot,
+        ),
+        // 片軸でも欠損/非数値 → resolver 既定 char_pos を保持（1.5/6.1）。
+        _ => placement.char_pos,
+    };
+
+    // --- balloon: 保存 offset があれば基準逆変換で導出、無ければ既定 offset 保持（2.3/2.4）---
+    let saved_bx = entry_value(
+        entries,
+        PersistKey::BalloonOffset {
+            scope,
+            axis: Axis::X,
+        },
+    )
+    .and_then(parse_px);
+    let saved_by = entry_value(
+        entries,
+        PersistKey::BalloonOffset {
+            scope,
+            axis: Axis::Y,
+        },
+    )
+    .and_then(parse_px);
+    let balloon_offset = match (saved_bx, saved_by) {
+        // 保存 offset（アンカー辺基準）を現 char_size で左上基準へ足し戻す（2.2/2.3）。
+        (Some(x), Some(y)) => {
+            balloon_offset_from_persist(placement.anchor, PointPx { x, y }, placement.char_size)
+        }
+        // offset 欠損 → resolver 既定 offset（左上基準）を保持（2.4）。
+        _ => placement.balloon_offset,
+    };
+    // どちらの場合も最終 char_pos へ追従させて balloon_pos を再導出する。
+    let balloon_pos = PointPx {
+        x: char_pos.x.saturating_add(balloon_offset.x),
+        y: char_pos.y.saturating_add(balloon_offset.y),
+    };
+
+    ScopePlacement {
+        scope: placement.scope,
+        char_pos,
+        char_size: placement.char_size,
+        balloon_pos,
+        balloon_size: placement.balloon_size,
+        balloon_offset,
+        anchor: placement.anchor,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -227,8 +415,20 @@ mod tests {
         assert_eq!(
             entries,
             vec![
-                (PersistKey::WindowPos { scope: 0, axis: Axis::X }, "1486".to_string()),
-                (PersistKey::WindowPos { scope: 0, axis: Axis::Y }, "353".to_string()),
+                (
+                    PersistKey::WindowPos {
+                        scope: 0,
+                        axis: Axis::X
+                    },
+                    "1486".to_string()
+                ),
+                (
+                    PersistKey::WindowPos {
+                        scope: 0,
+                        axis: Axis::Y
+                    },
+                    "353".to_string()
+                ),
             ]
         );
     }
@@ -240,8 +440,20 @@ mod tests {
         assert_eq!(
             entries,
             vec![
-                (PersistKey::WindowPos { scope: 1, axis: Axis::X }, "-400".to_string()),
-                (PersistKey::WindowPos { scope: 1, axis: Axis::Y }, "-20".to_string()),
+                (
+                    PersistKey::WindowPos {
+                        scope: 1,
+                        axis: Axis::X
+                    },
+                    "-400".to_string()
+                ),
+                (
+                    PersistKey::WindowPos {
+                        scope: 1,
+                        axis: Axis::Y
+                    },
+                    "-20".to_string()
+                ),
             ]
         );
     }
@@ -256,8 +468,20 @@ mod tests {
         assert_eq!(
             entries,
             vec![
-                (PersistKey::BalloonOffset { scope: 0, axis: Axis::X }, "-400".to_string()),
-                (PersistKey::BalloonOffset { scope: 0, axis: Axis::Y }, "0".to_string()),
+                (
+                    PersistKey::BalloonOffset {
+                        scope: 0,
+                        axis: Axis::X
+                    },
+                    "-400".to_string()
+                ),
+                (
+                    PersistKey::BalloonOffset {
+                        scope: 0,
+                        axis: Axis::Y
+                    },
+                    "0".to_string()
+                ),
             ]
         );
     }
@@ -268,8 +492,20 @@ mod tests {
         assert_eq!(
             entries,
             vec![
-                (PersistKey::BalloonOffset { scope: 2, axis: Axis::X }, "336".to_string()),
-                (PersistKey::BalloonOffset { scope: 2, axis: Axis::Y }, "12".to_string()),
+                (
+                    PersistKey::BalloonOffset {
+                        scope: 2,
+                        axis: Axis::X
+                    },
+                    "336".to_string()
+                ),
+                (
+                    PersistKey::BalloonOffset {
+                        scope: 2,
+                        axis: Axis::Y
+                    },
+                    "12".to_string()
+                ),
             ]
         );
     }
@@ -400,8 +636,7 @@ mod tests {
         // 復元時: 異なる高さ h2（サーフェスが縮んだ／伸びた）。
         let h2 = 620;
         let size_h2 = SizePx { w: 300, h: h2 };
-        let offset_tl_restored =
-            balloon_offset_from_persist(Anchor::Bottom, persisted, size_h2);
+        let offset_tl_restored = balloon_offset_from_persist(Anchor::Bottom, persisted, size_h2);
 
         // 復元後の「下端からの距離」は保存時と一致する（＝下端基準の関係が保たれた）。
         let distance_from_bottom_restored = h2 - offset_tl_restored.y;
@@ -488,7 +723,11 @@ mod tests {
         let snap = snapshot_of(vec![wa_rect(0, 0, 1920, 1040)]);
         let pos = PointPx { x: 3000, y: 440 }; // x は wa 右外
         let out = project_restore(Anchor::Bottom, pos, SZ, &snap);
-        assert_eq!(out.x, 1920 - 400, "x を [wa.left, wa.right−w] 内へ clamp（5.1）");
+        assert_eq!(
+            out.x,
+            1920 - 400,
+            "x を [wa.left, wa.right−w] 内へ clamp（5.1）"
+        );
         assert_eq!(out.x + SZ.w, 1920, "右端が wa.right に一致＝域内");
         assert_eq!(out.y, 1040 - 600, "下端吸着は維持（5.2）");
     }
@@ -555,5 +794,436 @@ mod tests {
             "x を最近傍 B の [left, right−w] 内へ clamp（5.1）"
         );
         assert!(out.x >= b.left, "x は B 内");
+    }
+
+    // ------------------------------------------------------------------
+    // apply_restored_placements（復元 merge・1.4/1.5/1.6/2.3/2.4/2.5/6.1・design C1）
+    //   純関数・決定論・永続不書込。saved pos 優先→project_restore→balloon 導出。
+    // ------------------------------------------------------------------
+
+    /// テスト用 `ScopePlacement` 構築（`balloon_pos ≡ char_pos + balloon_offset` の
+    /// 事後条件を満たす resolver 出力を模す）。
+    fn placement(
+        scope: usize,
+        anchor: Anchor,
+        char_pos: PointPx,
+        char_size: SizePx,
+        balloon_offset: PointPx,
+        balloon_size: SizePx,
+    ) -> ScopePlacement {
+        ScopePlacement {
+            scope,
+            char_pos,
+            char_size,
+            balloon_pos: PointPx {
+                x: char_pos.x + balloon_offset.x,
+                y: char_pos.y + balloon_offset.y,
+            },
+            balloon_size,
+            balloon_offset,
+            anchor,
+        }
+    }
+
+    fn wp(scope: u32, axis: Axis, v: &str) -> (PersistKey, String) {
+        (PersistKey::WindowPos { scope, axis }, v.to_string())
+    }
+    fn bo(scope: u32, axis: Axis, v: &str) -> (PersistKey, String) {
+        (PersistKey::BalloonOffset { scope, axis }, v.to_string())
+    }
+
+    /// 復元テスト共通寸法。
+    const CSZ: SizePx = SizePx { w: 400, h: 600 };
+    const BSZ: SizePx = SizePx { w: 200, h: 300 };
+
+    /// 1.4: 保存 WindowPos が両軸とも parse できるとき char_pos を保存値へ差し替える
+    /// （既定位置解決に優先）。空 snapshot ゆえ project_restore は identity で保存値素通し。
+    #[test]
+    fn apply_saved_window_pos_takes_priority_over_default() {
+        let snap = snapshot_of(vec![]); // 空＝project_restore identity（保存値素通し）
+        let placements = vec![placement(
+            0,
+            Anchor::Free,
+            PointPx { x: 100, y: 100 }, // 既定
+            CSZ,
+            PointPx { x: -50, y: 10 },
+            BSZ,
+        )];
+        let entries = vec![wp(0, Axis::X, "800"), wp(0, Axis::Y, "500")];
+
+        let out = apply_restored_placements(placements, &entries, &snap);
+
+        assert_eq!(out.len(), 1);
+        assert_eq!(
+            out[0].char_pos,
+            PointPx { x: 800, y: 500 },
+            "保存位置が既定(100,100)に優先する（1.4）"
+        );
+        // 事後条件: 寸法・anchor は不変
+        assert_eq!(out[0].char_size, CSZ);
+        assert_eq!(out[0].balloon_size, BSZ);
+        assert_eq!(out[0].anchor, Anchor::Free);
+    }
+
+    /// 1.5/2.4: 空 entries → 出力は入力 placements に完全恒等（identity）。
+    #[test]
+    fn apply_empty_entries_is_identity() {
+        let snap = snapshot_of(vec![wa_rect(0, 0, 1920, 1040)]);
+        let placements = vec![
+            placement(
+                0,
+                Anchor::Bottom,
+                PointPx { x: 500, y: 440 },
+                CSZ,
+                PointPx { x: -200, y: 0 },
+                BSZ,
+            ),
+            placement(
+                1,
+                Anchor::Free,
+                PointPx { x: 100, y: 200 },
+                CSZ,
+                PointPx { x: 400, y: 12 },
+                BSZ,
+            ),
+        ];
+
+        let out = apply_restored_placements(placements.clone(), &[], &snap);
+
+        assert_eq!(out, placements, "空 entries は入力恒等（1.5/2.4）");
+    }
+
+    /// 1.6/2.5: scope 別 entries は交差しない。scope0 の WindowPos は scope1 に波及せず、
+    /// scope1 は既定を保つ。
+    #[test]
+    fn apply_scopes_do_not_cross() {
+        let snap = snapshot_of(vec![]); // identity 射影
+        let placements = vec![
+            placement(
+                0,
+                Anchor::Free,
+                PointPx { x: 100, y: 100 },
+                CSZ,
+                PointPx { x: -50, y: 0 },
+                BSZ,
+            ),
+            placement(
+                1,
+                Anchor::Free,
+                PointPx { x: 700, y: 700 },
+                CSZ,
+                PointPx { x: 30, y: 5 },
+                BSZ,
+            ),
+        ];
+        // scope0 のみ保存（位置＋バルーン）。scope1 は entries 無し＝既定保持。
+        let entries = vec![
+            wp(0, Axis::X, "800"),
+            wp(0, Axis::Y, "500"),
+            bo(0, Axis::X, "-30"),
+            bo(0, Axis::Y, "20"),
+        ];
+
+        let out = apply_restored_placements(placements.clone(), &entries, &snap);
+
+        // scope0 は保存値へ
+        assert_eq!(
+            out[0].char_pos,
+            PointPx { x: 800, y: 500 },
+            "scope0 保存位置"
+        );
+        assert_eq!(
+            out[0].balloon_offset,
+            PointPx { x: -30, y: 20 },
+            "scope0 保存 offset"
+        );
+        // scope1 は完全恒等（scope0 の entries に汚染されない）
+        assert_eq!(
+            out[1], placements[1],
+            "scope1 は既定恒等（scope 分離・1.6/2.5）"
+        );
+    }
+
+    /// 2.4: BalloonOffset 欠損時は resolver 既定 offset を保持し、最終 char_pos へ追従する。
+    #[test]
+    fn apply_balloon_offset_absent_keeps_default_following_char() {
+        let snap = snapshot_of(vec![]); // identity
+        let default_offset = PointPx { x: -50, y: 10 };
+        let placements = vec![placement(
+            0,
+            Anchor::Free,
+            PointPx { x: 100, y: 100 },
+            CSZ,
+            default_offset,
+            BSZ,
+        )];
+        // WindowPos のみ（BalloonOffset 無し）。
+        let entries = vec![wp(0, Axis::X, "800"), wp(0, Axis::Y, "500")];
+
+        let out = apply_restored_placements(placements, &entries, &snap);
+
+        assert_eq!(out[0].char_pos, PointPx { x: 800, y: 500 });
+        assert_eq!(
+            out[0].balloon_offset, default_offset,
+            "offset 欠損は既定 offset 保持（2.4）"
+        );
+        assert_eq!(
+            out[0].balloon_pos,
+            PointPx {
+                x: 800 + default_offset.x,
+                y: 500 + default_offset.y
+            },
+            "既定 offset が最終 char_pos に追従する（2.4）"
+        );
+    }
+
+    /// 2.3: 保存 BalloonOffset 両軸あり → balloon_offset_from_persist で導出し balloon_pos へ反映。
+    /// Free アンカーは基準 (0,0) ゆえ from_persist は identity（persisted＝左上基準 offset）。
+    #[test]
+    fn apply_saved_balloon_offset_is_derived_free() {
+        let snap = snapshot_of(vec![]); // identity
+        let placements = vec![placement(
+            0,
+            Anchor::Free,
+            PointPx { x: 100, y: 100 },
+            CSZ,
+            PointPx { x: -50, y: 0 }, // 既定（保存値で上書きされる）
+            BSZ,
+        )];
+        let entries = vec![
+            wp(0, Axis::X, "800"),
+            wp(0, Axis::Y, "500"),
+            bo(0, Axis::X, "-30"),
+            bo(0, Axis::Y, "20"),
+        ];
+
+        let out = apply_restored_placements(placements, &entries, &snap);
+
+        assert_eq!(out[0].char_pos, PointPx { x: 800, y: 500 });
+        assert_eq!(
+            out[0].balloon_offset,
+            PointPx { x: -30, y: 20 },
+            "Free 基準(0,0)ゆえ persisted＝左上基準 offset（2.3）"
+        );
+        assert_eq!(
+            out[0].balloon_pos,
+            PointPx { x: 770, y: 520 },
+            "balloon_pos ≡ 最終 char_pos + 導出 offset"
+        );
+    }
+
+    /// 2.2/2.3: Bottom アンカーの保存 BalloonOffset はアンカー辺（下端）基準で足し戻す
+    /// （現 char_size で from_persist）。空 snapshot ゆえ char_pos は保存値素通し。
+    #[test]
+    fn apply_saved_balloon_offset_is_derived_bottom_basis() {
+        let snap = snapshot_of(vec![]); // identity（char_pos は保存値のまま）
+        let placements = vec![placement(
+            0,
+            Anchor::Bottom,
+            PointPx { x: 100, y: 100 },
+            CSZ, // h=600
+            PointPx { x: -50, y: 0 },
+            BSZ,
+        )];
+        // persisted (0, -430)（下端基準）→ from_persist(Bottom, (0,-430), h=600)=(0,170)。
+        let entries = vec![
+            wp(0, Axis::X, "800"),
+            wp(0, Axis::Y, "500"),
+            bo(0, Axis::X, "0"),
+            bo(0, Axis::Y, "-430"),
+        ];
+
+        let out = apply_restored_placements(placements, &entries, &snap);
+
+        assert_eq!(out[0].char_pos, PointPx { x: 800, y: 500 });
+        assert_eq!(
+            out[0].balloon_offset,
+            PointPx { x: 0, y: 170 },
+            "Bottom 基準(0,h)で足し戻す: -430+600=170（2.2/2.3）"
+        );
+        assert_eq!(out[0].balloon_pos, PointPx { x: 800, y: 670 });
+    }
+
+    /// 6.1: 片軸破損（非数値）→ 当該 scope の char_pos は既定を保持（両軸揃わないと差替えない）。
+    #[test]
+    fn apply_one_axis_corrupt_keeps_default() {
+        let snap = snapshot_of(vec![]); // identity
+        let default = PointPx { x: 100, y: 100 };
+        let placements = vec![placement(
+            0,
+            Anchor::Free,
+            default,
+            CSZ,
+            PointPx { x: -50, y: 0 },
+            BSZ,
+        )];
+        // Y が非数値 → 両軸揃わず＝既定保持。
+        let entries = vec![wp(0, Axis::X, "800"), wp(0, Axis::Y, "abc")];
+
+        let out = apply_restored_placements(placements.clone(), &entries, &snap);
+
+        assert_eq!(
+            out[0].char_pos, default,
+            "片軸破損は既定 char_pos 保持（6.1）"
+        );
+        assert_eq!(out[0], placements[0], "破損時は当該 scope 恒等");
+    }
+
+    /// 5.1/5.2: 保存位置が現 work area 外でも project_restore で域内へ（Bottom 下端吸着）。
+    /// merge が project_restore を実際に通していることの結合檻。
+    #[test]
+    fn apply_saved_pos_is_reprojected_into_work_area() {
+        let snap = snapshot_of(vec![wa_rect(0, 0, 1920, 1040)]);
+        let placements = vec![placement(
+            0,
+            Anchor::Bottom,
+            PointPx { x: 500, y: 440 },
+            CSZ,
+            PointPx { x: -200, y: 0 },
+            BSZ,
+        )];
+        // 保存 y=2000 は域外 → 下端吸着 y=1040−600=440。x=500 は域内で保持。
+        let entries = vec![wp(0, Axis::X, "500"), wp(0, Axis::Y, "2000")];
+
+        let out = apply_restored_placements(placements, &entries, &snap);
+
+        assert_eq!(
+            out[0].char_pos,
+            PointPx { x: 500, y: 440 },
+            "域外保存 y は Bottom 吸着で域内へ（5.1/5.2）"
+        );
+    }
+
+    /// scope の usize と PersistKey の u32 の一致取り（大きめ scope でも取り違えない）。
+    #[test]
+    fn apply_matches_scope_usize_to_persist_u32() {
+        let snap = snapshot_of(vec![]);
+        let placements = vec![placement(
+            3,
+            Anchor::Free,
+            PointPx { x: 10, y: 10 },
+            CSZ,
+            PointPx { x: 0, y: 0 },
+            BSZ,
+        )];
+        let entries = vec![wp(3, Axis::X, "77"), wp(3, Axis::Y, "88")];
+
+        let out = apply_restored_placements(placements, &entries, &snap);
+
+        assert_eq!(
+            out[0].char_pos,
+            PointPx { x: 77, y: 88 },
+            "scope 3 の u32 一致"
+        );
+    }
+
+    /// 決定論: 同一入力→同一出力。
+    #[test]
+    fn apply_is_deterministic() {
+        let snap = snapshot_of(vec![wa_rect(0, 0, 1920, 1040)]);
+        let placements = vec![placement(
+            0,
+            Anchor::Bottom,
+            PointPx { x: 500, y: 440 },
+            CSZ,
+            PointPx { x: -200, y: 0 },
+            BSZ,
+        )];
+        let entries = vec![wp(0, Axis::X, "600"), wp(0, Axis::Y, "440")];
+        let a = apply_restored_placements(placements.clone(), &entries, &snap);
+        let b = apply_restored_placements(placements, &entries, &snap);
+        assert_eq!(a, b, "同一入力→同一出力");
+    }
+
+    // ------------------------------------------------------------------
+    // load_restored_state（唯一の IO 点・8.1 前哨・6.1/6.3 寛容縮退）
+    // ------------------------------------------------------------------
+
+    /// このテスト専用の一意な一時ディレクトリ（source.rs と同規約・外部 tempfile 非依存）。
+    fn unique_temp_dir(tag: &str) -> std::path::PathBuf {
+        let mut dir = std::env::temp_dir();
+        dir.push(format!("areka_placement_persist_tests_{tag}"));
+        dir
+    }
+
+    /// 最小ゴーストパッケージ（ghost/master/descript.txt ＋ shell/master dir）を組む。
+    /// resolve が成功する最小構成（source.rs の失敗経路テストと同型）。
+    fn plant_minimal_ghost(root: &Path) {
+        let _ = std::fs::remove_dir_all(root);
+        let ghost_master = root.join("ghost").join("master");
+        std::fs::create_dir_all(&ghost_master).expect("create ghost/master");
+        std::fs::write(
+            ghost_master.join("descript.txt"),
+            "charset,UTF-8\nname,テスト\nsakura.name,さくら\n".as_bytes(),
+        )
+        .expect("write ghost descript");
+        std::fs::create_dir_all(root.join("shell").join("master")).expect("create shell/master");
+    }
+
+    /// 起動時先読み: profile_areka_root(shiori.dir) に植えた sylphya.toml が
+    /// `(PersistKey, String)` エントリとして読み戻る（load_scope 契約経由・8.1 前哨）。
+    #[test]
+    fn load_restored_state_reads_planted_sylphya_toml() {
+        let root = unique_temp_dir("load_reads_planted");
+        plant_minimal_ghost(&root);
+        // profile root = <ghost/master>/profile/areka（boot 結線と同一構築）。
+        let profile = profile_areka_root(&root.join("ghost").join("master"));
+        std::fs::create_dir_all(&profile).expect("create profile/areka");
+        std::fs::write(
+            profile.join("sylphya.toml"),
+            "format-version = 1\n[window.0]\nx = \"1486\"\ny = \"353\"\n[boot]\ncount = \"1\"\n"
+                .as_bytes(),
+        )
+        .expect("plant sylphya.toml");
+
+        let entries = load_restored_state(&root, DefaultEncoding::Ansi);
+
+        assert!(
+            entries.contains(&(
+                PersistKey::WindowPos {
+                    scope: 0,
+                    axis: Axis::X
+                },
+                "1486".to_string()
+            )),
+            "植えた WindowPos.x が読める: {entries:?}"
+        );
+        assert!(
+            entries.contains(&(
+                PersistKey::WindowPos {
+                    scope: 0,
+                    axis: Axis::Y
+                },
+                "353".to_string()
+            )),
+            "植えた WindowPos.y が読める: {entries:?}"
+        );
+        assert!(
+            entries.contains(&(PersistKey::BootCount, "1".to_string())),
+            "植えた BootCount が読める: {entries:?}"
+        );
+
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    /// 起動時先読み: 永続ファイル不在（profile 未作成）→ 空（load_scope の不在縮退・6.1）。
+    #[test]
+    fn load_restored_state_absent_file_is_empty() {
+        let root = unique_temp_dir("load_absent_file");
+        plant_minimal_ghost(&root); // resolve は成功するが sylphya.toml は植えない
+        let entries = load_restored_state(&root, DefaultEncoding::Ansi);
+        assert!(entries.is_empty(), "永続ファイル不在は空縮退: {entries:?}");
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    /// 起動時先読み: mount 解決失敗（ghost_root 不在）→ 空 Vec（寛容縮退・panic なし・6.1/6.3）。
+    #[test]
+    fn load_restored_state_mount_resolve_failure_is_empty() {
+        let root = unique_temp_dir("load_mount_fail").join("no_such_ghost");
+        let entries = load_restored_state(&root, DefaultEncoding::Ansi);
+        assert!(
+            entries.is_empty(),
+            "mount 解決失敗は空縮退（起動を止めない）"
+        );
     }
 }

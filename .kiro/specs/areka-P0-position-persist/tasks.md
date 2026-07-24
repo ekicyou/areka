@@ -3,7 +3,7 @@
 > 生成: 2026-07-24（requirements.md 2026-07-24 改訂版・design.md 2026-07-24 生成版・design-validation.md GO 判定に基づく）。
 > W4 並走契約（roadmap 追記㊵/㊹/㊺）: `crates/areka/src/placement/measure.rs`・`crates/areka/src/input_events/`・`crates/areka/src/emo2_boot/`（`consumer_ledger.rs` 含む）は本タスク群では**編集しない**。
 
-- [ ] 1. Foundation: 永続結線の純関数基盤（`placement/persist.rs`）
+- [x] 1. Foundation: 永続結線の純関数基盤（`placement/persist.rs`）
 - [x] 1.1 モジュール骨格・寛容 parse・保存 entries 構築関数の実装
   - `crates/areka` の `Cargo.toml` へ `areka-sylphya` への workspace 内依存を additive 追加する
   - `placement/mod.rs` に `pub mod persist;` を追加し、`prepare_never_reads_or_writes_ghost_dat` の doc コメントを現況（永続ストアは `sylphya.toml` の別系統であり prepare は引き続き永続を読まない）へ更新する
@@ -24,7 +24,7 @@
   - _Requirements: 5.1, 5.2, 5.3, 8.2_
   - _Boundary: placement/persist.rs_
 
-- [ ] 1.4 起動時先読み `load_restored_state` と復元マージ `apply_restored_placements` の実装
+- [x] 1.4 起動時先読み `load_restored_state` と復元マージ `apply_restored_placements` の実装
   - ghost root から `sylphya::persist::load_scope` を直接読み出す先読み関数（不在・破損はすべて空 entries＝値なしへ寛容縮退）と、entries を `ScopePlacement` へマージする純関数（スコープ別に窓位置優先適用・バルーンは基準変換の逆適用で導出・値なしは resolver 既定を保持）を実装する
   - マージ結果は永続状態へ一切書き込まない構造（書込 API を呼び出せない）であることをコードで保証する
   - 観測可能な完了条件: entries ありでは保存済み位置が既定位置解決に優先して採用され、entries が空のときは入力 placements と恒等になるユニットテストが通ること
