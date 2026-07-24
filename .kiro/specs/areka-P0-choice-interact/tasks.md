@@ -45,7 +45,7 @@
   - _Depends: 2.1, 3.1_
 
 - [ ] 4. Core: バルーンポインタハンドラ
-- [ ] 4.1 移動ハンドラの実装（hover 追従駆動）
+- [x] 4.1 移動ハンドラの実装（hover 追従駆動）
   - Bubble 相のみ処理する移動ハンドラを実装し、固定順の借用規律（共有借用→スナップショット→借用解放→可変借用で inject）に従う
   - `Emo2Wiring` 不在（boot 前／失敗）は正常縮退として `debug!` ＋ no-op（donor `presenter=None` 同型）、`BalloonWiring` 不在または `RefCell` 借用失敗は構成異常として `error!`（event = balloon_wiring_missing／balloon_runtime_borrow_failed）でログし no-op 縮退する（ログ無し失敗経路を作らない）
   - hover 遷移注入時は `debug!`（event = choice_hover_inject）を発行する

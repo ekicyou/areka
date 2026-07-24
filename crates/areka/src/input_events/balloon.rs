@@ -14,9 +14,17 @@
 //! 逆方向依存（上流が balloon.rs を知る）は禁止（design「依存方向」）。
 
 use std::collections::HashMap;
+use std::rc::Rc;
 use std::sync::mpsc::{Receiver, Sender};
 
 use areka_emo_text::actor::ChoiceHitRow;
+use areka_sakura::ActorKey;
+use bevy_ecs::entity::Entity;
+use bevy_ecs::world::World;
+use wintf::ecs::pointer::{Phase, PointerState};
+
+use crate::emo2_boot::frame::Emo2Wiring;
+use crate::placement::spawn::BalloonWindowMarker;
 
 /// 選択確定のワイヤ形（本 spec 契約正本・2.2）。
 ///
@@ -247,6 +255,159 @@ pub(crate) fn click_selection(
         scope,
         references: hit.references.clone(),
     })
+}
+
+// ---------------------------------------------------------------------------
+// 配線層（tasks.md task 4.1・design「配線層（input_events/balloon.rs）> balloon ハンドラ」）
+//
+// wintf `PointerEventHandler` 署名の移動ハンドラ。Bubble 相のみ処理し、固定順の借用規律
+// （共有借用→スナップショット→借用解放→可変借用で inject・design §204）に従って hover 追従を
+// 上流 runtime へ橋渡しする薄い結線。判断分岐は純関数核（hit_choice_row／hover_action）へ集約済み
+// で、本ハンドラは snapshot→純関数→適用のみを行う（自前描画なし・R1.6／R4.1）。
+// ---------------------------------------------------------------------------
+
+/// バルーン窓のポインタ移動ハンドラ（Bubble のみ処理・hover 追従駆動・R1.1/1.2/1.3/1.4/1.6/3.1/3.3/4.1/4.2/8.4）。
+///
+/// wintf `PointerEventHandler` 署名（donor `on_char_pointer_moved` 同型）。**Bubble 相のみ処理し
+/// Tunnel は伝播続行のため即 `false`**。`BalloonWindowMarker.scope` を取り、`client_point`（窓 client
+/// **物理 px**・i32）を `as f32` で（**スケール係数を掛けず**＝k=1.0 素通し・R4.2/8.6・DD-IE-10 整合）
+/// 純関数核へ渡し、hover 遷移を上流 `TextLayerRuntime` へ注入する。moved は非侵襲ゆえ**常に `false`**。
+///
+/// **借用規律（固定順序・design §204）**:
+/// 1. `Emo2Wiring` 共有借用→`runtime()` アクセサで `Rc` clone→world 側借用解放。
+///    `Emo2Wiring` 不在（boot 前／失敗）は**正常縮退**＝`debug!`＋no-op（donor presenter=None 同型・R4.1）。
+/// 2. `BalloonWiring` から `last_injected` を copy（共有借用即解放）。`BalloonWiring` 不在は結線漏れ＝
+///    **構成異常** `error!(event = "balloon_wiring_missing")`＋no-op（配線存在檻が開発時に検出）。
+/// 3. runtime `try_borrow`（不変）でスナップショット（`choice_active`＋現行 `choice_hit_rows` を純関数
+///    評価・move はここで完結）。`try_borrow` 失敗は構成異常 `error!(event = "balloon_runtime_borrow_failed")`。
+/// 4. 借用解放後に runtime `try_borrow_mut` で `inject_choice_hover`（`Inject` アームのみ）。
+/// 5. `BalloonWiring` 可変借用で自前 `hover` 更新。
+///
+/// `RefCell` は `try_borrow`／`try_borrow_mut` を用い、失敗時は `error!`＋no-op（panic しない・log-first）。
+/// hover 遷移注入時は `debug!(event = "choice_hover_inject")` を発行する（DD-CI-7・トラブルシュート用）。
+/// クリック確定・`send`・`info!` は本ハンドラの範囲外（押下ハンドラ＝task 4.2）。
+///
+/// `#[allow(dead_code)]`: 本番結線（`attach_balloon_pointer_handlers`＝task 6.1）まで到達者なし——
+/// 単体檻のみ到達（M1 暫定抑止）。
+#[allow(dead_code)]
+pub(crate) fn on_balloon_pointer_moved(
+    world: &mut World,
+    _sender: Entity,
+    entity: Entity,
+    ev: &Phase<PointerState>,
+) -> bool {
+    // (1) Bubble 相のみ処理。Tunnel は伝播続行のため即 false（donor 同型・非侵襲）。
+    let state = match ev {
+        Phase::Tunnel(_) => return false,
+        Phase::Bubble(s) => s,
+    };
+
+    // scope は BalloonWindowMarker から読む（donor char_scope の鏡写し・R-3）。attach は marker 窓のみを
+    // 標的とするため不在は理論上不到達の構成異常＝error!＋no-op（silent failure 禁止・panic しない）。
+    let Some(scope) = world.get::<BalloonWindowMarker>(entity).map(|m| m.scope) else {
+        tracing::error!(
+            event = "balloon_marker_missing",
+            "BalloonWindowMarker 不在の entity へ移動ハンドラが着火（理論上不到達）: no-op 縮退"
+        );
+        return false;
+    };
+    let actor = ActorKey::from(scope.to_string());
+
+    // (2) client 物理 px（i32）を f32 へ——スケール係数を掛けない（k=1.0 素通し・R4.2/8.6・DD-IE-10）。
+    let x = state.client_point.x as f32;
+    let y = state.client_point.y as f32;
+
+    // ── 借用規律 ① Emo2Wiring 共有借用→runtime() で Rc clone→world 側借用解放 ─────────────────
+    // Emo2Wiring 不在（boot 前／失敗）は正常縮退＝debug!＋no-op（donor presenter=None 同型・R4.1）。
+    let Some(runtime) = world
+        .get_non_send_resource::<Emo2Wiring>()
+        .map(|w| Rc::clone(w.runtime()))
+    else {
+        tracing::debug!(
+            event = "choice_moved_no_emo2",
+            scope,
+            "Emo2Wiring 不在（boot 前／失敗）: hover 追従を no-op 縮退"
+        );
+        return false;
+    };
+
+    // ── 借用規律 ② BalloonWiring から last_injected を copy（共有借用即解放）─────────────────────
+    // BalloonWiring 不在は結線漏れ＝構成異常 error!（配線存在檻が開発時に検出）＋no-op。
+    let Some(last_injected) = world
+        .get_non_send_resource::<BalloonWiring>()
+        .map(|bw| bw.hover(scope))
+    else {
+        tracing::error!(
+            event = "balloon_wiring_missing",
+            scope,
+            "BalloonWiring 不在（結線漏れ）: hover 追従を no-op 縮退"
+        );
+        return false;
+    };
+
+    // ── 借用規律 ③ runtime 不変借用でスナップショット（純関数評価・move はここで完結）────────────
+    // 毎イベント現行 choice_hit_rows に対して hit 判定する（新選択肢集合へ持ち越さない・R3.3）。
+    // try_borrow 失敗（理論上不到達の構成異常）は error!＋no-op（panic しない・log-first）。
+    let action = match runtime.try_borrow() {
+        Ok(rt) => {
+            let active = rt.choice_active(&actor);
+            let rows = rt.choice_hit_rows(&actor);
+            let hit_ordinal = hit_choice_row(rows, x, y).map(|i| rows[i].ordinal);
+            hover_action(active, hit_ordinal, last_injected)
+        }
+        Err(_) => {
+            tracing::error!(
+                event = "balloon_runtime_borrow_failed",
+                scope,
+                "runtime try_borrow 失敗（不変・スナップショット）: no-op 縮退"
+            );
+            return false;
+        }
+    };
+    // ここで不変借用（Ref）は解放済み——④ の可変借用と同時に持たない。
+
+    // 純関数の決定を適用する（自前描画なし＝inject_choice_hover のみ・R1.6）。
+    match action {
+        // 非表示・未注入（R1.4）／表示中・同値既注入（遷移なし）は何もしない。
+        HoverAction::NoopInactive | HoverAction::Keep => {}
+        // 消滅時整合（R3.4）: 自前状態のみ None 整合・inject はしない（上流原子性が正本）。
+        HoverAction::ResetOwnState => {
+            let mut bw = world
+                .get_non_send_resource_mut::<BalloonWiring>()
+                .expect("BalloonWiring は直上（②）で存在確認済み（donor self-gating 同型）");
+            bw.set_hover(scope, None);
+        }
+        // 遷移（R1.2/1.3）: ④ runtime 可変借用で inject→⑤ BalloonWiring 可変借用で自前状態更新。
+        HoverAction::Inject(value) => {
+            // ④ try_borrow_mut で inject_choice_hover（Some=行ハイライト／None=解除・描画 API は呼ばない）。
+            match runtime.try_borrow_mut() {
+                Ok(mut rt) => rt.inject_choice_hover(&actor, value),
+                Err(_) => {
+                    tracing::error!(
+                        event = "balloon_runtime_borrow_failed",
+                        scope,
+                        "runtime try_borrow_mut 失敗（inject）: no-op 縮退"
+                    );
+                    return false;
+                }
+            }
+            // ⑤ 可変借用は上で解放済み。BalloonWiring の自前 last-injected を更新する。
+            let mut bw = world
+                .get_non_send_resource_mut::<BalloonWiring>()
+                .expect("BalloonWiring は直上（②）で存在確認済み（donor self-gating 同型）");
+            bw.set_hover(scope, value);
+            // hover 遷移注入の marker（DD-CI-7・トラブルシュート用・info ではない）。
+            tracing::debug!(
+                event = "choice_hover_inject",
+                scope,
+                ordinal = ?value,
+                "hover 遷移を上流 runtime へ注入"
+            );
+        }
+    }
+
+    // moved は常に false（非侵襲・伝播継続）。
+    false
 }
 
 #[cfg(test)]
@@ -701,5 +862,363 @@ mod tests {
         let rows = [row_with_refs(0, 0.0, 0.0, 100.0, 20.0, Vec::new())];
         let sel = click_selection(true, &rows, 50.0, 10.0, 0).expect("ヒットするので構成される");
         assert!(sel.references.is_empty(), "空 references は空 Vec として転写");
+    }
+
+    // -------------------------------------------------------------------------
+    // on_balloon_pointer_moved 配線層檻（task 4.1・design「配線層 > balloon ハンドラ」／
+    // Error Handling／System Flows・R1.1/1.2/1.3/1.4/1.6/3.1/3.3/4.1/4.2/8.4）
+    //
+    // 合成 `PointerState` を直接ハンドラへ与え、(a) Tunnel 素通し、(b) 資源不在の縮退経路を
+    // 正しい**ログレベル**（Emo2Wiring 不在=debug／BalloonWiring 不在=error）で、(c) 適用アーム
+    // （Inject／ResetOwnState／Noop）を実 `TextLayerRuntime` で決定的に檻へ入れる。判断分岐そのもの
+    // （active×hit×last の全組合せ）は hover_action 純関数檻（task 3.2）が網羅済み。
+    //
+    // NOTE（runtime constructibility）: `choice_hit_rows` は `present_frame`（GPU）でしか
+    // `choice_snapshot` を埋めないため、headless では現行 rows が常に空＝hit=None。ゆえに
+    // 「Some(ordinal) ハイライト追従」は本層では実演できず hover_action 純関数檻（3.2）＋
+    // task 7.1 の pass-through 檻に委ねる。本檻はハンドラ経由の実注入として Inject(None) 遷移
+    // （active かつ hit=None かつ last=Some → ハイライト解除注入）を観測する（inject_choice_hover を
+    // 実 runtime へ実際に呼び、BalloonWiring.hover の更新と debug marker を固定する）。
+    // -------------------------------------------------------------------------
+
+    use std::cell::RefCell;
+    use std::collections::BTreeMap;
+    use std::rc::Rc;
+    use std::sync::{Arc, Mutex};
+
+    use areka_emo_atlas::AtlasTable;
+    use areka_emo_compose::{BindSet, EmoWorld};
+    use areka_emo_present::{EmoPresenter, PresentCommand};
+    use areka_emo_text::actor::TextLayerRuntime;
+    use areka_emo_text::state::TextLayerConfig;
+    use areka_sakura::contract::{ActorKey, CueCommand, TalkCue};
+    use areka_seriko::{AnimationTable, BindResolver, SurfaceResolver};
+    use tracing::field::{Field, Visit};
+    use tracing_subscriber::prelude::*;
+    use wintf::ecs::Point;
+    use wintf::ecs::pointer::{Phase, PointerState};
+
+    use crate::emo2_boot::assets::{BootAssets, LoopTables, ScopeAssets};
+    use crate::emo2_boot::frame::Emo2Wiring;
+    use crate::emo2_boot::move_cue::MoveDirective;
+    use crate::emo2_boot::talk_clock::TalkClock;
+    use crate::placement::spawn::BalloonWindowMarker;
+
+    /// 空 `EmoWorld`（空 shell から build・COM/GPU 不要の寛容契約・frame.rs 檻同型）。
+    fn empty_world() -> EmoWorld {
+        EmoWorld::build(&areka_parsers::shell::parse(""))
+    }
+
+    /// 空アトラス（headless 構築・frame.rs 檻同型）。
+    fn empty_atlas() -> AtlasTable {
+        AtlasTable::new(Vec::new(), Vec::new(), Vec::new())
+    }
+
+    /// 合成 `BootAssets`（scope0 の最小形・COM/GPU/fixture 不要の純合成・frame.rs synth_assets 同型）。
+    fn synth_boot_assets() -> BootAssets {
+        BootAssets {
+            shells: vec![ScopeAssets {
+                scope: 0,
+                emo_world: empty_world(),
+                atlas: empty_atlas(),
+                initial_surface_id: 0,
+            }],
+            balloons: vec![(0, empty_world(), empty_atlas())],
+            balloon_model: areka_parsers::balloon::parse_str("", None),
+            resolver: SurfaceResolver::new(BTreeMap::new()),
+            static_binds: BindSet::default(),
+            bind_resolver: BindResolver::empty(),
+            loop_tables: LoopTables {
+                shell: AnimationTable::empty(),
+                balloon: AnimationTable::empty(),
+            },
+        }
+    }
+
+    /// headless な `Emo2Wiring`（実 `EmoPresenter`／与えた runtime／合成 `BootAssets`・COM/GPU 不要）。
+    ///
+    /// ハンドラが `Emo2Wiring::runtime()` から借りる runtime を、テスト側が事前に populate した実体で
+    /// 差し込むための最小結線（frame.rs の headless_wiring_with と同型）。
+    fn headless_emo2_wiring(runtime: Rc<RefCell<TextLayerRuntime>>) -> Emo2Wiring {
+        Emo2Wiring::new(
+            EmoPresenter::new(),
+            mpsc::channel::<PresentCommand>().1,
+            mpsc::channel::<MoveDirective>().1,
+            runtime,
+            TalkClock::new(Arc::new(|| 0.0)),
+            synth_boot_assets(),
+        )
+    }
+
+    /// 選択肢スパンを 1 つ載せて `choice_active(actor)==true` にした実 runtime を組む（GPU 不要）。
+    /// `choice_hit_rows` は `present_frame`（GPU）未実行ゆえ空のまま（headless の既知制約）。
+    fn runtime_with_active_choice(actor: &str) -> Rc<RefCell<TextLayerRuntime>> {
+        let rt = Rc::new(RefCell::new(TextLayerRuntime::new(TextLayerConfig::default())));
+        rt.borrow_mut().apply_cue(&TalkCue {
+            at: 0.0,
+            actor: ActorKey::from(actor),
+            command: CueCommand::Choice {
+                id: "OnYes".into(),
+                text: "はい".into(),
+                references: Vec::new(),
+            },
+            duration: 0.0,
+        });
+        rt
+    }
+
+    /// Bubble 相の合成 `PointerState`（client 物理 px）を組む（moved ハンドラは double_click/ctrl 非参照）。
+    fn bubble_move(x: i32, y: i32) -> Phase<PointerState> {
+        Phase::Bubble(PointerState {
+            client_point: Point { x, y },
+            ..Default::default()
+        })
+    }
+
+    // ── スレッドローカル tracing capture（frame.rs 檻の最小複製・ログレベル決定論観測用）─────────
+    #[derive(Clone, Default)]
+    struct Capture(Arc<Mutex<Vec<String>>>);
+
+    impl<S: tracing::Subscriber> tracing_subscriber::Layer<S> for Capture {
+        fn on_event(
+            &self,
+            ev: &tracing::Event<'_>,
+            _: tracing_subscriber::layer::Context<'_, S>,
+        ) {
+            let meta = ev.metadata();
+            let mut line = format!("level={}", meta.level());
+            struct V<'a>(&'a mut String);
+            impl Visit for V<'_> {
+                fn record_debug(&mut self, f: &Field, v: &dyn std::fmt::Debug) {
+                    use std::fmt::Write;
+                    let _ = write!(self.0, " {}={:?}", f.name(), v);
+                }
+            }
+            ev.record(&mut V(&mut line));
+            self.0.lock().unwrap().push(line);
+        }
+    }
+
+    /// クロージャ `f` 実行中に**現在のスレッド**で発火した tracing イベントを 1 行 1 件で返す。
+    fn capture_logs<F: FnOnce()>(f: F) -> Vec<String> {
+        let cap = Capture::default();
+        let logs = cap.0.clone();
+        let subscriber = tracing_subscriber::registry().with(cap);
+        tracing::subscriber::with_default(subscriber, f);
+        let guard = logs.lock().unwrap();
+        guard.clone()
+    }
+
+    /// Tunnel 素通し（R1・donor 同型）: Tunnel 相は資源に一切触れず即 `false`（副作用なし）。
+    #[test]
+    fn moved_tunnel_phase_is_noop_false() {
+        let mut world = World::new();
+        let e = world.spawn(BalloonWindowMarker { scope: 0 }).id();
+        // 資源未挿入でも Tunnel は最初に短絡するため到達しない（副作用なしの担保）。
+        let tunnel = Phase::Tunnel(PointerState {
+            client_point: Point { x: 10, y: 20 },
+            ..Default::default()
+        });
+        assert!(
+            !on_balloon_pointer_moved(&mut world, e, e, &tunnel),
+            "Tunnel 相は即 false（伝播続行・非侵襲）"
+        );
+    }
+
+    /// Emo2Wiring 不在＝正常縮退（R4.1・donor presenter=None 同型）: **DEBUG** レベルで no-op・`false`。
+    #[test]
+    fn moved_emo2_absent_degrades_with_debug_not_error() {
+        let mut world = World::new();
+        let e = world.spawn(BalloonWindowMarker { scope: 0 }).id();
+        let ev = bubble_move(10, 20);
+
+        let logs = capture_logs(|| {
+            assert!(
+                !on_balloon_pointer_moved(&mut world, e, e, &ev),
+                "Emo2Wiring 不在は no-op false"
+            );
+        });
+
+        assert!(
+            logs.iter()
+                .any(|l| l.contains("level=DEBUG") && l.contains("choice_moved_no_emo2")),
+            "Emo2Wiring 不在は DEBUG で正常縮退する（event=choice_moved_no_emo2）: {logs:?}"
+        );
+        assert!(
+            !logs.iter().any(|l| l.contains("level=ERROR")),
+            "Emo2Wiring 不在は構成異常ではない＝ERROR を出さない: {logs:?}"
+        );
+    }
+
+    /// BalloonWiring 不在＝構成異常（結線漏れ）: Emo2Wiring は present でも **ERROR** で no-op・`false`。
+    /// （借用規律の固定順序＝Emo2Wiring→BalloonWiring ゆえ Emo2Wiring present が前提。）
+    #[test]
+    fn moved_balloon_wiring_absent_degrades_with_error() {
+        let mut world = World::new();
+        let e = world.spawn(BalloonWindowMarker { scope: 0 }).id();
+        // Emo2Wiring は present（空 runtime）・BalloonWiring は挿入しない。
+        let runtime = Rc::new(RefCell::new(TextLayerRuntime::new(TextLayerConfig::default())));
+        world.insert_non_send_resource(headless_emo2_wiring(Rc::clone(&runtime)));
+        let ev = bubble_move(10, 20);
+
+        let logs = capture_logs(|| {
+            assert!(
+                !on_balloon_pointer_moved(&mut world, e, e, &ev),
+                "BalloonWiring 不在は no-op false"
+            );
+        });
+
+        assert!(
+            logs.iter()
+                .any(|l| l.contains("level=ERROR") && l.contains("balloon_wiring_missing")),
+            "BalloonWiring 不在は ERROR の構成異常（event=balloon_wiring_missing）: {logs:?}"
+        );
+    }
+
+    /// BalloonWindowMarker 不在（理論上不到達の構成異常）: **ERROR** で no-op・`false`（silent 禁止）。
+    #[test]
+    fn moved_missing_marker_errors_and_noop() {
+        let mut world = World::new();
+        let e = world.spawn_empty().id(); // BalloonWindowMarker を持たない entity
+        let ev = bubble_move(10, 20);
+
+        let logs = capture_logs(|| {
+            assert!(
+                !on_balloon_pointer_moved(&mut world, e, e, &ev),
+                "marker 不在は no-op false"
+            );
+        });
+
+        assert!(
+            logs.iter()
+                .any(|l| l.contains("level=ERROR") && l.contains("balloon_marker_missing")),
+            "marker 不在は ERROR で縮退（silent failure 禁止）: {logs:?}"
+        );
+    }
+
+    /// hover 遷移注入（Inject アーム・R1.3）: choice 表示中・現行 hit=None（headless snapshot 空）・
+    /// 前回注入 Some(2) → `Inject(None)`。ハンドラが実 runtime へ `inject_choice_hover(actor, None)` を
+    /// 呼び、自前状態 `BalloonWiring.hover[scope]` を None へ更新し、`choice_hover_inject` を DEBUG 発火する。
+    #[test]
+    fn moved_active_choice_transition_injects_and_updates_own_state() {
+        let mut world = World::new();
+        let e = world.spawn(BalloonWindowMarker { scope: 0 }).id();
+
+        let runtime = runtime_with_active_choice("0");
+        assert!(
+            runtime.borrow().choice_active(&ActorKey::from("0")),
+            "前提: choice_active=true（選択肢スパンあり）"
+        );
+        world.insert_non_send_resource(headless_emo2_wiring(Rc::clone(&runtime)));
+
+        // 前回注入値 Some(2) を仕込む（遷移検出のため・現行 hit=None ゆえ Inject(None) へ遷移）。
+        let (tx, _rx) = mpsc::channel::<ChoiceSelection>();
+        let mut bw = BalloonWiring::new(tx);
+        bw.set_hover(0, Some(2));
+        world.insert_non_send_resource(bw);
+
+        let ev = bubble_move(10, 20);
+        let logs = capture_logs(|| {
+            assert!(
+                !on_balloon_pointer_moved(&mut world, e, e, &ev),
+                "moved は常に false（非侵襲）"
+            );
+        });
+
+        assert_eq!(
+            world
+                .get_non_send_resource::<BalloonWiring>()
+                .unwrap()
+                .hover(0),
+            None,
+            "Inject(None) 遷移で BalloonWiring.hover[scope] が None へ更新される（⑤）"
+        );
+        assert!(
+            logs.iter()
+                .any(|l| l.contains("level=DEBUG") && l.contains("choice_hover_inject")),
+            "hover 遷移注入で choice_hover_inject を DEBUG 発火（DD-CI-7）: {logs:?}"
+        );
+        // 実 runtime へ inject 済みでも借用/poison を残さない（try_borrow_mut が成功する）。
+        assert!(
+            runtime.try_borrow_mut().is_ok(),
+            "inject 後も runtime に借用/poison を残さない"
+        );
+    }
+
+    /// 消滅時整合（ResetOwnState アーム・R3.4）: choice 非表示・前回注入 Some(3) → 自前状態のみ
+    /// None 整合し、**inject はしない**（上流原子性が正本＝choice_hover_inject を発火しない）。
+    #[test]
+    fn moved_inactive_with_prior_injection_resets_own_state_without_inject() {
+        let mut world = World::new();
+        let e = world.spawn(BalloonWindowMarker { scope: 0 }).id();
+
+        // 選択肢無しの runtime（choice_active=false）。
+        let runtime = Rc::new(RefCell::new(TextLayerRuntime::new(TextLayerConfig::default())));
+        assert!(
+            !runtime.borrow().choice_active(&ActorKey::from("0")),
+            "前提: choice_active=false（選択肢スパン無し）"
+        );
+        world.insert_non_send_resource(headless_emo2_wiring(Rc::clone(&runtime)));
+
+        let (tx, _rx) = mpsc::channel::<ChoiceSelection>();
+        let mut bw = BalloonWiring::new(tx);
+        bw.set_hover(0, Some(3));
+        world.insert_non_send_resource(bw);
+
+        let ev = bubble_move(10, 20);
+        let logs = capture_logs(|| {
+            assert!(
+                !on_balloon_pointer_moved(&mut world, e, e, &ev),
+                "moved は常に false"
+            );
+        });
+
+        assert_eq!(
+            world
+                .get_non_send_resource::<BalloonWiring>()
+                .unwrap()
+                .hover(0),
+            None,
+            "消滅時は自前状態のみ None 整合（ResetOwnState・Some(3)→None）"
+        );
+        assert!(
+            !logs.iter().any(|l| l.contains("choice_hover_inject")),
+            "ResetOwnState は inject しない（choice_hover_inject を出さない・上流原子性が正本）: {logs:?}"
+        );
+    }
+
+    /// 完全 no-op（NoopInactive アーム・R1.4）: choice 非表示・前回注入なし → 自前状態を触らず
+    /// inject もしない（非表示中は hover 追従なし）。
+    #[test]
+    fn moved_inactive_no_prior_injection_is_full_noop() {
+        let mut world = World::new();
+        let e = world.spawn(BalloonWindowMarker { scope: 0 }).id();
+
+        let runtime = Rc::new(RefCell::new(TextLayerRuntime::new(TextLayerConfig::default())));
+        world.insert_non_send_resource(headless_emo2_wiring(Rc::clone(&runtime)));
+
+        let (tx, _rx) = mpsc::channel::<ChoiceSelection>();
+        world.insert_non_send_resource(BalloonWiring::new(tx)); // hover 空（未注入）
+
+        let ev = bubble_move(10, 20);
+        let logs = capture_logs(|| {
+            assert!(
+                !on_balloon_pointer_moved(&mut world, e, e, &ev),
+                "moved は常に false"
+            );
+        });
+
+        assert_eq!(
+            world
+                .get_non_send_resource::<BalloonWiring>()
+                .unwrap()
+                .hover(0),
+            None,
+            "NoopInactive は自前状態を触らない（未注入のまま None）"
+        );
+        assert!(
+            !logs.iter().any(|l| l.contains("choice_hover_inject")),
+            "NoopInactive は inject しない: {logs:?}"
+        );
     }
 }
