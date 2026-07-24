@@ -10,14 +10,18 @@ use std::path::PathBuf;
 use std::sync::mpsc::{self, Sender};
 
 use areka_actor::ActorHandle;
-use areka_kanade::{KanadeMsg, ShioriBackend, spawn_kanade, spawn_shiori_actor};
+use areka_kanade::{KanadeConfig, KanadeMsg, ShioriBackend, spawn_kanade, spawn_shiori_actor};
 use areka_parsers::charset::DefaultEncoding;
 use areka_parsers::package::{MountError, MountModel, resolve};
 use areka_sakura::contract::SystemVarSnapshot;
-use areka_sylphya::{SylphyaPublisher, SylphyaReader};
+use areka_sylphya::{
+    AskerContext, AskerId, DottedResolution, PersistKey, SylphyaPublisher, SylphyaReader,
+};
+use areka_talk::EpilogueCommand;
 
 use crate::config::resolve_kanade_config;
 use crate::dispatcher::{DispatcherMsg, spawn_dispatcher};
+use crate::prop_sink::{PROP_SET_CUE_NAME, PropSetCueSink};
 use crate::relay::spawn_relay;
 use crate::sink::BootCueSink;
 use crate::ticker::{TickerConfig, TickerMsg, spawn_ticker};
@@ -400,6 +404,68 @@ impl GhostRuntime {
     }
 }
 
+/// 起動記録ゲート（design.md「C5 GhostRuntime 増分」boot() step 1-3・要件 3.1/3.4/4.1/4.2/6.3）。
+///
+/// boot が据えた sylphya 読み口（`reader`）と ghost 自身の `ghost_asker` から永続鏡像を引き、
+/// [`KanadeConfig`] の初回起動系フィールドを解決して返す純ロジック（テスト単体で駆動可能なよう
+/// `boot()` から切り出す・記憶知見「判断分岐のみ檻に入れる」）。read のみ・**決して panic しない**
+/// （reader は panic-free・全不在は既定へ寛容縮退・要件 6.3「永続読取失敗は起動を止めない」）。
+///
+/// 手順:
+/// 1. **存在ゲート**（要件 3.1/3.4）: `areka.boot.count`（正準文字列は
+///    [`PersistKey::BootCount`] から取得＝単一権威）が鏡像に**存在**すれば `first_boot=false`
+///    （2 回目以降起動）、不在なら `true`（初回起動）。値の**数値解釈はしない**——存在の有無のみを
+///    見る（過剰実装回避・design C5-1）。
+/// 2. **vanish 寛容 parse**（要件 4.1/4.2）: `areka.vanish.count` を u32 として寛容 parse し
+///    `config.vanish_count` へ。不在→0・**非数値 present は warn の上 0**（起動は止めない・6.3）。
+/// 3. **初回起動記録 epilogue 注入**（要件 3.4）: `first_boot==true` のとき、初回挨拶トーク
+///    再生完走時に起動記録を書く汎用プロパティ SET キュー 1 件を `config.first_boot_epilogue` へ
+///    据える（`[PROP_SET_CUE_NAME, [BootCount 正準 key, "1"]]`）。kanade は正準 key を**不透明搬送**
+///    するのみで sylphya へは依存しない（依存方向規律の担保・design C5-3）。
+fn apply_boot_record_gate(
+    mut config: KanadeConfig,
+    reader: &SylphyaReader,
+    ghost_asker: &AskerId,
+) -> KanadeConfig {
+    let ctx = AskerContext {
+        asker: ghost_asker.clone(),
+    };
+
+    // step 1: 起動記録の**存在**ゲート（値は数値解釈しない・design C5-1・要件 3.1/3.4）。
+    let boot_count_key = PersistKey::BootCount.to_canonical_key();
+    config.first_boot = match reader.resolve_dotted_str(&ctx, &boot_count_key) {
+        // 記録あり（値の中身は問わない）→ 2 回目以降起動。
+        DottedResolution::Value(_) => false,
+        // 記録なし → 初回起動（既定挙動）。
+        DottedResolution::NotFound => true,
+    };
+
+    // step 2: vanish 回数の寛容 parse（不在→0・非数値→0＋warn・design C5-2・要件 4.1/4.2/6.3）。
+    let vanish_count_key = PersistKey::VanishCount.to_canonical_key();
+    config.vanish_count = match reader.resolve_dotted_str(&ctx, &vanish_count_key) {
+        DottedResolution::Value(raw) => raw.parse::<u32>().unwrap_or_else(|_| {
+            tracing::warn!(
+                target: "ghost-boot",
+                key = %vanish_count_key,
+                raw = %raw,
+                "areka.vanish.count が非数値——0 へ寛容縮退する（起動は止めない・要件 6.3）"
+            );
+            0
+        }),
+        DottedResolution::NotFound => 0,
+    };
+
+    // step 3: 初回起動なら起動記録書込 epilogue を据える（正準 key を不透明搬送・design C5-3・要件 3.4）。
+    if config.first_boot {
+        config.first_boot_epilogue = vec![EpilogueCommand {
+            name: PROP_SET_CUE_NAME.to_string(),
+            tokens: vec![boot_count_key, "1".to_string()],
+        }];
+    }
+
+    config
+}
+
 /// descript.txt 起点で全エンジンを起動順に結線する（design.md「ghost::runtime」
 /// Responsibilities & Constraints・「起動（boot）シーケンス」）。
 ///
@@ -410,7 +476,7 @@ impl GhostRuntime {
 /// マウント解決が失敗した場合、他のいかなるコンポーネントも spawn される前に
 /// `error!` の上で `Err(GhostBootError::Mount(_))` を返す（要件 2.5・後片付け
 /// 不要——何も起動していない）。
-pub fn boot(options: GhostBootOptions) -> Result<GhostRuntime, GhostBootError> {
+pub fn boot(mut options: GhostBootOptions) -> Result<GhostRuntime, GhostBootError> {
     // 1. マウント解決（失敗は即座に打ち切り・要件 2.1/2.5）。
     let mount = match resolve(&options.ghost_root, options.default_encoding) {
         Ok(mount) => mount,
@@ -445,6 +511,11 @@ pub fn boot(options: GhostBootOptions) -> Result<GhostRuntime, GhostBootError> {
 
     // ghost 自身の AskerId（MountModel.shiori.dir 由来の正準文字列・provider／prefetch sink が共有）。
     let ghost_asker = crate::sylphya_wiring::ghost_asker_id(&mount.shiori.dir);
+
+    // 2c. 起動記録ゲート（design「C5 GhostRuntime 増分」boot() step 1-3・要件 3.1/3.4/4.1/4.2/6.3）。
+    //     sylphya reader＋ghost_asker が揃った直後に永続鏡像を引き、初回起動ゲート・vanish 回数・
+    //     初回起動記録 epilogue を解決した config へ差し替える（read のみ・panic なし・不在は既定縮退）。
+    let config = apply_boot_record_gate(config, &sylphya_reader, &ghost_asker);
 
     // 静的構成層 publish: フラット（selfname 系＝derive_flat_statics）＋大域点付き（baseware 2 項・
     // version＝areka-ghost の CARGO_PKG_VERSION・R5.1）。投函のみ（反映は prefetch sink の barrier で担保）。
@@ -497,6 +568,13 @@ pub fn boot(options: GhostBootOptions) -> Result<GhostRuntime, GhostBootError> {
         }
         SystemVarWiring::Custom(src) => src,
     };
+    // 起動記録 SET sink 登録（design「C5 GhostRuntime 増分」boot() step 4・要件 3.4/6.2/7.1）。
+    //     `spawn_dispatcher` 直前の単一登録点——wired／fallback 両ブート経路が本 1 点を通るため
+    //     自動被覆する（per-path 登録にしない・emo2_boot 不触）。以後 dispatcher が talk ごとに
+    //     clone して broadcast し、`areka.prop.set`／カウンタ key を名前自己選別して write-through する。
+    options
+        .sinks
+        .push(Box::new(PropSetCueSink::new(sylphya_publisher.clone())));
     let (dispatcher_tx, dispatcher_handle) =
         spawn_dispatcher(kanade_tx.clone(), options.sinks, system_var_source);
 
@@ -1226,5 +1304,166 @@ mod tests {
         );
 
         let _ = std::fs::remove_dir_all(&root);
+    }
+
+    // ---- apply_boot_record_gate 単体（task 7.1・position-persist・design「C5 GhostRuntime 増分」step 1-3） ----
+
+    use areka_sylphya::persist::{FakePersistIo, PersistIo};
+    use areka_sylphya::{save_scope, spawn_sylphya, PersistScope, ScopeRoots, SylphyaInit, SylphyaParts};
+
+    /// 同一 [`FakePersistIo`] を `Arc` 共有する委譲 IO（prop_sink.rs 先例の再実装）。
+    ///
+    /// `FakePersistIo` は内部 `Mutex` で Clone 不可ゆえ、seed（`save_scope`）と spawn（`build_initial_image`
+    /// のロード）が**同一 store** を観測できるよう Arc 共有ハンドルで委譲する。
+    #[derive(Clone)]
+    struct SharedGateIo(Arc<FakePersistIo>);
+    impl PersistIo for SharedGateIo {
+        fn read(&self, path: &std::path::Path) -> std::io::Result<Option<String>> {
+            self.0.read(path)
+        }
+        fn commit(&self, path: &std::path::Path, content: &str) -> std::io::Result<()> {
+            self.0.commit(path, content)
+        }
+    }
+
+    /// Ghost スコープへ `seed` を事前保存した実 sylphya を起動し、`(parts, ghost_asker)` を返す。
+    ///
+    /// spawn 時の `build_initial_image` が seed を初期鏡像の大域点付き区画（正準 key）へ投影するため、
+    /// `parts.reader` は無待機で `resolve_dotted_str` により seed 値を観測できる（本番 boot と同型の
+    /// 「起動時に永続をロード」経路）。seed が空なら不在ケース（記録なし）を表す。
+    fn spawn_reader_seeded(seed: Vec<(PersistKey, String)>) -> (SylphyaParts, AskerId) {
+        let shared = SharedGateIo(Arc::new(FakePersistIo::new()));
+        let roots = ScopeRoots {
+            ghost: Some(PathBuf::from("/gate-ghost")),
+            ..ScopeRoots::default()
+        };
+        if !seed.is_empty() {
+            save_scope(PersistScope::Ghost, &roots, &shared, seed);
+        }
+        let parts = spawn_sylphya(SylphyaInit {
+            roots,
+            io: Box::new(shared),
+            runtime_sink: None,
+        });
+        (parts, AskerId::new("ghost/gate-asker"))
+    }
+
+    /// テスト用の素の config（gate が触る 3 フィールドのみが観測対象・他は既定）。
+    fn base_config() -> KanadeConfig {
+        KanadeConfig::new("master", "0.0.0-test")
+    }
+
+    /// step 1＋3（記録なし）: `areka.boot.count` 不在 → `first_boot=true` かつ
+    /// `first_boot_epilogue` に `areka.prop.set`/`areka.boot.count`/"1" が 1 件添付される
+    /// （design C5-1/C5-3・要件 3.1/3.4）。
+    #[test]
+    fn gate_absent_boot_record_marks_first_boot_and_injects_set_epilogue() {
+        let (parts, asker) = spawn_reader_seeded(vec![]);
+
+        let gated = apply_boot_record_gate(base_config(), &parts.reader, &asker);
+
+        assert!(
+            gated.first_boot,
+            "起動記録（areka.boot.count）不在 → 初回起動（first_boot=true）"
+        );
+        assert_eq!(
+            gated.first_boot_epilogue,
+            vec![EpilogueCommand {
+                name: PROP_SET_CUE_NAME.to_string(),
+                tokens: vec!["areka.boot.count".to_string(), "1".to_string()],
+            }],
+            "初回は areka.prop.set / areka.boot.count / \"1\" の SET epilogue を 1 件添付する"
+        );
+
+        parts.publisher.close();
+        parts.handle.join().expect("clean close joins");
+    }
+
+    /// step 1＋3（記録あり）: `areka.boot.count` 存在 → `first_boot=false` かつ epilogue 非添付
+    /// （2 回目以降起動・design C5-1/C5-3・要件 3.4）。
+    #[test]
+    fn gate_present_boot_record_marks_returning_and_no_epilogue() {
+        let (parts, asker) = spawn_reader_seeded(vec![(PersistKey::BootCount, "1".into())]);
+
+        let gated = apply_boot_record_gate(base_config(), &parts.reader, &asker);
+
+        assert!(
+            !gated.first_boot,
+            "起動記録あり → 2 回目以降起動（first_boot=false）"
+        );
+        assert!(
+            gated.first_boot_epilogue.is_empty(),
+            "非初回は起動記録 epilogue を添付しない"
+        );
+
+        parts.publisher.close();
+        parts.handle.join().expect("clean close joins");
+    }
+
+    /// step 1（存在ゲートは数値解釈しない）: `areka.boot.count="0"` でも「存在」ゆえ
+    /// `first_boot=false`（値の中身を問わない存在判定・design C5-1「数値解釈しない」）。
+    #[test]
+    fn gate_boot_record_is_existence_not_value() {
+        let (parts, asker) = spawn_reader_seeded(vec![(PersistKey::BootCount, "0".into())]);
+
+        let gated = apply_boot_record_gate(base_config(), &parts.reader, &asker);
+
+        assert!(
+            !gated.first_boot,
+            "存在ゲート: boot.count の値（\"0\"）に関わらず、存在すれば非初回"
+        );
+        assert!(gated.first_boot_epilogue.is_empty());
+
+        parts.publisher.close();
+        parts.handle.join().expect("clean close joins");
+    }
+
+    /// step 2（vanish 数値 present）: `areka.vanish.count="7"` → `vanish_count==7`（要件 4.1）。
+    #[test]
+    fn gate_vanish_count_present_numeric_is_parsed() {
+        let (parts, asker) = spawn_reader_seeded(vec![
+            (PersistKey::BootCount, "1".into()),
+            (PersistKey::VanishCount, "7".into()),
+        ]);
+
+        let gated = apply_boot_record_gate(base_config(), &parts.reader, &asker);
+
+        assert_eq!(gated.vanish_count, 7, "areka.vanish.count=\"7\" → 7 が parse される");
+
+        parts.publisher.close();
+        parts.handle.join().expect("clean close joins");
+    }
+
+    /// step 2（vanish 不在）: `areka.vanish.count` 不在 → `vanish_count==0`（既定縮退・要件 4.2）。
+    #[test]
+    fn gate_vanish_count_absent_defaults_zero() {
+        let (parts, asker) = spawn_reader_seeded(vec![]);
+
+        let gated = apply_boot_record_gate(base_config(), &parts.reader, &asker);
+
+        assert_eq!(gated.vanish_count, 0, "vanish.count 不在 → 0 縮退");
+
+        parts.publisher.close();
+        parts.handle.join().expect("clean close joins");
+    }
+
+    /// step 2（vanish 非数値）: `areka.vanish.count="abc"` → `vanish_count==0`（寛容縮退・panic せず
+    /// 起動を止めない・要件 4.2/6.3）。
+    #[test]
+    fn gate_vanish_count_non_numeric_degrades_zero() {
+        let (parts, asker) = spawn_reader_seeded(vec![
+            (PersistKey::BootCount, "1".into()),
+            (PersistKey::VanishCount, "abc".into()),
+        ]);
+
+        let gated = apply_boot_record_gate(base_config(), &parts.reader, &asker);
+
+        assert_eq!(
+            gated.vanish_count, 0,
+            "非数値 vanish.count は 0 へ寛容縮退する（起動は止めない・要件 6.3）"
+        );
+
+        parts.publisher.close();
+        parts.handle.join().expect("clean close joins");
     }
 }

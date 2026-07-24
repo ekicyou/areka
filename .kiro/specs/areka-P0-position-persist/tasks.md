@@ -133,7 +133,7 @@
   - _Boundary: main.rs_
 
 - [ ] 7. Integration: ghost boot() の設定注入と署名波及の追随
-- [ ] 7.1 boot() での起動記録読取・KanadeConfig 注入・SET sink 登録
+- [x] 7.1 boot() での起動記録読取・KanadeConfig 注入・SET sink 登録
   - sylphya spawn 後・`spawn_kanade` 前に `areka.boot.count` の存在（数値解釈はしない）で `first_boot` を決め、`areka.vanish.count` を寛容 parse して `vanish_count` を求める
   - `first_boot=true` のとき `first_boot_epilogue` を `PersistKey::BootCount.to_canonical_key()` を用いた `areka.prop.set` の `EpilogueCommand` として構築し `KanadeConfig` へ注入する（kanade は sylphya 非依存のまま正準 key を不透明搬送する）
   - `PropSetCueSink` を `options.sinks` へ登録し、wired／fallback 両起動経路が同一登録点を通ることを確認する
