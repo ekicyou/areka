@@ -314,8 +314,8 @@ fn main() -> Result<()> {
     // 終了処理へ運ぶ。`wired=false`（asset 組立失敗・boot 失敗等）は現行の `LogSink`×2 フォール
     // バック boot へ倒し、既存 smoke 前提・非致命 boot 意味論を温存する（R7.1/7.3・DD-7）。
     let outcome = emo2_boot::wire_emo2_boot(&app, &cfg.ghost_root, &cfg.balloon_root, &helper_exe);
-    let (ghost_runtime, seriko_handle) = if outcome.wired {
-        tracing::info!("実 sink 結線で起動しました（emo2-boot wire 成立）");
+    let (ghost_runtime, seriko_handle, loop_ticker) = if outcome.wired {
+        tracing::info!("実 sink 結線で起動しました（emo2-boot wire 成立・SERIKO ループ ticker 稼働）");
         // マウス配信資源を World へ結線（task 3.1・design「main.rs＋wire_mouse_input」・
         // DD-IE-9）: kanade Sender クローンで MouseWiring（NonSend・Presenter）を挿入する。
         // 挿入は wire_emo2_boot 成功後＝Emo2Wiring 挿入済みゆえ presenter 経由の region 解決が
@@ -324,7 +324,7 @@ fn main() -> Result<()> {
             let sender = runtime.kanade().clone();
             input_events::wire_mouse_input(app.world().borrow_mut().world_mut(), sender);
         }
-        (outcome.ghost, outcome.seriko)
+        (outcome.ghost, outcome.seriko, outcome.loop_ticker)
     } else {
         // フォールバック（R7.3・DD-7）: 現行の `LogSink`×2 boot を UI 基盤・起動窓の後へ
         // relocate したもの。失敗は非致命——`default_ghost_root()` はこのサンドボックスでは
@@ -352,15 +352,40 @@ fn main() -> Result<()> {
                 None
             }
         };
-        // フォールバック経路に seriko アクターはない（実 sink 結線が成立していない）。
-        (ghost, None)
+        // フォールバック経路に seriko アクター・loop ticker はない（実 sink 結線が成立していない）。
+        (ghost, None, None)
     };
 
     // `main` 所有のブロッキングメッセージループ（R2.4/R4.1）。ダミー窓／ゴースト窓が
     // 閉じられると `WindowRegistry` が空へ遷移し `run()` が `Ok` を返して正常終了する（DD7 改定）。
     app.run()?;
 
-    // 終了握手（task 5.2・design「終了握手（R6）」・DD-10）: `run()` 復帰後、boot 済み
+    // 終了順序（task 9.5・design「結線・資産・実機経路（main.rs）」）:
+    //   ① loop ticker Close → ② ghost.shutdown → ③ seriko join。
+    //
+    // ① loop ticker Close（本ブロック）: SERIKO ループ ticker の worker スレッドは closure 内へ
+    // `SerikoSink` クローン（tick_sink）を握る。これを先に停止させないと seriko inbox が ticker 経由で
+    // 生き続け、③ の join が「全 Sender drop」を永遠に待って hang する。停止端 Sender へ
+    // `TickerMsg::Close` を送ると worker は `recv_timeout` から `Ok(Close)` で return し、その closure＝
+    // tick_sink が drop される（inbox 切断の片翼が外れる。残る片翼＝ghost 側 SerikoSink は ② が外す）。
+    // main は ticker の JoinHandle を持たない（`wire_emo2_boot` が保持せず drop 済み）ため直接 join でき
+    // ないが、③ の seriko join が全 Sender drop まで block するため実質 ticker worker の終端を待つ形に
+    // なり hang しない（Close 未達で worker が既に終端していても drop で disconnected 経路へ倒れる）。
+    // 失敗（既に終端済み）は shutdown 期待事象ゆえ `debug!`（silent failure 禁止・非致命・R7.5）。
+    if let Some(ticker) = loop_ticker {
+        match ticker.send(areka_ghost::ticker::TickerMsg::Close) {
+            Ok(()) => tracing::info!(
+                "seriko: loop ticker を Close しました（終了順序①・SERIKO 再生ループ停止）"
+            ),
+            Err(_) => tracing::debug!(
+                "seriko: loop ticker は既に終端済み（Close 送信先なし・shutdown 期待事象）"
+            ),
+        }
+        // 送信の成否に依らず停止端 Sender をここで drop し、確実に制御チャンネルを disconnected にする。
+        drop(ticker);
+    }
+
+    // ② 終了握手（task 5.2・design「終了握手（R6）」・DD-10）: `run()` 復帰後、boot 済み
     // （`Some`）のときのみ `shutdown` を呼ぶ。DD-10 により終了理由は `System` から
     // `CloseReason::User` へ改定（全窓 close funnel はユーザ操作起点）。OnClose 応答の再生
     // 完了待ちは kanade の `ForceQuit` 終了系列内で処理される（本仕様は `shutdown` を呼ぶだけ・
@@ -375,11 +400,13 @@ fn main() -> Result<()> {
         }
     }
 
-    // seriko アクターの join（design「終了握手（R6）」・R6.3）。直前の `shutdown` が ghost 側の
-    // `SerikoSink`（seriko inbox への唯一の送信端）を drop することで inbox が切断され、seriko
-    // worker は自然終了する。main は `SerikoSink` クローンを保持しない（sink は `wire_emo2_boot`
-    // が boot へ move 済み）ため、この時点で worker は既に終端しており `join` は速やかに戻る。
-    // join 失敗（worker panic）は握り潰さず `error!`＋`Err` 伝播する（genuine な失敗を隠さない）。
+    // ③ seriko アクターの join（design「終了握手（R6）」・R6.3）。seriko inbox への送信端は 2 本ある:
+    // (a) ghost 側の `SerikoSink`（surface_sink・②の `shutdown` が drop）と (b) loop ticker closure の
+    // `tick_sink`（①の Close→worker return で drop）。①②で両端が drop されて inbox が切断され、seriko
+    // worker は自然終了する。main は自前の `SerikoSink` クローンを保持しない（sink は `wire_emo2_boot`
+    // が boot／ticker へ move 済み）ため、この `join` は両端 drop 完了（＝ticker worker 終端）まで block
+    // したうえで速やかに戻る（①で ticker を先に Close したことが hang 回避の要）。join 失敗（worker
+    // panic）は握り潰さず `error!`＋`Err` 伝播する（genuine な失敗を隠さない）。
     if let Some(seriko) = seriko_handle {
         if let Err(err) = seriko.join() {
             tracing::error!(error = %err, "seriko アクターの join に失敗しました");

@@ -10,8 +10,8 @@
 #![cfg(test)]
 
 use super::model::{
-    Animation, AppendTarget, AliasKey, Collision, CollisionName, Element, ElementPath, Interval,
-    Pattern, Shell, Surface, SurfaceAlias, SurfaceAppend,
+    Animation, AppendTarget, AliasKey, Collision, CollisionName, DrawMethod, Element, ElementPath,
+    Interval, Pattern, Shell, Surface, SurfaceAlias, SurfaceAppend,
 };
 
 // --- 1. 不透明 NewType の read-only 契約（要件 1.3/4.3/6.2/8.2） ---
@@ -44,6 +44,16 @@ fn collision_name_is_opaque_and_verbatim() {
     assert_eq!(n.as_str(), "Head");
 }
 
+/// タスク 1.3: `DrawMethod` は妥当性を判定しない不透明 NewType。既知語（overlay）・
+/// 別メソッド（replace/base）・未知名（frobnicate）・欠落相当の空文字を、いずれも
+/// 意味解釈せず verbatim に保持する（要件 4.6/8.4・parser は原文を運ぶだけ）。
+#[test]
+fn draw_method_is_opaque_and_verbatim() {
+    for m in ["overlay", "replace", "base", "frobnicate", ""] {
+        assert_eq!(DrawMethod::new(m.to_string()).as_str(), m);
+    }
+}
+
 // --- 2. Interval の #[non_exhaustive] variant 網羅（要件 1.4/5.1-5.3） ---
 
 #[test]
@@ -54,6 +64,7 @@ fn interval_variants_construct_and_match() {
             Interval::Bind => {}
             Interval::Random { k } => assert_eq!(k, 5),
             Interval::BindRandom { k } => assert_eq!(k, 3),
+            Interval::Other(_) => {}
         }
     }
 }
@@ -64,6 +75,27 @@ fn interval_variants_compare_by_value() {
     assert_eq!(Interval::Random { k: 5 }, Interval::Random { k: 5 });
     assert_ne!(Interval::Random { k: 5 }, Interval::Random { k: 6 });
     assert_ne!(Interval::Bind, Interval::BindRandom { k: 0 });
+}
+
+/// タスク 1.3: `Interval::Other` は未認識語彙の原文忠実転記のための **独立 variant** で
+/// あり、`Bind` へ縮退しない（討議 #1 裁定・fallback-Bind 撤去の model 面の檻・要件 8.2）。
+/// - `Other(kw)` は `Bind`（および他 variant）と値等価にならない。
+/// - 保持語彙は原文どおりで、`Other("sometimes") != Other("periodic")`。
+/// - 定義クレート内なら `#[non_exhaustive]` enum も網羅 match でき、原文を取り出せる。
+#[test]
+fn interval_other_is_distinct_variant_and_preserves_keyword() {
+    let other = Interval::Other("sometimes".into());
+    // Bind へ縮退しない（fallback-Bind 撤去の証明・要件 8.2）。
+    assert_ne!(other, Interval::Bind);
+    assert_ne!(other, Interval::Random { k: 0 });
+    // 語彙は原文保持・別語彙とは非等価。
+    assert_eq!(other, Interval::Other("sometimes".into()));
+    assert_ne!(other, Interval::Other("periodic".into()));
+    // 網羅 match で原文語彙を取り出せる。
+    match other {
+        Interval::Other(kw) => assert_eq!(&*kw, "sometimes"),
+        _ => panic!("expected Interval::Other"),
+    }
 }
 
 // --- 3. AppendTarget のシーム（要件 7.2・記述子で保持・展開しない） ---
@@ -144,6 +176,7 @@ fn assembled_shell_preserves_structure_and_duplicate_alias_keys() {
                 interval: Interval::Random { k: 4 },
                 patterns: vec![Pattern {
                     index: 0,
+                    method: DrawMethod::new("overlay".to_string()),
                     surface_id: -1, // 負値センチネル保持（要件 5.5）
                     wait: 100,
                     x: 0,

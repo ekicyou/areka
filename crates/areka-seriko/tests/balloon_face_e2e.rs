@@ -23,12 +23,14 @@
 //! - 解決テーブルは空 alias 表（`BTreeMap::new()`）で足りる。数値 key（`"0"`/`"2"`/`"-1"`）は
 //!   alias を引かず数値枝で解決できる（`resolve` / `resolve_balloon_key` の数値枝）。
 
-use areka_emo_compose::BindSet;
+use areka_emo_compose::{BindSet, PatternState};
 use areka_sakura::{
     spawn_talk, ActorKey, CueSink, SakuraMsg, StartTalk, SystemVarSnapshot, TalkCue, TalkDone,
     TalkEndReason, TalkId,
 };
-use areka_seriko::{spawn_seriko, BindResolver, DisplayCommand, MockSurfaceOutput, SurfaceResolver};
+use areka_seriko::{
+    spawn_seriko, BindResolver, DisplayCommand, MockSurfaceOutput, SerikoLoopConfig, SurfaceResolver,
+};
 use std::collections::BTreeMap;
 use std::time::Duration;
 
@@ -60,6 +62,7 @@ fn run_scenario(script: &str, ticks: &[f64]) -> Vec<DisplayCommand> {
         SurfaceResolver::new(BTreeMap::new()),
         BindSet::from_ids([]),
         BindResolver::empty(),
+        SerikoLoopConfig::disabled(),
         out,
     );
 
@@ -114,6 +117,7 @@ fn balloon_show_is_observed_end_to_end() {
         vec![DisplayCommand::ShowBalloon {
             scope: ActorKey::from("0"),
             surface_id: 2,
+            pattern: PatternState::default(),
         }],
         "\\b[2] は ShowBalloon{{scope:0, surface_id:2}} を 1 件観測させる（5.1）"
     );
@@ -136,6 +140,7 @@ fn balloon_hide_is_observed_end_to_end() {
             DisplayCommand::ShowBalloon {
                 scope: ActorKey::from("0"),
                 surface_id: 2,
+                pattern: PatternState::default(),
             },
             DisplayCommand::HideBalloon {
                 scope: ActorKey::from("0"),
@@ -158,6 +163,7 @@ fn bare_balloon_matches_bracket_form_end_to_end() {
         vec![DisplayCommand::ShowBalloon {
             scope: ActorKey::from("0"),
             surface_id: 2,
+            pattern: PatternState::default(),
         }],
         "裸形 \\b2 は ShowBalloon{{2}} を観測させる（1.2 の E2E 面）"
     );
@@ -182,6 +188,7 @@ fn same_balloon_twice_emits_once_end_to_end() {
         vec![DisplayCommand::ShowBalloon {
             scope: ActorKey::from("0"),
             surface_id: 2,
+            pattern: PatternState::default(),
         }],
         "同一面 \\b[2] の冪等な再指定は ShowBalloon を 1 件のみ発行する（4.3）"
     );
@@ -203,10 +210,12 @@ fn shell_and_balloon_mixed_recorded_independently_end_to_end() {
                 scope: ActorKey::from("0"),
                 surface_id: 0,
                 binds: BindSet::from_ids([]),
+                pattern: PatternState::default(),
             },
             DisplayCommand::ShowBalloon {
                 scope: ActorKey::from("0"),
                 surface_id: 2,
+                pattern: PatternState::default(),
             },
         ],
         "シェル面 Show(0) とバルーン面 ShowBalloon(2) が独立に記録される（4.6）"

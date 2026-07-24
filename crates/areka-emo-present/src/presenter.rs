@@ -35,7 +35,7 @@ use bevy_ecs::world::World;
 
 use areka_actor::ReplySender;
 use areka_emo_atlas::AtlasTable;
-use areka_emo_compose::{BindSet, ComposeError, Composer, EmoWorld, RegionPriority};
+use areka_emo_compose::{BindSet, ComposeError, Composer, EmoWorld, PatternState, RegionPriority};
 
 use wintf::ecs::{AlphaMaskResource, GraphicsCore, WucGraphicsResource};
 
@@ -189,8 +189,9 @@ impl EmoPresenter {
                 target,
                 surface_id,
                 binds,
+                pattern,
                 reply,
-            } => self.apply_show(world, target, surface_id, binds, reply),
+            } => self.apply_show(world, target, surface_id, binds, pattern, reply),
             PresentCommand::Hide { target, reply } => self.apply_hide(world, target, reply),
             PresentCommand::InvalidateCache { target, reply } => {
                 self.apply_invalidate(target, reply)
@@ -213,6 +214,7 @@ impl EmoPresenter {
         target_id: TargetId,
         surface_id: u32,
         binds: BindSet,
+        pattern: PatternState,
         reply: Option<ReplySender<PresentOutcome>>,
     ) {
         let Some(target) = self.targets.get_mut(&target_id) else {
@@ -221,16 +223,22 @@ impl EmoPresenter {
             return;
         };
 
-        // (1) 引き当て: 合成入力（id＋binds）の完全一致のみヒット＝再合成しない（R4.2）。ミスのみ合成する。
-        let cache_hit = target.cache.get(surface_id, &binds).is_some();
+        // (1) 引き当て: 合成入力（id＋binds＋pattern）の完全一致のみヒット＝再合成しない（R4.2/R5.2）。
+        // ミスのみ合成する。pattern は指令が運ぶ現在コマ集合をそのまま透過する（presenter は新しい
+        // 判断を持たず輸送のみ）。空 PatternState なら拡張前と観測等価（R5.4）。
+        let cache_hit = target.cache.get(surface_id, &binds, &pattern).is_some();
         if !cache_hit {
             match target
                 .composer
-                .compose(&target.emo_world, &target.atlas, surface_id, &binds)
+                // pattern を合成入力の第一級要素として合成器へ透過する（R5.1）。
+                .compose(&target.emo_world, &target.atlas, surface_id, &binds, &pattern)
             {
                 Ok(composed) => {
                     // 挿入時にマスクを 1 回だけ生成し、表示バッファと対で束ねる（R2.1/R2.4）。
-                    target.cache.insert(surface_id, binds.clone(), composed);
+                    // pattern は binds と同格のキー要素として挿入キーへ透過する（R5.2）。
+                    target
+                        .cache
+                        .insert(surface_id, binds.clone(), pattern.clone(), composed);
                 }
                 Err(ComposeError::EmptyComposition(id)) => {
                     // 全透明退化（外形 0×0）: 許容される正常退化として Hide 縮退＋reply Ok（skip ではない）。
@@ -268,7 +276,7 @@ impl EmoPresenter {
             let (w, h) = {
                 let entry = target
                     .cache
-                    .get(surface_id, &binds)
+                    .get(surface_id, &binds, &pattern)
                     .expect("直前に引き当て済み");
                 (entry.composed.width(), entry.composed.height())
             };
@@ -336,7 +344,7 @@ impl EmoPresenter {
         // (3) 供給面アップロード ＋ マスク同期 ＋ 可視化（同一呼び出し内＝原子入替・R2.4）。
         let entry = target
             .cache
-            .get(surface_id, &binds)
+            .get(surface_id, &binds, &pattern)
             .expect("直前に引き当て済み");
         let size = (entry.composed.width(), entry.composed.height());
 
@@ -496,9 +504,10 @@ mod tests {
     use areka_emo_atlas::{
         AlphaParams, MemoryDecoder, PackConfig, SetId, SurfaceSet, UseSelfAlpha, bake,
     };
-    use areka_emo_compose::BindSet;
+    use areka_emo_compose::{BindSet, ComposeMethod, PatternFrame};
     use areka_parsers::shell::{
-        Animation, AppendTarget, DefRef, Element, ElementPath, Interval, Pattern, Shell, Surface,
+        Animation, AppendTarget, DefRef, DrawMethod, Element, ElementPath, Interval, Pattern, Shell,
+        Surface,
     };
 
     use wintf::ecs::{GraphicsCore, HitTest, HitTestMode, Visual, WucGraphicsResource};
@@ -605,7 +614,7 @@ mod tests {
         // golden: presenter と同一入力を直接合成（move 前に計算する）。
         let mut composer = Composer::new();
         let golden = composer
-            .compose(&world, &atlas, 1000, &BindSet::default())
+            .compose(&world, &atlas, 1000, &BindSet::default(), &PatternState::default())
             .expect("静的 element 単体の合成は Ok");
         let golden_bytes = golden.bytes().to_vec();
 
@@ -637,6 +646,7 @@ mod tests {
                 target: TargetId(0),
                 surface_id: 1000,
                 binds: BindSet::default(),
+                pattern: PatternState::default(),
                 reply: Some(tx),
             },
         );
@@ -678,6 +688,7 @@ mod tests {
                 target: TargetId(0),
                 surface_id: 1000,
                 binds: BindSet::default(),
+                pattern: PatternState::default(),
                 reply: Some(tx0),
             },
         );
@@ -695,6 +706,7 @@ mod tests {
                 target: TargetId(0),
                 surface_id: 9999,
                 binds: BindSet::default(),
+                pattern: PatternState::default(),
                 reply: Some(tx1),
             },
         );
@@ -791,6 +803,7 @@ mod tests {
                 target: TargetId(0),
                 surface_id: 1000,
                 binds: BindSet::default(),
+                pattern: PatternState::default(),
                 reply: Some(tx0),
             },
         );
@@ -830,6 +843,7 @@ mod tests {
                 target: TargetId(0),
                 surface_id: 4242,
                 binds: BindSet::default(),
+                pattern: PatternState::default(),
                 reply: Some(tx1),
             },
         );
@@ -887,7 +901,7 @@ mod tests {
         // 前提固定: 7000 は「存在するが外形 0×0」＝EmptyComposition（SurfaceNotFound ではない）。
         {
             let mut composer = Composer::new();
-            let direct = composer.compose(&emo_world, &atlas, 7000, &BindSet::default());
+            let direct = composer.compose(&emo_world, &atlas, 7000, &BindSet::default(), &PatternState::default());
             assert_eq!(
                 direct.err(),
                 Some(ComposeError::EmptyComposition(7000)),
@@ -908,6 +922,7 @@ mod tests {
                 target: TargetId(0),
                 surface_id: 1000,
                 binds: BindSet::default(),
+                pattern: PatternState::default(),
                 reply: Some(tx0),
             },
         );
@@ -938,6 +953,7 @@ mod tests {
                 target: TargetId(0),
                 surface_id: 7000,
                 binds: BindSet::default(),
+                pattern: PatternState::default(),
                 reply: Some(tx1),
             },
         );
@@ -980,7 +996,7 @@ mod tests {
                 .get(&TargetId(0))
                 .unwrap()
                 .cache
-                .get(7000, &BindSet::default())
+                .get(7000, &BindSet::default(), &PatternState::default())
                 .is_none(),
             "EmptyComposition は cache へ 0×0 を挿入しない"
         );
@@ -1009,6 +1025,7 @@ mod tests {
                 target: TargetId(0),
                 surface_id: 1000,
                 binds: BindSet::default(),
+                pattern: PatternState::default(),
                 reply: Some(tx0),
             },
         );
@@ -1055,7 +1072,7 @@ mod tests {
             let target = presenter.targets.get(&TargetId(0)).unwrap();
             assert!(target.chain.is_some(), "Hide は swap chain を保持する（R3.3）");
             assert!(
-                target.cache.get(1000, &BindSet::default()).is_some(),
+                target.cache.get(1000, &BindSet::default(), &PatternState::default()).is_some(),
                 "Hide は合成キャッシュを保持する（R3.3）"
             );
             assert!(!target.visible, "Hide 後は target.visible=false");
@@ -1069,6 +1086,7 @@ mod tests {
                 target: TargetId(0),
                 surface_id: 1000,
                 binds: BindSet::default(),
+                pattern: PatternState::default(),
                 reply: Some(tx1),
             },
         );
@@ -1151,6 +1169,7 @@ mod tests {
                 target: TargetId(0),
                 surface_id: 1000,
                 binds: BindSet::default(),
+                pattern: PatternState::default(),
                 reply: Some(tx),
             },
         );
@@ -1214,6 +1233,7 @@ mod tests {
                 interval: Interval::Bind,
                 patterns: vec![Pattern {
                     index: 0,
+                    method: DrawMethod::new("overlay".to_string()),
                     surface_id: 5000,
                     wait: 0,
                     x: 0,
@@ -1254,12 +1274,12 @@ mod tests {
 
         let mut composer = Composer::new();
         let golden_plain = composer
-            .compose(&world, &atlas, 1000, &BindSet::default())
+            .compose(&world, &atlas, 1000, &BindSet::default(), &PatternState::default())
             .expect("bind 無し合成は Ok")
             .bytes()
             .to_vec();
         let golden_bound = composer
-            .compose(&world, &atlas, 1000, &BindSet::from_ids([2000]))
+            .compose(&world, &atlas, 1000, &BindSet::from_ids([2000]), &PatternState::default())
             .expect("bind 有り合成は Ok")
             .bytes()
             .to_vec();
@@ -1298,6 +1318,7 @@ mod tests {
                     target: TargetId(0),
                     surface_id: 1000,
                     binds,
+                    pattern: PatternState::default(),
                     reply: Some(tx),
                 },
             );
@@ -1381,12 +1402,12 @@ mod tests {
 
         let mut composer = Composer::new();
         let golden_1000 = composer
-            .compose(&world, &atlas, 1000, &BindSet::default())
+            .compose(&world, &atlas, 1000, &BindSet::default(), &PatternState::default())
             .expect("面 1000 の合成は Ok")
             .bytes()
             .to_vec();
         let golden_3000 = composer
-            .compose(&world, &atlas, 3000, &BindSet::default())
+            .compose(&world, &atlas, 3000, &BindSet::default(), &PatternState::default())
             .expect("面 3000 の合成は Ok")
             .bytes()
             .to_vec();
@@ -1427,6 +1448,7 @@ mod tests {
                 target: TargetId(0),
                 surface_id: 1000,
                 binds: BindSet::default(),
+                pattern: PatternState::default(),
                 reply: Some(tx0),
             },
         );
@@ -1461,6 +1483,7 @@ mod tests {
                 target: TargetId(0),
                 surface_id: 3000,
                 binds: BindSet::default(),
+                pattern: PatternState::default(),
                 reply: Some(tx1),
             },
         );
@@ -1504,6 +1527,162 @@ mod tests {
         assert_eq!(
             slot_before, slot_after,
             "同寸・異 id 再表示で文字スロット表示（slot/window/surface_size/scale）が変化した（TextSlotView が不安定）"
+        );
+    }
+
+    /// surface 1000（`w×h` 全不透明 element）＋ pattern の現在コマが参照する overlay surface 5000
+    /// （1×1 不透明・base と異色・base 左上に収まる）を同一 world へ載せた `(EmoWorld, AtlasTable)` と、
+    /// 空 pattern／非空 pattern それぞれの直接合成 golden を返す。
+    ///
+    /// surface 5000 は surface 1000 の **bind animation ではなく**（1000 に animation を定義しない）、
+    /// pattern の現在コマ（`PatternFrame{ surface_id: 5000, Overlay, (0,0) }`）としてのみ top-level 合流
+    /// する（plan.rs: 合流対象 = 有効 bind pattern0 の id ∪ PatternState に現在コマを持つ id）。5000 は
+    /// 定義層（extent 母集合＝全 element ＋全 bind animation pattern0）に寄与しないため合成外形は base の
+    /// `w×h` のまま不変で、pattern 有無で**外形は不変・バイトのみ変わる**（chain リサイズ経路を踏まず
+    /// 「pattern が compose へ届いたか」だけを固定できる）。
+    fn build_target_assets_with_pattern(
+        w: u32,
+        h: u32,
+        salt: u8,
+    ) -> (EmoWorld, AtlasTable, Vec<u8>, Vec<u8>) {
+        let base = Path::new("shell/master");
+        // surface 1000: 全不透明 element 1 本（animation は持たない＝bind 非依存）。
+        // surface 5000: 1×1 不透明 part（pattern の現在コマが参照する overlay 源）。
+        let surfaces = vec![
+            surface(1000, vec![elem("p.png", 0, 0)]),
+            surface(5000, vec![elem("q.png", 0, 0)]),
+        ];
+
+        let mut dec = MemoryDecoder::new();
+        let stride = w * 4;
+        let mut img: Vec<u8> = Vec::with_capacity((stride * h) as usize);
+        for y in 0..h {
+            for x in 0..w {
+                let b = (x as u8).wrapping_mul(3).wrapping_add(salt);
+                let g = (y as u8).wrapping_mul(5).wrapping_add(salt);
+                let r = ((x + y) as u8).wrapping_mul(7).wrapping_add(salt);
+                img.extend_from_slice(&[b, g, r, 0xFF]);
+            }
+        }
+        dec.insert(base.join("p.png"), w, h, stride, img, true);
+        // 1×1 の不透明 part（base 左上と必ず異なる色 → pattern 有無でバイトが必ず変わる）。
+        dec.insert(base.join("q.png"), 1, 1, 4, vec![0xFF, 0xFF, 0xFF, 0xFF], true);
+
+        let set = SurfaceSet {
+            surfaces: &surfaces,
+            base_dir: base,
+            alpha_params: AlphaParams {
+                use_self_alpha: UseSelfAlpha::On,
+            },
+        };
+        let baked = bake(&[set], &dec, PackConfig::default());
+        assert!(baked.errors.is_empty(), "atlas bake セットアップは失敗しない");
+
+        let mut world = EmoWorld::build(&shell_of(surfaces));
+        world.bind_atlas(&baked.table, SetId(0));
+        let atlas = baked.table;
+
+        let mut composer = Composer::new();
+        let golden_plain = composer
+            .compose(&world, &atlas, 1000, &BindSet::default(), &PatternState::default())
+            .expect("空 pattern 合成は Ok")
+            .bytes()
+            .to_vec();
+        let golden_pattern = composer
+            .compose(&world, &atlas, 1000, &BindSet::default(), &pattern_overlay(2000, 5000))
+            .expect("非空 pattern 合成は Ok")
+            .bytes()
+            .to_vec();
+        assert_ne!(
+            golden_plain, golden_pattern,
+            "fixture 前提: pattern 有無で合成バイトが異ならなければ回帰檻にならない"
+        );
+
+        (world, atlas, golden_plain, golden_pattern)
+    }
+
+    /// animation `anim_id` に surface `surf` の `Overlay` 現在コマ 1 枚を持つ非空 `PatternState`。
+    /// `PatternState::default()`（空）と等価でないことを保証する pattern 差分の実体。
+    fn pattern_overlay(anim_id: u32, surf: u32) -> PatternState {
+        let mut p = PatternState::default();
+        p.set(
+            anim_id,
+            PatternFrame {
+                surface_id: surf,
+                method: ComposeMethod::Overlay,
+                x: 0,
+                y: 0,
+            },
+        );
+        p
+    }
+
+    /// Task 8.2 完了檻（pattern が presenter → compose ＋ cache を実際に貫く・R5.1/5.2/5.4）: 同一
+    /// `(target, surface_id, binds)` でも `ShowSurface` が運ぶ **pattern が変われば表示が変わる**。
+    ///
+    /// (1) 空 pattern の Show → `read_back` が空 pattern 直接合成 golden と一致（R5.4: 拡張前と観測等価）。
+    /// (2) 同一 id・binds のまま **非空 pattern** の Show → `read_back` が非空 pattern 直接合成 golden と
+    ///     一致し、かつ空 pattern の絵と**異なる**（pattern が compose へ届き ComposeKey も pattern 分だけ
+    ///     ミスして再合成された証跡・R5.1/5.2）。(3) 再び空 pattern の Show → 空 golden へ戻る（pattern が
+    ///     キー要素として往復両方向で効く）。presenter が pattern を既定（空）で握り潰していれば (2) が
+    ///     空 golden のままとなり本テストは RED になる。
+    #[test]
+    fn show_surface_pattern_flows_through_to_compose_and_cache() {
+        let mut world = make_world_with_gpu();
+        let window = world.spawn_empty().id();
+
+        let (emo_world, atlas, golden_plain, golden_pattern) =
+            build_target_assets_with_pattern(4, 3, 0x3C);
+
+        let mut presenter = EmoPresenter::new();
+        presenter
+            .attach_target(&mut world, TargetId(0), window, emo_world, atlas)
+            .expect("attach_target 失敗");
+
+        let show = |presenter: &mut EmoPresenter, world: &mut World, pattern: PatternState| {
+            let (tx, rx) = reply_channel::<PresentOutcome>();
+            presenter.apply(
+                world,
+                PresentCommand::ShowSurface {
+                    target: TargetId(0),
+                    surface_id: 1000,
+                    binds: BindSet::default(),
+                    pattern,
+                    reply: Some(tx),
+                },
+            );
+            assert!(
+                matches!(rx.recv_timeout(Duration::from_secs(10)), Ok(Ok(()))),
+                "ShowSurface が Ok でない"
+            );
+        };
+
+        // (1) 空 pattern → golden_plain（拡張前と観測等価・R5.4）。
+        show(&mut presenter, &mut world, PatternState::default());
+        assert_eq!(
+            presenter.read_back(TargetId(0)).expect("read_back 失敗"),
+            golden_plain,
+            "空 pattern の表示が空 pattern 直接合成 golden と一致しない（R5.4）"
+        );
+
+        // (2) 同一 id・binds・非空 pattern → 再合成されて golden_pattern（pattern が compose＋cache を貫く証跡）。
+        show(&mut presenter, &mut world, pattern_overlay(2000, 5000));
+        let rb = presenter.read_back(TargetId(0)).expect("read_back 失敗");
+        assert_eq!(
+            rb, golden_pattern,
+            "非空 pattern が表示へ反映されない（pattern が compose へ届いていない＝presenter が握り潰している）"
+        );
+        assert_ne!(
+            rb, golden_plain,
+            "非空 pattern の表示が空 pattern と同一（ComposeKey が pattern を無視＝古い絵に衝突している）"
+        );
+
+        // (3) 空 pattern へ戻す → golden_plain（pattern がキー要素として往復両方向で効く）。
+        show(&mut presenter, &mut world, PatternState::default());
+        assert_eq!(
+            presenter.read_back(TargetId(0)).expect("read_back 失敗"),
+            golden_plain,
+            "空 pattern へ戻した表示が空 golden と一致しない（pattern キー要素の往復が壊れている）"
         );
     }
 
@@ -1558,6 +1737,7 @@ mod tests {
                 target: TargetId(0),
                 surface_id: 1000,
                 binds: BindSet::default(),
+                pattern: PatternState::default(),
                 reply: Some(tx),
             },
         );
@@ -1594,6 +1774,7 @@ mod tests {
                     target: TargetId(0),
                     surface_id: id,
                     binds: BindSet::default(),
+                    pattern: PatternState::default(),
                     reply: Some(tx),
                 },
             );
@@ -1638,6 +1819,7 @@ mod tests {
                 target: TargetId(0),
                 surface_id: 1000,
                 binds: BindSet::default(),
+                pattern: PatternState::default(),
                 reply: Some(tx0),
             },
         );
@@ -1697,6 +1879,7 @@ mod tests {
                 target: TargetId(0),
                 surface_id: 1000,
                 binds: BindSet::default(),
+                pattern: PatternState::default(),
                 reply: Some(tx0),
             },
         );

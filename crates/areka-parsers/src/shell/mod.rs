@@ -40,7 +40,7 @@ mod validation_tests;
 // モデル型と公開 facade を消費でき、内部の model/lexer/decode/parse 分割へ
 // 直接依存しない。依存方向 `model ← lexer ← decode ← parse` は不変。
 pub use model::{
-    Animation, AliasKey, AppendTarget, Collision, CollisionName, DefRef, Element, ElementPath,
-    Interval, Pattern, Shell, SortOrder, Surface, SurfaceAlias, SurfaceAppend,
+    Animation, AliasKey, AppendTarget, Collision, CollisionName, DefRef, DrawMethod, Element,
+    ElementPath, Interval, Pattern, Shell, SortOrder, Surface, SurfaceAlias, SurfaceAppend,
 };
 pub use parse::parse;

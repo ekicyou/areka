@@ -5,7 +5,7 @@
 //! ／後続 spec（emo-present）へ安全に受け渡せる。emo-present の表示指令 API が未完成でも、
 //! 本 spec 定義の観測用 [`MockSurfaceOutput`] を発行先にすれば単体観測が閉じる（要件 5.5）。
 
-use areka_emo_compose::BindSet;
+use areka_emo_compose::{BindSet, PatternState};
 use areka_sakura::ActorKey;
 use std::sync::{Arc, Mutex};
 
@@ -26,17 +26,26 @@ use std::sync::{Arc, Mutex};
 /// 追随を強制する文化を維持する）。
 #[derive(Clone, Debug, PartialEq)]
 pub enum DisplayCommand {
-    /// 表示: 解決済み surface id と現在の bind 集合を伴う（要件 5.1）。
+    /// 表示: 解決済み surface id・現在の bind 集合・pattern 進行状態を伴う（要件 5.1）。
+    /// `pattern` は「1 面の完全な合成入力」の第一級要素（PatternState・要件 5.1）。cue 由来の
+    /// Show は空 pattern（`PatternState::default()`）を載せ、ループ不活性時は従来と観測等価（要件 5.4）。
     Show {
         scope: ActorKey,
         surface_id: u32,
         binds: BindSet,
+        pattern: PatternState,
     },
     /// 非表示遷移（要件 5.2）。
     Hide { scope: ActorKey },
     /// バルーン面表示（要件 4.1）。`binds` なし＝M-boot にバルーン着せ替えは存在しない
-    /// （adapter は `PresentCommand::ShowSurface{binds: BindSet::default()}` を組む）。
-    ShowBalloon { scope: ActorKey, surface_id: u32 },
+    /// （adapter は `PresentCommand::ShowSurface{binds: BindSet::default()}` を組む）。`pattern` は
+    /// シェル面 [`DisplayCommand::Show`] と同様の第一級要素（要件 5.1）。バルーン面 pattern アニメも
+    /// surface 非依存に一様適用され得る（統一グラフィック思想）。cue 由来は空 pattern（要件 5.4）。
+    ShowBalloon {
+        scope: ActorKey,
+        surface_id: u32,
+        pattern: PatternState,
+    },
     /// バルーン非表示（`\b[-1]` 相当・要件 4.2）。
     HideBalloon { scope: ActorKey },
 }
@@ -117,6 +126,7 @@ mod tests {
                 scope: ActorKey::from("0"),
                 surface_id: 2100,
                 binds: BindSet::from_ids([48, 100]),
+                pattern: PatternState::default(),
             },
             DisplayCommand::Hide {
                 scope: ActorKey::from("1"),
@@ -125,6 +135,7 @@ mod tests {
                 scope: ActorKey::from("1"),
                 surface_id: 2106,
                 binds: BindSet::from_ids([]),
+                pattern: PatternState::default(),
             },
             DisplayCommand::Hide {
                 scope: ActorKey::from("0"),
@@ -157,6 +168,7 @@ mod tests {
         let show = DisplayCommand::ShowBalloon {
             scope: ActorKey::from("0"),
             surface_id: 2,
+            pattern: PatternState::default(),
         };
         assert_eq!(show, show.clone(), "ShowBalloon は clone と一致すること");
 
@@ -174,6 +186,7 @@ mod tests {
             DisplayCommand::ShowBalloon {
                 scope: ActorKey::from("0"),
                 surface_id: 3,
+                pattern: PatternState::default(),
             },
             "surface_id が異なれば ShowBalloon は不一致であること"
         );
@@ -184,6 +197,7 @@ mod tests {
             DisplayCommand::ShowBalloon {
                 scope: ActorKey::from("1"),
                 surface_id: 2,
+                pattern: PatternState::default(),
             },
             "scope が異なれば ShowBalloon は不一致であること"
         );
@@ -212,11 +226,13 @@ mod tests {
             DisplayCommand::ShowBalloon {
                 scope: ActorKey::from("0"),
                 surface_id: 2,
+                pattern: PatternState::default(),
             },
             DisplayCommand::Show {
                 scope: ActorKey::from("0"),
                 surface_id: 2100,
                 binds: BindSet::from_ids([48]),
+                pattern: PatternState::default(),
             },
             DisplayCommand::HideBalloon {
                 scope: ActorKey::from("0"),
@@ -224,6 +240,7 @@ mod tests {
             DisplayCommand::ShowBalloon {
                 scope: ActorKey::from("1"),
                 surface_id: 6,
+                pattern: PatternState::default(),
             },
             DisplayCommand::HideBalloon {
                 scope: ActorKey::from("1"),

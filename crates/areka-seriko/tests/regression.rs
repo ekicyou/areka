@@ -7,11 +7,11 @@
 //! 期待列と全値比較（binds 含む）できる。3 ケースはいずれも発行列 observable で判定でき、
 //! cross-thread の log 捕捉を要しない（log 檻は task 4.1 の同期 handler テストの領分）。
 
-use areka_emo_compose::EmoWorld;
+use areka_emo_compose::{EmoWorld, PatternState};
 use areka_sakura::{ActorKey, CueCommand, CueSink, TalkCue};
 use areka_seriko::{
     build_static_bindset, spawn_seriko, BindResolver, DisplayCommand, MockSurfaceOutput,
-    SurfaceResolver,
+    SerikoLoopConfig, SurfaceResolver,
 };
 
 /// テスト用の Shell 系 `TalkCue`（`Emote{key}`・at/actor 込み）を組む。
@@ -68,7 +68,13 @@ fn idempotent_repeat_surface_no_reemit() {
     let mock = MockSurfaceOutput::new();
     let records = mock.records();
 
-    let (mut sink, handle) = spawn_seriko(resolver, binds.clone(), BindResolver::empty(), mock);
+    let (mut sink, handle) = spawn_seriko(
+        resolver,
+        binds.clone(),
+        BindResolver::empty(),
+        SerikoLoopConfig::disabled(),
+        mock,
+    );
     CueSink::emit(&mut sink, emote_cue(0.0, "0", "2100")); // 初回 Show(2100)
     CueSink::emit(&mut sink, emote_cue(1.0, "0", "通常")); // 通常→[2100]＝同一状態・再発行なし
     CueSink::emit(&mut sink, emote_cue(2.0, "0", "2100")); // 同一 id 再指定・再発行なし
@@ -84,6 +90,7 @@ fn idempotent_repeat_surface_no_reemit() {
             scope: ActorKey::from("0"),
             surface_id: 2100,
             binds: binds.clone(),
+            pattern: PatternState::default(),
         },
         DisplayCommand::Hide {
             scope: ActorKey::from("0"),
@@ -92,6 +99,7 @@ fn idempotent_repeat_surface_no_reemit() {
             scope: ActorKey::from("0"),
             surface_id: 2200,
             binds: binds.clone(),
+            pattern: PatternState::default(),
         },
     ];
 
@@ -121,7 +129,13 @@ fn unresolved_mixed_still_processes_following() {
     let mock = MockSurfaceOutput::new();
     let records = mock.records();
 
-    let (mut sink, handle) = spawn_seriko(resolver, binds.clone(), BindResolver::empty(), mock);
+    let (mut sink, handle) = spawn_seriko(
+        resolver,
+        binds.clone(),
+        BindResolver::empty(),
+        SerikoLoopConfig::disabled(),
+        mock,
+    );
     CueSink::emit(&mut sink, emote_cue(0.0, "0", "2100")); // 有効
     CueSink::emit(&mut sink, emote_cue(1.0, "0", "存在しない別名")); // 未解決＝skip
     CueSink::emit(&mut sink, emote_cue(2.0, "0", "2200")); // 有効（継続の証跡）
@@ -133,11 +147,13 @@ fn unresolved_mixed_still_processes_following() {
             scope: ActorKey::from("0"),
             surface_id: 2100,
             binds: binds.clone(),
+            pattern: PatternState::default(),
         },
         DisplayCommand::Show {
             scope: ActorKey::from("0"),
             surface_id: 2200,
             binds: binds.clone(),
+            pattern: PatternState::default(),
         },
     ];
 
@@ -168,7 +184,13 @@ fn emo2_alias_single_and_multi_classification() {
     let mock = MockSurfaceOutput::new();
     let records = mock.records();
 
-    let (mut sink, handle) = spawn_seriko(resolver, binds.clone(), BindResolver::empty(), mock);
+    let (mut sink, handle) = spawn_seriko(
+        resolver,
+        binds.clone(),
+        BindResolver::empty(),
+        SerikoLoopConfig::disabled(),
+        mock,
+    );
     CueSink::emit(&mut sink, emote_cue(0.0, "0", "通常")); // 単一候補 [2100]→2100
     CueSink::emit(&mut sink, emote_cue(1.0, "1", "静観")); // 複数候補 [2106,2206]→先頭 2106
     sink.close().expect("Close を送れること");
@@ -179,11 +201,13 @@ fn emo2_alias_single_and_multi_classification() {
             scope: ActorKey::from("0"),
             surface_id: 2100,
             binds: binds.clone(),
+            pattern: PatternState::default(),
         },
         DisplayCommand::Show {
             scope: ActorKey::from("1"),
             surface_id: 2106,
             binds: binds.clone(),
+            pattern: PatternState::default(),
         },
     ];
 

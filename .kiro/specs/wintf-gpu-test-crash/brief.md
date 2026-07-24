@@ -31,6 +31,14 @@
 - **特定テスト非依存**（(6)(8) で一般化済み）。brushes 系（WUC を作らない）は無害（(7)）。
 - クラッシュは 2 個目テストの**実行中**（`test ... ` 出力後・ok 到達前）。panic ではなくプロセス AV（バックトレース無し）。
 
+### 影響範囲の拡大（2026-07-24 追記・sylphya 完了マージ時に観測）
+
+`areka-P0-seriko-loop` が main へ着地（`5eeb9d01`）して **areka bin テストにも同じ AV が波及**した。seriko-loop はまばたき e2e で 2 本目の GPU world 生成 spine テストを追加しており、**`spine_e2e_kero_blink_one_cycle_golden`（プロセス 2 本目の live GPU spine）で `STATUS_ACCESS_VIOLATION`**。直前の `spine_blink_smoke_send_tick_drives_loop_pattern_command`（1 本目）は緑＝**「2 個目の WUC スタックで死ぬ」法則と完全に一致**。
+
+- 実測（`--test-threads=1`）: worktree のマージ結果／**main チェックアウト単体（`5eeb9d01`・マージ抜き）とも同一テストで同一 AV**＝マージ起因ではなく main 既存。
+- 結論: 本バグの影響は wintf `graphics` バイナリに閉じず、**GPU world を 2 個以上作るあらゆるテストバイナリ**へ及ぶ。`cargo test --workspace` の赤は今や 2 バイナリ（wintf graphics ＋ areka bin）。
+- **優先度の引き上げ根拠**: 新機能が GPU テストを 1 本足すたびに別のバイナリが落ちる＝**DoD ゲートの侵食が進行中**。
+
 ### main でも再現＝pre-existing の直接証明
 
 main チェックアウト（`C:\home\maz\git\areka`・ブランチ main・**別バイナリ** `graphics-f34527c40075921b.exe`）で同一最小ペアを実走 → **同一 AV**。かつ sylphya ブランチは wintf を一切変更していない（`git diff --name-only main...HEAD` に wintf 皆無・wintf が使う workspace 依存も無改変）。

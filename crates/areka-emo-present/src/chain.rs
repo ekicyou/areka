@@ -289,7 +289,7 @@ mod tests {
     use areka_emo_atlas::{
         AlphaParams, MemoryDecoder, PackConfig, SetId, SurfaceSet, UseSelfAlpha, bake,
     };
-    use areka_emo_compose::{BindSet, Composer, EmoWorld};
+    use areka_emo_compose::{BindSet, Composer, EmoWorld, PatternState};
     use areka_parsers::shell::{
         AppendTarget, DefRef, Element, ElementPath, Shell, Surface,
     };
@@ -392,7 +392,7 @@ mod tests {
 
         let mut composer = Composer::new();
         composer
-            .compose(&world, &baked.table, 1000, &BindSet::default())
+            .compose(&world, &baked.table, 1000, &BindSet::default(), &PatternState::default())
             .expect("静的 element 単体の合成は Ok")
     }
 
