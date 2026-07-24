@@ -109,3 +109,11 @@
   - Observable: 全既存テスト＋新規テストが緑で exit 0
   - _Requirements: 8.1, 8.2, 8.3, 8.5, 8.6_
   - _Depends: 7.1, 7.2, 7.3_
+
+## Implementation Notes
+
+- 環境: worktree の `vendors/pasta` submodule が未populate だと areka ビルドが失敗する。`git submodule update --init --recursive vendors/pasta` で解消（既知の worktree quirk・source 変更ではない）。
+- 検証コマンド: 各タスクは `cargo build -p areka` ＋ `cargo test -p areka`（bin の in-source `#[cfg(test)]` を既定で走らせる）。バルーン限定は `cargo test -p areka --bin areka input_events::balloon`。最終回帰(7.4)のみ `cargo test --workspace`（i686 host-32 成果物の事前ビルド前提）。
+- 上流型: `ChoiceHitRow`（`areka_emo_text::actor`・実体 `crates/areka-emo-text/src/actor.rs:150`）・`HitRectPx`（`crates/areka-emo-text/src/choice.rs:155`・`left/top/right/bottom` は `pub` f32）。areka から実型で fixture 構築可能——ローカル並行型を作らないこと（4.1/8.5）。
+- **レビュアー厳守**: RED 再現やスタブ確認で `git checkout`/`git reset --hard` を絶対に使わない（未コミット実装を破棄する既知ハザード）。差替え検証はファイルバックアップ（cp）→復元で行い、復元後に diff 存在とテスト緑を必ず再確認する。
+- `#[allow(dead_code)]` は各シンボルへ narrow 付与（本番未消費のうちだけ・後続タスクの本番結線で撤去見込み）。crate-wide 抑止は禁止。
