@@ -2886,6 +2886,280 @@ mod tests {
         let _ = parts.handle.join();
     }
 
+    /// Task 8.2 保存→復元 往復値等価の END-TO-END 統合檻（Req8.1・Req7.2・design
+    /// Testing Strategy Integration §1）。
+    ///
+    /// 実 `FsPersistIo`＋temp dir に置いた**最小解決可能ゴースト**へ、save 側（DragEnd 観測点
+    /// →`PersistWiring`→実アクター→`sylphya.toml`）と restore 側（`load_restored_state`
+    /// →`apply_restored_placements`）を実ファイルシステム越しに結線し、キャラ位置・バルーン
+    /// オフセットが値等価で往復すること、および同居する無関係 key（`BootCount`）が save で
+    /// 破壊されないことを決定論固定する。
+    ///
+    /// これまでの follow.rs 檻は `FakePersistIo`（インメモリ）で「投函→load_scope」の
+    /// 送信端 FIFO を証明したが、本檻は**実 FS 書込＋mount 解決経由の実読出**で往復全体
+    /// （save→file→resolve→load→merge）を一本の檻に収める（design §1 が実 `FsPersistIo`
+    /// を要求する所以）。
+    ///
+    /// 檻の噛み方（往復が壊れたら落ちる）:
+    /// - char: save 側の bottom 吸着確定位置（1427, 513）が実ファイルへ書かれ、restore 側で
+    ///   同一 work area の `project_restore` が恒等（既に下端一致・x 域内）ゆえ merge 後の
+    ///   `char_pos` が確定位置と値等価に戻る。既定 char_pos(100,100) が漏れれば落ちる。
+    /// - balloon: DragEnd 最終確定位置から再導出した左上基準 offset(-412,-43) が下端基準
+    ///   (-412,-730) へ変換されてファイルへ、restore 側で現 char_size で左上基準へ足し戻り、
+    ///   `balloon_pos` が balloon 最終確定位置(1015, 470)へ戻る。
+    /// - 7.2: 事前に `persist_put` した無関係 key `BootCount="1"` が、char/balloon の DragEnd
+    ///   save 後も `load_restored_state` に不変で残る（read-modify-write の無関係 key 温存）。
+    ///
+    /// 座標は 96 の非倍数（1427・1015・470…）で隠れた dpi/96 再スケールの檻を兼ね、既定値
+    /// （100・0・96 系）と重ならない。
+    #[test]
+    fn round_trip_save_restore_value_equivalence_over_real_fs() {
+        use std::path::PathBuf;
+
+        use areka_ghost::sylphya_wiring::profile_areka_root;
+        use areka_parsers::charset::DefaultEncoding;
+        use areka_sylphya::persist::FsPersistIo;
+        use areka_sylphya::{
+            Axis, PersistKey, PersistScope, ScopeRoots, SylphyaInit, load_scope, spawn_sylphya,
+        };
+
+        use super::super::persist::{
+            PersistWiring, apply_restored_placements, balloon_offset_from_persist,
+            balloon_offset_to_persist, load_restored_state,
+        };
+        use super::on_balloon_drag_end;
+        use crate::placement::resolver::ScopePlacement;
+        use crate::placement::spawn::{BalloonWindowMarker, CharWindowMarker};
+
+        // panic をまたいで temp dir を確実に片付ける Drop ガード。
+        struct TempGhostDir(PathBuf);
+        impl Drop for TempGhostDir {
+            fn drop(&mut self) {
+                let _ = std::fs::remove_dir_all(&self.0);
+            }
+        }
+
+        // --- fixture: 最小解決可能ゴースト（persist.rs plant_minimal_ghost 同型）---------
+        let mut root = std::env::temp_dir();
+        root.push("areka_follow_round_trip_e2e_8_2");
+        let _ = std::fs::remove_dir_all(&root);
+        let _guard = TempGhostDir(root.clone());
+        let ghost_master = root.join("ghost").join("master");
+        std::fs::create_dir_all(&ghost_master).expect("create ghost/master");
+        std::fs::write(
+            ghost_master.join("descript.txt"),
+            "charset,UTF-8\nname,テスト\nsakura.name,さくら\n".as_bytes(),
+        )
+        .expect("write ghost descript");
+        std::fs::create_dir_all(root.join("shell").join("master")).expect("create shell/master");
+
+        // 永続ファイルは load_restored_state が読む場所と同一＝profile_areka_root(shiori.dir)。
+        // shiori.dir は resolve が root/ghost/master へ解決する（persist.rs load 檻が証明）。
+        // FsPersistIo::commit は親ディレクトリを作らないため、書込先を先に用意する
+        // （本番 boot 経路は profile/areka を別途用意する・ここでは檻の前提を満たす）。
+        let profile_root = profile_areka_root(&ghost_master);
+        std::fs::create_dir_all(&profile_root).expect("create profile/areka");
+
+        // --- save 側 sylphya（実 FsPersistIo・実 FS 往復）------------------------------
+        let roots = ScopeRoots {
+            ghost: Some(profile_root.clone()),
+            ..ScopeRoots::default()
+        };
+        let parts = spawn_sylphya(SylphyaInit {
+            roots: roots.clone(),
+            io: Box::new(FsPersistIo),
+            runtime_sink: None,
+        });
+
+        // 7.2 の無関係 key を DragEnd save に**先立って**植える（read-modify-write の温存対象）。
+        parts.publisher.persist_put(
+            PersistScope::Ghost,
+            vec![(PersistKey::BootCount, "1".to_string())],
+        );
+
+        // --- headless World（char + balloon + PersistWiring）--------------------------
+        let char_size = SizePx { w: 434, h: 687 };
+        // work area 下端 1200 → bottom 吸着 y = 1200 − 687 = 513（save/restore 双方で同一）。
+        let snapshot = MonitorSnapshot {
+            work_areas: vec![rect(0, 0, 1920, 1200)],
+        };
+
+        let mut world = World::new();
+        world.insert_non_send_resource(PersistWiring {
+            publisher: parts.publisher.clone(),
+        });
+        world.insert_resource(MonitorSnapshot {
+            work_areas: snapshot.work_areas.clone(),
+        });
+
+        // balloon 窓（scope1）: 単独ドラッグ確定後の最終位置は後段で明示設定する。
+        let balloon = world
+            .spawn((
+                fake_handle(0x2000),
+                window_pos_at(500, 500),
+                BalloonWindowMarker { scope: 1 },
+            ))
+            .id();
+        // char 窓（scope1・Bottom）: DraggingState + cursor から mapped=(1427, 513) が確定。
+        let stale_offset = PointPx { x: 999, y: 888 };
+        let char_w = world
+            .spawn((
+                fake_handle(0x1000),
+                window_pos_sized(1200, 600, char_size.w, char_size.h),
+                Anchored(Anchor::Bottom),
+                CharWindowMarker { scope: 1 },
+                BalloonFollow {
+                    balloon,
+                    offset: stale_offset,
+                },
+                dragging_state((1250, 500), (1300, 550)),
+            ))
+            .id();
+
+        // --- char DragEnd（保存）: cursor(1477,313) → raw(1427,263) → Bottom mapped(1427,513) ---
+        let char_ev = Phase::Bubble(drag_end_event_at(char_w, (1477, 313)));
+        assert!(!on_char_drag_end(&mut world, char_w, char_w, &char_ev));
+        let char_final = position_of(&world, char_w); // Point（WindowPos 通貨）
+        assert_eq!(
+            char_final,
+            Point { x: 1427, y: 513 },
+            "char DragEnd 確定位置（bottom 吸着・96 非倍数）"
+        );
+        // ScopePlacement は PointPx 通貨ゆえ比較用に写す（値は同一）。
+        let char_final_px = PointPx {
+            x: char_final.x,
+            y: char_final.y,
+        };
+
+        // --- balloon 単独ドラッグ確定位置を wndproc が置いたものとして明示設定 -----------
+        // （on_char_drag_end の follow_balloon が stale offset で動かした後の、ユーザーの
+        //   独立バルーンドラッグの最終確定位置。on_balloon_drag_end は WindowPos.position を読む。）
+        let balloon_final = Point { x: 1015, y: 470 };
+        world.get_mut::<WindowPos>(balloon).unwrap().position = Some(balloon_final);
+        let balloon_final_px = PointPx {
+            x: balloon_final.x,
+            y: balloon_final.y,
+        };
+
+        // --- balloon DragEnd（保存）: 最終確定位置から左上基準 offset を再導出→下端基準で保存 ---
+        let balloon_ev = Phase::Bubble(drag_end_event_at(balloon, (0, 0)));
+        assert!(!on_balloon_drag_end(&mut world, balloon, balloon, &balloon_ev));
+
+        // 期待 persist（下端基準）と復元 offset（左上基準）を同じ純関数で先に押さえる。
+        let expected_offset_tl = PointPx {
+            x: balloon_final.x - char_final.x, // 1015−1427 = −412
+            y: balloon_final.y - char_final.y, // 470−513  = −43
+        };
+        let expected_persist =
+            balloon_offset_to_persist(Anchor::Bottom, expected_offset_tl, char_size); // (−412,−730)
+        assert_ne!(
+            expected_offset_tl, expected_persist,
+            "檻の前提: 下端基準変換が左上基準と別値（Bottom は h ぶんずれる）"
+        );
+
+        // --- barrier: 上記 3 件の put（BootCount／WindowPos／BalloonOffset）が実 FS へ確定 ---
+        parts
+            .publisher
+            .barrier()
+            .expect("barrier should resolve while actor is alive");
+
+        // 実アクターと同一 roots・実 FsPersistIo で読み戻し、保存 entries を直接確認（往復の中間証拠）。
+        let loaded = load_scope(PersistScope::Ghost, &roots, &FsPersistIo);
+        assert!(
+            loaded.contains(&(
+                PersistKey::WindowPos {
+                    scope: 1,
+                    axis: Axis::X
+                },
+                "1427".to_string()
+            )) && loaded.contains(&(
+                PersistKey::WindowPos {
+                    scope: 1,
+                    axis: Axis::Y
+                },
+                "513".to_string()
+            )),
+            "char 確定位置が実 FS へ書かれていない: {loaded:?}"
+        );
+        assert!(
+            loaded.contains(&(
+                PersistKey::BalloonOffset {
+                    scope: 1,
+                    axis: Axis::X
+                },
+                expected_persist.x.to_string()
+            )) && loaded.contains(&(
+                PersistKey::BalloonOffset {
+                    scope: 1,
+                    axis: Axis::Y
+                },
+                expected_persist.y.to_string()
+            )),
+            "balloon 下端基準 offset が実 FS へ書かれていない: {loaded:?}"
+        );
+
+        // --- restore 側: mount 解決経由で実ファイルを読み、merge へ流す ------------------
+        let entries = load_restored_state(&root, DefaultEncoding::Ansi);
+
+        // 7.2: 無関係 key BootCount が DragEnd save 後も不変で残る（read-modify-write 温存）。
+        assert!(
+            entries.contains(&(PersistKey::BootCount, "1".to_string())),
+            "同居する無関係 key BootCount が DragEnd save で破壊された（7.2）: {entries:?}"
+        );
+
+        // resolver 出力を模す合成 placement（既定は saved と別位置＝復元優先の証明）。
+        let default_char_pos = PointPx { x: 100, y: 100 };
+        let default_balloon_offset = PointPx { x: 7, y: 7 };
+        let synthetic = ScopePlacement {
+            scope: 1,
+            char_pos: default_char_pos,
+            char_size,
+            balloon_pos: PointPx {
+                x: default_char_pos.x + default_balloon_offset.x,
+                y: default_char_pos.y + default_balloon_offset.y,
+            },
+            balloon_size: SizePx { w: 200, h: 300 },
+            balloon_offset: default_balloon_offset,
+            anchor: Anchor::Bottom,
+        };
+        // saved 位置を覆う work area ゆえ project_restore は恒等（既に下端一致・x 域内）。
+        let out = apply_restored_placements(vec![synthetic], &entries, &snapshot);
+
+        assert_eq!(out.len(), 1);
+        // (8.1) 復元 char_pos が DragEnd 確定位置と値等価（既定を上書き）。
+        assert_eq!(
+            out[0].char_pos, char_final_px,
+            "復元 char_pos が DragEnd 確定位置と値等価でない（1.4/8.1）"
+        );
+        assert_ne!(
+            out[0].char_pos, default_char_pos,
+            "復元が既定位置を漏らしている"
+        );
+        // (8.1) 復元 balloon offset（左上基準）が DragEnd 由来 offset と値等価。
+        let expected_restored_offset =
+            balloon_offset_from_persist(Anchor::Bottom, expected_persist, char_size);
+        assert_eq!(
+            expected_restored_offset, expected_offset_tl,
+            "檻の前提: 下端基準⇄左上基準が現 char_size で往復恒等"
+        );
+        assert_eq!(
+            out[0].balloon_offset, expected_offset_tl,
+            "復元 balloon offset が DragEnd 由来 offset と値等価でない（2.2/2.3/8.1）"
+        );
+        // (8.1) 復元 balloon_pos が balloon DragEnd 最終確定位置と値等価。
+        assert_eq!(
+            out[0].balloon_pos, balloon_final_px,
+            "復元 balloon_pos が balloon DragEnd 最終確定位置と値等価でない（2.3/8.1）"
+        );
+        // 事後条件（design C1）: 寸法・anchor は不変。
+        assert_eq!(out[0].char_size, char_size);
+        assert_eq!(out[0].anchor, Anchor::Bottom);
+
+        // 正典終了（アクター join）——temp dir は _guard の Drop が片付ける。
+        parts.publisher.close();
+        let _ = parts.handle.join();
+    }
+
     // -------------------------------------------------------------------------
     // Arrangement.offset 同期（task 8.3-fix・4.8 実機ブロッカ）
     //

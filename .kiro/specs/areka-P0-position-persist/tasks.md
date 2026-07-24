@@ -157,7 +157,7 @@
   - _Depends: 2.2_
   - _Boundary: placement/persist.rs tests_
 
-- [ ] 8.2 保存→復元 往復値等価の統合檻
+- [x] 8.2 保存→復元 往復値等価の統合檻
   - temp dir 上の実 `FsPersistIo` と headless World を用い、char/balloon DragEnd 駆動→保存→`load_restored_state`/`apply_restored_placements`→位置・オフセットが値等価で復元されることを確認する。無関係 key（他の永続値）が同居していても保存操作で破壊されないことも併せて確認する
   - 観測可能な完了条件: 一連の駆動後、復元された `ScopePlacement` が保存前にドラッグで確定した値と一致し、同居する無関係 key の値も不変であることがテストで確認できること
   - _Requirements: 8.1, 7.2_
