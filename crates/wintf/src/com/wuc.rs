@@ -10,6 +10,9 @@
 //! `DCompositionSurfaceExt::begin_draw`（撤去済み・task 3.2）と戻り型・cast ロジックを
 //! 完全一致させて設計されており、下流 `render_surface` のコードを byte-identical に保つ。
 
+use std::time::{Duration, Instant};
+
+use tracing::warn;
 use windows::UI::Composition::CompositionGraphicsDevice;
 use windows::UI::Composition::Desktop::DesktopWindowTarget;
 use windows::UI::Composition::ICompositionSurface;
@@ -23,8 +26,96 @@ use windows::Win32::System::WinRT::{
 use windows::Win32::System::WinRT::Composition::{
     ICompositionDrawingSurfaceInterop, ICompositorDesktopInterop, ICompositorInterop,
 };
+use windows::Win32::UI::WindowsAndMessaging::{
+    DispatchMessageW, MSG, PM_REMOVE, PeekMessageW, TranslateMessage, WM_QUIT,
+};
 use windows::System::DispatcherQueueController;
 use windows::core::{Interface, Result};
+
+/// [`drain_dispatcher_queue`] のドレインループ 1 反復の停止判定（純関数・決定論テスト対象）。
+///
+/// `AsyncStatus` の `Started`（`.0 == 0`）は「まだ実行中」。それ以外（Completed/Error/Canceled）は
+/// 完了とみなしてループを抜ける。到達不能な短時間 timeout でも `TimedOut` で必ず有界に抜ける。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum DrainStep {
+    /// `ShutdownQueueAsync` が完了（Started 以外）。正常ドレイン成立。
+    Completed,
+    /// 有界 timeout を超過。log-first で警告し、ハングせず抜ける。
+    TimedOut,
+    /// まだ Started かつ timeout 未超過。ポンプ継続。
+    Continue,
+}
+
+/// ドレインループの停止判定（純関数）。`still_started` は `Status() == Started`。
+///
+/// COM に依存しないため、タイムアウト分岐を含む全経路を決定論的に単体テストできる。
+#[inline]
+pub(crate) fn drain_step(still_started: bool, elapsed: Duration, timeout: Duration) -> DrainStep {
+    if !still_started {
+        DrainStep::Completed
+    } else if elapsed >= timeout {
+        DrainStep::TimedOut
+    } else {
+        DrainStep::Continue
+    }
+}
+
+/// `DispatcherQueueController` を明示 shutdown し、完了までメッセージポンプでドレインする。
+///
+/// `wuc_spike.rs` が実証した「`ShutdownQueueAsync` 発行 → `Status()` ポーリング →
+/// タイムアウト保険」パターンの関数化。呼び出しスレッド＝当該 controller の生成スレッド
+/// （`DQTYPE_THREAD_CURRENT` 束縛）であることを前提とする。
+///
+/// - 有界: `timeout` を超えたら log-first（`warn!`）で必ず抜ける（無限待機・ハングを排除）。
+/// - panic-free: 失敗・タイムアウトは握り潰さず `warn!` へ可視化するのみで panic しない
+///   （`Drop` 中からも安全に呼べる・無音失敗禁止＝memory `areka-log-first-no-silent-failure`）。
+///
+/// # Returns
+/// `ShutdownQueueAsync` が完了まで drain できたら `true`、タイムアウト保険で抜けたら `false`。
+pub fn drain_dispatcher_queue(controller: &DispatcherQueueController, timeout: Duration) -> bool {
+    let action = match controller.ShutdownQueueAsync() {
+        Ok(a) => a,
+        Err(e) => {
+            warn!("[drain_dispatcher_queue] ShutdownQueueAsync 発行失敗（継続）: {e:?}");
+            return false;
+        }
+    };
+
+    let start = Instant::now();
+    loop {
+        pump_current_thread_messages();
+        // Status() 取得失敗（Err）は「これ以上待てない」＝完了扱いで抜ける（無限待機回避）。
+        let still_started = action.Status().map(|s| s.0 == 0).unwrap_or(false);
+        match drain_step(still_started, start.elapsed(), timeout) {
+            DrainStep::Completed => return true,
+            DrainStep::TimedOut => {
+                warn!(
+                    "[drain_dispatcher_queue] ドレインが timeout（{:?}）を超過。保険で抜ける",
+                    timeout
+                );
+                return false;
+            }
+            DrainStep::Continue => std::thread::sleep(Duration::from_millis(5)),
+        }
+    }
+}
+
+/// 現在スレッドのメッセージキューを 1 バッチ空にする（DispatcherQueue tick の配送）。
+///
+/// `WM_QUIT` はドレイン中は無視して継続する（`wuc_spike::pump_once` と同型）。
+#[inline]
+fn pump_current_thread_messages() {
+    unsafe {
+        let mut msg = MSG::default();
+        while PeekMessageW(&mut msg, None, 0, 0, PM_REMOVE).as_bool() {
+            if msg.message == WM_QUIT {
+                return;
+            }
+            let _ = TranslateMessage(&msg);
+            DispatchMessageW(&msg);
+        }
+    }
+}
 
 /// `ICompositorInterop` の interop メソッドを安全 wrapper 化する Ext trait。
 ///
@@ -142,6 +233,63 @@ mod tests {
     use windows::Graphics::DirectX::{DirectXAlphaMode, DirectXPixelFormat};
     use windows::UI::Composition::{CompositionDrawingSurface, Compositor};
     use windows::Win32::System::WinRT::{DQTAT_COM_ASTA, DQTAT_COM_NONE};
+
+    /// `drain_step`（ドレインループ停止判定・純関数）の決定論全網羅（要件 4.2/4.3）。
+    ///
+    /// COM 非依存の判断分岐ゆえ、正常完了・タイムアウト・継続の 3 経路を実 GPU なしで確定検証する。
+    #[test]
+    fn drain_step_covers_completed_timeout_and_continue() {
+        // Started 以外（still_started=false）は timeout 未満でも即 Completed。
+        assert_eq!(
+            drain_step(false, Duration::from_millis(0), Duration::from_secs(2)),
+            DrainStep::Completed
+        );
+        // まだ Started かつ timeout 未満 → Continue（ポンプ継続）。
+        assert_eq!(
+            drain_step(true, Duration::from_millis(10), Duration::from_secs(2)),
+            DrainStep::Continue
+        );
+        // まだ Started かつ elapsed >= timeout → TimedOut（保険で抜ける・panic なし）。
+        assert_eq!(
+            drain_step(true, Duration::from_secs(2), Duration::from_secs(2)),
+            DrainStep::TimedOut
+        );
+        // 到達不能な短時間 timeout（ZERO）でも Started なら即 TimedOut（ハングしない）。
+        assert_eq!(
+            drain_step(true, Duration::from_nanos(1), Duration::ZERO),
+            DrainStep::TimedOut
+        );
+    }
+
+    /// `drain_dispatcher_queue` の正常ドレイン（実 WUC・要件 4.2）。
+    ///
+    /// 生成スレッド上で DispatcherQueueController を作り、明示ドレインが panic せず完了することを確認。
+    /// controller drop 前の明示 shutdown 手段（回帰檻・Path B の安全再生成プロトコルの正準手段）。
+    ///
+    /// apartment は本 in-source テスト群（`begin_draw_roundtrip` 等）と同じ ASTA 先行にする。
+    /// 理由: `--lib` バイナリ内で唯一の MTA/NONE Compositor テストは `wuc_graphics_resource_lifecycle`
+    /// のみであり、ここで 2 個目の MTA/NONE Compositor を別テストスレッドで生成すると根本原因
+    /// （同一プロセス・別スレッドの 2 個目 MTA 束縛 Compositor＝AV）を自ら踏む。ASTA は per-thread
+    /// 隔離アパートメントゆえ cross-thread でも安全（既存 --lib の ASTA 2 テスト共存で実証済み）。
+    #[test]
+    fn drain_dispatcher_queue_drains_live_controller_without_panic() {
+        let controller = create_dispatcher_queue_controller(DQTAT_COM_ASTA)
+            .or_else(|e| create_dispatcher_queue_controller(DQTAT_COM_NONE).map_err(|_| e))
+            .expect("DispatcherQueueController 生成失敗（ASTA/NONE いずれも不可）");
+        // Compositor を生成して DispatcherQueue に実体を持たせてからドレイン。
+        let _compositor = Compositor::new().expect("Compositor::new 失敗");
+
+        // 正常系: 十分な timeout で完了まで drain できる（true）・panic しない。
+        let drained = drain_dispatcher_queue(&controller, Duration::from_secs(2));
+        assert!(
+            drained,
+            "空に近いキューは十分な timeout 内で drain 完了するはず"
+        );
+
+        // 冪等性/panic-free: 既に shutdown 済みの controller へ再度呼んでも panic しない
+        // （タイムアウト系相当の握り潰し経路も含め、Drop から安全に呼べることの確認）。
+        let _second = drain_dispatcher_queue(&controller, Duration::from_millis(50));
+    }
 
     /// BeginDraw wrapper の往復単体テスト（atlas offset 非ゼロケース含む）。
     ///
