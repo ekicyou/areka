@@ -117,7 +117,7 @@ graph TB
   - **軸B**＝`GhostRuntime::sylphya_publisher()` additive アクセサ＋**NonSend** リソース `PersistWiring`（`SylphyaPublisher` は Clone+Send だが内部 `std::sync::mpsc::Sender` ゆえ Sync を仮定しない——`MouseWiring` NonSend 先例に従う。UI スレッド専有の規律とも一致）
   - **軸C**＝`KanadeConfig` additive（`first_boot`/`vanish_count`/`first_boot_epilogue`・既定値で現行挙動不変）＋書込タイミング＝**トーク末尾 SET キュー**（要件ディスカッション #2 既決・C3）
   - **軸D**＝保存値は物理 px・仮想スクリーン絶対座標の i32 文字列化（`WindowPos` と同一通貨・モニタ識別子は保存しない・復元時 live 再射影で吸収）
-  - **軸E**＝E1（write-through＋mpsc FIFO: close 投函以前の PersistPut は commit されてから停止）を保証の正本とし、E2-lite（shutdown 系列冒頭の `barrier()` 明示確認・Err は warn＋継続）を観測点として添える。タイムアウト付与はしない（アクター死亡時は `barrier()` が即 Err を返す・生存かつ停止は工程病理でスコープ外・smoke 有界 auto-exit が外側の防波堤）
+  - **軸E**＝E1（write-through＋mpsc FIFO: close 投函以前の PersistPut は commit されてから停止）を保証の正本とし、E2-lite（shutdown 系列冒頭の `barrier()` 明示確認・Err は warn＋継続）を観測点として添える。タイムアウト付与はしない（アクター死亡時は `barrier()` が即 Err を返す・生存かつ停止は工程病理でスコープ外・smoke 有界 auto-exit が外側の防波堤）。**フェンスは送信端をまたいで成立**する: `SylphyaPublisher` の clone（`PersistWiring`・UI スレッド）も同一 mpsc キューへ投函し、単一 FIFO ゆえ enqueue 済み put は Barrier より先に処理される（shutdown 時点で UI 送信は静止済み）——runtime 側 publisher から呼ぶ `barrier()` が UI clone 経由の put も被覆する（バリデーション Issue 2 対応）
 - **依存方向（違反はエラー扱い）**: `areka-talk` → { kanade, sakura, ghost } ／ `areka-sylphya`（最下層） → { ghost, areka bin } ／ dola → sakura ／ areka bin が最上位。**kanade→sylphya・dola→上流 areka クレートの import は禁止**。
 - Existing patterns preserved: 単一位置ライター（`enqueue_window_set_pos`/`move_window_to`）・`project_anchor` 単一射影・sink 名前自己選別・log-first（無音失敗禁止）・「prepare は永続を読まない」檻の精神
 - Steering compliance: 「名前で引ける値は 1 機構」（sylphya）の書込対応物／「\! コマンドは汎用キャリア 1 本」（typed 個別新設禁止・`Custom` に乗る）／「cue 再生制御は dola 集約」（新規監視者を作らない）／「ログ無し失敗経路の禁止」
@@ -364,7 +364,7 @@ pub fn persist_entries(world: &World, entries: Vec<(PersistKey, String)>);
 
 - `on_char_drag_end`（follow.rs:319）: `mapped` 確定・`enqueue_window_set_pos`・`follow_balloon` の**後**に `CharWindowMarker.scope`（entity から逆引き）＋`mapped` で `char_pos_entries`→`persist_entries`。Free アンカーは `project_anchor` が identity ゆえ既存ハンドラがそのまま**保存専用アーム**として機能する（要件ディスカッション #1 既決・射影段は無害通過）。
 - `spawn.rs`: `if !p.anchor.is_free()` ガード（:230-234）を撤去し全キャラ窓へ `OnDragEnd` を結線。**バルーン窓へ `OnDragEnd(on_balloon_drag_end)` を新規結線**（`on_balloon_drag` は連続イベントのため書込トリガにしない——1 ドラッグ 1 書込の確定点規律）。
-- 新規 `on_balloon_drag_end`（follow.rs）: バルーン entity→`BalloonFollow` 逆引き（`on_balloon_drag` と同流儀）→ 現在 `offset`（左上基準・in-session 表現は不変）＋ char の `Anchored`・`WindowPos.size` → `balloon_offset_to_persist` → `balloon_offset_entries`→`persist_entries`。
+- 新規 `on_balloon_drag_end`（follow.rs）: バルーン entity→`BalloonFollow` 逆引き（`on_balloon_drag` と同流儀）。保存値は in-session `offset` を読まず、**DragEnd の最終確定位置から `balloon_pos − char_pos` を再導出**する（`on_balloon_drag` と同一式。最終確定位置は最後の OnDrag 配信とずれ得る——char 側檻 follow.rs:1875 と同前提）。再導出 offset（左上基準・in-session 表現は不変のまま）＋ char の `Anchored`・`WindowPos.size` → `balloon_offset_to_persist` → `balloon_offset_entries`→`persist_entries`。檻: DragEnd 最終位置→保存値等価（バリデーション Issue 1 対応・2.1/8.1）。
 - **発火規律（1.9）**: 保存は上記 2 ハンドラのみ。`on_char_drag`・`move_window_to`・`resize_window_to`・復元 merge は構造的に `persist_entries` へ到達しない（檻: `apply_move_directive` 前後でストアのバイト不変）。
 
 #### C4: main.rs シーム（additive）
@@ -550,7 +550,7 @@ pub fn append_epilogue(sheet: CueSheet, epilogue: &[EpilogueCommand]) -> CueShee
 
 1. **保存→復元 往復値等価（8.1）**: temp dir sylphya（実 `FsPersistIo`）＋headless World（fake_handle 流儀）——char/balloon DragEnd 駆動→`barrier`→`load_scope`→`apply_restored_placements`→位置・offset・（別途）BootCount/vanish の値等価。
 2. **発火規律（1.9/8.4）**: `apply_move_directive`・復元 merge・（存在すれば）resize 経路の駆動前後でストア内容バイト不変／DragEnd のみが書く。
-3. **終了時フラッシュ（1.2/8.1）**: n×DragEnd（barrier なし）→ publisher `close()`（FIFO）→ アクター join 後にファイル最終値一致（E1 の檻）＋ `barrier()` 明示確認経路（E2-lite）。
+3. **終了時フラッシュ（1.2/8.1）**: put は **`PersistWiring` の clone 送信端**から投函する（実経路同型・runtime 保持の publisher からではない）——n×DragEnd 相当 put（barrier なし）→ runtime 側 `barrier()`／`close()`（FIFO）→ アクター join 後にファイル最終値一致（E1 の檻＋E2-lite の越境フェンス検証を兼ねる）。
 4. **完走時のみ記録（3.4）**: sakura `spawn_talk` 実駆動（注入時刻 Tick）——epilogue 付き台本の完走→sink 受理／horizon 前 `Close`→`stop()` で SET 不発火・ストア不変。
 5. **spine e2e 追随**: `on_first_boot` 署名×3・StartTalk 構築点の機械的更新（fixture ghost は永続ファイル無し＝初回扱いで従来挙動不変）。2 回目起動相当（BootCount plant）で OnFirstBoot 非発火の新檻。
 6. **`prepare_never_reads_or_writes_ghost_dat`**: 檻存続（A1＝prepare 不触は真のまま）・doc 参照更新のみ。merge 側に新契約檻（sylphya.toml plant→復元適用・prepare 出力は不変）。
