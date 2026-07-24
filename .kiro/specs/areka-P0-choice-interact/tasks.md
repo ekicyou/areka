@@ -78,7 +78,7 @@
   - _Boundary: attach_balloon_pointer_handlers, wire_balloon_choice_
   - _Depends: 4.1, 4.2, 5_
 
-- [ ] 6.2 main.rs 起動結線
+- [x] 6.2 main.rs 起動結線
   - 起動シーケンス（既存 `attach_char_pointer_handlers` 呼出の隣）へバルーン配線の結線呼び出しを追加する
   - Observable: クレートがビルド成功し、起動シーケンスが新規結線呼び出しを実行する
   - _Requirements: 4.3, 5.5, 8.1_
