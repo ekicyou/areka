@@ -293,6 +293,7 @@ fn render_wuc(resource: &WucGraphicsResource) -> Result<Vec<u8>> {
 /// であることを assert する。差分があれば最初の不一致画素座標と両者の BGRA を報告する。
 #[test]
 fn surface_pixel_equivalence_reference_vs_wuc() {
+    crate::common::on_gpu_owner_thread(move || {
     init_com_mta();
 
     let core = GraphicsCore::new().expect("GraphicsCore::new 失敗（HARDWARE デバイス生成）");
@@ -387,4 +388,5 @@ fn surface_pixel_equivalence_reference_vs_wuc() {
         H,
         W * H
     );
+    });
 }

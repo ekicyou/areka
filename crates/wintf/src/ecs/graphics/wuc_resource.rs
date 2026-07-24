@@ -13,7 +13,7 @@ use tracing::{debug, info};
 use windows::UI::Composition::{CompositionGraphicsDevice, Compositor};
 use windows::Win32::Graphics::Direct2D::ID2D1Device;
 use windows::Win32::System::WinRT::DQTAT_COM_NONE;
-use windows::System::DispatcherQueueController;
+use windows::System::{DispatcherQueue, DispatcherQueueController};
 use windows::core::Result;
 
 use crate::com::wuc::{CompositorInteropExt, create_dispatcher_queue_controller};
@@ -29,8 +29,14 @@ struct WucGraphicsResourceInner {
     graphics_device: CompositionGraphicsDevice,
     // dq_controller は読み出さず、Compositor より後に drop させるためだけに保持する
     // （終了時ドレインの前提・要件 3.3）。ゆえに dead_code を許可する。
+    //
+    // `Option`: 当該スレッドに既に DispatcherQueue が存在する場合（＝別の所有者が既に
+    // controller を持つ・例: 共有 GPU オーナースレッドの常駐 controller）は**新規 controller を
+    // 作らず既存 DQ を再利用**し `None` を保持する。`DQTYPE_THREAD_CURRENT` は 1 スレッド 1
+    // controller ゆえ、同一スレッド上で controller を作り直すと `0x8001010E`（already created）
+    // で失敗し、かつ生成/破棄の反復がプロセス内にリークする（research.md 根本原因記録）。
     #[allow(dead_code)]
-    dq_controller: DispatcherQueueController,
+    dq_controller: Option<DispatcherQueueController>,
 }
 
 /// WUC 合成デバイス群（`Compositor` / `CompositionGraphicsDevice` /
@@ -78,10 +84,21 @@ impl WucGraphicsResource {
     pub fn new(d2d_device: &ID2D1Device) -> Result<Self> {
         info!("[WucGraphicsResource] Initialization started");
 
-        // (1) DispatcherQueueController（Compositor 生成前・apartment は NONE）。
-        let dq_controller = create_dispatcher_queue_controller(DQTAT_COM_NONE)?;
+        // (1) DispatcherQueue の確保（Compositor 生成前・apartment は NONE）。
+        //     当該スレッドに既に DispatcherQueue があれば**再利用**し、新規 controller を作らない。
+        //     `DQTYPE_THREAD_CURRENT` は 1 スレッド 1 controller のため、既存スレッド DQ 上で
+        //     controller を作り直すと `0x8001010E`（already created）で失敗し、生成/破棄の反復が
+        //     プロセス内にリークする（共有 GPU オーナースレッドでの多重生成・本番の再初期化を
+        //     決定論化するための是正・research.md 根本原因記録／design.md G1「Path A 縮小適用」）。
+        let dq_controller = match DispatcherQueue::GetForCurrentThread() {
+            Ok(_existing) => {
+                debug!("[WucGraphicsResource] 既存スレッド DispatcherQueue を再利用");
+                None
+            }
+            Err(_) => Some(create_dispatcher_queue_controller(DQTAT_COM_NONE)?),
+        };
 
-        // (2) Compositor。
+        // (2) Compositor（当該スレッドの DispatcherQueue を使用）。
         let compositor = Compositor::new()?;
 
         // (3) 既存 D2D デバイスから CompositionGraphicsDevice。

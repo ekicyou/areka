@@ -95,6 +95,7 @@ fn stats(world: &World) -> SurfaceCreationStats {
 
 #[test]
 fn deferred_creation_creates_surface_with_physical_size() {
+    crate::common::on_gpu_owner_thread(move || {
     let mut world = setup_world();
     let entity = spawn_surface_target(&mut world, 100.0, 50.0);
 
@@ -112,10 +113,12 @@ fn deferred_creation_creates_surface_with_physical_size() {
 
     let dirty = world.get::<SurfaceGraphicsDirty>(entity).unwrap();
     assert_eq!(dirty.requested_frame, 1, "dirty の Changed トリガー用に +1 される");
+    });
 }
 
 #[test]
 fn deferred_creation_ceils_fractional_bounds() {
+    crate::common::on_gpu_owner_thread(move || {
     let mut world = setup_world();
     let entity = spawn_surface_target(&mut world, 100.5, 49.2);
 
@@ -124,10 +127,12 @@ fn deferred_creation_ceils_fractional_bounds() {
 
     let surface = world.get::<SurfaceGraphics>(entity).unwrap();
     assert_eq!(surface.size, (101, 50), "小数点以下は切り上げ（物理ピクセル）");
+    });
 }
 
 #[test]
 fn deferred_creation_skips_invalid_size_and_records_stat() {
+    crate::common::on_gpu_owner_thread(move || {
     let mut world = setup_world();
     let entity = spawn_surface_target(&mut world, 0.0, 0.0);
 
@@ -139,10 +144,12 @@ fn deferred_creation_skips_invalid_size_and_records_stat() {
     let s = stats(&world);
     assert_eq!(s.skipped_count, 1, "スキップ統計が記録される");
     assert_eq!(s.created_count, 0);
+    });
 }
 
 #[test]
 fn deferred_creation_is_noop_when_size_unchanged() {
+    crate::common::on_gpu_owner_thread(move || {
     let mut world = setup_world();
     let entity = spawn_surface_target(&mut world, 100.0, 50.0);
 
@@ -161,10 +168,12 @@ fn deferred_creation_is_noop_when_size_unchanged() {
     assert_eq!(s.created_count, 1, "再作成されない");
     assert_eq!(s.resize_count, 0, "リサイズ扱いにもならない");
     assert_eq!(s.skipped_count, 0);
+    });
 }
 
 #[test]
 fn deferred_creation_resizes_on_bounds_change() {
+    crate::common::on_gpu_owner_thread(move || {
     let mut world = setup_world();
     let entity = spawn_surface_target(&mut world, 100.0, 50.0);
 
@@ -179,6 +188,7 @@ fn deferred_creation_resizes_on_bounds_change() {
     let s = stats(&world);
     assert_eq!(s.created_count, 1, "初回作成のみ");
     assert_eq!(s.resize_count, 1, "リサイズ統計が記録される");
+    });
 }
 
 // ==========================================================================
@@ -187,6 +197,7 @@ fn deferred_creation_resizes_on_bounds_change() {
 
 #[test]
 fn cleanup_clears_surface_when_commandlist_removed() {
+    crate::common::on_gpu_owner_thread(move || {
     let mut world = setup_world();
     let entity = spawn_surface_target(&mut world, 100.0, 50.0);
 
@@ -207,10 +218,12 @@ fn cleanup_clears_surface_when_commandlist_removed() {
         "VisualGraphics は Visual 階層維持のため残る"
     );
     assert_eq!(stats(&world).deleted_count, 1, "削除統計が記録される");
+    });
 }
 
 #[test]
 fn cleanup_skips_already_invalid_surface() {
+    crate::common::on_gpu_owner_thread(move || {
     let mut world = setup_world();
     // Surface 未作成（invalid）のまま CommandList を除去
     let entity = spawn_surface_target(&mut world, 100.0, 50.0);
@@ -224,6 +237,7 @@ fn cleanup_skips_already_invalid_surface() {
         0,
         "既に invalid な Surface は削除統計に計上されない"
     );
+    });
 }
 
 // ==========================================================================
@@ -291,6 +305,7 @@ fn create_real_surface(world: &World, w: u32, h: u32) -> SurfaceGraphics {
 
 #[test]
 fn render_surface_draws_dirty_surface_without_error() {
+    crate::common::on_gpu_owner_thread(move || {
     let mut world = setup_world();
     let surface = create_real_surface(&world, 64, 64);
     let cmd = {
@@ -316,10 +331,12 @@ fn render_surface_draws_dirty_surface_without_error() {
         world.get::<SurfaceGraphics>(entity).unwrap().is_valid(),
         "描画後も Surface は有効なまま"
     );
+    });
 }
 
 #[test]
 fn render_surface_skips_invalid_surface_without_error() {
+    crate::common::on_gpu_owner_thread(move || {
     let mut world = setup_world();
     let entity = world
         .spawn((
@@ -336,6 +353,7 @@ fn render_surface_skips_invalid_surface_without_error() {
         !world.get::<SurfaceGraphics>(entity).unwrap().is_valid(),
         "invalid Surface はスキップされる（パニックなし）"
     );
+    });
 }
 
 // ==========================================================================

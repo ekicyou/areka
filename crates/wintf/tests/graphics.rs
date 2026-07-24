@@ -1,4 +1,6 @@
 // tests/graphics.rs — wintf graphics domain test entry point
+#[path = "graphics/common/mod.rs"]
+mod common;
 #[path = "graphics/brushes_system_test.rs"]
 mod brushes_system_test;
 #[path = "graphics/clip_sync_system_test.rs"]
@@ -29,3 +31,5 @@ mod surface_systems_test;
 mod frame_time_test;
 #[path = "graphics/window_pos_systems_test.rs"]
 mod window_pos_systems_test;
+#[path = "graphics/wuc_restart_regression_test.rs"]
+mod wuc_restart_regression_test;

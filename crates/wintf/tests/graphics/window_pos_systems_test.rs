@@ -58,6 +58,7 @@ fn create_test_bitmap(graphics: &GraphicsCore) -> ID2D1Bitmap1 {
 /// GraphicsCore 無効時に BitmapSourceGraphics が無効化される
 #[test]
 fn invalidate_invalidates_bitmap_source_when_graphics_invalid() {
+    crate::common::on_gpu_owner_thread(move || {
     let mut graphics = GraphicsCore::new().expect("GraphicsCore creation");
     let bitmap = create_test_bitmap(&graphics);
 
@@ -78,6 +79,7 @@ fn invalidate_invalidates_bitmap_source_when_graphics_invalid() {
         !bsg.is_valid(),
         "bitmap source should be invalidated when GraphicsCore is invalid"
     );
+    });
 }
 
 /// GraphicsCore 無効時でも WUC 系コンポーネント（VisualGraphics / SurfaceGraphics）は
@@ -88,6 +90,7 @@ fn invalidate_invalidates_bitmap_source_when_graphics_invalid() {
 /// WUC 移行: invalidate_dependent_components は WucGraphicsResource を無効化する。
 #[test]
 fn invalidate_leaves_wuc_graphics_components_stale() {
+    crate::common::on_gpu_owner_thread(move || {
     use windows::Foundation::Size;
     use windows::Graphics::DirectX::{DirectXAlphaMode, DirectXPixelFormat};
     use windows::UI::Composition::Visual;
@@ -156,11 +159,13 @@ fn invalidate_leaves_wuc_graphics_components_stale() {
         sg.is_valid(),
         "characterization: SurfaceGraphics stays stale-valid (not invalidated)"
     );
+    });
 }
 
 /// GraphicsCore リソース不在時は早期リターン（Option<Res> = None 経路）
 #[test]
 fn invalidate_noop_without_graphics_resource() {
+    crate::common::on_gpu_owner_thread(move || {
     let graphics = GraphicsCore::new().expect("GraphicsCore creation");
     let bitmap = create_test_bitmap(&graphics);
     let mut bsg = BitmapSourceGraphics::new();
@@ -178,6 +183,7 @@ fn invalidate_noop_without_graphics_resource() {
         bsg.is_valid(),
         "missing GraphicsCore resource must be a no-op"
     );
+    });
 }
 
 // ========================================================================
@@ -187,6 +193,7 @@ fn invalidate_noop_without_graphics_resource() {
 /// CW_USEDEFAULT の WindowPos はスキップされる（パニックせず完走）
 #[test]
 fn apply_window_pos_skips_cw_usedefault() {
+    crate::common::on_gpu_owner_thread(move || {
     let mut world = World::new();
     world.spawn((
         Window::default(),
@@ -206,6 +213,7 @@ fn apply_window_pos_skips_cw_usedefault() {
 
     // CW_USEDEFAULT 検出で continue する経路。座標変換も enqueue も行われない。
     run_apply_window_pos(&mut world);
+    });
 }
 
 /// 無効 HWND では座標変換が失敗しフォールバック経路を通る（パニックせず完走）
@@ -214,6 +222,7 @@ fn apply_window_pos_skips_cw_usedefault() {
 /// 実 SetWindowPos は呼ばれずスレッド終了時に破棄される。
 #[test]
 fn apply_window_pos_fallback_on_invalid_hwnd() {
+    crate::common::on_gpu_owner_thread(move || {
     let mut world = World::new();
     world.spawn((
         Window::default(),
@@ -232,11 +241,13 @@ fn apply_window_pos_fallback_on_invalid_hwnd() {
     ));
 
     run_apply_window_pos(&mut world);
+    });
 }
 
 /// Window を持たないエンティティは With<Window> フィルタで対象外（完走）
 #[test]
 fn apply_window_pos_ignores_non_window_entities() {
+    crate::common::on_gpu_owner_thread(move || {
     let mut world = World::new();
     world.spawn((
         WindowHandle {
@@ -251,4 +262,5 @@ fn apply_window_pos_ignores_non_window_entities() {
     ));
 
     run_apply_window_pos(&mut world);
+    });
 }
