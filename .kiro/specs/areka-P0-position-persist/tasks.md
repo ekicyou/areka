@@ -31,7 +31,7 @@
   - _Requirements: 1.4, 1.5, 1.6, 1.8, 2.3, 2.4, 2.5, 5.4, 6.1, 8.2_
   - _Boundary: placement/persist.rs_
 
-- [ ] 2. Core: ドラッグ確定→永続書込の結線
+- [x] 2. Core: ドラッグ確定→永続書込の結線
 - [x] 2.1 `PersistWiring` リソースと保存投函ヘルパの実装
   - UI スレッド常駐の NonSend リソース `PersistWiring`（`SylphyaPublisher` の clone を保持）と、`PersistScope::Ghost` 固定で entries を非ブロッキング投函するヘルパ関数を実装する。リソース不在時は debug ログのみで no-op とする
   - 観測可能な完了条件: リソース挿入済みの headless World で entries を渡すと `persist_put` が呼び出され、リソース未挿入では panic せず no-op となることがテストで確認できること
@@ -46,7 +46,7 @@
   - _Depends: 1.1, 1.4, 2.1_
   - _Boundary: placement/spawn.rs, placement/follow.rs_
 
-- [ ] 2.3 バルーン窓 DragEnd 結線と `on_balloon_drag_end` の実装
+- [x] 2.3 バルーン窓 DragEnd 結線と `on_balloon_drag_end` の実装
   - バルーン窓へ `OnDragEnd(on_balloon_drag_end)` を新規結線する（連続イベントの `on_balloon_drag` は書込トリガにしない）
   - `on_balloon_drag_end` は DragEnd の最終確定位置から `balloon_pos − char_pos` を再導出し（`on_balloon_drag` と同一式・in-session オフセットの再利用はしない）、アンカー辺基準へ変換して保存する
   - 観測可能な完了条件: バルーンドラッグ確定で当該スコープのバルーンオフセット entries が、最終確定位置から導出した値と一致して投函されることをテストで確認できること

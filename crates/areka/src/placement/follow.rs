@@ -41,9 +41,11 @@ use wintf::ecs::pointer::Phase;
 use wintf::ecs::window::monitor::Monitor;
 use wintf::ecs::{Point, SetWindowPosCommand, SizeI, WindowHandle, WindowPos};
 
-use super::persist::{char_pos_entries, persist_entries};
+use super::persist::{
+    balloon_offset_entries, balloon_offset_to_persist, char_pos_entries, persist_entries,
+};
 use super::resolver::{Anchor, PointPx, RectPx, SizePx};
-use super::spawn::CharWindowMarker;
+use super::spawn::{BalloonWindowMarker, CharWindowMarker};
 
 // =============================================================================
 // DragPositionPolicy（task 8.2R・DD15 v2・4.7）
@@ -522,6 +524,133 @@ pub(crate) fn on_balloon_drag(
                     y: balloon_pos.y - char_pos.y,
                 };
             }
+            false
+        }
+    }
+}
+
+/// `OnDragEnd` ハンドラ: バルーン単独ドラッグ確定 offset の永続 write-through
+/// （2.1・8.1・design C2/C3・task 2.3）。
+///
+/// [`on_balloon_drag`] が**連続**イベント（ドラッグ中の in-session offset 更新）で
+/// あるのに対し、本ハンドラは DragEnd の**確定**観測点でのみ発火する保存トリガである
+/// （1 ドラッグ＝1 書込・発火規律）。永続へバルーン offset を書くのはこの観測点のみ。
+///
+/// # 最終確定位置の源（`on_char_drag_end` との差）
+///
+/// バルーン窓は `DragConfig { move_window: true }` ゆえ wndproc が実窓位置を
+/// `WindowPos.position` へ更新済み——DragEnd 時点の**最終確定位置**はこの
+/// `WindowPos.position` で読める（[`on_balloon_drag`] と同源）。したがって
+/// [`on_char_drag_end`] のように `DraggingState`＋`ev.position`（カーソル）から生座標を
+/// 再構成する必要はなく、`ev.position` は使わない（char 窓は move_window=false で
+/// wndproc 移動が無いため cursor 再構成が要るが、balloon は move_window=true で窓自身が
+/// 動くため WindowPos が確定位置＝「最終確定位置」意味論は両者で一致する）。
+///
+/// # 保存値の導出（in-session offset を使わない・design 検証 Issue 1 対応）
+///
+/// 追従元キャラ窓（`BalloonFollow.balloon == 自バルーン`）を逆引きし、その最終
+/// `char_pos`（`WindowPos.position`）・`anchor`（[`Anchored`]）・`char_size`
+/// （`WindowPos.size`）を読む。offset は [`on_balloon_drag`] と**同式**
+/// `offset_tl = balloon_pos − char_pos`（左上基準・物理 px・再スケールなし・U4）で
+/// **最終確定位置から再導出**する——in-session の `BalloonFollow.offset`（連続ドラッグ中の
+/// 表現）は**流用しない**（最後の OnDrag 配信と最終確定位置はずれ得るため）。導出した
+/// 左上基準 offset を [`balloon_offset_to_persist`]`(anchor, offset_tl, char_size)` で
+/// サーフェス寸不変なアンカー辺基準へ移し、[`balloon_offset_entries`]→[`persist_entries`]
+/// で Ghost 永続スコープへ即時 write-through する（fire-and-forget・非ブロッキング）。
+/// scope はバルーン窓自身の [`BalloonWindowMarker`]（追従元 char の
+/// [`CharWindowMarker`] と同番号）。
+///
+/// # 縮退（panic しない・log-first・no-op）
+///
+/// バルーンの `WindowPos.position` 不在／[`BalloonWindowMarker`] 不在／追従元キャラ窓
+/// （その `WindowPos.position`・[`Anchored`]・`WindowPos.size` のいずれか）不在は
+/// `debug!`＋skip する。`BalloonFollow.offset`（in-session 表現）は本ハンドラでは
+/// 変異させない（連続ドラッグ側 [`on_balloon_drag`] が所有）。
+///
+/// イベントは消費しない（常に `false`＝伝播続行。[`on_balloon_drag`] と同じ規約）。
+pub(crate) fn on_balloon_drag_end(
+    world: &mut World,
+    _sender: Entity,
+    entity: Entity,
+    ev: &Phase<DragEndEvent>,
+) -> bool {
+    match ev {
+        Phase::Tunnel(_) => false,
+        Phase::Bubble(ev) => {
+            // 他 entity 宛イベントには何もしない（ハードニング・on_balloon_drag と同じ規約）
+            if ev.target != entity {
+                return false;
+            }
+
+            // 最終確定位置＝バルーン窓の WindowPos.position（wndproc が move_window=true で
+            // 更新済み・on_balloon_drag と同源。ev.position(cursor) は使わない）。
+            let Some(balloon_pos) = world.get::<WindowPos>(entity).and_then(|wp| wp.position) else {
+                debug!(
+                    ?entity,
+                    "バルーン窓の WindowPos.position 不在のため offset 保存を skip（防御・no-op）"
+                );
+                return false;
+            };
+
+            // scope はバルーン窓自身の BalloonWindowMarker（追従元 char と同番号）。
+            let Some(scope) = world.get::<BalloonWindowMarker>(entity).map(|m| m.scope) else {
+                debug!(
+                    ?entity,
+                    "BalloonWindowMarker 不在のためバルーン offset 保存を skip（防御・no-op）"
+                );
+                return false;
+            };
+
+            // BalloonFollow.balloon == 自バルーンのキャラ窓を逆引きし、最終 char_pos・anchor・
+            // char_size を読む（in-session の BalloonFollow.offset は SAVE に使わない）。
+            let mut chars = world.query::<(&BalloonFollow, &WindowPos, &Anchored)>();
+            let mut found: Option<(Point, Anchor, SizePx)> = None;
+            for (follow, char_wp, anchored) in chars.iter(world) {
+                if follow.balloon != entity {
+                    continue;
+                }
+                let Some(char_pos) = char_wp.position else {
+                    continue;
+                };
+                let Some(size) = char_wp.size else {
+                    continue;
+                };
+                found = Some((
+                    char_pos,
+                    anchored.0,
+                    SizePx {
+                        w: size.width,
+                        h: size.height,
+                    },
+                ));
+                break;
+            }
+            let Some((char_pos, anchor, char_size)) = found else {
+                debug!(
+                    ?entity,
+                    "追従元キャラ窓（位置/anchor/寸法）不在のためバルーン offset 保存を skip（防御・no-op）"
+                );
+                return false;
+            };
+
+            // offset_tl = balloon_final_pos − char_pos（左上基準・on_balloon_drag と同式）。
+            // 不変条件: 両者とも仮想スクリーン座標範囲のため減算は i32 を溢れない
+            // （溢れは入力源の異常・on_balloon_drag と同じ流儀）。
+            debug_assert!(
+                balloon_pos.x.checked_sub(char_pos.x).is_some()
+                    && balloon_pos.y.checked_sub(char_pos.y).is_some(),
+                "window positions out of virtual-screen range: {balloon_pos:?} - {char_pos:?}"
+            );
+            let offset_tl = PointPx {
+                x: balloon_pos.x - char_pos.x,
+                y: balloon_pos.y - char_pos.y,
+            };
+
+            // アンカー辺基準へ変換（保存方向・サーフェス寸不変）→ BalloonOffset entries を
+            // Ghost 永続スコープへ即時 write-through（fire-and-forget・7.1）。
+            let persist = balloon_offset_to_persist(anchor, offset_tl, char_size);
+            let entries = balloon_offset_entries(scope as u32, persist);
+            persist_entries(world, entries);
             false
         }
     }
@@ -2483,6 +2612,157 @@ mod tests {
             .id();
         let ev = Phase::Bubble(drag_event(orphan));
         assert!(!on_balloon_drag(&mut world, orphan, orphan, &ev));
+    }
+
+    // -------------------------------------------------------------------------
+    // on_balloon_drag_end: バルーン単独ドラッグ確定 offset の永続 write-through
+    // （task 2.3・Req2.1・8.1・design C2/C3）
+    //
+    // バルーン窓は move_window=true ゆえ wndproc が実窓位置を WindowPos.position へ
+    // 更新済み——DragEnd 時点の最終確定位置はこの WindowPos.position で読める
+    // （on_balloon_drag と同源）。on_balloon_drag_end は最終確定位置から
+    // offset = balloon_pos − char_pos を**再導出**（in-session BalloonFollow.offset は
+    // 使わない）し、balloon_offset_to_persist でアンカー辺基準へ変換して
+    // BalloonOffset entries を Ghost 永続スコープへ即時 write-through する。
+    // 実 publisher（spawn_sylphya + SharedFakeIo）で barrier→load_scope し、保存値が
+    // 最終確定位置由来の persist 値に一致することを固定する（Issue 1 対応・2.1/8.1）。
+    // -------------------------------------------------------------------------
+
+    /// Task 2.3 保存フック（Req2.1/8.1・design C3）: バルーン窓の DragEnd で、最終確定
+    /// 位置から**再導出**した相対 offset がアンカー辺基準へ変換され scope の
+    /// BalloonOffset として Ghost 永続スコープへ write-through される。**in-session の
+    /// BalloonFollow.offset は SAVE に使わない**（DragEnd 最終確定位置から再導出）——
+    /// stale な offset を仕込んで弁別する。
+    #[test]
+    fn on_balloon_drag_end_persists_balloon_offset_for_scope() {
+        use std::path::{Path, PathBuf};
+        use std::sync::Arc;
+
+        use areka_sylphya::persist::{FakePersistIo, PersistIo};
+        use areka_sylphya::{
+            Axis, PersistKey, PersistScope, ScopeRoots, SylphyaInit, load_scope, spawn_sylphya,
+        };
+
+        use super::super::persist::{PersistWiring, balloon_offset_to_persist};
+        use super::on_balloon_drag_end;
+        use crate::placement::spawn::BalloonWindowMarker;
+
+        // 共有 fake IO（アクター Box 移送用と観測用で同一ストアを指す・persist.rs と同流儀）。
+        struct SharedFakeIo(Arc<FakePersistIo>);
+        impl PersistIo for SharedFakeIo {
+            fn read(&self, path: &Path) -> std::io::Result<Option<String>> {
+                self.0.read(path)
+            }
+            fn commit(&self, path: &Path, content: &str) -> std::io::Result<()> {
+                self.0.commit(path, content)
+            }
+        }
+
+        let shared = Arc::new(FakePersistIo::new());
+        let roots = ScopeRoots {
+            ghost: Some(PathBuf::from("/g")),
+            ..ScopeRoots::default()
+        };
+        let parts = spawn_sylphya(SylphyaInit {
+            roots: roots.clone(),
+            io: Box::new(SharedFakeIo(shared.clone())),
+            runtime_sink: None,
+        });
+
+        let mut world = World::new();
+        // UI スレッド常駐の保存投函口を挿入（persist_entries が引く NonSend リソース）。
+        world.insert_non_send_resource(PersistWiring {
+            publisher: parts.publisher.clone(),
+        });
+
+        // char 窓（Bottom・emo2 実寸）と、単独ドラッグで wndproc が最終確定位置へ移した
+        // balloon 窓。値はいずれも 96 の倍数を避け、隠れた dpi/96 再スケールの檻とする。
+        let char_size = SizePx { w: 434, h: 687 };
+        let char_pos = Point { x: 1483, y: 733 };
+        let final_balloon_pos = Point { x: 1071, y: 708 }; // wndproc の最終確定位置
+        let anchor = Anchor::Bottom;
+
+        // stale な in-session offset（SAVE に誤用したら弁別で落ちる檻の値）。
+        let stale_offset = PointPx { x: 999, y: 888 };
+
+        let balloon = world
+            .spawn((
+                fake_handle(0x2000),
+                window_pos_at(final_balloon_pos.x, final_balloon_pos.y),
+                BalloonWindowMarker { scope: 1 },
+            ))
+            .id();
+        let char_w = world
+            .spawn((
+                fake_handle(0x1000),
+                window_pos_sized(char_pos.x, char_pos.y, char_size.w, char_size.h),
+                Anchored(anchor),
+                BalloonFollow {
+                    balloon,
+                    offset: stale_offset,
+                },
+            ))
+            .id();
+
+        // 期待 persist 値 = 最終確定位置から再導出（in-session offset ではない）。
+        let offset_tl = PointPx {
+            x: final_balloon_pos.x - char_pos.x,
+            y: final_balloon_pos.y - char_pos.y,
+        };
+        let expected = balloon_offset_to_persist(anchor, offset_tl, char_size);
+        assert_ne!(
+            expected, stale_offset,
+            "檻の前提: 最終確定 offset は stale な in-session offset と異なる"
+        );
+
+        // DragEnd をバルーン窓へ配送（cursor 値は無関係＝最終確定位置は balloon 窓の
+        // WindowPos.position を読む・move_window=true）。
+        let ev = Phase::Bubble(drag_end_event_at(balloon, (0, 0)));
+        assert!(!on_balloon_drag_end(&mut world, balloon, balloon, &ev));
+
+        // キャラ窓は不動・BalloonFollow.offset（in-session 表現）も on_balloon_drag_end では
+        // 変えない（保存は最終確定位置から独立に導出する）。
+        assert_eq!(position_of(&world, char_w), char_pos);
+        assert_eq!(
+            world.get::<BalloonFollow>(char_w).unwrap().offset,
+            stale_offset,
+            "on_balloon_drag_end は in-session offset を変異させない（保存専用）"
+        );
+
+        // barrier 復帰＝上記 put の write-through 保存まで完了（同一送信端 FIFO）。
+        parts
+            .publisher
+            .barrier()
+            .expect("barrier should resolve while actor is alive");
+
+        // 別ハンドルの load_scope で scope1 の BalloonOffset を観測（実 IO 通過＝投函の証明）。
+        let loaded = load_scope(PersistScope::Ghost, &roots, &SharedFakeIo(shared.clone()));
+        assert!(
+            loaded.contains(&(
+                PersistKey::BalloonOffset {
+                    scope: 1,
+                    axis: Axis::X
+                },
+                expected.x.to_string()
+            )),
+            "バルーン DragEnd の最終確定 offset X={} が scope1 の BalloonOffset として保存されていない: {loaded:?}",
+            expected.x
+        );
+        assert!(
+            loaded.contains(&(
+                PersistKey::BalloonOffset {
+                    scope: 1,
+                    axis: Axis::Y
+                },
+                expected.y.to_string()
+            )),
+            "バルーン DragEnd の最終確定 offset Y={} が scope1 の BalloonOffset として保存されていない: {loaded:?}",
+            expected.y
+        );
+
+        // 正典終了（アクター join）——テスト後始末（リーク回避・非本質）。
+        parts.publisher.close();
+        let _ = parts.handle.join();
     }
 
     // -------------------------------------------------------------------------
