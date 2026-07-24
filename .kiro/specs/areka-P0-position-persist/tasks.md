@@ -92,7 +92,7 @@
   - _Boundary: areka-ghost/prop_sink.rs_
 
 - [ ] 5. Core: kanade 初回起動ゲートと Reference0
-- [ ] 5.1 (P) `KanadeConfig` additive フィールドの追加
+- [x] 5.1 (P) `KanadeConfig` additive フィールドの追加
   - `first_boot: bool`（既定 true）・`vanish_count: u32`（既定 0）・`first_boot_epilogue: Vec<EpilogueCommand>`（既定空）を additive 追加する。既定値により既存構築点は挙動不変を保つ
   - 観測可能な完了条件: 既定値で構築した `KanadeConfig` が現行の boot happy-path 檻を無改変のまま通過すること
   - _Requirements: 3.1, 4.1_
