@@ -2,6 +2,13 @@
 
 > `\q` 選択肢の**対話面**——実ポインタ→hover 追従→クリック確定→`ChoiceSelection` 発行（2026-07-19 追記㉟＝choice-render 2分割の対話半分・開発者裁定）
 
+> **📌 2026-07-24 追記㊹陳腐化補正（W3 完走・本ブロックが㊵以下より優先）**:
+> - **上流 choice-render ✅完了（2026-07-24・実機サインオフ済）＝「供給予定」だった契約3 API は実物**: 所在は emo-present presenter.rs でなく **emo-text `actor.rs`（`TextLayerRuntime`）**——`ChoiceHitRow` :150・`inject_choice_hover` :366・`choice_hit_rows` :389・`choice_active` :400。
+> - emo-text の「良性スキップアーム（state.rs:234-241）」は撤去済み＝Choice cue は実消費（state.rs:367-400・`ChoiceSpan` :254）。
+> - **実機 hover 注入導線が donor として実在**: `emo2_boot/hover_inject.rs`＋frame.rs:707-711（env `AREKA_CHOICE_HOVER_INJECT`・本番既定無効）＝design で実ポインタ駆動との置換/共存を裁定すること。
+> - spawn.rs:80（BalloonWindowMarker＋DragConfig）・input_events/mod.rs:96（DD-IE-10）・dola runtime.rs:102/:246/:291・contract.rs:38／drive.rs:167,:355 は 2026-07-24 実測で全て一致＝そのまま前提にできる。
+> - W4 開始は割込 `wintf-gpu-test-crash` 完了後（追記㊹裁定）。
+
 > **📌 2026-07-23 追記㊵ウェーブ更新**: 攻め5ウェーブ再編により本 spec は **W4**（`position-persist` ∥ `emo-dpi-scaling` と3本同居）。本文の「W4 choice-render」「W5（単独）」等は「W3 choice-render」「W4 同居」へ読み替える。**同居の事前割当契約**: `spawn.rs` は position-persist 単独所有＝本 spec のバルーンポインタ配線は **input_events モジュール＋emo-text 幾何消費で完結**させる（バルーン窓は `BalloonWindowMarker`＋DragConfig 済〔spawn.rs:80〕＝spawn.rs 改変不要見込み。設計が spawn.rs 改変を要求したらその部分を W5 へ＝エスケープ条項）。W5 `collision-dpi-hittest` が `input_events/mod.rs` を後続共有するため、バルーンハンドラ増設は同ファイルの DPI 素通し規約（mod.rs:96・DD-IE-10）を壊さない形で。
 
 ## Problem

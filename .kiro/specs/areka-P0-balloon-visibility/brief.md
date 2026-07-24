@@ -3,6 +3,13 @@
 > バルーン表示ライフサイクル（自然な表示・消去・再表示）。`/kiro-discovery` 2026-07-23 発。
 > 実測（コード配管・7項目）と正典（ukadoc・6項目）の二重裏取り済み。file:line は本日時点の実測。
 
+> **📌 2026-07-24 追記㊹陳腐化補正（W3 完走＋kero-balloon 新設・本ブロックが㊵以下より優先）**:
+> - **新前提: W5 `kero-balloon`（追記㊹新設・挙動バグ）が `run_attach_phase` 末尾を先行改造**——本 spec の主犯（無条件バルーン ShowSurface）と `connect_balloon_text` は同一関数の隣接約20行（実測 :444-453 ⇄ :456-462）＝着手時に kero-balloon の per-scope BalloonModel 実形へ再突合してから。
+> - シンボル訂正: `run_emo2_frame` は実在しない——実体は **`emo2_frame_system`**（frame.rs:725-743・attach→drain→move_drain→resnap→text の**5段化**）・`Emo2Wiring` struct :170。主犯 :438-446→**:444-453**（`ShowSurface` は binds＋pattern 引数付き新形・doc :442-443）・first-`\s` ゲート :396-403→**:401-408**・`text_slot_view` :449→**:456**。
+> - **seriko「時間源なし」は失効**（W3 seriko-loop で `spawn_loop_ticker`〔ticker.rs:283・16ms・第3系統〕＋結線 emo2_boot/mod.rs:413-415 が着地）——ただし B案（seriko 頭脳）棄却の残り理由（talk 終了/フォーカス/コンテンツ配置を知らない）は依然真＝**採用 A案（UI 層 BalloonVisibility コントローラ）は不変**。
+> - seriko 側アンカー: `apply_balloon` state.rs:149,170→**:243**（HideBalloon 発行 :268）・adapter `map_display_command` :61-64→**:69-73**・presenter `apply_hide` :379,393→**:387**・`ClearAll` 単一前置 compile.rs:210-226→**:224-231**。
+> - 「TalkDone は kanade 止まり・UI 未配線」（dispatcher.rs:131・steady.rs:226）・バルーン窓ポインタ観測ゼロ（spawn.rs:163-178・`HitTest::none()` :174）は 2026-07-24 実測でも真＝本 spec の gap 認識は有効。
+
 > **📌 2026-07-23 追記㊵陳腐化補正（本ブロックが以下の本文より優先）**:
 > - **M1 編入・裁可済み**（2026-07-23 開発者裁定＝追記㊲の「裁可待ち」決着）・**ウェーブ配置=W6 単独**（攻め5ウェーブ再編＝旧 W7.5 表記は失効。前提: W3 `seriko-loop`〔frame.rs 同一関数 `Emo2Wiring`/`run_emo2_frame` の解消〕・W4 `choice-interact`〔バルーンポインタ配線 donor〕・W5 `dpi-window-vanish`〔spawn.rs 解放〕・W3 `sylphya`〔timeout 既定値のプロパティ化〕）。
 > - **本 brief は main 着地済み**（PR #79・2026-07-23 マージ）＝本文末尾の「branch 未着地」自己申告は失効。

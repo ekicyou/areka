@@ -5,6 +5,11 @@
 > **🧭 ゴール裁定を収録**: 本 brief が **M-dual（dual-surface／dual-window）の吸収・退役の正本**（2026-07-16 裁定）——M-dual は 2026-07-16 実査で「大半 M-boot 充足済み・残作業は検証と gap-fill に縮退」と確定済み（roadmap 統合点行）。独立 spec を起こさず、**本ユニットの適合検証項目として消化**する。
 > **⛔ 着手ゲート**: M1 残ユニットの全完了後（最終ユニット）。ただし**適合表の維持は今から**（下記チェックリストが M1 の「迷いの発生しないゴール」の単一定義）。
 
+> **📌 2026-07-24 追記㊹棚卸更新（本ブロックが以下の本文より優先・調査日 2026-07-16 の残ユニット認識は失効）**:
+> - **completed 済み**: cue-playback-duration・mayuna-compose・seriko-loop・sakura-dialogue-tags・choice-render・input-events・idle-talk・collision-geometry・sylphya（本文の「実装中/並走中」記述は全て過去形へ読み替え）。**残ウェーブ**: 割込 `wintf-gpu-test-crash`（DoD ゲート復旧）→ W4（position-persist ∥ choice-interact ∥ emo-dpi-scaling）→ W5（dpi-window-vanish ∥ collision-dpi-hittest ∥ choice-select-events ∥ kero-balloon）→ W6（balloon-visibility）→ **W7=本 spec**。
+> - **上流列へ追補4本**: `choice-interact`（choice-render 2分割の対話半分・**`ChoiceSelection` 正本**＝適合 #7 hover の対話面と #8 の供給元）・`balloon-visibility`（M1 編入裁可済＝**本 spec 着手時に適合表へ「バルーン表示ライフサイクル」項目を追補**・roadmap W7 行登記済み）・`kero-balloon`（**#10 kero 一式の前提充足**＝kero が `balloonk*` 正典資産で表示・placement 採寸 scope 別）・`sylphya`✅（%username 実導出）。#1 の DPI 検証は DPI 追従込みへ格上げ（追記㉟裁定）。
+> - アンカー微修正: spawn.rs の `GhostWindows` は **:109-130**（`ScopeWindows` :95-100）・target_map.rs:19-38 は不変。
+
 ## Problem
 
 M1 ゴール「emo2 が**そのまま** boot→talk→touch→menu→close まで E2E 実走する」を**証明する仕様が無所属**。各ユニットは自分の観測（決定論檻＋個別実機サインオフ）を持つが:

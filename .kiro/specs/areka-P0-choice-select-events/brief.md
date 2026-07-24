@@ -4,6 +4,12 @@
 > **調査日**: 2026-07-16（再入精査⑧・fixture 実物調査＋コード実態偵察＋ukadoc 裏取り）。
 > **順序（フェーズ別・2026-07-16 精密化）→ ✅ ゲート解除（2026-07-17・cue-playback 完了＝追記㉗）**: choice-render（ChoiceSelection 契約の正本）と契約先決ペア——契約が brief 間で先決済みのため**並走可**（撫でクラスタと同型）。~~cue-playback（CuePlayer/resolve_choice）完了が tasks 生成・実装フェーズの実質前提~~ **→充足済み**（`CuePlayer`/`pending_choices`/`resolve_choice` は settled シームとして main 着地済み）。着手時は settled コードを直接参照すればよい（設計を先行させた場合の `/kiro-validate-design` 再突合義務は 2026-07-17 現在未発生＝要件未着手）。**実装順注記（2026-07-17 合流裁定・roadmap 追記㉘）**: 本 spec は input-events の背骨＋idle-talk の `Status` 口＋dialogue-tags の choice cue 形＋choice-render の ChoiceSelection を消費する**実質最後尾**ユニット。
 
+> **📌 2026-07-24 追記㊹陳腐化補正（W3 完走・本ブロックが㊵以下より優先）**:
+> - kanade アンカー実測: `KanadeMsg` msg.rs:46-61→**:83-101**（Mouse variant 追加済み・選択系 variant 無しは依然真）・`Input` schedule/mod.rs:36-45→**:40 以降**・StartTalk 棚 steady.rs:92-103→**:167-175／:195-201**。
+> - dola アンカー実測: `WaitingForChoice` variant runtime.rs:71→**:75**・遷移 :231-237→**:246**・`resolve_choice` :279-293→**:291**（機構は settled のまま）。`SakuraMsg::ResolveChoice` は実物確定（contract.rs:38・drive.rs:167/:355）。
+> - 「OnChoiceSelect＝production 0 件」「`ChoiceSelection` 型は未存在（正本=choice-interact・W4 で着地予定）」は 2026-07-24 実測でも真＝本文の gap 認識は有効。
+> - **W5 は4本同居へ改訂**（`kero-balloon` 追加・追記㊹裁定＝4本のファイル集合は実測で互いに素・kanade 単独所有は不変）。
+
 > **📌 2026-07-23 追記㊵陳腐化補正（本ブロックが以下の本文より優先）**:
 > - **`ChoiceSelection` 契約の正本は `areka-P0-choice-interact`**（2026-07-19 追記㉟＝choice-render 2分割の対話半分・新設）——本文の「choice-render（ChoiceSelection 契約の正本）」「choice-render の ChoiceSelection を消費」等は全て **choice-interact** へ読み替える（choice-render に残るのは行ジオメトリ＋hover 状態 API の正本のみ）。
 > - **上流は全て完了済み**: input-events ✅（2026-07-23・`completed/`）・idle-talk ✅・sakura-dialogue-tags ✅＝「input-events 完了が望ましい先行」等の条件節は充足済みの確定事実へ読み替え。

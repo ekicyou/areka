@@ -6,6 +6,12 @@
 > **下流（必須依存）**: **`areka-P0-collision-dpi-hittest`**（当たり判定 ÷k がこの `scale()`→k と実 k× 表示に依存）／DPI追従が波及する全 emo 消費者（`window-placement` 窓寸・`emo-text-layer` 行寸・balloon 寸・`choice-render`）＝各 spec の Revalidation Trigger。
 > **M1/M2 配置・collision-geometry 合流**: **未決＝別セッションの計画判断**（[[portfolio-convergence-decided-in-separate-session]]）。DPI追従は開発者言明の**基本設計**だが emo2 は k=1.0 でも E2E 実走する（M1 blocker か否かは要判断）。
 
+> **📌 2026-07-24 追記㊹陳腐化補正（W3 完走・本ブロックが㊵以下より優先）**:
+> - **㊵の「W3 settled 前提」は充足済み**（seriko-loop✅／choice-render✅）——実形: `ComposeKey{surface, binds, pattern}`（cache.rs:51-54・get/insert は pattern 引数必須）・`PresentCommand::ShowSurface` は binds＋pattern 引数付き新形・`TextSlotView` struct :89。
+> - 行アンカー実測補正: `TextSlotView.scale` 唯一代入 :427→**:435**・`compute_extent` plan.rs:366-383→**:451**・swapchain 遅延生成 presenter.rs:268-311→**:275-340**・chain.rs ResizeBuffers 実体は **:180-188**（:115-117 は doc 言及のみ）・`hit_region` :449-453→**:457**（k=1.0 契約 doc :452）・wintf dpi.rs `scale_x/y` :21-28→**:61-66**。`CURRENT_COMPOSE_SCALE` presenter.rs:126・`measure_scope_sizes` measure.rs:62 は不変。
+> - **W5 後続共有の申し送り（追記㊹新設 `kero-balloon`）**: kero-balloon（W5）が `measure_scope_sizes` の同じ scope ループを per-scope バルーン採寸へ改造する＝本 spec の W4 再構造は「バルーン寸法が scope 別になり得る」席を潰さない関数分解にすること（同一関数衝突ゆえ W5 直列と裁定済み）。
+> - W4 開始は割込 `wintf-gpu-test-crash` 完了後。同 spec の修正が Approach B（tests/graphics ハーネス改修）だった場合、本 spec のテスト増設は新ハーネス形へ rebase。
+
 > **📌 2026-07-23 追記㊵陳腐化補正（本ブロックが以下の本文より優先）**:
 > - **M1/M2 は決着済み＝M1 編入**（2026-07-19 追記㉟開発者裁定）・**ウェーブ配置=W4**（追記㊵攻め再編＝`position-persist` ∥ `choice-interact` と同居）。同居の**事前割当契約**: 本 spec は `measure.rs`＋emo-atlas/compose/present＋wintf に限定・**`spawn.rs` 不触**（spawn.rs は position-persist 単独所有・窓寸の k 倍は `placement/measure.rs` 源で吸収する）。エスケープ: 設計が spawn.rs 改変を要求する形に着地したらその部分を W5 へ。
 > - **編集面の追加（2026-07-23 実測・本文未記載）**: 窓寸法の源は **`crates/areka/src/placement/measure.rs::measure_scope_sizes`**（L62・compose_size で surface 原寸を測る）＝k≠1.0 なら物理窓寸=原寸×k となり measure→spawn 消費が動く。「窓/swapchain 追従」は `chain.rs`（ResizeBuffers L115-118）だけでは閉じない。
