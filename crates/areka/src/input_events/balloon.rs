@@ -148,6 +148,61 @@ pub(crate) fn hit_choice_row(rows: &[ChoiceHitRow], x: f32, y: f32) -> Option<us
         .map(|(i, _)| i)
 }
 
+/// hover 遷移の決定（純関数・R1.2/1.3/1.4/3.4）。
+///
+/// 表示中フラグ・hit 結果（ordinal 展開済）・前回注入値の 3 入力から hover 遷移を
+/// 決める副作用なしの決定的関数。World・runtime 借用・GPU・sleep 一切不要——入力→
+/// `HoverAction` のみ。呼び手（配線層 task 4.1）が action を解釈する
+/// （`Inject` で `inject_choice_hover`・`BalloonWiring.hover` 更新等）。
+///
+/// - `active == false`（choice 非表示）:
+///   - `last_injected == None` → [`HoverAction::NoopInactive`]（未注入ゆえ何もしない・R1.4）。
+///   - `last_injected == Some(_)` → [`HoverAction::ResetOwnState`]（注入済ハイライトを消滅時に
+///     自前状態のみ `None` 整合・inject はしない＝上流原子性が正本・R3.4）。
+///   - この分岐で `hit_ordinal` は無視される（非表示中は hover 追従なし・R1.4）。
+/// - `active == true`（choice 表示中）:
+///   - `hit_ordinal == last_injected` → [`HoverAction::Keep`]（同値既注入・遷移なし・
+///     `Some==Some`／`None==None` 双方を含む）。
+///   - `hit_ordinal != last_injected` → [`HoverAction::Inject`]`(hit_ordinal)`（遷移・新値注入。
+///     `Some(ordinal)`＝行ハイライト・R1.2／`None`＝ハイライト解除・R1.3）。
+///
+/// `#[allow(dead_code)]`: 本番消費（配線層 task 4.1）まで到達者なし——単体檻のみ到達（M1 暫定抑止）。
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[allow(dead_code)]
+pub(crate) enum HoverAction {
+    /// choice 非表示かつ自前状態も None——何もしない（R1.4）。
+    NoopInactive,
+    /// choice 非表示だが自前状態が残っている——自前状態のみ None へ整合
+    /// （inject はしない・上流原子性が正本・R3.4）。
+    ResetOwnState,
+    /// 表示中・hover 対象が前回注入値と同一——再注入しない（遷移なし）。
+    Keep,
+    /// 表示中・hover 対象が変化——`inject_choice_hover(actor, value)` を行う
+    /// （`Some(ordinal)`＝行ハイライト・`None`＝ハイライト無し・R1.2/1.3）。
+    Inject(Option<usize>),
+}
+
+#[allow(dead_code)]
+pub(crate) fn hover_action(
+    active: bool,
+    hit_ordinal: Option<usize>,   // hit_choice_row の結果を ordinal へ展開した値
+    last_injected: Option<usize>, // BalloonWiring.hover[scope]
+) -> HoverAction {
+    if !active {
+        // choice 非表示中は hover 追従なし（hit_ordinal は無視・R1.4）。
+        return match last_injected {
+            None => HoverAction::NoopInactive,
+            Some(_) => HoverAction::ResetOwnState, // 消滅時は自前状態のみ None 整合（inject せず・R3.4）。
+        };
+    }
+    // 表示中: 同値なら遷移なし・変化なら新値注入（Some=ハイライト/None=解除・R1.2/1.3）。
+    if hit_ordinal == last_injected {
+        HoverAction::Keep
+    } else {
+        HoverAction::Inject(hit_ordinal)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -394,6 +449,90 @@ mod tests {
             hit_choice_row(&rows, x * scale, y * scale),
             None,
             "スケールを掛けた座標なら矩形外（＝実装はスケールを掛けていない反証 fixture）"
+        );
+    }
+
+    // -------------------------------------------------------------------------
+    // hover_action 純関数檻（task 3.2・design「純関数判定核」／Observable 全分岐）
+    //
+    // active・hit_ordinal・last_injected の 3 入力から hover 遷移を決める純関数の
+    // 全分岐（非表示時無処理／消滅時自前整合／同値維持／新規注入／解除注入）を
+    // World・runtime 不要で決定的に網羅する（R1.2/1.3/1.4/3.4）。
+    // -------------------------------------------------------------------------
+
+    /// 非表示時無処理（R1.4）: `active == false` かつ `last_injected == None` は
+    /// 何もしない。hit_ordinal（Some/None いずれも）は無視される。
+    #[test]
+    fn hover_inactive_no_prior_injection_is_noop() {
+        assert_eq!(
+            hover_action(false, None, None),
+            HoverAction::NoopInactive,
+            "非表示・未注入・hit なしは NoopInactive"
+        );
+        assert_eq!(
+            hover_action(false, Some(3), None),
+            HoverAction::NoopInactive,
+            "非表示・未注入は hit があっても NoopInactive（hit_ordinal 無視・R1.4）"
+        );
+    }
+
+    /// 消滅時自前整合（R3.4）: `active == false` かつ `last_injected == Some(k)` は
+    /// 自前状態を None 整合する `ResetOwnState`（inject はしない＝上流原子性が正本）。
+    /// hit_ordinal（Some/None いずれも）は無視される。
+    #[test]
+    fn hover_inactive_with_prior_injection_resets_own_state() {
+        assert_eq!(
+            hover_action(false, None, Some(2)),
+            HoverAction::ResetOwnState,
+            "非表示・注入済・hit なしは ResetOwnState（R3.4）"
+        );
+        assert_eq!(
+            hover_action(false, Some(5), Some(2)),
+            HoverAction::ResetOwnState,
+            "非表示・注入済は hit があっても ResetOwnState（hit_ordinal 無視・R3.4）"
+        );
+    }
+
+    /// 同値維持（遷移なし）: 表示中で hit_ordinal == last_injected は再注入しない Keep。
+    /// Some==Some と None==None の双方を確認する。
+    #[test]
+    fn hover_active_same_value_keeps() {
+        assert_eq!(
+            hover_action(true, Some(2), Some(2)),
+            HoverAction::Keep,
+            "表示中・同一 Some は Keep（再注入しない）"
+        );
+        assert_eq!(
+            hover_action(true, None, None),
+            HoverAction::Keep,
+            "表示中・None 同値は Keep（ハイライト無しのまま遷移なし）"
+        );
+    }
+
+    /// 新規注入（R1.2）: 表示中で hover 対象が変化したら新値を Inject する。
+    /// None→Some の初回注入と Some→Some の遷移の双方を確認する。
+    #[test]
+    fn hover_active_new_row_injects() {
+        assert_eq!(
+            hover_action(true, Some(1), None),
+            HoverAction::Inject(Some(1)),
+            "表示中・None→Some(1) は Inject(Some(1))（初回ハイライト・R1.2）"
+        );
+        assert_eq!(
+            hover_action(true, Some(3), Some(1)),
+            HoverAction::Inject(Some(3)),
+            "表示中・Some(1)→Some(3) は Inject(Some(3))（行遷移・R1.2）"
+        );
+    }
+
+    /// 解除注入（R1.3）: 表示中で hover が行外へ出たら None を Inject する
+    /// （Some→None＝ハイライト解除の遷移）。
+    #[test]
+    fn hover_active_leaves_row_injects_none() {
+        assert_eq!(
+            hover_action(true, None, Some(2)),
+            HoverAction::Inject(None),
+            "表示中・Some(2)→None は Inject(None)（ハイライト解除・R1.3）"
         );
     }
 }
