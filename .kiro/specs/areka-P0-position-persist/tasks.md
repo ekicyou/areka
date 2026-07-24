@@ -132,7 +132,7 @@
   - _Depends: 2.1, 3.1_
   - _Boundary: main.rs_
 
-- [ ] 7. Integration: ghost boot() の設定注入と署名波及の追随
+- [x] 7. Integration: ghost boot() の設定注入と署名波及の追随
 - [x] 7.1 boot() での起動記録読取・KanadeConfig 注入・SET sink 登録
   - sylphya spawn 後・`spawn_kanade` 前に `areka.boot.count` の存在（数値解釈はしない）で `first_boot` を決め、`areka.vanish.count` を寛容 parse して `vanish_count` を求める
   - `first_boot=true` のとき `first_boot_epilogue` を `PersistKey::BootCount.to_canonical_key()` を用いた `areka.prop.set` の `EpilogueCommand` として構築し `KanadeConfig` へ注入する（kanade は sylphya 非依存のまま正準 key を不透明搬送する）
@@ -142,7 +142,7 @@
   - _Depends: 4.1, 4.3, 5.1_
   - _Boundary: areka-ghost/runtime.rs_
 
-- [ ] 7.2 `on_first_boot` 署名変更の波及追随
+- [x] 7.2 `on_first_boot` 署名変更の波及追随
   - `events::on_first_boot` の署名変更に伴うコンパイラ捕捉箇所（spine_e2e_test の呼び出し点・アサーション）を機械的に追随させる
   - 観測可能な完了条件: 既存 fixture ghost（永続ファイルなし＝初回扱い）を用いた spine e2e テストが、新シグネチャのまま従来と同じ Reference0="0" で通過すること
   - _Requirements: 4.1_
@@ -200,4 +200,5 @@
 
 ## Implementation Notes
 
+- **[7.2] 5.2 に内包済み**: `on_first_boot` 署名変更の spine_e2e 波及追随（3 呼出点・Ref0="0" 維持）は、署名変更コミット（5.2）でワークスペース全体のコンパイル緑を保つため機械的に同時実施済み（commit 063b171）。7.2 は追加実装なしで完了条件（新署名 fixture ghost で spine e2e が Ref0="0" 通過）を充足。検証: `cargo test -p areka-ghost --test ghost spine_e2e -- --test-threads=1` → 14 passed。
 - **[3.1] サブエージェントが main リポジトリへ leak する罠（ハーネス quirk #3/#11 再演）**: 3.1 の implementer が worktree ではなく main リポジトリ（`C:\home\maz\git\areka`）の `runtime.rs` を編集し、worktree は clean のまま・変更が main に落ちた（過去タスクでも `persist.rs`・`input_events/balloon.rs` が main に untracked で leak 済みだった）。復旧: main→worktree へ該当ファイルを cp（base 一致を diff で確認）→ worktree でテスト緑を確認 → `git -C <main> restore` ＋ leaked untracked を rm。**予防**: implementer/reviewer へ「cd するな・main を触るな・絶対パスは必ず `.claude\worktrees\<name>` を含めよ・終了時に `git -C <main> status` が clean かつ自分の変更が worktree の `git status` に出ることを確認せよ」と厳命する。親は各タスク後に必ず worktree と main 双方の `git status` を検証する。
