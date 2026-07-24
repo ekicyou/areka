@@ -164,7 +164,7 @@
   - _Depends: 6.1, 6.2_
   - _Boundary: placement/persist.rs tests_
 
-- [ ] 8.3 発火規律（DragEnd のみ書込）の統合檻
+- [x] 8.3 発火規律（DragEnd のみ書込）の統合檻
   - 自動再射影・resize・`move_window_to`（`\![move]` 消費者）を駆動した前後でストア内容がバイト不変であることを確認する
   - 観測可能な完了条件: DragEnd を伴わない一連の操作後、永続ファイルの内容が操作前と完全一致することがテストで確認できること
   - _Requirements: 1.9, 8.4_

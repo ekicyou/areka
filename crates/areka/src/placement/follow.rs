@@ -2317,6 +2317,151 @@ mod tests {
         let _ = parts.handle.join();
     }
 
+    /// Task 8.3 発火規律の統合檻（Req1.9・8.4・design C2/C3・Testing Strategy Integration §2）:
+    /// 永続の窓位置・バルーン相対オフセットを書くのは **DragEnd の観測点のみ**であり、
+    /// 自動再射影（`resize_window_to`）・`\![move]` 消費経路（`move_window_to`）・復元時
+    /// 再射影（`apply_restored_placements`・純関数）・**連続ドラッグ**（`on_char_drag`）は
+    /// 永続ストアを一切書き換えないことを、ストア内容のバイト等価で決定論固定する。
+    ///
+    /// # 檻の噛み方（意味のある不変チェックにするための seed）
+    ///
+    /// まず 1 回の正当な書込（char の `on_char_drag_end`）で **ストアに内容を与えて**から
+    /// スナップショットを捕捉する（空ストア同士の比較では「何も書かない」ことが自明に
+    /// 成立してしまい檻が噛まないため）。その後に非 DragEnd 操作群を駆動し、`barrier` を
+    /// 挟んで（保留 put があれば flush される）ストア内容を再捕捉し、seed 時点と **完全一致**
+    /// することを assert する。`load_scope` は決定論順（sylphya 契約）ゆえ Vec を直接比較できる。
+    ///
+    /// もし駆動した操作のいずれかが `persist_put` を投函すれば、scope1 の WindowPos／
+    /// BalloonOffset entries が変化して seed スナップショットと乖離し、本 assert が落ちる
+    /// （RED 検証: 駆動ブロックへ一時的に `persist_entries` を差し込むと本檻が実際に落ちることを
+    /// 確認済み——発火規律が破れれば必ず検出する）。emo2 は全スコープ Bottom＝実機で Free の
+    /// 保存経路を踏まないのと同様、自動再射影が永続へ漏れないことは決定論檻でのみ観測できる。
+    #[test]
+    fn non_dragend_operations_leave_persist_store_byte_invariant() {
+        use std::path::{Path, PathBuf};
+        use std::sync::Arc;
+
+        use areka_sylphya::persist::{FakePersistIo, PersistIo};
+        use areka_sylphya::{PersistScope, ScopeRoots, SylphyaInit, load_scope, spawn_sylphya};
+
+        use super::super::persist::{PersistWiring, apply_restored_placements};
+        use crate::placement::resolver::ScopePlacement;
+        use crate::placement::spawn::{BalloonWindowMarker, CharWindowMarker};
+
+        // 共有 fake IO（アクター Box 移送用と観測用で同一ストアを指す・上の DragEnd 檻と同流儀）。
+        struct SharedFakeIo(Arc<FakePersistIo>);
+        impl PersistIo for SharedFakeIo {
+            fn read(&self, path: &Path) -> std::io::Result<Option<String>> {
+                self.0.read(path)
+            }
+            fn commit(&self, path: &Path, content: &str) -> std::io::Result<()> {
+                self.0.commit(path, content)
+            }
+        }
+
+        let shared = Arc::new(FakePersistIo::new());
+        let roots = ScopeRoots {
+            ghost: Some(PathBuf::from("/g")),
+            ..ScopeRoots::default()
+        };
+        let parts = spawn_sylphya(SylphyaInit {
+            roots: roots.clone(),
+            io: Box::new(SharedFakeIo(shared.clone())),
+            runtime_sink: None,
+        });
+
+        let mut world = World::new();
+        world.insert_non_send_resource(PersistWiring {
+            publisher: parts.publisher.clone(),
+        });
+        world.insert_resource(single_monitor_snapshot()); // 下端 1043・釘付け Y=1043−687=356
+
+        // char 窓 scope=1（Bottom）＋ balloon 窓 scope=1（BalloonFollow で連結）。
+        let balloon = world
+            .spawn((
+                fake_handle(0x2000),
+                window_pos_at(701, 383),
+                BalloonWindowMarker { scope: 1 },
+            ))
+            .id();
+        let start = (1400, 600);
+        let char_window = world
+            .spawn((
+                fake_handle(0x1000),
+                window_pos_sized(1250, 356, 434, 687),
+                Anchored(Anchor::Bottom),
+                CharWindowMarker { scope: 1 },
+                BalloonFollow {
+                    balloon,
+                    offset: PointPx { x: -549, y: 27 },
+                },
+                dragging_state((1207, 356), start),
+            ))
+            .id();
+
+        // --- SEED: 1 回の正当な書込（char DragEnd）でストアに内容を与える（不変チェックを
+        //     意味あるものにするため）。最終カーソル (1601,113) → mapped=(1408, 356)。
+        let ev = Phase::Bubble(drag_end_event_at(char_window, (1601, 113)));
+        assert!(!on_char_drag_end(&mut world, char_window, char_window, &ev));
+        parts
+            .publisher
+            .barrier()
+            .expect("seed barrier should resolve while actor is alive");
+
+        // seed 書込後のストア内容を正準スナップショットとして捕捉（load_scope は決定論順）。
+        let before = load_scope(PersistScope::Ghost, &roots, &SharedFakeIo(shared.clone()));
+        assert!(
+            !before.is_empty(),
+            "seed の DragEnd 書込がストアを満たしていない＝不変チェックが無意味になる: {before:?}"
+        );
+
+        // --- DRIVE: 書いてはならない非 DragEnd 操作群を駆動する ---------------------------
+        // 1) `\![move]` 消費経路（apply_move_directive が唯一呼ぶ位置ライター）。
+        assert!(
+            move_window_to(&mut world, char_window, 999, 777),
+            "move_window_to は成立するはず（char に WindowHandle あり）"
+        );
+        // 2) 自動再射影（re-snap）経路。Bottom → project_anchor で y=1043−700=343 へ再固定。
+        assert!(
+            resize_window_to(&mut world, char_window, SizePx { w: 500, h: 700 }),
+            "resize_window_to は成立するはず（Anchored/正寸/WindowHandle あり）"
+        );
+        // 3) 復元時再射影（純関数・World も永続も触れない・返り値は捨てる）。
+        let snap = single_monitor_snapshot();
+        let placements = vec![ScopePlacement {
+            scope: 1,
+            char_pos: PointPx { x: 1250, y: 356 },
+            char_size: SizePx { w: 434, h: 687 },
+            balloon_pos: PointPx { x: 701, y: 383 },
+            balloon_size: SizePx { w: 200, h: 300 },
+            balloon_offset: PointPx { x: -549, y: 27 },
+            anchor: Anchor::Bottom,
+        }];
+        let _restored = apply_restored_placements(placements, &before, &snap);
+        // 4) 連続ドラッグ（DragEnd ではない・書込トリガにしない確定点規律）。
+        let drag = Phase::Bubble(drag_event_at(char_window, start, (1450, 350)));
+        assert!(!on_char_drag(&mut world, char_window, char_window, &drag));
+
+        // 保留 put（存在しないはず）があれば flush する越境フェンス。
+        parts
+            .publisher
+            .barrier()
+            .expect("post-drive barrier should resolve while actor is alive");
+
+        // --- ASSERT: ストア内容が seed 時点と完全一致（非 DragEnd 操作は何も書いていない）---
+        let after = load_scope(PersistScope::Ghost, &roots, &SharedFakeIo(shared.clone()));
+        assert_eq!(
+            before, after,
+            "非 DragEnd 操作（move_window_to / resize_window_to / apply_restored_placements / \
+             連続 on_char_drag）が永続ストアを書き換えた（Req1.9/8.4 発火規律違反）: \
+             before={before:?} after={after:?}"
+        );
+
+        // 正典終了（アクター join）——テスト後始末（リーク回避・非本質）。
+        parts.publisher.close();
+        let _ = parts.handle.join();
+    }
+
     /// (g) target==自 entity ガード: 他 entity 宛イベントの Bubble を受けても
     /// on_char_drag／on_char_drag_end／on_balloon_drag はすべて no-op。
     #[test]
