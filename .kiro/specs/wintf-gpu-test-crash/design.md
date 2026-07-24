@@ -64,7 +64,7 @@
 
 ```mermaid
 flowchart TB
-    P0[Phase 0 環境記録<br/>GPU ドライバ版数と WU 履歴] --> P1
+    P0[Phase 0 環境記録と<br/>修正前ベースライン実測] --> P1
     P1[Phase 1 bisect 一発判定<br/>68bd2e3e の直前リビジョンで最小ペア実走] --> P2
     P2[Phase 2 実スタック取得<br/>cdb 配下で最小ペア実行し AV 点を特定] --> P3
     P3[Phase 3 切り分け実験<br/>a 生成のみ b mem forget c 明示ドレイン] --> G1
@@ -109,10 +109,10 @@ crates/wintf/tests/graphics/
 
 ### Modified Files（無条件）
 - `crates/wintf/tests/graphics.rs` — `wuc_restart_regression_test` の `#[path]` mod 追記（束ね役のみ・規約どおり）
+- `crates/wintf/src/com/wuc.rs` — ドレイン用ヘルパ `drain_dispatcher_queue`（`ShutdownQueueAsync` 発行→`Status()` ポーリング→タイムアウト保険）を**無条件**で追加（`wuc_spike.rs:162-191` パターンの関数化）。C7 回帰檻が採用経路（A/B）によらず明示 teardown に使用する正準手段であり、Path A 採用時は `Drop`／`shutdown_blocking`／spike の 3 者もこれを共用する
 
 ### Modified Files（Path A 採用時 — 宣言 (a) 本番実在リスク）
-- `crates/wintf/src/ecs/graphics/wuc_resource.rs` — `WucGraphicsResourceInner` に `Drop` 実装（`ShutdownQueueAsync` 発行＋有界ドレイン・log-first・panic-free）を追加し、明示 API `shutdown_blocking(timeout)` を新設。既存の宣言順 drop 不変条件（controller 最後）は維持
-- `crates/wintf/src/com/wuc.rs` — （必要時のみ）ドレイン用ヘルパ `drain_dispatcher_queue`（発行→Status ポーリング→タイムアウト保険）の追加。`wuc_spike.rs` のパターンを関数化
+- `crates/wintf/src/ecs/graphics/wuc_resource.rs` — `WucGraphicsResourceInner` に `Drop` 実装（`ShutdownQueueAsync` 発行＋有界ドレイン・log-first・panic-free）を追加し、明示 API `shutdown_blocking(timeout)` を新設。既存の宣言順 drop 不変条件（controller 最後）は維持。ドレインの実体は無条件成果物 `drain_dispatcher_queue`（`com/wuc.rs`）を共用
 - `crates/wintf/src/runtime/mod.rs` — （根因が本番終了経路にも波及すると判定された場合のみ）`WinApp` 終了経路への明示 shutdown 結線
 - `crates/wintf/examples/wuc_spike.rs` — （必要時のみ）ヘルパ関数化後の呼び替え（挙動等価）
 
@@ -187,7 +187,7 @@ Phase-gate 全体フローは Architecture 節の図が正本。ここでは判�
 | Requirements | 3.1, 3.2 |
 
 **Responsibilities & Constraints**
-- Phase 0: 環境記録 — GPU/ドライバ版数・直近 Windows Update 履歴を取得し記録（H-env の裏取り・証拠様式の一部）
+- Phase 0: 環境記録＋修正前ベースライン実測 — GPU/ドライバ版数・直近 Windows Update 履歴を取得し記録（H-env の裏取り・証拠様式の一部）。加えて**未実測の多重 WUC バイナリ（C6 マトリクス行 3–7・最低限 `areka-emo-text` の `draw_readback_test` と wintf visual）の修正前ベースラインを実測**し根本原因記録へ記載する——現状緑なら「なぜ graphics だけ落ちるか」の差分自体が根因ヒントとなり、是正後実測との区別（元から緑 vs 修正の波及で緑化）を不可逆に失わないための必須先行取得（2.3, 3.2）
 - Phase 1: bisect 一発判定 — `68bd2e3e~1`（=`31d5fe71`）を**別ディレクトリへ checkout**してビルドし、最小再現ペア（`cargo test -p wintf --test graphics -- --test-threads=1 --exact clip_sync_system_test::clip_sync_applies_all_clip_shape_variants clip_sync_system_test::clip_sync_clears_clip_when_clip_is_none`）を実走。AV なら H-env・緑なら H-code 確定（3.1）
 - Phase 2: 実スタック取得 — cdb 配下（`cdb -g -G -o <graphics テストバイナリ> --test-threads=1 --exact <最小ペア>`）で AV 時の `k`（コールスタック）・faulting module を取得。クラッシュ点を「WUC 生成時／前 world teardown 由来／schedule 実行中」のいずれかに分類（3.2）。cdb 不調時の代替: WER フルダンプ有効化→WinDbg 事後解析
 - Phase 3: 切り分け実験 — (a) 2 個目を「生成のみ・schedule 無し」に縮めて生死確認 (b) 1 個目 world を `std::mem::forget` して teardown 犯人説を直接検証 (c) 1 個目 teardown に明示 `ShutdownQueueAsync` ドレインを挿入して 2 個目の生死確認（＝Path A の事前効果検証）。実験コードは一時変更であり最終ツリーへコミットしない
@@ -356,7 +356,7 @@ pub fn with_shared_gpu<T: Send + 'static>(
 - 新規ファイル `crates/wintf/tests/graphics/wuc_restart_regression_test.rs` に **2 形態**を常設:
   1. **独立 2 `#[test]` 形**（`wuc_stack_a_full_cycle`／`wuc_stack_b_full_cycle`）: 各々がフルスタック生成→最小合成操作（`CreateSpriteVisual` 等）→G1 確定プロトコルで teardown。libtest の別スレッド・別実行単位という実クラッシュ様式を忠実に再現し、どちらが「プロセス内 2 個目」になっても法則を踏む
   2. **単一テスト内再生成形**（`wuc_stack_recreate_in_single_test`）: 同一 `#[test]` 内で 生成→teardown→再生成→最小操作。単独実行でも決定論的に再生成を検証（既存 in-source `wuc_graphics_resource_lifecycle` が覆えない「完全解放後の再生成」を明示検証）
-- teardown は G1 で確定した安全再生成プロトコル（Path A なら `Drop` 内蔵ドレインに乗るだけで足りる・明示検証には `shutdown_blocking` を使用）を常用
+- teardown は G1 で確定した安全再生成プロトコルを常用: Path A 採用時は `shutdown_blocking` を明示検証に使用（`Drop` 内蔵ドレインの重畳は無害）・Path B 採用時は無条件成果物 `drain_dispatcher_queue`（`com/wuc.rs`）を直接呼んでから drop する——いずれの経路でも檻の明示ドレイン手段は成果物として確保されており宙に浮かない
 - Path B 採用時も本ファイルは共有 fixture を**バイパス**して素のスタック生成を行う（檻の意味を保つ）
 - 検出保証（5.3）: 再発時は `STATUS_ACCESS_VIOLATION`＝プロセス死でテストバイナリ全体が失敗するため、サイレント成功は構造的に不可能。アサーション追加による偽陰性の余地なし
 - `tests/graphics.rs` へ `#[path]` mod 追記（束ね役規約維持）。graphics スイートの一部として並列既定・逐次の双方で安定成功すること（5.2＝1.4 の ×5 判定に内包）
