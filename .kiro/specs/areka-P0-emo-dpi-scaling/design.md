@@ -60,6 +60,14 @@ W4 事前割当契約の編集面は「`measure.rs`＋emo-atlas/compose/present�
 
 万一 W4 並走 spec と同一関数で衝突した場合、当該部分は R7.7 のエスケープ条項を準用して W5 へ送る。
 
+**裁可（2026-07-24 設計ディスカッション #1・開発者裁定）**: 上記 additive 増分 4 点を裁可する。ただし placement 系（source.rs・follow.rs・measure.rs）は並走 `areka-P0-position-persist` と衝突し得るため、**実装順序を直列化**する:
+
+1. `areka-P0-position-persist` の実装完了（main へのマージ）を先行させる。
+2. 本仕様は**タスク生成後・実装開始前に main 同期（origin/main の取り込み）を必須ゲート**とする。同期後、placement 系の実測アンカー（measure.rs:62・follow.rs:553/:729・source.rs:102 ほか）を同期後の実体で再確認してから実装に入る（並走 brief 陳腐化規律の実装前 rebase 適用）。
+3. `resize_window_keep_position` は position-persist の観測域（follow.rs DragEnd :319-350/:443-488）から離れた位置（ファイル末尾の公開ラッパ群）へ追記する。
+
+R7.7（W5 送り）は発動しない（直列化により衝突を回避）。
+
 ### Revalidation Triggers
 
 下流・並走 spec は次の変化で再検証を要する:
