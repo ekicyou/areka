@@ -8,7 +8,7 @@
   - _Boundary: input_events::balloon (skeleton), Emo2Wiring_
 
 - [ ] 2. Core: 契約型と状態配線資源
-- [ ] 2.1 ChoiceSelection 契約型の定義
+- [x] 2.1 ChoiceSelection 契約型の定義
   - id／label／scope／references の 4 フィールドを持つ選択確定ワイヤ形を定義する（ordinal は含めない）
   - Clone／Debug／PartialEq／Eq を導出し、下流が型を import して消費できる形にする
   - Observable: 単体テストで 2 つの ChoiceSelection 値を構築し、等価性比較が意図通り成立する
