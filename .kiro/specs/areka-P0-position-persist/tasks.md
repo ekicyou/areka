@@ -18,7 +18,7 @@
   - _Requirements: 2.2, 8.5_
   - _Boundary: placement/persist.rs_
 
-- [ ] 1.3 復元時再射影 `project_restore` の実装
+- [x] 1.3 復元時再射影 `project_restore` の実装
   - `project_anchor`（アンカー辺再導出）と `work_area_for_window`（最近傍モニタの作業領域）を再利用し、復元位置が作業領域外のとき吸着規則を保ったまま作業領域内へ寄せる純関数を実装する
   - 観測可能な完了条件: 作業領域内の入力は恒等出力となり、下端吸着窓の作業領域外入力は下端一致・水平位置保持で域内へ収まる決定論テストが通ること
   - _Requirements: 5.1, 5.2, 5.3, 8.2_

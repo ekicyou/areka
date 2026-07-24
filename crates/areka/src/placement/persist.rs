@@ -13,7 +13,8 @@
 
 use areka_sylphya::{Axis, PersistKey};
 
-use super::resolver::{Anchor, PointPx, SizePx};
+use super::follow::{MonitorSnapshot, project_anchor, work_area_for_window};
+use super::resolver::{Anchor, PointPx, RectPx, SizePx};
 
 /// 永続値の寛容 parse（design C1・6.1）。
 ///
@@ -99,6 +100,81 @@ pub fn balloon_offset_from_persist(
     PointPx {
         x: persisted.x + basis.x,
         y: persisted.y + basis.y,
+    }
+}
+
+/// 1 軸クランプ（`lo ≤ v ≤ hi`・逆転区間は `lo` 優先・非 panic）。
+///
+/// resolver `clamp_axis`／follow の縮退流儀と同じ min/max 書き（`i32::clamp` は
+/// 逆転区間で panic するため使わない＝「パニックしない」契約の防波堤）。
+fn clamp_axis(v: i32, lo: i32, hi: i32) -> i32 {
+    v.min(hi).max(lo)
+}
+
+/// 復元専用射影＝アンカー辺再導出（[`project_anchor`]・5.2）＋補軸 clamp（5.1）
+/// （design C1・純関数・決定論・永続不書込）。
+///
+/// 保存位置 `pos` を**毎起動**現在の work area 幾何へ再射影する（アンカーは保存せず
+/// 毎起動再解決・Req1.8）。復元値が現 work area の外（別 DPI・別モニタ構成からの
+/// 復元）でも、アンカー辺を対応辺へ再固定し補助軸を域内へ縮退することで、必ず可視
+/// 域内へ収める（Req5.1）。域内かつアンカー辺一致の入力に対してはべき等＝恒等
+/// （Req5.3）。
+///
+/// # 射影規則
+///
+/// `wa` は「`pos` に置いた窓矩形の中心が属するモニタの work area」
+/// （[`work_area_for_window`]・最近傍規則込み——どのモニタにも属さない復元位置は
+/// 最近傍 wa を採る＝モニタ喪失シナリオ）。既存の吸着規則は [`project_anchor`] へ
+/// 委譲し二重定義しない（Req5.2・Req1.6/1.8）:
+/// - `Bottom`/`Top`: アンカー辺（y）を再固定後、`x` を `[wa.left, wa.right − w]` へ clamp。
+/// - `Left`/`Right`: アンカー辺（x）を再固定後、`y` を `[wa.top, wa.bottom − h]` へ clamp。
+/// - `Free`: identity 射影（位置保持）＋両軸を wa 内へ clamp（可視性保証のみ・Req2.5）。
+///
+/// # graceful degradation
+///
+/// `snapshot` が空で [`work_area_for_window`] が `None` を返す場合は `pos` をそのまま
+/// 返す（identity＝架空の既定矩形を発明しない・既存縮退流儀・panic しない・Req5.1）。
+/// この場合、再射影結果を永続へ書き戻さないのは merge 側（`apply_restored_placements`）
+/// が純関数で書込 API を持たない構造遮断が担う（Req5.4）。
+#[allow(dead_code)] // 結線（apply_restored_placements・task 1.4）は後続タスクの領分
+pub fn project_restore(
+    anchor: Anchor,
+    pos: PointPx,
+    size: SizePx,
+    snapshot: &MonitorSnapshot,
+) -> PointPx {
+    // wa＝`pos` に置いた窓矩形の中心が属するモニタの work area（最近傍規則込み）。
+    // 空 snapshot は identity（架空矩形を発明しない・既存縮退流儀・Req5.1）。
+    let window = RectPx {
+        left: pos.x,
+        top: pos.y,
+        right: pos.x.saturating_add(size.w),
+        bottom: pos.y.saturating_add(size.h),
+    };
+    let Some(wa) = work_area_for_window(snapshot, window) else {
+        return pos;
+    };
+
+    // アンカー辺の再導出（5.2）＝ project_anchor へ委譲（Bottom は BottomSnapPolicy・
+    // Top/Left/Right は wa 対応辺固定・Free は identity）。二重定義しない（Req1.6/1.8）。
+    // project_anchor 内部の wa も同一 window 矩形から引くため補軸 clamp の wa と整合する。
+    let projected = project_anchor(anchor, pos, size, Some(snapshot));
+
+    // 補軸 clamp（5.1・可視性保証）: project_anchor が固定した軸は保持し、補助軸のみ
+    // wa 内へ縮退する（Bottom/Top→x・Left/Right→y・Free→両軸）。
+    match anchor {
+        Anchor::Bottom | Anchor::Top => PointPx {
+            x: clamp_axis(projected.x, wa.left, wa.right.saturating_sub(size.w)),
+            y: projected.y,
+        },
+        Anchor::Left | Anchor::Right => PointPx {
+            x: projected.x,
+            y: clamp_axis(projected.y, wa.top, wa.bottom.saturating_sub(size.h)),
+        },
+        Anchor::Free => PointPx {
+            x: clamp_axis(projected.x, wa.left, wa.right.saturating_sub(size.w)),
+            y: clamp_axis(projected.y, wa.top, wa.bottom.saturating_sub(size.h)),
+        },
     }
 }
 
@@ -342,5 +418,142 @@ mod tests {
             distance_from_bottom_saved,
             "この寸法差では左上基準は下端距離を保てないはず（テスト前提の健全性）"
         );
+    }
+
+    // ------------------------------------------------------------------
+    // project_restore（復元時再射影・5.1/5.2/5.3・design C1・Testing Strategy §2）
+    //   project_anchor（アンカー辺再導出）＋補軸 clamp（可視性保証）。
+    //   単一モニタ wa=(0,0,1920,1040)・size=(400,600) → bottom 揃え y=1040−600=440。
+    // ------------------------------------------------------------------
+
+    fn wa_rect(left: i32, top: i32, right: i32, bottom: i32) -> RectPx {
+        RectPx {
+            left,
+            top,
+            right,
+            bottom,
+        }
+    }
+
+    fn snapshot_of(rects: Vec<RectPx>) -> MonitorSnapshot {
+        MonitorSnapshot { work_areas: rects }
+    }
+
+    /// 復元テスト共通の char 寸（物理 px）。bottom 揃え y = wa.bottom − 600。
+    const SZ: SizePx = SizePx { w: 400, h: 600 };
+
+    /// 5.3: 域内 Free は恒等（identity 射影＋両軸 clamp が域内で no-op）。
+    #[test]
+    fn project_restore_free_inside_work_area_is_identity() {
+        let snap = snapshot_of(vec![wa_rect(0, 0, 1920, 1040)]);
+        // 窓 (500..900, 300..900) は wa 内へ完全に収まる
+        let pos = PointPx { x: 500, y: 300 };
+        assert_eq!(
+            project_restore(Anchor::Free, pos, SZ, &snap),
+            pos,
+            "域内 Free は不要な再射影をしない＝恒等（5.3）"
+        );
+    }
+
+    /// 5.3: 既に下端一致＋x 域内の Bottom はべき等＝恒等（不要な再射影をしない）。
+    #[test]
+    fn project_restore_bottom_already_anchored_inside_is_identity() {
+        let snap = snapshot_of(vec![wa_rect(0, 0, 1920, 1040)]);
+        // bottom 揃え y = 1040 − 600 = 440・x は wa 内
+        let pos = PointPx { x: 500, y: 440 };
+        assert_eq!(
+            project_restore(Anchor::Bottom, pos, SZ, &snap),
+            pos,
+            "既に下端一致＋x 域内なら恒等（5.3・べき等）"
+        );
+    }
+
+    /// 5.1/5.2: 保存 y が現 work area 外（背の高いモニタからの復元）の Bottom は、
+    /// 下端吸着で域内へ戻り（下端 = wa.bottom − h）水平位置は保持する。
+    #[test]
+    fn project_restore_bottom_y_outside_snaps_bottom_and_preserves_x() {
+        let snap = snapshot_of(vec![wa_rect(0, 0, 1920, 1040)]);
+        // 保存 y=2000 は現 work area 下端 1040 の外
+        let pos = PointPx { x: 500, y: 2000 };
+        let out = project_restore(Anchor::Bottom, pos, SZ, &snap);
+        assert_eq!(out.y, 1040 - 600, "下端吸着維持: y = wa.bottom − h（5.2）");
+        assert_eq!(out.y + SZ.h, 1040, "下端が wa.bottom に一致＝域内（5.1）");
+        assert_eq!(out.x, 500, "水平位置（X 意図）は保持（5.2）");
+    }
+
+    /// 5.1: 保存 x が現 work area 右外の Bottom は、x を [wa.left, wa.right−w] へ
+    /// clamp して域内へ戻す（モニタ喪失シナリオ＝最近傍 wa）。
+    #[test]
+    fn project_restore_bottom_x_outside_clamps_into_work_area() {
+        let snap = snapshot_of(vec![wa_rect(0, 0, 1920, 1040)]);
+        let pos = PointPx { x: 3000, y: 440 }; // x は wa 右外
+        let out = project_restore(Anchor::Bottom, pos, SZ, &snap);
+        assert_eq!(out.x, 1920 - 400, "x を [wa.left, wa.right−w] 内へ clamp（5.1）");
+        assert_eq!(out.x + SZ.w, 1920, "右端が wa.right に一致＝域内");
+        assert_eq!(out.y, 1040 - 600, "下端吸着は維持（5.2）");
+    }
+
+    /// 5.1/5.2: Left アンカーは x を wa.left へ固定し、補軸 y を域内へ clamp する。
+    #[test]
+    fn project_restore_left_pins_left_edge_and_clamps_y() {
+        let snap = snapshot_of(vec![wa_rect(0, 0, 1920, 1040)]);
+        let pos = PointPx { x: 3000, y: 2000 }; // x/y とも外
+        let out = project_restore(Anchor::Left, pos, SZ, &snap);
+        assert_eq!(out.x, 0, "左端固定: x = wa.left（5.2）");
+        assert_eq!(
+            out.y,
+            1040 - 600,
+            "補軸 y を [wa.top, wa.bottom−h] へ clamp（5.1）"
+        );
+    }
+
+    /// Free（域外）: identity 射影（アンカー辺固定なし）＋両軸のみ可視性 clamp。
+    #[test]
+    fn project_restore_free_clamps_both_axes_with_identity_projection() {
+        let snap = snapshot_of(vec![wa_rect(0, 0, 1920, 1040)]);
+        let pos = PointPx { x: 3000, y: 2000 }; // 両軸とも外
+        let out = project_restore(Anchor::Free, pos, SZ, &snap);
+        assert_eq!(
+            out,
+            PointPx {
+                x: 1920 - 400,
+                y: 1040 - 600
+            },
+            "Free＝アンカー辺再固定なし・両軸 clamp のみ（identity 射影＋可視性保証）"
+        );
+    }
+
+    /// 空 snapshot は全アンカーで恒等（架空矩形を発明しない・既存縮退流儀・5.1 note）。
+    #[test]
+    fn project_restore_empty_snapshot_is_identity() {
+        let snap = snapshot_of(vec![]);
+        let pos = PointPx { x: 3000, y: 2000 };
+        for anchor in ALL_ANCHORS {
+            assert_eq!(
+                project_restore(anchor, pos, SZ, &snap),
+                pos,
+                "空 snapshot は identity 縮退: {anchor:?}"
+            );
+        }
+    }
+
+    /// 5.1: どのモニタにも属さない復元位置は最近傍 wa を採り、その中へ吸着＋clamp
+    /// する（2 面構成・モニタ喪失シナリオ＝design §2）。
+    #[test]
+    fn project_restore_off_all_monitors_uses_nearest_work_area() {
+        // A=左・B=右の 2 面。保存位置は B のさらに右外＝どのモニタにも属さない
+        let a = wa_rect(0, 0, 1920, 1040);
+        let b = wa_rect(1920, 0, 3840, 1040);
+        let snap = snapshot_of(vec![a, b]);
+        // 窓中心 (5000+200, 500+300)=(5200,800) は B が最近傍
+        let pos = PointPx { x: 5000, y: 500 };
+        let out = project_restore(Anchor::Bottom, pos, SZ, &snap);
+        assert_eq!(out.y, 1040 - 600, "最近傍 B の下端へ吸着");
+        assert_eq!(
+            out.x,
+            3840 - 400,
+            "x を最近傍 B の [left, right−w] 内へ clamp（5.1）"
+        );
+        assert!(out.x >= b.left, "x は B 内");
     }
 }
