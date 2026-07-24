@@ -1466,4 +1466,125 @@ mod tests {
         parts.publisher.close();
         parts.handle.join().expect("clean close joins");
     }
+
+    // ---- 終了時フラッシュの統合檻（task 8.4・position-persist・design Testing Strategy「Integration
+    //      Tests §3」・要件 1.2/8.1・design 軸E: E1 write-through＋mpsc FIFO close／E2-lite 越境フェンス） ----
+
+    use areka_sylphya::persist::FsPersistIo;
+    use areka_sylphya::{load_scope, Axis};
+
+    /// シナリオ（task 8.4・position-persist）: 実 `FsPersistIo`（temp dir）上の実 sylphya アクターへ、
+    /// **`PersistWiring` の clone 送信端**（UI スレッド常駐端の代役）から `barrier` を挟まずに複数回
+    /// `persist_put` を投函し（n×DragEnd 相当・同一 scope の last-write-wins）、その後 **runtime 側の
+    /// publisher** から `barrier()`→`close()`→アクター `join` の終了系列（design「shutdown」step 10・
+    /// E2-lite）を駆動する。join 後にファイル（`<ghost root>/sylphya.toml`）を `load_scope` で読み戻し、
+    /// clone 投函の**最終値**が反映されていることを確認する。
+    ///
+    /// これは要件 1.2（正常終了時フラッシュ＝ドラッグ確定時 write-through への安全網）と 8.1（往復値
+    /// 等価の決定論檻）の統合檻であり、design 軸E の二重証明を兼ねる:
+    /// - **E1**（write-through＋mpsc FIFO close）: clone と runtime 側 publisher は同一 mpsc 送信端を
+    ///   共有する（`PersistWiring` は `{ publisher: SylphyaPublisher }` ゆえ clone した publisher が
+    ///   同一 FIFO）。clone が投函した put は、後続の `Close` 処理（Stop で積み残し破棄）より FIFO 順で
+    ///   **先に**処理されるため、close→join を経ればファイルへ確実に反映される。
+    /// - **E2-lite（越境フェンス）**: runtime 側 publisher から呼ぶ `barrier()` が、**別送信端**（clone）
+    ///   経由で enqueue 済みの put も被覆する（単一 FIFO・shutdown 時点で UI 送信は静止済み・design
+    ///   「軸E」バリデーション Issue 2 対応）。
+    ///
+    /// 判別性: 投函値は非 96 倍数の一意値（1234→1777・841→907）とし、最終値のみがファイルに現れる
+    /// （中間値 1234/841 は上書き消滅）ことを確認する——ファイルの最終値が観測できるのは、終了系列が
+    /// enqueue 済み put を処理したからに他ならない（barrier なしの clone put が確かにフラッシュされた証跡）。
+    ///
+    /// `barrier`/`join` の宙吊りに備え `run_bounded` で有界化し、temp dir は成功パスで掃除する
+    /// （`FsPersistIo.commit` は親ディレクトリを作らない＝`File::create` のみ・のため ghost scope root を
+    /// 事前作成する。本番では `profile/areka/` が既存の前提）。
+    #[test]
+    fn exit_flush_reflects_barrierless_clone_puts_after_shutdown_sequence() {
+        let root =
+            unique_temp_dir("exit_flush_reflects_barrierless_clone_puts_after_shutdown_sequence");
+        let _ = std::fs::remove_dir_all(&root);
+        // FsPersistIo.commit は親ディレクトリを作らない（`File::create` のみ）ため、ghost scope root を
+        // 事前作成する（本番では profile/areka/ が既存の前提）。未作成だと commit が Degraded になり
+        // ファイルが書かれず、この檻が意味を失う。
+        std::fs::create_dir_all(&root).expect("create ghost scope root dir");
+
+        let roots = ScopeRoots {
+            ghost: Some(root.clone()),
+            ..ScopeRoots::default()
+        };
+
+        // runtime 側 sylphya（実 FsPersistIo・実アクター・本番 boot と同一の spawn 経路）。
+        let parts = crate::sylphya_wiring::spawn_ghost_sylphya(roots.clone());
+
+        // `PersistWiring` の clone 送信端（UI スレッド常駐端の代役）。PersistWiring は
+        // `{ publisher: SylphyaPublisher }` ゆえ、clone した publisher が同一 mpsc 送信端＝同一 FIFO。
+        let ui_send_end = parts.publisher.clone();
+
+        // n×DragEnd 相当の barrier なし put（同一 scope 0・last-write-wins・非 96 倍数の判別値）。
+        ui_send_end.persist_put(
+            PersistScope::Ghost,
+            vec![
+                (PersistKey::WindowPos { scope: 0, axis: Axis::X }, "1234".into()),
+                (PersistKey::WindowPos { scope: 0, axis: Axis::Y }, "841".into()),
+            ],
+        );
+        ui_send_end.persist_put(
+            PersistScope::Ghost,
+            vec![
+                (PersistKey::WindowPos { scope: 0, axis: Axis::X }, "1777".into()),
+                (PersistKey::WindowPos { scope: 0, axis: Axis::Y }, "907".into()),
+            ],
+        );
+        // clone 送信端では barrier を一切呼ばない（＝終了時フラッシュ安全網に委ねる・要件 1.2）。
+        drop(ui_send_end);
+
+        // runtime 側 shutdown フェンス（design「shutdown」step 10 の barrier→close→join を同型で駆動）。
+        let SylphyaParts {
+            reader: _,
+            publisher,
+            handle,
+        } = parts;
+        run_bounded(
+            "runtime-side barrier -> close -> join (exit flush fence)",
+            std::time::Duration::from_secs(10),
+            move || {
+                // 越境フェンス: 別送信端（clone）経由で enqueue 済みの put も被覆する（単一 FIFO）。
+                publisher
+                    .barrier()
+                    .expect("runtime-side barrier must reflect clone-enqueued puts (live actor)");
+                publisher.close();
+                handle
+                    .join()
+                    .expect("sylphya actor joins cleanly after close");
+            },
+        );
+
+        // アクター join 後、ファイルの最終値が clone 投函の last-write-wins と値等価であること
+        // （barrier なし clone put が終了系列で確実にフラッシュされた・要件 1.2/8.1・E1＋E2-lite）。
+        let loaded = load_scope(PersistScope::Ghost, &roots, &FsPersistIo);
+        assert!(
+            loaded.contains(&(
+                PersistKey::WindowPos { scope: 0, axis: Axis::X },
+                "1777".to_string()
+            )),
+            "終了フラッシュ後、scope 0 の X はファイルへ clone 投函の最終値 1777 で反映されるべき: {loaded:?}"
+        );
+        assert!(
+            loaded.contains(&(
+                PersistKey::WindowPos { scope: 0, axis: Axis::Y },
+                "907".to_string()
+            )),
+            "終了フラッシュ後、scope 0 の Y はファイルへ clone 投函の最終値 907 で反映されるべき: {loaded:?}"
+        );
+        // 中間値が残っていないこと（last-write-wins の確認＝最終値のみが観測できるのは終了系列が
+        // enqueue 済み put を処理したから）。
+        assert!(
+            !loaded.iter().any(|(k, v)| matches!(
+                k,
+                PersistKey::WindowPos { scope: 0, axis: Axis::X }
+            ) && v == "1234"),
+            "中間値 1234 は最終値 1777 に上書きされているべき（last-write-wins）: {loaded:?}"
+        );
+
+        let _ = std::fs::remove_dir_all(&root);
+    }
 }

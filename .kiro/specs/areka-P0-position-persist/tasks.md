@@ -171,7 +171,7 @@
   - _Depends: 6.2_
   - _Boundary: placement/persist.rs tests_
 
-- [ ] 8.4 終了時フラッシュの統合檻
+- [x] 8.4 終了時フラッシュの統合檻
   - `PersistWiring` の clone 送信端（実経路と同型）から複数回の保存投函を行い、`barrier()`／`close()` を経てアクター join 後にファイルが最終値と一致することを確認する
   - 観測可能な完了条件: barrier なしで投函した保存が、shutdown 系列（barrier→close→join）の後に確実にファイルへ反映されていることがテストで確認できること
   - _Requirements: 1.2, 8.1_
