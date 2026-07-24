@@ -31,3 +31,5 @@ mod surface_systems_test;
 mod frame_time_test;
 #[path = "graphics/window_pos_systems_test.rs"]
 mod window_pos_systems_test;
+#[path = "graphics/wuc_restart_regression_test.rs"]
+mod wuc_restart_regression_test;
