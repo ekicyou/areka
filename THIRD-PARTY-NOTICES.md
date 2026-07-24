@@ -7,7 +7,7 @@ areka はバイナリ配布時に、以下の第三者パッケージのライ�
 areka 自身のライセンスは MIT です（ルートの `LICENSE-MIT` を参照）。
 
 使用ライセンス一覧:
-- MIT License (209 crate)
+- MIT License (210 crate)
 - zlib License (2 crate)
 - Apache License 2.0 (1 crate)
 - BSD 3-Clause "New" or "Revised" License (1 crate)
@@ -622,9 +622,9 @@ SOFTWARE.
 ## MIT License
 
 対象 crate:
-- futures-channel 0.3.32
-- futures-core 0.3.32
-- futures-io 0.3.32
+- futures-channel 0.3.33
+- futures-core 0.3.33
+- futures-io 0.3.33
 
 ```
 Copyright (c) 2016 Alex Crichton
@@ -1572,7 +1572,7 @@ SOFTWARE.
 ## MIT License
 
 対象 crate:
-- libc 0.2.186
+- libc 0.2.189
 
 ```
 Copyright (c) The Rust Project Developers
@@ -1681,7 +1681,7 @@ DEALINGS IN THE SOFTWARE.
 ## MIT License
 
 対象 crate:
-- zerocopy 0.8.54
+- zerocopy 0.8.55
 
 ```
 Copyright 2023 The Fuchsia Authors
@@ -2084,7 +2084,7 @@ SOFTWARE.
 - erased-serde 0.4.10
 - event-listener-strategy 0.5.4
 - event-listener 5.4.1
-- fastrand 2.4.1
+- fastrand 2.5.0
 - futures-lite 2.6.1
 - hermit-abi 0.5.2
 - itoa 1.0.18
@@ -2097,18 +2097,19 @@ SOFTWARE.
 - polling 3.11.0
 - portable-atomic-util 0.2.7
 - portable-atomic 1.14.0
-- proc-macro2 1.0.106
-- quote 1.0.46
+- proc-macro2 1.0.107
+- quote 1.0.47
 - rustix 1.1.4
 - rustversion 1.0.23
 - semver 1.0.28
-- serde 1.0.228
-- serde_core 1.0.228
-- serde_derive 1.0.228
-- serde_json 1.0.150
+- serde 1.0.229
+- serde_core 1.0.229
+- serde_derive 1.0.229
+- serde_json 1.0.151
 - syn 2.0.119
-- thiserror-impl 2.0.18
-- thiserror 2.0.18
+- syn 3.0.3
+- thiserror-impl 2.0.19
+- thiserror 2.0.19
 - typeid 1.0.3
 - unicode-ident 1.0.24
 - wasip2 1.0.4+wasi-0.2.12
