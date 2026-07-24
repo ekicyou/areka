@@ -16,6 +16,7 @@ fn init_com_mta() {
 
 #[test]
 fn test_graphics_core_invalidate_and_is_valid() {
+    crate::common::on_gpu_owner_thread(move || {
     let mut graphics = GraphicsCore::new().expect("GraphicsCore作成失敗");
 
     // 初期状態: 有効
@@ -45,10 +46,12 @@ fn test_graphics_core_invalidate_and_is_valid() {
         graphics.dwrite_factory().is_none(),
         "dwrite_factory() should return None after invalidate()"
     );
+    });
 }
 
 #[test]
 fn test_visual_new_and_invalidate() {
+    crate::common::on_gpu_owner_thread(move || {
     use windows::UI::Composition::Visual;
     use windows::core::Interface;
 
@@ -82,10 +85,12 @@ fn test_visual_new_and_invalidate() {
         visual.visual().is_none(),
         "visual() should return None after invalidate()"
     );
+    });
 }
 
 #[test]
 fn test_surface_new_and_invalidate() {
+    crate::common::on_gpu_owner_thread(move || {
     use windows::Foundation::Size;
     use windows::Graphics::DirectX::{DirectXAlphaMode, DirectXPixelFormat};
 
@@ -129,10 +134,12 @@ fn test_surface_new_and_invalidate() {
         surface.surface().is_none(),
         "surface() should return None after invalidate()"
     );
+    });
 }
 
 #[test]
 fn test_graphics_core_reinitialize() {
+    crate::common::on_gpu_owner_thread(move || {
     let mut graphics = GraphicsCore::new().expect("GraphicsCore作成失敗");
 
     // 初期状態
@@ -153,4 +160,5 @@ fn test_graphics_core_reinitialize() {
         initial_d2d, new_d2d,
         "Reinitialized GraphicsCore should have different device pointers"
     );
+    });
 }

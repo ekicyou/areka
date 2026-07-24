@@ -37,6 +37,7 @@ fn setup_world() -> World {
 
 #[test]
 fn test_dcomp_window_visual_gets_dcomp_components() {
+    crate::common::on_gpu_owner_thread(move || {
     let mut world = setup_world();
 
     // Window を生成
@@ -63,10 +64,12 @@ fn test_dcomp_window_visual_gets_dcomp_components() {
         world.get::<SurfaceGraphicsDirty>(visual_entity).is_some(),
         "DComp Visual should have SurfaceGraphicsDirty"
     );
+    });
 }
 
 #[test]
 fn test_orphan_visual_does_not_get_dcomp_components() {
+    crate::common::on_gpu_owner_thread(move || {
     let mut world = setup_world();
 
     // orphan Visual（Window 祖先なし）
@@ -80,6 +83,7 @@ fn test_orphan_visual_does_not_get_dcomp_components() {
         world.get::<VisualGraphics>(visual_entity).is_none(),
         "Orphan Visual should NOT have VisualGraphics"
     );
+    });
 }
 
 // ========================================================================
@@ -88,6 +92,7 @@ fn test_orphan_visual_does_not_get_dcomp_components() {
 
 #[test]
 fn test_invalidate_dependent_components_invalidates_wuc_resource() {
+    crate::common::on_gpu_owner_thread(move || {
     let mut world = setup_world();
 
     // WucGraphicsResource が valid であることを確認
@@ -110,4 +115,5 @@ fn test_invalidate_dependent_components_invalidates_wuc_resource() {
         !wgr.is_valid(),
         "WucGraphicsResource should be invalidated after GraphicsCore invalidation"
     );
+    });
 }

@@ -75,7 +75,7 @@
   - _Requirements: 1.1, 1.2, 1.3, 4.3_
   - _Boundary: C4 SharedGpuFixture_
 
-- [ ] 5.2 wintf graphics 各ドメインテストの fixture 委譲への置換
+- [x] 5.2 wintf graphics 各ドメインテストの fixture 委譲への置換
   - wintf graphics スイート配下の各テストが個別に持つ WUC スタック生成処理を、タスク 5.1 の共有 fixture 経由の呼び出しへ置換する（テスト本体のアサーションは変更しない）
   - 観測可能な完了条件: 置換後の wintf graphics スイートが既定並列設定で全テスト成功する
   - _Requirements: 1.1, 1.2, 1.3, 2.4_

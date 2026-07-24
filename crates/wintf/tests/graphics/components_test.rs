@@ -85,14 +85,17 @@ fn make_surface(
 
 #[test]
 fn visual_graphics_default_is_invalid_and_empty() {
+    crate::common::on_gpu_owner_thread(move || {
     let vg = VisualGraphics::default();
     assert!(!vg.is_valid(), "default は GPU リソースなし");
     assert!(vg.visual().is_none());
     assert!(vg.parent_visual().is_none());
+    });
 }
 
 #[test]
 fn visual_graphics_new_with_parent_holds_both_references() {
+    crate::common::on_gpu_owner_thread(move || {
     let resource = make_wuc();
     let visual = make_visual(&resource);
     let parent = make_visual(&resource);
@@ -101,10 +104,12 @@ fn visual_graphics_new_with_parent_holds_both_references() {
     assert!(vg.is_valid());
     assert!(vg.visual().is_some());
     assert!(vg.parent_visual().is_some(), "親 Visual がキャッシュされる");
+    });
 }
 
 #[test]
 fn visual_graphics_set_parent_visual_updates_cache() {
+    crate::common::on_gpu_owner_thread(move || {
     let resource = make_wuc();
     let visual = make_visual(&resource);
     let parent = make_visual(&resource);
@@ -117,10 +122,12 @@ fn visual_graphics_set_parent_visual_updates_cache() {
 
     vg.set_parent_visual(None);
     assert!(vg.parent_visual().is_none(), "None で解除できる");
+    });
 }
 
 #[test]
 fn visual_graphics_invalidate_clears_visual_and_parent() {
+    crate::common::on_gpu_owner_thread(move || {
     let resource = make_wuc();
     let visual = make_visual(&resource);
     let parent = make_visual(&resource);
@@ -131,10 +138,12 @@ fn visual_graphics_invalidate_clears_visual_and_parent() {
     assert!(!vg.is_valid());
     assert!(vg.visual().is_none(), "visual も解放される");
     assert!(vg.parent_visual().is_none(), "parent_visual キャッシュも解放される");
+    });
 }
 
 #[test]
 fn visual_graphics_debug_reports_presence_flags() {
+    crate::common::on_gpu_owner_thread(move || {
     let resource = make_wuc();
     let visual = make_visual(&resource);
 
@@ -145,10 +154,12 @@ fn visual_graphics_debug_reports_presence_flags() {
         dbg.contains("inner: true") && dbg.contains("parent_visual: false"),
         "COM ポインタではなく有無フラグを出力する: {dbg}"
     );
+    });
 }
 
 #[test]
 fn visual_graphics_on_remove_detaches_from_parent_visual() {
+    crate::common::on_gpu_owner_thread(move || {
     let resource = make_wuc();
     let parent = make_visual(&resource);
     let child = make_visual(&resource);
@@ -172,10 +183,12 @@ fn visual_graphics_on_remove_detaches_from_parent_visual() {
         remove_child(&parent, &child).is_err(),
         "on_remove フックが親 Visual から子をデタッチ済み"
     );
+    });
 }
 
 #[test]
 fn visual_graphics_on_remove_without_parent_is_safe() {
+    crate::common::on_gpu_owner_thread(move || {
     let resource = make_wuc();
     let visual = make_visual(&resource);
 
@@ -184,10 +197,12 @@ fn visual_graphics_on_remove_without_parent_is_safe() {
 
     // parent_visual = None でも on_remove はパニックしない
     world.despawn(entity);
+    });
 }
 
 #[test]
 fn visual_graphics_on_remove_after_invalidate_is_safe() {
+    crate::common::on_gpu_owner_thread(move || {
     let resource = make_wuc();
     let parent = make_visual(&resource);
     let child = make_visual(&resource);
@@ -204,6 +219,7 @@ fn visual_graphics_on_remove_after_invalidate_is_safe() {
         .unwrap()
         .invalidate();
     world.despawn(entity);
+    });
 }
 
 // ==========================================================================
@@ -212,6 +228,7 @@ fn visual_graphics_on_remove_after_invalidate_is_safe() {
 
 #[test]
 fn surface_graphics_set_surface_replaces_content_in_place() {
+    crate::common::on_gpu_owner_thread(move || {
     let resource = make_wuc();
     let (surface1, brush1) = make_surface(&resource, 32, 32);
     let (surface2, brush2) = make_surface(&resource, 64, 48);
@@ -227,10 +244,12 @@ fn surface_graphics_set_surface_replaces_content_in_place() {
     sg.set_surface(surface2, brush2, (64, 48));
     assert!(sg.is_valid());
     assert_eq!(sg.size, (64, 48), "サイズも同時に更新される");
+    });
 }
 
 #[test]
 fn surface_graphics_clear_resets_surface_and_size() {
+    crate::common::on_gpu_owner_thread(move || {
     let resource = make_wuc();
     let (surface, brush) = make_surface(&resource, 32, 32);
 
@@ -244,4 +263,5 @@ fn surface_graphics_clear_resets_surface_and_size() {
     assert!(sg.surface().is_none());
     assert!(sg.brush().is_none());
     assert_eq!(sg.size, (0, 0), "サイズもリセットされる");
+    });
 }

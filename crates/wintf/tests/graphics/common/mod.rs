@@ -21,6 +21,8 @@ use std::sync::OnceLock;
 use std::sync::mpsc::{Sender, channel};
 
 use windows::Win32::System::Com::{COINIT_MULTITHREADED, CoInitializeEx};
+use windows::Win32::System::WinRT::DQTAT_COM_NONE;
+use wintf::com::wuc::create_dispatcher_queue_controller;
 
 /// オーナースレッドへ送るジョブ（クロージャは自前で結果チャネルへ返す）。
 type Job = Box<dyn FnOnce() + Send>;
@@ -42,6 +44,12 @@ fn owner_sender() -> &'static Sender<Job> {
                 unsafe {
                     let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
                 }
+                // このスレッドに DispatcherQueueController を **1 個だけ常駐**させる。
+                // 以降テストの `WucGraphicsResource::new` はこの既存 DQ を再利用し（新規 controller
+                // を作らない）、controller の生成/破棄の反復リーク（0x8001010E）を根絶する。
+                // `_resident` はスレッド生存期間（＝プロセス終了まで）保持する。
+                let _resident = create_dispatcher_queue_controller(DQTAT_COM_NONE)
+                    .expect("常駐 DispatcherQueueController の生成失敗（オーナースレッド）");
                 // 全ジョブを逐次実行（GPU/WUC 操作は常にこの単一スレッド上）。
                 while let Ok(job) = rx.recv() {
                     job();
@@ -88,11 +96,10 @@ where
 }
 
 mod fixture_self_tests {
-    use super::*;
-    use windows::Win32::System::WinRT::DQTAT_COM_NONE;
     use windows::UI::Composition::Compositor;
-    use wintf::com::wuc::create_dispatcher_queue_controller;
     use wintf::ecs::{GraphicsCore, WucGraphicsResource};
+
+    use super::on_gpu_owner_thread;
 
     /// フルスタック（GraphicsCore + WucGraphicsResource＝Compositor）を生成→破棄する最小操作。
     fn make_and_drop_full_stack() {
@@ -123,12 +130,12 @@ mod fixture_self_tests {
         on_gpu_owner_thread(make_and_drop_full_stack);
     }
 
-    /// 値の受け渡しと DispatcherQueue 単体生成もオーナースレッド上で成立すること。
+    /// 値の受け渡しと、オーナースレッド常駐 DispatcherQueue を再利用した Compositor 生成が
+    /// 成立すること（オーナースレッドでは生の controller 生成はせず、常駐 DQ を使う）。
     #[test]
     fn owner_thread_returns_value() {
         let n = on_gpu_owner_thread(|| {
-            let _dq = create_dispatcher_queue_controller(DQTAT_COM_NONE)
-                .expect("DispatcherQueueController");
+            // 常駐 DispatcherQueue を使って Compositor を生成（新規 controller は作らない）。
             let _c = Compositor::new().expect("Compositor::new");
             42usize
         });

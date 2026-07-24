@@ -63,6 +63,7 @@ fn spawn_clip_entity(world: &mut World, visual: Visual, width: f32, height: f32)
 
 #[test]
 fn clip_sync_applies_all_clip_shape_variants() {
+    crate::common::on_gpu_owner_thread(move || {
     let mut world = setup_world();
     let mut schedule = clip_schedule();
 
@@ -103,10 +104,12 @@ fn clip_sync_applies_all_clip_shape_variants() {
     // エラーなく完走する（COM エラー時は error! ログ + continue のため panic しない設計だが、
     // 正常系では cast().expect が通ることを実行で確認する）
     schedule.run(&mut world);
+    });
 }
 
 #[test]
 fn clip_sync_clears_clip_when_clip_is_none() {
+    crate::common::on_gpu_owner_thread(move || {
     let mut world = setup_world();
     let mut schedule = clip_schedule();
 
@@ -126,10 +129,12 @@ fn clip_sync_clears_clip_when_clip_is_none() {
     // clip = None に変更 → クリップ解除（clear_clip）経路
     world.get_mut::<Visual>(entity).unwrap().clip = None;
     schedule.run(&mut world);
+    });
 }
 
 #[test]
 fn clip_sync_clears_clip_when_size_is_zero() {
+    crate::common::on_gpu_owner_thread(move || {
     let mut world = setup_world();
     let mut schedule = clip_schedule();
 
@@ -145,10 +150,12 @@ fn clip_sync_clears_clip_when_size_is_zero() {
     );
 
     schedule.run(&mut world);
+    });
 }
 
 #[test]
 fn clip_sync_skips_when_wuc_resource_is_absent() {
+    crate::common::on_gpu_owner_thread(move || {
     // WucGraphicsResource なし（ULW モード相当）→ 早期リターン
     let core = GraphicsCore::new().expect("GraphicsCore 作成失敗");
     let mut world = World::new();
@@ -174,4 +181,5 @@ fn clip_sync_skips_when_wuc_resource_is_absent() {
     let mut schedule = clip_schedule();
     schedule.run(&mut world);
     // パニックなしで完走すれば early return が機能している
+    });
 }
