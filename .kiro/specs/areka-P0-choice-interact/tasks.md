@@ -37,7 +37,7 @@
   - _Requirements: 1.2, 1.3, 1.4, 3.4_
   - _Boundary: hover_action_
 
-- [ ] 3.3 クリック確定判定関数の実装（stale／原子性）
+- [x] 3.3 クリック確定判定関数の実装（stale／原子性）
   - クリック時点の現行行ジオメトリのみから ChoiceSelection を構成する純関数を実装し、非表示中・非 hit・キャッシュのみのケースを None とする
   - Observable: 単体テストでヒット時の ChoiceSelection フィールド一致、非 hit／非表示／stale 行での非構成（None）を確認する
   - _Requirements: 2.1, 2.2, 2.3, 3.1, 3.2, 6.2, 6.3_

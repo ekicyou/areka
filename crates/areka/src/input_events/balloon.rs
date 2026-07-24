@@ -203,6 +203,52 @@ pub(crate) fn hover_action(
     }
 }
 
+/// クリック確定の決定（純関数・R2.1/2.2/2.3/3.1/3.2）。
+///
+/// クリック時点の**現行**行ジオメトリ（`rows`）のみから [`ChoiceSelection`] を構成する
+/// 副作用なしの決定的関数。World・runtime 借用・GPU・send・logging 一切不要——入力→
+/// `Option<ChoiceSelection>` のみ。発行シンクへの送出・一度きり制御・ログは呼び手
+/// （配線層 task 4.2）の領分。
+///
+/// - `active == false`（choice 非表示）→ `None`（hit 判定より前に短絡・R3.1）。
+///   choice 消滅時の stale／原子性ガード＝非表示中はたとえ矩形内座標でも発行しない。
+/// - `active == true` かつ非ヒット → `None`（[`hit_choice_row`] が `None`・R2.3）。
+/// - `active == true` かつヒット → **現行** `rows[i]`（`i` は [`hit_choice_row`] の
+///   返す index）の各フィールドを clone 転写した [`ChoiceSelection`] を返す。
+///   `id`/`label`/`references` は現行ヒット行から不透明転写（キャッシュ行からは決して
+///   読まない・R2.5/3.2）。`scope` は引数由来（`BalloonWindowMarker.scope`）。
+///   `ordinal` はワイヤ形に含めない（漏洩防止・design 2.6）。
+///
+/// stale 棄却（R3.2）は本関数が**現行 rows のみ**を読むことで成立する: 以前 hover した
+/// 座標に現行 rows のどの行も無ければ非ヒット＝`None`、別行が現れていればその現行行から
+/// 構成される（キャッシュではなく現行ジオメトリが正本）。
+///
+/// `#[allow(dead_code)]`: 本番消費（配線層 task 4.2）まで到達者なし——単体檻のみ到達（M1 暫定抑止）。
+#[allow(dead_code)]
+pub(crate) fn click_selection(
+    active: bool,
+    rows: &[ChoiceHitRow],
+    x: f32,
+    y: f32,
+    scope: usize,
+) -> Option<ChoiceSelection> {
+    // 非表示中は発行しない（hit 判定より前に短絡・消滅時 stale／原子性ガード・R3.1）。
+    if !active {
+        return None;
+    }
+    // 現行 rows のヒット判定を再利用（非ヒットは None・R2.3）。stale 棄却は現行 rows のみを
+    // 読むことで自然に成立する（キャッシュ行は参照しない・R2.5/3.2）。
+    let i = hit_choice_row(rows, x, y)?;
+    let hit = &rows[i];
+    // 現行ヒット行から不透明転写（id/label/references は clone・scope は arg・ordinal 非含有）。
+    Some(ChoiceSelection {
+        id: hit.id.clone(),
+        label: hit.label.clone(),
+        scope,
+        references: hit.references.clone(),
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -534,5 +580,126 @@ mod tests {
             HoverAction::Inject(None),
             "表示中・Some(2)→None は Inject(None)（ハイライト解除・R1.3）"
         );
+    }
+
+    // -------------------------------------------------------------------------
+    // click_selection 純関数檻（task 3.3・design「純関数判定核」／R2.1/2.2/2.3/3.1/3.2）
+    //
+    // active・現行 rows・click 座標・scope の入力から確定 ChoiceSelection の構成を
+    // 決める純関数を、World・runtime・send 不要で決定的に判定する。
+    // ヒット時のフィールド一致（scope は arg 由来・ordinal 非含有）、非 hit／非表示／
+    // stale 行での非構成（None）を網羅する（R2.1/2.2/2.3/3.1/3.2/6.2/6.3）。
+    // -------------------------------------------------------------------------
+
+    /// `references` を明示指定できる `ChoiceHitRow` を組む（転写忠実性の検証用）。
+    fn row_with_refs(
+        ordinal: usize,
+        left: f32,
+        top: f32,
+        right: f32,
+        bottom: f32,
+        references: Vec<String>,
+    ) -> ChoiceHitRow {
+        ChoiceHitRow {
+            ordinal,
+            id: format!("q{ordinal}"),
+            label: format!("label{ordinal}"),
+            references,
+            rect: HitRectPx {
+                left,
+                top,
+                right,
+                bottom,
+            },
+        }
+    }
+
+    /// ヒット確定（R2.1/2.2）: 表示中・ヒット座標では現行ヒット行の全フィールドを
+    /// clone 転写した `ChoiceSelection` を返す。scope は arg 由来・ordinal は非含有。
+    #[test]
+    fn click_hit_builds_selection_from_current_row() {
+        let rows = [
+            row_with_refs(0, 0.0, 0.0, 100.0, 20.0, vec!["a".to_string()]),
+            row_with_refs(
+                1,
+                0.0,
+                20.0,
+                100.0,
+                40.0,
+                vec!["r0".to_string(), "r1".to_string()],
+            ),
+        ];
+        // (50, 30) は index 1 の行内。
+        let sel = click_selection(true, &rows, 50.0, 30.0, 7)
+            .expect("表示中・ヒット座標では ChoiceSelection を構成する");
+        assert_eq!(sel.id, "q1", "id は現行ヒット行から転写");
+        assert_eq!(sel.label, "label1", "label は現行ヒット行から転写");
+        assert_eq!(sel.scope, 7, "scope は引数由来（BalloonWindowMarker.scope）");
+        assert_eq!(
+            sel.references,
+            vec!["r0".to_string(), "r1".to_string()],
+            "references は現行ヒット行から忠実転写"
+        );
+    }
+
+    /// 非ヒット→非発行（R2.3）: 表示中でも全矩形外の座標なら None。
+    #[test]
+    fn click_non_hit_returns_none() {
+        let rows = [row_with_refs(0, 10.0, 20.0, 50.0, 40.0, Vec::new())];
+        assert_eq!(
+            click_selection(true, &rows, 5.0, 5.0, 0),
+            None,
+            "全矩形外の click は非構成（None・R2.3）"
+        );
+    }
+
+    /// 非表示中は非発行（R3.1）: `active == false` は、たとえ矩形内座標でも None。
+    /// hit 判定より前に短絡する（消滅時の stale／原子性ガード）。
+    #[test]
+    fn click_inactive_returns_none_even_inside_rect() {
+        let rows = [row_with_refs(0, 10.0, 20.0, 50.0, 40.0, Vec::new())];
+        // (30, 30) は矩形内だが active=false ゆえ None。
+        assert_eq!(
+            click_selection(false, &rows, 30.0, 30.0, 0),
+            None,
+            "非表示中（active=false）は矩形内でも非構成（None・R3.1）"
+        );
+    }
+
+    /// stale 行棄却（R3.2/6.3）: 以前ヒットしていた座標に、現行 rows ではどの行も
+    /// 存在しない（レイアウト差替後）場合、同座標の click は None。
+    /// 現行ジオメトリのみを読むことを、キャッシュ座標を覆わない現行 rows で固定する。
+    #[test]
+    fn click_stale_coords_not_in_current_rows_returns_none() {
+        // hover 時代には座標 (30, 30) に行があったが、現行 rows はその座標を覆わない
+        // （行が消滅／別位置へ差し替わった）。
+        let current = [row_with_refs(0, 200.0, 200.0, 240.0, 220.0, Vec::new())];
+        assert_eq!(
+            click_selection(true, &current, 30.0, 30.0, 0),
+            None,
+            "現行 rows がクリック座標を覆わなければ stale 棄却で None（R3.2）"
+        );
+    }
+
+    /// stale 差替（R3.2/2.5）: 同座標に別行が現れた場合、確定は必ず**現行**行から
+    /// 構成される（キャッシュではなく現行ジオメトリが正本）。
+    #[test]
+    fn click_replaced_row_builds_from_current_not_cached() {
+        // 現行 rows: 座標 (30, 30) を覆うのは ordinal 9 の別行のみ。
+        let current = [row_with_refs(9, 10.0, 20.0, 50.0, 40.0, vec!["z".to_string()])];
+        let sel = click_selection(true, &current, 30.0, 30.0, 3)
+            .expect("現行行がヒットするので構成される");
+        assert_eq!(sel.id, "q9", "確定は現行ヒット行（差替後）から構成される");
+        assert_eq!(sel.label, "label9", "label も現行行から");
+        assert_eq!(sel.references, vec!["z".to_string()], "references も現行行から");
+        assert_eq!(sel.scope, 3, "scope は引数由来");
+    }
+
+    /// 空 references の忠実転写: 参照列が空でも空 Vec として構成される。
+    #[test]
+    fn click_empty_references_transcribed_as_empty() {
+        let rows = [row_with_refs(0, 0.0, 0.0, 100.0, 20.0, Vec::new())];
+        let sel = click_selection(true, &rows, 50.0, 10.0, 0).expect("ヒットするので構成される");
+        assert!(sel.references.is_empty(), "空 references は空 Vec として転写");
     }
 }
