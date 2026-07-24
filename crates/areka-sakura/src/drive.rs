@@ -177,7 +177,11 @@ where
             return ControlFlow::Continue(());
         }
 
-        let StartTalk { script, talk_id, .. } = start;
+        let StartTalk {
+            script,
+            talk_id,
+            epilogue,
+        } = start;
 
         // 上流パーサで Instruction 列へ変換（再パースしない・R1.2）→ 純粋コンパイル。
         let instructions = areka_parsers::sakura::parse(&script);
@@ -185,9 +189,14 @@ where
         // sakura は値源を所有せず、この凍結像だけを見る（provider 差替で本層は無改変＝差替シーム）。
         let compiled = compile(&instructions, &self.system_vars);
 
+        // epilogue を compile 後・空判定**前**に末尾 carrier cue として付加する（design C12・R3.4）。
+        // `epilogue.is_empty()` なら恒等（既存経路完全不変）。epilogue-only talk（空 script＋epilogue）は
+        // ここで 1 cue 以上の非空 sheet になり、通常再生して即時完走する（空判定を通過する）。
+        let sheet = crate::compile::append_epilogue(compiled.sheet, &epilogue);
+
         // 空 sheet: 時間軸駆動せず即終端（R1.4/R6.2）。end は Ended 固定でなく compiled.end
-        // （裸の `\-` は空 sheet＋Quit）。
-        if compiled.sheet.is_empty() {
+        // （裸の `\-` は空 sheet＋Quit）。epilogue 付加後も空なら epilogue も空（恒等）ゆえ従来挙動。
+        if sheet.is_empty() {
             self.send_done(talk_id, compiled.end);
             return ControlFlow::Break(());
         }
@@ -195,7 +204,7 @@ where
         // 非空 sheet: 刻印は初回 Tick に遅延（アンカー＝初回注入時刻）。台本を保持して継続。
         self.phase = TalkPhase::Armed {
             talk_id,
-            sheet: compiled.sheet,
+            sheet,
             end: compiled.end,
         };
         ControlFlow::Continue(())

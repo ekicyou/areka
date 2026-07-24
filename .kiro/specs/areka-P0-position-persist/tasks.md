@@ -75,7 +75,7 @@
   - _Requirements: 3.4_
   - _Boundary: areka-talk_
 
-- [ ] 4.2 (P) `append_epilogue` の実装と sakura `drive.rs` への結線
+- [x] 4.2 (P) `append_epilogue` の実装と sakura `drive.rs` への結線
   - CueSheet 末尾（既存 cue の `max(start_time+duration)`・duration 0）へ epilogue を carrier cue として付加する純関数を `areka-sakura` に実装する
   - `drive.rs` の `on_start` で compile 後・空判定前に本関数を適用する（epilogue 空は恒等＝既存経路不変）
   - 観測可能な完了条件: 非空 epilogue を渡すと CueSheet の末尾に carrier cue が追加され、既存末尾要素（選択待ちなど）より後の時刻に安定ソートで並ぶことがテストで確認できること
