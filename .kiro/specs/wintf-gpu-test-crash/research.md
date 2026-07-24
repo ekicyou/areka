@@ -148,3 +148,87 @@ brief の推奨方針（A を主・B を A 確定後の縮退選択肢として�
 2. Option A（根因修正）の介入範囲: `WucGraphicsResource` 単体への `Drop`/`shutdown()` 追加に留めるか、`WinApp` 終了経路（`runtime/mod.rs`）まで含めて本番の明示 teardown を新設するか。
 3. 回帰テスト（Requirement 5）の実装粒度: 既存 `wuc_graphics_resource_lifecycle`（同一関数内）を拡張するか、`tests/graphics/` に「2つの独立 `#[test]` 相当」を模した新規統合テストを追加するか（libtest のスレッド分離を実際に再現する必要がある点に注意）。
 4. ~~`draw_readback_test.rs` 等の追加候補バイナリが実際にクラッシュした場合、Requirement 2 AC3 の是正をこの spec のスコープに含めるか、別 spec へ切り出すか~~ — **✅ 解決済み（requirements discussion 議題1・開発者裁定 2026-07-24）**: 本 spec は全並行開発を閉塞するブロッカー解消 spec であり早期解決が優先、スコープ拡大許容。多重 WUC 生成構造を持つ全テストバイナリ（`areka-emo-text` 含む）の検証＋クラッシュ確認時の緑化までを本 spec 内で完遂する。除外は各クレートの本番ソースコード変更のみで、テストコード（テストハーネス）是正は全クレートで許容（requirements.md Boundary Context / Requirement 2 AC3-AC4 に反映済み）。
+
+---
+
+# 設計フェーズ追記（kiro-spec-design・2026-07-24）
+
+## Summary
+- **Feature**: `wintf-gpu-test-crash`
+- **Discovery Scope**: Extension（既存 WUC ライフサイクルの調査・是正）＋ Complex Investigation（根因未確定のため調査フェーズ先行の phase-gate 設計）
+- **Key Findings**:
+  - 多重 WUC 生成バイナリの全数インベントリを確定（下記）。gap analysis の候補（wintf graphics／areka bin／areka-emo-text tests）に加え、**`wintf --lib`（in-source テスト）・`wintf --test visual`・`areka-emo-text --lib`（`src/actor.rs` の in-source テスト 5 箇所）** も同一プロセス多重 WUC 生成構造を持つことを grep 実測で確認。
+  - `DQTYPE_THREAD_CURRENT`（`com/wuc.rs:126-135`）により DispatcherQueue は**生成スレッド束縛**。libtest は `#[test]` ごとに別スレッドを spawn するため、Path B（共有 fixture）は素朴な `OnceLock` 共有ではスレッド親和性違反になる——**専用オーナースレッド＋クロージャ marshal 型**（B1）が安全形。
+  - `wuc_spike.rs:162-191` に `ShutdownQueueAsync` 発行→`Status()` ポーリングドレイン→controller 最後 drop の実証済みパターンが存在。Path A の実装テンプレートとして流用可能。
+  - `WucGraphicsResourceInner`（`wuc_resource.rs:27-34`）は宣言順 drop のみで明示 shutdown なし——gap analysis 所見を再確認。
+
+## Research Log（設計フェーズ）
+
+### 多重 WUC 生成テストバイナリの全数インベントリ（Requirement 2 AC3 の検証対象母集団）
+- **Context**: R2 AC3/AC4 は「同一プロセス内 2 個以上の WUC/GPU スタック生成構造を持つ全テストバイナリ」の実測検証と緑化を要求する。
+- **Sources Consulted**: `WucGraphicsResource::new(` の全 crate grep（2026-07-24・本 worktree）。
+- **Findings**（バイナリ単位・呼出箇所つき）:
+  1. `wintf --test graphics` — 8 ファイルが WUC 生成（`clip_sync_system_test.rs:26`・`components_test.rs:29`・`window_pos_systems_test.rs:103`・`reinit_unit_test.rs:58,95`・`dcomp_integration_test.rs:24`・`surface_systems_test.rs:37`・`surface_pixel_equivalence_test.rs:303`）＝クラッシュ確認済み（brief）
+  2. `areka` bin（in-crate テスト）— `src/emo2_boot/spine.rs:257`（`make_world_with_gpu()`）＝クラッシュ確認済み（brief・`spine_e2e_kero_blink_one_cycle_golden`）
+  3. `wintf --test visual` — `tests/visual/common/mod.rs:45`（共有ヘルパー）＋`graphics_auto_creation_test.rs:31`＝**未実測**
+  4. `wintf --lib` — in-source テスト: `src/ecs/graphics/wuc_resource.rs:160,189`・`src/ecs/graphics/tests.rs:52,89`・`src/com/wuc.rs`（tests 内で `create_dispatcher_queue_controller`＋`Compositor` を 2 テスト）＝**未実測**
+  5. `areka-emo-text --lib` — `src/actor.rs:1181,1268,1365,1539,2233`（in-source テスト 5 箇所）＝**未実測**
+  6. `areka-emo-text` 統合テスト各バイナリ — `draw_readback_test.rs:101`（ヘルパー・`#[test]` 2 個が呼ぶ）・`emo2_fixture_e2e_test.rs:241`・`attach_wiring_test.rs:52`・`choice_fixture_test.rs:162`・`viewbox_scroll_test.rs:98`＝**未実測**（バイナリごとに WUC 生成 `#[test]` 数の選別要）
+  7. `areka-emo-present --lib` — `src/presenter.rs:531`＝**未実測**（1 箇所・多重かは `#[test]` 数次第）
+- **Implications**: 検証マトリクス（design.md C6）はこの 7 グループを母集団とし、`cargo test --workspace`（R2 AC1）で総括判定する。未実測バイナリが現状緑なら「なぜ graphics だけ落ちるか」の差分自体が根因ヒントになる（gap analysis §4 の指摘どおり）。
+
+### Path B の実現形とスレッド親和性
+- **Context**: 共有 fixture 化（Approach B）が libtest のテスト毎スレッド分離と両立するかの構造確認。
+- **Findings**: `DQTYPE_THREAD_CURRENT` により DispatcherQueue／Compositor は生成スレッドに束縛。`OnceLock<World>` の素朴共有は「fixture 生成スレッド ≠ 利用テストスレッド」となり WUC スレッド親和規約（memory `areka-wuc-runs-on-mta-thread`・`unsafe impl Send/Sync` の SAFETY 条件「同時呼び出しなし」）を破る恐れがある。
+- **Implications**: B 採用時は **B1: 専用オーナースレッド常駐＋チャネルでクロージャを marshal して実行**（GPU 操作は常に同一スレッド）を正とする。副次効果として GPU テストの直列化（並列実行での多重生成も構造的に消える）。
+
+### 回帰檻（R5）と Path B の緊張関係
+- **Context**: R5 AC1/AC2 は「同一プロセス内 WUC スタック 2 回以上連続生成」する回帰テストが**安定成功**することを要求。B は生成回避策であり、素の再生成が依然クラッシュするなら檻が立たない。
+- **Findings**: 切り分け実験 (c)（明示 `ShutdownQueueAsync` ドレイン挿入で 2 個目が通るか）が緑なら、「処方された安全再生成プロトコル」を檻テスト内で常用することで B 採用下でも R5 を充足できる。実験 (c) を含む全緩和が不成立（環境が再生成を全面禁止）の場合、R5 AC1+AC2 は**いかなる設計でも充足不能**＝要件エスカレーション事由。
+- **Implications**: 判定ゲート G1 に「安全再生成プロトコル成立/不成立」を明示出力として組み込み、不成立時は設計内で糊塗せずエスカレーションする（design.md C2）。
+
+## Architecture Pattern Evaluation
+
+| Option | Description | Strengths | Risks / Limitations | Notes |
+|--------|-------------|-----------|---------------------|-------|
+| Phase-gate（調査先行→判定→条件付き是正） | R3 の bisect・cdb・切り分け実験を必須先行させ、判定ゲート G1 で A/B/C を選択 | R3/R4 の要件構造（根因確定が修正選択の前提）に 1:1 で適合・憶測実装を構造的に排除 | 調査結果次第で実装範囲が変動（File Structure Plan が条件分岐） | **採用**。requirements discussion で root-cause-first が明示裁定済み |
+| 即時 Path B 先行（緑化優先→根因調査後追い） | 共有 fixture でまず workspace 緑へ | 最速で DoD 閉塞解除 | R3 AC1/AC2・R4 AC1 の宣言なしに修正を選ぶことになり要件違反・根因を隠す | 棄却（brief・requirements とも root-cause-first を明記） |
+| 即時 Path C（プロセス分離） | バイナリ分割で前提条件を消す | 確実に緑 | R3/R5 未充足・`structure.md` テスト入口固定化規約から逸脱 | 最終避難路としてのみ保持 |
+
+## Design Decisions（設計フェーズ）
+
+### Decision: Phase-gate 構造（調査 3 フェーズ→判定ゲート G1→条件付き是正）
+- **Context**: 根因が未確定（H-env vs H-code・クラッシュ点未特定）のまま修正経路 A/B/C を静的に確定できない。要件（R3→R4→R1/R2/R5）が「調査→宣言→是正」の順序を規定している。
+- **Alternatives Considered**: 上記 Architecture Pattern Evaluation の 3 案。
+- **Selected Approach**: Phase 0（環境記録）→ Phase 1（bisect `68bd2e3e~1`）→ Phase 2（cdb/WinDbg 実スタック）→ Phase 3（切り分け実験 a/b/c）→ G1（原因分類宣言＋経路選択＋安全再生成プロトコル確定）→ Phase 4（是正実装 A/B）→ Phase 5（検証マトリクス＋回帰檻＋×5 安定確認）。
+- **Rationale**: R3 AC1（bisect）・AC2（スタック証拠）は G1 の入力そのもの。R4 AC2/AC3 の分岐は G1 の出力。設計はこのワークフローと両経路のコンポーネント設計を確定し、経路選択のみ実装時証拠に委ねる。
+- **Trade-offs**: tasks.md は条件付きタスク（経路別）を含むことになるが、判定基準を設計で客観化することで実装時の裁量を排除。
+- **Follow-up**: G1 の判定証拠は本 research.md「根本原因記録」節（実装フェーズで新設）へ記録。
+
+### Decision: Path A の介入点＝`WucGraphicsResourceInner::drop` への有界ドレイン内蔵＋明示 `shutdown_blocking()` 併設
+- **Context**: gap analysis が特定した唯一の実装済み安全パターン（`wuc_spike.rs`）をどこへ載せるか。呼び出し側 91+ テストへの個別 teardown 追加は漏れが必然。
+- **Alternatives Considered**:
+  1. 全 `setup_world()` 系ヘルパーへ明示 teardown 追加 — 14+ 箇所・漏れリスク大
+  2. `Inner::drop` に自動ドレイン内蔵 — 全経路（テスト・本番・invalidate）を無改修でカバー
+- **Selected Approach**: 2 を主とし、観測可能な明示 API `shutdown_blocking(timeout)` を併設（回帰檻・本番終了経路・実験 (c) が使用）。ドレインは有界タイムアウト＋log-first（無音失敗禁止）・panic 中 drop でも panic-free。
+- **Rationale**: drop は生成スレッド上で起きる（テスト＝テストスレッド・本番＝UI スレッド）ため `DQTYPE_THREAD_CURRENT` 束縛と整合。既存呼び出し側は無改修で恩恵を受ける＝R2 の「wintf 根因修正の波及で緑化」期待経路と一致。
+- **Trade-offs**: drop 内メッセージポンプは実行時間を数 ms 増やす（91 テストで最大数百 ms・許容）。タイムアウト保険でハング不能を保証。
+- **Follow-up**: 実験 (c) の結果が「ドレインでも 2 個目死亡」なら本 Decision は棄却され G1 で再判定。
+
+### Decision: 回帰檻の正準形＝「檻専用ファイルに 2 独立 `#[test]` ＋ 単一テスト内再生成」の 2 形態併設
+- **Context**: R5 AC1「単一テストプロセス内で 2 回以上連続生成」・AC3「再発時に必ず失敗」。libtest 並列実行下では「プロセス内 2 個目」がどのテストに当たるか非決定。
+- **Selected Approach**: `crates/wintf/tests/graphics/wuc_restart_regression_test.rs` に (i) 各々フルスタック生成→最小合成操作→teardown する独立 `#[test]` 2 本（どちらが 2 個目になっても法則を踏む）、(ii) 同一 `#[test]` 内で 生成→teardown→再生成→最小操作 の決定論形、の 2 形態を置く。B 採用時もこのファイルは共有 fixture を**意図的にバイパス**する（檻の意味を保つ）。
+- **Rationale**: (i) は実際のクラッシュ様式（別テスト実行単位・別スレッド）の忠実な再現、(ii) は単独実行でも決定論的に再生成を検証。既存 in-source `wuc_graphics_resource_lifecycle`（同一スレッド内）では捕捉できない領域を覆う（gap analysis §2 R5 行）。
+- **Follow-up**: 檻内の teardown 手順は G1 で確定する「安全再生成プロトコル」を常用する。
+
+## Risks & Mitigations（設計フェーズ追記）
+- 環境が WUC 再生成を全面禁止（全緩和不成立）— G1 でエスカレーション条項を発動し R5 の要件再交渉へ（設計内で糊塗しない）
+- Path B1 の直列化で graphics スイート実行時間が増加 — 91 テストの GPU 部分は元々 UI スレッド固定相当の逐次性・許容範囲を Phase 5 で実測確認
+- `bisect` 用旧リビジョンのビルドが現環境で成立しない（依存ドリフト）— lockfile 固定（`Cargo.lock` はリポジトリ管理下）で再現・失敗時は brief のタイムライン証拠（コミットメッセージの ×5 緑記録）を代替証拠として記録
+- 未実測バイナリ（`wintf --lib`／`--test visual`／`areka-emo-text` 系）で新たな赤が発覚 — スコープ拡大は裁定済み（テストコード是正は全クレート許容）・検証マトリクスで早期に全数実測
+
+## References
+- `crates/wintf/examples/wuc_spike.rs` — `ShutdownQueueAsync` ドレインの実証済みパターン（Path A テンプレート）
+- `crates/wintf/src/com/wuc.rs:126-135` — `DQTYPE_THREAD_CURRENT`（スレッド束縛の根拠）
+- `.kiro/specs/wintf-gpu-test-crash/brief.md` — 診断マトリクス・タイムライン・仮説の正本
+- memory `areka-wuc-runs-on-mta-thread`／`areka-no-ci-gpu-tests-in-cargo-test`／`areka-log-first-no-silent-failure` — 制約の出典
