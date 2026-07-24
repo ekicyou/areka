@@ -93,7 +93,7 @@ fn boot_sequence_matches_canonical_exactly() {
     let expected_boot = vec![
         expected_call(events::on_initialize(&ExecutionSnapshot::INACTIVE)), // NOTIFY（References なし）
         expected_call(resources::resource_username(&ExecutionSnapshot::INACTIVE)), // GET（prefetch・R4.1）→204
-        expected_call(events::on_first_boot(&ExecutionSnapshot::INACTIVE)), // GET（Ref0="0"）→204
+        expected_call(events::on_first_boot(&ExecutionSnapshot::INACTIVE, 0)), // GET（Ref0="0"）→204
         expected_call(events::on_boot(&config, &ExecutionSnapshot::INACTIVE)), // GET（Ref0=shell_name）→Value
         expected_call(events::baseware_version(
             &config,

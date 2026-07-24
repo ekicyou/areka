@@ -99,7 +99,7 @@
   - _Depends: 4.1_
   - _Boundary: areka-kanade/msg.rs_
 
-- [ ] 5.2 (P) `events::on_first_boot` の署名変更
+- [x] 5.2 (P) `events::on_first_boot` の署名変更
   - `on_first_boot(snapshot, vanish_count: u32)` へ変更し、Reference0 を `vanish_count` の文字列化とする
   - 呼び出し点（boot.rs 発行点・関連 assert）とテスト（events.rs 檻・kanade boot/full_run テスト）を追随させる
   - 観測可能な完了条件: `vanish_count` に非ゼロ値を渡すと Reference0 がその値になることがテストで確認できること

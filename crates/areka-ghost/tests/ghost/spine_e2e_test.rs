@@ -779,6 +779,8 @@ mod s1_boot_success {
             )),
             expected_from_shiori_call(events::on_first_boot(
                 &areka_kanade::ExecutionSnapshot::INACTIVE,
+                // fixture ghost に永続ファイル無し＝vanish 不在ゆえ Ref0="0"（従来値同値）。
+                0,
             )),
             expected_from_shiori_call(events::on_boot(
                 &config,
@@ -1558,6 +1560,8 @@ mod s4_close_handshake {
             )),
             expected_from_shiori_call(events::on_first_boot(
                 &areka_kanade::ExecutionSnapshot::INACTIVE,
+                // fixture ghost に永続ファイル無し＝vanish 不在ゆえ Ref0="0"（従来値同値）。
+                0,
             )),
             expected_from_shiori_call(events::on_boot(
                 &config,
@@ -1900,6 +1904,8 @@ mod s5_close_deadline {
             )),
             expected_from_shiori_call(events::on_first_boot(
                 &areka_kanade::ExecutionSnapshot::INACTIVE,
+                // fixture ghost に永続ファイル無し＝vanish 不在ゆえ Ref0="0"（従来値同値）。
+                0,
             )),
             expected_from_shiori_call(events::on_boot(
                 &config,

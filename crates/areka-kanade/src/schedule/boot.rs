@@ -177,7 +177,9 @@ fn on_prefetch_reply(mut state: State, outcome: ShioriOutcome) -> (State, Vec<Ac
                 id: "username",
                 outcome: resource_outcome,
             },
-            Action::ShioriRequest(events::on_first_boot(&ExecutionSnapshot::INACTIVE)),
+            // vanish_count は Task 5.3 で `config.vanish_count` を注入する。本 gate では
+            // 従来挙動（Ref0="0"）を保存するため literal 0 を渡す。
+            Action::ShioriRequest(events::on_first_boot(&ExecutionSnapshot::INACTIVE, 0)),
         ],
     )
 }
@@ -321,7 +323,7 @@ mod tests {
         assert!(matches!(s.phase, Phase::BootType));
         assert_eq!(actions.len(), 2, "sink 呼出指示＋OnFirstBoot GET の 2 件");
         assert!(matches!(actions[0], Action::ResourceOutcome { .. }), "sink 先行");
-        assert_get(&actions[1], &events::on_first_boot(&ExecutionSnapshot::INACTIVE));
+        assert_get(&actions[1], &events::on_first_boot(&ExecutionSnapshot::INACTIVE, 0));
 
         // 3. BootType + NoContent(204) → OnBoot GET / BootMain（Req 1.3）。
         let (s, actions) = step(
