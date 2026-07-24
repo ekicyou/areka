@@ -32,7 +32,7 @@
   - _Boundary: placement/persist.rs_
 
 - [ ] 2. Core: ドラッグ確定→永続書込の結線
-- [ ] 2.1 `PersistWiring` リソースと保存投函ヘルパの実装
+- [x] 2.1 `PersistWiring` リソースと保存投函ヘルパの実装
   - UI スレッド常駐の NonSend リソース `PersistWiring`（`SylphyaPublisher` の clone を保持）と、`PersistScope::Ghost` 固定で entries を非ブロッキング投函するヘルパ関数を実装する。リソース不在時は debug ログのみで no-op とする
   - 観測可能な完了条件: リソース挿入済みの headless World で entries を渡すと `persist_put` が呼び出され、リソース未挿入では panic せず no-op となることがテストで確認できること
   - _Requirements: 1.1, 1.9, 6.2, 7.1_
