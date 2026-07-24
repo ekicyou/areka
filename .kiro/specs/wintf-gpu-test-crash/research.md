@@ -147,4 +147,4 @@ brief の推奨方針（A を主・B を A 確定後の縮退選択肢として�
 1. bisect 結果（H-env 確定 vs H-code 確定）に応じて Requirement 4 の分岐（本番リスク是正 vs テストハーネス是正）がどちらへ倒れるか——コード調査は H-env 寄りの物証を追加したが、開発者判断としての最終確定は bisect 実測後。
 2. Option A（根因修正）の介入範囲: `WucGraphicsResource` 単体への `Drop`/`shutdown()` 追加に留めるか、`WinApp` 終了経路（`runtime/mod.rs`）まで含めて本番の明示 teardown を新設するか。
 3. 回帰テスト（Requirement 5）の実装粒度: 既存 `wuc_graphics_resource_lifecycle`（同一関数内）を拡張するか、`tests/graphics/` に「2つの独立 `#[test]` 相当」を模した新規統合テストを追加するか（libtest のスレッド分離を実際に再現する必要がある点に注意）。
-4. `draw_readback_test.rs` 等の追加候補バイナリが実際にクラッシュした場合、Requirement 2 AC3 の是正をこの spec のスコープに含めるか、別 spec へ切り出すか（brief の Out of scope は「areka 側クレートのソースコード変更」を除外しているが、`areka-emo-text` は areka 本体クレートではなく wintf 系ユーティリティクレートであるため、スコープ境界の再確認が必要）。
+4. ~~`draw_readback_test.rs` 等の追加候補バイナリが実際にクラッシュした場合、Requirement 2 AC3 の是正をこの spec のスコープに含めるか、別 spec へ切り出すか~~ — **✅ 解決済み（requirements discussion 議題1・開発者裁定 2026-07-24）**: 本 spec は全並行開発を閉塞するブロッカー解消 spec であり早期解決が優先、スコープ拡大許容。多重 WUC 生成構造を持つ全テストバイナリ（`areka-emo-text` 含む）の検証＋クラッシュ確認時の緑化までを本 spec 内で完遂する。除外は各クレートの本番ソースコード変更のみで、テストコード（テストハーネス）是正は全クレートで許容（requirements.md Boundary Context / Requirement 2 AC3-AC4 に反映済み）。

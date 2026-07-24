@@ -7,9 +7,9 @@
 このクラッシュは単なるテスト基盤問題に留まらない可能性がある。「同一プロセスで WUC グラフィックススタックを 2 度生成すると死ぬ」という法則が本番コードにも当てはまるなら、将来のゴースト再ロードやシェル切替（プロセス内 GPU スタック再生成を伴う機能）が本番で同じクラッシュを踏む。したがって本 spec は、(1) テストスイートを決定論的に緑へ復旧させること、(2) 根本原因を特定・記録すること、(3) その原因が本番設計に持つ含意を明文化すること、(4) 同じ crash パターンが二度と静かに再発しないよう回帰の網を張ること、の 4 点を扱う。
 
 ## Boundary Context (Optional)
-- **In scope**: wintf `graphics` テストスイート（91 テスト）における同一プロセス 2 個目 WUC スタック生成クラッシュの根本原因特定・修正、`cargo test --workspace` の exit 0 復旧確認（wintf・areka bin 双方の該当テストを含む）、根本原因および本番設計への含意の文書化、再発防止のための回帰テスト追加
-- **Out of scope**: areka 側クレート（`areka-sylphya` / `areka-kanade` / `areka-ghost` / `areka-parsers` / `areka` bin 等）のソースコード変更、WUC 以外のレンダリング機能追加、graphics テストスイートの網羅範囲拡張（回帰テスト以外の新規テスト追加）、`areka-P0-sylphya` の完了処理（人間サインオフ待ちの別トラック）、emo2 実機系（`AREKA_EMO2_REAL_RUN`）検証、32bit SHIORI 系の変更
-- **Adjacent expectations**: 本 spec の完了は、後続ウェーブ（position-persist／choice-interact／emo-dpi-scaling 等）が「素の `cargo test --workspace` 緑」を前提に DoD 判定できることを回復する前提条件である。将来のゴースト再ロード・シェル切替機能は、本 spec が明文化する「プロセス内 GPU スタック再生成の可否」という設計含意に従うことを期待される。areka bin テストの緑化はこの根本原因修正の副次効果として得られるものであり、areka クレート自体への変更を要求しない。
+- **In scope**: wintf `graphics` テストスイート（91 テスト）における同一プロセス 2 個目 WUC スタック生成クラッシュの根本原因特定・修正、`cargo test --workspace` の exit 0 復旧確認、同一プロセス内で 2 個以上の WUC/GPU スタックを生成する構造を持つ**全テストバイナリ**（wintf `graphics`・areka bin に加え `areka-emo-text` 等の隣接クレートを含む）の検証と、クラッシュ確認時の本 spec 内での緑化（是正）、根本原因および本番設計への含意の文書化、再発防止のための回帰テスト追加。workspace 緑到達に必要な範囲での**テストコード（テストハーネス）の是正は全クレートで許容**される（本 spec は全並行開発を閉塞するブロッカー解消 spec であり、早期解決が優先されるため）
+- **Out of scope**: areka 側クレート（`areka-sylphya` / `areka-kanade` / `areka-ghost` / `areka-parsers` / `areka` bin / `areka-emo-text` 等）の**本番ソースコード**（非テストコード）の変更（根本原因が wintf 側にある限り不要のはずであり、wintf 根因修正の波及で緑化することを期待経路とする）、WUC 以外のレンダリング機能追加、graphics テストスイートの網羅範囲拡張（回帰テスト以外の新規テスト追加）、`areka-P0-sylphya` の完了処理（人間サインオフ待ちの別トラック）、emo2 実機系（`AREKA_EMO2_REAL_RUN`）検証、32bit SHIORI 系の変更
+- **Adjacent expectations**: 本 spec の完了は、後続ウェーブ（position-persist／choice-interact／emo-dpi-scaling 等）が「素の `cargo test --workspace` 緑」を前提に DoD 判定できることを回復する前提条件である。将来のゴースト再ロード・シェル切替機能は、本 spec が明文化する「プロセス内 GPU スタック再生成の可否」という設計含意に従うことを期待される。areka bin テストの緑化はこの根本原因修正の副次効果として得られるものであり、areka クレートの本番ソースコードへの変更を要求しない（テストコードの是正のみ許容範囲）。
 
 ## Requirements
 
@@ -28,8 +28,9 @@
 
 #### Acceptance Criteria
 1. When 修正適用後に `cargo test --workspace` を実行する, the ワークスペーステストコマンド shall exit code 0 で終了する
-2. When areka bin テストスイートを実行する, `spine_e2e_kero_blink_one_cycle_golden` shall areka クレートのソースコードを変更することなく `STATUS_ACCESS_VIOLATION` なく成功する
-3. If wintf `graphics` および areka bin 以外のテストバイナリが同一プロセス内で 2 個以上の WUC/GPU スタックを生成する構造を持つことが判明した場合, then そのテストバイナリ shall 同種の `STATUS_ACCESS_VIOLATION` が発生しないことを検証される
+2. When areka bin テストスイートを実行する, `spine_e2e_kero_blink_one_cycle_golden` shall areka クレートの本番ソースコードを変更することなく `STATUS_ACCESS_VIOLATION` なく成功する（テストハーネス側の是正は根本原因判明後の縮退経路として許容される）
+3. When 同一プロセス内で 2 個以上の WUC/GPU スタックを生成する構造を持つテストバイナリ（`areka-emo-text` の `draw_readback_test` 等の既知候補を含む）を実測検証する, the 当該テストバイナリ shall 同種の `STATUS_ACCESS_VIOLATION` を発生させずに全テスト成功する
+4. If 上記の実測検証で同種クラッシュが確認された場合, then 本 spec shall そのテストバイナリの緑化までを本 spec の完了範囲に含めて是正する（wintf 根因修正の波及による解決を本命とし、必要な場合は当該クレートのテストコード是正を許容する）
 
 ### Requirement 3: 根本原因の特定と記録
 **Objective:** As wintf メンテナ, I want 同一プロセス 2 個目 WUC スタック生成クラッシュの根本原因が特定・記録されることを求める, so that 将来の WUC ライフサイクル関連作業が憶測ではなく事実に基づいて行われる
