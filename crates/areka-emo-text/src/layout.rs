@@ -56,9 +56,13 @@
 //! グリフ別の行内位置＋送り幅と併せ、choice-render のクリック可能範囲導出が
 //! そのまま再利用できる（導出自体は実装しない・R9.4）。
 
+use std::collections::BTreeSet;
+
+use areka_sakura::contract::ActorKey;
+
 use crate::region::TextRegion;
 use crate::segment::SegmentPlan;
-use crate::state::{TextItem, TextLayerConfig};
+use crate::state::{CursorCoord, CursorUnit, TextItem, TextLayerConfig};
 use crate::writing::WritingMode;
 
 /// グリフ送りの注入点（metrics 依存の唯一の口・R4.5）。
@@ -74,15 +78,38 @@ pub trait GlyphMetrics {
     /// 行送りピッチ（image px）。M1 正準: `ceil(font_height × 1.25)`
     /// （係数は [`TextLayerConfig::line_pitch_factor`] が正本・既定 1.25）。
     fn line_pitch(&self, font_height: f32) -> f32;
+
+    /// **実レンダリング行ボックス丈**（image px・descent 込み＝`ascent + descent`）。
+    ///
+    /// em ボックス丈（`font_height`）ではなく、フォントが実際にインクを置く行ボックスの
+    /// ブロック軸寸。DirectWrite は行を `ascent + descent`（design metrics）で組むため、
+    /// 和文フォントでは `font_height` を大きく超える（実測: Yu Gothic UI ＝ `1.3301em`
+    /// ゆえ 28px で 37.24px・ＭＳ ゴシック ＝ ちょうど `1.0em`）。**行矩形（em ボックス）を
+    /// そのまま帯として使うと descent 側のインクが帯の外へ出る**——選択肢 hover ハイライト
+    /// 矩形／ヒット矩形のブロック軸帯はこの実測丈を源にする（design.md R3.3 の座標整合を
+    /// 保ったまま「文字の下が切れる」を構造的に排除する・[`crate::choice::highlight_band_extent`]）。
+    ///
+    /// 実装: COM 層 `DWriteMetrics` は**実 font face metrics**
+    /// （`GetMetrics` の `ascent`/`descent`/`designUnitsPerEm`）から算出し、
+    /// [`FixedMetrics`] は決定論仮想値を返す。文字列非依存（フォント固有の設計値）。
+    fn line_box_height(&self, font_height: f32) -> f32;
 }
 
 /// 構造テスト用の決定論 metrics（R4.5/R11.6）。
 ///
 /// 決定論仮想値: 全角（非 ASCII）＝`font_height`・半角（ASCII）＝`font_height / 2`。
-/// 行送りピッチは M1 正準式 `ceil(font_height × 既定係数 1.25)`。
+/// 行送りピッチは M1 正準式 `ceil(font_height × 既定係数 1.25)`。行ボックス丈は
+/// [`FIXED_LINE_BOX_RATIO`]×`font_height`。
 /// タイポグラフィ的正確さは目的でない——折返し・行送りアルゴリズムの檻のための値。
 #[derive(Clone, Copy, Debug, Default)]
 pub struct FixedMetrics;
+
+/// [`FixedMetrics`] の仮想行ボックス比（`ascent + descent` ÷ em）。
+///
+/// 和文フォントの実測（Yu Gothic UI ＝ 1.3301em）に倣った**決定論仮想値**——
+/// 「行ボックス丈 > em ボックス丈」という実フォントの性質を構造テストへ持ち込むための値で、
+/// 特定フォントの再現が目的ではない（`FixedMetrics` の advance 仮想値と同格）。
+pub const FIXED_LINE_BOX_RATIO: f32 = 1.33;
 
 impl GlyphMetrics for FixedMetrics {
     fn advance(&self, ch: char, font_height: f32) -> f32 {
@@ -95,6 +122,10 @@ impl GlyphMetrics for FixedMetrics {
 
     fn line_pitch(&self, font_height: f32) -> f32 {
         (font_height * TextLayerConfig::default().line_pitch_factor).ceil()
+    }
+
+    fn line_box_height(&self, font_height: f32) -> f32 {
+        font_height * FIXED_LINE_BOX_RATIO
     }
 }
 
@@ -210,6 +241,64 @@ impl LayoutEngine {
         metrics: &dyn GlyphMetrics,
         wrap: WrapPlan<'_>,
     ) -> Vec<PositionedLine> {
+        // pending-cursor の縮退 warn-once は actor 識別＋走査を跨いで持続する guard を要する
+        // （per-frame 呼出でのスパム抑止＝ランタイム所有）。actor 文脈を持たない既存呼び口は
+        // カーソル換算・遅延実体化（2.1/2.3/2.5）を完全に行いつつ縮退 warn（6.5）だけを抑止する
+        // （`None` 経路）。純挙動は [`layout_with_cursor_warn`] と完全同一。
+        Self::layout_inner(
+            items,
+            visible_count,
+            region,
+            mode,
+            font_height,
+            metrics,
+            wrap,
+            None,
+        )
+    }
+
+    /// [`layout`](Self::layout) の全挙動に加え、`\_l` 換算の 4 縮退分岐（負値絶対／`%`／
+    /// `@` 相対／パース不能）を **actor ごと初回のみ** `warn!` する（6.5・design 縮退表）。
+    ///
+    /// warn guard は走査を跨いで持続する必要がある（per-frame layout 呼出での重複警告抑止）
+    /// ため、呼び手（ランタイム＝`actor.rs` の `TextLayerRuntime`・既存 `unresolved_warned` と
+    /// 同型の持続 guard）が所有し `&mut` で渡す。行レイアウトの純挙動は [`layout`](Self::layout)
+    /// と完全同一——差は縮退ログの有無のみ（guard は決定的な行出力に一切影響しない）。
+    #[allow(clippy::too_many_arguments)]
+    pub fn layout_with_cursor_warn(
+        items: &[TextItem],
+        visible_count: usize,
+        region: &TextRegion,
+        mode: WritingMode,
+        font_height: f32,
+        metrics: &dyn GlyphMetrics,
+        wrap: WrapPlan<'_>,
+        actor: &ActorKey,
+        warn: &mut CursorWarnGuard,
+    ) -> Vec<PositionedLine> {
+        Self::layout_inner(
+            items,
+            visible_count,
+            region,
+            mode,
+            font_height,
+            metrics,
+            wrap,
+            Some((actor, warn)),
+        )
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn layout_inner(
+        items: &[TextItem],
+        visible_count: usize,
+        region: &TextRegion,
+        mode: WritingMode,
+        font_height: f32,
+        metrics: &dyn GlyphMetrics,
+        wrap: WrapPlan<'_>,
+        mut cursor_warn: Option<(&ActorKey, &mut CursorWarnGuard)>,
+    ) -> Vec<PositionedLine> {
         let pitch = metrics.line_pitch(font_height);
         let threshold = region.wrap_threshold();
         let start = region.start();
@@ -230,6 +319,10 @@ impl LayoutEngine {
         // `f32` 単独でなく Option なのは `\n[0]`（ratio 0＝行替え・送りゼロ）を「保留なし」
         // と区別して保存するため（DD-5）。走査ローカル＝フレームを跨ぐ状態を持たない。
         let mut pending: Option<f32> = None;
+        // pending-cursor（`\_l` 遅延実体化）: None＝保留なし・Some((inline, block))＝
+        // `cursor_to_image_px` 済みの絶対 image px（換算 None の軸は含めない＝当該軸不動・R2.4）。
+        // 走査ローカル＝フレームを跨がない（newline-defer の `pending` と同型・同一フラッシュで合成）。
+        let mut pending_cursor: Option<(Option<f32>, Option<f32>)> = None;
         // 先決済み塊の残グリフ数（Segmented 経路のみ使用）。正＝塊内（追加判定なし配置）・
         // 0 かつ塊先頭でない＝plan 非被覆（既存 CharByChar 式で判定）——この 2 状態の区別が
         // 「塊は途中分割されない」の型保証（design System Flows「塊内は追加判定なし」）。
@@ -245,10 +338,15 @@ impl LayoutEngine {
                         break;
                     }
                     let advance = metrics.advance(ch, font_height);
-                    // ② 保留改行の一括実体化（次の可視コンテンツ配置の直前・R2.1）。
-                    // current 非空なら現在行を確定してから block を Σratio ぶん前進させる。
-                    // 先頭改行（current 空）は空行を作らず前進のみ（DD-2）。
-                    if let Some(sum) = pending.take() {
+                    // ② 保留フラッシュ（次の可視コンテンツ配置の直前・R2.1/2.3）。保留改行と
+                    // pending-cursor は同一フラッシュに混在しうるため順序が意味を持つ（design
+                    // 「ゲート②の直後に②'として挿入」）。厳密順序:
+                    //   (1) 現在行が非空なら確定（改行・`\_l` とも行区切り＝RN-3・先頭フラッシュは
+                    //       current 空ゆえ空行を作らない・DD-2）。
+                    //   (2) 保留改行 Σratio を block へ適用し行内を先頭へ戻す（newline-defer 既存規則）。
+                    //   (3) pending-cursor の指定軸で inline/block を上書き（絶対 image px・不動軸は
+                    //       据え置き）。②' が (2) の改行送り/行内リセットに後勝ち＝カーソル明示位置が最終値。
+                    if pending.is_some() || pending_cursor.is_some() {
                         if !current.is_empty() {
                             lines.push(finish_line(
                                 std::mem::take(&mut current),
@@ -259,8 +357,18 @@ impl LayoutEngine {
                                 font_height,
                             ));
                         }
-                        block_pos += block_dir * pitch * sum;
-                        inline_pos = inline_start;
+                        if let Some(sum) = pending.take() {
+                            block_pos += block_dir * pitch * sum;
+                            inline_pos = inline_start;
+                        }
+                        if let Some((inline_val, block_val)) = pending_cursor.take() {
+                            if let Some(iv) = inline_val {
+                                inline_pos = iv;
+                            }
+                            if let Some(bv) = block_val {
+                                block_pos = bv;
+                            }
+                        }
                     }
                     // ③ 折返し判定（WrapPlan で分岐・design System Flows「ゲート③」）。
                     // feed＝この可視グリフの配置前に行送りするか。ゲート①②④・行頭 1 グリフ
@@ -337,6 +445,36 @@ impl LayoutEngine {
                     // 保留へ ratio を累算する（連続改行は単一累算 Σratio）。可視構造・
                     // 内容ビューボックスはここでは一切変化しない（R1.2/1.5）。
                     pending = Some(pending.map_or(ratio, |acc| acc + ratio));
+                }
+                TextItem::CursorMove { x, y } => {
+                    // 到着時換算（保留のみ・行は閉じない・R2.1/2.3）。x→水平軸（origin＝validrect
+                    // 左辺）／y→垂直軸（origin＝validrect 上辺）を `cursor_to_image_px` で絶対 image px
+                    // 化する（em＝font_height・lh＝pitch・原点加算——design §`\_l 換算式`）。
+                    let x_val = cursor_to_image_px(x, region.left(), font_height, pitch);
+                    let y_val = cursor_to_image_px(y, region.top(), font_height, pitch);
+                    // 縮退 4 分岐（負値絶対／`%`／`@`／パース不能）の actor ごと warn-once（6.5）。
+                    // Omitted（軸省略）・実導出成功（Some）は無音。guard 不在（`layout` 経路）は抑止。
+                    if let Some((actor, guard)) = cursor_warn.as_mut() {
+                        warn_cursor_degrade(x, x_val, *actor, &mut **guard);
+                        warn_cursor_degrade(y, y_val, *actor, &mut **guard);
+                    }
+                    // 軸読み替え正準表: 水平/垂直軸値を行内/ブロック軸へ写像（horizontal_tb＝行内 x・
+                    // ブロック y／縦書き rl・lr＝行内 y・ブロック x——layout の inline/block 割当と同一）。
+                    let (inline_val, block_val) = match mode {
+                        WritingMode::HorizontalTb => (x_val, y_val),
+                        WritingMode::VerticalRl | WritingMode::VerticalLr => (y_val, x_val),
+                    };
+                    if inline_val.is_some() || block_val.is_some() {
+                        // 有効軸が 1 つ以上＝保留（`\_l` は行区切り性を持つ・フラッシュで実体化）。
+                        // 換算 None の軸は保留に含めない（縮退＝状態不変・当該軸不動・R2.4）。
+                        pending_cursor = Some((inline_val, block_val));
+                    } else {
+                        // 両軸 None（`\_l[,]` や全縮退）＝完全 no-op（行区切りもしない・正典
+                        // 「両方省略で無効果」・R2.4・design 縮退表 両軸省略/全縮退 row）。
+                        tracing::debug!(
+                            "両軸縮退の \\_l を完全 no-op として素通しする（行区切りせず）"
+                        );
+                    }
                 }
             }
         }
@@ -460,27 +598,153 @@ fn finish_line(
     block_pos: f32,
     font_height: f32,
 ) -> PositionedLine {
+    // 行内開始エッジ（rect の行内軸近端）は「実際に置かれた先頭グリフの inline_pos」から取る。
+    // グリフは行内軸で単調増加ゆえ先頭が近端。`\_l` カーソル字下げは pending-cursor 実体化で
+    // 各グリフの `inline_pos` に載る一方、行頭定数 `inline_start` には載らない。描画（draw.rs）は
+    // 行矩形原点（rect.left／縦書きは rect.top）を平行移動原点にして bare 文字列を DWrite で
+    // 再レイアウトする——per-glyph `inline_pos` は描画では捨てられる——ため、字下げを rect の
+    // 近端エッジへ反映しないと draw が hit（inline_pos 由来）とずれる（R3.3・字下げ描画欠落）。
+    // 非カーソル行では先頭グリフ＝`inline_start` ゆえ従来値と一致し回帰なし。3 方向とも先頭グリフ
+    // が近端＝式は writing mode に依存しない。空行は呼び手が `!current.is_empty()` で弾くため
+    // 構造上出ないが、防御的に `inline_start` へ退避する。
+    let inline_lo = glyphs.first().map_or(inline_start, |g| g.inline_pos);
     let rect = match mode {
         WritingMode::HorizontalTb => LineRect {
-            left: inline_start,
+            left: inline_lo,
             top: block_pos,
             right: inline_end,
             bottom: block_pos + font_height,
         },
         WritingMode::VerticalRl => LineRect {
             left: block_pos - font_height,
-            top: inline_start,
+            top: inline_lo,
             right: block_pos,
             bottom: inline_end,
         },
         WritingMode::VerticalLr => LineRect {
             left: block_pos,
-            top: inline_start,
+            top: inline_lo,
             right: block_pos + font_height,
             bottom: inline_end,
         },
     };
     PositionedLine { rect, glyphs }
+}
+
+/// `\_l` カーソル座標 → image px 絶対座標の M1 実導出換算（純粋・全域・layout.rs 所有＝
+/// レイアウトカーソル意味論）。
+///
+/// 絶対 Px/Em/Lh の**非負値**のみ `Some(image px 絶対座標)` を返す。Percent／Relative（`@`）／
+/// 負値絶対／[`CursorCoord::Invalid`]／[`CursorCoord::Omitted`] は `None`（呼び手が状態不変
+/// スキップ＋warn-once・R2.4/6.5）。換算式（design Supporting References §`\_l 換算式`）:
+///
+/// - `Px`: `image_px = value`（裸数値＝バルーン画像 px 恒等）
+/// - `Em`: `image_px = value × font_height`（1em＝タグ時点の文字高さ＝`ResolvedFont::height`）
+/// - `Lh`: `image_px = value × line_pitch`（1lh＝行送りピッチ＝`ceil(font_height × 1.25)`）
+/// - 最終座標 ＝ `origin`（当該軸の validrect 原点＝`\_l` 原点・文字描画範囲左上・RN-3）＋ `image_px`
+///
+/// `origin`／`font_height`／`line_pitch` は呼び手が軸読み替え・metrics 解決済みで渡す
+/// （本関数は係数乗算と原点加算のみ——`line_pitch` は引数として受け取り内部算出しない）。
+/// パニックせず全入力で `Option<f32>` を返す（`Result` なし・R2.4 決定論）。物理化（`×k`）は
+/// 呼び手の領分で、本換算は image px で完結する（2 空間モデルの規律・2.2）。
+pub fn cursor_to_image_px(
+    coord: CursorCoord,
+    origin: f32,
+    font_height: f32,
+    line_pitch: f32,
+) -> Option<f32> {
+    match coord {
+        // 絶対 Px/Em/Lh の非負値のみ実導出（負値絶対はここで弾かず下の match ガードで None）。
+        CursorCoord::Absolute { value, unit } if value >= 0.0 => {
+            let factor = match unit {
+                CursorUnit::Px => 1.0,
+                CursorUnit::Em => font_height,
+                CursorUnit::Lh => line_pitch,
+                // Percent は M1 縮退保持（実導出せず None＝当該軸スキップ）。
+                CursorUnit::Percent => return None,
+            };
+            Some(origin + value * factor)
+        }
+        // 負値絶対・Relative（@）・Invalid・Omitted は縮退（None＝状態不変スキップ・warn-once）。
+        _ => None,
+    }
+}
+
+/// `\_l` 換算縮退の分岐種別（actor ごと warn-once の鍵・4 分岐）。
+///
+/// 各分岐を actor ごとに厳密 1 回だけ警告するための識別子（design 縮退表 2.4/6.5）。
+/// Omitted（軸省略）は正典の正常形ゆえ本種別に含めない（warn しない）。
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+enum CursorDegrade {
+    /// 負値絶対（`\_l[-1,…]`＝非負ゲート外）。
+    NegativeAbsolute,
+    /// `%`（M1 縮退保持・実導出せず）。
+    Percent,
+    /// `@` 相対（M1 縮退保持・実導出せず）。
+    Relative,
+    /// パース不能（`CursorCoord::Invalid`）。
+    Invalid,
+}
+
+/// pending-cursor 換算縮退の **actor ごと warn-once** 檻（走査を跨いで持続＝ランタイム所有）。
+///
+/// `\_l` の 4 縮退分岐（負値絶対／`%`／`@`／パース不能）を actor ごと初回のみ `warn!` する
+/// （per-frame layout 呼出での重複警告抑止・design 縮退表 2.4/6.5）。既存
+/// `TextLayerRuntime::unresolved_warned`（`BTreeSet<ActorKey>`）と同型の持続 guard で、
+/// [`LayoutEngine::layout_with_cursor_warn`] に `&mut` で渡す。行レイアウトの純挙動は guard に
+/// 依存しない——guard は縮退ログの重複抑止のみを担い、決定的な行出力へ影響しない。
+#[derive(Clone, Debug, Default)]
+pub struct CursorWarnGuard {
+    /// 既に警告済みの `(actor, 縮退分岐)`（決定論的順序のため `BTreeSet`）。
+    warned: BTreeSet<(ActorKey, CursorDegrade)>,
+}
+
+impl CursorWarnGuard {
+    /// `(actor, degrade)` が初回なら記録して `true`（＝今回警告する）、既出なら `false`。
+    fn should_warn(&mut self, actor: &ActorKey, degrade: CursorDegrade) -> bool {
+        self.warned.insert((actor.clone(), degrade))
+    }
+}
+
+/// `\_l` 換算が `None`（当該軸スキップ）へ縮退したとき、縮退分岐を分類し actor ごと初回のみ
+/// `warn!` する（design 縮退表 2.4/6.5）。
+///
+/// `converted.is_some()`（実導出成功）・`CursorCoord::Omitted`（軸省略＝正典の正常形）は
+/// 何もしない。負値絶対は unit を問わず非負ゲート外ゆえ `NegativeAbsolute` として分類する
+/// （`value < 0.0` を `Percent` より先に判定）。
+fn warn_cursor_degrade(
+    coord: CursorCoord,
+    converted: Option<f32>,
+    actor: &ActorKey,
+    guard: &mut CursorWarnGuard,
+) {
+    if converted.is_some() {
+        // 実導出成功＝縮退なし（非負 Px/Em/Lh）。
+        return;
+    }
+    let degrade = match coord {
+        // 軸省略は正典の正常形（縮退表「\_l 軸省略」＝ログなし・R2.4）。
+        CursorCoord::Omitted => return,
+        // 負値絶対（unit を問わず value<0 は非負ゲート外＝None）。
+        CursorCoord::Absolute { value, .. } if value < 0.0 => CursorDegrade::NegativeAbsolute,
+        // 非負 `%` は M1 縮退保持。
+        CursorCoord::Absolute {
+            unit: CursorUnit::Percent,
+            ..
+        } => CursorDegrade::Percent,
+        // 非負 Px/Em/Lh は `converted` が Some ゆえ到達しない——防御的に無音。
+        CursorCoord::Absolute { .. } => return,
+        CursorCoord::Relative { .. } => CursorDegrade::Relative,
+        CursorCoord::Invalid => CursorDegrade::Invalid,
+    };
+    if guard.should_warn(actor, degrade) {
+        tracing::warn!(
+            actor = %actor,
+            ?coord,
+            ?degrade,
+            "\\_l 座標が縮退した（当該軸スキップ・状態不変）——actor ごと初回のみ警告する（6.5）"
+        );
+    }
 }
 
 #[cfg(test)]
@@ -489,12 +753,18 @@ mod tests {
         BalloonModel, Font, FontColor, Origin, ValidRect, WindowPosition, WordWrapPoint,
     };
 
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::sync::Arc;
+
+    use areka_sakura::contract::ActorKey;
+
     use super::{
-        FixedMetrics, GlyphMetrics, LayoutEngine, LineRect, PositionedLine, VisibleWindow, WrapPlan,
+        cursor_to_image_px, CursorWarnGuard, FixedMetrics, GlyphMetrics, LayoutEngine, LineRect,
+        PositionedLine, VisibleWindow, WrapPlan,
     };
     use crate::region::TextRegion;
     use crate::segment::{Segment, SegmentPlan};
-    use crate::state::TextItem;
+    use crate::state::{CursorCoord, CursorUnit, TextItem};
     use crate::writing::WritingMode;
 
     /// テスト画像原寸（image px・region.rs の檻と同一値）。
@@ -545,6 +815,124 @@ mod tests {
         let m = FixedMetrics;
         assert_eq!(m.line_pitch(12.0), 15.0); // 15.0（割り切れ）
         assert_eq!(m.line_pitch(10.0), 13.0); // 12.5 → 13（ceil でなければ fail）
+    }
+
+    // ── R2.1/2.2/2.4: `\_l` カーソル座標 → image px 換算（cursor_to_image_px・タスク 4.1） ──
+    //
+    // 換算式（design §`\_l 換算式`）: Px＝恒等・Em＝×font_height・Lh＝×line_pitch、最終座標は
+    // origin（当該軸 validrect 原点）加算。実導出は絶対 Px/Em/Lh の非負値のみ Some、
+    // Percent／Relative(@)／負値絶対／Invalid／Omitted は None（縮退＝当該軸スキップ）。
+
+    /// 絶対 Px/Em/Lh の非負値は正典式どおり `origin + value × factor` を返す
+    /// （factor: Px=1・Em=font_height・Lh=line_pitch）。単位ごとに異なる factor を檻化。
+    #[test]
+    fn cursor_to_image_px_converts_absolute_units_with_origin() {
+        // Px: image_px = value（恒等）→ origin(10) + 5 = 15。font_height/line_pitch は無関与。
+        assert_eq!(
+            cursor_to_image_px(
+                CursorCoord::Absolute {
+                    value: 5.0,
+                    unit: CursorUnit::Px,
+                },
+                10.0,
+                20.0,
+                25.0,
+            ),
+            Some(15.0)
+        );
+        // Em: image_px = value × font_height → 2 × 20 = 40 → origin(10) + 40 = 50。
+        assert_eq!(
+            cursor_to_image_px(
+                CursorCoord::Absolute {
+                    value: 2.0,
+                    unit: CursorUnit::Em,
+                },
+                10.0,
+                20.0,
+                25.0,
+            ),
+            Some(50.0)
+        );
+        // Lh: image_px = value × line_pitch → 3 × 25 = 75 → origin(10) + 75 = 85。
+        assert_eq!(
+            cursor_to_image_px(
+                CursorCoord::Absolute {
+                    value: 3.0,
+                    unit: CursorUnit::Lh,
+                },
+                10.0,
+                20.0,
+                25.0,
+            ),
+            Some(85.0)
+        );
+    }
+
+    /// 非負境界 value=0.0 は Some(origin)（≥0 ゲートは 0 を含む＝原点そのもの・境界檻）。
+    #[test]
+    fn cursor_to_image_px_zero_value_maps_to_origin() {
+        for unit in [CursorUnit::Px, CursorUnit::Em, CursorUnit::Lh] {
+            assert_eq!(
+                cursor_to_image_px(CursorCoord::Absolute { value: 0.0, unit }, 7.0, 20.0, 25.0),
+                Some(7.0),
+                "{unit:?}: value 0 は origin へ写る（≥0 ゲート内）"
+            );
+        }
+    }
+
+    /// 縮退全形は None（当該軸スキップ・warn-once）: 負値絶対・Percent・Relative(@)・
+    /// Invalid・Omitted。origin/font_height/line_pitch に依らず None を返す。
+    #[test]
+    fn cursor_to_image_px_degenerate_forms_return_none() {
+        // 負値絶対（Px/Em/Lh いずれも）: 非負ゲート外＝None。
+        for unit in [CursorUnit::Px, CursorUnit::Em, CursorUnit::Lh] {
+            assert_eq!(
+                cursor_to_image_px(
+                    CursorCoord::Absolute { value: -1.0, unit },
+                    10.0,
+                    20.0,
+                    25.0
+                ),
+                None,
+                "{unit:?}: 負値絶対は None"
+            );
+        }
+        // Percent（縮退保持・非負でも実導出しない）。
+        assert_eq!(
+            cursor_to_image_px(
+                CursorCoord::Absolute {
+                    value: 5.0,
+                    unit: CursorUnit::Percent,
+                },
+                10.0,
+                20.0,
+                25.0,
+            ),
+            None
+        );
+        // Relative（@ 接頭）: 単位が Px/Em/Lh でも M1 は None。
+        assert_eq!(
+            cursor_to_image_px(
+                CursorCoord::Relative {
+                    value: 5.0,
+                    unit: CursorUnit::Px,
+                },
+                10.0,
+                20.0,
+                25.0,
+            ),
+            None
+        );
+        // Invalid（パース不能）。
+        assert_eq!(
+            cursor_to_image_px(CursorCoord::Invalid, 10.0, 20.0, 25.0),
+            None
+        );
+        // Omitted（当該軸省略）。
+        assert_eq!(
+            cursor_to_image_px(CursorCoord::Omitted, 10.0, 20.0, 25.0),
+            None
+        );
     }
 
     // ── R6.1: 横書き——行内 +x・行送り +y・折返し閾値 wordwrappoint.x ──
@@ -2326,5 +2714,581 @@ mod tests {
                 "vertical_rl visible {v}: 配置が全量出力の prefix と不一致（リフロー跳び）"
             );
         }
+    }
+
+    // ── Task 4.2: pending-cursor 遅延実体化（`\_l` の行区切り＋軸上書き・末尾蒸発・両軸 no-op） ──
+    //
+    // 共通前提は既存 layout 檻と同じ FixedMetrics・font 10（全角 'あ' advance 10・pitch 13）。
+    // origin(0,0)・wordwrappoint None ゆえ region.left()=0・region.top()=0・閾値=画像右辺 400。
+
+    /// 絶対 Px の `\_l` は現在行を確定し（`\_l` は行区切り・RN-3）、指定軸で次グリフの
+    /// inline/block を上書きする。`[あ, あ, \_l[100px,50px], あ]` → 行 0=[0,10]・
+    /// 3 個目が (inline 100, block 50) の行 1 頭へ載る。
+    #[test]
+    fn cursor_move_commits_line_and_overrides_next_glyph_axes() {
+        let region = TextRegion::resolve(
+            &model((Some(0), Some(0)), (None, None)),
+            IMAGE,
+            WritingMode::HorizontalTb,
+        );
+        let items = [
+            TextItem::Glyph { ch: 'あ' },
+            TextItem::Glyph { ch: 'あ' },
+            TextItem::CursorMove {
+                x: CursorCoord::Absolute {
+                    value: 100.0,
+                    unit: CursorUnit::Px,
+                },
+                y: CursorCoord::Absolute {
+                    value: 50.0,
+                    unit: CursorUnit::Px,
+                },
+            },
+            TextItem::Glyph { ch: 'あ' },
+        ];
+        let lines = LayoutEngine::layout(
+            &items,
+            3,
+            &region,
+            WritingMode::HorizontalTb,
+            10.0,
+            &FixedMetrics,
+            WrapPlan::CharByChar,
+        );
+        assert_eq!(lines.len(), 2, "\\_l は現在行を確定する（行区切り・RN-3）");
+        assert_eq!(inline_positions(&lines[0]), vec![0.0, 10.0]);
+        assert_eq!(
+            inline_positions(&lines[1]),
+            vec![100.0],
+            "inline 軸が origin(0)+100 へ上書き"
+        );
+        assert_eq!(lines[1].rect.top, 50.0, "block 軸が origin(0)+50 へ上書き");
+    }
+
+    /// 保留改行と `\_l` が同一フラッシュに混在するとき、順序は 行確定→保留改行 Σratio→
+    /// カーソル軸上書き。`[あ, \n(1.0), \_l[10px,5px], あ]`（pitch 13）: 改行送り(block=13)を
+    /// 経てカーソル上書きが後勝ちで (inline 10, block 5) が最終値になる（順序 (2)→(3) の証左）。
+    #[test]
+    fn cursor_flush_orders_after_pending_newline_and_overrides_it() {
+        let region = TextRegion::resolve(
+            &model((Some(0), Some(0)), (None, None)),
+            IMAGE,
+            WritingMode::HorizontalTb,
+        );
+        let items = [
+            TextItem::Glyph { ch: 'あ' },
+            TextItem::LineBreak { ratio: 1.0 },
+            TextItem::CursorMove {
+                x: CursorCoord::Absolute {
+                    value: 10.0,
+                    unit: CursorUnit::Px,
+                },
+                y: CursorCoord::Absolute {
+                    value: 5.0,
+                    unit: CursorUnit::Px,
+                },
+            },
+            TextItem::Glyph { ch: 'あ' },
+        ];
+        let lines = LayoutEngine::layout(
+            &items,
+            2,
+            &region,
+            WritingMode::HorizontalTb,
+            10.0,
+            &FixedMetrics,
+            WrapPlan::CharByChar,
+        );
+        assert_eq!(lines.len(), 2);
+        assert_eq!(lines[0].rect.top, 0.0);
+        // 改行送りは block を 13 にするが、カーソル block 上書きが後勝ちで 5 が最終値。
+        assert_eq!(
+            lines[1].rect.top, 5.0,
+            "カーソル block 上書きが保留改行送り(13)に勝つ（順序 (2)→(3)）"
+        );
+        // 改行は行内を 0 へ戻すが、カーソル inline 上書きが後勝ちで 10 が最終値。
+        assert_eq!(
+            inline_positions(&lines[1]),
+            vec![10.0],
+            "カーソル inline 上書きが改行の行内リセットに勝つ"
+        );
+    }
+
+    /// 後続可視グリフの無い末尾 `\_l` は保留のまま蒸発する（newline-defer と同一規則・2.5）。
+    /// `[あ, \_l[100,50]]` → 1 行 [あ@0]（`\_l` は行を開かず・位置も動かさない）。
+    #[test]
+    fn trailing_cursor_move_evaporates() {
+        let region = TextRegion::resolve(
+            &model((Some(0), Some(0)), (None, None)),
+            IMAGE,
+            WritingMode::HorizontalTb,
+        );
+        let items = [
+            TextItem::Glyph { ch: 'あ' },
+            TextItem::CursorMove {
+                x: CursorCoord::Absolute {
+                    value: 100.0,
+                    unit: CursorUnit::Px,
+                },
+                y: CursorCoord::Absolute {
+                    value: 50.0,
+                    unit: CursorUnit::Px,
+                },
+            },
+        ];
+        let lines = LayoutEngine::layout(
+            &items,
+            1,
+            &region,
+            WritingMode::HorizontalTb,
+            10.0,
+            &FixedMetrics,
+            WrapPlan::CharByChar,
+        );
+        assert_eq!(lines.len(), 1, "末尾 \\_l は蒸発（空行を開かない）");
+        assert_eq!(inline_positions(&lines[0]), vec![0.0]);
+        assert_eq!(lines[0].rect.top, 0.0);
+    }
+
+    /// 両軸 None（`\_l[,]`＝両軸省略）は完全 no-op——行区切りもしない
+    /// （正典「両方省略で無効果」・2.4）。`[あ, \_l[,], あ]` → 1 行 [あ@0, あ@10]（改行なし）。
+    #[test]
+    fn both_axes_omitted_cursor_move_is_complete_noop() {
+        let region = TextRegion::resolve(
+            &model((Some(0), Some(0)), (None, None)),
+            IMAGE,
+            WritingMode::HorizontalTb,
+        );
+        let items = [
+            TextItem::Glyph { ch: 'あ' },
+            TextItem::CursorMove {
+                x: CursorCoord::Omitted,
+                y: CursorCoord::Omitted,
+            },
+            TextItem::Glyph { ch: 'あ' },
+        ];
+        let lines = LayoutEngine::layout(
+            &items,
+            2,
+            &region,
+            WritingMode::HorizontalTb,
+            10.0,
+            &FixedMetrics,
+            WrapPlan::CharByChar,
+        );
+        assert_eq!(
+            lines.len(),
+            1,
+            "両軸省略の \\_l は行区切りしない（完全 no-op）"
+        );
+        assert_eq!(inline_positions(&lines[0]), vec![0.0, 10.0]);
+    }
+
+    // ── Task 4.3: 換算表完全性（em/lh をレイアウト経由で配置）＋フラッシュ順序の per-axis 合成 ──
+    //
+    // 4.1 の `cursor_to_image_px_*` は換算を単体で檻化するが、em/lh 係数が実際に次グリフ配置を
+    // 駆動する経路（layout フラッシュ）は 4.2 が Px のみで檻化していた。4.3 は換算表の em/lh 分岐を
+    // レイアウト経由で・保留改行との per-axis 合成（一方をカーソル上書き・他方は改行進行値）を・
+    // 全縮退両軸（Omitted でなく実導出 None 経由）の完全 no-op を補完する。
+
+    /// 換算表の em/lh 分岐がレイアウト配置を実際に駆動する（4.2 は Px のみ）。`\_l[2em, 3lh]`
+    /// （font 10・pitch 13）は inline=origin(0)+2×10=20・block=origin(0)+3×13=39 へ次グリフを載せる。
+    /// 単位ごとに異なる係数（em＝font_height・lh＝line_pitch）が配置座標に現れることを檻化する。
+    #[test]
+    fn cursor_move_em_and_lh_units_place_next_glyph_through_layout() {
+        let region = TextRegion::resolve(
+            &model((Some(0), Some(0)), (None, None)),
+            IMAGE,
+            WritingMode::HorizontalTb,
+        );
+        let items = [
+            TextItem::Glyph { ch: 'あ' },
+            TextItem::Glyph { ch: 'あ' },
+            TextItem::CursorMove {
+                x: CursorCoord::Absolute {
+                    value: 2.0,
+                    unit: CursorUnit::Em,
+                },
+                y: CursorCoord::Absolute {
+                    value: 3.0,
+                    unit: CursorUnit::Lh,
+                },
+            },
+            TextItem::Glyph { ch: 'あ' },
+        ];
+        let lines = LayoutEngine::layout(
+            &items,
+            3,
+            &region,
+            WritingMode::HorizontalTb,
+            10.0,
+            &FixedMetrics,
+            WrapPlan::CharByChar,
+        );
+        assert_eq!(lines.len(), 2, "\\_l は現在行を確定する（行区切り）");
+        assert_eq!(inline_positions(&lines[0]), vec![0.0, 10.0]);
+        assert_eq!(
+            inline_positions(&lines[1]),
+            vec![20.0],
+            "em: inline = origin(0) + 2×font_height(10) = 20"
+        );
+        assert_eq!(
+            lines[1].rect.top, 39.0,
+            "lh: block = origin(0) + 3×line_pitch(13) = 39"
+        );
+    }
+
+    /// 保留改行なしの単軸 `\_l` は指定軸のみ上書きし、省略軸は走査中の実行位置のまま据え置く
+    /// （軸別に独立・R2.4）。x のみ `\_l[10px,]` → inline=10・block は改行がないため 0 のまま。
+    /// y のみ `\_l[,50px]` → block=50・inline は直前グリフ送り終端(10)のまま（リセットされない）。
+    #[test]
+    fn cursor_move_single_axis_leaves_other_axis_unchanged() {
+        let region = TextRegion::resolve(
+            &model((Some(0), Some(0)), (None, None)),
+            IMAGE,
+            WritingMode::HorizontalTb,
+        );
+        // x 軸のみ上書き（y Omitted）: block は改行がないため据え置き（0）、inline のみ 10 へ。
+        let x_only = [
+            TextItem::Glyph { ch: 'あ' },
+            TextItem::CursorMove {
+                x: CursorCoord::Absolute {
+                    value: 10.0,
+                    unit: CursorUnit::Px,
+                },
+                y: CursorCoord::Omitted,
+            },
+            TextItem::Glyph { ch: 'あ' },
+        ];
+        let lines = LayoutEngine::layout(
+            &x_only,
+            2,
+            &region,
+            WritingMode::HorizontalTb,
+            10.0,
+            &FixedMetrics,
+            WrapPlan::CharByChar,
+        );
+        assert_eq!(lines.len(), 2, "\\_l は単軸でも行区切りする");
+        assert_eq!(
+            inline_positions(&lines[1]),
+            vec![10.0],
+            "inline のみ上書き（origin+10）"
+        );
+        assert_eq!(
+            lines[1].rect.top, 0.0,
+            "block 軸は指定なし＝据え置き（改行なしゆえ 0 のまま）"
+        );
+
+        // y 軸のみ上書き（x Omitted）: inline は直前送り終端(10)のまま・block のみ 50 へ。
+        let y_only = [
+            TextItem::Glyph { ch: 'あ' },
+            TextItem::CursorMove {
+                x: CursorCoord::Omitted,
+                y: CursorCoord::Absolute {
+                    value: 50.0,
+                    unit: CursorUnit::Px,
+                },
+            },
+            TextItem::Glyph { ch: 'あ' },
+        ];
+        let lines = LayoutEngine::layout(
+            &y_only,
+            2,
+            &region,
+            WritingMode::HorizontalTb,
+            10.0,
+            &FixedMetrics,
+            WrapPlan::CharByChar,
+        );
+        assert_eq!(lines.len(), 2);
+        assert_eq!(lines[1].rect.top, 50.0, "block のみ上書き（origin+50）");
+        assert_eq!(
+            inline_positions(&lines[1]),
+            vec![10.0],
+            "inline 軸は指定なし＝直前グリフ送り終端(10)のまま（改行リセットも上書きもされない）"
+        );
+    }
+
+    /// 保留改行と単軸 `\_l` が同一フラッシュに混在するとき、上書き軸はカーソル値・省略軸は改行進行値を
+    /// 取る（all-or-nothing でなく per-axis 合成の証左・R2.2/2.4）。font 10・pitch 13:
+    /// - x のみ `\_l[10px,]`＋`\n(1.0)`: inline=カーソル 10・block=改行進行 13。
+    /// - y のみ `\_l[,5px]`＋`\n(1.0)`: block=カーソル 5・inline=改行リセット 0。
+    #[test]
+    fn cursor_and_pending_newline_compose_per_axis() {
+        let region = TextRegion::resolve(
+            &model((Some(0), Some(0)), (None, None)),
+            IMAGE,
+            WritingMode::HorizontalTb,
+        );
+        // inline 上書き・block は改行進行値を取る。
+        let x_over = [
+            TextItem::Glyph { ch: 'あ' },
+            TextItem::LineBreak { ratio: 1.0 },
+            TextItem::CursorMove {
+                x: CursorCoord::Absolute {
+                    value: 10.0,
+                    unit: CursorUnit::Px,
+                },
+                y: CursorCoord::Omitted,
+            },
+            TextItem::Glyph { ch: 'あ' },
+        ];
+        let lines = LayoutEngine::layout(
+            &x_over,
+            2,
+            &region,
+            WritingMode::HorizontalTb,
+            10.0,
+            &FixedMetrics,
+            WrapPlan::CharByChar,
+        );
+        assert_eq!(lines.len(), 2);
+        assert_eq!(
+            inline_positions(&lines[1]),
+            vec![10.0],
+            "inline: カーソル上書きが後勝ち（改行リセット 0 を上書き）"
+        );
+        assert_eq!(
+            lines[1].rect.top, 13.0,
+            "block: カーソル省略ゆえ改行進行値 13 が残る（per-axis 合成）"
+        );
+
+        // block 上書き・inline は改行リセット値を取る（vice-versa）。
+        let y_over = [
+            TextItem::Glyph { ch: 'あ' },
+            TextItem::LineBreak { ratio: 1.0 },
+            TextItem::CursorMove {
+                x: CursorCoord::Omitted,
+                y: CursorCoord::Absolute {
+                    value: 5.0,
+                    unit: CursorUnit::Px,
+                },
+            },
+            TextItem::Glyph { ch: 'あ' },
+        ];
+        let lines = LayoutEngine::layout(
+            &y_over,
+            2,
+            &region,
+            WritingMode::HorizontalTb,
+            10.0,
+            &FixedMetrics,
+            WrapPlan::CharByChar,
+        );
+        assert_eq!(lines.len(), 2);
+        assert_eq!(
+            lines[1].rect.top, 5.0,
+            "block: カーソル上書きが後勝ち（改行進行 13 を上書き）"
+        );
+        assert_eq!(
+            inline_positions(&lines[1]),
+            vec![0.0],
+            "inline: カーソル省略ゆえ改行の行内リセット値 0 が残る（per-axis 合成）"
+        );
+    }
+
+    /// 両軸が実導出 None へ縮退（Omitted でなく負値絶対＋`%`）した `\_l` も完全 no-op——行区切りしない
+    /// （縮退表「全縮退」row・2.4）。`both_axes_omitted` の Omitted 経路と別の到達路（縮退分岐）で
+    /// 同一 no-op を檻化する。`[あ, \_l[-1px, 50%], あ]` → 1 行 [あ@0, あ@10]（改行なし）。
+    #[test]
+    fn cursor_all_axes_degraded_is_complete_noop() {
+        let region = TextRegion::resolve(
+            &model((Some(0), Some(0)), (None, None)),
+            IMAGE,
+            WritingMode::HorizontalTb,
+        );
+        let items = [
+            TextItem::Glyph { ch: 'あ' },
+            TextItem::CursorMove {
+                x: CursorCoord::Absolute {
+                    value: -1.0,
+                    unit: CursorUnit::Px,
+                }, // 負値絶対 → None
+                y: CursorCoord::Absolute {
+                    value: 50.0,
+                    unit: CursorUnit::Percent,
+                }, // % → None
+            },
+            TextItem::Glyph { ch: 'あ' },
+        ];
+        let lines = LayoutEngine::layout(
+            &items,
+            2,
+            &region,
+            WritingMode::HorizontalTb,
+            10.0,
+            &FixedMetrics,
+            WrapPlan::CharByChar,
+        );
+        assert_eq!(
+            lines.len(),
+            1,
+            "両軸全縮退の \\_l は行区切りしない（完全 no-op・Omitted 経路と同一結果）"
+        );
+        assert_eq!(inline_positions(&lines[0]), vec![0.0, 10.0]);
+    }
+
+    // ── Task 4.2: `\_l` 縮退 4 分岐の actor ごと warn-once（layout_with_cursor_warn・6.5） ──
+
+    /// WARN イベント数を数える最小 Subscriber（state.rs/region.rs の檻パターン踏襲・決定論）。
+    struct WarnCounter {
+        warns: Arc<AtomicUsize>,
+    }
+
+    impl tracing::Subscriber for WarnCounter {
+        fn enabled(&self, _: &tracing::Metadata<'_>) -> bool {
+            true
+        }
+        fn new_span(&self, _: &tracing::span::Attributes<'_>) -> tracing::span::Id {
+            tracing::span::Id::from_u64(1)
+        }
+        fn record(&self, _: &tracing::span::Id, _: &tracing::span::Record<'_>) {}
+        fn record_follows_from(&self, _: &tracing::span::Id, _: &tracing::span::Id) {}
+        fn event(&self, event: &tracing::Event<'_>) {
+            if *event.metadata().level() == tracing::Level::WARN {
+                self.warns.fetch_add(1, Ordering::SeqCst);
+            }
+        }
+        fn enter(&self, _: &tracing::span::Id) {}
+        fn exit(&self, _: &tracing::span::Id) {}
+    }
+
+    /// `\_l` 換算の 4 縮退分岐（負値絶対／`%`／`@` 相対／パース不能）は actor ごと・分岐ごとに
+    /// 厳密 1 回だけ `warn!` する（6.5）。同一 actor の再訪では追加警告なし、別 actor では再び
+    /// 全分岐が警告される（持続 guard による per-actor once）。x 軸に縮退座標・y は Omitted
+    /// （Omitted は正常形で無音）とし、後続グリフで CursorMove を確実に処理させる。
+    #[test]
+    fn cursor_degrade_warns_once_per_actor_per_branch() {
+        let region = TextRegion::resolve(
+            &model((Some(0), Some(0)), (None, None)),
+            IMAGE,
+            WritingMode::HorizontalTb,
+        );
+        // 4 縮退分岐（各 x 軸・y は Omitted）。
+        let branches = [
+            CursorCoord::Absolute {
+                value: -1.0,
+                unit: CursorUnit::Px,
+            }, // 負値絶対
+            CursorCoord::Absolute {
+                value: 5.0,
+                unit: CursorUnit::Percent,
+            }, // %
+            CursorCoord::Relative {
+                value: 3.0,
+                unit: CursorUnit::Px,
+            }, // @ 相対
+            CursorCoord::Invalid, // パース不能
+        ];
+        let a0 = ActorKey::from("0");
+        let a1 = ActorKey::from("1");
+
+        let warns = Arc::new(AtomicUsize::new(0));
+        let subscriber = WarnCounter {
+            warns: Arc::clone(&warns),
+        };
+        tracing::subscriber::with_default(subscriber, || {
+            let mut guard = CursorWarnGuard::default();
+            let mut run = |actor: &ActorKey, coord: CursorCoord| {
+                let items = [
+                    TextItem::CursorMove {
+                        x: coord,
+                        y: CursorCoord::Omitted,
+                    },
+                    TextItem::Glyph { ch: 'あ' },
+                ];
+                LayoutEngine::layout_with_cursor_warn(
+                    &items,
+                    1,
+                    &region,
+                    WritingMode::HorizontalTb,
+                    10.0,
+                    &FixedMetrics,
+                    WrapPlan::CharByChar,
+                    actor,
+                    &mut guard,
+                );
+            };
+
+            // actor "0" 初回: 4 分岐がそれぞれ 1 回警告 → 計 4。
+            for c in branches {
+                run(&a0, c);
+            }
+            assert_eq!(
+                warns.load(Ordering::SeqCst),
+                4,
+                "actor0 初回は 4 分岐×1 回＝4 警告"
+            );
+
+            // actor "0" 再訪: 同一 (actor, 分岐) は既出＝追加警告なし。
+            for c in branches {
+                run(&a0, c);
+            }
+            assert_eq!(
+                warns.load(Ordering::SeqCst),
+                4,
+                "actor0 再訪では追加警告なし（per-actor once）"
+            );
+
+            // actor "1": 別 actor は guard が独立＝再び 4 分岐が警告 → 計 8。
+            for c in branches {
+                run(&a1, c);
+            }
+            assert_eq!(
+                warns.load(Ordering::SeqCst),
+                8,
+                "別 actor では再び全 4 分岐が警告される（actor ごと once）"
+            );
+        });
+    }
+
+    /// `Omitted`（軸省略）・実導出成功（非負 Px/Em/Lh）は縮退でなく無音（warn しない・R2.4）。
+    /// `\_l[5px, ]`（x 実導出・y 省略）と `\_l[,]`（両省略）はいずれも警告 0。
+    #[test]
+    fn cursor_omitted_and_valid_axes_do_not_warn() {
+        let region = TextRegion::resolve(
+            &model((Some(0), Some(0)), (None, None)),
+            IMAGE,
+            WritingMode::HorizontalTb,
+        );
+        let a0 = ActorKey::from("0");
+        let warns = Arc::new(AtomicUsize::new(0));
+        let subscriber = WarnCounter {
+            warns: Arc::clone(&warns),
+        };
+        tracing::subscriber::with_default(subscriber, || {
+            let mut guard = CursorWarnGuard::default();
+            let items = [
+                TextItem::CursorMove {
+                    x: CursorCoord::Absolute {
+                        value: 5.0,
+                        unit: CursorUnit::Px,
+                    },
+                    y: CursorCoord::Omitted,
+                },
+                TextItem::CursorMove {
+                    x: CursorCoord::Omitted,
+                    y: CursorCoord::Omitted,
+                },
+                TextItem::Glyph { ch: 'あ' },
+            ];
+            LayoutEngine::layout_with_cursor_warn(
+                &items,
+                1,
+                &region,
+                WritingMode::HorizontalTb,
+                10.0,
+                &FixedMetrics,
+                WrapPlan::CharByChar,
+                &a0,
+                &mut guard,
+            );
+        });
+        assert_eq!(
+            warns.load(Ordering::SeqCst),
+            0,
+            "軸省略・実導出成功は縮退でない（警告しない）"
+        );
     }
 }

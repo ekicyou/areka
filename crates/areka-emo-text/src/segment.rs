@@ -134,6 +134,13 @@ pub fn segment_plan(items: &[TextItem]) -> SegmentPlan {
                 run_text.clear();
                 run_start = glyph_index;
             }
+            TextItem::CursorMove { .. } => {
+                // カーソル指定も run 境界（非グリフ＝通し番号を消費しない）。カーソルジャンプを
+                // 跨いで語分割塊を結合しないよう、LineBreak と同様に蓄積 run を分割する。
+                flush_run(&mut segments, &run_text, run_start);
+                run_text.clear();
+                run_start = glyph_index;
+            }
         }
     }
     // 末尾 run（末尾に LineBreak が無い場合）を処理。
@@ -163,7 +170,7 @@ mod tests {
             .iter()
             .filter_map(|it| match it {
                 TextItem::Glyph { ch } => Some(*ch),
-                TextItem::LineBreak { .. } => None,
+                TextItem::LineBreak { .. } | TextItem::CursorMove { .. } => None,
             })
             .collect()
     }

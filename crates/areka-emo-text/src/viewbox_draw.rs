@@ -45,11 +45,12 @@ use tracing::warn;
 use windows::Win32::Graphics::Direct2D::Common::{D2D_RECT_F, D2D1_COLOR_F};
 use windows::Win32::Graphics::Direct2D::{
     D2D1_ANTIALIAS_MODE_ALIASED, D2D1_DEVICE_CONTEXT_OPTIONS_NONE, D2D1_DRAW_TEXT_OPTIONS_NONE,
-    ID2D1DeviceContext, ID2D1Image,
+    ID2D1DeviceContext, ID2D1Image, ID2D1SolidColorBrush,
 };
 use windows::Win32::Graphics::DirectWrite::{
-    IDWriteFactory2, IDWriteTextFormat, IDWriteTextLayout,
+    DWRITE_TEXT_RANGE, IDWriteFactory2, IDWriteTextFormat, IDWriteTextLayout,
 };
+use windows::core::IUnknown;
 use windows_numerics::{Matrix3x2, Vector2};
 use wintf::com::d2d::{D2D1DeviceContextExt, D2D1DeviceExt};
 use wintf::ecs::GraphicsCore;
@@ -57,10 +58,10 @@ use wintf::ecs::GraphicsCore;
 use crate::TextLayerError;
 use crate::canvas::{ContentCanvas, ResidentContent};
 use crate::draw::{LineLayoutStore, ResolvedFont, create_d2d_target_bitmap, create_text_format};
-use crate::layout::VisibleWindow;
+use crate::layout::{PositionedGlyph, VisibleWindow};
 use crate::region::ScaleContract;
 use crate::surface::TextSurface;
-use crate::viewbox::{FramePlan, LineOverhang, PhysicalRect, ScrollPlanner};
+use crate::viewbox::{FramePlan, LineOverhang, PhysicalRect, ScrollPlanner, ScrollState};
 use crate::writing::WritingMode;
 
 /// 行 TextLayout format の前提（フォント名・高さビット・writing_mode）——変わると
@@ -159,6 +160,17 @@ impl ViewboxExecutor {
         self.stats
     }
 
+    /// スクロール量子化状態の読み口（内部 [`ScrollPlanner`] へ委譲・additive）。
+    ///
+    /// 面に反映済みの whole-pixel スクロール（[`ScrollState::committed`]）を提示フレーム同期で
+    /// 読むための口。結線層（task 8）の照会スナップショット写像が
+    /// `scroll_state().committed` を [`to_window_physical`](crate::choice::to_window_physical) の
+    /// committed 引数へ渡す（design.md「RuntimeContract」Implementation Notes・R9.3 契約点）。
+    /// UI スレッド専有（COM 層規律）。
+    pub fn scroll_state(&self) -> ScrollState {
+        self.planner.scroll_state()
+    }
+
     /// Clear cue の適用点（planner 初期化＋行 TextLayout キャッシュ全破棄——破棄はこの口だけ・
     /// R4.3）。
     ///
@@ -219,6 +231,19 @@ impl ViewboxExecutor {
                         .line_layout(index, &text, &format, font.height, mode)?;
                     self.line_store.overhang(index).unwrap_or_default()
                 }
+                // Choice 住人は内包 run を GlyphRun と同一経路で計測する（R9.5）。
+                ResidentContent::Choice(choice) if !choice.run.glyphs.is_empty() => {
+                    let text: String = choice.run.glyphs.iter().map(|g| g.ch).collect();
+                    self.line_store
+                        .line_layout(index, &text, &format, font.height, mode)?;
+                    let measured = self.line_store.overhang(index).unwrap_or_default();
+                    // ハイライト帯（band_extent）は em ボックス丈より外側へ出る（descent 込み）。
+                    // ダーティ矩形が em ボックス＋実測インクはみ出しのままだと、帯の外側部分が
+                    // クリップで塗り残り／消し残りになる（hover 解除フレームに塗りが残る）。
+                    // ゆえにブロック軸の遠端はみ出しを **帯の超過分**まで広げる（横書き＝下・
+                    // 縦書き＝右——`highlight_rect` が帯を伸ばす向きと同一）。
+                    expand_overhang_for_band(measured, choice.band_extent, font.height, mode)
+                }
                 // 空行/シーム住人は実インクを持たない＝はみ出し 0（em ボックス丈）。
                 _ => LineOverhang::default(),
             };
@@ -266,16 +291,23 @@ impl ViewboxExecutor {
                 }
 
                 // ── Phase 1（可謬）: 描画資源を BeginDraw の前に確定する ──
-                // 描画対象住人（draw_lines）の TextLayout と origin を組む。行レイアウトは plan 前の
-                // はみ出し収集ループで確保済み（ここは全てキャッシュヒット）。origin 式は DrawExecutor と
-                // 同一（validrect-local 平行移動＋ブロック軸の可視窓オフセット）。
-                let mut draws: Vec<(Vector2, IDWriteTextLayout)> = Vec::new();
+                // 描画対象住人（draw_lines）の TextLayout・origin・Choice ハイライト資源を組む。行
+                // レイアウトは plan 前のはみ出し収集ループで確保済み（ここは全てキャッシュヒット）。
+                // origin 式は DrawExecutor と同一（validrect-local 平行移動＋ブロック軸の可視窓
+                // オフセット）。ブラシ生成・`SetDrawingEffect`（**DrawingEffect リセット正準列**——
+                // キャッシュ層 TextLayout を汚さないため全文字範囲へ `None` を必ず適用してから hover
+                // 範囲へ文字色効果を焼く）は可謬ゆえこの BeginDraw 前区間で `?` 伝播する（失敗フレームは
+                // target 未設定のまま skip＝再試行安全・R4.5/R4.6）。
+                let block_offset = window.block_offset;
+                let mut draws: Vec<LineDraw> = Vec::new();
                 for &index in draw_lines {
                     let resident = &canvas.residents[index];
-                    let run = match &resident.content {
-                        ResidentContent::GlyphRun(run) => run,
-                        seam => {
-                            // planner の draw_lines は GlyphRun のみゆえ通常不発の防御経路
+                    let (run, choice) = match &resident.content {
+                        ResidentContent::GlyphRun(run) => (run, None),
+                        // Choice 住人は内包 run を GlyphRun と同格に描き、hover 時のみハイライトを重ねる。
+                        ResidentContent::Choice(choice) => (&choice.run, Some(choice)),
+                        seam @ (ResidentContent::Image(_) | ResidentContent::Surface(_)) => {
+                            // planner の draw_lines は GlyphRun/Choice のみゆえ通常不発の防御経路
                             // （warn は executor ごと初回のみ・DrawExecutor と同規律）。
                             if !self.seam_warned {
                                 self.seam_warned = true;
@@ -298,28 +330,85 @@ impl ViewboxExecutor {
                     let origin = match mode {
                         WritingMode::HorizontalTb => Vector2 {
                             X: dx,
-                            Y: dy + window.block_offset,
+                            Y: dy + block_offset,
                         },
                         WritingMode::VerticalRl | WritingMode::VerticalLr => Vector2 {
-                            X: dx + window.block_offset,
+                            X: dx + block_offset,
                             Y: dy,
                         },
                     };
-                    draws.push((origin, layout));
+
+                    // Choice 行はキャッシュ層 TextLayout に前フレームの効果が残り得るため、描画毎に
+                    // 全文字範囲を `None` へリセットする（hover 解除フレームは全範囲 None のみ＝素描画）。
+                    let choice_draw = if let Some(choice) = choice {
+                        let full_len = text.encode_utf16().count() as u32;
+                        unsafe {
+                            layout.SetDrawingEffect(
+                                None::<&IUnknown>,
+                                DWRITE_TEXT_RANGE {
+                                    startPosition: 0,
+                                    length: full_len,
+                                },
+                            )
+                        }
+                        .map_err(device_err("SetDrawingEffect(reset None)"))?;
+
+                        // highlight=Some（hover 行）: hover セグメント（ordinal==hovered）へ矩形塗り
+                        // ブラシ＋文字色効果を組む。NoMarker/非 hover は highlight=None＝素描画。
+                        let hover = if let Some(paint) = choice.highlight {
+                            let fill = self
+                                .dc
+                                .create_solid_color_brush(&color_f(paint.fill), None)
+                                .map_err(device_err("CreateSolidColorBrush(fill)"))?;
+                            let text_brush = self
+                                .dc
+                                .create_solid_color_brush(&color_f(paint.text), None)
+                                .map_err(device_err("CreateSolidColorBrush(text)"))?;
+                            let mut rects: Vec<D2D_RECT_F> = Vec::new();
+                            for seg in &choice.segments {
+                                if Some(seg.ordinal) != choice.hovered {
+                                    continue;
+                                }
+                                // hover セグメント矩形（inline_range × ハイライト帯 band_extent・
+                                // 住人 transform ＋block_offset 反映＝ヒット矩形／指紋と同座標系・R3.3）。
+                                // 帯は em ボックス丈（font.height）ではなく choice.band_extent
+                                // （descent 込みの実行ボックス丈）——`derive_hit_rows` へ渡る値と同一。
+                                rects.push(highlight_rect(
+                                    seg.inline_range,
+                                    (dx, dy),
+                                    block_offset,
+                                    choice.band_extent,
+                                    mode,
+                                ));
+                                // hover セグメントの文字範囲へ文字色効果を適用（run のグリフ位置から
+                                // UTF-16 文字範囲を導く）。
+                                if let Some(range) =
+                                    segment_text_range(&run.glyphs, seg.inline_range)
+                                {
+                                    unsafe { layout.SetDrawingEffect(&text_brush, range) }
+                                        .map_err(device_err("SetDrawingEffect(text)"))?;
+                                }
+                            }
+                            Some(ChoiceHover { fill, rects })
+                        } else {
+                            None
+                        };
+                        Some(ChoiceDraw { hover })
+                    } else {
+                        None
+                    };
+
+                    draws.push(LineDraw {
+                        origin,
+                        layout,
+                        choice: choice_draw,
+                    });
                 }
 
                 let (r, g, b) = font.color;
                 let brush = self
                     .dc
-                    .create_solid_color_brush(
-                        &D2D1_COLOR_F {
-                            r: r as f32 / 255.0,
-                            g: g as f32 / 255.0,
-                            b: b as f32 / 255.0,
-                            a: 1.0,
-                        },
-                        None,
-                    )
+                    .create_solid_color_brush(&color_f((r, g, b)), None)
                     .map_err(device_err("CreateSolidColorBrush"))?;
                 let target = create_d2d_target_bitmap(&self.dc, surface.back_tex())?;
 
@@ -361,10 +450,20 @@ impl ViewboxExecutor {
                         M32: 0.0,
                     });
                     // ⑤ 該当行を描画（クリップにより描画結果は dirty 矩形内へ限定される）。
-                    for (origin, layout) in &draws {
+                    // Choice hover 行は (a) セグメント矩形を塗り色で `FillRectangle` してから
+                    // (b) `DrawTextLayout`（効果範囲の文字だけが Phase 1 で焼いた切替色で描かれる）。
+                    for d in &draws {
+                        if let Some(ChoiceDraw {
+                            hover: Some(hover), ..
+                        }) = &d.choice
+                        {
+                            for rect in &hover.rects {
+                                self.dc.fill_rectangle(rect, &hover.fill);
+                            }
+                        }
                         self.dc.draw_text_layout(
-                            *origin,
-                            layout,
+                            d.origin,
+                            &d.layout,
                             &brush,
                             D2D1_DRAW_TEXT_OPTIONS_NONE,
                         );
@@ -559,6 +658,131 @@ fn device_err(context: &'static str) -> impl FnOnce(windows::core::Error) -> Tex
     }
 }
 
+/// 1 描画対象行の COM 描画資源（origin＋行 TextLayout＋Choice ハイライト資源）。
+struct LineDraw {
+    /// 描画原点（DrawExecutor と同一式・validrect-local 平行移動＋可視窓オフセット）。
+    origin: Vector2,
+    /// 行 TextLayout（[`LineLayoutStore`] 由来・効果は Phase 1 で焼込済み）。
+    layout: IDWriteTextLayout,
+    /// Choice 住人のときのみ Some（GlyphRun は None＝素描画）。
+    choice: Option<ChoiceDraw>,
+}
+
+/// Choice 行のハイライト描画資源（hover 時のみ塗り資源を持つ・非 hover は全範囲 None リセットのみ）。
+struct ChoiceDraw {
+    /// hover 時の矩形塗り資源（`highlight=None`／NoMarker は None＝素描画）。
+    hover: Option<ChoiceHover>,
+}
+
+/// hover セグメントの矩形塗り資源（文字色効果は Phase 1 で layout へ焼込済みゆえ持たない）。
+struct ChoiceHover {
+    /// 矩形塗りブラシ（`HighlightPaint::fill`）。
+    fill: ID2D1SolidColorBrush,
+    /// hover セグメント矩形（image px・住人 transform＋block_offset 反映）。
+    rects: Vec<D2D_RECT_F>,
+}
+
+/// RGB を不透明（α=1.0）の [`D2D1_COLOR_F`] へ写す（0..255→0.0..1.0）。
+fn color_f(rgb: (u8, u8, u8)) -> D2D1_COLOR_F {
+    let (r, g, b) = rgb;
+    D2D1_COLOR_F {
+        r: r as f32 / 255.0,
+        g: g as f32 / 255.0,
+        b: b as f32 / 255.0,
+        a: 1.0,
+    }
+}
+
+/// hover セグメント矩形を描画空間（image px・住人 transform＋block_offset 反映）で組む。
+///
+/// 行内軸＝セグメントの `inline_range`（文字幅）・ブロック軸帯＝`band_extent`
+/// （[`ChoiceLineContent::band_extent`]＝実 font metrics の `ascent + descent` 由来。em ボックス丈
+/// `font_height` ではない——em で切ると和文フォントの descent インクが帯からはみ出す）。住人平行移動
+/// `(dx, dy)` と可視窓オフセット `block_offset`（横＝Y・縦＝X）を反映し、glyph 描画原点と同一系へ
+/// 揃える（ヒット矩形／指紋と同座標系・R3.3）。座標は合成スケール `k` 適用前の image px
+/// （呼び手が `SetTransform(scale(k))` 下で `FillRectangle` する）。
+fn highlight_rect(
+    inline_range: (f32, f32),
+    offset: (f32, f32),
+    block_offset: f32,
+    band_extent: f32,
+    mode: WritingMode,
+) -> D2D_RECT_F {
+    let (i0, i1) = inline_range;
+    let (dx, dy) = offset;
+    match mode {
+        WritingMode::HorizontalTb => D2D_RECT_F {
+            left: dx + i0,
+            top: dy + block_offset,
+            right: dx + i1,
+            bottom: dy + block_offset + band_extent,
+        },
+        WritingMode::VerticalRl | WritingMode::VerticalLr => D2D_RECT_F {
+            left: dx + block_offset,
+            top: dy + i0,
+            right: dx + block_offset + band_extent,
+            bottom: dy + i1,
+        },
+    }
+}
+
+/// Choice 住人のダーティ帯を **ハイライト帯の超過分**まで広げた [`LineOverhang`] を返す（純粋）。
+///
+/// ダーティ矩形は em ボックス（`font_height`）＋実測インクはみ出しで組まれる（D2）。ハイライト帯
+/// （`band_extent`＝`ascent + descent` 由来）はそれより外側へ出るため、超過分
+/// `band_extent − font_height` をブロック軸**遠端**（横書き＝`bottom`・縦書き＝`right`——
+/// [`highlight_rect`] が帯を伸ばす向き）の下限として与える。実測インクはみ出しの方が大きい場合は
+/// 実測値を保つ（`max`）。これにより hover フレームの塗りが欠けず、hover 解除フレームで
+/// 塗りが消し残らない（同一帯が両フレームでダーティになる）。
+fn expand_overhang_for_band(
+    measured: LineOverhang,
+    band_extent: f32,
+    font_height: f32,
+    mode: WritingMode,
+) -> LineOverhang {
+    let excess = (band_extent - font_height).max(0.0);
+    match mode {
+        WritingMode::HorizontalTb => LineOverhang {
+            bottom: measured.bottom.max(excess),
+            ..measured
+        },
+        WritingMode::VerticalRl | WritingMode::VerticalLr => LineOverhang {
+            right: measured.right.max(excess),
+            ..measured
+        },
+    }
+}
+
+/// hover セグメントの resident-local `inline_range` を run のグリフ列へ照合し、`SetDrawingEffect`
+/// 用の UTF-16 文字範囲（[`DWRITE_TEXT_RANGE`]）を導く。
+///
+/// 行 TextLayout の text は `run.glyphs` の `ch` 連結ゆえ、グリフ index と text 位置は各 `ch` の
+/// UTF-16 長の累積で 1:1 対応する。グリフ中心（`inline_pos + advance/2`）が `inline_range` に入る
+/// **連続**グリフ subrange を採り、その手前までの累積を `startPosition`・subrange の累積長を
+/// `length` とする（境界がグリフ境界に一致するため中心判定が浮動小数誤差に頑健）。交差グリフ
+/// なしは `None`（効果を適用しない）。
+fn segment_text_range(glyphs: &[PositionedGlyph], inline_range: (f32, f32)) -> Option<DWRITE_TEXT_RANGE> {
+    let (i0, i1) = inline_range;
+    let mut acc: u32 = 0;
+    let mut start: Option<u32> = None;
+    let mut length: u32 = 0;
+    for g in glyphs {
+        let units = g.ch.len_utf16() as u32;
+        let center = g.inline_pos + g.advance * 0.5;
+        if center > i0 && center < i1 {
+            if start.is_none() {
+                start = Some(acc);
+            }
+            length += units;
+        }
+        acc += units;
+    }
+    start.map(|start_position| DWRITE_TEXT_RANGE {
+        startPosition: start_position,
+        length,
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use areka_parsers::balloon::{
@@ -576,7 +800,10 @@ mod tests {
 
     use super::{DrawStats, ViewboxExecutor};
     use crate::actor::TextSlotBinding;
-    use crate::canvas::ContentCanvas;
+    use crate::canvas::{
+        ChoiceLineContent, ChoiceRowSegment, ContentCanvas, HighlightPaint, Resident,
+        ResidentContent,
+    };
     use crate::draw::{DWriteMetrics, DrawExecutor, ResolvedFont};
     use crate::layout::{FixedMetrics, LayoutEngine, VisibleWindow, WrapPlan};
     use crate::region::{ScaleContract, TextRegion};
@@ -777,6 +1004,227 @@ mod tests {
         assert_eq!(
             stats.blits, 0,
             "初回 blit=(0,0) は blits を増やさない（全面 CopyResource）"
+        );
+    }
+
+    /// canvas の GlyphRun 住人を、内包 run が等価な非 hover の Choice 住人へ写す
+    /// （`segments` 空・`hovered=None`・`highlight=None`）。transform/effects は不変。
+    /// 「Choice は GlyphRun と同格の素描画」（R1.4/R9.5）を検証するための等価変換。
+    fn as_choice_canvas(canvas: &ContentCanvas) -> ContentCanvas {
+        let residents = canvas
+            .residents
+            .iter()
+            .map(|r| match &r.content {
+                ResidentContent::GlyphRun(run) => Resident {
+                    content: ResidentContent::Choice(ChoiceLineContent {
+                        run: run.clone(),
+                        segments: Vec::new(),
+                        hovered: None,
+                        highlight: None,
+                        // 素描画等価の検証ゆえ帯は em ボックス丈（塗りを持たない）。
+                        band_extent: run.size.1,
+                    }),
+                    transform: r.transform,
+                    effects: r.effects,
+                },
+                _ => r.clone(),
+            })
+            .collect();
+        ContentCanvas {
+            residents,
+            size: canvas.size,
+        }
+    }
+
+    /// R1.4/R9.5（ピクセル同一）: 非 hover（`highlight=None`）の Choice 住人は、内包 run が
+    /// 等価な GlyphRun 住人と**readback バイト完全一致**で描画される。GlyphRun canvas と
+    /// Choice canvas をそれぞれ独立の executor/供給面へ初回フレーム描画し、read_back を byte 比較する。
+    /// （Choice アームが run を GlyphRun と別経路で描く・寸を取り違える等の変異はこの檻で赤くなる。）
+    #[test]
+    fn choice_resident_renders_pixel_identical_to_glyph_run() {
+        let mut rig = Rig::new();
+        let image = (80u32, 40u32);
+        let mode = WritingMode::HorizontalTb;
+        let font = ResolvedFont::resolve(&geo_model(Some(10)));
+        let region = TextRegion::resolve(&geo_model(Some(10)), image, mode);
+        let contract = ScaleContract::new(1.0, None);
+
+        // 2 行（"あい" / "うえお"）＝複数住人。全角混在で実インクを確実に載せる。
+        let mut items = glyph_items("あい");
+        items.push(TextItem::LineBreak { ratio: 1.0 });
+        items.extend(glyph_items("うえお"));
+        let (glyph_canvas, window) = build(&items, &region, mode, 10.0);
+        let choice_canvas = as_choice_canvas(&glyph_canvas);
+
+        // 等価変換の健全性（偽 GO 防止）: Choice canvas は実際に Choice 住人を持ち、
+        // 住人数・寸は GlyphRun canvas と一致する。
+        assert!(
+            choice_canvas
+                .residents
+                .iter()
+                .any(|r| matches!(r.content, ResidentContent::Choice(_))),
+            "変換後 canvas は Choice 住人を含む"
+        );
+        assert_eq!(
+            choice_canvas.residents.len(),
+            glyph_canvas.residents.len(),
+            "住人数は等価"
+        );
+
+        // GlyphRun canvas を独立 executor/供給面へ初回描画。
+        let mut surface_glyph = rig.attach(image, 1.0);
+        let mut exec_glyph = ViewboxExecutor::new(&rig.core).expect("ViewboxExecutor::new 失敗");
+        exec_glyph
+            .render(&glyph_canvas, &window, &font, mode, &contract, &mut surface_glyph)
+            .expect("GlyphRun render 失敗");
+        let bytes_glyph = surface_glyph.read_back().expect("read_back 失敗");
+
+        // Choice canvas を別の独立 executor/供給面へ初回描画。
+        let mut surface_choice = rig.attach(image, 1.0);
+        let mut exec_choice = ViewboxExecutor::new(&rig.core).expect("ViewboxExecutor::new 失敗");
+        exec_choice
+            .render(&choice_canvas, &window, &font, mode, &contract, &mut surface_choice)
+            .expect("Choice render 失敗");
+        let bytes_choice = surface_choice.read_back().expect("read_back 失敗");
+
+        assert!(
+            opaque_count(&bytes_glyph) > 0,
+            "GlyphRun 描画で実インクが載る（空比較で偽 GO にしない）"
+        );
+        assert_eq!(
+            bytes_choice, bytes_glyph,
+            "非 hover の Choice 住人は等価な GlyphRun 住人とピクセル同一に描画される（R1.4/R9.5）"
+        );
+    }
+
+    /// premultiplied BGRA 密配列で、列帯 `x0..x1`（全 y）に指定 BGRA と完全一致する画素数を数える。
+    fn count_bgra_in_x_band(bytes: &[u8], w: u32, h: u32, x0: u32, x1: u32, target: [u8; 4]) -> usize {
+        let mut n = 0usize;
+        for y in 0..h {
+            for x in x0..x1.min(w) {
+                let o = ((y * w + x) * 4) as usize;
+                if bytes[o..o + 4] == target {
+                    n += 1;
+                }
+            }
+        }
+        n
+    }
+
+    /// 観測可能な完了状態（ハイライト描画・R4.2/4.3/4.5/4.6）: hover 中の Choice 行を描画すると
+    /// hover セグメント矩形内は塗り色（fill）＋切替文字色（白）の画素になり、セグメント外は素描画
+    /// （塗りなし）になる。さらに hover 解除フレーム（highlight=None・同一 executor＝キャッシュ
+    /// TextLayout 再利用）は塗り画素ゼロ・文字色も既定へ戻る（DrawingEffect リセット正準列＝
+    /// キャッシュ層 TextLayout を汚さない・4.5）。
+    #[test]
+    fn hover_choice_line_paints_segment_and_resets_on_hover_off() {
+        let mut rig = Rig::new();
+        let image = (40u32, 20u32);
+        let mut surface = rig.attach(image, 1.0);
+        let (w, h) = surface.size();
+        let mode = WritingMode::HorizontalTb;
+        let font = ResolvedFont::resolve(&geo_model(Some(10)));
+        let region = TextRegion::resolve(&geo_model(Some(10)), image, mode);
+        let contract = ScaleContract::new(1.0, None);
+        let mut exec = ViewboxExecutor::new(&rig.core).expect("ViewboxExecutor::new 失敗");
+
+        // 1 行「あい」（全角 2・font 10）＝グリフ位置 0/10・送り 10。GlyphRun canvas をベースに
+        // 先頭グリフのみ選択肢セグメント（ordinal 0・inline_range (0,10)＝resident-local）にして
+        // hover=Some(0)・fixture 実導出色（fill=(105,25,25)・text=(255,255,255)）を焼く。
+        let (base_canvas, window) = build(&glyph_items("あい"), &region, mode, 10.0);
+        let fill = (105u8, 25u8, 25u8);
+        let text_color = (255u8, 255u8, 255u8);
+        let make_choice = |highlight: Option<HighlightPaint>, hovered: Option<usize>| {
+            let residents = base_canvas
+                .residents
+                .iter()
+                .map(|r| match &r.content {
+                    ResidentContent::GlyphRun(run) => Resident {
+                        content: ResidentContent::Choice(ChoiceLineContent {
+                            run: run.clone(),
+                            segments: vec![ChoiceRowSegment {
+                                ordinal: 0,
+                                inline_range: (0.0, 10.0), // 先頭グリフ（resident-local）。
+                            }],
+                            hovered,
+                            highlight,
+                            // 帯は em ボックス丈（10）より**大きい** 13——実フォント
+                            // （Yu Gothic UI 比 1.33）の descent 込み帯と同じ関係を檻に持ち込む。
+                            // hover 解除フレームの「塗り画素ゼロ」判定が、ダーティ帯の帯超過分
+                            // 拡張（expand_overhang_for_band）まで含めて赤くなる。
+                            band_extent: 13.0,
+                        }),
+                        transform: r.transform,
+                        effects: r.effects,
+                    },
+                    _ => r.clone(),
+                })
+                .collect();
+            ContentCanvas {
+                residents,
+                size: base_canvas.size,
+            }
+        };
+
+        // premultiplied BGRA（α=255 ゆえ非乗算）: 塗り＝(b,g,r,a)=(25,25,105,255)・白文字＝(255,255,255,255)。
+        let fill_bgra = [25u8, 25, 105, 255];
+        let white_bgra = [255u8, 255, 255, 255];
+
+        // ── frame 1: hover 中（highlight=Some）。 ──
+        let hover_canvas = make_choice(
+            Some(HighlightPaint {
+                fill,
+                text: text_color,
+            }),
+            Some(0),
+        );
+        exec.render(&hover_canvas, &window, &font, mode, &contract, &mut surface)
+            .expect("hover render 失敗");
+        let hovered_px = surface.read_back().expect("read_back(hover) 失敗");
+
+        // セグメント帯（x 0..10）: 塗り画素あり＋白文字画素あり（矩形塗り＋文字色切替の双方）。
+        let seg_fill = count_bgra_in_x_band(&hovered_px, w, h, 0, 10, fill_bgra);
+        let seg_white = count_bgra_in_x_band(&hovered_px, w, h, 0, 10, white_bgra);
+        assert!(
+            seg_fill > 0,
+            "hover セグメント矩形内に塗り色（fill）画素が現れる（R4.2）"
+        );
+        assert!(
+            seg_white > 0,
+            "hover セグメント範囲の文字が切替色（白）で描かれる（R4.6）"
+        );
+
+        // セグメント外（x 10..20＝2 グリフ目）: 塗り画素ゼロ・白文字ゼロ（素描画＝既定色）。
+        let out_fill = count_bgra_in_x_band(&hovered_px, w, h, 10, 20, fill_bgra);
+        let out_white = count_bgra_in_x_band(&hovered_px, w, h, 10, 20, white_bgra);
+        assert_eq!(
+            out_fill, 0,
+            "hover セグメント外は塗られない（文字幅＝クリック領域幅・行全幅でない・R4.2）"
+        );
+        assert_eq!(
+            out_white, 0,
+            "hover セグメント外の文字は切替色にならない（効果範囲限定・R4.6）"
+        );
+
+        // ── frame 2: hover 解除（highlight=None・同一 executor＝行 TextLayout はキャッシュ再利用）。 ──
+        let plain_canvas = make_choice(None, None);
+        exec.render(&plain_canvas, &window, &font, mode, &contract, &mut surface)
+            .expect("hover 解除 render 失敗");
+        let plain_px = surface.read_back().expect("read_back(hover 解除) 失敗");
+
+        // 塗り画素は全域ゼロ（塗りが残らない）・白文字も全域ゼロ（効果が全範囲 None へリセット
+        // され既定黒へ戻る＝キャッシュ層 TextLayout を汚していない・4.5）。
+        let all_fill = count_bgra_in_x_band(&plain_px, w, h, 0, w, fill_bgra);
+        let all_white = count_bgra_in_x_band(&plain_px, w, h, 0, w, white_bgra);
+        assert_eq!(all_fill, 0, "hover 解除フレームは塗り画素ゼロ（素描画）");
+        assert_eq!(
+            all_white, 0,
+            "hover 解除フレームは切替文字色が残らない（DrawingEffect リセット正準列・4.5）"
+        );
+        // 非退化: 素描画でも content の非透明インクは在る（vacuous な空面一致を排除）。
+        assert!(
+            opaque_count(&plain_px) > 0,
+            "hover 解除でも素のグリフインクは描かれる"
         );
     }
 

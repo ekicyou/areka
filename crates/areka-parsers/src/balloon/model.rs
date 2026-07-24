@@ -38,10 +38,15 @@ pub struct BalloonModel {
     font: Font,
     writing_mode: Option<String>,
     budoux_newline: Option<String>,
+    cursor: BalloonCursor,
 }
 
 impl BalloonModel {
     /// 各 sub-struct を束ねて集約ルートを構築する（同クレート写像・テスト用）。
+    ///
+    /// `cursor` は additive 追加フィールドのため、既存呼び出し互換のため本コンストラクタでは
+    /// `BalloonCursor::default()`（全キー未指定）で初期化する。cursor.* を持つ写像は
+    /// [`BalloonModel::with_cursor`] で相乗り上書きする（`balloon::parse` が使用・要件 4.2）。
     pub fn new(
         windowposition: WindowPosition,
         origin: Origin,
@@ -59,7 +64,17 @@ impl BalloonModel {
             font,
             writing_mode,
             budoux_newline,
+            cursor: BalloonCursor::default(),
         }
+    }
+
+    /// cursor.* スタイルモデルを差し替えた値を返す additive ビルダ（不変値オブジェクト流儀）。
+    ///
+    /// `new` で基層を組んだ後、`balloon::parse` の KV 写像が cursor.* キー群を束ねた
+    /// [`BalloonCursor`] を相乗りさせるために消費する（既存呼び出し側は `new` のまま不変・要件 4.2）。
+    pub fn with_cursor(mut self, cursor: BalloonCursor) -> Self {
+        self.cursor = cursor;
+        self
     }
 
     /// バルーン配置調整値 `windowposition`（x, y）を読み取る（要件 2.1）。
@@ -101,6 +116,15 @@ impl BalloonModel {
     /// 下流 emo テキスト層の責務・parser は転記に徹する）。未指定は `None`。
     pub fn budoux_newline(&self) -> Option<&str> {
         self.budoux_newline.as_deref()
+    }
+
+    /// cursor.* 選択肢マーカースタイルモデル `cursor` を参照で読み取る（要件 4.2/6.2）。
+    ///
+    /// `Option<String>` を含むため参照返し（`font()` 流儀）。cursor.* 未記載バルーンでは
+    /// 全フィールドが未指定（`BalloonCursor::default()`）となり、下流 `ResolvedChoiceStyle::resolve`
+    /// が「未指定バルーン＝反転縮退」判定に用いる（要件 4.3/6.1）。
+    pub fn cursor(&self) -> &BalloonCursor {
+        &self.cursor
     }
 }
 
@@ -287,6 +311,112 @@ impl FontColor {
     }
 
     /// 青成分（0–255・未指定は `None`・`Some(0)` と判別・要件 2.5/2.6）。
+    pub fn b(&self) -> Option<u8> {
+        self.b
+    }
+}
+
+/// balloon descript の `cursor.*` スタイルキー群（選択肢マーカー・忠実転写・要件 4.2/6.2）。
+///
+/// 「`cursor,ファイル名`」（マウスカーソル画像キー）は別キーであり本モデルの対象外。
+/// 各成分は `Option`（`None` と `Some(0)` を判別・既存パーサ規約）で保持し、値の解釈・
+/// スタイル解決は下流（`ResolvedChoiceStyle::resolve`）に委ねる（parser は転記に徹する）。
+/// 全キー未指定（`Default`）＝「未指定バルーン」判定の素材となる（要件 4.3/6.1）。
+///
+/// `#[derive(Default)]` は「全キー未指定」の素直な表現であり、additive フィールドとして
+/// 既存コンストラクタ互換を保つために [`BalloonModel::new`] が用いる。`Eq` は集約ルート
+/// `BalloonModel` の `Eq` 派生（全フィールド `Eq` 要求）を満たすため付与する。
+#[non_exhaustive]
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct BalloonCursor {
+    style: Option<String>,
+    brush_color: CursorColor,
+    pen_color: CursorColor,
+    font_color: CursorColor,
+    blendmethod: Option<String>,
+}
+
+impl BalloonCursor {
+    /// style/brush/pen/font/blendmethod を束ねて構築する（同クレート写像・テスト用）。
+    ///
+    /// `style`（square/underline/square+underline/none）と `blendmethod`（none/notmaskpen/…）は
+    /// 数値化せず生文字列で保持し、語彙判定・fallback は下流（`resolve`）の責務とする。
+    pub fn new(
+        style: Option<String>,
+        brush_color: CursorColor,
+        pen_color: CursorColor,
+        font_color: CursorColor,
+        blendmethod: Option<String>,
+    ) -> Self {
+        BalloonCursor {
+            style,
+            brush_color,
+            pen_color,
+            font_color,
+            blendmethod,
+        }
+    }
+
+    /// 選択肢マーカースタイル `cursor.style`（square / underline / square+underline / none・
+    /// 未指定は `None`・生文字列転記・要件 4.2/6.5）。
+    pub fn style(&self) -> Option<&str> {
+        self.style.as_deref()
+    }
+
+    /// 矩形内塗り色 `cursor.brush.color.{r,g,b}`（hover 塗り色・要件 4.2）。
+    pub fn brush_color(&self) -> CursorColor {
+        self.brush_color
+    }
+
+    /// 枠/下線色 `cursor.pen.color.{r,g,b}`（語彙保持・M1 非参照・要件 6.2）。
+    pub fn pen_color(&self) -> CursorColor {
+        self.pen_color
+    }
+
+    /// hover 文字色 `cursor.font.color.{r,g,b}`（要件 4.2）。
+    ///
+    /// 既存 `font.color.*`（非 hover 文字色）とは別キー系であり、完全一致引きゆえ相互に
+    /// 汚染しない（「cursor キーを font へ巻き込まない」既存不変条件の分離側・要件 6.2）。
+    pub fn font_color(&self) -> CursorColor {
+        self.font_color
+    }
+
+    /// ブレンド方式 `cursor.blendmethod`（none / notmaskpen / …・不透明転写・未指定は `None`・要件 6.5）。
+    pub fn blendmethod(&self) -> Option<&str> {
+        self.blendmethod.as_deref()
+    }
+}
+
+/// `cursor.*.color`（`brush`/`pen`/`font` の r/g/b それぞれ 0–255）。各成分独立 `None`。
+///
+/// `FontColor` と同一表現を意図的にミラーする（r/g/b を個別に `Option<u8>` 化し、部分欠落を
+/// 欠落なく表現・`None` と `Some(0)` を判別・要件 4.2/2.6）。`FontColor` を再利用せず別 NewType
+/// とするのは、設計（BalloonCursorModel）が `CursorColor` を命名した意味論分離に従うため。
+#[non_exhaustive]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct CursorColor {
+    r: Option<u8>,
+    g: Option<u8>,
+    b: Option<u8>,
+}
+
+impl CursorColor {
+    /// r/g/b を個別に `Option` で保持して構築する（部分欠落を欠落なく表現・要件 4.2/2.6）。
+    pub fn new(r: Option<u8>, g: Option<u8>, b: Option<u8>) -> Self {
+        CursorColor { r, g, b }
+    }
+
+    /// 赤成分（0–255・未指定は `None`・`Some(0)` と判別・要件 4.2/2.6）。
+    pub fn r(&self) -> Option<u8> {
+        self.r
+    }
+
+    /// 緑成分（0–255・未指定は `None`・`Some(0)` と判別・要件 4.2/2.6）。
+    pub fn g(&self) -> Option<u8> {
+        self.g
+    }
+
+    /// 青成分（0–255・未指定は `None`・`Some(0)` と判別・要件 4.2/2.6）。
     pub fn b(&self) -> Option<u8> {
         self.b
     }

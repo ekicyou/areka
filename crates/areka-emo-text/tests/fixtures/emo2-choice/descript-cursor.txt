@@ -1,0 +1,33 @@
+charset,UTF-8
+// emo2-choice fixture（task 11.1・R7.6）: cursor.* 指定バルーン descript
+//
+// choice ハイライトが SquareFill 実導出（塗り=cursor.brush.color・hover 文字=cursor.font.color）へ
+// 解決される最小適合バルーン。値は 9.2/9.3 の in-code `cursor_model()` と同一
+// （square 塗り(105,25,25)＋白文字(255,255,255)）を「実 parse される descript」として自前用意する。
+//
+// 実フォント指定（既定 ＭＳ ゴシック盲点の回避・記憶 emo-text-byte-equiv-default-font-blindspot）:
+// pixel 檻は既定テストフォントで通っても、実フォントの字送り/descent では別の見え方をし得るため、
+// 7.6 は実フォント出力の目視確認を要求する。ゆえに fixture は font.name に実フォントを与える。
+font.name,Yu Gothic UI
+font.height,20
+font.color.r,0
+font.color.g,0
+font.color.b,0
+
+// バルーン幾何（原点＝validrect-local 書字開始角へクランプ・validrect は image 相対の負値=反対辺）。
+origin.x,0
+origin.y,0
+validrect.top,5
+validrect.left,5
+validrect.right,-5
+validrect.bottom,-5
+
+// cursor.* スタイルモデル（SquareFill 実導出・要件 4.2/6.2）。
+// style,square＝矩形塗りマーカー・brush.color＝矩形内塗り色・font.color＝hover 白文字。
+cursor.style,square
+cursor.brush.color.r,105
+cursor.brush.color.g,25
+cursor.brush.color.b,25
+cursor.font.color.r,255
+cursor.font.color.g,255
+cursor.font.color.b,255

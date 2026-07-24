@@ -148,6 +148,58 @@ pub struct GlyphRunContent {
     pub size: (f32, f32),
 }
 
+/// 選択肢住人の中身——グリフ行本体（[`GlyphRunContent`]）に選択肢セグメント・hover 状態・
+/// 解決済みハイライト塗りを付随させた住人（R1.1/R1.4）。
+///
+/// **描画は GlyphRun と同格**: 非 hover（`highlight == None`）時は `run` を等価な
+/// [`GlyphRun`](ResidentContent::GlyphRun) 住人と**まったく同一の素描画経路**で描く
+/// （ピクセル同一・R9.5）。ハイライト矩形塗り（`highlight == Some(..)`）・hover セグメントの
+/// 指紋反映・文字色差し替えは後続タスクの領分（本型はデータを保持するのみで、素描画には
+/// `run` 以外のフィールドは影響しない）。
+#[derive(Clone, Debug, PartialEq)]
+pub struct ChoiceLineContent {
+    /// グリフ行本体（描画は GlyphRun と同一経路・行ローカル座標）。
+    pub run: GlyphRunContent,
+    /// 行内の選択肢セグメント（ordinal ＋ 行内軸ローカル範囲・昇順・空＝選択肢なし行）。
+    pub segments: Vec<ChoiceRowSegment>,
+    /// hover 中セグメントの ordinal（無ければ `None`）。
+    pub hovered: Option<usize>,
+    /// 解決済みハイライト塗り（`None`＝描かない＝GlyphRun と同一の素描画）。
+    pub highlight: Option<HighlightPaint>,
+    /// ハイライト帯（＝ヒット帯）のブロック軸寸（image px・行矩形の block 近端起点）。
+    ///
+    /// [`highlight_band_extent`](crate::choice::highlight_band_extent) が実 font metrics
+    /// （`ascent + descent`）から決めた **descent 込みの帯丈**——`run.size` の em ボックス丈
+    /// （`font_height`）ではない。em ボックス丈で塗ると和文フォントの descent インクが帯の外へ
+    /// 出る（実機不具合「文字の下が切れる」の真因・R3.3/4.2）。COM 層はこの単一値から
+    /// ハイライト矩形とダーティ帯の両方を組み、純粋層の
+    /// [`derive_hit_rows`](crate::choice::derive_hit_rows) は同値を受け取って帯を一致させる。
+    pub band_extent: f32,
+}
+
+/// 行内の 1 選択肢セグメント（ordinal ＋ 行内軸ローカル範囲）。
+///
+/// `inline_range` は住人ローカル（行内軸 0 起点・image px）の `(始点, 終点)`。選択肢は
+/// 折返しで複数行（複数セグメント）に跨り得るため、同一 `ordinal` が別住人に現れ得る。
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct ChoiceRowSegment {
+    /// 選択肢の序数（表示順・0 起点）。
+    pub ordinal: usize,
+    /// 行内軸ローカル範囲 `(始点, 終点)`（image px・住人ローカル座標）。
+    pub inline_range: (f32, f32),
+}
+
+/// 解決済みハイライト塗り（矩形塗り色＋ハイライト時文字色・RGB）。
+///
+/// 描画時に解決済み——描く/描かないの判定は上流で済み、`Some` は「この塗りで描く」を意味する。
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct HighlightPaint {
+    /// ハイライト矩形の塗り色（RGB）。
+    pub fill: (u8, u8, u8),
+    /// ハイライト時の文字色（RGB）。
+    pub text: (u8, u8, u8),
+}
+
 /// `\_b` 画像住人の型シーム（実挙動なし・R8.5——fixture 実測で `\_b` 未使用）。
 ///
 /// `#[non_exhaustive]`＝crate 外から構成不能（実挙動を持たせない構造保証）。
@@ -173,6 +225,10 @@ pub struct SurfaceSeam {}
 pub enum ResidentContent {
     /// M1 唯一の実装住人: 1 行分のグリフ列（[`PositionedLine`] 由来）。
     GlyphRun(GlyphRunContent),
+    /// 選択肢行（グリフ行本体＋選択肢セグメント・R1.1）。非 hover（`highlight == None`）時は
+    /// [`GlyphRun`](Self::GlyphRun) と**同一の素描画**（R9.5）——指紋・インク矩形・描画とも
+    /// 内包 `run` を GlyphRun と同格に扱う。ハイライト塗り・hover 指紋は後続タスクが実装する。
+    Choice(ChoiceLineContent),
     /// `\_b` 画像（型シームのみ・実挙動なし・R8.5）。
     Image(ImageSeam),
     /// 将来の SERIKO サーフェス（シェル/バルーン融合ユニットが実装・R8.6）。

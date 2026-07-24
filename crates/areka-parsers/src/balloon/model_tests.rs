@@ -12,7 +12,8 @@
 use std::collections::BTreeMap;
 
 use crate::balloon::{
-    BalloonModel, Font, FontColor, Origin, ValidRect, WindowPosition, WordWrapPoint, parse,
+    BalloonCursor, BalloonModel, CursorColor, Font, FontColor, Origin, ValidRect, WindowPosition,
+    WordWrapPoint, parse,
 };
 
 /// テスト用: `&[(k, v)]` からフラット KV `BTreeMap` を組む小ヘルパ（parse_tests 流儀）。
@@ -255,4 +256,210 @@ fn budoux_newline_absent_is_none_and_other_keys_unaffected() {
     // 既存の他キーは budoux_newline 追加の影響を受けない（既存ゴースト挙動不変）。
     assert_eq!(got.origin().x(), Some(12));
     assert_eq!(got.writing_mode(), Some("vertical_rl"));
+}
+
+// ── cursor.* additive スタイルモデル（タスク 2.1・要件 4.2/6.2） ──
+
+/// `CursorColor` は `FontColor` と同一表現をミラー（r/g/b 各独立 `Option<u8>`・
+/// `None` と `Some(0)` の判別）（要件 4.2）。
+#[test]
+fn cursor_color_accessors_and_none_vs_some_zero() {
+    let c = CursorColor::new(Some(105), Some(25), None);
+    assert_eq!(c.r(), Some(105));
+    assert_eq!(c.g(), Some(25));
+    assert_eq!(c.b(), None);
+    // g=Some(25) と b=None（未指定）が判別される。
+    assert_ne!(c.g(), c.b());
+    // 既定は全成分 None（未指定バルーン判定の素材）。
+    assert_eq!(CursorColor::default(), CursorColor::new(None, None, None));
+}
+
+/// `BalloonCursor` の各 accessor が style/brush/pen/font/blendmethod を読める（要件 4.2）。
+#[test]
+fn balloon_cursor_accessors_read_all_fields() {
+    let cursor = BalloonCursor::new(
+        Some("square".to_string()),
+        CursorColor::new(Some(105), Some(25), Some(25)),
+        CursorColor::new(Some(200), Some(200), Some(200)),
+        CursorColor::new(Some(255), Some(255), Some(255)),
+        Some("none".to_string()),
+    );
+    assert_eq!(cursor.style(), Some("square"));
+    assert_eq!(cursor.brush_color(), CursorColor::new(Some(105), Some(25), Some(25)));
+    assert_eq!(cursor.pen_color().r(), Some(200));
+    assert_eq!(cursor.font_color(), CursorColor::new(Some(255), Some(255), Some(255)));
+    assert_eq!(cursor.blendmethod(), Some("none"));
+}
+
+/// `BalloonCursor::default()` は全キー未指定（`None`／全成分 `None`）を表す
+/// （cursor.* 未指定バルーン判定の素材・要件 4.3/6.1）。
+#[test]
+fn balloon_cursor_default_is_all_unspecified() {
+    let d = BalloonCursor::default();
+    assert_eq!(d.style(), None);
+    assert_eq!(d.blendmethod(), None);
+    assert_eq!(d.brush_color(), CursorColor::default());
+    assert_eq!(d.pen_color(), CursorColor::default());
+    assert_eq!(d.font_color(), CursorColor::default());
+}
+
+/// cursor.* を含む descript をマージ解析すると `cursor` 各フィールドが値を持つ（要件 4.2）。
+/// 2 層マージ（既存 `parse` の `merged` 機構）に cursor.* が相乗りする。
+#[test]
+fn cursor_keys_populate_cursor_model_via_merge() {
+    let descript = kv_map(&[
+        ("cursor.style", "square"),
+        ("cursor.brush.color.r", "105"),
+        ("cursor.brush.color.g", "25"),
+        ("cursor.brush.color.b", "25"),
+        ("cursor.pen.color.r", "200"),
+        ("cursor.font.color.r", "255"),
+        ("cursor.font.color.g", "255"),
+        ("cursor.font.color.b", "255"),
+        ("cursor.blendmethod", "none"),
+    ]);
+    let got = parse(&descript, None);
+    let cursor = got.cursor();
+
+    assert_eq!(cursor.style(), Some("square"));
+    assert_eq!(cursor.brush_color().r(), Some(105));
+    assert_eq!(cursor.brush_color().g(), Some(25));
+    assert_eq!(cursor.brush_color().b(), Some(25));
+    // pen.color は r のみ指定 → g/b は個別 None（部分欠落を欠落なく表現）。
+    assert_eq!(cursor.pen_color().r(), Some(200));
+    assert_eq!(cursor.pen_color().g(), None);
+    assert_eq!(cursor.pen_color().b(), None);
+    assert_eq!(cursor.font_color().r(), Some(255));
+    assert_eq!(cursor.font_color().g(), Some(255));
+    assert_eq!(cursor.font_color().b(), Some(255));
+    assert_eq!(cursor.blendmethod(), Some("none"));
+}
+
+/// cursor.* 未記載の descript では `cursor` 全フィールドが未指定（`None`／既定）になる（要件 4.3/6.1）。
+#[test]
+fn cursor_absent_yields_all_unspecified() {
+    let descript = kv_map(&[("origin.x", "0"), ("font.height", "28")]);
+    let got = parse(&descript, None);
+    let cursor = got.cursor();
+
+    assert_eq!(cursor.style(), None);
+    assert_eq!(cursor.blendmethod(), None);
+    assert_eq!(cursor.brush_color(), CursorColor::default());
+    assert_eq!(cursor.pen_color(), CursorColor::default());
+    assert_eq!(cursor.font_color(), CursorColor::default());
+    // 既存の他キーは cursor.* 追加の影響を受けない（既存ゴースト挙動不変・R2.7）。
+    assert_eq!(got.origin().x(), Some(0));
+    assert_eq!(got.font().height(), Some(28));
+}
+
+/// cursor.* の画像別上書きは既存 2 層後勝ちマージに相乗りする（要件 4.2・R3.2）。
+#[test]
+fn cursor_keys_image_layer_overrides_descript() {
+    let descript = kv_map(&[("cursor.style", "square"), ("cursor.brush.color.r", "105")]);
+    let image = kv_map(&[("cursor.brush.color.r", "10")]);
+    let got = parse(&descript, Some(&image));
+
+    // 画像別層が同一キーを後勝ち上書き（R3.2）。
+    assert_eq!(got.cursor().brush_color().r(), Some(10));
+    // 画像別層に無い style は descript 継承（R3.3）。
+    assert_eq!(got.cursor().style(), Some("square"));
+}
+
+/// 未モデル化 cursor サブキー（shadowcolor/shadowstyle 等）はモデル化フィールドへ漏れず、
+/// 寛容パス素通しのまま（KV 層が語彙を落とさない＝6.2 の語彙シーム）。
+#[test]
+fn cursor_unmodeled_subkeys_do_not_leak_into_modeled_fields() {
+    let descript = kv_map(&[
+        ("cursor.style", "square"),
+        ("cursor.shadowcolor.r", "77"),
+        ("cursor.shadowcolor.g", "77"),
+        ("cursor.shadowstyle", "1"),
+    ]);
+    let got = parse(&descript, None);
+    let cursor = got.cursor();
+
+    // 未モデル化サブキーはモデル化フィールドへ折り込まれない（完全一致引き）。
+    assert_eq!(cursor.style(), Some("square"));
+    assert_eq!(cursor.brush_color(), CursorColor::default());
+    assert_eq!(cursor.pen_color(), CursorColor::default());
+    assert_eq!(cursor.font_color(), CursorColor::default());
+    assert_eq!(cursor.blendmethod(), None);
+}
+
+/// cursor.font.color.* は cursor モデルへ入るが、既存 `font.color.*` を汚染しない
+/// （「cursor キーを font へ巻き込まない」既存不変条件の分離側・要件 6.2）。
+#[test]
+fn cursor_font_color_does_not_fold_into_font_color() {
+    let descript = kv_map(&[
+        ("font.color.r", "0"),
+        ("cursor.font.color.r", "255"),
+    ]);
+    let got = parse(&descript, None);
+
+    // font.color.r は descript の 0（cursor.font.color.r の 255 に汚染されない）。
+    assert_eq!(got.font().color().r(), Some(0));
+    // cursor.font.color.r は cursor モデルへ入る。
+    assert_eq!(got.cursor().font_color().r(), Some(255));
+}
+
+/// cursor.* サブキーは 1 キー単位で個別に有無を持てる（部分欠落を欠落なく表現・要件 4.2/2.6）。
+///
+/// 2.1 の写像テストは「ほぼ全キー在り」か「全キー無し」を主に固定するが、本テストは
+/// **フィールドを跨いだ疎な部分指定**——`cursor.brush.color.g` のみ・`cursor.pen.color.b` のみ・
+/// `cursor.font.color.*` 全欠落・`cursor.style`／`cursor.blendmethod` 欠落——を与え、各サブキーの
+/// 有無が**互いに独立**に反映されることを固定する（同色内の r/g/b 独立性、色間の独立性、
+/// 文字列フィールドの独立欠落を 1 本で檻に入れる）。
+#[test]
+fn cursor_subkeys_populate_independently_per_key() {
+    let descript = kv_map(&[
+        // brush は g のみ、pen は b のみ、font は 1 成分も指定しない。
+        ("cursor.brush.color.g", "40"),
+        ("cursor.pen.color.b", "200"),
+    ]);
+    let got = parse(&descript, None);
+    let cursor = got.cursor();
+
+    // 文字列フィールドは未指定 → None（他サブキー在りでも巻き込まれない）。
+    assert_eq!(cursor.style(), None);
+    assert_eq!(cursor.blendmethod(), None);
+
+    // brush.color: g のみ Some、r/b は個別 None（同色内 r/g/b 独立・Some(0) と None を判別）。
+    assert_eq!(cursor.brush_color().r(), None);
+    assert_eq!(cursor.brush_color().g(), Some(40));
+    assert_eq!(cursor.brush_color().b(), None);
+
+    // pen.color: b のみ Some、r/g は個別 None（色間も独立＝brush の指定に影響されない）。
+    assert_eq!(cursor.pen_color().r(), None);
+    assert_eq!(cursor.pen_color().g(), None);
+    assert_eq!(cursor.pen_color().b(), Some(200));
+
+    // font.color: 1 成分も指定なし → 全成分 None（既定）。
+    assert_eq!(cursor.font_color(), CursorColor::default());
+}
+
+/// `cursor.style` は語彙を解釈せず生文字列で忠実転記する（square / underline / square+underline /
+/// none／未知値のいずれも `Some(そのまま)`・要件 4.2/6.5）。
+///
+/// style の語彙判定・fallback は下流 `ResolvedChoiceStyle::resolve`（タスク 5.3）の責務であり、
+/// parser 層は不透明転写に徹する（[areka-parser-transcribes-tree-downstream]）。2.1 は "square"
+/// のみを固定していたため、複合値（`square+underline` の `+` 含み）・`none`・未知語彙を追加で檻に入れる。
+#[test]
+fn cursor_style_value_variants_transcribed_verbatim() {
+    for style in ["square", "underline", "square+underline", "none", "wobble"] {
+        let descript = kv_map(&[("cursor.style", style)]);
+        let got = parse(&descript, None);
+        // 未知語彙・複合語彙でも解釈せず生文字列のまま転記する（不透明転写）。
+        assert_eq!(got.cursor().style(), Some(style), "style={style:?}");
+    }
+}
+
+/// `cursor.blendmethod` も語彙を解釈せず生文字列で忠実転記する（none / notmaskpen／未知値の
+/// いずれも `Some(そのまま)`・要件 6.5）。style と同一規律の不透明転写を別フィールドでも固定する。
+#[test]
+fn cursor_blendmethod_value_variants_transcribed_verbatim() {
+    for blend in ["none", "notmaskpen", "alpha"] {
+        let descript = kv_map(&[("cursor.blendmethod", blend)]);
+        let got = parse(&descript, None);
+        assert_eq!(got.cursor().blendmethod(), Some(blend), "blend={blend:?}");
+    }
 }

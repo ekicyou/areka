@@ -19,11 +19,16 @@
 //!   （追記正本の忠実記録＝後出し優先）に留まり、その改行を実際に**行送りとして
 //!   可視化するか否か**（保留・累算・実体化・蒸発）は下流 layout の**遅延解釈**に委ねる。
 //!   すなわち「追記は即時・行送りの可視化は layout が遅延解釈」（R4.3）。
-//! - `Choice` は配送列に第一級で現れる（R8.6 仕様変更）が、表示（メニュー描画・ヒット
-//!   テスト）の消費は W4（choice-render）の領分——本 typewriter 状態機械は担当外ゆえ
-//!   actor ごと初回のみ `warn!`＋良性スキップ（テキスト状態は汚さない）。
-//! - `Cursor`（`\_l` の不透明転写）も同様に choice-render シーム（W4）の消費対象で、
-//!   actor ごと初回のみ `warn!`＋良性スキップ（状態不変・記録あり・R8.5）。
+//! - `Choice` は配送列に第一級で現れ（R8.6 仕様変更）、本層で実消費する（W4 choice-render）:
+//!   `text` のグリフを items へ Text cue と同一の追記＋リビール時刻式で載せつつ、`ChoiceSpan`
+//!   （配送順序数 `ordinal`・`\q` ID／表示 label／references の不透明転写・グリフ序数範囲）を
+//!   `choices` へ記録する（R1.1/R1.2）。空 `text` は `warn!`（actor 付き）＋空範囲スパン記録・
+//!   グリフ追記なし（R1.5 縮退）。`choices` は items と同一ライフサイクル（`Clear`/`ClearAll`
+//!   で同時初期化・R5.1/R5.3/R9.5）。
+//! - `Cursor`（`\_l` の不透明転写）も本層で実消費する: `parse_cursor_coord` で各軸を
+//!   `CursorCoord` 語彙へ忠実転写し、`TextItem::CursorMove` を items へ追記する（改行マーカーと
+//!   同格の非グリフアイテム＝reveal 対象外・グリフ／リビール状態は不変・R2.1）。単位換算・
+//!   座標解決・原点解釈は下流 layout の責務。
 //! - **typewriter リビール（R3／R7 系）**: `Text` 追記時に per-glyph リビール時刻を
 //!   `r_i = max(r_{i-1} + interval, at(chunk(i)))`（先頭は `r_0 = at`）で確定する。
 //!   `interval` は**配送された cue の再生時間**から `interval = duration / glyph_count`
@@ -34,7 +39,7 @@
 //!   emo2 fixture は結合文字を使用しない）。
 //! - 同一 cue 列＋同一入力条件→同一状態（決定論・R2.4/R2.5）。
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 
 use areka_sakura::contract::{ActorKey, CueCommand, TalkCue};
 
@@ -74,6 +79,108 @@ pub enum TextItem {
         /// 行送り量の比率（`行送り量 = line_pitch × ratio`）。
         ratio: f32,
     },
+    /// カーソル位置指定（`CueCommand::Cursor { x, y }`＝`\_l` の不透明転写）。
+    ///
+    /// 改行マーカーと同格の**非グリフ**アイテム（reveal 対象外・グリフ序数を消費しない）。
+    /// 各軸は [`parse_cursor_coord`] で忠実転写した [`CursorCoord`] 語彙で、単位換算・
+    /// 座標解決・原点解釈は下流 layout（`cursor_to_image_px`／pending-cursor 遅延実体化）の責務。
+    CursorMove {
+        /// x 軸の座標語彙。
+        x: CursorCoord,
+        /// y 軸の座標語彙。
+        y: CursorCoord,
+    },
+}
+
+/// `\_l` 座標 1 軸の語彙（不透明文字列の全語彙を保持・`Copy`・state.rs 所有）。
+///
+/// `Cursor` cue（`\_l[x,y]` の不透明転写）の各軸を、後段の換算層
+/// （`layout.rs::cursor_to_image_px`）が縮退表どおりに分岐できる語彙へ忠実転写する
+/// （design.md「純粋層 / StateIncrement」正本・R2.1/2.4/6.5）。本層は**語彙の保持**のみを
+/// 責務とし、非負ゲート・単位換算・原点解釈は下流 layout の責務（面引数不透明転写規約）。
+///
+/// M1 の縮退（design.md 縮退表）:
+/// - `Absolute { Px/Em/Lh, 非負 }` のみ layout が Some(image px) を返す実導出対象。
+/// - `Absolute { Percent, .. }`・`Relative`（`@`）・負値・`Invalid`・`Omitted` は
+///   layout が None（＝当該軸スキップ・warn-once 縮退）を返す。負の裸数値は本層では
+///   Absolute へ忠実転写し（Invalid へ写像しない）、非負ゲートは layout 層に委ねる。
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum CursorCoord {
+    /// 省略（空文字列）＝当該軸不動（正典・R2.4）。
+    Omitted,
+    /// 絶対座標（M1 実導出は Px/Em/Lh の非負値・Percent は縮退保持・負値は忠実転写）。
+    Absolute { value: f32, unit: CursorUnit },
+    /// 相対座標（`@` 接頭）。語彙保持のみ——M1 は layout が warn-once 縮退（None）。
+    Relative { value: f32, unit: CursorUnit },
+    /// パース不能（warn 縮退＝当該軸スキップ・状態不変・R6.5）。
+    Invalid,
+}
+
+/// `\_l` 座標の単位（design.md「純粋層 / StateIncrement」正本）。
+///
+/// `Px`＝image px（裸数値）・`Em`＝`em`（font 高基準）・`Lh`＝`lh`（行送り基準）・
+/// `Percent`＝`%`（縮退保持・M1 は layout が None）。
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum CursorUnit {
+    /// image px（裸数値・M1 実導出）。
+    Px,
+    /// `em`（font 高基準・M1 実導出）。
+    Em,
+    /// `lh`（行送り基準・M1 実導出）。
+    Lh,
+    /// `%`（縮退保持・M1 は layout が None）。
+    Percent,
+}
+
+/// 不透明転写文字列 → `CursorCoord` 語彙（純粋・全入力で値を返す全域関数・state.rs 所有）。
+///
+/// パニックせず `Result` も返さない（不透明文字列の全入力に対し値を返す・R2.4 決定論）。
+/// 文法:
+/// - 空文字列 `""` → [`CursorCoord::Omitted`]（当該軸省略）。
+/// - `@` 接頭 → [`CursorCoord::Relative`]（残りを本体としてパース）。無ければ
+///   [`CursorCoord::Absolute`]。
+/// - 本体末尾のサフィックス `%`／`em`／`lh` で単位を決め（無ければ [`CursorUnit::Px`]）、
+///   残りを `f32` としてパースする。
+/// - 数値本体が有限 `f32` へパースできれば当該 variant、できない／非有限なら
+///   [`CursorCoord::Invalid`]。
+///
+/// 負値は Absolute/Relative へ**忠実転写**する（非負ゲートは下流 `cursor_to_image_px`）。
+pub fn parse_cursor_coord(raw: &str) -> CursorCoord {
+    // 空文字列＝当該軸省略（正典 R2.4）。
+    if raw.is_empty() {
+        return CursorCoord::Omitted;
+    }
+
+    // `@` 接頭は相対（残りを本体としてパースし、成功時に Relative へ包む）。
+    let (is_relative, body) = match raw.strip_prefix('@') {
+        Some(rest) => (true, rest),
+        None => (false, raw),
+    };
+
+    // 末尾サフィックスで単位を決める（`%`／`em`／`lh`・無ければ裸数値＝Px）。
+    // `%` を先に剥がすことで "5%" 等を確実に Percent へ分類する。
+    let (num_str, unit) = if let Some(n) = body.strip_suffix('%') {
+        (n, CursorUnit::Percent)
+    } else if let Some(n) = body.strip_suffix("em") {
+        (n, CursorUnit::Em)
+    } else if let Some(n) = body.strip_suffix("lh") {
+        (n, CursorUnit::Lh)
+    } else {
+        (body, CursorUnit::Px)
+    };
+
+    match num_str.parse::<f32>() {
+        // 非有限（NaN／inf）は換算を汚さぬよう Invalid へ縮退（防御・R6.5）。
+        Ok(value) if value.is_finite() => {
+            if is_relative {
+                CursorCoord::Relative { value, unit }
+            } else {
+                CursorCoord::Absolute { value, unit }
+            }
+        }
+        // 数値本体が空／非数値／未知サフィックス残り→パース不能（R6.5 状態不変スキップの源）。
+        _ => CursorCoord::Invalid,
+    }
 }
 
 /// per-glyph リビール時刻列（注入時刻駆動 typewriter・R3.1–3.5／R7.1–7.3）。
@@ -133,13 +240,39 @@ impl RevealSchedule {
     }
 }
 
-/// actor 1 人分の表示テキスト状態（追記順の正本＋リビール時刻列）。
+/// 選択肢スパン（`ActorTextState` の一部・state.rs 所有・design.md「StateIncrement」正本）。
+///
+/// `Choice` cue 消費時に、追記したグリフ範囲＋不透明転写した `\q` 属性を 1 スパンとして記録する
+/// （R1.1/R1.2）。`ordinal` は配送順序数（hover／照会の主キー）で `choices.len()` を焼き込む。
+/// `glyph_range` は items のグリフ序数空間（`Glyph` のみを数える序数・改行／カーソル等の非グリフ
+/// アイテムを含めない・`visible_glyphs`／reveal と同一序数空間）で、空 `text` は空範囲（`start..start`）。
+///
+/// 不変条件（design.md「Data Models §不変条件」1）: `glyph_range` は items のグリフ序数空間で
+/// **互いに素**かつ**追記順に単調**（各 Choice cue は自身が追記したグリフのみを範囲化するため
+/// 構造的に成立）。
+#[derive(Clone, Debug, PartialEq)]
+pub struct ChoiceSpan {
+    /// 配送順序数（hover／照会の主キー・記録時の `choices.len()`）。
+    pub ordinal: usize,
+    /// `\q` ID（不透明転写）。
+    pub id: String,
+    /// 表示文字列（不透明転写・`text` の複製）。
+    pub label: String,
+    /// `\q` 第 3 引数以降（参照列・不透明転写）。
+    pub references: Vec<String>,
+    /// グリフ序数範囲（items のグリフ序数空間・空 `text` は空範囲）。
+    pub glyph_range: core::ops::Range<usize>,
+}
+
+/// actor 1 人分の表示テキスト状態（追記順の正本＋リビール時刻列＋選択肢スパン）。
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct ActorTextState {
-    /// 追記順の正本（グリフ／改行マーカー）。
+    /// 追記順の正本（グリフ／改行マーカー／カーソル指定）。
     items: Vec<TextItem>,
     /// per-glyph リビール時刻列。
     reveal: RevealSchedule,
+    /// 選択肢スパン（items と同一ライフサイクル＝`Clear`/`ClearAll` で同時初期化・R5.1/R5.3）。
+    choices: Vec<ChoiceSpan>,
 }
 
 impl ActorTextState {
@@ -153,9 +286,14 @@ impl ActorTextState {
         &self.reveal
     }
 
+    /// 選択肢スパン列（配送順・R1.2／R1.3 照会の源）。
+    pub fn choices(&self) -> &[ChoiceSpan] {
+        &self.choices
+    }
+
     /// テキスト状態が初期状態（空）か。
     pub fn is_empty(&self) -> bool {
-        self.items.is_empty() && self.reveal.is_empty()
+        self.items.is_empty() && self.reveal.is_empty() && self.choices.is_empty()
     }
 }
 
@@ -164,11 +302,6 @@ impl ActorTextState {
 pub struct TextLayerState {
     /// `ActorKey → ActorTextState`（決定論的順序のため BTreeMap・design.md 正本）。
     actors: BTreeMap<ActorKey, ActorTextState>,
-    /// `Choice` cue の warn を actor ごと初回のみに抑える記録（テキスト状態の外）。
-    choice_warned: BTreeSet<ActorKey>,
-    /// `Cursor` cue の warn を actor ごと初回のみに抑える記録（テキスト状態の外・
-    /// W4 choice-render シーム。`choice_warned` と同型の once-guard）。
-    cursor_warned: BTreeSet<ActorKey>,
 }
 
 impl TextLayerState {
@@ -231,23 +364,56 @@ impl TextLayerState {
                     *state = ActorTextState::default();
                 }
             }
-            CueCommand::Choice { .. } => {
-                // Choice cue は配送列に第一級で現れる（R8.6 仕様変更＝旧「先積み一択で配送しない」
-                // の意図的更新）。ただし表示（メニュー描画・ヒットテスト）の消費は W4（choice-render）
-                // の領分で、本 typewriter 状態機械は担当外——actor ごと初回のみ warn!＋良性スキップ・
-                // 状態は汚さない（挙動は従来どおり＝実機の見た目不変・R8.5）。
-                if self.choice_warned.insert(cue.actor.clone()) {
-                    tracing::warn!(actor = %cue.actor, "Choice cue は本層（typewriter）の担当外——配送列第一級だが表示消費は W4 choice-render（記録付き良性スキップ）");
+            CueCommand::Choice {
+                id,
+                text,
+                references,
+            } => {
+                // Choice cue の実消費（R1.1/R1.2）: `text` のグリフを Text cue と同一の追記＋
+                // リビール時刻式で載せ、追記したグリフ序数範囲＋不透明転写した `\q` 属性を
+                // 1 スパンとして `choices` へ記録する。空 `text` は warn!（actor 付き）＋空範囲
+                // スパン記録・グリフ追記なし（R1.5 縮退・design.md 縮退表 Choice text 空 row）。
+                let glyph_count = text.chars().count();
+                let interval = if glyph_count > 0 {
+                    cue.duration / glyph_count as f64
+                } else {
+                    0.0
+                };
+                let state = self.actors.entry(cue.actor.clone()).or_default();
+                // 序数空間は items のグリフ（`Glyph` のみ）＝`visible_glyphs`／reveal と同一。
+                let start = state
+                    .items
+                    .iter()
+                    .filter(|it| matches!(it, TextItem::Glyph { .. }))
+                    .count();
+                if glyph_count == 0 {
+                    // R1.5 縮退: 空範囲スパンのみ記録（グリフ追記・リビール拡張なし・行を生まない）。
+                    tracing::warn!(actor = %cue.actor, id = %id, "Choice cue の text が空——空範囲スパンを記録（グリフ追記なし・R1.5 縮退）");
+                } else {
+                    tracing::debug!(actor = %cue.actor, id = %id, len = glyph_count, at = cue.at, duration = cue.duration, interval, "Choice cue 適用（グリフ追記＋配送 duration 由来のリビール時刻確定＋スパン記録）");
+                    state
+                        .items
+                        .extend(text.chars().map(|ch| TextItem::Glyph { ch }));
+                    state.reveal.extend_chunk(glyph_count, cue.at, interval);
                 }
+                let ordinal = state.choices.len();
+                state.choices.push(ChoiceSpan {
+                    ordinal,
+                    id: id.clone(),
+                    label: text.clone(),
+                    references: references.clone(),
+                    glyph_range: start..(start + glyph_count),
+                });
             }
-            CueCommand::Cursor { .. } => {
-                // カーソル位置指定（`\_l` の不透明転写）は choice-render シーム（W4）の消費対象——
-                // 単位換算・座標解決・原点解釈は表示側の責務で、本 typewriter 状態機械は担当外。
-                // actor ごと初回のみ warn!＋良性スキップし、テキスト状態は一切変えない
-                // （記録あり・無音破棄でも異常終了でもない・R8.5）。
-                if self.cursor_warned.insert(cue.actor.clone()) {
-                    tracing::warn!(actor = %cue.actor, "Cursor cue は本層（typewriter）の担当外——表示消費は W4 choice-render（状態不変の良性スキップ）");
-                }
+            CueCommand::Cursor { x, y } => {
+                // カーソル位置指定（`\_l` の不透明転写）の実消費（R2.1）: 各軸を parse_cursor_coord で
+                // `CursorCoord` 語彙へ忠実転写し、非グリフアイテム `CursorMove` を items へ追記する。
+                // グリフ／リビール状態は不変（reveal 対象外）。単位換算・座標解決・原点解釈は下流 layout。
+                let x = parse_cursor_coord(x);
+                let y = parse_cursor_coord(y);
+                tracing::debug!(actor = %cue.actor, ?x, ?y, "Cursor cue 適用（CursorMove 追記・グリフ/リビール不変）");
+                let state = self.actors.entry(cue.actor.clone()).or_default();
+                state.items.push(TextItem::CursorMove { x, y });
             }
             // 文字状態機械が消費しない command（cue_target_of が Shell/None に分類）は本状態機械の
             // 対象外——演者側 relevance の責務。防御的に無視する（catch-all を置かず、dola の
@@ -560,7 +726,7 @@ mod tests {
         assert_eq!(a, b);
     }
 
-    // ── Choice（M1 対象外・actor ごと初回のみ warn＋無視） ──
+    // ── Choice/Cursor 実消費（W4 choice-render・タスク 1.2） ──
 
     /// WARN イベント数を数える最小 Subscriber（決定論的なログ檻・実時間非依存）。
     struct WarnCounter {
@@ -585,46 +751,134 @@ mod tests {
         fn exit(&self, _: &tracing::span::Id) {}
     }
 
-    #[test]
-    fn choice_cue_is_ignored_and_warns_once_per_actor() {
-        let warns = Arc::new(AtomicUsize::new(0));
-        let subscriber = WarnCounter {
-            warns: Arc::clone(&warns),
-        };
-
-        let state = tracing::subscriber::with_default(subscriber, || {
-            let mut state = TextLayerState::default();
-            let choice = |actor: &str, at: f64| {
-                cue(
-                    actor,
-                    at,
-                    CueCommand::Choice {
-                        id: "yes".into(),
-                        text: "はい".into(),
-                        references: vec![],
-                    },
-                )
-            };
-            state.apply_cue(&choice("0", 0.0));
-            state.apply_cue(&choice("0", 0.1)); // 同一 actor 2 回目は warn しない
-            state.apply_cue(&choice("1", 0.2)); // 別 actor は初回 warn
-            state
-        });
-
-        // warn は actor ごと初回のみ（"0" で 1 回・"1" で 1 回）。
-        assert_eq!(warns.load(Ordering::SeqCst), 2);
-        // テキスト状態は汚さない（actor エントリも作らない）。
-        assert!(state.actor_state(&ActorKey::from("0")).is_none());
-        assert!(state.actor_state(&ActorKey::from("1")).is_none());
+    /// actor の choices を取得する（未生成なら panic ＝テスト失敗として扱う）。
+    fn choices_of<'a>(state: &'a TextLayerState, actor: &str) -> &'a [ChoiceSpan] {
+        state
+            .actor_state(&ActorKey::from(actor))
+            .expect("actor state should exist")
+            .choices()
     }
 
-    // ── Cursor（W4 choice-render シーム・状態不変の良性スキップ・R8.5） ──
+    /// Choice cue ヘルパ。reveal を Text と同じ時刻式で観測するため、配送 duration =
+    /// `N × REVEAL_INTERVAL` を焼き込む（interval=0.25・[`cue`] の Text 分岐と機能等価）。
+    fn choice_cue(actor: &str, at: f64, id: &str, text: &str, refs: &[&str]) -> TalkCue {
+        let duration = text.chars().count() as f64 * REVEAL_INTERVAL;
+        cue_dur(
+            actor,
+            at,
+            duration,
+            CueCommand::Choice {
+                id: id.into(),
+                text: text.into(),
+                references: refs.iter().map(|s| s.to_string()).collect(),
+            },
+        )
+    }
 
-    /// `Cursor`（`\_l` の不透明転写）は本層（typewriter）の担当外——W4 choice-render の
-    /// 消費シーム。actor ごと初回のみ warn!＋良性スキップし、テキスト状態は一切変えない
-    /// （記録あり・無音破棄でも異常終了でもない・R8.5）。Choice の warn-once 檻と同型。
+    // ── R1.1/R1.2: Choice 実消費——グリフ追記＋非空 ChoiceSpan 記録 ──
+
+    /// 非空 `text` の Choice cue はグリフを items へ追記し（Text と同一）、非空
+    /// `glyph_range` を持つ `ChoiceSpan` を記録する（ordinal=0・id/label/references 忠実転写）。
     #[test]
-    fn cursor_cue_is_benign_skipped_and_warns_once_per_actor() {
+    fn choice_cue_appends_glyphs_and_records_nonempty_span() {
+        let mut state = TextLayerState::default();
+        state.apply_cue(&choice_cue("0", 0.0, "OnYes", "はい", &["r0", "r1"]));
+
+        // グリフは items へ追記される（Text cue と同一経路）。
+        assert_eq!(
+            items_of(&state, "0"),
+            &[TextItem::Glyph { ch: 'は' }, TextItem::Glyph { ch: 'い' }]
+        );
+        // 非空 glyph_range のスパンが記録される。
+        assert_eq!(
+            choices_of(&state, "0"),
+            &[ChoiceSpan {
+                ordinal: 0,
+                id: "OnYes".into(),
+                label: "はい".into(),
+                references: vec!["r0".into(), "r1".into()],
+                glyph_range: 0..2,
+            }]
+        );
+        // reveal も Text と同じ時刻式で拡張される（duration=2×0.25 → interval=0.25）。
+        assert_eq!(reveal_times_of(&state, "0"), vec![0.0, 0.25]);
+    }
+
+    /// 複数 Choice cue は ordinal が単調増加し、glyph_range は互いに素・追記順単調
+    /// （design.md「Data Models §不変条件」1）。先行テキスト・改行を挟んでも序数空間は
+    /// グリフのみ（非グリフ item を数えない）。
+    #[test]
+    fn multiple_choice_cues_have_monotonic_ordinal_and_disjoint_ranges() {
+        let mut state = TextLayerState::default();
+        state.apply_cue(&cue("0", 0.0, CueCommand::Text("あ".into()))); // グリフ 0
+        state.apply_cue(&cue("0", 0.1, CueCommand::NewLine { ratio: 1.0 })); // 非グリフ
+        state.apply_cue(&choice_cue("0", 0.2, "q0", "はい", &[])); // グリフ 1..3
+        state.apply_cue(&choice_cue("0", 0.3, "q1", "いいえ", &[])); // グリフ 3..6
+
+        let spans = choices_of(&state, "0");
+        assert_eq!(spans.len(), 2);
+        assert_eq!(spans[0].ordinal, 0);
+        assert_eq!(spans[0].glyph_range, 1..3);
+        assert_eq!(spans[1].ordinal, 1);
+        assert_eq!(spans[1].glyph_range, 3..6);
+        // 互いに素・単調（end0 <= start1）。
+        assert!(spans[0].glyph_range.end <= spans[1].glyph_range.start);
+    }
+
+    /// 配送順スパン記録（R1.2）: 3 つ以上の Choice を、間に Text／NewLine を挟んで配送しても、
+    /// `ChoiceSpan` は**配送順**に並び（label が配送順に一致）・`ordinal` は **0,1,2 と厳密に
+    /// 単調増加**し（design.md「不変条件 1」の順序）・`glyph_range` は互いに素かつ追記順単調。
+    /// 序数空間はグリフのみ（挟んだ改行等の非グリフ item を数えない）。
+    #[test]
+    fn choice_cues_preserve_delivery_order_with_strictly_monotonic_ordinals() {
+        let mut state = TextLayerState::default();
+        // 選択肢の間に通常テキスト・改行を interleave して配送する。
+        state.apply_cue(&cue("0", 0.0, CueCommand::Text("どれ".into()))); // グリフ 0..2
+        state.apply_cue(&choice_cue("0", 0.1, "q0", "はい", &["a"])); // グリフ 2..4
+        state.apply_cue(&cue("0", 0.2, CueCommand::Text("か".into()))); // グリフ 4..5（間テキスト）
+        state.apply_cue(&cue("0", 0.3, CueCommand::NewLine { ratio: 1.0 })); // 非グリフ
+        state.apply_cue(&choice_cue("0", 0.4, "q1", "いいえ", &["b"])); // グリフ 5..8
+        state.apply_cue(&choice_cue("0", 0.5, "q2", "たぶん", &["c"])); // グリフ 8..11
+
+        let spans = choices_of(&state, "0");
+        assert_eq!(spans.len(), 3);
+
+        // ordinal は 0,1,2 と厳密単調増加。
+        let ordinals: Vec<usize> = spans.iter().map(|s| s.ordinal).collect();
+        assert_eq!(ordinals, vec![0, 1, 2]);
+        assert!(
+            spans.windows(2).all(|w| w[0].ordinal < w[1].ordinal),
+            "ordinal は厳密単調増加でなければならない: {ordinals:?}"
+        );
+
+        // 配送順が保存される（label／id が配送順に一致）。
+        assert_eq!(
+            spans.iter().map(|s| s.label.as_str()).collect::<Vec<_>>(),
+            vec!["はい", "いいえ", "たぶん"]
+        );
+        assert_eq!(
+            spans.iter().map(|s| s.id.as_str()).collect::<Vec<_>>(),
+            vec!["q0", "q1", "q2"]
+        );
+
+        // glyph_range は間テキストを跨いで正しく（グリフ序数空間・非グリフを数えない）。
+        assert_eq!(spans[0].glyph_range, 2..4);
+        assert_eq!(spans[1].glyph_range, 5..8);
+        assert_eq!(spans[2].glyph_range, 8..11);
+
+        // 互いに素かつ追記順単調（不変条件 1: end_i <= start_{i+1}）。
+        assert!(
+            spans
+                .windows(2)
+                .all(|w| w[0].glyph_range.end <= w[1].glyph_range.start),
+            "glyph_range は互いに素・追記順単調でなければならない"
+        );
+    }
+
+    /// R1.5 縮退（design.md 縮退表 Choice text 空 row）: 空 `text` は warn!＋空範囲スパン記録・
+    /// グリフ追記なし・reveal 不変。once-guard は無いので繰り返し空 Choice は毎回 warn する。
+    #[test]
+    fn empty_choice_text_warns_and_records_empty_range_no_glyphs() {
         let warns = Arc::new(AtomicUsize::new(0));
         let subscriber = WarnCounter {
             warns: Arc::clone(&warns),
@@ -632,37 +886,216 @@ mod tests {
 
         let state = tracing::subscriber::with_default(subscriber, || {
             let mut state = TextLayerState::default();
-            // 既存テキストを載せた actor へ Cursor を送っても状態は不変（良性スキップ）。
-            state.apply_cue(&cue("0", 0.0, CueCommand::Text("あ".into())));
-            let before = state.actor_state(&ActorKey::from("0")).cloned();
-
-            let cursor = |actor: &str, at: f64| {
-                cue(
-                    actor,
-                    at,
-                    CueCommand::Cursor {
-                        x: "5em".into(),
-                        y: "2lh".into(),
-                    },
-                )
-            };
-            state.apply_cue(&cursor("0", 0.1)); // 同一 actor 初回 warn
-            state.apply_cue(&cursor("0", 0.2)); // 同一 actor 2 回目は warn しない
-            state.apply_cue(&cursor("1", 0.3)); // 別 actor は初回 warn
-
-            // Cursor は既存 actor の状態（items／reveal）を一切汚さない。
-            assert_eq!(
-                state.actor_state(&ActorKey::from("0")).cloned(),
-                before,
-                "Cursor は既存 actor のテキスト状態を変えない（状態不変の良性スキップ）"
-            );
-            // Cursor 単独では actor エントリを作らない（状態を汚さない・記録は状態の外）。
-            assert!(state.actor_state(&ActorKey::from("1")).is_none());
+            state.apply_cue(&cue("0", 0.0, CueCommand::Text("あ".into()))); // グリフ 0
+            state.apply_cue(&choice_cue("0", 0.1, "empty", "", &[]));
             state
         });
 
-        // warn は actor ごと初回のみ（"0" で 1 回・"1" で 1 回）＝記録あり良性スキップ。
-        assert_eq!(warns.load(Ordering::SeqCst), 2);
+        // グリフは追記されない（既存 "あ" のみ）・reveal 不変。
+        assert_eq!(items_of(&state, "0"), &[TextItem::Glyph { ch: 'あ' }]);
+        assert_eq!(reveal_times_of(&state, "0"), vec![0.0]);
+        // 空範囲スパンが記録される（start==end==1＝現グリフ末尾）。
+        assert_eq!(
+            choices_of(&state, "0"),
+            &[ChoiceSpan {
+                ordinal: 0,
+                id: "empty".into(),
+                label: "".into(),
+                references: vec![],
+                glyph_range: 1..1,
+            }]
+        );
+        // 空 text は warn する（R1.5）。
+        assert_eq!(warns.load(Ordering::SeqCst), 1);
+    }
+
+    /// 反復 Choice cue（非空 text）は once-guard 警告を一切発火しない（撤去済み）。
+    #[test]
+    fn repeated_nonempty_choice_cues_do_not_warn() {
+        let warns = Arc::new(AtomicUsize::new(0));
+        let subscriber = WarnCounter {
+            warns: Arc::clone(&warns),
+        };
+
+        tracing::subscriber::with_default(subscriber, || {
+            let mut state = TextLayerState::default();
+            state.apply_cue(&choice_cue("0", 0.0, "a", "はい", &[]));
+            state.apply_cue(&choice_cue("0", 0.5, "b", "いいえ", &[]));
+            state.apply_cue(&choice_cue("1", 1.0, "c", "はい", &[]));
+        });
+
+        assert_eq!(
+            warns.load(Ordering::SeqCst),
+            0,
+            "once-guard は撤去済み——非空 Choice は警告しない"
+        );
+    }
+
+    // ── R2.1: Cursor 実消費——CursorMove 追記・グリフ/リビール不変 ──
+
+    /// Cursor cue は各軸を parse_cursor_coord で語彙化した `CursorMove` を items へ追記し、
+    /// グリフ／リビール状態は変えない（非グリフ item・reveal 対象外）。once-guard 警告も無い。
+    #[test]
+    fn cursor_cue_appends_cursor_move_and_leaves_glyph_reveal_unchanged() {
+        let warns = Arc::new(AtomicUsize::new(0));
+        let subscriber = WarnCounter {
+            warns: Arc::clone(&warns),
+        };
+
+        let state = tracing::subscriber::with_default(subscriber, || {
+            let mut state = TextLayerState::default();
+            state.apply_cue(&cue("0", 0.0, CueCommand::Text("あ".into())));
+            state.apply_cue(&cue(
+                "0",
+                0.1,
+                CueCommand::Cursor {
+                    x: "5em".into(),
+                    y: "2lh".into(),
+                },
+            ));
+            // 反復しても warn 無し（once-guard 撤去）。
+            state.apply_cue(&cue(
+                "0",
+                0.2,
+                CueCommand::Cursor {
+                    x: "".into(),
+                    y: "@3".into(),
+                },
+            ));
+            state
+        });
+
+        // items: グリフ 1＋CursorMove 2（追記順）。
+        assert_eq!(
+            items_of(&state, "0"),
+            &[
+                TextItem::Glyph { ch: 'あ' },
+                TextItem::CursorMove {
+                    x: CursorCoord::Absolute {
+                        value: 5.0,
+                        unit: CursorUnit::Em
+                    },
+                    y: CursorCoord::Absolute {
+                        value: 2.0,
+                        unit: CursorUnit::Lh
+                    },
+                },
+                TextItem::CursorMove {
+                    x: CursorCoord::Omitted,
+                    y: CursorCoord::Relative {
+                        value: 3.0,
+                        unit: CursorUnit::Px
+                    },
+                },
+            ]
+        );
+        // グリフ／リビール状態は不変（CursorMove は reveal 枠を消費しない）。
+        assert_eq!(reveal_times_of(&state, "0"), vec![0.0]);
+        assert_eq!(state.visible_glyphs(&ActorKey::from("0"), 100.0), 1);
+        // Cursor は choices を作らない。
+        assert!(choices_of(&state, "0").is_empty());
+        // once-guard 警告は発火しない。
+        assert_eq!(warns.load(Ordering::SeqCst), 0);
+    }
+
+    /// Cursor アームがグリフ／reveal 状態を一切変えないことを、対照実行（Cursor cue を
+    /// 挟まない）との**バイト等価**で固定する（1.3 checklist「グリフ/reveal 状態を変更しない」）。
+    /// CursorMove は非グリフ item ゆえ、グリフ列（items から Glyph のみ抽出）と reveal 時刻列は
+    /// Cursor cue の有無で完全に一致し、可視グリフ数も全時刻で一致する。
+    #[test]
+    fn cursor_cue_leaves_glyph_and_reveal_byte_identical_to_run_without_it() {
+        // 対照: Cursor cue なし。
+        let mut control = TextLayerState::default();
+        control.apply_cue(&cue("0", 0.0, CueCommand::Text("あい".into())));
+        control.apply_cue(&cue("0", 0.5, CueCommand::Text("うえ".into())));
+
+        // 実験: 途中と末尾に Cursor cue を挟む（Absolute/Relative/Omitted/Invalid を混在）。
+        let mut experiment = TextLayerState::default();
+        experiment.apply_cue(&cue("0", 0.0, CueCommand::Text("あい".into())));
+        experiment.apply_cue(&cue(
+            "0",
+            0.25,
+            CueCommand::Cursor {
+                x: "3em".into(),
+                y: "@-1".into(),
+            },
+        ));
+        experiment.apply_cue(&cue("0", 0.5, CueCommand::Text("うえ".into())));
+        experiment.apply_cue(&cue(
+            "0",
+            0.75,
+            CueCommand::Cursor {
+                x: "".into(),
+                y: "bogus".into(),
+            },
+        ));
+
+        // グリフ列（Glyph のみ抽出）はバイト等価。
+        let glyphs = |s: &TextLayerState| -> Vec<TextItem> {
+            items_of(s, "0")
+                .iter()
+                .copied()
+                .filter(|it| matches!(it, TextItem::Glyph { .. }))
+                .collect()
+        };
+        assert_eq!(
+            glyphs(&experiment),
+            glyphs(&control),
+            "Cursor cue はグリフ列を変えない"
+        );
+
+        // reveal 時刻列もバイト等価（CursorMove は reveal 枠を消費しない）。
+        assert_eq!(
+            reveal_times_of(&experiment, "0"),
+            reveal_times_of(&control, "0"),
+            "Cursor cue は reveal 時刻列を変えない"
+        );
+
+        // 全時刻で可視グリフ数が一致（reveal 進行が Cursor に非依存）。
+        let actor = ActorKey::from("0");
+        for i in 0..30 {
+            let t = i as f64 * 0.05;
+            assert_eq!(
+                experiment.visible_glyphs(&actor, t),
+                control.visible_glyphs(&actor, t),
+                "可視グリフ数は Cursor cue の有無で一致すべき（t={t}）"
+            );
+        }
+    }
+
+    // ── R5.1/R5.3/R9.5: choices は items と同一ライフサイクル（Clear/ClearAll で同時初期化） ──
+
+    /// `Clear` は対象 actor の choices を items と同時に初期化する（データ形で 5.1/5.3 を保証）。
+    #[test]
+    fn clear_resets_choices_alongside_items() {
+        let mut state = TextLayerState::default();
+        state.apply_cue(&choice_cue("0", 0.0, "q0", "はい", &[]));
+        assert_eq!(choices_of(&state, "0").len(), 1);
+
+        state.apply_cue(&cue("0", 0.5, CueCommand::Clear));
+
+        let actor = state
+            .actor_state(&ActorKey::from("0"))
+            .expect("actor state should exist");
+        assert!(actor.choices().is_empty(), "Clear は choices も初期化する");
+        assert!(actor.items().is_empty());
+        assert_eq!(actor, &ActorTextState::default());
+    }
+
+    /// `ClearAll` は全 actor スコープの choices を items と同時に初期化する（R5.3）。
+    #[test]
+    fn clear_all_resets_choices_of_every_actor_scope() {
+        let mut state = TextLayerState::default();
+        state.apply_cue(&choice_cue("0", 0.0, "q0", "はい", &[]));
+        state.apply_cue(&choice_cue("1", 0.1, "q1", "いいえ", &[]));
+
+        state.apply_cue(&cue("0", 1.0, CueCommand::ClearAll));
+
+        assert!(choices_of(&state, "0").is_empty());
+        assert!(
+            choices_of(&state, "1").is_empty(),
+            "ClearAll は名指ししていないスコープの choices も消去する"
+        );
     }
 
     // ── Balloon 向けでない command の防御的無視 ──
@@ -992,5 +1425,206 @@ mod tests {
         // 1 つ目 "あ"(N=1,dur0.25) の r_0=0.0・tail=0.0 → "い"(N=1,dur0.25) r = max(0.0+0.25, 0.5)=0.5。
         assert_eq!(reveal_times_of(&experiment, "0"), vec![0.0, 0.5]);
         assert_eq!(experiment.visible_glyphs(&ActorKey::from("0"), 0.5), 2);
+    }
+
+    // ══ `\_l` 座標語彙のパース（parse_cursor_coord・語彙全形の網羅・タスク 1.1） ══
+    //
+    // 不透明転写文字列 → `CursorCoord`。全入力で値を返す純粋・全域関数（パニック／`Result`
+    // なし）。表現は「後段 `layout.rs::cursor_to_image_px` が bare/em/lh の非負のみ Some・
+    // %／@／負値／Invalid／Omitted は None」を区別できる語彙に忠実転写する（設計 縮退表・
+    // R2.1/2.4/6.5）。負の裸数値は Absolute へ忠実転写し（非負ゲートは layout 層の責務）、
+    // `%` は `unit: Percent` の Absolute、`@` 接頭は Relative variant で保持する。
+
+    // ── 空文字列＝当該軸省略（Omitted・正典 R2.4） ──
+
+    #[test]
+    fn parse_empty_is_omitted() {
+        assert_eq!(parse_cursor_coord(""), CursorCoord::Omitted);
+    }
+
+    // ── 裸数値＝image px（Absolute Px・R2.1） ──
+
+    #[test]
+    fn parse_bare_number_is_absolute_px() {
+        assert_eq!(
+            parse_cursor_coord("5"),
+            CursorCoord::Absolute {
+                value: 5.0,
+                unit: CursorUnit::Px
+            }
+        );
+    }
+
+    #[test]
+    fn parse_decimal_bare_number_is_absolute_px() {
+        assert_eq!(
+            parse_cursor_coord("5.0"),
+            CursorCoord::Absolute {
+                value: 5.0,
+                unit: CursorUnit::Px
+            }
+        );
+    }
+
+    /// 負の裸数値は Absolute へ**忠実転写**する（非負ゲートは layout 層＝
+    /// `cursor_to_image_px` が None を返す責務。語彙層は負値を Invalid へ写像しない）。
+    #[test]
+    fn parse_negative_bare_number_is_absolute_px_preserving_sign() {
+        assert_eq!(
+            parse_cursor_coord("-3"),
+            CursorCoord::Absolute {
+                value: -3.0,
+                unit: CursorUnit::Px
+            }
+        );
+    }
+
+    // ── `Nem` / `Nlh`＝Absolute Em/Lh（R2.1） ──
+
+    #[test]
+    fn parse_em_suffix_is_absolute_em() {
+        assert_eq!(
+            parse_cursor_coord("5em"),
+            CursorCoord::Absolute {
+                value: 5.0,
+                unit: CursorUnit::Em
+            }
+        );
+    }
+
+    #[test]
+    fn parse_lh_suffix_is_absolute_lh() {
+        assert_eq!(
+            parse_cursor_coord("2lh"),
+            CursorCoord::Absolute {
+                value: 2.0,
+                unit: CursorUnit::Lh
+            }
+        );
+    }
+
+    // ── `N%`＝Absolute Percent（縮退保持: layout が None・R6.5） ──
+
+    #[test]
+    fn parse_percent_suffix_is_absolute_percent() {
+        assert_eq!(
+            parse_cursor_coord("50%"),
+            CursorCoord::Absolute {
+                value: 50.0,
+                unit: CursorUnit::Percent
+            }
+        );
+    }
+
+    // ── `@N`＝Relative（`@` 接頭・語彙保持: layout が None・R6.5） ──
+
+    #[test]
+    fn parse_at_prefix_bare_is_relative_px() {
+        assert_eq!(
+            parse_cursor_coord("@5"),
+            CursorCoord::Relative {
+                value: 5.0,
+                unit: CursorUnit::Px
+            }
+        );
+    }
+
+    #[test]
+    fn parse_at_prefix_em_is_relative_em() {
+        assert_eq!(
+            parse_cursor_coord("@5em"),
+            CursorCoord::Relative {
+                value: 5.0,
+                unit: CursorUnit::Em
+            }
+        );
+    }
+
+    #[test]
+    fn parse_at_prefix_percent_is_relative_percent() {
+        assert_eq!(
+            parse_cursor_coord("@5%"),
+            CursorCoord::Relative {
+                value: 5.0,
+                unit: CursorUnit::Percent
+            }
+        );
+    }
+
+    /// 語彙全形の網羅（1.3 checklist「CursorCoord の全形」）: Relative × Lh は他の
+    /// `@` 単位テスト（Px/Em/Percent）で唯一欠けていた組合せ——Absolute×{Px,Em,Lh,Percent}
+    /// ／Relative×{Px,Em,Lh,Percent} の完全マトリクスを閉じる。
+    #[test]
+    fn parse_at_prefix_lh_is_relative_lh() {
+        assert_eq!(
+            parse_cursor_coord("@2lh"),
+            CursorCoord::Relative {
+                value: 2.0,
+                unit: CursorUnit::Lh
+            }
+        );
+    }
+
+    /// `@` の負値も語彙は Relative で保持（layout が None＝縮退の判定は下流）。
+    #[test]
+    fn parse_at_prefix_negative_is_relative_px_preserving_sign() {
+        assert_eq!(
+            parse_cursor_coord("@-2"),
+            CursorCoord::Relative {
+                value: -2.0,
+                unit: CursorUnit::Px
+            }
+        );
+    }
+
+    // ── パース不能＝Invalid（R6.5・状態不変スキップの源） ──
+
+    #[test]
+    fn parse_non_numeric_is_invalid() {
+        assert_eq!(parse_cursor_coord("abc"), CursorCoord::Invalid);
+    }
+
+    #[test]
+    fn parse_bare_unit_without_number_is_invalid() {
+        // 数値のない裸単位（"em"／"lh"／"%"）はパース不能。
+        assert_eq!(parse_cursor_coord("em"), CursorCoord::Invalid);
+        assert_eq!(parse_cursor_coord("lh"), CursorCoord::Invalid);
+        assert_eq!(parse_cursor_coord("%"), CursorCoord::Invalid);
+    }
+
+    #[test]
+    fn parse_lone_at_is_invalid() {
+        // `@` のみ（数値本体が空）はパース不能。
+        assert_eq!(parse_cursor_coord("@"), CursorCoord::Invalid);
+    }
+
+    #[test]
+    fn parse_trailing_garbage_is_invalid() {
+        // 数値＋未知サフィックス（"5xx"）はパース不能。
+        assert_eq!(parse_cursor_coord("5xx"), CursorCoord::Invalid);
+    }
+
+    #[test]
+    fn parse_at_prefixed_non_numeric_is_invalid() {
+        assert_eq!(parse_cursor_coord("@abc"), CursorCoord::Invalid);
+    }
+
+    /// 非有限（NaN／inf）は Invalid へ縮退（layout の換算を汚さない防御）。
+    #[test]
+    fn parse_non_finite_is_invalid() {
+        assert_eq!(parse_cursor_coord("NaN"), CursorCoord::Invalid);
+        assert_eq!(parse_cursor_coord("inf"), CursorCoord::Invalid);
+    }
+
+    /// 全域性: どの `&str` を与えてもパニックせず必ず値を返す（R2.4 決定論・total function）。
+    #[test]
+    fn parse_is_total_over_arbitrary_strings() {
+        for raw in [
+            "", "0", "-0", "5", "-3", "5.0", "5em", "5lh", "50%", "@5", "@5em", "@5%", "@-2",
+            "abc", "em", "lh", "%", "@", "5xx", "@abc", "  ", "5 em", "e", "@@5", "1e3", "1.2.3",
+        ] {
+            // パニックしないことを踏むのが主眼（戻り値の variant は各専用テストで固定）。
+            let _ = parse_cursor_coord(raw);
+        }
     }
 }

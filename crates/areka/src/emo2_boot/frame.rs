@@ -704,6 +704,11 @@ pub fn run_text_phase(wiring: &mut Emo2Wiring, world: &mut World, talk_time_over
             "emo2 text: present_frame が失敗（他 actor 非破壊・次フレーム再試行・R2.3）"
         );
     }
+    // 実機サインオフ用 hover 注入導線（HoverInjectConduit・8.2/8.4/8.6）: present_frame の**後**に
+    // 駆動し、`choice_active`／`choice_hit_rows` が当該フレームの提示を反映した状態で env ゲート
+    // （`AREKA_CHOICE_HOVER_INJECT`）駆動の周期巡回注入を行う。env 未設定/無効なら完全 no-op
+    // （`inject_choice_hover` を一度も呼ばない・本番既定）。`talk_time` は同じ frame clock 時刻源。
+    super::hover_inject::drive(&mut runtime, talk_time);
 }
 
 /// `FrameFinalize` 登録の排他 system（donor パターン: remove→3 フェーズ→insert・DD-1/DD-4）。
