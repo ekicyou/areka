@@ -320,4 +320,193 @@ mod tests {
         fn require_boot_sink<T: crate::sink::BootCueSink>() {}
         require_boot_sink::<PropSetCueSink>();
     }
+
+    /// 完走時のみ記録の**統合檻**（task 8.5・要件 3.4／design Testing §4・System Flow「初回ゲートと
+    /// 起動記録」・C7/C12）。
+    ///
+    /// 上流の単体檻（`boot_count_carrier_is_persisted` 他）は `PropSetCueSink` へ**直接** carrier cue を
+    /// `emit` して書込を確認する。本檻はその一段上——**実 sakura 再生**（`spawn_talk`・注入時刻 Tick）で
+    /// 初回挨拶台本の末尾 epilogue（`areka.prop.set` / `areka.boot.count` / "1"）を CueSheet horizon へ
+    /// 付加した楽譜を駆動し、`PropSetCueSink` を broadcast sink として実 sylphya（`spawn_sylphya`＋共有
+    /// `FakePersistIo`）へ結線して、**完走した時のみ**起動記録が書かれることを end-to-end で固定する:
+    ///
+    /// - **完走 → 記録あり**: horizon を跨ぐ Tick まで再生 → 末尾 SET cue が発火 → sink が受理 →
+    ///   別ハンドル `load_scope` が `BootCount="1"` を観測する。
+    /// - **horizon 前 `Close` → 記録なし**: 初回 Tick 後・horizon 到達前に `Close` を送ると
+    ///   `CuePlayer::stop()` が残 cue（末尾 SET）を破棄 → SET は発火せず sink へ届かない → ストア不変
+    ///   （`BootCount` 不在＝次回起動も初回扱いのまま・要件 3.4「初回挨拶が一度は完走することの保証」）。
+    ///
+    /// broadcast された cue 列を横で観測する記録 sink も併置し、**cue レベル**でも「完走時のみ SET が
+    /// 発火し中断時は発火しない」ことを直接固定する（ストアレベルの `load_scope` と二重に押さえる）。
+    mod completion_only_records_integration {
+        use super::*;
+        use areka_sakura::contract::{
+            CueSink, SakuraMsg, StartTalk, SystemVarSnapshot, TalkCue, TalkDone, TalkEndReason,
+            TalkId,
+        };
+        use areka_sakura::spawn_talk;
+        use areka_talk::EpilogueCommand;
+        use std::sync::mpsc;
+        use std::sync::Mutex;
+        use std::time::Duration;
+
+        /// broadcast で届いた全 cue を蓄積する観測 sink（cue レベルの弁別に使う・`Clone` で観測ハンドル取得）。
+        #[derive(Clone)]
+        struct ObservingSink {
+            records: Arc<Mutex<Vec<TalkCue>>>,
+        }
+        impl ObservingSink {
+            fn new() -> (Self, Arc<Mutex<Vec<TalkCue>>>) {
+                let records = Arc::new(Mutex::new(Vec::new()));
+                (
+                    Self {
+                        records: Arc::clone(&records),
+                    },
+                    records,
+                )
+            }
+        }
+        impl CueSink for ObservingSink {
+            fn emit(&mut self, cue: TalkCue) {
+                self.records
+                    .lock()
+                    .expect("ObservingSink records mutex poisoned")
+                    .push(cue);
+            }
+        }
+
+        /// 観測 sink の記録から carrier コマンド名の列を抽出する（SET cue が発火したかを名前で判定する）。
+        fn carrier_names(records: &Arc<Mutex<Vec<TalkCue>>>) -> Vec<String> {
+            records
+                .lock()
+                .unwrap()
+                .iter()
+                .filter_map(|c| c.command.as_command_carrier().map(|(n, _)| n.to_string()))
+                .collect()
+        }
+
+        /// 初回挨拶台本（stand-in グリーティング `hi\e`）＋起動記録 epilogue を組む。台本の占有 horizon
+        /// （`hi` 再生完了＝0.1s）末尾へ `areka.prop.set` / `areka.boot.count` / "1" が duration 0 で付く。
+        fn first_boot_start() -> StartTalk {
+            StartTalk {
+                talk_id: TalkId(8005),
+                // `\e` 終端の最小挨拶。ClearAll@0 / Text("hi")@0(d=0.1)。horizon=0.1。
+                script: r"hi\e".to_string(),
+                // ⓪ghost の apply_boot_record_gate が初回起動で据える epilogue と同一形（runtime.rs）。
+                epilogue: vec![EpilogueCommand {
+                    name: PROP_SET_CUE_NAME.to_string(),
+                    tokens: vec![PersistKey::BootCount.to_canonical_key(), "1".to_string()],
+                }],
+            }
+        }
+
+        /// **完走 → 記録あり**（要件 3.4・design Testing §4「epilogue 付き台本の完走→sink 受理」）。
+        /// horizon(0.1) を跨ぐ Tick(1.0) まで実再生 → 末尾 SET cue が発火 → `PropSetCueSink` が受理 →
+        /// 別ハンドル `load_scope` が `BootCount="1"` を観測する。cue レベルでも SET 発火を固定する。
+        #[test]
+        fn completion_fires_tail_set_cue_and_records_boot_count() {
+            let (parts, roots, shared) = spawn_with_shared_io();
+            let prop_sink = PropSetCueSink::new(parts.publisher.clone());
+            let (observer, observed) = ObservingSink::new();
+
+            let (done_tx, done_rx) = mpsc::channel::<TalkDone>();
+            let sinks: Vec<Box<dyn CueSink + Send>> =
+                vec![Box::new(prop_sink), Box::new(observer)];
+            let handle = spawn_talk(
+                first_boot_start(),
+                done_tx,
+                sinks,
+                SystemVarSnapshot::default(),
+            );
+
+            // 初回 Tick(0.0) でアンカー刻印（挨拶 cue は due・末尾 SET(0.1) は未 due で保留）。
+            handle.inbox.send(SakuraMsg::Tick(0.0)).unwrap();
+            // horizon(0.1) を跨ぐ Tick で末尾 SET cue が発火し占有 horizon 到達＝自然終端（完走）。
+            handle.inbox.send(SakuraMsg::Tick(1.0)).unwrap();
+
+            let done = done_rx
+                .recv_timeout(Duration::from_secs(5))
+                .expect("horizon 到達で TalkDone（完走）");
+            assert_eq!(
+                done.reason,
+                TalkEndReason::Ended,
+                "`\\e` 終端の完走は Ended"
+            );
+            handle.actor.join().expect("body は正常終了する");
+
+            // fire-and-forget の write-through を barrier で確定してから別ハンドルで観測する。
+            parts.publisher.barrier().expect("barrier while actor alive");
+            let loaded = load_scope(PersistScope::Ghost, &roots, &shared);
+            assert!(
+                loaded.contains(&(PersistKey::BootCount, "1".into())),
+                "完走時は末尾 SET cue が発火し BootCount=\"1\" が記録される: {loaded:?}"
+            );
+
+            // cue レベルの弁別: 完走再生では SET cue（areka.prop.set キャリア）が broadcast されている。
+            assert!(
+                carrier_names(&observed).contains(&PROP_SET_CUE_NAME.to_string()),
+                "完走では末尾 SET cue が実際に発火・broadcast される: {:?}",
+                carrier_names(&observed)
+            );
+
+            parts.publisher.close();
+            parts.handle.join().expect("clean close joins");
+        }
+
+        /// **horizon 前 `Close` → 記録なし**（要件 3.4・design System Flow「interrupt = CuePlayer::stop
+        /// drops residual」・Testing §4「horizon 前 Close→stop() で SET 不発火・ストア不変」）。
+        /// 初回 Tick(0.0) で Driving 入り（挨拶 cue は発火・末尾 SET(0.1) は保留）した直後に `Close` を
+        /// 送ると `CuePlayer::stop()` が残 cue（SET）を破棄する → SET は発火せず sink へ届かない →
+        /// ストアは不変（`BootCount` 不在）＝次回起動も初回扱いのまま。inbox は FIFO・単一スレッド処理
+        /// ゆえ Tick(0.0) は Close より前に処理される（決定的）。
+        #[test]
+        fn interrupt_before_horizon_drops_set_cue_and_records_nothing() {
+            let (parts, roots, shared) = spawn_with_shared_io();
+            let prop_sink = PropSetCueSink::new(parts.publisher.clone());
+            let (observer, observed) = ObservingSink::new();
+
+            let (done_tx, done_rx) = mpsc::channel::<TalkDone>();
+            let sinks: Vec<Box<dyn CueSink + Send>> =
+                vec![Box::new(prop_sink), Box::new(observer)];
+            let handle = spawn_talk(
+                first_boot_start(),
+                done_tx,
+                sinks,
+                SystemVarSnapshot::default(),
+            );
+
+            // 初回 Tick(0.0): Driving 入り・挨拶 cue は due で発火するが末尾 SET(0.1) は未 due で保留。
+            handle.inbox.send(SakuraMsg::Tick(0.0)).unwrap();
+            // horizon 到達前に Close: CuePlayer::stop() が残 cue（保留中の SET）を破棄する。
+            handle.inbox.send(SakuraMsg::Close).unwrap();
+
+            let done = done_rx
+                .recv_timeout(Duration::from_secs(5))
+                .expect("Close で中断 TalkDone");
+            assert_eq!(
+                done.reason,
+                TalkEndReason::Interrupted,
+                "horizon 前 Close は Interrupted"
+            );
+            handle.actor.join().expect("body は正常終了する");
+
+            // barrier で（あれば）write-through を確定させたうえでストア不変を観測する。
+            parts.publisher.barrier().expect("barrier while actor alive");
+            let loaded = load_scope(PersistScope::Ghost, &roots, &shared);
+            assert!(
+                loaded.is_empty(),
+                "horizon 前中断では SET cue が発火せずストアは不変（次回も初回扱い）: {loaded:?}"
+            );
+
+            // cue レベルの弁別: 中断再生では SET cue（areka.prop.set キャリア）は一度も broadcast されない。
+            assert!(
+                !carrier_names(&observed).contains(&PROP_SET_CUE_NAME.to_string()),
+                "中断では末尾 SET cue は stop() で破棄され発火しない: {:?}",
+                carrier_names(&observed)
+            );
+
+            parts.publisher.close();
+            parts.handle.join().expect("clean close joins");
+        }
+    }
 }

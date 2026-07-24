@@ -178,7 +178,7 @@
   - _Depends: 3.2, 6.2_
   - _Boundary: areka-ghost tests_
 
-- [ ] 8.5 完走時のみ記録の統合檻
+- [x] 8.5 完走時のみ記録の統合檻
   - 実 sakura `spawn_talk` を駆動し、epilogue 付き台本が完走したときのみ `PropSetCueSink` が発火して起動記録が書かれ、horizon 到達前に `Close` すると `CuePlayer::stop()` により SET が発火せずストアが不変のままであることを確認する
   - 観測可能な完了条件: 完走シナリオでは `BootCount` が書き込まれ、中断シナリオでは書き込まれないことの両方がテストで確認できること
   - _Requirements: 3.4, 8.1_
