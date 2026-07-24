@@ -67,7 +67,7 @@
   - _Requirements: 1.2_
   - _Boundary: areka-ghost/runtime.rs_
 
-- [ ] 4. Core: 汎用プロパティ SET キュー語彙
+- [x] 4. Core: 汎用プロパティ SET キュー語彙
 - [x] 4.1 (P) `EpilogueCommand` 型と `StartTalk.epilogue` の追加
   - `areka-talk` に汎用コマンドを表す `EpilogueCommand { name, tokens }` を新設し、`StartTalk` へ additive フィールド `epilogue: Vec<EpilogueCommand>`（既定空）を追加する
   - 既存呼び出し点の追随を最小化する `StartTalk::new(talk_id, script)`（epilogue 空の従来形コンストラクタ）を用意する
@@ -83,7 +83,7 @@
   - _Depends: 4.1_
   - _Boundary: areka-sakura_
 
-- [ ] 4.3 (P) `PropSetCueSink` の実装
+- [x] 4.3 (P) `PropSetCueSink` の実装
   - コマンド名 `areka.prop.set` を名前自己選別で受理する `CueSink` 実装を `areka-ghost` に新設する
   - 受理する key を `PersistKey::BootCount`/`VanishCount` の正準文字列に限定し（`WindowPos`/`BalloonOffset` は拒否）、引数不足・未知 key は warn 付きスキップとする。受理時は `PersistScope::Ghost` で `persist_put` を呼び、info ログを 1 本出す
   - 観測可能な完了条件: `areka.prop.set` かつカウンタ key の cue で `persist_put` が呼ばれ、位置系 key・未知名・引数不足では拒否されログのみ残ることがテストで確認できること
