@@ -116,7 +116,7 @@
   - _Depends: 5.1, 5.2_
   - _Boundary: areka-kanade/schedule/boot.rs_
 
-- [ ] 6. Integration: main.rs 起動シーム結線
+- [x] 6. Integration: main.rs 起動シーム結線
 - [x] 6.1 復元マージの呼出し
   - `open_startup_window` の正常経路（snapshot 構築直後）で `load_restored_state` → `apply_restored_placements` を呼び、spawn へ渡す placements を復元値でマージ済みのものへ差し替える
   - 観測可能な完了条件: 永続状態に保存済み位置がある場合、実際に spawn される窓の初期位置が既定位置ではなく保存済み位置になることが結合テストで確認できること
@@ -124,7 +124,7 @@
   - _Depends: 1.4_
   - _Boundary: main.rs_
 
-- [ ] 6.2 `PersistWiring` の挿入（wired／fallback 両経路）
+- [x] 6.2 `PersistWiring` の挿入（wired／fallback 両経路）
   - `runtime.sylphya_publisher()` の clone を `PersistWiring` として、wire 成立後の正常経路（既存の別 wiring 呼び出しとは別行の additive 追加）と fallback boot 経路の両方へ NonSend リソースとして挿入する
   - prepare 失敗時（ダミー窓経路）は挿入しない（従来どおり永続結線なし）
   - 観測可能な完了条件: 起動後の World から `PersistWiring` リソースが取得でき、DragEnd 経由の保存が実際にファイルへ反映されることが結合テストで確認できること

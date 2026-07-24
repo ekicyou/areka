@@ -323,6 +323,14 @@ fn main() -> Result<()> {
         if let Some(runtime) = outcome.ghost.as_ref() {
             let sender = runtime.kanade().clone();
             input_events::wire_mouse_input(app.world().borrow_mut().world_mut(), sender);
+            // 位置永続の World 結線（task 6.2・design C4/C5・要件 1.9）: wire_mouse_input とは
+            // 別行の additive 挿入。ゴースト窓を保持する同一 World（`wire_mouse_input` と同経路）へ
+            // sylphya publisher clone を持つ PersistWiring（NonSend）を差し、DragEnd→persist_entries の
+            // write-through 導管を確立する。
+            insert_persist_wiring(
+                app.world().borrow_mut().world_mut(),
+                runtime.sylphya_publisher().clone(),
+            );
         }
         (outcome.ghost, outcome.seriko, outcome.loop_ticker)
     } else {
@@ -335,6 +343,13 @@ fn main() -> Result<()> {
         let ghost = match areka_ghost::boot(ghost_options) {
             Ok(runtime) => {
                 tracing::info!("LogSink フォールバックで起動しました（emo2-boot wire 不成立）");
+                // 位置永続の World 結線（task 6.2・design C4/C5・要件 1.9）: fallback boot でも
+                // 生きた runtime があれば wired 経路と同型に PersistWiring（NonSend）を同一 World へ
+                // 挿入する（両経路で DragEnd→persist_entries の write-through 導管を確立）。
+                insert_persist_wiring(
+                    app.world().borrow_mut().world_mut(),
+                    runtime.sylphya_publisher().clone(),
+                );
                 Some(runtime)
             }
             Err(err) => {
@@ -548,6 +563,23 @@ fn restore_merged_placements(
     let entries = placement::persist::load_restored_state(ghost_root, default_encoding);
     // 純関数 merge（永続不書込・保存位置優先 → project_restore → balloon 導出）。
     placement::persist::apply_restored_placements(placements, &entries, snapshot)
+}
+
+/// `PersistWiring`（NonSend）を、ゴースト窓を保持する同一 World へ挿入するシーム抽出
+/// （task 6.2・design C4/C5・要件 1.9）。
+///
+/// wired 経路（実 sink 結線成立）と fallback boot 経路（`LogSink`×2）の**両方**が、生きた
+/// ghost runtime が存在するときにこのヘルパで `runtime.sylphya_publisher().clone()` を World の
+/// NonSend リソースとして挿入する（`MouseWiring`／`Emo2Wiring` の NonSend 先例に倣う）。以降、
+/// follow.rs の DragEnd 観測点が [`placement::persist::persist_entries`] 経由でこの publisher の
+/// clone 送信端から保存 entries を write-through 投函できる（World レベルの配線導管）。
+///
+/// 生きた runtime が無い経路（wired の `None` ghost・fallback の `Err`・prepare 失敗のダミー窓）
+/// では挿入しない＝従来どおり永続結線なし（`persist_entries` は `PersistWiring` 不在で debug!＋
+/// no-op へ縮退・6.2）。挿入は純粋な World 変異ゆえ headless 単体テスト可能（`insert_non_send_resource`
+/// を薄く包み `#[cfg(test)]` の檻に入れる）。
+fn insert_persist_wiring(world: &mut World, publisher: areka_sylphya::SylphyaPublisher) {
+    world.insert_non_send_resource(placement::persist::PersistWiring { publisher });
 }
 
 /// 起動窓シーム（task 6.2・要件 1.4・design「main.rs seam」）: `prepare_ghost_windows`
@@ -1292,5 +1324,104 @@ mod restore_seam_tests {
         );
 
         let _ = std::fs::remove_dir_all(&root);
+    }
+}
+
+/// `PersistWiring` 挿入シーム（task 6.2・design C4/C5・要件 1.9）の headless 単体テスト。
+///
+/// wired／fallback 両経路が使う挿入ヘルパ `insert_persist_wiring` を檻に入れる。
+/// シーム結線そのもの（`main` の boot 経路分岐）は生きた `WinApp` を要するため、TDD は
+/// headless で駆動可能な挿入ヘルパで回す。実 publisher（`spawn_sylphya`＋共有 fake IO）を
+/// headless World へ挿入し、(a) NonSend リソース `PersistWiring` が存在すること、(b) その
+/// World 越しの `persist_entries` 投函が barrier 後に別ハンドルの `load_scope` で読み戻せる
+/// （＝World レベルの配線導管が正しく確立され DragEnd→file の World シームが成立している）
+/// ことを証明する。DragEnd→file の完全な end-to-end は task 8.2 が担う。
+#[cfg(test)]
+mod persist_wiring_seam_tests {
+    use super::*;
+    use areka_sylphya::persist::{FakePersistIo, PersistIo};
+    use areka_sylphya::{
+        Axis, PersistKey, PersistScope, ScopeRoots, SylphyaInit, load_scope, spawn_sylphya,
+    };
+    use placement::persist::{PersistWiring, char_pos_entries, persist_entries};
+    use placement::resolver::PointPx;
+    use std::path::Path;
+    use std::sync::Arc;
+
+    /// 共有 fake IO（アクターへ `Box<dyn PersistIo>` として移送しつつ、同一ストアを別ハンドルの
+    /// `load_scope` で観測するための newtype ラッパ。persist.rs の write-through 檻と同流儀）。
+    struct SharedFakeIo(Arc<FakePersistIo>);
+    impl PersistIo for SharedFakeIo {
+        fn read(&self, path: &Path) -> std::io::Result<Option<String>> {
+            self.0.read(path)
+        }
+        fn commit(&self, path: &Path, content: &str) -> std::io::Result<()> {
+            self.0.commit(path, content)
+        }
+    }
+
+    /// 挿入シーム檻（3.1／1.9／C4/C5）: `insert_persist_wiring` で headless World へ実 publisher を
+    /// 挿入すると、(a) NonSend `PersistWiring` が存在し、(b) その World 越しの `persist_entries` 投函が
+    /// Ghost スコープへ write-through され、barrier 後に別ハンドルの `load_scope` で読み戻せる。
+    #[test]
+    fn insert_persist_wiring_establishes_world_conduit_reaching_the_store() {
+        // 共有 fake IO（アクター Box 移送用と観測用で同一ストアを指す）。
+        let shared = Arc::new(FakePersistIo::new());
+        let roots = ScopeRoots {
+            ghost: Some(std::path::PathBuf::from("/g")),
+            ..ScopeRoots::default()
+        };
+        let parts = spawn_sylphya(SylphyaInit {
+            roots: roots.clone(),
+            io: Box::new(SharedFakeIo(shared.clone())),
+            runtime_sink: None,
+        });
+
+        // wired／fallback 両経路が使う本物の挿入ヘルパで World へ結線する。
+        let mut world = World::new();
+        insert_persist_wiring(&mut world, parts.publisher.clone());
+
+        // (a) NonSend リソース PersistWiring が World に存在する。
+        assert!(
+            world.get_non_send_resource::<PersistWiring>().is_some(),
+            "insert_persist_wiring 後、World に PersistWiring が挿入されているべき（C4/C5）"
+        );
+
+        // (b) その World 越しの persist_entries 投函がストアへ到達する（DragEnd→file の World シーム）。
+        let entries = char_pos_entries(0, PointPx { x: 1486, y: 353 });
+        persist_entries(&world, entries);
+
+        // barrier 復帰＝上記 put の write-through 保存（save_scope）まで完了（同一送信端 FIFO）。
+        parts
+            .publisher
+            .barrier()
+            .expect("barrier should resolve while actor is alive");
+
+        // アクターと同一ストアを別ハンドルの load_scope で観測（実 IO 通過＝投函の証明）。
+        let loaded = load_scope(PersistScope::Ghost, &roots, &SharedFakeIo(shared.clone()));
+        assert!(
+            loaded.contains(&(
+                PersistKey::WindowPos {
+                    scope: 0,
+                    axis: Axis::X
+                },
+                "1486".to_string()
+            )),
+            "World 導管越しの persist_entries が Ghost へ write-through していない（WindowPos.x）: {loaded:?}"
+        );
+        assert!(
+            loaded.contains(&(
+                PersistKey::WindowPos {
+                    scope: 0,
+                    axis: Axis::Y
+                },
+                "353".to_string()
+            )),
+            "World 導管越しの persist_entries が Ghost へ write-through していない（WindowPos.y）: {loaded:?}"
+        );
+
+        // 正典終了（アクター join）——テスト後始末（リーク回避・非本質）。
+        parts.publisher.close();
+        let _ = parts.handle.join();
     }
 }
